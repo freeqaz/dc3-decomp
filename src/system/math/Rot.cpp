@@ -75,17 +75,15 @@ void MakeScale(const Hmx::Matrix3 &m, Vector3 &v) {
 void MakeEulerScale(const Hmx::Matrix3 &m1, Vector3 &v2, Vector3 &v3) {
     MakeScale(m1, v3);
     Hmx::Matrix3 m38;
-    m38.z.z = 0;
-    m38.x.z = v3.x ? 1.0f / v3.x : m38.z.z;
-    Scale(m1.x, m38.x.z, m38.x);
-    if (v3.y != 0) {
-        m38.y.z = 1.0f / v3.y;
-    }
-    Scale(m1.y, m38.y.z, m38.y);
-    if (v3.z != 0) {
-        m38.z.z = 1.0f / v3.z;
-    }
-    Scale(m1.z, m38.z.z, m38.z);
+    float inv_x = v3.x ? 1.0f / v3.x : 0.0f;
+    m38.x.z = inv_x;
+    Scale(m1.x, inv_x, m38.x);
+    float inv_y = v3.y ? 1.0f / v3.y : 0.0f;
+    m38.y.z = inv_y;
+    Scale(m1.y, inv_y, m38.y);
+    float inv_z = v3.z ? 1.0f / v3.z : 0.0f;
+    m38.z.z = inv_z;
+    Scale(m1.z, inv_z, m38.z);
     MakeEuler(m38, v2);
 }
 

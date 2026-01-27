@@ -48,12 +48,11 @@ MoveDetector::~MoveDetector() {}
 float MoveDetector::ActiveDetectFrac(int player, MoveDir *dir) {
     MILO_ASSERT(mActive, 0x42);
     MILO_ASSERT((0) <= (player) && (player) < (2), 0x43);
+    std::vector<DetectFrame> &frames = mPlayerDetectFrames[player];
     return dir->DetectFrac(
         player,
         mMove,
-        std::make_pair(
-            &mPlayerDetectFrames[player].front(), &mPlayerDetectFrames[player].back()
-        )
+        std::make_pair(&frames.front(), &frames.back())
     );
 }
 

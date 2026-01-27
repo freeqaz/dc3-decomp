@@ -201,9 +201,7 @@ bool CacheMgrXbox::MountAsync(CacheID *pCacheIDXbox, Cache **ppCache, Hmx::Objec
             SetLastResult(kCache_ErrorBadParam);
             return false;
         } else {
-            ULARGE_INTEGER u;
-            u.HighPart = 0;
-            u.LowPart = 0;
+            ULARGE_INTEGER u = {0};
             memset(&mOverlapped, 0, sizeof(XOVERLAPPED));
             DWORD res = XContentCreateEx(
                 0xFF,

@@ -230,12 +230,12 @@ DrivenPropertyEntry *FlowNode::GetDrivenEntry(DataArray *a) {
 }
 
 Flow *FlowNode::GetTopFlow() {
-    Flow *flow = GetOwnerFlow();
-    if (flow) {
-        for (; GetOwnerFlow() && GetOwnerFlow() != flow; flow = flow->GetOwnerFlow())
-            ;
-    }
-    return flow;
+    Flow *pFlow = GetOwnerFlow();
+    if (!pFlow)
+        return pFlow;
+    for (; GetOwnerFlow() && GetOwnerFlow() != pFlow; pFlow = pFlow->GetOwnerFlow())
+        ;
+    return pFlow;
 }
 
 void FlowNode::ActivateLabel(FlowLabel *label) {

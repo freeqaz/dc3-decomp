@@ -73,7 +73,7 @@ namespace STLPORT {
         }
 
         void deallocate(pointer ptr, size_type count) const {
-            int size = count << 5;  // Force bit shift instead of multiplication
+            int size = count * sizeof(T);
             const char *name;
             if (gStlAllocNameLookup) {
                 name = typeid(pointer).name();

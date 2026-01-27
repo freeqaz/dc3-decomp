@@ -61,21 +61,20 @@ JsonObject *JsonConverter::LoadFromString(const String &str) {
     printbuf *buf = printbuf_new();
     if (!buf) {
         return nullptr;
-    } else {
-        printbuf_memappend(buf, str.c_str(), str.length());
-        json_object *obj = json_tokener_parse(buf->buf);
-        if ((int)obj > 0xfffff060) { // ???
-            printbuf_free(buf);
-            return nullptr;
-        } else {
-            JsonObject *jObj = new JsonObject();
-            jObj->Set(obj);
-            printbuf_free(buf);
-            jObj->AddRef();
-            mObjects.push_back(jObj);
-            return jObj;
-        }
     }
+    printbuf_memappend(buf, str.c_str(), str.length());
+    json_object *obj = json_tokener_parse(buf->buf);
+    if ((int)obj > 0xfffff060) { // ???
+        printbuf_free(buf);
+        return nullptr;
+    }
+    JsonObject *jObj = new JsonObject();
+    jObj->Set(obj);
+    printbuf_free(buf);
+    JsonObject *temp = jObj;
+    json_object_get(obj);
+    mObjects.push_back(temp);
+    return jObj;
 }
 
 JsonObject *JsonConverter::GetValue(JsonArray *inArray, int inIdx) {

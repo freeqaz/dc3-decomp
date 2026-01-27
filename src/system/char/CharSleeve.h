@@ -8,8 +8,6 @@
 #include "utl/BinStream.h"
 #include "utl/MemMgr.h"
 
-class Character;
-
 class CharSleeve : public RndHighlightable, public CharPollable {
 public:
     // Hmx::Object
@@ -34,10 +32,9 @@ public:
 
     ObjPtr<RndTransformable> mSleeve; // 0x10
     ObjPtr<RndTransformable> mTopSleeve; // 0x24
-    ObjPtr<Character> mMe; // 0x30
-    Vector3 mPos; // 0x38
-    Vector3 mLastPos; // 0x48
-    float mLastDT; // 0x58
+    Vector3 unk38;
+    Vector3 unk48;
+    float unk58;
     float mInertia; // 0x5c
     float mGravity; // 0x60
     float mRange; // 0x64

@@ -43,18 +43,14 @@ END_LOADS
 bool FlowMultiSetProperty::Activate() {
     FLOW_LOG("Activate\n");
     unk58 = false;
-    if (!unk5c.empty() && GetDrivenEntry(Symbol("value"))) {
-        unk78.Array(0);
-        unk80 = unk78;
+    if (!unk5c.empty()) {
+        DrivenPropertyEntry *node = GetDrivenEntry("value");
+        if (node) {
+        }
     }
     FlowNode::PushDrivenProperties();
-
-    int size = unk5c.size();
-    for (int i = 0; i < size; i++) {
-        Hmx::Object *target = unk5c[i];
-        if (target) {
-            target->SetProperty(unk78.Array(0), unk80);
-        }
+    if (!unk5c.empty()) {
+        unk5c = nullptr;
     }
     return false;
 }

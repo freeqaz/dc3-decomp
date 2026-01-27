@@ -238,9 +238,9 @@ void RndShaderSimple::Select(RndMat *mat, ShaderType s, bool b) {
     if (!RedundantState(mat, s, isSkinned, TheShaderMgr.UseAO(), b)) {
         TheNgStats->mMats++;
         ((NgMat *)mat)->SetupShader(TheShaderMgr.AllowPerPixel(), true);
-        ShaderOptions opts(CalcShaderOpts((NgMat *)mat, s, b));
-        SetColorWriteMask(opts, mat);
+        u64 optsVal = CalcShaderOpts((NgMat *)mat, s, b);
+        SetColorWriteMask(ShaderOptions(optsVal), mat);
         CheckForceCull(s);
-        Cache(s, opts, mat);
+        Cache(s, ShaderOptions(optsVal), mat);
     }
 }

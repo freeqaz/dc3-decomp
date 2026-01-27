@@ -2,7 +2,7 @@
 #include "obj/Object.h"
 
 CharPosConstraint::CharPosConstraint()
-    : mSrc(this), mTargets(this), mBox(Vector3(1.0f, 1.0f, 1.0f), Vector3(-1.0f, -1.0f, -1.0f)) {}
+    : mSrc(this), mTargets(this), mBox(Vector3(1, 1, 1), Vector3(-1, -1, -1)) {}
 CharPosConstraint::~CharPosConstraint() {}
 
 BEGIN_HANDLERS(CharPosConstraint)
@@ -52,10 +52,10 @@ void CharPosConstraint::Load(BinStream &bs) {
     Hmx::Object::Load(bs);
     bs >> mTargets;
     bs >> mSrc;
-    if (d.rev <= 1) {
-        mBox.Set(Vector3(1, 1, 0), Vector3(-1, -1, 1000));
-    } else {
+    if (d.rev > 1) {
         bs >> mBox;
+    } else {
+        mBox.Set(Vector3(1, 1, 0), Vector3(-1, -1, 1000));
     }
 }
 

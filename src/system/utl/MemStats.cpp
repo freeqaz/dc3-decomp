@@ -37,7 +37,8 @@ BlockStat &BlockStatTable::GetBlockStat(int iStat) {
 void BlockStatTable::Update(
     const char *type, unsigned char heap, int reqSize, int actSize
 ) {
-    int idx = 0;
+    int idx;
+    idx = 0;
     for (; idx < mNumStats; idx++) {
         if (mStats[idx].mHeap == heap
             && (!mSizeMatters || mStats[idx].mSizeReq == reqSize)) {
@@ -46,9 +47,12 @@ void BlockStatTable::Update(
                     mStats[idx].mSizeReq += reqSize;
                 }
                 mStats[idx].mSizeAct += actSize;
-                if (reqSize >= mStats[idx].mMaxSize) {
-                    mStats[idx].mMaxSize = reqSize;
+                int maxSize;
+                maxSize = mStats[idx].mMaxSize;
+                if (reqSize >= maxSize) {
+                    maxSize = reqSize;
                 }
+                mStats[idx].mMaxSize = maxSize;
                 mStats[idx].mNumAllocs++;
                 return;
             }

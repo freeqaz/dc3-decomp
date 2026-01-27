@@ -233,15 +233,20 @@ void Character::PostLoad(BinStream &bs) {
             } else {
                 bs >> mShadow;
             }
-            if (d.rev < 3) {
-                mSelfShadow = false;
-            } else {
+            if (d.rev > 2) {
                 d >> mSelfShadow;
+            } else {
+                mSelfShadow = false;
             }
             if (d.rev > 4) {
-                ObjPtr<RndTransformable> t(this);
-                bs >> t;
-                mSphereBase = t.Ptr();
+                ObjPtr<RndTransformable> tPtr(this, 0);
+                bs >> tPtr;
+                RndTransformable *loadedPtr = tPtr.Ptr();
+                if (loadedPtr) {
+                    mSphereBase = loadedPtr;
+                } else {
+                    mSphereBase = this;
+                }
             } else {
                 mSphereBase = this;
             }
@@ -291,7 +296,7 @@ void Character::PostLoad(BinStream &bs) {
             bs >> mEnv;
         }
         if (otherRev > 3) {
-            gCharMe = d.rev < 6 ? this : nullptr;
+            gCharMe = otherRev < 6 ? this : nullptr;
             ObjVector<ObjVector<Character::Lod> > lods(this);
             d >> lods;
             if (lods.size() != 0)
@@ -312,7 +317,7 @@ void Character::PostLoad(BinStream &bs) {
     if (d.rev < 8) {
         float rad = GetSphere().GetRadius();
         for (int i = 0; i < mLods.size(); i++) {
-            mLods[i].mScreenSize /= rad;
+            mLods[i].mScreenSize *= (1.0f / rad);
         }
     }
 }

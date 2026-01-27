@@ -430,21 +430,23 @@ bool HolmesClientReadDone(File *) { return false; }
 void HolmesClientStackTrace(const char *cc, struct StackData *stack, int i, String &ret) {
     ret = "";
     CritSecTracker cst(&gCrit);
-    if (gHolmesStream && !gHolmesStream->Fail()) {
-        BeginCmd(Holmes::kStackTrace, true);
-        *gStreamBuffer << u8(Holmes::kStackTrace);
-        *gStreamBuffer << cc;
-        *gStreamBuffer << i;
-        for (int j = 0; j < i; j++) {
-            *gStreamBuffer << stack->mFailThreadStack[j];
-        }
-        HolmesFlushStreamBuffer();
-        gStackTraced = true;
-        WaitForResponse(Holmes::kStackTrace);
-        *gHolmesStream >> ret;
-        gPendingResponse = Holmes::kInvalidOpcode;
-        EndCmd(Holmes::kStackTrace);
+    if (!gHolmesStream || gHolmesStream->Fail()) {
+        return;
     }
+    BeginCmd(Holmes::kStackTrace, true);
+    *gStreamBuffer << u8(Holmes::kStackTrace);
+    *gStreamBuffer << cc;
+    *gStreamBuffer << i;
+    int j;
+    for (j = 0; j < i; j++) {
+        *gStreamBuffer << stack->mFailThreadStack[j];
+    }
+    HolmesFlushStreamBuffer();
+    gStackTraced = true;
+    WaitForResponse(Holmes::kStackTrace);
+    *gHolmesStream >> ret;
+    gPendingResponse = Holmes::kInvalidOpcode;
+    EndCmd(Holmes::kStackTrace);
 }
 
 void HolmesClientSendMessage(const Message &msg) {

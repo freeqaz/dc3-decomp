@@ -162,13 +162,16 @@ float RndLine::GetDistanceToPlane(const Plane &p, Vector3 &v3) {
     if (mPoints.empty())
         return 0;
     WorldXfm();
+    float ret = 0.0f;
     bool first = true;
-    float ret = 0;
-    for (std::vector<Point>::iterator it = mPoints.begin(); it != mPoints.end(); ++it) {
-        float dot = p.Dot(it->point);
-        if (first || fabs(dot) < fabs(ret)) {
-            ret = dot;
+    for (auto it = mPoints.begin(); it != mPoints.end(); ++it) {
+        float t1 = p.a * it->point.x;
+        float t2 = p.b * it->point.y;
+        float t3 = p.c * it->point.z;
+        float dot = t1 + t2 + t3 + p.d;
+        if (first || std::fabs(dot) < std::fabs(ret)) {
             first = false;
+            ret = dot;
             v3 = it->point;
         }
     }

@@ -44,8 +44,8 @@ BEGIN_LOADS(CharInterest)
         }
     }
     if (d.rev > 4) {
-        bs >> mOverridesMinTargetDist;
-        bs >> mMinTargetDistOverride;
+        d >> mOverridesMinTargetDist;
+        d >> mMinTargetDistOverride;
     }
     SyncMaxViewAngle();
 END_LOADS

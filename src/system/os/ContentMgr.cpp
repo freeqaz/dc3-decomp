@@ -111,30 +111,24 @@ void ContentMgr::PollRefresh() {
                     continue;
                 }
                 it = mContents.erase(it);
-            } else {
-                switch (newContentState) {
-                case 2:
-                case 3:
-                case 6:
-                    return;
-                case 4:
-                    if (oldContentState == 2) {
-                        NotifyMounted(*it);
-                    }
-                    return;
-                case 0:
-                    if (oldContentState == 3) {
-                        NotifyUnmounted(*it);
-                    }
-                    return;
-                case 7:
-                    if (oldContentState == 6) {
-                        NotifyDeleted(*it);
-                    }
-                    return;
-                default:
-                    break;
+            } else if (newContentState == 2 || newContentState == 3 || newContentState == 6) {
+                return;
+            } else if (newContentState == 4) {
+                if (oldContentState == 2) {
+                    NotifyMounted(*it);
                 }
+                return;
+            } else if (newContentState == 0) {
+                if (oldContentState == 3) {
+                    NotifyUnmounted(*it);
+                }
+                return;
+            } else if (newContentState == 7) {
+                if (oldContentState == 6) {
+                    NotifyDeleted(*it);
+                }
+                return;
+            } else {
                 ++it;
             }
         }
