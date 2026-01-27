@@ -190,9 +190,9 @@ bool Archive::GetFileInfo(
             if (it != mFileEntries.end() && it->HashedName() == nameValue
                 && it->HashedPath() == pathValue) {
                 arkfileNum = 0;
-                u64 u7 = 0;
+                unsigned long long u7 = 0;
                 for (; arkfileNum < mNumArkfiles; arkfileNum++) {
-                    u64 u6 = mArkfileSizes[arkfileNum] + u7;
+                    unsigned long long u6 = mArkfileSizes[arkfileNum] + u7;
                     if (it->mOffset < u6)
                         break;
                     u7 = u6;
@@ -207,6 +207,7 @@ bool Archive::GetFileInfo(
             byteOffset = 0;
             fileSize = 0;
             fileUCSize = 0;
+            return false;
         }
     }
     return false;

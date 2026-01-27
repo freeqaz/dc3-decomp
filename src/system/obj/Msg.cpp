@@ -92,8 +92,7 @@ void MsgSinks::EventSink::Add(
     elem.mode = mode;
     elem.handler = s;
     if (b4) {
-        sinks.push_front();
-        sinks.front() = elem;
+        sinks.push_front(elem);
     } else {
         sinks.push_back(elem);
     }

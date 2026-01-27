@@ -595,11 +595,14 @@ DataNode Hmx::Object::HandleType(DataArray *msg) {
 DataNode Hmx::Object::OnIterateRefs(const DataArray *da) {
     DataNode *var = da->Var(2);
     DataNode node(*var);
-    for (ObjRef::iterator it = mRefs.begin(); it != mRefs.end(); ++it) {
+    ObjRef *end = &mRefs;
+    for (ObjRef *it = mRefs.next; it != end;) {
+        ObjRef *next_it = it->next;
         *var = it->RefOwner();
         for (int i = 3; i < da->Size(); i++) {
-            da->Command(i)->Execute(true);
+            da->Command(i)->Execute();
         }
+        it = next_it;
     }
     *var = node;
     return 0;

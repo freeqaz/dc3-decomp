@@ -318,7 +318,9 @@ void AutoTimer::Init() {
         bool enabled = false;
         arr->FindData("enable", enabled, false);
         if (enabled) {
-            sTimers.push_back(std::pair<Timer, TimerStats>(Timer(arr), TimerStats(arr)));
+            TimerStats stats(arr);
+            Timer timer(arr);
+            sTimers.push_back(std::pair<Timer, TimerStats>(timer, stats));
         }
     }
 }

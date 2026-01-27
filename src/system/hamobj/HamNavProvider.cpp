@@ -96,35 +96,40 @@ BEGIN_LOADS(HamNavProvider)
 END_LOADS
 
 void HamNavProvider::Text(int i1, int i2, UIListLabel *list, UILabel *label) const {
-    if (list->Matches("label")) {
-        if (mNavItems[i2].unk14) {
-            mNavItems[i2].unk14->Node(0) = mNavItems[i2].mLabel;
-            Message msg("set_token_fmt", mNavItems[i2].unk14);
-            label->Handle(msg, false);
-        } else
-            label->SetTextToken(mNavItems[i2].mLabel);
-    } else if (list->Matches("checkbox")) {
-        switch (mNavItems[i2].mCheckboxState) {
+    UILabel *plbl = label;
+    UIListLabel *plist = list;
+    int idx = i2;
+    if (plist->Matches("label")) {
+        if (mNavItems[idx].unk14) {
+            mNavItems[idx].unk14->Node(0) = mNavItems[idx].mLabel;
+            Message msg("set_token_fmt", mNavItems[idx].unk14);
+            plbl->Handle(msg, false);
+            return;
+        }
+        plbl->SetTextToken(mNavItems[idx].mLabel);
+    } else if (plist->Matches("checkbox")) {
+        switch (mNavItems[idx].mCheckboxState) {
         case 0:
-            label->SetIcon('\0');
+            plbl->SetIcon('\0');
             break;
         case 1:
-            label->SetIcon('a');
+            plbl->SetIcon('a');
             break;
         case 2:
-            label->SetIcon('b');
+            plbl->SetIcon('b');
             break;
         default:
             break;
         }
-    } else if (list->Matches("song")) {
-        if (mNavItems[i2].unk14) {
-            mNavItems[i2].unk14->Node(0) = mNavItems[i2].mLabel;
-            Message msg("set_token_fmt", mNavItems[i2].unk14);
-            label->Handle(msg, false);
+    } else if (plist->Matches("song")) {
+        if (mNavItems[idx].unk14) {
+            mNavItems[idx].unk14->Node(0) = mNavItems[idx].mLabel;
+            Message msg("set_token_fmt", mNavItems[idx].unk14);
+            plbl->Handle(msg, false);
+            return;
         }
     } else {
-        label->SetTextToken(gNullStr);
+        plbl->SetTextToken(gNullStr);
     }
 }
 

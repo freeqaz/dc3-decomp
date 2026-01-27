@@ -130,7 +130,7 @@ BEGIN_HANDLERS(HamDirector)
     HANDLE(select_camera, OnSelectCamera)
     HANDLE(cycle_shot, OnCycleShot)
     HANDLE(force_shot, OnForceShot)
-    HANDLE_EXPR(camera_source, mVenue)
+    HANDLE_EXPR(camera_source, (Hmx::Object *)mVenue)
     HANDLE_ACTION(force_scene, ForceScene(_msg->Sym(2)))
     HANDLE_ACTION(force_minivenue, ForceMiniVenue(_msg->Sym(2)))
     HANDLE(cur_postprocs, OnPostProcs)
@@ -984,12 +984,11 @@ DataNode HamDirector::OnListPossibleVariants() {
         MoveMgr::Init("../meta/move_data.dta");
     }
     DataArray *moveArr = new DataArray(0);
-    // FIXME: should get MoveMgr's unk104 member
-    for (std::map<Symbol, MoveVariant *>::const_iterator it =
-             TheMoveMgr->MoveVariants().begin();
-         it != TheMoveMgr->MoveVariants().end();
+    for (std::set<const MoveVariant *>::const_iterator it =
+             TheMoveMgr->GetVariants().begin();
+         it != TheMoveMgr->GetVariants().end();
          ++it) {
-        moveArr->Insert(moveArr->Size(), it->first);
+        moveArr->Insert(moveArr->Size(), (*it)->Name());
     }
     moveArr->SortNodes(0);
     DataNode ret(moveArr);
@@ -1141,7 +1140,7 @@ DataNode HamDirector::OnSetDircut(DataArray *a) {
         }
         SetDircut(sym, filters);
     }
-    return mNextShot;
+    return (Hmx::Object *)mNextShot;
 }
 
 HamCharacter *HamDirector::GetCharacter(int i) const {

@@ -142,16 +142,19 @@ void LabelNumberTicker::Poll() {
         float animdelay = mAnimDelay * 1000.0f;
         float animsum = animdelay + animtime;
         if (split >= animdelay) {
-            float quotient = (split - animdelay) / animtime;
-            quotient *= std::pow(quotient, mAcceleration);
-            int somenum = unk6c + (int)(quotient * (mDesiredValue - unk6c));
+            float diff = split - animdelay;
+            float quotient = diff / animtime;
+            float powered = std::pow(quotient, mAcceleration);
+            quotient *= powered;
+            int delta = mDesiredValue - unk6c;
+            int somenum = unk6c + (int)(quotient * delta);
             if (mTickTrigger && mTickEvery != 0) {
                 if ((somenum / mTickEvery) > (unk70 / mTickEvery)) {
                     mTickTrigger->Trigger();
                 }
             }
             unk70 = somenum;
-            if (unk70 == mDesiredValue || (split >= animsum)) {
+            if (unk70 == mDesiredValue || split >= animsum) {
                 unk70 = mDesiredValue;
                 mTimer.Stop();
             }

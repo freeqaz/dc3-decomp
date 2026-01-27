@@ -62,8 +62,7 @@ void HttpGet::StartSending() {
         }
         str += "\r\n\r\n";
         int len = str.length();
-        mSocket->Send(str.c_str(), len);
-        if (len != 0) {
+        if (mSocket->Send(str.c_str(), len) != len) {
             mFailType = (HttpGetFailType)1;
             SetState((State)7);
         } else {

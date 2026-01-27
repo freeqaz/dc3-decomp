@@ -618,8 +618,9 @@ void Spotlight::SetFlareEnabled(bool b) {
 
 void Spotlight::CloseSlaves() {
     FOREACH (it, mSlaves) {
-        if (*it)
-            (*it)->SetShadowOverride(nullptr);
+        RndLight *lit = *it;
+        if (lit)
+            lit->SetShadowOverride(0);
     }
 }
 

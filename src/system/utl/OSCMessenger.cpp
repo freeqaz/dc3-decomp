@@ -13,7 +13,7 @@ OSCMessenger::~OSCMessenger() {
 void OSCMessenger::Connect() {
     if (!UsingCD()) {
         unsigned int ip = HolmesResolveIP().mIP;
-        if (ip != 0) {
+        if ((int)ip != 0) {
             mSocket1 = NetworkSocket::Create(false);
             mSocket1->Bind(0x303A);
             mSocket1->Listen();

@@ -41,6 +41,8 @@ void ArkFile::TaskDone(int a) {
     mTell += a;
 }
 
+bool ArkFile::Eof() { return mTell == mSize; }
+
 bool ArkFile::ReadDone(int &i) {
     TheBlockMgr.Poll();
     i = mBytesRead;

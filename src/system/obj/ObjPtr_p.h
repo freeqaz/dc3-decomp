@@ -53,8 +53,8 @@ Hmx::Object *ObjRefConcrete<T1, T2>::SetObj(Hmx::Object *root_obj) {
 template <class T1>
 BinStream &operator<<(BinStream &bs, const ObjRefConcrete<T1, class ObjectDir> &f) {
     MILO_ASSERT(f.RefOwner(), 0x4D1);
-    // TODO: the comparison here is emitting a cmpwi instead of a cmplwi
-    const char *objName = f ? f->Name() : "";
+    T1 *obj = f;
+    const char *objName = obj ? obj->Name() : "";
     bs << objName;
     return bs;
 }

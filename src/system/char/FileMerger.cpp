@@ -1,4 +1,5 @@
 #include "char/FileMerger.h"
+#include "char/FileMergerOrganizer.h"
 #include "CharClipGroup.h"
 #include "char/CharPollGroup.h"
 #include "obj/Dir.h"
@@ -375,19 +376,18 @@ bool FileMerger::NeedsLoading(FileMerger::Merger &merger) {
 void FileMerger::LaunchNextLoader() {
     MILO_ASSERT(!mFilesPending.empty(), 0x182);
     MILO_ASSERT(!mCurLoader, 0x183);
-    bool b1 = false;
+    int pos;
     if (Dir()->Loader() && !Dir()->Loader()->IsLoaded()) {
         if (Dir()->Loader()->GetPos() != kLoadStayBack) {
             if (Dir()->Loader()->GetPos() != kLoadFrontStayBack)
                 goto next;
         }
-        b1 = true;
+        pos = 2;
+    } else {
+        pos = 0;
     }
 
 next:
-    int pos = 0;
-    if (b1)
-        pos = 2;
     FilePath &fp = mFilesPending.front()->loading;
     MemHeapTracker tmp(mHeap);
     if (fp.empty()) {
@@ -433,7 +433,7 @@ bool FileMerger::StartLoadInternal(bool async, bool loading) {
         return false;
     else {
         if (async) {
-            // TheFileMergerOrganizer->AddFileMerger(this);
+            TheFileMergerOrganizer->AddFileMerger(this);
         } else {
             LaunchNextLoader();
             while (!mFilesPending.empty()) {

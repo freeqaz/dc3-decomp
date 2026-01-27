@@ -79,7 +79,7 @@ float MultiTempoTempoMap::GetTimeInLoop(float time) {
     MILO_ASSERT(timeFromStart >= 0.0f, 0xE3);
 
     float a = std::floor(timeFromStart / loopLength);
-    return startTime + -(loopLength * a - timeFromStart);
+    return startTime + (timeFromStart - loopLength * a);
 }
 
 int MultiTempoTempoMap::GetNumTempoChangePoints() const { return mTempoPoints.size(); }

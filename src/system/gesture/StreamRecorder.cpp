@@ -97,7 +97,7 @@ BEGIN_LOADS(StreamRecorder)
         d >> x;
     }
     d >> mUseAlpha;
-    // BinStreamEnum load here
+    d >> mPlaybackSpeed;
     if (d.rev > 4) {
         d >> mOutputWidth;
         d >> mOutputHeight;
@@ -159,9 +159,8 @@ void StreamRecorder::DeleteBuffers() {
 }
 
 void StreamRecorder::CompressTextures() {
-    FOREACH (it, unkcc) {
-        auto cur = it;
-        int index = *it;
+    while (!unkcc.empty()) {
+        int index = unkcc.front();
         unkcc.pop_front();
         MILO_ASSERT(index >= 0 && index < mBuffers.size(), 0x32);
         RndTex::AlphaCompress compress =

@@ -30,7 +30,8 @@ BEGIN_LOADS(MoveGraph)
         }
         MoveParent *parent = new MoveParent();
         parent->Load(d.stream, this);
-        mMoveParents[parent->unk4] = parent;
+        Symbol key = parent->unk4;
+        mMoveParents[key] = parent;
     }
     CacheLinks();
     mLayoutData->Load(d.stream);
@@ -53,7 +54,8 @@ void MoveGraph::ImportMoveData(DataArray *pMoveData) {
         MILO_ASSERT(pParentConfig, 0x57);
         MoveParent *pParent = new MoveParent(this, pParentConfig);
         MILO_ASSERT(pParent, 0x5A);
-        mMoveParents[pParent->unk4] = pParent;
+        Symbol key = pParent->unk4;
+        mMoveParents[key] = pParent;
         for (std::vector<MoveVariant *>::iterator it = pParent->mVariants.begin();
              it != pParent->mVariants.end();
              ++it) {

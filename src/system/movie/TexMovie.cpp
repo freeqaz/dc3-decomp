@@ -19,17 +19,17 @@ TexMovie::TexMovie()
 
 TexMovie::~TexMovie() { mMovie.End(); }
 
-BEGIN_COPYS(TexMovie)
-    COPY_SUPERCLASS(Hmx::Object)
-    COPY_SUPERCLASS(RndDrawable)
-    COPY_SUPERCLASS(RndPollable)
-    CREATE_COPY(TexMovie)
-    BEGIN_COPYING_MEMBERS
-        COPY_MEMBER(mTex)
-        COPY_MEMBER(sRoot)
-        COPY_MEMBER(unk5e)
-    END_COPYING_MEMBERS
-END_COPYS
+void TexMovie::Copy(const Hmx::Object *o, Hmx::Object::CopyType ty) {
+    Hmx::Object::Copy(o, ty);
+    RndDrawable::Copy(o, ty);
+    RndPollable::Copy(o, ty);
+    const TexMovie *c = dynamic_cast<const TexMovie *>(o);
+    if (c) {
+        mTex = c->mTex;
+        sRoot = c->sRoot;
+        unk5e = c->unk5e;
+    }
+}
 
 bool TexMovie::Replace(ObjRef *a, Hmx::Object *b) {
     bool check;

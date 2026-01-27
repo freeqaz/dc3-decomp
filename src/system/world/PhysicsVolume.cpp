@@ -179,7 +179,12 @@ void PhysicsVolume::CreatePhysicsVolume(PhysicsManager *mgr) {
     }
 }
 
-void PhysicsVolume::DestroyPhysicsVolume() { RELEASE(mDetectionVolume); }
+void PhysicsVolume::DestroyPhysicsVolume() {
+    if ((unsigned)(void*)mDetectionVolume.Ptr()) {
+        delete mDetectionVolume.Ptr();
+    }
+    mDetectionVolume = nullptr;
+}
 
 DataNode PhysicsVolume::OnSetDirectionalForce(const DataArray *args) {
     MILO_ASSERT(args->Size() == 5, 0x180);

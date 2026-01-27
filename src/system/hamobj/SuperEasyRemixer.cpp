@@ -95,7 +95,7 @@ bool InsertVariants(std::set<const MoveVariant *> &vars, Symbol name) {
     if (!mp) {
         return false;
     } else {
-        for (int i = 0; i < mp->Variants().size(); i++) {
+        for (int i = 0; i < (int)mp->Variants().size(); i++) {
             const MoveVariant *v = mp->Variants()[i];
             vars.insert(v);
         }

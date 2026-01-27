@@ -677,14 +677,14 @@ void LightPreset::AddSpotlight(Spotlight *s, bool b) {
 }
 
 void LightPreset::SetSpotlight(Spotlight *s, int data) {
-    int idx;
+    uint idx;
     for (idx = 0; idx != mSpotlights.size(); idx++) {
         if (mSpotlights[idx] == s)
             break;
     }
     if (idx == mSpotlights.size())
         AddSpotlight(s, false);
-    for (int i = 0; i != mKeyframes.size(); i++) {
+    for (uint i = 0; i != mKeyframes.size(); i++) {
         FillSpotPresetData(s, mKeyframes[i].mSpotlightEntries[idx], data);
     }
 }

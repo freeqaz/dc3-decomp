@@ -261,6 +261,7 @@ void HamCamShot::TeleportTarget(RndTransformable *trans, const Transform &xfm, b
     trans->SetLocalXfm(xfm);
     Character *theChar = dynamic_cast<Character *>(trans);
     if (theChar) {
+        theChar->SetTeleport(true);
         static Message msg("teleport_char", 0, 0);
         msg[0] = trans;
         msg[1] = b3;

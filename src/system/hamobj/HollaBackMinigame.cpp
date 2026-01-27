@@ -384,10 +384,12 @@ void HollaBackMinigame::DecipherShoutOut(float pct) {
 }
 
 void HollaBackMinigame::WinShoutOut() {
-    if (mWinShoutouts.size()) {
+    int nShoutouts = (int)mWinShoutouts.size();
+    if (nShoutouts) {
         StartShoutOut(mWinShoutouts.front().Str());
     }
-    if (mWinCamCuts.size()) {
+    int nCamCuts = (int)mWinCamCuts.size();
+    if (nCamCuts) {
         TheHamDirector->Handle(Message("force_shot", mWinCamCuts.front().Str()), true);
     }
 }
@@ -471,7 +473,7 @@ void HollaBackMinigame::SetMoveState(int measure, Symbol state) {
         if (unk10[measure] != state) {
             if (state == powered_up) {
                 bool b2 = false;
-                for (int i = mSpecifyFirstMoveMeasure;
+                for (u32 i = mSpecifyFirstMoveMeasure;
                      i < mSpecifyFirstMoveMeasure + mMaxRoutineSize;
                      i++) {
                     HamMove *curMove = theMoveDir->GetMoveAtMeasure(0, i);
@@ -481,8 +483,8 @@ void HollaBackMinigame::SetMoveState(int measure, Symbol state) {
                 }
                 if (!b2) {
                     mFlashcardDockPanel->SetShowing(true);
-                    int numMoves = unk488.size();
-                    for (int i = 0; i < numMoves; i++) {
+                    u32 numMoves = unk488.size();
+                    for (u32 i = 0; i < numMoves; i++) {
                         if (move == unk488[i]) {
                             mFlashcardDockPanel->Handle(
                                 Message(set_card_campaign_status_2, i, powered_up), true

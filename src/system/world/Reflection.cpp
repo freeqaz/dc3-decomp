@@ -121,8 +121,8 @@ void WorldReflection::DrawShowing() {
     START_AUTO_TIMER("world_reflect");
     if (unk138) {
         unk138 = true;
-        RndCam *cur = RndCam::Current();
-        unk134->Copy(RndCam::Current(), kCopyDeep);
+        RndCam *cur2 = RndCam::Current();
+        unk134->Copy(cur2, kCopyDeep);
         Transform tf48(WorldXfm());
         Transform tf78;
         Invert(tf48, tf78);
@@ -131,7 +131,7 @@ void WorldReflection::DrawShowing() {
         tfa8.m.z.z = -mVerticalStretch;
         Multiply(tf78, tfa8, tfa8);
         Multiply(tfa8, tf48, tfa8);
-        Multiply(cur->WorldXfm(), tfa8, unk134->DirtyLocalXfm());
+        Multiply(cur2->WorldXfm(), tfa8, unk134->DirtyLocalXfm());
         unk134->Select();
         Rnd::DrawMode oldMode = TheRnd.GetDrawMode();
         TheRnd.SetDrawMode((Rnd::DrawMode)8);
@@ -145,7 +145,7 @@ void WorldReflection::DrawShowing() {
         DoLOD(-1);
         UnHide();
         TheRnd.SetDrawMode(oldMode);
-        cur->Select();
+        cur2->Select();
         unk138 = false;
     }
 }

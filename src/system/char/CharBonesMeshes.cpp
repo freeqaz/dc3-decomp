@@ -94,10 +94,10 @@ void CharBonesMeshes::PoseMeshes() {
     ObjPtrVec<RndTransformable>::iterator curMesh = mMeshes.begin();
 
     // Set positions
-    char *pos = mStart;
-    char *scaleOff = mStart + mOffsets[TYPE_SCALE];
-    for (; pos < scaleOff; pos += sizeof(Vector3), ++curMesh) {
-        (*curMesh)->SetLocalPos(*(Vector3 *)pos);
+    Vector3 *pos = (Vector3 *)mStart;
+    Vector3 *scaleOff = (Vector3 *)(mStart + mOffsets[TYPE_SCALE]);
+    for (; pos < scaleOff; pos++, ++curMesh) {
+        (*curMesh)->SetLocalPos(*pos);
     }
 
     // Handle quaternions and rotations if we have enough meshes
@@ -105,16 +105,15 @@ void CharBonesMeshes::PoseMeshes() {
         curMesh = mMeshes.begin() + mCounts[TYPE_QUAT];
 
         // Apply quaternion rotations
-        char *quatOff = mStart + mOffsets[TYPE_QUAT];
-        char *rotxOff = mStart + mOffsets[TYPE_ROTX];
-        for (Hmx::Quat *q = (Hmx::Quat *)quatOff; (char *)q < rotxOff;
-             q++, ++curMesh) {
-            Normalize(*q, *q);
-            MakeRotMatrix(*q, (*curMesh)->DirtyLocalXfm().m);
+        Hmx::Quat *quat = (Hmx::Quat *)(mStart + mOffsets[TYPE_QUAT]);
+        Hmx::Quat *quatEnd = (Hmx::Quat *)(mStart + mOffsets[TYPE_ROTX]);
+        for (; quat < quatEnd; quat++, ++curMesh) {
+            Normalize(*quat, *quat);
+            MakeRotMatrix(*quat, (*curMesh)->DirtyLocalXfm().m);
         }
 
         // Apply X rotations
-        float *rotIt = (float *)rotxOff;
+        float *rotIt = (float *)(mStart + mOffsets[TYPE_ROTX]);
         float *rotyOff = (float *)(mStart + mOffsets[TYPE_ROTY]);
         for (; rotIt < rotyOff; rotIt++, ++curMesh) {
             MakeRotMatrixX(*rotIt, (*curMesh)->DirtyLocalXfm().m);
@@ -136,16 +135,15 @@ void CharBonesMeshes::PoseMeshes() {
     // Handle scales if we have enough meshes
     if (mCounts[TYPE_SCALE] < mMeshes.size()) {
         curMesh = mMeshes.begin() + mCounts[TYPE_SCALE];
-        char *scaleOff = mStart + mOffsets[TYPE_SCALE];
-        char *quatOff = mStart + mOffsets[TYPE_QUAT];
-        for (Vector3 *s = (Vector3 *)scaleOff; (char *)s < quatOff;
-             s++, ++curMesh) {
+        Vector3 *scale = (Vector3 *)(mStart + mOffsets[TYPE_SCALE]);
+        Vector3 *scaleEnd = (Vector3 *)(mStart + mOffsets[TYPE_QUAT]);
+        for (; scale < scaleEnd; scale++, ++curMesh) {
             Transform &xfm = (*curMesh)->DirtyLocalXfm();
-            Vector3 scale;
-            MakeScale(xfm.m, scale);
-            xfm.m.x *= s->x / scale.x;
-            xfm.m.y *= s->y / scale.y;
-            xfm.m.z *= s->z / scale.z;
+            Vector3 scaleVec;
+            MakeScale(xfm.m, scaleVec);
+            xfm.m.x *= scale->x / scaleVec.x;
+            xfm.m.y *= scale->y / scaleVec.y;
+            xfm.m.z *= scale->z / scaleVec.z;
         }
     }
 }

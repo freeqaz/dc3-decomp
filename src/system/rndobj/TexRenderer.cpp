@@ -148,15 +148,35 @@ void RndTexRenderer::ListPollChildren(std::list<RndPollable *> &list) const {
     }
 }
 
-BEGIN_LOADS(RndTexRenderer)
-    LOAD_REVS(bs)
-    ASSERT_REVS(13, 0)
-    LOAD_SUPERCLASS(Hmx::Object)
+void RndTexRenderer::Load(BinStream &bs) {
+    int revs = 0;
+    bs >> revs;
+    BinStreamRev d(bs, revs);
+    static const unsigned short gRevs[4] = { 13, 0, 0, 0 };
+    if (d.rev > 13) {
+        MILO_FAIL(
+            "%s can't load new %s version %d > %d",
+            PathName(this),
+            ClassName(),
+            d.rev,
+            gRevs[0]
+        );
+    }
+    if (d.altRev > 0) {
+        MILO_FAIL(
+            "%s can't load new %s alt version %d > %d",
+            PathName(this),
+            ClassName(),
+            d.altRev,
+            gRevs[2]
+        );
+    }
+    Hmx::Object::Load(d.stream);
     if (d.rev > 2) {
-        LOAD_SUPERCLASS(RndAnimatable)
-        LOAD_SUPERCLASS(RndDrawable)
+        RndAnimatable::Load(d.stream);
+        RndDrawable::Load(d.stream);
         if (d.rev > 10)
-            LOAD_SUPERCLASS(RndPollable)
+            RndPollable::Load(d.stream);
     }
     if (d.rev < 1) {
         FilePath fp;
@@ -208,7 +228,7 @@ BEGIN_LOADS(RndTexRenderer)
         bs >> mClearColor;
     }
     unk_0x58 = true;
-END_LOADS
+}
 
 void RndTexRenderer::DrawToTexture() {}
 

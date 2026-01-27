@@ -47,6 +47,7 @@ public:
     const std::map<Symbol, MoveVariant *> &MoveVariants() const {
         return mMoveGraph.MoveVariants();
     }
+    const std::set<const MoveVariant *> &GetVariants() const { return unk104; }
     const DataArrayPtr &Layout() const { return mMoveGraph.Layout(); }
     void Clear();
     bool HasRoutine() const;

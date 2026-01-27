@@ -30,7 +30,11 @@ BEGIN_PROPSYNCS(PracticeSection)
     SYNC_PROP_MODIFY(
         test_step_sequence,
         mTestStepSequence,
-        MinEq<int>(mTestStepSequence, mSeqs.size() - 1)
+        {
+            if (mTestStepSequence <= (int)mSeqs.size() - 1) {
+                mTestStepSequence = ((((unsigned int)mTestStepSequence >> 31) - 1) & mTestStepSequence);
+            }
+        }
     )
     SYNC_SUPERCLASS(RndAnimatable)
     SYNC_SUPERCLASS(Hmx::Object)

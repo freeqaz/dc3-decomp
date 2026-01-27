@@ -236,7 +236,7 @@ void ShaderOptions::GenerateMacros(ShaderType t, std::vector<ShaderMacro> &macro
     macros.push_back(ShaderMacro("TONE_MAPPING", sNumbers[(flags >> 39) & 1]));
     macros.push_back(ShaderMacro("SOFT_DEPTH_BLEND", sNumbers[(flags >> 45) & 1]));
     macros.push_back(ShaderMacro("ENABLE_POINT_CUBE_TEX", sNumbers[flags & 1])); // as
-                                                                                 // u16?
+                                                                             // u16?
     macros.push_back(ShaderMacro("HI_RES_SCREEN", sNumbers[(flags >> 52) & 1]));
     macros.push_back(ShaderMacro("INTENSIFY", sNumbers[(flags >> 53) & 1]));
     macros.push_back(ShaderMacro("FIT_TO_SPLINE", sNumbers[(flags >> 55) & 1]));

@@ -132,9 +132,10 @@ void RndCam::UpdatedWorldXfm() {
 }
 
 void RndCam::Select() {
-    if (sCurrent) {
-        if (sCurrent->TargetTex() && sCurrent != this) {
-            sCurrent->TargetTex()->FinishDrawTarget();
+    RndCam *cur = sCurrent;
+    if (cur) {
+        if (cur->TargetTex() && cur != this) {
+            cur->TargetTex()->FinishDrawTarget();
         }
     }
     WorldXfm();
@@ -151,8 +152,7 @@ Transform RndCam::GetInvViewXfm() {
 }
 
 void RndCam::SetViewProj(const Hmx::Matrix4 &mtx) {
-    unk300 = mtx;
-    Invert(unk300, unk340);
+    Invert(unk300 = mtx, unk340);
     Transpose(unk340, unk340);
 }
 

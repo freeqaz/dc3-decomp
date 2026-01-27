@@ -846,8 +846,9 @@ void MoveDir::FlushMoveRecord() {
 }
 
 void MoveDir::SwapMoveRecord() {
-    if (unk2d0) {
-        unk2d0->SwapMoveRecord();
+    SkeletonClip *clip = unk2d0;
+    if (clip) {
+        clip->SwapMoveRecord();
     } else {
         MILO_NOTIFY("skeleton recording not yet active");
     }

@@ -138,8 +138,7 @@ void RhythmBattle::Enter() {
 void RhythmBattle::Exit() {
     static Symbol mind_control("mind_control");
     static Symbol gameplay_mode("gameplay_mode");
-    const DataNode *node = TheHamProvider->Property(gameplay_mode, true);
-    Symbol mindControlCheck = node->Sym();
+    Symbol mindControlCheck = TheHamProvider->Property(gameplay_mode, true)->Sym();
     if (!unkf9 && mindControlCheck == mind_control)
         End();
 
@@ -157,7 +156,7 @@ void RhythmBattle::End() {
             unk130->Free();
             RELEASE(unk130);
         }
-        if (unk102) {
+        if (!unk102) {
             static UIPanel *panel =
                 ObjectDir::Main()->Find<UIPanel>("rhythm_detector_panel", false);
             if (panel && panel->LoadedDir()) {
@@ -172,10 +171,8 @@ void RhythmBattle::End() {
         if (unkfa) {
             ObjectDir *dir =
                 dynamic_cast<ObjectDir *>(DataVariable("hud_panel").GetObj());
-            RndDir *rightDir = dir->Find<RndDir>("score_right", true);
-            rightDir->SetShowing(true);
-            RndDir *leftDir = dir->Find<RndDir>("score_left", true);
-            leftDir->SetShowing(true);
+            dir->Find<RndDir>("score_right", true)->SetShowing(true);
+            dir->Find<RndDir>("score_left", true)->SetShowing(true);
         }
         unk102 = false;
     }

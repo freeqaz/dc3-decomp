@@ -369,7 +369,8 @@ DataNode PanelDir::GetFocusableComponentList() {
     }
     DataArrayPtr ptr(new DataArray(components.size()));
     int i = 0;
-    FOREACH (it, components) {
+    std::vector<UIComponent *>::iterator it = components.begin();
+    for (; it != components.end(); ++it, ++i) {
         ptr->Node(i) = *it;
     }
     return ptr;

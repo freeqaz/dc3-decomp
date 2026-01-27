@@ -23,12 +23,10 @@ BEGIN_LOADS(RndMultiMeshProxy)
 END_LOADS
 
 void RndMultiMeshProxy::DrawShowing() {
-    if (mMultiMesh) {
-        RndMesh *mesh = mMultiMesh->Mesh();
-        if (mesh) {
-            mesh->SetWorldXfm(mIndex->mXfm);
-            mMultiMesh->Mesh()->DrawShowing();
-        }
+    if (mMultiMesh && mMultiMesh->Mesh()) {
+        RndMesh *theMesh = mMultiMesh->Mesh();
+        theMesh->SetWorldXfm(mIndex->mXfm);
+        mMultiMesh->Mesh()->DrawShowing();
     }
 }
 

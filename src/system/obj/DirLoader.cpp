@@ -61,8 +61,8 @@ DirLoader::DirLoader(
         char buf[256];
         strcpy(buf, filePath);
         int bufLen = strlen(buf);
-        if (bufLen - 4 > 0 && streq("/gen", buf)) {
-            buf[bufLen] = 0;
+        if (bufLen > 4 && streq("/gen", buf + bufLen - 4)) {
+            buf[bufLen - 4] = '\0';
         }
         mRoot = FileMakePath(FileRoot(), buf);
     }

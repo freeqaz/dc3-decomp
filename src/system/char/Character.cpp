@@ -475,7 +475,7 @@ void Character::Teleport(Waypoint *wp) {
 }
 
 void Character::CalcBoundingSphere() {
-    Transform tf50(mLocalXfm);
+    Transform tf(mLocalXfm);
     DirtyLocalXfm().Reset();
     mBounding.Zero();
     static const char *boneNames[5] = { "bone_head.mesh",
@@ -495,7 +495,8 @@ void Character::CalcBoundingSphere() {
         RndTransformable *transLHand = CharUtlFindBoneTrans("bone_L-hand", this);
         if (transLHand) {
             Vector3 vClavicle = transLClavicle->WorldXfm().v;
-            vClavicle.z += Distance(vClavicle, transLHand->WorldXfm().v);
+            float fDist = Distance(vClavicle, transLHand->WorldXfm().v);
+            vClavicle.z += fDist;
             mBounding.GrowToContain(Sphere(vClavicle, 7.0f));
         }
     }
@@ -504,27 +505,28 @@ void Character::CalcBoundingSphere() {
         RndTransformable *transRHand = CharUtlFindBoneTrans("bone_R-hand", this);
         if (transRHand) {
             Vector3 vClavicle = transRClavicle->WorldXfm().v;
-            vClavicle.z += Distance(vClavicle, transRHand->WorldXfm().v);
+            float fDist = Distance(vClavicle, transRHand->WorldXfm().v);
+            vClavicle.z += fDist;
             mBounding.GrowToContain(Sphere(vClavicle, 7.0f));
         }
     }
     if (mBounding.GetRadius() == 0) {
         for (ObjDirItr<RndTransformable> it(this, true); it != nullptr; ++it) {
-            if (strneq(it->Name(), "bone_", 5) || strneq(it->Name(), "spot_", 5)) {
+            if ((strncmp(it->Name(), "bone_", 5) == 0)
+                || (strncmp(it->Name(), "spot_", 5) == 0)) {
                 mBounding.GrowToContain(Sphere(it->WorldXfm().v, 0.1f));
             }
             RndMesh *mesh = dynamic_cast<RndMesh *>(&*it);
             if (mesh && mesh->Showing()) {
                 for (int i = 0; i < mesh->Verts().size(); i++) {
-                    mBounding.GrowToContain(
-                        Sphere(mesh->SkinVertex(mesh->Verts(i), nullptr), 0.001f)
-                    );
+                    Vector3 vert = mesh->SkinVertex(mesh->Verts(i), nullptr);
+                    mBounding.GrowToContain(Sphere(vert, 0.001f));
                 }
             }
         }
     }
     UpdateSphere();
-    DirtyLocalXfm() = tf50;
+    DirtyLocalXfm() = tf;
 }
 
 bool Character::MakeWorldSphere(Sphere &s, bool b) {

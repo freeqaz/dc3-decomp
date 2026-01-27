@@ -433,15 +433,13 @@ void EventTrigger::BasicReset() {
 }
 
 DataArray *EventTrigger::SupportedEvents() {
-    DataArray *cfg;
     if (Type() == "endgame_action") {
-        cfg = SystemConfig(
+        gSupportedEvents = SystemConfig(
             "objects", "EventTrigger", "types", "endgame_action", "supported_events"
-        );
+        )->Array(1);
     } else {
-        cfg = SystemConfig("objects", "EventTrigger", "supported_events");
+        gSupportedEvents = SystemConfig("objects", "EventTrigger", "supported_events")->Array(1);
     }
-    gSupportedEvents = cfg->Array(1);
     return gSupportedEvents;
 }
 

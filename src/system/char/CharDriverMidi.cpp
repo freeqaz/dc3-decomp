@@ -40,7 +40,7 @@ END_COPYS
 BEGIN_LOADS(CharDriverMidi)
     LOAD_REVS(bs)
     ASSERT_REVS(7, 0)
-    LOAD_SUPERCLASS(CharDriverMidi)
+    LOAD_SUPERCLASS(CharDriver)
     if (d.rev < 7) {
         mDefaultClip.Load(bs, false, mClips);
     }

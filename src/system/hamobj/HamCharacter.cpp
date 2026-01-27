@@ -324,8 +324,9 @@ bool HamCharacter::InClipTest() {
 
 void HamCharacter::SetIKEffectorWeights(float weight) {
     FOREACH (it, mIKEffectors) {
-        if (*it) {
-            (*it)->SetWeight(weight);
+        CharWeightable *ptr = *it;
+        if (ptr) {
+            ptr->SetWeight(weight);
         }
     }
 }
@@ -457,10 +458,12 @@ void HamCharacter::SetUseCameraSkeleton(bool use) {
 
 Symbol HamCharacter::GetFaceOverrideClip() {
     CharLipSyncDriver *driver = Find<CharLipSyncDriver>("face.lipdrv", false);
-    if (driver && driver->OverrideClip()) {
-        return driver->OverrideClip()->Name();
-    } else
-        return Symbol();
+    if (driver) {
+        if (driver->OverrideClip() > (void*)0) {
+            return driver->OverrideClip()->Name();
+        }
+    }
+    return Symbol();
 }
 
 void HamCharacter::ResetFaceOverrideBlending() {

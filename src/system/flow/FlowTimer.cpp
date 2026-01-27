@@ -49,9 +49,9 @@ bool FlowTimer::Activate() {
     unk58 = false;
     FlowNode::PushDrivenProperties();
     if (0.0f >= mTotalTime) {
-        TheFlowMgr->QueueCommand(this, kQueue);
+        return false;
     }
-
+    TheFlowMgr->QueueCommand(this, kQueue);
     return true;
 }
 

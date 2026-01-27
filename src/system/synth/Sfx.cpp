@@ -42,8 +42,9 @@ void SfxInst::Stop() {
         (*it)->Stop(false);
     }
     FOREACH (it, mSfx->MoggClipMaps()) {
-        if (it->GetMoggClip()) {
-            it->GetMoggClip()->Stop(false);
+        MoggClip *clp = it->GetMoggClip();
+        if (clp) {
+            clp->Stop(false);
         }
     }
 }
@@ -54,8 +55,10 @@ bool SfxInst::IsRunning() {
             return true;
     }
     FOREACH (it, mSfx->MoggClipMaps()) {
-        if (it->GetMoggClip() && it->GetMoggClip()->GetStream()) {
-            return true;
+        MoggClip *clp = it->GetMoggClip();
+        if (clp) {
+            if (clp->GetStream())
+                return true;
         }
     }
     return false;

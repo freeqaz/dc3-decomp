@@ -370,7 +370,7 @@ void MidiReader::ReadFileHeader(BinStream &bs) {
         mTrackNames.resize(mNumTracks, "");
     }
     bs >> mTicksPerQuarter;
-    if (mTicksPerQuarter & 0x8000U) {
+    if ((unsigned short)mTicksPerQuarter & 0x8000U) {
         MILO_NOTIFY(
             "%s: MIDI file uses SMPTE time division; this is not allowed",
             mStreamName.c_str()
@@ -383,7 +383,7 @@ void MidiReader::ReadFileHeader(BinStream &bs) {
             mTicksPerQuarter
         );
     }
-    if (mNumTracks == 0 || midiType != 1 || (mTicksPerQuarter & 0x8000U)
+    if (mNumTracks == 0 || midiType != 1 || ((unsigned short)mTicksPerQuarter & 0x8000U)
         || mTicksPerQuarter != 480) {
         mFail = true;
         return;

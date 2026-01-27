@@ -163,7 +163,7 @@ void CharLipSync::Generator::Finish() {
     std::vector<bool> bools;
     bools.resize(mLipSync->mVisemes.size());
     for (int i = 0; i < bools.size(); i++) {
-        bools[i] = false;
+        bools[i] = 0;
     }
 
     std::vector<unsigned char> &data = mLipSync->mData;
@@ -175,7 +175,7 @@ void CharLipSync::Generator::Finish() {
             int viseme = data[idx++];
             MILO_ASSERT(viseme < mLipSync->mVisemes.size(), 0x6E);
             if (data[idx++] != 0) {
-                bools[viseme] = true;
+                bools[viseme] = 1;
             }
         }
     }

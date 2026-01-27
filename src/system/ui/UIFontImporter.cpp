@@ -298,33 +298,30 @@ BEGIN_LOADS(UIFontImporter)
 END_LOADS
 
 void UIFontImporter::ImportSettingsFromFont(RndFontBase *font) {
-    if (font) {
-        Symbol imported_font("imported_font");
-        if (font->Type() == imported_font) {
-            SetProperty("font_name", DataNode(font->Property("font_name", true)->Str()));
-            SetProperty(
-                "font_size",
-                DataNode(
-                    ConvertHeightNGToPctHeight(-font->Property("font_size", true)->Int())
-                )
-            );
-
-            SetProperty("weight", DataNode(font->Property("weight", true)->Int()));
-            SetProperty("italics", DataNode(font->Property("italics", true)->Int()));
-            SetProperty(
-                "drop_shadow", DataNode(font->Property("drop_shadow", true)->Int())
-            );
-            SetProperty(
-                "drop_shadow_opacity",
-                DataNode(font->Property("drop_shadow_opacity", true)->Int())
-            );
-            SetProperty("left", DataNode(font->Property("left", true)->Int()));
-            SetProperty("right", DataNode(font->Property("right", true)->Int()));
-            SetProperty("top", DataNode(font->Property("top", true)->Int()));
-            SetProperty("bottom", DataNode(font->Property("bottom", true)->Int()));
-        }
+    if (font && font->Type() == Symbol("imported_font")) {
+        SetProperty("font_name", DataNode(font->Property("font_name", true)->Str()));
+        SetProperty(
+            "font_size",
+            DataNode(
+                ConvertHeightNGToPctHeight(-font->Property("font_size", true)->Int())
+            )
+        );
+        SetProperty("weight", DataNode(font->Property("weight", true)->Int()));
+        SetProperty("italics", DataNode(font->Property("italics", true)->Int()));
+        SetProperty("drop_shadow", DataNode(font->Property("drop_shadow", true)->Int()));
+        SetProperty(
+            "drop_shadow_opacity",
+            DataNode(font->Property("drop_shadow_opacity", true)->Int())
+        );
+        SetProperty("left", DataNode(font->Property("left", true)->Int()));
+        SetProperty("right", DataNode(font->Property("right", true)->Int()));
+        SetProperty("top", DataNode(font->Property("top", true)->Int()));
+        SetProperty("bottom", DataNode(font->Property("bottom", true)->Int()));
+    } else {
+        MILO_NOTIFY(
+            "Can't import settings from Font because it doesnt have import_font type"
+        );
     }
-    MILO_NOTIFY("Can't import settings from Font because it doesnt have import_font type");
 }
 
 Symbol UIFontImporter::GetMatVariationName(unsigned int ui) const { return Symbol(0); }
