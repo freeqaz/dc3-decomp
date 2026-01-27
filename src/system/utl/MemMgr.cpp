@@ -1,5 +1,6 @@
 #include "utl/MemMgr.h"
 #include "MemHeap.h"
+#include "MemStats.h"
 #include "MemTracker.h"
 #include "Memory.h"
 #include "obj/Data.h"
@@ -11,6 +12,8 @@
 #include "utl/TextStream.h"
 #include "xdk/XAPILIB.h"
 #include <cstdlib>
+
+extern MemTracker *gMemTracker;
 
 #define MAX_HEAPS 16
 #define MAX_BUF_THREADS 32
@@ -97,9 +100,11 @@ int MemNumHeaps() { return gNumHeaps; }
 void MemFree(void *mem, const char *file, int line, const char *name) {
     if (mem) {
         CritSecTracker tracker(gMemLock);
+        int freed = 0;
         int i;
         for (i = 0; i < gNumHeaps; i++) {
-            if (gHeaps[i].Free((int *)mem))
+            freed = gHeaps[i].Free((int *)mem);
+            if (freed)
                 break;
         }
         if (i == gNumHeaps) {
@@ -109,11 +114,13 @@ void MemFree(void *mem, const char *file, int line, const char *name) {
                 free(mem);
             }
         }
-        //     if ((gMemTracker != 0x0) && (MemTrackFree(mem), gMemTracker->field_0x18195
-        //     !=
-        //     '\0')) {
-        //       HeapStats::Free(gMemTracker->mHeapStats + iVar2,iVar1,iVar1);
-        //     }
+        if (gMemTracker) {
+            MemTrackFree(mem);
+            if (((char *)gMemTracker)[0x18195]) {
+                HeapStats *stats = (HeapStats *)((char *)gMemTracker + 0xC);
+                stats[i].Free(freed, freed);
+            }
+        }
     }
 }
 

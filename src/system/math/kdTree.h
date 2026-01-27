@@ -87,22 +87,26 @@ public:
             }
             unsigned int vecIdx = mData.index;
             float idxDiff = box.mMax[vecIdx] - box.mMin[vecIdx];
-            int numContains = 0;
+            long numContains = 0;
             mData.real = idxDiff / 2.0f + box.mMin[mData.index];
             mData.index = 3;
-            float fsum = 0;
+            double fsum = 0;
             if (!items.empty()) {
                 FOREACH (it, items) {
                     Triangle *cur = *it;
+                    Vector3 v[3];
+                    v[0].Set(cur->origin.x + cur->frame.x.x, cur->origin.y + cur->frame.x.y, cur->origin.z + cur->frame.x.z);
+                    v[1].Set(cur->origin.x + cur->frame.y.x, cur->origin.y + cur->frame.y.y, cur->origin.z + cur->frame.y.z);
+                    v[2].Set(cur->origin.x + cur->frame.z.x, cur->origin.y + cur->frame.z.y, cur->origin.z + cur->frame.z.z);
                     for (int i = 0; i < 3; i++) {
-                        if (box.Contains(cur->origin)) {
+                        if (box.Contains(v[i])) {
+                            fsum += v[i][vecIdx];
                             numContains++;
-                            fsum += cur->origin[mData.index];
                         }
                     }
                 }
                 if (numContains != 0) {
-                    mData.real = fsum / numContains;
+                    mData.real = (float)(fsum / numContains);
                     mData.index = 3;
                 }
             }

@@ -1,6 +1,7 @@
 #include "char/CharClipDriver.h"
 #include "char/CharBones.h"
 #include "char/CharClip.h"
+#include "math/Easing.h"
 #include "math/Rand.h"
 #include "obj/Msg.h"
 #include "obj/Object.h"
@@ -90,7 +91,14 @@ CharClipDriver::CharClipDriver(Hmx::Object *o, const CharClipDriver &driver)
 
 void CharClipDriver::ScaleAdd(CharBones &bones, float f) {}
 
-void CharClipDriver::RotateTo(CharBones &bones, float f) {}
+void CharClipDriver::RotateTo(CharBones &bones, float f) {
+    if (f != 0) {
+        mWeight = f * EaseSigmoid(mBlendFrac, 0, 0);
+        mClip->RotateTo(bones, mWeight, mBeat);
+        if (mNext)
+            mNext->RotateTo(bones, f - mWeight);
+    }
+}
 
 int CharClipDriver::NumBeatEvents() const {
     if (mClip)

@@ -55,17 +55,20 @@ ClipDistMap::ClipDistMap(
     int w = CalcWidth();
     mDists.Resize(w, h);
 
-    mBeatAlignPeriod = mBeatAlign * mSamplesPerBeat + 0.5;
+    mBeatAlignPeriod = (int)(mBeatAlign * mSamplesPerBeat + 0.5f);
 
     int temp;
     if (mBeatAlignPeriod != 0) {
-        temp = mAStart * mSamplesPerBeat - mBStart * mSamplesPerBeat;
+        temp = (int)(mAStart * mSamplesPerBeat) - (int)(mBStart * mSamplesPerBeat);
         mBeatAlignOffset = temp - (temp / mBeatAlignPeriod) * mBeatAlignPeriod;
 
         if (mBeatAlignOffset < 0) {
             mBeatAlignOffset += mBeatAlignPeriod;
         }
     }
+}
+
+ClipDistMap::~ClipDistMap() {
 }
 
 bool ClipDistMap::BeatAligned(int i1, int i2) {

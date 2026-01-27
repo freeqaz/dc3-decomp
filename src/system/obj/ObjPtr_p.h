@@ -218,9 +218,9 @@ ObjPtrVec<T1, T2>::insert(typename ObjPtrVec<T1, T2>::const_iterator it, T1 *obj
     if (obj != 0 || mListMode != kObjListNoNull) {
         Node newNode(this);
         mNodes.push_back(newNode);
-        Set(begin(), obj);
-    } else {
-        return begin();
+        iterator result = begin();
+        Set(result, obj);
+        return result;
     }
     return begin();
 }

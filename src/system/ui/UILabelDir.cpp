@@ -89,7 +89,8 @@ RndFontBase *UILabelDir::FontObj(Symbol s) const { return nullptr; }
 
 UIColor *UILabelDir::GetStateColor(UIComponent::State state) const {
     MILO_ASSERT(state < UIComponent::kNumStates, 0x39);
-    return nullptr;
+    UIColor *c = mColors[state];
+    return c ? c : mDefaultColor;
 }
 
 DataNode UILabelDir::GetMatVariations(UILabelDir *) { return NULL_OBJ; }

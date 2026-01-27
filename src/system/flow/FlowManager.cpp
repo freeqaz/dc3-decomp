@@ -54,12 +54,12 @@ void FlowManager::AddEventTime(Symbol s, float f1) {
 }
 
 void FlowManager::Poll() {
-    float ms = 0;
+    float f31 = unk18c;
     unk18c = 0;
     Timer timer;
     timer.Reset();
-    timer.Start();
     unk2d = true;
+
     for (std::map<FlowNode *, FlowNode::QueueState>::iterator it = mFlowQueue.begin();
          it != mFlowQueue.end();
          ++it) {
@@ -68,11 +68,53 @@ void FlowManager::Poll() {
         }
     }
     mFlowQueue.clear();
+
     ObjPtrVec<FlowNode> polls(mPollables);
     for (ObjPtrVec<FlowNode>::iterator it = polls.begin(); it != polls.end(); ++it) {
         (*it)->Execute(FlowNode::kWhenAble);
     }
+
     unk2d = false;
-    timer.Stop();
+    float f27 = timer.Ms() - unk18c;
+    unk190 = f27 + unk7c + f31;
+
+    float f30 = -1.0f;
+    float f29 = -1.0f;
+
+    for (std::map<Symbol, DataNode>::iterator it = unk64.begin();
+         it != unk64.end();
+         ++it) {
+        DataNode &node = it->second;
+        float fval = node.Array()->Float(0);
+        float fval2 = node.Array()->Float(2);
+
+        if (!(fval < f30)) {
+            f30 = fval;
+            unk7c = fval;
+        }
+        if (!(fval2 < f29)) {
+            f29 = fval2;
+        }
+    }
+
+    float total = f27 + f31 + unk7c;
+
+    if (total > unk80) {
+        unk80 = total;
+        unk94++;
+        if (unk94 >= 0x3C) {
+            unk80 = 0;
+            float avg = 0;
+            for (int i = 0; i < 60; i++) {
+                avg += unk98[i];
+            }
+            unk94 = 0;
+            unk190 = avg * 0.01666667f;
+        }
+    }
+
+    unk64.clear();
+    unk7c = 0;
+    unk18c = 0;
     unk2c = false;
 }

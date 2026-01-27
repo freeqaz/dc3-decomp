@@ -191,15 +191,27 @@ unsigned char RndBitmap::NearestColor(
     int paletteColorIdx = -1;
     int minDiff = 0x40000;
     unsigned char pr, pg, pb, pa;
-    for (int i = (1 << mBpp) - 1; i >= 0; i--) {
-        PaletteColor(i, pr, pg, pb, pa);
+    int order = mOrder;
+    int bpp = mBpp;
+    int maxIdx = (1 << bpp) - 1;
+    for (int i = maxIdx; i >= 0; i--) {
+        int paletteIdx = i;
+        if ((order & 2) != 0 && bpp == 8) {
+            int bits = (i & 0x18);
+            if (bits == 8) {
+                paletteIdx = i + 8;
+            } else if (bits == 0x10) {
+                paletteIdx = i - 8;
+            }
+        }
+        ConvertColor(mPalette + paletteIdx * 4, pr, pg, pb, pa);
         int dr = pr - r;
         int dg = pg - g;
         int db = pb - b;
         int da = pa - a;
-        int diff = dr * dr + dg * dg + db * db + da * da;
-        if (diff < minDiff) {
-            minDiff = diff;
+        int dist = dr * dr + dg * dg + db * db + da * da;
+        if (dist < minDiff) {
+            minDiff = dist;
             paletteColorIdx = i;
         }
     }

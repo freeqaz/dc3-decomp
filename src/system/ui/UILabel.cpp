@@ -4,12 +4,9 @@
 #include "obj/Data.h"
 #include "obj/Object.h"
 #include "obj/Task.h"
-#include "rndobj/Font.h"
-#include "rndobj/FontBase.h"
 #include "rndobj/Text.h"
 #include "rndobj/Trans.h"
 #include "ui/UI.h"
-#include "ui/UIFontImporter.h"
 #include "ui/UILabelDir.h"
 #include "ui/UIListWidget.h"
 #include "utl/BinStream.h"
@@ -17,6 +14,7 @@
 #include "utl/Locale.h"
 #include "utl/Str.h"
 #include "utl/Symbol.h"
+#include "utl/UTF8.h"
 #include <cstring>
 
 bool UILabel::sDeferUpdate;
@@ -57,11 +55,92 @@ BEGIN_COPYS(UILabel)
 END_COPYS
 
 BEGIN_SAVES(UILabel)
+    int version = 0x10021;
+    bs << version;
+    SAVE_SUPERCLASS(UIComponent)
+    bs << mTextToken;
+    if ((version != 0) && !AllowEditText()) {
+        bs << gNullStr;
+    } else {
+        bs << unk118;
+    }
+    bs << unk120;
+    bs << *(float *)(((unsigned char *)this) - 0x11c);
+    bs << *(float *)(((unsigned char *)this) - 0x128);
+    bs << *(float *)(((unsigned char *)this) - 0x110);
+    bs << *(float *)(((unsigned char *)this) - 0x10c);
+    bs << *(unsigned char *)(((unsigned char *)this) - 0x108);
+    bs << *(float *)(((unsigned char *)this) - 0x114);
+    bs << *(float *)(((unsigned char *)this) - 0x124);
+    bs << *(float *)(((unsigned char *)this) - 0x120);
+    bs << *(float *)(((unsigned char *)this) - 0x118);
+
+    int *begin = (int *)(((unsigned char *)this) - 0x14);
+    int *end = (int *)(((unsigned char *)this) - 0x10);
+    int numStyles = ((*end - *begin) / 0x2c);
+    int numAsInt = numStyles;
+    bs << numAsInt;
+
+    if (numStyles != 0) {
+        unsigned int styleIdx = 0;
+        int offset = 0;
+        do {
+            bs << *(int *)(((unsigned char *)this) + offset - 0x14 + 0x14);
+            bs << *(int *)(((unsigned char *)this) + offset - 0x14);
+            RndText::Style *stylePtr = &Style(styleIdx);
+            bs << stylePtr->mSize;
+            bs << *(float *)(((unsigned char *)stylePtr) + 0x2c);
+            bs << *(float *)(((unsigned char *)stylePtr) + 0x30);
+            bs << *(float *)(((unsigned char *)stylePtr) + 0x28);
+            bs << *(float *)(((unsigned char *)stylePtr) + 0x24);
+            bs << *(unsigned char *)(((unsigned char *)stylePtr) + 0x48);
+            styleIdx++;
+            offset += 0x2c;
+        } while (styleIdx < (unsigned int)numStyles);
+    }
+
+    bs << *(float *)(((unsigned char *)this) - 0x104);
+    bs << *(float *)(((unsigned char *)this) - 0x100);
+    bs << *(float *)(((unsigned char *)this) - 0xfc);
+    bs << *(float *)(((unsigned char *)this) - 0xd4);
+    bs << *(unsigned char *)(((unsigned char *)this) - 0x107);
+
+    int numFonts = ((*end - *begin) / 0x2c);
+    if (numFonts != 0) {
+        unsigned int fontIdx = 0;
+        do {
+            bs << GetFontMat(fontIdx);
+            fontIdx++;
+        } while (fontIdx < (unsigned int)numFonts);
+    }
 END_SAVES
 
 void UILabel::PreLoad(BinStream &) {}
 
-void UILabel::PostLoad(BinStream &bs) {}
+void UILabel::PostLoad(BinStream &bs) {
+    UIComponent::PostLoad(bs);
+
+    LabelUpdate(false);
+    sDeferUpdate = true;
+    if (!unk118.empty()) {
+        unk120 = unk118[0];
+    } else {
+        SetTextToken(mTextToken);
+    }
+    if (sRequireFixedLength) {
+        if (unk120 == 0) {
+            MILO_WARN(
+                "%s: %s is preloaded, but doesn't have fixed length",
+                PathName(Dir()),
+                Name()
+            );
+        }
+    }
+    sDeferUpdate = false;
+    if (!mTextToken.Null() || !unk118.empty()) {
+        LabelUpdate(false);
+    }
+}
 
 Symbol UILabel::TextToken() { return mTextToken; }
 
@@ -73,12 +152,6 @@ void UILabel::DrawShowing() {}
 
 void UILabel::SetTextToken(Symbol s) {
     mTextToken = s;
-
-    if (TheLoadMgr.EditMode()) {
-        if (!unk118.empty() && unk120 == '\0') {
-            return;
-        }
-    }
 
     SetTokenFmtImp(mTextToken, 0, 0, 0, true);
 }
@@ -108,19 +181,40 @@ void UILabel::SetIcon(char c) {
     }
 }
 
-void UILabel::SetTokenFmt(const DataArray *) {}
+void UILabel::SetTokenFmt(const DataArray *da) {
+    const DataNode &n = da->Evaluate(0);
+    bool b = (da->Size() > 1) && (da->Evaluate(1).Type() == kDataArray);
+    if (b) {
+        SetTokenFmtImp(da->ForceSym(0), da->Array(1), da, 2, false);
+    } else {
+        SetTokenFmtImp(da->ForceSym(0), 0, da, 1, false);
+    }
+}
 
 RndText::Style &UILabel::Style(int) { return Style(0); }
 
-void UILabel::SetPrelocalizedString(String &s) {
-    SetDisplayText(s.c_str(), true);
-}
+void UILabel::SetPrelocalizedString(String &s) {}
 
 void UILabel::SetSubtitle(const DataArray *) {}
 
 void UILabel::SetTimeHMS(int, bool) {}
 
-bool UILabel::CheckValid(bool) { return false; }
+bool UILabel::CheckValid(bool warn) {
+    if (mFixedLength != 0 && UTF8StrLen(mText.c_str()) > (unsigned int)mFixedLength) {
+        if (warn) {
+            MILO_WARN(
+                "%s: %s has fixed length of %i but text is %i long (%s)",
+                PathName(Dir()),
+                Name(),
+                mFixedLength,
+                UTF8StrLen(mText.c_str()),
+                mText.c_str()
+            );
+        }
+        return false;
+    }
+    return true;
+}
 
 void UILabel::SetEditText(const char *c) {}
 
@@ -159,12 +253,7 @@ void UILabel::Init() {
 
 void UILabel::SetTokenFmtImp(
     Symbol s, const DataArray *da1, const DataArray *da2, int i, bool b
-) {
-    if (b != false) {
-        mTextToken = gNullStr;
-    }
-    RndText::SetText(Localize(s, 0, TheLocale));
-}
+) {}
 
 DataNode UILabel::OnSetPrelocalizedString(DataArray const *da) {
     return NULL_OBJ;
@@ -172,14 +261,7 @@ DataNode UILabel::OnSetPrelocalizedString(DataArray const *da) {
 
 DataNode UILabel::OnSetTokenFmt(DataArray const *da) { return NULL_OBJ; }
 
-DataNode UILabel::OnSetInt(DataArray const *da) {
-    int i = da->Int(2);
-    bool b = false;
-    if (da->Size() > 3)
-        b = da->Int(3) != 0;
-    SetInt(i, b);
-    return DataNode(1);
-}
+DataNode UILabel::OnSetInt(DataArray const *da) { return DataNode(1); }
 
 DataNode UILabel::OnSetTimeHMS(DataArray const *) { return NULL_OBJ; }
 
@@ -195,27 +277,7 @@ void UILabel::SetFontMat(char const *c, int i) {
 
 }
 
-char const *UILabel::GetFontMat(int i) {
-    int *begin;
-    int *end;
-    int matId;
-
-    begin = *(int **)(((unsigned char *)this) + 0x98);
-    end = *(int **)(((unsigned char *)this) + 0x9c);
-    matId = 0;
-
-    if (i < ((int)end - (int)begin) / 0x4c) {
-        matId = *(int *)(((unsigned char *)begin + (i * 0x4c)) + 0x40);
-    }
-
-    LabelStyle &style = LStyle(0);
-    void *pStyle = *(void **)(((unsigned char *)&style) + 0x20);
-    if (pStyle != 0) {
-        return ((UIFontImporter *)pStyle)->GetMatVariationName((RndFontBase *)(((unsigned char *)pStyle) + 0x1fc));
-    }
-
-    return "";
-}
+char const *UILabel::GetFontMat(int) { return 0; }
 
 void UILabel::RefreshFontMat(int i) {
     auto mat = GetFontMat(i);
@@ -240,6 +302,38 @@ BEGIN_HANDLERS(UILabel)
     HANDLE_SUPERCLASS(RndText)
 END_HANDLERS
 
-bool PropSync(UILabel::LabelStyle &, DataNode &, DataArray *, int, PropOp) {
+// Static initialization for symbol caching - PropSync template for LabelStyle
+static int g_PropSync_LabelStyle_init = 0;
+static Symbol g_list_sym;
+static Symbol g_file_path_sym;
+
+bool PropSync(UILabel::LabelStyle &style, DataNode &node, DataArray *array, int index, PropOp op) {
+    // Bounds check
+    if (index >= array->Size()) {
+        return false;
+    }
+
+    // Initialize symbols on first check
+    if (!g_PropSync_LabelStyle_init) {
+        g_PropSync_LabelStyle_init = 1;
+        g_list_sym = Symbol("list");
+        g_file_path_sym = Symbol("file_path");
+    }
+
+    // Get the current property symbol
+    Symbol prop_sym = array->Sym(index);
+
+    // Handle "list" property - recurse to UILabelDir PropSync
+    if (prop_sym == g_list_sym) {
+        return PropSync(style.unk14, node, array, index + 1, op);
+    }
+
+    // Handle "file_path" property - recurse to UILabelDir PropSync
+    if (prop_sym == g_file_path_sym) {
+        return PropSync(style.unk14, node, array, index + 1, op);
+    }
+
+    // Unknown property
     return false;
 }
+

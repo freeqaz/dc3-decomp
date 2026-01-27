@@ -1,4 +1,5 @@
 #include "utl/NetCacheMgr.h"
+#include "utl/NetCacheMgr_Xbox.h"
 #include "obj/Data.h"
 #include "obj/Dir.h"
 #include "obj/Object.h"
@@ -319,7 +320,7 @@ bool NetLoaderRef::IsValid() const {
 
 void NetCacheMgrInit() {
     MILO_ASSERT(TheNetCacheMgr == NULL, 0x1f);
-    // TheNetCacheMgr = new NetCacheMgr(); // needs to be new NetCacheXbox() later
+    TheNetCacheMgr = new NetCacheMgrXbox();
 }
 
 void NetCacheMgrTerminate() { RELEASE(TheNetCacheMgr); }

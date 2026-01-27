@@ -19,6 +19,7 @@ public:
     MEM_OVERLOAD(RndOverlay, 0x13);
 
     int NumLines() const { return mLines.size(); }
+    float Height() const;
     bool Showing() const { return mShowing; }
     void SetDumpCount(int dump_count) { mDumpCount = dump_count; }
     void SetShowing(bool show) {

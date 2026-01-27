@@ -73,6 +73,31 @@ BEGIN_COPYS(RhythmBattle)
 END_COPYS
 
 BEGIN_LOADS(RhythmBattle)
+    LOAD_REVS(bs)
+    ASSERT_REVS(3, 0)
+    LOAD_SUPERCLASS(Hmx::Object)
+
+    if (d.rev >= 2) {
+        d >> mCommandLabel;
+        d >> mPlayerOne;
+        d >> mPlayerTwo;
+    } else if (d.rev == 1) {
+        d >> unk58;
+        d >> unk80;
+        d >> unk94;
+        d >> unka8;
+        d >> unkbc;
+        d >> unk6c;
+        d >> unk1c;
+        d >> unke4;
+        d >> unkd0;
+        d >> unkbc;
+    }
+
+    if (d.rev >= 3) {
+        bool dummy;
+        d >> dummy;
+    }
 END_LOADS
 
 bool RhythmBattle::GetGoofy() const {
@@ -196,14 +221,76 @@ void RhythmBattle::OnReset() {
 
     const DataNode *gameplay_node = TheHamProvider->Property(gameplay_mode, true);
     Symbol gameplay_sym = gameplay_node->Sym();
-    if (TheHamDirector && unk11c == 0
-        && TheHamDirector->SongAnimByDifficulty(kDifficultyEasy)) {
+
+    if (TheHamDirector && unk11c == 0) {
+        RndPropAnim *song_anim = TheHamDirector->SongAnimByDifficulty(kDifficultyEasy);
+        if (song_anim) {
+            WorldDir *venue_world = TheHamDirector->GetVenueWorld();
+            Symbol move_sym("move");
+            unk11c = song_anim->GetNumKeys(venue_world, move_sym);
+        }
     }
 
-    static Symbol finale_intro_01("finale_intro_01");
-    static Symbol finale_intro_02("finale_intro_02");
-    QueueFinaleVO(finale_intro_01);
-    QueueFinaleVO(finale_intro_02);
+    if (gameplay_sym == mind_control || unkfa != 0) {
+        float num_keys = (float)unk11c;
+        if (num_keys >= 1.0f) {
+            unk104 = 0.0f;
+            unk108 = (num_keys - 2.0f) * 4.0f;
+        }
+    }
+
+    if (gameplay_sym == mind_control) {
+        TheMaster->GetAudio()->SetLoop(2.0f, 3.0f);
+    }
+
+    if (unkfa == 0) {
+        ObjectDir *player_dir = NULL;
+        if (mPlayerOne && mPlayerOne->unk1e8) {
+            player_dir = mPlayerOne->unk1e8;
+        }
+
+        HamLabel *intro_line_obj = NULL;
+        if (player_dir) {
+            intro_line_obj = player_dir->Find<HamLabel>("intro_line1.lbl", false);
+        }
+
+        if (intro_line_obj) {
+            unk1c = intro_line_obj;
+        }
+
+        static Symbol rhythm_battle_title("rhythm_battle_title");
+    } else {
+        Symbol null_str(gNullStr);
+
+        if (!unk150.empty()) {
+            unk150.erase(&unk150.front());
+            int new_size = unk150.size();
+        }
+
+        static Symbol finale_intro_01("finale_intro_01");
+        static Symbol finale_intro_02("finale_intro_02");
+        QueueFinaleVO(finale_intro_01);
+        QueueFinaleVO(finale_intro_02);
+
+        DataNode hud_panel_var = DataVariable("hud_panel");
+        ObjectDir *obj_dir = dynamic_cast<ObjectDir *>(hud_panel_var.GetObj());
+        if (obj_dir) {
+            RndDir *score_right = obj_dir->Find<RndDir>("score_right", true);
+            if (score_right) {
+                score_right->SetShowing(false);
+            }
+            RndDir *score_left = obj_dir->Find<RndDir>("score_left", true);
+            if (score_left) {
+                score_left->SetShowing(false);
+            }
+        }
+
+        WorldDir *venue_world = TheHamDirector->GetVenueWorld();
+        RndAnimatable *set_bid = venue_world->Find<RndAnimatable>("set_bid.anim", true);
+        if (set_bid) {
+            set_bid->Animate(0.0f, 0.0f, set_bid->Units(), 0.0f, 0.0f, NULL, kEaseLinear, 0.0f, false);
+        }
+    }
 }
 
 void RhythmBattle::Poll() {

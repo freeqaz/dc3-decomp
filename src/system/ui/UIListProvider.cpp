@@ -63,7 +63,36 @@ void UIListProvider::UpdateExtendedCustom(int, int, Hmx::Object *obj) const {
 #pragma endregion UIListProvider
 #pragma region DataProvider
 
-void DataProvider::Text(int i, int j, UIListLabel *listlabel, UILabel *label) const {}
+void DataProvider::Text(int i, int j, UIListLabel *listlabel, UILabel *label) const {
+    DataNode node = mData->Node(i + mOffset);
+
+    if (node.Type() == kDataArray) {
+        if (!TheLoadMgr.EditMode() && unkd) {
+            Message msg(Symbol("set_token_fmt"), node);
+            mList->HandleType(msg);
+        } else {
+            Symbol sym = node.Array()->Sym(0);
+            label->SetEditText(Localize(sym, false, TheLocale));
+        }
+    } else {
+        if (!mList || mList->IsActive(i)) {
+            if (!TheLoadMgr.EditMode()) {
+                Symbol sym = node.ForceSym();
+                label->SetEditText(Localize(sym, false, TheLocale));
+            } else {
+                Symbol sym = node.ForceSym();
+                Message msg(Symbol("set_token_fmt"), node);
+                mList->HandleType(msg);
+            }
+        } else {
+            label->SetTextToken(gNullStr);
+        }
+    }
+
+    if (unkd) {
+        // mWidths[i] = label->GetX();
+    }
+}
 
 float DataProvider::GapSize(int, int i, int, int) const {
     if (mFluidWidth)

@@ -137,10 +137,15 @@ void RndFlare::CalcScale() {
 }
 
 void RndFlare::SetSteps(int i1) {
-    i1 = Max(i1, 1);
+    if (i1 < 1) {
+        i1 = 1;
+    }
     if (mStep == mSteps) {
         mStep = i1;
-    } else
-        mStep *= ((float)i1 / mSteps);
+    } else {
+        float stepsFloat = (float)mSteps;
+        float i1Float = (float)i1;
+        mStep = (int)(i1Float / stepsFloat) * mStep;
+    }
     mSteps = i1;
 }

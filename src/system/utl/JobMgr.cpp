@@ -3,15 +3,33 @@
 #include "os/Debug.h"
 
 namespace {
-    int gJobIDCounter;
+    static int gJobIDCounter;
 }
 
-Job::Job() { mID = gJobIDCounter++; }
+Job::Job() {
+    mID = gJobIDCounter++;
+}
 
 void JobMgr::Poll() {}
 
 void JobMgr::CancelJob(int id) {
     for (std::list<Job *>::iterator it = mJobQueue.begin(); it != mJobQueue.end(); ++it) {
+        Job *job = *it;
+        if (job->ID() == id) {
+            int curID = job->ID();
+            it = mJobQueue.erase(it);
+            bool oldstart = mPreventStart;
+            mPreventStart = true;
+            job->Cancel(mCallback);
+            mPreventStart = oldstart;
+            if (curID == id && !oldstart) {
+                for (std::list<Job *>::iterator it2 = mJobQueue.begin(); it2 != it; ++it2) {
+                    (*it2)->Start();
+                }
+            }
+            delete job;
+            return;
+        }
     }
     MILO_NOTIFY("This job is not in the queue %i", id);
 }

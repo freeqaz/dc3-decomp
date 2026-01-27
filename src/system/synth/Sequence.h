@@ -160,6 +160,8 @@ public:
     virtual void Load(BinStream &);
     virtual SeqInst *MakeInstImpl();
 
+    int MaxSimultaneous() const { return mMaxSimultaneous; }
+
     NEW_OBJ(RandomIntervalGroupSeq)
     static void Init() { REGISTER_OBJ_FACTORY(RandomIntervalGroupSeq) }
 

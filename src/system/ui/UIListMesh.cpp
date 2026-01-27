@@ -43,7 +43,26 @@ void UIListMesh::Draw(
     UIComponent::State compstate,
     Box *box,
     DrawCommand cmd
-) {}
+) {
+    if (mMesh) {
+        float somefloat = 1.0f;
+        RndMat *themat = 0;
+        if (TheLoadMgr.EditMode()) {
+            themat = mMesh->Mat();
+            if (themat)
+                somefloat = themat->Alpha();
+        }
+        Transform xfm1 = mMesh->LocalXfm();
+        UIListSlot::Draw(drawstate, liststate, tf, compstate, box, cmd);
+        mMesh->SetLocalXfm(xfm1);
+        if (TheLoadMgr.EditMode()) {
+            mMesh->SetMat(themat);
+            if (themat) {
+                themat->SetAlpha(somefloat);
+            }
+        }
+    }
+}
 
 UIListSlotElement *UIListMesh::CreateElement(UIList *uilist) {
     MILO_ASSERT(mMesh, 0x5b);
@@ -57,6 +76,26 @@ RndTransformable *UIListMesh::RootTrans() { return mMesh; }
 #pragma region UIListMeshElement
 
 inline void
-UIListMeshElement::Draw(const Transform &tf, float f, UIColor *col, Box *box) {}
+UIListMeshElement::Draw(const Transform &tf, float f, UIColor *col, Box *box) {
+    RndMesh *mesh = mListMesh->Mesh();
+    MILO_ASSERT(mesh, 0x1B);
+    mesh->SetWorldXfm(tf);
+    if (box != nullptr) {
+        Box localbox = *box;
+        CalcBox(mesh, localbox);
+        box->GrowToContain(localbox.mMin, false);
+        box->GrowToContain(localbox.mMax, false);
+    } else if (mMat != nullptr) {
+        float alpha = mMat->Alpha();
+        mesh->SetMat(mMat);
+        mMat->SetAlpha(f * alpha);
+        if (col != nullptr) {
+            const Hmx::Color &c = col->GetColor();
+            mMat->SetColor(c.red, c.green, c.blue);
+        }
+        mesh->DrawShowing();
+        mMat->SetAlpha(alpha);
+    }
+}
 
 #pragma endregion UIListMeshElement

@@ -1,4 +1,5 @@
 #include "ui/UIList.h"
+#include "ui/Utl.h"
 #include "math/Geo.h"
 #include "math/Utl.h"
 #include "math/Vec.h"
@@ -9,6 +10,7 @@
 #include "os/User.h"
 #include "rndobj/Draw.h"
 #include "rndobj/FontBase.h"
+#include "ui/UI.h"
 #include "ui/UIComponent.h"
 #include "ui/UIListArrow.h"
 #include "ui/UIListCustom.h"
@@ -151,7 +153,24 @@ BEGIN_LOADS(UIList)
 END_LOADS
 
 BEGIN_COPYS(UIList)
-
+    COPY_SUPERCLASS(UIComponent)
+    CREATE_COPY(UIList)
+    BEGIN_COPYING_MEMBERS
+        COPY_MEMBER(mListDir)
+        mListState.SetCircular(c->mListState.Circular(), true);
+        mListState.SetNumDisplay(c->mListState.NumDisplay(), true);
+        mListState.SetGridSpan(c->mListState.GridSpan(), true);
+        mListState.SetSpeed(c->mListState.Speed());
+        mListState.SetMinDisplay(c->mListState.MinDisplay());
+        mListState.SetScrollPastMinDisplay(c->mListState.ScrollPastMinDisplay());
+        mListState.SetMaxDisplay(c->mListState.MaxDisplay());
+        mListState.SetScrollPastMaxDisplay(c->mListState.ScrollPastMaxDisplay());
+        COPY_MEMBER(mExtendedLabelEntries)
+        COPY_MEMBER(mExtendedMeshEntries)
+        COPY_MEMBER(mExtendedCustomEntries)
+        CopyHandlerData(c);
+    END_COPYING_MEMBERS
+    Update();
 END_COPYS
 
 UIListDir *UIList::GetUIListDir() const { return mListDir; }
@@ -171,8 +190,26 @@ void UIList::SetParent(UIList *uilist) { mParent = uilist; }
 // See RB3: box.Set(WorldXfm().v, WorldXfm().v);
 //          mListDir->DrawWidgets(mListState, mWidgets, WorldXfm(), DrawState(this), &box, ...);
 __declspec(noinline) void UIList::CalcBoundingBox(Box &box) {
-    volatile int stub = 0;
-    (void)stub;
+    Transform xfm = WorldXfm();
+    box.Set(xfm.v, xfm.v);
+
+    int selectedDisplay = mListState.SelectedDisplay();
+    UIList *subList = mListDir->SubList(selectedDisplay, mWidgets);
+
+    float elementSpacing = 0.0f;
+    if (subList) {
+        int subSelectedDisplay = mListState.SelectedDisplay();
+        float spacing = mListDir->ElementSpacing();
+        elementSpacing = spacing * (float)(double)subSelectedDisplay;
+    }
+
+    UIListWidgetDrawState drawState;
+    UIComponent::State state = DrawState(this);
+    mListDir->BuildDrawState(drawState, mListState, state, elementSpacing, true);
+
+    Transform xfm2 = WorldXfm();
+    UIComponent::State state2 = DrawState(this);
+    mListDir->DrawWidgets(drawState, mListState, mWidgets, xfm2, state2, &box, (bool)unk15d);
 }
 
 Symbol UIList::SelectedSym(bool fail) const {
@@ -238,7 +275,13 @@ void UIList::Poll() {
 
 int UIList::CollidePlane(std::vector<Vector3> const &vec, Plane const &p) { return 0; }
 
-void UIList::StartScroll(UIListState const &, int, bool) {}
+void UIList::StartScroll(UIListState const &state, int i, bool b) {
+    mListDir->StartScroll(state, mWidgets, i, b);
+    if (state.Provider()->IsActive(state.SelectedData())
+        && (!mAutoScrolling || mAutoScrollSendMsgs)) {
+        TheUI->Handle(UIComponentScrollStartMsg(this, mUser), false);
+    }
+}
 
 void UIList::HandleSelectionUpdated() {
     UIList *child = mListDir->SubList(mListState.SelectedDisplay(), mWidgets);
@@ -248,7 +291,39 @@ void UIList::HandleSelectionUpdated() {
     }
 }
 
-void UIList::UpdateExtendedEntries(UIListState const &) {}
+void UIList::UpdateExtendedEntries(UIListState const &state) {
+    UIListProvider *prov = state.Provider();
+    if (prov && prov->NumData() > 0) {
+        UIList *pMainList = mParent ? mParent : this;
+        MILO_ASSERT(pMainList, 0x3FD);
+        for (ObjPtrList<UILabel, ObjectDir>::iterator it =
+                 pMainList->mExtendedLabelEntries.begin();
+             it != pMainList->mExtendedLabelEntries.end();
+             ++it) {
+            UILabel *label = *it;
+            MILO_ASSERT(label, 0x404);
+            prov->UpdateExtendedText(state.SelectedDisplay(), state.SelectedData(), label);
+        }
+        for (ObjPtrList<RndMesh, ObjectDir>::iterator it =
+                 pMainList->mExtendedMeshEntries.begin();
+             it != pMainList->mExtendedMeshEntries.end();
+             ++it) {
+            RndMesh *mesh = *it;
+            MILO_ASSERT(mesh, 0x40F);
+            prov->UpdateExtendedMesh(state.SelectedDisplay(), state.SelectedData(), mesh);
+        }
+        for (ObjPtrList<Hmx::Object, ObjectDir>::iterator it =
+                 pMainList->mExtendedCustomEntries.begin();
+             it != pMainList->mExtendedCustomEntries.end();
+             ++it) {
+            Hmx::Object *custom = *it;
+            MILO_ASSERT(custom, 0x41A);
+            prov->UpdateExtendedCustom(
+                state.SelectedDisplay(), state.SelectedData(), custom
+            );
+        }
+    }
+}
 
 DataNode UIList::OnScroll(DataArray *da) {
     int scroll = da->Int(2);
@@ -267,7 +342,7 @@ DataNode UIList::OnSelectedSym(DataArray *da) {
 
 void UIList::FinishValueChange() {}
 
-void UIList::PreLoadWithRev(BinStreamRev &) {}
+void UIList::PreLoadWithRev(BinStreamRev &bs) {}
 
 void UIList::SetSelected(int i, int j) {
     mListDir->CompleteScroll(mListState, mWidgets);
@@ -333,15 +408,45 @@ void UIList::UnDimData(Symbol s) {
 
 void UIList::SetSelectedAux(int i) { SetSelected(i, -1); }
 
-void UIList::CompleteScroll(UIListState const &) {}
+void UIList::CompleteScroll(UIListState const &state) {
+    mListDir->CompleteScroll(state, mWidgets);
+    if (mAutoScrolling) {
+        int firstshowing = FirstShowing();
+        state.Provider();
+        int i3 = unk150 > 0 ? mListState.MaxFirstShowing() : 0;
+        if (firstshowing == i3) {
+            unk150 = unk150 - unk150 * 2;
+            unk158 = mAutoScrollPause + TheTaskMgr.UISeconds();
+        } else
+            Scroll(unk150);
+    }
+    if (state.Provider()->IsActive(state.SelectedData())) {
+        if (!mAutoScrolling || mAutoScrollSendMsgs) {
+            TheUI->Handle(UIComponentScrollMsg(this, mUser), false);
+        }
+        HandleSelectionUpdated();
+    }
+}
 
 DataNode UIList::OnSetSelected(DataArray *) { return NULL_OBJ; }
 
-void UIList::PreLoad(BinStream &) {}
+void UIList::PreLoad(BinStream &bs) {
+    LOAD_REVS(bs)
+    ASSERT_REVS(0x15, 0)
+    PreLoadWithRev(d);
+}
 
 void UIList::PostLoad(BinStream &) {}
 
-void UIList::SetSelectedSimulateScroll(int) {}
+void UIList::SetSelectedSimulateScroll(int i) {
+    mListDir->CompleteScroll(mListState, mWidgets);
+    mListState.SetSelectedSimulateScroll(i);
+    Refresh(false);
+    mListDir->Poll();
+    if (mListDir->SubList(mListState.SelectedDisplay(), mWidgets) != 0) {
+        Poll();
+    }
+}
 
 bool UIList::SetSelectedSimulateScroll(Symbol, bool) { return false; }
 
@@ -357,7 +462,19 @@ void UIList::Update() {
 
 DataNode UIList::OnMsg(const ButtonDownMsg &msg) { return NULL_OBJ; }
 
-DataNode UIList::OnSetSelectedSimulateScroll(DataArray *) { return NULL_OBJ; }
+DataNode UIList::OnSetSelectedSimulateScroll(DataArray *da) {
+    DataNode node = da->Evaluate(2);
+    if (node.Type() == kDataInt) {
+        SetSelectedSimulateScroll(node.Int());
+        return DataNode(1);
+    } else if (node.Type() == kDataSymbol || node.Type() == kDataString) {
+        bool b3 = da->Size() == 4 ? da->Int(3) : true;
+        return SetSelectedSimulateScroll(node.ForceSym(), b3);
+    } else {
+        MILO_FAIL("bad arg to set_selected_simulate_scroll");
+        return 0;
+    }
+}
 
 void UIList::OldResourcePreload(BinStream &bs) {
     char buf[0x100];
@@ -402,7 +519,19 @@ void UIList::LimitCircularDisplay(bool b) {
     }
 }
 
-void UIList::SetProvider(UIListProvider *prov) {}
+void UIList::SetProvider(UIListProvider *prov) {
+    if (prov == mListState.Provider()) {
+        LimitCircularDisplay(mLimitCircularDisplayNumToDataNum);
+        Refresh(true);
+    } else {
+        mListState.SetProvider(prov, (RndDir *)mListDir);
+        LimitCircularDisplay(mLimitCircularDisplayNumToDataNum);
+        SetSelected(0, -1);
+    }
+    UIList *child = mListDir->SubList(mListState.SelectedDisplay(), mWidgets);
+    if (child)
+        child->Poll();
+}
 
 DataNode UIList::OnSetData(DataArray *da) {
     DataArray *arr = da->Array(2);
@@ -417,7 +546,28 @@ DataNode UIList::OnSetData(DataArray *da) {
     return 1;
 }
 
-void UIList::DrawShowing() {}
+void UIList::DrawShowing() {
+    if (unk15d) {
+        mListState.Poll(TheTaskMgr.UISeconds());
+        unk15d = false;
+    }
+    bool b = mAllowHighlight;
+    if (mParent) {
+        if (mParent->GetUIListDir()->SubList(mListState.SelectedDisplay(), mParent->mWidgets) == this) {
+            b = mParent->mAllowHighlight;
+        }
+    }
+    UIList *subList = mListDir->SubList(mListState.SelectedDisplay(), mWidgets);
+    float offset = 0.0f;
+    if (subList != NULL) {
+        int subSelectedDisplay = subList->mListState.SelectedDisplay();
+        float spacing = mListDir->ElementSpacing();
+        offset = spacing * (float)subSelectedDisplay;
+    }
+    UIListWidgetDrawState drawState;
+    mListDir->BuildDrawState(drawState, mListState, DrawState(this), offset, false);
+    mListDir->DrawWidgets(drawState, mListState, mWidgets, WorldXfm(), DrawState(this), 0, b);
+}
 
 float UIList::GetDistanceToPlane(const Plane &p, Vector3 &v) {
     float ret = 0;
@@ -456,8 +606,83 @@ void UIList::Init() {
     REGISTER_OBJ_FACTORY(UIListWidget)
 }
 
-void UIList::BoundingBoxTriangles(std::vector<std::vector<Vector3> > &) {}
+void UIList::BoundingBoxTriangles(std::vector<std::vector<Vector3> > &vec) {
+    vec.clear();
+    Box box;
+    CalcBoundingBox(box);
+    float boxMinX = box.mMin.x;
+    float boxMaxX = box.mMax.x;
+    float boxMinY = box.mMin.y;
+    float boxMaxY = box.mMax.y;
+    float boxMinZ = box.mMin.z;
+    float boxMaxZ = box.mMax.z;
+    std::vector<Vector3> locVec;
+    for (int i = 0; i < 2; i++) {
+        float f;
+        if (i != 0)
+            f = boxMinX;
+        else
+            f = boxMaxX;
+        locVec.clear();
+        locVec.push_back(Vector3(f, boxMinY, boxMinZ));
+        locVec.push_back(Vector3(f, boxMinY, boxMaxZ));
+        locVec.push_back(Vector3(f, boxMaxY, boxMaxZ));
+        vec.push_back(locVec);
+        locVec.clear();
+        locVec.push_back(Vector3(f, boxMinY, boxMinZ));
+        locVec.push_back(Vector3(f, boxMaxY, boxMinZ));
+        locVec.push_back(Vector3(f, boxMaxY, boxMaxZ));
+        vec.push_back(locVec);
+    }
+    for (int i = 0; i < 2; i++) {
+        float f;
+        if (i != 0)
+            f = boxMinY;
+        else
+            f = boxMaxY;
+        locVec.clear();
+        locVec.push_back(Vector3(boxMinX, f, boxMinZ));
+        locVec.push_back(Vector3(boxMinX, f, boxMaxZ));
+        locVec.push_back(Vector3(boxMaxX, f, boxMaxZ));
+        vec.push_back(locVec);
+        locVec.clear();
+        locVec.push_back(Vector3(boxMinX, f, boxMinZ));
+        locVec.push_back(Vector3(boxMaxX, f, boxMinZ));
+        locVec.push_back(Vector3(boxMaxX, f, boxMaxZ));
+        vec.push_back(locVec);
+    }
+    for (int i = 0; i < 2; i++) {
+        float f;
+        if (i != 0)
+            f = boxMinZ;
+        else
+            f = boxMaxZ;
+        locVec.clear();
+        locVec.push_back(Vector3(boxMinX, boxMinY, f));
+        locVec.push_back(Vector3(boxMinX, boxMaxY, f));
+        locVec.push_back(Vector3(boxMaxX, boxMaxY, f));
+        vec.push_back(locVec);
+        locVec.clear();
+        locVec.push_back(Vector3(boxMinX, boxMinY, f));
+        locVec.push_back(Vector3(boxMaxX, boxMinY, f));
+        locVec.push_back(Vector3(boxMaxX, boxMaxY, f));
+        vec.push_back(locVec);
+    }
+}
 
 RndDrawable *UIList::CollideShowing(const Segment &, float &, Plane &) { return nullptr; }
 
-int UIList::CollidePlane(const Plane &) { return 1; }
+int UIList::CollidePlane(const Plane &p) {
+    std::vector<std::vector<Vector3> > triangles;
+    BoundingBoxTriangles(triangles);
+    int result = 0;
+    if (triangles.size() > 0) {
+        for (size_t i = 0; i < triangles.size(); ++i) {
+            int ret = CollidePlane(triangles[i], p);
+            if (ret) {
+                result = ret;
+            }
+        }
+    }
+    return result;
+}

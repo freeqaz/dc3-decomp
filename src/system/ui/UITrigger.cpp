@@ -54,7 +54,39 @@ BEGIN_LOADS(UITrigger)
     bs >> mBlockTransition;
 END_LOADS
 
-void UITrigger::Trigger() {}
+void UITrigger::Trigger() {
+    EventTrigger::Trigger();
+    mStartTime = TheTaskMgr.UISeconds();
+    mEndTime = 0;
+    FOREACH (it, mAnims) {
+        Anim &curAnim = *it;
+        if (curAnim.mAnim) {
+            float f4;
+            if (curAnim.mEnable) {
+                f4 = 0;
+                if (!(curAnim.mPeriod * 30.0f)) {
+                    f4 = curAnim.mScale;
+                    if (!f4)
+                        f4 = 1.0f;
+                    f4 = std::fabs(curAnim.mStart - curAnim.mEnd) / f4;
+                }
+            } else {
+                f4 = std::fabs(curAnim.mAnim->StartFrame() - curAnim.mAnim->EndFrame());
+            }
+            MaxEq(mEndTime, (curAnim.mDelay * 30.0f + f4) / 30.0f);
+        }
+    }
+    if (mBlockTransition && mEndTime > 5.0f) {
+        MILO_WARN(
+            "%s (%s) is blocking and really long! (%f seconds)",
+            Name(),
+            PathName(Dir()),
+            mEndTime
+        );
+    }
+    mEndTime += TheTaskMgr.UISeconds();
+    unk13c = false;
+}
 
 DataArray *UITrigger::SupportedEvents() {
     static DataArray *events =

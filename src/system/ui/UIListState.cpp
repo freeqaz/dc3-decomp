@@ -33,7 +33,62 @@ void UIListState::SetGridSpan(int span, bool b) {
     }
 }
 
-void UIListState::SetSelected(int i, int j, bool b) { mTargetShowing = 1.0f; }
+void UIListState::SetSelected(int i, int j, bool b) {
+    int showing = WrapShowing(i);
+    int data;
+
+    if (b) {
+        data = showing;
+        while (true) {
+            int dataVal = Showing2Data(data);
+            if (mProvider->IsActive(dataVal)) {
+                break;
+            }
+            data++;
+            int nextData = Showing2Data(data);
+            if (nextData == Showing2Data(showing)) {
+                break;
+            }
+        }
+        showing = WrapShowing(data);
+    }
+
+    if (mCircular) {
+        mFirstShowing = WrapShowing(showing - mMinDisplay);
+    } else {
+        if (j != -1) {
+            mFirstShowing = j;
+        } else {
+            int firstVal;
+            if (mScrollPastMinDisplay) {
+                firstVal = showing;
+            } else {
+                firstVal = showing - mMinDisplay;
+            }
+
+            int sign_val = firstVal >> 31;
+            int xor_val = firstVal ^ sign_val;
+            mFirstShowing = xor_val - sign_val;
+        }
+
+        int maxFirst = MaxFirstShowing();
+        int curFirst = mFirstShowing;
+        if (maxFirst < curFirst) {
+            curFirst = maxFirst;
+        }
+
+        mFirstShowing = curFirst;
+        mSelectedDisplay = showing - curFirst;
+
+        if (mScrollPastMinDisplay) {
+            mSelectedDisplay = mMinDisplay + (showing - curFirst);
+        }
+    }
+
+    mTargetShowing = mFirstShowing;
+    mStepPercent = -1.0f;
+    mStepTime = 0.0f;
+}
 
 void UIListState::SetSpeed(float speed) {
     MILO_ASSERT(speed >= 0, 0x15f);
@@ -156,7 +211,22 @@ int UIListState::Display2Data(int i) const {
         return Showing2Data(disp);
 }
 
-int UIListState::SnappedDataForDisplay(int i2) const { return -1; }
+int UIListState::SnappedDataForDisplay(int i2) const {
+    int iVar1 = mFirstShowing;
+    int iVar2 = mMaxDisplay;
+
+    bool bVar3 = ((iVar1 < iVar2 && i2 == 0) || (iVar2 == iVar1 && i2 == 0) ||
+                  (iVar2 < iVar1 && i2 == -1));
+
+    if (!bVar3)
+        return -1;
+
+    int uVar4 = Display2Showing(i2);
+    if ((int)uVar4 != -1) {
+        uVar4 = Showing2Data(uVar4);
+    }
+    return -1;
+}
 
 void UIListState::SetCircular(bool c, bool b) {
     mCircular = c;
@@ -165,7 +235,56 @@ void UIListState::SetCircular(bool c, bool b) {
     }
 }
 
-void UIListState::Poll(float) {}
+void UIListState::Poll(float fArg0) {
+    float dVar6;
+    int iVar1;
+    int iVar2;
+
+    dVar6 = -1.0f;
+    if (mFirstShowing != mTargetShowing) {
+        if (mStepTime == dVar6) {
+            mStepTime = fArg0;
+            iVar2 = 1;
+            if (ScrollToTarget(mTargetShowing) <= 0) {
+                iVar2 = -1;
+            }
+            mCallback->StartScroll(*this, iVar2, 1);
+        }
+        if (!(fArg0 < (mStepTime + mSpeed))) {
+            iVar2 = 1;
+            if (ScrollToTarget(mTargetShowing) <= 0) {
+                iVar2 = -1;
+            }
+            mFirstShowing = WrapShowing(mFirstShowing + iVar2);
+            mCallback->CompleteScroll(*this);
+            if (mFirstShowing != mTargetShowing) {
+                mStepTime = fArg0 - (fArg0 - (mStepTime + mSpeed));
+                iVar2 = 1;
+                if (ScrollToTarget(mTargetShowing) <= 0) {
+                    iVar2 = -1;
+                }
+                mCallback->StartScroll(*this, iVar2, 1);
+            } else {
+                mStepTime = dVar6;
+            }
+        }
+        if (mFirstShowing != mTargetShowing) {
+            if (mSpeed != 0.0f) {
+                mStepPercent = (fArg0 - mStepTime) / mSpeed;
+                return;
+            }
+        }
+        mStepPercent = 0.0f;
+        if (mSpeed == 0.0f) {
+            while (mFirstShowing != mTargetShowing) {
+                Poll(fArg0);
+            }
+        }
+    } else {
+        mStepTime = dVar6;
+        mStepPercent = 0.0f;
+    }
+}
 
 bool UIListState::CanScrollBack(bool b) const {
     if (mCircular)
@@ -197,7 +316,37 @@ bool UIListState::ShouldHoldDisplayInPlace(int i2) const { return false; }
 
 void UIListState::Scroll(int, bool) {}
 
-void UIListState::PageScroll(int) {}
+void UIListState::PageScroll(int amount) {
+    int direction;
+    if (amount <= 0) {
+        direction = -1;
+    } else {
+        direction = 1;
+    }
+
+    if (mCircular) {
+        direction *= mNumDisplay;
+    } else if (direction > 0) {
+        int maxDisplay = mMaxDisplay;
+        int selectedDisplay = mSelectedDisplay;
+        if ((selectedDisplay != (maxDisplay - 1)) && (selectedDisplay != mMinDisplay)) {
+            direction = ((mNumDisplay - (maxDisplay - mMinDisplay)) - selectedDisplay) - 1;
+        } else {
+            direction = mNumDisplay - mMinDisplay;
+        }
+    } else if (direction < 0) {
+        int selectedDisplay = mSelectedDisplay;
+        int minDisplay = mMinDisplay;
+        if (selectedDisplay == minDisplay) {
+            direction = minDisplay - mMaxDisplay;
+        } else {
+            int diff = minDisplay - selectedDisplay;
+            direction = (diff >> 0x1F) & diff;
+        }
+    }
+
+    Scroll(direction, false);
+}
 
 void UIListState::SetSelectedSimulateScroll(int) {}
 

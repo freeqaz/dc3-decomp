@@ -60,6 +60,8 @@ inline BinStream &operator>>(BinStream &bs, Hmx::Rect &rect) {
 
 class Triangle {
 public:
+    void Set(const Vector3 &v0, const Vector3 &v1, const Vector3 &v2);
+
     Vector3 origin;
     Hmx::Matrix3 frame;
 };
@@ -148,6 +150,7 @@ bool Intersect(const Transform &, const Hmx::Polygon &, const BSPNode *);
 bool Intersect(const Segment &, const Triangle &, bool, float &);
 bool Intersect(const Segment &, const BSPNode *, float &, Plane &);
 bool Intersect(const Segment &, const Sphere &);
+bool Intersect(const Segment &, const Triangle &, int, float &);
 bool Intersect(const Vector3 &, const BSPNode *);
 bool Intersect(const Vector3 &, const Vector3 &, const Triangle &, float &);
 bool Intersect(const Vector3 &, const Vector3 &, const Box &, float &, float &);

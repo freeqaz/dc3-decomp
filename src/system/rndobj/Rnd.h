@@ -291,7 +291,11 @@ protected:
     ObjPtr<RndPostProc> mPostProcBlackLightOverride; // 0x178
     ObjPtrList<RndDrawable> unk18c; // 0x18c
     ObjPtrList<RndDrawable> mDraws; // 0x1a0
+
+public:
     bool unk1b4; // 0x1b4
+
+protected:
     ProcCounter mProcCounter; // 0x1b8
     ProcessCmd mProcCmds; // 0x1d0
     ProcessCmd mLastProcCmds; // 0x1d4

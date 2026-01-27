@@ -17,10 +17,13 @@
 LoadMgr TheLoadMgr;
 int gLoadCount;
 
-void FrontLoaderGlitchCB(float f1, void *v) {
-    // the void* needs to be static_casted to some sort of struct
-    // const char* at 0x0, 0x8, 0xc, LoaderPos at 0x10
-    MILO_LOG("Loader %s %s took %f (%s to %s)\n");
+void FrontLoaderGlitchCB(float arg_sp14, void *v) {
+    TheDebug << MakeString("Loader %s %s took %f (%s to %s)\n",
+                           *(const char**)v,
+                           *(const char**)((char*)v + 0x8),
+                           arg_sp14,
+                           *(const char**)((char*)v + 0xC),
+                           LoadMgr::LoaderPosString(*(LoaderPos*)((char*)v + 0x10), true));
 }
 
 const char *WhiteSpace(int count) {

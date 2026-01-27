@@ -2,6 +2,7 @@
 #include "obj/Object.h"
 #include "os/Debug.h"
 #include "ui/UIListWidget.h"
+#include "ui/UIList.h"
 
 UIListHighlight::UIListHighlight() : mMesh(this) {}
 
@@ -37,7 +38,21 @@ void UIListHighlight::Draw(
     UIComponent::State compstate,
     Box *box,
     DrawCommand cmd
-) {}
+) {
+    if (!mMesh || cmd == kDrawFirst)
+        return;
+
+    Transform xfm1 = mMesh->WorldXfm();
+    Transform xfm2 = xfm1;
+    if (mParentList) {
+        // Call virtual method - based on assembly, takes Transform& parameter
+        // Method name unknown, trying methods that could modify a Transform
+        mParentList->Poll();
+    }
+    CalcXfm(tf, drawstate.mHighlightPos, xfm2);
+    DrawMesh(mMesh, (UIListWidgetState)drawstate.mHighlightElementState, compstate, xfm2, box);
+    mMesh->SetWorldXfm(xfm1);
+}
 
 BEGIN_HANDLERS(UIListHighlight)
     HANDLE_SUPERCLASS(UIListWidget)

@@ -46,6 +46,7 @@ public:
     MEM_OVERLOAD(ClipDistMap, 0x24);
 
     ClipDistMap(CharClip *, CharClip *, float, float, int, DataArray const *);
+    ~ClipDistMap();
     void SetNodes(ClipDistMap::Node *, ClipDistMap::Node *);
     void Draw(float, float, CharDriver *);
     void FindNodes(float, float, float);

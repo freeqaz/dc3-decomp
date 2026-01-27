@@ -330,3 +330,14 @@ void CharLipSync::PlayBack::Poll(float time) {
         }
     }
 }
+
+void CharLipSync::PlayBack::Reset() {
+    mIndex = 0;
+    mFrame = -1;
+    for (int i = 0; i < mWeights.size(); i++) {
+        Weight &weight = mWeights[i];
+        weight.unk18 = 0;
+        weight.unk1c = 0;
+        weight.unk14 = 0;
+    }
+}

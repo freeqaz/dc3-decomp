@@ -95,7 +95,27 @@ void UIListDir::PreLoad(BinStream &bs) {
     bs.PushRev(packRevs(d.altRev, d.rev), this);
 }
 
-void UIListDir::PostLoad(BinStream &bs) {}
+void UIListDir::PostLoad(BinStream &bs) {
+    int revs = bs.PopRev(this);
+    RndDir::PostLoad(bs);
+    int orientation, numdisplay, compstate;
+    float speed;
+    bs >> orientation;
+    bs >> mFadeOffset;
+    mOrientation = (UIListOrientation)orientation;
+    bs >> mTestMode;
+    bs >> numdisplay;
+    bs >> mElementSpacing;
+    bs >> speed;
+    bs >> mTestNumData;
+    bs >> compstate;
+    bs >> mTestGapSize;
+    bs >> mTestDisableElements;
+    if (revs > 0) bs >> mScrollHighlightChange;
+    mTestState.SetNumDisplay(numdisplay, true);
+    mTestState.SetSpeed(speed);
+    mTestComponentState = (UIComponent::State)compstate;
+}
 
 void UIListDir::SyncObjects() {
     RndDir::SyncObjects();
@@ -105,7 +125,14 @@ void UIListDir::SyncObjects() {
     }
 }
 
-void UIListDir::DrawShowing() {}
+void UIListDir::DrawShowing() {
+    if (mTestMode && TheLoadMgr.EditMode()) {
+        UIListWidgetDrawState drawState;
+        BuildDrawState(drawState, mTestState, mTestComponentState, 0, false);
+        DrawWidgets(drawState, mTestState, unk270, WorldXfm(), mTestComponentState, nullptr, false);
+    } else
+        RndDir::DrawShowing();
+}
 
 void UIListDir::Poll() {
     if (TheLoadMgr.EditMode()) {

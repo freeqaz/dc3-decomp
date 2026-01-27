@@ -67,6 +67,24 @@ private:
     DataNode OnGoBackScreen(DataArray const *);
     void FakeKeyboardAction(JoypadButton, JoypadAction);
     DataNode OnForeachCurrentScreen(DataArray const *);
+    DataNode OnSetSink(DataArray *);
+    DataNode OnUseJoypad(DataArray *);
+    DataNode OnSetVirtualDpad(DataArray *);
+    DataNode OnPushScreen(DataArray *);
+    DataNode OnPopScreen(DataArray *);
+    DataNode OnCurrentScreen(DataArray *);
+    DataNode OnTransitionScreen(DataArray *);
+    DataNode OnBottomScreen(DataArray *);
+    DataNode OnInTransition(DataArray *);
+    DataNode OnFocusPanel(DataArray *);
+    DataNode OnWentBack(DataArray *);
+    DataNode OnIsGameScreenActive(DataArray *);
+    DataNode OnToggleLoadTimes(DataArray *);
+    DataNode OnShowingLoadTimes(DataArray *);
+    DataNode OnToggleDevMenu(DataArray *);
+    DataNode OnShowDevMenu(DataArray *);
+    DataNode OnResetScreen(DataArray *);
+    DataNode OnFakeKeyboardAction(DataArray *);
 
 protected:
     void ReloadStrings();

@@ -854,10 +854,10 @@ _RandomAccessIter __unguarded_partition(_RandomAccessIter __first,
 #define __stl_threshold  16
 
 template <class _RandomAccessIter, class _Tp, class _Compare>
-void __unguarded_linear_insert(_RandomAccessIter __last, _Tp __val, 
+void __unguarded_linear_insert(_RandomAccessIter __last, _Tp __val,
                                _Compare __comp) {
   _RandomAccessIter __next = __last;
-  --__next;  
+  --__next;
   while (__comp(__val, *__next)) {
     *__last = *__next;
     __last = __next;

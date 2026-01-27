@@ -49,5 +49,10 @@ END_LOADS
 
 void CharSignalApplier::Poll() {}
 
-void CharSignalApplier::PollDeps(std::list<Hmx::Object *> &, std::list<Hmx::Object *> &) {
+void CharSignalApplier::PollDeps(std::list<Hmx::Object *> &a, std::list<Hmx::Object *> &b) {
+    for (size_t i = 0; i < unk40.size(); i++) {
+        for (std::list<Hmx::Object *>::iterator it = a.begin(); it != a.end(); ++it) {
+            b.push_back(*it);
+        }
+    }
 }

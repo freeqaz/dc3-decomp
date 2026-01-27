@@ -29,14 +29,20 @@ void ShortVector3::Set(const Vector3 &vec) {
 }
 
 void ShortQuat::Set(const Hmx::Quat &quat) {
-
+    x = (short)floor(Clamp(-32767.0f, 32767.0f, quat.x * 32767.0f + 0.5f));
+    y = (short)floor(Clamp(-32767.0f, 32767.0f, quat.y * 32767.0f + 0.5f));
+    z = (short)floor(Clamp(-32767.0f, 32767.0f, quat.z * 32767.0f + 0.5f));
+    w = (short)floor(Clamp(-32767.0f, 32767.0f, quat.w * 32767.0f + 0.5f));
 }
 
 void ShortQuat::ToQuat(Hmx::Quat &quat) const {
-    quat.x = x * 3.051851e-05f;
-    quat.y = y * 3.051851e-05f;
-    quat.z = z * 3.051851e-05f;
-    quat.w = w * 3.051851e-05f;
+    short s0 = x;
+    short s1 = y;
+    short s3 = w;
+    quat.z = (float)(long long)z * 3.051851e-05f;
+    quat.w = (float)(long long)s3 * 3.051851e-05f;
+    quat.y = (float)(long long)s1 * 3.051851e-05f;
+    quat.x = (float)(long long)s0 * 3.051851e-05f;
 }
 
 void CharBones::Zero() { memset(mStart, 0, mTotalSize); }

@@ -577,7 +577,35 @@ void GroupSeqInst::SetTranspose(float f) {
 #pragma region RandomGroupSeqInst
 
 RandomGroupSeqInst::RandomGroupSeqInst(RandomGroupSeq *seq)
-    : GroupSeqInst(seq, true), mIt(mSeqs.end()) {}
+    : GroupSeqInst(seq, true), mIt(mSeqs.end()) {
+    mNumSeqs = seq->GetNumSimul();
+    int childrenSize = seq->Children().size();
+    if (childrenSize < mNumSeqs)
+        mNumSeqs = childrenSize;
+    if (mNumSeqs == 1) {
+        int next = seq->NextIndex();
+        seq->PickNextIndex();
+        int n = 0;
+        for (ObjPtrList<Sequence>::iterator it = seq->Children().begin();
+             it != seq->Children().end();
+             ++it) {
+            if (n == next % childrenSize) {
+                SeqInst *si = (*it)->MakeInst();
+                if (si) {
+                    mSeqs.push_back();
+                    mSeqs.back() = si;
+                }
+                break;
+            }
+            n++;
+        }
+        mIt = mSeqs.begin();
+    } else {
+        if (mNumSeqs != 0) {
+        }
+        mIt = mSeqs.begin();
+    }
+}
 
 void RandomGroupSeqInst::StartImpl() {
     for (ObjVector<ObjPtr<SeqInst> >::iterator it = mIt; it != mSeqs.end(); it++) {
@@ -606,7 +634,17 @@ void RandomGroupSeqInst::Poll() {
 #pragma region RandomIntervalGroupSeqInst
 
 RandomIntervalGroupSeqInst::RandomIntervalGroupSeqInst(RandomIntervalGroupSeq *seq)
-    : GroupSeqInst(seq, true) {}
+    : GroupSeqInst(seq, true) {
+    int count = seq->MaxSimultaneous();
+    std::vector<float> *pv = (std::vector<float> *)((char *)this + 0x4c);
+    pv->resize(count);
+    float *p = &((*pv)[0]);
+    int i = 0;
+    while (i < count) {
+        p[i] = -1.0f;
+        i++;
+    }
+}
 
 #pragma endregion
 #pragma region SerialGroupSeqInst

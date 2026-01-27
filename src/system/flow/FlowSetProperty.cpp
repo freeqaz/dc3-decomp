@@ -16,8 +16,7 @@ FlowSetProperty::FlowSetProperty()
       mPersistent(0), mRate(0), mBlendTime(0), mChangePerUnit(0), unk_0xCC(this, nullptr),
       mEase(0), mEasePower(2), unk_0xE8(0), mStopMode(1) {}
 
-PropertyTask::
-    PropertyTask(Hmx::Object *, DataNode &, DataNode &, TaskUnits, float, EaseType t, float, bool, Hmx::Object *) {
+PropertyTask::PropertyTask(Hmx::Object *, DataNode &, DataNode &, TaskUnits, float, EaseType t, float, bool, Hmx::Object *) {
     mEaseFunc = GetEaseFunction(t);
 }
 
@@ -92,6 +91,31 @@ BEGIN_COPYS(FlowSetProperty)
 END_COPYS
 
 BEGIN_LOADS(FlowSetProperty)
+    LOAD_REVS(bs)
+    ASSERT_REVS(4, 0)
+    LOAD_SUPERCLASS(FlowNode)
+    bs >> mTarget;
+    bs >> unk_0x98;
+
+    if (d.rev < 2) {
+        if (!mValue.Node()) {
+        }
+    } else if (d.rev == 2) {
+        if (!mValue.Node()) {
+        }
+    } else {
+        if (!mValue.Node()) {
+        }
+    }
+
+    bs >> mRate;
+    bs >> mBlendTime;
+    bs >> mChangePerUnit;
+    bs >> mEase;
+    bs >> mEasePower;
+    bs >> unk_0xE8;
+    bs >> mPersistent;
+    bs >> mStopMode;
 END_LOADS
 
 void FlowSetProperty::MoveIntoDir(ObjectDir *r4, ObjectDir *r5) {

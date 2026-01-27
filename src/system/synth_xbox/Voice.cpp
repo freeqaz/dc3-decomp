@@ -10,6 +10,11 @@
 HANDLE gEvent;
 HANDLE gVoiceThread;
 
+extern void StartSynchronizedVoices();
+
+typedef void (*VoiceCallFunc)(int*, int*);
+typedef void (*PoolVoiceCallFunc)(int*, int, int);
+
 Voice::Voice(bool b1, int i, bool b2)
     : unk4(0), unk8(0), unkc(0), mNumSamples(0), mSampleRate(0), unk18(0), mLoopStart(-1),
       mLoopEnd(-1), mVolume(1.0f), mPan(0), unk2c(1.0f), unk30(0.001f), unk34(0.001f),
@@ -31,7 +36,33 @@ Voice::Voice(bool b1, int i, bool b2)
     }
 }
 
-Voice::~Voice() {}
+Voice::~Voice() {
+    for (;;) {
+        int state = unk4;
+        if (state != 2)
+            break;
+
+        if (unk49) {
+            StartSynchronizedVoices();
+        }
+        Sleep(0);
+    }
+
+    if (unk3c) {
+        int *pVar1 = (int *)unk3c;
+        int *pVar2 = (int *)(*pVar1);
+        VoiceCallFunc fn = (VoiceCallFunc)(*(int *)(*pVar2 + 0x10));
+        fn(pVar1, (int*)this);
+    }
+
+    if (unk58) {
+        int *pVar1 = (int *)unk58;
+        int *pVar2 = (int *)(*pVar1);
+        PoolVoiceCallFunc fn = (PoolVoiceCallFunc)(*(int *)(*pVar2 + 0x50));
+        fn(pVar1, 0, 0);
+        dispose(pVar1, unk4);
+    }
+}
 
 void Voice::SetSampleRate(int i) {
     mSampleRate = i;

@@ -1,6 +1,9 @@
 #include "char/CharBlendBone.h"
 #include "obj/Object.h"
 #include "os/Debug.h"
+#include "math/Rot.h"
+#include "math/Utl.h"
+#include <cstring>
 
 #pragma region CharBlendBone
 
@@ -65,7 +68,36 @@ BEGIN_LOADS(CharBlendBone)
     }
 END_LOADS
 
-void CharBlendBone::Poll() {}
+void CharBlendBone::Poll() {
+    for (ObjVector<ConstraintSystem>::iterator it = mTargets.begin(); it != mTargets.end();
+         ++it) {
+        RndTransformable *target = (*it).mTarget;
+        if (target && mSrc1 && mSrc2) {
+            const Transform &xfm1 = mSrc1->WorldXfm();
+            const Transform &xfm2 = mSrc2->WorldXfm();
+            Transform tf48(target->WorldXfm());
+            if (mTransX || mTransY || mTransZ) {
+                if (mTransX) {
+                    Interp(xfm1.v.x, xfm2.v.x, (*it).mWeight, tf48.v.x);
+                }
+                if (mTransY) {
+                    Interp(xfm1.v.y, xfm2.v.y, (*it).mWeight, tf48.v.y);
+                }
+                if (mTransZ) {
+                    Interp(xfm1.v.z, xfm2.v.z, (*it).mWeight, tf48.v.z);
+                }
+            }
+            if (mRotation) {
+                Hmx::Matrix3 m;
+                const Hmx::Matrix3 &m1 = xfm1.m;
+                const Hmx::Matrix3 &m2 = xfm2.m;
+                Interp(m1, m2, (*it).mWeight, m);
+                tf48.m = m;
+            }
+            target->SetWorldXfm(tf48);
+        }
+    }
+}
 
 void CharBlendBone::PollDeps(
     std::list<Hmx::Object *> &changedBy, std::list<Hmx::Object *> &change

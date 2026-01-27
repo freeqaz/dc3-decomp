@@ -3,11 +3,14 @@
 #include "math/Mtx.h"
 #include "obj/Data.h"
 #include "obj/Object.h"
+#include "os/Joypad.h"
 #include "os/JoypadMsgs.h"
 #include "rndobj/Draw.h"
 #include "rndobj/Mesh.h"
 #include "rndobj/Mat.h"
 #include "ui/UIPanel.h"
+#include "ui/UI.h"
+#include "ui/Utl.h"
 #include "utl/BinStream.h"
 #include "utl/Symbol.h"
 
@@ -73,8 +76,9 @@ void UISlider::PostLoad(BinStream &bs) {
 
 void UISlider::DrawShowing() {}
 
-RndDrawable *UISlider::CollideShowing(const Segment &, float &, Plane &) {
-    return nullptr;
+RndDrawable *UISlider::CollideShowing(const Segment &seg, float &f, Plane &pl) {
+    SyncSlider();
+    return unk50->CollideShowing(seg, f, pl) ? this : nullptr;
 }
 
 int UISlider::CollidePlane(const Plane &pl) {
@@ -98,7 +102,34 @@ int UISlider::SelectedAux() const { return Current(); }
 
 void UISlider::SetSelectedAux(int i) { SetCurrent(i); }
 
-DataNode UISlider::OnMsg(const ButtonDownMsg &msg) { return NULL_OBJ; }
+DataNode UISlider::OnMsg(const ButtonDownMsg &msg) {
+    Symbol cnttype = JoypadControllerTypePadNum(msg.GetPadNum());
+    if (CanScroll()) {
+        int act = ScrollDirection(msg, JoypadTypeHasLeftyFlip(cnttype), mVertical, 1);
+        if (act != kAction_None) {
+            if (mVertical)
+                act = (JoypadAction)-act;
+            int step = mCurrent + act;
+            if (step >= 0 && step < mNumSteps) {
+                SetCurrent(step);
+                UIComponentScrollMsg scroll_msg(this, msg.GetUser());
+                TheUI->Handle(scroll_msg, false);
+            }
+            return DataNode(1);
+        }
+        if (CatchNavAction(msg.GetAction())) {
+            return DataNode(1);
+        }
+    }
+    JoypadAction thisAct = msg.GetAction();
+    LocalUser *user = msg.GetUser();
+    if (thisAct == kAction_Confirm && SelectScrollSelect(this, user)) {
+        return DataNode(1);
+    } else if (thisAct == kAction_Cancel && RevertScrollSelect(this, user, 0)) {
+        return DataNode(1);
+    }
+    return DataNode(kDataUnhandled, 0);
+}
 
 void UISlider::SyncSlider() {
     if (unk50) {
@@ -142,15 +173,15 @@ void UISlider::Update() {
     unk7c = 0;
 
     const DataArray *typeDef = TypeDef();
-    if (typeDef == 0 || !unk50) {
+    if (typeDef == 0 || unk50 == 0) {
         return;
     }
 
     DataArray *meshArray = typeDef->FindArray(mesh, false);
     if (meshArray != 0) {
-        const char *str = meshArray->FindStr(mesh);
-        if (str != 0) {
-            unk68 = (int)unk50->Find<RndMesh>(str, true);
+        const char *meshStr = meshArray->FindStr(mesh);
+        if (meshStr != 0) {
+            unk68 = (int)unk50->Find<RndMesh>(meshStr, true);
         }
     }
 
@@ -159,22 +190,32 @@ void UISlider::Update() {
         return;
     }
 
-    int size = matsArray->Size();
-    for (int i = 1; i < size; i++) {
-        if (matsArray->Type(i) != kDataArray) {
+    int matsArraySize = matsArray->Size();
+    for (int i = 1; i < matsArraySize; i++) {
+        int itemType = matsArray->Type(i);
+        if (itemType != kDataArray) {
             continue;
         }
 
-        DataArray *arr = matsArray->Array(i);
-        if (arr == 0 || arr->Size() <= 0) {
+        DataArray *matItemArray = matsArray->Array(i);
+        if (matItemArray == 0) {
             continue;
         }
 
-        Symbol sym = arr->Sym(0);
-        State state = SymToUIComponentState(sym);
-        const char *name = arr->FindStr(mats);
-        if (name != 0) {
-            *(int *)((int)this + (state + 0x1b) * 4) = (int)unk50->Find<RndMat>(name, true);
+        int itemArraySize = matItemArray->Size();
+        if (itemArraySize <= 0) {
+            continue;
+        }
+
+        Symbol itemSym = matItemArray->Sym(0);
+        State itemState = SymToUIComponentState(itemSym);
+        const char *matName = matItemArray->FindStr(mats);
+        if (matName != 0) {
+            int stateOffset = itemState + 0x1b;
+            int byteOffset = stateOffset * 4;
+            int thisAddr = (int)this;
+            int matPtr = (int)unk50->Find<RndMat>(matName, true);
+            *(int *)(thisAddr + byteOffset) = matPtr;
         }
     }
 }

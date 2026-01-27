@@ -76,6 +76,7 @@ namespace {
     void HolmesFlushStreamBuffer();
     void WaitForAnyResponse(Holmes::Protocol prot);
     void WaitForResponse(Holmes::Protocol prot);
+    void WaitForReads();
     bool CheckForResponse(Holmes::Protocol prot, bool b);
     // this should hopefully be correct when someone does HolmesInput
     void CheckInput(bool b) {
@@ -121,7 +122,22 @@ NetAddress HolmesResolveIP() {
         return NetAddress();
 }
 
-void HolmesClientPollKeyboard() { return; }
+namespace {
+    bool gInputPolling = false;
+    class HolmesInput {
+    public:
+        void SendKeyboardMessages() {}
+    } gInput;
+}
+
+void HolmesClientPollKeyboard() {
+    HolmesClientPollInternal(true);
+    if (!gInputPolling) {
+        gInputPolling = true;
+        gInput.SendKeyboardMessages();
+        gInputPolling = false;
+    }
+}
 
 DataNode DumpHolmesLog(DataArray *) {
     TextFileStream *log = new TextFileStream("holmes.csv", true);
@@ -335,11 +351,79 @@ const char *HolmesFileShare() { return gShareName; }
 
 void HolmesClientTruncate(int, int) { return; }
 
-bool HolmesClientOpen(const char *, int, unsigned int &, int &) { return false; }
+bool HolmesClientOpen(const char *arg0, int arg1, unsigned int &arg2, int &arg3) {
+    CritSecTracker cst(&gCrit);
+
+    if (gHostLogging) {
+        if (arg1 & 1) {
+            if (gHolmesStream == NULL) {
+                return false;
+            }
+        } else {
+            if (!gHostConfig) {
+                MILO_FAIL("gHostLogging tried to read file");
+            }
+        }
+    }
+
+    if (gHolmesStream == NULL) {
+        MILO_ASSERT(gHolmesStream, 866);
+    }
+
+    if (!gHolmesStream->Fail()) {
+        BeginCmd(Holmes::kOpenFile, true);
+        *gStreamBuffer << u8(Holmes::kOpenFile);
+        *gStreamBuffer << arg0;
+        *gStreamBuffer << u8((arg1 >> 1) & 1);
+        *gStreamBuffer << u8((arg1 >> 18) & 1);
+
+        if (!((arg1 >> 1) & 1)) {
+            *gStreamBuffer << u8((arg1 >> 8) & 1);
+            *gStreamBuffer << u8((arg1 >> 9) & 1);
+        }
+
+        HolmesFlushStreamBuffer();
+        WaitForResponse(Holmes::kOpenFile);
+        *gHolmesStream >> arg3;
+
+        if (arg3 != -1) {
+            *gHolmesStream >> arg2;
+        }
+
+        gPendingResponse = Holmes::kInvalidOpcode;
+        EndCmd(Holmes::kOpenFile);
+
+        if (arg3 != -1) {
+            return true;
+        }
+    }
+
+    return false;
+}
 
 void HolmesClientWrite(int, int, int, const void *) { return; }
 
-void HolmesClientRead(int, int, int, void *, File *) { return; }
+void HolmesClientRead(int arg0, int arg1, int arg2, void *arg3, File *arg4) {
+    if (arg3 != NULL) {
+        CritSecTracker cst(&gCrit);
+        if (gHolmesStream == 0) {
+            MILO_ASSERT(gHolmesStream, 0x3c7);
+        }
+        BeginCmd((Holmes::Protocol)5, true);
+        *gStreamBuffer << u8(5);
+        *gStreamBuffer << arg0;
+        *gStreamBuffer << arg1;
+        *gStreamBuffer << arg3;
+        HolmesFlushStreamBuffer();
+
+        ReadRequest req;
+        req.mBuffer = arg3;
+        req.mBytes = arg2;
+        gRequests.insert(gRequests.end(), req);
+
+        EndCmd((Holmes::Protocol)5);
+    }
+}
 
 bool HolmesClientReadDone(File *) { return false; }
 
@@ -378,7 +462,30 @@ void HolmesClientSendMessage(const Message &msg) {
     }
 }
 
-void HolmesClientClose(File *, int) { return; }
+void HolmesClientClose(File *file, int handle) {
+    bool found = false;
+    CritSecTracker cst(&gCrit);
+
+    BeginCmd(Holmes::kCloseFile, true);
+    MILO_ASSERT(gHolmesStream, 1012);
+
+    // Check if file handle is in pending requests
+    for (auto it = gRequests.begin(); it != gRequests.end(); ++it) {
+        if (it->mBuffer == file) {
+            found = true;
+            break;
+        }
+    }
+
+    if (found) {
+        WaitForReads();
+    }
+
+    *gStreamBuffer << u8(Holmes::kCloseFile);
+    *gStreamBuffer << handle;
+    HolmesFlushStreamBuffer();
+    EndCmd(Holmes::kCloseFile);
+}
 
 void HolmesClientEnumerate(
     const char *, void (*)(const char *, const char *), bool, const char *, bool
@@ -397,7 +504,21 @@ bool CanUseHolmes(int p1) {
     return false;
 }
 
-void HolmesToLocal(char *p1, const char *p2) {}
+void HolmesToLocal(char *p1, const char *p2) {
+    String temp;
+    temp = HolmesXboxPath(gServerName.c_str(), p2);
+
+    const char *src = temp.c_str();
+    char *dst = p1;
+
+    s8 c;
+    do {
+        c = *src;
+        *dst = c;
+        src++;
+        dst++;
+    } while (c != 0);
+}
 
 char const *HolmesFileHostName() { return gMachineName; }
 

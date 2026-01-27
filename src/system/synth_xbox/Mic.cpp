@@ -99,7 +99,7 @@ void MicXbox::OnMicDisconnected() {
 
 MicManagerXbox::MicManagerXbox()
     : unk18(-1), unk1c(0), unk2c(0), unk30(false), unk88(-1) {
-    for (int i = 4; i != 0; i--) {
+    for (int i = 0; i < 4; i++) {
         unkc.push_back(0);
     }
     unk20.reserve(4);
@@ -107,12 +107,19 @@ MicManagerXbox::MicManagerXbox()
     DataRegisterFunc("set_low_cut", SetLowCut);
     DataRegisterFunc("set_local_gain", SetLocalGain);
     DataRegisterFunc("set_remote_gain", SetRemoteGain);
-    DataArray *synthConfig = SystemConfig("synth", "xbox_headset");
-    // synthConfig->FindData("noise_threshold", );
-    //  synthConfig->FindData("low_cut", unk20.front().unk0);
-    //  synthConfig->FindData("local_gain", unk1c);
-    //  synthConfig->FindData("remote_gain", unk2c);
-    //  GainEffect::sGain = DbToRatio();
+    DataArray *arr = SystemConfig("synth", "xbox_headset");
+    Symbol s1("noise_threshold");
+    float noiseThresh = 1.0f;
+    arr->FindData(s1, noiseThresh, true);
+    Symbol s2("low_cut");
+    float lowCut = 0.5f;
+    arr->FindData(s2, lowCut, true);
+    Symbol s3("local_gain");
+    float localGain = 1.0f;
+    arr->FindData(s3, localGain, true);
+    Symbol s4("remote_gain");
+    float remoteGain = 0.5f;
+    arr->FindData(s4, remoteGain, true);
 }
 
 MicManagerXbox::~MicManagerXbox() {}

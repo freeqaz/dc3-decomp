@@ -1,4 +1,5 @@
 #include "ui/UIFontImporter.h"
+#include "ui/UILabelDir.h"
 #include "obj/Data.h"
 #include "obj/Object.h"
 #include "os/System.h"
@@ -102,6 +103,46 @@ BEGIN_PROPSYNCS(UIFontImporter)
 END_PROPSYNCS
 
 BEGIN_SAVES(UIFontImporter)
+    bs.WriteEndian(&mUpperCaseAthroughZ, 4);
+    bs << mUpperCaseAthroughZ;
+    bs << mLowerCaseAthroughZ;
+    bs << mNumbers0through9;
+    bs << mPunctuation;
+    bs << mUpperEuro;
+    bs << mLowerEuro;
+    bs << mRussian;
+    bs << mPolish;
+    bs << mIncludeLocale;
+    bs << mIncludeFile;
+    String plusStr;
+    WideVectorToUTF8(mPlus, plusStr);
+    bs << plusStr;
+    String minusStr;
+    WideVectorToUTF8(mMinus, minusStr);
+    bs << minusStr;
+    bs << mFontName;
+    bs << mFontPctSize;
+    bs << mFontWeight;
+    bs << mItalics;
+    bs << mDropShadow;
+    bs << mDropShadowOpacity;
+    bs << mFontQuality;
+    bs << mPitchAndFamily;
+    bs << mFontCharset;
+    bs << mFontSupersample;
+    bs << mBitmapSavePath;
+    bs << mBitMapSaveName;
+    bs << mLeft;
+    bs << mRight;
+    bs << mTop;
+    bs << mBottom;
+    bs << mFillWithSafeWhite;
+    bs << mGennedFonts;
+    bs << mReferenceKerning;
+    bs << mMatVariations;
+    bs << mHandmadeFont;
+    bs << mSyncResource;
+    bs << mLastGenWasNG;
 END_SAVES
 
 BEGIN_COPYS(UIFontImporter)
@@ -147,7 +188,113 @@ BEGIN_COPYS(UIFontImporter)
 END_COPYS
 
 BEGIN_LOADS(UIFontImporter)
+    u32 vers;
+    bs.ReadEndian(&vers, 4);
+    u16 minVers = vers & 0xFFFF;
+    u16 altVers = vers >> 16;
 
+    BinStreamRev rev(bs, vers);
+    rev >> mUpperCaseAthroughZ;
+    rev >> mLowerCaseAthroughZ;
+    rev >> mNumbers0through9;
+    rev >> mPunctuation;
+    rev >> mUpperEuro;
+    rev >> mLowerEuro;
+
+    if (altVers > 0) {
+        rev >> mRussian;
+        rev >> mPolish;
+        rev >> mIncludeLocale;
+        rev >> mIncludeFile;
+    }
+
+    String str1, str2;
+    bs >> str1;
+    bs >> str2;
+
+    if (altVers < 4) {
+        ASCIItoWideVector(mPlus, str1.c_str());
+    } else {
+        UTF8toWideVector(mPlus, str1.c_str());
+    }
+
+    bs >> mFontName;
+
+    if (minVers <= 4) {
+        s32 val;
+        bs.ReadEndian(&val, 4);
+        mFontPctSize = fabs((f32)(s64)(-val) * 0.0013888889f);
+    } else {
+        bs.ReadEndian(&mFontPctSize, 4);
+    }
+
+    bs.ReadEndian(&mFontWeight, 4);
+    rev >> mDropShadow;
+
+    if (altVers > 1) {
+        bs.ReadEndian(&mFontWeight, 4);
+    }
+
+    if (altVers > 2) {
+        bs.ReadEndian(&mFontSupersample, 4);
+    }
+
+    bs.ReadEndian(&mLeft, 4);
+    bs.ReadEndian(&mRight, 4);
+    bs.ReadEndian(&mTop, 4);
+    bs.ReadEndian(&mBottom, 4);
+    bs.ReadEndian(&mFontQuality, 4);
+
+    if (minVers > 1) {
+        bs.ReadEndian(&mFontWeight, 4);
+    }
+
+    bs >> mFontName;
+    bs >> mIncludeFile;
+    bs.ReadEndian(&mFontPctSize, 4);
+    bs.ReadEndian(&mFontWeight, 4);
+    bs.ReadEndian(&mFontWeight, 4);
+    bs.ReadEndian(&mFontWeight, 4);
+    rev >> mDropShadow;
+
+    if (minVers < 8) {
+        mFontToImportFrom.Load(bs, 1, 0);
+    }
+
+    if (minVers > 2) {
+        mGennedFonts.Load(bs, 1, 0, 1);
+        mReferenceKerning.Load(bs, 1, 0);
+    }
+
+    if (minVers == 3) {
+        // Load temporary mat at version 3
+        bs.ReadEndian(&mFontWeight, 4);
+    }
+
+    if (minVers > 3) {
+        mMatVariations.Load(bs, 1, 0, 1);
+    }
+
+    if ((minVers > 5) && (minVers < 10)) {
+        // Load temporary mat at version 5-9
+        bs.ReadEndian(&mFontWeight, 4);
+    }
+
+    if (minVers > 6) {
+        mHandmadeFont.Load(bs, 1, 0);
+    }
+
+    if (minVers > 7) {
+        bs >> mBitMapSaveName;
+    }
+
+    if (minVers > 8) {
+        rev >> mCheckNG;
+    }
+
+    if (altVers == 1) {
+        bs.ReadEndian(&mSyncResource, 4);
+    }
 END_LOADS
 
 void UIFontImporter::ImportSettingsFromFont(RndFontBase *font) {
@@ -182,7 +329,35 @@ void UIFontImporter::ImportSettingsFromFont(RndFontBase *font) {
 
 Symbol UIFontImporter::GetMatVariationName(unsigned int ui) const { return Symbol(0); }
 
-char const *UIFontImporter::GetMatVariationName(RndFontBase *) const { return 0; }
+char const *UIFontImporter::GetMatVariationName(RndFontBase *font) const {
+    if (!font)
+        return "";
+
+    if (!font->Type())
+        return "";
+
+    int count = mMatVariations.size();
+    Symbol type = font->Type();
+
+    if (count > 0) {
+        RndMat *first = mMatVariations.front();
+        if (first && first->Type() == type) {
+            return "";
+        }
+    } else {
+        return "";
+    }
+
+    for (auto it = mMatVariations.begin(); it != mMatVariations.end(); ++it) {
+        RndMat *mat = *it;
+        if (mat && mat->Type() == type) {
+            return FileGetBase(type.Str());
+        }
+    }
+
+    MILO_NOTIFY("%s not found in resource dir %s", PathName(this), PathName(font));
+    return "";
+}
 
 int UIFontImporter::GetMatVariationIdx(Symbol s) const {
     int size = NumMatVariations();
@@ -193,7 +368,37 @@ int UIFontImporter::GetMatVariationIdx(Symbol s) const {
     return -1;
 }
 
-RndFontBase *UIFontImporter::GetGennedFont(Symbol s) const { return nullptr; }
+RndFontBase *UIFontImporter::GetGennedFont(Symbol s) const {
+    if (s.Null()) {
+        void *p = reinterpret_cast<void *>(
+            reinterpret_cast<char *>(const_cast<UIFontImporter *>(this)) + 0x9c
+        );
+        return *reinterpret_cast<RndFontBase * const *>(p);
+    }
+    int idx = GetMatVariationIdx(s);
+    if (idx == -1) {
+        return nullptr;
+    }
+    unsigned int numVar = *reinterpret_cast<unsigned int const *>(
+        reinterpret_cast<char *>(const_cast<UIFontImporter *>(this)) + 0xc0
+    );
+    if ((unsigned int)idx >= numVar) {
+        return FindFontForMat(nullptr);
+    }
+    void *pPtr = reinterpret_cast<void *>(
+        reinterpret_cast<char *>(const_cast<UIFontImporter *>(this)) + 0xc4
+    );
+    void *ptr = *reinterpret_cast<void * const *>(pPtr);
+    for (; idx; idx--) {
+        ptr = *reinterpret_cast<void * const *>(
+            reinterpret_cast<char *>(ptr) + 0x14
+        );
+    }
+    RndMat *mat = *reinterpret_cast<RndMat * const *>(
+        reinterpret_cast<char *>(ptr) + 0xc
+    );
+    return FindFontForMat(mat);
+}
 
 void UIFontImporter::AttachImporterToFont(RndFontBase *font) {
     if (font) {
@@ -240,7 +445,34 @@ String UIFontImporter::GetASCIIMinusChars() {
     return minusChars;
 }
 
-void UIFontImporter::SyncWithGennedFonts() {}
+void UIFontImporter::SyncWithGennedFonts() {
+    int idx = 0;
+    for (ObjPtrList<RndFontBase>::iterator it = mGennedFonts.begin(); it != mGennedFonts.end();) {
+        RndFontBase *font = *it;
+        bool matfound = false;
+        if (idx == 0) {
+            matfound = true;
+        } else {
+            for (ObjPtrList<RndMat>::iterator mit = mMatVariations.begin();
+                 mit != mMatVariations.end();
+                 ++mit) {
+                if (font->Mat() == *mit) {
+                    matfound = true;
+                }
+            }
+        }
+        if (!matfound) {
+            RndText *text = FindTextForFont(font);
+            it = mGennedFonts.erase(it);
+            delete font;
+            if (text)
+                delete text;
+        } else {
+            it++;
+        }
+        idx++;
+    }
+}
 
 void UIFontImporter::HandmadeFontChanged() {}
 
@@ -328,7 +560,57 @@ void UIFontImporter::OnSetCharsetUTF8(String const &s) {
     UTF8toWideVector(mPlus, s.c_str());
 }
 
-DataNode UIFontImporter::OnSyncWithResourceFile(DataArray *) { return NULL_OBJ; }
+DataNode UIFontImporter::OnSyncWithResourceFile(DataArray *) {
+    if (!mSyncResource.empty()) {
+        FilePath path;
+        static Symbol uilabeldirSym("UILabelDir");
+        if (ResourceDirBase::MakeResourcePath(
+                path, ClassName(), uilabeldirSym, mSyncResource.c_str()
+            )) {
+            ObjDirPtr<UILabelDir> labelDir;
+            labelDir.LoadFile(path, false, true, kLoadFront, false);
+            labelDir.PostLoad(0);
+            if (labelDir.IsLoaded()) {
+                mLowerCaseAthroughZ = labelDir->mLowerCaseAthroughZ;
+                mUpperCaseAthroughZ = labelDir->mUpperCaseAthroughZ;
+                mNumbers0through9 = labelDir->mNumbers0through9;
+                mPunctuation = labelDir->mPunctuation;
+                mUpperEuro = labelDir->mUpperEuro;
+                mLowerEuro = labelDir->mLowerEuro;
+                mPlus = labelDir->mPlus;
+                mMinus = labelDir->mMinus;
+                mFontName = labelDir->mFontName;
+                mFontPctSize = labelDir->mFontPctSize;
+                mFontWeight = labelDir->mFontWeight;
+                mFontQuality = labelDir->mFontQuality;
+                mPitchAndFamily = labelDir->mPitchAndFamily;
+                mFontQuality = labelDir->mFontQuality;
+                mFontCharset = labelDir->mFontCharset;
+                mBitmapSavePath = labelDir->mBitmapSavePath;
+                mBitMapSaveName = labelDir->mBitMapSaveName;
+                mFontSupersample = labelDir->mFontSupersample;
+                mItalics = labelDir->mItalics;
+                mLeft = labelDir->mLeft;
+                mRight = labelDir->mRight;
+                mTop = labelDir->mTop;
+                mBottom = labelDir->mBottom;
+                mFillWithSafeWhite = labelDir->mFillWithSafeWhite;
+                if (mReferenceKerning) {
+                    if (labelDir->mReferenceKerning) {
+                        std::vector<RndFontBase::KernInfo> kerninfo;
+                        labelDir->mReferenceKerning->GetKerning(kerninfo);
+                        mReferenceKerning->SetKerning(kerninfo);
+                        // Cast to access protected mBaseKerning member
+                        RndFontBase *pKern = labelDir->mReferenceKerning;
+                        float baseKerning = *(float *)((char *)pKern + 0x3c);
+                        mReferenceKerning->SetBaseKerning(baseKerning);
+                    }
+                }
+            }
+        }
+    }
+    return 0;
+}
 
 RndText *UIFontImporter::FindTextForFont(RndFontBase *font) const {
     if (font) {

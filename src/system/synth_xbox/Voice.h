@@ -64,7 +64,7 @@ private:
     void UpdateSends();
     void SafeRestart();
     // void SetSendImpl(FxSend360 *);
-    // void dispose(PoolVoice *, unsigned int);
+    void dispose(int *, unsigned int);
 };
 
 unsigned long StartVoiceThreadEntry(void *);

@@ -93,12 +93,14 @@ XboxMultipleItemsPurchaser::XboxMultipleItemsPurchaser(
 }
 
 DataNode XboxMultipleItemsPurchaser::OnMsg(UIChangedMsg const &msg) {
-    if (msg.mData->Int(1) == 1 && msg.mData->Node(2).Int(msg.mData) == 0) {
-        static Symbol ui_changed("ui_changed");
-        ThePlatformMgr.RemoveSink(this, ui_changed);
-        mState = kSuccess;
+    if (msg.mData->Int(1) == 1) {
+        if (msg.mData->Node(2).Int(msg.mData) == 0) {
+            static Symbol ui_changed("ui_changed");
+            ThePlatformMgr.RemoveSink(this, ui_changed);
+            mState = kSuccess;
+        }
     }
-    return this;
+    return DataNode();
 }
 
 BEGIN_HANDLERS(XboxMultipleItemsPurchaser)

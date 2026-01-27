@@ -210,5 +210,77 @@ void HamVisDir::PreLoad(BinStream &bs) {
 }
 
 void HamVisDir::PostLoad(BinStream &bs) {
+    s32 rev = bs.PopRev(this);
 
+    if (rev < 1) {
+        PanelDir::PostLoad(bs);
+    } else {
+        SkeletonDir::PostLoad(bs);
+    }
+
+    if (rev > 1 && rev < 3) {
+        bs.ReadEndian(&unk2d8, 4);
+        bs.ReadEndian(&unk2dc, 4);
+    }
+
+    if (rev > 2 && rev < 6) {
+        float temp;
+        bs.ReadEndian(&temp, 4);
+    }
+
+    if (rev > 3 && rev < 13) {
+        ObjPtrList<RndDrawable, ObjectDir> drawables(nullptr, (ObjListMode)0);
+        drawables.Load(bs, true, nullptr, nullptr);
+        float temps[3];
+        bs.ReadEndian(&temps, 12);
+    }
+
+    if (rev > 4 && rev < 13) {
+        ObjRefConcrete<RndCam, ObjectDir> cam(nullptr);
+        cam.Load(bs, true, nullptr);
+        float tempf;
+        bs.ReadEndian(&tempf, 4);
+    }
+
+    if (rev > 6) {
+        bool val;
+        bs >> val;
+    }
+
+    if (rev > 7) {
+        mPlayer1Right.Load(bs, true, nullptr);
+        mPlayer1Left.Load(bs, true, nullptr);
+        mPlayer2Right.Load(bs, true, nullptr);
+        mPlayer2Left.Load(bs, true, nullptr);
+    }
+
+    if (rev < 13) {
+        if (rev > 8) {
+            ObjRefConcrete<RndDrawable, ObjectDir> drawable[4] = {
+                ObjRefConcrete<RndDrawable, ObjectDir>(nullptr),
+                ObjRefConcrete<RndDrawable, ObjectDir>(nullptr),
+                ObjRefConcrete<RndDrawable, ObjectDir>(nullptr),
+                ObjRefConcrete<RndDrawable, ObjectDir>(nullptr)
+            };
+            drawable[0].Load(bs, true, nullptr);
+            drawable[1].Load(bs, true, nullptr);
+            drawable[2].Load(bs, true, nullptr);
+            drawable[3].Load(bs, true, nullptr);
+        }
+
+        if (rev > 9) {
+            ObjRefConcrete<RndAnimatable, ObjectDir> anim(nullptr);
+            anim.Load(bs, true, nullptr);
+        }
+
+        if (rev > 10) {
+            ObjRefConcrete<RndCam, ObjectDir> cam(nullptr);
+            cam.Load(bs, true, nullptr);
+        }
+
+        if (rev > 11) {
+            ObjRefConcrete<RndAnimatable, ObjectDir> anim(nullptr);
+            anim.Load(bs, true, nullptr);
+        }
+    }
 }

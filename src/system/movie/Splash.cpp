@@ -1,12 +1,16 @@
 #include "movie/Splash.h"
 #include "Splash.h"
 #include "obj/Object.h"
+#include "os/Archive.h"
 #include "os/CritSec.h"
 #include "os/Debug.h"
 #include "os/System.h"
+#include "utl/MakeString.h"
 #include "rndobj/EventTrigger.h"
 #include "rndobj/Movie.h"
 #include "rndobj/Rnd_NG.h"
+#include "rndobj/Utl.h"
+#include "xdk/xapilibi/processthreadsapi.h"
 
 bool gSplashing = false;
 Splash *TheSplasher;
@@ -41,8 +45,31 @@ void Splash::Suspend() {
 }
 
 void Splash::Resume() {
-    MILO_ASSERT(MainThread(), 0xcf);
-    unk60 -= 1;
+    MILO_ASSERT(MainThread(), 0x257);
+    if (--unk60 <= 0) {
+        MILO_ASSERT(unk60 == 0, 0x264);
+        if (unk64 != 0) {
+            if (SetMutableState(SplashState::s3)) {
+                if (unk50 != NULL) {
+                    unk50->SetShowing(false);
+                    unk50->GetMovie().UnlockThread();
+                }
+                MILO_ASSERT(SetMutableState(SplashState::kResuming), 0x279);
+                WaitForState(SplashState::kResumed);
+            } else {
+                MILO_ASSERT(mState == SplashState::kWaitingForTerminating, 0x285);
+                if (unk50 != NULL) {
+                    unk50->SetShowing(false);
+                    unk50->GetMovie().UnlockThread();
+                }
+            }
+        } else {
+            if (SetMutableState(SplashState::kResumed) == 0)
+                return;
+            unk5c = 0;
+            Draw();
+        }
+    }
 }
 
 void Splash::AddScreen(char const *c, int i) {
@@ -84,7 +111,29 @@ void Splash::PrepareRemaining() {
     for (bool b = PrepareNext(); b; b = PrepareNext()) {}
 }
 
-void Splash::EndSplasher() {}
+void Splash::EndSplasher() {
+    if (TheSplasher) {
+        if (unk64) {
+            MILO_ASSERT(mScreens.empty(), 0xa6);
+            MILO_ASSERT(gSplashing, 0xa7);
+            MILO_ASSERT(SetImmutableState(kTerminating), 0xa9);
+            WaitForState(kTerminated);
+            gSplashing = false;
+        } else {
+            while (ShowNext())
+                ;
+            MILO_ASSERT(SetImmutableState(kTerminated), 0xb6);
+        }
+        TheSplasher = NULL;
+        SetRndSplasherCallback(0, 0, 0);
+        *(bool *)((char *)&TheRnd + 0x1b4) = false;
+        for (std::list<RndDir *>::iterator it = unkc0.begin(); it != unkc0.end(); ++it) {
+            delete *it;
+        }
+        Movie::Validate();
+        MemFree(mThreadStack, __FILE__, __LINE__, "");
+    }
+}
 
 void Splash::Poll() {
     if (!unk64 || unk60 && !gSplashing) {
@@ -98,7 +147,27 @@ void Splash::Poll() {
     }
 }
 
-void Splash::BeginSplasher() {}
+void Splash::BeginSplasher() {
+    if (unk64) {
+        MILO_ASSERT(!gSplashing, 0x6B);
+        gSplashing = true;
+        MILO_ASSERT(!mPreparedScreens.empty(), 0x6D);
+
+        MILO_ASSERT(SetMutableState(kResuming), 0x6F);
+        HANDLE thread = CreateThread(0, 0, ThreadStart, this, 4, 0);
+        XSetThreadProcessor(thread, 5);
+        SetThreadPriority(thread, 1);
+        ResumeThread(thread);
+        WaitForState(kResumed);
+    } else {
+        SetMutableState(kResumed);
+        Show();
+        Draw();
+    }
+    TheSplasher = this;
+    SetRndSplasherCallback(PollFunc, SuspendFunc, ResumeFunc);
+    ((Rnd *)&TheRnd)->unk1b4 = 1;
+}
 
 void Splash::Draw() {}
 
@@ -203,18 +272,50 @@ bool Splash::UpdateThreadLoop() {
 }
 
 void Splash::UpdateThread() {
-    DWORD threadID = GetCurrentThreadId();
+    unk68 = GetCurrentThreadId();
     MILO_ASSERT(!MainThread(), 0x21d);
-    CritSecTracker tracker(&unk6c);
+    unk6c.Enter();
     MILO_ASSERT(mState == kResuming, 0x221);
     mState = kResumed;
     unk8c.Set();
+    unk6c.Exit();
+
     unk18.Start();
-    Show();
-    bool b = UpdateThreadLoop();
-    while (b) {
-        CheckWorkerSuspend(b);
+
+    if (unk18.SplitMs() == 0) {
+        unk60 = __mftb();
     }
+
+    Show();
+
+    while (UpdateThreadLoop()) {
+        CheckWorkerSuspend(true);
+    }
+
+    MILO_ASSERT(mPreparedScreens.empty(), 0x23a);
+
+    for (int i = 0; i < 2; i++) {
+        TheRnd.BeginDrawing();
+        TheRnd.EndDrawing();
+    }
+
+    if (!SetImmutableState(kTerminating)) {
+        while (mState != s1) {
+            CheckWorkerSuspend(false);
+        }
+        SetImmutableState(kTerminating);
+    }
+
+    TheNgRnd.Suspend();
+
+    float elapsed = unk18.SplitMs();
+    if (TheArchive && Archive::DebugArkOrder()) {
+        TheDebug << MakeString("Splash Time: %f", elapsed);
+    }
+
+    WaitForState(kWaitingForTerminating);
+
+    MILO_ASSERT(SetImmutableState(kTerminated), 0x257);
 }
 
 unsigned long Splash::ThreadStart(void *v) {

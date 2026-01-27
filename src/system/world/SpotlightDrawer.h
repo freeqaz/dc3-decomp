@@ -36,7 +36,7 @@ public:
     // size 0x50
     class SpotMeshEntry { // from RB3 decomp
     public:
-        SpotMeshEntry() : unk0(0), unk4(0), unk8(0) {}
+        SpotMeshEntry() : unk0(0), unk4(0), unk8(0), unkc(0) {}
         RndMesh *unk0;
         RndMesh *unk4;
         Spotlight *unk8;

@@ -731,21 +731,23 @@ DataNode Character::OnGetCurrentInterests(DataArray *da) {
 void Character::DrawLodOrShadow(int lod, DrawMode drawMode) {
     mLastLod = Clamp<int>(0, mLods.size() - 1, lod);
     if (drawMode == 4) {
-        if (!mShadow.empty()) {
+        if (mShadow.size() > 0) {
             mShadow.Draw();
             return;
         }
         DrawShowing();
     } else {
         if (drawMode & 1) {
-            RndEnvironTracker tracker(mEnv, &WorldXfm().v);
+            RndEnvironTracker tracker(unk2a0, unk2b4);
             DrawShowing();
         }
         if (!(drawMode & 2))
             return;
         if (drawMode == 2) {
             RndEnvironTracker tracker(unk2a0, unk2b4);
+            DrawShowing();
             return;
         }
+        DrawShowing();
     }
 }

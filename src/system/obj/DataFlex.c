@@ -1527,8 +1527,6 @@ YY_DECL_LAST_ARG
     YY_BUFFER_STATE b;
 
     b = (YY_BUFFER_STATE)yy_flex_alloc(sizeof(struct yy_buffer_state) YY_CALL_LAST_ARG);
-    if (!b)
-        YY_FATAL_ERROR("out of dynamic memory in yy_create_buffer()");
 
     b->yy_buf_size = size;
 

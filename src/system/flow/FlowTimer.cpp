@@ -101,7 +101,19 @@ void FlowTimer::RequestStopCancel() {
 
 void FlowTimer::Execute(FlowNode::QueueState state) {
     FLOW_LOG("Execute: state = %i\n", state);
-    OnTimerEnd();
+
+    if (FlowNode::IsRunning()) {
+        // Running
+    } else {
+        // Not running
+        switch (state) {
+        case 1:
+            break;
+        case 0:
+            OnTimerEnd();
+            break;
+        }
+    }
 }
 
 bool FlowTimer::IsRunning() { return unk60 || FlowNode::IsRunning(); }

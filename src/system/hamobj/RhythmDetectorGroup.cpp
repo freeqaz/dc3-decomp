@@ -89,10 +89,17 @@ void RhythmDetectorGroup::RemoveDebugGraphs() {
 }
 
 void RhythmDetectorGroup::AddDebugGraphs() {
+    float pos;
+
     delete mDebugGraph;
+
     mDebugGraph = new DebugGraph(0.1f, 0.0f, 0.8f, 0.9f, Hmx::Color(0.4, 0.4, 0.4, 0.8), Hmx::Color(0.4, 0.4, 0.4, 0.8), null, 0.0, 2.0, "");
+
+    pos = 0.1f;
     FOREACH(it, mDetectors) {
-        (*it)->RemoveDebugGraphs();
-        (*it)->AddDebugGraph(0.1f, 0.1f, 0.8f, 0.1f / 0.8f, Hmx::Color(0.4, 0.4, 0.4, 0.8));
+        RhythmDetector* detector = *it;
+        detector->RemoveDebugGraphs();
+        detector->AddDebugGraph(0.1f, pos, 0.8f, 0.125f, Hmx::Color(0.4, 0.4, 0.4, 0.8));
+        pos += 0.1f;
     }
 }

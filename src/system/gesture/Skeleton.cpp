@@ -34,6 +34,13 @@ void SkeletonFrame::Init() {
 void SkeletonFrame::Create(const NUI_SKELETON_FRAME &nui_frame, int i2) {
     unk0 = nui_frame.dwFrameNumber;
     mElapsedMs = i2;
+
+    sUpVectorSmoother.Smooth(
+        Vector3(nui_frame.vFloorClipPlane.x, nui_frame.vFloorClipPlane.y, nui_frame.vFloorClipPlane.z),
+        i2 * 0.001f,
+        true
+    );
+
     unk8 = sUpVectorSmoother.Value();
     unk18.Set(
         nui_frame.vFloorClipPlane.x,

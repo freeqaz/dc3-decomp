@@ -112,16 +112,18 @@ void AllocInfo::FillStackTrace() {
 
 void AllocInfoInit() {
     void *dst;
-    if (s_pTrie == nullptr) {
-        // 0x220008
-        dst = MemAlloc(sizeof(Trie), __FILE__, 0x28, "Trie, 0");
-        if (dst == nullptr) {
-            s_pTrie = nullptr;
+    Trie *pTrie = s_pTrie;
+    if (pTrie == nullptr) {
+        dst = MemAlloc(0x28, __FILE__, 0x28, "Trie, 0");
+        if (dst != nullptr) {
+            memset(dst, 0, 0x28);
+            // some trie member bool being set to true here
+            ((char *)dst)[0] = 1;
+            pTrie = (Trie *)dst;
         }
         else {
-            memset(dst, 0, sizeof(Trie));
-            // some trie member bool being set to true here
-            s_pTrie = (Trie *)dst;
+            pTrie = nullptr;
         }
+        s_pTrie = pTrie;
     }
 }

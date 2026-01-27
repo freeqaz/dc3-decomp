@@ -151,7 +151,11 @@ int Archive::GetArkfileCachePriority(int arkfileNum) const {
 }
 
 int Archive::GetArkfileNumBlocks(int file) const {
-    return (mArkfileSizes[file] - 1) / kArkBlockSize + 1;
+    int blockSize = kArkBlockSize;
+    int size = mArkfileSizes[file];
+    int temp = size - 1;
+    int div = temp / blockSize;
+    return div + 1;
 }
 
 void Archive::SetLocationHardDrive() {

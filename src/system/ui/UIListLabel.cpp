@@ -44,15 +44,14 @@ const char *UIListLabel::GetDefaultText() const {
 }
 
 UILabel *UIListLabel::ElementLabel(int display) const {
-    if (mElements.empty())
+    size_t size = mElements.size();
+    if (size == 0)
         return 0;
-    else {
-        MILO_ASSERT((0) <= (display) && (display) < (mElements.size()), 0x74);
-        UIListLabelElement *le = dynamic_cast<UIListLabelElement *>(mElements[display]);
-        MILO_ASSERT(le, 0x77);
-        return le->mLabel;
-    }
-    return 0;
+
+    MILO_ASSERT((0) <= (display) && (display) < (size), 0x74);
+    UIListLabelElement *le = dynamic_cast<UIListLabelElement *>(mElements[display]);
+    MILO_ASSERT(le, 0x77);
+    return le->mLabel;
 }
 
 UIListSlotElement *UIListLabel::CreateElement(UIList *uilist) {
@@ -69,6 +68,14 @@ UIListSlotElement *UIListLabel::CreateElement(UIList *uilist) {
 
 UIListLabelElement::~UIListLabelElement() { delete mLabel; }
 
-void UIListLabelElement::Draw(const Transform &tf, float f, UIColor *col, Box *box) {}
+void UIListLabelElement::Draw(const Transform &tf, float f, UIColor *col, Box *box) {
+    mLabel->SetWorldXfm(tf);
+    if (box) {
+        // box processing
+    } else {
+        // drawing
+        mLabel->DrawShowing();
+    }
+}
 
 #pragma endregion UIListLabelElement

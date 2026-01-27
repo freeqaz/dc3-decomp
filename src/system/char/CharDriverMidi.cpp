@@ -2,7 +2,10 @@
 #include "char/CharDriver.h"
 #include "obj/Data.h"
 #include "obj/Object.h"
+#include "obj/Task.h"
 #include "utl/Symbol.h"
+#include "utl/TimeConversion.h"
+#include "math/Utl.h"
 
 CharDriverMidi::CharDriverMidi() : mClipFlags(0), mBlendOverridePct(1.0f) {}
 
@@ -60,18 +63,78 @@ void CharDriverMidi::PollDeps(
     CharDriver::PollDeps(changedBy, change);
 }
 
-void CharDriverMidi::Enter() {}
+void CharDriverMidi::Enter() {
+    ((u8 *)this)[0xb8] = 1;
+    CharDriver::Enter();
+    Hmx::Object *msgParser = Dir()->FindObject(mParser.Str(), true, true);
+    if (msgParser)
+        msgParser->AddSink(this);
+    Hmx::Object *msgFlagParser = Dir()->FindObject(mFlagParser.Str(), true, true);
+    if (msgFlagParser)
+        msgFlagParser->AddSink(this);
+}
 
 void CharDriverMidi::Exit() { CharDriver::Exit(); }
 
-DataNode CharDriverMidi::OnMidiParser(DataArray *da) { return 0; }
+DataNode CharDriverMidi::OnMidiParser(DataArray *da) {
+    CharClip *clip;
+    if (!unke0 && mDefaultClip)
+        clip = dynamic_cast<CharClip *>(mDefaultClip.Ptr());
+    else
+        clip = FindClip(da->Node(2), false);
+    if (clip && clip != FirstClip()) {
+        float somefloat = da->Float(3);
+        if (clip->PlayFlags() & 0x200) {
+            float secs = TheTaskMgr.Seconds(TaskMgr::kRealTime);
+            float beat = TheTaskMgr.Beat();
+            float bts = BeatToSeconds(somefloat + beat) - secs;
+            somefloat = bts * clip->AverageBeatsPerSecond();
+        }
+        MaxEq(somefloat, 0.0f);
+        Play(clip, 0, somefloat * mBlendOverridePct, -somefloat, 0.0f);
+    }
+    return 0;
+}
 
 DataNode CharDriverMidi::OnMidiParserFlags(DataArray *da) {
     mClipFlags = da->Int(2);
     return 0;
 }
 
-DataNode CharDriverMidi::OnMidiParserGroup(DataArray *da) { return NULL_OBJ; }
+DataNode CharDriverMidi::OnMidiParserGroup(DataArray *da) {
+    const char *name = da->Str(2);
+    CharClipGroup *grp = mClips->Find<CharClipGroup>(name, false);
+    if (!grp) {
+        MILO_WARN("%s could not find group %s in %s", PathName(this), name, grp->Name());
+        return 0;
+    } else {
+        CharClip *clip;
+        if (unke0 || !mDefaultClip) {
+            clip = grp->GetClip(mClipFlags);
+        } else {
+            clip = dynamic_cast<CharClip *>(mDefaultClip.Ptr());
+        }
+        if (!clip) {
+            MILO_WARN(
+                "%s could not find clip with flags %d in %s",
+                PathName(this),
+                mClipFlags,
+                PathName(grp)
+            );
+            return 0;
+        } else {
+            if (clip || clip != FirstClip()) {
+                float somefloat = da->Float(3);
+                if (clip->PlayFlags() & 0x200) {
+                    somefloat *= clip->AverageBeatsPerSecond();
+                }
+                MaxEq(somefloat, 0.0f);
+                Play(clip, 0, -somefloat, 1e+30f, 0.0f)->mBlendWidth = somefloat * mBlendOverridePct;
+            }
+        }
+    }
+    return 0;
+}
 
 BEGIN_HANDLERS(CharDriverMidi)
     HANDLE(midi_parser, OnMidiParser)

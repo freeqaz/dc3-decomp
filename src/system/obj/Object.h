@@ -1252,7 +1252,11 @@ public:
         back() = t;
     }
 
-    void resize(unsigned int size) { Base::resize(size, T(mOwner)); }
+    void resize(unsigned int size) {
+        Hmx::Object *owner = mOwner;
+        T temp = T(owner);
+        Base::resize(size, temp);
+    }
 
     void operator=(const ObjVector &vec) {
         if (this != &vec) {

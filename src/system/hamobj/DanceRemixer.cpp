@@ -191,8 +191,11 @@ const MoveParent *DanceRemixer::GetMoveParent(int x, int y) {
 void BuildSetOfPrevAdjacentMoveParents(
     std::set<const MoveParent *> &s1, const std::set<const MoveParent *> &s2
 ) {
-    for (std::set<const MoveParent *>::const_iterator it = s2.begin(); it != s2.end();
-         ++it) {
+    for (std::set<const MoveParent *>::const_iterator it = s2.begin(); it != s2.end(); ++it) {
+        const MoveParent *moveParent = *it;
+        if (!moveParent->HasRestMoveVariant() && !moveParent->HasFinalMoveVariant()) {
+            s1.insert(moveParent);
+        }
     }
 }
 

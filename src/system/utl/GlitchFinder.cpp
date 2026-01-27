@@ -164,6 +164,9 @@ GlitchFinder::GlitchFinder() : unk0(0), unk4(0), unk8(true), unk40(0.0), unk3004
     unk10.Start();
 }
 
+GlitchFinder::~GlitchFinder() {
+}
+
 void GlitchFinder::Init() {
     DataRegisterFunc("glitch_find", OnGlitchFind);
     DataRegisterFunc("glitch_find_budget", OnGlitchFindBudget);

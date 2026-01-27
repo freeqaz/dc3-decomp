@@ -47,6 +47,28 @@ void UIListSubList::Draw(
     Box *box,
     DrawCommand cmd
 ) {
+    if (RootTrans()) {
+        int size = drawstate.mElements.size();
+        for (int i = 0; i < size; i++) {
+            UIList *uilist = SubList(i);
+            UIComponent::State state = drawstate.mElements[i].mComponentState;
+            switch (state) {
+            case UIComponent::kNormal:
+                uilist->SetState(UIComponent::kNormal);
+                break;
+            case UIComponent::kFocused:
+                if (compstate == UIComponent::kFocused) {
+                    uilist->SetState(UIComponent::kFocused);
+                } else {
+                    uilist->SetState(UIComponent::kNormal);
+                }
+                break;
+            case UIComponent::kDisabled:
+                uilist->SetState(UIComponent::kDisabled);
+                break;
+            }
+        }
+    }
     UIListSlot::Draw(drawstate, liststate, tf, compstate, box, cmd);
 }
 

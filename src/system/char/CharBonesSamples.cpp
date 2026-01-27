@@ -10,12 +10,23 @@ CharBonesSamples::CharBonesSamples()
 
 CharBonesSamples::~CharBonesSamples() { MemFree(mRawData); }
 
-BEGIN_LOADS(CharBonesSamples)
-LOAD_REVS(bs)
-MILO_FAIL("%s can\'t load new %s version %d > %d", "", "ChaBonesSample", bs.Tell(), (unsigned short)1);
-LoadHeader(d);
-LoadData(d);
-END_LOADS
+void CharBonesSamples::Load(BinStream &bs) {
+    u32 ver;
+    bs >> ver;
+
+    u32 v0 = ver & 0xFFFF;
+    u32 v1 = (ver >> 16) & 0xFFFF;
+
+    if (v0 > 0x10) {
+        MILO_FAIL("%s can't load new %s version %d > %d", "", "ChaBonesSample", v0, 1);
+    }
+    if (v1 != 0) {
+        MILO_FAIL("%s can't load new %s alt version", "", "ChaBonesSample");
+    }
+    MILO_ASSERT(v0 > 0xC, 0x29D);
+    LoadHeader((BinStreamRev &)bs);
+    LoadData((BinStreamRev &)bs);
+}
 
 int CharBonesSamples::AllocateSize() { return mTotalSize * mNumSamples; }
 

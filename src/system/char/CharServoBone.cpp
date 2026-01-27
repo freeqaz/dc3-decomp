@@ -2,6 +2,7 @@
 #include "char/CharBoneDir.h"
 #include "char/CharBonesMeshes.h"
 #include "char/CharPollable.h"
+#include "char/CharUtl.h"
 #include "math/Mtx.h"
 #include "math/Rot.h"
 #include "obj/Object.h"
@@ -49,7 +50,18 @@ END_LOADS
 
 void CharServoBone::Poll() {}
 
-void CharServoBone::ReallocateInternal() {}
+void CharServoBone::ReallocateInternal() {
+    CharBonesMeshes::ReallocateInternal();
+    mFacingRotDelta = 0;
+    mFacingPosDelta = (Vector3 *)FindPtr("bone_facing_delta.pos");
+    if ((void *)mFacingPosDelta) {
+        mFacingPos = (Vector3 *)FindPtr("bone_facing.pos");
+        RndTransformable *pelvis = CharUtlFindBoneTrans("bone_pelvis", Dir());
+        MILO_ASSERT(mFacingPos && pelvis, 0xB3);
+        mFacingRot = (float *)FindPtr("bone_facing.rotz");
+        mFacingRotDelta = (float *)FindPtr("bone_facing_delta.rotz");
+    }
+}
 
 void CharServoBone::Enter() {
     ZeroDeltas();

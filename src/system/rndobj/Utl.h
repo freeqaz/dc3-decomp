@@ -59,6 +59,9 @@ void RndSplasherPoll();
 void RndSplasherSuspend();
 void RndSplasherResume();
 
+typedef void (*SplashFunc)(void);
+void SetRndSplasherCallback(SplashFunc func1, SplashFunc func2, SplashFunc func3);
+
 void MakeTangentsLate(RndMesh *);
 void CalcBox(RndMesh *, Box &);
 MatShaderOptions GetDefaultMatShaderOpts(const Hmx::Object *, RndMat *);

@@ -28,12 +28,16 @@ void MeasureMap::TickToMeasureBeatTick(
     );
     if (change != mTimeSigChanges.begin())
         change--;
-    int div = (change->Num() * 1920) / change->Denom();
-    oMeasure = (change->Measure() - change->Tick()) / div;
-    int mod = (tick - change->Tick()) % div;
+    int numerator = change->Num() * 1920;
+    int denom = change->Denom();
+    int div = numerator / denom;
+    int beatsPerMeasure = div / 480;
+    int tickDiff = tick - change->Tick();
+    oMeasure = change->Measure() + tickDiff / div;
+    int mod = tickDiff % div;
     oBeat = mod / 480;
     oTick = mod % 480;
-    oBeatsPerMeasure = div / 480;
+    oBeatsPerMeasure = beatsPerMeasure;
 }
 
 void MeasureMap::TickToMeasureBeatTick(int tick, int &oMeasure, int &oBeat, int &oTick)

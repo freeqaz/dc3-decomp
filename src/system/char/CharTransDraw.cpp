@@ -41,7 +41,27 @@ BEGIN_LOADS(CharTransDraw)
         bs >> unk54;
 END_LOADS
 
-void CharTransDraw::DrawShowing() {}
+void CharTransDraw::DrawShowing() {
+    int mode2 = 2;
+    int mode1 = 1;
+    ObjPtrList<Character>::iterator it = mChars.begin();
+    ObjPtrList<Character>::iterator end = mChars.end();
+
+    while (it != end) {
+        Character *c = *it;
+        bool showing = c->Showing();
+
+        if (showing) {
+            c->Draw();
+        } else if (unk54) {
+            c->SetShowing(true);
+            c->Draw();
+            c->SetShowing(false);
+        }
+
+        ++it;
+    }
+}
 
 BEGIN_HANDLERS(CharTransDraw)
     HANDLE_SUPERCLASS(RndDrawable)

@@ -10,9 +10,43 @@ namespace {
     int mSigninSameGuest;
     XUID mXuidCache[4];
     int gNumSmartGlassClients;
+    void *mFriendsEnum;
+    void *mFriendsBuffer;
+    Hmx::Object *mFriendsCallback;
+    void *mFriendsAsync;
+    void *mListener;
+    unsigned int mPathLen;
+    unsigned int mListSize;
+    unsigned int mUserID;
+    unsigned int mResult;
 }
 
-PlatformMgr::PlatformMgr() {}
+PlatformMgr::PlatformMgr() {
+    mSigninMask = 0;
+    mSigninChangeMask = 0;
+    mGuideShowing = true;
+    mConfirmCancelSwapped = false;
+    mConnected = false;
+    mScreenSaver = false;
+    mHasXSocialPhotoPost = false;
+    mHasXSocialLinkPost = false;
+    unk4c = 0;
+    mRegion = kRegionNone;
+    mDiskError = kNoDiskError;
+
+    mSigninSameGuest = 0;
+    mFriendsEnum = 0;
+    mFriendsBuffer = 0;
+    mFriendsCallback = 0;
+    mFriendsAsync = 0;
+    mListener = 0;
+    mPathLen = 0x200;
+    mListSize = 0;
+    mUserID = -1;
+    mResult = 0;
+
+    mJobMgr = new JobMgr(this);
+}
 
 bool PlatformMgr::IsEthernetCableConnected() { return XNetGetEthernetLinkStatus() != 0; }
 
@@ -42,10 +76,9 @@ bool PlatformMgr::HasCreatedContentPrivilege() const {
     bool ret = true;
     for (int i = 0; i < 4; i++) {
         int bptr = 0;
-        if (XUserCheckPrivilege(i, XPRIVILEGE_USER_CREATED_CONTENT, &bptr) == 0
-            && XUserCheckPrivilege(i, XPRIVILEGE_USER_CREATED_CONTENT_FRIENDS_ONLY, &bptr)
-                == 0) {
-            ret &= bptr;
+        if ((XUserCheckPrivilege(i, XPRIVILEGE_USER_CREATED_CONTENT, &bptr) == 0)
+            && (XUserCheckPrivilege(i, XPRIVILEGE_USER_CREATED_CONTENT_FRIENDS_ONLY, &bptr) == 0)) {
+            ret = ret && (bptr != 0);
         }
     }
     return ret;

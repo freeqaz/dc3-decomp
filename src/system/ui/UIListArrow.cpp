@@ -47,13 +47,41 @@ BEGIN_LOADS(UIListArrow)
 END_LOADS
 
 void UIListArrow::Draw(
-    const UIListWidgetDrawState &,
-    const UIListState &,
-    const Transform &,
-    UIComponent::State,
-    Box *,
-    DrawCommand
-) {}
+    const UIListWidgetDrawState &drawstate,
+    const UIListState &liststate,
+    const Transform &tf,
+    UIComponent::State compstate,
+    Box *box,
+    DrawCommand cmd
+) {
+    if (!mMesh)
+        return;
+    if (cmd == kDrawFirst)
+        return;
+
+    const Vector3 *vec;
+    bool onhighlight = mOnHighlight;
+
+    if (onhighlight) {
+        vec = (const Vector3 *)((const char *)&drawstate + 0x20);
+    } else if (mPosition == kUIListArrowBack) {
+        vec = (const Vector3 *)((const char *)&drawstate);
+    } else {
+        vec = (const Vector3 *)((const char *)&drawstate + 0x10);
+    }
+
+    if (box || !mShowOnlyScroll
+        || ((mPosition != kUIListArrowBack || liststate.CanScrollBack(onhighlight))
+            && (mPosition != kUIListArrowNext || liststate.CanScrollNext(mOnHighlight)))) {
+        const Transform &worldxfm = mMesh->WorldXfm();
+        Transform xfm1 = worldxfm;
+        Transform xfm2 = xfm1;
+
+        CalcXfm(tf, *vec, xfm2);
+        DrawMesh(mMesh, (UIListWidgetState)0, compstate, xfm2, box);
+        mMesh->SetWorldXfm(xfm1);
+    }
+}
 
 void UIListArrow::StartScroll(int i, bool) {
     if (mScrollAnim == nullptr)

@@ -45,19 +45,23 @@ String &RndOverlay::CurrentLine() {
     return *mLine;
 }
 
+float RndOverlay::Height() const {
+    return mLines.size() * 0.0212f;
+}
+
 void RndOverlay::DrawAll(bool b) {
     float toUse = sTopAligned ? 0.0212f : 0.9788f;
-    // FOREACH (it, sOverlays) {
-    //     RndOverlay *cur = *it;
-    //     if (!b || cur->mModal) {
-    //         if (sTopAligned)
-    //             toUse = cur->Draw(toUse);
-    //         else if (cur->Showing()) {
-    //             toUse -= DrawOverlayLine(cur);
-    //             cur->Draw(toUse);
-    //         }
-    //     }
-    // }
+    FOREACH (it, sOverlays) {
+        RndOverlay *cur = *it;
+        if (!b || cur->mModal) {
+            if (sTopAligned)
+                toUse = cur->Draw(toUse);
+            else if (cur->Showing()) {
+                toUse -= cur->Height();
+                cur->Draw(toUse);
+            }
+        }
+    }
 }
 
 void RndOverlay::SetLines(int lines) {

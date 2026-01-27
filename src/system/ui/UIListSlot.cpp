@@ -53,13 +53,41 @@ void UIListSlot::CreateElements(UIList *uilist, int count) {
 }
 
 void UIListSlot::Draw(
-    const UIListWidgetDrawState &,
-    const UIListState &,
-    const Transform &,
-    UIComponent::State,
-    Box *,
-    DrawCommand
-) {}
+    const UIListWidgetDrawState &drawstate,
+    const UIListState &liststate,
+    const Transform &ctf,
+    UIComponent::State compstate,
+    Box *box,
+    DrawCommand cmd
+) {
+    RndTransformable *root = RootTrans();
+    if (root) {
+        int thesize = mElements.size();
+        Transform tf78(root->WorldXfm());
+        Transform tfa8;
+        UIListProvider *prov = const_cast<UIListState &>(liststate).Provider();
+        for (int i = 0; i < thesize; i++) {
+            float d10 = 1.0f;
+            UIColor *uicolor = 0;
+            if (!box) {
+                if (mSlotDrawType == kUIListSlotDrawHighlight) {
+                } else if (mSlotDrawType == kUIListSlotDrawNoHighlight) {
+                }
+                UIListWidgetState slotstate = prov->SlotElementStateOverride(i, i, this, kUIListWidgetActive);
+                uicolor = DisplayColor(slotstate, compstate);
+                uicolor = prov->SlotColorOverride(i, i, this, uicolor);
+                prov->PreDraw(i, i, this);
+            }
+            tfa8 = tf78;
+            CalcXfm(ctf, Vector3(0, 0, 0), tfa8);
+            if (cmd != kExcludeFirst || i > 0) {
+                mElements[i]->Draw(tfa8, d10, uicolor, box);
+            }
+            if (cmd == kDrawFirst)
+                return;
+        }
+    }
+}
 
 void UIListSlot::Fill(const UIListProvider &prov, int display, int j, int k) {
     if (RootTrans()) {

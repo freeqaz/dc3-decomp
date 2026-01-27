@@ -8,7 +8,9 @@
 #include "os/JoypadMsgs.h"
 #include "os/Timer.h"
 #include "ui/UI.h"
+#include "ui/UILabel.h"
 #include "ui/UIPanel.h"
+#include "ui/PanelDir.h"
 #include "utl/Std.h"
 #include "utl/Symbol.h"
 #include "utl/TextStream.h"
@@ -127,7 +129,24 @@ void UIScreen::Poll() {
     }
 }
 
-void UIScreen::Draw() {}
+void UIScreen::Draw() {
+    if (!mShowing) {
+        return;
+    }
+
+    for (auto it = mPanelList.begin(); it != mPanelList.end(); it++) {
+        bool is_active = it->Active();
+        bool is_showing = false;
+
+        if (is_active) {
+            is_showing = it->mPanel->Showing();
+        }
+
+        if (is_active && is_showing) {
+            it->mPanel->Draw();
+        }
+    }
+}
 
 bool UIScreen::InComponentSelect() const {
     UIComponent *component = TheUI->FocusComponent();
@@ -138,7 +157,23 @@ bool UIScreen::InComponentSelect() const {
     return false;
 }
 
-void UIScreen::Enter(UIScreen *) {}
+void UIScreen::Enter(UIScreen *from) {
+    if (from != NULL) {
+        sUnloadingScreen = from;
+        from->UnloadPanels();
+    }
+
+    for (auto it = mPanelList.begin(); it != mPanelList.end(); it++) {
+        if (it->Active() && it->mPanel->GetState() == UIPanel::kDown) {
+            it->mPanel->Enter();
+        }
+    }
+
+    static Message msg("enter", 0);
+    msg[0] = from;
+    HandleType(msg);
+    Poll();
+}
 
 bool UIScreen::Entering() const {
     FOREACH (it, mPanelList) {
@@ -264,7 +299,19 @@ bool UIScreen::HasPanel(UIPanel *panel) {
     return false;
 }
 
-void UIScreen::ReenterScreen() {}
+void UIScreen::ReenterScreen() {
+    for (auto it = mPanelList.begin(); it != mPanelList.end(); it++) {
+        if (it->Active()) {
+            it->mPanel->Exit();
+        }
+    }
+
+    for (auto it = mPanelList.begin(); it != mPanelList.end(); it++) {
+        if (it->Active()) {
+            it->mPanel->Enter();
+        }
+    }
+}
 
 void UIScreen::SetPanelActive(UIPanel *panel, bool active) {
     bool found = false;
@@ -331,7 +378,22 @@ DataNode UIScreen::ForeachPanel(const DataArray *da) {
     return DataNode(0);
 }
 
-void UIScreen::ReloadStrings() {}
+void UIScreen::ReloadStrings() {
+    Message msg(Symbol("reload_string"));
+
+    FOREACH (it, mPanelList) {
+        if (!it->mPanel) {
+            continue;
+        }
+        PanelDir *panelDir = it->mPanel->LoadedDir();
+        if (!panelDir) {
+            continue;
+        }
+        for (ObjDirItr<UILabel> labelIt(panelDir, true); labelIt; ++labelIt) {
+            labelIt->Handle(msg, true);
+        }
+    }
+}
 
 BEGIN_HANDLERS(UIScreen)
     HANDLE_EXPR(focus_panel, mFocusPanel)
@@ -351,6 +413,10 @@ BEGIN_HANDLERS(UIScreen)
     HANDLE_MESSAGE(ButtonDownMsg)
 END_HANDLERS
 
-void EnterGlitchCB(float, void *) {}
-
-void UnloadGlitchCB(float, void *) {}
+void UnloadGlitchCB(float f, void *data) {
+    int checkTime;
+    char *obj = (char *)((char **)((char **)data)[1])[1] + (int)data;
+    checkTime = *(int *)((char *)obj + 0x24);
+    int result = (*(int (**)(char *, char *, int))((char *)obj + 0xC))((char *)obj + 4, obj, 0);
+    TheDebug << MakeString("CheckUnload took %2.f ms\n", result, &checkTime, &f);
+}

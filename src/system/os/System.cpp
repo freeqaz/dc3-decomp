@@ -19,8 +19,10 @@
 #include "os/File.h"
 #include "os/FileCache.h"
 #include "os/Joypad.h"
+#include "os/JoypadClient.h"
 #include "os/Keyboard.h"
 #include "os/MapFile_Xbox.h"
+#include "os/Memcard_Xbox.h"
 #include "os/Platform.h"
 #include "os/PlatformMgr.h"
 #include "os/ThreadCall.h"
@@ -202,33 +204,31 @@ int SystemMs() {
 }
 
 void SystemPoll(bool b1) {
-    static Timer *_t = AutoTimer ::GetTimer("system_poll");
+    static Timer *_t = AutoTimer::GetTimer("system_poll");
     AutoTimer _at(_t, 50.0f, nullptr, nullptr);
     Timer::ClearSlowFrame();
     SystemMs();
     TheDebug.Poll();
-    //   MemcardXbox::Poll(&TheMC);
-    //   if (gUsingCD == 0) {
-    //     HolmesClientPoll();
-    //   }
-    //   JoypadPoll();
-    //   JoypadClientPoll();
-    //   KeyboardPoll();
-    //   ThreadCallPoll();
-    //   FileCache::PollAll();
-    //   LoadMgr::Poll(&TheLoadMgr);
-    //   (**(*TheCacheMgr + 4))();
-    //   (**(*TheNetCacheMgr + 0x58))();
-    //   (**(*TheWebSvcMgr + 0x5c))();
-    //   if (TheAppChild != 0x0) {
-    //     AppChild::Poll(TheAppChild);
-    //   }
-    //   if (param_1) {
-    //     TaskMgr::Poll(&TheTaskMgr);
-    //   }
-    //   PlatformMgr::Poll(&ThePlatformMgr);
-    //   VirtualKeyboard::Poll(&TheVirtualKeyboard);
-    //   (**(*TheContentMgr + 0x68))();
+    TheMC.Poll();
+    if (gUsingCD == 0) {
+        HolmesClientPoll();
+    }
+    JoypadPoll();
+    JoypadClientPoll();
+    KeyboardPoll();
+    ThreadCallPoll();
+    FileCache::PollAll();
+    TheLoadMgr.Poll();
+    TheCacheMgr->Poll();
+    TheNetCacheMgr->Poll();
+    TheWebSvcMgr.Poll();
+    if (TheAppChild != nullptr) {
+        TheAppChild->Poll();
+    }
+    if (b1) {
+        TheTaskMgr.Poll();
+    }
+    TheVirtualKeyboard.Poll();
 }
 
 DataArray *SupportedLanguages(bool cheats) {
@@ -264,15 +264,20 @@ void SetSystemLanguage(Symbol lang, bool cheats) {
                     lang,
                     arrLang
                 );
+                return;
             }
         } else {
             MILO_NOTIFY(
                 "Language %s is not supported, and there is no default language found!\n",
                 lang
             );
+            return;
         }
     }
-    if (!gSystemLanguage.Null() && lang != gSystemLanguage) {
+
+    if (gSystemLanguage.Null() || lang == gSystemLanguage) {
+        gSystemLanguage = lang;
+    } else {
         TheLocale.Terminate();
         gSystemLanguage = lang;
         TheLocale.Init();

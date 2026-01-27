@@ -11,13 +11,21 @@
 class UIList;
 class UIListProvider;
 
-struct UIListWidgetDrawState {};
-
 enum UIListWidgetState {
     kUIListWidgetActive,
     kUIListWidgetHighlight,
     kUIListWidgetInactive,
     kNumUIListWidgetStates
+};
+
+struct UIListWidgetDrawElement {
+    UIComponent::State mComponentState; // 0x28
+};
+
+struct UIListWidgetDrawState {
+    std::vector<UIListWidgetDrawElement> mElements;
+    Vector3 mHighlightPos;
+    UIListWidgetState mHighlightElementState;
 };
 
 enum UIListWidgetDrawType {

@@ -1,4 +1,6 @@
 #include "os/File.h"
+#include "os/AsyncFile.h"
+#include "os/FileCache.h"
 #include "HolmesClient.h"
 #include "obj/Data.h"
 #include "obj/DataFunc.h"
@@ -8,6 +10,7 @@
 #include "types.h"
 #include "utl/BinStream.h"
 #include "utl/Loader.h"
+#include "utl/MemMgr.h"
 #include "utl/Option.h"
 #include <cctype>
 
@@ -228,4 +231,55 @@ File *NewFile(const char *iFilename, int iMode) {
     if (gNullFiles) {
         return new NullFile();
     }
+
+    // Check if we're on the main thread, if not, fail
+    if (!MainThread()) {
+        MILO_FAIL("NewFile(%s) from non-MainThread()");
+        return nullptr;
+    }
+
+    // Check if filename is provided
+    if (!iFilename || *iFilename == '\0') {
+        return nullptr;
+    }
+
+    const char *filename = iFilename;
+    char localized[256];
+
+    // Localize the filename if needed (mode bit 30 set)
+    if (iMode & 0x40000000) {
+        filename = FileLocalize(iFilename, localized);
+    }
+
+    // Check if file is local and update mode flags
+    if (FileIsLocal(filename)) {
+        iMode |= 0x10000;
+    }
+
+    // Check if we can use FileCache (mode bit 30 and not bit 14)
+    if ((iMode & 0x40000000) && !(iMode & 0x4000)) {
+        File *cachedFile = FileCache::GetFileAll(filename);
+        if (cachedFile) {
+            return cachedFile;
+        }
+    }
+
+    // Determine which file type to create
+    File *file = nullptr;
+
+    // TODO: ArkFile support when UsingCD()
+    // For now, just use AsyncFile
+    iMode &= ~0x4000; // Clear bit 14
+    file = AsyncFile::New(filename, iMode);
+
+    // Validate the file
+    if (file) {
+        if (file->Fail()) {
+            // File failed to open - delete and return nullptr
+            delete file;
+            return nullptr;
+        }
+    }
+
+    return file;
 }

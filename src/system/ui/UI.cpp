@@ -13,6 +13,7 @@
 #include "os/UserMgr.h"
 #include "rndobj/Cam.h"
 #include "ui/CheatProvider.h"
+#include "utl/Cheats.h"
 #include "ui/InlineHelp.h"
 #include "ui/LabelNumberTicker.h"
 #include "ui/LabelShrinkWrapper.h"
@@ -228,7 +229,58 @@ void UIManager::Terminate() {
     RELEASE(mAutomator);
 }
 
-bool UIManager::IsGameScreenActive() { return false; }
+bool UIManager::IsGameScreenActive() {
+    bool result = false;
+
+    void *screenPtr;
+    if (!mPushedScreens.empty()) {
+        screenPtr = mPushedScreens[0];
+    } else {
+        screenPtr = mCurrentScreen;
+    }
+
+    if (!screenPtr) {
+        return result;
+    }
+
+    void *checkPtr;
+    if (!mPushedScreens.empty()) {
+        checkPtr = mPushedScreens[0];
+    } else {
+        checkPtr = mCurrentScreen;
+    }
+
+    char *name = *(char **)((char *)checkPtr + 0x20);
+    const char *targetStr = "game_screen";
+
+    do {
+        char c1 = *name;
+        char c2 = *targetStr;
+        if (c1 - c2 != 0) {
+            result = true;
+            if (c1 != 0) {
+                return result;
+            }
+        } else {
+            name++;
+            targetStr++;
+        }
+    } while (*name);
+
+    result = false;
+    if (mCurrentScreen) {
+        void *finalPtr;
+        if (!mPushedScreens.empty()) {
+            finalPtr = mPushedScreens[0];
+        } else {
+            finalPtr = mCurrentScreen;
+        }
+
+        result = (finalPtr == mCurrentScreen);
+    }
+
+    return result;
+}
 
 bool UIManager::BlockHandlerDuringTransition(Symbol s, DataArray *da) { return false; }
 
@@ -307,13 +359,67 @@ DataNode UIManager::OnGoBackScreen(DataArray const *arr) {
     return DATA_UNHANDLED;
 }
 
-void UIManager::ReloadStrings() {}
+void UIManager::ReloadStrings() {
+    Message msg(Symbol("reload_strings"));
+
+    if (mCurrentScreen) {
+        mCurrentScreen->Handle(msg, false);
+    }
+
+    for (auto it = mPushedScreens.begin(); it != mPushedScreens.end(); ++it) {
+        (*it)->Handle(msg, false);
+    }
+}
 
 void UIManager::FakeKeyboardAction(JoypadButton, JoypadAction) {}
 
 void UIManager::Poll() {}
 
-void UIManager::PushScreen(UIScreen *screen) { MILO_ASSERT(screen, 0x38c); }
+void UIManager::PushScreen(UIScreen *screen) {
+    // Function prologue
+    UIScreen *current = mCurrentScreen;
+
+    CancelTransition();
+    MILO_ASSERT(current, 0x358);
+    MILO_ASSERT(screen, 0x359);
+
+    // Check if screen is already in stack
+    UIScreen *existing = nullptr;
+    for (std::vector<UIScreen *>::iterator it = mPushedScreens.begin();
+         it != mPushedScreens.end();
+         ++it) {
+        existing = *it;
+        if (screen == existing) {
+            MILO_WARN("Don't push %s, it is already there!\n", screen->Name());
+            break;
+        }
+    }
+
+    // Push current screen to stack
+    mPushedScreens.push_back(current);
+
+    // Check max depth (use > instead of >= for branch matching)
+    if (mPushedScreens.size() > (mMaxPushDepth - 1)) {
+        MILO_WARN(
+            "Exceeded max push depth of %i, pushing %s", mMaxPushDepth, screen->Name()
+        );
+        MILO_LOG("mPushedScreens:\n");
+
+        UIScreen *stacked = nullptr;
+        for (std::vector<UIScreen *>::iterator it = mPushedScreens.begin();
+             it != mPushedScreens.end();
+             ++it) {
+            stacked = *it;
+            if (stacked) {
+                MILO_LOG("%s\n", stacked->Name());
+            }
+        }
+    }
+
+    // Clear current screen before transition
+    mCurrentScreen = nullptr;
+    GotoScreenImpl(screen, false, false);
+}
 
 DataNode UIManager::OnForeachCurrentScreen(DataArray const *) { return NULL_OBJ; }
 
@@ -397,7 +503,98 @@ void UIManager::Init() {
     TheKnownIssues.Init();
 }
 
+DataNode UIManager::OnSetSink(DataArray *arr) { return 0; }
+DataNode UIManager::OnUseJoypad(DataArray *arr) {
+    int val = arr->Int(2);
+    UseJoypad(val != 0, true);
+    return 0;
+}
+DataNode UIManager::OnSetVirtualDpad(DataArray *arr) {
+    int val = arr->Int(2);
+    mJoyClient->SetVirtualDpad(val != 0);
+    return 0;
+}
+DataNode UIManager::OnPushScreen(DataArray *arr) {
+    return 0;
+}
+DataNode UIManager::OnPopScreen(DataArray *arr) {
+    return 0;
+}
+DataNode UIManager::OnCurrentScreen(DataArray *arr) {
+    return DataNode(mCurrentScreen);
+}
+DataNode UIManager::OnTransitionScreen(DataArray *arr) {
+    return DataNode(mTransitionScreen);
+}
+DataNode UIManager::OnBottomScreen(DataArray *arr) {
+    UIScreen *screen;
+    if (mPushedScreens.size() != (size_t)mPushedScreens.capacity()) {
+        screen = *mPushedScreens.begin();
+    } else {
+        screen = mCurrentScreen;
+    }
+    return DataNode(screen);
+}
+DataNode UIManager::OnInTransition(DataArray *arr) {
+    return DataNode((bool)(mTransitionState != kTransitionNone));
+}
+DataNode UIManager::OnFocusPanel(DataArray *arr) {
+    return 0;
+}
+DataNode UIManager::OnWentBack(DataArray *arr) {
+    return DataNode((bool)mWentBack);
+}
+DataNode UIManager::OnIsGameScreenActive(DataArray *arr) {
+    return DataNode((bool)IsGameScreenActive());
+}
+DataNode UIManager::OnToggleLoadTimes(DataArray *arr) {
+    ToggleLoadTimes();
+    return 0;
+}
+DataNode UIManager::OnShowingLoadTimes(DataArray *arr) {
+    u8 result = 0;
+    return DataNode(result);
+}
+DataNode UIManager::OnToggleDevMenu(DataArray *arr) {
+    return 0;
+}
+DataNode UIManager::OnShowDevMenu(DataArray *arr) {
+    u8 result = 0;
+    return DataNode(result);
+}
+DataNode UIManager::OnResetScreen(DataArray *arr) {
+    return 0;
+}
+DataNode UIManager::OnFakeKeyboardAction(DataArray *arr) {
+    int button = arr->Int(3);
+    int action = arr->Int(2);
+    FakeKeyboardAction((JoypadButton)action, (JoypadAction)button);
+    return 0;
+}
+
 BEGIN_HANDLERS(UIManager)
+    HANDLE(set_sink, OnSetSink)
+    HANDLE(use_joypad, OnUseJoypad)
+    HANDLE(set_virtual_dpad, OnSetVirtualDpad)
+    HANDLE(push_screen, OnPushScreen)
+    HANDLE(pop_screen, OnPopScreen)
+    HANDLE(goto_screen, OnGotoScreen)
+    HANDLE(go_back_screen, OnGoBackScreen)
+    HANDLE(reset_screen, OnResetScreen)
+    HANDLE(focus_panel, OnFocusPanel)
+    HANDLE(current_screen, OnCurrentScreen)
+    HANDLE(transition_screen, OnTransitionScreen)
+    HANDLE(bottom_screen, OnBottomScreen)
+    HANDLE(in_transition, OnInTransition)
+    HANDLE(is_resource, OnIsResource)
+    HANDLE(foreach_current_screen, OnForeachCurrentScreen)
+    HANDLE(went_back, OnWentBack)
+    HANDLE(is_game_screen_active, OnIsGameScreenActive)
+    HANDLE(toggle_load_times, OnToggleLoadTimes)
+    HANDLE(showing_load_times, OnShowingLoadTimes)
+    HANDLE(toggle_dev_menu, OnToggleDevMenu)
+    HANDLE(show_dev_menu, OnShowDevMenu)
+    HANDLE(fake_keyboard_action, OnFakeKeyboardAction)
 END_HANDLERS
 
 #pragma endregion UIManager
@@ -560,7 +757,19 @@ Symbol Automator::CurScreenName() {
 
 void Automator::Poll() {}
 
-DataNode Automator::OnMsg(ButtonDownMsg const &msg) { return DATA_UNHANDLED; }
+DataNode Automator::OnMsg(ButtonDownMsg const &msg) {
+    Symbol screenName = CurScreenName();
+    if (mScreenScripts && !screenName.Null()) {
+        if (mCurScript) {
+            FillButtonMsg(const_cast<ButtonDownMsg&>(msg), mCurMsgIndex);
+        }
+    }
+    if (mRecord && !screenName.Null()) {
+        DataArrayPtr ptr("button_down");
+        AddRecord(screenName, ptr);
+    }
+    return DATA_UNHANDLED;
+}
 
 DataNode Automator::OnCheatInvoked(DataArray const *arr) { return DATA_UNHANDLED; }
 
@@ -579,7 +788,13 @@ void Automator::HandleMessage(Symbol msgType) {
 }
 
 BEGIN_HANDLERS(Automator)
-
+    HANDLE_EXPR("toggle_auto", DataNode(ToggleAuto()))
+    HANDLE_EXPR("toggle_record", DataNode(ToggleRecord()))
+    HANDLE_EXPR("auto_script", DataNode((mScreenScripts && !mRecord) ? mAutoPath.c_str() : "OFF"))
+    HANDLE_EXPR("record_script", DataNode(mRecord ? mRecordPath.c_str() : "OFF"))
+    HANDLE_ACTION("set_auto_script", (mAutoPath = _msg->Str(2)))
+    HANDLE_ACTION("set_record_script", (mRecordPath = _msg->Str(2)))
+    HANDLE_ACTION("add_message_type", (AddMessageType(_msg->GetObj(2), _msg->Sym(3))))
 END_HANDLERS
 
 #pragma endregion Automator
