@@ -457,6 +457,11 @@ BinStreamRev &operator>>(BinStreamRev &bs, ObjectDir::Viewport &v) {
     return bs;
 }
 
+BinStream &operator>>(BinStream &bs, ObjectDir::Viewport &v) {
+    bs >> v.mXfm;
+    return bs;
+}
+
 void ObjectDir::TransferLoaderState(ObjectDir *dir) {
     mProxyFile = dir->mProxyFile;
     mProxyOverride = dir->mProxyOverride;
@@ -901,4 +906,325 @@ FilePath ObjectDir::GetSubDirPath(const FilePath &fp, const BinStream &bs) {
         ret = FilePath(FileRoot(), handled.Str());
     }
     return ret;
+}
+
+void ObjectDir::PreLoad(BinStream &bs) {
+    LOAD_REVS(bs)
+    ASSERT_REVS(0x1C, 0)
+
+    if (d.rev > 0x15) {
+        LoadType(bs);
+    } else if (d.rev >= 2 && d.rev <= 0x10) {
+        Hmx::Object::Load(bs);
+    }
+
+    if (d.rev < 3) {
+        int hashSize, strSize;
+        bs >> hashSize >> strSize;
+        Reserve(hashSize, strSize);
+    }
+
+    if (d.rev > 0x19) {
+        if (d.rev < 0x1B) {
+            bool b;
+            bs >> b;
+            mAlwaysInlined = b;
+        } else {
+            bs >> mAlwaysInlined;
+        }
+        int hashLen;
+        bs >> hashLen;
+        if (hashLen) {
+            char *hash = (char *)MemOrPoolAlloc(hashLen + 1, __FILE__, 0x9B0, nullptr);
+            mAlwaysInlineHash = hash;
+            bs.Read(hash, hashLen);
+            hash[hashLen] = '\0';
+        }
+    }
+
+    if (d.rev > 1) {
+        bs >> mViewports;
+        bs >> (int &)mCurViewportID;
+    }
+
+    if (d.rev > 0xC) {
+        if (d.rev > 0x13) {
+            if (!gLoadingProxyFromDisk) {
+                unsigned char proxyType;
+                bs >> proxyType;
+                mInlineProxyType = (InlineDirType)proxyType;
+            } else {
+                unsigned char dummy;
+                bs >> dummy;
+            }
+        }
+        if (gLoadingProxyFromDisk || mProxyOverride) {
+            bool fail = false;
+            if (mProxyOverride && (mInlineProxyType == kInlineCached || mInlineProxyType == kInlineAlways)) {
+                fail = true;
+            }
+            if (fail) {
+                MILO_FAIL("You cannot override an inlined proxy!");
+            }
+            FilePath fp;
+            bs >> fp;
+            mProxyOverride = false;
+        } else {
+            FilePath fp;
+            bs >> fp;
+            if (!fp.empty() && fp == mProxyFile) {
+                mProxyOverride = true;
+            } else {
+                mProxyFile = fp;
+                mProxyOverride = false;
+            }
+        }
+    }
+
+    if (d.rev >= 2 && d.rev <= 10) {
+        char buf[0x80];
+        bs.ReadString(buf, 0x80);
+    }
+    if (d.rev >= 4 && d.rev <= 10) {
+        char buf[0x80];
+        bs.ReadString(buf, 0x80);
+        mCurCam = FindObject(buf, false, true);
+    }
+    if (d.rev == 5) {
+        char buf[0x80];
+        bs.ReadString(buf, 0x80);
+    }
+
+    static std::vector<FilePath> inlinedSubDirs;
+    static std::vector<FilePath> notInlinedSubDirs;
+
+    if (d.rev > 2) {
+        bs >> notInlinedSubDirs;
+        std::vector<int> intVec;
+        if (d.rev == 0x17) {
+            bs >> intVec;
+        }
+        if (d.rev > 0x14) {
+            bs >> mInlineSubDirType;
+            bs >> inlinedSubDirs;
+        } else {
+            inlinedSubDirs.clear();
+        }
+
+        int i20 = 0;
+        if (SaveSubdirs() || inlinedSubDirs.size() != 0 || notInlinedSubDirs.size() != 0) {
+            for (int i = 0; i < mSubDirs.size(); i++) {
+                RemovingSubDir(mSubDirs[i]);
+            }
+            if (!bs.Cached()
+                && mSubDirs.size() == notInlinedSubDirs.size() + inlinedSubDirs.size()) {
+                i20 = 1;
+            } else {
+                mSubDirs.reserve(notInlinedSubDirs.size() + inlinedSubDirs.size());
+                mSubDirs.resize(notInlinedSubDirs.size() + inlinedSubDirs.size());
+            }
+        } else {
+            i20 = 2;
+        }
+
+        for (int i = 0; i != notInlinedSubDirs.size(); i++) {
+            bool filesneq = mSubDirs[i].GetFile() != notInlinedSubDirs[i];
+            if (i20 == 0 || filesneq) {
+                bool b17 = false;
+                if (intVec.size() != 0) {
+                    b17 = intVec[i] != 0;
+                }
+                LoadSubDir(i, notInlinedSubDirs[i], bs, !b17);
+            }
+        }
+
+        if (d.rev > 0x17) {
+            int numNotInlined = notInlinedSubDirs.size();
+            for (int i = 0; i < inlinedSubDirs.size(); i++) {
+                bool getfileres = mSubDirs[i + numNotInlined].GetFile() != inlinedSubDirs[i];
+                InlineDirType dType;
+                if (d.rev > 0x18) {
+                    unsigned char b;
+                    bs >> b;
+                    MILO_ASSERT_RANGE_EQ(b, kInlineCached, kInlineCachedShared, 0x3C3);
+                    dType = (InlineDirType)b;
+                } else {
+                    dType = kInlineCached;
+                }
+                inlinedSubDirs[i] = GetSubDirPath(inlinedSubDirs[i], bs);
+                PreLoadInlined(inlinedSubDirs[i], false, dType);
+                if (i20 == 1) {
+                    bs.PushRev(getfileres, this);
+                }
+            }
+            bs.PushRev(numNotInlined, this);
+            if (!bs.Cached()) {
+                bs.PushRev(i20, this);
+            }
+        }
+    }
+
+    if (d.rev == 12 || d.rev == 13) {
+        OldLoadProxies(bs, d.rev);
+    }
+
+    if (d.rev < 0x13) {
+        if (d.rev > 0xF) {
+            int inlineProxy;
+            bs >> inlineProxy;
+            MILO_ASSERT(inlineProxy != 1, 0x3E1);
+        } else if (d.rev > 0xE) {
+            bool inlineProxy;
+            bs >> inlineProxy;
+            MILO_ASSERT(!inlineProxy, 0x3E6);
+        }
+    }
+
+    std::vector<bool> boolVec;
+    boolVec.resize(mInlinedDirs.size());
+    for (int i = 0; i < mInlinedDirs.size(); i++) {
+        if (d.rev < 0x19 && !bs.Cached()) {
+            boolVec[i] = true;
+        } else {
+            bool b;
+            bs >> b;
+            boolVec[i] = b;
+        }
+    }
+
+    for (int i = 0; i < mInlinedDirs.size(); i++) {
+        InlinedDir &curIDir = mInlinedDirs[i];
+        FilePath fpath(curIDir.file);
+        if (!bs.Cached() || !boolVec[i]) {
+            if (!boolVec[i] && (curIDir.mType == kInlineAlways || bs.Cached())) {
+                curIDir.dir.LoadInlinedFile(fpath, bs);
+            } else if (IsProxy() && !mProxyFile.empty()) {
+                curIDir.dir = nullptr;
+            } else {
+                curIDir.dir.LoadFile(fpath, true, curIDir.shared, kLoadFront, true);
+            }
+        }
+    }
+
+    if (d.rev >= 21 && d.rev <= 23) {
+        int offset = notInlinedSubDirs.size();
+        MILO_ASSERT(mSubDirs.capacity() >= offset + inlinedSubDirs.size(), 0x41A);
+        for (int i = 0; i < inlinedSubDirs.size(); i++) {
+            mSubDirs[i + offset].LoadInlinedFile(inlinedSubDirs[i], bs);
+        }
+    }
+
+    mIsSubDir = false;
+    bs.PushRev(packRevs(d.altRev, d.rev), this);
+}
+
+void ObjectDir::PostLoad(BinStream &bs) {
+    BinStreamRev d(bs, bs.PopRev(this));
+
+    for (int i = mInlinedDirs.size() - 1; i >= 0; i--) {
+        InlinedDir &iDir = mInlinedDirs[i];
+        int tempRev = d.rev;
+        iDir.dir.PostLoad(mLoader);
+        d.rev = tempRev;
+        if (iDir.mType == kInlineCachedShared) {
+            iDir.shared = true;
+        }
+        if (iDir.shared) {
+            FilePath &fp = iDir.file;
+            DirLoader *last = DirLoader::FindLast(fp);
+            if (last) {
+                if (last->IsLoaded()) {
+                    iDir.dir = last->GetDir();
+                } else {
+                    MILO_NOTIFY("Can't share unloaded dir %s", fp);
+                }
+            }
+        } else {
+            if (iDir.dir.IsLoaded()) {
+                delete iDir.dir->mLoader;
+                iDir.dir->mLoader = nullptr;
+            }
+        }
+    }
+
+    if (d.rev > 0x17) {
+        int revs2 = bs.Cached() ? 0 : bs.PopRev(this);
+        int offset = bs.PopRev(this);
+        MILO_ASSERT_RANGE_EQ(offset, 0, mSubDirs.size(), 0x466);
+        if (revs2 != 2) {
+            for (int i = mSubDirs.size() - offset - 1; i >= 0; i--) {
+                bool bbb = false;
+                if (revs2 == 1) {
+                    bbb = bs.PopRev(this) != 0;
+                }
+                ObjDirPtr<ObjectDir> inlinedDirPtr = PostLoadInlined();
+                ObjDirPtr<ObjectDir> &curDirPtr = mSubDirs[i + offset];
+                if (revs2 == 0 || bbb) {
+                    curDirPtr = inlinedDirPtr;
+                }
+                AddedSubDir(curDirPtr);
+            }
+            for (offset = offset - 1; offset >= 0; offset--) {
+                ObjDirPtr<ObjectDir> &offsetPtr = mSubDirs[offset];
+                offsetPtr.PostLoad(mLoader);
+                AddedSubDir(offsetPtr);
+            }
+        }
+    } else {
+        for (int i = 0; i < mSubDirs.size(); i++) {
+            ObjDirPtr<ObjectDir> &curDirPtr = mSubDirs[i];
+            curDirPtr.PostLoad(mLoader);
+            AddedSubDir(curDirPtr);
+            if (curDirPtr.IsLoaded()) {
+                if (curDirPtr->InlineSubDirType() != kInlineNever) {
+                    delete curDirPtr->mLoader;
+                    curDirPtr->mLoader = nullptr;
+                }
+            }
+        }
+    }
+
+    if (d.rev > 10) {
+        char buf[0x80];
+        bs.ReadString(buf, 0x80);
+        unk8c = FindObject(buf, false, true);
+        bs.ReadString(buf, 0x80);
+        mCurCam = FindObject(buf, false, true);
+    }
+
+    if (d.rev > 0x15) {
+        LoadRest(bs);
+    } else if (d.rev > 0x10) {
+        Hmx::Object::Load(bs);
+    }
+
+    static Message change_proxies("change_proxies");
+    HandleType(change_proxies);
+
+    if (mProxyOverride) {
+        bool overridden = false;
+        mProxyOverride = false;
+        if (gLoadingProxyFromDisk
+            || (IsProxy()
+                && !(mInlineProxyType == kInlineCached || mInlineProxyType == kInlineAlways))) {
+            overridden = true;
+        }
+        if (!overridden) {
+            MILO_FAIL("You cannot override an inlined proxy!");
+        }
+    } else {
+        if (IsProxy() && !mProxyFile.empty()) {
+            DeleteObjects();
+            DeleteSubDirs();
+            DirLoader *dl = new DirLoader(
+                mProxyFile,
+                kLoadFront,
+                nullptr,
+                InlineProxy(bs) ? &bs : nullptr,
+                this,
+                false,
+                nullptr
+            );
+        }
+    }
 }
