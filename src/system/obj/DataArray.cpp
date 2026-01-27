@@ -285,7 +285,7 @@ int NodeCmp(const void *a, const void *b) {
         float b = bnode->LiteralFloat();
         if (a < b)
             return -1;
-        return a != b;
+        return a == b ? 0 : 1;
     }
     case kDataString:
     case kDataSymbol:

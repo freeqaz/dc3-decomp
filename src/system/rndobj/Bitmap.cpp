@@ -1,8 +1,10 @@
 #include "rndobj/Bitmap.h"
 #include "utl/CRC.h"
+#include "utl/BufStream.h"
 #include "utl/ChunkStream.h"
 #include "utl/FileStream.h"
 #include "utl/MemMgr.h"
+#include "os/Endian.h"
 
 unsigned char BITMAP_REV = 2;
 
@@ -20,14 +22,16 @@ int RndBitmap::DxtRowBytes() const { return mOrder & 0x38 ? mRowBytes * 4 : mRow
 unsigned char RndBitmap::PixelIndex(int i1, int i2) const {
     bool bb;
     int offset = PixelOffset(i1, i2, bb);
-    unsigned char pixel = mPixels[offset];
+    u8 *p = mPixels + offset;
+    unsigned char ret;
     if (mBpp == 8) {
-        return pixel;
-    } else if (bb) {
-        return pixel >> 4;
-    } else {
-        return pixel & 0xF;
+        return *p;
     }
+    ret = *p >> 4;
+    if (!bb) {
+        ret = *p & 0xF;
+    }
+    return ret;
 }
 
 void RndBitmap::SetName(const Hmx::CRC &crc) { mName = crc; }
@@ -172,6 +176,102 @@ void RndBitmap::AllocateBuffer() {
     mPixels = mBuffer + paletteBytes;
 }
 
+void RndBitmap::Create(
+    int width,
+    int height,
+    int rowlen,
+    int bpp,
+    int order,
+    void *palette,
+    void *pixels,
+    void *buf
+) {
+    MILO_ASSERT(width >= 0 && height >= 0, 0x1BA);
+    MILO_ASSERT(bpp == 4 || bpp == 8 || bpp == 16 || bpp == 24 || bpp == 32, 0x1BB);
+    mWidth = width;
+    mHeight = height;
+    mRowBytes = rowlen;
+    mBpp = bpp;
+    mOrder = order;
+    mPixels = (u8 *)pixels;
+    mPalette = (u8 *)palette;
+    RELEASE(mMip);
+    if (mRowBytes == 0) {
+        if (mBpp == 4 && mWidth & 1) {
+            mRowBytes = (mWidth + 1) * mBpp >> 3;
+        } else
+            mRowBytes = mWidth * mBpp >> 3;
+    }
+    if (mOrder & 4) {
+        unsigned char theBpp = mBpp;
+        if ((theBpp == 8 && (mWidth < 16 || mHeight < 16))
+            || (theBpp == 4 && (mWidth < 32 || mHeight < 16)) || theBpp > 8) {
+            mOrder &= ~0x4;
+        }
+    }
+    if (mBuffer) {
+        MemFree(mBuffer, __FILE__, 0x1DF);
+        mBuffer = 0;
+    }
+    if (buf)
+        mBuffer = (u8 *)buf;
+    else if (!pixels)
+        AllocateBuffer();
+}
+
+void RndBitmap::Create(const RndBitmap &bm, int bpp, int order, void *palette) {
+    Create(bm.Width(), bm.Height(), 0, bpp, order, palette, NULL, NULL);
+    if (mPalette && !palette) {
+        MILO_ASSERT(bm.Palette(), 0x1EE);
+        for (int i = 0; i < bm.NumPaletteColors(); i++) {
+            unsigned char r, g, b, a;
+            bm.PaletteColor(i, r, g, b, a);
+            SetPaletteColor(i, r, g, b, a);
+        }
+    }
+    Blt(bm, 0, 0, 0, 0, mWidth, mHeight);
+    if (bm.nextMip()) {
+        mMip = new RndBitmap();
+        mMip->Create(*bm.nextMip(), bpp, order, mPalette);
+    }
+}
+
+void RndBitmap::Create(void *buffer) {
+    if (!buffer)
+        MILO_NOTIFY("Load buffer is empty");
+    else {
+        BufStream bs(buffer, 32, true);
+        unsigned char buf;
+        LoadHeader(bs, buf);
+        if (mBuffer) {
+            MemFree(mBuffer, __FILE__, 0x203);
+            mBuffer = 0;
+        }
+        mBuffer = (u8 *)buffer;
+        u8 *i5 = mBuffer + bs.Tell();
+
+        int pbytes = PaletteBytes();
+        mPalette = pbytes ? i5 : 0;
+
+        int pixbytes = PixelBytes();
+        mPixels = i5 + pbytes;
+        u8 *pixels = i5 + pbytes + pixbytes;
+        RELEASE(mMip);
+        int width = mWidth;
+        int height = mHeight;
+        RndBitmap *cur = this;
+        while (buf-- != 0) {
+            cur->mMip = new RndBitmap();
+            cur = cur->mMip;
+            width >>= 1;
+            height >>= 1;
+            pixbytes >>= 2;
+            cur->Create(width, height, 0, mBpp, mOrder, mPalette, pixels, 0);
+            pixels += pixbytes;
+        }
+    }
+}
+
 void RndBitmap::SetPixelIndex(int i1, int i2, unsigned char uc) {
     bool bb;
     int offset = PixelOffset(i1, i2, bb);
@@ -183,6 +283,100 @@ void RndBitmap::SetPixelIndex(int i1, int i2, unsigned char uc) {
     } else {
         *(pixels + offset) = *(pixels + offset) & 0xF0 | uc;
     }
+}
+
+int RndBitmap::PixelOffset(int x, int y, bool &nibble) const {
+    static char bytes02[64] = {
+        0x0,  0x4,  0x8,  0xC,  0x10, 0x14, 0x18, 0x1c, 0x2,  0x6,  0xa,  0xe,  0x12,
+        0x16, 0x1a, 0x1e, 0x20, 0x24, 0x28, 0x2c, 0x30, 0x34, 0x38, 0x3c, 0x22, 0x26,
+        0x2a, 0x2e, 0x32, 0x36, 0x3a, 0x3e, 0x11, 0x15, 0x19, 0x1d, 0x1,  0x5,  0x9,
+        0xd,  0x13, 0x17, 0x1b, 0x1f, 0x3,  0x7,  0xb,  0xf,  0x31, 0x35, 0x39, 0x3d,
+        0x21, 0x25, 0x29, 0x2d, 0x33, 0x37, 0x3b, 0x3f, 0x23, 0x27, 0x2b, 0x2f
+    };
+    static char bytes13[64] = {
+        0x10, 0x14, 0x18, 0x1c, 0x0,  0x4,  0x8,  0xc,  0x12, 0x16, 0x1a, 0x1e, 0x2,
+        0x6,  0xa,  0xe,  0x30, 0x34, 0x38, 0x3c, 0x20, 0x24, 0x28, 0x2c, 0x32, 0x36,
+        0x3a, 0x3e, 0x22, 0x26, 0x2a, 0x2e, 0x1,  0x5,  0x9,  0xd,  0x11, 0x15, 0x19,
+        0x1d, 0x3,  0x7,  0xb,  0xf,  0x13, 0x17, 0x1b, 0x1f, 0x21, 0x25, 0x29, 0x2d,
+        0x31, 0x35, 0x39, 0x3d, 0x23, 0x27, 0x2b, 0x2f, 0x33, 0x37, 0x3b, 0x3f
+    };
+    static char hbytes02[128] = {
+        0x0,  0x8,  0x10, 0x18, 0x20, 0x28, 0x30, 0x38, 0x2,  0xa,  0x12, 0x1a, 0x22,
+        0x2a, 0x32, 0x3a, 0x4,  0xc,  0x14, 0x1c, 0x24, 0x2c, 0x34, 0x3c, 0x6,  0xe,
+        0x16, 0x1e, 0x26, 0x2e, 0x36, 0x3e, 0x40, 0x48, 0x50, 0x58, 0x60, 0x68, 0x70,
+        0x78, 0x42, 0x4a, 0x52, 0x5a, 0x62, 0x6a, 0x72, 0x7a, 0x44, 0x4c, 0x54, 0x5c,
+        0x64, 0x6c, 0x74, 0x7c, 0x46, 0x4e, 0x56, 0x5e, 0x66, 0x6e, 0x76, 0x7e, 0x21,
+        0x29, 0x31, 0x39, 0x1,  0x9,  0x11, 0x19, 0x23, 0x2b, 0x33, 0x3b, 0x3,  0xb,
+        0x13, 0x1b, 0x25, 0x2d, 0x35, 0x3d, 0x5,  0xd,  0x15, 0x1d, 0x27, 0x2f, 0x37,
+        0x3f, 0x7,  0xf,  0x17, 0x1f, 0x61, 0x69, 0x71, 0x79, 0x41, 0x49, 0x51, 0x59,
+        0x63, 0x6b, 0x73, 0x7b, 0x43, 0x4b, 0x53, 0x5b, 0x65, 0x6d, 0x75, 0x7d, 0x45,
+        0x4d, 0x55, 0x5d, 0x67, 0x6f, 0x77, 0x7f, 0x47, 0x4f, 0x57, 0x5f
+    };
+    static char hbytes13[128] = {
+        0x20, 0x28, 0x30, 0x38, 0x0,  0x8,  0x10, 0x18, 0x22, 0x2a, 0x32, 0x3a, 0x2,
+        0xa,  0x12, 0x1a, 0x24, 0x2c, 0x34, 0x3c, 0x4,  0xc,  0x14, 0x1c, 0x26, 0x2e,
+        0x36, 0x3e, 0x6,  0xe,  0x16, 0x1e, 0x60, 0x68, 0x70, 0x78, 0x40, 0x48, 0x50,
+        0x58, 0x62, 0x6a, 0x72, 0x7a, 0x42, 0x4a, 0x52, 0x5a, 0x64, 0x6c, 0x74, 0x7c,
+        0x44, 0x4c, 0x54, 0x5c, 0x66, 0x6e, 0x76, 0x7e, 0x46, 0x4e, 0x56, 0x5e, 0x1,
+        0x9,  0x11, 0x19, 0x21, 0x29, 0x31, 0x39, 0x3,  0xb,  0x13, 0x1b, 0x23, 0x2b,
+        0x33, 0x3b, 0x5,  0xd,  0x15, 0x1d, 0x25, 0x2d, 0x35, 0x3d, 0x7,  0xf,  0x17,
+        0x1f, 0x27, 0x2f, 0x37, 0x3f, 0x41, 0x49, 0x51, 0x59, 0x61, 0x69, 0x71, 0x79,
+        0x43, 0x4b, 0x53, 0x5b, 0x63, 0x6b, 0x73, 0x7b, 0x45, 0x4d, 0x55, 0x5d, 0x65,
+        0x6d, 0x75, 0x7d, 0x47, 0x4f, 0x57, 0x5f, 0x67, 0x6f, 0x77, 0x7f
+    };
+
+    if (mOrder & 4) {
+        if (mBpp == 8) {
+            int temp_r9 = (int)mRowBytes * 2;
+            char *lookup = (((y >> 2) % 4) & 1) ? hbytes13 : hbytes02;
+            unsigned char var_r11_3 = lookup[(y % 4) * 0x10 + (x % 16)];
+            if ((int)var_r11_3 > 0x1F) {
+                var_r11_3 = (var_r11_3 + temp_r9) - 0x20;
+            }
+            return var_r11_3 + ((((y >> 1) & 0xFFFFFFFE) * temp_r9) + (((x >> 1) * 4) & 0xFFFFFFE0));
+        }
+        int temp_r10_2 = (y >> 2) % 4;
+        int var_r3, var_r8, var_r11_2;
+        if ((mWidth > 0x80U) && (mHeight > 0x80U)) {
+            var_r3 = (((int)(y - ((y / 128) << 7)) >> 1) & 0xFFFFFFF8) + ((x >> 1) & 0xFFFFFFC0);
+            var_r8 = (((int)(x - ((x / 128) << 7)) >> 2) & 0xFFFFFFF8) + ((y >> 2) & 0xFFFFFFE0) + (temp_r10_2 * 2);
+            var_r11_2 = (((mHeight - (((int)mHeight / 128) << 7)) & 0xFFFFFFF0) + (mWidth & 0xFFFFFF80)) * 2;
+        } else {
+            var_r3 = (y >> 1) & 0xFFFFFFF8;
+            var_r8 = ((x >> 2) & 0xFFFFFFF8) + (temp_r10_2 * 2);
+            var_r11_2 = (int)mHeight * 2;
+        }
+        char *lookup2 = (temp_r10_2 & 1) ? hbytes13 : hbytes02;
+        unsigned char temp_r10_3 = lookup2[(y % 4) << 5 + (x - ((x / 32) << 5))];
+        int var_r10_2 = (int)temp_r10_3 >> 1;
+        nibble = temp_r10_3 & 1;
+        if (var_r10_2 > 0x1F) {
+            var_r10_2 = (var_r10_2 + var_r11_2) - 0x20;
+        }
+        return var_r10_2 + ((var_r11_2 * var_r8) + (var_r3 * 4));
+    }
+    if (mOrder & 0x40) {
+        unsigned char temp_r11_3 = mBpp;
+        int var_r10_3 = 8;
+        if (temp_r11_3 != 4) {
+            var_r10_3 = 4;
+        }
+        unsigned short temp_r31 = mWidth;
+        int temp_r11_4 = temp_r11_3 - 0x10;
+        nibble = x & 1;
+        int temp_r11_5 = (((temp_r11_4 - temp_r11_4) - !(temp_r11_4 >> 31)) & 4) + 4;
+        int temp_r9_2 = (((temp_r11_3 - 0x20) == 0) & 1) + 1;
+        int temp_r7_2 = x % temp_r11_5;
+        int temp_r8_2 = ((((((int)temp_r31 / temp_r11_5) * (y / var_r10_3)) + (x / temp_r11_5)) * temp_r9_2 * var_r10_3) + (y % var_r10_3)) * temp_r11_5;
+        unsigned int temp_r27 = temp_r31 * temp_r9_2;
+        int var_r11 = (int)(mBpp * ((temp_r8_2 + temp_r7_2) % temp_r27)) >> (temp_r9_2 + 2);
+        int var_r10 = mRowBytes * ((unsigned int)(temp_r8_2 + temp_r7_2) / temp_r27);
+        return var_r11 + var_r10;
+    }
+    nibble = x & 1;
+    int var_r11 = (int)(mBpp * x) >> 3;
+    int var_r10 = mRowBytes * y;
+    return var_r11 + var_r10;
 }
 
 unsigned char RndBitmap::NearestColor(
@@ -216,6 +410,116 @@ unsigned char RndBitmap::NearestColor(
         }
     }
     return paletteColorIdx;
+}
+
+void RndBitmap::ConvertColor(
+    const unsigned char *uc,
+    unsigned char &r,
+    unsigned char &g,
+    unsigned char &b,
+    unsigned char &a
+) const {
+    if (mBpp == 0x20 || mPalette) {
+        if (mOrder & 1) {
+            a = uc[3];
+            b = uc[2];
+            g = uc[1];
+            r = uc[0];
+        } else if (mOrder & 0x40) {
+            a = uc[0];
+            r = uc[1];
+            g = uc[0x20];
+            b = uc[0x21];
+        } else {
+            a = uc[3];
+            r = uc[2];
+            g = uc[1];
+            b = uc[0];
+        }
+
+        if (mOrder & 2) {
+            a = ((a * 256) - a) >> 7;
+        }
+    } else if (mBpp == 0x10) {
+        unsigned short swapped = SwapBytes(*(unsigned short *)uc);
+        if (mOrder & 1) {
+            a = -(swapped >> 0xF & 1);
+            b = swapped >> 7 & 0xF8;
+            g = swapped >> 2 & 0xF8;
+            r = swapped << 3;
+        } else {
+            a = -(swapped >> 0xF & 1);
+            r = swapped >> 7 & 0xF8;
+            g = swapped >> 2 & 0xF8;
+            b = swapped << 3;
+        }
+    } else if ((mOrder & 0x80) && (mOrder & 0x40)) {
+        r = 255;
+        g = 255;
+        b = 255;
+        a = *uc;
+    } else {
+        a = 255;
+        if (mOrder & 1) {
+            b = uc[2];
+            g = uc[1];
+            r = uc[0];
+        } else {
+            r = uc[2];
+            g = uc[1];
+            b = uc[0];
+        }
+    }
+}
+
+void RndBitmap::ConvertColor(
+    unsigned char r, unsigned char g, unsigned char b, unsigned char a, unsigned char *uc
+) const {
+    if (mBpp == 0x20 || mPalette) {
+        if (mOrder & 2) {
+            a = (a + 1) >> 1;
+        }
+        if (mOrder & 1) {
+            uc[3] = a;
+            uc[2] = b;
+            uc[1] = g;
+            uc[0] = r;
+        } else if (mOrder & 0x40) {
+            uc[0] = a;
+            uc[1] = r;
+            uc[0x20] = g;
+            uc[0x21] = b;
+        } else {
+            uc[3] = a;
+            uc[2] = r;
+            uc[1] = g;
+            uc[0] = b;
+        }
+        return;
+    }
+    if (mBpp == 0x10) {
+        unsigned short *twobytes = (unsigned short *)uc;
+        if (mOrder & 1) {
+            *twobytes = (a & 0x80) << 8 | (b & 0xF8) << 7 | (g & 0xF8) << 2 | r >> 3;
+        } else {
+            *twobytes = (a & 0x80) << 8 | (r & 0xF8) << 7 | (g & 0xF8) << 2 | b >> 3;
+        }
+        *twobytes = EndianSwap(*twobytes);
+        return;
+    }
+    if ((mOrder & 0x80) && (mOrder & 0x40)) {
+        uc[0] = a;
+        return;
+    }
+    if (mOrder & 1) {
+        uc[2] = b;
+        uc[1] = g;
+        uc[0] = r;
+    } else {
+        uc[2] = r;
+        uc[1] = g;
+        uc[0] = b;
+    }
 }
 
 void RndBitmap::PaletteColor(
@@ -279,39 +583,75 @@ void RndBitmap::GenerateMips() {
         RELEASE(mMip);
         mMip = new RndBitmap();
         mMip->Create(mWidth >> 1, mHeight >> 1, 0, mBpp, mOrder, mPalette, 0, 0);
-        int i18 = 0;
         for (int i = 0; i < mMip->mHeight; i++) {
-            int i181 = i18 + 1;
-            int i17 = 0;
             for (int j = 0; j < mMip->mWidth; j++) {
-                int i171 = i17 + 1;
                 unsigned char r, g, b, a;
-                PixelColor(i17, i18, r, g, b, a);
-                unsigned short rsum = r;
-                unsigned short gsum = g;
-                unsigned short bsum = b;
-                unsigned short asum = a;
-                PixelColor(i171, i18, r, g, b, a);
+                PixelColor(j * 2, i * 2, r, g, b, a);
+                int rsum = r;
+                int gsum = g;
+                int bsum = b;
+                int asum = a;
+                PixelColor(j * 2 + 1, i * 2, r, g, b, a);
                 rsum += r;
                 gsum += g;
                 bsum += b;
                 asum += a;
-                PixelColor(i17, i181, r, g, b, a);
+                PixelColor(j * 2, i * 2 + 1, r, g, b, a);
                 rsum += r;
                 gsum += g;
                 bsum += b;
                 asum += a;
-                PixelColor(i171, i181, r, g, b, a);
+                PixelColor(j * 2 + 1, i * 2 + 1, r, g, b, a);
                 rsum += r;
                 gsum += g;
                 bsum += b;
                 asum += a;
-                mMip->SetPixelColor(j, i, rsum >> 2, gsum >> 2, bsum >> 2, asum >> 2);
-                i17 += 2;
+                int rval = rsum >> 2;
+                int gval = gsum >> 2;
+                int bval = bsum >> 2;
+                int aval = asum >> 2;
+                mMip->SetPixelColor(j, i, (unsigned char)rval, (unsigned char)gval, (unsigned char)bval, (unsigned char)aval);
             }
-            i18 += 2;
         }
         mMip->GenerateMips();
+    }
+}
+
+void RndBitmap::SelfMip() {
+    int pixelBytes = PixelBytes();
+    int rowOffset = mRowBytes / 2;
+    mWidth /= 2;
+    unsigned short w = Width();
+    unsigned short h = Height();
+    int dim = Min(w, h);
+
+    int i4 = 0;
+    int i3 = 0;
+    while (dim > 1) {
+        if (dim & 1) {
+            i3 = 1;
+        }
+        dim >>= 1;
+        i4++;
+    }
+    int count = i4 + i3 - 3;
+    RndBitmap *cur = this;
+    RELEASE(mMip);
+    for (int i = 0; i < count; i++) {
+        cur->mMip = new RndBitmap();
+        cur->mMip->Create(
+            cur->mWidth >> 1,
+            cur->mHeight >> 1,
+            mRowBytes,
+            mBpp,
+            mOrder,
+            mPalette,
+            mPixels + rowOffset,
+            0
+        );
+        pixelBytes >>= 1;
+        cur = cur->mMip;
+        rowOffset += pixelBytes;
     }
 }
 
@@ -470,6 +810,93 @@ void RndBitmap::Save(BinStream &bs) const {
     }
 }
 
+void DecodeDxtColor(unsigned char *uc, int i, int j, bool arg3, unsigned char &r, unsigned char &g, unsigned char &b, unsigned char &a) {
+    unsigned short color0 = *(unsigned short *)uc;
+    unsigned short color1 = *((unsigned short *)uc + 1);
+
+    int offset;
+    if (j & 1) {
+        offset = j - 1;
+    } else {
+        offset = j + 1;
+    }
+
+    a = 0xFF;
+    unsigned char r0 = (color0 >> 8) & 0xF8;
+    unsigned char r1 = (color1 >> 8) & 0xF8;
+    unsigned char g0 = (color0 >> 3) & 0xFC;
+    unsigned char g1 = (color1 >> 3) & 0xFC;
+    unsigned char b0 = (color0 * 8) & 0xF8;
+    unsigned char b1 = (color1 * 8) & 0xF8;
+
+    unsigned char colorIdx = ((unsigned char) *(uc + 4 + offset) >> ((i * 2) & 0xFE)) & 3;
+
+    if (colorIdx == 0) {
+        r = r0;
+        g = g0;
+        b = b0;
+        return;
+    }
+
+    if (colorIdx == 1) {
+        r = r1;
+        g = g1;
+        b = b1;
+        return;
+    }
+
+    if ((color0 <= color1) && (arg3 != 0)) {
+        r = (unsigned char) ((int) (r1 + r0) / 2);
+        g = (unsigned char) ((int) (g1 + g0) / 2);
+        b = (unsigned char) ((int) (b1 + b0) / 2);
+        if (colorIdx == 3) {
+            a = 0;
+        }
+    } else {
+        int w0 = 4 - colorIdx;
+        int w1 = colorIdx - 1;
+        r = (unsigned char) ((unsigned int) ((r1 * w1) + (r0 * w0)) / 3U);
+        g = (unsigned char) ((unsigned int) ((g1 * w1) + (g0 * w0)) / 3U);
+        b = (unsigned char) ((unsigned int) ((b1 * w1) + (b0 * w0)) / 3U);
+    }
+}
+
+void DecodeDxt3Alpha(unsigned char *uc, int i, int j, unsigned char &alpha) {
+    unsigned short *bytepair = (unsigned short *)uc;
+    int i1 = bytepair[j] >> (i << 2);
+    alpha = ((i1 << 4) & 0xF0) | (i1 & 0xF);
+}
+
+void DecodeDxt5Alpha(unsigned char *uc, int i, int j, unsigned char &alpha) {
+    // Placeholder - full DXT5 alpha decompression would go here
+}
+
+void RndBitmap::DxtColor(
+    int x, int y, unsigned char &r, unsigned char &g, unsigned char &b, unsigned char &a
+) const {
+    int dxt = mOrder & 0x38;
+    MILO_ASSERT(dxt != 0, 0x7EE);
+
+    int tmpx = (x / 4) + (x < 0 && (x & 3U) != 0);
+    int tmpy = (y / 4) + (y < 0 && (y & 3U) != 0);
+    int i5 = x + tmpx * -4;
+    int i6 = y + tmpy * -4;
+    int i2 = tmpx + (mWidth / 4) * tmpy;
+
+    if (dxt == 8) {
+        DecodeDxtColor(mPixels + i2 * 8, i5, i6, true, r, g, b, a);
+    } else {
+        u8 *newpixels = mPixels + i2 * 0x10;
+        unsigned char throwaway;
+        DecodeDxtColor(newpixels + 8, i5, i6, false, r, g, b, throwaway);
+        if (dxt == 0x10) {
+            DecodeDxt3Alpha(newpixels, i5, i6, a);
+        } else {
+            DecodeDxt5Alpha(newpixels, i5, i6, a);
+        }
+    }
+}
+
 void RndBitmap::PixelColor(
     int x, int y, unsigned char &r, unsigned char &g, unsigned char &b, unsigned char &a
 ) const {
@@ -530,7 +957,7 @@ void RndBitmap::SetAlpha(AlphaFlag flag) {
             PaletteColor(i, r, g, b, a);
             switch (flag) {
             case kTransparentBlack:
-                if (b == 0 && r == 0 && g == 0) {
+                if (!(r | g | b)) {
                     a = min;
                 }
                 break;
@@ -555,7 +982,7 @@ void RndBitmap::SetAlpha(AlphaFlag flag) {
                 PixelColor(j, i, r, g, b, a);
                 switch (flag) {
                 case kTransparentBlack:
-                    if (b == 0 && r == 0 && g == 0) {
+                    if (!(r | g | b)) {
                         a = 0;
                     }
                     break;

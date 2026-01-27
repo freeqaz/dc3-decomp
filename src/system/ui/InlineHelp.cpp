@@ -217,9 +217,9 @@ DataNode InlineHelp::OnSetConfig(const DataArray *da) {
     for (int i = 0; i < arr->Size(); i++) {
         DataArray *loopArr = arr->Array(i);
         ActionElement el((JoypadAction)loopArr->Int(0));
-        el.SetConfig(arr->Node(1), false);
+        el.SetConfig(loopArr->Node(1), false);
         if (loopArr->Size() > 2)
-            el.SetConfig(arr->Node(2), true);
+            el.SetConfig(loopArr->Node(2), true);
         mConfig.push_back(el);
     }
     SyncLabelsToConfig();

@@ -1,6 +1,11 @@
 #include "rndobj/BoxMap.h"
 #include "rndobj/Lit.h"
 
+// Accumulation buffers for light calculations
+static int gLightIndex = 0;
+static Vector3 gLightBuffer1[50];
+static Vector3 gLightBuffer2[50];
+
 BoxMapLighting::BoxMapLighting() { Clear(); }
 
 void BoxMapLighting::Clear() {
@@ -40,6 +45,16 @@ bool BoxMapLighting::QueueLight(RndLight *light, float colorScale) {
         }
     }
     return false;
+}
+
+void BoxMapLighting::ApplyQueuedLights(Hmx::Color *color, const Vector3 *v3) const {
+    ApplyLight(mQueued_Directional);
+    if (v3) {
+        ApplyLight(mQueued_Point, *v3);
+        if (mQueued_Spot.NumElements() != 0) {
+            ApplyLight(mQueued_Spot, *v3);
+        }
+    }
 }
 
 bool BoxMapLighting::CacheData(LightParams_Spot &spot) {

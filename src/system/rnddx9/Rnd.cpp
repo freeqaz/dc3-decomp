@@ -257,8 +257,7 @@ void DxRnd::DrawSafeArea(float percent, bool widescreen, const Hmx::Color &color
     }
 
     float v1y = (1.0f - percent) * 0.5f;
-    float temp = targetAspect * realAspect;
-    float v1x = v1y + (temp - 1.0f) * 0.5f;
+    float v1x = v1y + (1.0f - targetAspect * realAspect) * 0.5f;
     float v2y = 1.0f - v1y;
     float v2x = 1.0f - v1x;
 

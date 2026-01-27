@@ -113,7 +113,10 @@ BEGIN_COPYS(CharCollide)
         memcpy(mOrigLength, c->mOrigLength, 8);
         memcpy(mCurRadius, c->mCurRadius, 8);
         memcpy(mCurLength, c->mCurLength, 8);
-        COPY_MEMBER(unk1a0)
+        {
+            void *src = (void *)&c->unk1a0;
+            memcpy(&unk1a0, src, 0x40);
+        }
         COPY_MEMBER(mMeshYBias)
         COPY_MEMBER(mMesh)
     END_COPYING_MEMBERS

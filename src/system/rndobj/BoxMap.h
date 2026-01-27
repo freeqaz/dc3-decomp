@@ -88,7 +88,7 @@ private:
     void ApplyLight(const BoxLightArray<LightParams_Point, 50> &, const Vector3 &) const;
     void ApplyLight(const BoxLightArray<LightParams_Spot, 50> &, const Vector3 &) const;
 
-    // static Vector3 sAxisDir[6];
+    static Vector3 sAxisDir[6];
 
     BoxLightArray<LightParams_Directional, 50> mQueued_Directional; // 0x0
     BoxLightArray<LightParams_Point, 50> mQueued_Point; // 0x5644

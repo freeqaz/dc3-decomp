@@ -228,6 +228,10 @@ void CharBones::ScaleAdd(CharClip *clip, float f1, float f2, float f3) {
     clip->ScaleAdd(*this, f1, f2, f3);
 }
 
+CharBonesAlloc::~CharBonesAlloc() {
+    MemFree(mStart);
+}
+
 void CharBonesAlloc::ReallocateInternal() {
     MemFree(mStart);
     mStart = (char *)MemAlloc(mTotalSize, __FILE__, 0x6C0, "CharBones");

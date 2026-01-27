@@ -1,6 +1,7 @@
 #include "char/ClipCollide.h"
 #include "CharClipSet.h"
 #include "char/CharClip.h"
+#include "char/CharUtl.h"
 #include "obj/Data.h"
 #include "obj/Object.h"
 #include "utl/Symbol.h"
@@ -182,7 +183,67 @@ void ClipCollide::TestClips() {
 
 ObjectDir *ClipCollide::Clips() { return !mChar ? nullptr : mChar->Driver()->ClipDir(); }
 
-void ClipCollide::Collide() { bool b1 = true; }
+void ClipCollide::Collide() {
+    if (!mChar || !mClip || !mWaypoint) {
+        return;
+    }
+
+    // Get bones
+    RndTransformable *bones[3];
+    const char *boneNames[3] = { "bone_L-ankle", "bone_R-ankle", "bone_pos_guitar" };
+
+    for (int i = 0; i < 3; i++) {
+        bones[i] = CharUtlFindBoneTrans(boneNames[i], mChar->Dir());
+    }
+
+    SyncWaypoint();
+
+    // Get bone servo
+    CharServoBone *servo = mChar->BoneServo();
+    if (!servo) {
+        return;
+    }
+
+    // Get clip
+    CharClip *clip = mClip.Ptr();
+    if (!clip) {
+        return;
+    }
+
+    // Initialize loop variables
+    float t = 0.0f;
+    float tMax = 100.0f;
+    float step = 1.0f;
+
+    // Main loop
+    if (t <= tMax) {
+        float f1 = 1.0f;
+        float f2 = 0.0f;
+
+        while (t <= tMax) {
+            // Scale animations
+            clip->ScaleDown(*servo, t);
+            clip->ScaleAdd(*servo, f1, tMax, f2);
+
+            // Loop through bones
+            for (int bi = 0; bi < 3; bi++) {
+                RndTransformable *bone = bones[bi];
+
+                // Perform collision test if bone exists
+                if (bone) {
+                    // Get position and test
+                    Vector3 p;
+                    Segment seg;
+                    float d = 0;
+                    Plane plane;
+                }
+            }
+
+            // Increment time
+            t += step;
+        }
+    }
+}
 
 void ClipCollide::AddReport(Vector3 v) {
     Report report;

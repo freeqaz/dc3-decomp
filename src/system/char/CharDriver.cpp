@@ -224,7 +224,8 @@ CharDriver::PlayGroup(const char *cc, int i, float f1, float f2, float f3) {
 CharClipDriver *
 CharDriver::PlayGroup(CharClipGroup *grp, int i, float f1, float f2, float f3) {
     unk84 = grp;
-    return Play(grp->GetClip(0), i, f1, f2, f3);
+    CharClip *clip = grp->GetClip(0);
+    return Play(clip, i, f1, f2, f3);
 }
 
 void CharDriver::SyncInternalBones() {
@@ -281,3 +282,13 @@ BEGIN_SAVES(CharDriver)
     bs << unk98;
 
 END_SAVES
+
+// Template instantiation for std::map<CharClip*, float>
+namespace stlpmtx_std {
+
+template class _Rb_tree<CharClip*, less<CharClip*>, pair<CharClip* const, float>,
+    _Select1st<pair<CharClip* const, float> >,
+    priv::_MapTraitsT<pair<CharClip* const, float> >,
+    StlNodeAlloc<_Rb_tree_node<pair<CharClip* const, float> > > >;
+
+} // namespace stlpmtx_std

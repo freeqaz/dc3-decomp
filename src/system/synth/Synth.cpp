@@ -190,6 +190,8 @@ void Synth::InitSecurity() {
     mByteGrinder.Init();
 }
 
+extern "C" void OnlyReturns();
+
 void Synth::Terminate() {
     MILO_ASSERT(mZombieInsts.empty(), 0x116);
     DeleteAll(mMics);
@@ -198,7 +200,7 @@ void Synth::Terminate() {
     RELEASE(mSfxFader);
     RELEASE(mMidiInstrumentFader);
     RELEASE(mMicClientMapper);
-    // there's a return stub here
+    OnlyReturns();
 }
 
 void Synth::Poll() {

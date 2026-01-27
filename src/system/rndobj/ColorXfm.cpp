@@ -3,6 +3,38 @@
 
 void RndColorXfm::Reset() { mColorXfm.Reset(); }
 
+void RndColorXfm::AdjustLevels() {
+    Vector3 v50(
+        mLevelInHi.red - mLevelInLo.red,
+        mLevelInHi.green - mLevelInLo.green,
+        mLevelInHi.blue - mLevelInLo.blue
+    );
+    float f1 = 0;
+    if (v50.z != 0) {
+        f1 = (mLevelOutHi.blue - mLevelOutLo.blue) / (mLevelInHi.blue - mLevelInLo.blue);
+    }
+    float f2 = 0;
+    if (v50.y != 0) {
+        f2 = (mLevelOutHi.green - mLevelOutLo.green)
+            / (mLevelInHi.green - mLevelInLo.green);
+    }
+    float f3 = 0;
+    if (v50.x != 0) {
+        f3 = (mLevelOutHi.red - mLevelOutLo.red) / (mLevelInHi.red - mLevelInLo.red);
+    }
+    Vector3 v5c(f3, f2, f1);
+    float v68x = -(mLevelInLo.red * f3 - mLevelOutLo.red);
+    float v68y = -(mLevelInLo.green * f2 - mLevelOutLo.green);
+    float v68z = -(mLevelInLo.blue * f1 - mLevelOutLo.blue);
+    Vector3 v68(v68x, v68y, v68z);
+    Transform tf40;
+    tf40.m.x.Set(v5c.x, 0, 0);
+    tf40.m.y.Set(0, v5c.y, 0);
+    tf40.m.z.Set(0, 0, v5c.z);
+    tf40.v = v68;
+    Multiply(mColorXfm, tf40, mColorXfm);
+}
+
 void RndColorXfm::AdjustBrightness() {
     Transform tf;
     tf.Reset();
@@ -39,6 +71,25 @@ RndColorXfm::RndColorXfm()
       mLevelInLo(0, 0, 0), mLevelInHi(1, 1, 1), mLevelOutLo(0, 0, 0),
       mLevelOutHi(1, 1, 1) {
     Reset();
+}
+
+void RndColorXfm::AdjustLightness() {
+    Transform tf58;
+    tf58.Reset();
+    float lit = mLightness / 100.0f;
+    float f1 = 0;
+    float f3;
+    if (lit >= 0) {
+        f3 = 1.0f - lit;
+        f1 = lit;
+    } else {
+        f3 = lit + 1.0f;
+    }
+    tf58.m[2][2] = f3;
+    tf58.m[1][1] = f3;
+    tf58.m[0][0] = f3;
+    tf58.v.Set(f1, f1, f1);
+    Multiply(mColorXfm, tf58, mColorXfm);
 }
 
 void RndColorXfm::AdjustColorXfm() {

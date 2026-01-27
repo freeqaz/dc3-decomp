@@ -191,7 +191,7 @@ void UILabel::SetTokenFmt(const DataArray *da) {
     }
 }
 
-RndText::Style &UILabel::Style(int) { return Style(0); }
+RndText::Style &UILabel::Style(int) { return RndText::Style(0); }
 
 void UILabel::SetPrelocalizedString(String &s) {}
 
@@ -269,7 +269,20 @@ bool UILabel::AllowEditText() const { return false; }
 
 void UILabel::LabelUpdate(bool b) { unk122 = false; }
 
-DataNode UILabel::OnSetHeightFromText(DataArray *) { return NULL_OBJ; }
+DataNode UILabel::OnSetHeightFromText(DataArray *da) {
+    if ((*(int *)((unsigned char *)da + 0x20) == 0) &&
+        (*(int *)((unsigned char *)&Style(0) + 0x40) != 0)) {
+        float height = 0.0f;
+        ComputeHeight(*(int *)((unsigned char *)da + 0xc4), 1.0f, height);
+        *(float *)((unsigned char *)da + 0x14) = height;
+    } else {
+        FormatString fs("Could not set height, either no style or no text");
+        TheDebug.Notify(fs.Str());
+    }
+    *(int *)this = 0;
+    *(int *)((unsigned char *)this + 4) = 0;
+    return (DataNode)this;
+}
 
 void UILabel::SetFontMat(char const *c, int i) {
     RndMat *rndmat = nullptr;

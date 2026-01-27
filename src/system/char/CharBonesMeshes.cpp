@@ -40,9 +40,10 @@ void CharBonesMeshes::ReallocateInternal() {
         }
         mMeshes.push_back(trans);
     }
-    if (!mMeshes.empty()) {
+    if (mMeshes.empty())
+        return;
+    else
         AcquirePose();
-    }
 }
 
 void CharBonesMeshes::AcquirePose() {

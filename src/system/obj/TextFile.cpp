@@ -1,10 +1,13 @@
 #include "obj/TextFile.h"
 #include <cstring>
+#include "os/HolmesClient.h"
 
 void TextFile::SetName(const char *c, class ObjectDir *dir) {
     Hmx::Object::SetName(c, dir);
     RELEASE(mFile);
-    if (c && *c) {
+
+    bool holmes = UsingHolmes(4);
+    if (c && *c && holmes) {
         const char *s = strstr(c, "_append");
         if (s) {
             char buf[0x100];

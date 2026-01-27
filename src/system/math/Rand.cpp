@@ -43,6 +43,11 @@ float RandomFloat(float f1, float f2) {
     return Rand::sRand.Float(f1, f2);
 }
 
+int Rand::FastInt(int low, int high) {
+    MILO_ASSERT(high > low, 0x33);
+    return ((Int() * (high - low)) >> 0x10) + low;
+}
+
 float Rand::Gaussian() {
     float f2, f3, f4, f5;
 

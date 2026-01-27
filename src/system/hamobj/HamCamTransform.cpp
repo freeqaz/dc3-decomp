@@ -82,7 +82,7 @@ void TransformArea::Load(BinStreamRev &d) {
     mCamshots.Load(d.stream, false, nullptr, true);
     d >> mAnims;
     if (d.rev > 1) {
-        d.stream >> mCrowds;
+        d >> mCrowds;
     }
     if (d.rev > 2) {
         d >> mFlow;

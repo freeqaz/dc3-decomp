@@ -38,3 +38,6 @@ _CL_*
 
 # Doxygen output
 doxygen/
+
+# Generated patches from orchestrator
+generated-patches/

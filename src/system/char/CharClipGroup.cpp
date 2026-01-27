@@ -6,6 +6,12 @@
 #include "obj/Object.h"
 #include <cstring>
 
+// Explicit template instantiation
+namespace stlpmtx_std {
+    // Declare the template class
+    template class vector<ObjPtrVec<CharClip, ObjectDir>::Node, StlNodeAlloc<ObjPtrVec<CharClip, ObjectDir>::Node>>;
+}
+
 CharClipGroup::CharClipGroup()
     : mClips(this, (EraseMode)1), mWhich(0), unk24(0), mFlags(0) {}
 
