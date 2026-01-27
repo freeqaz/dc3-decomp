@@ -57,6 +57,18 @@ BEGIN_PROPSYNCS(UILabelDir)
 END_PROPSYNCS
 
 BEGIN_SAVES(UILabelDir)
+    RndDir::Save(bs);
+    bs << 0xB;
+    bs << mFocusAnim;
+    bs << mPulseAnim;
+    bs << mFocusedBackgroundGroup;
+    bs << mUnfocusedBackgroundGroup;
+    bs << mAllowEditText;
+    bs << mDefaultColor;
+    for (int i = 0; i < 10; i++) {
+        bs << mColors[i];
+    }
+    UIFontImporter::Save(bs);
 END_SAVES
 
 BEGIN_COPYS(UILabelDir)

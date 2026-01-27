@@ -14,7 +14,7 @@
 class UILabel : public RndText, public UIComponent, public TextHolder {
 public:
     struct LabelStyle {
-        LabelStyle(Hmx::Object *);
+        LabelStyle(Hmx::Object *o) : mColorOverride(o, 0), unk14(o, 0), unk28(0) {}
         ~LabelStyle();
 
         ObjPtr<UIColor> mColorOverride; // 0x0
