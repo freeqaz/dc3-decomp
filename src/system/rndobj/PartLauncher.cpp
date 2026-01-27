@@ -5,8 +5,10 @@
 #include "rndobj/Poll.h"
 
 RndPartLauncher::RndPartLauncher()
-    : mPart(this), mTrans(this), mMeshEmitter(this), mNumParts(0), mEmitRate(0, 0),
-      mEmitCount(0) {}
+    : mPart(this, 0), mTrans(this, 0), mMeshEmitter(this, 0), mNumParts(0),
+      mEmitRate(0.0f, 0.0f), mEmitCount(0.0f), mPartOverride(gNoPartOverride)
+{
+}
 
 BEGIN_HANDLERS(RndPartLauncher)
     HANDLE_ACTION(launch_particles, LaunchParticles())

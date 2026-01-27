@@ -170,38 +170,48 @@ void DxRnd::PostDeviceReset() {
 D3DFORMAT DxRnd::D3DFormatForBitmap(const RndBitmap &bitmap) {
     int fmt = bitmap.Order() & 0x38;
     int bpp = bitmap.Bpp();
+    D3DFORMAT result = (D3DFORMAT)-1;
     if (fmt != 0) {
         switch (fmt) {
         case 8:
-            return D3DFMT_DXT1;
+            result = D3DFMT_DXT1;
+            break;
         case 0x10:
-            return D3DFMT_DXT3;
+            result = D3DFMT_DXT3;
+            break;
         case 0x18:
-            return D3DFMT_DXT5;
+            result = D3DFMT_DXT5;
+            break;
         case 0x20:
-            return D3DFMT_DXN;
+            result = D3DFMT_DXN;
+            break;
         default:
             MILO_FAIL("Invalid dxt format: %d", fmt);
             MILO_ASSERT(fmt != D3DFMT_UNKNOWN, 999);
-            return (D3DFORMAT)0xffffffff;
+            break;
         }
     } else {
         switch (bpp) {
         case 4:
         case 8:
-            return D3DFMT_A8R8G8B8;
+            result = D3DFMT_A8R8G8B8;
+            break;
         case 0x10:
-            return D3DFMT_A1R5G5B5;
+            result = D3DFMT_A1R5G5B5;
+            break;
         case 0x18:
-            return D3DFMT_X8R8G8B8;
+            result = D3DFMT_X8R8G8B8;
+            break;
         case 0x20:
-            return D3DFMT_A8R8G8B8;
+            result = D3DFMT_A8R8G8B8;
+            break;
         default:
             MILO_FAIL("Invalid bpp: %d", bpp);
             MILO_ASSERT(fmt != D3DFMT_UNKNOWN, 999);
-            return (D3DFORMAT)0xffffffff;
+            break;
         }
     }
+    return result;
 }
 
 int DxRnd::BitmapOrderForD3DFormat(D3DFORMAT fmt) {
@@ -238,17 +248,27 @@ void DxRnd::DrawSafeArea(float percent, bool widescreen, const Hmx::Color &color
     if (mShrinkToSafe)
         percent = percent * 1.0526316f;
 
-    Vector2 vec1;
-    Vector2 vec2;
-
-    float targetAspect = widescreen ? 16.f / 9.f : 4.f / 3.f;
     float realAspect = (float)mHeight / mWidth;
+    float targetAspect;
+    if (widescreen) {
+        targetAspect = 16.f / 9.f;
+    } else {
+        targetAspect = 4.f / 3.f;
+    }
 
-    vec1.y = (1.0f - percent) * 0.5f;
-    vec1.x = -(targetAspect * realAspect - 1.0f) * 0.5f + vec1.y;
+    float v1y = (1.0f - percent) * 0.5f;
+    float temp = targetAspect * realAspect;
+    float v1x = v1y + (temp - 1.0f) * 0.5f;
+    float v2y = 1.0f - v1y;
+    float v2x = 1.0f - v1x;
 
-    vec2.x = 1.0f - vec1.x;
-    vec2.y = 1.0f - vec1.y;
+    Vector2 vec1;
+    vec1.y = v1y;
+    vec1.x = v1x;
+
+    Vector2 vec2;
+    vec2.x = v2x;
+    vec2.y = v2y;
 
     UtilDrawRect2D(vec1, vec2, color);
 }

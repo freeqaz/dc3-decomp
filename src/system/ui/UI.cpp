@@ -545,7 +545,18 @@ char const *Automator::ToggleRecord() {
         return "OFF";
 }
 
-Symbol Automator::CurScreenName() { return gNullStr; }
+Symbol Automator::CurScreenName() {
+    UIScreen *curScreen = mUIManager.CurrentScreen();
+    if (curScreen) {
+        static Message msg(Symbol("is_system_cheat"));
+        DataNode handled = curScreen->Handle(msg, false);
+        bool unhandled = handled.Equal(DataNode(kDataUnhandled, 0), 0, 1) || handled.Int() == 0;
+        if (unhandled) {
+            return curScreen->Name();
+        }
+    }
+    return gNullStr;
+}
 
 void Automator::Poll() {}
 

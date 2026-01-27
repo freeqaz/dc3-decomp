@@ -235,7 +235,16 @@ DataNode PanelDir::OnMsg(ButtonDownMsg const &msg) {
 
 void PanelDir::DisableComponent(UIComponent *c, JoypadAction nav_action) {}
 
-DataNode PanelDir::OnDisableComponent(DataArray const *) { return NULL_OBJ; }
+DataNode PanelDir::OnDisableComponent(DataArray const *da) {
+    UIComponent *c = da->Obj<UIComponent>(2);
+    if (da->Size() == 4) {
+        DisableComponent(c, (JoypadAction)da->Int(3));
+    } else if (da->Size() == 3) {
+        DisableComponent(c, kAction_None);
+    } else
+        MILO_WARN("wrong number of args to PanelDir disable");
+    return 0;
+}
 
 DataNode PanelDir::GetFocusableComponentList() {
     std::vector<UIComponent *> components;

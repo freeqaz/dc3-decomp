@@ -84,7 +84,7 @@ BEGIN_LOADS(Waypoint)
     LOAD_REVS(bs)
     ASSERT_REVS(5, 0)
     LOAD_SUPERCLASS(Hmx::Object)
-    if (d.rev < 5) {
+    if (5 > d.rev) {
         RndMesh *mesh = Hmx::Object::New<RndMesh>();
         mesh->RndDrawable::Load(bs);
         if (mesh) {
@@ -94,15 +94,15 @@ BEGIN_LOADS(Waypoint)
     LOAD_SUPERCLASS(RndTransformable)
     d >> mFlags;
     d >> mConnections;
-    if (d.rev > 1) {
+    if (1 < d.rev) {
         d >> mRadius;
     } else
         mRadius = 12;
-    if (d.rev > 2) {
+    if (2 < d.rev) {
         d >> mYRadius;
         d >> mAngRadius;
     }
-    if (d.rev > 3) {
+    if (3 < d.rev) {
         d >> mStrictRadiusDelta;
         d >> mStrictAngDelta;
     }

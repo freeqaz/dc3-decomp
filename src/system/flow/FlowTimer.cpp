@@ -65,6 +65,22 @@ void FlowTimer::Deactivate(bool b) {
 void FlowTimer::ChildFinished(FlowNode *node) {
     FLOW_LOG("Child Finished of class:%s\n", node->ClassName());
     mRunningNodes.remove(node);
+
+    if (!mFlowParent)
+        return;
+
+    if (mFlowParent->HasRunningNode(this))
+        return;
+
+    if (!IsRunning())
+        return;
+
+    MILO_ASSERT(mFlowParent->HasRunningNode(this), 0x10d);
+
+    FLOW_LOG("Timed Release From Parent \n");
+    Timer t;
+    t.Reset();
+    mFlowParent->ChildFinished(this);
 }
 
 void FlowTimer::RequestStop() {

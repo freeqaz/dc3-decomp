@@ -310,7 +310,26 @@ DataNode UIScreen::OnMsg(ButtonDownMsg const &msg) {
     return DATA_UNHANDLED;
 }
 
-DataNode UIScreen::ForeachPanel(DataArray const *) { return NULL_OBJ; }
+DataNode UIScreen::ForeachPanel(const DataArray *da) {
+    // {$screen foreach_panel $panel ...}
+
+    DataNode *var = da->Var(2);
+    DataNode tmp = *var;
+
+    for (auto it = mPanelList.begin(); it != mPanelList.end(); it++) {
+        if (!it->mActive) {
+            continue;
+        }
+
+        *var = it->mPanel;
+        for (int i = 3; i < da->Size(); i++) {
+            da->Command(i)->Execute();
+        }
+    }
+
+    *var = tmp;
+    return DataNode(0);
+}
 
 void UIScreen::ReloadStrings() {}
 

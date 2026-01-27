@@ -4,9 +4,12 @@
 #include "obj/Data.h"
 #include "obj/Object.h"
 #include "obj/Task.h"
+#include "rndobj/Font.h"
+#include "rndobj/FontBase.h"
 #include "rndobj/Text.h"
 #include "rndobj/Trans.h"
 #include "ui/UI.h"
+#include "ui/UIFontImporter.h"
 #include "ui/UILabelDir.h"
 #include "ui/UIListWidget.h"
 #include "utl/BinStream.h"
@@ -71,6 +74,12 @@ void UILabel::DrawShowing() {}
 void UILabel::SetTextToken(Symbol s) {
     mTextToken = s;
 
+    if (TheLoadMgr.EditMode()) {
+        if (!unk118.empty() && unk120 == '\0') {
+            return;
+        }
+    }
+
     SetTokenFmtImp(mTextToken, 0, 0, 0, true);
 }
 
@@ -103,7 +112,9 @@ void UILabel::SetTokenFmt(const DataArray *) {}
 
 RndText::Style &UILabel::Style(int) { return Style(0); }
 
-void UILabel::SetPrelocalizedString(String &s) {}
+void UILabel::SetPrelocalizedString(String &s) {
+    SetDisplayText(s.c_str(), true);
+}
 
 void UILabel::SetSubtitle(const DataArray *) {}
 
@@ -148,7 +159,12 @@ void UILabel::Init() {
 
 void UILabel::SetTokenFmtImp(
     Symbol s, const DataArray *da1, const DataArray *da2, int i, bool b
-) {}
+) {
+    if (b != false) {
+        mTextToken = gNullStr;
+    }
+    RndText::SetText(Localize(s, 0, TheLocale));
+}
 
 DataNode UILabel::OnSetPrelocalizedString(DataArray const *da) {
     return NULL_OBJ;
@@ -156,7 +172,14 @@ DataNode UILabel::OnSetPrelocalizedString(DataArray const *da) {
 
 DataNode UILabel::OnSetTokenFmt(DataArray const *da) { return NULL_OBJ; }
 
-DataNode UILabel::OnSetInt(DataArray const *da) { return DataNode(1); }
+DataNode UILabel::OnSetInt(DataArray const *da) {
+    int i = da->Int(2);
+    bool b = false;
+    if (da->Size() > 3)
+        b = da->Int(3) != 0;
+    SetInt(i, b);
+    return DataNode(1);
+}
 
 DataNode UILabel::OnSetTimeHMS(DataArray const *) { return NULL_OBJ; }
 
@@ -172,7 +195,27 @@ void UILabel::SetFontMat(char const *c, int i) {
 
 }
 
-char const *UILabel::GetFontMat(int) { return 0; }
+char const *UILabel::GetFontMat(int i) {
+    int *begin;
+    int *end;
+    int matId;
+
+    begin = *(int **)(((unsigned char *)this) + 0x98);
+    end = *(int **)(((unsigned char *)this) + 0x9c);
+    matId = 0;
+
+    if (i < ((int)end - (int)begin) / 0x4c) {
+        matId = *(int *)(((unsigned char *)begin + (i * 0x4c)) + 0x40);
+    }
+
+    LabelStyle &style = LStyle(0);
+    void *pStyle = *(void **)(((unsigned char *)&style) + 0x20);
+    if (pStyle != 0) {
+        return ((UIFontImporter *)pStyle)->GetMatVariationName((RndFontBase *)(((unsigned char *)pStyle) + 0x1fc));
+    }
+
+    return "";
+}
 
 void UILabel::RefreshFontMat(int i) {
     auto mat = GetFontMat(i);

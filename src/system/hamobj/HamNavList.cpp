@@ -267,9 +267,13 @@ bool HamNavList::SkipPoll() const {
 void HamNavList::Refresh() { unk1f0 = true; }
 
 void HamNavList::SetHighButtonMode(bool b) {
-    if (unk184 == 0)
-        return;
     unk1fe = b;
+    int **obj = (int **)unk184;
+    if (!obj)
+        return;
+    typedef void (*VFunc)(void *);
+    VFunc vfunc = (VFunc)(obj[0][0xf]);
+    vfunc((void *)obj);
 }
 
 int HamNavList::NumData() const { return 18; }
@@ -430,6 +434,16 @@ float HamNavList::EndFrame() {
 void HamNavList::SendHighlightSettledMsg(int i) {
     UIListProvider *provider = mListState.Provider();
     MILO_ASSERT(provider, 0x327);
+
+    if (provider) {
+        bool canSel = provider->CanSelect(i);
+        bool isActive = provider->IsActive(i);
+
+        if (isActive != 0) {
+            Symbol dataSym = provider->DataSymbol(i);
+            int idx = provider->DataIndex(Symbol());
+        }
+    }
 }
 
 void HamNavList::SetProvider(UIListProvider *p) {

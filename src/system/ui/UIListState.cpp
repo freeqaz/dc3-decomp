@@ -230,4 +230,31 @@ void UIListState::SetProvider(UIListProvider *provider, RndDir *rdir) {
     SetSelected(0, -1, true);
 }
 
-int UIListState::ScrollToTarget(int) const { return 1; }
+int UIListState::ScrollToTarget(int target) const {
+    int diff = target - mFirstShowing;
+
+    if (mCircular) {
+        int adjusted;
+        if (diff > 0) {
+            adjusted = diff - NumShowing();
+        } else {
+            adjusted = NumShowing() + diff;
+        }
+
+        int sign_adjusted = adjusted >> 31;
+        int sign_diff = diff >> 31;
+        int xor_adj = adjusted ^ sign_adjusted;
+        int xor_dif = diff ^ sign_diff;
+        int absAdjusted = xor_adj - sign_adjusted;
+        int absDiff = xor_dif - sign_diff;
+
+        if (absAdjusted < absDiff) {
+            return adjusted;
+        }
+        if (absAdjusted == absDiff) {
+            return 1;
+        }
+    }
+
+    return diff;
+}

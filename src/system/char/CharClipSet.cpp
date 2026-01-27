@@ -91,7 +91,12 @@ float CharClipSet::EndFrame() {
         return 0;
 }
 
-void CharClipSet::ListDrawChildren(std::list<class RndDrawable *> &) {}
+void CharClipSet::ListDrawChildren(std::list<RndDrawable *> &draws) {
+    RndDir *char_obj = mPreviewChar;
+    if (char_obj != 0) {
+        draws.insert(draws.end(), char_obj);
+    }
+}
 
 void CharClipSet::ResetEditorState() {
     ResetPreviewState();

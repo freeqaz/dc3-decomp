@@ -40,7 +40,10 @@ void Splash::Suspend() {
     }
 }
 
-void Splash::Resume() {}
+void Splash::Resume() {
+    MILO_ASSERT(MainThread(), 0xcf);
+    unk60 -= 1;
+}
 
 void Splash::AddScreen(char const *c, int i) {
     MILO_ASSERT(!gSplashing, 0x175);
@@ -223,6 +226,8 @@ void SuspendFunc() {
     TheSplasher->Suspend();
 }
 
-void ResumeFunc() {}
+void ResumeFunc() {
+    TheSplasher->Resume();
+}
 
 void PollFunc() { TheSplasher->Poll(); }

@@ -117,6 +117,7 @@ struct MoveCandidate {
 
 class MoveVariant {
     friend class MoveCandidate;
+    friend class MoveParent;
 
 public:
     MoveVariant() {}

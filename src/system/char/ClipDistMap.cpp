@@ -85,19 +85,52 @@ bool ClipDistMap::BeatAligned(int i1, int i2) {
 }
 
 bool ClipDistMap::FindBestNode(float f1, float f2, float f3, ClipDistMap::Node &node) {
-    int temp1;
-    int temp2;
-    if (f2 < f3) {
-        temp1 = (f3 - mAStart) * mSamplesPerBeat;
-        temp2 = (f2 - mAStart) * mSamplesPerBeat;
-        temp2 = 0xffffffff - (temp2 >> 0x1f) & temp2;
-        if (temp1 <= mDists.mWidth) {
-            mDists.mWidth = temp1;
-        }
-        for (int i = 0; i < mDists.mWidth; i++) {
+    if (!(f2 < f3)) {
+        return false;
+    }
+
+    node.unk8 = f1;
+
+    int iVar1 = (int)((f3 - mAStart) * mSamplesPerBeat);
+    int uVar6 = (int)((f2 - mAStart) * mSamplesPerBeat);
+    float fVar2 = mAStart;
+
+    // Unsigned masking
+    uVar6 = 0xffffffffU - ((int)uVar6 >> 0x1f) & uVar6;
+    int iVar8 = mDists.mWidth;
+
+    if (iVar1 <= mDists.mWidth) {
+        iVar8 = iVar1;
+    }
+
+    for (; (int)uVar6 < iVar8; uVar6 = uVar6 + 1) {
+        iVar1 = mAStart;
+        int uVar5 = mDists.mHeight;
+        int lVar7 = uVar5 - 1;
+
+        if (-1 < lVar7) {
+            do {
+                float fVar3 = node.unk8;
+                float fVar4 = *(float *)((mDists.mWidth * (int)lVar7 + uVar6) * 4 + mDists.mData);
+
+                if (fVar3 - fVar4 < 0.0) {
+                    fVar4 = fVar3;
+                }
+
+                node.unk8 = fVar4;
+
+                if (fVar4 != fVar3) {
+                    node.unk0 = (float)(int)uVar6 / (float)iVar1 + fVar2;
+                    node.unk4 = (float)(int)lVar7 / (float)mAStart + mBStart;
+                }
+
+                lVar7 = lVar7 - 1;
+                uVar5 = uVar5 - 1;
+            } while (uVar5 != 0);
         }
     }
-    return false;
+
+    return node.unk8 < f1;
 }
 
 void ClipDistMap::FindNodes(float f1, float f2, float f3) {

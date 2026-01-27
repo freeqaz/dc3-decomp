@@ -21,7 +21,11 @@ StorePanel::StorePanel()
       mStorePreviewMgr(0), unk70(false), mPurchaser(0), unk78(nullptr), unk7c(0),
       unk8c(gNullStr), unk90(gNullStr), unk94(0), unk98(0) {}
 
-StorePanel::~StorePanel() {}
+StorePanel::~StorePanel() {
+    DeleteAll(unk38);
+    DeleteAll(unk44);
+    delete unk60;
+}
 
 BEGIN_PROPSYNCS(StorePanel)
     SYNC_PROP(load_ok, mLoadOk)

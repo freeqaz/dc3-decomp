@@ -50,7 +50,11 @@ void CharMirror::Poll() {
     static Symbol zw("zw");
     static Symbol mirror_x("mirror_x");
 
-    mBones.ScaleDown(*mServo, 1.0f - Weight());
+    float w = Weight();
+    if (w == 0.0f || mBones.TotalSize() == 0)
+        return;
+
+    mBones.ScaleDown(*mServo, 1.0f - w);
     MirrorOp *curMirrorOp = &mOps[0];
     for (Vector3 *it = (Vector3 *)(mBones.mStart + mBones.mOffsets[CharBones::TYPE_POS]);
          it < (Vector3 *)(mBones.mStart + mBones.mOffsets[CharBones::TYPE_SCALE]);
@@ -82,7 +86,7 @@ void CharMirror::Poll() {
          curMirrorOp++, it++) {
         *it = *(float *)curMirrorOp->ptr;
     }
-    mBones.ScaleAdd(*mServo, Weight());
+    mBones.ScaleAdd(*mServo, w);
 }
 
 void CharMirror::PollDeps(

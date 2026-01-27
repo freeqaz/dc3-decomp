@@ -306,7 +306,44 @@ void String::resize(unsigned int arg) {
 // length: how many chars you want the replacement to be
 // buffer: the replacement chars
 String &String::replace(unsigned int pos, unsigned int n, const char *buffer) {
-    MILO_ASSERT(pos <= capacity(), 0x241);
+    char *text_ptr;
+    char *copy_dst;
+    char *copy_src;
+    unsigned int buffer_len, end;
+    char ch;
+
+    MILO_ASSERT(pos <= capacity(), 0x1C2);
+
+    end = pos + n;
+    if (end > capacity()) {
+        n = capacity() - pos;
+    }
+
+    buffer_len = strlen(buffer);
+    if (buffer_len > n) {
+        String str_tmp;
+        str_tmp.reserve(buffer_len + (length() - n));
+        strncpy(str_tmp.mStr, mStr, pos);
+        strncpy(str_tmp.mStr + pos, buffer, buffer_len);
+        strcpy(str_tmp.mStr + (buffer_len + pos), mStr + (n + pos));
+
+        // Swap
+        char *tmp_str = mStr;
+        int tmp_cap = capacity();
+        mStr = str_tmp.mStr;
+        str_tmp.mStr = tmp_str;
+    } else {
+        strncpy(mStr + pos, buffer, buffer_len);
+        text_ptr = mStr + pos;
+        copy_dst = text_ptr + buffer_len;
+        copy_src = text_ptr + n;
+        while (*copy_src != '\0') {
+            ch = *copy_src++;
+            *copy_dst++ = ch;
+        }
+        *copy_dst = *copy_src;
+    }
+
     return *this;
 }
 

@@ -88,19 +88,31 @@ void RndShaderMgr::Terminate() {
 }
 
 void RndShaderMgr::UpdateCache(const Transform &xfm, int idx) {
-    float *cacheIdx = &mConstantCache[idx];
-    cacheIdx[0] = xfm.m.x.x;
-    cacheIdx[1] = xfm.m.y.x;
-    cacheIdx[2] = xfm.m.z.x;
-    cacheIdx[3] = xfm.v.x;
-    cacheIdx[4] = xfm.m.x.y;
-    cacheIdx[5] = xfm.m.y.y;
-    cacheIdx[6] = xfm.m.z.y;
-    cacheIdx[7] = xfm.v.y;
-    cacheIdx[8] = xfm.m.x.z;
-    cacheIdx[9] = xfm.m.y.z;
-    cacheIdx[10] = xfm.m.z.z;
-    cacheIdx[11] = xfm.v.z;
+    float *p = (float *)(*(int *)((char *)this + 0x64) + idx * 0x30);
+    float f0 = *(float *)&xfm;
+    float f4 = *(float *)((char *)&xfm + 4);
+    float f8 = *(float *)((char *)&xfm + 8);
+    float f1 = *(float *)((char *)&xfm + 0x10);
+    float f5 = *(float *)((char *)&xfm + 0x14);
+    float f9 = *(float *)((char *)&xfm + 0x18);
+    float f2 = *(float *)((char *)&xfm + 0x20);
+    float f6 = *(float *)((char *)&xfm + 0x24);
+    float f10 = *(float *)((char *)&xfm + 0x28);
+    float f3 = *(float *)((char *)&xfm + 0x30);
+    float f7 = *(float *)((char *)&xfm + 0x34);
+    float f11 = *(float *)((char *)&xfm + 0x38);
+    p[0] = f0;
+    p[1] = f1;
+    p[2] = f2;
+    p[3] = f3;
+    p[4] = f4;
+    p[5] = f5;
+    p[6] = f6;
+    p[7] = f7;
+    p[8] = f8;
+    p[9] = f9;
+    p[10] = f10;
+    p[11] = f11;
 }
 
 void RndShaderMgr::ShaderPoolAlloc(int i) { unk5c = i; }

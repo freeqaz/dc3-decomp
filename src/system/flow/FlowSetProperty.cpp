@@ -165,9 +165,56 @@ void FlowSetProperty::ReActivate() {
 
 void FlowSetProperty::Execute(QueueState qs) {
     FLOW_LOG("Execute: state = %i\n");
-    if (!IsRunning() || qs == kIgnore) {
+
+    if (IsRunning() && qs != kIgnore) {
+        float durationTime = mBlendTime;
+
+        if (mChangePerUnit != 0.0f && !unk_0xE8) {
+            const DataNode *node = mTarget->Property(unk_0x98.Array(), true);
+
+            if (node != nullptr && node->Type() == kDataFloat) {
+                float endVal = node->Float();
+                durationTime = (mValue.Node().Float() - endVal) / mChangePerUnit;
+                if (durationTime < 0.0f) {
+                    durationTime = -durationTime;
+                }
+            } else if (node != nullptr && node->Type() == kDataInt) {
+                int endVal = node->Int();
+                durationTime = (float)(mValue.Node().Int() - endVal) / mChangePerUnit;
+                if (durationTime < 0.0f) {
+                    durationTime = -durationTime;
+                }
+            }
+        }
+
+        if (durationTime > 0.0f) {
+            Hmx::Object *target = mTarget;
+            DataNode dataNode = unk_0x98;
+            DataNode valueNode = mValue.Node();
+            PropertyTask *task = new PropertyTask(
+                target,
+                dataNode,
+                valueNode,
+                (TaskUnits)mEase,
+                durationTime,
+                (EaseType)mEase,
+                mEasePower,
+                false,
+                nullptr
+            );
+            unk_0xCC = task;
+        } else {
+            mTarget->SetProperty(unk_0x98.Array(), mValue.Node());
+        }
+    } else {
         FLOW_LOG("RequestStop: Stopping\n");
-        UnregisterEvents(this);
+        if (unk_0xE8) {
+            UnregisterEvents(this);
+        }
+        if (unk_0xCC != nullptr) {
+            unk_0xCC = nullptr;
+        }
+        TheFlowMgr->QueueCommand(this, qs);
     }
 }
 

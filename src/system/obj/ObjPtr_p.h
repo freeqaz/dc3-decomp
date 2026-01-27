@@ -215,12 +215,14 @@ void ObjPtrVec<T1, T2>::push_back(T1 *obj) {
 template <class T1, class T2>
 typename ObjPtrVec<T1, T2>::iterator
 ObjPtrVec<T1, T2>::insert(typename ObjPtrVec<T1, T2>::const_iterator it, T1 *obj) {
-    int idx = *it != nullptr ? size() : 0;
-    if (obj || mListMode != kObjListNoNull) {
-        // mNodes.insert(it, Node(obj));
-        Set(iterator(0), obj);
+    if (obj != 0 || mListMode != kObjListNoNull) {
+        Node newNode(this);
+        mNodes.push_back(newNode);
+        Set(begin(), obj);
+    } else {
+        return begin();
     }
-    return iterator(&Node(obj));
+    return begin();
 }
 
 template <class T1, class T2>

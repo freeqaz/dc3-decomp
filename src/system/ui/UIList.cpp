@@ -240,13 +240,30 @@ int UIList::CollidePlane(std::vector<Vector3> const &vec, Plane const &p) { retu
 
 void UIList::StartScroll(UIListState const &, int, bool) {}
 
-void UIList::HandleSelectionUpdated() { UITransitionHandler::StartValueChange(); }
+void UIList::HandleSelectionUpdated() {
+    UIList *child = mListDir->SubList(mListState.SelectedDisplay(), mWidgets);
+    UITransitionHandler::StartValueChange();
+    if (child != 0) {
+        child->HandleSelectionUpdated();
+    }
+}
 
 void UIList::UpdateExtendedEntries(UIListState const &) {}
 
-DataNode UIList::OnScroll(DataArray *) { return NULL_OBJ; }
+DataNode UIList::OnScroll(DataArray *da) {
+    int scroll = da->Int(2);
+    mUser = da->Size() > 3 ? da->Obj<LocalUser>(3) : 0;
+    Scroll(scroll);
+    return 1;
+}
 
-DataNode UIList::OnSelectedSym(DataArray *) { return NULL_OBJ; }
+DataNode UIList::OnSelectedSym(DataArray *da) {
+    if (da->Size() > 2) {
+        return SelectedSym(da->Int(2));
+    } else {
+        return SelectedSym(true);
+    }
+}
 
 void UIList::FinishValueChange() {}
 
@@ -342,7 +359,11 @@ DataNode UIList::OnMsg(const ButtonDownMsg &msg) { return NULL_OBJ; }
 
 DataNode UIList::OnSetSelectedSimulateScroll(DataArray *) { return NULL_OBJ; }
 
-void UIList::OldResourcePreload(BinStream &bs) {}
+void UIList::OldResourcePreload(BinStream &bs) {
+    char buf[0x100];
+    bs.ReadString(buf, 0x100);
+    mListDir.SetName(buf, true);
+}
 
 void UIList::SetNumDisplay(int i) {
     mListState.SetNumDisplay(i, gLoading == 0);
@@ -383,7 +404,18 @@ void UIList::LimitCircularDisplay(bool b) {
 
 void UIList::SetProvider(UIListProvider *prov) {}
 
-DataNode UIList::OnSetData(DataArray *) { return NULL_OBJ; }
+DataNode UIList::OnSetData(DataArray *da) {
+    DataArray *arr = da->Array(2);
+    int i3 = da->Size() > 3 ? da->Int(3) : 0;
+    bool i4 = da->Size() > 4 ? da->Int(4) : 0;
+    bool i5 = da->Size() > 5 ? da->Int(5) : 0;
+    if (mDataProvider)
+        mDataProvider->SetData(arr);
+    else
+        mDataProvider = new DataProvider(arr, i3, i4, i5, this);
+    SetProvider(mDataProvider);
+    return 1;
+}
 
 void UIList::DrawShowing() {}
 

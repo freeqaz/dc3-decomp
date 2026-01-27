@@ -230,7 +230,15 @@ void UIFontImporter::GenerateBitmapFilename() {
 
 String UIFontImporter::GetASCIIPlusChars() { return String(); }
 
-String UIFontImporter::GetASCIIMinusChars() { return 0; }
+String UIFontImporter::GetASCIIMinusChars() {
+    static String minusChars;
+    static int initialized = 0;
+    if (!initialized) {
+        minusChars = WideVectorToASCII(mMinus);
+        initialized = 1;
+    }
+    return minusChars;
+}
 
 void UIFontImporter::SyncWithGennedFonts() {}
 

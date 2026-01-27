@@ -259,18 +259,25 @@ void HamWardrobe::SyncInterestObjects(ObjectDir *dir) {
 }
 
 void HamWardrobe::UpdateOverlay() {
-    if (mOverlay && mOverlay->Showing()) {
-        for (ObjPtrList<Character>::iterator it = mCrowdMembers.begin();
-             it != mCrowdMembers.end();
-             ++it) {
-            Character *cur = *it;
-            if (cur) {
-                *mOverlay << cur->Name() << ": ";
-                CharDriver *driver = cur->Driver();
-                if (driver) {
-                }
+    if (!mOverlay) {
+        return;
+    }
+    if (!mOverlay->Showing()) {
+        return;
+    }
+    ObjPtrList<Character>::iterator it = mCrowdMembers.begin();
+    while (it != mCrowdMembers.end()) {
+        Character *cur = *it;
+        if (cur) {
+            *mOverlay << cur->Name() << ": ";
+            CharDriver *driver = cur->Driver();
+            if (driver) {
+                *mOverlay << "     " << "\n";
+            } else {
+                *mOverlay << "\n";
             }
         }
+        ++it;
     }
 }
 

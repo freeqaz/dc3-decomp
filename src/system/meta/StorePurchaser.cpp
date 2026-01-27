@@ -45,7 +45,16 @@ bool XboxPurchaser::IsPurchasing() const {
     return !(mState == purchasestate0 || mState == kSuccess || mState == purchasestate3);
 }
 
-DataNode XboxPurchaser::OnMsg(UIChangedMsg const &) { return NULL_OBJ; }
+DataNode XboxPurchaser::OnMsg(UIChangedMsg const &msg) {
+    if (mState == purchasestate1) {
+        if (!msg.Showing()) {
+            static Symbol ui_changed("ui_changed");
+            ThePlatformMgr.RemoveSink(this, ui_changed);
+            mState = kSuccess;
+        }
+    }
+    return DataNode();
+}
 
 BEGIN_HANDLERS(XboxPurchaser)
     HANDLE_SUPERCLASS(Hmx::Object)
@@ -83,7 +92,14 @@ XboxMultipleItemsPurchaser::XboxMultipleItemsPurchaser(
     unk3c = offerIDs;
 }
 
-DataNode XboxMultipleItemsPurchaser::OnMsg(UIChangedMsg const &) { return NULL_OBJ; }
+DataNode XboxMultipleItemsPurchaser::OnMsg(UIChangedMsg const &msg) {
+    if (msg.mData->Int(1) == 1 && msg.mData->Node(2).Int(msg.mData) == 0) {
+        static Symbol ui_changed("ui_changed");
+        ThePlatformMgr.RemoveSink(this, ui_changed);
+        mState = kSuccess;
+    }
+    return this;
+}
 
 BEGIN_HANDLERS(XboxMultipleItemsPurchaser)
     HANDLE_SUPERCLASS(Hmx::Object)

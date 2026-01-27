@@ -5,9 +5,13 @@
 #include "obj/Object.h"
 #include "os/JoypadMsgs.h"
 #include "rndobj/Draw.h"
+#include "rndobj/Mesh.h"
+#include "rndobj/Mat.h"
 #include "ui/UIPanel.h"
 #include "utl/BinStream.h"
 #include "utl/Symbol.h"
+
+extern UIComponent::State SymToUIComponentState(Symbol);
 
 void UISlider::OldResourcePreload(BinStream &bs) {
     char buf[256];
@@ -46,7 +50,10 @@ BEGIN_LOADS(UISlider)
     PostLoad(bs);
 END_LOADS
 
-void UISlider::SetTypeDef(DataArray *) {}
+void UISlider::SetTypeDef(DataArray *da) {
+    UIComponent::SetTypeDef(da);
+    Update();
+}
 
 void UISlider::PreLoad(BinStream &bs) {
     LOAD_REVS(bs);
@@ -70,7 +77,10 @@ RndDrawable *UISlider::CollideShowing(const Segment &, float &, Plane &) {
     return nullptr;
 }
 
-int UISlider::CollidePlane(const Plane &pl) { return 1; }
+int UISlider::CollidePlane(const Plane &pl) {
+    SyncSlider();
+    return unk50->CollidePlane(pl);
+}
 
 void UISlider::Enter() {
     UIComponent::Enter();
@@ -130,6 +140,43 @@ void UISlider::Update() {
     unk74 = 0;
     unk78 = 0;
     unk7c = 0;
+
+    const DataArray *typeDef = TypeDef();
+    if (typeDef == 0 || !unk50) {
+        return;
+    }
+
+    DataArray *meshArray = typeDef->FindArray(mesh, false);
+    if (meshArray != 0) {
+        const char *str = meshArray->FindStr(mesh);
+        if (str != 0) {
+            unk68 = (int)unk50->Find<RndMesh>(str, true);
+        }
+    }
+
+    DataArray *matsArray = typeDef->FindArray(mats, false);
+    if (matsArray == 0) {
+        return;
+    }
+
+    int size = matsArray->Size();
+    for (int i = 1; i < size; i++) {
+        if (matsArray->Type(i) != kDataArray) {
+            continue;
+        }
+
+        DataArray *arr = matsArray->Array(i);
+        if (arr == 0 || arr->Size() <= 0) {
+            continue;
+        }
+
+        Symbol sym = arr->Sym(0);
+        State state = SymToUIComponentState(sym);
+        const char *name = arr->FindStr(mats);
+        if (name != 0) {
+            *(int *)((int)this + (state + 0x1b) * 4) = (int)unk50->Find<RndMat>(name, true);
+        }
+    }
 }
 
 BEGIN_HANDLERS(UISlider)

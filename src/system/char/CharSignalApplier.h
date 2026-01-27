@@ -9,7 +9,9 @@
 
 class CharSignalApplier : public CharPollable, public CharWeightable {
 public:
-    struct BoneOp {};
+    struct BoneOp {
+        char data[0x24];
+    };
 
     // Hmx::Object
     OBJ_CLASSNAME(CharSignalApplier);

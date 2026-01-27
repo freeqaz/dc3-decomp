@@ -385,11 +385,14 @@ void WorldCrowd::ListDrawChildren(std::list<RndDrawable *> &draws) {
 
 void WorldCrowd::CollideList(const Segment &seg, std::list<Collision> &colls) {
     if (TheLoadMgr.EditMode() && CollideSphere(seg)) {
-        FOREACH (it, mCharacters) {
+        ObjList<CharData>::iterator it = mCharacters.begin();
+        ObjList<CharData>::iterator end = mCharacters.end();
+        while (it != end) {
             RndMultiMesh *curMM = it->mMMesh;
             if (curMM) {
                 curMM->CollideList(seg, colls);
             }
+            ++it;
         }
     }
 }
@@ -460,8 +463,12 @@ bool WorldCrowd::Crowd3DExists() {
 }
 
 void WorldCrowd::SetMatAndCameraLod() {
-    gImpostorCamera->SetTargetTex(gImpostorTex[mLod]);
-    gImpostorMat->SetDiffuseTex(gImpostorTex[mLod]);
+    int lod = mLod;
+    RndTex *tex = gImpostorTex[lod];
+    RndCam *cam = gImpostorCamera;
+    RndMat *mat = gImpostorMat;
+    cam->SetTargetTex(tex);
+    mat->SetDiffuseTex(tex);
 }
 
 void WorldCrowd::CreateMeshes() {

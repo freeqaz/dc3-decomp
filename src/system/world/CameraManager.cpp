@@ -260,10 +260,23 @@ bool CameraManager::SetCrowds(ObjVector<CamShotCrowd> &crowds) {
     bool ret = false;
     FOREACH (it, unk78) {
         WorldCrowd *curCrowd = *it;
-        FOREACH (cit, crowds) {
+        CamShotCrowd *begin = crowds.begin();
+        CamShotCrowd *end = crowds.end();
+        CamShotCrowd *cit = begin;
+        while (cit != end) {
+            if (cit->mCrowd == curCrowd) {
+                break;
+            }
+            cit = (CamShotCrowd *)((int)cit + 0x28);
+        }
+        if (cit != end) {
+            curCrowd->SetShowing(true);
+            ret = true;
+        } else {
+            curCrowd->SetShowing(false);
         }
     }
-    return false;
+    return ret;
 }
 
 bool CameraManager::ShotMatches(CamShot *shot, const std::vector<PropertyFilter> &filts) {

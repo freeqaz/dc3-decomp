@@ -37,7 +37,10 @@ END_SAVES
 void SongCollision::Print() {
     int maxDatas = 0;
     for (int i = 0; i < kNumDifficulties; i++) {
-        maxDatas = Max<int>(maxDatas, mData[i].size());
+        int sz = (int)mData[i].size();
+        if (maxDatas < sz) {
+            maxDatas = sz;
+        }
     }
     String str;
     str = "Beat\tData";
@@ -45,9 +48,30 @@ void SongCollision::Print() {
          d = DifficultyOneHarder(d)) {
         str += MakeString("\t%s", DifficultyToSym(d).Str());
     }
-    MILO_LOG("%s\n", str.c_str());
-    // more...
+    TheDebug << str << "\n";
+
+    for (int beat = 0; beat < maxDatas; beat++) {
+        str = "";
+        str += beat;
+
+        int diff = 0;
+        while (diff < kNumDifficulties) {
+            if (beat >= 0 && beat < (int)mData[diff].size()) {
+                const BeatCollisionData& data = mData[diff][beat];
+                str += MakeString("\t%d / Min X", diff);
+                str += MakeString("\t%f", data.mMinX);
+                str += MakeString("\t%f", data.mMaxX);
+                str += MakeString("\t%f", data.mOffset.x);
+                str += MakeString("\t%f", data.mOffset.y);
+                str += MakeString("\t%f", data.mOffset.z);
+            }
+            diff++;
+        }
+
+        TheDebug << str << "\n";
+    }
 }
+
 
 void SongCollision::Init() {
     REGISTER_OBJ_FACTORY(SongCollision);

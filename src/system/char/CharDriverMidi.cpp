@@ -66,7 +66,10 @@ void CharDriverMidi::Exit() { CharDriver::Exit(); }
 
 DataNode CharDriverMidi::OnMidiParser(DataArray *da) { return 0; }
 
-DataNode CharDriverMidi::OnMidiParserFlags(DataArray *da) { return 0; }
+DataNode CharDriverMidi::OnMidiParserFlags(DataArray *da) {
+    mClipFlags = da->Int(2);
+    return 0;
+}
 
 DataNode CharDriverMidi::OnMidiParserGroup(DataArray *da) { return NULL_OBJ; }
 

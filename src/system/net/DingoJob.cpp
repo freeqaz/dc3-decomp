@@ -4,6 +4,7 @@
 #include "net/HttpReq.h"
 #include "net/WebSvcMgr.h"
 #include "net/WebSvcReq.h"
+#include "net/DingoSvr.h"
 #include "os/Debug.h"
 #include "os/OnlineID.h"
 #include "utl/DataPointMgr.h"
@@ -80,10 +81,18 @@ void DingoJob::CleanUp(bool success) {
 
 bool DingoJob::CheckReqResult() {
     JsonConverter converter;
-    JsonObject *jObj = nullptr;
-    ParseResponse(&converter, &jObj, nullptr);
-    // more
-    return false;
+    JsonObject *response = nullptr;
+    ParseResponse(&converter, &response, nullptr);
+    if (mResult == -3) {
+        if (!TheServer.IsAuthenticated()) {
+            TheServer.Poll();
+        }
+        if (TheServer.IsAuthenticated()) {
+            TheServer.DelayJob(this);
+            return false;
+        }
+    }
+    return true;
 }
 
 void DingoJob::Reset() {

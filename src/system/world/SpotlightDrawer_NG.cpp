@@ -139,3 +139,32 @@ bool NgSpotlightDrawer::CheckSharedResources() {
     sSharedResources = new SpotlightResources();
     return CheckRTs(sSharedResources);
 }
+
+// Manual vector erase implementation to match target code generation
+typedef std::vector<SpotlightDrawer::SpotMeshEntry> SpotMeshEntryVector;
+typedef SpotlightDrawer::SpotMeshEntry SpotMeshEntry;
+
+namespace stlpmtx_std {
+template <>
+SpotMeshEntry* vector<SpotMeshEntry, StlNodeAlloc<SpotMeshEntry>>::_M_erase(
+    SpotMeshEntry* __first,
+    SpotMeshEntry* __last,
+    const __false_type&
+) {
+    SpotMeshEntry* __pos = __first;
+    SpotMeshEntry* __src = __last;
+    int __count = (this->_M_finish - __src) / 0x50;
+
+    if (__count > 0) {
+        do {
+            memcpy(__pos, __src, 0x50);
+            __count--;
+            __pos += 1;
+            __src += 1;
+        } while (__count != 0);
+    }
+
+    this->_M_finish = __pos;
+    return __first;
+}
+}  // namespace stlpmtx_std

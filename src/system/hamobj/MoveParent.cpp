@@ -127,6 +127,36 @@ bool MoveParent::HasRestMoveVariant() const {
 void MoveParent::PopulateAdjacentParents() {
     std::set<const MoveParent *> set1;
     std::set<const MoveParent *> set2;
+
+    // Iterate through variants
+    for (std::vector<MoveVariant *>::iterator it = mVariants.begin(); it != mVariants.end(); ++it) {
+        MoveVariant *variant = *it;
+
+        // Process previous candidates
+        for (std::vector<MoveCandidate>::iterator prevIt = variant->mPrevCandidates.begin();
+             prevIt != variant->mPrevCandidates.end();
+             ++prevIt) {
+            if (prevIt->mValue.mVariant != nullptr) {
+                set1.insert(prevIt->mValue.mVariant->Parent());
+            }
+        }
+
+        // Process next candidates
+        for (std::vector<MoveCandidate>::iterator nextIt = variant->mNextCandidates.begin();
+             nextIt != variant->mNextCandidates.end();
+             ++nextIt) {
+            if (nextIt->mValue.mVariant != nullptr) {
+                set2.insert(nextIt->mValue.mVariant->Parent());
+            }
+        }
+    }
+
+    // Copy results to member vectors
+    unk34.clear();
+    unk34.insert(unk34.end(), set2.begin(), set2.end());
+
+    mPrevAdjacents.clear();
+    mPrevAdjacents.insert(mPrevAdjacents.end(), set1.begin(), set1.end());
 }
 
 void MoveParent::CacheLinks(MoveGraph *graph) {

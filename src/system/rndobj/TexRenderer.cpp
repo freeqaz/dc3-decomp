@@ -212,9 +212,11 @@ END_LOADS
 
 void RndTexRenderer::DrawToTexture() {}
 
+
 void RndTexRenderer::DrawShowing() {
-    if (!mDrawPreClear)
+    if (!mDrawPreClear) {
         DrawToTexture();
+    }
 }
 
 RndTexRenderer::RndTexRenderer()
