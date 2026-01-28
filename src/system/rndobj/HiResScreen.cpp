@@ -21,14 +21,22 @@ int HiResScreen::GetPaddingX() const { return 480; }
 int HiResScreen::GetPaddingY() const { return 270; }
 
 HiResScreen::BmpCache::BmpCache(unsigned int ui1, unsigned int ui2) {
-    mRowsPerCacheLine = ui2 + 1;
     mPixelsPerRow = ui1;
     mTotalRows = ui2;
     mDirtyStart = 0;
     mDirtyEnd = 0;
-    mByteSize = mTotalRows % mRowsPerCacheLine;
-    MILO_ASSERT(mTotalRows % mRowsPerCacheLine == 0, 0x3B);
-    mTotalNumCacheLines = mTotalRows / mRowsPerCacheLine;
+
+    unsigned int rows_per = ui2 + 1;
+    unsigned int byte_size;
+    do {
+        rows_per--;
+        byte_size = rows_per * ui1 * 4;
+    } while (byte_size > 0x6DDD00);
+
+    mRowsPerCacheLine = rows_per;
+    mByteSize = byte_size;
+    MILO_ASSERT(ui2 % rows_per == 0, 0x3B);
+    mTotalNumCacheLines = ui2 / rows_per;
     mFileNames = new String[mTotalNumCacheLines];
     for (uint i = 0; i < mTotalNumCacheLines; i++) {
         mFileNames[i] = MakeString("_hires_cache_%.2d.dat", i);
@@ -125,26 +133,31 @@ void HiResScreen::BmpCache::SetPixelColor(
     unsigned int yOffset = nLoadedEnd - y;
     unsigned int offset = (yOffset * mPixelsPerRow + x) * 4;
     unsigned int newPixel = (a << 24) | (r << 16) | (g << 8) | b;
-    unsigned int oldPixel = *(unsigned int *)(mBuffer + offset);
+    unsigned char *bufPtr = mBuffer + offset;
+    unsigned int oldPixel = *(unsigned int *)bufPtr;
     if (newPixel != oldPixel) {
-        *(unsigned int *)(mBuffer + offset) = newPixel;
-        if (offset < mDirtyStart) {
-            mDirtyStart = offset;
+        *(unsigned int *)bufPtr = newPixel;
+        unsigned int minDirty = mDirtyStart;
+        if (offset < minDirty) {
+            minDirty = offset;
         }
-        unsigned int offsetEnd = offset + 4;
-        if (mDirtyEnd < offsetEnd) {
-            mDirtyEnd = offsetEnd;
+        mDirtyStart = minDirty;
+        unsigned int maxDirty = offset + 4;
+        unsigned int curEnd = mDirtyEnd;
+        if (maxDirty >= curEnd) {
+            curEnd = maxDirty;
         }
+        mDirtyEnd = curEnd;
     }
 }
 
 void HiResScreen::TakeShot(const char *c, int i) {
     mFileBase = c;
     mTiling = i;
-    mActive = true;
+    mActive = 1;
     mCurrTile = 0;
     if (TheRnd.Width() <= 480 || TheRnd.Height() <= 270) {
-        MILO_NOTIFY(MakeString("Padding exceeds screen size"));
+        MILO_NOTIFY("Padding exceeds screen size");
         mActive = false;
     } else {
         mAccumWidth = i * (TheRnd.Width() - 480);
@@ -167,21 +180,21 @@ void HiResScreen::TakeShot(const char *c, int i) {
 void HiResScreen::GetBorderForTile(int x, int y, int &left, int &right, int &top, int &bottom)
     const {
     left = 0;
-    right = 0;
     top = 0;
+    right = 0;
     bottom = 0;
     int xStep = TheRnd.Width() - 480;
     int xPos = xStep * x + TheRnd.Width();
     if (xPos < (int)mAccumWidth) {
         right = 480;
-    } else if ((x + 1) * xStep > TheRnd.Width()) {
+    } else if (((x + 1) * xStep) - TheRnd.Width() > 0) {
         left = 480;
     }
     int yStep = TheRnd.Height() - 270;
     int yPos = yStep * y + TheRnd.Height();
     if (yPos < (int)mAccumHeight) {
         bottom = 270;
-    } else if ((y + 1) * yStep > TheRnd.Height()) {
+    } else if (((y + 1) * yStep) - TheRnd.Height() > 0) {
         top = 270;
     }
 }
@@ -218,6 +231,7 @@ void HiResScreen::Finish() {
     int fileNum = 0;
     String filename;
     File *existFile = 0;
+    FileStream *fs = 0;
     do {
         fileNum++;
         filename = MakeString("%s_%d.bmp", mFileBase, fileNum);
@@ -227,11 +241,10 @@ void HiResScreen::Finish() {
         existFile = NewFile(filename.c_str(), 1);
     } while (existFile);
     mCache->FlushCache();
-    FileStream *fs = new FileStream(filename.c_str(), FileStream::kWrite, true);
+    fs = new FileStream(filename.c_str(), FileStream::kWrite, true);
     RndBitmap bm;
     bm.Create(mAccumWidth, mAccumHeight, 32, 0, 0, 0, 0, 0);
     bm.SaveBmpHeader(fs);
-    delete &bm;
     for (int i = mCache->mTotalNumCacheLines - 1; i >= 0; i--) {
         mCache->LoadCache(i * mCache->mRowsPerCacheLine);
         fs->Write(mCache->mBuffer, mCache->mByteSize);
@@ -242,7 +255,7 @@ void HiResScreen::Finish() {
     FileMkDir("lo_res");
     filename = MakeString("lo_res/%s_%d.bmp", mFileBase, fileNum);
     File *loResFile = NewFile(filename.c_str(), 0x101);
-    if (loResFile) {
+    if (loResFile != 0) {
         delete loResFile;
         RndBitmap loResBm;
         DownSample(loResBm);
@@ -262,17 +275,17 @@ void HiResScreen::Finish() {
 void HiResScreen::Merge(
     const RndBitmap &bm, int srcX, int srcY, int srcW, int srcH, int dstX, int dstY, int padX, int padY
 ) {
-    if (srcW >= srcH) {
+    if (srcH >= srcW) {
         return;
     }
     int xStart = dstX;
     int xEnd = srcH;
     int xRange = xEnd - srcX;
     for (; xStart < mAccumHeight && xStart >= 0; xStart++, xRange++) {
+        mCache->LoadCache(xStart);
         if (xStart + xRange >= srcH) {
             break;
         }
-        mCache->LoadCache(xStart);
         int yStart = srcY;
         int yOff = srcX - padX;
         int yRange = srcY - padY;
@@ -280,26 +293,29 @@ void HiResScreen::Merge(
             if (yStart + yRange >= srcW) {
                 break;
             }
-            int bmX = xRange + xStart;
             int bmY = yRange + yStart;
+            int bmX = xRange + xStart;
             unsigned char r, g, b, a;
             bm.PixelColor(bmY, bmX, r, g, b, a);
             unsigned char cr, cg, cb, ca;
             mCache->GetPixelColor(yStart, xStart, cr, cg, cb, ca);
             float blendX = 0.0f;
-            float blendY = 0.0f;
             if (bmY > padX) {
                 blendX = (float)yOff / (float)padX;
             }
+            float blendY = 0.0f;
             if (bmX > srcX) {
                 blendY = (float)xRange / (float)srcX;
             }
-            float blend = 0.0f;
+            float blend;
             if (blendX > 0.0f || blendY > 0.0f) {
                 blend = sqrtf(blendX * blendX + blendY * blendY);
-                blend = (blend - 0.5f) * 2.0f;
-                if (blend < 0.0f) blend = 0.0f;
+                blend = blend - 0.5f;
+                blend = blend + blend;
                 if (blend > 1.0f) blend = 1.0f;
+                if (blend < 0.0f) blend = 0.0f;
+            } else {
+                blend = 0.0f;
             }
             float invBlend = (1.0f - blend) * 255.0f;
             unsigned char newA = (unsigned char)invBlend;
@@ -322,10 +338,12 @@ void HiResScreen::Merge(
 
 void HiResScreen::DownSample(RndBitmap &outBm) {
     int tiling = mTiling;
-    int newHeight = (tiling * 270 + mAccumHeight) / tiling;
-    int newWidth = (tiling * 480 + mAccumWidth) / tiling;
-    float scaleY = (float)mAccumHeight / (float)newHeight;
-    float scaleX = (float)mAccumWidth / (float)newWidth;
+    int accum_h = mAccumHeight;
+    int accum_w = mAccumWidth;
+    int newWidth = (tiling * 480 + accum_w) / tiling;
+    int newHeight = (tiling * 270 + accum_h) / tiling;
+    float scaleX = (float)accum_w / (float)newWidth;
+    float scaleY = (float)accum_h / (float)newHeight;
     outBm.Create(newWidth, newHeight, 32, 0, 0, 0, 0, 0);
     memset(outBm.Buffer(), 0, outBm.PixelBytes());
     for (int y = 0; y < newHeight; y++) {
@@ -382,27 +400,26 @@ Hmx::Rect HiResScreen::ScreenRect(const RndCam *cam, const Hmx::Rect &r) const {
         return r;
     }
     int tiling = mTiling;
+    int tileX = mCurrTile % tiling;
+    int tileY = mCurrTile / tiling;
     float invTiling = 1.0f / (float)tiling;
     Hmx::Rect tileRect, accumRect;
     CurrentTileRect(r, tileRect, accumRect);
-    int tileX = mCurrTile % tiling;
-    int tileY = mCurrTile / tiling;
     int left, right, top, bottom;
     GetBorderForTile(tileX, tileY, left, right, top, bottom);
     float screenH = (float)TheRnd.Height();
     float screenW = (float)TheRnd.Width();
     float leftF = (float)left;
-    float topF = (float)top;
     float rightF = (float)right;
+    float topF = (float)top;
     float bottomF = (float)bottom;
     float xScale = screenH / (screenH - leftF);
     float yScale = screenW / (screenW - topF);
-    float xOffset = xScale - invTiling;
-    float yOffset = yScale - invTiling;
-    xOffset = xOffset - invTiling;
     float xShift = screenH / (screenH - rightF);
     float yShift = screenW / (screenW - bottomF);
-    xShift = xShift - invTiling;
+    float xOffset = (xScale - invTiling) - invTiling;
+    xShift = (xShift - invTiling) - invTiling;
+    float yOffset = yScale - invTiling;
     yShift = yShift - invTiling;
     ret.x = accumRect.x - xOffset;
     ret.w = accumRect.w + xOffset + xShift;
