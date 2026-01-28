@@ -92,3 +92,20 @@ int OSCMessenger::GetInt(String str, int intValue) {
         return intValue;
     }
 }
+
+float OSCMessenger::GetFloat(String str, float fValue) {
+    OSCValue *val = GetValue(str);
+    if (val) {
+        MILO_ASSERT(val->mType == 'f', 0x149);
+        fValue = *(float *)val->buffer;
+        val->unk89 = 0;
+    } else {
+        OSCValue newValue;
+        newValue.unk0 = str;
+        newValue.unk89 = 0;
+        newValue.mType = 'f';
+        *(float *)newValue.buffer = fValue;
+        mValues.push_back(newValue);
+    }
+    return fValue;
+}

@@ -6,12 +6,17 @@
 #include "os/SynchronizationEvent.h"
 #include "os/System.h"
 #include "os/Timer.h"
+#include "os/NetworkSocket.h"
 #include "utl/MemMgr.h"
 #include "utl/Option.h"
 #include "utl/TextFileStream.h"
+#include "utl/MakeString.h"
 #include <vector>
 #include "xdk/XAPILIB.h"
+#include "xdk/xbdm/xbdm.h"
 #include "utl/Std.h"
+
+extern long HmxGlobalHandler(_EXCEPTION_POINTERS *);
 
 const char *kAssertStr = "File: %s Line: %d Error: %s\n";
 bool gMemoryUsageTest;
@@ -224,4 +229,85 @@ void Debug::Init() {
     if (log) {
         StartLog(log, true);
     }
+    SetUnhandledExceptionFilter(&HmxGlobalHandler);
+    mFailing = false;
+    DM_SYSTEM_INFO sysInfo;
+    unsigned char pad[12];
+    (void)pad;
+    sysInfo.SizeOfStruct = 0x20;
+    if (DmGetSystemInfo(&sysInfo) >= 0) {
+        unk11c = MakeString("%d.%d", sysInfo.KernelVersion.Major, sysInfo.KernelVersion.Minor);
+    }
+    unk12c = NetworkSocket::GetHostName();
+}
+
+const char *GetExpCode(int code) {
+    volatile int arg = code;
+
+    if (code <= 0xC000008D) {
+        if (code != 0xC000008D) {
+            if (code <= 0xC0000006) {
+                if (code != 0xC0000006) {
+                    int temp = code - 0x80000001;
+                    if (temp != 0) {
+                        switch ((unsigned int)temp) {
+                        case 0x40000004:
+                            return "EXCEPTION_ACCESS_VIOLATION";
+                        case 0x3:
+                            return "EXCEPTION_SINGLE_STEP";
+                        case 0x2:
+                            return "EXCEPTION_BREAKPOINT";
+                        case 0x1:
+                            return "EXCEPTION_DATATYPE_MISALIGNMENT";
+                        default:
+                            break;
+                        }
+                    } else {
+                        return "EXCEPTION_GUARD_PAGE";
+                    }
+                } else {
+                    return "EXCEPTION_IN_PAGE_ERROR";
+                }
+            } else {
+                int temp = code - 0xC0000008;
+                if (temp != 0) {
+                    switch ((unsigned int)temp) {
+                    case 0x84:
+                        return "EXCEPTION_ARRAY_BOUNDS_EXCEEDED";
+                    case 0x1E:
+                        return "EXCEPTION_INVALID_DISPOSITION";
+                    case 0x1D:
+                        return "EXCEPTION_NONCONTINUABLE_EXCEPTION";
+                    case 0x15:
+                        return "EXCEPTION_ILLEGAL_INSTRUCTION";
+                    default:
+                        break;
+                    }
+                } else {
+                    return "EXCEPTION_INVALID_HANDLE";
+                }
+            }
+        } else {
+            return "EXCEPTION_FLT_DENORMAL_OPERAND";
+        }
+    } else {
+        switch (code) {
+        default: {
+            int temp = code + 0x3FFFFF72;
+            if ((unsigned int)temp <= 8U) {
+                if (temp == 0) {
+                    return "EXCEPTION_FLT_DIVIDE_BY_ZERO";
+                }
+                return "EXCEPTION_PRIV_INSTRUCTION";
+            }
+            extern const char *merged_82610090(const char *, volatile int *);
+            return merged_82610090("Unhandled Exception", &arg);
+        }
+        case 0xC00000FD:
+            return "EXCEPTION_STACK_OVERFLOW";
+        case 0xC000013A:
+            return "CONTROL_C_EXIT";
+        }
+    }
+    return "Unhandled Exception";
 }

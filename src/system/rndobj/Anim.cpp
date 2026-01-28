@@ -352,6 +352,38 @@ float AnimTask::TimeUntilEnd() {
     return time;
 }
 
+void AnimTask::Poll(float time) {
+    float frame;
+    float blend = 1.0f;
+    if (mBlendPeriod) {
+        blend = time / mBlendPeriod;
+        if (blend >= 1.0f) {
+            blend = 1.0f;
+            delete mBlendTask;
+            mBlendPeriod = 0.0f;
+        } else if (!mBlendTask) {
+            float oldtime = mBlendTime;
+            mBlendTime = time;
+            blend = (time - oldtime) / (mBlendPeriod - oldtime);
+        }
+    } else {
+        if (mBlendTask)
+            delete mBlendTask;
+    }
+    time = time * mScale + mOffset;
+    if (mLoop) {
+        frame = ModRange(mMin, mMax, time);
+    } else {
+        frame = Clamp<float>(mMin, mMax, time);
+    }
+    mAnim->SetFrame(frame, blend);
+    if (!mAnimTarget
+        || (!mLoop && !mBlending && !mBlendPeriod)
+            && ((time > mMax || time < mMin) || (mScale == 0))) {
+        delete this;
+    }
+}
+
 #pragma endregion
 #pragma region Handlers
 

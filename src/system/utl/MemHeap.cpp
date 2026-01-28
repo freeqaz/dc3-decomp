@@ -4,6 +4,8 @@
 #include "os/Debug.h"
 #include "utl/MakeString.h"
 #include "utl/TextStream.h"
+#include "utl/AllocInfo.h"
+#include "utl/MemTrack.h"
 
 namespace {
     int gTimeStamp;
@@ -37,24 +39,94 @@ void MemHeap::FreeBlockStats(int &lFrags, int &rFrags, int &freeBytes, int &i4, 
     i4 = unk24;
 }
 
-void MemHeap::Print(TextStream &ts, bool b2) {
+void MemHeap::Print(TextStream &ts, bool verbose) {
     ts << MakeString(";---------------------------------------\n");
     int sizeBytes = mSizeWords * 4;
     ts << MakeString(
         "; HEAP: %i (%s), starts %p, %d bytes\n", mNum, mName, mStart, sizeBytes
     );
-    int lFrags, rFrags, i10b0, i10b4;
-    FreeBlockStats(lFrags, rFrags, sizeBytes, i10b0, i10b4);
+    int lFrags, rFrags, freeBytes, largestFree;
+    FreeBlockStats(lFrags, rFrags, freeBytes, largestFree, largestFree);
     ts << MakeString("\n");
     ts << MakeString(
-        ";   lFrags =  %8d\n;   rFrags =  %8d\n;   Total Free Bytes=  %8d\n",
+        ";   lFrags =  %8d\n;   rFrags =  %8d\n",
         lFrags,
-        rFrags,
-        sizeBytes
+        rFrags
     );
     ts << MakeString("\n");
-    for (int i = sizeBytes; i < sizeBytes + mSizeWords * 4; i++) {
+    ts << MakeString("\n");
+
+    unsigned int startPtr = (unsigned int)mStart;
+    unsigned int endPtr = startPtr + (mSizeWords * 4);
+
+    int curAllocCount = 0;
+    int curAllocSize = 0;
+    int curAllocPtr = 0;
+    const AllocInfo *curAllocInfo = 0;
+    FreeBlock *curFreeBlock = mFreeBlockChain;
+    unsigned int curPtr = startPtr;
+
+    while (curPtr < endPtr) {
+        if (curFreeBlock != 0 && curPtr == (unsigned int)curFreeBlock) {
+            // Process and flush current allocation
+            if (curAllocCount > 0) {
+                ts << *curAllocInfo;
+            }
+
+            // Process free block
+            unsigned int blockSize = curFreeBlock->mSizeWords * 4;
+            int blockTime = curFreeBlock->mTimeStamp;
+            const char *freeStr = "";
+
+            if (blockSize >= 0x186A0) {
+                freeStr = " >>> BIG FREE BLOCK <<<";
+            }
+
+            ts << MakeString(
+                "(%p FREE   (size %6d) (time %5d)) %s\n",
+                curFreeBlock, blockSize, blockTime, freeStr
+            );
+
+            // Reset allocation tracking
+            curAllocPtr = 0;
+            curAllocSize = 0;
+            curAllocCount = 0;
+            curAllocInfo = 0;
+
+            // Move to next free block
+            curFreeBlock = curFreeBlock->mNextBlock;
+            curPtr = (unsigned int)curFreeBlock;
+        } else {
+            // Process allocated block
+            unsigned int blockHeader = *(unsigned int *)curPtr;
+            unsigned int blockSize = (blockHeader >> 8);
+
+            if (verbose == 0) {
+                int allocSizeWords = blockSize * 4;
+
+                if (allocSizeWords == curAllocSize) {
+                    curAllocCount++;
+                } else {
+                    if (curAllocCount > 0) {
+                        ts << *curAllocInfo;
+                    }
+                    curAllocPtr = curPtr + 4;
+                    curAllocSize = allocSizeWords;
+                    curAllocCount = 1;
+                    curAllocInfo = 0;
+                }
+            }
+
+            curPtr += blockSize * 4;
+        }
     }
+
+    // Print final allocation
+    if (curAllocCount > 0) {
+        ts << *curAllocInfo;
+    }
+
+    ts << MakeString("\n\n");
 }
 
 void MemHeap::InsertFreeBlock(

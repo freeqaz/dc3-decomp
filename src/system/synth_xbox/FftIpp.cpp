@@ -1,4 +1,5 @@
 #include "synth_xbox/FftIpp.h"
+#include "types.h"
 #include "utl/MemMgr.h"
 
 extern void merged_827BD118(void *, void *);
@@ -11,24 +12,24 @@ void FftIpp::FftReal(
 ) {}
 
 FftIpp::~FftIpp() {
-    if (unk8 != 0) {
-        MemFree(&unk8);
-    }
-
-    if (unk14 != 0) {
-        MemFree(&unk14);
-    }
-
-    if (unk20 != 0) {
-        MemFree(&unk20);
+    if (unk38 != 0) {
+        MemFree((void *)unk38);
     }
 
     if (unk2c != 0) {
-        MemFree(&unk2c);
+        MemFree((void *)unk2c);
     }
 
-    if (unk38 != 0) {
-        MemFree(&unk38);
+    if (unk20 != 0) {
+        MemFree((void *)unk20);
+    }
+
+    if (unk14 != 0) {
+        MemFree((void *)unk14);
+    }
+
+    if (unk8 != 0) {
+        MemFree((void *)unk8);
     }
 }
 
@@ -46,34 +47,34 @@ void FftIpp::SetMode(int mode) {
         } while ((1 << unk4) < unk0);
     }
 
-    // First vector - offset 0x8
-    int cap1 = (unk10 - unk8) >> 2;
+    // First vector - offset 0x8 (begin=unk8, end=unkc, cap=unk10)
+    int size1 = (unkc - unk8) >> 2;
     float zero = 0.0f;
-    if ((unsigned int)mode < (unsigned int)cap1) {
+    if ((unsigned int)mode < (unsigned int)size1) {
         merged_827BD118((void *)(&unk8 + 1), (void *)((mode * 4) + unk8));
     } else {
         merged_827BD118((void *)(&unk8 + 1), (void *)(&unk8 + 1));
     }
 
-    // Second vector - offset 0x14
-    int cap2 = (unk18 - unk14) >> 2;
-    if ((unsigned int)unk0 < (unsigned int)cap2) {
+    // Second vector - offset 0x14 (begin=unk14, end=unk18, cap=unk1c)
+    int size2 = (unk18 - unk14) >> 2;
+    if ((unsigned int)unk0 < (unsigned int)size2) {
         merged_827BD118((void *)(&unk14 + 1), (void *)((unk0 * 4) + unk14));
     } else {
         merged_827BD118((void *)(&unk14 + 1), (void *)(&unk14 + 1));
     }
 
-    // Third vector - offset 0x20
-    int cap3 = (unk24 - unk20) >> 2;
-    if ((unsigned int)unk0 < (unsigned int)cap3) {
+    // Third vector - offset 0x20 (begin=unk20, end=unk24, cap=unk28)
+    int size3 = (unk24 - unk20) >> 2;
+    if ((unsigned int)unk0 < (unsigned int)size3) {
         merged_827BD118((void *)(&unk20 + 1), (void *)((unk0 * 4) + unk20));
     } else {
         merged_827BD118((void *)(&unk20 + 1), (void *)(&unk20 + 1));
     }
 
-    // Fourth vector - offset 0x38
-    int cap4 = (unk3c - unk38) >> 2;
-    if ((unsigned int)unk0 < (unsigned int)cap4) {
+    // Fourth vector - offset 0x38 (begin=unk38, end=unk3c, cap=unk40)
+    int size4 = (unk3c - unk38) >> 2;
+    if ((unsigned int)unk0 < (unsigned int)size4) {
         merged_827BD118((void *)(&unk38 + 1), (void *)((unk0 * 4) + unk38));
     } else {
         merged_827BD118((void *)(&unk38 + 1), (void *)(&unk38 + 1));

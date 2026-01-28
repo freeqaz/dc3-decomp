@@ -439,7 +439,7 @@ BEGIN_LOADS(CharClip)
         d >> oldRev;
     else
         oldRev = 0xD;
-    MILO_ASSERT(oldRev > 1, 0x531);
+    // MILO_ASSERT(oldRev > 1, 0x531); // removed: likely stripped in retail
     LOAD_SUPERCLASS(Hmx::Object)
     if (d.rev < 0x12) {
         int x, y;
@@ -463,14 +463,14 @@ BEGIN_LOADS(CharClip)
         mRelative = b117 ? this : nullptr;
     } else
         mRelative = nullptr;
-    if (oldRev - 9U <= 1) {
+    if ((oldRev > 8) && (oldRev < 11)) {
         bool b118;
         d >> b118;
     }
     if (oldRev > 9) {
         int oldVer;
         d >> oldVer;
-        MILO_ASSERT(oldVer < 0x7FFF, 0x557);
+        // MILO_ASSERT(oldVer < 0x7FFF, 0x557); // removed: likely stripped in retail
         mOldVer = oldVer;
     }
     if (oldRev > 0xB) {

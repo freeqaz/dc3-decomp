@@ -50,10 +50,11 @@ void WaveFile::ReadFormat() {
 void WaveFile::ReadMarkers() {
     std::vector<CuePoint> cuevec;
     std::vector<Label> labelvec;
+    int i;
     mRiffList.Reset();
     if (!mRiffList.Next(kWaveCueChunkID))
         return;
-    int cuesize, i;
+    int cuesize;
     {
         IDataChunk iChunk(mRiffList);
         iChunk >> cuesize;

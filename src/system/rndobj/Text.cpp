@@ -499,9 +499,8 @@ void RndText::FontMap::UpdateScrolling(float f1) {
 
 RndText::FontMap3d::~FontMap3d() {
     for (int i = 0; i < mMeshes.size(); i++) {
-        RndMesh *mesh = mMeshes[i];
-        if (mesh) {
-            delete mesh;
+        if (mMeshes[i]) {
+            delete mMeshes[i];
         }
     }
 }

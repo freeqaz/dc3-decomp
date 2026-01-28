@@ -1,6 +1,7 @@
 #include "utl/AllocInfo.h"
 #include "utl/Pool.h"
 #include "os/Debug.h"
+#include "os/System.h"
 #include "trie.h"
 #include "utl/TextStream.h"
 #include "xdk/XBDM.h"
@@ -74,6 +75,33 @@ void AllocInfo::PrintCsv(TextStream &ts) const {
     if (mPooled) {
         ts << ", pooled";
     }
+}
+
+void AllocInfo::PrintForReport(TextStream &ts) const {
+    MILO_ASSERT(s_pTrie, 0xD1);
+    char buffer[0x140];
+    char buf1d[0x80];
+    char buf21[0x80];
+    char *str1;
+    char *str2;
+    const char *pooledStr;
+
+    str1 = s_pTrie->get(unk1d, buf1d, 0x80);
+    str2 = s_pTrie->get(unk21, buf21, 0x80);
+
+    if (mPooled) {
+        pooledStr = "pooled";
+    } else {
+        pooledStr = "";
+    }
+
+    Hx_snprintf(
+        buffer, 0x140,
+        "addr 0x%lX / %s / bytes %d / actual %d / heap %d / %s / %s / %s",
+        (unsigned long)mMem, mType, mReqSize, mActSize, mHeap, str1, str2, pooledStr
+    );
+
+    ts << buffer;
 }
 
 void AllocInfo::Print(TextStream &ts) const {

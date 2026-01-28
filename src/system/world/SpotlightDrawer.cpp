@@ -51,6 +51,13 @@ BEGIN_COPYS(SpotlightDrawer)
     END_COPYING_MEMBERS
 END_COPYS
 
+SpotDrawParams::SpotDrawParams(SpotlightDrawer *owner)
+    : mIntensity(1.0f), mColor(1.0f, 1.0f, 1.0f), mBaseIntensity(0.1f),
+      mSmokeIntensity(0.5f), mHalfDistance(250.0f), mLightingInfluence(1.0f),
+      mTexture(owner, 0), mProxy(owner, 0), mOwner(owner) {
+    MILO_ASSERT(owner, 0x37c);
+}
+
 void SpotDrawParams::Save(BinStream &bs) {
     bs << mIntensity;
     bs << mBaseIntensity;

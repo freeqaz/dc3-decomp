@@ -110,6 +110,8 @@ FormatString &FormatString::operator<<(int i) {
 }
 
 const char *FormatString::Str() {
+    const char *result = mBuf;
+
     if (mType != kNone)
         MILO_NOTIFY(
             "FormatString: '%s' doesn't start with kNone.  Format: '%s'", mFmt, mFmtBuf
@@ -118,7 +120,7 @@ const char *FormatString::Str() {
         MILO_ASSERT(mFmtEnd - mFmt < mBufSize, 0x16F);
         strcpy(mBuf + MAX_BUF_SIZE - mBufSize, mFmt);
     }
-    return mBuf;
+    return result;
 }
 
 FormatString &FormatString::operator<<(const char *cc) {

@@ -263,3 +263,38 @@ int FileCache::CurSize() const {
     }
     return size;
 }
+
+void FileCache::PollUntilLoaded() {
+    int savedMaxSize = mMaxSize;
+    mMaxSize = 0x40000000;
+
+    // Check if any entries are unloaded
+    unsigned char hasUnloaded = 0;
+    unsigned int i;
+    for (i = 0; i < mEntries.size(); i++) {
+        if (!(mEntries[i]->Size() > -1)) {
+            hasUnloaded = 1;
+            break;
+        }
+    }
+
+    // Poll until all loaded
+    if (hasUnloaded) {
+        do {
+            TheLoadMgr.Poll();
+            Poll();
+
+            hasUnloaded = 0;
+            for (i = 0; i < mEntries.size(); i++) {
+                if (!(mEntries[i]->Size() > -1)) {
+                    hasUnloaded = 1;
+                    break;
+                }
+            }
+        } while (hasUnloaded);
+    }
+
+    mMaxSize = savedMaxSize;
+    TheLoadMgr.Poll();
+    Poll();
+}

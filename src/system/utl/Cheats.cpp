@@ -85,16 +85,18 @@ CheatsManager::CheatsManager()
 }
 
 void CheatsManager::AppendLog(FixedString &fs) {
-    FOREACH (it, mBuffer) {
+    if (mBuffer.size() != 0) {
         fs += "\n\nCheats Used";
-        String s = "\n   %.30s";
-        // memcpy(s, "\n   %.30s", 10);
-        it->mScript.Print(s, true, 0);
-        const char *c = MakeString("\n   %.30s");
-        fs += c;
-    }
-    if (mBuffer.size() == mMaxBuffer) {
-        fs += "\n   ...";
+        char buf[16];
+        strncpy(buf, "\n   %.30s", 10);
+        for (std::list<CheatLog>::iterator it = mBuffer.begin(); it != mBuffer.end(); ++it) {
+            String str;
+            it->mScript.Print(str, 1, 0);
+            fs += MakeString(buf, str);
+        }
+        if (mMaxBuffer == mBuffer.size()) {
+            fs += "\n   ...";
+        }
     }
 }
 

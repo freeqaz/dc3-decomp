@@ -152,15 +152,15 @@ float MultiTempoTempoMap::TickToTime(float tick) const {
             return 0.0f;
         else
             return pt->mMs
-                + (pt->mTempo * ((tick - (float)pt->mTick) / 480.0f) / 1000.0f);
+                + (pt->mTempo * (tick - pt->mTick) / 480.0f / 1000.0f);
     } else {
         float loopTickLength = mEndLoopTick - startTick;
         float loopTick = tick - mEndLoopTick;
         float loopPercent = std::floor(loopTick / loopTickLength);
-
         float loopTimeLength = mEndLoopTime - mStartLoopTime;
+
         float loopTime = loopTimeLength * loopPercent + mEndLoopTime;
-        loopTime += TickToTime(startTick + -(loopTickLength * loopPercent - loopTick))
+        loopTime += TickToTime(startTick - loopTickLength * loopPercent + loopTick)
             - mStartLoopTime;
         return loopTime;
     }
@@ -180,18 +180,6 @@ float MultiTempoTempoMap::TimeToTick(float time) const {
         const TempoInfoPoint *pt = PointForTime(time);
         return pt->mTick + ((time - pt->mMs) * 1000.0f / (float)pt->mTempo) * 480.0f;
     } else {
-        // float loopTimeLength = endTime - mStartLoopTime;
-        // float loopTime = time - endTime;
-        // float loopPercent = std::floor(loopTime / loopTimeLength);
-
-        // float a = time + -(loopTimeLength * loopPercent - loopTime);
-
-        // float loopTickLength = endTick - startTick;
-        // float loopTick = endTick + (loopTickLength * loopPercent);
-        // loopTick += TimeToTick(a) - startTick;
-
-        // return loopTick;
-
         float startTime = mStartLoopTime;
 
         float loopTimeLength = endTime - startTime;

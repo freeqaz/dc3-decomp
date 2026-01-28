@@ -297,6 +297,10 @@ void HamNavList::SetSwelling() {
 
 bool HamNavList::CanHaveFocus() { return mNavInputType == kNavInput_RightHand; }
 
+void HamNavList::Poll() {
+    // TODO: Implement Poll
+}
+
 bool HamNavList::ShouldSkipSelectAnim(DataNode &node) const {
     UIListProvider *provider = mListState.Provider();
     if (!provider || 1 < mListState.NumShowing()) {

@@ -137,22 +137,25 @@ void QuatSpline(
         NormalizeTo(prevQuat, q88);
         NormalizeTo(prevQuat, nextQuat);
         NormalizeTo(prevQuat, q58);
-        for (int i = 0; i < 4; i++) {
-            // Match base computation order exactly
-            float pq = prevQuat[i];
-            float p2 = pq * 2.0f;
-            float nq = nextQuat[i];
-            float q8 = q88[i];
-            float n3mq8 = nq * 3.0f - q8;
-            float q5 = q58[i];
-            float diff = nq - q8;
-            float n4p2 = nq * 4.0f + p2;
-            float coef3part = q5 - n3mq8;
-            float coef1 = diff * 0.5f;
-            float tmp = n4p2 - pq * 5.0f;
-            float coef3 = coef3part - diff;
-            float coef2 = tmp - q5;
-            qout[i] = ((coef3 * ref + coef2) * ref + coef1) * ref + p2;
+        int i = 0;
+        while (i < 4) {
+            float prev_val = prevQuat[i];
+            float next_val = nextQuat[i];
+            float prev_prev_val = q88[i];
+            float next_next_val = q58[i];
+
+            float twice_prev = prev_val * 2.0f;
+            float five_prev = prev_val * 5.0f;
+            float three_next = next_val * 3.0f;
+            float four_next = next_val * 4.0f;
+
+            float difference = next_val - prev_prev_val;
+            float c1 = difference * 0.5f;
+            float c3 = (three_next - prev_prev_val) - difference;
+            float c2 = (four_next - five_prev + twice_prev) - next_next_val;
+
+            qout[i] = ((c3 * ref + c2) * ref + c1) * ref + twice_prev;
+            i++;
         }
         Normalize(qout, qout);
     }

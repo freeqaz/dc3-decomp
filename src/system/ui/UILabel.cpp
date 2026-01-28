@@ -34,10 +34,24 @@ BEGIN_PROPSYNCS(UILabel)
     SYNC_PROP_SET(text_token, mTextToken, SetTextToken(_val.ForceSym()))
     SYNC_PROP_SET(icon, unk118, SetIcon(_val.Str(0)[0]))
     SYNC_PROP(edit_text, unk118)
-    SYNC_PROP(draw_width, unkb4)
+    SYNC_PROP(width, *(float *)(((unsigned char *)this) - 0x128))
+    SYNC_PROP(height, *(float *)(((unsigned char *)this) - 0x124))
+    SYNC_PROP(circle, *(float *)(((unsigned char *)this) - 0x120))
+    SYNC_PROP(alignment, *(int *)(((unsigned char *)this) - 0x11C))
+    SYNC_PROP(fit_type, *(int *)(((unsigned char *)this) - 0x118))
+    SYNC_PROP(caps_mode, *(int *)(((unsigned char *)this) - 0x114))
+    SYNC_PROP(markup, *(bool *)(((unsigned char *)this) - 0x108))
+    SYNC_PROP(scroll_delay, *(float *)(((unsigned char *)this) - 0x104))
+    SYNC_PROP(scroll_rate, *(float *)(((unsigned char *)this) - 0x100))
+    SYNC_PROP(scroll_pause, *(float *)(((unsigned char *)this) - 0xFC))
+    SYNC_PROP(leading, *(float *)(((unsigned char *)this) - 0x110))
+    SYNC_PROP(indentation, *(float *)(((unsigned char *)this) - 0xD4))
+    SYNC_PROP(basic_markup, *(bool *)(((unsigned char *)this) - 0x107))
+    SYNC_PROP(fixed_length, mFixedLength)
+    SYNC_PROP(draw_width, unkbc)
     SYNC_PROP(styles, unk124)
-    SYNC_SUPERCLASS(RndText)
     SYNC_SUPERCLASS(UIComponent)
+    SYNC_SUPERCLASS(RndText)
 END_PROPSYNCS
 
 BEGIN_COPYS(UILabel)
@@ -286,7 +300,10 @@ void UILabel::SetTokenFmt(const DataArray *da) {
     }
 }
 
-RndText::Style &UILabel::Style(int) { return RndText::Style(0); }
+RndText::Style &UILabel::Style(int) {
+    static RndText::Style dummy(0);
+    return dummy;
+}
 
 void UILabel::SetPrelocalizedString(String &s) {}
 

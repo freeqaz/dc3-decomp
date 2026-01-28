@@ -270,3 +270,25 @@ void KeylessHash<T1, T2>::Clear() {
     mOwnEntries = true;
     mNumEntries = 0;
 }
+
+template <>
+void KeylessHash<void *, AllocInfo *>::Remove(AllocInfo **entry) {
+    unsigned int idx = (unsigned int)((int)(entry - mEntries) >> 2) >> 2;
+    MILO_ASSERT((int)idx >= 0 && (int)idx < mSize, 0xCF);
+
+    int next = idx + 1;
+    *entry = mRemoved;
+    int subVal = 0 - (mSize - next);
+
+    if (mEntries[(subVal & next)] == mEmpty) {
+        int cur = idx;
+        do {
+            cur--;
+            mEntries[cur] = mEmpty;
+            mNumEntries--;
+            if (cur == -1) {
+                cur = mSize - 1;
+            }
+        } while (mEntries[cur] == mRemoved);
+    }
+}

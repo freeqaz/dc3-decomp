@@ -10,24 +10,29 @@ void Profiler::Start() { mTimer.Start(); }
 
 void Profiler::Stop() {
     mTimer.Stop();
-    mMin = Min(mMin, mTimer.Ms());
-    mMax = Max(mMax, mTimer.Ms());
+    float ms = mTimer.Ms();
+    if (ms < mMin) {
+        mMin = ms;
+    }
+    if (ms > mMax) {
+        mMax = ms;
+    }
     mCount++;
-    mSum += mTimer.Ms();
+    mSum += ms;
     if (mCount == mCountMax) {
         if (mCountMax == 1U) {
-            MILO_LOG("%s: %s\n", FormatTime(mMin));
+            TheDebug << MakeString("%s: %s\n", mName, FormatTime(mMin));
         } else {
-            MILO_LOG(
+            TheDebug << MakeString(
                 "%s: min %s max %s mean %s\n",
                 mName,
                 FormatTime(mMin),
                 FormatTime(mMax),
-                FormatTime(mSum / mCount)
+                FormatTime(mSum / (float)mCount)
             );
         }
         mCount = 0;
-        mMin = 3.402823e+38;
+        mMin = 3.4028235e+38;
         mMax = 0;
         mSum = 0;
     }

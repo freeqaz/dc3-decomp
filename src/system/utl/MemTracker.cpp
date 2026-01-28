@@ -281,6 +281,45 @@ DataNode MemTracker::SpitAllocInfo(DataArray *a) {
     return ret;
 }
 
+void MemTracker::Report(int threshold, TextStream &ts) {
+    int numMemBlocks, numPoolBlocks;
+
+    HeapReport(ts);
+    UpdateStats();
+
+    mMemTable[mCurStatTable].SortBySize();
+    ts << MakeString("\n  %30s %2s %5s %10s %10s\n", "SzActual", "SzRequest", "Hp", "TYPE");
+
+    numMemBlocks = mMemTable[mCurStatTable].GetNumStats();
+    for (int i = 0; i < numMemBlocks; i++) {
+        BlockStat &stat = mMemTable[mCurStatTable].GetBlockStat(i);
+        if (stat.mNumAllocs >= threshold) {
+            ts << MakeString(
+                "  %30s %2d %5d %10d %10d\n",
+                stat.mName, stat.mNumAllocs, stat.mSizeReq, stat.mSizeAct
+            );
+        }
+    }
+
+    mPoolTable[mCurStatTable].SortBySize();
+    ts << MakeString("\n  %30s %5s %10s %10s\n", "POOL TYPE", "SzRequest", "SzActual", "Num");
+
+    numPoolBlocks = mPoolTable[mCurStatTable].GetNumStats();
+    for (int i = 0; i < numPoolBlocks; i++) {
+        BlockStat &stat = mPoolTable[mCurStatTable].GetBlockStat(i);
+        ts << MakeString("  %30s %5d %10d %10d\n", stat.mName, stat.mSizeReq, stat.mSizeAct, stat.mNumAllocs);
+    }
+
+    ts << "Diff from last report:\n";
+    ts << "MALLOC DIFF TYPES\n";
+    DiffTblReport("malloc", mMemTable[mCurStatTable], mMemTable[1 - mCurStatTable], ts);
+
+    ts << "POOL DIFF TYPES\n";
+    DiffTblReport("pool", mPoolTable[mCurStatTable], mPoolTable[1 - mCurStatTable], ts);
+
+    mCurStatTable = 1 - mCurStatTable;
+}
+
 void MemTracker::DiffDump(TextStream &ts) {
     if (mTimeSlice) {
         ts << "(executable " << TheSystemArgs.front() << ")\n";

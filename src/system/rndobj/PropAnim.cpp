@@ -185,6 +185,72 @@ BEGIN_LOADS(RndPropAnim)
     }
 END_LOADS
 
+void RndPropAnim::LoadPre7(BinStreamRev &bs) {
+    ObjOwnerPtr<Hmx::Object> objPtr(this);
+    if (bs.rev < 2)
+        bs >> objPtr;
+    int count;
+    bs >> count;
+    for (int i = 0; i < count; i++) {
+        DataArray *arr = nullptr;
+        PropKeys::AnimKeysType ty = PropKeys::kFloat;
+        Keys<float, float> floatKeys;
+        Keys<Hmx::Color, Hmx::Color> colorKeys;
+        ObjKeys objKeys(this);
+        Keys<bool, bool> boolKeys;
+        Keys<Hmx::Quat, Hmx::Quat> quatKeys;
+        if (bs.rev >= 2)
+            bs >> objPtr;
+        if (bs.rev < 1) {
+            Symbol sym;
+            bs >> sym;
+            arr = DataArrayPtr(sym);
+        } else
+            bs >> arr;
+        if (bs.rev < 3)
+            bs >> floatKeys;
+        else {
+            int animtype;
+            bs >> animtype;
+            ty = (PropKeys::AnimKeysType)animtype;
+            bs >> floatKeys;
+            bs >> colorKeys;
+            Hmx::Object *oldowner = ObjectStage::sOwner;
+            if (bs.rev > 3) {
+                ObjectStage::sOwner = this;
+                bs >> objKeys;
+            }
+            ObjectStage::sOwner = oldowner;
+            if (bs.rev > 4)
+                bs >> boolKeys;
+            if (bs.rev > 5)
+                bs >> quatKeys;
+        }
+        PropKeys *addedKeys = AddKeys(objPtr.Ptr(), arr, ty);
+        if (arr)
+            arr->Release();
+        switch (ty) {
+        case PropKeys::kFloat:
+            *addedKeys->AsFloatKeys() = floatKeys;
+            break;
+        case PropKeys::kColor:
+            *addedKeys->AsColorKeys() = colorKeys;
+            break;
+        case PropKeys::kObject:
+            *addedKeys->AsObjectKeys() = objKeys;
+            break;
+        case PropKeys::kBool:
+            *addedKeys->AsBoolKeys() = boolKeys;
+            break;
+        case PropKeys::kQuat:
+            *addedKeys->AsQuatKeys() = quatKeys;
+            break;
+        default:
+            break;
+        }
+    }
+}
+
 void RndPropAnim::Print() {
     int idx = 0;
     for (std::list<PropKeys *>::iterator it = mPropKeys.begin(); it != mPropKeys.end();

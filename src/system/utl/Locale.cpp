@@ -31,6 +31,16 @@ void LocaleChunkSort::Sort(OrderedLocaleChunk *chunks, int count) {
     qsort(chunks, count, sizeof(OrderedLocaleChunk), LocaleChunkSortFunc);
 }
 
+const char *Locale::Localize(Symbol token, bool success) const {
+    // Search for token in symbol table
+    for (int i = 0; i < mSize; i++) {
+        if (mSymTable[i] == token) {
+            return mStrTable[i];
+        }
+    }
+    return 0;
+}
+
 void Locale::Terminate() {
     delete[] mSymTable;
     mSymTable = 0;
@@ -179,3 +189,55 @@ done:
     DataRegisterFunc("set_locale_verbose_notify", DataSetLocaleVerboseNotify);
     DataRegisterFunc("toggle_show_tokens_cheat", DataToggleShowTokensCheat);
 }
+
+// Static buffers and index
+struct LocaleFloatBuffer {
+    char buffers[4][0x32];
+};
+static LocaleFloatBuffer gLocalizeFloatBuf;
+static int gLocalizeFloatIdx = 0;
+static bool gLocalizeFloatInitialized = false;
+static Symbol gLocalizeFloatSeparator;
+
+const char *LocalizeFloat(const char *fmt, float num) {
+    const char *str;
+    const char *decimalStr;
+    char *buf;
+    char *p;
+
+    str = MakeString(fmt, num);
+
+    // Lazy initialization of the decimal separator symbol
+    if (!gLocalizeFloatInitialized) {
+        gLocalizeFloatInitialized = true;
+        gLocalizeFloatSeparator = Symbol("locale_decimal_separator");
+    }
+
+    decimalStr = TheLocale.Localize(gLocalizeFloatSeparator, false);
+
+    // If the localized decimal separator is not '.', we need to replace it
+    if (decimalStr != 0 && *decimalStr != '.') {
+        buf = gLocalizeFloatBuf.buffers[gLocalizeFloatIdx];
+        strncpy(buf, str, 0x32);
+        buf[0x31] = '\0';
+
+        // Find and replace '.' with localized separator
+        p = buf;
+        for (;;) {
+            if (*p == 0) break;
+            if (*p == '.') {
+                *p = *decimalStr;
+                break;
+            }
+            p++;
+        }
+
+        // Increment index with modulo 4 wrapping
+        gLocalizeFloatIdx = (gLocalizeFloatIdx + 1) % 4;
+
+        return buf;
+    }
+
+    return str;
+}
+

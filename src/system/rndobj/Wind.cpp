@@ -6,7 +6,8 @@
 float gUnitsPerMeter = 39.370079f;
 
 RndWind::RndWind()
-    : mPrevailing(0, 0, 0), mRandom(0, 0, 0), mTrans(this), mWindOwner(this) {
+    : mPrevailing(0.0f, 0.0f, 0.0f), mRandom(0.0f, 0.0f, 0.0f), mTimeLoop(100.0f),
+      mSpaceLoop(100.0f), mTrans(this), mWindOwner(this, this) {
     SyncLoops();
 }
 

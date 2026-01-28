@@ -59,6 +59,13 @@ protected:
 
 #include "obj/Msg.h"
 
+class PostPurchaseEnumJob : public SingleItemEnumJob {
+public:
+    PostPurchaseEnumJob(Hmx::Object *, int, u64);
+    virtual ~PostPurchaseEnumJob();
+    virtual void OnCompletion(Hmx::Object *);
+};
+
 DECLARE_MESSAGE(SingleItemEnumCompleteMsg, "single_item_enum_complete")
 bool Success() const { return mData->Int(2); }
 bool HasOfferID() const { return mData->Int(3); }

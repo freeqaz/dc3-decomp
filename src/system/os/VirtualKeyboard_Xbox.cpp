@@ -65,13 +65,15 @@ DataNode VirtualKeyboard::ShowKeyboardUI(
     UTF8toWChar_t(gDefaultText, defaultTxt.c_str());
     UTF8toWChar_t(gWindowTitle, windowTitle.c_str());
     UTF8toWChar_t(gDescrptionText, descText.c_str());
-    DWORD flags = 0;
-    if (i8 == 0) {
-        flags = 0x20000001;
-    } else if (i8 == 1) {
-        flags = 0x20;
+    DWORD flags;
+    if (i8 >= 1) {
+        if (i8 != 1) {
+            MILO_ASSERT(false, 0x98);
+        } else {
+            flags = 0x20;
+        }
     } else {
-        MILO_ASSERT(false, 0x98);
+        flags = 0x20000001;
     }
     DWORD res = XShowKeyboardUI(
         pad, flags, gDefaultText, gWindowTitle, gDescrptionText, newWStr, i2, newXo

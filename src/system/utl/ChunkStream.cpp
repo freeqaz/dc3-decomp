@@ -183,20 +183,20 @@ int ChunkStream::WriteChunk() {
     MILO_ASSERT(mCurBufOffset < kChunkSizeMask, 778);
     int size = mCurBufOffset;
     int flags = 0;
-    int firstbuf = *(int *)mBuffers[0];
+    int *firstbuf = (int *)mBuffers[0];
     if (mChunkInfo.mID == 0xCDBEDEAF) {
         int l38 = mBufSize - 4;
-        unsigned int secondbuf = *(int *)mBuffers[1];
-        secondbuf = size;
-        secondbuf = EndianSwap(secondbuf);
-        CompressMem(mBuffers[0], size, (char *)secondbuf + 1, l38, 0);
+        unsigned int *secondbuf = (unsigned int *)mBuffers[1];
+        *secondbuf = size;
+        EndianSwapEq(*secondbuf);
+        CompressMem(mBuffers[0], size, secondbuf + 1, l38, 0);
         if (((float)mCurBufOffset / (float)l38) > 1.1f && mChunkInfo.mNumChunks != 0) {
             size = l38 + 4;
-            firstbuf = secondbuf;
+            firstbuf = (int *)secondbuf;
         } else
             flags |= 0x1000000;
     }
-    if (size != mFile->Write((const void *)firstbuf, size)) {
+    if (size != mFile->Write(firstbuf, size)) {
         mFail = true;
     }
     MILO_ASSERT((size & ~kChunkSizeMask) == 0, 820);

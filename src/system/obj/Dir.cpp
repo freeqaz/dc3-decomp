@@ -1202,29 +1202,23 @@ void ObjectDir::PostLoad(BinStream &bs) {
     HandleType(change_proxies);
 
     if (mProxyOverride) {
-        bool overridden = false;
         mProxyOverride = false;
-        if (gLoadingProxyFromDisk
-            || (IsProxy()
-                && !(mInlineProxyType == kInlineCached || mInlineProxyType == kInlineAlways))) {
-            overridden = true;
-        }
-        if (!overridden) {
+        if (!gLoadingProxyFromDisk
+            && (!IsProxy()
+                || (mInlineProxyType == kInlineCached || mInlineProxyType == kInlineAlways))) {
             MILO_FAIL("You cannot override an inlined proxy!");
         }
-    } else {
-        if (IsProxy() && !mProxyFile.empty()) {
-            DeleteObjects();
-            DeleteSubDirs();
-            DirLoader *dl = new DirLoader(
-                mProxyFile,
-                kLoadFront,
-                nullptr,
-                InlineProxy(bs) ? &bs : nullptr,
-                this,
-                false,
-                nullptr
-            );
-        }
+    } else if (IsProxy() && !mProxyFile.empty()) {
+        DeleteObjects();
+        DeleteSubDirs();
+        DirLoader *dl = new DirLoader(
+            mProxyFile,
+            kLoadFront,
+            nullptr,
+            InlineProxy(bs) ? &bs : nullptr,
+            this,
+            false,
+            nullptr
+        );
     }
 }

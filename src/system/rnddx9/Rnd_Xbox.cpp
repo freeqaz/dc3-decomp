@@ -515,11 +515,11 @@ void DxRnd::InitBuffers() {
     } else if (SystemConfig(rnd)->FindInt(low_res) != 0) {
         unk37c |= 1;
     }
-    unk1f8 = unk37c;
+    unk1f8 = unk37c & 1;
     mAspect = unk1f8 ? kWidescreen : kRegular;
-    mHeight = unk37c & 1 ? 540 : 720;
+    mHeight = unk1f8 ? 540 : 720;
     int i11, i10;
-    if (mVideoMode.fIsHiDef || unk1f8) {
+    if (mVideoMode.fIsHiDef != 0 || unk1f8 != 0) {
         i11 = (mHeight << 4) / 9;
         i10 = (mHeight << 4) / 9;
     } else {
@@ -529,9 +529,11 @@ void DxRnd::InitBuffers() {
     mWidth = i11;
     if (!(unk37c & 1)) {
         mNumTiles = 2;
-        // stuff
-        if (!(unk37c & 2)) {
-            // things
+        if (unk37c & 2) {
+            i11 = i11 / 2;
+            i10 = i10 / 2;
+        } else {
+            i10 = i10 / 2;
         }
     }
     mPresentParams.Windowed = 0;
@@ -541,22 +543,6 @@ void DxRnd::InitBuffers() {
     mPresentParams.BackBufferHeight = mHeight;
     mPresentParams.PresentationInterval = 0;
     mPresentParams.SwapEffect = D3DSWAPEFFECT_DISCARD;
-    // D3DPRESENT_PARAMETERS mPresentParams; // 0x234
-    //   local_88 = this + 0x294;
-    //   *(this + 0x26c) = 1;DisableAutoBackBuffer
-    //   *(this + 0x270) = 1;DisableAutoFrontBuffer
-    //   *pDVar18 = *(this + 0x40);
-    //   *(this + 0x238) = *(this + 0x44);
-    //   *(this + 0x268) = 0;PresentationInterval
-    //   *(this + 0x24c) = 1;SwapEffect
-    //   *(this + 0x288) = 0x600000;
-    //   *(this + 0x290) = 0xc;
-    //   *(this + 0x294) = 0;
-    //   *(this + 0x298) = 0;
-    //   *(this + 0x29c) = *(this + 0x40);
-    //   *(this + 0x2a0) = *(this + 0x44);
-    //   *(this + 0x2ac) = 0;
-    //   (**(*this + 0x154))(this);
     UpdateScalerParams();
     unk228 = GetCurrentThreadId();
     {
@@ -575,6 +561,9 @@ void DxRnd::InitBuffers() {
         );
         EndMemTrackObjectName();
         BeginMemTrackObjectName("CreateBackBuffers:UI");
+        CreateBackBuffers(
+            i10, i11, D3DMULTISAMPLE_2_SAMPLES, unk3a8, unk3ac, unk384, unk38c
+        );
     } else {
         MILO_ASSERT(mNumTiles == 0, 0x37E);
         BeginMemTrackObjectName("CreateBackBuffers:World");
@@ -583,10 +572,10 @@ void DxRnd::InitBuffers() {
         );
         EndMemTrackObjectName();
         BeginMemTrackObjectName("CreateBackBuffers:UI");
+        CreateBackBuffers(
+            mWidth, mHeight, D3DMULTISAMPLE_2_SAMPLES, unk3a8, unk3ac, unk384, unk38c
+        );
     }
-    CreateBackBuffers(
-        mWidth, mHeight, D3DMULTISAMPLE_2_SAMPLES, unk3a8, unk3ac, unk384, unk38c
-    );
     EndMemTrackObjectName();
     {
         BeginMemTrackObjectName("CreateTexture:PreProcessBuffer");
@@ -620,7 +609,9 @@ void DxRnd::InitBuffers() {
     DX_ASSERT(mFrontBufferDepth, 0x3A2);
     EndMemTrackObjectName();
     PostDeviceReset();
+    int temp27 = ((((mHeight + 0x1F) >> 5) * ((mWidth + 0x1F) >> 5)) << 0xC);
     for (int i = 0; i < 2; i++) {
+        memset(mFrontBuffers[i], 0, temp27);
     }
     mRegAlloc = (RegisterAlloc)0;
     D3DDevice_SetShaderGPRAllocation(mD3DDevice, 0, 0, 0);

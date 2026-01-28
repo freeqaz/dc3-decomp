@@ -76,11 +76,14 @@ void FixedSizeAlloc::Refill() {
     mFreeList = RawAlloc(allocSize * 4);
     mNumChunks++;
 
-    int *it = mFreeList;
-    for (; it < mFreeList + (allocSize - mAllocSizeWords); ++it) {
-        *it += mAllocSizeWords;
+    int *cur = mFreeList;
+    int *end = mFreeList + (allocSize - mAllocSizeWords);
+    while (cur < end) {
+        int *next = cur + mAllocSizeWords;
+        *cur = (int)next;
+        cur = next;
     }
-    *it = 0;
+    *cur = 0;
 }
 
 ChunkAllocator::ChunkAllocator() {

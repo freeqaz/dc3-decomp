@@ -318,6 +318,18 @@ bool NetLoaderRef::IsValid() const {
     return (!mCacheLoader || !mNetLoader) && (mCacheLoader || mNetLoader);
 }
 
+bool NetLoaderRef::NeedsToDownload() {
+    MILO_ASSERT(IsValid(), 0x31B);
+    if (!mCacheLoader) {
+        if (mNetLoader) {
+            int state = *(int*)mNetLoader;
+            return (state == 1 || state == 2) ? true : false;
+        }
+        return true;
+    }
+    return false;
+}
+
 void NetCacheMgrInit() {
     MILO_ASSERT(TheNetCacheMgr == NULL, 0x1f);
     TheNetCacheMgr = new NetCacheMgrXbox();

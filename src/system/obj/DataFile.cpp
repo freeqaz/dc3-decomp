@@ -1,5 +1,6 @@
 #include "obj/DataFile.h"
 
+#include <map>
 #include "DataFlex.h"
 #include "utl/Compress.h"
 #include "utl/Std.h"

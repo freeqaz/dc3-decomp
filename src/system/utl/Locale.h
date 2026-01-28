@@ -51,7 +51,7 @@ public:
 
     void SetMagnuStrings(DataArray *);
     // bool FindDataIndex(Symbol, int &, bool) const;
-    // const char *Localize(Symbol, bool) const;
+    const char *Localize(Symbol, bool) const;
 
     static void SetLocaleVerboseNotify(bool set) { Locale::sVerboseNotify = set; }
 

@@ -115,11 +115,13 @@ int JoypadClient::OnMsg(const ButtonDownMsg &msg) {
     }
     if (!btnUser)
         return 0;
+
     if (((1 << btn) & mBtnMask)) {
-        mRepeats[btnUser->GetPadNum()].Start(btn, msg.GetAction(), msg.GetPadNum());
+        int padNum = btnUser->GetPadNum();
+        mRepeats[padNum].Start(btn, msg.GetAction(), msg.GetPadNum());
         if (DirectionalAction(msg.GetAction())) {
             for (int i = 0; i < 4; i++) {
-                if (i != btnUser->GetPadNum()) {
+                if (i != padNum) {
                     if (DirectionalAction(ButtonToAction(
                             mRepeats[i].mLastBtn, JoypadControllerTypePadNum(i)
                         ))) {
@@ -136,24 +138,23 @@ int JoypadClient::OnMsg(const ButtonDownMsg &msg) {
 int JoypadClient::OnMsg(const ButtonUpMsg &msg) {
     if (mFilterAllButStart && msg.GetAction() != kAction_Start)
         return 0;
-    if (msg.GetUser()) {
-        LocalUser *btnUser = msg.GetUser();
-        if (mUser && btnUser != mUser)
-            return 0;
-        JoypadButton btn = msg.GetButton();
-        if (mVirtualDpad && MovedLeftStick(btn)) {
-            JoypadButton dpadbtn = LeftStickToDpad(btn);
-            mSink->Handle(
-                ButtonUpMsg(btnUser, dpadbtn, msg.GetAction(), msg.GetPadNum()), false
-            );
-        } else {
-            mSink->Handle(msg, false);
-        }
-        if (!btnUser)
-            return 0;
-        if (((1 << btn) & mBtnMask)) {
-            mRepeats[btnUser->GetPadNum()].Reset(btn);
-        }
+    LocalUser *btnUser = msg.GetUser();
+    if (mUser && btnUser != mUser)
+        return 0;
+
+    JoypadButton btn = msg.GetButton();
+    if (mVirtualDpad && MovedLeftStick(btn)) {
+        JoypadButton dpadbtn = LeftStickToDpad(btn);
+        mSink->Handle(
+            ButtonUpMsg(btnUser, dpadbtn, msg.GetAction(), msg.GetPadNum()), false
+        );
+    } else {
+        mSink->Handle(msg, false);
+    }
+    if (!btnUser)
+        return 0;
+    if (((1 << btn) & mBtnMask)) {
+        mRepeats[btnUser->GetPadNum()].Reset(btn);
     }
     return 0;
 }

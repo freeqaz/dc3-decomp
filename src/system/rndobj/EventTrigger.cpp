@@ -4,12 +4,15 @@
 #include "obj/DataFunc.h"
 #include "obj/Object.h"
 #include "obj/Msg.h"
+#include "obj/Utl.h"
 #include "os/Debug.h"
 #include "os/System.h"
+#include "os/File.h"
 #include "rndobj/Anim.h"
 #include "rndobj/PartLauncher.h"
 #include "utl/BinStream.h"
 #include "utl/Loader.h"
+#include "utl/MakeString.h"
 
 DataArray *gSupportedEvents;
 
@@ -577,6 +580,78 @@ void EventTrigger::LoadOldAnim(BinStream &bs, RndAnimatable *anim) {
     if (anim) {
         eventAnim.mAnim = anim;
         mAnims.push_back(eventAnim);
+    }
+}
+
+void EventTrigger::LoadOldEvent(
+    BinStreamRev &bs, Hmx::Object *obj, const char *trigName, ObjectDir *dir
+) {
+    mTriggerEvents.clear();
+    Symbol s;
+    bs >> s;
+    if (!s.Null()) {
+        mTriggerEvents.push_back(s);
+    }
+    if (trigName) {
+        SetName(NextName(MakeString("%s_%s.trig", trigName, s), dir), dir);
+    }
+    RndAnimatable *anim = dynamic_cast<RndAnimatable *>(obj);
+    if (bs.rev < 5) {
+        bool b58;
+        bs >> b58;
+        LoadOldAnim(bs.stream, b58 ? anim : nullptr);
+    } else {
+        unsigned int count;
+        bs >> count;
+        EventTrigger *curTrig = this;
+        while (count-- != 0) {
+            curTrig->LoadOldAnim(bs.stream, anim);
+            if (count != 0) {
+                EventTrigger *newTrig = new EventTrigger();
+                curTrig->mNextLink = newTrig;
+                curTrig = newTrig;
+                curTrig->SetName(
+                    MakeString("%s_%d.trig", FileGetBase(Name()), count), dir
+                );
+            }
+        }
+    }
+    int whichVec;
+    bs >> whichVec;
+    if (whichVec == 1) {
+        RndDrawable *draw = dynamic_cast<RndDrawable *>(obj);
+        if (draw)
+            mShows.push_back(draw);
+    } else if (whichVec == 2) {
+        RndDrawable *draw = dynamic_cast<RndDrawable *>(obj);
+        if (draw) {
+            mHideDelays.push_back();
+            mHideDelays.back().mHide = draw;
+        }
+    } else if (whichVec == 3) {
+        MILO_WARN("%s: can't enable %s", Name(), obj ? obj->Name() : "''");
+    } else if (whichVec == 4) {
+        MILO_WARN("%s: can't disable %s", Name(), obj ? obj->Name() : "''");
+    }
+    if (bs.rev > 1) {
+        float f50;
+        bs >> f50;
+        if (f50) {
+            FOREACH (it, mAnims) {
+                if (it->mAnim->Units() == 0) {
+                    it->mDelay += f50;
+                } else {
+                    MILO_WARN("%s: anim delay not in seconds");
+                }
+            }
+        }
+    }
+    if (bs.rev > 3) {
+        String str;
+        bs >> str;
+        if (!str.empty()) {
+            MILO_WARN("%s: %s", Name(), str);
+        }
     }
 }
 

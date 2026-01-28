@@ -128,23 +128,23 @@ void ClosestPoint(const Vector3 &v1, const Vector3 &v2, const Vector3 &v3, Vecto
     Subtract(v2, v1, diff21);
     Subtract(v3, v1, diff31);
     float f5 = Dot(diff31, diff21);
-    if (f5 <= 0) {
+    if (!(f5 > 0)) {
         *vout = v1;
-    } else {
-        float dot21 = Dot(diff21, diff21);
-        if (f5 > dot21) {
-            *vout = v2;
-        } else {
-            Scale(diff21, f5 / dot21, diff21);
-            Add(v1, diff21, *vout);
-        }
+        return;
     }
+    float dot21 = Dot(diff21, diff21);
+    if (f5 > dot21) {
+        *vout = v2;
+        return;
+    }
+    Scale(diff21, f5 / dot21, diff21);
+    Add(v1, diff21, *vout);
 }
 
 void Plane::Set(const Vector3 &v1, const Vector3 &v2, const Vector3 &v3) {
-    Vector3 diff21, diff31, cross;
-    Subtract(v2, v1, diff21);
+    Vector3 diff31, diff21, cross;
     Subtract(v3, v1, diff31);
+    Subtract(v2, v1, diff21);
     Cross(diff21, diff31, cross);
     Normalize(cross, cross);
     a = cross.x;
@@ -289,7 +289,7 @@ void Intersect(const Transform &trans, const Plane &plane, Hmx::Ray &ray) {
     float dotY = trans.m.y.x * plane.a + trans.m.y.y * plane.b + trans.m.y.z * plane.c;
     float dotZ = trans.m.z.x * plane.a + trans.m.z.y * plane.b + trans.m.z.z * plane.c;
     ray.dir.Set(dotX, dotY);
-    if (std::fabs(dotY) > std::fabs(dotX)) {
+    if (fabsf(dotY) > fabsf(dotX)) {
         ray.base.Set(point.x + (dotZ / dotX) * point.z, point.y);
     }
     else {

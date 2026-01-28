@@ -109,6 +109,7 @@ bool DxShader::Compile(
     MILO_ASSERT(streq("PIXEL_SHADER", defines[0].Name), 0xBB);
     MILO_ASSERT(!mVShader, 0xBD);
     MILO_ASSERT(!mPShader, 0xBE);
+
     LPCSTR data = nullptr;
     UINT bytes = 0;
     if (TheDxShaderInclude.Open(
@@ -116,25 +117,44 @@ bool DxShader::Compile(
         )
         < 0) {
         return false;
-    } else {
-        buf1 = new DxShaderBuffer();
-        defines[0].Value = "0";
-        HRESULT vRes = D3DXCompileShaderExA(
-            data,
-            bytes,
-            reinterpret_cast<const D3DXMACRO *>(defines.begin()),
-            &TheDxShaderInclude,
-            "vshader",
-            "vs_3_0",
-            0,
-            0,
-            0,
-            0,
-            0
-        );
     }
 
-    return true;
+    buf1 = new DxShaderBuffer();
+    buf2 = new DxShaderBuffer();
+
+    defines[0].Value = "0";
+    ID3DXBuffer *vShader = nullptr;
+    HRESULT vRes = D3DXCompileShaderExA(
+        data,
+        bytes,
+        reinterpret_cast<const D3DXMACRO *>(defines.begin()),
+        &TheDxShaderInclude,
+        "vshader",
+        "vs_3_0",
+        0,
+        vShader,
+        nullptr,
+        nullptr,
+        nullptr
+    );
+
+    defines[0].Value = "1";
+    ID3DXBuffer *pShader = nullptr;
+    HRESULT pRes = D3DXCompileShaderExA(
+        data,
+        bytes,
+        reinterpret_cast<const D3DXMACRO *>(defines.begin()),
+        &TheDxShaderInclude,
+        "pshader",
+        "ps_3_0",
+        0,
+        pShader,
+        nullptr,
+        nullptr,
+        nullptr
+    );
+
+    return (vRes >= 0) && (pRes >= 0);
 }
 
 void DxShader::CreateVertexShader(RndShaderBuffer &buffer) {

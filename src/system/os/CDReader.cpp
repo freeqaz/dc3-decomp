@@ -101,16 +101,17 @@ int CDRead(int arkFile, int i2, int i3, void *v) {
         gOverlapped.Offset = i2 << 0xB;
         if (!ReadFile(gArkFiles[arkFile], v, i3 << 0xB, nullptr, &gOverlapped)) {
             DWORD err = GetLastError();
-            if (err == ERROR_IO_PENDING || err == ERROR_IO_INCOMPLETE) {
-                MILO_NOTIFY("Disc error: ERROR_IO_INCOMPLETE, ignoring");
-                gPendingFile = arkFile;
-                return 0;
-            } else {
+            if (err != ERROR_IO_PENDING && err != ERROR_IO_INCOMPLETE) {
                 gErrorCode = err;
                 DiskErrorLoop();
                 return 1;
+            } else {
+                MILO_NOTIFY("Disc error: ERROR_IO_INCOMPLETE, ignoring");
+                gPendingFile = arkFile;
+                return 0;
             }
         }
+        return 0;
     }
 }
 

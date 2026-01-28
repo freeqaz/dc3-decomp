@@ -1,6 +1,7 @@
 #include "utl/JobMgr.h"
 #include "obj/Object.h"
 #include "os/Debug.h"
+#include "utl/DataPointMgr.h"
 
 namespace {
     static int gJobIDCounter;
@@ -10,7 +11,21 @@ Job::Job() {
     mID = gJobIDCounter++;
 }
 
-void JobMgr::Poll() {}
+void JobMgr::Poll() {
+    if (!mJobQueue.empty()) {
+        Job *job = mJobQueue.front();
+        if (job->IsFinished()) {
+            mJobQueue.erase(mJobQueue.begin());
+            mPreventStart = true;
+            job->OnCompletion(mCallback);
+            delete job;
+            mPreventStart = false;
+            if (!mJobQueue.empty()) {
+                mJobQueue.front()->Start();
+            }
+        }
+    }
+}
 
 void JobMgr::CancelJob(int id) {
     for (std::list<Job *>::iterator it = mJobQueue.begin(); it != mJobQueue.end(); ++it) {
@@ -53,3 +68,33 @@ void JobMgr::CancelAllJobs() {
 }
 
 JobMgr::~JobMgr() { CancelAllJobs(); }
+
+PostPurchaseEnumJob::PostPurchaseEnumJob(Hmx::Object *obj, int unk, u64 u) : SingleItemEnumJob(obj, unk, u) {}
+
+PostPurchaseEnumJob::~PostPurchaseEnumJob() {}
+
+void PostPurchaseEnumJob::OnCompletion(Hmx::Object *obj) {
+    if ((unk18 == 2) && (unk1c != 0)) {
+        static int sInitFlags = 0;
+        static Symbol sSourceSymbol;
+        static Symbol sOfferSymbol;
+        static Symbol sPurchaserSymbol;
+
+        if (!(sInitFlags & 1)) {
+            sInitFlags |= 1;
+            sSourceSymbol = Symbol("source");
+        }
+        if (!(sInitFlags & 2)) {
+            sInitFlags |= 2;
+            sOfferSymbol = Symbol("offer");
+        }
+        if (!(sInitFlags & 4)) {
+            sInitFlags |= 4;
+            sPurchaserSymbol = Symbol("purchaser");
+        }
+
+        String dataStr(MakeString("%016llX", *(u64 *)(((char *)this) + 0x10)));
+        SendDataPoint("store/purchase", sSourceSymbol, *(Symbol *)(((char *)this) + 0x48), sOfferSymbol, dataStr, sPurchaserSymbol, *(int *)(((char *)this) + 0x4C));
+    }
+    SingleItemEnumJob::OnCompletion(obj);
+}

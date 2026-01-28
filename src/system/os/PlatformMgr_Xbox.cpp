@@ -22,28 +22,28 @@ namespace {
 }
 
 PlatformMgr::PlatformMgr() {
+    mHasXSocialPhotoPost = false;
+    mHasXSocialLinkPost = false;
+    unk4c = 0;
     mSigninMask = 0;
     mSigninChangeMask = 0;
     mGuideShowing = true;
     mConfirmCancelSwapped = false;
     mConnected = false;
     mScreenSaver = false;
-    mHasXSocialPhotoPost = false;
-    mHasXSocialLinkPost = false;
-    unk4c = 0;
     mRegion = kRegionNone;
     mDiskError = kNoDiskError;
 
-    mSigninSameGuest = 0;
     mFriendsEnum = 0;
+    mListSize = 0;
     mFriendsBuffer = 0;
     mFriendsCallback = 0;
+    mPathLen = 0x200;
     mFriendsAsync = 0;
     mListener = 0;
-    mPathLen = 0x200;
-    mListSize = 0;
     mUserID = -1;
     mResult = 0;
+    mSigninSameGuest = 0;
 
     mJobMgr = new JobMgr(this);
 }

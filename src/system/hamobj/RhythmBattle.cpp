@@ -415,19 +415,14 @@ void RhythmBattle::UpdateMindControl() {
     static Symbol gameplay_mode("gameplay_mode");
     static Symbol game_stage("game_stage");
     static Symbol playing("playing");
-    static Symbol grooving("grooving");
-    static Symbol not_grooving("not_grooving");
 
-    // Get gameplay mode and game stage
-    const DataNode *gameplayNode = TheHamProvider->Property(gameplay_mode, true);
-    Symbol gameplaySym = gameplayNode->Sym();
+    const DataNode *gameplay_node = TheHamProvider->Property(gameplay_mode, true);
+    Symbol gameplay_sym = gameplay_node->Sym();
 
-    const DataNode *stageNode = TheHamProvider->Property(game_stage, true);
-    Symbol stageSym = stageNode->Sym();
+    const DataNode *stage_node = TheHamProvider->Property(game_stage, true);
+    Symbol stage_sym = stage_node->Sym();
 
-    // Check if mind control and playing
-    if (gameplaySym == mind_control && stageSym == playing) {
-        // Set player active states for mind control mode
+    if (gameplay_sym == mind_control && stage_sym == playing) {
         if (mPlayerOne) {
             mPlayerOne->SetActive(true);
         }
@@ -435,39 +430,48 @@ void RhythmBattle::UpdateMindControl() {
             mPlayerTwo->SetActive(true);
         }
 
-        // Character animation management
-        HamCharacter *character = nullptr;
-        for (int i = 0; i < 2; i++) {
-            character = TheHamDirector->GetCharacter(i);
-            if (!character) continue;
+        float f28 = 1.0f;
+        float f31 = 4.196f;
+        s32 r26 = 0;
+        float f29 = 0.4f;
+        float f30 = 0.95f;
 
-            RndAnimatable *animMC = character->Find<RndAnimatable>("mind_control.anim", false);
-            RndAnimatable *animSound = character->Find<RndAnimatable>("mind_control_sound.anim", false);
-
-            // Calculate animation parameters
-            float timeSeconds = TheTaskMgr.UISeconds();
-            float phase = sin(timeSeconds * (2.0f * 3.14159265f)) * (0.2f - 0.2f) + 0.2f;
-            float beatVal = phase * unk110;
-
-            if (animMC) {
-                animMC->Animate(0.0f, animMC->EndFrame(), animMC->Units(), beatVal, 0, 0, kEaseLinear, 0, 0);
+        do {
+            u32 character = (u32)TheHamDirector->GetCharacter(r26);
+            RndAnimatable *var_r30 = NULL;
+            if (character != 0U) {
+                var_r30 = ((RndDir *)character)->Find<RndAnimatable>("mind_control.anim", false);
             }
-            if (animSound) {
-                animSound->Animate(0.0f, animSound->EndFrame(), animSound->Units(), unk10c, 0, 0, kEaseLinear, 0, 0);
-            }
-        }
 
-        // Check grooving status
-        float beatMC = unk10c;
-        if (beatMC > 0.5f && beatMC <= 0.9333f) {
+            sin(TheTaskMgr.UISeconds() * f31);
+
+            if (var_r30 != NULL) {
+                var_r30->Animate(f28, var_r30->EndFrame(), var_r30->Units(), f28, 0.0f, NULL, kEaseLinear, 0.0f, false);
+            }
+
+            RndAnimatable *var_r3 = NULL;
+            if (character != 0U) {
+                var_r3 = ((RndDir *)character)->Find<RndAnimatable>("mind_control_sound.anim", false);
+            }
+
+            if (var_r3 != NULL) {
+                var_r3->Animate(unk10c, f28, var_r3->Units(), f28, 0.0f, NULL, kEaseLinear, 0.0f, false);
+            }
+
+            r26 += 1;
+        } while (r26 < 2);
+
+        float temp_f0 = unk10c;
+        if (temp_f0 > 0.5f && temp_f0 < 0.95f && unk110 > 5.0f) {
+            static Symbol grooving("grooving");
             PlayMindControlVO(grooving);
-        } else if (beatMC <= 0.2f && beatMC > 0.0f) {
+        }
+        if (temp_f0 < 0.15f && unk110 > 20.0f) {
+            static Symbol not_grooving("not_grooving");
             PlayMindControlVO(not_grooving);
         }
 
-        // Update beat counter
-        float deltaSecs = TheTaskMgr.DeltaSeconds();
-        unk110 += deltaSecs;
+        unk110 = TheTaskMgr.DeltaSeconds() + unk110;
     }
 }
 
