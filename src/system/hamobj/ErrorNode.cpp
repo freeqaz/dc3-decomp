@@ -274,25 +274,27 @@ void PositionNode::CalcError(
 ) const {
     MILO_ASSERT(node_input.mNodeWeight == NULL, 0x21C);
     Vector3 jointDiff;
-    Subtract(
-        frame_input.mJointPositions[mJoint],
-        frame_input.mJointPositions[mBaseJoint],
-        jointDiff
-    );
     Vector3 baseJointDiff;
+    float desired_bone_len;
+    float base_bone_len;
+    Vector3 scaledBaseDiff;
+
     Subtract(
         frame_input.mBaseJointPositions[mJoint],
         frame_input.mBaseJointPositions[mBaseJoint],
         baseJointDiff
     );
-    float desired_bone_len;
-    float base_bone_len;
+    Subtract(
+        frame_input.mJointPositions[mJoint],
+        frame_input.mJointPositions[mBaseJoint],
+        jointDiff
+    );
     NormBoneLengths(frame_input, mNormBones, desired_bone_len, base_bone_len);
     MILO_ASSERT(desired_bone_len > 0, 0x22C);
+
     if (base_bone_len <= 0) {
         vout.Set(1, 1, 1);
     } else {
-        Vector3 scaledBaseDiff;
         Scale(baseJointDiff, desired_bone_len / base_bone_len, scaledBaseDiff);
         DistanceToErrors(jointDiff, scaledBaseDiff, node_input.mNodeComponentWeight, vout);
     }

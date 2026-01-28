@@ -8,6 +8,31 @@
 #include "obj/Task.h"
 #include "utl/BinStream.h"
 
+void NormalizeScale(const Vector3 &param_2, float param_1, Vector3 &param_4) {
+    float fVar1;
+    float fVar2;
+    float fVar3;
+    float dVar4;
+
+    fVar2 = param_2[1];
+    dVar4 = 0.0f;
+    fVar1 = fVar2 * fVar2;
+    fVar3 = param_2[0];
+    fVar1 = fVar3 * fVar3 + fVar1;
+    fVar3 = param_2[2];
+    fVar1 = fVar3 * fVar3 + fVar1;
+    fVar1 = sqrtf(fVar1);
+    if (fVar1 != 0.0f) {
+        dVar4 = 1.0f / fVar1;
+    }
+    fVar1 = dVar4 * param_1;
+    fVar2 = param_2[2];
+    fVar3 = param_2[1];
+    param_4[2] = fVar1 * fVar2;
+    param_4[1] = fVar3 * fVar1;
+    param_4[0] = param_2[0] * fVar1;
+}
+
 CharEyes::CharEyes()
     : mEyes(this), mInterests(this), mFaceServo(this), mCamWeight(this), unk78(0, 0, 0),
       mDefaultFilterFlags(0), mViewDirection(this), mHeadLookAt(this),
@@ -79,6 +104,21 @@ BinStream &operator<<(BinStream &bs, const CharEyes::EyeDesc &desc) {
 
 inline BinStream &operator<<(BinStream &bs, const CharEyes::CharInterestState &state) {
     bs << state.mInterest;
+    return bs;
+}
+
+BinStream &operator>>(BinStreamRev &bsrev, ObjVector<CharEyes::CharInterestState> &vec) {
+    BinStream &bs = bsrev.stream;
+    int count;
+    bs.ReadEndian(&count, 4);
+    vec.resize(count);
+
+    CharEyes::CharInterestState *state = vec.begin();
+    while (state != vec.end()) {
+        state->mInterest.Load(bs, true, 0);
+        state++;
+    }
+
     return bs;
 }
 
@@ -173,6 +213,18 @@ bool CharEyes::IsHeadIKWeightIncreasing() {
 
 void CharEyes::ClearAllInterestObjects() { mInterests.clear(); }
 
+float CharEyes::CharInterestState::RefractoryTimeRemaining() {
+    if (!mInterest || unk14 < 0.0)
+        return 0.0f;
+    else {
+        float secs = TheTaskMgr.Seconds(TaskMgr::kRealTime) - unk14;
+        if (secs < mInterest->RefractoryPeriod())
+            return mInterest->RefractoryPeriod() - secs;
+        else
+            return 0.0f;
+    }
+}
+
 void CharEyes::ProceduralBlinkUpdate() {
     static DataNode &disableCheat = DataVariable("cheat.disable_procedural_blinks");
 
@@ -195,19 +247,38 @@ void CharEyes::ProceduralBlinkUpdate() {
         return;
 
     float elapsed = TheTaskMgr.Seconds(TaskMgr::kRealTime) - unk190;
+    CharFaceServo *servo = mFaceServo;
     if (elapsed < 0.115f) {
         // Closing phase
         float t = Clamp(0.0f, 1.0f, elapsed * 8.695652f);
-        mFaceServo->SetProceduralBlinkWeight(EaseInExp(t));
+        servo->SetProceduralBlinkWeight(EaseInExp(t));
     } else if (elapsed < 0.3f) {
         // Opening phase
         float t = Clamp(0.0f, 1.0f, 1.0f - (elapsed - 0.115f) * 5.405405f);
-        mFaceServo->SetProceduralBlinkWeight(EaseSigmoid(t, 0.0f, 0.0f));
+        servo->SetProceduralBlinkWeight(EaseSigmoid(t, 0.0f, 0.0f));
         unk78 = unk1a0;
     } else {
         // Blink complete
-        mFaceServo->SetProceduralBlinkWeight(0.0f);
+        servo->SetProceduralBlinkWeight(0.0f);
         unk18c = false;
         unk78 = unk1a0;
+    }
+}
+
+namespace stlpmtx_std {
+    template<>
+    _List_iterator<RndPollable*, _Nonconst_traits<RndPollable*>>
+    list<RndPollable*, StlNodeAlloc<RndPollable*>>::insert(
+        _List_iterator<RndPollable*, _Nonconst_traits<RndPollable*>> __position,
+        RndPollable* const& __x)
+    {
+        _Node_base* __tmp = _M_create_node(__x);
+        _Node_base* __n = __position._M_node;
+        _Node_base* __p = __n->_M_prev;
+        __tmp->_M_next = __n;
+        __tmp->_M_prev = __p;
+        __p->_M_next = __tmp;
+        __n->_M_prev = __tmp;
+        return __tmp;
     }
 }

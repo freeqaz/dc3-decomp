@@ -358,14 +358,14 @@ void CacheMgrXbox::PollDelete() {
         DWORD res = XGetOverlappedResult(&mOverlapped, &dw, false);
         if (res != 0) {
             if (res != 0x15 && res != 0x456 && res != 0x48F && res != 0x651
-                && XContentGetDeviceState(mCacheIDXbox->DeviceID(), nullptr) == 0) {
+                && XContentGetDeviceState(mCacheIDXbox->DeviceID(), nullptr) != 0) {
+                SetLastResult(kCache_ErrorStorageDeviceMissing);
+            } else {
                 MILO_NOTIFY(
                     "CacheMgrXbox::PollDelete(): Unhandled error %u returned from XContentDelete().\n",
                     res
                 );
                 SetLastResult(kCache_ErrorUnknown);
-            } else {
-                SetLastResult(kCache_ErrorStorageDeviceMissing);
             }
         } else {
             SetLastResult(kCache_NoError);
@@ -416,8 +416,9 @@ void CacheMgrXbox::PollSearch() {
 
 void CacheMgrXbox::PollMount() {
     if (mOverlapped.InternalLow != 0x3E5) {
+        DWORD res;
         DWORD err;
-        DWORD res = XGetOverlappedResult(&mOverlapped, &err, false);
+        res = XGetOverlappedResult(&mOverlapped, &err, false);
         if (res == 0) {
             MILO_ASSERT(mppCache != NULL, 0x293);
             MILO_ASSERT(*mppCache == NULL, 0x294);
@@ -436,22 +437,26 @@ void CacheMgrXbox::PollMount() {
                 );
                 extErr = 0x48F;
             }
-            if (extErr != 0x15) {
-                if (extErr == 0xB7) {
-                    SetLastResult(kCache_ErrorCorrupt);
-                } else {
-                    if (extErr != 0x456) {
-                        MILO_NOTIFY(
-                            "CacheMgrXbox::PollMount(): Unhandled error %u %u %u returned from XContentCreateEx().\n",
-                            res,
-                            err,
-                            extErr
-                        );
-                        SetLastResult(kCache_ErrorUnknown);
-                    }
-                }
-            } else {
+            switch (extErr) {
+            case 0xB7:
+            case 0x570:
+                SetLastResult(kCache_ErrorCorrupt);
+                break;
+            case 0x15:
+            case 0x456:
+            case 0x48F:
+            case 0x651:
                 SetLastResult(kCache_ErrorStorageDeviceMissing);
+                break;
+            default:
+                MILO_NOTIFY(
+                    "CacheMgrXbox::PollMount(): Unhandled error %u %u %u returned from XContentCreateEx().\n",
+                    res,
+                    err,
+                    extErr
+                );
+                SetLastResult(kCache_ErrorUnknown);
+                break;
             }
         } else {
             MILO_NOTIFY(

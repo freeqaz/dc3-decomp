@@ -67,8 +67,7 @@ BEGIN_LOADS(RndCamAnim)
         Hmx::Object::Load(bs);
     }
     RndAnimatable::Load(bs);
-    bs >> mCam;
-    d >> mFovKeys >> mKeysOwner;
+    bs >> mCam >> mFovKeys >> mKeysOwner;
     if (d.rev < 2) {
         FOREACH (it, mFovKeys) {
             it->value = ConvertFov(it->value, 0.75);

@@ -57,9 +57,11 @@ void HiResScreen::BmpCache::FlushCache() {
         File *cacheFile = NewFile(mFileNames[mCurrLoadedIndex].c_str(), 1);
         MILO_ASSERT(cacheFile, 0xA2);
         cacheFile->Seek(mDirtyStart, 0);
-        unsigned int nBuffRange = mDirtyEnd - mDirtyStart;
-        MILO_ASSERT(nBuffRange < mByteSize, 0xAA);
-        unsigned int numWritten = cacheFile->Write(mBuffer + mDirtyStart, nBuffRange);
+        unsigned int nStart = mDirtyStart;
+        unsigned int nEnd = mDirtyEnd;
+        unsigned int nBuffRange = nEnd - nStart;
+        MILO_ASSERT(nBuffRange <= mByteSize, 0xAA);
+        unsigned int numWritten = cacheFile->Write(mBuffer + nStart, nBuffRange);
         MILO_ASSERT(numWritten == nBuffRange, 0xAE);
         cacheFile->Flush();
         delete cacheFile;
@@ -89,8 +91,8 @@ void HiResScreen::BmpCache::LoadCache(unsigned int y) {
         unsigned int numRead = cacheFile->Read(mBuffer, mByteSize);
         MILO_ASSERT(numRead == mByteSize, 0x8A);
         mDirtyStart = 0;
+        mDirtyEnd = 0;
     }
-    mDirtyEnd = mDirtyStart;
     if (cacheFile != 0) {
         delete cacheFile;
     }
@@ -106,10 +108,11 @@ void HiResScreen::BmpCache::GetPixelColor(
     MILO_ASSERT(y >= nLoadedStart && y <= nLoadedEnd, 0xC1);
     unsigned int yOffset = nLoadedEnd - y;
     unsigned int offset = (yOffset * mPixelsPerRow + x) * 4;
-    a = mBuffer[offset + 3];
-    r = mBuffer[offset + 2];
-    g = mBuffer[offset + 1];
-    b = mBuffer[offset];
+    unsigned char *ptr = mBuffer + offset;
+    a = ptr[3];
+    r = ptr[2];
+    g = ptr[1];
+    b = ptr[0];
 }
 
 void HiResScreen::BmpCache::SetPixelColor(

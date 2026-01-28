@@ -186,7 +186,7 @@ void RndCubeTex::UpdateFace(CubeFace face) {
 void RndCubeTex::PostLoad(BinStream &bs) {
     BinStreamRev d(bs, bs.PopRev(this));
     if (d.rev < 2) {
-        bool b;
+        bool b = false;
         d >> b;
     }
     for (int i = 0; i < kNumCubeFaces; i++) {

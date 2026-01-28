@@ -206,16 +206,16 @@ void MoveMgr::PickRandomMoveSet(Symbol s1, int count, DataArray *a3, DataArray *
     MILO_ASSERT(count > 1, 0x4BB);
     a3->Resize(1);
     a4->Resize(count - 1);
-    std::vector<const MoveVariant *> wrongMoves;
     std::vector<const MoveVariant *> rightMoves;
+    std::vector<const MoveVariant *> wrongMoves;
     std::set<const MoveVariant *> moveSet;
     FOREACH (it, MoveParents()) {
         const MoveVariant *randomVar = it->second->PickRandomVariant();
         if (randomVar->IsValidForMinigame()) {
             if (it->second->HasCategory(s1)) {
-                wrongMoves.push_back(randomVar);
-            } else {
                 rightMoves.push_back(randomVar);
+            } else {
+                wrongMoves.push_back(randomVar);
             }
         }
     }

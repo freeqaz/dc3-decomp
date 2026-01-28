@@ -115,7 +115,102 @@ BEGIN_SAVES(UILabel)
     }
 END_SAVES
 
-void UILabel::PreLoad(BinStream &) {}
+void UILabel::PreLoad(BinStream &bs) {
+    LOAD_REVS(bs)
+    ASSERT_REVS(0x18, 0)
+    UIComponent::PreLoad(bs);
+    if (d.rev != 0 && d.rev < 0xE) {
+        bool b;
+        d >> b;
+    }
+    d >> mTextToken;
+    if (d.rev > 0xD) {
+        String s;
+        d >> s;
+    }
+    if (d.rev > 0xE)
+        d >> unk118;
+    if (d.rev > 1) {
+        int alignment, capsMode;
+        d >> unk120 >> alignment >> capsMode;
+        MILO_ASSERT(alignment < 255, 0xFF);
+        MILO_ASSERT(capsMode < 255, 0x100);
+        if (d.rev > 7) {
+            LOAD_BITFIELD(bool, mMarkup)
+        }
+    }
+    if (d.rev > 4) {
+        // Icon loading was here in some versions
+    }
+    if ((6 < d.rev) && (d.rev < 0x1b)) {
+        int unkStyle;
+        d >> unkStyle;
+    }
+    if ((8 < d.rev) && (d.rev < 0x10)) {
+        // Shadow style section
+        int shadowVal;
+        d >> shadowVal;
+    }
+    if ((9 < d.rev) && (d.rev < 0x1a)) {
+        String shadowStr;
+        d >> shadowStr;
+    }
+    if (10 < d.rev) {
+        int unk;
+        d >> unk;
+    }
+    if (0xc < d.rev) {
+        int unk;
+        d >> unk;
+    }
+    if ((0x10 < d.rev) && (d.rev < 0x1d)) {
+        int glossVal;
+        d >> glossVal;
+    }
+    if (0x11 < d.rev) {
+        int unk;
+        d >> unk;
+        String s;
+        d >> s;
+    }
+    if (d.rev < 0x13) {
+        int unk;
+        d >> unk;
+    } else {
+        int unk;
+        d >> unk;
+    }
+    if (0x13 < d.rev) {
+        int unk;
+        d >> unk;
+        if (d.rev < 0x19) {
+            int unk2;
+            d >> unk2;
+        }
+    }
+    if (0x14 < d.rev) {
+        String s;
+        d >> s;
+    }
+    if (0x15 < d.rev) {
+        int elemCount = (*(int *)(((unsigned char *)this) - 0x10) - *(int *)(((unsigned char *)this) - 0x14)) / 0x2c;
+        if (elemCount == 2) {
+            String s;
+            d >> s;
+        } else {
+            String s;
+            d >> s;
+        }
+    }
+    if (0x16 < d.rev) {
+        String s;
+        d >> s;
+    }
+    if (0x17 < d.rev) {
+        int unk1, unk2;
+        d >> unk1 >> unk2;
+    }
+}
 
 void UILabel::PostLoad(BinStream &bs) {
     UIComponent::PostLoad(bs);
@@ -236,14 +331,17 @@ void UILabel::CenterWithLabel(UILabel *, bool, float) {}
 void UILabel::OldResourcePreload(BinStream &) {}
 
 void UILabel::SetDisplayText(const char *cc, bool b) {
-    if (b)
-        mTextToken = gNullStr;
+    if (b) {
+        Symbol temp(gNullStr);
+        mTextToken = temp;
+    }
     RndText::SetText(cc);
     if (strchr(cc, 60)) {
         mMarkup = true;
     }
-    if (!sDeferUpdate)
+    if (!sDeferUpdate) {
         LabelUpdate(false);
+    }
 }
 
 void UILabel::Init() {

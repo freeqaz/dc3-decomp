@@ -46,7 +46,7 @@ CacheXbox::CacheXbox(const CacheIDXbox &c)
     : mCacheID(c), mData(0), mSize(0), mCacheDirList(0), mCallbackObj(0) {}
 
 bool CacheXbox::IsConnectedSync() {
-    return XContentGetDeviceState(0, nullptr) == ERROR_SUCCESS;
+    return XContentGetDeviceState(mCacheID.DeviceID(), 0) == ERROR_SUCCESS;
 }
 
 int CacheXbox::ThreadStart() {

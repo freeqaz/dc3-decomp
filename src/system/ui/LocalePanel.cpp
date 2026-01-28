@@ -44,7 +44,10 @@ void LocalePanel::AddHeading(const char *cc) {
 void LocalePanel::Enter() {
     mEntries.clear();
     UIScreen *screen = Screen();
-    FOREACH (it, screen->PanelList()) {
+    std::list<PanelRef> &panelList = screen->PanelList();
+    for (std::list<PanelRef>::iterator it = panelList.begin();
+         it != panelList.end();
+         ++it) {
         AddDirEntries((ObjectDir *)it->mPanel->LoadedDir(), it->mPanel->Name());
     }
     UIPanel::Enter();

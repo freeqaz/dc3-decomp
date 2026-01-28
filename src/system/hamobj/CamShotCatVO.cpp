@@ -114,8 +114,11 @@ void CamShotVOData(
                 if (s == WIN_HYPE_SOLO) {
                     s1 = win_hype_solo;
                     charSym = active;
+                } else if (s == WIN_HYPE_DIFF_CREW) {
+                    s1 = win_hype_diff_crew;
+                    charSym = all;
                 } else {
-                    s1 = s == WIN_HYPE_DIFF_CREW ? win_hype_diff_crew : win_hype_crew;
+                    s1 = win_hype_crew;
                     charSym = all;
                 }
             } else if (subStrings.size() > 2) {

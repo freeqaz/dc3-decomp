@@ -257,9 +257,9 @@ void CharLipSync::PlayBack::Poll(float time) {
     if (!mLipSync)
         return;
 
+    float zero = 0.0f;
     static Message viseme_list("viseme_list");
     DataNode result = mLipSync->Handle(viseme_list, false);
-    float zero = 0.0f;
 
     if (result.Type() == kDataArray) {
         int numVisemes = mLipSync->mVisemes.size();
@@ -318,9 +318,9 @@ void CharLipSync::PlayBack::Poll(float time) {
             mFrame++;
         } while (mFrame < frameIdx);
     } else if (mFrame >= 0 && mFrame == frameIdx) {
+        int idx = mOldIndex + 1;
         int count = lipSync->mData[mOldIndex];
         if (count != 0) {
-            int idx = mOldIndex + 1;
             for (int i = count; i != 0; i--) {
                 int wIdx = lipSync->mData[idx];
                 idx += 2;

@@ -71,7 +71,7 @@ void ChunkStream::ReadChunkAsync() {
     int bufIdx = 1;
     int idx;
     for (; bufIdx < 4; bufIdx++) {
-        idx = (mCurBufferIdx + bufIdx) % 2;
+        idx = (mCurBufferIdx + bufIdx) % 3;
         if (mBuffersState[idx] == kInvalid)
             break;
     }
@@ -80,8 +80,7 @@ void ChunkStream::ReadChunkAsync() {
         if (thechunk != mChunkEnd) {
             int thechunkval = *thechunk;
             int sizemask = thechunkval & kChunkSizeMask;
-            bool maskexists = (thechunkval >> 24) & 1;
-            if (mChunkInfo.mID != 0xCABEDEAF && !maskexists) {
+            if (mChunkInfo.mID != 0xCABEDEAF && !(thechunkval & 0x01000000)) {
                 mFile->ReadAsync(mBuffers[idx] + mBufSize - sizemask, sizemask);
             } else
                 mFile->ReadAsync(mBuffers[idx], sizemask);

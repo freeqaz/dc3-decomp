@@ -105,7 +105,31 @@ UIColor *UILabelDir::GetStateColor(UIComponent::State state) const {
     return c ? c : mDefaultColor;
 }
 
-DataNode UILabelDir::GetMatVariations(UILabelDir *) { return NULL_OBJ; }
+DataNode UILabelDir::GetMatVariations(UILabelDir *pThis) {
+    s32 numVariations = 0;
+    s32 index = 0;
+    DataArray *pArray;
+
+    if (pThis != NULL) {
+        numVariations = pThis->NumMatVariations();
+    }
+
+    pArray = new DataArray(numVariations + 1);
+
+    DataNode node(pArray, kDataArray);
+    node = gNullStr;
+
+    for (index = 1; index <= numVariations; index++) {
+        Symbol sym = pThis->GetMatVariationName(index - 1);
+        DataNode node2(pArray, kDataArray);
+        node2 = sym;
+    }
+
+    DataNode result(pArray, kDataArray);
+    pArray->Release();
+
+    return result;
+}
 
 void UILabelDir::Init() {}
 

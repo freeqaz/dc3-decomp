@@ -38,6 +38,7 @@ BEGIN_LOADS(FlowWhile)
     LOAD_REVS(bs)
     ASSERT_REVS(0, 0)
     LOAD_SUPERCLASS(FlowSwitch)
+    mEntryCount = 0;
 END_LOADS
 
 bool FlowWhile::Activate() {

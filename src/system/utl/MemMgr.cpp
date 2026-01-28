@@ -134,10 +134,10 @@ void *MemTruncate(void *mem, int size, const char *file, int line, const char *n
         MemFree(mem);
         return nullptr;
     } else {
-        int i;
-        int allocSize = (size + 3) / 4;
         int i60;
+        int allocSize = (size + 3) >> 2;
         void *truncated = nullptr;
+        int i;
         for (i = 0; i < gNumHeaps; i++) {
             if (gHeaps[i].Truncate((int *)mem, allocSize, i60))
                 break;
@@ -146,7 +146,7 @@ void *MemTruncate(void *mem, int size, const char *file, int line, const char *n
             truncated = realloc(mem, size);
             i60 = allocSize;
         }
-        MemTrackRealloc(mem, size, i60 * 4, truncated);
+        MemTrackRealloc(mem, size, i60 << 2, truncated);
         return truncated;
     }
 }

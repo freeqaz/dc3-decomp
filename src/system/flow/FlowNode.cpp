@@ -151,8 +151,12 @@ void FlowNode::ChildFinished(FlowNode *node) {
 void FlowNode::RequestStop() {
     FLOW_LOG("RequestStop\n");
     unk58 = true;
-    FOREACH (it, mRunningNodes) {
+    auto it = mRunningNodes.begin();
+    while (it != mRunningNodes.end()) {
+        auto next_it = it;
+        next_it++;
         (*it)->RequestStop();
+        it = next_it;
     }
 }
 
@@ -165,8 +169,9 @@ void FlowNode::RequestStopCancel() {
 }
 
 Flow *FlowNode::GetOwnerFlow() {
-    if (Dir()) {
-        return static_cast<Flow *>(Dir());
+    ObjectDir* dir = Dir();
+    if (dir) {
+        return static_cast<Flow *>(dir);
     } else
         return nullptr;
 }

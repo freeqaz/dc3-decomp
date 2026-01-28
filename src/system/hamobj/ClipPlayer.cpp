@@ -188,19 +188,18 @@ void ClipPlayer::GetRoutineCrossoverClips(
 
 void ClipPlayer::PlayNormal(float f1, HamDriver::LayerArray *arr, const char *cc) {
     HamDriver::LayerArray *newArr;
-    if (newArr) {
+    if (arr != NULL) {
         newArr = new HamDriver::LayerArray();
         arr->unk2c.push_back(newArr);
-        strncpy(arr->unkc, cc, 0x1F);
+        strncpy(newArr->unkc, cc, 0x1F);
     } else {
         newArr = &unk1c->Layers();
     }
     newArr->unk4 = f1 - unk50;
     if (!mClipKeys) {
         if (TheLoadMgr.EditMode()) {
-            MILO_NOTIFY_ONCE(
-                "No 'clips' keyframes in your song.anim.  Please don't save this song!"
-            );
+            const char *msg = "No 'clips' keyframes in your song.anim.  Please don't save this song!";
+            MILO_NOTIFY_ONCE(msg);
         }
     } else {
         static Symbol merge_moves("merge_moves");

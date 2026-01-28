@@ -83,7 +83,9 @@ void DefaultPhysicsManager::Poll() {
     for (auto it = mActiveCollidables.begin(); it != mActiveCollidables.end();) {
         RndMesh *d = *it;
         if (!IsShowing(d)) {
-            mActiveCollidables.erase(it);
+            auto prev_it = it;
+            ++it;
+            mActiveCollidables.erase(prev_it);
             MILO_ASSERT(std::find( mInactiveCollidables.begin(), mInactiveCollidables.end(), d) == mInactiveCollidables.end(), 0x41);
             mInactiveCollidables.push_back(d);
         } else {
@@ -93,9 +95,11 @@ void DefaultPhysicsManager::Poll() {
     for (auto it = mInactiveCollidables.begin(); it != mInactiveCollidables.end();) {
         RndMesh *d = *it;
         if (IsShowing(d)) {
-            mActiveCollidables.erase(it);
+            auto prev_it = it;
+            ++it;
+            mInactiveCollidables.erase(prev_it);
             MILO_ASSERT(std::find( mActiveCollidables.begin(), mActiveCollidables.end(), d) == mActiveCollidables.end(), 0x55);
-            mInactiveCollidables.push_back(d);
+            mActiveCollidables.push_back(d);
         } else {
             ++it;
         }

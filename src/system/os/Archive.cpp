@@ -250,8 +250,8 @@ void Archive::Read(int heap_headroom) {
 void Archive::Merge(Archive &shadow) {
     std::vector<FileEntry> extraFileEntries;
     MILO_ASSERT(shadow.mNumArkfiles == 1, 0x3C0);
-    unsigned int totalSize = 0;
-    for (int i = 0; i < mArkfileSizes.size(); i++) {
+    unsigned long long totalSize = 0;
+    for (size_t i = 0; i < mArkfileSizes.size(); i++) {
         totalSize += mArkfileSizes[i];
     }
     FOREACH (it, shadow.mFileEntries) {
@@ -268,11 +268,11 @@ void Archive::Merge(Archive &shadow) {
             fileIt->mUCSize = it->mUCSize;
         } else {
             FileEntry toAdd;
-            toAdd.mUCSize = it->mUCSize;
-            toAdd.mSize = it->mSize;
             toAdd.mOffset = it->mOffset + totalSize;
             toAdd.mHashedName = entry.HashedName();
             toAdd.mHashedPath = entry.HashedPath();
+            toAdd.mSize = it->mSize;
+            toAdd.mUCSize = it->mUCSize;
             extraFileEntries.push_back(toAdd);
         }
     }

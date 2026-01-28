@@ -113,7 +113,7 @@ void DateTime::Format(class String &str) const {
         if (SearchReplace(
                 str.c_str(),
                 "%e",
-                LocalizeOrdinal(mDay, LocaleGenderMasculine, LocaleSingular, false),
+                LocalizeOrdinal(mDay, LocaleGenderMasculine, LocaleSingular, false, Symbol(), TheLocale),
                 buf
             )) {
             str = buf;

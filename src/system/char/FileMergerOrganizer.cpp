@@ -149,9 +149,8 @@ void FileMergerOrganizer::RemoveFileMerger(FileMergerOrganizer::OrganizedFileMer
     if (ofm->merger->mCurLoader) {
         Dispatch(ofm);
     }
-    FileMerger *merger = ofm->merger;
-    if (!merger->mCurLoader) {
-        merger->mOrganizer = merger;
+    if (!ofm->merger->mCurLoader) {
+        ofm->merger->mOrganizer = ofm->merger;
         FOREACH (it, mOrganizedFileMergers) {
             if (&*it == ofm) {
                 mOrganizedFileMergers.erase(it);

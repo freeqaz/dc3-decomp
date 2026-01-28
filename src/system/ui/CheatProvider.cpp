@@ -35,8 +35,8 @@ CheatProvider::CheatProvider() : mFilterIdx(0) {
                 theKeyStr = arr2->Str(0);
             } else {
                 const char *cheatStrStart = cheatTypeSym == "keyboard" ? "KB_" : "kPad_";
-                theKeyStr = DataGetMacroByInt(arr2->Int(0), cheatStrStart).Str()
-                    + strlen(cheatStrStart);
+                Symbol tmpSymbol = DataGetMacroByInt(arr2->Int(0), cheatStrStart);
+                theKeyStr = tmpSymbol.Str() + strlen(cheatStrStart);
             }
             String theConcattedStr;
             int theNodeIdx = 1;

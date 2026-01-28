@@ -19,7 +19,7 @@ BEGIN_SAVES(FlowMultiSetProperty)
     SAVE_REVS(0, 0)
     SAVE_SUPERCLASS(FlowNode)
     bs << unk5c;
-    bs << unk70 << unk78;
+    bs << unk78 << unk80;
 END_SAVES
 
 BEGIN_COPYS(FlowMultiSetProperty)
@@ -27,8 +27,8 @@ BEGIN_COPYS(FlowMultiSetProperty)
     CREATE_COPY_AS(FlowMultiSetProperty, c)
     BEGIN_COPYING_MEMBERS_FROM(c)
         COPY_MEMBER(unk5c)
-        COPY_MEMBER(unk70)
         COPY_MEMBER(unk78)
+        COPY_MEMBER(unk80)
     END_COPYING_MEMBERS
 END_COPYS
 
@@ -37,7 +37,7 @@ BEGIN_LOADS(FlowMultiSetProperty)
     ASSERT_REVS(0, 0)
     LOAD_SUPERCLASS(FlowNode)
     bs >> unk5c;
-    bs >> unk70 >> unk78;
+    bs >> unk78 >> unk80;
 END_LOADS
 
 bool FlowMultiSetProperty::Activate() {
@@ -46,11 +46,15 @@ bool FlowMultiSetProperty::Activate() {
     if (!unk5c.empty()) {
         DrivenPropertyEntry *node = GetDrivenEntry("value");
         if (node) {
+            unk80 = unk5c.front()->Property(unk78.Array(), true)->Evaluate();
         }
     }
     FlowNode::PushDrivenProperties();
-    if (!unk5c.empty()) {
-        unk5c = nullptr;
+    for (ObjPtrVec<Hmx::Object>::iterator it = unk5c.begin(); it != unk5c.end(); ++it) {
+        Hmx::Object *obj = *it;
+        if (obj != NULL) {
+            obj->SetProperty(unk78.Array(), unk80);
+        }
     }
     return false;
 }

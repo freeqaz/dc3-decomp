@@ -720,8 +720,7 @@ DataNode RndPropAnim::OnGetNumKeys(const DataArray *da) {
 DataNode RndPropAnim::ForEachTarget(const DataArray *da) {
     ObjPtrList<Hmx::Object> objList(this);
     const char *arrstr = da->Str(2);
-    for (std::list<PropKeys *>::iterator it = mPropKeys.begin(); it != mPropKeys.end();
-         ++it) {
+    FOREACH (it, mPropKeys) {
         PropKeys *cur = *it;
         if (arrstr == gNullStr || cur->Target()->ClassName() == arrstr) {
             objList.push_back(cur->Target());
@@ -729,11 +728,10 @@ DataNode RndPropAnim::ForEachTarget(const DataArray *da) {
     }
     DataNode *var = da->Var(3);
     DataNode node(*var);
-    for (std::list<PropKeys *>::iterator it = mPropKeys.begin(); it != mPropKeys.end();
-         ++it) {
-        *var = (*it)->Target();
+    FOREACH (it, objList) {
+        *var = *it;
         for (int i = 4; i < da->Size(); i++) {
-            da->Command(i)->Execute(true);
+            da->Command(i)->Execute();
         }
     }
     *var = node;

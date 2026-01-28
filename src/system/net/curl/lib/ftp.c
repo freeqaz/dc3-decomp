@@ -1379,10 +1379,10 @@ static CURLcode ftp_state_post_cwd(struct connectdata *conn)
 static CURLcode ftp_state_ul_setup(struct connectdata *conn,
                                    bool sizechecked)
 {
-  CURLcode result = CURLE_OK;
-  struct FTP *ftp = conn->data->state.proto.ftp;
   struct SessionHandle *data = conn->data;
   struct ftp_conn *ftpc = &conn->proto.ftpc;
+  CURLcode result = CURLE_OK;
+  struct FTP *ftp = data->state.proto.ftp;
   int seekerr = CURL_SEEKFUNC_OK;
 
   if((data->state.resume_from && !sizechecked) ||
@@ -1446,8 +1446,7 @@ static CURLcode ftp_state_ul_setup(struct connectdata *conn,
     /* now, decrease the size of the read */
     if(data->set.infilesize>0) {
       data->set.infilesize -= data->state.resume_from;
-
-      if(data->set.infilesize <= 0) {
+      if(data->set.infilesize < 1) {
         infof(data, "File already completely uploaded\n");
 
         /* no data to transfer */
@@ -3011,7 +3010,7 @@ static CURLcode ftp_connect(struct connectdata *conn,
      * FTP pointer
      */
     ftp_save = data->state.proto.ftp;
-    memset(&http_proxy, 0, sizeof(http_proxy));
+    memset(&http_proxy, 0, 0x60);
     data->state.proto.http = &http_proxy;
 
     result = Curl_proxyCONNECT(conn, FIRSTSOCKET,

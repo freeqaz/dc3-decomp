@@ -146,11 +146,7 @@ bool CharInterest::IsMatchingFilterFlags(int mask) {
 float CharInterest::ComputeScore(
     const Vector3 &v1, const Vector3 &v2, const Vector3 &v3, float f, int filterFlags, bool b
 ) {
-    bool b2 = false;
-    if (IsMatchingFilterFlags(filterFlags) || (b && mCategoryFlags == 0)) {
-        b2 = true;
-    }
-    if (!b2)
+    if (!(IsMatchingFilterFlags(filterFlags) || (b && mCategoryFlags == 0)))
         return -1.0f;
 
     Vector3 v7c(WorldXfm().v);

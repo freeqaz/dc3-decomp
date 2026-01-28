@@ -220,15 +220,9 @@ MCResult MCContainerXbox::Unmount() {
 
 MCResult MCContainerXbox::GetPathFreeSpace(const char *cc, u64 *u) {
     MILO_ASSERT(IsMounted(), 0x1B4);
-    ULARGE_INTEGER u1;
-    ULARGE_INTEGER u2;
-    ULARGE_INTEGER u3;
-    u1.u.HighPart = 0;
-    u2.u.HighPart = 0;
-    u3.u.HighPart = 0;
-    u1.u.LowPart = 0;
-    u2.u.LowPart = 0;
-    u3.u.LowPart = 0;
+    ULARGE_INTEGER u1 = {0};
+    ULARGE_INTEGER u2 = {0};
+    ULARGE_INTEGER u3 = {0};
     String str = BuildPath(cc);
     bool success = GetDiskFreeSpaceExA(str.c_str(), &u1, &u2, &u3);
     if (success == 0U) {

@@ -102,6 +102,42 @@ inline int KeylessHash<void *, AllocInfo *>::HashValue(AllocInfo *&entry, int si
     return Hash(entry->mMem, size);
 }
 
+template <>
+inline AllocInfo **KeylessHash<void *, AllocInfo *>::Insert(AllocInfo *const &val) {
+    MILO_ASSERT(val != mEmpty && val != mRemoved, 0x98);
+    if (!mEntries) {
+        MILO_ASSERT(mOwnEntries, 0x9C);
+        Resize(0x19, 0);
+    }
+    void *valMem = val->mMem;
+    int i = Hash(valMem, mSize);
+    MILO_ASSERT(i >= 0, 0xA2);
+    while (mEntries[i] != mEmpty && mEntries[i] != mRemoved
+           && mEntries[i]->mMem != valMem) {
+        Advance(i);
+    }
+    if (mEntries[i] == mEmpty) {
+        mNumEntries++;
+        if (mNumEntries > mSize / 2) {
+            if (mOwnEntries) {
+                MILO_ASSERT(mSize, 0xB3);
+                Resize(mSize * 2, 0);
+                if (!TheLoadMgr.EditMode()) {
+                    MILO_NOTIFY("Resizing hash table (%d)", mSize);
+                }
+                return Insert(val);
+            } else {
+                MILO_NOTIFY_ONCE("Hash table half full (%d)", mSize / 2);
+            }
+        }
+        if (mNumEntries >= mSize) {
+            MILO_FAIL("Hash table full (%d)", mSize);
+        }
+    }
+    mEntries[i] = val;
+    return &mEntries[i];
+}
+
 template <class T1, class T2>
 KeylessHash<T1, T2>::KeylessHash(int size, const T2 &empty, const T2 &removed, T2 *entries)
     : mEmpty(empty), mRemoved(removed) {

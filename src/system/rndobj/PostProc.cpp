@@ -45,18 +45,16 @@ unsigned int ProcCounter::SetEmulateFPS(int fps) {
         return mFPS;
     }
     fps = Clamp(1, 60, fps);
-    if (fps == mFPS) {
+    if (fps == mFPS)
         return mFPS;
-    }
     mFPS = fps;
-    int round = Round(120.0f / mFPS);
+    int round = Round(120.0f / (f32)fps);
+    mOdd = round & 1;
     mSwitch = round >> 1;
-    mOdd = round;
-    if (mCount < mSwitch) {
-        return mFPS;
-    }
+    if (mCount < mSwitch)
+        return fps;
     mCount = 0;
-    return mFPS;
+    return fps;
 }
 
 ProcessCmd ProcCounter::ProcCommands() {

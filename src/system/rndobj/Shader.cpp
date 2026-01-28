@@ -184,6 +184,7 @@ bool RndShader::DisplayMatShaderFlagsError(RndMat *mat, ShaderType s) {
 }
 
 void RndShader::SelectConfig(RndMat *mat, ShaderType shader_type, bool b3) {
+    RndShader *shader;
     MILO_ASSERT(shader_type >= ShaderType(0) && shader_type < kMaxShaderTypes, 0x1BB);
     if (TheRnd.GetDrawMode() == 2) {
         shader_type = kShadowmapShader;
@@ -192,21 +193,24 @@ void RndShader::SelectConfig(RndMat *mat, ShaderType shader_type, bool b3) {
     } else if (TheShaderMgr.Unk18()) {
         shader_type = kDepthVolumeShader;
     }
-    if (!b3) {
-        if (TheLoadMgr.EditMode() || !UsingCD()) {
-            if (!DisplayMatShaderFlagsError(mat, shader_type)) {
-                if (mat && TheShaderMgr.ShowMetaMatErrors()) {
-                    bool metaMat = !mat->GetMetaMaterial();
-                    if (metaMat) {
-                        shader_type = shader_type == kPostprocessShader
-                            ? kPostprocessErrorShader
-                            : kErrorShader;
-                    }
-                }
+    if (!b3 && (TheLoadMgr.EditMode() || !UsingCD())) {
+        if (!DisplayMatShaderFlagsError(mat, shader_type)) {
+            bool doError = true;
+            void *metaMat;
+            if (mat && TheShaderMgr.ShowMetaMatErrors()) {
+                metaMat = mat->GetMetaMaterial();
+                doError = doError && (metaMat == nullptr);
+            }
+            if (!doError) {
+                goto done;
             }
         }
+        shader_type = shader_type == kPostprocessShader
+            ? kPostprocessErrorShader
+            : kErrorShader;
     }
-    RndShader *shader = sShaders[shader_type];
+done:
+    shader = sShaders[shader_type];
     MILO_ASSERT(shader, 0x1D3);
     shader->Select(mat, shader_type, b3);
 }

@@ -218,7 +218,49 @@ void StorePanel::PopulateOffers(DataArray *arr, bool b) {
 
 void StorePanel::EnumerateOffers(bool) {}
 
-void StorePanel::FinishEnum(std::list<EnumProduct> const &, bool) {}
+void StorePanel::FinishEnum(std::list<EnumProduct> const &enumList, bool arg) {
+    unk68 = -1;
+
+    if (arg) {
+        StoreError err = UpdateOffers(enumList, arg);
+
+        if (err == 0 || err == 1) {
+            if (!unk44.empty()) {
+                err = UpdateOffers(enumList, true);
+            }
+        }
+
+        if (err > 0) {
+            if (err == 1) {
+                if (TheNetCacheMgr->IsDebug() == 0) {
+                    FormatString fmt("No offers in this metadata were");
+                    TheDebug.Notify(fmt.Str());
+                }
+            } else {
+                ExitError(err);
+                return;
+            }
+            ExitError(err);
+            return;
+        }
+
+        static bool msg_created = false;
+        if (!msg_created) {
+            msg_created = true;
+            static Symbol sym("enum_finished");
+            static Message msg(sym);
+        }
+    } else {
+        FormatString fmt("An enumeration failed!");
+        TheDebug.Notify(fmt.Str());
+
+        if (mLoadOk) {
+            mLoadOk = false;
+            void (*func)(void *, int) = (void (*)(void *, int))*(void **)this;
+            func(this, 2);
+        }
+    }
+}
 
 StoreError StorePanel::UpdateOffers(std::list<EnumProduct> const &enumList, bool arg) {
     StoreError result;

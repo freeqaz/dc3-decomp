@@ -128,3 +128,50 @@ void CharLookAt::SetMaxPitch(float pitch) {
     mMaxPitch = pitch;
     SyncLimits();
 }
+
+void CharLookAt::SyncLimits() {
+    float fMin = -80.0f;
+    float deg2rad = DEG2RAD;
+    float fMax = 80.0f;
+
+    // Clamp all four angle values
+    float fTemp12 = (fMin - mMinYaw >= 0.0f) ? fMin : mMinYaw;
+    mMinYaw = (fTemp12 - fMax >= 0.0f) ? fMax : fTemp12;
+    float fTemp13 = mMaxYaw;
+    fTemp12 = (fMin - fTemp13 >= 0.0f) ? fMin : fTemp13;
+    mMaxYaw = (fTemp12 - fMax >= 0.0f) ? fMax : fTemp12;
+    fTemp13 = mMinPitch;
+    fTemp12 = (fMin - fTemp13 >= 0.0f) ? fMin : fTemp13;
+    mMinPitch = (fTemp12 - fMax >= 0.0f) ? fMax : fTemp12;
+    fTemp13 = mMaxPitch;
+    fTemp12 = (fMin - fTemp13 >= 0.0f) ? fMin : fTemp13;
+    mMaxPitch = (fTemp12 - fMax >= 0.0f) ? fMax : fTemp12;
+
+    // Load and take absolute values
+    fTemp13 = mMaxYaw;
+    fTemp12 = mMinYaw;
+    float fTemp11 = mMaxPitch;
+    float fTemp0 = mMinPitch;
+    fTemp0 = std::fabs(fTemp0);
+    fTemp12 = std::fabs(fTemp12);
+    fTemp11 = std::fabs(fTemp11);
+    fTemp13 = std::fabs(fTemp13);
+
+    // Calculate max pitch and max yaw
+    float fDiff0_11 = fTemp0 - fTemp11;
+    float fDiff12_13 = fTemp12 - fTemp13;
+    float fMax_pitch = (fDiff0_11 >= 0.0f) ? fTemp0 : fTemp11;
+    float fMax_yaw = (fDiff12_13 >= 0.0f) ? fTemp12 : fTemp13;
+
+    // Calculate final max
+    float fDiff_yaw_pitch = fMax_yaw - fMax_pitch;
+    float fMax_overall = (fDiff_yaw_pitch >= 0.0f) ? fMax_yaw : fMax_pitch;
+
+    // Calculate and store results
+    unkb4.mMin.y = (float)std::cos((double)(fMax_overall * deg2rad));
+    unkb4.mMax.y = 1.0E+29f;
+    unkb4.mMin.z = (float)std::tan((double)(mMinYaw * deg2rad)) * unkb4.mMin.y;
+    unkb4.mMax.z = (float)std::tan((double)(mMaxYaw * deg2rad)) * unkb4.mMin.y;
+    unkb4.mMin.x = (float)std::tan((double)(mMinPitch * deg2rad)) * unkb4.mMin.y;
+    unkb4.mMax.x = (float)std::tan((double)(mMaxPitch * deg2rad)) * unkb4.mMin.y;
+}

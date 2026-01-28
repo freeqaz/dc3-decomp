@@ -133,11 +133,12 @@ bool NgSpotlightDrawer::CheckSharedResources() {
         if (sSharedResources->unk8 && sSharedResources->unk8->Width() != RTWidth()) {
             RELEASE(sSharedResources);
         }
-        if (sSharedResources)
-            return true;
     }
-    sSharedResources = new SpotlightResources();
-    return CheckRTs(sSharedResources);
+    if (!sSharedResources) {
+        sSharedResources = new SpotlightResources();
+        return CheckRTs(sSharedResources);
+    }
+    return true;
 }
 
 // Manual vector erase implementation to match target code generation

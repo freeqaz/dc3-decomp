@@ -146,7 +146,9 @@ END_LOADS
 
 void SongLayout::ClearChosenPatterns() {
     FOREACH (it, mSongPatterns) {
-        memset(&it->mMoveParents, 0, it->mMoveParents.size());
+        const MoveParent **start = &(*it->mMoveParents.begin());
+        int sz = it->mMoveParents.size() * sizeof(const MoveParent *);
+        memset(start, 0, sz);
         it->mNumMoves = 0;
     }
 }

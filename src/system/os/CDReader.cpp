@@ -76,7 +76,10 @@ bool CDReadDone() {
             return true;
         }
         gErrorCode = GetLastError();
-        if (gErrorCode == ERROR_IO_PENDING || gErrorCode == ERROR_IO_INCOMPLETE) {
+        if (gErrorCode == ERROR_IO_PENDING) {
+            return false;
+        }
+        if (gErrorCode == ERROR_IO_INCOMPLETE) {
             return false;
         }
     }

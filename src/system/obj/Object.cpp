@@ -451,7 +451,10 @@ int Hmx::Object::PropertySize(DataArray *prop) {
     } else {
         MILO_ASSERT(prop->Size() == 1, 0x208);
         Symbol name = prop->Sym(0);
-        const DataNode *a = mTypeProps->KeyValue(name, false);
+        const DataNode *a = nullptr;
+        if (mTypeProps != nullptr) {
+            a = mTypeProps->KeyValue(name, false);
+        }
         if (a == nullptr) {
             if (mTypeDef != nullptr) {
                 a = &mTypeDef->FindArray(name)->Evaluate(1);
@@ -461,7 +464,6 @@ int Hmx::Object::PropertySize(DataArray *prop) {
         MILO_ASSERT(a->Type() == kDataArray, 0x21B);
         return a->UncheckedArray()->Size();
     }
-    return 0;
 }
 
 void Hmx::Object::RemoveProperty(DataArray *prop) {

@@ -127,7 +127,7 @@ bool FlowTrigger::ActivateWithParams(Hmx::Object *o, DataArray *a) {
     }
     bool ret = FlowQueueable::Activate(o);
     Symbol sym("anon");
-    if (mTriggerEvents.size() != 0) {
+    if (mTriggerEvents.size() > 0) {
         if (mTriggerEvents.size() > 1) {
             sym = MakeString("Event:%s...", mTriggerEvents.front());
             goto flow_event;
@@ -136,13 +136,7 @@ bool FlowTrigger::ActivateWithParams(Hmx::Object *o, DataArray *a) {
             goto flow_event;
         }
     }
-    if (mTriggerProperties.empty()) {
-        goto flow_event;
-    }
-    if (mTriggerProperties.size() == 0) {
-        goto flow_event;
-    }
-    if (!mTriggerProperties.empty()) {
+    if (mTriggerProperties.size() > 0) {
         PropTriggerDefn &defn = mTriggerProperties.front();
         if (mTriggerProperties.size() > 1) {
             sym = MakeString(

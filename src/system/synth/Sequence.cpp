@@ -677,10 +677,10 @@ void SerialGroupSeqInst::Poll() {
     while (mIt != mSeqs.end()) {
         if ((*mIt) && (*mIt)->IsRunning())
             return;
-        if (mIt++ != mSeqs.end()) {
-            SeqInst *si = (*mIt);
-            if (si)
-                si->Start();
+        ++mIt;
+        if (mIt != mSeqs.end()) {
+            if (*mIt != 0)
+                (*mIt)->Start();
         }
     }
 }

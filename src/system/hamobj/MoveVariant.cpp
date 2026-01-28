@@ -256,12 +256,12 @@ void MoveVariant::Load(BinStream &bs, MoveGraph *graph, MoveParent *parent) {
     int numCandidates;
     bs >> numCandidates;
     mPrevCandidates.resize(numCandidates);
-    for (int i = 0; i < numCandidates; i++) {
+    for (unsigned int i = 0; i < (unsigned int)numCandidates; i++) {
         mPrevCandidates[i].Load(bs);
     }
     bs >> numCandidates;
     mNextCandidates.resize(numCandidates);
-    for (int i = 0; i < numCandidates; i++) {
+    for (unsigned int i = 0; i < (unsigned int)numCandidates; i++) {
         mNextCandidates[i].Load(bs);
     }
     graph->mMoveVariants[mSongName] = this;

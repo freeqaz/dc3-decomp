@@ -46,6 +46,8 @@ public:
     struct CharInterestState {
         CharInterestState(Hmx::Object *owner) : mInterest(owner), unk14(-1) {}
 
+        float RefractoryTimeRemaining();
+
         ObjOwnerPtr<CharInterest> mInterest; // 0x0
         float unk14; // 0x14
     };
@@ -92,6 +94,7 @@ protected:
     CharEyes();
     bool IsHeadIKWeightIncreasing();
     void ProceduralBlinkUpdate();
+    void EnforceMinimumTargetDistance(const Vector3 &, const Vector3 &, Vector3 &);
 
     DataNode OnAddInterest(DataArray *);
     DataNode OnToggleForceFocus(DataArray *);
@@ -175,4 +178,6 @@ protected:
     Vector3 unk1a0;
     bool unk1b0;
     bool unk1b1;
+    bool unkc5;
+    void *unkc8;
 };

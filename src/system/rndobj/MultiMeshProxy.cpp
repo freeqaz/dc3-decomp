@@ -32,8 +32,8 @@ void RndMultiMeshProxy::DrawShowing() {
 
 void RndMultiMeshProxy::UpdatedWorldXfm() {
     if (mMultiMesh) {
-        RndMultiMesh::Instance &inst = *mIndex;
-        inst.mXfm = WorldXfm();
+        Transform &tfm = mIndex->mXfm;
+        tfm = WorldXfm();
     }
 }
 

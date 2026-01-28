@@ -35,18 +35,20 @@ bool gReadingFile;
 
 void DataWriteFile(const char *file, const DataArray *da, int i) {
     TextStream *stream;
+    int idx;
     if (file != 0) {
         stream = new TextFileStream(file, false);
     }
     else {
         stream = new Debug();
     }
-    for (; i < da->Size(); i++) {
-        da->Node(i).Print(*stream, false, 0);
+    idx = i;
+    for (; idx < da->Size(); idx++) {
+        da->Node(idx).Print(*stream, false, 0);
         stream->operator<<("\n");
     }
     if (stream) {
-        stream->Space(1);
+        delete stream;
     }
 }
 

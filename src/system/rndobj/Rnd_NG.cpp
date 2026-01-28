@@ -17,6 +17,10 @@
 #include "rndobj/Stats_NG.h"
 #include "rndobj/Tex.h"
 #include "utl/MakeString.h"
+#include "rndobj/PostProc_NG.h"
+#include "rndobj/DOFProc_NG.h"
+
+extern "C" void OnlyReturns();
 
 NgStats gNgStats[3];
 NgStats *TheNgStats = &gNgStats[0];
@@ -55,7 +59,10 @@ void NgRnd::Terminate() {
     RELEASE(mOcclusionQueryMgr);
     RELEASE(unk208);
     TheShaderMgr.Terminate();
+    NgPostProc::Terminate();
+    NgDOFProc::Terminate();
     RndShadowMap::Terminate();
+    OnlyReturns();
     Rnd::Terminate();
 }
 

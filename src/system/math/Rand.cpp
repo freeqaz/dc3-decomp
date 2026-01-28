@@ -63,7 +63,7 @@ float Rand::Gaussian() {
             } while (f5 >= 1.0f);
         } while (0 == f5);
         f4 = std::log(f5);
-        f5 = std::sqrt((-2.0f * f4) / f5);
+        f5 = std::sqrt(-2.0f * f4 / f5);
         mSpareGaussianValue = f2 * f5;
         mSpareGaussianAvailable = true;
         return f3 * f5;

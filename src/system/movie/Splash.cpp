@@ -136,12 +136,17 @@ void Splash::EndSplasher() {
 }
 
 void Splash::Poll() {
-    if (!unk64 || unk60 && !gSplashing) {
-        if (!UpdateThreadLoop()) {
-            gSplashing = true;
-            for (int i = 0; i < 2; i++) {
-                TheRnd.BeginDrawing();
-                TheRnd.EndDrawing();
+    static bool finished;
+    if (!unk64 || unk60) {
+        if (!finished) {
+            if (!UpdateThreadLoop()) {
+                finished = true;
+                int i = 0;
+                do {
+                    TheRnd.BeginDrawing();
+                    TheRnd.EndDrawing();
+                    i++;
+                } while (i != 2);
             }
         }
     }

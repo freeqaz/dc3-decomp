@@ -334,32 +334,35 @@ void PoseFatalities::Enter() {
 }
 
 void PoseFatalities::PollVO() {
-    if (InStrikeAPose()) {
-        bool flag1 = unk1768 & 1;
-        bool flag2 = (unk1768 >> 1) & 1;
-        if (flag1) {
-            if (flag2) {
-                PlayVO("nar_sap_both_fc");
-            } else {
-                PlayVO("nar_sap_left_fc");
-            }
-        } else if (flag2) {
-            PlayVO("nar_sap_right_fc");
-        }
-        if (unk1764 <= 0) {
-            if (unk1768 & 4) {
-                PlayVO("nar_sap_gen_pos");
-            } else if (unk176c > 8.0f) {
-                PlayVO("nar_sap_time_limit");
-                unk176c = 0;
-            }
+    if (!InStrikeAPose()) {
+        return;
+    }
+
+    uint flag_val = unk1768;
+    bool flag1 = flag_val & 1;
+    bool flag2 = (flag_val >> 1) & 1;
+    if ((flag1 || !flag2) && flag1) {
+        if (flag2) {
+            PlayVO("nar_sap_both_fc");
         } else {
-            unk1764 -= TheTaskMgr.DeltaSeconds();
+            PlayVO("nar_sap_left_fc");
         }
-        unk1768 = 0;
-        if (InFatality(-1)) {
-            unk176c += Clamp(0.0f, 1.0f, TheTaskMgr.DeltaSeconds());
+    } else if (flag1 == 0 && flag2 != 0) {
+        PlayVO("nar_sap_right_fc");
+    }
+    if (unk1764 <= 0) {
+        if (unk1768 & 4) {
+            PlayVO("nar_sap_gen_pos");
+        } else if (unk176c > 8.0f) {
+            PlayVO("nar_sap_time_limit");
+            unk176c = 0;
         }
+    } else {
+        unk1764 -= TheTaskMgr.DeltaSeconds();
+    }
+    unk1768 = 0;
+    if (InFatality(-1) != 0) {
+        unk176c += Clamp(0.0f, 1.0f, TheTaskMgr.DeltaSeconds());
     }
 }
 

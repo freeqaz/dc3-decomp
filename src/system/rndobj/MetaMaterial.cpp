@@ -134,9 +134,9 @@ void MetaMaterial::SetEditAction(MatProp propNum, MatPropEditAction action) {
             if (propNum == kMatPropTexXfm) {
                 Transform xfm;
                 xfm.Reset();
-                action = (MatPropEditAction)(mTexXfm == xfm);
+                action = (MatPropEditAction)(mTexXfm == xfm ? 0 : 1);
             } else {
-                action = (MatPropEditAction)var.Equal(*node, nullptr, true);
+                action = (MatPropEditAction)(var.Equal(*node, nullptr, true) ? 0 : 1);
             }
         }
     }

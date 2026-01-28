@@ -24,6 +24,7 @@ public:
     bool IsMatchingFilterFlags(int);
     float
     ComputeScore(const Vector3 &, const Vector3 &, const Vector3 &, float, int, bool);
+    float RefractoryPeriod() const { return mRefractoryPeriod; }
 
 protected:
     CharInterest();

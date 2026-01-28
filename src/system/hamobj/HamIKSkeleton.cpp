@@ -64,9 +64,11 @@ void HamIKSkeleton::NeutralLocalPos(RndTransformable *t, Vector3 &v) {
 }
 
 void HamIKSkeleton::NeutralWorldXfm(RndTransformable *t, Transform &xfm) {
-    if (mNeutralSkelDir && mNeutralSkelDir != mChar) {
-        RndTransformable *charTrans = mChar->Find<RndTransformable>(t->Name(), false);
-        if (charTrans) {
+    ObjectDir *skelDir = mNeutralSkelDir;
+    ObjectDir *charDir = mChar;
+    if (skelDir != NULL && skelDir != charDir) {
+        RndTransformable *charTrans = charDir->Find<RndTransformable>(t->Name(), false);
+        if (charTrans != NULL) {
             SetBone(t, charTrans);
             t = charTrans;
         }

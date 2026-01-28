@@ -475,13 +475,14 @@ void HamCharacter::ResetFaceOverrideBlending() {
 
 void HamCharacter::SetCampaignVo(const char *cc) {
     mCampaignVO = cc;
-    RELEASE(mCampaignVOBank);
+    Hmx::Object *&bank = mCampaignVOBank;
+    RELEASE(bank);
     if (!mCampaignVO.empty()) {
         String milo = GetCampaignVoMilo();
-        mCampaignVODir = DirLoader::LoadObjects(milo.c_str(), nullptr, nullptr);
+        mCampaignVODir = DirLoader::LoadObjects(milo.c_str(), 0, 0);
         for (ObjDirItr<Hmx::Object> it(mCampaignVODir, false); it != nullptr; ++it) {
             if (it->Type() == "character_vo") {
-                mCampaignVOBank = it;
+                bank = it;
                 return;
             }
         }

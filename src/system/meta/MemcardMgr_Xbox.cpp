@@ -251,14 +251,14 @@ MCResult MemcardMgr::PerformWrite(MCContainer *container) {
     if (res != kMCNoError) {
         container->DestroyMCFile(file);
         return res;
-    } else {
-        MCResult writeRes = file->Write(unk34, unk38);
-        MCResult closeRes = file->Close();
-        container->DestroyMCFile(file);
-        if (writeRes != kMCNoError) {
-            closeRes = writeRes;
-        }
+    }
+    MCResult writeRes = file->Write(unk34, unk38);
+    MCResult closeRes = file->Close();
+    container->DestroyMCFile(file);
+    if (writeRes == kMCNoError) {
         return closeRes;
+    } else {
+        return writeRes;
     }
 }
 

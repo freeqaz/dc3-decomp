@@ -468,14 +468,12 @@ bool HamGameData::SetAssociatedPadNum(int player, int padnum) {
     HamPlayerData *pPlayer = mPlayers[player];
     MILO_ASSERT(pPlayer, 0x2D0);
     if (padnum >= 0 && ThePlatformMgr.IsSignedIn(padnum)) {
-        HamPlayerData *playerData = mPlayers[player];
-        if (playerData->PadNum() == padnum) {
-            playerData->SetAssociatedPadNum(-1, gNullStr);
+        if (pPlayer->PadNum() == padnum) {
+            pPlayer->SetAssociatedPadNum(-1, gNullStr);
         }
-        return playerData->SetAssociatedPadNum(padnum, ThePlatformMgr.GetName(padnum));
-    } else {
-        return pPlayer->SetAssociatedPadNum(-1, gNullStr);
+        return pPlayer->SetAssociatedPadNum(padnum, ThePlatformMgr.GetName(padnum));
     }
+    return pPlayer->SetAssociatedPadNum(-1, gNullStr);
 }
 
 void HamGameData::SwapPlayerSides() {

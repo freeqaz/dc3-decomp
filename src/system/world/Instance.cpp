@@ -21,8 +21,8 @@ END_HANDLERS
 
 BEGIN_PROPSYNCS(WorldInstance)
     SYNC_PROP_MODIFY(instance_file, mDir, SyncDir())
-    SYNC_PROP_SET(shared_group, mSharedGroup ? mSharedGroup->Group() : NULL_OBJ, )
-    SYNC_PROP_SET(poll_master, mSharedGroup ? !mSharedGroup->PollMaster() : 0, )
+    SYNC_PROP_SET(shared_group, mSharedGroup ? mSharedGroup->Group() : NULL, )
+    SYNC_PROP_SET(poll_master, mSharedGroup ? (mSharedGroup->PollMaster() == this) : 0, )
     SYNC_SUPERCLASS(RndDir)
 END_PROPSYNCS
 

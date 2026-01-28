@@ -221,7 +221,7 @@ void AutoGlitchReport::SendCallback(
             for (int i = 0; i < sDepth; i++) {
                 str += ' ';
             }
-            TheDebug.Print(str.c_str());
+            TheDebug << str;
             if (!cb) {
                 MILO_LOG("%s took %.2f ms\n", cc, diff);
             } else {

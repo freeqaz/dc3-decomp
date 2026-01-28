@@ -247,7 +247,7 @@ void ReloadObjectType(Hmx::Object *obj, DataArray *arr) {
             DataArray *objArr = arr->FindArray(obj->ClassName(), types, obj->Type());
             DataUpdateArray(def, objArr);
             obj->SetTypeDef(def);
-            if (arr)
+            if ((long)arr & 0xFF)
                 arr->Release();
         }
     }

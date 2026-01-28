@@ -17,13 +17,9 @@ void NetCacheMgrXbox::Poll() {
                 mDoneLoading = true;
             }
             if (!unk30 && mConnection.GetState() == 4) {
-                NetCacheMgrFailType ft;
-                if (ThePlatformMgr.IsEthernetCableConnected()) {
-                    ft = (NetCacheMgrFailType)1;
-                } else {
-                    ft = (NetCacheMgrFailType)3;
-                }
-                SetFail(ft);
+                u32 r3 = (u32)ThePlatformMgr.IsEthernetCableConnected();
+                u32 r11 = -(s32)r3;
+                SetFail((NetCacheMgrFailType)(3 + (r11 >> 31)));
             }
         }
     }

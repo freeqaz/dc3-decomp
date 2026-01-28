@@ -82,7 +82,7 @@ RndParticle *ParticleCommonPool::AllocateParticle() {
     RndParticle *cur = mPoolFreeParticles;
     RndParticle *ret = nullptr;
     if (cur) {
-        mPoolFreeParticles = mPoolFreeParticles->next;
+        mPoolFreeParticles = cur->next;
         cur->prev = cur;
         mNumActiveParticles++;
         ret = cur;

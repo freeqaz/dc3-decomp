@@ -9,6 +9,11 @@
 #include "synth/Utl.h"
 #include "utl/BinStream.h"
 
+namespace {
+    static const float DOPPLER_MIN = 0.00390625f;
+    static const float DOPPLER_MAX = 4.0f;
+}
+
 ThreeDSound::ThreeDSound()
     : unk194(0), unk195(0), unk198(0), unk19c(0), unk1a0(0), unk1a4(0), unk1a8(0),
       mFalloffType(kEaseLinear), mFalloffParameter(2), mMinFalloffDistance(10),
@@ -202,9 +207,9 @@ void ThreeDSound::SetAngle(float radians) {
 }
 
 void ThreeDSound::SetDoppler(float doppler) {
-    float powed = std::pow(doppler, mDopplerPower);
-    if (powed > 4.0f || powed < 0.00390625f) {
-        powed = 1.0f;
+    float var1 = std::pow(doppler, mDopplerPower);
+    if ((var1 > DOPPLER_MAX) || (var1 < DOPPLER_MIN)) {
+        var1 = 1.0f;
     }
-    unk1c8->SetTranspose(CalcTransposeFromSpeed(powed));
+    unk1c8->SetTranspose(CalcTransposeFromSpeed(var1));
 }

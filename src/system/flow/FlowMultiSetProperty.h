@@ -26,8 +26,8 @@ public:
     NEW_OBJ(FlowMultiSetProperty)
 
     ObjPtrVec<Hmx::Object> unk5c;
-    DataNode unk70;
     DataNode unk78;
+    DataNode unk80;
 
 protected:
     FlowMultiSetProperty();

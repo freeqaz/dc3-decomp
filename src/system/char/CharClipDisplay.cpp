@@ -36,7 +36,8 @@ float CharClipDisplay::GetX(float f) const {
 
 Hmx::Object *CharClipDisplay::FindSource(Hmx::Object *obj) {
     for (ObjDirItr<Hmx::Object> it(ObjectDir::Main(), false); it != nullptr; ++it) {
-        if (it->Sinks() != nullptr && it->Sinks()->HasSink(obj)) {
+        MsgSinks *sinks = it->Sinks();
+        if (sinks != nullptr && sinks->HasSink(obj)) {
             return it;
         }
     }

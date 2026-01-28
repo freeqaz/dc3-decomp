@@ -89,7 +89,7 @@ void DataPoint::ToJSON(String &str) const {
             str += ",";
         }
         str += "\"";
-        str.Print(it->first.Str());
+        str += it->first.Str();
         str += "\"";
         str += ":";
         if (it->second.Type() == kDataString || it->second.Type() == kDataSymbol) {

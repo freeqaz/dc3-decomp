@@ -326,22 +326,27 @@ String &String::replace(unsigned int pos, unsigned int n, const char *buffer) {
         strncpy(str_tmp.mStr, mStr, pos);
         strncpy(str_tmp.mStr + pos, buffer, buffer_len);
         strcpy(str_tmp.mStr + (buffer_len + pos), mStr + (n + pos));
-
-        // Swap
+        // Swap implementation
         char *tmp_str = mStr;
         int tmp_cap = capacity();
         mStr = str_tmp.mStr;
+        *(int *)(mStr - 4) = *(int *)(str_tmp.mStr - 4);
         str_tmp.mStr = tmp_str;
+        *(int *)(str_tmp.mStr - 4) = tmp_cap;
     } else {
         strncpy(mStr + pos, buffer, buffer_len);
-        text_ptr = mStr + pos;
-        copy_dst = text_ptr + buffer_len;
-        copy_src = text_ptr + n;
-        while (*copy_src != '\0') {
-            ch = *copy_src++;
-            *copy_dst++ = ch;
+        copy_dst = mStr + pos + buffer_len;
+        copy_src = mStr + pos + n;
+        ch = *copy_src;
+        if (ch != '\0') {
+            do {
+                *copy_dst = ch;
+                copy_dst++;
+                copy_src++;
+                ch = *copy_src;
+            } while ((signed char)ch != 0);
         }
-        *copy_dst = *copy_src;
+        *copy_dst = ch;
     }
 
     return *this;

@@ -581,6 +581,8 @@ void Rnd::DoWorldBegin() {
 }
 
 void Rnd::DoWorldEnd() {
+    std::list<PostProcessor *>::iterator it;
+    std::list<PostProcessor *>::iterator end;
     if (!unk147) {
         CopyWorldCam(nullptr);
     }
@@ -590,10 +592,11 @@ void Rnd::DoWorldEnd() {
     } else if (mPostProcOverride) {
         mPostProcOverride->EndWorld();
     } else {
-        for (std::list<PostProcessor *>::iterator it = mPostProcessors.begin();
-             it != mPostProcessors.end();
-             ++it) {
+        it = mPostProcessors.begin();
+        end = mPostProcessors.end();
+        while (it != end) {
             (*it)->EndWorld();
+            ++it;
         }
     }
 }
@@ -743,8 +746,10 @@ void Rnd::RegisterPostProcessor(PostProcessor *proc) {
 }
 
 void Rnd::CopyWorldCam(RndCam *cam) {
-    if (mProcCmds & kProcessWorld) {
-        mWorldCamCopy->Copy(cam ? cam : RndCam::Current(), kCopyShallow);
+    if (mProcCmds & 1) {
+        if (!cam)
+            cam = RndCam::Current();
+        mWorldCamCopy->Copy(cam, kCopyShallow);
         mWorldCamCopy->SetTransParent(nullptr, false);
         unk147 = true;
     }
