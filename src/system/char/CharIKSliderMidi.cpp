@@ -116,7 +116,8 @@ void CharIKSliderMidi::Poll() {
     else {
         float weight = Weight();
         if (weight != 0) {
-            if (Character::Current() && Character::Current()->Teleported()) {
+            Character *current = Character::Current();
+            if (current && current->Teleported()) {
                 mResetAll = true;
             }
             if (mResetAll) {

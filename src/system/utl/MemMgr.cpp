@@ -350,8 +350,7 @@ void MemInit() {
         if (OptionBool("memory_usage_test", false)) {
             gMemoryUsageTest = true;
             MILO_LOG("--- Executing Game in Memory Usage Test Mode ---\n");
-            MemTrackSetReportName(OptionStr("budget_log", "mem_usage_test_x360.0000.csv")
-            );
+            MemTrackSetReportName(OptionStr("budget_log", "mem_usage_test_x360.0000.csv"));
         }
         if (OptionBool("memory_alloc_test", false)) {
             MILO_LOG("--- Executing Game in Memory Alloc Test Mode ---\n");
@@ -388,12 +387,13 @@ void *MemResizeElem(
     const char *name
 ) {
     void *old = mem;
-    int prefixSize = (char *)cutPoint - (char *)mem;
     int suffixSize = 0;
+    int prefixSize = (char *)cutPoint - (char *)mem;
     int newTotalSize = prefixSize;
     if (insertLength > -1) {
         suffixSize = (totalSize - newTotalSize) - cutLength;
-        newTotalSize += suffixSize + insertLength;
+        int delta = insertLength + suffixSize;
+        newTotalSize = delta + prefixSize;
     }
     if (newTotalSize != totalSize) {
         mem = MemAlloc(newTotalSize, file, line, name);
@@ -424,7 +424,8 @@ MemRealloc(void *mem, int size, const char *file, int line, const char *name, in
         return dst;
     } else {
         void *dst = realloc(mem, size);
-        MemTrackRealloc(mem, size, (size + 3) / 4, dst);
+        int sizeInWords = (size + 3) >> 2;
+        MemTrackRealloc(mem, size, sizeInWords << 2, dst);
         return dst;
     }
 }

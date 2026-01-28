@@ -73,15 +73,28 @@ void WaveFile::ReadMarkers() {
     if (mRiffList.Next(kWaveAdditionalChunkID)) {
         IListChunk iChunk(mRiffList);
         for (i = 0; i < cuesize; i++) {
-            iChunk.Next(kWaveLabelChunkID);
+            iChunk.Next();
             IDataChunk dataChunk(iChunk);
-            int len = dataChunk.Header()->Length() - 4;
-            int labelid;
-            dataChunk >> labelid;
-            String str;
-            str.resize(len);
-            dataChunk.Read((char *)str.c_str(), len);
-            labelvec.push_back(Label(str, labelid));
+            ChunkHeader *hdr = dataChunk.Header();
+            if (strncmp((char *)hdr, (char *)&kWaveLabelChunkID, 4) == 0) {
+                int len = hdr->Length() - 4;
+                int labelid;
+                dataChunk >> labelid;
+                String str;
+                str.resize(len);
+                dataChunk.Read((char *)str.c_str(), len);
+                labelvec.push_back(Label(str, labelid));
+            } else if (strncmp((char *)hdr, (char *)&kWaveTextChunkID, 4) == 0) {
+                int len = hdr->Length() - 0x14;
+                int unk1, unk2, unk3;
+                short unk4, unk5, unk6, unk7;
+                dataChunk >> unk1 >> unk2 >> unk3;
+                dataChunk >> unk4 >> unk5 >> unk6 >> unk7;
+                String str;
+                str.resize(len);
+                dataChunk.Read((char *)str.c_str(), len);
+                labelvec.push_back(Label(str, unk1));
+            }
         }
     }
 

@@ -8,7 +8,9 @@ RndSoftParticleBuffer::RndSoftParticleBuffer() : unk38(4), unk3c(this) {
     for (int i = 0; i < 2; i++) {
         mSurfaces[i] = nullptr;
     }
-    AllocateData(TheNgRnd.Width() >> 2, TheNgRnd.Height() >> 2, TheNgRnd.Bpp());
+    unsigned int w = TheNgRnd.Width() >> 2;
+    unsigned int h = TheNgRnd.Height() >> 2;
+    AllocateData(w, h, TheNgRnd.Bpp());
 }
 
 RndSoftParticleBuffer::~RndSoftParticleBuffer() { FreeData(); }

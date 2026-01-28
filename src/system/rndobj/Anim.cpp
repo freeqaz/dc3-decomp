@@ -185,8 +185,10 @@ Task *RndAnimatable::Animate(
         this, StartFrame(), EndFrame(), FramesPerUnit(), Loop(), blend, o, e, f4, b5
     );
     ObjPtr<AnimTask> taskPtr(nullptr, task);
-    if (wait && task->BlendTask()) {
-        delay += task->BlendTask()->TimeUntilEnd();
+    if (wait) {
+        if (taskPtr->BlendTask()) {
+            delay += taskPtr->BlendTask()->TimeUntilEnd();
+        }
     }
     if (delay == 0) {
         SetFrame(StartFrame(), 1);

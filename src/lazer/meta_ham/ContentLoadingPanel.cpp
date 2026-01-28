@@ -33,7 +33,7 @@ void ContentLoadingPanel::ContentMountBegun(int i) {
 
 void ContentLoadingPanel::ShowIfPossible() {
     if (!mShowing) {
-        if (unk3c) { // theres an extra check here
+        if (unk3c && unk40 != 1) { // theres an extra check here
             MILO_ASSERT(CheckIsLoaded(), 0x84);
             Enter();
             mShowing = true;

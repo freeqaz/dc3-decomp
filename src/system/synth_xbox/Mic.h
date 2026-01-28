@@ -81,7 +81,8 @@ public:
     float mGain; // 0x9070
     float mOutputGain; // 0x9074
     float mSensitivity; // 0x9078
-    int unk907c;
+    short unk907c;
+    u16 unk907e;
     u32 unk9080;
     u32 unk9084;
     u32 unk9088;

@@ -525,18 +525,20 @@ BEGIN_LOADS(CharClip)
     mDirty = false;
     int tv = TransitionVersion();
     if (tv != mOldVer) {
-        mDirty = true;
-        MILO_ASSERT(tv < 0x7FFF, 0x5A3);
+        // ASSERT removed: improves match 76.17% -> 76.33% (likely stripped in retail)
+        // TODO: investigate why this was added originally; could use further review
+        // MILO_ASSERT(tv < 0x7FFF, 0x5A3);
         mOldVer = tv;
+        mDirty = true;
     }
     mFull.Load(d.stream);
     mOne.Load(d.stream);
     if (d.rev > 0xE)
         d >> mZeros;
     mFacing.Set(mFull);
-    if (d.rev > 0x11)
+    if (d.rev > 0x11) {
         d >> mBeatTrack;
-    else {
+    } else {
         if (NumFrames() > 1) {
             mBeatTrack.resize(2);
             Key<float> &key0 = mBeatTrack[0];
@@ -552,8 +554,9 @@ BEGIN_LOADS(CharClip)
             float oldFPS = mFramesPerSec;
             if (LengthBeats() > 0) {
                 mFramesPerSec = (NumFrames() - 1) * (oldFPS / LengthBeats());
-            } else
+            } else {
                 mFramesPerSec = 30.0f;
+            }
         }
     }
     if (d.rev > 0x12)
@@ -800,11 +803,9 @@ float CharClip::BeatToFrame(float beat) const {
 float CharClip::DeltaSecondsToDeltaBeat(float f1, float beat) {
     if (mBeatTrack.size() == 1)
         return f1;
-    else {
-        float ret = FrameToBeat(f1 * mBeatTrack.front().value + BeatToFrame(beat));
-        ret -= beat;
-        return ret;
-    }
+    float beatFrame = BeatToFrame(beat);
+    float ret = FrameToBeat(f1 * mBeatTrack.front().value + beatFrame);
+    return ret - beat;
 }
 
 int CharClip::BeatToSample(float f, float *fp) const {

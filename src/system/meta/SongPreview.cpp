@@ -187,8 +187,9 @@ void SongPreview::PreparePreview() {
     mStartMs = previewstart;
     mEndMs = previewend;
     PrepareSong(mSong);
-    if (!mLoopForever)
+    if (!mLoopForever) {
         mRestart = false;
+    }
 }
 
 DataNode SongPreview::OnStart(DataArray *arr) {

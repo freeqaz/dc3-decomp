@@ -123,14 +123,12 @@ public:
     void AddCrowdChars();
     void SetCrowdChars();
     void ClearCrowdChars();
-    void
-    GetSelectedCrowd(std::list<
-                     std::pair<RndMultiMesh *, std::list<RndMultiMesh::Instance>::iterator> >
-                         &);
-    void
-    AddCrowdChars(std::list<
-                  std::pair<RndMultiMesh *, std::list<RndMultiMesh::Instance>::iterator> >
-                      &);
+    void GetSelectedCrowd(
+        std::list<std::pair<RndMultiMesh *, std::list<RndMultiMesh::Instance>::iterator> > &
+    );
+    void AddCrowdChars(
+        std::list<std::pair<RndMultiMesh *, std::list<RndMultiMesh::Instance>::iterator> > &
+    );
 
     /** "The crowd to show for this shot" */
     ObjPtr<WorldCrowd> mCrowd; // 0x0
@@ -145,9 +143,12 @@ inline BinStream &operator<<(BinStream &bs, const CamShotCrowd &f) {
     return bs;
 }
 
+class AutoPrepTarget;
+
 /** "A camera shot. This is an animated camera path with keyframed settings." */
 class CamShot : public RndAnimatable, public RndTransformable {
 public:
+    friend class AutoPrepTarget;
     // Hmx::Object
     virtual ~CamShot();
     OBJ_CLASSNAME(CamShot);

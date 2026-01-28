@@ -37,6 +37,34 @@ inline float ScaleToFOV(float scale) {
     return float(std::atan(24.0f / (scale * 2.0f))) * 2.0f;
 }
 
+#pragma region AutoPrepTarget
+
+bool AutoPrepTarget::sChanging = false;
+
+AutoPrepTarget::AutoPrepTarget(CamShotFrame &frame)
+    : mFrame(&frame), mShot(frame.mCamShot) {
+    mOldZoomFov = frame.mFOV;
+    mOldFilter = mShot->mFilter;
+    mOldCamHeight = mShot->mClampHeight;
+    mShot->mFilter = 0.0f;
+    mShot->mClampHeight = -1.0f;
+    mShot->unk210.Zero();
+    mShot->unk220.Zero();
+    mShot->unk230.Zero();
+    mShot->unk240.Zero();
+    mShot->unk250.Zero();
+    mShot->unk260.Zero();
+    sChanging = true;
+    frame.UpdateTarget();
+}
+
+AutoPrepTarget::~AutoPrepTarget() {
+    mShot->mFilter = mOldFilter;
+    mShot->mClampHeight = mOldCamHeight;
+    sChanging = false;
+}
+
+#pragma endregion
 #pragma region CamShotFrame
 
 CamShotFrame::CamShotFrame(Hmx::Object *owner)

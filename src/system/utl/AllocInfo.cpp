@@ -4,8 +4,10 @@
 #include "trie.h"
 #include "utl/TextStream.h"
 #include "xdk/XBDM.h"
+#include "utl/MemTracker.h"
 
 Trie *s_pTrie;
+extern MemTracker *gMemTracker;
 bool AllocInfo::bPrintCsv;
 
 Pool &GetPool() {
@@ -26,10 +28,19 @@ AllocInfo::AllocInfo(
     int line,
     String &str1,
     String &str2
-)
-    : mReqSize(requestedSize), mActSize(actualSize), mType(type), mMem(mem), mHeap(heap),
-      mPooled(pooled), mStrat(strat), mFile(file), mLine(line),
-      unk1d(s_pTrie->store(str1.c_str())), unk21(s_pTrie->store(str2.c_str())) {
+) {
+    mReqSize = requestedSize;
+    mActSize = actualSize;
+    mType = type;
+    mMem = mem;
+    mHeap = heap;
+    mPooled = pooled;
+    mStrat = strat;
+    mFile = file;
+    mLine = line;
+    unk1d = s_pTrie->store(str1.c_str());
+    unk21 = s_pTrie->store(str2.c_str());
+    mTimeSlice = *(short *)((char *)gMemTracker + 0x8);
     FillStackTrace();
 }
 
@@ -120,8 +131,7 @@ void AllocInfoInit() {
             // some trie member bool being set to true here
             ((char *)dst)[0] = 1;
             pTrie = (Trie *)dst;
-        }
-        else {
+        } else {
             pTrie = nullptr;
         }
         s_pTrie = pTrie;

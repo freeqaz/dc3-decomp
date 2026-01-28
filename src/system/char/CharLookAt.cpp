@@ -5,12 +5,12 @@
 #include "rndobj/Poll.h"
 
 CharLookAt::CharLookAt()
-    : mSource(this), mPivot(this), mTarget(this), mHalfTime(0), mMinYaw(-80), mMaxYaw(80),
-      mMinPitch(-80), mMaxPitch(80), mMinWeightYaw(-1), mMaxWeightYaw(-1),
-      mWeightYawSpeed(10000), unk8c(kHugeFloat, 0, 0), unk9c(1), mSourceRadius(0),
-      unka4(0, 0, 0), mShowRange(false), mTestRange(false), mTestRangePitch(0.5),
-      mTestRangeYaw(0.5), mAllowRoll(true), unke1(false), mEnableJitter(false),
-      mYawJitterLimit(0), mPitchJitterLimit(0) {
+    : mSource(this), mPivot(this), mTarget(this), mHalfTime(0.0f), mMinYaw(-80.0f),
+      mMaxYaw(-mMinYaw), mMinPitch(-80.0f), mMaxPitch(-mMinPitch), mMinWeightYaw(-1.0f),
+      mMaxWeightYaw(-1.0f), mWeightYawSpeed(10000.0f), unk8c(1.0e30f, 0.0f, 0.0f),
+      unk9c(1.0f), mSourceRadius(0.0f), unka4(0, 0, 0), mShowRange(false),
+      mTestRange(false), mTestRangePitch(0.5f), mTestRangeYaw(0.5f), mAllowRoll(true),
+      unke1(false), mEnableJitter(false), mYawJitterLimit(0.0f), mPitchJitterLimit(0.0f) {
     SyncLimits();
 }
 

@@ -158,37 +158,38 @@ void PropKeys::ChangeFrame(int idx, float new_frame, bool sort) {
 }
 
 void PropKeys::Print() {
-    TheDebug << "      target: " << mTarget.Ptr() << "\n";
-    TheDebug << "      property: " << mProp << "\n";
-    TheDebug << "      interpolation: " << mInterpolation << "\n";
+    TextStream &ts = TheDebug;
+    ts << "      target: " << mTarget.Ptr() << "\n";
+    ts << "      property: " << mProp << "\n";
+    ts << "      interpolation: " << (int)mInterpolation << "\n";
     for (int i = 0; i < NumKeys(); i++) {
-        float frame = 0;
+        float frame = 0.0f;
         FrameFromIndex(i, frame);
-        TheDebug << "      " << frame << " -> ";
+        ts << "      " << frame << " -> ";
         switch (mKeysType) {
         case kFloat:
-            TheDebug << (*AsFloatKeys())[i].value;
+            ts << (*AsFloatKeys())[i].value;
             break;
         case kColor:
-            TheDebug << (*AsColorKeys())[i].value;
+            ts << (*AsColorKeys())[i].value;
             break;
         case kObject:
-            TheDebug << (*AsObjectKeys())[i].value;
+            ts << (*AsObjectKeys())[i].value;
             break;
         case kBool:
-            TheDebug << (*AsBoolKeys())[i].value;
-            break;
-        case kQuat:
-            TheDebug << (*AsQuatKeys())[i].value;
+            ts << (*AsBoolKeys())[i].value;
             break;
         case kVector3:
-            TheDebug << (*AsVector3Keys())[i].value;
+            ts << (*AsVector3Keys())[i].value;
+            break;
+        case kQuat:
+            ts << (*AsQuatKeys())[i].value;
             break;
         case kSymbol:
-            TheDebug << (*AsSymbolKeys())[i].value;
+            ts << (*AsSymbolKeys())[i].value;
             break;
         }
-        TheDebug << "\n";
+        ts << "\n";
     }
 }
 

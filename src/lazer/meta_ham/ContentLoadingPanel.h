@@ -25,7 +25,7 @@ public:
     void AllowedToShow(bool);
 
     bool unk3c;
-    int unk40;
+    volatile int unk40;
     int unk44;
 
 private:

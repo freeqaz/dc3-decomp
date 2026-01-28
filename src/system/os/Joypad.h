@@ -151,6 +151,65 @@ struct BreedData {
     unsigned char unka; // 0xa
 };
 
+struct ProGuitarStringInfo {
+    bool mDown : 1;
+    unsigned char mVelocity : 7;
+};
+
+// size 0x10
+struct ProGuitarData {
+    unsigned char mString4FretBottomHalf : 3;
+    unsigned char mString5Fret : 5;
+
+    bool unk1upper : 1;
+    unsigned char mString3Fret : 5;
+    unsigned char mString4FretTopHalf : 2;
+
+    unsigned char mString1FretBottomHalf : 3;
+    unsigned char mString2Fret : 5;
+
+    bool unk3upper : 1;
+    unsigned char mString0Fret : 5;
+    unsigned char mString1FretTopHalf : 2;
+
+    union {
+        struct {
+            bool unk4bool : 1;
+            unsigned char mString5Velocity : 7;
+            bool unk5bool : 1;
+            unsigned char mString4Velocity : 7;
+            bool unk6bool : 1;
+            unsigned char mString3Velocity : 7;
+            bool unk7bool : 1;
+            unsigned char mString2Velocity : 7;
+            bool unk8bool : 1;
+            unsigned char mString1Velocity : 7;
+            bool unk9bool : 1;
+            unsigned char mString0Velocity : 7;
+        };
+        struct {
+            ProGuitarStringInfo mStringInfos[6];
+        };
+    };
+
+    bool unkabool : 1;
+    unsigned char unkachar : 7;
+
+    bool unkbbool : 1;
+    unsigned char unkbchar : 7;
+
+    bool unkcbool : 1;
+    unsigned char unkcchar : 7;
+
+    bool mStompBox : 1;
+    unsigned char unkdchar : 7;
+
+    bool unkebool : 1;
+    unsigned char mMuting : 7;
+
+    unsigned char unkf;
+};
+
 // size 0xDC
 class JoypadData {
 public:
@@ -161,8 +220,8 @@ public:
     float mTriggers[2]; // 0x1C = LT; 0x20 = RT
     float mSensors[3]; // 0x24 = SX; 0x28 = SY; 0x2C = SZ
     float mPressures[kNumPressureButtons]; // 0x30
-    // 0x34-0x44 seems to be the pro union we deduced in RB3
-    char propadding[16]; // 0x34
+    // 0x34-0x44 pro guitar data union
+    struct ProGuitarData mProGuitarData; // 0x34
     class LocalUser *mUser; // 0x44
     bool mConnected; // 0x48
     bool mVibrateEnabled; // 0x49

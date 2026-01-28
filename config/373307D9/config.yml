@@ -1,6 +1,7 @@
 object: orig/373307D9/default.xex
 symbols: config/373307D9/symbols.txt
 splits: config/373307D9/splits.txt
+source_base_path: src
 
 # (optional) Path to the DOL's .map file.
 # This path is relative to the root of the project, and is _not_ affected by `object_base`.

@@ -144,7 +144,10 @@ BEGIN_COPYS(RndPropAnim)
              it != c->mPropKeys.end();
              ++it) {
             PropKeys *cur = *it;
-            AddKeys(cur->Target(), cur->Prop(), cur->KeysType())->Copy(*it);
+            Hmx::Object *tgt = cur->Target();
+            PropKeys::AnimKeysType t = cur->KeysType();
+            DataArray *p = cur->Prop();
+            AddKeys(tgt, p, t)->Copy(*it);
         }
         COPY_MEMBER(mLoop)
         COPY_MEMBER(mFlowLabels)

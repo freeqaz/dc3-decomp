@@ -10,16 +10,13 @@ void InitQuickJoyCheats(const DataArray *a, CheatsManager::ShiftMode);
 void InitKeyCheats(const DataArray *);
 void InitLongJoyCheats(const DataArray *);
 
-
-bool CheatsInitialized() {
-    return gCheatsManager != 0;
-}
+bool CheatsInitialized() { return gCheatsManager != 0; }
 
 BEGIN_HANDLERS(CheatsManager)
-HANDLE_ACTION(set_unsafe_cheat_used, gCheatsManager->mUnsafeCheatsUsed)
-HANDLE_MESSAGE(ButtonDownMsg)
-HANDLE_MESSAGE(KeyboardKeyMsg)
-HANDLE_MESSAGE(KeyboardKeyReleaseMsg)
+    HANDLE_ACTION(set_unsafe_cheat_used, gCheatsManager->mUnsafeCheatsUsed)
+    HANDLE_MESSAGE(ButtonDownMsg)
+    HANDLE_MESSAGE(KeyboardKeyMsg)
+    HANDLE_MESSAGE(KeyboardKeyReleaseMsg)
 END_HANDLERS
 
 void CheatsInit() {
@@ -33,8 +30,12 @@ void CheatsInit() {
         KeyboardSubscribe(gCheatsManager);
 
         DataArray *quickCheats = SystemConfig("quick_cheats");
-        InitQuickJoyCheats(quickCheats->FindArray("left", true), CheatsManager::kLeftShift);
-        InitQuickJoyCheats(quickCheats->FindArray("right", true), CheatsManager::kRightShift);
+        InitQuickJoyCheats(
+            quickCheats->FindArray("left", true), CheatsManager::kLeftShift
+        );
+        InitQuickJoyCheats(
+            quickCheats->FindArray("right", true), CheatsManager::kRightShift
+        );
 
         InitKeyCheats(quickCheats->FindArray("keyboard", true));
 
@@ -46,16 +47,13 @@ void CheatsInit() {
     }
 }
 
-DataNode OnGetCheatMode(DataArray *da) {
-    return gCheatsManager->CheatMode();
-}
+DataNode OnGetCheatMode(DataArray *da) { return gCheatsManager->CheatMode(); }
 
 void EnableKeyCheats(bool b) {
     gKeyCheatsEnabled = b;
     if (gCheatsManager) {
         gCheatsManager->setKeyCheatsEnabled(b);
     }
-
 }
 
 DataNode OnSetCheatMode(DataArray *da) {
@@ -76,17 +74,21 @@ DataNode SetKeyCheatsEnabled(DataArray *da) {
     return 0;
 }
 
-CheatsManager::~CheatsManager() {  }
+CheatsManager::~CheatsManager() {}
 
-CheatsManager::CheatsManager() : mLongJoyCheats(0), mSymMode(gNullStr), mBuffer(0) {
+CheatsManager::CheatsManager()
+    : mLongJoyCheats(), mQuickJoyCheats(), mKeyCheats(), mJoyCheatPtrsMode(),
+      mKeyCheatPtrsMode(), mLastButtonTime(), mKeyCheatsEnabled(false) {
+    mLastButtonTime.Start();
+    SystemConfig()->FindData("cheats_buffer", (int &)mMaxBuffer, true);
     SetName("cheats_mgr", ObjectDir::Main());
 }
 
 void CheatsManager::AppendLog(FixedString &fs) {
-    FOREACH(it, mBuffer) {
+    FOREACH (it, mBuffer) {
         fs += "\n\nCheats Used";
         String s = "\n   %.30s";
-        //memcpy(s, "\n   %.30s", 10);
+        // memcpy(s, "\n   %.30s", 10);
         it->mScript.Print(s, true, 0);
         const char *c = MakeString("\n   %.30s");
         fs += c;
@@ -109,9 +111,7 @@ void AppendCheatsLog(FixedString &fs) {
     }
 }
 
-bool GetEnabledKeyCheats() {
-    return gKeyCheatsEnabled;
-}
+bool GetEnabledKeyCheats() { return gKeyCheatsEnabled; }
 
 void CheatsManager::Log(int padNum, bool quickCheat, DataArray *script) {
     CheatLog log;
@@ -137,7 +137,6 @@ void CheatsManager::CallCheatScript(bool b1, DataArray *da, LocalUser *lu, bool 
     } else {
         Log(lu->GetPadNum(), b1, da);
     }
-
 }
 
 void CallQuickCheat(DataArray *da, LocalUser *lu) {
@@ -161,15 +160,12 @@ void CheatsTerminate() {
     }
 }
 
-void CheatsManager::RebuildKeyCheatsForMode() {
-    return;
-}
-
+void CheatsManager::RebuildKeyCheatsForMode() { return; }
 
 CheatLog::~CheatLog() {}
 
 DataNode CheatsManager::OnMsg(KeyboardKeyReleaseMsg const &msg) {
     if (msg->Int(2) == 0x11 && mIsOverridingKeyboard)
 
-    return 0;
+        return 0;
 }

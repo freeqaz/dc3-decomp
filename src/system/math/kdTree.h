@@ -95,9 +95,21 @@ public:
                 FOREACH (it, items) {
                     Triangle *cur = *it;
                     Vector3 v[3];
-                    v[0].Set(cur->origin.x + cur->frame.x.x, cur->origin.y + cur->frame.x.y, cur->origin.z + cur->frame.x.z);
-                    v[1].Set(cur->origin.x + cur->frame.y.x, cur->origin.y + cur->frame.y.y, cur->origin.z + cur->frame.y.z);
-                    v[2].Set(cur->origin.x + cur->frame.z.x, cur->origin.y + cur->frame.z.y, cur->origin.z + cur->frame.z.z);
+                    v[0].Set(
+                        cur->origin.x + cur->frame.x.x,
+                        cur->origin.y + cur->frame.x.y,
+                        cur->origin.z + cur->frame.x.z
+                    );
+                    v[1].Set(
+                        cur->origin.x + cur->frame.y.x,
+                        cur->origin.y + cur->frame.y.y,
+                        cur->origin.z + cur->frame.y.z
+                    );
+                    v[2].Set(
+                        cur->origin.x + cur->frame.z.x,
+                        cur->origin.y + cur->frame.z.y,
+                        cur->origin.z + cur->frame.z.z
+                    );
                     for (int i = 0; i < 3; i++) {
                         if (box.Contains(v[i])) {
                             fsum += v[i][vecIdx];
@@ -156,9 +168,9 @@ public:
     kdTree(const Box &box) {
         unkc.Set(box.mMin, box.mMax);
         mNodes = new kdTreeNode[0x8000];
-        // for (int i = 0; i < 0x8000; i++) {
-        //     mNodes[i].unk4 |= i;
-        // }
+        for (u16 i = 0; i < 0x8000; i++) {
+            mNodes[i].unk4 |= i;
+        }
     }
     ~kdTree() { delete[] mNodes; }
 

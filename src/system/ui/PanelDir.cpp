@@ -121,6 +121,11 @@ void PanelDir::PreLoad(BinStream &bs) {
 
 void PanelDir::PostLoad(BinStream &bs) {}
 
+UIComponentFocusChangeMsg::UIComponentFocusChangeMsg(
+    UIComponent *comp1, UIComponent *comp2, PanelDir *dir, Symbol s
+)
+    : Message(Type(), comp1, comp2, (Hmx::Object *)dir, s) {}
+
 void PanelDir::RemovingObject(Hmx::Object *o) {
     ObjMatchPr pr(o);
     mComponents.remove_if(pr);
@@ -236,7 +241,8 @@ UIComponent *PanelDir::ComponentNav(
     UIComponent *comp, JoypadAction act, JoypadButton btn, Symbol controller_type
 ) {
     UIComponent *compIt = nullptr;
-    bool overloaded = TheUI->OverloadHorizontalNav(act, btn, JoypadTypeHasLeftyFlip(controller_type));
+    bool overloaded =
+        TheUI->OverloadHorizontalNav(act, btn, JoypadTypeHasLeftyFlip(controller_type));
     if (act == kAction_Down) {
         compIt = *(UIComponent **)((char *)comp + 0x2c);
     }

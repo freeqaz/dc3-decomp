@@ -5,6 +5,7 @@
 #include "gesture/Skeleton.h"
 #include "hamobj/HamScrollSpeedIndicator.h"
 #include "math/DoubleExponentialSmoother.h"
+#include "obj/Msg.h"
 #include "obj/Object.h"
 #include "os/JoypadMsgs.h"
 #include "rndobj/Anim.h"
@@ -15,6 +16,13 @@
 #include "ui/UIListState.h"
 #include "ui/UIListWidget.h"
 #include "utl/MemMgr.h"
+#include "utl/Symbol.h"
+
+class HamNavList;
+
+DECLARE_MESSAGE(NavSelectMsg, "nav_select")
+NavSelectMsg(Symbol, int, HamNavList *, bool);
+END_MESSAGE
 
 /** "List of navigation actions controlled by a single hand with gestures" */
 class HamNavList : public UIComponent,

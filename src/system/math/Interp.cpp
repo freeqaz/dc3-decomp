@@ -32,7 +32,6 @@ float ATanInterpolator::Eval(float f1) const {
 }
 
 ATanInterpolator::ATanInterpolator(const char *, const char *) : Interpolator() {
-    mSeverity = 2.0;
     Sync();
 }
 

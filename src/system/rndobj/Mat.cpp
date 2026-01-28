@@ -467,13 +467,14 @@ void RndMat::UpdatePropertiesFromMetaMat() {
         unk226 = true;
         String str70;
         std::list<Symbol> syms78;
-        ListProperties(syms78, 0, "Mat", nullptr, false);
+        ListProperties(syms78, "Mat", 0, nullptr, false);
         for (std::list<Symbol>::iterator it = syms78.begin(); it != syms78.end(); ++it) {
             static Symbol metamaterial("metamaterial");
             Symbol cur = *it;
             if (cur != metamaterial) {
-                MatPropEditAction a =
-                    GetMetaMatPropAction(cur == "alpha_threshold" ? "alpha_cut" : cur);
+                MatPropEditAction a = GetMetaMatPropAction(
+                    (cur == "alpha_threshold") ? Symbol("alpha_cut") : cur
+                );
                 if ((a == kPropDefault || a == kPropForce)
                     && PropValDifferent(cur, mMetaMaterial)) {
                     if (cur == "tex_xfm") {

@@ -63,10 +63,8 @@ bool LoadingPanel::IsLoaded() const {
     if (!pAudio)
         MILO_NOTIFY("missing audio object!\n");
 
-    return (
-        TheContentMgr.RefreshDone() && UIPanel::IsLoaded() && pAudio && !pAudio->Fail()
-        && !pAudio->IsReady()
-    );
+    return TheContentMgr.RefreshDone() && UIPanel::IsLoaded() && pAudio && !pAudio->Fail()
+        && !pAudio->IsReady();
 }
 
 bool LoadingPanel::Exiting() {

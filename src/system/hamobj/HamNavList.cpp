@@ -27,6 +27,9 @@
 #include "utl/Std.h"
 #include "utl/Symbol.h"
 
+NavSelectMsg::NavSelectMsg(Symbol sym, int index, HamNavList *list, bool selecting)
+    : Message(Type(), sym, index, (Hmx::Object *)list, selecting) {}
+
 HamNavList::HamNavList()
     : mNavInputType(kNavInput_RightHand), mListState(this, this),
       mRibbonMode(HamListRibbon::kRibbonSlide), unkc8(0), mListRibbonResource(this),
