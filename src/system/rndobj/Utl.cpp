@@ -10,6 +10,7 @@
 #include "os/FileCache.h"
 #include "os/Platform.h"
 #include "os/System.h"
+#include "rndobj/AmbientOcclusion.h"
 #include "rndobj/Bitmap.h"
 #include "rndobj/Cam.h"
 #include "rndobj/Dir.h"
@@ -145,17 +146,16 @@ void RndUtlPreInit() {
 void RndUtlInit() {
     FileCache::RegisterResourceCacheHelper(&gResourceFileCacheHelper);
     if (!UsingCD()) {
-        sCylinderDir = DirLoader::LoadObjects(
-            FilePath(FileSystemRoot(), "rndobj/cylinder.milo"), 0, 0
-        );
+        FilePath cylinderPath(FileSystemRoot(), "rndobj/cylinder.milo");
+        sCylinderDir = DirLoader::LoadObjects(cylinderPath, 0, 0);
     }
-    sSphereDir =
-        DirLoader::LoadObjects(FilePath(FileSystemRoot(), "rndobj/sphere.milo"), 0, 0);
+    FilePath spherePath(FileSystemRoot(), "rndobj/sphere.milo");
+    sSphereDir = DirLoader::LoadObjects(spherePath, 0, 0);
     if (sSphereDir) {
         sSphereMesh = sSphereDir->Find<RndMesh>("sphere.mesh", true);
     }
     if (sCylinderDir) {
-        sCylinderMesh = sSphereDir->Find<RndMesh>("Cylinder.mesh", true);
+        sCylinderMesh = sCylinderDir->Find<RndMesh>("Cylinder.mesh", true);
     }
 }
 
@@ -683,4 +683,16 @@ void EndianSwapBitmap(RndBitmap &bmap) {
             // EndianSwap()
         }
     }
+}
+
+// Template instantiation for set<RndAmbientOcclusion::Edge>
+#include <set>
+#include "utl/StlAlloc.h"
+namespace stlpmtx_std {
+template class _Rb_tree<RndAmbientOcclusion::Edge,
+    less<RndAmbientOcclusion::Edge>,
+    RndAmbientOcclusion::Edge,
+    _Identity<RndAmbientOcclusion::Edge>,
+    priv::_SetTraitsT<RndAmbientOcclusion::Edge>,
+    StlNodeAlloc<RndAmbientOcclusion::Edge> >;
 }

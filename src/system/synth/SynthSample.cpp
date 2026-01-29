@@ -66,6 +66,79 @@ SynthSample::~SynthSample() {
     }
 }
 
+DataNode SynthSample::Handle(DataArray *in, bool b) {
+    Symbol sym = in->Sym(b);
+
+    static Symbol sPlatformSizeKb("platform_size_kb");
+    static Symbol sNumMarkers("num_markers");
+    static Symbol sMarkerName("marker_name");
+    static Symbol sMarkerSample("marker_sample");
+    static Symbol sSampleLength("sample_length");
+    static int sInitState = 0;
+
+    Timer timer;
+    if (MessageTimer::Active()) {
+        timer.Restart();
+    }
+
+    if (!(sInitState & 1)) {
+        sInitState |= 1;
+        sPlatformSizeKb = Symbol("platform_size_kb");
+    }
+    if (sym == sPlatformSizeKb) {
+        int size = mSampleData.SizeAs(SampleData::kPCM) >> 10;
+        return DataNode(size + 0);
+    }
+
+    if (!(sInitState & 2)) {
+        sInitState |= 2;
+        sNumMarkers = Symbol("num_markers");
+    }
+    if (sym == sNumMarkers) {
+        return mSampleData.NumMarkers();
+    }
+
+    if (!(sInitState & 4)) {
+        sInitState |= 4;
+        sMarkerName = Symbol("marker_name");
+    }
+    if (sym == sMarkerName) {
+        int idx = in->Int(b);
+        const SampleMarker &marker = mSampleData.GetMarker(idx);
+        return DataNode(marker.Name());
+    }
+
+    if (!(sInitState & 8)) {
+        sInitState |= 8;
+        sMarkerSample = Symbol("marker_sample");
+    }
+    if (sym == sMarkerSample) {
+        int idx = in->Int(b);
+        const SampleMarker &marker = mSampleData.GetMarker(idx);
+        return marker.Sample();
+    }
+
+    if (!(sInitState & 0x10)) {
+        sInitState |= 0x10;
+        sSampleLength = Symbol("sample_length");
+    }
+    if (sym == sSampleLength) {
+        float len = LengthMs();
+        return DataNode((int)(len * 0.001f));
+    }
+
+    DataNode ret = Hmx::Object::Handle(in, b);
+    if (ret.Type() != kDataUnhandled) {
+        return ret;
+    }
+
+    if (b) {
+        const char *msg = MakeString("Unhandled msg: %s %s", PathName(this), sym);
+        TheDebug.Notify(msg);
+    }
+    return DataNode(kDataUnhandled, 0);
+}
+
 BEGIN_PROPSYNCS(SynthSample)
     SYNC_PROP_MODIFY(file, mFile, Sync(sync0))
     SYNC_PROP_SET(

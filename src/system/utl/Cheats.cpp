@@ -166,6 +166,43 @@ void CheatsManager::RebuildKeyCheatsForMode() { return; }
 
 CheatLog::~CheatLog() {}
 
+void InitLongJoyCheats(const DataArray *da) {
+    int i = 1;
+    while (i < da->Size()) {
+        const DataArray *entry = da->Array(i);
+        const DataArray *array = entry->Array(0);
+
+        if (array->Size() > 0x10) {
+            TheDebug << MakeString("Too many buttons in long cheat, ");
+        } else {
+            std::vector<int> buttons;
+            bool isValid = 1;
+            int j = 0;
+
+            while (j < array->Size()) {
+                int button = array->Int(j);
+                if (button >= 0 && button < 0x18) {
+                    buttons.push_back(button);
+                } else {
+                    TheDebug << MakeString("Error in long_cheats: %s is not a valid button", button);
+                    isValid = 0;
+                    break;
+                }
+                j++;
+            }
+
+            if (isValid) {
+                DataArray *cmd = entry->Command(1);
+                CheatsManager::LongJoyCheat *cheat = new CheatsManager::LongJoyCheat();
+                cheat->mSequence = buttons;
+                cheat->mScript = cmd;
+                gCheatsManager->mLongJoyCheats.push_back(cheat);
+            }
+        }
+        i++;
+    }
+}
+
 DataNode CheatsManager::OnMsg(KeyboardKeyReleaseMsg const &msg) {
     if (msg->Int(2) == 0x11 && mIsOverridingKeyboard)
 

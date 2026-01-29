@@ -20,7 +20,7 @@ public:
     virtual void Highlight() {}
 
     OBJ_MEM_OVERLOAD(0x1A);
-    static void Init();
+    static void Init() { REGISTER_OBJ_FACTORY(RndWind) }
 
     void SetWindOwner(RndWind *wind);
     // void Zero();

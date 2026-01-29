@@ -228,7 +228,9 @@ void SystemPoll(bool b1) {
     if (b1) {
         TheTaskMgr.Poll();
     }
+    ThePlatformMgr.Poll();
     TheVirtualKeyboard.Poll();
+    TheContentMgr.Poll();
 }
 
 DataArray *SupportedLanguages(bool cheats) {
@@ -479,8 +481,44 @@ void SystemInit(const char *config) {
     }
 }
 
+static char sCommandLineBuffer[kCommandLineSz];
+
 void SetSystemArgs(const char *commandLine) {
     MILO_ASSERT(commandLine && strlen(commandLine) < kCommandLineSz, 0x39A);
+
+    strncpy(sCommandLineBuffer, commandLine, kCommandLineSz - 1);
+    sCommandLineBuffer[kCommandLineSz - 1] = 0;
+
+    if (sCommandLineBuffer[0] != 0) {
+        int inQuotes = 0;
+        char *ptr = sCommandLineBuffer;
+
+        for (;;) {
+            if (*ptr == ' ' && inQuotes == 0) {
+                *ptr = 0;
+                inQuotes = 1;
+                ptr++;
+            } else if (*ptr == '"') {
+                *ptr = 0;
+                ptr++;
+                inQuotes = (inQuotes == 0) ? 1 : 0;
+                if (inQuotes == 0) {
+                    TheSystemArgs.push_back(ptr);
+                } else {
+                    inQuotes = 1;
+                }
+            } else {
+                if (inQuotes != 0) {
+                    TheSystemArgs.push_back(ptr);
+                    inQuotes = 0;
+                }
+                ptr++;
+            }
+
+            if (*ptr == 0) break;
+        }
+    }
+
     NormalizeSystemArgs();
     gPristineSystemArgs = TheSystemArgs;
 }

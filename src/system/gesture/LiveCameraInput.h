@@ -89,7 +89,7 @@ public:
     RndTex *DisplayTex(BufferType) const;
     void LockStream(const void *, LockedRect &);
     void UnlockStream(const void *);
-
+    RndTex *GetStreamTex(BufferType) const;
 
     static void PreInit();
     static void Init();

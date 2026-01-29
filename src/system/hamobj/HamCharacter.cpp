@@ -148,8 +148,12 @@ END_LOADS
 
 void HamCharacter::PreLoad(BinStream &bs) {
     LOAD_REVS(bs)
-    ASSERT_REVS(0, 0)
+    ASSERT_REVS(3, 0)
     Character::PreLoad(bs);
+    ObjectDir *objDir = (ObjectDir*)((char*)this - 0x358);
+    int numChars = *(int*)((char*)this - 0x344);
+    StringTable *stringTable = (StringTable*)((char*)this - 0x330);
+    objDir->Reserve((numChars + 0x14) * 2, stringTable->UsedSize() + 0x1B8);
     bs.PushRev(packRevs(d.altRev, d.rev), this);
 }
 

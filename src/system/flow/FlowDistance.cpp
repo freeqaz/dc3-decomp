@@ -57,6 +57,9 @@ BEGIN_LOADS(FlowDistance)
     mObj1.LoadFromMainOrDir(bs);
     mObj2.LoadFromMainOrDir(bs);
     bs >> mDistance;
+    d >> mPersistent;
+    d >> mRunInRange;
+    d >> mDriveIntensity;
 END_LOADS
 
 bool FlowDistance::Activate() {

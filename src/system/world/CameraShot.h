@@ -127,7 +127,7 @@ public:
         std::list<std::pair<RndMultiMesh *, std::list<RndMultiMesh::Instance>::iterator> > &
     );
     void AddCrowdChars(
-        std::list<std::pair<RndMultiMesh *, std::list<RndMultiMesh::Instance>::iterator> > &
+        const std::list<std::pair<RndMultiMesh *, std::list<RndMultiMesh::Instance>::iterator> > &
     );
 
     /** "The crowd to show for this shot" */

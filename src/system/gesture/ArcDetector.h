@@ -2,6 +2,7 @@
 #include "gesture/BaseSkeleton.h"
 #include "gesture/Skeleton.h"
 #include "math/Vec.h"
+#include "math/Color.h"
 #include "rndobj/Overlay.h"
 
 class ArcDetector {
@@ -27,6 +28,7 @@ private:
     float GetPathError() const;
     void SwipeFailed(const Skeleton &);
     void CullPath();
+    void DrawPath(const std::list<Vector3> &, class SkeletonViz &, class Hmx::Color, const Vector3 &) const;
 
     static float _swipeRetentionFactor;
     static float _acceptablePathErrorRatio;

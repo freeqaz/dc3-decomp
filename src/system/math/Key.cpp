@@ -11,19 +11,23 @@ void InterpTangent(
     float f,
     Vector3 &vout
 ) {
-    float ftimes6;
-    float scale3;
-    float scale;
-    ftimes6 = f * 6.0f;
-    scale = f * f;
-    Scale(v1, (scale * 6.0f) - ftimes6, vout);
+    float fsq = f * f;
+    float f6 = f * 6.0f;
+    float fsq3 = fsq * 3.0f;
+    float f4 = f * 4.0f;
+
+    float a = fsq * 6.0f - f6;
+    float b = 1.0f - (f4 - fsq3);
+    float c = f6 - fsq * 6.0f;
+    float d = fsq3 - f * 2.0f;
+
+    Scale(v1, a, vout);
     Vector3 vtmp;
-    scale3 = scale * 3.0f;
-    Scale(v2, 1.0f + (scale3 - (f * 4.0f)), vtmp);
+    Scale(v2, b, vtmp);
     Add(vout, vtmp, vout);
-    Scale(v3, (scale * -6.0f) + ftimes6, vtmp);
+    Scale(v3, c, vtmp);
     Add(vout, vtmp, vout);
-    Scale(v4, (scale3 - (f * 2.0f)), vtmp);
+    Scale(v4, d, vtmp);
     Add(vout, vtmp, vout);
 }
 

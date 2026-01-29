@@ -484,7 +484,8 @@ void CameraTilt::UpdateTiltingDown() {
 void CameraTilt::Poll() {
     if (!unk2c)
         return;
-    switch (unk70) {
+    unsigned int state = unk70;
+    switch (state) {
     case 0:
         unk2c = false;
         unk68 = 0;
@@ -568,8 +569,6 @@ void CameraTilt::Poll() {
                 unk70 = 5;
             }
         }
-        break;
-    default:
         break;
     }
     mTimer.Stop();

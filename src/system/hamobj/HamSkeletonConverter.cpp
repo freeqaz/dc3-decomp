@@ -103,8 +103,9 @@ void HamSkeletonConverter::PollDeps(
 void HamSkeletonConverter::Highlight() {
     for (int i = 0; i < kNumJoints; i++) {
         Vector3 curV = unk80[i];
-        UtilDrawSphere(curV, 1, Hmx::Color(0, 0, 1), nullptr);
         Transform curXfm = unk1c0[i];
+        UtilDrawSphere(curV, 1.0f, Hmx::Color(0.0f, 0.0f, 1.0f), nullptr);
+
         Vector3 scaledX;
         Scale(curXfm.m.x, 4.0f, scaledX);
         Vector3 scaledY;
@@ -112,13 +113,13 @@ void HamSkeletonConverter::Highlight() {
         Vector3 scaledZ;
         Scale(curXfm.m.z, 4.0f, scaledZ);
 
-        Vector3 scaled;
-        Add(scaledX, curXfm.v, scaled);
-        TheRnd.DrawLine(curXfm.v, scaledX, Hmx::Color(1, 0, 0), false);
-        Add(scaledY, curXfm.v, scaled);
-        TheRnd.DrawLine(curXfm.v, scaled, Hmx::Color(0, 1, 0), false);
-        Add(scaledZ, curXfm.v, scaled);
-        TheRnd.DrawLine(curXfm.v, scaled, Hmx::Color(0, 0, 1), false);
+        Vector3 lineEnd;
+        Add(scaledX, curXfm.v, lineEnd);
+        TheRnd.DrawLine(curXfm.v, lineEnd, Hmx::Color(1.0f, 0.0f, 0.0f), false);
+        Add(scaledY, curXfm.v, lineEnd);
+        TheRnd.DrawLine(curXfm.v, lineEnd, Hmx::Color(0.0f, 1.0f, 0.0f), false);
+        Add(scaledZ, curXfm.v, lineEnd);
+        TheRnd.DrawLine(curXfm.v, lineEnd, Hmx::Color(0.0f, 0.0f, 1.0f), false);
     }
 }
 

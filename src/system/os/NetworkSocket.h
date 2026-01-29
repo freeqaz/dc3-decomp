@@ -12,7 +12,7 @@ public:
 class NetworkSocket {
 public:
     NetworkSocket() {}
-    virtual ~NetworkSocket() {}
+    virtual ~NetworkSocket();
     virtual bool Connect(unsigned int ip, unsigned short port) = 0;
     virtual bool Fail() const = 0;
     virtual void Disconnect() = 0;

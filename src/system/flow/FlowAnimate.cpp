@@ -12,7 +12,12 @@ FlowAnimate::FlowAnimate()
     mType = range;
 }
 
-FlowAnimate::~FlowAnimate() {}
+FlowAnimate::~FlowAnimate() {
+    if (unk5c != nullptr) {
+    }
+    if (mAnim != nullptr) {
+    }
+}
 
 BEGIN_HANDLERS(FlowAnimate)
     HANDLE_ACTION(on_anim_event, OnAnimEvent(_msg->Sym(2)))
@@ -75,15 +80,28 @@ BEGIN_COPYS(FlowAnimate)
     END_COPYING_MEMBERS
 END_COPYS
 
-BEGIN_LOADS(FlowAnimate)
-    LOAD_REVS(bs)
+void FlowAnimate::Load(BinStream &bs) {
+    int revs;
+    bs >> revs;
+    BinStreamRev d(bs, revs);
+
     ASSERT_REVS(3, 0)
-    LOAD_SUPERCLASS(FlowNode)
+
+    FlowNode::Load(bs);
+
     if (d.rev < 3) {
-        mAnim = mAnim.LoadFromMainOrDir(d.stream);
-    } else
         mAnim.LoadFromMainOrDir(d.stream);
-END_LOADS
+    }
+
+    bs >> mBlend >> mWait >> mDelay;
+    bs >> (int&)mStopMode >> mEnable;
+    bs >> (int&)mRate >> mStart;
+    bs >> mEnd >> mPeriod;
+    bs >> mType;
+    bs >> mScale >> (int&)mEase >> mEasePower;
+    bs >> mWrap;
+    bs >> mImmediateRelease;
+}
 
 void FlowAnimate::ResetAnim() {
     if (mAnim && !FlowNode::sPushDrivenProperties) {

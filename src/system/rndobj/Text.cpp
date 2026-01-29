@@ -9,6 +9,7 @@
 #include "rndobj/Mat.h"
 #include "rndobj/Mesh.h"
 #include "rndobj/Trans.h"
+#include "rndobj/Cam.h"
 #include "utl/BinStream.h"
 #include "utl/MemMgr.h"
 #include "utl/UTF8.h"
@@ -493,6 +494,27 @@ void RndText::FontMap::UpdateScrolling(float f1) {
     for (int i = 0; i < NumMeshes(); i++) {
         RndMesh *mesh = Mesh(i);
         if (mesh) {
+            float *pf = (float *)((char *)mesh + 0x78);
+            int *pi = (int *)((char *)mesh + 0x7c);
+
+            float f0 = pf[0];
+            double d0 = (double)pi[0];
+            double d1 = (double)pi[1];
+            double d2 = (double)pi[2];
+
+            d0 = d0;
+            d1 = d1;
+            d2 = d2;
+            f0 = f1;
+
+            pi[0] = (int)d0;
+            pi[1] = (int)d1;
+            pi[2] = (int)d2;
+            pf[0] = f0;
+
+            if (*(unsigned char *)((char *)mesh + 0xfd) == 0) {
+                mesh->SetDirty_Force();
+            }
         }
     }
 }
@@ -617,13 +639,39 @@ void RndText::SetTextASCII(const char *cstr) {
 }
 
 void RndText::QueueBlacklightPacket(RndMesh *mesh, float f2, int i3) {
-    int cursize = sBlacklightPacketPool.size();
-    if (sBlacklightPacketCount >= cursize) {
+    u32 cursize = sBlacklightPacketPool.size();
+    if ((u32)sBlacklightPacketCount >= cursize) {
         int newsize = 8;
         if (cursize != 0) {
             newsize = cursize * 2;
         }
-        sBlacklightPacketPool.resize(newsize);
+        BlacklightPacket packet;
+        sBlacklightPacketPool.resize(newsize, packet);
     }
-    sBlacklightPacketCount++;
+    int idx = sBlacklightPacketCount++;
+    int *pkt_ptr = (int *)&sBlacklightPacketPool[0] + (idx << 3);
+    pkt_ptr[0] = (int)mesh;
+    char *mesh_char = (char *)mesh + 0x128;
+    pkt_ptr[1] = *(int *)(mesh_char + 0x2C);
+    pkt_ptr[2] = *(int *)(mesh_char + 0x30);
+    pkt_ptr[3] = *(int *)(mesh_char + 0x34);
+    pkt_ptr[4] = *(int *)(mesh_char + 0x38);
+    *(float *)(pkt_ptr + 5) = f2;
+    pkt_ptr[6] = i3;
+    pkt_ptr[7] = (int)RndCam::Current();
+}
+
+// Template instantiation for map<RndFontBase*, set<unsigned short>>
+#include <map>
+#include <set>
+#include "utl/StlAlloc.h"
+namespace stlpmtx_std {
+typedef set<unsigned short, less<unsigned short>, StlNodeAlloc<unsigned short> > _FontCharSet;
+typedef pair<RndFontBase* const, _FontCharSet> _FontMapValue;
+template class _Rb_tree<RndFontBase*,
+    less<RndFontBase*>,
+    _FontMapValue,
+    _Select1st<_FontMapValue>,
+    priv::_MapTraitsT<_FontMapValue>,
+    StlNodeAlloc<_FontMapValue> >;
 }

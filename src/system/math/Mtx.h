@@ -346,6 +346,7 @@ inline void Multiply(const Vector3 &v, const Transform &t, Vector3 &out) {
 }
 
 void Multiply(const Plane &, const Transform &, Plane &);
+void Multiply(const Transform &, const Hmx::Matrix3 &, Transform &);
 
 inline void Multiply(const Hmx::Quat &q1, const Hmx::Quat &q2, Hmx::Quat &qres) {
     qres.Set(

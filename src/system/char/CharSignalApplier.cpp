@@ -44,7 +44,10 @@ BEGIN_LOADS(CharSignalApplier)
     ASSERT_REVS(0, 0)
     LOAD_SUPERCLASS(Hmx::Object)
     LOAD_SUPERCLASS(CharWeightable)
-    bs >> unk2c >> unk30 >> unk34 >> unk38;
+    bs >> unk34;
+    bs >> unk38;
+    bs >> unk2c;
+    bs >> unk30;
 END_LOADS
 
 void CharSignalApplier::Poll() {}

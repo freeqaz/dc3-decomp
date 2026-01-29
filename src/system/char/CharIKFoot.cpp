@@ -77,3 +77,69 @@ void CharIKFoot::Poll() {
         mTargets.clear();
     }
 }
+
+void CharIKFoot::DoFSM(Character *mMe, Transform &tf) {
+    if (mMe && mMe->Teleported())
+        unkc4 = 0;
+    float deltasecs = TheTaskMgr.DeltaSeconds();
+    if (deltasecs < 0.0f)
+        deltasecs = 0.0f;
+    tf.m = mFinger->WorldXfm().m;
+    tf.v.z = mFinger->WorldXfm().v.z;
+    unke0.z = tf.v.z;
+    float vecat = mData->LocalXfm().v[mDataIndex];
+    float f10;
+    bool b2 = false;
+    if (vecat < 1.0f) {
+        if (vecat <= 0.0f) {
+            ;
+        } else {
+            if (unkc4 == 1) {
+                f10 = 0.6f;
+            } else {
+                f10 = 0.5f;
+            }
+            if (f10 > tf.v.z) {
+                b2 = true;
+            }
+        }
+    } else {
+        b2 = true;
+    }
+    if (unkc4 == 0) {
+        tf.v = mFinger->WorldXfm().v;
+        if (b2) {
+            unke0 = tf.v;
+            unkc4 = 1;
+        }
+    }
+    if (unkc4 == 1) {
+        if (!b2) {
+            unkc4 = 2;
+            unkf0 = Distance(mFinger->WorldXfm().v, tf.v);
+        } else {
+            Vector3 v3c;
+            Subtract(mFinger->WorldXfm().v, unke0, v3c);
+            float len = Length(v3c);
+            if (len > 0.125f)
+                v3c *= 0.125f / len;
+            Add(unke0, v3c, tf.v);
+            return;
+        }
+    }
+    if (unkc4 == 2) {
+        Vector3 v48;
+        Subtract(mFinger->WorldXfm().v, tf.v, v48);
+        float len = Length(v48);
+        unkf0 = Min(-(deltasecs * 25.0f - unkf0), len);
+        if (unkf0 <= 0.0f)
+            unkc4 = 0;
+        else
+            v48 *= (len - unkf0) / len;
+        tf.v += v48;
+        if (b2) {
+            unke0 = tf.v;
+            unkc4 = 1;
+        }
+    }
+}

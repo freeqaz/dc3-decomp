@@ -132,10 +132,35 @@ Symbol GetDanceBattleBackupOutfit(Symbol s1, Symbol s2) {
     Symbol out(gNullStr);
     String str88(s1);
     String str90(str88);
-    if (str90.length() >= 2) {
-        str90 = str90.substr(0, str90.length() - 2);
-    }
-    for (int i = 1; i < charArr->Size(); i++) {
+    str90 = str90.substr(0, str90.length() - 2);
+    int i = 1;
+    if (charArr->Size() > 1) {
+        while (i < charArr->Size()) {
+            Symbol s = charArr->Sym(i);
+            if (str90 != s.Str()) {
+                const char *cStr = s.Str();
+                const char *p = cStr;
+                while (*p) p++;
+                unsigned int len = (unsigned int)(p - cStr);
+                if (len < 0x1E) {
+                    char buf[30];
+                    const char *src = cStr;
+                    char *dst = buf;
+                    do {
+                        *dst = *src;
+                        dst++;
+                        src++;
+                    } while (*src);
+                    const char *baseStr = str90.c_str();
+                    unsigned int baseLen = str90.length();
+                    buf[len - 2] = baseStr[baseLen - 2];
+                    buf[len - 1] = baseStr[baseLen - 1];
+                    *dst = 0;
+                    out = GetOutfitRemap(Symbol(buf), false);
+                }
+            }
+            i++;
+        }
     }
     return out;
 }

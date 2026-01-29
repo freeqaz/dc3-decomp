@@ -36,6 +36,7 @@ public:
     POOL_OVERLOAD(DirLoader, 0x2A);
 
     static bool sPrintTimes;
+    static ObjectDir *sTopSaveDir;
     static void SetCacheMode(bool);
 
     static Symbol GetDirClass(const char *);
@@ -89,7 +90,6 @@ private:
 
     static bool sCacheMode;
     static bool (*sPathEval)(const char *);
-    static ObjectDir *sTopSaveDir;
     static TextFileStream *sObjectMemDumpFile;
     static TextFileStream *sTypeMemDumpFile;
     static std::map<String, MemPointDelta> sMemPointMap;

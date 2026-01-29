@@ -12,6 +12,7 @@
 #include "utl/MemMgr.h"
 
 class RndEnviron : public RndTransformable, public RndDrawable {
+    friend class LightPreset;
 public:
     virtual ~RndEnviron();
     virtual bool Replace(ObjRef *, Hmx::Object *);

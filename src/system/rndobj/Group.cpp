@@ -318,6 +318,18 @@ void RndGroup::SortDraws() {
     }
 }
 
+int RndGroup::CollidePlane(const Plane &p) {
+    int ret = -1;
+    FOREACH (it, mDraws) {
+        if (it == mDraws.begin()) {
+            ret = (*it)->CollidePlane(p);
+        } else if (ret != (*it)->CollidePlane(p)) {
+            return 0;
+        }
+    }
+    return ret;
+}
+
 DataNode RndGroup::GetGroupChildren() {
     DataArrayPtr ptr(new DataArray(mObjects.size()));
     int idx = 0;

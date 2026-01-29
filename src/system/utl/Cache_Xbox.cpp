@@ -337,9 +337,75 @@ int CacheXbox::ThreadGetFileSize() {
     }
 }
 
-// int CacheXbox::ThreadRead() { return 1; }
+int CacheXbox::ThreadWrite() {
+    mThreadStr.ReplaceAll('/', '\\');
 
-// int CacheXbox::ThreadWrite() { return 1; }
+    unsigned int pos = mThreadStr.find('\\');
+    unsigned int nextPos = mThreadStr.find('\\', pos + 1);
+
+    while (nextPos != FixedString::npos) {
+        String dirPath = mThreadStr.substr(0, nextPos);
+
+        int attrs = GetFileAttributesA(dirPath.c_str());
+        if (attrs != -1) {
+            // Directory exists
+        } else {
+            int res = CreateDirectoryA(dirPath.c_str(), nullptr);
+            if (res == 0) {
+                break;
+            }
+        }
+
+        pos = nextPos;
+        nextPos = mThreadStr.find('\\', pos + 1);
+    }
+
+    HANDLE hFile = CreateFileA(
+        mThreadStr.c_str(),
+        0x40000000,  // GENERIC_WRITE
+        0,           // No sharing
+        nullptr,     // No security
+        2,           // CREATE_ALWAYS
+        0x80,        // FILE_ATTRIBUTE_NORMAL
+        nullptr      // No template
+    );
+
+    if (hFile == (HANDLE)-1) {
+        DWORD err = GetLastError();
+        if (err >= 2) {
+            if (err <= 3) {
+                return 8;
+            } else if (err != 0x15) {
+                if (IsDeviceConnected(mCacheID.DeviceID())) {
+                    MILO_NOTIFY("CacheXbox::WriteAsync() - Unhandled error %u from CreateFile()\n", err);
+                    return -1;
+                }
+            }
+        }
+        return 8;
+    }
+
+    DWORD bytesWritten = 0;
+    int result = WriteFile(hFile, mData, mSize, &bytesWritten, nullptr);
+    if (result != 0) {
+        CloseHandle(hFile);
+        XContentFlush(mCacheID.Name(), nullptr);
+        return 0;
+    }
+
+    DWORD err = GetLastError();
+    CloseHandle(hFile);
+    XContentFlush(mCacheID.Name(), nullptr);
+
+    if (IsDeviceConnected(mCacheID.DeviceID())) {
+        MILO_NOTIFY("CacheXbox::ThreadWrite() - Unhandled error %u from WriteFile()\n", err);
+        return -1;
+    }
+
+    return 8;
+}
+
+// int CacheXbox::ThreadRead() { return 1; }
 
 // bool CacheXbox::DeleteParentDirs(String) { return 1; }
 

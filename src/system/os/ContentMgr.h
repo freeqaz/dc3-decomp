@@ -108,6 +108,7 @@ public:
     virtual void Init();
     virtual void Terminate() {}
     virtual void StartRefresh() {}
+    virtual void Poll();
     virtual void PollRefresh();
     virtual const char *TitleContentPath() { return nullptr; }
     virtual const char *ContentPath(int) { return 0; }

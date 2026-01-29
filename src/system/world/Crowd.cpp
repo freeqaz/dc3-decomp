@@ -515,3 +515,40 @@ void WorldCrowd::Force3DCrowd(bool force) {
         Set3DCharList(vec, this);
     }
 }
+
+void SetMatColorFlags(ObjPtrList<RndMat, ObjectDir> &matList, int flags,
+                      stlpmtx_std::vector<Hmx::Color> *colors) {
+    RndMat **head = (RndMat **)((char *)&matList + 0x8);
+    if (*head == NULL) {
+        return;
+    }
+
+    RndMat *current = *head;
+    do {
+        current->SetColorMod(*(Hmx::Color *)flags, 0);
+        u32 *modNum = (u32 *)((char *)current + 0x228);
+        *modNum = *modNum | 2;
+
+        if (colors != NULL) {
+            int *pBegin = (int *)colors;
+            int *pEnd = (int *)colors + 1;
+            int size = *pEnd - *pBegin;
+            int alignedSize = size & 0xFFFFFFF0;
+
+            if (alignedSize != 0x30) {
+                TheDebug.Fail(MakeString(kAssertStr, "Crowd.cpp", 0x33b, "RndMat::kColorModNum != modulate"), nullptr);
+            }
+
+            int colorCount = size >> 4;
+            if (colorCount > 0) {
+                for (u32 i = 0; i < (u32)colorCount; i++) {
+                    current->SetColorMod(colors->at(i), i);
+                }
+            } else {
+                stlpmtx_std::__stl_throw_out_of_range("vector");
+            }
+        }
+
+        current = *(RndMat **)((char *)current + 0x14);
+    } while (current != NULL);
+}

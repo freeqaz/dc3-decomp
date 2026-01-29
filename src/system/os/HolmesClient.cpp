@@ -9,6 +9,7 @@
 #include "os/NetworkSocket.h"
 #include "os/System.h"
 #include "os/Timer.h"
+#include "utl/Cache.h"
 #include "utl/Loader.h"
 #include "utl/MemStream.h"
 #include "utl/Option.h"
@@ -23,6 +24,7 @@
 #define NETBIOS_NAME_MAX 64
 
 String gLastCachedResource;
+CacheResourceResult gLastCacheResult;
 
 namespace {
     struct HolmesProfileData {
@@ -104,6 +106,30 @@ namespace {
         CheckInput(b);
         CheckReads(b);
     };
+
+    CacheResourceResult HolmesClientCacheResource(const char *filename, const char *resourceName) {
+        AutoSlowFrame frame("HolmesClientCacheFile", 1000.0f);
+        CritSecTracker cst(&gCrit);
+
+        BeginCmd(Holmes::kCacheResource, true);
+        gLastCachedResource = resourceName;
+
+        MILO_ASSERT(gHolmesStream, 1208);
+
+        *gStreamBuffer << u8(Holmes::kCacheResource);
+        *gStreamBuffer << filename;
+        HolmesFlushStreamBuffer();
+        WaitForResponse(Holmes::kCacheResource);
+
+        u8 result;
+        *gHolmesStream >> result;
+        gPendingResponse = Holmes::kInvalidOpcode;
+        gLastCacheResult = (CacheResourceResult)(s8)result;
+
+        EndCmd(Holmes::kCacheResource);
+
+        return gLastCacheResult;
+    }
 }
 
 #pragma region Public API
@@ -524,6 +550,48 @@ void HolmesToLocal(char *p1, const char *p2) {
 
 char const *HolmesFileHostName() { return gMachineName; }
 
+void WaitForAnyResponse(Holmes::Protocol prot) {
+    if (gPendingResponse == Holmes::kInvalidOpcode && gHolmesStream->Eof()) {
+        AutoSlowFrame frame("Holmes::WaitForAnyResponse", 2.0f);
+
+        HolmesProfileData *profile = &gProfile[prot];
+
+        int count = profile->count;
+        profile->count = count + 1;
+        if (count == 0) {
+            profile->wait.Start();
+        }
+
+        float elapsed = profile->wait.SplitMs();
+        float timeout = 2000.0f;
+
+        if (gHolmesStream->Eof()) {
+            float timeout_step = 1000.0f;
+            float timeout_factor = 0.001f;
+
+            do {
+                Timer::Sleep(0);
+
+                if (!gStackTraced && (profile->wait.SplitMs() - elapsed) > timeout) {
+                    const char *proto_str = Holmes::ProtocolDebugString(prot);
+                    float time_blocked = timeout * timeout_factor;
+                    printf(
+                        "Holmes: %s opcode blocked for %f\n",
+                        proto_str,
+                        time_blocked
+                    );
+                    timeout += timeout_step;
+                }
+            } while (gHolmesStream->Eof());
+        }
+
+        profile->count--;
+        if (profile->count == 0) {
+            profile->wait.Stop();
+        }
+    }
+}
+
 void HolmesClientPoll() {
     CritSecTracker cst(&gCrit);
 
@@ -532,4 +600,55 @@ void HolmesClientPoll() {
 
     gPollStreamEof = false;
     HolmesClientPollInternal(true);
+}
+
+bool HolmesClientCacheFile(char *arg0, const char *arg1) {
+    CritSecTracker cst(&gCrit);
+    AutoSlowFrame slow("HolmesClientCacheFile", 25.0f);
+
+    BeginCmd(Holmes::kCacheFile, true);
+
+    String str(arg1);
+    HolmesToLocal(arg0, arg1);
+
+    if (*arg0 == 0) {
+        EndCmd(Holmes::kCacheFile);
+        return false;
+    }
+
+    bool result = false;
+    u8 fileInfo[0x20];
+    int attrResult = GetFileAttributesExA(arg0, (GET_FILEEX_INFO_LEVELS)0, fileInfo);
+    bool fileExists = (attrResult - 1) != (-1);
+    s64 fileTime = *(s64*)(fileInfo + 0x14);
+
+    if ((str != gLastCachedResource) && (gLastCacheResult > 0 || fileExists)) {
+        EndCmd(Holmes::kCacheFile);
+        return true;
+    }
+
+    u8 cmd = Holmes::kCacheFile;
+    gStreamBuffer->Write(&cmd, 1);
+    *gStreamBuffer << str;
+
+    u8 hasFileFlag = fileExists;
+    gStreamBuffer->Write(&hasFileFlag, 1);
+
+    if (fileExists) {
+        gStreamBuffer->WriteEndian(&fileTime, 8);
+    }
+
+    HolmesFlushStreamBuffer();
+    WaitForResponse(Holmes::kCacheFile);
+
+    u8 response = 0;
+    *gHolmesStream >> response;
+    gPendingResponse = Holmes::kInvalidOpcode;
+
+    if (response != 0) {
+        result = true;
+    }
+
+    EndCmd(Holmes::kCacheFile);
+    return result;
 }

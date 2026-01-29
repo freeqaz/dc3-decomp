@@ -8,6 +8,12 @@ BinStream &operator<<(BinStream &bs, const CharBone::WeightContext &ctx) {
     return bs;
 }
 
+BinStreamRev &operator>>(BinStreamRev &bs, CharBone::WeightContext &ctx) {
+    bs >> ctx.mContext;
+    bs >> ctx.mWeight;
+    return bs;
+}
+
 BEGIN_CUSTOM_PROPSYNC(CharBone::WeightContext)
     SYNC_PROP(context, o.mContext)
     SYNC_PROP(weight, o.mWeight)
@@ -63,6 +69,71 @@ BEGIN_LOADS(CharBone)
     if (d.rev < 9) {
         RndTransformableRemover t;
         t.Load(bs);
+    }
+    if (d.rev > 6) {
+        d >> mPositionContext;
+    } else {
+        bool val;
+        d >> val;
+        mPositionContext = (int)val;
+    }
+    if (d.rev > 6) {
+        d >> mScaleContext;
+    } else if (d.rev > 1) {
+        bool val;
+        d >> val;
+        mScaleContext = (int)val;
+    }
+    int rot_val;
+    d >> rot_val;
+    mRotation = (CharBones::Type)rot_val;
+    if (d.rev < 5) {
+        int dummy;
+        d >> dummy;
+    }
+    if (d.rev < 2) {
+        mScaleContext = 0;
+        mRotation = (CharBones::Type)(rot_val + 1);
+    }
+    if ((d.rev < 5) && (rot_val > 6)) {
+        mRotation = (CharBones::Type)6;
+    }
+    if (d.rev > 6) {
+        d >> mRotationContext;
+    } else {
+        mRotationContext = rot_val - 6;
+    }
+    if ((d.rev > 2) && (d.rev < 8)) {
+        int dummy;
+        d >> dummy;
+    }
+    if (d.rev > 3) {
+        d >> mTarget;
+    }
+    if (d.rev == 6) {
+        int val;
+        d >> val;
+        if (mPositionContext != 0) {
+            mPositionContext = val;
+        }
+        if (mScaleContext != 0) {
+            mScaleContext = val;
+        }
+        if (mRotationContext != 0) {
+            mRotationContext = val;
+        }
+    } else {
+        if (d.rev > 7) {
+            d >> mWeights;
+        }
+        if (d.rev > 8) {
+            d >> mTrans;
+        }
+        if (d.rev > 9) {
+            bool val;
+            d >> val;
+            mBakeOutAsTopLevel = val;
+        }
     }
 END_LOADS
 

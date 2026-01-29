@@ -167,7 +167,17 @@ void MemHeap::Init(
     mSizeWords = size - (i7 - start >> 2);
     gTimeStamp++;
     InsertFreeBlock((FreeBlock *)mStart, mSizeWords, nullptr, nullptr, gTimeStamp);
-    if (mDebugLevel > 0) {
+    if (mDebugLevel >= 1) {
+        FreeBlock *blockStart = mFreeBlockChain;
+        int *blockStartInt = (int *)blockStart;
+        int *blockEnd = blockStartInt + (blockStart->mSizeWords << 2);
+        if (blockStartInt + 3 < blockEnd) {
+            int *ptr = blockStartInt + 2;
+            for (int count = (((blockEnd - (blockStartInt + 3)) - 1) >> 2) + 1; count != 0; count--) {
+                ptr++;
+                *ptr = 0xDEADDEAD;
+            }
+        }
     }
 }
 

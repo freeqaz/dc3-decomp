@@ -38,6 +38,7 @@ public:
         DataArray *mScript;
     };
 
+    friend void InitLongJoyCheats(const DataArray *);
 
     CheatsManager();
     virtual ~CheatsManager();
@@ -94,6 +95,7 @@ void LogCheat(int, bool, DataArray *);
 void AppendCheatsLog(FixedString &);
 void CallQuickCheat(DataArray *da, LocalUser *lu);
 void InitQuickJoyCheats(const DataArray *a, CheatsManager::ShiftMode);
+void InitLongJoyCheats(const DataArray *);
 void CheatsTerminate();
 DataNode OnGetCheatMode(DataArray *da);
 DataNode SetKeyCheatsEnabled(DataArray *da);

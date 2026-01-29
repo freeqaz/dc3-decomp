@@ -1,5 +1,7 @@
 #include "rndobj/Part.h"
 #include "math/Geo.h"
+#include "math/Rand.h"
+#include "math/Rot.h"
 #include "obj/Data.h"
 #include "obj/DataFunc.h"
 #include "obj/Object.h"
@@ -128,8 +130,8 @@ RndParticleSys::RndParticleSys()
       mStretchWithVelocity(0), mConstantArea(0), mPerspectiveStretch(0), mStretchScale(1),
       mScreenAspect(1), mSubSamples(0), mGrowRatio(0), mShrinkRatio(1),
       mMidColorRatio(0.5), mMidColorLow(1, 1, 1), mMidColorHigh(1, 1, 1),
-      mBirthMomentum(0), mBirthMomentumAmount(1), mMaxBurst(0), unk3a4(0),
-      mBurstInterval(15, 35), mBurstPeak(4, 8), mBurstLength(20, 30), unk3c0(0),
+      mBirthMomentum(0), mBirthMomentumAmount(1), mMaxBurst(0), mTimeTillBurst(0),
+      mBurstInterval(15, 35), mBurstPeak(4, 8), mBurstLength(20, 30), mExplicitParts(0),
       mElapsedTime(0), mAnimateUVs(0), mLoopUVAnim(1), mRandomAnimStart(0),
       mTileHoldTime(0), mNumTilesAcross(1), mNumTilesDown(1), mNumTilesTotal(1),
       mStartingTile(0), unk3e0(1), unk3e4(1), mAttractors(this) {
@@ -732,6 +734,133 @@ void RndParticleSys::SetSubSamples(int num) {
     Multiply(WorldXfm(), mSubSampleXfm, mSubSampleXfm);
 }
 
+void RndParticleSys::UpdateRelativeXfm() {
+    if (mRelativeMotion == 1) {
+        mRelativeXfm = mMotionParent->WorldXfm();
+    } else if (mRelativeMotion) {
+        const Transform &worldXfm = mMotionParent->WorldXfm();
+        Invert(mLastWorldXfm.m, mLastWorldXfm.m);
+        Multiply(mLastWorldXfm.m, worldXfm.m, mLastWorldXfm.m);
+        Hmx::Quat q28(0, 0, 0, 1);
+        FastInterp(q28, Hmx::Quat(mLastWorldXfm.m), mRelativeMotion, q28);
+        MakeRotMatrix(q28, mLastWorldXfm.m);
+        Subtract(mRelativeXfm.v, mLastWorldXfm.v, mRelativeXfm.v);
+        Multiply(mRelativeXfm, mLastWorldXfm.m, mRelativeXfm);
+        Normalize(mRelativeXfm.m, mRelativeXfm.m);
+        Interp(mLastWorldXfm.v, worldXfm.v, mRelativeMotion, mLastWorldXfm.v);
+        Add(mRelativeXfm.v, mLastWorldXfm.v, mRelativeXfm.v);
+        Subtract(mMotionParent->WorldXfm().v, mLastWorldXfm.v, unk2b4);
+        mLastWorldXfm = mMotionParent->WorldXfm();
+    }
+}
+
+void RndParticleSys::MoveParticles(float dt, float frameSpan) {
+    // Stub function for now - complexity deferred
+}
+
+void RndParticleSys::CreateParticles(float frame, const Transform &xfm) {
+    int numToCreate = (int)mEmitCount;
+    if (numToCreate <= 0 || mNumActive >= mMaxParticles)
+        return;
+
+    mEmitCount -= numToCreate;
+    for (int i = 0; i < numToCreate && mNumActive < mMaxParticles; i++) {
+        RndParticle *p = AllocParticle();
+        if (!p)
+            break;
+        InitParticle(frame, p, &xfm, gNoPartOverride);
+    }
+}
+
+void RndParticleSys::RunFastForward() {
+    if (mNeedForward == false) {
+        return;
+    }
+
+    mNeedForward = false;
+
+    float frame = CalcFrame();
+    if (mFrameDrive == false) {
+        unk138 = frame;
+    }
+}
+
+void RndParticleSys::UpdateParticles() {
+    if (mPreserveParticles == 0) {
+        return;
+    }
+
+    f32 currentFrame = CalcFrame();
+
+    if (unk138 == 0.0f) {
+        unk138 = currentFrame;
+    }
+
+    if (mNeedForward != 0) {
+        RunFastForward();
+        if (mFrameDrive == 0) {
+            unk138 = currentFrame;
+        }
+    } else {
+        f32 frameUpdate = currentFrame - unk138;
+        if (mFrameDrive == 0) {
+            unk138 = currentFrame;
+        }
+
+        if (frameUpdate != 0.0f) {
+            if (mPauseOffscreen != 0) {
+                if (frameUpdate > 100.0f) {
+                    float excess = frameUpdate - 100.0f;
+                    frameUpdate = 100.0f;
+                    unk144 = unk144 + excess;
+                }
+                currentFrame -= unk144;
+            }
+
+            MoveParticles(currentFrame, frameUpdate);
+
+            if ((mExplicitParts != 0) || (mEmitRate.x > 0.0f) || (mEmitRate.y > 0.0f) || (mMaxBurst != 0)) {
+                MakeLocToRel(mRelativeXfm);
+
+                if (mSubSamples > 1) {
+                    if (mExplicitParts == 0) {
+                        f32 halfSample = 0.5f;
+                        f32 pitchMid = LimitAng(mPitch.y - mPitch.x) * halfSample + mPitch.x;
+                        f32 yawMid = LimitAng(mYaw.y - mYaw.x) * halfSample + mYaw.x;
+                        f32 speedMid = (mSpeed.y - mSpeed.x) * halfSample + mSpeed.x;
+
+                        f32 pi = 3.14159265f;
+                        f32 sinYawPlus = FastSin(yawMid + pi);
+                        f32 sinPitch = FastSin(pitchMid);
+                        f32 cosPitch = FastSin(pitchMid);
+                        f32 sinPitchPlus = FastSin(pitchMid + pi);
+
+                        Vector3 baseVel(
+                            -sinPitch * sinYawPlus * speedMid,
+                            sinPitchPlus * sinYawPlus * speedMid,
+                            cosPitch * speedMid
+                        );
+
+                        memcpy(&mRelativeXfm, &mSubSampleXfm, sizeof(Transform));
+
+                        f32 invSamples = 1.0f / (f32)mSubSamples;
+                        for (int i = 1; i < mSubSamples; i++) {
+                            f32 interpT = (f32)i * invSamples;
+                            CreateParticles(currentFrame, mRelativeXfm);
+                            Vector3 interpOffset;
+                            Interp(unk2b4, baseVel, interpT, interpOffset);
+                        }
+                    } else {
+                        CreateParticles(currentFrame, mRelativeXfm);
+                    }
+                } else {
+                    CreateParticles(currentFrame, mRelativeXfm);
+                }
+            }
+        }
+    }
+}
+
 void RndParticleSys::FreeAllParticles() {
     for (RndParticle *p = mActiveParticles; p != nullptr; p = FreeParticle(p))
         ;
@@ -750,7 +879,7 @@ void RndParticleSys::ExplicitParticles(int i1, bool b2, PartOverride &partOverri
             InitParticle(frame, p, &tf, partOverride);
         }
     } else {
-        unk3c0 += i1;
+        mExplicitParts += i1;
     }
 }
 
@@ -903,4 +1032,22 @@ DataNode RndParticleSys::OnExplicitParts(const DataArray *da) {
     bool b = da->Size() >= 4 && da->Int(3);
     ExplicitParticles(da->Int(2), b, gNoPartOverride);
     return 0;
+}
+
+bool RndParticleSys::MakeWorldSphere(Sphere &s, bool b2) {
+    if (b2) {
+        s.Zero();
+        for (RndParticle *p = mActiveParticles; p != nullptr; p = p->next) {
+            Sphere s38;
+            Multiply((const Vector3 &)p->pos, mRelativeXfm, s38.center);
+            s38.radius = p->size * 0.5f;
+            s.GrowToContain(s38);
+        }
+        return true;
+    }
+    if (mSphere.GetRadius()) {
+        Multiply(mSphere, WorldXfm(), s);
+        return true;
+    }
+    return false;
 }

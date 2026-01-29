@@ -226,7 +226,22 @@ bool BaseDisplacementNode::Displacements(
     return false;
 }
 
-void DistanceToErrors(const Vector3 &, const Vector3 &, const Vector3 &, Vector3 &);
+void DistanceToErrors(const Vector3 &a, const Vector3 &b, const Vector3 &c, Vector3 &d) {
+    Vector3 v;
+    Subtract(a, b, v);
+
+    d.x = c.x * v.x;
+    d.y = c.y * v.y;
+    d.z = c.z * v.z;
+
+    for (int j = 0; j < 3; ++j) {
+        float x = fabs(d[j]);
+        float y = -x;
+        float z = (y >= 0.0f) ? 0.0f : x;
+        float w = (z - 1.0f >= 0.0f) ? 1.0f : z;
+        d[j] = w;
+    }
+}
 
 void DisplacementNode::CalcError(
     const ErrorFrameInput &frame_input, const ErrorNodeInput &node_input, Vector3 &vout

@@ -112,14 +112,22 @@ void NgMat::SetBasicState() {
 }
 
 void NgMat::SetupAmbient() {
+    f32 x, y, z, w;
     if (mUseEnviron) {
         const Vector4 &v4 =
             reinterpret_cast<const Vector4 &>(RndEnviron::Current()->AmbientColor());
-        TheShaderMgr.SetVConstant((VShaderConstant)1, v4);
-        TheShaderMgr.SetPConstant((PShaderConstant)1, v4);
+        x = v4.x;
+        y = v4.y;
+        z = v4.z;
+        w = v4.w;
     } else {
-        Vector4 v4(1, 1, 1, 1);
-        TheShaderMgr.SetVConstant((VShaderConstant)1, v4);
-        TheShaderMgr.SetPConstant((PShaderConstant)1, v4);
+        x = 1.0f;
+        y = 1.0f;
+        z = 1.0f;
+        w = 1.0f;
     }
+    Vector4 v4_1(x, y, z, w);
+    TheShaderMgr.SetVConstant((VShaderConstant)1, v4_1);
+    Vector4 v4_2(x, y, z, w);
+    TheShaderMgr.SetPConstant((PShaderConstant)1, v4_2);
 }

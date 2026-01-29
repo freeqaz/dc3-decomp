@@ -159,14 +159,15 @@ FlowTrigger::PropTriggerDefn::PropTriggerDefn(Hmx::Object *owner) : mProvider(ow
 }
 
 DataNode FlowTrigger::PropTriggerDefn::GetPathDisplay(DataArray *a) {
-    if (mProvider && unk20.Type() == kDataArray) {
-        if (unk20.Array()->Size() != 0) {
-            String str;
-            unk20.Print(str, true, 0);
-            return MakeString("%s->%s", mProvider->Name(), str.c_str());
-        }
+    if (!mProvider || unk20.Type() != kDataArray) {
+        return "<none>";
     }
-    return "<none>";
+    if (unk20.Array()->Size() == 0) {
+        return "<none>";
+    }
+    String str;
+    unk20.Print(str, true, 0);
+    return MakeString("%s->%s", mProvider->Name(), str.c_str());
 }
 
 Hmx::Object *FlowTrigger::GetEventProvider() {

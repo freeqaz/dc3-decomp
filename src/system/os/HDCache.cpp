@@ -114,13 +114,19 @@ void HDCache::Poll() {
     }
 }
 
-bool HDCache::ReadAsync(int arkfileNum, int blockNum, void *) {
+bool HDCache::ReadAsync(int arkfileNum, int blockNum, void *ptr) {
     MILO_ASSERT(ReadDone(), 0x191);
     if (mBlockState[arkfileNum]) {
         MILO_ASSERT(blockNum < TheArchive->GetArkfileNumBlocks(arkfileNum), 0x196);
+        // Check if block is in bitmap
+        if ((mBlockState[arkfileNum][(blockNum / 32)] & (1 << (blockNum % 32)))) {
+            File *readFile = mReadArkFiles[arkfileNum];
+            MILO_ASSERT(readFile->Size() >= ((blockNum + 1) * kArkBlockSize), 0x19D);
+            mReadFileIdx = arkfileNum;
+            readFile->Seek(blockNum * kArkBlockSize, 0);
+            return readFile->ReadAsync(ptr, kArkBlockSize);
+        }
     }
-    MILO_ASSERT(mReadArkFiles[arkfileNum]->Size() >= ((blockNum + 1) * kArkBlockSize), 0x19D);
-    mReadFileIdx = arkfileNum;
     return false;
 }
 

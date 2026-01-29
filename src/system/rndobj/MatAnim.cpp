@@ -222,3 +222,16 @@ void Interp(
 ) {
     tex = texPtr;
 }
+
+BinStreamRev &operator>>(
+    BinStreamRev &bs, std::vector<Key<RndMatAnim::TexPtr>, stlpmtx_std::StlNodeAlloc<Key<RndMatAnim::TexPtr>>>
+        &keys
+) {
+    unsigned int length;
+    bs >> length;
+    keys.resize(length);
+    for (auto it = keys.begin(); it != keys.end(); it++) {
+        bs >> *it;
+    }
+    return bs;
+}

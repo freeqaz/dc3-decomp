@@ -19,6 +19,7 @@ public:
     virtual int UncompressedSize() { return mUCSize; }
     virtual bool ReadDone(int &);
     virtual bool WriteDone(int &i);
+    virtual bool GetFileHandle(void *&) { return false; }
 
     void Init();
     static AsyncFile *New(const char *, int);

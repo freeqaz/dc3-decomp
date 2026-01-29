@@ -1,10 +1,23 @@
 #include "os/PlatformMgr.h"
+#include "os/OnlineID.h"
+#include "system/utl/GlitchFinder.h"
 #include "xdk/XAPILIB.h"
 #include "xdk/XMP.h"
 #include "xdk/XNET.h"
 #include "xdk/NUI.h"
 #include "xdk/xapilibi/winerror.h"
 #include "xdk/xapilibi/xbox.h"
+
+// Forward declarations for JSON writing functions
+extern int XJSONBeginArray(void*);
+extern int XJSONEndArray(void*);
+extern int XJSONWriteNullValue(void*);
+extern int XJSONWriteNumberValue(void*, double);
+extern int XJSONWriteStringValue(void*, const unsigned char*, int);
+
+// Forward declarations for merged functions
+extern void* merged_DataArrayNode(void*, int);
+extern void* merged_82610090(const void*, unsigned int*);
 
 namespace {
     int mSigninSameGuest;
@@ -52,21 +65,23 @@ bool PlatformMgr::IsEthernetCableConnected() { return XNetGetEthernetLinkStatus(
 
 void PlatformMgr::UpdateSigninState() {
     XUID oldCache[4] = { mXuidCache[0], mXuidCache[1], mXuidCache[2], mXuidCache[3] };
+    int i;
     mSigninSameGuest = 0;
-    for (int i = 0; i < 4; i++) {
-        if (XUserGetSigninState(i) == eXUserSigninState_NotSignedIn) {
-            mXuidCache[i] = 0;
-        } else {
-            XUSER_SIGNIN_INFO info;
-            mSigninMask |= 1 << i;
+    mSigninMask = 0;
+    for (i = 0; i < 4; i++) {
+        if (XUserGetSigninState(i) != 0) {
+            XUSER_SIGNIN_INFO info = {};
+            mSigninMask |= (1 << i);
             XUserGetSigninInfo(i, 2, &info);
             XUserGetXUID(i, &info.xuid);
+            mXuidCache[i] = info.xuid;
+        } else {
             mXuidCache[i] = 0;
         }
         if (oldCache[i] != mXuidCache[i]) {
-            mSigninChangeMask |= 1 << i;
-            if (mXuidCache[i] == 0) {
-                mSigninSameGuest |= 1 << i;
+            mSigninChangeMask |= (1 << i);
+            if (((oldCache[i] ^ mXuidCache[i]) & 0xff3fffffffffffff) == 0) {
+                mSigninSameGuest |= (1 << i);
             }
         }
     }
@@ -238,5 +253,70 @@ void PlatformMgr::RegionInit() {
         SetRegion(kRegionEurope);
     } else {
         SetRegion(kRegionNA);
+    }
+}
+
+namespace {
+    void DtaToJsonHelper(void* writer, const DataArray* arr) {
+        short count = *(short*)((char*)arr + 8);
+        if (count != 0 && count > 0) {
+            for (int i = 0; i < count; i++) {
+                DataNode& nodeRef = arr->Node(i);
+                DataNode* node = &nodeRef;
+                unsigned int type = *(unsigned int*)((char*)node + 4);
+
+                if (type >= 1) {
+                    switch (type) {
+                        case 18: {
+                            const char* str = node->Str();
+                            const char* start = str;
+                            while (*str != 0) {
+                                str++;
+                            }
+                            int len = str - start - 1;
+                            const char* str2 = node->Str();
+                            XJSONWriteStringValue(writer, (unsigned char*)str2, len);
+                            break;
+                        }
+                        case 16: {
+                            XJSONBeginArray(writer);
+                            DataArray* subArr = node->Array();
+                            DtaToJsonHelper(writer, subArr);
+                            XJSONEndArray(writer);
+                            break;
+                        }
+                        case 5: {
+                            Symbol sym = node->Sym();
+                            const char* symStart = sym.Str();
+                            const char* symStr = symStart;
+                            while (*symStr != 0) {
+                                symStr++;
+                            }
+                            int len = symStr - symStart - 1;
+                            Symbol sym2 = node->Sym();
+                            XJSONWriteStringValue(writer, (unsigned char*)sym2.Str(), len);
+                            break;
+                        }
+                        case 1: {
+                            double val = node->Float();
+                            XJSONWriteNumberValue(writer, val);
+                            break;
+                        }
+                        default: {
+                            unsigned int t = type;
+                            const char* msg = "DtaToJson can't handle type %d r";
+                            const char* formatted = (const char*)merged_82610090(&msg, &t);
+                            TheDebug.Notify(formatted);
+                            XJSONWriteNullValue(writer);
+                            break;
+                        }
+                    }
+                } else {
+                    int intVal = node->Int();
+                    double dblVal = (double)(long long)intVal;
+                    XJSONWriteNumberValue(writer, dblVal);
+                }
+            }
+        }
     }
 }

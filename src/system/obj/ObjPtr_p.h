@@ -197,9 +197,8 @@ void ObjPtrVec<T1, T2>::Set(iterator it, T1 *obj) {
 // see Draw.cpp for this
 template <class T1, class T2>
 void ObjPtrVec<T1, T2>::operator=(const ObjPtrVec &other) {
-    if (this != &other) {
-        mNodes.clear();
-    }
+    if (this == &other) return;
+    mNodes.clear();
     mNodes.reserve(other.mNodes.size());
     for (const_iterator it = other.begin(); it != other.end(); ++it) {
         mNodes.push_back(Node(this));

@@ -3,6 +3,7 @@
 #include "os/System.h"
 #include "rndobj/FontBase.h"
 #include "obj/Object.h"
+#include "obj/PropSync.h"
 #include "utl/BinStream.h"
 #include "math/Rot.h"
 #include "utl/FilePath.h"
@@ -522,3 +523,4 @@ int RndFont::CharPage(unsigned short c) const {
         return -1;
     }
 }
+

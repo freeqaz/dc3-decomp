@@ -79,6 +79,46 @@ bool ClipPlayer::CanUseRestStep() {
         return true;
 }
 
+DataNode ClipPlayer::AnnotatePractice() {
+    if (unk24 == kHugeFloat) {
+        return 0;
+    }
+    DataArray *tempMem = new DataArray(0);
+    DataArray *arr;
+    if (tempMem) {
+        arr = new DataArray(0);
+    }
+    float f30 = 1.0f;
+    if (!TheLoadMgr.EditMode() || !TheHamDirector->NoTransitions()) {
+        if (mInClip) {
+            float f31 = unk20 + f30;
+            Annotate(arr, f31 - ClipLength(mInClip), mInClip->Name());
+            Annotate(arr, unk20 + f30, "");
+        }
+    }
+    float f31 = unk24;
+    if (!TheLoadMgr.EditMode() || !TheHamDirector->NoTransitions()) {
+        if (mOutClip) {
+            Annotate(arr, f31 - f30, mOutClip->Name());
+            f31 += ClipLength(mOutClip) - 2.0f;
+        }
+    }
+    if (CanUseRestStep()) {
+        Annotate(arr, f31, "rest_step");
+        f31 = unk24 + 2.0f;
+    }
+    Annotate(arr, f31, "rest");
+    int startMarginFrames = (int)TheHamDirector->Property(Symbol("loop_frame_start"), true)->Int();
+    long long loopStartVal = (long long)(startMarginFrames * 4);
+    Annotate(arr, unk20 - (float)loopStartVal, "loop");
+    int endMarginFrames = (int)TheHamDirector->Property(Symbol("loop_frame_end"), true)->Int();
+    long long loopEndVal = (long long)(endMarginFrames * 4);
+    Annotate(arr, (float)loopEndVal + unk24 + f30, "loop");
+    DataNode node(arr, kDataArray);
+    arr->Release();
+    return node;
+}
+
 void ClipPlayer::PlayAnims(HamCharacter *c, float f1, float f2, int x) {
     unk48 = x;
     unkc = FrameToBeat(f1);

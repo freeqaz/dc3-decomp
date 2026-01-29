@@ -98,3 +98,53 @@ void PostPurchaseEnumJob::OnCompletion(Hmx::Object *obj) {
     }
     SingleItemEnumJob::OnCompletion(obj);
 }
+
+MultipleItemsEnumJob::MultipleItemsEnumJob(Hmx::Object *obj, int unk) : Job() {
+    unk8 = obj;
+    unkc = unk;
+}
+
+MultipleItemsEnumJob::~MultipleItemsEnumJob() {}
+
+void MultipleItemsEnumJob::Start() {}
+
+bool MultipleItemsEnumJob::IsFinished() { return true; }
+
+void MultipleItemsEnumJob::Cancel(Hmx::Object *obj) {}
+
+void MultipleItemsEnumJob::OnCompletion(Hmx::Object *obj) {}
+
+MultipleItemsPostPurchaseEnumJob::MultipleItemsPostPurchaseEnumJob(Hmx::Object *obj, int unk) : MultipleItemsEnumJob(obj, unk) {}
+
+MultipleItemsPostPurchaseEnumJob::~MultipleItemsPostPurchaseEnumJob() {}
+
+void MultipleItemsPostPurchaseEnumJob::OnCompletion(Hmx::Object *obj) {
+    if ((unk30 == 2) && (unk34 != 0)) {
+        static int sInitFlags = 0;
+        static Symbol sSourceSymbol;
+        static Symbol sOfferSymbol;
+        static Symbol sPurchaserSymbol;
+
+        if (!(sInitFlags & 1)) {
+            sInitFlags |= 1;
+            sSourceSymbol = Symbol("source");
+        }
+        if (!(sInitFlags & 2)) {
+            sInitFlags |= 2;
+            sOfferSymbol = Symbol("offer");
+        }
+        if (!(sInitFlags & 4)) {
+            sInitFlags |= 4;
+            sPurchaserSymbol = Symbol("purchaser");
+        }
+
+        int count = ((int)((u64)unk14 - (u64)unk10)) >> 3;
+        if (count != 0) {
+            for (int i = 0; i < count; i++) {
+                String itemStr(MakeString("0x%016llX", (u64)unk10 + (i << 3)));
+                SendDataPoint("store/purchase", sSourceSymbol, *unk5c, sOfferSymbol, itemStr, sPurchaserSymbol, unk60);
+            }
+        }
+    }
+    MultipleItemsEnumJob::OnCompletion(obj);
+}

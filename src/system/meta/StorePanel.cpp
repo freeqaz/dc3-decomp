@@ -156,12 +156,32 @@ void StorePanel::HandleNetCacheMgrFailure() {
 }
 
 void StorePanel::HandleNetCacheLoaderFailure(int failType) {
-    MILO_ASSERT((0) <= (failType) && (failType) < (kNCMS_Max), 0xe5);
+    StoreError err = kStoreErrorSuccess;
+
+    MILO_ASSERT((0) <= (failType) && (failType) < (4), 0xe5);
+
     switch (failType) {
     case 0:
-
+        break;
+    case 1: {
+        void (*func)(void *) = (void (*)(void *))*(void **)this;
+        func(this);
+        if (ThePlatformMgr.IsSignedIntoLive(0) == 0) {
+            err = (StoreError)2;
+        }
         break;
     }
+    case 2:
+        break;
+    case 3:
+        break;
+    }
+
+    if (ThePlatformMgr.IsEthernetCableConnected() == 0) {
+        err = (StoreError)7;
+    }
+
+    ExitError(err);
 }
 
 void StorePanel::MultipleItemsCheckout(std::list<StoreOffer *> *offers) {

@@ -292,10 +292,11 @@ void RhythmBattle::OnReset() {
 
 void RhythmBattle::Poll() {
     if (!TheLoadMgr.EditMode()) {
-        if (mActive && unk102) {
-            if (GetGoofy() != unkf8) {
+        if (mActive && !unk102) {
+            bool goofy = GetGoofy();
+            if (goofy != unkf8) {
                 mPlayerOne->SwapObjs(mPlayerTwo);
-                unkf8 = GetGoofy();
+                unkf8 = goofy;
             }
             Symbol leader = GetLeader();
             static Symbol left("left");
@@ -304,34 +305,35 @@ void RhythmBattle::Poll() {
                 ObjectDir::Main()->Find<UIPanel>("rhythm_detector_panel", false);
             if (unk130 != 0) {
                 static Symbol playing("playing");
-                if (TheUI->FocusPanel() && unk100 && unk101) {
+                if (TheUI->FocusPanel() && unk100 && !unk101) {
                     const Skeleton *skeleton = TheGameData->Player(0)->GetSkeleton();
-                    if (!skeleton) {
-                        unk130->SetVal44(-1);
-                    } else {
+                    if (skeleton != NULL) {
                         unk130->SetVal44(skeleton->SkeletonIndex());
+                    } else {
+                        unk130->SetVal44(-1);
                     }
                     unk130->Poll();
                     Skeleton *skeleton2 = TheGestureMgr->GetSkeletonByTrackingID(
                         TheGameData->Player(1)->GetSkeletonTrackingID()
                     );
-                    if (!skeleton) {
-                        if (!unk134.empty()) {
-                            unk134.clear();
-                        }
-                    } else {
+                    if (skeleton2 != NULL) {
                         ArchiveSkeleton ac = ArchiveSkeleton();
                         unk134.push_back(ac);
-                        // if (200 < something) {
-                        //     MILO_WARN("bustajack recordings are getting big %d\n",
-                        //     something);
-                        //     // unk134.back().Set(skeleton);
-                        // }
+                        size_t size = unk134.size();
+                        if (size > 200) {
+                            MILO_WARN("bustajack recordings are getting big %d\n", size);
+                            unk134.back().Set(*skeleton2);
+                        }
+                    } else {
+                        if (!unk134.empty()) {
+                            unk134.erase(&unk134.front());
+                        }
                     }
                 }
             }
             float beat = TheTaskMgr.Beat();
-            if (beat != unk144 && beat != 0) {
+            int iBeat = (int)beat;
+            if (beat != unk144 && iBeat != 0) {
                 OnBeat();
                 unk144 = beat;
             }
@@ -416,57 +418,39 @@ void RhythmBattle::UpdateMindControl() {
     static Symbol game_stage("game_stage");
     static Symbol playing("playing");
 
-    const DataNode *gameplay_node = TheHamProvider->Property(gameplay_mode, true);
-    Symbol gameplay_sym = gameplay_node->Sym();
-
-    const DataNode *stage_node = TheHamProvider->Property(game_stage, true);
-    Symbol stage_sym = stage_node->Sym();
+    Symbol gameplay_sym = TheHamProvider->Property(gameplay_mode, true)->Sym();
+    Symbol stage_sym = TheHamProvider->Property(game_stage, true)->Sym();
 
     if (gameplay_sym == mind_control && stage_sym == playing) {
-        if (mPlayerOne) {
+        if (mPlayerOne)
             mPlayerOne->SetActive(true);
-        }
-        if (mPlayerTwo) {
+        if (mPlayerTwo)
             mPlayerTwo->SetActive(true);
+
+        float f31 = 18.84955596923828f;
+        float f28 = 1.0f;
+
+        for (s32 r26 = 0; r26 < 2; r26++) {
+            u32 character_ptr = (u32)TheHamDirector->GetCharacter(r26);
+            if (character_ptr != 0) {
+                RndAnimatable *var_r30 = ((RndDir *)character_ptr)->Find<RndAnimatable>("mind_control.anim", false);
+                if (var_r30 != NULL) {
+                    sin(TheTaskMgr.UISeconds() * f31);
+                    var_r30->Animate(f28, f28, var_r30->Units(), f28, 0.0f, NULL, kEaseLinear, 0.0f, false);
+                }
+
+                RndAnimatable *var_r3 = ((RndDir *)character_ptr)->Find<RndAnimatable>("mind_control_sound.anim", false);
+                if (var_r3 != NULL) {
+                    var_r3->Animate(unk10c, f28, var_r3->Units(), f28, 0.0f, NULL, kEaseLinear, 0.0f, false);
+                }
+            }
         }
 
-        float f28 = 1.0f;
-        float f31 = 4.196f;
-        s32 r26 = 0;
-        float f29 = 0.4f;
-        float f30 = 0.95f;
-
-        do {
-            u32 character = (u32)TheHamDirector->GetCharacter(r26);
-            RndAnimatable *var_r30 = NULL;
-            if (character != 0U) {
-                var_r30 = ((RndDir *)character)->Find<RndAnimatable>("mind_control.anim", false);
-            }
-
-            sin(TheTaskMgr.UISeconds() * f31);
-
-            if (var_r30 != NULL) {
-                var_r30->Animate(f28, var_r30->EndFrame(), var_r30->Units(), f28, 0.0f, NULL, kEaseLinear, 0.0f, false);
-            }
-
-            RndAnimatable *var_r3 = NULL;
-            if (character != 0U) {
-                var_r3 = ((RndDir *)character)->Find<RndAnimatable>("mind_control_sound.anim", false);
-            }
-
-            if (var_r3 != NULL) {
-                var_r3->Animate(unk10c, f28, var_r3->Units(), f28, 0.0f, NULL, kEaseLinear, 0.0f, false);
-            }
-
-            r26 += 1;
-        } while (r26 < 2);
-
-        float temp_f0 = unk10c;
-        if (temp_f0 > 0.5f && temp_f0 < 0.95f && unk110 > 5.0f) {
+        float f0 = unk10c;
+        if (f0 > 0.5f && f0 < 0.95f && unk110 > 5.0f) {
             static Symbol grooving("grooving");
             PlayMindControlVO(grooving);
-        }
-        if (temp_f0 < 0.15f && unk110 > 20.0f) {
+        } else if (f0 < 0.15f && unk110 > 20.0f) {
             static Symbol not_grooving("not_grooving");
             PlayMindControlVO(not_grooving);
         }
@@ -1170,6 +1154,44 @@ void RhythmBattle::OnBeat() {
     // Update finale VO at the end
     int voMs = unk120;
     UpdateFinaleVO(voMs);
+}
+
+void RhythmBattle::CheckIsFinale() {
+    void *pMem = PoolAlloc(0x10, 0x10, "hamobj/RhythmBattle.cpp", 0xD2, "DataArray");
+
+    DataArray *itemArray;
+    if (pMem) {
+        itemArray = new DataArray(1);
+    } else {
+        itemArray = NULL;
+    }
+
+    DataNode nodeQuery("is_finale");
+    DataNode nodeResult = itemArray->Node(0);
+    nodeQuery = nodeResult;
+
+    if (nodeQuery.Type() & 0x10) {
+        itemArray->Release();
+    }
+
+    nodeResult = itemArray->Execute(false);
+
+    int finaleValue = nodeQuery.Int(itemArray);
+
+    bool isFinale;
+    if (finaleValue == 0 || !unkf9) {
+        isFinale = false;
+    } else {
+        isFinale = true;
+    }
+
+    unkfa = isFinale;
+
+    if (nodeResult.Type() & 0x10) {
+        itemArray->Release();
+    }
+
+    itemArray->Release();
 }
 
 void ClearJump() {

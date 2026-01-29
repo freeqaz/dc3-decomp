@@ -277,11 +277,15 @@ void DxRnd::SetupGamma() {
     float gamma;
     if (cfg->FindData("gamma", gamma, false)) {
         D3DGAMMARAMP ramp;
-        for (int i = 0; i < 256; i++) {
+        unsigned short *redPtr = ramp.red;
+        unsigned short *greenPtr = ramp.green;
+        unsigned short *bluePtr = ramp.blue;
+        for (unsigned int i = 0; i < 256; i++) {
             float powed = (float)std::pow(i * 0.00390625f, gamma) * 1024.0f;
-            ramp.red[i] = powed;
-            ramp.green[i] = powed;
-            ramp.blue[i] = powed;
+            unsigned short usVal = (unsigned short)powed;
+            redPtr[i] = usVal;
+            greenPtr[i] = usVal;
+            bluePtr[i] = usVal;
         }
         D3DDevice_SetGammaRamp(mD3DDevice, 0, &ramp);
     }
@@ -289,20 +293,25 @@ void DxRnd::SetupGamma() {
 
 void DxRnd::SetDefaultRenderStates() {
     D3DCAPS9 caps;
+    unsigned int max_stages;
+    unsigned int i;
     memset(&caps, 0, sizeof(D3DCAPS9));
     GetDeviceCaps(&caps);
     D3DDevice_SetRenderState_AlphaRef(TheDxRnd.Device(), 0);
     D3DDevice_SetRenderState_AlphaFunc(TheDxRnd.Device(), D3DCMP_GREATER);
     D3DDevice_SetRenderState_PointSizeMax(
-        TheDxRnd.Device(), reinterpret_cast<UINT &>(caps.MaxPointSize) // ???
+        TheDxRnd.Device(), reinterpret_cast<UINT &>(caps.MaxPointSize)
     );
     D3DDevice_SetRenderState_SeparateAlphaBlendEnable(TheDxRnd.Device(), 1);
     D3DDevice_SetRenderState_SrcBlendAlpha(TheDxRnd.Device(), 1);
     D3DDevice_SetRenderState_DestBlendAlpha(TheDxRnd.Device(), 1);
     D3DDevice_SetRenderState_BlendOpAlpha(TheDxRnd.Device(), 3);
-    for (int i = 0; i < caps.MaxTextureBlendStages; i++) {
+    max_stages = caps.MaxTextureBlendStages;
+    i = 0;
+    while (i < max_stages) {
         D3DDevice_SetSamplerState_MinFilter(TheDxRnd.Device(), i, 1);
         D3DDevice_SetSamplerState_MagFilter(TheDxRnd.Device(), i, 1);
+        i++;
     }
     D3DDevice_SetRenderState_PresentImmediateThreshold(TheDxRnd.Device(), 100);
 }

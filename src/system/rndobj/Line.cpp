@@ -270,6 +270,62 @@ void RndLine::UpdateInternal() {
     SetNumPoints(mPoints.size());
 }
 
+void RndLine::SetNumPoints(int num) {
+    mPoints.resize(num);
+    if (num >= 1) {
+        int i1 = num;
+        if (mHasCaps) {
+            i1 = num + 2;
+            if (mLinePairs) {
+                i1 = (num & 0x7ffffffeU) * 2;
+            }
+        }
+        mMesh->Verts().resize(i1 * 2);
+        int numPoints = mPoints.size();
+        for (int i = 0; i < numPoints; i++) {
+            VertsMap vmap;
+            MapVerts(i, vmap);
+            Hmx::Color &ptColor = mPoints[i].color;
+            if (vmap.t == 1) {
+                vmap.v->tex.Set(0, 1);
+                vmap.v++->color = ptColor;
+                vmap.v->tex.Set(0, 0);
+                vmap.v++->color = ptColor;
+            }
+            vmap.v->tex.Set(1, 1);
+            vmap.v++->color = ptColor;
+            vmap.v->tex.Set(1, 0);
+            vmap.v++->color = ptColor;
+            if (vmap.t == 2) {
+                vmap.v->tex.Set(1, 1);
+                vmap.v++->color = ptColor;
+                vmap.v->tex.Set(1, 0);
+                vmap.v++->color = ptColor;
+            }
+        }
+
+        if (mLinePairs) {
+            if (mHasCaps)
+                i1 = i1 * 3 >> 1;
+        } else
+            i1 = (i1 - 1) * 2;
+        mMesh->Faces().resize(i1);
+        for (int i5 = i1 - 2; i5 >= 0; i5 -= 2) {
+            int i7 = i5;
+            if (mLinePairs) {
+                if (mHasCaps) {
+                    i7 = i5 % 6 + (i5 / 6) * 8;
+                } else
+                    i7 = i5 * 2;
+            }
+            mMesh->Faces(i5).Set(i7, i7 + 2, i7 + 1);
+            mMesh->Faces(i1 - 1).Set(i7 + 1, i7 + 2, i7 + 3);
+            i1 = i5;
+        }
+        mMesh->Sync(0x13F);
+    }
+}
+
 DataNode RndLine::OnSetMat(const DataArray *array) {
     RndMat *mat = array->Obj<RndMat>(2);
     SetMat(mat);

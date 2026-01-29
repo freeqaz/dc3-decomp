@@ -616,7 +616,10 @@ RndText *UIFontImporter::FindTextForFont(RndFontBase *font) const {
             Hmx::Object *owner = (*it).RefOwner();
             if (owner) {
                 if (owner->ClassName() == Text) {
-                    return dynamic_cast<RndText *>(owner);
+                    RndText *text = dynamic_cast<RndText *>(owner);
+                    if (text) {
+                        return text;
+                    }
                 }
             }
         }

@@ -125,6 +125,75 @@ float DirectionGestureFilterSingleUser::UpdateOverlay(RndOverlay *overlay, float
     return mArcDetector.UpdateOverlay(overlay, f1);
 }
 
+bool DirectionGestureFilterSingleUser::IsValidSwipePosition(const Skeleton &skeleton) const {
+    const Vector3 &handPos = skeleton.HandJoint(unk4).mJointPos[0];
+    float handX = handPos.x;
+    float handY = handPos.y;
+    float handZ = handPos.z;
+
+    float otherX = *((float*)(&skeleton) + 0x3B);
+    float otherY = *((float*)(&skeleton) + 0x3C);
+    float otherZ = *((float*)(&skeleton) + 0x3D);
+
+    float deltaX = handX - otherX;
+    float deltaY = handY - otherY;
+    float deltaZ = handZ - otherZ;
+
+    Vector3 corner1, corner2;
+    corner1.x = otherX - deltaX;
+    corner2.x = handX + deltaX;
+    corner1.y = otherY - deltaY;
+    corner2.y = handY + deltaY;
+    corner1.z = otherZ - deltaZ;
+    corner2.z = handZ + deltaZ;
+
+    Vector3 closest;
+    ClosestPoint(corner1, corner2, handPos, &closest);
+
+    Vector3 direction;
+    direction.x = *((float*)(&skeleton) + 0x1B4) - *((float*)(&skeleton) + 0x15D);
+    direction.y = *((float*)(&skeleton) + 0x1B5) - *((float*)(&skeleton) + 0x15E);
+    direction.z = *((float*)(&skeleton) + 0x1B6) - *((float*)(&skeleton) + 0x15F);
+
+    Normalize(direction, direction);
+
+    float angle = atan2(direction.z, direction.x);
+    float s1 = Sine(3.14159265f * 0.5f - angle);
+    float s2 = Sine(-angle);
+
+    float rotX = closest.x * s2;
+    rotX += closest.y * s1;
+    float rotY = closest.x * s1;
+    rotY -= closest.y * s2;
+
+    float height, width;
+    if (mEngaged) {
+        height = 0.15f;
+        width = 0.15f;
+    } else {
+        height = 0.15f;
+        width = 0.15f;
+    }
+
+    float ellipseTest = ((rotX * rotX) / (height * height)) + ((rotY * rotY) / (width * width));
+
+    if (ellipseTest < 1.0f) {
+        return 0;
+    }
+
+    if ((!mAllowAboveShoulder) || mHighButtonMode) {
+        float yTest = skeleton.HandJoint(unk4).mJointPos[0].y - *((float*)(&skeleton) + 0x3C);
+        if (mHighButtonMode) {
+            if (yTest < 0.0f) {
+                return 0;
+            }
+        } else {
+            return 0;
+        }
+    }
+    return 1;
+}
+
 #pragma endregion
 #pragma region DirectionGestureFilterDoubleUser
 

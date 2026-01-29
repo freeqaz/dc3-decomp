@@ -323,3 +323,53 @@ DataNode RndMultiMesh::OnAddXfms(const DataArray *da) {
     }
     return 0;
 }
+
+void RndMultiMesh::CollideList(const Segment &seg, std::list<Collision> &colls) {
+    static int stamp = 0;
+    if (TheLoadMgr.EditMode() && CollideSphere(seg)) {
+        stamp++;
+        if (mMesh) {
+            for (std::list<RndMultiMesh::Instance>::iterator it = mInstances.begin();
+                 it != mInstances.end();
+                 ++it) {
+                mMesh->SetWorldXfm((*it).mXfm);
+                float f;
+                Plane pl;
+                if (mMesh->CollideShowing(seg, f, pl)) {
+                    RndMultiMeshProxy *proxy = nullptr;
+                    RndMultiMeshProxy *proxy00 = proxy;
+                    for (std::list<std::pair<RndMultiMeshProxy *, int> >::iterator sit =
+                             sProxyPool.begin();
+                         sit != sProxyPool.end();
+                         ++sit) {
+                        proxy = sit->first;
+                        if (proxy->MultiMesh() == this && proxy->Index() == it)
+                            break;
+                    }
+                    proxy00 = proxy;
+                    if (!proxy) {
+                        for (std::list<std::pair<RndMultiMeshProxy *, int> >::iterator
+                                 sit = sProxyPool.begin();
+                             sit != sProxyPool.end();
+                             ++sit) {
+                            if (stamp != sit->second) {
+                                proxy00 = sit->first;
+                                if (!proxy00->Children().size()) {
+                                    sit->second = stamp;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    if (!proxy00) {
+                        RndMultiMeshProxy *new_proxy =
+                            Hmx::Object::New<RndMultiMeshProxy>();
+                        sProxyPool.push_front(std::make_pair(new_proxy, stamp));
+                        new_proxy->SetMultiMesh(this, it);
+                        colls.push_back(Collision(new_proxy, f, pl));
+                    }
+                }
+            }
+        }
+    }
+}

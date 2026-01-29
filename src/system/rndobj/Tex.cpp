@@ -224,25 +224,33 @@ void RndTex::PlatformBppOrder(const char *path, int &bpp, int &order, bool hasAl
 
 const char *CheckDim(int dim, RndTex::Type ty, bool b) {
     const char *ret = 0;
-    if (dim == 0)
-        return ret;
-    else {
-        if (ty == RndTex::kMovie && (dim % 16 != 0)) {
-            ret = "%s: dimensions not multiple of 16";
-        }
-        if (GetGfxMode() == 0) {
-            if (b && dim > 0x400) {
-                ret = "%s: dimensions greater than 1024";
-            } else if (dim > 0x800) {
-                ret = "%s: dimensions greater than 2048";
-            }
-            if (dim % 8 != 0) {
+    if (dim != 0) {
+        if (b) {
+            if (ty == RndTex::kMovie) {
+                if ((dim % 16) != 0) {
+                    ret = "%s: dimensions not multiple of 16";
+                }
+            } else if ((dim % 8) != 0) {
                 ret = "%s: dimensions not multiple of 8";
             }
         }
+        if (GetGfxMode() == 0) {
+            if ((b != 0) && (dim > 0x400)) {
+                ret = "%s: dimensions greater than 1024";
+            } else if (dim > 0x1000) {
+                ret = "%s: dimensions greater than 4096";
+            }
+        }
         if (b) {
-            if (!PowerOf2(dim))
+            bool isPowerOf2;
+            if (dim < 0) {
+                isPowerOf2 = false;
+            } else {
+                isPowerOf2 = (((dim - 1) & dim) == 0);
+            }
+            if (!isPowerOf2) {
                 ret = "%s: dimensions are not power-of-2";
+            }
         }
     }
     return ret;

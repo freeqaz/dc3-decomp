@@ -164,7 +164,7 @@ void CharHair::FreezePose() {
 
 void CharHair::Load(BinStream &bs) {
     LOAD_REVS(bs);
-    ASSERT_REVS(11, 0);
+    ASSERT_REVS(13, 0);
     LOAD_SUPERCLASS(Hmx::Object)
     bs >> mStiffness >> mTorsion >> mInertia >> mGravity >> mWeight >> mFriction;
     if (d.rev < 8) {
@@ -173,9 +173,12 @@ void CharHair::Load(BinStream &bs) {
     } else
         bs >> mMinSlack >> mMaxSlack;
     // bs >> mStrands;
-    bs >> mSimulate;
-    if (d.rev > 10)
+    d >> mSimulate;
+    bs >> mWindObj;
+    if (d.rev > 11)
         bs >> mWind;
+    if (d.rev > 12)
+        bs >> mFlat;
 }
 
 #pragma endregion CharHair

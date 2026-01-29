@@ -61,6 +61,10 @@ DxMesh::~DxMesh() {
     unk1b0 = nullptr;
 }
 
+u32 DxMesh::VertFVF() const {
+    return 0;
+}
+
 void _fake(void) {
     BufLock<struct D3DVertexBuffer> buf(nullptr, 0);
     BufLock<struct D3DIndexBuffer> buf2(nullptr, 0);

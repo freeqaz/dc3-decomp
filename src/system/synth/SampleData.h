@@ -22,6 +22,7 @@ public:
         bs >> sample;
     }
     int Sample() const { return sample; }
+    const String &Name() const { return name; }
 
 private:
     String name; // 0x0

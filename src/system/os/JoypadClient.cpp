@@ -119,12 +119,16 @@ int JoypadClient::OnMsg(const ButtonDownMsg &msg) {
     if (((1 << btn) & mBtnMask)) {
         int padNum = btnUser->GetPadNum();
         mRepeats[padNum].Start(btn, msg.GetAction(), msg.GetPadNum());
-        if (DirectionalAction(msg.GetAction())) {
+        JoypadAction act = msg.GetAction();
+        if (!((act != kAction_Up) && (act != kAction_Right)
+           && (act != kAction_Down) && (act != kAction_Left))) {
             for (int i = 0; i < 4; i++) {
                 if (i != padNum) {
-                    if (DirectionalAction(ButtonToAction(
+                    JoypadAction otherAct = ButtonToAction(
                             mRepeats[i].mLastBtn, JoypadControllerTypePadNum(i)
-                        ))) {
+                        );
+                    if (!((otherAct != kAction_Up) && (otherAct != kAction_Right)
+                       && (otherAct != kAction_Down) && (otherAct != kAction_Left))) {
                         mRepeats[i].mHoldTimer.Reset();
                         mRepeats[i].mRepeatTimer.Reset();
                     }

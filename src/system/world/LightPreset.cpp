@@ -689,8 +689,61 @@ void LightPreset::SetSpotlight(Spotlight *s, int data) {
     }
 }
 
+void LightPreset::FillSpotPresetData(
+    Spotlight *spot, LightPreset::SpotlightEntry &entry, int mask
+) {
+    if (mask & 1) {
+        entry.mIntensity = spot->Intensity();
+        entry.mColor = spot->Color().Pack();
+    }
+    if (mask & 2) {
+        entry.mTarget = spot->GetTarget();
+        entry.unk20 =
+            entry.mTarget ? Hmx::Quat(0, 0, 0, 0) : Hmx::Quat(spot->WorldXfm().m);
+    }
+    if (mask != 0 && spot->IsFlareEnabled()) {
+        entry.unk8 |= SpotlightEntry::kEnabled;
+    }
+}
+
 DataNode LightPreset::OnViewKeyframe(DataArray *da) {
     ApplyState(mKeyframes[da->Int(2)]);
     Animate(1.0f);
     return 0;
+}
+
+void LightPreset::SyncKeyframeTargets() {
+    for (ObjDirItr<Spotlight> it(Dir(), true); it; ++it) {
+        Spotlight *key = it;
+        if (std::find(mSpotlights.begin(), mSpotlights.end(), key) == mSpotlights.end()) {
+            AddSpotlight(key, false);
+        }
+    }
+    for (ObjDirItr<RndEnviron> it(Dir(), true); it; ++it) {
+        RndEnviron *key = it;
+        if (std::find(mEnvironments.begin(), mEnvironments.end(), key)
+            == mEnvironments.end()) {
+            AddEnvironment(key);
+        }
+        FOREACH (lit, key->mLightsReal) {
+            RndLight *lkey = *lit;
+            if (std::find(mLights.begin(), mLights.end(), lkey) == mLights.end()) {
+                AddLight(lkey);
+            }
+        }
+        FOREACH (lit, key->mLightsApprox) {
+            RndLight *lkey = *lit;
+            if (std::find(mLights.begin(), mLights.end(), lkey) == mLights.end()) {
+                AddLight(lkey);
+            }
+        }
+    }
+    for (ObjDirItr<SpotlightDrawer> it(Dir(), true); it; ++it) {
+        SpotlightDrawer *key = it;
+        if (std::find(mSpotlightDrawers.begin(), mSpotlightDrawers.end(), key)
+            == mSpotlightDrawers.end()) {
+            AddSpotlightDrawer(key);
+        }
+    }
+    CacheFrames();
 }

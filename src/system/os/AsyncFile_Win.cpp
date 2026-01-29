@@ -33,35 +33,45 @@ bool AsyncFileWin::Truncate(int distanceToMove) {
 }
 
 void AsyncFileWin::_OpenAsync() {
+    unsigned int uVar1;
+    int iVar4;
+    unsigned int uVar3;
+    int iVar5;
+    DWORD dwDesiredAccess;
+    DWORD dwCreationDisposition;
+    DWORD err;
+
     mSize = 0;
     if (gFakeFileErrors) {
         SetLastError(0x20000002);
     } else {
         unk34 = 0x800;
-        if (((mMode & 0x7fffe) << 0x20 | mMode & 0x40002) == 0) {
-            int _FileHandle =
-                _open(mFilename.c_str(), mMode & 0xfffffffd | 0x8000, 0x180);
-            unk3c = _FileHandle;
-            mFail = !unk3c;
-            if (_FileHandle < 0)
+        uVar1 = mMode;
+        iVar4 = (uVar1 & 0x7fffe) & (uVar1 & 0x40002);
+        if (iVar4 == 0) {
+            iVar5 =
+                _open(mFilename.c_str(), (uVar1 & 0xfffffffd) | 0x8000, 0x180);
+            unk3c = iVar5;
+            uVar3 = ((unsigned int)iVar5) >> 31;
+            mFail = uVar3;
+            if (uVar3 != 0)
                 return;
-            mUCSize = _lseeki64(unk3c, 0, 2);
-            if (mMode & 8)
-                return;
-            _lseek((int)mFile, 0, 0);
+            mUCSize = _lseeki64(iVar5, 0, 2);
+            if (!(uVar1 & 8)) {
+                _lseek((int)unk3c, 0, 0);
+            }
             return;
         }
-        DWORD dwDesiredAccess;
-        DWORD dwCreationDisposition;
         if (mMode & 2) {
             dwDesiredAccess = 0x80000000;
             dwCreationDisposition = 3;
         } else {
-            dwDesiredAccess = 0x40000000;
             if (mMode & 0x200) {
+                dwDesiredAccess = 0x40000000;
                 dwCreationDisposition = 2;
             } else {
-                dwCreationDisposition = mMode & 0x20;
+                dwDesiredAccess = 0x40000000;
+                dwCreationDisposition = (((mMode & 0x100) == 0) ? 1 : 0) + 3;
             }
         }
         mFile = CreateFileA(
@@ -73,19 +83,21 @@ void AsyncFileWin::_OpenAsync() {
             0x60000000,
             nullptr
         );
-        if (mFile == (HANDLE)-1) {
-            DWORD err = GetLastError();
-            if (err == 2 || err == 3 || err == 0x15) {
+        if ((HANDLE)mFile == (HANDLE)-1) {
+            err = GetLastError();
+            if ((err == 2) || (err == 3) || (err == 0x15)) {
                 mFail = true;
+                return;
             }
         } else {
             mFail = false;
-            mSize = GetFileSize(mFile, nullptr);
+            mUCSize = GetFileSize(mFile, nullptr);
+            return;
         }
-        return;
     }
     ReadError(mFilename.c_str());
     mFail = true;
+    return;
 }
 
 bool AsyncFileWin::_WriteDone() {

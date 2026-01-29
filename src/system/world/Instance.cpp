@@ -2,8 +2,10 @@
 #include "obj/Dir.h"
 #include "obj/Msg.h"
 #include "obj/Object.h"
+#include "obj/DirLoader.h"
 #include "rndobj/Dir.h"
 #include "rndobj/Group.h"
+#include "utl/MemMgr.h"
 
 #pragma region WorldInstance
 
@@ -171,6 +173,29 @@ void WorldInstance::LoadPersistentObjects(BinStreamRev &bs) {
             RemoveSubDir(subDir);
             mDir->SetName(dirNameStr.c_str(), dirDir);
             mDir->SetTypeDef(dirTypeDef);
+        }
+    }
+}
+
+void WorldInstance::DeleteTransientObjects() {
+    if (!Dir() || Dir() == DirLoader::sTopSaveDir
+        || Dir()->InlineSubDirType() != kInlineAlways) {
+        DeleteObjects();
+    } else {
+        for (ObjDirItr<Hmx::Object> obj(this, false); obj != nullptr; ++obj) {
+            if (obj == this) {
+                continue;
+            }
+            Hmx::Object *to = mDir->Find<Hmx::Object>(obj->Name(), true);
+            MILO_ASSERT(obj->ClassName() == to->ClassName(), 0x1CB);
+            const ObjRef &refs = obj->Refs();
+            for (ObjRef::iterator it = refs.begin(); it != refs.end(); ++it) {
+                ObjRef *ref = it;
+                if (ref->RefOwner() && ref->RefOwner()->Dir() == this) {
+                    ref->Replace(to);
+                }
+            }
+            delete obj;
         }
     }
 }

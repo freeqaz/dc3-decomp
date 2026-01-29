@@ -5,6 +5,9 @@
 #include "rndobj/Draw.h"
 #include "rndobj/Mat.h"
 #include "rndobj/Tex.h"
+#include "rndobj/ShaderMgr.h"
+#include "rndobj/Cam.h"
+#include "rndobj/Shader.h"
 
 #pragma region Hmx::Object
 
@@ -105,6 +108,72 @@ RndMat *RndTexBlender::SetupMaterial(RndMat *mat, RndTex *tex) {
     mat->SetTexWrap(kTexWrapClamp);
     mat->SetDiffuseTex(tex);
     return mat;
+}
+
+void RndTexBlender::DrawBlendList(
+    const std::vector<std::pair<RndTexBlendController *, float> > &list,
+    TexState state
+) {
+    RndTex *texmap;
+    if (state != 2) {
+        texmap = mNearMap;
+    } else {
+        texmap = mFarMap;
+    }
+
+    u32 texdata = 0;
+    if (texmap) {
+        texdata = *(u32 *)((char *)texmap + 0xC);
+    }
+
+    if (((texdata != 0) || (state == 8)) && (!list.empty())) {
+        unkbc |= state;
+
+        RndMat *mat = TheShaderMgr.GetWork();
+        float f31 = 1.0f;
+        float f29 = -1.0f;
+
+        Transform xfm;
+        TheShaderMgr.SetTransform(xfm);
+        SetupMaterial(mat, texmap);
+
+        *(int *)((char *)mat + 0xB4) = 3;
+        *(int *)((char *)mat + 0x228) |= 2;
+
+        for (std::vector<std::pair<RndTexBlendController *, float> >::const_iterator it = list.begin(); it != list.end(); ++it) {
+            RndTexBlendController *controller = it->first;
+            float alpha = it->second;
+
+            if (state == 8) {
+                *(int *)((char *)mat + 0x40 + 0x80) = *(int *)((char *)controller + 0x80);
+                *(int *)((char *)mat + 0x228) |= 2;
+            }
+
+            if (alpha != f29 || state == 8) {
+                *(float *)((char *)mat + 0x38) = alpha;
+                *(int *)((char *)mat + 0x228) |= 1;
+                RndShader::SelectConfig(mat, (ShaderType)0x16, false);
+                f29 = alpha;
+            }
+
+            void *mesh_ptr = *(void **)((char *)controller + 0x38);
+            if (mesh_ptr) {
+                void **vt = *(void ***)((char *)mesh_ptr + 0x148);
+                typedef void (*DrawFunc)(void **, int, int);
+                DrawFunc draw = (DrawFunc)(*(void **)((char *)vt + 0x40));
+                draw(vt, 0, -1);
+            }
+        }
+
+        *(float *)((char *)mat + 0x38) = f31;
+        *(int *)((char *)mat + 0x228) |= 1;
+
+        RndCam *cam = RndCam::Current();
+        if (cam) {
+            void *cam_xfm = (void *)((char *)cam + 0x300);
+            TheShaderMgr.SetTransform(*(Transform *)cam_xfm);
+        }
+    }
 }
 
 DataNode RndTexBlender::OnGetRenderTextures(DataArray *) {

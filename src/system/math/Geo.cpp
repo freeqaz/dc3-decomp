@@ -298,24 +298,32 @@ void Intersect(const Transform &trans, const Plane &plane, Hmx::Ray &ray) {
 }
 
 bool Intersect(const Segment &seg, const Triangle &tri, bool b, float &out) {
-    Vector3 segDirection(seg.end.x - seg.start.x, seg.end.y - seg.start.y, seg.end.z - seg.start.z);
+    float segDirX = seg.end.x - seg.start.x;
+    float segDirY = seg.end.y - seg.start.y;
+    float segDirZ = seg.end.z - seg.start.z;
+
     const Vector3 &triFrameZ = tri.frame.z;
-    float segDirDot = triFrameZ.x * segDirection.x + triFrameZ.y * segDirection.y + triFrameZ.z * segDirection.z;
-    if (fabs(segDirDot) < 0.0001f || b && segDirDot > 0.0f) {
+    float segDirDot = triFrameZ.x * segDirX + triFrameZ.y * segDirY + triFrameZ.z * segDirZ;
+
+    if (fabs(segDirDot) < 0.0001f || (b && segDirDot > 0.0f)) {
         return false;
     }
 
-    Vector3 vec3A(seg.start.x - tri.origin.x, seg.start.y - tri.origin.y, seg.start.z - tri.origin.z);
-    float tempDot = triFrameZ.x * vec3A.x + triFrameZ.y * vec3A.y + triFrameZ.z * vec3A.z;
+    float vec3AX = seg.start.x - tri.origin.x;
+    float vec3AY = seg.start.y - tri.origin.y;
+    float vec3AZ = seg.start.z - tri.origin.z;
+
+    float tempDot = triFrameZ.x * vec3AX + triFrameZ.y * vec3AY + triFrameZ.z * vec3AZ;
     float t = -(tempDot / segDirDot);
     out = t;
+
     if (t < 0.0f || t > 1.0f) {
         return false;
     }
 
-    Vector3 vec3B((seg.start.x + segDirection.x * t) - tri.origin.x,
-                  (seg.start.y + segDirection.y * t) - tri.origin.y,
-                  (seg.start.z + segDirection.z * t) - tri.origin.z);
+    float vec3BX = (seg.start.x + segDirX * t) - tri.origin.x;
+    float vec3BY = (seg.start.y + segDirY * t) - tri.origin.y;
+    float vec3BZ = (seg.start.z + segDirZ * t) - tri.origin.z;
 
     const Vector3 &triFrameX = tri.frame.x;
     const Vector3 &triFrameY = tri.frame.y;
@@ -323,8 +331,8 @@ bool Intersect(const Segment &seg, const Triangle &tri, bool b, float &out) {
     float dotXX = triFrameX.x * triFrameX.x + triFrameX.y * triFrameX.y + triFrameX.z * triFrameX.z;
     float dotYY = triFrameY.x * triFrameY.x + triFrameY.y * triFrameY.y + triFrameY.z * triFrameY.z;
     float dotXY = triFrameX.x * triFrameY.x + triFrameX.y * triFrameY.y + triFrameX.z * triFrameY.z;
-    float dotX3B = triFrameX.x * vec3B.x + triFrameX.y * vec3B.y + triFrameX.z * vec3B.z;
-    float dotY3B = triFrameY.x * vec3B.x + triFrameY.y * vec3B.y + triFrameY.z * vec3B.z;
+    float dotX3B = triFrameX.x * vec3BX + triFrameX.y * vec3BY + triFrameX.z * vec3BZ;
+    float dotY3B = triFrameY.x * vec3BX + triFrameY.y * vec3BY + triFrameY.z * vec3BZ;
 
     float inv = 1.0f / (dotXY * dotXY - dotYY * dotXX);
     float k = (dotY3B * dotXY - dotX3B * dotYY) * inv;
@@ -337,3 +345,47 @@ bool Intersect(const Segment &seg, const Triangle &tri, bool b, float &out) {
     }
     return true;
 }
+
+// Comparator stub for BSPFace
+namespace stlpmtx_std {
+    // Provide a less<BSPFace> specialization that doesn't actually compare
+    // The actual comparison is handled at a lower level
+    template<>
+    struct less<BSPFace> {
+        bool operator()(const BSPFace& /*a*/, const BSPFace& /*b*/) const { return false; }
+    };
+
+    template<>
+    void _S_sort<BSPFace, StlNodeAlloc<BSPFace>, less<BSPFace>>(
+        std::list<BSPFace, StlNodeAlloc<BSPFace>>& __that,
+        less<BSPFace> __comp) {
+        std::list<BSPFace, StlNodeAlloc<BSPFace>>::iterator __it = __that.begin();
+        std::list<BSPFace, StlNodeAlloc<BSPFace>>::iterator __end = __that.end();
+
+        // Do nothing if the list has length 0 or 1.
+        if (__it != __end) {
+            ++__it;
+            if (__it != __end) {
+                std::list<BSPFace, StlNodeAlloc<BSPFace>> __carry(__that.get_allocator());
+                std::list<BSPFace, StlNodeAlloc<BSPFace>> __counter[64];
+                int __fill = 0;
+                while (!__that.empty()) {
+                    __carry.splice(__carry.begin(), __that, __that.begin());
+                    int __i = 0;
+                    while(__i < __fill && !__counter[__i].empty()) {
+                        _S_merge(__counter[__i], __carry, __comp);
+                        __carry.swap(__counter[__i++]);
+                    }
+                    __carry.swap(__counter[__i]);
+                    if (__i == __fill) ++__fill;
+                }
+
+                for (int __i = 1; __i < __fill; ++__i)
+                    _S_merge(__counter[__i], __counter[__i-1], __comp);
+                __that.swap(__counter[__fill-1]);
+            }
+        }
+    }
+}
+
+

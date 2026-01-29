@@ -56,6 +56,8 @@ public:
     static void Terminate();
 
 protected:
+    void DoVelocity();
+
     static Hmx::Color s_prevBloomColor;
     static float s_prevBloomIntensity;
     static NgPostProc *s_BloomSetter;

@@ -7,6 +7,7 @@
 #include "utl/Str.h"
 
 DECLARE_MESSAGE(SkeletonIdentifiedMsg, "skeleton_identified")
+    SkeletonIdentifiedMsg(int, int);
 END_MESSAGE
 
 enum IdentityStatus {

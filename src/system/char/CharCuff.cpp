@@ -1,6 +1,9 @@
 #include "char/CharCuff.h"
 #include "obj/Object.h"
 #include "rndobj/Trans.h"
+#include "rndobj/Rnd.h"
+#include "math/Trig.h"
+#include <cmath>
 
 CharCuff::CharCuff() : mOpenEnd(0), mIgnore(this), mBone(this), mEccentricity(1) {
     mShape[0].offset = -2.9;
@@ -100,3 +103,46 @@ BEGIN_LOADS(CharCuff)
     if (d.rev < 7)
         MILO_NOTIFY("%s old CharCuff, must convert, see James", PathName(this));
 END_LOADS
+
+float CharCuff::Eccentricity(const Vector2 &v) const {
+    float f1 = v.y * v.y;
+    float f2 = v.x * v.x;
+    return std::sqrt((f1 + f2) / (f1 * (1.0f / (mEccentricity * mEccentricity)) + f2));
+}
+
+void CharCuff::Highlight() {
+    Hmx::Color white(1, 1, 1, 1);
+    const float kTwoPi = 6.2831855f;
+    const float kInv32 = 1.0f / 32.0f;
+    for (int i = 0; i < 2; i++) {
+        for (int j = 0; j < 32; j++) {
+            float toSine = j * kTwoPi * kInv32;
+            Vector3 va8(Sine(toSine), Cosine(toSine), mShape[i].offset);
+            Vector3 vb4(Sine(toSine), Cosine(toSine), mShape[i + 1].offset);
+            (Vector2 &)va8 *= mShape[i].radius * Eccentricity((Vector2 &)va8);
+            (Vector2 &)vb4 *= mShape[i + 1].radius * Eccentricity((Vector2 &)vb4);
+            Vector3 vc0;
+            Multiply(va8, WorldXfm(), vc0);
+            Vector3 vcc;
+            Multiply(vb4, WorldXfm(), vcc);
+            TheRnd.DrawLine(vc0, vcc, white, false);
+            if (i < 2) {
+                float toSinePlus1 = (j + 1) * kTwoPi * kInv32;
+                va8.Set(Sine(toSinePlus1), Cosine(toSinePlus1), mShape[i].offset);
+                (Vector2 &)va8 *= mShape[i].radius * Eccentricity((Vector2 &)va8);
+                Multiply(va8, WorldXfm(), vcc);
+                TheRnd.DrawLine(vc0, vcc, white, false);
+            }
+            if (i == 1) {
+                Vector3 vd8(Sine(toSine), Cosine(toSine), mShape[i].offset);
+                (Vector2 &)vd8 *= mOuterRadius;
+                Multiply(vd8, WorldXfm(), vc0);
+                float toSinePlus1 = (j + 1) * kTwoPi * kInv32;
+                vb4.Set(Sine(toSinePlus1), Cosine(toSinePlus1), mShape[i].offset);
+                (Vector2 &)vb4 *= mOuterRadius;
+                Multiply(vb4, WorldXfm(), vcc);
+                TheRnd.DrawLine(vc0, vcc, white, false);
+            }
+        }
+    }
+}

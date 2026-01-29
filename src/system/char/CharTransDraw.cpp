@@ -4,7 +4,14 @@
 
 CharTransDraw::CharTransDraw() : mChars(this), unk54(false) {}
 
-CharTransDraw::~CharTransDraw() {}
+CharTransDraw::~CharTransDraw() {
+    for (ObjPtrList<Character>::iterator it = mChars.begin(); it != NULL; ++it) {
+        if (it != NULL) {
+            Character *c = *it;
+            *(u32 *)((u32)c + 0x294) = 3;
+        }
+    }
+}
 
 BEGIN_PROPSYNCS(CharTransDraw)
     SYNC_PROP(chars, mChars)

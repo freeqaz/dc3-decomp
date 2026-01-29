@@ -29,6 +29,7 @@ public:
     virtual void OnSync(int);
 
     D3DVertexBuffer *GetMultimeshFaces();
+    u32 VertFVF() const;
 
     NEW_OBJ(DxMesh)
 

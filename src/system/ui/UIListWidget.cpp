@@ -166,6 +166,7 @@ BEGIN_LOADS(UIListWidget)
         bs >> mDisabledAlphaScale;
     for (int i = 0; i < kNumUIListWidgetStates; i++) {
         for (int j = 0; j < UIComponent::kNumStates; j++) {
+            bs >> mColors[i][j];
         }
     }
 END_LOADS

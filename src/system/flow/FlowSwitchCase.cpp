@@ -63,10 +63,58 @@ BEGIN_LOADS(FlowSwitchCase)
     LOAD_REVS(bs)
     ASSERT_REVS(3, 0)
     LOAD_SUPERCLASS(FlowNode)
-    if (d.rev < 2) {
+
+    u16 version = d.rev;
+
+    if (version > 3) {
+        TheDebug.Fail(MakeString("FlowSwitchCase: can't load new version %d", version), 0);
+    }
+    if (d.altRev > 0) {
+        TheDebug.Fail(MakeString("FlowSwitchCase: can't load new alt version"), 0);
+    }
+
+    if (version < 2) {
         DataNode n;
         d >> n;
         mFromValue = n;
+    } else {
+        u32 type;
+        d >> type;
+        if (type == 4) {
+            mFromValue = LoadObjectFromMainOrDir(d.stream, nullptr);
+        } else {
+            DataNode n;
+            d >> n;
+            mFromValue = n;
+        }
+    }
+
+    int opValue;
+    d >> opValue;
+    mOperator = (OperatorType)opValue;
+
+    if (version < 2) {
+        DataNode n;
+        d >> n;
+        mToValue = n;
+    } else {
+        u32 type;
+        d >> type;
+        if (type == 4) {
+            mToValue = LoadObjectFromMainOrDir(d.stream, nullptr);
+        } else {
+            DataNode n;
+            d >> n;
+            mToValue = n;
+        }
+    }
+
+    if (version > 0) {
+        d >> mUseLastValue;
+    }
+
+    if (version > 2) {
+        d >> mUnregisterParent;
     }
 END_LOADS
 

@@ -244,8 +244,8 @@ const char *XboxMapFile::GetFunction(unsigned int ui, bool b2) {
     if (b2) {
         mFile->Seek(mStart, 0);
     }
-    char localC40[1024];
     char local1440[2048];
+    char localC40[1024];
     char *cur = local1440;
     sprintf(localC40, "%8x", ui);
     int oldTell = mFile->Tell();
@@ -263,6 +263,25 @@ const char *XboxMapFile::GetFunction(unsigned int ui, bool b2) {
         *pCur = 0;
         while (*pCur++ == 0x20)
             ;
+        pCur--;
+
+        // String comparison
+        char *cmpBuf = localC40;
+        char b3 = *cmpBuf;
+        char b4_1 = *pCur;
+
+        while (b3 != 0 && b3 == b4_1) {
+            cmpBuf++;
+            pCur++;
+            b3 = *cmpBuf;
+            b4_1 = *pCur;
+        }
+
+        if ((int)((unsigned char)b3 - (unsigned char)b4_1) >= 0) {
+            TryDemangleFunc(sBuffer, &cur[0x15]);
+            mFile->Seek(oldTell, 0);
+            return sBuffer;
+        }
     }
     return "(unknown)";
 }

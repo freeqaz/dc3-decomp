@@ -1,4 +1,7 @@
 #include "os/AsyncFile.h"
+#include "os/Archive.h"
+#include "os/AsyncFileHolmes_p.h"
+#include "os/AsyncFile_Win.h"
 #include "HolmesClient.h"
 #include "math/Utl.h"
 #include "obj/Data.h"
@@ -55,6 +58,36 @@ AsyncFile::AsyncFile(const char *c, int i)
 
 AsyncFile::~AsyncFile() {}
 
+extern bool HolmesClientCacheFile(char *, const char *);
+
+AsyncFile *AsyncFile::New(const char *cc, int i) {
+    if (Archive::DebugArkOrder())
+        PrintDiscFile(cc);
+
+    if (UsingHolmes(1) && (i & 1U) && !FileIsLocal(cc)) {
+        AsyncFile *result = new AsyncFileHolmes(cc, i);
+        if (result) {
+            result->Init();
+            return result;
+        }
+    }
+
+    if (!UsingCD() && !FileIsLocal(cc)) {
+        char buf[256];
+        if (HolmesClientCacheFile(buf, cc)) {
+            AsyncFile *result = new AsyncFileHolmes(buf, i);
+            if (result) {
+                result->Init();
+                return result;
+            }
+        }
+    }
+
+    AsyncFile *result = new AsyncFileWin(cc, i);
+    result->Init();
+    return result;
+}
+
 int AsyncFile::Read(void *iBuf, int iBytes) {
     ReadAsync(iBuf, iBytes);
     if (mFail)
@@ -101,34 +134,31 @@ bool AsyncFile::WriteAsync(const void *v, int i) {
     MILO_ASSERT(mMode & FILE_OPEN_WRITE, 0x186);
     if (mFail)
         return false;
-    else {
-        if (!mBuffer) {
-            _WriteAsync(v, i);
-        } else {
-            do {
-                if (mOffset + i > gBufferSize) {
-                    int size = gBufferSize - mOffset;
-                    memcpy(mBuffer + mOffset, v, size);
-                    mOffset = gBufferSize;
-                    v = (void *)((int)v + size);
-                    mTell += size;
-                    Flush();
-                    i -= size;
-                } else {
-                    memcpy(mBuffer + mOffset, v, i);
-                    mTell += i;
-                    mOffset += i;
-                    if (mSize < mTell)
-                        mSize = mTell;
-                    goto okthen;
-                }
-
-            } while (!mFail);
-            return false;
+    if (!mBuffer) {
+        _WriteAsync(v, i);
+    } else {
+        while (true) {
+            int size = gBufferSize - mOffset;
+            if ((unsigned)i > (unsigned)size) {
+                memcpy(mBuffer + mOffset, v, size);
+                mOffset = gBufferSize;
+                v = (void *)((int)v + size);
+                mTell += size;
+                Flush();
+                if (mFail)
+                    return false;
+                i -= size;
+            } else {
+                memcpy(mBuffer + mOffset, v, i);
+                mTell += i;
+                mOffset += i;
+                if (mTell > mSize)
+                    mSize = mTell;
+                break;
+            }
         }
-    okthen:
-        return i != 0;
     }
+    return i != 0;
 }
 
 int AsyncFile::Seek(int i, int j) {

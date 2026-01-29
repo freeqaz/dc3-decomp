@@ -31,8 +31,32 @@ GameEndedDataPointJob::GameEndedDataPointJob(
     static Symbol custom_session("custom_session");
     static Symbol challenge("challenge");
 
-    if (TheMaster && TheMaster->IsLoaded()) {
+    DataPoint dataP;
+
+    if (TheMaster != nullptr && TheMaster->IsLoaded()) {
+        dataP.AddPair(mode, 0);
+        dataP.AddPair(song, 0);
+        dataP.AddPair(reason, 0);
+        dataP.AddPair(song_position, 0.0f);
+        dataP.AddPair(playlist_perform, 0);
+        dataP.AddPair(perform, 0);
+        dataP.AddPair(dance_battle, 0);
+        dataP.AddPair(perform_legacy, 0);
+        dataP.AddPair(practice, 0);
+        dataP.AddPair(showdown, 0);
+        dataP.AddPair(score, 0);
+        dataP.AddPair(num_stars, 0);
+        dataP.AddPair(perf_no_flashcard, 0);
+        dataP.AddPair(perf_current_stars, 0);
+        dataP.AddPair(photos_disabled, 0);
+        dataP.AddPair(freestyle_disabled, 0);
+        dataP.AddPair(num_bid_vcmds, 0);
+        dataP.AddPair(num_shell_vcmds, 0);
+        dataP.AddPair(custom_session, 0);
+        dataP.AddPair(challenge, 0);
     }
+
+    SetDataPoint(dataP);
 }
 
 OmgScoresJob::OmgScoresJob(Hmx::Object *callback, int p1Score, int p2Score)

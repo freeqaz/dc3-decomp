@@ -24,6 +24,8 @@ public:
     // RndHighlightable
     virtual void Highlight();
 
+    float Eccentricity(const Vector2 &) const;
+
     OBJ_MEM_OVERLOAD(0x1A)
     NEW_OBJ(CharCuff)
 

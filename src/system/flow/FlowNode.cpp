@@ -77,11 +77,41 @@ BEGIN_COPYS(FlowNode)
     END_COPYING_MEMBERS
 END_COPYS
 
-BEGIN_LOADS(FlowNode)
-    LOAD_REVS(bs)
-    ASSERT_REVS(2, 0)
-    LOAD_SUPERCLASS(Hmx::Object)
-    d >> mChildNodes;
+void FlowNode::Load(BinStream &bs) {
+    int revs;
+    bs >> revs;
+    BinStreamRev d(bs, revs);
+
+    static const unsigned short gRevs[4] = { 2, 0, 0, 0 };
+    if (d.rev > 2) {
+        MILO_FAIL(
+            "%s can't load new %s version %d > %d",
+            PathName(this),
+            ClassName(),
+            d.rev,
+            gRevs[0]
+        );
+    }
+    if (d.altRev > 0) {
+        MILO_FAIL(
+            "%s can't load new %s alt version %d > %d",
+            PathName(this),
+            ClassName(),
+            d.altRev,
+            gRevs[2]
+        );
+    }
+
+    if (!dynamic_cast<Flow *>(this)) {
+        Hmx::Object::Load(d.stream);
+    }
+
+    mChildNodes.Load(d.stream, true, nullptr);
+
+    // Call SetParent on each loaded child node
+    for (auto it = mChildNodes.begin(); it != mChildNodes.end(); ++it) {
+        (*it)->SetParent(this, false);
+    }
 
     int numEntries;
     d >> numEntries;
@@ -92,7 +122,16 @@ BEGIN_LOADS(FlowNode)
         entry.Load(d.stream, this);
         mDrivenPropEntries.push_back(entry);
     }
-END_LOADS
+
+    if (d.rev > 0) {
+        bool unk;
+        d >> unk;
+        unk58 = unk;
+    }
+    if (d.rev > 1) {
+        d >> mDebugComment;
+    }
+}
 
 const char *FlowNode::FindPathName() {
     ObjectDir *dir = dynamic_cast<ObjectDir *>(this);

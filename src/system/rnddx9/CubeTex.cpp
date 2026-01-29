@@ -37,6 +37,8 @@ void DxCubeTex::Sync() {
     XGGetTextureDesc(mTex, 0, &desc);
     for (int i = 0; i < kNumCubeFaces; i++) {
         RndBitmap bitmap;
+        bitmap.Reset();
+        bitmap.Reset();
     }
     NgMat::SetCurrent(nullptr);
 }

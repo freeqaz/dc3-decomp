@@ -108,10 +108,14 @@ void DanceRemixer::Reset() {
     unk48 = false;
     ClearJump();
     for (int i = 0; i < 2; i++) {
-        for (int j = 0; j < mTotalMeasures; i++) {
+        for (int j = 0; j < mTotalMeasures; j++) {
+            TheMoveMgr->mMoveParents[i][j] = 0;
+            TheMoveMgr->unk134[i][j] = 0;
+            TheMoveMgr->unk150[i][j] = std::make_pair<const MoveVariant *, const MoveVariant *>(0, 0);
         }
         mUnscoredMeasures[i].clear();
     }
+    TheMoveMgr->unk168 = 1;
     HandleType(Message("post_reset"));
 }
 

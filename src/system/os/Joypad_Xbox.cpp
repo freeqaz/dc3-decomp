@@ -187,7 +187,7 @@ bool requestBreedWrite(int pad, unsigned char *pBreedWritePacket) {
 }
 
 JoypadType SetupHXRealGuitar(int pad, const XINPUT_CAPABILITIES &c) {
-    short us = c.Gamepad.sThumbLY;
+    unsigned short us = (unsigned short)c.Gamepad.sThumbLY & 0xFFF0;
     bool u1 = us == 0x1530;
     bool u2 = us == 0x1430;
     if (!u1 && !u2)

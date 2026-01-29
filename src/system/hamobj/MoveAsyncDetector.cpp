@@ -125,3 +125,27 @@ void MoveAsyncDetector::DisableAllDetectors() {
         }
     }
 }
+
+MoveDetector *MoveAsyncDetector::FindDetector(const HamMove *move) {
+    for (std::vector<MoveDetector *>::iterator it = unk4.begin(); it != unk4.end();
+         ++it) {
+        if ((*it)->Move() == move) {
+            return *it;
+        }
+    }
+    return 0;
+}
+
+void MoveAsyncDetector::EnableDetector(HamMove *move) {
+    MoveDetector *detector = FindDetector(move);
+    if (detector) {
+        unk10.insert(detector);
+    }
+}
+
+void MoveAsyncDetector::DisableDetector(HamMove *move) {
+    MoveDetector *detector = FindDetector(move);
+    if (detector) {
+        unk10.erase(detector);
+    }
+}

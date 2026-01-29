@@ -1004,6 +1004,71 @@ void RndBitmap::SetAlpha(AlphaFlag flag) {
     }
 }
 
+bool RndBitmap::SamePaletteColors(const RndBitmap &bmap) const {
+    u8 *bmapPalette = bmap.mPalette;
+    u8 *thisPalette = mPalette;
+    u32 bmapPaletteWord = *(u32 *)(bmapPalette + 0x14);
+    u32 thisPaletteWord = *(u32 *)(thisPalette + 0x14);
+
+    if (bmapPaletteWord == thisPaletteWord) {
+        return true;
+    }
+
+    u8 bppVal = bmap.mBpp;
+    u32 paletteIndexMask = (1 << bppVal) - 1;
+
+    if ((s32)paletteIndexMask < 0) {
+        return true;
+    }
+
+    u32 paletteIndexMaskMinus8 = paletteIndexMask - 8;
+    u32 thisBitmapFlags = mOrder & 2;
+    u32 bmapBitmapFlags = bmap.mOrder & 2;
+
+    u32 paletteIdx = paletteIndexMask;
+
+    while (true) {
+        u32 thisAdjustedIdx = paletteIdx;
+        if (thisBitmapFlags != 0 && bppVal == 8) {
+            u32 bits = paletteIdx & 0x18;
+            if (bits == 8) {
+                thisAdjustedIdx = paletteIndexMaskMinus8 + 0x10;
+            } else if (bits == 0x10) {
+                thisAdjustedIdx = paletteIndexMaskMinus8;
+            }
+        }
+
+        u8 thisR, thisG, thisB, thisA;
+        ConvertColor(thisPalette + thisAdjustedIdx * 4, thisR, thisG, thisB, thisA);
+
+        u32 bmapAdjustedIdx = paletteIdx;
+        if (bmapBitmapFlags != 0 && bppVal == 8) {
+            u32 bits = paletteIdx & 0x18;
+            if (bits == 8) {
+                bmapAdjustedIdx = paletteIndexMaskMinus8 + 0x10;
+            } else if (bits == 0x10) {
+                bmapAdjustedIdx = paletteIndexMaskMinus8;
+            }
+        }
+
+        u8 bmapR, bmapG, bmapB, bmapA;
+        bmap.ConvertColor(bmapPalette + bmapAdjustedIdx * 4, bmapR, bmapG, bmapB, bmapA);
+
+        if (thisR != bmapR) {
+            return false;
+        }
+
+        paletteIdx -= 1;
+        paletteIndexMaskMinus8 -= 1;
+
+        if ((s32)paletteIdx < 0) {
+            break;
+        }
+    }
+
+    return true;
+}
+
 bool RndBitmap::LoadBmp(const char *filename, bool wantMips, bool noAlpha) {
     FileStream *stream = new FileStream(filename, FileStream::kRead, true);
     if (stream->Fail()) {

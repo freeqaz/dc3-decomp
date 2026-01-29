@@ -142,18 +142,18 @@ void ThreeDSound::Highlight() {
         vscale.y = 1.0f / vscale.y;
         vscale.z = 1.0f / vscale.z;
         Scale(vscale, xfm.m, xfm.m);
-        if (mRadius < mMinFalloffDistance) {
-            UtilDrawCylinder(xfm, mRadius, mMinFalloffDistance, Hmx::Color(1, 0, 0), 0x40);
-        } else {
+        if (mRadius > mMinFalloffDistance) {
             UtilDrawSphere(
                 WorldXfm().v, mMinFalloffDistance, Hmx::Color(1, 0, 0), nullptr
             );
+        } else {
+            UtilDrawCylinder(xfm, mRadius, mMinFalloffDistance, Hmx::Color(1, 0, 0), 0x40);
         }
-        if (mRadius < mSilenceDistance) {
-            UtilDrawCylinder(xfm, mRadius, mSilenceDistance, Hmx::Color(0, 1, 0), 0x40);
+        if (mRadius > mSilenceDistance) {
+            UtilDrawSphere(WorldXfm().v, mSilenceDistance, Hmx::Color(0, 1, 0), nullptr);
             return;
         }
-        UtilDrawSphere(WorldXfm().v, mSilenceDistance, Hmx::Color(0, 1, 0), nullptr);
+        UtilDrawCylinder(xfm, mRadius, mSilenceDistance, Hmx::Color(0, 1, 0), 0x40);
     } else {
         UtilDrawSphere(WorldXfm().v, mMinFalloffDistance, Hmx::Color(1, 0, 0), nullptr);
 

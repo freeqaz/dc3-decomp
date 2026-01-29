@@ -60,15 +60,15 @@ void PhysicsManager::HarvestCollidables(ObjectDir *parentProxy) {
             const DataNode *prop = it->Property(collidable, false);
             if (prop) {
                 int i5 = prop->Int();
-                bool u2 = i5;
                 if (i5 == 1) {
+                    bool u2 = false;
                     if (!mesh->GetKeepMeshData()) {
                         RndMesh *owner = mesh->GetGeomOwner();
                         if (mesh != owner) {
                             u2 = HasKeepMeshData(owner);
-                        } else {
-                            u2 = false;
                         }
+                    } else {
+                        u2 = true;
                     }
                     if (u2) {
                         AddCollidable(it, parentProxy, mesh->Showing());

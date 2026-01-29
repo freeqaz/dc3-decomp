@@ -104,7 +104,7 @@ void CharLookAt::Enter() {
 void CharLookAt::PollDeps(
     std::list<Hmx::Object *> &changedBy, std::list<Hmx::Object *> &change
 ) {
-    changedBy.push_back(mSource);
+    changedBy.push_back(GetSource());
     changedBy.push_back(mTarget);
     change.push_back(mPivot);
 }

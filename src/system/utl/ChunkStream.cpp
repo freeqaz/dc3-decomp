@@ -243,7 +243,30 @@ void ChunkStream::DecompressChunk(DecompressTask &task) {
 }
 
 void ChunkStream::DecompressChunkAsync() {
+    int bufIdx = 1;
+    int idx;
+    for (; bufIdx <= 2; bufIdx++) {
+        idx = (mCurBufferIdx + bufIdx) % 3;
+        if (mBuffersState[idx] == kReading)
+            break;
+    }
 
+    if (mBuffersState[idx] == kReading) {
+        bool maskexists = (mCurChunk[bufIdx] >> 24) & 1;
+        if (mChunkInfo.mID != 0xCABEDEAF && !maskexists) {
+            mBuffersState[idx] = kDecompressing;
+            DecompressTask dtask;
+            dtask.mChunk = &mCurChunk[bufIdx];
+            dtask.mBuffer = mBuffers[idx];
+            dtask.mState = &mBuffersState[idx];
+            dtask.unkc = mBufSize;
+            dtask.mID = mChunkInfo.mID;
+            dtask.mTempBuf = (char *)mFilename.c_str();
+            gDecompressionQueue.push_back(dtask);
+        } else {
+            mBuffersState[idx] = kReady;
+        }
+    }
 }
 
 bool ChunkStream::PollDecompressionWorker() {
@@ -283,38 +306,38 @@ void ChunkStream::MaybeWriteChunk(bool b) {
     if (mChunkInfo.mNumChunks < 2 && 0x2000 <= mCurBufOffset) {
         b = true;
     }
-    if (mCurBufOffset >= mRecommendedChunkSize || b != false) {
-        unsigned int temp = ((mChunkInfo.mNumChunks - 0x1ff) << 20) >> 25; // some leading zeroes thing
-        if (b == false && temp != 0) {
+    if (mCurBufOffset >= mRecommendedChunkSize || b) {
+        bool maxchunks = mChunkInfo.mNumChunks == 511;
+        if (!b && maxchunks) {
             return;
         }
-        if (mRecommendedChunkSize + 0x2000 >= mCurBufOffset && 0x1fff <= mLastWriteMarker && temp == 0) {
-            int size = mCurBufOffset - mLastWriteMarker;
-            void *dst = _MemAllocTemp(size, __FILE__, 0x2e6, "ChunkStreamBuf",  0);
-            memcpy(dst, mBuffers[mLastWriteMarker], size);
-            int writeMarker = mLastWriteMarker;
+        if ((mCurBufOffset >= mRecommendedChunkSize + 0x2000)
+            && (0x2000 <= mLastWriteMarker) && !maxchunks) {
+            int __n = mCurBufOffset - mLastWriteMarker;
+            void *__dest = _MemAllocTemp(__n, __FILE__, 0x2e6, "ChunkStreamBuf", 0);
+            memcpy(__dest, mBuffers[0] + mLastWriteMarker, __n);
+            mCurBufOffset = mLastWriteMarker;
             mLastWriteMarker = 0;
-            mCurBufOffset = writeMarker;
             MaybeWriteChunk(true);
-            mCurBufOffset = size;
-            memcpy(mBuffers, dst, size);
-            MemFree(dst);
-            if (b == false) {
+            mCurBufOffset = __n;
+            memcpy(mBuffers[0], __dest, __n);
+            MemFree(__dest);
+            if (!b) {
                 return;
             }
         }
-        if (512 <= mChunkInfo.mNumChunks) {
-            MILO_FAIL("%s has %d chunks, max is %d", mFilename, mChunkInfo.mNumChunks, 512);
-        }
-        int chunkWrite = WriteChunk();
-        mChunkInfo.mChunks[mChunkInfo.mNumChunks] = chunkWrite;
-        mChunkInfo.mNumChunks++;
-        if (mCurBufOffset >= mChunkInfo.mMaxChunkSize) {
-            mChunkInfo.mMaxChunkSize = mCurBufOffset;
-        }
-        if ((chunkWrite & kChunkSizeMask) >= mChunkInfo.mMaxChunkSize) {
-            mChunkInfo.mMaxChunkSize = chunkWrite & kChunkSizeMask;
-        }
+        MILO_ASSERT_FMT(
+            mChunkInfo.mNumChunks < 512,
+            "%s has %d chunks, max is %d",
+            mFilename,
+            mChunkInfo.mNumChunks,
+            512
+        );
+        unsigned int wrote = WriteChunk();
+        int mask = wrote & kChunkSizeMask;
+        mChunkInfo.mChunks[mChunkInfo.mNumChunks++] = wrote;
+        mChunkInfo.mMaxChunkSize =
+            Max<int>(mask, mCurBufOffset, mChunkInfo.mMaxChunkSize);
         mCurBufOffset = 0;
     }
     mLastWriteMarker = mCurBufOffset;

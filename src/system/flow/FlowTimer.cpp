@@ -124,10 +124,28 @@ void FlowTimer::OnKeyframe(FlowNode *node) {
 }
 
 void FlowTimer::OnTimerEnd() {
-    if (!FlowNode::IsRunning()) {
+    if (FlowNode::IsRunning()) {
+        // Running
+    } else {
         MILO_ASSERT(mFlowParent->HasRunningNode(this), 0x10d);
-
         FLOW_LOG("Timed Release From Parent \n");
+        int depth = 0;
+        unsigned int start = 0;
+        unsigned long long cycles = 0;
+        Timer t;
+        t.Reset();
+        depth++;
+        if (depth == 1) {
+            start = __mftb();
+        }
+        mFlowParent->ChildFinished(this);
+        depth--;
+        if (depth == 0) {
+            unsigned int end = __mftb();
+            cycles += end - start;
+            float ms = Timer::CyclesToMs(cycles);
+            TheFlowMgr->AddMs(ms);
+        }
     }
 }
 

@@ -334,6 +334,30 @@ Loader *LoadMgr::AddLoader(const FilePath &file, LoaderPos pos) {
     return new FileLoader(file, file.c_str(), pos, 0, false, true, nullptr, nullptr);
 }
 
+void LoadMgr::PollUntilLoaded(Loader *ldr1, Loader *ldr2) {
+    AutoGlitchReport hang(1e9f, __FUNCTION__);
+    float saved_period = unk1c;
+    while (!ldr1->IsLoaded()) {
+        unk1c = 1e+30f;
+        if (ldr2 && ldr2 == mLoading.front()) {
+#ifdef MILO_DEBUG
+            MILO_FAIL(
+                "PollUntilLoaded circular dependency %s on %s",
+                ldr2->DebugText(),
+                ldr1->DebugText()
+            );
+#endif
+        }
+        PollFrontLoader();
+        if (!ListFind(mLoading, ldr1))
+            break;
+        if (mLoading.front()->IsLoaded()) {
+            mLoading.pop_front();
+        }
+    }
+    unk1c = saved_period;
+}
+
 #pragma endregion
 #pragma region Handlers
 

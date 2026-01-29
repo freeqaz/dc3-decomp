@@ -228,7 +228,7 @@ void MakeRotQuat(const Vector3 &v1, const Vector3 &v2, Hmx::Quat &q) {
     Vector3 vec;
     Cross(v1, v2, vec);
     float sq = std::sqrt(LengthSquared(v1) * LengthSquared(v2));
-    float sq2 = std::sqrt(0.5f + ((Dot(v1, v2) / 2.0f) / sq));
+    float sq2 = std::sqrt(((Dot(v1, v2) / sq + 1.0f) * 0.5f));
     if (sq2 > 1e-7f) {
         float f1 = 0.5f / (sq * sq2);
         q.Set(vec.x * f1, vec.y * f1, vec.z * f1, sq2);

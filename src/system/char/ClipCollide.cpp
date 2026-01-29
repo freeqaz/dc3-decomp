@@ -83,6 +83,33 @@ void ClipCollide::SyncWaypoint() {
     static Symbol back("back");
     static Symbol left("left");
     static Symbol right("right");
+    mChar->Enter();
+    mChar->Teleport(mWaypoint);
+    float radius = mWaypoint->MYRadius();
+    Transform xfm = mWaypoint->WorldXfm();
+    if (radius <= 0)
+        radius = mWaypoint->Radius();
+    if (mPosition == front) {
+        xfm.v.x += xfm.m.y.x * radius;
+        xfm.v.y += xfm.m.y.y * radius;
+        xfm.v.z += xfm.m.y.z * radius;
+    } else if (mPosition == back) {
+        radius = -radius;
+        xfm.v.x += xfm.m.y.x * radius;
+        xfm.v.y += xfm.m.y.y * radius;
+        xfm.v.z += xfm.m.y.z * radius;
+    } else if (mPosition == left) {
+        radius = mWaypoint->Radius();
+        xfm.v.x += xfm.m.x.x * radius;
+        xfm.v.y += xfm.m.x.y * radius;
+        xfm.v.z += xfm.m.x.z * radius;
+    } else {
+        radius = -mWaypoint->Radius();
+        xfm.v.x += xfm.m.x.x * radius;
+        xfm.v.y += xfm.m.x.y * radius;
+        xfm.v.z += xfm.m.x.z * radius;
+    }
+    mChar->SetLocalXfm(xfm);
 }
 
 void ClipCollide::ClearReport() {

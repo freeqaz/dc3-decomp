@@ -63,11 +63,12 @@ void HamPhraseMeter::SetRatingFrac(float f1, float f2) {
         } else {
             unk220 = (mFirstPerfectFrame - mAnim->StartFrame()) * f1;
         }
-        if (f2 > 0) {
-            // unk224 = Min<float>(mDesiredFPB, std::fabs(unk220 - mAnim->GetFrame()) /
-            // f2);
-        } else {
+        if (!(f2 > 0)) {
             mAnim->SetFrame(unk220, 1);
+        } else {
+            float temp = std::fabs(unk220 - mAnim->GetFrame());
+            temp = temp / f2;
+            unk224 = (mDesiredFPB - temp >= 0.0f) ? mDesiredFPB : temp;
         }
     }
 }

@@ -17,6 +17,7 @@
 
 /** "Represents a beam and floorspot for venue modeling" */
 class Spotlight : public RndDrawable, public RndTransformable, public RndPollable {
+    friend class SpotlightDrawer;
 public:
     struct BeamDef {
         enum Shape {
@@ -112,6 +113,7 @@ public:
     BeamDef GetBeam() const { return mBeam; }
     RndFlare *GetFlare() const { return mFlare; }
     ObjPtrList<RndDrawable> GetAdditionalObjects() const { return mAdditionalObjects; }
+    RndMat *LensMesh() const { return mLensMaterial; }
     void SetFlareIsBillboard(bool);
     void SetIntensity(float);
     void SetColorIntensity(const Hmx::Color &c, float f);
@@ -120,6 +122,8 @@ public:
     RndTransformable *GetFloorSpotTarget() const {
         return mSpotTarget ? mSpotTarget : mTarget;
     }
+    bool IsFlareEnabled() const { return mFlareEnabled; }
+    RndTransformable *GetTarget() const { return mTarget; }
     void SetFlareEnabled(bool);
 
     static void RemoveFromLists(Spotlight *);

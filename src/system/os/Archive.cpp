@@ -127,9 +127,11 @@ void Archive::Enumerate(
 ) {
     char dtbPath[256];
     char folderPath[256];
+    bool isDtb = false;
+
     if (pattern) {
-        const char *str = strstr(pattern, ".dta");
-        if (str) {
+        if (strstr(pattern, ".dta")) {
+            isDtb = true;
             sprintf(dtbPath, "%s/gen/%s.dtb", FileGetPath(pattern), FileGetBase(pattern));
             pattern = dtbPath;
             if (!recurse) {
@@ -138,10 +140,58 @@ void Archive::Enumerate(
             }
         }
     }
-    for (std::vector<FileEntry>::iterator it = mFileEntries.begin();
-         it != mFileEntries.end();
-         ++it) {
-        const char *cur = mHashTable[it->HashedPath()];
+
+    // Calculate directory length
+    const char *dirEnd = dir;
+    while (*dirEnd) {
+        dirEnd++;
+    }
+    int dirLen = dirEnd - dir;
+
+    const char *lastPath = nullptr;
+    bool matches = false;
+
+    // Iterate through file entries
+    for (auto it = mFileEntries.begin(); it != mFileEntries.end(); ++it) {
+        const char *curPath = mHashTable[it->HashedPath()];
+
+        // If path is different, recheck the directory match
+        if (lastPath != curPath) {
+            lastPath = curPath;
+            matches = strncmp(dir, curPath, dirLen) == 0;
+            if (matches && !recurse) {
+                // For non-recursive, verify we're in the same directory (same slash count)
+                int dirSlashes = 0;
+                for (const char *p = dir; *p; p++) {
+                    if (*p == '/') dirSlashes++;
+                }
+                int curSlashes = 0;
+                for (const char *p = curPath; *p; p++) {
+                    if (*p == '/') curSlashes++;
+                }
+                if (dirSlashes != curSlashes) {
+                    matches = false;
+                }
+            }
+        }
+
+        if (!matches) continue;
+
+        const char *curName = mHashTable[it->HashedName()];
+        bool patternMatches = true;
+        if (pattern != nullptr) {
+            char buf[512];
+            sprintf(buf, "%s/%s", curPath, curName);
+            patternMatches = FileMatch(buf, pattern) != 0;
+        }
+
+        if (patternMatches) {
+            if (isDtb) {
+                cb(FileGetPath(curPath), FileGetBase(curPath));
+            } else {
+                cb(curPath, curName);
+            }
+        }
     }
 }
 

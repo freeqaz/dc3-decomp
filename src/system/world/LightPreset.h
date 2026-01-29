@@ -200,6 +200,7 @@ protected:
     void FillSpotPresetData(Spotlight *, SpotlightEntry &, int);
     void Animate(float);
     void SyncNewSpotlights();
+    void SyncKeyframeTargets();
 
     DataNode OnSetKeyframe(DataArray *);
     DataNode OnViewKeyframe(DataArray *);

@@ -185,3 +185,68 @@ void HamListRibbon::PlaySelectSound(int idx) {
         mSelectSounds[idx]->Activate();
     }
 }
+
+void HamListRibbon::PostLoad(BinStream &bs) {
+    BinStreamRev d(bs, bs.PopRev(this));
+    RndDir::PostLoad(bs);
+    bs >> *((int *)((char *)this - 0x16c));
+    mSwellAnim.Load(bs, true, this);
+    mSlideAnim.Load(bs, true, this);
+    mSelectAnim.Load(bs, true, this);
+    mSelectInactiveAnim.Load(bs, true, this);
+    mSelectAllAnim.Load(bs, true, this);
+    mLabelPlaceholder.Load(bs, true, this);
+
+    if ((u16)d.rev >= 2) {
+        mScrollAnims.Load(d);
+    }
+    if ((u16)d.rev >= 3) {
+        mDisengageAnim.Load(bs, true, this);
+    }
+    if ((u16)d.rev >= 4) {
+        if ((u16)d.rev < 9) {
+            int count1 = 0;
+            d >> count1;
+            for (int i = 0; i < count1; ++i) {
+                Symbol s;
+                d >> s;
+            }
+            int count2 = 0;
+            d >> count2;
+            for (int i = 0; i < count2; ++i) {
+                Symbol s;
+                d >> s;
+            }
+        }
+    }
+    if ((u16)d.rev == 4) {
+        Symbol s;
+        d >> s;
+        d >> s;
+    }
+    if ((u16)d.rev >= 5) {
+        mSlideSound.Load(bs, true, this);
+        mSlideSoundAnim.Load(bs, true, this);
+        mScrollSound.Load(bs, true, this);
+        mScrollSoundAnim.Load(bs, true, this);
+    }
+    if ((u16)d.rev >= 0xa) {
+        mEnterFlow.Load(bs, true, this);
+    }
+    if ((u16)d.rev >= 6) {
+        mSelectToggleAnim.Load(bs, true, this);
+    }
+    if ((u16)d.rev >= 7) {
+        bs >> *((int *)((char *)this - 0x160));
+    }
+    if ((u16)d.rev >= 8) {
+        bs >> *((int *)((char *)this - 0x15c));
+    }
+    if ((u16)d.rev >= 9) {
+        mHighlightSounds.Load(bs, true, this);
+        mSelectSounds.Load(bs, true, this);
+    }
+    if ((u16)d.rev >= 0xb) {
+        mEnterAnim.Load(bs, true, this);
+    }
+}

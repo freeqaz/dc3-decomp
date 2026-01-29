@@ -130,3 +130,33 @@ char *BlockMgr::GetBlockData(int ark, int blk) {
     }
     return nullptr;
 }
+
+bool BlockMgr::SpinUp() {
+    TheBlockMgr.Poll();
+    if (UsingCD()) {
+        if (mSpinDownTimer.Ms() > 120000.0f) {
+            if (mReadingBlock == nullptr) {
+                MILO_LOG("BlockMgr spinning up...\n");
+                Block *blk = FindMRUBlock();
+                mReadingBlock = blk;
+                AsyncTask at(blk->ArkFileNum(), blk->BlockNum());
+                AddTask(at);
+                gReadHD = false;
+                bool x = CDRead(
+                    mReadingBlock->ArkFileNum(),
+                    (mReadingBlock->BlockNum() << 5),
+                    2,
+                    (void *)gTempBlock
+                );
+                if (!x) {
+                    mReadingBlock->UpdateTimestamp();
+                } else {
+                    MILO_LOG("CD READING ERROR: %x\n", x);
+                    mReadingBlock = nullptr;
+                }
+            }
+            return false;
+        }
+    }
+    return true;
+}

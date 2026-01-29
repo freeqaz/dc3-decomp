@@ -740,32 +740,33 @@ int CharClip::TransitionVersion() {
 
 const CharGraphNode *
 CharClip::FindNode(CharClip *clip, float f1, int iii, float f2) const {
+    unsigned int blendMode = iii & 0xFu;
     const CharGraphNode *n = nullptr;
-    int blendMode = iii & 0xF;
-    switch (blendMode) {
-    case kPlayNoDefault:
-        break;
-    case kPlayNow:
-        break;
-    case kPlayDirty:
-        break;
-    case kPlayNoBlend:
-        n = nullptr;
-        break;
-    case kPlayFirst:
-        n = FindFirstNode(clip, f1);
-        break;
-    case kPlayLast:
-        n = FindLastNode(clip, f1);
-        break;
-    default:
-        MILO_NOTIFY("Unknown mode flags %x, default to kPlayNow", iii);
-        break;
+
+    if (blendMode >= kPlayNoBlend) {
+        if (blendMode != kPlayNoBlend) {
+            if (blendMode >= kPlayLast) {
+                if (blendMode == kPlayLast) {
+                    n = FindLastNode(clip, f1);
+                } else if (blendMode != kPlayDirty) {
+                    MILO_NOTIFY("Unknown mode flags %x, default to kPlayNow", iii);
+                }
+            } else {
+                n = FindFirstNode(clip, f1);
+            }
+        } else {
+            n = nullptr;
+        }
     }
+
     if (!n) {
         static CharGraphNode node;
+        static int sFlag;
+        if (!(sFlag & 1)) {
+            sFlag |= 1;
+        }
         node.curBeat = f1;
-        if (blendMode == kPlayLast) {
+        if ((int)blendMode == 4) {
             MaxEq(node.curBeat, EndBeat() - f2 * 0.5f);
         }
         n = &node;
@@ -977,6 +978,29 @@ CharBoneDir *CharClip::GetResource() const {
         MILO_NOTIFY("%s has no resource", PathName(this));
     }
     return dir;
+}
+
+float CharClip::SampleToBeat(int sample) const {
+    float *begin = *(float **)((char *)this + 0xf8);
+    float *end = *(float **)((char *)this + 0xfc);
+
+    s64 sampleExt = sample;
+    float fSample = (float)(double)sampleExt;
+    float result;
+
+    if ((int)(end - begin) & 0xFFFFFFFC) {
+        float *lower = std::lower_bound(begin, end, fSample);
+        int index = (int)(lower - begin);
+        s64 indexExt = index;
+        float fIndex = (float)(double)indexExt;
+        float beat = 0.0f;
+        mBeatTrack.Linear(fIndex, beat);
+        result = beat;
+    } else {
+        result = fSample;
+    }
+
+    return result;
 }
 
 void CharClip::LockAndDelete(CharClip **const clips, int i2, int remaining) {

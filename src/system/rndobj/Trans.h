@@ -10,7 +10,10 @@
  * "Base class for transformable objects. Trans objects have
  * a 3D position, rotation, and scale."
  */
+class RndText;
+
 class RndTransformable : public virtual RndHighlightable {
+    friend class RndText;
 public:
     enum Constraint {
         /** "no constraint" */

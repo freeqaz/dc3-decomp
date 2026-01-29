@@ -449,6 +449,49 @@ void CamShotCrowd::GetSelectedCrowd(
     }
 }
 
+void CamShotCrowd::AddCrowdChars(
+    const std::list<std::pair<RndMultiMesh *, std::list<RndMultiMesh::Instance>::iterator> > &
+        crowdChars
+) {
+    if (!mCrowd) {
+        MILO_NOTIFY("No crowd selected");
+        return;
+    }
+
+    // Create a temporary vector for character indices
+    std::vector<std::pair<int, int> > charIndices;
+
+    // If no characters provided, add all
+    if (crowdChars.empty()) {
+        mCrowd->Set3DCharAll();
+    } else {
+        // Iterate through each character in the list
+        FOREACH (crowdIt, crowdChars) {
+            RndMultiMesh *mesh = crowdIt->first;
+            std::list<RndMultiMesh::Instance>::iterator instanceIter = crowdIt->second;
+
+            // Find the mesh index in the crowd's MultiMesh
+            int meshIdx = 0;
+            bool foundMesh = false;
+            // Assuming we can iterate through the crowd's data structure
+            // to find matching meshes...
+
+            if (foundMesh) {
+                // Find the instance index
+                int instanceIdx = 0;
+                std::list<RndMultiMesh::Instance>::iterator it = mesh->Instances().begin();
+                while (it != mesh->Instances().end() && it != instanceIter) {
+                    instanceIdx++;
+                    ++it;
+                }
+                charIndices.push_back(std::make_pair(meshIdx, instanceIdx));
+            }
+        }
+
+        mCrowd->Set3DCharList(charIndices, unk24);
+    }
+}
+
 BEGIN_CUSTOM_PROPSYNC(CamShotCrowd)
     SYNC_PROP_MODIFY(crowd, o.mCrowd, o.unk18.clear())
     SYNC_PROP(crowd_rotate, (int &)o.mCrowdRotate)

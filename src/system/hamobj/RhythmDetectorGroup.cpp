@@ -27,10 +27,14 @@ BEGIN_LOADS(RhythmDetectorGroup)
     LOAD_REVS(bs)
     ASSERT_REVS(2, 0)
     LOAD_SUPERCLASS(RndPollable)
-    bs >> mDetectors;
-    bs >> mSkeletonIndex;
-    if (mSkeletonIndex > -1) {
-        SetSkeletonIndex(mSkeletonIndex);
+    if (d.rev >= 1) {
+        bs >> mDetectors;
+    }
+    if (d.rev >= 2) {
+        bs >> mSkeletonIndex;
+        if (mSkeletonIndex > -1) {
+            SetSkeletonIndex(mSkeletonIndex);
+        }
     }
 END_LOADS
 
@@ -50,24 +54,19 @@ RhythmDetectorGroup::~RhythmDetectorGroup() {}
 RhythmDetectorGroup::RhythmDetectorGroup() : mDetectors(this, static_cast<EraseMode>(0), kObjListNoNull), mRating(0.0), mFreshness(0.0), mSkeletonIndex(-1), mDebugGraph(nullptr) {}
 
 void RhythmDetectorGroup::Poll() {
+    RhythmDetector* detector;
+    float groove, freshness;
     if (TheLoadMgr.EditMode() == false) {
-        mRating = 0.0;
-        mFreshness = 0.0;
+        mRating = 0.0f;
+        mFreshness = 0.0f;
         FOREACH(it, mDetectors) {
-            float groove = (*it)->Groove();
-            float temp = mRating;
-            if (temp - groove < 0.0) {
-                temp = groove;
-            }
-            mRating = temp;
-            float freshness = (*it)->Freshness();
-            float temp2 = mFreshness;
-            if (temp2 - freshness < 0.0) {
-                temp2 = freshness;
-            }
-            mFreshness = temp2;
+            detector = *it;
+            groove = detector->Groove();
+            mRating = (mRating - groove < 0.0f) ? groove : mRating;
+            freshness = detector->Freshness();
+            mFreshness = (mFreshness - freshness < 0.0f) ? freshness : mFreshness;
         }
-        if (mDebugGraph) {
+        if (mDebugGraph != 0) {
             mDebugGraph->AddData(mRating, mFreshness);
             mDebugGraph->Draw();
         }

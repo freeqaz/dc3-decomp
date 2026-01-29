@@ -2,14 +2,22 @@
 
 #include "obj/Object.h"
 #include "utl/BinStream.h"
+#include "math/Rand.h"
 
 float gUnitsPerMeter = 39.370079f;
+float sWindField[0x401] = { 0 }, sWhiteField[0x400] = { 0 };
+Rand *sRand;
+Vector3 sOffset(0.0f, 0.3384f, 0.66843998f);
+
+void SetWind(int, int, float, float, float) {}
 
 RndWind::RndWind()
     : mPrevailing(0.0f, 0.0f, 0.0f), mRandom(0.0f, 0.0f, 0.0f), mTimeLoop(100.0f),
-      mSpaceLoop(100.0f), mTrans(this), mWindOwner(this, this) {
+      mSpaceLoop(100.0f), mTrans(this), mAboutZ(false), mMaxSpeed(20.0f),
+      mMinSpeed(0.0f), mWindOwner(this, this) {
     SyncLoops();
 }
+
 
 RndWind::~RndWind() {}
 

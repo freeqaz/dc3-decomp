@@ -201,14 +201,13 @@ MCResult MCContainerXbox::Mount(CreateType ct) {
             }
         }
     }
-    switch (res) {
-    case ERROR_PATH_NOT_FOUND:
+    if (res == ERROR_PATH_NOT_FOUND) {
         return kMCFileNotFound;
-    case ERROR_ALREADY_EXISTS:
-        return kMCCorrupt;
-    default:
-        return TranslateCommonWinErrorToMCResult(res);
     }
+    if (res == ERROR_ALREADY_EXISTS) {
+        return kMCCorrupt;
+    }
+    return TranslateCommonWinErrorToMCResult(res);
 }
 
 MCResult MCContainerXbox::Unmount() {

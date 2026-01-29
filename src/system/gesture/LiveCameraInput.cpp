@@ -22,6 +22,8 @@
 #include "xdk/xapilibi/handleapi.h"
 #include "xdk/xapilibi/winerror.h"
 
+extern u8 *gDebugDepth;
+
 namespace {
     // bool  GetExposureRegion(struct _NUI_CAMERA_AE_ROI &)
     // long  GetColorCameraProperty(  _NUI_CAMERA_PROPERTY)
@@ -594,4 +596,23 @@ void LiveCameraInput::StoreDepthBufferClip(
             mTextureStore.size() - 1
         );
     }
+}
+
+RndTex *LiveCameraInput::GetStreamTex(BufferType type) const {
+    MILO_ASSERT(type == kBufferColor || type == kBufferDepth, 0x1EA);
+    void *bufferData = StreamBufferData(type);
+    DxTex *tex;
+    if (type == kBufferColor) {
+        tex = unk14a8;
+    } else {
+        tex = unk14ac;
+    }
+    tex->SetDeviceTex((D3DTexture *)bufferData);
+    RndTex *result = tex;
+    if (type == kBufferDepth) {
+        if (unk14b0 != nullptr && (bufferData == nullptr || *gDebugDepth != 0)) {
+            result = unk14b0;
+        }
+    }
+    return result;
 }

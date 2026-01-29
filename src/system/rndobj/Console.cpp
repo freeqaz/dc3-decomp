@@ -1,6 +1,8 @@
 #include "rndobj/Console.h"
 #include "os/System.h"
 #include "obj/DataFunc.h"
+#include "obj/DataFile.h"
+#include "utl/Cheats.h"
 
 RndConsole *gConsole;
 
@@ -111,6 +113,44 @@ RndConsole::Breakpoint::~Breakpoint() {
         DataArray *cmd = parent->Command(index);
         cmd->Node(0) = DataNop;
     }
+}
+
+void RndConsole::SetBreak(DataArray *arr) {
+    if (arr->Size() > 1) {
+        DataArray *arr9 = nullptr;
+        if (arr->Size() > 2) {
+            Hmx::Object *myObj = arr->Obj<Hmx::Object>(1);
+            if (myObj) {
+                if (myObj->TypeDef()) {
+                    arr9 = myObj->TypeDef()->FindArray(arr->Sym(2));
+                }
+            } else if (arr->Size() > 3) {
+                arr9 = SystemConfig(
+                    "objects", arr->Sym(1), "types", arr->Sym(2), arr->Sym(3)
+                );
+            }
+        } else if (DataThis()->TypeDef()) {
+            arr9 = DataThis()->TypeDef()->FindArray(arr->Sym(1));
+        }
+        if (arr9) {
+            for (int i = 0; i < arr9->Size(); i++) {
+                if (arr9->Type(i) == kDataCommand) {
+                    InsertBreak(arr9, i);
+                    return;
+                }
+            }
+        }
+    } else if (gCallStackPtr - gCallStack > 1) {
+        DataArray *arr9 = gCallStackPtr[-3];
+        DataArray *arr7 = gCallStackPtr[-2];
+        for (int i = 0; i < arr9->Size(); i++) {
+            if (arr9->Type(i) == kDataCommand && arr9->UncheckedArray(i) == arr7) {
+                InsertBreak(arr9, i);
+                return;
+            }
+        }
+    }
+    MILO_FAIL("Can't insert break");
 }
 
 void RndConsole::Breakpoints() {
@@ -241,3 +281,33 @@ RndConsole::RndConsole()
 }
 
 RndConsole::~RndConsole() { TheDebug.SetReflect(nullptr); }
+
+void RndConsole::ExecuteLine() {
+    String &line_txt = mInput->CurrentLine();
+    DataNode n40, n48;
+    if (line_txt.empty())
+        MILO_FAIL("Empty command");
+    mBuffer.push_front(line_txt);
+    if (line_txt[line_txt.length() - 1] == '/') {
+        line_txt.erase(line_txt.length() - 1, 1);
+        SetShowing(false);
+    }
+    if (mBuffer.size() > mMaxBuffer) {
+        mBuffer.pop_back();
+    }
+    mBufPtr = mBuffer.begin();
+    MILO_LOG("> %s\n", line_txt);
+    n40 = DataNode(DataReadString(line_txt.c_str()), kDataArray);
+    n40.Array()->Release();
+    mInput->CurrentLine().erase();
+    LogCheat(-1, 0, n40.Array());
+    if (n40.Array()->Type(0) == kDataCommand && n40.Array()->Size() == 1) {
+        n48 = n40.Array()->Command(0)->Execute();
+    } else {
+        n48 = n40.Array()->Execute();
+    }
+    String output;
+    output << "Evaluates to " << n48 << "\n";
+    mInput->Print(output.c_str());
+    MILO_LOG("%s", output);
+}

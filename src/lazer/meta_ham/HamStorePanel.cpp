@@ -30,12 +30,24 @@ HamStorePanel::HamStorePanel()
     : unka0(), unka4(), mOfferProvider(), unkb8(), unkc0(false), unk128(), unk154(false),
       unk155(true), unk156(false), unk157(false), unk158(false), unk159(false), unk184(),
       mXboxPurchaser() {
-    for (int i = 7; i != 0; i--) {
+    for (int i = 0; i < 7; i++) {
         unk138[i] = 0;
     }
     DataArray *sysConfig = SystemConfig("store");
-    DataArray *specialOfferArray = sysConfig->FindArray("special_offers", false);
+    Symbol specialOffersSym("special_offers");
+    DataArray *specialOfferArray = sysConfig->FindArray(specialOffersSym, false);
     if (specialOfferArray) {
+        int numOffers = (specialOfferArray->Size() + 23) / 24;
+        if (numOffers >= 7) {
+            numOffers = 6;
+        }
+
+        for (int i = 0; i < numOffers; i++) {
+            DataNode offerNode = specialOfferArray->Node(i);
+            if (offerNode.Type() == kDataArray) {
+                // Process special offer
+            }
+        }
     }
     TheContentMgr.RegisterCallback(this, false);
 }

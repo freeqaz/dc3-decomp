@@ -5,6 +5,7 @@
 #include "os/File.h"
 #include "os/System.h"
 #include "utl/Str.h"
+#include "utl/DataPointMgr.h"
 #include "xdk/xbdm/xbdm.h"
 #include <vector>
 
@@ -32,13 +33,38 @@ void LocaleChunkSort::Sort(OrderedLocaleChunk *chunks, int count) {
 }
 
 const char *Locale::Localize(Symbol token, bool success) const {
-    // Search for token in symbol table
+    if (token == gNullStr) {
+        return "";
+    }
+    if (!mSymTable) {
+        MILO_ASSERT(mSymTable, 0x1D8);
+    }
+
+    // Static eng symbol
+    static Symbol sEng("eng");
+
+    // Check mMagnuStrings for language-specific strings
+    if (mMagnuStrings != nullptr) {
+        if (SystemLanguage() == sEng) {
+            DataArray *langArray = mMagnuStrings->FindArray(token, false);
+            if (langArray) {
+                return langArray->Str(1);
+            }
+        }
+    }
+
+    // Search main symbol table
     for (int i = 0; i < mSize; i++) {
         if (mSymTable[i] == token) {
             return mStrTable[i];
         }
     }
-    return 0;
+
+    if (UsingCD()) {
+        SendDebugDataPoint("debug/locale/token", "token", token, "success", false);
+    }
+
+    return nullptr;
 }
 
 void Locale::Terminate() {

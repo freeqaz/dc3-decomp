@@ -124,8 +124,11 @@ void LabelShrinkWrapper::Init() { REGISTER_OBJ_FACTORY(LabelShrinkWrapper) }
 
 void LabelShrinkWrapper::DrawShowing() {
     if (m_pLabel && m_pShow) {
-        MILO_ASSERT(mResourceDir, 0xa7);
+        RndDir *pDir = mResourceDir;
+        MILO_ASSERT(pDir, 0xa7);
         UpdateAndDrawWrapper();
+        pDir->SetWorldXfm(WorldXfm());
+        pDir->Draw();
     }
 }
 

@@ -37,6 +37,14 @@ enum QuitType {
     kQuitDataManager
 };
 
+enum ShowGamercardResult {
+    kShowGamercardResult_Success = 0,
+    kShowGamercardResult_Failed = -1,
+    kShowGamercardResult_PrivilegeFailed = -2,
+    kShowGamercardResult_NotSignedIn = -3,
+    kShowGamercardResult_Offline = -1
+};
+
 typedef bool XCallbackFunc(unsigned long &);
 
 class PlatformMgr : public Hmx::Object {
@@ -115,6 +123,7 @@ public:
     void SetPadPresence(int, int) const;
     void SetPadProperty(int, int, unsigned short const *) const;
     void EnumerateFriends(int, std::vector<Friend *> &, Hmx::Object *);
+    void Poll();
 
     bool GuideShowing() { return mGuideShowing; }
     bool IsConnected() { return mConnected; }
@@ -129,6 +138,7 @@ public:
     ShowDeviceSelectorUI(DWORD, DWORD, DWORD, ULARGE_INTEGER, DWORD *, XOVERLAPPED *);
     bool GetServiceID(const String &, unsigned int &);
     void SignInUsers(int, unsigned long);
+    ShowGamercardResult ShowGamercardForPadNum(int, const OnlineID *);
 };
 
 extern PlatformMgr ThePlatformMgr;

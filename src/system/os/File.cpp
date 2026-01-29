@@ -1,6 +1,7 @@
 #include "os/File.h"
 #include "os/AsyncFile.h"
 #include "os/FileCache.h"
+#include "os/ArkFile_p.h"
 #include "HolmesClient.h"
 #include "obj/Data.h"
 #include "obj/DataFunc.h"
@@ -13,6 +14,7 @@
 #include "utl/MemMgr.h"
 #include "utl/Option.h"
 #include <cctype>
+#include <cstdio>
 
 static char gSystemRoot[256]; // 0x0
 static char gExecRoot[256]; // 0x100
@@ -228,58 +230,67 @@ const char *FileRelativePath(const char *root, const char *filepath) {
 bool FileReadOnly(const char *filepath) { return true; }
 
 File *NewFile(const char *iFilename, int iMode) {
+    const char *filename;
+    int mode;
+    File *result;
+
+    filename = iFilename;
+    mode = iMode;
+    result = nullptr;
+
     if (gNullFiles) {
         return new NullFile();
     }
 
-    // Check if we're on the main thread, if not, fail
     if (!MainThread()) {
-        MILO_FAIL("NewFile(%s) from non-MainThread()");
-        return nullptr;
+        TheDebug.Notify("NewFile(%s) from MainThread()");
     }
 
-    // Check if filename is provided
-    if (!iFilename || *iFilename == '\0') {
-        return nullptr;
-    }
+    if ((iFilename != nullptr) && (*iFilename != '\0')) {
+        char localized[256];
+        if (mode & 0x2) {
+            filename = FileLocalize(iFilename, localized);
+        }
 
-    const char *filename = iFilename;
-    char localized[256];
+        if (FileIsLocal(filename)) {
+            mode |= 0x10000;
+        }
 
-    // Localize the filename if needed (mode bit 30 set)
-    if (iMode & 0x40000000) {
-        filename = FileLocalize(iFilename, localized);
-    }
+        int mode_check = mode & 0x2;
+        if ((mode_check == 0) || (mode & 0x20000) ||
+            ((result = FileCache::GetFileAll(filename)) == nullptr)) {
+            if ((UsingCD() != 0) && (mode_check != 0) && !(mode & 0x10000)) {
+                void *mem = _MemAllocTemp(0x38, __FILE__, 0x19, "ArkFile", 0);
+                if (mem != nullptr) {
+                    result = new (mem) ArkFile(filename, mode);
+                } else {
+                    result = nullptr;
+                }
+            } else {
+                mode &= ~0x4000;
+                result = AsyncFile::New(filename, mode);
+            }
 
-    // Check if file is local and update mode flags
-    if (FileIsLocal(filename)) {
-        iMode |= 0x10000;
-    }
+            if (result != nullptr) {
+                if (result->Fail()) {
+                    delete result;
+                    return nullptr;
+                }
 
-    // Check if we can use FileCache (mode bit 30 and not bit 14)
-    if ((iMode & 0x40000000) && !(iMode & 0x4000)) {
-        File *cachedFile = FileCache::GetFileAll(filename);
-        if (cachedFile) {
-            return cachedFile;
+                if ((gOpenCaptureFile != nullptr) && (mode & 0x2) &&
+                    !(mode & 0x20000)) {
+                    char path_buf[256];
+                    sprintf(path_buf, "./%s", FileMakePath(".", filename));
+                    const char *ptr = path_buf;
+                    while (*ptr != '\0') {
+                        ptr++;
+                    }
+                    gOpenCaptureFile->Write(path_buf, (ptr - path_buf) - 1);
+                    gOpenCaptureFile->Flush();
+                }
+            }
         }
     }
 
-    // Determine which file type to create
-    File *file = nullptr;
-
-    // TODO: ArkFile support when UsingCD()
-    // For now, just use AsyncFile
-    iMode &= ~0x4000; // Clear bit 14
-    file = AsyncFile::New(filename, iMode);
-
-    // Validate the file
-    if (file) {
-        if (file->Fail()) {
-            // File failed to open - delete and return nullptr
-            delete file;
-            return nullptr;
-        }
-    }
-
-    return file;
+    return result;
 }

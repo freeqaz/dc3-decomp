@@ -336,17 +336,32 @@ void Character::UpdateSphere() {
     SetSphere(s78);
 }
 
-void Character::DrawShadow(const Transform &xfm, float f2) {
+void Character::DrawShadow(const Transform &xfm, float planeD) {
     if (mShowing && !mShadow.empty()) {
-        Vector3 myWorldVec = WorldXfm().v;
-        Plane pl140;
-        pl140.Set(0, 0, 1, 0);
         MILO_ASSERT(GetGfxMode() == kOldGfx, 0x2E7);
+
+        Transform tf40;
+        Transpose(xfm, tf40);
+
+        Plane pl70;
+        pl70.Set(0, 0, 1, planeD);
+        Plane plb0;
+        Multiply(pl70, tf40, plb0);
+
         Transform tf90;
-        Transpose(xfm, tf90);
-        Plane pl130;
-        Multiply(pl140, tf90, pl130);
-        // more...
+        float scale = -1.0f / plb0.b;
+        tf90.m.Set(1, plb0.a * scale, 0, 0, 0, 0, 0, plb0.c * scale, 1);
+        tf90.v.Set(0, plb0.d * scale, 0);
+
+        Transform tfa0;
+        Multiply(tf40, tf90, tfa0);
+        Multiply(tfa0, xfm, tfa0);
+
+        for (int i = 0; i < mShadowBones.size(); i++) {
+            ShadowBone *cur = mShadowBones[i];
+            Multiply(cur->Parent()->WorldXfm(), tfa0, cur->DirtyLocalXfm());
+        }
+
         mShadow.Draw();
     }
 }

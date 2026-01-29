@@ -35,6 +35,11 @@ public:
     void SetMinPitch(float);
     void SetMaxPitch(float);
 
+    RndTransformable *GetSource() const {
+        const ObjPtr<RndTransformable> &ptr = mSource ? mSource : mPivot;
+        return ptr;
+    }
+
 protected:
     CharLookAt();
 

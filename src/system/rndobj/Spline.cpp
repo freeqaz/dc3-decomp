@@ -4,6 +4,7 @@
 #include "math/Rot.h"
 #include "os/Debug.h"
 #include "rndobj/Poll.h"
+#include "rndobj/ShaderMgr.h"
 #include "utl/BinStream.h"
 
 RndSpline::CtrlPoint::CtrlPoint()
@@ -151,5 +152,57 @@ const RndSpline::CtrlPoint &RndSpline::GetDeformedCtrlPointOrDummy(int iIndex) c
         return unkec;
     } else {
         return mDeformedCtrlPoints[iIndex];
+    }
+}
+
+void RndSpline::SyncDeformedCtrlPoints(int startCtrlPt, int endCtrlPt) {
+    // Stub implementation
+}
+
+void RndSpline::PrepareShader(float farg0, float farg1) const {
+    int startIdx = mStartCtrlPoint;
+    int endIdx = mEndCtrlPoint;
+    int tempIdx = mCtrlPoints.size();
+    unsigned int deformedSize = (unsigned int)((int)(mDeformedCtrlPoints.capacity() - mDeformedCtrlPoints.size()) / 88);
+    if (deformedSize >= 2U) {
+        int temp = 0 - (startIdx + 1);
+        int actualStart = ((temp - temp) - !1) & startIdx;
+        if (endIdx == -1) {
+            endIdx = (((int)(mCtrlPoints.capacity() - mCtrlPoints.size()) / 88) - 1);
+        }
+        const_cast<RndSpline *>(this)->SyncDeformedCtrlPoints(actualStart, endIdx);
+        int count = endIdx - actualStart;
+        if ((count + 1) >= 0xC) {
+            MILO_ASSERT(false, 0x1C1);
+        }
+        int idx = actualStart;
+        if (actualStart <= endIdx) {
+            int constIdx = 0xAF;
+            do {
+                const CtrlPoint &pt = GetDeformedCtrlPoint(idx);
+                if ((unsigned char)pt.mDirtyConstants != 0) {
+                    MILO_ASSERT(false, 0x1CF);
+                }
+                TheShaderMgr.SetVConstant((VShaderConstant)(constIdx - 2), *(Vector4 *)((unsigned char *)&pt + 0x18));
+                TheShaderMgr.SetVConstant((VShaderConstant)(constIdx - 1), *(Vector4 *)((unsigned char *)&pt + 0x28));
+                TheShaderMgr.SetVConstant((VShaderConstant)constIdx, *(Vector4 *)((unsigned char *)&pt + 0x38));
+                TheShaderMgr.SetVConstant((VShaderConstant)(constIdx + 1), *(Vector4 *)((unsigned char *)&pt + 0x48));
+                idx++;
+                constIdx += 4;
+            } while (idx <= endIdx);
+        }
+        float zero = 0.0f;
+        float invFarg1 = 1.0f / farg1;
+        float countAsFloat = (float)(double)count;
+        Vector4 shader1(countAsFloat, invFarg1, 0.0f, zero);
+        TheShaderMgr.SetVConstant((VShaderConstant)0x19, shader1);
+        if ((unsigned char)unk146 != 0) {
+            float startAsFloat = (float)(double)actualStart;
+            float amp = mPulseAmplitude;
+            float offset = unk148 - startAsFloat;
+            float perPt = (mYPerCtrlPoint / mPulseLength) * 2.0f;
+            Vector4 shader2(offset, amp, perPt, zero);
+            TheShaderMgr.SetVConstant((VShaderConstant)0x1A, shader2);
+        }
     }
 }

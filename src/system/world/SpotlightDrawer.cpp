@@ -138,6 +138,21 @@ void SpotlightDrawer::DrawAdditional(
     }
 }
 
+void SpotlightDrawer::DrawLenses(
+    SpotlightDrawer::SpotlightEntry *spotIter,
+    SpotlightDrawer::SpotlightEntry *const &spotEnd
+) {
+    MILO_ASSERT(spotIter != spotEnd, 0x2b1);
+    for (; spotIter != spotEnd; ++spotIter) {
+        Spotlight *sl = spotIter->unk4;
+        if (Spotlight::sDiskMesh) {
+            MILO_ASSERT(sl->LensMesh(), 0x2b9);
+            Spotlight::sDiskMesh->SetMat(sl->LensMesh());
+            Spotlight::sDiskMesh->Draw();
+        }
+    }
+}
+
 void SpotlightDrawer::SortLights() {
     if (sLights.size() > 2) {
         std::sort(sLights.begin(), sLights.end(), ByColor());

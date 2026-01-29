@@ -94,90 +94,93 @@ int CharClipGroup::QueueRandom(int pos, int end) const {
 
 CharClip *CharClipGroup::GetClip(int flags) {
     int size = mClips.size();
-    if (size != 0) {
-        // Clamp mWhich to valid range
-        if (mWhich > size - 1) {
-            mWhich = size - 1;
-        }
-
-        // Clamp unk24 to valid range
-        if (unk24 > size - 1) {
-            unk24 = size - 1;
-        }
-
-        int origWhich = mWhich;
-        int origUnk24 = unk24;
-
-        // Calculate starting position (next after mWhich, wrapping)
-        int pos = mWhich + 1;
-        if (pos >= size) {
-            pos -= size;
-        }
-        mWhich = pos;
-
-        // First loop: search from pos to unk24
-        if (pos != unk24) {
-            do {
-                int swapIdx = QueueRandom(pos, unk24);
-                mClips.swap(pos, swapIdx);
-                CharClip *clip = mClips[pos];
-                if ((clip->Flags() & flags) == flags) {
-                    // Found matching clip
-                    mClips.swap(pos, mWhich);
-                    // Update unk24
-                    int newUnk24 = unk24 + 1;
-                    if (newUnk24 >= size) {
-                        newUnk24 -= size;
-                    }
-                    unk24 = newUnk24;
-                    return clip;
-                }
-                pos = pos + 1;
-                if (pos >= size) {
-                    pos -= size;
-                }
-            } while (pos != unk24);
-        }
-
-        // Second loop: search from pos to origWhich
-        if (pos != origWhich) {
-            do {
-                int swapIdx = QueueRandom(pos, origWhich);
-                mClips.swap(pos, swapIdx);
-                CharClip *clip = mClips[pos];
-                if ((clip->Flags() & flags) == flags) {
-                    // Found matching clip
-                    mClips.swap(pos, mWhich);
-                    mClips.swap(pos, unk24);
-                    // Update unk24
-                    int newUnk24 = unk24 + 1;
-                    if (newUnk24 >= size) {
-                        newUnk24 -= size;
-                    }
-                    unk24 = newUnk24;
-                    return clip;
-                }
-                pos = pos + 1;
-                if (pos >= size) {
-                    pos -= size;
-                }
-            } while (pos != origWhich);
-        }
-
-        // Final check at current position
-        CharClip *clip = mClips[pos];
-        if ((clip->Flags() & flags) == flags) {
-            // Found matching clip, update state
-            mClips.swap(pos, mWhich);
-            mClips.swap(pos, unk24);
-            // Update unk24
-            int newUnk24 = unk24 + 1;
-            if (newUnk24 >= size) {
-                newUnk24 -= size;
-            }
-            unk24 = newUnk24;
-            return clip;
-        }
+    if (!size) {
+        return nullptr;
     }
+
+    // Clamp mWhich to valid range
+    if (mWhich >= size) {
+        mWhich = size - 1;
+    }
+
+    // Clamp unk24 to valid range
+    if (unk24 >= size) {
+        unk24 = size - 1;
+    }
+
+    int origWhich = mWhich;
+    int origUnk24 = unk24;
+
+    // Calculate starting position (next after mWhich, wrapping)
+    int pos = mWhich + 1;
+    if (pos >= size) {
+        pos -= size;
+    }
+    mWhich = pos;
+
+    // First loop: search from pos to origUnk24
+    if (pos != origUnk24) {
+        do {
+            int swapIdx = QueueRandom(pos, origUnk24);
+            mClips.swap(pos, swapIdx);
+            CharClip *clip = mClips[pos];
+            if ((clip->Flags() & flags) == flags) {
+                // Found matching clip
+                mClips.swap(pos, mWhich);
+                // Update unk24
+                int newUnk24 = origUnk24 + 1;
+                if (newUnk24 >= size) {
+                    newUnk24 -= size;
+                }
+                unk24 = newUnk24;
+                return clip;
+            }
+            pos = pos + 1;
+            if (pos >= size) {
+                pos -= size;
+            }
+        } while (pos != origUnk24);
+    }
+
+    // Second loop: search from pos to origWhich
+    if (pos != origWhich) {
+        do {
+            int swapIdx = QueueRandom(pos, origWhich);
+            mClips.swap(pos, swapIdx);
+            CharClip *clip = mClips[pos];
+            if ((clip->Flags() & flags) == flags) {
+                // Found matching clip
+                mClips.swap(pos, mWhich);
+                mClips.swap(pos, unk24);
+                // Update unk24
+                int newUnk24 = unk24 + 1;
+                if (newUnk24 >= size) {
+                    newUnk24 -= size;
+                }
+                unk24 = newUnk24;
+                return clip;
+            }
+            pos = pos + 1;
+            if (pos >= size) {
+                pos -= size;
+            }
+        } while (pos != origWhich);
+    }
+
+    // Final check at current position
+    CharClip *clip = mClips[pos];
+    if ((clip->Flags() & flags) == flags) {
+        // Found matching clip, update state
+        mClips.swap(pos, mWhich);
+        mClips.swap(pos, unk24);
+        // Update unk24
+        int newUnk24 = unk24 + 1;
+        if (newUnk24 >= size) {
+            newUnk24 -= size;
+        }
+        unk24 = newUnk24;
+        return clip;
+    }
+
     return nullptr;
 }

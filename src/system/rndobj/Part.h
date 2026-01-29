@@ -119,6 +119,9 @@ public:
     };
     class Burst {
     public:
+        Burst() : unk0(0), unk4(0), unk8(0), unkc(0) {}
+        bool Set(float, float);
+        float Emit(float);
         float unk0;
         float unk4;
         float unk8;
@@ -252,6 +255,9 @@ protected:
 
     void UpdateParticles();
     void UpdateRelativeXfm();
+    void MoveParticles(float, float);
+    void CreateParticles(float, const Transform &);
+    void RunFastForward();
     void InitParticle(float, RndParticle *, const Transform *, PartOverride &);
 
     DataNode OnSetStartColor(const DataArray *);
@@ -371,11 +377,11 @@ protected:
     float mBirthMomentumAmount; // 0x390
     std::vector<Burst> mBursts; // 0x394
     int mMaxBurst; // 0x3a0
-    float unk3a4;
+    float mTimeTillBurst; // 0x3a4
     Vector2 mBurstInterval; // 0x3a8
     Vector2 mBurstPeak; // 0x3b0
     Vector2 mBurstLength; // 0x3b8
-    int unk3c0;
+    int mExplicitParts; // 0x3c0
     float mElapsedTime; // 0x3c4
     /** "uses material texture as page tiles to animated through" */
     bool mAnimateUVs; // 0x3c8

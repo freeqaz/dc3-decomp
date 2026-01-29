@@ -2124,11 +2124,22 @@ void HamDirector::Reteleport() {
         GetPropAnim(TheGameData->Player(0)->GetDifficulty(), "song.anim", false);
     PropKeys *propKeys = anim->GetKeys(this, DataArrayPtr(practice));
     int frameIdx = 0;
+    CharClip *clip = 0;
     if (propKeys) {
-        frameIdx = propKeys->AsSymbolKeys()->AtFrame(BeatToFrame(beat), s);
-        // GetClipStartAndEndBeats
+        float frameTime = BeatToSeconds(beat) * 32.0f;
+        frameIdx = propKeys->AsSymbolKeys()->AtFrame(frameTime, s);
+        float startBeat = 0;
+        clip = GetClipStartAndEndBeats(s, startBeat, beat, 0);
     }
     Vector3 v = Vector3::ZeroVec();
+    if (clip && frameIdx > 0) {
+        ClipPredict predict(clip, Vector3::ZeroVec(), 0);
+        predict.PredictDeltaPos(beat - 4.0f, beat);
+        v = predict.mPos;
+    }
+    if (mCurShot) {
+        mCurShot->Reteleport(v, false, Symbol(gNullStr));
+    }
 }
 
 bool HamDirector::ReactToCollision(float frame) {

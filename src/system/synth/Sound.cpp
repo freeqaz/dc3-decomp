@@ -4,6 +4,7 @@
 #include "obj/Data.h"
 #include "obj/Msg.h"
 #include "obj/Object.h"
+#include "obj/Task.h"
 #include "os/Debug.h"
 #include "synth/FxSend.h"
 #include "synth/MoggClip.h"
@@ -395,3 +396,67 @@ DataNode Sound::OnPlay(DataArray *a) {
 }
 
 SynthSample *Sound::Sample() { return mSynthSample; }
+
+void Sound::SynthPoll() {
+    float deltaTime = TheTaskMgr.DeltaSeconds() * 1000.0f;
+
+    // Process delayed arguments
+    if (!mDelayArgs.empty()) {
+        float dummy = 0.0f;
+        for (auto it = mDelayArgs.begin(); it != mDelayArgs.end();) {
+            DelayArgs *args = *it;
+            args->unk10 -= deltaTime;
+            if (args->unk10 <= dummy) {
+                Play(args->unk0, args->unk4, args->unk8, args->unkc, 0.0f);
+                delete args;
+                it = mDelayArgs.erase(it);
+            } else {
+                ++it;
+            }
+        }
+    }
+
+    // Process samples
+    for (auto it = mSamples.begin(); it != mSamples.end();) {
+        PlayableSample *sample = *it;
+        if (!unkb4 && mMaxPolyphony != 0) {
+            if (sample->DonePlaying()) {
+                it = mSamples.erase(it);
+            } else {
+                ++it;
+            }
+        } else {
+            mDuckers.Unduck();
+            CancelPolling();
+            break;
+        }
+    }
+
+    // Update faders if dirty
+    if (mFaders.Dirty()) {
+        for (auto it = mSamples.begin(); it != mSamples.end(); ++it) {
+            PlayableSample *sample = *it;
+            float faderVol, faderPan, faderTranspose;
+            mFaders.GetVal(faderVol, faderPan, faderTranspose);
+
+            sample->SetPan(mVolume + faderVol);
+
+            float panVal = mPan + faderPan;
+            float clampedPan = (4.0f - panVal >= 0.0f) ? 4.0f : panVal;
+            clampedPan = (clampedPan - (-4.0f) >= 0.0f) ? (-4.0f) : clampedPan;
+            sample->SetPan(clampedPan);
+
+            float speed = CalcSpeedFromTranspose(faderTranspose) * mSpeed;
+            float clampedSpeed = (speed - 0.00390625f >= 0.0f) ? 0.00390625f : speed;
+            clampedSpeed = (clampedSpeed - 4.0f >= 0.0f) ? 4.0f : clampedSpeed;
+            sample->SetSpeed(clampedSpeed);
+        }
+        mFaders.ClearDirty();
+    }
+
+    // Final cleanup check
+    if (mSamples.empty() && mDelayArgs.empty()) {
+        mDuckers.Unduck();
+        CancelPolling();
+    }
+}

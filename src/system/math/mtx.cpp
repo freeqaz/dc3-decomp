@@ -8,6 +8,25 @@ Hmx::Matrix4 Hmx::Matrix4::sID(
 
 Transform Transform::sID(Hmx::Matrix3::GetIdentity(), Vector3(0, 0, 0));
 
+Hmx::Matrix4::Matrix4(const Transform &tf) {
+    x.x = tf.m.x.x;
+    x.y = tf.m.x.y;
+    x.z = tf.m.x.z;
+    x.w = 0.0f;
+    y.x = tf.m.y.x;
+    y.y = tf.m.y.y;
+    y.z = tf.m.y.z;
+    y.w = 0.0f;
+    z.x = tf.m.z.x;
+    z.y = tf.m.z.y;
+    z.z = tf.m.z.z;
+    z.w = 0.0f;
+    w.x = tf.v.x;
+    w.y = tf.v.y;
+    w.z = tf.v.z;
+    w.w = 1.0f;
+}
+
 float Det(const Hmx::Matrix3 &m) {
     Vector3 cross;
     Cross(m.z, m.y, cross);
@@ -19,12 +38,12 @@ float Det(const Hmx::Matrix3 &m) {
 }
 
 void Invert(const Hmx::Matrix3 &min, Hmx::Matrix3 &mout) {
-    float mult = 0;
-    float f1 = (min.y.x - min.z.y - min.z.x * min.y.y) + min.x.z
-        + ((min.y.y * min.z.z - min.y.z * min.z.y) * min.x.x
-           - (min.y.x * min.z.z - min.z.x * min.y.z) * min.x.y);
-    if (f1 != 0) {
-        mult = 1.0f / f1;
+    float det = (min.y.y * min.z.z - min.y.z * min.z.y) * min.x.x
+                - (min.y.x * min.z.z - min.z.x * min.y.z) * min.x.y
+                + (min.y.x * min.z.y - min.z.x * min.y.y) * min.x.z;
+    float mult = 0.0f;
+    if (det != 0.0f) {
+        mult = 1.0f / det;
     }
     mout.Set(
         (min.z.z * min.y.y - min.y.z * min.z.y) * mult,
@@ -34,9 +53,14 @@ void Invert(const Hmx::Matrix3 &min, Hmx::Matrix3 &mout) {
         (min.z.z * min.x.x - min.x.z * min.z.x) * mult,
         -((min.y.z * min.x.x - min.x.z * min.y.x) * mult),
         (min.z.y * min.y.x - min.z.x * min.y.y) * mult,
-        -((min.z.y * min.y.x - min.z.x * min.x.y) * mult),
+        -((min.z.y * min.x.y - min.z.x * min.x.y) * mult),
         (min.y.y * min.x.x - min.x.y * min.y.x) * mult
     );
+}
+
+void Multiply(const Transform &t, const Hmx::Matrix3 &m, Transform &out) {
+    Multiply(t.m, m, out.m);
+    Multiply(t.v, m, out.v);
 }
 
 void FastInvert(const Hmx::Matrix3 &min, Hmx::Matrix3 &mout) {

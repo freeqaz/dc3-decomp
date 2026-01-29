@@ -41,3 +41,13 @@ doxygen/
 
 # Generated patches from orchestrator
 generated-patches/
+
+# Generated databases
+*.db
+*.sqlite
+
+# Backup files
+*.backup
+*.bak
+*.bak2
+*.tmp

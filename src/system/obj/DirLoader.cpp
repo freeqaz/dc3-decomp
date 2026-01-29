@@ -560,6 +560,55 @@ bool DirLoader::SaveObjects(const char *file, ObjectDir *dir, bool) {
     }
 }
 
+void DirLoader::LoadDir() {
+    if (mLoadDir) {
+        FilePathTracker tracker(mRoot.c_str());
+        bool oldproxy = gLoadingProxyFromDisk;
+        gLoadingProxyFromDisk = (bool)mProxyName;
+        if (!mPostLoad) {
+            MemPoint begin(MemPoint::kInitType0);
+            if (sObjectMemDumpFile || sTypeMemDumpFile) {
+                begin = MemPoint(MemPoint::kInitType1);
+            }
+            mDir->PreLoad(*mStream);
+            mPostLoad = true;
+            if (sObjectMemDumpFile) {
+                MemPoint end(MemPoint::kInitType1);
+                DumpObjectMemDelta(mDir, end - begin);
+            }
+            if (sTypeMemDumpFile) {
+                MemPoint end(MemPoint::kInitType1);
+                AddTypeObjectMemDelta(mDir, end - begin);
+            }
+        }
+        EofType t = TempEof;
+        std::list<Loader *> &loaders = TheLoadMgr.Loading();
+        Loader *firstLoader = loaders.empty() ? nullptr : loaders.front();
+        if (firstLoader != this || (t = mStream->Eof(), t != NotEof)) {
+            MILO_ASSERT(t == TempEof, 0x49F);
+            gLoadingProxyFromDisk = oldproxy;
+            return;
+        }
+        MemPoint begin(MemPoint::kInitType0);
+        if (sObjectMemDumpFile || sTypeMemDumpFile) {
+            begin = MemPoint(MemPoint::kInitType1);
+        }
+        mDir->PostLoad(*mStream);
+        gLoadingProxyFromDisk = oldproxy;
+        mPostLoad = false;
+        if (sObjectMemDumpFile) {
+            MemPoint end(MemPoint::kInitType1);
+            DumpObjectMemDelta(mDir, end - begin);
+        }
+        if (sTypeMemDumpFile) {
+            MemPoint end(MemPoint::kInitType1);
+            AddTypeObjectMemDelta(mDir, end - begin);
+        }
+    }
+    ReadDead(*mStream);
+    mState = &DirLoader::LoadObjs;
+}
+
 ObjectDir *DirLoader::LoadObjects(const FilePath &fp, Callback *cb, BinStream *bs) {
     if (sTypeMemDumpFile) {
         sMemPointMap.clear();

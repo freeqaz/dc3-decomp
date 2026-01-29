@@ -13,6 +13,7 @@
 #include "rndobj/TransAnim.h"
 #include "world/Instance.h"
 #include <float.h>
+#include "utl/Std.h"
 
 bool IsValidObject(Hmx::Object *obj) {
     RndMesh *mesh = dynamic_cast<RndMesh *>(obj);
@@ -346,6 +347,36 @@ bool RndAmbientOcclusion::IsValid_Mesh(const RndMesh *mesh) const {
     return false;
 }
 
+bool RndAmbientOcclusion::IsValid_AOReceive(const RndMesh *mesh) const {
+    u8 var_r31 = 0;
+    u8 var_r29 = 0;
+    if (!IsSerializable(mesh)) {
+        return 0;
+    }
+    if (!IsValid_Mesh(mesh)) {
+        return 0;
+    }
+    void *temp_r11 = *(void **)((char *)mesh + 0x128);
+    if (temp_r11 != NULL) {
+        s32 temp_r10 = *(s32 *)((char *)temp_r11 + 0xB8);
+        u8 var_r11 = 0;
+        float f38 = *(float *)((char *)temp_r11 + 0x38);
+        if ((temp_r10 == 0) || (temp_r10 == 2) || (f38 == 0.0f)) {
+            var_r11 = 1;
+        }
+        var_r29 = *(u8 *)((char *)temp_r11 + 0x3D);
+        var_r31 = var_r11;
+    }
+    if ((*(u8 *)((char *)this + 0x6A) == 0) || (*(u8 *)((char *)mesh + 0x08) != 0)) {
+        if ((*(u8 *)((char *)this + 0x68) == 0) || (var_r31 == 0)) {
+            if ((*(u8 *)((char *)this + 0x69) == 0) || (var_r29 == 0)) {
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+
 bool RndAmbientOcclusion::IsMeshAnimated(const RndMesh *mesh) const {
     static Symbol sRndTransAnim = RndTransAnim::StaticClassName();
     static Symbol sRndPropAnim = RndPropAnim::StaticClassName();
@@ -438,3 +469,4 @@ DataNode RndAmbientOcclusion::OnGetValidObjects(DataArray *) const {
     }
     return ptr;
 }
+

@@ -244,6 +244,13 @@ public:
     class iterator {
         friend class const_iterator;
 
+    public:
+        typedef std::forward_iterator_tag iterator_category;
+        typedef Node value_type;
+        typedef ptrdiff_t difference_type;
+        typedef Node *pointer;
+        typedef Node &reference;
+
     private:
         typedef typename std::vector<Node>::iterator Base;
         Base it;
@@ -265,9 +272,17 @@ public:
         }
 
         bool operator!=(const iterator &other) const { return it != other.it; }
+        bool operator==(const iterator &other) const { return it == other.it; }
     };
     // ditto
     class const_iterator {
+    public:
+        typedef std::forward_iterator_tag iterator_category;
+        typedef Node value_type;
+        typedef ptrdiff_t difference_type;
+        typedef const Node *pointer;
+        typedef const Node &reference;
+
     private:
         typedef typename std::vector<Node>::const_iterator Base;
         Base it;
@@ -290,6 +305,7 @@ public:
         }
 
         bool operator!=(const const_iterator &other) const { return it != other.it; }
+        bool operator==(const const_iterator &other) const { return it == other.it; }
     };
 
     ObjPtrVec(Hmx::Object *owner, EraseMode = (EraseMode)0, ObjListMode = kObjListNoNull);

@@ -41,6 +41,8 @@ public:
     // RndPollable
     virtual void Poll();
 
+    void PrepareShader(float, float) const;
+
     OBJ_MEM_OVERLOAD(0x18);
     NEW_OBJ(RndSpline)
     static void Init() { REGISTER_OBJ_FACTORY(RndSpline) }
@@ -55,6 +57,7 @@ protected:
 
 private:
     void SyncPristineCtrlPoints();
+    void SyncDeformedCtrlPoints(int, int);
     const CtrlPoint &GetDeformedCtrlPointOrDummy(int) const;
 
     DataNode OnTestPulse(DataArray *);

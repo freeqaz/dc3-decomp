@@ -5,6 +5,10 @@ StubCameraInput::StubCameraInput() {
     mCachedFrame.unk18.Set(0.04584, 0.991929, 0.118222, 0.786);
     mCachedFrame.unk0 = 0;
     mCachedFrame.mElapsedMs = 33;
+    for (int i = 0; i < 6; i++) {
+        mCachedFrame.mSkeletonDatas[i].mTracking = (SkeletonTrackingState)0;
+        mCachedFrame.mSkeletonDatas[i].mQualityFlags = 0;
+    }
 }
 
 void StubCameraInput::StubSkeletonFrame(SkeletonFrame &frame) {
@@ -19,8 +23,8 @@ void StubCameraInput::StubSkeletonData(SkeletonData &data, const Vector3 &vec) {
     data.mTrackingID = 0;
     data.unk2dc = 0;
     data.mTracking = kSkeletonTracked;
-    data.unk2e0.Set(0.0, 0.5, 2.3);
-    data.unk2e0.Set(data.unk2e0.x + vec.x, vec.y + 0.5f, vec.z + 2.3f);
+    data.unk2e0.Set(0.0f, 0.5f, 2.3f);
+    data.unk2e0.Set(data.unk2e0.x + vec.x, data.unk2e0.y + vec.y, data.unk2e0.z + vec.z);
     data.unk144[0].Set(0.126847f, 0.111759f, 2.264718f);
     data.unk144[1].Set(0.127627f, 0.178946f, 2.32085f);
     data.unk144[2].Set(0.13937f, 0.554082f, 2.307118f);
@@ -41,7 +45,9 @@ void StubCameraInput::StubSkeletonData(SkeletonData &data, const Vector3 &vec) {
     data.unk144[17].Set(0.22748f, -0.893713f, 2.355198f);
     data.unk144[18].Set(-0.043792f, -0.917228f, 2.308891f);
     data.unk144[19].Set(0.216633f, -0.932548f, 2.347959f);
-    for (int i = 0; i < 20; i++) {
+    int i = 20;
+    while (i > 0) {
+        i--;
         data.unk144[i].Set(
             data.unk144[i].x + vec.x, data.unk144[i].y + vec.y, data.unk144[i].z + vec.z
         );
