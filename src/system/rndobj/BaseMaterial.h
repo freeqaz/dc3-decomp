@@ -150,6 +150,8 @@ public:
     bool PointLights() const { return mPointLights; }
     bool ColorAdjust() const { return mColorAdjust; }
     bool FadeOut() const { return mFadeout; }
+    bool Prelit() const { return mPrelit; }
+    Blend GetBlend() const { return mBlend; }
 
 protected:
     BaseMaterial();

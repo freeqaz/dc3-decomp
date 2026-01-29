@@ -294,9 +294,6 @@ void RndAmbientOcclusion::TransformNormal(
     Normalize(vin, vtmp);
     Hmx::Matrix3 mtmp;
     Invert(min, mtmp);
-    // vout.x = vtmp.x * mtmp.x.x + vtmp.y * mtmp.x.y + vtmp.z * mtmp.x.z;
-    // vout.y = vtmp.x * mtmp.y.x + vtmp.y * mtmp.y.y + vtmp.z * mtmp.y.z;
-    // vout.z = vtmp.x * mtmp.z.x + vtmp.y * mtmp.z.y + vtmp.z * mtmp.z.z;
     vout.Set(Dot(vtmp, mtmp.x), Dot(vtmp, mtmp.y), Dot(vtmp, mtmp.z));
     Normalize(vout, vout);
 }
@@ -329,7 +326,7 @@ bool RndAmbientOcclusion::IsSerializable(const RndMesh *mesh) const {
 }
 
 bool RndAmbientOcclusion::IsValid_Mesh(const RndMesh *mesh) const {
-    RndMesh *nonConstMesh = (RndMesh *)mesh; // lmao
+    RndMesh *nonConstMesh = const_cast<RndMesh *>(mesh);
     if (nonConstMesh->Verts().size() && nonConstMesh->Faces().size()) {
         static Symbol classNames[] = { "Spotlight", "WorldCrowd" };
         FOREACH (it, mesh->Refs()) {
@@ -348,33 +345,33 @@ bool RndAmbientOcclusion::IsValid_Mesh(const RndMesh *mesh) const {
 }
 
 bool RndAmbientOcclusion::IsValid_AOReceive(const RndMesh *mesh) const {
-    u8 var_r31 = 0;
-    u8 var_r29 = 0;
+    bool isTransparent = false;
+    bool isPrelit = false;
     if (!IsSerializable(mesh)) {
-        return 0;
+        return false;
     }
     if (!IsValid_Mesh(mesh)) {
-        return 0;
+        return false;
     }
-    void *temp_r11 = *(void **)((char *)mesh + 0x128);
-    if (temp_r11 != NULL) {
-        s32 temp_r10 = *(s32 *)((char *)temp_r11 + 0xB8);
-        u8 var_r11 = 0;
-        float f38 = *(float *)((char *)temp_r11 + 0x38);
-        if ((temp_r10 == 0) || (temp_r10 == 2) || (f38 == 0.0f)) {
-            var_r11 = 1;
+    RndMat *mat = mesh->Mat();
+    if (mat != NULL) {
+        ZMode zmode = mat->GetZMode();
+        bool transparent = false;
+        float alpha = mat->Alpha();
+        if (zmode == kZModeDisable || zmode == kZModeTransparent || alpha == 0.0f) {
+            transparent = true;
         }
-        var_r29 = *(u8 *)((char *)temp_r11 + 0x3D);
-        var_r31 = var_r11;
+        isPrelit = mat->Prelit();
+        isTransparent = transparent;
     }
-    if ((*(u8 *)((char *)this + 0x6A) == 0) || (*(u8 *)((char *)mesh + 0x08) != 0)) {
-        if ((*(u8 *)((char *)this + 0x68) == 0) || (var_r31 == 0)) {
-            if ((*(u8 *)((char *)this + 0x69) == 0) || (var_r29 == 0)) {
-                return 1;
+    if (!mIgnoreHidden || mesh->Showing()) {
+        if (!mIgnoreTransparent || !isTransparent) {
+            if (!mIgnorePrelit || !isPrelit) {
+                return true;
             }
         }
     }
-    return 0;
+    return false;
 }
 
 bool RndAmbientOcclusion::IsMeshAnimated(const RndMesh *mesh) const {

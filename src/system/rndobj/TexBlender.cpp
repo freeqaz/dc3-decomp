@@ -2,6 +2,7 @@
 #include "Utl.h"
 #include "obj/Data.h"
 #include "obj/Object.h"
+#include "os/Debug.h"
 #include "rndobj/Draw.h"
 #include "rndobj/Mat.h"
 #include "rndobj/Tex.h"
@@ -95,7 +96,7 @@ bool RndTexBlender::MakeWorldSphere(Sphere &sphere, bool b) {
     if (mOwner) {
         return mOwner->MakeWorldSphere(sphere, b);
     } else
-        return 0;
+        return false;
 }
 
 #pragma endregion
@@ -121,6 +122,9 @@ void RndTexBlender::DrawBlendList(
         texmap = mFarMap;
     }
 
+    // Offset 0xC in Hmx::Object is within mRefs (ObjRef prev pointer).
+    // This check verifies texture validity - non-null indicates the texture
+    // has valid internal state. Platform-specific, no accessor available.
     u32 texdata = 0;
     if (texmap) {
         texdata = *(u32 *)((char *)texmap + 0xC);
@@ -134,44 +138,48 @@ void RndTexBlender::DrawBlendList(
         float f29 = -1.0f;
 
         Transform xfm;
+        xfm.Reset();
         TheShaderMgr.SetTransform(xfm);
         SetupMaterial(mat, texmap);
 
-        *(int *)((char *)mat + 0xB4) = 3;
-        *(int *)((char *)mat + 0x228) |= 2;
+        mat->SetBlend(BaseMaterial::kBlendSrcAlpha);
 
-        for (std::vector<std::pair<RndTexBlendController *, float> >::const_iterator it = list.begin(); it != list.end(); ++it) {
+        for (std::vector<std::pair<RndTexBlendController *, float> >::const_iterator it =
+                 list.begin();
+             it != list.end();
+             ++it) {
             RndTexBlendController *controller = it->first;
             float alpha = it->second;
 
             if (state == 8) {
-                *(int *)((char *)mat + 0x40 + 0x80) = *(int *)((char *)controller + 0x80);
-                *(int *)((char *)mat + 0x228) |= 2;
+                mat->SetDiffuseTex(controller->Tex());
             }
 
             if (alpha != f29 || state == 8) {
-                *(float *)((char *)mat + 0x38) = alpha;
-                *(int *)((char *)mat + 0x228) |= 1;
+                mat->SetAlpha(alpha);
                 RndShader::SelectConfig(mat, (ShaderType)0x16, false);
                 f29 = alpha;
             }
 
-            void *mesh_ptr = *(void **)((char *)controller + 0x38);
-            if (mesh_ptr) {
-                void **vt = *(void ***)((char *)mesh_ptr + 0x148);
-                typedef void (*DrawFunc)(void **, int, int);
-                DrawFunc draw = (DrawFunc)(*(void **)((char *)vt + 0x40));
-                draw(vt, 0, -1);
+            RndMesh *mesh = controller->Mesh();
+            if (mesh) {
+                if (mesh->IsSkinned()) {
+                    MILO_NOTIFY_ONCE(
+                        "%s: \"%s\" should not be a skinned mesh",
+                        PathName(this),
+                        mesh->Name()
+                    );
+                }
+                mesh->DrawFacesInRange(0, -1);
             }
         }
 
-        *(float *)((char *)mat + 0x38) = f31;
-        *(int *)((char *)mat + 0x228) |= 1;
+        mat->SetAlpha(f31);
 
         RndCam *cam = RndCam::Current();
         if (cam) {
-            void *cam_xfm = (void *)((char *)cam + 0x300);
-            TheShaderMgr.SetTransform(*(Transform *)cam_xfm);
+            // Reinterpret unk300 (Matrix4) as Transform - first 48 bytes match Transform layout
+            TheShaderMgr.SetTransform(*(const Transform *)&cam->GetMatrix300());
         }
     }
 }
