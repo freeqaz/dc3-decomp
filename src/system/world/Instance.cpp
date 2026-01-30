@@ -184,18 +184,18 @@ void WorldInstance::DeleteTransientObjects() {
     } else {
         for (ObjDirItr<Hmx::Object> obj(this, false); obj != nullptr; ++obj) {
             if (obj == this) {
-                continue;
-            }
-            Hmx::Object *to = mDir->Find<Hmx::Object>(obj->Name(), true);
-            MILO_ASSERT(obj->ClassName() == to->ClassName(), 0x1CB);
-            const ObjRef &refs = obj->Refs();
-            for (ObjRef::iterator it = refs.begin(); it != refs.end(); ++it) {
-                ObjRef *ref = it;
-                if (ref->RefOwner() && ref->RefOwner()->Dir() == this) {
-                    ref->Replace(to);
+            } else {
+                Hmx::Object *to = mDir->Find<Hmx::Object>(obj->Name(), true);
+                MILO_ASSERT(obj->ClassName() == to->ClassName(), 0x1CB);
+                const ObjRef &refs = obj->Refs();
+                for (ObjRef::iterator it = refs.begin(); it != refs.end(); ++it) {
+                    ObjRef *ref = it;
+                    if (ref->RefOwner() && ref->RefOwner()->Dir() == this) {
+                        ref->Replace(to);
+                    }
                 }
+                delete obj;
             }
-            delete obj;
         }
     }
 }

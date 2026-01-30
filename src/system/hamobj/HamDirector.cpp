@@ -1932,7 +1932,7 @@ void HamDirector::OnPopulateMoveMgr() {
     TheMoveMgr->AutoFillParents();
     TheMoveMgr->FillRoutineFromParents(-1);
     TheMoveMgr->ComputeLoadedMoveSet();
-    // LoadRoutineBuilderData()
+    LoadRoutineBuilderData((std::set<const MoveVariant *> &)TheMoveMgr->GetVariants(), true);
     OnPopulateFromMoveMgr();
     DataArrayPtr variants;
     TheMoveMgr->SaveRoutineVariants(variants);
@@ -2122,13 +2122,13 @@ void HamDirector::Reteleport() {
     static Symbol practice("practice");
     RndPropAnim *anim =
         GetPropAnim(TheGameData->Player(0)->GetDifficulty(), "song.anim", false);
+    float startBeat = 0.0f;
     PropKeys *propKeys = anim->GetKeys(this, DataArrayPtr(practice));
     int frameIdx = 0;
     CharClip *clip = 0;
     if (propKeys) {
         float frameTime = BeatToSeconds(beat) * 32.0f;
         frameIdx = propKeys->AsSymbolKeys()->AtFrame(frameTime, s);
-        float startBeat = 0;
         clip = GetClipStartAndEndBeats(s, startBeat, beat, 0);
     }
     Vector3 v = Vector3::ZeroVec();

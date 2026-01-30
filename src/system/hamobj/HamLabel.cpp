@@ -1,4 +1,5 @@
 #include "hamobj/HamLabel.h"
+#include "hamobj/HamMove.h"
 #include "obj/Task.h"
 #include "rndobj/Anim.h"
 #include "ui/UI.h"
@@ -15,6 +16,7 @@ BEGIN_HANDLERS(HamLabel)
         start_count, Count(_msg->Int(2), _msg->Int(3), _msg->Float(4), _msg->Sym(5))
     )
     HANDLE_ACTION(finish_count, FinishCount())
+    HANDLE_ACTION(set_move_name, SetMoveName(_msg->Obj<HamMove>(2)))
 END_HANDLERS
 
 BEGIN_PROPSYNCS(HamLabel)
@@ -80,4 +82,7 @@ void HamLabel::SetDisplayText(const char *cc, bool b2) {
         unk180 = b2;
         UITransitionHandler::StartValueChange();
     }
+}
+
+void HamLabel::SetMoveName(HamMove *move) {
 }

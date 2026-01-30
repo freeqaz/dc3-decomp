@@ -23,8 +23,8 @@ public:
     static void Init() { REGISTER_OBJ_FACTORY(RndWind) }
 
     void SetWindOwner(RndWind *wind);
-    // void Zero();
-    // void SetDefaults();
+    void Zero();
+    void SetDefaults();
     // float GetWind(float);
     // void GetWind(const Vector3 &v, float f, Vector3 &v2) {
     //     return mWindOwner->SelfGetWind(v, f, v2);

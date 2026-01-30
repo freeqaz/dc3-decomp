@@ -30,11 +30,14 @@ void MeasureMap::TickToMeasureBeatTick(
         change--;
     int div = (change->Num() * 1920) / change->Denom();
     int offset = tick - change->Tick();
-    oMeasure = change->Measure() + offset / div;
+    int quot = offset / div;
+    int mod = offset - quot * div;
+    int beat = mod / 480;
+    int tickrem = mod - beat * 480;
+    oMeasure = change->Measure() + quot;
+    oBeat = beat;
+    oTick = tickrem;
     oBeatsPerMeasure = div / 480;
-    int mod = offset % div;
-    oBeat = mod / 480;
-    oTick = mod % 480;
 }
 
 void MeasureMap::TickToMeasureBeatTick(int tick, int &oMeasure, int &oBeat, int &oTick)

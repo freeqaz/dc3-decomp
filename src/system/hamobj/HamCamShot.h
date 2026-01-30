@@ -69,10 +69,10 @@ public:
     struct TargetCache {
         TargetCache() : unk0(0), unk4(0) { unkxfm.Reset(); }
 
-        Symbol unksym; // 0x8
         int unk0; // 0x0
         RndTransformable *unk4; // 0x4
-        Transform unkxfm; // 0xc
+        Symbol unksym; // 0x8
+        Transform unkxfm; // 0x10
     };
 
     // Hmx::Object

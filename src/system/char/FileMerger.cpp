@@ -316,7 +316,7 @@ void FileMerger::DeleteCurLoader() {
     if (mCurLoader) {
         DirLoader *d = dynamic_cast<DirLoader *>(mCurLoader);
         // if (d)
-        //     d->unk99 = true;
+        //     d->unk99 = true; // TODO: needs accessor
         delete mCurLoader;
     }
 }

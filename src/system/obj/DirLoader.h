@@ -81,10 +81,10 @@ private:
     const char *mProxyName; // 0x60
     int unk64;
     Timer mTimer; // 0x68
-    bool unk98;
+    bool mAccessed;
     bool unk99;
     bool unk9a;
-    bool unk9b;
+    bool mIsSubDir;
     class ObjectDir *unk9c;
     ObjOwnerPtr<ObjectDir> mProxyDir; // 0xa0
 

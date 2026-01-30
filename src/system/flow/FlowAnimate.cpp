@@ -85,22 +85,20 @@ void FlowAnimate::Load(BinStream &bs) {
     bs >> revs;
     BinStreamRev d(bs, revs);
 
-    ASSERT_REVS(3, 0)
-
     FlowNode::Load(bs);
 
     if (d.rev < 3) {
         mAnim.LoadFromMainOrDir(d.stream);
     }
 
-    bs >> mBlend >> mWait >> mDelay;
-    bs >> (int&)mStopMode >> mEnable;
-    bs >> (int&)mRate >> mStart;
-    bs >> mEnd >> mPeriod;
-    bs >> mType;
-    bs >> mScale >> (int&)mEase >> mEasePower;
-    bs >> mWrap;
-    bs >> mImmediateRelease;
+    d >> mBlend >> mWait >> mDelay;
+    d >> (int&)mStopMode >> mEnable;
+    d >> (int&)mRate >> mStart;
+    d >> mEnd >> mPeriod;
+    d >> mType;
+    d >> mScale >> (int&)mEase >> mEasePower;
+    d >> mWrap;
+    d >> mImmediateRelease;
 }
 
 void FlowAnimate::ResetAnim() {

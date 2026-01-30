@@ -401,16 +401,18 @@ void DxRnd::EndTiling(D3DBaseTexture *tex, int i2) {
 }
 
 void DxRnd::SavePreBuffer() {
+    D3DDevice *dev = mD3DDevice;
+    D3DDevice_Resolve(
+        dev, 0x14, nullptr, mFrontBufferDepth, nullptr, 0, 0, nullptr, 1, 0, nullptr
+    );
+
     XMVECTOR vector;
     vector.v[0] = mClearColor.red;
     vector.v[1] = mClearColor.green;
     vector.v[2] = mClearColor.blue;
     vector.v[3] = 0;
     D3DDevice_Resolve(
-        mD3DDevice, 0x14, nullptr, mFrontBufferDepth, nullptr, 0, 0, nullptr, 1, 0, nullptr
-    );
-    D3DDevice_Resolve(
-        mD3DDevice, 0x300, nullptr, mPreProcessBuffer, nullptr, 0, 0, &vector, 0, 0, nullptr
+        dev, 0x300, nullptr, mPreProcessBuffer, nullptr, 0, 0, &vector, 0, 0, nullptr
     );
 }
 

@@ -166,7 +166,7 @@ void Hmx::Object::LoadType(BinStream &bs) {
     Symbol s;
     bs >> s;
     SetType(s);
-    d.PushRev(this);
+    bs.PushRev(packRevs(d.altRev, d.rev), this);
 }
 
 void Hmx::Object::LoadRest(BinStream &bs) {

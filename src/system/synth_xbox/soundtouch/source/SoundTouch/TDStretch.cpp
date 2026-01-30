@@ -86,16 +86,19 @@ static const short
  *****************************************************************************/
 
 TDStretch::TDStretch() : FIFOProcessor(&outputBuffer) {
-    bQuickSeek = FALSE;
+    bQuickSeek = false;
     channels = 2;
     pMidBuffer = NULL;
     pRefMidBufferUnaligned = NULL;
     overlapLength = 0;
-    bAutoSeqSetting = 1;
-    bAutoSeekSetting = 1;
+    bAutoSeqSetting = true;
+    bAutoSeekSetting = true;
     skipFract = 0;
+    nominalSkip = 0;
+    sampleReq = 0;
+    tempo = 1.0f;
 
-    setParameters(44100, DEFAULT_SEQUENCE_MS, DEFAULT_SEEKWINDOW_MS, DEFAULT_OVERLAP_MS);
+    setParameters(44100, 82, 28, 12);
     setTempo(1.0f);
 
     clear();

@@ -472,15 +472,14 @@ bool RndFont::CharDefined(unsigned short c) const {
 
 void RndFont::Print() const {
     TheDebug << "   pages: " << mMats.size() << "\n";
-    int numMats = mMats.size();
-    for (int i = 0; i < numMats; i++) {
-        TheDebug << "         " << mMats[i] << "\n";
+    for (auto it = mMats.begin(); it != mMats.end(); ++it) {
+        TheDebug << "         " << *it << "\n";
     }
     TheDebug << "   cellSize: " << mCellSize << "\n";
     TheDebug << "   deprecated size: " << mDeprecatedSize << "\n";
     TheDebug << "   space: " << mBaseKerning << "\n";
     TheDebug << "   chars: ";
-    for (int i = 0; i < mChars.size(); i++) {
+    for (size_t i = 0; i < mChars.size(); i++) {
         unsigned short us = mChars[i];
         TheDebug << WideCharToChar(&us);
     }

@@ -904,17 +904,15 @@ DataNode CharClip::GetClipEvents() {
 void CharClip::ApplyBlendedSkeletons(
     CharClip **clips, CharBones &bones, float f1, float f2
 ) {
-    float f60;
-    int sample = BeatToSample(f1, &f2);
+    float f60 = f2;
+    int sample = BeatToSample(f1, &f60);
     float f7 = 0;
-    std::map<int, float> &curMap = unk18c[sample];
     float f6 = 1;
-    FOREACH (it, curMap) {
+    FOREACH (it, unk18c[sample]) {
         clips[it->first]->ScaleAdd(bones, (f6 - f60) * it->second * f2, f7, f7);
     }
     if (f7 < f60) {
-        std::map<int, float> &nextMap = unk18c[sample + 1];
-        FOREACH (it, nextMap) {
+        FOREACH (it, unk18c[sample + 1]) {
             clips[it->first]->ScaleAdd(bones, f60 * it->second * f2, f7, f7);
         }
     }

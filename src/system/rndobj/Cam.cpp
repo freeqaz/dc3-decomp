@@ -249,8 +249,9 @@ void RndCam::ScreenToWorld(const Vector2 &v2, float f, Vector3 &vout) const {
 }
 
 void RndCam::GetDepthRangeValues(Vector4 &v) const {
+    float near = mZRange.x;
     float zratio = 1.0f / (mZRange.y - mZRange.x);
-    v.Set(mNearPlane, mFarPlane, zratio, zratio * mZRange.x);
+    v.Set(mNearPlane, mFarPlane, zratio, zratio * near);
 }
 
 void RndCam::GetInfiniteViewProj(Hmx::Matrix4 &m4) const {

@@ -56,7 +56,7 @@ void AsyncFileWin::_OpenAsync() {
             mFail = uVar3;
             if (uVar3 != 0)
                 return;
-            mUCSize = _lseeki64(iVar5, 0, 2);
+            mSize = _lseeki64(iVar5, 0, 2);
             if (!(uVar1 & 8)) {
                 _lseek((int)unk3c, 0, 0);
             }
@@ -83,19 +83,17 @@ void AsyncFileWin::_OpenAsync() {
             0x60000000,
             nullptr
         );
-        if ((HANDLE)mFile == (HANDLE)-1) {
+        if (mFile == (HANDLE)-1) {
             err = GetLastError();
-            if ((err == 2) || (err == 3) || (err == 0x15)) {
-                mFail = true;
-                return;
+            if ((err != 2) && (err != 3) && (err != 0x15)) {
+                ReadError(mFilename.c_str());
             }
         } else {
             mFail = false;
-            mUCSize = GetFileSize(mFile, nullptr);
+            mSize = GetFileSize(mFile, nullptr);
             return;
         }
     }
-    ReadError(mFilename.c_str());
     mFail = true;
     return;
 }

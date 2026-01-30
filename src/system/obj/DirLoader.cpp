@@ -30,20 +30,20 @@ DirLoader::DirLoader(
     Loader::Callback *cb,
     BinStream *stream,
     ObjectDir *dir,
-    bool bbb,
+    bool isSubDir,
     ObjectDir *dir2
 )
     : Loader(fp, pos), mOwnStream(false), mStream(stream), mRev(0), mCounter(0),
       mObjects(nullptr, kObjListAllowNull), mCallback(cb), mDir(dir), mPostLoad(false),
-      mLoadDir(true), mDeleteSelf(false), mProxyName(nullptr), unk98(0), unk99(0),
-      unk9a(0), unk9b(bbb), unk9c(dir2), mProxyDir(this) {
+      mLoadDir(true), mDeleteSelf(false), mProxyName(nullptr), mAccessed(0), unk99(0),
+      unk9a(0), mIsSubDir(isSubDir), unk9c(dir2), mProxyDir(this) {
     if (dir) {
         mDeleteSelf = true;
         mProxyName = dir->Name();
         mProxyDir = dir->Dir();
         mDir->SetLoader(this);
     }
-    if (!stream && !dir && !bbb) {
+    if (!stream && !dir && !isSubDir) {
         DataArray *arr = SystemConfig()->FindArray("force_milo_inline", false);
         if (arr) {
             for (int i = 1; i < arr->Size(); i++) {
@@ -75,14 +75,14 @@ DirLoader::~DirLoader() {
         Cleanup(nullptr);
     } else if (mDir) {
         mDir->SetLoader(nullptr);
-        if (!unk98 && !mProxyName) {
+        if (!mAccessed && !mProxyName) {
             RELEASE(mDir);
         }
     }
     mProxyDir = nullptr;
     if (mCallback && unk99) {
         mCallback->FailedLoading(this);
-        mCallback = 0;
+        mCallback = nullptr;
     }
 }
 
@@ -122,7 +122,7 @@ void DirLoader::SetCacheMode(bool mode) { sCacheMode = mode; }
 
 ObjectDir *DirLoader::GetDir() {
     MILO_ASSERT(IsLoaded(), 0x82);
-    unk98 = true;
+    mAccessed = true;
     return mDir;
 }
 
@@ -160,15 +160,14 @@ const char *DirLoader::CachedPath(const char *cc, bool b) {
 }
 
 bool DirLoader::ShouldBlockSubdirLoad(const FilePath &fp) {
-    return fp.c_str() && sPathEval ? sPathEval(fp.c_str()) : false;
+    if (!fp.c_str())
+        return false;
+    if (!sPathEval)
+        return false;
+    return sPathEval(fp.c_str());
 }
 
-// I am WELL aware that this is terrible
-// however, the alternate to this would be using gotos,
-// which I would argue is more terrible
-// so unless you can finnagle this in such a way
-// that the decomp % matches, and there aren't any gotos,
-// this will have to do.
+// Nested ifs match the original codegen; RB3 uses gotos for the same logic.
 Symbol DirLoader::FixClassName(Symbol orig) {
     if (mRev < 0x1C) {
         static Symbol CharClip("CharClip");
@@ -376,7 +375,6 @@ bool DirLoader::ClassAndNameSort::operator()(Hmx::Object *o1, Hmx::Object *o2) {
         } else
             return strcmp(o1->Name(), o2->Name()) < 0;
     }
-    return false;
 }
 
 DirLoader *DirLoader::FindLast(const FilePath &fp) {
@@ -429,7 +427,7 @@ void DirLoader::Cleanup(const char *str) {
         }
         if (IsLoaded() && mDir) {
             AutoGlitchReport report(50.0f, SyncObjectsGlitchCB, mDir);
-            mDir->SetSubDirFlag(unk9b);
+            mDir->SetSubDirFlag(mIsSubDir);
             mDir->SyncObjects();
             mDir->SetSubDirFlag(false);
         }
@@ -461,6 +459,7 @@ void DirLoader::AddTypeObjectMemDelta(
         if (it == sMemPointMap.end()) {
             sMemPointMap[name] = MemPointDelta();
         }
+        sMemPointMap[name] += memDelta;
     }
 }
 

@@ -31,17 +31,25 @@ float RndAnimFilter::StartFrame() {
 float RndAnimFilter::EndFrame() {
     if (!mAnim)
         return 0.0f;
-    else {
-        float denom = Scale();
-        if (denom == 0.0f)
-            denom = 1.0f;
 
-        float ret = (mEnd - FrameOffset()) / denom;
-        if (mType == kShuttle) {
-            ret *= 2.0f;
-        }
-        return ret;
+    float denom = Scale();
+    if (denom == 0.0f)
+        denom = 1.0f;
+
+    float frameOff;
+    if (mEnd >= mStart)
+        frameOff = 0.0f;
+    else {
+        frameOff = mStart;
+        frameOff -= mEnd;
     }
+    frameOff += mOffset;
+
+    float ret = (mEnd - frameOff) / denom;
+    if (mType == kShuttle) {
+        ret *= 2.0f;
+    }
+    return ret;
 }
 
 void RndAnimFilter::Save(BinStream &bs) {

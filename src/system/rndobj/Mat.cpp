@@ -200,13 +200,14 @@ END_COPYS
 BEGIN_LOADS(RndMat)
     LOAD_REVS(bs)
     ASSERT_REVS(0x46, 0)
+    int minVer = 0x19;
     MILO_ASSERT_FMT(
         d.rev >= 0x19,
         "%s can't load old %s version %d < %d.  Use RB2 Milo to load.",
         PathName(this),
         ClassName(),
         d.rev,
-        0x19
+        minVer
     );
     mDirty = 3;
     ResetColors(mColorMod, 3);

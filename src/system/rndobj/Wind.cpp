@@ -21,8 +21,22 @@ RndWind::RndWind()
 
 RndWind::~RndWind() {}
 
+void RndWind::Zero() {
+    mRandom.Set(0.0f, 0.0f, 0.0f);
+    mPrevailing.Set(0.0f, 0.0f, 0.0f);
+}
+
+void RndWind::SetDefaults() {
+    mPrevailing.Set(0.0f, 0.0f, 0.0f);
+    mRandom.Set(17.0f, 17.0f, 0.0f);
+    mTimeLoop = 100.0f;
+    mSpaceLoop = 100.0f;
+}
+
 BEGIN_HANDLERS(RndWind)
     HANDLE_SUPERCLASS(Hmx::Object)
+    HANDLE_ACTION(set_defaults, SetDefaults())
+    HANDLE_ACTION(set_zero, Zero())
 END_HANDLERS
 
 BEGIN_PROPSYNCS(RndWind)

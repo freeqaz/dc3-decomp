@@ -86,11 +86,11 @@ BEGIN_LOADS(CharBone)
     }
     int rot_val;
     d >> rot_val;
-    mRotation = (CharBones::Type)rot_val;
     if (d.rev < 5) {
         int dummy;
         d >> dummy;
     }
+    mRotation = (CharBones::Type)rot_val;
     if (d.rev < 2) {
         mScaleContext = 0;
         mRotation = (CharBones::Type)(rot_val + 1);

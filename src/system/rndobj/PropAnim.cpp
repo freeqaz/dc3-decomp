@@ -304,7 +304,7 @@ float RndPropAnim::StartFrame() {
     float frame = 0.0f;
     for (std::list<PropKeys *>::iterator it = mPropKeys.begin(); it != mPropKeys.end();
          ++it) {
-        frame = Min((*it)->StartFrame(), frame);
+        frame = Min(frame, (*it)->StartFrame());
     }
     return frame;
 }
