@@ -18,7 +18,8 @@ orig/*/*
 *.MAP
 
 # Build files
-build/
+build/*
+!build/.gitkeep
 .ninja_*
 build.ninja
 
@@ -29,6 +30,9 @@ ctx.*
 # Generated configs
 objdiff.json
 compile_commands.json
+
+# Local binaries
+bin/objdiff-cli
 
 # Miscellaneous
 /*.txt

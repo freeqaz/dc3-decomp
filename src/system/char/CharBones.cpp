@@ -143,11 +143,9 @@ int CharBones::FindOffset(Symbol s) const {
     int size = TypeSize(ty);
     int count = mCounts[ty];
     int offset = mOffsets[ty];
-    for (int i = 0; i < nextcount - count; i++) {
-        if (mBones[count << 3].name == s)
+    for (int i = count; i < nextcount; i++, offset += size) {
+        if (mBones[i].name == s)
             return offset;
-        else
-            offset += size;
     }
     return -1;
 }

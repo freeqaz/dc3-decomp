@@ -87,29 +87,28 @@ bool CDReadDone() {
     return true;
 }
 
-int CDRead(int arkFile, int i2, int i3, void *v) {
+int CDRead(int arkFile, int offset, int size, void *buffer) {
     if (gFakeFileErrors || !UsingCD()) {
         gErrorCode = 0x45D;
         DiskErrorLoop();
         return 1;
     } else {
-        int ret = ArkFilesInit();
-        if (ret) {
-            return ret;
+        if (ArkFilesInit()) {
+            return 1;
         }
-        gOverlapped.OffsetHigh = (i2 << 0xB) >> 0x20;
-        gOverlapped.Offset = i2 << 0xB;
-        if (!ReadFile(gArkFiles[arkFile], v, i3 << 0xB, nullptr, &gOverlapped)) {
+        u64 pos = (u64)offset << 0xB;
+        gOverlapped.Offset = pos;
+        gOverlapped.OffsetHigh = pos >> 0x20;
+        if (!ReadFile(gArkFiles[arkFile], buffer, size << 0xB, nullptr, &gOverlapped)) {
             DWORD err = GetLastError();
-            if (err != ERROR_IO_PENDING && err != ERROR_IO_INCOMPLETE) {
-                gErrorCode = err;
-                DiskErrorLoop();
-                return 1;
-            } else {
+            gErrorCode = err;
+            if (err == ERROR_IO_PENDING || err == ERROR_IO_INCOMPLETE) {
                 MILO_NOTIFY("Disc error: ERROR_IO_INCOMPLETE, ignoring");
                 gPendingFile = arkFile;
                 return 0;
             }
+            DiskErrorLoop();
+            return 1;
         }
         return 0;
     }

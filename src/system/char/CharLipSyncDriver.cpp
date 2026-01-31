@@ -202,12 +202,13 @@ void CharLipSyncDriver::Highlight() {
         float y = TheRnd.DrawString(MakeString("%s:", PathName(this)), v2, white, true).y;
         v2.y += y;
         if (unk88) {
-            TheRnd.DrawString(MakeString("frame %d", unk88->mFrame), v2, white, true);
+            int frame = unk88->mFrame;
+            TheRnd.DrawString(MakeString("frame %d", frame), v2, white, true);
             v2.y += y;
             std::vector<CharLipSync::PlayBack::Weight> &weights = unk88->mWeights;
             for (int i = 0; i < weights.size(); i++) {
                 CharLipSync::PlayBack::Weight &curWeight = weights[i];
-                float f14 = curWeight.unk14;
+                float f14 = curWeight.unk1c;
                 CharClip *clip = curWeight.unk0;
                 if (f14 != 0 && clip) {
                     TheRnd.DrawString(
