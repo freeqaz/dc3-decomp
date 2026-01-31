@@ -1,0 +1,19 @@
+Metadata-Version: 2.1
+Name: pyghidra-mcp
+Version: 0.1.6
+Summary: Python Command-Line Ghidra MCP
+Home-page: https://github.com/clearbluejar/pyghidra-mcp
+Author: clearbluejar
+Author-email: 3752074+clearbluejar@users.noreply.github.com
+Keywords: dynamic-analysis,ghidra,mcp,pyghidra,reverse-engineering,security,static-analysis
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: 3.13
+Classifier: Topic :: Security
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Provides-Extra: dev

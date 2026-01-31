@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Combined objdiff + Ghidra analysis for decompilation work
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+exec python3 "${SCRIPT_DIR}/../tools/analyze_function.py" "$@"

@@ -1,0 +1,2 @@
+[console_scripts]
+pyghidra-mcp = pyghidra_mcp.server:main

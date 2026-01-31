@@ -1,0 +1,540 @@
+#!/usr/bin/env python3
+"""
+Compare decomp progress between two report.json files, or show current snapshot.
+
+Usage:
+    python3 scripts/compare_progress.py <baseline_report> <current_report>
+    python3 scripts/compare_progress.py --snapshot [report.json]
+
+Examples:
+    # Compare against baseline
+    python3 scripts/compare_progress.py ../og-dc3-decomp/build/373307D9/report.json build/373307D9/report.json
+
+    # Show detailed unit breakdown
+    python3 scripts/compare_progress.py --detailed ../og-dc3-decomp/build/373307D9/report.json build/373307D9/report.json
+
+    # Show current snapshot (all subsystems)
+    python3 scripts/compare_progress.py --snapshot
+    python3 scripts/compare_progress.py --snapshot --sort=percent
+"""
+
+import argparse
+import json
+import sys
+from pathlib import Path
+
+
+# Subsystems to exclude by default (third-party, XDK, tiny standalone files)
+EXCLUDED_PREFIXES = ("xdk/", "lib/", "default/")
+DEFAULT_MIN_SIZE = 10240  # 10KB
+
+
+def get_subsystem(name: str) -> str:
+    """Extract subsystem from unit name."""
+    parts = name.split("/")
+    if len(parts) >= 3:
+        return f"{parts[1]}/{parts[2]}"
+    return name
+
+
+def fmt_bytes(b: int) -> str:
+    """Format byte count with sign and units."""
+    if abs(b) >= 1024:
+        return f"{b/1024:+.1f} KB"
+    return f"{b:+d} B"
+
+
+def fmt_bytes_plain(b: int) -> str:
+    """Format byte count without sign."""
+    if abs(b) >= 1024 * 1024:
+        return f"{b/1024/1024:.2f} MB"
+    if abs(b) >= 1024:
+        return f"{b/1024:.1f} KB"
+    return f"{b} B"
+
+
+def load_report(path: Path) -> dict:
+    """Load a report.json file."""
+    with open(path) as f:
+        return json.load(f)
+
+
+def aggregate_by_subsystem(units: list) -> dict:
+    """Aggregate unit stats by subsystem."""
+    agg = {}
+    for u in units:
+        sub = get_subsystem(u["name"])
+        if sub not in agg:
+            agg[sub] = {
+                "matched_code": 0,
+                "total_code": 0,
+                "matched_functions": 0,
+                "total_functions": 0,
+            }
+        measures = u.get("measures", {})
+        agg[sub]["matched_code"] += int(measures.get("matched_code", 0) or 0)
+        agg[sub]["total_code"] += int(measures.get("total_code", 0) or 0)
+        agg[sub]["matched_functions"] += int(measures.get("matched_functions", 0) or 0)
+        agg[sub]["total_functions"] += int(measures.get("total_functions", 0) or 0)
+    return agg
+
+
+def compare_subsystems(baseline: dict, current: dict) -> list:
+    """Compare aggregated subsystem stats."""
+    baseline_agg = aggregate_by_subsystem(baseline["units"])
+    current_agg = aggregate_by_subsystem(current["units"])
+
+    results = []
+    for sub, curr in current_agg.items():
+        if sub in baseline_agg and curr["total_code"] > 0:
+            base = baseline_agg[sub]
+            base_pct = 100 * base["matched_code"] / base["total_code"] if base["total_code"] > 0 else 0
+            curr_pct = 100 * curr["matched_code"] / curr["total_code"]
+            diff_bytes = curr["matched_code"] - base["matched_code"]
+            diff_funcs = curr["matched_functions"] - base["matched_functions"]
+
+            if diff_bytes != 0:
+                results.append({
+                    "subsystem": sub,
+                    "base_pct": base_pct,
+                    "curr_pct": curr_pct,
+                    "diff_pct": curr_pct - base_pct,
+                    "diff_bytes": diff_bytes,
+                    "diff_funcs": diff_funcs,
+                })
+
+    results.sort(key=lambda x: x["diff_bytes"], reverse=True)
+    return results
+
+
+def compare_units(baseline: dict, current: dict, min_diff: float = 0.01) -> list:
+    """Compare individual unit stats."""
+    baseline_units = {u["name"]: u for u in baseline["units"]}
+    current_units = {u["name"]: u for u in current["units"]}
+
+    results = []
+    for name, curr in current_units.items():
+        if name in baseline_units:
+            base = baseline_units[name]
+            base_measures = base.get("measures", {})
+            curr_measures = curr.get("measures", {})
+            base_pct = base_measures.get("fuzzy_match_percent", 0) or 0
+            curr_pct = curr_measures.get("fuzzy_match_percent", 0) or 0
+            diff = curr_pct - base_pct
+
+            if abs(diff) > min_diff:
+                base_matched = base_measures.get("matched_functions", 0)
+                base_total = base_measures.get("total_functions", 0)
+                curr_matched = curr_measures.get("matched_functions", 0)
+                curr_total = curr_measures.get("total_functions", 0)
+                results.append({
+                    "name": name,
+                    "base_pct": base_pct,
+                    "curr_pct": curr_pct,
+                    "diff_pct": diff,
+                    "base_funcs": f"{base_matched}/{base_total}",
+                    "curr_funcs": f"{curr_matched}/{curr_total}",
+                })
+
+    results.sort(key=lambda x: x["diff_pct"], reverse=True)
+    return results
+
+
+def print_subsystem_table(results: list, baseline: dict, current: dict):
+    """Print subsystem comparison table."""
+    total_bytes = sum(r["diff_bytes"] for r in results)
+    total_funcs = sum(r["diff_funcs"] for r in results)
+    base_total = baseline.get("measures", {}).get("fuzzy_match_percent", 0)
+    curr_total = current.get("measures", {}).get("fuzzy_match_percent", 0)
+
+    print()
+    print(f"Overall: {base_total:.2f}% -> {curr_total:.2f}% ({curr_total-base_total:+.2f}%)")
+    print(f"Total: {fmt_bytes(total_bytes)} matched code, {total_funcs:+d} functions")
+    print()
+
+    # Calculate column widths
+    headers = ["Subsystem", "Baseline", "Current", "Change", "Bytes Gained"]
+    rows = []
+    for r in results:
+        rows.append([
+            r["subsystem"],
+            f"{r['base_pct']:.2f}%",
+            f"{r['curr_pct']:.2f}%",
+            f"{r['diff_pct']:+.2f}%",
+            fmt_bytes(r["diff_bytes"]),
+        ])
+
+    widths = [len(h) for h in headers]
+    for row in rows:
+        for i, cell in enumerate(row):
+            widths[i] = max(widths[i], len(cell))
+
+    def fmt_row(cells, align_right=None):
+        if align_right is None:
+            align_right = [False] * len(cells)
+        parts = []
+        for i, cell in enumerate(cells):
+            if align_right[i]:
+                parts.append(cell.rjust(widths[i]))
+            else:
+                parts.append(cell.ljust(widths[i]))
+        return "| " + " | ".join(parts) + " |"
+
+    align = [False, True, True, True, True]  # Right-align numeric columns
+    print(fmt_row(headers))
+    print("|" + "|".join("-" * (w + 2) for w in widths) + "|")
+    for row in rows:
+        print(fmt_row(row, align))
+
+
+def print_unit_table(results: list, limit: int = 50):
+    """Print detailed unit comparison table."""
+    count = min(limit, len(results))
+    print()
+    print(f"Top {count} Unit Changes")
+    print()
+
+    headers = ["Unit Path", "Baseline", "Current", "Change", "Funcs (base)", "Funcs (curr)"]
+    rows = []
+    for r in results[:limit]:
+        rows.append([
+            r["name"].replace("default/", ""),
+            f"{r['base_pct']:.2f}%",
+            f"{r['curr_pct']:.2f}%",
+            f"{r['diff_pct']:+.2f}%",
+            r["base_funcs"],
+            r["curr_funcs"],
+        ])
+
+    widths = [len(h) for h in headers]
+    for row in rows:
+        for i, cell in enumerate(row):
+            widths[i] = max(widths[i], len(cell))
+
+    def fmt_row(cells, align_right=None):
+        if align_right is None:
+            align_right = [False] * len(cells)
+        parts = []
+        for i, cell in enumerate(cells):
+            if align_right[i]:
+                parts.append(cell.rjust(widths[i]))
+            else:
+                parts.append(cell.ljust(widths[i]))
+        return "| " + " | ".join(parts) + " |"
+
+    align = [False, True, True, True, True, True]  # Right-align numeric columns
+    print(fmt_row(headers))
+    print("|" + "|".join("-" * (w + 2) for w in widths) + "|")
+    for row in rows:
+        print(fmt_row(row, align))
+
+
+def get_category(subsystem: str) -> str:
+    """Categorize a subsystem."""
+    if subsystem.startswith("xdk/"):
+        return "XDK"
+    if subsystem.startswith("lib/"):
+        return "Third-Party"
+    if subsystem.startswith("lazer/"):
+        return "Game Code"
+    if subsystem.startswith("default/"):
+        return "Standalone"
+    return "Milo Engine"
+
+
+def print_overview(report: dict):
+    """Print complete overview grouped by category."""
+    agg = aggregate_by_subsystem(report.get("units", []))
+
+    # Build results with category
+    results = []
+    for sub, stats in agg.items():
+        if stats["total_code"] > 0:
+            pct = 100 * stats["matched_code"] / stats["total_code"]
+            results.append({
+                "subsystem": sub,
+                "category": get_category(sub),
+                "matched_code": stats["matched_code"],
+                "total_code": stats["total_code"],
+                "percent": pct,
+                "matched_funcs": stats["matched_functions"],
+                "total_funcs": stats["total_functions"],
+            })
+
+    # Overall stats
+    measures = report.get("measures", {})
+    total_matched = int(measures.get("matched_code", 0) or 0)
+    total_code = int(measures.get("total_code", 0) or 0)
+    total_pct = 100 * total_matched / total_code if total_code > 0 else 0
+    total_funcs_matched = int(measures.get("matched_functions", 0) or 0)
+    total_funcs = int(measures.get("total_functions", 0) or 0)
+
+    print()
+    print(f"{'='*70}")
+    print(f"  DECOMP OVERVIEW: {total_pct:.2f}% complete")
+    print(f"  Code: {fmt_bytes_plain(total_matched)} / {fmt_bytes_plain(total_code)}")
+    print(f"  Functions: {total_funcs_matched:,} / {total_funcs:,}")
+    print(f"{'='*70}")
+
+    # Group by category
+    categories = ["Game Code", "Milo Engine", "Third-Party", "XDK", "Standalone"]
+    for cat in categories:
+        cat_results = [r for r in results if r["category"] == cat]
+        if not cat_results:
+            continue
+
+        # Sort by size within category
+        cat_results.sort(key=lambda x: x["total_code"], reverse=True)
+
+        # Category totals
+        cat_matched = sum(r["matched_code"] for r in cat_results)
+        cat_total = sum(r["total_code"] for r in cat_results)
+        cat_pct = 100 * cat_matched / cat_total if cat_total > 0 else 0
+        cat_funcs_matched = sum(r["matched_funcs"] for r in cat_results)
+        cat_funcs_total = sum(r["total_funcs"] for r in cat_results)
+
+        print()
+        print(f"## {cat}: {cat_pct:.1f}% ({fmt_bytes_plain(cat_matched)}/{fmt_bytes_plain(cat_total)}, {cat_funcs_matched}/{cat_funcs_total} funcs)")
+        print()
+
+        headers = ["Subsystem", "Matched", "Total", "%", "Funcs"]
+        rows = []
+        for r in cat_results:
+            # Trim category prefix for cleaner display
+            name = r["subsystem"]
+            if name.startswith("system/"):
+                name = name[7:]
+            elif name.startswith("lazer/"):
+                name = name[6:]
+            elif name.startswith("xdk/"):
+                name = name[4:]
+            elif name.startswith("lib/"):
+                name = name[4:]
+            elif name.startswith("default/"):
+                name = name[8:]
+
+            rows.append([
+                name,
+                fmt_bytes_plain(r["matched_code"]),
+                fmt_bytes_plain(r["total_code"]),
+                f"{r['percent']:.1f}%",
+                f"{r['matched_funcs']}/{r['total_funcs']}",
+            ])
+
+        widths = [len(h) for h in headers]
+        for row in rows:
+            for i, cell in enumerate(row):
+                widths[i] = max(widths[i], len(cell))
+
+        def fmt_row(cells, align_right=None):
+            if align_right is None:
+                align_right = [False] * len(cells)
+            parts = []
+            for i, cell in enumerate(cells):
+                if align_right[i]:
+                    parts.append(cell.rjust(widths[i]))
+                else:
+                    parts.append(cell.ljust(widths[i]))
+            return "  " + " | ".join(parts)
+
+        align = [False, True, True, True, True]
+        print(fmt_row(headers))
+        print("  " + "-+-".join("-" * w for w in widths))
+        for row in rows:
+            print(fmt_row(row, align))
+
+    print()
+
+
+def print_snapshot(report: dict, sort_by: str = "percent", show_all: bool = False):
+    """Print current snapshot of all subsystems."""
+    agg = aggregate_by_subsystem(report.get("units", []))
+
+    # Build results list with filtering
+    results = []
+    for sub, stats in agg.items():
+        if stats["total_code"] > 0:
+            # Filter out excluded prefixes and small subsystems unless --all
+            if not show_all:
+                if any(sub.startswith(prefix) for prefix in EXCLUDED_PREFIXES):
+                    continue
+                if stats["total_code"] < DEFAULT_MIN_SIZE:
+                    continue
+
+            pct = 100 * stats["matched_code"] / stats["total_code"]
+            results.append({
+                "subsystem": sub,
+                "matched_code": stats["matched_code"],
+                "total_code": stats["total_code"],
+                "percent": pct,
+                "matched_funcs": stats["matched_functions"],
+                "total_funcs": stats["total_functions"],
+            })
+
+    # Sort
+    if sort_by == "percent":
+        results.sort(key=lambda x: x["percent"], reverse=True)
+    elif sort_by == "size":
+        results.sort(key=lambda x: x["total_code"], reverse=True)
+    elif sort_by == "matched":
+        results.sort(key=lambda x: x["matched_code"], reverse=True)
+    else:  # name
+        results.sort(key=lambda x: x["subsystem"])
+
+    # Overall stats
+    measures = report.get("measures", {})
+    total_matched = int(measures.get("matched_code", 0) or 0)
+    total_code = int(measures.get("total_code", 0) or 0)
+    total_pct = 100 * total_matched / total_code if total_code > 0 else 0
+    total_funcs_matched = int(measures.get("matched_functions", 0) or 0)
+    total_funcs = int(measures.get("total_functions", 0) or 0)
+
+    print()
+    print(f"Overall: {total_pct:.2f}% ({fmt_bytes_plain(total_matched)} / {fmt_bytes_plain(total_code)})")
+    print(f"Functions: {total_funcs_matched}/{total_funcs}")
+    print()
+
+    headers = ["Subsystem", "Matched", "Total", "%", "Functions"]
+    rows = []
+    for r in results:
+        rows.append([
+            r["subsystem"],
+            fmt_bytes_plain(r["matched_code"]),
+            fmt_bytes_plain(r["total_code"]),
+            f"{r['percent']:.2f}%",
+            f"{r['matched_funcs']}/{r['total_funcs']}",
+        ])
+
+    widths = [len(h) for h in headers]
+    for row in rows:
+        for i, cell in enumerate(row):
+            widths[i] = max(widths[i], len(cell))
+
+    def fmt_row(cells, align_right=None):
+        if align_right is None:
+            align_right = [False] * len(cells)
+        parts = []
+        for i, cell in enumerate(cells):
+            if align_right[i]:
+                parts.append(cell.rjust(widths[i]))
+            else:
+                parts.append(cell.ljust(widths[i]))
+        return "| " + " | ".join(parts) + " |"
+
+    align = [False, True, True, True, True]
+    print(fmt_row(headers))
+    print("|" + "|".join("-" * (w + 2) for w in widths) + "|")
+    for row in rows:
+        print(fmt_row(row, align))
+    print()
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Compare decomp progress between two report.json files, or show snapshot"
+    )
+    parser.add_argument(
+        "baseline",
+        nargs="?",
+        type=Path,
+        help="Path to baseline report.json (or report for --snapshot)",
+    )
+    parser.add_argument(
+        "current",
+        nargs="?",
+        type=Path,
+        help="Path to current report.json",
+    )
+    parser.add_argument(
+        "--overview", "-o",
+        action="store_true",
+        help="Show complete overview grouped by category (Game/Milo/XDK)",
+    )
+    parser.add_argument(
+        "--snapshot", "-s",
+        action="store_true",
+        help="Show current snapshot of all subsystems (no comparison)",
+    )
+    parser.add_argument(
+        "--sort",
+        choices=["name", "percent", "size", "matched"],
+        default="percent",
+        help="Sort snapshot by: name, percent (default), size, or matched bytes",
+    )
+    parser.add_argument(
+        "--all", "-a",
+        action="store_true",
+        help="Show all subsystems (including xdk, lib, tiny ones)",
+    )
+    parser.add_argument(
+        "--detailed",
+        action="store_true",
+        help="Show detailed per-unit breakdown",
+    )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=50,
+        help="Max units to show in detailed view (default: 50)",
+    )
+
+    args = parser.parse_args()
+
+    # Overview mode - grouped by category
+    if args.overview:
+        if args.baseline:
+            report_path = args.baseline
+        else:
+            report_path = Path("build/373307D9/report.json")
+
+        if not report_path.exists():
+            print(f"Error: Report not found: {report_path}")
+            print("Run 'ninja' first to generate the report.")
+            sys.exit(1)
+
+        report = load_report(report_path)
+        print_overview(report)
+        return
+
+    # Snapshot mode - show current state without comparison
+    if args.snapshot:
+        if args.baseline:
+            report_path = args.baseline
+        else:
+            report_path = Path("build/373307D9/report.json")
+
+        if not report_path.exists():
+            print(f"Error: Report not found: {report_path}")
+            print("Run 'ninja' first to generate the report.")
+            sys.exit(1)
+
+        report = load_report(report_path)
+        print_snapshot(report, sort_by=args.sort, show_all=args.all)
+        return
+
+    # Comparison mode - need both reports
+    if not args.baseline or not args.current:
+        parser.error("comparison mode requires both baseline and current reports (or use --snapshot)")
+
+    if not args.baseline.exists():
+        print(f"Error: Baseline report not found: {args.baseline}")
+        sys.exit(1)
+    if not args.current.exists():
+        print(f"Error: Current report not found: {args.current}")
+        sys.exit(1)
+
+    baseline = load_report(args.baseline)
+    current = load_report(args.current)
+
+    # Always show subsystem summary
+    subsystem_results = compare_subsystems(baseline, current)
+    print_subsystem_table(subsystem_results, baseline, current)
+
+    # Optionally show detailed breakdown
+    if args.detailed:
+        unit_results = compare_units(baseline, current)
+        print_unit_table(unit_results, args.limit)
+
+
+if __name__ == "__main__":
+    main()
