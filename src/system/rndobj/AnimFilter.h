@@ -42,11 +42,10 @@ public:
     float End() { return mEnd; }
     float Period() { return mPeriod; }
     float FrameOffset() {
-        float ret = mStart;
-        if (mEnd >= mStart)
-            ret = 0.0f;
-        else
-            ret -= mEnd;
+        float ret = 0.0f;
+        if (mEnd < mStart) {
+            ret = mStart - mEnd;
+        }
         return mOffset + ret;
     }
 

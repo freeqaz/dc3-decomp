@@ -84,11 +84,11 @@ void CharClip::Transitions::RemoveClip(CharClip *clip) {
     NodeVector *it;
     for (it = mNodeStart; it < mNodeEnd; it = it->Next()) {
         if (it->clip == clip) {
-            goto uhm_ackshually;
+            goto found;
         }
     }
     it = nullptr;
-uhm_ackshually:
+found:
     if (it)
         RemoveNodes(it);
 }

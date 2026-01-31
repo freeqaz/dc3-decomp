@@ -237,9 +237,9 @@ void MetaPanel::Poll() {
     unk4c.Poll();
     MILO_ASSERT(TheMetaMusic, 0x176);
     TheMetaMusic->Poll();
-    if (MsToBeat(sHamMaster->StreamMs()) > 0.0f) {
-        float f = sHamMaster->StreamMs();
-        TheTaskMgr.SetSecondsAndBeat(f * 0.001f, 0, false);
+    float beat = MsToBeat(sHamMaster->StreamMs());
+    if (beat > 0.0f) {
+        TheTaskMgr.SetSecondsAndBeat(sHamMaster->StreamMs() * 0.001f, beat, false);
     }
 }
 
@@ -275,14 +275,11 @@ bool MetaPanel::Exiting() const {
     if (mState != 2) {
         return UIPanel::Exiting();
     }
-    if (unk4c.IsWaitingToDelete() || unk4c.IsFadingOut() || TheMetaMusic->IsActive()) {
-        if (!UIPanel::Exiting()) {
-            TheTaskMgr.SetAutoSecondsBeats(true);
-            return UIPanel::Exiting();
-        }
-        return true;
+    bool ret = unk4c.IsWaitingToDelete() || unk4c.IsFadingOut() || TheMetaMusic->IsActive() || UIPanel::Exiting();
+    if (!ret) {
+        TheTaskMgr.SetAutoSecondsBeats(true);
     }
-    return false;
+    return ret;
 }
 
 void MetaPanel::UnlockClassicOutfit(Symbol s) {

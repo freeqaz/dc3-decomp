@@ -3,6 +3,7 @@
 #include "obj/Data.h"
 #include "obj/Object.h"
 #include "obj/Dir.h"
+#include "os/Archive.h"
 #include "os/Debug.h"
 #include "os/File.h"
 #include "os/Platform.h"
@@ -13,6 +14,7 @@
 #include "utl/FilePath.h"
 #include "utl/Loader.h"
 #include "utl/MemPoint.h"
+#include "utl/MemTrack.h"
 #include "utl/TextFileStream.h"
 #include "utl/TextStream.h"
 #include <map>
@@ -126,6 +128,23 @@ ObjectDir *DirLoader::GetDir() {
     return mDir;
 }
 
+Symbol DirLoader::GetDirClass(const char *cc) {
+    ChunkStream cs(cc, ChunkStream::kRead, 0x10000, true, kPlatformNone, false);
+    if (cs.Fail()) {
+        return Symbol("");
+    } else {
+        EofType t;
+        while (t = cs.Eof(), t != NotEof) {
+            MILO_ASSERT(t == TempEof, 0x199);
+        }
+        int i;
+        cs >> i;
+        Symbol s;
+        cs >> s;
+        return s;
+    }
+}
+
 int DirLoader::ClassAndNameSort::ClassIndex(Hmx::Object *obj) {
     static DataArray *cfg = SystemConfig("system", "dir_sort");
     Symbol name = obj->ClassName();
@@ -160,7 +179,11 @@ const char *DirLoader::CachedPath(const char *cc, bool b) {
 }
 
 bool DirLoader::ShouldBlockSubdirLoad(const FilePath &fp) {
-    return fp.c_str() && sPathEval ? sPathEval(fp.c_str()) : false;
+    if (!fp.c_str())
+        return false;
+    if (!sPathEval)
+        return false;
+    return sPathEval(fp.c_str());
 }
 
 // I am WELL aware that this is terrible
@@ -313,14 +336,14 @@ void ReadDead(BinStream &bs) {
 
 void ReadEditorDirDead(BinStream &bs) {
     unsigned char buf;
-    for (int i = 0; i < 20; i++) {
+    for (unsigned int i = 0; i < 20; i++) {
         while (true) {
             EofType t;
             while ((t = bs.Eof()) != NotEof) {
                 MILO_ASSERT(t == TempEof, 0x470);
             }
             bs >> buf;
-            if ("%#@EndOfEditorDir@#%"[i] == buf)
+            if (((const unsigned char *)"%#@EndOfEditorDir@#%")[i] == buf)
                 break;
         }
     }
@@ -458,9 +481,15 @@ void DirLoader::AddTypeObjectMemDelta(
         if (!name || !*name)
             name = "Unknown";
         std::map<String, MemPointDelta>::iterator it = sMemPointMap.find(name);
-        if (it == sMemPointMap.end()) {
-            sMemPointMap[name] = MemPointDelta();
+        MemPointDelta *target;
+        if (it != sMemPointMap.end()) {
+            target = &it->second;
+        } else {
+            std::pair<std::map<String, MemPointDelta>::iterator, bool> result =
+                sMemPointMap.insert(std::pair<String, MemPointDelta>(name, MemPointDelta()));
+            target = &result.first->second;
         }
+        *target += memDelta;
     }
 }
 
@@ -560,6 +589,162 @@ bool DirLoader::SaveObjects(const char *file, ObjectDir *dir, bool) {
     }
 }
 
+bool DirLoader::SetupDir(Symbol sym) {
+    MemPoint begin(MemPoint::kInitType0);
+    if (sObjectMemDumpFile || sTypeMemDumpFile) {
+        begin = MemPoint(MemPoint::kInitType1);
+    }
+    if (mDir) {
+        if (mDir->ClassName() != sym) {
+            if (mDir->Dir() != mDir) {
+                MILO_NOTIFY(
+                    "%s: Proxy %s class %s not %s, converting",
+                    PathName(mDir->Dir()),
+                    mFile.c_str(),
+                    mDir->ClassName(),
+                    sym
+                );
+            } else {
+                MILO_NOTIFY(
+                    "%s: Proxy class %s not %s, converting",
+                    mFile.c_str(),
+                    mDir->ClassName(),
+                    sym
+                );
+            }
+            ObjectDir *newDir =
+                dynamic_cast<ObjectDir *>(Hmx::Object::NewObject(sym));
+            if (!newDir) {
+                Cleanup(MakeString(
+                    "%s: Trying to make non ObjectDir proxy class %s %s",
+                    mFile.c_str(),
+                    mDir->ClassName(),
+                    sym
+                ));
+                return false;
+            }
+            newDir->TransferLoaderState(mDir);
+            ReplaceObject(mDir, newDir, true, true, false);
+            mDir = newDir;
+        }
+    } else {
+        mDir = dynamic_cast<ObjectDir *>(Hmx::Object::NewObject(sym));
+    }
+    mDir->SetPathName(mFile.c_str());
+    if (sObjectMemDumpFile) {
+        MemPoint end(MemPoint::kInitType1);
+        DumpObjectMemDelta(mDir, end - begin);
+    }
+    if (sTypeMemDumpFile) {
+        MemPoint end(MemPoint::kInitType1);
+        AddTypeObjectMemDelta(mDir, end - begin);
+    }
+    return true;
+}
+
+void DirLoader::LoadObjs() {
+    FilePathTracker tracker(mRoot.c_str());
+    EofType t;
+    while (!mObjects.empty()) {
+        t = mStream->Eof();
+        if (t != NotEof) {
+            MILO_ASSERT(t == TempEof, 0x4C0);
+        } else {
+            Hmx::Object *obj = mObjects.front();
+            if (obj) {
+                if (!mPostLoad) {
+                    MemPoint begin(MemPoint::kInitType0);
+                    if (sObjectMemDumpFile || sTypeMemDumpFile) {
+                        begin = MemPoint(MemPoint::kInitType1);
+                    }
+                    const char *name = obj->Name();
+                    if (!strcmp(name, ""))
+                        name = mProxyName;
+                    BeginMemTrackObjectName(name);
+                    if (mDir) {
+                        BeginMemTrackFileName(mDir->GetPathName());
+                    }
+                    obj->PreLoad(*mStream);
+                    mPostLoad = true;
+                    if (sObjectMemDumpFile) {
+                        MemPoint end(MemPoint::kInitType1);
+                        DumpObjectMemDelta(obj, end - begin);
+                    }
+                    if (sTypeMemDumpFile) {
+                        MemPoint end(MemPoint::kInitType1);
+                        AddTypeObjectMemDelta(obj, end - begin);
+                    }
+                    EndMemTrackFileName();
+                    EndMemTrackObjectName();
+                }
+                std::list<Loader *> &loaders = TheLoadMgr.Loading();
+                Loader *firstLoader = loaders.empty() ? nullptr : loaders.front();
+                if (firstLoader != this)
+                    return;
+                MemPoint begin(MemPoint::kInitType0);
+                if (sObjectMemDumpFile || sTypeMemDumpFile) {
+                    begin = MemPoint(MemPoint::kInitType1);
+                }
+                const char *name = obj->Name();
+                if (!strcmp(name, ""))
+                    name = mProxyName;
+                BeginMemTrackObjectName(name);
+                if (mDir) {
+                    BeginMemTrackFileName(mDir->GetPathName());
+                }
+                obj->PostLoad(*mStream);
+                mPostLoad = false;
+                if (sObjectMemDumpFile) {
+                    MemPoint end(MemPoint::kInitType1);
+                    DumpObjectMemDelta(obj, end - begin);
+                }
+                if (sTypeMemDumpFile) {
+                    MemPoint end(MemPoint::kInitType1);
+                    AddTypeObjectMemDelta(obj, end - begin);
+                }
+                EndMemTrackFileName();
+                EndMemTrackObjectName();
+                if (mRev > 1) {
+                    ReadDead(*mStream);
+                }
+            } else {
+                MILO_ASSERT(mRev > 1, 0x507);
+                ReadDead(*mStream);
+            }
+            mObjects.pop_front();
+        }
+        if (TheLoadMgr.CheckSplit()) {
+            return;
+        }
+        std::list<Loader *> &loaders = TheLoadMgr.Loading();
+        Loader *firstLoader = loaders.empty() ? nullptr : loaders.front();
+        if (firstLoader != this)
+            return;
+    }
+    mState = &DirLoader::DoneLoading;
+    if (mRev > 0x1d) {
+        if (mRev == 0x1e) {
+            t = mStream->Eof();
+            MILO_ASSERT(t == TempEof, 0x524);
+            if (mStream->Eof() == NotEof) {
+                ReadDead(*mStream);
+            }
+        } else if (mRev == 0x1f) {
+            ReadEditorDirDead(*mStream);
+        }
+        if (unk9a && mRev > 0x1f) {
+            ReadEditorDirDead(*mStream);
+        }
+    }
+    Cleanup(nullptr);
+    std::list<Loader *> &loaders = TheLoadMgr.Loading();
+    Loader *firstLoader = loaders.empty() ? nullptr : loaders.front();
+    if (firstLoader != this)
+        return;
+    if (mCallback)
+        mCallback->FinishLoading(this);
+}
+
 void DirLoader::LoadDir() {
     if (mLoadDir) {
         FilePathTracker tracker(mRoot.c_str());
@@ -607,6 +792,178 @@ void DirLoader::LoadDir() {
     }
     ReadDead(*mStream);
     mState = &DirLoader::LoadObjs;
+}
+
+void DirLoader::LoadResources() {
+    if (mCounter-- != 0) {
+        FilePathTracker fpt(mRoot.c_str());
+        FilePath fp2;
+        *mStream >> fp2;
+        if (!fp2.empty()) {
+            TheLoadMgr.AddLoader(fp2, kLoadFront);
+        }
+    } else {
+        if (mRev > 0xD)
+            mState = &DirLoader::LoadDir;
+        else
+            mState = &DirLoader::LoadObjs;
+    }
+}
+
+void DirLoader::CreateObjects() {
+    while (mCounter-- != 0) {
+        Symbol classSym;
+        *mStream >> classSym;
+        classSym = FixClassName(classSym);
+        char buf[0x80];
+        mStream->ReadString(buf, 0x80);
+        bool b8;
+        if (mRev > 0 && mRev < 8) {
+            *mStream >> b8;
+        }
+        Hmx::Object *obj;
+        if (!Hmx::Object::RegisteredFactory(classSym)) {
+            MILO_NOTIFY("%s: Can't make %s", mFile.c_str(), classSym);
+            obj = nullptr;
+        } else {
+            MemPoint begin(MemPoint::kInitType0);
+            if (sObjectMemDumpFile || sTypeMemDumpFile) {
+                begin = MemPoint(MemPoint::kInitType1);
+            }
+            BeginMemTrackObjectName(buf);
+            obj = Hmx::Object::NewObject(classSym);
+            EndMemTrackObjectName();
+            if (mRev == 0x16 && dynamic_cast<ObjectDir *>(obj)) {
+                RELEASE(obj);
+            } else {
+                obj->SetName(buf, mDir);
+            }
+            if (sObjectMemDumpFile) {
+                MemPoint end(MemPoint::kInitType1);
+                DumpObjectMemDelta(obj, end - begin);
+            }
+            if (sTypeMemDumpFile) {
+                MemPoint end(MemPoint::kInitType1);
+                AddTypeObjectMemDelta(obj, end - begin);
+            }
+        }
+        mObjects.push_back(obj);
+        if (TheLoadMgr.CheckSplit())
+            return;
+    }
+    if (mRev > 16) {
+        mState = &DirLoader::LoadDir;
+    } else {
+        *mStream >> mCounter;
+        mState = &DirLoader::LoadResources;
+    }
+}
+
+void DirLoader::LoadHeader() {
+    EofType t;
+    while (t = mStream->Eof(), t != NotEof) {
+        if (t != TempEof) {
+            Cleanup(MakeString(
+                "%s: Unexpected end of file. Processing could not be completed",
+                mStream->Name()
+            ));
+            return;
+        }
+        if (TheLoadMgr.CheckSplit())
+            return;
+    }
+    *mStream >> mRev;
+    if (mRev < 7) {
+        Cleanup(MakeString("Can't load old ObjectDir %s", mFile));
+        return;
+    }
+    Symbol dirSym("RndDir");
+    if (!Hmx::Object::RegisteredFactory(dirSym)) {
+        dirSym = "ObjectDir";
+    }
+    if (mRev > 0xD) {
+        Symbol symRead;
+        *mStream >> symRead;
+        symRead = FixClassName(symRead);
+        char buf[0x80];
+        mStream->ReadString(buf, 0x80);
+        if (!Hmx::Object::RegisteredFactory(symRead)) {
+            MILO_NOTIFY(
+                "%s: %s not registered, defaulting to %s",
+                mFile.c_str(),
+                symRead,
+                dirSym
+            );
+            symRead = dirSym;
+            mLoadDir = false;
+        }
+        if (!SetupDir(symRead))
+            return;
+        int size1, size2;
+        *mStream >> size1 >> size2;
+        size1 += mDir->HashTableUsedSize() + 0x10;
+        size2 += mDir->StrTableUsedSize() + 0x98;
+        mDir->Reserve(size1, size2);
+        bool &unk9aRef = unk9a;
+        unk9aRef = false;
+        if (mRev > 0x1c) {
+            *mStream >> unk9aRef;
+        }
+        mDir->SetName(buf, mDir);
+    } else if (mRev > 0xC) {
+        Symbol sa8;
+        *mStream >> sa8;
+        if (!SetupDir("ObjectDir"))
+            return;
+        mDir->SetName(FileGetBase(mFile.c_str()), mDir);
+        mDir->ObjectDir::Load(*mStream);
+    } else {
+        if (!SetupDir(dirSym))
+            return;
+        mDir->SetName(FileGetBase(mFile.c_str()), mDir);
+    }
+    mDir->SetLoader(this);
+    *mStream >> mCounter;
+    if (mRev < 0xE) {
+        mDir->Reserve(mCounter * 2, mCounter * 25);
+    }
+    mState = &DirLoader::CreateObjects;
+}
+
+void DirLoader::OpenFile() {
+    mTimer.Start();
+    if (mStream == nullptr) {
+        Archive *theArchive = TheArchive;
+        bool using_cd = UsingCD();
+        bool cache_mode = sCacheMode;
+        const char *fileStr = mFile.c_str();
+        bool matches = gHostFile && FileMatch(fileStr, gHostFile);
+        if (matches) {
+            SetCacheMode(gHostCached);
+            SetUsingCD(false);
+            TheArchive = nullptr;
+        }
+        const char *path = CachedPath(fileStr, false);
+        mStream =
+            new ChunkStream(path, ChunkStream::kRead, 0x10000, true, kPlatformNone, false);
+        mOwnStream = true;
+        if (matches) {
+            SetCacheMode(cache_mode);
+            SetUsingCD(using_cd);
+            TheArchive = theArchive;
+        }
+        if (mStream->Fail()) {
+            if (mProxyDir) {
+                Cleanup(
+                    MakeString("%s: could not load: %s", PathName(mProxyDir.Ptr()), path)
+                );
+                return;
+            }
+            Cleanup(MakeString("Could not load: %s", path));
+            return;
+        }
+    }
+    mState = &DirLoader::LoadHeader;
 }
 
 ObjectDir *DirLoader::LoadObjects(const FilePath &fp, Callback *cb, BinStream *bs) {

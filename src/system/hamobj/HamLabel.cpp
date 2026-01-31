@@ -17,6 +17,7 @@ BEGIN_HANDLERS(HamLabel)
     )
     HANDLE_ACTION(finish_count, FinishCount())
     HANDLE_ACTION(set_move_name, SetMoveName(_msg->Obj<HamMove>(2)))
+    HANDLE_SUPERCLASS(UILabel)
 END_HANDLERS
 
 BEGIN_PROPSYNCS(HamLabel)
@@ -42,6 +43,7 @@ END_COPYS
 void HamLabel::Init() { REGISTER_OBJ_FACTORY(HamLabel); }
 
 void HamLabel::FinishCount() {
+    // Need at least start and end key frames (2 total)
     if (unk168.size() >= 2) {
         SetTokenFmt(unk174, LocalizeSeparatedInt(unk168[1].value, TheLocale));
         unk168.clear();
@@ -50,12 +52,13 @@ void HamLabel::FinishCount() {
 
 void HamLabel::Poll() {
     UILabel::Poll();
+    // Update count animation if active (size >= 2 means we have key frames)
     if (unk168.size() >= 2) {
-        float f3 = 0;
+        float frameValue = 0;
         float ui_ms = TheTaskMgr.UISeconds() * 1000;
-        unk168.AtFrame(ui_ms, f3);
+        unk168.AtFrame(ui_ms, frameValue);
         SetTokenFmt(unk174, LocalizeSeparatedInt(0, TheLocale));
-        if (f3 < ui_ms) {
+        if (frameValue < ui_ms) {
             unk168.clear();
             TheUI->Handle(HamLabelCountDoneMsg(this), false);
         }
@@ -66,8 +69,9 @@ void HamLabel::Poll() {
 void HamLabel::Count(int i1, int i2, float f3, Symbol s) {
     unk168.clear();
     float ui_ms = TheTaskMgr.UISeconds() * 1000;
+    // Create animation keyframes: start at current time with i1, end at (i2 + duration) with i2
     unk168.push_back(Key<float>(ui_ms, i1));
-    unk168.push_back(Key<float>((float)(i2) + f3, i2));
+    unk168.push_back(Key<float>(i2 + f3, i2));
     unk174 = s;
 }
 
@@ -77,6 +81,7 @@ void HamLabel::FinishValueChange() {
 }
 
 void HamLabel::SetDisplayText(const char *cc, bool b2) {
+    // Only trigger transition if text content or display state actually changed
     if (!streq(cc, unk178.c_str()) || b2 != unk180) {
         unk178 = cc;
         unk180 = b2;

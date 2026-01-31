@@ -235,13 +235,13 @@ bool Skeleton::RequestIdentity() {
     if (info) {
         HRESULT hr = NuiIdentityIdentify(mTrackingID, 0, IdentityCallback, info);
         MILO_ASSERT(hr != E_INVALIDARG, 0x2B1);
-        bool canset = hr == 0;
-        if (!SUCCEEDED(hr)) {
-            if (hr != 0x8000000A)
+        int success = hr == 0;
+        if (hr < 0) {
+            if ((unsigned int)hr != 0x8000000A)
                 return false;
-            canset = false;
+            success = 0;
         }
-        if (canset) {
+        if (success) {
             info->SetUnk0(true);
         } else {
             GestureMgr::sIdentityOpInProgress = true;

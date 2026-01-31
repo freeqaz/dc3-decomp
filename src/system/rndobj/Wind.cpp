@@ -18,7 +18,6 @@ RndWind::RndWind()
     SyncLoops();
 }
 
-
 RndWind::~RndWind() {}
 
 void RndWind::Zero() {
@@ -89,9 +88,10 @@ BEGIN_COPYS(RndWind)
 END_COPYS
 
 void RndWind::SyncLoops() {
-    float f1 = (mTimeLoop == 0.0f) ? 0.0f : 1.0f / mTimeLoop;
+    float f1;
+    f1 = (mTimeLoop == 0.0f) ? 0.0f : (1.0f / mTimeLoop);
     mTimeRate.Set(f1, f1 * 0.773437f, f1 * 1.38484f);
-    f1 = (mSpaceLoop == 0.0f) ? 0.0f : 1.0f / mSpaceLoop;
+    f1 = (mSpaceLoop == 0.0f) ? 0.0f : (1.0f / mSpaceLoop);
     mSpaceRate.Set(f1, f1 * 0.773437f, f1 * 1.38484f);
 }
 

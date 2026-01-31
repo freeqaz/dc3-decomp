@@ -4,16 +4,16 @@
 CharEyeDartRuleset::CharEyeDartRuleset() {}
 
 void CharEyeDartRuleset::EyeDartRulesetData::ClearToDefaults() {
-    mMinDartsPerSequence = 2;
-    mMaxDartsPerSequence = 5;
     mMinRadius = 0.5;
-    mScaleWithDistance = true;
     mMaxRadius = 3;
     mOnTargetAngleThresh = 5;
+    mMinDartsPerSequence = 2;
+    mMaxDartsPerSequence = 5;
     mMinSecsBetweenDarts = 0.25;
     mMaxSecsBetweenDarts = 0.65;
     mMinSecsBetweenSequences = 1;
     mMaxSecsBetweenSequences = 2;
+    mScaleWithDistance = true;
     mReferenceDistance = 70;
 }
 
@@ -74,10 +74,10 @@ BEGIN_LOADS(CharEyeDartRuleset)
     LOAD_REVS(bs)
     ASSERT_REVS(1, 0)
     LOAD_SUPERCLASS(Hmx::Object)
-    d.stream >> mData.mMinRadius >> mData.mMaxRadius >> mData.mOnTargetAngleThresh
+    d >> mData.mMinRadius >> mData.mMaxRadius >> mData.mOnTargetAngleThresh
         >> mData.mMinDartsPerSequence >> mData.mMaxDartsPerSequence
         >> mData.mMinSecsBetweenDarts >> mData.mMaxSecsBetweenDarts
         >> mData.mMinSecsBetweenSequences >> mData.mMaxSecsBetweenSequences;
     d >> mData.mScaleWithDistance;
-    d.stream >> mData.mReferenceDistance;
+    d >> mData.mReferenceDistance;
 END_LOADS

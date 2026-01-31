@@ -15,15 +15,15 @@ KerningTable::KerningTable() : mNumEntries(0), mEntries(0) { memset(mTable, 0, 0
 KerningTable::~KerningTable() { delete mEntries; }
 
 KerningTable::Entry *KerningTable::Find(unsigned short us1, unsigned short us2) {
-    if (mNumEntries == 0)
+    if (mNumEntries == 0) {
         return nullptr;
-    else {
-        Entry *entry = mTable[TableIndex(us1, us2)];
-        int key = Key(us1, us2);
-        for (; entry != nullptr && key != entry->key; entry = entry->next)
-            ;
-        return entry;
     }
+    Entry *entry = mTable[TableIndex(us1, us2)];
+    int key = Key(us1, us2);
+    while (entry != nullptr && key != entry->key) {
+        entry = entry->next;
+    }
+    return entry;
 }
 
 float KerningTable::Kerning(unsigned short us1, unsigned short us2) {
@@ -50,8 +50,7 @@ void KerningTable::SetKerning(
     const std::vector<RndFont::KernInfo> &info, RndFontBase *font
 ) {
     int validcount = 0;
-    int i = 0;
-    for (i = 0; i < info.size(); i++) {
+    for (int i = 0; i < info.size(); i++) {
         if (Valid(info[i], font)) {
             validcount++;
         }
@@ -63,7 +62,7 @@ void KerningTable::SetKerning(
     }
     memset(mTable, 0, 0x80);
     int entryIdx = 0;
-    for (i = 0; i < info.size(); i++) {
+    for (int i = 0; i < info.size(); i++) {
         const RndFont::KernInfo &curInfo = info[i];
         if (Valid(curInfo, font)) {
             Entry &curEntry = mEntries[entryIdx++];
@@ -79,9 +78,10 @@ void KerningTable::SetKerning(
 void KerningTable::GetKerning(std::vector<RndFontBase::KernInfo> &info) const {
     info.resize(mNumEntries);
     for (int i = 0; i < mNumEntries; i++) {
-        info[i].unk0 = mEntries[i].key;
-        info[i].unk2 = (unsigned int)(mEntries[i].key) >> 16;
-        info[i].kerning = mEntries[i].kerning;
+        const Entry &entry = mEntries[i];
+        info[i].unk0 = entry.key;
+        info[i].unk2 = (unsigned int)(entry.key) >> 16;
+        info[i].kerning = entry.kerning;
     }
 }
 
@@ -140,15 +140,12 @@ void BitmapLocker::LoadPage(int pageIdx) {
         int len = strlen(filename);
         if (UsingCD() || len < 4 || stricmp(filename + len - 4, ".bmp")) {
             mTex->LockBitmap(unkc, 3);
-            if (unkc.Pixels()) {
-                unk8 = &unkc;
-            }
         } else {
             unkc.LoadBmp(filename, false, true);
-            if (unkc.Pixels()) {
-                unk8 = &unkc;
-            }
             mTex = nullptr;
+        }
+        if (unkc.Pixels()) {
+            unk8 = &unkc;
         }
     }
 }
@@ -211,7 +208,7 @@ BEGIN_SAVES(RndFont)
          it != mCharInfoMap.end();
          ++it) {
         bs << it->first;
-        CharInfo &info = it->second;
+        const CharInfo &info = it->second;
         bs << info.unk0;
         bs << info.unk4;
         bs << info.unk8;
@@ -230,11 +227,13 @@ BEGIN_COPYS(RndFont)
     COPY_MEMBER_FROM(f, mDeprecatedSize)
     COPY_MEMBER_FROM(f, mPacked)
     COPY_MEMBER_FROM(f, mCharInfoMap)
+    RndFont *obj;
     if (ty == kCopyShallow || (ty == kCopyFromMax && f->mTextureOwner != f)) {
-        mTextureOwner = f->mTextureOwner;
+        obj = f->mTextureOwner;
     } else {
-        mTextureOwner = this;
+        obj = this;
     }
+    mTextureOwner = obj;
 END_COPYS
 
 static const char theChars[96] =
@@ -438,7 +437,7 @@ float RndFont::CharWidth(unsigned short c) const {
 
 bool RndFont::CharAdvance(unsigned short u1, unsigned short c, float &f3) const {
     if (mTextureOwner != this) {
-        mTextureOwner->CharAdvance(u1);
+        return mTextureOwner->CharAdvance(u1, c, f3);
     } else {
         auto it = mCharInfoMap.find(c);
         if (it != mCharInfoMap.end()
@@ -461,13 +460,12 @@ float RndFont::CharAdvance(unsigned short c) const {
 }
 
 bool RndFont::CharDefined(unsigned short c) const {
-    if (HasChar(c)) {
-        auto it = mCharInfoMap.find(c);
+    auto it = mCharInfoMap.find(c);
+    if (it != mCharInfoMap.end()) {
         const CharInfo &info = it->second;
         return info.unk4 != 0 || info.unk8 != 0 || info.unk10 != 0;
-    } else {
-        return false;
     }
+    return false;
 }
 
 void RndFont::Print() const {

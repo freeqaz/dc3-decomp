@@ -239,11 +239,11 @@ void RndMat::ReloadMetaMaterials() {
     ObjectDir *metaDir = LoadMetaMaterials();
     if (metaDir != nullptr && sMetaMaterials != nullptr) {
         MergeMetaMaterials(sMetaMaterials, metaDir);
-        for (ObjDirItr<MetaMaterial> it(sMetaMaterials, true); it != 0; ++it) {
+        for (ObjDirItr<MetaMaterial> it(sMetaMaterials, true); it != nullptr; ++it) {
             MetaMaterial *mat = metaDir->Find<MetaMaterial>(it->Name(), false);
-            if (mat == 0) {
+            if (mat == nullptr) {
                 delete &*it;
-                ObjDirItr<MetaMaterial> tmp(0, true);
+                ObjDirItr<MetaMaterial> tmp(nullptr, true);
                 it = tmp;
             }
         }
@@ -278,13 +278,10 @@ bool RndMat::OnGetPropertyDisplay(PropDisplay display, Symbol s) {
     if (mMetaMaterial) {
         if (mToggleDisplayAllProps)
             return display == kPropDisplayHidden;
-        else
-            return true;
-    } else {
-        MatPropEditAction a = GetMetaMatPropAction(s);
-        return a == 2 || (a != 0 && a != 1);
+        return true;
     }
-    return false;
+    MatPropEditAction a = GetMetaMatPropAction(s);
+    return a == 2 || (a != 0 && a != 1);
 }
 
 void RndMat::SetColorMod(const Hmx::Color &color, int index) {
@@ -380,10 +377,10 @@ DataNode RndMat::OnGetMetaMaterials(const DataArray *a) {
 }
 
 MetaMaterial *RndMat::CreateMetaMaterial(bool notify) {
-    bool hasStr = false;
+    bool isAnonymous = false;
     String str(Name());
     if (str.empty()) {
-        hasStr = true;
+        isAnonymous = true;
         str = kAnonMetaMatPrefix;
         str += ".";
         str += ClassExt("Mat");
@@ -399,30 +396,30 @@ MetaMaterial *RndMat::CreateMetaMaterial(bool notify) {
     MetaMaterial *mat = Hmx::Object::New<MetaMaterial>();
     mat->SetName(nextname, sMetaMaterials);
     mat->Copy(this, kCopyDeep);
-    String strc0;
+    String notCopiedProps;
     std::list<Symbol> symList;
     ListProperties(symList, "Mat", 0, nullptr, false);
     for (std::list<Symbol>::iterator it = symList.begin(); it != symList.end(); ++it) {
         Symbol cur = *it;
         static Symbol metamaterial("metamaterial");
         if (cur != metamaterial) {
-            bool b10 = false;
+            bool isObjectProp = false;
             const DataNode *node = Property(cur, true);
             if (node && node->Type() == kDataObject && node->GetObj()) {
-                if (!strc0.empty()) {
-                    strc0 += ", ";
+                if (!notCopiedProps.empty()) {
+                    notCopiedProps += ", ";
                 }
-                strc0 += cur.Str();
+                notCopiedProps += cur.Str();
                 mat->SetProperty(cur, NULL_OBJ);
-                b10 = true;
+                isObjectProp = true;
             }
-            bool b9 = PropValDifferent(cur, nullptr);
-            String stre0(cur);
-            stre0 += "_edit_action";
-            mat->SetProperty(stre0.c_str(), b10 ? 2 : b9 != 0);
+            bool propDiffers = PropValDifferent(cur, nullptr);
+            String actionPropName(cur);
+            actionPropName += "_edit_action";
+            mat->SetProperty(actionPropName.c_str(), isObjectProp ? 2 : propDiffers != 0);
         }
     }
-    if (hasStr) {
+    if (isAnonymous) {
         for (ObjDirItr<MetaMaterial> it(sMetaMaterials, true); it != nullptr; ++it) {
             if (mat != it && mat->IsEquivalent(it)) {
                 delete mat;
@@ -432,10 +429,10 @@ MetaMaterial *RndMat::CreateMetaMaterial(bool notify) {
         }
     }
     if (notify) {
-        if (!strc0.empty()) {
+        if (!notCopiedProps.empty()) {
             MILO_NOTIFY(
                 "Some object properties were not copied to the MetaMaterial:%s",
-                strc0.c_str()
+                notCopiedProps.c_str()
             );
         }
     }
@@ -444,21 +441,21 @@ MetaMaterial *RndMat::CreateMetaMaterial(bool notify) {
 
 bool RndMat::IsEditable(Symbol s) {
     if (mMetaMaterial && !unk226) {
-        bool ret = mMetaMaterial->Property(s, true)->Int() == 2;
-        if (!ret) {
-            String str(s);
-            int len = str.length();
+        bool isEditable = mMetaMaterial->Property(s, true)->Int() == 2;
+        if (!isEditable) {
+            String propName(s);
+            int len = propName.length();
             if (len > 12) {
-                str = str.substr(0, len - 12);
+                propName = propName.substr(0, len - 12);
             }
             MILO_NOTIFY_ONCE(
                 "Unable to set property %s in Mat %s.  Not allowed by MetaMaterial %s.\n",
-                str.c_str(),
+                propName.c_str(),
                 PathName(this),
                 PathName(mMetaMaterial)
             );
         }
-        return ret;
+        return isEditable;
     }
     return true;
 }
@@ -466,17 +463,17 @@ bool RndMat::IsEditable(Symbol s) {
 void RndMat::UpdatePropertiesFromMetaMat() {
     if (mMetaMaterial) {
         unk226 = true;
-        String str70;
-        std::list<Symbol> syms78;
-        ListProperties(syms78, "Mat", 0, nullptr, false);
-        for (std::list<Symbol>::iterator it = syms78.begin(); it != syms78.end(); ++it) {
+        String overriddenProps;
+        std::list<Symbol> properties;
+        ListProperties(properties, "Mat", 0, nullptr, false);
+        for (std::list<Symbol>::iterator it = properties.begin(); it != properties.end(); ++it) {
             static Symbol metamaterial("metamaterial");
             Symbol cur = *it;
             if (cur != metamaterial) {
-                MatPropEditAction a = GetMetaMatPropAction(
+                MatPropEditAction action = GetMetaMatPropAction(
                     (cur == "alpha_threshold") ? Symbol("alpha_cut") : cur
                 );
-                if ((a == kPropDefault || a == kPropForce)
+                if ((action == kPropDefault || action == kPropForce)
                     && PropValDifferent(cur, mMetaMaterial)) {
                     if (cur == "tex_xfm") {
                         mTexXfm = mMetaMaterial->TexXfm();
@@ -484,12 +481,12 @@ void RndMat::UpdatePropertiesFromMetaMat() {
                     } else {
                         SetProperty(cur, *mMetaMaterial->Property(cur, true));
                     }
-                    AddOverridePropName(str70, cur);
+                    AddOverridePropName(overriddenProps, cur);
                 }
             }
         }
-        if (!str70.empty())
-            str70 += ".";
+        if (!overriddenProps.empty())
+            overriddenProps += ".";
         unk226 = false;
     }
     mDirty |= 2;
@@ -513,9 +510,9 @@ void RndMat::LoadOld(BinStreamRev &bs) {
     bs >> mDiffuseTex;
     bs >> mNextPass;
     bs.stream >> mIntensify;
-    bool bCull;
-    bs >> bCull;
-    mCull = (Cull)bCull;
+    bool cullValue;
+    bs >> cullValue;
+    mCull = (Cull)cullValue;
     bs >> mEmissiveMultiplier;
     bs >> mSpecularRGB;
     bs >> mNormalMap;
@@ -541,15 +538,15 @@ void RndMat::LoadOld(BinStreamRev &bs) {
         bs >> mPerPixelLit;
     }
     if (bs.rev > 0x1A && bs.rev < 0x32) {
-        bool b150;
-        bs >> b150;
+        bool unusedValue;
+        bs >> unusedValue;
     }
     if (bs.rev > 0x1B) {
         bs >> (int &)mStencilMode;
     }
     if (bs.rev < 0x29 && bs.rev > 0x1C) {
-        Symbol s;
-        bs >> s;
+        Symbol unusedSymbol;
+        bs >> unusedSymbol;
     }
     if (bs.rev > 0x20) {
         bs >> mFur;
@@ -571,9 +568,9 @@ void RndMat::LoadOld(BinStreamRev &bs) {
         }
     }
     if (bs.rev > 0x21 && bs.rev < 0x31) {
-        bool b150;
-        Hmx::Color c80;
-        bs >> b150 >> c80;
+        bool unusedBool;
+        Hmx::Color unusedColor;
+        bs >> unusedBool >> unusedColor;
         if (bs.rev > 0x22) {
             ObjPtr<RndTex> tex(this);
             bs >> tex;
@@ -585,16 +582,16 @@ void RndMat::LoadOld(BinStreamRev &bs) {
     }
     if (bs.rev > 0x26) {
         if (bs.rev < 0x2A) {
-            bool b150;
-            bs >> b150;
+            bool unusedValue;
+            bs >> unusedValue;
         }
         bs >> mNormDetailTiling;
         bs >> mNormDetailStrength;
         if (bs.rev < 0x2A) {
-            int x;
-            Hmx::Color c;
-            bs >> x;
-            bs >> c;
+            int unusedInt;
+            Hmx::Color unusedColor;
+            bs >> unusedInt;
+            bs >> unusedColor;
         }
         bs >> mNormDetailMap;
         if (bs.rev < 0x2A) {
@@ -609,18 +606,18 @@ void RndMat::LoadOld(BinStreamRev &bs) {
         if (bs.rev > 0x2C) {
             bs >> mPointLights;
         } else {
-            int x;
-            bs >> x;
-            mPointLights = x == 1;
+            int pointLightsValue;
+            bs >> pointLightsValue;
+            mPointLights = pointLightsValue == 1;
         }
         if (bs.rev < 0x3F) {
-            bool b150;
-            bs >> b150;
+            bool unusedValue;
+            bs >> unusedValue;
         }
         bs >> mFog >> mFadeout;
         if (bs.rev > 0x2B && bs.rev < 0x2E) {
-            bool b150;
-            bs >> b150;
+            bool unusedValue;
+            bs >> unusedValue;
         }
         if (bs.rev > 0x2E) {
             bs >> mColorAdjust;
@@ -632,8 +629,8 @@ void RndMat::LoadOld(BinStreamRev &bs) {
         if (bs.rev >= 0x3A) {
             bs >> mRimLightUnder;
         } else {
-            bool b150;
-            bs >> b150;
+            bool unusedValue;
+            bs >> unusedValue;
             float red = mRimRGB.red * 2.857143f;
             float green = mRimRGB.green * 2.857143f;
             float blue = mRimRGB.blue * 2.857143f;
@@ -649,9 +646,9 @@ void RndMat::LoadOld(BinStreamRev &bs) {
         bs >> mScreenAligned;
     }
     if (bs.rev > 0x31 && bs.rev < 0x33) {
-        bool b150;
-        bs >> b150;
-        if (b150) {
+        bool isSkinned;
+        bs >> isSkinned;
+        if (isSkinned) {
             mShaderVariation = kShaderVariationSkin;
         }
     }
@@ -662,15 +659,15 @@ void RndMat::LoadOld(BinStreamRev &bs) {
     if (bs.rev > 0x33 && bs.rev < 0x44) {
         std::vector<Hmx::Color> colors;
         if (bs.rev < 0x35) {
-            bool x;
-            bs >> x;
+            bool unusedBool;
+            bs >> unusedBool;
         } else {
-            int x;
-            bs >> x;
+            int unusedInt;
+            bs >> unusedInt;
         }
         if (bs.rev > 0x34 && bs.rev < 0x3C) {
-            Hmx::Color c;
-            bs >> c;
+            Hmx::Color unusedColor;
+            bs >> unusedColor;
         }
         if (bs.rev >= 0x3C) {
             bs >> colors;
@@ -681,13 +678,13 @@ void RndMat::LoadOld(BinStreamRev &bs) {
         bs >> obj;
     }
     if (bs.rev > 0x36 && bs.rev < 0x3F) {
-        bool b150;
-        bs >> b150;
-        mPerfSettings.mPS3ForceTrilinear = b150;
+        bool forceTrilinear;
+        bs >> forceTrilinear;
+        mPerfSettings.mPS3ForceTrilinear = forceTrilinear;
     }
     if (bs.rev > 0x37 && bs.rev < 0x39) {
-        int x, y;
-        bs >> x >> y;
+        int unusedX, unusedY;
+        bs >> unusedX >> unusedY;
     }
     if (bs.rev > 0x3E) {
         mPerfSettings.LoadOld(bs);

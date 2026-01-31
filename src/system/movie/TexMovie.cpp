@@ -95,7 +95,7 @@ void TexMovie::UpdatePreClearState() {
 }
 
 void TexMovie::Poll() {
-    if (unk5f == false) {
+    if (!unk5f) {
         if (mShowing) {
             mMovie.SetPaused(false);
             if (mTex && !mMovie.Poll()) {
@@ -110,8 +110,7 @@ void TexMovie::Poll() {
 void TexMovie::Enter() {
     unk5d = true;
     RndPollable::Enter();
-    bool b = (mTex && mTex->Width() && mTex->Height());
-    if (b) {
+    if (mTex && mTex->Width() && mTex->Height()) {
         mTex->MakeDrawTarget();
         Hmx::Rect r(0, 0, 1, 1);
         Hmx::Color c(0, 0, 0, 1);
@@ -149,9 +148,7 @@ void TexMovie::Reset() {
 bool TexMovie::IsEmpty() const { return sRoot.empty(); }
 
 void TexMovie::DrawToTexture() {
-    bool b = (mTex != nullptr && mTex->Width() && mTex->Height());
-
-    if (b) {
+    if (mTex != nullptr && mTex->Width() && mTex->Height()) {
         mTex->MakeDrawTarget();
         mMovie.Draw();
         mTex->FinishDrawTarget();
@@ -162,7 +159,7 @@ void TexMovie::DrawToTexture() {
 void TexMovie::SetFile(FilePath const &fp) {
     mMovie.End();
     sRoot = fp;
-    DoBeginMovieFromFile(0, kLoadBack);
+    DoBeginMovieFromFile(nullptr, kLoadBack);
 }
 
 void TexMovie::DoBeginMovieFromFile(BinStream *stream, LoaderPos lp) {
@@ -190,9 +187,8 @@ void TexMovie::DoBeginMovieFromFile(BinStream *stream, LoaderPos lp) {
 
 DataNode TexMovie::OnPlayMovie(DataArray *d) {
     if (d->Int(2) != 0) {
-        bool b = mMovie.IsLoading(); // ok hmx
-        if (!b && !mMovie.IsOpen())
-            DoBeginMovieFromFile(0, kLoadFront);
+        if (!mMovie.IsLoading() && !mMovie.IsOpen())
+            DoBeginMovieFromFile(nullptr, kLoadFront);
     } else {
         mMovie.End();
     }

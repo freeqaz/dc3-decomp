@@ -8,7 +8,7 @@ BinStream &operator<<(BinStream &bs, const CharBone::WeightContext &ctx) {
     return bs;
 }
 
-BinStreamRev &operator>>(BinStreamRev &bs, CharBone::WeightContext &ctx) {
+BinStream &operator>>(BinStream &bs, CharBone::WeightContext &ctx) {
     bs >> ctx.mContext;
     bs >> ctx.mWeight;
     return bs;
@@ -84,24 +84,22 @@ BEGIN_LOADS(CharBone)
         d >> val;
         mScaleContext = (int)val;
     }
-    int rot_val;
-    d >> rot_val;
+    d >> (int&)mRotation;
     if (d.rev < 5) {
         int dummy;
         d >> dummy;
     }
-    mRotation = (CharBones::Type)rot_val;
     if (d.rev < 2) {
         mScaleContext = 0;
-        mRotation = (CharBones::Type)(rot_val + 1);
+        mRotation = (CharBones::Type)((int)mRotation + 1);
     }
-    if ((d.rev < 5) && (rot_val > 6)) {
+    if ((d.rev < 5) && ((int)mRotation > 6)) {
         mRotation = (CharBones::Type)6;
     }
     if (d.rev > 6) {
         d >> mRotationContext;
     } else {
-        mRotationContext = rot_val - 6;
+        mRotationContext = (int)mRotation - 6;
     }
     if ((d.rev > 2) && (d.rev < 8)) {
         int dummy;
@@ -119,21 +117,19 @@ BEGIN_LOADS(CharBone)
         if (mScaleContext != 0) {
             mScaleContext = val;
         }
-        if (mRotationContext != 0) {
-            mRotationContext = val;
+        if (mRotationContext == 0) {
+            return;
         }
-    } else {
-        if (d.rev > 7) {
-            d >> mWeights;
-        }
-        if (d.rev > 8) {
-            d >> mTrans;
-        }
-        if (d.rev > 9) {
-            bool val;
-            d >> val;
-            mBakeOutAsTopLevel = val;
-        }
+        mRotationContext = val;
+    }
+    if (d.rev > 7) {
+        d >> mWeights;
+    }
+    if (d.rev > 8) {
+        d >> mTrans;
+    }
+    if (d.rev > 9) {
+        d >> mBakeOutAsTopLevel;
     }
 END_LOADS
 

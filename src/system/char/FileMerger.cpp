@@ -46,7 +46,7 @@ protected:
     Loader::Callback *mCallback; // 0x18
 };
 
-void FileMerger::Merger::Clear(bool b1) {
+void FileMerger::Merger::Clear(bool shouldDraw) {
     mLoaded.Set(FilePath::Root().c_str(), "");
     Hmx::Object *owner = mLoadedObjects.Owner();
     if (owner != sFmDeleting) {
@@ -68,7 +68,8 @@ void FileMerger::Merger::Clear(bool b1) {
     } else {
         mLoadedSubdirs.clear();
     }
-    if (b1 && !TheRnd.GetUnk1b4()) {
+    // Finish any pending drawing operations
+    if (shouldDraw && !TheRnd.GetUnk1b4()) {
         TheRnd.BeginDrawing();
         TheRnd.EndDrawing();
     }
@@ -315,8 +316,8 @@ FileMerger::Merger *FileMerger::InMerger(Hmx::Object *o) {
 void FileMerger::DeleteCurLoader() {
     if (mCurLoader) {
         DirLoader *d = dynamic_cast<DirLoader *>(mCurLoader);
-        // if (d)
-        //     d->unk99 = true; // TODO: needs accessor
+        if (d)
+            d->SetUnk99(true);
         delete mCurLoader;
     }
 }
@@ -377,6 +378,7 @@ void FileMerger::LaunchNextLoader() {
     MILO_ASSERT(!mFilesPending.empty(), 0x182);
     MILO_ASSERT(!mCurLoader, 0x183);
     int pos;
+    // Determine loader position based on current loader state
     if (Dir()->Loader() && !Dir()->Loader()->IsLoaded()) {
         if (Dir()->Loader()->GetPos() != kLoadStayBack) {
             if (Dir()->Loader()->GetPos() != kLoadFrontStayBack)
@@ -387,6 +389,7 @@ void FileMerger::LaunchNextLoader() {
         pos = 0;
     }
 
+// Create the next loader with the determined position
 next:
     FilePath &fp = mFilesPending.front()->loading;
     MemHeapTracker tmp(mHeap);

@@ -19,13 +19,12 @@ float RndAnimFilter::Scale() {
 float RndAnimFilter::StartFrame() {
     if (!mAnim)
         return 0.0f;
-    else {
-        float denom = Scale();
-        if (denom == 0.0f)
-            denom = 1.0f;
 
-        return (mStart - FrameOffset()) / denom;
-    }
+    float denom = Scale();
+    if (denom == 0.0f)
+        denom = 1.0f;
+
+    return (mStart - FrameOffset()) / denom;
 }
 
 float RndAnimFilter::EndFrame() {
@@ -46,9 +45,8 @@ float RndAnimFilter::EndFrame() {
     frameOff += mOffset;
 
     float ret = (mEnd - frameOff) / denom;
-    if (mType == kShuttle) {
+    if (mType == kShuttle)
         ret *= 2.0f;
-    }
     return ret;
 }
 
@@ -127,7 +125,7 @@ void RndAnimFilter::Load(BinStream &bs) {
     } else {
         bool b;
         d >> b;
-        mType = (RndAnimFilter::Type)(b);
+        mType = static_cast<RndAnimFilter::Type>(b);
     }
     if (d.rev > 1) {
         bs >> mSnap >> mJitter;

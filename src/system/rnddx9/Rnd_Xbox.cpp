@@ -47,21 +47,15 @@
 void CreateBackBuffers(int, int, D3DMULTISAMPLE_TYPE, unsigned int &, unsigned int &, D3DSurface *&, D3DSurface *&);
 
 DxRnd::DxRnd()
-    : unk220(0), mD3DDevice(nullptr), unk22c(0), mDeviceType(D3DDEVTYPE_HAL),
-      unk_0x301(1), unk360(0), mAsyncSwapCurrent(0), mPerfCounterStart(0),
-      mPerfCounterEnd(0), mGPUTimer(0), unk370(0), unk374(0), mCreatedPerfCounters(0),
-      unk3a4(0), unk3f4(0), unk3f7(0), unk404(0), unk408(0) {
-    unk220 = 1;
-    mFrontBuffers[0] = 0;
-    mFrontBuffers[1] = 0;
-    mBackBuffer = 0;
-    unk388 = 0;
-    unk384 = 0;
-    unk38c = 0;
-    unk37c = 0;
-    unk35c = 0;
-    mNumTiles = 0;
-    unk34d = true;
+    : unk220(1), mD3DDevice(nullptr), unk22c(0), mDeviceType(D3DDEVTYPE_HAL),
+      unk_0x301(1), unk360(0), mAsyncSwapCurrent(0), mPerfCounterStart(nullptr),
+      mPerfCounterEnd(nullptr), mGPUTimer(nullptr), unk370(0), unk374(0),
+      mCreatedPerfCounters(false), unk3a4(false), unk3f4(false), unk3f7(false),
+      unk404(false), unk408(0), mBackBuffer(nullptr), unk388(nullptr),
+      unk384(nullptr), unk38c(nullptr), unk37c(0), unk35c(0), mNumTiles(0),
+      unk34d(true) {
+    mFrontBuffers[0] = nullptr;
+    mFrontBuffers[1] = nullptr;
 }
 
 DxRnd::~DxRnd() {
@@ -208,29 +202,31 @@ void DxRnd::DoPostProcess() {
 }
 
 void DxRnd::Suspend() {
-    if (mD3DDevice && !mAsyncSwapCurrent) {
-        MILO_ASSERT(!mDrawing, 0x695);
-        if (!unk3f4) {
-            static Timer *cpuTimer = AutoTimer::GetTimer("cpu");
-            if (unk3f5 && cpuTimer->SplitMs() > 30.0f) {
-                MILO_LOG("GLITCH (pre-suspend): %i ms\n", (int)cpuTimer->SplitMs());
-            }
-            unk360 = false;
-            D3DDevice_Suspend(mD3DDevice);
-        }
-        unk3f4 = true;
+    if (!mD3DDevice || mAsyncSwapCurrent) {
+        return;
     }
+    MILO_ASSERT(!mDrawing, 0x695);
+    if (!unk3f4) {
+        static Timer *cpuTimer = AutoTimer::GetTimer("cpu");
+        if (unk3f5 && cpuTimer->SplitMs() > 30.0f) {
+            MILO_LOG("GLITCH (pre-suspend): %i ms\n", (int)cpuTimer->SplitMs());
+        }
+        unk360 = false;
+        D3DDevice_Suspend(mD3DDevice);
+    }
+    unk3f4 = true;
 }
 
 void DxRnd::Resume() {
-    if ((int)mD3DDevice) {
-        if (unk3f4) {
-            MILO_ASSERT(mAsyncSwapCurrent == false, 0x6AE);
-            D3DDevice_Resume(mD3DDevice);
-            unk360 = false;
-        }
-        unk3f4 = false;
+    if (!mD3DDevice) {
+        return;
     }
+    if (unk3f4) {
+        MILO_ASSERT(mAsyncSwapCurrent == false, 0x6AE);
+        D3DDevice_Resume(mD3DDevice);
+        unk360 = false;
+    }
+    unk3f4 = false;
 }
 
 D3DSurface *DxRnd::BackBuffer() const {
@@ -246,12 +242,11 @@ const char *DxRnd::Error(long code) { return MakeString("code %d", code); }
 void DxRnd::Present() {
     unk35c = (unk35c - 1) & 1;
     if (mAsyncSwapCurrent) {
-        static D3DSWAP_STATUS sSwapStatus;
-        while (D3DDevice_QuerySwapStatus(mD3DDevice, &sSwapStatus),
-               sSwapStatus.EnqueuedCount != 0) {
+        static D3DSWAP_STATUS swapStatus;
+        while (D3DDevice_QuerySwapStatus(mD3DDevice, &swapStatus),
+               swapStatus.EnqueuedCount != 0) {
             Sleep(0);
         }
-
     } else {
         D3DDevice_SynchronizeToPresentationInterval(mD3DDevice);
     }
@@ -293,8 +288,6 @@ void DxRnd::SetupGamma() {
 
 void DxRnd::SetDefaultRenderStates() {
     D3DCAPS9 caps;
-    unsigned int max_stages;
-    unsigned int i;
     memset(&caps, 0, sizeof(D3DCAPS9));
     GetDeviceCaps(&caps);
     D3DDevice_SetRenderState_AlphaRef(TheDxRnd.Device(), 0);
@@ -306,12 +299,10 @@ void DxRnd::SetDefaultRenderStates() {
     D3DDevice_SetRenderState_SrcBlendAlpha(TheDxRnd.Device(), 1);
     D3DDevice_SetRenderState_DestBlendAlpha(TheDxRnd.Device(), 1);
     D3DDevice_SetRenderState_BlendOpAlpha(TheDxRnd.Device(), 3);
-    max_stages = caps.MaxTextureBlendStages;
-    i = 0;
-    while (i < max_stages) {
+    unsigned int max_stages = caps.MaxTextureBlendStages;
+    for (unsigned int i = 0; i < max_stages; i++) {
         D3DDevice_SetSamplerState_MinFilter(TheDxRnd.Device(), i, 1);
         D3DDevice_SetSamplerState_MagFilter(TheDxRnd.Device(), i, 1);
-        i++;
     }
     D3DDevice_SetRenderState_PresentImmediateThreshold(TheDxRnd.Device(), 100);
 }
@@ -320,11 +311,7 @@ void DxRnd::BeginTiling(const Hmx::Color &c, float f, unsigned int ui) {
     if (mNumTiles == 0) {
         D3DDevice_Clear(mD3DDevice, 0, nullptr, 0x31, MakeColor(c), f, ui, 0);
     } else {
-        XMVECTOR v;
-        v.v[0] = c.red;
-        v.v[1] = c.green;
-        v.v[2] = c.blue;
-        v.v[3] = c.alpha;
+        XMVECTOR v = {c.red, c.green, c.blue, c.alpha};
         D3DDevice_BeginTiling(mD3DDevice, 0, mNumTiles, &unk3b4, &v, f, ui);
         unk34c = true;
     }
@@ -371,32 +358,28 @@ void DxRnd::PerfCountersStop() {
     D3DPERFCOUNTER_VALUES endValues;
     code = D3DPerfCounters_GetValues(mPerfCounterEnd, &endValues, 0, nullptr);
     DX_ASSERT_CODE(code, 0x26A);
-    ULARGE_INTEGER *startLargeIntegers = (ULARGE_INTEGER *)&startValues;
-    ULARGE_INTEGER *endLargeIntegers = (ULARGE_INTEGER *)&endValues;
-    for (int i = 0; i < (sizeof(D3DPERFCOUNTER_VALUES) / sizeof(ULARGE_INTEGER)); i++) {
-        endLargeIntegers[i].QuadPart =
-            endLargeIntegers[i].QuadPart - startLargeIntegers[i].QuadPart;
+    auto *startLargeIntegers = (ULARGE_INTEGER *)&startValues;
+    auto *endLargeIntegers = (ULARGE_INTEGER *)&endValues;
+    for (size_t i = 0; i < sizeof(D3DPERFCOUNTER_VALUES) / sizeof(ULARGE_INTEGER); i++) {
+        endLargeIntegers[i].QuadPart -= startLargeIntegers[i].QuadPart;
     }
     unk370 = endLargeIntegers[1].QuadPart * 2e-06f;
     unk374 = endLargeIntegers[2].QuadPart * 2e-06f;
 }
 
-void DxRnd::EndTiling(D3DBaseTexture *tex, int i2) {
-    int l2 = 0;
-    if (tex && i2) {
-        l2 = (i2 & 0x3F) << 0x1A;
+void DxRnd::EndTiling(D3DBaseTexture *tex, int flags) {
+    int tileMode = 0;
+    if (tex && flags) {
+        tileMode = (flags & 0x3F) << 0x1A;
     }
     if (unk34c) {
         MILO_ASSERT(mNumTiles > 0, 0x480);
-        HRESULT hr =
-            D3DDevice_EndTiling(mD3DDevice, l2, nullptr, tex, nullptr, 0, 0, nullptr);
+        HRESULT hr = D3DDevice_EndTiling(mD3DDevice, tileMode, nullptr, tex, nullptr, 0, 0, nullptr);
         DX_ASSERT_CODE(hr, 0x481);
         unk34c = false;
     } else {
         MILO_ASSERT(mNumTiles == 0, 0x486);
-        D3DDevice_Resolve(
-            mD3DDevice, l2, nullptr, tex, nullptr, 0, 0, nullptr, 0, 0, nullptr
-        );
+        D3DDevice_Resolve(mD3DDevice, tileMode, nullptr, tex, nullptr, 0, 0, nullptr, 0, 0, nullptr);
     }
 }
 
@@ -406,11 +389,7 @@ void DxRnd::SavePreBuffer() {
         dev, 0x14, nullptr, mFrontBufferDepth, nullptr, 0, 0, nullptr, 1, 0, nullptr
     );
 
-    XMVECTOR vector;
-    vector.v[0] = mClearColor.red;
-    vector.v[1] = mClearColor.green;
-    vector.v[2] = mClearColor.blue;
-    vector.v[3] = 0;
+    XMVECTOR vector = {mClearColor.red, mClearColor.green, mClearColor.blue, 0.f};
     D3DDevice_Resolve(
         dev, 0x300, nullptr, mPreProcessBuffer, nullptr, 0, 0, &vector, 0, 0, nullptr
     );
@@ -423,69 +402,56 @@ void DxRnd::SavePostBuffer() {
 }
 
 void DxRnd::SetShaderRegisterAlloc(RegisterAlloc s) {
-    MILO_ASSERT(s >=0 && s < kNumRegAlloc, 0x6BA);
-    if (mRegAlloc != s) {
-        mRegAlloc = s;
-        switch (s) {
-        case 0:
-            D3DDevice_SetShaderGPRAllocation(mD3DDevice, 0, 0, 0);
-            break;
-        case 1:
-            D3DDevice_SetShaderGPRAllocation(
-                mD3DDevice, 0, mDefaultVSRegAlloc, mDefaultPSRegAlloc
-            );
-            break;
-        case 2:
-            D3DDevice_SetShaderGPRAllocation(mD3DDevice, 0, 0x10, 0x70);
-            break;
-        case 3:
-            D3DDevice_SetShaderGPRAllocation(mD3DDevice, 0, 0x10, 0x70);
-            break;
-        default:
-            MILO_NOTIFY("Invalid Shader Register Allocation");
-            break;
-        }
+    MILO_ASSERT(s >= 0 && s < kNumRegAlloc, 0x6BA);
+    if (mRegAlloc == s) {
+        return;
+    }
+    mRegAlloc = s;
+    switch (s) {
+    case 0:
+        D3DDevice_SetShaderGPRAllocation(mD3DDevice, 0, 0, 0);
+        break;
+    case 1:
+        D3DDevice_SetShaderGPRAllocation(mD3DDevice, 0, mDefaultVSRegAlloc, mDefaultPSRegAlloc);
+        break;
+    case 2:
+    case 3:
+        D3DDevice_SetShaderGPRAllocation(mD3DDevice, 0, 0x10, 0x70);
+        break;
+    default:
+        MILO_NOTIFY("Invalid Shader Register Allocation");
+        break;
     }
 }
 
-RndTex *DxRnd::GetCurrentFrameTex(bool b1) {
-    if (!unk3a4) {
-        if (b1) {
-            D3DDevice_Resolve(
-                mD3DDevice,
-                0,
-                nullptr,
-                mPreProcessBuffer,
-                nullptr,
-                0,
-                0,
-                nullptr,
-                0,
-                0,
-                nullptr
-            );
-        }
-        return PreProcessTexture();
+RndTex *DxRnd::GetCurrentFrameTex(bool resolvePreProcess) {
+    if (unk3a4) {
+        return PostProcessTexture();
     }
-    return PostProcessTexture();
+    if (resolvePreProcess) {
+        D3DDevice_Resolve(
+            mD3DDevice, 0, nullptr, mPreProcessBuffer, nullptr, 0, 0, nullptr, 0, 0, nullptr
+        );
+    }
+    return PreProcessTexture();
 }
 
 bool DxRnd::CanModal(Debug::ModalType t) {
-    if (unk34c) {
-        if (t == Debug::kModalFail) {
-            EndTiling(FrontBuffer(), 0);
-        } else {
-            return false;
-        }
+    if (!unk34c) {
+        return true;
     }
-    return true;
+    if (t == Debug::kModalFail) {
+        EndTiling(FrontBuffer(), 0);
+        return true;
+    }
+    return false;
 }
 
 void DxRnd::ModalDraw(Debug::ModalType t, const char *cc) {
-    bool d3f4 = unk3f4;
+    bool wasSuspended = unk3f4;
     Resume();
-    D3DSurface *renderTarget = D3DDevice_GetRenderTarget(mD3DDevice, 0);
-    D3DSurface *stencilSurface = D3DDevice_GetDepthStencilSurface(mD3DDevice);
+    D3DSurface *savedRenderTarget = D3DDevice_GetRenderTarget(mD3DDevice, 0);
+    D3DSurface *savedStencilSurface = D3DDevice_GetDepthStencilSurface(mD3DDevice);
     D3DDevice_SetRenderTarget_External(mD3DDevice, 0, mBackBuffer);
     D3DDevice_SetDepthStencilSurface(mD3DDevice, 0);
     Hmx::Color color(0, 0.1, 0.5, 0);
@@ -505,9 +471,9 @@ void DxRnd::ModalDraw(Debug::ModalType t, const char *cc) {
         D3DDevice_SetShaderGPRAllocation(mD3DDevice, 0, 0, 0);
     }
     Present();
-    D3DDevice_SetRenderTarget_External(mD3DDevice, 0, renderTarget);
-    D3DDevice_SetDepthStencilSurface(mD3DDevice, stencilSurface);
-    if (d3f4) {
+    D3DDevice_SetRenderTarget_External(mD3DDevice, 0, savedRenderTarget);
+    D3DDevice_SetDepthStencilSurface(mD3DDevice, savedStencilSurface);
+    if (wasSuspended) {
         Suspend();
     }
 }

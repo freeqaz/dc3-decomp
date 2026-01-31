@@ -199,44 +199,21 @@ void RndCam::SetFrustum(float near, float far, float yfov, float f4) {
     UpdateLocal();
 }
 
-// float __thiscall RndCam::WorldToScreen(RndCam *this,Vector3 *param_1,Vector2 *param_2)
-
-// {
-
-//   Multiply(param_1,this + 0x180,&local_30);
-//   if (local_30.z == 0.0) {
-//     param_2->x = local_30.x;
-//     param_2->y = local_30.y;
-//   }
-//   else {
-//     param_2->x = local_30.x * (1.0 / local_30.z);
-//     param_2->y = local_30.y * (1.0 / local_30.z);
-//   }
-//   fVar3 = (param_2->x + 1.0) * 0.5;
-//   param_2->x = fVar3;
-//   fVar4 = (param_2->y + 1.0) * 0.5;
-//   param_2->y = fVar4;
-
-//   param_2->y = *(this + 0x2e4) * fVar4 + *(this + 0x2dc);
-//   param_2->x = *(this + 0x2e0) * fVar3 + *(this + 0x2d8);
-//   return local_30.z;
-// }
-
 float RndCam::WorldToScreen(const Vector3 &w, Vector2 &s) const {
-    Vector3 v18;
-    Multiply(w, mWorldProjectXfm, v18);
-    if (v18.z) {
-        float scale = 1.0f / v18.z;
-        s.x = v18.x * scale;
-        s.y = v18.y * scale;
+    Vector3 projectedVec;
+    Multiply(w, mWorldProjectXfm, projectedVec);
+    if (projectedVec.z) {
+        float scale = 1.0f / projectedVec.z;
+        s.x = projectedVec.x * scale;
+        s.y = projectedVec.y * scale;
     } else {
-        s.x = v18.x;
-        s.y = v18.y;
+        s.x = projectedVec.x;
+        s.y = projectedVec.y;
     }
     s.x = (s.x + 1.0f) / 2.0f;
     s.y = (s.y + 1.0f) / 2.0f;
     s.Set(s.x * mScreenRect.w + mScreenRect.x, s.y * mScreenRect.h + mScreenRect.y);
-    return v18.z;
+    return projectedVec.z;
 }
 
 void RndCam::ScreenToWorld(const Vector2 &v2, float f, Vector3 &vout) const {

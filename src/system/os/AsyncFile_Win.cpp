@@ -1,5 +1,4 @@
 #include "os/AsyncFile_Win.h"
-#include "File.h"
 #include "os/ContentMgr.h"
 #include "os/File.h"
 #include "os/PlatformMgr.h"
@@ -12,8 +11,8 @@ void ReadError(const char *cc) {
     String str;
     if (FileIsLocal(cc) && TheContentMgr.Contains(cc, str)) {
         MILO_LOG("ReadError in package '%s', err = 0x%08x\n", str, err);
-        int b3 = (err == ERROR_FILE_CORRUPT) || (err == ERROR_DISK_CORRUPT);
-        TheContentMgr.OnReadFailure(b3, str.c_str());
+        int isCorruptError = (err == ERROR_FILE_CORRUPT) || (err == ERROR_DISK_CORRUPT);
+        TheContentMgr.OnReadFailure(isCorruptError, str.c_str());
     } else {
         if (!UsingCD())
             return;
@@ -33,10 +32,10 @@ bool AsyncFileWin::Truncate(int distanceToMove) {
 }
 
 void AsyncFileWin::_OpenAsync() {
-    unsigned int uVar1;
-    int iVar4;
-    unsigned int uVar3;
-    int iVar5;
+    unsigned int mode;
+    int modeCheck;
+    unsigned int openError;
+    int fd;
     DWORD dwDesiredAccess;
     DWORD dwCreationDisposition;
     DWORD err;
@@ -46,18 +45,18 @@ void AsyncFileWin::_OpenAsync() {
         SetLastError(0x20000002);
     } else {
         unk34 = 0x800;
-        uVar1 = mMode;
-        iVar4 = (uVar1 & 0x7fffe) & (uVar1 & 0x40002);
-        if (iVar4 == 0) {
-            iVar5 =
-                _open(mFilename.c_str(), (uVar1 & 0xfffffffd) | 0x8000, 0x180);
-            unk3c = iVar5;
-            uVar3 = ((unsigned int)iVar5) >> 31;
-            mFail = uVar3;
-            if (uVar3 != 0)
+        mode = mMode;
+        modeCheck = (mode & 0x7fffe) & (mode & 0x40002);
+        if (modeCheck == 0) {
+            fd =
+                _open(mFilename.c_str(), (mode & 0xfffffffd) | 0x8000, 0x180);
+            unk3c = fd;
+            openError = ((unsigned int)fd) >> 31;
+            mFail = openError;
+            if (openError != 0)
                 return;
-            mSize = _lseeki64(iVar5, 0, 2);
-            if (!(uVar1 & 8)) {
+            mSize = _lseeki64(fd, 0, 2);
+            if (!(mode & 8)) {
                 _lseek((int)unk3c, 0, 0);
             }
             return;
@@ -95,7 +94,6 @@ void AsyncFileWin::_OpenAsync() {
         }
     }
     mFail = true;
-    return;
 }
 
 bool AsyncFileWin::_WriteDone() {
@@ -104,8 +102,8 @@ bool AsyncFileWin::_WriteDone() {
     } else {
         if (mOverlapped.Internal != 0x103) {
             mWriteInProgress = false;
-            DWORD bytes[4];
-            if (GetOverlappedResult(mFile, &mOverlapped, bytes, false)) {
+            DWORD bytesWritten;
+            if (GetOverlappedResult(mFile, &mOverlapped, &bytesWritten, false)) {
                 return true;
             }
             mFail = true;
@@ -121,10 +119,12 @@ void AsyncFileWin::_SeekToTell() {
                 mFail = true;
             }
         } else {
+            // Wait for pending write operation to complete
             while (!_WriteDone())
                 ;
         }
     } else {
+        // Wait for pending read operation to complete
         while (!_ReadDone())
             ;
     }
@@ -134,6 +134,7 @@ void AsyncFileWin::_Close() {
     if (mMode & FILE_OPEN_READ) {
         if (mFile == INVALID_HANDLE_VALUE)
             return;
+        // Wait for pending read operation to complete
         while (!_ReadDone())
             ;
     } else {
@@ -142,6 +143,7 @@ void AsyncFileWin::_Close() {
         }
         if (mFile == INVALID_HANDLE_VALUE)
             return;
+        // Wait for pending write operation to complete
         while (!_WriteDone())
             ;
     }

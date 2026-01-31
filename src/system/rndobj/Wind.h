@@ -1,5 +1,4 @@
 #pragma once
-#include "obj/Object.h"
 #include "math/Vec.h"
 #include "obj/Object.h"
 #include "rndobj/Highlight.h"
@@ -25,11 +24,7 @@ public:
     void SetWindOwner(RndWind *wind);
     void Zero();
     void SetDefaults();
-    // float GetWind(float);
-    // void GetWind(const Vector3 &v, float f, Vector3 &v2) {
-    //     return mWindOwner->SelfGetWind(v, f, v2);
-    // }
-    // void SelfGetWind(const Vector3 &, float, Vector3 &);
+
 protected:
     RndWind();
     void SyncLoops();

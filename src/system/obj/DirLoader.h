@@ -32,6 +32,7 @@ public:
     const char *ProxyName() const { return mProxyName; }
     ObjectDir *ProxyDir() const { return mProxyDir; }
     void SetDeleteSelf(bool set) { mDeleteSelf = set; }
+    void SetUnk99(bool b) { unk99 = b; }
 
     POOL_OVERLOAD(DirLoader, 0x2A);
 

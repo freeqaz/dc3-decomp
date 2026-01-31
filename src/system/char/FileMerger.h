@@ -63,9 +63,9 @@ public:
                 return mDir.Owner()->Dir();
         }
 
-        // gross and convoluted way to basically check if this object is in mLoadedObjects
+        // Check if this object is in mLoadedObjects
         bool IsObjectLoaded(Hmx::Object *obj) {
-            return !mLoadedObjects.find(obj) == false;
+            return mLoadedObjects.find(obj) != mLoadedObjects.end();
         }
 
         void SetSelected(const FilePath &fp, bool b) {

@@ -30,6 +30,7 @@
 #include "hamobj/HamPlayerData.h"
 #include "hamobj/HamRibbon.h"
 #include "hamobj/HamSkeletonConverter.h"
+#include "hamobj/HamSong.h"
 #include "hamobj/HamVisDir.h"
 #include "hamobj/HamWardrobe.h"
 #include "hamobj/TransConstraint.h"
@@ -498,25 +499,22 @@ void HamDirector::Initialize() {
 RndPropAnim *HamDirector::SongAnim(int playerIndex) {
     if (!mSongAnims[kDifficultyEasy]) {
         return nullptr;
-    } else {
-        MILO_ASSERT((0) <= (playerIndex) && (playerIndex) < (2), 0x620);
-        if (TheHamProvider->Property("merge_moves", true)->Int()) {
-            return playerIndex == 0 ? mPlayer1RoutineBuilderAnim
-                                    : mPlayer2RoutineBuilderAnim;
-        } else {
-            HamPlayerData *hpd = TheGameData->Player(playerIndex);
-            return SongAnimByDifficulty(LegacyDifficulty(hpd->GetDifficulty()));
-        }
     }
+    MILO_ASSERT((0) <= (playerIndex) && (playerIndex) < (2), 0x620);
+    if (TheHamProvider->Property("merge_moves", true)->Int()) {
+        return playerIndex == 0 ? mPlayer1RoutineBuilderAnim
+                                : mPlayer2RoutineBuilderAnim;
+    }
+    HamPlayerData *hpd = TheGameData->Player(playerIndex);
+    return SongAnimByDifficulty(LegacyDifficulty(hpd->GetDifficulty()));
 }
 
 PropKeys *HamDirector::GetPropKeys(Difficulty d, Symbol s) {
     RndPropAnim *anim = GetPropAnim(d, "song.anim", false);
     if (!anim) {
         return nullptr;
-    } else {
-        return anim->GetKeys(this, DataArrayPtr(s));
     }
+    return anim->GetKeys(this, DataArrayPtr(s));
 }
 
 void HamDirector::VenueEnter(WorldDir *dir) {
@@ -1628,7 +1626,7 @@ DataNode HamDirector::OnBlendInFaceClip(DataArray *a) {
 
 void HamDirector::InitOffline() {
     if (!mOfflineSong) {
-        // HamSong::mPreferStreaming = true;
+        HamSong::mPreferStreaming = true;
         mOfflineSong = dynamic_cast<Song *>(Hmx::Object::NewObject("Song"));
         MILO_ASSERT(mOfflineSong, 0x114B);
         DataVariable("tool_song") = mOfflineSong;
@@ -2122,14 +2120,14 @@ void HamDirector::Reteleport() {
     static Symbol practice("practice");
     RndPropAnim *anim =
         GetPropAnim(TheGameData->Player(0)->GetDifficulty(), "song.anim", false);
-    float startBeat = 0.0f;
     PropKeys *propKeys = anim->GetKeys(this, DataArrayPtr(practice));
     int frameIdx = 0;
-    CharClip *clip = 0;
+    CharClip *clip = nullptr;
+    float endBeat;
     if (propKeys) {
-        float frameTime = BeatToSeconds(beat) * 32.0f;
+        float frameTime = BeatToSeconds(beat) * 30.0f;
         frameIdx = propKeys->AsSymbolKeys()->AtFrame(frameTime, s);
-        clip = GetClipStartAndEndBeats(s, startBeat, beat, 0);
+        clip = GetClipStartAndEndBeats(s, endBeat, beat, 0);
     }
     Vector3 v = Vector3::ZeroVec();
     if (clip && frameIdx > 0) {

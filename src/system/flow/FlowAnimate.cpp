@@ -1,5 +1,4 @@
 #include "flow/FlowAnimate.h"
-#include "FlowAnimate.h"
 #include "flow/FlowNode.h"
 #include "rndobj/Anim.h"
 
@@ -12,12 +11,8 @@ FlowAnimate::FlowAnimate()
     mType = range;
 }
 
-FlowAnimate::~FlowAnimate() {
-    if (unk5c != nullptr) {
-    }
-    if (mAnim != nullptr) {
-    }
-}
+FlowAnimate::~FlowAnimate() {}
+
 
 BEGIN_HANDLERS(FlowAnimate)
     HANDLE_ACTION(on_anim_event, OnAnimEvent(_msg->Sym(2)))

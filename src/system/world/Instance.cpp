@@ -45,14 +45,12 @@ void WorldInstance::PostSave(BinStream &bs) { SyncDir(); }
 RndDrawable *WorldInstance::CollideShowing(const Segment &s, float &f, Plane &pl) {
     if (RndDir::CollideShowing(s, f, pl))
         return this;
-    else {
-        if (mSharedGroup) {
-            if (mSharedGroup->Collide(WorldXfm(), s, f, pl)) {
-                return this;
-            }
+    if (mSharedGroup) {
+        if (mSharedGroup->Collide(WorldXfm(), s, f, pl)) {
+            return this;
         }
-        return 0;
     }
+    return 0;
 }
 
 void WorldInstance::Poll() {
@@ -103,7 +101,7 @@ void WorldInstance::PreLoad(BinStream &bs) {
         DeleteObjects();
     LOAD_REVS(bs);
     ASSERT_REVS(3, 0);
-    if (0 < d.rev) {
+    if (d.rev > 0) {
         FilePath fp;
         bs >> fp;
         PreLoadInlined(fp, true, kInlineCachedShared);
@@ -139,7 +137,6 @@ void WorldInstance::LoadPersistentObjects(BinStreamRev &bs) {
             Symbol objClassName;
             bs >> objClassName;
             char objName[0x80];
-            // bs.ReadString(objName, 0x80);
 
             if (!Hmx::Object::RegisteredFactory(objClassName)) {
                 MILO_WARN("%s: Can't make %s", mStoredFile.c_str(), objClassName);
@@ -165,8 +162,6 @@ void WorldInstance::LoadPersistentObjects(BinStreamRev &bs) {
         }
         while (!objlist.empty()) {
             Hmx::Object *cur = objlist.front();
-            // cur->PreLoad(bs);
-            // cur->PostLoad(bs);
             objlist.pop_front();
         }
         if (mDir) {
@@ -183,8 +178,7 @@ void WorldInstance::DeleteTransientObjects() {
         DeleteObjects();
     } else {
         for (ObjDirItr<Hmx::Object> obj(this, false); obj != nullptr; ++obj) {
-            if (obj == this) {
-            } else {
+            if (obj != this) {
                 Hmx::Object *to = mDir->Find<Hmx::Object>(obj->Name(), true);
                 MILO_ASSERT(obj->ClassName() == to->ClassName(), 0x1CB);
                 const ObjRef &refs = obj->Refs();
