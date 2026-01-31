@@ -16,6 +16,7 @@ import argparse
 import asyncio
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -48,6 +49,7 @@ from orchestrator.database import (
     update_function_status,
     get_file_pair,
     query_file_pairs,
+    search_functions_by_name,
 )
 from orchestrator.rb3_pairing import get_rb3_source_for_unit, find_rb3_file
 from orchestrator.rb2_dwarf import RB2DwarfParser, DEFAULT_RB2_DUMP
@@ -467,6 +469,469 @@ class DecompMCPServer:
 
         return [TextContent(type="text", text=output)]
 
+    # ========================================================================
+    # Enrichment pipeline helpers for run_objdiff
+    # ========================================================================
+
+    # Regex for parsing PPC memory operands: rX, 0xOFF(rY) or rX, OFF(rY)
+    _MEM_ARG_RE = re.compile(r'r(\d+),\s*(-?0x[0-9a-fA-F]+|-?\d+)\(r(\d+)\)')
+    # Regex for parsing PPC immediate operands: rX, rY, IMM
+    _SHIFT_ARG_RE = re.compile(r'r(\d+),\s*r(\d+),\s*(\d+)')
+    # Memory opcodes that access struct fields
+    _MEM_OPCODES = frozenset([
+        'lwz', 'stw', 'lfs', 'stfs', 'lhz', 'sth', 'lbz', 'stb', 'lfd', 'stfd',
+        'lwzu', 'stwu', 'lfsu', 'stfsu', 'lha', 'lhau',
+    ])
+    # Shift/rotate opcodes
+    _SHIFT_OPCODES = frozenset(['slwi', 'srwi', 'slw', 'srw', 'rlwinm'])
+
+    @staticmethod
+    def _extract_class_from_demangled(demangled: str) -> str | None:
+        """Extract class name from demangled symbol like 'ClassName::Method(...)'."""
+        m = re.search(r'(\w+)::\w+\s*\(', demangled)
+        return m.group(1) if m else None
+
+    @staticmethod
+    def _parse_hex_or_int(s: str) -> int:
+        """Parse a string as hex (0x...) or decimal integer."""
+        s = s.strip()
+        if s.startswith(('0x', '0X', '-0x', '-0X')):
+            return int(s, 16)
+        return int(s)
+
+    def _resolve_offset_mismatches(self, data: dict) -> list[dict]:
+        """
+        Scan instruction diffs for memory offset mismatches and resolve
+        them to struct field names using StructDB.
+
+        Returns list of offset mismatch records with field names.
+        """
+        instructions = data.get("instructions") or data.get("mismatch_instructions") or []
+        demangled = data.get("demangled", "")
+        class_name = self._extract_class_from_demangled(demangled)
+
+        if not class_name and not instructions:
+            return []
+
+        struct_db_path = self.project_root / "struct_db.sqlite"
+        if not struct_db_path.exists():
+            return []
+
+        mismatches = []
+        try:
+            with StructDB(str(struct_db_path)) as db:
+                for instr in instructions:
+                    match_type = instr.get("match_type")
+                    if match_type != "diff_arg":
+                        continue
+
+                    target = instr.get("target", {})
+                    base = instr.get("base", {})
+                    opcode_t = target.get("opcode", "")
+                    opcode_b = base.get("opcode", "")
+
+                    # Both must be memory opcodes
+                    if opcode_t not in self._MEM_OPCODES or opcode_b not in self._MEM_OPCODES:
+                        continue
+
+                    args_t = target.get("args", "")
+                    args_b = base.get("args", "")
+                    m_t = self._MEM_ARG_RE.search(args_t)
+                    m_b = self._MEM_ARG_RE.search(args_b)
+
+                    if not m_t or not m_b:
+                        continue
+
+                    off_t = self._parse_hex_or_int(m_t.group(2))
+                    off_b = self._parse_hex_or_int(m_b.group(2))
+
+                    if off_t == off_b:
+                        continue  # Same offset, different register — not a struct mismatch
+
+                    # Resolve field names
+                    target_field = None
+                    base_field = None
+
+                    if class_name:
+                        result_t = db.lookup(class_name, off_t)
+                        result_b = db.lookup(class_name, off_b)
+                        if result_t:
+                            target_field = f"{result_t[0]}::{result_t[1]} ({result_t[2]})"
+                        if result_b:
+                            base_field = f"{result_b[0]}::{result_b[1]} ({result_b[2]})"
+
+                    entry = {
+                        "index": instr.get("index"),
+                        "opcode": opcode_t,
+                        "target_offset": f"0x{off_t:x}",
+                        "base_offset": f"0x{off_b:x}",
+                    }
+                    if target_field:
+                        entry["target_field"] = target_field
+                    if base_field:
+                        entry["base_field"] = base_field
+                    if target_field and base_field:
+                        entry["fix_hint"] = (
+                            f"Source accesses '{base_field.split('::')[-1].split(' (')[0]}' "
+                            f"but target accesses '{target_field.split('::')[-1].split(' (')[0]}' — wrong field?"
+                        )
+
+                    mismatches.append(entry)
+        except Exception:
+            pass  # Don't let struct DB errors break objdiff
+
+        return mismatches
+
+    @staticmethod
+    def _detect_stack_copy_ref(data: dict) -> list[dict]:
+        """
+        Detect pass-by-reference via stack copy pattern.
+
+        Target copies a member to stack then passes stack address,
+        while base passes the member address directly.
+        """
+        instructions = data.get("instructions") or data.get("mismatch_instructions") or []
+        if not instructions:
+            return []
+
+        patterns_found = []
+
+        # Build index of instructions by position for context lookups
+        instr_by_idx = {instr.get("index"): instr for instr in instructions}
+
+        # Look for sequences: delete stw/stfs to r1 (stack store) near diff_arg addi with r1
+        for instr in instructions:
+            match_type = instr.get("match_type")
+            target = instr.get("target", {})
+            base = instr.get("base", {})
+
+            if match_type != "diff_arg":
+                continue
+
+            # Check if this is an addi where target uses r1 (stack) but base doesn't
+            if target.get("opcode") != "addi" or base.get("opcode") != "addi":
+                continue
+
+            t_args = target.get("args", "")
+            b_args = base.get("args", "")
+
+            # Target: addi rN, r1, stackoff (passing stack address)
+            # Base: addi rN, rX, offset (passing member address directly)
+            if ", r1," in t_args and ", r1," not in b_args:
+                idx = instr.get("index", -1)
+                # Look for nearby stack stores (delete instructions)
+                nearby_stores = []
+                for check_idx in range(max(0, idx - 5), idx):
+                    nearby = instr_by_idx.get(check_idx)
+                    if nearby and nearby.get("match_type") == "delete":
+                        t = nearby.get("target", {})
+                        op = t.get("opcode", "")
+                        args = t.get("args", "")
+                        if op in ("stw", "stfs", "sth", "stb", "stfd") and "r1" in args:
+                            nearby_stores.append(check_idx)
+
+                if nearby_stores:
+                    patterns_found.append({
+                        "pattern": "STACK_COPY_REF",
+                        "confidence": "high",
+                        "fixability": "likely_fixable",
+                        "instruction_indices": nearby_stores + [idx],
+                        "fix_hint": (
+                            "Target copies member to stack before passing as const-ref. "
+                            "Fix: assign to a local variable before the call."
+                        ),
+                    })
+
+        return patterns_found
+
+    @staticmethod
+    def _annotate_shift_semantics(data: dict) -> list[dict]:
+        """
+        Annotate shift instructions with multiplication/division equivalents.
+
+        slwi r10, r11, 3 → "×8", srwi r10, r11, 2 → "÷4"
+        """
+        instructions = data.get("instructions") or data.get("mismatch_instructions") or []
+        annotations = []
+        shift_re = re.compile(r'r(\d+),\s*r(\d+),\s*(\d+)')
+
+        for instr in instructions:
+            if instr.get("match_type") != "diff_arg":
+                continue
+
+            target = instr.get("target", {})
+            base = instr.get("base", {})
+            t_op = target.get("opcode", "")
+            b_op = base.get("opcode", "")
+
+            # At least one side must be a shift opcode
+            if t_op not in ('slwi', 'srwi', 'slw', 'srw', 'rlwinm') and \
+               b_op not in ('slwi', 'srwi', 'slw', 'srw', 'rlwinm'):
+                continue
+
+            def shift_meaning(opcode: str, args: str) -> str | None:
+                m = shift_re.search(args)
+                if not m:
+                    return None
+                amount = int(m.group(3))
+                if opcode in ('slwi', 'slw'):
+                    return f"×{1 << amount}"
+                elif opcode in ('srwi', 'srw'):
+                    return f"÷{1 << amount}"
+                elif opcode == 'rlwinm':
+                    return f"rotate/mask by {amount}"
+                return None
+
+            t_meaning = shift_meaning(t_op, target.get("args", ""))
+            b_meaning = shift_meaning(b_op, base.get("args", ""))
+
+            if t_meaning or b_meaning:
+                ann = {
+                    "index": instr.get("index"),
+                    "target": {"opcode": t_op, "args": target.get("args", "")},
+                    "base": {"opcode": b_op, "args": base.get("args", "")},
+                    "match_type": "diff_arg",
+                }
+                parts = []
+                if t_meaning:
+                    parts.append(f"target: {t_meaning}")
+                if b_meaning:
+                    parts.append(f"base: {b_meaning}")
+                ann["annotation"] = ", ".join(parts)
+                annotations.append(ann)
+
+        return annotations
+
+    @staticmethod
+    def _refine_register_swap_confidence(data: dict) -> None:
+        """
+        Refine REGISTER_SWAP pattern confidence based on register types.
+
+        If all swapped registers are floating-point (f0-f31), downgrade
+        fixability to unlikely_fixable since FP register allocation is
+        rarely controllable from source.
+
+        Mutates data["analysis"]["patterns"] in-place.
+        """
+        analysis = data.get("analysis", {})
+        patterns = analysis.get("patterns", [])
+
+        for pattern in patterns:
+            if pattern.get("pattern") != "REGISTER_SWAP":
+                continue
+
+            details = pattern.get("details", {})
+            swaps = details.get("swaps", [])
+            if not swaps:
+                continue
+
+            fp_re = re.compile(r'^f\d+$')
+            fp_count = 0
+            int_count = 0
+
+            for swap in swaps:
+                t_reg = swap.get("target_reg", "")
+                b_reg = swap.get("base_reg", "")
+                if fp_re.match(t_reg) or fp_re.match(b_reg):
+                    fp_count += 1
+                else:
+                    int_count += 1
+
+            # Annotate register type
+            if fp_count > 0 and int_count == 0:
+                details["register_type"] = "float"
+                # Check if there are other fixable patterns
+                other_fixable = any(
+                    p.get("pattern") != "REGISTER_SWAP"
+                    and p.get("fixability") in ("fixable", "likely_fixable", "maybe_fixable")
+                    for p in patterns
+                )
+                if not other_fixable:
+                    pattern["fixability"] = "unlikely_fixable"
+                    pattern["fix_hint"] = (
+                        "FP register allocation — rarely fixable from source. "
+                        "Consider accepting as at_limit."
+                    )
+            elif fp_count > 0 and int_count > 0:
+                details["register_type"] = "mixed"
+            else:
+                details["register_type"] = "integer"
+
+    def _inline_rb3_method_source(self, data: dict) -> dict | None:
+        """
+        Look up and return RB3 reference source for the method.
+
+        Returns a dict with rb3_reference info including method_source,
+        or None if not available.
+        """
+        demangled = data.get("demangled", "")
+        if not demangled:
+            return None
+
+        # Extract class and method name
+        class_name = self._extract_class_from_demangled(demangled)
+        if not class_name:
+            return None
+
+        # Extract method name
+        m = re.search(r'(\w+)::(\w+)\s*\(', demangled)
+        if not m:
+            return None
+        method_name = m.group(2)
+
+        # Find the unit for this symbol to look up the RB3 pair
+        symbol = data.get("symbol", "")
+        source_file = data.get("source_file", "")
+
+        # Try to find RB3 file via unit
+        rb3_file_path = None
+        if source_file:
+            # Convert source_file path to unit for file_pair lookup
+            unit = source_file.replace("src/", "default/").rsplit(".", 1)[0]
+            pair = get_file_pair(unit, db_path=self.db_path)
+            if pair and pair.get("rb3_file"):
+                rb3_file_path = Path(pair["rb3_file"])
+
+        # Fallback: search by class name
+        if not rb3_file_path:
+            rb3_file_path = find_rb3_file(class_name, Path(self.rb3_path))
+
+        if not rb3_file_path or not rb3_file_path.exists():
+            return None
+
+        try:
+            source = rb3_file_path.read_text(errors="replace")
+        except Exception:
+            return None
+
+        # Extract the specific method source
+        method_source = self._extract_method_source(source, class_name, method_name)
+        if not method_source:
+            return {"available": True, "rb3_file": str(rb3_file_path), "method_found": False}
+
+        # Cap at 60 lines
+        lines = method_source.split("\n")
+        if len(lines) > 60:
+            method_source = "\n".join(lines[:60]) + "\n// ... (truncated)"
+
+        return {
+            "available": True,
+            "rb3_file": str(rb3_file_path),
+            "method_found": True,
+            "method_source": method_source,
+        }
+
+    @staticmethod
+    def _extract_method_source(source: str, class_name: str, method_name: str) -> str | None:
+        """
+        Extract a method's source code from a C++ file.
+
+        Finds the method definition and extracts through its closing brace.
+        """
+        # Look for ClassName::MethodName pattern
+        # Handle various return types before the class::method
+        pattern = re.compile(
+            rf'^[^\n]*\b{re.escape(class_name)}::{re.escape(method_name)}\s*\(',
+            re.MULTILINE
+        )
+        match = pattern.search(source)
+        if not match:
+            return None
+
+        start = match.start()
+
+        # Find opening brace
+        brace_pos = source.find('{', match.end())
+        if brace_pos == -1:
+            return None
+
+        # Count braces to find the matching closing brace
+        depth = 1
+        pos = brace_pos + 1
+        while pos < len(source) and depth > 0:
+            ch = source[pos]
+            if ch == '{':
+                depth += 1
+            elif ch == '}':
+                depth -= 1
+            pos += 1
+
+        if depth != 0:
+            return None
+
+        return source[start:pos].strip()
+
+    def _suggest_similar_symbols(self, symbol: str) -> list[str]:
+        """
+        When a symbol is not found, suggest similar symbols from the database.
+
+        Returns formatted suggestion strings.
+        """
+        # Extract search term from mangled symbol
+        search_term = symbol
+        if "@" in symbol:
+            # MSVC mangled: ?MethodName@ClassName@@...
+            parts = symbol.split("@")
+            method = parts[0].lstrip("?")
+            if len(parts) >= 2:
+                cls = parts[1]
+                search_term = f"{cls}::{method}"
+        elif "::" in symbol:
+            search_term = symbol
+
+        try:
+            results = search_functions_by_name(search_term, limit=5, db_path=self.db_path)
+            if not results:
+                # Try just the method name
+                method_only = search_term.split("::")[-1] if "::" in search_term else search_term
+                results = search_functions_by_name(method_only, limit=5, db_path=self.db_path)
+
+            suggestions = []
+            for r in results:
+                pct = r.get("current_percent")
+                pct_str = f" ({pct:.1f}%)" if pct is not None else ""
+                suggestions.append(f"`{r['symbol']}`{pct_str}")
+            return suggestions
+        except Exception:
+            return []
+
+    def _enrich_objdiff_data(self, data: dict) -> dict:
+        """
+        Run the full enrichment pipeline on parsed objdiff JSON data.
+
+        Adds: offset_mismatches, shift_annotations, stack_copy_ref patterns,
+        RB3 method source, and refined register swap confidence.
+
+        Mutates and returns data.
+        """
+        # 1. Auto-resolve offset mismatches
+        offset_mismatches = self._resolve_offset_mismatches(data)
+        if offset_mismatches:
+            data["offset_mismatches"] = offset_mismatches
+
+        # 2. Detect stack copy ref pattern
+        stack_copy_patterns = self._detect_stack_copy_ref(data)
+        if stack_copy_patterns:
+            # Add to existing analysis patterns if present
+            analysis = data.setdefault("analysis", {})
+            patterns = analysis.setdefault("patterns", [])
+            patterns.extend(stack_copy_patterns)
+
+        # 3. Annotate shift semantics
+        shift_annotations = self._annotate_shift_semantics(data)
+        if shift_annotations:
+            data["shift_annotations"] = shift_annotations
+
+        # 4. Refine REGISTER_SWAP confidence for FP registers
+        self._refine_register_swap_confidence(data)
+
+        # 5. Inline RB3 method source
+        rb3_ref = self._inline_rb3_method_source(data)
+        if rb3_ref:
+            data["rb3_reference"] = rb3_ref
+
+        return data
+
     async def _run_objdiff(self, args: dict) -> list[TextContent]:
         """
         Handle run_objdiff tool call.
@@ -532,13 +997,32 @@ class DecompMCPServer:
             if result.stderr:
                 output += f"\n\n[stderr]\n{result.stderr}"
 
+            # Check for symbol-not-found errors and suggest alternatives
+            if "Symbol not found" in output or "Failed" in output:
+                suggestions = self._suggest_similar_symbols(symbol)
+                error_msg = output.strip()
+                if suggestions:
+                    error_msg += "\n\nDid you mean:\n" + "\n".join(
+                        f"  - {s}" for s in suggestions
+                    )
+                return [TextContent(type="text", text=error_msg)]
+
             # Parse JSON to extract key info for summary
             summary = ""
+            data = None
             try:
                 data = json.loads(result.stdout)
+                # Run enrichment pipeline
+                data = self._enrich_objdiff_data(data)
+
                 match_pct = data.get("fuzzy_match_percent", "?")
                 verdict = data.get("verdict", {}).get("classification", "UNKNOWN")
                 summary = f"**Match: {match_pct}% | Verdict: {verdict}**\n\n"
+
+                # Re-serialize enriched data
+                output = json.dumps(data, indent=2)
+                if result.stderr:
+                    output += f"\n\n[stderr]\n{result.stderr}"
             except (json.JSONDecodeError, KeyError):
                 # Not valid JSON, just use raw output
                 pass

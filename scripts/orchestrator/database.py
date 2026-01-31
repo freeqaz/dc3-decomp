@@ -1004,6 +1004,63 @@ def query_file_pairs(
     return [dict(row) for row in rows]
 
 
+def search_functions_by_name(
+    name: str,
+    limit: int = 5,
+    db_path: str | Path = DEFAULT_DB_PATH,
+) -> list[dict[str, Any]]:
+    """
+    Fuzzy search for functions by name.
+
+    Useful for suggesting correct symbols when an exact match fails.
+    Searches both mangled symbol and demangled name fields.
+
+    Args:
+        name: Search term (class::method, method name, or partial symbol)
+        limit: Max results to return
+        db_path: Database path
+
+    Returns:
+        List of function dicts with symbol, demangled, unit, current_percent
+    """
+    conn = get_connection(db_path)
+
+    # Try multiple search strategies in order of specificity
+    results = []
+
+    # Strategy 1: LIKE match on demangled name
+    rows = conn.execute(
+        """
+        SELECT symbol, demangled, unit, current_percent
+        FROM functions
+        WHERE demangled LIKE ?
+        ORDER BY current_percent DESC NULLS LAST
+        LIMIT ?
+        """,
+        (f"%{name}%", limit),
+    ).fetchall()
+    results.extend(dict(r) for r in rows)
+
+    if len(results) >= limit:
+        return results[:limit]
+
+    # Strategy 2: LIKE match on mangled symbol (for partial mangled names)
+    seen_symbols = {r["symbol"] for r in results}
+    rows = conn.execute(
+        """
+        SELECT symbol, demangled, unit, current_percent
+        FROM functions
+        WHERE symbol LIKE ? AND symbol NOT IN ({})
+        ORDER BY current_percent DESC NULLS LAST
+        LIMIT ?
+        """.format(",".join("?" * len(seen_symbols)) if seen_symbols else "'__none__'"),
+        [f"%{name}%"] + list(seen_symbols) + [limit - len(results)],
+    ).fetchall()
+    results.extend(dict(r) for r in rows)
+
+    return results[:limit]
+
+
 def get_file_pairs_stats(db_path: str | Path = DEFAULT_DB_PATH) -> dict[str, Any]:
     """Get statistics about file pairings."""
     conn = get_connection(db_path)
