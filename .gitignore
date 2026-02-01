@@ -39,6 +39,12 @@ bin/objdiff-cli
 *.exe
 *.pdb
 _CL_*
+agent-home/
+archive/
+tmp/
+logs/
+ghidra_projects/
+.env
 
 # Doxygen output
 doxygen/
