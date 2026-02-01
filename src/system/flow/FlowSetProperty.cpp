@@ -55,21 +55,21 @@ void FlowSetProperty::OnTargetChanged(void) {
 }
 
 bool FlowSetProperty::IsBlendable(void) {
-    if (mTarget == nullptr)
-        return false;
-    if (!unk_0x98.NotNull())
-        return false;
-    const DataNode *props = mTarget->Property(unk_0x98.Array(), false);
-    if (props == nullptr)
-        return false;
-    if (props->Type() == kDataInt || props->Type() == kDataFloat)
-        return true;
-    DrivenPropertyEntry *dpe = GetDrivenEntry("value");
-    if (dpe == nullptr)
-        return false;
-    if (dpe->Empty())
-        return false;
-    return true;
+    if (mTarget != nullptr) {
+        if (unk_0x98.NotNull()) {
+            const DataNode *props = mTarget->Property(unk_0x98.Array(), false);
+            if (props != nullptr) {
+                if (props->Type() == kDataInt || props->Type() == kDataFloat) {
+                    return true;
+                }
+                DrivenPropertyEntry *dpe = GetDrivenEntry("value");
+                if (dpe != nullptr && !dpe->Empty()) {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
 }
 
 BEGIN_COPYS(FlowSetProperty)

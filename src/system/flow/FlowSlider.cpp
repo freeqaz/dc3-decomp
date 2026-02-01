@@ -134,7 +134,7 @@ void FlowSlider::UpdateIntensity() {
 __declspec(noinline) void FlowSlider::UpdateEase() {
     EaseType e = mEaseType;
     MILO_ASSERT(e >= kEaseLinear && e <= kEaseQuarterHalfStairstep, 0x16b);
-    mEaseFunc = GetEaseFunction(e);
+    mEaseFunc = gEaseFuncs[e];
 }
 
 void FlowSlider::ReActivate() {

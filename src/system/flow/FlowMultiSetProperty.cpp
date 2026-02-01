@@ -45,14 +45,14 @@ bool FlowMultiSetProperty::Activate() {
     unk58 = false;
     if (!unk5c.empty()) {
         DrivenPropertyEntry *node = GetDrivenEntry("value");
-        if (node) {
+        if (node != nullptr) {
             unk80 = unk5c.front()->Property(unk78.Array(), true)->Evaluate();
         }
     }
     FlowNode::PushDrivenProperties();
     for (ObjPtrVec<Hmx::Object>::iterator it = unk5c.begin(); it != unk5c.end(); ++it) {
         Hmx::Object *obj = *it;
-        if (obj != NULL) {
+        if (obj != nullptr) {
             obj->SetProperty(unk78.Array(), unk80);
         }
     }

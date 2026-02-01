@@ -178,10 +178,10 @@ DataNode op3(DataArray *msg) {
 DataNode op4(DataArray *msg) {
     u32 operand = msg->Int(1);
     u32 w = msg->Int(2);
-
-    u32 ret = ((u8(w) == 0) << 3) & ~0xFF;
-    ret = ((u8(w) << 27) & 1) | (ret & ~0x1);
-    ret >>= (operand == 0);
+    u32 b = (operand == 0);
+    u32 a = (u8(w) == 0);
+    u32 ret = (a << 8) | a;
+    ret >>= b;
     return u8(ret);
 }
 
@@ -438,9 +438,8 @@ DataNode op34(DataArray *msg) {
     u32 operand = msg->Int(1);
     u8 w = msg->Int(2);
 
-    u32 working2 = w ^ 0xFFu;
-    u32 tmp = ((working2 | (w << 8)) >> 2);
-    return u8(tmp ^ operand);
+    u32 result = (w ^ 0x3F) | ((w & 3) << 6);
+    return u8(result ^ operand);
 }
 
 DataNode op35(DataArray *msg) {
@@ -502,9 +501,7 @@ DataNode op41(DataArray *msg) {
     u32 operand = msg->Int(1);
     u8 w = msg->Int(2);
 
-    u32 working2 = (w ^ 0x5Cu);
-    u32 working3 = (w << 8);
-    u32 tmp = ((working2 | working3) >> 2);
+    u32 tmp = ((u8)(w >> 2) ^ 0x17) | ((w << 6) & 0xC0);
     return u8(tmp ^ operand);
 }
 
@@ -512,9 +509,7 @@ DataNode op42(DataArray *msg) {
     u32 operand = msg->Int(1);
     u8 w = msg->Int(2);
 
-    u32 working2 = (w ^ 0x5Cu);
-    u32 working3 = (w << 8);
-    u32 tmp = ((working2 | working3) >> 3);
+    u32 tmp = ((u8)(w >> 3) ^ 0xB) | ((w << 5) & 0xE0);
     return u8(tmp ^ operand);
 }
 
@@ -522,9 +517,7 @@ DataNode op43(DataArray *msg) {
     u32 operand = msg->Int(1);
     u8 w = msg->Int(2);
 
-    u32 working2 = (w ^ 0x5Cu);
-    u32 working3 = (w << 8);
-    u32 tmp = ((working2 | working3) >> 5);
+    u32 tmp = ((u8)(w >> 5) ^ 2) | ((w * 8) & 0xF8);
     return u8(tmp ^ operand);
 }
 
@@ -532,9 +525,7 @@ DataNode op44(DataArray *msg) {
     u32 operand = msg->Int(1);
     u8 w = msg->Int(2);
 
-    u32 working2 = (w ^ 0x36u);
-    u32 working3 = (w << 8);
-    u32 tmp = ((working2 | working3) >> 2);
+    u32 tmp = ((u8)(w >> 2) ^ 0xD) | ((w << 6) & 0xC0);
     return u8(tmp ^ operand);
 }
 
@@ -542,9 +533,7 @@ DataNode op45(DataArray *msg) {
     u32 operand = msg->Int(1);
     u8 w = msg->Int(2);
 
-    u32 working2 = (w ^ 0x36u);
-    u32 working3 = (w << 8);
-    u32 tmp = ((working2 | working3) >> 3);
+    u32 tmp = ((u8)(w >> 3) ^ 6) | ((w << 5) & 0xE0);
     return u8(tmp ^ operand);
 }
 
@@ -552,9 +541,7 @@ DataNode op46(DataArray *msg) {
     u32 operand = msg->Int(1);
     u8 w = msg->Int(2);
 
-    u32 working2 = (w ^ 0x36u);
-    u32 working3 = (w << 8);
-    u32 tmp = ((working2 | working3) >> 4);
+    u32 tmp = ((u8)(w >> 4) ^ 3) | ((w * 0x10) & 0xF0);
     return u8(tmp ^ operand);
 }
 
@@ -562,9 +549,7 @@ DataNode op47(DataArray *msg) {
     u32 operand = msg->Int(1);
     u8 w = msg->Int(2);
 
-    u32 working2 = (w ^ 0x36u);
-    u32 working3 = (w << 8);
-    u32 tmp = ((working2 | working3) >> 1);
+    u32 tmp = ((u8)(w >> 1) ^ 0x1B) | ((w << 7) & 0x80);
     return u8(tmp ^ operand);
 }
 
