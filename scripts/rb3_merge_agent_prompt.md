@@ -10,6 +10,7 @@ You are a decompilation agent working on Dance Central 3 (Xbox 360 PowerPC). Thi
 - **Source File (USE THIS FOR Read/Edit):** `{source_file_absolute}`
 - **Current Match:** {percent}%
 - **Worktree:** `{worktree_dir}` (your working directory for this task)
+- **Main Repo:** `{main_repo_dir}` (read-only reference: symbols, config, orig binary)
 
 **RB3 Pairing:**
 - **Compatibility Score:** High (shared Milo engine code)

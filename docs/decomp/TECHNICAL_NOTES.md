@@ -1,0 +1,790 @@
+# Technical Notes - Compiler Patterns & Lessons Learned
+
+This document captures technical knowledge gained during decompilation sessions.
+
+---
+
+## Compiler Behavior (MSVC for Xbox 360)
+
+### Inlined Functions
+
+DC3's compiler inlines these standard library functions:
+- `strcpy`
+- `strlen`
+- `strcmp`
+- `strcat`
+
+Also inlines:
+- `DataArray::Int()`, `Float()`, `Str()`
+- `std::vector` and `std::list` methods
+
+**Pattern recognition:** Look for loop patterns that indicate inlined string operations.
+
+### Static Symbol Initialization
+
+MSVC uses bit flags for static local variable initialization.
+
+```cpp
+static Symbol foo("foo");  // Uses bit 0x1
+static Symbol bar("bar");  // Uses bit 0x2
+static Symbol baz("baz");  // Uses bit 0x4
+```
+
+**Assembly pattern:**
+```asm
+ori r11, r11, 0x1   ; First static
+ori r11, r11, 0x2   ; Second static
+ori r11, r11, 0x4   ; Third static
+```
+
+**Important:** Order of static Symbol declarations in source must match the original.
+
+### Static Variable Scoping
+
+Static variables must stay in their original scope. Moving them affects code generation.
+
+```cpp
+// CORRECT (99.6% match) - static in block scope
+{
+    static int _x = MemFindHeap("physical");
+    MemHeapTracker mem(_x);
+    // use mem...
+}
+
+// BROKEN (99.5% match) - static moved outside block
+static int _x = MemFindHeap("physical");
+{
+    MemHeapTracker mem(_x);
+    // use mem...
+}
+```
+
+Even small scope changes affect the initialization guard patterns the compiler generates.
+
+### Register Allocation Patterns
+
+The compiler's register allocation is sensitive to:
+- Local variable declarations
+- Loop structure (while vs for)
+- Parameter usage vs local copies
+- Variable declaration order within blocks
+- Literal types in initializer lists
+
+**Example fix (FillModeArrayWithParentData):**
+```cpp
+// Before (97.5% match) - modifies parameter directly
+while (a2->FindArray(sym)->...) {
+    sym = ...;
+}
+
+// After (100% match) - uses local variable
+for (Symbol s = sym; a2->FindArray(s)->...;) {
+    s = ...;
+}
+```
+
+### Initializer List Literals
+
+Use `0` instead of `0.0f` or `false` for consistent register allocation:
+
+```cpp
+// Before (0% match) - different literal types
+Shuttle::Shuttle() : mMs(0.0f), mEndMs(0.0f), mActive(false), mController(0) {}
+
+// After (100% match) - all use integer literal 0
+Shuttle::Shuttle() : mMs(0), mEndMs(0), mActive(0), mController(0) {}
+```
+
+### Boolean Index Expressions
+
+Use arithmetic instead of comparison for boolean-to-index conversion:
+
+```cpp
+// Before (95.5% match) - generates cntlzw + extrwi instructions
+label = mBAMColumns[side == 0]->Find<HamLabel>(...);
+
+// After (improved) - simpler arithmetic
+label = mBAMColumns[1 - side]->Find<HamLabel>(...);
+```
+
+### Control Flow Structure Must Match Exactly
+
+Even logically equivalent control flow changes can break matches. Moving a conditional inside another block changes instruction ordering.
+
+```cpp
+// CORRECT (99.7% match) - threshold check outside HasSong block
+if (thresh >= prereqNum) {
+    return true;
+}
+if (HasSong(sym)) {
+    // other logic
+}
+
+// BROKEN (99.3% match) - moved threshold check inside
+if (HasSong(sym)) {
+    if (thresh >= prereqNum) {
+        return true;
+    }
+    // other logic
+}
+```
+
+The compiler generates different branch structures even when the logic is equivalent.
+
+### Ternary vs If-Else
+
+Ternary operators often match better than if-else for simple conditionals:
+
+```cpp
+// Before - generates extra branches
+bool ret;
+if (progress) {
+    ret = progress->IsEraComplete();
+} else {
+    ret = false;
+}
+
+// After - cleaner codegen
+bool ret = progress ? progress->IsEraComplete() : false;
+```
+
+### Variable Declaration Order
+
+The order of variable declarations affects register allocation:
+
+```cpp
+// Before (99.9% match) - iStarCount declared with iReqStars
+int iReqStars = pEra->GetSongRequiredStars(song), iStarCount = 0;
+CampaignEraProgress *pEraProgress = GetEraProgress(era);
+
+// After (improved) - iStarCount declared after pointer
+int iReqStars = pEra->GetSongRequiredStars(song);
+CampaignEraProgress *pEraProgress = GetEraProgress(era);
+int iStarCount = 0;
+```
+
+**Critical:** Even moving a simple `int total = 0` from before a pointer declaration to after it can break a 96% match down to 91%. The compiler assigns registers based on declaration order, and changing that order changes the entire register allocation scheme for the function.
+
+```cpp
+// CORRECT (96.1% match) - total declared before pointer
+int total = 0;
+CampaignEraSongProgress *pEraSongProgress = GetEraSongProgress(name);
+
+// BROKEN (91.8% match) - total moved after pointer
+CampaignEraSongProgress *pEraSongProgress = GetEraSongProgress(name);
+int total = 0;  // This breaks the register allocation!
+```
+
+### Assignment in Function Arguments
+
+Sometimes values need to be stored before use:
+
+```cpp
+// Before - separate assignment and call
+era = pEra->GetName();
+CampaignEraProgress *progress = GetEraProgress(era);
+
+// After - assignment within call (matches stw instruction pattern)
+CampaignEraProgress *progress = GetEraProgress(era = pEra->GetName());
+```
+
+---
+
+## Merged Functions
+
+"Merged functions" occur when the compiler generates identical machine code for different functions and combines them at the same address.
+
+### Types of Merged Functions
+
+1. **Scalar Deleting Destructors**
+   - Compiler-generated for `delete` expressions
+   - Pattern: `??_E<ClassName>@@...`
+   - Not written in source code
+
+2. **Virtual Function Thunks**
+   - Generated for multiple inheritance
+   - Adjust `this` pointer before calling actual implementation
+   - Pattern: `??_E<ClassName>@@$4PPPPPPPM@...`
+
+3. **Identical Implementations**
+   - Simple functions with same code (e.g., trivial destructors)
+   - `RELEASE(mPtr)` pattern often merges
+
+### How to Handle
+
+- **Don't try to write these manually** - they're compiler artifacts
+- **Keep source code as-is** - the actual functions are correct
+- **Mark in build config** - already handled in splits.txt
+- **Ignore 0% match** - expected for merged functions
+
+### Known Merged Functions
+
+**SongDB (1 function):**
+- Destructor body (80 bytes) - `RELEASE(mSongData)` pattern
+
+**HamUser (7 functions):**
+- 3 scalar deleting destructors (User, LocalUser, HamUser)
+- 4 virtual thunks for multiple inheritance
+
+### ICF (Identical COMDAT Folding)
+
+The linker uses ICF to merge functions with **identical machine code** to a single address. This is why:
+- Multiple symbol names point to the same address
+- objdiff shows `merged_<address>` instead of a function name
+
+**Statistics:**
+- 31,754 COMDAT-folded symbols in the binary
+- 3,068 unique merged addresses
+- Some addresses have 76+ symbols (e.g., `ObjRefConcrete<T>::GetObj()` template)
+
+**Common ICF Patterns:**
+
+| Pattern | Example | Count |
+|---------|---------|-------|
+| Destructor pairs | `??_G` + `??_E` (scalar/vector) | 1,206 |
+| Template instantiations | `ObjRefConcrete<T>::GetObj()` | 1,407 |
+| Simple getters | Empty or trivial returns | varies |
+
+**Address-Based vs Named Merged Functions:**
+
+- **Named**: `merged_Read4FloatStruct` - has a recognizable name
+- **Address-based**: `merged_82331360` - linker generated address
+
+**How to Look Up Merged Addresses:**
+
+```bash
+# CLI tool
+./bin/merged-symbols 82331360
+
+# MCP tool (for agents)
+mcp__orchestrator__lookup_merged_symbol address="82331360"
+```
+
+**Example output:**
+```
+Address 0x82331360: 2 symbols merged by ICF
+
+  1. ObjRef::`scalar deleting destructor'(unsigned int) (App.obj)
+  2. ObjRef::`vector deleting destructor'(unsigned int) (App.obj)
+```
+
+**Why it matters:** When objdiff shows a call to `merged_82331360`, any of the symbols at that address is valid. The function is at its limit - you cannot control which merged symbol the linker chooses.
+
+---
+
+## Common Matching Issues
+
+### Issue: Comparison operators
+
+Subtle differences in comparison can affect codegen:
+- `size >= 1` vs `size > 0`
+- `depth < 1` vs `depth == 0`
+- `n < depth` vs `depth > n`
+- `i3 < 2` vs `i3 <= 1` - affects cmpwi immediate value
+
+```cpp
+// Before (98.9%) - generates cmpwi r27, 0x2 + bge
+if (i3 < 2) {
+
+// After (100%) - generates cmpwi r27, 0x1 + bgt
+if (i3 <= 1) {
+```
+
+**Diagnosis:** Check objdiff for `cmpwi` immediate values and branch conditions (`bge` vs `bgt`).
+
+### Issue: Unsigned Zero Comparisons (CONFIRMED)
+
+For **unsigned** variables compared against zero, the compiler generates different branch instructions:
+
+| Source Pattern | Our Build | Original | Fix |
+|---------------|-----------|----------|-----|
+| `if (x != 0)` | `cmpwi` + `beq` | `cmpwi` + `ble` | Use `if (x > 0)` |
+| `if (x == 0)` | `cmpwi` + `bne` | `cmpwi` + `bgt` | Use `if (x <= 0)` or `if (!(x > 0))` |
+
+```cpp
+// Before - generates beq branch
+unsigned int count = GetCount();
+if (count != 0) {
+    DoSomething();
+}
+
+// After - generates ble branch (matches original)
+unsigned int count = GetCount();
+if (count > 0) {
+    DoSomething();
+}
+```
+
+**Important:** This pattern ONLY applies to zero comparisons with unsigned types. Other transformations like `> X` to `>= X+1` make matches WORSE. Only use this for unsigned zero comparisons.
+
+**Diagnosis:** Look for `beq`/`bne` vs `ble`/`bgt` differences in objdiff when comparing against zero.
+
+### Issue: Function Argument Evaluation Order
+
+The compiler evaluates function arguments **right-to-left**. For `func(a, b)`, it evaluates `b` first, then `a`. This affects the order of load instructions.
+
+```cpp
+// Before (99.1%) - mStr evaluated second (loaded second)
+return strcmp(mStr, str.c_str()) == 0;
+
+// After (100%) - mStr evaluated first (loaded first, matches target)
+return strcmp(str.c_str(), mStr) == 0;
+```
+
+**Diagnosis:** Use objdiff to compare load instruction order. If target loads `this->member` before `param->member`, swap the arguments.
+
+### Issue: sizeof() Returns Unsigned
+
+`sizeof()` returns `size_t` (unsigned), which promotes the entire expression to unsigned. This affects division codegen:
+
+- **Unsigned division** by power of 2: `srwi` (shift right word immediate)
+- **Signed division** by power of 2: `srawi` + `addze` (arithmetic shift + carry correction)
+
+```cpp
+// Before (93.8%) - unsigned division, generates srwi
+return (NumVerts() * 0x50 + NumFaces() * sizeof(Face)) / 1024;
+
+// After (100%) - signed division, generates srawi + addze
+return (NumVerts() * 0x50 + NumFaces() * (int)sizeof(Face)) / 1024;
+```
+
+**Diagnosis:** Look for `srwi` vs `srawi`/`addze` mismatch in objdiff. If return type is `int` but code generates `srwi`, cast the `sizeof()` to `int`.
+
+### Issue: Bitwise Word-Aligned Formulas
+
+Sometimes the compiler uses `clrrwi` (clear right word immediate) instead of division for computing word-aligned sizes:
+
+```cpp
+// Before (97.93%) - standard division formula, generates srawi + addze
+FixedSizeAlloc((x + 15) / 4, ...)
+
+// After (100%) - bitwise formula, generates srawi + clrrwi
+FixedSizeAlloc(((x + 15) >> 2) & ~3, ...)
+```
+
+`clrrwi r4, r11, 2` clears the bottom 2 bits (`& ~3`). This pattern appears in allocator code for word-aligned byte calculations.
+
+### Issue: Loop Counter Signedness
+
+Loop counters affect comparison instruction selection:
+
+- **Signed loop counter**: `cmpwi` (compare word immediate)
+- **Unsigned loop counter**: `cmplwi` (compare logical word immediate)
+
+```cpp
+// Before (98%) - signed comparison, generates cmpwi
+int size;
+bs >> size;
+for (; size != 0; size--) { ... }
+
+// After (100%) - unsigned comparison, generates cmplwi
+unsigned int size;
+bs >> size;
+for (; size != 0; size--) { ... }
+```
+
+### Issue: String Iteration Signedness
+
+When iterating over strings for hashing or byte operations, use `unsigned char` to avoid sign extension:
+
+- **Signed char**: generates `extsb` (extend sign byte) instruction
+- **Unsigned char**: no sign extension, uses `cmplwi` for null check
+
+```cpp
+// Before (84.7%) - signed char generates extsb
+for (const char *p = str; *p != '\0'; p++) {
+    hash = hash * mult + *p;
+}
+
+// After (100%) - unsigned char, no sign extension
+for (const unsigned char *p = (const unsigned char *)str; *p != '\0'; p++) {
+    hash = hash * mult + *p;
+}
+```
+
+**Diagnosis:** Look for `extsb` instructions in string processing code. If the original doesn't have them, switch to unsigned char iteration.
+
+### Issue: Data Type Sizing (Store Instructions)
+
+Member variable types affect store instruction selection:
+
+- **32-bit store**: `stw` (store word)
+- **16-bit store**: `sth` (store half)
+
+```cpp
+// Before (98.7%) - stw instruction for mPort
+class NetAddress {
+    unsigned int mIP;
+    unsigned int mPort;  // Wrong! Generates stw
+};
+
+// After (100%) - sth instruction for mPort
+class NetAddress {
+    unsigned int mIP;
+    unsigned short mPort;  // Correct! Generates sth
+};
+```
+
+### Issue: OBJ_MEM_OVERLOAD Line Numbers
+
+The `OBJ_MEM_OVERLOAD` macro embeds a line number that must match the original binary exactly:
+
+```cpp
+// Before (99.95%) - wrong line number
+OBJ_MEM_OVERLOAD(0x1D)  // Generates li r5, 0x1d
+
+// After (100%) - correct line number
+OBJ_MEM_OVERLOAD(0x1B)  // Generates li r5, 0x1b
+```
+
+**Diagnosis:** Look for `li rX, 0xNN` differences in objdiff where `0xNN` is a small number (likely a line number).
+
+### Issue: Wrapper Struct Duplicate Padding
+
+Check if wrapper structs duplicate existing padding in their member types:
+
+```cpp
+// Vector3 already has internal padding
+class Vector3 {
+    float x, y, z;
+    u32 PAD;  // Already 16 bytes total
+};
+
+// Before (99.9%) - wrapper adds duplicate padding!
+struct Vector3Pad {
+    Vector3 v;    // 16 bytes
+    float pad;    // 4 bytes extra - WRONG!
+};  // 20 bytes - causes wrong struct sizes downstream
+
+// After (100%) - use the type directly
+typedef Vector3 Vector3Pad;  // 16 bytes
+```
+
+**Diagnosis:** If a struct has wrong size affecting templates/arrays, check if any member types already have internal padding that wrapper structs are duplicating.
+
+### Issue: STL empty() vs size() == 0
+
+`empty()` and `size() == 0` are semantically equivalent but generate **different code**:
+
+- **`empty()`**: Pointer comparison (`cmplw begin, end`)
+- **`size() == 0`**: Division-based count (`divw (end-begin)/sizeof(T)`)
+
+```cpp
+// Before (87.88%) - pointer comparison
+if (mTempoPoints.empty()) {
+
+// After (100%) - division-based size check
+if (mTempoPoints.size() == 0) {
+```
+
+**Diagnosis:** Look for `divw` in target vs `cmplw` in decomp. If target calculates actual element count via division, use `size() == 0`.
+
+### Issue: Thread Function Pointers
+
+Don't call the function when passing to thread creation APIs:
+
+```cpp
+// Before (94%) - WRONG: calls function, casts return value to pointer!
+mThread = CreateThread(
+    0, 0, (LPTHREAD_START_ROUTINE)ThreadEntry(0), this, 4, 0
+);
+
+// After (99.7%) - Correct: pass function pointer directly
+mThread = CreateThread(0, 0, ThreadEntry, this, 4, 0);
+```
+
+**Diagnosis:** If target has `lis`/`addi` loading a function address but decomp doesn't, you're probably calling instead of passing the function.
+
+### Issue: Free-List Allocator Patterns
+
+Pool allocators use pointer chains. Common bugs:
+
+```cpp
+// BUG 1: Not following the chain
+int *old = mFreeList;
+mFreeList = old;  // NO-OP! Should be: mFreeList = (int*)*old;
+
+// BUG 2: Not linking freed blocks
+void Free(void *v) {
+    v = mFreeList;           // WRONG: overwrites parameter
+    mFreeList = (int *)v;    // Then assigns same value back
+}
+
+// CORRECT free-list insertion:
+void Free(void *v) {
+    *(int **)v = mFreeList;  // Store old head in new block's next pointer
+    mFreeList = (int *)v;     // New block becomes head
+}
+```
+
+**Diagnosis:** If allocator functions are sub-90% match, check if free-list pointer chains are being followed correctly. These bugs make allocators completely non-functional.
+
+### Issue: Loop structure
+
+```cpp
+// These generate different code:
+while (condition) { ... }
+for (; condition;) { ... }
+for (Type x = init; condition;) { ... }
+```
+
+### Issue: Variable caching
+
+```cpp
+// Sometimes need to cache values:
+int arrSize = arr->Size();  // Cache in local
+for (int i = 0; i < arrSize; i++) { ... }
+
+// vs direct call:
+for (int i = 0; i < arr->Size(); i++) { ... }
+```
+
+### Issue: Intentional bugs in original
+
+Sometimes the original code has bugs that must be preserved:
+
+```cpp
+// GameMode::SetMode line 152
+if (parent_mode == campaign)  // Compares two different static Symbols
+                              // Always false - but matches original!
+```
+
+---
+
+## Debugging Techniques
+
+### Using objdiff
+
+```bash
+# CLI comparison
+objdiff-cli diff -u 373307D9 -t PresenceMgr.cpp
+
+# For detailed analysis, use objdiff GUI
+# Shows side-by-side instruction comparison
+```
+
+### Reading Target Assembly
+
+```bash
+# Find function in target assembly
+grep -n "FunctionName" build/373307D9/asm/lazer/game/File.s
+
+# View around a specific address
+grep -A 50 "8287" build/373307D9/asm/lazer/game/File.s
+```
+
+### Build Single File
+
+```bash
+# Faster iteration - build just one object
+ninja build/373307D9/src/lazer/game/GameMode.obj
+
+# Then regenerate report
+ninja build/373307D9/report.json
+```
+
+### Check Specific Function Match
+
+```bash
+# Use objdiff-cli report function for direct lookup
+./bin/objdiff-cli report function build/373307D9/report.json "Game::Poll"
+
+# Or query by unit pattern
+./bin/objdiff-cli report query build/373307D9/report.json --functions \
+  --unit "default/lazer/game/GameMode" --min-percent 0 -f json-pretty
+```
+
+---
+
+## Class Layout Reference
+
+### PresenceMgr (DC3)
+```
+Offset  Type          Member
+0x2c    DataArray*    mPresenceModes
+0x30    DataArray*    mPresenceModeContexts
+0x34    DataArray*    mInstrumentPlayModeContexts
+0x38    Symbol        unk38
+0x3c    int           mSongID
+0x40    bool          mInGame
+```
+
+### PresenceMgr (RB3) - For Comparison
+```
+Offset  Type          Member
+0x1c    DataArray*    unk1c (presence modes)
+0x20    DataArray*    unk20 (contexts)
+0x24    int           unk24
+0x28    Symbol        unk28
+0x2c    vector<Sym>   unk2c
+0x34    int           unk34
+0x38    bool          unk38 (in game)
+0x39    bool          unk39 (override flag)
+0x3c    int           unk3c (override value)
+```
+
+### HamUser Inheritance
+```
+    Object (Hmx)
+        ↓
+      User (virtual base)
+        ↓
+   LocalUser (virtual inheritance)
+        ↓
+    HamUser
+```
+
+---
+
+## Lessons Learned
+
+1. **Read the assembly first** - Understand what you're matching against
+2. **Check RB3 for patterns** - Even if not identical, shows intent
+3. **Small changes matter** - One variable declaration can change everything
+4. **Preserve bugs** - If original has bugs, match them
+5. **Merged functions are OK** - Compiler artifacts, don't fight them
+6. **Use local variables** - Often needed to match register allocation
+7. **Order matters** - Static declarations, member order, variable declarations
+8. **Prefer ternary operators** - Cleaner codegen than if-else for simple cases
+9. **Use `0` in initializers** - Not `0.0f` or `false`, affects register allocation
+10. **Arithmetic over comparison** - `1 - side` not `side == 0` for boolean-to-int
+11. **Run parallel agents** - 15+ subagents can work simultaneously on different targets
+12. **Argument eval is right-to-left** - `func(a, b)` evaluates `b` first; swap args to change load order
+13. **Cast sizeof() for signed math** - `sizeof()` is unsigned; use `(int)sizeof(T)` for signed division
+14. **Free-list allocators follow pointers** - `mFree = *(Type **)ptr`, not `mFree = nullptr`
+15. **Unsigned char for string iteration** - Avoids `extsb` sign extension; use `(const unsigned char *)str`
+16. **Check wrapper struct padding** - Types like `Vector3` may already have internal padding; don't duplicate it
+17. **Static const for float comparisons** - `static const float zero = 0.0f` forces memory load vs immediate
+18. **Manual sqrt decomposition** - `sqrt(zz + yy + xx)` may match when `Length(v)` helper doesn't
+19. **`empty()` vs `size() == 0`** - Different codegen; `empty()` compares pointers, `size()` uses division
+20. **Don't call function pointers** - `CreateThread(..., ThreadFunc, ...)` not `CreateThread(..., ThreadFunc(), ...)`
+21. **Sub-90% often means real bugs** - Low matches frequently have broken logic, not just codegen differences
+22. **Load ordering via locals** - Declare variables in order you want them loaded; `int a = x; int b = y;` loads x then y
+23. **Variable declaration position matters** - Moving `int x = 0` to a different line can break register allocation entirely
+24. **Control flow must match exactly** - Moving a conditional block inside another (even if logically equivalent) changes instruction order
+25. **Keep static variables in original scope** - Static declarations affect code generation; don't move them between scopes
+26. **Unsigned zero comparisons** - Use `x > 0` instead of `x != 0` for unsigned types to match `ble` vs `beq` branches
+27. **Sequential if + return vs if-else** - `if (x) { y; return; } if (z) {...}` may match when `if (x) { y; } else if (z) {...}` doesn't
+28. **Dot product component order** - `((w*q.w + x*q.x) + z*q.z) + y*q.y` may match when `x*q.x + y*q.y + z*q.z + w*q.w` doesn't
+29. **Commutative register swaps are unfixable** - `fmuls f11, f0, f13` vs `fmuls f11, f13, f0` - same result, different register order
+30. **VMX128 XMVECTOR parameters** - Passed in v1 register, stored to stack via `stvx128`, then read as scalar floats at offsets +0x10 (x), +0x14 (y), +0x18 (z), +0x1c (w)
+31. **64-bit to 16-bit extraction patterns** - Target may use `lhz` to load 16-bit slice from stored `__int64`; our compiler uses `ld` + bit masking (unfixable ~5% gap)
+
+---
+
+## Known Unfixable Issues
+
+Some mismatches are caused by linker or compiler behaviors we cannot reproduce. These represent hard limits on match percentages for affected functions.
+
+### Linker-Level Optimizations (UNFIXABLE)
+
+The target binary is a **debug build** (XBDM present in static libraries) and does **not** use LTCG (`/GL` + `/LTCG`). However, the linker still applies **ICF (Identical COMDAT Folding)** via `/OPT:ICF`, which merges functions with identical machine code to a single address.
+
+**We compare at the .obj level**, so linker-level optimizations like float constant pooling and ICF will never match. This explains persistent 0.5-1% gaps on some functions that are otherwise correct.
+
+### Float Constant Pooling (UNDER INVESTIGATION)
+
+The original linker places float literals adjacent to static arrays, allowing a single base register for both:
+
+```asm
+# Original (single base for floats and static data)
+addi r29, r10, base@l
+lfs f0, 0x0(r29)      ; float constant
+addi r7, r29, 0x8     ; gRevs[0]
+```
+
+Our build uses separate `.rdata` symbols for each float, requiring extra `lis` instructions:
+
+```asm
+# Our build (separate addresses)
+lis r11, float1@ha
+lfs f0, float1@l(r11)
+lis r10, gRevs@ha
+addi r7, r10, gRevs@l
+```
+
+This causes 1-2 instruction differences in functions with float literals.
+
+### ASSERT_REVS Instruction Scheduling (UNFIXABLE)
+
+The `ASSERT_REVS` macro's second `MILO_FAIL` call shows consistent scheduling differences:
+- Target computes `gRevs[2]` address before stack variables
+- Our build computes stack variables before `gRevs[2]`
+- Same instructions, different order - compiler heuristic difference
+
+This causes ~0.8-0.9% mismatch on all `Load` functions using `ASSERT_REVS`. These are considered effectively matched.
+
+### fmadds vs fmuls+fadds (UNFIXABLE)
+
+The Xbox 360 compiler sometimes generates fused multiply-add instructions (`fmadds`) where our build generates separate `fmuls` + `fadds`. This is a compiler optimization flag difference that cannot be controlled at the source level.
+
+**Example from FreestyleMotionFilter::UpdateFilters:**
+```cpp
+// Magnitude squared calculation
+float magSq = v.x * v.x + v.y * v.y + v.z * v.z;
+```
+
+```asm
+# Original (fused multiply-add)
+fmadds f0, f11, f11, f0
+
+# Our build (separate multiply and add)
+fmuls f11, f11, f11
+fadds f0, f0, f11
+```
+
+Both are mathematically equivalent, but the fused version has slightly different rounding behavior. XDK documentation confirms `/fp:fast` is the **default** on Xbox 360 (unlike standard MSVC which defaults to `/fp:precise`), and `#pragma fp_contract` is **ON by default** — so both builds should generate fmadds when possible. Testing confirmed adding `/fp:fast` explicitly has zero effect (already active). The fmadds vs fmuls+fadds difference is an inherent compiler backend scheduling decision about when multiply-add patterns are close enough to fuse.
+
+**Impact**: ~1-3% mismatch on math-heavy functions with repeated multiply-add patterns.
+
+### Linker Merged Functions (ICF - Identical COMDAT Folding)
+
+Functions with identical machine code are merged by the linker (Identical COMDAT Folding):
+
+```
+merged_Read4FloatStruct:
+  ; operator>>(BinStream&, Color&) merged with
+  ; operator>>(BinStream&, Rect&)
+  ; Both read 4 floats, so linker combined them
+```
+
+Known merged patterns:
+- `RELEASE(mPtr)` in destructors
+- Simple 4-float struct reads
+- Trivial virtual function implementations
+
+**Lookup tool:** When objdiff shows `merged_82331360` (address-based), use the lookup tool to see which symbols share that address:
+```bash
+./bin/merged-symbols 82331360
+# Or MCP: mcp__orchestrator__lookup_merged_symbol address="82331360"
+```
+
+**Verification workflow:** Don't blindly accept as unfixable. After lookup:
+1. Check if YOUR call target is in the merged set
+2. If yes → Unfixable, accept at_limit (code is correct)
+3. If no → Investigate! You may be calling the wrong function
+
+**Unfixable** only after verification confirms your code is correct. These show as 0% match in reports.
+
+### Compiler Version Notes
+
+- Xbox 360 SDK uses **MSVC 16.00.11886.00** (Visual Studio 2010)
+- Linker: **LINK 10.0.11886.0**
+- XDK SDK: **v2.0.21173.0**
+- Target binary: **debug build** (XBDM present, no LTCG)
+- `/Gw` (Optimize Global Data) is **NOT available** (added in VS2013)
+- Current flags: `/O1 /Oi /GR /EHsc` (empirically confirmed correct — `/O2` breaks matches, `/fp:fast` has no effect)
+- Rich header: 1871 C++ objects + 465 C objects compiled with cl.exe 16.00.11886, plus 3 objects from VS2005 (Bink middleware)
+- Xbox 360 `/O1` = `/Oy /Ob2 /GF` (differs from standard MSVC; `/O2` = `/Oi /Oy /Ob2 /GF`)
+- `/fp:fast` is the **default** on Xbox 360 (per XDK docs `xenon_compiler_technology.htm`)
+- `#pragma fp_contract` is **ON by default** — controls fmadds generation
+- Xbox 360-specific flags tested and rejected: `/Ou` (prescheduling — breaks matches), `/Oc` (disable traps — no effect)
+
+---
+
+## See Also
+
+- [RB3_REFERENCE.md](RB3_REFERENCE.md) - Using RB3 as reference
+- [LOW_HANGING_FRUIT.md](LOW_HANGING_FRUIT.md) - Prioritized function list
+- [SUBAGENT_STRATEGY.md](SUBAGENT_STRATEGY.md) - Parallel AI agent workflow
+- [../WORKSESSION.md](../WORKSESSION.md) - Main session notes

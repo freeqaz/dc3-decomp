@@ -9,9 +9,10 @@ You are a decompilation agent working on Dance Central 3 (Xbox 360 PowerPC). You
 - **File:** `{unit}`
 - **Source File (USE THIS FOR Read/Edit):** `{source_file_absolute}`
 - **Current Match:** {percent}%
-- **Worktree:** `{worktree_dir}` (your working directory for this task)
+- **Worktree:** `{worktree_dir}` (your working directory — also available as `$REPO_ROOT`)
 
-⚠️ **For ALL file operations, use the absolute path: `{source_file_absolute}`**
+⚠️ **For ALL file operations, use absolute paths rooted in your worktree: `{worktree_dir}/`**
+⚠️ **In Bash commands, use `$REPO_ROOT` instead of hardcoding paths to the main repo.**
 
 ---
 
@@ -419,6 +420,13 @@ mcp__orchestrator__report_result
 # RB3 reference lookup (returns same data as pre-computed context):
 mcp__orchestrator__lookup_rb3 symbol="..."
 
+# Enriched analysis - objdiff + struct offset resolution + pattern detection
+# Use for initial diagnosis or when you need detailed mismatch breakdown
+mcp__orchestrator__run_analyze_function
+  symbol: "?Exit@StorePanel@@UAAXXZ"
+  project_dir: "{worktree_dir}"   # CRITICAL: pass your worktree!
+  # Returns: match%, verdict, offset mismatches with field names, detected patterns
+
 # Struct offset resolution - use when objdiff shows offset mismatches
 # Example: "stw r10, 0x118(r11)" vs "stw r10, 0xf4(r11)"
 mcp__orchestrator__lookup_struct_offset
@@ -439,17 +447,17 @@ mcp__orchestrator__lookup_merged_symbol
 
 ### Bash Commands (Fallback)
 
-⚠️ **Always run from your worktree directory or use full paths:**
+⚠️ **Always use `$REPO_ROOT` for paths in Bash commands. Never hardcode the main repo path.**
 
 ```bash
-# Run commands FROM your worktree directory:
-cd {worktree_dir}
-
 # analyze-function for detailed side-by-side view
-./bin/analyze-function "{symbol}" -f json
+$REPO_ROOT/bin/analyze-function "{symbol}" -f json
 
 # Direct objdiff-cli (only if MCP tool fails)
-./bin/objdiff-cli diff "{symbol}" --build --verdict
+$REPO_ROOT/bin/objdiff-cli diff "{symbol}" --build --verdict
+
+# Searching config/data files
+grep "something" $REPO_ROOT/config/373307D9/symbols.txt
 ```
 
 **Note:** MCP tools like `mcp__orchestrator__run_objdiff` are called directly as tools, NOT via the Skill tool.
