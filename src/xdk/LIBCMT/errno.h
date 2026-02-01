@@ -4,7 +4,8 @@
 extern "C" {
 #endif
 
-#define errno 0
+int *_errno(void);
+#define errno (*_errno())
 
 #define EACCES 13
 #define ENOSPC 28
