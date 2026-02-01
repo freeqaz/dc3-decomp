@@ -3,6 +3,7 @@
 #include "os/Platform.h"
 #include "os/Timer.h"
 #include "utl/BinStream.h"
+#include "utl/MemMgr.h"
 
 #define kChunkSizeMask 0x00ffffff
 #define kChunkUnusedMask 0xfe000000
@@ -10,7 +11,6 @@
 #define CHUNKSTREAM_Z_ID2 0xCCBEDEAF
 #define CHUNKSTREAM_Z_ID3 0xCDBEDEAF
 #define kChunkIDMask 0xC0BEDEAF
-
 
 enum BufferState {
     kInvalid,
@@ -49,12 +49,6 @@ public:
         kWrite = 1,
     };
 
-    static void *operator new(unsigned int s) {
-        return _MemAllocTemp(s, __FILE__, 0x31, "ChunkStream", 0);
-    }
-    static void *operator new(unsigned int s, void *place) { return place; }
-    static void operator delete(void *v) { MemFree(v, __FILE__, 0x31, "ChunkStream"); }
-
     ChunkStream(const char *, FileType, int, bool, Platform, bool);
     virtual ~ChunkStream();
     virtual void Flush() {}
@@ -64,6 +58,8 @@ public:
     virtual const char *Name() const;
     virtual bool Cached() const;
     virtual Platform GetPlatform() const;
+
+    MEM_OVERLOAD(ChunkStream, 0x31)
 
     void PotentiallyWriteChunk(bool b) { MaybeWriteChunk(b); } // so dumb
     static bool PollDecompressionWorker();

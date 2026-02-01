@@ -201,3 +201,47 @@ void OriginalChoreoRemixer::SaveOriginalMoveParents() {
         MILO_FAIL("Remixer could not determine start and end moves in %s", song.Str());
     }
 }
+
+void OriginalChoreoRemixer::BridgeGapsInMoveParents(int i1) {
+    std::vector<std::set<const MoveParent *> > setVec;
+    std::vector<const MoveParent *> &moveParentsByDiff = GetMoveParentsByDifficulty(i1);
+    for (int i = 0; i < mTotalMeasures; i++) {
+        if (!moveParentsByDiff[i]) {
+            if (i <= 0) {
+                MILO_FAIL(
+                    "MixItMgr: Gap at measure 0 in song %s\n", TheGameData->GetSong()
+                );
+            }
+            int i12 = i + 1;
+            for (; i12 < mTotalMeasures && !moveParentsByDiff[i12]; i12++) {
+            }
+            if (i12 > unk108) {
+                MILO_FAIL(
+                    "MixItMgr: Gap beyond finishing move in song %s\n",
+                    TheGameData->GetSong()
+                );
+            }
+            setVec.clear();
+            setVec.resize(mTotalMeasures);
+            setVec[i - 1].insert(moveParentsByDiff[i - 1]);
+            setVec[i].insert(moveParentsByDiff[i]);
+            for (int j = i12 - 1; j >= 0; j--) {
+                BuildSetOfPrevAdjacentMoveParents(setVec[j], setVec[j + 1]);
+            }
+            for (; i < i12; i++) {
+                std::set<const MoveParent *> &curSet = setVec[i];
+                const MoveParent *curMoveParentByDiff = moveParentsByDiff[i];
+                FOREACH (it, curSet) {
+                    if ((*it)->HasPrevAdjacent(curMoveParentByDiff)) {
+                        moveParentsByDiff[i] = *it;
+                        break; // needs to go to the next iteration of the i < i12 loop
+                    }
+                }
+                if (curSet.size() == 0) {
+                } else {
+                    moveParentsByDiff[i] = *curSet.begin();
+                }
+            }
+        }
+    }
+}

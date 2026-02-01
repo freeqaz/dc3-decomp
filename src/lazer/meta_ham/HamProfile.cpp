@@ -1,11 +1,13 @@
 #include "meta_ham/HamProfile.h"
 #include "flow/PropertyEventProvider.h"
+#include "game/GameMode.h"
 #include "game/HamUser.h"
 #include "game/HamUserMgr.h"
 #include "hamobj/Difficulty.h"
 #include "hamobj/HamGameData.h"
 #include "hamobj/HamLabel.h"
 #include "hamobj/HamPlayerData.h"
+#include "math/Rand.h"
 #include "math/Utl.h"
 #include "meta/FixedSizeSaveable.h"
 #include "meta/FixedSizeSaveableStream.h"
@@ -16,6 +18,7 @@
 #include "meta_ham/CampaignProgress.h"
 #include "meta_ham/FitnessGoalMgr.h"
 #include "meta_ham/HamSongMgr.h"
+#include "meta_ham/Leaderboards.h"
 #include "meta_ham/MetaPanel.h"
 #include "meta_ham/MetagameRank.h"
 #include "meta_ham/MetagameStats.h"
@@ -30,9 +33,12 @@
 #include "obj/Object.h"
 #include "os/DateTime.h"
 #include "os/Debug.h"
+#include "os/File.h"
 #include "os/OnlineID.h"
 #include "os/PlatformMgr.h"
+#include "stl/_algobase.h"
 #include "utl/JobMgr.h"
+#include "utl/MakeString.h"
 #include "utl/Std.h"
 #include "utl/Symbol.h"
 #include "xdk/xapilibi/xbox.h"
@@ -248,8 +254,21 @@ bool HamProfile::HasCheated() const {
 bool HamProfile::IsUnsaved() const {
     if (HasCheated()) {
         return false;
-    } else {
     }
+
+    if (Profile::IsUnsaved()) {
+        return true;
+    }
+
+    if (mStats->IsDirty()) {
+        return true;
+    }
+
+    if (mRank->UnkCA()) {
+        return true;
+    }
+
+    return mRatingHistory->Unk20() != false;
 }
 
 bool HamProfile::HasSomethingToUpload() {
@@ -852,10 +871,11 @@ void HamProfile::SetFitnessGoalsThrough(HamLabel *label) {
     MILO_ASSERT(label, 0x624);
     static Symbol fitness_goals_through_fmt("fitness_goals_through_fmt");
     if (!mIsFitnessGoalSet) {
-        label->SetTokenFmt(
-            fitness_goals_through_fmt,
-            DateTime::GetDateFormatting() == kMDY ? "MM/DD/YY" : ""
-        );
+        if (DateTime::GetDateFormatting() == kMDY) {
+            label->SetTokenFmt(fitness_goals_through_fmt, "MM/DD/YY");
+        } else {
+            label->SetTokenFmt(fitness_goals_through_fmt, "");
+        }
     } else {
         DateTime dt(
             mFitnessGoalStartYear, mFitnessGoalStartMonth, mFitnessGoalStartDay, 0, 0, 0
@@ -870,29 +890,23 @@ void HamProfile::SetFitnessGoalsThrough(HamLabel *label) {
 void HamProfile::SetFitnessGoalDays(HamLabel *label) {
     MILO_ASSERT(label, 0x63D);
     static Symbol fitness_goal_stat_fmt("fitness_goal_stat_fmt");
-    int i2, i3;
     if (!mIsFitnessGoalSet) {
-        i3 = 0;
-        i2 = 0;
+        label->SetTokenFmt(fitness_goal_stat_fmt, 0, 0);
     } else {
-        i3 = mFitnessGoalDaysActive;
-        i2 = mTrackedDaysActive;
+        label->SetTokenFmt(
+            fitness_goal_stat_fmt, mTrackedDaysActive, mFitnessGoalDaysActive
+        );
     }
-    label->SetTokenFmt(fitness_goal_stat_fmt, i2, i3);
 }
 
 void HamProfile::SetFitnessGoalCalories(HamLabel *label) {
     MILO_ASSERT(label, 0x64D);
     static Symbol fitness_goal_stat_fmt("fitness_goal_stat_fmt");
-    int i2, i3;
     if (!mIsFitnessGoalSet) {
-        i3 = 0;
-        i2 = 0;
+        label->SetTokenFmt(fitness_goal_stat_fmt, 0, 0);
     } else {
-        i3 = mFitnessGoalCalories;
-        i2 = mTrackedCalories;
+        label->SetTokenFmt(fitness_goal_stat_fmt, mTrackedCalories, mFitnessGoalCalories);
     }
-    label->SetTokenFmt(fitness_goal_stat_fmt, i2, i3);
 }
 
 void HamProfile::MarkContentNotNew(Symbol content) {
@@ -988,5 +1002,90 @@ void HamProfile::ResetOutfitPrefs() {
             }
         }
         MILO_ASSERT(playableCount == kNumCharacters, 0x147);
+    }
+}
+
+void HamProfile::UpdateBattleScore(
+    int songID, const HamPlayerData *playerdata, int stars, bool b
+) {
+    if (IsOkToUpdateProfile()) {
+        if (playerdata) {
+            mRank->UpdateScore(songID, playerdata, mSongStatusMgr, stars, 0);
+            mDirty = mDirty || mRank->UnkCA();
+        }
+        bool updatedSong = mSongStatusMgr->UpdateBattleSong(songID, stars, b);
+        mDirty = mDirty || updatedSong;
+    }
+}
+
+void HamProfile::UpdateScore(
+    int songID,
+    HamPlayerData const *playerdata,
+    Difficulty diff,
+    int score,
+    int i3,
+    int stars,
+    int numNices,
+    int numPerfects,
+    int percentPassed,
+    int i8,
+    bool b1,
+    bool b2
+) {
+    if (IsOkToUpdateProfile()) {
+        if (playerdata) {
+            mRank->UpdateScore(songID, playerdata, mSongStatusMgr, score, stars);
+            mDirty = mDirty || mRank->UnkCA();
+        }
+        bool updateSong = mSongStatusMgr->UpdateSong(
+            songID,
+            score,
+            i3,
+            diff,
+            i8,
+            stars,
+            numNices,
+            numPerfects,
+            percentPassed,
+            b1,
+            b2,
+            false
+        ); // i hated this so much why didnt it go in order
+        mDirty = mDirty || updateSong;
+
+        static Symbol challenge("challenge");
+        if (TheGameMode->InMode(challenge)) {
+            bool updateFlaunt = mSongStatusMgr->UpdateFlaunt(songID, score, diff, b1);
+            mDirty = mDirty || updateFlaunt;
+        }
+
+        if (!b1 && TheLeaderboards) {
+            TheLeaderboards->UploadScores(this);
+        }
+
+        if (!b1) {
+            TheFitnessGoalMgr->UpdateFitnessGoal(this);
+        }
+    }
+}
+
+char const *HamProfile::NextOutfitSample(Symbol s) {
+    auto it = std::find(mCharPrefs.begin(), mCharPrefs.end(), s);
+    if (it == mCharPrefs.end()) {
+        MILO_NOTIFY("Could not find vo index for %s", s);
+        return gNullStr;
+    } else {
+        int idx = it->mVoicemailIdx;
+        if (idx == -1) {
+            idx = RandomInt(0, 2);
+        }
+        int set = (idx + 1) % 2;
+        if (set < 0) {
+            set += 2;
+        }
+        it->mVoicemailIdx = set;
+        return FileLocalize(
+            MakeString("sfx/loc/eng/%s/%s_voicemail_%02d.mogg", s, s, idx), nullptr
+        );
     }
 }

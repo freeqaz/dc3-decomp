@@ -10,7 +10,6 @@
 #include "os/FileCache.h"
 #include "os/Platform.h"
 #include "os/System.h"
-#include "rndobj/AmbientOcclusion.h"
 #include "rndobj/Bitmap.h"
 #include "rndobj/Cam.h"
 #include "rndobj/Dir.h"
@@ -21,10 +20,11 @@
 #include "rndobj/Mat.h"
 #include "rndobj/Mesh.h"
 #include "rndobj/MetaMaterial.h"
-#include "rndobj/MultiMesh.h"
 #include "rndobj/Part.h"
 #include "utl/Std.h"
 #include "rndobj/Utl.h"
+
+#include "math/Rand.h"
 
 typedef void (*SplashFunc)(void);
 
@@ -40,6 +40,7 @@ RndMesh *sCylinderMesh;
 SplashFunc gSplashPoll;
 SplashFunc gSplashSuspend;
 SplashFunc gSplashResume;
+Vector3 gUtlXfms;
 
 RndGroup *GroupOwner(Hmx::Object *o) {
     if (o) {
@@ -146,16 +147,17 @@ void RndUtlPreInit() {
 void RndUtlInit() {
     FileCache::RegisterResourceCacheHelper(&gResourceFileCacheHelper);
     if (!UsingCD()) {
-        FilePath cylinderPath(FileSystemRoot(), "rndobj/cylinder.milo");
-        sCylinderDir = DirLoader::LoadObjects(cylinderPath, 0, 0);
+        sCylinderDir = DirLoader::LoadObjects(
+            FilePath(FileSystemRoot(), "rndobj/cylinder.milo"), 0, 0
+        );
     }
-    FilePath spherePath(FileSystemRoot(), "rndobj/sphere.milo");
-    sSphereDir = DirLoader::LoadObjects(spherePath, 0, 0);
+    sSphereDir =
+        DirLoader::LoadObjects(FilePath(FileSystemRoot(), "rndobj/sphere.milo"), 0, 0);
     if (sSphereDir) {
         sSphereMesh = sSphereDir->Find<RndMesh>("sphere.mesh", true);
     }
     if (sCylinderDir) {
-        sCylinderMesh = sCylinderDir->Find<RndMesh>("Cylinder.mesh", true);
+        sCylinderMesh = sSphereDir->Find<RndMesh>("Cylinder.mesh", true);
     }
 }
 
@@ -685,14 +687,51 @@ void EndianSwapBitmap(RndBitmap &bmap) {
     }
 }
 
-// Template instantiation for set<RndAmbientOcclusion::Edge>
-#include <set>
-#include "utl/StlAlloc.h"
-namespace stlpmtx_std {
-template class _Rb_tree<RndAmbientOcclusion::Edge,
-    less<RndAmbientOcclusion::Edge>,
-    RndAmbientOcclusion::Edge,
-    _Identity<RndAmbientOcclusion::Edge>,
-    priv::_SetTraitsT<RndAmbientOcclusion::Edge>,
-    StlNodeAlloc<RndAmbientOcclusion::Edge> >;
+void Clip(BuildPoly &bp, const Plane &plane, bool b) {
+    Hmx::Ray ray;
+    if (fabs(
+            bp.mTransform.m.z.x * plane.a + bp.mTransform.m.z.z * plane.c
+            + bp.mTransform.m.z.y * plane.b
+        )
+        <= 0.9999f) {
+        Intersect(bp.mTransform, plane, ray);
+        if (b) {
+            ray.dir.x = -ray.dir.x;
+            ray.dir.y = -ray.dir.y;
+        }
+        Clip(bp.mPoly, ray, bp.mPoly);
+    }
+}
+
+void ScrambleXfms(RndMultiMesh *mesh) {
+    double scrambleMax = 6.2829999923706055;
+    double scrambleMin = 0.0;
+    double max = 1.0;
+    double min = -1.0;
+    FOREACH (it, mesh->Instances()) {
+        float randZ = RandomFloat(min, max);
+        float randY = RandomFloat(min, max);
+        float randX = RandomFloat(min, max);
+        Vector3 vec(randX, randY, randZ);
+        Normalize(vec, vec);
+        float scrambler = RandomFloat(scrambleMin, scrambleMax);
+        Hmx::Quat q;
+        q.Set(vec, scrambler);
+        MakeRotMatrix(q, it->mXfm.m);
+    }
+}
+
+void SortXfms(RndMultiMesh *mesh, const Vector3 &vec) {
+    gUtlXfms = vec;
+    mesh->Instances().sort(XfmSort);
+    mesh->InvalidateProxies();
+}
+
+bool XfmSort(RndMultiMesh::Instance &mesh1, RndMultiMesh::Instance &mesh2) {
+    return (mesh1.mXfm.v.z - gUtlXfms.z) * (mesh1.mXfm.v.z - gUtlXfms.z)
+        + (mesh1.mXfm.v.y - gUtlXfms.y) * (mesh1.mXfm.v.y - gUtlXfms.y)
+        + (mesh1.mXfm.v.x - gUtlXfms.x) * (mesh1.mXfm.v.x - gUtlXfms.x)
+        < (mesh2.mXfm.v.z - gUtlXfms.z) * (mesh2.mXfm.v.z - gUtlXfms.z)
+        + (mesh2.mXfm.v.y - gUtlXfms.y) * (mesh2.mXfm.v.y - gUtlXfms.y)
+        + (mesh2.mXfm.v.x - gUtlXfms.x) * (mesh2.mXfm.v.x - gUtlXfms.x);
 }

@@ -13,6 +13,7 @@ public:
     virtual bool NatalToWorld(Transform &) const;
 
     void ResetSkeletonCharOrigin();
+    void SetUnk2430(bool b) { unk2430 = b; }
 
     static float const kDrawScale;
 

@@ -4,12 +4,18 @@
 #include "gesture/DepthBuffer3D.h"
 #include "Pose.h"
 #include "gesture/BaseSkeleton.h"
+#include "gesture/Skeleton.h"
 #include "gesture/SkeletonDir.h"
 #include "gesture/SkeletonUpdate.h"
+#include "hamobj/HamPlayerData.h"
 #include "obj/Object.h"
 #include "os/Debug.h"
+#include "rndobj/Anim.h"
+#include "rndobj/Cam.h"
+#include "rndobj/Draw.h"
 #include "ui/PanelDir.h"
 #include "utl/BinStream.h"
+#include "utl/Loader.h"
 
 PoseOwner::PoseOwner() : pose(0), holder(0), in_pose(0) {}
 
@@ -110,55 +116,6 @@ HamVisDir::~HamVisDir() {
     }
 }
 
-void HamVisDir::SetGrooviness(float groove) {
-    unk334 = Clamp<float>(0.0, 1.0, (groove - 0.5f) * 2/3);
-    auto itr = ObjDirItr<DepthBuffer3D>(this, true);
-    while (itr != nullptr) {
-        itr->SetGrooviness(groove);
-        ++itr;
-    }
-}
-
-void HamVisDir::CheckPose(int i1, PoseOwner &po) {
-    bool flag = false;
-    if (po.in_pose != false || po.pose->CurrentScore() <= 9.0f/10.0f) {
-        if (po.in_pose != false && po.holder->CurrentScore() <= 9.0f/10.0f) {
-            flag = true;
-            po.in_pose = false;
-        }
-    }
-    else {
-        flag = true;
-        po.in_pose = true;
-        TheGameData->HandlePoseFound(i1);
-    }
-    if (flag != false) {
-        static Message msg("whatever");
-        msg.SetType(MakeString("%s_state_changed", po.name));
-        Export(msg, true);
-    }
-}
-
-void HamVisDir::Enter() {
-    PanelDir::Enter();
-    mRunning = TheLoadMgr.EditMode();
-    if (TheLoadMgr.EditMode() == 0 && TheGestureMgr != nullptr) {
-        auto freestyle_filter = ObjectDir::Main()->Find<FreestyleMotionFilter>("freestyle_filter", false);
-        mFilter = freestyle_filter;
-        if (freestyle_filter == nullptr) {
-            freestyle_filter = new FreestyleMotionFilter();
-            mFilter = freestyle_filter;
-        }
-        freestyle_filter->SetName("freestyle_filter", Main());
-    }
-    mFilter->Deactivate();
-}
-
-void HamVisDir::Load(BinStream &bs) {
-    PreLoad(bs);
-    PostLoad(bs);
-}
-
 BEGIN_HANDLERS(HamVisDir)
     HANDLE_SUPERCLASS(SkeletonDir)
 END_HANDLERS
@@ -196,7 +153,10 @@ BEGIN_COPYS(HamVisDir)
     END_COPYING_MEMBERS
 END_COPYS
 
-void HamVisDir::Run(bool run) { mRunning = run; }
+void HamVisDir::Load(BinStream &bs) {
+    PreLoad(bs);
+    PostLoad(bs);
+}
 
 void HamVisDir::PreLoad(BinStream &bs) {
     LOAD_REVS(bs);
@@ -206,81 +166,142 @@ void HamVisDir::PreLoad(BinStream &bs) {
     } else {
         SkeletonDir::PreLoad(bs);
     }
-    bs.PushRev(packRevs(d.altRev, d.rev), this);
+    d.PushRev(this);
 }
 
 void HamVisDir::PostLoad(BinStream &bs) {
-    s32 rev = bs.PopRev(this);
-
-    if (rev < 1) {
+    BinStreamRev d(bs, bs.PopRev(this));
+    if (d.rev < 1) {
         PanelDir::PostLoad(bs);
     } else {
         SkeletonDir::PostLoad(bs);
     }
-
-    if (rev > 1 && rev < 3) {
-        bs.ReadEndian(&unk2d8, 4);
-        bs.ReadEndian(&unk2dc, 4);
+    if (d.rev > 1 && d.rev < 3) {
+        int x;
+        d >> x;
+        d >> x;
     }
-
-    if (rev > 2 && rev < 6) {
-        float temp;
-        bs.ReadEndian(&temp, 4);
+    if (d.rev > 2 && d.rev < 6) {
+        int x;
+        d >> x;
     }
-
-    if (rev > 3 && rev < 13) {
-        ObjPtrList<RndDrawable, ObjectDir> drawables(nullptr, (ObjListMode)0);
-        drawables.Load(bs, true, nullptr, nullptr);
-        float temps[3];
-        bs.ReadEndian(&temps, 12);
+    if (d.rev > 3 && d.rev < 0xD) {
+        ObjPtrList<RndDrawable> list(this);
+        d >> list;
+        Vector3 v;
+        d >> v;
     }
-
-    if (rev > 4 && rev < 13) {
-        ObjRefConcrete<RndCam, ObjectDir> cam(nullptr);
-        cam.Load(bs, true, nullptr);
-        float tempf;
-        bs.ReadEndian(&tempf, 4);
+    if (d.rev > 4 && d.rev < 0xD) {
+        ObjPtr<RndCam> cam(this);
+        d >> cam;
+        int x;
+        d >> x;
     }
-
-    if (rev > 6) {
-        bool val;
-        bs >> val;
+    if (d.rev > 6) {
+        d >> mMiloManualFrame;
     }
-
-    if (rev > 7) {
-        mPlayer1Right.Load(bs, true, nullptr);
-        mPlayer1Left.Load(bs, true, nullptr);
-        mPlayer2Right.Load(bs, true, nullptr);
-        mPlayer2Left.Load(bs, true, nullptr);
+    if (d.rev > 7) {
+        d >> mPlayer1Left;
+        d >> mPlayer1Right;
+        d >> mPlayer2Left;
+        d >> mPlayer2Right;
     }
-
-    if (rev < 13) {
-        if (rev > 8) {
-            ObjRefConcrete<RndDrawable, ObjectDir> drawable[4] = {
-                ObjRefConcrete<RndDrawable, ObjectDir>(nullptr),
-                ObjRefConcrete<RndDrawable, ObjectDir>(nullptr),
-                ObjRefConcrete<RndDrawable, ObjectDir>(nullptr),
-                ObjRefConcrete<RndDrawable, ObjectDir>(nullptr)
-            };
-            drawable[0].Load(bs, true, nullptr);
-            drawable[1].Load(bs, true, nullptr);
-            drawable[2].Load(bs, true, nullptr);
-            drawable[3].Load(bs, true, nullptr);
+    if (d.rev < 0xD) {
+        if (d.rev > 8) {
+            ObjPtr<RndDrawable> draw(this);
+            d >> draw;
+            d >> draw;
+            d >> draw;
+            d >> draw;
         }
-
-        if (rev > 9) {
-            ObjRefConcrete<RndAnimatable, ObjectDir> anim(nullptr);
-            anim.Load(bs, true, nullptr);
+        if (d.rev > 9) {
+            ObjPtr<RndAnimatable> anim(this);
+            d >> anim;
         }
-
-        if (rev > 10) {
-            ObjRefConcrete<RndCam, ObjectDir> cam(nullptr);
-            cam.Load(bs, true, nullptr);
+        if (d.rev > 10) {
+            ObjPtr<RndCam> cam(this);
+            d >> cam;
         }
-
-        if (rev > 11) {
-            ObjRefConcrete<RndAnimatable, ObjectDir> anim(nullptr);
-            anim.Load(bs, true, nullptr);
+        if (d.rev > 11) {
+            ObjPtr<RndAnimatable> anim(this);
+            d >> anim;
         }
     }
 }
+
+void HamVisDir::Enter() {
+    PanelDir::Enter();
+    mRunning = TheLoadMgr.EditMode();
+    if (TheLoadMgr.EditMode() == 0 && TheGestureMgr != nullptr) {
+        auto freestyle_filter =
+            ObjectDir::Main()->Find<FreestyleMotionFilter>("freestyle_filter", false);
+        mFilter = freestyle_filter;
+        if (freestyle_filter == nullptr) {
+            freestyle_filter = new FreestyleMotionFilter();
+            mFilter = freestyle_filter;
+        }
+        freestyle_filter->SetName("freestyle_filter", Main());
+    }
+    mFilter->Deactivate();
+}
+
+void HamVisDir::PostUpdate(const SkeletonUpdateData *data) {
+    if (data) {
+        if (TheLoadMgr.EditMode()) {
+            MILO_ASSERT(TheGameData, 0xEE);
+            TheGameData->AutoAssignSkeletons(data);
+        }
+        if ((!mFilter || mFilter->IsActive()) || mRunning) {
+            if (mFilter) {
+                mFilter->UpdateFilters(*data);
+            }
+            if (mRunning) {
+                for (int i = 0; i < 2; i++) {
+                    HamPlayerData *player_data = TheGameData->Player(i);
+                    MILO_ASSERT(player_data, 0x101);
+                    if (player_data->IsPlaying()) {
+                        Skeleton *cur = data->unk0[i];
+                        if (cur && cur->IsTracked()) {
+                            UpdateGestureFilter(*cur, i);
+                            mSquatPoses[i].pose->Update(*cur);
+                            mSquatPoses[i].holder->Update(*cur);
+                            mYPoses[i].pose->Update(*cur);
+                            mYPoses[i].holder->Update(*cur);
+                            CheckPose(i, mSquatPoses[i]);
+                            CheckPose(i, mYPoses[i]);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+void HamVisDir::SetGrooviness(float groove) {
+    unk334 = (groove - 0.5f) * (2.0f / 3.0f);
+    unk334 = Clamp<float>(0.0, 1.0, unk334);
+    for (ObjDirItr<DepthBuffer3D> it(this, true); it != nullptr; ++it) {
+        it->SetGrooviness(groove);
+    }
+}
+
+void HamVisDir::CheckPose(int i1, PoseOwner &po) {
+    bool flag = false;
+    if (po.in_pose || po.pose->CurrentScore() <= 9.0f / 10.0f) {
+        if (po.in_pose && po.holder->CurrentScore() <= 9.0f / 10.0f) {
+            flag = true;
+            po.in_pose = false;
+        }
+    } else {
+        flag = true;
+        po.in_pose = true;
+        TheGameData->HandlePoseFound(i1);
+    }
+    if (flag) {
+        static Message msg("whatever");
+        msg.SetType(MakeString("%s_state_changed", po.name));
+        Export(msg, true);
+    }
+}
+
+void HamVisDir::Run(bool run) { mRunning = run; }

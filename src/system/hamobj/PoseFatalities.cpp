@@ -408,6 +408,7 @@ void PoseFatalities::Poll() {
             }
             if (InFatality(i)) {
                 CharCameraInput input(TheHamDirector->GetCharacter(i));
+                input.SetUnk2430(true);
                 input.PollTracking();
                 const SkeletonFrame *frame = input.NewFrame();
                 if (frame) {

@@ -3,6 +3,8 @@
 #include "obj/Object.h"
 #include "os/Debug.h"
 #include "utl/BinStream.h"
+#include "utl/Std.h"
+#include "utl/Symbol.h"
 
 MoveGraph::~MoveGraph() {
     mLayoutData = nullptr;
@@ -14,6 +16,14 @@ BEGIN_HANDLERS(MoveGraph)
     HANDLE_EXPR(get_layout_data, mLayoutData)
     HANDLE_SUPERCLASS(Hmx::Object)
 END_HANDLERS
+
+BEGIN_COPYS(MoveGraph)
+    COPY_SUPERCLASS(Hmx::Object)
+    CREATE_COPY(MoveGraph)
+    BEGIN_COPYING_MEMBERS
+        *this = *c;
+    END_COPYING_MEMBERS
+END_COPYS
 
 BEGIN_LOADS(MoveGraph)
     while (bs.Eof() != NotEof) {
@@ -30,17 +40,37 @@ BEGIN_LOADS(MoveGraph)
         }
         MoveParent *parent = new MoveParent();
         parent->Load(d.stream, this);
-        Symbol key = parent->unk4;
-        mMoveParents[key] = parent;
+        mMoveParents[parent->Name()] = parent;
     }
     CacheLinks();
     mLayoutData->Load(d.stream);
 END_LOADS
 
+MoveGraph &MoveGraph::operator=(const MoveGraph &graph) {
+    Clear();
+    FOREACH (it, graph.mMoveParents) {
+        MoveParent *cur = it->second;
+        MoveParent *parent = new MoveParent(cur);
+        FOREACH (v, cur->Variants()) {
+            MoveVariant *variant = new MoveVariant(this, *v, parent);
+            parent->AddVariant(variant);
+            parent->AddGenre(variant->Genre());
+            parent->AddEra(variant->Era());
+            mMoveVariants[variant->Name()] = variant;
+        }
+        if (parent->Variants().size() != 0) {
+            mMoveParents[parent->Name()] = parent;
+        } else {
+            delete parent;
+        }
+    }
+    CacheLinks();
+    mLayoutData = graph.mLayoutData;
+    return *this;
+}
+
 void MoveGraph::Clear() {
-    for (std::map<Symbol, MoveParent *>::iterator it = mMoveParents.begin();
-         it != mMoveParents.end();
-         ++it) {
+    FOREACH (it, mMoveParents) {
         RELEASE(it->second);
     }
     mMoveParents.clear();
@@ -54,11 +84,8 @@ void MoveGraph::ImportMoveData(DataArray *pMoveData) {
         MILO_ASSERT(pParentConfig, 0x57);
         MoveParent *pParent = new MoveParent(this, pParentConfig);
         MILO_ASSERT(pParent, 0x5A);
-        Symbol key = pParent->unk4;
-        mMoveParents[key] = pParent;
-        for (std::vector<MoveVariant *>::iterator it = pParent->mVariants.begin();
-             it != pParent->mVariants.end();
-             ++it) {
+        mMoveParents[pParent->Name()] = pParent;
+        FOREACH (it, pParent->Variants()) {
             mMoveVariants[(*it)->Name()] = *it;
         }
     }
@@ -66,9 +93,7 @@ void MoveGraph::ImportMoveData(DataArray *pMoveData) {
 }
 
 void MoveGraph::CacheLinks() {
-    for (std::map<Symbol, MoveParent *>::iterator it = mMoveParents.begin();
-         it != mMoveParents.end();
-         ++it) {
+    FOREACH (it, mMoveParents) {
         it->second->CacheLinks(this);
     }
 }
@@ -83,4 +108,73 @@ MoveVariant *MoveGraph::FindNonConstMoveByVariantName(Symbol name) const {
 
 const MoveVariant *MoveGraph::FindMoveByVariantName(Symbol name) const {
     return FindNonConstMoveByVariantName(name);
+}
+
+void MoveGraph::GatherVariants(
+    std::vector<const MoveVariant *> *vars, MoveVariantFunc *func, void *v3
+) const {
+    vars->reserve(mMoveParents.size() * 10);
+    FOREACH (it, mMoveParents) {
+        MoveParent *curParent = it->second;
+        FOREACH (var, curParent->Variants()) {
+            if (!func || func(*var, v3)) {
+                vars->push_back(*var);
+            }
+        }
+    }
+}
+
+bool MoveGraph::HasVariantPair(const MoveParent *p1, const MoveParent *p2) const {
+    const MoveVariant *v1;
+    const MoveVariant *v2;
+    return FindVariantPair(v1, v2, p1, p2, nullptr, nullptr, gNullStr, true);
+}
+
+bool MoveGraph::FindVariantPair(
+    const MoveVariant *&vref1,
+    const MoveVariant *&vref2,
+    const MoveParent *p1,
+    const MoveParent *p2,
+    const MoveVariant *v1,
+    const MoveVariant *v2,
+    Symbol s,
+    bool b8
+) const {
+    if (p1) {
+        auto it = mMoveParents.find(p1->Name());
+        if (it == mMoveParents.end()) {
+            return false;
+        } else {
+            p1 = it->second;
+        }
+    }
+    if (p2) {
+        auto it = mMoveParents.find(p2->Name());
+        if (it == mMoveParents.end()) {
+            return false;
+        } else {
+            p2 = it->second;
+        }
+    }
+    if (v1) {
+        auto it = mMoveVariants.find(v1->Name());
+        if (it != mMoveVariants.end() && it->second->Parent() != p1) {
+            v1 = it->second;
+        } else {
+            v1 = nullptr;
+        }
+    }
+    if (v2) {
+        auto it = mMoveVariants.find(v2->Name());
+        if (it != mMoveVariants.end() && it->second->Parent() != p2) {
+            v2 = it->second;
+        } else {
+            v2 = nullptr;
+        }
+    }
+    if (p1 && p2) {
+        vref1 = 0;
+        vref2 = 0;
+    }
+    return 0;
 }

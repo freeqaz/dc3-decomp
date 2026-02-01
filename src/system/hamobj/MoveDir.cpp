@@ -18,6 +18,7 @@
 #include "hamobj/Difficulty.h"
 #include "hamobj/ErrorNode.h"
 #include "hamobj/FilterVersion.h"
+#include "hamobj/HamAudio.h"
 #include "hamobj/HamDirector.h"
 #include "hamobj/HamGameData.h"
 #include "hamobj/HamMove.h"
@@ -34,6 +35,7 @@
 #include "obj/DataUtl.h"
 #include "obj/Dir.h"
 #include "obj/DirLoader.h"
+#include "obj/Msg.h"
 #include "obj/Object.h"
 #include "obj/Task.h"
 #include "obj/Utl.h"
@@ -46,6 +48,8 @@
 #include "rndobj/Font.h"
 #include "rndobj/FontBase.h"
 #include "rndobj/Overlay.h"
+#include "rndobj/Rnd.h"
+#include "rndobj/Utl.h"
 #include "ui/PanelDir.h"
 #include "ui/ResourceDirPtr.h"
 #include "ui/UILabelDir.h"
@@ -55,9 +59,33 @@
 #include "utl/SongInfoCopy.h"
 #include "utl/Std.h"
 #include "utl/Symbol.h"
+#include "utl/TimeConversion.h"
 #include "world/Dir.h"
+#include "xdk/XAPILIB.h"
 
 std::vector<FilterVersion *> MoveDir::sFilterVersions;
+
+namespace {
+    static Hmx::Color sGray(0.5, 0.5, 0.5, 1);
+    static Hmx::Color sGreen(0, 0.6, 0, 0.5);
+    static Hmx::Color sDarkerGray(0.3, 0.3, 0.3, 0.8);
+    static Hmx::Color sLightGray(0.8, 0.8, 0.8, 1);
+    static Hmx::Color sDarkGray(0.3, 0.3, 0.3, 0.6);
+
+    float DrawOverlayBar(float f1, float f2, float f3, const Hmx::Color &c, float f4) {
+        TheRnd.DrawRectScreen(
+            Hmx::Rect(f2, f1, (f3 - f2), f4), c, nullptr, nullptr, nullptr
+        );
+        UtilDrawLine(Vector2(f2, f1), Vector2(f2, f1 + f4), sGray);
+        UtilDrawLine(Vector2(f3, f1), Vector2(f3, f1 + f4), sGray);
+        return f4;
+    }
+
+    float DrawDetectedBar(float, const char *, float, float, float, bool, bool);
+    void DrawBeatLine(float, float, float, const Hmx::Color &);
+    float DrawPlayClip(float, SkeletonClip *, int);
+
+}
 
 String RecordClipName(const char *cc, int i2) {
     DateTime dt;
@@ -100,7 +128,7 @@ MoveMode CurrentMoveMode() {
 MoveDir::MoveDir()
     : mShowMoveOverlay(0), mErrorNodeInfo(0), mPlayClip(this), mRecordClip(this),
       unk2bc(this), unk2d0(this), unk2e4(0), mReportMove(this), mFiltersEnabled(0),
-      mGamePanel(0), unk30c(0), mFilterQueue(0), mAsyncDetector(0), unk394(0),
+      mGamePanel(0), unk30c(0), mFilterQueue(0), mAsyncDetector(0), mUpdateLoader(0),
       mFinishingMoveMeasure(10000), mMoveOverlay(RndOverlay::Find("ham_move", true)),
       mDancerSeq(this), unk414(0), mSkeletonViz(Hmx::Object::New<SkeletonViz>()),
       unk41c(0), mDebugLatencyOffset(0), mDebugLoop(0), mLastPollMs(0),
@@ -285,7 +313,7 @@ void MoveDir::PreLoad(BinStream &bs) {
             const SongMetadata *songData =
                 songMgr->Data(songMgr->GetSongIDFromShortName(song, true));
             if (songData->Version() < 11) {
-                unk394 = dynamic_cast<DirLoader *>(TheLoadMgr.AddLoader(
+                mUpdateLoader = dynamic_cast<DirLoader *>(TheLoadMgr.AddLoader(
                     FilePath(FileRoot(), songMgr->SongFilePath(song, "_update.milo", 11)),
                     kLoadFront
                 ));
@@ -422,9 +450,9 @@ void MoveDir::PostLoad(BinStream &bs) {
         d >> filterVersion;
     }
     SetFilterVersion(filterVersion);
-    if (unk394) {
-        ObjectDir *loaderDir = unk394->GetDir();
-        RELEASE(unk394);
+    if (mUpdateLoader) {
+        ObjectDir *loaderDir = mUpdateLoader->GetDir();
+        RELEASE(mUpdateLoader);
         if (loaderDir) {
             for (ObjDirItr<Hmx::Object> it(loaderDir, true); it != nullptr; ++it) {
                 Hmx::Object *cur = it;
@@ -474,7 +502,7 @@ void MoveDir::PostLoad(BinStream &bs) {
                     RndFontBase *font = labelDirPtr->FontObj(gNullStr);
                     MILO_ASSERT(font, 0xA52);
                     ReplaceObject(font, updateFont, false, false, true);
-                    unk398.push_back(labelDirPtr);
+                    mUpdateFonts.push_back(labelDirPtr);
                 }
             }
         }
@@ -660,9 +688,9 @@ void MoveDir::PostUpdate(const SkeletonUpdateData *data) {
                     unk424.Poll(0, skeletonFrame);
                 }
             } else {
-                const Skeleton *playerSkeleton =
-                    TheGameData->Player(0)->GetSkeleton((const Skeleton *const(&)[6]
-                    )data->unk4);
+                const Skeleton *playerSkeleton = TheGameData->Player(0)->GetSkeleton(
+                    (const Skeleton *const(&)[6])data->unk4
+                );
                 if (playerSkeleton) {
                     unk424 = *playerSkeleton;
                 }
@@ -1011,9 +1039,9 @@ DataNode MoveDir::OnStreamJump(const DataArray *) {
     return 0;
 }
 
-// TODO: once this is fully implemented, remove the noinline part
-__declspec(noinline) void MoveDir::OnBeat() {
-    if (TheMaster) {
+void MoveDir::OnBeat() {
+    if (TheMaster && (int)TheMaster->TotalBeat2() % 4 == 3
+        && (int)TheMaster->TotalBeat1() % 4 == 0) {
         for (int i = 0; i < 2; i++) {
             mCurMoveSmoothers[i].Reset();
         }
@@ -1031,80 +1059,6 @@ PracticeSection *MoveDir::GetPracticeSection(Difficulty d) {
     return nullptr;
 }
 
-float MoveDir::DetectRangePSNR(
-    const std::pair<DetectFrame *, DetectFrame *> &frames, const FilterVersion *filterVersion
-) const {
-    MILO_ASSERT(filterVersion->mType == 1, 0x1E8);
-    float result = 0.0f;
-    MoveMode mode = CurrentMoveMode();
-    for (DetectFrame *frame = frames.first; frame != frames.second; frame = (DetectFrame *)((char *)frame + 0x430)) {
-        const Ham2FrameWeight &weight = frame->GetMoveFrame()->FrameWeight(frame->Mirror());
-        float frameWeight = weight.unk0;
-        if (frameWeight > 0.0f && frame->HasScore()) {
-            result += frame->Score(filterVersion, mode) * frameWeight;
-        }
-    }
-    return result;
-}
-
-MoveFrame *MoveDir::ClosestMoveFrame() {
-    HamMove *move = mMovePlayerData[0].mCurMove;
-    if (!move)
-        return nullptr;
-    struct FilterFrameDist {
-        float mDist;
-        FilterFrameDist(float dist) : mDist(dist) {}
-        bool operator()(const MoveFrame &a, const MoveFrame &b) {
-            return fabsf(a.GetBeat() - mDist) < fabsf(b.GetBeat() - mDist);
-        }
-    };
-    int measure = TheTaskMgr.CurrentMeasure();
-    float beat = TheTaskMgr.TotalBeat();
-    int measureBeats = measure * 4;
-    std::vector<MoveFrame> &frames = move->GetMoveFrames();
-    MoveFrame *result = std::min_element(
-        frames.begin(), frames.end(), FilterFrameDist(beat - (float)measureBeats)
-    );
-    return result != frames.end() ? result : nullptr;
-}
-
-float MoveDir::SongSeconds() {
-    float seconds = TheTaskMgr.Seconds(TaskMgr::kRealTime);
-    if (TheMaster) {
-        HamAudio *audio = TheMaster->GetAudio();
-        if ((int)audio) {
-            Stream *stream = audio->GetSongStream();
-            if (stream) {
-                stream = TheMaster->GetAudio()->GetSongStream();
-                seconds += stream->GetJumpBackTotalTime() * 0.001f;
-            }
-        }
-    }
-    return seconds;
-}
-
-float MoveDir::SongSpeed() const {
-    if (TheMaster) {
-        Stream *stream = TheMaster->GetAudio()->GetSongStream();
-        return stream->GetSpeed();
-    }
-    return 1.0f;
-}
-
-bool MoveDir::InGracePeriod(int player) {
-    HamPlayerData *playerData = TheGameData->Player(player);
-    Hmx::Object *provider = playerData->Provider();
-    if (provider) {
-        static Symbol prop("start_score_move_index");
-        const DataNode *node = provider->Property(prop, false);
-        if (node) {
-            int measure = TheTaskMgr.CurrentMeasure();
-            return node->Int() == measure;
-        }
-    }
-    return false;
-}
-
 DancerSequence *MoveDir::SkillsSequence(Difficulty d, Symbol s1, Symbol s2) {
     PracticeSection *section = GetPracticeSection(d);
     if (section) {
@@ -1112,4 +1066,180 @@ DancerSequence *MoveDir::SkillsSequence(Difficulty d, Symbol s1, Symbol s2) {
     } else {
         return nullptr;
     }
+}
+
+void MoveDir::SetCurrentMove(int player, HamMove *move) {
+    MILO_ASSERT_RANGE(player, 0, 2, 0x563);
+    MovePlayerData &mpd = mMovePlayerData[player];
+    HamPhraseMeter *hpm = mpd.unk30;
+    if (hpm) {
+        hpm->SetRatingFrac(0, -1);
+        if (move && move->Scored() && TheGameData->Player(player)->IsPlaying()
+            && !InGracePeriod(player)) {
+            hpm->SetShowing(true);
+        } else {
+            hpm->SetShowing(false);
+        }
+    }
+    if (mpd.unk38) {
+        mpd.unk38->SetShowing(mpd.unk2c == 0);
+    }
+    mpd.mCurMove = move;
+    if (move) {
+        float f8 = TheTaskMgr.TotalBeat() - TheTaskMgr.CurrentMeasure() * 4;
+        float f9 = BeatToSeconds(f8);
+        f9 = (BeatToSeconds(f8 + 4.0f) - f9) * 1000.0f;
+        if (TheMaster && TheMaster->GetAudio()
+            && TheMaster->GetAudio()->GetSongStream()) {
+            f9 = f9 / TheMaster->GetAudio()->GetSongStream()->GetSpeed();
+        }
+        if (move->SuppressGuideGesture()) {
+            XNuiDelayUI((int)f9);
+        }
+        if (move->SuppressPracticeOptions()) {
+            static Message suppressMsg("begin_suppress_practice_options", 0);
+            suppressMsg[0] = f9 / 1000.0f;
+            TheHamProvider->Handle(suppressMsg, false);
+        }
+    }
+    mMoveOverlay->SetCallback(this);
+}
+
+float MoveDir::SongSeconds() {
+    float secs = TheTaskMgr.Seconds(TaskMgr::kRealTime);
+    if (TheMaster && TheMaster->GetAudio() && TheMaster->GetAudio()->GetSongStream()) {
+        float time = TheMaster->GetAudio()->GetSongStream()->GetJumpBackTotalTime() * secs
+            * 1000.0f;
+        secs += time / 1000.0f;
+    }
+    return secs;
+}
+
+float MoveDir::SongSpeed() const {
+    if (TheMaster) {
+        return TheMaster->GetAudio()->GetSongStream()->GetSpeed();
+    } else {
+        return 1;
+    }
+}
+
+float MoveDir::DetectRangePSNR(
+    const std::pair<const DetectFrame *, const DetectFrame *> &detectFrames,
+    const FilterVersion *fv
+) const {
+    MILO_ASSERT(fv->mType == kFilterVersionHam2, 0x1E8);
+    float ret = 0;
+    MoveMode moveMode = CurrentMoveMode();
+    for (const DetectFrame *it = detectFrames.first; it != detectFrames.second; ++it) {
+        const Ham2FrameWeight &wt = it->GetMoveFrame()->FrameWeight(it->Mirror());
+        float cmp = wt.unk0;
+        if (cmp > 0 && it->HasScore()) {
+            ret += it->Score(fv, moveMode) * cmp;
+        }
+    }
+    return ret;
+}
+
+float MoveDir::DetectRangeFrac(
+    const std::pair<DetectFrame *, DetectFrame *> &detectFrames, const FilterVersion *fv
+) const {
+    MILO_ASSERT(fv->mType == kFilterVersionHam1, 0x1D5);
+    int idx = 0;
+    float ret = 0;
+    MoveMode moveMode = CurrentMoveMode();
+    for (DetectFrame *it = detectFrames.first; it != detectFrames.second; ++it, ++idx) {
+        ret += it->Score(fv, moveMode);
+    }
+    if (idx > 0) {
+        return Clamp(0.0f, 1.0f, ret / (float)idx);
+    } else {
+        return 0;
+    }
+}
+
+bool MoveDir::InGracePeriod(int player) {
+    Hmx::Object *provider = TheGameData->Player(player)->Provider();
+    if (provider) {
+        static Symbol start_score_move_index("start_score_move_index");
+        const DataNode *prop = provider->Property(start_score_move_index, false);
+        if (prop) {
+            return TheTaskMgr.CurrentMeasure() < prop->Int();
+        } else {
+            return false;
+        }
+    } else {
+        return false;
+    }
+}
+
+MoveFrame *MoveDir::ClosestMoveFrame() {
+    struct FilterFrameDist {
+        FilterFrameDist(float f) : unk0(f) {}
+        bool operator()(const MoveFrame &frame1, const MoveFrame &frame2) const {
+            return fabsf(frame1.Beat() - unk0) < fabsf(frame2.Beat() - unk0);
+        }
+
+        float unk0;
+    };
+    HamMove *move = mMovePlayerData[0].mCurMove;
+    if (move) {
+        float cmp = TheTaskMgr.TotalBeat() - (float)(TheTaskMgr.CurrentMeasure() * 4);
+        std::vector<MoveFrame> &frames = move->GetMoveFrames();
+        return std::min_element(frames.begin(), frames.end(), FilterFrameDist(cmp));
+    } else {
+        return nullptr;
+    }
+}
+
+float MoveDir::DetectFrac(
+    int player,
+    const HamMove *move,
+    const std::pair<DetectFrame *, DetectFrame *> &detectFrames
+) {
+    MILO_ASSERT_RANGE(player, 0, 2, 0x187);
+    MILO_ASSERT(TheGameData, 0x188);
+    MILO_ASSERT(move, 0x189);
+    const FilterVersion *fv = move->FilterVer();
+    float frac;
+    if (fv->mType == kFilterVersionHam2) {
+        frac = move->PSNRToDetectFrac(DetectRangePSNR(detectFrames, fv));
+    } else {
+        frac = DetectRangeFrac(detectFrames, fv);
+    }
+    Symbol autoplay = TheGameData->Player(player)->Autoplay();
+    if (!autoplay.Null()) {
+        static Symbol maximum("maximum");
+        if (autoplay == maximum) {
+            frac = 1;
+        } else {
+            frac = RatingToDetectFrac(autoplay, move->RatingOverride());
+        }
+        int i8 = 0;
+        int i7 = 0;
+        for (DetectFrame *it = detectFrames.first; it != detectFrames.second; ++it) {
+            const Ham2FrameWeight &wt = it->GetMoveFrame()->FrameWeight(it->Mirror());
+            if (wt.unk0 != 0) {
+                i8++;
+                if (it->HasScore()) {
+                    i7++;
+                }
+            }
+        }
+        if (i8 != 0) {
+            frac = i7 / (i8 * frac);
+        }
+    }
+    return frac;
+}
+
+void MoveDir::DetectRange(
+    std::vector<DetectFrame> &frames,
+    std::pair<DetectFrame *, DetectFrame *> &range,
+    int low,
+    int high
+) {
+    range.first =
+        std::lower_bound(frames.begin(), frames.end(), low, DetectFrameMoveIdxCmp());
+    range.second =
+        std::upper_bound(frames.begin(), frames.end(), high, DetectFrameMoveIdxCmp());
 }

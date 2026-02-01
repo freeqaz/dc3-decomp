@@ -36,10 +36,11 @@ public:
         int filterMask = (unk4 & 0x300000) >> 5;
         return filterMask ? kFilterVersionHam1 : kFilterVersionHam2;
     }
+    float Beat() const { return mBeat; }
 
 private:
     float mBeat; // 0x0
-    int unk4; // 0x4
+    int unk4; // 0x4 - flags?
     Ham1NodeWeight mHam1NodeWeights[kNumMoveModes][kNumMoveMirrored][kNumHam1Nodes]; // 0x8
     Vector3 mNodeWeights[kNumMoveMirrored][kMaxNumErrorNodes]; // 0x508
     Vector3 mNodeScales[kNumMoveMirrored][kMaxNumErrorNodes]; // 0x928
@@ -51,9 +52,11 @@ private:
 class HamMove : public RndPropAnim {
 public:
     struct LocalizedName {
-        bool operator==(const Symbol &s) const { return mLanguage == s; }
+        bool operator==(const Symbol s) const { return mLanguage == s; }
 
+        /** The localized name's language. (i.e. eng, esp, fre) */
         Symbol mLanguage; // 0x0
+        /** The move's name, in that language. */
         String mName; // 0x4
     };
     enum TexState {
@@ -148,7 +151,7 @@ protected:
     /** "Override threshold for super perfect /
         perfect/flawless / awesome/nice / ok/almost (0 means no override)" */
     float mOverrides[kNumMoveRatings]; // 0xc0
-    bool unkd0; // 0xd0
+    bool unkd0; // 0xd0 - dirty
     /** "id used when comparing to other moves" */
     Hmx::CRC mConfusabilityID; // 0xd4
     std::map<Hmx::CRC, float> mConfusabilities; // 0xd8

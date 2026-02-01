@@ -51,6 +51,8 @@ public:
     void SetMaps();
     void LoaderPoll();
     int Unk70() const { return unk60.GetMeasure(); }
+    float TotalBeat1() const { return unk60.GetTotalBeat(); }
+    float TotalBeat2() const { return unk78.GetTotalBeat(); }
     HamAudio *GetAudio() const { return mAudio; }
     HamSongData *SongData() const { return mSongData; }
     MidiParserMgr *GetMidiParserMgr() const { return mMidiParserMgr; }

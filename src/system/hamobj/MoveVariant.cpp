@@ -4,6 +4,9 @@
 #include "obj/Data.h"
 #include "os/Debug.h"
 #include "utl/BinStream.h"
+#include "utl/Symbol.h"
+
+#pragma region MoveCandidate
 
 MoveCandidate::MoveCandidate(Symbol s1, Symbol, Symbol s3, bool b4) : mAdjacencyFlag(0) {
     if (b4)
@@ -67,6 +70,9 @@ unsigned int MoveCandidate::Adjacency(Symbol s) {
     }
 }
 
+#pragma endregion
+#pragma region MoveVariant
+
 MoveVariant::MoveVariant(MoveGraph *graph, const MoveVariant *other, MoveParent *parent) {
     mVariantName = other->mVariantName;
     mMoveParent = parent;
@@ -80,17 +86,15 @@ MoveVariant::MoveVariant(MoveGraph *graph, const MoveVariant *other, MoveParent 
     mEra = other->mEra;
     mFlags = other->mFlags & ~1;
     if (other->mLinkedTo.mVariant) {
-        mLinkedTo.mVariantName = other->mLinkedTo.mVariant->mSongName.Str();
+        mLinkedTo.mVariantName = other->mLinkedTo.mVariant->mVariantName.Str();
     } else {
         mLinkedTo.mVariant = nullptr;
     }
     if (other->mLinkedFrom.mVariant) {
-        mLinkedFrom.mVariantName = other->mLinkedFrom.mVariant->mSongName.Str();
-    } else {
-        mLinkedFrom.mVariant = nullptr;
+        mLinkedFrom.mVariantName = other->mLinkedFrom.mVariant->mVariantName.Str();
     }
     mPositionOffset = other->mPositionOffset;
-    graph->mMoveVariants[mSongName] = this;
+    graph->mMoveVariants[mVariantName] = this;
 }
 
 MoveVariant::MoveVariant(MoveGraph *graph, DataArray *cfg, MoveParent *parent) {
@@ -114,13 +118,13 @@ MoveVariant::MoveVariant(MoveGraph *graph, DataArray *cfg, MoveParent *parent) {
     static Symbol prev_candidates("prev_candidates");
     static Symbol next_candidates("next_candidates");
     static Symbol original_adjacent("original_adjacent");
-    mMoveParent = parent;
     mVariantName = cfg->Sym(0);
-    mSongName = cfg->FindSym(song_name);
-    mAvgBeatsPerSec = cfg->FindFloat(average_beats_per_second);
-    mGenre = cfg->FindSym(genre);
+    mMoveParent = parent;
+    mSongName = cfg->FindArray(song_name)->Sym(1);
+    mAvgBeatsPerSec = cfg->FindArray(average_beats_per_second)->Float(1);
+    mGenre = cfg->FindArray(genre)->Sym(1);
+    mEra = cfg->FindArray(era)->Sym(1);
     mFlags = 0;
-    mEra = cfg->FindSym(era);
     mFlags |= cfg->FindInt(scored, 0) << 1;
     mFlags |= cfg->FindInt(final_pose, 0) << 3;
     mFlags |= cfg->FindInt(suppress_guide_gesture, 0) << 4;
@@ -132,13 +136,13 @@ MoveVariant::MoveVariant(MoveGraph *graph, DataArray *cfg, MoveParent *parent) {
     else
         mFlags &= ~0x40;
     if (cfg->FindArray(linked_to, false))
-        mLinkedTo.mVariantName = cfg->FindSym(linked_to).Str();
+        mLinkedTo.mVariantName = cfg->FindArray(linked_to)->Sym(1).Str();
     else
         mLinkedTo.mVariant = nullptr;
     if (cfg->FindArray(linked_from, false))
-        mLinkedFrom.mVariantName = cfg->FindSym(linked_from).Str();
+        mLinkedFrom.mVariantName = cfg->FindArray(linked_from)->Sym(1).Str();
     else
-        mLinkedFrom.mVariant = 0;
+        mLinkedFrom.mVariant = nullptr;
 
     if (cfg->FindArray(position_offset, false)) {
         mPositionOffset.x = cfg->FindArray(position_offset)->Float(1);
@@ -147,37 +151,58 @@ MoveVariant::MoveVariant(MoveGraph *graph, DataArray *cfg, MoveParent *parent) {
     } else {
         mPositionOffset.Zero();
     }
-    mHamMoveName = cfg->FindSym(ham_move_name);
-    mHamMoveMiloName = cfg->FindSym(ham_move_milo_name);
+    mHamMoveName = cfg->FindArray(ham_move_name)->Sym(1);
+    mHamMoveMiloName = cfg->FindArray(ham_move_milo_name)->Sym(1);
     mPrevCandidates.clear();
     mNextCandidates.clear();
 
     DataArray *prevCandsArr = cfg->FindArray(prev_candidates, true);
     for (int i = 1; i < prevCandsArr->Size(); i++) {
-        Symbol s1 = prevCandsArr->Array(i)->Type(0) == kDataInt
-            ? MakeString("%i", prevCandsArr->Array(i)->Int(0))
-            : prevCandsArr->Array(i)->Sym(0);
-        Symbol s2 = prevCandsArr->Array(i)->Type(1) == kDataInt
-            ? MakeString("%i", prevCandsArr->Array(i)->Int(1))
-            : prevCandsArr->Array(i)->Sym(1);
+        Symbol s1;
+        if (prevCandsArr->Array(i)->Type(0) == kDataInt) {
+            s1 = MakeString("%i", prevCandsArr->Array(i)->Int(0));
+        } else {
+            s1 = prevCandsArr->Array(i)->Sym(0);
+        }
+        Symbol s2;
+        if (prevCandsArr->Array(i)->Type(1) == kDataInt) {
+            s2 = MakeString("%i", prevCandsArr->Array(i)->Int(1));
+        } else {
+            s2 = prevCandsArr->Array(i)->Sym(1);
+        }
         bool b3 = prevCandsArr->Array(i)->Int(2);
-        Symbol s3 = prevCandsArr->Array(i)->Size() > 3 ? prevCandsArr->Array(i)->Sym(3)
-                                                       : original_adjacent;
+        Symbol s3;
+        if (prevCandsArr->Array(i)->Size() > 3) {
+            s3 = prevCandsArr->Array(i)->Sym(3);
+        } else {
+            s3 = original_adjacent;
+        }
         mPrevCandidates.push_back(MoveCandidate(s1, s2, s3, b3));
     }
     DataArray *nextCandsArr = cfg->FindArray(next_candidates, true);
     for (int i = 1; i < nextCandsArr->Size(); i++) {
-        Symbol s1 = nextCandsArr->Array(i)->Type(0) == kDataInt
-            ? MakeString("%i", nextCandsArr->Array(i)->Int(0))
-            : nextCandsArr->Array(i)->Sym(0);
-        Symbol s2 = nextCandsArr->Array(i)->Type(1) == kDataInt
-            ? MakeString("%i", nextCandsArr->Array(i)->Int(1))
-            : nextCandsArr->Array(i)->Sym(1);
+        Symbol s1;
+        if (nextCandsArr->Array(i)->Type(0) == kDataInt) {
+            s1 = MakeString("%i", nextCandsArr->Array(i)->Int(0));
+        } else {
+            s1 = nextCandsArr->Array(i)->Sym(0);
+        }
+        Symbol s2;
+        if (nextCandsArr->Array(i)->Type(1) == kDataInt) {
+            s2 = MakeString("%i", nextCandsArr->Array(i)->Int(1));
+        } else {
+            s2 = nextCandsArr->Array(i)->Sym(1);
+        }
         bool b3 = nextCandsArr->Array(i)->Int(2);
-        Symbol s3 = nextCandsArr->Array(i)->Size() > 3 ? nextCandsArr->Array(i)->Sym(3)
-                                                       : original_adjacent;
+        Symbol s3;
+        if (nextCandsArr->Array(i)->Size() > 3) {
+            s3 = nextCandsArr->Array(i)->Sym(3);
+        } else {
+            s3 = original_adjacent;
+        }
         mNextCandidates.push_back(MoveCandidate(s1, s2, s3, b3));
     }
+
     graph->mMoveVariants[mVariantName] = this;
 }
 
@@ -194,24 +219,19 @@ bool MoveVariant::IsRest() const {
     static Symbol groove("groove");
     if (mHamMoveName == Rest || mHamMoveName == rest || mHamMoveName == groove)
         return true;
-    String moveStr(mHamMoveName);
-    if (moveStr.contains("finish"))
-        return true;
-    else
-        return false;
+    else {
+        String move = mHamMoveName.Str();
+        return move.contains("finish");
+    }
 }
 
 void MoveVariant::CacheLinks(MoveGraph *graph) {
     mLinkedTo.mVariant = graph->FindMoveByVariantName(mLinkedTo.mVariantName);
     mLinkedFrom.mVariant = graph->FindMoveByVariantName(mLinkedFrom.mVariantName);
-    for (std::vector<MoveCandidate>::iterator it = mPrevCandidates.begin();
-         it != mPrevCandidates.end();
-         ++it) {
+    FOREACH (it, mPrevCandidates) {
         it->CacheLinks(graph);
     }
-    for (std::vector<MoveCandidate>::iterator it = mNextCandidates.begin();
-         it != mNextCandidates.end();
-         ++it) {
+    FOREACH (it, mNextCandidates) {
         it->CacheLinks(graph);
     }
 }
@@ -246,14 +266,13 @@ void MoveVariant::Load(BinStream &bs, MoveGraph *graph, MoveParent *parent) {
             bs >> s;
             mLinkedFrom.mVariantName = s.Str();
         } else {
-            goto nullset;
+            mLinkedFrom.mVariant = nullptr;
         }
     } else {
-    nullset:
         mLinkedFrom.mVariant = nullptr;
     }
 
-    int numCandidates;
+    unsigned int numCandidates;
     bs >> numCandidates;
     mPrevCandidates.resize(numCandidates);
     for (unsigned int i = 0; i < (unsigned int)numCandidates; i++) {
@@ -264,5 +283,17 @@ void MoveVariant::Load(BinStream &bs, MoveGraph *graph, MoveParent *parent) {
     for (unsigned int i = 0; i < (unsigned int)numCandidates; i++) {
         mNextCandidates[i].Load(bs);
     }
-    graph->mMoveVariants[mSongName] = this;
+    graph->mMoveVariants[mVariantName] = this;
+}
+
+bool MoveVariant::IsValidForMinigame() const {
+    if (IsRest()) {
+        return false;
+    }
+    if (mNextCandidates.size() < 8) {
+        return false;
+    }
+    if (IsFinalPose())
+        return false;
+    return !(mFlags & 1);
 }

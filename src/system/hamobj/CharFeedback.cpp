@@ -2,8 +2,12 @@
 #include "obj/Object.h"
 #include "obj/Task.h"
 #include "os/Debug.h"
+#include "rndobj/Anim.h"
 #include "rndobj/Draw.h"
+#include "rndobj/Line.h"
+#include "rndobj/Mesh.h"
 #include "rndobj/Poll.h"
+#include "ui/UIColor.h"
 
 bool CharFeedback::sEnabled = true;
 
@@ -57,6 +61,60 @@ BEGIN_COPYS(CharFeedback)
         COPY_MEMBER(mFadeSecs)
     END_COPYING_MEMBERS
 END_COPYS
+
+BEGIN_LOADS(CharFeedback)
+    LOAD_REVS(bs)
+    ASSERT_REVS(10, 0)
+    LOAD_SUPERCLASS(Hmx::Object)
+    LOAD_SUPERCLASS(RndDrawable)
+    d >> mTarget;
+    if (d.rev < 3) {
+        if (d.rev > 0) {
+            ObjPtr<RndMesh> mesh(this);
+            d >> mesh;
+            int x;
+            d >> x;
+        }
+        if (d.rev > 1) {
+            ObjPtr<RndAnimatable> anim(this);
+            d >> anim;
+        }
+    }
+    if (d.rev > 2) {
+        if (d.rev < 6) {
+            ObjPtr<RndLine> line(this);
+            ObjPtr<UIColor> color(this);
+            d >> line;
+            d >> color;
+            d >> color;
+        } else if (d.rev < 8) {
+            int x;
+            d >> x;
+        } else if (d.rev < 9) {
+            Symbol s;
+            d >> s;
+        } else {
+            d >> (int &)mTestLimbs;
+        }
+    }
+    if (d.rev > 3) {
+        d >> mFailTriggerSecs;
+    }
+    if (d.rev > 6) {
+        d >> mMinFailSecs;
+    }
+    if (d.rev > 4) {
+        d >> mFailMat;
+    }
+    if (d.rev > 8) {
+        d >> mFadeSecs;
+        if (d.rev < 10) {
+            int x;
+            d >> x;
+        }
+    }
+    Sync();
+END_LOADS
 
 void CharFeedback::Enter() {
     RndPollable::Enter();

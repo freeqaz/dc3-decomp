@@ -101,7 +101,6 @@ private:
 
     DataNode OnFindVariants(DataArray *);
 
-protected:
     Keys<Symbol, Symbol> *mClipPropKeys[kNumDifficultiesDC2]; // 0x2c
     int unk38; // 0x38
     Keys<Symbol, Symbol> *mPracticePropKeys; // 0x3c
@@ -124,8 +123,8 @@ protected:
     std::vector<MoveChoiceSet> unk16c; // 0x16c
     std::vector<CategoryData> unk178; // 0x178 - genre data
     std::vector<CategoryData> unk184; // 0x184 - era data
-    std::vector<CategoryData> unk190; // 0x190
-    std::vector<CategoryData> unk19c; // 0x19c
+    std::vector<CategoryData> unk190; // 0x190 - also genre data
+    std::vector<CategoryData> unk19c; // 0x19c - also era data
     ObjectDir *mMoveDataDir; // 0x1a8
     SuperEasyRemixer *mSuperEasyRemixer; // 0x1ac
 };

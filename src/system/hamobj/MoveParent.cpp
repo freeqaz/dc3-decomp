@@ -8,7 +8,7 @@
 
 MoveParent::MoveParent() {}
 MoveParent::MoveParent(const MoveParent *other) {
-    unk4 = other->unk4;
+    mName = other->mName;
     mDifficulty = other->mDifficulty;
     unkc = false;
 }
@@ -20,9 +20,9 @@ MoveParent::MoveParent(MoveGraph *graph, DataArray *arr) {
     static Symbol variant("variant");
     static Symbol difficulty("difficulty");
     if (arr->Type(0) == kDataInt) {
-        unk4 = MakeString("%i", arr->Int(0));
+        mName = MakeString("%i", arr->Int(0));
     } else {
-        unk4 = arr->Sym(0);
+        mName = arr->Sym(0);
     }
     DataArray *diffArr = arr->FindArray(difficulty, false);
     if (diffArr) {
@@ -63,9 +63,7 @@ MoveParent::~MoveParent() {
 }
 
 bool MoveParent::IsValidForMiniGame() const {
-    for (std::vector<MoveVariant *>::const_iterator it = mVariants.begin();
-         it != mVariants.end();
-         ++it) {
+    FOREACH (it, mVariants) {
         if ((*it)->IsValidForMinigame())
             return true;
     }
@@ -77,9 +75,7 @@ const MoveVariant *MoveParent::PickRandomVariant() const {
 }
 
 bool MoveParent::HasPrevAdjacent(const MoveParent *parent) const {
-    for (std::vector<const MoveParent *>::const_iterator it = mPrevAdjacents.begin();
-         it != mPrevAdjacents.end();
-         ++it) {
+    FOREACH (it, mPrevAdjacents) {
         if (parent == *it)
             return true;
     }
@@ -105,9 +101,7 @@ bool MoveParent::HasEra(Symbol era) const {
 bool MoveParent::HasCategory(Symbol cat) const { return HasGenre(cat) || HasEra(cat); }
 
 bool MoveParent::HasFinalMoveVariant() const {
-    for (std::vector<MoveVariant *>::const_iterator it = mVariants.begin();
-         it != mVariants.end();
-         ++it) {
+    FOREACH (it, mVariants) {
         if ((*it)->IsFinalPose())
             return true;
     }
@@ -115,9 +109,7 @@ bool MoveParent::HasFinalMoveVariant() const {
 }
 
 bool MoveParent::HasRestMoveVariant() const {
-    for (std::vector<MoveVariant *>::const_iterator it = mVariants.begin();
-         it != mVariants.end();
-         ++it) {
+    FOREACH (it, mVariants) {
         if ((*it)->IsRest())
             return true;
     }
@@ -125,44 +117,24 @@ bool MoveParent::HasRestMoveVariant() const {
 }
 
 void MoveParent::PopulateAdjacentParents() {
-    std::set<const MoveParent *> set1;
-    std::set<const MoveParent *> set2;
-
-    // Iterate through variants
-    for (std::vector<MoveVariant *>::iterator it = mVariants.begin(); it != mVariants.end(); ++it) {
-        MoveVariant *variant = *it;
-
-        // Process previous candidates
-        for (std::vector<MoveCandidate>::iterator prevIt = variant->mPrevCandidates.begin();
-             prevIt != variant->mPrevCandidates.end();
-             ++prevIt) {
-            if (prevIt->mValue.mVariant != nullptr) {
-                set1.insert(prevIt->mValue.mVariant->Parent());
-            }
+    std::set<const MoveParent *> nextParents;
+    std::set<const MoveParent *> prevParents;
+    FOREACH (it, mVariants) {
+        FOREACH (cand, (*it)->mNextCandidates) {
+            nextParents.insert(cand->mValue.mVariant->Parent());
         }
-
-        // Process next candidates
-        for (std::vector<MoveCandidate>::iterator nextIt = variant->mNextCandidates.begin();
-             nextIt != variant->mNextCandidates.end();
-             ++nextIt) {
-            if (nextIt->mValue.mVariant != nullptr) {
-                set2.insert(nextIt->mValue.mVariant->Parent());
-            }
+        FOREACH (cand, (*it)->mPrevCandidates) {
+            prevParents.insert(cand->mValue.mVariant->Parent());
         }
     }
-
-    // Copy results to member vectors
-    unk34.clear();
-    unk34.insert(unk34.end(), set2.begin(), set2.end());
-
-    mPrevAdjacents.clear();
-    mPrevAdjacents.insert(mPrevAdjacents.end(), set1.begin(), set1.end());
+    mNextAdjacents.resize(nextParents.size());
+    std::copy(nextParents.begin(), nextParents.end(), mNextAdjacents.begin());
+    mPrevAdjacents.resize(prevParents.size());
+    std::copy(prevParents.begin(), prevParents.end(), mPrevAdjacents.begin());
 }
 
 void MoveParent::CacheLinks(MoveGraph *graph) {
-    for (std::vector<MoveVariant *>::iterator it = mVariants.begin();
-         it != mVariants.end();
-         ++it) {
+    FOREACH (it, mVariants) {
         (*it)->CacheLinks(graph);
     }
     PopulateAdjacentParents();
@@ -171,7 +143,7 @@ void MoveParent::CacheLinks(MoveGraph *graph) {
 void MoveParent::Load(BinStream &bs, MoveGraph *graph) {
     int rev;
     bs >> rev;
-    bs >> unk4;
+    bs >> mName;
     int diff;
     bs >> diff;
     mDifficulty = (Difficulty)diff;

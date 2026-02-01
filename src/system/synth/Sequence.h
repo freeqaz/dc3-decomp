@@ -2,6 +2,7 @@
 #include "obj/Object.h"
 #include "synth/Pollable.h"
 #include "synth/Faders.h"
+#include "utl/PoolAlloc.h"
 
 class SeqInst;
 
@@ -228,6 +229,8 @@ public:
     virtual void SetTranspose(float) = 0;
     virtual void Poll() {}
     virtual void StartImpl() = 0;
+
+    POOL_OVERLOAD(SeqInst, 0x11f)
 
     void Start();
     void SetVolume(float);

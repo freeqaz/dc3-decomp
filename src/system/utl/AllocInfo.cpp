@@ -1,14 +1,11 @@
 #include "utl/AllocInfo.h"
 #include "utl/Pool.h"
 #include "os/Debug.h"
-#include "os/System.h"
 #include "trie.h"
 #include "utl/TextStream.h"
 #include "xdk/XBDM.h"
-#include "utl/MemTracker.h"
 
 Trie *s_pTrie;
-extern MemTracker *gMemTracker;
 bool AllocInfo::bPrintCsv;
 
 Pool &GetPool() {
@@ -29,19 +26,10 @@ AllocInfo::AllocInfo(
     int line,
     String &str1,
     String &str2
-) {
-    mReqSize = requestedSize;
-    mActSize = actualSize;
-    mType = type;
-    mMem = mem;
-    mHeap = heap;
-    mPooled = pooled;
-    mStrat = strat;
-    mFile = file;
-    mLine = line;
-    unk1d = s_pTrie->store(str1.c_str());
-    unk21 = s_pTrie->store(str2.c_str());
-    mTimeSlice = *(short *)((char *)gMemTracker + 0x8);
+)
+    : mReqSize(requestedSize), mActSize(actualSize), mType(type), mMem(mem), mHeap(heap),
+      mPooled(pooled), mStrat(strat), mFile(file), mLine(line),
+      unk1d(s_pTrie->store(str1.c_str())), unk21(s_pTrie->store(str2.c_str())) {
     FillStackTrace();
 }
 
@@ -75,33 +63,6 @@ void AllocInfo::PrintCsv(TextStream &ts) const {
     if (mPooled) {
         ts << ", pooled";
     }
-}
-
-void AllocInfo::PrintForReport(TextStream &ts) const {
-    MILO_ASSERT(s_pTrie, 0xD1);
-    char buffer[0x140];
-    char buf1d[0x80];
-    char buf21[0x80];
-    char *str1;
-    char *str2;
-    const char *pooledStr;
-
-    str1 = s_pTrie->get(unk1d, buf1d, 0x80);
-    str2 = s_pTrie->get(unk21, buf21, 0x80);
-
-    if (mPooled) {
-        pooledStr = "pooled";
-    } else {
-        pooledStr = "";
-    }
-
-    Hx_snprintf(
-        buffer, 0x140,
-        "addr 0x%lX / %s / bytes %d / actual %d / heap %d / %s / %s / %s",
-        (unsigned long)mMem, mType, mReqSize, mActSize, mHeap, str1, str2, pooledStr
-    );
-
-    ts << buffer;
 }
 
 void AllocInfo::Print(TextStream &ts) const {
@@ -151,17 +112,34 @@ void AllocInfo::FillStackTrace() {
 
 void AllocInfoInit() {
     void *dst;
-    Trie *pTrie = s_pTrie;
-    if (pTrie == nullptr) {
-        dst = MemAlloc(0x28, __FILE__, 0x28, "Trie, 0");
-        if (dst != nullptr) {
-            memset(dst, 0, 0x28);
-            // some trie member bool being set to true here
-            ((char *)dst)[0] = 1;
-            pTrie = (Trie *)dst;
+    if (s_pTrie == nullptr) {
+        // 0x220008
+        dst = MemAlloc(sizeof(Trie), __FILE__, 0x28, "Trie, 0");
+        if (dst == nullptr) {
+            s_pTrie = nullptr;
         } else {
-            pTrie = nullptr;
+            memset(dst, 0, sizeof(Trie));
+            // some trie member bool being set to true here
+            s_pTrie = (Trie *)dst;
         }
-        s_pTrie = pTrie;
     }
+}
+
+int AllocInfo::StackCompare(const AllocInfo &other) const {
+    int result = Compare(other);
+    if (result != 0) {
+        return result;
+    }
+    for (int i = 0; i < 16; i++) {
+        if (mStackTrace[i] < other.mStackTrace[i]) {
+            return -1;
+        }
+        if (mStackTrace[i] > other.mStackTrace[i]) {
+            return 1;
+        }
+        if (mStackTrace[i] == 0 && other.mStackTrace[i] == 0) {
+            break;
+        }
+    }
+    return 0;
 }

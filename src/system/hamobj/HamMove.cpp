@@ -119,7 +119,7 @@ BinStream &operator>>(BinStreamRev &d, Ham2FrameWeight &wt) {
 void MoveFrame::Save(BinStream &bs) const {
     bs << mBeat;
     bs << unk4;
-    bs << 16;
+    bs << kNumHam1Nodes;
     for (int i = 0; i < kNumMoveModes; i++) {
         for (int j = 0; j < kNumMoveMirrored; j++) {
             for (int k = 0; k < kNumHam1Nodes; k++) {
@@ -147,9 +147,8 @@ void MoveFrame::Load(BinStreamRev &d) {
     }
     if (d.rev > 0x2B) {
         d >> unk4;
-    } else {
+    } else
         unk4 = -1;
-    }
     int num_ham2_nodes = FilterVersion::NumHam2Nodes();
     int num_ham1_nodes = kNumHam1Nodes;
     if (d.rev > 0x27) {
@@ -162,12 +161,12 @@ void MoveFrame::Load(BinStreamRev &d) {
                 }
             }
         }
-        for (int i = 0; i < 2; i++) {
+        for (int i = 0; i < kNumMoveMirrored; i++) {
             d >> mFrameWeights[i];
         }
         int count;
         d >> count;
-        for (int i = 0; i < kNumMoveMirrored; i++) {
+        for (int i = 0; i < 2; i++) {
             for (int j = 0; j < count; j++) {
                 if (j >= num_ham2_nodes) {
                     if (d.rev < 0x29) {
@@ -197,7 +196,7 @@ void MoveFrame::Load(BinStreamRev &d) {
                     for (int k = 0; k < 3; k++) {
                         float &cur = mNodeScales[i][j][k];
                         float set = kHugeFloat;
-                        if (fabsf(cur) >= 0.0000099999997f) {
+                        if (0.0000099999997f <= fabsf(cur)) {
                             set = 1.0f / cur;
                         }
                         mNodeScales[i][j][k] = set;
@@ -206,7 +205,7 @@ void MoveFrame::Load(BinStreamRev &d) {
             }
         }
         for (; count < num_ham2_nodes; count++) {
-            for (int mirror = 0; mirror < 2; mirror++) {
+            for (int mirror = 0; mirror < kNumMoveMirrored; mirror++) {
                 SetNodeScale(count, (MoveMirrored)mirror, Vector3(1, 1, 1));
             }
         }
@@ -243,7 +242,7 @@ void MoveFrame::Load(BinStreamRev &d) {
                 }
             }
         } else {
-            for (int i = 0; i < 2; i++) {
+            for (int i = 0; i < 4; i++) {
                 for (int j = 0; j < 2; j++) {
                     for (int k = 0; k < 2; k++) {
                         d >> oldNodeWeights[i + k];
@@ -251,29 +250,7 @@ void MoveFrame::Load(BinStreamRev &d) {
                 }
             }
         }
-        // Copy oldNodeWeights into mNodeWeights arrays
-        int node_idx = 0;
-        for (int mirror = 0; mirror < kNumMoveMirrored; mirror++) {
-            int size = oldNodeWeights[mirror].size();
-            for (int i = 0; i < size; i++) {
-                mNodeWeights[mirror][node_idx][0] = oldNodeWeights[mirror][i].unk0;
-                mNodeWeights[mirror][node_idx][1] = oldNodeWeights[mirror][i].unk0;
-                mNodeWeights[mirror][node_idx][2] = oldNodeWeights[mirror][i].unk0;
-                node_idx++;
-            }
-        }
-        // Process ham2 frame weights
-        if (d.rev > 0x1C) {
-            for (int mirror = 0; mirror < kNumMoveMirrored; mirror++) {
-                d >> mFrameWeights[mirror];
-            }
-        }
-        // Fill remaining nodes with default scale
-        for (int node = node_idx; node < num_ham2_nodes; node++) {
-            for (int mirror = 0; mirror < kNumMoveMirrored; mirror++) {
-                SetNodeScale(node, (MoveMirrored)mirror, Vector3(1, 1, 1));
-            }
-        }
+        // more...
     }
 }
 
@@ -607,9 +584,7 @@ BEGIN_LOADS(HamMove)
     if (d.rev > 0x23) {
         for (int i = 0; i < kNumMoveRatings; i++) {
             d >> mThresholds[i];
-            if (d.rev > 0x2C) {
-                d >> mOverrides[i];
-            }
+            d >> mOverrides[i];
         }
     }
     if (d.rev > 0x2A) {
@@ -789,28 +764,29 @@ const FilterVersion *HamMove::FilterVer() const {
 }
 
 float HamMove::ConfusabilityWithMoveDataArray(const DataArray *a) {
-    float maxConfuse = 0;
-    int count = 0;
-    float result = maxConfuse;
+    float f7 = 0;
+    int i3 = 0;
+    float f6 = f7;
     int aSize = a->Size();
     for (int i = 0; i < aSize; i++) {
         HamMove *move = a->Obj<HamMove>(i);
         if (move != this) {
-            count++;
-            float confuse = Confusability(move);
-            if (confuse > result) {
-                if (confuse < 0.5f) {
-                    result = confuse;
+            i3++;
+            float f5 = Confusability(move);
+            if (f5 > f6) {
+                if (f5 < 0.5f) {
+                    f6 = f5;
                 } else {
-                    result = 0.5f;
+                    f6 = 0.5f;
                 }
             }
         }
     }
-    if (count == 0) {
-        return maxConfuse;
+    if (i3 == 0) {
+        return f7;
+    } else {
+        return f6;
     }
-    return result;
 }
 
 float HamMove::AdjustNormalizedPercentToConfusability(float f1, float f2) {
@@ -821,5 +797,13 @@ float HamMove::AdjustNormalizedPercentToConfusability(float f1, float f2) {
         return (0.5f / fvar1) * f1;
     } else {
         return ((f1 - fvar1) / (perfectFrac - fvar1) + 1.0f) / 2.0f;
+    }
+}
+
+const std::vector<float> *HamMove::RatingOverride() const {
+    if (mRatingStates.front() > 0) {
+        return &mRatingStates;
+    } else {
+        return nullptr;
     }
 }

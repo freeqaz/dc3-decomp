@@ -31,7 +31,8 @@ protected:
     float mSeconds; // 0x8
     MoveMirrored unkc; // 0xc
     Vector3 mBestNodeErrors[kMaxNumErrorNodes]; // 0x10, 33*16=0x210, ends at 0x220
-    Vector3 mNodeComponentWeights[MoveFrame::kNumHam1Nodes]; // 0x220, 16*16=0x100, ends at 0x320
+    Vector3 mNodeComponentWeights[MoveFrame::kNumHam1Nodes]; // 0x220, 16*16=0x100, ends
+                                                             // at 0x320
     char unk320[0x110]; // 0x320, unknown data to reach size 0x430
 };
 

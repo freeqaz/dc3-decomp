@@ -47,13 +47,17 @@ protected:
     HamVisDir();
     void CheckPose(int, PoseOwner &);
     void CalcArmLengths(std::vector<float> &, const Skeleton &);
+    void UpdateGestureFilter(const Skeleton &, int);
 
     Transform unk284; // 0x284
     FreestyleMotionFilter *mFilter; // 0x2c4
     bool mRunning; // 0x2c8
+
+    // maybe this all here is a struct in itself
     std::vector<unsigned int> unk2cc; // 0x2cc
     int unk2d8; // 0x2d8
     int unk2dc; // 0x2dc
+
     /** "Animated from 0 - 100, depending on player one's hand height" */
     ObjPtr<RndAnimatable> mPlayer1Right; // 0x2e0
     /** "Animated from 0 - 100, depending on player one's hand height" */

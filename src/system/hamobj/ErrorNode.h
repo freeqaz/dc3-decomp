@@ -79,7 +79,7 @@ struct Ham1NodeWeight {
 
 // Ham2FrameWeight size: 0x24
 struct Ham2FrameWeight {
-    float unk0;
+    float unk0; // 0x0 - PSNR?
     float unk4[4];
     float unk14[4];
 };
@@ -118,9 +118,9 @@ public:
 protected:
     ErrorNode(ErrorNodeType, const DataArray *);
 
-    void
-    NormBoneLengths(const ErrorFrameInput &, const SkeletonBone (&)[3], float &, float &)
-        const;
+    void NormBoneLengths(
+        const ErrorFrameInput &, const SkeletonBone (&)[3], float &, float &
+    ) const;
     void InitNormBones(const DataArray *, SkeletonBone (&)[3]);
 
     ErrorNodeType mType; // 0x4
@@ -164,9 +164,9 @@ protected:
     };
 
     bool Displacements(const ErrorFrameInput &, DisplacementData &) const;
-    bool
-    Displacements(const ErrorFrameInput &, DisplacementData &, Ham1DisplacementData &)
-        const;
+    bool Displacements(
+        const ErrorFrameInput &, DisplacementData &, Ham1DisplacementData &
+    ) const;
 
     SkeletonJoint mBaseJoint; // 0x1c
     SkeletonBone mNormBones[kMaxNumNormBones]; // 0x20
@@ -201,9 +201,13 @@ private:
 
     ScaleOp mPotentialAngleOp; // 0x2c
 
-    void
-    Errors(const ErrorFrameInput &, const ErrorNodeInput &, ErrorData &, DisplacementData &, Ham1DisplacementData &)
-        const;
+    void Errors(
+        const ErrorFrameInput &,
+        const ErrorNodeInput &,
+        ErrorData &,
+        DisplacementData &,
+        Ham1DisplacementData &
+    ) const;
 
 public:
     Ham1DisplacementNode(ErrorNodeType, const DataArray *);

@@ -104,9 +104,9 @@ public:
     PracticeSection *GetPracticeSection(Difficulty);
     DancerSequence *SkillsSequence(Difficulty, Symbol, Symbol);
     float DetectFrac(int, int);
+    bool InGracePeriod(int);
 
     MoveAsyncDetector *GetAsyncDetector() const { return mAsyncDetector; }
-    bool InGracePeriod(int);
 
     static void Init();
     static void LoadScoring(const DataArray *);
@@ -122,14 +122,17 @@ private:
     void DetectRange(
         std::vector<DetectFrame> &, std::pair<DetectFrame *, DetectFrame *> &, int, int
     );
-    float DetectRangePSNR(
-        const std::pair<DetectFrame *, DetectFrame *> &, const FilterVersion *
-    ) const;
     void PostUpdateFilters();
-    MoveFrame *ClosestMoveFrame();
     float SongSpeed() const;
+    MoveFrame *ClosestMoveFrame();
 
     DataNode OnStreamJump(const DataArray *);
+    float DetectRangePSNR(
+        const std::pair<const DetectFrame *, const DetectFrame *> &, const FilterVersion *
+    ) const;
+    float DetectRangeFrac(
+        const std::pair<DetectFrame *, DetectFrame *> &, const FilterVersion *
+    ) const;
 
     static std::vector<FilterVersion *> sFilterVersions;
     static float sLatencySeconds;
@@ -165,8 +168,8 @@ protected:
     FilterQueue *mFilterQueue; // 0x314
     MovePlayerData mMovePlayerData[2]; // 0x318
     MoveAsyncDetector *mAsyncDetector; // 0x390
-    DirLoader *unk394; // 0x394 - update loader?
-    std::list<ObjDirPtr<UILabelDir> > unk398; // 0x398 - update fonts?
+    DirLoader *mUpdateLoader; // 0x394
+    std::list<ObjDirPtr<UILabelDir> > mUpdateFonts; // 0x398
     /** Smoothed normalized results of the current move. */
     DoubleExponentialSmoother mCurMoveSmoothers[2]; // 0x3a0
 
