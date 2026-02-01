@@ -1,0 +1,489 @@
+"""Agent execution and result parsing for orchestrator.
+
+Encapsulates running Claude agents (via SDK or subprocess) and parsing
+their output into structured AgentRunResult objects.
+"""
+
+import asyncio
+import json
+import logging
+import os
+import re
+from pathlib import Path
+from typing import Any, Optional
+
+from .types import AgentRunConfig, AgentRunResult, DEFAULT_DECOMP_TOOLS
+
+# SDK integration toggle (default: use SDK)
+USE_SDK = os.getenv("ORCHESTRATOR_USE_SDK", "true").lower() == "true"
+
+# Import SDK types conditionally
+try:
+    from claude_code_sdk import (
+        query as sdk_query,
+        ClaudeCodeOptions,
+        AssistantMessage,
+        UserMessage,
+        ResultMessage,
+        ToolUseBlock,
+        ToolResultBlock,
+        TextBlock,
+        CLINotFoundError,
+        ProcessError,
+    )
+    from claude_code_sdk.types import McpStdioServerConfig
+    SDK_AVAILABLE = True
+except ImportError:
+    SDK_AVAILABLE = False
+
+from .config import (
+    _get_openrouter_enabled,
+    _get_openrouter_api_key,
+    _get_openrouter_base_url,
+    get_token_budget,
+    requires_openrouter,
+)
+from .model_selection import get_model_id
+
+
+def get_oauth_token() -> Optional[str]:
+    """Read OAuth token from Claude CLI credentials file.
+
+    Note: Only used for subprocess mode. SDK auto-detects credentials.
+    """
+    creds_path = Path.home() / ".claude" / ".credentials.json"
+    if not creds_path.exists():
+        return None
+    try:
+        with open(creds_path) as f:
+            creds = json.load(f)
+        return creds.get("claudeAiOauth", {}).get("accessToken")
+    except (json.JSONDecodeError, IOError):
+        return None
+
+
+class AgentRunner:
+    """Runs Claude agents and parses their results.
+
+    Accepts dependencies through constructor for testability. Parsing
+    methods are public so they can be tested without running agents.
+    """
+
+    def __init__(self, main_repo: Path, db_path: str, logger: logging.Logger):
+        self.main_repo = main_repo
+        self.db_path = db_path
+        self.logger = logger
+
+    async def run(self, config: AgentRunConfig) -> AgentRunResult:
+        """Execute an agent and return structured result."""
+        if USE_SDK and SDK_AVAILABLE:
+            raw = await self._run_sdk(config)
+            parsed = self.parse_sdk_messages(raw.get("messages", []))
+            parsed.output = raw.get("output", "")
+            parsed.exit_code = raw.get("exit_code", 1)
+            parsed.messages = raw.get("messages", [])
+            return parsed
+        else:
+            raw = await self._run_process(config)
+            parsed = self.parse_process_output(raw.get("output", ""))
+            parsed.exit_code = raw.get("exit_code", 1)
+            parsed.output = raw.get("output", "")
+            return parsed
+
+    def build_env(self, model: str = None) -> dict[str, str]:
+        """Build environment dict for agent process. Public for testing."""
+        agent_home = Path(os.environ.get(
+            "AGENT_HOME",
+            "/home/free/code/milohax/dc3-decomp/agent-home",
+        ))
+        agent_home.mkdir(parents=True, exist_ok=True)
+
+        http_proxy_port = os.environ.get("CLAUDE_CODE_HOST_HTTP_PROXY_PORT")
+        socks_proxy_port = os.environ.get("CLAUDE_CODE_HOST_SOCKS_PROXY_PORT")
+
+        env: dict[str, str] = {
+            "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+            "HOME": str(agent_home),
+        }
+
+        if http_proxy_port:
+            env["HTTP_PROXY"] = f"http://localhost:{http_proxy_port}"
+            env["HTTPS_PROXY"] = f"http://localhost:{http_proxy_port}"
+            env["http_proxy"] = f"http://localhost:{http_proxy_port}"
+            env["https_proxy"] = f"http://localhost:{http_proxy_port}"
+        if socks_proxy_port:
+            env["ALL_PROXY"] = f"socks5h://localhost:{socks_proxy_port}"
+            env["all_proxy"] = f"socks5h://localhost:{socks_proxy_port}"
+
+        return env
+
+    def build_auth_env(self, model: str = None) -> dict[str, str]:
+        """Build auth environment for SDK/subprocess. Public for testing.
+
+        Returns environment variables for API authentication.
+        SDK auto-detects OAuth credentials, but we still need to set
+        OpenRouter environment variables when that backend is enabled
+        or when the model requires OpenRouter.
+        """
+        env: dict[str, str] = {}
+
+        use_openrouter = _get_openrouter_enabled() or (model and requires_openrouter(model))
+
+        if use_openrouter and _get_openrouter_api_key():
+            env["ANTHROPIC_BASE_URL"] = _get_openrouter_base_url()
+            env["ANTHROPIC_AUTH_TOKEN"] = _get_openrouter_api_key()
+            env["ANTHROPIC_API_KEY"] = ""  # Must be explicitly empty
+
+            if model and requires_openrouter(model):
+                openrouter_model_id = get_model_id(model)
+                env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = openrouter_model_id
+
+        return env
+
+    def build_sdk_options(self, config: AgentRunConfig) -> Any:
+        """Build SDK options from config. Public for testing.
+
+        Returns ClaudeCodeOptions (or raises if SDK not available).
+        """
+        if not SDK_AVAILABLE:
+            raise RuntimeError("claude-code-sdk not installed")
+
+        if requires_openrouter(config.model):
+            cli_model = "sonnet"
+        else:
+            cli_model = get_model_id(config.model)
+
+        env = self.build_env(config.model)
+        env.update(self.build_auth_env(config.model))
+
+        mcp_config: McpStdioServerConfig = {
+            "command": "python3",
+            "args": ["-m", "scripts.orchestrator.mcp_server", "--db", str(self.db_path)],
+            "env": {"PYTHONPATH": str(self.main_repo)},
+        }
+
+        tools = config.effective_tools
+        disallowed = config.disallowed_tools or ["Task", "TaskOutput"]
+
+        options = ClaudeCodeOptions(
+            model=cli_model,
+            max_turns=config.max_turns,
+            cwd=str(config.worktree),
+            env=env,
+            permission_mode="bypassPermissions",
+            mcp_servers={"orchestrator": mcp_config},
+            allowed_tools=tools,
+            disallowed_tools=disallowed,
+            add_dirs=[str(self.main_repo)],
+        )
+
+        return options
+
+    def parse_process_output(self, output: str) -> AgentRunResult:
+        """Parse subprocess output into AgentRunResult. Public for testing."""
+        result = {
+            "status": "unknown",
+            "percent": None,
+            "notes": "",
+            "verdict": None,
+        }
+
+        # Look for report_result JSON in output
+        json_pattern = r'\{[^{}]*"_decomp_exit"[^{}]*\}'
+        matches = re.findall(json_pattern, output, re.DOTALL)
+
+        if matches:
+            try:
+                data = json.loads(matches[-1])
+                result["status"] = data.get("status", "unknown")
+                result["percent"] = data.get("percent")
+                result["notes"] = data.get("notes", "")
+                self.logger.debug(f"Parsed report_result MCP call: status={result['status']}, percent={result['percent']}")
+            except json.JSONDecodeError as e:
+                self.logger.warning(f"Failed to parse JSON from agent output: {e}")
+
+        # Look for verdict in objdiff output
+        verdict_pattern = r'verdict[:\s]+(COMPLETE|AT_LIMIT|LIKELY_FIXABLE|MAYBE_FIXABLE|UNKNOWN|NEEDS_INVESTIGATION|NeedsInvestigation|LikelyFixable|MaybeFixable|AtLimit)'
+        verdict_matches = re.findall(verdict_pattern, output, re.IGNORECASE)
+        if verdict_matches:
+            verdict = re.sub(r'([a-z])([A-Z])', r'\1_\2', verdict_matches[-1]).upper()
+            result["verdict"] = verdict
+            self.logger.debug(f"Parsed verdict from objdiff: {result['verdict']}")
+
+        # Look for percentage in objdiff output
+        percent_pattern = r'(\d+\.?\d*)\s*%\s*match'
+        percent_matches = re.findall(percent_pattern, output, re.IGNORECASE)
+        if percent_matches and result["percent"] is None:
+            try:
+                result["percent"] = float(percent_matches[-1])
+                self.logger.debug(f"Parsed percentage from objdiff: {result['percent']}%")
+            except ValueError:
+                pass
+
+        # Also look for RESULT/PERCENT/NOTES format
+        result_pattern = r'RESULT:\s*(\w+)'
+        result_matches = re.findall(result_pattern, output, re.IGNORECASE)
+        if result_matches:
+            result["status"] = result_matches[-1].lower()
+
+        percent_result_pattern = r'PERCENT:\s*([\d.]+)'
+        percent_result_matches = re.findall(percent_result_pattern, output, re.IGNORECASE)
+        if percent_result_matches:
+            try:
+                result["percent"] = float(percent_result_matches[-1])
+            except ValueError:
+                pass
+
+        notes_pattern = r'NOTES:\s*(.+?)(?:\n|$)'
+        notes_matches = re.findall(notes_pattern, output, re.IGNORECASE)
+        if notes_matches:
+            result["notes"] = notes_matches[-1].strip()
+
+        return AgentRunResult(
+            exit_code=0,
+            status=result["status"],
+            percent=result["percent"],
+            notes=result["notes"],
+            verdict=result["verdict"],
+        )
+
+    def parse_sdk_messages(self, messages: list[Any]) -> AgentRunResult:
+        """Parse SDK message stream into AgentRunResult. Public for testing."""
+        result = {
+            "status": "unknown",
+            "percent": None,
+            "notes": "",
+            "verdict": None,
+            "usage": None,
+            "total_cost_usd": None,
+            "duration_ms": None,
+            "num_turns": None,
+        }
+
+        all_text = []
+
+        for message in messages:
+            if SDK_AVAILABLE and isinstance(message, AssistantMessage):
+                for block in message.content:
+                    if isinstance(block, ToolUseBlock):
+                        if block.name == "mcp__orchestrator__report_result":
+                            input_data = block.input
+                            result["status"] = input_data.get("status", "unknown")
+                            result["percent"] = input_data.get("percent")
+                            result["notes"] = input_data.get("notes", "")
+                    elif isinstance(block, TextBlock):
+                        all_text.append(block.text)
+            elif SDK_AVAILABLE and isinstance(message, ResultMessage):
+                result["total_cost_usd"] = message.total_cost_usd
+                result["duration_ms"] = message.duration_ms
+                result["num_turns"] = message.num_turns
+
+                if message.usage:
+                    result["usage"] = {
+                        "input_tokens": message.usage.get("inputTokens"),
+                        "output_tokens": message.usage.get("outputTokens"),
+                        "cache_read_tokens": message.usage.get("cacheReadInputTokens"),
+                        "cache_creation_tokens": message.usage.get("cacheCreationInputTokens"),
+                    }
+
+        combined_text = "\n".join(all_text)
+
+        # Look for verdict in text
+        verdict_pattern = r'verdict[:\s]+(COMPLETE|AT_LIMIT|LIKELY_FIXABLE|MAYBE_FIXABLE|UNKNOWN|NEEDS_INVESTIGATION|NeedsInvestigation|LikelyFixable|MaybeFixable|AtLimit)'
+        verdict_matches = re.findall(verdict_pattern, combined_text, re.IGNORECASE)
+        if verdict_matches:
+            verdict = re.sub(r'([a-z])([A-Z])', r'\1_\2', verdict_matches[-1]).upper()
+            result["verdict"] = verdict
+
+        # Fallback percentage from text
+        if result["percent"] is None:
+            percent_pattern = r'(\d+\.?\d*)\s*%\s*match'
+            percent_matches = re.findall(percent_pattern, combined_text, re.IGNORECASE)
+            if percent_matches:
+                try:
+                    result["percent"] = float(percent_matches[-1])
+                except ValueError:
+                    pass
+
+        # Fallback RESULT/PERCENT/NOTES format
+        if result["status"] == "unknown":
+            result_pattern = r'RESULT:\s*(\w+)'
+            result_matches = re.findall(result_pattern, combined_text, re.IGNORECASE)
+            if result_matches:
+                result["status"] = result_matches[-1].lower()
+
+            percent_result_pattern = r'PERCENT:\s*([\d.]+)'
+            percent_result_matches = re.findall(percent_result_pattern, combined_text, re.IGNORECASE)
+            if percent_result_matches and result["percent"] is None:
+                try:
+                    result["percent"] = float(percent_result_matches[-1])
+                except ValueError:
+                    pass
+
+            notes_pattern = r'NOTES:\s*(.+?)(?:\n|$)'
+            notes_matches = re.findall(notes_pattern, combined_text, re.IGNORECASE)
+            if notes_matches and not result["notes"]:
+                result["notes"] = notes_matches[-1].strip()
+
+        return AgentRunResult(
+            exit_code=0,
+            status=result["status"],
+            percent=result["percent"],
+            notes=result["notes"],
+            verdict=result["verdict"],
+            total_cost_usd=result["total_cost_usd"],
+            duration_ms=result["duration_ms"],
+            usage=result["usage"],
+        )
+
+    # --- Private execution methods ---
+
+    async def _run_sdk(self, config: AgentRunConfig) -> dict[str, Any]:
+        """Run agent via Python SDK."""
+        if not SDK_AVAILABLE:
+            raise RuntimeError("claude-code-sdk not installed. Run: pip install claude-code-sdk")
+
+        options = self.build_sdk_options(config)
+
+        use_openrouter = _get_openrouter_enabled() or requires_openrouter(config.model)
+        if config.verbose and use_openrouter and _get_openrouter_api_key():
+            actual_model = get_model_id(config.model)
+            print(f"[{config.session_id}] Using OpenRouter backend at {_get_openrouter_base_url()}")
+
+        if config.verbose:
+            actual_model = get_model_id(config.model)
+            print(f"[{config.session_id}] Starting agent (SDK) with model {actual_model}...")
+
+        messages: list[Any] = []
+        output_lines: list[str] = []
+
+        try:
+            async for message in sdk_query(prompt=config.prompt, options=options):
+                messages.append(message)
+
+                if config.verbose:
+                    if isinstance(message, AssistantMessage):
+                        for block in message.content:
+                            if isinstance(block, TextBlock):
+                                print(block.text, end="")
+                                output_lines.append(block.text)
+                            elif isinstance(block, ToolUseBlock):
+                                tool_str = f"\n[Tool: {block.name}]"
+                                if hasattr(block, 'input') and block.input:
+                                    input_parts = []
+                                    for k, v in block.input.items():
+                                        v_str = str(v)
+                                        if len(v_str) > 100:
+                                            v_str = v_str[:100] + "..."
+                                        input_parts.append(f"{k}={v_str}")
+                                    if input_parts:
+                                        tool_str += f" {', '.join(input_parts)}"
+                                tool_str += "\n"
+                                print(tool_str, end="")
+                                output_lines.append(tool_str)
+                    elif isinstance(message, UserMessage):
+                        for block in message.content:
+                            if isinstance(block, ToolResultBlock):
+                                content = block.content
+                                if content is None:
+                                    content_str = "(no output)"
+                                elif isinstance(content, str):
+                                    content_str = content
+                                else:
+                                    content_str = str(content)
+
+                                if len(content_str) > 200:
+                                    content_str = content_str[:200] + "..."
+
+                                error_marker = " ERROR" if block.is_error else ""
+                                result_str = f"  → {content_str}{error_marker}\n"
+                                print(result_str, end="")
+                                output_lines.append(result_str)
+                    elif isinstance(message, ResultMessage):
+                        result_str = f"\n[Result: {message}]\n"
+                        print(result_str, end="")
+                        output_lines.append(result_str)
+
+            return {
+                "exit_code": 0,
+                "messages": messages,
+                "output": "".join(output_lines),
+                "session_id": config.session_id,
+            }
+
+        except CLINotFoundError as e:
+            error_msg = f"Claude CLI not found: {e}"
+            if config.verbose:
+                print(f"\n[{config.session_id}] Error: {error_msg}")
+            return {"exit_code": 127, "error": error_msg, "messages": [], "output": ""}
+
+        except ProcessError as e:
+            error_msg = str(e)
+            if config.verbose:
+                print(f"\n[{config.session_id}] Process error: {error_msg}")
+            return {
+                "exit_code": e.exit_code if hasattr(e, 'exit_code') else 1,
+                "error": error_msg,
+                "messages": [],
+                "output": getattr(e, 'stderr', ''),
+            }
+
+        except Exception as e:
+            error_msg = str(e)
+            if config.verbose:
+                print(f"\n[{config.session_id}] Unexpected error: {error_msg}")
+            return {"exit_code": 1, "error": error_msg, "messages": [], "output": ""}
+
+    async def _run_process(self, config: AgentRunConfig) -> dict[str, Any]:
+        """Run Claude CLI agent as subprocess."""
+        cli_model = get_model_id(config.model)
+
+        cmd = [
+            "claude",
+            "--print",
+            "--model", cli_model,
+            "--max-turns", str(config.max_turns),
+            "--dangerously-skip-permissions",
+            "--no-session-persistence",
+            config.prompt,
+        ]
+
+        if config.verbose:
+            print(f"[{config.session_id}] Starting agent with model {cli_model}...")
+
+        env = {**os.environ, **self.build_env(config.model)}
+
+        if _get_openrouter_enabled() and _get_openrouter_api_key():
+            env["ANTHROPIC_BASE_URL"] = _get_openrouter_base_url()
+            env["ANTHROPIC_API_KEY"] = _get_openrouter_api_key()
+            if config.verbose:
+                print(f"[{config.session_id}] Using OpenRouter backend at {_get_openrouter_base_url()}")
+        else:
+            oauth_token = get_oauth_token()
+            if oauth_token:
+                env["CLAUDE_CODE_OAUTH_TOKEN"] = oauth_token
+
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
+            cwd=config.worktree,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+            env=env,
+        )
+
+        output_lines = []
+        async for line in process.stdout:
+            decoded = line.decode("utf-8", errors="replace")
+            output_lines.append(decoded)
+            if config.verbose:
+                print(decoded, end="")
+
+        await process.wait()
+
+        output = "".join(output_lines)
+
+        return {
+            "exit_code": process.returncode,
+            "output": output,
+            "session_id": config.session_id,
+        }

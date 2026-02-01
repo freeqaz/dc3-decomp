@@ -143,6 +143,7 @@ public:
     HamCamShot *CurShot() const { return mCurShot; }
     FileMerger *GetGameModeMerger() const { return mGameModeMerger; }
     void SetPickingDisabled(bool disable) { mDisablePicking = disable; }
+    void SetPollEnabled(bool enable) { unk2ac = enable; }
 
     DataNode OnGetDancerVisemes(DataArray *);
 

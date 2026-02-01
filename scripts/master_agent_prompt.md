@@ -237,7 +237,7 @@ This tool:
 | **COMPLETE** | 100% match! Go to Phase 6. | Victory - function perfect |
 | **LIKELY_FIXABLE** | Control flow or operator tweaks likely to work. Try: if/else order, loop structure, comparison operators. | Usually fixes in 1-3 tries |
 | **MAYBE_FIXABLE** | Variable reordering or struct member order may help. Try reordering declarations or struct fields. | Moderate difficulty, try 2-5 variations |
-| **AT_LIMIT** | Unfixable patterns detected (linker-merged calls, bool masks). Accept current match and go to Phase 6. | Dig in to verify if the pattern applies. If it does, stop here. |
+| **AT_LIMIT** | Patterns detected that may be at their limit (linker-merged calls, bool masks, register allocation). **Verify before accepting** — use `lookup_merged_symbol` for merged calls. If verified, go to Phase 6. If not verified, investigate further. | Don't accept blindly. Verify the pattern applies, then stop. |
 
 Loop back to Phase 3 until verdict stops changing.
 
@@ -254,9 +254,10 @@ Loop back to Phase 3 until verdict stops changing.
 
 - ✅ **COMPLETE** - 100% match, nothing more to do
 - ✅ **AT_LIMIT verdict** - Compiler patterns we cannot reproduce easily.
-- ✅ **95%+ with linker-merged functions** - These are very hard to fix.
+- ✅ **95%+ with verified linker-merged functions** - Use `lookup_merged_symbol` to confirm your call target is in the merged set, then accept
 - ✅ **15+ iterations with no progress** - You've tried common patterns, time to accept it
-- ✅ **BOOL_MASK or LINKER_MERGED pattern detected** - Compiler optimizations, unfixable
+- ✅ **BOOL_MASK pattern detected** - Compiler optimization, unfixable
+- ✅ **LINKER_MERGED verified** - After confirming via `lookup_merged_symbol` that your call target is in the merged set
 
 **Never give up too early on:**
 - `LIKELY_FIXABLE` - these usually respond to control flow changes (1-3 iterations typical)
@@ -310,13 +311,13 @@ Different function types have predictable patterns:
 
 ---
 
-## Unfixable Patterns (Stop Editing - Accept Current Match)
+## Limiting Patterns (Verify Before Accepting)
 
-These patterns cannot be reproduced and should be accepted. **Do NOT attempt to fix:**
+Some patterns cannot be reproduced at source level. **Verify each before accepting as at_limit:**
 
 | Pattern | Detection | Why Unfixable | Action |
 |---------|-----------|---------------|--------|
-| **LINKER_MERGED** | Target contains `merged_*` function calls (e.g., `merged_82331360`) | Linker merges identical functions via ICF. **Verify first**: use `mcp__orchestrator__lookup_merged_symbol` to confirm your call target is in the merged set. If verified, unfixable. If NOT in set, investigate - you may be calling the wrong function. | Verify, then report `at_limit` if confirmed |
+| **LINKER_MERGED** | Target contains `merged_*` function calls (e.g., `merged_82331360`) | Linker merges identical functions via ICF. **Verify first**: use `mcp__orchestrator__lookup_merged_symbol` to confirm your call target is in the merged set. If verified, accept `at_limit`. If NOT in set, investigate — you may be calling the wrong function. | Verify, then report `at_limit` if confirmed |
 | **STRUCT_OFFSET_MISMATCH** | objdiff shows `offset +/-4/8/12` bytes with no local cause | Struct padding/alignment differs from reference | Use `mcp__orchestrator__lookup_struct_offset` to identify fields, then stop and report `at_limit` |
 | **FILE_PATH_MISMATCH** | objdiff shows `__FILE__` or debug info strings differ | Compilation path varies (sandbox/worktree differences) | Stop, report `at_limit` |
 | **BOOL_MASK** | `clrlwi`/`rlwinm` differences in bool handling | Compiler optimization choice (cannot control) | Stop, report `at_limit` |
@@ -327,9 +328,10 @@ These patterns cannot be reproduced and should be accepted. **Do NOT attempt to 
 **How to detect these:**
 - Run `mcp__orchestrator__run_analyze_function --symbol "{symbol}" --project-dir "{worktree_dir}"`
 - Check the detailed objdiff output for patterns above
-- If you see any of these: **Stop trying and report with `at_limit`**
+- For LINKER_MERGED: **verify with `lookup_merged_symbol` before accepting**
+- For other patterns (BOOL_MASK, STRUCT_OFFSET, FILE_PATH): report `at_limit`
 
-When you see these patterns, stop trying. Report with verdict `at_limit` and your current match%.
+When you see these patterns and have verified them, report with `at_limit` and your current match%.
 
 ---
 
@@ -396,7 +398,7 @@ Test by making an obvious change (add a comment), then verify match% changes
 6. mcp__orchestrator__report_result
    status: "at_limit"
    percent: 96.0
-   notes: "Load function - added missing member reads (+43%), reordered vars (+8%), 1 linker-merged function unfixable"
+   notes: "Load function - added missing member reads (+43%), reordered vars (+8%), 1 linker-merged call verified via lookup_merged_symbol"
 ```
 
 ---

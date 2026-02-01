@@ -29,7 +29,7 @@ import requests
 MCP_URL = "http://127.0.0.1:8000/mcp"
 # Binary name is dynamically resolved - pyghidra-mcp uses SHA1 hash suffix
 # e.g., "default.xex-997567" instead of just "default.xex"
-BINARY_NAME = None  # Will be resolved via list_binaries()
+BINARY_NAME = "default.xex-997567"
 
 
 # =============================================================================
@@ -355,7 +355,7 @@ class MCPClient:
                 for binary in binaries:
                     name = binary.get("name", "") if isinstance(binary, dict) else str(binary)
                     if "default.xex" in name:
-                        self._binary_name = "/" + name if not name.startswith("/") else name
+                        self._binary_name = name.lstrip("/")
                         self._binary_resolved = True
                         return
 
@@ -363,13 +363,13 @@ class MCPClient:
                 if binaries:
                     first = binaries[0]
                     name = first.get("name", "") if isinstance(first, dict) else str(first)
-                    self._binary_name = "/" + name if not name.startswith("/") else name
+                    self._binary_name = name.lstrip("/")
 
             self._binary_resolved = True
 
         except Exception:
             # Fall back to default
-            self._binary_name = "/default.xex"
+            self._binary_name = "default.xex-997567"
             self._binary_resolved = True
 
     def list_binaries(self) -> List[Dict[str, str]]:

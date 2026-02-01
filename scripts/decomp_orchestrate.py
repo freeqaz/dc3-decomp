@@ -177,6 +177,8 @@ def cmd_single(args):
         verbose=not args.quiet,
         dry_run=args.dry_run,
         use_incremental=use_incremental,
+        refactor=not args.no_refactor,
+        custom_prompt=args.prompt,
     )
 
     if args.json:
@@ -336,6 +338,7 @@ def cmd_batch(args):
                 use_incremental=use_incremental,
                 periodic_full_interval=args.periodic_full if not args.incremental_only else 0,
                 validate_diffs=args.validate_diffs,
+                refactor=not args.no_refactor,
             )
         )
     else:
@@ -352,6 +355,7 @@ def cmd_batch(args):
                 use_incremental=use_incremental,
                 periodic_full_interval=args.periodic_full if not args.incremental_only else 0,
                 validate_diffs=args.validate_diffs,
+                refactor=not args.no_refactor,
             )
         )
 
@@ -1034,6 +1038,17 @@ def main():
         default=0.0,
         help="Minimum improvement %% to auto-apply (default: 0 = any)",
     )
+    p_single.add_argument(
+        "--no-refactor",
+        action="store_true",
+        help="Skip the Haiku refactor-staff cleanup pass after the main agent",
+    )
+    p_single.add_argument(
+        "--prompt", "-p",
+        type=str,
+        default=None,
+        help="Custom instructions/guidance to append to the agent prompt",
+    )
 
     # batch
     p_batch = subparsers.add_parser(
@@ -1120,6 +1135,11 @@ def main():
         type=float,
         default=0.0,
         help="Minimum improvement %% required to auto-apply (default: 0 = any progress)",
+    )
+    p_batch.add_argument(
+        "--no-refactor",
+        action="store_true",
+        help="Skip the Haiku refactor-staff cleanup pass after the main agent",
     )
 
     # query

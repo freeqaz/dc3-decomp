@@ -1047,6 +1047,61 @@ float MoveDir::DetectRangePSNR(
     return result;
 }
 
+MoveFrame *MoveDir::ClosestMoveFrame() {
+    HamMove *move = mMovePlayerData[0].mCurMove;
+    if (!move)
+        return nullptr;
+    struct FilterFrameDist {
+        float mDist;
+        FilterFrameDist(float dist) : mDist(dist) {}
+        bool operator()(const MoveFrame &a, const MoveFrame &b) {
+            return fabsf(a.GetBeat() - mDist) < fabsf(b.GetBeat() - mDist);
+        }
+    };
+    int measure = TheTaskMgr.CurrentMeasure();
+    float beat = TheTaskMgr.TotalBeat();
+    int measureBeats = measure * 4;
+    std::vector<MoveFrame> &frames = move->GetMoveFrames();
+    MoveFrame *result = std::min_element(
+        frames.begin(), frames.end(), FilterFrameDist(beat - (float)measureBeats)
+    );
+    return result != frames.end() ? result : nullptr;
+}
+
+float MoveDir::SongSeconds() {
+    float seconds = TheTaskMgr.Seconds(TaskMgr::kRealTime);
+    if (TheMaster) {
+        HamAudio *audio = TheMaster->GetAudio();
+        if (audio && audio->GetSongStream()) {
+            Stream *stream = audio->GetSongStream();
+            seconds += stream->GetJumpBackTotalTime() * 0.001f;
+        }
+    }
+    return seconds;
+}
+
+float MoveDir::SongSpeed() const {
+    if (TheMaster) {
+        Stream *stream = TheMaster->GetAudio()->GetSongStream();
+        return stream->GetSpeed();
+    }
+    return 1.0f;
+}
+
+bool MoveDir::InGracePeriod(int player) {
+    HamPlayerData *playerData = TheGameData->Player(player);
+    PropertyEventProvider *provider = playerData->Provider();
+    if (provider) {
+        static Symbol prop("start_score_move_index");
+        const DataNode *node = provider->Property(prop, false);
+        if (node) {
+            int measure = TheTaskMgr.CurrentMeasure();
+            return node->Int() == measure;
+        }
+    }
+    return false;
+}
+
 DancerSequence *MoveDir::SkillsSequence(Difficulty d, Symbol s1, Symbol s2) {
     PracticeSection *section = GetPracticeSection(d);
     if (section) {

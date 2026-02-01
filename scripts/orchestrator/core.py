@@ -13,55 +13,10 @@ import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
-# SDK integration toggle (default: use SDK)
-USE_SDK = os.getenv("ORCHESTRATOR_USE_SDK", "true").lower() == "true"
-
-# Import SDK types conditionally
-try:
-    from claude_code_sdk import (
-        query as sdk_query,
-        ClaudeCodeOptions,
-        AssistantMessage,
-        UserMessage,
-        ResultMessage,
-        ToolUseBlock,
-        ToolResultBlock,
-        TextBlock,
-        CLINotFoundError,
-        ProcessError,
-    )
-    from claude_code_sdk.types import McpStdioServerConfig
-    SDK_AVAILABLE = True
-except ImportError:
-    SDK_AVAILABLE = False
-
-
-def get_oauth_token() -> Optional[str]:
-    """Read OAuth token from Claude CLI credentials file.
-
-    Note: Only used for subprocess mode. SDK auto-detects credentials.
-    """
-    creds_path = Path.home() / ".claude" / ".credentials.json"
-    if not creds_path.exists():
-        return None
-    try:
-        with open(creds_path) as f:
-            creds = json.load(f)
-        return creds.get("claudeAiOauth", {}).get("accessToken")
-    except (json.JSONDecodeError, IOError):
-        return None
-
-
-from .config import (
-    get_backend,
-    _get_openrouter_enabled,
-    _get_openrouter_api_key,
-    _get_openrouter_base_url,
-    get_token_budget,
-    requires_openrouter,
-)
+from .agent_runner import AgentRunner, USE_SDK, SDK_AVAILABLE
+from .types import AgentRunConfig, AgentRunResult, DEFAULT_DECOMP_TOOLS, REFACTOR_TOOLS
 from .context_collector import collect_pre_run_context, TOTAL_CHAR_BUDGET, SECTION_CHAR_BUDGET
 from .database import (
     get_connection,
@@ -212,6 +167,13 @@ class DecompOrchestrator:
             db_path=db_path,
         )
 
+        # Agent runner for executing Claude agents
+        self.runner = AgentRunner(
+            main_repo=self.main_repo,
+            db_path=self.db_path,
+            logger=self.logger,
+        )
+
         # Patch applier for auto-applying agent progress to main repo
         self.patch_applier = PatchApplier(
             main_repo=self.main_repo,
@@ -242,7 +204,7 @@ class DecompOrchestrator:
         }
 
         # Add auth env (OpenRouter or Anthropic OAuth)
-        env.update(self._get_auth_env(model))
+        env.update(self.runner.build_auth_env(model))
 
         cmd = [
             "claude",
@@ -296,6 +258,78 @@ class DecompOrchestrator:
         """Load the prompt template."""
         with open(self.prompt_template_path) as f:
             return f.read()
+
+    def _worktree_has_changes(self, worktree: Path) -> bool:
+        """Check if worktree has uncommitted changes."""
+        result = subprocess.run(
+            ["git", "diff", "--quiet", "HEAD"],
+            cwd=worktree,
+            capture_output=True,
+        )
+        return result.returncode != 0
+
+    def _build_refactor_prompt(self, func: dict, worktree: Path, first_pass_percent: float) -> str:
+        """Build prompt for refactor-staff second pass."""
+        # Read the skill file
+        skill_path = self.main_repo / ".claude" / "skills" / "refactor-staff" / "SKILL.md"
+        if not skill_path.exists():
+            raise RuntimeError(f"refactor-staff skill not found at {skill_path}")
+
+        with open(skill_path) as f:
+            skill_content = f.read()
+
+        # Get modified files list
+        result = subprocess.run(
+            ["git", "diff", "--name-only", "HEAD"],
+            cwd=worktree,
+            capture_output=True,
+            text=True,
+        )
+        modified_files = result.stdout.strip().split("\n") if result.stdout.strip() else []
+
+        # Build the prompt
+        prompt = f"""# Refactor-Staff Cleanup Pass
+
+{skill_content}
+
+---
+
+## Context
+
+**Function:** {func['symbol']}
+**Demangled:** {func.get('demangled') or func['symbol']}
+**Current match:** {first_pass_percent:.1f}%
+**Worktree:** {worktree}
+
+**Modified files from first pass:**
+{chr(10).join(f"- {f}" for f in modified_files) if modified_files else "(none)"}
+
+---
+
+## Critical Constraints
+
+You MUST preserve or improve the match percentage. Current: {first_pass_percent:.1f}%.
+
+If your changes reduce the match, revert them immediately.
+
+After making any changes, verify with:
+```bash
+./bin/objdiff-cli diff {func['symbol']} --project-dir {worktree}
+```
+
+When using MCP tools (run_objdiff, analyze_function, etc.), pass:
+```
+project_dir={worktree}
+```
+
+---
+
+## Your Task
+
+Apply the refactor-staff methodology to clean up the code from the first pass.
+Focus on readability and maintainability while preserving exact behavior and match percentage.
+"""
+        return prompt
 
     def _build_prompt(self, func: dict[str, Any], use_incremental: bool = True, worktree_dir: Optional[str] = None, context: Optional[dict[str, Any]] = None) -> str:
         """Build prompt from template for a specific function.
@@ -354,79 +388,60 @@ class DecompOrchestrator:
             worktree_dir=worktree_dir or '(unknown)',
         ) + build_hint
 
-    def run_single_sync(
+    async def _execute_session(
         self,
-        symbol: str,
-        model: Optional[str] = None,
-        verbose: bool = True,
-        dry_run: bool = False,
-        use_incremental: bool = True,
+        func: dict,
+        session_id: str | None,
+        pre_locked: bool,
+        model: str | None,
+        verbose: bool,
+        dry_run: bool,
+        use_incremental: bool,
+        prompt_builder: Callable[[dict, str, dict], str],
+        notes_prefix: str = "",
+        session_prefix: str = "single",
+        dry_run_handler: Callable[[dict, str, dict], dict] | None = None,
+        refactor: bool = False,
     ) -> dict[str, Any]:
-        """
-        Run single agent on one function (synchronous wrapper).
+        """Execute a session flow shared by run_single and run_rb3_merge_single.
 
         Args:
-            symbol: Function symbol to work on
-            model: Force specific model (haiku, sonnet, opus)
-            verbose: Print agent output
-            dry_run: Don't actually run agent, just show what would happen
-            use_incremental: Use incremental build if True, full build if False
-
-        Returns:
-            Result dict with status, percent, patch, etc.
-        """
-        return asyncio.run(self.run_single(symbol, model, verbose, dry_run, use_incremental))
-
-    async def run_single(
-        self,
-        symbol: str,
-        model: Optional[str] = None,
-        verbose: bool = True,
-        dry_run: bool = False,
-        use_incremental: bool = True,
-        session_id: Optional[str] = None,
-        pre_locked: bool = False,
-    ) -> dict[str, Any]:
-        """
-        Run single agent on one function.
-
-        Args:
-            symbol: Function symbol to work on
-            model: Force specific model (haiku, sonnet, opus)
-            verbose: Print agent output
-            dry_run: Don't actually run agent, just show what would happen
-            use_incremental: Use incremental build if True, full build if False
+            func: Function dict from database
             session_id: Optional session ID (generated if not provided)
             pre_locked: If True, skip locking (already locked by caller)
+            model: Force specific model (haiku, sonnet, opus)
+            verbose: Print agent output
+            dry_run: Don't actually run agent, just show what would happen
+            use_incremental: Use incremental build if True, full build if False
+            prompt_builder: Callable(func, worktree_dir, context) -> str for building prompt
+            notes_prefix: Prefix for notes field (e.g., "RB3-merge: ")
+            session_prefix: Prefix for session ID generation (e.g., "single", "rb3merge")
+            dry_run_handler: Optional callable for custom dry-run output. If None, uses default.
+            refactor: Reserved for future use (Phase 4)
 
         Returns:
             Result dict with status, percent, patch, etc.
         """
-        # 1. Get function from database
-        func = get_function_by_symbol(symbol, db_path=self.db_path)
-        if not func:
-            self.logger.error(f"Function not found in database: {symbol}")
-            raise ValueError(f"Function not found: {symbol}")
-
-        # 1b. Preflight quota check
+        # 1. Preflight quota check
         await self._check_quota(model or "haiku")
 
-        self.logger.info(f"Starting agent session for symbol: {symbol}")
+        self.logger.info(f"Starting agent session for symbol: {func['symbol']}")
         self.logger.debug(f"Function details: demangled={func.get('demangled')}, unit={func.get('unit')}, current_percent={func.get('current_percent')}%")
 
         # 2. Generate session ID if not provided
         if session_id is None:
-            session_id = f"single-{func['id']}-{datetime.now().strftime('%H%M%S')}"
+            session_id = f"{session_prefix}-{func['id']}-{datetime.now().strftime('%H%M%S')}"
 
         # 3. Lock function (skip if pre_locked)
         if not pre_locked:
             if not lock_function(func["id"], session_id, db_path=self.db_path):
-                raise RuntimeError(f"Could not lock function (already locked?): {symbol}")
+                raise RuntimeError(f"Could not lock function (already locked?): {func['symbol']}")
 
         # 4. Acquire worktree
         worktree = self.worktree_pool.acquire(session_id)
         if worktree is None:
-            unlock_function(func["id"], db_path=self.db_path)
+            if not pre_locked:
+                unlock_function(func["id"], db_path=self.db_path)
             raise RuntimeError("No worktrees available")
 
         try:
@@ -437,23 +452,10 @@ class DecompOrchestrator:
             self.logger.info(f"Model selected: {selected_model} (reason: {reason})")
             self.logger.debug(f"Worktree: {worktree}, Build strategy: {'incremental' if use_incremental else 'full'}")
 
-            if verbose:
-                mode = "SDK" if (USE_SDK and SDK_AVAILABLE) else "subprocess"
-                print(f"\n{'='*60}")
-                print(f"Function: {func.get('demangled') or symbol}")
-                print(f"Symbol:   {symbol}")
-                print(f"Unit:     {func.get('unit') or 'unknown'}")
-                print(f"Current:  {func.get('current_percent') or 'unimplemented'}%")
-                print(f"Model:    {selected_model} ({reason})")
-                print(f"Mode:     {mode}")
-                print(f"Worktree: {worktree}")
-                print(f"Session:  {session_id}")
-                print(f"{'='*60}\n")
-
             # 6. Collect pre-run context
             context = {}
             try:
-                self.logger.debug(f"Collecting pre-run context for {symbol}...")
+                self.logger.debug(f"Collecting pre-run context for {func['symbol']}...")
                 context = collect_pre_run_context(
                     symbol=func["symbol"],
                     unit=func.get("unit"),
@@ -467,66 +469,37 @@ class DecompOrchestrator:
                 self.logger.warning(f"Failed to collect pre-run context: {e}")
                 context = {}
 
+            # 7. Handle dry-run
             if dry_run:
-                # Show context in dry-run output
-                print("[DRY RUN] Pre-Computed Analysis Context:")
-                print(f"  Match: {context.get('match_percent', '(unknown)')}%")
-                print(f"  Verdict: {context.get('verdict', '(unavailable)')}")
-                if context.get('key_patterns'):
-                    print(f"  Patterns: {', '.join(context.get('key_patterns', []))}")
-                if context.get('previous_attempts_count', 0) > 0:
-                    print(f"  Previous attempts: {context.get('previous_attempts_count')}")
-                # RB3 reference
-                rb3_ref = context.get('rb3_reference', '(not available)')
-                if rb3_ref and not rb3_ref.startswith('('):
-                    rb3_lines = len(rb3_ref.split('\n'))
-                    print(f"  RB3 reference: {rb3_lines} lines")
+                if dry_run_handler:
+                    return dry_run_handler(func, str(worktree), context)
                 else:
-                    print(f"  RB3 reference: {rb3_ref}")
-                # m2c decompilation
-                m2c_path = context.get('m2c_file_path_relative', '(not written)')
-                m2c_lines = context.get('m2c_line_count', 0)
-                if m2c_path and not m2c_path.startswith('('):
-                    print(f"  m2c output: {m2c_path} ({m2c_lines} lines)")
-                else:
-                    m2c_msg = context.get('m2c_decompilation', '(not run)')
-                    if m2c_msg.startswith('('):
-                        print(f"  m2c output: {m2c_msg}")
-                # Xrefs
-                if context.get('xrefs_path_relative') != '(unavailable)':
-                    print(f"  Xrefs: {context.get('xrefs_path_relative')}")
-                # objdiff output file
-                objdiff_file = context.get('objdiff_file', '(unavailable)')
-                objdiff_lines = context.get('objdiff_line_count', 0)
-                if objdiff_file and not objdiff_file.startswith('('):
-                    print(f"  objdiff output: {objdiff_file} ({objdiff_lines} lines)")
-                print()
-                return {
-                    "status": "dry_run",
-                    "function": func,
-                    "model": selected_model,
-                    "worktree": str(worktree),
-                    "context": context,
-                }
+                    # Default dry-run handler
+                    print(f"[DRY RUN] Would process {func['symbol']}")
+                    print(f"  Model: {selected_model}")
+                    print(f"  Worktree: {worktree}")
+                    return {
+                        "status": "dry_run",
+                        "function": func,
+                        "model": selected_model,
+                        "worktree": str(worktree),
+                        "context": context,
+                    }
 
-            # 7. Build prompt (with pre-computed context injected)
-            prompt = self._build_prompt(func, use_incremental=use_incremental, worktree_dir=str(worktree), context=context)
+            # 8. Build prompt (using provided builder)
+            prompt = prompt_builder(func, str(worktree), context)
 
-            # Check prompt size against token budget (~40k tokens / ~120k chars)
-            # SDK passes prompt as CLI argument: claude --print -- <prompt>
+            # Check prompt size against token budget
             prompt_size = len(prompt.encode('utf-8'))
 
             if prompt_size > TOTAL_CHAR_BUDGET:
-                # Prompt exceeds budget - this shouldn't happen if context_collector worked correctly
-                # Log error and truncate to prevent ARG_MAX failure
                 self.logger.error(
                     f"Prompt exceeds budget: {prompt_size / 1024:.1f}KB > {TOTAL_CHAR_BUDGET / 1024:.1f}KB. "
                     f"Truncating to prevent ARG_MAX failure."
                 )
-                # Emergency truncation - keep first TOTAL_CHAR_BUDGET chars
                 prompt = prompt[:TOTAL_CHAR_BUDGET]
                 prompt += "\n\n[PROMPT TRUNCATED - exceeded token budget]"
-            elif prompt_size > TOTAL_CHAR_BUDGET * 0.8:  # 80% threshold warning
+            elif prompt_size > TOTAL_CHAR_BUDGET * 0.8:
                 self.logger.warning(
                     f"Prompt approaching budget: {prompt_size / 1024:.1f}KB "
                     f"({prompt_size * 100 // TOTAL_CHAR_BUDGET}% of {TOTAL_CHAR_BUDGET / 1024:.0f}KB budget)"
@@ -534,47 +507,64 @@ class DecompOrchestrator:
             else:
                 self.logger.debug(f"Prompt size: {prompt_size / 1024:.1f}KB ({prompt_size * 100 // TOTAL_CHAR_BUDGET}% of budget)")
 
-            # 8. Run agent via SDK or subprocess
+            # 9. Run agent via AgentRunner
             start_percent = func.get("current_percent") or 0
 
-            if USE_SDK and SDK_AVAILABLE:
-                # Use Python SDK (preferred)
-                result = await self._run_agent_sdk(
-                    session_id=session_id,
-                    worktree=worktree,
-                    prompt=prompt,
-                    model=selected_model,
-                    verbose=verbose,
-                    use_incremental=use_incremental,
-                )
-                # 9. Extract patch
-                patch = self.worktree_pool.extract_patch(session_id)
-                # 10. Parse result from SDK messages
-                parsed = self._parse_agent_result_sdk(result.get("messages", []))
-            else:
-                # Fallback to subprocess (legacy)
-                result = await self._run_agent_process(
-                    session_id=session_id,
-                    worktree=worktree,
-                    prompt=prompt,
-                    model=selected_model,
-                    verbose=verbose,
-                    use_incremental=use_incremental,
-                )
-                # 9. Extract patch
-                patch = self.worktree_pool.extract_patch(session_id)
-                # 10. Parse result from agent output
-                parsed = self._parse_agent_result(result.get("output", ""))
+            agent_config = AgentRunConfig(
+                session_id=session_id,
+                worktree=worktree,
+                prompt=prompt,
+                model=selected_model,
+                verbose=verbose,
+            )
+            agent_result = await self.runner.run(agent_config)
 
-            end_percent = parsed.get("percent", start_percent)
-            exit_status = parsed.get("status", "unknown")
-            notes = parsed.get("notes", "")
-            verdict = parsed.get("verdict")
+            # 9b. Refactor pass (if enabled and first pass made changes)
+            if refactor and self._worktree_has_changes(worktree):
+                self.logger.info(f"Running refactor-staff cleanup pass (Haiku)...")
+                refactor_prompt = self._build_refactor_prompt(func, worktree, agent_result.percent or start_percent)
+                refactor_config = AgentRunConfig(
+                    session_id=f"{session_id}-refactor",
+                    worktree=worktree,
+                    prompt=refactor_prompt,
+                    model="haiku",
+                    verbose=verbose,
+                    max_turns=30,
+                    allowed_tools=list(REFACTOR_TOOLS),
+                )
+                refactor_result = await self.runner.run(refactor_config)
 
-            # Extract usage data (only available from SDK path)
-            usage_data = parsed.get("usage") or {}
-            actual_cost_usd = parsed.get("total_cost_usd")
-            duration_ms = parsed.get("duration_ms")
+                # Safety: check if match% regressed
+                if refactor_result.percent is not None and agent_result.percent is not None:
+                    if refactor_result.percent < agent_result.percent - 0.1:
+                        # Regressed — revert refactor changes
+                        self.logger.warning(
+                            f"Refactor pass regressed: {agent_result.percent}% -> {refactor_result.percent}%. Reverting."
+                        )
+                        subprocess.run(["git", "checkout", "--", "."], cwd=worktree, capture_output=True)
+                    else:
+                        # Success — merge cost
+                        agent_result.merge_cost(refactor_result)
+                        if refactor_result.percent is not None:
+                            agent_result.percent = refactor_result.percent
+                else:
+                    # Can't verify — merge cost anyway (assume ok)
+                    agent_result.merge_cost(refactor_result)
+            elif refactor:
+                self.logger.debug("Refactor pass skipped — no changes in worktree")
+
+            # 10. Extract patch
+            patch = self.worktree_pool.extract_patch(session_id)
+
+            # 11. Unpack result
+            end_percent = agent_result.percent if agent_result.percent is not None else start_percent
+            exit_status = agent_result.status
+            notes = notes_prefix + agent_result.notes
+            verdict = agent_result.verdict
+
+            usage_data = agent_result.usage or {}
+            actual_cost_usd = agent_result.total_cost_usd
+            duration_ms = agent_result.duration_ms
 
             self.logger.info(f"Agent result: status={exit_status}, percent={start_percent}% → {end_percent}%, verdict={verdict}")
             self.logger.debug(f"Notes from agent: {notes[:100]}..." if len(notes) > 100 else f"Notes from agent: {notes}")
@@ -585,7 +575,7 @@ class DecompOrchestrator:
                 if usage_data:
                     self.logger.debug(f"Tokens: in={usage_data.get('input_tokens')}, out={usage_data.get('output_tokens')}, cache_read={usage_data.get('cache_read_tokens')}")
 
-            # 11. Record attempt
+            # 12. Record attempt
             self.logger.debug(f"Recording attempt to database...")
             record_attempt(
                 function_id=func["id"],
@@ -607,7 +597,7 @@ class DecompOrchestrator:
                 db_path=self.db_path,
             )
 
-            # 12. Update function status
+            # 13. Update function status
             self.logger.debug(f"Updating function status in database...")
             update_function_status(
                 function_id=func["id"],
@@ -617,36 +607,14 @@ class DecompOrchestrator:
                 db_path=self.db_path,
             )
 
-            # 13. Auto-apply patch to main repo if enabled and there was progress
+            # 14. Auto-apply patch to main repo if enabled and there was progress
             apply_result = self.patch_applier.maybe_apply(
                 patch=patch,
                 start_percent=start_percent,
                 end_percent=end_percent if end_percent is not None else start_percent,
                 exit_status=exit_status,
-                symbol=symbol,
+                symbol=func["symbol"],
             )
-
-            if verbose:
-                print(f"\n{'='*60}")
-                print(f"Result: {exit_status}")
-                print(f"Match:  {start_percent}% → {end_percent}%")
-                if verdict:
-                    print(f"Verdict: {verdict}")
-                if patch:
-                    print(f"Patch:  {len(patch)} bytes")
-                if apply_result.get("applied"):
-                    print(f"Auto-applied: {apply_result['message']}")
-                # Display actual cost if available
-                if actual_cost_usd is not None:
-                    print(f"Cost:   ${actual_cost_usd:.4f}")
-                    if duration_ms:
-                        print(f"Time:   {duration_ms / 1000:.1f}s")
-                    if usage_data.get("input_tokens") or usage_data.get("output_tokens"):
-                        in_tok = usage_data.get("input_tokens", 0) or 0
-                        out_tok = usage_data.get("output_tokens", 0) or 0
-                        cache_read = usage_data.get("cache_read_tokens", 0) or 0
-                        print(f"Tokens: {in_tok:,} in / {out_tok:,} out / {cache_read:,} cache")
-                print(f"{'='*60}\n")
 
             return {
                 "status": exit_status,
@@ -658,545 +626,197 @@ class DecompOrchestrator:
                 "model": selected_model,
                 "session_id": session_id,
                 "patch_applied": apply_result.get("applied", False),
-                # Actual cost tracking (may be None for subprocess/MCP paths)
                 "actual_cost_usd": actual_cost_usd,
                 "duration_ms": duration_ms,
                 "usage": usage_data if usage_data else None,
             }
 
         finally:
-            # 14. Cleanup (only unlock if we did the locking)
+            # 15. Cleanup (only unlock if we did the locking)
             if not pre_locked:
                 unlock_function(func["id"], db_path=self.db_path)
             self.worktree_pool.release(session_id)
 
-    async def _run_agent_process(
+    def run_single_sync(
         self,
-        session_id: str,
-        worktree: Path,
-        prompt: str,
-        model: str,
+        symbol: str,
+        model: Optional[str] = None,
         verbose: bool = True,
-        max_turns: int = 300,
+        dry_run: bool = False,
         use_incremental: bool = True,
+        refactor: bool = True,
+        custom_prompt: Optional[str] = None,
     ) -> dict[str, Any]:
         """
-        Run Claude CLI agent as subprocess.
+        Run single agent on one function (synchronous wrapper).
 
         Args:
-            session_id: Unique session identifier
-            worktree: Working directory for agent
-            prompt: Initial prompt for agent
-            model: Model to use (haiku, sonnet, opus)
-            verbose: Stream output to stdout
-            max_turns: Maximum conversation turns
+            symbol: Function symbol to work on
+            model: Force specific model (haiku, sonnet, opus)
+            verbose: Print agent output
+            dry_run: Don't actually run agent, just show what would happen
             use_incremental: Use incremental build if True, full build if False
+            refactor: Run a Haiku cleanup pass after the first agent (default: True)
+            custom_prompt: Custom instructions to append to agent prompt
 
         Returns:
-            Dict with exit_code, output, etc.
+            Result dict with status, percent, patch, etc.
         """
-        # Get model ID for current backend (Anthropic or OpenRouter)
-        cli_model = get_model_id(model)
+        return asyncio.run(self.run_single(symbol, model, verbose, dry_run, use_incremental, refactor=refactor, custom_prompt=custom_prompt))
 
-        # Build command
-        # Note: Token budgets (max_thinking_tokens, etc.) are enforced at the API level
-        # by OpenRouter/Anthropic, and are passed to the SDK via ClaudeCodeOptions.
-        # The CLI subprocess path does not expose these token controls.
-        cmd = [
-            "claude",
-            "--print",  # Print conversation to stdout
-            "--model", cli_model,
-            "--max-turns", str(max_turns),
-            "--dangerously-skip-permissions",  # Auto-approve tool use
-            "--no-session-persistence",  # Don't write session files (sandbox-safe)
-            prompt,
-        ]
-
-        if verbose:
-            build_str = "incremental" if use_incremental else "full"
-            print(f"[{session_id}] Starting agent with model {cli_model} ({build_str} build)...")
-
-        # Build environment with OAuth token if available
-        # Set HOME to writable location so Claude CLI can write .claude.json etc
-        agent_home = Path(os.environ.get("AGENT_HOME", "/home/free/code/milohax/dc3-decomp/agent-home"))
-        agent_home.mkdir(parents=True, exist_ok=True)
-
-        # Use Claude-specific proxy ports if available (sandbox-friendly)
-        http_proxy_port = os.environ.get("CLAUDE_CODE_HOST_HTTP_PROXY_PORT")
-        socks_proxy_port = os.environ.get("CLAUDE_CODE_HOST_SOCKS_PROXY_PORT")
-
-        env = {
-            **os.environ,
-            "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
-            "HOME": str(agent_home),
-        }
-
-        # Override proxy settings to use Claude-specific ports
-        if http_proxy_port:
-            env["HTTP_PROXY"] = f"http://localhost:{http_proxy_port}"
-            env["HTTPS_PROXY"] = f"http://localhost:{http_proxy_port}"
-            env["http_proxy"] = f"http://localhost:{http_proxy_port}"
-            env["https_proxy"] = f"http://localhost:{http_proxy_port}"
-        if socks_proxy_port:
-            env["ALL_PROXY"] = f"socks5h://localhost:{socks_proxy_port}"
-            env["all_proxy"] = f"socks5h://localhost:{socks_proxy_port}"
-
-        if _get_openrouter_enabled() and _get_openrouter_api_key():
-            # Use OpenRouter backend
-            env["ANTHROPIC_BASE_URL"] = _get_openrouter_base_url()
-            env["ANTHROPIC_API_KEY"] = _get_openrouter_api_key()
-            if verbose:
-                print(f"[{session_id}] Using OpenRouter backend at {_get_openrouter_base_url()}")
-        else:
-            # Use native Anthropic backend (default)
-            oauth_token = get_oauth_token()
-            if oauth_token:
-                env["CLAUDE_CODE_OAUTH_TOKEN"] = oauth_token
-
-        # Run subprocess
-        process = await asyncio.create_subprocess_exec(
-            *cmd,
-            cwd=worktree,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT,
-            env=env,
-        )
-
-        # Collect output
-        output_lines = []
-
-        async for line in process.stdout:
-            decoded = line.decode("utf-8", errors="replace")
-            output_lines.append(decoded)
-            if verbose:
-                print(decoded, end="")
-
-        await process.wait()
-
-        output = "".join(output_lines)
-
-        return {
-            "exit_code": process.returncode,
-            "output": output,
-            "session_id": session_id,
-        }
-
-    def _parse_agent_result(self, output: str) -> dict[str, Any]:
-        """
-        Parse agent output to extract result.
-
-        Looks for report_result MCP tool call or final state.
-        """
-        result = {
-            "status": "unknown",
-            "percent": None,
-            "notes": "",
-            "verdict": None,
-        }
-
-        # Look for report_result JSON in output
-        # Pattern: {"_decomp_exit": true, "status": "...", ...}
-        json_pattern = r'\{[^{}]*"_decomp_exit"[^{}]*\}'
-        matches = re.findall(json_pattern, output, re.DOTALL)
-
-        if matches:
-            try:
-                # Take the last match (final result)
-                data = json.loads(matches[-1])
-                result["status"] = data.get("status", "unknown")
-                result["percent"] = data.get("percent")
-                result["notes"] = data.get("notes", "")
-                self.logger.debug(f"Parsed report_result MCP call: status={result['status']}, percent={result['percent']}")
-            except json.JSONDecodeError as e:
-                self.logger.warning(f"Failed to parse JSON from agent output: {e}")
-                pass
-
-        # Also look for verdict in objdiff output - only match valid verdict values
-        # Valid verdicts (underscore or camelCase): COMPLETE, AT_LIMIT, LIKELY_FIXABLE, MAYBE_FIXABLE, UNKNOWN, NEEDS_INVESTIGATION
-        verdict_pattern = r'verdict[:\s]+(COMPLETE|AT_LIMIT|LIKELY_FIXABLE|MAYBE_FIXABLE|UNKNOWN|NEEDS_INVESTIGATION|NeedsInvestigation|LikelyFixable|MaybeFixable|AtLimit)'
-        verdict_matches = re.findall(verdict_pattern, output, re.IGNORECASE)
-        if verdict_matches:
-            # Normalize to uppercase with underscores
-            verdict = verdict_matches[-1].upper()
-            verdict = re.sub(r'([a-z])([A-Z])', r'\1_\2', verdict_matches[-1]).upper()
-            result["verdict"] = verdict
-            self.logger.debug(f"Parsed verdict from objdiff: {result['verdict']}")
-
-        # Look for percentage in objdiff output
-        percent_pattern = r'(\d+\.?\d*)\s*%\s*match'
-        percent_matches = re.findall(percent_pattern, output, re.IGNORECASE)
-        if percent_matches and result["percent"] is None:
-            try:
-                result["percent"] = float(percent_matches[-1])
-                self.logger.debug(f"Parsed percentage from objdiff: {result['percent']}%")
-            except ValueError:
-                pass
-
-        # Also look for new RESULT format from agent prompt
-        # RESULT: complete
-        # PERCENT: 100.0
-        # NOTES: Fixed comparison
-        result_pattern = r'RESULT:\s*(\w+)'
-        result_matches = re.findall(result_pattern, output, re.IGNORECASE)
-        if result_matches:
-            result["status"] = result_matches[-1].lower()
-            self.logger.debug(f"Parsed RESULT line format: status={result['status']}")
-
-        percent_result_pattern = r'PERCENT:\s*([\d.]+)'
-        percent_result_matches = re.findall(percent_result_pattern, output, re.IGNORECASE)
-        if percent_result_matches:
-            try:
-                result["percent"] = float(percent_result_matches[-1])
-                self.logger.debug(f"Parsed PERCENT line format: {result['percent']}%")
-            except ValueError:
-                pass
-
-        notes_pattern = r'NOTES:\s*(.+?)(?:\n|$)'
-        notes_matches = re.findall(notes_pattern, output, re.IGNORECASE)
-        if notes_matches:
-            result["notes"] = notes_matches[-1].strip()
-            self.logger.debug(f"Parsed NOTES line format: {result['notes'][:50]}...")
-
-        return result
-
-    def _get_auth_env(self, model: str = None) -> dict[str, str]:
-        """Build auth environment for SDK/subprocess.
-
-        Returns environment variables for API authentication.
-        SDK auto-detects OAuth credentials, but we still need to set
-        OpenRouter environment variables when that backend is enabled
-        or when the model requires OpenRouter.
-
-        Per OpenRouter docs (https://openrouter.ai/docs/guides/guides/claude-code-integration):
-        - ANTHROPIC_BASE_URL: https://openrouter.ai/api (not /api/v1)
-        - ANTHROPIC_AUTH_TOKEN: OpenRouter API key
-        - ANTHROPIC_API_KEY: Must be empty string
-        - ANTHROPIC_DEFAULT_*_MODEL: Override for non-Anthropic models
-
-        Args:
-            model: Optional model tier. If OpenRouter-only, uses OpenRouter credentials.
-
-        Returns:
-            Dict of environment variables for auth
-        """
-        env: dict[str, str] = {}
-
-        # Use OpenRouter if explicitly enabled OR if model requires it
-        use_openrouter = _get_openrouter_enabled() or (model and requires_openrouter(model))
-
-        if use_openrouter and _get_openrouter_api_key():
-            # OpenRouter backend - use correct env vars per their docs
-            env["ANTHROPIC_BASE_URL"] = _get_openrouter_base_url()
-            env["ANTHROPIC_AUTH_TOKEN"] = _get_openrouter_api_key()
-            env["ANTHROPIC_API_KEY"] = ""  # Must be explicitly empty
-
-            # For non-Anthropic models, override the default model alias
-            # Claude Code CLI uses aliases (sonnet, haiku, opus) - we override via env
-            if model and requires_openrouter(model):
-                openrouter_model_id = get_model_id(model)
-                # Override sonnet alias (the default tier we use)
-                env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = openrouter_model_id
-        # Anthropic: SDK auto-reads ~/.claude/.credentials.json
-
-        return env
-
-    async def _run_agent_sdk(
+    async def run_single(
         self,
-        session_id: str,
-        worktree: Path,
-        prompt: str,
-        model: str,
+        symbol: str,
+        model: Optional[str] = None,
         verbose: bool = True,
-        max_turns: int = 300,
+        dry_run: bool = False,
         use_incremental: bool = True,
+        session_id: Optional[str] = None,
+        pre_locked: bool = False,
+        refactor: bool = False,
+        custom_prompt: Optional[str] = None,
     ) -> dict[str, Any]:
         """
-        Run Claude agent via Python SDK.
-
-        Uses claude-code-sdk for direct API access with structured
-        message types instead of subprocess/stdout parsing.
+        Run single agent on one function.
 
         Args:
-            session_id: Unique session identifier
-            worktree: Working directory for agent
-            prompt: Initial prompt for agent
-            model: Model to use (haiku, sonnet, opus)
-            verbose: Stream output to stdout
-            max_turns: Maximum conversation turns
+            symbol: Function symbol to work on
+            model: Force specific model (haiku, sonnet, opus)
+            verbose: Print agent output
+            dry_run: Don't actually run agent, just show what would happen
             use_incremental: Use incremental build if True, full build if False
+            session_id: Optional session ID (generated if not provided)
+            pre_locked: If True, skip locking (already locked by caller)
+            refactor: Reserved for future use (Phase 4)
+            custom_prompt: Custom instructions to append to agent prompt
 
         Returns:
-            Dict with exit_code, messages list, output string, etc.
+            Result dict with status, percent, patch, etc.
         """
-        if not SDK_AVAILABLE:
-            raise RuntimeError("claude-code-sdk not installed. Run: pip install claude-code-sdk")
+        # Get function from database
+        func = get_function_by_symbol(symbol, db_path=self.db_path)
+        if not func:
+            self.logger.error(f"Function not found in database: {symbol}")
+            raise ValueError(f"Function not found: {symbol}")
 
-        # Get model ID for CLI
-        # For OpenRouter-only models, use "sonnet" alias - the actual model is set via
-        # ANTHROPIC_DEFAULT_SONNET_MODEL env var in _get_auth_env()
-        if requires_openrouter(model):
-            cli_model = "sonnet"  # Alias gets overridden by env var
-        else:
-            cli_model = get_model_id(model)
+        # Print verbose header before delegating to _execute_session
+        if verbose and not dry_run:
+            # Need to select model early for verbose header
+            selected_model = select_model(func, force_model=model)
+            reason = get_escalation_reason(func, selected_model)
+            mode = "SDK" if (USE_SDK and SDK_AVAILABLE) else "subprocess"
 
-        # Get thinking token budget for models that support it
-        thinking_tokens = get_token_budget(model)
+            # Generate session ID for display (will be regenerated in _execute_session if None)
+            display_session_id = session_id or f"single-{func['id']}-{datetime.now().strftime('%H%M%S')}"
 
-        if verbose:
-            build_str = "incremental" if use_incremental else "full"
-            # Show actual model ID (not just CLI alias)
-            actual_model = get_model_id(model)
-            print(f"[{session_id}] Starting agent (SDK) with model {actual_model} ({build_str} build)...")
+            print(f"\n{'='*60}")
+            print(f"Function: {func.get('demangled') or symbol}")
+            print(f"Symbol:   {symbol}")
+            print(f"Unit:     {func.get('unit') or 'unknown'}")
+            print(f"Current:  {func.get('current_percent') or 'unimplemented'}%")
+            print(f"Model:    {selected_model} ({reason})")
+            print(f"Mode:     {mode}")
+            print(f"Session:  {display_session_id}")
+            if custom_prompt:
+                print(f"Prompt:   {custom_prompt[:80]}{'...' if len(custom_prompt) > 80 else ''}")
+            print(f"{'='*60}\n")
 
-        # Build environment with OAuth token if available
-        # Set HOME to writable location so Claude CLI can write .claude.json etc
-        agent_home = Path(os.environ.get("AGENT_HOME", "/home/free/code/milohax/dc3-decomp/agent-home"))
-        agent_home.mkdir(parents=True, exist_ok=True)
+        # Custom dry-run handler for run_single's elaborate output
+        def run_single_dry_run_handler(func: dict, worktree_dir: str, context: dict) -> dict:
+            selected_model = select_model(func, force_model=model)
 
-        # Use Claude-specific proxy ports if available (sandbox-friendly)
-        http_proxy_port = os.environ.get("CLAUDE_CODE_HOST_HTTP_PROXY_PORT")
-        socks_proxy_port = os.environ.get("CLAUDE_CODE_HOST_SOCKS_PROXY_PORT")
+            print("[DRY RUN] Pre-Computed Analysis Context:")
+            print(f"  Match: {context.get('match_percent', '(unknown)')}%")
+            print(f"  Verdict: {context.get('verdict', '(unavailable)')}")
+            if context.get('key_patterns'):
+                print(f"  Patterns: {', '.join(context.get('key_patterns', []))}")
+            if context.get('previous_attempts_count', 0) > 0:
+                print(f"  Previous attempts: {context.get('previous_attempts_count')}")
 
-        env = {
-            "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
-            "HOME": str(agent_home),
-        }
+            # RB3 reference
+            rb3_ref = context.get('rb3_reference', '(not available)')
+            if rb3_ref and not rb3_ref.startswith('('):
+                rb3_lines = len(rb3_ref.split('\n'))
+                print(f"  RB3 reference: {rb3_lines} lines")
+            else:
+                print(f"  RB3 reference: {rb3_ref}")
 
-        # Override proxy settings to use Claude-specific ports
-        if http_proxy_port:
-            env["HTTP_PROXY"] = f"http://localhost:{http_proxy_port}"
-            env["HTTPS_PROXY"] = f"http://localhost:{http_proxy_port}"
-            env["http_proxy"] = f"http://localhost:{http_proxy_port}"
-            env["https_proxy"] = f"http://localhost:{http_proxy_port}"
-        if socks_proxy_port:
-            env["ALL_PROXY"] = f"socks5h://localhost:{socks_proxy_port}"
-            env["all_proxy"] = f"socks5h://localhost:{socks_proxy_port}"
+            # m2c decompilation
+            m2c_path = context.get('m2c_file_path_relative', '(not written)')
+            m2c_lines = context.get('m2c_line_count', 0)
+            if m2c_path and not m2c_path.startswith('('):
+                print(f"  m2c output: {m2c_path} ({m2c_lines} lines)")
+            else:
+                m2c_msg = context.get('m2c_decompilation', '(not run)')
+                if m2c_msg.startswith('('):
+                    print(f"  m2c output: {m2c_msg}")
 
-        # Add auth environment
-        env.update(self._get_auth_env(model))
+            # Xrefs
+            if context.get('xrefs_path_relative') != '(unavailable)':
+                print(f"  Xrefs: {context.get('xrefs_path_relative')}")
 
-        use_openrouter = _get_openrouter_enabled() or requires_openrouter(model)
-        if verbose and use_openrouter and _get_openrouter_api_key():
-            print(f"[{session_id}] Using OpenRouter backend at {_get_openrouter_base_url()}")
+            # objdiff output file
+            objdiff_file = context.get('objdiff_file', '(unavailable)')
+            objdiff_lines = context.get('objdiff_line_count', 0)
+            if objdiff_file and not objdiff_file.startswith('('):
+                print(f"  objdiff output: {objdiff_file} ({objdiff_lines} lines)")
+            print()
 
-        # Configure MCP server for orchestrator tools
-        mcp_config: McpStdioServerConfig = {
-            "command": "python3",
-            "args": ["-m", "scripts.orchestrator.mcp_server", "--db", str(self.db_path)],
-            "env": {"PYTHONPATH": str(self.main_repo)},
-        }
+            return {
+                "status": "dry_run",
+                "function": func,
+                "model": selected_model,
+                "worktree": worktree_dir,
+                "context": context,
+            }
 
-        # Build SDK options
-        # Note: max_thinking_tokens is not supported in current ClaudeCodeOptions
-        # Token budgets are enforced at the API level instead
-        options = ClaudeCodeOptions(
-            model=cli_model,
-            max_turns=max_turns,
-            cwd=str(worktree),
-            env=env,
-            permission_mode="bypassPermissions",
-            mcp_servers={"orchestrator": mcp_config},
-            allowed_tools=[
-                "Read", "Write", "Edit", "Bash", "Glob", "Grep",
-                "mcp__orchestrator__report_result",
-                "mcp__orchestrator__query_functions",
-                "mcp__orchestrator__get_attempts",
-                "mcp__orchestrator__lookup_rb3",
-                "mcp__orchestrator__run_objdiff",
-            ],
-            # Prevent agents from trying to spawn sub-agents (orchestrator handles this)
-            disallowed_tools=["Task", "TaskOutput"],
-            # Add main repo to allowed dirs so symlinks work in sandbox
-            add_dirs=[str(self.main_repo)],
+        # Prompt builder for run_single
+        def build_single_prompt(func: dict, worktree_dir: str, context: dict) -> str:
+            prompt = self._build_prompt(func, use_incremental=use_incremental, worktree_dir=worktree_dir, context=context)
+            if custom_prompt:
+                prompt += f"\n\n## Custom Instructions\n\n{custom_prompt}\n"
+            return prompt
+
+        # Delegate to _execute_session
+        result = await self._execute_session(
+            func=func,
+            session_id=session_id,
+            pre_locked=pre_locked,
+            model=model,
+            verbose=verbose,
+            dry_run=dry_run,
+            use_incremental=use_incremental,
+            prompt_builder=build_single_prompt,
+            notes_prefix="",
+            session_prefix="single",
+            dry_run_handler=run_single_dry_run_handler if dry_run else None,
+            refactor=refactor,
         )
 
-        # Collect messages for parsing
-        messages: list[Any] = []
-        output_lines: list[str] = []
+        # Print verbose footer
+        if verbose and not dry_run:
+            print(f"\n{'='*60}")
+            print(f"Result: {result['status']}")
+            print(f"Match:  {result['start_percent']}% → {result['end_percent']}%")
+            if result.get('verdict'):
+                print(f"Verdict: {result['verdict']}")
+            if result.get('patch'):
+                print(f"Patch:  {len(result['patch'])} bytes")
+            if result.get('patch_applied'):
+                print(f"Auto-applied: patch applied successfully")
 
-        try:
-            async for message in sdk_query(prompt=prompt, options=options):
-                messages.append(message)
-
-                # Stream output if verbose
-                if verbose:
-                    if isinstance(message, AssistantMessage):
-                        for block in message.content:
-                            if isinstance(block, TextBlock):
-                                print(block.text, end="")
-                                output_lines.append(block.text)
-                            elif isinstance(block, ToolUseBlock):
-                                tool_str = f"\n[Tool: {block.name}]"
-                                # Format input parameters
-                                if hasattr(block, 'input') and block.input:
-                                    input_parts = []
-                                    for k, v in block.input.items():
-                                        # Truncate long values
-                                        v_str = str(v)
-                                        if len(v_str) > 100:
-                                            v_str = v_str[:100] + "..."
-                                        input_parts.append(f"{k}={v_str}")
-                                    if input_parts:
-                                        tool_str += f" {', '.join(input_parts)}"
-                                tool_str += "\n"
-                                print(tool_str, end="")
-                                output_lines.append(tool_str)
-                    elif isinstance(message, UserMessage):
-                        # Log tool results
-                        for block in message.content:
-                            if isinstance(block, ToolResultBlock):
-                                # Format the result content
-                                content = block.content
-                                if content is None:
-                                    content_str = "(no output)"
-                                elif isinstance(content, str):
-                                    content_str = content
-                                else:
-                                    content_str = str(content)
-
-                                # Truncate long results
-                                if len(content_str) > 200:
-                                    content_str = content_str[:200] + "..."
-
-                                error_marker = " ERROR" if block.is_error else ""
-                                result_str = f"  → {content_str}{error_marker}\n"
-                                print(result_str, end="")
-                                output_lines.append(result_str)
-                    elif isinstance(message, ResultMessage):
-                        result_str = f"\n[Result: {message}]\n"
-                        print(result_str, end="")
-                        output_lines.append(result_str)
-
-            return {
-                "exit_code": 0,
-                "messages": messages,
-                "output": "".join(output_lines),
-                "session_id": session_id,
-            }
-
-        except CLINotFoundError as e:
-            error_msg = f"Claude CLI not found: {e}"
-            if verbose:
-                print(f"\n[{session_id}] Error: {error_msg}")
-            return {"exit_code": 127, "error": error_msg, "messages": [], "output": ""}
-
-        except ProcessError as e:
-            error_msg = str(e)
-            if verbose:
-                print(f"\n[{session_id}] Process error: {error_msg}")
-            return {
-                "exit_code": e.exit_code if hasattr(e, 'exit_code') else 1,
-                "error": error_msg,
-                "messages": [],
-                "output": getattr(e, 'stderr', ''),
-            }
-
-        except Exception as e:
-            error_msg = str(e)
-            if verbose:
-                print(f"\n[{session_id}] Unexpected error: {error_msg}")
-            return {"exit_code": 1, "error": error_msg, "messages": [], "output": ""}
-
-    def _parse_agent_result_sdk(self, messages: list[Any]) -> dict[str, Any]:
-        """
-        Parse agent result from SDK messages.
-
-        Primary method: Extract from ToolUseBlock with report_result call.
-        Fallback: Use regex on text content (backward compat).
-
-        Also extracts usage data from ResultMessage if present.
-
-        Args:
-            messages: List of SDK message objects
-
-        Returns:
-            Dict with status, percent, notes, verdict, and usage data
-        """
-        result = {
-            "status": "unknown",
-            "percent": None,
-            "notes": "",
-            "verdict": None,
-            # Usage data from ResultMessage (may be None for non-SDK paths)
-            "usage": None,
-            "total_cost_usd": None,
-            "duration_ms": None,
-            "num_turns": None,
-        }
-
-        # Collect all text for fallback regex parsing
-        all_text = []
-
-        # Primary: Look for report_result tool call and ResultMessage
-        for message in messages:
-            if isinstance(message, AssistantMessage):
-                for block in message.content:
-                    if isinstance(block, ToolUseBlock):
-                        if block.name == "mcp__orchestrator__report_result":
-                            # Direct structured access - no regex needed!
-                            input_data = block.input
-                            result["status"] = input_data.get("status", "unknown")
-                            result["percent"] = input_data.get("percent")
-                            result["notes"] = input_data.get("notes", "")
-                            # report_result found, but continue to collect text for verdict
-                    elif isinstance(block, TextBlock):
-                        all_text.append(block.text)
-            elif isinstance(message, ResultMessage):
-                # Extract usage data from ResultMessage
-                result["total_cost_usd"] = message.total_cost_usd
-                result["duration_ms"] = message.duration_ms
-                result["num_turns"] = message.num_turns
-
-                # Extract token usage dict
-                if message.usage:
-                    result["usage"] = {
-                        "input_tokens": message.usage.get("inputTokens"),
-                        "output_tokens": message.usage.get("outputTokens"),
-                        "cache_read_tokens": message.usage.get("cacheReadInputTokens"),
-                        "cache_creation_tokens": message.usage.get("cacheCreationInputTokens"),
-                    }
-
-        # Combine text for regex fallback parsing
-        combined_text = "\n".join(all_text)
-
-        # Look for verdict in objdiff output (not in report_result)
-        # Valid verdicts (underscore or camelCase): COMPLETE, AT_LIMIT, LIKELY_FIXABLE, MAYBE_FIXABLE, UNKNOWN, NEEDS_INVESTIGATION
-        verdict_pattern = r'verdict[:\s]+(COMPLETE|AT_LIMIT|LIKELY_FIXABLE|MAYBE_FIXABLE|UNKNOWN|NEEDS_INVESTIGATION|NeedsInvestigation|LikelyFixable|MaybeFixable|AtLimit)'
-        verdict_matches = re.findall(verdict_pattern, combined_text, re.IGNORECASE)
-        if verdict_matches:
-            # Normalize to uppercase with underscores
-            verdict = re.sub(r'([a-z])([A-Z])', r'\1_\2', verdict_matches[-1]).upper()
-            result["verdict"] = verdict
-
-        # Fallback: Look for percentage in text if not found in tool call
-        if result["percent"] is None:
-            percent_pattern = r'(\d+\.?\d*)\s*%\s*match'
-            percent_matches = re.findall(percent_pattern, combined_text, re.IGNORECASE)
-            if percent_matches:
-                try:
-                    result["percent"] = float(percent_matches[-1])
-                except ValueError:
-                    pass
-
-        # Fallback: Look for RESULT/PERCENT/NOTES format if no tool call found
-        if result["status"] == "unknown":
-            result_pattern = r'RESULT:\s*(\w+)'
-            result_matches = re.findall(result_pattern, combined_text, re.IGNORECASE)
-            if result_matches:
-                result["status"] = result_matches[-1].lower()
-
-            percent_result_pattern = r'PERCENT:\s*([\d.]+)'
-            percent_result_matches = re.findall(percent_result_pattern, combined_text, re.IGNORECASE)
-            if percent_result_matches and result["percent"] is None:
-                try:
-                    result["percent"] = float(percent_result_matches[-1])
-                except ValueError:
-                    pass
-
-            notes_pattern = r'NOTES:\s*(.+?)(?:\n|$)'
-            notes_matches = re.findall(notes_pattern, combined_text, re.IGNORECASE)
-            if notes_matches and not result["notes"]:
-                result["notes"] = notes_matches[-1].strip()
+            # Display actual cost if available
+            if result.get('actual_cost_usd') is not None:
+                print(f"Cost:   ${result['actual_cost_usd']:.4f}")
+                if result.get('duration_ms'):
+                    print(f"Time:   {result['duration_ms'] / 1000:.1f}s")
+                usage = result.get('usage', {})
+                if usage.get('input_tokens') or usage.get('output_tokens'):
+                    in_tok = usage.get('input_tokens', 0) or 0
+                    out_tok = usage.get('output_tokens', 0) or 0
+                    cache_read = usage.get('cache_read_tokens', 0) or 0
+                    print(f"Tokens: {in_tok:,} in / {out_tok:,} out / {cache_read:,} cache")
+            print(f"{'='*60}\n")
 
         return result
 
@@ -1212,6 +832,7 @@ class DecompOrchestrator:
         use_incremental: bool = True,
         periodic_full_interval: int = 10,
         validate_diffs: bool = False,
+        refactor: bool = True,
     ) -> dict[str, Any]:
         """
         Run batch of functions matching pattern with N parallel agents.
@@ -1232,6 +853,7 @@ class DecompOrchestrator:
             use_incremental: Use incremental builds by default (True) or full (False)
             periodic_full_interval: Run full build every Nth batch (0 = disabled)
             validate_diffs: Validate diffs between incremental and full builds
+            refactor: Run Haiku refactor-staff cleanup pass after main agent (default: True)
 
         Returns:
             Summary dict with results
@@ -1343,7 +965,7 @@ class DecompOrchestrator:
             # Spawn agent asynchronously
             task = asyncio.create_task(
                 self._run_batch_agent(
-                    session_id, func, model, verbose, use_incremental=current_use_incremental
+                    session_id, func, model, verbose, use_incremental=current_use_incremental, refactor=refactor
                 )
             )
             self.active_sessions[session_id] = task
@@ -1403,6 +1025,7 @@ class DecompOrchestrator:
         use_incremental: bool = True,
         periodic_full_interval: int = 10,
         validate_diffs: bool = False,
+        refactor: bool = True,
     ) -> dict[str, Any]:
         """
         Run batch on a pre-selected list of target functions.
@@ -1418,6 +1041,7 @@ class DecompOrchestrator:
             use_incremental: Use incremental builds by default
             periodic_full_interval: Run full build every Nth batch (0 = disabled)
             validate_diffs: Validate diffs between incremental and full builds
+            refactor: Run Haiku refactor-staff cleanup pass after main agent (default: True)
 
         Returns:
             Summary dict with results
@@ -1505,7 +1129,7 @@ class DecompOrchestrator:
             # Spawn agent asynchronously
             task = asyncio.create_task(
                 self._run_batch_agent(
-                    session_id, func, model, verbose, use_incremental=current_use_incremental
+                    session_id, func, model, verbose, use_incremental=current_use_incremental, refactor=refactor
                 )
             )
             self.active_sessions[session_id] = task
@@ -1562,6 +1186,7 @@ class DecompOrchestrator:
         model: Optional[str],
         verbose: bool,
         use_incremental: bool = True,
+        refactor: bool = True,
     ) -> dict[str, Any]:
         """Run single agent as part of batch (handles its own errors).
 
@@ -1571,6 +1196,7 @@ class DecompOrchestrator:
             model: Force specific model
             verbose: Print output
             use_incremental: Use incremental build
+            refactor: Run Haiku refactor-staff cleanup pass after main agent
         """
         try:
             return await self.run_single(
@@ -1580,6 +1206,7 @@ class DecompOrchestrator:
                 use_incremental=use_incremental,
                 session_id=session_id,
                 pre_locked=True,  # Batch already locked the function
+                refactor=refactor,
             )
         except Exception as e:
             print(f"[{session_id}] Error: {e}")
@@ -1783,137 +1410,36 @@ class DecompOrchestrator:
         if not func:
             raise ValueError(f"Function not found: {symbol}")
 
-        # Preflight quota check
-        await self._check_quota(model or "haiku")
+        # Custom dry-run handler for RB3-merge
+        def rb3_merge_dry_run_handler(func: dict, worktree_dir: str, context: dict) -> dict:
+            print(f"[DRY RUN] Would process {symbol} with RB3-merge")
+            print(f"  RB3 source: {len(rb3_source)} characters")
+            return {"status": "dry_run", "function": func}
 
-        if session_id is None:
-            session_id = f"rb3merge-{func['id']}-{datetime.now().strftime('%H%M%S')}"
+        # Prompt builder for RB3-merge
+        def build_rb3_merge_prompt(func: dict, worktree_dir: str, context: dict) -> str:
+            return self._build_rb3_merge_prompt(func, rb3_source, worktree_dir=worktree_dir, context=context)
 
-        # Lock function if not pre-locked by batch
-        if not pre_locked:
-            if not lock_function(func["id"], session_id, db_path=self.db_path):
-                raise RuntimeError(f"Could not lock function: {symbol}")
+        # Delegate to _execute_session
+        result = await self._execute_session(
+            func=func,
+            session_id=session_id,
+            pre_locked=pre_locked,
+            model=model,
+            verbose=verbose,
+            dry_run=dry_run,
+            use_incremental=True,  # RB3-merge always uses incremental
+            prompt_builder=build_rb3_merge_prompt,
+            notes_prefix="RB3-merge: ",
+            session_prefix="rb3merge",
+            dry_run_handler=rb3_merge_dry_run_handler if dry_run else None,
+            refactor=False,
+        )
 
-        worktree = self.worktree_pool.acquire(session_id)
-        if worktree is None:
-            if not pre_locked:
-                unlock_function(func["id"], db_path=self.db_path)
-            raise RuntimeError("No worktrees available")
+        # Add mode field to distinguish RB3-merge results
+        result["mode"] = "rb3_merge"
 
-        try:
-            selected_model = select_model(func, force_model=model)
-
-            # Collect context
-            context = {}
-            try:
-                context = collect_pre_run_context(
-                    symbol=func["symbol"],
-                    unit=func.get("unit"),
-                    project_dir=str(self.main_repo),
-                    worktree_dir=str(worktree)
-                )
-            except Exception as e:
-                self.logger.warning(f"Failed to collect context: {e}")
-
-            if dry_run:
-                print(f"[DRY RUN] Would process {symbol} with RB3-merge")
-                print(f"  RB3 source: {len(rb3_source)} characters")
-                return {"status": "dry_run", "function": func}
-
-            # Build RB3-specific prompt
-            prompt = self._build_rb3_merge_prompt(
-                func, rb3_source, worktree_dir=str(worktree), context=context
-            )
-
-            start_percent = func.get("current_percent") or 0
-
-            if USE_SDK and SDK_AVAILABLE:
-                result = await self._run_agent_sdk(
-                    session_id=session_id,
-                    worktree=worktree,
-                    prompt=prompt,
-                    model=selected_model,
-                    verbose=verbose,
-                )
-                patch = self.worktree_pool.extract_patch(session_id)
-                parsed = self._parse_agent_result_sdk(result.get("messages", []))
-            else:
-                result = await self._run_agent_process(
-                    session_id=session_id,
-                    worktree=worktree,
-                    prompt=prompt,
-                    model=selected_model,
-                    verbose=verbose,
-                )
-                patch = self.worktree_pool.extract_patch(session_id)
-                parsed = self._parse_agent_result(result.get("output", ""))
-
-            end_percent = parsed.get("percent", start_percent)
-            exit_status = parsed.get("status", "unknown")
-            notes = f"RB3-merge: {parsed.get('notes', '')}"
-            verdict = parsed.get("verdict")
-
-            usage_data = parsed.get("usage") or {}
-            actual_cost_usd = parsed.get("total_cost_usd")
-            duration_ms = parsed.get("duration_ms")
-
-            record_attempt(
-                function_id=func["id"],
-                session_id=session_id,
-                model=selected_model,
-                start_percent=start_percent,
-                end_percent=end_percent,
-                exit_status=exit_status,
-                verdict=verdict,
-                patch=patch,
-                notes=notes,
-                input_tokens=usage_data.get("input_tokens"),
-                output_tokens=usage_data.get("output_tokens"),
-                cache_read_tokens=usage_data.get("cache_read_tokens"),
-                cache_creation_tokens=usage_data.get("cache_creation_tokens"),
-                actual_cost_usd=actual_cost_usd,
-                duration_ms=duration_ms,
-                enrichment_flags=context.get("enrichment_flags"),
-                db_path=self.db_path,
-            )
-
-            update_function_status(
-                function_id=func["id"],
-                current_percent=end_percent,
-                verdict=verdict,
-                source_patch=patch if exit_status == "complete" else None,
-                db_path=self.db_path,
-            )
-
-            apply_result = self.patch_applier.maybe_apply(
-                patch=patch,
-                start_percent=start_percent,
-                end_percent=end_percent if end_percent is not None else start_percent,
-                exit_status=exit_status,
-                symbol=symbol,
-            )
-
-            return {
-                "status": exit_status,
-                "start_percent": start_percent,
-                "end_percent": end_percent,
-                "verdict": verdict,
-                "patch": patch,
-                "notes": notes,
-                "model": selected_model,
-                "session_id": session_id,
-                "patch_applied": apply_result.get("applied", False),
-                "actual_cost_usd": actual_cost_usd,
-                "duration_ms": duration_ms,
-                "usage": usage_data if usage_data else None,
-                "mode": "rb3_merge",
-            }
-
-        finally:
-            # Only unlock if we locked it (not in batch mode)
-            if not pre_locked:
-                unlock_function(func["id"], db_path=self.db_path)
-            self.worktree_pool.release(session_id)
+        return result
 
     async def _run_rb3_merge_agent(
         self,

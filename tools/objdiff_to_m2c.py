@@ -54,10 +54,26 @@ def symbol_to_label(name: str) -> str:
     if name.startswith('__'):
         return name
 
-    # Handle C++ style names (already partially demangled by objdiff)
-    # "CharClip::SetFlags" -> "CharClip_SetFlags"
+    # Handle C++ demangled names with full signatures
+    # e.g. "private: class MoveFrame * __cdecl MoveDir::ClosestMoveFrame(void)"
+    # Extract the qualified name (Class::Method) before the parameter list
     if '::' in name:
-        return name.replace('::', '_')
+        # Strip parameter list
+        paren_idx = name.find('(')
+        if paren_idx != -1:
+            name = name[:paren_idx]
+        # Take the last space-separated token(s) containing ::
+        # This strips return type, access specifier, calling convention
+        tokens = name.split()
+        qualified = [t for t in tokens if '::' in t]
+        if qualified:
+            label = qualified[-1].replace('::', '_')
+        else:
+            label = tokens[-1].replace('::', '_')
+        # Sanitize any remaining invalid chars
+        label = re.sub(r'[^a-zA-Z0-9_]', '_', label)
+        label = re.sub(r'_+', '_', label).strip('_')
+        return label or 'unknown'
 
     # Handle MSVC mangled names like "?SetFlags@CharClip@@QAAXH@Z"
     if name.startswith('?'):
@@ -219,6 +235,10 @@ def format_instruction(instr: dict) -> str:
         if len(parts) == 3:
             # Format: "lwz r11, 0x4c, r3" -> "lwz r11, 0x4c(r3)"
             reg_dest, offset, reg_base = parts
+            return f"{opcode} {reg_dest}, {offset}({reg_base})"
+        elif len(parts) == 4:
+            # Format with relocation: "lwz r11, 0x3c, r10, ?TheTaskMgr..." -> "lwz r11, 0x3c(r10)"
+            reg_dest, offset, reg_base, _reloc = parts
             return f"{opcode} {reg_dest}, {offset}({reg_base})"
 
     # Standard instruction formatting

@@ -31,6 +31,7 @@ public:
     const Vector3 &NodeInverseScale(int, MoveMirrored) const;
     void SetNodeScale(int, MoveMirrored, const Vector3 &);
     float QuantizedSeconds(float) const;
+    float GetBeat() const { return mBeat; }
     FilterVersionType Version() const {
         int filterMask = (unk4 & 0x300000) >> 5;
         return filterMask ? kFilterVersionHam1 : kFilterVersionHam2;

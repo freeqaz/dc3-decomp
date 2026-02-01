@@ -92,12 +92,15 @@ class TestCollectPreRunContextSuccess(unittest.TestCase):
         """Clean up."""
         self.temp_dir.cleanup()
 
+    @patch('scripts.orchestrator.context_collector.get_binary_path')
     @patch('scripts.orchestrator.context_collector.run_objdiff')
     @patch('scripts.orchestrator.context_collector.DirectGhidraClient')
     @patch('scripts.orchestrator.context_collector.get_last_attempt')
-    def test_collect_pre_run_context_success(self, mock_get_attempts, mock_ghidra_class, mock_run_objdiff):
+    def test_collect_pre_run_context_success(self, mock_get_attempts, mock_ghidra_class, mock_run_objdiff, mock_get_binary):
         """Test successful context collection with all data available."""
         # Setup mocks
+        mock_get_binary.return_value = "/fake/path/to/binary.xex"
+
         objdiff_result = MockObjdiffResult(
             fuzzy_match_percent=98.67,
             verdict={"classification": "LIKELY_FIXABLE"},
@@ -114,8 +117,8 @@ class TestCollectPreRunContextSuccess(unittest.TestCase):
             ["callee1", "callee2"]
         )
 
-        # Mock previous attempts
-        mock_get_attempts.return_value = "Attempt 1: haiku, 85.5% → 86.2%\nAttempt 2: sonnet, 86.2% → 87.0%"
+        # Mock previous attempts (returns tuple of (formatted_string, count))
+        mock_get_attempts.return_value = ("Attempt 1: haiku, 85.5% → 86.2%\nAttempt 2: sonnet, 86.2% → 87.0%", 2)
 
         # Call function
         context = collect_pre_run_context(
@@ -127,7 +130,7 @@ class TestCollectPreRunContextSuccess(unittest.TestCase):
 
         # Assertions
         self.assertIsInstance(context, dict)
-        self.assertEqual(len(context), 9, "Should have all 9 keys")
+        self.assertEqual(len(context), 34, "Should have all 34 keys from result dict")
         self.assertAlmostEqual(context["match_percent"], 98.67)
         self.assertEqual(context["verdict"], "LIKELY_FIXABLE")
         self.assertIsInstance(context["key_patterns"], list)
@@ -172,7 +175,7 @@ class TestCollectPreRunContextSuccess(unittest.TestCase):
         mock_client.decompile_function.return_value = "void func() {}"
         mock_client.list_cross_references.return_value = ([], [])
 
-        mock_get_attempts.return_value = "None yet"
+        mock_get_attempts.return_value = ("None yet", 0)
 
         collect_pre_run_context(
             symbol=self.symbol,
@@ -216,7 +219,7 @@ class TestCollectContextGhidraUnavailable(unittest.TestCase):
         # Make DirectGhidraClient raise error
         mock_ghidra_class.side_effect = DirectGhidraClientError("Ghidra not available")
 
-        mock_get_attempts.return_value = "None yet"
+        mock_get_attempts.return_value = ("None yet", 0)
 
         # Call function - should not crash
         context = collect_pre_run_context(
@@ -268,7 +271,7 @@ class TestCollectContextNoPreviousAttempts(unittest.TestCase):
         mock_client.list_cross_references.return_value = ([], [])
 
         # No previous attempts
-        mock_get_attempts.return_value = "None yet"
+        mock_get_attempts.return_value = ("None yet", 0)
 
         context = collect_pre_run_context(
             symbol=self.symbol,
@@ -296,11 +299,14 @@ class TestXrefsFileCreation(unittest.TestCase):
         """Clean up."""
         self.temp_dir.cleanup()
 
+    @patch('scripts.orchestrator.context_collector.get_binary_path')
     @patch('scripts.orchestrator.context_collector.run_objdiff')
     @patch('scripts.orchestrator.context_collector.DirectGhidraClient')
     @patch('scripts.orchestrator.context_collector.get_last_attempt')
-    def test_xrefs_file_created(self, mock_get_attempts, mock_ghidra_class, mock_run_objdiff):
+    def test_xrefs_file_created(self, mock_get_attempts, mock_ghidra_class, mock_run_objdiff, mock_get_binary):
         """Test that xrefs file is created at correct path with correct format."""
+        mock_get_binary.return_value = "/fake/path/to/binary.xex"
+
         objdiff_result = MockObjdiffResult()
         mock_run_objdiff.return_value = objdiff_result
 
@@ -312,7 +318,7 @@ class TestXrefsFileCreation(unittest.TestCase):
         callees = ["Callee1", "Callee2"]
         mock_client.list_cross_references.return_value = (callers, callees)
 
-        mock_get_attempts.return_value = "None yet"
+        mock_get_attempts.return_value = ("None yet", 0)
 
         context = collect_pre_run_context(
             symbol=self.symbol,
@@ -348,11 +354,14 @@ class TestXrefsFileCreation(unittest.TestCase):
         expected_relative = f"function_analysis/xrefs_{self.symbol}.txt"
         self.assertEqual(context["xrefs_path_relative"], expected_relative)
 
+    @patch('scripts.orchestrator.context_collector.get_binary_path')
     @patch('scripts.orchestrator.context_collector.run_objdiff')
     @patch('scripts.orchestrator.context_collector.DirectGhidraClient')
     @patch('scripts.orchestrator.context_collector.get_last_attempt')
-    def test_xrefs_preview(self, mock_get_attempts, mock_ghidra_class, mock_run_objdiff):
+    def test_xrefs_preview(self, mock_get_attempts, mock_ghidra_class, mock_run_objdiff, mock_get_binary):
         """Test that xrefs preview contains first 20 lines of file."""
+        mock_get_binary.return_value = "/fake/path/to/binary.xex"
+
         objdiff_result = MockObjdiffResult()
         mock_run_objdiff.return_value = objdiff_result
 
@@ -364,7 +373,7 @@ class TestXrefsFileCreation(unittest.TestCase):
         callees = [f"Callee_{i}" for i in range(15)]
         mock_client.list_cross_references.return_value = (callers, callees)
 
-        mock_get_attempts.return_value = "None yet"
+        mock_get_attempts.return_value = ("None yet", 0)
 
         context = collect_pre_run_context(
             symbol=self.symbol,
@@ -416,7 +425,7 @@ class TestPreviousAttemptsFormatting(unittest.TestCase):
             "Attempt 2: sonnet, 86.2% → 87.5%\n"
             "Attempt 3: opus, 87.5% → 88.0%"
         )
-        mock_get_attempts.return_value = formatted_attempts
+        mock_get_attempts.return_value = (formatted_attempts, 3)
 
         context = collect_pre_run_context(
             symbol=self.symbol,
@@ -464,7 +473,7 @@ class TestExceptionHandling(unittest.TestCase):
         mock_client.decompile_function.return_value = "void test() {}"
         mock_client.list_cross_references.return_value = ([], [])
 
-        mock_get_attempts.return_value = "None yet"
+        mock_get_attempts.return_value = ("None yet", 0)
 
         # Should still return a dict (graceful degradation)
         context = collect_pre_run_context(
@@ -495,7 +504,7 @@ class TestExceptionHandling(unittest.TestCase):
         # Make DirectGhidraClient initialization fail
         mock_ghidra_class.side_effect = DirectGhidraClientError("Client init failed")
 
-        mock_get_attempts.return_value = "None yet"
+        mock_get_attempts.return_value = ("None yet", 0)
 
         context = collect_pre_run_context(
             symbol=self.symbol,
@@ -578,7 +587,7 @@ class TestContextDictStructure(unittest.TestCase):
         mock_client.decompile_function.return_value = "void test() {}"
         mock_client.list_cross_references.return_value = ([], [])
 
-        mock_get_attempts.return_value = "None yet"
+        mock_get_attempts.return_value = ("None yet", 0)
 
         context = collect_pre_run_context(
             symbol=self.symbol,
@@ -587,21 +596,53 @@ class TestContextDictStructure(unittest.TestCase):
             worktree_dir=str(self.worktree_dir)
         )
 
-        required_keys = {
+        # Exact set of keys from the result dict initializer.
+        # ghidra_file is conditionally added so not included here.
+        expected_keys = {
             "match_percent",
             "verdict",
             "key_patterns",
             "suggestions",
             "previous_attempts",
+            "previous_attempts_count",
             "decompilation",
+            "rb3_reference",
+            "m2c_decompilation",
+            "m2c_file_path",
+            "m2c_file_path_relative",
+            "m2c_line_count",
+            "m2c_method",
             "xrefs_path_absolute",
             "xrefs_path_relative",
             "xrefs_preview",
+            "source_file_absolute",
+            "objdiff_file",
+            "objdiff_file_absolute",
+            "objdiff_line_count",
+            "objdiff_preview",
+            "enrichment_flags",
+            "pattern_classification",
+            "pattern_classification_summary",
+            "function_type",
+            "function_type_guidance",
+            "class_layout",
+            "class_layout_summary",
+            "attempt_diffs",
+            "attempt_diffs_summary",
+            "matched_siblings",
+            "matched_siblings_summary",
+            "callee_signatures",
+            "callee_signatures_summary",
         }
         context_keys = set(context.keys())
-        self.assertEqual(context_keys, required_keys,
-                        f"Missing keys: {required_keys - context_keys}, "
-                        f"Extra keys: {context_keys - required_keys}")
+        missing = expected_keys - context_keys
+        extra = context_keys - expected_keys
+        self.assertEqual(missing, set(),
+                        f"Missing keys: {missing}")
+        # ghidra_file may be present conditionally; filter it from extras
+        unexpected_extra = extra - {"ghidra_file"}
+        self.assertEqual(unexpected_extra, set(),
+                        f"Unexpected extra keys: {unexpected_extra}")
 
     @patch('scripts.orchestrator.context_collector.run_objdiff')
     @patch('scripts.orchestrator.context_collector.DirectGhidraClient')
@@ -619,7 +660,7 @@ class TestContextDictStructure(unittest.TestCase):
         mock_client.decompile_function.return_value = "void test() {}"
         mock_client.list_cross_references.return_value = ([], [])
 
-        mock_get_attempts.return_value = "None yet"
+        mock_get_attempts.return_value = ("None yet", 0)
 
         context = collect_pre_run_context(
             symbol=self.symbol,

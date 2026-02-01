@@ -70,9 +70,29 @@ BinStreamRev &operator>>(BinStreamRev &d, BattleStep &step) {
     return d;
 }
 
-BEGIN_LOADS(HamBattleData)
-    LOAD_REVS(bs)
-    ASSERT_REVS(4, 0)
-    LOAD_SUPERCLASS(Hmx::Object)
+void HamBattleData::Load(BinStream &bs) {
+    int revs;
+    bs >> revs;
+    BinStreamRev d(bs, revs);
+    static const unsigned short gRevs[4] = { 4, 0, 0, 0 };
+    if (d.rev > 4) {
+        MILO_FAIL(
+            "%s can't load new %s version %d > %d",
+            PathName(this),
+            ClassName(),
+            d.rev,
+            gRevs[0]
+        );
+    }
+    if (d.altRev > 0) {
+        MILO_FAIL(
+            "%s can't load new %s alt version %d > %d",
+            PathName(this),
+            ClassName(),
+            d.altRev,
+            gRevs[2]
+        );
+    }
+    Hmx::Object::Load(bs);
     d >> mSteps;
-END_LOADS
+}

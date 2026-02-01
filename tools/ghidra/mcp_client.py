@@ -48,7 +48,7 @@ class MCPClient:
         """Get binary name, resolving dynamically if needed."""
         if not self._binary_resolved:
             self._resolve_binary()
-        return self._binary or "/default.xex"  # Fallback
+        return self._binary or "default.xex-997567"  # Fallback
 
     def _resolve_binary(self) -> None:
         """Resolve binary name by querying list_binaries."""
@@ -74,7 +74,7 @@ class MCPClient:
             for binary in binary_list:
                 name = binary.get("name", "") if isinstance(binary, dict) else str(binary)
                 if name.startswith("default.xex"):
-                    self._binary = "/" + name if not name.startswith("/") else name
+                    self._binary = name.lstrip("/")
                     self._binary_resolved = True
                     return
 
@@ -82,13 +82,13 @@ class MCPClient:
             if binary_list:
                 first = binary_list[0]
                 name = first.get("name", "") if isinstance(first, dict) else str(first)
-                self._binary = "/" + name if not name.startswith("/") else name
+                self._binary = name.lstrip("/")
 
             self._binary_resolved = True
 
         except MCPError:
             # Fall back to default
-            self._binary = "/default.xex"
+            self._binary = "default.xex-997567"
             self._binary_resolved = True
 
     def _next_id(self) -> int:

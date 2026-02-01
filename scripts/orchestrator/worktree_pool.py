@@ -331,11 +331,13 @@ class WorktreePool:
                 conn.commit()
                 return self.acquire(session_id, _depth + 1)
 
-        # Clean untracked files (exclude copied directories)
+        # Clean untracked files (exclude copied directories and symlinked paths)
         try:
             clean_cmd = ["git", "clean", "-fd"]
             for copy_name in self.copies:
                 clean_cmd.extend(["-e", copy_name])
+            for link_name in self.symlinks:
+                clean_cmd.extend(["-e", link_name])
             subprocess.run(
                 clean_cmd,
                 cwd=worktree_path,

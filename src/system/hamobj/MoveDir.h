@@ -106,6 +106,7 @@ public:
     float DetectFrac(int, int);
 
     MoveAsyncDetector *GetAsyncDetector() const { return mAsyncDetector; }
+    bool InGracePeriod(int);
 
     static void Init();
     static void LoadScoring(const DataArray *);
@@ -125,6 +126,8 @@ private:
         const std::pair<DetectFrame *, DetectFrame *> &, const FilterVersion *
     ) const;
     void PostUpdateFilters();
+    MoveFrame *ClosestMoveFrame();
+    float SongSpeed() const;
 
     DataNode OnStreamJump(const DataArray *);
 

@@ -2,6 +2,7 @@
 
 #include "Compress.h"
 #include "obj/Object.h"
+#include "os/CritSec.h"
 #include "os/Endian.h"
 #include "os/File.h"
 #include "os/SynchronizationEvent.h"
@@ -9,7 +10,7 @@
 
 namespace {
     std::list<DecompressTask> gDecompressionQueue;
-    CriticalSection *gDecompressionCritSec;
+    CriticalSection gDecompressionCritSec;
     bool gDecompressionThread = false;
     SynchronizationEvent gDataProcessedEvt;
     SynchronizationEvent gDataReadyEvt;
@@ -222,23 +223,23 @@ void DecompressMemHelper(const void *compressedMem, int size, void *dst, int &ds
 
 void ChunkStream::DecompressChunk(DecompressTask &task) {
     MILO_ASSERT(*task.mState == kDecompressing, 0x3c1);
-    auto compressedSize = *task.mChunk & kChunkSizeMask;
-    MILO_ASSERT((compressedSize & ~kChunkSizeMask) == 0, 0x3c5);
-    if (task.mID == CHUNKSTREAM_Z_ID3) {
-        void *compressedData = (char *)task.mBuffer + (task.unkc - compressedSize);
-        DecompressMemHelper(compressedData, compressedSize, task.mBuffer, task.unkc, task.mTempBuf);
-    }
-    else if (task.mID == CHUNKSTREAM_Z_ID2) {
-        void *compressedData = (char *)task.mBuffer + (task.unkc - compressedSize) + 10;
-        compressedSize -= 18;
-        DecompressMem(compressedData, compressedSize, task.mBuffer, task.unkc, task.mTempBuf);
-    }
-    else {
+    int data = *task.mChunk;
+    int dataMsk = data & kChunkSizeMask;
+    MILO_ASSERT((data & ~kChunkSizeMask) == 0, 0x3c5);
+    int out_len = task.unkc;
+    int id = task.mID;
+    if (id == 0xCDBEDEAF) {
+        char *dataOffset = (char *)task.mBuffer + (out_len - dataMsk);
+        DecompressMemHelper(dataOffset, dataMsk, task.mBuffer, out_len, task.mTempBuf);
+    } else if (id == 0xCCBEDEAF) {
+        char *dataOffset = (char *)task.mBuffer + (out_len - dataMsk) + 10;
+        DecompressMem(dataOffset, dataMsk - 0x12, task.mBuffer, out_len, task.mTempBuf);
+    } else {
         MILO_ASSERT(task.mID == CHUNKSTREAM_Z_ID, 0x3d7);
-        void *compressedData = (char *)task.mBuffer + (task.unkc - compressedSize);
-        DecompressMem(compressedData, compressedSize, task.mBuffer, task.unkc, task.mTempBuf);
+        char *dataOffset = (char *)task.mBuffer + (task.unkc - dataMsk);
+        DecompressMem(dataOffset, dataMsk, task.mBuffer, out_len, task.mTempBuf);
     }
-    *task.mChunk = task.unkc;
+    *task.mChunk = out_len;
     *task.mState = kReady;
 }
 
@@ -270,20 +271,16 @@ void ChunkStream::DecompressChunkAsync() {
 }
 
 bool ChunkStream::PollDecompressionWorker() {
-    gDecompressionCritSec->Enter();
-    unsigned int counter = 0;
-    FOREACH(it, gDecompressionQueue) {
-        counter++;
-    }
-    if (counter != 0) {
-        DecompressTask task;
-        memcpy(&task, &gDecompressionQueue.front(), sizeof(task));
+    gDecompressionCritSec.Enter();
+    DecompressTask task;
+    if (gDecompressionQueue.size() != 0) {
+        task = gDecompressionQueue.front();
         gDecompressionQueue.pop_front();
-        gDecompressionCritSec->Exit();
+        gDecompressionCritSec.Exit();
         DecompressChunk(task);
         return true;
     }
-    gDecompressionCritSec->Exit();
+    gDecompressionCritSec.Exit();
     return false;
 }
 
