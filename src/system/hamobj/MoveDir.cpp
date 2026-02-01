@@ -1072,9 +1072,12 @@ float MoveDir::SongSeconds() {
     float seconds = TheTaskMgr.Seconds(TaskMgr::kRealTime);
     if (TheMaster) {
         HamAudio *audio = TheMaster->GetAudio();
-        if (audio && audio->GetSongStream()) {
+        if ((int)audio) {
             Stream *stream = audio->GetSongStream();
-            seconds += stream->GetJumpBackTotalTime() * 0.001f;
+            if (stream) {
+                stream = TheMaster->GetAudio()->GetSongStream();
+                seconds += stream->GetJumpBackTotalTime() * 0.001f;
+            }
         }
     }
     return seconds;
@@ -1090,7 +1093,7 @@ float MoveDir::SongSpeed() const {
 
 bool MoveDir::InGracePeriod(int player) {
     HamPlayerData *playerData = TheGameData->Player(player);
-    PropertyEventProvider *provider = playerData->Provider();
+    Hmx::Object *provider = playerData->Provider();
     if (provider) {
         static Symbol prop("start_score_move_index");
         const DataNode *node = provider->Property(prop, false);
