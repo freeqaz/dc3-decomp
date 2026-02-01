@@ -947,6 +947,10 @@ class DecompMCPServer:
         if not symbol:
             return [TextContent(type="text", text="Error: No symbol provided.")]
 
+        if symbol.startswith("merged_"):
+            return [TextContent(type="text", text=f"Error: {symbol} is a linker ICF artifact (merged symbol), not a real function. "
+                                "Use lookup_merged_symbol to see what real symbols share this address.")]
+
         # Determine which project directory to use
         # - If agent passes project_dir (e.g., its worktree), use that
         # - Otherwise use main repo (for orchestrator calls or main repo usage)
@@ -1086,6 +1090,10 @@ class DecompMCPServer:
 
         if not symbol:
             return [TextContent(type="text", text="Error: No symbol provided.")]
+
+        if symbol.startswith("merged_"):
+            return [TextContent(type="text", text=f"Error: {symbol} is a linker ICF artifact (merged symbol), not a real function. "
+                                "Use lookup_merged_symbol to see what real symbols share this address.")]
 
         # Determine which project directory to use
         # - If agent passes project_dir (e.g., its worktree), use that

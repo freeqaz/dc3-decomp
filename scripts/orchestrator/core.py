@@ -412,7 +412,7 @@ Focus on readability and maintainability while preserving exact behavior and mat
         session_id: str | None,
         pre_locked: bool,
         model: str | None,
-        verbose: bool,
+        verbose: int,
         dry_run: bool,
         use_incremental: bool,
         prompt_builder: Callable[[dict, str, dict], str],
@@ -440,6 +440,16 @@ Focus on readability and maintainability while preserving exact behavior and mat
         Returns:
             Result dict with status, percent, patch, etc.
         """
+        # 0. Reject merged symbols (ICF artifacts, not real decomp targets)
+        if func.get("symbol", "").startswith("merged_"):
+            self.logger.warning(f"Skipping merged symbol {func['symbol']} (ICF artifact, not actionable)")
+            return {
+                "status": "at_limit",
+                "percent": 0.0,
+                "notes": f"Merged symbol (ICF artifact). Not a real decomp target.",
+                "symbol": func["symbol"],
+            }
+
         # 1. Preflight quota check
         await self._check_quota(model or "haiku")
 
@@ -683,7 +693,7 @@ Focus on readability and maintainability while preserving exact behavior and mat
         self,
         symbol: str,
         model: Optional[str] = None,
-        verbose: bool = True,
+        verbose: int = 1,
         dry_run: bool = False,
         use_incremental: bool = True,
         refactor: bool = True,
@@ -710,7 +720,7 @@ Focus on readability and maintainability while preserving exact behavior and mat
         self,
         symbol: str,
         model: Optional[str] = None,
-        verbose: bool = True,
+        verbose: int = 1,
         dry_run: bool = False,
         use_incremental: bool = True,
         session_id: Optional[str] = None,
@@ -870,11 +880,12 @@ Focus on readability and maintainability while preserving exact behavior and mat
         max_agents: int = 3,
         model: Optional[str] = None,
         limit: int = 0,
-        verbose: bool = True,
+        verbose: int = 1,
         use_incremental: bool = True,
         periodic_full_interval: int = 10,
         validate_diffs: bool = False,
         refactor: bool = True,
+        exclude_at_limit: bool = False,
     ) -> dict[str, Any]:
         """
         Run batch of functions matching pattern with N parallel agents.
@@ -906,6 +917,7 @@ Focus on readability and maintainability while preserving exact behavior and mat
             min_percent=min_percent,
             max_percent=max_percent,
             limit=limit,
+            exclude_at_limit=exclude_at_limit,
             db_path=self.db_path,
         )
 
@@ -925,7 +937,8 @@ Focus on readability and maintainability while preserving exact behavior and mat
         if batch_stats['locked'] > 0:
             print(f"  Locked: {batch_stats['locked']} (skipped)")
         if batch_stats['excluded_complete'] > 0:
-            print(f"  Complete/at-limit: {batch_stats['excluded_complete']} (excluded)")
+            label = "Complete/at-limit" if exclude_at_limit else "Complete"
+            print(f"  {label}: {batch_stats['excluded_complete']} (excluded)")
         print(f"  Available: {batch_stats['available']}")
         print(f"    - First tries: {batch_stats['first_tries']} (no prior attempts)")
         print(f"    - Retries: {batch_stats['retries']} (have prior attempts)")
@@ -966,6 +979,7 @@ Focus on readability and maintainability while preserving exact behavior and mat
                 pattern=pattern,
                 min_percent=min_percent,
                 max_percent=max_percent,
+                exclude_at_limit=exclude_at_limit,
                 db_path=self.db_path,
             )
 
@@ -1063,7 +1077,7 @@ Focus on readability and maintainability while preserving exact behavior and mat
         targets: list[dict[str, Any]],
         max_agents: int = 3,
         model: Optional[str] = None,
-        verbose: bool = True,
+        verbose: int = 1,
         use_incremental: bool = True,
         periodic_full_interval: int = 10,
         validate_diffs: bool = False,
@@ -1226,7 +1240,7 @@ Focus on readability and maintainability while preserving exact behavior and mat
         session_id: str,
         func: dict[str, Any],
         model: Optional[str],
-        verbose: bool,
+        verbose: int,
         use_incremental: bool = True,
         refactor: bool = True,
     ) -> dict[str, Any]:
@@ -1426,7 +1440,7 @@ Focus on readability and maintainability while preserving exact behavior and mat
         symbol: str,
         rb3_source: str,
         model: Optional[str] = None,
-        verbose: bool = True,
+        verbose: int = 1,
         dry_run: bool = False,
         session_id: Optional[str] = None,
         pre_locked: bool = False,
@@ -1489,7 +1503,7 @@ Focus on readability and maintainability while preserving exact behavior and mat
         func: dict[str, Any],
         rb3_source: str,
         model: Optional[str],
-        verbose: bool,
+        verbose: int,
     ) -> dict[str, Any]:
         """Run single RB3-merge agent as part of batch (handles its own errors).
 
@@ -1529,7 +1543,7 @@ Focus on readability and maintainability while preserving exact behavior and mat
         func_limit_per_unit: int = 20,
         min_percent: float = 0,
         max_percent: float = 100,
-        verbose: bool = True,
+        verbose: int = 1,
     ) -> dict[str, Any]:
         """
         Run RB3-merge batch on multiple paired files with concurrent agents.

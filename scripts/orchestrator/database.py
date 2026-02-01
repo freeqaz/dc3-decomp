@@ -332,6 +332,7 @@ def get_next_function(
     max_percent: float = 100,
     exclude_locked: bool = True,
     exclude_complete: bool = True,
+    exclude_at_limit: bool = False,
     db_path: str | Path = DEFAULT_DB_PATH,
 ) -> dict[str, Any] | None:
     """
@@ -342,7 +343,8 @@ def get_next_function(
         min_percent: Minimum match percentage
         max_percent: Maximum match percentage
         exclude_locked: Skip functions locked by other agents
-        exclude_complete: Skip functions with verdict COMPLETE or AT_LIMIT
+        exclude_complete: Skip functions with verdict COMPLETE (100%)
+        exclude_at_limit: Skip functions with verdict AT_LIMIT
         db_path: Database path
 
     Returns:
@@ -364,8 +366,14 @@ def get_next_function(
     if exclude_locked:
         query += " AND locked_by IS NULL"
 
+    excluded_verdicts = []
     if exclude_complete:
-        query += " AND (verdict IS NULL OR verdict NOT IN ('COMPLETE', 'AT_LIMIT'))"
+        excluded_verdicts.append('COMPLETE')
+    if exclude_at_limit:
+        excluded_verdicts.append('AT_LIMIT')
+    if excluded_verdicts:
+        placeholders = ", ".join(f"'{v}'" for v in excluded_verdicts)
+        query += f" AND (verdict IS NULL OR verdict NOT IN ({placeholders}))"
 
     # Order by: non-null percent first, then by descending percent (near-matches first)
     query += """
@@ -428,6 +436,7 @@ def query_functions(
     max_percent: float = 100,
     exclude_locked: bool = True,
     exclude_complete: bool = True,
+    exclude_at_limit: bool = False,
     limit: int = 20,
     db_path: str | Path = DEFAULT_DB_PATH,
 ) -> list[dict[str, Any]]:
@@ -452,8 +461,16 @@ def query_functions(
     if exclude_locked:
         query += " AND locked_by IS NULL"
 
+    excluded_verdicts = []
     if exclude_complete:
-        query += " AND (verdict IS NULL OR verdict NOT IN ('COMPLETE', 'AT_LIMIT'))"
+        excluded_verdicts.append('COMPLETE')
+    if exclude_at_limit:
+        excluded_verdicts.append('AT_LIMIT')
+    if excluded_verdicts:
+        placeholders = ", ".join(f"'{v}'" for v in excluded_verdicts)
+        query += f" AND (verdict IS NULL OR verdict NOT IN ({placeholders}))"
+
+    query += " AND symbol NOT LIKE 'merged_%'"
 
     query += """
         ORDER BY
@@ -715,6 +732,7 @@ def query_batch_stats(
     min_percent: float = 0,
     max_percent: float = 100,
     limit: int = 0,
+    exclude_at_limit: bool = False,
     db_path: str | Path = DEFAULT_DB_PATH,
 ) -> dict[str, Any]:
     """
@@ -733,6 +751,7 @@ def query_batch_stats(
         min_percent: Minimum match percentage
         max_percent: Maximum match percentage
         limit: Max functions to process (0 = unlimited)
+        exclude_at_limit: Also exclude AT_LIMIT verdicts (default: only COMPLETE excluded)
         db_path: Database path
 
     Returns:
@@ -748,13 +767,16 @@ def query_batch_stats(
         glob_params,
     ).fetchone()[0]
 
+    # All batch stats queries exclude merged_ symbols (ICF artifacts, not real functions)
+    merged_filter = " AND symbol NOT LIKE 'merged_%'"
+
     # Count functions in match percentage range
     in_range = conn.execute(
         f"""
         SELECT COUNT(*) FROM functions
         WHERE {glob_clause}
           AND (current_percent IS NULL OR (current_percent >= ? AND current_percent <= ?))
-        """,
+        """ + merged_filter,
         glob_params + [min_percent, max_percent],
     ).fetchone()[0]
 
@@ -765,9 +787,16 @@ def query_batch_stats(
         WHERE {glob_clause}
           AND (current_percent IS NULL OR (current_percent >= ? AND current_percent <= ?))
           AND locked_by IS NOT NULL
-        """,
+        """ + merged_filter,
         glob_params + [min_percent, max_percent],
     ).fetchone()[0]
+
+    # Build excluded verdicts list
+    excluded_verdicts = ['COMPLETE']
+    if exclude_at_limit:
+        excluded_verdicts.append('AT_LIMIT')
+    verdict_placeholders = ", ".join(f"'{v}'" for v in excluded_verdicts)
+    verdict_filter = f" AND (verdict IS NULL OR verdict NOT IN ({verdict_placeholders}))"
 
     # Count complete/at_limit functions in range
     excluded_verdict = conn.execute(
@@ -775,20 +804,20 @@ def query_batch_stats(
         SELECT COUNT(*) FROM functions
         WHERE {glob_clause}
           AND (current_percent IS NULL OR (current_percent >= ? AND current_percent <= ?))
-          AND verdict IN ('COMPLETE', 'AT_LIMIT')
-        """,
+          AND verdict IN ({verdict_placeholders})
+        """ + merged_filter,
         glob_params + [min_percent, max_percent],
     ).fetchone()[0]
 
-    # Count available functions (not locked, not complete)
+    # Count available functions (not locked, not excluded by verdict)
     available = conn.execute(
         f"""
         SELECT COUNT(*) FROM functions
         WHERE {glob_clause}
           AND (current_percent IS NULL OR (current_percent >= ? AND current_percent <= ?))
           AND locked_by IS NULL
-          AND (verdict IS NULL OR verdict NOT IN ('COMPLETE', 'AT_LIMIT'))
-        """,
+          {verdict_filter}
+        """ + merged_filter,
         glob_params + [min_percent, max_percent],
     ).fetchone()[0]
 
@@ -799,9 +828,9 @@ def query_batch_stats(
         WHERE {glob_clause}
           AND (current_percent IS NULL OR (current_percent >= ? AND current_percent <= ?))
           AND locked_by IS NULL
-          AND (verdict IS NULL OR verdict NOT IN ('COMPLETE', 'AT_LIMIT'))
+          {verdict_filter}
           AND attempt_count = 0
-        """,
+        """ + merged_filter,
         glob_params + [min_percent, max_percent],
     ).fetchone()[0]
 
@@ -1144,6 +1173,8 @@ def query_functions_by_priority(
     if exclude_locked:
         query += " AND locked_by IS NULL"
 
+    query += " AND symbol NOT LIKE 'merged_%'"
+
     query += """
         ORDER BY priority_score DESC, current_percent DESC
         LIMIT ?
@@ -1220,6 +1251,8 @@ def query_functions_for_unit_completion(
 
     if exclude_locked:
         query += " AND f.locked_by IS NULL"
+
+    query += " AND f.symbol NOT LIKE 'merged_%'"
 
     query += """
         ORDER BY f.priority_score DESC

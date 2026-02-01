@@ -2147,6 +2147,23 @@ def collect_pre_run_context(
     """
     logger.info(f"Collecting context for {symbol} in {unit}")
 
+    # Short-circuit merged symbols (ICF artifacts, not real decomp targets)
+    if symbol.startswith("merged_"):
+        logger.info(f"Skipping merged symbol {symbol} (ICF artifact, not actionable)")
+        return {
+            "match_percent": 0.0,
+            "verdict": "AT_LIMIT",
+            "key_patterns": ["LINKER_MERGED"],
+            "suggestions": ["Merged symbols are linker ICF artifacts. The real functions are "
+                            "compiler-generated (template instantiations, deleting destructors) "
+                            "and match automatically when the class is implemented correctly."],
+            "previous_attempts": "No previous attempts",
+            "previous_attempts_count": 0,
+            "decompilation": "(unavailable - merged symbol)",
+            "source_file_absolute": "(not applicable)",
+            "enrichment_flags": {},
+        }
+
     # Get A/B experiment assignments
     enrichment_flags = get_enrichment_assignments(symbol)
     if enrichment_overrides:

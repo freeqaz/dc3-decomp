@@ -19,9 +19,9 @@ USE_SDK = os.getenv("ORCHESTRATOR_USE_SDK", "true").lower() == "true"
 
 # Import SDK types conditionally
 try:
-    from claude_code_sdk import (
+    from claude_agent_sdk import (
         query as sdk_query,
-        ClaudeCodeOptions,
+        ClaudeAgentOptions,
         AssistantMessage,
         UserMessage,
         ResultMessage,
@@ -31,7 +31,7 @@ try:
         CLINotFoundError,
         ProcessError,
     )
-    from claude_code_sdk.types import McpStdioServerConfig
+    from claude_agent_sdk.types import McpStdioServerConfig
     SDK_AVAILABLE = True
 except ImportError:
     SDK_AVAILABLE = False
@@ -143,10 +143,10 @@ class AgentRunner:
     def build_sdk_options(self, config: AgentRunConfig) -> Any:
         """Build SDK options from config. Public for testing.
 
-        Returns ClaudeCodeOptions (or raises if SDK not available).
+        Returns ClaudeAgentOptions (or raises if SDK not available).
         """
         if not SDK_AVAILABLE:
-            raise RuntimeError("claude-code-sdk not installed")
+            raise RuntimeError("claude-agent-sdk not installed")
 
         if requires_openrouter(config.model):
             cli_model = "sonnet"
@@ -155,6 +155,7 @@ class AgentRunner:
 
         env = self.build_env(config.model)
         env.update(self.build_auth_env(config.model))
+        env["REPO_ROOT"] = str(config.worktree)
 
         mcp_config: McpStdioServerConfig = {
             "command": "python3",
@@ -163,14 +164,21 @@ class AgentRunner:
         }
 
         tools = config.effective_tools
-        disallowed = config.disallowed_tools or ["Task", "TaskOutput"]
+        if config.disallowed_tools:
+            disallowed = config.disallowed_tools
+        elif config.model == "haiku":
+            disallowed = ["Task", "TaskOutput", "TodoWrite", "Skill"]
+        else:
+            disallowed = []
 
-        options = ClaudeCodeOptions(
+        options = ClaudeAgentOptions(
             model=cli_model,
             max_turns=config.max_turns,
             cwd=str(config.worktree),
             env=env,
             permission_mode="bypassPermissions",
+            system_prompt={"type": "preset", "preset": "claude_code"},
+            setting_sources=["user", "project", "local"],
             mcp_servers={"orchestrator": mcp_config},
             allowed_tools=tools,
             disallowed_tools=disallowed,
@@ -338,19 +346,125 @@ class AgentRunner:
 
     # --- Private execution methods ---
 
+    # Keys worth showing inline for each tool at normal verbosity
+    _TOOL_SUMMARY_KEYS: dict[str, list[str]] = {
+        "Read": ["file_path"],
+        "Edit": ["file_path"],
+        "Write": ["file_path"],
+        "Glob": ["pattern"],
+        "Grep": ["pattern"],
+        "Bash": ["description", "command"],
+        "mcp__orchestrator__run_objdiff": ["symbol"],
+        "mcp__orchestrator__run_analyze_function": ["symbol"],
+        "mcp__orchestrator__report_result": ["status", "percent", "notes"],
+        "mcp__orchestrator__lookup_struct_offset": ["class_name", "offset"],
+        "mcp__orchestrator__lookup_merged_symbol": ["address"],
+        "mcp__orchestrator__lookup_rb3": ["symbol"],
+        "mcp__orchestrator__query_functions": ["unit_pattern"],
+    }
+
+    def _format_tool_summary(self, block: Any) -> str:
+        """Format a tool call for normal verbosity: name + key args."""
+        name = block.name
+        inp = block.input or {}
+        keys = self._TOOL_SUMMARY_KEYS.get(name, list(inp.keys())[:2])
+        parts = []
+        for k in keys:
+            if k in inp:
+                v = str(inp[k])
+                # For Bash, prefer description over command
+                if name == "Bash" and k == "command" and "description" in inp:
+                    continue
+                if len(v) > 80:
+                    v = v[:77] + "..."
+                parts.append(v)
+        suffix = f" {', '.join(parts)}" if parts else ""
+        return f"  [{name}]{suffix}"
+
+    def _print_message(self, message: Any, config: AgentRunConfig, output_lines: list[str]) -> None:
+        """Print SDK message at the appropriate verbosity level.
+
+        verbose=1 (normal): tool names with key args, match%, errors, result summary
+        verbose=2 (--verbose): full text, all tool args, tool result snippets
+        """
+        if not SDK_AVAILABLE:
+            return
+
+        if isinstance(message, AssistantMessage):
+            for block in message.content:
+                if isinstance(block, TextBlock):
+                    output_lines.append(block.text)
+                    if config.verbose >= 2:
+                        print(block.text, end="")
+                elif isinstance(block, ToolUseBlock):
+                    if config.verbose >= 2:
+                        tool_str = f"\n[Tool: {block.name}]"
+                        if hasattr(block, 'input') and block.input:
+                            input_parts = []
+                            for k, v in block.input.items():
+                                v_str = str(v)
+                                if len(v_str) > 100:
+                                    v_str = v_str[:100] + "..."
+                                input_parts.append(f"{k}={v_str}")
+                            if input_parts:
+                                tool_str += f" {', '.join(input_parts)}"
+                        tool_str += "\n"
+                        print(tool_str, end="")
+                        output_lines.append(tool_str)
+                    else:
+                        print(self._format_tool_summary(block))
+
+        elif isinstance(message, UserMessage):
+            for block in message.content:
+                if isinstance(block, ToolResultBlock):
+                    content = block.content
+                    if content is None:
+                        content_str = "(no output)"
+                    elif isinstance(content, str):
+                        content_str = content
+                    else:
+                        content_str = str(content)
+
+                    if config.verbose >= 2:
+                        if len(content_str) > 200:
+                            content_str = content_str[:200] + "..."
+                        error_marker = " ERROR" if block.is_error else ""
+                        result_str = f"  → {content_str}{error_marker}\n"
+                        print(result_str, end="")
+                        output_lines.append(result_str)
+                    else:
+                        if block.is_error:
+                            short = content_str[:150] + "..." if len(content_str) > 150 else content_str
+                            print(f"    ERROR: {short}")
+                        else:
+                            # Show match% from objdiff results
+                            match = re.search(r'"match_percent":\s*([\d.]+)', content_str)
+                            if match:
+                                print(f"    → {match.group(1)}% match")
+
+        elif isinstance(message, ResultMessage):
+            if config.verbose >= 2:
+                result_str = f"\n[Result: {message}]\n"
+                print(result_str, end="")
+                output_lines.append(result_str)
+            else:
+                cost = f"${message.total_cost_usd:.3f}" if message.total_cost_usd else "n/a"
+                turns = message.num_turns or "?"
+                print(f"  Done: {turns} turns, cost {cost}")
+
     async def _run_sdk(self, config: AgentRunConfig) -> dict[str, Any]:
         """Run agent via Python SDK."""
         if not SDK_AVAILABLE:
-            raise RuntimeError("claude-code-sdk not installed. Run: pip install claude-code-sdk")
+            raise RuntimeError("claude-agent-sdk not installed. Run: pip install claude-agent-sdk")
 
         options = self.build_sdk_options(config)
 
         use_openrouter = _get_openrouter_enabled() or requires_openrouter(config.model)
-        if config.verbose and use_openrouter and _get_openrouter_api_key():
+        if config.verbose >= 2 and use_openrouter and _get_openrouter_api_key():
             actual_model = get_model_id(config.model)
             print(f"[{config.session_id}] Using OpenRouter backend at {_get_openrouter_base_url()}")
 
-        if config.verbose:
+        if config.verbose >= 1:
             actual_model = get_model_id(config.model)
             print(f"[{config.session_id}] Starting agent (SDK) with model {actual_model}...")
 
@@ -361,48 +475,8 @@ class AgentRunner:
             async for message in sdk_query(prompt=config.prompt, options=options):
                 messages.append(message)
 
-                if config.verbose:
-                    if isinstance(message, AssistantMessage):
-                        for block in message.content:
-                            if isinstance(block, TextBlock):
-                                print(block.text, end="")
-                                output_lines.append(block.text)
-                            elif isinstance(block, ToolUseBlock):
-                                tool_str = f"\n[Tool: {block.name}]"
-                                if hasattr(block, 'input') and block.input:
-                                    input_parts = []
-                                    for k, v in block.input.items():
-                                        v_str = str(v)
-                                        if len(v_str) > 100:
-                                            v_str = v_str[:100] + "..."
-                                        input_parts.append(f"{k}={v_str}")
-                                    if input_parts:
-                                        tool_str += f" {', '.join(input_parts)}"
-                                tool_str += "\n"
-                                print(tool_str, end="")
-                                output_lines.append(tool_str)
-                    elif isinstance(message, UserMessage):
-                        for block in message.content:
-                            if isinstance(block, ToolResultBlock):
-                                content = block.content
-                                if content is None:
-                                    content_str = "(no output)"
-                                elif isinstance(content, str):
-                                    content_str = content
-                                else:
-                                    content_str = str(content)
-
-                                if len(content_str) > 200:
-                                    content_str = content_str[:200] + "..."
-
-                                error_marker = " ERROR" if block.is_error else ""
-                                result_str = f"  → {content_str}{error_marker}\n"
-                                print(result_str, end="")
-                                output_lines.append(result_str)
-                    elif isinstance(message, ResultMessage):
-                        result_str = f"\n[Result: {message}]\n"
-                        print(result_str, end="")
-                        output_lines.append(result_str)
+                if config.verbose >= 1:
+                    self._print_message(message, config, output_lines)
 
             return {
                 "exit_code": 0,
@@ -413,13 +487,13 @@ class AgentRunner:
 
         except CLINotFoundError as e:
             error_msg = f"Claude CLI not found: {e}"
-            if config.verbose:
+            if config.verbose >= 1:
                 print(f"\n[{config.session_id}] Error: {error_msg}")
             return {"exit_code": 127, "error": error_msg, "messages": [], "output": ""}
 
         except ProcessError as e:
             error_msg = str(e)
-            if config.verbose:
+            if config.verbose >= 1:
                 print(f"\n[{config.session_id}] Process error: {error_msg}")
             return {
                 "exit_code": e.exit_code if hasattr(e, 'exit_code') else 1,
@@ -430,7 +504,7 @@ class AgentRunner:
 
         except Exception as e:
             error_msg = str(e)
-            if config.verbose:
+            if config.verbose >= 1:
                 print(f"\n[{config.session_id}] Unexpected error: {error_msg}")
             return {"exit_code": 1, "error": error_msg, "messages": [], "output": ""}
 
@@ -448,7 +522,7 @@ class AgentRunner:
             config.prompt,
         ]
 
-        if config.verbose:
+        if config.verbose >= 1:
             print(f"[{config.session_id}] Starting agent with model {cli_model}...")
 
         env = {**os.environ, **self.build_env(config.model)}
@@ -456,7 +530,7 @@ class AgentRunner:
         if _get_openrouter_enabled() and _get_openrouter_api_key():
             env["ANTHROPIC_BASE_URL"] = _get_openrouter_base_url()
             env["ANTHROPIC_API_KEY"] = _get_openrouter_api_key()
-            if config.verbose:
+            if config.verbose >= 2:
                 print(f"[{config.session_id}] Using OpenRouter backend at {_get_openrouter_base_url()}")
         else:
             oauth_token = get_oauth_token()
@@ -475,7 +549,7 @@ class AgentRunner:
         async for line in process.stdout:
             decoded = line.decode("utf-8", errors="replace")
             output_lines.append(decoded)
-            if config.verbose:
+            if config.verbose >= 2:
                 print(decoded, end="")
 
         await process.wait()

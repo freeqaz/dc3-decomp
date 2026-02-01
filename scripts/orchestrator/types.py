@@ -14,10 +14,10 @@ from typing import Any
 DEFAULT_DECOMP_TOOLS = [
     "Read", "Write", "Edit", "Bash", "Glob", "Grep",
     "mcp__orchestrator__report_result",
-    "mcp__orchestrator__query_functions",
-    "mcp__orchestrator__get_attempts",
-    "mcp__orchestrator__lookup_rb3",
     "mcp__orchestrator__run_objdiff",
+    "mcp__orchestrator__run_analyze_function",
+    "mcp__orchestrator__lookup_struct_offset",
+    "mcp__orchestrator__lookup_merged_symbol",
 ]
 
 REFACTOR_TOOLS = [
@@ -34,7 +34,7 @@ class AgentRunConfig:
     worktree: Path
     prompt: str
     model: str  # "haiku", "sonnet", "opus"
-    verbose: bool = True
+    verbose: int = 1  # 0=quiet, 1=normal, 2=verbose
     max_turns: int = 300
     allowed_tools: list[str] | None = None  # None = default decomp toolset
     disallowed_tools: list[str] | None = None
@@ -78,7 +78,10 @@ class AgentRunResult:
             self.duration_ms = (self.duration_ms or 0) + other.duration_ms
         if other.usage and self.usage:
             for k, v in other.usage.items():
-                self.usage[k] = self.usage.get(k, 0) + v
+                if not isinstance(v, (int, float)):
+                    continue
+                prev = self.usage.get(k, 0)
+                self.usage[k] = (prev if isinstance(prev, (int, float)) else 0) + v
 
 
 @dataclass

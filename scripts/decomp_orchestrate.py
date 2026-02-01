@@ -138,6 +138,15 @@ def cmd_init(args):
     print(orchestrator.status())
 
 
+def _verbosity(args) -> int:
+    """Convert --quiet / --verbose flags to int: 0=quiet, 1=normal, 2=verbose."""
+    if getattr(args, 'quiet', False):
+        return 0
+    if getattr(args, 'verbose', False):
+        return 2
+    return 1
+
+
 def cmd_single(args):
     """Run single agent on one function."""
     validate_model_backend(args.model)
@@ -174,7 +183,7 @@ def cmd_single(args):
     result = orchestrator.run_single_sync(
         symbol=args.symbol,
         model=args.model,
-        verbose=not args.quiet,
+        verbose=_verbosity(args),
         dry_run=args.dry_run,
         use_incremental=use_incremental,
         refactor=not args.no_refactor,
@@ -334,7 +343,7 @@ def cmd_batch(args):
                 targets=targets,
                 max_agents=args.max_agents,
                 model=args.model,
-                verbose=not args.quiet,
+                verbose=_verbosity(args),
                 use_incremental=use_incremental,
                 periodic_full_interval=args.periodic_full if not args.incremental_only else 0,
                 validate_diffs=args.validate_diffs,
@@ -351,11 +360,12 @@ def cmd_batch(args):
                 max_agents=args.max_agents,
                 model=args.model,
                 limit=args.limit,
-                verbose=not args.quiet,
+                verbose=_verbosity(args),
                 use_incremental=use_incremental,
                 periodic_full_interval=args.periodic_full if not args.incremental_only else 0,
                 validate_diffs=args.validate_diffs,
                 refactor=not args.no_refactor,
+                exclude_at_limit=args.exclude_at_limit,
             )
         )
 
@@ -371,6 +381,7 @@ def cmd_query(args):
         max_percent=args.max_percent,
         limit=args.limit,
         exclude_complete=not args.include_complete,
+        exclude_at_limit=getattr(args, 'exclude_at_limit', False),
         db_path=args.db,
     )
 
@@ -542,7 +553,7 @@ def cmd_retry(args):
     result = orchestrator.run_single_sync(
         symbol=args.symbol,
         model=model,
-        verbose=not args.quiet,
+        verbose=_verbosity(args),
     )
 
     print(f"\nResult: {result.get('status')}")
@@ -843,7 +854,7 @@ def cmd_rb3_sync(args):
         rb3_path=rb3_path,
         report_path=report_path,
         db_path=args.db,
-        verbose=not args.quiet,
+        verbose=_verbosity(args),
     )
 
     if args.json:
@@ -969,7 +980,7 @@ def cmd_rb3_merge(args):
             func_limit_per_unit=args.func_limit,
             min_percent=args.min_percent,
             max_percent=args.max_percent,
-            verbose=not args.quiet,
+            verbose=_verbosity(args),
         )
     )
 
@@ -1011,7 +1022,8 @@ def main():
     # Model choices generated dynamically from registry (supports all backends)
     available_models = sorted(set(get_available_models("anthropic") + get_available_models("openrouter")))
     p_single.add_argument("--model", choices=available_models, help="Force specific model (default: auto-select)")
-    p_single.add_argument("--quiet", "-q", action="store_true", help="Suppress verbose output")
+    p_single.add_argument("--quiet", "-q", action="store_true", help="Suppress all output")
+    p_single.add_argument("--verbose", "-v", action="store_true", help="Full agent output (tool args, results, text)")
     p_single.add_argument("--json", action="store_true", help="Output results as JSON")
     p_single.add_argument("--dry-run", action="store_true", help="Show what would happen without running the agent")
     p_single.add_argument("--force", "-f", action="store_true", help="Force unlock if function is already locked by another session")
@@ -1097,7 +1109,8 @@ def main():
     # Model choices generated dynamically from registry (supports all backends)
     p_batch.add_argument("--model", choices=available_models, help="Force all agents to use this model")
     p_batch.add_argument("--limit", type=int, default=0, help="Max functions to process (0=unlimited)")
-    p_batch.add_argument("--quiet", "-q", action="store_true", help="Suppress verbose output")
+    p_batch.add_argument("--quiet", "-q", action="store_true", help="Suppress all output")
+    p_batch.add_argument("--verbose", "-v", action="store_true", help="Full agent output (tool args, results, text)")
     p_batch.add_argument("--json", action="store_true", help="Output results as JSON")
 
     # Build strategy options
@@ -1141,6 +1154,11 @@ def main():
         action="store_true",
         help="Skip the Haiku refactor-staff cleanup pass after the main agent",
     )
+    p_batch.add_argument(
+        "--exclude-at-limit",
+        action="store_true",
+        help="Also exclude functions with AT_LIMIT verdict (by default only 100%% COMPLETE functions are excluded)",
+    )
 
     # query
     p_query = subparsers.add_parser(
@@ -1154,6 +1172,7 @@ def main():
     p_query.add_argument("--max-percent", type=float, default=100, help="Only show functions with match at most this many percent (default: 100)")
     p_query.add_argument("--limit", type=int, default=20, help="Max results to show (default: 20)")
     p_query.add_argument("--include-complete", action="store_true", help="Include completely matched (100) functions in results")
+    p_query.add_argument("--exclude-at-limit", action="store_true", help="Also exclude functions with AT_LIMIT verdict")
     p_query.add_argument("--estimate-cost", action="store_true", help="Show estimated token cost and runtime to complete batch")
     # Model choices generated dynamically from registry (supports all backends)
     p_query.add_argument("--model", choices=available_models, help="Model for cost estimate (if not specified, uses auto-selection)")
@@ -1187,7 +1206,8 @@ def main():
     p_retry.add_argument("symbol", help="Mangled function symbol")
     # Model choices generated dynamically from registry (supports all backends)
     p_retry.add_argument("--model", choices=available_models, help="Escalated model to use")
-    p_retry.add_argument("--quiet", "-q", action="store_true", help="Suppress verbose output")
+    p_retry.add_argument("--quiet", "-q", action="store_true", help="Suppress all output")
+    p_retry.add_argument("--verbose", "-v", action="store_true", help="Full agent output (tool args, results, text)")
 
     # cleanup
     p_cleanup = subparsers.add_parser(
@@ -1313,7 +1333,8 @@ def main():
         "--rb3-path",
         help=f"Path to RB3 source (default: {DEFAULT_RB3_PATH})"
     )
-    p_rb3_sync.add_argument("--quiet", "-q", action="store_true", help="Suppress verbose output")
+    p_rb3_sync.add_argument("--quiet", "-q", action="store_true", help="Suppress all output")
+    p_rb3_sync.add_argument("--verbose", "-v", action="store_true", help="Full agent output (tool args, results, text)")
     p_rb3_sync.add_argument("--json", action="store_true", help="Output as JSON")
 
     # rb3-query
@@ -1344,7 +1365,8 @@ def main():
     p_rb3_merge.add_argument("--func-limit", type=int, default=20, help="Max functions per unit (default: 20)")
     p_rb3_merge.add_argument("-j", "--max-agents", type=int, default=1, help="Max parallel agents (default: 1)")
     p_rb3_merge.add_argument("--model", choices=available_models, help="Force specific model")
-    p_rb3_merge.add_argument("--quiet", "-q", action="store_true", help="Suppress verbose output")
+    p_rb3_merge.add_argument("--quiet", "-q", action="store_true", help="Suppress all output")
+    p_rb3_merge.add_argument("--verbose", "-v", action="store_true", help="Full agent output (tool args, results, text)")
     p_rb3_merge.add_argument("--dry-run", action="store_true", help="Show what would be processed")
     p_rb3_merge.add_argument("--no-auto-apply", action="store_true", help="Disable auto-apply patches")
     p_rb3_merge.add_argument("--json", action="store_true", help="Output as JSON")
