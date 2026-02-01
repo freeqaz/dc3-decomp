@@ -58,26 +58,27 @@ DEFAULT_EXPORT_TYPES = Path("/home/free/code/milohax/dc3-decomp/tools/ghidra/exp
 # =============================================================================
 # Token Budget System
 # =============================================================================
-# Total prompt budget: ~40k tokens max (~120k chars at ~3 chars/token)
+# Total prompt budget: ~80k tokens max (~240k chars at ~3 chars/token)
 # Per-section budget: ~8k tokens max (~24k chars)
 #
 # Anything exceeding per-section budget gets written to a file in the worktree
 # with only a short preview (head -n 30) included inline.
 #
-# SDK passes prompt as CLI argument which is subject to ARG_MAX (~2MB on Linux).
-# This token budget system keeps us well under that limit.
+# The SDK passes prompts via stdin (not CLI args), so ARG_MAX does not apply.
+# Subprocess mode passes prompts as CLI args but Linux ARG_MAX is ~2MB,
+# so 240KB is well within limits for both modes.
 # =============================================================================
 
 # Token-to-character ratio (conservative estimate)
 CHARS_PER_TOKEN = 3
 
 # Budget limits in tokens
-TOTAL_PROMPT_TOKEN_BUDGET = 40_000  # ~40k tokens total
-SECTION_TOKEN_BUDGET = 8_000        # ~8k tokens per section
+TOTAL_PROMPT_TOKEN_BUDGET = 60_000  # ~60k tokens total
+SECTION_TOKEN_BUDGET = 6_000        # ~6k tokens per section
 
 # Derived character limits
-SECTION_CHAR_BUDGET = SECTION_TOKEN_BUDGET * CHARS_PER_TOKEN  # ~24k chars
-TOTAL_CHAR_BUDGET = TOTAL_PROMPT_TOKEN_BUDGET * CHARS_PER_TOKEN  # ~120k chars
+SECTION_CHAR_BUDGET = SECTION_TOKEN_BUDGET * CHARS_PER_TOKEN  # ~18k chars
+TOTAL_CHAR_BUDGET = TOTAL_PROMPT_TOKEN_BUDGET * CHARS_PER_TOKEN  # ~180k chars
 
 # Preview size when content exceeds budget (in lines)
 PREVIEW_LINES = 30
@@ -1995,16 +1996,24 @@ def run_objdiff_cli(
         result["line_count"] = len(lines)
 
         # Truncate preview based on both line count and character budget
-        # This ensures we stay within the section token budget
-        if len(output) <= SECTION_CHAR_BUDGET and len(lines) <= PREVIEW_LINES * 3:
+        # This ensures we stay within the section token budget.
+        # IMPORTANT: objdiff JSON with --include-instructions often produces
+        # 1-3 very long lines (100KB+ each), so we MUST enforce a character
+        # limit, not just a line limit.
+        PREVIEW_CHAR_LIMIT = 4_000  # ~4KB preview is plenty for orientation
+        if len(output) <= PREVIEW_CHAR_LIMIT:
             result["preview"] = output
         else:
-            preview_lines = lines[:PREVIEW_LINES]
-            preview_text = "\n".join(preview_lines)
-            remaining = len(lines) - PREVIEW_LINES
+            # Truncate by characters first, then by lines
+            preview_text = output[:PREVIEW_CHAR_LIMIT]
+            # Try to break at a line boundary
+            last_newline = preview_text.rfind("\n")
+            if last_newline > PREVIEW_CHAR_LIMIT // 2:
+                preview_text = preview_text[:last_newline]
+            remaining_chars = len(output) - len(preview_text)
             result["preview"] = (
                 f"{preview_text}\n\n"
-                f"... ({remaining} more lines)\n"
+                f"... ({remaining_chars} more chars, {len(lines)} total lines)\n"
                 f"Full output: {result['output_file']}\n"
                 f"View with: cat {result['output_file']}"
             )
@@ -2174,7 +2183,9 @@ def collect_pre_run_context(
         "previous_attempts": "No previous attempts",
         "previous_attempts_count": 0,
         "decompilation": "(unavailable)",
+        "ghidra_file_path_relative": "(not written)",
         "rb3_reference": "(not searched)",
+        "rb3_file_path_relative": "(not found)",
         "m2c_decompilation": "(not run yet)",
         "m2c_file_path": "(not written)",
         "m2c_file_path_relative": "(not written)",
@@ -2386,16 +2397,43 @@ def collect_pre_run_context(
     logger.info("Looking up RB3 reference...")
     try:
         rb3_ref = find_rb3_reference(symbol, unit)
-        result["rb3_reference"] = rb3_ref
         if not rb3_ref.startswith("("):
-            logger.info(f"Found RB3 reference: {len(rb3_ref)} chars")
+            # Always write to file
+            rb3_offload = truncate_and_offload(
+                content=rb3_ref,
+                name=f"rb3_{symbol}",
+                worktree_dir=worktree_dir,
+            )
+            if not rb3_offload["was_truncated"]:
+                # truncate_and_offload didn't write a file — do it ourselves
+                analysis_dir = Path(worktree_dir) / "function_analysis"
+                analysis_dir.mkdir(exist_ok=True, parents=True)
+                safe_name = f"rb3_{symbol}".replace("?", "_Q_").replace("@", "_A_").replace("<", "_L_").replace(">", "_R_").replace("/", "_")
+                rb3_file = analysis_dir / f"{safe_name}.cpp"
+                rb3_file.write_text(rb3_ref)
+                rb3_offload["file_path_relative"] = f"function_analysis/{safe_name}.cpp"
+
+            result["rb3_file_path_relative"] = rb3_offload["file_path_relative"]
+            match_pct = result.get("match_percent", 0.0)
+            if match_pct >= 90.0:
+                result["rb3_reference"] = (
+                    f"(file-only at {match_pct:.1f}% match)\n"
+                    f"View with: cat {rb3_offload['file_path_relative']}"
+                )
+                logger.info(f"RB3 reference file-only (match={match_pct:.1f}%): {rb3_offload['file_path_relative']}")
+            else:
+                result["rb3_reference"] = rb3_offload["inline"]
+                logger.info(f"Found RB3 reference: {len(rb3_ref)} chars, file: {rb3_offload['file_path_relative']}")
         else:
+            result["rb3_reference"] = rb3_ref
+            result["rb3_file_path_relative"] = "(not found)"
             logger.info(f"RB3 reference: {rb3_ref}")
     except Exception as e:
         logger.warning(f"RB3 lookup failed: {e}")
         result["rb3_reference"] = f"(error: {e})"
+        result["rb3_file_path_relative"] = "(error)"
 
-    # 4. Run m2c decompilation (always - writes to file, includes inline if < 1000 lines)
+    # 4. Run m2c decompilation (always writes to file, only inline for low-match functions)
     # Pass objdiff JSON path to enable new pipeline with better relocation handling
     logger.info("Running m2c decompilation...")
     try:
@@ -2406,17 +2444,27 @@ def collect_pre_run_context(
             objdiff_json_path=result.get("objdiff_file_absolute"),
             use_type_context=True,
         )
-        result["m2c_decompilation"] = m2c_result["inline"]
         result["m2c_file_path"] = m2c_result["file_path"]
         result["m2c_file_path_relative"] = m2c_result["file_path_relative"]
         result["m2c_line_count"] = m2c_result["line_count"]
         result["m2c_method"] = m2c_result.get("method", "none")
 
-        if m2c_result["success"]:
-            method = m2c_result.get("method", "unknown")
-            logger.info(f"m2c decompilation ({method}): {m2c_result['line_count']} lines, written to {m2c_result['file_path_relative']}")
+        # For high-match functions (>=90%), don't inline m2c - just point to the file.
+        # The agent can read it if needed, but it's noise in the initial prompt at this stage.
+        match_pct = result.get("match_percent", 0.0)
+        if match_pct >= 90.0 and m2c_result["success"]:
+            result["m2c_decompilation"] = (
+                f"(file-only - function is at {match_pct:.1f}% match, m2c output saved to file)\n"
+                f"View with: cat {m2c_result['file_path_relative']}"
+            )
+            logger.info(f"m2c written to file only (match={match_pct:.1f}% >= 90%): {m2c_result['file_path_relative']}")
         else:
-            logger.info(f"m2c decompilation: {m2c_result['inline']}")
+            result["m2c_decompilation"] = m2c_result["inline"]
+            if m2c_result["success"]:
+                method = m2c_result.get("method", "unknown")
+                logger.info(f"m2c decompilation ({method}): {m2c_result['line_count']} lines, written to {m2c_result['file_path_relative']}")
+            else:
+                logger.info(f"m2c decompilation: {m2c_result['inline']}")
     except Exception as e:
         logger.warning(f"m2c decompilation failed: {e}")
         result["m2c_decompilation"] = f"(error: {e})"
@@ -2449,18 +2497,32 @@ def collect_pre_run_context(
             # Get decompilation
             try:
                 decompilation = client.decompile_function(symbol)
-                # Use truncate_and_offload to respect token budget
-                ghidra_result = truncate_and_offload(
+                # Always write to file, use truncate_and_offload for inline budget
+                ghidra_offload = truncate_and_offload(
                     content=decompilation,
                     name=f"ghidra_{symbol}",
                     worktree_dir=worktree_dir,
                 )
-                result["decompilation"] = ghidra_result["inline"]
-                if ghidra_result["was_truncated"]:
-                    result["ghidra_file"] = ghidra_result["file_path_relative"]
-                    logger.info(f"Ghidra decompilation offloaded: {ghidra_result['original_size']} chars → {ghidra_result['file_path_relative']}")
+                if not ghidra_offload["was_truncated"]:
+                    # truncate_and_offload didn't write a file — do it ourselves
+                    analysis_dir = Path(worktree_dir) / "function_analysis"
+                    analysis_dir.mkdir(exist_ok=True, parents=True)
+                    safe_name = f"ghidra_{symbol}".replace("?", "_Q_").replace("@", "_A_").replace("<", "_L_").replace(">", "_R_").replace("/", "_")
+                    ghidra_file = analysis_dir / f"{safe_name}.c"
+                    ghidra_file.write_text(decompilation)
+                    ghidra_offload["file_path_relative"] = f"function_analysis/{safe_name}.c"
+
+                result["ghidra_file_path_relative"] = ghidra_offload["file_path_relative"]
+                match_pct = result.get("match_percent", 0.0)
+                if match_pct >= 90.0:
+                    result["decompilation"] = (
+                        f"(file-only at {match_pct:.1f}% match)\n"
+                        f"View with: cat {ghidra_offload['file_path_relative']}"
+                    )
+                    logger.info(f"Ghidra decompilation file-only (match={match_pct:.1f}%): {ghidra_offload['file_path_relative']}")
                 else:
-                    logger.info(f"Ghidra decompilation retrieved: {len(decompilation)} chars")
+                    result["decompilation"] = ghidra_offload["inline"]
+                    logger.info(f"Ghidra decompilation: {len(decompilation)} chars, file: {ghidra_offload['file_path_relative']}")
             except DirectGhidraClientError as e:
                 logger.warning(f"Ghidra decompilation failed: {e}")
 

@@ -66,22 +66,16 @@ Use this table to decide whether to edit this function:
 
 **Note:** RB3 and DC3 share the Milo engine. The reference below is pre-computed from RB3 source.
 
-**IMPORTANT:** The `mcp__orchestrator__lookup_rb3` tool may return 20+ grep results showing multiple implementations. This is expected:
-- Focus on function signatures that exactly match the pattern in this function
-- Ignore variable names and comments in the RB3 results
-- The pre-computed reference below is already filtered to the most relevant match
+**File:** `{rb3_file_path_relative}`
 
 ```cpp
 {rb3_reference}
 ```
 
-If you call the lookup tool anyway (which wastes an API call), remember that RB3 is pre-computed and returns raw grep results - these show possible matches, not the exact implementation. The reference above has already been selected as most relevant.
-
 **For class/struct layouts:** If you need member offsets or inheritance info not in the RB3 source, check the RB2 DWARF dump:
 ```bash
 grep -A 30 "^class ClassName " ~/code/milohax/rb3/doc/rb2_dump.cpp
 ```
-This contains 8,570 classes with full member offsets - invaluable for struct layout issues.
 
 ### m2c Decompilation (Auto-Generated Starting Point)
 
@@ -95,7 +89,9 @@ This contains 8,570 classes with full member offsets - invaluable for struct lay
 
 ### Ghidra Decompilation (Original Code)
 
-**Note:** This is pre-computed by the orchestrator. If it shows `(unavailable)`, proceed without it - do NOT attempt to run Ghidra yourself. The Ghidra integration is embedded in Python (pyghidra) and only runs from the orchestrator.
+**Note:** If it shows `(unavailable)`, proceed without it - do NOT attempt to run Ghidra yourself.
+
+**File:** `{ghidra_file_path_relative}`
 
 ```c
 {ghidra_decompilation}

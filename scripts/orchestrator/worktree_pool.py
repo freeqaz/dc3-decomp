@@ -27,7 +27,6 @@ class WorktreePool:
 
     # Paths to symlink (lightweight, shared resources)
     DEFAULT_SYMLINKS = [
-        "scripts",                  # decomp_orchestrate.py and other tools
         "decomp.db",                # SQLite database
         "compile_commands.json",    # For clangd
         ".clangd",                  # Clangd config

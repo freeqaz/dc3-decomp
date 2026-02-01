@@ -351,6 +351,22 @@ Focus on readability and maintainability while preserving exact behavior and mat
         # Handle pre-computed context (default to empty dict if not provided)
         context = context or {}
 
+        # Log per-section sizes for budget debugging
+        sections = {
+            "template": len(template),
+            "rb3_reference": len(context.get('rb3_reference', '')),
+            "m2c_decompilation": len(context.get('m2c_decompilation', '')),
+            "ghidra_decompilation": len(context.get('decompilation', '')),
+            "objdiff_preview": len(context.get('objdiff_preview', '')),
+            "previous_attempts": len(context.get('previous_attempts', '')),
+            "xrefs_preview": len(context.get('xrefs_preview', '')),
+        }
+        total_sections = sum(sections.values())
+        self.logger.info(
+            f"Prompt section sizes (total {total_sections / 1024:.1f}KB): "
+            + ", ".join(f"{k}={v / 1024:.1f}KB" for k, v in sorted(sections.items(), key=lambda x: -x[1]))
+        )
+
         # Add build strategy hint to prompt
         build_hint = ""
         if use_incremental:
@@ -369,7 +385,9 @@ Focus on readability and maintainability while preserving exact behavior and mat
             previous_attempts=context.get('previous_attempts', 'No previous attempts'),
             previous_attempts_count=context.get('previous_attempts_count', 0),
             ghidra_decompilation=context.get('decompilation', '(unavailable)'),
+            ghidra_file_path_relative=context.get('ghidra_file_path_relative', '(not written)'),
             rb3_reference=context.get('rb3_reference', '(not available)'),
+            rb3_file_path_relative=context.get('rb3_file_path_relative', '(not found)'),
             m2c_decompilation=context.get('m2c_decompilation', '(not run)'),
             m2c_file_path=context.get('m2c_file_path', '(not written)'),
             m2c_file_path_relative=context.get('m2c_file_path_relative', '(not written)'),
@@ -495,7 +513,7 @@ Focus on readability and maintainability while preserving exact behavior and mat
             if prompt_size > TOTAL_CHAR_BUDGET:
                 self.logger.error(
                     f"Prompt exceeds budget: {prompt_size / 1024:.1f}KB > {TOTAL_CHAR_BUDGET / 1024:.1f}KB. "
-                    f"Truncating to prevent ARG_MAX failure."
+                    f"Truncating to reduce context noise."
                 )
                 prompt = prompt[:TOTAL_CHAR_BUDGET]
                 prompt += "\n\n[PROMPT TRUNCATED - exceeded token budget]"
@@ -510,6 +528,7 @@ Focus on readability and maintainability while preserving exact behavior and mat
             # 9. Run agent via AgentRunner
             start_percent = func.get("current_percent") or 0
 
+            self.logger.info(f"Launching agent (model={selected_model}, worktree={worktree})...")
             agent_config = AgentRunConfig(
                 session_id=session_id,
                 worktree=worktree,
@@ -518,43 +537,57 @@ Focus on readability and maintainability while preserving exact behavior and mat
                 verbose=verbose,
             )
             agent_result = await self.runner.run(agent_config)
+            self.logger.info(
+                f"Agent finished: status={agent_result.status}, percent={agent_result.percent}, "
+                f"exit_code={agent_result.exit_code}"
+            )
 
             # 9b. Refactor pass (if enabled and first pass made changes)
             if refactor and self._worktree_has_changes(worktree):
-                self.logger.info(f"Running refactor-staff cleanup pass (Haiku)...")
-                refactor_prompt = self._build_refactor_prompt(func, worktree, agent_result.percent or start_percent)
-                refactor_config = AgentRunConfig(
-                    session_id=f"{session_id}-refactor",
-                    worktree=worktree,
-                    prompt=refactor_prompt,
-                    model="haiku",
-                    verbose=verbose,
-                    max_turns=30,
-                    allowed_tools=list(REFACTOR_TOOLS),
-                )
-                refactor_result = await self.runner.run(refactor_config)
+                try:
+                    self.logger.info(f"Running refactor-staff cleanup pass (Haiku)...")
+                    refactor_prompt = self._build_refactor_prompt(func, worktree, agent_result.percent or start_percent)
+                    refactor_config = AgentRunConfig(
+                        session_id=f"{session_id}-refactor",
+                        worktree=worktree,
+                        prompt=refactor_prompt,
+                        model="haiku",
+                        verbose=verbose,
+                        max_turns=30,
+                        allowed_tools=list(REFACTOR_TOOLS),
+                    )
+                    refactor_result = await self.runner.run(refactor_config)
+                    self.logger.info(f"Refactor pass completed: percent={refactor_result.percent}, status={refactor_result.status}")
 
-                # Safety: check if match% regressed
-                if refactor_result.percent is not None and agent_result.percent is not None:
-                    if refactor_result.percent < agent_result.percent - 0.1:
-                        # Regressed — revert refactor changes
-                        self.logger.warning(
-                            f"Refactor pass regressed: {agent_result.percent}% -> {refactor_result.percent}%. Reverting."
-                        )
-                        subprocess.run(["git", "checkout", "--", "."], cwd=worktree, capture_output=True)
+                    # Safety: check if match% regressed
+                    if refactor_result.percent is not None and agent_result.percent is not None:
+                        if refactor_result.percent < agent_result.percent - 0.1:
+                            # Regressed — revert refactor changes
+                            self.logger.warning(
+                                f"Refactor pass regressed: {agent_result.percent}% -> {refactor_result.percent}%. Reverting."
+                            )
+                            subprocess.run(["git", "checkout", "--", "."], cwd=worktree, capture_output=True)
+                        else:
+                            # Success — merge cost
+                            agent_result.merge_cost(refactor_result)
+                            if refactor_result.percent is not None:
+                                agent_result.percent = refactor_result.percent
                     else:
-                        # Success — merge cost
+                        # Can't verify — merge cost anyway (assume ok)
                         agent_result.merge_cost(refactor_result)
-                        if refactor_result.percent is not None:
-                            agent_result.percent = refactor_result.percent
-                else:
-                    # Can't verify — merge cost anyway (assume ok)
-                    agent_result.merge_cost(refactor_result)
+                except Exception as e:
+                    self.logger.error(f"Refactor pass failed with exception: {e}", exc_info=True)
+                    self.logger.info("Continuing with first-pass results (refactor skipped due to error)")
             elif refactor:
                 self.logger.debug("Refactor pass skipped — no changes in worktree")
 
             # 10. Extract patch
+            self.logger.info("Extracting patch from worktree...")
             patch = self.worktree_pool.extract_patch(session_id)
+            if patch:
+                self.logger.info(f"Patch extracted: {len(patch)} bytes")
+            else:
+                self.logger.info("No patch (no changes in worktree)")
 
             # 11. Unpack result
             end_percent = agent_result.percent if agent_result.percent is not None else start_percent
@@ -576,7 +609,7 @@ Focus on readability and maintainability while preserving exact behavior and mat
                     self.logger.debug(f"Tokens: in={usage_data.get('input_tokens')}, out={usage_data.get('output_tokens')}, cache_read={usage_data.get('cache_read_tokens')}")
 
             # 12. Record attempt
-            self.logger.debug(f"Recording attempt to database...")
+            self.logger.info(f"Recording attempt to database (status={exit_status}, {start_percent}% -> {end_percent}%)...")
             record_attempt(
                 function_id=func["id"],
                 session_id=session_id,
@@ -598,7 +631,7 @@ Focus on readability and maintainability while preserving exact behavior and mat
             )
 
             # 13. Update function status
-            self.logger.debug(f"Updating function status in database...")
+            self.logger.info(f"Updating function status in database...")
             update_function_status(
                 function_id=func["id"],
                 current_percent=end_percent,
@@ -614,6 +647,12 @@ Focus on readability and maintainability while preserving exact behavior and mat
                 end_percent=end_percent if end_percent is not None else start_percent,
                 exit_status=exit_status,
                 symbol=func["symbol"],
+            )
+
+            self.logger.info(
+                f"Session complete for {func['symbol']}: "
+                f"{start_percent}% -> {end_percent}%, status={exit_status}, "
+                f"patch_applied={apply_result.get('applied', False)}"
             )
 
             return {
@@ -633,9 +672,12 @@ Focus on readability and maintainability while preserving exact behavior and mat
 
         finally:
             # 15. Cleanup (only unlock if we did the locking)
+            self.logger.debug(f"Cleaning up session {session_id}...")
             if not pre_locked:
                 unlock_function(func["id"], db_path=self.db_path)
+                self.logger.debug(f"Unlocked function {func['id']}")
             self.worktree_pool.release(session_id)
+            self.logger.debug(f"Released worktree for session {session_id}")
 
     def run_single_sync(
         self,
