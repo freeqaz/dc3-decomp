@@ -43,10 +43,10 @@ BEGIN_LOADS(ColorPalette)
     ASSERT_REVS(1, 0)
     LOAD_SUPERCLASS(Hmx::Object)
     if (d.rev < 1) {
-        std::vector<ColorSet> vec;
-        d >> vec;
+        std::vector<ColorSet> setvec;
+        d >> setvec;
         mColors.clear();
-        FOREACH (it, vec) {
+        FOREACH (it, setvec) {
             mColors.push_back(it->mPrimary);
         }
     } else

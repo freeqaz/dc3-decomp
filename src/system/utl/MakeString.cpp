@@ -394,6 +394,10 @@ FormatString::FormatString(const char *str)
     InitializeWithFmt(str, true);
 }
 
+// Explicit template instantiations for MakeString variants used by ASSERT_REVS
+template const char *
+MakeString<const char *, Symbol, int, unsigned short>(const char *, const char *const &, const Symbol &, const int &, const unsigned short &);
+
 FormatString &FormatString::operator<<(const DataNode &node) {
     char tmp = *mFmtEnd;
     *mFmtEnd = '\0';

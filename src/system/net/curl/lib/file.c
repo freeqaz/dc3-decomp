@@ -137,15 +137,15 @@ static CURLcode file_range(struct connectdata *conn)
   struct SessionHandle *data = conn->data;
 
   if(data->state.use_range && data->state.range) {
-    from=curlx_strtoofft(data->state.range, &ptr, 0);
-    while(*ptr && (ISSPACE(*ptr) || (*ptr=='-')))
+    from = curlx_strtoofft(data->state.range, &ptr, 0);
+    while(*ptr && (ISSPACE(*ptr) || (*ptr == '-')))
       ptr++;
-    to=curlx_strtoofft(ptr, &ptr2, 0);
+    to = curlx_strtoofft(ptr, &ptr2, 0);
     if(ptr == ptr2) {
       /* we didn't get any digit */
-      to=-1;
+      to = -1;
     }
-    if((-1 == to) && (from>=0)) {
+    if((to == -1) && (from >= 0)) {
       /* X - */
       data->state.resume_from = from;
       DEBUGF(infof(data, "RANGE %" FORMAT_OFF_T " to end of file\n",
@@ -160,8 +160,8 @@ static CURLcode file_range(struct connectdata *conn)
     }
     else {
       /* X-Y */
-      totalsize = to-from;
-      data->req.maxdownload = totalsize+1; /* include last byte */
+      totalsize = to - from;
+      data->req.maxdownload = totalsize + 1; /* include last byte */
       data->state.resume_from = from;
       DEBUGF(infof(data, "RANGE from %" FORMAT_OFF_T
                    " getting %" FORMAT_OFF_T " bytes\n",

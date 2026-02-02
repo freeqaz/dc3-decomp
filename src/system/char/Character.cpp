@@ -773,3 +773,47 @@ void Character::DrawLodOrShadow(int lod, DrawMode drawMode) {
         DrawShowing();
     }
 }
+
+#pragma endregion
+#pragma region CharPollableSorter
+
+void CharPollableSorter::AddDeps(
+    Dep *me, const std::list<Hmx::Object *> &odeps, std::list<Dep *> &toDo, bool changedBy
+) {
+    for (std::list<Hmx::Object *>::const_iterator it = odeps.begin(); it != odeps.end();
+         ++it) {
+        Hmx::Object *cur = *it;
+        if (cur) {
+            Dep *mapDep = &mDeps[cur];
+            if (!mapDep->obj) {
+                mapDep->obj = cur;
+                toDo.push_back(mapDep);
+            }
+            if (changedBy) {
+                me->changedBy.push_back(mapDep);
+            } else {
+                mapDep->changedBy.push_back(me);
+            }
+        }
+    }
+}
+
+// Template instantiation for std::list<CharPollableSorter::Dep*>::erase
+namespace stlpmtx_std {
+    template <>
+    _List_iterator<CharPollableSorter::Dep *, _Nonconst_traits<CharPollableSorter::Dep *>>
+    list<CharPollableSorter::Dep *, StlNodeAlloc<CharPollableSorter::Dep *>>::erase(
+        _List_iterator<CharPollableSorter::Dep *, _Nonconst_traits<CharPollableSorter::Dep *>> __position
+    ) {
+        _Node_base *__next_node = __position._M_node->_M_next;
+        _Node_base *__prev_node = __position._M_node->_M_prev;
+        _Node *__n = __STATIC_CAST(_Node *, __position._M_node);
+        __prev_node->_M_next = __next_node;
+        __next_node->_M_prev = __prev_node;
+        _STLP_STD::_Destroy(&__n->_M_data);
+        this->_M_node.deallocate(__n, 1);
+        return iterator(__next_node);
+    }
+}
+
+#pragma endregion

@@ -81,7 +81,7 @@ void LabelShrinkWrapper::PreLoad(BinStream &bs) {
 
 void LabelShrinkWrapper::PostLoad(BinStream &bs) {
     bs.PopRev(this);
-    mResourceDir.PostLoad(nullptr);
+    mResourceDir.PostLoad(0);
     UIComponent::PostLoad(bs);
     Update();
 }

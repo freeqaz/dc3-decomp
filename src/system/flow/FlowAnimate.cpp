@@ -12,7 +12,12 @@ FlowAnimate::FlowAnimate()
     mType = range;
 }
 
-FlowAnimate::~FlowAnimate() {}
+FlowAnimate::~FlowAnimate() {
+    if (unk5c != nullptr) {
+    }
+    if (mAnim != nullptr) {
+    }
+}
 
 
 BEGIN_HANDLERS(FlowAnimate)

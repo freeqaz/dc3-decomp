@@ -200,7 +200,7 @@ void HamCharacter::SyncObjects() {
         EnableFacialAnimation(lipDrv->LipSync(), 0);
         bool blinking;
         if (servo) {
-            blinking = !servo->BlinkClipLeftName().Null() && !servo->BlinkClipRightName().Null();
+            blinking = !servo->BlinkClipLeftName().Null() || !servo->BlinkClipRightName().Null();
         } else {
             blinking = false;
         }

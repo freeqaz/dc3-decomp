@@ -38,15 +38,14 @@ BEGIN_SAVES(StarsDisplay)
     bs << mResourceDir;
 END_SAVES
 
-BEGIN_COPYS(StarsDisplay)
-    COPY_SUPERCLASS(UIComponent)
-    CREATE_COPY(StarsDisplay)
-    BEGIN_COPYING_MEMBERS
-        COPY_MEMBER(mAlpha)
-        COPY_MEMBER(mResourceDir)
-    END_COPYING_MEMBERS
+void StarsDisplay::Copy(const Hmx::Object *o, Hmx::Object::CopyType ty) {
+    UIComponent::Copy(o, ty);
+    if (const StarsDisplay *c = dynamic_cast<const StarsDisplay *>(o)) {
+        mAlpha = c->mAlpha;
+        mResourceDir = c->mResourceDir;
+    }
     Update();
-END_COPYS
+}
 
 BEGIN_LOADS(StarsDisplay)
     PreLoad(bs);

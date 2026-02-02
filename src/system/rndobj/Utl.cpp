@@ -10,6 +10,7 @@
 #include "os/FileCache.h"
 #include "os/Platform.h"
 #include "os/System.h"
+#include "rndobj/AmbientOcclusion.h"
 #include "rndobj/Bitmap.h"
 #include "rndobj/Cam.h"
 #include "rndobj/Dir.h"

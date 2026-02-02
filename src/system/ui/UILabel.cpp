@@ -1,6 +1,7 @@
 #include "ui/UILabel.h"
 
 #include "macros.h"
+#include "ui/ResourceDirPtr.h"
 #include "obj/Data.h"
 #include "obj/Object.h"
 #include "obj/Task.h"
@@ -305,9 +306,9 @@ RndText::Style &UILabel::Style(int) {
     return dummy;
 }
 
-void UILabel::SetPrelocalizedString(String &s) {}
-
-void UILabel::SetSubtitle(const DataArray *) {}
+void UILabel::SetSubtitle(const DataArray *da) {
+    SetDisplayText(da->Str(2), true);
+}
 
 void UILabel::SetTimeHMS(int, bool) {}
 
@@ -345,7 +346,13 @@ void UILabel::CenterWithLabel(UILabel *, bool, float) {}
 
 // UILabel::LabelStyle &UILabel::LStyle(int) { return new LabelStyle(0); }
 
-void UILabel::OldResourcePreload(BinStream &) {}
+void UILabel::OldResourcePreload(BinStream &bs) {
+    char buffer[0x100];
+    LabelStyle &style = LStyle(0);
+    ResourceDirPtr<UILabelDir> &ptr = *(ResourceDirPtr<UILabelDir> *)&style.unk14;
+    bs.ReadString(buffer, 0x100);
+    ptr.SetName(buffer, true);
+}
 
 void UILabel::SetDisplayText(const char *cc, bool b) {
     if (b) {
@@ -374,9 +381,34 @@ DataNode UILabel::OnSetPrelocalizedString(DataArray const *da) {
     return NULL_OBJ;
 }
 
-DataNode UILabel::OnSetTokenFmt(DataArray const *da) { return NULL_OBJ; }
+DataNode UILabel::OnSetTokenFmt(const DataArray *da) {
+    const DataNode &n = da->Evaluate(2);
+    if (n.Type() == kDataArray) {
+        DataArray *arr = n.Array();
+        bool b = arr->Size() > 1 && arr->Evaluate(1).Type() == kDataArray;
+        if (b) {
+            SetTokenFmtImp(arr->ForceSym(0), arr->Array(1), arr, 2, false);
+        } else
+            SetTokenFmtImp(arr->ForceSym(0), 0, arr, 1, false);
+    } else {
+        bool b = da->Size() > 3 && da->Evaluate(3).Type() == kDataArray;
+        if (b) {
+            SetTokenFmtImp(da->ForceSym(2), da->Array(3), da, 4, false);
+        } else {
+            SetTokenFmtImp(da->ForceSym(2), 0, da, 3, false);
+        }
+    }
+    return 1;
+}
 
-DataNode UILabel::OnSetInt(DataArray const *da) { return DataNode(1); }
+DataNode UILabel::OnSetInt(DataArray const *da) {
+    int i = da->Int(2);
+    bool b = false;
+    if (da->Size() > 3)
+        b = da->Int(3) != 0;
+    SetInt(i, b);
+    return DataNode(1);
+}
 
 DataNode UILabel::OnSetTimeHMS(DataArray const *) { return NULL_OBJ; }
 

@@ -584,7 +584,9 @@ BEGIN_LOADS(HamMove)
     if (d.rev > 0x23) {
         for (int i = 0; i < kNumMoveRatings; i++) {
             d >> mThresholds[i];
-            d >> mOverrides[i];
+            if (d.rev > 0x2C) {
+                d >> mOverrides[i];
+            }
         }
     }
     if (d.rev > 0x2A) {
@@ -764,29 +766,28 @@ const FilterVersion *HamMove::FilterVer() const {
 }
 
 float HamMove::ConfusabilityWithMoveDataArray(const DataArray *a) {
-    float f7 = 0;
-    int i3 = 0;
-    float f6 = f7;
+    float maxConfuse = 0;
+    int count = 0;
+    float result = maxConfuse;
     int aSize = a->Size();
     for (int i = 0; i < aSize; i++) {
         HamMove *move = a->Obj<HamMove>(i);
         if (move != this) {
-            i3++;
-            float f5 = Confusability(move);
-            if (f5 > f6) {
-                if (f5 < 0.5f) {
-                    f6 = f5;
+            count++;
+            float confuse = Confusability(move);
+            if (confuse > result) {
+                if (confuse < 0.5f) {
+                    result = confuse;
                 } else {
-                    f6 = 0.5f;
+                    result = 0.5f;
                 }
             }
         }
     }
-    if (i3 == 0) {
-        return f7;
-    } else {
-        return f6;
+    if (count == 0) {
+        return maxConfuse;
     }
+    return result;
 }
 
 float HamMove::AdjustNormalizedPercentToConfusability(float f1, float f2) {

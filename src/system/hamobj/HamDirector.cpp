@@ -2125,7 +2125,7 @@ void HamDirector::Reteleport() {
         GetPropAnim(TheGameData->Player(0)->GetDifficulty(), "song.anim", false);
     PropKeys *propKeys = anim->GetKeys(this, DataArrayPtr(practice));
     int frameIdx = 0;
-    CharClip *clip = nullptr;
+    CharClip *clip;
     float endBeat;
     if (propKeys) {
         float frameTime = BeatToSeconds(beat) * 30.0f;

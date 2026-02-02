@@ -56,8 +56,10 @@ BEGIN_LOADS(FlowDistance)
     LOAD_SUPERCLASS(FlowNode)
     mObj1.LoadFromMainOrDir(bs);
     mObj2.LoadFromMainOrDir(bs);
+    d >> mPersistent;
     bs >> mDistance;
     d >> mPersistent;
+    bs >> mDistance;
     d >> mRunInRange;
     d >> mDriveIntensity;
 END_LOADS

@@ -98,8 +98,13 @@ void HamSongData::Load(const char *cc, const SongInfo *info, bool b3) {
     RELEASE(mMeasureMap);
     RELEASE(mBeatMap);
     mBeatMap = new BeatMap();
-    MidiParserMgr *mgr = TheMidiParserMgr;
-    MidiReceiver *rcvr = mgr ? mgr : (MidiReceiver *)this;
+    MidiReceiver *rcvr;
+    MidiReceiver *mgr = TheMidiParserMgr;
+    if (mgr) {
+        rcvr = mgr;
+    } else {
+        rcvr = (MidiReceiver *)this;
+    }
     mMidiReader = new MidiReader(*mStream, *rcvr, cc);
     if (b3) {
         while (!Poll())

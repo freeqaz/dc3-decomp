@@ -64,7 +64,7 @@ JsonObject *JsonConverter::LoadFromString(const String &str) {
     }
     printbuf_memappend(buf, str.c_str(), str.length());
     json_object *obj = json_tokener_parse(buf->buf);
-    if ((int)obj > 0xfffff060) { // json-c returns error codes as invalid pointers
+    if ((int)obj > 0xfffff060) { // ???
         printbuf_free(buf);
         return nullptr;
     }

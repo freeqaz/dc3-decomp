@@ -92,6 +92,7 @@ public:
 
 protected:
     CharEyes();
+    RndTransformable *GetHead();
     bool IsHeadIKWeightIncreasing();
     void ProceduralBlinkUpdate();
     void EnforceMinimumTargetDistance(const Vector3 &, const Vector3 &, Vector3 &);

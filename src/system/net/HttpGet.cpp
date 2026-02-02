@@ -93,23 +93,23 @@ void HttpGet::StartSending() {
     if (!mSocket->CanSend()) {
         mFailType = (HttpGetFailType)1;
         SetState((State)7);
+        return;
+    }
+    String str = "GET ";
+    str += unkc;
+    str += " ";
+    str += "HTTP/1.1";
+    if (!unk58.empty()) {
+        str += "\r\n";
+        str += unk58;
+    }
+    str += "\r\n\r\n";
+    int len = (int)str.length();
+    if (mSocket->Send(str.c_str(), len) != len) {
+        mFailType = (HttpGetFailType)1;
+        SetState((State)7);
     } else {
-        String str("GET ");
-        str += unkc;
-        str += " ";
-        str += "HTTP/1.1";
-        if (!unk58.empty()) {
-            str += "\r\n";
-            str += unk58;
-        }
-        str += "\r\n\r\n";
-        int len = str.length();
-        if (mSocket->Send(str.c_str(), len) != len) {
-            mFailType = (HttpGetFailType)1;
-            SetState((State)7);
-        } else {
-            SetState((State)3);
-        }
+        SetState((State)3);
     }
 }
 

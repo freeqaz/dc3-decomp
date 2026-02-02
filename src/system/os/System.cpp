@@ -259,7 +259,7 @@ void SetSystemLanguage(Symbol lang, bool cheats) {
         DataArray *langConfig = SystemConfig(system, language);
         DataArray *arr = langConfig->FindArray(defaultSym, false);
         if (arr != 0) {
-            Symbol arrLang = arr->Sym(1); // element 0 is the config key
+            Symbol arrLang = arr->Sym(1);  // Element 0 is the config key
             if (IsSupportedLanguage(arrLang, cheats)) {
                 lang = arrLang;
             } else {
@@ -279,6 +279,7 @@ void SetSystemLanguage(Symbol lang, bool cheats) {
         }
     }
 
+    // Only reinitialize locale if language is actually changing
     if (gSystemLanguage.Null() || lang == gSystemLanguage) {
         gSystemLanguage = lang;
     } else {

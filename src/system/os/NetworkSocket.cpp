@@ -8,9 +8,7 @@ extern int XNetDnsRelease(void *dns_info);
 extern void CloseHandle(int handle);
 extern void WaitForSingleObject(int handle, int timeout);
 
-// Forward declarations for merged functions and system functions
-extern const char *TheDebugStr();
-extern void PrintDebug(const char *str);
+NetworkSocket::~NetworkSocket() {}
 
 NetAddress NetworkSocket::SetIPPortFromHostPort(
     const char *host_port, const char *domain, unsigned short default_port

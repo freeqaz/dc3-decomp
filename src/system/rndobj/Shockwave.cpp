@@ -49,7 +49,7 @@ void RndShockwave::Save(BinStream &bs) {
 
 BEGIN_PROPSYNCS(RndShockwave)
     SYNC_PROP_SET(
-        selected, sSelected == this, sSelected = _val.Int() != 0 ? this : nullptr
+        selected, sSelected == this, if (_val.Int() != 0) sSelected = this; else if (sSelected == this) sSelected = nullptr
     )
     SYNC_PROP(auto_select, mAutoSelect)
     SYNC_PROP(radius, mRadius)
@@ -59,12 +59,6 @@ BEGIN_PROPSYNCS(RndShockwave)
     SYNC_SUPERCLASS(RndTransformable)
     SYNC_SUPERCLASS(Hmx::Object)
 END_PROPSYNCS
-
-BEGIN_HANDLERS(RndShockwave)
-    HANDLE_SUPERCLASS(RndPollable)
-    HANDLE_SUPERCLASS(RndTransformable)
-    HANDLE_SUPERCLASS(Hmx::Object)
-END_HANDLERS
 
 void RndShockwave::PrepareShader(float f1) {
     const Vector3 &v = WorldXfm().v;

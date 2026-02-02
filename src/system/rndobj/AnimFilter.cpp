@@ -45,8 +45,9 @@ float RndAnimFilter::EndFrame() {
     frameOff += mOffset;
 
     float ret = (mEnd - frameOff) / denom;
-    if (mType == kShuttle)
+    if (mType == kShuttle) {
         ret *= 2.0f;
+    }
     return ret;
 }
 

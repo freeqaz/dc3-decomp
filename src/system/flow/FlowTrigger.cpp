@@ -130,25 +130,23 @@ bool FlowTrigger::ActivateWithParams(Hmx::Object *o, DataArray *a) {
     if (mTriggerEvents.size() > 0) {
         if (mTriggerEvents.size() > 1) {
             sym = MakeString("Event:%s...", mTriggerEvents.front());
-            goto flow_event;
         } else {
             sym = MakeString("Event:%s", mTriggerEvents.front());
-            goto flow_event;
+        }
+    } else {
+        if (mTriggerProperties.size() != 0) {
+            PropTriggerDefn &defn = mTriggerProperties.front();
+            if (mTriggerProperties.size() > 1) {
+                sym = MakeString(
+                    "PropChange:%s->%s...", defn.mProvider->Name(), defn.GetPathDisplay(0)
+                );
+            } else {
+                sym = MakeString(
+                    "PropChange:%s->%s", defn.mProvider->Name(), defn.GetPathDisplay(0)
+                );
+            }
         }
     }
-    if (mTriggerProperties.size() > 0) {
-        PropTriggerDefn &defn = mTriggerProperties.front();
-        if (mTriggerProperties.size() > 1) {
-            sym = MakeString(
-                "PropChange:%s->%s...", defn.mProvider->Name(), defn.GetPathDisplay(0)
-            );
-        } else {
-            sym = MakeString(
-                "PropChange:%s->%s", defn.mProvider->Name(), defn.GetPathDisplay(0)
-            );
-        }
-    }
-flow_event:
     timer.Stop();
     TheFlowMgr->AddEventTime(sym, timer.Ms());
     return ret;

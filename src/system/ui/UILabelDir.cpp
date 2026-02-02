@@ -105,30 +105,30 @@ UIColor *UILabelDir::GetStateColor(UIComponent::State state) const {
     return c ? c : mDefaultColor;
 }
 
-DataNode UILabelDir::GetMatVariations(UILabelDir *pThis) {
-    s32 numVariations = 0;
-    s32 index = 0;
-    DataArray *pArray;
+DataNode UILabelDir::GetMatVariations(UILabelDir *pLabelDir) {
+    DataArray *pArr = nullptr;
+    int numVars = 0;
 
-    if (pThis != NULL) {
-        numVariations = pThis->NumMatVariations();
+    if (pLabelDir != NULL) {
+        numVars = *(int *)((char *)pLabelDir + 0x2bc);
     }
 
-    pArray = new DataArray(numVariations + 1);
+    pArr = new DataArray(numVars + 1);
+    if (pArr != NULL) {
+        pArr->Node(0) = DataNode();
 
-    DataNode node(pArray, kDataArray);
-    node = gNullStr;
-
-    for (index = 1; index <= numVariations; index++) {
-        Symbol sym = pThis->GetMatVariationName(index - 1);
-        DataNode node2(pArray, kDataArray);
-        node2 = sym;
+        int i = 1;
+        while (i <= numVars) {
+            Symbol varName = pLabelDir->GetMatVariationName(i - 1);
+            pArr->Node(i) = DataNode(varName);
+            i++;
+        }
     }
 
-    DataNode result(pArray, kDataArray);
-    pArray->Release();
+    DataNode ret(pArr, kDataArray);
+    pArr->Release();
 
-    return result;
+    return ret;
 }
 
 void UILabelDir::Init() {}

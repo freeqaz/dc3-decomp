@@ -54,12 +54,12 @@ DataNode HeldButtonPanel::OnMsg(const ProcessedButtonDownMsg &msg) {
     if (msg.IsHeldDown()) {
         // Button held for longer than threshold; forward as held button message
         static Symbol on_button_held("on_button_held");
-        static Message msgButtonHeld(on_button_held, 0, 0, 0, 0);
-        msgButtonHeld[0] = msg.GetUser();
-        msgButtonHeld[1] = msg.GetButton();
-        msgButtonHeld[2] = msg.GetAction();
-        msgButtonHeld[3] = msg.GetPadNum();
-        Handle(msgButtonHeld, false);
+        static Message heldMsg(on_button_held, 0, 0, 0, 0);
+        heldMsg[0] = msg.GetUser();
+        heldMsg[1] = msg.GetButton();
+        heldMsg[2] = msg.GetAction();
+        heldMsg[3] = msg.GetPadNum();
+        Handle(heldMsg, false);
     } else {
         // Button released or below hold threshold; forward as regular button down
         static ButtonDownMsg msgButtonDown(0, kPad_L2, kAction_None, 0);

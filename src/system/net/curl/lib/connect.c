@@ -243,7 +243,7 @@ static CURLcode bindlocal(struct connectdata *conn,
   struct sockaddr_in6 *si6 = (struct sockaddr_in6 *)&sa;
 #endif
 
-  struct Curl_dns_entry *h=NULL;
+  struct Curl_dns_entry *h = NULL;
   unsigned short port = data->set.localport; /* use this port number, 0 for
                                                 "random" */
   /* how many port numbers to try to bind to, increasing one at a time */
@@ -401,10 +401,10 @@ static CURLcode bindlocal(struct connectdata *conn,
       port++; /* try next port */
       /* We re-use/clobber the port variable here below */
       if(sock->sa_family == AF_INET)
-        si4->sin_port = ntohs(port);
+        si4->sin_port = htons(port);
 #ifdef ENABLE_IPV6
       else
-        si6->sin6_port = ntohs(port);
+        si6->sin6_port = htons(port);
 #endif
     }
     else

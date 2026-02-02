@@ -689,13 +689,8 @@ void HamNavList::SendHighlightSettledMsg(int i) {
     MILO_ASSERT(provider, 0x327);
 
     if (provider) {
-        bool canSel = provider->CanSelect(i);
-        bool isActive = provider->IsActive(i);
-
-        if (isActive) {
-            Symbol dataSym = provider->DataSymbol(i);
-            int idx = provider->DataIndex(Symbol());
-            // TODO: Send highlight settled message once NavHighlightSettledMsg is created
+        if (provider->IsActive(i)) {
+            // TODO: Send highlight settled message with data symbol and index
         }
     }
 }
@@ -744,9 +739,7 @@ void HamNavList::SendHighlightMsg(int i) {
         RealRefresh();
     UIListProvider *provider = mListState.Provider();
     MILO_ASSERT(provider, 0x339);
-    bool canSel = provider->CanSelect(i);
-    Symbol dataSym = provider->DataSymbol(i);
-    // TODO: Send highlight message once NavHighlightMsg is created
+    // TODO: Send highlight message with canSel and dataSym once NavHighlightMsg is created
 }
 
 int HamNavList::GetHighlightItem() const {

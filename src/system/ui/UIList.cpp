@@ -460,7 +460,119 @@ void UIList::Update() {
     }
 }
 
-DataNode UIList::OnMsg(const ButtonDownMsg &msg) { return NULL_OBJ; }
+DataNode UIList::OnMsg(const ButtonDownMsg &msg) {
+    mUser = msg.GetUser();
+    Symbol cntType = JoypadControllerTypePadNum(msg.GetPadNum());
+    bool bLeftyFlip = JoypadTypeHasLeftyFlip(cntType);
+    int gridspan = 0;
+    UIList *childList = 0;
+    UIListOrientation o = kUIListVertical;
+    bool b1 = false;
+    int scrollDir = 0;
+    int oldSelData = 0;
+    int oldNextFill = 0;
+
+    if (CanScroll()) {
+        gridspan = mListState.GridSpan();
+        childList = mListDir->SubList(mListState.SelectedDisplay(), mWidgets);
+        o = mListDir->Orientation();
+        b1 = false;
+
+        if (childList) {
+            if (childList->Handle(msg, false) != DataNode(kDataUnhandled, 0)) {
+                return 1;
+            }
+
+            scrollDir = ScrollDirection(
+                msg,
+                bLeftyFlip,
+                childList->GetUIListDir()->Orientation() == 0,
+                childList->GridSpan()
+            );
+            if ((scrollDir == 1
+                 && childList->SelectedData() == childList->NumProviderData() - 1)
+                || (scrollDir == -1 && childList->SelectedData() == 0)) {
+                o = childList->GetUIListDir()->Orientation();
+                b1 = true;
+            }
+        }
+
+        scrollDir = ScrollDirection(msg, bLeftyFlip, o == 0, gridspan);
+        if (scrollDir != 0) {
+            if (gridspan == 1 || (scrollDir != 1 && scrollDir != -1)
+                || ((scrollDir == 1 && (mListState.SelectedDisplay() + 1) % gridspan)
+                    || (scrollDir == -1 && mListState.SelectedDisplay() % gridspan))) {
+                oldSelData = SelectedData();
+                Scroll(scrollDir);
+                if (oldSelData == SelectedData() && !IsScrolling() && !mSelectToScroll) {
+                    return DataNode(kDataUnhandled, 0);
+                }
+
+                oldNextFill = UIListSubList::sNextFillSelection;
+                if (childList) {
+                    UIList *curChild = mListDir->SubList(mListState.SelectedDisplay(), mWidgets);
+                    bool b2 = false;
+                    if (curChild == childList) {
+                        int dispFill = scrollDir + mListState.SelectedDisplay();
+                        if (dispFill < 0 || dispFill >= NumDisplay())
+                            b2 = true;
+                        else {
+                            curChild = mListDir->SubList(dispFill, mWidgets);
+                        }
+                    }
+                    if (curChild) {
+                        if (b1) {
+                            if (scrollDir > 0)
+                                oldNextFill = 0;
+                            else if (b2)
+                                oldNextFill = 1000000;
+                            else
+                                oldNextFill = curChild->NumProviderData() - 1;
+                        } else {
+                            oldNextFill =
+                                Min(curChild->NumProviderData() - 1,
+                                    childList->SelectedData());
+                        }
+                        if (b2)
+                            UIListSubList::sNextFillSelection = oldNextFill;
+                        else
+                            curChild->SetSelectedSimulateScroll(oldNextFill);
+                    }
+                }
+
+                return 1;
+            }
+
+            return 1;
+        }
+
+        int pageDir = PageDirection(msg.GetAction());
+        if (pageDir != 0) {
+            if (mPaginate) {
+                mListState.PageScroll(pageDir);
+                return 1;
+            }
+        } else if (pageDir == 0) {
+            if (CatchNavAction(msg.GetAction()))
+                return 1;
+        }
+    }
+
+    if (!IsScrolling()) {
+        if (msg.GetAction() == kAction_Confirm) {
+            if (SelectScrollSelect(this, mUser))
+                return 1;
+            SendSelect(mUser);
+            return 1;
+        }
+        if (msg.GetAction() == kAction_Cancel) {
+            if (RevertScrollSelect(this, mUser, nullptr))
+                return 1;
+        }
+    }
+
+    return DataNode(kDataUnhandled, 0);
+}
 
 DataNode UIList::OnSetSelectedSimulateScroll(DataArray *da) {
     DataNode node = da->Evaluate(2);

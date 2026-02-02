@@ -87,7 +87,8 @@ void InterpVector(
         SplineTangent(keys, idx, v70);
         Vector3 v7c;
         Vector3 v88;
-        Scale(v70, ref + -(fsq * 2.0f - fcubed), v88);
+        float tmp0 = fcubed - fsq * 2.0f;
+        Scale(v70, ref + tmp0, v88);
         Add(vref, v88, vref);
         Scale(next->value, fcubed * -2.0f + fsq3, v88);
         Add(vref, v88, vref);

@@ -463,17 +463,17 @@ bool RndMat::IsEditable(Symbol s) {
 void RndMat::UpdatePropertiesFromMetaMat() {
     if (mMetaMaterial) {
         unk226 = true;
-        String overriddenProps;
-        std::list<Symbol> properties;
-        ListProperties(properties, "Mat", 0, nullptr, false);
-        for (std::list<Symbol>::iterator it = properties.begin(); it != properties.end(); ++it) {
+        String str70;
+        std::list<Symbol> syms78;
+        ListProperties(syms78, "Mat", 0, nullptr, false);
+        for (std::list<Symbol>::iterator it = syms78.begin(); it != syms78.end(); ++it) {
             static Symbol metamaterial("metamaterial");
             Symbol cur = *it;
             if (cur != metamaterial) {
-                MatPropEditAction action = GetMetaMatPropAction(
+                MatPropEditAction a = GetMetaMatPropAction(
                     (cur == "alpha_threshold") ? Symbol("alpha_cut") : cur
                 );
-                if ((action == kPropDefault || action == kPropForce)
+                if ((a == kPropDefault || a == kPropForce)
                     && PropValDifferent(cur, mMetaMaterial)) {
                     if (cur == "tex_xfm") {
                         mTexXfm = mMetaMaterial->TexXfm();
@@ -481,12 +481,12 @@ void RndMat::UpdatePropertiesFromMetaMat() {
                     } else {
                         SetProperty(cur, *mMetaMaterial->Property(cur, true));
                     }
-                    AddOverridePropName(overriddenProps, cur);
+                    AddOverridePropName(str70, cur);
                 }
             }
         }
-        if (!overriddenProps.empty())
-            overriddenProps += ".";
+        if (!str70.empty())
+            str70 += ".";
         unk226 = false;
     }
     mDirty |= 2;

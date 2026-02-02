@@ -16,7 +16,7 @@ struct _stati64 {
     __time64_t st_ctime;
 };
 
-struct _stat64 {
+struct __stat64 {
     _dev_t st_dev;
     _ino_t st_ino;
     unsigned short st_mode;
@@ -29,3 +29,6 @@ struct _stat64 {
     __time64_t st_mtime;
     __time64_t st_ctime;
 };
+
+int _stat64(const char *path, struct __stat64 *buffer);
+int _fstat64(int fd, struct __stat64 *buffer);

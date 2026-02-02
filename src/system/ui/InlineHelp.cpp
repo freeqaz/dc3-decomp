@@ -65,7 +65,7 @@ END_PROPSYNCS
 
 void InlineHelp::PostLoad(BinStream &bs) {
     bs.PopRev(this);
-    mResourceDir.PostLoad(nullptr);
+    mResourceDir.PostLoad(0);
     UIComponent::PostLoad(bs);
     Update();
 }

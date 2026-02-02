@@ -89,7 +89,19 @@ CharClipDriver::CharClipDriver(Hmx::Object *o, const CharClipDriver &driver)
         mNext = nullptr;
 }
 
-void CharClipDriver::ScaleAdd(CharBones &bones, float f) {}
+void CharClipDriver::ScaleAdd(CharBones &bones, float f) {
+    if (f != 0.0f) {
+        mWeight = f * EaseSigmoid(mBlendFrac, 0.0f, 0.0f);
+        bones.ScaleAdd(mClip, mWeight, mBeat, mDBeat);
+        if (mPlayMultipleClips) {
+            if (mNext)
+                mNext->ScaleAdd(bones, f);
+        } else {
+            if (mNext)
+                mNext->ScaleAdd(bones, f - mWeight);
+        }
+    }
+}
 
 void CharClipDriver::RotateTo(CharBones &bones, float f) {
     if (f != 0) {

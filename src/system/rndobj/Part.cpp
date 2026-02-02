@@ -54,8 +54,6 @@ BinStream &operator>>(BinStream &bs, RndParticle &p) {
     return bs;
 }
 
-RndParticleSys::Burst::Burst() : unk0(0), unk4(0), unk8(0), unkc(0) {}
-
 PartOverride::PartOverride()
     : mask(0), life(0), speed(0), deltaSize(0), startColor(0), midColor(0), endColor(0),
       pitch(0, 0), yaw(0, 0), mesh(0), box(Vector3(0, 0, 0), Vector3(0, 0, 0)) {}
@@ -758,20 +756,6 @@ void RndParticleSys::UpdateRelativeXfm() {
 
 void RndParticleSys::MoveParticles(float dt, float frameSpan) {}
 
-void RndParticleSys::CreateParticles(float frame, float frameSpan, const Transform &xfm) {
-    int numToCreate = (int)mEmitCount;
-    if (numToCreate <= 0 || mNumActive >= mMaxParticles)
-        return;
-
-    mEmitCount -= numToCreate;
-    for (int i = 0; i < numToCreate && mNumActive < mMaxParticles; i++) {
-        RndParticle *p = AllocParticle();
-        if (!p)
-            break;
-        InitParticle(frame, p, &xfm, gNoPartOverride);
-    }
-}
-
 void RndParticleSys::RunFastForward() {
     mNeedForward = false;
 
@@ -1042,20 +1026,73 @@ DataNode RndParticleSys::OnExplicitParts(const DataArray *da) {
     return 0;
 }
 
-bool RndParticleSys::MakeWorldSphere(Sphere &s, bool b2) {
-    if (b2) {
-        s.Zero();
-        for (RndParticle *p = mActiveParticles; p != nullptr; p = p->next) {
-            Sphere s38;
-            Multiply((const Vector3 &)p->pos, mRelativeXfm, s38.center);
-            s38.radius = p->size * 0.5f;
-            s.GrowToContain(s38);
+bool RndParticleSys::Burst::Set(float f1, float f2) {
+    if (f2 > 0) {
+        unk0 = f1;
+        unk4 = f2 * 0.5f;
+        unkc = f2;
+        unk8 = 1.0f / unk4;
+        return true;
+    } else
+        return false;
+}
+
+float RndParticleSys::Burst::Emit(float f1) {
+    unkc -= f1;
+    if (unkc < 0)
+        return -1;
+    float ret = unkc;
+    if (ret > unk4) {
+        ret = unk4 * 2.0f - ret;
+    }
+    ret *= unk8;
+    return ret * ret * 3.0f - ret * ret * ret * 2.0f * unk0 * f1;
+}
+
+float RndParticleSys::CheckBursts(float f1) {
+    if (f1 > 1)
+        f1 = 1;
+    float sum = 0;
+    for (std::vector<Burst>::iterator it = mBursts.begin(); it != mBursts.end();) {
+        float emit = it->Emit(f1);
+        if (emit < 0)
+            it = mBursts.erase(it);
+        else {
+            sum += emit;
+            ++it;
         }
-        return true;
     }
-    if (mSphere.GetRadius()) {
-        Multiply(mSphere, WorldXfm(), s);
-        return true;
+    if (mBursts.size() < mMaxBurst) {
+        mTimeTillBurst -= f1;
+        if (mTimeTillBurst <= 0) {
+            Burst burst;
+            if (burst.Set(
+                    RandomFloat(mBurstPeak.x, mBurstPeak.y),
+                    RandomFloat(mBurstLength.x, mBurstLength.y)
+                )) {
+                mBursts.push_back(burst);
+            }
+            mTimeTillBurst = RandomFloat(mBurstInterval.x, mBurstInterval.y);
+        }
     }
-    return false;
+    return sum;
+}
+
+void RndParticleSys::CreateParticles(float f1, float f2, const Transform &tf) {
+    if (f2 <= 0 || mNumActive >= mMaxParticles)
+        return;
+    else {
+        mEmitCount += f2 * RandomFloat(mEmitRate.x, mEmitRate.y);
+        mEmitCount += CheckBursts(f2) + (float)mExplicitParts;
+        mExplicitParts = 0;
+        while (mEmitCount >= 1.0f && mNumActive < mMaxParticles) {
+            RndParticle *p = AllocParticle();
+            if (!p) {
+                mEmitCount = 0;
+                return;
+            }
+            InitParticle(f1, p, &tf, gNoPartOverride);
+            mEmitCount -= 1.0f;
+        }
+    }
 }

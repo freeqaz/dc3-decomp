@@ -1,6 +1,7 @@
 #include "synth_xbox/FftIpp.h"
 #include "types.h"
 #include "utl/MemMgr.h"
+#include <cstdlib>
 
 extern void merged_827BD118(void *, void *);
 extern void CalculateSinCosTable(int, void *);

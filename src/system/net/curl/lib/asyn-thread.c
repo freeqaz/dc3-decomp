@@ -381,7 +381,7 @@ static bool init_resolve_thread(
 #endif
 
     if (!td->thread_hnd) {
-        err = errno;
+        err = *_errno();
         goto err_exit;
     }
 
