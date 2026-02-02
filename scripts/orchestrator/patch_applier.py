@@ -1,7 +1,7 @@
 """Auto-apply patches from agent worktrees to main repository.
 
-When an agent makes progress on a function (end_percent > start_percent),
-this module can automatically apply the patch to the main repo.
+When an agent works on a function, any non-error patches are applied to the
+main repo — even without match improvement, style/cleanup changes are valuable.
 """
 
 import logging
@@ -28,10 +28,17 @@ def clean_patch(patch: str) -> str:
     cleaned = []
     skip_until_next_diff = False
 
+    # Only allow patches to files in src/ and include/ directories
+    allowed_prefixes = ('diff --git a/src/', 'diff --git a/include/')
+
     for line in lines:
         if line.startswith('diff --git'):
-            # Check if this is a spurious file
-            if '.gitkeep' in line or '/orig/' in line or 'orig/373307D9' in line:
+            # Only keep changes to source/header files
+            if not any(line.startswith(p) for p in allowed_prefixes):
+                skip_until_next_diff = True
+                continue
+            # Also filter known spurious files within allowed dirs
+            if '.gitkeep' in line:
                 skip_until_next_diff = True
                 continue
             skip_until_next_diff = False
@@ -155,54 +162,14 @@ def apply_patch_to_main(
         patch_file.unlink(missing_ok=True)
 
 
-def should_apply_patch(
-    start_percent: float,
-    end_percent: float,
-    exit_status: str,
-    min_progress: float = 0.0,
-    require_improvement: bool = True,
-) -> tuple[bool, str]:
-    """Determine if a patch should be applied based on agent results.
-
-    Args:
-        start_percent: Match % before agent ran
-        end_percent: Match % after agent ran
-        exit_status: Agent's exit status (complete, at_limit, stuck, error)
-        min_progress: Minimum improvement required (default: any improvement)
-        require_improvement: If False, apply even without improvement
-
-    Returns:
-        Tuple of (should_apply: bool, reason: str)
-    """
-    # Don't apply if agent errored
-    if exit_status == "error":
-        return False, "Agent errored"
-
-    # Calculate improvement
-    improvement = end_percent - start_percent
-
-    # Check for progress
-    if require_improvement and improvement <= 0:
-        return False, f"No improvement ({start_percent}% -> {end_percent}%)"
-
-    # Check minimum threshold
-    if improvement < min_progress:
-        return False, f"Improvement {improvement:.1f}% below threshold {min_progress}%"
-
-    # Check if it's complete or made meaningful progress
-    if exit_status == "complete" or improvement >= min_progress:
-        return True, f"Progress: {start_percent:.1f}% -> {end_percent:.1f}% (+{improvement:.1f}%)"
-
-    return False, f"Status {exit_status} with {improvement:.1f}% improvement"
-
-
 class PatchApplier:
     """Manages automatic patch application from agent results.
 
+    All non-error patches are applied (style/cleanup changes are valuable).
+    Only patches from errored agents are skipped.
+
     Configuration options:
         - enabled: Whether auto-apply is on
-        - min_progress: Minimum improvement to trigger apply (default: 0 = any)
-        - require_improvement: Apply even without improvement? (default: True)
         - allow_partial: Apply partial patches on conflict (default: True)
     """
 
@@ -217,8 +184,6 @@ class PatchApplier:
         self.main_repo = Path(main_repo).resolve()
         self.patches_dir = self.main_repo / "generated-patches"
         self.enabled = enabled
-        self.min_progress = min_progress
-        self.require_improvement = require_improvement
         self.allow_partial = allow_partial
 
         # Stats
@@ -283,28 +248,28 @@ class PatchApplier:
                 "message": "No patch to apply",
             }
 
-        # Check if we should apply
-        should_apply, reason = should_apply_patch(
-            start_percent=start_percent,
-            end_percent=end_percent,
-            exit_status=exit_status,
-            min_progress=self.min_progress,
-            require_improvement=self.require_improvement,
-        )
-
-        if not should_apply:
+        # Don't apply patches from errored agents — code may be broken
+        if exit_status == "error":
             self.skipped_count += 1
-            logger.debug(f"Skipping patch for {symbol}: {reason}")
+            logger.debug(f"Skipping patch for {symbol}: agent errored")
             return {
                 "success": True,
                 "applied": False,
-                "message": f"Skipped: {reason}",
+                "message": "Skipped: Agent errored",
             }
+
+        # Determine reason for logging (improvement vs style-only)
+        improvement = end_percent - start_percent
+        if improvement > 0:
+            reason = f"Progress: {start_percent:.1f}% -> {end_percent:.1f}% (+{improvement:.1f}%)"
+        else:
+            reason = f"Style/cleanup changes ({start_percent:.1f}% -> {end_percent:.1f}%)"
 
         # Write patch file for review/tracking
         patch_path = self.write_patch_file(patch, symbol, end_percent)
 
-        # Apply the patch
+        # Always apply non-error patches — even without match improvement,
+        # refactor/style changes are valuable
         logger.info(f"Auto-applying patch for {symbol}: {reason}")
         result = apply_patch_to_main(
             patch=patch,

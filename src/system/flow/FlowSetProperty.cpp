@@ -273,10 +273,9 @@ BEGIN_SAVES(FlowSetProperty)
 END_SAVES
 
 void FlowSetProperty::OnAnimEvent(Symbol) {
-    FLOW_LOG("PropertyRampEnded");
+    FLOW_LOG("PropertyRampEnded\n");
     FLOW_LOG("Timed Release From Parent \n");
-    Timer t;
-    t.Reset();
+    unk_0xCC = nullptr;
 }
 
 void FlowSetProperty::Deactivate(bool b) {

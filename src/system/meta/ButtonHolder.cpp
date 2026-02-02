@@ -29,10 +29,7 @@ END_HANDLERS
 
 void ButtonHolder::Poll() {
     static Symbol on_button_held("on_button_held");
-    // Snapshot of current action records to track press state changes
     std::vector<ActionRec> recs = mActionRecs;
-
-    // Check each connected gamepad
     for (int i = 0; i < 4; i++) {
         if (JoypadIsConnectedPadNum(i)) {
             JoypadData *curPadData = JoypadGetPadData(i);
@@ -44,7 +41,6 @@ void ButtonHolder::Poll() {
                 );
                 PressRec &pressRec = it->GetPressRec(i);
                 if (curPadData->IsButtonInMask(pressRec.iRawButton)) {
-                    // Button is currently pressed - check if hold time threshold exceeded
                     if (pressRec.fPressTime > 0
                         && TheTaskMgr.UISeconds() - pressRec.fPressTime
                             >= it->mHoldTime) {
@@ -55,6 +51,7 @@ void ButtonHolder::Poll() {
                         msg[4] = 1;
                         mCallback->Handle(msg, true);
                         pressRec.fPressTime = -TheTaskMgr.UISeconds();
+                        goto out;
                     }
                 } else {
                     if (pressRec.fPressTime > 0) {
@@ -65,6 +62,7 @@ void ButtonHolder::Poll() {
                         msg[4] = 0;
                         mCallback->Handle(msg, true);
                         pressRec.fPressTime = 0;
+                        goto out;
                     }
                     if (pressRec.fPressTime < 0)
                         pressRec.fPressTime = 0;
@@ -72,6 +70,7 @@ void ButtonHolder::Poll() {
             }
         }
     }
+out:
     for (int i = 0; i < mActionRecs.size(); i++) {
         JoypadAction a = mActionRecs[i].mAction;
         auto it = std::find(recs.begin(), recs.end(), a);
@@ -84,7 +83,8 @@ void ButtonHolder::Poll() {
 void ButtonHolder::ClearHeldButtons() {
     std::vector<ActionRec> recs;
     for (int i = 0; i < mActionRecs.size(); i++) {
-        recs.push_back(ActionRec(mActionRecs[i].mAction, mActionRecs[i].mHoldTime, mUserMgr));
+        ActionRec rec(mActionRecs[i].mAction, mActionRecs[i].mHoldTime, mUserMgr);
+        recs.push_back(rec);
     }
     SetHoldActions(recs);
 }
@@ -126,7 +126,6 @@ ActionRec::ActionRec(JoypadAction act, float f, UserMgr *umgr)
     : mAction(act), mHoldTime(f) {
     std::vector<LocalUser *> uservec;
     umgr->GetLocalUsers(uservec);
-    // Initialize a press record for each connected user
     for (int i = 0; i < uservec.size(); i++) {
         mPresses.push_back(PressRec());
         mPresses[i].iUser = uservec[i];

@@ -254,6 +254,7 @@ class RB2DwarfDB:
         if self._conn is None:
             self._conn = sqlite3.connect(self.db_path)
             self._conn.row_factory = sqlite3.Row
+            self._conn.execute("PRAGMA journal_mode = WAL")
         return self._conn
 
     def build_from_parser(self, parser: RB2DwarfParser) -> dict[str, int]:

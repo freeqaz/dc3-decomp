@@ -51,8 +51,8 @@ private:
     void Load(const char *, const SongInfo *, bool);
     void PostLoad();
 
-    bool unk10;
-    const SongInfo *unk14;
+    bool unk10; // 0x10 - fully loaded?
+    const SongInfo *mSongInfo; // 0x14
     TempoMap *mTempoMap; // 0x18
     MeasureMap *mMeasureMap; // 0x1c
     BeatMap *mBeatMap; // 0x20

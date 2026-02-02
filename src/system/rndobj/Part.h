@@ -256,7 +256,7 @@ protected:
     void UpdateParticles();
     void UpdateRelativeXfm();
     void MoveParticles(float, float);
-    void CreateParticles(float, const Transform &);
+    void CreateParticles(float, float, const Transform &);
     void RunFastForward();
     void InitParticle(float, RndParticle *, const Transform *, PartOverride &);
 

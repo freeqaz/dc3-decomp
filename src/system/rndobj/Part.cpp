@@ -754,11 +754,9 @@ void RndParticleSys::UpdateRelativeXfm() {
     }
 }
 
-void RndParticleSys::MoveParticles(float dt, float frameSpan) {
-    // Stub function for now - complexity deferred
-}
+void RndParticleSys::MoveParticles(float dt, float frameSpan) {}
 
-void RndParticleSys::CreateParticles(float frame, const Transform &xfm) {
+void RndParticleSys::CreateParticles(float frame, float frameSpan, const Transform &xfm) {
     int numToCreate = (int)mEmitCount;
     if (numToCreate <= 0 || mNumActive >= mMaxParticles)
         return;
@@ -773,15 +771,23 @@ void RndParticleSys::CreateParticles(float frame, const Transform &xfm) {
 }
 
 void RndParticleSys::RunFastForward() {
-    if (mNeedForward == false) {
-        return;
-    }
-
     mNeedForward = false;
 
-    float frame = CalcFrame();
-    if (mFrameDrive == false) {
-        unk138 = frame;
+    float avgRate = (mEmitRate.x + mEmitRate.y) * 0.5f;
+    if (0.0001f > avgRate)
+        return;
+
+    float step = 1.0f / avgRate;
+    float duration = Min(step * (float)mMaxParticles, (mLife.x + mLife.y) * 0.5f);
+    step = Max(1.0f, step);
+    float curFrame = CalcFrame();
+
+    Transform locToRel;
+    MakeLocToRel(locToRel);
+
+    for (float t = curFrame - duration; t <= curFrame; t += step) {
+        MoveParticles(t, step);
+        CreateParticles(t, step, locToRel);
     }
 }
 
@@ -846,15 +852,15 @@ void RndParticleSys::UpdateParticles() {
                         f32 invSamples = 1.0f / (f32)mSubSamples;
                         for (int i = 1; i < mSubSamples; i++) {
                             f32 interpT = (f32)i * invSamples;
-                            CreateParticles(currentFrame, mRelativeXfm);
+                            CreateParticles(currentFrame, frameUpdate, mRelativeXfm);
                             Vector3 interpOffset;
                             Interp(unk2b4, baseVel, interpT, interpOffset);
                         }
                     } else {
-                        CreateParticles(currentFrame, mRelativeXfm);
+                        CreateParticles(currentFrame, frameUpdate, mRelativeXfm);
                     }
                 } else {
-                    CreateParticles(currentFrame, mRelativeXfm);
+                    CreateParticles(currentFrame, frameUpdate, mRelativeXfm);
                 }
             }
         }

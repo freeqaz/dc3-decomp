@@ -66,9 +66,7 @@ AsyncFile *AsyncFile::New(const char *cc, int i) {
             result->Init();
             return result;
         }
-    }
-
-    if (!UsingCD() && !FileIsLocal(cc)) {
+    } else if (!UsingCD() && !FileIsLocal(cc)) {
         char buf[256];
         if (HolmesClientCacheFile(buf, cc)) {
             AsyncFile *result = new AsyncFileHolmes(buf, i);
@@ -133,26 +131,23 @@ bool AsyncFile::WriteAsync(const void *v, int i) {
     if (!mBuffer) {
         _WriteAsync(v, i);
     } else {
-        while (true) {
+        int remaining = i;
+        while ((mOffset + remaining) > gBufferSize) {
             int size = gBufferSize - mOffset;
-            if ((unsigned)i > (unsigned)size) {
-                memcpy(mBuffer + mOffset, v, size);
-                mOffset = gBufferSize;
-                v = (void *)((int)v + size);
-                mTell += size;
-                Flush();
-                if (mFail)
-                    return false;
-                i -= size;
-            } else {
-                memcpy(mBuffer + mOffset, v, i);
-                mTell += i;
-                mOffset += i;
-                if (mTell > mSize)
-                    mSize = mTell;
-                break;
-            }
+            memcpy(mBuffer + mOffset, v, size);
+            mOffset = gBufferSize;
+            v = (void *)((int)v + size);
+            mTell += size;
+            Flush();
+            if (mFail)
+                return false;
+            remaining -= size;
         }
+        memcpy(mBuffer + mOffset, v, remaining);
+        mTell += remaining;
+        mOffset += remaining;
+        if (mTell > mSize)
+            mSize = mTell;
     }
     return i != 0;
 }
@@ -165,7 +160,6 @@ int AsyncFile::Seek(int i, int j) {
             Flush();
         else
             MILO_ASSERT(!mBytesLeft, 0x1CA);
-        // stuff in between
         _SeekToTell();
         if (mBuffer && (mMode & FILE_OPEN_READ)) {
             mOffset = gBufferSize;

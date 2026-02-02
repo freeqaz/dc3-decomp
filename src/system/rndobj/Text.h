@@ -70,6 +70,8 @@ public:
               mFontColor(1, 1, 1), mItalics(0), mKerning(0), mZOffset(0), mFont(owner),
               mBlacklight(false) {}
 
+        Style(const Style &s);
+
         Style &operator=(const Style &s) {
             mFont = s.mFont;
             mBlacklight = s.mBlacklight;

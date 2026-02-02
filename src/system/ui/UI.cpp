@@ -286,11 +286,11 @@ bool UIManager::BlockHandlerDuringTransition(Symbol s, DataArray *da) { return f
 
 void UIManager::GotoScreenImpl(UIScreen *scr, bool b1, bool b2) {
     if (b1 || mTransitionState != kTransitionNone
-        || mCurrentScreen != scr
-            && (mTransitionState != kTransitionTo && mTransitionState != kTransitionPop)
+        || mCurrentScreen != scr && (mTransitionState != kTransitionTo && mTransitionState != kTransitionPop)
         || mTransitionScreen != scr) {
         CancelTransition();
 
+#ifdef MILO_DEBUG
         if (scr) {
             for (std::vector<UIScreen *>::iterator it = mPushedScreens.begin();
                  it != mPushedScreens.end();
@@ -300,10 +300,11 @@ void UIManager::GotoScreenImpl(UIScreen *scr, bool b1, bool b2) {
                 }
             }
         }
+#endif
 
         mWentBack = b2;
-        // UIScreenChangeMsg msg(scr, mCurrentScreen, mWentBack);
-        // Handle(msg, false);
+        UIScreenChangeMsg msg(scr, mCurrentScreen, mWentBack);
+        Handle(msg, false);
         mTransitionState = kTransitionTo;
         mTransitionScreen = scr;
         if (mCurrentScreen)
@@ -311,10 +312,12 @@ void UIManager::GotoScreenImpl(UIScreen *scr, bool b1, bool b2) {
         else if (scr)
             scr->LoadPanels();
 
+#ifdef MILO_DEBUG
         if (mTransitionScreen) {
             mOverlay->CurrentLine() = gNullStr;
             mLoadTimer.Restart();
         }
+#endif
     }
 }
 

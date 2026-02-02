@@ -1066,8 +1066,16 @@ Focus on readability and maintainability while preserving exact behavior and mat
                 print(f"Modified files: {len(summary['modified_files'])}")
             # Show auto-apply stats if enabled
             apply_stats = summary["auto_apply_stats"]
-            if apply_stats["applied"] > 0 or apply_stats["failed"] > 0:
-                print(f"Auto-applied: {apply_stats['applied']} patches ({apply_stats['skipped']} skipped, {apply_stats['failed']} failed)")
+            if apply_stats["applied"] > 0 or apply_stats["failed"] > 0 or apply_stats["skipped"] > 0:
+                parts = [f"Auto-applied: {apply_stats['applied']} patches"]
+                extra = []
+                if apply_stats["skipped"] > 0:
+                    extra.append(f"{apply_stats['skipped']} skipped (errors)")
+                if apply_stats["failed"] > 0:
+                    extra.append(f"{apply_stats['failed']} failed")
+                if extra:
+                    parts.append(f"({', '.join(extra)})")
+                print(" ".join(parts))
             print(f"{'='*60}\n")
 
         return summary
@@ -1229,8 +1237,16 @@ Focus on readability and maintainability while preserving exact behavior and mat
             if summary.get("modified_files"):
                 print(f"Modified files: {len(summary['modified_files'])}")
             apply_stats = summary["auto_apply_stats"]
-            if apply_stats["applied"] > 0 or apply_stats["failed"] > 0:
-                print(f"Auto-applied: {apply_stats['applied']} patches ({apply_stats['skipped']} skipped, {apply_stats['failed']} failed)")
+            if apply_stats["applied"] > 0 or apply_stats["failed"] > 0 or apply_stats["skipped"] > 0:
+                parts = [f"Auto-applied: {apply_stats['applied']} patches"]
+                extra = []
+                if apply_stats["skipped"] > 0:
+                    extra.append(f"{apply_stats['skipped']} skipped (errors)")
+                if apply_stats["failed"] > 0:
+                    extra.append(f"{apply_stats['failed']} failed")
+                if extra:
+                    parts.append(f"({', '.join(extra)})")
+                print(" ".join(parts))
             print(f"{'='*60}\n")
 
         return summary

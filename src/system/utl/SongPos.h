@@ -12,6 +12,9 @@ private:
 public:
     SongPos()
         : mTotalTick(0), mTotalBeat(0), mPhrase(0), mMeasure(0), mBeat(0), mTick(0) {}
+    SongPos(float totalTick, float totalBeat, int phrase, int measure, int beat, int tick)
+        : mTotalTick(totalTick), mTotalBeat(totalBeat), mPhrase(phrase), mMeasure(measure),
+          mBeat(beat), mTick(tick) {}
     float GetTotalTick() const { return mTotalTick; }
     float GetTotalBeat() const { return mTotalBeat; }
     int GetMeasure() const { return mMeasure; }

@@ -15,7 +15,38 @@ namespace {
     int LineLength(char *, int) { return 1; }
     bool StrIStartsWith(String const &, const char *) { return false; }
     char *ParseHeader(char *, int, std::vector<String> *) { return 0; }
-    unsigned int ParseStatusCode(std::vector<String> const &) { return 1; }
+
+    unsigned int ParseStatusCode(std::vector<String> const &lines) {
+        String status;
+
+        if ((StrIStartsWith(lines[0], "HTTP/1.0") == 0) && (StrIStartsWith(lines[0], "HTTP/1.1") == 0)) {
+            return 0;
+        }
+
+        const char *ptr = lines[0].c_str();
+        ptr += 8;
+
+        char c = *ptr;
+        while (((c < '0') || (c > '9')) && (c != '\0') && (c != '\n')) {
+            ptr++;
+            c = *ptr;
+        }
+
+        if (c >= '0') {
+            do {
+                status += c;
+                ptr++;
+                c = *ptr;
+            } while ((c >= '0') && (c <= '9'));
+        }
+
+        if (status.c_str()[0] == '\0') {
+            return 0;
+        }
+
+        return atoi(status.c_str());
+    }
+
     int GetContentLength(std::vector<String> const &) { return 1; }
 };
 

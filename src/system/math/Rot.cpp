@@ -305,17 +305,11 @@ void IdentityInterp(const Hmx::Quat &qin, float f, Hmx::Quat &qout) {
 
 void Nlerp(const Hmx::Quat &q1, const Hmx::Quat &q2, float f, Hmx::Quat &qout) {
     if (f == 0.0f) {
-        qout.x = q1.x;
-        qout.y = q1.y;
-        qout.z = q1.z;
-        qout.w = q1.w;
+        memcpy(&qout, &q1, sizeof(Hmx::Quat));
         return;
     }
     if (f == 1.0f) {
-        qout.x = q2.x;
-        qout.y = q2.y;
-        qout.z = q2.z;
-        qout.w = q2.w;
+        memcpy(&qout, &q2, sizeof(Hmx::Quat));
         return;
     }
     float dot = q1.x * q2.x;

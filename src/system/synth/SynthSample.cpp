@@ -60,6 +60,12 @@ END_CUSTOM_PROPSYNC
 SynthSample::SynthSample() {}
 
 SynthSample::~SynthSample() {
+    while (!mSampleInsts.empty()) {
+        SampleInst *inst = mSampleInsts.front();
+        mSampleInsts.pop_front();
+        delete inst;
+    }
+
     if (sLoading == this) {
         RELEASE(sLoader);
         sLoading = nullptr;

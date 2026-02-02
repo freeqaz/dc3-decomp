@@ -83,6 +83,11 @@ BEGIN_PROPSYNCS(RndText)
     SYNC_SUPERCLASS(Hmx::Object)
 END_PROPSYNCS
 
+RndText::Style::Style(const Style &s) : mFont(s.mFont) {
+    memcpy(this, &s, 0x34);
+    mBlacklight = s.mBlacklight;
+}
+
 BinStream &operator<<(BinStream &bs, const RndText::Style &s) {
     bs << s.mFont;
     bs << s.mSize;

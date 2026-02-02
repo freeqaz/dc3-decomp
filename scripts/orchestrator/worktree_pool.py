@@ -428,9 +428,9 @@ class WorktreePool:
                     check=True,
                 )
 
-            # Now get the full diff (includes both modifications and new files)
+            # Now get the diff for source files only (excludes function_analysis/, symlinks, etc.)
             result = subprocess.run(
-                ["git", "diff", "HEAD"],
+                ["git", "diff", "HEAD", "--", "src/", "include/"],
                 cwd=worktree_path,
                 capture_output=True,
                 text=True,

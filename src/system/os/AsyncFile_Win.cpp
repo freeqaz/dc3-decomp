@@ -43,107 +43,100 @@ void AsyncFileWin::_OpenAsync() {
     mSize = 0;
     if (gFakeFileErrors) {
         SetLastError(0x20000002);
-    } else {
-        unk34 = 0x800;
-        mode = mMode;
-        modeCheck = (mode & 0x7fffe) & (mode & 0x40002);
-        if (modeCheck == 0) {
-            fd =
-                _open(mFilename.c_str(), (mode & 0xfffffffd) | 0x8000, 0x180);
-            mFd = fd;
-            openError = ((unsigned int)fd) >> 31;
-            mFail = openError;
-            if (openError != 0)
-                return;
-            mSize = _lseeki64(fd, 0, 2);
-            if (!(mode & 8)) {
-                _lseek((int)mFd, 0, 0);
-            }
-            return;
-        }
-        if (mMode & 2) {
-            dwDesiredAccess = 0x80000000;
-            dwCreationDisposition = 3;
-        } else {
-            if (mMode & 0x200) {
-                dwDesiredAccess = 0x40000000;
-                dwCreationDisposition = 2;
-            } else {
-                dwDesiredAccess = 0x40000000;
-                dwCreationDisposition = (((mMode & 0x100) == 0) ? 1 : 0) + 3;
-            }
-        }
-        mFile = CreateFileA(
-            mFilename.c_str(),
-            dwDesiredAccess,
-            3,
-            nullptr,
-            dwCreationDisposition,
-            0x60000000,
-            nullptr
-        );
-        if (mFile == (HANDLE)-1) {
-            err = GetLastError();
-            if ((err != 2) && (err != 3) && (err != 0x15)) {
-                ReadError(mFilename.c_str());
-            }
-        } else {
-            mFail = false;
-            mSize = GetFileSize(mFile, nullptr);
-            return;
-        }
+        mFail = true;
+        return;
     }
-    mFail = true;
+    unk34 = 0x800;
+    mode = mMode;
+    modeCheck = (mode & 0x7fffe) & (mode & 0x40002);
+    if (modeCheck == 0) {
+        fd = _open(mFilename.c_str(), (mode & 0xfffffffd) | 0x8000, 0x180);
+        mFd = fd;
+        openError = ((unsigned int)fd) >> 31;
+        mFail = openError;
+        if (openError != 0)
+            return;
+        mSize = _lseeki64(fd, 0, 2);
+        if (!(mode & 8)) {
+            _lseek((int)mFd, 0, 0);
+        }
+        return;
+    }
+    if (mMode & 2) {
+        dwDesiredAccess = 0x80000000;
+        dwCreationDisposition = 3;
+    } else if (mMode & 0x200) {
+        dwDesiredAccess = 0x40000000;
+        dwCreationDisposition = 2;
+    } else {
+        dwCreationDisposition = 3 + (((mMode & 0x100) == 0) ? 1 : 0);
+        dwDesiredAccess = 0x40000000;
+    }
+    mFile = CreateFileA(
+        mFilename.c_str(),
+        dwDesiredAccess,
+        3,
+        nullptr,
+        dwCreationDisposition,
+        0x60000000,
+        nullptr
+    );
+    if (mFile == (HANDLE)-1) {
+        err = GetLastError();
+        // Ignore file-not-found (2), path-not-found (3), not-ready (0x15)
+        if ((err != 2) && (err != 3) && (err != 0x15)) {
+            ReadError(mFilename.c_str());
+        }
+        mFail = true;
+        return;
+    }
+    mFail = false;
+    mSize = GetFileSize(mFile, nullptr);
 }
 
 bool AsyncFileWin::_WriteDone() {
     if (!mWriteInProgress) {
         return true;
-    } else {
-        if (mOverlapped.Internal != 0x103) {
-            mWriteInProgress = false;
-            DWORD bytesWritten;
-            if (GetOverlappedResult(mFile, &mOverlapped, &bytesWritten, false)) {
-                return true;
-            }
-            mFail = true;
-        }
-        return false;
     }
+    if (mOverlapped.Internal != 0x103) { // STATUS_PENDING
+        mWriteInProgress = false;
+        DWORD bytesWritten; // required out param, value unused
+        if (GetOverlappedResult(mFile, &mOverlapped, &bytesWritten, false)) {
+            return true;
+        }
+        mFail = true;
+    }
+    return false;
 }
 
 void AsyncFileWin::_SeekToTell() {
-    if (!(mMode & FILE_OPEN_READ)) {
+    if (!(mMode & FILE_OPEN_READ)) { // write mode
         if (mFd >= 0) {
             if (_lseek(mFd, mTell, 0) < 0) {
                 mFail = true;
             }
         } else {
-            // Wait for pending write operation to complete
             while (!_WriteDone())
                 ;
         }
-    } else {
-        // Wait for pending read operation to complete
+    } else { // read mode
         while (!_ReadDone())
             ;
     }
 }
 
 void AsyncFileWin::_Close() {
-    if (mMode & FILE_OPEN_READ) {
+    if (mMode & FILE_OPEN_READ) { // read mode
         if (mFile == INVALID_HANDLE_VALUE)
             return;
-        // Wait for pending read operation to complete
         while (!_ReadDone())
             ;
-    } else {
+    } else { // write mode
         if (mFd >= 0) {
             _close(mFd);
         }
         if (mFile == INVALID_HANDLE_VALUE)
             return;
-        // Wait for pending write operation to complete
         while (!_WriteDone())
             ;
     }

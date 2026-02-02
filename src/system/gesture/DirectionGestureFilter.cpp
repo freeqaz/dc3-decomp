@@ -70,21 +70,17 @@ void DirectionGestureFilterSingleUser::Update(const Skeleton &skeleton, int elap
 
 void DirectionGestureFilterSingleUser::Draw(const Skeleton &skeleton, SkeletonViz &viz) {
     mArcDetector.Draw(skeleton, viz);
+    bool valid = IsValidSwipePosition(skeleton);
     viz.DrawPoint3D(
         skeleton.HandJoint(unk4).mJointPos[0],
         0.1f,
-        IsValidSwipePosition(skeleton) ? Hmx::Color(0, 1, 0) : Hmx::Color(1, 0, 0),
+        valid ? Hmx::Color(0, 1, 0) : Hmx::Color(1, 0, 0),
         0.2f
     );
     if (sLastSwipeTime[skeleton.SkeletonIndex()] + unk20 > TheTaskMgr.UISeconds()
         && sLastSwipeTime[skeleton.SkeletonIndex()] < TheTaskMgr.UISeconds()) {
-        viz.DrawPoint3D(
-            skeleton.HandJoint(unk4).mJointPos[0],
-            0.1f,
-            // FIXME: I need to be able to reuse the color from the first DrawPoint3D call
-            IsValidSwipePosition(skeleton) ? Hmx::Color(0, 1, 0) : Hmx::Color(1, 0, 0),
-            0.2f
-        );
+        const Vector3 &pos = skeleton.HandJoint(unk4).mJointPos[0];
+        viz.DrawPoint3D(pos, 0.1f, Hmx::Color(0, 1, 0), 0.2f);
     }
 }
 
@@ -131,25 +127,27 @@ bool DirectionGestureFilterSingleUser::IsValidSwipePosition(const Skeleton &skel
     float handY = handPos.y;
     float handZ = handPos.z;
 
-    float otherX = *((float*)(&skeleton) + 0x3B);
-    float otherY = *((float*)(&skeleton) + 0x3C);
-    float otherZ = *((float*)(&skeleton) + 0x3D);
+    // ShoulderCenter camera-space position (raw offset into mTrackedJoints)
+    float shoulderX = *((float*)(&skeleton) + 0x3B);
+    float shoulderY = *((float*)(&skeleton) + 0x3C);
+    float shoulderZ = *((float*)(&skeleton) + 0x3D);
 
-    float deltaX = handX - otherX;
-    float deltaY = handY - otherY;
-    float deltaZ = handZ - otherZ;
+    float deltaX = handX - shoulderX;
+    float deltaY = handY - shoulderY;
+    float deltaZ = handZ - shoulderZ;
 
     Vector3 corner1, corner2;
-    corner1.x = otherX - deltaX;
+    corner1.x = shoulderX - deltaX;
     corner2.x = handX + deltaX;
-    corner1.y = otherY - deltaY;
+    corner1.y = shoulderY - deltaY;
     corner2.y = handY + deltaY;
-    corner1.z = otherZ - deltaZ;
+    corner1.z = shoulderZ - deltaZ;
     corner2.z = handZ + deltaZ;
 
     Vector3 closest;
     ClosestPoint(corner1, corner2, handPos, &closest);
 
+    // HipRight - HipLeft (raw offset into mTrackedJoints)
     Vector3 direction;
     direction.x = *((float*)(&skeleton) + 0x1B4) - *((float*)(&skeleton) + 0x15D);
     direction.y = *((float*)(&skeleton) + 0x1B5) - *((float*)(&skeleton) + 0x15E);
@@ -166,14 +164,8 @@ bool DirectionGestureFilterSingleUser::IsValidSwipePosition(const Skeleton &skel
     float rotY = closest.x * s1;
     rotY -= closest.y * s2;
 
-    float height, width;
-    if (mEngaged) {
-        height = 0.15f;
-        width = 0.15f;
-    } else {
-        height = 0.15f;
-        width = 0.15f;
-    }
+    float height = 0.15f;
+    float width = 0.15f;
 
     float ellipseTest = ((rotX * rotX) / (height * height)) + ((rotY * rotY) / (width * width));
 
@@ -183,11 +175,7 @@ bool DirectionGestureFilterSingleUser::IsValidSwipePosition(const Skeleton &skel
 
     if ((!mAllowAboveShoulder) || mHighButtonMode) {
         float yTest = skeleton.HandJoint(unk4).mJointPos[0].y - *((float*)(&skeleton) + 0x3C);
-        if (mHighButtonMode) {
-            if (yTest < 0.0f) {
-                return 0;
-            }
-        } else {
+        if ((mHighButtonMode && yTest < 0.0f) || (!mHighButtonMode && yTest > 0.0f)) {
             return 0;
         }
     }
