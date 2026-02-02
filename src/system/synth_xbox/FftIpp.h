@@ -1,5 +1,21 @@
 #pragma once
 
+#include "utl/MemMgr.h"
+
+struct IppBuf {
+    unsigned int mBegin;
+    unsigned int mEnd;
+    unsigned int mCap;
+    IppBuf() : mBegin(0), mEnd(0), mCap(0) {}
+    ~IppBuf() {
+        void *&p = (void *&)mBegin;
+        if (p) {
+            void *temp = p;
+            MemFree(temp);
+        }
+    }
+};
+
 class FftIpp {
 public:
     void FftRealCcs(unsigned int *, volatile float &, unsigned int *, float &);
@@ -11,19 +27,9 @@ public:
 
     int unk0;
     int unk4;
-    unsigned int unk8;
-    unsigned int unkc;
-    unsigned int unk10;
-    unsigned int unk14;
-    unsigned int unk18;
-    unsigned int unk1c;
-    unsigned int unk20;
-    unsigned int unk24;
-    unsigned int unk28;
-    unsigned int unk2c;
-    unsigned int unk30;
-    unsigned int unk34;
-    unsigned int unk38;
-    unsigned int unk3c;
-    int unk40;
+    IppBuf mBuf1;   // 0x08
+    IppBuf mBuf2;   // 0x14
+    IppBuf mBuf3;   // 0x20
+    IppBuf mBuf4;   // 0x2C
+    IppBuf mSinCos; // 0x38
 };
