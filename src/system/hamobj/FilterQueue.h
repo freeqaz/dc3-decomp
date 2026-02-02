@@ -31,10 +31,11 @@ public:
     };
 
     FilterQueue();
+    ~FilterQueue();
 
-    bool GetResults(float &, DetectFrame **, float);
-    void EnqueueNewJob(float, float, MoveMode);
-    void EnqueueFrame(int, float, float, DetectFrame *, const FilterVersion *);
+    bool GetResults(float &outValue, DetectFrame **frames, float unused);
+    void EnqueueNewJob(float outValue, float duration, MoveMode mode);
+    void EnqueueFrame(int frameNumber, float f2, float f3, DetectFrame *df, const FilterVersion *fv);
     bool IsJobFinished() const;
     float LastPollMs() const;
     bool HasJob() const;
@@ -46,10 +47,10 @@ private:
     float unk0;
     MoveMode unk4;
     float unk8;
-    std::vector<FilterInputFrame> qframes; // 0xc
+    std::vector<FilterInputFrame> mQueuedFrames; // 0xc
     float unk18;
     MoveMode unk1c;
-    std::vector<FilterOutputFrame> oframes; // 0x20
-    bool jobFinished; // 0x2c
-    float lastPollMs; // 0x30
+    std::vector<FilterOutputFrame> mOutputFrames; // 0x20
+    bool mJobFinished; // 0x2c
+    float mLastPollMs; // 0x30
 };

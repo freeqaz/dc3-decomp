@@ -559,19 +559,23 @@ void MoveMgr::LoadRoutineVariants(const DataArray *a) {
 }
 
 HamMove *MoveMgr::FindHamMoveFromName(Symbol name) const {
-    if (name == Symbol("") && TheHamDirector->GetMoveDir()) {
-        HamMove *move = TheHamDirector->GetMoveDir()->Find<HamMove>(name.Str(), false);
-        if (!move) {
-            move = TheHamDirector->MergerDir()->Find<HamMove>(name.Str(), false);
-            if (!move) {
-                MILO_NOTIFY(
-                    "MoveMgr::FindHamMoveFromName couldn't find a move for %s", name
-                );
-            }
-        }
-        return move;
+    if (name == Symbol("")) {
+        return nullptr;
     }
-    return nullptr;
+    MoveDir *moveDir = TheHamDirector->GetMoveDir();
+    if ((unsigned int)moveDir <= 0) {
+        return nullptr;
+    }
+    HamMove *move = moveDir->Find<HamMove>(name.Str(), false);
+    if (!move) {
+        move = TheHamDirector->MergerDir()->Find<HamMove>(name.Str(), false);
+        if (!move) {
+            MILO_NOTIFY(
+                "MoveMgr::FindHamMoveFromName couldn't find a move for %s", name
+            );
+        }
+    }
+    return move;
 }
 
 CharClip *MoveMgr::FindCharClip(Symbol name) const {

@@ -10,6 +10,8 @@
 class CharSignalApplier : public CharPollable, public CharWeightable {
 public:
     struct BoneOp {
+        BoneOp() {}
+        BoneOp(Hmx::Object *) {}  // Used by ObjVector::resize()
         char data[0x24];
     };
 
@@ -29,16 +31,16 @@ public:
     OBJ_MEM_OVERLOAD(0x19)
     NEW_OBJ(CharSignalApplier);
 
-    float unk28;
-    float unk2c;
-    float unk30;
-    bool unk34;
-    float unk38;
-    float unk3c;
-    ObjVector<CharSignalApplier::BoneOp> unk40;
-
 protected:
     CharSignalApplier();
+
+    float mSignal; // 0x28 - current signal value
+    float mSignalMin; // 0x2c
+    float mSignalMax; // 0x30
+    bool mDoSmoothing; // 0x34
+    float mSmoothIncrement; // 0x38
+    float mSmoothedSignal; // 0x3c
+    ObjVector<CharSignalApplier::BoneOp> mBoneOps; // 0x40
 };
 
 bool PropSync(CharSignalApplier::BoneOp &, DataNode &, DataArray *, int, PropOp);

@@ -1,5 +1,5 @@
 #include "ui/LabelShrinkWrapper.h"
-#include "UIComponent.h"
+#include "ui/UIComponent.h"
 #include "macros.h"
 #include "obj/Data.h"
 #include "obj/Dir.h"
@@ -81,7 +81,7 @@ void LabelShrinkWrapper::PreLoad(BinStream &bs) {
 
 void LabelShrinkWrapper::PostLoad(BinStream &bs) {
     bs.PopRev(this);
-    // mResourceDir->PostLoad(bs);  fix this line later ig
+    mResourceDir.PostLoad(nullptr);
     UIComponent::PostLoad(bs);
     Update();
 }

@@ -1,5 +1,5 @@
 #include "net/JsonUtils.h"
-#include "json-c/json_object_private.h"
+#include "net/json-c/json_object_private.h"
 #include "net/json-c/json_object.h"
 #include "net/json-c/json_tokener.h"
 #include "net/json-c/linkhash.h"
@@ -64,7 +64,7 @@ JsonObject *JsonConverter::LoadFromString(const String &str) {
     }
     printbuf_memappend(buf, str.c_str(), str.length());
     json_object *obj = json_tokener_parse(buf->buf);
-    if ((int)obj > 0xfffff060) { // ???
+    if ((int)obj > 0xfffff060) { // json-c returns error codes as invalid pointers
         printbuf_free(buf);
         return nullptr;
     }
@@ -91,21 +91,19 @@ const char *JsonConverter::Str(JsonArray *j, int i) { return GetValue(j, i)->Str
 JsonObject *JsonConverter::GetByName(JsonObject *j, const char *cc) {
     if (j->GetType() != JsonObject::kType_Object) {
         return nullptr;
-    } else {
-        lh_table *lh = j->Get();
-        const void *v = lh_table_lookup(lh, cc);
-        if (v) {
-            json_object *obj = (json_object *)v;
-            json_object_get(obj);
-            JsonObject *jObj = new JsonObject();
-            jObj->Set(obj);
-            jObj->AddRef();
-            mObjects.push_back(jObj);
-            return jObj;
-        } else {
-            return nullptr;
-        }
     }
+    lh_table *lh = j->Get();
+    const void *v = lh_table_lookup(lh, cc);
+    if (!v) {
+        return nullptr;
+    }
+    json_object *obj = (json_object *)v;
+    json_object_get(obj);
+    JsonObject *jObj = new JsonObject();
+    jObj->Set(obj);
+    jObj->AddRef();
+    mObjects.push_back(jObj);
+    return jObj;
 }
 
 void JsonConverter::PushObject(JsonObject *obj) {

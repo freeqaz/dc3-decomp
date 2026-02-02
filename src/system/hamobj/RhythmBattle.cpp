@@ -348,9 +348,9 @@ void RhythmBattle::Poll() {
 }
 
 void RhythmBattle::PlayMindControlVO(Symbol s) {
-    static Message mind_control_vo("mind_control_vo", DataNode(0));
-    mind_control_vo[0] = DataNode(5);
-    TheHamProvider->HandleType(mind_control_vo);
+    static Message msg("mind_control_vo", DataNode(0));
+    msg[0] = DataNode(s);
+    TheHamProvider->HandleType(msg);
     unk110 = 0;
 }
 
@@ -361,7 +361,7 @@ void RhythmBattle::UpdateFinaleVO(int &i) {
         unk150.erase(&unk150.front());
         static Message play_finale_vo("play_finale_vo", DataNode(0));
         play_finale_vo[0] = DataNode(5);
-        DataNode handled = game_panel->HandleType(play_finale_vo);
+        game_panel->HandleType(play_finale_vo);
         i = -1;
     }
 }

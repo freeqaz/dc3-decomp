@@ -255,15 +255,13 @@ void CreateAndSetMetaMat(RndMat *mat) {
 }
 
 bool ShouldStrip(RndTransformable *trans) {
-    if (trans) {
-        const char *name = trans->Name();
-        if (name) {
-            return strnicmp("bone_", name, 5) == 0 || strnicmp("exo_", name, 4) == 0
-                || strncmp("spot_", name, 5) == 0;
-        } else
-            return false;
-    } else
+    if (!trans)
         return false;
+    const char *name = trans->Name();
+    if (!name)
+        return false;
+    return strnicmp("bone_", name, 5) == 0 || strnicmp("exo_", name, 4) == 0
+        || strncmp("spot_", name, 5) == 0;
 }
 
 bool AnimContains(const RndAnimatable *anim1, const RndAnimatable *anim2) {
@@ -272,9 +270,7 @@ bool AnimContains(const RndAnimatable *anim1, const RndAnimatable *anim2) {
     else {
         std::list<RndAnimatable *> children;
         anim1->ListAnimChildren(children);
-        for (std::list<RndAnimatable *>::iterator it = children.begin();
-             it != children.end();
-             ++it) {
+        FOREACH (it, children) {
             if (AnimContains(*it, anim2))
                 return true;
         }

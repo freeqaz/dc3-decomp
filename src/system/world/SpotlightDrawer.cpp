@@ -9,9 +9,9 @@
 RndEnviron *SpotlightDrawer::sEnviron;
 SpotlightDrawer *SpotlightDrawer::sDefault;
 int SpotlightDrawer::sNeedBoxMap = -1;
-bool sHaveAdditionals;
-bool sHaveLenses;
-bool sHaveFlares;
+bool SpotlightDrawer::sHaveAdditionals;
+bool SpotlightDrawer::sHaveLenses;
+bool SpotlightDrawer::sHaveFlares;
 
 SpotlightDrawer::SpotlightDrawer() : mParams(this) { mOrder = -100000; }
 
@@ -77,12 +77,14 @@ BEGIN_SAVES(SpotlightDrawer)
 END_SAVES
 
 void SpotlightDrawer::Init() {
+    SpotlightDrawer *ptr;
     sEnviron = Hmx::Object::New<RndEnviron>();
     sEnviron->SetUseApproxes(false);
     REGISTER_OBJ_FACTORY(SpotlightDrawer)
-    sDefault = Hmx::Object::New<SpotlightDrawer>();
-    sDefault->mParams.mLightingInfluence = 0.0f;
-    sDefault->Select();
+    ptr = Hmx::Object::New<SpotlightDrawer>();
+    ptr->mParams.mLightingInfluence = 0;
+    sDefault = ptr;
+    ptr->Select();
 }
 
 void SpotlightDrawer::Select() {

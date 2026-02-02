@@ -18,8 +18,8 @@ MicXbox::MicXbox(int, float volume)
       unk9054(1.0f), unk9058(0), unk905c(0), unk9060(0), mVolume(volume), mMute(false),
       unk906c(0), mGain(1.0f), mOutputGain(1.0f), mSensitivity(1.0f), unk907c(0),
       mDroppedSamples(0), unk90c4("generic_usb"), mClipping(false) {
-    unk302c->Init(0xc00);
-    unk3040->Init(0x6000);
+    unk302c.Init(0xc00);
+    unk3040.Init(0x6000);
     unk3020.reserve(0x1800);
     memset(unk1c, 0, 0x3000);
 }
@@ -40,8 +40,8 @@ float MicXbox::GetOutputGain() const { return mOutputGain; }
 float MicXbox::GetSensitivity() const { return mSensitivity; }
 
 void MicXbox::ClearBuffers() {
-    unk302c->Reset();
-    unk3040->Reset();
+    unk302c.Reset();
+    unk3040.Reset();
 }
 
 void MicXbox::SetOutputGain(float f) {
@@ -127,7 +127,7 @@ MicManagerXbox::~MicManagerXbox() {}
 void MicManagerXbox::RequirePushToTalk(bool b, int pad) {
     unk68.Enter();
     if (b) {
-        MILO_ASSERT(pad >=0, 0x2c7);
+        MILO_ASSERT(pad >= 0, 0x2c7);
         unk88 = pad;
     } else {
         unk88 = -1;

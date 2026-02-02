@@ -21,7 +21,7 @@ void ReadError(const char *cc) {
 }
 
 AsyncFileWin::AsyncFileWin(const char *filename, int mode)
-    : AsyncFile(filename, mode), mFile(INVALID_HANDLE_VALUE), unk3c(-1),
+    : AsyncFile(filename, mode), mFile(INVALID_HANDLE_VALUE), mFd(-1),
       mReadInProgress(0), mWriteInProgress(0) {}
 
 AsyncFileWin::~AsyncFileWin() { Terminate(); }
@@ -50,14 +50,14 @@ void AsyncFileWin::_OpenAsync() {
         if (modeCheck == 0) {
             fd =
                 _open(mFilename.c_str(), (mode & 0xfffffffd) | 0x8000, 0x180);
-            unk3c = fd;
+            mFd = fd;
             openError = ((unsigned int)fd) >> 31;
             mFail = openError;
             if (openError != 0)
                 return;
             mSize = _lseeki64(fd, 0, 2);
             if (!(mode & 8)) {
-                _lseek((int)unk3c, 0, 0);
+                _lseek((int)mFd, 0, 0);
             }
             return;
         }
@@ -114,8 +114,8 @@ bool AsyncFileWin::_WriteDone() {
 
 void AsyncFileWin::_SeekToTell() {
     if (!(mMode & FILE_OPEN_READ)) {
-        if (unk3c >= 0) {
-            if (_lseek(unk3c, mTell, 0) < 0) {
+        if (mFd >= 0) {
+            if (_lseek(mFd, mTell, 0) < 0) {
                 mFail = true;
             }
         } else {
@@ -138,8 +138,8 @@ void AsyncFileWin::_Close() {
         while (!_ReadDone())
             ;
     } else {
-        if (unk3c >= 0) {
-            _close(unk3c);
+        if (mFd >= 0) {
+            _close(mFd);
         }
         if (mFile == INVALID_HANDLE_VALUE)
             return;

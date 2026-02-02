@@ -1245,13 +1245,11 @@ void CamShot::UnHide() {
 }
 
 RndCam *CamShot::GetCam() {
-    RndCam *ret = nullptr;
+    RndCam *ret = 0;
     WorldDir *crowdDir = GetCrowdDir();
     if (crowdDir) {
-        if (crowdDir->Cam()) {
-            ret = crowdDir->Cam();
-        }
-        if (!ret) {
+        ret = crowdDir->Cam();
+        if (ret == 0) {
             MILO_NOTIFY_ONCE("%s: paneldir but no cam", PathName(crowdDir));
         }
     } else {

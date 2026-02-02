@@ -1,5 +1,5 @@
 #pragma once
-#include "StorePurchaser.h"
+#include "meta/StorePurchaser.h"
 #include "meta/Profile.h"
 #include "meta/StoreEnumeration.h"
 #include "meta/StoreOffer.h"
@@ -31,6 +31,8 @@ public:
     virtual bool IsLoaded() const;
     virtual void Unload();
     virtual void LoadArt(char const *, UIPanel *);
+    virtual void ExitStore(StoreError) const;
+    virtual Profile *StoreProfile() const;
 
     StorePanel();
     void CheckOut(StorePurchaseable *);
@@ -71,10 +73,17 @@ protected:
     void StartReEnum();
     DataNode OnMsg(SigninChangedMsg const &);
     DataNode OnMsg(ProfileSwappedMsg const &);
+    DataNode OnMsg(SingleItemEnumCompleteMsg const &);
     void ValidateOffers(std::vector<StoreOffer *> &);
-    // DataNode __cdecl OnMsg(SingleItemEnumCompleteMsg const &);
     // DataNode __cdecl OnMsg(MultipleItemsEnumCompleteMsg const &);
 };
+
+DECLARE_MESSAGE(MultipleItemsEnumCompleteMsg, "multiple_items_enum_complete")
+bool Purchased(int index) const {
+    DataArray *arr = mData->Node(6).Array(mData);
+    return arr->Node(index).Int(arr);
+}
+END_MESSAGE
 
 class StoreEnumJob : public Job {
 public:

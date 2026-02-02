@@ -56,15 +56,15 @@ BEGIN_LOADS(DancerSequence)
     for (int i = 0; i < numFrames; i++) {
         DancerFrame &curFrame = mDancerFrames[i];
         if (d.rev < 1) {
-            int x;
-            d >> x;
+            int val;
+            d >> val;
             curFrame.unk0 = curFrame.mMoveFrameIdx = -1;
         } else if (d.rev < 7) {
-            int x, y;
-            d >> x;
-            d >> y;
-            curFrame.unk0 = x;
-            curFrame.mMoveFrameIdx = y;
+            int val0, val1;
+            d >> val0;
+            d >> val1;
+            curFrame.unk0 = val0;
+            curFrame.mMoveFrameIdx = val1;
         } else {
             d >> curFrame.unk0;
             d >> curFrame.mMoveFrameIdx;
@@ -91,29 +91,29 @@ BEGIN_LOADS(DancerSequence)
                 skeleton.SetDisplacementElapsedMs(ms);
             }
             if (skeletonRev < 3) {
-                bool b;
-                d >> b;
-                int x;
-                d >> x;
+                bool unusedBool;
+                d >> unusedBool;
+                int unusedInt;
+                d >> unusedInt;
             }
-            for (int i = 0; i < kNumJoints; i++) {
+            for (int jointIdx = 0; jointIdx < kNumJoints; jointIdx++) {
                 int count = 6;
                 if (skeletonRev < 1) {
                     count = 4;
                 } else if (skeletonRev < 2) {
                     count = 9;
                 }
-                for (int j = 0; j < count; j++) {
-                    if (j >= 6) {
+                for (int dataIdx = 0; dataIdx < count; dataIdx++) {
+                    if (dataIdx >= 6) {
                         Vector3 v;
                         d >> v >> v >> v;
                     } else {
-                        if (j == 0) {
+                        if (dataIdx == 0) {
                             Vector3 pos, disp;
                             d >> pos;
                             d >> disp;
-                            skeleton.SetCamJointPos((SkeletonJoint)i, pos);
-                            skeleton.SetCamJointDisplacement((SkeletonJoint)i, disp);
+                            skeleton.SetCamJointPos((SkeletonJoint)jointIdx, pos);
+                            skeleton.SetCamJointDisplacement((SkeletonJoint)jointIdx, disp);
                         } else {
                             Vector3 v1, v2;
                             d >> v1 >> v2;
@@ -125,34 +125,34 @@ BEGIN_LOADS(DancerSequence)
                     }
                 }
                 if (skeletonRev < 3) {
-                    std::vector<float> floats;
-                    d >> floats;
-                    int x;
-                    d >> x;
-                } else if (skeletonRev > 4) {
-                    int x;
-                    d >> x;
+                    std::vector<float> unusedFloats;
+                    d >> unusedFloats;
+                    int unusedVal;
+                    d >> unusedVal;
+                } else if (skeletonRev >= 5) {
+                    int unusedVal;
+                    d >> unusedVal;
                 }
             }
             if (skeletonRev < 2) {
-                for (int i = 0; i < 2; i++) {
-                    for (int j = 0; j < 3; j++) {
+                for (int row = 0; row < 2; row++) {
+                    for (int col = 0; col < 3; col++) {
                         std::vector<float> floats;
                         d >> floats;
                     }
                 }
             }
         } else {
-            for (int i = 0; i < kNumJoints; i++) {
+            for (int jointIdx = 0; jointIdx < kNumJoints; jointIdx++) {
                 Vector3 pos;
                 Vector3 disp;
                 d >> pos;
                 d >> disp;
-                skeleton.SetCamJointPos((SkeletonJoint)i, pos);
-                skeleton.SetCamJointDisplacement((SkeletonJoint)i, disp);
+                skeleton.SetCamJointPos((SkeletonJoint)jointIdx, pos);
+                skeleton.SetCamJointDisplacement((SkeletonJoint)jointIdx, disp);
                 if (d.rev < 8) {
-                    int x;
-                    d >> x;
+                    int unusedVal;
+                    d >> unusedVal;
                 }
             }
             int ms;

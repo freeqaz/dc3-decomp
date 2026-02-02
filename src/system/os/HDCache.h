@@ -38,7 +38,7 @@ private:
     int mLastHdrWriteMs; // 0x30
     int mLastCacheWriteMs; // 0x34
     DWORD mLockId; // 0x38
-    int unk3c; // 0x3c
+    int mLockCount; // 0x3c
     CriticalSection *mCritSec; // 0x40
     int mHdrIdx; // 0x44
     File *mHdr[2]; // 0x48

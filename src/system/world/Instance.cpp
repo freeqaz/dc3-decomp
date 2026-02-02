@@ -137,9 +137,9 @@ void WorldInstance::LoadPersistentObjects(BinStreamRev &bs) {
             Symbol objClassName;
             bs >> objClassName;
             char objName[0x80];
-
+            bs.stream.ReadString(objName, 0x80);
             if (!Hmx::Object::RegisteredFactory(objClassName)) {
-                MILO_WARN("%s: Can't make %s", mStoredFile.c_str(), objClassName);
+                MILO_NOTIFY("%s: Can't make %s", mStoredFile.c_str(), objClassName);
                 DeleteObjects();
                 return;
             }
@@ -162,6 +162,8 @@ void WorldInstance::LoadPersistentObjects(BinStreamRev &bs) {
         }
         while (!objlist.empty()) {
             Hmx::Object *cur = objlist.front();
+            cur->PreLoad(bs.stream);
+            cur->PostLoad(bs.stream);
             objlist.pop_front();
         }
         if (mDir) {

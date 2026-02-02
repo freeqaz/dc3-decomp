@@ -42,7 +42,7 @@ bool XboxPurchaser::PurchaseMade() const {
 }
 
 bool XboxPurchaser::IsPurchasing() const {
-    return !(mState == purchasestate0 || mState == kSuccess || mState == purchasestate3);
+    return mState == purchasestate1;
 }
 
 DataNode XboxPurchaser::OnMsg(UIChangedMsg const &msg) {
@@ -74,7 +74,7 @@ bool XboxMultipleItemsPurchaser::PurchaseMade() const {
 }
 
 bool XboxMultipleItemsPurchaser::IsPurchasing() const {
-    return !(mState == purchasestate0 || mState == kSuccess || mState == purchasestate3);
+    return mState == purchasestate1;
 }
 
 void XboxMultipleItemsPurchaser::Initiate() { MILO_ASSERT(!IsPurchasing(), 0x343); }

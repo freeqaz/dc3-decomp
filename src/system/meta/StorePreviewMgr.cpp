@@ -82,25 +82,27 @@ bool StorePreviewMgr::AllowPreviewDownload(String const &str) {
 
 void StorePreviewMgr::PlayCurrentPreview() {
     MILO_ASSERT(mStreamPlayer, 0xd8);
-    if (unk34.empty()) {
-        return;
-    }
-    String temp_str(unk34.c_str());
-    if (unk4c) {
-        mStreamPlayer->StopPlaying();
-        FilePath filepath(temp_str.c_str());
-        unk4c->SetFile(filepath);
-        mStreamPlayer->SetVolume(-unk2c);
-    } else {
-        // Find and remove ".mogg" extension
-        unsigned int pos = temp_str.find(".mogg");
-        if (pos != String::npos) {
-            temp_str.erase(pos);
-        }
-        if (TheNetCacheMgr->IsLocalFile(unk34.c_str())) {
-            mStreamPlayer->PlayFile(temp_str.c_str(), -unk2c, 0.0f, unk30);
-        } else {
+    if (!unk34.empty() && TheNetCacheMgr->IsLocalFile(unk34.c_str())) {
+        String str(unk34.c_str());
+        if (unk4c) {
             mStreamPlayer->StopPlaying();
+            FilePath filepath(str.c_str());
+            unk4c->SetFile(filepath);
+            mStreamPlayer->SetVolume(-unk2c);
+        } else {
+            int len = str.length();
+            if (str.find(".mogg", len - 5) != String::npos) {
+                str.erase(len - 5);
+            } else if (str.find(".bik", len - 4) != String::npos) {
+                str.erase(len - 4);
+            }
+            mStreamPlayer->PlayFile(str.c_str(), -unk2c, 0.0f, unk30);
+        }
+    } else {
+        mStreamPlayer->StopPlaying();
+        if (unk4c) {
+            FilePath filepath(gNullStr);
+            unk4c->SetFile(filepath);
         }
     }
 }

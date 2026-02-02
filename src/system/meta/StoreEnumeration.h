@@ -1,5 +1,4 @@
 #pragma once
-#include "meta/StoreEnumeration.h"
 #include "stl/_vector.h"
 #include "types.h"
 #include "utl/Str.h"

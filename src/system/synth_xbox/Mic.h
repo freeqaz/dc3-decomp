@@ -5,7 +5,6 @@
 #include "stl/_vector.h"
 #include "synth/FxSend.h"
 #include "synth/Mic.h"
-#include "synth_xbox/Mic.h"
 #include "synth_xbox/Voice.h"
 #include "types.h"
 #include "utl/Symbol.h"
@@ -62,12 +61,12 @@ public:
     short unk1c[6144];
     short *unk301c;
     std::vector<short> unk3020;
-    RingBuffer *unk302c;
+    RingBuffer unk302c;
     u32 unk3030;
     int unk3034;
     u32 unk3038;
     u32 unk303c;
-    RingBuffer *unk3040;
+    RingBuffer unk3040;
     u32 unk3044;
     int unk3048;
     u32 unk304c[6146];

@@ -18,7 +18,7 @@ HDCache TheHDCache;
 HDCache::HDCache()
     : mBlockState(0), mWriteFileIdx(0), mWriteBlock(-1), mWritingHeader(false),
       mReadFileIdx(0), mDirtyCache(0), mLastHdrWriteMs(-1), mLastCacheWriteMs(-1),
-      mLockId(-1), unk3c(0), mCritSec(nullptr), mHdrIdx(0), mHdrBuf(nullptr),
+      mLockId(-1), mLockCount(0), mCritSec(nullptr), mHdrIdx(0), mHdrBuf(nullptr),
       unk64(false) {}
 
 HDCache::~HDCache() {}
@@ -27,7 +27,7 @@ bool HDCache::LockCache() {
     CritSecTracker cst(mCritSec);
     if (mLockId == -1 || mLockId == GetCurrentThreadId()) {
         mLockId = GetCurrentThreadId();
-        unk3c++;
+        mLockCount++;
         return true;
     } else {
         return false;
@@ -37,25 +37,25 @@ bool HDCache::LockCache() {
 void HDCache::UnlockCache() {
     CritSecTracker cst(mCritSec);
     MILO_ASSERT(mLockId == CurrentThreadId(), 0xfa);
-    unk3c--;
-    if (unk3c == 0)
+    mLockCount--;
+    if (mLockCount == 0)
         mLockId = -1;
 }
 
 int HDCache::HdrSize() {
-    int i5 = 32;
+    int blockStateSize = 32;
     int numArkfiles = TheArchive->NumArkFiles();
     for (int i = 0; i < numArkfiles; i++) {
         if (TheArchive->GetArkfileCachePriority(i) >= 0) {
             int numBlocks = TheArchive->GetArkfileNumBlocks(i) + 0x1F;
-            i5 += (numBlocks / 32 + 1) * 4;
+            blockStateSize += (numBlocks / 32 + 1) * 4;
         }
     }
-    int i2 = i5 + 0x100;
-    if (i5 != 0) {
-        i2 = (i2 - i5) + 0x1000;
+    int totalSize = blockStateSize + 0x100;
+    if (blockStateSize != 0) {
+        totalSize = (totalSize - blockStateSize) + 0x1000;
     }
-    return i2;
+    return totalSize;
 }
 
 bool HDCache::ReadFail() {
@@ -118,13 +118,11 @@ bool HDCache::ReadAsync(int arkfileNum, int blockNum, void *ptr) {
     MILO_ASSERT(ReadDone(), 0x191);
     if (mBlockState[arkfileNum]) {
         MILO_ASSERT(blockNum < TheArchive->GetArkfileNumBlocks(arkfileNum), 0x196);
-        // Check if block is in bitmap
         if ((mBlockState[arkfileNum][(blockNum / 32)] & (1 << (blockNum % 32)))) {
-            File *readFile = mReadArkFiles[arkfileNum];
-            MILO_ASSERT(readFile->Size() >= ((blockNum + 1) * kArkBlockSize), 0x19D);
+            MILO_ASSERT(mReadArkFiles[arkfileNum]->Size() >= ((blockNum + 1) * kArkBlockSize), 0x19D);
             mReadFileIdx = arkfileNum;
-            readFile->Seek(blockNum * kArkBlockSize, 0);
-            return readFile->ReadAsync(ptr, kArkBlockSize);
+            mReadArkFiles[arkfileNum]->Seek(blockNum * kArkBlockSize, 0);
+            return mReadArkFiles[mReadFileIdx]->ReadAsync(ptr, kArkBlockSize);
         }
     }
     return false;
@@ -186,13 +184,13 @@ void HDCache::WriteHdr() {
         mDirtyCache = 0;
         int finalSize = HdrSize();
         MILO_ASSERT(mHdrBuf->Size() <= finalSize, 0x176);
-        char buf1e0[0x80];
-        memset(buf1e0, 0, 0x80);
+        char zeroPad[0x80];
+        memset(zeroPad, 0, 0x80);
         while (mHdrBuf->Size() < finalSize) {
             int size = finalSize - mHdrBuf->Size();
             if (size > 0x80U)
                 size = 0x80;
-            mHdrBuf->Write(buf1e0, size);
+            mHdrBuf->Write(zeroPad, size);
         }
         MILO_ASSERT(mHdrBuf->Size() == finalSize, 0x183);
         int oldSize = mHdr[mHdrIdx]->Size();
@@ -224,15 +222,15 @@ void HDCache::OpenFiles(int numCachedArkfiles) {
     }
     const char *hdrFmt = MakeString(mHdrFmt.c_str(), 0);
     mHdr[0] = NewFile(hdrFmt, 0x50101);
-    bool i11 = mHdr[0] && !mHdr[0]->Fail();
-    if (i11) {
+    bool hdrValid = mHdr[0] && !mHdr[0]->Fail();
+    if (hdrValid) {
         int hdrSize = HdrSize();
         mHdr[0]->Truncate(hdrSize);
         RELEASE(mHdr[0]);
         mHdr[0] = NewFile(hdrFmt, 0x50001);
-        i11 = (hdrSize - mHdr[0]->Size()) == 0;
+        hdrValid = (hdrSize - mHdr[0]->Size()) == 0;
     }
-    if (!i11) {
+    if (!hdrValid) {
         RELEASE(mHdr[0]);
     } else {
         while (pendingArkfiles.size() != 0) {

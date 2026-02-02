@@ -5,7 +5,8 @@
 #include "obj/Object.h"
 #include "os/Debug.h"
 
-bool savebool;
+// Guard to prevent recursive saves when loading watches from file
+static bool savebool;
 
 void Watcher::SaveWatches() {
     if (!savebool) {
@@ -25,12 +26,12 @@ void Watcher::SaveWatches() {
 void Watcher::Update() {
     if (mWatches.size()) {
         mOverlay->SetLines(mWatches.size() * 2);
-        int idx = 0;
+        int i = 0;
         for (std::vector<std::pair<DataArray *, DataNode> >::iterator it =
                  mWatches.begin();
              it != mWatches.end();
-             ++it, ++idx) {
-            *mOverlay << idx;
+             ++it, ++i) {
+            *mOverlay << i;
             *mOverlay << ": ";
             it->first->Print(*mOverlay, kDataArray, true, 0);
             *mOverlay << "\n";

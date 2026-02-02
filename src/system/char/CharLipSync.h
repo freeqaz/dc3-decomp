@@ -14,8 +14,8 @@ public:
     class Generator {
     public:
         struct Weight {
-            unsigned char unk0;
-            unsigned char unk1;
+            unsigned char mPrev;
+            unsigned char mCur;
         };
 
         Generator() : mLipSync(nullptr), mLastCount(0) {}
@@ -35,12 +35,12 @@ public:
     class PlayBack {
     public:
         struct Weight {
-            Weight() : unk0(nullptr) {}
+            Weight() : mClip(nullptr) {}
 
-            ObjPtr<CharClip> unk0;
-            float unk14;
-            float unk18;
-            float unk1c;
+            ObjPtr<CharClip> mClip;
+            float mPrevWeight;
+            float mNextWeight;
+            float mCurWeight;
         };
         PlayBack();
         void Set(CharLipSync *, ObjPtr<ObjectDir>);

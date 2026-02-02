@@ -8,8 +8,7 @@ SkeletonHistoryArchive::SkeletonHistoryArchive() {
     }
 }
 
-const std::vector<ArchiveSkeleton> &SkeletonHistoryArchive::GetArchive(int skel_idx
-) const {
+const std::vector<ArchiveSkeleton> &SkeletonHistoryArchive::GetArchive(int skel_idx) const {
     MILO_ASSERT((0) <= (skel_idx) && (skel_idx) < (6), 0x36);
     return mHistories[skel_idx];
 }
@@ -17,7 +16,7 @@ const std::vector<ArchiveSkeleton> &SkeletonHistoryArchive::GetArchive(int skel_
 bool SkeletonHistory::PrevFromArchive(
     const SkeletonHistoryArchive &archives,
     const Skeleton &skeleton,
-    int i3,
+    int targetMs,
     ArchiveSkeleton &archiveSkeleton,
     int &elapsedMs
 ) const {
@@ -25,9 +24,11 @@ bool SkeletonHistory::PrevFromArchive(
     MILO_ASSERT((0) <= (skel_idx) && (skel_idx) < (6), 0x13);
     const std::vector<ArchiveSkeleton> &archive = archives.GetArchive(skel_idx);
     std::vector<ArchiveSkeleton>::const_iterator it = archive.begin();
-    std::vector<ArchiveSkeleton>::const_iterator itEnd = archive.end();
-    for (elapsedMs = skeleton.ElapsedMs(); it != itEnd && elapsedMs < i3; ++it) {
+    std::vector<ArchiveSkeleton>::const_iterator itEnd;
+    elapsedMs = skeleton.ElapsedMs();
+    while ((itEnd = archive.end(), it != itEnd) && elapsedMs < targetMs) {
         elapsedMs += it->ElapsedMs();
+        ++it;
     }
     if (it != itEnd) {
         archiveSkeleton = *it;
@@ -44,7 +45,11 @@ void SkeletonHistoryArchive::ClearHistory(int skel_idx) {
 void SkeletonHistoryArchive::AddToHistory(int skel_idx, const Skeleton &skeleton) {
     MILO_ASSERT((0) <= (skel_idx) && (skel_idx) < (6), 0x3F);
 
-    ArchiveSkeleton aSkeleton;
-    aSkeleton.Set(skeleton);
-    mHistories[skel_idx].insert(mHistories[skel_idx].begin() + 1, aSkeleton);
+    while (mHistories[skel_idx].size() >= 0xA0) {
+        mHistories[skel_idx].pop_back();
+    }
+
+    ArchiveSkeleton archiveSkeleton;
+    archiveSkeleton.Set(skeleton);
+    mHistories[skel_idx].insert(mHistories[skel_idx].begin(), archiveSkeleton);
 }

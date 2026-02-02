@@ -98,27 +98,24 @@ void RndPostProcMgr::BlendToPostProc(RndPostProc *iPostProc, float iBlendTime) {
 
 RndPostProc *RndPostProcMgr::MsgToPostProc(DataArray *iMsg) {
     MILO_ASSERT(iMsg, 0x116);
+    RndPostProc *result = nullptr;
     if (iMsg->Size() > 2) {
         DataType t = iMsg->Type(2);
         if (t == kDataObject) {
-            return iMsg->Obj<RndPostProc>(2);
+            result = iMsg->Obj<RndPostProc>(2);
         } else if (t == kDataSymbol || t == kDataString) {
             const char *name = iMsg->Str(2);
-            RndPostProc *found = Dir()->Find<RndPostProc>(name, false);
-            if (found) {
-                return found;
-            } else {
+            result = Dir()->Find<RndPostProc>(name, false);
+            if (!result) {
                 MILO_NOTIFY("could not find post-proc %s", name);
-                return nullptr;
             }
         } else {
             MILO_NOTIFY("unexpected post-proc data type %d", t);
-            return nullptr;
         }
     } else {
         MILO_NOTIFY("not enough arguments supplied to OnSetPostProc");
-        return nullptr;
     }
+    return result;
 }
 
 DataNode RndPostProcMgr::OnCopyFromPostProc(DataArray *a) {

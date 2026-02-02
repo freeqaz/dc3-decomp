@@ -39,3 +39,7 @@ protected:
     void WriteToCache();
     void Poll();
 };
+
+inline bool operator==(NetCacheLoader* loader, const String& str) {
+    return str == loader->GetRemotePath();
+}

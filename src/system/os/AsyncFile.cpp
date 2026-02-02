@@ -42,11 +42,7 @@ void PrintDiscFile(const char *file) {
     }
     String fullPath(MakeString("%s/%s%s.%s", path, gen, base, ext));
     unsigned int last = fullPath.find_last_of('_');
-    bool lastFound = last != FixedString::npos;
-    if (lastFound) {
-        Symbol plat = PlatformSymbol(TheLoadMgr.GetPlatform());
-        lastFound = plat == fullPath.c_str() + last + 1;
-    }
+    bool lastFound = (last != FixedString::npos) && (PlatformSymbol(TheLoadMgr.GetPlatform()) == fullPath.c_str() + last + 1);
     fullPath = (lastFound) ? fullPath.substr(0, last) : fullPath;
     MILO_LOG("AsyncFile:   '%s'\n", fullPath);
     HolmesClientPrint(fullPath.c_str());

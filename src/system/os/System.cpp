@@ -29,6 +29,7 @@
 #include "os/Timer.h"
 #include "os/VirtualKeyboard.h"
 #include "utl/CacheMgr.h"
+#include "utl/Cheats.h"
 #include "utl/DataPointMgr.h"
 #include "utl/Licenses.h"
 #include "utl/Loader.h"
@@ -580,15 +581,13 @@ void SystemPreInit(const char *cmdLine, const char *cfg) {
 
 void SystemTerminate() {
     TheDebug.RemoveExitCallback(SystemTerminate);
-    // missing Terminate here
     TheVirtualKeyboard.Terminate();
     CacheMgrTerminate();
     NetCacheMgrTerminate();
     FileCache::Terminate();
     TheLocale.Terminate();
-    //   this_01 = &TheMC;
-    //   MemcardXbox::Terminate(&TheMC);
-    //   CheatsTerminate();
+    TheMC.Terminate();
+    CheatsTerminate();
     KeyboardTerminate();
     JoypadTerminate();
     SpewTerminate();

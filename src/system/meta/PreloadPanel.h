@@ -1,5 +1,5 @@
 #pragma once
-#include "SongMgr.h"
+#include "meta/SongMgr.h"
 #include "obj/Data.h"
 #include "obj/Object.h"
 #include "os/ContentMgr.h"
@@ -47,9 +47,9 @@ protected:
     bool mMounted; // 0x4c
     std::vector<Symbol> mContentNames; // 0x50
     Hmx::Object *mAppReadFailureHandler; // 0x5c
-    bool unk60; // 0x60
-    String unk64; // 0x64
-    bool unk6c; // 0x6c
+    bool mContentCorrupt; // 0x60
+    String mCorruptContentName; // 0x64
+    bool mSongDoesNotExist; // 0x6c
     int mMaxCacheSize; // 0x70
 
 private:

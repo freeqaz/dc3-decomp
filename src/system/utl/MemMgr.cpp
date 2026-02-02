@@ -212,7 +212,7 @@ void MemOrPoolFreeSTL(
 
 void AddHeap(
     int heapNum,
-    int i2,
+    int size,
     const char *c3,
     bool b4,
     int i5,
@@ -220,22 +220,22 @@ void AddHeap(
     int i7,
     bool b8
 ) {
-    void *tmp2 = malloc(i2);
-    if (!tmp2) {
+    void *raw_mem = malloc(size);
+    if (raw_mem == 0) {
         int max = 0x40000000;
-        void *raw_mem = malloc(max);
+        raw_mem = malloc(max);
         MILO_ASSERT(raw_mem, 0x32C);
-        if (i2 > max) {
+        if (size > max) {
             MILO_LOG(
                 "not enough memory for heap \"%s\". Requested: %d. Available: %d\n",
                 c3,
-                i2,
+                size,
                 max
             );
         }
-        i2 = max;
+        size = max;
     }
-    gHeaps[heapNum].Init(c3, gNumHeaps, (int *)tmp2, i2 / 4, b4, strat, i7, b8);
+    gHeaps[heapNum].Init(c3, gNumHeaps, (int *)raw_mem, size >> 2, b4, strat, i7, b8);
 }
 
 void AddHeap(int i1, int i2, DataArray *arr) {

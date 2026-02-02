@@ -12,6 +12,7 @@
 #include "os/PlatformMgr.h"
 #include "rndobj/Tex.h"
 #include "ui/UIPanel.h"
+#include "utl/JobMgr.h"
 #include "utl/MakeString.h"
 #include "utl/NetCacheMgr.h"
 #include "utl/Std.h"
@@ -39,14 +40,10 @@ void StorePanel::Load() {
     unk50 = true;
     mLoadOk = true;
     ThePlatformMgr.AddSink(this);
-    if (ThePlatformMgr.IsSignedIn(0) == 0) {
-        if (mLoadOk) {
-            mLoadOk = false;
-        }
-    } else if (ThePlatformMgr.IsSignedIntoLive(0)) {
-        if (mLoadOk) {
-            mLoadOk = false;
-        }
+    if (StoreProfile() == 0) {
+        ExitError(kStoreErrorLiveServer);
+    } else if (ThePlatformMgr.IsSignedIntoLive(0) == 0) {
+        ExitError(kStoreErrorCacheNoSpace);
     }
     TheContentMgr.StartRefresh();
     TheNetCacheMgr->Load((NetCacheMgr::CacheSize)1);
@@ -54,27 +51,27 @@ void StorePanel::Load() {
     mStorePreviewMgr = new StorePreviewMgr();
     mStorePreviewMgr->AddSink(this);
     MILO_ASSERT(!mPurchaser, 0x88);
+    unk94 = 2;
 }
 
 void StorePanel::Enter() {}
 
 void StorePanel::Exit() {
     XBackgroundDownloadSetMode(XBACKGROUND_DOWNLOAD_MODE_AUTO);
-    ThePlatformMgr.RemoveSink(this, gNullStr);
-    if (0 <= unk68)
+    Symbol sym = gNullStr;
+    ThePlatformMgr.RemoveSink(this, sym);
+    if (0 <= unk68) {
         ThePlatformMgr.CancelEnumJob(unk68);
+    }
     unk68 = -1;
     UIPanel::Exit();
 }
 
 bool StorePanel::Exiting() const {
-    bool b;
     if (mPurchaser && mPurchaser->unk8 != 0) {
-        b = UIPanel::Exiting();
+        UIPanel::Exiting();
     }
-    b = true;
-
-    return b;
+    return true;
 }
 
 void StorePanel::Poll() {}
@@ -84,7 +81,7 @@ bool StorePanel::IsLoaded() const {
 }
 
 void StorePanel::Unload() {
-    if (0 < unk68) {
+    if (unk68 > 0) {
         ThePlatformMgr.CancelEnumJob(unk68);
     }
     unk68 = -1;
@@ -127,6 +124,7 @@ void StorePanel::ExitError(StoreError e) {
     MILO_ASSERT(e != kStoreErrorSuccess, 0x405);
     if (mLoadOk) {
         mLoadOk = false;
+        ExitStore(e);
     }
 }
 
@@ -167,7 +165,7 @@ void StorePanel::HandleNetCacheLoaderFailure(int failType) {
         void (*func)(void *) = (void (*)(void *))*(void **)this;
         func(this);
         if (ThePlatformMgr.IsSignedIntoLive(0) == 0) {
-            err = (StoreError)2;
+            err = kStoreErrorCacheNoSpace;
         }
         break;
     }
@@ -178,7 +176,7 @@ void StorePanel::HandleNetCacheLoaderFailure(int failType) {
     }
 
     if (ThePlatformMgr.IsEthernetCableConnected() == 0) {
-        err = (StoreError)7;
+        err = kStoreErrorNoMetadata;
     }
 
     ExitError(err);
@@ -186,21 +184,61 @@ void StorePanel::HandleNetCacheLoaderFailure(int failType) {
 
 void StorePanel::MultipleItemsCheckout(std::list<StoreOffer *> *offers) {
     MILO_ASSERT(!mPurchaser, 0x2e7);
-    // MILO_ASSERT(profile, 0x2ea);
-    FOREACH (it, *offers) {
-        MILO_ASSERT((*it)->IsAvailable(), 0x2ef);
+
+    std::vector<u64> songIds;
+    std::vector<std::pair<StorePurchaseable*, const Profile*>> pairs;
+
+    // Populate vectors from offers list
+    FOREACH(it, *offers) {
+        StoreOffer *offer = *it;
+        MILO_ASSERT(offer->IsAvailable(), 0x2ef);
+
+        // Store song ID
+        u64 songId = offer->songID;
+        songIds.push_back(songId);
+
+        // Store pair
+        std::pair<StorePurchaseable*, const Profile*> pair;
+        pair.first = offer;
+        pairs.push_back(pair);
     }
+
+    // Allocate and construct purchaser
+    void* mem = operator new(0x50);
+    if (mem) {
+        u64 firstSongId = (*offers->begin())->songID;
+        mPurchaser = new (mem) XboxMultipleItemsPurchaser(
+            (int)firstSongId,
+            songIds,
+            unk8c,
+            0
+        );
+    } else {
+        mPurchaser = 0;
+    }
+
+    // Call Initiate virtual function
+    if (mPurchaser) {
+        typedef void (*VirtFunc)(void*);
+        void** vptr = (void**)mPurchaser;
+        void** vfunc_addr = (void**)*vptr;
+        VirtFunc vf = (VirtFunc)vfunc_addr[1];
+        vf(mPurchaser);
+    }
+
+    // Clean up
+    songIds.clear();
 }
 
 void StorePanel::PopulateOffers(DataArray *arr, bool b) {
     if (mLoadOk) {
         DeleteAll(unk44);
-        if (b == 0) {
+        if (!b) {
             DeleteAll(unk38);
         }
 
         std::vector<StoreOffer *> *offerVec = &unk44;
-        if (b == 0) {
+        if (!b) {
             offerVec = &unk38;
         }
 
@@ -215,15 +253,11 @@ void StorePanel::PopulateOffers(DataArray *arr, bool b) {
                     StoreOffer *offer = new StoreOffer(child_arr, 0);
 
                     if ((unk52 == 0) && (offer->IsTest())) {
-                        if (offer != NULL) {
-                            delete offer;
-                        }
+                        delete offer;
                     } else if (offer->ValidTitle()) {
                         offerVec->push_back(offer);
                     } else {
-                        if (offer != NULL) {
-                            delete offer;
-                        }
+                        delete offer;
                     }
 
                     i++;
@@ -286,7 +320,6 @@ StoreError StorePanel::UpdateOffers(std::list<EnumProduct> const &enumList, bool
     StoreError result;
     std::vector<StoreOffer *> *offers;
 
-    // Select which vector to use based on arg
     if (arg == 0) {
         offers = &unk38;
     } else {
@@ -300,9 +333,9 @@ StoreError StorePanel::UpdateOffers(std::list<EnumProduct> const &enumList, bool
         // Empty list - format error message
         FormatString fmt("This metadata contained no offer");
         TheDebug.Notify(fmt.Str());
-        result = (StoreError)6;
+        result = kStoreErrorSignedOut;
     } else {
-        result = (StoreError)1;
+        result = kStoreErrorNoContent;
     }
 
     // Iterate through offers
@@ -356,15 +389,14 @@ void StorePanel::UpdateFromEnumProduct(StorePurchaseable *sp, EnumProduct const 
 void StorePanel::StartReEnum() {
     if (unk98 != 0) {
         ThePlatformMgr.QueueEnumJob(unk98);
-        unk98 = nullptr;
+        unk98 = 0;
     }
 }
 
 DataNode StorePanel::OnMsg(SigninChangedMsg const &msg) {
-    int changedMask;
     int mask = msg.GetMask();
     if (mask != 0) {
-        changedMask = msg.GetChangedMask();
+        int changedMask = msg.GetChangedMask();
         if ((1 << changedMask & mask) == 0) {
             return DataNode(0);
         }
@@ -376,6 +408,12 @@ DataNode StorePanel::OnMsg(SigninChangedMsg const &msg) {
 }
 
 DataNode StorePanel::OnMsg(ProfileSwappedMsg const &) { return 0; }
+
+DataNode StorePanel::OnMsg(SingleItemEnumCompleteMsg const &) {
+    static Message doneMsg("store_enum_done");
+    static Message enumMsg("store_enum_msg");
+    return DataNode(0);
+}
 
 void StorePanel::ValidateOffers(std::vector<StoreOffer *> &offers) {
     static Symbol song_sym("song");

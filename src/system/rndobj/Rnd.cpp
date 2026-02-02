@@ -1,20 +1,20 @@
 #include "rndobj/Rnd.h"
-#include "AmbientOcclusion.h"
-#include "CamAnim.h"
-#include "Enter.h"
-#include "Group.h"
-#include "Morph.h"
-#include "MotionBlur.h"
-#include "MultiMeshProxy.h"
-#include "PollAnim.h"
-#include "PostProcMgr.h"
-#include "PropAnim.h"
-#include "ScreenMask.h"
-#include "Shockwave.h"
-#include "SoftParticles.h"
-#include "Spline.h"
-#include "TexBlendController.h"
-#include "TexBlender.h"
+#include "rndobj/AmbientOcclusion.h"
+#include "rndobj/CamAnim.h"
+#include "rndobj/Enter.h"
+#include "rndobj/Group.h"
+#include "rndobj/Morph.h"
+#include "rndobj/MotionBlur.h"
+#include "rndobj/MultiMeshProxy.h"
+#include "rndobj/PollAnim.h"
+#include "rndobj/PostProcMgr.h"
+#include "rndobj/PropAnim.h"
+#include "rndobj/ScreenMask.h"
+#include "rndobj/Shockwave.h"
+#include "rndobj/SoftParticles.h"
+#include "rndobj/Spline.h"
+#include "rndobj/TexBlendController.h"
+#include "rndobj/TexBlender.h"
 #include "math/Color.h"
 #include "obj/DataFunc.h"
 #include "obj/Dir.h"
@@ -83,8 +83,8 @@ bool gNotifyKeepGoing;
 bool gFailKeepGoing;
 bool gFailRestartConsole;
 
-HANDLE gRndTextureEvent;
 HANDLE gRndThread;
+HANDLE gRndTextureEvent;
 
 DataNode ModalKeyListener::OnMsg(const KeyboardKeyMsg &k) {
     if (k.GetKey() == 0x12e) {
@@ -385,9 +385,10 @@ void Rnd::Terminate() {
     DOFProc::Terminate();
     RndMat::Terminate();
     SetName(nullptr, nullptr);
-    SetEvent(gRndTextureEvent);
-    CloseHandle(gRndThread);
-    CloseHandle(gRndTextureEvent);
+    HANDLE *handles = &gRndThread;
+    SetEvent(handles[1]);
+    CloseHandle(handles[0]);
+    CloseHandle(handles[1]);
 }
 
 void Rnd::ScreenDump(const char *file) {

@@ -138,15 +138,14 @@ void MsgSinks::AddSink(
         if (handler.Null())
             handler = ev;
         MILO_ASSERT((s != mOwner) || (handler != ev), 0xB9);
-        for (ObjList<EventSink>::iterator it = mEventSinks.begin();
-             it != mEventSinks.end();
-             ++it) {
-            if (it->event == ev) {
-                if (chainProxy != it->chainProxy) {
+        ObjList<EventSink>::iterator found;
+        for (found = mEventSinks.begin(); found != mEventSinks.end(); ++found) {
+            if (found->event == ev) {
+                if (chainProxy != found->chainProxy) {
                     MILO_NOTIFY("%s mismatched proxy chain for %s", PathName(mOwner), ev);
-                    mEventSinks.back().Add(s, mode, handler, mExporting);
-                    return;
                 }
+                found->Add(s, mode, handler, mExporting);
+                return;
             }
         }
         mEventSinks.push_back();

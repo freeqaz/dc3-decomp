@@ -1,4 +1,3 @@
-#include "MemcardMgr.h"
 #include "meta/MemcardAction.h"
 #include "meta/MemcardMgr.h"
 #include "meta/Profile.h"
@@ -277,6 +276,21 @@ MCResult MemcardMgr::ThreadCall_CheckForSaveContainer() {
     return res;
 }
 
+MCResult MemcardMgr::ThreadCall_LoadGame() {
+    MCContainer *container = mContainers[mPadNum];
+    MCResult res = container->Mount((CreateType)0);
+    if (res == kMCNoError) {
+        MCResult readRes = PerformRead(container);
+        MCResult unmountRes = container->Unmount();
+        if (readRes != kMCNoError) {
+            res = readRes;
+        } else {
+            res = unmountRes;
+        }
+    }
+    return res;
+}
+
 MCResult MemcardMgr::ThreadCall_SearchForDevice() {
     MILO_ASSERT(mSelectDeviceWaiting == false, 0x9D);
     MILO_ASSERT(mProfile, 0x9E);
@@ -343,13 +357,14 @@ DataNode MemcardMgr::OnMsg(const SigninChangedMsg &msg) {
     }
     int mask = msg.GetMask();
     for (int i = 0; i < 4; i++) {
-        if (!(mask & 1 << i)) {
-            if (mContainers[i] && !mContainers[i]->IsMounted()) {
-                TheMC.DestroyContainer(mContainers[i]);
-                mContainers[i] = nullptr;
-            }
-            mValidDevices[i] = false;
+        if (mask & (1 << i)) {
+            continue;
         }
+        if (mContainers[i] && !mContainers[i]->IsMounted()) {
+            TheMC.DestroyContainer(mContainers[i]);
+            mContainers[i] = nullptr;
+        }
+        mValidDevices[i] = false;
     }
     return 0;
 }

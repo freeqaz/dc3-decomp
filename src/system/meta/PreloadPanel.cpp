@@ -1,6 +1,4 @@
 #include "meta/PreloadPanel.h"
-#include "PreloadPanel.h"
-#include "SongMgr.h"
 #include "meta/SongMgr.h"
 #include "obj/Data.h"
 #include "obj/DirLoader.h"
@@ -17,8 +15,8 @@
 #pragma region Hmx::Object
 
 PreloadPanel::PreloadPanel()
-    : mPreloadResult(kPreloadInProgress), mMounted(0), mAppReadFailureHandler(), unk60(0),
-      unk6c(0), mMaxCacheSize(0x500000) {
+    : mPreloadResult(kPreloadInProgress), mMounted(0), mAppReadFailureHandler(), mContentCorrupt(0),
+      mSongDoesNotExist(0), mMaxCacheSize(0x500000) {
     if (!sCache) {
         sCache = new FileCache(mMaxCacheSize, kLoadBack, true, true);
     }
@@ -51,8 +49,8 @@ void PreloadPanel::Load() {
     TheContentMgr.RegisterCallback(this, false);
     mAppReadFailureHandler = TheContentMgr.SetReadFailureHandler(this);
     MILO_ASSERT(mAppReadFailureHandler, 0x50);
-    unk60 = false;
-    unk64 = gNullStr;
+    mContentCorrupt = false;
+    mCorruptContentName = gNullStr;
     Symbol cur = CurrentSong();
     if (cur.Null()) {
         MILO_NOTIFY("Trying to preload null song");
@@ -60,9 +58,9 @@ void PreloadPanel::Load() {
     SongMgr *song_mgr = FindSongMgr();
     MILO_ASSERT(song_mgr, 0x5E);
     mContentNames.clear();
-    unk6c = false;
+    mSongDoesNotExist = false;
     if (!song_mgr->HasSong(cur, false)) {
-        unk6c = true;
+        mSongDoesNotExist = true;
     } else {
         song_mgr->GetContentNames(cur, mContentNames);
         for (auto it = mContentNames.begin(); it != mContentNames.end();) {
@@ -98,7 +96,7 @@ void PreloadPanel::PollForLoading() {
             StartCache();
         }
         if (mPreloadResult == kPreloadInProgress && mMounted && sCache->DoneCaching()) {
-            if (unk6c) {
+            if (mSongDoesNotExist) {
                 mPreloadResult = kPreloadFailure;
             } else {
                 FileCache::PollAll();
@@ -133,8 +131,8 @@ void PreloadPanel::ContentMounted(const char *c1, const char *c2) {
 void PreloadPanel::ContentFailed(char const *c) {
     const char *cc20 = gNullStr;
     if (TheContentMgr.IsCorrupt(c, cc20)) {
-        unk60 = true;
-        unk64 = cc20;
+        mContentCorrupt = true;
+        mCorruptContentName = cc20;
     }
     OnContentMountedOrFailed(c);
 }
@@ -169,24 +167,24 @@ SongMgr *PreloadPanel::FindSongMgr() const {
 }
 
 DataNode PreloadPanel::OnMsg(const ContentReadFailureMsg &msg) {
-    unk60 = msg->Int(2);
-    unk64 = msg->Str(3);
+    mContentCorrupt = msg->Int(2);
+    mCorruptContentName = msg->Str(3);
     return 1;
 }
 
 DataNode PreloadPanel::OnMsg(const UITransitionCompleteMsg &msg) {
     MILO_ASSERT(mPreloadResult != kPreloadInProgress, 0x153);
     if (mPreloadResult == kPreloadSuccess) {
-        static Message msg("on_preload_ok");
-        HandleType(msg);
+        static Message okMsg("on_preload_ok");
+        HandleType(okMsg);
     } else {
-        static Message msg("on_preload_failed");
-        if (HandleType(msg).Equal(DATA_UNHANDLED, nullptr, true)) {
+        static Message failMsg("on_preload_failed");
+        if (HandleType(failMsg).Equal(DATA_UNHANDLED, nullptr, true)) {
             MILO_ASSERT(mAppReadFailureHandler, 0x15F);
-            static ContentReadFailureMsg msg(false, gNullStr);
-            msg[0] = unk60;
-            msg[1] = unk64;
-            mAppReadFailureHandler->Handle(msg, true);
+            static ContentReadFailureMsg failureMsg(false, gNullStr);
+            failureMsg[0] = mContentCorrupt;
+            failureMsg[1] = mCorruptContentName;
+            mAppReadFailureHandler->Handle(failureMsg, true);
         }
     }
     mAppReadFailureHandler = nullptr;
@@ -215,7 +213,7 @@ void PreloadPanel::StartCache() {
     sCache->Clear();
     sCache->SetSize(mMaxCacheSize);
     sCache->StartSet(0);
-    if (!unk6c) {
+    if (!mSongDoesNotExist) {
         static Symbol preload_files("preload_files");
         DataArray *files = TypeDef()->FindArray(preload_files);
         for (int i = 1; i < files->Size(); i++) {

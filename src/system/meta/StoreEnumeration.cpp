@@ -12,10 +12,9 @@ XboxEnumeration::XboxEnumeration(int i, std::vector<unsigned long long> *mOfferI
 XboxEnumeration::~XboxEnumeration() {}
 
 bool XboxEnumeration::IsSuccess() const {
-    if (*((u32*)((u8*)this + 0x3c)) == 0) {
-        return *((bool*)((u8*)this + 0x24));
+    if (*((u32*)((u8*)this + 0x3c)) != 0) {
+        MILO_ASSERT(false, 0x208);
     }
-    MILO_ASSERT(false, "mHandle");
     return *((bool*)((u8*)this + 0x24));
 }
 

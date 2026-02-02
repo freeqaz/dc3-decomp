@@ -17,14 +17,19 @@ void DeJitter::Reset() {
 
 float DeJitter::NewMs(float f1, float &fref) {
     static DataNode &n = DataVariable("dejitter_disable");
+    // Ring buffer indices (0-31 wrapping): temp_r29 is previous write position, temp_r28 is the
+    // position unk84 steps back (for averaging interval)
     float var_f30 = f1;
-    float var_f31 = 1.0000000150474662e+30;
+    float var_f31 = 1.0000000150474662e+30; // FLT_MAX-like sentinel for uninitialized result
     int temp_r29 = (unk80 - 1) & 0x1F;
     int temp_r28 = (temp_r29 - unk84) & 0x1F;
 
+    // Only apply jitter correction if enabled and have accumulated enough samples
     if (!n.Int()) {
-        if (unk84 > 8) {
+        if (unk84 > 8) { // Need more than 8 samples in the history
+            // Calculate average delta since unk84 steps ago
             float f0 = (unk0[temp_r29] - unk0[temp_r28]) / (float)unk84;
+            // Smooth the average with exponential moving average (alpha=0.1)
             if (unk88 == 0.0f) {
                 unk88 = f0;
             }
@@ -32,38 +37,46 @@ float DeJitter::NewMs(float f1, float &fref) {
             var_f31 = f0;
             unk88 = f0;
             if (sTimeScale != 1.0f) {
+                // With time scale, output is scaled delta
                 f0 = f0 * sTimeScale;
                 unk88 = f0;
                 var_f31 = f0 + unk8c;
             } else {
+                // Without time scale, clamp output to ±33ms from previous value
                 float f12 = unk8c + f0;
                 float f11 = var_f30 - 33.0f;
                 float f13 = var_f30 + 33.0f;
                 float f10 = ((f11 - f12) >= 0.0f) ? f11 : f12;
                 var_f31 = ((f10 - f13) >= 0.0f) ? f13 : f10;
             }
+            // Don't let result go below previous output value
             if (var_f31 < unk8c) {
                 var_f31 = unk8c;
             }
         }
     }
 
+    // Store new sample in ring buffer
     unk0[unk80] = var_f30;
+    // Use computed jittered value if it was calculated, otherwise use raw input
     if (var_f31 != 1.0000000150474662e+30) {
         var_f30 = var_f31;
     }
     unk80 = (unk80 + 1) & 0x1F;
 
+    // Output delta: on initialization (-2), use default frame time; otherwise use difference
     if (unk84 == -2) {
-        fref = 16.666f;
+        fref = 16.666f; // Default 60 FPS frame time
     } else {
         fref = var_f30 - unk8c;
     }
 
+    // Count up to stabilization threshold
     if (unk84 < 30) {
         unk84 = unk84 + 1;
     }
 
+    // Remember output for next iteration
     unk8c = var_f30;
     return var_f30;
 }

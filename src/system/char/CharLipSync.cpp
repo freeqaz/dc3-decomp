@@ -141,8 +141,8 @@ void CharLipSync::Generator::Init(CharLipSync *sync) {
     mLipSync->mData.resize(0);
     mWeights.resize(mLipSync->mVisemes.size());
     for (int i = 0; i < mWeights.size(); i++) {
-        mWeights[i].unk0 = 0;
-        mWeights[i].unk1 = 0;
+        mWeights[i].mPrev = 0;
+        mWeights[i].mCur = 0;
     }
     mLastCount = mLipSync->mData.size();
     mLipSync->mData.push_back(0);
@@ -193,17 +193,27 @@ void CharLipSync::Generator::Finish() {
 void CharLipSync::Generator::RemoveViseme(int visemeIdx) {
     mLipSync->mVisemes.erase(mLipSync->mVisemes.begin() + visemeIdx);
 
-    std::vector<unsigned char> &data = mLipSync->mData;
     int cur = 0;
-    for (int i = 0; i < mLipSync->mFrames; i++) {
-        int count = data[cur++];
-        for (int j = 0; j < count; j++) {
-            if (data[cur] >= visemeIdx) {
-                data[cur]--;
-                MILO_ASSERT(data[cur] < mLipSync->mVisemes.size(), 0x96);
+    int i = 0;
+    CharLipSync *lipSync = mLipSync;
+    if (lipSync->mFrames > 0) {
+        do {
+            int j = 0;
+            int count = lipSync->mData[cur++];
+            // For each viseme entry in this frame
+            if (count != 0) {
+                do {
+                    // Adjust indices for visemes after the removed one
+                    if (lipSync->mData[cur] >= visemeIdx) {
+                        lipSync->mData[cur]--;
+                        MILO_ASSERT(lipSync->mData[cur] < mLipSync->mVisemes.size(), 0x96);
+                    }
+                    j++;
+                    cur += 2;
+                } while (j < count);
             }
-            cur += 2;
-        }
+            i++;
+        } while (i < lipSync->mFrames);
     }
 }
 
@@ -228,7 +238,7 @@ void CharLipSync::PlayBack::Set(CharLipSync *lipsync, ObjPtr<ObjectDir> clips) {
     mWeights.resize(numVisemes);
 
     for (int i = 0; i < mWeights.size(); i++) {
-        ObjPtr<CharClip> &clip = mWeights[i].unk0;
+        ObjPtr<CharClip> &clip = mWeights[i].mClip;
         clip = mClips->Find<CharClip>(mLipSync->mVisemes[i].c_str(), false);
         if (!clip) {
             MILO_NOTIFY("could not find %s", mLipSync->mVisemes[i].c_str());
@@ -246,7 +256,7 @@ void CharLipSync::PlayBack::Set(CharLipSync *lipsync, ObjPtr<ObjectDir> clips) {
             mWeights.resize(newSize);
             for (int i = numVisemes; i < newSize; i++) {
                 Symbol visemeSym = arr->Sym(i - numVisemes);
-                ObjPtr<CharClip> &clip = mWeights[i].unk0;
+                ObjPtr<CharClip> &clip = mWeights[i].mClip;
                 clip = mClips->Find<CharClip>(visemeSym.Str(), false);
             }
         }
@@ -273,7 +283,7 @@ void CharLipSync::PlayBack::Poll(float time) {
                 Symbol visemeSym = result.Array(0)->Sym(visIdx);
                 float weight = ls->Property(visemeSym, true)->Float(0);
                 if ((unsigned int)numVisemes < mWeights.size()) {
-                    mWeights[numVisemes].unk1c = Clamp(zero, one, weight);
+                    mWeights[numVisemes].mCurWeight = Clamp(zero, one, weight);
                 }
             }
         }
@@ -309,10 +319,10 @@ void CharLipSync::PlayBack::Poll(float time) {
                 for (int i = count; i != 0; i--) {
                     int idx = lipSync->mData[mIndex++];
                     Weight &w = mWeights[idx];
-                    w.unk14 = w.unk18;
+                    w.mPrevWeight = w.mNextWeight;
                     int val = lipSync->mData[mIndex++];
-                    w.unk18 = (float)val * conv;
-                    w.unk1c = Interp(w.unk14, w.unk18, frac);
+                    w.mNextWeight = (float)val * conv;
+                    w.mCurWeight = Interp(w.mPrevWeight, w.mNextWeight, frac);
                 }
             }
             mFrame++;
@@ -325,7 +335,7 @@ void CharLipSync::PlayBack::Poll(float time) {
                 int wIdx = lipSync->mData[idx];
                 idx += 2;
                 Weight &w = mWeights[wIdx];
-                w.unk1c = Interp(w.unk14, w.unk18, frac);
+                w.mCurWeight = Interp(w.mPrevWeight, w.mNextWeight, frac);
             }
         }
     }
@@ -336,8 +346,8 @@ void CharLipSync::PlayBack::Reset() {
     mFrame = -1;
     for (int i = 0; i < mWeights.size(); i++) {
         Weight &weight = mWeights[i];
-        weight.unk18 = 0;
-        weight.unk1c = 0;
-        weight.unk14 = 0;
+        weight.mNextWeight = 0;
+        weight.mCurWeight = 0;
+        weight.mPrevWeight = 0;
     }
 }

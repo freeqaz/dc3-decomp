@@ -14,12 +14,14 @@ void DeJitterPanel::Enter() {
 }
 
 void DeJitterPanel::Poll() {
+    // First frame only: prime the jitter state
     if (unkf8) {
         unk38.Restart();
         float f;
         unk68.NewMs(0, f);
     }
     {
+        // Use scoped time correction: pass timer on subsequent frames, nullptr on first
         DeJitterSetter setter(unk68, unkf8 ? nullptr : &unk38);
         UIPanel::Poll();
     }
@@ -27,14 +29,17 @@ void DeJitterPanel::Poll() {
 }
 
 DeJitterSetter::DeJitterSetter(DeJitter &dj, Timer *t) {
+    // Save current time state for restoration in destructor
     secs = TheTaskMgr.Seconds(TaskMgr::kRealTime);
     delta_secs = TheTaskMgr.DeltaSeconds();
     float f1 = 0.0f;
     float f18 = 0.0f;
     if (t) {
+        // Apply jitter correction via DeJitter, convert ms to seconds
         f1 = dj.NewMs(t->SplitMs(), f18) * 0.001f;
         f18 *= 0.001f;
     }
+    // Set corrected time for the duration of this scope
     TheTaskMgr.SetTimeAndDelta(kTaskSeconds, f1, f18);
 }
 

@@ -2,7 +2,6 @@
 #include "obj/DataUtl.h"
 #include "os/Debug.h"
 #include "os/System.h"
-// #include "ui/UIListLabel.h"
 #include "ui/UIListLabel.h"
 #include "utl/Cheats.h"
 #include "utl/Std.h"
@@ -156,11 +155,8 @@ void CheatProvider::ApplyFilter() {
 }
 
 BEGIN_HANDLERS(CheatProvider)
-    HANDLE_ACTION(
-        invoke,
-        CallQuickCheat(mFilterCheats[_msg->Int(2)].mScript, _msg->Obj<LocalUser>(3))
-    )
-    HANDLE_ACTION(next_filter, ApplyFilter())
+    HANDLE_ACTION(invoke, CallQuickCheat(mFilterCheats[_msg->Int(2)].mScript, _msg->Obj<LocalUser>(3)))
+    HANDLE_ACTION(next_filter, (mFilterIdx = (mFilterIdx + 1) % mFilters.size(), ApplyFilter()))
     HANDLE_EXPR(filter, mFilters[mFilterIdx])
     HANDLE_SUPERCLASS(Hmx::Object)
 END_HANDLERS

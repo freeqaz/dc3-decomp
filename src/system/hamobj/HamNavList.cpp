@@ -1,6 +1,5 @@
 #include "hamobj/HamNavList.h"
 #include "HamListRibbon.h"
-#include "HamNavList.h"
 #include "HamScrollBehavior.h"
 #include "gesture/BaseSkeleton.h"
 #include "gesture/GestureMgr.h"
@@ -260,11 +259,9 @@ bool HamNavList::SkipPoll() const {
     float uiSeconds = (float)TheTaskMgr.UISeconds();
     if (unk1ec < uiSeconds - 0.5f) {
         return true;
-    } else {
-        return mNavInputType == kNavInput_RightHand && mOnlyUseWhenFocused
-            && TheUI->FocusComponent() != this;
     }
-    return false;
+    return mNavInputType == kNavInput_RightHand && mOnlyUseWhenFocused
+        && TheUI->FocusComponent() != this;
 }
 
 void HamNavList::Refresh() { unk1f0 = true; }
@@ -309,26 +306,21 @@ bool HamNavList::ShouldSkipSelectAnim(DataNode &node) const {
 
         static Symbol skip_select_anim("skip_select_anim");
         static Symbol skip_select_anim_and_sound("skip_select_anim_and_sound");
-        if (node.Sym(0) != skip_select_anim) {
-            if (node.Sym(0) != skip_select_anim_and_sound)
-                return false;
-        }
+        Symbol sym = node.Sym(0);
+        if (sym != skip_select_anim && sym != skip_select_anim_and_sound)
+            return false;
     }
     return true;
 }
 
 bool HamNavList::ShouldSkipSelectSound(DataNode &node) const {
-    if (node.Type() != kDataSymbol) {
+    if (node.Type() != kDataSymbol)
         return false;
-    } else {
-        static Symbol skip_select_sound("skip_select_sound");
-        static Symbol skip_select_anim_and_sound("skip_select_anim_and_sound");
-        if (node.Sym(0) != skip_select_sound) {
-            if (node.Sym(0) != skip_select_anim_and_sound)
-                return false;
-        }
-        return true;
-    }
+
+    static Symbol skip_select_sound("skip_select_sound");
+    static Symbol skip_select_anim_and_sound("skip_select_anim_and_sound");
+    Symbol sym = node.Sym(0);
+    return sym == skip_select_sound || sym == skip_select_anim_and_sound;
 }
 
 void HamNavList::AddRibbonSinks(Hmx::Object *o, Symbol s) {
@@ -356,7 +348,8 @@ void HamNavList::DoSelectFor(int i) {
 void HamNavList::HandleHighlightChanged(int i) {
     if (0 <= i && i < mListState.NumShowing()) {
         SendHighlightMsg(i);
-        if (unk190.GetFirstVal() > 0.0f) {
+        bool shouldSend = unk190.GetFirstVal() <= 0.0f;
+        if (shouldSend) {
             SendHighlightSettledMsg(i);
         }
         if (TheGestureMgr->GetBool4271() && mListRibbonResource) {
@@ -446,9 +439,10 @@ void HamNavList::SendHighlightSettledMsg(int i) {
         bool canSel = provider->CanSelect(i);
         bool isActive = provider->IsActive(i);
 
-        if (isActive != 0) {
+        if (isActive) {
             Symbol dataSym = provider->DataSymbol(i);
             int idx = provider->DataIndex(Symbol());
+            // TODO: Send highlight settled message once NavHighlightSettledMsg is created
         }
     }
 }
@@ -499,7 +493,7 @@ void HamNavList::SendHighlightMsg(int i) {
     MILO_ASSERT(provider, 0x339);
     bool canSel = provider->CanSelect(i);
     Symbol dataSym = provider->DataSymbol(i);
-    // continue once NavHighlightMsg is created
+    // TODO: Send highlight message once NavHighlightMsg is created
 }
 
 int HamNavList::GetHighlightItem() const {
@@ -522,17 +516,16 @@ void HamNavList::SetSliding(float f) {
         RealRefresh();
 
     if (mRibbonMode != HamListRibbon::kRibbonSelect) {
-        float f1 = 0.0f;
         if (mRibbonMode != HamListRibbon::kRibbonSlide) {
-            unk15c.Reset();
+            unk15c.SetParams(0.0f, 0.0f, 0.0f);
             SetRibbonMode(HamListRibbon::kRibbonSlide);
         }
-        if (sSlideSmoothAmount == f) {
-            unk15c.SetParams(f1, f1, f);
+        if (sSlideSmoothAmount == 0.0f) {
+            unk15c.SetParams(f, f, 0.0f);
         } else {
             unk15c.Smooth(f, TheTaskMgr.DeltaUISeconds());
-            SetFrame(0, 0); // idk whats goin on here but I think SetFrame is involved
         }
+        SetFrame(unk15c.Level(), 1.0f);
     }
 }
 

@@ -1,5 +1,5 @@
 #include "meta/HeldButtonPanel.h"
-#include "ButtonHolder.h"
+#include "meta/ButtonHolder.h"
 #include "obj/Object.h"
 #include "os/JoypadMsgs.h"
 #include "ui/UI.h"
@@ -23,11 +23,11 @@ void HeldButtonPanel::Enter() {
     DataArray *heldButtonsArr = TypeDef()->FindArray(held_buttons, false);
     if (heldButtonsArr) {
         for (int i = 1; i < heldButtonsArr->Size(); i++) {
-            DataArray *el = heldButtonsArr->Array(i);
-            MILO_ASSERT(el, 0x27);
-            float innerFloat = el->Float(1);
-            if (innerFloat > 0) {
-                ActionRec rec((JoypadAction)el->Int(0), innerFloat, TheUserMgr);
+            DataArray *elem = heldButtonsArr->Array(i);
+            MILO_ASSERT(elem, 0x27);
+            float holdTime = elem->Float(1);
+            if (holdTime > 0) {
+                ActionRec rec((JoypadAction)elem->Int(0), holdTime, TheUserMgr);
                 recs.push_back(rec);
             }
         }
@@ -52,6 +52,7 @@ void HeldButtonPanel::Poll() {
 
 DataNode HeldButtonPanel::OnMsg(const ProcessedButtonDownMsg &msg) {
     if (msg.IsHeldDown()) {
+        // Button held for longer than threshold; forward as held button message
         static Symbol on_button_held("on_button_held");
         static Message msgButtonHeld(on_button_held, 0, 0, 0, 0);
         msgButtonHeld[0] = msg.GetUser();
@@ -60,6 +61,7 @@ DataNode HeldButtonPanel::OnMsg(const ProcessedButtonDownMsg &msg) {
         msgButtonHeld[3] = msg.GetPadNum();
         Handle(msgButtonHeld, false);
     } else {
+        // Button released or below hold threshold; forward as regular button down
         static ButtonDownMsg msgButtonDown(0, kPad_L2, kAction_None, 0);
         msgButtonDown[0] = msg.GetUser();
         msgButtonDown[1] = msg.GetButton();

@@ -174,8 +174,9 @@ void HamWardrobe::EndCrowdOverride() {
         if (unk3c == gNullStr) {
             unk38 = false;
             int flags = unk40;
-            if (flags & 2) {
-                flags &= ~2;
+            if (unk40 & 2) {
+                // If flag 1 is set, clear bits 0-1 and set bit 0
+                flags = (unk40 & ~3) | 1;
             }
             PlayCrowdAnimation(unk44, flags, false);
         }

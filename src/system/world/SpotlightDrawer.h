@@ -71,8 +71,6 @@ public:
     OBJ_MEM_OVERLOAD(0x34)
     NEW_OBJ(SpotlightDrawer)
 
-    static RndEnviron *sEnviron;
-
     static void Init();
 
     void Select();
@@ -101,6 +99,7 @@ protected:
 
     SpotlightDrawer();
 
+    static RndEnviron *sEnviron;
     static SpotlightDrawer *sCurrent;
     static SpotlightDrawer *sDefault;
     static bool sNeedDraw;
@@ -130,11 +129,8 @@ public:
     bool operator()(
         const SpotlightDrawer::SpotMeshEntry &e1, const SpotlightDrawer::SpotMeshEntry &e2
     ) const {
-        if (e1.unk4 < e2.unk4)
-            return true;
-        else if (e1.unk4 > e2.unk4)
-            return false;
-        else
-            return e1.unk0 < e2.unk0;
+        if (e1.unk4 != e2.unk4)
+            return e1.unk4 < e2.unk4;
+        return e1.unk0 < e2.unk0;
     }
 };

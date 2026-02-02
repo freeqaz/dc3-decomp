@@ -13,8 +13,8 @@ Job::Job() {
 
 void JobMgr::Poll() {
     if (!mJobQueue.empty()) {
-        Job *job = mJobQueue.front();
-        if (job->IsFinished()) {
+        if (mJobQueue.front()->IsFinished()) {
+            Job *job = mJobQueue.front();
             mJobQueue.erase(mJobQueue.begin());
             mPreventStart = true;
             job->OnCompletion(mCallback);

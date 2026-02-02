@@ -4,65 +4,67 @@
 #include "os/Debug.h"
 #include "utl/Loader.h"
 
-FilterQueue::FilterQueue() : jobFinished(0), lastPollMs(0) {}
+FilterQueue::FilterQueue() : mJobFinished(0), mLastPollMs(0) {}
 
-bool FilterQueue::GetResults(float &f1, DetectFrame **frames, float f3) {
-    jobFinished = false;
-    if (qframes.empty()) {
-        oframes.clear();
+FilterQueue::~FilterQueue() {}
+
+bool FilterQueue::GetResults(float &outValue, DetectFrame **frames, float unused) {
+    mJobFinished = false;
+    if (mQueuedFrames.empty()) {
+        mOutputFrames.clear();
     }
-    f1 = unk0;
-    MILO_ASSERT(qframes.size() == oframes.size(), 0x42);
+    outValue = unk0;
+    MILO_ASSERT(mQueuedFrames.size() == mOutputFrames.size(), 0x42);
     frames[0] = nullptr;
     frames[1] = nullptr;
-    for (int i = 0; i < qframes.size(); i++) {
-        qframes[i].unkc->AddError(oframes[i].unk4, qframes[i].unk4);
+    for (int frameIdx = 0; frameIdx < mQueuedFrames.size(); frameIdx++) {
+        mQueuedFrames[frameIdx].unkc->AddError(mOutputFrames[frameIdx].unk4, mQueuedFrames[frameIdx].unk4);
     }
-    qframes.clear();
-    oframes.clear();
+    mQueuedFrames.clear();
+    mOutputFrames.clear();
     return true;
 }
 
-void FilterQueue::EnqueueNewJob(float f1, float f2, MoveMode mode) {
-    if (!qframes.empty()) {
+void FilterQueue::EnqueueNewJob(float outValue, float duration, MoveMode mode) {
+    if (!mQueuedFrames.empty()) {
         MILO_NOTIFY("Queuing new job, but there are already queued frames");
-        qframes.clear();
+        mQueuedFrames.clear();
     }
-    unk0 = f1;
+    unk0 = outValue;
     unk4 = mode;
-    unk8 = f2;
+    unk8 = duration;
 }
 
 void FilterQueue::EnqueueFrame(
-    int i1, float f2, float f3, DetectFrame *df, const FilterVersion *fv
+    int frameNumber, float f2, float f3, DetectFrame *df, const FilterVersion *fv
 ) {
     FilterInputFrame frame;
-    frame.unk0 = i1;
+    frame.unk0 = frameNumber;
     frame.unk4 = f2;
     frame.unk8 = f3;
     frame.unkc = df;
     frame.unk10 = fv;
-    qframes.push_back(frame);
+    mQueuedFrames.push_back(frame);
 }
 
-bool FilterQueue::IsJobFinished() const { return jobFinished; }
-float FilterQueue::LastPollMs() const { return lastPollMs; }
-bool FilterQueue::HasJob() const { return !oframes.empty(); }
-void FilterQueue::CancelJob() { qframes.clear(); }
+bool FilterQueue::IsJobFinished() const { return mJobFinished; }
+float FilterQueue::LastPollMs() const { return mLastPollMs; }
+bool FilterQueue::HasJob() const { return !mOutputFrames.empty(); }
+void FilterQueue::CancelJob() { mQueuedFrames.clear(); }
 
 void FilterQueue::StartJob() {
-    if (!oframes.empty()) {
+    if (!mOutputFrames.empty()) {
         if (!TheLoadMgr.EditMode()) {
             MILO_NOTIFY("Starting new job, but there are unprocessed output frames");
         }
-        oframes.clear();
+        mOutputFrames.clear();
     }
     unk18 = unk8;
-    jobFinished = false;
+    mJobFinished = false;
     unk1c = unk4;
-    int numQFrames = qframes.size();
-    oframes.resize(numQFrames);
-    for (int i = 0; i < numQFrames; i++) {
-        oframes[i].unk0 = qframes[i].unk0;
+    int numQFrames = mQueuedFrames.size();
+    mOutputFrames.resize(numQFrames);
+    for (int frameIdx = 0; frameIdx < numQFrames; frameIdx++) {
+        mOutputFrames[frameIdx].unk0 = mQueuedFrames[frameIdx].unk0;
     }
 }

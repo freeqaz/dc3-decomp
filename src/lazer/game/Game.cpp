@@ -313,11 +313,12 @@ void Game::StartIntro() {}
 void Game::SetHamMove(int i1, HamMove *move, bool b3) {
     if (mMoveDir) {
         HamMove *current = mMoveDir->CurrentMove(i1);
-        int i5 = TheTaskMgr.CurrentMeasure();
         if (current) {
-            if (TheTaskMgr.CurrentBeat() == 0) {
-                i5 = TheTaskMgr.CurrentMeasure() - 1;
-            } else if (TheTaskMgr.CurrentBeat() != 3) {
+            int currentBeat = TheTaskMgr.CurrentBeat();
+            int i5 = TheTaskMgr.CurrentMeasure();
+            if (currentBeat == 0) {
+                i5 = i5 - 1;
+            } else if (currentBeat != 3) {
                 current->IsRest();
             }
             MILO_ASSERT(TheGameData, 0x2C8);

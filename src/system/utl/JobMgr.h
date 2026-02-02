@@ -1,4 +1,5 @@
 #pragma once
+#include "obj/Msg.h"
 #include "obj/Object.h"
 #include "stdlib.h"
 #include "utl/MemMgr.h"
@@ -57,8 +58,6 @@ protected:
     XOVERLAPPED unk28;
 };
 
-#include "obj/Msg.h"
-
 class PostPurchaseEnumJob : public SingleItemEnumJob {
 public:
     PostPurchaseEnumJob(Hmx::Object *, int, u64);
@@ -112,3 +111,4 @@ bool Success() const { return mData->Int(2); }
 bool HasOfferID() const { return mData->Int(3); }
 unsigned long long OfferID() const { return _strtoui64(mData->Str(4), 0, 16); }
 END_MESSAGE
+

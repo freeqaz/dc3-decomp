@@ -2,7 +2,6 @@
 #include "macros.h"
 #include "math/Easing.h"
 #include "math/Rand.h"
-#include "net/json-c/printbuf.h"
 #include "obj/Data.h"
 #include "obj/DataFile.h"
 #include "obj/Object.h"
@@ -104,7 +103,7 @@ void MoviePanel::Enter() { UIPanel::Enter(); }
 
 void MoviePanel::Exit() {
     UIPanel::Exit();
-    if (mPreload == false) {
+    if (!mPreload) {
         mMovie.End();
     }
     mShowMenu = false;
@@ -192,7 +191,7 @@ void MoviePanel::FinishLoad() {
         if (mDir)
             mSubtitleLabel = mDir->Find<UILabel>("subtitles.lbl", false);
     } else {
-        mSubtitles = 0;
+        mSubtitles = nullptr;
     }
     if (mDir) {
         mPauseHintAnim = mDir->Find<RndAnimatable>("fade_pausehint.anim", true);
@@ -243,7 +242,7 @@ void MoviePanel::PlayMovie() {
     mMovie.BeginFromFile(
         MakeString("videos/%s", mCurrentMovie),
         0.0f,
-        mAudio == 0,
+        !mAudio,
         mLoop,
         mPreload,
         mFillWidth,
