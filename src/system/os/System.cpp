@@ -256,9 +256,10 @@ void SetSystemLanguage(Symbol lang, bool cheats) {
         static Symbol system("system");
         static Symbol language("language");
         static Symbol defaultSym("default");
-        DataArray *arr = SystemConfig(system, language)->FindArray(defaultSym, false);
-        if (arr) {
-            Symbol arrLang = arr->Sym(0);
+        DataArray *langConfig = SystemConfig(system, language);
+        DataArray *arr = langConfig->FindArray(defaultSym, false);
+        if (arr != 0) {
+            Symbol arrLang = arr->Sym(1); // element 0 is the config key
             if (IsSupportedLanguage(arrLang, cheats)) {
                 lang = arrLang;
             } else {

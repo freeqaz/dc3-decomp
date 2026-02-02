@@ -198,9 +198,12 @@ void HamCharacter::SyncObjects() {
         CharFaceServo *servo = Find<CharFaceServo>("face.faceservo", false);
         CharLipSyncDriver *lipDrv = Find<CharLipSyncDriver>("face.lipdrv", false);
         EnableFacialAnimation(lipDrv->LipSync(), 0);
-        bool blinking = servo
-            && (!servo->BlinkClipLeftName().Null() && !servo->BlinkClipRightName().Null()
-            );
+        bool blinking;
+        if (servo) {
+            blinking = !servo->BlinkClipLeftName().Null() && !servo->BlinkClipRightName().Null();
+        } else {
+            blinking = false;
+        }
         SetBlinking(blinking);
     }
     mCrewCardMesh = Find<RndMesh>(kCrewCardMeshName, false);
