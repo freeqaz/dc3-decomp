@@ -151,6 +151,15 @@ def quote_symbol(sym: str) -> str:
     return sym
 
 
+def _is_reloc_symbol(s: str) -> bool:
+    """Check if a string looks like a relocation symbol appended by objdiff."""
+    # MSVC mangled names, labels, merged symbols
+    return (s.startswith('?') or s.startswith('merged_') or
+            s.startswith('lbl_') or s.startswith('jumptable_') or
+            s.startswith('switch_') or s.startswith('__jtbl') or
+            (s.startswith('"') and '@' in s))
+
+
 def format_instruction(instr: dict) -> str:
     """
     Format a single instruction from objdiff JSON to assembly.
@@ -218,28 +227,54 @@ def format_instruction(instr: dict) -> str:
 
     # Convert memory operands from objdiff format to GNU-as format
     # objdiff: "lwz r11, 0x4c, r3" -> GNU-as: "lwz r11, 0x4c(r3)"
-    # This applies to load/store instructions
+    # This applies to load/store instructions with offset(base) format.
+    # Indexed ops (ending in 'x') use 3 registers: "lbzx rD, rA, rB" - no conversion needed.
     memory_ops = {
         'lwz', 'lbz', 'lhz', 'lha', 'lfs', 'lfd', 'lmw',
         'stw', 'stb', 'sth', 'stfs', 'stfd', 'stmw',
         'lwzu', 'lbzu', 'lhzu', 'lfsu', 'lfdu',
         'stwu', 'stbu', 'sthu', 'stfsu', 'stfdu',
+        # PPC64 load/store doubleword
+        'ld', 'std', 'ldu', 'stdu',
+    }
+
+    if opcode in memory_ops and args:
+        parts = args.split(', ')
+        if len(parts) == 3:
+            reg_dest, offset, reg_base = parts
+            # Check if offset is a symbol reference (not numeric)
+            # e.g. "lwz r4, ?gNullStr@@3PBDB, r11" -> "lwz r4, "?gNullStr..."@l(r11)"
+            if offset and not offset.startswith('0x') and not offset.lstrip('-').isdigit():
+                return f"{opcode} {reg_dest}, {quote_symbol(offset)}@l({reg_base})"
+            # Format: "lwz r11, 0x4c, r3" -> "lwz r11, 0x4c(r3)"
+            return f"{opcode} {reg_dest}, {offset}({reg_base})"
+        elif len(parts) == 4:
+            # Format with relocation: "lwz r11, 0x3c, r10, ?TheTaskMgr..." -> "lwz r11, 0x3c(r10)"
+            reg_dest, offset, reg_base, _reloc = parts
+            return f"{opcode} {reg_dest}, {offset}({reg_base})"
+
+    # Indexed memory ops (ending in 'x') use 3 registers: "lbzx rD, rA, rB"
+    # objdiff may append relocation info as a 4th part - strip it
+    indexed_memory_ops = {
         'lwzx', 'lbzx', 'lhzx', 'lhax', 'lfsx', 'lfdx',
         'stwx', 'stbx', 'sthx', 'stfsx', 'stfdx',
         'lwbrx', 'lhbrx', 'stwbrx', 'sthbrx',
         'lwarx', 'stwcx.',
     }
 
-    if opcode in memory_ops and args:
+    if opcode in indexed_memory_ops and args:
         parts = args.split(', ')
-        if len(parts) == 3:
-            # Format: "lwz r11, 0x4c, r3" -> "lwz r11, 0x4c(r3)"
-            reg_dest, offset, reg_base = parts
-            return f"{opcode} {reg_dest}, {offset}({reg_base})"
-        elif len(parts) == 4:
-            # Format with relocation: "lwz r11, 0x3c, r10, ?TheTaskMgr..." -> "lwz r11, 0x3c(r10)"
-            reg_dest, offset, reg_base, _reloc = parts
-            return f"{opcode} {reg_dest}, {offset}({reg_base})"
+        if len(parts) == 4:
+            # Strip relocation info: "lbzx r0, r12, r4, ??_C@..." -> "lbzx r0, r12, r4"
+            return f"{opcode} {parts[0]}, {parts[1]}, {parts[2]}"
+
+    # General relocation stripping: objdiff appends symbol info to many instructions
+    # e.g. "add r12, r12, r0, ?SongInfoAudioTypeToSym..." -> "add r12, r12, r0"
+    if args:
+        parts = args.split(', ')
+        if len(parts) >= 2 and _is_reloc_symbol(parts[-1]):
+            cleaned = ', '.join(parts[:-1])
+            return f"{opcode} {cleaned}"
 
     # Standard instruction formatting
     if args:

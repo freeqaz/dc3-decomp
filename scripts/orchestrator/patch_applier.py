@@ -205,8 +205,6 @@ class PatchApplier:
         self,
         main_repo: Path,
         enabled: bool = True,
-        min_progress: float = 0.0,
-        require_improvement: bool = True,
     ):
         self.main_repo = Path(main_repo).resolve()
         self.patches_dir = self.main_repo / "generated-patches"

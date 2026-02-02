@@ -669,6 +669,9 @@
 /* If you want to build curl with the built-in manual */
 #define USE_MANUAL 1
 
+/* Xbox 360: zlib support is linked, enabling libz-dependent code paths */
+#define HAVE_LIBZ 1
+
 #if defined(__POCC__) || (USE_IPV6)
 #  define ENABLE_IPV6 1
 #endif

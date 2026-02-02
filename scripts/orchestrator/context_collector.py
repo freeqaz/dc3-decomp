@@ -278,6 +278,76 @@ def parse_msvc_symbol(symbol: str) -> Tuple[Optional[str], Optional[str]]:
     return None, None
 
 
+def _extract_source_window(
+    source: str,
+    class_name: str,
+    method_name: str,
+    context_lines: int = 20,
+) -> Tuple[str, int, int, int]:
+    """
+    Find a function in source code and return a windowed extract with line numbers.
+
+    Args:
+        source: Full source file contents
+        class_name: Class name (e.g., "CharMirror")
+        method_name: Method name (e.g., "Load")
+        context_lines: Lines of context before and after function body
+
+    Returns:
+        Tuple of (window_text, start_line, end_line, total_lines)
+        If function not found, returns (source, 1, total_lines, total_lines) (full file)
+    """
+    lines = source.split('\n')
+    total_lines = len(lines)
+
+    # Build regex: ClassName::MethodName( at any position in a line
+    pattern = re.compile(
+        rf'\b{re.escape(class_name)}::{re.escape(method_name)}\s*\(',
+        re.MULTILINE,
+    )
+    match = pattern.search(source)
+    if not match:
+        # Function not found — return full file
+        return source, 1, total_lines, total_lines
+
+    # Find which line the match is on
+    func_start_offset = match.start()
+    func_start_line = source[:func_start_offset].count('\n')  # 0-indexed
+
+    # Find opening brace after match
+    brace_pos = source.find('{', match.end())
+    if brace_pos == -1:
+        return source, 1, total_lines, total_lines
+
+    # Count braces to find matching closing brace
+    depth = 1
+    pos = brace_pos + 1
+    while pos < len(source) and depth > 0:
+        ch = source[pos]
+        if ch == '{':
+            depth += 1
+        elif ch == '}':
+            depth -= 1
+        pos += 1
+
+    if depth != 0:
+        return source, 1, total_lines, total_lines
+
+    # Find which line the closing brace is on
+    func_end_line = source[:pos].count('\n')  # 0-indexed
+
+    # Compute window with context
+    window_start = max(0, func_start_line - context_lines)
+    window_end = min(total_lines - 1, func_end_line + context_lines)
+
+    # Extract the window lines
+    window_lines = lines[window_start:window_end + 1]
+    window_text = '\n'.join(window_lines)
+
+    # Return 1-indexed line numbers for display
+    return window_text, window_start + 1, window_end + 1, total_lines
+
+
 def find_rb3_reference(
     symbol: str,
     unit: str,
@@ -2191,6 +2261,74 @@ def collect_pre_run_context(
         # If no file found, use the most likely .cpp
         source_file_absolute = str((Path(worktree_dir) / f"{unit_path}.cpp").resolve())
 
+    # Compute header file path (try .h with same base as the source file)
+    header_file_absolute = "(no header)"
+    header_contents = "(no header found)"
+    header_line_count = 0
+    source_file_path = Path(source_file_absolute)
+    if source_file_path.suffix == '.cpp':
+        header_candidate = source_file_path.with_suffix('.h')
+        if header_candidate.exists():
+            header_file_absolute = str(header_candidate.resolve())
+            try:
+                raw_header = header_candidate.read_text()
+                header_line_count = raw_header.count('\n') + 1
+                header_offload = truncate_and_offload(
+                    content=raw_header,
+                    name=f"header_{header_candidate.stem}",
+                    worktree_dir=worktree_dir,
+                )
+                header_contents = header_offload["inline"]
+                logger.info(f"Header loaded: {header_file_absolute} ({header_line_count} lines, truncated={header_offload['was_truncated']})")
+            except Exception as e:
+                logger.warning(f"Failed to read header {header_candidate}: {e}")
+                header_contents = f"(error reading header: {e})"
+        else:
+            logger.debug(f"No header file found at {header_candidate}")
+
+    # Extract source window around target function
+    source_contents = "(not read)"
+    source_window_start_line = 0
+    source_window_end_line = 0
+    source_total_lines = 0
+    class_name_for_window, method_name_for_window = parse_msvc_symbol(symbol)
+    if Path(source_file_absolute).exists():
+        try:
+            raw_source = Path(source_file_absolute).read_text()
+            source_total_lines = raw_source.count('\n') + 1
+            if class_name_for_window and method_name_for_window:
+                window_text, start_line, end_line, total = _extract_source_window(
+                    raw_source, class_name_for_window, method_name_for_window
+                )
+                source_window_start_line = start_line
+                source_window_end_line = end_line
+                source_total_lines = total
+                # Apply truncate_and_offload to the window (or full file if extraction failed)
+                source_offload = truncate_and_offload(
+                    content=window_text,
+                    name=f"source_window_{symbol}",
+                    worktree_dir=worktree_dir,
+                )
+                source_contents = source_offload["inline"]
+                if start_line == 1 and end_line == total:
+                    logger.info(f"Source window: full file ({total} lines, function not found by pattern)")
+                else:
+                    logger.info(f"Source window: lines {start_line}-{end_line} of {total}")
+            else:
+                # Can't parse symbol — fall back to full file with truncation
+                source_offload = truncate_and_offload(
+                    content=raw_source,
+                    name=f"source_full_{symbol}",
+                    worktree_dir=worktree_dir,
+                )
+                source_contents = source_offload["inline"]
+                source_window_start_line = 1
+                source_window_end_line = source_total_lines
+                logger.info(f"Source window: full file ({source_total_lines} lines, could not parse symbol)")
+        except Exception as e:
+            logger.warning(f"Failed to read source file {source_file_absolute}: {e}")
+            source_contents = f"(error reading source: {e})"
+
     # Initialize result dict with defaults
     result = {
         "match_percent": 0.0,
@@ -2213,6 +2351,15 @@ def collect_pre_run_context(
         "xrefs_preview": "(unavailable)",
         # Source file absolute path
         "source_file_absolute": source_file_absolute,
+        # Header file
+        "header_file_absolute": header_file_absolute,
+        "header_contents": header_contents,
+        "header_line_count": header_line_count,
+        # Source window
+        "source_contents": source_contents,
+        "source_window_start_line": source_window_start_line,
+        "source_window_end_line": source_window_end_line,
+        "source_total_lines": source_total_lines,
         # Pre-computed objdiff output file
         "objdiff_file": "(unavailable)",
         "objdiff_file_absolute": "(unavailable)",

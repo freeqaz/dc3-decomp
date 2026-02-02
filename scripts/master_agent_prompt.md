@@ -63,6 +63,19 @@ Use this table to decide whether to edit this function:
 | > 80% and < 98% | ANY | - | May need some structural changes still. All tools are likely useful, but leaning towards objdiff. |
 | < 80%% | ANY | - | Try many tools out. Decompilation output will be really helpful. 
 
+### Current Header
+**File:** `{header_file_absolute}` ({header_line_count} lines)
+```cpp
+{header_contents}
+```
+
+### Current Source (lines {source_window_start_line}-{source_window_end_line} of {source_total_lines})
+**File:** `{source_file_absolute}`
+```cpp
+{source_contents}
+```
+**Note:** This is a window around the target function. Use the Read tool on the full file if you need more context.
+
 ### RB3 Reference Implementation
 
 **Note:** RB3 and DC3 share the Milo engine. The reference below is pre-computed from RB3 source.

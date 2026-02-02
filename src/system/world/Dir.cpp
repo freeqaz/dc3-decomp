@@ -277,7 +277,6 @@ BinStream &operator>>(BinStream &bs, WorldDir::BitmapOverride &c) {
     } else
         bs >> c.replacement;
     return bs;
-    return bs;
 }
 
 BinStreamRev &operator>>(BinStreamRev &d, WorldDir::BitmapOverride &o) {
@@ -441,7 +440,7 @@ void WorldDir::Poll() {
         SetTheWorld(this);
         float deltas[4];
         AccumulateDeltas(deltas);
-        bool b = (unk3f4 || (TheRnd.ProcCmds() & kProcessPost));
+        bool b = unk3f4 || (TheRnd.ProcCmds() != kProcessWorld);
         unk3f4 = false;
         if (b) {
             for (int i = 0; i < 4; i++) {

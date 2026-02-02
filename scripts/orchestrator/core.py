@@ -126,6 +126,16 @@ def _setup_logging(logs_dir: Path = DEFAULT_LOGS_DIR) -> logging.Logger:
     return logger
 
 
+class TaggedLogger(logging.LoggerAdapter):
+    """Logger adapter that prepends a [tag] prefix to all messages.
+
+    Used to disambiguate interleaved log output from parallel agents.
+    """
+
+    def process(self, msg, kwargs):
+        return f"[{self.extra['tag']}] {msg}", kwargs
+
+
 class DecompOrchestrator:
     """
     Main orchestrator for multi-agent decompilation.
@@ -146,7 +156,6 @@ class DecompOrchestrator:
         prompt_template_path: Path | None = None,
         logs_dir: Path = DEFAULT_LOGS_DIR,
         auto_apply: bool = False,
-        auto_apply_min_progress: float = 0.0,
     ):
         self.db_path = str(db_path)
         self.pool_dir = pool_dir
@@ -178,8 +187,6 @@ class DecompOrchestrator:
         self.patch_applier = PatchApplier(
             main_repo=self.main_repo,
             enabled=auto_apply,
-            min_progress=auto_apply_min_progress,
-            require_improvement=True,
         )
 
         # Active sessions: session_id -> asyncio.Task
@@ -359,6 +366,8 @@ Focus on readability and maintainability while preserving exact behavior and mat
             "objdiff_preview": len(context.get('objdiff_preview', '')),
             "previous_attempts": len(context.get('previous_attempts', '')),
             "xrefs_preview": len(context.get('xrefs_preview', '')),
+            "header_contents": len(context.get('header_contents', '')),
+            "source_contents": len(context.get('source_contents', '')),
         }
         total_sections = sum(sections.values())
         self.logger.info(
@@ -396,6 +405,15 @@ Focus on readability and maintainability while preserving exact behavior and mat
             xrefs_preview=context.get('xrefs_preview', '(unavailable)'),
             # Source file absolute path
             source_file_absolute=context.get('source_file_absolute', '(unknown)'),
+            # Header file
+            header_file_absolute=context.get('header_file_absolute', '(no header)'),
+            header_contents=context.get('header_contents', '(no header found)'),
+            header_line_count=context.get('header_line_count', 0),
+            # Source window
+            source_contents=context.get('source_contents', '(not read)'),
+            source_window_start_line=context.get('source_window_start_line', 0),
+            source_window_end_line=context.get('source_window_end_line', 0),
+            source_total_lines=context.get('source_total_lines', 0),
             # Pre-computed objdiff output
             objdiff_file=context.get('objdiff_file', '(unavailable)'),
             objdiff_file_absolute=context.get('objdiff_file_absolute', '(unavailable)'),
@@ -439,9 +457,14 @@ Focus on readability and maintainability while preserving exact behavior and mat
         Returns:
             Result dict with status, percent, patch, etc.
         """
-        # 0. Reject merged symbols (ICF artifacts, not real decomp targets)
+        # 0. Generate session ID early so all log messages carry it
+        if session_id is None:
+            session_id = f"{session_prefix}-{func['id']}-{datetime.now().strftime('%H%M%S')}"
+        log = TaggedLogger(self.logger, {"tag": func['id']})
+
+        # 0b. Reject merged symbols (ICF artifacts, not real decomp targets)
         if func.get("symbol", "").startswith("merged_"):
-            self.logger.warning(f"Skipping merged symbol {func['symbol']} (ICF artifact, not actionable)")
+            log.warning(f"Skipping merged symbol {func['symbol']} (ICF artifact, not actionable)")
             return {
                 "status": "at_limit",
                 "percent": 0.0,
@@ -452,12 +475,8 @@ Focus on readability and maintainability while preserving exact behavior and mat
         # 1. Preflight quota check
         await self._check_quota(model or "haiku")
 
-        self.logger.info(f"Starting agent session for symbol: {func['symbol']}")
-        self.logger.debug(f"Function details: demangled={func.get('demangled')}, unit={func.get('unit')}, current_percent={func.get('current_percent')}%")
-
-        # 2. Generate session ID if not provided
-        if session_id is None:
-            session_id = f"{session_prefix}-{func['id']}-{datetime.now().strftime('%H%M%S')}"
+        log.info(f"Starting agent session for symbol: {func['symbol']}")
+        log.debug(f"Function details: demangled={func.get('demangled')}, unit={func.get('unit')}, current_percent={func.get('current_percent')}%")
 
         # 3. Lock function (skip if pre_locked)
         if not pre_locked:
@@ -476,25 +495,45 @@ Focus on readability and maintainability while preserving exact behavior and mat
             selected_model = select_model(func, force_model=model)
             reason = get_escalation_reason(func, selected_model)
 
-            self.logger.info(f"Model selected: {selected_model} (reason: {reason})")
-            self.logger.debug(f"Worktree: {worktree}, Build strategy: {'incremental' if use_incremental else 'full'}")
+            log.info(f"Model selected: {selected_model} (reason: {reason})")
+            log.debug(f"Worktree: {worktree}, Build strategy: {'incremental' if use_incremental else 'full'}")
 
             # 6. Collect pre-run context
             context = {}
             try:
-                self.logger.debug(f"Collecting pre-run context for {func['symbol']}...")
+                log.debug(f"Collecting pre-run context for {func['symbol']}...")
                 context = collect_pre_run_context(
                     symbol=func["symbol"],
                     unit=func.get("unit"),
                     project_dir=str(self.main_repo),
                     worktree_dir=str(worktree)
                 )
-                self.logger.debug(f"Context collected: {len(context)} fields")
+                log.debug(f"Context collected: {len(context)} fields")
                 if context.get('verdict'):
-                    self.logger.debug(f"Verdict: {context.get('verdict')}, Match: {context.get('match_percent')}%")
+                    log.debug(f"Verdict: {context.get('verdict')}, Match: {context.get('match_percent')}%")
             except Exception as e:
-                self.logger.warning(f"Failed to collect pre-run context: {e}")
+                log.warning(f"Failed to collect pre-run context: {e}")
                 context = {}
+
+            # 6b. Correct stale DB percent using measured match
+            # The DB percent can drift if a prior session reported wrong data or
+            # if source files were edited outside the orchestrator.  Use the
+            # freshly-measured objdiff percent as the authoritative start value
+            # so that improvement/regression detection is accurate.
+            measured_percent = context.get("match_percent")
+            db_percent = func.get("current_percent") or 0
+            if measured_percent is not None and abs(measured_percent - db_percent) > 0.05:
+                log.warning(
+                    f"DB percent stale for {func['symbol']}: "
+                    f"DB={db_percent:.2f}%, measured={measured_percent:.2f}%. "
+                    f"Correcting DB to measured value."
+                )
+                update_function_status(
+                    function_id=func["id"],
+                    current_percent=measured_percent,
+                    db_path=self.db_path,
+                )
+                func["current_percent"] = measured_percent
 
             # 7. Handle dry-run
             if dry_run:
@@ -520,24 +559,24 @@ Focus on readability and maintainability while preserving exact behavior and mat
             prompt_size = len(prompt.encode('utf-8'))
 
             if prompt_size > TOTAL_CHAR_BUDGET:
-                self.logger.error(
+                log.error(
                     f"Prompt exceeds budget: {prompt_size / 1024:.1f}KB > {TOTAL_CHAR_BUDGET / 1024:.1f}KB. "
                     f"Truncating to reduce context noise."
                 )
                 prompt = prompt[:TOTAL_CHAR_BUDGET]
                 prompt += "\n\n[PROMPT TRUNCATED - exceeded token budget]"
             elif prompt_size > TOTAL_CHAR_BUDGET * 0.8:
-                self.logger.warning(
+                log.warning(
                     f"Prompt approaching budget: {prompt_size / 1024:.1f}KB "
                     f"({prompt_size * 100 // TOTAL_CHAR_BUDGET}% of {TOTAL_CHAR_BUDGET / 1024:.0f}KB budget)"
                 )
             else:
-                self.logger.debug(f"Prompt size: {prompt_size / 1024:.1f}KB ({prompt_size * 100 // TOTAL_CHAR_BUDGET}% of budget)")
+                log.debug(f"Prompt size: {prompt_size / 1024:.1f}KB ({prompt_size * 100 // TOTAL_CHAR_BUDGET}% of budget)")
 
             # 9. Run agent via AgentRunner
             start_percent = func.get("current_percent") or 0
 
-            self.logger.info(f"Launching agent (model={selected_model}, worktree={worktree})...")
+            log.info(f"Launching agent (model={selected_model}, worktree={worktree})...")
             agent_config = AgentRunConfig(
                 session_id=session_id,
                 worktree=worktree,
@@ -546,7 +585,7 @@ Focus on readability and maintainability while preserving exact behavior and mat
                 verbose=verbose,
             )
             agent_result = await self.runner.run(agent_config)
-            self.logger.info(
+            log.info(
                 f"Agent finished: status={agent_result.status}, percent={agent_result.percent}, "
                 f"exit_code={agent_result.exit_code}"
             )
@@ -554,7 +593,7 @@ Focus on readability and maintainability while preserving exact behavior and mat
             # 9b. Refactor pass (if enabled and first pass made changes)
             if refactor and self._worktree_has_changes(worktree):
                 try:
-                    self.logger.info(f"Running refactor-staff cleanup pass (Haiku)...")
+                    log.info(f"Running refactor-staff cleanup pass (Haiku)...")
                     refactor_prompt = self._build_refactor_prompt(func, worktree, agent_result.percent or start_percent)
                     refactor_config = AgentRunConfig(
                         session_id=f"{session_id}-refactor",
@@ -566,13 +605,13 @@ Focus on readability and maintainability while preserving exact behavior and mat
                         allowed_tools=list(REFACTOR_TOOLS),
                     )
                     refactor_result = await self.runner.run(refactor_config)
-                    self.logger.info(f"Refactor pass completed: percent={refactor_result.percent}, status={refactor_result.status}")
+                    log.info(f"Refactor pass completed: percent={refactor_result.percent}, status={refactor_result.status}")
 
                     # Safety: check if match% regressed
                     if refactor_result.percent is not None and agent_result.percent is not None:
                         if refactor_result.percent < agent_result.percent - 0.1:
                             # Regressed — revert refactor changes
-                            self.logger.warning(
+                            log.warning(
                                 f"Refactor pass regressed: {agent_result.percent}% -> {refactor_result.percent}%. Reverting."
                             )
                             subprocess.run(["git", "checkout", "--", "."], cwd=worktree, capture_output=True)
@@ -585,18 +624,29 @@ Focus on readability and maintainability while preserving exact behavior and mat
                         # Can't verify — merge cost anyway (assume ok)
                         agent_result.merge_cost(refactor_result)
                 except Exception as e:
-                    self.logger.error(f"Refactor pass failed with exception: {e}", exc_info=True)
-                    self.logger.info("Continuing with first-pass results (refactor skipped due to error)")
+                    log.error(f"Refactor pass failed with exception: {e}", exc_info=True)
+                    log.info("Continuing with first-pass results (refactor skipped due to error)")
             elif refactor:
-                self.logger.debug("Refactor pass skipped — no changes in worktree")
+                log.debug("Refactor pass skipped — no changes in worktree")
 
             # 10. Extract patch
-            self.logger.info("Extracting patch from worktree...")
+            log.info("Extracting patch from worktree...")
             patch = self.worktree_pool.extract_patch(session_id)
             if patch:
-                self.logger.info(f"Patch extracted: {len(patch)} bytes")
+                log.info(f"Patch extracted: {len(patch)} bytes")
             else:
-                self.logger.info("No patch (no changes in worktree)")
+                log.info("No patch (no changes in worktree)")
+
+            # 10b. Detect "agent claims progress but no patch" inconsistency
+            if not patch and agent_result.percent is not None and agent_result.percent > (func.get("current_percent") or 0):
+                log.warning(
+                    f"Agent reported improvement ({func.get('current_percent') or 0:.2f}% -> "
+                    f"{agent_result.percent:.2f}%) but worktree has no changes. "
+                    f"Possible causes: agent worked on wrong file, reverted changes, "
+                    f"or edited outside src/include/. Discarding agent-reported percent."
+                )
+                # Don't trust the agent's reported percent — use the measured start
+                agent_result.percent = func.get("current_percent") or 0
 
             # 11. Unpack result
             end_percent = agent_result.percent if agent_result.percent is not None else start_percent
@@ -608,17 +658,17 @@ Focus on readability and maintainability while preserving exact behavior and mat
             actual_cost_usd = agent_result.total_cost_usd
             duration_ms = agent_result.duration_ms
 
-            self.logger.info(f"Agent result: status={exit_status}, percent={start_percent}% → {end_percent}%, verdict={verdict}")
-            self.logger.debug(f"Notes from agent: {notes[:100]}..." if len(notes) > 100 else f"Notes from agent: {notes}")
+            log.info(f"Agent result: status={exit_status}, percent={start_percent}% → {end_percent}%, verdict={verdict}")
+            log.debug(f"Notes from agent: {notes[:100]}..." if len(notes) > 100 else f"Notes from agent: {notes}")
             if patch:
-                self.logger.debug(f"Patch size: {len(patch)} bytes")
+                log.debug(f"Patch size: {len(patch)} bytes")
             if actual_cost_usd is not None:
-                self.logger.debug(f"Actual cost: ${actual_cost_usd:.4f}, duration: {duration_ms}ms")
+                log.debug(f"Actual cost: ${actual_cost_usd:.4f}, duration: {duration_ms}ms")
                 if usage_data:
-                    self.logger.debug(f"Tokens: in={usage_data.get('input_tokens')}, out={usage_data.get('output_tokens')}, cache_read={usage_data.get('cache_read_tokens')}")
+                    log.debug(f"Tokens: in={usage_data.get('input_tokens')}, out={usage_data.get('output_tokens')}, cache_read={usage_data.get('cache_read_tokens')}")
 
             # 12. Record attempt
-            self.logger.info(f"Recording attempt to database (status={exit_status}, {start_percent}% -> {end_percent}%)...")
+            log.info(f"Recording attempt to database (status={exit_status}, {start_percent}% -> {end_percent}%)...")
             record_attempt(
                 function_id=func["id"],
                 session_id=session_id,
@@ -640,7 +690,7 @@ Focus on readability and maintainability while preserving exact behavior and mat
             )
 
             # 13. Update function status
-            self.logger.info(f"Updating function status in database...")
+            log.info(f"Updating function status in database...")
             update_function_status(
                 function_id=func["id"],
                 current_percent=end_percent,
@@ -658,7 +708,7 @@ Focus on readability and maintainability while preserving exact behavior and mat
                 symbol=func["symbol"],
             )
 
-            self.logger.info(
+            log.info(
                 f"Session complete for {func['symbol']}: "
                 f"{start_percent}% -> {end_percent}%, status={exit_status}, "
                 f"patch_applied={apply_result.get('applied', False)}"
@@ -681,12 +731,12 @@ Focus on readability and maintainability while preserving exact behavior and mat
 
         finally:
             # 15. Cleanup (only unlock if we did the locking)
-            self.logger.debug(f"Cleaning up session {session_id}...")
+            log.debug(f"Cleaning up session {session_id}...")
             if not pre_locked:
                 unlock_function(func["id"], db_path=self.db_path)
-                self.logger.debug(f"Unlocked function {func['id']}")
+                log.debug(f"Unlocked function {func['id']}")
             self.worktree_pool.release(session_id)
-            self.logger.debug(f"Released worktree for session {session_id}")
+            log.debug(f"Released worktree for session {session_id}")
 
     def run_single_sync(
         self,
@@ -805,6 +855,18 @@ Focus on readability and maintainability while preserving exact behavior and mat
             # Xrefs
             if context.get('xrefs_path_relative') != '(unavailable)':
                 print(f"  Xrefs: {context.get('xrefs_path_relative')}")
+
+            # Header
+            header_file = context.get('header_file_absolute', '(no header)')
+            if header_file and not header_file.startswith('('):
+                print(f"  Header: {header_file} ({context.get('header_line_count', 0)} lines)")
+
+            # Source window
+            src_start = context.get('source_window_start_line', 0)
+            src_end = context.get('source_window_end_line', 0)
+            src_total = context.get('source_total_lines', 0)
+            if src_total > 0:
+                print(f"  Source window: lines {src_start}-{src_end} of {src_total}")
 
             # objdiff output file
             objdiff_file = context.get('objdiff_file', '(unavailable)')
@@ -1443,6 +1505,15 @@ Focus on readability and maintainability while preserving exact behavior and mat
             m2c_line_count=context.get('m2c_line_count', 0),
             ghidra_decompilation=context.get('decompilation', '(unavailable)'),
             source_file_absolute=context.get('source_file_absolute', '(unknown)'),
+            # Header file
+            header_file_absolute=context.get('header_file_absolute', '(no header)'),
+            header_contents=context.get('header_contents', '(no header found)'),
+            header_line_count=context.get('header_line_count', 0),
+            # Source window
+            source_contents=context.get('source_contents', '(not read)'),
+            source_window_start_line=context.get('source_window_start_line', 0),
+            source_window_end_line=context.get('source_window_end_line', 0),
+            source_total_lines=context.get('source_total_lines', 0),
             objdiff_file=context.get('objdiff_file', '(unavailable)'),
             objdiff_file_absolute=context.get('objdiff_file_absolute', '(unavailable)'),
             objdiff_line_count=context.get('objdiff_line_count', 0),

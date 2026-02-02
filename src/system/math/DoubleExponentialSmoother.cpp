@@ -48,10 +48,7 @@ Vector3 Vector3DESmoother::Value() const {
 }
 
 void Vector3DESmoother::ForceValue(Vector3 v) {
-    mSmootherX.mLevel = mSmootherX.mPrevLevel = v.x;
-    mSmootherX.mTrend = 0;
-    mSmootherY.mPrevLevel = mSmootherY.mLevel = v.y;
-    mSmootherY.mTrend = 0;
-    mSmootherZ.mLevel = mSmootherZ.mPrevLevel = v.z;
-    mSmootherZ.mTrend = 0;
+    mSmootherX.SetParams(v.x, v.x, 0);
+    mSmootherY.SetParams(v.y, v.y, 0);
+    mSmootherZ.SetParams(v.z, v.z, 0);
 }

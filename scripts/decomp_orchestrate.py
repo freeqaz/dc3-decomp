@@ -155,7 +155,6 @@ def cmd_single(args):
         pool_dir=Path(args.pool_dir),
         main_repo=_project_root,
         auto_apply=not args.no_auto_apply,
-        auto_apply_min_progress=args.auto_apply_min_progress,
     )
 
     # Force unlock if requested
@@ -309,7 +308,6 @@ def cmd_batch(args):
         pool_size=max(args.max_agents, 3),  # Ensure enough worktrees
         main_repo=_project_root,
         auto_apply=not args.no_auto_apply,
-        auto_apply_min_progress=args.auto_apply_min_progress,
     )
 
     # Ensure pool exists
@@ -1045,12 +1043,6 @@ def main():
         help="Disable auto-applying patches to main repo",
     )
     p_single.add_argument(
-        "--auto-apply-min-progress",
-        type=float,
-        default=0.0,
-        help="Minimum improvement %% to auto-apply (default: 0 = any)",
-    )
-    p_single.add_argument(
         "--no-refactor",
         action="store_true",
         help="Skip the Haiku refactor-staff cleanup pass after the main agent",
@@ -1142,12 +1134,6 @@ def main():
         "--no-auto-apply",
         action="store_true",
         help="Disable auto-applying patches to main repo",
-    )
-    p_batch.add_argument(
-        "--auto-apply-min-progress",
-        type=float,
-        default=0.0,
-        help="Minimum improvement %% required to auto-apply (default: 0 = any progress)",
     )
     p_batch.add_argument(
         "--no-refactor",
