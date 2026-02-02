@@ -68,7 +68,7 @@ void KerningTable::SetKerning(
             Entry &curEntry = mEntries[entryIdx++];
             curEntry.key = Key(curInfo.unk0, curInfo.unk2);
             curEntry.kerning = curInfo.kerning;
-            int index = TableIndex(curInfo.unk0, curInfo.unk2);
+            int index = TableIndex(curInfo.unk2, curInfo.unk0);
             curEntry.next = mTable[index];
             mTable[index] = &curEntry;
         }

@@ -1,0 +1,295 @@
+# Fixable Patterns: Comparison
+
+Patterns related to comparison operators, signedness, and conditional expressions.
+
+---
+
+## Unsigned Zero Comparison
+
+**Impact:** +0.4-1.3%
+**Success Rate:** 95%
+**Time:** 2 minutes
+
+For unsigned variables compared against zero, use `> 0` instead of `!= 0`.
+
+### Symptom
+
+objdiff shows `beq`/`bne` vs `ble`/`bgt` branch mismatch when comparing unsigned to 0.
+
+### Why It Works
+
+MSVC generates different branch instructions:
+- `!= 0` → `cmpwi` + `beq` (branch if equal)
+- `> 0` → `cmpwi` + `ble` (branch if less or equal)
+
+The original binary uses `ble`. For unsigned types, `x > 0` is mathematically equivalent to `x != 0`.
+
+### Fix
+
+```cpp
+// Before - generates beq branch
+if (d.rev != 0)
+    bs >> mBlinkClipLeftName;
+
+// After - generates ble branch (matches original)
+if (d.rev > 0)
+    bs >> mBlinkClipLeftName;
+```
+
+### Real Examples
+
+| Function | Before | After | Delta |
+|----------|--------|-------|-------|
+| CharFaceServo::Load | 98.8% | 99.5% | +0.7% |
+| UIListArrow::Load | 94.2% | 95.5% | +1.3% |
+| RndTransformable::Load | 92.1% | 92.5% | +0.4% |
+
+### Important
+
+This pattern ONLY applies to:
+- Zero comparisons (`!= 0` or `== 0`)
+- Unsigned types
+
+Other transformations like `> X` to `>= X+1` make matches WORSE.
+
+---
+
+## Signed/Unsigned Cast
+
+**Impact:** +1-50%
+**Success Rate:** 100%
+**Time:** 5 minutes
+
+Force specific comparison instruction by casting to signed or unsigned.
+
+### Symptom
+
+objdiff shows `cmplwi` (unsigned) vs `cmpwi` (signed) mismatch.
+
+### Why It Works
+
+Pointer/integer null checks can generate either instruction type. The original code may have used explicit casts.
+
+### Fix
+
+```cpp
+// Force signed comparison (cmpwi)
+if ((int)ip != 0) { ... }
+if (!obj) { ... }  // null check uses signed
+
+// Force unsigned comparison (cmplwi)
+if ((unsigned long)ptr != 0) { ... }
+```
+
+### Real Examples
+
+| Function | Before | After | Delta | Notes |
+|----------|--------|-------|-------|-------|
+| OSCMessenger::Connect | 98.57% | 100% | +1.43% | `(int)ip != 0` forces cmpwi |
+| ObjectDir::RemoveSubDir | 98.13% | 100% | +1.87% | Direct mObject pointer access for cmplw |
+| PhysicsVolume::DestroyPhysicsVolume | 98.0% | 100% | +2.0% | `(unsigned)(void*)` cast in RELEASE macro |
+| HamNavList::SetHighButtonMode | 17.0% | 100% | +83% | Virtual call + cast fix |
+| FlowPtrGetLoadingDir | 97.78% | 100% | +2.22% | `(unsigned long)flow->Loader() > 0` |
+| HollaBackMinigame::WinShoutOut | 98.21% | 100% | +1.79% | `(int)mWinShoutouts.size()` for clrrwi. |
+
+---
+
+## Loop Counter Signedness
+
+**Impact:** Variable
+**Success Rate:** HIGH
+**Time:** 3 minutes
+
+Loop counter type affects comparison instruction selection.
+
+### Symptom
+
+objdiff shows `cmpwi` (signed) vs `cmplwi` (unsigned) in loop termination.
+
+### Fix
+
+```cpp
+// Before - signed comparison, generates cmpwi
+int size;
+bs >> size;
+for (; size != 0; size--) { ... }
+
+// After - unsigned comparison, generates cmplwi
+unsigned int size;
+bs >> size;
+for (; size != 0; size--) { ... }
+```
+
+### Real Examples
+
+| Function | Before | After | Delta | Notes |
+|----------|--------|-------|-------|-------|
+| SfxInst::Stop | 98.57% | 100% | +1.43% | Extracted `MoggClip*` to local var changes cmpwi/cmplwi |
+| (loop counter) | 97.1% | 100% | +2.9% | `(int)size()` in loop condition |
+
+### Detection
+
+Look for `cmpwi` vs `cmplwi` differences in loop comparison code.
+
+---
+
+## String Iteration Signedness
+
+**Impact:** Variable
+**Success Rate:** HIGH
+**Time:** 3 minutes
+
+Use `unsigned char` for string iteration to avoid sign extension.
+
+### Symptom
+
+objdiff shows extra `extsb` (extend sign byte) instruction in string loops.
+
+### Why It Works
+
+- `char*` iteration: generates `extsb` for sign extension
+- `unsigned char*` iteration: no sign extension needed
+
+### Fix
+
+```cpp
+// Before - signed char generates extsb
+for (const char *p = str; *p != '\0'; p++) {
+    hash = hash * mult + *p;
+}
+
+// After - unsigned char, no sign extension
+for (const unsigned char *p = (const unsigned char *)str; *p != '\0'; p++) {
+    hash = hash * mult + *p;
+}
+```
+
+### Detection
+
+Look for `extsb` instructions in string processing code. If the original doesn't have them, switch to unsigned char.
+
+---
+
+## empty() vs size()
+
+**Impact:** Variable
+**Success Rate:** HIGH
+**Time:** 2 minutes
+
+`empty()` and `size() == 0` generate different code.
+
+### Symptom
+
+objdiff shows `cmplw` (pointer compare) vs `divw` (division) mismatch.
+
+### Why It Works
+
+- `empty()`: Compares begin/end pointers (`cmplw begin, end`)
+- `size() == 0`: Calculates element count via division (`divw (end-begin)/sizeof(T)`)
+
+### Fix
+
+```cpp
+// Before - pointer comparison
+if (mTempoPoints.empty()) {
+
+// After - division-based size check
+if (mTempoPoints.size() == 0) {
+```
+
+Also applies to Eof checks:
+
+```cpp
+// Before - generates wrong subtraction order
+virtual EofType Eof() { return (EofType)(mBuffer.size() == mTell); }
+
+// After - explicit (end - begin) - Tell matches PowerPC register order
+virtual EofType Eof() { return (EofType)(mBuffer.end() - mBuffer.begin() - mTell == 0); }
+```
+
+### Real Examples
+
+| Function | Before | After | Delta | Notes |
+|----------|--------|-------|-------|-------|
+| MemStream::Eof | 98.75% | 100% | +1.25% | `end() - begin() - mTell == 0` |
+| BufStream::Eof | 98.0% | 100% | +2.0% | `mTell == mSize` operand order |
+| ArkFile::Eof | 98.0% | 100% | +2.0% | Moved inline to .cpp, `mTell == mSize` |
+
+### Detection
+
+Look for `divw` in target vs `cmplw` in decomp. If target calculates actual count, use `size() == 0`.
+
+---
+
+## Comparison Style
+
+**Impact:** Variable
+**Success Rate:** MEDIUM
+**Time:** 5 minutes
+
+Equivalent comparisons may generate different code.
+
+### Symptom
+
+objdiff shows `cmpwi` immediate value off by 1, with different branch condition.
+
+### Fix
+
+Try equivalent comparison forms:
+
+```cpp
+// These are logically equivalent but may generate different code:
+if (x >= 5) ...
+if (x > 4) ...
+if (!(x < 5)) ...
+
+// Example fix:
+// Before - generates cmpwi r27, 0x2 + bge
+if (i3 < 2) {
+
+// After - generates cmpwi r27, 0x1 + bgt
+if (i3 <= 1) {
+```
+
+### Detection
+
+Check objdiff for `cmpwi` immediate values and branch conditions (`bge` vs `bgt`).
+
+---
+
+## Argument Evaluation Order
+
+**Impact:** Variable
+**Success Rate:** MEDIUM
+**Time:** 5 minutes
+
+Function argument evaluation order is unspecified in C++.
+
+### Symptom
+
+objdiff shows load instructions in wrong order near function calls.
+
+### Why It Works
+
+C++ does not guarantee argument evaluation order. The compiler may evaluate right-to-left, left-to-right, or any other order.
+
+### Fix
+
+```cpp
+// Before - mStr loaded second
+return strcmp(mStr, str.c_str()) == 0;
+
+// After - mStr loaded first (matches target)
+return strcmp(str.c_str(), mStr) == 0;
+```
+
+### Detection
+
+Use objdiff to compare load instruction order before `bl` calls. If target loads `this->member` before `param->member`, swap the arguments.
+
+---
+
+## See Also
+
+- [fixable-casting.md](fixable-casting.md) - Type casting patterns
+- [unfixable-compiler.md](unfixable-compiler.md) - When comparison fixes don't work
