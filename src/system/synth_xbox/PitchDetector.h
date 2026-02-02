@@ -9,15 +9,17 @@ public:
     ~SpectralAnalysis();
     SpectralAnalysis();
 
-    FftIpp mFft1;           // offset 0x0c
-    char pad1[0x44];        // offset 0x50 - padding
-    FftIpp mFft2;           // offset 0x50
-    char pad2[0x50];        // offset 0xa0 - padding
-    void *mData1;           // offset 0xa0
-    void *mData2;           // offset 0xac
-    void *mData3;           // offset 0xb8
-    void *mData4;           // offset 0xc4
-    void *mData5;           // offset 0xd0
+    int unk0;               // 0x00
+    int unk4;               // 0x04
+    int unk8;               // 0x08
+    FftIpp mFft1;           // 0x0C
+    FftIpp mFft2;           // 0x50
+    IppBuf mData0;          // 0x94
+    IppBuf mData1;          // 0xA0
+    IppBuf mData2;          // 0xAC
+    IppBuf mData3;          // 0xB8
+    IppBuf mData4;          // 0xC4
+    IppBuf mData5;          // 0xD0
 };
 
 } // namespace DSP
