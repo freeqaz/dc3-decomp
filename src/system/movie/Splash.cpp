@@ -30,11 +30,13 @@ void Splash::SetWaitForSplash(bool b) {
 void Splash::Suspend() {
     MILO_ASSERT(MainThread(), 0xcf);
     unk60 += 1;
+    // Only handle first suspend
     if (unk60 < 2) {
         if (!unk64) {
             SetMutableState(SplashState::s2);
         }
         else {
+            // Threaded mode: signal and wait for render thread
             bool b = SetMutableState(SplashState::s1);
             if (b) {
                 WaitForState(SplashState::s2);
@@ -49,6 +51,7 @@ void Splash::Resume() {
     if (--unk60 <= 0) {
         MILO_ASSERT(unk60 == 0, 0x264);
         if (unk64 != 0) {
+            // Threaded mode: resume rendering and signal render thread
             if (SetMutableState(SplashState::s3)) {
                 if (unk50 != NULL) {
                     unk50->SetShowing(false);
@@ -64,6 +67,7 @@ void Splash::Resume() {
                 }
             }
         } else {
+            // Non-threaded mode: resume drawing immediately
             if (SetMutableState(SplashState::kResumed) == 0)
                 return;
             unk5c = 0;
@@ -82,29 +86,32 @@ void Splash::AddScreen(char const *c, int i) {
 }
 
 bool Splash::PrepareNext() {
-    //CriticalSection *cs = &unk98;
     CritSecTracker tracker(&unk98);
     if (mScreens.empty()) {
         return false;
     }
-    else {
-        auto local58 = mScreens.back().fname;
-        FilePath fp = local58;
-        auto loadedObj = DirLoader::LoadObjects(fp, 0, 0);
-        RndDir *rndDir = dynamic_cast<RndDir *>(loadedObj);
-        if (!rndDir) {
-            MILO_FAIL("Missing file %s", local58);
-        }
-        auto splashMovie = rndDir->Find<TexMovie>(kSplashMovie, false);
-        if (splashMovie) {
-            splashMovie->GetMovie().CheckOpen(false);
-        }
-        CritSecTracker tracker2(&unk98);
-        PreparedScreenParams psp = {rndDir};
-        mPreparedScreens.push_back(psp);
-        mScreens.clear();
-        return true;
+
+    // Load and prepare the next screen from the queue
+    auto fname = mScreens.back().fname;
+    FilePath fp = fname;
+    auto loadedObj = DirLoader::LoadObjects(fp, 0, 0);
+    RndDir *rndDir = dynamic_cast<RndDir *>(loadedObj);
+    if (!rndDir) {
+        MILO_FAIL("Missing file %s", fname);
     }
+
+    // Pre-check if movie exists
+    auto splashMovie = rndDir->Find<TexMovie>(kSplashMovie, false);
+    if (splashMovie) {
+        splashMovie->GetMovie().CheckOpen(false);
+    }
+
+    // Queue the prepared screen
+    CritSecTracker tracker2(&unk98);
+    PreparedScreenParams psp = {rndDir};
+    mPreparedScreens.push_back(psp);
+    mScreens.clear();
+    return true;
 }
 
 void Splash::PrepareRemaining() {
@@ -114,12 +121,14 @@ void Splash::PrepareRemaining() {
 void Splash::EndSplasher() {
     if (TheSplasher) {
         if (unk64) {
+            // Threaded mode: signal termination and wait for worker thread
             MILO_ASSERT(mScreens.empty(), 0xa6);
             MILO_ASSERT(gSplashing, 0xa7);
             MILO_ASSERT(SetImmutableState(kTerminating), 0xa9);
             WaitForState(kTerminated);
             gSplashing = false;
         } else {
+            // Non-threaded mode: manually process remaining screens
             while (ShowNext())
                 ;
             MILO_ASSERT(SetImmutableState(kTerminated), 0xb6);
@@ -127,6 +136,7 @@ void Splash::EndSplasher() {
         TheSplasher = NULL;
         SetRndSplasherCallback(0, 0, 0);
         *(bool *)((char *)&TheRnd + 0x1b4) = false;
+        // Clean up archived screen directories
         for (std::list<RndDir *>::iterator it = unkc0.begin(); it != unkc0.end(); ++it) {
             delete *it;
         }
@@ -179,8 +189,10 @@ void Splash::Draw() {}
 bool Splash::SetMutableState(Splash::SplashState state) {
     MILO_ASSERT(state <= kResumed, 0x13b);
     CritSecTracker tracker(&unk6c);
+    // Only allow transition if we're in a mutable state
     if (mState <= kResumed) {
         mState = state;
+        // Signal appropriate event for main or worker thread
         MainThread() ? unk90.Set() : unk8c.Set();
         return true;
     }
@@ -192,7 +204,9 @@ bool Splash::SetMutableState(Splash::SplashState state) {
 bool Splash::SetImmutableState(Splash::SplashState state) {
     MILO_ASSERT(state > kResumed, 0x150);
     CritSecTracker tracker(&unk6c);
+    // Only allow transition to terminal states in specific sequences
     if (mState < kResumed || state <= mState) {
+        // Allow WaitingForTerminating -> kTerminating transition
         if (state != kWaitingForTerminating || mState != kTerminating) {
             return false;
         }
@@ -206,9 +220,11 @@ bool Splash::SetImmutableState(Splash::SplashState state) {
 }
 
 void Splash::WaitForState(Splash::SplashState state) {
+    // Can only wait in threaded mode
     if (unk64 == 0) {
         MILO_FAIL("Can\'t WaitForState");
     }
+    // Wait for state change, allowing intermediate states for kResumed
     while (mState != state && (state != kResumed || mState <= kResumed)) {
         MainThread() ? unk8c.Wait(-1) : unk90.Wait(-1);
     }
@@ -217,22 +233,40 @@ void Splash::WaitForState(Splash::SplashState state) {
 void Splash::CheckWorkerSuspend(bool) {}
 
 bool Splash::ShowNext() {
-    if (unk50) {
+    // Clean up previous splash screen
+    if (unk50 != NULL) {
         unk50->SetShowing(false);
         unk50->GetMovie().SetPaused(true);
-        unk50 = nullptr;
+        unk50 = NULL;
     }
-    if (unk48) {
+    // Clean up and archive previous splash directory
+    if (unk48 != NULL) {
         unk48->Exit();
         unkc0.push_back(unk48);
-        unk48 = nullptr;
+        unk48 = NULL;
     }
     unk4c = 0;
     unk54 = 0;
     CritSecTracker tracker(&unk98);
-    FOREACH(it, mPreparedScreens) {
-        // not really sure whats going on here
+
+    // Count prepared screens to determine if we're done
+    std::list<PreparedScreenParams>::iterator begin = mPreparedScreens.begin();
+    std::list<PreparedScreenParams>::iterator end = mPreparedScreens.end();
+    std::list<PreparedScreenParams>::iterator node = begin;
+    unsigned int num = 0;
+
+    if (node != end) {
+        do {
+            ++node;
+            ++num;
+        } while (node != end);
+        // If only one screen remains, signal that we're done
+        if (num == 1U) {
+            return true;
+        }
     }
+
+    // Display the next screen
     mPreparedScreens.clear();
     return Show();
 }
@@ -241,14 +275,17 @@ bool Splash::Show() {
     CritSecTracker tracker(&unk98);
     MILO_ASSERT(!mPreparedScreens.empty(), 0x283);
     tracker.mCritSec->Exit();
+    // Get the last prepared screen (typically only one)
     auto rndDir = mPreparedScreens.end()->unk0;
     rndDir->Exit();
     unk4c = unk48->Find<RndCam>(kSplashCam, true);
     unk50 = unk48->Find<TexMovie>(kSplashMovie, true);
     if (!unk50) {
+        // No movie found, use preset duration
         unk8 = mPreparedScreens.end()->unk4;
     }
     else {
+        // Found movie; if not threaded, skip to next screen
         if (!unk64) {
             return ShowNext();
         }
@@ -266,11 +303,14 @@ bool Splash::Show() {
 }
 
 bool Splash::UpdateThreadLoop() {
+    // Continue if screen time hasn't elapsed or if we successfully advanced to next screen
     if (unk18.SplitMs() <= unk8 || ShowNext()) {
         Draw();
+        // Keep looping unless we're terminating and should wait
         if (mState != kTerminating || unkc) {
             return true;
         }
+        // Drain remaining screens before terminating
         for (bool b = ShowNext(); b; b = ShowNext()) {}
     }
     return false;
@@ -287,6 +327,7 @@ void Splash::UpdateThread() {
 
     unk18.Start();
 
+    // Initialize time reference for performance monitoring
     if (unk18.SplitMs() == 0) {
         unk60 = __mftb();
     }

@@ -113,7 +113,14 @@ Symbol RhythmBattle::GetLeader() const {
     static Symbol right("right");
     bool goofy = GetGoofy();
 
-    return both;
+    return goofy ? right : left;
+}
+
+void RhythmBattle::Begin() {
+    mActive = true;
+    if (unk130) {
+        unk130->StartRecording();
+    }
 }
 
 void RhythmBattle::ResetCombo() {
@@ -347,6 +354,46 @@ void RhythmBattle::Poll() {
     }
 }
 
+void RhythmBattle::PlayTanClip(int phase, bool flag) {
+    Symbol use_char_projection("use_char_projection");
+    TheHamProvider->SetProperty(use_char_projection, DataNode(1));
+
+    static Message showCharProjection("show_char_projection");
+    TheHamProvider->Handle(showCharProjection, false);
+
+    HamCharacter *character = TheHamDirector->GetCharacter(0);
+    CharDriver *driver = character->Driver();
+
+    String clipName;
+    float beatLength;
+
+    if (phase == 0) {
+        clipName = "tan_rigged_01";
+        beatLength = 28.0f;
+        static Message tanPhaseIn("tan_finale_phasein01");
+        TheHamProvider->Handle(tanPhaseIn, false);
+    } else if (phase == 1) {
+        clipName = "tan_rigged_02";
+        beatLength = 22.0f;
+        static Message tanPhaseIn("tan_finale_phasein02");
+        TheHamProvider->Handle(tanPhaseIn, false);
+    } else if (phase == 2) {
+        clipName = "tan_rigged_03";
+        beatLength = 40.0f;
+        static Message tanPhaseIn("tan_finale_phasein03");
+        TheHamProvider->Handle(tanPhaseIn, false);
+    } else if (phase == 3) {
+        clipName = "tan_rigged_04";
+        beatLength = 1.0e30f;
+    } else {
+        clipName = "pose_fatalities_tan";
+        beatLength = 2.7f;
+    }
+
+    CharClip *clip = driver->FindClip(DataNode(clipName.c_str()), true);
+    driver->Play(clip, flag ? 1 : 2, -1.0f, beatLength, 0.0f);
+}
+
 void RhythmBattle::PlayMindControlVO(Symbol s) {
     static Message msg("mind_control_vo", DataNode(0));
     msg[0] = DataNode(s);
@@ -427,8 +474,8 @@ void RhythmBattle::UpdateMindControl() {
         if (mPlayerTwo)
             mPlayerTwo->SetActive(true);
 
-        float f31 = 18.84955596923828f;
         float f28 = 1.0f;
+        float f31 = 18.84955596923828f;
 
         for (s32 r26 = 0; r26 < 2; r26++) {
             u32 character_ptr = (u32)TheHamDirector->GetCharacter(r26);
@@ -447,12 +494,14 @@ void RhythmBattle::UpdateMindControl() {
         }
 
         float f0 = unk10c;
-        if (f0 > 0.5f && f0 < 0.95f && unk110 > 5.0f) {
+        if ((f0 <= 0.5f || f0 >= 0.95f) || (unk110 <= 5.0f)) {
+            if (f0 < 0.2f && unk110 > 20.0f) {
+                static Symbol not_grooving("not_grooving");
+                PlayMindControlVO(not_grooving);
+            }
+        } else {
             static Symbol grooving("grooving");
             PlayMindControlVO(grooving);
-        } else if (f0 < 0.15f && unk110 > 20.0f) {
-            static Symbol not_grooving("not_grooving");
-            PlayMindControlVO(not_grooving);
         }
 
         unk110 = TheTaskMgr.DeltaSeconds() + unk110;

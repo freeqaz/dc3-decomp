@@ -49,6 +49,7 @@ typedef struct D3DDevice { /* Size=0x2a80 */
     /* 0x01d4 */ VOID (*m_SetSamplerStateCall[20])(D3DDevice *, UINT, UINT);
     /* 0x0224 */ UINT (*m_GetRenderStateCall[101])(D3DDevice *);
     /* 0x03b8 */ UINT (*m_GetSamplerStateCall[20])(D3DDevice *, UINT);
+    /* 0x0408 */ char _pad408[0x78];
     /* 0x0480 */ D3DConstants m_Constants;
     /* 0x2820 */ float m_ClipPlanes[6][4];
     /* 0x2880 */ GPU_DESTINATIONPACKET m_DestinationPacket;
@@ -793,6 +794,16 @@ void D3DDevice_BlockOnFence(DWORD fence);
 
 void D3DDevice_SetSamplerState_MinFilter(D3DDevice *pDevice, DWORD Sampler, DWORD Value);
 void D3DDevice_SetSamplerState_MagFilter(D3DDevice *pDevice, DWORD Sampler, DWORD Value);
+inline void D3DDevice_SetSamplerState_MipFilter(D3DDevice *pDevice, DWORD Sampler, DWORD Value, UINT64 PendingMask3) {
+    DWORD *pWord = &pDevice->m_Constants.TextureFetch[Sampler].dword[0];
+    *pWord = (*pWord & ~0x1C00) | ((Value & 7) << 10);
+    pDevice->m_Pending.m_Mask[3] |= PendingMask3;
+}
+inline void D3DDevice_SetSamplerState_AddressU(D3DDevice *pDevice, DWORD Sampler, DWORD Value, UINT64 PendingMask3) {
+    DWORD *pWord = &pDevice->m_Constants.TextureFetch[Sampler].dword[0];
+    *pWord = (*pWord & ~0xE000) | ((Value & 7) << 13);
+    pDevice->m_Pending.m_Mask[3] |= PendingMask3;
+}
 
 D3DVertexBuffer *D3DDevice_CreateVertexBuffer(UINT Length, DWORD Usage, D3DPOOL Pool);
 
@@ -927,11 +938,21 @@ Direct3D_CreateDevice(
     D3DDevice **ppReturnedDeviceInterface
 );
 
+D3DSurface *D3DDevice_CreateSurface(
+    UINT Width,
+    UINT Height,
+    D3DFORMAT D3DFormat,
+    D3DMULTISAMPLE_TYPE MultiSample,
+    const D3DSURFACE_PARAMETERS *pParameters
+);
+
 D3DQuery *
 D3DDevice_CreateQueryTiled(D3DDevice *pDevice, D3DQUERYTYPE Type, UINT TileCapacity);
 
 void D3DDevice_SetVertexShader(D3DDevice *pDevice, D3DVertexShader *pShader);
 void D3DDevice_SetPixelShader(D3DDevice *pDevice, D3DPixelShader *pShader);
+
+void D3DXSetDXT3DXT5(int enable);
 
 #ifdef __cplusplus
 }

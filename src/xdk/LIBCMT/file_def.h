@@ -112,9 +112,15 @@ typedef struct _FILE FILE;
 #define SEEK_END (2)
 #endif
 
-#define stdin &(__files[0])
-#define stdout &(__files[1])
-#define stderr &(__files[2])
+/* MSVC CRT uses a 32-byte FILE struct internally for __iob_func */
+struct _iobuf {
+    char _placeholder[0x20];
+};
+
+struct _iobuf *__iob_func(void);
+#define stdin  ((FILE *)&__iob_func()[0])
+#define stdout ((FILE *)&__iob_func()[1])
+#define stderr ((FILE *)&__iob_func()[2])
 
 #define _STATIC_FILES 4
 

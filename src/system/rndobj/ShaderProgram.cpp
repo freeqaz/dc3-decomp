@@ -58,9 +58,23 @@ void RndShaderProgram::CopyErrorShader(ShaderType shader, const ShaderOptions &o
         );
     }
     MILO_ASSERT(shader != kErrorShader && shader != kPostprocessErrorShader, 0x12F);
-    ShaderType errorType = kPostprocessShader ? kPostprocessErrorShader : kErrorShader;
-    u64 mask = (errorType == kErrorShader && opts.flags & 0x1000) ? 0x1000 : 0;
-    mask |= TheShaderMgr.GetShaderErrorDisplay() << 0x23;
+
+    // Determine the appropriate error shader type
+    ShaderType errorType;
+    if (shader == kPostprocessShader) {
+        errorType = kPostprocessErrorShader;
+    } else {
+        errorType = kErrorShader;
+    }
+
+    // Build options mask for error shader, preserving specific flags
+    u64 mask = 0;
+    if (errorType == kErrorShader && (opts.flags & 0x1000)) {
+        mask = 0x1000;
+    }
+    u64 display = TheShaderMgr.GetShaderErrorDisplay();
+    mask = ((display & 1) << 0x23) | (mask & 0xfffffff7ffffffff);
+
     ShaderOptions newOpts(mask);
     RndShaderProgram &program = TheShaderMgr.FindShader(errorType, newOpts);
     if (!program.Cached()) {

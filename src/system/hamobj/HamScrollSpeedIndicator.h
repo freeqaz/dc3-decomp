@@ -33,7 +33,9 @@ public:
     OBJ_MEM_OVERLOAD(0x11)
     NEW_OBJ(HamScrollSpeedIndicator)
 
+    bool IsShowing() const { return unk1fc; }
     void Show(bool);
+    void Update(float, float, float);
     void HandleEnter();
     void HandleExit();
     void Draw(const Transform &);

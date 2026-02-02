@@ -54,6 +54,8 @@ BinStream &operator>>(BinStream &bs, RndParticle &p) {
     return bs;
 }
 
+RndParticleSys::Burst::Burst() : unk0(0), unk4(0), unk8(0), unkc(0) {}
+
 PartOverride::PartOverride()
     : mask(0), life(0), speed(0), deltaSize(0), startColor(0), midColor(0), endColor(0),
       pitch(0, 0), yaw(0, 0), mesh(0), box(Vector3(0, 0, 0), Vector3(0, 0, 0)) {}
@@ -773,21 +775,21 @@ void RndParticleSys::CreateParticles(float frame, float frameSpan, const Transfo
 void RndParticleSys::RunFastForward() {
     mNeedForward = false;
 
-    float avgRate = (mEmitRate.x + mEmitRate.y) * 0.5f;
-    if (0.0001f > avgRate)
+    float avgEmitRate = (mEmitRate.x + mEmitRate.y) * 0.5f;
+    if (avgEmitRate < 0.0001f)
         return;
 
-    float step = 1.0f / avgRate;
-    float duration = Min(step * (float)mMaxParticles, (mLife.x + mLife.y) * 0.5f);
-    step = Max(1.0f, step);
-    float curFrame = CalcFrame();
+    float stepSize = 1.0f / avgEmitRate;
+    float duration = Min(stepSize * (float)mMaxParticles, (mLife.x + mLife.y) * 0.5f);
+    stepSize = Max(1.0f, stepSize);
+    float currentFrame = CalcFrame();
+    Transform xfm;
+    MakeLocToRel(xfm);
 
-    Transform locToRel;
-    MakeLocToRel(locToRel);
-
-    for (float t = curFrame - duration; t <= curFrame; t += step) {
-        MoveParticles(t, step);
-        CreateParticles(t, step, locToRel);
+    float frame;
+    for (frame = currentFrame - duration; frame <= currentFrame; frame += stepSize) {
+        MoveParticles(frame, stepSize);
+        CreateParticles(frame, stepSize, xfm);
     }
 }
 

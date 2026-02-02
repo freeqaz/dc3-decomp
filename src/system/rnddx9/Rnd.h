@@ -223,7 +223,7 @@ private:
     bool unk3f4;
     bool unk3f5;
     bool unk3f6;
-    bool unk3f7;
+    u8 unk3f7;
     RegisterAlloc mRegAlloc; // 0x3f8
     int mDefaultVSRegAlloc; // 0x3fc
     int mDefaultPSRegAlloc; // 0x400

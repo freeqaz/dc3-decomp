@@ -213,6 +213,16 @@ CharHair::Strand::Strand(Hmx::Object *o)
     mRootMat.Identity();
 }
 
+CharHair::Strand::Strand(const Strand &rhs)
+    : mShowSpheres(rhs.mShowSpheres), mShowCollide(rhs.mShowCollide),
+      mShowPose(rhs.mShowPose), mRoot(rhs.mRoot), mAngle(rhs.mAngle),
+      mPoints(rhs.mPoints), mHookupFlags(rhs.mHookupFlags) {
+    mBaseMat = rhs.mBaseMat;
+    mRootMat = rhs.mRootMat;
+}
+
+
+
 BEGIN_CUSTOM_PROPSYNC(CharHair::Strand)
     gStrand = &o;
     SYNC_PROP_SET(root, o.mRoot.Ptr(), o.SetRoot(_val.Obj<RndTransformable>()))

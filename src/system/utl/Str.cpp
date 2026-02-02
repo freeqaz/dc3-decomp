@@ -139,9 +139,8 @@ String::String() {}
 
 String::String(unsigned int len, char c) {
     reserve(len);
-    for (int i = 0; i < len; i++) {
+    for (unsigned int i = 0; i < len; i++)
         mStr[i] = c;
-    }
     mStr[len] = '\0';
 }
 

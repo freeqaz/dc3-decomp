@@ -3,6 +3,7 @@
 
 extern "C" {
     extern complex* lbl_8316EB70;
+    extern complex* lbl_8316EBA8;
     extern complex* lbl_83172BB0;
     extern const double __real_0000000000000000;
     extern const double __real_3f50624dd2f1a9fc;
@@ -16,6 +17,57 @@ extern "C" {
     void expand(complex*, int, complex*, ...);
     complex expj(complex*, double);
     double exp(double);
+}
+
+void compute_z_mzt(void) {
+    complex sp50;
+    int loop_count = 0;
+    int array_offset = 0;
+    complex* src_base = lbl_8316EBA8;
+    complex* dst_base = lbl_83172BB0;
+
+    // Load header values from source
+    int src_count1 = *(int*)((char*)src_base + 0x4000);
+    int src_count2 = *(int*)((char*)src_base + 0x4004);
+
+    // Copy headers to destination
+    *(int*)((char*)dst_base + 0x4000) = src_count1;
+    *(int*)((char*)dst_base + 0x4004) = src_count2;
+
+    // Process first array
+    if (src_count1 > 0) {
+        do {
+            complex* src = (complex*)((char*)src_base + array_offset);
+            complex* dst = (complex*)((char*)dst_base + array_offset);
+
+            expj(&sp50, src->x);
+            loop_count++;
+            array_offset += 0x10;
+            dst->x = sp50.x;
+            dst->y = sp50.y;
+
+            src_count1 = *(int*)((char*)dst_base + 0x4000);
+        } while (loop_count < src_count1);
+    }
+
+    src_count2 = *(int*)((char*)dst_base + 0x4004);
+    loop_count = 0;
+
+    // Process second array (offset by 0x2000)
+    if (src_count2 > 0) {
+        do {
+            complex* src = (complex*)((char*)src_base + 0x2000 + array_offset);
+            complex* dst = (complex*)((char*)dst_base + 0x2000 + array_offset);
+
+            expj(&sp50, src->x);
+            loop_count++;
+            array_offset += 0x10;
+            dst->x = sp50.x;
+            dst->y = sp50.y;
+
+            src_count2 = *(int*)((char*)dst_base + 0x4004);
+        } while (loop_count < src_count2);
+    }
 }
 
 void compute_bpres(double arg_sp10, double arg_sp18, double arg_sp20, double arg_sp28,

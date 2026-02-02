@@ -192,7 +192,27 @@ void UIListWidget::DrawMesh(
     MILO_ASSERT(mesh, 0x40);
     mesh->SetWorldXfm(tf);
     if (box) {
-        Box localbox = *box;
+        int minData[4];
+        int maxData[4];
+        const int *src = (const int *)box;
+        minData[0] = src[0];
+        minData[1] = src[1];
+        minData[2] = src[2];
+        minData[3] = src[3];
+        maxData[0] = src[4];
+        maxData[1] = src[5];
+        maxData[2] = src[6];
+        maxData[3] = src[7];
+        Box localbox;
+        int *dst = (int *)&localbox;
+        dst[0] = minData[0];
+        dst[1] = minData[1];
+        dst[2] = minData[2];
+        dst[3] = minData[3];
+        dst[4] = maxData[0];
+        dst[5] = maxData[1];
+        dst[6] = maxData[2];
+        dst[7] = maxData[3];
         CalcBox(mesh, localbox);
         box->GrowToContain(localbox.mMin, false);
         box->GrowToContain(localbox.mMax, false);
@@ -200,8 +220,10 @@ void UIListWidget::DrawMesh(
         UIColor *col = DisplayColor(wstate, cstate);
         if (col) {
             RndMat *mat = mesh->Mat();
-            if (mat)
-                mat->SetColor(0, 0, 0);
+            if (mat) {
+                const Hmx::Color &c = col->GetColor();
+                mat->SetColor(c.red, c.green, c.blue);
+            }
         }
         mesh->DrawShowing();
     }

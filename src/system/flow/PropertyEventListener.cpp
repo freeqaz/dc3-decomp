@@ -38,10 +38,14 @@ void PropertyEventListener::UnregisterEvents(FlowNode *node) {
 }
 
 void PropertyEventListener::GenerateAutoNames(FlowNode *node, bool clear) {
-    if (clear)
+    if (clear) {
         mAutoPropEntries.clear();
-    FOREACH (it, node->DrivenPropEntries()) {
-        FOREACH (op, it->MathOps()) {
+    }
+
+    const auto &entries = node->DrivenPropEntries();
+    FOREACH (entry_it, entries) {
+        const auto &ops = entry_it->MathOps();
+        FOREACH (op_it, ops) {
             AutoPropEntry entry(node);
             mAutoPropEntries.push_back(entry);
         }

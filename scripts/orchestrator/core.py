@@ -180,7 +180,6 @@ class DecompOrchestrator:
             enabled=auto_apply,
             min_progress=auto_apply_min_progress,
             require_improvement=True,
-            allow_partial=True,
         )
 
         # Active sessions: session_id -> asyncio.Task

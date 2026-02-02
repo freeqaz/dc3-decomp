@@ -14,14 +14,14 @@ namespace {
 }
 
 void URLEncode(char const *input, String &output, bool escapeUnsafe) {
+    char const *hexmap = "0123456789ABCDEF";
     char const *reserved = "$&+,/:;=?@\"<>";
     char const *unsafe = "#%{}|\\^~[]`";
-    char const *hexmap = "0123456789ABCDEF";
     int length = strlen(input);
 
     for (int i = 0; i < length; ++i) {
         char c = input[i];
-        if (IsCharInString(c, unsafe) || IsCharInString(c, reserved) || c < ' '
+        if (IsCharInString(c, reserved) || IsCharInString(c, unsafe) || c < ' '
             || c > '~') {
             output += '%';
 

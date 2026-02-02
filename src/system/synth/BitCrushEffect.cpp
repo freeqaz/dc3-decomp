@@ -19,7 +19,7 @@ void BitCrushEffect::Process(float *f, int numSamples, int numChans) {
         int stride;
 
         ctr = numSamples;
-        stride = numChans << 2;
+        stride = numChans << 2;  // stride in bytes: 4 bytes per sample * numChans
         left = f;
         right = f + 1;
 
@@ -31,16 +31,17 @@ void BitCrushEffect::Process(float *f, int numSamples, int numChans) {
                 }
                 unk4--;
             } else {
-                float val = *left;
-                int intval = (int)val;
-                *left = (float)intval;
-                unk8 = *left;
+                float temp;
+                temp = *left;
+                temp = (float)(int)temp;
+                *left = temp;
+                unk8 = temp;
 
                 if (numChans == 2) {
-                    val = *right;
-                    intval = (int)val;
-                    *right = (float)intval;
-                    unkc = *right;
+                    temp = *right;
+                    temp = (float)(int)temp;
+                    *right = temp;
+                    unkc = temp;
                 }
             }
 

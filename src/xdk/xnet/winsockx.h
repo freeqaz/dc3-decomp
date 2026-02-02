@@ -8,11 +8,17 @@ extern "C" {
 #define IOCPARAM_MASK 0x7f
 #define IOC_VOID 0x20000000
 #define IOC_OUT 0x40000000
-#define IOC_IN 0x800000000
+#define IOC_IN 0x80000000
 
 #define _IOW(x, y, t)                                                                    \
     (IOC_IN | (((long)sizeof(t) & IOCPARAM_MASK) << 16) | ((x) << 8) | (y))
 #define FIONBIO _IOW('f', 126, unsigned long)
+
+/* Xbox 360 is big-endian, so byte order conversions are no-ops */
+#define ntohs(x) (x)
+#define ntohl(x) (x)
+#define htons(x) (x)
+#define htonl(x) (x)
 
 #define AF_INET 2
 #define PF_INET AF_INET
@@ -93,7 +99,7 @@ struct sockaddr {
     char sa_data[14];
 };
 
-typedef unsigned int *SOCKET;
+typedef unsigned int SOCKET;
 
 typedef struct fd_set {
     unsigned int fd_count;
@@ -133,7 +139,7 @@ struct sockaddr_in {
     short sin_family;
     unsigned short sin_port;
     struct in_addr sin_addr;
-    char sin_zero[0];
+    char sin_zero[8];
 };
 
 #define _SS_MAXSIZE 128

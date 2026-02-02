@@ -53,22 +53,24 @@ def apply_patch_to_main(
     patch: str,
     main_repo: Path,
     dry_run: bool = False,
-    allow_partial: bool = True,
 ) -> dict:
     """Apply a patch to the main repository.
+
+    Tries clean apply first, then falls back to 3-way merge which uses
+    blob SHAs from the patch header as a merge base. On conflict, keeps
+    the 3-way result with conflict markers (more useful than .rej files).
 
     Args:
         patch: Git diff patch content
         main_repo: Path to main repository
-        dry_run: If True, only check if patch would apply
-        allow_partial: If True, apply hunks that succeed even if some fail
+        dry_run: If True, only check if patch would apply cleanly
 
     Returns:
         Dict with:
             - success: bool - whether patch applied (fully or partially)
             - applied: bool - whether any changes were applied
             - message: str - description of result
-            - failed_files: list[str] - files that failed to apply
+            - failed_files: list[str] - files with conflict markers
     """
     if not patch or not patch.strip():
         return {
@@ -116,41 +118,68 @@ def apply_patch_to_main(
                 "failed_files": [],
             }
 
-        # If clean apply failed and we allow partial, try --reject
-        if allow_partial and not dry_run:
-            reject_cmd = ['git', 'apply', '--reject', str(patch_file)]
-            reject_result = subprocess.run(
-                reject_cmd,
+        # Try 3-way merge — uses blob SHAs from the patch as a merge base,
+        # resolving context-line drift from concurrent edits to the same file.
+        # On conflict, --3way leaves conflict markers in the working tree
+        # (like a merge conflict) which is strictly more useful than --reject's
+        # .rej files, so we keep its result either way.
+        if not dry_run:
+            threeway_cmd = ['git', 'apply', '--3way', str(patch_file)]
+            threeway_result = subprocess.run(
+                threeway_cmd,
+                cwd=main_repo,
+                capture_output=True,
+                text=True,
+            )
+            if threeway_result.returncode == 0:
+                return {
+                    "success": True,
+                    "applied": True,
+                    "message": "Patch applied via 3-way merge",
+                    "failed_files": [],
+                }
+
+            # --3way failed with conflicts. Parse stderr for conflicted files.
+            # Lines look like: "Applied patch to 'src/foo.cpp' with conflicts."
+            failed_files = []
+            for line in threeway_result.stderr.splitlines():
+                if 'with conflicts' in line:
+                    # Extract filename from "Applied patch to 'path' with conflicts."
+                    start = line.find("'")
+                    end = line.find("'", start + 1)
+                    if start != -1 and end != -1:
+                        failed_files.append(line[start + 1:end])
+
+            if failed_files:
+                # Unstage the conflicts so they show as working-tree changes
+                subprocess.run(
+                    ['git', 'reset', 'HEAD', '--', 'src/', 'include/'],
+                    cwd=main_repo,
+                    capture_output=True,
+                    text=True,
+                )
+                return {
+                    "success": True,
+                    "applied": True,
+                    "message": f"Patch applied via 3-way merge ({len(failed_files)} file(s) have conflict markers)",
+                    "failed_files": failed_files,
+                }
+
+            # --3way failed entirely (e.g. missing blobs). Clean up and fall through.
+            subprocess.run(
+                ['git', 'reset', 'HEAD', '--', 'src/', 'include/'],
+                cwd=main_repo,
+                capture_output=True,
+                text=True,
+            )
+            subprocess.run(
+                ['git', 'checkout', '--', 'src/', 'include/'],
                 cwd=main_repo,
                 capture_output=True,
                 text=True,
             )
 
-            # Collect .rej files (failed hunks)
-            rej_files = list(main_repo.rglob('*.rej'))
-            failed_files = [str(f.relative_to(main_repo)) for f in rej_files]
-
-            # Clean up .rej files
-            for rej in rej_files:
-                rej.unlink()
-
-            if reject_result.returncode == 0 or not failed_files:
-                return {
-                    "success": True,
-                    "applied": True,
-                    "message": "Patch applied cleanly",
-                    "failed_files": [],
-                }
-            else:
-                # Some parts applied, some failed
-                return {
-                    "success": True,  # Partial success is still success
-                    "applied": True,
-                    "message": f"Patch partially applied ({len(failed_files)} file(s) had conflicts)",
-                    "failed_files": failed_files,
-                }
-
-        # Clean apply failed and we don't allow partial
+        # Both clean apply and 3-way merge failed
         return {
             "success": False,
             "applied": False,
@@ -170,7 +199,6 @@ class PatchApplier:
 
     Configuration options:
         - enabled: Whether auto-apply is on
-        - allow_partial: Apply partial patches on conflict (default: True)
     """
 
     def __init__(
@@ -179,12 +207,10 @@ class PatchApplier:
         enabled: bool = True,
         min_progress: float = 0.0,
         require_improvement: bool = True,
-        allow_partial: bool = True,
     ):
         self.main_repo = Path(main_repo).resolve()
         self.patches_dir = self.main_repo / "generated-patches"
         self.enabled = enabled
-        self.allow_partial = allow_partial
 
         # Stats
         self.applied_count = 0
@@ -274,7 +300,6 @@ class PatchApplier:
         result = apply_patch_to_main(
             patch=patch,
             main_repo=self.main_repo,
-            allow_partial=self.allow_partial,
         )
 
         if result["applied"]:

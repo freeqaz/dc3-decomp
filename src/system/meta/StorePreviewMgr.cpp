@@ -82,12 +82,20 @@ bool StorePreviewMgr::AllowPreviewDownload(String const &str) {
 
 void StorePreviewMgr::PlayCurrentPreview() {
     MILO_ASSERT(mStreamPlayer, 0xd8);
-    if (!unk34.empty() && TheNetCacheMgr->IsLocalFile(unk34.c_str())) {
+    if (unk34.empty() || !TheNetCacheMgr->IsLocalFile(unk34.c_str())) {
+        mStreamPlayer->StopPlaying();
+        if (unk4c) {
+            FilePath fp(gNullStr);
+            unk4c->SetFile(fp);
+        }
+    } else {
         String str(unk34.c_str());
         if (unk4c) {
             mStreamPlayer->StopPlaying();
-            FilePath filepath(str.c_str());
-            unk4c->SetFile(filepath);
+            {
+                FilePath fp(str.c_str());
+                unk4c->SetFile(fp);
+            }
             mStreamPlayer->SetVolume(-unk2c);
         } else {
             int len = str.length();
@@ -97,12 +105,6 @@ void StorePreviewMgr::PlayCurrentPreview() {
                 str.erase(len - 4);
             }
             mStreamPlayer->PlayFile(str.c_str(), -unk2c, 0.0f, unk30);
-        }
-    } else {
-        mStreamPlayer->StopPlaying();
-        if (unk4c) {
-            FilePath filepath(gNullStr);
-            unk4c->SetFile(filepath);
         }
     }
 }

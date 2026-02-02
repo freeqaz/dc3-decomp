@@ -307,10 +307,11 @@ void UIManager::GotoScreenImpl(UIScreen *scr, bool b1, bool b2) {
         Handle(msg, false);
         mTransitionState = kTransitionTo;
         mTransitionScreen = scr;
-        if (mCurrentScreen)
+        if (mCurrentScreen) {
             mCurrentScreen->Exit(scr);
-        else if (scr)
+        } else if (scr) {
             scr->LoadPanels();
+        }
 
 #ifdef MILO_DEBUG
         if (mTransitionScreen) {

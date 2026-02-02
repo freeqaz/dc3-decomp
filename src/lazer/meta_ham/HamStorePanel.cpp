@@ -38,14 +38,11 @@ HamStorePanel::HamStorePanel()
     DataArray *specialOfferArray = sysConfig->FindArray(specialOffersSym, false);
     if (specialOfferArray) {
         int numOffers = (specialOfferArray->Size() + 23) / 24;
-        if (numOffers >= 7) {
-            numOffers = 6;
-        }
+        numOffers = (numOffers >= 7) ? 6 : numOffers;
 
         for (int i = 0; i < numOffers; i++) {
             DataNode offerNode = specialOfferArray->Node(i);
             if (offerNode.Type() == kDataArray) {
-                // Process special offer
             }
         }
     }

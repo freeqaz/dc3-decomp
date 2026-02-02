@@ -22,23 +22,50 @@ void DxCubeTex::Reset() {
 
 void DxCubeTex::Sync() {
     PhysMemTypeTracker tracker("D3D(phys):CubeTex");
+
     mTex = D3DDevice_CreateTexture(
-        props.mWidth,
-        props.mWidth,
-        6,
-        props.mNumMips + 1,
-        0,
-        TheDxRnd.D3DFormatForBitmap(mBitmap[kCubeFaceRight]),
-        0,
+        props.mWidth, props.mWidth, 6, props.mNumMips + 1, 0,
+        TheDxRnd.D3DFormatForBitmap(mBitmap[kCubeFaceRight]), 0,
         D3DRTYPE_CUBETEXTURE
     );
+
     DX_ASSERT(mTex, 0x38);
+
     XGTEXTURE_DESC desc;
     XGGetTextureDesc(mTex, 0, &desc);
-    for (int i = 0; i < kNumCubeFaces; i++) {
+
+    int numMips = props.mNumMips + 1;
+
+    for (int face = 0; face < 6; face++) {
         RndBitmap bitmap;
         bitmap.Reset();
+
+        RndBitmap *pWork = &mBitmap[face];
+
+        if (pWork->Width() != 0 && pWork->Height() != 0) {
+            if (pWork->Buffer() != nullptr || pWork->Bpp() == 0x18) {
+                bitmap.Create(*pWork, 0x20, pWork->NumMips(), nullptr);
+                pWork = &bitmap;
+            }
+
+            if (numMips > 0) {
+                int mipIdx = 0;
+                do {
+                    if (pWork != nullptr) {
+                        u32 rowPitch = pWork->DxtRowBytes();
+                        XGTileTextureLevel(desc.Width, desc.Height, mipIdx, 0, 0, nullptr, nullptr,
+                                         pWork->Buffer(), rowPitch, nullptr);
+                    }
+                    pWork = pWork->nextMip();
+                    mipIdx++;
+                } while (mipIdx < numMips);
+            }
+
+            mBitmap[face].Reset();
+        }
+
         bitmap.Reset();
     }
+
     NgMat::SetCurrent(nullptr);
 }

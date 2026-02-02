@@ -209,8 +209,8 @@ inline _BidirectionalIter2 __copy_backward(_BidirectionalIter1 __first,
 }
 
 template <class _RandomAccessIter, class _BidirectionalIter, class _Distance>
-inline _BidirectionalIter __copy_backward(_RandomAccessIter __first, 
-                                          _RandomAccessIter __last, 
+inline _BidirectionalIter __copy_backward(_RandomAccessIter __first,
+                                          _RandomAccessIter __last,
                                           _BidirectionalIter __result,
                                           const random_access_iterator_tag &,
                                           _Distance*) {

@@ -45,6 +45,7 @@ public:
     virtual void PostLoad(BinStream &);
     // UIListProvider
     virtual int NumData() const;
+    virtual void AdjustTrans(Transform &, const UIListElementDrawState &) {}
     // RndDrawable
     virtual float GetDistanceToPlane(const Plane &, Vector3 &);
     virtual void DrawShowing();

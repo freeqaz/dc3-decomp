@@ -256,7 +256,24 @@ void DxRnd::Present() {
         D3DDevice_BlockUntilIdle(mD3DDevice);
         D3DDevice_SetSwapMode(mD3DDevice, mAsyncSwapCurrent);
     }
-    unk3f7 = (PIXGetCaptureState() & 2);
+    unk3f7 = PIXGetCaptureState() & 2;
+}
+
+void DxRnd::UpdateScalerParams() {
+    float width = (float)mVideoMode.dwDisplayWidth;
+    float height = (float)mVideoMode.dwDisplayHeight;
+    bool letterbox = mAspect == kLetterbox && !unk1f8;
+    if (letterbox && width * 0.5625f < height) {
+        height = width * 0.5625f;
+    }
+    if (mShrinkToSafe) {
+        width *= 0.95f;
+        if (!letterbox) {
+            height *= 0.95f;
+        }
+    }
+    mPresentParams.VideoScalerParameters.ScaledOutputWidth = (int)width;
+    mPresentParams.VideoScalerParameters.ScaledOutputHeight = (int)height;
 }
 
 void DxRnd::TerminateBuffers() {
@@ -272,16 +289,19 @@ void DxRnd::SetupGamma() {
     float gamma;
     if (cfg->FindData("gamma", gamma, false)) {
         D3DGAMMARAMP ramp;
-        unsigned short *redPtr = ramp.red;
-        unsigned short *greenPtr = ramp.green;
-        unsigned short *bluePtr = ramp.blue;
-        for (unsigned int i = 0; i < 256; i++) {
-            float powed = (float)std::pow(i * 0.00390625f, gamma) * 1024.0f;
-            unsigned short usVal = (unsigned short)powed;
-            redPtr[i] = usVal;
-            greenPtr[i] = usVal;
-            bluePtr[i] = usVal;
-        }
+        unsigned int i = 0;
+        unsigned short i16;
+        do {
+            float fval = (float)(int)i * 0.00390625f;
+            float fpow = std::pow(fval, gamma);
+            unsigned long long ival = (long long)(fpow * 1024.0f);
+            unsigned short usVal = (unsigned short)(ival >> 6);
+            ramp.red[i] = usVal;
+            ramp.green[i] = usVal;
+            ramp.blue[i] = usVal;
+            i16 = (unsigned short)((i + 1) & 0xffff);
+            i = i16;
+        } while (i16 < 0x100);
         D3DDevice_SetGammaRamp(mD3DDevice, 0, &ramp);
     }
 }
@@ -307,6 +327,15 @@ void DxRnd::SetDefaultRenderStates() {
     D3DDevice_SetRenderState_PresentImmediateThreshold(TheDxRnd.Device(), 100);
 }
 
+void DxRnd::InitRenderState() {
+    PhysMemTypeTracker tracker("D3D(phys):DxRnd");
+    if (mD3DDevice) {
+        SetDefaultRenderStates();
+        D3DXSetDXT3DXT5(1);
+        SetupGamma();
+    }
+}
+
 void DxRnd::BeginTiling(const Hmx::Color &c, float f, unsigned int ui) {
     if (mNumTiles == 0) {
         D3DDevice_Clear(mD3DDevice, 0, nullptr, 0x31, MakeColor(c), f, ui, 0);
@@ -315,6 +344,26 @@ void DxRnd::BeginTiling(const Hmx::Color &c, float f, unsigned int ui) {
         D3DDevice_BeginTiling(mD3DDevice, 0, mNumTiles, &unk3b4, &v, f, ui);
         unk34c = true;
     }
+}
+
+void DxRnd::SetFrameBuffersAsSource() {
+    D3DDevice_SetTexture(mD3DDevice, 6, mPreProcessBuffer, 0x02000000);
+    D3DDevice_SetSamplerState_MinFilter(TheDxRnd.Device(), 6, 1);
+    D3DDevice_SetSamplerState_MagFilter(TheDxRnd.Device(), 6, 1);
+    D3DDevice_SetSamplerState_MipFilter(TheDxRnd.Device(), 6, 2, 0x02000000);
+    D3DDevice_SetSamplerState_AddressU(TheDxRnd.Device(), 6, 2, 0x02000000);
+
+    D3DDevice_SetTexture(mD3DDevice, 9, mFrontBufferDepth, 0x400000);
+    D3DDevice_SetSamplerState_MinFilter(TheDxRnd.Device(), 9, 0);
+    D3DDevice_SetSamplerState_MagFilter(TheDxRnd.Device(), 9, 0);
+    D3DDevice_SetSamplerState_MipFilter(TheDxRnd.Device(), 9, 2, 0x400000);
+    D3DDevice_SetSamplerState_AddressU(TheDxRnd.Device(), 9, 2, 0x400000);
+
+    D3DDevice_SetTexture(mD3DDevice, 14, mPostProcessBuffer, 0x20000);
+    D3DDevice_SetSamplerState_MinFilter(TheDxRnd.Device(), 14, 1);
+    D3DDevice_SetSamplerState_MagFilter(TheDxRnd.Device(), 14, 1);
+    D3DDevice_SetSamplerState_MipFilter(TheDxRnd.Device(), 14, 2, 0x20000);
+    D3DDevice_SetSamplerState_AddressU(TheDxRnd.Device(), 14, 2, 0x20000);
 }
 
 void DxRnd::PerfCountersInit() {
@@ -383,15 +432,68 @@ void DxRnd::EndTiling(D3DBaseTexture *tex, int flags) {
     }
 }
 
+void CreateBackBuffers(
+    int width,
+    int height,
+    D3DMULTISAMPLE_TYPE multisample,
+    unsigned int &edramBase,
+    unsigned int &edramHzBase,
+    D3DSurface *&colorSurface,
+    D3DSurface *&depthSurface
+) {
+    UINT colorSize = XGSurfaceSize(width, height, D3DFMT_A8R8G8B8, multisample);
+    UINT depthSize = XGSurfaceSize(width, height, D3DFMT_D24FS8, multisample);
+
+    int adjustedWidth = width;
+    int adjustedHeight = height;
+    if ((int)multisample >= 1) {
+        adjustedHeight = height * 2;
+    }
+    if ((int)multisample == 2) {
+        adjustedWidth = width * 2;
+    }
+
+    edramBase = 0x800;
+    edramHzBase = 0xE10;
+
+    int base = edramBase;
+    edramBase = base - depthSize;
+
+    int hzSize = (((adjustedWidth + 0x1F) >> 5) * ((adjustedHeight + 0xF) >> 4)) & 0x7FFFFF;
+    edramHzBase = edramHzBase - hzSize;
+
+    D3DSURFACE_PARAMETERS depthParams;
+    memset(&depthParams, 0, sizeof(D3DSURFACE_PARAMETERS));
+    depthParams.Base = edramBase;
+    depthParams.HierarchicalZBase = edramHzBase;
+    depthSurface = D3DDevice_CreateSurface(width, height, D3DFMT_D24FS8, multisample, &depthParams);
+    DX_ASSERT(depthSurface, 0x2CE);
+
+    int base2 = edramBase;
+    edramBase = base2 - colorSize;
+
+    D3DSURFACE_PARAMETERS colorParams;
+    memset(&colorParams, 0, sizeof(D3DSURFACE_PARAMETERS));
+    colorParams.Base = edramBase;
+    colorParams.HierarchicalZBase = -1;
+    colorSurface = D3DDevice_CreateSurface(width, height, D3DFMT_A8R8G8B8, multisample, &colorParams);
+    DX_ASSERT(colorSurface, 0x2D4);
+}
+
 void DxRnd::SavePreBuffer() {
-    D3DDevice *dev = mD3DDevice;
+    Hmx::Color c = mClearColor;
+    XMVECTOR vector;
+    vector.x = c.red;
+    vector.y = c.green;
+    vector.z = c.blue;
+    vector.w = 0.f;
+
     D3DDevice_Resolve(
-        dev, 0x14, nullptr, mFrontBufferDepth, nullptr, 0, 0, nullptr, 1, 0, nullptr
+        mD3DDevice, 0x14, nullptr, mFrontBufferDepth, nullptr, 0, 0, nullptr, 1, 0, nullptr
     );
 
-    XMVECTOR vector = {mClearColor.red, mClearColor.green, mClearColor.blue, 0.f};
     D3DDevice_Resolve(
-        dev, 0x300, nullptr, mPreProcessBuffer, nullptr, 0, 0, &vector, 0, 0, nullptr
+        mD3DDevice, 0x300, nullptr, mPreProcessBuffer, nullptr, 0, 0, &vector, 0, 0, nullptr
     );
 }
 
@@ -402,7 +504,7 @@ void DxRnd::SavePostBuffer() {
 }
 
 void DxRnd::SetShaderRegisterAlloc(RegisterAlloc s) {
-    MILO_ASSERT(s >= 0 && s < kNumRegAlloc, 0x6BA);
+    MILO_ASSERT(s >=0 && s < kNumRegAlloc, 0x6BA);
     if (mRegAlloc == s) {
         return;
     }
@@ -425,26 +527,26 @@ void DxRnd::SetShaderRegisterAlloc(RegisterAlloc s) {
 }
 
 RndTex *DxRnd::GetCurrentFrameTex(bool resolvePreProcess) {
-    if (unk3a4) {
-        return PostProcessTexture();
+    if (!unk3a4) {
+        if (resolvePreProcess) {
+            D3DDevice_Resolve(
+                mD3DDevice, 0, nullptr, mPreProcessBuffer, nullptr, 0, 0, nullptr, 0, 0, nullptr
+            );
+        }
+        return PreProcessTexture();
     }
-    if (resolvePreProcess) {
-        D3DDevice_Resolve(
-            mD3DDevice, 0, nullptr, mPreProcessBuffer, nullptr, 0, 0, nullptr, 0, 0, nullptr
-        );
-    }
-    return PreProcessTexture();
+    return PostProcessTexture();
 }
 
 bool DxRnd::CanModal(Debug::ModalType t) {
-    if (!unk34c) {
-        return true;
+    if (unk34c) {
+        if (t == Debug::kModalFail) {
+            EndTiling(FrontBuffer(), 0);
+        } else {
+            return false;
+        }
     }
-    if (t == Debug::kModalFail) {
-        EndTiling(FrontBuffer(), 0);
-        return true;
-    }
-    return false;
+    return true;
 }
 
 void DxRnd::ModalDraw(Debug::ModalType t, const char *cc) {
@@ -454,7 +556,7 @@ void DxRnd::ModalDraw(Debug::ModalType t, const char *cc) {
     D3DSurface *savedStencilSurface = D3DDevice_GetDepthStencilSurface(mD3DDevice);
     D3DDevice_SetRenderTarget_External(mD3DDevice, 0, mBackBuffer);
     D3DDevice_SetDepthStencilSurface(mD3DDevice, 0);
-    Hmx::Color color(0, 0.1, 0.5, 0);
+    Hmx::Color color(0, 0.1f, 0.5f, 0);
     if (t == Debug::kModalFail) {
         color.alpha = 0.25f;
         color.green = 0;

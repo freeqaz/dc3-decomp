@@ -410,28 +410,42 @@ void HollaBackMinigame::EndShoutOut() {
 
 float HollaBackMinigame::NailedMovesInRoutinePct() {
     static Symbol powered_up("powered_up");
-    int i5 = 0;
+    int nailedCount = 0;
     int numMoves = unk488.size();
     MoveDir *theMoveDir = TheHamDirector->GetMoveDir();
-    for (int i = 0; i < numMoves; i++) {
-        HamMove *curMove = unk488[i];
-        for (int j = 0; j < mMaxRoutineSize; j++) {
-            HamMove *moveAtMeasure =
-                theMoveDir->GetMoveAtMeasure(0, mSpecifyFirstMoveMeasure + j);
-            if (moveAtMeasure == curMove
-                && unk10[mSpecifyFirstMoveMeasure + j] == powered_up) {
-                i5++;
-                for (int k = 0; k < mMaxRoutineSize; k++) {
-                    HamMove *moveAtMeasure =
-                        theMoveDir->GetMoveAtMeasure(0, mSpecifyFirstMoveMeasure + k);
-                    if (moveAtMeasure == curMove) {
-                        unk10[mSpecifyFirstMoveMeasure + j] = powered_up;
+    if (numMoves > 0) {
+        int moveIndex = 0;
+        int routineCount = numMoves;
+        do {
+            HamMove *curMove = unk488[moveIndex];
+            int j = 0;
+            if (mMaxRoutineSize > 0) {
+                while (true) {
+                    HamMove *foundMove = theMoveDir->GetMoveAtMeasure(0, mSpecifyFirstMoveMeasure + j);
+                    // Continue searching if no match found or state not powered_up
+                    if ((foundMove != curMove) || (unk10[mSpecifyFirstMoveMeasure + j] != powered_up)) {
+                        j++;
+                        if (j >= mMaxRoutineSize) {
+                            break;
+                        }
+                    } else {
+                        // Found a nailed move - mark all matching moves in routine
+                        nailedCount++;
+                        for (int k = 0; k < mMaxRoutineSize; k++) {
+                            HamMove *checkMove = theMoveDir->GetMoveAtMeasure(0, mSpecifyFirstMoveMeasure + k);
+                            if (checkMove == foundMove) {
+                                unk10[mSpecifyFirstMoveMeasure + k] = powered_up;
+                            }
+                        }
+                        break;
                     }
                 }
             }
-        }
+            routineCount--;
+            moveIndex++;
+        } while (routineCount != 0);
     }
-    return (float)i5 / (float)numMoves;
+    return (float)(s64)nailedCount / (float)(s64)numMoves;
 }
 
 void HollaBackMinigame::EndMinigame(bool b1) {

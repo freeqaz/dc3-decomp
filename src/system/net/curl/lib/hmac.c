@@ -43,8 +43,8 @@
  * context initialisation.
  */
 
-static const unsigned char hmac_ipad = 0x36;
 static const unsigned char hmac_opad = 0x5C;
+static const unsigned char hmac_ipad = 0x36;
 
 HMAC_context *Curl_HMAC_init(
     const HMAC_params *hashparams, const unsigned char *key, unsigned int keylen

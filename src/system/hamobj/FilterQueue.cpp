@@ -10,15 +10,26 @@ FilterQueue::~FilterQueue() {}
 
 bool FilterQueue::GetResults(float &outValue, DetectFrame **frames, float unused) {
     mJobFinished = false;
-    if (mQueuedFrames.empty()) {
+    // Empty branch structure matches original control flow
+    if (!mQueuedFrames.empty()) {
+        // Queued frames exist; no action needed in this branch
+    } else {
+        // No queued frames; clear output frames
         mOutputFrames.clear();
     }
     outValue = unk0;
     MILO_ASSERT(mQueuedFrames.size() == mOutputFrames.size(), 0x42);
-    frames[0] = nullptr;
     frames[1] = nullptr;
-    for (int frameIdx = 0; frameIdx < mQueuedFrames.size(); frameIdx++) {
-        mQueuedFrames[frameIdx].unkc->AddError(mOutputFrames[frameIdx].unk4, mQueuedFrames[frameIdx].unk4);
+    frames[0] = nullptr;
+    for (int frameIdx = 0; frameIdx < (int)mQueuedFrames.size(); frameIdx++) {
+        DetectFrame *pFrame = mQueuedFrames[frameIdx].unkc;
+        pFrame->AddError(mOutputFrames[frameIdx].unk4, mQueuedFrames[frameIdx].unk4);
+        // Access field at offset +8 in DetectFrame
+        float* pFrameData = (float*)((char*)pFrame + 8);
+        // Check if output value exceeds field data and input error exceeds threshold
+        if ((unk0 > *pFrameData) && (mQueuedFrames[frameIdx].unk4 > unused)) {
+            frames[mQueuedFrames[frameIdx].unk0] = pFrame;
+        }
     }
     mQueuedFrames.clear();
     mOutputFrames.clear();

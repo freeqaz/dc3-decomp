@@ -291,7 +291,7 @@ CURLcode Curl_proxyCONNECT(struct connectdata *conn,
                 /* A Content-Length based body: simply count down the counter
                    and make sure to break out of the loop when we're done! */
                 cl -= gotbytes;
-                if(cl<1) {
+                if(cl<=0) {
                   keepon = FALSE;
                   break;
                 }
@@ -368,7 +368,7 @@ CURLcode Curl_proxyCONNECT(struct connectdata *conn,
                            read */
                         cl -= (gotbytes - i);
 
-                        if(cl<1)
+                        if(cl<=0)
                           /* if the whole thing was already read, we are done!
                            */
                           keepon=FALSE;

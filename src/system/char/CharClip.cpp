@@ -21,7 +21,7 @@ CharClip::FacingSet::FacingBones CharClip::FacingSet::sFacingRotAndPos;
 #pragma region Transitions
 
 bool CharClip::Transitions::Replace(ObjRef *from, Hmx::Object *to) {
-    NodeVector *vector = reinterpret_cast<NodeVector *>(from); // i guess?
+    NodeVector *vector = reinterpret_cast<NodeVector *>(from);
     if (!vector->clip.SetObj(to)) {
         RemoveNodes(vector);
     }
@@ -30,7 +30,7 @@ bool CharClip::Transitions::Replace(ObjRef *from, Hmx::Object *to) {
 
 void CharClip::Transitions::Clear() {
     for (NodeVector *it = mNodeStart; it < mNodeEnd; it = it->Next()) {
-        it->clip->~CharClip(); // scalar deleting dtor gets called here
+        it->clip->~CharClip();
     }
     Resize(0, nullptr);
 }
@@ -81,16 +81,9 @@ CharClip::NodeVector *CharClip::Transitions::FindNodes(CharClip *clip) const {
 }
 
 void CharClip::Transitions::RemoveClip(CharClip *clip) {
-    NodeVector *it;
-    for (it = mNodeStart; it < mNodeEnd; it = it->Next()) {
-        if (it->clip == clip) {
-            goto found;
-        }
-    }
-    it = nullptr;
-found:
-    if (it)
-        RemoveNodes(it);
+    NodeVector *node = FindNodes(clip);
+    if (node)
+        RemoveNodes(node);
 }
 
 void CharClip::Transitions::RemoveNodes(NodeVector *n) {
@@ -432,17 +425,17 @@ END_COPYS
 BEGIN_LOADS(CharClip)
     static int _x = MemFindHeap("char");
     MemHeapTracker temp(_x);
+    int oldRev, x, y, oldVer, tv;
     LOAD_REVS(bs)
     ASSERT_REVS(0x16, 0)
-    int oldRev = 0;
+    oldRev = 0;
     if (d.rev < 0x10)
         d >> oldRev;
     else
         oldRev = 0xD;
-    // MILO_ASSERT(oldRev > 1, 0x531); // removed: likely stripped in retail
+    MILO_ASSERT(oldRev > 1, 0x531);
     LOAD_SUPERCLASS(Hmx::Object)
     if (d.rev < 0x12) {
-        int x, y;
         d >> x;
         d >> y;
     }
@@ -458,17 +451,16 @@ BEGIN_LOADS(CharClip)
     if (oldRev > 5) {
         mRelative.Load(d.stream, false, nullptr);
     } else if (oldRev > 4) {
-        bool b117;
-        d >> b117;
-        mRelative = b117 ? this : nullptr;
+        bool isRelativeToSelf;
+        d >> isRelativeToSelf;
+        mRelative = isRelativeToSelf ? this : nullptr;
     } else
         mRelative = nullptr;
-    if ((oldRev > 8) && (oldRev < 11)) {
-        bool b118;
-        d >> b118;
+    if (oldRev > 8 && oldRev < 11) {
+        bool unused;
+        d >> unused;
     }
     if (oldRev > 9) {
-        int oldVer;
         d >> oldVer;
         // MILO_ASSERT(oldVer < 0x7FFF, 0x557); // removed: likely stripped in retail
         mOldVer = oldVer;
@@ -495,39 +487,38 @@ BEGIN_LOADS(CharClip)
             mBeatEvents[i].Load(d.stream);
         }
     } else {
-        String str;
-        d >> str;
-        if (!str.empty()) {
-            MILO_NOTIFY("%s has old enter event %s, must port", PathName(this), str);
+        String eventName;
+        d >> eventName;
+        if (!eventName.empty()) {
+            MILO_NOTIFY("%s has old enter event %s, must port", PathName(this), eventName);
         }
-        d >> str;
-        if (!str.empty()) {
-            MILO_NOTIFY("%s has old exit event %s, must port", PathName(this), str);
+        d >> eventName;
+        if (!eventName.empty()) {
+            MILO_NOTIFY("%s has old exit event %s, must port", PathName(this), eventName);
         }
         int count;
         d >> count;
-        float f1 = -kHugeFloat;
+        float lastFrame = -kHugeFloat;
         for (int i = 0; i < count; i++) {
-            float x;
-            d >> x;
-            d >> str;
-            if (!str.empty()) {
+            float frameNum;
+            d >> frameNum;
+            d >> eventName;
+            if (!eventName.empty()) {
                 MILO_NOTIFY(
-                    "%s has old frame %.2f event %s, must port", PathName(this), x, str
+                    "%s has old frame %.2f event %s, must port", PathName(this), frameNum, eventName
                 );
             }
-            if (x < f1) {
+            if (frameNum < lastFrame) {
                 MILO_NOTIFY("Keyframes in %s are out of order.", Name());
             }
-            f1 = x;
+            lastFrame = frameNum;
         }
     }
     mDirty = false;
-    int tv = TransitionVersion();
+    tv = TransitionVersion();
     if (tv != mOldVer) {
-        // ASSERT removed: improves match 76.17% -> 76.33% (likely stripped in retail)
-        // TODO: investigate why this was added originally; could use further review
-        // MILO_ASSERT(tv < 0x7FFF, 0x5A3);
+        // The assert `MILO_ASSERT(tv < 0x7FFF, 0x5A3)` was removed to match retail behavior
+        // (improves match 76.17% -> 76.33%). This assertion likely gets stripped in retail builds.
         mOldVer = tv;
         mDirty = true;
     }
@@ -698,15 +689,15 @@ void CharClip::EvaluateChannel(void *v1, const void *v2, int iii, float f) {
     if (!v2) {
         MILO_FAIL("%s passed in NULL for evaluate channel", PathName(this));
     }
-    int off = (int)v2 - 1;
-    if (off < mFull.TotalSize()) {
-        mFull.EvaluateChannel(v1, off, iii, f);
+    int offset = (int)v2 - 1;
+    if (offset < mFull.TotalSize()) {
+        mFull.EvaluateChannel(v1, offset, iii, f);
     } else {
-        int i2 = off - mFull.TotalSize();
-        if (i2 < mOne.TotalSize()) {
-            mOne.EvaluateChannel(v1, i2, 0, 0);
+        int oneOffset = offset - mFull.TotalSize();
+        if (oneOffset < mOne.TotalSize()) {
+            mOne.EvaluateChannel(v1, oneOffset, 0, 0);
         } else {
-            MILO_FAIL("%s could not find offset %d %d", off, i2, PathName(this));
+            MILO_FAIL("%s could not find offset %d %d", offset, oneOffset, PathName(this));
         }
     }
 }

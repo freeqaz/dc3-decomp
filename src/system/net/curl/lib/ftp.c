@@ -1813,8 +1813,9 @@ static CURLcode ftp_state_pasv_resp(struct connectdata *conn,
      * Curl_proxyCONNECT we have to set back the member to the original struct
      * FTP pointer
      */
+    struct HTTP http_proxy;
     struct FTP *ftp_save = data->state.proto.ftp;
-    struct HTTP http_proxy = {0};
+    memset(&http_proxy, 0, sizeof(http_proxy));
     data->state.proto.http = &http_proxy;
 
     result = Curl_proxyCONNECT(conn, SECONDARYSOCKET, newhost, newport);

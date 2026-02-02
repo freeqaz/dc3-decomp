@@ -102,8 +102,7 @@ String InlineHelp::GetIconStringFromAction(int idx) {
     const DataArray *t = TypeDef();
     MILO_ASSERT(t, 0x1cb);
     DataArray *actionArr = t->FindArray(action_chars);
-    for (std::vector<Symbol>::iterator it = mIconTypes.begin(); it != mIconTypes.end();
-         ++it) {
+    FOREACH (it, mIconTypes) {
         const char *str = actionArr->FindArray(*it)->Str(idx + 1);
         char c = *str;
         if (ret.find(c) == String::npos)
@@ -175,8 +174,7 @@ void InlineHelp::Poll() {
 
 void InlineHelp::SetActionToken(JoypadAction a, DataNode &node) {
     bool found = false;
-    for (std::vector<ActionElement>::iterator it = mConfig.begin(); it != mConfig.end();
-         ++it) {
+    FOREACH (it, mConfig) {
         if ((*it).mAction == a) {
             (*it).SetConfig(node, false);
             found = true;
@@ -193,20 +191,22 @@ void InlineHelp::SetActionToken(JoypadAction a, DataNode &node) {
 
 void InlineHelp::SyncLabelsToConfig() {
     ResetRotation();
-    int cfg_size = mConfig.size();
-    int labels_size = mTextLabels.size();
+    int cfg_size = (int)mConfig.size();
+    int labels_size = (int)mTextLabels.size();
     if (cfg_size > labels_size) {
-        for (; labels_size < cfg_size; labels_size++) {
+        for (int i = labels_size; i < cfg_size; i++) {
             UILabel *lbl = Hmx::Object::New<UILabel>();
+            if (unk88 != nullptr) {
+                ((UILabel *)unk88)->Copy(lbl, Hmx::Object::kCopyShallow);
+            }
+            lbl->LStyle(0).mColorOverride = mTextColor;
             mTextLabels.push_back(lbl);
         }
-    } else {
-        if (labels_size > cfg_size) {
-            for (; cfg_size < labels_size; cfg_size++) {
-                delete mTextLabels[cfg_size];
-            }
-            mTextLabels.resize(cfg_size);
+    } else if (labels_size > cfg_size) {
+        for (int i = cfg_size; i < labels_size; i++) {
+            delete mTextLabels[i];
         }
+        mTextLabels.resize(cfg_size);
     }
     UpdateLabelText();
 }

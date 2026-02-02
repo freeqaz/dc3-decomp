@@ -51,3 +51,19 @@ EQEffect::EQEffect(IXAudioBatchAllocator *) {
     unkbc = 0;
     Reset();
 }
+
+void EQEffect::SetParameters(EQEffect::Params const &params) {
+    SetParameter(0, params.unk4);
+    SetParameter(1, params.unk8);
+    SetParameter(2, params.unkc);
+    SetParameter(3, params.unk10);
+    SetParameter(4, params.unk14);
+    SetParameter(5, params.unk18);
+    SetParameter(6, params.unk1c);
+    SetParameter(7, params.unk20);
+    SetParameter(8, params.unk24);
+    SetParameter(9, params.unk28);
+    SetParameter(10, params.unk2c);
+    SetParameter(11, params.unk30);
+    SetParameter(12, params.unk34);
+}

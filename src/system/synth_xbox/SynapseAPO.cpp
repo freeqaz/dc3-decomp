@@ -5,13 +5,10 @@ namespace DSP {
 
 SynapseAPOParams::SynapseAPOParams() {}
 
-template <>
-CSampleXAPOBase<SynapseAPO, SynapseAPOParams>::CSampleXAPOBase() {}
-
 SynapseAPO::SynapseAPO() : CSampleXAPOBase<SynapseAPO, SynapseAPOParams>() {
-  SetSamplingRate(48000.0f);
   unk168 = 0;
   new (&unk16C) SynapseAPOParams();
+  SetSamplingRate(48000.0f);
 }
 
 SynapseAPO::~SynapseAPO() {}

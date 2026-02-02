@@ -395,7 +395,8 @@
 /* ---------------------------------------------------------------- */
 
 /* Define if you have struct sockaddr_storage. */
-#if !defined(__SALFORDC__) && !defined(__BORLANDC__)
+/* Xbox 360 XDK: not defined - uses char buffer[256] fallback in sockaddr.h */
+#if 0
 #define HAVE_STRUCT_SOCKADDR_STORAGE 1
 #endif
 
@@ -499,6 +500,7 @@
 #    define SIZEOF_TIME_T 4
 #  endif
 #endif
+
 
 /* Officially, Microsoft's Windows SDK versions 6.X do not support Windows
    2000 as a supported build target. VS2008 default installations provide

@@ -872,18 +872,8 @@ inline void __linear_insert(_RandomAccessIter __first,
   //*TY 12/26/1998 - added __val as a paramter
   //  _Tp __val = *__last;        //*TY 12/26/1998 - __val supplied by caller
   if (__comp(__val, *__first)) {
-    _RandomAccessIter __pos = __last + 1;
-    _RandomAccessIter __prev = __last;
-    int __count = __last - __first;
-    if (__count > 0) {
-      do {
-        __pos -= 1;
-        __prev -= 1;
-        memcpy(__pos, __prev, sizeof(_Tp));
-        __count -= 1;
-      } while (__count != 0);
-    }
-    memcpy(__first, &__val, sizeof(_Tp));
+    copy_backward(__first, __last, __last + 1);
+    *__first = __val;
   }
   else
     __unguarded_linear_insert(__last, __val, __comp);

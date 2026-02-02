@@ -408,7 +408,7 @@ CURLcode Curl_SOCKS5(
     curlx_nonblock(sock, TRUE);
 
     /* wait until socket gets connected */
-    result = Curl_socket_ready(sock, CURL_SOCKET_BAD, timeout);
+    result = Curl_socket_ready(CURL_SOCKET_BAD, sock, timeout);
 
     if (result == -1) {
         failf(conn->data, "SOCKS5: no connection here");

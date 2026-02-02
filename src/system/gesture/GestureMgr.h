@@ -56,8 +56,10 @@ public:
     int GetActiveSkeletonIndex() const;
     void SetInControllerMode(bool);
     void SetInVoiceMode(bool);
+    bool InVoiceMode() const { return mInVoiceMode; }
     void SetGesturingWithVoice(bool);
     void SetInDoubleUserMode(bool);
+    bool InDoubleUserMode() const { return mInDoubleUserMode; }
     void StartTrackAllSkeletons();
     void CancelTrackAllSkeletons();
     void Poll();
@@ -95,6 +97,7 @@ public:
     }
     bool InControllerMode() const { return mInControllerMode; }
     SkeletonRecoverer &Recoverer() { return mRecoverer; }
+    int GetActiveSkeletonTrackingID() const { return mActiveSkelTrackingID; }
     void SetActiveSkeletonTrackingID(int id) { mActiveSkelTrackingID = id; }
 
     static bool sIdentityOpInProgress;

@@ -18,14 +18,25 @@ enum UIListWidgetState {
     kNumUIListWidgetStates
 };
 
-struct UIListWidgetDrawElement {
-    UIComponent::State mComponentState; // 0x28
+class UIListElementDrawState {
+public:
+    bool unk0; // 0x0
+    Vector3 mPos; // 0x4
+    float mAlpha; // 0x10
+    UIListWidgetState mElementState; // 0x14
+    UIComponent::State mComponentState; // 0x18
+    int mDisplay; // 0x1c
+    int mShowing; // 0x20
+    int mData; // 0x24
 };
 
 struct UIListWidgetDrawState {
-    std::vector<UIListWidgetDrawElement> mElements;
-    Vector3 mHighlightPos;
-    UIListWidgetState mHighlightElementState;
+    Vector3 mFirstPos; // 0x0
+    Vector3 mLastPos; // 0xc
+    Vector3 mHighlightPos; // 0x18
+    int mHighlightDisplay; // 0x24
+    UIListWidgetState mHighlightElementState; // 0x28
+    std::vector<UIListElementDrawState> mElements; // 0x2c
 };
 
 enum UIListWidgetDrawType {
@@ -69,6 +80,8 @@ public:
     virtual void Poll() {}
 
     float DrawOrder() const;
+    float DisabledAlphaScale() const { return mDisabledAlphaScale; }
+    UIList *ParentList() { return mParentList; }
     void SetParentList(UIList *);
     void SetColor(UIListWidgetState, UIComponent::State, UIColor *);
 

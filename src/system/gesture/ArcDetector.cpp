@@ -84,59 +84,50 @@ void ArcDetector::CullPath() {
 }
 
 void ArcDetector::Draw(const Skeleton &skeleton, SkeletonViz &viz) {
-    std::list<Vector3>::iterator it = mJointPath.begin();
-    std::list<Vector3>::iterator end_it = mJointPath.end();
-    unsigned int count = 0;
-    if (it != end_it) {
+    unsigned int count = mJointPath.size();
+    if (count != 0U) {
+        std::list<Vector3> arcPath;
+        float f31 = 0.0f;
+        float f29 = 2.0f;
+        float f30 = 0.031415927f;
+        int i = 0;
+
         do {
-            it++;
-            count++;
-        } while (it != end_it);
+            float f13 = unk28;
+            double temp_d = (double)i;
+            float f0 = (float)temp_d * f13 * f30;
+            float f12 = f13 * f0;
+            float comp = f12 * f29 - (f0 * f0);
 
-        if (count != 0U) {
-            std::list<Vector3> arcPath;
-            float f31 = 0.0f;
-            float f29 = 2.0f;
-            float f30 = 0.031415927f;
-            int i = 0;
+            if (!(comp > f31)) {
+                f13 = f31;
+            } else {
+                f13 = sqrtf(comp);
+            }
 
-            do {
-                float f13 = unk28;
-                double temp_d = (double)i;
-                float f0 = (float)temp_d * f13 * f30;
-                float f12 = f13 * f0;
-                float comp = f12 * f29 - (f0 * f0);
+            f13 = -f13;
+            int sign = ((-(0 - mSide)) & 2) - 1;
+            Vector3 vec(f0 * (float)sign, f31, f13);
+            arcPath.insert(arcPath.end(), vec);
 
-                if (!(comp > f31)) {
-                    f13 = f31;
-                } else {
-                    f13 = sqrtf(comp);
-                }
+            i++;
+        } while (i < 100);
 
-                f13 = -f13;
-                int sign = ((-(0 - mSide)) & 2) - 1;
-                Vector3 vec(f0 * (float)sign, f31, f13);
-                arcPath.insert(arcPath.end(), vec);
+        const TrackedJoint *joints = skeleton.TrackedJoints();
+        const Vector3 &jpos = joints[unk8].mJointPos[0];
+        Vector3 pos(
+            jpos.x + unk18.x,
+            jpos.z + unk18.z,
+            jpos.y + unk18.y
+        );
 
-                i++;
-            } while (i < 100);
+        std::list<Vector3> path1(arcPath);
+        DrawPath(path1, viz, Hmx::Color(0.0f, 1.0f, 1.0f, 1.0f), pos);
+        arcPath.clear();
 
-            const TrackedJoint *joints = skeleton.TrackedJoints();
-            const Vector3 &jpos = joints[unk8].mJointPos[0];
-            Vector3 pos(
-                jpos.x + unk18.x,
-                jpos.z + unk18.z,
-                jpos.y + unk18.y
-            );
-
-            std::list<Vector3> path1(arcPath);
-            DrawPath(path1, viz, Hmx::Color(0.0f, 1.0f, 1.0f, 1.0f), pos);
-            arcPath.clear();
-
-            const Vector3 &jpos2 = joints[unkc].mJointPos[0];
-            std::list<Vector3> path2(mJointPath);
-            DrawPath(path2, viz, Hmx::Color(1.0f, 0.0f, 1.0f, 1.0f), jpos2);
-        }
+        const Vector3 &jpos2 = joints[unkc].mJointPos[0];
+        std::list<Vector3> path2(mJointPath);
+        DrawPath(path2, viz, Hmx::Color(1.0f, 0.0f, 1.0f, 1.0f), jpos2);
     }
 }
 

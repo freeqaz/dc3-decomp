@@ -274,8 +274,16 @@ END_SAVES
 
 void FlowSetProperty::OnAnimEvent(Symbol) {
     FLOW_LOG("PropertyRampEnded\n");
-    FLOW_LOG("Timed Release From Parent \n");
     unk_0xCC = nullptr;
+    if (mRunningNodes.size() == 0 && !mEventsRegistered) {
+        FLOW_LOG("Timed Release From Parent \n");
+        Timer t;
+        t.Reset();
+        t.Start();
+        mFlowParent->ChildFinished(this);
+        t.Stop();
+        TheFlowMgr->AddMs(t.Ms());
+    }
 }
 
 void FlowSetProperty::Deactivate(bool b) {

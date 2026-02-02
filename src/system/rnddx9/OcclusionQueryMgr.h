@@ -48,11 +48,11 @@ private:
         MILO_ASSERT(queryIndex < kMaxQueries, 0x57);
         if (!mDXQueryArray[queryIndex][mCurrentFrameIndex]) {
             MILO_ASSERT(GetQueryState(queryIndex) == kQueryStateInvalid, 0x5D);
-            if (mDXQueryArray[queryIndex][mCurrentFrameIndex]) {
-                mDXQueryArray[queryIndex][mCurrentFrameIndex] =
-                    D3DDevice_CreateQueryTiled(
-                        TheDxRnd.Device(), D3DQUERYTYPE_OCCLUSION, 1
-                    );
+            D3DQuery **slot = &mDXQueryArray[queryIndex][mCurrentFrameIndex];
+            if (slot) {
+                *slot = D3DDevice_CreateQueryTiled(
+                    TheDxRnd.Device(), D3DQUERYTYPE_OCCLUSION, 1
+                );
             }
             SetQueryState(queryIndex, kQueryStateReady);
         }

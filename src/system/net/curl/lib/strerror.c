@@ -340,7 +340,6 @@ const char *Curl_strerror(struct connectdata *conn, int err) {
     buf = conn->syserr_buf;
     max = sizeof(conn->syserr_buf) - 1;
     *buf = '\0';
-    buf[max] = '\0';
 
     str = strerror(err);
     if (str) {

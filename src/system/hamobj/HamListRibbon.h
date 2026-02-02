@@ -76,9 +76,11 @@ public:
     void PlaySelectSound(int);
     bool IsScrollable(int) const;
     Sound *SlideSound() const { return mSlideSound; }
+    RndAnimatable *SlideSoundAnim() const { return mSlideSoundAnim; }
     Sound *ScrollSound() const { return mScrollSound; }
     RndAnimatable *ScrollSoundAnim() const { return mScrollSoundAnim; }
     RndAnimatable *EnterAnim() const { return mEnterAnim; }
+    bool TestEntering() const { return mTestEntering; }
     void SetTestEntering(bool b) { mTestEntering = b; }
 
 private:

@@ -58,9 +58,9 @@ UIListSlotElement *UIListLabel::CreateElement(UIList *uilist) {
     MILO_ASSERT(mLabel, 0x86);
     UILabel *l = dynamic_cast<UILabel *>(Hmx::Object::NewObject(mLabel->ClassName()));
     MILO_ASSERT(l, 0x89);
-    // l->ResourceCopy(mLabel);
+    l->Copy(mLabel, kCopyDeep);
     l->SetTextToken(gNullStr);
-    return nullptr;
+    return new UIListLabelElement(this, l);
 }
 
 #pragma endregion UIListLabel

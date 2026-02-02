@@ -62,29 +62,54 @@ void UIListSlot::Draw(
 ) {
     RndTransformable *root = RootTrans();
     if (root) {
-        int thesize = mElements.size();
+        int thesize = drawstate.mElements.size();
+        if (thesize > mElements.size()) {
+            MILO_FAIL("%i isn't enough elements (need %i)", mElements.size(), thesize);
+        }
         Transform tf78(root->WorldXfm());
         Transform tfa8;
-        UIListProvider *prov = const_cast<UIListState &>(liststate).Provider();
+        UIListProvider *prov = liststate.Provider();
+        float d10;
+        UIColor *uicolor;
         for (int i = 0; i < thesize; i++) {
-            float d10 = 1.0f;
-            UIColor *uicolor = 0;
-            if (!box) {
-                if (mSlotDrawType == kUIListSlotDrawHighlight) {
-                } else if (mSlotDrawType == kUIListSlotDrawNoHighlight) {
+            const UIListElementDrawState &curdrawstate = drawstate.mElements[i];
+            if (curdrawstate.unk0) {
+                d10 = 1.0f;
+                uicolor = 0;
+                if (!box) {
+                    if (mSlotDrawType == kUIListSlotDrawHighlight
+                            && curdrawstate.mDisplay != drawstate.mHighlightDisplay
+                        || mSlotDrawType == kUIListSlotDrawNoHighlight
+                            && curdrawstate.mDisplay == drawstate.mHighlightDisplay) {
+                        continue;
+                    }
+
+                    UIListWidgetState slotoverride = prov->SlotElementStateOverride(
+                        curdrawstate.mShowing,
+                        curdrawstate.mData,
+                        this,
+                        curdrawstate.mElementState
+                    );
+                    UIComponent::State curcompstate = curdrawstate.mComponentState;
+                    uicolor = DisplayColor(slotoverride, curcompstate);
+                    uicolor = prov->SlotColorOverride(
+                        curdrawstate.mShowing, curdrawstate.mData, this, uicolor
+                    );
+                    d10 = curdrawstate.mAlpha;
+                    if (curcompstate == UIComponent::kDisabled)
+                        d10 *= DisabledAlphaScale();
+                    prov->PreDraw(curdrawstate.mShowing, curdrawstate.mData, this);
                 }
-                UIListWidgetState slotstate = prov->SlotElementStateOverride(i, i, this, kUIListWidgetActive);
-                uicolor = DisplayColor(slotstate, compstate);
-                uicolor = prov->SlotColorOverride(i, i, this, uicolor);
-                prov->PreDraw(i, i, this);
+                tfa8 = tf78;
+                if (ParentList())
+                    ParentList()->AdjustTrans(tfa8, curdrawstate);
+                CalcXfm(ctf, curdrawstate.mPos, tfa8);
+                if (cmd != kExcludeFirst || i > 0) {
+                    mElements[i]->Draw(tfa8, d10, uicolor, box);
+                }
+                if (cmd == kDrawFirst)
+                    return;
             }
-            tfa8 = tf78;
-            CalcXfm(ctf, Vector3(0, 0, 0), tfa8);
-            if (cmd != kExcludeFirst || i > 0) {
-                mElements[i]->Draw(tfa8, d10, uicolor, box);
-            }
-            if (cmd == kDrawFirst)
-                return;
         }
     }
 }

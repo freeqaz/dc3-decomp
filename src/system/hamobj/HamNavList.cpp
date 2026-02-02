@@ -1,6 +1,7 @@
 #include "hamobj/HamNavList.h"
 #include "HamListRibbon.h"
 #include "HamScrollBehavior.h"
+#include "flow/PropertyEventProvider.h"
 #include "gesture/BaseSkeleton.h"
 #include "gesture/GestureMgr.h"
 #include "gesture/HandsUpGestureFilter.h"
@@ -8,6 +9,7 @@
 #include "gesture/SkeletonUpdate.h"
 #include "gesture/SkeletonViz.h"
 #include "hamobj/HamNavProvider.h"
+#include "hamobj/HamScrollSpeedIndicator.h"
 #include "obj/Data.h"
 #include "obj/Object.h"
 #include "obj/Task.h"
@@ -15,6 +17,7 @@
 #include "os/JoypadMsgs.h"
 #include "os/System.h"
 #include "rndobj/Anim.h"
+#include "rndobj/Overlay.h"
 #include "rndobj/Trans.h"
 #include "synth/Sound.h"
 #include "ui/UI.h"
@@ -23,8 +26,11 @@
 #include "ui/UIListProvider.h"
 #include "ui/UIListState.h"
 #include "utl/BinStream.h"
+#include "utl/Loader.h"
 #include "utl/Std.h"
 #include "utl/Symbol.h"
+
+bool HamNavList::sForceDisengage;
 
 NavSelectMsg::NavSelectMsg(Symbol sym, int index, HamNavList *list, bool selecting)
     : Message(Type(), sym, index, (Hmx::Object *)list, selecting) {}
@@ -295,7 +301,254 @@ void HamNavList::SetSwelling() {
 bool HamNavList::CanHaveFocus() { return mNavInputType == kNavInput_RightHand; }
 
 void HamNavList::Poll() {
-    // TODO: Implement Poll
+    UIComponent::Poll();
+
+    if (unk1f0) {
+        RealRefresh();
+    }
+
+    // Poll list dir widgets if loaded
+    if (mListDirResource) {
+        mListDirResource->PollWidgets(unk64);
+    }
+
+    if (SkipPoll()) {
+        // When skipping poll but ribbon resource exists, reset slide sound anim
+        if (mListRibbonResource) {
+            RndAnimatable *slideSoundAnim = mListRibbonResource->SlideSoundAnim();
+            if (slideSoundAnim) {
+                slideSoundAnim->SetFrame(0.0f, 1.0f);
+            }
+        }
+        // TODO(match): target calls unk184->vtable[0x28/4] here (5 instructions missing)
+        return;
+    }
+
+    // Check if gesture mode changed and update if needed
+    if (TheGestureMgr && !TheLoadMgr.EditMode()) {
+        if (TheGestureMgr->InDoubleUserMode() != unk1fd) {
+            Update();
+        }
+    }
+
+    // Update skeleton tracking ID if using active skeleton
+    if (mAlwaysUseActiveSkeleton) {
+        mSkeletonTrackingID = TheGestureMgr->GetActiveSkeletonTrackingID();
+    }
+
+    // Get skeleton and update gestures
+    Skeleton *skeleton = TheGestureMgr->GetSkeletonByTrackingID(mSkeletonTrackingID);
+    if (skeleton && skeleton->IsValid() && !skeleton->IsSideways() && !sForceDisengage) {
+        UpdateGestures(skeleton);
+
+        // Update scroll speed indicator if present
+        if (mScrollSpeedIndicatorResource) {
+            if (mRibbonMode != HamListRibbon::kRibbonDisengaged) {
+                // Check if scrolling past min display
+                if (!mListState.ScrollPastMinDisplay()) {
+                    // Check if ribbon resource test entering
+                    if (mScrollSpeedIndicatorResource) {
+                        if (!mScrollSpeedIndicatorResource->IsShowing()) {
+                            mScrollSpeedIndicatorResource->Show(false);
+                        }
+                    }
+                } else if (mRibbonMode == HamListRibbon::kRibbonSwell) {
+                    if (mScrollSpeedIndicatorResource) {
+                        if (!mScrollSpeedIndicatorResource->IsShowing()) {
+                            mScrollSpeedIndicatorResource->Show(false);
+                        }
+                    }
+                } else {
+                    // Update scroll speed indicator with scroll behavior data
+                    float scrollSpeed = unk190.unk10;
+                    float scrollDownCap = HamScrollBehavior::mScrollDownCap;
+                    float scrollUpCap = HamScrollBehavior::mScrollUpCap;
+                    mScrollSpeedIndicatorResource->Update(scrollSpeed, scrollUpCap, scrollDownCap);
+                }
+            }
+        }
+    } else {
+        // No valid skeleton - check if we should disengage
+        bool shouldDisengage = true;
+        if (TheGestureMgr) {
+            if (TheGestureMgr->InVoiceMode()) {
+                shouldDisengage = false;
+            }
+        }
+        if (shouldDisengage) {
+            Disengage();
+
+            // Hide scroll speed indicator if present
+            if (mScrollSpeedIndicatorResource) {
+                if (mScrollSpeedIndicatorResource->IsShowing()) {
+                    mScrollSpeedIndicatorResource->Show(false);
+                }
+            }
+        }
+    }
+
+    // Update swipe direction debug overlay
+    if (mRibbonMode != HamListRibbon::kRibbonDisengaged) {
+        RndOverlay *swipeOverlay = RndOverlay::Find("swipe_direction", true);
+        swipeOverlay->SetCallback((RndOverlay::Callback *)unk184);
+    }
+
+    // Play enter anim if pending
+    if (unk154) {
+        unk154 = false;
+        PlayEnterAnim();
+    }
+
+    // Determine highlighted item based on mode
+    if (mRibbonMode == HamListRibbon::kRibbonSwell) {
+        bool inControllerMode = false;
+        if (TheGestureMgr) {
+            inControllerMode = TheGestureMgr->InControllerMode();
+        }
+        if (!inControllerMode) {
+            bool inVoiceMode = false;
+            if (TheGestureMgr) {
+                inVoiceMode = TheGestureMgr->InVoiceMode();
+            }
+            if (!inVoiceMode && !TheLoadMgr.EditMode()) {
+                DetermineHighlightedItem();
+            }
+        }
+    }
+
+    // Check if we should clear scroll tracking
+    if (mRibbonMode == HamListRibbon::kRibbonDisengaged) {
+        bool inControllerMode = false;
+        if (TheGestureMgr) {
+            inControllerMode = TheGestureMgr->InControllerMode();
+        }
+        if (!inControllerMode) {
+            bool inVoiceMode = false;
+            if (TheGestureMgr) {
+                inVoiceMode = TheGestureMgr->InVoiceMode();
+            }
+            if (inVoiceMode) {
+                unk190.unk30 = 0;
+            }
+        }
+    }
+
+    // If disengaged and in controller mode, switch to swell
+    if (mRibbonMode == HamListRibbon::kRibbonDisengaged) {
+        bool inControllerMode = false;
+        if (TheGestureMgr) {
+            inControllerMode = TheGestureMgr->InControllerMode();
+        }
+        if (inControllerMode) {
+            SetRibbonMode(HamListRibbon::kRibbonSwell);
+        }
+    }
+
+    // Update scroll behavior if scrollable
+    if (mListRibbonResource && mListState.Provider()
+        && mListRibbonResource->IsScrollable(mListState.NumShowing()) && !sForceDisengage) {
+        unk190.Update(unk190.unk10);
+    }
+
+    // Update slide sound anim based on mode
+    if (mListRibbonResource) {
+        if (mRibbonMode == HamListRibbon::kRibbonSlide
+            && !mListRibbonResource->TestEntering()) {
+            RndAnimatable *slideSoundAnim = mListRibbonResource->SlideSoundAnim();
+            if (slideSoundAnim) {
+                slideSoundAnim->SetFrame(unk15c.Level(), 1.0f);
+            }
+        } else {
+            RndAnimatable *slideSoundAnim = mListRibbonResource->SlideSoundAnim();
+            if (slideSoundAnim) {
+                slideSoundAnim->SetFrame(0.0f, 1.0f);
+            }
+        }
+    }
+
+    // Update each ribbon draw state swell amount
+    for (unsigned int i = 0; i < mRibbonDrawStates.size(); i++) {
+        float deltaUI = TheTaskMgr.DeltaUISeconds();
+        float targetSwell = GetTargetSwellAmount(i);
+        mRibbonDrawStates[i].unk0.Smooth(targetSwell, deltaUI);
+    }
+
+    // Smooth the secondary smoother based on mode
+    if (mRibbonMode == HamListRibbon::kRibbonDisengaged) {
+        unk170.Smooth(1.0f, TheTaskMgr.DeltaUISeconds());
+    } else {
+        unk170.Smooth(0.0f, TheTaskMgr.DeltaUISeconds());
+    }
+
+    // Handle select mode completion
+    if (mRibbonMode == HamListRibbon::kRibbonSelect) {
+        if (!RndAnimatable::IsAnimating() && !TheUI->InTransition()
+            && !TheLoadMgr.EditMode()) {
+            SetRibbonMode(HamListRibbon::kRibbonSwell);
+
+            // Reset all draw state smoothers
+            for (unsigned int i = 0; i < mRibbonDrawStates.size(); i++) {
+                mRibbonDrawStates[i].unk0.SetParams(0.0f, 0.0f, 0.0f);
+            }
+
+            // Send nav_select_done message
+            if (unk1f8 != -1) {
+                UIListProvider *provider = mListState.Provider();
+                MILO_ASSERT(provider, 0x185);
+
+                static Message navSelectDoneMsg(
+                    Symbol("nav_select_done"), DataNode(0), DataNode(0), DataNode(0), DataNode(0)
+                );
+                navSelectDoneMsg->Node(2) = DataNode(unk1f4);
+                navSelectDoneMsg->Node(3) = DataNode(unk1f8);
+                navSelectDoneMsg->Node(4) = DataNode(this);
+                navSelectDoneMsg->Node(5) = DataNode(unk1fc);
+
+                TheUI->Handle(navSelectDoneMsg.Data(), false);
+                TheHamProvider->Handle(navSelectDoneMsg.Data(), false);
+
+                unk1f8 = -1;
+            }
+
+            // Notify ribbon resources
+            if (mListRibbonResource) {
+                mListRibbonResource->OnSelectDone();
+            }
+            if (mHeaderRibbonResource) {
+                mHeaderRibbonResource->OnSelectDone();
+            }
+        }
+    }
+
+    // Update ribbon test entering state
+    if (mListRibbonResource) {
+        if (unk157) {
+            mListRibbonResource->SetTestEntering(true);
+            RndAnimatable::SetFrame(0.0f, 1.0f);
+        } else {
+            if (mListRibbonResource->TestEntering()) {
+                if (!RndAnimatable::IsAnimating()) {
+                    mListRibbonResource->SetTestEntering(false);
+                    RndAnimatable::SetFrame(0.0f, 1.0f);
+                }
+            }
+        }
+    }
+
+    // Same for header ribbon
+    if (mHeaderRibbonResource) {
+        if (unk157) {
+            mHeaderRibbonResource->SetTestEntering(true);
+            RndAnimatable::SetFrame(0.0f, 1.0f);
+        } else {
+            if (mHeaderRibbonResource->TestEntering()) {
+                if (!RndAnimatable::IsAnimating()) {
+                    mHeaderRibbonResource->SetTestEntering(false);
+                    RndAnimatable::SetFrame(0.0f, 1.0f);
+                }
+            }
+        }
+    }
 }
 
 bool HamNavList::ShouldSkipSelectAnim(DataNode &node) const {

@@ -377,7 +377,7 @@ typedef int sig_atomic_t;
  * (or equivalent) on this platform to hide platform details to code using it.
  */
 
-#ifdef WIN32
+#if defined(WIN32) && !defined(_M_PPCBE)
 #define ERRNO ((int)GetLastError())
 #define SET_ERRNO(x) (SetLastError((DWORD)(x)))
 #else

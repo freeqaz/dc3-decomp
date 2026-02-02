@@ -37,6 +37,8 @@ public:
     static float mScrollDownCap;
     static float mSlowFastThreshold;
 
+    friend class HamNavList;
+
 private:
     static float sScrollSettleTime;
 

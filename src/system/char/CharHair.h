@@ -42,6 +42,7 @@ public:
 
     public:
         Strand(Hmx::Object *);
+        Strand(const Strand &);
         void SetRoot(RndTransformable *);
         void SetAngle(float);
         void Save(BinStream &) const;

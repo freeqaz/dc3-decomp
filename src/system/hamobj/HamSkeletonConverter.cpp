@@ -195,26 +195,32 @@ void HamSkeletonConverter::RotateTowards(
 ) {
     if (v1 == v2)
         return;
-    else {
-        Hmx::Quat q50;
-        q50.Reset();
-        Hmx::Quat q40;
-        MakeRotQuat(v1, v2, q40);
-        float angle = acos(Dot(v1, v2));
-        if (fabsf(angle) < 1e-9) {
-            vout.x = v1.x;
-            vout.y = v1.y;
-            vout.z = v1.z;
-        } else {
+    Hmx::Quat q50;
+    q50.Reset();
+    Hmx::Quat q40;
+    MakeRotQuat(v1, v2, q40);
+    float angle = acos(Dot(v1, v2));
+    int isValid = (angle != angle) ? 0 : 1;
+    if ((isValid & 0xFF) != 0) {
+        float absAngle = fabs(angle);
+        if (absAngle >= 1.0e-9) {
             float fabsed = fabsf(f / angle);
-            if (fabsed < 1.0f) {
-                Interp(q50, q40, fabsed, q40);
-                Multiply(v1, q40, vout);
-            } else {
+            if (fabsed >= 1.0f) {
                 vout.x = v2.x;
                 vout.y = v2.y;
                 vout.z = v2.z;
+            } else {
+                Interp(q50, q40, fabsed, q40);
+                Multiply(v1, q40, vout);
             }
+        } else {
+            vout.x = v1.x;
+            vout.y = v1.y;
+            vout.z = v1.z;
         }
+    } else {
+        vout.x = v1.x;
+        vout.y = v1.y;
+        vout.z = v1.z;
     }
 }

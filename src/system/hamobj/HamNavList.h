@@ -119,9 +119,13 @@ private:
     int GetDisabledCount(int) const;
     int GetHighlightItem(void) const;
     void DetermineHighlightedItem();
+    void Disengage();
+    void UpdateGestures(const Skeleton *);
+    float GetTargetSwellAmount(int);
 
     static float sSlideSmoothAmount;
     static float sSlideTrendAmount;
+    static bool sForceDisengage;
 
     DataNode OnMsg(const ButtonDownMsg &);
 
