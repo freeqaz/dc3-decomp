@@ -338,12 +338,12 @@ void HiResScreen::Merge(
 
 void HiResScreen::DownSample(RndBitmap &outBm) {
     int tiling = mTiling;
-    int accum_w = mAccumWidth;
     int accum_h = mAccumHeight;
-    int newHeight = (tiling * 270 + accum_h) / tiling;
+    int accum_w = mAccumWidth;
     int newWidth = (tiling * 480 + accum_w) / tiling;
-    float scaleY = (float)accum_h / (float)newHeight;
+    int newHeight = (tiling * 270 + accum_h) / tiling;
     float scaleX = (float)accum_w / (float)newWidth;
+    float scaleY = (float)accum_h / (float)newHeight;
     outBm.Create(newWidth, newHeight, 32, 0, 0, 0, 0, 0);
     memset(outBm.Buffer(), 0, outBm.PixelBytes());
     for (int y = 0; y < newHeight; y++) {

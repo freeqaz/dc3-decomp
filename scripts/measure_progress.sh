@@ -10,6 +10,8 @@
 #   scripts/measure_progress.sh dd02a3e            # Compare HEAD vs specific commit
 #   scripts/measure_progress.sh --worktree 15      # Use agent-15 worktree
 #   scripts/measure_progress.sh --detailed HEAD~5  # Show per-unit breakdown
+#   scripts/measure_progress.sh --functions c8d98a # Show function-level changes
+#   scripts/measure_progress.sh --regressions      # Only show regressions
 #
 set -euo pipefail
 
@@ -17,7 +19,7 @@ MAIN_REPO="$(cd "$(dirname "$0")/.." && pwd)"
 REPORT_REL="build/373307D9/report.json"
 WORKTREE_ID=19
 BASELINE_REF="HEAD~1"
-DETAILED=""
+COMPARE_FLAGS=()
 WORKTREE_BASE="/tmp/claude/decomp-agents"
 
 # --- Parse arguments ---
@@ -28,11 +30,23 @@ while [[ $# -gt 0 ]]; do
             shift 2
             ;;
         --detailed)
-            DETAILED="--detailed"
+            COMPARE_FLAGS+=("--detailed")
             shift
             ;;
+        --functions|-f)
+            COMPARE_FLAGS+=("--functions")
+            shift
+            ;;
+        --regressions|-r)
+            COMPARE_FLAGS+=("--regressions")
+            shift
+            ;;
+        --limit)
+            COMPARE_FLAGS+=("--limit" "$2")
+            shift 2
+            ;;
         --help|-h)
-            sed -n '2,13p' "$0"
+            sed -n '2,14p' "$0"
             exit 0
             ;;
         *)
@@ -124,12 +138,7 @@ fi
 
 # --- Compare ---
 echo ""
-COMPARE_ARGS=(
-    "${WORKTREE}/${REPORT_REL}"
+python3 "${MAIN_REPO}/scripts/compare_progress.py" \
+    "${COMPARE_FLAGS[@]}" \
+    "${WORKTREE}/${REPORT_REL}" \
     "${MAIN_REPO}/${REPORT_REL}"
-)
-if [[ -n "${DETAILED}" ]]; then
-    COMPARE_ARGS=("${DETAILED}" "${COMPARE_ARGS[@]}")
-fi
-
-python3 "${MAIN_REPO}/scripts/compare_progress.py" "${COMPARE_ARGS[@]}"

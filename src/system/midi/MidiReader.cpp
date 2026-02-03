@@ -135,9 +135,9 @@ void MidiReader::ProcessMidiList() {
 void MidiReader::ReadMidiEvent(
     int tick, unsigned char status, unsigned char data1, BinStream &bs
 ) {
+    int statusType = status & 0xF0;
     unsigned char data2;
     bool queue = false;
-    int statusType = status & 0xF0;
     switch (statusType) {
     case kNoteOn:
         bs >> data2;
@@ -166,7 +166,7 @@ void MidiReader::ReadMidiEvent(
             "%s (%s): Cannot parse event %i",
             mStreamName.c_str(),
             mCurTrackName.c_str(),
-            status & 0xF0
+            statusType
         );
         break;
     }

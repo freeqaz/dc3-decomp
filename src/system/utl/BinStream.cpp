@@ -152,9 +152,10 @@ void BinStream::Read(void *data, int bytes) {
     } else {
         AutoGlitchReport report(50.0f, "BinStream::Read");
         unsigned char *ptr = (unsigned char *)data;
+        unsigned char *end;
         ReadImpl(data, bytes);
         if (mCrypto) {
-            unsigned char *end = ptr + bytes;
+            end = ptr + bytes;
             while (ptr < end) {
                 *ptr++ ^= mCrypto->Int();
             }

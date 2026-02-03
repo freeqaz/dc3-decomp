@@ -93,14 +93,10 @@ int AllocInfo::Compare(const AllocInfo &info) const {
     int cmp = strcmp(mType, info.mType);
     if (cmp) {
         return cmp;
-    }
-    if (mReqSize < info.mReqSize) {
+    } else if (mReqSize < info.mReqSize) {
         return -1;
-    }
-    if (mReqSize > info.mReqSize) {
-        return 1;
-    }
-    return 0;
+    } else
+        return mReqSize <= info.mReqSize;
 }
 
 void AllocInfo::FillStackTrace() {
@@ -115,10 +111,13 @@ void AllocInfo::FillStackTrace() {
 }
 
 void AllocInfoInit() {
+    void *dst;
     if (s_pTrie == nullptr) {
         // 0x220008
-        void *dst = MemAlloc(sizeof(Trie), __FILE__, 0x28, "Trie, 0");
-        if (dst != nullptr) {
+        dst = MemAlloc(sizeof(Trie), __FILE__, 0x28, "Trie, 0");
+        if (dst == nullptr) {
+            s_pTrie = nullptr;
+        } else {
             memset(dst, 0, sizeof(Trie));
             // some trie member bool being set to true here
             s_pTrie = (Trie *)dst;

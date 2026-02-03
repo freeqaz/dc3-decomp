@@ -171,13 +171,8 @@ bool FlowNode::Activate() {
 
 void FlowNode::Deactivate(bool b1) {
     FLOW_LOG("Deactivated\n");
-    // Manually iterate with pre-increment to handle iterator invalidation
-    // when ChildFinished() is called during node->Deactivate()
-    auto it = mRunningNodes.begin();
-    while (it != mRunningNodes.end()) {
-        auto node = *it;
-        ++it;
-        node->Deactivate(b1);
+    FOREACH (it, mRunningNodes) {
+        (*it)->Deactivate(b1);
     }
     mRunningNodes.clear();
 }

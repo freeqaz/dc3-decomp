@@ -1,7 +1,7 @@
 #include "os/File.h"
 #include "os/AsyncFile.h"
-#include "os/ArkFile_p.h"
 #include "os/FileCache.h"
+#include "os/ArkFile_p.h"
 #include "HolmesClient.h"
 #include "obj/Data.h"
 #include "obj/DataFunc.h"
@@ -15,7 +15,6 @@
 #include "utl/Option.h"
 #include <cctype>
 #include <cstdio>
-using namespace std;
 
 static char gSystemRoot[256]; // 0x0
 static char gExecRoot[256]; // 0x100

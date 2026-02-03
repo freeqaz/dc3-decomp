@@ -367,11 +367,11 @@ void UIManager::ReloadStrings() {
     Message msg(Symbol("reload_strings"));
 
     if (mCurrentScreen) {
-        mCurrentScreen->Handle(msg, false);
+        mCurrentScreen->Handle(msg, true);
     }
 
     for (auto it = mPushedScreens.begin(); it != mPushedScreens.end(); ++it) {
-        (*it)->Handle(msg, false);
+        (*it)->Handle(msg, true);
     }
 }
 

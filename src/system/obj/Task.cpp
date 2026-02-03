@@ -104,29 +104,22 @@ void ScriptTask::SwapVars() {
 }
 
 void ThreadTask::Poll(float f1) {
-    if (mExecuting)
+    if (mExecuting) {
         MILO_FAIL("Can't re-enter ThreadTask::Poll");
+    }
     MILO_ASSERT(mScript, 0x11A);
-    if (f1 < mTime)
-        return;
-    else {
+    if (f1 >= mTime) {
         mTime = f1;
-        mWait = false;
         mExecuting = true;
+        mWait = false;
         SwapVars();
-        Hmx::Object *old_this = DataSetThis(mThis);
-        for (; mCurrent < mScript->Size();) {
-            int old_current = mCurrent;
+        Hmx::Object *oldThis = DataSetThis(mThis);
+        for (; mCurrent < mScript->Size(); mCurrent++) {
             mScript->Command(mCurrent)->Execute(true);
             if (mWait)
                 break;
-            // Only increment if Execute() didn't modify mCurrent
-            // (handlers like OnSetCurrent may adjust the script position)
-            if (mCurrent == old_current) {
-                mCurrent++;
-            }
         }
-        DataSetThis(old_this);
+        DataSetThis(oldThis);
         SwapVars();
         mExecuting = false;
         if (mCurrent == mScript->Size()) {

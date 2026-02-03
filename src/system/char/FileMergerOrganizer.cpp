@@ -165,8 +165,8 @@ void FileMergerOrganizer::RemoveFileMerger(FileMergerOrganizer::OrganizedFileMer
 void FileMergerOrganizer::CheckDone() {
     MILO_ASSERT(mActiveOrg == NULL, 0x97);
     MILO_ASSERT(mStartOrg == NULL, 0x98);
-    OrganizedFileMerger *bestOrg = nullptr;
-    FileMerger::Merger *bestFront = nullptr;
+    OrganizedFileMerger *o5 = nullptr;
+    FileMerger::Merger *m4 = nullptr;
     FOREACH (it, mOrganizedFileMergers) {
         OrganizedFileMerger *curr = &*it;
         MILO_ASSERT(curr->state != kPendingLoad, 0xA3);
@@ -175,13 +175,14 @@ void FileMergerOrganizer::CheckDone() {
             RemoveFileMerger(curr);
             return;
         }
-        if (!bestOrg || !FileMergerSort()(bestFront, front)) {
-            bestOrg = curr;
-            bestFront = front;
+        FileMergerSort sort;
+        if (!o5 || !sort(m4, front)) {
+            o5 = curr;
+            m4 = front;
         }
     }
-    if (bestOrg)
-        Dispatch(bestOrg);
+    if (o5)
+        Dispatch(o5);
 }
 
 void FileMergerOrganizer::AddFileMerger(FileMerger *fm) {

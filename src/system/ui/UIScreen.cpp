@@ -413,21 +413,10 @@ BEGIN_HANDLERS(UIScreen)
     HANDLE_MESSAGE(ButtonDownMsg)
 END_HANDLERS
 
-void EnterGlitchCB(float fElapsed, void *data) {
-    char sp54[12];
-    int sp50;
-
-    int *p1 = *(int **)((char *)data + 4);
-    void *ptr = (void *)(*(int *)(p1 + 1) + (char *)data);
-    void *p2 = (void *)((char *)ptr + 4);
-    void *(*func)(void *, void *, void *) = *(void *(**)(void *, void *, void *))((char *)ptr + 0xc);
-    sp50 = *(int *)((char *)ptr + 0x24);
-    float elapsed = fElapsed;
-
-    Symbol result;
-    func(&result, p2, (void *)&result);
-    const char *str = MakeString("Enter took %.2f ms\n", result, elapsed);
-    TheDebug << str;
+void UnloadGlitchCB(float f, void *data) {
+    int checkTime;
+    char *obj = (char *)((char **)((char **)data)[1])[1] + (int)data;
+    checkTime = *(int *)((char *)obj + 0x24);
+    int result = (*(int (**)(char *, char *, int))((char *)obj + 0xC))((char *)obj + 4, obj, 0);
+    TheDebug << MakeString("CheckUnload took %2.f ms\n", result, &checkTime, &f);
 }
-
-void UnloadGlitchCB(float, void *) {}

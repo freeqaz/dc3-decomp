@@ -59,8 +59,8 @@ BEGIN_LOADS(CharFaceServo)
     ASSERT_REVS(4, 0)
     LOAD_SUPERCLASS(Hmx::Object)
     ObjPtr<ObjectDir> oDirPtr(this);
-    Symbol sym = Symbol();
     bs >> oDirPtr;
+    Symbol sym;
     if (d.rev > 3)
         bs >> sym;
     else if (oDirPtr) {

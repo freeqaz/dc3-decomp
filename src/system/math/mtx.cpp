@@ -53,7 +53,7 @@ void Invert(const Hmx::Matrix3 &min, Hmx::Matrix3 &mout) {
         (min.z.z * min.x.x - min.x.z * min.z.x) * mult,
         -((min.y.z * min.x.x - min.x.z * min.y.x) * mult),
         (min.z.y * min.y.x - min.z.x * min.y.y) * mult,
-        -((min.z.y * min.x.y - min.z.x * min.x.y) * mult),
+        -((min.z.y * min.x.x - min.z.x * min.x.y) * mult),
         (min.y.y * min.x.x - min.x.y * min.y.x) * mult
     );
 }

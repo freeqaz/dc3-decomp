@@ -24,16 +24,13 @@ DingoJob::~DingoJob() { RELEASE(mDataPoint); }
 void DingoJob::Start() {
     MILO_ASSERT(GetURL(), 0x49);
     MILO_ASSERT(strlen(GetURL()) != 0, 0x4A);
-
-    SetURL(MakeString("/%s/%s/%s/%s", "", TheServer.mOnlineId.ToString(), TheServer.mHostName.c_str(), GetURL()));
-    StartImpl();
 }
 
 void DingoJob::SendCallback(bool success, bool cancelled) {
     // Validate the response if the request succeeded
     if (success) {
         ParseResponse();
-        // Treat certain error codes as failures
+        // Check for error result codes
         if (!mJsonResponse || mResult == -1 || mResult == -4 || mResult == -0xb
             || mResult == -0x138b) {
             success = false;
@@ -71,7 +68,7 @@ void DingoJob::CleanUp(bool success) {
         char *str_buffer =
             (char *)_MemAllocTemp(size + 1, __FILE__, 0x6D, "DingoJobTmp", 0);
         MILO_ASSERT(str_buffer, 0x6E);
-        memcpy(str_buffer, mResponseData, size);
+        memcpy(str_buffer, src, size);
         str_buffer[size] = '\0';
         mResponseStr = str_buffer;
         MemFree(str_buffer);

@@ -805,8 +805,6 @@ int CharClip::BeatToSample(float f, float *fp) const {
     float f1 = 0;
     if (mBeatTrack.back().frame != 0) {
         f1 = frame / mBeatTrack.back().frame;
-    } else {
-        f1 = 0;
     }
     *fp = f1;
     return mFull.FracToSample(fp);

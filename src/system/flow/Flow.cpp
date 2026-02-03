@@ -249,19 +249,15 @@ void Flow::Deactivate(bool b1) { FlowQueueable::Deactivate(b1); }
 void Flow::RequestStop() {
     FLOW_LOG("RequestStop\n");
     if (!unk58) {
-        void *head = *(void **)((char *)this + 0x38);
         unk58 = true;
-        if (head != NULL) {
-            void *node = head;
-            void *next;
-            do {
-                next = *(void **)((char *)node + 0x14);
-                FlowNode *flowNode = (FlowNode *)node;
-                if (flowNode->ClassName() != FlowLabel::StaticClassName()) {
-                    flowNode->RequestStop();
-                }
-                node = next;
-            } while (next != NULL);
+        auto it = mRunningNodes.begin();
+        while (it != mRunningNodes.end()) {
+            auto next_it = it;
+            next_it++;
+            if ((*it)->ClassName() != FlowLabel::StaticClassName()) {
+                (*it)->RequestStop();
+            }
+            it = next_it;
         }
         unk58 = false;
     }

@@ -438,20 +438,22 @@ int Hmx::Object::PropertySize(DataArray *prop) {
     static DataNode n;
     if (SyncProperty(n, prop, 0, kPropSize)) {
         return n.Int();
-    } else {
-        MILO_ASSERT(prop->Size() == 1, 0x208);
-        Symbol name = prop->Sym(0);
-        const DataNode *a = nullptr;
-        if (mTypeProps != nullptr) {
-            a = mTypeProps->KeyValue(name, false);
-        }
-        if (a == nullptr) {
-            if (mTypeDef != nullptr) {
-                a = &mTypeDef->FindArray(name)->Evaluate(1);
-            } else
-                MILO_FAIL("%s: property %s not found", PathName(this), name);
+    }
+    MILO_ASSERT(prop->Size() == 1, 0x208);
+    Symbol name = prop->Sym(0);
+    const DataNode *a = nullptr;
+    if (mTypeProps) {
+        a = mTypeProps->KeyValue(name, false);
+    }
+    if (!a) {
+        if (mTypeDef) {
+            a = &mTypeDef->FindArray(name)->Evaluate(1);
+        } else {
+            MILO_FAIL("%s: property %s not found", PathName(this), name);
         }
     }
+    MILO_ASSERT(a->Type() == kDataArray, 0x21B);
+    return a->UncheckedArray()->Size();
 }
 
 void Hmx::Object::RemoveProperty(DataArray *prop) {

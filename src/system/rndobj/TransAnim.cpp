@@ -53,7 +53,7 @@ BEGIN_COPYS(RndTransAnim)
     COPY_SUPERCLASS(RndAnimatable)
     mTrans = t->mTrans;
     if (ty == kCopyShallow || ty == kCopyFromMax && t->mKeysOwner != t) {
-        mKeysOwner.SetObjConcrete(t->mKeysOwner);
+        mKeysOwner = t->mKeysOwner;
     } else {
         mKeysOwner = this;
         mTransKeys = t->mKeysOwner->mTransKeys;

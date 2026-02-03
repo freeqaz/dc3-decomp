@@ -13,6 +13,12 @@ Examples:
     # Show detailed unit breakdown
     python3 scripts/compare_progress.py --detailed ../og-dc3-decomp/build/373307D9/report.json build/373307D9/report.json
 
+    # Show function-level changes (regressions and improvements)
+    python3 scripts/compare_progress.py --functions baseline.json current.json
+
+    # Only show regressions across all views
+    python3 scripts/compare_progress.py --regressions --functions --detailed baseline.json current.json
+
     # Show current snapshot (all subsystems)
     python3 scripts/compare_progress.py --snapshot
     python3 scripts/compare_progress.py --snapshot --sort=percent
@@ -140,6 +146,60 @@ def compare_units(baseline: dict, current: dict, min_diff: float = 0.01) -> list
     return results
 
 
+def compare_functions(baseline: dict, current: dict, min_diff: float = 0.5) -> list:
+    """Compare individual function match percentages between two reports.
+
+    Returns a list of functions whose fuzzy_match_percent changed, sorted by
+    regression severity (most regressed first).
+    """
+    # Build function lookup: (unit_name, func_name) -> fuzzy_match_percent
+    def build_func_map(report):
+        fmap = {}
+        for unit in report.get("units", []):
+            unit_name = unit["name"]
+            for func in unit.get("functions", []):
+                fname = func.get("name", "")
+                pct = func.get("fuzzy_match_percent", None)
+                demangled = func.get("metadata", {}).get("demangled_name", "")
+                fmap[(unit_name, fname)] = {
+                    "pct": pct,
+                    "size": int(func.get("size", 0)),
+                    "demangled": demangled,
+                }
+        return fmap
+
+    base_funcs = build_func_map(baseline)
+    curr_funcs = build_func_map(current)
+
+    results = []
+    for key, curr in curr_funcs.items():
+        if key in base_funcs:
+            base = base_funcs[key]
+            # Skip functions with no match data in either
+            if base["pct"] is None and curr["pct"] is None:
+                continue
+            base_pct = base["pct"] or 0
+            curr_pct = curr["pct"] or 0
+            diff = curr_pct - base_pct
+
+            if abs(diff) >= min_diff:
+                unit_name, func_name = key
+                display = curr["demangled"] or base["demangled"] or func_name
+                results.append({
+                    "unit": unit_name,
+                    "name": func_name,
+                    "display": display,
+                    "base_pct": base_pct,
+                    "curr_pct": curr_pct,
+                    "diff_pct": diff,
+                    "size": curr["size"],
+                })
+
+    # Sort: most regressed first, then most improved
+    results.sort(key=lambda x: x["diff_pct"])
+    return results
+
+
 def print_subsystem_table(results: list, baseline: dict, current: dict):
     """Print subsystem comparison table."""
     total_bytes = sum(r["diff_bytes"] for r in results)
@@ -223,6 +283,88 @@ def print_unit_table(results: list, limit: int = 50):
         return "| " + " | ".join(parts) + " |"
 
     align = [False, True, True, True, True, True]  # Right-align numeric columns
+    print(fmt_row(headers))
+    print("|" + "|".join("-" * (w + 2) for w in widths) + "|")
+    for row in rows:
+        print(fmt_row(row, align))
+
+
+def print_function_table(results: list, limit: int = 100):
+    """Print function-level comparison table."""
+    count = min(limit, len(results))
+    if not results:
+        print("\nNo function-level changes found.")
+        return
+
+    # Separate regressions and improvements
+    regressions = [r for r in results if r["diff_pct"] < 0]
+    improvements = [r for r in results if r["diff_pct"] > 0]
+
+    if regressions:
+        print()
+        reg_count = min(limit, len(regressions))
+        print(f"Regressions ({len(regressions)} functions, showing top {reg_count}):")
+        print()
+        _print_func_rows(regressions[:limit])
+
+    if improvements:
+        print()
+        imp_count = min(limit, len(improvements))
+        # Show improvements sorted best-first
+        imp_sorted = sorted(improvements, key=lambda x: x["diff_pct"], reverse=True)
+        print(f"Improvements ({len(improvements)} functions, showing top {imp_count}):")
+        print()
+        _print_func_rows(imp_sorted[:limit])
+
+    # Summary
+    total_reg = len(regressions)
+    total_imp = len(improvements)
+    reg_bytes = sum(r["size"] for r in regressions)
+    imp_bytes = sum(r["size"] for r in improvements)
+    print()
+    print(f"Summary: {total_reg} regressions ({fmt_bytes_plain(reg_bytes)} affected), "
+          f"{total_imp} improvements ({fmt_bytes_plain(imp_bytes)} affected)")
+
+
+def _print_func_rows(results: list):
+    """Print rows for function comparison."""
+    headers = ["Function", "Unit", "Base", "Curr", "Change", "Size"]
+    rows = []
+    for r in results:
+        # Truncate long demangled names
+        display = r["display"]
+        if len(display) > 60:
+            display = display[:57] + "..."
+        unit = r["unit"].replace("default/", "")
+        # Shorten unit path
+        if len(unit) > 30:
+            unit = "..." + unit[-27:]
+        rows.append([
+            display,
+            unit,
+            f"{r['base_pct']:.1f}%",
+            f"{r['curr_pct']:.1f}%",
+            f"{r['diff_pct']:+.1f}%",
+            str(r["size"]),
+        ])
+
+    widths = [len(h) for h in headers]
+    for row in rows:
+        for i, cell in enumerate(row):
+            widths[i] = max(widths[i], len(cell))
+
+    def fmt_row(cells, align_right=None):
+        if align_right is None:
+            align_right = [False] * len(cells)
+        parts = []
+        for i, cell in enumerate(cells):
+            if align_right[i]:
+                parts.append(cell.rjust(widths[i]))
+            else:
+                parts.append(cell.ljust(widths[i]))
+        return "| " + " | ".join(parts) + " |"
+
+    align = [False, False, True, True, True, True]
     print(fmt_row(headers))
     print("|" + "|".join("-" * (w + 2) for w in widths) + "|")
     for row in rows:
@@ -472,10 +614,20 @@ def main():
         help="Show detailed per-unit breakdown",
     )
     parser.add_argument(
+        "--functions", "-f",
+        action="store_true",
+        help="Show function-level changes (most useful for finding regressions)",
+    )
+    parser.add_argument(
+        "--regressions", "-r",
+        action="store_true",
+        help="Only show regressions (negative changes) in all views",
+    )
+    parser.add_argument(
         "--limit",
         type=int,
         default=50,
-        help="Max units to show in detailed view (default: 50)",
+        help="Max items to show in detailed/function view (default: 50)",
     )
 
     args = parser.parse_args()
@@ -528,12 +680,23 @@ def main():
 
     # Always show subsystem summary
     subsystem_results = compare_subsystems(baseline, current)
+    if args.regressions:
+        subsystem_results = [r for r in subsystem_results if r["diff_bytes"] < 0]
     print_subsystem_table(subsystem_results, baseline, current)
 
-    # Optionally show detailed breakdown
+    # Optionally show detailed unit breakdown
     if args.detailed:
         unit_results = compare_units(baseline, current)
+        if args.regressions:
+            unit_results = [r for r in unit_results if r["diff_pct"] < 0]
         print_unit_table(unit_results, args.limit)
+
+    # Optionally show function-level breakdown
+    if args.functions:
+        func_results = compare_functions(baseline, current)
+        if args.regressions:
+            func_results = [r for r in func_results if r["diff_pct"] < 0]
+        print_function_table(func_results, args.limit)
 
 
 if __name__ == "__main__":

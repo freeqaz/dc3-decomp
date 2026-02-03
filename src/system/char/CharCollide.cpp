@@ -6,8 +6,8 @@
 CharCollide::CharCollide()
     : mShape(kCollideSphere), mFlags(0), mMesh(this), mMeshYBias(false) {
     for (int i = 0; i < 2; i++) {
-        mOrigLength[i] = 0;
         mOrigRadius[i] = 0;
+        mOrigLength[i] = 0;
     }
     CopyOriginalToCur();
     for (int i = 0; i < 8; i++) {

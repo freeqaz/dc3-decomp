@@ -19,10 +19,14 @@ const char *LocalizeOrdinal(
     strncpy(buf, LocalizeSeparatedInt(num, locale), 255);
     int len = strlen(buf);
     char code1, code2;
-    if (len > 0) code1 = buf[len - 1];
-    else code1 = '0';
-    if (len > 1) code2 = buf[len - 2];
-    else code2 = '0';
+    if (len > 0)
+        code1 = buf[len - 1];
+    else
+        code1 = '0';
+    if (len > 1)
+        code2 = buf[len - 2];
+    else
+        code2 = '0';
 
     static Symbol jpn("jpn");
     static Symbol eng("eng");
@@ -33,15 +37,21 @@ const char *LocalizeOrdinal(
 
     if (lang != jpn) {
         if (lang == eng) {
-            if (superscriptMarkup) strcat(buf, "<sup>");
-            if (code1 == '1' && code2 != '1') strcat(buf, "st");
-            else if (code1 == '2' && code2 != '1') strcat(buf, "nd");
-            else if (code1 == '3' && code2 != '1') strcat(buf, "rd");
-            else strcat(buf, "th");
-            if (superscriptMarkup) strcat(buf, "</sup>");
-        }
-        else if (lang == fre) {
-            if (superscriptMarkup) strcat(buf, "<sup>");
+            if (superscriptMarkup)
+                strcat(buf, "<sup>");
+            if (code1 == '1' && code2 != '1')
+                strcat(buf, "st");
+            else if (code1 == '2' && code2 != '1')
+                strcat(buf, "nd");
+            else if (code1 == '3' && code2 != '1')
+                strcat(buf, "rd");
+            else
+                strcat(buf, "th");
+            if (superscriptMarkup)
+                strcat(buf, "</sup>");
+        } else if (lang == fre) {
+            if (superscriptMarkup)
+                strcat(buf, "<sup>");
             if (code1 == '1') {
                 if (gender == LocaleGenderMasculine) {
                     strcat(buf, "er");
@@ -51,9 +61,10 @@ const char *LocalizeOrdinal(
             } else {
                 strcat(buf, "e");
             }
-            if (superscriptMarkup) strcat(buf, "</sup>");
-        }
-        else if (lang == deu) strcat(buf, ".");
+            if (superscriptMarkup)
+                strcat(buf, "</sup>");
+        } else if (lang == deu)
+            strcat(buf, ".");
         else if (lang == esl || lang == ita) {
             String str;
             EncodeUTF8(str, 0xb0);
