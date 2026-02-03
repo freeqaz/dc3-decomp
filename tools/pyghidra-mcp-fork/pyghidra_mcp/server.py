@@ -461,9 +461,10 @@ def _detect_binary_language(binary_path: Path) -> tuple[str | None, str | None]:
                 ghidra_dir = os.environ.get("GHIDRA_INSTALL_DIR", "")
                 ext_dir = Path(ghidra_dir) / "Extensions" / "XEXLoaderWV" if ghidra_dir else None
                 if ext_dir and ext_dir.exists():
-                    # Let the XEX loader handle format detection natively
-                    logger.info("XEX binary detected, deferring to XEXLoaderWV")
-                    return None, None
+                    # XEX loader handles format parsing, but we must specify
+                    # the Xenon language variant for VMX128 instruction support
+                    logger.info("XEX binary detected, using XEXLoaderWV with Xenon language")
+                    return "PowerPC:BE:64:Xenon", None
                 else:
                     # Fallback: import as raw binary with PowerPC language
                     logger.info("XEX binary detected, no XEXLoaderWV - using raw import")

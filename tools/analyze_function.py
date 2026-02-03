@@ -1946,6 +1946,9 @@ def analyze_function(
 
             # Verify address matches expected address from symbols.txt
             decompile_target = resolved_addr if resolved_addr else resolved_name
+            # Fallback to expected address from symbols.txt when Ghidra resolution found no address
+            if not resolved_addr and expected_addr:
+                decompile_target = expected_addr
             if expected_addr and resolved_addr:
                 # Normalize for comparison (lowercase, strip 0x)
                 exp_norm = expected_addr.lower().replace("0x", "")

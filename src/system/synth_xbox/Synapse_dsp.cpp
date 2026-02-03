@@ -1,5 +1,18 @@
 #include <cstdlib>
 #include <vector>
+#include <cstring>
+
+// Forward declarations for external functions used by ProcessInPlace
+extern "C" {
+    void Add_InPlace_IPP(unsigned int, int, float *);
+    void Detect_PeakDetector(void *, unsigned int);
+    void Detect_PitchDetector(void *, unsigned int);
+    void ExtractGranules(void *);
+    void Flush_GranularSynth(void *);
+    float GetCorrection_PitchCorrectedVoice(void *);
+    void MulConstant_InPlace_IPP(unsigned int, float *, float);
+    void Synthesize_GranularSynth(void *, unsigned int, int);
+}
 
 // Forward declarations for destructors
 namespace stlpmtx_std {
@@ -75,6 +88,9 @@ namespace Synapse {
             void *field_0x74;  // 0x74 - merged_OperatorDelete
             void *pitchDetector;  // 0x28
 
+            // Methods
+            void ProcessInPlace(unsigned int arg1, float *arg2);
+
             // Destructor
             ~Synapse();
         };
@@ -84,6 +100,133 @@ namespace Synapse {
 // Implementation
 namespace Synapse {
     namespace DSP {
+        void Synapse::ProcessInPlace(unsigned int arg1, float *arg2) {
+            float temp_f30 = 0.0f;
+            float temp_f31 = 256.0f;
+
+            if (arg1 != 0) {
+                float *var_r24 = arg2;
+                unsigned int var_r22 = arg1;
+
+                do {
+                    // Store input sample
+                    float *buffer = (float *)*(unsigned int *)((char *)this + 0x0);
+                    unsigned int *idx = (unsigned int *)((char *)this + 0x18);
+                    buffer[*idx] = *var_r24;
+
+                    unsigned int temp_r10 = *(unsigned int *)((char *)this + 0x18);
+
+                    if (!(temp_r10 & 3)) {
+                        float *temp_r11 = (float *)*(unsigned int *)((char *)this + 0x0);
+
+                        if (temp_r10 == 0) {
+                            int temp_r9 = (int)((unsigned int *)((char *)this + 0x4) - (unsigned int *)temp_r11) >> 2;
+                            float var_f0 = temp_r11[temp_r9 - 1] + temp_r11[temp_r9 - 3] + temp_r11[temp_r9 - 2] + temp_r11[0];
+                            *(float *)((char *)this + 0xC) = var_f0;
+                        } else {
+                            float *temp_r9_2 = &temp_r11[temp_r10];
+                            float var_f0 = temp_r11[temp_r10 - 3] + temp_r11[temp_r10 - 2] + temp_r9_2[-1] + temp_r9_2[0];
+                            *(float *)((char *)this + 0xC) = var_f0;
+                        }
+                    }
+
+                    // PeakDetector
+                    Detect_PeakDetector((void *)*(unsigned int *)((char *)this + 0x40), *(unsigned int *)((char *)this + 0x18));
+                    *(float *)((char *)(*(void **)((char *)this + 0x68)) + 0x8) = *(float *)((char *)(*(void **)((char *)this + 0x40)) + 0x30);
+
+                    unsigned int temp_r11_2 = *(unsigned int *)((char *)this + 0x18);
+
+                    if (!((*(int *)((char *)this + 0x24) - 1) & temp_r11_2)) {
+                        // PitchDetector
+                        Detect_PitchDetector((void *)*(unsigned int *)((char *)this + 0x28), temp_r11_2 >> 2);
+                        void *temp_r11_3 = (void *)*(unsigned int *)((char *)this + 0x28);
+                        float temp_f0 = *(float *)((char *)temp_r11_3 + 0x10);
+                        *(float *)((char *)this + 0x30) = temp_f0;
+                        *(float *)((char *)this + 0x34) = *(float *)((char *)temp_r11_3 + 0x14);
+
+                        if (temp_f0 > *(float *)((char *)this + 0x38)) {
+                            float temp_f0_2 = *(float *)((char *)temp_r11_3 + 0xC) * temp_f31;
+                            *(float *)((char *)this + 0x2C) = temp_f0_2;
+
+                            if (temp_f0_2 == temp_f30) {
+                                *(float *)((char *)this + 0x2C) = (float)(*(int *)((char *)this + 0x1C));
+                            }
+
+                            *(float *)((char *)(*(void **)((char *)this + 0x40)) + 0x4) = *(float *)((char *)this + 0x2C);
+                            *(float *)((char *)(*(void **)((char *)this + 0x68)) + 0x4) = *(float *)((char *)this + 0x2C);
+                            *(float *)((char *)(*(void **)((char *)this + 0x68)) + 0xC) = *(float *)((char *)this + 0x30);
+                        }
+
+                        // Process voices
+                        unsigned int var_r27 = 0;
+                        int voice_count = ((int)(*(int *)((char *)this + 0x60) - *(int *)((char *)this + 0x5C)) / 56);
+
+                        if (voice_count != 0) {
+                            int var_r28 = 0;
+                            int var_r29 = 0;
+
+                            do {
+                                void *voice = (char *)*(int *)((char *)this + 0x5C) + var_r29;
+                                *(float *)voice = *(float *)((char *)this + 0x6C) / *(float *)((char *)this + 0x2C);
+                                *(float *)((char *)voice + 0x28) = *(float *)((char *)this + 0x30);
+                                *(float *)((char *)voice + 0x2C) = *(float *)((char *)this + 0x34);
+
+                                void *temp_r21 = (void *)*(unsigned int *)((char *)this + 0x68);
+                                float temp_f1 = GetCorrection_PitchCorrectedVoice(voice);
+
+                                var_r27++;
+                                void *temp_r11_4 = (char *)(*(int *)((char *)temp_r21 + 0x2C)) + var_r28;
+                                var_r29 += 0x38;
+                                var_r28 += 0x18;
+
+                                *(float *)((char *)temp_r11_4 + 0x8) = temp_f1;
+                            } while (var_r27 < (unsigned int)voice_count);
+                        }
+                    }
+
+                    if (!((*(int *)((char *)this + 0x24) - 1) & *(unsigned int *)((char *)this + 0x18))) {
+                        Flush_GranularSynth((void *)*(unsigned int *)((char *)this + 0x68));
+                    }
+
+                    ExtractGranules((void *)*(unsigned int *)((char *)this + 0x68));
+
+                    unsigned int temp_r11_5 = *(unsigned int *)((char *)this + 0x18) + 1;
+                    *(unsigned int *)((char *)this + 0x18) = temp_r11_5;
+
+                    if (temp_r11_5 >= (unsigned int)((int)(*(int *)((char *)this + 0x4) - *(int *)((char *)this + 0x0)) >> 2)) {
+                        *(unsigned int *)((char *)this + 0x18) = 0;
+                    }
+
+                    var_r22--;
+                    var_r24++;
+                } while (var_r22 != 0);
+            }
+
+            Synthesize_GranularSynth((void *)*(unsigned int *)((char *)this + 0x68), arg1, *(int *)((char *)this + 0x50));
+
+            if (arg1 != 0) {
+                memset(arg2, 0, arg1 * 4);
+            }
+
+            void *temp_r30 = (char *)this + 0x5C;
+            unsigned int var_r29_2 = 0;
+            int voice_count2 = ((int)(*(int *)((char *)this + 0x60) - *(int *)((char *)this + 0x5C)) / 56);
+
+            if (voice_count2 != 0) {
+                int var_r28_2 = 0;
+
+                do {
+                    Add_InPlace_IPP(arg1, *(int *)((char *)this + 0x50 + var_r28_2), arg2);
+                    var_r29_2++;
+                    var_r28_2 += 4;
+                } while (var_r29_2 < (unsigned int)voice_count2);
+            }
+
+            *(float *)((char *)this + 0x3C) = 1.0f;
+            int final_count = ((int)(*(int *)((char *)this + 0x60) - *(int *)((char *)this + 0x5C)) / 56);
+            MulConstant_InPlace_IPP(arg1, arg2, 1.0f / (float)final_count);
+        }
+
         Synapse::~Synapse() {
             // Delete field at 0x74
             merged_OperatorDelete(*((void**)((char*)this + 0x74)));

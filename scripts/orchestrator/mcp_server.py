@@ -961,50 +961,22 @@ class DecompMCPServer:
 
         return data
 
-    def _format_compact_diff(self, data: dict) -> str:
+    def _format_enrichment_sections(self, data: dict) -> str:
         """
-        Format enriched objdiff data as a compact side-by-side instruction diff.
+        Format enrichment annotations as markdown sections to append to
+        the built-in objdiff markdown output.
 
-        Produces a human-readable table showing target vs base instructions,
-        with mismatch markers and enrichment annotations appended.
-        Much more token-efficient than raw JSON for agent consumption.
+        Covers: offset mismatches, shift semantics, detected patterns,
+        and RB3 reference source.
         """
         lines = []
-
-        # Instruction diff table
-        instrs = data.get("instructions", [])
-        if instrs:
-            for i, instr in enumerate(instrs):
-                t = instr.get("target") or {}
-                b = instr.get("base") or {}
-                mt = instr.get("match_type", "")
-                t_op = t.get("opcode", "") if t else ""
-                t_args = t.get("args", "") if t else "(none)"
-                b_op = b.get("opcode", "") if b else ""
-                b_args = b.get("args", "") if b else "(none)"
-                mark = "  <<<<" if mt != "equal" else ""
-                lines.append(
-                    f"{i:3d}  T: {t_op:8s} {t_args:40s} | B: {b_op:8s} {b_args:40s} {mt}{mark}"
-                )
-
-        # Verdict details
-        verdict = data.get("verdict", {})
-        if verdict:
-            classification = verdict.get("classification", "UNKNOWN")
-            reason = verdict.get("reason", "")
-            lines.append("")
-            lines.append(f"Verdict: {classification}")
-            if reason:
-                lines.append(f"Reason: {reason}")
-            mismatch_summary = verdict.get("mismatch_summary")
-            if mismatch_summary:
-                lines.append(f"Mismatches: {mismatch_summary}")
 
         # Offset mismatches with resolved field names
         offset_mismatches = data.get("offset_mismatches", [])
         if offset_mismatches:
             lines.append("")
-            lines.append("Offset mismatches:")
+            lines.append("## Offset Mismatches (resolved)")
+            lines.append("")
             for om in offset_mismatches:
                 idx = om.get("index", "?")
                 opcode = om.get("opcode", "?")
@@ -1013,7 +985,7 @@ class DecompMCPServer:
                 t_field = om.get("target_field", "")
                 b_field = om.get("base_field", "")
                 hint = om.get("fix_hint", "")
-                line = f"  [{idx}] {opcode}: target {t_off}"
+                line = f"- [{idx}] `{opcode}`: target {t_off}"
                 if t_field:
                     line += f" ({t_field})"
                 line += f" vs base {b_off}"
@@ -1027,22 +999,24 @@ class DecompMCPServer:
         shift_annotations = data.get("shift_annotations", [])
         if shift_annotations:
             lines.append("")
-            lines.append("Shift semantics:")
+            lines.append("## Shift Semantics")
+            lines.append("")
             for sa in shift_annotations:
                 idx = sa.get("index", "?")
                 meaning = sa.get("meaning", "?")
-                lines.append(f"  [{idx}] {meaning}")
+                lines.append(f"- [{idx}] {meaning}")
 
         # Analysis patterns (stack_copy_ref, etc.)
         patterns = data.get("analysis", {}).get("patterns", [])
         if patterns:
             lines.append("")
-            lines.append("Detected patterns:")
+            lines.append("## Detected Patterns")
+            lines.append("")
             for pat in patterns:
                 ptype = pat.get("type", "unknown")
                 desc = pat.get("description", "")
                 fixable = pat.get("fixable", "")
-                line = f"  - {ptype}"
+                line = f"- **{ptype}**"
                 if desc:
                     line += f": {desc}"
                 if fixable:
@@ -1054,8 +1028,9 @@ class DecompMCPServer:
         if rb3_ref and rb3_ref.get("available"):
             lines.append("")
             rb3_file = rb3_ref.get("rb3_file", "?")
-            lines.append(f"RB3 reference: {rb3_file}")
+            lines.append(f"## RB3 Reference ({rb3_file})")
             if rb3_ref.get("method_found") and rb3_ref.get("method_source"):
+                lines.append("")
                 lines.append("```cpp")
                 lines.append(rb3_ref["method_source"])
                 lines.append("```")
@@ -1103,100 +1078,110 @@ class DecompMCPServer:
                 text=f"Error: objdiff-cli not found at {objdiff_cli}"
             )]
 
-        # Build command with absolute project path
-        cmd = [
+        # Common args for both runs
+        base_args = [
             str(objdiff_cli),
             "diff",
             "-p", str(project_dir),
             symbol,
-            "--build",
             "--verdict",
-            "-f", "json",
+            "--include-instructions",
         ]
 
+        build_flag = ["--build"]
         if full_build:
-            cmd.append("--full-build")
+            build_flag.append("--full-build")
+
+        def _filter_stderr(stderr: str) -> str:
+            """Filter ninja progress lines from stderr, return error lines."""
+            if not stderr:
+                return ""
+            lines = stderr.strip().splitlines()
+            error_lines = [
+                line for line in lines
+                if not re.match(r'^\s*\[\d+/\d+\]\s', line)
+            ]
+            return "\n".join(error_lines)
 
         try:
-            result = subprocess.run(
-                cmd,
+            # 1) JSON run (with build) - for enrichment data
+            json_cmd = base_args + build_flag + ["-f", "json"]
+            json_result = subprocess.run(
+                json_cmd,
                 capture_output=True,
                 text=True,
-                timeout=300,  # 5 minute timeout
+                timeout=300,
                 cwd=str(project_dir),
             )
 
-            # Combine stdout and stderr (filter out build progress lines)
-            output = result.stdout
-            if result.stderr:
-                # Filter stderr to only keep errors/warnings, not ninja progress lines
-                stderr_lines = result.stderr.strip().splitlines()
-                error_lines = [
-                    line for line in stderr_lines
-                    if not re.match(r'^\s*\[\d+/\d+\]\s', line)
-                ]
-                if error_lines:
-                    output += f"\n\n[stderr]\n" + "\n".join(error_lines)
+            # Check for errors in JSON output
+            json_output = json_result.stdout
+            stderr_text = _filter_stderr(json_result.stderr)
 
-            # Check for symbol-not-found errors and suggest alternatives
-            if "Symbol not found" in output or "Failed" in output:
+            if "Symbol not found" in json_output or "Failed" in json_output:
                 suggestions = self._suggest_similar_symbols(symbol)
-                error_msg = output.strip()
+                error_msg = json_output.strip()
+                if stderr_text:
+                    error_msg += f"\n\n[stderr]\n{stderr_text}"
                 if suggestions:
                     error_msg += "\n\nDid you mean:\n" + "\n".join(
                         f"  - {s}" for s in suggestions
                     )
                 return [TextContent(type="text", text=error_msg)]
 
-            # Parse JSON and format as compact diff
-            summary = ""
-            data = None
+            # 2) Markdown run (no build, already built) - for display
+            md_cmd = base_args + ["-f", "markdown"]
+            md_result = subprocess.run(
+                md_cmd,
+                capture_output=True,
+                text=True,
+                timeout=60,
+                cwd=str(project_dir),
+            )
+            output = md_result.stdout
+
+            # 3) Enrich from JSON and append enrichment sections
+            enrichment = ""
             try:
-                data = json.loads(result.stdout)
-                # Run enrichment pipeline
+                data = json.loads(json_result.stdout)
                 data = self._enrich_objdiff_data(data)
-
-                match_pct = data.get("fuzzy_match_percent", "?")
-                verdict = data.get("verdict", {}).get("classification", "UNKNOWN")
-                summary = f"**Match: {match_pct}% | Verdict: {verdict}**\n\n"
-
-                # Format as compact side-by-side diff
-                output = self._format_compact_diff(data)
-                if result.stderr:
-                    stderr_lines = result.stderr.strip().splitlines()
-                    error_lines = [
-                        line for line in stderr_lines
-                        if not re.match(r'^\s*\[\d+/\d+\]\s', line)
-                    ]
-                    if error_lines:
-                        output += f"\n\n[stderr]\n" + "\n".join(error_lines)
+                enrichment = self._format_enrichment_sections(data)
             except (json.JSONDecodeError, KeyError):
-                # Not valid JSON, just use raw output
                 pass
+
+            if enrichment:
+                output += "\n" + enrichment
+
+            if stderr_text:
+                output += f"\n\n[stderr]\n{stderr_text}"
 
             # Count lines
             lines = output.split("\n")
             line_count = len(lines)
 
             if line_count < MAX_INLINE_LINES:
-                # Return inline
-                return [TextContent(
-                    type="text",
-                    text=f"{summary}```\n{output}\n```"
-                )]
+                return [TextContent(type="text", text=output)]
             else:
                 # Write to file in the project directory being tested
                 analysis_dir = project_dir / "function_analysis"
                 analysis_dir.mkdir(exist_ok=True, parents=True)
 
-                # Sanitize symbol for filename
                 safe_symbol = symbol.replace("?", "_Q_").replace("@", "_A_").replace("<", "_L_").replace(">", "_R_")
-                output_file = analysis_dir / f"objdiff_{safe_symbol}.txt"
+                output_file = analysis_dir / f"objdiff_{safe_symbol}.md"
 
                 with open(output_file, "w") as f:
                     f.write(output)
 
-                # Return file path with instructions
+                # Extract summary from JSON for the inline preview
+                summary = ""
+                try:
+                    data = json.loads(json_result.stdout)
+                    match_pct = data.get("fuzzy_match_percent", "?")
+                    verdict = data.get("verdict", {}).get("classification", "UNKNOWN")
+                    summary = f"**Match: {match_pct}% | Verdict: {verdict}**\n\n"
+                except (json.JSONDecodeError, KeyError):
+                    pass
+
                 return [TextContent(
                     type="text",
                     text=f"""{summary}Output is large ({line_count} lines). Written to file.

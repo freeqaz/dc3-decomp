@@ -105,6 +105,34 @@ class GhidraTools:
         """
         fm = self.program.getFunctionManager()
 
+        # Strategy 0: Direct hex address (e.g., "0x82E4E6B8" or "82E4E6B8")
+        raw_addr = None
+        stripped = name.strip().lower().replace("0x", "")
+        if stripped and all(c in "0123456789abcdef" for c in stripped):
+            try:
+                raw_addr = int(stripped, 16)
+            except ValueError:
+                pass
+        if raw_addr is not None:
+            addr_formats = [
+                f"0x{raw_addr:08x}",
+                f"ram:0x{raw_addr:08x}",
+            ]
+            for addr_str in addr_formats:
+                try:
+                    addr = self.program.getAddressFactory().getAddress(addr_str)
+                    if addr:
+                        func = fm.getFunctionAt(addr)
+                        if func:
+                            logger.debug(f"Found function by direct address: {name} -> {func.name}")
+                            return func
+                        func = fm.getFunctionContaining(addr)
+                        if func:
+                            logger.debug(f"Found function by direct address (containing): {name} -> {func.name}")
+                            return func
+                except Exception as e:
+                    logger.debug(f"Direct address lookup failed for {addr_str}: {e}")
+
         # Strategy 1: Address lookup from map file (O(1) - try first!)
         address = self.symbol_matcher.get_address(name)
         if address:
