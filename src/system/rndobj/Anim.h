@@ -81,8 +81,17 @@ public:
         float,
         bool
     );
-    Task *
-    Animate(float, float, TaskUnits, float, float, Hmx::Object *, EaseType, float, bool);
+    Task *Animate(
+        float,
+        float,
+        TaskUnits,
+        float = 0,
+        float = 0,
+        Hmx::Object * = nullptr,
+        EaseType = kEaseLinear,
+        float = 0,
+        bool = false
+    );
 
     TaskUnits Units() const;
     float FramesPerUnit();

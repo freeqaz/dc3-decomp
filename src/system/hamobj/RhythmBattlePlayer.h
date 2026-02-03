@@ -58,6 +58,7 @@ public:
     void UpdateAnimations(Hmx::Object *);
     void ResetCombo();
     void SetActive(bool);
+    bool Unk2a8Check() const { return unk2a5 && unk2a8 > 12; }
 
 protected:
     RhythmBattlePlayer();
@@ -105,7 +106,7 @@ private:
     /** "which player is this" */
     int mPlayer; // 0x238
     RhythmBattle *unk23c; // 0x23c
-    bool unk240;
+    bool unk240; // 0x240 - active?
     float unk244;
     float unk248;
     float unk24c;

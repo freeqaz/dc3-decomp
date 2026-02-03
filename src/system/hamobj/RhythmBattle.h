@@ -36,6 +36,8 @@ public:
     void ResetCombo();
     void Begin();
     bool CanTrick(Symbol);
+    bool Unkf9() const { return unkf9; }
+    bool Unk102() const { return unk102; }
 
 protected:
     RhythmBattle();
