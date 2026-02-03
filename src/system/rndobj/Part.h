@@ -119,7 +119,7 @@ public:
     };
     class Burst {
     public:
-        Burst() : unk0(0), unk4(0), unk8(0), unkc(0) {}
+        Burst();
         bool Set(float, float);
         float Emit(float);
         float unk0;
@@ -258,7 +258,6 @@ protected:
     void MoveParticles(float, float);
     void CreateParticles(float, float, const Transform &);
     void RunFastForward();
-    float CheckBursts(float);
     void InitParticle(float, RndParticle *, const Transform *, PartOverride &);
 
     DataNode OnSetStartColor(const DataArray *);

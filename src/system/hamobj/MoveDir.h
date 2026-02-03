@@ -122,9 +122,6 @@ private:
     void DetectRange(
         std::vector<DetectFrame> &, std::pair<DetectFrame *, DetectFrame *> &, int, int
     );
-    float DetectRangePSNR(
-        const std::pair<DetectFrame *, DetectFrame *> &, const FilterVersion *
-    ) const;
     void PostUpdateFilters();
     float SongSpeed() const;
     MoveFrame *ClosestMoveFrame();

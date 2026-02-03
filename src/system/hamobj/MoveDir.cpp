@@ -1059,22 +1059,6 @@ PracticeSection *MoveDir::GetPracticeSection(Difficulty d) {
     return nullptr;
 }
 
-float MoveDir::DetectRangePSNR(
-    const std::pair<DetectFrame *, DetectFrame *> &frames, const FilterVersion *filterVersion
-) const {
-    MILO_ASSERT(filterVersion->mType == 1, 0x1E8);
-    float result = 0.0f;
-    MoveMode mode = CurrentMoveMode();
-    for (DetectFrame *frame = frames.first; frame != frames.second; frame = (DetectFrame *)((char *)frame + 0x430)) {
-        const Ham2FrameWeight &weight = frame->GetMoveFrame()->FrameWeight(frame->Mirror());
-        float frameWeight = weight.unk0;
-        if (frameWeight > 0.0f && frame->HasScore()) {
-            result += frame->Score(filterVersion, mode) * frameWeight;
-        }
-    }
-    return result;
-}
-
 DancerSequence *MoveDir::SkillsSequence(Difficulty d, Symbol s1, Symbol s2) {
     PracticeSection *section = GetPracticeSection(d);
     if (section) {

@@ -45,7 +45,11 @@ void SkeletonHistoryArchive::ClearHistory(int skel_idx) {
 void SkeletonHistoryArchive::AddToHistory(int skel_idx, const Skeleton &skeleton) {
     MILO_ASSERT((0) <= (skel_idx) && (skel_idx) < (6), 0x3F);
 
+    while (mHistories[skel_idx].size() >= 0xA0) {
+        mHistories[skel_idx].pop_back();
+    }
+
     ArchiveSkeleton archiveSkeleton;
     archiveSkeleton.Set(skeleton);
-    mHistories[skel_idx].insert(mHistories[skel_idx].begin() + 1, archiveSkeleton);
+    mHistories[skel_idx].insert(mHistories[skel_idx].begin(), archiveSkeleton);
 }

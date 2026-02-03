@@ -188,17 +188,17 @@ BEGIN_LOADS(SkeletonClip)
     }
     if (d.altRev > 0) {
         bs >> mWeighted;
-    } else if (d.rev > 8) {
-        static Symbol weighted("weighted");
-        Symbol s;
-        bs >> s;
-        if (s == weighted) {
-            mWeighted = 1;
-        } else {
-            mWeighted = 0;
-        }
     } else {
-        mWeighted = 1;
+        if (d.rev > 8) {
+            static Symbol weighted("weighted");
+            Symbol s;
+            bs >> s;
+            if (s != weighted) {
+                mWeighted = 0;
+            }
+        } else {
+            mWeighted = 1;
+        }
     }
 END_LOADS
 

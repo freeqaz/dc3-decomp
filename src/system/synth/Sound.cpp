@@ -239,15 +239,13 @@ void Sound::Stop(Hmx::Object *obj, bool b2) {
     }
     if ((unkb4 || mMoggClip) && (unk3d || b2)) {
         if (!obj) {
-            auto it2 = mSamples.begin();
-            while (it2 != mSamples.end()) {
-                PlayableSample *sample = *it2;
-                ++it2;
-                sample->Stop(b2);
-                Hmx::Object *receiver = sample->GetEventReceiver();
-                if (receiver) {
+            for (auto it = mSamples.begin(); it != mSamples.end(); it) {
+                PlayableSample *cur = *it++;
+                cur->Stop(b2);
+                Hmx::Object *eventReceiver = cur->GetEventReceiver();
+                if (eventReceiver) {
                     static Message msg("on_marker_event", Symbol("interrupted"));
-                    receiver->Handle(msg, false);
+                    eventReceiver->Handle(msg, false);
                 }
             }
         } else {

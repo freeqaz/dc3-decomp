@@ -29,10 +29,7 @@ END_HANDLERS
 
 void ButtonHolder::Poll() {
     static Symbol on_button_held("on_button_held");
-    // Snapshot of current action records to track press state changes
     std::vector<ActionRec> recs = mActionRecs;
-
-    // Check each connected gamepad
     for (int i = 0; i < 4; i++) {
         if (JoypadIsConnectedPadNum(i)) {
             JoypadData *curPadData = JoypadGetPadData(i);
@@ -44,7 +41,6 @@ void ButtonHolder::Poll() {
                 );
                 PressRec &pressRec = it->GetPressRec(i);
                 if (curPadData->IsButtonInMask(pressRec.iRawButton)) {
-                    // Button is currently pressed - check if hold time threshold exceeded
                     if (pressRec.fPressTime > 0
                         && TheTaskMgr.UISeconds() - pressRec.fPressTime
                             >= it->mHoldTime) {
@@ -52,24 +48,22 @@ void ButtonHolder::Poll() {
                         msg[1] = pressRec.iRawButton;
                         msg[2] = pressRec.iAction;
                         msg[3] = pressRec.iPadNum;
-                        msg[4] = 1;  // isHeldDown = true
+                        msg[4] = 1;
                         mCallback->Handle(msg, true);
-                        // Mark as held (negative time tracks when hold was triggered)
                         pressRec.fPressTime = -TheTaskMgr.UISeconds();
+                        goto out;
                     }
                 } else {
-                    // Button is no longer pressed
                     if (pressRec.fPressTime > 0) {
-                        // Was pressed but didn't meet hold threshold - notify release
                         msg[0] = pressRec.iUser;
                         msg[1] = pressRec.iRawButton;
                         msg[2] = pressRec.iAction;
                         msg[3] = pressRec.iPadNum;
-                        msg[4] = 0;  // isHeldDown = false
+                        msg[4] = 0;
                         mCallback->Handle(msg, true);
                         pressRec.fPressTime = 0;
+                        goto out;
                     }
-                    // If held, reset the negative flag
                     if (pressRec.fPressTime < 0)
                         pressRec.fPressTime = 0;
                 }
@@ -77,7 +71,6 @@ void ButtonHolder::Poll() {
         }
     }
 out:
-    // Synchronize press records from the snapshot back to the active records
     for (int i = 0; i < mActionRecs.size(); i++) {
         JoypadAction a = mActionRecs[i].mAction;
         auto it = std::find(recs.begin(), recs.end(), a);
@@ -88,10 +81,10 @@ out:
 }
 
 void ButtonHolder::ClearHeldButtons() {
-    // Create fresh action records (clears any press state)
     std::vector<ActionRec> recs;
     for (int i = 0; i < mActionRecs.size(); i++) {
-        recs.push_back(ActionRec(mActionRecs[i].mAction, mActionRecs[i].mHoldTime, mUserMgr));
+        ActionRec rec(mActionRecs[i].mAction, mActionRecs[i].mHoldTime, mUserMgr);
+        recs.push_back(rec);
     }
     SetHoldActions(recs);
 }
@@ -104,13 +97,11 @@ void ButtonHolder::SetHoldActions(std::vector<ActionRec> &recs) {
 DataNode ButtonHolder::OnSetHoldActions(DataArray *da) {
     std::vector<ActionRec> recs;
     DataArray *arr = da->Array(2);
-    // Build action records from data array, filtering by hold time threshold
     for (int i = 0; i < arr->Size(); i++) {
         DataArray *innerArr = arr->Array(i);
-        float innerFloat = innerArr->Float(1);
-        // Only add actions with positive hold time
-        if (innerFloat > 0) {
-            ActionRec rec((JoypadAction)innerArr->Int(0), innerFloat, mUserMgr);
+        float holdTime = innerArr->Float(1);
+        if (holdTime > 0) {
+            ActionRec rec((JoypadAction)innerArr->Int(0), holdTime, mUserMgr);
             recs.push_back(rec);
         }
     }
@@ -135,7 +126,6 @@ ActionRec::ActionRec(JoypadAction act, float f, UserMgr *umgr)
     : mAction(act), mHoldTime(f) {
     std::vector<LocalUser *> uservec;
     umgr->GetLocalUsers(uservec);
-    // Initialize a press record for each connected user
     for (int i = 0; i < uservec.size(); i++) {
         mPresses.push_back(PressRec());
         mPresses[i].iUser = uservec[i];

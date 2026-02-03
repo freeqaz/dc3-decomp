@@ -23,11 +23,11 @@ void HeldButtonPanel::Enter() {
     DataArray *heldButtonsArr = TypeDef()->FindArray(held_buttons, false);
     if (heldButtonsArr) {
         for (int i = 1; i < heldButtonsArr->Size(); i++) {
-            DataArray *el = heldButtonsArr->Array(i);
-            MILO_ASSERT(el, 0x27);
-            float duration = el->Float(1);
-            if (duration > 0) {
-                ActionRec rec((JoypadAction)el->Int(0), duration, TheUserMgr);
+            DataArray *elem = heldButtonsArr->Array(i);
+            MILO_ASSERT(elem, 0x27);
+            float holdTime = elem->Float(1);
+            if (holdTime > 0) {
+                ActionRec rec((JoypadAction)elem->Int(0), holdTime, TheUserMgr);
                 recs.push_back(rec);
             }
         }
@@ -54,20 +54,21 @@ DataNode HeldButtonPanel::OnMsg(const ProcessedButtonDownMsg &msg) {
     if (msg.IsHeldDown()) {
         // Button held for longer than threshold; forward as held button message
         static Symbol on_button_held("on_button_held");
-        static Message heldMsg(on_button_held, 0, 0, 0, 0);
-        heldMsg[0] = msg.GetUser();
-        heldMsg[1] = msg.GetButton();
-        heldMsg[2] = msg.GetAction();
-        heldMsg[3] = msg.GetPadNum();
-        Handle(heldMsg, false);
+        static Message msgButtonHeld(on_button_held, 0, 0, 0, 0);
+        msgButtonHeld[0] = msg.GetUser();
+        msgButtonHeld[1] = msg.GetButton();
+        msgButtonHeld[2] = msg.GetAction();
+        msgButtonHeld[3] = msg.GetPadNum();
+        Handle(msgButtonHeld, false);
     } else {
-        static ButtonDownMsg downMsg(0, kPad_L2, kAction_None, 0);
-        downMsg[0] = msg.GetUser();
-        downMsg[1] = msg.GetButton();
-        downMsg[2] = msg.GetAction();
-        downMsg[3] = msg.GetPadNum();
+        // Button released or below hold threshold; forward as regular button down
+        static ButtonDownMsg msgButtonDown(0, kPad_L2, kAction_None, 0);
+        msgButtonDown[0] = msg.GetUser();
+        msgButtonDown[1] = msg.GetButton();
+        msgButtonDown[2] = msg.GetAction();
+        msgButtonDown[3] = msg.GetPadNum();
         mHandling = true;
-        Handle(downMsg, false);
+        Handle(msgButtonDown, false);
         mHandling = false;
     }
     return 1;

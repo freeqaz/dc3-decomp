@@ -61,32 +61,8 @@ DxMesh::~DxMesh() {
     unk1b0 = nullptr;
 }
 
-D3DVertexBuffer* DxMesh::GetMultimeshFaces() {
-    MILO_ASSERT(!Mutable(), 0x1a7);
-
-    if (unk1b0 == nullptr) {
-        s32 nVerts = mNumVerts;
-        u32 nFaces3 = nVerts * 3;
-        u32 bufSize = nFaces3 * 4;
-
-        unk1b0 = D3DDevice_CreateVertexBuffer(bufSize, 0, D3DPOOL_DEFAULT);
-        void* vbuf = D3DVertexBuffer_Lock((D3DVertexBuffer*)unk1b0, 0, 0, 0);
-        void* ibuf = D3DIndexBuffer_Lock((D3DIndexBuffer*)unk1ac, 0, 0, 0x10);
-
-        if (nFaces3 != 0) {
-            u16* src = (u16*)ibuf - 1;
-            u32* dst = (u32*)vbuf - 1;
-            u32 i = nFaces3;
-            while (i--) {
-                *++dst = *++src;
-            }
-        }
-
-        D3DIndexBuffer_Unlock((D3DIndexBuffer*)unk1ac);
-        D3DVertexBuffer_Unlock((D3DVertexBuffer*)unk1b0);
-    }
-
-    return (D3DVertexBuffer*)unk1b0;
+u32 DxMesh::VertFVF() const {
+    return 0;
 }
 
 void _fake(void) {

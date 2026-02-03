@@ -175,16 +175,16 @@ DataNode PreloadPanel::OnMsg(const ContentReadFailureMsg &msg) {
 DataNode PreloadPanel::OnMsg(const UITransitionCompleteMsg &msg) {
     MILO_ASSERT(mPreloadResult != kPreloadInProgress, 0x153);
     if (mPreloadResult == kPreloadSuccess) {
-        static Message okMsg("on_preload_ok");
-        HandleType(okMsg);
+        static Message msg("on_preload_ok");
+        HandleType(msg);
     } else {
-        static Message failMsg("on_preload_failed");
-        if (HandleType(failMsg).Equal(DATA_UNHANDLED, nullptr, true)) {
+        static Message msg("on_preload_failed");
+        if (HandleType(msg).Equal(DATA_UNHANDLED, nullptr, true)) {
             MILO_ASSERT(mAppReadFailureHandler, 0x15F);
-            static ContentReadFailureMsg failureMsg(false, gNullStr);
-            failureMsg[0] = mContentCorrupt;
-            failureMsg[1] = mCorruptContentName;
-            mAppReadFailureHandler->Handle(failureMsg, true);
+            static ContentReadFailureMsg msg(false, gNullStr);
+            msg[0] = mContentCorrupt;
+            msg[1] = mCorruptContentName;
+            mAppReadFailureHandler->Handle(msg, true);
         }
     }
     mAppReadFailureHandler = nullptr;

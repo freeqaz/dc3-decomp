@@ -30,6 +30,8 @@
 #include "utl/Std.h"
 #include "utl/Symbol.h"
 
+bool HamNavList::sForceDisengage;
+
 NavSelectMsg::NavSelectMsg(Symbol sym, int index, HamNavList *list, bool selecting)
     : Message(Type(), sym, index, (Hmx::Object *)list, selecting) {}
 
@@ -687,8 +689,13 @@ void HamNavList::SendHighlightSettledMsg(int i) {
     MILO_ASSERT(provider, 0x327);
 
     if (provider) {
-        if (provider->IsActive(i)) {
-            // TODO: Send highlight settled message with data symbol and index
+        bool canSel = provider->CanSelect(i);
+        bool isActive = provider->IsActive(i);
+
+        if (isActive) {
+            Symbol dataSym = provider->DataSymbol(i);
+            int idx = provider->DataIndex(Symbol());
+            // TODO: Send highlight settled message once NavHighlightSettledMsg is created
         }
     }
 }
@@ -737,7 +744,9 @@ void HamNavList::SendHighlightMsg(int i) {
         RealRefresh();
     UIListProvider *provider = mListState.Provider();
     MILO_ASSERT(provider, 0x339);
-    // TODO: Send highlight message with canSel and dataSym once NavHighlightMsg is created
+    bool canSel = provider->CanSelect(i);
+    Symbol dataSym = provider->DataSymbol(i);
+    // TODO: Send highlight message once NavHighlightMsg is created
 }
 
 int HamNavList::GetHighlightItem() const {

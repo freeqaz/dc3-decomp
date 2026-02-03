@@ -292,9 +292,9 @@ void DxRnd::SetupGamma() {
         unsigned int i = 0;
         unsigned short i16;
         do {
-            double dval = (double)(float)i * 0.00390625;
-            double dpow = std::pow(dval, gamma);
-            unsigned long long ival = (unsigned long long)(int)(dpow * 1024.0);
+            float fval = (float)(int)i * 0.00390625f;
+            float fpow = std::pow(fval, gamma);
+            unsigned long long ival = (long long)(fpow * 1024.0f);
             unsigned short usVal = (unsigned short)(ival >> 6);
             ramp.red[i] = usVal;
             ramp.green[i] = usVal;
