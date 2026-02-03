@@ -52,7 +52,7 @@ class PatchInfo:
     source: str = ""  # "generated-patches" or "decomp.db"
     patch_bytes: int = 0
     timestamp: str = ""
-    status: str = "triaged"  # triaged | applied | regressed | skipped
+    status: str = "triaged"  # triaged | applied | regressed | skipped | refreshed
     note: str = ""
 
 
@@ -400,7 +400,7 @@ def run_triage(refresh: bool = False):
         lookup_key = meta.get("symbol") or filename
         if lookup_key in existing:
             prev = existing[lookup_key]
-            if prev.get("status") in ("applied", "skipped"):
+            if prev.get("status") in ("applied", "skipped", "refreshed"):
                 status = prev["status"]
 
         unit = meta.get("unit", "") or extract_unit_from_targets(target_files)

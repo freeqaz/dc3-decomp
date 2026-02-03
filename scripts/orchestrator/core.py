@@ -1945,3 +1945,328 @@ Focus on readability and maintainability while preserving exact behavior and mat
             print(f"  Errors:    {summary['error']}")
 
         return summary
+
+    # ── patch-refresh ──────────────────────────────────────────────
+
+    PATCH_REFRESH_PROMPT = """\
+You are refreshing a stale patch for a decomp project. The patch was generated
+previously but no longer applies cleanly because the codebase has changed.
+
+## Your task
+
+1. Read the raw patch file at `{worktree_dir}/raw_patch.diff` to understand what
+   changes it intended to make.
+2. Look at the *current* source files that the patch targets and understand the
+   current state of the code.
+3. Manually apply the patch's intent by editing the source files directly.
+   Do NOT use `git apply` — the patch is known to be stale.
+4. Build the affected unit to ensure it compiles:
+   ```
+   ninja -C {worktree_dir}
+   ```
+   Fix any compilation errors from your edits.
+5. Run objdiff to verify the match percentage:
+   Use the `mcp__orchestrator__run_objdiff` tool with symbol `{symbol}` and
+   project_dir `{worktree_dir}`.
+6. If the match percentage improved or held, report your result.
+   If it regressed, investigate and fix.
+7. Call `mcp__orchestrator__report_result` with:
+   - symbol: `{symbol}`
+   - percent: the final match percentage
+   - status: "complete" if you successfully applied the patch intent, "stuck" if
+     you could not
+   - notes: brief description of what you did
+
+## Context
+
+- **Symbol:** `{symbol}`
+- **Demangled:** `{demangled}`
+- **Unit:** `{unit}`
+- **Current match:** {current_percent}%
+- **Patch claimed:** {patch_percent}%
+- **Target files:** {target_files}
+- **Worktree:** `{worktree_dir}`
+
+## Raw patch preview (first 200 lines)
+
+```diff
+{patch_preview}
+```
+
+{patch_overflow_note}
+
+## Important
+
+- Work ONLY in the worktree directory: `{worktree_dir}`
+- Pass `project_dir="{worktree_dir}"` to ALL MCP tool calls
+- Do NOT modify files outside src/ and include/
+- The goal is to faithfully reproduce the patch's *intent*, adapting to current code
+"""
+
+    async def _run_patch_refresh_single(
+        self,
+        patch_entry: dict[str, Any],
+        patch_content: str,
+        model: Optional[str] = None,
+        verbose: int = 1,
+        dry_run: bool = False,
+    ) -> dict[str, Any]:
+        """Refresh a single stale patch in an isolated worktree.
+
+        Args:
+            patch_entry: Manifest entry dict (symbol, unit, patch_percent, etc.)
+            patch_content: Raw patch text
+            model: Force specific model
+            verbose: Print agent output
+            dry_run: Show what would happen without running
+
+        Returns:
+            Result dict with status, refreshed_patch, etc.
+        """
+        symbol = patch_entry.get("symbol", "")
+        demangled = patch_entry.get("demangled", symbol)
+        unit = patch_entry.get("unit", "")
+        patch_percent = patch_entry.get("patch_percent", 0)
+        current_percent = patch_entry.get("current_percent", 0)
+        target_files = patch_entry.get("target_files", [])
+        filename = patch_entry.get("filename", "unknown.patch")
+
+        session_id = f"patchrefresh-{datetime.now().strftime('%H%M%S')}-{filename[:20]}"
+        log = TaggedLogger(self.logger, {"tag": session_id})
+
+        log.info(f"Refreshing patch: {filename} (symbol={symbol})")
+
+        if dry_run:
+            print(f"[DRY RUN] Would refresh: {filename}")
+            print(f"  Symbol: {demangled}")
+            print(f"  Unit: {unit}")
+            print(f"  Current: {current_percent}% -> Patch claims: {patch_percent}%")
+            print(f"  Target files: {', '.join(target_files)}")
+            return {"status": "dry_run", "filename": filename}
+
+        # Acquire worktree
+        worktree = self.worktree_pool.acquire(session_id)
+        if worktree is None:
+            raise RuntimeError("No worktrees available")
+
+        try:
+            # Write raw patch into worktree for agent to read
+            raw_patch_path = Path(worktree) / "raw_patch.diff"
+            raw_patch_path.write_text(patch_content)
+            log.info(f"Wrote raw patch to {raw_patch_path} ({len(patch_content)} bytes)")
+
+            # Build patch preview (first 200 lines)
+            patch_lines = patch_content.split('\n')
+            patch_preview = '\n'.join(patch_lines[:200])
+            if len(patch_lines) > 200:
+                patch_overflow_note = f"Full patch is {len(patch_lines)} lines. Read `raw_patch.diff` for the complete content."
+            else:
+                patch_overflow_note = ""
+
+            # Build prompt
+            prompt = self.PATCH_REFRESH_PROMPT.format(
+                worktree_dir=str(worktree),
+                symbol=symbol,
+                demangled=demangled,
+                unit=unit,
+                current_percent=current_percent,
+                patch_percent=patch_percent,
+                target_files=', '.join(target_files) if target_files else '(unknown)',
+                patch_preview=patch_preview,
+                patch_overflow_note=patch_overflow_note,
+            )
+
+            # Select model (default to sonnet for patch refresh — not trivial work)
+            selected_model = model or "sonnet"
+            log.info(f"Model: {selected_model}, Worktree: {worktree}")
+
+            # Run agent
+            agent_config = AgentRunConfig(
+                session_id=session_id,
+                worktree=worktree,
+                prompt=prompt,
+                model=selected_model,
+                verbose=verbose,
+            )
+            agent_result = await self.runner.run(agent_config)
+            log.info(
+                f"Agent finished: status={agent_result.status}, "
+                f"percent={agent_result.percent}, exit_code={agent_result.exit_code}"
+            )
+
+            # Extract refreshed patch
+            refreshed_patch = self.worktree_pool.extract_patch(session_id)
+
+            # Save refreshed patch
+            refreshed_dir = self.main_repo / "scratch" / "patches" / "refreshed"
+            refreshed_dir.mkdir(parents=True, exist_ok=True)
+            refreshed_path = None
+
+            if refreshed_patch:
+                refreshed_path = refreshed_dir / filename
+                # Avoid collision
+                counter = 1
+                while refreshed_path.exists():
+                    stem = Path(filename).stem
+                    refreshed_path = refreshed_dir / f"{stem}_{counter}.patch"
+                    counter += 1
+                refreshed_path.write_text(refreshed_patch)
+                log.info(f"Refreshed patch saved: {refreshed_path} ({len(refreshed_patch)} bytes)")
+            else:
+                log.warning("No changes in worktree after patch refresh agent")
+
+            return {
+                "status": agent_result.status,
+                "filename": filename,
+                "symbol": symbol,
+                "demangled": demangled,
+                "start_percent": current_percent,
+                "end_percent": agent_result.percent,
+                "refreshed_patch": refreshed_patch,
+                "refreshed_path": str(refreshed_path) if refreshed_path else None,
+                "notes": agent_result.notes,
+                "actual_cost_usd": agent_result.total_cost_usd,
+                "duration_ms": agent_result.duration_ms,
+            }
+
+        except Exception as e:
+            log.error(f"Patch refresh failed: {e}", exc_info=True)
+            return {
+                "status": "error",
+                "filename": filename,
+                "symbol": symbol,
+                "error": f"{type(e).__name__}: {e}",
+            }
+        finally:
+            self.worktree_pool.release(session_id)
+            log.debug(f"Released worktree for session {session_id}")
+
+    async def run_patch_refresh_batch(
+        self,
+        patches: list[tuple[dict[str, Any], str]],
+        max_agents: int = 3,
+        model: Optional[str] = None,
+        verbose: int = 1,
+        dry_run: bool = False,
+    ) -> dict[str, Any]:
+        """Refresh multiple stale patches in parallel.
+
+        Args:
+            patches: List of (manifest_entry, patch_content) tuples
+            max_agents: Maximum parallel agents
+            model: Force specific model
+            verbose: Print progress
+            dry_run: Show what would happen
+
+        Returns:
+            Summary dict with results
+        """
+        if not patches:
+            print("No patches to refresh.")
+            return {"total": 0, "results": []}
+
+        print(f"\n{'='*60}")
+        print(f"Patch Refresh: {len(patches)} patches")
+        print(f"Max agents: {max_agents}")
+        if model:
+            print(f"Model: {model}")
+        print(f"{'='*60}\n")
+
+        if dry_run:
+            for entry, _ in patches:
+                print(f"  [DRY RUN] {entry.get('demangled') or entry.get('symbol') or entry.get('filename')}")
+                print(f"    Current: {entry.get('current_percent', 0)}% -> Patch: {entry.get('patch_percent', 0)}%")
+            return {"total": len(patches), "status": "dry_run"}
+
+        # Ensure pool exists
+        if self.worktree_pool.status()["total"] == 0:
+            self.initialize()
+
+        # Preflight quota check
+        await self._check_quota(model or "sonnet")
+
+        results = []
+        active: dict[str, asyncio.Task] = {}
+        patch_queue = list(patches)
+        batch_start = datetime.now()
+
+        while patch_queue or active:
+            # Spawn up to max_agents
+            while patch_queue and len(active) < max_agents:
+                entry, content = patch_queue.pop(0)
+                session_id = f"patchrefresh-{len(results) + len(active)}"
+
+                task = asyncio.create_task(
+                    self._run_patch_refresh_single(
+                        patch_entry=entry,
+                        patch_content=content,
+                        model=model,
+                        verbose=verbose,
+                    )
+                )
+                active[session_id] = task
+
+                if verbose:
+                    name = entry.get('demangled') or entry.get('symbol') or entry.get('filename')
+                    if len(name) > 60:
+                        name = name[:57] + "..."
+                    print(f"[{len(active)}/{max_agents}] Spawned: {name}")
+
+            # Wait for any to complete
+            if active:
+                done, _ = await asyncio.wait(
+                    active.values(),
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+                for task in done:
+                    for sid, t in list(active.items()):
+                        if t == task:
+                            del active[sid]
+                            try:
+                                result = task.result()
+                            except Exception as e:
+                                result = {"status": "error", "error": str(e)}
+                            results.append(result)
+
+                            if verbose:
+                                fname = result.get("filename", "?")
+                                status = result.get("status", "?")
+                                start = result.get("start_percent", 0)
+                                end = result.get("end_percent", start)
+                                rpath = result.get("refreshed_path")
+                                if rpath:
+                                    print(
+                                        f"  Done: {fname} -> {status} "
+                                        f"({start}% -> {end}%, patch={rpath})"
+                                    )
+                                else:
+                                    print(
+                                        f"  Done: {fname} -> {status} "
+                                        f"({start}% -> {end}%, no patch)"
+                                    )
+                            break
+
+        # Summary
+        elapsed = (datetime.now() - batch_start).total_seconds()
+        refreshed = [r for r in results if r.get("refreshed_patch")]
+        errored = [r for r in results if r.get("status") == "error"]
+
+        summary = {
+            "total": len(results),
+            "refreshed": len(refreshed),
+            "errors": len(errored),
+            "elapsed_seconds": elapsed,
+            "results": results,
+        }
+
+        if verbose:
+            print(f"\n{'='*60}")
+            print("Patch Refresh Complete")
+            print(f"Processed: {len(results)} patches in {elapsed:.1f}s")
+            print(f"Refreshed: {len(refreshed)} patches")
+            print(f"Errors: {len(errored)}")
+            if refreshed:
+                print(f"\nRefreshed patches saved to: scratch/patches/refreshed/")
+            print(f"{'='*60}\n")
+
+        return summary

@@ -1,6 +1,7 @@
 #include "char/CharDriverMidi.h"
 #include "char/CharDriver.h"
 #include "obj/Data.h"
+#include "obj/Dir.h"
 #include "obj/Object.h"
 #include "obj/Task.h"
 #include "utl/Symbol.h"
@@ -77,7 +78,16 @@ void CharDriverMidi::Enter() {
         msgFlagParser->AddSink(this);
 }
 
-void CharDriverMidi::Exit() { CharDriver::Exit(); }
+void CharDriverMidi::Exit() {
+    CharDriver::Exit();
+    Hmx::Object *msgParser = ObjectDir::Main()->Find<Hmx::Object>(mParser.Str(), false);
+    if (msgParser)
+        msgParser->RemoveSink(this);
+    Hmx::Object *msgFlagParser =
+        ObjectDir::Main()->Find<Hmx::Object>(mFlagParser.Str(), false);
+    if (msgFlagParser)
+        msgFlagParser->RemoveSink(this);
+}
 
 DataNode CharDriverMidi::OnMidiParser(DataArray *da) {
     CharClip *clip;

@@ -15,7 +15,7 @@ void JobMgr::Poll() {
     if (!mJobQueue.empty()) {
         if (mJobQueue.front()->IsFinished()) {
             Job *job = mJobQueue.front();
-            mJobQueue.erase(mJobQueue.begin());
+            mJobQueue.pop_front();
             mPreventStart = true;
             job->OnCompletion(mCallback);
             delete job;
@@ -28,23 +28,23 @@ void JobMgr::Poll() {
 }
 
 void JobMgr::CancelJob(int id) {
-    for (std::list<Job *>::iterator it = mJobQueue.begin(); it != mJobQueue.end(); ++it) {
+    std::list<Job *>::iterator it = mJobQueue.begin();
+    while (it != mJobQueue.end()) {
         Job *job = *it;
         if (job->ID() == id) {
-            int curID = job->ID();
+            int frontID = mJobQueue.front()->ID();
             it = mJobQueue.erase(it);
             bool oldstart = mPreventStart;
             mPreventStart = true;
             job->Cancel(mCallback);
             mPreventStart = oldstart;
-            if (curID == id && !oldstart) {
-                for (std::list<Job *>::iterator it2 = mJobQueue.begin(); it2 != it; ++it2) {
-                    (*it2)->Start();
-                }
+            if (frontID == id && !oldstart && it != mJobQueue.end()) {
+                (*it)->Start();
             }
             delete job;
             return;
         }
+        ++it;
     }
     MILO_NOTIFY("This job is not in the queue %i", id);
 }

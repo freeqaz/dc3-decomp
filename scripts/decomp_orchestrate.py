@@ -986,6 +986,152 @@ def cmd_rb3_merge(args):
         print(json.dumps(summary, indent=2, default=str))
 
 
+def cmd_patch_refresh(args):
+    """Refresh stale patches using agents in worktrees."""
+    validate_model_backend(args.model)
+
+    # Load manifest
+    manifest_path = _project_root / "scratch" / "patches" / "manifest.json"
+    if not manifest_path.exists():
+        print(f"Error: No manifest found at {manifest_path}")
+        print("Run: python scripts/patch_triage.py")
+        sys.exit(1)
+
+    manifest = json.loads(manifest_path.read_text())
+
+    # Filter to needs-merge patches (or a specific file)
+    if args.patch_file:
+        # Single patch file mode
+        patch_path = Path(args.patch_file)
+        if not patch_path.exists():
+            print(f"Error: Patch file not found: {patch_path}")
+            sys.exit(1)
+        patch_content = patch_path.read_text()
+
+        # Try to find matching manifest entry
+        entry = None
+        for e in manifest:
+            if e.get("filename") == patch_path.name:
+                entry = e
+                break
+
+        if entry is None:
+            # Build a minimal entry from the patch itself
+            from orchestrator.patch_applier import clean_patch
+            cleaned = clean_patch(patch_content)
+            target_files = []
+            for line in cleaned.split('\n'):
+                if line.startswith('diff --git a/'):
+                    parts = line.split(' b/')
+                    if len(parts) >= 2:
+                        path = parts[-1].strip()
+                        if path not in target_files:
+                            target_files.append(path)
+            entry = {
+                "filename": patch_path.name,
+                "symbol": "",
+                "demangled": "",
+                "unit": "",
+                "patch_percent": 0,
+                "current_percent": 0,
+                "target_files": target_files,
+                "category": "needs-merge",
+            }
+
+        patches = [(entry, patch_content)]
+    else:
+        # Filter manifest for needs-merge patches
+        category = args.category or "needs-merge"
+        candidates = [
+            e for e in manifest
+            if e.get("category") == category
+            and e.get("status") not in ("applied", "skipped", "refreshed")
+            and e.get("delta", 0) > 0
+        ]
+
+        if args.min_delta:
+            candidates = [e for e in candidates if e.get("delta", 0) >= args.min_delta]
+
+        # Sort by delta descending (biggest improvements first)
+        candidates.sort(key=lambda e: e.get("delta", 0), reverse=True)
+
+        if args.limit and args.limit > 0:
+            candidates = candidates[:args.limit]
+
+        if not candidates:
+            print(f"No {category} patches found matching criteria.")
+            return
+
+        # Load patch content for each candidate
+        scratch_dir = _project_root / "scratch" / "patches"
+        patches = []
+        for entry in candidates:
+            cat = entry.get("category", "needs-merge")
+            patch_path = scratch_dir / cat / entry["filename"]
+            if not patch_path.exists():
+                print(f"  Warning: patch file missing: {patch_path}")
+                continue
+            patches.append((entry, patch_path.read_text()))
+
+    if not patches:
+        print("No patches to refresh.")
+        return
+
+    if not args.quiet:
+        print(f"\nPatch Refresh: {len(patches)} patches")
+        for entry, _ in patches:
+            name = entry.get("demangled") or entry.get("symbol") or entry.get("filename")
+            if len(name) > 60:
+                name = name[:57] + "..."
+            delta = entry.get("delta", 0)
+            print(f"  +{delta:5.1f}%  {name}")
+        print()
+
+    # Initialize orchestrator
+    orchestrator = DecompOrchestrator(
+        db_path=args.db,
+        pool_dir=Path(args.pool_dir),
+        pool_size=max(args.max_agents, 3),
+        main_repo=_project_root,
+        auto_apply=False,  # Never auto-apply refreshed patches
+    )
+
+    if orchestrator.worktree_pool.status()["total"] < args.max_agents:
+        print(f"Initializing worktree pool with {args.max_agents} worktrees...")
+        orchestrator.initialize(force=True)
+
+    summary = asyncio.run(
+        orchestrator.run_patch_refresh_batch(
+            patches=patches,
+            max_agents=args.max_agents,
+            model=args.model,
+            verbose=_verbosity(args),
+            dry_run=args.dry_run,
+        )
+    )
+
+    # Update manifest with refreshed status
+    if not args.dry_run:
+        refreshed_symbols = set()
+        for r in summary.get("results", []):
+            if r.get("refreshed_patch"):
+                refreshed_symbols.add(r.get("symbol") or r.get("filename"))
+
+        if refreshed_symbols:
+            updated = 0
+            for entry in manifest:
+                key = entry.get("symbol") or entry.get("filename")
+                if key in refreshed_symbols:
+                    entry["status"] = "refreshed"
+                    updated += 1
+
+            manifest_path.write_text(json.dumps(manifest, indent=2))
+            print(f"Manifest updated: {updated} entries marked as 'refreshed'")
+
+    if args.json:
+        print(json.dumps(summary, indent=2, default=str))
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="DC3 Decomp Orchestrator - Multi-agent decompilation pipeline"
@@ -1357,6 +1503,61 @@ def main():
     p_rb3_merge.add_argument("--no-auto-apply", action="store_true", help="Disable auto-apply patches")
     p_rb3_merge.add_argument("--json", action="store_true", help="Output as JSON")
 
+    # patch-refresh
+    p_patch_refresh = subparsers.add_parser(
+        "patch-refresh",
+        help="Refresh stale/needs-merge patches using agents",
+        description="Take stale patches that no longer apply cleanly, run agents in worktrees to apply the intent and produce clean refreshed patches.",
+        epilog="""Examples:
+  # Refresh top 10 needs-merge patches by delta
+  ./bin/orchestrate patch-refresh --limit 10
+
+  # Refresh a specific patch file
+  ./bin/orchestrate patch-refresh --patch-file scratch/patches/needs-merge/SomeFunc_85pct.patch
+
+  # Refresh patches with at least 10%% improvement potential
+  ./bin/orchestrate patch-refresh --min-delta 10 --limit 20 -j 3
+
+  # Dry run to see what would be refreshed
+  ./bin/orchestrate patch-refresh --limit 5 --dry-run"""
+    )
+    p_patch_refresh.add_argument(
+        "--patch-file",
+        help="Single patch file to refresh (instead of filtering manifest)"
+    )
+    p_patch_refresh.add_argument(
+        "--category",
+        default="needs-merge",
+        help="Manifest category to filter (default: needs-merge)"
+    )
+    p_patch_refresh.add_argument(
+        "--min-delta",
+        type=float,
+        default=0,
+        help="Minimum improvement delta to include (default: 0)"
+    )
+    p_patch_refresh.add_argument(
+        "--limit",
+        type=int,
+        default=0,
+        help="Max patches to refresh (0=unlimited, default: 0)"
+    )
+    p_patch_refresh.add_argument(
+        "-j", "--max-agents",
+        type=int,
+        default=3,
+        help="Maximum parallel agents (default: 3)"
+    )
+    p_patch_refresh.add_argument(
+        "--model",
+        choices=available_models,
+        help="Force specific model (default: sonnet)"
+    )
+    p_patch_refresh.add_argument("--quiet", "-q", action="store_true", help="Suppress output")
+    p_patch_refresh.add_argument("--verbose", "-v", action="store_true", help="Full agent output")
+    p_patch_refresh.add_argument("--dry-run", action="store_true", help="Show what would be refreshed")
+    p_patch_refresh.add_argument("--json", action="store_true", help="Output as JSON")
+
     args = parser.parse_args()
 
     commands = {
@@ -1375,6 +1576,7 @@ def main():
         "rb3-sync": cmd_rb3_sync,
         "rb3-query": cmd_rb3_query,
         "rb3-merge": cmd_rb3_merge,
+        "patch-refresh": cmd_patch_refresh,
     }
 
     try:

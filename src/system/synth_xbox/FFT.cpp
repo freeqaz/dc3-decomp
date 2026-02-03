@@ -129,3 +129,53 @@ int fft_matrix_forward_columnwise(float* data, long size, float* context) {
     free(temp);
     return 0;
 }
+
+int fft_matrix_inverse_columnwise(float *data, long size, float *scratch) {
+    int ret = 0;
+    int exp = 1;
+
+    if (size == 1) {
+        exp = 0;
+    } else {
+        int pow2 = 2;
+        if (size > 2) {
+            do {
+                pow2 *= 2;
+                exp += 1;
+            } while (pow2 < size);
+        }
+    }
+
+    if ((1 << exp) != size) {
+        return 0x16;
+    }
+
+    if (((unsigned long)data) & 0xF) {
+        return 0x16;
+    }
+
+    int half_exp = exp / 2;
+    int ceil_half_exp = half_exp;
+    if (exp & 1) {
+        ceil_half_exp = half_exp + 1;
+    }
+
+    int cols = 1 << half_exp;
+    int rows = 1 << ceil_half_exp;
+
+    void *temp = malloc(cols * 0x10);
+    if (temp == 0) {
+        return 0xC;
+    }
+
+    for (int i = cols - 1; i >= 0; i--) {
+        ret = FFTComplex((float *)data + i * rows * 2, rows, 1, scratch);
+        if (ret != 0) {
+            free(temp);
+            return ret;
+        }
+    }
+
+    free(temp);
+    return 0;
+}

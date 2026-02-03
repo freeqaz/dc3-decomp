@@ -119,7 +119,33 @@ void PanelDir::PreLoad(BinStream &bs) {
     bs.PushRev(packRevs(d.altRev, d.rev), this);
 }
 
-void PanelDir::PostLoad(BinStream &bs) {}
+void PanelDir::PostLoad(BinStream &bs) {
+    int revs;
+    BinStreamRev d(bs, revs = bs.PopRev(this));
+    RndDir::PostLoad(bs);
+    if (this == Dir()) {
+        if (d.rev > 0)
+            d >> mCam;
+        if (d.rev > 1 && d.rev < 3) {
+            Symbol s;
+            d >> s;
+        }
+    }
+    if (d.rev > 3)
+        d >> mCanEndWorld;
+    if (d.rev > 4)
+        d >> mBackFilenames >> mFrontFilenames;
+    if (d.rev > 5)
+        d >> mShowEditModePanels;
+    if (d.rev > 7) {
+        if (gLoadingProxyFromDisk) {
+            bool b;
+            d >> b;
+        } else
+            d >> mUseSpecifiedCam;
+    }
+    SyncEditModePanels();
+}
 
 UIComponentFocusChangeMsg::UIComponentFocusChangeMsg(
     UIComponent *comp1, UIComponent *comp2, PanelDir *dir, Symbol s

@@ -375,7 +375,14 @@ void UIManager::ReloadStrings() {
     }
 }
 
-void UIManager::FakeKeyboardAction(JoypadButton, JoypadAction) {}
+void UIManager::FakeKeyboardAction(JoypadButton btn, JoypadAction action) {
+    static ButtonDownMsg msg(nullptr, btn, action, 0x18);
+    msg[0] = TheUserMgr->GetLocalUserFromPadNum(0);
+    msg[1] = btn;
+    msg[2] = action;
+    msg[3] = 0;
+    mCurrentScreen->Handle(msg, false);
+}
 
 void UIManager::Poll() {}
 

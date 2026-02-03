@@ -11,6 +11,7 @@
 #include "utl/BinStream.h"
 #include "utl/Symbol.h"
 
+
 UILabelDir::UILabelDir()
     : mDefaultColor(this), mFocusAnim(this), mPulseAnim(this),
       mFocusedBackgroundGroup(this), mUnfocusedBackgroundGroup(this),
@@ -131,7 +132,12 @@ DataNode UILabelDir::GetMatVariations(UILabelDir *pThis) {
     return result;
 }
 
-void UILabelDir::Init() {}
+void UILabelDir::Init() {
+    REGISTER_OBJ_FACTORY(UILabelDir)
+    UIColor *c = Hmx::Object::New<UIColor>();
+    Hmx::Color color(1.0f, 1.0f, 1.0f, 1.0f);
+    c->SetColor(color);
+}
 
 BEGIN_HANDLERS(UILabelDir)
     HANDLE_EXPR(font_obj, FontObj(_msg->Sym(2)))

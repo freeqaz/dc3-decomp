@@ -103,14 +103,10 @@ void StorePanel::Unload() {
 
 void StorePanel::LoadArt(const char *cc, UIPanel *panel) {
     String str(cc);
-    std::list<NetCacheLoader *>::iterator it = unk54.begin();
-    std::list<NetCacheLoader *>::iterator end = unk54.end();
-    while (it != end) {
-        ++it;
-    }
+    std::list<NetCacheLoader *>::iterator it = std::find(unk54.begin(), unk54.end(), str);
     NetCacheLoader *loader = TheNetCacheMgr->AddNetCacheLoader(cc, (NetLoaderPos)0);
     if (loader) {
-        unk54.insert(end, loader);
+        unk54.insert(it, loader);
     }
     mPendingArtCallback = panel;
 }

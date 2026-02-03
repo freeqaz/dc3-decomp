@@ -961,6 +961,107 @@ class DecompMCPServer:
 
         return data
 
+    def _format_compact_diff(self, data: dict) -> str:
+        """
+        Format enriched objdiff data as a compact side-by-side instruction diff.
+
+        Produces a human-readable table showing target vs base instructions,
+        with mismatch markers and enrichment annotations appended.
+        Much more token-efficient than raw JSON for agent consumption.
+        """
+        lines = []
+
+        # Instruction diff table
+        instrs = data.get("instructions", [])
+        if instrs:
+            for i, instr in enumerate(instrs):
+                t = instr.get("target") or {}
+                b = instr.get("base") or {}
+                mt = instr.get("match_type", "")
+                t_op = t.get("opcode", "") if t else ""
+                t_args = t.get("args", "") if t else "(none)"
+                b_op = b.get("opcode", "") if b else ""
+                b_args = b.get("args", "") if b else "(none)"
+                mark = "  <<<<" if mt != "equal" else ""
+                lines.append(
+                    f"{i:3d}  T: {t_op:8s} {t_args:40s} | B: {b_op:8s} {b_args:40s} {mt}{mark}"
+                )
+
+        # Verdict details
+        verdict = data.get("verdict", {})
+        if verdict:
+            classification = verdict.get("classification", "UNKNOWN")
+            reason = verdict.get("reason", "")
+            lines.append("")
+            lines.append(f"Verdict: {classification}")
+            if reason:
+                lines.append(f"Reason: {reason}")
+            mismatch_summary = verdict.get("mismatch_summary")
+            if mismatch_summary:
+                lines.append(f"Mismatches: {mismatch_summary}")
+
+        # Offset mismatches with resolved field names
+        offset_mismatches = data.get("offset_mismatches", [])
+        if offset_mismatches:
+            lines.append("")
+            lines.append("Offset mismatches:")
+            for om in offset_mismatches:
+                idx = om.get("index", "?")
+                opcode = om.get("opcode", "?")
+                t_off = om.get("target_offset", "?")
+                b_off = om.get("base_offset", "?")
+                t_field = om.get("target_field", "")
+                b_field = om.get("base_field", "")
+                hint = om.get("fix_hint", "")
+                line = f"  [{idx}] {opcode}: target {t_off}"
+                if t_field:
+                    line += f" ({t_field})"
+                line += f" vs base {b_off}"
+                if b_field:
+                    line += f" ({b_field})"
+                if hint:
+                    line += f" -- {hint}"
+                lines.append(line)
+
+        # Shift annotations
+        shift_annotations = data.get("shift_annotations", [])
+        if shift_annotations:
+            lines.append("")
+            lines.append("Shift semantics:")
+            for sa in shift_annotations:
+                idx = sa.get("index", "?")
+                meaning = sa.get("meaning", "?")
+                lines.append(f"  [{idx}] {meaning}")
+
+        # Analysis patterns (stack_copy_ref, etc.)
+        patterns = data.get("analysis", {}).get("patterns", [])
+        if patterns:
+            lines.append("")
+            lines.append("Detected patterns:")
+            for pat in patterns:
+                ptype = pat.get("type", "unknown")
+                desc = pat.get("description", "")
+                fixable = pat.get("fixable", "")
+                line = f"  - {ptype}"
+                if desc:
+                    line += f": {desc}"
+                if fixable:
+                    line += f" (fixable: {fixable})"
+                lines.append(line)
+
+        # RB3 reference
+        rb3_ref = data.get("rb3_reference", {})
+        if rb3_ref and rb3_ref.get("available"):
+            lines.append("")
+            rb3_file = rb3_ref.get("rb3_file", "?")
+            lines.append(f"RB3 reference: {rb3_file}")
+            if rb3_ref.get("method_found") and rb3_ref.get("method_source"):
+                lines.append("```cpp")
+                lines.append(rb3_ref["method_source"])
+                lines.append("```")
+
+        return "\n".join(lines)
+
     async def _run_objdiff(self, args: dict) -> list[TextContent]:
         """
         Handle run_objdiff tool call.
@@ -1047,7 +1148,7 @@ class DecompMCPServer:
                     )
                 return [TextContent(type="text", text=error_msg)]
 
-            # Parse JSON to extract key info for summary
+            # Parse JSON and format as compact diff
             summary = ""
             data = None
             try:
@@ -1059,8 +1160,8 @@ class DecompMCPServer:
                 verdict = data.get("verdict", {}).get("classification", "UNKNOWN")
                 summary = f"**Match: {match_pct}% | Verdict: {verdict}**\n\n"
 
-                # Re-serialize enriched data
-                output = json.dumps(data, indent=2)
+                # Format as compact side-by-side diff
+                output = self._format_compact_diff(data)
                 if result.stderr:
                     stderr_lines = result.stderr.strip().splitlines()
                     error_lines = [
@@ -1081,7 +1182,7 @@ class DecompMCPServer:
                 # Return inline
                 return [TextContent(
                     type="text",
-                    text=f"{summary}```json\n{output}\n```"
+                    text=f"{summary}```\n{output}\n```"
                 )]
             else:
                 # Write to file in the project directory being tested
@@ -1090,7 +1191,7 @@ class DecompMCPServer:
 
                 # Sanitize symbol for filename
                 safe_symbol = symbol.replace("?", "_Q_").replace("@", "_A_").replace("<", "_L_").replace(">", "_R_")
-                output_file = analysis_dir / f"objdiff_{safe_symbol}.json"
+                output_file = analysis_dir / f"objdiff_{safe_symbol}.txt"
 
                 with open(output_file, "w") as f:
                     f.write(output)
@@ -1101,11 +1202,6 @@ class DecompMCPServer:
                     text=f"""{summary}Output is large ({line_count} lines). Written to file.
 
 **File:** `{output_file.relative_to(project_dir)}`
-
-**To view:**
-- Summary: Use the Read tool to read first 100 lines
-- Full content: `Read {output_file.relative_to(project_dir)}`
-- Quick look: The match% and verdict are shown above
 
 **Next steps:**
 1. If verdict is AT_LIMIT: Report with mcp__orchestrator__report_result

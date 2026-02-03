@@ -15,6 +15,7 @@ public:
     // Hmx::Object
     OBJ_CLASSNAME(UILabelDir);
     OBJ_SET_TYPE(UILabelDir);
+    NEW_OBJ(UILabelDir);
     virtual DataNode Handle(DataArray *, bool);
     virtual bool SyncProperty(DataNode &, DataArray *, int, PropOp);
     virtual void Save(BinStream &);

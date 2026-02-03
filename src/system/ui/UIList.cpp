@@ -436,7 +436,95 @@ void UIList::PreLoad(BinStream &bs) {
     PreLoadWithRev(d);
 }
 
-void UIList::PostLoad(BinStream &) {}
+void UIList::PostLoad(BinStream &bs) {
+    UIComponent::PostLoad(bs);
+    int local_maxdisplay = -1;
+    int local_mindisplay = 0;
+    bool local_scrollpastmax = true;
+    bool local_scrollpastmin = false;
+    float local_speed;
+    bool local_circular;
+    int local_gridspan = 1;
+    int local_numdisplay;
+    int rev = bs.PopRev(this);
+    if (rev < 0xF) {
+        int i;
+        int x;
+        int j;
+        int k;
+        bool ba;
+        bool b9;
+        bool b8;
+        bs >> i;
+        bs >> j;
+        if (rev > 4) {
+            if (rev > 6)
+                bs >> k;
+            else
+                bs >> b8;
+        }
+        if (rev > 6) {
+            bs >> b9;
+        }
+        if (rev > 8) {
+            bs >> ba;
+        }
+        if (rev > 10) {
+            int b;
+            bs >> b;
+        }
+        bs >> x;
+    }
+    bs >> local_numdisplay;
+    if (rev > 0x11)
+        bs >> local_gridspan;
+    bs >> local_circular;
+    bs >> local_speed;
+    if (rev > 0xC) {
+        bs >> local_scrollpastmin;
+    }
+    if (rev > 7) {
+        bs >> local_scrollpastmax;
+    }
+    if (rev > 2)
+        bs >> mPaginate;
+    if (rev > 3)
+        bs >> mSelectToScroll;
+    if (rev >= 10)
+        bs >> local_mindisplay;
+    if (rev >= 6)
+        bs >> local_maxdisplay;
+    gLoading = true;
+    SetNumDisplay(local_numdisplay);
+    SetGridSpan(local_gridspan);
+    SetCircular(local_circular);
+    SetSpeed(local_speed);
+    mListState.SetScrollPastMinDisplay(local_scrollpastmin);
+    mListState.SetScrollPastMaxDisplay(local_scrollpastmax);
+    mListState.SetMinDisplay(local_mindisplay);
+    mListState.SetMaxDisplay(local_maxdisplay);
+    if (rev == 1) {
+        int x, y;
+        bs >> x >> y;
+    }
+    if (rev >= 12)
+        bs >> mNumData;
+    if (rev >= 14)
+        bs >> mAutoScrollPause;
+    if (rev < 19)
+        mAutoScrollSendMsgs = true;
+    else
+        bs >> mAutoScrollSendMsgs;
+    if (rev >= 0x10) {
+        bs >> mExtendedLabelEntries;
+        bs >> mExtendedMeshEntries;
+        bs >> mExtendedCustomEntries;
+    }
+    if (rev >= 17)
+        UITransitionHandler::LoadHandlerData(bs);
+    gLoading = false;
+    Update();
+}
 
 void UIList::SetSelectedSimulateScroll(int i) {
     mListDir->CompleteScroll(mListState, mWidgets);

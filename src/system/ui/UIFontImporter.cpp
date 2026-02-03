@@ -471,7 +471,40 @@ void UIFontImporter::SyncWithGennedFonts() {
     }
 }
 
-void UIFontImporter::HandmadeFontChanged() {}
+void UIFontImporter::HandmadeFontChanged() {
+    if (mHandmadeFont) {
+        if (mGennedFonts.size() > 0) {
+            RndFontBase *frontfont = *mGennedFonts.begin();
+            if (frontfont != mHandmadeFont) {
+                RndText *text = FindTextForFont(frontfont);
+                delete frontfont;
+                if (text) {
+                    delete text;
+                }
+            }
+            mGennedFonts.Set(mGennedFonts.begin(), mHandmadeFont);
+            for (ObjPtrList<RndFontBase>::iterator it = ++mGennedFonts.begin();
+                 it != mGennedFonts.end();
+                 it++) {
+                if (*it == mHandmadeFont) {
+                    mGennedFonts.erase(it);
+                    break;
+                }
+            }
+        } else {
+            mGennedFonts.push_back(mHandmadeFont);
+        }
+        mReferenceKerning = mHandmadeFont;
+        mLowerEuro = false;
+        mUpperEuro = false;
+        mPunctuation = false;
+        mNumbers0through9 = false;
+        mLowerCaseAthroughZ = false;
+        mUpperCaseAthroughZ = false;
+        mMinus.clear();
+        mPlus.clear();
+    }
+}
 
 RndFontBase *UIFontImporter::FindFontForMat(RndMat *mat) const {
     if (mat) {

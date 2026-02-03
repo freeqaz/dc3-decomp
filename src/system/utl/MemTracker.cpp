@@ -19,6 +19,10 @@
 bool gMemTrackerTracking;
 String gMemLogType;
 
+struct MemDiffEntry {
+    char data[72];
+};
+
 extern MemTracker *gMemTracker;
 
 bool StackLess(AllocInfo *const &a1, AllocInfo *const &a2) {
@@ -371,4 +375,20 @@ void MemTracker::DiffDump(TextStream &ts) {
     }
     mFreedInfos.delete_and_clear();
     mTimeSlice++;
+}
+
+// Forward declaration for __pop_heap_aux template specialization
+namespace stlpmtx_std {
+    extern void __pop_heap_aux(MemDiffEntry*, MemDiffEntry*, int, less<MemDiffEntry>);
+}
+
+// Template specialization for sort_heap<MemDiffEntry*, less<MemDiffEntry>>
+namespace stlpmtx_std {
+    template <>
+    void sort_heap<MemDiffEntry* __restrict, less<MemDiffEntry>>(MemDiffEntry* __restrict __first, MemDiffEntry* __restrict __last, less<MemDiffEntry> __comp) {
+        while ((__last - __first) / 72 > 1) {
+            __pop_heap_aux(__first, __last, 0, __comp);
+            __last -= 72;
+        }
+    }
 }

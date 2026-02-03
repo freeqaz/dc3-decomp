@@ -22,9 +22,15 @@ Examples:
     # Show current snapshot (all subsystems)
     python3 scripts/compare_progress.py --snapshot
     python3 scripts/compare_progress.py --snapshot --sort=percent
+
+    # Filter to specific paths using glob patterns
+    python3 scripts/compare_progress.py --snapshot --filter 'system/ui/*'
+    python3 scripts/compare_progress.py --filter 'system/char/*' --functions baseline.json current.json
+    python3 scripts/compare_progress.py --snapshot --filter '*/synth/*' --filter '*/midi/*'
 """
 
 import argparse
+import fnmatch
 import json
 import sys
 from pathlib import Path
@@ -57,6 +63,34 @@ def fmt_bytes_plain(b: int) -> str:
     if abs(b) >= 1024:
         return f"{b/1024:.1f} KB"
     return f"{b} B"
+
+
+def expand_filter_patterns(patterns: list) -> list:
+    """Expand filter patterns for convenience.
+
+    If a pattern doesn't start with '*' or contain '/' at the start,
+    prepend '*/' so 'system/ui/*' matches 'default/system/ui/Foo'.
+    """
+    expanded = []
+    for p in patterns:
+        expanded.append(p)
+        # Also try with '*/' prefix if pattern doesn't already start with '*' or '/'
+        if not p.startswith("*") and not p.startswith("/"):
+            expanded.append("*/" + p)
+    return expanded
+
+
+def filter_units(units: list, patterns: list) -> list:
+    """Filter units by glob patterns matched against their name."""
+    if not patterns:
+        return units
+    expanded = expand_filter_patterns(patterns)
+    filtered = []
+    for u in units:
+        name = u["name"]
+        if any(fnmatch.fnmatch(name, p) for p in expanded):
+            filtered.append(u)
+    return filtered
 
 
 def load_report(path: Path) -> dict:
@@ -573,7 +607,15 @@ def print_snapshot(report: dict, sort_by: str = "percent", show_all: bool = Fals
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Compare decomp progress between two report.json files, or show snapshot"
+        description="Compare decomp progress between two report.json files, or show snapshot",
+        epilog="""examples:
+  %(prog)s --snapshot                           Show all subsystems
+  %(prog)s --snapshot --filter 'system/ui/*'    Show only system/ui subsystems
+  %(prog)s --snapshot -g '*/char/*' -g '*/anim/*'  Multiple filters
+  %(prog)s -g 'system/synth/*' --functions baseline.json current.json
+  %(prog)s --overview --filter 'lazer/*'        Overview filtered to game code
+""",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
         "baseline",
@@ -629,6 +671,13 @@ def main():
         default=50,
         help="Max items to show in detailed/function view (default: 50)",
     )
+    parser.add_argument(
+        "--filter", "-g",
+        action="append",
+        default=[],
+        metavar="PATTERN",
+        help="Filter units by glob pattern (e.g. 'system/ui/*', '*/char/*'). Can be repeated.",
+    )
 
     args = parser.parse_args()
 
@@ -645,6 +694,8 @@ def main():
             sys.exit(1)
 
         report = load_report(report_path)
+        if args.filter:
+            report["units"] = filter_units(report.get("units", []), args.filter)
         print_overview(report)
         return
 
@@ -661,6 +712,8 @@ def main():
             sys.exit(1)
 
         report = load_report(report_path)
+        if args.filter:
+            report["units"] = filter_units(report.get("units", []), args.filter)
         print_snapshot(report, sort_by=args.sort, show_all=args.all)
         return
 
@@ -677,6 +730,10 @@ def main():
 
     baseline = load_report(args.baseline)
     current = load_report(args.current)
+
+    if args.filter:
+        baseline["units"] = filter_units(baseline.get("units", []), args.filter)
+        current["units"] = filter_units(current.get("units", []), args.filter)
 
     # Always show subsystem summary
     subsystem_results = compare_subsystems(baseline, current)
