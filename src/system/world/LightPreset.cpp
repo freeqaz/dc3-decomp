@@ -712,6 +712,38 @@ DataNode LightPreset::OnViewKeyframe(DataArray *da) {
     return 0;
 }
 
-// Explicit template instantiation for ObjDirItr<Spotlight>::Advance
-#include "world/Spotlight.h"
-template class ObjDirItr<Spotlight>;
+void LightPreset::SyncKeyframeTargets() {
+    for (ObjDirItr<Spotlight> it(Dir(), true); it; ++it) {
+        Spotlight *key = it;
+        if (std::find(mSpotlights.begin(), mSpotlights.end(), key) == mSpotlights.end()) {
+            AddSpotlight(key, false);
+        }
+    }
+    for (ObjDirItr<RndEnviron> it(Dir(), true); it; ++it) {
+        RndEnviron *key = it;
+        if (std::find(mEnvironments.begin(), mEnvironments.end(), key)
+            == mEnvironments.end()) {
+            AddEnvironment(key);
+        }
+        FOREACH (lit, key->mLightsReal) {
+            RndLight *lkey = *lit;
+            if (std::find(mLights.begin(), mLights.end(), lkey) == mLights.end()) {
+                AddLight(lkey);
+            }
+        }
+        FOREACH (lit, key->mLightsApprox) {
+            RndLight *lkey = *lit;
+            if (std::find(mLights.begin(), mLights.end(), lkey) == mLights.end()) {
+                AddLight(lkey);
+            }
+        }
+    }
+    for (ObjDirItr<SpotlightDrawer> it(Dir(), true); it; ++it) {
+        SpotlightDrawer *key = it;
+        if (std::find(mSpotlightDrawers.begin(), mSpotlightDrawers.end(), key)
+            == mSpotlightDrawers.end()) {
+            AddSpotlightDrawer(key);
+        }
+    }
+    CacheFrames();
+}

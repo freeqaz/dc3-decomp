@@ -39,6 +39,31 @@ void DxCubeTex::Sync() {
     for (int face = 0; face < 6; face++) {
         RndBitmap bitmap;
         bitmap.Reset();
+
+        RndBitmap *pWork = &mBitmap[face];
+
+        if (pWork->Width() != 0 && pWork->Height() != 0) {
+            if (pWork->Buffer() != nullptr || pWork->Bpp() == 0x18) {
+                bitmap.Create(*pWork, 0x20, pWork->NumMips(), nullptr);
+                pWork = &bitmap;
+            }
+
+            if (numMips > 0) {
+                int mipIdx = 0;
+                do {
+                    if (pWork != nullptr) {
+                        u32 rowPitch = pWork->DxtRowBytes();
+                        XGTileTextureLevel(desc.Width, desc.Height, mipIdx, 0, 0, nullptr, nullptr,
+                                         pWork->Buffer(), rowPitch, nullptr);
+                    }
+                    pWork = pWork->nextMip();
+                    mipIdx++;
+                } while (mipIdx < numMips);
+            }
+
+            mBitmap[face].Reset();
+        }
+
         bitmap.Reset();
     }
 
