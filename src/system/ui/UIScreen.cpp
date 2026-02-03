@@ -413,6 +413,16 @@ BEGIN_HANDLERS(UIScreen)
     HANDLE_MESSAGE(ButtonDownMsg)
 END_HANDLERS
 
+void EnterGlitchCB(float fElapsed, void *data) {
+    int sp54;
+    const char *sp50;
+
+    char *obj = (char *)(((int **)data)[1][1] + (int)data);
+    sp50 = *(const char **)((char *)obj + 0x24);
+    void *(*func)(void *, char *) = *(void *(**)(void *, char *))(*((int *)(obj + 4)) + 0xC);
+    TheDebug << MakeString("%s %s Enter took %.2f ms\n", *(Symbol *)func(&sp54, obj + 4), sp50, fElapsed);
+}
+
 void UnloadGlitchCB(float f, void *data) {
     int checkTime;
     char *obj = (char *)((char **)((char **)data)[1])[1] + (int)data;

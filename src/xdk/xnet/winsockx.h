@@ -106,6 +106,28 @@ typedef struct fd_set {
     SOCKET fd_array[64];
 } fd_set;
 
+#define FD_SETSIZE 64
+
+extern int __cdecl __WSAFDIsSet(SOCKET, fd_set *);
+
+#define FD_ZERO(set) ((set)->fd_count = 0)
+
+#define FD_SET(fd, set) do { \
+    unsigned int __i; \
+    for (__i = 0; __i < ((fd_set *)(set))->fd_count; __i++) { \
+        if (((fd_set *)(set))->fd_array[__i] == (fd)) \
+            break; \
+    } \
+    if (__i == ((fd_set *)(set))->fd_count) { \
+        if (((fd_set *)(set))->fd_count < FD_SETSIZE) { \
+            ((fd_set *)(set))->fd_array[__i] = (fd); \
+            ((fd_set *)(set))->fd_count++; \
+        } \
+    } \
+} while(0)
+
+#define FD_ISSET(fd, set) __WSAFDIsSet((SOCKET)(fd), (fd_set *)(set))
+
 struct timeval {
     long tv_sec;
     long tv_usec;

@@ -113,8 +113,20 @@ static inline void __stvx(XMVECTOR vSrc, void *base, int offset) {
 // Vector128 Multiply Add Floating Point
 XMVECTOR __vmaddfp(XMVECTOR mul1, XMVECTOR mul2, XMVECTOR addend);
 
+// Vector128 Negative Multiply Subtract Floating Point
+XMVECTOR __vnmsubfp(XMVECTOR mul1, XMVECTOR mul2, XMVECTOR sub);
+
 // Vector128 Splat Word
 XMVECTOR __vspltw(XMVECTOR vSrcA, unsigned int uImmed);
+
+// Vector128 Merge Low Word
+XMVECTOR __vmrglw(XMVECTOR vSrcA, XMVECTOR vSrcB);
+
+// Vector128 Merge High Word
+XMVECTOR __vmrghw(XMVECTOR vSrcA, XMVECTOR vSrcB);
+
+// Vector128 Permute
+XMVECTOR __vperm(XMVECTOR vSrcA, XMVECTOR vSrcB, XMVECTOR vPerm);
 
 #ifdef __cplusplus
 }

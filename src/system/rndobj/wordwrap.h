@@ -3,7 +3,7 @@
 void WordWrap_SetOption(unsigned int);
 
 extern unsigned int g_uOption;
-extern unsigned char IsEastAsianChar(unsigned short, unsigned short);
+extern unsigned char IsEastAsianChar(unsigned short);
 extern unsigned short g_LineBreakTable[];
 
 inline bool WordWrap_CanBreakLineAt(const wchar_t *arg0, const wchar_t *arg1)
@@ -77,7 +77,7 @@ block_13:
     }
 block_15:
     if ((((int)((arg0 - arg1) & 0xFFFFFFFE) <= 2) || ((temp_r11 = arg0[-2], ((temp_r11 == 9) == 0)) && (temp_r11 != 0xD) && (temp_r11 != 0x20) && (temp_r11 != 0x3000)) || ((unsigned short)arg0[-1] != 0x22) || (temp_r31 == 9) || (temp_r31 == 0xD) || (temp_r31 == 0x20) || (temp_r31 == 0x3000)) && ((var_r4 = arg0[-1], ((var_r4 == 9) != 0)) || (var_r4 == 0xD) || (var_r4 == 0x20) || (var_r4 == 0x3000) || (temp_r31 != 0x22) || ((temp_r11_2 = arg0[1], ((temp_r11_2 == 9) == 0)) && (temp_r11_2 != 0xD) && (temp_r11_2 != 0x20) && (temp_r11_2 != 0x3000)))) {
-        if ((temp_r31 == 9) || (temp_r31 == 0xD) || (temp_r31 == 0x20) || (temp_r31 == 0x3000) || (temp_ret = IsEastAsianChar(temp_r31, var_r4), temp_r3 = temp_ret, var_r4 = (unsigned short)(unsigned int)(unsigned long long)temp_ret, ((temp_r3 == 0) == 0)) || (temp_ret_2 = IsEastAsianChar(var_r4, temp_r31), temp_r3_2 = temp_ret_2, var_r4 = (unsigned short)(unsigned int)(unsigned long long)temp_ret_2, ((temp_r3_2 == 0) == 0)) || ((unsigned int)0x2D == 0x2DU)) {
+        if ((temp_r31 == 9) || (temp_r31 == 0xD) || (temp_r31 == 0x20) || (temp_r31 == 0x3000) || (temp_ret = IsEastAsianChar(temp_r31), temp_r3 = temp_ret, var_r4 = (unsigned short)(unsigned int)(unsigned long long)temp_ret, ((temp_r3 == 0) == 0)) || (temp_ret_2 = IsEastAsianChar(var_r4), temp_r3_2 = temp_ret_2, var_r4 = (unsigned short)(unsigned int)(unsigned long long)temp_ret_2, ((temp_r3_2 == 0) == 0)) || ((unsigned int)0x2D == 0x2DU)) {
             temp_r5 = temp_r29 & 1;
             if (temp_r5 != 0) {
                 var_r11_3 = 0;

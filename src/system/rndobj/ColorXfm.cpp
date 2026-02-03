@@ -92,6 +92,23 @@ void RndColorXfm::AdjustLightness() {
     Multiply(mColorXfm, tf58, mColorXfm);
 }
 
+void RndColorXfm::AdjustContrast() {
+    Transform tf58;
+    tf58.Reset();
+    float contrast = mContrast / 100.0f;
+    if (contrast > 0) {
+        contrast = 1.0f / (contrast * -0.9921875f + 1.0f);
+    } else {
+        contrast = -(contrast * -0.992126f - 1.0f);
+    }
+    float f2 = (1.0f - contrast) * 0.5f;
+    tf58.m[2][2] = contrast;
+    tf58.m[1][1] = contrast;
+    tf58.m[0][0] = contrast;
+    tf58.v.Set(f2, f2, f2);
+    Multiply(mColorXfm, tf58, mColorXfm);
+}
+
 void RndColorXfm::AdjustColorXfm() {
     mColorXfm.Reset();
     AdjustHue();
