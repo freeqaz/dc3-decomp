@@ -1,8 +1,51 @@
 #include "hamobj/HamListRibbon.h"
+#include "hamobj/HamLabel.h"
 #include "obj/Data.h"
 #include "obj/Object.h"
 #include "rndobj/Dir.h"
+#include "rndobj/Text.h"
 #include "utl/BinStream.h"
+
+#pragma region ScrollAnims
+
+void HamListRibbon::ScrollAnims::SetScrollFrame(float frame) {
+    if (mScrollAnim)
+        mScrollAnim->SetFrame(frame, 1);
+}
+
+void HamListRibbon::ScrollAnims::SetAnims(int i1) {
+    if (mScrollAnim) {
+        float frame = mScrollAnim->GetFrame();
+        if (i1 == 0) {
+            if (mScrollFade)
+                mScrollFade->SetFrame(1 - frame, 1);
+        } else if (i1 > 0 && i1 < 4) {
+            if (mScrollActive)
+                mScrollActive->SetFrame(frame, 1);
+        } else if (i1 == 4) {
+            if (mScrollFade)
+                mScrollFade->SetFrame(frame, 1);
+        } else if (mScrollFaded)
+            mScrollFaded->SetFrame(frame, 1);
+    }
+}
+
+void HamListRibbon::ScrollAnims::Save(BinStream &bs) const {
+    bs << mScrollAnim;
+    bs << mScrollActive;
+    bs << mScrollFade;
+    bs << mScrollFaded;
+}
+
+void HamListRibbon::ScrollAnims::Load(BinStreamRev &bs) {
+    bs >> mScrollAnim;
+    bs >> mScrollActive;
+    bs >> mScrollFade;
+    bs >> mScrollFaded;
+}
+
+#pragma endregion
+#pragma region HamListRibbon
 
 HamListRibbon::HamListRibbon()
     : mScrollAnims(this), mTestMode(0), mTestNumDisplay(4), mTestSelectedIndex(0),
@@ -109,40 +152,133 @@ BEGIN_COPYS(HamListRibbon)
     END_COPYING_MEMBERS
 END_COPYS
 
-void HamListRibbon::ScrollAnims::SetScrollFrame(float frame) {
-    if (mScrollAnim)
-        mScrollAnim->SetFrame(frame, 1);
+void HamListRibbon::PreLoad(BinStream &bs) {
+    LOAD_REVS(bs)
+    ASSERT_REVS(0xB, 0)
+    RndDir::PreLoad(d.stream);
+    d.PushRev(this);
 }
 
-void HamListRibbon::ScrollAnims::SetAnims(int i1) {
-    if (mScrollAnim) {
-        float frame = mScrollAnim->GetFrame();
-        if (i1 == 0) {
-            if (mScrollFade)
-                mScrollFade->SetFrame(1 - frame, 1);
-        } else if (i1 > 0 && i1 < 4) {
-            if (mScrollActive)
-                mScrollActive->SetFrame(frame, 1);
-        } else if (i1 == 4) {
-            if (mScrollFade)
-                mScrollFade->SetFrame(frame, 1);
-        } else if (mScrollFaded)
-            mScrollFaded->SetFrame(frame, 1);
+void HamListRibbon::PostLoad(BinStream &bs) {
+    BinStreamRev d(bs, bs.PopRev(this));
+    RndDir::PostLoad(d.stream);
+    d >> mSpacing;
+    d >> mSwellAnim;
+    d >> mSlideAnim;
+    d >> mSelectAnim;
+    d >> mSelectInactiveAnim;
+    d >> mSelectAllAnim;
+    d >> mLabelPlaceholder;
+    if (d.rev >= 2) {
+        mScrollAnims.Load(d);
+    }
+    if (d.rev >= 3) {
+        d >> mDisengageAnim;
+    }
+    if (d.rev >= 4) {
+        if (d.rev < 9) {
+            Symbol s;
+            int num;
+            d >> num;
+            for (int i = 0; i < num; i++) {
+                d >> s;
+            }
+            d >> num;
+            for (int i = 0; i < num; i++) {
+                d >> s;
+            }
+        }
+        if (d.rev == 4) {
+            Symbol s;
+            d >> s;
+            d >> s;
+        }
+    }
+    if (d.rev >= 5) {
+        d >> mSlideSound;
+        d >> mSlideSoundAnim;
+        d >> mScrollSound;
+        d >> mScrollSoundAnim;
+    }
+    if (d.rev >= 10) {
+        d >> mEnterFlow;
+    }
+    if (d.rev >= 6) {
+        d >> mEnterAnim;
+    }
+    if (d.rev >= 7) {
+        d >> mPaddedSize;
+    }
+    if (d.rev >= 8) {
+        d >> mPaddedSpacing;
+    }
+    if (d.rev >= 9) {
+        d >> mHighlightSounds;
+        d >> mSelectSounds;
+    }
+    if (d.rev >= 11) {
+        d >> mSelectToggleAnim;
     }
 }
 
-void HamListRibbon::ScrollAnims::Save(BinStream &bs) const {
-    bs << mScrollAnim;
-    bs << mScrollActive;
-    bs << mScrollFade;
-    bs << mScrollFaded;
+void HamListRibbon::DrawShowing() {
+    if (!mTestMode) {
+        RndDir::DrawShowing();
+    } else {
+        std::vector<HamListRibbonDrawState> drawStates(mTestNumDisplay);
+        for (int i = 0; i < mTestNumDisplay; i++) {
+            if (i == mTestSelectedIndex) {
+                drawStates[i].unk14 = true;
+                if (mMode == kRibbonSwell && !mTestEntering) {
+                    float frame = GetFrame();
+                    drawStates[i].unk0.SetParams(frame, frame, 0);
+                } else {
+                    drawStates[i].unk0.SetParams(1, 1, 0);
+                }
+            } else {
+                drawStates[i].unk14 = false;
+                drawStates[i].unk0.SetParams(0, 0, 0);
+            }
+        }
+        Transform xfm = WorldXfm();
+        Draw(xfm, drawStates, true, false);
+    }
 }
 
-void HamListRibbon::ScrollAnims::Load(BinStreamRev &bs) {
-    bs >> mScrollAnim;
-    bs >> mScrollActive;
-    bs >> mScrollFade;
-    bs >> mScrollFaded;
+float HamListRibbon::StartFrame() {
+    if (mTestEntering && mEnterAnim) {
+        return mEnterAnim->StartFrame();
+    } else {
+        switch (mMode) {
+        case kRibbonSwell:
+            if (mSwellAnim) {
+                return mSwellAnim->StartFrame();
+            } else {
+                return 0;
+            }
+        case kRibbonSlide:
+            if (mSlideAnim) {
+                return mSlideAnim->StartFrame();
+            } else {
+                return 0;
+            }
+        case kRibbonSelect:
+            if (unk26c && mSelectToggleAnim) {
+                return mSelectToggleAnim->StartFrame();
+            } else if (mSelectAnim || mSelectAllAnim) {
+                if (mSelectAnim && !mSelectAllAnim) {
+                    return mSelectAnim->StartFrame();
+                } else if (!mSelectAnim && mSelectAllAnim) {
+                    return mSelectAllAnim->StartFrame();
+                } else if (mSelectAnim && mSelectAllAnim) {
+                    return Min(mSelectAnim->StartFrame(), mSelectAllAnim->StartFrame());
+                }
+            }
+            return 0;
+        default:
+            return 0;
+        }
+    }
 }
 
 void HamListRibbon::HandleEnter() {
@@ -174,79 +310,73 @@ DataNode HamListRibbon::OnExitBlacklightMode(const DataArray *a) {
 }
 
 void HamListRibbon::PlayHighlightSound(int idx) {
-    if (idx >= mHighlightSounds.size() - 1)
-        return;
-    else
-        mHighlightSounds[idx]->Activate();
+    int numSounds = mHighlightSounds.size();
+    if (numSounds != 0) {
+        mHighlightSounds[Min(idx, numSounds - 1)]->Activate();
+    }
 }
 
 void HamListRibbon::PlaySelectSound(int idx) {
-    if (idx < mSelectSounds.size()) {
-        mSelectSounds[idx]->Activate();
+    int numSounds = mSelectSounds.size();
+    if (numSounds != 0 && idx >= 0) {
+        mSelectSounds[Min(idx, numSounds - 1)]->Activate();
     }
 }
 
-void HamListRibbon::PostLoad(BinStream &bs) {
-    BinStreamRev d(bs, bs.PopRev(this));
-    RndDir::PostLoad(bs);
-    bs >> *((int *)((char *)this - 0x16c));
-    mSwellAnim.Load(bs, true, this);
-    mSlideAnim.Load(bs, true, this);
-    mSelectAnim.Load(bs, true, this);
-    mSelectInactiveAnim.Load(bs, true, this);
-    mSelectAllAnim.Load(bs, true, this);
-    mLabelPlaceholder.Load(bs, true, this);
+bool HamListRibbon::IsScrollable(int i1) const { return i1 > 6; }
 
-    if ((u16)d.rev >= 2) {
-        mScrollAnims.Load(d);
+void HamListRibbon::ResetAnims(bool b1) {
+    if (mSelectInactiveAnim && (mSelectInactiveAnim->GetFrame() != 0 || b1)) {
+        mSelectInactiveAnim->SetFrame(0, 1);
     }
-    if ((u16)d.rev >= 3) {
-        mDisengageAnim.Load(bs, true, this);
+    if (mSelectAnim && (mSelectAnim->GetFrame() != 0 || b1)) {
+        mSelectAnim->SetFrame(0, 1);
     }
-    if ((u16)d.rev >= 4) {
-        if ((u16)d.rev < 9) {
-            int count1 = 0;
-            d >> count1;
-            for (int i = 0; i < count1; ++i) {
-                Symbol s;
-                d >> s;
-            }
-            int count2 = 0;
-            d >> count2;
-            for (int i = 0; i < count2; ++i) {
-                Symbol s;
-                d >> s;
+    if (mSelectToggleAnim && (mSelectToggleAnim->GetFrame() != 0 || b1)) {
+        mSelectToggleAnim->SetFrame(0, 1);
+    }
+    if (mSlideAnim && (mSlideAnim->GetFrame() != 0 || b1)) {
+        mSlideAnim->SetFrame(0, 1);
+    }
+    if (mSwellAnim && (mSwellAnim->GetFrame() != 0 || b1)) {
+        mSwellAnim->SetFrame(0, 1);
+    }
+}
+
+void HamListRibbon::SetAnims(bool b1, float f2) {
+    if (mTestEntering)
+        return;
+    if (mSwellAnim) {
+        mSwellAnim->SetFrame(f2, 1);
+    }
+    if (b1) {
+        if (mMode == 1 && mSlideAnim) {
+            mSlideAnim->SetFrame(GetFrame(), 1);
+        }
+        if (mMode == 2) {
+            if (unk26c && mSelectToggleAnim) {
+                mSelectToggleAnim->SetFrame(GetFrame(), 1);
+            } else if (mSelectAnim) {
+                mSelectAnim->SetFrame(GetFrame(), 1);
             }
         }
+    } else {
+        if (mMode == 2 && !unk26c && mSelectInactiveAnim) {
+            mSelectInactiveAnim->SetFrame(GetFrame(), 1);
+        }
     }
-    if ((u16)d.rev == 4) {
-        Symbol s;
-        d >> s;
-        d >> s;
+}
+
+void HamListRibbon::SetDisengageFrame(float f1) {
+    if (mDisengageAnim) {
+        mDisengageAnim->SetFrame(f1, 1);
     }
-    if ((u16)d.rev >= 5) {
-        mSlideSound.Load(bs, true, this);
-        mSlideSoundAnim.Load(bs, true, this);
-        mScrollSound.Load(bs, true, this);
-        mScrollSoundAnim.Load(bs, true, this);
+}
+
+float HamListRibbon::GetLabelTotalAlpha() const {
+    float ret = 1;
+    for (unsigned int i = 0; i < mLabelPlaceholder->NumStyles(); i++) {
+        ret *= mLabelPlaceholder->Style(i).GetAlpha();
     }
-    if ((u16)d.rev >= 0xa) {
-        mEnterFlow.Load(bs, true, this);
-    }
-    if ((u16)d.rev >= 6) {
-        mSelectToggleAnim.Load(bs, true, this);
-    }
-    if ((u16)d.rev >= 7) {
-        bs >> *((int *)((char *)this - 0x160));
-    }
-    if ((u16)d.rev >= 8) {
-        bs >> *((int *)((char *)this - 0x15c));
-    }
-    if ((u16)d.rev >= 9) {
-        mHighlightSounds.Load(bs, true, this);
-        mSelectSounds.Load(bs, true, this);
-    }
-    if ((u16)d.rev >= 0xb) {
-        mEnterAnim.Load(bs, true, this);
-    }
+    return ret;
 }

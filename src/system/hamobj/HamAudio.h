@@ -59,7 +59,7 @@ private:
     SongInfo *mSongInfo; // 0x3c
     Stream *mSongStream; // 0x40
     Stream *unk44[2]; // 0x44
-    bool unk4c;
+    bool mReady; // 0x4c
     Fader *mMasterFader; // 0x50
     float mMasterVolume; // 0x54
     bool mMuteMaster; // 0x58
@@ -73,6 +73,6 @@ private:
     float unk74;
     int unk78;
     Fader *mCrossFaders[2]; // 0x7c
-    std::vector<Fader *> unk84;
+    std::vector<Fader *> unk84; // 0x84
     std::map<Symbol, Fader *> unk90; // 0x90
 };

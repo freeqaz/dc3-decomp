@@ -35,6 +35,24 @@ public:
     void End();
     void ResetCombo();
     void Begin();
+    bool CanTrick(Symbol);
+
+protected:
+    RhythmBattle();
+
+private:
+    bool GetGoofy() const;
+    Symbol GetLeader() const;
+    void OnPause();
+    void OnUnpause();
+    void CheckIsFinale();
+    void PlayTanClip(int, bool);
+    void PlayMindControlVO(Symbol);
+    void UpdateMindControl();
+    void UpdateFinaleVO(int &);
+    void QueueFinaleVO(Symbol);
+    void OnReset();
+    void OnBeat();
 
     ObjPtr<HamLabel> mCommandLabel; // 0x8
     ObjPtr<HamLabel> unk1c;
@@ -77,23 +95,6 @@ public:
     int unk148;
     int unk14c;
     std::vector<Symbol> unk150;
-
-protected:
-    RhythmBattle();
-
-private:
-    bool GetGoofy() const;
-    Symbol GetLeader() const;
-    void OnPause();
-    void OnUnpause();
-    void CheckIsFinale();
-    void PlayTanClip(int, bool);
-    void PlayMindControlVO(Symbol);
-    void UpdateMindControl();
-    void UpdateFinaleVO(int &);
-    void QueueFinaleVO(Symbol);
-    void OnReset();
-    void OnBeat();
 };
 
 void SetJump(int, int);

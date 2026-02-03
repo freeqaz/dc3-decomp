@@ -1,5 +1,6 @@
 #include "hamobj/HamMaster.h"
 #include "HamAudio.h"
+#include "flow/PropertyEventProvider.h"
 #include "hamobj/HamSongData.h"
 #include "midi/DataEventList.h"
 #include "midi/MidiParserMgr.h"
@@ -13,6 +14,7 @@
 #include "synth/Synth.h"
 #include "utl/Loader.h"
 #include "utl/SongPos.h"
+#include "utl/TimeConversion.h"
 
 HamMaster::HamMaster(HamSongData *data, MidiParserMgr *mgr)
     : mSongData(data), mAudio(nullptr), mMidiParserMgr(mgr), mSongInfo(nullptr),
@@ -36,15 +38,51 @@ BEGIN_PROPSYNCS(HamMaster)
     SYNC_SUPERCLASS(Hmx::Object)
 END_PROPSYNCS
 
+void HamMaster::Poll(float f1) {
+    if (IsLoaded() && mAudio->GetSongStream()) {
+        unk48 = f1;
+        unk60 = mSongData->CalcSongPos(this, unk48);
+        float f8 = mAudio->GetSongStream()->GetJumpBackTotalTime();
+        float f9 = f8 + unk48;
+        unk50 = f9 < mStreamMs;
+        Marker marker1, marker2;
+        bool jp = mAudio->GetSongStream()->CurrentJumpPoints(marker1, marker2);
+        if (!unk50 && jp && marker1.posMS <= marker2.posMS) {
+            if (mStreamMs <= marker2.posMS && marker2.posMS < f9) {
+                unk50 = true;
+            } else {
+                unk50 = false;
+            }
+        }
+        if (unk50) {
+            float f10;
+            if (jp) {
+                f10 = MsToTick(marker2.posMS) - 1.0f;
+            } else {
+                f10 = unk60.GetTotalTick();
+            }
+            if (mMidiParserMgr) {
+                mMidiParserMgr->Reset();
+            }
+            unk5c = mStreamMs;
+            static Message msg("stream_jump");
+            Export(msg, true);
+        }
+        CheckBeat();
+        CheckLevels();
+        mAudio->Poll();
+    }
+}
+
 void HamMaster::Jump(float f1) {
     SongPos calcedPos = mSongData->CalcSongPos(this, f1);
-    SongPos &tmp = unk60;
+    const SongPos &tmp = unk60;
     unk60 = calcedPos;
     unk78 = tmp;
     unkb4 = -1;
     unkb8 = 0;
     if (mMidiParserMgr) {
-        mMidiParserMgr->Reset(unk78.GetTotalTick());
+        mMidiParserMgr->Reset(tmp.GetTotalTick());
     }
     mAudio->Jump(f1);
 }
@@ -97,8 +135,14 @@ float HamMaster::SongDurationMs() {
     return 0;
 }
 
-void HamMaster::
-    Load(SongInfo *s, bool b2, int i3, bool b4, HamSongDataValidate v, std::vector<MidiReceiver *> *) {
+void HamMaster::Load(
+    SongInfo *s,
+    bool b2,
+    int i3,
+    bool b4,
+    HamSongDataValidate v,
+    std::vector<MidiReceiver *> *
+) {
     unk44 = b2;
     mSongInfo = s;
     mSongData->Load(s, b4, v);
@@ -135,8 +179,8 @@ bool HamMaster::DetectStreamJump(float &f1, float &f2, float &f3) const {
 }
 
 void HamMaster::AddMusicFader(Fader *fader) {
-    if (mAudio && mAudio->GetSongStream()) {
-        mAudio->GetSongStream()->Faders()->Add(fader);
+    if (GetAudio() && GetAudio()->GetSongStream()) {
+        GetAudio()->GetSongStream()->Faders()->Add(fader);
     }
 }
 
@@ -171,6 +215,41 @@ void HamMaster::LoaderPoll() {
         unk45 = true;
         RELEASE(mLoader);
     }
+}
+
+void HamMaster::CheckBeat() {
+    int totalbeat1 = unk60.GetTotalBeat();
+    int totalbeat2 = unk78.GetTotalBeat();
+    if (totalbeat1 != totalbeat2) {
+        int beat = unk60.GetBeat();
+        TheHamProvider->SetProperty("beat", beat + 1);
+        if (mMetronome) {
+            if (beat == 0) {
+                TheSynth->PlaySound("metronome_measure", 0, 0, 0);
+            } else {
+                TheSynth->PlaySound("metronome_beat", 0, 0, 0);
+            }
+        }
+        static DataNode &n = DataVariable("beat");
+        n = totalbeat2;
+        static Message msg("beat");
+        Export(msg, true);
+    }
+    if (unk78.GetMeasure() != unk60.GetMeasure()) {
+        static DataNode &n = DataVariable("measure");
+        n = unk60.GetMeasure();
+        static Message msg("downbeat");
+        TheHamProvider->Export(msg, true);
+    }
+    if (unk78.GetTick() / 240 != unk60.GetTick() / 240) {
+        static Message msg("halfbeat");
+        TheHamProvider->Export(msg, true);
+    }
+    if (unk78.GetTick() / 120 != unk60.GetTick() / 120) {
+        static Message msg("quarterbeat");
+        TheHamProvider->Export(msg, true);
+    }
+    unk78 = unk60;
 }
 
 HamMasterLoader::HamMasterLoader(HamMaster *master)

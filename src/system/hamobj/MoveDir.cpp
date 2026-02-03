@@ -112,10 +112,16 @@ String RecordClipName(const char *cc, int i2) {
         break;
     }
     String ret(MakeString(
-        "%s%d~%s~%c~%s~%s", prefix, dt.ToCode(), TheGameData->GetSong(), diff, cc
+        "%s%d~%s~%c~%s~%s",
+        prefix,
+        dt.ToCode(),
+        TheGameData->GetSong(),
+        diff,
+        TheGameData->Player(0)->Unk2c(),
+        cc
     ));
-    if (ret.length() > 0x26) {
-        ret.resize(0x26);
+    if (ret.length() > 38) {
+        ret.resize(38);
     }
     return ret;
 }
@@ -129,7 +135,7 @@ MoveDir::MoveDir()
     : mShowMoveOverlay(0), mErrorNodeInfo(0), mPlayClip(this), mRecordClip(this),
       unk2bc(this), unk2d0(this), unk2e4(0), mReportMove(this), mFiltersEnabled(0),
       mGamePanel(0), unk30c(0), mFilterQueue(0), mAsyncDetector(0), mUpdateLoader(0),
-      mFinishingMoveMeasure(10000), mMoveOverlay(RndOverlay::Find("ham_move", true)),
+      mFinishingMoveMeasure(10000), mMoveOverlay(RndOverlay::Find("ham_move")),
       mDancerSeq(this), unk414(0), mSkeletonViz(Hmx::Object::New<SkeletonViz>()),
       unk41c(0), mDebugLatencyOffset(0), mDebugLoop(0), mLastPollMs(0),
       mDebugCollision(0), unkf84(-1) {
@@ -1174,21 +1180,25 @@ bool MoveDir::InGracePeriod(int player) {
 
 MoveFrame *MoveDir::ClosestMoveFrame() {
     struct FilterFrameDist {
-        FilterFrameDist(float f) : unk0(f) {}
+        FilterFrameDist(float dist) : mDist(dist) {}
         bool operator()(const MoveFrame &frame1, const MoveFrame &frame2) const {
-            return fabsf(frame1.Beat() - unk0) < fabsf(frame2.Beat() - unk0);
+            return fabsf(frame1.Beat() - mDist) < fabsf(frame2.Beat() - mDist);
         }
 
-        float unk0;
+        float mDist; // 0x0
     };
     HamMove *move = mMovePlayerData[0].mCurMove;
-    if (move) {
-        float cmp = TheTaskMgr.TotalBeat() - (float)(TheTaskMgr.CurrentMeasure() * 4);
-        std::vector<MoveFrame> &frames = move->GetMoveFrames();
-        return std::min_element(frames.begin(), frames.end(), FilterFrameDist(cmp));
-    } else {
+    if (!move)
         return nullptr;
-    }
+
+    int measure = TheTaskMgr.CurrentMeasure();
+    float beat = TheTaskMgr.TotalBeat();
+    int measureBeats = measure * 4;
+    std::vector<MoveFrame> &frames = move->GetMoveFrames();
+    MoveFrame *ret = std::min_element(
+        frames.begin(), frames.end(), FilterFrameDist(beat - (float)measureBeats)
+    );
+    return ret != frames.end() ? ret : nullptr;
 }
 
 float MoveDir::DetectFrac(

@@ -5,10 +5,13 @@
 #include "ui/UI.h"
 #include "ui/UILabel.h"
 #include "ui/UITransitionHandler.h"
+#include "utl/BinStream.h"
 #include "utl/Locale.h"
+#include "utl/Str.h"
 
 HamLabel::HamLabel()
     : UITransitionHandler(this), unk178(""), unk180(0), mCanHaveFocus(0) {}
+
 HamLabel::~HamLabel() {}
 
 BEGIN_HANDLERS(HamLabel)
@@ -40,25 +43,59 @@ BEGIN_COPYS(HamLabel)
     END_COPYING_MEMBERS
 END_COPYS
 
-void HamLabel::Init() { REGISTER_OBJ_FACTORY(HamLabel); }
+void HamLabel::Load(BinStream &bs) {
+    PreLoad(bs);
+    PostLoad(bs);
+}
+
+void HamLabel::PreLoad(BinStream &bs) {
+    LOAD_REVS(bs)
+    ASSERT_REVS(17, 0)
+    if (d.rev >= 17) {
+        UILabel::PreLoad(d.stream);
+    } else {
+        MILO_FAIL("Can't load HamLabel older than rev %d", 17);
+    }
+    d.PushRev(this);
+}
+
+void HamLabel::PostLoad(BinStream &bs) {
+    BinStreamRev d(bs, bs.PopRev(this));
+    UILabel::PostLoad(d.stream);
+    LoadHandlerData(d.stream);
+}
+
+void HamLabel::Count(int i1, int i2, float f3, Symbol s) {
+    unk168.clear();
+    unk168.push_back(Key<float>(TheTaskMgr.UISeconds() * 1000, i1));
+    unk168.push_back(Key<float>((float)(i2) + f3, i2));
+    unk174 = s;
+}
 
 void HamLabel::FinishCount() {
-    // Need at least start and end key frames (2 total)
     if (unk168.size() >= 2) {
         SetTokenFmt(unk174, LocalizeSeparatedInt(unk168[1].value, TheLocale));
         unk168.clear();
     }
 }
 
+void HamLabel::SetMoveName(HamMove *move) {
+    String str;
+    if (move) {
+        str = move->DisplayName();
+        mMarkup = str.find('<') != FixedString::npos;
+    }
+    SetDisplayText(str.c_str(), true);
+}
+
 void HamLabel::Poll() {
     UILabel::Poll();
-    // Update count animation if active (size >= 2 means we have key frames)
     if (unk168.size() >= 2) {
-        float frameValue = 0;
+        float f3 = 0;
         float ui_ms = TheTaskMgr.UISeconds() * 1000;
-        unk168.AtFrame(ui_ms, frameValue);
+        unk168.AtFrame(ui_ms, f3);
         SetTokenFmt(unk174, LocalizeSeparatedInt(0, TheLocale));
-        if (frameValue < ui_ms) {
+        if (f3 < ui_ms) {
             unk168.clear();
             TheUI->Handle(HamLabelCountDoneMsg(this), false);
         }
@@ -66,22 +103,7 @@ void HamLabel::Poll() {
     UpdateHandler();
 }
 
-void HamLabel::Count(int i1, int i2, float f3, Symbol s) {
-    unk168.clear();
-    float ui_ms = TheTaskMgr.UISeconds() * 1000;
-    // Create animation keyframes: start at current time with i1, end at (i2 + duration) with i2
-    unk168.push_back(Key<float>(ui_ms, i1));
-    unk168.push_back(Key<float>(i2 + f3, i2));
-    unk174 = s;
-}
-
-void HamLabel::FinishValueChange() {
-    UILabel::SetDisplayText(unk178.c_str(), unk180);
-    UITransitionHandler::FinishValueChange();
-}
-
 void HamLabel::SetDisplayText(const char *cc, bool b2) {
-    // Only trigger transition if text content or display state actually changed
     if (!streq(cc, unk178.c_str()) || b2 != unk180) {
         unk178 = cc;
         unk180 = b2;
@@ -89,5 +111,9 @@ void HamLabel::SetDisplayText(const char *cc, bool b2) {
     }
 }
 
-void HamLabel::SetMoveName(HamMove *move) {
+void HamLabel::FinishValueChange() {
+    UILabel::SetDisplayText(unk178.c_str(), unk180);
+    UITransitionHandler::FinishValueChange();
 }
+
+void HamLabel::Init() { REGISTER_OBJ_FACTORY(HamLabel); }

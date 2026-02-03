@@ -1,4 +1,11 @@
 #include "RhythmDetectorGroup.h"
+#include "hamobj/RhythmDetector.h"
+
+RhythmDetectorGroup::RhythmDetectorGroup()
+    : mDetectors(this, (EraseMode)0), mRating(0.0), mFreshness(0.0), mSkeletonIndex(-1),
+      mDebugGraph(nullptr) {}
+
+RhythmDetectorGroup::~RhythmDetectorGroup() {}
 
 BEGIN_HANDLERS(RhythmDetectorGroup)
     HANDLE_ACTION(add_debug_graphs, AddDebugGraphs())
@@ -23,21 +30,6 @@ BEGIN_SAVES(RhythmDetectorGroup)
     bs << mSkeletonIndex;
 END_SAVES
 
-BEGIN_LOADS(RhythmDetectorGroup)
-    LOAD_REVS(bs)
-    ASSERT_REVS(2, 0)
-    LOAD_SUPERCLASS(RndPollable)
-    if (d.rev >= 1) {
-        bs >> mDetectors;
-    }
-    if (d.rev >= 2) {
-        bs >> mSkeletonIndex;
-        if (mSkeletonIndex > -1) {
-            SetSkeletonIndex(mSkeletonIndex);
-        }
-    }
-END_LOADS
-
 BEGIN_COPYS(RhythmDetectorGroup)
     COPY_SUPERCLASS(RndPollable)
     CREATE_COPY(RhythmDetectorGroup)
@@ -49,9 +41,20 @@ BEGIN_COPYS(RhythmDetectorGroup)
     END_COPYING_MEMBERS
 END_COPYS
 
-RhythmDetectorGroup::~RhythmDetectorGroup() {}
-
-RhythmDetectorGroup::RhythmDetectorGroup() : mDetectors(this, static_cast<EraseMode>(0), kObjListNoNull), mRating(0.0), mFreshness(0.0), mSkeletonIndex(-1), mDebugGraph(nullptr) {}
+BEGIN_LOADS(RhythmDetectorGroup)
+    LOAD_REVS(bs)
+    ASSERT_REVS(2, 0)
+    LOAD_SUPERCLASS(RndPollable)
+    if (d.rev >= 1) {
+        d >> mDetectors;
+    }
+    if (d.rev >= 2) {
+        d >> mSkeletonIndex;
+        if (mSkeletonIndex > -1) {
+            SetSkeletonIndex(mSkeletonIndex);
+        }
+    }
+END_LOADS
 
 void RhythmDetectorGroup::Poll() {
     RhythmDetector* detector;
@@ -67,38 +70,47 @@ void RhythmDetectorGroup::Poll() {
             mFreshness = (mFreshness - freshness < 0.0f) ? freshness : mFreshness;
         }
         if (mDebugGraph != 0) {
-            mDebugGraph->AddData(mRating, mFreshness);
+            mDebugGraph->AddData(mRating, false);
             mDebugGraph->Draw();
         }
     }
 }
 
 void RhythmDetectorGroup::SetSkeletonIndex(int skelIdx) {
-    FOREACH(it, mDetectors) {
+    FOREACH (it, mDetectors) {
         (*it)->SetSkeletonID(skelIdx);
     }
 }
 
 void RhythmDetectorGroup::RemoveDebugGraphs() {
-    delete mDebugGraph;
-    mDebugGraph = nullptr;
-    FOREACH(it, mDetectors) {
+    RELEASE(mDebugGraph);
+    FOREACH (it, mDetectors) {
         (*it)->RemoveDebugGraphs();
     }
 }
 
 void RhythmDetectorGroup::AddDebugGraphs() {
-    float pos;
-
+    float f6 = 1.0f / (float)(mDetectors.size() + 1);
+    float f7 = f6 * 0.9f;
     delete mDebugGraph;
-
-    mDebugGraph = new DebugGraph(0.1f, 0.0f, 0.8f, 0.9f, Hmx::Color(0.4, 0.4, 0.4, 0.8), Hmx::Color(0.4, 0.4, 0.4, 0.8), null, 0.0, 2.0, "");
-
-    pos = 0.1f;
-    FOREACH(it, mDetectors) {
-        RhythmDetector* detector = *it;
-        detector->RemoveDebugGraphs();
-        detector->AddDebugGraph(0.1f, pos, 0.8f, 0.125f, Hmx::Color(0.4, 0.4, 0.4, 0.8));
-        pos += 0.1f;
+    mDebugGraph = new DebugGraph(
+        0.1f,
+        0.0f,
+        0.8f,
+        0.9f,
+        Hmx::Color(0.4, 0.4, 0.4, 0.8),
+        Hmx::Color(0.4, 0.4, 0.4, 0.8),
+        null,
+        0.0,
+        2.0,
+        ""
+    );
+    mDebugGraph->SetUnk44(1);
+    float f10 = f6;
+    FOREACH (it, mDetectors) {
+        RhythmDetector *cur = *it;
+        cur->RemoveDebugGraphs();
+        cur->AddDebugGraph(0.1f, f10, 0.8f, 0.1f / 0.8f, Hmx::Color(1, 0, 1, 0));
+        f10 += f6;
     }
 }

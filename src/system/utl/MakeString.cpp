@@ -12,12 +12,12 @@
 #define MAX_BUF_SIZE 0x1000
 
 bool bufExceeded = false;
-static CriticalSection *gLock;
-static char ***gBuf;
-static int gNum[MAX_BUF_THREADS];
-static int gThreadIds[MAX_BUF_THREADS];
-static int gCurThread;
-static int gNumThreads;
+static CriticalSection *gLock = nullptr;
+static char ***gBuf = nullptr;
+static int gNum[MAX_BUF_THREADS] = { 0 };
+static int gThreadIds[MAX_BUF_THREADS] = { -1 };
+static int gCurThread = 0;
+static int gNumThreads = 0;
 
 void InitMakeString() {
     if (!gLock) {

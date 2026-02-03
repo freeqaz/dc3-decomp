@@ -161,7 +161,7 @@ BEGIN_LOADS(RndPropAnim)
     LOAD_SUPERCLASS(Hmx::Object)
     LOAD_SUPERCLASS(RndAnimatable)
     ObjOwnerPtr<Hmx::Object> obj(this);
-    mLastFrame = mFrame;
+    mLastFrame = GetFrame();
     DeleteAll(mPropKeys);
     if (d.rev < 7) {
         LoadPre7(d);

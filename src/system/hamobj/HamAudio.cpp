@@ -1,16 +1,19 @@
 #include "hamobj/HamAudio.h"
 #include "math/Utl.h"
+#include "obj/Data.h"
 #include "obj/Object.h"
 #include "os/Debug.h"
+#include "os/System.h"
 #include "synth/Faders.h"
 #include "synth/FxSend.h"
 #include "synth/Synth.h"
 #include "utl/Loader.h"
 #include "utl/MemMgr.h"
 #include "utl/SongInfoCopy.h"
+#include "utl/TimeConversion.h"
 
 HamAudio::HamAudio()
-    : mFileLoader(0), unk34(0), mSongInfo(0), mSongStream(0), unk4c(0),
+    : mFileLoader(0), unk34(0), mSongInfo(0), mSongStream(0), mReady(0),
       mMasterFader(Hmx::Object::New<Fader>()), mMuteMaster(0), unk59(0), unk68(0),
       unk78(0) {
     unk44[0] = 0;
@@ -63,8 +66,8 @@ bool HamAudio::IsReady() {
         } else
             return false;
     }
-    unk4c = mSongStream && mSongStream->IsReady();
-    return unk4c;
+    mReady = mSongStream && mSongStream->IsReady();
+    return mReady;
 }
 
 bool HamAudio::Paused() const { return !(mSongStream && mSongStream->IsPlaying()); }
@@ -134,7 +137,7 @@ void HamAudio::Jump(float f1) {
         if (unk44[1]) {
             unk44[1]->Stop();
         }
-        unk4c = false;
+        mReady = false;
         mSongStream->Resync(f1);
     }
 }
@@ -148,8 +151,7 @@ void HamAudio::ClearLoop() {
 
 void HamAudio::DeleteFaders() {
     DeleteAll(unk84);
-    for (std::map<Symbol, Fader *>::iterator it = unk90.begin(); it != unk90.end();
-         ++it) {
+    FOREACH (it, unk90) {
         RELEASE(it->second);
     }
     unk90.clear();
@@ -218,6 +220,107 @@ void HamAudio::PrintFaders() {
     MILO_LOG("CrossFaders[1] %.2f\n", mCrossFaders[1]->DuckedValue());
 }
 
+// intentionally unimplemented
 void HamAudio::SetBackgroundVolume(float) {}
 void HamAudio::SetForegroundVolume(float) {}
 void HamAudio::SetStereo(bool) {}
+
+bool HamAudio::GetCurrLoopMarkers(float &f1, float &f2) const {
+    Marker m1, m2;
+    Stream *s = mSongStream;
+    if (s && s->CurrentJumpPoints(m1, m2)) {
+        f1 = m1.posMS;
+        f2 = m2.posMS;
+        return true;
+    } else {
+        return false;
+    }
+}
+
+bool HamAudio::GetCurrLoopBeats(int &i1, int &i2) const {
+    float f1, f2;
+    if (!GetCurrLoopMarkers(f1, f2)) {
+        return false;
+    } else {
+        i1 = SecondsToBeat(f1 / 1000.0f) + 0.5f;
+        i2 = SecondsToBeat(f2 / 1000.0f) + 0.5f;
+        return true;
+    }
+}
+
+void HamAudio::SetLoop(float f1, float f2) {
+    SetLoop(BeatToMs(f1), BeatToMs(f2), GetSongStream());
+}
+
+void HamAudio::SetCrossfadeJump(float f1, float f2, float f3) {
+    MILO_ASSERT_FMT(unk44[0] && unk44[1], "Crossfade requires 2 song streams");
+    if (unk68) {
+        MILO_NOTIFY("Stomping on current queued crossfade");
+    }
+    unk64 = f3;
+    unk60 = f2;
+    unk5c = f1;
+    unk68 = 1;
+    bool b2 = false;
+    if (f1 - (f3 / 2.0f) <= 0) {
+        MILO_NOTIFY(
+            "Crossfade begins before start of song. Setting up hard jump instead of crossfade."
+        );
+        b2 = true;
+    }
+    if (unk78 > 1 && unk5c - (unk64 / 2.0f) <= (unk74 / 2.0f) + unk70) {
+        MILO_NOTIFY(
+            "Crossfade begins before existing crossfade ends. Setting up hard jump instead of crossfade."
+        );
+        b2 = true;
+    }
+    if (b2) {
+        unk68 = 0;
+    }
+    SetLoop(f2, f1, unk44[0]);
+}
+
+void HamAudio::SetLoop(float f1, float f2, Stream *stream) {
+    Marker m1, m2;
+    if (stream->CurrentJumpPoints(m2, m1) && m1.posMS == f1 && m2.posMS == f2) {
+        return;
+    } else {
+        stream->ClearJump();
+        stream->ClearMarkerList();
+        String start = "start";
+        String end = "end";
+        m1.name = start;
+        m1.posMS = f1;
+        m2.name = end;
+        m2.posMS = f2;
+        stream->AddMarker(m1);
+        stream->AddMarker(m2);
+        stream->SetJump(end, start);
+    }
+}
+
+DataNode HamAudio::OnSetCrossfadeJump(DataArray *a) {
+    float a2 = a->Float(2);
+    float f6 = BeatToMs(a2);
+    float f7 = BeatToMs(a->Float(3));
+    float f8;
+    if (a->Size() > 4) {
+        f8 = a->Float(4);
+    } else {
+        f8 = SystemConfig("synth", "crossfade_beats")->Float(1);
+    }
+    f8 = BeatToMs(f8 + a2) - f6;
+    SetCrossfadeJump(f6, f7, f8);
+    return 0;
+}
+
+DataNode HamAudio::OnGetCurrentLoopBeats(DataArray *a) {
+    int i40, i3c;
+    if (!GetCurrLoopBeats(i40, i3c)) {
+        return 0;
+    } else {
+        *a->Var(2) = i40;
+        *a->Var(3) = i3c;
+        return 1;
+    }
+}

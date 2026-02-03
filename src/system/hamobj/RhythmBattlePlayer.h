@@ -1,10 +1,9 @@
 #pragma once
-
 #include "flow/Flow.h"
+#include "gesture/DepthBuffer3D.h"
 #include "hamobj/HamLabel.h"
 #include "hamobj/HamMove.h"
 #include "hamobj/HamPhraseMeter.h"
-#include "hamobj/RhythmBattle.h"
 #include "hamobj/TransConstraint.h"
 #include "obj/Data.h"
 #include "obj/Dir.h"
@@ -17,10 +16,15 @@
 #include "utl/BinStream.h"
 #include "utl/Symbol.h"
 
+class RhythmBattle;
+
 enum RhythmBattleJackState {
 };
 
+/** "The state of a player in Rhythm Battle." */
 class RhythmBattlePlayer : public RndPollable {
+    friend class RhythmBattle;
+
 public:
     // Hmx::Object
     virtual ~RhythmBattlePlayer();
@@ -55,42 +59,58 @@ public:
     void ResetCombo();
     void SetActive(bool);
 
-    ObjPtr<RndAnimatable> unk8;
-    ObjPtr<RndAnimatable> unk1c;
-    ObjPtr<RndAnimatable> unk30;
-    ObjPtr<RndAnimatable> unk44;
-    ObjPtr<RndAnimatable> unk58;
-    ObjPtr<RndAnimatable> unk6c;
-    ObjPtr<RndAnimatable> unk80;
-    ObjPtr<RndAnimatable> unk94;
-    ObjPtr<RndAnimatable> unka8;
-    ObjPtr<RndAnimatable> unkbc;
-    ObjPtr<RndAnimatable> unkd0;
-    ObjPtr<RndAnimatable> unke4;
-    ObjPtr<RndDir> unkf8;
+protected:
+    RhythmBattlePlayer();
+
+private:
+    void AnimateBoxyState(int, bool, bool);
+    void UpdateScore(int);
+
+    /** "instruction display" */
+    ObjPtr<RndAnimatable> mComboPosAnim; // 0x8
+    /** "instruction display" */
+    ObjPtr<RndAnimatable> mComboColorAnim; // 0x1c
+    /** "instruction display" */
+    ObjPtr<RndAnimatable> mResetComboAnim; // 0x30
+    /** "instruction display" */
+    ObjPtr<RndAnimatable> m2xMultAnim; // 0x44
+    /** "instruction display" */
+    ObjPtr<RndAnimatable> m3xMultAnim; // 0x58
+    /** "instruction display" */
+    ObjPtr<RndAnimatable> m4xMultAnim; // 0x6c
+    ObjPtr<RndAnimatable> mRhythmBattleAnim; // 0x80
+    ObjPtr<RndAnimatable> unk94; // 0x94
+    ObjPtr<RndAnimatable> mBattleMeterStaleAnim; // 0xa8
+    ObjPtr<RndAnimatable> mBattleMeterInAnim; // 0xbc
+    ObjPtr<RndAnimatable> mShowScoreAnim; // 0xd0
+    ObjPtr<RndAnimatable> mBattleMeterOutAnim; // 0xe4
+    /** "override the world boxydir" */
+    ObjPtr<RndDir> mBoxyDir; // 0xf8
     ObjPtr<HamLabel> unk10c;
-    ObjPtr<HamLabel> unk120;
-    ObjPtr<Flow> unk134;
-    ObjPtr<Flow> unk148;
-    ObjPtr<Flow> unk15c;
-    ObjPtr<Flow> unk170;
-    ObjPtr<HamPhraseMeter> unk184;
-    ObjPtr<TransConstraint> unk198;
-    ObjPtr<RndTransformable> unk1ac;
-    ObjPtr<HamMove> unk1c0; // change to DepthBuffer3D once class made
-    ObjPtr<HamMove> unk1d4; // change to DepthBuffer3D once class made
-    ObjPtr<ObjectDir> unk1e8;
-    ObjPtr<ObjectDir> unk1fc;
-    ObjPtr<RndParticleSys> unk210;
-    ObjPtr<RndAnimatable> unk224;
-    int unk238;
-    int unk23c;
+    /** "instruction display" */
+    ObjPtr<HamLabel> mScoreLabel; // 0x120
+    ObjPtr<Flow> mInTheZoneFlow; // 0x134
+    ObjPtr<Flow> mOutTheZoneOkFlow; // 0x148
+    ObjPtr<Flow> mOutTheZoneBadFlow; // 0x15c
+    ObjPtr<Flow> mSwagJackedFlow; // 0x170
+    ObjPtr<HamPhraseMeter> mPhraseMeter; // 0x184
+    ObjPtr<TransConstraint> mTransConstraint; // 0x198
+    ObjPtr<RndTransformable> mBoxyWaistTrans; // 0x1ac
+    ObjPtr<DepthBuffer3D> mBoxyman1; // 0x1c0
+    ObjPtr<DepthBuffer3D> mBoxyman2; // 0x1d4
+    ObjPtr<ObjectDir> mTextFeedback; // 0x1e8
+    ObjPtr<ObjectDir> mMoveFeedback; // 0x1fc
+    ObjPtr<RndParticleSys> mStealPart; // 0x210
+    ObjPtr<RndAnimatable> mStealAnim; // 0x224
+    /** "which player is this" */
+    int mPlayer; // 0x238
+    RhythmBattle *unk23c; // 0x23c
     bool unk240;
     float unk244;
     float unk248;
     float unk24c;
     float unk250;
-    u32 unk254;
+    float unk254;
     float unk258;
     float unk25c;
     int unk260;
@@ -99,7 +119,7 @@ public:
     int unk26c;
     float unk270;
     float unk274;
-    u32 unk278;
+    float unk278;
     Symbol unk27c;
     int unk280;
     float unk284;
@@ -109,15 +129,8 @@ public:
     int unk294;
     Symbol unk298;
     int unk29c;
-    u32 unk2a0;
+    float unk2a0;
     bool unk2a4;
     bool unk2a5;
     int unk2a8;
-
-protected:
-    RhythmBattlePlayer();
-
-private:
-    void AnimateBoxyState(int, bool, bool);
-    void UpdateScore(int);
 };

@@ -10,40 +10,43 @@ FilterQueue::~FilterQueue() {}
 
 bool FilterQueue::GetResults(float &outValue, DetectFrame **frames, float unused) {
     mJobFinished = false;
+    std::vector<FilterInputFrame> &qframes = mQueuedJob.frames;
+    std::vector<FilterOutputFrame> &oframes = mOutput.frames;
     // Empty branch structure matches original control flow
-    if (!mQueuedFrames.empty()) {
+    if (!qframes.empty()) {
         // Queued frames exist; no action needed in this branch
     } else {
         // No queued frames; clear output frames
-        mOutputFrames.clear();
+        oframes.clear();
     }
-    outValue = unk0;
-    MILO_ASSERT(mQueuedFrames.size() == mOutputFrames.size(), 0x42);
-    frames[1] = nullptr;
+    outValue = mQueuedJob.unk0;
+    MILO_ASSERT(qframes.size() == oframes.size(), 0x42);
     frames[0] = nullptr;
-    for (int frameIdx = 0; frameIdx < (int)mQueuedFrames.size(); frameIdx++) {
-        DetectFrame *pFrame = mQueuedFrames[frameIdx].unkc;
-        pFrame->AddError(mOutputFrames[frameIdx].unk4, mQueuedFrames[frameIdx].unk4);
+    frames[1] = nullptr;
+    for (int frameIdx = 0; frameIdx < qframes.size(); frameIdx++) {
+        DetectFrame *pFrame = qframes[frameIdx].unkc;
+        pFrame->AddError(oframes[frameIdx].unk4, qframes[frameIdx].unk4);
         // Access field at offset +8 in DetectFrame
         float* pFrameData = (float*)((char*)pFrame + 8);
         // Check if output value exceeds field data and input error exceeds threshold
-        if ((unk0 > *pFrameData) && (mQueuedFrames[frameIdx].unk4 > unused)) {
-            frames[mQueuedFrames[frameIdx].unk0] = pFrame;
+        if ((mQueuedJob.unk0 > *pFrameData) && (qframes[frameIdx].unk4 > unused)) {
+            frames[qframes[frameIdx].unk0] = pFrame;
         }
     }
-    mQueuedFrames.clear();
-    mOutputFrames.clear();
+    qframes.clear();
+    oframes.clear();
     return true;
 }
 
 void FilterQueue::EnqueueNewJob(float outValue, float duration, MoveMode mode) {
-    if (!mQueuedFrames.empty()) {
+    std::vector<FilterInputFrame> &qframes = mQueuedJob.frames;
+    if (!qframes.empty()) {
         MILO_NOTIFY("Queuing new job, but there are already queued frames");
-        mQueuedFrames.clear();
+        qframes.clear();
     }
-    unk0 = outValue;
-    unk4 = mode;
-    unk8 = duration;
+    mQueuedJob.unk0 = outValue;
+    mQueuedJob.unk4 = mode;
+    mQueuedJob.unk8 = duration;
 }
 
 void FilterQueue::EnqueueFrame(
@@ -55,27 +58,27 @@ void FilterQueue::EnqueueFrame(
     frame.unk8 = f3;
     frame.unkc = df;
     frame.unk10 = fv;
-    mQueuedFrames.push_back(frame);
+    mQueuedJob.frames.push_back(frame);
 }
 
 bool FilterQueue::IsJobFinished() const { return mJobFinished; }
 float FilterQueue::LastPollMs() const { return mLastPollMs; }
-bool FilterQueue::HasJob() const { return !mOutputFrames.empty(); }
-void FilterQueue::CancelJob() { mQueuedFrames.clear(); }
+bool FilterQueue::HasJob() const { return !mOutput.frames.empty(); }
+void FilterQueue::CancelJob() { mQueuedJob.frames.clear(); }
 
 void FilterQueue::StartJob() {
-    if (!mOutputFrames.empty()) {
+    if (!mOutput.frames.empty()) {
         if (!TheLoadMgr.EditMode()) {
             MILO_NOTIFY("Starting new job, but there are unprocessed output frames");
         }
-        mOutputFrames.clear();
+        mOutput.frames.clear();
     }
-    unk18 = unk8;
+    mOutput.unk0 = mQueuedJob.unk8;
     mJobFinished = false;
-    unk1c = unk4;
-    int numQFrames = mQueuedFrames.size();
-    mOutputFrames.resize(numQFrames);
+    mOutput.unk4 = mQueuedJob.unk4;
+    int numQFrames = mQueuedJob.frames.size();
+    mOutput.frames.resize(numQFrames);
     for (int frameIdx = 0; frameIdx < numQFrames; frameIdx++) {
-        mOutputFrames[frameIdx].unk0 = mQueuedFrames[frameIdx].unk0;
+        mOutput.frames[frameIdx].unk0 = mQueuedJob.frames[frameIdx].unk0;
     }
 }

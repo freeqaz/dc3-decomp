@@ -78,7 +78,7 @@ public:
             memcpy(this, &s, 0x34);
             return *this;
         }
-
+        float GetAlpha() const { return mFontColor.alpha; }
         void SetAlpha(float alpha) { mFontColor.alpha = alpha; }
 
         // perhaps the memory from 0x0 to 0x34 is another struct
@@ -287,6 +287,7 @@ public:
     void SetText(const char *);
     int FontMapIndex(RndFontBase *, bool);
     float ComputeHeight(int, float, float &);
+    int NumStyles() const { return mStyles.size(); }
 
 protected:
     RndText();

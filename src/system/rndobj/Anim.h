@@ -1,5 +1,6 @@
 #pragma once
 #include "math/Easing.h"
+#include "math/Utl.h"
 #include "obj/Data.h"
 
 #include "obj/Object.h"
@@ -91,15 +92,17 @@ public:
     Rate GetRate() { return mRate; }
     void SetRate(Rate r) { mRate = r; }
     float GetFrame() const { return mFrame; }
+    void ResetFrame() { mFrame = kHugeFloat; }
 
     static TaskUnits RateToTaskUnits(Rate);
 
-protected:
+private: // RB2 said so
     /** "Frame of animation". It ranges from 0 to what EndFrame() returns. */
     float mFrame; // 0x8
     /** "Rate to animate" */
     Rate mRate; // 0xc
 
+protected:
     RndAnimatable();
     void FireFlowLabel(Symbol);
     /** Create a new AnimTask using the configuration in the supplied DataArray.

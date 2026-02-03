@@ -1,5 +1,6 @@
 #include "hamobj/HamList.h"
 #include "obj/Object.h"
+#include "rndobj/Anim.h"
 #include "ui/UIList.h"
 #include "utl/BinStream.h"
 
@@ -33,10 +34,20 @@ void HamList::Init() { REGISTER_OBJ_FACTORY(HamList); }
 void HamList::PreLoad(BinStream &bs) {
     LOAD_REVS(bs)
     ASSERT_REVS(19, 0)
-    if (d.rev <= 0x11) {
+    if (d.rev <= 17) {
         UIList::PreLoadWithRev(d);
     } else {
         UIList::PreLoad(d.stream);
     }
-    d.stream.PushRev(packRevs(d.altRev, d.rev), this);
+    d.PushRev(this);
+}
+
+void HamList::PostLoad(BinStream &bs) {
+    BinStreamRev d(bs, bs.PopRev(this));
+    UIList::PostLoad(d.stream);
+    if (d.rev >= 18 && d.rev < 19) {
+        ObjPtr<RndAnimatable> anim(this);
+        d >> anim;
+        d >> anim;
+    }
 }

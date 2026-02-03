@@ -11,6 +11,8 @@
 #include "utl/MemMgr.h"
 
 struct HamListRibbonDrawState {
+    HamListRibbonDrawState();
+
     DoubleExponentialSmoother unk0;
     bool unk14;
     int unk18;
@@ -75,6 +77,9 @@ public:
     void PlayHighlightSound(int);
     void PlaySelectSound(int);
     bool IsScrollable(int) const;
+    void Draw(const Transform &, const std::vector<HamListRibbonDrawState> &, bool, bool);
+    void SetDisengageFrame(float);
+
     Sound *SlideSound() const { return mSlideSound; }
     RndAnimatable *SlideSoundAnim() const { return mSlideSoundAnim; }
     Sound *ScrollSound() const { return mScrollSound; }
@@ -85,11 +90,12 @@ public:
 
 private:
     void ResetAnims(bool);
+    void SetAnims(bool, float);
+    float GetLabelTotalAlpha() const;
 
     DataNode OnEnterBlacklightMode(const DataArray *);
     DataNode OnExitBlacklightMode(const DataArray *);
 
-protected:
     ScrollAnims mScrollAnims; // 0x1fc
     /** "(Milo only) Draw as a test list?" */
     bool mTestMode; // 0x24c

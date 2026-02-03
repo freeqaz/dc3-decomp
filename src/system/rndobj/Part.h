@@ -180,7 +180,7 @@ public:
 
     float CalcFrame() {
         if (mFrameDrive)
-            return mFrame;
+            return GetFrame();
         else
             return mElapsedTime;
     }

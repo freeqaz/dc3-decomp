@@ -29,6 +29,7 @@ public:
         unsigned int
     );
     void GetRows(std::vector<LeaderboardRow> *);
+    unsigned int SongID() const { return mCacheKey; }
 
 private:
     friend class Leaderboards;

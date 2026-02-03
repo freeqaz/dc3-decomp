@@ -30,7 +30,7 @@ public:
 protected:
     RhythmDetectorGroup();
 
-    ObjPtrVec<RhythmDetector> mDetectors; //  0xC?
+    ObjPtrVec<RhythmDetector> mDetectors; // 0x8
     float mRating; // 0x24
     float mFreshness; // 0x28
     int mSkeletonIndex; // 0x2c

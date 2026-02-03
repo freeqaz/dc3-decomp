@@ -123,7 +123,7 @@ void Song::SetFrame(float frame, float blend) {
         if (mDirty) {
             SyncState();
         }
-    } else if (mFrame != frame) {
+    } else if (GetFrame() != frame) {
         SetStateDirty(true);
     }
 }

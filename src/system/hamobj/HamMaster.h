@@ -58,6 +58,9 @@ public:
     MidiParserMgr *GetMidiParserMgr() const { return mMidiParserMgr; }
 
 private:
+    void CheckBeat();
+    void CheckLevels();
+
     HamSongData *mSongData; // 0x30
     HamAudio *mAudio; // 0x34
     MidiParserMgr *mMidiParserMgr; // 0x38

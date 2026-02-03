@@ -408,7 +408,7 @@ BEGIN_COPYS(RndParticleSys)
             }
         }
         COPY_MEMBER(mNumActive)
-        unk138 = mFrame;
+        unk138 = GetFrame();
         if (ty != kCopyFromMax) {
             COPY_MEMBER(mLife)
             COPY_MEMBER(mScreenAspect)

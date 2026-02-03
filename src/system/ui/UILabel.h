@@ -57,6 +57,7 @@ public:
     void SetDateTime(DateTime const &, Symbol);
     void SetIcon(char);
     void SetTokenFmt(const DataArray *);
+    const RndText::Style &Style(int) const;
     RndText::Style &Style(int);
     void SetPrelocalizedString(String &);
     void SetSubtitle(const DataArray *);

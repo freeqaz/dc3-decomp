@@ -47,6 +47,7 @@ public:
     void SetUnk48(Symbol s) { unk48 = s; }
     Symbol Unk48() const { return unk48; }
     void SetAutoplay(Symbol s) { mAutoplay = s; }
+    const String &Unk2c() const { return unk2c; }
 
 private:
     void SetSkeletonTrackingID(int);

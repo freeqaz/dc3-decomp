@@ -4,15 +4,20 @@
 #include "meta_ham/HamSongMgr.h"
 #include "meta_ham/ProfileMgr.h"
 #include "meta_ham/SongStatusMgr.h"
+#include "net_ham/LeaderboardJobs.h"
 #include "net_ham/RCJobDingo.h"
 #include "net_ham/RockCentral.h"
 #include "net_ham/ScoreJobs.h"
+#include "obj/Data.h"
 #include "obj/Dir.h"
 #include "obj/Msg.h"
 #include "obj/Object.h"
 #include "os/Debug.h"
+#include "os/OnlineID.h"
 #include "os/PlatformMgr.h"
 #include "os/System.h"
+#include "stl/_pair.h"
+#include "stl/_vector.h"
 #include "ui/UI.h"
 #include "ui/UIListLabel.h"
 #include "ui/UIPanel.h"
@@ -287,6 +292,85 @@ void Leaderboards::UploadScores(HamProfile *profile) {
                 } else {
                     StartUploadingNextProfile();
                 }
+            }
+        }
+    }
+}
+
+Symbol Leaderboards::ShowGamercard(int i, HamProfile *profile) {
+    static Symbol display_gamercard_pad_error("display_gamercard_pad_error");
+    if ((0 <= i) && (i <= mRows.size())) {
+        if (ThePlatformMgr.IsSignedIntoLive(profile->GetPadNum())) {
+            if (mRows.size() != 0) {
+                const OnlineID id(mRows[i].mXUID);
+                ShowGamercardResult result =
+                    ThePlatformMgr.ShowGamercardForPadNum(profile->GetPadNum(), &id);
+                if (result == (ShowGamercardResult)-2) {
+                    static Symbol display_gamercard_privilege_error(
+                        "display_gamercard_privilege_error"
+                    );
+                    return display_gamercard_privilege_error;
+                } else if (result == (ShowGamercardResult)-3) {
+                    return display_gamercard_pad_error;
+                } else {
+                    if (0 > result) {
+                        static Symbol on_select_gamertag_error("on_select_gamertag_error");
+                        return on_select_gamertag_error;
+                    }
+                }
+            }
+            return gNullStr;
+        }
+    }
+    return display_gamercard_pad_error;
+}
+
+DataNode Leaderboards::OnMsg(const RCJobCompleteMsg &msg) {
+    if (msg.Job() == mLeaderboardJob) {
+        ReadScoresComplete(false, msg.Success() != 0);
+    } else {
+        if (msg.Success() && !mScoresToUpload.empty()) {
+            SongStatusData data = mScoresToUpload.front();
+            if (mUploadProfile) {
+                mUploadProfile->GetSongStatusMgr()->ClearNeedUpload(data.mSongID, data.mDifficulty);
+            }
+            mScoresToUpload.pop_front();
+            if (!mScoresToUpload.empty()) {
+                UploadNextScore();
+            } else {
+                if (!mPendingProfiles.empty()) {
+                    StartUploadingNextProfile();
+                } else {
+                    mUploadProfile = nullptr;
+                }
+            }
+        }
+    }
+    return 1;
+}
+
+void Leaderboards::GetScores(int i) {
+    if (!mLoading && !mLeaderboardJob) {
+        mRows.clear();
+        HamProfile *activeProfile = TheProfileMgr.GetActiveProfile(true);
+        if (!ThePlatformMgr.IsSignedIntoLive(activeProfile->GetPadNum())) {
+            static Message leaderboards_failed("leaderboards_failed");
+            TheUI->Handle(leaderboards_failed, false);
+        } else {
+            unk90 = i;
+            mLoading = true;
+            if (mType == 1 || mType == 5) {
+                i = 1000; // idk
+            }
+            auto it = mScoreCache.find(mMode + i); // idk about the param here
+            if (it->second.empty()) {
+                mLeaderboardJob = new GetLeaderboardByPlayerJob(
+                    this, activeProfile, i, mType, mMode, 10, 0
+                );
+                TheRockCentral.ManageJob(mLeaderboardJob);
+            } else {
+                mRows = it->second;
+                ReadScoresComplete(true, true);
             }
         }
     }

@@ -5,7 +5,7 @@
 #include "hamobj/HamCharacter.h"
 #include "math/Mtx.h"
 
-class MocapSkeletonIterator : public SkeletonHistory, public SkeletonHistoryArchive {
+class MocapSkeletonIterator : public SkeletonHistoryArchive, public SkeletonHistory {
 public:
     MocapSkeletonIterator(int, int);
     ~MocapSkeletonIterator();
@@ -13,6 +13,8 @@ public:
 
     operator bool();
     void operator++();
+
+    int Unk24b8() const { return unk24b8; }
 
 private:
     void Update();

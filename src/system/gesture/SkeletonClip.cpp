@@ -42,7 +42,7 @@ SkeletonClip::SkeletonClip()
     : mRecordedFrames(sFrames), unk11f4(sCamFrame), unk11f8(sLoadedFile), unk11fc(-1),
       mDifficulty(kNumDifficulties), mWeighted(0), unk1230(0), unk1231(0),
       mFileStream(nullptr), unk1240(0), mAutoplay(false) {
-    mRate = k30_fps;
+    SetRate(k30_fps);
 }
 
 SkeletonClip::~SkeletonClip() {

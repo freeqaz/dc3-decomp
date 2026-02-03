@@ -15,11 +15,8 @@ struct DepthBuffer3DAttachment {
     RndTransformable *obj; // 0x0
     int player; // 0x4
     int unk8;
-    int unkc;
-    int unk10;
-    int unk14;
-    int unk18;
-    int unk1c;
+    Vector3 unkc;
+    bool unk1c;
     int unk20;
 };
 
