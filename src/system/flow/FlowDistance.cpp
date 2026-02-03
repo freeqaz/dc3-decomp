@@ -58,8 +58,6 @@ BEGIN_LOADS(FlowDistance)
     mObj2.LoadFromMainOrDir(bs);
     d >> mPersistent;
     bs >> mDistance;
-    d >> mPersistent;
-    bs >> mDistance;
     d >> mRunInRange;
     d >> mDriveIntensity;
 END_LOADS

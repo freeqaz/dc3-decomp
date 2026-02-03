@@ -64,12 +64,15 @@ void CharDriverMidi::PollDeps(
 }
 
 void CharDriverMidi::Enter() {
-    ((u8 *)this)[0xb8] = 1;
+    bool *field_b8 = (bool *)((char *)this + 0xb8);
+    *field_b8 = true;
     CharDriver::Enter();
-    Hmx::Object *msgParser = Dir()->FindObject(mParser.Str(), true, true);
+    Hmx::Object *msgParser =
+        Dir()->FindObject(mParser.Str(), true, true);
     if (msgParser)
         msgParser->AddSink(this);
-    Hmx::Object *msgFlagParser = Dir()->FindObject(mFlagParser.Str(), true, true);
+    Hmx::Object *msgFlagParser =
+        Dir()->FindObject(mFlagParser.Str(), true, true);
     if (msgFlagParser)
         msgFlagParser->AddSink(this);
 }

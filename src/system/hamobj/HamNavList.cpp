@@ -30,8 +30,6 @@
 #include "utl/Std.h"
 #include "utl/Symbol.h"
 
-bool HamNavList::sForceDisengage;
-
 NavSelectMsg::NavSelectMsg(Symbol sym, int index, HamNavList *list, bool selecting)
     : Message(Type(), sym, index, (Hmx::Object *)list, selecting) {}
 

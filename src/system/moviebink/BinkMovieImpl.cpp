@@ -1,15 +1,5 @@
 #include "BinkMovieImpl.h"
 #include <cstring>
-#include <stl/_vector.h>
-#include <stl/_algobase.h>
-#include <algorithm>
-
-// Explicit template instantiation for vector<BINK*, StlNodeAlloc<BINK*>>
-namespace stlpmtx_std {
-
-template class vector<BINK*, StlNodeAlloc<BINK*>>;
-
-} // namespace stlpmtx_std
 
 MovieInternalBuffers::MovieInternalBuffers() {
     // Zero out padding region (0x44-0xBC)

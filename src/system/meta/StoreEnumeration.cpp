@@ -1,10 +1,7 @@
 #include "meta/StoreEnumeration.h"
 #include "os/Debug.h"
-#include "xdk/win_types.h"
-#include "xdk/xapilibi/handleapi.h"
-#include "xdk/xapilibi/xbase.h"
-#include "xdk/xapilibi/xbox.h"
-#include "xdk/xapilibi/stringapiset.h"
+#include "xdk/XAPILIB.h"
+#include <cstring>
 
 XboxEnumeration::XboxEnumeration(int i, std::vector<unsigned long long> *mOfferIDCount)
     : unk18(i), unk1c(false) {}

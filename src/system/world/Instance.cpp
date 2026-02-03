@@ -138,6 +138,7 @@ void WorldInstance::LoadPersistentObjects(BinStreamRev &bs) {
             bs >> objClassName;
             char objName[0x80];
             bs.stream.ReadString(objName, 0x80);
+
             if (!Hmx::Object::RegisteredFactory(objClassName)) {
                 MILO_NOTIFY("%s: Can't make %s", mStoredFile.c_str(), objClassName);
                 DeleteObjects();

@@ -566,19 +566,9 @@ protected:
     return __first;
   }
   iterator _M_erase(iterator __first, iterator __last, const __false_type& /*_Movable*/) {
-    pointer __result = __first;
-    ptrdiff_t __element_count = this->_M_finish - __last;
-    if (__element_count > 0) {
-      ptrdiff_t __loop_count = __element_count;
-      pointer __src_ptr = __last;
-      do {
-        memcpy(__result, __src_ptr, 0x44);
-        --__loop_count;
-        __result += 1;
-        __src_ptr += 1;
-      } while (__loop_count != 0);
-    }
-    this->_M_finish = __result;
+    pointer __i = __copy_ptrs(__last, this->_M_finish, __first, _TrivialAss());
+    _STLP_STD::_Destroy_Range(__i, this->_M_finish);
+    this->_M_finish = __i;
     return __first;
   }
 

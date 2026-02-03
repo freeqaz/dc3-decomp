@@ -23,11 +23,11 @@ void HeldButtonPanel::Enter() {
     DataArray *heldButtonsArr = TypeDef()->FindArray(held_buttons, false);
     if (heldButtonsArr) {
         for (int i = 1; i < heldButtonsArr->Size(); i++) {
-            DataArray *elem = heldButtonsArr->Array(i);
-            MILO_ASSERT(elem, 0x27);
-            float holdTime = elem->Float(1);
-            if (holdTime > 0) {
-                ActionRec rec((JoypadAction)elem->Int(0), holdTime, TheUserMgr);
+            DataArray *el = heldButtonsArr->Array(i);
+            MILO_ASSERT(el, 0x27);
+            float duration = el->Float(1);
+            if (duration > 0) {
+                ActionRec rec((JoypadAction)el->Int(0), duration, TheUserMgr);
                 recs.push_back(rec);
             }
         }
@@ -61,14 +61,13 @@ DataNode HeldButtonPanel::OnMsg(const ProcessedButtonDownMsg &msg) {
         heldMsg[3] = msg.GetPadNum();
         Handle(heldMsg, false);
     } else {
-        // Button released or below hold threshold; forward as regular button down
-        static ButtonDownMsg msgButtonDown(0, kPad_L2, kAction_None, 0);
-        msgButtonDown[0] = msg.GetUser();
-        msgButtonDown[1] = msg.GetButton();
-        msgButtonDown[2] = msg.GetAction();
-        msgButtonDown[3] = msg.GetPadNum();
+        static ButtonDownMsg downMsg(0, kPad_L2, kAction_None, 0);
+        downMsg[0] = msg.GetUser();
+        downMsg[1] = msg.GetButton();
+        downMsg[2] = msg.GetAction();
+        downMsg[3] = msg.GetPadNum();
         mHandling = true;
-        Handle(msgButtonDown, false);
+        Handle(downMsg, false);
         mHandling = false;
     }
     return 1;

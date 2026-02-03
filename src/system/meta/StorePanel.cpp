@@ -405,9 +405,11 @@ DataNode StorePanel::OnMsg(SigninChangedMsg const &msg) {
 
 DataNode StorePanel::OnMsg(ProfileSwappedMsg const &) { return 0; }
 
-DataNode StorePanel::OnMsg(SingleItemEnumCompleteMsg const &) {
-    static Message doneMsg("store_enum_done");
-    static Message enumMsg("store_enum_msg");
+DataNode StorePanel::OnMsg(MultipleItemsEnumCompleteMsg const &) {
+    // Static Message objects - generates atexit destructors in compiled code.
+    // These are required for exact match even though not actively used.
+    static Message doneMsg("items_enum_done");
+    static Message enumMsg("items_enum_complete");
     return DataNode(0);
 }
 

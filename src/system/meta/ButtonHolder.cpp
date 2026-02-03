@@ -107,9 +107,10 @@ DataNode ButtonHolder::OnSetHoldActions(DataArray *da) {
     // Build action records from data array, filtering by hold time threshold
     for (int i = 0; i < arr->Size(); i++) {
         DataArray *innerArr = arr->Array(i);
-        float holdTime = innerArr->Float(1);
-        if (holdTime > 0) {
-            ActionRec rec((JoypadAction)innerArr->Int(0), holdTime, mUserMgr);
+        float innerFloat = innerArr->Float(1);
+        // Only add actions with positive hold time
+        if (innerFloat > 0) {
+            ActionRec rec((JoypadAction)innerArr->Int(0), innerFloat, mUserMgr);
             recs.push_back(rec);
         }
     }
