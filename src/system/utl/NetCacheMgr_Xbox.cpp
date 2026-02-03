@@ -17,6 +17,7 @@ void NetCacheMgrXbox::Poll() {
                 mDoneLoading = true;
             }
             if (!unk30 && mConnection.GetState() == 4) {
+                // Convert ethernet cable connected bool to FailType (3 or 4)
                 u32 r3 = (u32)ThePlatformMgr.IsEthernetCableConnected();
                 u32 r11 = -(s32)r3;
                 SetFail((NetCacheMgrFailType)(3 + (r11 >> 31)));
@@ -38,6 +39,10 @@ void NetCacheMgrXbox::UnloadInit() {
     if (!IsServerLocal()) {
         mConnection.Disconnect();
     }
+}
+
+bool NetCacheMgrXbox::IsDoneUnloading() const {
+    return (mConnection.GetUnk8() == 0);
 }
 
 unsigned int NetCacheMgrXbox::GetIP() {

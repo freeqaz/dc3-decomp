@@ -192,12 +192,13 @@ class DecompOrchestrator:
         # Active sessions: session_id -> asyncio.Task
         self.active_sessions: dict[str, asyncio.Task] = {}
 
-    async def _check_quota(self, model: str = "haiku") -> None:
+    async def _check_quota(self, model: str = "haiku", logger=None) -> None:
         """Verify we have API quota remaining before launching agents.
 
         Runs a minimal Claude CLI probe and checks for rate limit messages.
         Raises RuntimeError if quota is exhausted.
         """
+        log = logger or self.logger
         cli_model = get_model_id(model)
 
         agent_home = Path(os.environ.get("AGENT_HOME", "/home/free/code/milohax/dc3-decomp/agent-home"))
@@ -222,7 +223,7 @@ class DecompOrchestrator:
             "Reply with exactly: ok",
         ]
 
-        self.logger.info("Running quota preflight check...")
+        log.info("Running quota preflight check...")
         process = await asyncio.create_subprocess_exec(
             *cmd,
             cwd=self.main_repo,
@@ -246,12 +247,12 @@ class DecompOrchestrator:
             )
 
         if process.returncode != 0:
-            self.logger.warning(
+            log.warning(
                 f"Quota check exited with code {process.returncode}, "
                 f"but no rate limit detected. Proceeding."
             )
 
-        self.logger.info("Quota check passed.")
+        log.info("Quota check passed.")
 
     def initialize(self, force: bool = False) -> None:
         """Initialize worktree pool. Call before running agents."""
@@ -460,7 +461,7 @@ Focus on readability and maintainability while preserving exact behavior and mat
         # 0. Generate session ID early so all log messages carry it
         if session_id is None:
             session_id = f"{session_prefix}-{func['id']}-{datetime.now().strftime('%H%M%S')}"
-        log = TaggedLogger(self.logger, {"tag": func['id']})
+        log = TaggedLogger(self.logger, {"tag": session_id})
 
         # 0b. Reject merged symbols (ICF artifacts, not real decomp targets)
         if func.get("symbol", "").startswith("merged_"):
@@ -474,7 +475,7 @@ Focus on readability and maintainability while preserving exact behavior and mat
             }
 
         # 1. Preflight quota check
-        await self._check_quota(model or "haiku")
+        await self._check_quota(model or "haiku", logger=log)
 
         log.info(f"Starting agent session for symbol: {func['symbol']}")
         log.debug(f"Function details: demangled={func.get('demangled')}, unit={func.get('unit')}, current_percent={func.get('current_percent')}%")
@@ -507,7 +508,8 @@ Focus on readability and maintainability while preserving exact behavior and mat
                     symbol=func["symbol"],
                     unit=func.get("unit"),
                     project_dir=str(self.main_repo),
-                    worktree_dir=str(worktree)
+                    worktree_dir=str(worktree),
+                    logger=log,
                 )
                 log.debug(f"Context collected: {len(context)} fields")
                 if context.get('verdict'):

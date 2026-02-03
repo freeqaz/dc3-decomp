@@ -2186,6 +2186,7 @@ def collect_pre_run_context(
     project_dir: str,
     worktree_dir: str,
     enrichment_overrides: Optional[Dict[str, bool]] = None,
+    logger=None,
 ) -> Dict[str, Any]:
     """
     Collect all context that agent would waste turns computing.
@@ -2200,6 +2201,7 @@ def collect_pre_run_context(
         project_dir: Project directory (e.g., /home/free/code/milohax/dc3-decomp)
         worktree_dir: Worktree directory for writing xrefs file
         enrichment_overrides: Optional dict to override A/B assignments (for testing)
+        logger: Optional logger instance (uses module logger if not provided)
 
     Returns:
         Dict with keys:
@@ -2215,11 +2217,12 @@ def collect_pre_run_context(
         - enrichment_flags (dict, A/B experiment assignments)
         - pattern_classification (optional, Experiment 1 output)
     """
-    logger.info(f"Collecting context for {symbol} in {unit}")
+    log = logger or logging.getLogger(__name__)
+    log.info(f"Collecting context for {symbol} in {unit}")
 
     # Short-circuit merged symbols (ICF artifacts, not real decomp targets)
     if symbol.startswith("merged_"):
-        logger.info(f"Skipping merged symbol {symbol} (ICF artifact, not actionable)")
+        log.info(f"Skipping merged symbol {symbol} (ICF artifact, not actionable)")
         return {
             "match_percent": 0.0,
             "verdict": "AT_LIMIT",
@@ -2238,7 +2241,7 @@ def collect_pre_run_context(
     enrichment_flags = get_enrichment_assignments(symbol)
     if enrichment_overrides:
         enrichment_flags.update(enrichment_overrides)
-    logger.info(f"Enrichment assignments: {enrichment_flags}")
+    log.info(f"Enrichment assignments: {enrichment_flags}")
 
     # Compute source file absolute path from unit name - use worktree_dir so agent edits the right file
     # Unit format is "default/system/char/Char" or "system/char/Char"
@@ -2279,12 +2282,12 @@ def collect_pre_run_context(
                     worktree_dir=worktree_dir,
                 )
                 header_contents = header_offload["inline"]
-                logger.info(f"Header loaded: {header_file_absolute} ({header_line_count} lines, truncated={header_offload['was_truncated']})")
+                log.info(f"Header loaded: {header_file_absolute} ({header_line_count} lines, truncated={header_offload['was_truncated']})")
             except Exception as e:
-                logger.warning(f"Failed to read header {header_candidate}: {e}")
+                log.warning(f"Failed to read header {header_candidate}: {e}")
                 header_contents = f"(error reading header: {e})"
         else:
-            logger.debug(f"No header file found at {header_candidate}")
+            log.debug(f"No header file found at {header_candidate}")
 
     # Extract source window around target function
     source_contents = "(not read)"
@@ -2311,9 +2314,9 @@ def collect_pre_run_context(
                 )
                 source_contents = source_offload["inline"]
                 if start_line == 1 and end_line == total:
-                    logger.info(f"Source window: full file ({total} lines, function not found by pattern)")
+                    log.info(f"Source window: full file ({total} lines, function not found by pattern)")
                 else:
-                    logger.info(f"Source window: lines {start_line}-{end_line} of {total}")
+                    log.info(f"Source window: lines {start_line}-{end_line} of {total}")
             else:
                 # Can't parse symbol — fall back to full file with truncation
                 source_offload = truncate_and_offload(
@@ -2324,9 +2327,9 @@ def collect_pre_run_context(
                 source_contents = source_offload["inline"]
                 source_window_start_line = 1
                 source_window_end_line = source_total_lines
-                logger.info(f"Source window: full file ({source_total_lines} lines, could not parse symbol)")
+                log.info(f"Source window: full file ({source_total_lines} lines, could not parse symbol)")
         except Exception as e:
-            logger.warning(f"Failed to read source file {source_file_absolute}: {e}")
+            log.warning(f"Failed to read source file {source_file_absolute}: {e}")
             source_contents = f"(error reading source: {e})"
 
     # Initialize result dict with defaults
@@ -2392,43 +2395,43 @@ def collect_pre_run_context(
 
     # Experiment 2: Function Type Templates (run early, doesn't depend on objdiff)
     if enrichment_flags.get("function_types"):
-        logger.info("Classifying function type (Experiment 2)...")
+        log.info("Classifying function type (Experiment 2)...")
         try:
             func_type = classify_function_type(symbol)
             result["function_type"] = func_type
             result["function_type_guidance"] = format_function_type_guidance(func_type)
             if func_type["type"] != "GENERIC":
-                logger.info(f"Function type: {func_type['type']} - {func_type['description']}")
+                log.info(f"Function type: {func_type['type']} - {func_type['description']}")
             else:
-                logger.debug("Function type: GENERIC (no specific guidance)")
+                log.debug("Function type: GENERIC (no specific guidance)")
         except Exception as e:
-            logger.warning(f"Function type classification failed: {e}")
+            log.warning(f"Function type classification failed: {e}")
     else:
-        logger.debug("Function type templates disabled (control group)")
+        log.debug("Function type templates disabled (control group)")
 
     # Experiment 3: RB2 Class Layouts
     if enrichment_flags.get("rb2_layouts") and class_name:
-        logger.info(f"Looking up RB2 class layout for {class_name} (Experiment 3)...")
+        log.info(f"Looking up RB2 class layout for {class_name} (Experiment 3)...")
         try:
             layout = get_class_layout(class_name)
             result["class_layout"] = layout
             if layout["found"]:
                 result["class_layout_summary"] = format_class_layout(layout)
-                logger.info(f"Found RB2 layout: {len(layout['members'])} members, size 0x{layout['total_size']:X}")
+                log.info(f"Found RB2 layout: {len(layout['members'])} members, size 0x{layout['total_size']:X}")
             else:
                 result["class_layout_summary"] = f"(class {class_name} not found in RB2 DWARF)"
-                logger.debug(f"RB2 layout: {layout.get('error', 'not found')}")
+                log.debug(f"RB2 layout: {layout.get('error', 'not found')}")
         except Exception as e:
-            logger.warning(f"RB2 layout lookup failed: {e}")
+            log.warning(f"RB2 layout lookup failed: {e}")
             result["class_layout_summary"] = f"(error: {e})"
     else:
         if not enrichment_flags.get("rb2_layouts"):
-            logger.debug("RB2 class layouts disabled (control group)")
+            log.debug("RB2 class layouts disabled (control group)")
         elif not class_name:
-            logger.debug("RB2 class layouts: could not parse class name from symbol")
+            log.debug("RB2 class layouts: could not parse class name from symbol")
 
     # 1. Run objdiff with incremental build
-    logger.info("Running objdiff with incremental build...")
+    log.info("Running objdiff with incremental build...")
     if run_objdiff:
         try:
             objdiff_result = run_objdiff(
@@ -2448,19 +2451,19 @@ def collect_pre_run_context(
                     verdict = objdiff_result.verdict.get("classification", "UNKNOWN")
                     result["verdict"] = verdict
 
-                logger.info(
+                log.info(
                     f"objdiff result: {result['match_percent']:.2f}% match, "
                     f"verdict={result['verdict']}"
                 )
             else:
-                logger.warning(f"objdiff error: {objdiff_result.error if objdiff_result else 'No result'}")
+                log.warning(f"objdiff error: {objdiff_result.error if objdiff_result else 'No result'}")
         except Exception as e:
-            logger.warning(f"objdiff failed: {e}")
+            log.warning(f"objdiff failed: {e}")
     else:
-        logger.warning("run_objdiff not available")
+        log.warning("run_objdiff not available")
 
     # 1b. Also run objdiff-cli to save full JSON output to file
-    logger.info("Saving full objdiff output to file...")
+    log.info("Saving full objdiff output to file...")
     try:
         cli_result = run_objdiff_cli(symbol, project_dir, worktree_dir)
         if cli_result["success"]:
@@ -2473,11 +2476,11 @@ def collect_pre_run_context(
                 result["match_percent"] = cli_result["match_percent"]
             if result["verdict"] == "UNKNOWN" and cli_result["verdict"]:
                 result["verdict"] = cli_result["verdict"]
-            logger.info(f"objdiff saved to {cli_result['output_file']} ({cli_result['line_count']} lines)")
+            log.info(f"objdiff saved to {cli_result['output_file']} ({cli_result['line_count']} lines)")
 
             # Experiment 1: Diff Pattern Classification
             if enrichment_flags.get("diff_patterns"):
-                logger.info("Running diff pattern classification (Experiment 1)...")
+                log.info("Running diff pattern classification (Experiment 1)...")
                 try:
                     classification = classify_diff_patterns(
                         cli_result.get("preview", ""),
@@ -2485,80 +2488,80 @@ def collect_pre_run_context(
                     )
                     result["pattern_classification"] = classification
                     result["pattern_classification_summary"] = format_pattern_classification(classification)
-                    logger.info(f"Pattern classification: {classification['fixability']}")
+                    log.info(f"Pattern classification: {classification['fixability']}")
                 except Exception as e:
-                    logger.warning(f"Pattern classification failed: {e}")
+                    log.warning(f"Pattern classification failed: {e}")
                     result["pattern_classification_summary"] = f"(error: {e})"
             else:
-                logger.debug("Diff pattern classification disabled (control group)")
+                log.debug("Diff pattern classification disabled (control group)")
         else:
-            logger.warning(f"objdiff-cli failed: {cli_result['error']}")
+            log.warning(f"objdiff-cli failed: {cli_result['error']}")
     except Exception as e:
-        logger.warning(f"objdiff-cli failed: {e}")
+        log.warning(f"objdiff-cli failed: {e}")
 
     # 2. Get previous attempts
-    logger.info("Retrieving previous attempts...")
+    log.info("Retrieving previous attempts...")
     attempts_str, attempts_count = get_last_attempt(symbol, project_dir)
     result["previous_attempts"] = attempts_str
     result["previous_attempts_count"] = attempts_count
-    logger.info(f"Found {attempts_count} previous attempts")
+    log.info(f"Found {attempts_count} previous attempts")
 
     # Experiment 4: Previous Attempt Diffs
     if enrichment_flags.get("attempt_diffs") and attempts_count > 0:
-        logger.info("Retrieving previous attempt diffs (Experiment 4)...")
+        log.info("Retrieving previous attempt diffs (Experiment 4)...")
         try:
             attempt_diffs = get_previous_attempt_diffs(symbol, project_dir)
             result["attempt_diffs"] = attempt_diffs
             if attempt_diffs["count"] > 0:
                 result["attempt_diffs_summary"] = format_previous_attempt_diffs(attempt_diffs)
-                logger.info(f"Found {attempt_diffs['count']} attempts with diffs")
+                log.info(f"Found {attempt_diffs['count']} attempts with diffs")
             else:
                 result["attempt_diffs_summary"] = "(no attempts with patches found)"
         except Exception as e:
-            logger.warning(f"Failed to get attempt diffs: {e}")
+            log.warning(f"Failed to get attempt diffs: {e}")
             result["attempt_diffs_summary"] = f"(error: {e})"
     else:
         if not enrichment_flags.get("attempt_diffs"):
-            logger.debug("Previous attempt diffs disabled (control group)")
+            log.debug("Previous attempt diffs disabled (control group)")
         elif attempts_count == 0:
-            logger.debug("Previous attempt diffs: no previous attempts")
+            log.debug("Previous attempt diffs: no previous attempts")
 
     # Experiment 5: Matched Siblings
     if enrichment_flags.get("matched_siblings") and class_name:
-        logger.info(f"Looking for matched siblings in class {class_name} (Experiment 5)...")
+        log.info(f"Looking for matched siblings in class {class_name} (Experiment 5)...")
         try:
             siblings = get_matched_siblings(class_name, symbol, project_dir)
             result["matched_siblings"] = siblings
             if siblings["count"] > 0:
                 result["matched_siblings_summary"] = format_matched_siblings(siblings)
-                logger.info(f"Found {siblings['count']} matched siblings")
+                log.info(f"Found {siblings['count']} matched siblings")
             else:
                 result["matched_siblings_summary"] = f"(no 100% matched siblings for {class_name})"
         except Exception as e:
-            logger.warning(f"Failed to get matched siblings: {e}")
+            log.warning(f"Failed to get matched siblings: {e}")
             result["matched_siblings_summary"] = f"(error: {e})"
     else:
         if not enrichment_flags.get("matched_siblings"):
-            logger.debug("Matched siblings disabled (control group)")
+            log.debug("Matched siblings disabled (control group)")
         elif not class_name:
-            logger.debug("Matched siblings: could not determine class name")
+            log.debug("Matched siblings: could not determine class name")
 
     # Experiment 6: Callee Signatures (stub implementation)
     if enrichment_flags.get("callee_signatures"):
-        logger.info("Getting callee signatures (Experiment 6 - stub)...")
+        log.info("Getting callee signatures (Experiment 6 - stub)...")
         try:
             sig_data = get_callee_signatures(symbol)
             result["callee_signatures"] = sig_data
             result["callee_signatures_summary"] = format_callee_signatures(sig_data)
-            logger.debug(f"Callee signatures: {sig_data['summary']}")
+            log.debug(f"Callee signatures: {sig_data['summary']}")
         except Exception as e:
-            logger.warning(f"Failed to get callee signatures: {e}")
+            log.warning(f"Failed to get callee signatures: {e}")
             result["callee_signatures_summary"] = f"(error: {e})"
     else:
-        logger.debug("Callee signatures disabled (control group)")
+        log.debug("Callee signatures disabled (control group)")
 
     # 3. Get RB3 reference implementation
-    logger.info("Looking up RB3 reference...")
+    log.info("Looking up RB3 reference...")
     try:
         rb3_ref = find_rb3_reference(symbol, unit)
         if not rb3_ref.startswith("("):
@@ -2584,22 +2587,22 @@ def collect_pre_run_context(
                     f"(file-only at {match_pct:.1f}% match)\n"
                     f"View with: cat {rb3_offload['file_path_relative']}"
                 )
-                logger.info(f"RB3 reference file-only (match={match_pct:.1f}%): {rb3_offload['file_path_relative']}")
+                log.info(f"RB3 reference file-only (match={match_pct:.1f}%): {rb3_offload['file_path_relative']}")
             else:
                 result["rb3_reference"] = rb3_offload["inline"]
-                logger.info(f"Found RB3 reference: {len(rb3_ref)} chars, file: {rb3_offload['file_path_relative']}")
+                log.info(f"Found RB3 reference: {len(rb3_ref)} chars, file: {rb3_offload['file_path_relative']}")
         else:
             result["rb3_reference"] = rb3_ref
             result["rb3_file_path_relative"] = "(not found)"
-            logger.info(f"RB3 reference: {rb3_ref}")
+            log.info(f"RB3 reference: {rb3_ref}")
     except Exception as e:
-        logger.warning(f"RB3 lookup failed: {e}")
+        log.warning(f"RB3 lookup failed: {e}")
         result["rb3_reference"] = f"(error: {e})"
         result["rb3_file_path_relative"] = "(error)"
 
     # 4. Run m2c decompilation (always writes to file, only inline for low-match functions)
     # Pass objdiff JSON path to enable new pipeline with better relocation handling
-    logger.info("Running m2c decompilation...")
+    log.info("Running m2c decompilation...")
     try:
         m2c_result = run_m2c_decompile(
             symbol=symbol,
@@ -2621,16 +2624,16 @@ def collect_pre_run_context(
                 f"(file-only - function is at {match_pct:.1f}% match, m2c output saved to file)\n"
                 f"View with: cat {m2c_result['file_path_relative']}"
             )
-            logger.info(f"m2c written to file only (match={match_pct:.1f}% >= 90%): {m2c_result['file_path_relative']}")
+            log.info(f"m2c written to file only (match={match_pct:.1f}% >= 90%): {m2c_result['file_path_relative']}")
         else:
             result["m2c_decompilation"] = m2c_result["inline"]
             if m2c_result["success"]:
                 method = m2c_result.get("method", "unknown")
-                logger.info(f"m2c decompilation ({method}): {m2c_result['line_count']} lines, written to {m2c_result['file_path_relative']}")
+                log.info(f"m2c decompilation ({method}): {m2c_result['line_count']} lines, written to {m2c_result['file_path_relative']}")
             else:
-                logger.info(f"m2c decompilation: {m2c_result['inline']}")
+                log.info(f"m2c decompilation: {m2c_result['inline']}")
     except Exception as e:
-        logger.warning(f"m2c decompilation failed: {e}")
+        log.warning(f"m2c decompilation failed: {e}")
         result["m2c_decompilation"] = f"(error: {e})"
         result["m2c_file_path"] = "(not written)"
         result["m2c_file_path_relative"] = "(not written)"
@@ -2638,13 +2641,13 @@ def collect_pre_run_context(
         result["m2c_method"] = "none"
 
     # 5. Collect from Ghidra (optional, fail gracefully)
-    logger.info("Attempting Ghidra decompilation and xrefs...")
+    log.info("Attempting Ghidra decompilation and xrefs...")
     try:
         binary_path = get_binary_path(project_dir)
         if not binary_path:
-            logger.warning("Could not locate binary for Ghidra")
+            log.warning("Could not locate binary for Ghidra")
         elif not DirectGhidraClient:
-            logger.warning("DirectGhidraClient not available")
+            log.warning("DirectGhidraClient not available")
         else:
             # Use sandbox-friendly path for Ghidra projects
             # /tmp/claude/ is in the sandbox allowlist for write operations
@@ -2683,17 +2686,17 @@ def collect_pre_run_context(
                         f"(file-only at {match_pct:.1f}% match)\n"
                         f"View with: cat {ghidra_offload['file_path_relative']}"
                     )
-                    logger.info(f"Ghidra decompilation file-only (match={match_pct:.1f}%): {ghidra_offload['file_path_relative']}")
+                    log.info(f"Ghidra decompilation file-only (match={match_pct:.1f}%): {ghidra_offload['file_path_relative']}")
                 else:
                     result["decompilation"] = ghidra_offload["inline"]
-                    logger.info(f"Ghidra decompilation: {len(decompilation)} chars, file: {ghidra_offload['file_path_relative']}")
+                    log.info(f"Ghidra decompilation: {len(decompilation)} chars, file: {ghidra_offload['file_path_relative']}")
             except DirectGhidraClientError as e:
-                logger.warning(f"Ghidra decompilation failed: {e}")
+                log.warning(f"Ghidra decompilation failed: {e}")
 
             # Get cross-references
             try:
                 callers, callees = client.list_cross_references(symbol)
-                logger.info(f"Found {len(callers)} callers, {len(callees)} callees")
+                log.info(f"Found {len(callers)} callers, {len(callees)} callees")
 
                 # Write xrefs to worktree
                 analysis_dir = Path(worktree_dir) / "function_analysis"
@@ -2719,23 +2722,23 @@ def collect_pre_run_context(
                     lines = f.readlines()[:20]
                 result["xrefs_preview"] = ''.join(lines)
 
-                logger.info(f"Xrefs written to {xrefs_file}")
+                log.info(f"Xrefs written to {xrefs_file}")
 
             except DirectGhidraClientError as e:
-                logger.warning(f"Ghidra xrefs lookup failed: {e}")
+                log.warning(f"Ghidra xrefs lookup failed: {e}")
 
             # Clean up
             try:
                 client.close()
             except Exception as e:
-                logger.warning(f"Error closing Ghidra client: {e}")
+                log.warning(f"Error closing Ghidra client: {e}")
 
     except DirectGhidraClientError as e:
-        logger.warning(f"Ghidra initialization failed (continuing without Ghidra): {e}")
+        log.warning(f"Ghidra initialization failed (continuing without Ghidra): {e}")
     except Exception as e:
-        logger.warning(f"Unexpected Ghidra error (continuing without Ghidra): {e}")
+        log.warning(f"Unexpected Ghidra error (continuing without Ghidra): {e}")
 
-    logger.info(f"Context collection complete. Verdict: {result['verdict']}")
+    log.info(f"Context collection complete. Verdict: {result['verdict']}")
     return result
 
 

@@ -205,10 +205,13 @@ class PatchApplier:
         self,
         main_repo: Path,
         enabled: bool = True,
+        run_id: Optional[str] = None,
     ):
         self.main_repo = Path(main_repo).resolve()
         self.patches_dir = self.main_repo / "generated-patches"
         self.enabled = enabled
+        # run_id groups patches from the same orchestrator invocation
+        self.run_id = run_id or datetime.now().strftime("%Y%m%d_%H%M%S")
 
         # Stats
         self.applied_count = 0
@@ -230,8 +233,7 @@ class PatchApplier:
 
         # Create filename from symbol (sanitized)
         safe_name = symbol.replace("?", "").replace("@", "_")[:50]
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"{safe_name}_{percent:.0f}pct_{timestamp}.patch"
+        filename = f"{self.run_id}_{safe_name}_{percent:.0f}pct.patch"
 
         patch_path = self.patches_dir / filename
         patch_path.write_text(patch)
