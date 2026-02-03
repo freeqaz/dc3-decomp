@@ -187,6 +187,7 @@ def cmd_single(args):
         use_incremental=use_incremental,
         refactor=not args.no_refactor,
         custom_prompt=args.prompt,
+        reviewer_model=args.reviewer_model,
     )
 
     if args.json:
@@ -346,6 +347,7 @@ def cmd_batch(args):
                 periodic_full_interval=args.periodic_full if not args.incremental_only else 0,
                 validate_diffs=args.validate_diffs,
                 refactor=not args.no_refactor,
+                reviewer_model=args.reviewer_model,
             )
         )
     else:
@@ -364,6 +366,10 @@ def cmd_batch(args):
                 validate_diffs=args.validate_diffs,
                 refactor=not args.no_refactor,
                 exclude_at_limit=args.exclude_at_limit,
+                reviewer_model=args.reviewer_model,
+                order_by=args.order,
+                order_asc=args.asc,
+                min_size=args.min_size,
             )
         )
 
@@ -1191,13 +1197,19 @@ def main():
     p_single.add_argument(
         "--no-refactor",
         action="store_true",
-        help="Skip the Haiku refactor-staff cleanup pass after the main agent",
+        help="Skip the refactor-staff cleanup pass after the main agent",
     )
     p_single.add_argument(
         "--prompt", "-p",
         type=str,
         default=None,
         help="Custom instructions/guidance to append to the agent prompt",
+    )
+    p_single.add_argument(
+        "--reviewer-model",
+        choices=available_models,
+        default="sonnet",
+        help="Model for the refactor-staff reviewer pass (default: sonnet)",
     )
 
     # batch
@@ -1244,6 +1256,23 @@ def main():
     p_batch.add_argument("-j", "--max-agents", type=int, default=3, help="Maximum parallel agents (default: 3). Increase for faster batches (uses more RAM)")
     p_batch.add_argument("--min-percent", type=float, default=0, help="Only process functions with match at least this many percent (default: 0)")
     p_batch.add_argument("--max-percent", type=float, default=100, help="Only process functions with match at most this many percent (default: 100)")
+    p_batch.add_argument(
+        "--order",
+        choices=["percent", "size"],
+        default="percent",
+        help="Sort order for function selection: 'percent' (default, by match %%) or 'size' (by function size in bytes)"
+    )
+    p_batch.add_argument(
+        "--asc",
+        action="store_true",
+        help="Sort ascending instead of descending (e.g., smallest functions first with --order size)"
+    )
+    p_batch.add_argument(
+        "--min-size",
+        type=int,
+        default=0,
+        help="Minimum function size in bytes (default: 0, no minimum). Useful to skip tiny stubs"
+    )
     # Model choices generated dynamically from registry (supports all backends)
     p_batch.add_argument("--model", choices=available_models, help="Force all agents to use this model")
     p_batch.add_argument("--limit", type=int, default=0, help="Max functions to process (0=unlimited)")
@@ -1284,12 +1313,18 @@ def main():
     p_batch.add_argument(
         "--no-refactor",
         action="store_true",
-        help="Skip the Haiku refactor-staff cleanup pass after the main agent",
+        help="Skip the refactor-staff cleanup pass after the main agent",
     )
     p_batch.add_argument(
         "--exclude-at-limit",
         action="store_true",
         help="Also exclude functions with AT_LIMIT verdict (by default only 100%% COMPLETE functions are excluded)",
+    )
+    p_batch.add_argument(
+        "--reviewer-model",
+        choices=available_models,
+        default="sonnet",
+        help="Model for the refactor-staff reviewer pass (default: sonnet)",
     )
 
     # query

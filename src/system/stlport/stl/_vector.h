@@ -566,9 +566,18 @@ protected:
     return __first;
   }
   iterator _M_erase(iterator __first, iterator __last, const __false_type& /*_Movable*/) {
-    pointer __i = __copy_ptrs(__last, this->_M_finish, __first, _TrivialAss());
-    _STLP_STD::_Destroy_Range(__i, this->_M_finish);
-    this->_M_finish = __i;
+    int __count = (int)(this->_M_finish - __last);
+    pointer __i = __first;
+    pointer __j = __last;
+    if (__count > 0) {
+      while (__count > 0) {
+        *__i = *__j;
+        __i++;
+        __j++;
+        __count -= 1;
+      }
+      this->_M_finish = __i;
+    }
     return __first;
   }
 

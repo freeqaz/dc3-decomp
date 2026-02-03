@@ -365,6 +365,9 @@ def get_next_function(
     exclude_complete: bool = True,
     exclude_at_limit: bool = False,
     db_path: str | Path = DEFAULT_DB_PATH,
+    order_by: str = "percent",
+    order_asc: bool = False,
+    min_size: int = 0,
 ) -> dict[str, Any] | None:
     """
     Get next function to work on based on criteria.
@@ -377,6 +380,9 @@ def get_next_function(
         exclude_complete: Skip functions with verdict COMPLETE (100%)
         exclude_at_limit: Skip functions with verdict AT_LIMIT
         db_path: Database path
+        order_by: Sort column - "percent" (default) or "size"
+        order_asc: Sort ascending instead of descending
+        min_size: Minimum function size in bytes (0 = no minimum)
 
     Returns:
         Function dict or None if no matches
@@ -397,8 +403,13 @@ def get_next_function(
     if exclude_locked:
         query += " AND locked_by IS NULL"
 
-    # Exclude merged symbols (ICF artifacts, not real decomp targets)
+    # Exclude ICF artifacts and linker stubs (not real decomp targets)
     query += " AND symbol NOT LIKE 'merged_%'"
+    query += " AND symbol NOT LIKE 'fn_%'"
+    query += " AND symbol != 'OnlyReturns'"
+
+    if min_size > 0:
+        query += f" AND size >= {min_size}"
 
     excluded_verdicts = []
     if exclude_complete:
@@ -409,11 +420,20 @@ def get_next_function(
         placeholders = ", ".join(f"'{v}'" for v in excluded_verdicts)
         query += f" AND (verdict IS NULL OR verdict NOT IN ({placeholders}))"
 
-    # Order by: non-null percent first, then by descending percent (near-matches first)
-    query += """
+    # Build ORDER BY clause
+    direction = "ASC" if order_asc else "DESC"
+    if order_by == "size":
+        query += f"""
+        ORDER BY
+            CASE WHEN size IS NULL THEN 1 ELSE 0 END,
+            size {direction}
+        LIMIT 1
+    """
+    else:
+        query += f"""
         ORDER BY
             CASE WHEN current_percent IS NULL THEN 1 ELSE 0 END,
-            current_percent DESC
+            current_percent {direction}
         LIMIT 1
     """
 

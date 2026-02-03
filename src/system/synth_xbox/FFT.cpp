@@ -219,17 +219,13 @@ int fft_matrix_inverse_columnwise(float *data, long size, float *scratch) {
             float sin_2a2 = (float)sin((float)((double)angle2 * two_d));
             sv.f[1] = sin2_2;
             sv.f[3] = sin_2a2;
-            // vmrglw gives {sin_2a1, sin_2a1, sin_2a2, sin_2a2}
             XMVECTOR v_sin2a = __vmrglw(sv.v, sv.v);
-            // vmrghw gives {sin2_1, sin2_1, sin2_2, sin2_2} (same source vector)
             XMVECTOR v_sin2 = __vmrghw(sv.v, sv.v);
 
             // Start overwriting sv for cos vector
             sv.f[0] = one_f;
 
-            // vor128 v126, v124, v124 (copy sign to v126)
             XMVECTOR v_im_init = v_sign;
-            // vmaddcfp128 v126, v0, v125 (v126 = v0 * v126 + zero)
             v_im_init = __vmaddfp(v_sin2a, v_im_init, v_zero);
 
             sv.f[2] = (float)cos(angle1);
@@ -250,7 +246,6 @@ int fft_matrix_inverse_columnwise(float *data, long size, float *scratch) {
             XMVECTOR w_re1 = v_cos_splat;
             XMVECTOR w_im1 = v_zero;
             XMVECTOR w_re2 = v_cos_merged;
-            // vmaddcfp128 v11, v124, v125 => v11 = v124 * v11 + v125
             XMVECTOR w_im2 = __vmaddfp(v_sign, v_sin_merged, v_zero);
 
             float *dst1 = temp;
@@ -260,6 +255,9 @@ int fft_matrix_inverse_columnwise(float *data, long size, float *scratch) {
 
             if (half_cols > 0) {
                 int data_stride = half_rows * 0x10;
+                XMVECTOR pm_swap_v = *(XMVECTOR *)&perm_swap;
+                XMVECTOR pm_lo_v = *(XMVECTOR *)&perm_lo;
+                XMVECTOR pm_hi_v = *(XMVECTOR *)&perm_hi;
 
                 do {
                     // Load first data element (row 0)
@@ -271,8 +269,7 @@ int fft_matrix_inverse_columnwise(float *data, long size, float *scratch) {
                     XMVECTOR sp_sin2_2 = v_sin2;
                     XMVECTOR sp_sin2_3 = v_sin2;
 
-                    // Load swap mask, begin twiddle recurrence
-                    XMVECTOR pm_swap_v = *(XMVECTOR *)&perm_swap;
+                    // Begin twiddle recurrence
                     XMVECTOR new_re1 = __vnmsubfp(w_re1, sp_sin2, w_re1);
                     XMVECTOR t1 = __vmaddfp(w_re1, d0, v_zero);
                     XMVECTOR d_swap0 = __vperm(d0, d0, pm_swap_v);
@@ -301,9 +298,8 @@ int fft_matrix_inverse_columnwise(float *data, long size, float *scratch) {
                     k += 1;
 
                     // Interleave results and store to temp
-                    XMVECTOR pm_lo_v = *(XMVECTOR *)&perm_lo;
                     XMVECTOR out_lo = __vperm(r1, r2, pm_lo_v);
-                    XMVECTOR out_hi = __vperm(r1, r2, *(XMVECTOR *)&perm_hi);
+                    XMVECTOR out_hi = __vperm(r1, r2, pm_hi_v);
 
                     __stvx(out_lo, dst1, 0);
                     dst1 += 4;

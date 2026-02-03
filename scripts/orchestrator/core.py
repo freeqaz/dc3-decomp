@@ -454,6 +454,7 @@ Focus on readability and maintainability while preserving exact behavior and mat
         session_prefix: str = "single",
         dry_run_handler: Callable[[dict, str, dict], dict] | None = None,
         refactor: bool = False,
+        reviewer_model: str = "sonnet",
     ) -> dict[str, Any]:
         """Execute a session flow shared by run_single and run_rb3_merge_single.
 
@@ -469,7 +470,8 @@ Focus on readability and maintainability while preserving exact behavior and mat
             notes_prefix: Prefix for notes field (e.g., "RB3-merge: ")
             session_prefix: Prefix for session ID generation (e.g., "single", "rb3merge")
             dry_run_handler: Optional callable for custom dry-run output. If None, uses default.
-            refactor: Reserved for future use (Phase 4)
+            refactor: Run refactor-staff cleanup pass after the main agent
+            reviewer_model: Model to use for the refactor-staff pass (default: sonnet)
 
         Returns:
             Result dict with status, percent, patch, etc.
@@ -631,13 +633,13 @@ Focus on readability and maintainability while preserving exact behavior and mat
             # 9b. Refactor pass (if enabled and first pass made changes)
             if refactor and self._worktree_has_changes(worktree):
                 try:
-                    log.info(f"Running refactor-staff cleanup pass (Haiku)...")
+                    log.info(f"Running refactor-staff cleanup pass ({reviewer_model})...")
                     refactor_prompt = self._build_refactor_prompt(func, worktree, agent_result.percent or start_percent)
                     refactor_config = AgentRunConfig(
                         session_id=f"{session_id}-refactor",
                         worktree=worktree,
                         prompt=refactor_prompt,
-                        model="haiku",
+                        model=reviewer_model,
                         verbose=verbose,
                         max_turns=30,
                         allowed_tools=list(REFACTOR_TOOLS),
@@ -810,6 +812,7 @@ Focus on readability and maintainability while preserving exact behavior and mat
         use_incremental: bool = True,
         refactor: bool = True,
         custom_prompt: Optional[str] = None,
+        reviewer_model: str = "sonnet",
     ) -> dict[str, Any]:
         """
         Run single agent on one function (synchronous wrapper).
@@ -820,13 +823,14 @@ Focus on readability and maintainability while preserving exact behavior and mat
             verbose: Print agent output
             dry_run: Don't actually run agent, just show what would happen
             use_incremental: Use incremental build if True, full build if False
-            refactor: Run a Haiku cleanup pass after the first agent (default: True)
+            refactor: Run a cleanup pass after the first agent (default: True)
             custom_prompt: Custom instructions to append to agent prompt
+            reviewer_model: Model to use for the refactor-staff pass (default: sonnet)
 
         Returns:
             Result dict with status, percent, patch, etc.
         """
-        return asyncio.run(self.run_single(symbol, model, verbose, dry_run, use_incremental, refactor=refactor, custom_prompt=custom_prompt))
+        return asyncio.run(self.run_single(symbol, model, verbose, dry_run, use_incremental, refactor=refactor, custom_prompt=custom_prompt, reviewer_model=reviewer_model))
 
     async def run_single(
         self,
@@ -839,6 +843,7 @@ Focus on readability and maintainability while preserving exact behavior and mat
         pre_locked: bool = False,
         refactor: bool = False,
         custom_prompt: Optional[str] = None,
+        reviewer_model: str = "sonnet",
     ) -> dict[str, Any]:
         """
         Run single agent on one function.
@@ -851,8 +856,9 @@ Focus on readability and maintainability while preserving exact behavior and mat
             use_incremental: Use incremental build if True, full build if False
             session_id: Optional session ID (generated if not provided)
             pre_locked: If True, skip locking (already locked by caller)
-            refactor: Reserved for future use (Phase 4)
+            refactor: Run refactor-staff cleanup pass after the main agent
             custom_prompt: Custom instructions to append to agent prompt
+            reviewer_model: Model to use for the refactor-staff pass (default: sonnet)
 
         Returns:
             Result dict with status, percent, patch, etc.
@@ -967,6 +973,7 @@ Focus on readability and maintainability while preserving exact behavior and mat
             session_prefix="single",
             dry_run_handler=run_single_dry_run_handler if dry_run else None,
             refactor=refactor,
+            reviewer_model=reviewer_model,
         )
 
         # Print verbose footer
@@ -1010,6 +1017,10 @@ Focus on readability and maintainability while preserving exact behavior and mat
         validate_diffs: bool = False,
         refactor: bool = True,
         exclude_at_limit: bool = False,
+        reviewer_model: str = "sonnet",
+        order_by: str = "percent",
+        order_asc: bool = False,
+        min_size: int = 0,
     ) -> dict[str, Any]:
         """
         Run batch of functions matching pattern with N parallel agents.
@@ -1030,7 +1041,8 @@ Focus on readability and maintainability while preserving exact behavior and mat
             use_incremental: Use incremental builds by default (True) or full (False)
             periodic_full_interval: Run full build every Nth batch (0 = disabled)
             validate_diffs: Validate diffs between incremental and full builds
-            refactor: Run Haiku refactor-staff cleanup pass after main agent (default: True)
+            refactor: Run refactor-staff cleanup pass after main agent (default: True)
+            reviewer_model: Model to use for the refactor-staff pass (default: sonnet)
 
         Returns:
             Summary dict with results
@@ -1109,6 +1121,9 @@ Focus on readability and maintainability while preserving exact behavior and mat
                 max_percent=max_percent,
                 exclude_at_limit=exclude_at_limit,
                 db_path=self.db_path,
+                order_by=order_by,
+                order_asc=order_asc,
+                min_size=min_size,
             )
 
             if not func:
@@ -1164,7 +1179,7 @@ Focus on readability and maintainability while preserving exact behavior and mat
             # Spawn agent asynchronously
             task = asyncio.create_task(
                 self._run_batch_agent(
-                    session_id, func, model, verbose, use_incremental=current_use_incremental, refactor=refactor
+                    session_id, func, model, verbose, use_incremental=current_use_incremental, refactor=refactor, reviewer_model=reviewer_model
                 )
             )
             self.active_sessions[session_id] = task
@@ -1241,6 +1256,7 @@ Focus on readability and maintainability while preserving exact behavior and mat
         periodic_full_interval: int = 10,
         validate_diffs: bool = False,
         refactor: bool = True,
+        reviewer_model: str = "sonnet",
     ) -> dict[str, Any]:
         """
         Run batch on a pre-selected list of target functions.
@@ -1256,7 +1272,8 @@ Focus on readability and maintainability while preserving exact behavior and mat
             use_incremental: Use incremental builds by default
             periodic_full_interval: Run full build every Nth batch (0 = disabled)
             validate_diffs: Validate diffs between incremental and full builds
-            refactor: Run Haiku refactor-staff cleanup pass after main agent (default: True)
+            refactor: Run refactor-staff cleanup pass after main agent (default: True)
+            reviewer_model: Model to use for the refactor-staff pass (default: sonnet)
 
         Returns:
             Summary dict with results
@@ -1367,7 +1384,7 @@ Focus on readability and maintainability while preserving exact behavior and mat
             # Spawn agent asynchronously
             task = asyncio.create_task(
                 self._run_batch_agent(
-                    session_id, func, model, verbose, use_incremental=current_use_incremental, refactor=refactor
+                    session_id, func, model, verbose, use_incremental=current_use_incremental, refactor=refactor, reviewer_model=reviewer_model
                 )
             )
             self.active_sessions[session_id] = task
@@ -1441,6 +1458,7 @@ Focus on readability and maintainability while preserving exact behavior and mat
         verbose: int,
         use_incremental: bool = True,
         refactor: bool = True,
+        reviewer_model: str = "sonnet",
     ) -> dict[str, Any]:
         """Run single agent as part of batch (handles its own errors).
 
@@ -1450,7 +1468,8 @@ Focus on readability and maintainability while preserving exact behavior and mat
             model: Force specific model
             verbose: Print output
             use_incremental: Use incremental build
-            refactor: Run Haiku refactor-staff cleanup pass after main agent
+            refactor: Run refactor-staff cleanup pass after main agent
+            reviewer_model: Model to use for the refactor-staff pass (default: sonnet)
         """
         try:
             return await self.run_single(
@@ -1461,6 +1480,7 @@ Focus on readability and maintainability while preserving exact behavior and mat
                 session_id=session_id,
                 pre_locked=True,  # Batch already locked the function
                 refactor=refactor,
+                reviewer_model=reviewer_model,
             )
         except Exception as e:
             self.logger.error(f"[{session_id}] {type(e).__name__}: {e}", exc_info=True)

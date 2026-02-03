@@ -1,289 +1,359 @@
-#include <cstdlib>
-#include <vector>
+#include "Synapse_dsp.h"
+#include "Biquad.h"
+#include "IPP_basicmath_xbox.h"
 #include <cstring>
+#include <cmath>
 
-// Forward declarations for external functions used by ProcessInPlace
-extern "C" {
-    void Add_InPlace_IPP(unsigned int, int, float *);
-    void Detect_PeakDetector(void *, unsigned int);
-    void Detect_PitchDetector(void *, unsigned int);
-    void ExtractGranules(void *);
-    void Flush_GranularSynth(void *);
-    float GetCorrection_PitchCorrectedVoice(void *);
-    void MulConstant_InPlace_IPP(unsigned int, float *, float);
-    void Synthesize_GranularSynth(void *, unsigned int, int);
-}
+namespace DSP {
 
-// Forward declarations for destructors
-namespace stlpmtx_std {
-    template<typename T, typename Alloc>
-    class vector;
-}
+void LowpassCoefficients(float *const, float, float, float);
+void HighpassCoefficients(float *const, float, float, float);
 
 namespace Synapse {
-    namespace DSP {
-        class GranularSynth;
-        class PitchDetector;
-        class PitchCorrectedVoice;
-        class Synapse;
-    }
+
+// Minimal class definitions for destructor visibility
+class PitchDetector {
+public:
+    PitchDetector(const stlpmtx_std::vector<float, stlpmtx_std::StlNodeAlloc<float> > &, unsigned int, unsigned int);
+    ~PitchDetector();
+    void Detect(unsigned int);
+    float mField_0x00;
+    float mField_0x04;
+    float mField_0x08;
+    float mDetectedPitch;    // 0x0C
+    float mPitchConfidence;  // 0x10
+    float mPitchClarity;     // 0x14
+    unsigned char _pad[0x128 - 0x18]; // pad to match sizeof = 0x128
+};
+
+class PeakDetector {
+public:
+    PeakDetector(const stlpmtx_std::vector<float, stlpmtx_std::StlNodeAlloc<float> > &, unsigned int, unsigned int);
+    ~PeakDetector();
+    void Detect(unsigned int);
+    float mField_0x00;
+    float mDetectedPitch;    // 0x04
+    // ... more fields
+    unsigned char _pad[0x30 - 0x08];
+    float mPeak;             // 0x30
+};
+
+struct GranularVoice {
+    float mField_0x00;
+    float mGain;             // 0x04
+    float mCorrection;       // 0x08
+    bool mEnabled;           // 0x0C
+    unsigned char _pad1[3];
+    double mTimestamp;        // 0x10
+};
+
+class GranularSynth {
+public:
+    GranularSynth(const stlpmtx_std::vector<float, stlpmtx_std::StlNodeAlloc<float> > &, unsigned int, unsigned int, unsigned int);
+    ~GranularSynth();
+    void SetVoiceEnabled(unsigned int idx, bool enabled);
+    void Flush();
+    void ExtractGranules();
+    void Synthesize(unsigned int, float *const *);
+
+    float mField_0x00;
+    float mDetectedPitch;    // 0x04
+    float mPeak;             // 0x08
+    float mPitchConfidence;  // 0x0C
+    float mField_0x10;
+    unsigned int mDetectionInterval; // 0x14
+    unsigned int mSampleCount;       // 0x18
+    unsigned char _pad[0x2C - 0x1C];
+    GranularVoice *mVoices;          // 0x2C
+    unsigned char _pad2[0x44 - 0x30]; // pad to match sizeof = 0x44
+};
+
+static const float kBiquadParams[] = { 7902.13f, 0.7071068f, 340.0f };
+
+namespace {
+float Time2IirA(float time, float sampleRate) {
+    if (time <= 0.0f) return 1.0f;
+    return 1.0f - expf(-1.0f / (time * sampleRate));
+}
 }
 
-// Allocator template declarations
-namespace stlpmtx_std {
-    template<typename T>
-    class StlNodeAlloc;
+void Synapse::SetVoiceTargetNote(unsigned int idx, float val) {
+    *(float *)((char *)&mVoices[idx] + 4) = val;
 }
 
-// Forward declarations of external functions
-extern "C" {
-    void merged_OperatorDelete(void *ptr);
-    void OnlyReturns(void *ptr);
+void Synapse::SetVoiceGain(unsigned int idx, float val) {
+    mGranularSynth->mVoices[idx].mGain = val;
 }
 
-// Destructor for vector types
-namespace stlpmtx_std {
-    template<typename T, typename Alloc>
-    void vector_destructor_M(void *ptr);
-
-    template<typename T, typename Alloc>
-    void vector_destructor_PitchCorrectedVoice(void *ptr);
-
-    template<typename T, typename Alloc>
-    void vector_vector_destructor(void *ptr);
+void Synapse::SetVoiceEnabled(unsigned int idx, bool enabled) {
+    mGranularSynth->SetVoiceEnabled(idx, enabled);
 }
 
-// Allocator deallocate functions
-extern "C" {
-    void allocate_deallocate_M(void *allocator, void *ptr, int count);
-    void allocate_deallocate_PAM(void *allocator, void *ptr, int count);
+void Synapse::SetVoiceTransposition(unsigned int idx, float val) {
+    mVoices[idx].SetTransposition(val);
 }
 
-// GranularSynth destructor
-namespace Synapse {
-    namespace DSP {
-        extern void GranularSynth_destructor(void *ptr);
-        extern void PitchDetector_destructor(void *ptr);
-        extern void vector_PitchCorrectedVoice_destructor(void *ptr);
-        extern void vector_vector_M_destructor(void *ptr);
-    }
+void Synapse::SetVoiceAmount(unsigned int idx, float val) {
+    mVoices[idx].SetAmount(val);
 }
 
-namespace Synapse {
-    namespace DSP {
-        class Synapse {
-        public:
-            // Member variables at various offsets (inferred from m2c)
-            void *unknown[3];  // 0x0
-            void *vector1_ptr;  // 0xC
-            void *vector1_end;  // 0x10
-            // ... more members
-            void *vector2_ptr;  // 0x40 - OnlyReturns
-            // ... more members
-            void *vector3_ptr;  // 0x50 - deallocate
-            void *vector3_end;  // 0x54
-            void *pitchCorrected;  // 0x5C
-            void *granularSynth;  // 0x68
-            void *field_0x70;  // 0x70 - merged_OperatorDelete
-            void *field_0x74;  // 0x74 - merged_OperatorDelete
-            void *pitchDetector;  // 0x28
-
-            // Methods
-            void ProcessInPlace(unsigned int arg1, float *arg2);
-
-            // Destructor
-            ~Synapse();
-        };
-    }
+void Synapse::SetVoiceProximityEffect(unsigned int idx, float val) {
+    mVoices[idx].SetProximityEffect(val);
 }
 
-// Implementation
-namespace Synapse {
-    namespace DSP {
-        void Synapse::ProcessInPlace(unsigned int arg1, float *arg2) {
-            float temp_f30 = 0.0f;
-            float temp_f31 = 256.0f;
+void Synapse::SetVoiceProximityFocus(unsigned int idx, float val) {
+    mVoices[idx].SetProximityFocus(val);
+}
 
-            if (arg1 != 0) {
-                float *var_r24 = arg2;
-                unsigned int var_r22 = arg1;
-
-                do {
-                    // Store input sample
-                    float *buffer = (float *)*(unsigned int *)((char *)this + 0x0);
-                    unsigned int *idx = (unsigned int *)((char *)this + 0x18);
-                    buffer[*idx] = *var_r24;
-
-                    unsigned int temp_r10 = *(unsigned int *)((char *)this + 0x18);
-
-                    if (!(temp_r10 & 3)) {
-                        float *temp_r11 = (float *)*(unsigned int *)((char *)this + 0x0);
-
-                        if (temp_r10 == 0) {
-                            int temp_r9 = (int)((unsigned int *)((char *)this + 0x4) - (unsigned int *)temp_r11) >> 2;
-                            float var_f0 = temp_r11[temp_r9 - 1] + temp_r11[temp_r9 - 3] + temp_r11[temp_r9 - 2] + temp_r11[0];
-                            *(float *)((char *)this + 0xC) = var_f0;
-                        } else {
-                            float *temp_r9_2 = &temp_r11[temp_r10];
-                            float var_f0 = temp_r11[temp_r10 - 3] + temp_r11[temp_r10 - 2] + temp_r9_2[-1] + temp_r9_2[0];
-                            *(float *)((char *)this + 0xC) = var_f0;
-                        }
-                    }
-
-                    // PeakDetector
-                    Detect_PeakDetector((void *)*(unsigned int *)((char *)this + 0x40), *(unsigned int *)((char *)this + 0x18));
-                    *(float *)((char *)(*(void **)((char *)this + 0x68)) + 0x8) = *(float *)((char *)(*(void **)((char *)this + 0x40)) + 0x30);
-
-                    unsigned int temp_r11_2 = *(unsigned int *)((char *)this + 0x18);
-
-                    if (!((*(int *)((char *)this + 0x24) - 1) & temp_r11_2)) {
-                        // PitchDetector
-                        Detect_PitchDetector((void *)*(unsigned int *)((char *)this + 0x28), temp_r11_2 >> 2);
-                        void *temp_r11_3 = (void *)*(unsigned int *)((char *)this + 0x28);
-                        float temp_f0 = *(float *)((char *)temp_r11_3 + 0x10);
-                        *(float *)((char *)this + 0x30) = temp_f0;
-                        *(float *)((char *)this + 0x34) = *(float *)((char *)temp_r11_3 + 0x14);
-
-                        if (temp_f0 > *(float *)((char *)this + 0x38)) {
-                            float temp_f0_2 = *(float *)((char *)temp_r11_3 + 0xC) * temp_f31;
-                            *(float *)((char *)this + 0x2C) = temp_f0_2;
-
-                            if (temp_f0_2 == temp_f30) {
-                                *(float *)((char *)this + 0x2C) = (float)(*(int *)((char *)this + 0x1C));
-                            }
-
-                            *(float *)((char *)(*(void **)((char *)this + 0x40)) + 0x4) = *(float *)((char *)this + 0x2C);
-                            *(float *)((char *)(*(void **)((char *)this + 0x68)) + 0x4) = *(float *)((char *)this + 0x2C);
-                            *(float *)((char *)(*(void **)((char *)this + 0x68)) + 0xC) = *(float *)((char *)this + 0x30);
-                        }
-
-                        // Process voices
-                        unsigned int var_r27 = 0;
-                        int voice_count = ((int)(*(int *)((char *)this + 0x60) - *(int *)((char *)this + 0x5C)) / 56);
-
-                        if (voice_count != 0) {
-                            int var_r28 = 0;
-                            int var_r29 = 0;
-
-                            do {
-                                void *voice = (char *)*(int *)((char *)this + 0x5C) + var_r29;
-                                *(float *)voice = *(float *)((char *)this + 0x6C) / *(float *)((char *)this + 0x2C);
-                                *(float *)((char *)voice + 0x28) = *(float *)((char *)this + 0x30);
-                                *(float *)((char *)voice + 0x2C) = *(float *)((char *)this + 0x34);
-
-                                void *temp_r21 = (void *)*(unsigned int *)((char *)this + 0x68);
-                                float temp_f1 = GetCorrection_PitchCorrectedVoice(voice);
-
-                                var_r27++;
-                                void *temp_r11_4 = (char *)(*(int *)((char *)temp_r21 + 0x2C)) + var_r28;
-                                var_r29 += 0x38;
-                                var_r28 += 0x18;
-
-                                *(float *)((char *)temp_r11_4 + 0x8) = temp_f1;
-                            } while (var_r27 < (unsigned int)voice_count);
-                        }
-                    }
-
-                    if (!((*(int *)((char *)this + 0x24) - 1) & *(unsigned int *)((char *)this + 0x18))) {
-                        Flush_GranularSynth((void *)*(unsigned int *)((char *)this + 0x68));
-                    }
-
-                    ExtractGranules((void *)*(unsigned int *)((char *)this + 0x68));
-
-                    unsigned int temp_r11_5 = *(unsigned int *)((char *)this + 0x18) + 1;
-                    *(unsigned int *)((char *)this + 0x18) = temp_r11_5;
-
-                    if (temp_r11_5 >= (unsigned int)((int)(*(int *)((char *)this + 0x4) - *(int *)((char *)this + 0x0)) >> 2)) {
-                        *(unsigned int *)((char *)this + 0x18) = 0;
-                    }
-
-                    var_r22--;
-                    var_r24++;
-                } while (var_r22 != 0);
-            }
-
-            Synthesize_GranularSynth((void *)*(unsigned int *)((char *)this + 0x68), arg1, *(int *)((char *)this + 0x50));
-
-            if (arg1 != 0) {
-                memset(arg2, 0, arg1 * 4);
-            }
-
-            void *temp_r30 = (char *)this + 0x5C;
-            unsigned int var_r29_2 = 0;
-            int voice_count2 = ((int)(*(int *)((char *)this + 0x60) - *(int *)((char *)this + 0x5C)) / 56);
-
-            if (voice_count2 != 0) {
-                int var_r28_2 = 0;
-
-                do {
-                    Add_InPlace_IPP(arg1, *(int *)((char *)this + 0x50 + var_r28_2), arg2);
-                    var_r29_2++;
-                    var_r28_2 += 4;
-                } while (var_r29_2 < (unsigned int)voice_count2);
-            }
-
-            *(float *)((char *)this + 0x3C) = 1.0f;
-            int final_count = ((int)(*(int *)((char *)this + 0x60) - *(int *)((char *)this + 0x5C)) / 56);
-            MulConstant_InPlace_IPP(arg1, arg2, 1.0f / (float)final_count);
-        }
-
-        Synapse::~Synapse() {
-            // Delete field at 0x74
-            merged_OperatorDelete(*((void**)((char*)this + 0x74)));
-
-            // Delete field at 0x70
-            merged_OperatorDelete(*((void**)((char*)this + 0x70)));
-
-            // GranularSynth destructor at 0x68
-            void *granularSynth = *((void**)((char*)this + 0x68));
-            if (granularSynth != nullptr) {
-                GranularSynth_destructor(granularSynth);
-                merged_OperatorDelete(granularSynth);
-            }
-
-            // Vector at 0x5C
-            vector_PitchCorrectedVoice_destructor((char*)this + 0x5C);
-
-            // Deallocate vector at 0x50
-            void *vector_ptr = *((void**)((char*)this + 0x50));
-            if (vector_ptr != nullptr) {
-                void *end = *((void**)((char*)this + 0x54));
-                int count = ((unsigned int)end - (unsigned int)vector_ptr) >> 2;
-                allocate_deallocate_PAM((char*)this + 0x50, (char*)this + 0x50 + 8, count);
-            }
-
-            // Vector destructor at 0x44
-            vector_vector_M_destructor((char*)this + 0x44);
-
-            // OnlyReturns at 0x40
-            void *onlyReturns = *((void**)((char*)this + 0x40));
-            if (onlyReturns != nullptr) {
-                OnlyReturns(onlyReturns);
-                merged_OperatorDelete(onlyReturns);
-            }
-
-            // PitchDetector at 0x28
-            void *pitchDetector = *((void**)((char*)this + 0x28));
-            if (pitchDetector != nullptr) {
-                PitchDetector_destructor(pitchDetector);
-                merged_OperatorDelete(pitchDetector);
-            }
-
-            // Deallocate vector at 0x0C
-            void *vector_ptr2 = *((void**)((char*)this + 0x0C));
-            if (vector_ptr2 != nullptr) {
-                void *end2 = *((void**)((char*)this + 0x10));
-                int count2 = ((unsigned int)end2 - (unsigned int)vector_ptr2) >> 2;
-                allocate_deallocate_M((char*)this + 0x0C, (char*)this + 0x0C + 8, count2);
-            }
-
-            // Deallocate vector at 0x0
-            void *vector_ptr3 = *((void**)((char*)this + 0x0));
-            if (vector_ptr3 != nullptr) {
-                void *end3 = *((void**)((char*)this + 0x8));
-                int count3 = ((unsigned int)end3 - (unsigned int)vector_ptr3) >> 2;
-                allocate_deallocate_M((char*)this, (char*)this + 0x8, count3);
-            }
+void GranularSynth::SetVoiceEnabled(unsigned int idx, bool enabled) {
+    if (enabled != 0 && mVoices[idx].mEnabled == 0) {
+        double timestamp = mVoices[idx].mTimestamp;
+        unsigned int thresh = mDetectionInterval * 3;
+        unsigned int samp = mSampleCount;
+        if ((float)samp - timestamp > (double)thresh) {
+            mVoices[idx].mTimestamp = (double)samp;
         }
     }
+    mVoices[idx].mEnabled = enabled;
 }
+
+void Synapse::SetAttackSmoothing(float val) {
+    float coeff = Time2IirA(val * 0.001f / (float)mDetectionInterval, mTargetPitch);
+    unsigned int count = 0;
+    void *vp = (char *)this + 0x5C;
+    int voiceCount = (int)((int)(*(void **)((char *)vp + 0x4)) - (int)(*(void **)vp)) / 56;
+    if (voiceCount != 0) {
+        int offset = 0;
+        do {
+            ((PitchCorrectedVoice *)((char *)(*(void **)vp) + offset))->SetAttackSmoothing(coeff);
+            count++;
+            offset += 0x38;
+        } while (count < (unsigned int)((int)((int)(*(void **)((char *)vp + 0x4)) - (int)(*(void **)vp)) / 56));
+    }
+}
+
+void Synapse::SetReleaseSmoothing(float val) {
+    float coeff = Time2IirA(val * 0.001f / (float)mDetectionInterval, mTargetPitch);
+    unsigned int count = 0;
+    void *vp = (char *)this + 0x5C;
+    int voiceCount = (int)((int)(*(void **)((char *)vp + 0x4)) - (int)(*(void **)vp)) / 56;
+    if (voiceCount != 0) {
+        int offset = 0;
+        do {
+            ((PitchCorrectedVoice *)((char *)(*(void **)vp) + offset))->SetReleaseSmoothing(coeff);
+            count++;
+            offset += 0x38;
+        } while (count < (unsigned int)((int)((int)(*(void **)((char *)vp + 0x4)) - (int)(*(void **)vp)) / 56));
+    }
+}
+
+Synapse::Synapse(float sampleRate) : mTargetPitch(sampleRate) {
+    mDetectionInterval = 64;
+
+    float prod1 = sampleRate * 0.4f;
+    float prod2 = sampleRate * 0.0015384615f;
+    float prod3 = sampleRate * 0.016666668f;
+    mDefaultPitch = (int)(long long)(prod1 + (prod1 >= 0.0f ? 0.5f : -0.5f));
+    mField_0x20 = (int)(long long)(prod2 + (prod2 >= 0.0f ? 0.5f : -0.5f));
+    mDetectionInterval = (int)(long long)(prod3 + (prod3 >= 0.0f ? 0.5f : -0.5f));
+
+    float zero = 0.0f;
+    mInputBuffer.insert(mInputBuffer.end(), mDefaultPitch, zero);
+    mDownsampledBuffer.insert(mDownsampledBuffer.end(), (unsigned int)mInputBuffer.size() >> 2, zero);
+
+    mBufferIndex = 0;
+    mGain = 1.0f;
+
+    // PitchDetector
+    PitchDetector *pd = new PitchDetector(mDownsampledBuffer, (mDefaultPitch + 3) >> 2, mField_0x20 >> 2);
+    mPitchDetector.reset(pd);
+
+    mPitchConfidence = 0.0f;
+    mPitchClarity = 0.0f;
+    mPitchThreshold = 0.35f;
+    mDetectedPitch = (float)mDefaultPitch;
+
+    // PeakDetector
+    PeakDetector *peak = new PeakDetector(mInputBuffer, mDefaultPitch, mField_0x20);
+    mPeakDetector.reset(peak);
+
+    // Voices
+    PitchCorrectedVoice pcv;
+    mVoices.resize(3, pcv);
+
+    // Channel buffers
+    stlpmtx_std::vector<float, stlpmtx_std::StlNodeAlloc<float> > emptyVec;
+    mChannelBuffers.resize((int)mVoices.size(), emptyVec);
+
+    // Output buffers
+    float *nullPtr = 0;
+    mOutputBuffers.insert(mOutputBuffers.end(), (int)mVoices.size(), nullPtr);
+
+    // Resize each channel buffer to 0x2000 floats and set output buffer pointers
+    unsigned int i = 0;
+    if ((int)mChannelBuffers.size() != 0) {
+        int chanOffset = 0;
+        int outOffset = 0;
+        do {
+            mChannelBuffers[i].insert(mChannelBuffers[i].end(), (size_t)0x2000, zero);
+            i++;
+            mOutputBuffers[outOffset / 4] = mChannelBuffers[(chanOffset) / 12].begin();
+            chanOffset += 0xC;
+            outOffset += 4;
+        } while (i < (unsigned int)((int)mChannelBuffers.size()));
+    }
+
+    // GranularSynth
+    GranularSynth *gs = new GranularSynth(mInputBuffer, (int)mVoices.size(), mDefaultPitch, mField_0x20);
+    mGranularSynth.reset(gs);
+
+    // Zero out voice gains in GranularSynth
+    unsigned int j = 0;
+    if ((int)mVoices.size() != 0) {
+        int voiceOffset = 0;
+        do {
+            j++;
+            mGranularSynth->mVoices[voiceOffset / 0x18].mField_0x00 = 0.0f;
+            voiceOffset += 0x18;
+        } while (j < (unsigned int)((int)mVoices.size()));
+    }
+
+    // Biquad filters
+    float coeffs[5];
+    LowpassCoefficients(coeffs, mTargetPitch, kBiquadParams[0], kBiquadParams[1]);
+    Biquad *lpf = new Biquad(coeffs);
+    mScratchBuffer1.reset(lpf);
+
+    HighpassCoefficients(coeffs, mTargetPitch * 0.25f, kBiquadParams[2], kBiquadParams[1]);
+    Biquad *hpf = new Biquad(coeffs);
+    mScratchBuffer2.reset(hpf);
+
+    mIirSmooth = 0.0f;
+    mIirCoeff = Time2IirA(0.00811767578125f, mTargetPitch * 0.25f);
+
+    SetAttackSmoothing(30.0f);
+    SetReleaseSmoothing(80.0f);
+}
+
+Synapse::~Synapse() {}
+
+void Synapse::ProcessInPlace(unsigned int arg1, float *arg2) {
+    float temp_f30 = 0.0f;
+    float temp_f31 = 4.0f;
+
+    if (arg1 != 0) {
+        float *var_r24 = arg2;
+        unsigned int var_r22 = arg1;
+
+        do {
+            float *inputStart = mInputBuffer.begin();
+            inputStart[mBufferIndex] = *var_r24;
+
+            unsigned int temp_r10 = mBufferIndex;
+
+            if (!(temp_r10 & 3)) {
+                float *temp_r11 = mInputBuffer.begin();
+
+                float var_f0;
+                if (temp_r10 == 0) {
+                    int temp_r9 = (int)((char *)mInputBuffer.end() - (char *)temp_r11) >> 2;
+                    var_f0 = temp_r11[temp_r9 - 1] + temp_r11[temp_r9 - 3] + temp_r11[temp_r9 - 2] + temp_r11[0];
+                } else {
+                    float *temp_r9_2 = &temp_r11[temp_r10];
+                    var_f0 = temp_r11[temp_r10 - 3] + temp_r11[temp_r10 - 2] + temp_r9_2[-1] + temp_r9_2[0];
+                }
+                *(float *)((temp_r10 & ~3u) + (unsigned int)mDownsampledBuffer.begin()) = var_f0;
+            }
+
+            (*(PeakDetector **)((char *)this + 0x40))->Detect(mBufferIndex);
+            (*(GranularSynth **)((char *)this + 0x68))->mPeak = (*(PeakDetector **)((char *)this + 0x40))->mPeak;
+
+            unsigned int temp_r11_2 = mBufferIndex;
+
+            if (!((mDetectionInterval - 1) & temp_r11_2)) {
+                (*(PitchDetector **)((char *)this + 0x28))->Detect(temp_r11_2 >> 2);
+                PitchDetector *pd = *(PitchDetector **)((char *)this + 0x28);
+                float temp_f0 = pd->mPitchConfidence;
+                mPitchConfidence = temp_f0;
+                mPitchClarity = pd->mPitchClarity;
+
+                if (temp_f0 > mPitchThreshold) {
+                    float temp_f0_2 = pd->mDetectedPitch * temp_f31;
+                    mDetectedPitch = temp_f0_2;
+
+                    if (temp_f0_2 == temp_f30) {
+                        mDetectedPitch = (float)mDefaultPitch;
+                    }
+
+                    (*(PeakDetector **)((char *)this + 0x40))->mDetectedPitch = mDetectedPitch;
+                    (*(GranularSynth **)((char *)this + 0x68))->mDetectedPitch = mDetectedPitch;
+                    (*(GranularSynth **)((char *)this + 0x68))->mPitchConfidence = mPitchConfidence;
+                }
+
+                void *vp = (char *)this + 0x5C;
+                unsigned int var_r27 = 0;
+                if ((int)((int)(*(void **)((char *)vp + 0x4)) - (int)(*(void **)vp)) / 56 != 0) {
+                    int var_r28 = 0;
+                    int var_r29 = 0;
+
+                    do {
+                        *(float *)((char *)(*(void **)vp) + var_r29) = mTargetPitch / mDetectedPitch;
+                        *(float *)((char *)(*(void **)vp) + var_r29 + 0x28) = mPitchConfidence;
+                        *(float *)((char *)(*(void **)vp) + var_r29 + 0x2C) = mPitchClarity;
+
+                        GranularSynth *gs = *(GranularSynth **)((char *)this + 0x68);
+                        float temp_f1 = ((PitchCorrectedVoice *)((char *)(*(void **)vp) + var_r29))->GetCorrection();
+
+                        var_r27++;
+                        GranularVoice *gv = (GranularVoice *)((char *)gs->mVoices + var_r28);
+                        var_r29 += 0x38;
+                        var_r28 += 0x18;
+
+                        gv->mCorrection = temp_f1;
+                    } while (var_r27 < (unsigned int)((int)((int)(*(void **)((char *)vp + 0x4)) - (int)(*(void **)vp)) / 56));
+                }
+            }
+
+            if (!((mDetectionInterval - 1) & mBufferIndex)) {
+                (*(GranularSynth **)((char *)this + 0x68))->Flush();
+            }
+
+            (*(GranularSynth **)((char *)this + 0x68))->ExtractGranules();
+
+            unsigned int temp_r11_5 = mBufferIndex + 1;
+            mBufferIndex = temp_r11_5;
+
+            if (temp_r11_5 >= (unsigned int)((int)((int)mInputBuffer.end() - (int)mInputBuffer.begin()) >> 2)) {
+                mBufferIndex = 0;
+            }
+
+            var_r22--;
+            var_r24++;
+        } while (var_r22 != 0);
+    }
+
+    (*(GranularSynth **)((char *)this + 0x68))->Synthesize(arg1, (float *const *)mOutputBuffers.begin());
+
+    if (arg1 != 0) {
+        memset(arg2, 0, arg1 * 4);
+    }
+
+    void *vp2 = (char *)this + 0x5C;
+    unsigned int var_r29_2 = 0;
+    if ((int)((int)(*(void **)((char *)vp2 + 0x4)) - (int)(*(void **)vp2)) / 56 != 0) {
+        int var_r28_2 = 0;
+
+        do {
+            IPP::Add_InPlace(arg1, *(float **)((char *)mOutputBuffers.begin() + var_r28_2), arg2);
+            var_r29_2++;
+            var_r28_2 += 4;
+        } while (var_r29_2 < (unsigned int)((int)((int)(*(void **)((char *)vp2 + 0x4)) - (int)(*(void **)vp2)) / 56));
+    }
+
+    mGain = 1.0f;
+    unsigned int final_count = ((int)((int)(*(void **)((char *)vp2 + 0x4)) - (int)(*(void **)vp2)) / 56);
+    IPP::MulConstant_InPlace(arg1, arg2, 1.0f / (float)final_count);
+}
+
+} // namespace Synapse
+} // namespace DSP
