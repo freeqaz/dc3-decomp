@@ -215,13 +215,12 @@ template <class T1, class T2>
 typename ObjPtrVec<T1, T2>::iterator
 ObjPtrVec<T1, T2>::insert(typename ObjPtrVec<T1, T2>::const_iterator it, T1 *obj) {
     if (obj != 0 || mListMode != kObjListNoNull) {
+        int idx = it.it ? (it.it - mNodes.begin()) : 0;
         Node newNode(this);
-        mNodes.push_back(newNode);
-        iterator result = begin();
-        Set(result, obj);
-        return result;
+        mNodes.insert(mNodes.begin() + idx, 1, newNode);
+        Set(begin() + idx, obj);
     }
-    return begin();
+    return iterator(const_cast<typename std::vector<Node>::iterator>(it.it));
 }
 
 template <class T1, class T2>
@@ -261,6 +260,16 @@ template <class T1>
 BinStream &operator>>(BinStream &bs, ObjPtrVec<T1, ObjectDir> &vec) {
     vec.Load(bs, true, nullptr);
     return bs;
+}
+
+template <class T1, class T2>
+typename ObjPtrVec<T1, T2>::const_iterator
+ObjPtrVec<T1, T2>::find(const Hmx::Object *target) const {
+    for (const_iterator it = begin(); it != end(); ++it) {
+        if (*it == target)
+            return it;
+    }
+    return end();
 }
 
 #pragma endregion

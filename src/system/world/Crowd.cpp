@@ -20,6 +20,12 @@ int gNumCrowd;
 WorldCrowd *gParent;
 RndTex *gImpostorTex[kNumLods];
 
+const Hmx::Color &ColorPalette::GetColor(int idx) const {
+    MILO_ASSERT(mColors.size(), 0x18);
+    int colorIdx = idx % mColors.size();
+    return mColors[colorIdx];
+}
+
 #pragma region CharDef
 
 void WorldCrowd::CharDef::Save(BinStream &bs) const {
@@ -505,6 +511,28 @@ void WorldCrowd::Sort3DCharList() {
     }
 }
 
+void WorldCrowd::Set3DCharAll() {
+    START_AUTO_TIMER("crowd_set3d");
+    float fvar1 = mFlatFullness;
+    Reset3DCrowd();
+    FOREACH (it, mCharacters) {
+        RndMultiMesh *multiMesh = it->mMMesh;
+        if (multiMesh) {
+            std::list<RndMultiMesh::Instance>::iterator instIt = multiMesh->Instances().begin();
+            int idx = 0;
+            for (; instIt != multiMesh->Instances().end(); ++instIt, ++idx) {
+                CharData::Char3D char3D(instIt->mXfm, idx);
+                it->m3DChars.push_back(char3D);
+            }
+            multiMesh->Instances().clear();
+            multiMesh->InvalidateProxies();
+        }
+    }
+    Sort3DCharList();
+    SetFullness(fvar1, mCharFullness);
+    AssignRandomColors(false);
+}
+
 void WorldCrowd::Force3DCrowd(bool force) {
     mForce3DCrowd = force;
     if (mForce3DCrowd)
@@ -516,39 +544,3 @@ void WorldCrowd::Force3DCrowd(bool force) {
     }
 }
 
-void SetMatColorFlags(ObjPtrList<RndMat, ObjectDir> &matList, int flags,
-                      stlpmtx_std::vector<Hmx::Color> *colors) {
-    RndMat **head = (RndMat **)((char *)&matList + 0x8);
-    if (*head == NULL) {
-        return;
-    }
-
-    RndMat *current = *head;
-    do {
-        current->SetColorMod(*(Hmx::Color *)flags, 0);
-        u32 *modNum = (u32 *)((char *)current + 0x228);
-        *modNum = *modNum | 2;
-
-        if (colors != NULL) {
-            int *pBegin = (int *)colors;
-            int *pEnd = (int *)colors + 1;
-            int size = *pEnd - *pBegin;
-            int alignedSize = size & 0xFFFFFFF0;
-
-            if (alignedSize != 0x30) {
-                TheDebug.Fail(MakeString(kAssertStr, "Crowd.cpp", 0x33b, "RndMat::kColorModNum != modulate"), nullptr);
-            }
-
-            int colorCount = size >> 4;
-            if (colorCount > 0) {
-                for (u32 i = 0; i < (u32)colorCount; i++) {
-                    current->SetColorMod(colors->at(i), i);
-                }
-            } else {
-                stlpmtx_std::__stl_throw_out_of_range("vector");
-            }
-        }
-
-        current = *(RndMat **)((char *)current + 0x14);
-    } while (current != NULL);
-}

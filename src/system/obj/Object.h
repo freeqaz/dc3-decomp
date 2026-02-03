@@ -243,6 +243,7 @@ public:
     // this derives off of std::vector<Node>::iterator in some way
     class iterator {
         friend class const_iterator;
+        friend class ObjPtrVec;
 
     public:
         typedef std::forward_iterator_tag iterator_category;
@@ -276,6 +277,8 @@ public:
     };
     // ditto
     class const_iterator {
+        friend class ObjPtrVec;
+
     public:
         typedef std::forward_iterator_tag iterator_category;
         typedef Node value_type;

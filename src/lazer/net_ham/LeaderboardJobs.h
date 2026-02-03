@@ -5,16 +5,16 @@
 
 class LeaderboardRow {
 public:
-    String unk0; // 0x0 - gamertag
+    String mName; // 0x0 - gamertag
     int unk8;
-    int unkc; // 0xc - score
-    unsigned int unk10; // 0x10 - rank fmt/rank/level?
+    int mScore; // 0xc
+    unsigned int mRank; // 0x10
     int unk14;
-    Difficulty unk18; // 0x18 - difficulty
-    bool unk1c; // 0x1c - no flashcards?
-    bool unk1d;
+    Difficulty mDiffID; // 0x18
+    bool mNoFlashcards; // 0x1c
+    bool mIsPercentile; // 0x1d
     bool unk1e;
-    XUID unk20;
+    XUID mXUID; // 0x20
 };
 
 class GetLeaderboardByPlayerJob : public RCJob {
@@ -31,7 +31,8 @@ public:
     void GetRows(std::vector<LeaderboardRow> *);
 
 private:
-    unsigned int unkb0;
+    friend class Leaderboards;
+    unsigned int mCacheKey; // 0xb0
 };
 
 class GetMiniLeaderboardJob : public RCJob {

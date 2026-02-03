@@ -6,40 +6,6 @@ These patterns are caused by compiler optimizations or heuristics we cannot cont
 
 ---
 
-## Bool Mask
-
-**Prevalence:** 9 functions tagged (database)
-**Typical Gap:** ~3%
-
-The compiler adds a bool-masking instruction for ABI compliance.
-
-### Symptom
-
-Extra `clrlwi r3, rX, 24` instruction masking return value to 8 bits.
-
-### Why Unfixable
-
-This is compiler ABI handling for bool return values. Multiple approaches have been tried and none work:
-
-- Integer literals instead of bool (`return 1`)
-- Direct condition return
-- Local variable
-- Ternary operator
-
-### Detection
-
-Look for `clrlwi` with `, 24` in objdiff:
-
-```
-| delete | clrlwi r3, r11, 24 |
-```
-
-### What To Do
-
-Accept ~3% gap as permanent.
-
----
-
 ## ASSERT_REVS Scheduling
 
 **Prevalence:** Functions with ASSERT_REVS macro (~10%)

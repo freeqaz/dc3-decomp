@@ -135,6 +135,11 @@ class DecompMCPServer:
                                 "type": "integer",
                                 "description": "Max results to return (default: 20)",
                             },
+                            "status": {
+                                "type": "string",
+                                "description": "Filter by function status: 'workable' (default, excludes complete/at_limit), 'all' (no filtering), 'complete' (only complete), 'at_limit' (only at_limit)",
+                                "enum": ["workable", "all", "complete", "at_limit"],
+                            },
                         },
                     },
                 ),
@@ -397,11 +402,33 @@ class DecompMCPServer:
         max_percent = args.get("max_percent", 100)
         pattern = args.get("unit_pattern", "*")
         limit = args.get("limit", 20)
+        status = args.get("status", "workable")
+
+        # Map status filter to database query params
+        if status == "all":
+            exclude_complete = False
+            exclude_at_limit = False
+            verdict_filter = None
+        elif status == "complete":
+            exclude_complete = False
+            exclude_at_limit = True
+            verdict_filter = "COMPLETE"
+        elif status == "at_limit":
+            exclude_complete = True
+            exclude_at_limit = False
+            verdict_filter = "AT_LIMIT"
+        else:  # "workable" (default)
+            exclude_complete = True
+            exclude_at_limit = False
+            verdict_filter = None
 
         results = db_query_functions(
             pattern=pattern,
             min_percent=min_percent,
             max_percent=max_percent,
+            exclude_complete=exclude_complete,
+            exclude_at_limit=exclude_at_limit,
+            verdict_filter=verdict_filter,
             limit=limit,
             db_path=self.db_path,
         )
@@ -414,8 +441,10 @@ class DecompMCPServer:
         for func in results:
             pct = func.get("current_percent")
             pct_str = f"{pct:.1f}%" if pct is not None else "unimplemented"
+            verdict = func.get("verdict")
+            verdict_str = f" | Verdict: {verdict}" if verdict else ""
             output += f"- `{func['symbol']}` ({func.get('demangled', 'N/A')})\n"
-            output += f"  Unit: {func.get('unit', 'unknown')} | Match: {pct_str}\n"
+            output += f"  Unit: {func.get('unit', 'unknown')} | Match: {pct_str}{verdict_str}\n"
 
         return [TextContent(type="text", text=output)]
 
@@ -996,10 +1025,17 @@ class DecompMCPServer:
                 cwd=str(project_dir),
             )
 
-            # Combine stdout and stderr
+            # Combine stdout and stderr (filter out build progress lines)
             output = result.stdout
             if result.stderr:
-                output += f"\n\n[stderr]\n{result.stderr}"
+                # Filter stderr to only keep errors/warnings, not ninja progress lines
+                stderr_lines = result.stderr.strip().splitlines()
+                error_lines = [
+                    line for line in stderr_lines
+                    if not re.match(r'^\s*\[\d+/\d+\]\s', line)
+                ]
+                if error_lines:
+                    output += f"\n\n[stderr]\n" + "\n".join(error_lines)
 
             # Check for symbol-not-found errors and suggest alternatives
             if "Symbol not found" in output or "Failed" in output:
@@ -1026,7 +1062,13 @@ class DecompMCPServer:
                 # Re-serialize enriched data
                 output = json.dumps(data, indent=2)
                 if result.stderr:
-                    output += f"\n\n[stderr]\n{result.stderr}"
+                    stderr_lines = result.stderr.strip().splitlines()
+                    error_lines = [
+                        line for line in stderr_lines
+                        if not re.match(r'^\s*\[\d+/\d+\]\s', line)
+                    ]
+                    if error_lines:
+                        output += f"\n\n[stderr]\n" + "\n".join(error_lines)
             except (json.JSONDecodeError, KeyError):
                 # Not valid JSON, just use raw output
                 pass
@@ -1139,7 +1181,14 @@ class DecompMCPServer:
 
             output = result.stdout
             if result.stderr:
-                output += f"\n\n[stderr]\n{result.stderr}"
+                # Filter stderr to only keep errors/warnings, not ninja progress lines
+                stderr_lines = result.stderr.strip().splitlines()
+                error_lines = [
+                    line for line in stderr_lines
+                    if not re.match(r'^\s*\[\d+/\d+\]\s', line)
+                ]
+                if error_lines:
+                    output += f"\n\n[stderr]\n" + "\n".join(error_lines)
 
             if result.returncode != 0:
                 return [TextContent(

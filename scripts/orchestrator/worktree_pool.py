@@ -4,6 +4,7 @@ Each agent works in its own git worktree to prevent file conflicts.
 Worktrees share build artifacts via symlinks to the main repo.
 """
 
+import logging
 import shutil
 import subprocess
 import sqlite3
@@ -11,6 +12,8 @@ from pathlib import Path
 from typing import Optional
 
 from .database import get_connection, DEFAULT_DB_PATH
+
+logger = logging.getLogger("decomp_orchestrator")
 
 
 class WorktreePool:
@@ -439,15 +442,27 @@ class WorktreePool:
 
             # Reset the staging area to clean up intent-to-add markers
             if untracked_files:
-                subprocess.run(
-                    ["git", "reset", "HEAD"] + untracked_files,
+                reset_result = subprocess.run(
+                    ["git", "reset", "HEAD", "--"] + untracked_files,
                     cwd=worktree_path,
                     capture_output=True,
-                    check=False,  # Don't fail if reset has issues
+                    text=True,
                 )
+                if reset_result.returncode != 0:
+                    logger.warning(
+                        f"git reset after extract_patch failed (rc={reset_result.returncode}): "
+                        f"{reset_result.stderr.strip()}"
+                    )
+                    # Force-clean the index as fallback
+                    subprocess.run(
+                        ["git", "reset", "HEAD"],
+                        cwd=worktree_path,
+                        capture_output=True,
+                    )
 
             return result.stdout if result.stdout.strip() else None
-        except subprocess.CalledProcessError:
+        except subprocess.CalledProcessError as e:
+            logger.warning(f"extract_patch failed for session {session_id}: {e}")
             return None
 
     def get_worktree_for_session(self, session_id: str) -> Optional[Path]:

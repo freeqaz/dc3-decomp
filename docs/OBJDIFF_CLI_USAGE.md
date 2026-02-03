@@ -416,7 +416,7 @@ Output:
 | Pattern | Description | Fixability |
 |---------|-------------|------------|
 | `LINKER_MERGED` | Calls to `merged_*`, `OnlyReturns`, MSVC dtors | Verify then accept (see lookup workflow) |
-| `BOOL_MASK` | `clrlwi`/`rlwinm` for bool return masking | Usually unfixable |
+| `BOOL_MASK` | `clrlwi`/`rlwinm` for bool masking | Often fixable (see [fixable-bool-mask.md](decomp/patterns/fixable-bool-mask.md)) |
 | `REGISTER_SWAP` | Consistent register allocation differences | Maybe fixable (try reordering vars) |
 | `COMPARISON_STYLE` | `cmpwi`/`cmplwi` with values differing by 1 (e.g., `>= 5` vs `> 4`) | Maybe fixable |
 | `CONTROL_FLOW` | `diff_op`/`replace` on branch instructions | Likely fixable |

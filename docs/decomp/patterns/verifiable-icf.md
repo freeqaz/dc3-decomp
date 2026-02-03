@@ -176,5 +176,5 @@ Accept 1-2 instruction differences as permanent (if applicable).
 
 ## See Also
 
-- [unfixable-compiler.md](unfixable-compiler.md) - Compiler-side unfixable patterns (truly unfixable)
+- [unfixable-compiler.md](unfixable-compiler.md) - Compiler patterns (some fixable, some not)
 - [../TECHNICAL_NOTES.md](../TECHNICAL_NOTES.md#known-unfixable-issues) - Full technical details

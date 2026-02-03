@@ -11,6 +11,11 @@
 #include "utl/BinStream.h"
 #include "utl/Loader.h"
 
+// Explicit template instantiation
+namespace stlpmtx_std {
+    template class vector<ObjPtrVec<Spotlight, ObjectDir>::Node, StlNodeAlloc<ObjPtrVec<Spotlight, ObjectDir>::Node>>;
+}
+
 LightPreset *gEditPreset;
 std::deque<std::pair<LightPreset::KeyframeCmd, float> > LightPreset::sManualEvents;
 
@@ -699,7 +704,7 @@ void LightPreset::FillSpotPresetData(
     if (mask & 2) {
         entry.mTarget = spot->GetTarget();
         entry.unk20 =
-            entry.mTarget ? Hmx::Quat(0, 0, 0, 0) : Hmx::Quat(spot->WorldXfm().m);
+            entry.mTarget ? Hmx::Quat(0, 0, 0, 0) : Hmx::Quat(spot->mWorldXfm.m);
     }
     if (mask != 0 && spot->IsFlareEnabled()) {
         entry.unk8 |= SpotlightEntry::kEnabled;
@@ -715,33 +720,37 @@ DataNode LightPreset::OnViewKeyframe(DataArray *da) {
 void LightPreset::SyncKeyframeTargets() {
     for (ObjDirItr<Spotlight> it(Dir(), true); it; ++it) {
         Spotlight *key = it;
-        if (std::find(mSpotlights.begin(), mSpotlights.end(), key) == mSpotlights.end()) {
+        ObjPtrVec<Spotlight, ObjectDir>::const_iterator found = mSpotlights.find(key);
+        if (found == mSpotlights.end()) {
             AddSpotlight(key, false);
         }
     }
     for (ObjDirItr<RndEnviron> it(Dir(), true); it; ++it) {
         RndEnviron *key = it;
-        if (std::find(mEnvironments.begin(), mEnvironments.end(), key)
-            == mEnvironments.end()) {
+        ObjPtrVec<RndEnviron, ObjectDir>::const_iterator found = mEnvironments.find(key);
+        if (found == mEnvironments.end()) {
             AddEnvironment(key);
         }
         FOREACH (lit, key->mLightsReal) {
             RndLight *lkey = *lit;
-            if (std::find(mLights.begin(), mLights.end(), lkey) == mLights.end()) {
+            ObjPtrVec<RndLight, ObjectDir>::const_iterator lfound = mLights.find(lkey);
+            if (lfound == mLights.end()) {
                 AddLight(lkey);
             }
         }
         FOREACH (lit, key->mLightsApprox) {
             RndLight *lkey = *lit;
-            if (std::find(mLights.begin(), mLights.end(), lkey) == mLights.end()) {
+            ObjPtrVec<RndLight, ObjectDir>::const_iterator lfound = mLights.find(lkey);
+            if (lfound == mLights.end()) {
                 AddLight(lkey);
             }
         }
     }
     for (ObjDirItr<SpotlightDrawer> it(Dir(), true); it; ++it) {
         SpotlightDrawer *key = it;
-        if (std::find(mSpotlightDrawers.begin(), mSpotlightDrawers.end(), key)
-            == mSpotlightDrawers.end()) {
+        ObjPtrVec<SpotlightDrawer, ObjectDir>::const_iterator found =
+            mSpotlightDrawers.find(key);
+        if (found == mSpotlightDrawers.end()) {
             AddSpotlightDrawer(key);
         }
     }

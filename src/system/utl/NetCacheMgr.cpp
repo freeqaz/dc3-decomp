@@ -321,11 +321,19 @@ bool NetLoaderRef::IsValid() const {
 bool NetLoaderRef::NeedsToDownload() {
     MILO_ASSERT(IsValid(), 0x31B);
     if (!mCacheLoader) {
-        if (mNetLoader) {
-            int state = *(int*)mNetLoader;
-            return (state == 1 || state == 2) ? true : false;
-        }
-        return true;
+        // mNetLoader's first member is the loader state (0=none, 1=pending, 2=downloading)
+        int state = *(int*)mNetLoader;
+        return state == 1 || state == 2;
+    }
+    return false;
+}
+
+bool NetLoaderRef::IsDownloading() {
+    MILO_ASSERT(IsValid(), 0x321);
+    if (!mCacheLoader) {
+        // mNetLoader's first member is the loader state (0=none, 1=pending, 2=downloading)
+        int state = *(int*)mNetLoader;
+        if (state == 2) return true;
     }
     return false;
 }

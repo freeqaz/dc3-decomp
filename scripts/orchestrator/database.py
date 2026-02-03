@@ -14,7 +14,7 @@ from typing import Any
 DEFAULT_DB_PATH = "decomp.db"
 
 # Schema version for migrations
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 SCHEMA = """
 -- Schema version tracking
@@ -77,6 +77,9 @@ CREATE TABLE IF NOT EXISTS attempts (
     -- A/B testing enrichment tracking (v4 schema)
     enrichment_flags TEXT,              -- JSON: {"diff_patterns": true, "function_types": false, ...}
 
+    -- Pre-refactor backup patch (v5 schema)
+    pre_refactor_patch TEXT,            -- Patch before refactor-staff pass (backup)
+
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -116,12 +119,30 @@ CREATE INDEX IF NOT EXISTS idx_file_pairs_dc3_unit ON file_pairs(dc3_unit);
 """
 
 
+_migrated_dbs: set[str] = set()  # Track which DB paths have been migration-checked
+
+
 def get_connection(db_path: str | Path = DEFAULT_DB_PATH) -> sqlite3.Connection:
-    """Get a database connection with row factory enabled."""
-    conn = sqlite3.connect(str(db_path))
+    """Get a database connection with row factory enabled.
+
+    Automatically runs pending migrations on first access per DB path.
+    """
+    db_str = str(db_path)
+    conn = sqlite3.connect(db_str)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode = WAL")
     conn.execute("PRAGMA foreign_keys = ON")
+
+    if db_str not in _migrated_dbs:
+        _migrated_dbs.add(db_str)
+        cursor = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version'"
+        )
+        if cursor.fetchone() is not None:
+            version = conn.execute("SELECT version FROM schema_version").fetchone()[0]
+            if version < SCHEMA_VERSION:
+                _run_migrations(conn, version, SCHEMA_VERSION)
+
     return conn
 
 
@@ -203,6 +224,15 @@ def _run_migrations(conn: sqlite3.Connection, from_version: int, to_version: int
             CREATE INDEX IF NOT EXISTS idx_attempts_enrichment
             ON attempts(enrichment_flags)
         """)
+
+    if from_version < 5 <= to_version:
+        # Migration v4 -> v5: Add pre_refactor_patch column for backup patches
+        print("  Migration v5: Adding pre_refactor_patch column...")
+        try:
+            conn.execute("ALTER TABLE attempts ADD COLUMN pre_refactor_patch TEXT")
+        except sqlite3.OperationalError as e:
+            if "duplicate column" not in str(e).lower():
+                raise
 
     # Update schema version
     conn.execute("UPDATE schema_version SET version = ?", (to_version,))
@@ -441,11 +471,16 @@ def query_functions(
     exclude_locked: bool = True,
     exclude_complete: bool = True,
     exclude_at_limit: bool = False,
+    verdict_filter: str | None = None,
     limit: int = 20,
     db_path: str | Path = DEFAULT_DB_PATH,
 ) -> list[dict[str, Any]]:
     """
     Query multiple functions matching criteria.
+
+    Args:
+        verdict_filter: If set, only return functions with this verdict
+                        (e.g. 'COMPLETE', 'AT_LIMIT'). Overrides exclude_* flags.
 
     Returns list of function dicts.
     """
@@ -465,14 +500,19 @@ def query_functions(
     if exclude_locked:
         query += " AND locked_by IS NULL"
 
-    excluded_verdicts = []
-    if exclude_complete:
-        excluded_verdicts.append('COMPLETE')
-    if exclude_at_limit:
-        excluded_verdicts.append('AT_LIMIT')
-    if excluded_verdicts:
-        placeholders = ", ".join(f"'{v}'" for v in excluded_verdicts)
-        query += f" AND (verdict IS NULL OR verdict NOT IN ({placeholders}))"
+    if verdict_filter:
+        # Positive filter: only return functions with this specific verdict
+        query += f" AND verdict = '{verdict_filter}'"
+    else:
+        # Negative filter: exclude specified verdicts
+        excluded_verdicts = []
+        if exclude_complete:
+            excluded_verdicts.append('COMPLETE')
+        if exclude_at_limit:
+            excluded_verdicts.append('AT_LIMIT')
+        if excluded_verdicts:
+            placeholders = ", ".join(f"'{v}'" for v in excluded_verdicts)
+            query += f" AND (verdict IS NULL OR verdict NOT IN ({placeholders}))"
 
     query += " AND symbol NOT LIKE 'merged_%'"
 
@@ -570,6 +610,7 @@ def record_attempt(
     actual_cost_usd: float | None = None,
     duration_ms: int | None = None,
     enrichment_flags: dict | None = None,
+    pre_refactor_patch: str | None = None,
     db_path: str | Path = DEFAULT_DB_PATH,
 ) -> int:
     """
@@ -608,9 +649,9 @@ def record_attempt(
             (function_id, session_id, model, started_at, finished_at,
              start_percent, end_percent, exit_status, verdict, patch, notes, iterations,
              input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,
-             actual_cost_usd, duration_ms, enrichment_flags)
+             actual_cost_usd, duration_ms, enrichment_flags, pre_refactor_patch)
         VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ?, ?, ?, ?, ?, ?, ?,
-                ?, ?, ?, ?, ?, ?, ?)
+                ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             function_id,
@@ -630,6 +671,7 @@ def record_attempt(
             actual_cost_usd,
             duration_ms,
             enrichment_json,
+            pre_refactor_patch,
         ),
     )
 

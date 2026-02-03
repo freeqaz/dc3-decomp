@@ -41,6 +41,7 @@ public:
             Char3D(const Char3D &o) : unk0(o.unk0), unk40(o.unk40), unk50(0) {
                 unk44 = o.unk44;
             }
+            Char3D(const Transform &t, int idx) : unk0(t), unk40(idx), unk50(nullptr) {}
 
             Transform unk0;
             int unk40;

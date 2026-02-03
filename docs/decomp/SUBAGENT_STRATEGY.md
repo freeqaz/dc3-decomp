@@ -265,11 +265,10 @@ Launch agents:
 Agents should stop and report when encountering:
 
 1. **LINKER_MERGED calls** - Compiler merged identical functions
-2. **BOOL_MASK patterns** - `clrlwi`/`rlwinm` bool handling differences
-3. **Consistent register swaps** - Compiler chose different registers throughout
-4. **AT_LIMIT verdict** - objdiff-cli determined function is at practical limit
+2. **Consistent register swaps** - Compiler chose different registers throughout
+3. **AT_LIMIT verdict** - objdiff-cli determined function is at practical limit
 
-These patterns mean the current match is the best achievable.
+**BOOL_MASK patterns are often fixable** — try local `bool` variable, `(bool)` cast, or look for a missing inline before giving up. See [fixable-bool-mask.md](patterns/fixable-bool-mask.md).
 
 ---
 

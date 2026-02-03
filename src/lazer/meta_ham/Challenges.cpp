@@ -105,6 +105,49 @@ bool Challenges::IsExportedSongDC2(int songID) {
     return false;
 }
 
+void Challenges::DownloadPlayerChallenges() {
+    if (mPlayerChallengeTimer.Running()) {
+        mPlayerChallengeTimer.Stop();
+    }
+    if (mHasFlaunted) {
+        unk2c = true;
+        return;
+    }
+    if (mGetPlayerChallengesJob) {
+        mGetPlayerChallengesJob->Cancel(false);
+        mGetPlayerChallengesJob = nullptr;
+    }
+    std::vector<HamProfile *> profiles;
+    for (int i = 0; i < 2; i++) {
+        HamPlayerData *playerData = TheGameData->Player(i);
+        MILO_ASSERT(playerData, 0xED);
+        HamProfile *profile = TheProfileMgr.GetProfileFromPad(playerData->PadNum());
+        if (profile) {
+            profile->UpdateOnlineID();
+            if (profile->IsSignedIn()
+                && ThePlatformMgr.IsSignedIntoLive(profile->GetPadNum())) {
+                profiles.push_back(profile);
+            }
+        }
+    }
+    if (profiles.size() != 0) {
+        mGetPlayerChallengesJob = new GetPlayerChallengesJob(this, profiles);
+        TheRockCentral.ManageJob(mGetPlayerChallengesJob);
+    } else {
+        mProfileChallenges.clear();
+        mGetPlayerChallengesJob = nullptr;
+        static Message allUpdatedMsg("all_challenges_updated", 0);
+        if (!mGetOfficialChallengesJob) {
+            bool dirty = mPlayerChallengesDirty || mOfficialChallengesDirty;
+            allUpdatedMsg[0] = dirty;
+            TheUI->Handle(allUpdatedMsg, true);
+            mPlayerChallengesDirty = false;
+            mOfficialChallengesDirty = false;
+        }
+        mPlayerChallengeTimer.Restart();
+    }
+}
+
 void Challenges::DownloadOfficialChallenges() {
     if (mGetOfficialChallengesJob) {
         mGetOfficialChallengesJob->Cancel(false);

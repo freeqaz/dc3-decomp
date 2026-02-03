@@ -53,6 +53,9 @@ doxygen/
 # Generated patches from orchestrator
 generated-patches/
 
+# Scratch workspace for patch triage
+scratch/
+
 # Generated databases
 *.db
 *.sqlite

@@ -168,7 +168,7 @@ class TestBuildSdkOptions(unittest.TestCase):
     @patch('scripts.orchestrator.agent_runner._get_openrouter_api_key', return_value=None)
     @patch('scripts.orchestrator.agent_runner.requires_openrouter', return_value=False)
     @patch('scripts.orchestrator.agent_runner.get_model_id', return_value="claude-sonnet-4-20250514")
-    @patch('scripts.orchestrator.agent_runner.ClaudeCodeOptions')
+    @patch('scripts.orchestrator.agent_runner.ClaudeAgentOptions')
     def test_default_tools_when_none(self, mock_options, *_):
         config = AgentRunConfig(
             session_id="test-1",
@@ -185,7 +185,7 @@ class TestBuildSdkOptions(unittest.TestCase):
     @patch('scripts.orchestrator.agent_runner._get_openrouter_api_key', return_value=None)
     @patch('scripts.orchestrator.agent_runner.requires_openrouter', return_value=False)
     @patch('scripts.orchestrator.agent_runner.get_model_id', return_value="claude-sonnet-4-20250514")
-    @patch('scripts.orchestrator.agent_runner.ClaudeCodeOptions')
+    @patch('scripts.orchestrator.agent_runner.ClaudeAgentOptions')
     def test_custom_tools_passed_through(self, mock_options, *_):
         custom_tools = ["Read", "Write", "mcp__orchestrator__run_objdiff"]
         config = AgentRunConfig(
@@ -204,7 +204,7 @@ class TestBuildSdkOptions(unittest.TestCase):
     @patch('scripts.orchestrator.agent_runner._get_openrouter_api_key', return_value=None)
     @patch('scripts.orchestrator.agent_runner.requires_openrouter', return_value=False)
     @patch('scripts.orchestrator.agent_runner.get_model_id', return_value="claude-sonnet-4-20250514")
-    @patch('scripts.orchestrator.agent_runner.ClaudeCodeOptions')
+    @patch('scripts.orchestrator.agent_runner.ClaudeAgentOptions')
     def test_disallowed_tools_default(self, mock_options, *_):
         config = AgentRunConfig(
             session_id="test-1",
@@ -214,14 +214,14 @@ class TestBuildSdkOptions(unittest.TestCase):
         )
         self.runner.build_sdk_options(config)
         call_kwargs = mock_options.call_args
-        self.assertEqual(call_kwargs.kwargs["disallowed_tools"], ["Task", "TaskOutput"])
+        self.assertEqual(call_kwargs.kwargs["disallowed_tools"], [])
 
     @patch('scripts.orchestrator.agent_runner.SDK_AVAILABLE', True)
     @patch('scripts.orchestrator.agent_runner._get_openrouter_enabled', return_value=False)
     @patch('scripts.orchestrator.agent_runner._get_openrouter_api_key', return_value=None)
     @patch('scripts.orchestrator.agent_runner.requires_openrouter', return_value=False)
     @patch('scripts.orchestrator.agent_runner.get_model_id', return_value="claude-sonnet-4-20250514")
-    @patch('scripts.orchestrator.agent_runner.ClaudeCodeOptions')
+    @patch('scripts.orchestrator.agent_runner.ClaudeAgentOptions')
     def test_custom_disallowed_tools(self, mock_options, *_):
         config = AgentRunConfig(
             session_id="test-1",

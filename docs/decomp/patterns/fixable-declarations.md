@@ -219,6 +219,74 @@ static int _x = MemFindHeap("physical");
 
 ---
 
+## Braced vs Braceless If (Scope Counter)
+
+**Impact:** Fixes all diff_arg/replace for static locals with wrong `?N?`
+**Success Rate:** 100%
+**Time:** 2 minutes
+
+MSVC's `?N?` scope number in mangled static local names is a sequential counter of `{}` blocks opened before the declaration point. A braced `if` counts as one more scope than a braceless `if`.
+
+### Symptom
+
+Static local variables have the wrong `?N?` scope number in their mangled names. objdiff shows `diff_arg` on every reference to the static (guard variable, atexit destructor, data accesses) with a scope number off by 1 or more:
+
+```
+Target: ??__FmyMsg@?6??MyFunc@@QAAX_N@Z@YAXXZ    (scope 6)
+Base:   ??__FmyMsg@?7??MyFunc@@QAAX_N@Z@YAXXZ    (scope 7)
+```
+
+### Why It Works
+
+MSVC counts every `{}` block opening as a new scope, incrementing a sequential counter that never resets within the function. The counter increases even for blocks that contain no static locals. A braceless `if`/`for`/`while` does NOT increment the counter.
+
+### How to Diagnose
+
+1. Check the `?N?` in the mangled names -- target vs base
+2. If base is higher by K, you have K extra `{}` blocks before the static declaration
+3. Count all `{}` blocks in the function up to the static declaration point
+4. Look for `if` statements with unnecessary braces around single statements
+
+### Fix
+
+Remove braces from single-statement `if`/`for`/`while` blocks that appear before the static declaration:
+
+```cpp
+// WRONG - scope ?7? (braces create an extra scope)
+if (b2) {
+    unk64.insert(std::make_pair(job->unkb0, unk58));
+}
+// ...
+static Message msg("loaded");  // gets scope 7
+
+// CORRECT - scope ?6? (no extra scope from braceless if)
+if (b2)
+    unk64.insert(std::make_pair(job->unkb0, unk58));
+// ...
+static Message msg("loaded");  // gets scope 6
+```
+
+### Verification Method
+
+Empirically test by removing code blocks and observing the scope number change:
+- Remove a braced `if` body entirely: scope drops by N (where N = scopes within that block including templates)
+- Remove just the braces from `if (cond) { stmt; }` to `if (cond) stmt;`: scope drops by exactly 1
+
+### Real Examples
+
+| Function | Before | After | Fix |
+|---|---|---|---|
+| Leaderboards::ReadScoresComplete | ?7? (mismatch) | ?6? (match) | Removed braces from `if (b2) { insert(...) }` |
+| MoveDir::ClosestMoveFrame | ?4? (mismatch) | ?3? (match) | Moved struct definition out of if-block |
+
+### Notes
+
+- Template function bodies inlined at the call site also count as scopes (e.g., `Find<T>` inlines ~4 scopes from its body, MILO_FAIL expansion, etc.)
+- Function call arguments that involve copy constructors do NOT create scopes (they're function calls, not inline blocks)
+- The `vector::clear()` -> `erase()` inline expansion's `if (__first == __last)` check does NOT count as a scope in practice
+
+---
+
 ## Static Symbol Order
 
 **Impact:** Variable
@@ -313,6 +381,61 @@ objdiff shows `OFFSET_SWAP` pattern with details like:
 ```
 swapped_offsets: [(instr 15: 0x4 vs 0x8), (instr 23: 0x8 vs 0x4)]
 ```
+
+---
+
+## sret Return Value Tracing
+
+**Impact:** +7-8%
+**Success Rate:** HIGH
+**Time:** 10 minutes
+
+When a function returns a struct by value (sret), trace which register is stored to the sret pointer at the end. If it's an unmodified parameter register, the original code returns the parameter directly — not a computed value.
+
+### Symptom
+
+Extra `stw`/`mr` instructions around the sret pointer, or match% stuck despite correct logic. The function computes a value for the return but the target assembly stores a parameter register unchanged.
+
+### Diagnostic
+
+1. Find `stw rN, 0(sret_reg)` at the function epilog
+2. Trace rN backward through the function body
+3. If rN is set only once from a parameter (`mr rN, paramReg`) and never updated in the body, the function returns the parameter unchanged
+4. Restructure to return the parameter directly instead of a computed value
+
+### Fix
+
+```cpp
+// Before (88.6%) - computes begin()+idx for return value
+if (obj != 0 || mListMode != kObjListNoNull) {
+    int idx = it.it ? (it.it - mNodes.begin()) : 0;
+    Node newNode(this);
+    mNodes.insert(mNodes.begin() + idx, 1, newNode);
+    iterator result = begin() + idx;
+    Set(result, obj);
+    return result;
+}
+return iterator(const_cast<...>(it.it));
+
+// After (96.2%) - returns it.it directly in both paths
+if (obj != 0 || mListMode != kObjListNoNull) {
+    int idx = it.it ? (it.it - mNodes.begin()) : 0;
+    Node newNode(this);
+    mNodes.insert(mNodes.begin() + idx, 1, newNode);
+    Set(begin() + idx, obj);
+}
+return iterator(const_cast<...>(it.it));
+```
+
+### Why It Works
+
+The target assembly shows r26 (holding `it.it` from entry) stored to the sret pointer at the end, with no intervening write to r26 in the body. The `begin() + idx` is computed only into r4 as the `Set()` call argument and is never saved. Computing a separate return value generates extra register moves and sret writes that don't appear in the target.
+
+### Real Examples
+
+| Function | Before | After | Delta | Notes |
+|----------|--------|-------|-------|-------|
+| ObjPtrVec::insert | 88.6% | 96.2% | +7.6% | Eliminated computed return, used parameter directly |
 
 ---
 

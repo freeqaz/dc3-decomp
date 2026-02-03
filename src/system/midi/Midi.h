@@ -2,6 +2,7 @@
 #include "utl/BinStream.h"
 #include "utl/TempoMap.h"
 #include "utl/ChunkIDs.h"
+#include "utl/MemMgr.h"
 #include <vector>
 
 struct MidiMessage {
@@ -9,6 +10,7 @@ struct MidiMessage {
     unsigned long dwParam1;
     unsigned long dwParam2;
     unsigned int wTimeMs;
+    MEM_ARRAY_OVERLOAD(MidiMessage, 0x12)
 };
 
 class MidiReader;

@@ -27,7 +27,8 @@ class TestWorktreeHasChanges(unittest.TestCase):
         subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=self.repo, capture_output=True, check=True)
         subprocess.run(["git", "config", "user.name", "Test"], cwd=self.repo, capture_output=True, check=True)
         # Create initial commit
-        (self.repo / "test.txt").write_text("hello")
+        (self.repo / "src").mkdir()
+        (self.repo / "src" / "test.cpp").write_text("// hello")
         subprocess.run(["git", "add", "."], cwd=self.repo, capture_output=True, check=True)
         subprocess.run(["git", "commit", "-m", "init"], cwd=self.repo, capture_output=True, check=True)
 
@@ -54,15 +55,15 @@ class TestWorktreeHasChanges(unittest.TestCase):
         self.assertFalse(has_changes)
 
     def test_returns_true_for_modified_file(self):
-        """Test that modified file returns True."""
-        (self.repo / "test.txt").write_text("modified")
+        """Test that modified file in src/ returns True."""
+        (self.repo / "src" / "test.cpp").write_text("// modified")
         has_changes = self.orch._worktree_has_changes(self.repo)
         self.assertTrue(has_changes)
 
     def test_returns_true_for_new_staged_file(self):
-        """Test that new staged file returns True."""
-        (self.repo / "new.txt").write_text("new content")
-        subprocess.run(["git", "add", "new.txt"], cwd=self.repo, capture_output=True, check=True)
+        """Test that new staged file in src/ returns True."""
+        (self.repo / "src" / "new.cpp").write_text("// new content")
+        subprocess.run(["git", "add", "src/new.cpp"], cwd=self.repo, capture_output=True, check=True)
         has_changes = self.orch._worktree_has_changes(self.repo)
         self.assertTrue(has_changes)
 
@@ -233,7 +234,9 @@ class TestRefactorPassIntegration(unittest.IsolatedAsyncioTestCase):
         )
 
         # Verify refactor methods were called
-        self.orch._worktree_has_changes.assert_called_once()
+        # _worktree_has_changes is called twice: once for pre-refactor patch extraction (9a),
+        # once for the refactor gate (9b)
+        self.assertEqual(self.orch._worktree_has_changes.call_count, 2)
         self.orch._build_refactor_prompt.assert_called_once()
 
         # Verify runner was called twice (first pass + refactor)
@@ -301,7 +304,9 @@ class TestRefactorPassIntegration(unittest.IsolatedAsyncioTestCase):
         )
 
         # Verify refactor was NOT run
-        self.orch._worktree_has_changes.assert_called_once()
+        # _worktree_has_changes is called twice: once for pre-refactor patch extraction (9a),
+        # once for the refactor gate (9b) — both return False
+        self.assertEqual(self.orch._worktree_has_changes.call_count, 2)
         self.orch._build_refactor_prompt.assert_not_called()
         self.assertEqual(self.orch.runner.run.call_count, 1)  # Only first pass
 
@@ -424,7 +429,7 @@ class TestRefactorPassIntegration(unittest.IsolatedAsyncioTestCase):
         checkout_calls = [call for call in mock_subprocess_run.call_args_list
                           if call[0][0][:2] == ["git", "checkout"]]
         self.assertEqual(len(checkout_calls), 1)
-        self.assertEqual(checkout_calls[0][0][0], ["git", "checkout", "--", "."])
+        self.assertEqual(checkout_calls[0][0][0], ["git", "checkout", "--", "src/", "include/"])
 
     @patch('scripts.orchestrator.core.lock_function')
     @patch('scripts.orchestrator.core.unlock_function')

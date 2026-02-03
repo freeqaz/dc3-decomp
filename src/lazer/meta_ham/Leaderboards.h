@@ -45,21 +45,21 @@ protected:
 
     DataNode OnMsg(const RCJobCompleteMsg &);
 
-    std::list<SongStatusData> unk30;
+    std::list<SongStatusData> mScoresToUpload; // 0x30
     std::list<HamProfile *> mPendingProfiles; // 0x38
     RecordScoreData mRecordScoreData; // 0x40
-    HamProfile *unk54;
-    std::vector<LeaderboardRow> unk58;
-    std::map<unsigned int, std::vector<LeaderboardRow> > unk64; // 0x64
+    HamProfile *mUploadProfile; // 0x54
+    std::vector<LeaderboardRow> mRows; // 0x58
+    std::map<unsigned int, std::vector<LeaderboardRow> > mScoreCache; // 0x64
     int unk7c;
-    bool unk80;
-    int unk84; // 0x84 - lb type
-    int unk88; // 0x88 - lb mode
+    bool mLoading; // 0x80
+    int mType; // 0x84
+    int mMode; // 0x88
     int unk8c;
-    int unk90; // 0x90 - song id?
-    bool unk94;
-    int unk98;
-    bool unk9c;
+    int unk90;
+    bool mFetchingScores; // 0x94
+    GetLeaderboardByPlayerJob *mLeaderboardJob; // 0x98
+    bool mDisconnected; // 0x9c
 };
 
 extern Leaderboards *TheLeaderboards;

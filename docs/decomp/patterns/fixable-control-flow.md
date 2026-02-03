@@ -245,6 +245,49 @@ The compiler generates different branch structures even when the logic is equiva
 
 ---
 
+## Single Return for Branch Direction
+
+**Impact:** +6%
+**Success Rate:** HIGH
+**Time:** 5 minutes
+
+Pre-initialize the result before an if-block so both paths share a single `return` statement. This makes the compiler generate `beq` (skip body → fall through to return) instead of `bne` (enter body from early-return path).
+
+### Symptom
+
+objdiff shows CONTROL_FLOW mismatch: target has `beq` but base generates `bne` at the same branch point. Typically appears with `||` conditions that guard early returns.
+
+### Why It Works
+
+An `||` condition with two `return` statements (one inside, one after the if-block) generates two `bne` branches to the body. A single return with a pre-initialized result makes the compiler generate `beq` to skip the body and fall through to the shared return.
+
+### Fix
+
+```cpp
+// Before (82.6%) - two return paths, generates bne
+if (obj != 0 || mListMode != kObjListNoNull) {
+    // ... body ...
+    return result;
+}
+return fallback;
+
+// After (88.6%) - single return, generates beq
+auto result = fallback;
+if (obj != 0 || mListMode != kObjListNoNull) {
+    // ... body ...
+    result = computed_value;
+}
+return result;
+```
+
+### Real Examples
+
+| Function | Before | After | Delta | Notes |
+|----------|--------|-------|-------|-------|
+| ObjPtrVec::insert | 82.6% | 88.6% | +6.0% | `beq` vs `bne` at branch index 12 |
+
+---
+
 ## See Also
 
 - [fixable-comparison.md](fixable-comparison.md) - Conditional expression patterns

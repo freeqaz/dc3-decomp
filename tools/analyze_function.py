@@ -117,9 +117,9 @@ PATTERN_DOCS = {
 
     # Unfixable/rarely fixable patterns - compiler
     "BOOL_MASK": (
-        "unfixable-compiler.md",
-        "bool-mask",
-        "Accept as at_limit - compiler bool ABI handling"
+        "fixable-bool-mask.md",
+        "",
+        "Often fixable: try local bool variable, (bool) cast, or find missing inline — see pattern doc"
     ),
     "REGISTER_SWAP": (
         "unfixable-compiler.md",

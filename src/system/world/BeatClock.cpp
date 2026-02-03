@@ -86,3 +86,22 @@ void BeatClock::SetBeatsPerMeasure(int beats) {
     mMeasureMap = new MeasureMap();
     mMeasureMap->AddTimeSignature(0, beats, 4, true);
 }
+
+BEGIN_LOADS(BeatClock)
+    LOAD_REVS(bs)
+    ASSERT_REVS(3, 0)
+    LOAD_SUPERCLASS(Hmx::Object)
+    d >> mBeatsPerMinute;
+    d >> mBeatsPerMeasure;
+    d >> mUseGlobal;
+    if (d.rev >= 1) {
+        d >> mMeasuresPerPhrase;
+    }
+    if (d.rev >= 2) {
+        mSound.Load(d.stream, true, nullptr);
+    }
+    if (d.rev >= 3) {
+        d >> (int &)mTimeline;
+    }
+    SetBeatsPerMeasure(mBeatsPerMeasure);
+END_LOADS

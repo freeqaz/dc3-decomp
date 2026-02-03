@@ -130,13 +130,14 @@ class TestCollectPreRunContextSuccess(unittest.TestCase):
 
         # Assertions
         self.assertIsInstance(context, dict)
-        self.assertEqual(len(context), 34, "Should have all 34 keys from result dict")
+        self.assertEqual(len(context), 43, "Should have all 43 keys from result dict")
         self.assertAlmostEqual(context["match_percent"], 98.67)
         self.assertEqual(context["verdict"], "LIKELY_FIXABLE")
         self.assertIsInstance(context["key_patterns"], list)
         self.assertIsInstance(context["suggestions"], list)
         self.assertEqual(len(context["suggestions"]), 2)
-        self.assertEqual(context["decompilation"], "void func() { /* original */ }")
+        # At 98.67% match, decompilation is file-only (not inlined) to save prompt budget
+        self.assertIn("file-only", context["decompilation"])
         self.assertIn("Attempt 1", context["previous_attempts"])
         self.assertIn("Attempt 2", context["previous_attempts"])
 
@@ -606,7 +607,9 @@ class TestContextDictStructure(unittest.TestCase):
             "previous_attempts",
             "previous_attempts_count",
             "decompilation",
+            "ghidra_file_path_relative",
             "rb3_reference",
+            "rb3_file_path_relative",
             "m2c_decompilation",
             "m2c_file_path",
             "m2c_file_path_relative",
@@ -616,6 +619,13 @@ class TestContextDictStructure(unittest.TestCase):
             "xrefs_path_relative",
             "xrefs_preview",
             "source_file_absolute",
+            "header_file_absolute",
+            "header_contents",
+            "header_line_count",
+            "source_contents",
+            "source_window_start_line",
+            "source_window_end_line",
+            "source_total_lines",
             "objdiff_file",
             "objdiff_file_absolute",
             "objdiff_line_count",

@@ -85,7 +85,7 @@ AppMiniLeaderboardDisplay::ElementStateOverride(int, int data, UIListWidgetState
         bool bHasOnlineID = profile->IsSignedIn();
         MILO_ASSERT(bHasOnlineID, 500);
         XUID xuid = profile->GetOnlineID()->GetXUID();
-        if (mLBRows[data].unk20 == xuid) {
+        if (mLBRows[data].mXUID == xuid) {
             return kUIListWidgetHighlight;
         }
     }

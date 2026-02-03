@@ -36,14 +36,18 @@ These patterns can often be fixed with source changes. Sorted by ROI (impact x s
 | Comparison Style | [fixable-comparison.md](fixable-comparison.md#comparison-style) |
 | Initializer Literals | [fixable-declarations.md](fixable-declarations.md#initializer-literals) |
 | Static Variable Scope | [fixable-declarations.md](fixable-declarations.md#static-variable-scope) |
+| Braced vs Braceless If (Scope Counter) | [fixable-declarations.md](fixable-declarations.md#braced-vs-braceless-if-scope-counter) |
 | Static Symbol Order | [fixable-declarations.md](fixable-declarations.md#static-symbol-order) |
 | Offset Swap | [fixable-declarations.md](fixable-declarations.md#offset-swap) |
+| sret Return Value Tracing | [fixable-declarations.md](fixable-declarations.md#sret-return-value-tracing) |
 | Loop Structure | [fixable-control-flow.md](fixable-control-flow.md#loop-structure) |
 | Sequential If vs If-Else | [fixable-control-flow.md](fixable-control-flow.md#sequential-if-vs-if-else) |
+| Single Return for Branch Direction | [fixable-control-flow.md](fixable-control-flow.md#single-return-for-branch-direction) |
 | Boolean Index | [fixable-operators.md](fixable-operators.md#boolean-index) |
 | Bitwise Alignment | [fixable-operators.md](fixable-operators.md#bitwise-alignment) |
 | Commutative Operand Order | [fixable-operators.md](fixable-operators.md#commutative-operand-order) |
 | Comparison Operand Order | [fixable-operators.md](fixable-operators.md#comparison-operand-order) |
+| Bool Mask | [fixable-bool-mask.md](fixable-bool-mask.md) |
 
 ---
 
@@ -57,7 +61,6 @@ These patterns cannot be fixed at source level. Accept current match percentage 
 | LTCG/Global Pooling | varies | 0.5-1% | [verifiable-icf.md](verifiable-icf.md#ltcg-global-pooling) |
 | Float Constant Pooling | common | 1-2 instr | [verifiable-icf.md](verifiable-icf.md#float-constant-pooling) |
 | Register Allocation | 607 functions | 1-3% | [unfixable-compiler.md](unfixable-compiler.md#register-allocation) |
-| Bool Mask | 9 functions | ~3% | [unfixable-compiler.md](unfixable-compiler.md#bool-mask) |
 | ASSERT_REVS Scheduling | ~10% | ~0.8-0.9% | [unfixable-compiler.md](unfixable-compiler.md#assert_revs-scheduling) |
 | fmadds vs Separate Ops | float math | 1-3% | [unfixable-compiler.md](unfixable-compiler.md#fmadds-vs-separate-ops) |
 | Commutative Register Swap | float ops | <1% | [unfixable-compiler.md](unfixable-compiler.md#commutative-register-swap) |
@@ -131,7 +134,7 @@ From `decomp.db` — 47,371 functions, 14,772 attempts, 2,149 generated patches:
 | REGISTER_SWAP | 607 | 92.3% | 92 | 11 | Rarely — compiler artifact |
 | LINKER_MERGED | 400 | 96.3% | 174 | 4 | No — ICF/LTCG |
 | CONTROL_FLOW | 134 | 92.4% | 21 | 8 | Sometimes |
-| BOOL_MASK | 9 | 92.8% | 1 | 0 | No |
+| BOOL_MASK | 33 | 92.8% | 1 | 0 | Often |
 | COMPARISON_STYLE | 7 | 93.2% | 3 | 0 | Often |
 
 ### Fine-Tuning Success Rates (90%+ to 100%)
@@ -161,6 +164,7 @@ From 143 successful fine-tuning attempts (90%+ start, 100% end):
 - [fixable-control-flow.md](fixable-control-flow.md) — Max/Min explicit, ternary vs if/else, loop structure
 - [fixable-declarations.md](fixable-declarations.md) — Variable extraction, declaration order, destructor
 - [fixable-operators.md](fixable-operators.md) — FMA order, operator overload, inline assignment
-- [unfixable-compiler.md](unfixable-compiler.md) — Register swap, bool mask, ASSERT_REVS, fmadds
+- [fixable-bool-mask.md](fixable-bool-mask.md) — Bool mask (`clrlwi`) fixes
+- [unfixable-compiler.md](unfixable-compiler.md) — Register swap, ASSERT_REVS, fmadds
 - [verifiable-icf.md](verifiable-icf.md) — ICF, LTCG, float constant pooling
 - [harmful-avoid.md](harmful-avoid.md) — Member aliasing, child pointer in loop

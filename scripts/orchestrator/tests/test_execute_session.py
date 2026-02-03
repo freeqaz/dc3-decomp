@@ -57,7 +57,7 @@ class TestExecuteSession(unittest.IsolatedAsyncioTestCase):
         mock_lock.return_value = True
         mock_select_model.return_value = "haiku"
         mock_escalation.return_value = "first attempt"
-        mock_collect_context.return_value = {"match_percent": "80.0", "verdict": "LIKELY_FIXABLE"}
+        mock_collect_context.return_value = {"match_percent": 80.0, "verdict": "LIKELY_FIXABLE"}
 
         # Mock worktree pool
         self.orch.worktree_pool.acquire = MagicMock(return_value=Path("/fake/worktree"))
@@ -290,7 +290,7 @@ class TestExecuteSession(unittest.IsolatedAsyncioTestCase):
         mock_select_model.return_value = "haiku"
         mock_escalation.return_value = "first attempt"
 
-        context_data = {"match_percent": "80.0", "verdict": "LIKELY_FIXABLE", "key_patterns": ["register"]}
+        context_data = {"match_percent": 80.0, "verdict": "LIKELY_FIXABLE", "key_patterns": ["register"]}
         mock_collect_context.return_value = context_data
 
         self.orch.worktree_pool.acquire = MagicMock(return_value=Path("/fake/worktree"))

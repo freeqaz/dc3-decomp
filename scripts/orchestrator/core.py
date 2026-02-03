@@ -11,6 +11,7 @@ import os
 import re
 import subprocess
 import sys
+from collections import Counter
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Optional
@@ -98,6 +99,7 @@ def _setup_logging(logs_dir: Path = DEFAULT_LOGS_DIR) -> logging.Logger:
         return logger  # Already configured
 
     logger.setLevel(logging.DEBUG)
+    logger.propagate = False  # Prevent duplicate output via root logger
 
     # Console handler: INFO and above, concise
     console_handler = logging.StreamHandler()
@@ -122,6 +124,10 @@ def _setup_logging(logs_dir: Path = DEFAULT_LOGS_DIR) -> logging.Logger:
     )
     file_handler.setFormatter(file_fmt)
     logger.addHandler(file_handler)
+
+    # Suppress noisy third-party loggers that spam during batch runs.
+    # pyghidra_mcp logs project opening, analysis status, map parsing on every call.
+    logging.getLogger("pyghidra_mcp").setLevel(logging.WARNING)
 
     return logger
 
@@ -267,13 +273,23 @@ class DecompOrchestrator:
             return f.read()
 
     def _worktree_has_changes(self, worktree: Path) -> bool:
-        """Check if worktree has uncommitted changes."""
+        """Check if worktree has uncommitted changes or new files in src/include."""
+        # Check tracked file modifications
         result = subprocess.run(
-            ["git", "diff", "--quiet", "HEAD"],
+            ["git", "diff", "--quiet", "HEAD", "--", "src/", "include/"],
             cwd=worktree,
             capture_output=True,
         )
-        return result.returncode != 0
+        if result.returncode != 0:
+            return True
+        # Also check for new untracked files in src/
+        untracked = subprocess.run(
+            ["git", "ls-files", "--others", "--exclude-standard", "src/", "include/"],
+            cwd=worktree,
+            capture_output=True,
+            text=True,
+        )
+        return bool(untracked.stdout.strip())
 
     def _build_refactor_prompt(self, func: dict, worktree: Path, first_pass_percent: float) -> str:
         """Build prompt for refactor-staff second pass."""
@@ -361,14 +377,14 @@ Focus on readability and maintainability while preserving exact behavior and mat
         # Log per-section sizes for budget debugging
         sections = {
             "template": len(template),
-            "rb3_reference": len(context.get('rb3_reference', '')),
-            "m2c_decompilation": len(context.get('m2c_decompilation', '')),
-            "ghidra_decompilation": len(context.get('decompilation', '')),
-            "objdiff_preview": len(context.get('objdiff_preview', '')),
-            "previous_attempts": len(context.get('previous_attempts', '')),
-            "xrefs_preview": len(context.get('xrefs_preview', '')),
-            "header_contents": len(context.get('header_contents', '')),
-            "source_contents": len(context.get('source_contents', '')),
+            "rb3_reference": len(context.get('rb3_reference') or ''),
+            "m2c_decompilation": len(context.get('m2c_decompilation') or ''),
+            "ghidra_decompilation": len(context.get('decompilation') or ''),
+            "objdiff_preview": len(context.get('objdiff_preview') or ''),
+            "previous_attempts": len(context.get('previous_attempts') or ''),
+            "xrefs_preview": len(context.get('xrefs_preview') or ''),
+            "header_contents": len(context.get('header_contents') or ''),
+            "source_contents": len(context.get('source_contents') or ''),
         }
         total_sections = sum(sections.values())
         self.logger.info(
@@ -593,6 +609,25 @@ Focus on readability and maintainability while preserving exact behavior and mat
                 f"exit_code={agent_result.exit_code}"
             )
 
+            # 9a. Extract pre-refactor patch (backup before refactor-staff modifies it)
+            pre_refactor_patch = None
+            if refactor and self._worktree_has_changes(worktree):
+                try:
+                    pre_refactor_patch = self.worktree_pool.extract_patch(session_id)
+                    if pre_refactor_patch:
+                        log.info(f"Pre-refactor patch extracted: {len(pre_refactor_patch)} bytes")
+                        # Save to generated-patches/dirty/ as backup
+                        dirty_dir = self.main_repo / "generated-patches" / "dirty"
+                        dirty_dir.mkdir(parents=True, exist_ok=True)
+                        safe_name = func["symbol"].replace("?", "").replace("@", "_")[:50]
+                        pct = agent_result.percent or start_percent
+                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                        dirty_path = dirty_dir / f"{safe_name}_{pct:.0f}pct_{timestamp}.patch"
+                        dirty_path.write_text(pre_refactor_patch)
+                        log.debug(f"Pre-refactor backup saved: {dirty_path}")
+                except Exception as e:
+                    log.warning(f"Failed to extract pre-refactor patch: {e}")
+
             # 9b. Refactor pass (if enabled and first pass made changes)
             if refactor and self._worktree_has_changes(worktree):
                 try:
@@ -613,11 +648,23 @@ Focus on readability and maintainability while preserving exact behavior and mat
                     # Safety: check if match% regressed
                     if refactor_result.percent is not None and agent_result.percent is not None:
                         if refactor_result.percent < agent_result.percent - 0.1:
-                            # Regressed — revert refactor changes
+                            # Regressed — revert refactor changes (tracked + untracked)
                             log.warning(
                                 f"Refactor pass regressed: {agent_result.percent}% -> {refactor_result.percent}%. Reverting."
                             )
-                            subprocess.run(["git", "checkout", "--", "."], cwd=worktree, capture_output=True)
+                            subprocess.run(["git", "checkout", "--", "src/", "include/"], cwd=worktree, capture_output=True)
+                            subprocess.run(["git", "clean", "-fd", "--", "src/", "include/"], cwd=worktree, capture_output=True)
+                            subprocess.run(["git", "reset", "HEAD", "--", "src/", "include/"], cwd=worktree, capture_output=True)
+                            # Re-apply pre-refactor patch if we have it
+                            if pre_refactor_patch:
+                                log.info("Re-applying pre-refactor patch after revert...")
+                                apply_proc = subprocess.run(
+                                    ["git", "apply", "--allow-empty"],
+                                    input=pre_refactor_patch, cwd=worktree,
+                                    capture_output=True, text=True,
+                                )
+                                if apply_proc.returncode != 0:
+                                    log.warning(f"Failed to re-apply pre-refactor patch: {apply_proc.stderr}")
                         else:
                             # Success — merge cost
                             agent_result.merge_cost(refactor_result)
@@ -640,8 +687,17 @@ Focus on readability and maintainability while preserving exact behavior and mat
             else:
                 log.info("No patch (no changes in worktree)")
 
-            # 10b. Detect "agent claims progress but no patch" inconsistency
-            if not patch and agent_result.percent is not None and agent_result.percent > (func.get("current_percent") or 0):
+            # 10b. Handle "already matching" case — agent reports complete with no changes needed
+            if not patch and agent_result.status == "complete" and agent_result.percent is not None:
+                db_percent = func.get("current_percent") or 0
+                if agent_result.percent > db_percent:
+                    log.info(
+                        f"No patch but agent reports {agent_result.percent:.1f}% "
+                        f"(DB has {db_percent:.1f}%). Trusting agent — function likely already matching."
+                    )
+
+            # 10c. Detect "agent claims progress but no patch" inconsistency
+            elif not patch and agent_result.percent is not None and agent_result.percent > (func.get("current_percent") or 0):
                 log.warning(
                     f"Agent reported improvement ({func.get('current_percent') or 0:.2f}% -> "
                     f"{agent_result.percent:.2f}%) but worktree has no changes. "
@@ -654,6 +710,9 @@ Focus on readability and maintainability while preserving exact behavior and mat
             # 11. Unpack result
             end_percent = agent_result.percent if agent_result.percent is not None else start_percent
             exit_status = agent_result.status
+            if exit_status == "unknown":
+                log.warning("Agent exited without reporting status — treating as error")
+                exit_status = "error"
             notes = notes_prefix + agent_result.notes
             verdict = agent_result.verdict
 
@@ -689,6 +748,7 @@ Focus on readability and maintainability while preserving exact behavior and mat
                 actual_cost_usd=actual_cost_usd,
                 duration_ms=duration_ms,
                 enrichment_flags=context.get("enrichment_flags"),
+                pre_refactor_patch=pre_refactor_patch,
                 db_path=self.db_path,
             )
 
@@ -1029,6 +1089,10 @@ Focus on readability and maintainability while preserving exact behavior and mat
         processed = 0
         errors = 0
         batch_count = 0
+        consecutive_errors = 0
+        recent_errors: list[str] = []
+        circuit_tripped = False
+        circuit_reason = ""
         batch_start_time = datetime.now()
         build_metrics = {
             "incremental_count": 0,
@@ -1074,7 +1138,22 @@ Focus on readability and maintainability while preserving exact behavior and mat
                     results.append(result)
                     if result.get("status") == "error":
                         errors += 1
+                        consecutive_errors += 1
+                        recent_errors.append(result.get("error", "unknown"))
+                        reason = self._should_trip_circuit_breaker(
+                            errors, len(results), consecutive_errors, recent_errors
+                        )
+                        if reason:
+                            circuit_tripped = True
+                            circuit_reason = reason
+                            print(f"\nCIRCUIT BREAKER: {reason}")
+                            self.logger.error(f"CIRCUIT BREAKER: {reason}")
+                            break
+                    else:
+                        consecutive_errors = 0
                     batch_count += 1
+            if circuit_tripped:
+                break
 
             # Lock function BEFORE spawning to prevent race conditions
             session_id = f"batch-{func['id']}-{datetime.now().strftime('%H%M%S')}"
@@ -1095,7 +1174,7 @@ Focus on readability and maintainability while preserving exact behavior and mat
                 build_str = "inc" if current_use_incremental else "full"
                 print(f"[{len(self.active_sessions)}/{max_agents}] Spawned: {func.get('demangled') or func['symbol']} ({build_str})")
 
-        # Wait for remaining agents
+        # Wait for remaining agents (drain — no new spawns, just collect results)
         while self.active_sessions:
             result = await self._wait_for_any_completion()
             if result:
@@ -1109,16 +1188,24 @@ Focus on readability and maintainability while preserving exact behavior and mat
         summary["periodic_validation"] = periodic_full_interval if use_incremental else 0
         summary["build_metrics"] = build_metrics
         summary["auto_apply_stats"] = self.patch_applier.stats()
+        if circuit_tripped:
+            summary["circuit_breaker_tripped"] = True
+            summary["circuit_breaker_reason"] = circuit_reason
 
         if verbose:
             elapsed = (datetime.now() - batch_start_time).total_seconds()
             print(f"\n{'='*60}")
-            print("Batch complete!")
+            if circuit_tripped:
+                print("Batch stopped early (circuit breaker)")
+            else:
+                print("Batch complete!")
             print(f"Processed: {len(results)} functions in {elapsed:.1f}s")
             print(f"Build strategy: {summary['build_strategy']}")
             if periodic_full_interval > 0 and use_incremental:
                 print(f"Periodic full builds: Every {periodic_full_interval} batches")
             print(f"Errors: {errors}")
+            if errors > 0:
+                self._print_error_summary(results)
             if summary.get("improvements"):
                 print(f"Improvements: {len(summary['improvements'])}")
                 total_gain = sum(
@@ -1192,6 +1279,10 @@ Focus on readability and maintainability while preserving exact behavior and mat
         processed = 0
         errors = 0
         batch_count = 0
+        consecutive_errors = 0
+        recent_errors: list[str] = []
+        circuit_tripped = False
+        circuit_reason = ""
         batch_start_time = datetime.now()
         target_idx = 0
 
@@ -1228,6 +1319,10 @@ Focus on readability and maintainability while preserving exact behavior and mat
                     results.append(result)
                     if result.get("status") == "error":
                         errors += 1
+                        consecutive_errors += 1
+                        recent_errors.append(result.get("error", "unknown"))
+                    else:
+                        consecutive_errors = 0
                     batch_count += 1
                 continue
 
@@ -1246,7 +1341,22 @@ Focus on readability and maintainability while preserving exact behavior and mat
                     results.append(result)
                     if result.get("status") == "error":
                         errors += 1
+                        consecutive_errors += 1
+                        recent_errors.append(result.get("error", "unknown"))
+                        reason = self._should_trip_circuit_breaker(
+                            errors, len(results), consecutive_errors, recent_errors
+                        )
+                        if reason:
+                            circuit_tripped = True
+                            circuit_reason = reason
+                            print(f"\nCIRCUIT BREAKER: {reason}")
+                            self.logger.error(f"CIRCUIT BREAKER: {reason}")
+                            break
+                    else:
+                        consecutive_errors = 0
                     batch_count += 1
+            if circuit_tripped:
+                break
 
             # Lock function BEFORE spawning to prevent race conditions
             session_id = f"batch-{func['id']}-{datetime.now().strftime('%H%M%S')}"
@@ -1268,7 +1378,7 @@ Focus on readability and maintainability while preserving exact behavior and mat
                 pct = func.get("current_percent") or 0
                 print(f"[{len(self.active_sessions)}/{max_agents}] Spawned: {func.get('demangled') or func['symbol']} ({pct:.1f}%, {build_str})")
 
-        # Wait for remaining agents
+        # Wait for remaining agents (drain — no new spawns, just collect results)
         while self.active_sessions:
             result = await self._wait_for_any_completion()
             if result:
@@ -1283,14 +1393,22 @@ Focus on readability and maintainability while preserving exact behavior and mat
         summary["auto_apply_stats"] = self.patch_applier.stats()
         summary["target_count"] = len(targets)
         summary["processed_count"] = processed
+        if circuit_tripped:
+            summary["circuit_breaker_tripped"] = True
+            summary["circuit_breaker_reason"] = circuit_reason
 
         if verbose:
             elapsed = (datetime.now() - batch_start_time).total_seconds()
             print(f"\n{'='*60}")
-            print("Batch complete!")
+            if circuit_tripped:
+                print("Batch stopped early (circuit breaker)")
+            else:
+                print("Batch complete!")
             print(f"Processed: {processed}/{len(targets)} targets in {elapsed:.1f}s")
             print(f"Build strategy: {summary['build_strategy']}")
             print(f"Errors: {errors}")
+            if errors > 0:
+                self._print_error_summary(results)
             if summary.get("improvements"):
                 print(f"Improvements: {len(summary['improvements'])}")
                 total_gain = sum(
@@ -1345,10 +1463,10 @@ Focus on readability and maintainability while preserving exact behavior and mat
                 refactor=refactor,
             )
         except Exception as e:
-            print(f"[{session_id}] Error: {e}")
+            self.logger.error(f"[{session_id}] {type(e).__name__}: {e}", exc_info=True)
             return {
                 "status": "error",
-                "error": str(e),
+                "error": f"{type(e).__name__}: {e}",
                 "symbol": func["symbol"],
                 "function_id": func["id"],  # Need this for unlock
             }
@@ -1428,6 +1546,51 @@ Focus on readability and maintainability while preserving exact behavior and mat
         summary["modified_files"] = list(summary["modified_files"])
 
         return summary
+
+    def _print_error_summary(self, results: list[dict[str, Any]]) -> None:
+        """Print grouped error summary to console and logger."""
+        error_messages = [
+            r.get("error", "unknown") for r in results if r.get("status") == "error"
+        ]
+        if not error_messages:
+            return
+        grouped = Counter(e[:80] for e in error_messages)
+        print("Error breakdown:")
+        for msg, count in grouped.most_common(5):
+            print(f"  {count}x: {msg}")
+            self.logger.error(f"Batch error ({count}x): {msg}")
+
+    def _should_trip_circuit_breaker(
+        self,
+        errors: int,
+        processed: int,
+        consecutive_errors: int,
+        recent_errors: list[str],
+        *,
+        max_consecutive: int = 5,
+        max_error_rate: float = 0.6,
+        min_processed: int = 4,
+    ) -> Optional[str]:
+        """Return a reason string if circuit breaker should trip, else None."""
+        if consecutive_errors >= max_consecutive:
+            # Group errors by prefix to find dominant root cause
+            prefixes = Counter(e[:80] for e in recent_errors[-max_consecutive:])
+            top_cause, top_count = prefixes.most_common(1)[0]
+            return (
+                f"Stopping batch — {consecutive_errors} consecutive errors\n"
+                f"  Root cause ({top_count}x): \"{top_cause}\"\n"
+                f"  Processed: {processed}, Errors: {errors}"
+            )
+        if processed >= min_processed and errors / processed > max_error_rate:
+            prefixes = Counter(e[:80] for e in recent_errors)
+            top_cause, top_count = prefixes.most_common(1)[0]
+            rate = errors / processed * 100
+            return (
+                f"Stopping batch — error rate {rate:.0f}% after {processed} results\n"
+                f"  Root cause ({top_count}x): \"{top_cause}\"\n"
+                f"  Processed: {processed}, Errors: {errors}"
+            )
+        return None
 
     def status(self) -> dict[str, Any]:
         """Get current orchestrator status."""
@@ -1613,7 +1776,7 @@ Focus on readability and maintainability while preserving exact behavior and mat
                 pre_locked=True,  # Batch already locked the function
             )
         except Exception as e:
-            print(f"[{session_id}] Error: {e}")
+            print(f"[{session_id}] Error: {type(e).__name__}: {e}")
             return {
                 "status": "error",
                 "error": str(e),

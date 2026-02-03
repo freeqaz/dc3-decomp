@@ -222,12 +222,12 @@ Queue::Queue(int i) : mArrayStart(0) { Initialize(i); }
 
 Queue::~Queue() {
     CritSecTracker tracker(&gCritSection);
-    delete mArrayStart;
+    delete[] mArrayStart;
 }
 
 void Queue::Initialize(int i) {
     CritSecTracker tracker(&gCritSection);
-    delete mArrayStart;
+    delete[] mArrayStart;
     mArrayStart = new MidiMessage[i + 1];
     mArrayEnd = &mArrayStart[i] + 1;
     mUsurpedFret[0] = mUsurpedFret[1] = mUsurpedFret[2] = mUsurpedFret[3] =

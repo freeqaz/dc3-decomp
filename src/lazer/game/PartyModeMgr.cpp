@@ -1177,9 +1177,10 @@ void PartyModeMgr::SetSongAndDefaults(Symbol song, Symbol mode, bool force_crew_
     Symbol altCrew;
     Symbol altChar;
     Symbol altOutfit;
+    bool isSpecialMode = mode == dance_battle || mode == strike_a_pose;
     MetaPerformer::Current()->CalcCharacters(
         data,
-        mode == dance_battle || mode == strike_a_pose,
+        isSpecialMode,
         (PlayerFlag)2,
         songPlayerData,
         songCrew,
