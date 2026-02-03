@@ -467,7 +467,8 @@ Focus on readability and maintainability while preserving exact behavior and mat
             log.warning(f"Skipping merged symbol {func['symbol']} (ICF artifact, not actionable)")
             return {
                 "status": "at_limit",
-                "percent": 0.0,
+                "start_percent": 0.0,
+                "end_percent": 0.0,
                 "notes": f"Merged symbol (ICF artifact). Not a real decomp target.",
                 "symbol": func["symbol"],
             }

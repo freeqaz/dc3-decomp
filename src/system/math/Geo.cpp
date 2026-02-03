@@ -386,6 +386,23 @@ namespace stlpmtx_std {
             }
         }
     }
+
+    template<>
+    std::list<BSPFace, StlNodeAlloc<BSPFace>>::iterator
+    list<BSPFace, StlNodeAlloc<BSPFace>>::insert(
+        std::list<BSPFace, StlNodeAlloc<BSPFace>>::iterator __pos,
+        const BSPFace& __x) {
+        _List_node_base* __tmp = _M_create_node(__x);
+        _List_node_base* __pos_node = __pos._M_node;
+        _List_node_base* __prev_node = __pos_node->_M_prev;
+
+        __tmp->_M_next = __pos_node;
+        __tmp->_M_prev = __prev_node;
+        __prev_node->_M_next = __tmp;
+        __pos_node->_M_prev = __tmp;
+
+        return iterator(__tmp);
+    }
 }
 
 

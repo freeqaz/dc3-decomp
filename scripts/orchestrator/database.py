@@ -367,6 +367,9 @@ def get_next_function(
     if exclude_locked:
         query += " AND locked_by IS NULL"
 
+    # Exclude merged symbols (ICF artifacts, not real decomp targets)
+    query += " AND symbol NOT LIKE 'merged_%'"
+
     excluded_verdicts = []
     if exclude_complete:
         excluded_verdicts.append('COMPLETE')

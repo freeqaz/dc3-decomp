@@ -19,6 +19,8 @@
 bool gMemTrackerTracking;
 String gMemLogType;
 
+extern MemTracker *gMemTracker;
+
 bool StackLess(AllocInfo *const &a1, AllocInfo *const &a2) {
     return a1->StackCompare(*a2) < 0;
 }
@@ -29,6 +31,15 @@ int HashKey(void *ptr, int size) {
 }
 
 void DiffTblReport(const char *, BlockStatTable &, BlockStatTable &, TextStream &);
+
+// Explicit template instantiation for MakeString with 4 array reference arguments
+template const char *MakeString<const char(&)[9], const char(&)[3], const char(&)[9], const char(&)[8]>(
+    const char *,
+    const char(&)[9],
+    const char(&)[3],
+    const char(&)[9],
+    const char(&)[8]
+);
 
 MemTracker::MemTracker(int x, int y)
     : mHashMem(nullptr), mHashTable(nullptr), mTimeSlice(0), mCurStatTable(0),
@@ -318,6 +329,22 @@ void MemTracker::Report(int threshold, TextStream &ts) {
     DiffTblReport("pool", mPoolTable[mCurStatTable], mPoolTable[1 - mCurStatTable], ts);
 
     mCurStatTable = 1 - mCurStatTable;
+}
+
+int MemTracker::SpitAllocInfo(TextStream *ts) {
+    int ret = 1;
+    if (gMemTracker != nullptr && gMemTracker->mHashTable != nullptr) {
+        FormatString begin_fmt("----------------------------------------BEGIN MemTracker");
+        *ts << begin_fmt.Str() << "\n";
+        for (auto it = gMemTracker->mHashTable->Begin(); it != nullptr; it = gMemTracker->mHashTable->Next(it)) {
+            AllocInfo *info = *it;
+            info->PrintForReport(*ts);
+        }
+        FormatString end_fmt("----------------------------------------END MemTracker:::");
+        *ts << end_fmt.Str() << "\n";
+        ret = 0;
+    }
+    return ret;
 }
 
 void MemTracker::DiffDump(TextStream &ts) {

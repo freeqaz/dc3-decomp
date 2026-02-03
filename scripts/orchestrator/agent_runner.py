@@ -363,7 +363,7 @@ class AgentRunner:
         "mcp__orchestrator__query_functions": ["unit_pattern"],
     }
 
-    def _format_tool_summary(self, block: Any) -> str:
+    def _format_tool_summary(self, block: Any, prefix: str = "") -> str:
         """Format a tool call for normal verbosity: name + key args."""
         name = block.name
         inp = block.input or {}
@@ -379,26 +379,31 @@ class AgentRunner:
                     v = v[:77] + "..."
                 parts.append(v)
         suffix = f" {', '.join(parts)}" if parts else ""
-        return f"  [{name}]{suffix}"
+        return f"{prefix}  [{name}]{suffix}"
 
     def _print_message(self, message: Any, config: AgentRunConfig, output_lines: list[str]) -> None:
         """Print SDK message at the appropriate verbosity level.
 
         verbose=1 (normal): tool names with key args, match%, errors, result summary
         verbose=2 (--verbose): full text, all tool args, tool result snippets
+
+        All output is prefixed with [session_id] to disambiguate interleaved
+        output from parallel agents.
         """
         if not SDK_AVAILABLE:
             return
+
+        prefix = f"[{config.session_id}] "
 
         if isinstance(message, AssistantMessage):
             for block in message.content:
                 if isinstance(block, TextBlock):
                     output_lines.append(block.text)
                     if config.verbose >= 2:
-                        print(block.text, end="")
+                        print(f"{prefix}{block.text}", end="")
                 elif isinstance(block, ToolUseBlock):
                     if config.verbose >= 2:
-                        tool_str = f"\n[Tool: {block.name}]"
+                        tool_str = f"\n{prefix}[Tool: {block.name}]"
                         if hasattr(block, 'input') and block.input:
                             input_parts = []
                             for k, v in block.input.items():
@@ -412,7 +417,7 @@ class AgentRunner:
                         print(tool_str, end="")
                         output_lines.append(tool_str)
                     else:
-                        print(self._format_tool_summary(block))
+                        print(self._format_tool_summary(block, prefix=prefix))
 
         elif isinstance(message, UserMessage):
             for block in message.content:
@@ -429,28 +434,28 @@ class AgentRunner:
                         if len(content_str) > 200:
                             content_str = content_str[:200] + "..."
                         error_marker = " ERROR" if block.is_error else ""
-                        result_str = f"  → {content_str}{error_marker}\n"
+                        result_str = f"{prefix}  → {content_str}{error_marker}\n"
                         print(result_str, end="")
                         output_lines.append(result_str)
                     else:
                         if block.is_error:
                             short = content_str[:150] + "..." if len(content_str) > 150 else content_str
-                            print(f"    ERROR: {short}")
+                            print(f"{prefix}    ERROR: {short}")
                         else:
                             # Show match% from objdiff results
                             match = re.search(r'"match_percent":\s*([\d.]+)', content_str)
                             if match:
-                                print(f"    → {match.group(1)}% match")
+                                print(f"{prefix}    → {match.group(1)}% match")
 
         elif isinstance(message, ResultMessage):
             if config.verbose >= 2:
-                result_str = f"\n[Result: {message}]\n"
+                result_str = f"\n{prefix}[Result: {message}]\n"
                 print(result_str, end="")
                 output_lines.append(result_str)
             else:
                 cost = f"${message.total_cost_usd:.3f}" if message.total_cost_usd else "n/a"
                 turns = message.num_turns or "?"
-                print(f"  Done: {turns} turns, cost {cost}")
+                print(f"{prefix}  Done: {turns} turns, cost {cost}")
 
     async def _run_sdk(self, config: AgentRunConfig) -> dict[str, Any]:
         """Run agent via Python SDK."""
@@ -545,12 +550,13 @@ class AgentRunner:
             env=env,
         )
 
+        prefix = f"[{config.session_id}] "
         output_lines = []
         async for line in process.stdout:
             decoded = line.decode("utf-8", errors="replace")
             output_lines.append(decoded)
             if config.verbose >= 2:
-                print(decoded, end="")
+                print(f"{prefix}{decoded}", end="")
 
         await process.wait()
 

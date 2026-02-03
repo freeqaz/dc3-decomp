@@ -9,6 +9,7 @@
 #include "os/System.h"
 #include "utl/Option.h"
 #include "utl/PoolAlloc.h"
+#include "utl/Std.h"
 #include "utl/TextStream.h"
 #include "xdk/XAPILIB.h"
 #include <cstdlib>
@@ -62,6 +63,17 @@ void PhysDelta(const char *name) {
 }
 
 bool MemUseLowestMip() { return gbUseLowestMip; }
+
+bool MemUseLowestMipException(const char *exc) {
+    String str(exc);
+    str.ToLower();
+    FOREACH (it, gUseLowestMipExceptions) {
+        if (strstr(str.c_str(), it->c_str()) != nullptr) {
+            return true;
+        }
+    }
+    return false;
+}
 
 int _GetFreePhysicalMemory() {
     int low = 0;
@@ -455,6 +467,28 @@ void MemPopHeap() {
     }
     MemHeapStack s = ThreadMemStack(true);
     MILO_ASSERT(s.mSize > 0, 0x1f6);
+    s.mSize--;
+}
+
+void MemPushTemp() {
+    if (gNumHeaps == 0) {
+        return;
+    }
+    if (gNumHeaps <= 0) {
+        return;
+    }
+    MemHeapStack &s = ThreadMemStack(true);
+    s.mSize++;
+}
+
+void MemPopTemp() {
+    if (gNumHeaps == 0) {
+        return;
+    }
+    if (gNumHeaps <= 0) {
+        return;
+    }
+    MemHeapStack &s = ThreadMemStack(true);
     s.mSize--;
 }
 

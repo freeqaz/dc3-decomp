@@ -5,6 +5,8 @@
 #include "os/System.h"
 #include "utl/Std.h"
 
+OSCMessenger TheOSCMessenger;
+
 OSCMessenger::~OSCMessenger() {
     delete mSocket1;
     delete mSocket2;
@@ -91,6 +93,15 @@ int OSCMessenger::GetInt(String str, int intValue) {
         mValues.push_back(newValue);
         return intValue;
     }
+}
+
+OSCMessenger::OSCValue *OSCMessenger::GetValue(String str) {
+    FOREACH (it, mValues) {
+        if (it->unk0 == str) {
+            return &(*it);
+        }
+    }
+    return 0;
 }
 
 float OSCMessenger::GetFloat(String str, float fValue) {
