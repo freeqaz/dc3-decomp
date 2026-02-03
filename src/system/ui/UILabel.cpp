@@ -306,6 +306,8 @@ RndText::Style &UILabel::Style(int) {
     return dummy;
 }
 
+void UILabel::SetPrelocalizedString(String &s) { SetDisplayText(s.c_str(), true); }
+
 void UILabel::SetSubtitle(const DataArray *da) { SetDisplayText(da->Str(2), true); }
 
 void UILabel::SetTimeHMS(int, bool) {}
