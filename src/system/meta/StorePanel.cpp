@@ -103,10 +103,14 @@ void StorePanel::Unload() {
 
 void StorePanel::LoadArt(const char *cc, UIPanel *panel) {
     String str(cc);
-    std::list<NetCacheLoader *>::iterator it = std::find(unk54.begin(), unk54.end(), str);
+    std::list<NetCacheLoader *>::iterator it = unk54.begin();
+    std::list<NetCacheLoader *>::iterator end = unk54.end();
+    while (it != end) {
+        ++it;
+    }
     NetCacheLoader *loader = TheNetCacheMgr->AddNetCacheLoader(cc, (NetLoaderPos)0);
     if (loader) {
-        unk54.insert(it, loader);
+        unk54.insert(end, loader);
     }
     mPendingArtCallback = panel;
 }
@@ -405,11 +409,9 @@ DataNode StorePanel::OnMsg(SigninChangedMsg const &msg) {
 
 DataNode StorePanel::OnMsg(ProfileSwappedMsg const &) { return 0; }
 
-DataNode StorePanel::OnMsg(MultipleItemsEnumCompleteMsg const &) {
-    // Static Message objects - generates atexit destructors in compiled code.
-    // These are required for exact match even though not actively used.
-    static Message doneMsg("items_enum_done");
-    static Message enumMsg("items_enum_complete");
+DataNode StorePanel::OnMsg(SingleItemEnumCompleteMsg const &) {
+    static Message doneMsg("store_enum_done");
+    static Message enumMsg("store_enum_msg");
     return DataNode(0);
 }
 
