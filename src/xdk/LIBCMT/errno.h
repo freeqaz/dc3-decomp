@@ -7,6 +7,8 @@ extern "C" {
 int *_errno(void);
 #define errno (*_errno())
 
+int *_errno(void);
+
 #define EACCES 13
 #define ENOSPC 28
 #define ERANGE 34

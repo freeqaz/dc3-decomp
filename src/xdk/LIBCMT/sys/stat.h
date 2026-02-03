@@ -30,5 +30,11 @@ struct __stat64 {
     __time64_t st_ctime;
 };
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 int _stat64(const char *path, struct __stat64 *buffer);
 int _fstat64(int fd, struct __stat64 *buffer);
+#ifdef __cplusplus
+}
+#endif

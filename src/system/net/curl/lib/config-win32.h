@@ -395,8 +395,8 @@
 /* ---------------------------------------------------------------- */
 
 /* Define if you have struct sockaddr_storage. */
-/* Xbox 360 XDK: not defined - uses char buffer[256] fallback in sockaddr.h */
-#if 0
+/* Xbox 360: disabled to use 256-byte buffer fallback matching target binary */
+#if !defined(__SALFORDC__) && !defined(__BORLANDC__) && !defined(_M_PPCBE)
 #define HAVE_STRUCT_SOCKADDR_STORAGE 1
 #endif
 
@@ -645,14 +645,6 @@
 
 #if defined(__POCC__) && defined(CURL_LDAP_WIN)
 #  define CURL_DISABLE_LDAP 1
-#endif
-
-/* ---------------------------------------------------------------- */
-/*                     XBOX 360 PROTOCOL DISABLES                   */
-/* ---------------------------------------------------------------- */
-
-#ifdef _M_PPCBE
-#  define CURL_DISABLE_FILE 1
 #endif
 
 /* ---------------------------------------------------------------- */
