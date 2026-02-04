@@ -368,6 +368,7 @@ def get_next_function(
     order_by: str = "percent",
     order_asc: bool = False,
     min_size: int = 0,
+    exclude_patterns: list[str] | None = None,
 ) -> dict[str, Any] | None:
     """
     Get next function to work on based on criteria.
@@ -383,13 +384,18 @@ def get_next_function(
         order_by: Sort column - "percent" (default) or "size"
         order_asc: Sort ascending instead of descending
         min_size: Minimum function size in bytes (0 = no minimum)
+        exclude_patterns: Glob patterns for units to exclude (default: XDK)
 
     Returns:
         Function dict or None if no matches
     """
     conn = get_connection(db_path)
 
-    glob_clause, glob_params = _build_unit_glob_clause(pattern)
+    # Use default exclusions if not specified
+    if exclude_patterns is None:
+        exclude_patterns = DEFAULT_EXCLUDE_PATTERNS
+
+    glob_clause, glob_params = _build_unit_glob_clause(pattern, exclude_patterns)
 
     query = f"""
         SELECT id, symbol, demangled, unit, size, current_percent, best_percent,
@@ -459,18 +465,28 @@ def normalize_unit_pattern(pattern: str) -> str:
     return pattern
 
 
+# Default exclusion patterns for batch operations
+# XDK functions are third-party/SDK code, not decomp targets
+DEFAULT_EXCLUDE_PATTERNS = [
+    "default/xdk/*",
+]
+
+
 def _build_unit_glob_clause(
     patterns: str | list[str],
+    exclude_patterns: list[str] | None = None,
 ) -> tuple[str, list[str]]:
     """
     Build a SQL WHERE clause fragment matching one or more unit GLOB patterns.
 
     Args:
         patterns: Single pattern string or list of pattern strings.
+        exclude_patterns: Optional list of patterns to exclude from results.
 
     Returns:
         Tuple of (sql_fragment, params) where sql_fragment is like
-        "(unit GLOB ? OR unit GLOB ?)" and params is the normalized patterns.
+        "(unit GLOB ? OR unit GLOB ?) AND unit NOT GLOB ?" and params
+        is the normalized patterns followed by exclude patterns.
     """
     if isinstance(patterns, str):
         patterns = [patterns]
@@ -478,10 +494,22 @@ def _build_unit_glob_clause(
     normalized = [normalize_unit_pattern(p) for p in patterns]
 
     if len(normalized) == 1:
-        return "unit GLOB ?", normalized
+        include_clause = "unit GLOB ?"
+    else:
+        clauses = " OR ".join("unit GLOB ?" for _ in normalized)
+        include_clause = f"({clauses})"
 
-    clauses = " OR ".join("unit GLOB ?" for _ in normalized)
-    return f"({clauses})", normalized
+    params = normalized
+
+    # Add exclusion patterns if provided
+    if exclude_patterns:
+        normalized_exclude = [normalize_unit_pattern(p) for p in exclude_patterns]
+        exclude_clauses = " AND ".join("unit NOT GLOB ?" for _ in normalized_exclude)
+        full_clause = f"{include_clause} AND {exclude_clauses}"
+        params = params + normalized_exclude
+        return full_clause, params
+
+    return include_clause, params
 
 
 def query_functions(
@@ -494,6 +522,7 @@ def query_functions(
     verdict_filter: str | None = None,
     limit: int = 20,
     db_path: str | Path = DEFAULT_DB_PATH,
+    exclude_patterns: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     """
     Query multiple functions matching criteria.
@@ -501,12 +530,17 @@ def query_functions(
     Args:
         verdict_filter: If set, only return functions with this verdict
                         (e.g. 'COMPLETE', 'AT_LIMIT'). Overrides exclude_* flags.
+        exclude_patterns: Glob patterns for units to exclude (default: XDK)
 
     Returns list of function dicts.
     """
     conn = get_connection(db_path)
 
-    glob_clause, glob_params = _build_unit_glob_clause(pattern)
+    # Use default exclusions if not specified
+    if exclude_patterns is None:
+        exclude_patterns = DEFAULT_EXCLUDE_PATTERNS
+
+    glob_clause, glob_params = _build_unit_glob_clause(pattern, exclude_patterns)
 
     query = f"""
         SELECT id, symbol, demangled, unit, size, current_percent, best_percent,

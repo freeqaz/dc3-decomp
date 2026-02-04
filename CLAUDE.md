@@ -23,7 +23,7 @@ Compares compiled C++ against the original binary. Extended for this project to:
 
 **Use `./bin/objdiff-cli`** (not the system `objdiff-cli` which lacks extended commands).
 
-Usage: [docs/OBJDIFF_CLI_USAGE.md](docs/OBJDIFF_CLI_USAGE.md)
+Usage: [docs/tools/objdiff/USAGE.md](docs/tools/objdiff/USAGE.md)
 
 ## Code Style
 - Be carefuly when modifying MILO_ASSERT() calls or OBJ_MEM_OVERLOAD macros. Whatever is in there should be tested carefully.

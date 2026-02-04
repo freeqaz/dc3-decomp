@@ -1101,6 +1101,7 @@ Focus on readability and maintainability while preserving exact behavior and mat
         order_by: str = "percent",
         order_asc: bool = False,
         min_size: int = 0,
+        exclude_patterns: list[str] | None = None,
     ) -> dict[str, Any]:
         """
         Run batch of functions matching pattern with N parallel agents.
@@ -1204,6 +1205,7 @@ Focus on readability and maintainability while preserving exact behavior and mat
                 order_by=order_by,
                 order_asc=order_asc,
                 min_size=min_size,
+                exclude_patterns=exclude_patterns,
             )
 
             if not func:

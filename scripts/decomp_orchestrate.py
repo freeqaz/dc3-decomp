@@ -352,6 +352,10 @@ def cmd_batch(args):
         )
     else:
         # Use pattern-based selection (default)
+        # Handle exclude patterns: None means use defaults, empty list means no exclusions
+        exclude_patterns = args.exclude if args.exclude else None
+        if args.no_exclude:
+            exclude_patterns = []
         summary = asyncio.run(
             orchestrator.run_batch(
                 pattern=args.pattern,
@@ -370,6 +374,7 @@ def cmd_batch(args):
                 order_by=args.order,
                 order_asc=args.asc,
                 min_size=args.min_size,
+                exclude_patterns=exclude_patterns,
             )
         )
 
@@ -1325,6 +1330,17 @@ def main():
         choices=available_models,
         default="sonnet",
         help="Model for the refactor-staff reviewer pass (default: sonnet)",
+    )
+    p_batch.add_argument(
+        "--exclude",
+        action="append",
+        metavar="PATTERN",
+        help="Glob pattern(s) to exclude (default: 'default/xdk/*'). Can be specified multiple times.",
+    )
+    p_batch.add_argument(
+        "--no-exclude",
+        action="store_true",
+        help="Disable default exclusions (include XDK functions)",
     )
 
     # query
