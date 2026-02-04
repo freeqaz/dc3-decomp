@@ -439,6 +439,137 @@ The target assembly shows r26 (holding `it.it` from entry) stored to the sret po
 
 ---
 
+## MILO_NOTIFY vs MILO_NOTIFY_ONCE
+
+**Impact:** +10-35%
+**Success Rate:** HIGH
+**Time:** 5 minutes
+
+The target binary may use `MILO_NOTIFY_ONCE` instead of `MILO_NOTIFY`. These generate very different code.
+
+### Symptom
+
+objdiff shows:
+- Static guard variable (`ori r11, r11, 0x1`) and `atexit` call patterns
+- Call to `merged_AddToStrings` or `AddToStrings`
+- Static `std::list<String>` initialization code
+- Significant size difference (100+ bytes larger for MILO_NOTIFY_ONCE)
+
+### Detection
+
+Look for these patterns in Ghidra decompilation:
+```c
+if ((DAT_xxxxxxxx & 1) == 0) {
+    DAT_xxxxxxxx = DAT_xxxxxxxx | 1;
+    // list initialization
+    atexit(...);
+}
+// AddToStrings call
+if (cVar != '\0') {
+    Notify(...);
+}
+```
+
+This is the `MILO_NOTIFY_ONCE` pattern with static list guard.
+
+### Fix
+
+```cpp
+// Before - generates simple Notify call
+MILO_NOTIFY("error: bad value %f", val);
+
+// After - generates static list + guard + AddToStrings pattern
+MILO_NOTIFY_ONCE("error: bad value %f", val);
+```
+
+### Duplicate Static Declaration
+
+If a function has BOTH an explicit `static std::list<String>` AND uses `MILO_NOTIFY_ONCE`, you'll get two static lists. Remove the explicit declaration - the macro creates its own.
+
+```cpp
+// WRONG - two static lists generated
+void Func() {
+    static std::list<String> _dw;  // Remove this!
+    if (error) {
+        MILO_NOTIFY_ONCE("error");  // Macro creates its own _dw
+    }
+}
+
+// CORRECT - only macro's static list
+void Func() {
+    if (error) {
+        MILO_NOTIFY_ONCE("error");
+    }
+}
+```
+
+### Real Examples
+
+| Function | Before | After | Delta | Notes |
+|----------|--------|-------|-------|-------|
+| BinStream::Read | 63.6% | 95.4% | +31.8% | Removed duplicate static list |
+| CharInterest::ComputeScore | 80.8% | 91.6% | +10.8% | Changed MILO_NOTIFY to MILO_NOTIFY_ONCE |
+
+---
+
+## alloca vs _alloca (Intrinsic Stack Allocation)
+
+**Impact:** +10-15%
+**Success Rate:** 100%
+**Time:** 1 minute
+
+Use `_alloca` (intrinsic) instead of `alloca` (CRT wrapper) when the target binary uses stack probing.
+
+### Symptom
+
+objdiff shows prologue mismatch with `_RtlCheckStack12` in target but not in your build, or vice versa:
+
+```asm
+# Target - uses intrinsic _alloca with stack probe
+bl _RtlCheckStack12
+sub r1, r1, r0
+
+# Your build - uses alloca CRT wrapper
+bl alloca
+```
+
+### Why It Works
+
+- `alloca()` is a CRT library wrapper that handles stack allocation
+- `_alloca()` is a compiler intrinsic that generates inline stack probe code (`_RtlCheckStack12`)
+- They produce identical results but very different code paths
+
+### Detection
+
+Look for these clues in objdiff or Ghidra:
+- Prologue shows `bl _RtlCheckStack12` call
+- Stack frame setup differs significantly at function start
+- Match% stuck at ~90% despite correct logic
+
+### Fix
+
+```c
+// Before - CRT wrapper (no stack probe)
+float *buffer = alloca(n * sizeof(*buffer));
+
+// After - intrinsic with stack probe
+float *buffer = _alloca(n * sizeof(*buffer));
+```
+
+### Real Examples
+
+| Function | Before | After | Delta | Notes |
+|----------|--------|-------|-------|-------|
+| seed_chase | 89.8% | 100% | +10.2% | Changed `alloca` to `_alloca` |
+
+### Notes
+
+- MSVC's `_alloca` is defined in `<malloc.h>`
+- The intrinsic generates stack probing code to handle large allocations safely
+- Check the prologue carefully - this pattern is easy to miss
+
+---
+
 ## See Also
 
 - [fixable-operators.md](fixable-operators.md) - Assignment patterns

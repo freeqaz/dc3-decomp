@@ -47,10 +47,11 @@ Examples:
 import argparse
 import asyncio
 import json
+import re
 import subprocess
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Optional
 
@@ -106,6 +107,46 @@ from orchestrator.config import (
     requires_openrouter,
     TOKEN_BUDGETS,
 )
+
+
+def parse_duration(duration_str: str) -> timedelta:
+    """Parse a duration string like '1d', '6h', '30m' into a timedelta.
+
+    Supported units: d (days), h (hours), m (minutes), s (seconds)
+    Examples: '1d' = 1 day, '6h' = 6 hours, '30m' = 30 minutes, '2d12h' = 2.5 days
+    """
+    if not duration_str:
+        raise ValueError("Empty duration string")
+
+    total = timedelta()
+    pattern = re.compile(r'(\d+)([dhms])')
+    matches = pattern.findall(duration_str.lower())
+
+    if not matches:
+        raise ValueError(f"Invalid duration format: {duration_str}. Use format like '1d', '6h', '30m'")
+
+    for value, unit in matches:
+        value = int(value)
+        if unit == 'd':
+            total += timedelta(days=value)
+        elif unit == 'h':
+            total += timedelta(hours=value)
+        elif unit == 'm':
+            total += timedelta(minutes=value)
+        elif unit == 's':
+            total += timedelta(seconds=value)
+
+    return total
+
+
+def parse_manifest_timestamp(timestamp_str: str) -> Optional[datetime]:
+    """Parse manifest timestamp format YYYYMMDD_HHMMSS into datetime."""
+    if not timestamp_str:
+        return None
+    try:
+        return datetime.strptime(timestamp_str, "%Y%m%d_%H%M%S")
+    except ValueError:
+        return None
 
 
 def validate_model_backend(model: Optional[str]) -> None:
@@ -1063,8 +1104,32 @@ def cmd_patch_refresh(args):
         if args.min_delta:
             candidates = [e for e in candidates if e.get("delta", 0) >= args.min_delta]
 
-        # Sort by delta descending (biggest improvements first)
-        candidates.sort(key=lambda e: e.get("delta", 0), reverse=True)
+        # Filter by max age if specified
+        if args.max_age:
+            try:
+                max_age_delta = parse_duration(args.max_age)
+                cutoff_time = datetime.now() - max_age_delta
+                filtered = []
+                for e in candidates:
+                    ts = parse_manifest_timestamp(e.get("timestamp", ""))
+                    if ts and ts >= cutoff_time:
+                        filtered.append(e)
+                candidates = filtered
+            except ValueError as ex:
+                print(f"Error parsing --max-age: {ex}")
+                sys.exit(1)
+
+        # Sort by specified order
+        order = getattr(args, 'order', 'delta')
+        if order == 'date':
+            # Sort by timestamp descending (most recent first)
+            def date_key(e):
+                ts = parse_manifest_timestamp(e.get("timestamp", ""))
+                return ts if ts else datetime.min
+            candidates.sort(key=date_key, reverse=True)
+        else:
+            # Sort by delta descending (biggest improvements first)
+            candidates.sort(key=lambda e: e.get("delta", 0), reverse=True)
 
         if args.limit and args.limit > 0:
             candidates = candidates[:args.limit]
@@ -1089,13 +1154,21 @@ def cmd_patch_refresh(args):
         return
 
     if not args.quiet:
-        print(f"\nPatch Refresh: {len(patches)} patches")
+        order = getattr(args, 'order', 'delta')
+        print(f"\nPatch Refresh: {len(patches)} patches (ordered by {order})")
         for entry, _ in patches:
             name = entry.get("demangled") or entry.get("symbol") or entry.get("filename")
-            if len(name) > 60:
-                name = name[:57] + "..."
             delta = entry.get("delta", 0)
-            print(f"  +{delta:5.1f}%  {name}")
+            if order == 'date':
+                ts = parse_manifest_timestamp(entry.get("timestamp", ""))
+                ts_str = ts.strftime("%Y-%m-%d %H:%M") if ts else "unknown"
+                if len(name) > 45:
+                    name = name[:42] + "..."
+                print(f"  {ts_str}  +{delta:5.1f}%  {name}")
+            else:
+                if len(name) > 60:
+                    name = name[:57] + "..."
+                print(f"  +{delta:5.1f}%  {name}")
         print()
 
     # Initialize orchestrator
@@ -1563,6 +1636,15 @@ def main():
   # Refresh top 10 needs-merge patches by delta
   ./bin/orchestrate patch-refresh --limit 10
 
+  # Refresh top 10 most recently created patches
+  ./bin/orchestrate patch-refresh --order date --limit 10
+
+  # Refresh patches created in the last day
+  ./bin/orchestrate patch-refresh --max-age 1d --limit 50
+
+  # Refresh patches from the last 6 hours, ordered by date
+  ./bin/orchestrate patch-refresh --max-age 6h --order date --limit 20
+
   # Refresh a specific patch file
   ./bin/orchestrate patch-refresh --patch-file scratch/patches/needs-merge/SomeFunc_85pct.patch
 
@@ -1586,6 +1668,18 @@ def main():
         type=float,
         default=0,
         help="Minimum improvement delta to include (default: 0)"
+    )
+    p_patch_refresh.add_argument(
+        "--order",
+        choices=["delta", "date"],
+        default="delta",
+        help="Sort order: 'delta' (default, biggest improvement first) or 'date' (most recent first)"
+    )
+    p_patch_refresh.add_argument(
+        "--max-age",
+        type=str,
+        default=None,
+        help="Only include patches newer than this age (e.g., '1d', '6h', '30m')"
     )
     p_patch_refresh.add_argument(
         "--limit",

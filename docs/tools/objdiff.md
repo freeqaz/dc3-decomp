@@ -16,8 +16,17 @@ objdiff-cli report query build/373307D9/report.json --functions \
 # Check a specific function's match status
 objdiff-cli report function build/373307D9/report.json "Game::Poll"
 
+# Markdown diff with verdict (default format)
+objdiff-cli diff -p . "Game::Poll" --verdict
+
+# With context around mismatches (like grep -C)
+objdiff-cli diff -p . "Game::Poll" --verdict -C 3
+
+# Full instruction listing
+objdiff-cli diff -p . "Game::Poll" --verdict --full-listing
+
 # Interactive diff viewer (TUI)
-objdiff-cli diff -p . "Game::Poll"
+objdiff-cli diff -p . "Game::Poll" -f tui
 
 # Get JSON diff with instructions
 objdiff-cli diff -p . "Game::Poll" -f json --include-instructions

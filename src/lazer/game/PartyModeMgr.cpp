@@ -764,8 +764,11 @@ void PartyModeMgr::EndPartyStats() {
         HamPlayerData *playerData = TheGameData->Player(i);
         MILO_ASSERT(playerData, 0x9DA);
         HamProfile *profile = TheProfileMgr.GetProfileFromPad(playerData->PadNum());
-        if (profile && profile->GetMetagameStats()) {
-            profile->GetMetagameStats()->UpdatePartyStats(diff);
+        if (profile) {
+            MetagameStats *stats = profile->GetMetagameStats();
+            if (stats) {
+                stats->UpdatePartyStats(diff);
+            }
         }
     }
 }

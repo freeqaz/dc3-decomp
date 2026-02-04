@@ -296,14 +296,18 @@ AT_LIMIT (7 functions):
 
 This is the "batch diagnosis" from WISHLIST but with actual implementation detail.
 
-### Phase 6: Advanced Features
+### Phase 6: Advanced Features (Partial)
 
-**Estimated scope:** ~400 lines of Rust
+**Status:** 6.3 (Instruction Context Window) COMPLETE. 6.1 and 6.2 still planned.
+
+**Estimated scope:** ~400 lines of Rust (remaining)
+
+**Files modified:**
+- `objdiff-cli/src/cmd/diff.rs` - Added `-C`/`--context` flag, `--full-listing` flag, pattern doc links, match guidance, analysis summary, verdict factors table, markdown as default format
 
 **Files to modify/create:**
-- `objdiff-cli/src/cmd/report.rs` - Add `merged-functions` subcommand
-- `objdiff-cli/src/cmd/diff.rs` - Add `--context` flag
-- `objdiff-cli/src/cmd/history.rs` (new) - History tracking
+- `objdiff-cli/src/cmd/report.rs` - Add `merged-functions` subcommand (planned)
+- `objdiff-cli/src/cmd/history.rs` (new) - History tracking (planned)
 
 #### 6.1: Merged Function Catalog
 
@@ -382,39 +386,29 @@ Best: 98.2% (current)
 2. New `history` subcommand reads and formats history
 3. Optional: `--track-note "fixed loop"` to annotate entries
 
-#### 6.3: Instruction Context Window
+#### 6.3: Instruction Context Window ✓ COMPLETE
+
+**Status:** Implemented 2026-02-04
 
 **Problem:** Seeing mismatched instructions without surrounding context makes diagnosis harder.
 
-**Command:**
+**Actual commands:**
 ```bash
-objdiff-cli diff -p . "MyFunc" -f json --include-instructions --context 2
+# Show 3 instructions before/after each mismatch (like grep -C)
+objdiff-cli diff -p . "MyFunc" --verdict -C 3
+
+# Full listing of all instructions
+objdiff-cli diff -p . "MyFunc" --verdict --full-listing
 ```
 
-**Output change:** Each mismatch includes surrounding instructions:
-```json
-{
-  "index": 45,
-  "match_type": "diff_op",
-  "target": {"opcode": "beq", "args": "0x120"},
-  "base": {"opcode": "bne", "args": "0x120"},
-  "context_before": [
-    {"index": 43, "match_type": "equal", "target": {"opcode": "cmpwi", "args": "cr0, r3, 0"}},
-    {"index": 44, "match_type": "equal", "target": {"opcode": "mr", "args": "r4, r5"}}
-  ],
-  "context_after": [
-    {"index": 46, "match_type": "equal", "target": {"opcode": "lwz", "args": "r3, 0x10, r4"}},
-    {"index": 47, "match_type": "equal", "target": {"opcode": "blr", "args": null}}
-  ]
-}
-```
+**Markdown output:** Context is shown inline with mismatches **bolded** for visibility. Non-contiguous sections are separated with `...`.
 
-**Markdown output:** Context shown inline with mismatches highlighted.
-
-**Implementation:**
-1. Add `--context N` flag to diff args (default 0)
-2. When building instruction output, attach N before/after for non-equal rows
-3. Update markdown renderer to show context with visual distinction
+**Additional features implemented:**
+- Match percentage guidance hints based on match %
+- Pattern documentation links (📖 emoji) for each detected pattern
+- Analysis summary showing patterns checked and unattributed mismatches
+- Verdict factors table showing decision breakdown
+- Markdown is now the default output format
 
 ---
 

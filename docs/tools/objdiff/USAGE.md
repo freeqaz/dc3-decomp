@@ -2,6 +2,8 @@
 
 Quick reference for the extended objdiff-cli commands.
 
+**See also:** [CLI_OPTIONS.md](./CLI_OPTIONS.md) for a quick reference card with all options, configuration properties, and pattern detection details.
+
 ## Setup
 
 **Important:** The extended commands (`report analyze`, `report query`, `report trending`, etc.) are only available in the custom build, not the system `objdiff-cli`.
@@ -247,7 +249,7 @@ objdiff-cli diff -p . "Game::Poll" -f json -o /tmp/diff.json
 objdiff-cli diff -p . "Game::Poll" --build -f json --verdict
 ```
 
-**Output formats:** `tui` (default, interactive), `json`, `json-pretty`, `markdown`
+**Output formats:** `markdown` (default), `tui` (interactive), `json`, `json-pretty`
 
 **Options:**
 - `--include-instructions` - Add instruction-level diff
@@ -255,6 +257,8 @@ objdiff-cli diff -p . "Game::Poll" --build -f json --verdict
 - `--analyze` - Detect mismatch patterns (implies --summary)
 - `--verdict` - Add fixability classification (implies --analyze)
 - `--build` - Rebuild object file before diffing (runs `ninja` on base object)
+- `-C, --context <N>` - Show N instructions before/after each mismatch (like grep -C)
+- `--full-listing` - Show all instructions, not just mismatches (implies --include-instructions)
 
 ### JSON Output Schema
 
@@ -281,17 +285,31 @@ objdiff-cli diff -p . "Game::Poll" --build -f json --verdict
 
 **match_type values:** `equal`, `diff_op`, `diff_arg`, `replace`, `delete`, `insert`
 
-## Markdown Output (for Agents/Reports)
+## Markdown Output (Default for Non-TUI)
 
-The `-f markdown` format produces human-readable reports ideal for:
+Markdown is now the **default output format** (unless using TUI mode). It produces human-readable reports ideal for:
 - Agent-based workflows where structured prose is more useful than JSON
 - Documentation and progress tracking
 - Sharing analysis results
 
 ```bash
-# Full analysis report in markdown
-objdiff-cli diff -p . "Game::Poll" -f markdown --verdict --include-instructions
+# Full analysis report in markdown (default format)
+objdiff-cli diff -p . "Game::Poll" --verdict --include-instructions
+
+# With context around mismatches (like grep -C)
+objdiff-cli diff -p . "Game::Poll" --verdict -C 3
+
+# Full instruction listing (all instructions, not just mismatches)
+objdiff-cli diff -p . "Game::Poll" --verdict --full-listing
 ```
+
+**New Features:**
+- **Match Guidance**: Shows contextual hints based on match percentage (what to try next)
+- **Pattern Doc Links**: Each detected pattern links to its documentation in `docs/decomp/patterns/`
+- **Analysis Summary**: Shows patterns checked and unattributed mismatches
+- **Verdict Factors Table**: Shows the factors that contributed to the verdict classification
+- **Context Mode** (`-C N`): Shows N instructions before/after each mismatch for context
+- **Full Listing** (`--full-listing`): Shows all instructions, not just mismatches
 
 **Example output:**
 ```markdown
@@ -300,6 +318,7 @@ objdiff-cli diff -p . "Game::Poll" -f markdown --verdict --include-instructions
 - **Symbol**: `Game::Poll`
 - **Demangled**: `public: void __cdecl Game::Poll(void)`
 - **Match**: 97.5%
+  - 💡 Check for unfixable patterns; if none, try variable reorder/inline assignment
 - **Target Size**: 1248 bytes
 - **Base Size**: 1252 bytes
 
@@ -315,23 +334,39 @@ objdiff-cli diff -p . "Game::Poll" -f markdown --verdict --include-instructions
 
 ## Patterns Detected
 
-- **LINKER_MERGED**: 8 instruction(s), Unfixable fixability
+- **LINKER_MERGED**: 8 instruction(s), Unfixable
   - `merged_Read4FloatStruct`: 5 call(s)
   - `OnlyReturns`: 3 call(s)
-- **CONTROL_FLOW**: 3 instruction(s), LikelyFixable fixability
+  - 📖 [Pattern docs](docs/decomp/patterns/verifiable-icf.md#linker-merged-icf)
+- **CONTROL_FLOW**: 3 instruction(s), LikelyFixable
   - Index 45: beq vs bne (diff_op)
   - Index 102: blt vs bge (diff_op)
+  - 📖 [Pattern docs](docs/decomp/patterns/fixable-control-flow.md)
 
-## Verdict: LikelyFixable
+### Analysis Summary
+
+- **Patterns Checked**: LINKER_MERGED, BOOL_MASK, REGISTER_SWAP, COMPARISON_STYLE, CONTROL_FLOW, COMMUTATIVE_OP_ORDER, OFFSET_SWAP
+- **Unattributed Mismatches**: 7 (not explained by detected patterns)
+
+## Verdict: LikelyFixable (Medium confidence)
 
 3 control flow difference(s) detected with low merged ratio (26.7%).
+
+### Verdict Factors
+
+| Factor | Value | Threshold | Result |
+|--------|-------|-----------|--------|
+| bool_mask_detected | false | - | not_detected |
+| merged_call_ratio | 0.27 | 0.8 | below_threshold |
+| control_flow_diffs | 3 | 1.0 | detected |
 
 **Recommendation**: Investigate control flow structure.
 
 ### Suggestions
 
-1. Check branch conditions and if/else structure
-2. Try equivalent comparison operators (>= vs >, etc.)
+1. Check branch at index 45, 102
+2. Check branch conditions and if/else structure
+3. Try equivalent comparison operators (>= vs >, etc.)
 
 ## Instruction Mismatches
 
@@ -406,7 +441,7 @@ Output:
       }
     }
   ],
-  "patterns_checked": ["LINKER_MERGED", "BOOL_MASK", "REGISTER_SWAP", "COMPARISON_STYLE", "CONTROL_FLOW"],
+  "patterns_checked": ["LINKER_MERGED", "BOOL_MASK", "REGISTER_SWAP", "COMPARISON_STYLE", "CONTROL_FLOW", "COMMUTATIVE_OP_ORDER", "OFFSET_SWAP"],
   "unattributed_mismatches": 33
 }
 ```
@@ -420,6 +455,8 @@ Output:
 | `REGISTER_SWAP` | Consistent register allocation differences | Maybe fixable (try reordering vars) |
 | `COMPARISON_STYLE` | `cmpwi`/`cmplwi` with values differing by 1 (e.g., `>= 5` vs `> 4`) | Maybe fixable |
 | `CONTROL_FLOW` | `diff_op`/`replace` on branch instructions | Likely fixable |
+| `COMMUTATIVE_OP_ORDER` | Operand order swap in `fadd`/`fmul`/`add`/`and`/`or`/`xor` | Likely fixable |
+| `OFFSET_SWAP` | Two offsets swapped between adjacent instructions | Likely fixable |
 
 ### Fixability Verdict (--verdict)
 
@@ -508,6 +545,20 @@ objdiff-cli diff -p . "MyFunc" -f json --analyze | jq '
   .analysis.patterns[] | select(.pattern == "CONTROL_FLOW") | .details.branch_diffs'
 ```
 
+**Check for commutative operation order:**
+```bash
+# See operand order swaps in fadd/fmul/add/and/or/xor
+objdiff-cli diff -p . "MyFunc" -f json --analyze | jq '
+  .analysis.patterns[] | select(.pattern == "COMMUTATIVE_OP_ORDER") | .details.swaps'
+```
+
+**Check for offset swaps:**
+```bash
+# See pairs of swapped offsets between instructions
+objdiff-cli diff -p . "MyFunc" -f json --analyze | jq '
+  .analysis.patterns[] | select(.pattern == "OFFSET_SWAP") | .details.swaps'
+```
+
 **Edit-rebuild-diff workflow:**
 ```bash
 # Make changes, rebuild, and get verdict in one command
@@ -524,6 +575,31 @@ objdiff-cli report analyze build/373307D9/report.json \
     --min-percent 90 --max-percent 99 --limit 100 -f json-pretty \
     | jq '.results.LIKELY_FIXABLE[] | {name: .demangled // .name, percent: .fuzzy_match_percent, suggestion}'
 ```
+
+## Configuration Options
+
+The `-c key=value` flag allows setting configuration properties. Multiple `-c` flags can be used.
+
+### PowerPC-Specific Options
+
+```bash
+# Enable experimental data flow analysis (shows register contents)
+objdiff-cli diff -p . "MyFunc" -c analyzeDataFlow=true -f markdown --verdict
+
+# Disable pool relocation calculation
+objdiff-cli diff -p . "MyFunc" -c ppc.calculatePoolRelocations=false
+```
+
+### Common Configuration Properties
+
+| Key | Values | Default | Description |
+|-----|--------|---------|-------------|
+| `analyzeDataFlow` | `true`/`false` | `false` | **(Experimental)** Data flow analysis |
+| `ppc.calculatePoolRelocations` | `true`/`false` | `true` | Show pooled data refs as relocations |
+| `demangler` | `auto`/`none`/`msvc`/`itanium`/etc | `auto` | Symbol demangling format |
+| `spaceBetweenArgs` | `true`/`false` | `true` | Space between instruction args |
+
+See [CLI_OPTIONS.md](./CLI_OPTIONS.md) for the complete list of configuration options.
 
 ## Common Patterns
 

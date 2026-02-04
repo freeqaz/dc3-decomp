@@ -14,7 +14,7 @@ from typing import Any
 DEFAULT_DB_PATH = "decomp.db"
 
 # Schema version for migrations
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 SCHEMA = """
 -- Schema version tracking
@@ -101,6 +101,19 @@ CREATE INDEX IF NOT EXISTS idx_functions_percent ON functions(current_percent);
 CREATE INDEX IF NOT EXISTS idx_attempts_function ON attempts(function_id);
 CREATE INDEX IF NOT EXISTS idx_attempts_session ON attempts(session_id);
 CREATE INDEX IF NOT EXISTS idx_worktrees_status ON worktrees(status);
+
+-- Merged symbol detail tracking (v6)
+CREATE TABLE IF NOT EXISTS merged_symbols (
+    id INTEGER PRIMARY KEY,
+    function_id INTEGER NOT NULL REFERENCES functions(id) ON DELETE CASCADE,
+    symbol_name TEXT NOT NULL,           -- e.g., "merged_824D1870"
+    call_count INTEGER DEFAULT 1,
+    category TEXT,                       -- 'addtostrings', 'makestring', 'setobjconcrete', 'destructor', 'unknown'
+    resolved_symbols TEXT,               -- JSON array of demangled names
+    UNIQUE(function_id, symbol_name)
+);
+CREATE INDEX IF NOT EXISTS idx_merged_symbols_function ON merged_symbols(function_id);
+CREATE INDEX IF NOT EXISTS idx_merged_symbols_category ON merged_symbols(category);
 
 -- RB3 file pairing for cross-reference assistance
 CREATE TABLE IF NOT EXISTS file_pairs (
@@ -233,6 +246,46 @@ def _run_migrations(conn: sqlite3.Connection, from_version: int, to_version: int
         except sqlite3.OperationalError as e:
             if "duplicate column" not in str(e).lower():
                 raise
+
+    if from_version < 6 <= to_version:
+        # Migration v5 -> v6: Add merged_symbols table and granular merged tracking
+        print("  Migration v6: Adding merged_symbols table and granular tracking...")
+
+        # Create merged_symbols table
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS merged_symbols (
+                id INTEGER PRIMARY KEY,
+                function_id INTEGER NOT NULL REFERENCES functions(id) ON DELETE CASCADE,
+                symbol_name TEXT NOT NULL,
+                call_count INTEGER DEFAULT 1,
+                category TEXT,
+                resolved_symbols TEXT,
+                UNIQUE(function_id, symbol_name)
+            );
+            CREATE INDEX IF NOT EXISTS idx_merged_symbols_function ON merged_symbols(function_id);
+            CREATE INDEX IF NOT EXISTS idx_merged_symbols_category ON merged_symbols(category);
+        """)
+
+        # Add new columns to functions table
+        new_columns = [
+            ("has_addtostrings", "BOOLEAN DEFAULT 0"),
+            ("has_makestring", "BOOLEAN DEFAULT 0"),
+            ("has_setobjconcrete", "BOOLEAN DEFAULT 0"),
+            ("verdict_reason", "TEXT"),
+            ("merged_symbol_count", "INTEGER DEFAULT 0"),
+        ]
+        for col_name, col_def in new_columns:
+            try:
+                conn.execute(f"ALTER TABLE functions ADD COLUMN {col_name} {col_def}")
+            except sqlite3.OperationalError as e:
+                if "duplicate column" not in str(e).lower():
+                    raise
+
+        # Add partial index for quick AddToStrings candidate lookup
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_functions_addtostrings
+            ON functions(has_addtostrings) WHERE has_addtostrings = 1
+        """)
 
     # Update schema version
     conn.execute("UPDATE schema_version SET version = ?", (to_version,))
@@ -1419,3 +1472,210 @@ def get_priority_stats(db_path: str | Path = DEFAULT_DB_PATH) -> dict[str, Any]:
         "linker_merged_count": linker_merged,
         "bool_mask_count": bool_mask,
     }
+
+
+# ============================================================================
+# Merged Symbol Tracking Functions (v6)
+# ============================================================================
+
+
+def upsert_merged_symbol(
+    function_id: int,
+    symbol_name: str,
+    call_count: int = 1,
+    category: str | None = None,
+    resolved_symbols: list[str] | None = None,
+    db_path: str | Path = DEFAULT_DB_PATH,
+) -> int:
+    """
+    Insert or update a merged symbol record for a function.
+
+    Args:
+        function_id: Database ID of the function
+        symbol_name: Merged symbol name (e.g., "merged_824D1870")
+        call_count: Number of times this merged symbol is called
+        category: Category of merged symbol ('addtostrings', 'makestring', etc.)
+        resolved_symbols: List of demangled names at this merged address
+        db_path: Database path
+
+    Returns:
+        Row ID of the inserted/updated record
+    """
+    conn = get_connection(db_path)
+
+    resolved_json = json.dumps(resolved_symbols) if resolved_symbols else None
+
+    # Check if exists
+    existing = conn.execute(
+        "SELECT id FROM merged_symbols WHERE function_id = ? AND symbol_name = ?",
+        (function_id, symbol_name),
+    ).fetchone()
+
+    if existing:
+        conn.execute(
+            """
+            UPDATE merged_symbols SET
+                call_count = ?,
+                category = COALESCE(?, category),
+                resolved_symbols = COALESCE(?, resolved_symbols)
+            WHERE id = ?
+            """,
+            (call_count, category, resolved_json, existing["id"]),
+        )
+        conn.commit()
+        return existing["id"]
+    else:
+        cursor = conn.execute(
+            """
+            INSERT INTO merged_symbols
+                (function_id, symbol_name, call_count, category, resolved_symbols)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (function_id, symbol_name, call_count, category, resolved_json),
+        )
+        conn.commit()
+        return cursor.lastrowid
+
+
+def update_function_merged_flags(
+    function_id: int,
+    has_addtostrings: bool = False,
+    has_makestring: bool = False,
+    has_setobjconcrete: bool = False,
+    merged_symbol_count: int = 0,
+    db_path: str | Path = DEFAULT_DB_PATH,
+) -> None:
+    """Update the granular merged symbol flags on a function."""
+    conn = get_connection(db_path)
+    conn.execute(
+        """
+        UPDATE functions SET
+            has_addtostrings = ?,
+            has_makestring = ?,
+            has_setobjconcrete = ?,
+            merged_symbol_count = ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+        """,
+        (has_addtostrings, has_makestring, has_setobjconcrete, merged_symbol_count, function_id),
+    )
+    conn.commit()
+
+
+def get_function_merged_symbols(
+    function_id: int, db_path: str | Path = DEFAULT_DB_PATH
+) -> list[dict[str, Any]]:
+    """Get all merged symbols for a function."""
+    conn = get_connection(db_path)
+    rows = conn.execute(
+        """
+        SELECT id, symbol_name, call_count, category, resolved_symbols
+        FROM merged_symbols
+        WHERE function_id = ?
+        ORDER BY call_count DESC
+        """,
+        (function_id,),
+    ).fetchall()
+
+    results = []
+    for row in rows:
+        d = dict(row)
+        if d["resolved_symbols"]:
+            d["resolved_symbols"] = json.loads(d["resolved_symbols"])
+        results.append(d)
+    return results
+
+
+def query_functions_by_merged_category(
+    category: str,
+    min_percent: float = 0,
+    max_percent: float = 100,
+    limit: int = 50,
+    db_path: str | Path = DEFAULT_DB_PATH,
+) -> list[dict[str, Any]]:
+    """
+    Query functions that have merged symbols of a specific category.
+
+    Args:
+        category: Merged symbol category ('addtostrings', 'makestring', 'setobjconcrete', 'destructor', 'unknown')
+        min_percent: Minimum match percentage
+        max_percent: Maximum match percentage
+        limit: Max results to return
+        db_path: Database path
+
+    Returns:
+        List of function dicts with merged symbol info
+    """
+    conn = get_connection(db_path)
+
+    rows = conn.execute(
+        """
+        SELECT DISTINCT f.id, f.symbol, f.demangled, f.unit, f.current_percent,
+               f.verdict, f.merged_symbol_count, f.has_addtostrings, f.has_makestring
+        FROM functions f
+        JOIN merged_symbols ms ON f.id = ms.function_id
+        WHERE ms.category = ?
+          AND f.excluded = 0
+          AND (f.current_percent IS NULL OR (f.current_percent >= ? AND f.current_percent <= ?))
+        ORDER BY f.current_percent DESC
+        LIMIT ?
+        """,
+        (category, min_percent, max_percent, limit),
+    ).fetchall()
+
+    return [dict(row) for row in rows]
+
+
+def get_merged_symbol_stats(db_path: str | Path = DEFAULT_DB_PATH) -> dict[str, Any]:
+    """Get statistics about merged symbols by category."""
+    conn = get_connection(db_path)
+
+    # Check if table has data
+    total = conn.execute("SELECT COUNT(*) FROM merged_symbols").fetchone()[0]
+    if total == 0:
+        return {
+            "populated": False,
+            "message": "Run detect_patterns.py to populate merged symbol data",
+        }
+
+    # Category distribution
+    categories = conn.execute(
+        """
+        SELECT category, COUNT(*) as count, COUNT(DISTINCT function_id) as functions
+        FROM merged_symbols
+        GROUP BY category
+        ORDER BY count DESC
+        """
+    ).fetchall()
+
+    # Function-level stats
+    funcs_with_addtostrings = conn.execute(
+        "SELECT COUNT(*) FROM functions WHERE has_addtostrings = 1 AND excluded = 0"
+    ).fetchone()[0]
+    funcs_with_makestring = conn.execute(
+        "SELECT COUNT(*) FROM functions WHERE has_makestring = 1 AND excluded = 0"
+    ).fetchone()[0]
+    funcs_with_setobjconcrete = conn.execute(
+        "SELECT COUNT(*) FROM functions WHERE has_setobjconcrete = 1 AND excluded = 0"
+    ).fetchone()[0]
+
+    return {
+        "populated": True,
+        "total_merged_symbols": total,
+        "category_distribution": {row["category"]: {"count": row["count"], "functions": row["functions"]} for row in categories},
+        "functions_with_addtostrings": funcs_with_addtostrings,
+        "functions_with_makestring": funcs_with_makestring,
+        "functions_with_setobjconcrete": funcs_with_setobjconcrete,
+    }
+
+
+def clear_merged_symbols_for_function(
+    function_id: int, db_path: str | Path = DEFAULT_DB_PATH
+) -> int:
+    """Clear all merged symbols for a function. Returns count deleted."""
+    conn = get_connection(db_path)
+    cursor = conn.execute(
+        "DELETE FROM merged_symbols WHERE function_id = ?", (function_id,)
+    )
+    conn.commit()
+    return cursor.rowcount

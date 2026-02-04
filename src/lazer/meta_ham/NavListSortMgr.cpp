@@ -288,11 +288,7 @@ Symbol NavListSortMgr::OnGetToken(int idx) {
 }
 
 int NavListSortMgr::DataIndex(Symbol s) const {
-    static std::list<String> strings;
-    // const char *str = "DataIndex is not necessarily unique\n";
-    bool added = AddToStrings("DataIndex is not necessarily unique\n", strings);
-    if (added)
-        MILO_NOTIFY("DataIndex is not necessarily unique\n");
+    MILO_NOTIFY_ONCE("DataIndex is not necessarily unique\n");
     auto node = mSorts[mCurrentSortIdx]->GetNode(s);
     if (!node) {
         return -1;

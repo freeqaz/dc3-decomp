@@ -466,8 +466,14 @@ mcp__orchestrator__lookup_merged_symbol
 # analyze-function for detailed side-by-side view
 $REPO_ROOT/bin/analyze-function "{symbol}" -f json
 
-# Direct objdiff-cli (only if MCP tool fails)
+# Direct objdiff-cli (markdown is default output format)
 $REPO_ROOT/bin/objdiff-cli diff "{symbol}" --build --verdict
+
+# With context around mismatches (like grep -C)
+$REPO_ROOT/bin/objdiff-cli diff "{symbol}" --build --verdict -C 3
+
+# Full instruction listing
+$REPO_ROOT/bin/objdiff-cli diff "{symbol}" --verdict --full-listing
 
 # Searching config/data files
 grep "something" $REPO_ROOT/config/373307D9/symbols.txt

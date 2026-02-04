@@ -47,8 +47,8 @@ void GetOfficialChallengesJob::GetRows(
     std::vector<ChallengeRow> &rows, double &dref, bool &bref
 ) {
     if (mResult == 1) {
-        JsonConverter &reader = mJsonReader;
         JsonObject *response = mJsonResponse;
+        JsonConverter &reader = mJsonReader;
         if (response) {
             static Symbol challenge_gold("challenge_gold");
             static Symbol challenge_silver("challenge_silver");
@@ -59,7 +59,7 @@ void GetOfficialChallengesJob::GetRows(
             if (startName) {
                 startTime.ParseDate(startName->Str());
                 String dateStr;
-                startTime.ToDateString(dateStr);
+                startTime.ToString(dateStr);
                 MILO_LOG(
                     ">>>>>>>>>> official_challenge_start_time = %s\n", dateStr.c_str()
                 );
@@ -72,7 +72,7 @@ void GetOfficialChallengesJob::GetRows(
                     DateTime nextStartTime;
                     nextStartTime.ParseDate(nextStartName->Str());
                     String dateStr;
-                    nextStartTime.ToDateString(dateStr);
+                    nextStartTime.ToString(dateStr);
                     MILO_LOG(">>>>>>>>>> next_start_time = %s\n", dateStr.c_str());
                     DateTime systemDt;
                     GetSystemDateAndTime(systemDt);
@@ -115,25 +115,25 @@ void GetOfficialChallengesJob::GetRows(
                             Localize(challenge_bronze, nullptr, TheLocale);
                     }
                     for (int i = 0; i < 3; i++) {
-                        localRows[i].mSongID = songID;
-                        localRows[i].unk0 = i;
+                        ChallengeRow &row = localRows[i];
+                        row.mSongID = songID;
+                        row.unk0 = i;
                         JsonObject *artistName = reader.GetByName(response, "hmx_artist");
                         if (artistName) {
-                            localRows[i].mArtist = artistName->Str();
+                            row.mArtist = artistName->Str();
                         }
-                        JsonObject *songName =
-                            reader.GetByName(response, "hmx_song_name");
+                        JsonObject *songName = reader.GetByName(response, "hmx_song_name");
                         if (songName) {
-                            localRows[i].mSongTitle = songName->Str();
+                            row.mSongTitle = songName->Str();
                         }
                         JsonObject *diffName = reader.GetByName(response, "hmx_diff");
                         if (diffName) {
-                            localRows[i].mDiff = diffName->Int();
+                            row.mDiff = diffName->Int();
                         }
-                        localRows[i].unk2c = "";
-                        localRows[i].mTimeStamp = startTime.ToCode();
-                        localRows[i].mChallengerXp = 0;
-                        calcedRows.push_back(localRows[i]);
+                        row.unk2c = "";
+                        row.mTimeStamp = startTime.ToCode();
+                        row.mChallengerXp = 0;
+                        calcedRows.push_back(row);
                     }
                 }
             }
@@ -166,25 +166,25 @@ void GetOfficialChallengesJob::GetRows(
                             Localize(challenge_bronze, nullptr, TheLocale);
                     }
                     for (int i = 0; i < 3; i++) {
-                        localRows[i].mSongID = dlcSongID;
-                        localRows[i].unk0 = i;
+                        ChallengeRow &row = localRows[i];
+                        row.mSongID = dlcSongID;
+                        row.unk0 = i;
                         JsonObject *artistName = reader.GetByName(response, "dlc_artist");
                         if (artistName) {
-                            localRows[i].mArtist = artistName->Str();
+                            row.mArtist = artistName->Str();
                         }
-                        JsonObject *songName =
-                            reader.GetByName(response, "dlc_song_name");
+                        JsonObject *songName = reader.GetByName(response, "dlc_song_name");
                         if (songName) {
-                            localRows[i].mSongTitle = songName->Str();
+                            row.mSongTitle = songName->Str();
                         }
                         JsonObject *diffName = reader.GetByName(response, "dlc_diff");
                         if (diffName) {
-                            localRows[i].mDiff = diffName->Int();
+                            row.mDiff = diffName->Int();
                         }
-                        localRows[i].unk2c = "";
-                        localRows[i].mTimeStamp = startTime.ToCode();
-                        localRows[i].mChallengerXp = 0;
-                        calcedRows.push_back(localRows[i]);
+                        row.unk2c = "";
+                        row.mTimeStamp = startTime.ToCode();
+                        row.mChallengerXp = 0;
+                        calcedRows.push_back(row);
                     }
                 }
             }
@@ -259,6 +259,9 @@ void GetBadgeInfo(
             it->second.mMedalCounts[kBadgeBronze] = dlcBronze + hmxBronze;
         } else {
             ChallengeBadgeInfo value;
+            value.mMedalCounts[kBadgeGold] = 0;
+            value.mMedalCounts[kBadgeSilver] = 0;
+            value.mMedalCounts[kBadgeBronze] = 0;
             value.mMedalCounts[kBadgeGold] = dlcGold + hmxGold;
             value.mMedalCounts[kBadgeSilver] = dlcSilver + hmxSilver;
             value.mMedalCounts[kBadgeBronze] = dlcBronze + hmxBronze;
@@ -300,9 +303,11 @@ void GetRows(
         curRow.mDiff = c.GetValue(cur, 6)->Int();
         curRow.mType = ChallengeRow::kNumChallengeTypes;
         curRow.unk2c = c.GetValue(cur, 7)->Str();
+        unsigned int timeStamp;
         DateTime dt;
         dt.ParseDate(c.GetValue(cur, 8)->Str());
-        curRow.mTimeStamp = dt.ToCode();
+        timeStamp = dt.ToCode();
+        curRow.mTimeStamp = timeStamp;
         curRow.mChallengerXp = c.GetValue(cur, 9)->Int();
         calcedRows[curRow.unk2c].push_back(curRow);
     }

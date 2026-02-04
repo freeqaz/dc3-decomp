@@ -289,6 +289,70 @@ Use objdiff to compare load instruction order before `bl` calls. If target loads
 
 ---
 
+## IsNaN vs Threshold Check
+
+**Impact:** +3-5%
+**Success Rate:** HIGH
+**Time:** 5 minutes
+
+`IsNaN(x)` and `x < threshold` generate completely different code.
+
+### Symptom
+
+objdiff shows:
+- `fcmpu cr6, fN, fN` (compare register with itself) for IsNaN
+- `fcmpu cr6, fN, fM` (compare with loaded constant) for threshold
+- Different branch conditions (`bne` for IsNaN vs `bge`/`blt` for threshold)
+
+### Detection
+
+Look at the float comparison in objdiff:
+
+```asm
+# IsNaN pattern - compares register with itself
+fcmpu cr6, f30, f30
+bne cr6, ...         ; NaN if f30 != f30
+
+# Threshold pattern - compares with constant
+lfs f0, __real@b8d1b717, r11   ; load -0.0001
+fcmpu cr6, f30, f0
+bge cr6, ...         ; branch if f30 >= -0.0001
+```
+
+### Why It Matters
+
+`IsNaN(x)` generates a self-comparison (`x != x` is true only for NaN), while a threshold check loads a constant and compares against it. These are semantically different and generate different code.
+
+### Fix
+
+Check Ghidra decompilation to see which pattern the target uses:
+
+```cpp
+// Before - IsNaN check (self-comparison)
+if (IsNaN(score)) {
+    MILO_NOTIFY("error: bad score %f", score);
+}
+
+// After - threshold check (comparison with constant)
+if (score < -0.0001f) {
+    MILO_NOTIFY("error: bad score %f", score);
+}
+```
+
+### Real Examples
+
+| Function | Before | After | Delta | Notes |
+|----------|--------|-------|-------|-------|
+| CharInterest::ComputeScore | 91.6% | 94.6% | +3.0% | Changed `IsNaN(f7)` to `f7 < -0.0001f` |
+
+### Note
+
+The threshold value can be determined from the float constant in objdiff. Common values:
+- `__real@b8d1b717` = -0.0001f (approximately)
+- Check the IEEE 754 hex representation to decode the exact value
+
+---
+
 ## See Also
 
 - [fixable-casting.md](fixable-casting.md) - Type casting patterns

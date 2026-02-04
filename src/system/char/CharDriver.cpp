@@ -110,11 +110,12 @@ DataNode CharDriver::OnPrint(const DataArray *) {
     return 0;
 }
 
+// Overload that resolves a DataNode to a CharClip and delegates to Play(CharClip*, ...)
+// The thisnode copy is required for proper DataNode reference counting
 CharClipDriver *
 CharDriver::Play(const DataNode &node, int i, float f1, float f2, float f3) {
     DataNode thisnode(node);
-    CharClip *found = FindClip(node, true);
-    CharClipDriver *driver = Play(found, i, f1, f2, f3);
+    CharClipDriver *driver = Play(FindClip(node, true), i, f1, f2, f3);
     mLastNode = thisnode;
     return driver;
 }

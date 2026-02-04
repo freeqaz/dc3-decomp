@@ -56,9 +56,6 @@ enum ChallengeBadgeType {
 class ChallengeBadgeInfo {
 public:
     int mMedalCounts[kNumBadgeTypes]; // 0x0
-    // int mGold; // 0x0
-    // int mSilver; // 0x4
-    // int mBronze; // 0x8
 };
 
 class FlauntScoreData {

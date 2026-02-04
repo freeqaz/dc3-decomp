@@ -179,8 +179,8 @@ void ObjPtrVec<T1, T2>::ReplaceNode(Node *n, Hmx::Object *obj) {
     if (mListMode == kObjListOwnerControl) {
         mOwner->Replace(n, obj);
     } else {
-        n->SetObj(obj);
-        if (n->Obj() == nullptr && mListMode == kObjListNoNull) {
+        Hmx::Object *oldObj = n->SetObj(obj);
+        if (!oldObj && mListMode == kObjListNoNull) {
             erase(n);
         }
     }
@@ -309,8 +309,8 @@ void ObjPtrList<T1, T2>::ReplaceNode(struct ObjPtrList::Node *node, Hmx::Object 
     if (mListMode == kObjListOwnerControl) {
         mOwner->Replace(node, obj);
     } else {
-        node->SetObj(obj);
-        if (node->Obj() == nullptr && mListMode == kObjListNoNull) {
+        Hmx::Object *old = node->SetObj(obj);
+        if (!old && mListMode == kObjListNoNull) {
             erase(node);
         }
     }

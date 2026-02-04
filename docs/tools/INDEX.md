@@ -64,6 +64,20 @@ ICF (Identical COMDAT Folding) merges functions with identical machine code to s
 - `??_G` / `??_E`: Scalar and vector deleting destructors (identical code)
 - Template instantiations like `ObjRefConcrete<T>::GetObj()` (same code for different T)
 
+## Function Database (decomp.db)
+
+SQLite database tracking all functions, patterns, and scoring:
+
+```bash
+# Find high-priority reachable targets
+sqlite3 decomp.db "SELECT symbol, current_percent FROM functions WHERE reachable_100=1 AND current_percent < 100 ORDER BY priority_score DESC LIMIT 10"
+
+# Query functions by pattern
+sqlite3 decomp.db "SELECT symbol, current_percent FROM functions WHERE has_linker_merged=1 ORDER BY current_percent DESC LIMIT 10"
+```
+
+See [../reference/DATABASE_SCHEMA.md](../reference/DATABASE_SCHEMA.md) for full schema documentation.
+
 ## Quick Commands
 
 ```bash
@@ -76,7 +90,13 @@ ninja build/373307D9/report.json
 # Find near-match functions (90-99%)
 objdiff-cli report query build/373307D9/report.json --functions --min-percent 90 --max-percent 99
 
-# Check a specific function
+# Check a specific function (markdown output is default)
+objdiff-cli diff -p . "Game::Poll" --verdict
+
+# Diff with context around mismatches
+objdiff-cli diff -p . "Game::Poll" --verdict -C 3
+
+# Check function info from report
 objdiff-cli report function build/373307D9/report.json "Game::Poll"
 
 # Quick m2c decompilation from target binary

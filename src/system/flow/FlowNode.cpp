@@ -281,8 +281,9 @@ DrivenPropertyEntry *FlowNode::GetDrivenEntry(DataArray *a) {
 Flow *FlowNode::GetTopFlow() {
     Flow *pFlow = GetOwnerFlow();
     if (!pFlow)
-        return pFlow;
-    for (; GetOwnerFlow() && GetOwnerFlow() != pFlow; pFlow = pFlow->GetOwnerFlow())
+        return static_cast<Flow *>(this);
+    for (; pFlow->GetOwnerFlow() && pFlow->GetOwnerFlow() != pFlow;
+         pFlow = pFlow->GetOwnerFlow())
         ;
     return pFlow;
 }

@@ -4,7 +4,7 @@ These patterns are caused by linker ICF merging identical function bodies after 
 
 **Note:** The target binary is a debug build (no LTCG), but ICF is still enabled.
 
-**Action:** Use `merged-symbols` / `lookup_merged_symbol` to verify your call target is in the merged set. If verified, accept at_limit. If not in set, investigate — your code may be calling the wrong function.
+**Action:** Use `objdiff-cli diff --analyze --verdict` to confirm LINKER_MERGED is present, then use `merged-symbols` / `lookup_merged_symbol` to verify your call target is in the merged set. If verified, accept at_limit. If not in set, investigate — your code may be calling the wrong function.
 
 ---
 
@@ -55,10 +55,23 @@ Check for `bl` instructions to `merged_*` in objdiff output:
 mcp__orchestrator__lookup_merged_symbol address="82331360"
 ```
 
+**Finding merged functions in decomp.db:**
+```sql
+-- All functions flagged with ICF-merged calls
+SELECT symbol, current_percent
+FROM functions
+WHERE has_linker_merged = 1
+  AND excluded = 0
+ORDER BY current_percent DESC;
+
+-- Count: ~1,572 functions currently flagged
+```
+
 ### Verification Workflow
 
 **IMPORTANT**: Don't blindly accept LINKER_MERGED as unfixable. Verify first:
 
+0. **Confirm the verdict/pattern** - Run `objdiff-cli diff --analyze --verdict` and ensure LINKER_MERGED is actually present.
 1. **Identify your call target** - What function does YOUR code call?
 2. **Look up the merged address** - What symbols share that address?
 3. **Check membership**:

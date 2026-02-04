@@ -959,9 +959,8 @@ DataNode CharClip::OnHasGroup(DataArray *arr) {
 
 CharBoneDir *CharClip::GetResource() const {
     CharBoneDir *dir = 0;
-    const DataArray *tdef = TypeDef();
-    if (tdef) {
-        DataArray *found = tdef->FindArray("resource", false);
+    if (TypeDef()) {
+        DataArray *found = TypeDef()->FindArray("resource", false);
         if (found)
             dir = CharBoneDir::FindBoneDirResource(found->Str(1));
     }

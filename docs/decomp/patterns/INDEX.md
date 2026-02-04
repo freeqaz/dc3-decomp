@@ -1,6 +1,6 @@
 # Pattern Reference Index
 
-Quick reference for all documented decompilation patterns in DC3 (Dance Central 3), targeting Xbox 360 / Metrowerks CodeWarrior for PowerPC.
+Quick reference for all documented decompilation patterns in DC3 (Dance Central 3), targeting Xbox 360 / MSVC (PowerPC).
 
 > **Data source:** `decomp.db` — 14,772 attempts across 47,371 functions, 2,149 generated patches.
 > **Last updated:** 2026-01-29
@@ -16,6 +16,8 @@ These patterns can often be fixed with source changes. Sorted by ROI (impact x s
 | Float/Double Separation | +80% | 95% | [fixable-casting.md](fixable-casting.md#floatdouble-separation) |
 | FMA Expression Order | +1-75% | 98% | [fixable-operators.md](fixable-operators.md#fma-expression-order) |
 | Signed/Unsigned Cast | +1-50% | 100% | [fixable-comparison.md](fixable-comparison.md#signedunsigned-cast) |
+| MILO_NOTIFY vs MILO_NOTIFY_ONCE | +10-35% | HIGH | [fixable-declarations.md](fixable-declarations.md#milo_notify-vs-milo_notify_once) |
+| alloca vs _alloca | +10-15% | 100% | [fixable-declarations.md](fixable-declarations.md#alloca-vs-_alloca-intrinsic-stack-allocation) |
 | Variable Extraction | +1-35% | 95% | [fixable-declarations.md](fixable-declarations.md#variable-extraction) |
 | Explicit Conditional vs Max() | +35% | HIGH | [fixable-control-flow.md](fixable-control-flow.md#explicit-conditional-vs-max) |
 | Explicit Float Cast | +35% | HIGH | [fixable-casting.md](fixable-casting.md#explicit-float-cast) |
@@ -23,6 +25,7 @@ These patterns can often be fixed with source changes. Sorted by ROI (impact x s
 | Operator Overload Selection | +1-2% | 100% | [fixable-operators.md](fixable-operators.md#operator-overload-selection) |
 | Inline Assignment | +1-2% | 95% | [fixable-operators.md](fixable-operators.md#inline-assignment) |
 | Ternary vs If-Else | +5-10% | 75% | [fixable-control-flow.md](fixable-control-flow.md#ternary-vs-if-else) |
+| IsNaN vs Threshold Check | +3-5% | HIGH | [fixable-comparison.md](fixable-comparison.md#isnan-vs-threshold-check) |
 | Variable Declaration Order | +1-88% | 30% | [fixable-declarations.md](fixable-declarations.md#variable-declaration-order) |
 
 ### Additional Fixable Patterns
@@ -48,12 +51,14 @@ These patterns can often be fixed with source changes. Sorted by ROI (impact x s
 | Commutative Operand Order | [fixable-operators.md](fixable-operators.md#commutative-operand-order) |
 | Comparison Operand Order | [fixable-operators.md](fixable-operators.md#comparison-operand-order) |
 | Bool Mask | [fixable-bool-mask.md](fixable-bool-mask.md) |
+| MILO_NOTIFY vs MILO_NOTIFY_ONCE | [fixable-declarations.md](fixable-declarations.md#milo_notify-vs-milo_notify_once) |
+| IsNaN vs Threshold Check | [fixable-comparison.md](fixable-comparison.md#isnan-vs-threshold-check) |
 
 ---
 
 ## Unfixable Patterns
 
-These patterns cannot be fixed at source level. Accept current match percentage when detected.
+These patterns are usually not fixable at source level. Verify that the pattern truly applies (and isn’t mixed with fixable issues) before accepting the current match percentage.
 
 | Pattern | Prevalence | Typical Gap | File |
 |---------|------------|-------------|------|
@@ -91,15 +96,76 @@ Match% 50-80%?
 
 Match% 80-95%?
   → Fine-tuning. Check comparison patterns, casting, operator selection.
+  → Prologue mismatch with _RtlCheckStack12? Try _alloca instead of alloca.
 
 Match% 95-99%?
   → Check for unfixable patterns first.
   → If no unfixable patterns: try variable reorder, inline assignment.
 
 Match% 99%+ but not 100%?
-  → Very likely unfixable (linker-merged, register allocation).
-  → Accept as "at limit" unless verdict says otherwise.
+  → Often unfixable (linker-merged, register allocation), but verify first.
+  → Check `objdiff-cli diff --analyze --verdict` and confirm any LINKER_MERGED calls.
+  → Only mark "at limit" after verification; otherwise keep investigating.
 ```
+
+### Prologue Hints
+
+When the prologue (function entry) differs significantly:
+- **`_RtlCheckStack12` in target:** Use `_alloca` (intrinsic) instead of `alloca` (CRT wrapper)
+- **Stack frame size differs:** Check for missing/extra local variables
+- **Different save/restore pattern:** May indicate unfixable compiler optimization
+
+**Tip:** When running `objdiff-cli diff --verdict`, the output now shows:
+- 💡 Match guidance hints based on percentage
+- 📖 Links to pattern documentation for each detected pattern
+- Analysis summary showing patterns checked and unattributed mismatches
+- Verdict factors table explaining the classification
+
+---
+
+## Finding Targets in decomp.db
+
+Query the database to find functions matching specific patterns or criteria:
+
+```sql
+-- Functions that CAN reach 100% (no unfixable patterns)
+SELECT symbol, current_percent, unit
+FROM functions
+WHERE reachable_100 = 1
+  AND current_percent < 100
+  AND excluded = 0
+ORDER BY current_percent DESC
+LIMIT 20;
+
+-- High-impact functions (many callers, worth fixing first)
+SELECT symbol, fan_in, current_percent
+FROM functions
+WHERE fan_in >= 5
+  AND current_percent < 100
+  AND excluded = 0
+ORDER BY fan_in DESC
+LIMIT 20;
+
+-- Fresh targets (never attempted, high match)
+SELECT symbol, current_percent, unit
+FROM functions
+WHERE attempt_count = 0
+  AND current_percent >= 90
+  AND excluded = 0
+ORDER BY current_percent DESC
+LIMIT 20;
+
+-- Type anchors (constructors/destructors for class validation)
+SELECT symbol, current_percent
+FROM functions
+WHERE (is_constructor = 1 OR is_destructor = 1)
+  AND current_percent < 100
+  AND excluded = 0
+ORDER BY current_percent DESC
+LIMIT 20;
+```
+
+See [DATABASE_SCHEMA.md](../../reference/DATABASE_SCHEMA.md) for full schema documentation.
 
 ---
 

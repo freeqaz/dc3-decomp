@@ -189,6 +189,10 @@ class DecompMCPServer:
                                 "type": "string",
                                 "description": "⚠️ CRITICAL: Project directory to build from. MUST pass your worktree directory here to test your changes! If omitted, defaults to main repo and your edits won't be visible in results.",
                             },
+                            "context": {
+                                "type": "integer",
+                                "description": "Show N instructions of context before/after each mismatch (like grep -C). Default: 3.",
+                            },
                         },
                         "required": ["symbol"],
                     },
@@ -1048,6 +1052,7 @@ class DecompMCPServer:
         symbol = args.get("symbol", "")
         full_build = args.get("full_build", False)
         project_dir_arg = args.get("project_dir", None)
+        context = args.get("context", 3)
 
         if not symbol:
             return [TextContent(type="text", text="Error: No symbol provided.")]
@@ -1092,6 +1097,9 @@ class DecompMCPServer:
         if full_build:
             build_flag.append("--full-build")
 
+        if context:
+            base_args.extend(["-C", str(context)])
+
         def _filter_stderr(stderr: str) -> str:
             """Filter ninja progress lines from stderr, return error lines."""
             if not stderr:
@@ -1130,7 +1138,7 @@ class DecompMCPServer:
                 return [TextContent(type="text", text=error_msg)]
 
             # 2) Markdown run (no build, already built) - for display
-            md_cmd = base_args + ["-f", "markdown"]
+            md_cmd = list(base_args)  # markdown is default format
             md_result = subprocess.run(
                 md_cmd,
                 capture_output=True,

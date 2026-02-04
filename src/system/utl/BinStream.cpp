@@ -147,7 +147,6 @@ int BinStream::PopRev(Hmx::Object *o) {
 }
 
 void BinStream::Read(void *data, int bytes) {
-    static std::list<String> _dw;
     if (Fail()) {
         MILO_NOTIFY_ONCE("Stream error: Can't read from %s", Name());
         memset(data, 0, bytes);

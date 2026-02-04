@@ -61,7 +61,10 @@ Decision guide for DC3 decompilation tools. Each tool serves a specific purpose 
 - `--verdict` - Get fixability classification (LIKELY_FIXABLE, AT_LIMIT, etc.)
 - `--build` - Run ninja before diffing (great for iteration)
 - `--analyze` - Detect mismatch patterns without full verdict
-- `-f markdown` - Human-readable report format
+- `-C <N>` - Show N instructions of context around mismatches (like grep -C)
+- `--full-listing` - Show all instructions, not just mismatches
+
+**Note:** Markdown is now the default output format (no `-f` needed).
 
 ### objdiff-cli report query
 

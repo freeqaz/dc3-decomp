@@ -142,18 +142,21 @@ bool BustAMovePanel::InBustAMove() {
 
 Symbol BustAMovePanel::GetPlayerColor(int i1) {
     static Symbol is_in_party_mode("is_in_party_mode");
+    const char *color;
     if (TheHamProvider->Property(is_in_party_mode)->Int()) {
         if (TheGameData->Player(i1)->Side() == kSkeletonRight) {
-            return "pink";
+            color = "pink";
         } else {
-            return "blue";
+            color = "blue";
+        }
+    } else {
+        if (i1 == 0) {
+            color = "pink";
+        } else {
+            color = "blue";
         }
     }
-    if (i1 == 0) {
-        return "pink";
-    } else {
-        return "blue";
-    }
+    return Symbol(color);
 }
 
 MoveRating BustAMovePanel::GetMoveRating(float f1) {

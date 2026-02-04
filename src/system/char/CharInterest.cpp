@@ -146,7 +146,9 @@ bool CharInterest::IsMatchingFilterFlags(int mask) {
 float CharInterest::ComputeScore(
     const Vector3 &v1, const Vector3 &v2, const Vector3 &v3, float f, int filterFlags, bool b
 ) {
-    if (!(IsMatchingFilterFlags(filterFlags) || (b && mCategoryFlags == 0)))
+    bool valid = IsMatchingFilterFlags(filterFlags);
+    valid = valid || (b && mCategoryFlags == 0);
+    if (!valid)
         return -1.0f;
 
     Vector3 v7c(WorldXfm().v);
@@ -157,8 +159,9 @@ float CharInterest::ComputeScore(
 
     float dot = Dot(v1, v88);
     float f1 = 0.0f;
-    if (dot >= mMaxViewAngleCos)
+    if (dot >= mMaxViewAngleCos) {
         f1 = 1.0f;
+    }
 
     float dot2 = Dot(v3, v88);
     float f2 = 0.0f;
@@ -166,8 +169,8 @@ float CharInterest::ComputeScore(
         f2 = 1.0f;
 
     float f7 = -(lensq * f - 1.0f);
-    if (IsNaN(f7)) {
-        MILO_NOTIFY("error scoring interest object: bad normalize factor gave score %f", f7);
+    if (f7 < -0.0001f) {
+        MILO_NOTIFY_ONCE("error scoring interest object: bad normalize factor gave score %f", f7);
     }
 
     float f4 = f7 + f2 + f1 - 0.99f;

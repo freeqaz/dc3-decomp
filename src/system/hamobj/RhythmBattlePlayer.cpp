@@ -41,7 +41,8 @@ RhythmBattlePlayer::RhythmBattlePlayer()
       mTextFeedback(this), mMoveFeedback(this), mStealPart(this), mStealAnim(this),
       mPlayer(0), unk23c(0), unk244(0), unk248(0), unk24c(0), unk250(0), unk258(0),
       unk25c(0), unk260(0), mInTheZone(-2), unk270(0), unk274(0), unk280(0), unk284(0),
-      unk288(false), unk294(-1), unk298("none"), unk29c(0), unk2a4(false), unk2a5(false),
+      unk288(false), unk294(-1), unk298("none"), unk29c(0), unk2a4(false),
+      unk2a5(false),
       unk2a8(0) {}
 
 RhythmBattlePlayer::~RhythmBattlePlayer() {}

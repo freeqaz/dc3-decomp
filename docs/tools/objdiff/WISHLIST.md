@@ -157,26 +157,43 @@ See [OBJDIFF_CLI_USAGE.md](./OBJDIFF_CLI_USAGE.md#report-analyze) for full docum
 
 ## 7. Instruction Context Window
 
-> **Status:** 📋 **PLANNED** for Phase 6 - see [OBJDIFF_CLI_IMPLEMENTATION.md](./OBJDIFF_CLI_IMPLEMENTATION.md#63-instruction-context-window).
+> **Status:** ✅ **IMPLEMENTED** as `-C` / `--context` flag (2026-02-04).
 
-**Problem:** Seeing just the mismatched instruction without context makes diagnosis harder.
-
-**Proposed enhancement:**
+**Actual command:**
 ```bash
-objdiff-cli diff -p . "Symbol" -f json --include-instructions --context 3
+# Show 3 instructions before/after each mismatch (like grep -C)
+objdiff-cli diff -p . "Symbol" --verdict -C 3
+
+# Full listing of all instructions
+objdiff-cli diff -p . "Symbol" --verdict --full-listing
 ```
 
-Shows 3 instructions before and after each mismatch for better pattern recognition.
+Shows context around mismatches for better pattern recognition. The markdown output bolds mismatch lines and shows `...` separators between non-contiguous sections.
 
 ---
 
 ## 8. Export to Markdown/HTML Report
 
-> **Status:** ✅ **PARTIALLY IMPLEMENTED** - Markdown added in Phase 3. HTML remains wishlist.
+> **Status:** ✅ **FULLY IMPLEMENTED** for Markdown (2026-02-04). HTML remains wishlist.
 
-**Implemented (Phase 3):**
+**Implemented:**
+- Markdown is now the **default output format** (no `-f` flag needed)
+- Match percentage guidance (hints based on match %)
+- Pattern documentation links (📖 links to docs/decomp/patterns/)
+- Analysis summary with patterns checked and unattributed mismatches
+- Verdict factors table showing decision breakdown
+- Context mode (`-C N`) for showing context around mismatches
+- Full listing mode (`--full-listing`) for all instructions
+
 ```bash
-objdiff-cli diff -p . "Symbol" -f markdown -o diff-report.md --verdict --include-instructions
+# Default markdown output with verdict
+objdiff-cli diff -p . "Symbol" --verdict
+
+# With context around mismatches
+objdiff-cli diff -p . "Symbol" --verdict -C 3
+
+# Full instruction listing
+objdiff-cli diff -p . "Symbol" --verdict --full-listing
 ```
 
 **Still wishlist:** HTML output with syntax highlighting:

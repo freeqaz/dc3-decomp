@@ -2,7 +2,7 @@
 
 These patterns are caused by compiler optimizations or heuristics we cannot control at source level.
 
-**Action:** Accept current match percentage when these patterns are detected.
+**Action:** Confirm the pattern actually applies (and that no fixable issues are mixed in). If verified, accept the current match percentage.
 
 ---
 
@@ -97,9 +97,63 @@ All mismatches are `diff_arg` with register operands swapped:
 | fmr f30, f1 | fmr f31, f1 |
 ```
 
+**Finding register swap functions in decomp.db:**
+```sql
+SELECT symbol, current_percent
+FROM functions
+WHERE primary_pattern = 'REGISTER_SWAP'
+  AND excluded = 0
+ORDER BY current_percent DESC;
+```
+
+### Variable Reordering Heuristics
+
+When REGISTER_SWAP is detected, try these strategies (~30% success rate overall):
+
+**1. Group by usage pattern**
+Variables used together should be declared together:
+```cpp
+// Before - scattered declarations
+float x = GetX();
+int count = 0;
+float y = GetY();  // Used with x but declared far apart
+
+// After - grouped by usage
+float x = GetX();
+float y = GetY();  // Now adjacent to x
+int count = 0;
+```
+
+**2. Order by first use**
+Declare variables in the order they're first read:
+```cpp
+// If function does: read a, read b, read c, write a
+// Declare in order: a, b, c
+```
+
+**3. Separate integer and float declarations**
+The compiler may allocate GPRs and FPRs from separate pools:
+```cpp
+// Before - interleaved
+int a; float f1; int b; float f2;
+
+// After - grouped by type
+int a; int b;
+float f1; float f2;
+```
+
+**4. Try reverse order**
+Sometimes the compiler allocates from the end:
+```cpp
+// If nothing else works, try reversing declaration order
+float z, y, x;  // Instead of x, y, z
+```
+
 ### What To Do
 
-Try [Variable Declaration Order](fixable-declarations.md#variable-declaration-order) first (~30% success rate). If 10+ reordering attempts don't help, accept as permanent.
+Try [Variable Declaration Order](fixable-declarations.md#variable-declaration-order) with the heuristics above. If 10+ reordering attempts don't help, accept as permanent.
+
+**Important:** The detection currently doesn't identify *which* variables correspond to swapped registers. You'll need to trace register usage manually in objdiff to identify candidates.
 
 ### Real Example
 

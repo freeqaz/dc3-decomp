@@ -438,8 +438,8 @@ static void seed_loop(vorbis_look_psy *p,
 }
 
 static void seed_chase(float *seeds, int linesper, long n){
-  long  *posstack=alloca(n*sizeof(*posstack));
-  float *ampstack=alloca(n*sizeof(*ampstack));
+  long  *posstack=_alloca(n*sizeof(*posstack));
+  float *ampstack=_alloca(n*sizeof(*ampstack));
   long   stack=0;
   long   pos=0;
   long   i;
