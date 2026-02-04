@@ -5,12 +5,23 @@
 #include "utl/Str.h"
 
 enum HttpGetFailType {
+    kHttpFail_None = 0,
+    kHttpFail_Send = 1,
 };
 
 class HttpGet {
 public:
     enum State {
         kHttpGet_Nil = -1,
+        kHttpGet_Connecting = 0,
+        kHttpGet_Sending = 1,
+        kHttpGet_SendingBody = 2,
+        kHttpGet_ReceivingHeaders = 3,
+        kHttpGet_ReceivingBody = 4,
+        kHttpGet_Downloaded = 5,
+        kHttpGet_Failed = 6,
+        kHttpGet_FailedSend = 7,
+        kHttpGet_Pending = 8,
     };
 
     HttpGet(unsigned int ip, unsigned short port, const char *, const char *);
@@ -55,21 +66,21 @@ protected:
     void SetState(State);
 
     NetworkSocket *mSocket; // 0x8
-    String unkc; // 0xc
+    String mPath; // 0xc - URL path for GET/POST requests
     unsigned short mPort; // 0x14
     int mState; // 0x18
     bool unk1c;
-    Timer unk20;
+    Timer mTimer; // 0x20
     float mTimeoutMs; // 0x50
     unsigned int mIP; // 0x54
-    String unk58;
-    void *unk60;
+    String mHeaders; // 0x58 - additional HTTP headers
+    void *mRecvBuf; // 0x60 - receive buffer (allocated as 0x1000 bytes)
     int mRecvBufPos; // 0x64
     u32 unk68;
     char *mFileBuf; // 0x6c
     int mFileBufSize; // 0x70
     int mFileBufRecvPos; // 0x74
-    int unk78;
+    int mRetryCount; // 0x78 - compared against kMaxRetries
     HttpGetFailType mFailType; // 0x7c
     State mPrevState; // 0x80
 };

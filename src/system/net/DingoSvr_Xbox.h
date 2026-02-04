@@ -47,10 +47,10 @@ protected:
     String mXLSPFilter; // 0x140
     int unk148;
     JobMgr mJobMgr; // 0x14c
-    int unk15c; // 0x15c - state? last job type queued?
-    u64 unk160;
-    u64 unk168;
-    HANDLE unk170;
+    int mJobState; // 0x15c - tracks current job: 0=idle, 1=making, 2=joining, 3=starting, 4=writing, 5=ending, 6=leaving, 7=deleting
+    u64 mScoreXUID; // 0x160 - XUID for leaderboard score submission
+    u64 mCareerScore; // 0x168 - career score value to submit
+    HANDLE mSessionHandle; // 0x170
     float mMsBetweenReconnDingo; // 0x174
     unsigned int mLeaderboardID; // 0x178
     unsigned int mLeaderboardScorePropID; // 0x17c

@@ -15,8 +15,8 @@ DingoSvrXbox gDingoSvrXbox;
 DingoServer &TheServer = gDingoSvrXbox;
 
 DingoSvrXbox::DingoSvrXbox()
-    : unkb0(0), mXUID(0), unk148(0), mJobMgr(this), unk15c(0), unk160(0), unk168(0),
-      unk170(0), mMsBetweenReconnDingo(0), mLeaderboardID(-1),
+    : unkb0(0), mXUID(0), unk148(0), mJobMgr(this), mJobState(0), mScoreXUID(0), mCareerScore(0),
+      mSessionHandle(0), mMsBetweenReconnDingo(0), mLeaderboardID(-1),
       mLeaderboardScorePropID(-1) {}
 
 BEGIN_HANDLERS(DingoSvrXbox)
@@ -79,20 +79,20 @@ bool DingoSvrXbox::IsValidLoginCandidate(int pad) const {
 }
 
 void DingoSvrXbox::MakeSessionJobComplete(bool b1) {
-    if (b1 && unk170) {
-        mJobMgr.QueueJob(new AddLocalPlayerJob(unk170, unk74, false));
-        unk15c = 2;
+    if (b1 && mSessionHandle) {
+        mJobMgr.QueueJob(new AddLocalPlayerJob(mSessionHandle, unk74, false));
+        mJobState = 2;
     } else {
-        unk15c = 0;
+        mJobState = 0;
     }
 }
 
 void DingoSvrXbox::JoinSessionComplete(bool b1) {
     if (b1) {
-        mJobMgr.QueueJob(new StartSessionJob(unk170));
-        unk15c = 3;
+        mJobMgr.QueueJob(new StartSessionJob(mSessionHandle));
+        mJobState = 3;
     } else {
-        unk15c = 0;
+        mJobState = 0;
     }
 }
 
@@ -101,47 +101,47 @@ void DingoSvrXbox::StartSessionComplete(bool b1) {
     MILO_ASSERT(mLeaderboardScorePropID != -1, 0x208);
     if (b1) {
         mJobMgr.QueueJob(new WriteCareerLeaderboardJob(
-            unk170, mLeaderboardID, mLeaderboardScorePropID, unk160, unk168
+            mSessionHandle, mLeaderboardID, mLeaderboardScorePropID, mScoreXUID, mCareerScore
         ));
-        unk15c = 4;
+        mJobState = 4;
     } else {
-        unk15c = 0;
+        mJobState = 0;
     }
 }
 
 void DingoSvrXbox::WriteCareerLeaderboardComplete(bool b1) {
     if (b1) {
-        mJobMgr.QueueJob(new EndSessionJob(unk170));
-        unk15c = 5;
+        mJobMgr.QueueJob(new EndSessionJob(mSessionHandle));
+        mJobState = 5;
     } else {
-        unk15c = 0;
+        mJobState = 0;
     }
 }
 
 void DingoSvrXbox::LeaveSessionComplete(bool b1) {
     if (b1) {
-        mJobMgr.QueueJob(new DeleteSessionJob(unk170));
-        unk15c = 7;
+        mJobMgr.QueueJob(new DeleteSessionJob(mSessionHandle));
+        mJobState = 7;
     } else {
-        unk15c = 0;
+        mJobState = 0;
     }
 }
 
 void DingoSvrXbox::EndSessionComplete(bool b1) {
     if (b1) {
-        mJobMgr.QueueJob(new RemoveLocalPlayerJob(unk170, unk74));
-        unk15c = 6;
+        mJobMgr.QueueJob(new RemoveLocalPlayerJob(mSessionHandle, unk74));
+        mJobState = 6;
     } else {
-        unk15c = 0;
+        mJobState = 0;
     }
 }
 
-void DingoSvrXbox::DeleteSessionComplete(bool b1) { unk15c = 0; }
+void DingoSvrXbox::DeleteSessionComplete(bool b1) { mJobState = 0; }
 
 void DingoSvrXbox::StartUploadCareerScore(u64 u) {
-    if (unk15c == 0) {
-        unk168 = u;
-        unk160 = mXUID;
+    if (mJobState == 0) {
+        mCareerScore = u;
+        mScoreXUID = mXUID;
         CreateSession();
     }
 }
@@ -213,8 +213,8 @@ void DingoSvrXbox::OnAuthSuccess() {
 
 void DingoSvrXbox::CreateSession() {
     XUserSetContext(unk74, 0x800A, 1);
-    mJobMgr.QueueJob(new MakeSessionJob(&unk170, 0x706, unk74));
-    unk15c = 1;
+    mJobMgr.QueueJob(new MakeSessionJob(&mSessionHandle, 0x706, unk74));
+    mJobState = 1;
 }
 
 int DingoSvrXbox::GetValidLoginCandidate(char *name, u64 &xuid) const {

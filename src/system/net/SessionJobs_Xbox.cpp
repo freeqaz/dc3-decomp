@@ -97,7 +97,7 @@ void MakeSessionJob::Start() {
 bool MakeSessionJob::IsFinished() {
     DWORD dw;
     DWORD res = XGetOverlappedResult(&mXOverlapped, &dw, false);
-    if (res == 0x3E4) {
+    if (res == ERROR_IO_INCOMPLETE) {
         return false;
     } else {
         if (res != 0) {
@@ -121,7 +121,7 @@ void MakeSessionJob::OnCompletion(Hmx::Object *) {
 }
 
 void MakeSessionJob::CheckError(DWORD err, XOVERLAPPED *overlapped) {
-    if (err != 0 && err != 0x3E5) {
+    if (err != 0 && err != ERROR_IO_PENDING) {
         MILO_NOTIFY(
             "Error %i in Xbox Session: %x ", err, XGetOverlappedExtendedError(overlapped)
         );

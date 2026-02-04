@@ -45,7 +45,7 @@ void HttpReqCurl::Start() {
     MILO_ASSERT(!mReq, 0x75);
     mReq = curl_easy_init();
     String str60;
-    if (mType == 2 || mType == 3) {
+    if (mType == kHttpReqType_PUT || mType == kHttpReqType_HTTPS_POST) {
         str60 = "s";
         curl_easy_setopt(mReq, CURLOPT_SSL_VERIFYPEER, mSSLVerifyPeer);
         curl_easy_setopt(mReq, CURLOPT_SSL_VERIFYHOST, mSSLVerifyHost);

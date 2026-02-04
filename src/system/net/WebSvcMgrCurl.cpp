@@ -32,23 +32,23 @@ void WebSvcMgrCurl::Poll() {
             sRunningHandles = running_handles;
         }
         int msgs_in_queue = 0;
-        int i5 = 100;
+        int maxMessages = 100;
         CURLMsg *msg;
         while (msg = curl_multi_info_read(mCurlMultiHandle, &msgs_in_queue), msg) {
             if (msg->msg == CURLMSG_DONE) {
                 CURL *handle = msg->easy_handle;
-                bool b6 = false;
-                unsigned int arg = 0;
+                bool success = false;
+                unsigned int httpStatus = 0;
                 MILO_ASSERT(handle, 0x11D);
                 if (msg->data.result == 0
-                    && curl_easy_getinfo(handle, (CURLINFO)0x200002, &arg) == 0
-                    && arg == 200) {
-                    b6 = true;
+                    && curl_easy_getinfo(handle, CURLINFO_RESPONSE_CODE, &httpStatus) == 0
+                    && httpStatus == 200) {
+                    success = true;
                 }
-                FindAndFinish(handle, b6, arg);
+                FindAndFinish(handle, success, httpStatus);
             }
-            i5--;
-            if (i5 == 0)
+            maxMessages--;
+            if (maxMessages == 0)
                 return;
         }
     }
@@ -130,11 +130,11 @@ void WebSvcMgrCurl::FindAndFinish(void *handle, bool success, unsigned int http_
     return;
 
 found:
-    if (curl_easy_getinfo((CURL *)handle, (CURLINFO)0x40001C, nullptr) == 0) {
+    if (curl_easy_getinfo((CURL *)handle, CURLINFO_COOKIELIST, nullptr) == 0) {
         std::map<String, String> cookies;
         char *response_headers = nullptr;
 
-        curl_easy_getinfo((CURL *)handle, (CURLINFO)0x40001C, &response_headers);
+        curl_easy_getinfo((CURL *)handle, CURLINFO_COOKIELIST, &response_headers);
 
         if (response_headers) {
             String header_str(response_headers);
