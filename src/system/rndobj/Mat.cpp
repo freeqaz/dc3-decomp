@@ -255,10 +255,10 @@ RndTex *RndMat::GetRefractNormalMap() {
     return mRefractNormalMap ? mRefractNormalMap : mNormalMap;
 }
 
-bool RndMat::GetRefractEnabled(bool b1) {
+bool RndMat::GetRefractEnabled(bool b) {
     if (mRefractEnabled == 1 && mRefractStrength > 0.0f) {
         RndTex *tex = mRefractNormalMap ? mRefractNormalMap : mNormalMap;
-        if (tex && (b1 || TheRnd.GetCurrentFrameTex(false))) {
+        if (tex && (b || TheRnd.GetCurrentFrameTex(false))) {
             return true;
         }
     }

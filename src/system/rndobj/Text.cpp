@@ -83,6 +83,10 @@ BEGIN_PROPSYNCS(RndText)
     SYNC_SUPERCLASS(Hmx::Object)
 END_PROPSYNCS
 
+RndText::Style::Style(Hmx::Object *owner)
+    : mSize(30), mTextColor(1, 1, 1), mFontColorOverride(false), mFontColor(1, 1, 1),
+      mItalics(0), mKerning(0), mZOffset(0), mFont(owner), mBlacklight(false) {}
+
 RndText::Style::Style(const Style &s) : mFont(s.mFont) {
     memcpy(this, &s, 0x34);
     mBlacklight = s.mBlacklight;

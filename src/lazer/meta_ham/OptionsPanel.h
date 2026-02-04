@@ -47,4 +47,7 @@ DECLARE_MESSAGE(TokenRedeemedMsg, "token_redeemed")
 END_MESSAGE
 
 DECLARE_MESSAGE(LinkingCodeRetrievedMsg, "linking_code_retrieved")
+LinkingCodeRetrievedMsg(bool b, const String &str) : Message(Type(), b, str) {}
+bool Success() const { return mData->Int(2); }
+const char *LinkingCode() const { return mData->Str(3); }
 END_MESSAGE

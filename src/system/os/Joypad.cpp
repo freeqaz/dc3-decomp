@@ -260,19 +260,31 @@ void JoypadInitCommon(DataArray *joypad_config) {
     gJoypadLibInitialized = true;
 }
 
+// Converts analog stick positions to digital button presses when stick exceeds threshold
+// Button layout per stick: Up(+0), Right(+1), Down(+2), Left(+3)
+// LStick buttons start at kPad_LStickUp (16), RStick at kPad_RStickUp (20)
+// NOTE: Unusual structure (separated declarations, while loop) required for 100% match
 void TranslateSticksToButs(JoypadData &data, unsigned int &mask) {
     float dist = data.mDistFromRest;
-    for (int i = 0; i < kNumAnalogSticks; i++) {
+    int i;
+    int btn_index;
+    i = 0;
+    btn_index = kPad_LStickUp;
+    while (i < kNumAnalogSticks) {
+        // X-axis: Right (+) or Left (-)
         if (data.mSticks[i][0] > dist) {
-            mask |= 1 << (kPad_LStickRight + (i * 4));
+            mask |= 1 << (btn_index + 1);  // Right
         } else if (data.mSticks[i][0] < -dist) {
-            mask |= 1 << (kPad_LStickLeft + (i * 4));
+            mask |= 1 << (btn_index + 3);  // Left
         }
+        // Y-axis: Down (+) or Up (-)
         if (data.mSticks[i][1] > dist) {
-            mask |= 1 << (kPad_LStickDown + (i * 4));
+            mask |= 1 << (btn_index + 2);  // Down
         } else if (data.mSticks[i][1] < -dist) {
-            mask |= 1 << (kPad_LStickUp + (i * 4));
+            mask |= 1 << btn_index;  // Up
         }
+        btn_index += 4;
+        i++;
     }
 }
 

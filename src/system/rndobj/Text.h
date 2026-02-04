@@ -65,11 +65,7 @@ public:
 
     class Style {
     public:
-        Style(Hmx::Object *owner)
-            : mSize(30), mTextColor(1, 1, 1), mFontColorOverride(false),
-              mFontColor(1, 1, 1), mItalics(0), mKerning(0), mZOffset(0), mFont(owner),
-              mBlacklight(false) {}
-
+        Style(Hmx::Object *owner);
         Style(const Style &s);
 
         Style &operator=(const Style &s) {

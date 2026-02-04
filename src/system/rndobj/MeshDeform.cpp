@@ -46,7 +46,8 @@ BEGIN_COPYS(RndMeshDeform)
     CREATE_COPY(RndMeshDeform)
     BEGIN_COPYING_MEMBERS
         COPY_MEMBER(mMesh)
-        COPY_MEMBER(mMeshInverse)
+        const Transform &src = c->mMeshInverse;
+        mMeshInverse = src;
         COPY_MEMBER(mBones)
         COPY_MEMBER(mSkipInverse)
         mVerts.Copy(c->mVerts);

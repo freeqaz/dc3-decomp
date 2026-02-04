@@ -347,14 +347,18 @@ int SongStatusMgr::GetScoreForDifficulty(int songID, Difficulty d, bool &bref) c
 int SongStatusMgr::GetBestScore(int songID, bool &bref, Difficulty d) const {
     int bestScore = 0;
     bref = false;
-    if (HasSongStatus(songID) && d != kNumDifficulties) {
-        for (; d != kNumDifficulties; d = DifficultyOneHarder(d)) {
-            const SongStatus &status = GetSongStatus(songID);
-            int score = status.mStatusData[d].mScore;
-            if (score > bestScore) {
-                bref = status.mStatusData[d].mNoFlashcards;
-                bestScore = score;
-            }
+    if (HasSongStatus(songID)) {
+        Difficulty loopDiff = d;
+        if (d != kNumDifficulties) {
+            do {
+                const SongStatus &status = GetSongStatus(songID);
+                int score = status.mStatusData[loopDiff].mScore;
+                if (score > bestScore) {
+                    bref = status.mStatusData[loopDiff].mNoFlashcards;
+                    bestScore = score;
+                }
+                loopDiff = DifficultyOneHarder(loopDiff);
+            } while (loopDiff != kNumDifficulties);
         }
     }
     return bestScore;

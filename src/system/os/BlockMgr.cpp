@@ -98,13 +98,17 @@ Block *BlockMgr::FindBlock(int arknum, int blocknum) {
 }
 
 Block *BlockMgr::FindLRUBlock(bool b) {
-    int time = Block::CurrentTimestamp();
-    Block *ret = nullptr;
+    Block *ret = 0;
+    int time = Block::sCurrTimestamp;
     for (int i = 0; i < mBlockCache.size(); i++) {
-        if (mBlockCache[i] != mWritingBlock && mBlockCache[i] != mReadingBlock
-            && (!b || !mBlockCache[i]->Written() && mBlockCache[i]->Timestamp() < time)) {
-            ret = mBlockCache[i];
-            time = mBlockCache[i]->Timestamp();
+        if (mBlockCache[i] != mWritingBlock && mBlockCache[i] != mReadingBlock) {
+            if (b) {
+                if (mBlockCache[i]->mWritten) continue;
+            }
+            if (mBlockCache[i]->mTimestamp < time) {
+                ret = mBlockCache[i];
+                time = mBlockCache[i]->mTimestamp;
+            }
         }
     }
     return ret;

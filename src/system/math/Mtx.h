@@ -120,6 +120,10 @@ namespace Hmx {
         }
         static const Hmx::Matrix4 &ID() { return sID; }
 
+        Vector4 Col4(int col) const {
+            return Vector4(x[col], y[col], z[col], w[col]);
+        }
+
         Vector4 x;
         Vector4 y;
         Vector4 z;

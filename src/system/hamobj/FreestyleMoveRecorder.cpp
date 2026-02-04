@@ -1,5 +1,6 @@
 #include "hamobj/FreestyleMoveRecorder.h"
 #include "gesture/BaseSkeleton.h"
+#include "gesture/GestureMgr.h"
 #include "hamobj/DancerSkeleton.h"
 #include "hamobj/FreestyleMove.h"
 #include "obj/Data.h"
@@ -253,4 +254,31 @@ DataNode FreestyleMoveRecorder::OnReadAttempt(DataArray *a) {
 DataNode FreestyleMoveRecorder::OnClearAttempt(DataArray *a) {
     sInstance->ClearFreestyleMoveClip();
     return 0;
+}
+
+float FreestyleMoveRecorder::GetScore(int i1, int i2, float f, bool b) {
+    // Default: use skeleton from gesture manager if player index is valid
+    BaseSkeleton *skeletonToScore = nullptr;
+    if (i1 >= 0) {
+        skeletonToScore = &TheGestureMgr->GetSkeleton(i1);
+    }
+
+    // Check if there's a live skeleton that should override the default
+    BaseSkeleton *liveSkeleton = GetLiveSkeleton();
+    if (liveSkeleton) {
+        // Get the reference skeleton (if unk44 is set)
+        BaseSkeleton *referenceSkeleton;
+        if (unk44 >= 0) {
+            referenceSkeleton = &TheGestureMgr->GetSkeleton(unk44);
+        } else {
+            referenceSkeleton = nullptr;
+        }
+
+        // Use live skeleton only if it differs from reference
+        if (liveSkeleton != referenceSkeleton) {
+            skeletonToScore = liveSkeleton;
+        }
+    }
+
+    return GetScore(skeletonToScore, i2, f, b);
 }

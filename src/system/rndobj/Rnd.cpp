@@ -86,6 +86,9 @@ bool gFailRestartConsole;
 HANDLE gRndThread;
 HANDLE gRndTextureEvent;
 
+extern int lbl_82F14008;
+void MemPrintOverview(int, char *const);
+
 DataNode ModalKeyListener::OnMsg(const KeyboardKeyMsg &k) {
     if (k.GetKey() == 0x12e) {
         if (!GetEnabledKeyCheats() && !TheRnd.ConsoleShowing()) {
@@ -898,4 +901,21 @@ void Rnd::PreClearDrawAddOrRemove(RndDrawable *d, bool b2, bool b3) {
     } else {
         PreClearCompilerHelper(list, d);
     }
+}
+
+void Rnd::UpdateHeap() {
+    mHeapOverlay->SetLines((lbl_82F14008 == -1) ? MemNumHeaps() + 1 : 1);
+
+    int heapNum;
+    if (lbl_82F14008 == -1) {
+        heapNum = -3;
+    } else if (lbl_82F14008 == MemNumHeaps()) {
+        heapNum = -2;
+    } else {
+        heapNum = lbl_82F14008;
+    }
+
+    char buf[2056];
+    MemPrintOverview(heapNum, buf);
+    *mHeapOverlay << buf;
 }

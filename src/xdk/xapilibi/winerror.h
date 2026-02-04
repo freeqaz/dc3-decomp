@@ -31,6 +31,8 @@
 #define E_OUTOFMEMORY                   (long)0x8007000E
 #define E_NUI_DEVICE_NOT_READY          (long)0x80070015
 #define E_INVALIDARG                    (long)0x80070057
+#define E_INVALID_OPERATION             (long)0x800710DD
+#define E_FAIL                          (long)0x80004005
 
 #define E_NUI_DEVICE_NOT_CONNECTED      (long)0x8007048F
 #define E_NUI_ALREADY_INITIALIZED       (long)0x800704DF

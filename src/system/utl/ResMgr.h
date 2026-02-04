@@ -6,13 +6,12 @@
 
 template <class T>
 class RefRes {
-private:
+public:
     int mRefs; // 0x0
     T *mRes; // 0x4
-public:
     RefRes() : mRefs(0), mRes(0) {}
 
-    T *Data() { return mRes; }
+    T *Data() const { return mRes; }
     void AddRef() { mRefs++; }
     void Release() { mRefs--; }
     void SetData(T *data) { mRes = data; }
@@ -48,7 +47,7 @@ public:
 
     void ReserveRes(Hmx::CRC key, T *data) {
         RefRes<T> &res = mResources[key];
-        MILO_ASSERT(res.Data() == NULL, 0x50);
+        MILO_ASSERT(res.mRes == NULL, 0x50);
         res.SetData(data);
         res.AddRef();
     }

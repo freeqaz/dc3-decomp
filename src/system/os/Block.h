@@ -21,6 +21,8 @@ public:
     MEM_OVERLOAD(Block, 0x16);
     static int CurrentTimestamp() { return sCurrTimestamp; }
 
+    friend class BlockMgr;
+
 private:
     static int sCurrTimestamp;
 

@@ -34,7 +34,29 @@
 #include <float.h>
 
 namespace {
-    void GetShuffledInts(std::vector<int> &, int);
+    void GetShuffledInts(std::vector<int> &v, int n) {
+        v.clear();
+        int val = 0;
+        if (n > 0) {
+            do {
+                v.push_back(val);
+                val++;
+            } while (val < n);
+        }
+        int i = 0;
+        if (n - 1 > 0) {
+            int byteOffset = 0;
+            do {
+                int j = RandomInt(i, n);
+                int *data = &v[0];
+                i++;
+                int temp = *(int*)((char*)data + byteOffset);
+                *(int*)((char*)data + byteOffset) = data[j];
+                byteOffset += 4;
+                data[j] = temp;
+            } while (i < n - 1);
+        }
+    }
 
 }
 

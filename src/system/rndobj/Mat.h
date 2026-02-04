@@ -78,7 +78,7 @@ public:
     NEW_OBJ(RndMat);
     OBJ_MEM_OVERLOAD(69); // nice
 
-    bool GetRefractEnabled(bool);
+    bool GetRefractEnabled(bool bypass_frame_check);
     float GetRefractStrength();
     RndTex *GetRefractNormalMap();
     void SetZMode(ZMode mode) {

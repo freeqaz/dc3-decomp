@@ -20,6 +20,23 @@
 PatchVerts gPatchVerts;
 int MESH_REV_SEP_COLOR = 0x25;
 
+/** Calculate the centroid of a triangle face by averaging its three vertex positions. */
+void FaceCenter(RndMesh *mesh, RndMesh::Face *face, Vector3 &center) {
+    center.x = 0.0f;
+    center.y = 0.0f;
+    center.z = 0.0f;
+    RndMesh::Vert *verts = mesh->mGeomOwner->mVerts.mVerts;
+    // Accumulate positions of all three vertices
+    for (int i = 0; i < 3; i++) {
+        RndMesh::Vert &v = verts[(*face)[i]];
+        center.x += v.pos.x;
+        center.y += v.pos.y;
+        center.z += v.pos.z;
+    }
+    // Average: divide by 3
+    center *= 0.33333334f;
+}
+
 RndMesh::RndMesh()
     : mMat(this), mGeomOwner(this, this), mBones(this), mMutable(0),
       mVolume(kVolumeTriangles), mBSPTree(nullptr), mMultiMesh(nullptr), mHasAOCalc(0),

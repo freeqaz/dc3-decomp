@@ -110,8 +110,7 @@ void Box::GrowToContain(const Vector3 &vec, bool b) {
 }
 
 bool Box::Clamp(Vector3 &v) {
-    return ClampEq(v.x, mMin.x, mMax.x) | ClampEq(v.y, mMin.y, mMax.y)
-        | ClampEq(v.z, mMin.z, mMax.z);
+    return ClampEq(v.x, mMin.x, mMax.x) | ClampEq(v.y, mMin.y, mMax.y) | ClampEq(v.z, mMin.z, mMax.z);
 }
 
 void Normalize(const Plane &in, Plane &out) {

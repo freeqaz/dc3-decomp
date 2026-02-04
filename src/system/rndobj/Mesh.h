@@ -191,6 +191,8 @@ public:
     int GetBoneIndex(const RndTransformable *);
     RndMultiMesh *CreateMultiMesh();
 
+    friend void FaceCenter(RndMesh *, Face *, Vector3 &);
+
 protected:
     RndMesh();
 

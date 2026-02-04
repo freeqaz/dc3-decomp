@@ -301,9 +301,20 @@ void UILabel::SetTokenFmt(const DataArray *da) {
     }
 }
 
-RndText::Style &UILabel::Style(int) {
-    static RndText::Style dummy(0);
-    return dummy;
+const RndText::Style &UILabel::Style(int idx) const {
+    if ((unsigned int)idx < mStyles.size()) {
+        return mStyles[idx];
+    }
+    static RndText::Style s(0);
+    return s;
+}
+
+RndText::Style &UILabel::Style(int idx) {
+    if ((unsigned int)idx < mStyles.size()) {
+        return mStyles[idx];
+    }
+    static RndText::Style s(0);
+    return s;
 }
 
 void UILabel::SetPrelocalizedString(String &s) { SetDisplayText(s.c_str(), true); }
@@ -356,11 +367,10 @@ void UILabel::OldResourcePreload(BinStream &bs) {
 
 void UILabel::SetDisplayText(const char *cc, bool b) {
     if (b) {
-        Symbol temp(gNullStr);
-        mTextToken = temp;
+        mTextToken = gNullStr;
     }
     RndText::SetText(cc);
-    if (strchr(cc, 60)) {
+    if (strchr(cc, '<')) {
         mMarkup = true;
     }
     if (!sDeferUpdate) {
@@ -414,7 +424,45 @@ DataNode UILabel::OnSetTimeHMS(DataArray const *) { return NULL_OBJ; }
 
 bool UILabel::AllowEditText() const { return false; }
 
-void UILabel::LabelUpdate(bool b) { unk122 = false; }
+void UILabel::LabelUpdate(bool b) {
+    unk122 = false;
+
+    // Get reference font from Style(0)
+    RndFontBase *refFont = Style(0).mFont;
+
+    // Set Style(0) text color to white
+    RndText::Style &s0 = Style(0);
+    float *color0 = &s0.mTextColor.red;
+    int i = 1;
+    color0[0] = 1.0f;
+    color0[1] = 1.0f;
+    color0[2] = 1.0f;
+    color0[3] = 1.0f;
+
+    // Loop through remaining styles (1 to n-1)
+    if (unk124.size() > 1) {
+        do {
+            RndText::Style &style = Style(i);
+            LabelStyle &lstyle = LStyle(i);
+
+            // If colorOverride AND font AND font differs from reference
+            if (lstyle.mColorOverride && style.mFont && style.mFont != refFont) {
+                const Hmx::Color &c = lstyle.mColorOverride->GetColor();
+                // Copy as words to match target codegen
+                memcpy(&style.mTextColor, &c, sizeof(Hmx::Color));
+            } else {
+                style.mTextColor.red = 1.0f;
+                style.mTextColor.green = 1.0f;
+                style.mTextColor.blue = 1.0f;
+                style.mTextColor.alpha = 1.0f;
+            }
+            i++;
+        } while (i < unk124.size());
+    }
+
+    UpdateText();
+    CheckValid(!TheLoadMgr.EditMode());
+}
 
 DataNode UILabel::OnSetHeightFromText(DataArray *da) {
     if ((*(int *)((unsigned char *)da + 0x20) == 0) &&

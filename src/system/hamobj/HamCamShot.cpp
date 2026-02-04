@@ -1,5 +1,4 @@
 #include "hamobj/HamCamShot.h"
-#include "HamCamShot.h"
 #include "char/Character.h"
 #include "flow/PropertyEventProvider.h"
 #include "math/Mtx.h"
@@ -301,6 +300,16 @@ int HamCamShot::GetNumShots() {
     std::list<HamCamShot *> shots;
     ListNextShots(shots);
     return shots.size() + 1;
+}
+
+float HamCamShot::GetTotalDuration() {
+    float dur = mDuration;
+    std::list<HamCamShot *> shots;
+    ListNextShots(shots);
+    for (std::list<HamCamShot *>::iterator it = shots.begin(); it != shots.end(); ++it) {
+        dur += (*it)->mDuration;
+    }
+    return dur;
 }
 
 float HamCamShot::GetTotalDurationSeconds() {

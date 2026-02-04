@@ -123,16 +123,17 @@ DataArray *LoadDtz(const char *c, int i) {
 
 const char *CachedDataFile(const char *file, bool &b) {
     bool isLocal = FileIsLocal(file);
-    const char *filename = strstr(file, ".dtb");
-    if (filename) {
-        if (UsingCD() && !isLocal) {
-            b = true;
-            const char *filebase = FileGetBase(file);
-            const char *filepath = FileGetPath(file);
-            return MakeString("%s/gen/%s.dtb", filepath, filebase);
-        }
-        b = false;
+    if (strstr(file, ".dtb")) {
+        b = true;
+        return file;
     }
+    if (UsingCD() && !isLocal) {
+        b = true;
+        const char *filebase = FileGetBase(file);
+        const char *filepath = FileGetPath(file);
+        return MakeString("%s/gen/%s.dtb", filepath, filebase);
+    }
+    b = false;
     return file;
 }
 
