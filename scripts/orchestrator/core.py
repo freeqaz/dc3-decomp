@@ -17,6 +17,8 @@ from pathlib import Path
 from typing import Any, Callable, Optional
 
 from .agent_runner import AgentRunner, USE_SDK, SDK_AVAILABLE
+from . import colors as _clr
+from .colors import ColoredFormatter
 from .types import AgentRunConfig, AgentRunResult, DEFAULT_DECOMP_TOOLS, REFACTOR_TOOLS
 from .context_collector import collect_pre_run_context, TOTAL_CHAR_BUDGET, SECTION_CHAR_BUDGET
 from .database import (
@@ -104,11 +106,7 @@ def _setup_logging(logs_dir: Path = DEFAULT_LOGS_DIR) -> logging.Logger:
     # Console handler: INFO and above, concise
     console_handler = logging.StreamHandler()
     console_handler.setLevel(logging.INFO)
-    console_fmt = logging.Formatter(
-        "[%(asctime)s] %(levelname)s: %(message)s",
-        datefmt="%H:%M:%S"
-    )
-    console_handler.setFormatter(console_fmt)
+    console_handler.setFormatter(ColoredFormatter())
     logger.addHandler(console_handler)
 
     # File handler: DEBUG and above, detailed with session context
@@ -124,6 +122,15 @@ def _setup_logging(logs_dir: Path = DEFAULT_LOGS_DIR) -> logging.Logger:
     )
     file_handler.setFormatter(file_fmt)
     logger.addHandler(file_handler)
+
+    # Apply colored formatter to the root logger's StreamHandlers too,
+    # so library loggers (context_collector, etc.) get colors.
+    root = logging.getLogger()
+    for handler in root.handlers:
+        if isinstance(handler, logging.StreamHandler) and not isinstance(handler, logging.FileHandler):
+            handler.setFormatter(ColoredFormatter(
+                fmt="%(levelname)s: %(name)s: %(message)s",
+            ))
 
     # Suppress noisy third-party loggers that spam during batch runs.
     # pyghidra_mcp logs project opening, analysis status, map parsing on every call.
@@ -879,17 +886,34 @@ Focus on readability and maintainability while preserving exact behavior and mat
             # Generate session ID for display (will be regenerated in _execute_session if None)
             display_session_id = session_id or f"single-{func['id']}-{datetime.now().strftime('%H%M%S')}"
 
-            print(f"\n{'='*60}")
-            print(f"Function: {func.get('demangled') or symbol}")
-            print(f"Symbol:   {symbol}")
-            print(f"Unit:     {func.get('unit') or 'unknown'}")
-            print(f"Current:  {func.get('current_percent') or 'unimplemented'}%")
-            print(f"Model:    {selected_model} ({reason})")
-            print(f"Mode:     {mode}")
-            print(f"Session:  {display_session_id}")
+            # Color the match percentage
+            cur_pct = func.get('current_percent')
+            if cur_pct is not None:
+                pct_val = float(cur_pct)
+                if pct_val >= 100:
+                    pct_c = _clr.BOLD_GREEN
+                elif pct_val >= 80:
+                    pct_c = _clr.GREEN
+                elif pct_val >= 50:
+                    pct_c = _clr.YELLOW
+                else:
+                    pct_c = _clr.RED
+                pct_str = f"{pct_c}{cur_pct}%{_clr.RESET}"
+            else:
+                pct_str = f"{_clr.DIM}unimplemented{_clr.RESET}"
+
+            sess_c = _clr.session_color(display_session_id)
+            print(f"\n{_clr.DIM}{'='*60}{_clr.RESET}")
+            print(f"{_clr.BOLD}Function:{_clr.RESET} {_clr.CYAN}{func.get('demangled') or symbol}{_clr.RESET}")
+            print(f"{_clr.BOLD}Symbol:{_clr.RESET}   {_clr.DIM}{symbol}{_clr.RESET}")
+            print(f"{_clr.BOLD}Unit:{_clr.RESET}     {func.get('unit') or 'unknown'}")
+            print(f"{_clr.BOLD}Current:{_clr.RESET}  {pct_str}")
+            print(f"{_clr.BOLD}Model:{_clr.RESET}    {_clr.MAGENTA}{selected_model}{_clr.RESET} {_clr.DIM}({reason}){_clr.RESET}")
+            print(f"{_clr.BOLD}Mode:{_clr.RESET}     {mode}")
+            print(f"{_clr.BOLD}Session:{_clr.RESET}  {sess_c}{display_session_id}{_clr.RESET}")
             if custom_prompt:
-                print(f"Prompt:   {custom_prompt[:80]}{'...' if len(custom_prompt) > 80 else ''}")
-            print(f"{'='*60}\n")
+                print(f"{_clr.BOLD}Prompt:{_clr.RESET}   {custom_prompt[:80]}{'...' if len(custom_prompt) > 80 else ''}")
+            print(f"{_clr.DIM}{'='*60}{_clr.RESET}\n")
 
         # Custom dry-run handler for run_single's elaborate output
         def run_single_dry_run_handler(func: dict, worktree_dir: str, context: dict) -> dict:

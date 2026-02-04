@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from .types import AgentRunConfig, AgentRunResult, DEFAULT_DECOMP_TOOLS
+from . import colors as _clr
 
 # SDK integration toggle (default: use SDK)
 USE_SDK = os.getenv("ORCHESTRATOR_USE_SDK", "true").lower() == "true"
@@ -379,7 +380,8 @@ class AgentRunner:
                     v = v[:77] + "..."
                 parts.append(v)
         suffix = f" {', '.join(parts)}" if parts else ""
-        return f"{prefix}  [{name}]{suffix}"
+        color = _clr.TOOL_COLORS.get(name, _clr.DEFAULT_TOOL_COLOR)
+        return f"{prefix}  {color}[{name}]{_clr.RESET}{suffix}"
 
     def _print_message(self, message: Any, config: AgentRunConfig, output_lines: list[str]) -> None:
         """Print SDK message at the appropriate verbosity level.
@@ -393,7 +395,7 @@ class AgentRunner:
         if not SDK_AVAILABLE:
             return
 
-        prefix = f"[{config.session_id}] "
+        prefix = _clr.colored_prefix(config.session_id)
 
         if isinstance(message, AssistantMessage):
             for block in message.content:
@@ -440,12 +442,21 @@ class AgentRunner:
                     else:
                         if block.is_error:
                             short = content_str[:150] + "..." if len(content_str) > 150 else content_str
-                            print(f"{prefix}    ERROR: {short}")
+                            print(f"{prefix}    {_clr.BOLD_RED}ERROR:{_clr.RESET} {_clr.RED}{short}{_clr.RESET}")
                         else:
                             # Show match% from objdiff results
                             match = re.search(r'"match_percent":\s*([\d.]+)', content_str)
                             if match:
-                                print(f"{prefix}    → {match.group(1)}% match")
+                                pct = float(match.group(1))
+                                if pct >= 100:
+                                    pct_color = _clr.BOLD_GREEN
+                                elif pct >= 80:
+                                    pct_color = _clr.GREEN
+                                elif pct >= 50:
+                                    pct_color = _clr.YELLOW
+                                else:
+                                    pct_color = _clr.RED
+                                print(f"{prefix}    {pct_color}→ {match.group(1)}% match{_clr.RESET}")
 
         elif isinstance(message, ResultMessage):
             if config.verbose >= 2:
@@ -455,7 +466,7 @@ class AgentRunner:
             else:
                 cost = f"${message.total_cost_usd:.3f}" if message.total_cost_usd else "n/a"
                 turns = message.num_turns or "?"
-                print(f"{prefix}  Done: {turns} turns, cost {cost}")
+                print(f"{prefix}  {_clr.DIM}Done: {turns} turns, cost {cost}{_clr.RESET}")
 
     async def _run_sdk(self, config: AgentRunConfig) -> dict[str, Any]:
         """Run agent via Python SDK."""
@@ -467,11 +478,13 @@ class AgentRunner:
         use_openrouter = _get_openrouter_enabled() or requires_openrouter(config.model)
         if config.verbose >= 2 and use_openrouter and _get_openrouter_api_key():
             actual_model = get_model_id(config.model)
-            print(f"[{config.session_id}] Using OpenRouter backend at {_get_openrouter_base_url()}")
+            pfx = _clr.colored_prefix(config.session_id)
+            print(f"{pfx}Using OpenRouter backend at {_get_openrouter_base_url()}")
 
         if config.verbose >= 1:
             actual_model = get_model_id(config.model)
-            print(f"[{config.session_id}] Starting agent (SDK) with model {actual_model}...")
+            pfx = _clr.colored_prefix(config.session_id)
+            print(f"{pfx}{_clr.DIM}Starting agent (SDK) with model {actual_model}...{_clr.RESET}")
 
         messages: list[Any] = []
         output_lines: list[str] = []
@@ -493,13 +506,15 @@ class AgentRunner:
         except CLINotFoundError as e:
             error_msg = f"Claude CLI not found: {e}"
             if config.verbose >= 1:
-                print(f"\n[{config.session_id}] Error: {error_msg}")
+                pfx = _clr.colored_prefix(config.session_id)
+                print(f"\n{pfx}{_clr.BOLD_RED}Error:{_clr.RESET} {error_msg}")
             return {"exit_code": 127, "error": error_msg, "messages": [], "output": ""}
 
         except ProcessError as e:
             error_msg = str(e)
             if config.verbose >= 1:
-                print(f"\n[{config.session_id}] Process error: {error_msg}")
+                pfx = _clr.colored_prefix(config.session_id)
+                print(f"\n{pfx}{_clr.BOLD_RED}Process error:{_clr.RESET} {error_msg}")
             return {
                 "exit_code": e.exit_code if hasattr(e, 'exit_code') else 1,
                 "error": error_msg,
@@ -510,7 +525,8 @@ class AgentRunner:
         except Exception as e:
             error_msg = str(e)
             if config.verbose >= 1:
-                print(f"\n[{config.session_id}] Unexpected error: {error_msg}")
+                pfx = _clr.colored_prefix(config.session_id)
+                print(f"\n{pfx}{_clr.BOLD_RED}Unexpected error:{_clr.RESET} {error_msg}")
             return {"exit_code": 1, "error": error_msg, "messages": [], "output": ""}
 
     async def _run_process(self, config: AgentRunConfig) -> dict[str, Any]:
@@ -528,7 +544,8 @@ class AgentRunner:
         ]
 
         if config.verbose >= 1:
-            print(f"[{config.session_id}] Starting agent with model {cli_model}...")
+            pfx = _clr.colored_prefix(config.session_id)
+            print(f"{pfx}{_clr.DIM}Starting agent with model {cli_model}...{_clr.RESET}")
 
         env = {**os.environ, **self.build_env(config.model)}
 
@@ -536,7 +553,8 @@ class AgentRunner:
             env["ANTHROPIC_BASE_URL"] = _get_openrouter_base_url()
             env["ANTHROPIC_API_KEY"] = _get_openrouter_api_key()
             if config.verbose >= 2:
-                print(f"[{config.session_id}] Using OpenRouter backend at {_get_openrouter_base_url()}")
+                pfx = _clr.colored_prefix(config.session_id)
+                print(f"{pfx}Using OpenRouter backend at {_get_openrouter_base_url()}")
         else:
             oauth_token = get_oauth_token()
             if oauth_token:
@@ -550,7 +568,7 @@ class AgentRunner:
             env=env,
         )
 
-        prefix = f"[{config.session_id}] "
+        prefix = _clr.colored_prefix(config.session_id)
         output_lines = []
         async for line in process.stdout:
             decoded = line.decode("utf-8", errors="replace")
