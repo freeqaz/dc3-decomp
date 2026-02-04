@@ -58,6 +58,8 @@ void UISlider::SetTypeDef(DataArray *da) {
     Update();
 }
 
+INIT_REVS(3, 0)
+
 void UISlider::PreLoad(BinStream &bs) {
     LOAD_REVS(bs);
     ASSERT_REVS(3, 0);

@@ -38,6 +38,8 @@ BEGIN_COPYS(CharDriverMidi)
     END_COPYING_MEMBERS
 END_COPYS
 
+INIT_REVS(7, 0)
+
 BEGIN_LOADS(CharDriverMidi)
     LOAD_REVS(bs)
     ASSERT_REVS(7, 0)

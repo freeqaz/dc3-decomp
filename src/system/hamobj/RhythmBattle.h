@@ -13,6 +13,7 @@
 
 class RhythmBattlePlayer;
 
+/** "Competition between two RhythmBattlePlayers." */
 class RhythmBattle : public RndPollable {
 public:
     // Hmx::Object
@@ -36,7 +37,7 @@ public:
     void ResetCombo();
     void Begin();
     bool CanTrick(Symbol);
-    bool Unkf9() const { return unkf9; }
+    bool InFullKTB() const { return mFullKTB; }
     bool Unk102() const { return unk102; }
 
 protected:
@@ -56,9 +57,12 @@ private:
     void OnReset();
     void OnBeat();
 
+    /** "instruction display" */
     ObjPtr<HamLabel> mCommandLabel; // 0x8
     ObjPtr<HamLabel> unk1c;
+    /** "player 0 object" */
     ObjPtr<RhythmBattlePlayer> mPlayerOne; // 0x30
+    /** "player 1 object" */
     ObjPtr<RhythmBattlePlayer> mPlayerTwo; // 0x44
     ObjPtr<RndTransformable> unk58;
     ObjPtr<RndAnimatable> unk6c;
@@ -68,9 +72,10 @@ private:
     ObjPtr<RndAnimatable> unkbc;
     ObjPtr<RndAnimatable> unkd0;
     ObjPtr<RndAnimatable> unke4;
-    bool unkf8;
-    bool unkf9;
-    bool unkfa;
+    bool mGoofy; // 0xf8
+    /** "is this keep the beat, or just groove tech experience" */
+    bool mFullKTB; // 0xf9
+    bool mFinale; // 0xfa
     bool mActive; // 0xfb
     bool unkfc;
     bool unkfd;
@@ -89,11 +94,11 @@ private:
     float unk120;
     int unk124;
     int unk128;
-    Symbol unk12c;
+    Symbol mLeader; // 0x12c
     FreestyleMoveRecorder *unk130;
     std::vector<ArchiveSkeleton> unk134;
     int unk140;
-    u32 unk144;
+    int unk144;
     int unk148;
     int unk14c;
     std::vector<Symbol> unk150;

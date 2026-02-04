@@ -22,12 +22,6 @@
 
 #include "setup.h"
 
-/* Xbox 360 doesn't have getaddrinfo */
-#undef HAVE_GETADDRINFO
-#ifndef ENOMEM
-#define ENOMEM 12
-#endif
-
 #ifdef HAVE_SYS_SOCKET_H
 #include <sys/socket.h>
 #endif
@@ -54,7 +48,7 @@
 #endif
 #elif defined(USE_THREADS_WIN32)
 #ifdef HAVE_PROCESS_H
-#include <process.h>
+#include <xdk/LIBCMT/process.h>
 #endif
 #endif
 
@@ -63,21 +57,9 @@
 #define in_addr_t unsigned long
 #endif
 
-/* Xbox 360 build does not have getaddrinfo */
-#undef HAVE_GETADDRINFO
-
-/* Xbox 360 uses errno, not GetLastError/SetLastError */
-int *_errno(void);
-#undef SET_ERRNO
-#define SET_ERRNO(x) do { int *p = _errno(); *p = (x); } while(0)
-
-#define EAI_MEMORY 6
 #ifdef HAVE_GETADDRINFO
 #define RESOLVER_ENOMEM EAI_MEMORY
 #else
-#ifndef ENOMEM
-#define ENOMEM 12
-#endif
 #define RESOLVER_ENOMEM ENOMEM
 #endif
 
@@ -172,9 +154,9 @@ struct thread_sync_data {
     int port;
     int sock_error;
     Curl_addrinfo *res;
-#ifdef HAVE_GETADDRINFO
-    struct addrinfo hints;
-#endif
+    // #ifdef HAVE_GETADDRINFO
+    //     struct addrinfo hints;
+    // #endif
 };
 
 struct thread_data {
@@ -208,14 +190,21 @@ static void destroy_thread_sync_data(struct thread_sync_data *tsd) {
 }
 
 /* Initialize resolver thread synchronization data */
-int init_thread_sync_data(
+static int init_thread_sync_data(
     struct thread_sync_data *tsd,
     const char *hostname,
-    int port
+    int port,
+    const struct addrinfo *hints
 ) {
     memset(tsd, 0, sizeof(*tsd));
 
     tsd->port = port;
+#ifdef CURLRES_IPV6
+    DEBUGASSERT(hints);
+    tsd->hints = *hints;
+#else
+    (void)hints;
+#endif
 
     tsd->mtx = malloc(sizeof(curl_mutex_t));
     if (tsd->mtx == NULL)
@@ -253,42 +242,42 @@ static int getaddrinfo_complete(struct connectdata *conn) {
     return rc;
 }
 
-#ifdef HAVE_GETADDRINFO
-
-/*
- * getaddrinfo_thread() resolves a name and then exits.
- *
- * For builds without ARES, but with ENABLE_IPV6, create a resolver thread
- * and wait on it.
- */
-static unsigned int CURL_STDCALL getaddrinfo_thread(void *arg) {
-    struct thread_sync_data *tsd = (struct thread_sync_data *)arg;
-    char service[32];
-    int rc;
-
-    snprintf(service, sizeof(service), "%d", tsd->port);
-
-    rc = Curl_getaddrinfo_ex(tsd->hostname, service, &tsd->hints, &tsd->res);
-
-    if (rc != 0) {
-        tsd->sock_error = SOCKERRNO ? SOCKERRNO : rc;
-        if (tsd->sock_error == 0)
-            tsd->sock_error = RESOLVER_ENOMEM;
-    }
-
-    Curl_mutex_acquire(tsd->mtx);
-    tsd->done = 1;
-    Curl_mutex_release(tsd->mtx);
-
-    return 0;
-}
-
-#else /* HAVE_GETADDRINFO */
+// #ifdef HAVE_GETADDRINFO
+//
+///*
+// * getaddrinfo_thread() resolves a name and then exits.
+// *
+// * For builds without ARES, but with ENABLE_IPV6, create a resolver thread
+// * and wait on it.
+// */
+// static unsigned int CURL_STDCALL getaddrinfo_thread(void *arg) {
+//    struct thread_sync_data *tsd = (struct thread_sync_data *)arg;
+//    char service[NI_MAXSERV];
+//    int rc;
+//
+//    snprintf(service, sizeof(service), "%d", tsd->port);
+//
+//    rc = Curl_getaddrinfo_ex(tsd->hostname, service, &tsd->hints, &tsd->res);
+//
+//    if (rc != 0) {
+//        tsd->sock_error = SOCKERRNO ? SOCKERRNO : rc;
+//        if (tsd->sock_error == 0)
+//            tsd->sock_error = RESOLVER_ENOMEM;
+//    }
+//
+//    Curl_mutex_acquire(tsd->mtx);
+//    tsd->done = 1;
+//    Curl_mutex_release(tsd->mtx);
+//
+//    return 0;
+//}
+//
+// #else /* HAVE_GETADDRINFO */
 
 /*
  * gethostbyname_thread() resolves a name and then exits.
  */
-unsigned int CURL_STDCALL gethostbyname_thread(void *arg) {
+static unsigned int CURL_STDCALL gethostbyname_thread(void *arg) {
     struct thread_sync_data *tsd = (struct thread_sync_data *)arg;
 
     tsd->res = Curl_ipv4_resolve_r(tsd->hostname, tsd->port);
@@ -306,7 +295,7 @@ unsigned int CURL_STDCALL gethostbyname_thread(void *arg) {
     return 0;
 }
 
-#endif /* HAVE_GETADDRINFO */
+// #endif /* HAVE_GETADDRINFO */
 
 /*
  * destroy_async_data() cleans up async resolver data and thread handle.
@@ -342,10 +331,9 @@ static bool init_resolve_thread(
     struct connectdata *conn, const char *hostname, int port, const struct addrinfo *hints
 ) {
     struct thread_data *td = calloc(1, sizeof(struct thread_data));
-    int err;
+    int err = RESOLVER_ENOMEM;
 
     conn->async.os_specific = (void *)td;
-    err = RESOLVER_ENOMEM;
     if (!td)
         goto err_exit;
 
@@ -356,7 +344,7 @@ static bool init_resolve_thread(
     td->dummy_sock = CURL_SOCKET_BAD;
     td->thread_hnd = curl_thread_t_null;
 
-    if (!init_thread_sync_data(&td->tsd, hostname, port))
+    if (!init_thread_sync_data(&td->tsd, hostname, port, hints))
         goto err_exit;
 
     Curl_safefree(conn->async.hostname);
@@ -374,14 +362,16 @@ static bool init_resolve_thread(
         goto err_exit;
 #endif
 
-#ifdef HAVE_GETADDRINFO
-    td->thread_hnd = Curl_thread_create(getaddrinfo_thread, &td->tsd);
-#else
+    // #ifdef HAVE_GETADDRINFO
+    //     td->thread_hnd = Curl_thread_create(getaddrinfo_thread, &td->tsd);
+    // #else
     td->thread_hnd = Curl_thread_create(gethostbyname_thread, &td->tsd);
-#endif
+    // #endif
 
     if (!td->thread_hnd) {
-        err = *_errno();
+#ifndef _WIN32_WCE
+        err = errno;
+#endif
         goto err_exit;
     }
 
@@ -423,7 +413,7 @@ static const char *gai_strerror(int ecode) {
         return "An argument buffer overflowed";
         default : return "Unknown error";
 
-        /* define this now as this is a private implementation of said function */
+/* define this now as this is a private implementation of said function */
 #define HAVE_GAI_STRERROR
     }
 #endif
@@ -602,24 +592,84 @@ static const char *gai_strerror(int ecode) {
 Curl_addrinfo *Curl_resolver_getaddrinfo(
     struct connectdata *conn, const char *hostname, int port, int *waitp
 ) {
+    struct addrinfo hints;
     struct in_addr in;
+    Curl_addrinfo *res;
+    int error;
+    char sbuf[NI_MAXSERV];
+    int pf = PF_INET;
+#ifdef CURLRES_IPV6
+    struct in6_addr in6;
+#endif /* CURLRES_IPV6 */
 
     *waitp = 0; /* default to synchronous response */
 
+    /* First check if this is an IPv4 address string */
     if (Curl_inet_pton(AF_INET, hostname, &in) > 0)
         /* This is a dotted IP address 123.123.123.123-style */
         return Curl_ip2addr(AF_INET, &in, hostname, port);
 
+#ifdef CURLRES_IPV6
+    /* check if this is an IPv6 address string */
+    if (Curl_inet_pton(AF_INET6, hostname, &in6) > 0)
+        /* This is an IPv6 address literal */
+        return Curl_ip2addr(AF_INET6, &in6, hostname, port);
+
+    /*
+     * Check if a limited name resolve has been requested.
+     */
+    switch (conn->ip_version) {
+    case CURL_IPRESOLVE_V4:
+        pf = PF_INET;
+        break;
+    case CURL_IPRESOLVE_V6:
+        pf = PF_INET6;
+        break;
+    default:
+        pf = PF_UNSPEC;
+        break;
+    }
+
+    if ((pf != PF_INET) && !Curl_ipv6works())
+        /* the stack seems to be a non-ipv6 one */
+        pf = PF_INET;
+
+#endif /* CURLRES_IPV6 */
+
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = pf;
+    hints.ai_socktype = conn->socktype;
+
+    snprintf(sbuf, sizeof(sbuf), "%d", port);
+
     /* fire up a new resolver thread! */
-    if (init_resolve_thread(conn, hostname, port, NULL)) {
+    if (init_resolve_thread(conn, hostname, port, &hints)) {
         *waitp = 1; /* expect asynchronous response */
         return NULL;
     }
 
     /* fall-back to blocking version */
-    return Curl_ipv4_resolve_r(hostname, port);
+    infof(
+        conn->data,
+        "init_resolve_thread() failed for %s; %s\n",
+        hostname,
+        Curl_strerror(conn, ERRNO)
+    );
+
+    error = Curl_getaddrinfo_ex(hostname, sbuf, &hints, &res);
+    if (error) {
+        infof(
+            conn->data,
+            "getaddrinfo() failed for %s:%d; %s\n",
+            hostname,
+            port,
+            Curl_strerror(conn, SOCKERRNO)
+        );
+        return NULL;
+    }
+    return res;
 }
 
 #endif /* !HAVE_GETADDRINFO */
-#undef EAI_MEMORY
+
 #endif /* CURLRES_THREADED */

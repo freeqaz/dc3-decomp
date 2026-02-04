@@ -190,7 +190,7 @@ Curl_cookie_add(struct SessionHandle *data,
   char name[MAX_NAME];
   struct Cookie *co;
   struct Cookie *lastc=NULL;
-  time_t now = time(NULL);
+  __time64_t now = _time64(NULL);
   bool replace_old = FALSE;
   bool badcookie = FALSE; /* cookies are good by default. mmmmm yummy */
 
@@ -802,7 +802,7 @@ struct Cookie *Curl_cookie_getlist(struct CookieInfo *c,
 {
   struct Cookie *newco;
   struct Cookie *co;
-  time_t now = _time64(NULL);
+  __time64_t now = _time64(NULL);
   struct Cookie *mainco=NULL;
   size_t matches = 0;
 

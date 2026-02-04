@@ -109,6 +109,8 @@ BinStreamRev &operator>>(BinStreamRev &d, RndLine::Point &pt) {
     return d;
 }
 
+INIT_REVS(4, 0)
+
 BEGIN_LOADS(RndLine)
     LOAD_REVS(bs)
     ASSERT_REVS(4, 0)

@@ -54,6 +54,7 @@ public:
     Hmx::Rect ScreenRect() const;
     Hmx::Rect InvScreenRect() const;
     bool IsActive() const { return mActive; }
+    int GetTiling() const { return mTiling; }
 
 protected:
     void Merge(const RndBitmap &, int, int, int, int, int, int, int, int);

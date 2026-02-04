@@ -121,6 +121,8 @@ BEGIN_COPYS(Sound)
     END_COPYING_MEMBERS
 END_COPYS
 
+INIT_REVS(9, 0)
+
 BEGIN_LOADS(Sound)
     LOAD_REVS(bs)
     ASSERT_REVS(9, 0)
@@ -167,7 +169,9 @@ END_LOADS
 
 const char *Sound::GetSoundDisplayName() { return MakeString("Sequence: %s", Name()); }
 
-void Sound::Play(float volume, float pan, float transpose, Hmx::Object *obj, float delayMs) {
+void Sound::Play(
+    float volume, float pan, float transpose, Hmx::Object *obj, float delayMs
+) {
     if (Name() && strstr(Name(), "camp_gameplay_failure")) {
         MILO_LOG(
             "[EH] BZ-64344 Playing sound with camp_gameplay_failure in it: '%s'\n", Name()
@@ -208,7 +212,11 @@ void Sound::Play(float volume, float pan, float transpose, Hmx::Object *obj, flo
             mFaders.GetVal(faderVol, faderPan, faderTranspose);
             sample->Play(mVolume + faderVol + volume);
             sample->SetPan(Clamp(-4.0f, 4.0f, mPan + faderPan + pan));
-            sample->SetSpeed(Clamp(0.00390625f, 4.0f, CalcSpeedFromTranspose(faderTranspose + transpose) * mSpeed));
+            sample->SetSpeed(Clamp(
+                0.00390625f,
+                4.0f,
+                CalcSpeedFromTranspose(faderTranspose + transpose) * mSpeed
+            ));
             sample->SetEventReceiver(obj ? obj : unkb8);
             if (mEnvelope) {
                 sample->SetADSR(mEnvelope->Impl());

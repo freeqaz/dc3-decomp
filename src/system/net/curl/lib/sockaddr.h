@@ -25,12 +25,12 @@
 #include "setup.h"
 
 #ifdef HAVE_STRUCT_SOCKADDR_STORAGE
-/* Use sockaddr_storage directly to avoid Xbox 360 MSVC C compiler quirk
-   where wrapping in another struct inflates size from 160 to 256 bytes */
-#define Curl_sockaddr_storage sockaddr_storage
+struct Curl_sockaddr_storage {
+  struct sockaddr_storage buffer;
+};
 #else
 struct Curl_sockaddr_storage {
-    char buffer[256]; /* this should be big enough to fit a lot */
+  char buffer[256];   /* this should be big enough to fit a lot */
 };
 #endif
 

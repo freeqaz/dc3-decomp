@@ -1,7 +1,7 @@
 #include "flow/FlowAnimate.h"
+#include "FlowAnimate.h"
 #include "flow/FlowNode.h"
 #include "rndobj/Anim.h"
-#include "obj/Object.h"
 
 FlowAnimate::FlowAnimate()
     : unk5c(this), mAnim(this), mStopMode(kStopLastFrame), unk98(0), mBlend(0), mWait(0),
@@ -13,7 +13,6 @@ FlowAnimate::FlowAnimate()
 }
 
 FlowAnimate::~FlowAnimate() {}
-
 
 BEGIN_HANDLERS(FlowAnimate)
     HANDLE_ACTION(on_anim_event, OnAnimEvent(_msg->Sym(2)))
@@ -54,52 +53,39 @@ BEGIN_SAVES(FlowAnimate)
     bs << mImmediateRelease;
 END_SAVES
 
-void FlowAnimate::Copy(const Hmx::Object *o, CopyType ty) {
-    FlowNode::Copy(o, ty);
-    const FlowAnimate *c = dynamic_cast<const FlowAnimate *>(o);
-    if (c) {
-        Symbol typeVal = c->mType;
-        float blendVal = c->mBlend;
+BEGIN_COPYS(FlowAnimate)
+    COPY_SUPERCLASS(FlowNode)
+    CREATE_COPY(FlowAnimate)
+    BEGIN_COPYING_MEMBERS
+        COPY_MEMBER(mAnim)
+        COPY_MEMBER(mBlend)
+        COPY_MEMBER(mDelay)
+        COPY_MEMBER(mStopMode)
+        COPY_MEMBER(mEnable)
+        COPY_MEMBER(mRate)
+        COPY_MEMBER(mStart)
+        COPY_MEMBER(mEnd)
+        COPY_MEMBER(mPeriod)
+        COPY_MEMBER(mType)
+        COPY_MEMBER(mScale)
+        COPY_MEMBER(mEase)
+        COPY_MEMBER(mEasePower)
+        COPY_MEMBER(mWrap)
+        COPY_MEMBER(mImmediateRelease)
+    END_COPYING_MEMBERS
+END_COPYS
 
-        mAnim = c->mAnim;
-        mBlend = blendVal;
-        mDelay = c->mDelay;
-        mStopMode = c->mStopMode;
-        mEnable = c->mEnable;
-        mRate = c->mRate;
-        mStart = c->mStart;
-        mEnd = c->mEnd;
-        mPeriod = c->mPeriod;
-        mType = typeVal;
-        mScale = c->mScale;
-        mEase = c->mEase;
-        mEasePower = c->mEasePower;
-        mWrap = c->mWrap;
-        mImmediateRelease = c->mImmediateRelease;
-    }
-}
+INIT_REVS(3, 0)
 
-void FlowAnimate::Load(BinStream &bs) {
-    int revs;
-    bs >> revs;
-    BinStreamRev d(bs, revs);
-
+BEGIN_LOADS(FlowAnimate)
+    LOAD_REVS(bs)
     ASSERT_REVS(3, 0)
-    FlowNode::Load(bs);
-
+    LOAD_SUPERCLASS(FlowNode)
     if (d.rev < 3) {
+        mAnim = mAnim.LoadFromMainOrDir(d.stream);
+    } else
         mAnim.LoadFromMainOrDir(d.stream);
-    }
-
-    d >> mBlend >> mWait >> mDelay;
-    d >> (int&)mStopMode >> mEnable;
-    d >> (int&)mRate >> mStart;
-    d >> mEnd >> mPeriod;
-    d >> mType;
-    d >> mScale >> (int&)mEase >> mEasePower;
-    d >> mWrap;
-    d >> mImmediateRelease;
-}
+END_LOADS
 
 void FlowAnimate::ResetAnim() {
     if (mAnim && !FlowNode::sPushDrivenProperties) {

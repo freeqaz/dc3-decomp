@@ -146,14 +146,12 @@ BEGIN_LOADS(HamCharacter)
     PostLoad(bs);
 END_LOADS
 
+INIT_REVS(0, 0)
+
 void HamCharacter::PreLoad(BinStream &bs) {
     LOAD_REVS(bs)
-    ASSERT_REVS(3, 0)
+    ASSERT_REVS(0, 0)
     Character::PreLoad(bs);
-    ObjectDir *objDir = (ObjectDir*)((char*)this - 0x358);
-    int numChars = *(int*)((char*)this - 0x344);
-    StringTable *stringTable = (StringTable*)((char*)this - 0x330);
-    objDir->Reserve((numChars + 0x14) * 2, stringTable->UsedSize() + 0x1B8);
     bs.PushRev(packRevs(d.altRev, d.rev), this);
 }
 
@@ -198,12 +196,9 @@ void HamCharacter::SyncObjects() {
         CharFaceServo *servo = Find<CharFaceServo>("face.faceservo", false);
         CharLipSyncDriver *lipDrv = Find<CharLipSyncDriver>("face.lipdrv", false);
         EnableFacialAnimation(lipDrv->LipSync(), 0);
-        bool blinking;
-        if (servo) {
-            blinking = !servo->BlinkClipLeftName().Null() && !servo->BlinkClipRightName().Null();
-        } else {
-            blinking = false;
-        }
+        bool blinking = servo
+            && (!servo->BlinkClipLeftName().Null()
+                && !servo->BlinkClipRightName().Null());
         SetBlinking(blinking);
     }
     mCrewCardMesh = Find<RndMesh>(kCrewCardMeshName, false);
@@ -331,9 +326,8 @@ bool HamCharacter::InClipTest() {
 
 void HamCharacter::SetIKEffectorWeights(float weight) {
     FOREACH (it, mIKEffectors) {
-        CharWeightable *ptr = *it;
-        if (ptr) {
-            ptr->SetWeight(weight);
+        if (*it) {
+            (*it)->SetWeight(weight);
         }
     }
 }
@@ -465,12 +459,10 @@ void HamCharacter::SetUseCameraSkeleton(bool use) {
 
 Symbol HamCharacter::GetFaceOverrideClip() {
     CharLipSyncDriver *driver = Find<CharLipSyncDriver>("face.lipdrv", false);
-    if (driver) {
-        if (driver->OverrideClip() > (void*)0) {
-            return driver->OverrideClip()->Name();
-        }
-    }
-    return Symbol();
+    if (driver && driver->OverrideClip()) {
+        return driver->OverrideClip()->Name();
+    } else
+        return Symbol();
 }
 
 void HamCharacter::ResetFaceOverrideBlending() {
@@ -482,14 +474,13 @@ void HamCharacter::ResetFaceOverrideBlending() {
 
 void HamCharacter::SetCampaignVo(const char *cc) {
     mCampaignVO = cc;
-    Hmx::Object *&bank = mCampaignVOBank;
-    RELEASE(bank);
+    RELEASE(mCampaignVOBank);
     if (!mCampaignVO.empty()) {
         String milo = GetCampaignVoMilo();
-        mCampaignVODir = DirLoader::LoadObjects(milo.c_str(), 0, 0);
+        mCampaignVODir = DirLoader::LoadObjects(milo.c_str(), nullptr, nullptr);
         for (ObjDirItr<Hmx::Object> it(mCampaignVODir, false); it != nullptr; ++it) {
             if (it->Type() == "character_vo") {
-                bank = it;
+                mCampaignVOBank = it;
                 return;
             }
         }

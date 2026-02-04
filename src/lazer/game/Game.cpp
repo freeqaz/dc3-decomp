@@ -1,4 +1,6 @@
 #include "game/Game.h"
+#include "Game.h"
+#include "SongDB.h"
 #include "char/FileMerger.h"
 #include "flow/PropertyEventProvider.h"
 #include "game/BustAMovePanel.h"
@@ -55,17 +57,17 @@ static bool sMoveOverlayToggle;
 std::vector<Symbol> sAutoplayStates;
 
 Game::Game()
-    : mSongDB(new SongDB()), mSongInfo(0), mGameInput(0), mRestartCount(0), unk5c(false),
-      mUseMoveGraph(false), mPaused(true), mTimePaused(false), mRealTime(false), unk64(0), unk68(false),
-      mMusicSpeed(1), mNeverAllowInput(false), unk71(false), mOvershell(0), mMoveDir(this), mLoadState(0),
-      mShuttle(new Shuttle()), mLoadedSongAudio(gNullStr), mWaitState(0), unka8(0), mAltTempoMap(0) {
+    : mSongDB(new SongDB()), mSongInfo(0), mGameInput(0), unk58(0), unk5c(false),
+      unk5d(false), mPaused(true), mTimePaused(false), unk60(false), unk64(0),
+      unk68(false), unk6c(1), unk70(false), unk71(false), mOvershell(0), mMoveDir(this),
+      unk90(0), mShuttle(new Shuttle()), unka0(gNullStr), unka4(0), unka8(0), unkac(0) {
     if (TheSongDB) {
         RELEASE(TheSongDB);
     }
     TheSongDB = mSongDB;
     TheGame = this;
     SetName("game", ObjectDir::Main());
-    MidiParserMgr *parserMgr = new MidiParserMgr(nullptr, "biteme");
+    MidiParserMgr *lol = new MidiParserMgr(nullptr, "biteme");
     TheMaster = new HamMaster(mSongDB->SongData(), TheMidiParserMgr);
     mMaster = TheMaster;
     TheMaster->SetName("master", ObjectDir::Main());
@@ -107,7 +109,7 @@ BEGIN_HANDLERS(Game)
         SetGamePaused(_msg->Int(2), true, _msg->Size() > 3 ? _msg->Int(3) : false)
     )
     HANDLE_EXPR(get_paused, mPaused)
-    HANDLE_ACTION(never_allow_input, mNeverAllowInput = _msg->Int(2))
+    HANDLE_ACTION(never_allow_input, unk70 = _msg->Int(2))
     HANDLE_ACTION(set_time_paused, SetTimePaused(_msg->Int(2)))
     HANDLE_EXPR(time_paused, mTimePaused)
     HANDLE(set_shuttle, OnSetShuttle)
@@ -115,7 +117,7 @@ BEGIN_HANDLERS(Game)
     HANDLE_ACTION(jump, Jump(_msg->Float(2), true))
     HANDLE_ACTION(set_intro_real_time, SetIntroRealTime(_msg->Float(2)))
     HANDLE_ACTION(set_realtime, SetRealTime(_msg->Int(2)))
-    HANDLE_EXPR(get_realtime, mRealTime)
+    HANDLE_EXPR(get_realtime, unk60)
     HANDLE_ACTION(is_active_user, _msg->Obj<HamUser>(2))
     HANDLE_EXPR(
         ms_per_beat, TheTempoMap ? TheTempoMap->GetTempo(TheTaskMgr.CurrentTick()) : 0.0f
@@ -147,7 +149,7 @@ BEGIN_HANDLERS(Game)
 END_HANDLERS
 
 BEGIN_PROPSYNCS(Game)
-    SYNC_PROP_SET(music_speed, mMusicSpeed, SetMusicSpeed(_val.Float()))
+    SYNC_PROP_SET(music_speed, unk6c, SetMusicSpeed(_val.Float()))
 END_PROPSYNCS
 
 void Game::PostUpdate(const SkeletonUpdateData *data) {
@@ -157,9 +159,9 @@ void Game::PostUpdate(const SkeletonUpdateData *data) {
                 static Symbol practice("practice");
                 static Symbol gameplay_mode("gameplay_mode");
                 if (TheGameMode->Property(gameplay_mode)->Sym() != practice) {
-                    mOvershell->Poll((const Skeleton *const (&)[6])data->unk4);
+                    mOvershell->Poll((const Skeleton *(&)[6])data->unk4);
                 }
-                CheckForSkeletonLoss((const Skeleton *const (&)[6])data->unk4);
+                CheckForSkeletonLoss((const Skeleton *(&)[6])data->unk4);
             }
         }
     }
@@ -167,7 +169,7 @@ void Game::PostUpdate(const SkeletonUpdateData *data) {
 
 void Game::Start() {
     mHasIntro = false;
-    mWaitState = mWaitState == 3 ? 4 : 1;
+    unka4 = unka4 == 3 ? 4 : 1;
 }
 
 bool Game::HasIntro() { return mHasIntro; }
@@ -199,7 +201,7 @@ void Game::LoadNewVenue(Symbol newVenue) {
 void Game::SetIntroRealTime(float f) {
     TheTaskMgr.SetSeconds(f, true);
     mHasIntro = f < 0;
-    mRealTime = true;
+    unk60 = true;
     mGameInput->SetTimeOffset();
     TheGamePanel->ResetJitter();
 }
@@ -224,8 +226,8 @@ void Game::CheckPauseRequest() {
 }
 
 void Game::LoadNewSongAudio(Symbol s) {
-    if (mLoadedSongAudio != s) {
-        mLoadedSongAudio = s;
+    if (unka0 != s) {
+        unka0 = s;
         HamSongDataValidate hsvd = (HamSongDataValidate)0;
         static Symbol dcimindcontrol("dcimindcontrol");
         if (s != dcimindcontrol) {
@@ -260,22 +262,22 @@ void Game::ReloadSong() {
     WorldDir *world = TheHamDirector->GetWorld();
     MILO_ASSERT(world, 0x1c7);
     mMoveDir = world->Find<MoveDir>("moves");
-    mLoadState = 0;
+    unk90 = 0;
     LoadSong();
 }
 
 bool Game::IsReady() { return IsLoaded() != false; }
 
 void Game::Restart(bool b) {
-    mRestartCount++;
+    unk58++;
     TheGamePanel->ResetJitter();
     TheSynth->StopAllSfx(false);
     TheSynth->StopAllSounds();
     if (b) {
         mMaster->Reset();
     }
-    if (mWaitState != 5) {
-        mWaitState = 3;
+    if (unka4 != 5) {
+        unka4 = 3;
     }
     if (TheHamDirector)
         TheHamDirector->ResetFacialAnimation();
@@ -284,7 +286,7 @@ void Game::Restart(bool b) {
 void Game::SetTimePaused(bool b) {
     mTimePaused = b;
     SetPaused(b, true);
-    if (!b && mRealTime) {
+    if (!b && unk60) {
         mGameInput->SetTimeOffset();
     }
 }
@@ -299,7 +301,7 @@ void Game::PostWaitStart() {
         mMaster->GetAudio()->Play();
         mPaused = false;
         MetaPerformer::Current()->StartGameplayTimer();
-        mRealTime = false;
+        unk60 = false;
     }
 }
 
@@ -313,12 +315,11 @@ void Game::StartIntro() {}
 void Game::SetHamMove(int i1, HamMove *move, bool b3) {
     if (mMoveDir) {
         HamMove *current = mMoveDir->CurrentMove(i1);
+        int i5 = TheTaskMgr.CurrentMeasure();
         if (current) {
-            int currentBeat = TheTaskMgr.CurrentBeat();
-            int i5 = TheTaskMgr.CurrentMeasure();
-            if (currentBeat == 0) {
-                i5 = i5 - 1;
-            } else if (currentBeat != 3) {
+            if (TheTaskMgr.CurrentBeat() == 0) {
+                i5 = TheTaskMgr.CurrentMeasure() - 1;
+            } else if (TheTaskMgr.CurrentBeat() != 3) {
                 current->IsRest();
             }
             MILO_ASSERT(TheGameData, 0x2C8);
@@ -339,8 +340,8 @@ void Game::SetHamMove(int i1, HamMove *move, bool b3) {
 }
 
 void Game::SetRealTime(bool b1) {
-    mRealTime = b1;
-    if (mRealTime) {
+    unk60 = b1;
+    if (unk60) {
         mGameInput->SetTimeOffset();
     }
 }
@@ -354,7 +355,7 @@ EndGameResult Game::GetResult(bool) {
 }
 
 void Game::ResetAudio() {
-    mWaitState = 0;
+    unka4 = 0;
     mMaster->ResetAudio();
 }
 
@@ -365,7 +366,7 @@ void Game::SetLoop(bool b1) {
 }
 
 void Game::SetMusicSpeed(float f1) {
-    mMusicSpeed = f1;
+    unk6c = f1;
     mMaster->GetAudio()->GetSongStream()->SetSpeed(f1);
 }
 
@@ -374,15 +375,15 @@ void Game::Jump(float f1, bool b2) {
         mMaster->Jump(f1);
     }
     TheTaskMgr.ResetTaskTime(f1 / 1000.0f, MsToBeat(f1));
-    mJumpMs = f1;
-    mWaitState = 2;
+    unk9c = f1;
+    unka4 = 2;
 }
 
 bool Game::IsWaiting() {
     HamAudio *audio = mMaster->GetAudio();
     if (audio->Fail()) {
         return false;
-    } else if (mWaitState != 0) {
+    } else if (unka4 != 0) {
         return true;
     } else if (audio->IsReady()) {
         return false;
@@ -393,7 +394,7 @@ bool Game::IsWaiting() {
 
 void Game::Reset() {
     SongPos pos;
-    mRealTime = false;
+    unk60 = false;
     mTimePaused = false;
     mSongPos = pos;
     mHasIntro = false;
@@ -429,8 +430,8 @@ float Game::PollShuttle() {
 
 void Game::PostWaitJump() {
     TheGamePanel->ResetJitter();
-    if (mRealTime) {
-        mGameInput->SetPostWaitJumpOffset(mJumpMs);
+    if (unk60) {
+        mGameInput->SetPostWaitJumpOffset(unk9c);
     }
     if (TheSongSequence.CurrentIndex() > 0 && !TheSongSequence.GetUnk28()) {
         TheSongSequence.SetUnk28(true);
@@ -464,12 +465,12 @@ void Game::LoadSong() {
     }
     Symbol song = TheGameData->GetSong();
     MetaPerformer::Current()->Handle(Message("on_load_song", 0), true);
-    mUseMoveGraph = false;
+    unk5d = false;
     static Symbol cascade("cascade");
     if (TheGameMode->Property("use_movegraph")->Int() != 0
         || TheHamProvider->Property("microgame")->Sym() == cascade
         || TheGameMode->Property("battle_mode")->Sym() == cascade) {
-        mUseMoveGraph = true;
+        unk5d = true;
     }
     const HamSongMetadata *data =
         TheHamSongMgr.Data(TheHamSongMgr.GetSongIDFromShortName(song));
@@ -482,7 +483,7 @@ void Game::LoadSong() {
         fader->SetVolume(0);
     }
     TheMoveMgr->Clear();
-    if (mUseMoveGraph) {
+    if (unk5d) {
         TheMoveMgr->SetSong(song);
     }
     RELEASE(mSongInfo);
@@ -527,7 +528,7 @@ void Game::SetGamePaused(bool b1, bool b2, bool b3) {
             TheTaskMgr.SetSecondsAndBeat(
                 TheTaskMgr.Seconds(TaskMgr::kRealTime), TheTaskMgr.Beat(), false
             );
-        } else if (mRealTime) {
+        } else if (unk60) {
             mGameInput->SetTimeOffset();
         }
     }
@@ -573,33 +574,32 @@ void Game::LoadNewSong(Symbol s1, Symbol s2) {
     if (s2.Null()) {
         s2 = s1;
     }
-    mWaitState = 5;
+    unka4 = 5;
     if (loaded) {
-        TheHamDirector->SetPollEnabled(false);
     }
-    mUseMoveGraph = false;
+    unk5d = false;
     static Symbol cascade("cascade");
     static Symbol holla_back("holla_back");
-    mUseMoveGraph = TheGameMode->Property("use_movegraph")->Int();
+    unk5d = TheGameMode->Property("use_movegraph")->Int();
     if (s1 != s2) {
         RELEASE(mSongInfo);
         mSongInfo = new SongInfoCopy(TheHamSongMgr.SongMgr::SongAudioData(s2));
         mMaster->LoadOnlySongData(mSongInfo, true, (HamSongDataValidate)0);
         MultiTempoTempoMap *other =
             static_cast<MultiTempoTempoMap *>(HamSongData::sInstance->GetTempoMap());
-        mAltTempoMap = new MultiTempoTempoMap(*other);
+        unkac = new MultiTempoTempoMap(*other);
     } else {
-        RELEASE(mAltTempoMap);
+        RELEASE(unkac);
     }
     LoadNewSongAudio(s1);
     Symbol s48(TheMaster->GetAudio()->Name());
     LoadNewSongMoves(s2, true);
-    if (mUseMoveGraph) {
+    if (unk5d) {
         TheMoveMgr->SetSong(s2);
     } else {
         TheMoveMgr->Graph().Clear();
     }
-    mLoadState = 0;
+    unk90 = 0;
 }
 
 void Game::PauseForSkeletonLoss() {
@@ -618,24 +618,23 @@ void Game::PauseForSkeletonLoss() {
         }
     }
 }
-
 bool Game::IsLoaded() {
-    if (mLoadState == 3) {
+    if (unk90 == 3) {
         return true;
     } else {
         if ((int)mMaster && !mMaster->IsLoaded()) {
             return false;
         }
-        if (mLoadState == 0) {
+        if (unk90 == 0) {
             if (!mMaster->IsLoaded()) {
                 return false;
             }
-            if (mUseMoveGraph && !TheHamDirector->IsWorldLoaded()) {
+            if (unk5d && !TheHamDirector->IsWorldLoaded()) {
                 return false;
             }
             TheSongDB->PostLoad(mMaster->GetMidiParserMgr()->GetEventsList());
             PostLoad();
-            if (mUseMoveGraph) {
+            if (unk5d) {
                 MILO_ASSERT(mMoveDir, 0x224);
                 ObjectDir *moveData = mMoveDir->Find<ObjectDir>("move_data", false);
                 MILO_ASSERT_FMT(
@@ -647,16 +646,16 @@ bool Game::IsLoaded() {
             } else {
                 MILO_LOG("Game::IsLoaded() - not using MoveGraph");
             }
-            mLoadState = 1;
+            unk90 = 1;
         }
-        if (mLoadState == 1) {
-            if (mUseMoveGraph && !TheHamDirector->IsMoveMergerFinished()) {
+        if (unk90 == 1) {
+            if (unk5d && !TheHamDirector->IsMoveMergerFinished()) {
                 return false;
             }
             MILO_LOG("Game::IsLoaded() - Done waiting for MoveGraph\n");
-            mLoadState = 2;
+            unk90 = 2;
         }
-        if (mLoadState == 2) {
+        if (unk90 == 2) {
             if (mMaster->GetAudio()->Fail()) {
                 return true;
             }
@@ -664,10 +663,10 @@ bool Game::IsLoaded() {
                 TheSynth->Poll();
                 return false;
             }
-            mLoadState = 3;
+            unk90 = 3;
             TheProfileMgr.PushAllOptions();
         }
-        return mLoadState == 3;
+        return unk90 == 3;
     }
 }
 

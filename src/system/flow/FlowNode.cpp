@@ -77,41 +77,13 @@ BEGIN_COPYS(FlowNode)
     END_COPYING_MEMBERS
 END_COPYS
 
-void FlowNode::Load(BinStream &bs) {
-    int revs;
-    bs >> revs;
-    BinStreamRev d(bs, revs);
+INIT_REVS(2, 0)
 
-    static const unsigned short gRevs[4] = { 2, 0, 0, 0 };
-    if (d.rev > 2) {
-        MILO_FAIL(
-            "%s can't load new %s version %d > %d",
-            PathName(this),
-            ClassName(),
-            d.rev,
-            gRevs[0]
-        );
-    }
-    if (d.altRev > 0) {
-        MILO_FAIL(
-            "%s can't load new %s alt version %d > %d",
-            PathName(this),
-            ClassName(),
-            d.altRev,
-            gRevs[2]
-        );
-    }
-
-    if (!dynamic_cast<Flow *>(this)) {
-        Hmx::Object::Load(d.stream);
-    }
-
-    mChildNodes.Load(d.stream, true, nullptr);
-
-    // Call SetParent on each loaded child node
-    for (auto it = mChildNodes.begin(); it != mChildNodes.end(); ++it) {
-        (*it)->SetParent(this, false);
-    }
+BEGIN_LOADS(FlowNode)
+    LOAD_REVS(bs)
+    ASSERT_REVS(2, 0)
+    LOAD_SUPERCLASS(Hmx::Object)
+    d >> mChildNodes;
 
     int numEntries;
     d >> numEntries;
@@ -122,16 +94,7 @@ void FlowNode::Load(BinStream &bs) {
         entry.Load(d.stream, this);
         mDrivenPropEntries.push_back(entry);
     }
-
-    if (d.rev > 0) {
-        bool unk;
-        d >> unk;
-        unk58 = unk;
-    }
-    if (d.rev > 1) {
-        d >> mDebugComment;
-    }
-}
+END_LOADS
 
 const char *FlowNode::FindPathName() {
     ObjectDir *dir = dynamic_cast<ObjectDir *>(this);
@@ -171,13 +134,8 @@ bool FlowNode::Activate() {
 
 void FlowNode::Deactivate(bool b1) {
     FLOW_LOG("Deactivated\n");
-    // Manually iterate with pre-increment to handle iterator invalidation
-    // when ChildFinished() is called during node->Deactivate()
-    auto it = mRunningNodes.begin();
-    while (it != mRunningNodes.end()) {
-        auto node = *it;
-        ++it;
-        node->Deactivate(b1);
+    FOREACH (it, mRunningNodes) {
+        (*it)->Deactivate(b1);
     }
     mRunningNodes.clear();
 }
@@ -195,12 +153,8 @@ void FlowNode::ChildFinished(FlowNode *node) {
 void FlowNode::RequestStop() {
     FLOW_LOG("RequestStop\n");
     unk58 = true;
-    auto it = mRunningNodes.begin();
-    while (it != mRunningNodes.end()) {
-        auto next_it = it;
-        next_it++;
+    FOREACH (it, mRunningNodes) {
         (*it)->RequestStop();
-        it = next_it;
     }
 }
 
@@ -213,9 +167,8 @@ void FlowNode::RequestStopCancel() {
 }
 
 Flow *FlowNode::GetOwnerFlow() {
-    ObjectDir* dir = Dir();
-    if (dir) {
-        return static_cast<Flow *>(dir);
+    if (Dir()) {
+        return static_cast<Flow *>(Dir());
     } else
         return nullptr;
 }
@@ -279,13 +232,12 @@ DrivenPropertyEntry *FlowNode::GetDrivenEntry(DataArray *a) {
 }
 
 Flow *FlowNode::GetTopFlow() {
-    Flow *pFlow = GetOwnerFlow();
-    if (!pFlow)
-        return static_cast<Flow *>(this);
-    for (; pFlow->GetOwnerFlow() && pFlow->GetOwnerFlow() != pFlow;
-         pFlow = pFlow->GetOwnerFlow())
-        ;
-    return pFlow;
+    Flow *flow = GetOwnerFlow();
+    if (flow) {
+        for (; GetOwnerFlow() && GetOwnerFlow() != flow; flow = flow->GetOwnerFlow())
+            ;
+    }
+    return flow;
 }
 
 void FlowNode::ActivateLabel(FlowLabel *label) {

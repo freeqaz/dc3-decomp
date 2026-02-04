@@ -54,7 +54,7 @@ curl_off_t curlx_strtoll(const char *nptr, char **endptr, int base);
 #endif
 #endif
 #else
-#define curlx_strtoofft _strtoi64
+#define curlx_strtoofft strtol
 #endif
 
 #if (CURL_SIZEOF_CURL_OFF_T == 4)

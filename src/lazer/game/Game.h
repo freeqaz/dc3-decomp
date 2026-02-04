@@ -66,6 +66,8 @@ public:
 
     MoveDir *GetMoveDir() const { return mMoveDir; }
     HamMaster *GetMaster() const { return mMaster; }
+    bool Paused() const { return mPaused; }
+    bool TimePaused() const { return mTimePaused; }
 
 private:
     void PostWaitStart();
@@ -87,36 +89,42 @@ private:
     SongInfo *mSongInfo; // 0x4c
     HamMaster *mMaster; // 0x50
     GameInput *mGameInput; // 0x54
-    int mRestartCount;
+    int unk58;
     bool unk5c;
-    bool mUseMoveGraph;
+    bool unk5d; // 0x5d - cascade?
     bool mPaused;
     bool mTimePaused;
-    bool mRealTime;
+    bool unk60;
     bool unk61;
     bool mHasIntro; // 0x62
     float unk64;
     bool unk68;
     bool unk69;
-    float mMusicSpeed;
-    bool mNeverAllowInput;
+    float unk6c;
+    bool unk70;
     bool unk71;
     bool unk72;
     bool unk73;
     bool unk74;
     Overshell *mOvershell; // 0x78
     ObjPtr<MoveDir> mMoveDir; // 0x7c
-    int mLoadState;
+    int unk90;
     Shuttle *mShuttle; // 0x94
     int unk98;
-    float mJumpMs;
-    Symbol mLoadedSongAudio;
-    int mWaitState;
+    float unk9c;
+    Symbol unka0;
+    int unka4; // 0xa4 - state?
     int unka8;
-    MultiTempoTempoMap *mAltTempoMap;
+    MultiTempoTempoMap *unkac;
 };
 
 void GameInit();
 void GameTerminate();
 
 extern Game *TheGame;
+
+static inline bool AllPaused() {
+    if (!TheGame || TheGame->TimePaused() || TheGame->Paused())
+        return false;
+    return true;
+}

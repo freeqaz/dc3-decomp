@@ -91,6 +91,7 @@ struct timeval {
     long tv_usec;
 };
 #endif
+
 /*
  * If we have the MSG_NOSIGNAL define, make sure we use
  * it as the fourth argument of function send()
@@ -262,7 +263,7 @@ typedef enum {
     bool_false = 0,
     bool_true = 1
 } bool;
-#endif
+
 /*
  * Use a define to let 'true' and 'false' use those enums.  There
  * are currently no use of true and false in libcurl proper, but
@@ -272,7 +273,7 @@ typedef enum {
 #define false bool_false
 #define true bool_true
 #define HAVE_BOOL_T
-// #endif
+#endif
 
 /*
  * Redefine TRUE and FALSE too, to catch current use. With this
@@ -376,8 +377,10 @@ typedef int sig_atomic_t;
  * Macro ERRNO / SET_ERRNO() returns / sets the NOT *socket-related* errno
  * (or equivalent) on this platform to hide platform details to code using it.
  */
-
-#if defined(WIN32) && !defined(_M_PPCBE)
+#ifdef _XBOX360
+#define ERRNO (errno)
+#define SET_ERRNO(x) (errno = (x))
+#elif defined(WIN32)
 #define ERRNO ((int)GetLastError())
 #define SET_ERRNO(x) (SetLastError((DWORD)(x)))
 #else

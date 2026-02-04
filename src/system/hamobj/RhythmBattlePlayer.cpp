@@ -39,7 +39,7 @@ RhythmBattlePlayer::RhythmBattlePlayer()
       mOutTheZoneBadFlow(this), mSwagJackedFlow(this), mPhraseMeter(this),
       mTransConstraint(this), mBoxyWaistTrans(this), mBoxyman1(this), mBoxyman2(this),
       mTextFeedback(this), mMoveFeedback(this), mStealPart(this), mStealAnim(this),
-      mPlayer(0), unk23c(0), unk244(0), unk248(0), unk24c(0), unk250(0), unk258(0),
+      mPlayer(0), mRhythmBattle(0), unk244(0), unk248(0), unk24c(0), unk250(0), unk258(0),
       unk25c(0), unk260(0), mInTheZone(-2), unk270(0), unk274(0), unk280(0), unk284(0),
       unk288(false), unk294(-1), unk298("none"), unk29c(0), unk2a4(false),
       unk2a5(false),
@@ -104,6 +104,8 @@ BEGIN_COPYS(RhythmBattlePlayer)
     END_COPYING_MEMBERS
 END_COPYS
 
+INIT_REVS(1, 0)
+
 BEGIN_LOADS(RhythmBattlePlayer)
     LOAD_REVS(bs)
     ASSERT_REVS(1, 0)
@@ -128,11 +130,11 @@ void RhythmBattlePlayer::Poll() {
         ObjectDir::Main()->Find<UIPanel>("rhythm_detector_panel", false);
     if (!TheLoadMgr.EditMode() && sRhythmDetectorPanel) {
         float f12 = TheTaskMgr.Beat();
-        if (unk23c && unk23c->Unkf9()) {
+        if (mRhythmBattle && mRhythmBattle->InFullKTB()) {
             HamPlayerData *hpd = TheGameData->Player(mPlayer);
             hpd->Provider()->Export(Message("hide_hud", 0), true);
         }
-        if (unk240 && unk23c && !unk23c->Unk102()) {
+        if (unk240 && mRhythmBattle && !mRhythmBattle->Unk102()) {
             int skelIdx = TheGestureMgr->GetSkeletonIndexByTrackingID(
                 TheGameData->Player(mPlayer)->GetSkeletonTrackingID()
             );
@@ -175,10 +177,7 @@ void RhythmBattlePlayer::Poll() {
             if (f17 < 0) {
                 f17 = 0;
             }
-            float f13 = 1;
-            if (unk244 <= 0 && unk248 <= 0) {
-                f13 = 0;
-            }
+            float f13 = unk244 <= 0 && unk248 <= 0 ? 0.0f : 1.0f;
             if (unk24c <= unk244) {
                 unk24c = unk244;
             }
@@ -188,16 +187,13 @@ void RhythmBattlePlayer::Poll() {
             unk250 += unk248 * f17;
             unk254 += f13 * f17;
             unk258 += f17;
-            f13 = unk24c;
-            if (unk24c > 1) {
-                f13 = 1;
-            }
+            f13 = unk24c > 1.0f ? 1.0f : unk24c;
             float f16 = 4.0f - unk258 - f17;
             if (mPhraseMeter) {
                 f16 = Max(f16, 0.0f);
                 mPhraseMeter->SetRatingFrac(f13, f16);
             }
-            if (mInTheZone == 1 && unk23c && unk23c->Unkf9()) {
+            if (mInTheZone == 1 && mRhythmBattle && mRhythmBattle->InFullKTB()) {
                 unk284 -= f17 * 1.125f;
                 if (unk284 < 0) {
                     unk284 = 0;
@@ -353,7 +349,7 @@ void RhythmBattlePlayer::SetInTheZone(int i, bool b1, bool b2) {
 
 void RhythmBattlePlayer::SetActive(bool b1) {
     unk240 = b1;
-    if (!unk240 && unk23c && unk23c->Unkf9() && mInTheZone != -1) {
+    if (!unk240 && mRhythmBattle && mRhythmBattle->InFullKTB() && mInTheZone != -1) {
         AnimateBoxyState(-1, true, false);
     }
 }
@@ -473,7 +469,7 @@ void RhythmBattlePlayer::UpdateScore(int i1) {
 
 void RhythmBattlePlayer::OnReset(RhythmBattle *rb) {
     static Symbol none("none");
-    unk23c = rb;
+    mRhythmBattle = rb;
     unk29c = 0;
     unk27c = none;
     unk260 = 0;
@@ -692,7 +688,7 @@ void RhythmBattlePlayer::UpdateScore(Hmx::Object *handler) {
     unk27c = none;
     unk278 = unk254 / unk258;
     static Symbol autotrick(OptionStr("autotrick", "none"));
-    if ((unk278 < 0.5f || autotrick == pose) && unk23c->CanTrick(pose)) {
+    if ((unk278 < 0.5f || autotrick == pose) && mRhythmBattle->CanTrick(pose)) {
         unk27c = rhythmbattle_trickpose;
     }
     skelIdx = TheGestureMgr->GetSkeletonIndexByTrackingID(
@@ -704,7 +700,7 @@ void RhythmBattlePlayer::UpdateScore(Hmx::Object *handler) {
         float yRight = skeleton.TrackedJoints()[kJointFootRight].mJointPos[0].y;
         float yMin = yLeft < yRight ? yLeft : yRight;
         float yMax = yLeft > yRight ? yLeft : yRight;
-        if (unk2a0 != -1 && (yMin - unk2a0 > 0.1f) && unk23c->CanTrick(jump)) {
+        if (unk2a0 != -1 && (yMin - unk2a0 > 0.1f) && mRhythmBattle->CanTrick(jump)) {
             unk27c = rhythmbattle_trickjump;
         }
         unk2a0 = yMax;

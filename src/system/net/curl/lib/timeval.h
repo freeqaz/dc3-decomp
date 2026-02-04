@@ -28,6 +28,7 @@
  */
 
 #include "setup.h"
+
 struct timeval curlx_tvnow(void);
 
 /*
@@ -50,7 +51,7 @@ long Curl_tvlong(struct timeval t1);
 /* These two defines below exist to provide the older API for library
    internals only. */
 #define Curl_tvnow() curlx_tvnow()
-#define Curl_tvdiff(x, y) curlx_tvdiff(x, y)
-#define Curl_tvdiff_secs(x, y) curlx_tvdiff_secs(x, y)
+#define Curl_tvdiff(x,y) curlx_tvdiff(x,y)
+#define Curl_tvdiff_secs(x,y) curlx_tvdiff_secs(x,y)
 
 #endif

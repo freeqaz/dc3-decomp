@@ -8,17 +8,11 @@ extern "C" {
 #define IOCPARAM_MASK 0x7f
 #define IOC_VOID 0x20000000
 #define IOC_OUT 0x40000000
-#define IOC_IN 0x80000000
+#define IOC_IN 0x800000000
 
 #define _IOW(x, y, t)                                                                    \
     (IOC_IN | (((long)sizeof(t) & IOCPARAM_MASK) << 16) | ((x) << 8) | (y))
 #define FIONBIO _IOW('f', 126, unsigned long)
-
-/* Xbox 360 is big-endian, so byte order conversions are no-ops */
-#define ntohs(x) (x)
-#define ntohl(x) (x)
-#define htons(x) (x)
-#define htonl(x) (x)
 
 #define AF_INET 2
 #define PF_INET AF_INET
@@ -99,33 +93,14 @@ struct sockaddr {
     char sa_data[14];
 };
 
-typedef unsigned int SOCKET;
+typedef unsigned int *SOCKET;
 
 typedef struct fd_set {
     unsigned int fd_count;
     SOCKET fd_array[64];
 } fd_set;
 
-#define FD_SETSIZE 64
-
-extern int __cdecl __WSAFDIsSet(SOCKET, fd_set *);
-
-#define FD_ZERO(set) ((set)->fd_count = 0)
-
-#define FD_SET(fd, set) do { \
-    unsigned int __i; \
-    for (__i = 0; __i < ((fd_set *)(set))->fd_count; __i++) { \
-        if (((fd_set *)(set))->fd_array[__i] == (fd)) \
-            break; \
-    } \
-    if (__i == ((fd_set *)(set))->fd_count) { \
-        if (((fd_set *)(set))->fd_count < FD_SETSIZE) { \
-            ((fd_set *)(set))->fd_array[__i] = (fd); \
-            ((fd_set *)(set))->fd_count++; \
-        } \
-    } \
-} while(0)
-
+#define FD_ZERO(set) (((fd_set *)(set))->fd_count = 0)
 #define FD_ISSET(fd, set) __WSAFDIsSet((SOCKET)(fd), (fd_set *)(set))
 
 struct timeval {
@@ -161,7 +136,7 @@ struct sockaddr_in {
     short sin_family;
     unsigned short sin_port;
     struct in_addr sin_addr;
-    char sin_zero[8];
+    char sin_zero[0];
 };
 
 #define _SS_MAXSIZE 128
