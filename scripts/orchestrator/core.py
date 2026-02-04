@@ -41,6 +41,16 @@ from .model_selection import select_model, should_retry, get_escalation_reason, 
 from .patch_applier import PatchApplier
 from .rb3_pairing import get_rb3_source_for_unit
 
+# Import run_objdiff for early verdict check (short-circuit already-complete functions)
+try:
+    # Add tools directory to path if needed
+    _tools_dir = Path(__file__).parent.parent.parent / "tools"
+    if str(_tools_dir) not in sys.path:
+        sys.path.insert(0, str(_tools_dir))
+    from analyze_function import run_objdiff
+except ImportError:
+    run_objdiff = None
+
 
 # Default paths
 DEFAULT_POOL_DIR = Path("/tmp/claude/decomp-agents")
@@ -524,6 +534,52 @@ Focus on readability and maintainability while preserving exact behavior and mat
 
             log.info(f"Model selected: {selected_model} (reason: {reason})")
             log.debug(f"Worktree: {worktree}, Build strategy: {'incremental' if use_incremental else 'full'}")
+
+            # 5b. Early short-circuit: check if function is already complete
+            # This is a lightweight check to avoid expensive context collection (m2c, Ghidra, etc.)
+            if run_objdiff and func.get("unit"):
+                try:
+                    log.info("Running pre-check objdiff for verdict...")
+                    objdiff_result = run_objdiff(
+                        func["symbol"],
+                        project_dir=str(self.main_repo),
+                        unit=func.get("unit"),
+                        incremental=True,
+                    )
+                    if objdiff_result and not objdiff_result.error:
+                        verdict_data = objdiff_result.verdict or {}
+                        verdict_class = verdict_data.get("classification", "UNKNOWN")
+                        measured_percent = objdiff_result.fuzzy_match_percent
+
+                        if verdict_class == "COMPLETE" or (measured_percent is not None and measured_percent >= 100.0):
+                            log.info(
+                                f"Function already complete (verdict={verdict_class}, "
+                                f"measured={measured_percent:.2f}%). Skipping agent."
+                            )
+                            # Update DB to mark as complete
+                            update_function_status(
+                                function_id=func["id"],
+                                current_percent=measured_percent if measured_percent is not None else 100.0,
+                                verdict="COMPLETE",
+                                db_path=self.db_path,
+                            )
+                            return {
+                                "status": "complete",
+                                "start_percent": measured_percent if measured_percent is not None else 100.0,
+                                "end_percent": measured_percent if measured_percent is not None else 100.0,
+                                "verdict": "COMPLETE",
+                                "patch": None,
+                                "notes": "Already complete per objdiff verdict - agent skipped",
+                                "model": selected_model,
+                                "session_id": session_id,
+                                "patch_applied": False,
+                                "actual_cost_usd": 0.0,
+                                "duration_ms": 0,
+                                "usage": None,
+                                "skipped": True,
+                            }
+                except Exception as e:
+                    log.warning(f"Pre-check objdiff failed: {e} - continuing with full context collection")
 
             # 6. Collect pre-run context
             context = {}
