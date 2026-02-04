@@ -329,11 +329,12 @@ void DxRnd::SetDefaultRenderStates() {
 
 void DxRnd::InitRenderState() {
     PhysMemTypeTracker tracker("D3D(phys):DxRnd");
-    if (mD3DDevice) {
-        SetDefaultRenderStates();
-        D3DXSetDXT3DXT5(1);
-        SetupGamma();
+    if (!mD3DDevice) {
+        return;
     }
+    SetDefaultRenderStates();
+    D3DXSetDXT3DXT5(1);
+    SetupGamma();
 }
 
 void DxRnd::BeginTiling(const Hmx::Color &c, float f, unsigned int ui) {

@@ -99,6 +99,22 @@ void HamScrollBehavior::Enter() {
     unk50->PlayScrollSound();
 }
 
+void HamScrollBehavior::Reset() {
+    unk30 = 0;
+    unk2c = 0;
+    unk28 = 0;
+    unk0 = 0.0f;
+    unk24 = 0;
+    unk34.Reset();
+    unk50->SetScrollSoundFrame(unk34.Level());
+    unkc = 0.0f;
+    unk4 = false;
+    unk20 = 0.0f;
+    unk5 = false;
+    unk18 = 0.0f;
+    unk48 = 2;
+}
+
 void HamScrollBehavior::Exit() {
     Reset();
     unk50->StopScrollSound();

@@ -5,9 +5,9 @@
 
 // External declarations - C functions from assembly
 extern Timer *GetTimer(Symbol);
-extern void BinkNextFrame(void *);
+extern void BinkNextFrame(BINK *);
 extern unsigned char BinkGetTrackData(int, int);
-extern void *BinkOpenTrack(void *, unsigned char);
+extern BINKTRACK *BinkOpenTrack(BINK *, unsigned char);
 extern void *MemAlloc(int, const char *, int, const char *, int);
 extern Debug TheDebug;
 
@@ -127,4 +127,15 @@ void BinkReader::Poll(float) {
 
 void BinkReader::Seek(int) {
     // Seek implementation
+}
+
+void BinkReader::Init() {
+    MILO_ASSERT(mStream, 0x114);
+    // Initialize stream with: num tracks, sample rate, float samples flag, channel count
+    mStream->InitInfo(
+        mBink->NumTracks,
+        mTracks[0]->Frequency,
+        false,
+        -1
+    );
 }

@@ -146,7 +146,10 @@ String::String(unsigned int len, char c) {
 
 String::String(const String &str) { *this = str.c_str(); }
 
-String::~String() {}
+String::~String() {
+    if (capacity() != 0)
+        MemOrPoolFree(capacity() + 5, mStr - 4);
+}
 
 bool String::operator!=(const char *str) const {
     if (str == 0)

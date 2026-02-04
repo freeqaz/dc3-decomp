@@ -27,11 +27,12 @@ namespace {
     void PixelSpace(Hmx::Rect &rect) {
         int width = TheRnd.Width();
         int height = TheRnd.Height();
-        ScreenSpace(rect);
-        rect.x = width * rect.x;
-        rect.y = height * rect.y;
-        rect.w = width * rect.w;
-        rect.h = height * rect.h;
+        Hmx::Rect temp;
+        ScreenSpace(temp);
+        rect.x = width * temp.x;
+        rect.w = width * temp.w;
+        rect.y = height * temp.y;
+        rect.h = height * temp.h;
     }
 }
 

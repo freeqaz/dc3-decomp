@@ -1017,7 +1017,7 @@ Focus on readability and maintainability while preserving exact behavior and mat
                 print(f"Cost:   ${result['actual_cost_usd']:.4f}")
                 if result.get('duration_ms'):
                     print(f"Time:   {result['duration_ms'] / 1000:.1f}s")
-                usage = result.get('usage', {})
+                usage = result.get('usage') or {}
                 if usage.get('input_tokens') or usage.get('output_tokens'):
                     in_tok = usage.get('input_tokens', 0) or 0
                     out_tok = usage.get('output_tokens', 0) or 0

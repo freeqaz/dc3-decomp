@@ -3,6 +3,16 @@
 #include "synth/StreamReader.h"
 #include "synth/StandardStream.h"
 
+// Forward declarations for Bink SDK structures
+struct BINK {
+    char padding[0x38];
+    int NumTracks; // 0x38
+};
+
+struct BINKTRACK {
+    int Frequency; // 0x00
+};
+
 class BinkReader : public StreamReader {
 public:
     BinkReader(File *, StandardStream *);
@@ -12,13 +22,13 @@ public:
     virtual void EnableReads(bool enable) { mEnableReads = enable; }
     virtual bool Done() { return mDone; }
     virtual bool Fail() { return mFail; }
-    virtual void Init() {}
+    virtual void Init();
 
 private:
     File *mFile; // 0x00
     StandardStream *mStream; // 0x04
-    void *mBink; // 0x08
-    void *mTracks[16]; // 0x0C
+    BINK *mBink; // 0x08
+    BINKTRACK *mTracks[16]; // 0x0C
 
     unsigned char mCurrentTrack; // 0xD0
     int mNumSamplesToConsume; // 0xD4

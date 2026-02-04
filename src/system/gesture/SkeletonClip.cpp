@@ -543,3 +543,14 @@ void SkeletonClip::StartXboxRecording(const char *cc) {
         mDifficulty = kNumDifficulties;
     }
 }
+
+float SkeletonClip::SongEndSeconds() const {
+    if (!mFile.empty() && !mRecordedFrames->empty() && !mSong.Null()) {
+        float result = mRecordedFrames->back().unk1c4;
+        if (IsFailClip()) {
+            result *= 1000.0f;
+        }
+        return result;
+    }
+    return 0.0f;
+}

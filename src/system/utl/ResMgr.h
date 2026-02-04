@@ -14,6 +14,7 @@ public:
 
     T *Data() { return mRes; }
     void AddRef() { mRefs++; }
+    void Release() { mRefs--; }
     void SetData(T *data) { mRes = data; }
     int NumRefs() const { return mRefs; }
 };
@@ -50,6 +51,20 @@ public:
         MILO_ASSERT(res.Data() == NULL, 0x50);
         res.SetData(data);
         res.AddRef();
+    }
+
+    bool ReleaseRes(Hmx::CRC key) {
+        auto it = mResources.find(key);
+        if (it != mResources.end()) {
+            RefRes<T> &res = it->second;
+            res.Release();
+            if (res.NumRefs() <= 0) {
+                OnReleaseResource(res.Data());
+                mResources.erase(it);
+            }
+            return true;
+        }
+        return false;
     }
 
 protected:

@@ -86,3 +86,13 @@ void NgPostProc::DoVelocity() {
         } while (head != 0);
     }
 }
+
+void NgPostProc::SetBloomColor() {
+    float diff = 1.0f - mBloomThreshold;
+    float divisor = (diff >= 0.0f) ? 1.0f : mBloomThreshold;
+    float scale = 1.0f / divisor;
+    float invScale = 1.0f / scale;
+
+    Vector4 bloomParams(scale * 0.3f, scale * 0.59f, scale * 0.11f, invScale);
+    TheShaderMgr.SetPConstant((PShaderConstant)7, bloomParams);
+}

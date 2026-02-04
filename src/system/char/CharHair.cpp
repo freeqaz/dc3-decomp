@@ -217,7 +217,8 @@ CharHair::Strand::Strand(const Strand &rhs)
     : mShowSpheres(rhs.mShowSpheres), mShowCollide(rhs.mShowCollide),
       mShowPose(rhs.mShowPose), mRoot(rhs.mRoot), mAngle(rhs.mAngle),
       mPoints(rhs.mPoints), mHookupFlags(rhs.mHookupFlags) {
-    mBaseMat = rhs.mBaseMat;
+    const Hmx::Matrix3& src = rhs.mBaseMat;
+    mBaseMat = src;
     mRootMat = rhs.mRootMat;
 }
 

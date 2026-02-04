@@ -232,6 +232,19 @@ void DxShaderMgr::SetVConstant(VShaderConstant vsc, RndTex *tex) {
     }
 }
 
+void DxShaderMgr::SetPConstant(PShaderConstant psc, RndTex *tex) {
+    if (!tex) {
+        tex = TheRnd.GetNullTexture();
+    }
+    if (tex) {
+        tex->Select(psc);
+    } else {
+        D3DDevice_SetTexture(
+            TheDxRnd.Device(), psc, nullptr, 0x8000000000000000 >> (psc + 0x20U)
+        );
+    }
+}
+
 void DxShaderMgr::LoadShaderFile(FileStream &fs) {
     RndSplasherResume();
     PhysMemTypeTracker tracker("D3D(phys):ShaderCache");

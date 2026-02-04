@@ -7,13 +7,7 @@ Rand Rand::sRand(0x29A);
 
 Rand::Rand(int i)
     : mRandIndex1(0), mRandIndex2(0), mRandTable(), mSpareGaussianAvailable(0) {
-    for (int idx = 0; idx < 0x100; idx++) {
-        int j = i * 0x41C64E6D + 0x3039;
-        i = j * 0x41C64E6D + 0x3039;
-        mRandTable[idx] = ((j >> 16) & 0xFFFF) | (i & 0x7FFF0000);
-    }
-    mRandIndex1 = 0;
-    mRandIndex2 = 0x67;
+    Seed(i);
 }
 
 void Rand::Seed(int seed) {
@@ -24,16 +18,6 @@ void Rand::Seed(int seed) {
     }
     mRandIndex1 = 0;
     mRandIndex2 = 0x67;
-}
-
-int Rand::Int() {
-    mRandIndex1 = (mRandIndex1 + 1) & 0xFF;
-    mRandIndex2 = (mRandIndex2 + mRandTable[mRandIndex1]) & 0xFF;
-    return mRandTable[(mRandTable[mRandIndex1] + mRandTable[mRandIndex2]) & 0xFF];
-}
-
-int Rand::Int(int low, int high) {
-    return low + (Int() % (high - low));
 }
 
 float Rand::Float() { return ((Int() & 0xFFFF) / 65536.0f); }

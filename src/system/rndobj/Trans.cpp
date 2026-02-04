@@ -383,8 +383,8 @@ DataNode RndTransformable::OnGetLocalScaleIndex(const DataArray *a) {
     return v28[a->Int(2)];
 }
 
-void RndTransformable::SetWorldXfm(const Transform &xfm) {
-    mWorldXfm = xfm;
+void RndTransformable::SetWorldXfm(const Transform &tf) {
+    mWorldXfm = tf;
     mDirty = false;
     UpdatedWorldXfm();
     FOREACH (it, mChildren) {

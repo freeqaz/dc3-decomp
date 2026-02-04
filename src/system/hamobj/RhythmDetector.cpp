@@ -96,10 +96,9 @@ namespace {
     }
 
     float Variance(const std::vector<float> &vec, float mean, int start, int end) {
-        // dear god please someone figure what isnt right here
         int size = (vec.size());
         end = size < end ? size : end;
-        start = start < 0 ? 0 : start;
+        start = start > 0 ? start : 0;
         float sum = 0.0f;
         for (int i = start; i < end; i++) {
             sum += (vec[i] - mean) * (vec[i] - mean);

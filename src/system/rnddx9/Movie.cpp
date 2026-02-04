@@ -127,3 +127,12 @@ void DxMovie::StreamNextBuffer() {
     int size = StreamChunkSize();
     unk4c->ReadAsync(c44 + unk54, size);
 }
+
+void DxMovie::StreamRestart(int frame) {
+    StreamReadFinish();
+    unk4c->Seek(mVideo.FrameSize() * frame + unk50, FILE_SEEK_SET);
+    unk4c->Read(unk44, StreamChunkSize());
+    unk54 = 0;
+    unk58 = unk44;
+    StreamNextBuffer();
+}

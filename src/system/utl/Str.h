@@ -129,15 +129,13 @@ inline TextStream &operator<<(TextStream &ts, const String &str) {
 }
 
 template <int N>
-class StackString : public FixedString, public TextStream {
+class StackString : public TextStream, public FixedString {
 private:
     char mStack[N];
 
 public:
-    StackString() : TextStream(), FixedString((char *)mStack, N + 5) {}
-    StackString(const char *str) : TextStream(), FixedString((char *)mStack, N + 5) {
-        *this += str;
-    }
+    StackString() : FixedString(mStack, N + 5) {}
+    StackString(const char *str) : FixedString(mStack, N + 5) { *this += str; }
     // virtual ~StackString() {} // dtor is at 0x8269E480
     virtual void Print(const char *str) { *this += str; }
     operator const char *() const { return c_str(); }

@@ -344,6 +344,24 @@ bool RndAmbientOcclusion::IsValid_Mesh(const RndMesh *mesh) const {
     return false;
 }
 
+bool RndAmbientOcclusion::IsValid_AOCast(const RndMesh *mesh) const {
+    bool isTransparent = false;
+    if (!IsValid_Mesh(mesh)) {
+        return false;
+    }
+    RndMat *mat = mesh->Mat();
+    if (mat != NULL) {
+        ZMode zmode = mat->GetZMode();
+        isTransparent = zmode == kZModeDisable || zmode == kZModeTransparent;
+    }
+    if (!mIgnoreHidden || mesh->Showing()) {
+        if (!mIgnoreTransparent || !isTransparent) {
+            return true;
+        }
+    }
+    return false;
+}
+
 bool RndAmbientOcclusion::IsValid_AOReceive(const RndMesh *mesh) const {
     bool isTransparent = false;
     bool isPrelit = false;

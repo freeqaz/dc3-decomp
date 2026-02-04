@@ -124,14 +124,15 @@ UIComponent *UIManager::FocusComponent() {
         return nullptr;
 }
 
+void UIManager::GotoFirstScreen() {
+    UIScreen *screen = DataVariable("first_screen").Obj<UIScreen>();
+    GotoScreen(screen, false, false);
+    mTimer.Restart();
+}
+
 void UIManager::ToggleLoadTimes() {
     mOverlay->CurrentLine() = gNullStr;
     mOverlay->SetShowing(!mOverlay->Showing());
-}
-
-void UIManager::GotoFirstScreen() {
-    GotoScreen(DataVariable("first_screen").Obj<UIScreen>(), false, false);
-    mTimer.Restart();
 }
 
 void UIManager::Draw() {

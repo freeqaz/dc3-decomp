@@ -95,7 +95,19 @@ BEGIN_PROPSYNCS(Flow)
     SYNC_SUPERCLASS(ObjectDir)
 END_PROPSYNCS
 
-BinStream &operator<<(BinStream &bs, const Flow::DynamicPropertyEntry &entry);
+BinStream &operator<<(BinStream &bs, const Flow::DynamicPropertyEntry &entry) {
+    int type = entry.mType;
+    BinStream &bs1 = bs << entry.mName;
+    bs1 << type;
+    entry.mDefaultVal.Save(bs1);
+    bool exposed = entry.mExposed;
+    BinStream &bs2 = bs1 << entry.mHelp;
+    bs2 << exposed;
+    entry.unk24.Save(bs2);
+    BinStream &bs3 = bs2 << entry.mObjectClass;
+    bs3 << entry.mObjectType;
+    return bs;
+}
 
 BEGIN_SAVES(Flow)
     SAVE_REVS(7, 2)

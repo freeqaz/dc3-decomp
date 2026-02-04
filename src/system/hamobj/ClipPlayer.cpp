@@ -72,11 +72,15 @@ bool ClipPlayer::Init(Difficulty d) {
 bool ClipPlayer::Init(int x) { return Init(TheHamDirector->SongAnim(x)); }
 
 bool ClipPlayer::CanUseRestStep() {
-    if ((!TheLoadMgr.EditMode() || !TheHamDirector->NoTransitions()) && mOutClip
-        && (ClipLength(mOutClip) != 3 || mOutClip->Flags() & 4)) {
-        return false;
-    } else
-        return true;
+    // In non-edit mode (or when transitions are enabled), check if the out clip
+    // is compatible with rest steps. Rest steps require a 3-beat clip with no flag 0x4.
+    if (!TheLoadMgr.EditMode() || !TheHamDirector->NoTransitions()) {
+        CharClip *clip = mOutClip;
+        if (clip && (ClipLength(clip) != 3 || clip->Flags() & 4)) {
+            return false;
+        }
+    }
+    return true;
 }
 
 DataNode ClipPlayer::AnnotatePractice() {

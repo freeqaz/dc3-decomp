@@ -123,6 +123,14 @@ void HamDriver::LayerClip::Eval(float f1) {
     unk8 = EaseSigmoid(clamped, 0.0, 0.0) * f1;
 }
 
+void HamDriver::LayerClip::Play(CharBones &bones) {
+    if (unk8 > 0.0f) {
+        float beat = unk10->StartBeat();
+        float deltaBeat = (TheTaskMgr.Beat() - unkc) + beat;
+        bones.ScaleAdd(unk10, unk8, deltaBeat, TheTaskMgr.DeltaBeat());
+    }
+}
+
 bool HamDriver::LayerClip::Replace(ObjRef *ref, Hmx::Object *obj) {
     if ((ObjRef *)unk10.Ptr() == ref && unk10.SetObj(obj) == nullptr) {
         delete unk10;

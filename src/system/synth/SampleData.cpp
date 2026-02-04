@@ -15,6 +15,16 @@ void SampleData::SetAllocator(SampleDataAllocFunc a, SampleDataFreeFunc f) {
     TheWavMgr->SetAllocator((WavMgrAllocFunc)a, (WavMgrFreeFunc)f);
 }
 
+void SampleData::Dealloc() {
+    Hmx::CRC crc;
+    crc.mCRC = mCRC.mCRC;
+    if (crc.mCRC == 0 || !TheWavMgr->ReleaseRes(crc)) {
+        sFree(mData, "SampleData.cpp", 196, "SampleData");
+    }
+    mData = 0;
+    mCRC.mCRC = 0;
+}
+
 void SampleData::Reset() {
     Dealloc();
     mFormat = kPCM;
