@@ -126,6 +126,38 @@ for (auto it = mChildren.begin(); it != mChildren.end(); ++it) {
 
 ---
 
+## Constructor Zero-Init That Doesn’t Exist in Target
+
+**Effect:** -2% to -6% (size mismatch + extra float stores)
+
+Adding explicit zero-initialization to members that the original constructor **did not** initialize injects extra constant loads and stores (often `lis/lfs/stfs` for `0.0f`).
+
+### What NOT to Do
+
+```cpp
+// BAD - adds lfs/stfs for 0.0f if target doesn't initialize it
+CharacterTest::CharacterTest(Character* theChar)
+    : /* ... */, unk90(0.0f) {
+}
+```
+
+### What To Do Instead
+
+Only initialize if the target does:
+
+```cpp
+// GOOD - leave uninitialized if target doesn't store
+CharacterTest::CharacterTest(Character* theChar)
+    : /* ... */ {
+}
+```
+
+### Notes
+
+In `CharacterTest::CharacterTest`, adding `unk90(0)` introduced a `lis/lfs/stfs` sequence and dropped the match from 100% to ~94–97%. Removing the init restored size parity and brought it back to 99%+.
+
+---
+
 ## Patterns With No Effect
 
 These patterns were tested and had no impact (neither positive nor negative):

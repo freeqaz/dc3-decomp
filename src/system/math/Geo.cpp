@@ -110,7 +110,6 @@ void Box::GrowToContain(const Vector3 &vec, bool b) {
 }
 
 bool Box::Clamp(Vector3 &v) {
-    // Bitwise OR ensures all three ClampEq calls are evaluated (no short-circuit)
     return ClampEq(v.x, mMin.x, mMax.x) | ClampEq(v.y, mMin.y, mMax.y) | ClampEq(v.z, mMin.z, mMax.z);
 }
 

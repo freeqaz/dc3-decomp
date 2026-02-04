@@ -55,6 +55,9 @@ Options:
   --context             Generate type context from Ghidra (if available)
   --gotos-only          Pass --gotos-only to m2c for complex control flow
   --no-andor            Pass --no-andor to m2c
+  --decomp              Decomp-friendly output (--noise=low + --show-offsets)
+  --show-offsets        Show struct field offsets in comments
+  --noise LEVEL         Output noise level: full, low, minimal
   -v, --verbose         Show progress messages
   -h, --help            Show this help message
 
@@ -215,6 +218,9 @@ run_m2c() {
     local gotos_only="$2"
     local no_andor="$3"
     local has_context="$4"
+    local decomp_mode="$5"
+    local show_offsets="$6"
+    local noise_level="$7"
 
     log "Running m2c decompiler..."
 
@@ -233,6 +239,19 @@ run_m2c() {
 
     if [ "$no_andor" = "1" ]; then
         cmd+=(--no-andor)
+    fi
+
+    # Decomp-friendly output flags
+    if [ "$decomp_mode" = "1" ]; then
+        cmd+=(--decomp)
+    fi
+
+    if [ "$show_offsets" = "1" ]; then
+        cmd+=(--show-offsets)
+    fi
+
+    if [ -n "$noise_level" ]; then
+        cmd+=(--noise "$noise_level")
     fi
 
     # Input file
@@ -270,6 +289,9 @@ OUTPUT_FILE=""
 USE_CONTEXT=0
 GOTOS_ONLY=0
 NO_ANDOR=0
+DECOMP_MODE=0
+SHOW_OFFSETS=0
+NOISE_LEVEL=""
 VERBOSE=0
 
 while [ $# -gt 0 ]; do
@@ -297,6 +319,18 @@ while [ $# -gt 0 ]; do
         --no-andor)
             NO_ANDOR=1
             shift
+            ;;
+        --decomp)
+            DECOMP_MODE=1
+            shift
+            ;;
+        --show-offsets)
+            SHOW_OFFSETS=1
+            shift
+            ;;
+        --noise)
+            NOISE_LEVEL="$2"
+            shift 2
             ;;
         -v|--verbose)
             VERBOSE=1
@@ -345,6 +379,6 @@ get_objdiff_json "$FUNCTION_NAME" "$UNIT"
 convert_to_m2c
 
 # Step 4: Run m2c
-run_m2c "$OUTPUT_FILE" "$GOTOS_ONLY" "$NO_ANDOR" "$HAS_CONTEXT"
+run_m2c "$OUTPUT_FILE" "$GOTOS_ONLY" "$NO_ANDOR" "$HAS_CONTEXT" "$DECOMP_MODE" "$SHOW_OFFSETS" "$NOISE_LEVEL"
 
 log "Done!"

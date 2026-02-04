@@ -536,14 +536,15 @@ void LiveCameraInput::StoreTextureAt(RndTex *tex, int idx) {
 }
 
 void LiveCameraInput::ApplyTextureClip(RndMat *mat, int idx) const {
-    if (idx < 0 || idx >= 8) {
+    if (idx < 0 || 7 < idx) {
         MILO_LOG(
             "LiveCameraInput::GetStoredTexture: index %d out of bounds [max=%d]\n", 7
         );
     }
+    const CamTexClip *clip = &mTexClips[idx];
     mat->SetTexGen(kTexGenXfmOrigin);
-    mat->SetTexXfm(mTexClips[idx].mXfm);
-    mat->SetDiffuseTex(mTexClips[idx].mTex);
+    mat->SetTexXfm(clip->mXfm);
+    mat->SetDiffuseTex(clip->mTex);
 }
 
 void LiveCameraInput::StoreColorBuffer(int idx) {

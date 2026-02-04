@@ -4,6 +4,7 @@
 
 #define MAX_NODES 0x20000
 #define NODE_SIZE 0x11
+#define FREE_NODE_CHAR 0xFF
 #define TRIE_GET_NODE(idx) ((char *)this + idx * NODE_SIZE)
 #define TRIE_GET_COUNTS(node) (unsigned int *)(node + 0xC)
 #define TRIE_GET_DUP_COUNT(countsPtr) *countsPtr >> 8

@@ -1089,7 +1089,10 @@ def run_m2c(
     function_name: str,
     project_dir: str,
     unit: Optional[str] = None,
-    context_file: Optional[str] = None
+    context_file: Optional[str] = None,
+    decomp_mode: bool = True,
+    noise_level: Optional[str] = None,
+    show_offsets: bool = False
 ) -> M2CResult:
     """
     Run m2c decompilation on a function.
@@ -1156,6 +1159,13 @@ def run_m2c(
         m2c_cmd = ["python3", M2C_PATH, "-t", "ppc"]
         if context_file:
             m2c_cmd.extend(["--context", context_file])
+        # Decomp-friendly output flags
+        if decomp_mode:
+            m2c_cmd.append("--decomp")
+        if noise_level:
+            m2c_cmd.extend(["--noise", noise_level])
+        if show_offsets:
+            m2c_cmd.append("--show-offsets")
         m2c_cmd.append("-")  # Read from stdin
 
         proc = subprocess.run(
@@ -1865,7 +1875,10 @@ def analyze_function(
     incremental: bool = True,
     include_m2c: bool = True,
     m2c_context: Optional[str] = None,
-    resolve_offsets: bool = False
+    resolve_offsets: bool = False,
+    m2c_decomp_mode: bool = True,
+    m2c_noise_level: Optional[str] = None,
+    m2c_show_offsets: bool = False
 ) -> str:
     """
     Analyze a function combining objdiff and Ghidra data.
@@ -1998,7 +2011,10 @@ def analyze_function(
             function_name=function_name,
             project_dir=project_dir,
             unit=unit,
-            context_file=m2c_context
+            context_file=m2c_context,
+            decomp_mode=m2c_decomp_mode,
+            noise_level=m2c_noise_level,
+            show_offsets=m2c_show_offsets
         )
         if m2c_result.error:
             vprint(f"m2c error: {m2c_result.error}", verbose, prefix="analyze")
@@ -2056,7 +2072,7 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  %(prog)s "Game::Poll"                                        # Markdown output (includes m2c by default)
+  %(prog)s "Game::Poll"                                        # Markdown output (includes m2c with --decomp by default)
   %(prog)s "Game::Poll" -f json                                # JSON output
   %(prog)s "?Poll@Game@@QAAXXZ"                                # Use mangled name
   %(prog)s "Game::Poll" --no-xrefs                             # Skip cross-references
@@ -2069,6 +2085,8 @@ Examples:
   %(prog)s --list-units                                        # List all available units
   %(prog)s --list-units character                              # Filter units by name pattern
   %(prog)s "Game::Poll" --m2c-context types.ctx                # Use m2c with type context
+  %(prog)s "Game::Poll" --m2c-noise=minimal                    # Comment out artifact declarations
+  %(prog)s "Game::Poll" --m2c-no-decomp                        # Disable decomp-friendly output
         """
     )
 
@@ -2134,6 +2152,21 @@ Examples:
         metavar="FILE",
         help="Path to m2c context file for type info"
     )
+    parser.add_argument(
+        "--m2c-no-decomp",
+        action="store_true",
+        help="Disable m2c --decomp flag (artifact annotations + offsets)"
+    )
+    parser.add_argument(
+        "--m2c-noise",
+        choices=["full", "low", "minimal"],
+        help="m2c noise level: full (default), low (artifact comments), minimal (commented out)"
+    )
+    parser.add_argument(
+        "--m2c-show-offsets",
+        action="store_true",
+        help="Show struct field offsets in m2c output"
+    )
 
     parser.add_argument("--resolve-offsets", action="store_true", help="Resolve struct field names for offset mismatches")
     args = parser.parse_args()
@@ -2175,7 +2208,10 @@ Examples:
             incremental=not args.full_build,
             include_m2c=not args.no_m2c,
             m2c_context=args.m2c_context,
-            resolve_offsets=args.resolve_offsets
+            resolve_offsets=args.resolve_offsets,
+            m2c_decomp_mode=not args.m2c_no_decomp,
+            m2c_noise_level=args.m2c_noise,
+            m2c_show_offsets=args.m2c_show_offsets
         )
 
         if args.output:

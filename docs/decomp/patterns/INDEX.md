@@ -82,6 +82,7 @@ These patterns make matches **worse**. Avoid them.
 | Member Aliasing | -6% | [harmful-avoid.md](harmful-avoid.md#member-aliasing) |
 | Child Pointer in Loop | -6.5% | [harmful-avoid.md](harmful-avoid.md#child-pointer-in-loop) |
 | End Iterator Explicit | -0.5% | [harmful-avoid.md](harmful-avoid.md#end-iterator-explicit) |
+| Constructor Zero-Init That Doesn’t Exist in Target | -2% to -6% | [harmful-avoid.md](harmful-avoid.md#constructor-zero-init-that-doesnt-exist-in-target) |
 
 ---
 

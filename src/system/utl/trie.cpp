@@ -53,17 +53,21 @@ unsigned int Trie::get_free_node() {
     return n;
 }
 
+// Free a node and add it to the free list
+// Note: Multiple check_index calls are required for exact codegen match
 void Trie::delete_node(unsigned int n) {
+    // Clear all node fields
     check_index(n);
     TRIE_CLEAR_NODE(n);
     check_index(n);
     TRIE_CLEAR_SIBLING(n);
     check_index(n);
     TRIE_CLEAR_PARENT(n);
-    *TRIE_GET_COUNTS(n) = *(unsigned int *)0;
+    TRIE_CLEAR_COUNTS(n);
     check_index(n);
     unsigned int *freeHead = TRIE_GET_FREE_HEAD;
-    TRIE_SET_CHAR(n, 0xFF);
+    TRIE_SET_CHAR(n, FREE_NODE_CHAR); // Mark as free node
+    // Insert at head of free list
     if (*freeHead != 0) {
         check_index(n);
         TRIE_SET_SIBLING(n, *freeHead);

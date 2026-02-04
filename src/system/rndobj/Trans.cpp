@@ -414,7 +414,7 @@ DataNode RndTransformable::OnCopyLocalTo(const DataArray *da) {
     DataArray *arr = da->Array(2);
     for (int i = arr->Size() - 1; i >= 0; i--) {
         RndTransformable *t = arr->Obj<RndTransformable>(i);
-        t->SetLocalXfm(mLocalXfm);
+        t->SetLocalXfm(LocalXfm());
     }
     return 0;
 }

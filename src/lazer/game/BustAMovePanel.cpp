@@ -34,8 +34,11 @@
 #include <float.h>
 
 namespace {
+    // Fisher-Yates shuffle: fill vector [0..n-1], then shuffle in-place
     void GetShuffledInts(std::vector<int> &v, int n) {
         v.clear();
+
+        // Fill with sequential integers [0, 1, 2, ..., n-1]
         int val = 0;
         if (n > 0) {
             do {
@@ -43,16 +46,19 @@ namespace {
                 val++;
             } while (val < n);
         }
+
+        // Shuffle: for each position i, swap with random position j in [i, n)
+        // Uses pointer arithmetic pattern required for codegen (idx tracks byte offset)
         int i = 0;
         if (n - 1 > 0) {
-            int byteOffset = 0;
+            int idx = 0;  // Offset index (increments separately for codegen)
             do {
                 int j = RandomInt(i, n);
-                int *data = &v[0];
+                int *data = &v[0];  // Base pointer (reloaded each iteration)
                 i++;
-                int temp = *(int*)((char*)data + byteOffset);
-                *(int*)((char*)data + byteOffset) = data[j];
-                byteOffset += 4;
+                int temp = data[idx];
+                data[idx] = data[j];
+                idx++;
                 data[j] = temp;
             } while (i < n - 1);
         }

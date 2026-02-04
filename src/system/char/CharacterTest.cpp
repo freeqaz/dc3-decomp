@@ -1,15 +1,23 @@
 #include "char/CharacterTest.h"
 #include "Character.h"
+#include "char/CharClipDriver.h"
 #include "char/CharForeTwist.h"
 #include "char/CharUpperTwist.h"
 #include "char/CharUtl.h"
 #include "char/ClipGraphGen.h"
+#include "math/Utl.h"
+#include "obj/DirLoader.h"
 #include "obj/Object.h"
+#include "obj/Task.h"
+#include "os/File.h"
 #include "rndobj/Cam.h"
 #include "rndobj/Graph.h"
 #include "rndobj/Overlay.h"
+#include "utl/FilePath.h"
+#include "obj/Msg.h"
 #include "utl/Symbol.h"
 #include "rndobj/Utl.h"
+#include <cmath>
 
 Hmx::Object *gClick;
 
@@ -253,4 +261,134 @@ void CharacterTest::SetDistMap(Symbol s) {
             }
         }
     }
+}
+
+void CharacterTest::PlayNew() {
+    unk90 = kHugeFloat;
+    if (!mClip1)
+        return;
+    CharClipDriver *drv =
+        mDriver->Play(mClip1, CharClip::kPlayNoBlend, -1.0f, kHugeFloat, 0.0f);
+    if (mClip2) {
+        unk90 = mClip2->EndBeat();
+        CharClip::NodeVector *nodes = mClip1->GetTransitions().FindNodes(mClip2);
+        if (nodes) {
+            drv->mPlayFlags = drv->mPlayFlags & 0xffff0fff;
+            int idx = unk94 % nodes->size;
+            unk94 = idx;
+            if (mCycleTransition) {
+                unk94 = idx + 1;
+            } else {
+                idx = mTransition;
+            }
+            const CharGraphNode &node = nodes->nodes[idx];
+            float curBeat = node.curBeat - 4.0f;
+            MaxEq(drv->mBeat, curBeat);
+            mDriver->Play(
+                mClip2, CharClip::kPlayNow, -1.0f, node.nextBeat, node.curBeat - drv->mBeat
+            );
+            float endBeat = node.nextBeat + 4.0f;
+            MinEq(unk90, endBeat);
+        } else {
+            mDriver->Play(mClip2, CharClip::kPlayLast, -1.0f, kHugeFloat, 0.0f);
+        }
+    } else {
+        drv->mPlayFlags = drv->mPlayFlags & 0xffff0f0f | CharClip::kPlayLoop;
+    }
+}
+
+void CharacterTest::Poll() {
+    if (!Clips() || !mClip1)
+        return;
+    if (!gClick) {
+        ObjectDir *clickdir = DirLoader::LoadObjects(
+            FilePath(MakeString("%s/char/chartest.milo", FileSystemRoot())), 0, 0
+        );
+        gClick = clickdir->Find<Hmx::Object>("click_hi.cue", true);
+    }
+    float beat = TheTaskMgr.Beat();
+    float deltabeat = TheTaskMgr.DeltaBeat();
+    if (mMetronome) {
+        if (floorf(beat - deltabeat) + 1.0f == floorf(beat)) {
+            static Message playMsg("play");
+            gClick->Handle(playMsg, true);
+        }
+    }
+    CharClipDriver *drivs = mDriver->First();
+    if (drivs) {
+        CharClip *drivclip = drivs->GetClip();
+        if (!mClip2) {
+            if (drivclip != mClip1)
+                PlayNew();
+        } else if ((drivclip != mClip1 && drivclip != mClip2)
+                   || (drivclip == mClip2 && drivs->mBeat > unk90)) {
+            PlayNew();
+        }
+    } else {
+        PlayNew();
+    }
+    if (mZeroTravel) {
+        Transform xfm = mMe->LocalXfm();
+        xfm.v.Zero();
+        mMe->SetLocalXfm(xfm);
+        if (mMe->BoneServo()) {
+            mMe->BoneServo()->SetRegulateWaypoint(nullptr);
+        }
+        Recenter();
+    }
+}
+
+void CharacterTest::Sync() {
+    unk94 = 0;
+    if (!mDriver || (mClip1 && mClip1->Dir() != Clips())) {
+        mClip1 = nullptr;
+    }
+    if (!mDriver || (mClip2 && mClip2->Dir() != Clips())) {
+        mClip2 = nullptr;
+    }
+    if (!mDriver || (mFilterGroup && mFilterGroup->Dir() != Clips())) {
+        mFilterGroup = nullptr;
+    }
+    if (mMe->BoneServo()) {
+        mMe->BoneServo()->SetRegulateWaypoint(nullptr);
+    }
+    if (mClip1 || mClip2) {
+        mOverlay->SetCallback(this);
+        mOverlay->SetShowing(true);
+    } else {
+        mOverlay->SetCallback(nullptr);
+        mOverlay->SetShowing(false);
+    }
+
+    static Symbol none("none");
+    RndGraph::Get(0)->Reset();
+    if (!mClip2)
+        mTransition = 0;
+    if (unk98 && (unk98->ClipA() != mClip1 || unk98->ClipB() != mClip2)) {
+        SetDistMap(mShowDistMap);
+    }
+    if (mClip1) {
+        mClip1->AverageBeatsPerSecond();
+        if (mClip2) {
+            CharClip::NodeVector *nodes = mClip1->GetTransitions().FindNodes(mClip2);
+            if (nodes) {
+                int maxVal = nodes->size - 1;
+                if (mTransition > maxVal) {
+                    mTransition = maxVal;
+                } else {
+                    // Branchless clamp to 0 if negative
+                    unsigned int uval = mTransition;
+                    int mask = (uval >> 31) - 1;
+                    mTransition = mTransition & mask;
+                }
+            } else {
+                mTransition = 0;
+            }
+            mClip2->AverageBeatsPerSecond();
+        }
+    }
+    if (mClip1 || mClip2) {
+        mDriver->Enter();
+    }
+    unk94 = 0;
 }
