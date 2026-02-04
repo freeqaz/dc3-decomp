@@ -36,13 +36,12 @@ void ShortQuat::Set(const Hmx::Quat &quat) {
 }
 
 void ShortQuat::ToQuat(Hmx::Quat &quat) const {
-    short s0 = x;
-    short s1 = y;
-    short s3 = w;
-    quat.z = (float)(long long)z * 3.051851e-05f;
-    quat.w = (float)(long long)s3 * 3.051851e-05f;
-    quat.y = (float)(long long)s1 * 3.051851e-05f;
-    quat.x = (float)(long long)s0 * 3.051851e-05f;
+    quat.Set(
+        (float)(long long)x * 3.051851e-05f,
+        (float)(long long)y * 3.051851e-05f,
+        (float)(long long)z * 3.051851e-05f,
+        (float)(long long)w * 3.051851e-05f
+    );
 }
 
 void CharBones::Zero() { memset(mStart, 0, mTotalSize); }

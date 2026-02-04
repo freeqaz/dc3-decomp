@@ -148,8 +148,8 @@ void Voice::InitSourceBuffer(XAUDIO2_BUFFER &audio_buffer) {
             mLoopEnd = mNumSamples;
         }
         if (mXMA) {
-            mLoopStart -= (mLoopStart / 128) * 128;
-            mLoopEnd -= (mLoopEnd / 128) * 128;
+            mLoopStart = mLoopStart - (mLoopStart % 128);
+            mLoopEnd = mLoopEnd - (mLoopEnd % 128);
         }
         audio_buffer.LoopCount = 0xff;
         audio_buffer.LoopBegin = mLoopStart;
