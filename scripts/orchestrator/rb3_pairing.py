@@ -167,10 +167,95 @@ def get_rb3_function_names(rb3_file: Path) -> set[str]:
     for match in re.finditer(method_pattern, content):
         names.add(match.group(2))
 
-    # Pattern 2: Standalone functions (harder to detect reliably)
-    # For now, skip these as class methods are more useful
+    # Pattern 2: Standalone functions
+    standalone_pattern = r'(?<![:\w])\b(?:void|bool|int|float|char|unsigned|const|static|inline|virtual)\s+(\w+)\s*\('
+    for match in re.finditer(standalone_pattern, content):
+        name = match.group(1)
+        if name not in ('if', 'while', 'for', 'switch', 'return'):
+            names.add(name)
 
     return names
+
+
+def get_rb3_names_and_classes(rb3_file: Path) -> tuple[set[str], set[str]]:
+    """
+    Extract both method names and class names from RB3 source file.
+
+    Returns:
+        Tuple of (method_names, class_names)
+    """
+    if not rb3_file.exists():
+        return set(), set()
+
+    try:
+        content = rb3_file.read_text(errors="replace")
+    except Exception:
+        return set(), set()
+
+    methods = set()
+    classes = set()
+
+    # Pattern 1: ClassName::MethodName( - extracts both
+    method_pattern = r'\b(\w+)::(\w+)\s*\('
+    for match in re.finditer(method_pattern, content):
+        classes.add(match.group(1))
+        methods.add(match.group(2))
+
+    # Pattern 2: Standalone functions
+    standalone_pattern = r'(?<![:\w])\b(?:void|bool|int|float|char|unsigned|const|static|inline|virtual)\s+(\w+)\s*\('
+    for match in re.finditer(standalone_pattern, content):
+        name = match.group(1)
+        if name not in ('if', 'while', 'for', 'switch', 'return'):
+            methods.add(name)
+
+    # Pattern 3: Class definitions
+    class_pattern = r'\bclass\s+(\w+)'
+    for match in re.finditer(class_pattern, content):
+        classes.add(match.group(1))
+
+    # Pattern 4: Struct definitions
+    struct_pattern = r'\bstruct\s+(\w+)'
+    for match in re.finditer(struct_pattern, content):
+        classes.add(match.group(1))
+
+    return methods, classes
+
+
+def extract_class_and_method_from_symbols(symbols: list[str]) -> tuple[set[str], set[str]]:
+    """
+    Extract both class names and method names from DC3 symbols.
+
+    Args:
+        symbols: List of mangled or demangled symbol names
+
+    Returns:
+        Tuple of (method_names, class_names)
+    """
+    methods = set()
+    classes = set()
+
+    for symbol in symbols:
+        # MSVC mangled format: ?MethodName@ClassName@@...
+        if symbol.startswith("?"):
+            parts = symbol.split("@")
+            if len(parts) >= 2:
+                methods.add(parts[0].lstrip("?"))
+                if len(parts) >= 3:
+                    # Second part is the class name
+                    classes.add(parts[1])
+        # Demangled format: Class::Method or Namespace::Class::Method
+        elif "::" in symbol:
+            parts = symbol.split("::")
+            if len(parts) >= 2:
+                # Last part is method name (strip params)
+                methods.add(parts[-1].split("(")[0].strip())
+                # Second-to-last is class name
+                classes.add(parts[-2].split("(")[0].strip())
+        else:
+            # Plain function name
+            methods.add(symbol.split("(")[0].strip())
+
+    return methods, classes
 
 
 def calculate_compatibility(
@@ -357,3 +442,112 @@ def get_rb3_source_for_unit(
             pass
 
     return None
+
+
+def sync_rb3_refs(
+    db_path: str | Path = DEFAULT_DB_PATH,
+    verbose: bool = False,
+) -> dict[str, int]:
+    """
+    Populate has_rb3_ref for functions based on class + method matching.
+
+    For each DC3 unit with an RB3 match, extracts both method names and
+    class names from both sources. A DC3 function has an RB3 reference if:
+    - The method name exists in RB3, OR
+    - The class name exists in RB3 (class structure/members are similar)
+
+    Args:
+        db_path: Database path
+        verbose: Print progress
+
+    Returns:
+        Dict with counts: {updated, with_ref, without_ref, units_processed}
+    """
+    from .database import (
+        get_functions_for_unit,
+        batch_update_rb3_refs,
+        query_file_pairs,
+    )
+
+    # Get all file pairs with RB3 matches
+    pairs = query_file_pairs(
+        min_compat=0.0,
+        pattern="*",
+        limit=10000,  # Get all pairs
+        db_path=db_path,
+    )
+
+    matched_pairs = [p for p in pairs if p.get("rb3_file")]
+
+    if verbose:
+        print(f"Processing {len(matched_pairs)} matched units...")
+
+    updates: list[tuple[str, int]] = []
+    with_ref = 0
+    without_ref = 0
+    units_processed = 0
+
+    # Cache of RB3 methods and classes per file
+    rb3_cache: dict[str, tuple[set[str], set[str]]] = {}
+
+    for pair in matched_pairs:
+        dc3_unit = pair["dc3_unit"]
+        rb3_file_path = pair.get("rb3_file")
+
+        if not rb3_file_path:
+            continue
+
+        # Get RB3 methods and classes (with caching)
+        if rb3_file_path not in rb3_cache:
+            rb3_file = Path(rb3_file_path)
+            rb3_cache[rb3_file_path] = get_rb3_names_and_classes(rb3_file)
+
+        rb3_methods, rb3_classes = rb3_cache[rb3_file_path]
+
+        # Get DC3 functions for this unit
+        dc3_functions = get_functions_for_unit(dc3_unit, db_path=db_path)
+
+        if not dc3_functions:
+            continue
+
+        units_processed += 1
+
+        if verbose and units_processed % 50 == 0:
+            print(f"  Processed {units_processed}/{len(matched_pairs)} units...")
+
+        for func in dc3_functions:
+            symbol = func["symbol"]
+            demangled = func.get("demangled", "")
+
+            # Extract method and class names from DC3 function
+            dc3_methods, dc3_classes = extract_class_and_method_from_symbols(
+                [demangled] if demangled else [symbol]
+            )
+
+            # Match if method name OR class name exists in RB3
+            method_match = bool(dc3_methods & rb3_methods)
+            class_match = bool(dc3_classes & rb3_classes)
+            has_ref = 1 if method_match or class_match else 0
+
+            updates.append((symbol, has_ref))
+
+            if has_ref:
+                with_ref += 1
+            else:
+                without_ref += 1
+
+    # Apply all updates in a single transaction
+    if verbose:
+        print(f"Applying {len(updates)} updates...")
+
+    updated = batch_update_rb3_refs(updates, db_path=db_path)
+
+    # Clear has_rb3_ref for functions in unmatched units
+    # (They keep their default value of 0, so no action needed)
+
+    return {
+        "updated": updated,
+        "with_ref": with_ref,
+        "without_ref": without_ref,
+        "units_processed": units_processed,
+    }

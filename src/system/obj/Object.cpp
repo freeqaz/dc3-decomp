@@ -51,7 +51,10 @@ Hmx::Object::~Object() {
 }
 
 bool Hmx::Object::Replace(ObjRef *from, Hmx::Object *to) {
-    return mSinks ? mSinks->Replace(from, to) : false;
+    if (mSinks)
+        return mSinks->Replace(from, to);
+    else
+        return false;
 }
 
 BEGIN_HANDLERS(Hmx::Object)
@@ -113,10 +116,10 @@ void Hmx::Object::SaveType(BinStream &bs) {
 }
 
 void Hmx::Object::SaveRest(BinStream &bs) {
-    if (mTypeProps)
-        mTypeProps->Save(bs);
-    else
+    if (!mTypeProps)
         bs << (DataArray *)nullptr;
+    else
+        mTypeProps->Save(bs);
 
     if (mNote.empty() || bs.Cached())
         bs << 0;
@@ -204,7 +207,11 @@ void Hmx::Object::SetTypeDef(DataArray *def) {
 }
 
 DataArray *Hmx::Object::ObjectDef(Symbol s) {
-    return SystemConfig("objects", (s == gNullStr) ? ClassName() : s);
+    if (s == gNullStr) {
+        return SystemConfig("objects", ClassName());
+    } else {
+        return SystemConfig("objects", s);
+    }
 }
 
 void Hmx::Object::SetName(const char *name, ObjectDir *dir) {
@@ -301,7 +308,10 @@ void Hmx::Object::RemovePropertySink(Hmx::Object *o, DataArray *a) {
 }
 
 bool Hmx::Object::HasPropertySink(Hmx::Object *o, DataArray *a) {
-    return mSinks ? mSinks->HasPropertySink(o, a) : false;
+    if (mSinks)
+        return mSinks->HasPropertySink(o, a);
+    else
+        return false;
 }
 
 void Hmx::Object::RemoveSink(Hmx::Object *o, Symbol s) {

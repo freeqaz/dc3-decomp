@@ -47,15 +47,35 @@
 void CreateBackBuffers(int, int, D3DMULTISAMPLE_TYPE, unsigned int &, unsigned int &, D3DSurface *&, D3DSurface *&);
 
 DxRnd::DxRnd()
-    : unk220(1), mD3DDevice(nullptr), unk22c(0), mDeviceType(D3DDEVTYPE_HAL),
-      unk_0x301(1), unk360(0), mAsyncSwapCurrent(0), mPerfCounterStart(nullptr),
-      mPerfCounterEnd(nullptr), mGPUTimer(nullptr), unk370(0), unk374(0),
-      mCreatedPerfCounters(false), unk3a4(false), unk3f4(false), unk3f7(false),
-      unk404(false), unk408(0), mBackBuffer(nullptr), unk388(nullptr),
-      unk384(nullptr), unk38c(nullptr), unk37c(0), unk35c(0), mNumTiles(0),
-      unk34d(true) {
+    : unk220(0),
+      mD3DDevice(nullptr),
+      unk22c(0),
+      mDeviceType(D3DDEVTYPE_HAL),
+      unk_0x301(1),
+      unk360(false),
+      mAsyncSwapCurrent(false),
+      mPerfCounterStart(nullptr),
+      mPerfCounterEnd(nullptr),
+      mGPUTimer(nullptr),
+      unk370(0.0f),
+      unk374(0.0f),
+      mCreatedPerfCounters(false),
+      unk3a4(false),
+      unk3f4(false),
+      unk3f7(false),
+      unk404(false),
+      unk408(0) {
+    unk220 = 1;
     mFrontBuffers[0] = nullptr;
     mFrontBuffers[1] = nullptr;
+    mBackBuffer = nullptr;
+    unk388 = nullptr;
+    unk384 = nullptr;
+    unk38c = nullptr;
+    unk37c = 0;
+    unk35c = 0;
+    mNumTiles = 0;
+    unk34d = true;
 }
 
 DxRnd::~DxRnd() {

@@ -68,6 +68,18 @@ u32 result = ((w >> 2) ^ 0x3F) | ((w << 6) & 0xC0);
 - Do not modify `MILO_ASSERT()` call text without testing carefully -- the string content is baked into the binary
 - Do not modify `OBJ_MEM_OVERLOAD` macro arguments without verification
 
+## Macro Usage
+
+See [MACROS.md](MACROS.md) for comprehensive macro documentation covering handlers, property sync, serialization, and more.
+
+### Critical Macro Rules
+
+1. **MILO_ASSERT text is frozen** - The condition string (`#cond`) is baked into the binary; changing the condition expression will cause a mismatch
+2. **OBJ_MEM_OVERLOAD requires exact line numbers** - The line number parameter must match the original source
+3. **Handler ordering affects codegen** - Place `HANDLE_SUPERCLASS` after local handlers; don't reorder without verification
+4. **INIT_REVS placement** - Must be placed after `Save()` and `Load()` implementations, not before
+5. **Load uses `d` stream** - After `LOAD_REVS`, use `d >>` and `d.stream` instead of `bs`
+
 ## General Conventions
 
 - Use `u8`, `u32`, `s32` etc. for fixed-width types (defined in `types.h`)

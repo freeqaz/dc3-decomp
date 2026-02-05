@@ -75,22 +75,7 @@ bool ScrollSelect::RevertScrollSelect(
         return false;
 }
 
-DataNode ScrollSelect::Handle(DataArray *_msg, bool _warn) {
-    Symbol sym = _msg->Sym(1);
-
-    MessageTimer timer(
-        (MessageTimer::Active()) ? dynamic_cast<Hmx::Object *>(this) : 0, sym
-    );
-
+BEGIN_CUSTOM_HANDLERS(ScrollSelect)
     HANDLE_EXPR(is_scroll_selected, IsScrollSelected())
     HANDLE_ACTION(reset, Reset())
-    if (_warn)
-        MILO_NOTIFY(
-            "%s(%d): %s unhandled msg: %s",
-            __FILE__,
-            0x58,
-            PathName(dynamic_cast<Hmx::Object *>(this)),
-            sym
-        );
-    return DATA_UNHANDLED;
-}
+END_CUSTOM_HANDLERS

@@ -78,10 +78,9 @@ void KerningTable::SetKerning(
 void KerningTable::GetKerning(std::vector<RndFontBase::KernInfo> &info) const {
     info.resize(mNumEntries);
     for (int i = 0; i < mNumEntries; i++) {
-        const Entry &entry = mEntries[i];
-        info[i].unk0 = entry.key;
-        info[i].unk2 = (unsigned int)(entry.key) >> 16;
-        info[i].kerning = entry.kerning;
+        info[i].unk0 = mEntries[i].key;
+        info[i].unk2 = (unsigned int)(mEntries[i].key) >> 16;
+        info[i].kerning = mEntries[i].kerning;
     }
 }
 
@@ -140,12 +139,15 @@ void BitmapLocker::LoadPage(int pageIdx) {
         int len = strlen(filename);
         if (UsingCD() || len < 4 || stricmp(filename + len - 4, ".bmp")) {
             mTex->LockBitmap(unkc, 3);
+            if (unkc.Pixels()) {
+                unk8 = &unkc;
+            }
         } else {
             unkc.LoadBmp(filename, false, true);
+            if (unkc.Pixels()) {
+                unk8 = &unkc;
+            }
             mTex = nullptr;
-        }
-        if (unkc.Pixels()) {
-            unk8 = &unkc;
         }
     }
 }
@@ -462,17 +464,18 @@ float RndFont::CharAdvance(unsigned short c) const {
 }
 
 bool RndFont::CharDefined(unsigned short c) const {
-    auto it = mCharInfoMap.find(c);
-    if (it != mCharInfoMap.end()) {
+    if (HasChar(c)) {
+        auto it = mCharInfoMap.find(c);
         const CharInfo &info = it->second;
         return info.unk4 != 0 || info.unk8 != 0 || info.unk10 != 0;
+    } else {
+        return false;
     }
-    return false;
 }
 
 void RndFont::Print() const {
     TheDebug << "   pages: " << mMats.size() << "\n";
-    for (auto it = mMats.begin(); it != mMats.end(); ++it) {
+    FOREACH (it, mMats) {
         TheDebug << "         " << *it << "\n";
     }
     TheDebug << "   cellSize: " << mCellSize << "\n";

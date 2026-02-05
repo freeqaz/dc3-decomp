@@ -183,6 +183,7 @@ public:
     Symbol Category() const { return mCategory; }
     int Flags() const { return mFlags; }
     int Disabled() const { return mDisabled; }
+    bool ShotOver() const { return mShotOver; }
     void Disable(bool, int);
     bool ShotOk(CamShot *);
     bool SetPos(CamShotFrame &, RndCam *);

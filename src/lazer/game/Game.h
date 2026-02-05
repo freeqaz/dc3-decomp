@@ -89,33 +89,33 @@ private:
     SongInfo *mSongInfo; // 0x4c
     HamMaster *mMaster; // 0x50
     GameInput *mGameInput; // 0x54
-    int unk58;
+    int mRestartCount;
     bool unk5c;
-    bool unk5d; // 0x5d - cascade?
+    bool mUseMoveGraph;
     bool mPaused;
     bool mTimePaused;
-    bool unk60;
+    bool mRealTime;
     bool unk61;
     bool mHasIntro; // 0x62
     float unk64;
     bool unk68;
     bool unk69;
-    float unk6c;
-    bool unk70;
+    float mMusicSpeed;
+    bool mNeverAllowInput;
     bool unk71;
     bool unk72;
     bool unk73;
     bool unk74;
     Overshell *mOvershell; // 0x78
     ObjPtr<MoveDir> mMoveDir; // 0x7c
-    int unk90;
+    int mLoadState;
     Shuttle *mShuttle; // 0x94
     int unk98;
-    float unk9c;
-    Symbol unka0;
-    int unka4; // 0xa4 - state?
+    float mJumpMs;
+    Symbol mLoadedSongAudio;
+    int mWaitState;
     int unka8;
-    MultiTempoTempoMap *unkac;
+    MultiTempoTempoMap *mAltTempoMap;
 };
 
 void GameInit();

@@ -257,7 +257,7 @@ void Sound::Stop(Hmx::Object *obj, bool b2) {
                 }
             }
         } else {
-            for (auto it = mSamples.begin(); it != mSamples.end(); ++it) {
+            FOREACH (it, mSamples) {
                 if ((*it)->GetEventReceiver() == obj) {
                     (*it)->Stop(b2);
                     static Message msg("on_marker_event", Symbol("interrupted"));
@@ -442,7 +442,7 @@ void Sound::SynthPoll() {
 
     // Update faders if dirty
     if (mFaders.Dirty()) {
-        for (auto it = mSamples.begin(); it != mSamples.end(); ++it) {
+        FOREACH (it, mSamples) {
             PlayableSample *sample = *it;
             float faderVol, faderPan, faderTranspose;
             mFaders.GetVal(faderVol, faderPan, faderTranspose);

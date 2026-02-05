@@ -4,7 +4,14 @@
 
 CharTransDraw::CharTransDraw() : mChars(this), unk54(false) {}
 
-CharTransDraw::~CharTransDraw() {}
+CharTransDraw::~CharTransDraw() {
+    for (ObjPtrList<Character>::iterator it = mChars.begin(); it != NULL; ++it) {
+        if (it != NULL) {
+            Character *c = *it;
+            *(u32 *)((u32)c + 0x294) = 3;
+        }
+    }
+}
 
 BEGIN_PROPSYNCS(CharTransDraw)
     SYNC_PROP(chars, mChars)
@@ -33,7 +40,7 @@ END_COPYS
 
 INIT_REVS(2, 1)
 
-BEGIN_LOADS(CharTransDraw)
+void CharTransDraw::Load(BinStream &bs) {
     LOAD_REVS(bs)
     ASSERT_REVS(2, 1)
     LOAD_SUPERCLASS(Hmx::Object)
@@ -41,9 +48,33 @@ BEGIN_LOADS(CharTransDraw)
     bs >> mChars;
     if (d.altRev > 0)
         bs >> unk54;
-END_LOADS
 
-void CharTransDraw::DrawShowing() {}
+    // Iterate through characters and set flag
+    FOREACH (it, mChars) {
+        auto c = *it;
+        if (c != 0) {
+            *(u32 *)((u32)c + 0x294) = 1;
+        }
+    }
+}
+
+void CharTransDraw::DrawShowing() {
+    int mode2 = 2;
+    int mode1 = 1;
+    FOREACH (it, mChars) {
+        Character *c = *it;
+        if (c->Showing()) {
+            *(u32 *)((u32)c + 0x294) = mode2;
+            c->Draw();
+        } else if (unk54) {
+            *(u32 *)((u32)c + 0x294) = mode2;
+            c->SetShowing(true);
+            c->Draw();
+            c->SetShowing(false);
+            *(u32 *)((u32)c + 0x294) = mode1;
+        }
+    }
+}
 
 BEGIN_HANDLERS(CharTransDraw)
     HANDLE_SUPERCLASS(RndDrawable)

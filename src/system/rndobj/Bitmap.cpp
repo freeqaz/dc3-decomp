@@ -382,30 +382,27 @@ int RndBitmap::PixelOffset(int x, int y, bool &nibble) const {
 unsigned char RndBitmap::NearestColor(
     unsigned char r, unsigned char g, unsigned char b, unsigned char a
 ) const {
+    unsigned char pa, pb, pg, pr;
+    int ir = r, ig = g, ib = b, ia = a;
     int paletteColorIdx = -1;
-    int minDiff = 0x40000;
-    unsigned char pr, pg, pb, pa;
-    int order = mOrder;
-    int bpp = mBpp;
-    int maxIdx = (1 << bpp) - 1;
-    for (int i = maxIdx; i >= 0; i--) {
-        int paletteIdx = i;
-        if ((order & 2) != 0 && bpp == 8) {
-            int bits = (i & 0x18);
-            if (bits == 8) {
-                paletteIdx = i + 8;
-            } else if (bits == 0x10) {
-                paletteIdx = i - 8;
+    int minDiff = 0x400;
+    for (int i = (1 << mBpp) - 1; i >= 0; i--) {
+        int offset = i;
+        if ((mOrder & 2) && mBpp == 8) {
+            if ((i & 0x18) == 8) {
+                offset = i + 8;
+            } else if ((i & 0x18) == 0x10) {
+                offset = i - 8;
             }
         }
-        ConvertColor(mPalette + paletteIdx * 4, pr, pg, pb, pa);
-        int dr = pr - r;
-        int dg = pg - g;
-        int db = pb - b;
-        int da = pa - a;
-        int dist = dr * dr + dg * dg + db * db + da * da;
-        if (dist < minDiff) {
-            minDiff = dist;
+        ConvertColor(mPalette + offset * 4, pr, pg, pb, pa);
+        int dr = pr - ir;
+        int dg = pg - ig;
+        int db = pb - ib;
+        int da = pa - ia;
+        int diff = abs(dr) + abs(dg) + abs(db) + abs(da);
+        if (diff < minDiff) {
+            minDiff = diff;
             paletteColorIdx = i;
         }
     }

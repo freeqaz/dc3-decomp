@@ -16,6 +16,10 @@ DEFAULT_DB_PATH = "decomp.db"
 # Schema version for migrations
 SCHEMA_VERSION = 6
 
+# Default maximum attempts before deprioritizing a function
+# Functions with >= this many attempts are excluded from normal queries
+DEFAULT_MAX_ATTEMPTS = 20
+
 SCHEMA = """
 -- Schema version tracking
 CREATE TABLE IF NOT EXISTS schema_version (
@@ -422,6 +426,7 @@ def get_next_function(
     order_asc: bool = False,
     min_size: int = 0,
     exclude_patterns: list[str] | None = None,
+    max_attempts: int | None = DEFAULT_MAX_ATTEMPTS,
 ) -> dict[str, Any] | None:
     """
     Get next function to work on based on criteria.
@@ -438,6 +443,7 @@ def get_next_function(
         order_asc: Sort ascending instead of descending
         min_size: Minimum function size in bytes (0 = no minimum)
         exclude_patterns: Glob patterns for units to exclude (default: XDK)
+        max_attempts: Skip functions with >= this many attempts (None to disable)
 
     Returns:
         Function dict or None if no matches
@@ -469,6 +475,10 @@ def get_next_function(
 
     if min_size > 0:
         query += f" AND size >= {min_size}"
+
+    # Exclude functions that have been tried too many times
+    if max_attempts is not None:
+        query += f" AND (attempt_count IS NULL OR attempt_count < {max_attempts})"
 
     excluded_verdicts = []
     if exclude_complete:
@@ -576,6 +586,7 @@ def query_functions(
     limit: int = 20,
     db_path: str | Path = DEFAULT_DB_PATH,
     exclude_patterns: list[str] | None = None,
+    max_attempts: int | None = DEFAULT_MAX_ATTEMPTS,
 ) -> list[dict[str, Any]]:
     """
     Query multiple functions matching criteria.
@@ -584,6 +595,7 @@ def query_functions(
         verdict_filter: If set, only return functions with this verdict
                         (e.g. 'COMPLETE', 'AT_LIMIT'). Overrides exclude_* flags.
         exclude_patterns: Glob patterns for units to exclude (default: XDK)
+        max_attempts: Skip functions with >= this many attempts (None to disable)
 
     Returns list of function dicts.
     """
@@ -622,6 +634,10 @@ def query_functions(
             query += f" AND (verdict IS NULL OR verdict NOT IN ({placeholders}))"
 
     query += " AND symbol NOT LIKE 'merged_%'"
+
+    # Exclude functions that have been tried too many times
+    if max_attempts is not None:
+        query += f" AND (attempt_count IS NULL OR attempt_count < {max_attempts})"
 
     query += """
         ORDER BY
@@ -1283,6 +1299,7 @@ def query_functions_by_priority(
     exclude_locked: bool = True,
     limit: int = 20,
     db_path: str | Path = DEFAULT_DB_PATH,
+    max_attempts: int | None = DEFAULT_MAX_ATTEMPTS,
 ) -> list[dict[str, Any]]:
     """
     Query functions ordered by priority score from Phase 2 infrastructure.
@@ -1298,6 +1315,7 @@ def query_functions_by_priority(
         exclude_locked: Skip functions locked by other agents
         limit: Max results to return
         db_path: Database path
+        max_attempts: Skip functions with >= this many attempts (None to disable)
 
     Returns:
         List of function dicts with priority metadata, sorted by priority desc
@@ -1328,6 +1346,10 @@ def query_functions_by_priority(
 
     query += " AND symbol NOT LIKE 'merged_%'"
 
+    # Exclude functions that have been tried too many times
+    if max_attempts is not None:
+        query += f" AND (attempt_count IS NULL OR attempt_count < {max_attempts})"
+
     query += """
         ORDER BY priority_score DESC, current_percent DESC
         LIMIT ?
@@ -1345,6 +1367,7 @@ def query_functions_for_unit_completion(
     exclude_locked: bool = True,
     limit: int = 20,
     db_path: str | Path = DEFAULT_DB_PATH,
+    max_attempts: int | None = DEFAULT_MAX_ATTEMPTS,
 ) -> list[dict[str, Any]]:
     """
     Query incomplete functions from nearly-complete units.
@@ -1358,6 +1381,7 @@ def query_functions_for_unit_completion(
         exclude_locked: Skip functions locked by other agents
         limit: Max results to return
         db_path: Database path
+        max_attempts: Skip functions with >= this many attempts (None to disable)
 
     Returns:
         List of function dicts from near-complete units, sorted by unit
@@ -1406,6 +1430,10 @@ def query_functions_for_unit_completion(
         query += " AND f.locked_by IS NULL"
 
     query += " AND f.symbol NOT LIKE 'merged_%'"
+
+    # Exclude functions that have been tried too many times
+    if max_attempts is not None:
+        query += f" AND (f.attempt_count IS NULL OR f.attempt_count < {max_attempts})"
 
     query += """
         ORDER BY f.priority_score DESC
@@ -1472,6 +1500,140 @@ def get_priority_stats(db_path: str | Path = DEFAULT_DB_PATH) -> dict[str, Any]:
         "linker_merged_count": linker_merged,
         "bool_mask_count": bool_mask,
     }
+
+
+def get_unit_success_rates(
+    days: int = 7,
+    min_attempts: int = 5,
+    db_path: str | Path = DEFAULT_DB_PATH,
+) -> dict[str, float]:
+    """
+    Calculate empirical success rates by unit from recent attempt data.
+
+    Success = attempt resulted in 'complete' status.
+
+    Args:
+        days: Number of days of recent data to use (default: 7)
+        min_attempts: Minimum attempts required for a unit to be included (default: 5)
+        db_path: Database path
+
+    Returns:
+        Dict mapping unit path -> success rate (0.0 to 1.0)
+    """
+    conn = get_connection(db_path)
+
+    query = """
+        SELECT
+            f.unit,
+            COUNT(*) as attempts,
+            SUM(CASE WHEN a.exit_status = 'complete' THEN 1 ELSE 0 END) as completions
+        FROM attempts a
+        JOIN functions f ON a.function_id = f.id
+        WHERE a.started_at >= datetime('now', ?)
+          AND f.unit IS NOT NULL
+        GROUP BY f.unit
+        HAVING COUNT(*) >= ?
+    """
+
+    rows = conn.execute(query, (f'-{days} days', min_attempts)).fetchall()
+
+    result = {}
+    for row in rows:
+        unit = row["unit"]
+        attempts = row["attempts"]
+        completions = row["completions"]
+        result[unit] = completions / attempts if attempts > 0 else 0.0
+
+    return result
+
+
+def get_function_type_success_rates(
+    days: int = 7,
+    db_path: str | Path = DEFAULT_DB_PATH,
+) -> dict[str, float]:
+    """
+    Calculate empirical success rates by function type from recent attempt data.
+
+    Args:
+        days: Number of days of recent data to use (default: 7)
+        db_path: Database path
+
+    Returns:
+        Dict mapping function type -> success rate (0.0 to 1.0)
+    """
+    conn = get_connection(db_path)
+
+    query = """
+        SELECT
+            CASE
+                WHEN f.is_destructor = 1 THEN 'destructor'
+                WHEN f.is_constructor = 1 THEN 'constructor'
+                WHEN f.is_virtual = 1 THEN 'virtual'
+                ELSE 'other'
+            END as func_type,
+            COUNT(*) as attempts,
+            SUM(CASE WHEN a.exit_status = 'complete' THEN 1 ELSE 0 END) as completions
+        FROM attempts a
+        JOIN functions f ON a.function_id = f.id
+        WHERE a.started_at >= datetime('now', ?)
+        GROUP BY func_type
+    """
+
+    rows = conn.execute(query, (f'-{days} days',)).fetchall()
+
+    result = {}
+    for row in rows:
+        func_type = row["func_type"]
+        attempts = row["attempts"]
+        completions = row["completions"]
+        result[func_type] = completions / attempts if attempts > 0 else 0.0
+
+    return result
+
+
+def get_size_bucket_success_rates(
+    days: int = 7,
+    db_path: str | Path = DEFAULT_DB_PATH,
+) -> dict[str, float]:
+    """
+    Calculate empirical success rates by function size bucket from recent attempt data.
+
+    Args:
+        days: Number of days of recent data to use (default: 7)
+        db_path: Database path
+
+    Returns:
+        Dict mapping size bucket -> success rate (0.0 to 1.0)
+    """
+    conn = get_connection(db_path)
+
+    query = """
+        SELECT
+            CASE
+                WHEN f.size < 50 THEN 'tiny'
+                WHEN f.size < 150 THEN 'small'
+                WHEN f.size < 400 THEN 'medium'
+                WHEN f.size < 1000 THEN 'large'
+                ELSE 'huge'
+            END as size_bucket,
+            COUNT(*) as attempts,
+            SUM(CASE WHEN a.exit_status = 'complete' THEN 1 ELSE 0 END) as completions
+        FROM attempts a
+        JOIN functions f ON a.function_id = f.id
+        WHERE a.started_at >= datetime('now', ?)
+        GROUP BY size_bucket
+    """
+
+    rows = conn.execute(query, (f'-{days} days',)).fetchall()
+
+    result = {}
+    for row in rows:
+        bucket = row["size_bucket"]
+        attempts = row["attempts"]
+        completions = row["completions"]
+        result[bucket] = completions / attempts if attempts > 0 else 0.0
+
+    return result
 
 
 # ============================================================================
@@ -1679,3 +1841,80 @@ def clear_merged_symbols_for_function(
     )
     conn.commit()
     return cursor.rowcount
+
+
+# ============================================================================
+# RB3 Reference Tracking Functions
+# ============================================================================
+
+
+def batch_update_rb3_refs(
+    updates: list[tuple[str, int]],
+    db_path: str | Path = DEFAULT_DB_PATH,
+) -> int:
+    """
+    Batch update has_rb3_ref for multiple functions.
+
+    Args:
+        updates: List of (symbol, has_ref) tuples where has_ref is 0 or 1
+        db_path: Database path
+
+    Returns:
+        Number of rows updated
+    """
+    if not updates:
+        return 0
+
+    conn = get_connection(db_path)
+
+    # Use executemany for efficiency
+    cursor = conn.executemany(
+        "UPDATE functions SET has_rb3_ref = ? WHERE symbol = ?",
+        [(has_ref, symbol) for symbol, has_ref in updates],
+    )
+    conn.commit()
+    return cursor.rowcount
+
+
+def get_functions_for_unit(
+    unit: str,
+    db_path: str | Path = DEFAULT_DB_PATH,
+) -> list[dict[str, Any]]:
+    """
+    Get all functions for a specific unit.
+
+    Args:
+        unit: Unit path (e.g., "default/system/char/CharBones")
+        db_path: Database path
+
+    Returns:
+        List of function dicts with symbol and demangled
+    """
+    conn = get_connection(db_path)
+    rows = conn.execute(
+        """
+        SELECT symbol, demangled
+        FROM functions
+        WHERE unit = ?
+        """,
+        (unit,),
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def get_rb3_ref_stats(db_path: str | Path = DEFAULT_DB_PATH) -> dict[str, Any]:
+    """Get statistics about RB3 reference coverage."""
+    conn = get_connection(db_path)
+
+    total = conn.execute("SELECT COUNT(*) FROM functions").fetchone()[0]
+    with_ref = conn.execute(
+        "SELECT COUNT(*) FROM functions WHERE has_rb3_ref = 1"
+    ).fetchone()[0]
+    without_ref = total - with_ref
+
+    return {
+        "total_functions": total,
+        "with_rb3_ref": with_ref,
+        "without_rb3_ref": without_ref,
+        "coverage_pct": round(100 * with_ref / total, 2) if total > 0 else 0,
+    }

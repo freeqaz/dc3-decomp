@@ -549,7 +549,7 @@ static CURLcode rtsp_do(struct connectdata *conn, bool *done)
   if(result)
     return result;
 
-  if((unsigned)postsize > 0) {
+  if(postsize > 0) {
     result = Curl_add_buffer(req_buffer, data->set.postfields,
                              (size_t)postsize);
     if(result)
@@ -565,8 +565,8 @@ static CURLcode rtsp_do(struct connectdata *conn, bool *done)
   }
 
   Curl_setup_transfer(conn, FIRSTSOCKET, -1, TRUE, &http->readbytecount,
-                      (unsigned)putsize > 0 ? FIRSTSOCKET : -1,
-                      (unsigned)putsize > 0 ? &http->writebytecount : NULL);
+                      putsize?FIRSTSOCKET:-1,
+                      putsize?&http->writebytecount:NULL);
 
   /* Increment the CSeq on success */
   data->state.rtsp_next_client_CSeq++;

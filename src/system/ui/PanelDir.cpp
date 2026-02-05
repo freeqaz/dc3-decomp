@@ -112,6 +112,8 @@ BEGIN_COPYS(PanelDir)
     END_COPYING_MEMBERS
 END_COPYS
 
+INIT_REVS(8, 0)
+
 void PanelDir::PreLoad(BinStream &bs) {
     LOAD_REVS(bs);
     ASSERT_REVS(8, 0);
@@ -324,24 +326,6 @@ void PanelDir::SendTransition(Message const &msg, Symbol forward, Symbol back) {
 }
 
 bool PanelDir::PanelNav(JoypadAction act, JoypadButton btn, Symbol controller_type) {
-    UIComponent *comp = mFocusComponent;
-    if (comp) {
-        static Symbol none("none");
-        static Symbol panel_navigated("panel_navigated");
-        static Message panel_navigated_msg(panel_navigated);
-
-        while (comp = ComponentNav(comp, act, btn, controller_type)) {
-            if (comp == mFocusComponent)
-                break;
-            if (comp->GetState() == UIComponent::kDisabled)
-                continue;
-            if (controller_type != none) {
-                TheUI->Handle(panel_navigated_msg, false);
-            }
-            SetFocusComponent(comp, controller_type);
-            return true;
-        }
-    }
     return false;
 }
 

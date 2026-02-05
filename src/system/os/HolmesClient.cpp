@@ -498,7 +498,7 @@ void HolmesClientClose(File *file, int handle) {
     MILO_ASSERT(gHolmesStream, 1012);
 
     // Check if file handle is in pending requests
-    for (auto it = gRequests.begin(); it != gRequests.end(); ++it) {
+    FOREACH (it, gRequests) {
         if (it->mBuffer == file) {
             found = true;
             break;

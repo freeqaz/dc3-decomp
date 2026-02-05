@@ -345,7 +345,7 @@ char const *UIFontImporter::GetMatVariationName(RndFontBase *font) const {
         return "";
     }
 
-    for (auto it = mMatVariations.begin(); it != mMatVariations.end(); ++it) {
+    FOREACH (it, mMatVariations) {
         RndMat *mat = *it;
         if (mat && mat->Type() == type) {
             return FileGetBase(type.Str());

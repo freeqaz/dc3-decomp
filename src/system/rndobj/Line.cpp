@@ -168,7 +168,7 @@ float RndLine::GetDistanceToPlane(const Plane &p, Vector3 &v3) {
     WorldXfm();
     float ret = 0.0f;
     bool first = true;
-    for (auto it = mPoints.begin(); it != mPoints.end(); ++it) {
+    FOREACH (it, mPoints) {
         float t1 = p.a * it->point.x;
         float t2 = p.b * it->point.y;
         float t3 = p.c * it->point.z;

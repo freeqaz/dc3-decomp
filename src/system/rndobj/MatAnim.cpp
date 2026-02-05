@@ -232,7 +232,7 @@ BinStreamRev &operator>>(
     unsigned int length;
     bs >> length;
     keys.resize(length);
-    for (auto it = keys.begin(); it != keys.end(); it++) {
+    FOREACH_POST (it, keys) {
         bs >> *it;
     }
     return bs;

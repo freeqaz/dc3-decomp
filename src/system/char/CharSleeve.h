@@ -1,6 +1,5 @@
 #pragma once
 #include "char/CharPollable.h"
-#include "char/Character.h"
 #include "math/Vec.h"
 #include "obj/Data.h"
 #include "obj/Object.h"
@@ -33,16 +32,15 @@ public:
 
     ObjPtr<RndTransformable> mSleeve; // 0x10
     ObjPtr<RndTransformable> mTopSleeve; // 0x24
-    Vector3 mPos; // 0x38
-    Vector3 mLastPos; // 0x48
-    float mLastDT; // 0x58
+    Vector3 unk38; // 0x38
+    Vector3 unk48; // 0x48
+    float unk58; // 0x58
     float mInertia; // 0x5c
     float mGravity; // 0x60
     float mRange; // 0x64
     float mNegLength; // 0x68
     float mPosLength; // 0x6c
     float mStiffness; // 0x70
-    ObjPtr<Character> mMe; // 0x74
 
 protected:
     CharSleeve();

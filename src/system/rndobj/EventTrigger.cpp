@@ -277,7 +277,7 @@ BEGIN_LOADS(EventTrigger)
         ObjPtrList<RndDrawable> drawList(this);
         d >> drawList;
         mHideDelays.clear();
-        for (auto it = drawList.begin(); it != drawList.end(); ++it) {
+        FOREACH (it, drawList) {
             mHideDelays.push_back();
             mHideDelays.back().mHide = *it;
         }

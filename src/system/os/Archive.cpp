@@ -152,7 +152,7 @@ void Archive::Enumerate(
     bool matches = false;
 
     // Iterate through file entries
-    for (auto it = mFileEntries.begin(); it != mFileEntries.end(); ++it) {
+    FOREACH (it, mFileEntries) {
         const char *curPath = mHashTable[it->HashedPath()];
 
         // If path is different, recheck the directory match

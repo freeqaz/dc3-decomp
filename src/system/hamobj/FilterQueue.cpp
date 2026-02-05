@@ -4,12 +4,10 @@
 #include "os/Debug.h"
 #include "utl/Loader.h"
 
-FilterQueue::FilterQueue() : mJobFinished(0), mLastPollMs(0) {}
-
-FilterQueue::~FilterQueue() {}
+FilterQueue::FilterQueue() : jobFinished(0), lastPollMs(0) {}
 
 bool FilterQueue::GetResults(float &outValue, DetectFrame **frames, float unused) {
-    mJobFinished = false;
+    jobFinished = false;
     std::vector<FilterInputFrame> &qframes = mQueuedJob.frames;
     std::vector<FilterOutputFrame> &oframes = mOutput.frames;
     // Empty branch structure matches original control flow
@@ -61,8 +59,8 @@ void FilterQueue::EnqueueFrame(
     mQueuedJob.frames.push_back(frame);
 }
 
-bool FilterQueue::IsJobFinished() const { return mJobFinished; }
-float FilterQueue::LastPollMs() const { return mLastPollMs; }
+bool FilterQueue::IsJobFinished() const { return jobFinished; }
+float FilterQueue::LastPollMs() const { return lastPollMs; }
 bool FilterQueue::HasJob() const { return !mOutput.frames.empty(); }
 void FilterQueue::CancelJob() { mQueuedJob.frames.clear(); }
 
@@ -74,7 +72,7 @@ void FilterQueue::StartJob() {
         mOutput.frames.clear();
     }
     mOutput.unk0 = mQueuedJob.unk8;
-    mJobFinished = false;
+    jobFinished = false;
     mOutput.unk4 = mQueuedJob.unk4;
     int numQFrames = mQueuedJob.frames.size();
     mOutput.frames.resize(numQFrames);

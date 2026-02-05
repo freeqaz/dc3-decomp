@@ -430,6 +430,8 @@ void UIList::CompleteScroll(UIListState const &state) {
 
 DataNode UIList::OnSetSelected(DataArray *) { return NULL_OBJ; }
 
+INIT_REVS(0x15, 0)
+
 void UIList::PreLoad(BinStream &bs) {
     LOAD_REVS(bs)
     ASSERT_REVS(0x15, 0)

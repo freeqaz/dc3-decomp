@@ -1,6 +1,6 @@
 #include "flow/FlowAnimate.h"
-#include "FlowAnimate.h"
 #include "flow/FlowNode.h"
+#include "obj/Object.h"
 #include "rndobj/Anim.h"
 
 FlowAnimate::FlowAnimate()
@@ -75,17 +75,46 @@ BEGIN_COPYS(FlowAnimate)
     END_COPYING_MEMBERS
 END_COPYS
 
-INIT_REVS(3, 0)
+void FlowAnimate::Load(BinStream &bs) {
+    int revs;
+    bs >> revs;
+    BinStreamRev d(bs, revs);
 
-BEGIN_LOADS(FlowAnimate)
-    LOAD_REVS(bs)
-    ASSERT_REVS(3, 0)
-    LOAD_SUPERCLASS(FlowNode)
+    static const unsigned short gRevs[4] = { 3, 0, 0, 0 };
+    if (d.rev > 3) {
+        MILO_FAIL(
+            "%s can't load new %s version %d > %d",
+            PathName(this),
+            ClassName(),
+            d.rev,
+            gRevs[0]
+        );
+    }
+    if (d.altRev > 0) {
+        MILO_FAIL(
+            "%s can't load new %s alt version %d > %d",
+            PathName(this),
+            ClassName(),
+            d.altRev,
+            gRevs[2]
+        );
+    }
+
+    FlowNode::Load(bs);
+
     if (d.rev < 3) {
-        mAnim = mAnim.LoadFromMainOrDir(d.stream);
-    } else
         mAnim.LoadFromMainOrDir(d.stream);
-END_LOADS
+    }
+
+    d >> mBlend >> mWait >> mDelay;
+    d >> (int&)mStopMode >> mEnable;
+    d >> (int&)mRate >> mStart;
+    d >> mEnd >> mPeriod;
+    d >> mType;
+    d >> mScale >> (int&)mEase >> mEasePower;
+    d >> mWrap;
+    d >> mImmediateRelease;
+}
 
 void FlowAnimate::ResetAnim() {
     if (mAnim && !FlowNode::sPushDrivenProperties) {

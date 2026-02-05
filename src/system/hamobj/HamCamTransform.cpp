@@ -53,9 +53,8 @@ BinStream &operator>>(BinStream &bs, TransformCrowd &c) {
 
 void TransformCrowd::Load(BinStream &bs) {
     bs >> mCrowd;
-    int x;
-    bs >> x;
-    mCrowdRotate = (CrowdRotate)x;
+    BinStreamEnum<CrowdRotate> mEnum(mCrowdRotate);
+    bs >> mEnum;
 }
 
 TransformArea::TransformArea(Hmx::Object *owner)

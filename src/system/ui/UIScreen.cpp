@@ -134,7 +134,7 @@ void UIScreen::Draw() {
         return;
     }
 
-    for (auto it = mPanelList.begin(); it != mPanelList.end(); it++) {
+    FOREACH_POST (it, mPanelList) {
         bool is_active = it->Active();
         bool is_showing = false;
 
@@ -163,7 +163,7 @@ void UIScreen::Enter(UIScreen *from) {
         from->UnloadPanels();
     }
 
-    for (auto it = mPanelList.begin(); it != mPanelList.end(); it++) {
+    FOREACH_POST (it, mPanelList) {
         if (it->Active() && it->mPanel->GetState() == UIPanel::kDown) {
             it->mPanel->Enter();
         }
@@ -300,13 +300,13 @@ bool UIScreen::HasPanel(UIPanel *panel) {
 }
 
 void UIScreen::ReenterScreen() {
-    for (auto it = mPanelList.begin(); it != mPanelList.end(); it++) {
+    FOREACH_POST (it, mPanelList) {
         if (it->Active()) {
             it->mPanel->Exit();
         }
     }
 
-    for (auto it = mPanelList.begin(); it != mPanelList.end(); it++) {
+    FOREACH_POST (it, mPanelList) {
         if (it->Active()) {
             it->mPanel->Enter();
         }
@@ -363,7 +363,7 @@ DataNode UIScreen::ForeachPanel(const DataArray *da) {
     DataNode *var = da->Var(2);
     DataNode tmp = *var;
 
-    for (auto it = mPanelList.begin(); it != mPanelList.end(); it++) {
+    FOREACH_POST (it, mPanelList) {
         if (!it->mActive) {
             continue;
         }

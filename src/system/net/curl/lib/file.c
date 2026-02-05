@@ -310,10 +310,10 @@ static CURLcode file_upload(struct connectdata *conn)
 {
   struct FILEPROTO *file = conn->data->state.proto.file;
   const char *dir = strchr(file->path, DIRSEP);
-  struct SessionHandle *data = conn->data;
-  char *buf = data->state.buffer;
   FILE *fp;
   CURLcode res=CURLE_OK;
+  struct SessionHandle *data = conn->data;
+  char *buf = data->state.buffer;
   size_t nread;
   size_t nwrite;
   curl_off_t bytecount = 0;
@@ -360,7 +360,7 @@ static CURLcode file_upload(struct connectdata *conn)
     return CURLE_WRITE_ERROR;
   }
 
-  if(data->set.infilesize != -1)
+  if(-1 != data->set.infilesize)
     /* known size of data to "upload" */
     Curl_pgrsSetUploadSize(data, data->set.infilesize);
 
@@ -371,7 +371,8 @@ static CURLcode file_upload(struct connectdata *conn)
       failf(data, "Can't get the size of %s", file->path);
       return CURLE_WRITE_ERROR;
     }
-    data->state.resume_from = (curl_off_t)file_stat.st_size;
+    else
+      data->state.resume_from = (curl_off_t)file_stat.st_size;
   }
 
   while(res == CURLE_OK) {
@@ -387,13 +388,13 @@ static CURLcode file_upload(struct connectdata *conn)
 
     /*skip bytes before resume point*/
     if(data->state.resume_from) {
-      if(nread <= (size_t)data->state.resume_from ) {
+      if((curl_off_t)nread <= data->state.resume_from ) {
         data->state.resume_from -= nread;
         nread = 0;
         buf2 = buf;
       }
       else {
-        buf2 = buf + (size_t)data->state.resume_from;
+        buf2 = buf + data->state.resume_from;
         nread -= (size_t)data->state.resume_from;
         data->state.resume_from = 0;
       }
@@ -402,8 +403,8 @@ static CURLcode file_upload(struct connectdata *conn)
       buf2 = buf;
 
     /* write the data to the target */
-    nwrite = fwrite(buf2, 1, (size_t)nread, fp);
-    if((size_t)nwrite != nread) {
+    nwrite = fwrite(buf2, 1, nread, fp);
+    if(nwrite != nread) {
       res = CURLE_SEND_ERROR;
       break;
     }

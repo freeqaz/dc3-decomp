@@ -10,7 +10,6 @@
 class FilterQueue {
 public:
     FilterQueue();
-    ~FilterQueue();
 
     bool GetResults(float &outValue, DetectFrame **frames, float unused);
     void EnqueueNewJob(float outValue, float duration, MoveMode mode);
@@ -55,6 +54,6 @@ private:
 
     QueuedJob mQueuedJob; // 0x0
     Output mOutput; // 0x18
-    bool mJobFinished; // 0x2c
-    float mLastPollMs; // 0x30
+    bool jobFinished; // 0x2c
+    float lastPollMs; // 0x30
 };

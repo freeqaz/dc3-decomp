@@ -210,7 +210,7 @@ void Skeleton::Init() {
         mTrackedJoints[i].unk60.Zero();
     }
     memset(mCamBoneLengths, 0, sizeof(mCamBoneLengths));
-    mCamDisplacements = std::vector<CameraDisplacement>();
+    mCamDisplacements.clear();
 }
 
 bool Skeleton::ProfileMatched() const {

@@ -37,6 +37,11 @@ from scripts.orchestrator.context_collector import (
     extract_key_patterns,
     get_last_attempt,
     get_binary_path,
+    extract_callees_from_objdiff,
+    resolve_signature,
+    resolve_callee_info,
+    get_callee_signatures,
+    format_callee_signatures,
 )
 
 
@@ -695,6 +700,250 @@ class TestContextDictStructure(unittest.TestCase):
         self.assertGreater(len(context["verdict"]), 0)
         self.assertGreater(len(context["key_patterns"]), 0)
         self.assertEqual(len(context["suggestions"]), 2)
+
+
+# =============================================================================
+# Experiment 6: Callee Signatures Tests
+# =============================================================================
+
+class TestCalleeSignatures(unittest.TestCase):
+    """Test callee signature extraction and resolution (Experiment 6)."""
+
+    def test_extract_callees_from_objdiff_basic(self):
+        """Test extracting callees from objdiff JSON with bl instructions."""
+        objdiff_json = {
+            'instructions': [
+                {'target': {'opcode': 'mflr', 'args': 'r12'}},
+                {'target': {'opcode': 'bl', 'args': '__savegprlr_21',
+                            'typed_args': [{'type': 'Symbol', 'value': '__savegprlr_21'}]}},
+                {'target': {'opcode': 'bl', 'args': '?Load@BinStream@@QAAXPAXH@Z',
+                            'typed_args': [{'type': 'Symbol', 'value': '?Load@BinStream@@QAAXPAXH@Z'}]}},
+                {'target': {'opcode': 'stw', 'args': 'r3, 0x10(r1)'}},
+                {'target': {'opcode': 'bl', 'args': '?Fail@Debug@@QAAXPBDPAX@Z',
+                            'typed_args': [{'type': 'Symbol', 'value': '?Fail@Debug@@QAAXPBDPAX@Z'}]}},
+            ]
+        }
+
+        callees = extract_callees_from_objdiff(objdiff_json)
+
+        # Should find 3 bl instructions
+        self.assertEqual(len(callees), 3)
+        self.assertIn('__savegprlr_21', callees)
+        self.assertIn('?Load@BinStream@@QAAXPAXH@Z', callees)
+        self.assertIn('?Fail@Debug@@QAAXPBDPAX@Z', callees)
+
+    def test_extract_callees_from_objdiff_deduplication(self):
+        """Test that duplicate callees are deduplicated, preserving first occurrence."""
+        objdiff_json = {
+            'instructions': [
+                {'target': {'opcode': 'bl', 'args': '?Func@Class@@QAAXXZ',
+                            'typed_args': [{'type': 'Symbol', 'value': '?Func@Class@@QAAXXZ'}]}},
+                {'target': {'opcode': 'bl', 'args': '?Other@Class@@QAAXXZ',
+                            'typed_args': [{'type': 'Symbol', 'value': '?Other@Class@@QAAXXZ'}]}},
+                {'target': {'opcode': 'bl', 'args': '?Func@Class@@QAAXXZ',
+                            'typed_args': [{'type': 'Symbol', 'value': '?Func@Class@@QAAXXZ'}]}},
+            ]
+        }
+
+        callees = extract_callees_from_objdiff(objdiff_json)
+
+        # Should deduplicate
+        self.assertEqual(len(callees), 2)
+        # Order should be preserved (first occurrence)
+        self.assertEqual(callees[0], '?Func@Class@@QAAXXZ')
+        self.assertEqual(callees[1], '?Other@Class@@QAAXXZ')
+
+    def test_extract_callees_from_objdiff_empty(self):
+        """Test extracting callees from objdiff JSON with no bl instructions."""
+        objdiff_json = {
+            'instructions': [
+                {'target': {'opcode': 'mflr', 'args': 'r12'}},
+                {'target': {'opcode': 'stw', 'args': 'r3, 0x10(r1)'}},
+            ]
+        }
+
+        callees = extract_callees_from_objdiff(objdiff_json)
+        self.assertEqual(len(callees), 0)
+
+    def test_extract_callees_fallback_to_args(self):
+        """Test fallback to args string when typed_args is missing."""
+        objdiff_json = {
+            'instructions': [
+                {'target': {'opcode': 'bl', 'args': '?Func@Class@@QAAXXZ'}},
+            ]
+        }
+
+        callees = extract_callees_from_objdiff(objdiff_json)
+        self.assertEqual(len(callees), 1)
+        self.assertEqual(callees[0], '?Func@Class@@QAAXXZ')
+
+    def test_resolve_signature_msvc_method(self):
+        """Test resolving a standard MSVC method symbol."""
+        # Use a symbol that won't be in the database
+        sig = resolve_signature('?TestMethod@TestClass@@QAAXXZ', '/nonexistent')
+        self.assertEqual(sig, 'TestClass::TestMethod')
+
+    def test_resolve_signature_msvc_constructor(self):
+        """Test resolving a constructor symbol."""
+        sig = resolve_signature('??0TestClass@@QAA@XZ', '/nonexistent')
+        self.assertEqual(sig, 'TestClass::TestClass')
+
+    def test_resolve_signature_msvc_destructor(self):
+        """Test resolving a destructor symbol."""
+        sig = resolve_signature('??1TestClass@@UAA@XZ', '/nonexistent')
+        self.assertEqual(sig, 'TestClass::~TestClass')
+
+    def test_resolve_signature_free_function(self):
+        """Test resolving a free function (no class)."""
+        sig = resolve_signature('?GlobalFunc@@YAXXZ', '/nonexistent')
+        self.assertEqual(sig, 'GlobalFunc')
+
+    def test_resolve_signature_intrinsic_skipped(self):
+        """Test that compiler intrinsics are skipped."""
+        sig = resolve_signature('__savegprlr_21', '/nonexistent')
+        self.assertIsNone(sig)
+
+    def test_get_callee_signatures_no_objdiff(self):
+        """Test get_callee_signatures when objdiff JSON is not available."""
+        result = get_callee_signatures('test_symbol', None, '.')
+
+        self.assertEqual(result['count'], 0)
+        self.assertEqual(result['summary'], '(objdiff data not available)')
+        self.assertEqual(result['signatures'], [])
+
+    def test_get_callee_signatures_no_callees(self):
+        """Test get_callee_signatures when no bl instructions found."""
+        objdiff_json = {
+            'instructions': [
+                {'target': {'opcode': 'stw', 'args': 'r3, 0x10(r1)'}},
+            ]
+        }
+
+        result = get_callee_signatures('test_symbol', objdiff_json, '.')
+
+        self.assertEqual(result['count'], 0)
+        self.assertEqual(result['summary'], '(no callees found)')
+
+    def test_get_callee_signatures_with_callees(self):
+        """Test get_callee_signatures with resolvable callees."""
+        objdiff_json = {
+            'instructions': [
+                {'target': {'opcode': 'bl', 'args': '?Load@BinStream@@QAAXPAXH@Z',
+                            'typed_args': [{'type': 'Symbol', 'value': '?Load@BinStream@@QAAXPAXH@Z'}]}},
+                {'target': {'opcode': 'bl', 'args': '?Fail@Debug@@QAAXPBDPAX@Z',
+                            'typed_args': [{'type': 'Symbol', 'value': '?Fail@Debug@@QAAXPBDPAX@Z'}]}},
+                # This should be skipped (intrinsic)
+                {'target': {'opcode': 'bl', 'args': '__savegprlr_21',
+                            'typed_args': [{'type': 'Symbol', 'value': '__savegprlr_21'}]}},
+            ]
+        }
+
+        result = get_callee_signatures('test_symbol', objdiff_json, '/nonexistent')
+
+        self.assertEqual(result['count'], 2)
+        self.assertIn('Found 2 callee signatures', result['summary'])
+        # Verify signatures are resolved
+        sigs = [s['signature'] for s in result['signatures']]
+        self.assertIn('BinStream::Load', sigs)
+        self.assertIn('Debug::Fail', sigs)
+
+    def test_format_callee_signatures_empty(self):
+        """Test formatting when no callees found."""
+        sig_data = {
+            'count': 0,
+            'signatures': [],
+            'summary': '(no callees found)'
+        }
+
+        result = format_callee_signatures(sig_data)
+        self.assertEqual(result, '(no callees found)')
+
+    def test_format_callee_signatures_with_data(self):
+        """Test formatting callee signatures for prompt injection."""
+        sig_data = {
+            'count': 2,
+            'implemented_count': 0,
+            'signatures': [
+                {'symbol': '?Load@BinStream@@QAAXPAXH@Z', 'signature': 'BinStream::Load'},
+                {'symbol': '?Fail@Debug@@QAAXPBDPAX@Z', 'signature': 'Debug::Fail'},
+            ],
+            'summary': 'Found 2 callee signatures'
+        }
+
+        result = format_callee_signatures(sig_data)
+
+        self.assertIn('## Called Function Signatures', result)
+        self.assertIn('Found 2 callees with resolved signatures', result)
+        self.assertIn('`BinStream::Load`', result)
+        self.assertIn('`Debug::Fail`', result)
+        self.assertIn('**Tip**:', result)
+
+    def test_format_callee_signatures_with_source_locations(self):
+        """Test formatting callee signatures including source locations."""
+        sig_data = {
+            'count': 3,
+            'implemented_count': 2,
+            'signatures': [
+                {
+                    'symbol': '?Load@CharTest@@QAAXH@Z',
+                    'signature': 'CharTest::Load',
+                    'match_percent': 100.0,
+                    'source_location': 'src/system/char/CharTest.cpp:42',
+                },
+                {
+                    'symbol': '?Save@CharTest@@QAAXH@Z',
+                    'signature': 'CharTest::Save',
+                    'match_percent': 100.0,
+                    'source_location': 'src/system/char/CharTest.cpp:58',
+                },
+                {
+                    'symbol': '?Other@CharTest@@QAAXH@Z',
+                    'signature': 'CharTest::Other',
+                    'match_percent': 85.5,
+                },
+            ],
+            'summary': 'Found 3 callee signatures (2 with source locations)'
+        }
+
+        result = format_callee_signatures(sig_data)
+
+        self.assertIn('## Called Function Signatures', result)
+        self.assertIn('2 with 100% match and source location', result)
+        self.assertIn('`CharTest::Load` — **100%** at `src/system/char/CharTest.cpp:42`', result)
+        self.assertIn('`CharTest::Save` — **100%** at `src/system/char/CharTest.cpp:58`', result)
+        self.assertIn('`CharTest::Other` — 86%', result)  # Rounded
+        self.assertIn('fully implemented', result)
+
+    def test_resolve_callee_info_returns_dict(self):
+        """Test that resolve_callee_info returns proper dict structure."""
+        info = resolve_callee_info('?TestMethod@TestClass@@QAAXXZ', '/nonexistent')
+
+        self.assertIsInstance(info, dict)
+        self.assertIn('signature', info)
+        self.assertIn('match_percent', info)
+        self.assertIn('source_location', info)
+        self.assertEqual(info['signature'], 'TestClass::TestMethod')
+        self.assertIsNone(info['match_percent'])  # Not in database
+        self.assertIsNone(info['source_location'])  # Not 100%
+
+    def test_resolve_callee_info_intrinsic_returns_none(self):
+        """Test that compiler intrinsics return None."""
+        info = resolve_callee_info('__savegprlr_21', '/nonexistent')
+        self.assertIsNone(info)
+
+    def test_get_callee_signatures_includes_implemented_count(self):
+        """Test that get_callee_signatures tracks implemented functions."""
+        objdiff_json = {
+            'instructions': [
+                {'target': {'opcode': 'bl', 'args': '?Func@Class@@QAAXXZ',
+                            'typed_args': [{'type': 'Symbol', 'value': '?Func@Class@@QAAXXZ'}]}},
+            ]
+        }
+
+        result = get_callee_signatures('test_symbol', objdiff_json, '/nonexistent')
+
+        self.assertIn('implemented_count', result)
+        self.assertIsInstance(result['implemented_count'], int)
 
 
 # =============================================================================

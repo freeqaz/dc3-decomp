@@ -78,9 +78,11 @@ from orchestrator.database import (
     unlock_function,
     query_file_pairs,
     get_file_pairs_stats,
+    get_rb3_ref_stats,
 )
 from orchestrator.rb3_pairing import (
     sync_file_pairs,
+    sync_rb3_refs,
     DEFAULT_RB3_PATH,
     DEFAULT_DC3_REPORT,
 )
@@ -310,6 +312,9 @@ def cmd_batch(args):
     reachable_only = getattr(args, 'reachable_only', False)
     min_priority = getattr(args, 'min_priority', 0)
 
+    # Convert max_attempts=0 to None (disable limit)
+    max_attempts = args.max_attempts if args.max_attempts > 0 else None
+
     if strategy == "priority":
         # Use Phase 2 scoring infrastructure
         targets = query_functions_by_priority(
@@ -319,6 +324,7 @@ def cmd_batch(args):
             reachable_only=reachable_only,
             limit=args.limit if args.limit > 0 else 1000,
             db_path=args.db,
+            max_attempts=max_attempts,
         )
         if not targets:
             print("No functions found matching priority criteria.")
@@ -333,6 +339,7 @@ def cmd_batch(args):
             reachable_only=reachable_only,
             limit=args.limit if args.limit > 0 else 100,
             db_path=args.db,
+            max_attempts=max_attempts,
         )
         if not targets:
             print("No functions found in near-complete units.")
@@ -662,6 +669,9 @@ def cmd_targets(args):
         print("Run: python3 docs/meta-strategy/scripts/compute_scores.py")
         return
 
+    # Convert max_attempts=0 to None (disable limit)
+    max_attempts = args.max_attempts if args.max_attempts > 0 else None
+
     if args.json:
         # JSON output
         if args.strategy == "priority":
@@ -672,12 +682,14 @@ def cmd_targets(args):
                 reachable_only=args.reachable_only,
                 limit=args.limit,
                 db_path=args.db,
+                max_attempts=max_attempts,
             )
         else:  # unit-completion
             targets = query_functions_for_unit_completion(
                 reachable_only=args.reachable_only,
                 limit=args.limit,
                 db_path=args.db,
+                max_attempts=max_attempts,
             )
         print(json.dumps(targets, indent=2, default=str))
         return
@@ -702,7 +714,7 @@ def cmd_targets(args):
 
     # Get targets based on strategy
     if args.strategy == "priority":
-        print(f"Strategy: PRIORITY (min={args.min_priority}, reachable_only={args.reachable_only})")
+        print(f"Strategy: PRIORITY (min={args.min_priority}, reachable_only={args.reachable_only}, max_attempts={max_attempts or 'unlimited'})")
         targets = query_functions_by_priority(
             min_priority=args.min_priority,
             min_percent=args.min_percent,
@@ -710,13 +722,15 @@ def cmd_targets(args):
             reachable_only=args.reachable_only,
             limit=args.limit,
             db_path=args.db,
+            max_attempts=max_attempts,
         )
     else:  # unit-completion
-        print(f"Strategy: UNIT-COMPLETION (reachable_only={args.reachable_only})")
+        print(f"Strategy: UNIT-COMPLETION (reachable_only={args.reachable_only}, max_attempts={max_attempts or 'unlimited'})")
         targets = query_functions_for_unit_completion(
             reachable_only=args.reachable_only,
             limit=args.limit,
             db_path=args.db,
+            max_attempts=max_attempts,
         )
 
     if not targets:
@@ -959,6 +973,39 @@ def cmd_rb3_query(args):
             print(f"    RB3:    {pair['rb3_file']}")
         print(f"    Compat: {compat_str} ({overlap}/{dc3_count} functions)")
         print()
+
+
+def cmd_rb3_refs(args):
+    """Populate has_rb3_ref from RB3 file pairings."""
+    if not args.quiet:
+        print("Syncing has_rb3_ref from RB3 pairings...")
+
+    results = sync_rb3_refs(
+        db_path=args.db,
+        verbose=_verbosity(args) >= 2,
+    )
+
+    if args.json:
+        # Include stats in JSON output
+        stats = get_rb3_ref_stats(db_path=args.db)
+        results["stats"] = stats
+        print(json.dumps(results, indent=2))
+    else:
+        # Get final stats
+        stats = get_rb3_ref_stats(db_path=args.db)
+
+        print()
+        print(f"{'='*60}")
+        print("RB3 Reference Sync Complete")
+        print(f"{'='*60}")
+        print(f"  Units processed:     {results['units_processed']}")
+        print(f"  Functions updated:   {results['updated']}")
+        print()
+        print(f"Summary:")
+        print(f"  Total functions:     {stats['total_functions']}")
+        print(f"  With RB3 reference:  {stats['with_rb3_ref']}")
+        print(f"  Without reference:   {stats['without_rb3_ref']}")
+        print(f"  Coverage:            {stats['coverage_pct']:.1f}%")
 
 
 def cmd_rb3_merge(args):
@@ -1351,6 +1398,12 @@ def main():
         default=0,
         help="Minimum function size in bytes (default: 0, no minimum). Useful to skip tiny stubs"
     )
+    p_batch.add_argument(
+        "--max-attempts",
+        type=int,
+        default=20,
+        help="Skip functions with >= this many attempts (default: 20). Use 0 to disable limit."
+    )
     # Model choices generated dynamically from registry (supports all backends)
     p_batch.add_argument("--model", choices=available_models, help="Force all agents to use this model")
     p_batch.add_argument("--limit", type=int, default=0, help="Max functions to process (0=unlimited)")
@@ -1536,6 +1589,12 @@ def main():
         default=20,
         help="Maximum targets to show (default: 20)"
     )
+    p_targets.add_argument(
+        "--max-attempts",
+        type=int,
+        default=20,
+        help="Skip functions with >= this many attempts (default: 20). Use 0 to disable limit."
+    )
     p_targets.add_argument("--json", action="store_true", help="Output as JSON")
 
     # sync
@@ -1604,6 +1663,17 @@ def main():
     p_rb3_query.add_argument("--pattern", default="*", help="Glob pattern for DC3 unit paths (default: all)")
     p_rb3_query.add_argument("--limit", type=int, default=50, help="Max results (default: 50)")
     p_rb3_query.add_argument("--json", action="store_true", help="Output as JSON")
+
+    # rb3-refs
+    p_rb3_refs = subparsers.add_parser(
+        "rb3-refs",
+        help="Populate has_rb3_ref from RB3 file pairings",
+        description="Scan matched file pairs and mark individual functions as having RB3 references based on function-level name matching.",
+        epilog="Examples:\n  ./bin/orchestrate rb3-refs\n  ./bin/orchestrate rb3-refs --verbose"
+    )
+    p_rb3_refs.add_argument("--quiet", "-q", action="store_true", help="Suppress output")
+    p_rb3_refs.add_argument("--verbose", "-v", action="store_true", help="Show detailed progress")
+    p_rb3_refs.add_argument("--json", action="store_true", help="Output as JSON")
 
     # rb3-merge
     p_rb3_merge = subparsers.add_parser(
@@ -1720,6 +1790,7 @@ def main():
         "analyze-models": cmd_analyze_models,
         "rb3-sync": cmd_rb3_sync,
         "rb3-query": cmd_rb3_query,
+        "rb3-refs": cmd_rb3_refs,
         "rb3-merge": cmd_rb3_merge,
         "patch-refresh": cmd_patch_refresh,
     }

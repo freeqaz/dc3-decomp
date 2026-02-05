@@ -130,6 +130,8 @@ BEGIN_SAVES(UILabel)
     }
 END_SAVES
 
+INIT_REVS(0x18, 0)
+
 void UILabel::PreLoad(BinStream &bs) {
     LOAD_REVS(bs)
     ASSERT_REVS(0x18, 0)

@@ -74,11 +74,10 @@ void CharClipSet::PostSave(BinStream &bs) {
     if (mPreviewChar) {
         mPreviewChar->SetName("preview_character", this);
         mPreviewChar->Enter();
-        Hmx::Object *obj = ObjectDir::Main()->FindObject("milo", false, true);
-        if (obj)
-            obj->Handle(Message("update_objects"), true);
     }
 }
+
+INIT_REVS(0x18, 0)
 
 void CharClipSet::PreLoad(BinStream &bs) {
     LOAD_REVS(bs);

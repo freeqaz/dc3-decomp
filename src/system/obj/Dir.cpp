@@ -473,7 +473,7 @@ bool ObjectDir::HasDirPtrs() const {
     if (sDeleting == this) {
         return true;
     } else {
-        for (ObjRef::iterator it = mRefs.begin(); it != mRefs.end(); ++it) {
+        FOREACH (it, mRefs) {
             if (it->IsDirPtr())
                 return true;
         }
@@ -907,6 +907,8 @@ FilePath ObjectDir::GetSubDirPath(const FilePath &fp, const BinStream &bs) {
     }
     return ret;
 }
+
+INIT_REVS(0x1C, 0)
 
 void ObjectDir::PreLoad(BinStream &bs) {
     LOAD_REVS(bs)

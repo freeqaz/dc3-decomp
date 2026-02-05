@@ -1885,38 +1885,298 @@ def format_matched_siblings(sibling_data: Dict[str, Any]) -> str:
 # =============================================================================
 # Experiment 6: Callee Signatures
 # =============================================================================
-# Pre-resolved callee signatures to reduce lookup turns.
-# NOTE: This is the lowest priority experiment and has highest implementation complexity.
-# Implementation is a stub - full implementation would require:
-# 1. Parsing xrefs from Ghidra or objdiff output
-# 2. Looking up signatures from headers
-# 3. Significant token cost management
+# Pre-resolved callee signatures to reduce agent lookup turns.
+# Extracts callees from objdiff JSON (bl instructions) and resolves signatures.
+
+# Limits for callee signature resolution
+MAX_CALLEE_SIGNATURES = 10
+MAX_SIGNATURE_CHARS = 200
+
+
+def extract_callees_from_objdiff(objdiff_json: Dict[str, Any]) -> List[str]:
+    """
+    Extract called function symbols from objdiff JSON output.
+
+    Parses the instructions array looking for 'bl' (branch-link) opcodes
+    which represent function calls on PowerPC.
+
+    Args:
+        objdiff_json: Parsed objdiff JSON output with --include-instructions
+
+    Returns:
+        List of callee symbols (deduplicated, preserving first occurrence order)
+    """
+    callees = []
+    instructions = objdiff_json.get("instructions", [])
+
+    for instr in instructions:
+        target = instr.get("target", {})
+        opcode = target.get("opcode", "")
+
+        # bl = branch and link (function call)
+        if opcode == "bl":
+            # Get symbol from typed_args (preferred) or args
+            typed_args = target.get("typed_args", [])
+            if typed_args and typed_args[0].get("type") == "Symbol":
+                symbol = typed_args[0].get("value", "")
+                if symbol:
+                    callees.append(symbol)
+            else:
+                # Fallback to args string
+                args = target.get("args", "")
+                if args and (args.startswith("?") or args.startswith("_")):
+                    callees.append(args)
+
+    # Deduplicate while preserving order
+    seen = set()
+    result = []
+    for c in callees:
+        if c not in seen:
+            seen.add(c)
+            result.append(c)
+    return result
+
+
+def _find_function_line_number(
+    class_name: Optional[str],
+    method_name: str,
+    source_path: Path,
+) -> Optional[int]:
+    """
+    Find the line number where a function is defined in a source file.
+
+    Args:
+        class_name: Class name (or None for free functions)
+        method_name: Method/function name
+        source_path: Path to the source file
+
+    Returns:
+        Line number (1-indexed) or None if not found
+    """
+    if not source_path.exists():
+        return None
+
+    try:
+        content = source_path.read_text()
+        lines = content.split('\n')
+
+        # Build patterns to search for
+        patterns = []
+        if class_name:
+            # Standard method definition: ClassName::MethodName(
+            patterns.append(f"{class_name}::{method_name}(")
+            # Nested class: OuterClass::InnerClass::MethodName(
+            patterns.append(f"::{class_name}::{method_name}(")
+        else:
+            # Free function: just the name with opening paren
+            patterns.append(f" {method_name}(")
+            patterns.append(f"\n{method_name}(")
+
+        for i, line in enumerate(lines, 1):
+            for pattern in patterns:
+                if pattern in line:
+                    # Verify it looks like a function definition (not a call)
+                    # Definition typically has return type before or is at line start
+                    stripped = line.strip()
+                    if not stripped.startswith("//") and not stripped.startswith("/*"):
+                        return i
+
+        return None
+    except Exception:
+        return None
+
+
+def resolve_callee_info(symbol: str, project_dir: str) -> Optional[Dict[str, Any]]:
+    """
+    Resolve a mangled symbol to detailed callee information.
+
+    Returns signature, match percentage, and source location (if implemented).
+
+    Args:
+        symbol: Mangled function symbol
+        project_dir: Project directory containing decomp.db and src/
+
+    Returns:
+        Dict with:
+        - signature: Demangled signature string
+        - match_percent: Current match percentage (or None)
+        - source_location: "path/file.cpp:line" (or None if not found/not 100%)
+        Or None if resolution failed entirely
+    """
+    # Skip runtime/compiler intrinsics (not useful for decomp context)
+    if symbol.startswith("__") and not symbol.startswith("__Z"):
+        return None
+
+    result = {
+        "signature": None,
+        "match_percent": None,
+        "source_location": None,
+    }
+
+    # Parse the symbol for class/method names (needed for line search)
+    class_name, method_name = parse_msvc_symbol(symbol)
+
+    # Try database lookup for demangled name, unit, and match percent
+    db_path = Path(project_dir) / "decomp.db"
+    unit = None
+    if db_path.exists():
+        try:
+            import sqlite3
+            conn = sqlite3.connect(str(db_path))
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                "SELECT demangled, unit, current_percent FROM functions WHERE symbol = ?",
+                (symbol,)
+            ).fetchone()
+            conn.close()
+
+            if row:
+                demangled = row["demangled"]
+                if demangled and demangled != symbol and not demangled.startswith("?"):
+                    result["signature"] = demangled
+
+                result["match_percent"] = row["current_percent"]
+                unit = row["unit"]
+        except Exception:
+            pass
+
+    # If no signature yet, try c++filt
+    if not result["signature"]:
+        try:
+            proc_result = subprocess.run(
+                ["c++filt", "-n", symbol],
+                capture_output=True,
+                text=True,
+                timeout=1,
+            )
+            if proc_result.returncode == 0:
+                demangled = proc_result.stdout.strip()
+                if demangled and demangled != symbol:
+                    result["signature"] = demangled
+        except Exception:
+            pass
+
+    # If still no signature, use parse_msvc_symbol
+    if not result["signature"] and method_name:
+        if class_name:
+            result["signature"] = f"{class_name}::{method_name}"
+        else:
+            result["signature"] = method_name
+
+    # If we have no signature at all, return None
+    if not result["signature"]:
+        return None
+
+    # Try to find source location for 100% matched functions
+    if result["match_percent"] == 100.0 and unit and method_name:
+        # Convert unit path to source file path
+        # unit is like "default/system/char/CharMirror" -> "src/system/char/CharMirror.cpp"
+        unit_path = unit
+        if unit_path.startswith("default/"):
+            unit_path = unit_path[8:]  # Remove "default/" prefix
+
+        source_path = Path(project_dir) / "src" / f"{unit_path}.cpp"
+        line_num = _find_function_line_number(class_name, method_name, source_path)
+
+        if line_num:
+            # Use relative path for cleaner output
+            rel_path = f"src/{unit_path}.cpp"
+            result["source_location"] = f"{rel_path}:{line_num}"
+
+    return result
+
+
+def resolve_signature(symbol: str, project_dir: str) -> Optional[str]:
+    """
+    Resolve a mangled symbol to its demangled signature.
+
+    Uses tiered lookup:
+    1. Database demangled column (fast, pre-computed)
+    2. c++filt subprocess (full MSVC demangling)
+    3. Fallback to Class::Method from parse_msvc_symbol
+
+    Args:
+        symbol: Mangled function symbol
+        project_dir: Project directory containing decomp.db
+
+    Returns:
+        Demangled signature string, or None if resolution failed
+    """
+    info = resolve_callee_info(symbol, project_dir)
+    return info["signature"] if info else None
+
 
 def get_callee_signatures(
     symbol: str,
-    xrefs_path: Optional[str] = None,
+    objdiff_json: Optional[Dict[str, Any]] = None,
+    project_dir: str = "",
 ) -> Dict[str, Any]:
     """
     Get signatures of functions called by this function (Experiment 6).
 
-    This is a stub implementation - full implementation would require
-    parsing cross-references and header signatures.
+    Extracts callees from objdiff JSON and resolves their signatures
+    to reduce agent lookup iterations during decompilation.
 
     Args:
-        symbol: Function symbol
-        xrefs_path: Optional path to xrefs file
+        symbol: Function symbol (for logging)
+        objdiff_json: Parsed objdiff JSON with --include-instructions
+        project_dir: Project directory for database lookup
 
     Returns:
-        Dict with signature information
+        Dict with:
+        - count: Number of resolved signatures
+        - signatures: List of {symbol, signature} dicts
+        - summary: Human-readable summary
     """
-    # Stub implementation - indicates experiment is defined but not fully implemented
-    return {
-        "count": 0,
-        "signatures": [],
-        "summary": "(callee signature lookup not fully implemented)",
-        "note": "This experiment requires cross-reference parsing which is complex to implement. "
-                "Prioritize experiments 1-5 first.",
-    }
+    result = {"count": 0, "signatures": [], "summary": "(no callees found)"}
+
+    if not objdiff_json:
+        result["summary"] = "(objdiff data not available)"
+        return result
+
+    callees = extract_callees_from_objdiff(objdiff_json)
+    if not callees:
+        return result
+
+    # Limit to avoid token bloat
+    callees = callees[:MAX_CALLEE_SIGNATURES]
+    signatures = []
+    implemented_count = 0
+
+    for callee_symbol in callees:
+        info = resolve_callee_info(callee_symbol, project_dir)
+        if info and info["signature"]:
+            sig = info["signature"]
+            # Truncate very long signatures
+            if len(sig) > MAX_SIGNATURE_CHARS:
+                sig = sig[:MAX_SIGNATURE_CHARS] + "..."
+
+            entry = {
+                "symbol": callee_symbol,
+                "signature": sig,
+            }
+
+            # Include match percent and source location if available
+            if info["match_percent"] is not None:
+                entry["match_percent"] = info["match_percent"]
+                if info["match_percent"] == 100.0:
+                    implemented_count += 1
+
+            if info["source_location"]:
+                entry["source_location"] = info["source_location"]
+
+            signatures.append(entry)
+
+    result["count"] = len(signatures)
+    result["signatures"] = signatures
+    result["implemented_count"] = implemented_count
+    if signatures:
+        if implemented_count > 0:
+            result["summary"] = f"Found {len(signatures)} callee signatures ({implemented_count} with source locations)"
+        else:
+            result["summary"] = f"Found {len(signatures)} callee signatures"
+
+    return result
 
 
 def format_callee_signatures(sig_data: Dict[str, Any]) -> str:
@@ -1932,15 +2192,37 @@ def format_callee_signatures(sig_data: Dict[str, Any]) -> str:
     if sig_data["count"] == 0:
         return sig_data["summary"]
 
+    implemented_count = sig_data.get("implemented_count", 0)
     lines = [
         "## Called Function Signatures",
         "",
-        f"**Found {sig_data['count']} callees with signatures.**",
-        "",
     ]
 
-    for sig in sig_data["signatures"]:
-        lines.append(f"- `{sig['signature']}`")
+    if implemented_count > 0:
+        lines.append(f"**Found {sig_data['count']} callees ({implemented_count} with 100% match and source location).**")
+    else:
+        lines.append(f"**Found {sig_data['count']} callees with resolved signatures.**")
+    lines.append("")
+
+    for item in sig_data["signatures"]:
+        sig = item["signature"]
+        source_loc = item.get("source_location")
+        match_pct = item.get("match_percent")
+
+        if source_loc:
+            # 100% match with source location - most useful for agent
+            lines.append(f"- `{sig}` — **100%** at `{source_loc}`")
+        elif match_pct is not None:
+            # Known match percentage but no source location
+            lines.append(f"- `{sig}` — {match_pct:.0f}%")
+        else:
+            # Unknown/not in database
+            lines.append(f"- `{sig}`")
+
+    lines.extend([
+        "",
+        "**Tip**: Functions with source locations are fully implemented — read them for reference patterns.",
+    ])
 
     return "\n".join(lines)
 
@@ -2546,14 +2828,31 @@ def collect_pre_run_context(
         elif not class_name:
             log.debug("Matched siblings: could not determine class name")
 
-    # Experiment 6: Callee Signatures (stub implementation)
+    # Experiment 6: Callee Signatures
     if enrichment_flags.get("callee_signatures"):
-        log.info("Getting callee signatures (Experiment 6 - stub)...")
+        log.info("Getting callee signatures (Experiment 6)...")
         try:
-            sig_data = get_callee_signatures(symbol)
+            # Load objdiff JSON from the file we wrote earlier
+            objdiff_json = None
+            objdiff_file = result.get("objdiff_file_absolute")
+            if objdiff_file:
+                objdiff_path = Path(objdiff_file)
+                if objdiff_path.exists():
+                    content = objdiff_path.read_text()
+                    # objdiff outputs build messages before JSON, find the JSON line
+                    for line in content.split("\n"):
+                        line = line.strip()
+                        if line.startswith("{"):
+                            try:
+                                objdiff_json = json.loads(line)
+                                break
+                            except json.JSONDecodeError:
+                                continue
+
+            sig_data = get_callee_signatures(symbol, objdiff_json, project_dir)
             result["callee_signatures"] = sig_data
             result["callee_signatures_summary"] = format_callee_signatures(sig_data)
-            log.debug(f"Callee signatures: {sig_data['summary']}")
+            log.info(f"Callee signatures: {sig_data['summary']}")
         except Exception as e:
             log.warning(f"Failed to get callee signatures: {e}")
             result["callee_signatures_summary"] = f"(error: {e})"

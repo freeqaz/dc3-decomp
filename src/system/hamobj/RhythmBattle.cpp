@@ -301,12 +301,13 @@ void RhythmBattle::OnReset() {
 
     unkfc = false;
     unkfd = false;
+    int beat = TheTaskMgr.Beat();
     unk128 = 0;
     unk124 = -1;
     unkfe = false;
     unk120 = 0.0f;
     unkff = false;
-    unk144 = TheTaskMgr.Beat();
+    unk144 = beat;
     unk100 = false;
     unk101 = false;
     unk148 = 0;
@@ -331,14 +332,85 @@ void RhythmBattle::OnReset() {
 
     const DataNode *gameplay_node = TheHamProvider->Property(gameplay_mode, true);
     Symbol gameplay_sym = gameplay_node->Sym();
-    if (TheHamDirector && unk11c == 0
-        && TheHamDirector->SongAnimByDifficulty(kDifficultyEasy)) {
+
+    if (TheHamDirector && unk11c == 0) {
+        RndPropAnim *song_anim = TheHamDirector->SongAnimByDifficulty(kDifficultyEasy);
+        if (song_anim) {
+            WorldDir *venue_world = TheHamDirector->GetVenueWorld();
+            Symbol move_sym("move");
+            unk11c = song_anim->GetNumKeys(venue_world, move_sym);
+        }
     }
 
-    static Symbol finale_intro_01("finale_intro_01");
-    static Symbol finale_intro_02("finale_intro_02");
-    QueueFinaleVO(finale_intro_01);
-    QueueFinaleVO(finale_intro_02);
+    if (gameplay_sym == mind_control || mFinale != 0) {
+        float num_keys = (float)unk11c;
+        if (num_keys >= 1.0f) {
+            unk104 = 0.0f;
+            unk108 = (num_keys - 2.0f) * 4.0f;
+        }
+    }
+
+    if (gameplay_sym == mind_control) {
+        TheMaster->GetAudio()->SetLoop(32.0f, 128.0f);
+    }
+
+    if (mFinale) {
+        if (!unk150.empty()) {
+            unk150.erase(unk150.begin());
+        }
+
+        static Symbol finale_intro_01("finale_intro_01");
+        static Symbol finale_intro_02("finale_intro_02");
+        QueueFinaleVO(finale_intro_01);
+        QueueFinaleVO(finale_intro_02);
+
+        ObjectDir *obj_dir =
+            dynamic_cast<ObjectDir *>(DataVariable("hud_panel").GetObj());
+        if (obj_dir) {
+            RndDir *score_right = obj_dir->Find<RndDir>("score_right", true);
+            if (score_right) {
+                score_right->SetShowing(false);
+            }
+            RndDir *score_left = obj_dir->Find<RndDir>("score_left", true);
+            if (score_left) {
+                score_left->SetShowing(false);
+            }
+        }
+
+        WorldDir *venue_world = TheHamDirector->GetVenueWorld();
+        RndAnimatable *set_bid = venue_world->Find<RndAnimatable>("set_bid.anim", true);
+        if (set_bid) {
+            set_bid->Animate(0.0f, false, 0.0f, NULL, kEaseLinear, 0.0f, false);
+        }
+    } else {
+        ObjectDir *player_dir = NULL;
+        if (mPlayerOne && mPlayerOne->mTextFeedback) {
+            player_dir = mPlayerOne->mTextFeedback;
+        }
+
+        HamLabel *intro_line_obj = NULL;
+        if (player_dir) {
+            intro_line_obj = player_dir->Find<HamLabel>("intro_line1.lbl", false);
+        }
+
+        if (intro_line_obj) {
+            unk1c = intro_line_obj;
+        }
+
+        static Symbol rhythm_battle_title("rhythm_battle_title");
+        if (mPlayerOne) {
+            ObjectDir *feedback = mPlayerOne->mTextFeedback;
+            if (feedback) {
+                feedback->HandleType(Message(rhythm_battle_title));
+            }
+        }
+        if (mPlayerTwo) {
+            ObjectDir *feedback = mPlayerTwo->mTextFeedback;
+            if (feedback) {
+                feedback->HandleType(Message(gNullStr));
+            }
+        }
+    }
 }
 
 void RhythmBattle::PlayMindControlVO(Symbol s) {
@@ -412,83 +484,96 @@ void RhythmBattle::UpdateMindControl() {
     static Symbol gameplay_mode("gameplay_mode");
     static Symbol game_stage("game_stage");
     static Symbol playing("playing");
-    static Symbol grooving("grooving");
-    static Symbol not_grooving("not_grooving");
 
     // Get gameplay mode and game stage
-    const DataNode *gameplayNode = TheHamProvider->Property(gameplay_mode, true);
-    Symbol gameplaySym = gameplayNode->Sym();
+    Symbol gameplaySym = TheHamProvider->Property(gameplay_mode, true)->Sym();
+    Symbol stageSym = TheHamProvider->Property(game_stage, true)->Sym();
 
-    const DataNode *stageNode = TheHamProvider->Property(game_stage, true);
-    Symbol stageSym = stageNode->Sym();
-
-    // Check if mind control and playing
-    if (gameplaySym == mind_control && stageSym == playing) {
-        // Set player active states for mind control mode
-        if (mPlayerOne) {
-            mPlayerOne->SetActive(true);
-        }
-        if (mPlayerTwo) {
-            mPlayerTwo->SetActive(true);
-        }
-
-        // Character animation management
-        HamCharacter *character = nullptr;
-        for (int i = 0; i < 2; i++) {
-            character = TheHamDirector->GetCharacter(i);
-            if (!character)
-                continue;
-
-            RndAnimatable *animMC =
-                character->Find<RndAnimatable>("mind_control.anim", false);
-            RndAnimatable *animSound =
-                character->Find<RndAnimatable>("mind_control_sound.anim", false);
-
-            // Calculate animation parameters
-            float timeSeconds = TheTaskMgr.UISeconds();
-            float phase = sin(timeSeconds * (2.0f * 3.14159265f)) * (0.2f - 0.2f) + 0.2f;
-            float beatVal = phase * unk110;
-
-            if (animMC) {
-                animMC->Animate(
-                    0.0f,
-                    animMC->EndFrame(),
-                    animMC->Units(),
-                    beatVal,
-                    0,
-                    0,
-                    kEaseLinear,
-                    0,
-                    0
-                );
-            }
-            if (animSound) {
-                animSound->Animate(
-                    0.0f,
-                    animSound->EndFrame(),
-                    animSound->Units(),
-                    unk10c,
-                    0,
-                    0,
-                    kEaseLinear,
-                    0,
-                    0
-                );
-            }
-        }
-
-        // Check grooving status
-        float beatMC = unk10c;
-        if (beatMC > 0.5f && beatMC <= 0.9333f) {
-            PlayMindControlVO(grooving);
-        } else if (beatMC <= 0.2f && beatMC > 0.0f) {
-            PlayMindControlVO(not_grooving);
-        }
-
-        // Update beat counter
-        float deltaSecs = TheTaskMgr.DeltaSeconds();
-        unk110 += deltaSecs;
+    // Early-out: must be in mind_control mode
+    if (gameplaySym != mind_control) {
+        return;
     }
+
+    // Set player active states for mind control mode
+    if (mPlayerOne) {
+        mPlayerOne->SetActive(true);
+    }
+    if (mPlayerTwo) {
+        mPlayerTwo->SetActive(true);
+    }
+
+    // Load curShot before the stageSym check (compiler optimization)
+    HamCamShot *curShot = TheHamDirector->CurShot();
+    if (stageSym != playing) {
+        // Not playing - only reset timer (not beat accumulator)
+        unk110 = 0.0f;
+        goto do_animation;
+    }
+
+    // Check if current shot is CAMP_MINDCONTROL campaign
+    if (curShot != nullptr) {
+        const char *shotCategory = curShot->Category().Str();
+        if (strcmp(shotCategory, "CAMP_MINDCONTROL") == 0) {
+            // Reset accumulators for mind control campaign
+            unk10c = 0.0f;
+            unk110 = 0.0f;
+
+            // Check if shot is over - if so, check shot name
+            if (curShot->ShotOver()) {
+                const char *shotName = curShot->Name();
+                if (strcmp(shotName, "CAMP_6.3_DCI_mind_control_03.shot") != 0) {
+                    // Force clear shot and set property
+                    TheHamDirector->ForceShot(gNullStr);
+                    static Symbol CAMP_MINDCONTROL_DANCE("CAMP_MINDCONTROL_DANCE");
+                    TheHamDirector->SetProperty(Symbol("shot"), CAMP_MINDCONTROL_DANCE);
+                }
+            }
+            goto do_animation;
+        }
+    }
+
+    // Beat accumulation path when players are in zone
+    if (mPlayerOne->unk260 != 0 || mPlayerTwo->unk260 != 0) {
+        unk10c += TheTaskMgr.DeltaBeat() * 0.1f;
+    }
+
+do_animation:
+    // Character animation management
+    for (int i = 0; i < 2; i++) {
+        HamCharacter *character = TheHamDirector->GetCharacter(i);
+        RndAnimatable *animMC = character
+            ? character->Find<RndAnimatable>("mind_control.anim", false)
+            : nullptr;
+
+        // Calculate animation parameters (6*PI = 18.84955597)
+        float timeSeconds = TheTaskMgr.UISeconds();
+        float phase = (float)sin(timeSeconds * 18.84955597f) * 0.4f + 0.6f;
+        float beatVal = phase * unk10c;
+
+        if (animMC) {
+            animMC->SetFrame(beatVal, 1.0f);
+        }
+
+        RndAnimatable *animSound = character
+            ? character->Find<RndAnimatable>("mind_control_sound.anim", false)
+            : nullptr;
+        if (animSound) {
+            animSound->SetFrame(unk10c, 1.0f);
+        }
+    }
+
+    // Check grooving status
+    float beatMC = unk10c;
+    if (beatMC > 0.5f && beatMC < 0.95f && unk110 > 5.0f) {
+        static Symbol grooving("grooving");
+        PlayMindControlVO(grooving);
+    } else if (beatMC < 0.2f && unk110 > 12.0f) {
+        static Symbol not_grooving("not_grooving");
+        PlayMindControlVO(not_grooving);
+    }
+
+    // Update beat counter
+    unk110 += TheTaskMgr.DeltaSeconds();
 }
 
 // clang-format off

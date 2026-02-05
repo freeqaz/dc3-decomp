@@ -723,7 +723,7 @@ void Character::CopyBoundingSphere(Character *c) {
 }
 
 void Character::RemoveFromDraws(DrawPtrVec &vec) {
-    for (auto it = vec.begin(); it != vec.end(); ++it) {
+    FOREACH (it, vec) {
         RndDrawable *cur = *it;
         VectorRemove(mDraws, cur);
     }

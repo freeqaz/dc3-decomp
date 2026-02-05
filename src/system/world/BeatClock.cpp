@@ -87,6 +87,8 @@ void BeatClock::SetBeatsPerMeasure(int beats) {
     mMeasureMap->AddTimeSignature(0, beats, 4, true);
 }
 
+INIT_REVS(3, 0)
+
 BEGIN_LOADS(BeatClock)
     LOAD_REVS(bs)
     ASSERT_REVS(3, 0)

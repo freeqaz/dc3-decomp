@@ -371,7 +371,7 @@ void UIManager::ReloadStrings() {
         mCurrentScreen->Handle(msg, true);
     }
 
-    for (auto it = mPushedScreens.begin(); it != mPushedScreens.end(); ++it) {
+    FOREACH (it, mPushedScreens) {
         (*it)->Handle(msg, true);
     }
 }

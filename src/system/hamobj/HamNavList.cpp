@@ -561,21 +561,26 @@ bool HamNavList::ShouldSkipSelectAnim(DataNode &node) const {
 
         static Symbol skip_select_anim("skip_select_anim");
         static Symbol skip_select_anim_and_sound("skip_select_anim_and_sound");
-        Symbol sym = node.Sym(0);
-        if (sym != skip_select_anim && sym != skip_select_anim_and_sound)
-            return false;
+        if (node.Sym(0) != skip_select_anim) {
+            if (node.Sym(0) != skip_select_anim_and_sound)
+                return false;
+        }
     }
     return true;
 }
 
 bool HamNavList::ShouldSkipSelectSound(DataNode &node) const {
-    if (node.Type() != kDataSymbol)
+    if (node.Type() != kDataSymbol) {
         return false;
-
-    static Symbol skip_select_sound("skip_select_sound");
-    static Symbol skip_select_anim_and_sound("skip_select_anim_and_sound");
-    Symbol sym = node.Sym(0);
-    return sym == skip_select_sound || sym == skip_select_anim_and_sound;
+    } else {
+        static Symbol skip_select_sound("skip_select_sound");
+        static Symbol skip_select_anim_and_sound("skip_select_anim_and_sound");
+        if (node.Sym(0) != skip_select_sound) {
+            if (node.Sym(0) != skip_select_anim_and_sound)
+                return false;
+        }
+        return true;
+    }
 }
 
 void HamNavList::AddRibbonSinks(Hmx::Object *o, Symbol s) {

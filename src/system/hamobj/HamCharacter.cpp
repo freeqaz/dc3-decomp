@@ -146,12 +146,13 @@ BEGIN_LOADS(HamCharacter)
     PostLoad(bs);
 END_LOADS
 
-INIT_REVS(0, 0)
+INIT_REVS(3, 0)
 
 void HamCharacter::PreLoad(BinStream &bs) {
     LOAD_REVS(bs)
-    ASSERT_REVS(0, 0)
+    ASSERT_REVS(3, 0)
     Character::PreLoad(bs);
+    Reserve((mHashTable.UsedSize() + 20) * 2, mStringTable.UsedSize() + 0x1B8);
     bs.PushRev(packRevs(d.altRev, d.rev), this);
 }
 
@@ -474,13 +475,14 @@ void HamCharacter::ResetFaceOverrideBlending() {
 
 void HamCharacter::SetCampaignVo(const char *cc) {
     mCampaignVO = cc;
-    RELEASE(mCampaignVOBank);
+    Hmx::Object *&bank = mCampaignVOBank;
+    RELEASE(bank);
     if (!mCampaignVO.empty()) {
         String milo = GetCampaignVoMilo();
-        mCampaignVODir = DirLoader::LoadObjects(milo.c_str(), nullptr, nullptr);
+        mCampaignVODir = DirLoader::LoadObjects(milo.c_str(), 0, 0);
         for (ObjDirItr<Hmx::Object> it(mCampaignVODir, false); it != nullptr; ++it) {
             if (it->Type() == "character_vo") {
-                mCampaignVOBank = it;
+                bank = it;
                 return;
             }
         }
@@ -520,8 +522,8 @@ int HamCharacter::SongAnimation() {
 }
 
 bool HamCharacter::GetPropShowing(int prop) {
-    return mShowableProps.size() > prop && mShowableProps[prop]
-        && mShowableProps[prop]->Showing();
+    RndDrawable *d;
+    return mShowableProps.size() > prop && (d = mShowableProps[prop]) && d->Showing();
 }
 
 void HamCharacter::SetPropShowing(int prop, bool show) {
@@ -594,9 +596,9 @@ DataNode HamCharacter::OnToggleInterestDebugOverlay(DataArray *a) {
 }
 
 DataNode HamCharacter::OnCamTeleport(DataArray *a) {
-    mWaypoint->SetLocalXfm(LocalXfm());
-    if (Regulator()) {
-        Regulator()->SetWaypoint(nullptr);
+    mWaypoint->DirtyLocalXfm() = LocalXfm();
+    if (Find<HamRegulate>("song.hreg", false)) {
+        Find<HamRegulate>("song.hreg", false)->SetWaypoint(0);
     }
     return 0;
 }

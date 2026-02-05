@@ -25,6 +25,8 @@ Compares compiled C++ against the original binary. Extended for this project to:
 
 Usage: [docs/tools/objdiff/USAGE.md](docs/tools/objdiff/USAGE.md)
 
+Note: objdiff is the source of truth for decomp percentages. Our database and report.json can be out of sync with the code.
+
 ## Code Style
 - Be carefuly when modifying MILO_ASSERT() calls or OBJ_MEM_OVERLOAD macros. Whatever is in there should be tested carefully.
 - Keep members protected/private unless confirmed public via DWARF or asserts. For external access, add getters/setters rather than making members public. Use friend classes for closely related types (e.g., Foo and FooHandle).

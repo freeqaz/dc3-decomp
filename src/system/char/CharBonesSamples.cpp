@@ -10,22 +10,39 @@ CharBonesSamples::CharBonesSamples()
 
 CharBonesSamples::~CharBonesSamples() { MemFree(mRawData); }
 
+// DECOMP: 87.8% match - AT_LIMIT
+// Unfixable diffs:
+// - Register allocation: target uses r25 for 'this', base uses r28; also r26/r27 vs r10/r11
+// - Format strings: target uses MakeString variant with extra unsigned short param (7th arg)
+//   passing max version from a global table at lbl_82020EDC
+// - __FILE__ path: target uses "CharBonesSamples.cpp", build produces full path
+// - MILO_ASSERT MakeString call is ICF-merged to merged_824D1870 (901 MakeString variants)
+// - Stack frame 0xb0 vs 0x90
+// Note: RB3 uses simpler pattern with global gVer and MILO_ASSERT instead of MILO_FAIL
 void CharBonesSamples::Load(BinStream &bs) {
-    u32 ver;
+    int ver;
     bs >> ver;
+    BinStreamRev d(bs, ver);
 
-    u32 v0 = ver & 0xFFFF;
-    u32 v1 = (ver >> 16) & 0xFFFF;
-
-    if (v0 > 0x10) {
-        MILO_FAIL("%s can't load new %s version %d > %d", "", "ChaBonesSample", v0, 1);
+    if (d.rev > 0x10) {
+        MILO_FAIL(
+            "%s can't load new %s version %d ",
+            "",
+            "CharBonesSample",
+            d.rev
+        );
     }
-    if (v1 != 0) {
-        MILO_FAIL("%s can't load new %s alt version", "", "ChaBonesSample");
+    if (d.altRev > 0) {
+        MILO_FAIL(
+            "%s can't load new %s alt version",
+            "",
+            "CharBonesSample",
+            d.altRev
+        );
     }
-    MILO_ASSERT(v0 > 0xC, 0x29D);
-    LoadHeader((BinStreamRev &)bs);
-    LoadData((BinStreamRev &)bs);
+    MILO_ASSERT(d.rev > 12, 0x29D);
+    LoadHeader(d);
+    LoadData(d);
 }
 
 int CharBonesSamples::AllocateSize() { return mTotalSize * mNumSamples; }

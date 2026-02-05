@@ -19,17 +19,17 @@ TexMovie::TexMovie()
 
 TexMovie::~TexMovie() { mMovie.End(); }
 
-void TexMovie::Copy(const Hmx::Object *o, Hmx::Object::CopyType ty) {
-    Hmx::Object::Copy(o, ty);
-    RndDrawable::Copy(o, ty);
-    RndPollable::Copy(o, ty);
-    const TexMovie *c = dynamic_cast<const TexMovie *>(o);
-    if (c) {
-        mTex = c->mTex;
-        sRoot = c->sRoot;
-        unk5e = c->unk5e;
-    }
-}
+BEGIN_COPYS(TexMovie)
+    COPY_SUPERCLASS(Hmx::Object)
+    COPY_SUPERCLASS(RndDrawable)
+    COPY_SUPERCLASS(RndPollable)
+    CREATE_COPY(TexMovie)
+    BEGIN_COPYING_MEMBERS
+        COPY_MEMBER(mTex)
+        COPY_MEMBER(sRoot)
+        COPY_MEMBER(unk5e)
+    END_COPYING_MEMBERS
+END_COPYS
 
 bool TexMovie::Replace(ObjRef *a, Hmx::Object *b) {
     bool check;
@@ -67,22 +67,14 @@ INIT_REVS(5, 1)
 
 BEGIN_LOADS(TexMovie)
     LOAD_REVS(bs)
-    ASSERT_REVS(8, 0)
+    ASSERT_REVS(5, 1)
     LOAD_SUPERCLASS(Hmx::Object)
     LOAD_SUPERCLASS(RndDrawable)
     LOAD_SUPERCLASS(RndPollable)
+    if (d.altRev < 4)
+        bs >> unk5e;
     bs >> mTex >> unk5c;
-    d >> unk5e;
-    if (d.rev < 4)
-        d >> unk5e;
-    bs >> sRoot;
-    if (d.rev > 5)
-        d >> unk5e;
-    if (d.rev == 7)
-        d >> unk5e;
-    if ((d.rev > 1) && (d.rev < 3))
-        d >> unk5e;
-    DoBeginMovieFromFile(nullptr, kLoadBack);
+
 END_LOADS
 
 void TexMovie::DrawPreClear() {
@@ -112,7 +104,8 @@ void TexMovie::Poll() {
 void TexMovie::Enter() {
     unk5d = true;
     RndPollable::Enter();
-    if (mTex && mTex->Width() && mTex->Height()) {
+    bool b = (mTex && mTex->Width() && mTex->Height());
+    if (b) {
         mTex->MakeDrawTarget();
         Hmx::Rect r(0, 0, 1, 1);
         Hmx::Color c(0, 0, 0, 1);
@@ -150,7 +143,9 @@ void TexMovie::Reset() {
 bool TexMovie::IsEmpty() const { return sRoot.empty(); }
 
 void TexMovie::DrawToTexture() {
-    if (mTex != nullptr && mTex->Width() && mTex->Height()) {
+    bool b = (mTex != nullptr && mTex->Width() && mTex->Height());
+
+    if (b) {
         mTex->MakeDrawTarget();
         mMovie.Draw();
         mTex->FinishDrawTarget();

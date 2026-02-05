@@ -1,5 +1,4 @@
 #include "char/CharInterest.h"
-#include "CharInterest.h"
 #include "math/Rand.h"
 #include "math/Rot.h"
 #include "math/Utl.h"
@@ -153,12 +152,9 @@ float CharInterest::ComputeScore(
     int filterFlags,
     bool b
 ) {
-    bool b2 = false;
-    if (IsMatchingFilterFlags(filterFlags) || (b && mCategoryFlags == 0)) {
-        b2 = true;
-    }
-    if (!b2)
+    if (!IsMatchingFilterFlags(filterFlags) && !(b && mCategoryFlags == 0)) {
         return -1.0f;
+    }
 
     Vector3 v7c(WorldXfm().v);
     Vector3 v88;
@@ -177,8 +173,8 @@ float CharInterest::ComputeScore(
         f2 = 1.0f;
 
     float f7 = -(lensq * f - 1.0f);
-    if (IsNaN(f7)) {
-        MILO_NOTIFY(
+    if (f7 < -0.0001f) {
+        MILO_NOTIFY_ONCE(
             "error scoring interest object: bad normalize factor gave score %f", f7
         );
     }
