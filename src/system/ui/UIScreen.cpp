@@ -386,13 +386,16 @@ DataNode UIScreen::ForeachPanel(const DataArray *da) {
 
 void UIScreen::ReloadStrings() {
     Message msg(Symbol("reload_string"));
-
     FOREACH (it, mPanelList) {
-        PanelDir *panelDir;
-        if ((panelDir = it->mPanel->LoadedDir()) != NULL) {
-            for (ObjDirItr<UILabel> labelIt(panelDir, true); labelIt; labelIt++) {
-                labelIt->Handle(msg, true);
-            }
+        if (!it->mPanel) {
+            continue;
+        }
+        PanelDir *panelDir = it->mPanel->LoadedDir();
+        if (!panelDir) {
+            continue;
+        }
+        for (ObjDirItr<UILabel> labelIt(panelDir, true); labelIt; ++labelIt) {
+            labelIt->Handle(msg, true);
         }
     }
 }

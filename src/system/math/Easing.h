@@ -129,48 +129,28 @@ inline float EaseBounceOutIn(float t, float power, float) {
         return (EaseBounceIn(t * 2 - 1.0f, 0.0f, 0.0f) + 1.0f) / 2;
 }
 
-inline float EaseElasticIn(float t, float power, float f3) {
-    MILO_ASSERT(t >= 0 && t <= 1, 145);
-    if (t > 0 && t < 1.0f) {
-        if (f3 <= 0)
-            f3 = 0.45f;
+float EaseElasticIn(float t, float power, float period);
 
-        // Calculate phase shift based on amplitude
-        float s;
-        if (power < 1.0f) {
-            power = 1.0f;
-            s = f3 * 0.25f;
-        } else {
-            s = asin(1.0f / power) * f3 * 0.15915494f; // 1/(2π)
-        }
-
-        t = t - 1.0f;
-        float amplitude = pow(2.0, t * 10.0f);
-        return -(FastSin((t - s) / f3 * 6.283185f) * amplitude * power); // 2π
-    }
-    return t;
-}
-
-inline float EaseElasticOut(float t, float power, float f3) {
+inline float EaseElasticOut(float t, float power, float period) {
     MILO_ASSERT(t >= 0 && t <= 1, 164);
-    float difference = EaseElasticIn(1.0f - t, power, f3);
+    float difference = EaseElasticIn(1.0f - t, power, period);
     return 1.0f - difference;
 }
 
-inline float EaseElasticInOut(float t, float power, float f3) {
+inline float EaseElasticInOut(float t, float power, float period) {
     MILO_ASSERT(t >= 0 && t <= 1, 170);
     if (t < 0.5)
-        return EaseElasticIn(t * 2, power, f3) / 2;
+        return EaseElasticIn(t * 2, power, period) / 2;
     else
-        return (EaseElasticOut(t * 2 - 1.0f, power, f3) + 1.0f) / 2;
+        return (EaseElasticOut(t * 2 - 1.0f, power, period) + 1.0f) / 2;
 }
 
-inline float EaseElasticOutIn(float t, float power, float f3) {
+inline float EaseElasticOutIn(float t, float power, float period) {
     MILO_ASSERT(t >= 0 && t <= 1, 177);
     if (t < 0.5)
-        return EaseElasticOut(t * 2, power, f3) / 2;
+        return EaseElasticOut(t * 2, power, period) / 2;
     else
-        return (EaseElasticIn(t * 2 - 1.0f, power, f3) + 1.0f) / 2;
+        return (EaseElasticIn(t * 2 - 1.0f, power, period) + 1.0f) / 2;
 }
 
 inline float EaseBackIn(float t, float power, float) {
@@ -310,7 +290,7 @@ inline float EaseCircInOut(float t, float power, float) {
     return ret * tmp_f13;
 }
 
-inline float EaseCircOutIn(float t, float power, float f3) {
+inline float EaseCircOutIn(float t, float power, float) {
     MILO_ASSERT(t >= 0 && t <= 1, 286);
     if (t < 0.5)
         return EaseCircOut(t * 2, 0.0f, 0.0f);
@@ -318,15 +298,15 @@ inline float EaseCircOutIn(float t, float power, float f3) {
         return (EaseCircIn(t * 2 - 1.0f, 0.0f, 0.0f) + 1.0f) / 2;
 }
 
-inline float EaseStairstep(float t, float power, float f3) {
+inline float EaseStairstep(float t, float power, float steps) {
     MILO_ASSERT(t >= 0 && t <= 1, 294);
-    if (f3 == 0) {
-        f3 = 2;
+    if (steps == 0) {
+        steps = 2;
     }
-    float tmp_f30 = t * f3;
+    float tmp_f30 = t * steps;
     float tmp_f26 = floor(tmp_f30);
-    f3 = 1.0f / f3; // this is SUPPOSED to be here, but it's getting scheduled for later
-    return (EasePolyInOut(tmp_f30 - tmp_f26, power, 0.0f) + tmp_f26) * f3;
+    steps = 1.0f / steps; // this is SUPPOSED to be here, but it's getting scheduled for later
+    return (EasePolyInOut(tmp_f30 - tmp_f26, power, 0.0f) + tmp_f26) * steps;
 }
 
 inline float EaseThirdStairstep(float t, float power, float) {

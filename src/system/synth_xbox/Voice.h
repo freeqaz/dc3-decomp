@@ -7,7 +7,7 @@
 class Voice {
 public:
     Voice(bool, int, bool);
-    ~Voice();
+    virtual ~Voice();
     void InitSourceBuffer(XAUDIO2_BUFFER &);
     int GetAddr();
     void SetData(void const *, int, int);

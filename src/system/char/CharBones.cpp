@@ -76,13 +76,14 @@ void CharBones::RecomputeSizes() {
     *offset = 0;
     do {
         int cur_offset = *offset;
+        // offset[-7] = mCounts[i], offset[-6] = mCounts[i+1]
+        // (mCounts is 7 ints (0x1C bytes) before mOffsets)
         int count_diff = offset[-6] - offset[-7];
-        int type_size = TypeSize(i);
+        *++offset = cur_offset + TypeSize(i) * count_diff;
         i++;
-        *++offset = type_size * count_diff + cur_offset;
     } while (i < NUM_TYPES);
-    mTotalSize = mOffsets[TYPE_END] + 0xFU & 0xFFFFFFF0; // round up to the nearest 0x10,
-                                                         // alignment moment
+    // Round up to nearest 0x10 for alignment
+    mTotalSize = mOffsets[TYPE_END] + 0xFU & 0xFFFFFFF0;
 }
 
 void CharBones::SetCompression(CompressionType ty) {

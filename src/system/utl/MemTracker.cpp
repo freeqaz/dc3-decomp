@@ -362,16 +362,45 @@ void MemTracker::DiffDump(TextStream &ts) {
                 count++;
             }
         }
-        AllocInfoVec vec(count);
+        AllocInfoVec allocVec(count);
         for (auto it = mHashTable->Begin(); it != nullptr; it = mHashTable->Next(it)) {
             AllocInfo *info = *it;
             if (mTimeSlice == info->mTimeSlice) {
-                vec.push_back(info);
+                allocVec.push_back(info);
             }
         }
-        std::sort(vec.begin(), vec.end(), StackLess);
+        std::sort(allocVec.begin(), allocVec.end(), StackLess);
         std::sort(mFreedInfos.begin(), mFreedInfos.end(), StackLess);
-        // iterate across both AllocInfoVecs here
+
+        const char *allocStr = "alloc";
+        const char *freeStr = "free";
+        AllocInfo **freedEnd = mFreedInfos.end();
+        AllocInfo **allocEnd = allocVec.end();
+        AllocInfo **freedIt = mFreedInfos.begin();
+        AllocInfo **allocIt = allocVec.begin();
+
+        for (; allocIt != allocEnd || freedIt != freedEnd;) {
+            if (allocIt == allocEnd) {
+                ColatedPrint(ts, *freedIt, freeStr);
+                freedIt++;
+            } else if (freedIt == freedEnd) {
+                ColatedPrint(ts, *allocIt, allocStr);
+                allocIt++;
+            } else {
+                int cmp = (*allocIt)->StackCompare(**freedIt);
+                if (cmp < 0) {
+                    ColatedPrint(ts, *allocIt, allocStr);
+                    allocIt++;
+                } else if (cmp > 0) {
+                    ColatedPrint(ts, *freedIt, freeStr);
+                    freedIt++;
+                } else {
+                    allocIt++;
+                    freedIt++;
+                }
+            }
+        }
+        ts << ")\n";
     }
     mFreedInfos.delete_and_clear();
     mTimeSlice++;

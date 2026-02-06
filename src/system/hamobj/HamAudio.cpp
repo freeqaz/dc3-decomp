@@ -257,24 +257,26 @@ void HamAudio::SetCrossfadeJump(float f1, float f2, float f3) {
     if (unk68) {
         MILO_NOTIFY("Stomping on current queued crossfade");
     }
-    unk64 = f3;
-    unk60 = f2;
     unk5c = f1;
+    unk60 = f2;
+    unk64 = f3;
     unk68 = 1;
-    bool b2 = false;
-    if (f1 - (f3 / 2.0f) <= 0) {
+    float halfFade = 0.5f;
+    bool crossfadeInvalid = f3 * halfFade <= f1;
+    if (crossfadeInvalid) {
         MILO_NOTIFY(
             "Crossfade begins before start of song. Setting up hard jump instead of crossfade."
         );
-        b2 = true;
     }
-    if (unk78 > 1 && unk5c - (unk64 / 2.0f) <= (unk74 / 2.0f) + unk70) {
-        MILO_NOTIFY(
-            "Crossfade begins before existing crossfade ends. Setting up hard jump instead of crossfade."
-        );
-        b2 = true;
+    if (unk78 > 1) {
+        if (-(unk64 * halfFade - unk5c) <= (unk74 * halfFade) + unk70) {
+            MILO_NOTIFY(
+                "Crossfade begins before existing crossfade ends. Setting up hard jump instead of crossfade."
+            );
+            crossfadeInvalid = true;
+        }
     }
-    if (b2) {
+    if (crossfadeInvalid) {
         unk68 = 0;
     }
     SetLoop(f2, f1, unk44[0]);

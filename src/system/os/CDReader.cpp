@@ -117,10 +117,10 @@ int CDRead(int arkFile, int offset, int size, void *buffer) {
 bool CDReadExternal(void *&v, int i, u64 u) {
     if (ArkFilesInit() != 0) {
         return false;
+    } else {
+        v = gExternalArkFiles[i];
+        LONG l = u;
+        SetFilePointer(v, u, &l, 0);
+        return true;
     }
-    v = gExternalArkFiles[i];
-    long high = u >> 32;
-    long low = (long)u;
-    SetFilePointer(v, low, &high, 0);
-    return true;
 }

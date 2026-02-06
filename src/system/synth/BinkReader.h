@@ -26,10 +26,19 @@ public:
     virtual void Seek(int);
     virtual void EnableReads(bool enable) { mEnableReads = enable; }
     virtual bool Done() { return mState == 4; } // State 4 = playback complete
-    virtual bool Fail() { return mFail; }
+    virtual bool Fail() { return mState == 5; } // State 5 = error/failure
     virtual void Init();
 
 private:
+    // BinkReader uses a state machine instead of separate boolean flags
+    enum State {
+        kInit = 1,    // Initializing tracks
+        kSetup = 2,   // Setup complete, ready to play
+        kPlaying = 3, // Actively playing
+        kDone = 4,    // Playback complete
+        kFail = 5     // Error occurred
+    };
+
     File *mFile;
     StandardStream *mStream;
     BINK *mBink;
@@ -40,8 +49,6 @@ private:
     int mNumSamplesToConsume;
     int mSamplesRead;
     int mSamplesPerFrame;
-    int mState; // At offset 0xE0; values: 1=init, 2=setup, 3=playing, 4=done, 5=fail
+    int mState; // Current state (see State enum)
     bool mEnableReads;
-    bool mDone; // Unused in BinkReader; present for symmetry with VorbisReader
-    bool mFail;
 };

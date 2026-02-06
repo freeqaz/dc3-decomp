@@ -442,12 +442,16 @@ bool RndPostProc::DoGradientMap() const {
 
 bool RndPostProc::DoRefraction() const { return mRefractMap && mRefractDist; }
 
+// Checks if any color transformation effects are active
 bool RndPostProc::ColorXfmEnabled() const {
+    // Color modulation or basic color adjustments
     return mColorModulation != 1 || mColorXfm.mHue != 0 || mColorXfm.mSaturation != 0
         || mColorXfm.mLightness != 0 || mColorXfm.mContrast != 0
-        || mColorXfm.mBrightness != 0 || mColorXfm.mLevelInLo.Pack() != 0
-        || mColorXfm.mLevelInHi.Pack() != 0 || mColorXfm.mLevelOutLo.Pack() != 0
-        || mColorXfm.mLevelOutHi.Pack() != 0;
+        || mColorXfm.mBrightness != 0
+        // Color level adjustments (Pack() returns 24-bit RGB: 0=black, 0xffffff=white)
+        || mColorXfm.mLevelInLo.Pack() != 0 || mColorXfm.mLevelOutLo.Pack() != 0
+        || mColorXfm.mLevelInHi.Pack() != 0xffffff
+        || mColorXfm.mLevelOutHi.Pack() != 0xffffff;
 }
 
 void RndPostProc::UpdateTimeDelta() {

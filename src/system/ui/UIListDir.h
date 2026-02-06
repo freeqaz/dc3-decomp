@@ -89,6 +89,6 @@ protected:
     int mDirection; // 0x27c
 
 private:
-    float SetElementPos(Vector3 &, float, int, float, float) const;
+    float SetElementPos(Vector3 &v, float position, int gridSpan, float primaryBase, float secondaryBase) const;
     void Reset();
 };

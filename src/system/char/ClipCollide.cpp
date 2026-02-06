@@ -128,12 +128,7 @@ void ClipCollide::SyncMode() {
 }
 
 void ClipCollide::Demonstrate() {
-    bool b1;
-    if (!mChar || !mWaypoint || !mClip) {
-        b1 = false;
-    } else {
-        b1 = true;
-    }
+    bool b1 = mChar && mWaypoint && mClip;
     if (b1) {
         SyncWaypoint();
         mChar->Driver()->Play(mClip, 2, -1.0f, 1e+30f, 0.0f);

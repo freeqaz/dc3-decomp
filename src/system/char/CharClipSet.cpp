@@ -174,9 +174,9 @@ float CharClipSet::EndFrame() {
 }
 
 void CharClipSet::ListDrawChildren(std::list<RndDrawable *> &draws) {
-    RndDir *char_obj = mPreviewChar;
-    if (char_obj != 0) {
-        draws.insert(draws.end(), char_obj);
+    if (mPreviewChar) {
+        RndDir *ptr = mPreviewChar;
+        draws.insert(draws.end(), ptr);
     }
 }
 

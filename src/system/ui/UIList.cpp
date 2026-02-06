@@ -283,11 +283,11 @@ void UIList::StartScroll(UIListState const &state, int i, bool b) {
     }
 }
 
+// Called when the list selection changes. Triggers transition animations and propagates to child lists.
 void UIList::HandleSelectionUpdated() {
-    UIList *child = mListDir->SubList(mListState.SelectedDisplay(), mWidgets);
     UITransitionHandler::StartValueChange();
-    if (child != 0) {
-        child->HandleSelectionUpdated();
+    if (ChildList()) {
+        ChildList()->HandleSelectionUpdated();
     }
 }
 

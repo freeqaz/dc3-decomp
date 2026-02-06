@@ -490,8 +490,7 @@ void UILabel::SetFontMat(char const *c, int i) {
 char const *UILabel::GetFontMat(int) { return 0; }
 
 void UILabel::RefreshFontMat(int i) {
-    LabelStyle &style = LStyle(i);
-    const char *mat = GetFontMat(i);
+    auto mat = GetFontMat(i);
     SetFontMat(mat, i);
     if (sDeferUpdate == false) {
         LabelUpdate(false);

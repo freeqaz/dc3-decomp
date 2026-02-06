@@ -117,23 +117,24 @@ bool FileCacheFile::ReadAsync(void *v, int i) {
     }
 }
 
-int FileCacheFile::Seek(int i1, int i2) {
+int FileCacheFile::Seek(int offset, int whence) {
     int ret;
-    switch (i2) {
-    case 0:
-        ret = i1;
+    switch (whence) {
+    case FILE_SEEK_SET:
+        ret = offset;
         break;
-    case 1:
-        ret = Tell() + i1;
+    case FILE_SEEK_CUR:
+        ret = Tell() + offset;
         break;
-    case 2:
-        ret = mParent->Size() + i1;
+    case FILE_SEEK_END:
+        ret = mParent->Size() + offset;
         break;
     default:
         return mPos;
     }
-    ClampEq(ret, 0, mParent->Size());
-    mPos = ret;
+    int sz = mParent->Size();
+    // Clamp position to [0, size]
+    mPos = (ret > sz) ? sz : ((ret < 0) ? 0 : ret);
     return mPos;
 }
 

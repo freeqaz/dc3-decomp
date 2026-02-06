@@ -686,6 +686,7 @@ def query_functions(
             query += f" AND (verdict IS NULL OR verdict NOT IN ({placeholders}))"
 
     query += " AND symbol NOT LIKE 'merged_%'"
+    query += " AND demangled NOT LIKE '%stlpmtx_std::%'"
 
     # Exclude functions that have been tried too many times
     if max_attempts is not None:
@@ -1397,6 +1398,7 @@ def query_functions_by_priority(
         query += " AND locked_by IS NULL"
 
     query += " AND symbol NOT LIKE 'merged_%'"
+    query += " AND demangled NOT LIKE '%stlpmtx_std::%'"
 
     # Exclude functions that have been tried too many times
     if max_attempts is not None:
@@ -1482,6 +1484,7 @@ def query_functions_for_unit_completion(
         query += " AND f.locked_by IS NULL"
 
     query += " AND f.symbol NOT LIKE 'merged_%'"
+    query += " AND f.demangled NOT LIKE '%stlpmtx_std::%'"
 
     # Exclude functions that have been tried too many times
     if max_attempts is not None:

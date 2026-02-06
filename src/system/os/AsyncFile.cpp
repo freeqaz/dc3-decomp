@@ -115,11 +115,12 @@ bool AsyncFile::ReadAsync(void *iBuff, int iBytes) {
 }
 
 int AsyncFile::Write(const void *iBuf, int iBytes) {
-    WriteAsync((void *)iBuf, iBytes);
+    int ret; // NOTE: Uninitialized but required for exact codegen match
+    WriteAsync(iBuf, iBytes);
     if (mFail)
         return 0;
     else
-        while (!WriteDone(iBytes))
+        while (!WriteDone(ret))
             ;
     return iBytes;
 }
@@ -155,18 +156,35 @@ bool AsyncFile::WriteAsync(const void *v, int i) {
 int AsyncFile::Seek(int i, int j) {
     if (mFail)
         return mTell;
-    else {
-        if (mMode & FILE_OPEN_WRITE)
-            Flush();
-        else
-            MILO_ASSERT(!mBytesLeft, 0x1CA);
-        _SeekToTell();
-        if (mBuffer && (mMode & FILE_OPEN_READ)) {
-            mOffset = gBufferSize;
-            FillBuffer();
-        }
-        return mTell;
+    if (mMode & FILE_OPEN_WRITE)
+        Flush();
+    else
+        MILO_ASSERT(!mBytesLeft, 0x1CA);
+
+    int newPos;
+    if (j == 1) {
+        newPos = mTell + i;
+    } else if (j == 0) {
+        newPos = i;
+    } else if (j == 2) {
+        newPos = mSize + i;
     }
+
+    // Clamp to valid range [0, mSize]
+    if ((unsigned int)newPos > mSize) {
+        mTell = mSize;
+    } else if (newPos < 0) {
+        mTell = 0;
+    } else {
+        mTell = newPos;
+    }
+
+    _SeekToTell();
+    if (mBuffer && (mMode & FILE_OPEN_READ)) {
+        mOffset = gBufferSize;
+        FillBuffer();
+    }
+    return mTell;
 }
 
 void AsyncFile::Flush() {
@@ -193,30 +211,30 @@ bool AsyncFile::ReadDone(int &i) {
                 i = mBytesRead;
                 return false;
             } else {
-                if (!mBuffer)
+                if (!mBuffer) {
                     return true;
-                else {
-                    if (mOffset + mBytesLeft > gBufferSize) {
-                        int size = gBufferSize - mOffset;
-                        memcpy(mData, mBuffer + mOffset, size);
-                        mBytesRead += size;
-                        mOffset = gBufferSize;
-                        mTell += size;
-                        mBytesLeft -= size;
-                        mData += size;
-                        FillBuffer();
-                        i = mBytesRead;
-                        return false;
-                    } else {
-                        memcpy(mData, mBuffer + mOffset, mBytesLeft);
-                        mOffset += mBytesLeft;
-                        int ret = mBytesRead + mBytesLeft;
-                        mTell += mBytesLeft;
-                        mBytesLeft = 0;
-                        mBytesRead = ret;
-                        i = ret;
-                        return true;
-                    }
+                }
+                // Buffer needs refilling - read partial data
+                if (mOffset + mBytesLeft > gBufferSize) {
+                    int size = gBufferSize - mOffset;
+                    memcpy(mData, mBuffer + mOffset, size);
+                    mBytesRead += size;
+                    mOffset = gBufferSize;
+                    mTell += size;
+                    mBytesLeft -= size;
+                    mData += size;
+                    FillBuffer();
+                    i = mBytesRead;
+                    return false;
+                } else {
+                    // All requested data fits in current buffer
+                    memcpy(mData, mBuffer + mOffset, mBytesLeft);
+                    mBytesRead += mBytesLeft;
+                    mOffset += mBytesLeft;
+                    mTell += mBytesLeft;
+                    mBytesLeft = 0;
+                    i = mBytesRead;
+                    return true;
                 }
             }
         }

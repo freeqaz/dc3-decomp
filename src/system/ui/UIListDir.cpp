@@ -277,36 +277,35 @@ void UIListDir::CreateElements(UIList *uilist, std::vector<UIListWidget *> &vec,
     }
 }
 
-// Positions an element in a grid layout based on index and grid span
-// Returns the primary scroll offset
-float UIListDir::SetElementPos(Vector3 &v, float f1, int i2, float f3, float f4) const {
+// Calculates element position in a grid layout for UI list scrolling
+// position: floating-point index (supports fractional values for smooth scrolling)
+// gridSpan: number of elements per row/column
+// primaryBase: base offset along scroll direction
+// secondaryBase: base offset perpendicular to scroll direction
+// Returns: primary offset (along scroll direction)
+float UIListDir::SetElementPos(Vector3 &v, float position, int gridSpan, float primaryBase, float secondaryBase) const {
     v.Zero();
-
-    // Split position into integer and fractional parts
-    float floored_f = std::floor(f1);
-    int floored = (int)floored_f;
-
-    // Calculate grid row (div) and column (mod)
-    float div_f = (float)(floored / i2);
-    float mod_f = (float)(floored % i2);
-    float fractional = f1 - floored_f;
-
-    // Compute offsets: primary is scroll direction, secondary is perpendicular
-    float primary_offset_factor = fractional + div_f;
-    float primary_offset = mElementSpacing * primary_offset_factor;
-    float secondary_offset = mElementSpacing * mod_f;
-    float f3toset = primary_offset + f3;
-    float f2toset = secondary_offset + f4;
-
+    // Split position into integer and fractional components
+    float floored = std::floor(position);
+    float fractional = position - floored;
+    int intPos = (int)floored;
+    // Calculate grid coordinates: row/column indices
+    int rowIndex = intPos / gridSpan;
+    int colIndex = intPos % gridSpan;
+    float colOffset = (float)colIndex;
+    float rowOffset = (float)rowIndex;
+    // Calculate offsets along secondary (perpendicular) and primary (scroll) axes
+    float secondaryOffset = colOffset * mElementSpacing + secondaryBase;
+    float primaryOffset = (fractional + rowOffset) * mElementSpacing + primaryBase;
     // Apply offsets based on list orientation
     if (mOrientation == kUIListVertical) {
-        v.z -= f3toset;  // Primary: vertical scroll
-        v.x += f2toset;  // Secondary: horizontal grid
+        v.z -= primaryOffset;
+        v.x += secondaryOffset;
     } else {
-        v.x += f3toset;  // Primary: horizontal scroll
-        v.z -= f2toset;  // Secondary: vertical grid
+        v.x += primaryOffset;
+        v.z -= secondaryOffset;
     }
-    return f3toset;
+    return primaryOffset;
 }
 
 void UIListDir::Reset() {

@@ -272,16 +272,16 @@ void ChunkStream::DecompressChunkAsync() {
 
 bool ChunkStream::PollDecompressionWorker() {
     gDecompressionCritSec.Enter();
-    DecompressTask task;
     if (gDecompressionQueue.size() != 0) {
-        task = gDecompressionQueue.front();
+        DecompressTask task = gDecompressionQueue.front();
         gDecompressionQueue.pop_front();
         gDecompressionCritSec.Exit();
         DecompressChunk(task);
         return true;
+    } else {
+        gDecompressionCritSec.Exit();
+        return false;
     }
-    gDecompressionCritSec.Exit();
-    return false;
 }
 
 BinStream &WriteChunks(BinStream &bs, const void *v, int i1, int i2) {

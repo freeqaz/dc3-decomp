@@ -20,7 +20,7 @@ static Timer *sTimer = nullptr;
 BinkReader::BinkReader(File *file, StandardStream *stream)
     : mFile(file), mStream(stream), mBink(nullptr), mCurrentTrack(0),
       mNumSamplesToConsume(0), mSamplesRead(0), mSamplesPerFrame(0),
-      mState(1), mEnableReads(true), mDone(false), mFail(false) {
+      mState(kInit), mEnableReads(true) {
     for (int i = 0; i < 16; i++) {
         mTracks[i] = nullptr;
         mPCMBuffers[i] = nullptr;
@@ -55,12 +55,12 @@ void BinkReader::Poll(float) {
     int state = mState;
 
     switch (state) {
-    case 5: {
+    case kFail: {
         // Error state - already failed
         TheDebug.Fail("BinkReader::Poll() failed", nullptr);
         break;
     }
-    case 3: {
+    case kPlaying: {
         // Playing state - process audio data
         // TheBlockMgr.Poll();  // Poll the block manager
 
@@ -104,13 +104,13 @@ void BinkReader::Poll(float) {
         }
         break;
     }
-    case 2: {
+    case kSetup: {
         // Setup complete, transition to playing
-        mState = 3;
+        mState = kPlaying;
         // Call Init function from vtable
         break;
     }
-    case 1: {
+    case kInit: {
         // Initialization state - setup tracks
         // int numTracks = mBink->GetNumTracks();
         //
@@ -129,21 +129,21 @@ void BinkReader::Poll(float) {
         //         // ...
         //     }
         // }
-        mState = 2;
+        mState = kSetup;
         break;
     }
     }
 
     // Check for error at end
     // if (mBink && mBink->hasError) {
-    //     mState = 5;
+    //     mState = kFail;
     // }
 }
 
 extern void BinkGoto(void *bink, unsigned int frame, int mode);
 
 void BinkReader::Seek(int targetSample) {
-    if (mBink != nullptr && mState != 5) {
+    if (mBink != nullptr && mState != kFail) {
         double sampleRate;
         double samplesPerFrame;
         unsigned int targetFrame;
@@ -186,7 +186,7 @@ void BinkReader::Seek(int targetSample) {
             MILO_ASSERT(false, 0x10B);
         }
 
-        mState = 3;
+        mState = kPlaying;
     }
 }
 

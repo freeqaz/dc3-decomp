@@ -10,6 +10,7 @@
 #include "rndobj/PostProc.h"
 #include "utl/BinStream.h"
 #include "utl/Loader.h"
+#include <algorithm>
 
 // Explicit template instantiation
 namespace stlpmtx_std {
@@ -748,8 +749,7 @@ void LightPreset::SyncKeyframeTargets() {
     }
     for (ObjDirItr<SpotlightDrawer> it(Dir(), true); it; ++it) {
         SpotlightDrawer *key = it;
-        ObjPtrVec<SpotlightDrawer, ObjectDir>::const_iterator found =
-            mSpotlightDrawers.find(key);
+        ObjPtrVec<SpotlightDrawer, ObjectDir>::const_iterator found = mSpotlightDrawers.find(key);
         if (found == mSpotlightDrawers.end()) {
             AddSpotlightDrawer(key);
         }

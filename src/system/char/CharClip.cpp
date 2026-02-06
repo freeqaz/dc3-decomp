@@ -995,64 +995,61 @@ float CharClip::SampleToBeat(int sample) const {
     return result;
 }
 
-void CharClip::LockAndDelete(CharClip **const clips, int numToCheck, int maxToDelete) {
-    // Flag indicating a clip is marked for deletion (bit 15 of mPlayFlags - 0x8000)
-    CharClip *clip;
-    int partitionPos;
+void CharClip::LockAndDelete(CharClip **const clips, int remaining, int maxToDelete) {
     int loopIdx;
-    int numToRelease;
+    CharClip *clip;
 
-    MILO_ASSERT(maxToDelete >= 0, 0x42A);
+    MILO_ASSERT(remaining >= 0, 0x42A);
 
-    // Cap maxToDelete at numToCheck
-    if (numToCheck >= maxToDelete) {
-        maxToDelete = numToCheck;
+    // Cap maxToDelete at remaining
+    if (remaining < maxToDelete) {
+        maxToDelete = remaining;
     }
 
-    partitionPos = 0;
+    loopIdx = 0;
 
-    // Phase 1: Partition clips with flag 0x8000 set
-    // Move flagged clips from front to back section at clips[numToCheck+]
-    if (numToCheck > 0) {
-        CharClip **readPtr = &clips[1];
-        CharClip **writeBackPtr = &clips[numToCheck];
-        for (loopIdx = 0; loopIdx < numToCheck; loopIdx++) {
-            clip = readPtr[-1];
-            if ((clip->mPlayFlags & 0x8000) != 0) {
-                CharClip *temp = writeBackPtr[-1];
-                numToCheck--;
-                maxToDelete--;
-                partitionPos--;
-                writeBackPtr[-1] = clip;
-                readPtr[-1] = temp;
-            }
-            partitionPos++;
-            readPtr++;
-        }
-    }
-
-    // Phase 2: Mark additional clips with deletion flag (bit 15)
-    if (maxToDelete > 0) {
-        CharClip **markPtr = &clips[numToCheck];
-        numToRelease = maxToDelete;
-        numToCheck -= maxToDelete;
+    // Phase 1: Partition clips with flag 0x10000 set
+    if (remaining > 0) {
+        CharClip **readPtr = &clips[0];
+        CharClip **writeBackPtr = &clips[remaining];
         do {
-            markPtr[-1]->mPlayFlags |= 0x8000;
-            markPtr++;
-            numToRelease--;
-        } while (numToRelease != 0);
+            readPtr++;
+            clip = readPtr[-1];
+            if ((clip->mPlayFlags & 0x10000) != 0) {
+                writeBackPtr--;
+                remaining--;
+                maxToDelete--;
+                loopIdx--;
+                readPtr[-1] = *writeBackPtr;
+                *writeBackPtr = clip;
+                readPtr--;
+            }
+            loopIdx++;
+        } while (loopIdx < remaining);
+    }
+
+    // Phase 2: Mark additional clips with deletion flag
+    if (maxToDelete > 0) {
+        int cnt = maxToDelete;
+        CharClip **markPtr = &clips[remaining];
+        remaining -= maxToDelete;
+        do {
+            markPtr--;
+            (*markPtr)->mPlayFlags |= 0x10000;
+            cnt--;
+        } while (cnt != 0);
     }
 
     // Phase 3: Release all marked clips
-    if (numToCheck > 0) {
-        CharClip **releasePtr = &clips[numToCheck - 1];
+    if (remaining > 0) {
+        CharClip **releasePtr = &clips[remaining];
         do {
-            clip = *releasePtr;
-            numToCheck--;
-            if (clip != nullptr) {
-                clip->Release(nullptr);
+            releasePtr--;
+            CharClip *clip = *releasePtr;
+            remaining--;
+            if ((unsigned int)clip) {
+                clip->Release((ObjRef *)1);
             }
-            releasePtr++;
-        } while (numToCheck > 0);
+        } while (remaining > 0);
     }
 }

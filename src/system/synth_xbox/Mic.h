@@ -57,16 +57,16 @@ public:
     bool unkd;
     int unk10;
     bool mChangeNotify; // 0x14
-    Voice *unk18;
+    void *unk18;
     short unk1c[6144];
     short *unk301c;
     std::vector<short> unk3020;
     RingBuffer unk302c;
+    RingBuffer unk3040;
     u32 unk3030;
     int unk3034;
     u32 unk3038;
     u32 unk303c;
-    RingBuffer unk3040;
     u32 unk3044;
     int unk3048;
     u32 unk304c[6146];

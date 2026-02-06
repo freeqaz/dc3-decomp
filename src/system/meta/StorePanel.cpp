@@ -422,15 +422,18 @@ void StorePanel::StartReEnum() {
 }
 
 DataNode StorePanel::OnMsg(SigninChangedMsg const &msg) {
-    int mask = msg.GetMask();
+    int mask = msg.mData->Int(2);
     if (mask != 0) {
-        int changedMask = msg.GetChangedMask();
-        if ((1 << changedMask & mask) == 0) {
+        int changedMask = msg.mData->Node(3).Int(msg.mData);
+        Profile *profile = StoreProfile();
+        int padNum = profile->GetPadNum();
+        if (((1 << padNum) & changedMask) == 0) {
             return DataNode(0);
         }
     }
     if (mLoadOk) {
         mLoadOk = false;
+        ExitStore(kStoreErrorSignedOut);
     }
     return DataNode(0);
 }

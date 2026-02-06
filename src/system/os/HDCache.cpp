@@ -51,11 +51,12 @@ int HDCache::HdrSize() {
             blockStateSize += (numBlocks / 32 + 1) * 4;
         }
     }
-    int totalSize = blockStateSize + 0x100;
-    if (blockStateSize != 0) {
-        totalSize = (totalSize - blockStateSize) + 0x1000;
+    int ret = blockStateSize + 0x100;
+    int remainder = ret - ((ret / 4096) << 12);
+    if (remainder != 0) {
+        ret = ret - remainder + 0x1000;
     }
-    return totalSize;
+    return ret;
 }
 
 bool HDCache::ReadFail() {

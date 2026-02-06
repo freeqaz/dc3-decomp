@@ -555,25 +555,22 @@ DataNode UIFontImporter::OnGenerate3D(DataArray *) {
 }
 
 DataNode UIFontImporter::OnGetGennedBitmapPath(DataArray *da) {
-    RndFontBase *fontbase;
-    if (mGennedFonts.empty())
-        fontbase = 0;
-    else
-        fontbase = mGennedFonts.front();
-    RndFont *font = (RndFont *)fontbase;
-    RndTex *tex = 0;
-    if (font) {
-        RndMat *mat = font->Mat(0);
-        if (mat) {
-            RndTex *thetex = mat->GetDiffuseTex();
-            if (thetex)
-                tex = thetex;
+    RndFont *font;
+    const char *path = "";
+    if (!mGennedFonts.empty()) {
+        font = dynamic_cast<RndFont *>(mGennedFonts.front());
+        if (font) {
+            RndMat *mat = font->Mat(0);
+            if (mat) {
+                if (mat->GetDiffuseTex()) {
+                    if (mat->GetDiffuseTex()) {
+                        path = mat->GetDiffuseTex()->File().c_str();
+                    }
+                }
+            }
         }
     }
-    if (tex)
-        return DataNode(tex->File().c_str());
-    else
-        return DataNode("");
+    return DataNode(path);
 }
 
 DataNode UIFontImporter::OnImportSettings(DataArray *da) {

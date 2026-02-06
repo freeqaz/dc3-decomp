@@ -110,7 +110,6 @@ UIColor *UILabelDir::GetStateColor(UIComponent::State state) const {
 
 DataNode UILabelDir::GetMatVariations(UILabelDir *pThis) {
     s32 numVariations = 0;
-    s32 index = 0;
     DataArray *pArray;
 
     if (pThis != NULL) {
@@ -119,13 +118,12 @@ DataNode UILabelDir::GetMatVariations(UILabelDir *pThis) {
 
     pArray = new DataArray(numVariations + 1);
 
-    DataNode node(pArray, kDataArray);
-    node = gNullStr;
+    // First element is always the null string (empty material variation)
+    pArray->Node(0) = DataNode(gNullStr);
 
-    for (index = 1; index <= numVariations; index++) {
-        Symbol sym = pThis->GetMatVariationName(index - 1);
-        DataNode node2(pArray, kDataArray);
-        node2 = sym;
+    // Add each material variation name
+    for (s32 index = 1; index <= numVariations; index++) {
+        pArray->Node(index) = DataNode(pThis->GetMatVariationName(index - 1));
     }
 
     DataNode result(pArray, kDataArray);

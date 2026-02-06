@@ -4,12 +4,11 @@
 
 bool MainThread();
 
+// Returns true if on main thread, or if gMainThreadID == -1 (thread checks disabled)
 inline bool MainThread() {
-    if (gMainThreadID == -1)
-        return true;
-    if (GetCurrentThreadId() == gMainThreadID)
-        return true;
-    return false;
+    if (gMainThreadID != -1 && GetCurrentThreadId() != gMainThreadID)
+        return false;
+    return true;
 }
 
 inline DWORD CurrentThreadId() { return GetCurrentThreadId(); }

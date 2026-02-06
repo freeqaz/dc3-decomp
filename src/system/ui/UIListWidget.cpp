@@ -9,6 +9,8 @@
 
 float UIListWidget::DrawOrder() const { return mDrawOrder; }
 
+void UIListWidget::ResourceCopy(const UIListWidget *w) { Copy(w, kCopyShallow); }
+
 void UIListWidget::CalcXfm(const Transform &tfin, const Vector3 &vin, Transform &out) {
     out.v.x += vin.x;
     out.v.y += vin.y;

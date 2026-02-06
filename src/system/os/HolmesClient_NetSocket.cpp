@@ -85,7 +85,7 @@ namespace HolmesClient {
     }
 
     String PlatformGetHostName() {
-        return String(HolmesFileHostName());
+        return NetworkSocket::GetHostName();
     }
 
     NetAddress PlatformResolveIP() {

@@ -112,14 +112,14 @@ void RndDrawable::Draw() {
 
 int RndDrawable::CollidePlane(const Plane &plane) {
     if (mShowing) {
-        Sphere sphere;
-        sphere.radius = 0.0f;
-        if (MakeWorldSphere(sphere, false)) {
-            if (sphere >= plane)
+        Sphere s;
+        if (MakeWorldSphere(s, false)) {
+            if (s >= plane)
                 return 1;
-            if (sphere < plane)
+            else if (s < plane)
                 return -1;
-            return 0;
+            else
+                return 0;
         }
     }
     return -1;

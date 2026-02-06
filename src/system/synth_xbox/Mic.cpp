@@ -11,6 +11,22 @@
 
 MicManagerXbox *sInstance;
 
+namespace GainEffect {
+static float sGain;
+}
+
+struct HeadsetConfig {
+    float noiseThreshold;
+    float pad;
+    float lowCut;
+    float localGain;
+    float remoteGain;
+};
+
+extern "C" {
+extern HeadsetConfig lbl_82F474C8;
+}
+
 #pragma region MicXbox
 
 MicXbox::MicXbox(int, float volume)
@@ -27,6 +43,9 @@ MicXbox::MicXbox(int, float volume)
 MicXbox::~MicXbox() {
     if (unkd)
         Stop();
+    if (unk18)
+        delete static_cast<Voice *>(unk18);
+    unk18 = 0;
 }
 
 bool MicXbox::GetClipping() const { return mClipping; }
@@ -103,23 +122,22 @@ MicManagerXbox::MicManagerXbox()
         unkc.push_back(0);
     }
     unk20.reserve(4);
-    DataRegisterFunc("set_noise_gate", SetNoiseGate);
-    DataRegisterFunc("set_low_cut", SetLowCut);
-    DataRegisterFunc("set_local_gain", SetLocalGain);
-    DataRegisterFunc("set_remote_gain", SetRemoteGain);
-    DataArray *arr = SystemConfig("synth", "xbox_headset");
-    Symbol s1("noise_threshold");
-    float noiseThresh = 1.0f;
-    arr->FindData(s1, noiseThresh, true);
-    Symbol s2("low_cut");
-    float lowCut = 0.5f;
-    arr->FindData(s2, lowCut, true);
-    Symbol s3("local_gain");
-    float localGain = 1.0f;
-    arr->FindData(s3, localGain, true);
-    Symbol s4("remote_gain");
-    float remoteGain = 0.5f;
-    arr->FindData(s4, remoteGain, true);
+
+    // Register data functions for headset configuration
+    DataRegisterFunc(Symbol("set_noise_gate"), SetNoiseGate);
+    DataRegisterFunc(Symbol("set_low_cut"), SetLowCut);
+    DataRegisterFunc(Symbol("set_local_gain"), SetLocalGain);
+    DataRegisterFunc(Symbol("set_remote_gain"), SetRemoteGain);
+
+    // Load headset configuration from system config
+    DataArray *arr = SystemConfig(Symbol("synth"), Symbol("xbox_headset"));
+    arr->FindData(Symbol("noise_threshold"), lbl_82F474C8.noiseThreshold, true);
+    arr->FindData(Symbol("low_cut"), lbl_82F474C8.lowCut, true);
+    arr->FindData(Symbol("local_gain"), lbl_82F474C8.localGain, true);
+    arr->FindData(Symbol("remote_gain"), lbl_82F474C8.remoteGain, true);
+
+    // Convert remote gain from dB to linear ratio
+    GainEffect::sGain = DbToRatio(lbl_82F474C8.remoteGain);
 }
 
 MicManagerXbox::~MicManagerXbox() {}

@@ -23,7 +23,7 @@ BEGIN_PROPSYNCS(LabelShrinkWrapper)
     SYNC_PROP_MODIFY(resource, mResourceDir, Update())
     SYNC_PROP_SET(
         label, m_pLabel.Ptr(), m_pLabel = dynamic_cast<UILabel *>(_val.GetObj())
-    ) // somethings wrong with this line for some reason
+    )
     SYNC_PROP_SET(show, m_pShow, m_pShow = _val.Int())
     SYNC_PROP(left_border, mLeftBorder)
     SYNC_PROP(right_border, mRightBorder)
@@ -42,20 +42,20 @@ BEGIN_SAVES(LabelShrinkWrapper)
     SAVE_SUPERCLASS(UIComponent)
 END_SAVES
 
-BEGIN_COPYS(LabelShrinkWrapper)
-    COPY_SUPERCLASS(UIComponent)
-    CREATE_COPY(LabelShrinkWrapper)
-    BEGIN_COPYING_MEMBERS
-        COPY_MEMBER(m_pLabel)
-        COPY_MEMBER(m_pShow)
-        COPY_MEMBER(mLeftBorder)
-        COPY_MEMBER(mRightBorder)
-        COPY_MEMBER(mTopBorder)
-        COPY_MEMBER(mBottomBorder)
-        COPY_MEMBER(mResourceDir)
-    END_COPYING_MEMBERS
+void LabelShrinkWrapper::Copy(const Hmx::Object *o, Hmx::Object::CopyType ty) {
+    UIComponent::Copy(o, ty);
+    const LabelShrinkWrapper *c = dynamic_cast<const LabelShrinkWrapper *>(o);
+    if (c) {
+        m_pLabel = c->m_pLabel;
+        m_pShow = c->m_pShow;
+        mLeftBorder = c->mLeftBorder;
+        mRightBorder = c->mRightBorder;
+        mTopBorder = c->mTopBorder;
+        mBottomBorder = c->mBottomBorder;
+        mResourceDir = c->mResourceDir;
+    }
     Update();
-END_COPYS
+}
 
 BEGIN_LOADS(LabelShrinkWrapper)
     PreLoad(bs);

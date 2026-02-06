@@ -587,7 +587,8 @@ bool RndMesh::MakeWorldSphere(Sphere &s, bool b) {
 
 void RndMesh::Mats(std::list<RndMat *> &mats, bool) {
     if (mMat) {
-        mMat->SetShaderOpts(GetDefaultMatShaderOpts(this, mMat));
+        MatShaderOptions opts = GetDefaultMatShaderOpts(this, mMat);
+        mMat->SetShaderOpts(opts);
         mats.push_back(mMat);
     }
 }

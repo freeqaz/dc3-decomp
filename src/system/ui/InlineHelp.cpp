@@ -39,19 +39,20 @@ BEGIN_SAVES(InlineHelp)
     SAVE_SUPERCLASS(UIComponent)
 END_SAVES
 
-BEGIN_COPYS(InlineHelp)
-    COPY_SUPERCLASS(UIComponent)
-    CREATE_COPY_AS(InlineHelp, c)
-    BEGIN_COPYING_MEMBERS_FROM(c)
-        COPY_MEMBER(mHorizontal)
-        COPY_MEMBER(mSpacing)
-        COPY_MEMBER(mConfig)
-        COPY_MEMBER(mTextColor)
-        COPY_MEMBER(mUseConnectedControllers)
-        COPY_MEMBER(mResourceDir)
-    END_COPYING_MEMBERS
+void InlineHelp::Copy(const Hmx::Object *o, Hmx::Object::CopyType ty) {
+    UIComponent::Copy(o, ty);
+    const InlineHelp *c = dynamic_cast<const InlineHelp *>(o);
+    if (c) {
+        mHorizontal = c->mHorizontal;
+        mSpacing = c->mSpacing;
+        mConfig = c->mConfig;
+        mTextColor = c->mTextColor;
+        mUseConnectedControllers = c->mUseConnectedControllers;
+        mResourceDir = c->mResourceDir;
+    }
     Update();
-END_COPYS
+    UpdateIconTypes(0);
+}
 
 BEGIN_PROPSYNCS(InlineHelp)
     SYNC_PROP_MODIFY(resource, mResourceDir, Update())

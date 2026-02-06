@@ -275,13 +275,31 @@ inline void Interp(const Vector2 &v1, const Vector2 &v2, float f, Vector2 &res) 
 }
 
 inline void Interp(const Vector3 &v1, const Vector3 &v2, float f, Vector3 &dst) {
-    if (f == 0) {
-        dst = v1;
-    } else if (f == 1) {
-        dst = v2;
-    } else {
-        dst.Set(Interp(v1.x, v2.x, f), Interp(v1.y, v2.y, f), Interp(v1.z, v2.z, f));
+    if (f == 0.0f) {
+        // Copy as integers for codegen match
+        ((u32 *)&dst)[0] = ((u32 *)&v1)[0];
+        ((u32 *)&dst)[1] = ((u32 *)&v1)[1];
+        ((u32 *)&dst)[2] = ((u32 *)&v1)[2];
+        ((u32 *)&dst)[3] = ((u32 *)&v1)[3];
+        return;
     }
+    if (f == 1.0f) {
+        // Copy as integers for codegen match
+        ((u32 *)&dst)[0] = ((u32 *)&v2)[0];
+        ((u32 *)&dst)[1] = ((u32 *)&v2)[1];
+        ((u32 *)&dst)[2] = ((u32 *)&v2)[2];
+        ((u32 *)&dst)[3] = ((u32 *)&v2)[3];
+        return;
+    }
+    // Load values in the order the compiler expects for register allocation
+    float v1_y = v1.y;
+    float v2_y = v2.y;
+    float v1_x = v1.x;
+    float v2_x = v2.x;
+    // Compute and store in z, y, x order to match target
+    dst.z = f * (v2.z - v1.z) + v1.z;
+    dst.y = f * (v2_y - v1_y) + v1_y;
+    dst.x = f * (v2_x - v1_x) + v1_x;
 }
 
 inline float Distance(const Vector3 &v1, const Vector3 &v2) {

@@ -231,67 +231,71 @@ void UIManager::Terminate() {
 }
 
 bool UIManager::IsGameScreenActive() {
-    bool result = false;
+    UIScreen *screen;
 
-    void *screenPtr;
+    // Get the bottom-most screen in the stack
     if (!mPushedScreens.empty()) {
-        screenPtr = mPushedScreens[0];
+        screen = mPushedScreens[0];
     } else {
-        screenPtr = mCurrentScreen;
+        screen = mCurrentScreen;
     }
 
-    if (!screenPtr) {
-        return result;
+    if (!screen) {
+        return false;
     }
 
-    void *checkPtr;
-    if (!mPushedScreens.empty()) {
-        checkPtr = mPushedScreens[0];
-    } else {
-        checkPtr = mCurrentScreen;
-    }
+    // Manual string comparison for "game_screen" (required for codegen matching)
+    const char *screenName = screen->Name();
+    const char *gameScreenLiteral = "game_screen";
 
-    char *name = *(char **)((char *)checkPtr + 0x20);
-    const char *targetStr = "game_screen";
-
+    signed char c1;
+    signed char c2;
+    signed char charDiff;
     do {
-        char c1 = *name;
-        char c2 = *targetStr;
-        if (c1 - c2 != 0) {
-            result = true;
-            if (c1 != 0) {
-                return result;
-            }
-        } else {
-            name++;
-            targetStr++;
-        }
-    } while (*name);
+        c1 = *screenName;
+        c2 = *gameScreenLiteral;
+        charDiff = c1 - c2;
+        if (c1 == 0) break;
+        screenName++;
+        gameScreenLiteral++;
+    } while (charDiff == 0);
 
-    result = false;
-    if (mCurrentScreen) {
-        void *finalPtr;
+    // If screen name is "game_screen", verify it's also the current active screen
+    bool isGameScreen = true;
+    if (charDiff == 0) {
+        if (!mCurrentScreen) {
+            return false;
+        }
+
+        // Re-resolve the bottom screen
         if (!mPushedScreens.empty()) {
-            finalPtr = mPushedScreens[0];
+            screen = mPushedScreens[0];
         } else {
-            finalPtr = mCurrentScreen;
+            screen = mCurrentScreen;
         }
 
-        result = (finalPtr == mCurrentScreen);
+        isGameScreen = (screen == mCurrentScreen);
     }
 
-    return result;
+    return isGameScreen;
 }
 
 bool UIManager::BlockHandlerDuringTransition(Symbol s, DataArray *da) { return false; }
 
 void UIManager::GotoScreenImpl(UIScreen *scr, bool b1, bool b2) {
-    if (b1 || mTransitionState != kTransitionNone
-        || mCurrentScreen != scr && (mTransitionState != kTransitionTo && mTransitionState != kTransitionPop)
-        || mTransitionScreen != scr) {
+    // Only proceed if:
+    // - Force transition (b1), OR
+    // - Already in a transition, OR
+    // - Changing to a different screen
+    // AND we're not already transitioning to this exact screen
+    if (((b1 || mTransitionState != kTransitionNone) || mCurrentScreen != scr)
+        && ((mTransitionState != kTransitionTo && mTransitionState != kTransitionPop)
+            || mTransitionScreen != scr)) {
         CancelTransition();
 
 #ifdef MILO_DEBUG
+        // Verify that the new screen doesn't share panels with any pushed screens
+        // (panels should be unique per screen to avoid resource conflicts)
         if (scr) {
             for (std::vector<UIScreen *>::iterator it = mPushedScreens.begin();
                  it != mPushedScreens.end();
@@ -303,11 +307,21 @@ void UIManager::GotoScreenImpl(UIScreen *scr, bool b1, bool b2) {
         }
 #endif
 
+        // Log the transition for debugging
+        const char *curName = mCurrentScreen ? mCurrentScreen->Name() : "<none>";
+        const char *newName = scr ? scr->Name() : "<none>";
+        TheDebug << MakeString("transition from %s to %s\n", curName, newName);
+
+        // Store transition state and notify listeners
         mWentBack = b2;
         UIScreenChangeMsg msg(scr, mCurrentScreen, mWentBack);
         Handle(msg, false);
+
+        // Begin transition to new screen
         mTransitionState = kTransitionTo;
         mTransitionScreen = scr;
+
+        // Exit current screen or load new screen panels
         if (mCurrentScreen) {
             mCurrentScreen->Exit(scr);
         } else if (scr) {
@@ -315,6 +329,7 @@ void UIManager::GotoScreenImpl(UIScreen *scr, bool b1, bool b2) {
         }
 
 #ifdef MILO_DEBUG
+        // Start tracking load time for the new screen
         if (mTransitionScreen) {
             mOverlay->CurrentLine() = gNullStr;
             mLoadTimer.Restart();

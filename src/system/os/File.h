@@ -8,6 +8,7 @@
 
 #define FILE_SEEK_SET 0
 #define FILE_SEEK_CUR 1
+#define FILE_SEEK_END 2
 
 extern bool gNullFiles;
 extern bool gFakeFileErrors;

@@ -242,42 +242,35 @@ void PlaylistSortMgr::QueueCmdEditPlaylist(Playlist *pl) {
 }
 
 void PlaylistSortMgr::ProcessNextCommand() {
-    int i = 0;
-    for (auto it = (unkc0).begin(); it != (unkc0).end(); (++it), i++) {
-        if (i != 0) {
-            unkc8 = true;
-            i = (*it)->unk4.i;
-            if (i == 0) {
-                HandleCmdChangeProfileOnlineID();
-                return;
-            }
-            if (i == 1) {
-                StartCmdGetPlaylistsFromRC();
-                return;
-            }
-            if (i == 2) {
-                HandleCmdResolvePlaylists();
-                return;
-            }
-            if (i == 3) {
-                StartCmdGetPlaylistFromRC();
-                return;
-            }
-            if (i == 4) {
-                StartCmdAddPlaylistToRC();
-                return;
-            }
-            if (i == 5) {
-                StartCmdEditPlaylist();
-                return;
-            }
-            if (i == 6) {
-                StartCmdDeletePlaylistFromRC();
-                return;
-            }
+    if (unkc0.size() == 0) {
+        unkc8 = false;
+    } else {
+        unkc8 = true;
+        QueueableCommand *cmd = unkc0.front();
+        switch (cmd->GetType()) {
+        case 0:
+            HandleCmdChangeProfileOnlineID();
+            break;
+        case 1:
+            StartCmdGetPlaylistsFromRC();
+            break;
+        case 2:
+            HandleCmdResolvePlaylists();
+            break;
+        case 3:
+            StartCmdGetPlaylistFromRC();
+            break;
+        case 4:
+            StartCmdAddPlaylistToRC();
+            break;
+        case 5:
+            StartCmdEditPlaylist();
+            break;
+        case 6:
+            StartCmdDeletePlaylistFromRC();
+            break;
         }
     }
-    unkc8 = false;
 }
 
 void PlaylistSortMgr::ResolvePlaylists() {

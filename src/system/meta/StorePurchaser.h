@@ -16,6 +16,10 @@ enum PurchaseState { // just know the val of kSuccess
 class StorePurchaser {
 public:
     virtual ~StorePurchaser() {}
+    virtual void Initiate() = 0;
+    virtual bool IsPurchasing() const = 0;
+    virtual bool IsSuccess() const = 0;
+    virtual bool PurchaseMade() const = 0;
 
     StorePurchaser(Symbol s, unsigned int i) : unk4(s), unk8(i) {}
 

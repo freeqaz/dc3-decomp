@@ -13,7 +13,10 @@
 #include "utl/MemMgr.h"
 
 /** "A quickly-rendered bunch of instanced characters within an area" */
+class CameraManager;
+
 class WorldCrowd : public RndDrawable, public RndPollable {
+    friend class CameraManager;
 public:
     class CharDef {
     public:

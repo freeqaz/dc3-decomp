@@ -19,7 +19,7 @@ BEGIN_LOADS(CharBonesSamples)
             "%s can\'t load new %s version %d > %d", "", "CharBonesSample", d.rev, gRev
         );
     }
-    if (d.rev > 0) {
+    if (d.altRev > 0) {
         MILO_FAIL(
             "%s can\'t load new %s alt version %d > %d",
             "",

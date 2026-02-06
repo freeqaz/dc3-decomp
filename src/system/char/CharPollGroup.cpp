@@ -104,13 +104,15 @@ void CharPollGroup::PollDeps(
     }
 }
 
-void CharPollGroup::SortPolls() { // incomplete
+void CharPollGroup::SortPolls() {
+    CharPollableSorter sorter;
     std::vector<RndPollable *> polls;
     polls.reserve(mPolls.size());
     for (ObjPtrList<CharPollable>::iterator it = mPolls.begin(); it != mPolls.end();
          ++it) {
         polls.push_back(*it);
     }
+    sorter.Sort(polls);
     mPolls.clear();
     for (int i = 0; i < polls.size(); i++) {
         mPolls.push_back(dynamic_cast<CharPollable *>(polls[i]));

@@ -95,8 +95,10 @@ int AllocInfo::Compare(const AllocInfo &info) const {
         return cmp;
     } else if (mReqSize < info.mReqSize) {
         return -1;
+    } else if (mReqSize > info.mReqSize) {
+        return 1;
     } else
-        return mReqSize <= info.mReqSize;
+        return 0;
 }
 
 void AllocInfo::FillStackTrace() {

@@ -32,6 +32,7 @@ import logging
 import re
 import sys
 import time
+from collections import defaultdict
 from pathlib import Path
 
 # Add project root to path
@@ -58,13 +59,6 @@ logger = logging.getLogger(__name__)
 def parse_map_file(map_path: Path) -> list[tuple[str, str]]:
     """Parse linker map file to extract function symbols and addresses.
 
-    Looks for entries in the .text section (section 0005) which contains
-    compiled code. Each entry has format:
-        0005:OFFSET       SYMBOL   ADDRESS f   OBJECT
-
-    Args:
-        map_path: Path to the .map file
-
     Returns:
         List of (symbol, hex_address) tuples
     """
@@ -80,11 +74,32 @@ def parse_map_file(map_path: Path) -> list[tuple[str, str]]:
         for line in f:
             m = pattern.match(line)
             if m:
-                symbol = m.group(1)
-                address = m.group(2)
-                symbols.append((symbol, address))
+                symbols.append((m.group(1), m.group(2)))
 
     return symbols
+
+
+def build_address_groups(
+    symbols: list[tuple[str, str]],
+) -> tuple[dict[str, list[str]], list[str]]:
+    """Group symbols by address for ICF deduplication.
+
+    Many template instantiations get merged to the same address by the linker
+    (Identical COMDAT Folding). We only need to decompile each unique address
+    once, then fan out the result to all symbols at that address.
+
+    Returns:
+        (addr_to_symbols dict, unique_addresses list in order)
+    """
+    addr_to_symbols: dict[str, list[str]] = defaultdict(list)
+    seen_addresses: list[str] = []
+
+    for symbol, address in symbols:
+        if address not in addr_to_symbols:
+            seen_addresses.append(address)
+        addr_to_symbols[address].append(symbol)
+
+    return dict(addr_to_symbols), seen_addresses
 
 
 def show_stats(db_path: Path) -> None:
@@ -114,19 +129,10 @@ def batch_export(
 ) -> None:
     """Run batch export of Ghidra decompilations and xrefs to SQLite.
 
-    Uses the running pyghidra-mcp HTTP service (which has XEXLoaderWV
-    and the VMX128-enabled Ghidra build) rather than a standalone
-    DirectGhidraClient.
+    Deduplicates by address: ICF-merged symbols sharing the same address
+    are decompiled once, with the result fanned out to all symbols.
 
-    Args:
-        map_path: Path to linker map file
-        db_path: Path to decomp.db
-        mcp_url: URL of pyghidra-mcp service
-        resume: Skip already-cached symbols
-        decomp_only: Only export decompilations
-        xrefs_only: Only export cross-references
-        limit: Max functions to process (0 = all)
-        batch_size: Commit every N functions
+    Uses WAL mode for non-blocking concurrent reads during export.
     """
     do_decomp = not xrefs_only
     do_xrefs = not decomp_only
@@ -134,10 +140,20 @@ def batch_export(
     # Parse map file
     print(f"Parsing map file: {map_path}")
     all_symbols = parse_map_file(map_path)
-    print(f"Found {len(all_symbols)} functions in .text section")
+    print(f"Found {len(all_symbols)} symbols in .text section")
+
+    # Group by address for ICF deduplication
+    addr_to_symbols, unique_addresses = build_address_groups(all_symbols)
+    total_symbols = len(all_symbols)
+    total_unique = len(unique_addresses)
+    icf_count = total_symbols - total_unique
+    print(f"Unique addresses: {total_unique} ({icf_count} ICF-merged duplicates)")
 
     # Initialize database (runs migrations if needed)
     conn = init_database(str(db_path))
+    # WAL mode is already set by get_connection(), but set busy timeout
+    # so we don't block other readers/writers
+    conn.execute("PRAGMA busy_timeout = 5000")
 
     # Get already-cached symbols for resume
     cached = set()
@@ -145,23 +161,29 @@ def batch_export(
         cached = get_cached_symbols(conn)
         print(f"Already cached: {len(cached)} symbols")
 
-    # Filter to uncached symbols
-    if resume:
-        work_list = [(s, a) for s, a in all_symbols if s not in cached]
-    else:
-        work_list = all_symbols
+    # Build work list of unique addresses that have uncached symbols
+    work_addresses = []
+    for addr in unique_addresses:
+        syms = addr_to_symbols[addr]
+        # Skip if ALL symbols at this address are already cached
+        if resume and all(s in cached for s in syms):
+            continue
+        work_addresses.append(addr)
 
     if limit > 0:
-        work_list = work_list[:limit]
+        work_addresses = work_addresses[:limit]
 
-    total = len(work_list)
+    # Count total symbols that will be written
+    symbols_to_write = sum(len(addr_to_symbols[a]) for a in work_addresses)
+
+    total = len(work_addresses)
     if total == 0:
         print("Nothing to do — all symbols already cached.")
         show_stats(db_path)
         return
 
-    print(f"Will process {total} functions" +
-          (f" (limited to {limit})" if limit > 0 else ""))
+    print(f"Will decompile {total} unique addresses -> {symbols_to_write} symbol entries" +
+          (f" (limited to {limit} addresses)" if limit > 0 else ""))
     print()
 
     # Connect to pyghidra-mcp service
@@ -177,72 +199,87 @@ def batch_export(
         sys.exit(1)
     print()
 
-    # Process functions
+    # Process unique addresses
     start_time = time.time()
-    success_count = 0
-    error_count = 0
+    addr_success = 0
+    addr_errors = 0
+    symbol_count = 0
     consecutive_errors = 0
 
-    for i, (symbol, address) in enumerate(work_list):
-        try:
-            # Use hex address for lookup — more reliable than mangled names
-            # GhidraTools.find_function Strategy 0 handles direct hex addresses
-            lookup_key = f"0x{address}"
+    for i, address in enumerate(work_addresses):
+        symbols_at_addr = addr_to_symbols[address]
+        lookup_key = f"0x{address}"
 
-            # Decompilation
+        # --- Decompilation: fetch once per address ---
+        decomp_code = None
+        decomp_sig = None
+        decomp_error = None
+
+        if do_decomp:
+            try:
+                result = client.call_tool("decompile_function", {
+                    "binary_name": client.binary,
+                    "name": lookup_key,
+                })
+                decomp_code = result.get("code", "") if isinstance(result, dict) else str(result)
+                decomp_sig = result.get("signature") if isinstance(result, dict) else None
+                consecutive_errors = 0
+            except MCPError as e:
+                decomp_error = str(e)
+                consecutive_errors += 1
+                if i < 5 or consecutive_errors == 1:
+                    logger.warning(f"Decomp error @ {lookup_key} ({len(symbols_at_addr)} syms): {e}")
+
+        # --- Xrefs: fetch once per address ---
+        xref_callers = None
+        xref_error = None
+
+        if do_xrefs:
+            try:
+                result = client.list_xrefs(lookup_key)
+                xref_list = []
+                if isinstance(result, dict):
+                    xref_list = result.get("cross_references", [])
+                elif isinstance(result, list):
+                    xref_list = result
+
+                xref_callers = []
+                for xref in xref_list:
+                    if isinstance(xref, dict):
+                        fn = xref.get("function_name")
+                        if fn:
+                            xref_callers.append(fn)
+                consecutive_errors = 0
+            except MCPError as e:
+                xref_error = str(e)
+                if i < 5 or consecutive_errors == 1:
+                    logger.warning(f"Xrefs error @ {lookup_key}: {e}")
+
+        # --- Fan out result to all symbols at this address ---
+        for symbol in symbols_at_addr:
+            if resume and symbol in cached:
+                continue
+
             if do_decomp:
-                try:
-                    result = client.decompile_function(lookup_key)
-                    # MCPClient returns dict with 'code', 'name', 'signature'
-                    code = result.get("code", "") if isinstance(result, dict) else str(result)
-                    signature = result.get("signature") if isinstance(result, dict) else None
-                    put_decompilation(conn, symbol, address, code, signature)
-                    consecutive_errors = 0
-                except MCPError as e:
-                    put_decompilation(
-                        conn, symbol, address, code="", error=str(e)
-                    )
-                    error_count += 1
-                    consecutive_errors += 1
-                    if i < 5 or consecutive_errors == 1:
-                        logger.warning(f"Decomp error for {symbol} @ 0x{address}: {e}")
+                if decomp_error:
+                    put_decompilation(conn, symbol, address, code="", error=decomp_error)
+                else:
+                    put_decompilation(conn, symbol, address, decomp_code, decomp_sig)
 
-            # Cross-references
             if do_xrefs:
-                try:
-                    result = client.list_xrefs(lookup_key)
-                    # MCPClient returns dict with 'cross_references' list
-                    xref_list = []
-                    if isinstance(result, dict):
-                        xref_list = result.get("cross_references", [])
-                    elif isinstance(result, list):
-                        xref_list = result
+                if xref_error:
+                    put_xrefs(conn, symbol, address, callers=[], callees=[], error=xref_error)
+                else:
+                    put_xrefs(conn, symbol, address, xref_callers, callees=[])
 
-                    callers = []
-                    for xref in xref_list:
-                        if isinstance(xref, dict):
-                            fn = xref.get("function_name")
-                            if fn:
-                                callers.append(fn)
-                    # Xrefs from this API are incoming refs (callers)
-                    put_xrefs(conn, symbol, address, callers, callees=[])
-                    consecutive_errors = 0
-                except MCPError as e:
-                    put_xrefs(
-                        conn, symbol, address,
-                        callers=[], callees=[], error=str(e),
-                    )
-                    if i < 5 or consecutive_errors == 1:
-                        logger.warning(f"Xrefs error for {symbol}: {e}")
+            symbol_count += 1
 
-            success_count += 1
+        if decomp_error and xref_error:
+            addr_errors += 1
+        else:
+            addr_success += 1
 
-        except Exception as e:
-            error_count += 1
-            consecutive_errors += 1
-            logger.error(f"Unexpected error for {symbol}: {e}")
-
-        # Bail if service seems down (many consecutive errors)
+        # Bail if service seems down
         if consecutive_errors >= 20:
             print(f"\nERROR: {consecutive_errors} consecutive errors — service may be down")
             print("Check: ./tools/ghidra/pyghidra-service.sh status")
@@ -259,9 +296,9 @@ def batch_export(
 
             pct = 100.0 * (i + 1) / total
             print(
-                f"[{pct:5.1f}%] {i+1}/{total} — "
-                f"{success_count} ok, {error_count} errors — "
-                f"{rate:.1f} fn/s — "
+                f"[{pct:5.1f}%] {i+1}/{total} addrs ({symbol_count} syms) — "
+                f"{addr_success} ok, {addr_errors} errors — "
+                f"{rate:.1f} addr/s — "
                 f"ETA: {remaining/60:.1f} min"
             )
 
@@ -269,9 +306,10 @@ def batch_export(
     elapsed = time.time() - start_time
     print()
     print(f"Batch export complete in {elapsed/60:.1f} minutes")
-    print(f"  Processed: {i + 1}")
-    print(f"  Success:   {success_count}")
-    print(f"  Errors:    {error_count}")
+    print(f"  Addresses processed: {i + 1}")
+    print(f"  Symbols written:     {symbol_count}")
+    print(f"  Address success:     {addr_success}")
+    print(f"  Address errors:      {addr_errors}")
     print()
     show_stats(db_path)
 
@@ -322,13 +360,13 @@ def main():
         "--limit",
         type=int,
         default=0,
-        help="Max functions to process (0 = all)",
+        help="Max unique addresses to process (0 = all)",
     )
     parser.add_argument(
         "--batch-size",
         type=int,
         default=100,
-        help="Commit every N functions (default: 100)",
+        help="Commit every N addresses (default: 100)",
     )
     parser.add_argument(
         "--stats",
