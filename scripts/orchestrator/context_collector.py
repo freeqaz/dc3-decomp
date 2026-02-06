@@ -2953,7 +2953,9 @@ def collect_pre_run_context(
             ghidra_project_dir = Path("/tmp/claude/ghidra_projects")
             ghidra_project_dir.mkdir(parents=True, exist_ok=True)
 
-            client = DirectGhidraClient(
+            # Use singleton pattern to avoid JVM/project state corruption
+            # when processing multiple functions in batch mode
+            client = DirectGhidraClient.get_instance(
                 binary_path=binary_path,
                 project_dir=str(ghidra_project_dir),
                 project_name="DC3",
@@ -3026,11 +3028,7 @@ def collect_pre_run_context(
             except DirectGhidraClientError as e:
                 log.warning(f"Ghidra xrefs lookup failed: {e}")
 
-            # Clean up
-            try:
-                client.close()
-            except Exception as e:
-                log.warning(f"Error closing Ghidra client: {e}")
+            # Note: Don't close the singleton client - it stays alive for batch reuse
 
     except DirectGhidraClientError as e:
         log.warning(f"Ghidra initialization failed (continuing without Ghidra): {e}")

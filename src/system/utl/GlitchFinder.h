@@ -35,35 +35,25 @@ public:
     void Dump(TextStream &, int);
     void ClearData();
 
-
     static float smLastDumpTime;
     static bool smDumpLeaves;
     static float smThreshold;
     static float smTotalLeafTime;
-
-    GlitchAverager *GetAverager() { return mAvg; };
-    void SetUnk0(const char *c) { strncpy(unk0, c, 0x40); }
-    void SetUnk40(float f) { unk40 = f; }
-    void SetUnk58(float f) { unk58 = f; }
-    GlitchPoker *GetUnk54() { return unk54; }
-    void SetUnk54(GlitchPoker *poker) { unk54 = poker; }
-    void SetAverager(GlitchAverager *avg) {  mAvg = avg; }
-    std::vector<GlitchPoker *> GetUnk48() { return unk48;}
-    void Unk48PushBack(GlitchPoker *poker) { unk48.push_back(poker); }
-    void SetUnk44(float f) { unk44 = f; }
 
 private:
     static std::vector<float> smNestedStartTimes;
     void PrintResult(TextStream &);
     void PrintNestedStartTimes(TextStream &, float);
 
+    friend class GlitchFinder;
+
 protected:
-    char unk0[64]; // 0x0
-    float unk40; // 0x40
-    float unk44; // 0x44
-    std::vector<GlitchPoker *> unk48; // 0x48
-    GlitchPoker *unk54; // 0x54
-    float unk58; // 0x58
+    char mName[64]; // 0x0
+    float mTime; // 0x40
+    float mTimeEnd; // 0x44
+    std::vector<GlitchPoker *> mChildren; // 0x48
+    GlitchPoker *mParent; // 0x54
+    float mBudget; // 0x58
     GlitchAverager *mAvg; // 0x5c
 };
 

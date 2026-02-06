@@ -398,10 +398,10 @@ void ObjectDir::SyncObjects() {
 }
 
 void ObjectDir::ResetEditorState() {
-    mViewports.resize(7);
-    unk8c = 0;
-    mCurCam = 0;
-    mAlwaysInlined = 0;
+    mViewports.resize(kNumViewports);
+    mCurViewportID = (ViewportId)0;
+    unk8c = nullptr;
+    mCurCam = nullptr;
     ResetViewports();
 }
 
@@ -523,20 +523,27 @@ void ObjectDir::SaveProxy(BinStream &bs) {
 }
 
 void ObjectDir::ResetViewports() {
-    mViewports[1].mXfm.m.Set(0, -1, 0, 1, 0, 0, 0, 0, 1);
-    mViewports[1].mXfm.v.Set(-768, 0, 0);
-    mViewports[2].mXfm.m.Set(0, 1, 0, -1, 0, 0, 0, 0, 1);
-    mViewports[2].mXfm.v.Set(768, 0, 0);
-    mViewports[3].mXfm.m.Set(1, 0, 0, 0, 0, 1, 0, 1, 0);
-    mViewports[3].mXfm.v.Set(0, 0, 768);
-    mViewports[4].mXfm.m.Set(1, 0, 0, 0, 0, 1, 0, -1, 0);
-    mViewports[4].mXfm.v.Set(0, 0, -768);
-    mViewports[5].mXfm.m.Set(1, 0, 0, 0, 1, 0, 0, 0, 1);
-    mViewports[5].mXfm.v.Set(0, -768, 0);
-    mViewports[6].mXfm.m.Set(-1, 0, 0, 0, -1, 0, 0, 0, 1);
-    mViewports[6].mXfm.v.Set(0, 768, 0);
-    MakeRotMatrix(Vector3(1, 1, -1), Vector3(0, 0, 1), mViewports[0].mXfm.m);
-    Multiply(Vector3(0, -768.0f, 0), mViewports[0].mXfm.m, mViewports[0].mXfm.v);
+    Viewport *vp = &mViewports[0];
+    vp[1].mXfm.m.Set(0, -1, 0, 1, 0, 0, 0, 0, 1);
+    vp[1].mXfm.v.Set(-768, 0, 0);
+    vp[2].mXfm.m.Set(0, 1, 0, -1, 0, 0, 0, 0, 1);
+    vp[2].mXfm.v.Set(768, 0, 0);
+    vp[3].mXfm.m.Set(1, 0, 0, 0, 0, 1, 0, 1, 0);
+    vp[3].mXfm.v.Set(0, 0, 768);
+    vp[4].mXfm.m.Set(1, 0, 0, 0, 0, 1, 0, -1, 0);
+    vp[4].mXfm.v.Set(0, 0, -768);
+    vp[5].mXfm.m.Set(1, 0, 0, 0, 1, 0, 0, 0, 1);
+    vp[5].mXfm.v.Set(0, -768, 0);
+    vp[6].mXfm.m.Set(-1, 0, 0, 0, -1, 0, 0, 0, 1);
+    vp[6].mXfm.v.Set(0, 768, 0);
+    MakeRotMatrix(Vector3(1, 1, -1), Vector3(0, 0, 1), vp[0].mXfm.m);
+    Vector3 v(0, -768.0f, 0);
+    Hmx::Matrix3 &m = vp[0].mXfm.m;
+    vp[0].mXfm.v.Set(
+        m.x.x * v.x + (m.z.x * v.z + m.y.x * v.y),
+        m.x.y * v.x + (m.z.y * v.z + m.y.y * v.y),
+        m.x.z * v.x + (m.z.z * v.z + m.y.z * v.y)
+    );
 }
 
 DataNode OnLoadObjects(DataArray *a) {

@@ -332,8 +332,8 @@ def ingest_report(
             if not symbol:
                 continue
 
-            demangled = func.get("demangled", func.get("name", ""))
-            size = func.get("size", 0)
+            demangled = func.get("metadata", {}).get("demangled_name", "") or func.get("demangled", func.get("name", ""))
+            size = int(func.get("size", 0) or 0)
 
             # Calculate match percentage from fuzzy_match_percent or match_percent
             percent = func.get("fuzzy_match_percent")

@@ -50,12 +50,15 @@ BEGIN_LOADS(CharDriverMidi)
     if (d.rev == 2) {
         String str;
         bs >> str;
-    } else if (d.rev > 3)
+    } else if (d.rev > 3) {
         bs >> mParser;
-    if (d.rev > 4)
+    }
+    if (d.rev > 4) {
         bs >> mFlagParser;
-    if (d.rev > 5)
+    }
+    if (d.rev > 5) {
         bs >> mBlendOverridePct;
+    }
 END_LOADS
 
 void CharDriverMidi::Poll() { CharDriver::Poll(); }
@@ -67,8 +70,7 @@ void CharDriverMidi::PollDeps(
 }
 
 void CharDriverMidi::Enter() {
-    bool *field_b8 = (bool *)((char *)this + 0xb8);
-    *field_b8 = true;
+    unke0 = true;
     CharDriver::Enter();
     Hmx::Object *msgParser =
         Dir()->FindObject(mParser.Str(), true, true);
@@ -93,12 +95,14 @@ void CharDriverMidi::Exit() {
 
 DataNode CharDriverMidi::OnMidiParser(DataArray *da) {
     CharClip *clip;
+    // Use default clip if available and not in special mode
     if (!unke0 && mDefaultClip)
         clip = dynamic_cast<CharClip *>(mDefaultClip.Ptr());
     else
         clip = FindClip(da->Node(2), false);
     if (clip && clip != FirstClip()) {
         float somefloat = da->Float(3);
+        // If clip uses beat-based timing (flag 0x200), convert beats to clip time
         if (clip->PlayFlags() & 0x200) {
             float secs = TheTaskMgr.Seconds(TaskMgr::kRealTime);
             float beat = TheTaskMgr.Beat();
@@ -120,6 +124,7 @@ DataNode CharDriverMidi::OnMidiParserGroup(DataArray *da) {
     const char *name = da->Str(2);
     CharClipGroup *grp = mClips->Find<CharClipGroup>(name, false);
     if (!grp) {
+        // BUG: grp is NULL here, grp->Name() will crash. Preserved from original.
         MILO_WARN("%s could not find group %s in %s", PathName(this), name, grp->Name());
         return 0;
     } else {
@@ -138,6 +143,8 @@ DataNode CharDriverMidi::OnMidiParserGroup(DataArray *da) {
             );
             return 0;
         } else {
+            // NOTE: Condition is redundant (clip || clip != X) - first part always succeeds if true
+            // Preserved from original code
             if (clip || clip != FirstClip()) {
                 float somefloat = da->Float(3);
                 if (clip->PlayFlags() & 0x200) {

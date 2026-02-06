@@ -10,38 +10,31 @@ ClipGraphGenerator::~ClipGraphGenerator() {}
 ClipDistMap *ClipGraphGenerator::GeneratePair(
     CharClip *c1, CharClip *c2, ClipDistMap::Node *n1, ClipDistMap::Node *n2
 ) {
-    c1->GetTransitions().RemoveNodes((CharClip::NodeVector *)c2);
-    bool b2 = true;
+    c1->GetTransitions().RemoveClip(c2);
     unk2c = c1->TypeDef();
-    bool b1 = true;
     if (unk2c) {
-        if (c2->Type() == c1->Type())
-            b1 = false;
-    }
-    if (!b1 && ((c1->PlayFlags() & 0xF0) != 0x10))
-        b2 = false;
-    if (b2)
-        return 0;
-    else {
-        DataArray *transarr = unk2c->FindArray("on_transition", false);
-        if (!transarr)
-            return 0;
-        else {
-            static DataNode &a_clip = DataVariable("a_clip");
-            static DataNode &b_clip = DataVariable("b_clip");
-            mDmap = 0;
-            a_clip = DataNode(c1);
-            b_clip = DataNode(c2);
-            mClipA = c1;
-            mClipB = c2;
-            transarr->ExecuteScript(1, this, 0, 1);
-            ClipDistMap *dmap = mDmap;
-            mDmap = 0;
-            if (dmap)
-                dmap->SetNodes(n1, n2);
-            return dmap;
+        if (c1->Type() == c2->Type()) {
+            if ((c1->PlayFlags() & 0xF0) != 0x10) {
+                DataArray *transarr = unk2c->FindArray("on_transition", false);
+                if (transarr) {
+                    static DataNode &a_clip = DataVariable("a_clip");
+                    static DataNode &b_clip = DataVariable("b_clip");
+                    mDmap = 0;
+                    a_clip = DataNode(c1);
+                    b_clip = DataNode(c2);
+                    mClipA = c1;
+                    mClipB = c2;
+                    transarr->ExecuteScript(1, this, 0, 1);
+                    ClipDistMap *dmap = mDmap;
+                    mDmap = 0;
+                    if (dmap)
+                        dmap->SetNodes(n1, n2);
+                    return dmap;
+                }
+            }
         }
     }
+    return 0;
 }
 
 DataNode ClipGraphGenerator::OnGenerateTransitions(DataArray *da) {
@@ -62,8 +55,8 @@ DataNode ClipGraphGenerator::OnGenerateTransitions(DataArray *da) {
     da->FindData("end_dist", end_dist, false);
     DataArray *restrictArr = da->FindArray("restrict", false);
 
-    int aflag = mClipA->PlayFlags() >> 12 & 15;
     int bflag = mClipB->PlayFlags() >> 12 & 15;
+    int aflag = mClipA->PlayFlags() >> 12 & 15;
     if (bflag >= aflag)
         aflag = bflag;
     if (beat_align < (float)aflag)

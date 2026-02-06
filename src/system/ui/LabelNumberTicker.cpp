@@ -139,24 +139,37 @@ void LabelNumberTicker::SnapToValue(int i) {
 void LabelNumberTicker::Poll() {
     UIComponent::Poll();
     if (mTimer.Running()) {
-        float split = mTimer.SplitMs();
-        float animtime = mAnimTime * 1000.0f;
-        float animdelay = mAnimDelay * 1000.0f;
-        float animsum = animdelay + animtime;
-        if (split >= animdelay) {
-            float diff = split - animdelay;
-            float quotient = diff / animtime;
-            float powered = std::pow(quotient, mAcceleration);
-            quotient *= powered;
-            int delta = mDesiredValue - unk6c;
-            int somenum = unk6c + (int)(quotient * delta);
+        // Get elapsed time and compute animation timing windows
+        float elapsedMs = mTimer.SplitMs();
+        float animTimeMs = mAnimTime * 1000.0f;
+        float delayMs = mAnimDelay * 1000.0f;
+        float totalMs = delayMs + animTimeMs;
+
+        // Only animate after initial delay period
+        if (elapsedMs >= delayMs) {
+            // Calculate animation progress (0.0 to 1.0+)
+            float progress = (elapsedMs - delayMs) / animTimeMs;
+
+            // Apply acceleration curve: progress^(1 + acceleration)
+            float powered = std::pow(progress, mAcceleration);
+            progress *= powered;
+
+            // Interpolate from start value (unk6c) to desired value
+            int valueDelta = mDesiredValue - unk6c;
+            int newValue = unk6c + (int)(progress * valueDelta);
+
+            // Trigger events when crossing mTickEvery thresholds
             if (mTickTrigger && mTickEvery != 0) {
-                if ((somenum / mTickEvery) > (unk70 / mTickEvery)) {
+                if ((newValue / mTickEvery) > (unk70 / mTickEvery)) {
                     mTickTrigger->Trigger();
                 }
             }
-            unk70 = somenum;
-            if (unk70 == mDesiredValue || split >= animsum) {
+
+            // Update current display value (unk70)
+            unk70 = newValue;
+
+            // Stop animation when target reached or time exceeded
+            if (unk70 == mDesiredValue || elapsedMs >= totalMs) {
                 unk70 = mDesiredValue;
                 mTimer.Stop();
             }

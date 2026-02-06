@@ -243,17 +243,17 @@ void CharDriver::SyncInternalBones() {
     }
 }
 
-float CharDriver::EvaluateFlags(int i) {
-    float ret = 1.0f;
-    float f1 = 0.0f;
-    for (auto it = mFirst; it != nullptr; it = it->Next()) {
-        float temp = EaseSigmoid(it->mBlendFrac, 0.0f, 0.0f);
-        if ((it->mClip->Flags() & i) != 0) {
-            ret += temp * f1;
+float CharDriver::EvaluateFlags(int flags) {
+    float weight = 1;
+    float result = 0;
+    for (CharClipDriver *it = mFirst; it != nullptr; it = it->Next()) {
+        float sigmoid = EaseSigmoid(it->mBlendFrac, 0.0f, 0.0f);
+        if ((it->mClip->Flags() & flags) != 0) {
+            result += sigmoid * weight;
         }
-        f1 *= 1.0f - temp;
+        weight *= 1.0f - sigmoid;
     }
-    return ret;
+    return result;
 }
 
 bool CharDriver::Replace(ObjRef *from, Hmx::Object *to) {

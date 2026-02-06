@@ -67,6 +67,7 @@ load_dotenv(_project_root / ".env")
 
 from orchestrator.database import (
     init_database,
+    ingest_report,
     get_connection,
     query_functions,
     query_functions_by_priority,
@@ -786,56 +787,14 @@ def cmd_sync(args):
 
     print(f"Syncing database from {report_path}...")
 
-    # Load report
-    with open(report_path) as f:
-        report = json.load(f)
+    result = ingest_report(report_path, db_path=args.db)
 
-    # Connect to database
-    import sqlite3
-    conn = sqlite3.connect(args.db)
-    cursor = conn.cursor()
-
-    updated = 0
-    inserted = 0
-
-    for unit in report.get("units", []):
-        unit_name = unit.get("name", "")
-        for func in unit.get("functions", []):
-            symbol = func.get("name", "")
-            fuzzy = func.get("fuzzy_match_percent")
-            demangled = func.get("demangled_name", "")
-
-            if not symbol or fuzzy is None:
-                continue
-
-            # Try to update existing
-            cursor.execute("""
-                UPDATE functions
-                SET current_percent = ?, demangled = COALESCE(?, demangled)
-                WHERE symbol = ? AND (current_percent IS NULL OR ABS(current_percent - ?) > 0.001)
-            """, (fuzzy, demangled or None, symbol, fuzzy))
-
-            if cursor.rowcount > 0:
-                updated += 1
-            else:
-                # Check if it exists at all
-                cursor.execute("SELECT 1 FROM functions WHERE symbol = ?", (symbol,))
-                if not cursor.fetchone():
-                    # Insert new function
-                    cursor.execute("""
-                        INSERT INTO functions (symbol, demangled, unit, current_percent)
-                        VALUES (?, ?, ?, ?)
-                    """, (symbol, demangled or None, unit_name, fuzzy))
-                    inserted += 1
-
-    conn.commit()
-    conn.close()
-
-    print(f"Updated: {updated} functions")
-    print(f"Inserted: {inserted} functions")
+    print(f"Updated: {result['updated']} functions")
+    print(f"Inserted: {result['inserted']} functions")
+    print(f"Skipped: {result['skipped']} functions")
 
     if args.json:
-        print(json.dumps({"updated": updated, "inserted": inserted}))
+        print(json.dumps(result))
 
 
 def cmd_analyze_models(args):

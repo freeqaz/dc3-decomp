@@ -186,12 +186,8 @@ bool DirLoader::ShouldBlockSubdirLoad(const FilePath &fp) {
     return sPathEval(fp.c_str());
 }
 
-// I am WELL aware that this is terrible
-// however, the alternate to this would be using gotos,
-// which I would argue is more terrible
-// so unless you can finnagle this in such a way
-// that the decomp % matches, and there aren't any gotos,
-// this will have to do.
+// Handles class name migrations across milo file format versions.
+// Uses nested structure to match original binary's control flow.
 Symbol DirLoader::FixClassName(Symbol orig) {
     if (mRev < 0x1C) {
         static Symbol CharClip("CharClip");
@@ -207,8 +203,8 @@ Symbol DirLoader::FixClassName(Symbol orig) {
             if (mRev < 0x1A) {
                 static Symbol P9TransDraw("P9TransDraw");
                 static Symbol CharTransDraw("CharTransDraw");
-                if (orig == CharTransDraw)
-                    orig = P9TransDraw;
+                if (orig == P9TransDraw)
+                    orig = CharTransDraw;
                 if (mRev < 0x19) {
                     static Symbol CompositeTexture("CompositeTexture");
                     static Symbol RenderedTex("RenderedTex");

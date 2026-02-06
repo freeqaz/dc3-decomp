@@ -506,6 +506,7 @@ bool Rnd::ConsoleShowing() { return mConsole->Showing(); }
 void Rnd::EndWorld() {
     if (!mWorldEnded) {
         if (unk14c) {
+            unk14c();
         }
         DoWorldEnd();
         DoPostProcess();

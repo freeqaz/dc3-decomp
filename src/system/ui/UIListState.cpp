@@ -34,8 +34,8 @@ void UIListState::SetGridSpan(int span, bool b) {
 }
 
 void UIListState::SetSelected(int i, int j, bool b) {
-    int showing = WrapShowing(i);
     int data;
+    int showing = WrapShowing(i);
 
     if (b) {
         data = showing;
@@ -59,16 +59,9 @@ void UIListState::SetSelected(int i, int j, bool b) {
         if (j != -1) {
             mFirstShowing = j;
         } else {
-            int firstVal;
-            if (mScrollPastMinDisplay) {
-                firstVal = showing;
-            } else {
-                firstVal = showing - mMinDisplay;
-            }
-
-            int sign_val = firstVal >> 31;
-            int xor_val = firstVal ^ sign_val;
-            mFirstShowing = xor_val - sign_val;
+            int firstVal = mScrollPastMinDisplay ? showing : showing - mMinDisplay;
+            int sign = firstVal >> 31;
+            mFirstShowing = (firstVal ^ sign) - sign;
         }
 
         int maxFirst = MaxFirstShowing();
@@ -78,16 +71,17 @@ void UIListState::SetSelected(int i, int j, bool b) {
         }
 
         mFirstShowing = curFirst;
-        mSelectedDisplay = showing - curFirst;
+        int tempDiff = showing - curFirst;
+        mSelectedDisplay = tempDiff;
 
         if (mScrollPastMinDisplay) {
-            mSelectedDisplay = mMinDisplay + (showing - curFirst);
+            mSelectedDisplay = tempDiff + mMinDisplay;
         }
     }
 
     mTargetShowing = mFirstShowing;
-    mStepPercent = -1.0f;
-    mStepTime = 0.0f;
+    mStepTime = -1.0f;
+    mStepPercent = 0.0f;
 }
 
 void UIListState::SetSpeed(float speed) {

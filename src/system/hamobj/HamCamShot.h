@@ -32,8 +32,7 @@ public:
     struct Target {
         Target(Hmx::Object *owner)
             : mFastForward(0), mEnvOverride(owner), mForceLOD(kLODPerFrame),
-              mTeleport(false), mReturn(true), mSelfShadow(false), unk68p4(true),
-              unk68p3(true) {
+              mTeleport(1), mReturn(1), mSelfShadow(1), unk68p4(0), unk68p3(1) {
             mTo.Reset();
         }
         void UpdateTarget(Symbol, HamCamShot *);

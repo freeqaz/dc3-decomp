@@ -104,12 +104,12 @@ public:
 
     ContentMgr() {}
     virtual DataNode Handle(DataArray *, bool);
-    virtual void PreInit() {}
+    void PreInit() {}
     virtual void Init();
     virtual void Terminate() {}
     virtual void StartRefresh() {}
-    virtual void Poll();
     virtual void PollRefresh();
+    virtual void Poll();
     virtual const char *TitleContentPath() { return nullptr; }
     virtual const char *ContentPath(int) { return 0; }
     virtual bool MountContent(Symbol) { return true; }

@@ -49,7 +49,7 @@ BackendType = Literal["anthropic", "openrouter"]
 # Add new models here only!
 MODEL_REGISTRY = {
     "anthropic": {
-        # Anthropic direct API pricing (Jan 2026):
+        # Anthropic direct API pricing (Feb 2026):
         # Haiku: $1/M input, $5/M output
         # Sonnet: $3/M input, $15/M output
         # Opus: $5/M input, $25/M output
@@ -71,7 +71,7 @@ MODEL_REGISTRY = {
         },
     },
     "openrouter": {
-        # OpenRouter pricing (Jan 2026) - per-function estimates
+        # OpenRouter pricing (Feb 2026) - per-function estimates
         # Assumes ~5K input + ~20K output tokens per function
         # Claude models via OpenRouter (same pricing as Anthropic direct)
         "haiku": {
@@ -85,7 +85,7 @@ MODEL_REGISTRY = {
             "cost": 0.315,  # $3/M in + $15/M out
         },
         "opus": {
-            "model_id": "anthropic/claude-opus-4.5",
+            "model_id": "anthropic/claude-opus-4.6",
             "token_budget": 30000,
             "cost": 0.525,  # $5/M in + $25/M out
         },

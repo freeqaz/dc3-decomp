@@ -44,11 +44,38 @@ bool TexMovie::Replace(ObjRef *a, Hmx::Object *b) {
 }
 
 BEGIN_PROPSYNCS(TexMovie)
-    SYNC_PROP_MODIFY(output_texture, mTex, DoBeginMovieFromFile(nullptr, kLoadBack))
-    SYNC_PROP_SET(bink_movie_file, sRoot, SetFile(sRoot.c_str()))
-    SYNC_PROP(loop, unk5e)
-    SYNC_PROP(is_localized, unk5d)
-    SYNC_PROP(is_empty, sRoot)
+    SYNC_PROP_MODIFY(output_texture, mTex, DoBeginMovieFromFile(nullptr, kLoadFront))
+    {
+        _NEW_STATIC_SYMBOL(bink_movie_file)
+        if (sym == _s) {
+            if (_op == kPropSet) {
+                FilePath fp(_val.Str(nullptr));
+                SetFile(fp);
+            } else {
+                // kPropUnknown0x40 (aka kPropHandle) not supported for this property
+                if (_op == kPropUnknown0x40)
+                    return false;
+                // kPropGet - return the relative path
+                _val = FileRelativePath(FilePath::Root().c_str(), sRoot.c_str());
+            }
+            return true;
+        }
+    }
+    SYNC_PROP(loop, unk5c)
+    SYNC_PROP(is_localized, unk5e)
+    {
+        _NEW_STATIC_SYMBOL(is_empty)
+        if (sym == _s) {
+            // Read-only property - only supports kPropGet
+            if (_op != kPropSet) {
+                if (_op == kPropUnknown0x40) {
+                    return false;
+                }
+                _val = sRoot.empty();
+            }
+            return true;
+        }
+    }
     SYNC_SUPERCLASS(RndDrawable)
     SYNC_SUPERCLASS(Hmx::Object)
     SYNC_SUPERCLASS(RndPollable)

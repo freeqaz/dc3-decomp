@@ -134,38 +134,51 @@ bool ClipDistMap::FindBestNode(float f1, float f2, float f3, ClipDistMap::Node &
     return node.unk8 < f1;
 }
 
-void ClipDistMap::FindNodes(float f1, float f2, float f3) {
-    mNodes = std::vector<ClipDistMap::Node>(mNodes);
-    mLastMinErr = f1;
+// Find transition nodes between clips based on error threshold and distance constraints.
+// Nodes represent points where animation transitions can occur.
+// Parameters:
+//   maxError: Maximum acceptable error threshold for a valid node
+//   maxDist: Maximum distance between adjacent nodes
+//   endDist: Minimum distance from clip end where final node can be placed
+void ClipDistMap::FindNodes(float maxError, float maxDist, float endDist) {
+    mNodes.clear();
+    mLastMinErr = maxError;
 
-    float f4 = f2 * 0.45f;
-    if (f2 == 0.0f) {
-        f4 = kHugeFloat;
-        f3 = f4;
-    } else if (f3 == 0.0f) {
-        f3 = f4;
+    // Calculate search bounds for recursive node finding
+    // The 0.45 factor creates asymmetric search bounds around potential nodes
+    float halfMaxDist = maxDist * 0.45f;
+    if (maxDist == 0.0f) {
+        // No distance constraints - allow nodes anywhere
+        endDist = halfMaxDist = kHugeFloat;
+    } else if (endDist == 0.0f) {
+        // Use half-distance as default end constraint
+        endDist = halfMaxDist;
     }
 
-    FindBestNodeRecurse(f1, f4, (f4 * 2.0f - f2), mAStart, mAEnd);
+    // Recursively find all candidate nodes within the clip range
+    FindBestNodeRecurse(maxError, halfMaxDist, maxDist - halfMaxDist * 2.0f, mAStart, mAEnd);
 
+    // Sort nodes by position (unk0 field)
     std::sort(mNodes.begin(), mNodes.end(), DistMapNodeSort());
 
-    if (!mNodes.empty() && f3 > 0.0f) {
+    // Ensure we have a node near the end of the clip if needed
+    if (!mNodes.empty() && endDist > 0.0f) {
         float lastNodeDist = mAEnd - mNodes.back().unk0;
-        if (lastNodeDist > f3) {
+        if (lastNodeDist > endDist) {
             ClipDistMap::Node node;
-            if (FindBestNode(f1, mAEnd - f3, mAEnd, node)) {
+            if (FindBestNode(maxError, mAEnd - endDist, mAEnd, node)) {
                 mNodes.push_back(node);
                 std::sort(mNodes.begin(), mNodes.end(), DistMapNodeSort());
             }
         }
     }
 
+    // Remove nodes that are too close together (violate maxDist constraint)
     int limit = mNodes.size() - 1;
     if (limit > 1) {
         for (int i = 1; i < limit;) {
             float dist = mNodes[i + 1].unk0 - mNodes[i].unk0;
-            if (dist < f2) {
+            if (dist < maxDist) {
                 mNodes.erase(mNodes.begin() + (i + 1));
                 i--;
             }
@@ -239,32 +252,34 @@ void ClipDistMap::SetNodes(ClipDistMap::Node *node1, ClipDistMap::Node *node2) {
     mClipB->GetTransitions().RemoveClip(mClipB);
     for (int i = 0; i < mNodes.size(); i++) {
         if (node1) {
-            float fVar1 = node1->unk8;
-            float fVar2 = mNodes[i].unk8;
-            if (node1->unk8 - mNodes[i].unk8 < 0.0) {
-                fVar2 = fVar1;
+            float currentBest = node1->unk8;
+            float candidateErr = mNodes[i].unk8;
+            // Use fsel pattern: if (currentBest - candidateErr >= 0.0f) use candidateErr, else use currentBest
+            bool changed = 1;
+            float newBest = (currentBest - candidateErr >= 0.0f) ? candidateErr : currentBest;
+            node1->unk8 = newBest;
+            if (newBest == currentBest) {
+                changed = 0;
             }
-            node1->unk8 = fVar2;
-            if (fVar2 != fVar1) {
-                node1->unk0 = mNodes[i].unk0;
-                node1->unk4 = mNodes[i].unk4;
-                node1->unk8 = mNodes[i].unk8;
+            if (changed) {
+                *node1 = mNodes[i];
             }
         }
         if (node2) {
-            float fVar1 = node2->unk8;
-            float fVar2 = mNodes[i].unk8;
-            if (fVar1 - fVar2 < 0.0) {
-                fVar2 = fVar1;
+            float currentBest = node2->unk8;
+            float candidateErr = mNodes[i].unk8;
+            // Use fsel pattern: if (currentBest - candidateErr >= 0.0f) use candidateErr, else use currentBest
+            bool changed = 1;
+            float newBest = (currentBest - candidateErr >= 0.0f) ? candidateErr : currentBest;
+            node2->unk8 = newBest;
+            if (newBest == currentBest) {
+                changed = 0;
             }
-            node2->unk8 = fVar2;
-            if (fVar2 != fVar1) {
-                node2->unk0 = mNodes[i].unk0;
-                node2->unk4 = mNodes[i].unk4;
-                node2->unk8 = mNodes[i].unk8;
+            if (changed) {
+                *node2 = mNodes[i];
             }
         }
-        auto graphNode = CharGraphNode();
+        CharGraphNode graphNode;
         graphNode.nextBeat = mNodes[i].unk4;
         graphNode.curBeat = mNodes[i].unk0;
         mClipB->GetTransitions().AddNode(mClipB, graphNode);

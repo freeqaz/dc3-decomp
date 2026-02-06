@@ -5,7 +5,6 @@
 #include "types.h"
 #include "utl/Cache.h"
 
-// what's an `enum class`?
 namespace Holmes {
     enum Protocol {
         kVersion, // 0x0
@@ -31,7 +30,7 @@ namespace Holmes {
         kInvalidOpcode, // 0x14
     };
 
-    inline const char *ProtocolDebugString(u8 c) {
+    inline const char *ProtocolDebugString(unsigned char c) {
         switch (c) {
         case 0:
             return "kVersion";

@@ -807,27 +807,31 @@ void RndBitmap::Save(BinStream &bs) const {
     }
 }
 
+// DXT color decompression: extracts RGB values from DXT-compressed texture data
+// DXT stores 4x4 pixel blocks with 2 reference colors and 2-bit indices per pixel
 void DecodeDxtColor(unsigned char *uc, int i, int j, bool arg3, unsigned char &r, unsigned char &g, unsigned char &b, unsigned char &a) {
     unsigned short color0 = *(unsigned short *)uc;
     unsigned short color1 = *((unsigned short *)uc + 1);
 
-    int offset;
-    if (j & 1) {
-        offset = j - 1;
-    } else {
-        offset = j + 1;
-    }
+    // Adjust row index for DXT block layout
+    int offset = (j & 1) ? j - 1 : j + 1;
 
+    // Extract 2-bit color index for this pixel
+    unsigned char *bytePtr = uc + 4 + offset;
+    unsigned char colorIdx = (*bytePtr >> ((i * 2) & 0xFE)) & 3;
+
+    // Default alpha is fully opaque
     a = 0xFF;
+
+    // Extract RGB components from reference colors (565 format)
     unsigned char r0 = (color0 >> 8) & 0xF8;
-    unsigned char r1 = (color1 >> 8) & 0xF8;
     unsigned char g0 = (color0 >> 3) & 0xFC;
+    unsigned char b0 = (color0 << 3) & 0xF8;
+    unsigned char r1 = (color1 >> 8) & 0xF8;
     unsigned char g1 = (color1 >> 3) & 0xFC;
-    unsigned char b0 = (color0 * 8) & 0xF8;
-    unsigned char b1 = (color1 * 8) & 0xF8;
+    unsigned char b1 = (color1 << 3) & 0xF8;
 
-    unsigned char colorIdx = ((unsigned char) *(uc + 4 + offset) >> ((i * 2) & 0xFE)) & 3;
-
+    // Color index 0: use first reference color
     if (colorIdx == 0) {
         r = r0;
         g = g0;
@@ -835,6 +839,7 @@ void DecodeDxtColor(unsigned char *uc, int i, int j, bool arg3, unsigned char &r
         return;
     }
 
+    // Color index 1: use second reference color
     if (colorIdx == 1) {
         r = r1;
         g = g1;
@@ -842,19 +847,22 @@ void DecodeDxtColor(unsigned char *uc, int i, int j, bool arg3, unsigned char &r
         return;
     }
 
-    if ((color0 <= color1) && (arg3 != 0)) {
+    // Color indices 2-3: interpolate between reference colors
+    if ((color0 > color1) || !arg3) {
+        // DXT1 opaque mode or DXT3/DXT5: 3-color interpolation
+        int w0 = 4 - colorIdx;
+        int w1 = colorIdx - 1;
+        r = (unsigned char) ((unsigned int) ((r0 * w0) + (r1 * w1)) / 3U);
+        g = (unsigned char) ((unsigned int) ((g0 * w0) + (g1 * w1)) / 3U);
+        b = (unsigned char) ((unsigned int) ((b0 * w0) + (b1 * w1)) / 3U);
+    } else {
+        // DXT1 transparency mode: 2-color interpolation
         r = (unsigned char) ((int) (r1 + r0) / 2);
         g = (unsigned char) ((int) (g1 + g0) / 2);
         b = (unsigned char) ((int) (b1 + b0) / 2);
         if (colorIdx == 3) {
-            a = 0;
+            a = 0;  // Index 3 is transparent black in DXT1
         }
-    } else {
-        int w0 = 4 - colorIdx;
-        int w1 = colorIdx - 1;
-        r = (unsigned char) ((unsigned int) ((r1 * w1) + (r0 * w0)) / 3U);
-        g = (unsigned char) ((unsigned int) ((g1 * w1) + (g0 * w0)) / 3U);
-        b = (unsigned char) ((unsigned int) ((b1 * w1) + (b0 * w0)) / 3U);
     }
 }
 
@@ -872,24 +880,26 @@ void RndBitmap::DxtColor(
     int x, int y, unsigned char &r, unsigned char &g, unsigned char &b, unsigned char &a
 ) const {
     int dxt = mOrder & 0x38;
-    MILO_ASSERT(dxt != 0, 0x7EE);
+    MILO_ASSERT(dxt != 0, 0x6CC);
 
-    int tmpx = (x / 4) + (x < 0 && (x & 3U) != 0);
-    int tmpy = (y / 4) + (y < 0 && (y & 3U) != 0);
-    int i5 = x + tmpx * -4;
-    int i6 = y + tmpy * -4;
-    int i2 = tmpx + (mWidth / 4) * tmpy;
+    int xQuotient = x / 4;
+    int yQuotient = y / 4;
+    int blockIdx = (mWidth >> 2) * yQuotient + xQuotient;
+    int xRemainder = x - xQuotient * 4;
+    int yRemainder = y - yQuotient * 4;
 
     if (dxt == 8) {
-        DecodeDxtColor(mPixels + i2 * 8, i5, i6, true, r, g, b, a);
+        DecodeDxtColor(mPixels + blockIdx * 8, xRemainder, yRemainder, true, r, g, b, a);
     } else {
-        u8 *newpixels = mPixels + i2 * 0x10;
-        unsigned char throwaway;
-        DecodeDxtColor(newpixels + 8, i5, i6, false, r, g, b, throwaway);
+        u8 *blockData = mPixels + blockIdx * 0x10;
+        unsigned char unused;
+        DecodeDxtColor(blockData + 8, xRemainder, yRemainder, false, r, g, b, unused);
         if (dxt == 0x10) {
-            DecodeDxt3Alpha(newpixels, i5, i6, a);
+            unsigned short *alphaData = (unsigned short *)blockData;
+            unsigned char alphaBits = (unsigned char)(alphaData[yRemainder] >> (xRemainder << 2));
+            a = alphaBits | (alphaBits << 4);
         } else {
-            DecodeDxt5Alpha(newpixels, i5, i6, a);
+            DecodeDxt5Alpha(blockData, xRemainder, yRemainder, a);
         }
     }
 }

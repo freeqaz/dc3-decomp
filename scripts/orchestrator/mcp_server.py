@@ -1090,15 +1090,18 @@ class DecompMCPServer:
             "-p", str(project_dir),
             symbol,
             "--verdict",
-            "--include-instructions",
         ]
 
         build_flag = ["--build"]
         if full_build:
             build_flag.append("--full-build")
 
+        # --include-instructions only for JSON run (enrichment/m2c pipeline).
+        # The markdown run uses --verdict alone which already contains the
+        # analysis, patterns, and suggestions without the bulky instruction table.
+        json_extra = ["--include-instructions"]
         if context:
-            base_args.extend(["-C", str(context)])
+            json_extra.extend(["-C", str(context)])
 
         def _filter_stderr(stderr: str) -> str:
             """Filter ninja progress lines from stderr, return error lines."""
@@ -1113,7 +1116,7 @@ class DecompMCPServer:
 
         try:
             # 1) JSON run (with build) - for enrichment data
-            json_cmd = base_args + build_flag + ["-f", "json"]
+            json_cmd = base_args + json_extra + build_flag + ["-f", "json"]
             json_result = subprocess.run(
                 json_cmd,
                 capture_output=True,
@@ -1138,7 +1141,8 @@ class DecompMCPServer:
                 return [TextContent(type="text", text=error_msg)]
 
             # 2) Markdown run (no build, already built) - for display
-            md_cmd = list(base_args)  # markdown is default format
+            # Explicit -f markdown avoids TUI fallback when no TTY is present
+            md_cmd = list(base_args) + ["-f", "markdown"]
             md_result = subprocess.run(
                 md_cmd,
                 capture_output=True,

@@ -162,25 +162,34 @@ BEGIN_LOADS(RndPropAnim)
     ASSERT_REVS(15, 0)
     LOAD_SUPERCLASS(Hmx::Object)
     LOAD_SUPERCLASS(RndAnimatable)
+
+    // RAII guard for proper object lifecycle during load
     ObjOwnerPtr<Hmx::Object> obj(this);
     mLastFrame = GetFrame();
-    DeleteAll(mPropKeys);
+    RemoveKeys();
+
     if (d.rev < 7) {
+        // Legacy format (pre-revision 7)
         LoadPre7(d);
     } else {
-        int num;
-        d >> num;
-        for (int i = 0; i < num; i++) {
+        // Modern format: read PropKeys count and load each
+        int count;
+        d >> count;
+        for (int i = 0; i < count; i++) {
             int type;
             d >> type;
             AddKeys(nullptr, nullptr, (PropKeys::AnimKeysType)type)->Load(d);
         }
+
+        // Revision 12+: loop flag
         if (d.rev > 0xB) {
             d >> mLoop;
         }
+        // Revision 14+: flow labels
         if (d.rev > 0xD) {
             d >> mFlowLabels;
         }
+        // Revision 15+: intensity
         if (d.rev > 0xE) {
             d >> mIntensity;
         }

@@ -295,18 +295,34 @@ void MoggClip::UpdatePanInfo() {
 void MoggClip::LoadNumChannels() {
     if (mMoggFile.empty()) {
         unk58 = -1;
-    } else {
-        if (mLoader && !mLoader->IsLoaded()) {
-            TheLoadMgr.PollUntilLoaded(mLoader, nullptr);
-        }
-        SynthPoll();
-        if (mStream) {
-            for (int i = 0; i < 200; i++) {
-                Timer::Sleep(1);
-                TheSynth->Poll();
-            }
-        }
+        return;
     }
+    if (mLoader && !mLoader->IsLoaded()) {
+        TheLoadMgr.PollUntilLoaded(mLoader, nullptr);
+    }
+    SynthPoll();
+    if (!mStream) {
+        unk58 = -1;
+        return;
+    }
+    int i = 0;
+    int numChannels;
+    do {
+        Timer::Sleep(1);
+        TheSynth->Poll();
+        numChannels = mStream->GetNumChannels();
+        if (numChannels > 0) break;
+        i++;
+    } while (i < 200);
+    unk58 = numChannels;
+    Pause(0);
+    if (unk58 >= 0) {
+        return;
+    }
+    TheDebug.Notify(
+        MakeString("[GetNumChannels] Ret = %d.  Unable to get num channels from '%s'.\n",
+                   unk58, mMoggFile.c_str()));
+    unk58 = -1;
 }
 
 void MoggClip::LoadFile(BinStream *bs) {

@@ -46,6 +46,16 @@ class WorktreePool:
         "tools",                    # Analysis tools (analyze_function.py, struct_db.py, etc.)
     ]
 
+    # Subset of copies to re-sync from main repo on each acquire.
+    # Keeps tools up-to-date without touching per-worktree build artifacts.
+    REFRESH_ON_ACQUIRE = [
+        "bin",                      # objdiff-cli, analyze-function
+        "tools",                    # analyze_function.py, struct_db.py, etc.
+        "objdiff.json",             # objdiff-cli project config
+        "build.ninja",              # Ninja build file
+        "config",                   # Build config
+    ]
+
     def __init__(
         self,
         main_repo: Path,
@@ -215,6 +225,28 @@ class WorktreePool:
             if not dst.exists():
                 dst.symlink_to(src)
 
+    def _refresh_tools(self, worktree_path: Path) -> None:
+        """Re-copy tool directories from main repo to keep worktree in sync."""
+        for name in self.REFRESH_ON_ACQUIRE:
+            src = self.main_repo / name
+            dst = worktree_path / name
+            if not src.exists():
+                continue
+            try:
+                if dst.is_symlink():
+                    dst.unlink()
+                elif dst.is_file():
+                    dst.unlink()
+                elif dst.is_dir():
+                    shutil.rmtree(dst)
+
+                if src.is_dir():
+                    shutil.copytree(src, dst)
+                else:
+                    shutil.copy2(src, dst)
+            except Exception as e:
+                logger.warning(f"Failed to refresh {name} in worktree: {e}")
+
     def _get_main_repo_commit(self) -> Optional[str]:
         """Get the current commit SHA of the main repo."""
         try:
@@ -357,6 +389,9 @@ class WorktreePool:
             )
             conn.commit()
             return self.acquire(session_id, _depth + 1)  # Recursively try next
+
+        # Refresh tool directories from main repo so worktrees stay in sync
+        self._refresh_tools(worktree_path)
 
         return worktree_path
 

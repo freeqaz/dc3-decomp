@@ -179,6 +179,6 @@ protected:
     Vector3 unk1a0;
     bool unk1b0;
     bool unk1b1;
-    bool unkc5;
-    void *unkc8;
+    bool unk1b2;
+    bool unk1b3;
 };

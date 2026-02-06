@@ -44,9 +44,9 @@ protected:
     float mAnimTime; // 0x5c
     float mAnimDelay; // 0x60
     Symbol mWrapperText; // 0x64
-    float mAcceleration; // 0x68
-    int unk6c; // 0x6c
-    int unk70; // 0x70
+    float mAcceleration; // 0x68 - exponent for acceleration curve: progress^(1 + acceleration)
+    int unk6c; // 0x6c - animation start value
+    int unk70; // 0x70 - current display value (interpolated during animation)
     u32 unk74; // 0x74
     Timer mTimer; // 0x78
     ObjPtr<EventTrigger> mTickTrigger; // 0xa8

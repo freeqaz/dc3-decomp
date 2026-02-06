@@ -59,7 +59,11 @@ public:
     virtual bool Cached() const;
     virtual Platform GetPlatform() const;
 
-    MEM_OVERLOAD(ChunkStream, 0x31)
+    static void *operator new(unsigned int s) {
+        return _MemAllocTemp(s, __FILE__, 0x31, "ChunkStream", 0);
+    }
+    static void *operator new(unsigned int s, void *place) { return place; }
+    static void operator delete(void *v) { MemFree(v, __FILE__, 0x31, "ChunkStream"); }
 
     void PotentiallyWriteChunk(bool b) { MaybeWriteChunk(b); } // so dumb
     static bool PollDecompressionWorker();

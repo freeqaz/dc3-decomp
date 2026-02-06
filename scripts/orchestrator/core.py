@@ -43,11 +43,7 @@ from .rb3_pairing import get_rb3_source_for_unit
 
 # Import run_objdiff for early verdict check (short-circuit already-complete functions)
 try:
-    # Add tools directory to path if needed
-    _tools_dir = Path(__file__).parent.parent.parent / "tools"
-    if str(_tools_dir) not in sys.path:
-        sys.path.insert(0, str(_tools_dir))
-    from analyze_function import run_objdiff
+    from tools.analyze_function import run_objdiff
 except ImportError:
     run_objdiff = None
 

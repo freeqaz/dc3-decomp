@@ -59,7 +59,8 @@ void CharBoneTwist::Poll() {
     Scale(v58, 1.0f / mTargets.size(), v58);
     Transform tf48(mBone->WorldXfm());
     Vector3 v70;
-    Subtract(v58, mBone->WorldXfm().v, v70);
+    const Vector3 &bonePos = mBone->WorldXfm().v;
+    v70.Set(v58.x - bonePos.x, v58.y - bonePos.y, v58.z - bonePos.z);
     Vector3 v7c;
     Scale(tf48.m.x, Dot(tf48.m.x, v70), v7c);
     Subtract(v70, v7c, v7c);

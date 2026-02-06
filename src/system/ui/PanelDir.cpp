@@ -326,6 +326,27 @@ void PanelDir::SendTransition(Message const &msg, Symbol forward, Symbol back) {
 }
 
 bool PanelDir::PanelNav(JoypadAction act, JoypadButton btn, Symbol controller_type) {
+    UIComponent *comp = mFocusComponent;
+    if (!comp) {
+        return false;
+    }
+    do {
+        comp = ComponentNav(comp, act, btn, controller_type);
+        if (!comp)
+            break;
+        if (comp == mFocusComponent)
+            break;
+        if (comp->GetState() == UIComponent::kDisabled) {
+            continue;
+        }
+        static Symbol none("none");
+        if (controller_type != none) {
+            static Message panelNavigatedMsg("panel_navigated");
+            TheUI->Handle(panelNavigatedMsg, false);
+        }
+        SetFocusComponent(comp, controller_type);
+        return true;
+    } while (true);
     return false;
 }
 

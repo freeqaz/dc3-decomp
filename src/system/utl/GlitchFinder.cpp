@@ -9,21 +9,21 @@ GlitchPoker::GlitchPoker() {}
 GlitchPoker::~GlitchPoker() {}
 
 void GlitchPoker::ClearData() {
-    unk40 = -1.0;
-    unk0[0] = '\0';
-    unk44 = -1.0;
-    unk48.clear();
-    unk58 = -1.0;
-    unk54 = 0;
+    mTime = -1.0;
+    mName[0] = '\0';
+    mTimeEnd = -1.0;
+    mChildren.clear();
+    mBudget = -1.0;
+    mParent = 0;
     mAvg = 0;
 }
 
 bool GlitchPoker::OverBudget() {
-    if (unk58 > 0.0 && unk44 - unk40 > unk58) {
+    if (mBudget > 0.0 && mTimeEnd - mTime > mBudget) {
         return true;
     }
-    for (int i = 0; i < unk48.size(); i++) {
-        if (unk48[i]->OverBudget()) {
+    for (int i = 0; i < mChildren.size(); i++) {
+        if (mChildren[i]->OverBudget()) {
             return true;
         }
     }
@@ -31,11 +31,11 @@ bool GlitchPoker::OverBudget() {
 }
 
 void GlitchPoker::PrintResult(TextStream &stream) {
-    float temp = unk44 - unk40;
-    if (unk48.size() > 0 || temp >= 0.0049999999f) {
-        stream << "{ " << unk0 << " (" << temp << ") ";
+    float temp = mTimeEnd - mTime;
+    if (mChildren.size() > 0 || temp >= 0.0049999999f) {
+        stream << "{ " << mName << " (" << temp << ") ";
     } else {
-        stream << "[ " << unk0 << " ] ";
+        stream << "[ " << mName << " ] ";
     }
     if (mAvg) {
         stream << "<" << mAvg->mAvg << " avg, " << mAvg->mGlitchAvg << " glitch avg, "
@@ -45,10 +45,10 @@ void GlitchPoker::PrintResult(TextStream &stream) {
 
 void GlitchPoker::PollAveragesRecurse(bool b) {
     if (mAvg) {
-        mAvg->PushInstance(unk44 - unk40, b);
+        mAvg->PushInstance(mTimeEnd - mTime, b);
     }
-    for (int i = 0; i < unk48.size(); i++) {
-        unk48[i]->PollAveragesRecurse(b);
+    for (int i = 0; i < mChildren.size(); i++) {
+        mChildren[i]->PollAveragesRecurse(b);
     }
 }
 
@@ -65,89 +65,89 @@ void GlitchPoker::PrintNestedStartTimes(TextStream &stream, float f1) {
 
 void GlitchPoker::Dump(TextStream &stream, int i1) {
     float f1 = 0.0049999999f;
-    if (unk40 > smLastDumpTime + 0.005f) {
+    if (mTime > smLastDumpTime + 0.005f) {
         PrintNestedStartTimes(stream, smLastDumpTime);
         if (!smDumpLeaves) {
-            stream << "TIME GAP (" << unk40 - smLastDumpTime << ")\n";
-        } else if (unk40 - smLastDumpTime > smThreshold) {
-            stream << "   TIME GAP (" << unk40 - smLastDumpTime << ") before " << unk0;
-            for (GlitchPoker *p = unk54; p; p = p->unk54) {
-                stream << " : " << p->unk0;
+            stream << "TIME GAP (" << mTime - smLastDumpTime << ")\n";
+        } else if (mTime - smLastDumpTime > smThreshold) {
+            stream << "   TIME GAP (" << mTime - smLastDumpTime << ") before " << mName;
+            for (GlitchPoker *p = mParent; p; p = p->mParent) {
+                stream << " : " << p->mName;
             }
             stream << "\n";
         }
-        smTotalLeafTime = (unk40 - smLastDumpTime) + smTotalLeafTime;
+        smTotalLeafTime = (mTime - smLastDumpTime) + smTotalLeafTime;
     }
-    PrintNestedStartTimes(stream, unk40);
-    if (!smDumpLeaves && unk48.empty() && unk44 - unk40 <= f1) {
-        stream << "[ " << unk0 << " ]";
+    PrintNestedStartTimes(stream, mTime);
+    if (!smDumpLeaves && mChildren.empty() && mTimeEnd - mTime <= f1) {
+        stream << "[ " << mName << " ]";
         if (mAvg) {
             stream << " (" << mAvg->mAvg << " avg)";
         }
         stream << "\n";
-        smLastDumpTime = unk44;
+        smLastDumpTime = mTimeEnd;
     } else {
-        if (smDumpLeaves && unk54) {
+        if (smDumpLeaves && mParent) {
             f1 = smThreshold;
-            if (unk44 - unk40 >= f1) {
-                if (!unk48.empty()) {
+            if (mTimeEnd - mTime >= f1) {
+                if (!mChildren.empty()) {
                     float temp_f30 = smLastDumpTime;
-                    smLastDumpTime = unk40;
-                    for (int i = 0; i < unk48.size(); i++) {
-                        unk48[i]->Dump(stream, i1 + 1);
+                    smLastDumpTime = mTime;
+                    for (int i = 0; i < mChildren.size(); i++) {
+                        mChildren[i]->Dump(stream, i1 + 1);
                     }
-                    if (unk44 - smLastDumpTime >= f1) {
-                        stream << "   TIME GAP (" << unk44 - smLastDumpTime
-                               << ") at end of " << unk0;
-                        for (GlitchPoker *p = unk54; p; p = p->unk54) {
-                            stream << " : " << p->unk0;
+                    if (mTimeEnd - smLastDumpTime >= f1) {
+                        stream << "   TIME GAP (" << mTimeEnd - smLastDumpTime
+                               << ") at end of " << mName;
+                        for (GlitchPoker *p = mParent; p; p = p->mParent) {
+                            stream << " : " << p->mName;
                         }
                         stream << "\n";
-                        smTotalLeafTime = (unk44 - smLastDumpTime) + smTotalLeafTime;
+                        smTotalLeafTime = (mTimeEnd - smLastDumpTime) + smTotalLeafTime;
                     }
                     smLastDumpTime = temp_f30;
                 } else {
                     stream << "   ";
                     PrintResult(stream);
                     stream << "}\n";
-                    for (GlitchPoker *p = unk54; p; p = p->unk54) {
-                        stream << " : " << p->unk0;
+                    for (GlitchPoker *p = mParent; p; p = p->mParent) {
+                        stream << " : " << p->mName;
                     }
                     stream << "\n";
-                    smTotalLeafTime = (unk44 - unk40) + smTotalLeafTime;
+                    smTotalLeafTime = (mTimeEnd - mTime) + smTotalLeafTime;
                 }
             }
         }
     }
     PrintResult(stream);
-    smNestedStartTimes.push_back(unk40);
-    for (int i = 0; i < unk48.size(); i++) {
-        unk48[i]->Dump(stream, i1 + 1);
+    smNestedStartTimes.push_back(mTime);
+    for (int i = 0; i < mChildren.size(); i++) {
+        mChildren[i]->Dump(stream, i1 + 1);
     }
-    if (unk44 > smLastDumpTime + f1) {
+    if (mTimeEnd > smLastDumpTime + f1) {
         PrintNestedStartTimes(stream, smLastDumpTime);
         if (!smDumpLeaves) {
-            stream << "TIME GAP (" << unk44 - smLastDumpTime << ")\n";
+            stream << "TIME GAP (" << mTimeEnd - smLastDumpTime << ")\n";
         } else {
-            if (unk40 - smLastDumpTime > smThreshold) {
-                stream << "   TIME GAP (" << unk44 - smLastDumpTime << ") at end of "
-                       << unk0;
-                for (GlitchPoker *p = unk54; p; p = p->unk54) {
-                    stream << " : " << p->unk0;
+            if (mTime - smLastDumpTime > smThreshold) {
+                stream << "   TIME GAP (" << mTimeEnd - smLastDumpTime << ") at end of "
+                       << mName;
+                for (GlitchPoker *p = mParent; p; p = p->mParent) {
+                    stream << " : " << p->mName;
                 }
                 stream << "\n";
-                smTotalLeafTime = (unk44 - smLastDumpTime) + smTotalLeafTime;
+                smTotalLeafTime = (mTimeEnd - smLastDumpTime) + smTotalLeafTime;
             }
         }
     }
-    smLastDumpTime = unk44;
+    smLastDumpTime = mTimeEnd;
     smNestedStartTimes.pop_back();
-    PrintNestedStartTimes(stream, unk44);
+    PrintNestedStartTimes(stream, mTimeEnd);
     if (smDumpLeaves) {
         float totalTime = smTotalLeafTime;
-        float pct = totalTime / (unk44 - unk40);
+        float pct = totalTime / (mTimeEnd - mTime);
         stream << "{ total leaf time: " << totalTime << " (" << pct * 100.0f << "%)\n";
-    } else if (!unk48.empty() || !(unk44 - unk40 < f1)) {
+    } else if (!mChildren.empty() || !(mTimeEnd - mTime < f1)) {
         stream << "}\n";
     }
 }
@@ -217,7 +217,9 @@ GlitchPoker *GlitchFinder::NewPoker() {
 void GlitchFinder::PokeStart(
     const char *c, unsigned int ui, float f1, float f2, GlitchAverager *avg
 ) {
-    if (unk30048 || f1 >= 0.0) {
+    if (!unk30048 && f1 < 0.0)
+        return;
+    else {
         if (unk8) {
             unk8 = 0;
             unk10.Restart();
@@ -226,21 +228,22 @@ void GlitchFinder::PokeStart(
             unk30044 = 0;
         }
         GlitchPoker *poker = NewPoker();
-        poker->SetUnk0(c);
-        poker->SetUnk40(unk10.SplitMs());
-        poker->SetUnk58(f1);
-        poker->SetUnk54(unk3004c);
-        poker->SetAverager(avg);
+        strncpy(poker->mName, c, 0x40);
+        poker->mTime = unk10.SplitMs();
+        poker->mParent = unk3004c;
+        poker->mBudget = f1;
+        poker->mAvg = avg;
         if (!unk30048) {
             unk3004c = poker;
             unk30048 = poker;
             unk30054 = f2;
             unk30058 = 0;
         } else {
-            unk3004c->Unk48PushBack(poker);
-            if (ui) {
-                unsigned int mftb = __mftb();
-                unk30058 = unk30058 - ui + mftb;
+            unk3004c->mChildren.push_back(poker);
+            unk3004c = poker;
+            if (ui != 0) {
+                unsigned int cycles = __mftb();
+                unk30058 = (double *)((int)unk30058 + cycles - ui);
             }
         }
     }
@@ -248,8 +251,8 @@ void GlitchFinder::PokeStart(
 
 void GlitchFinder::PokeEnd(unsigned int ui) {
     if (unk3004c) {
-        unk3004c->SetUnk44(unk10.SplitMs());
-        if (!unk3004c->GetUnk54()) {
+        unk3004c->mTimeEnd = unk10.SplitMs();
+        if (!unk3004c->mParent) {
             CheckDump();
         }
     }

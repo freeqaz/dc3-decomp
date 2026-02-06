@@ -196,6 +196,19 @@ void RndPartLauncher::Poll() {
     }
 }
 
+// Copy particle system properties from mPart to mPartOverride.
+// Only copies properties where the override mask bit is NOT set.
+// Bit mask values:
+//   0x001 - life
+//   0x002 - speed
+//   0x004 - size
+//   0x008 - deltaSize
+//   0x010 - startColor
+//   0x020 - midColor
+//   0x040 - endColor
+//   0x080 - pitch/yaw (emit direction)
+//   0x100 - mesh emitter
+//   0x200 - box emitter extents
 void RndPartLauncher::CopyPropsFromPart() {
     if (mPart) {
         if (!(mPartOverride.mask & 1)) {
@@ -211,19 +224,20 @@ void RndPartLauncher::CopyPropsFromPart() {
             mPartOverride.deltaSize = Average(mPart->DeltaSize());
         }
         if (!(mPartOverride.mask & 0x10)) {
-            mPartOverride.startColor = Average(
-                mPartOverride.startColor, mPart->StartColorLow(), mPart->StartColorHigh()
-            );
+            // Temporary required for correct codegen
+            Hmx::Color tmp;
+            Average(tmp, mPart->StartColorLow(), mPart->StartColorHigh());
+            mPartOverride.startColor = tmp;
         }
         if (!(mPartOverride.mask & 0x20)) {
-            mPartOverride.midColor = Average(
-                mPartOverride.midColor, mPart->MidColorLow(), mPart->MidColorHigh()
-            );
+            Hmx::Color tmp;
+            Average(tmp, mPart->MidColorLow(), mPart->MidColorHigh());
+            mPartOverride.midColor = tmp;
         }
         if (!(mPartOverride.mask & 0x40)) {
-            mPartOverride.endColor = Average(
-                mPartOverride.endColor, mPart->EndColorLow(), mPart->EndColorHigh()
-            );
+            Hmx::Color tmp;
+            Average(tmp, mPart->EndColorLow(), mPart->EndColorHigh());
+            mPartOverride.endColor = tmp;
         }
         if (!(mPartOverride.mask & 0x80)) {
             mPartOverride.pitch = mPart->Pitch();

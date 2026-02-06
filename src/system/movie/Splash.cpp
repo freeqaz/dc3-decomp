@@ -29,20 +29,30 @@ void Splash::SetWaitForSplash(bool b) {
 
 void Splash::Suspend() {
     MILO_ASSERT(MainThread(), 0xcf);
-    unk60 += 1;
-    // Only handle first suspend
-    if (unk60 < 2) {
-        if (!unk64) {
-            SetMutableState(SplashState::s2);
-        }
-        else {
-            // Threaded mode: signal and wait for render thread
-            bool b = SetMutableState(SplashState::s1);
-            if (b) {
+    if (++unk60 <= 1) {
+        if (unk64) {
+            if (SetMutableState(SplashState::s1)) {
                 WaitForState(SplashState::s2);
                 TheNgRnd.Suspend();
+                if (unk50 != NULL) {
+                    unk50->SetShowing(true);
+                    unk50->GetMovie().LockThread();
+                }
+                *(u8 *)&unk5c = 0;
+                Draw();
+            } else {
+                MILO_ASSERT(mState == kWaitingForTerminating, 0xeb);
+                TheNgRnd.Suspend();
+                if (unk50 != NULL) {
+                    unk50->SetShowing(true);
+                    unk50->GetMovie().LockThread();
+                }
             }
+        } else {
+            SetMutableState(SplashState::s2);
         }
+
+        unk200.Reset();
     }
 }
 
@@ -272,33 +282,34 @@ bool Splash::ShowNext() {
 }
 
 bool Splash::Show() {
-    CritSecTracker tracker(&unk98);
+    if (&unk98) {
+        unk98.Enter();
+    }
     MILO_ASSERT(!mPreparedScreens.empty(), 0x283);
-    tracker.mCritSec->Exit();
-    // Get the last prepared screen (typically only one)
-    auto rndDir = mPreparedScreens.end()->unk0;
-    rndDir->Exit();
+    if (&unk98) {
+        unk98.Exit();
+    }
+    unk48 = mPreparedScreens.begin()->unk0;
+    unk48->Enter();
     unk4c = unk48->Find<RndCam>(kSplashCam, true);
     unk50 = unk48->Find<TexMovie>(kSplashMovie, true);
-    if (!unk50) {
-        // No movie found, use preset duration
-        unk8 = mPreparedScreens.end()->unk4;
-    }
-    else {
-        // Found movie; if not threaded, skip to next screen
-        if (!unk64) {
+    if (unk50) {
+        if (unk64) {
+            unk50->SetShowing(true);
+            unk50->GetMovie().SetPaused(false);
+            unk8 = ceil(unk50->GetMovie().MsPerFrame() * unk50->GetMovie().NumFrames());
+        } else {
             return ShowNext();
         }
-        unk50->SetShowing(true);
-        unk50->GetMovie().SetPaused(false);
-        unk8 = ceil(unk50->GetMovie().MsPerFrame() * unk50->GetMovie().NumFrames());
+    } else {
+        unk8 = mPreparedScreens.begin()->unk4;
     }
     unk54 = unk48->Find<EventTrigger>("splash.trig", false);
     if (unk54) {
         unk54->Trigger();
     }
     unk18.Restart();
-    unk5c = false;
+    unk5c = 0;
     return true;
 }
 

@@ -33,7 +33,7 @@ public:
     int unk64;
 };
 
-// size 0xc8
+// size 0xd0
 class RndFancyParticle : public RndParticle {
 public:
     float growFrame; // 0x60
@@ -51,6 +51,7 @@ public:
     float RPF; // 0xa8
     float swingArmVel; // 0xac
     int unkb0, unkb4, unkb8, unkbc, unkc0, unkc4;
+    int unkc8, unkcc;
 };
 
 class ParticleCommonPool {

@@ -342,8 +342,8 @@ bool SongMgr::IsSongMounted(Symbol shortname) const {
     const char *name = ContentName(GetSongIDFromShortName(shortname, true));
     if (name) {
         return TheContentMgr.IsMounted(name);
-    } else
-        return true;
+    }
+    return true;
 }
 
 bool SongMgr::SaveCachedSongInfo(BufStream &bs) {
