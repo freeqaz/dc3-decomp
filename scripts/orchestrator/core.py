@@ -37,7 +37,8 @@ from .database import (
     DEFAULT_DB_PATH,
 )
 from .worktree_pool import WorktreePool
-from .model_selection import select_model, should_retry, get_escalation_reason, get_model_id
+from .model_selection import select_model, should_retry, get_escalation_reason, get_model_id, compute_cost_from_tokens
+from .config import requires_openrouter, _get_openrouter_enabled, _get_openrouter_api_key, _get_openrouter_base_url
 from .patch_applier import PatchApplier
 from .rb3_pairing import get_rb3_source_for_unit
 
@@ -211,6 +212,33 @@ class DecompOrchestrator:
         # Active sessions: session_id -> asyncio.Task
         self.active_sessions: dict[str, asyncio.Task] = {}
 
+    @staticmethod
+    def _resolve_cost(sdk_cost, model, usage):
+        """Resolve actual cost, falling back to token-rate computation.
+
+        Uses SDK-reported cost when available. Otherwise computes from
+        token counts and registry rates.
+
+        Args:
+            sdk_cost: Cost reported by SDK (may be None)
+            model: Model name (e.g., "haiku", "deepseek-v3.2")
+            usage: Usage dict with token counts (may be None or empty)
+
+        Returns:
+            Cost in USD, or None if neither source available
+        """
+        if sdk_cost is not None:
+            return sdk_cost
+        if not usage:
+            return None
+        return compute_cost_from_tokens(
+            model,
+            input_tokens=usage.get("input_tokens") or 0,
+            output_tokens=usage.get("output_tokens") or 0,
+            cache_read_tokens=usage.get("cache_read_tokens") or 0,
+            cache_creation_tokens=usage.get("cache_creation_tokens") or 0,
+        )
+
     async def _check_quota(self, model: str = "haiku", logger=None) -> None:
         """Verify we have API quota remaining before launching agents.
 
@@ -218,7 +246,9 @@ class DecompOrchestrator:
         Raises RuntimeError if quota is exhausted.
         """
         log = logger or self.logger
-        cli_model = get_model_id(model)
+        # OpenRouter-only models (e.g. deepseek) route through ANTHROPIC_DEFAULT_SONNET_MODEL,
+        # so tell the CLI to use "sonnet" as the model name
+        cli_model = "sonnet" if requires_openrouter(model) else get_model_id(model)
 
         agent_home = Path(os.environ.get("AGENT_HOME", "/home/free/code/milohax/dc3-decomp/agent-home"))
         agent_home.mkdir(parents=True, exist_ok=True)
@@ -229,8 +259,13 @@ class DecompOrchestrator:
             "HOME": str(agent_home),
         }
 
-        # Add auth env (OpenRouter or Anthropic OAuth)
-        env.update(self.runner.build_auth_env(model))
+        # Auth for CLI subprocess (not SDK - CLI needs ANTHROPIC_API_KEY, not AUTH_TOKEN)
+        use_openrouter = _get_openrouter_enabled() or requires_openrouter(model)
+        if use_openrouter and _get_openrouter_api_key():
+            env["ANTHROPIC_BASE_URL"] = _get_openrouter_base_url()
+            env["ANTHROPIC_API_KEY"] = _get_openrouter_api_key()
+            if requires_openrouter(model):
+                env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = get_model_id(model)
 
         cmd = [
             "claude",
@@ -348,15 +383,13 @@ You MUST preserve or improve the match percentage. Current: {first_pass_percent:
 
 If your changes reduce the match, revert them immediately.
 
-After making any changes, verify with:
-```bash
-./bin/objdiff-cli diff {func['symbol']} --project-dir {worktree}
+After making any changes, verify with the MCP tool:
+```
+mcp__orchestrator__run_objdiff
+  symbol: "{func['symbol']}"
+  project_dir: "{worktree}"
 ```
 
-When using MCP tools (run_objdiff, analyze_function, etc.), pass:
-```
-project_dir={worktree}
-```
 
 ---
 
@@ -451,6 +484,8 @@ Focus on readability and maintainability while preserving exact behavior and mat
             objdiff_preview=context.get('objdiff_preview', '(unavailable)'),
             # Worktree location (for agents to pass to MCP tools)
             worktree_dir=worktree_dir or '(unknown)',
+            # Conditional Task-model hint (non-empty only for non-haiku agents)
+            task_model_hint=context.get('task_model_hint', ''),
         ) + build_hint
 
     async def _execute_session(
@@ -503,6 +538,8 @@ Focus on readability and maintainability while preserving exact behavior and mat
                 "end_percent": 0.0,
                 "notes": f"Merged symbol (ICF artifact). Not a real decomp target.",
                 "symbol": func["symbol"],
+                "unit": func.get("unit"),
+                "demangled": func.get("demangled"),
             }
 
         # 1. Preflight quota check
@@ -573,6 +610,8 @@ Focus on readability and maintainability while preserving exact behavior and mat
                                 "duration_ms": 0,
                                 "usage": None,
                                 "skipped": True,
+                                "unit": func.get("unit"),
+                                "demangled": func.get("demangled"),
                             }
                 except Exception as e:
                     log.warning(f"Pre-check objdiff failed: {e} - continuing with full context collection")
@@ -614,6 +653,25 @@ Focus on readability and maintainability while preserving exact behavior and mat
                     db_path=self.db_path,
                 )
                 func["current_percent"] = measured_percent
+
+            # 6c. Inject Task-model hint for non-haiku agents
+            if selected_model != "haiku":
+                context["task_model_hint"] = (
+                    "## Task Tool: Always Use Haiku\n\n"
+                    "When spawning sub-agents with the `Task` tool for research "
+                    "(file lookups, grep, class definitions, etc.), **always pass "
+                    '`model: "haiku"`**. This avoids wasting expensive model tokens '
+                    "on simple searches:\n\n"
+                    "```\n"
+                    "Task:\n"
+                    '  description: "Find class definition"\n'
+                    '  prompt: "..."\n'
+                    '  subagent_type: "Explore"\n'
+                    '  model: "haiku"          \u2190 ALWAYS include this\n'
+                    "```\n\n"
+                )
+            else:
+                context["task_model_hint"] = ""
 
             # 7. Handle dry-run
             if dry_run:
@@ -778,7 +836,7 @@ Focus on readability and maintainability while preserving exact behavior and mat
             verdict = agent_result.verdict
 
             usage_data = agent_result.usage or {}
-            actual_cost_usd = agent_result.total_cost_usd
+            actual_cost_usd = self._resolve_cost(agent_result.total_cost_usd, selected_model, usage_data)
             duration_ms = agent_result.duration_ms
 
             log.info(f"Agent result: status={exit_status}, percent={start_percent}% → {end_percent}%, verdict={verdict}")
@@ -851,6 +909,8 @@ Focus on readability and maintainability while preserving exact behavior and mat
                 "actual_cost_usd": actual_cost_usd,
                 "duration_ms": duration_ms,
                 "usage": usage_data if usage_data else None,
+                "unit": func.get("unit"),
+                "demangled": func.get("demangled"),
             }
 
         finally:
@@ -1287,40 +1347,13 @@ Focus on readability and maintainability while preserving exact behavior and mat
 
         if verbose:
             elapsed = (datetime.now() - batch_start_time).total_seconds()
-            print(f"\n{'='*60}")
-            if circuit_tripped:
-                print("Batch stopped early (circuit breaker)")
-            else:
-                print("Batch complete!")
-            print(f"Processed: {len(results)} functions in {elapsed:.1f}s")
-            print(f"Build strategy: {summary['build_strategy']}")
-            if periodic_full_interval > 0 and use_incremental:
-                print(f"Periodic full builds: Every {periodic_full_interval} batches")
-            print(f"Errors: {errors}")
-            if errors > 0:
-                self._print_error_summary(results)
-            if summary.get("improvements"):
-                print(f"Improvements: {len(summary['improvements'])}")
-                total_gain = sum(
-                    imp["end_percent"] - imp["start_percent"]
-                    for imp in summary["improvements"]
-                )
-                print(f"Total gain: +{total_gain:.1f}%")
-            if summary.get("modified_files"):
-                print(f"Modified files: {len(summary['modified_files'])}")
-            # Show auto-apply stats if enabled
-            apply_stats = summary["auto_apply_stats"]
-            if apply_stats["applied"] > 0 or apply_stats["failed"] > 0 or apply_stats["skipped"] > 0:
-                parts = [f"Auto-applied: {apply_stats['applied']} patches"]
-                extra = []
-                if apply_stats["skipped"] > 0:
-                    extra.append(f"{apply_stats['skipped']} skipped (errors)")
-                if apply_stats["failed"] > 0:
-                    extra.append(f"{apply_stats['failed']} failed")
-                if extra:
-                    parts.append(f"({', '.join(extra)})")
-                print(" ".join(parts))
-            print(f"{'='*60}\n")
+            self._print_batch_summary(
+                summary, results, elapsed,
+                processed=len(results),
+                total_targets=len(results),
+                errors=errors,
+                circuit_tripped=circuit_tripped,
+            )
 
         return summary
 
@@ -1494,37 +1527,13 @@ Focus on readability and maintainability while preserving exact behavior and mat
 
         if verbose:
             elapsed = (datetime.now() - batch_start_time).total_seconds()
-            print(f"\n{'='*60}")
-            if circuit_tripped:
-                print("Batch stopped early (circuit breaker)")
-            else:
-                print("Batch complete!")
-            print(f"Processed: {processed}/{len(targets)} targets in {elapsed:.1f}s")
-            print(f"Build strategy: {summary['build_strategy']}")
-            print(f"Errors: {errors}")
-            if errors > 0:
-                self._print_error_summary(results)
-            if summary.get("improvements"):
-                print(f"Improvements: {len(summary['improvements'])}")
-                total_gain = sum(
-                    imp["end_percent"] - imp["start_percent"]
-                    for imp in summary["improvements"]
-                )
-                print(f"Total gain: +{total_gain:.1f}%")
-            if summary.get("modified_files"):
-                print(f"Modified files: {len(summary['modified_files'])}")
-            apply_stats = summary["auto_apply_stats"]
-            if apply_stats["applied"] > 0 or apply_stats["failed"] > 0 or apply_stats["skipped"] > 0:
-                parts = [f"Auto-applied: {apply_stats['applied']} patches"]
-                extra = []
-                if apply_stats["skipped"] > 0:
-                    extra.append(f"{apply_stats['skipped']} skipped (errors)")
-                if apply_stats["failed"] > 0:
-                    extra.append(f"{apply_stats['failed']} failed")
-                if extra:
-                    parts.append(f"({', '.join(extra)})")
-                print(" ".join(parts))
-            print(f"{'='*60}\n")
+            self._print_batch_summary(
+                summary, results, elapsed,
+                processed=processed,
+                total_targets=len(targets),
+                errors=errors,
+                circuit_tripped=circuit_tripped,
+            )
 
         return summary
 
@@ -1567,6 +1576,8 @@ Focus on readability and maintainability while preserving exact behavior and mat
                 "error": f"{type(e).__name__}: {e}",
                 "symbol": func["symbol"],
                 "function_id": func["id"],  # Need this for unlock
+                "unit": func.get("unit"),
+                "demangled": func.get("demangled"),
             }
         finally:
             # Batch mode: unlock the function when agent completes
@@ -1609,6 +1620,11 @@ Focus on readability and maintainability while preserving exact behavior and mat
             "error": 0,
             "improvements": [],
             "modified_files": set(),
+            "per_file": {},  # unit -> {improved: int, gain: float, functions: list}
+            "total_cost": 0.0,
+            "total_duration_ms": 0,
+            "results_with_cost": 0,
+            "results_with_duration": 0,
         }
 
         for result in results:
@@ -1622,16 +1638,37 @@ Focus on readability and maintainability while preserving exact behavior and mat
             elif status == "error":
                 summary["error"] += 1
 
+            # Track cost and duration
+            cost = result.get("actual_cost_usd")
+            if cost is not None and cost > 0:
+                summary["total_cost"] += cost
+                summary["results_with_cost"] += 1
+            dur = result.get("duration_ms")
+            if dur is not None and dur > 0:
+                summary["total_duration_ms"] += dur
+                summary["results_with_duration"] += 1
+
             # Track improvements (handle None values and ensure float type)
             start = float(result.get("start_percent") or 0)
             end = float(result.get("end_percent") or 0)
             if end > 0 and start >= 0 and end > start:
-                summary["improvements"].append({
+                imp = {
                     "symbol": result.get("symbol"),
+                    "demangled": result.get("demangled"),
+                    "unit": result.get("unit"),
                     "start_percent": start,
                     "end_percent": end,
                     "gain": end - start,
-                })
+                }
+                summary["improvements"].append(imp)
+
+                # Aggregate per-file stats
+                unit = result.get("unit") or "unknown"
+                if unit not in summary["per_file"]:
+                    summary["per_file"][unit] = {"improved": 0, "gain": 0.0, "functions": []}
+                summary["per_file"][unit]["improved"] += 1
+                summary["per_file"][unit]["gain"] += end - start
+                summary["per_file"][unit]["functions"].append(imp)
 
             # Track modified files
             if result.get("patch"):
@@ -1644,6 +1681,129 @@ Focus on readability and maintainability while preserving exact behavior and mat
         summary["modified_files"] = list(summary["modified_files"])
 
         return summary
+
+    def _print_batch_summary(
+        self,
+        summary: dict[str, Any],
+        results: list[dict[str, Any]],
+        elapsed: float,
+        processed: int,
+        total_targets: int,
+        errors: int,
+        circuit_tripped: bool,
+    ) -> None:
+        """Print rich batch completion summary."""
+        print(f"\n{'='*60}")
+        if circuit_tripped:
+            print("Batch stopped early (circuit breaker)")
+        else:
+            print("Batch complete!")
+        print(f"{'='*60}")
+
+        # --- Overview ---
+        elapsed_min = elapsed / 60
+        avg_sec = elapsed / processed if processed > 0 else 0
+        print(f"\n  Processed:  {processed}/{total_targets} in ", end="")
+        if elapsed_min >= 1:
+            print(f"{elapsed_min:.1f}m (avg {avg_sec:.1f}s/fn)")
+        else:
+            print(f"{elapsed:.1f}s (avg {avg_sec:.1f}s/fn)")
+        print(f"  Strategy:   {summary['build_strategy']}")
+        if summary.get("periodic_validation"):
+            print(f"  Validation: full build every {summary['periodic_validation']} batches")
+
+        # --- Results breakdown ---
+        total_gain = sum(imp["gain"] for imp in summary["improvements"]) if summary.get("improvements") else 0
+        n_improved = len(summary.get("improvements", []))
+        print(f"\n  Results")
+        print(f"  {'─'*40}")
+        parts = []
+        if summary.get("complete", 0):
+            parts.append(f"{summary['complete']} complete")
+        if n_improved:
+            parts.append(f"{n_improved} improved")
+        if summary.get("at_limit", 0):
+            parts.append(f"{summary['at_limit']} at_limit")
+        if summary.get("stuck", 0):
+            parts.append(f"{summary['stuck']} stuck")
+        if errors:
+            parts.append(f"{errors} errors")
+        no_change = processed - n_improved - errors - summary.get("complete", 0)
+        if no_change > 0 and not summary.get("complete", 0):
+            # Only show no-change if we're not conflating with "complete"
+            pass
+        print(f"  {' | '.join(parts)}")
+        if n_improved:
+            avg_gain = total_gain / n_improved
+            print(f"  Total gain: +{total_gain:.1f}%  (avg +{avg_gain:.1f}% per improved fn)")
+
+        # --- Errors ---
+        if errors > 0:
+            self._print_error_summary(results)
+
+        # --- Auto-apply stats ---
+        apply_stats = summary.get("auto_apply_stats", {})
+        applied = apply_stats.get("applied", 0)
+        failed = apply_stats.get("failed", 0)
+        skipped = apply_stats.get("skipped", 0)
+        if applied > 0 or failed > 0 or skipped > 0:
+            parts = [f"Auto-applied: {applied} patches"]
+            extra = []
+            if skipped > 0:
+                extra.append(f"{skipped} skipped")
+            if failed > 0:
+                extra.append(f"{failed} failed")
+            if extra:
+                parts.append(f"({', '.join(extra)})")
+            print(f"  {' '.join(parts)}")
+
+        # --- Per-file progress ---
+        per_file = summary.get("per_file", {})
+        if per_file:
+            print(f"\n  Progress by file")
+            print(f"  {'─'*40}")
+            # Sort by total gain descending
+            sorted_files = sorted(per_file.items(), key=lambda x: x[1]["gain"], reverse=True)
+            for unit, stats in sorted_files:
+                # Shorten long unit paths (show last 2 components)
+                display = unit
+                parts = unit.split("/")
+                if len(parts) > 2:
+                    display = "/".join(parts[-2:])
+                count_str = f"{stats['improved']} fn" if stats['improved'] == 1 else f"{stats['improved']} fns"
+                print(f"  {display:40s} {count_str:>6s}  +{stats['gain']:6.1f}%")
+
+        # --- Top improvements ---
+        improvements = summary.get("improvements", [])
+        if improvements:
+            sorted_imps = sorted(improvements, key=lambda x: x["gain"], reverse=True)
+            top = sorted_imps[:8]
+            print(f"\n  Top improvements")
+            print(f"  {'─'*40}")
+            for imp in top:
+                name = imp.get("demangled") or imp.get("symbol") or "?"
+                # Truncate long demangled names
+                if len(name) > 38:
+                    name = name[:35] + "..."
+                print(f"  {name:38s} {imp['start_percent']:5.1f}% → {imp['end_percent']:5.1f}%  (+{imp['gain']:.1f}%)")
+
+        # --- Cost/duration ---
+        cost = summary.get("total_cost", 0)
+        dur_count = summary.get("results_with_duration", 0)
+        if cost > 0:
+            cost_str = f"${cost:.2f}" if cost >= 0.01 else f"${cost:.4f}"
+            print(f"\n  Cost: {cost_str}", end="")
+            if n_improved > 0 and total_gain > 0:
+                cpi = cost / total_gain
+                print(f"  (${cpi:.4f} per % gained)", end="")
+            print()
+
+        # --- Modified files count ---
+        mod_files = summary.get("modified_files", [])
+        if mod_files:
+            print(f"  Modified files: {len(mod_files)}")
+
+        print(f"{'='*60}\n")
 
     def _print_error_summary(self, results: list[dict[str, Any]]) -> None:
         """Print grouped error summary to console and logger."""
@@ -1783,6 +1943,7 @@ Focus on readability and maintainability while preserving exact behavior and mat
             objdiff_line_count=context.get('objdiff_line_count', 0),
             objdiff_preview=context.get('objdiff_preview', '(unavailable)'),
             worktree_dir=worktree_dir or '(unknown)',
+            task_model_hint=context.get('task_model_hint', ''),
         )
 
     async def run_rb3_merge_single(
@@ -2223,7 +2384,9 @@ previously but no longer applies cleanly because the codebase has changed.
                 "refreshed_patch": refreshed_patch,
                 "refreshed_path": str(refreshed_path) if refreshed_path else None,
                 "notes": agent_result.notes,
-                "actual_cost_usd": agent_result.total_cost_usd,
+                "actual_cost_usd": self._resolve_cost(
+                    agent_result.total_cost_usd, selected_model, agent_result.usage
+                ),
                 "duration_ms": agent_result.duration_ms,
             }
 

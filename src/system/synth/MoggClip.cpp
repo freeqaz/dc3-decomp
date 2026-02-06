@@ -196,9 +196,9 @@ void MoggClip::Pause(bool pause) {
 bool MoggClip::DonePlaying() { return !mStream; }
 
 void MoggClip::SetVolume(float vol) {
-    unk44 = vol;
+    mVolume = vol;
     if (mStream) {
-        mStream->Stream::SetVolume(mVolume + unk44);
+        mStream->Stream::SetVolume(unk44 + mVolume);
     }
 }
 
@@ -293,36 +293,47 @@ void MoggClip::UpdatePanInfo() {
 }
 
 void MoggClip::LoadNumChannels() {
+    // Early exit if no mogg file configured
     if (mMoggFile.empty()) {
         unk58 = -1;
         return;
     }
+
+    // Ensure loader has completed if present
     if (mLoader && !mLoader->IsLoaded()) {
         TheLoadMgr.PollUntilLoaded(mLoader, nullptr);
     }
+
+    // Poll to initialize stream
     SynthPoll();
     if (!mStream) {
         unk58 = -1;
         return;
     }
-    int i = 0;
-    int numChannels;
-    do {
+
+    // Poll synth up to 200 times waiting for channel count to become available
+    int retries = 0;
+    int numChannels = 0;
+    while (retries < 200) {
         Timer::Sleep(1);
         TheSynth->Poll();
         numChannels = mStream->GetNumChannels();
-        if (numChannels > 0) break;
-        i++;
-    } while (i < 200);
+        if (numChannels > 0) {
+            break;
+        }
+        retries++;
+    }
+
     unk58 = numChannels;
     Pause(0);
-    if (unk58 >= 0) {
-        return;
+
+    // Log error if channel count retrieval failed
+    if (unk58 < 0) {
+        TheDebug.Notify(
+            MakeString("[GetNumChannels] Ret = %d.  Unable to get num channels from '%s'.\n",
+                       unk58, mMoggFile));
+        unk58 = -1;
     }
-    TheDebug.Notify(
-        MakeString("[GetNumChannels] Ret = %d.  Unable to get num channels from '%s'.\n",
-                   unk58, mMoggFile.c_str()));
-    unk58 = -1;
 }
 
 void MoggClip::LoadFile(BinStream *bs) {

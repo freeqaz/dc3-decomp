@@ -144,11 +144,63 @@ bool NgSpotlightDrawer::CheckSharedResources() {
     return true;
 }
 
-// Manual vector erase implementation to match target code generation
+// Manual vector implementations to match target code generation
 typedef std::vector<SpotlightDrawer::SpotMeshEntry> SpotMeshEntryVector;
 typedef SpotlightDrawer::SpotMeshEntry SpotMeshEntry;
 
 namespace stlpmtx_std {
+
+// Manual specialization for SpotMeshEntry vector to match target codegen
+// The target binary uses manual memcpy loops instead of STL helpers
+template <>
+void vector<SpotMeshEntry, StlNodeAlloc<SpotMeshEntry>>::_M_fill_insert_aux(
+    SpotMeshEntry* __pos,
+    unsigned int __n,
+    const SpotMeshEntry& __x,
+    const __false_type&
+) {
+    // Self-reference check required for non-movable types
+    if (_M_is_inside(__x)) {
+        SpotMeshEntry __x_copy = __x;
+        _M_fill_insert_aux(__pos, __n, __x_copy, __false_type());
+        return;
+    }
+
+    pointer __old_finish = this->_M_finish;
+    const size_type __elems_after = __old_finish - __pos;
+
+    if (__elems_after > __n) {
+        // Move tail elements forward
+        __uninitialized_copy(__old_finish - __n, __old_finish, __old_finish, _TrivialUCpy());
+        this->_M_finish += __n;
+
+        // Manual backward copy loop to match target codegen
+        pointer src = __old_finish - __n;
+        pointer dst = __old_finish;
+        for (int count = (src - __pos) / sizeof(SpotMeshEntry); count > 0; count--) {
+            dst--;
+            src--;
+            memcpy(dst, src, sizeof(SpotMeshEntry));
+        }
+
+        // Manual fill loop to match target codegen
+        pointer end = __pos + __n;
+        for (pointer p = __pos; p != end; p++) {
+            memcpy(p, &__x, sizeof(SpotMeshEntry));
+        }
+    } else {
+        // Fill new elements beyond old finish
+        this->_M_finish = __uninitialized_fill_n(this->_M_finish, __n - __elems_after, __x, _PODType());
+        // Copy remaining elements
+        __uninitialized_copy(__pos, __old_finish, this->_M_finish, _TrivialUCpy());
+        this->_M_finish += __elems_after;
+        // Fill elements within old range
+        for (pointer p = __pos; p != __old_finish; p++) {
+            memcpy(p, &__x, sizeof(SpotMeshEntry));
+        }
+    }
+}
+
 template <>
 SpotMeshEntry* vector<SpotMeshEntry, StlNodeAlloc<SpotMeshEntry>>::_M_erase(
     SpotMeshEntry* __first,

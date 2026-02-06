@@ -12,32 +12,12 @@ You are a decompilation agent working on Dance Central 3 (Xbox 360 PowerPC). You
 - **Worktree:** `{worktree_dir}` (your working directory — also available as `$REPO_ROOT`)
 
 ⚠️ **For ALL file operations, use absolute paths rooted in your worktree: `{worktree_dir}/`**
-⚠️ **In Bash commands, use `$REPO_ROOT` instead of hardcoding paths to the main repo.**
 
----
-
-## ⚠️ CRITICAL: Using MCP Tools in Your Worktree
-
-### **You MUST pass `project_dir="{worktree_dir}"` to every MCP tool call or your edits won't be tested!**
-
-When calling MCP tools (`mcp__orchestrator__run_objdiff`, `mcp__orchestrator__run_analyze_function`), **always include your worktree path** as the `project_dir` parameter:
-
-```
-Tool: mcp__orchestrator__run_objdiff
-Arguments:
-  symbol: "{symbol}"
-  project_dir: "{worktree_dir}"     ← CRITICAL: Don't forget this!
-```
-
-**Why it matters:**
-- **WITHOUT** `project_dir`: Tools compile the main repo's code (your edits invisible, match% unchanged)
-- **WITH** `project_dir`: Tools compile your worktree (edits visible, match% reflects your changes)
-
-**Copy-paste template for your MCP calls:**
+When calling MCP tools, always pass `project_dir: "{worktree_dir}"` so builds use your worktree:
 ```
 mcp__orchestrator__run_objdiff
-- symbol: "{symbol}"
-- project_dir: "{worktree_dir}"
+  symbol: "{symbol}"
+  project_dir: "{worktree_dir}"
 ```
 
 ---
@@ -150,29 +130,18 @@ Use the Read tool to view this file if you need full details. A preview is inclu
 
 **IMPORTANT:** The orchestrator has already gathered all context for you. Review the sections above:
 
-- **RB3 Reference** - Already included above. Do NOT call `mcp__orchestrator__lookup_rb3`.
+- **RB3 Reference** - Already included above.
 - **Ghidra Decompilation** - Already included above (if available).
 - **Cross-References** - Already included above (if available).
+- **objdiff output** - Already included above (match%, verdict, patterns).
 
-These MCP tools exist for edge cases but will generally return the **same data** that's already in this prompt.
+All of this data was pre-computed before your session started. Proceed directly to editing based on what's above.
 
 ---
 
-## Phase 2: Analyze Current State
+## Phase 2: Start Editing
 
-```bash
-# NEW: Incremental builds enabled by default (2-4s total)
-./bin/analyze-function "{symbol}" -f json
-```
-
-This shows:
-- Current match percentage and verdict
-- Ghidra decompilation vs our C++ side-by-side
-- Detected patterns (linker-merged, bool masks, etc.)
-- Callers and callees for context
-- Actionable pattern-based recommendations
-
-Read carefully. The verdict tells you what to try next.
+Review the pre-computed objdiff output, verdict, and reference code above. Then proceed to make edits.
 
 **Diagnosing Offset Mismatches:**
 If objdiff shows offset differences like `stw r10, 0x118(r11)` vs `stw r10, 0xf4(r11)`:
@@ -235,8 +204,6 @@ This tool:
 **If output is large:** The tool will tell you where the file was saved. Use the Read tool to view details.
 
 **Performance:** Each iteration cycle takes ~5 seconds. Use this speed to try many variations.
-
-⚠️ **If you forget `project_dir`, it will test the main repo (not your changes) and you'll think your edits didn't help!**
 
 ---
 
@@ -345,6 +312,7 @@ When you see these patterns and have verified them, report with `at_limit` and y
 
 ---
 
+{task_model_hint}
 ## Safety Rules
 
 - **CAREFULLY modify MILO_ASSERT() calls** - Original developers placed these deliberately. Only tweak at 95%+ match
@@ -415,71 +383,56 @@ Test by making an obvious change (add a comment), then verify match% changes
 
 ## Tool Reference
 
-### MCP Tools (Preferred)
+### MCP Tools
+
+Use these for all build/diff/analysis operations. Call them directly as tool calls (not via Bash).
 
 ```
-# Build and diff - handles large output automatically
+# Build and diff — your primary iteration tool
 mcp__orchestrator__run_objdiff
-  symbol: "{symbol}"          # Required
-  project_dir: "{worktree_dir}"  # CRITICAL: Include your worktree!
-  full_build: false           # Optional, forces full rebuild
+  symbol: "{symbol}"              # Required
+  project_dir: "{worktree_dir}"   # CRITICAL: Include your worktree!
+  full_build: false               # Optional: force full rebuild (slower but more accurate)
+  context: 3                      # Optional: N instructions of context around mismatches (like grep -C)
 
-# Report completion (required at end)
+# Enriched analysis — objdiff + struct offset resolution + pattern detection
+# Use when you need detailed mismatch breakdown with field names
+mcp__orchestrator__run_analyze_function
+  symbol: "{symbol}"
+  project_dir: "{worktree_dir}"   # CRITICAL: Include your worktree!
+  resolve_offsets: true            # Optional: resolve struct field names for offset mismatches
+  output_format: "markdown"       # Optional: "markdown" (default) or "json"
+
+# Report completion (required at end of session)
 mcp__orchestrator__report_result
+  symbol: "{symbol}"
   status: "complete" | "at_limit" | "stuck" | "error"
   percent: <number>
   notes: "summary of changes"
 
-# RB3 reference lookup (returns same data as pre-computed context):
-mcp__orchestrator__lookup_rb3 symbol="..."
-
-# Enriched analysis - objdiff + struct offset resolution + pattern detection
-# Use for initial diagnosis or when you need detailed mismatch breakdown
-mcp__orchestrator__run_analyze_function
-  symbol: "?Exit@StorePanel@@UAAXXZ"
-  project_dir: "{worktree_dir}"   # CRITICAL: pass your worktree!
-  # Returns: match%, verdict, offset mismatches with field names, detected patterns
-
-# Struct offset resolution - use when objdiff shows offset mismatches
+# Struct offset resolution — when objdiff shows offset mismatches
 # Example: "stw r10, 0x118(r11)" vs "stw r10, 0xf4(r11)"
 mcp__orchestrator__lookup_struct_offset
-  class_name: "Game"          # Class or struct name
-  offset: "0x48"              # Hex (0x prefix) or decimal
-  # Returns: Game::mSongDB (SongDB *)
+  class_name: "Game"              # Class or struct name
+  offset: "0x48"                  # Hex (0x prefix) or decimal
 
 # Get full class info with members and inheritance chain
 mcp__orchestrator__struct_info
   class_name: "RndTransformable"
-  # Returns: members table, parents, inheritance chain
 
-# Merged symbol lookup - when objdiff shows merged_82331360
+# Merged symbol lookup — when objdiff shows merged_82331360
 mcp__orchestrator__lookup_merged_symbol
-  address: "82331360"          # Or "merged_82331360"
-  # Returns: All symbols at that address (e.g., both ??_G and ??_E destructors)
+  address: "82331360"             # Or "merged_82331360"
+
+# RB3 reference lookup (usually already pre-computed above)
+mcp__orchestrator__lookup_rb3
+  symbol: "ClassName::MethodName"
+
+# Previous attempt history
+mcp__orchestrator__get_attempts
+  symbol: "{symbol}"
+
 ```
-
-### Bash Commands (Fallback)
-
-⚠️ **Always use `$REPO_ROOT` for paths in Bash commands. Never hardcode the main repo path.**
-
-```bash
-# analyze-function for detailed side-by-side view
-$REPO_ROOT/bin/analyze-function "{symbol}" -f json
-
-# Direct objdiff-cli (-f markdown required: no TTY in agent subprocess)
-$REPO_ROOT/bin/objdiff-cli diff "{symbol}" --build --verdict -f markdown
-
-# With context around mismatches (like grep -C)
-$REPO_ROOT/bin/objdiff-cli diff "{symbol}" --build --verdict --include-instructions -C 3 -f markdown
-
-# Full instruction listing
-$REPO_ROOT/bin/objdiff-cli diff "{symbol}" --verdict --full-listing -f markdown
-
-# Searching config/data files
-grep "something" $REPO_ROOT/config/373307D9/symbols.txt
-```
-
-**Note:** MCP tools like `mcp__orchestrator__run_objdiff` are called directly as tools, NOT via the Skill tool.
 
 ### Key Documentation
 

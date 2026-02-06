@@ -326,15 +326,15 @@ void UIFontImporter::ImportSettingsFromFont(RndFontBase *font) {
 
 Symbol UIFontImporter::GetMatVariationName(unsigned int idx) const {
     if (idx >= mMatVariations.size())
-        return Symbol(0);
+        return Symbol();
     ObjPtrList<RndMat>::iterator it = mMatVariations.begin();
-    for (unsigned int i = 0; i < idx; i++) {
+    // Use decrement pattern to match target codegen
+    while (idx != 0) {
         ++it;
+        idx--;
     }
     RndMat *mat = *it;
-    if (!mat)
-        return Symbol(0);
-    return mat->Type();
+    return Symbol(FileGetBase(mat->Name()));
 }
 
 char const *UIFontImporter::GetMatVariationName(RndFontBase *font) const {

@@ -2939,101 +2939,135 @@ def collect_pre_run_context(
         result["m2c_line_count"] = 0
         result["m2c_method"] = "none"
 
-    # 5. Collect from Ghidra (optional, fail gracefully)
+    # 5. Collect from Ghidra cache (or fall back to live Ghidra)
     log.info("Attempting Ghidra decompilation and xrefs...")
     try:
-        binary_path = get_binary_path(project_dir)
-        if not binary_path:
-            log.warning("Could not locate binary for Ghidra")
-        elif not DirectGhidraClient:
-            log.warning("DirectGhidraClient not available")
-        else:
-            # Use sandbox-friendly path for Ghidra projects
-            # /tmp/claude/ is in the sandbox allowlist for write operations
-            ghidra_project_dir = Path("/tmp/claude/ghidra_projects")
-            ghidra_project_dir.mkdir(parents=True, exist_ok=True)
+        from scripts.orchestrator.database import get_connection as _get_conn
+        from scripts.orchestrator.database import get_decompilation, get_xrefs
 
-            # Use singleton pattern to avoid JVM/project state corruption
-            # when processing multiple functions in batch mode
-            client = DirectGhidraClient.get_instance(
-                binary_path=binary_path,
-                project_dir=str(ghidra_project_dir),
-                project_name="DC3",
-                verbose=False,
-            )
+        db_path = Path(project_dir) / "decomp.db"
+        cache_conn = _get_conn(str(db_path)) if db_path.exists() else None
 
-            # Get decompilation
+        # --- Decompilation: cache-first ---
+        decompilation = None
+        if cache_conn:
+            decompilation = get_decompilation(cache_conn, symbol)
+            if decompilation:
+                log.info(f"Cache hit: decompilation for {symbol} ({len(decompilation)} chars)")
+
+        if decompilation is None:
+            # Cache miss — fall back to live Ghidra
+            log.info(f"Cache miss for decompilation: {symbol}, trying live Ghidra")
             try:
-                decompilation = client.decompile_function(symbol)
-                # Always write to file, use truncate_and_offload for inline budget
-                ghidra_offload = truncate_and_offload(
-                    content=decompilation,
-                    name=f"ghidra_{symbol}",
-                    worktree_dir=worktree_dir,
-                )
-                if not ghidra_offload["was_truncated"]:
-                    # truncate_and_offload didn't write a file — do it ourselves
-                    analysis_dir = Path(worktree_dir) / "function_analysis"
-                    analysis_dir.mkdir(exist_ok=True, parents=True)
-                    safe_name = f"ghidra_{symbol}".replace("?", "_Q_").replace("@", "_A_").replace("<", "_L_").replace(">", "_R_").replace("/", "_")
-                    ghidra_file = analysis_dir / f"{safe_name}.c"
-                    ghidra_file.write_text(decompilation)
-                    ghidra_offload["file_path_relative"] = f"function_analysis/{safe_name}.c"
-
-                result["ghidra_file_path_relative"] = ghidra_offload["file_path_relative"]
-                match_pct = result.get("match_percent", 0.0)
-                if match_pct >= 90.0:
-                    result["decompilation"] = (
-                        f"(file-only at {match_pct:.1f}% match)\n"
-                        f"View with: cat {ghidra_offload['file_path_relative']}"
+                binary_path = get_binary_path(project_dir)
+                if binary_path and DirectGhidraClient:
+                    ghidra_project_dir = Path("/tmp/claude/ghidra_projects")
+                    ghidra_project_dir.mkdir(parents=True, exist_ok=True)
+                    client = DirectGhidraClient.get_instance(
+                        binary_path=binary_path,
+                        project_dir=str(ghidra_project_dir),
+                        project_name="DC3",
+                        verbose=False,
                     )
-                    log.info(f"Ghidra decompilation file-only (match={match_pct:.1f}%): {ghidra_offload['file_path_relative']}")
+                    decompilation = client.decompile_function(symbol)
+                elif not binary_path:
+                    log.warning("Could not locate binary for Ghidra")
                 else:
-                    result["decompilation"] = ghidra_offload["inline"]
-                    log.info(f"Ghidra decompilation: {len(decompilation)} chars, file: {ghidra_offload['file_path_relative']}")
+                    log.warning("DirectGhidraClient not available")
             except DirectGhidraClientError as e:
-                log.warning(f"Ghidra decompilation failed: {e}")
+                log.warning(f"Live Ghidra decompilation failed: {e}")
+            except Exception as e:
+                log.warning(f"Unexpected Ghidra error: {e}")
 
-            # Get cross-references
-            try:
-                callers, callees = client.list_cross_references(symbol)
-                log.info(f"Found {len(callers)} callers, {len(callees)} callees")
-
-                # Write xrefs to worktree
+        if decompilation:
+            # Write to file + inline (same logic as before)
+            ghidra_offload = truncate_and_offload(
+                content=decompilation,
+                name=f"ghidra_{symbol}",
+                worktree_dir=worktree_dir,
+            )
+            if not ghidra_offload["was_truncated"]:
                 analysis_dir = Path(worktree_dir) / "function_analysis"
                 analysis_dir.mkdir(exist_ok=True, parents=True)
+                safe_name = f"ghidra_{symbol}".replace("?", "_Q_").replace("@", "_A_").replace("<", "_L_").replace(">", "_R_").replace("/", "_")
+                ghidra_file = analysis_dir / f"{safe_name}.c"
+                ghidra_file.write_text(decompilation)
+                ghidra_offload["file_path_relative"] = f"function_analysis/{safe_name}.c"
 
-                xrefs_file = analysis_dir / f"xrefs_{symbol}.txt"
-                with open(xrefs_file, 'w') as f:
-                    f.write(f"Cross-references for {symbol}\n")
-                    f.write(f"{'='*80}\n\n")
-                    f.write(f"Callers ({len(callers)} total):\n")
-                    for caller in callers:
-                        f.write(f"  - {caller}\n")
-                    f.write(f"\nCallees ({len(callees)} total):\n")
-                    for callee in callees:
-                        f.write(f"  - {callee}\n")
+            result["ghidra_file_path_relative"] = ghidra_offload["file_path_relative"]
+            match_pct = result.get("match_percent", 0.0)
+            if match_pct >= 90.0:
+                result["decompilation"] = (
+                    f"(file-only at {match_pct:.1f}% match)\n"
+                    f"View with: cat {ghidra_offload['file_path_relative']}"
+                )
+                log.info(f"Ghidra decompilation file-only (match={match_pct:.1f}%): {ghidra_offload['file_path_relative']}")
+            else:
+                result["decompilation"] = ghidra_offload["inline"]
+                log.info(f"Ghidra decompilation: {len(decompilation)} chars, file: {ghidra_offload['file_path_relative']}")
 
-                # Set xrefs paths
-                result["xrefs_path_absolute"] = str(xrefs_file)
-                result["xrefs_path_relative"] = f"function_analysis/xrefs_{symbol}.txt"
+        # --- Cross-references: cache-first ---
+        callers = None
+        callees = None
+        if cache_conn:
+            cached_xrefs = get_xrefs(cache_conn, symbol)
+            if cached_xrefs:
+                callers, callees = cached_xrefs
+                log.info(f"Cache hit: {len(callers)} callers, {len(callees)} callees")
 
-                # Read preview
-                with open(xrefs_file, 'r') as f:
-                    lines = f.readlines()[:20]
-                result["xrefs_preview"] = ''.join(lines)
-
-                log.info(f"Xrefs written to {xrefs_file}")
-
+        if callers is None:
+            # Cache miss — fall back to live Ghidra
+            log.info(f"Cache miss for xrefs: {symbol}, trying live Ghidra")
+            try:
+                binary_path = get_binary_path(project_dir)
+                if binary_path and DirectGhidraClient:
+                    ghidra_project_dir = Path("/tmp/claude/ghidra_projects")
+                    ghidra_project_dir.mkdir(parents=True, exist_ok=True)
+                    client = DirectGhidraClient.get_instance(
+                        binary_path=binary_path,
+                        project_dir=str(ghidra_project_dir),
+                        project_name="DC3",
+                        verbose=False,
+                    )
+                    callers, callees = client.list_cross_references(symbol)
+                elif not binary_path:
+                    log.warning("Could not locate binary for Ghidra")
+                else:
+                    log.warning("DirectGhidraClient not available")
             except DirectGhidraClientError as e:
-                log.warning(f"Ghidra xrefs lookup failed: {e}")
+                log.warning(f"Live Ghidra xrefs lookup failed: {e}")
+            except Exception as e:
+                log.warning(f"Unexpected Ghidra xrefs error: {e}")
 
-            # Note: Don't close the singleton client - it stays alive for batch reuse
+        if callers is not None:
+            log.info(f"Found {len(callers)} callers, {len(callees)} callees")
 
-    except DirectGhidraClientError as e:
-        log.warning(f"Ghidra initialization failed (continuing without Ghidra): {e}")
+            # Write xrefs to worktree
+            analysis_dir = Path(worktree_dir) / "function_analysis"
+            analysis_dir.mkdir(exist_ok=True, parents=True)
+
+            xrefs_file = analysis_dir / f"xrefs_{symbol}.txt"
+            with open(xrefs_file, 'w') as f:
+                f.write(f"Cross-references for {symbol}\n")
+                f.write(f"{'='*80}\n\n")
+                f.write(f"Callers ({len(callers)} total):\n")
+                for caller in callers:
+                    f.write(f"  - {caller}\n")
+                f.write(f"\nCallees ({len(callees)} total):\n")
+                for callee in callees:
+                    f.write(f"  - {callee}\n")
+
+            result["xrefs_path_absolute"] = str(xrefs_file)
+            result["xrefs_path_relative"] = f"function_analysis/xrefs_{symbol}.txt"
+
+            with open(xrefs_file, 'r') as f:
+                lines = f.readlines()[:20]
+            result["xrefs_preview"] = ''.join(lines)
+
+            log.info(f"Xrefs written to {xrefs_file}")
+
     except Exception as e:
-        log.warning(f"Unexpected Ghidra error (continuing without Ghidra): {e}")
+        log.warning(f"Ghidra/cache error (continuing without): {e}")
 
     log.info(f"Context collection complete. Verdict: {result['verdict']}")
     return result

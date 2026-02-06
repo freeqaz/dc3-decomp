@@ -531,7 +531,11 @@ class AgentRunner:
 
     async def _run_process(self, config: AgentRunConfig) -> dict[str, Any]:
         """Run Claude CLI agent as subprocess."""
-        cli_model = get_model_id(config.model)
+        # OpenRouter-only models route through ANTHROPIC_DEFAULT_SONNET_MODEL
+        if requires_openrouter(config.model):
+            cli_model = "sonnet"
+        else:
+            cli_model = get_model_id(config.model)
 
         cmd = [
             "claude",
@@ -549,9 +553,12 @@ class AgentRunner:
 
         env = {**os.environ, **self.build_env(config.model)}
 
-        if _get_openrouter_enabled() and _get_openrouter_api_key():
+        use_openrouter = _get_openrouter_enabled() or requires_openrouter(config.model)
+        if use_openrouter and _get_openrouter_api_key():
             env["ANTHROPIC_BASE_URL"] = _get_openrouter_base_url()
             env["ANTHROPIC_API_KEY"] = _get_openrouter_api_key()
+            if requires_openrouter(config.model):
+                env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = get_model_id(config.model)
             if config.verbose >= 2:
                 pfx = _clr.colored_prefix(config.session_id)
                 print(f"{pfx}Using OpenRouter backend at {_get_openrouter_base_url()}")

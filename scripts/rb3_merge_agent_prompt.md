@@ -216,6 +216,7 @@ This tells you what field is at that offset in RB2 (often same as DC3).
 
 ---
 
+{task_model_hint}
 ## Safety Rules
 
 - **DO NOT modify MILO_ASSERT() calls**

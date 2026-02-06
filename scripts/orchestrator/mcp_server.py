@@ -57,6 +57,46 @@ from tools.struct_db import StructDB
 from tools.merged_symbols import MergedSymbolLookup
 
 
+# Itanium ABI mangled name pattern: MethodName__<N><ClassName><params>
+_ITANIUM_PATTERN = re.compile(r'^(.+?)__(\d+)(\w+)')
+
+
+def _demangle_itanium_to_qualified(symbol: str) -> str | None:
+    """Demangle an Itanium-style mangled name to ClassName::MethodName.
+
+    Returns None if the symbol is not Itanium-mangled (e.g. MSVC or already demangled).
+
+    Examples:
+        PokeStart__12GlitchFinderFPCcUi... → GlitchFinder::PokeStart
+        __ct__12GlitchFinderFv             → GlitchFinder::GlitchFinder
+        __dt__12GlitchFinderFv             → GlitchFinder::~GlitchFinder
+        SomeFunc__Fv (free function)       → None
+    """
+    # Skip MSVC mangled or already-demangled names
+    if symbol.startswith("?") or "::" in symbol:
+        return None
+
+    m = _ITANIUM_PATTERN.match(symbol)
+    if not m:
+        return None
+
+    method, class_len_str, rest = m.group(1), m.group(2), m.group(3)
+    class_len = int(class_len_str)
+
+    if class_len > len(rest) or class_len == 0:
+        return None
+
+    class_name = rest[:class_len]
+
+    # Handle ctor/dtor special names
+    if method == "__ct":
+        method = class_name
+    elif method == "__dt":
+        method = f"~{class_name}"
+
+    return f"{class_name}::{method}"
+
+
 class DecompMCPServer:
     """MCP Server providing decomp orchestration tools."""
 
@@ -187,14 +227,14 @@ class DecompMCPServer:
                             },
                             "project_dir": {
                                 "type": "string",
-                                "description": "⚠️ CRITICAL: Project directory to build from. MUST pass your worktree directory here to test your changes! If omitted, defaults to main repo and your edits won't be visible in results.",
+                                "description": "Project directory to build from. Pass your worktree directory here to test your changes.",
                             },
                             "context": {
                                 "type": "integer",
                                 "description": "Show N instructions of context before/after each mismatch (like grep -C). Default: 3.",
                             },
                         },
-                        "required": ["symbol"],
+                        "required": ["symbol", "project_dir"],
                     },
                 ),
                 Tool(
@@ -218,10 +258,10 @@ class DecompMCPServer:
                             },
                             "project_dir": {
                                 "type": "string",
-                                "description": "⚠️ CRITICAL: Project directory to build from. MUST pass your worktree directory here to test your changes! If omitted, defaults to main repo.",
+                                "description": "Project directory to build from. Pass your worktree directory here to test your changes.",
                             },
                         },
-                        "required": ["symbol"],
+                        "required": ["symbol", "project_dir"],
                     },
                 ),
                 Tool(
@@ -437,8 +477,34 @@ class DecompMCPServer:
             db_path=self.db_path,
         )
 
+        # When filtering by unit, check if there are hidden functions
+        hidden_note = ""
+        if status != "all" and pattern != "*":
+            all_results = db_query_functions(
+                pattern=pattern,
+                min_percent=0,
+                max_percent=100,
+                exclude_complete=False,
+                exclude_at_limit=False,
+                verdict_filter=None,
+                limit=9999,
+                max_attempts=None,
+                db_path=self.db_path,
+            )
+            total = len(all_results)
+            if total > len(results):
+                hidden_note = (
+                    f"\n---\n"
+                    f"Note: Showing {len(results)} of {total} functions "
+                    f"(filtered by status='{status}'). "
+                    f"Use status='all' to see all functions in this unit."
+                )
+
         if not results:
-            return [TextContent(type="text", text="No functions found matching criteria.")]
+            msg = "No functions found matching criteria."
+            if hidden_note:
+                msg += hidden_note
+            return [TextContent(type="text", text=msg)]
 
         # Format results
         output = f"Found {len(results)} functions:\n\n"
@@ -449,6 +515,9 @@ class DecompMCPServer:
             verdict_str = f" | Verdict: {verdict}" if verdict else ""
             output += f"- `{func['symbol']}` ({func.get('demangled', 'N/A')})\n"
             output += f"  Unit: {func.get('unit', 'unknown')} | Match: {pct_str}{verdict_str}\n"
+
+        if hidden_note:
+            output += hidden_note
 
         return [TextContent(type="text", text=output)]
 
@@ -909,6 +978,10 @@ class DecompMCPServer:
             if len(parts) >= 2:
                 cls = parts[1]
                 search_term = f"{cls}::{method}"
+        elif "__" in symbol:
+            demangled = _demangle_itanium_to_qualified(symbol)
+            if demangled:
+                search_term = demangled
         elif "::" in symbol:
             search_term = symbol
 
@@ -1060,6 +1133,11 @@ class DecompMCPServer:
         if symbol.startswith("merged_"):
             return [TextContent(type="text", text=f"Error: {symbol} is a linker ICF artifact (merged symbol), not a real function. "
                                 "Use lookup_merged_symbol to see what real symbols share this address.")]
+
+        # Auto-demangle Itanium-style names to qualified names objdiff can resolve
+        demangled = _demangle_itanium_to_qualified(symbol)
+        if demangled is not None:
+            symbol = demangled
 
         # Determine which project directory to use
         # - If agent passes project_dir (e.g., its worktree), use that
@@ -1229,6 +1307,11 @@ class DecompMCPServer:
         if symbol.startswith("merged_"):
             return [TextContent(type="text", text=f"Error: {symbol} is a linker ICF artifact (merged symbol), not a real function. "
                                 "Use lookup_merged_symbol to see what real symbols share this address.")]
+
+        # Auto-demangle Itanium-style names to qualified names
+        demangled = _demangle_itanium_to_qualified(symbol)
+        if demangled is not None:
+            symbol = demangled
 
         # Determine which project directory to use
         # - If agent passes project_dir (e.g., its worktree), use that

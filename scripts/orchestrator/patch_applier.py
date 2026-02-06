@@ -275,9 +275,14 @@ class PatchApplier:
             }
 
         # Don't apply patches from errored agents — code may be broken
+        # But still write the patch file so it can be reviewed/refreshed later
         if exit_status == "error":
             self.skipped_count += 1
-            logger.debug(f"Skipping patch for {symbol}: agent errored")
+            if patch and patch.strip():
+                self.write_patch_file(patch, symbol, end_percent)
+                logger.debug(f"Skipping patch for {symbol}: agent errored (patch saved)")
+            else:
+                logger.debug(f"Skipping patch for {symbol}: agent errored (no patch)")
             return {
                 "success": True,
                 "applied": False,

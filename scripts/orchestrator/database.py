@@ -14,7 +14,7 @@ from typing import Any
 DEFAULT_DB_PATH = "decomp.db"
 
 # Schema version for migrations
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 # Default maximum attempts before deprioritizing a function
 # Functions with >= this many attempts are excluded from normal queries
@@ -133,6 +133,30 @@ CREATE TABLE IF NOT EXISTS file_pairs (
 );
 CREATE INDEX IF NOT EXISTS idx_file_pairs_compat ON file_pairs(compatibility_score DESC);
 CREATE INDEX IF NOT EXISTS idx_file_pairs_dc3_unit ON file_pairs(dc3_unit);
+
+-- Ghidra decompilation cache (v7)
+CREATE TABLE IF NOT EXISTS decompilations (
+    symbol TEXT PRIMARY KEY,
+    address TEXT,
+    code TEXT NOT NULL,
+    signature TEXT,
+    error TEXT,
+    cached_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS xrefs (
+    symbol TEXT PRIMARY KEY,
+    address TEXT,
+    callers_json TEXT NOT NULL,
+    callees_json TEXT NOT NULL,
+    callers_count INTEGER,
+    callees_count INTEGER,
+    error TEXT,
+    cached_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_decompilations_address ON decompilations(address);
+CREATE INDEX IF NOT EXISTS idx_xrefs_address ON xrefs(address);
 """
 
 
@@ -289,6 +313,34 @@ def _run_migrations(conn: sqlite3.Connection, from_version: int, to_version: int
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_functions_addtostrings
             ON functions(has_addtostrings) WHERE has_addtostrings = 1
+        """)
+
+    if from_version < 7 <= to_version:
+        # Migration v6 -> v7: Add Ghidra decompilation cache tables
+        print("  Migration v7: Adding decompilations and xrefs cache tables...")
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS decompilations (
+                symbol TEXT PRIMARY KEY,
+                address TEXT,
+                code TEXT NOT NULL,
+                signature TEXT,
+                error TEXT,
+                cached_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS xrefs (
+                symbol TEXT PRIMARY KEY,
+                address TEXT,
+                callers_json TEXT NOT NULL,
+                callees_json TEXT NOT NULL,
+                callers_count INTEGER,
+                callees_count INTEGER,
+                error TEXT,
+                cached_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_decompilations_address ON decompilations(address);
+            CREATE INDEX IF NOT EXISTS idx_xrefs_address ON xrefs(address);
         """)
 
     # Update schema version
@@ -1917,4 +1969,119 @@ def get_rb3_ref_stats(db_path: str | Path = DEFAULT_DB_PATH) -> dict[str, Any]:
         "with_rb3_ref": with_ref,
         "without_rb3_ref": without_ref,
         "coverage_pct": round(100 * with_ref / total, 2) if total > 0 else 0,
+    }
+
+
+# ============================================================================
+# Ghidra Decompilation Cache Functions (v7)
+# ============================================================================
+
+
+def get_decompilation(
+    conn: sqlite3.Connection, symbol: str
+) -> str | None:
+    """Get cached decompilation for a symbol. Pure read, no Ghidra.
+
+    Returns the decompilation code string, or None if not cached.
+    Entries with non-NULL error are treated as cache misses.
+    """
+    row = conn.execute(
+        "SELECT code, error FROM decompilations WHERE symbol = ?",
+        (symbol,),
+    ).fetchone()
+    if row and row["error"] is None:
+        return row["code"]
+    return None
+
+
+def get_xrefs(
+    conn: sqlite3.Connection, symbol: str
+) -> tuple[list[str], list[str]] | None:
+    """Get cached cross-references for a symbol. Pure read, no Ghidra.
+
+    Returns (callers, callees) lists, or None if not cached.
+    Entries with non-NULL error are treated as cache misses.
+    """
+    row = conn.execute(
+        "SELECT callers_json, callees_json, error FROM xrefs WHERE symbol = ?",
+        (symbol,),
+    ).fetchone()
+    if row and row["error"] is None:
+        callers = json.loads(row["callers_json"]) if row["callers_json"] else []
+        callees = json.loads(row["callees_json"]) if row["callees_json"] else []
+        return callers, callees
+    return None
+
+
+def put_decompilation(
+    conn: sqlite3.Connection,
+    symbol: str,
+    address: str | None,
+    code: str,
+    signature: str | None = None,
+    error: str | None = None,
+) -> None:
+    """Store a decompilation result in the cache."""
+    conn.execute(
+        """
+        INSERT OR REPLACE INTO decompilations
+            (symbol, address, code, signature, error, cached_at)
+        VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        """,
+        (symbol, address, code, signature, error),
+    )
+
+
+def put_xrefs(
+    conn: sqlite3.Connection,
+    symbol: str,
+    address: str | None,
+    callers: list[str],
+    callees: list[str],
+    error: str | None = None,
+) -> None:
+    """Store cross-reference data in the cache."""
+    conn.execute(
+        """
+        INSERT OR REPLACE INTO xrefs
+            (symbol, address, callers_json, callees_json,
+             callers_count, callees_count, error, cached_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        """,
+        (
+            symbol,
+            address,
+            json.dumps(callers),
+            json.dumps(callees),
+            len(callers),
+            len(callees),
+            error,
+        ),
+    )
+
+
+def get_cached_symbols(conn: sqlite3.Connection) -> set[str]:
+    """Get set of symbols that have cached decompilations (for resume support)."""
+    rows = conn.execute("SELECT symbol FROM decompilations").fetchall()
+    return {row["symbol"] for row in rows}
+
+
+def get_cache_stats(conn: sqlite3.Connection) -> dict[str, Any]:
+    """Get statistics about the decompilation/xrefs cache."""
+    decomp_total = conn.execute("SELECT COUNT(*) FROM decompilations").fetchone()[0]
+    decomp_errors = conn.execute(
+        "SELECT COUNT(*) FROM decompilations WHERE error IS NOT NULL"
+    ).fetchone()[0]
+    xrefs_total = conn.execute("SELECT COUNT(*) FROM xrefs").fetchone()[0]
+    xrefs_errors = conn.execute(
+        "SELECT COUNT(*) FROM xrefs WHERE error IS NOT NULL"
+    ).fetchone()[0]
+
+    return {
+        "decompilations_total": decomp_total,
+        "decompilations_ok": decomp_total - decomp_errors,
+        "decompilations_errors": decomp_errors,
+        "xrefs_total": xrefs_total,
+        "xrefs_ok": xrefs_total - xrefs_errors,
+        "xrefs_errors": xrefs_errors,
     }

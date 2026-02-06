@@ -6,7 +6,7 @@ and attempt history.
 
 from typing import Any, Optional
 
-from .config import get_backend, get_token_budget
+from .config import get_backend, get_token_budget, estimate_per_function_cost
 
 
 def select_model(func: dict[str, Any], force_model: Optional[str] = None) -> str:
@@ -122,17 +122,77 @@ MODEL_MAPS = {
     },
 }
 
-# Backward compatibility: derive COST_TABLES from registry
+# Backward compatibility: derive COST_TABLES from registry token rates
 COST_TABLES = {
-    "anthropic": {
-        name: info.get("cost", 0.10)  # Use cost from registry, default to haiku-level
-        for name, info in MODEL_REGISTRY.get("anthropic", {}).items()
-    },
-    "openrouter": {
-        name: info.get("cost", 0.10)  # Use cost from registry, default to haiku-level
-        for name, info in MODEL_REGISTRY.get("openrouter", {}).items()
-    },
+    backend: {
+        name: estimate_per_function_cost(info["prompt_rate"], info["completion_rate"])
+        for name, info in models.items()
+    }
+    for backend, models in MODEL_REGISTRY.items()
 }
+
+# Anthropic Claude model IDs (used for cache pricing detection)
+_ANTHROPIC_MODEL_PREFIXES = ("anthropic/", "claude")
+
+
+def compute_cost_from_tokens(
+    model: str,
+    input_tokens: int,
+    output_tokens: int,
+    cache_read_tokens: int = 0,
+    cache_creation_tokens: int = 0,
+    backend: str | None = None,
+) -> float | None:
+    """Compute actual cost from token counts using registry rates.
+
+    For Anthropic/Claude models, applies cache pricing:
+    - cache_read: 10% of prompt_rate
+    - cache_creation: 125% of prompt_rate
+
+    For non-Anthropic models, cache tokens are treated as regular input.
+
+    Args:
+        model: Model name (e.g., "haiku", "sonnet", "deepseek-v3.2")
+        input_tokens: Number of input tokens
+        output_tokens: Number of output tokens
+        cache_read_tokens: Number of cache read tokens (Anthropic only)
+        cache_creation_tokens: Number of cache creation tokens (Anthropic only)
+        backend: Backend name. If None, auto-detects from model.
+
+    Returns:
+        Cost in USD, or None if model not found in registry
+    """
+    if backend is None:
+        from .config import get_backend
+        backend = get_backend(model)
+
+    info = MODEL_REGISTRY.get(backend, {}).get(model, {})
+    if not info:
+        return None
+
+    prompt_rate = info["prompt_rate"]
+    completion_rate = info["completion_rate"]
+
+    # Check if this is a Claude/Anthropic model (gets cache pricing)
+    model_id = info.get("model_id", "")
+    is_anthropic = (
+        backend == "anthropic"
+        or any(model_id.startswith(p) for p in _ANTHROPIC_MODEL_PREFIXES)
+    )
+
+    if is_anthropic:
+        # Anthropic cache pricing: read at 10%, creation at 125% of prompt rate
+        input_cost = prompt_rate * input_tokens / 1_000_000
+        cache_read_cost = prompt_rate * 0.10 * cache_read_tokens / 1_000_000
+        cache_creation_cost = prompt_rate * 1.25 * cache_creation_tokens / 1_000_000
+        output_cost = completion_rate * output_tokens / 1_000_000
+        return input_cost + cache_read_cost + cache_creation_cost + output_cost
+    else:
+        # Non-Anthropic: cache tokens count as regular input
+        total_input = input_tokens + cache_read_tokens + cache_creation_tokens
+        input_cost = prompt_rate * total_input / 1_000_000
+        output_cost = completion_rate * output_tokens / 1_000_000
+        return input_cost + output_cost
 
 
 def estimate_batch_cost(functions: list[dict], model: Optional[str] = None) -> dict:

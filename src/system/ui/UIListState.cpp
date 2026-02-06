@@ -70,8 +70,8 @@ void UIListState::SetSelected(int i, int j, bool b) {
             curFirst = maxFirst;
         }
 
-        mFirstShowing = curFirst;
         int tempDiff = showing - curFirst;
+        mFirstShowing = curFirst;
         mSelectedDisplay = tempDiff;
 
         if (mScrollPastMinDisplay) {
@@ -80,8 +80,8 @@ void UIListState::SetSelected(int i, int j, bool b) {
     }
 
     mTargetShowing = mFirstShowing;
-    mStepTime = -1.0f;
     mStepPercent = 0.0f;
+    mStepTime = -1.0f;
 }
 
 void UIListState::SetSpeed(float speed) {

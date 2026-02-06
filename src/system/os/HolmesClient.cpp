@@ -26,6 +26,13 @@
 String gLastCachedResource;
 CacheResourceResult gLastCacheResult;
 
+class HolmesInput {
+public:
+    void LoadKeyboard(BinStream &bs);
+    void LoadJoypad(BinStream &bs);
+    void SendKeyboardMessages();
+};
+
 namespace {
     struct HolmesProfileData {
         Timer wait;
@@ -54,12 +61,7 @@ namespace {
     std::list<ReadRequest> gRequests;
     String gServerName;
 
-    class HolmesInput {
-    public:
-        void LoadKeyboard(BinStream &bs) {}
-        void LoadJoypad(BinStream &bs) {}
-        void SendKeyboardMessages() {}
-    } gInput;
+    HolmesInput gInput;
 
     String gHolmesTarget;
     bool gPollStreamEof;
@@ -89,7 +91,7 @@ namespace {
     bool CheckForResponse(Holmes::Protocol prot, bool b);
     bool CheckReads(bool b);
 
-    __declspec(noinline) void CheckInput(bool b) {
+    void CheckInput(bool b) {
         if (CheckForResponse(Holmes::kPollKeyboard, b)) {
             BeginCmd(Holmes::kPollKeyboard, true);
             gInput.LoadKeyboard(*gHolmesStream);
@@ -138,6 +140,7 @@ namespace {
 
         return gLastCacheResult;
     }
+
 }
 
 #pragma region Public API

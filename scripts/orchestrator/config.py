@@ -45,85 +45,170 @@ BackendType = Literal["anthropic", "openrouter"]
 # ============================================================================
 # CENTRAL MODEL REGISTRY - Single source of truth for all models
 # ============================================================================
-# Format: {backend: {model_name: {model_id, token_budget, cost (OR)}}
+# Format: {backend: {model_name: {model_id, token_budget, prompt_rate, completion_rate}}}
+# Rates are $/M tokens (dollars per million tokens).
 # Add new models here only!
+
+# Default token assumptions for per-function cost estimates
+_DEFAULT_INPUT_TOKENS = 5000
+_DEFAULT_OUTPUT_TOKENS = 20000
+
+
+def estimate_per_function_cost(prompt_rate: float, completion_rate: float) -> float:
+    """Estimate per-function cost from token rates.
+
+    Uses default token assumptions (~5K input + ~20K output per function).
+
+    Args:
+        prompt_rate: Cost per million input tokens ($/M)
+        completion_rate: Cost per million output tokens ($/M)
+
+    Returns:
+        Estimated cost in USD for one function attempt
+    """
+    return (prompt_rate * _DEFAULT_INPUT_TOKENS + completion_rate * _DEFAULT_OUTPUT_TOKENS) / 1_000_000
+
+
 MODEL_REGISTRY = {
     "anthropic": {
         # Anthropic direct API pricing (Feb 2026):
-        # Haiku: $1/M input, $5/M output
-        # Sonnet: $3/M input, $15/M output
-        # Opus: $5/M input, $25/M output
-        # Per-function estimate assumes ~5K input + ~20K output tokens
+        # Rates in $/M tokens
         "haiku": {
             "model_id": "haiku",
             "token_budget": 10000,
-            "cost": 0.105,  # $1*5K + $5*20K = $0.105 per function
+            "prompt_rate": 1.00,       # $/M input tokens
+            "completion_rate": 5.00,   # $/M output tokens
         },
         "sonnet": {
             "model_id": "sonnet",
             "token_budget": 20000,
-            "cost": 0.315,  # $3*5K + $15*20K = $0.315 per function
+            "prompt_rate": 3.00,
+            "completion_rate": 15.00,
         },
         "opus": {
             "model_id": "opus",
             "token_budget": 30000,
-            "cost": 0.525,  # $5*5K + $25*20K = $0.525 per function
+            "prompt_rate": 5.00,
+            "completion_rate": 25.00,
         },
     },
     "openrouter": {
-        # OpenRouter pricing (Feb 2026) - per-function estimates
-        # Assumes ~5K input + ~20K output tokens per function
+        # OpenRouter pricing (Feb 2026) - rates in $/M tokens
         # Claude models via OpenRouter (same pricing as Anthropic direct)
         "haiku": {
             "model_id": "anthropic/claude-haiku-4.5",
             "token_budget": 10000,
-            "cost": 0.105,  # $1/M in + $5/M out
+            "prompt_rate": 1.00,
+            "completion_rate": 5.00,
         },
         "sonnet": {
             "model_id": "anthropic/claude-sonnet-4.5",
             "token_budget": 20000,
-            "cost": 0.315,  # $3/M in + $15/M out
+            "prompt_rate": 3.00,
+            "completion_rate": 15.00,
         },
         "opus": {
             "model_id": "anthropic/claude-opus-4.6",
             "token_budget": 30000,
-            "cost": 0.525,  # $5/M in + $25/M out
+            "prompt_rate": 5.00,
+            "completion_rate": 25.00,
         },
         # Alternative models - optimized for code/reasoning
         "glm-4.7": {
             "model_id": "z-ai/glm-4.7",
             "token_budget": 30000,
-            "cost": 0.032,  # $0.40/M in + $1.50/M out
+            "prompt_rate": 0.40,
+            "completion_rate": 1.50,
         },
         "grok-code-fast-1": {
             "model_id": "x-ai/grok-code-fast-1",
             "token_budget": 25000,
-            "cost": 0.031,  # $0.20/M in + $1.50/M out
+            "prompt_rate": 0.20,
+            "completion_rate": 1.50,
         },
         "minimax-m2.1": {
             "model_id": "minimax/minimax-m2.1",
             "token_budget": 20000,
-            "cost": 0.007,  # ~$0.10/M in + $0.30/M out (estimate)
+            "prompt_rate": 0.27,
+            "completion_rate": 0.95,
         },
         "deepseek-v3.2": {
             "model_id": "deepseek/deepseek-chat-v3-0324",
             "token_budget": 25000,
-            "cost": 0.018,  # $0.19/M in + $0.87/M out
+            "prompt_rate": 0.19,
+            "completion_rate": 0.87,
         },
         "gemini-3-flash": {
-            "model_id": "google/gemini-2.5-flash-preview",
+            "model_id": "google/gemini-3-flash-preview",
             "token_budget": 15000,
-            "cost": 0.009,  # ~$0.10/M in + $0.40/M out (estimate)
+            "prompt_rate": 0.50,
+            "completion_rate": 3.00,
+        },
+        "gemini-3-pro": {
+            "model_id": "google/gemini-3-pro-preview",
+            "token_budget": 25000,
+            "prompt_rate": 2.00,
+            "completion_rate": 12.00,
+        },
+        "kimi-k2.5": {
+            "model_id": "moonshotai/kimi-k2.5",
+            "token_budget": 20000,
+            "prompt_rate": 0.45,
+            "completion_rate": 2.50,
         },
         "gpt-oss-120b": {
             "model_id": "openai/gpt-oss-120b",
             "token_budget": 20000,
-            "cost": 0.021,  # ~$0.20/M in + $1.00/M out (estimate)
+            "prompt_rate": 0.04,
+            "completion_rate": 0.19,
         },
         "qwen/qwen3-coder": {
             "model_id": "qwen/qwen3-235b-a22b",
             "token_budget": 20000,
-            "cost": 0.013,  # $0.20/M in + $0.60/M out
+            "prompt_rate": 0.20,
+            "completion_rate": 0.60,
+        },
+        "qwen3-coder-next": {
+            "model_id": "qwen/qwen3-coder-next",
+            "token_budget": 20000,
+            "prompt_rate": 0.07,
+            "completion_rate": 0.30,
+        },
+        "trinity-large": {
+            "model_id": "arcee-ai/trinity-large-preview:free",
+            "token_budget": 15000,
+            "prompt_rate": 0.00,
+            "completion_rate": 0.00,
+        },
+        "gpt-5.2": {
+            "model_id": "openai/gpt-5.2",
+            "token_budget": 25000,
+            "prompt_rate": 1.75,
+            "completion_rate": 14.00,
+        },
+        "step-3.5-flash": {
+            "model_id": "stepfun/step-3.5-flash:free",
+            "token_budget": 15000,
+            "prompt_rate": 0.00,
+            "completion_rate": 0.00,
+        },
+        "palmyra-x5": {
+            "model_id": "writer/palmyra-x5",
+            "token_budget": 20000,
+            "prompt_rate": 0.60,
+            "completion_rate": 6.00,
+        },
+        "gpt-5.2-codex": {
+            "model_id": "openai/gpt-5.2-codex",
+            "token_budget": 25000,
+            "prompt_rate": 1.75,
+            "completion_rate": 14.00,
+        },
+        "olmo-3.1-32b": {
+            "model_id": "allenai/olmo-3.1-32b-think",
+            "token_budget": 15000,
+            "prompt_rate": 0.15,
+            "completion_rate": 0.50,
         },
     },
 }

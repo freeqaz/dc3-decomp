@@ -133,7 +133,20 @@ inline float EaseElasticIn(float t, float power, float f3) {
     MILO_ASSERT(t >= 0 && t <= 1, 145);
     if (t > 0 && t < 1.0f) {
         if (f3 <= 0)
-            f3 = 0.45;
+            f3 = 0.45f;
+
+        // Calculate phase shift based on amplitude
+        float s;
+        if (power < 1.0f) {
+            power = 1.0f;
+            s = f3 * 0.25f;
+        } else {
+            s = asin(1.0f / power) * f3 * 0.15915494f; // 1/(2π)
+        }
+
+        t = t - 1.0f;
+        float amplitude = pow(2.0, t * 10.0f);
+        return -(FastSin((t - s) / f3 * 6.283185f) * amplitude * power); // 2π
     }
     return t;
 }
