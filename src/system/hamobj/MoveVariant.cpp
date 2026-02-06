@@ -290,10 +290,12 @@ bool MoveVariant::IsValidForMinigame() const {
     if (IsRest()) {
         return false;
     }
-    if (mNextCandidates.size() < 8) {
+    int size = (int)mNextCandidates.size();
+    if (size < 8) {
         return false;
     }
     if (IsFinalPose())
         return false;
-    return !(mFlags & 1);
+    unsigned int invFlags = ~mFlags;
+    return (invFlags >> 3) & 1;
 }

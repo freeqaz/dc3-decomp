@@ -4,7 +4,7 @@
 #include "obj/Object.h"
 #include "os/Debug.h"
 #include "utl/MemMgr.h"
-
+#line 8 "CharBonesSamples.cpp"
 CharBonesSamples::CharBonesSamples()
     : mNumSamples(0), mPreviewSample(0), mRawData(nullptr) {}
 
@@ -12,14 +12,18 @@ CharBonesSamples::~CharBonesSamples() { MemFree(mRawData); }
 
 INIT_REVS(0x10, 0)
 
-BEGIN_LOADS(CharBonesSamples)
-    LOAD_REVS(bs)
-    if (0x10 < d.rev) {
+void CharBonesSamples::Load(BinStream &bs) {
+    int revs;
+    bs >> revs;
+    int rev = getHmxRev(revs);
+    int altRev = getAltRev(revs);
+    BinStreamRev d(bs, revs);
+    if (0x10 < rev) {
         MILO_FAIL(
             "%s can\'t load new %s version %d > %d", "", "CharBonesSample", d.rev, gRev
         );
     }
-    if (d.altRev > 0) {
+    if (altRev > 0) {
         MILO_FAIL(
             "%s can\'t load new %s alt version %d > %d",
             "",
@@ -28,10 +32,12 @@ BEGIN_LOADS(CharBonesSamples)
             gAltRev
         );
     }
-    MILO_ASSERT(d.rev > 12, 0x29d);
+    if (!(rev > 12)) {
+        TheDebugFailer << MakeString(kAssertStr, __FILE__, 0x29d, "d.rev > 12");
+    }
     LoadHeader(d);
     LoadData(d);
-END_LOADS
+}
 
 int CharBonesSamples::AllocateSize() { return mTotalSize * mNumSamples; }
 

@@ -761,8 +761,8 @@ void TDStretch::calculateOverlapLength(int overlapInMsec) {
 }
 
 double TDStretch::calcCrossCorrMono(const float *mixingPos, const float *compare) const {
-    double corr = 0;
     double norm = 0;
+    double corr = 0;
 
     for (int i = 1; i < overlapLength; i++) {
         corr += mixingPos[i] * compare[i];

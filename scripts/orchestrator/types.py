@@ -23,6 +23,7 @@ DEFAULT_DECOMP_TOOLS = [
 REFACTOR_TOOLS = [
     "Read", "Write", "Edit", "Bash", "Glob", "Grep",
     "mcp__orchestrator__run_objdiff",
+    "mcp__orchestrator__refactor_complete",
 ]
 
 

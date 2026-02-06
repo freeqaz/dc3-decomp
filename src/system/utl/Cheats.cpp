@@ -57,10 +57,10 @@ void EnableKeyCheats(bool b) {
 }
 
 DataNode OnSetCheatMode(DataArray *da) {
-    Symbol sym = da->Sym(1);
+    Symbol sym;
+    sym = da->Sym(1);
     if (gCheatsManager->GetSymMode() != sym) {
         gCheatsManager->SetSymMode(sym);
-        gCheatsManager->RebuildKeyCheatsForMode();
     }
     return 0;
 }
@@ -163,6 +163,11 @@ void CheatsTerminate() {
 }
 
 void CheatsManager::RebuildKeyCheatsForMode() { return; }
+
+__declspec(noinline) void CheatsManager::SetSymMode(Symbol sym) {
+    mSymMode = sym;
+    RebuildKeyCheatsForMode();
+}
 
 CheatLog::~CheatLog() {}
 

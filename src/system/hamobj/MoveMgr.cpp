@@ -309,13 +309,14 @@ void MoveMgr::Init(const char *filename) {
 }
 
 const MoveVariant *MoveMgr::GetRoutinePreferredVariant(int i1, int i2) const {
+    const MoveVariant *result = 0;
     if (i2 < unk134[i1].size()) {
         const MoveVariant *var = unk134[i1][i2];
-        if (var && var->Parent() == mMoveParents[i1].at(i2)) {
-            return var;
+        if (var != 0 && var->Parent() == mMoveParents[i1].at(i2)) {
+            result = var;
         }
     }
-    return nullptr;
+    return result;
 }
 
 void MoveMgr::LoadSongData() { ImportMoveData("../meta/move_data.dta", true); }

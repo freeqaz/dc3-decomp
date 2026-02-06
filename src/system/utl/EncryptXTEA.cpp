@@ -18,7 +18,7 @@ void XTEABlockEncrypter::Encrypt(const XTEABlock *in, XTEABlock *out) {
     unsigned long long *nonce = mNonce;
     unsigned long offset = (char *)out - (char *)in;
     for (int i = 0; i < 2; i++) {
-        *(unsigned long long *)(offset + (char *)in) =
+        *(unsigned long long *)((char *)in + offset) =
             *(unsigned long long *)in ^ Encipher(*nonce, key);
         *nonce += 1;
         nonce++;

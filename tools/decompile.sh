@@ -206,7 +206,7 @@ get_objdiff_json() {
 convert_to_m2c() {
     log "Converting to m2c assembly format..."
 
-    if ! python3 "$OBJDIFF_TO_M2C" -i "$TMP_JSON" -o "$TMP_ASM"; then
+    if ! python3 "$OBJDIFF_TO_M2C" -i "$TMP_JSON" -o "$TMP_ASM" --project-dir "$PROJECT_DIR"; then
         error "Failed to convert objdiff output to m2c format"
     fi
 

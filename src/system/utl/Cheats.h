@@ -54,7 +54,7 @@ public:
     void SetUnsafeCheatsUsed(bool b) { mUnsafeCheatsUsed = b; };
 
     Symbol GetSymMode() { return mSymMode; }
-    void SetSymMode(Symbol sym) { mSymMode = sym; }
+    void SetSymMode(Symbol sym);
 
 private:
     int OnMsg(ButtonDownMsg const &);

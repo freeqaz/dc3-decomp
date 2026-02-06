@@ -22,6 +22,7 @@ struct DepthBuffer3DAttachment {
 
 /** "Render the Kinect depth buffer as a 3D mesh" */
 class DepthBuffer3D : public RndDrawable, public RndTransformable {
+    friend class BustAMovePanel;
 public:
     // Hmx::Object
     virtual ~DepthBuffer3D();

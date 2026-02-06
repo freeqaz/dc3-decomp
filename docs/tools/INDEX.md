@@ -23,7 +23,7 @@ Quick reference for tools used in the DC3 decompilation project.
 | Script | Description |
 |--------|-------------|
 | `tools/decompile.sh` | **Combined m2c decompilation workflow** (objdiff → m2c) |
-| `tools/objdiff_to_m2c.py` | Convert objdiff JSON to m2c assembly format |
+| `tools/objdiff_to_m2c.py` | Convert objdiff JSON to m2c assembly format (with jump table resolution) |
 | `tools/ghidra/export_types.py` | Export Ghidra types as m2c context headers |
 | `tools/asm_to_m2c.py` | Convert DC3 dtk assembly to m2c-compatible format |
 | `tools/decompctx.py` | Generate context files for decomp.me |
@@ -108,8 +108,9 @@ tools/decompile.sh "CharMirror::Load" --context
 # Full analysis with m2c included
 ./bin/analyze-function "Game::Poll" --m2c
 
-# Manual m2c pipeline (alternative)
-python3 tools/asm_to_m2c.py build/373307D9/asm/path/File.s -f FuncName | \
+# Manual m2c pipeline (alternative, with jump table support)
+./bin/objdiff-cli diff -p . "Foo::Bar" -f json --include-instructions | \
+    python3 tools/objdiff_to_m2c.py --project-dir . | \
     python3 ~/code/milohax/m2c/m2c.py -t ppc -
 
 # Generate decomp.me context

@@ -40,13 +40,11 @@ void UIListState::SetSelected(int i, int j, bool b) {
     if (b) {
         data = showing;
         while (true) {
-            int dataVal = Showing2Data(data);
-            if (mProvider->IsActive(dataVal)) {
+            if (mProvider->IsActive(Showing2Data(data))) {
                 break;
             }
             data++;
-            int nextData = Showing2Data(data);
-            if (nextData == Showing2Data(showing)) {
+            if (Showing2Data(data) == Showing2Data(showing)) {
                 break;
             }
         }
@@ -60,8 +58,7 @@ void UIListState::SetSelected(int i, int j, bool b) {
             mFirstShowing = j;
         } else {
             int firstVal = mScrollPastMinDisplay ? showing : showing - mMinDisplay;
-            int sign = firstVal >> 31;
-            mFirstShowing = (firstVal ^ sign) - sign;
+            mFirstShowing = Max(0, firstVal);
         }
 
         int maxFirst = MaxFirstShowing();
@@ -80,8 +77,8 @@ void UIListState::SetSelected(int i, int j, bool b) {
     }
 
     mTargetShowing = mFirstShowing;
-    mStepPercent = 0.0f;
     mStepTime = -1.0f;
+    mStepPercent = 0.0f;
 }
 
 void UIListState::SetSpeed(float speed) {

@@ -183,19 +183,19 @@ void HiResScreen::GetBorderForTile(int x, int y, int &left, int &right, int &top
     top = 0;
     right = 0;
     bottom = 0;
-    int xStep = TheRnd.Width() - 480;
-    int xPos = xStep * x + TheRnd.Width();
-    if (xPos < (int)mAccumWidth) {
-        right = 480;
-    } else if (((x + 1) * xStep) - TheRnd.Width() > 0) {
-        left = 480;
-    }
     int yStep = TheRnd.Height() - 270;
     int yPos = yStep * y + TheRnd.Height();
     if (yPos < (int)mAccumHeight) {
         bottom = 270;
     } else if (((y + 1) * yStep) - TheRnd.Height() > 0) {
         top = 270;
+    }
+    int xStep = TheRnd.Width() - 480;
+    int xPos = xStep * x + TheRnd.Width();
+    if (xPos < (int)mAccumWidth) {
+        right = 480;
+    } else if (((x + 1) * xStep) - TheRnd.Width() > 0) {
+        left = 480;
     }
 }
 

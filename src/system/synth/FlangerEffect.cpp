@@ -31,8 +31,9 @@ void FlangerEffect::Reset() {
 }
 
 void FlangerEffect::SetParameters(FlangerEffect::Params const &params) {
-    unk14 = params.unk4 * 48.0f;
-    unk28 = (params.unk8 * 48000.0f) * (2 * PI);
+    float sampleRate = 48000.0f;
+    unk14 = (int)(params.unk4 * 48.0f);
+    unk28 = (params.unk8 / sampleRate) * 6.2831853f;
     unk18 = params.unkc / 100.0f;
     unk20 = params.unk10 / 100.0f;
     unk30 = params.unk14 / 100.0f;

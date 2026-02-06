@@ -45,6 +45,9 @@ public:
     void ReadFreestyleMoveClip(String, int &, FreestyleMoveFrame *);
     float GetScore(const BaseSkeleton *, int, float, bool);
     float GetScore(int, int, float, bool);
+    RndTex *GetPlayerPalette() const { return unkbc; }
+    int GetDancerTakeFrameCount() const { return unkc4; }
+    int GetCurrentMoveNumFrames() const { return unk48[unkb8].mNumFrames; }
 
     void SetVal44(int i) { unk44 = i; } // change once context found
 

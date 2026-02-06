@@ -1138,7 +1138,7 @@ def run_m2c(
 
         # Step 2: Convert to m2c assembly format via objdiff_to_m2c.py
         proc = subprocess.run(
-            ["python3", OBJDIFF_TO_M2C],
+            ["python3", OBJDIFF_TO_M2C, "--project-dir", project_dir],
             input=objdiff_json,
             capture_output=True,
             text=True,

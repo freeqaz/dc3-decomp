@@ -120,8 +120,9 @@ tools/decompile.sh "Foo::Bar" --context
 **Manual workflow:**
 ```bash
 # Get disassembly from objdiff and convert to m2c format
+# --project-dir enables automatic jump table resolution for switch statements
 ./bin/objdiff-cli diff -p . "Foo::Bar" -f json --include-instructions | \
-  python3 tools/objdiff_to_m2c.py | \
+  python3 tools/objdiff_to_m2c.py --project-dir . | \
   python3 ~/code/milohax/m2c/m2c.py -t ppc -
 
 # With Ghidra type context for better output

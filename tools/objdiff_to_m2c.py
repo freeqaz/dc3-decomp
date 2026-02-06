@@ -22,6 +22,11 @@ Usage:
         python3 tools/objdiff_to_m2c.py | \
         python3 ~/code/milohax/m2c/m2c.py -t ppc -
 
+    # With jump table resolution (for functions with switch statements)
+    ./bin/objdiff-cli diff -p . "BustAMovePanel::OnBeat" -f json --include-instructions | \
+        python3 tools/objdiff_to_m2c.py --obj build/373307D9/obj/lazer/game/BustAMovePanel.obj | \
+        python3 ~/code/milohax/m2c/m2c.py -t ppc -
+
 Examples:
     # Extract target binary disassembly and decompile
     ./bin/objdiff-cli diff -p . "Game::Poll" -f json --include-instructions 2>/dev/null | \
@@ -31,9 +36,11 @@ Examples:
 
 import argparse
 import json
+import os
 import re
+import struct
 import sys
-from typing import Optional
+from typing import Dict, List, Optional, Tuple
 
 
 def symbol_to_label(name: str) -> str:
@@ -118,6 +125,7 @@ def parse_branch_targets(instructions: list) -> set:
         'beq', 'bne', 'blt', 'bgt', 'ble', 'bge',
         'beqlr', 'bnelr', 'bltlr', 'bgtlr', 'blelr', 'bgelr',
         'bdnz', 'bdz', 'bdnzl', 'bdzl',
+        'bdzf', 'bdzt', 'bdnzf', 'bdnzt',
     }
 
     for instr in instructions:
@@ -158,6 +166,259 @@ def _is_reloc_symbol(s: str) -> bool:
             s.startswith('lbl_') or s.startswith('jumptable_') or
             s.startswith('switch_') or s.startswith('__jtbl') or
             (s.startswith('"') and '@' in s))
+
+
+def find_obj_for_symbol(project_dir: str, symbol_name: str) -> Optional[str]:
+    """
+    Find the target OBJ file for a symbol by searching objdiff.json units.
+
+    Extracts the class name from the demangled symbol and matches it against
+    unit names in objdiff.json. Returns the absolute path to the target OBJ.
+    """
+    objdiff_json_path = os.path.join(project_dir, 'objdiff.json')
+    try:
+        with open(objdiff_json_path) as f:
+            config = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return None
+
+    # Extract class/file name from demangled symbol
+    # e.g. "public: void __cdecl BustAMovePanel::OnBeat(void)" -> "BustAMovePanel"
+    candidates = []
+    match = re.search(r'(\w+)::\w+', symbol_name)
+    if match:
+        class_name = match.group(1)
+        for unit in config.get('units', []):
+            unit_name = unit.get('name', '')
+            target_path = unit.get('target_path', '')
+            if not target_path:
+                continue
+            # Match class name against the last component of the unit name
+            # e.g. "default/lazer/game/BustAMovePanel" -> "BustAMovePanel"
+            unit_basename = unit_name.rsplit('/', 1)[-1]
+            if unit_basename == class_name:
+                candidates.append(os.path.join(project_dir, target_path))
+
+    # If we got exactly one match, use it
+    if len(candidates) == 1:
+        obj_path = candidates[0]
+        if os.path.exists(obj_path):
+            return obj_path
+
+    # Multiple matches or no match - try matching against OBJ filename
+    if not candidates:
+        for unit in config.get('units', []):
+            target_path = unit.get('target_path', '')
+            if not target_path:
+                continue
+            obj_basename = os.path.basename(target_path).replace('.obj', '')
+            if match and obj_basename == match.group(1):
+                candidates.append(os.path.join(project_dir, target_path))
+
+    # Return first existing match
+    for path in candidates:
+        if os.path.exists(path):
+            return path
+
+    return None
+
+
+def detect_jump_tables(instructions: list) -> List[Dict]:
+    """
+    Detect MSVC PPC jump table patterns in instructions.
+
+    Pattern:
+        cmplwi crN, rX, max_case
+        bgt crN, default_label
+        lis rY, jumptable_*
+        slwi rZ, rX, shift
+        addi rY, rY, jumptable_*
+        lhzx/lwzx/lbzx rZ, rY, rZ
+        lis rW, base@ha
+        addi rW, rW, base@l
+        [nop]
+        add rW, rW, rZ
+        mtctr rW
+        bctr
+
+    Returns list of jump table info dicts with:
+        - symbol: jump table symbol name (e.g. "jumptable_820FA100")
+        - num_cases: number of cases from cmplwi + 1
+        - entry_size: 1 (lbzx), 2 (lhzx), or 4 (lwzx)
+        - bctr_addr: address of the bctr instruction
+    """
+    tables = []
+    for i, instr in enumerate(instructions):
+        t = instr.get('target', {})
+        if t.get('opcode') != 'bctr':
+            continue
+
+        bctr_addr_str = t.get('address', '')
+        if not bctr_addr_str:
+            continue
+        bctr_addr = int(bctr_addr_str, 16)
+
+        # Scan backwards from bctr to find the pattern
+        jtbl_symbol = None
+        num_cases = None
+        entry_size = None
+
+        # Look back up to 15 instructions for the pattern
+        start = max(0, i - 15)
+        for j in range(start, i):
+            tj = instructions[j].get('target', {})
+            op = tj.get('opcode', '')
+            args = tj.get('args', '')
+
+            # Find lis with jumptable symbol
+            if op == 'lis' and 'jumptable_' in args:
+                parts = args.split(', ', 1)
+                if len(parts) == 2:
+                    jtbl_symbol = parts[1]
+
+            # Find cmplwi to get case count
+            if op == 'cmplwi':
+                typed = tj.get('typed_args', [])
+                for ta in typed:
+                    if ta.get('type') == 'Unsigned':
+                        num_cases = ta['value'] + 1  # cmplwi compares against max index
+
+            # Find load instruction to determine entry size
+            if op == 'lbzx':
+                entry_size = 1
+            elif op == 'lhzx':
+                entry_size = 2
+            elif op == 'lwzx':
+                entry_size = 4
+
+        if jtbl_symbol and num_cases and entry_size:
+            tables.append({
+                'symbol': jtbl_symbol,
+                'num_cases': num_cases,
+                'entry_size': entry_size,
+                'bctr_addr': bctr_addr,
+            })
+
+    return tables
+
+
+def read_jump_table_from_obj(obj_path: str, symbol_name: str,
+                             num_cases: int, entry_size: int) -> Optional[List[int]]:
+    """
+    Read jump table entries from a COFF object file.
+
+    Parses the COFF symbol table to find the jump table symbol,
+    then reads the entries from the appropriate section.
+
+    Returns list of integer offsets, or None on failure.
+    """
+    try:
+        with open(obj_path, 'rb') as f:
+            # COFF header (always little-endian, even for big-endian targets)
+            f.seek(0)
+            _machine = struct.unpack('<H', f.read(2))[0]
+            num_sections = struct.unpack('<H', f.read(2))[0]
+            f.read(4)  # timestamp
+            symtab_offset = struct.unpack('<I', f.read(4))[0]
+            num_symbols = struct.unpack('<I', f.read(4))[0]
+            opt_size = struct.unpack('<H', f.read(2))[0]
+            f.read(2)  # characteristics
+
+            # Read section headers
+            f.seek(20 + opt_size)
+
+            sections = []
+            for _ in range(num_sections):
+                sec_name = f.read(8).rstrip(b'\x00').decode('ascii', errors='replace')
+                f.read(8)  # virtual size + addr
+                raw_size = struct.unpack('<I', f.read(4))[0]
+                raw_offset = struct.unpack('<I', f.read(4))[0]
+                f.read(16)  # relocs, linenums, etc
+                sections.append({
+                    'name': sec_name,
+                    'raw_size': raw_size,
+                    'raw_offset': raw_offset,
+                })
+
+            # Read string table
+            strtab_offset = symtab_offset + num_symbols * 18
+            f.seek(strtab_offset)
+            strtab_size_bytes = f.read(4)
+            if len(strtab_size_bytes) < 4:
+                return None
+            strtab_size = struct.unpack('<I', strtab_size_bytes)[0]
+            f.seek(strtab_offset)
+            strtab = f.read(strtab_size)
+
+            def get_string(offset):
+                end = strtab.find(b'\x00', offset)
+                if end < 0:
+                    end = len(strtab)
+                return strtab[offset:end].decode('ascii', errors='replace')
+
+            # Search symbol table for the jump table symbol
+            f.seek(symtab_offset)
+            sym_value = None
+            sym_section = None
+            i = 0
+            while i < num_symbols:
+                entry = f.read(18)
+                if len(entry) < 18:
+                    break
+                name_field = entry[:8]
+                value = struct.unpack('<I', entry[8:12])[0]
+                section_num = struct.unpack('<h', entry[12:14])[0]
+                num_aux = entry[17]
+
+                if name_field[:4] == b'\x00\x00\x00\x00':
+                    str_offset = struct.unpack('<I', name_field[4:8])[0]
+                    name = get_string(str_offset)
+                else:
+                    name = name_field.rstrip(b'\x00').decode('ascii', errors='replace')
+
+                if name == symbol_name:
+                    sym_value = value
+                    sym_section = section_num  # 1-based
+                    break
+
+                # Skip aux entries
+                for _ in range(num_aux):
+                    f.read(18)
+                i += 1 + num_aux
+
+            if sym_value is None or sym_section is None or sym_section < 1:
+                return None
+
+            # Get the section data
+            sec = sections[sym_section - 1]  # convert to 0-based
+            file_offset = sec['raw_offset'] + sym_value
+
+            # Read entries (big-endian data on PPC)
+            f.seek(file_offset)
+            entries = []
+            for _ in range(num_cases):
+                if entry_size == 1:
+                    data = f.read(1)
+                    if len(data) < 1:
+                        break
+                    entries.append(data[0])
+                elif entry_size == 2:
+                    data = f.read(2)
+                    if len(data) < 2:
+                        break
+                    entries.append(struct.unpack('>H', data)[0])
+                elif entry_size == 4:
+                    data = f.read(4)
+                    if len(data) < 4:
+                        break
+                    entries.append(struct.unpack('>I', data)[0])
+
+            return entries
+
+    except (OSError, struct.error) as e:
+        print(f"Warning: Failed to read jump table from {obj_path}: {e}",
+              file=sys.stderr)
+        return None
 
 
 def format_instruction(instr: dict) -> str:
@@ -283,13 +544,15 @@ def format_instruction(instr: dict) -> str:
         return opcode
 
 
-def convert_objdiff_json(data: dict, symbol_override: Optional[str] = None) -> str:
+def convert_objdiff_json(data: dict, symbol_override: Optional[str] = None,
+                         obj_path: Optional[str] = None) -> str:
     """
     Convert objdiff JSON to m2c assembly format.
 
     Args:
         data: Parsed JSON from objdiff-cli
         symbol_override: Optional symbol name to use instead of extracted one
+        obj_path: Optional path to target OBJ file for jump table resolution
 
     Returns:
         m2c-compatible assembly string
@@ -309,6 +572,41 @@ def convert_objdiff_json(data: dict, symbol_override: Optional[str] = None) -> s
     # Find branch targets to create labels
     branch_targets = parse_branch_targets(instructions)
 
+    # Detect and resolve jump tables
+    jump_tables = detect_jump_tables(instructions)
+    rdata_sections = []  # list of (symbol_name, target_addrs) for .rdata emission
+
+    if jump_tables and obj_path:
+        for jtbl in jump_tables:
+            entries = read_jump_table_from_obj(
+                obj_path, jtbl['symbol'],
+                jtbl['num_cases'], jtbl['entry_size']
+            )
+            if entries is None:
+                continue
+
+            # Compute target addresses in objdiff address space
+            # base = bctr_addr + 4 (the instruction right after bctr)
+            base_addr = jtbl['bctr_addr'] + 4
+            target_addrs = [base_addr + e for e in entries]
+
+            # Add targets to branch_targets so labels are emitted
+            for addr in target_addrs:
+                branch_targets.add(addr)
+
+            rdata_sections.append((jtbl['symbol'], target_addrs))
+
+            print(f"Resolved jump table {jtbl['symbol']}: "
+                  f"{jtbl['num_cases']} cases, "
+                  f"entry_size={jtbl['entry_size']}, "
+                  f"base=0x{base_addr:X}",
+                  file=sys.stderr)
+    elif jump_tables and not obj_path:
+        for jtbl in jump_tables:
+            print(f"Warning: Jump table {jtbl['symbol']} detected but no --obj "
+                  f"provided; switch will not be decompiled correctly",
+                  file=sys.stderr)
+
     # Build address-to-index map for the target side
     # Use the target addresses since we're extracting target binary
     addr_map = {}
@@ -321,6 +619,9 @@ def convert_objdiff_json(data: dict, symbol_override: Optional[str] = None) -> s
                 addr_map[addr] = idx
             except ValueError:
                 pass
+
+    # Emit .text section header
+    output.append(".text")
 
     # Emit function header
     output.append(f".global {label}")
@@ -358,6 +659,16 @@ def convert_objdiff_json(data: dict, symbol_override: Optional[str] = None) -> s
 
             output.append(f"\t{asm}")
 
+    # Emit .rdata sections for jump tables
+    if rdata_sections:
+        output.append("")
+        output.append(".rdata")
+        for jtbl_symbol, target_addrs in rdata_sections:
+            output.append(f".globl {jtbl_symbol}")
+            output.append(f"{jtbl_symbol}:")
+            for addr in target_addrs:
+                output.append(f".word .L_{addr:08X}")
+
     return '\n'.join(output)
 
 
@@ -378,6 +689,14 @@ def main():
     parser.add_argument(
         "--symbol",
         help="Override the symbol name for the function label",
+    )
+    parser.add_argument(
+        "--obj",
+        help="Path to target OBJ file for jump table resolution",
+    )
+    parser.add_argument(
+        "--project-dir",
+        help="Project directory (auto-detects OBJ file from objdiff.json)",
     )
     parser.add_argument(
         "--use-base",
@@ -409,8 +728,16 @@ def main():
         for instr in data.get('instructions', []):
             instr['target'], instr['base'] = instr.get('base', {}), instr.get('target', {})
 
+    # Resolve OBJ path for jump tables
+    obj_path = args.obj
+    if not obj_path and args.project_dir:
+        symbol_name = data.get('symbol', data.get('demangled', ''))
+        obj_path = find_obj_for_symbol(args.project_dir, symbol_name)
+        if obj_path:
+            print(f"Auto-detected OBJ: {obj_path}", file=sys.stderr)
+
     # Convert
-    output = convert_objdiff_json(data, args.symbol)
+    output = convert_objdiff_json(data, args.symbol, obj_path)
 
     if not output:
         sys.exit(1)

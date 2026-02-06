@@ -5,6 +5,11 @@ class SkeletonRecoverer {
 public:
     struct TrackingIDHistory {
         int unk0;
+        int unk4;
+        int unk8;
+        int unkC;
+        int unk10;
+        int unk14;
     };
     SkeletonRecoverer();
     virtual ~SkeletonRecoverer();

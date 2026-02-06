@@ -17,13 +17,22 @@
 LoadMgr TheLoadMgr;
 int gLoadCount;
 
-void FrontLoaderGlitchCB(float arg_sp14, void *v) {
+struct LoaderGlitchContext {
+    const char *name;       // 0x0
+    int unk4;               // 0x4
+    String file;            // 0x8
+    const char *fromState;  // 0xC
+    LoaderPos toPos;        // 0x10
+};
+
+void FrontLoaderGlitchCB(float elapsed, void *v) {
+    LoaderGlitchContext *ctx = (LoaderGlitchContext *)v;
     TheDebug << MakeString("Loader %s %s took %f (%s to %s)\n",
-                           *(const char**)v,
-                           *(const char**)((char*)v + 0x8),
-                           arg_sp14,
-                           *(const char**)((char*)v + 0xC),
-                           LoadMgr::LoaderPosString(*(LoaderPos*)((char*)v + 0x10), true));
+                           ctx->name,
+                           ctx->file,
+                           elapsed,
+                           ctx->fromState,
+                           LoadMgr::LoaderPosString(ctx->toPos, true));
 }
 
 const char *WhiteSpace(int count) {

@@ -67,8 +67,8 @@ private:
     void ShowGetReadyCard(Symbol, SkeletonSide);
     void SetUpMoveNames();
     void PollCaptureFlashcard();
-    void AnimateFlashcard(int);
-    void AdvanceFlashcards();
+    __declspec(noinline) void AnimateFlashcard(int);
+    __declspec(noinline) void AdvanceFlashcards();
     int RepsToNextPhrase();
     void SetFlashcardImage(int, int, int);
 
@@ -110,8 +110,8 @@ private:
     int unk968;
     int unk96c;
     bool unk970;
-    int unk974;
-    int unk978;
+    float unk974;
+    float unk978;
     std::vector<int> mSongStructure; // 0x97c
     int unk988; // 0x988 - num reps
     bool unk98c;

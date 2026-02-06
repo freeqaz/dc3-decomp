@@ -2,6 +2,7 @@
 #include "ScoreUtl.h"
 #include "math/Utl.h"
 #include "obj/Object.h"
+#include "obj/Task.h"
 #include "rndobj/Dir.h"
 
 HamPhraseMeter::HamPhraseMeter()
@@ -54,6 +55,24 @@ void HamPhraseMeter::Enter() {
     RndDir::Enter();
     SetRatingFrac(0, -1);
     unk224 = mDesiredFPB;
+}
+
+void HamPhraseMeter::SetBounds(float startBeat, float endBeat, const TempoMap *tempoMap) {
+    if (endBeat <= startBeat) {
+        SetRatingFrac(0, -1);
+        return;
+    }
+
+    float beat = TheTaskMgr.Beat();
+    if (tempoMap) {
+        float ms = TheTaskMgr.Seconds(TaskMgr::kRealTime) * 1000.0f;
+        beat = tempoMap->TimeToTick(ms) / 480.0f;
+    }
+
+    float span = endBeat - startBeat;
+    float frac = (beat - startBeat) / span;
+    float remaining = endBeat - beat;
+    SetRatingFrac(Clamp(0.0f, 1.0f, frac), remaining > 0.0f ? remaining : -1.0f);
 }
 
 void HamPhraseMeter::SetRatingFrac(float f1, float f2) {

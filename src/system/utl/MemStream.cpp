@@ -4,8 +4,8 @@ void MemStream::ReadImpl(void *data, int bytes) {
     unsigned int size = mBuffer.size();
     int tell = mTell;
     if (tell + bytes > size) {
-        mFail = true;
         bytes = size - tell;
+        mFail = true;
     }
     memcpy(data, &mBuffer[mTell], bytes);
     mTell += bytes;

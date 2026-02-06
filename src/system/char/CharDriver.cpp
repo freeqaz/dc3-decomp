@@ -345,3 +345,13 @@ BEGIN_LOADS(CharDriver)
     if (d.rev > 0xD)
         d >> unk98;
 END_LOADS
+
+// Template instantiation for std::map<CharClip*, float>
+namespace stlpmtx_std {
+
+template class _Rb_tree<CharClip*, less<CharClip*>, pair<CharClip* const, float>,
+    _Select1st<pair<CharClip* const, float> >,
+    priv::_MapTraitsT<pair<CharClip* const, float> >,
+    StlNodeAlloc<_Rb_tree_node<pair<CharClip* const, float> > > >;
+
+} // namespace stlpmtx_std

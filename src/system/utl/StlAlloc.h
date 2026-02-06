@@ -61,26 +61,15 @@ namespace STLPORT {
         size_type max_size() const { return size_type(-1) / sizeof(T); }
 
         pointer allocate(const size_type count, const void *hint = nullptr) const {
-            const char *name;
-            if (gStlAllocNameLookup) {
-                name = typeid(pointer).name();
-            } else {
-                name = gStlAllocName;
-            }
+            const char *name = gStlAllocNameLookup ? typeid(pointer).name() : gStlAllocName;
             return reinterpret_cast<pointer>(
                 MemOrPoolAllocSTL(count * sizeof(T), __FILE__, 0x39, name)
             );
         }
 
         void deallocate(pointer ptr, size_type count) const {
-            int size = count * sizeof(T);
-            const char *name;
-            if (gStlAllocNameLookup) {
-                name = typeid(pointer).name();
-            } else {
-                name = gStlAllocName;
-            }
-            MemOrPoolFreeSTL(size, ptr, __FILE__, 0x40, name);
+            const char *name = gStlAllocNameLookup ? typeid(pointer).name() : gStlAllocName;
+            MemOrPoolFreeSTL(count * sizeof(T), ptr, __FILE__, 0x40, name);
         }
 
         void construct(pointer ptr, const_reference value) const { new (ptr) T(value); }

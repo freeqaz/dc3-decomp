@@ -15,12 +15,12 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 PORT=8000
 HOST=127.0.0.1
-PROJECT_PATH="$PROJECT_DIR/ghidra_projects/DC3"
-# Use default.xex - Ghidra's XEX loader recognizes Xbox 360 format correctly
+PROJECT_PATH="$PROJECT_DIR/ghidra_projects/DC3/DC3"
 XEX_PATH="$PROJECT_DIR/orig/373307D9/default.xex"
+MAP_FILE="$PROJECT_DIR/orig/373307D9/ham_xbox_r.map"
+PYGHIDRA_MCP="$HOME/code/milohax/pyghidra-mcp"
 PIDFILE="/tmp/claude/pyghidra-mcp-dc3.pid"
 LOGFILE="/tmp/claude/pyghidra-mcp-dc3.log"
-# Note: New pyghidra-mcp (FastMCP) runs Uvicorn on port 8000 by default
 
 export JAVA_HOME="/usr/lib/jvm/java-17-openjdk"
 # Use VMX128-enabled Ghidra build (not stock /opt/ghidra)
@@ -43,13 +43,16 @@ cmd_start() {
     echo "Starting pyghidra-mcp service..."
     echo "  Project: $PROJECT_PATH"
     echo "  Binary: $XEX_PATH"
+    echo "  Map file: $MAP_FILE"
     echo "  Log: $LOGFILE"
 
-    # Start service with logging enabled
-    nohup "$PROJECT_DIR/venv/bin/pyghidra-mcp" \
+    # Start service using upstream pyghidra-mcp repo (via uv run with pinned Python)
+    # --wait-for-analysis ensures map symbols are applied after the binary is fully analyzed
+    nohup uv run --python 3.10 --project "$PYGHIDRA_MCP" pyghidra-mcp \
         --transport streamable-http \
-        --project-name "DC3" \
-        --project-directory "$PROJECT_PATH" \
+        --project-path "$PROJECT_PATH" \
+        --map-file "$MAP_FILE" \
+        --wait-for-analysis \
         --cache-dir "$PROJECT_DIR" \
         --log-file "$LOGFILE" \
         "$XEX_PATH" \
@@ -59,11 +62,8 @@ cmd_start() {
     echo $PID > "$PIDFILE"
     echo "Started with PID: $PID"
     echo ""
-    echo "Note: The new pyghidra-mcp version uses FastMCP transport with hardened service features."
-    echo "Features: port cleanup, health checks, comprehensive logging, diagnostics"
     echo "Server is starting in the background..."
     echo "Check logs with: $0 logs"
-    echo "Check diagnostics with: pyghidra-mcp --diagnose"
 
     sleep 5
     if ps -p $PID > /dev/null 2>&1; then
@@ -134,7 +134,7 @@ cmd_restart() {
 cmd_diagnose() {
     echo "Running Ghidra service diagnostics..."
     echo ""
-    "$PROJECT_DIR/venv/bin/pyghidra-mcp" --diagnose
+    uv run --python 3.10 --project "$PYGHIDRA_MCP" pyghidra-mcp --diagnose
 }
 
 case "${1:-}" in

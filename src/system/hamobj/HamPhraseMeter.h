@@ -2,6 +2,7 @@
 #include "obj/Object.h"
 #include "rndobj/Anim.h"
 #include "rndobj/Dir.h"
+#include "utl/TempoMap.h"
 #include "utl/MemMgr.h"
 
 /** "Custom component for move feedback progress" */
@@ -24,6 +25,7 @@ public:
     OBJ_MEM_OVERLOAD(0x10)
     NEW_OBJ(HamPhraseMeter)
 
+    void SetBounds(float, float, const TempoMap *);
     void SetRatingFrac(float, float);
 
 protected:

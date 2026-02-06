@@ -233,6 +233,10 @@ class DecompMCPServer:
                                 "type": "integer",
                                 "description": "Show N instructions of context before/after each mismatch (like grep -C). Default: 3.",
                             },
+                            "concise": {
+                                "type": "boolean",
+                                "description": "Concise output: match%, compact summary, patterns, verdict headline. Default: false.",
+                            },
                         },
                         "required": ["symbol", "project_dir"],
                     },
@@ -1038,7 +1042,7 @@ class DecompMCPServer:
 
         return data
 
-    def _format_enrichment_sections(self, data: dict) -> str:
+    def _format_enrichment_sections(self, data: dict, skip_rb3: bool = False) -> str:
         """
         Format enrichment annotations as markdown sections to append to
         the built-in objdiff markdown output.
@@ -1100,9 +1104,9 @@ class DecompMCPServer:
                     line += f" (fixable: {fixable})"
                 lines.append(line)
 
-        # RB3 reference
+        # RB3 reference (skip in concise mode)
         rb3_ref = data.get("rb3_reference", {})
-        if rb3_ref and rb3_ref.get("available"):
+        if rb3_ref and rb3_ref.get("available") and not skip_rb3:
             lines.append("")
             rb3_file = rb3_ref.get("rb3_file", "?")
             lines.append(f"## RB3 Reference ({rb3_file})")
@@ -1126,6 +1130,7 @@ class DecompMCPServer:
         full_build = args.get("full_build", False)
         project_dir_arg = args.get("project_dir", None)
         context = args.get("context", 3)
+        concise = args.get("concise", False)
 
         if not symbol:
             return [TextContent(type="text", text="Error: No symbol provided.")]
@@ -1221,6 +1226,8 @@ class DecompMCPServer:
             # 2) Markdown run (no build, already built) - for display
             # Explicit -f markdown avoids TUI fallback when no TTY is present
             md_cmd = list(base_args) + ["-f", "markdown"]
+            if concise:
+                md_cmd.append("--concise")
             md_result = subprocess.run(
                 md_cmd,
                 capture_output=True,
@@ -1235,7 +1242,7 @@ class DecompMCPServer:
             try:
                 data = json.loads(json_result.stdout)
                 data = self._enrich_objdiff_data(data)
-                enrichment = self._format_enrichment_sections(data)
+                enrichment = self._format_enrichment_sections(data, skip_rb3=concise)
             except (json.JSONDecodeError, KeyError):
                 pass
 

@@ -553,13 +553,14 @@ def run_m2c_from_objdiff_json(
     m2c_path: Path = DEFAULT_M2C_PATH,
     objdiff_to_m2c_path: Path = DEFAULT_OBJDIFF_TO_M2C,
     context_file: Optional[str] = None,
+    project_dir: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Run m2c using objdiff JSON output (new pipeline with better relocation handling).
 
     This pipeline:
     1. Reads pre-computed objdiff JSON (with --include-instructions)
-    2. Converts to m2c format via objdiff_to_m2c.py
+    2. Converts to m2c format via objdiff_to_m2c.py (with jump table resolution)
     3. Runs m2c with optional type context
 
     Args:
@@ -627,6 +628,8 @@ def run_m2c_from_objdiff_json(
 
         # Step 1: Convert JSON to m2c assembly using objdiff_to_m2c.py
         convert_cmd = ["python3", str(objdiff_to_m2c_path)]
+        if project_dir:
+            convert_cmd.extend(["--project-dir", project_dir])
         convert_result = subprocess.run(
             convert_cmd,
             input=json_line,
@@ -730,6 +733,9 @@ def run_m2c_from_objdiff_json(
         return result
 
 
+DEFAULT_PROJECT_DIR = str(Path("/home/free/code/milohax/dc3-decomp"))
+
+
 def run_m2c_decompile(
     symbol: str,
     unit: str,
@@ -739,6 +745,7 @@ def run_m2c_decompile(
     asm_dir: Path = DEFAULT_ASM_DIR,
     objdiff_json_path: Optional[str] = None,
     use_type_context: bool = True,
+    project_dir: str = DEFAULT_PROJECT_DIR,
 ) -> Dict[str, Any]:
     """
     Run m2c decompiler on assembly to generate initial C code.
@@ -802,6 +809,7 @@ def run_m2c_decompile(
                 worktree_dir=worktree_dir,
                 m2c_path=m2c_path,
                 context_file=context_file,
+                project_dir=project_dir,
             )
             if json_result.get("success"):
                 logger.info(f"m2c succeeded via objdiff JSON pipeline")

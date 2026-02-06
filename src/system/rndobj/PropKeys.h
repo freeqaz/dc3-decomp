@@ -43,6 +43,7 @@ public:
  * as well as the property path.
  */
 class PropKeys : public ObjRefOwner {
+    friend class RndPropAnim;
 public:
     enum AnimKeysType {
         kFloat,

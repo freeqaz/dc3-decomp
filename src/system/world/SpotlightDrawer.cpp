@@ -77,12 +77,11 @@ BEGIN_SAVES(SpotlightDrawer)
 END_SAVES
 
 void SpotlightDrawer::Init() {
-    SpotlightDrawer *ptr;
     sEnviron = Hmx::Object::New<RndEnviron>();
     sEnviron->SetUseApproxes(false);
     REGISTER_OBJ_FACTORY(SpotlightDrawer)
-    ptr = Hmx::Object::New<SpotlightDrawer>();
-    ptr->mParams.mLightingInfluence = 0;
+    SpotlightDrawer* ptr = Hmx::Object::New<SpotlightDrawer>();
+    ptr->mParams.mLightingInfluence = 0.0f;
     sDefault = ptr;
     ptr->Select();
 }
