@@ -228,6 +228,11 @@ void Interp(
     tex = texPtr;
 }
 
+BinStreamRev &operator>>(BinStreamRev &bs, Key<RndMatAnim::TexPtr> &key) {
+    bs >> key.value >> key.frame;
+    return bs;
+}
+
 BinStreamRev &operator>>(
     BinStreamRev &bs, std::vector<Key<RndMatAnim::TexPtr>, stlpmtx_std::StlNodeAlloc<Key<RndMatAnim::TexPtr>>>
         &keys

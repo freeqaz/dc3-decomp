@@ -10,17 +10,23 @@ RndParticleSysAnim::RndParticleSysAnim() : mParticleSys(this), mKeysOwner(this, 
 
 bool RndParticleSysAnim::Replace(ObjRef *from, Hmx::Object *to) {
     if (&mParticleSys == from) {
-        if (mKeysOwner != this) {
-            mKeysOwner = this;
+        // When our particle system is being replaced, update the keys owner:
+        // - If we own our own keys, keep owning them
+        // - If the replacement is also a ParticleSysAnim, delegate to its keys owner
+        // - Otherwise, take ownership of our own keys
+        if (mKeysOwner == this) {
+            mKeysOwner.SetObjConcrete(this);
         } else {
             RndParticleSysAnim *sysTo = dynamic_cast<RndParticleSysAnim *>(to);
             if (sysTo) {
-                mKeysOwner = sysTo->mKeysOwner;
+                mKeysOwner.SetObjConcrete(sysTo->mKeysOwner);
+            } else {
+                mKeysOwner.SetObjConcrete(this);
             }
         }
-    } else {
-        return Hmx::Object::Replace(from, to);
+        return true;
     }
+    return Hmx::Object::Replace(from, to);
 }
 
 BEGIN_HANDLERS(RndParticleSysAnim)

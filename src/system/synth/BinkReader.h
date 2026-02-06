@@ -25,7 +25,7 @@ public:
     virtual void Poll(float);
     virtual void Seek(int);
     virtual void EnableReads(bool enable) { mEnableReads = enable; }
-    virtual bool Done() { return mDone; }
+    virtual bool Done() { return mState == 4; } // State 4 = playback complete
     virtual bool Fail() { return mFail; }
     virtual void Init();
 
@@ -40,8 +40,8 @@ private:
     int mNumSamplesToConsume;
     int mSamplesRead;
     int mSamplesPerFrame;
-    int mState; // At offset 0xE0 based on objdiff
+    int mState; // At offset 0xE0; values: 1=init, 2=setup, 3=playing, 4=done, 5=fail
     bool mEnableReads;
-    bool mDone;
+    bool mDone; // Unused in BinkReader; present for symmetry with VorbisReader
     bool mFail;
 };

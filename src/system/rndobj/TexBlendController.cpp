@@ -72,10 +72,14 @@ bool RndTexBlendController::IsValid() const {
     if (!mMesh)
         return false;
     if (!mTex) {
-        if (mMinDistance <= mReferenceDistance || mReferenceDistance <= mMaxDistance) {
-            return true;
+        float refDist = mReferenceDistance;
+        bool distValid;
+        if (!(mMinDistance > refDist) || !(refDist > mMaxDistance)) {
+            distValid = true;
+        } else {
+            distValid = false;
         }
-        if (!mObject1 || !mObject2 || mReferenceDistance <= 0) {
+        if (!mObject1 || !mObject2 || refDist <= 0 || !distValid) {
             return false;
         }
     }

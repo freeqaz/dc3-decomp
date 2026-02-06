@@ -160,11 +160,15 @@ RndFont::~RndFont() { RELEASE(mKerningTable); }
 
 bool RndFont::Replace(ObjRef *from, Hmx::Object *to) {
     if (&mTextureOwner == from) {
-        RndFont *replace = this;
-        if (mTextureOwner != this) {
+        RndFont *replace;
+        if (mTextureOwner == this) {
+            replace = this;
+        } else {
             RndFont *f = dynamic_cast<RndFont *>(to);
             if (f) {
                 replace = f->mTextureOwner;
+            } else {
+                replace = this;
             }
         }
         mTextureOwner = replace;

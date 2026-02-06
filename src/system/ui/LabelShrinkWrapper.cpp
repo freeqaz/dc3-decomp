@@ -44,8 +44,8 @@ END_SAVES
 
 BEGIN_COPYS(LabelShrinkWrapper)
     COPY_SUPERCLASS(UIComponent)
-    CREATE_COPY_AS(LabelShrinkWrapper, c)
-    BEGIN_COPYING_MEMBERS_FROM(c)
+    CREATE_COPY(LabelShrinkWrapper)
+    BEGIN_COPYING_MEMBERS
         COPY_MEMBER(m_pLabel)
         COPY_MEMBER(m_pShow)
         COPY_MEMBER(mLeftBorder)

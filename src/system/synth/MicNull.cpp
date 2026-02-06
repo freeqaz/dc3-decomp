@@ -4,9 +4,12 @@
 Rand sRand(0x1bca7);
 
 short *MicNull::GetRecentBuf(int &size) {
-    size = DIM(mRecentBuf);
-    memcpy(mRecentBuf, mBuf, sizeof(mRecentBuf));
-    return mRecentBuf;
+    int sz = 0x600;
+    size = sz;
+    short *src = mBuf;
+    short *dst = mRecentBuf;
+    memcpy(dst, src, 0xc00);
+    return dst;
 }
 
 MicNull::MicNull() {

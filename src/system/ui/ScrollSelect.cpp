@@ -22,7 +22,6 @@ DataNode ScrollSelect::SendScrollSelected(UIComponent *comp, LocalUser *user) {
     scroll_select_msg[1] = user;
     scroll_select_msg[2] = mSelectedAux != -1;
     return TheUI->Handle(scroll_select_msg, false);
-    return 0;
 }
 
 UIComponent::State ScrollSelect::DrawState(UIComponent *comp) const {
@@ -55,19 +54,19 @@ bool ScrollSelect::RevertScrollSelect(
     int oldAux = mSelectedAux;
     if (oldAux != -1) {
         int selAux = SelectedAux();
-        bool somenum = oldAux != selAux;
+        bool auxChanged = oldAux != selAux;
         SetSelectedAux(oldAux);
         mSelectedAux = -1;
         DataNode node(kDataUnhandled, 0);
-        if (somenum && obj) {
-            // node = obj->Handle(UIComponentScrollMsg(comp, user), false);
+        if (auxChanged && obj) {
+            node = obj->Handle(UIComponentScrollMsg(comp, user), false);
         }
         if (node.Type() == kDataUnhandled) {
             node = SendScrollSelected(comp, user);
         }
-        if (somenum) {
+        if (auxChanged) {
             if (node.Type() == kDataUnhandled) {
-                // TheUI->Handle(UIComponentScrollMsg(comp, user), false);
+                TheUI->Handle(UIComponentScrollMsg(comp, user), false);
             }
         }
         return true;

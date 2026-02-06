@@ -238,14 +238,15 @@ MessageTask::MessageTask(Hmx::Object *o, DataArray *msg) : mObj(this, o), mMsg(m
 bool ScriptTask::Replace(ObjRef *ref, Hmx::Object *obj) {
     if (ref == &mThis) {
         mThis.SetObjConcrete(obj);
-        if (mThis)
-            return true;
+        if (mThis) return true;
     } else {
-        if (ref->Parent() != &mObjects) {
-            // mObjects.SetObjConcrete(obj);
-            return true;
-        } else
+        if (ref->Parent() == &mObjects) {
+            if (obj) {
+                mObjects.remove(obj);
+                return true;
+            }
             return Hmx::Object::Replace(ref, obj);
+        }
     }
     delete this;
     return true;
