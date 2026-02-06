@@ -84,14 +84,17 @@ bool CharClipGroup::HasClip(CharClip *clip) const {
     return mClips.find(clip) != mClips.end();
 }
 
+// Generates a random index for shuffling clips in the range [pos, end).
+// When end < pos (wrapping case), the range extends from pos to array end, then wraps to 0..end.
+// Returns the selected index, wrapped back into [0, size) bounds if needed.
 int CharClipGroup::QueueRandom(int pos, int end) const {
-    int range = (pos >= end ? mClips.size() : 0) + end - pos;
+    int diff = end - pos;
+    // Handle wrap-around: if end < pos, range includes tail + head of array
+    int range = (diff < 0 ? mClips.size() : 0) + diff;
     int result = Rand::sRand.FastInt(0, range) + pos;
     int size = mClips.size();
-    if (result >= size) {
-        result -= size;
-    }
-    return result;
+    // Modulo operation: wrap result back into valid array bounds
+    return result - ((result >= size) ? size : 0);
 }
 
 CharClip *CharClipGroup::GetClip(int flags) {

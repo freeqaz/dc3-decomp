@@ -8,6 +8,8 @@ extern Timer *GetTimer(Symbol);
 extern void BinkNextFrame(BINK *);
 extern unsigned char BinkGetTrackData(int, int);
 extern BINKTRACK *BinkOpenTrack(BINK *, unsigned char);
+extern void BinkCloseTrack(BINKTRACK *);
+extern void BinkClose(BINK *);
 extern void *MemAlloc(int, const char *, int, const char *, int);
 extern Debug TheDebug;
 
@@ -21,10 +23,23 @@ BinkReader::BinkReader(File *file, StandardStream *stream)
       mState(1), mEnableReads(true), mDone(false), mFail(false) {
     for (int i = 0; i < 16; i++) {
         mTracks[i] = nullptr;
+        mPCMBuffers[i] = nullptr;
     }
 }
 
-BinkReader::~BinkReader() {}
+BinkReader::~BinkReader() {
+    if (mState > 1 && mBink->NumTracks > 0) {
+        for (unsigned char i = 0; i < mBink->NumTracks; i++) {
+            if (mTracks[i]) {
+                BinkCloseTrack(mTracks[i]);
+            }
+            if (mPCMBuffers[i]) {
+                MemFree(mPCMBuffers[i], "unknown", 0, "unknown");
+            }
+        }
+        BinkClose(mBink);
+    }
+}
 
 void BinkReader::Poll(float) {
     // Initialize timer if needed (static)
@@ -125,8 +140,54 @@ void BinkReader::Poll(float) {
     // }
 }
 
-void BinkReader::Seek(int) {
-    // Seek implementation
+extern void BinkGoto(void *bink, unsigned int frame, int mode);
+
+void BinkReader::Seek(int targetSample) {
+    if (mBink != nullptr && mState != 5) {
+        double sampleRate;
+        double samplesPerFrame;
+        unsigned int targetFrame;
+        unsigned int framesAfterSeek;
+        unsigned int samplesAfterSeek;
+        int deltaFrames;
+
+        // Get audio sample frequency from first track
+        // Note: mTracks[0] is a BINKTRACK*, but we're reading the first uint32 (Frequency field)
+        sampleRate = (double)*((unsigned int *)mTracks[0]);
+
+        // Calculate Bink video frames per second
+        // The (double)(float)(double) casting pattern matches original compiler behavior for precision
+        samplesPerFrame = (double)(float)((double)mBink->TimeBasis / (double)mBink->SampleRate);
+
+        // Convert target audio sample number to Bink video frame index
+        // The 0.75 offset adjusts for Bink's frame timing alignment
+        targetFrame = (unsigned int)(((double)(float)((double)(long long)(int)targetSample / sampleRate) - 0.75) * samplesPerFrame + 1.0);
+
+        // Validate that target frame is within video bounds
+        if (mBink->FrameCount < targetFrame) {
+            MILO_ASSERT(false, 0x102);
+        }
+
+        // Perform the seek operation
+        BinkGoto(mBink, targetFrame, 1);
+
+        // Calculate actual audio sample position after the seek
+        // Work backwards: last frame -> time -> audio samples
+        framesAfterSeek = (mBink->FrameCount) - 1;
+        samplesAfterSeek = (unsigned int)(((double)(float)((double)framesAfterSeek * (double)(float)(1.0 / samplesPerFrame) + 0.75) * sampleRate));
+
+        // Store the delta and update reader state
+        deltaFrames = targetSample - samplesAfterSeek;
+        mNumSamplesToConsume = deltaFrames;
+        mSamplesRead = samplesAfterSeek;
+
+        // Verify that the delta is within one frame's worth of audio samples
+        if ((float)((double)(float)(1.0 / samplesPerFrame) * sampleRate) < (float)(deltaFrames & 0xFFFFFFFF)) {
+            MILO_ASSERT(false, 0x10B);
+        }
+
+        mState = 3;
+    }
 }
 
 void BinkReader::Init() {

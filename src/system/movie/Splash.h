@@ -25,8 +25,8 @@ public:
     };
 
     struct PreparedScreenParams {
-        RndDir *unk0;
-        int unk4;
+        RndDir *dir;
+        int durationMs;
     };
     virtual ~Splash();
 
@@ -40,21 +40,21 @@ public:
     void EndSplasher();
     void Poll();
     void BeginSplasher();
-    DWORD SplashThreadId() const { return unk68; }
+    DWORD SplashThreadId() const { return mThreadId; }
 
-    float unk8;
-    bool unkc;
+    int mSplashDurationMs;
+    bool mWaitForSplash;
     std::list<ScreenParams> mScreens; // 0x10
-    Timer unk18;
-    RndDir *unk48;
-    RndCam *unk4c;
-    TexMovie *unk50;
-    EventTrigger *unk54;
+    Timer mTimer;
+    RndDir *mCurrentDir;
+    RndCam *mCurrentCam;
+    TexMovie *mCurrentMovie;
+    EventTrigger *mCurrentTrigger;
     int unk58;
     u32 unk5c;
     int unk60;
-    bool unk64;
-    DWORD unk68;
+    bool mThreaded;
+    DWORD mThreadId;
     CriticalSection unk6c;
     SynchronizationEvent unk8c;
     SynchronizationEvent unk90;

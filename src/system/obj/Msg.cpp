@@ -72,13 +72,15 @@ void MsgSinks::ChainEventSinks(Hmx::Object *from, Hmx::Object *to) {
     }
 }
 
-void MsgSinks::EventSink::Remove(Hmx::Object *o, bool b) {
+void MsgSinks::EventSink::Remove(Hmx::Object *o, bool exporting) {
     for (ObjList<EventSinkElem>::iterator it = sinks.begin(); it != sinks.end(); ++it) {
         if (it->obj == o) {
-            it->obj->Release(nullptr);
-            if (!b) {
-                sinks.erase(it);
+            it->obj = nullptr;
+            // When exporting, null the pointer but keep the element in the list
+            if (exporting) {
+                return;
             }
+            sinks.erase(it);
             return;
         }
     }

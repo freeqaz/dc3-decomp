@@ -237,12 +237,13 @@ MergeFilter::Action FileMerger::Filter(Hmx::Object *o1, Hmx::Object *o2, ObjectD
 
 MergeFilter::SubdirAction FileMerger::FilterSubdir(ObjectDir *o1, ObjectDir *o2) {
     SubdirAction a;
+    Merger *merger = mFilesPending.front();
     if (mFilter) {
         a = mFilter->FilterSubdir(o1, o2);
     } else {
-        a = MergeFilter::DefaultSubdirAction(o1, mFilesPending.front()->mSubdirs);
+        a = DefaultSubdirAction(o1, merger->mSubdirs);
     }
-    if (a == 1 && !o2->HasSubDir(o1)) {
+    if (a == kMergeReplace && !o2->HasSubDir(o1)) {
         mFilesPending.front()->mLoadedSubdirs.push_back(o1);
     }
     return a;

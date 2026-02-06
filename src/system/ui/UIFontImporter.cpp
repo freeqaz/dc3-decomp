@@ -324,7 +324,18 @@ void UIFontImporter::ImportSettingsFromFont(RndFontBase *font) {
     }
 }
 
-Symbol UIFontImporter::GetMatVariationName(unsigned int ui) const { return Symbol(0); }
+Symbol UIFontImporter::GetMatVariationName(unsigned int idx) const {
+    if (idx >= mMatVariations.size())
+        return Symbol(0);
+    ObjPtrList<RndMat>::iterator it = mMatVariations.begin();
+    for (unsigned int i = 0; i < idx; i++) {
+        ++it;
+    }
+    RndMat *mat = *it;
+    if (!mat)
+        return Symbol(0);
+    return mat->Type();
+}
 
 char const *UIFontImporter::GetMatVariationName(RndFontBase *font) const {
     if (!font)
@@ -357,10 +368,13 @@ char const *UIFontImporter::GetMatVariationName(RndFontBase *font) const {
 }
 
 int UIFontImporter::GetMatVariationIdx(Symbol s) const {
-    int size = NumMatVariations();
-    for (int ret = 0; ret < size; ret++) {
-        if (GetMatVariationName(ret) == s)
-            return ret;
+    int count = mMatVariations.size();
+    int i;
+    Symbol name;
+    for (i = 0; i < count; i++) {
+        name = GetMatVariationName(i);
+        if (name == s)
+            return i;
     }
     return -1;
 }
@@ -541,22 +555,25 @@ DataNode UIFontImporter::OnGenerate3D(DataArray *) {
 }
 
 DataNode UIFontImporter::OnGetGennedBitmapPath(DataArray *da) {
-    RndFont *font;
-    const char *path = "";
-    if (!mGennedFonts.empty()) {
-        font = dynamic_cast<RndFont *>(mGennedFonts.front());
-        if (font) {
-            RndMat *mat = font->Mat(0);
-            if (mat) {
-                if (mat->GetDiffuseTex()) {
-                    if (mat->GetDiffuseTex()) {
-                        path = mat->GetDiffuseTex()->File().c_str();
-                    }
-                }
-            }
+    RndFontBase *fontbase;
+    if (mGennedFonts.empty())
+        fontbase = 0;
+    else
+        fontbase = mGennedFonts.front();
+    RndFont *font = (RndFont *)fontbase;
+    RndTex *tex = 0;
+    if (font) {
+        RndMat *mat = font->Mat(0);
+        if (mat) {
+            RndTex *thetex = mat->GetDiffuseTex();
+            if (thetex)
+                tex = thetex;
         }
     }
-    return DataNode(path);
+    if (tex)
+        return DataNode(tex->File().c_str());
+    else
+        return DataNode("");
 }
 
 DataNode UIFontImporter::OnImportSettings(DataArray *da) {

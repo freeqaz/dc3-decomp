@@ -28,6 +28,13 @@ BinStream &operator>>(BinStream &bs, CharMeshHide::Hide &hide) {
     return bs;
 }
 
+BinStream &operator<<(BinStream &bs, const CharMeshHide::Hide &hide) {
+    bs << hide.mDraw;
+    bs << hide.mFlags;
+    bs << hide.mShow;
+    return bs;
+}
+
 #pragma endregion CharMeshHide::Hide
 #pragma region CharMeshHide
 
@@ -41,11 +48,15 @@ BEGIN_PROPSYNCS(CharMeshHide)
     SYNC_SUPERCLASS(Hmx::Object)
 END_PROPSYNCS
 
-BEGIN_SAVES(CharMeshHide)
-    SAVE_REVS(2, 0)
-    SAVE_SUPERCLASS(Hmx::Object)
-    bs << mFlags;
-END_SAVES
+void CharMeshHide::Save(BinStream &bs) {
+    int data[2];  // Array sized for stack alignment
+    data[0] = 2;
+    bs.WriteEndian(data, 4);
+    Hmx::Object::Save(bs);
+    data[0] = mFlags;
+    bs.WriteEndian(data, 4);
+    bs << mHides;
+}
 
 BEGIN_COPYS(CharMeshHide)
     COPY_SUPERCLASS(Hmx::Object)

@@ -1,4 +1,5 @@
 #include "rndobj/Overlay.h"
+#include "rndobj/Rnd.h"
 #include "os/System.h"
 #include "utl/Std.h"
 
@@ -35,18 +36,21 @@ void RndOverlay::Terminate() {
 }
 
 String &RndOverlay::CurrentLine() {
-    if (mLine == mLines.begin()) {
+    std::list<String>::iterator begin_it = mLines.begin();
+    if (mLine == begin_it) {
         String newstr;
         mLines.pop_front();
         mLines.push_back(newstr);
-        mLine = PrevItr(mLines.begin());
+        mLine = --begin_it;
         mLine->reserve(0x7F);
     }
     return *mLine;
 }
 
 float RndOverlay::Height() const {
-    return mLines.size() * 0.0212f;
+    unsigned int numlines = NumLines();
+    const Vector2 &v = TheRnd.DrawStringScreen("", Vector2(0, 0), mTextColor, true);
+    return (float)numlines * v.y + 0.0268f;
 }
 
 void RndOverlay::DrawAll(bool b) {

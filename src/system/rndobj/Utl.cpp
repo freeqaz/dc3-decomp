@@ -32,10 +32,10 @@ typedef void (*SplashFunc)(void);
 FileCacheHelper gResourceFileCacheHelper;
 float gLimitUVRange;
 int gDxtCacher;
-ObjectDir *sSphereDir;
-RndMesh *sSphereMesh;
-ObjectDir *sCylinderDir;
-RndMesh *sCylinderMesh;
+static ObjectDir *sSphereDir;
+static RndMesh *sSphereMesh;
+static ObjectDir *sCylinderDir;
+static RndMesh *sCylinderMesh;
 // std::list<BuildPoly> gChildPolys;
 // std::list<BuildPoly> gParentPolys;
 SplashFunc gSplashPoll;
@@ -158,15 +158,23 @@ void RndUtlInit() {
         sSphereMesh = sSphereDir->Find<RndMesh>("sphere.mesh", true);
     }
     if (sCylinderDir) {
+        // Note: Searches in sSphereDir, not sCylinderDir - matches original binary
         sCylinderMesh = sSphereDir->Find<RndMesh>("Cylinder.mesh", true);
     }
 }
 
+// Clean up sphere and cylinder resource directories
 void RndUtlTerminate() {
-    RELEASE(sSphereDir);
-    sSphereMesh = nullptr;
-    RELEASE(sCylinderDir);
-    sCylinderMesh = nullptr;
+    if (sSphereDir) {
+        delete sSphereDir;
+    }
+    sSphereDir = 0;
+    sSphereMesh = 0;
+    if (sCylinderDir) {
+        delete sCylinderDir;
+    }
+    sCylinderDir = 0;
+    sCylinderMesh = 0;
 }
 
 MatShaderOptions GetDefaultMatShaderOpts(const Hmx::Object *obj, RndMat *mat) {
@@ -658,19 +666,26 @@ void LinearizeKeys(
 
 void TransformKeys(RndTransAnim *tanim, const Transform &tf) {
     Vector3 v48;
-    MakeScale(tf.m, v48);
+    Hmx::Quat q58;
     Hmx::Matrix3 m3c;
+    MakeScale(tf.m, v48);
     Scale(tf.m.x, 1.0f / v48.x, m3c.x);
     Scale(tf.m.y, 1.0f / v48.y, m3c.y);
     Scale(tf.m.z, 1.0f / v48.z, m3c.z);
-    Hmx::Quat q58(m3c);
-    FOREACH (it, tanim->TransKeys()) {
+    q58.Set(m3c);
+    for (Keys<Vector3, Vector3>::iterator it = tanim->TransKeys().begin();
+         it != tanim->TransKeys().end();
+         ++it) {
         Multiply(it->value, tf, it->value);
     }
-    FOREACH (it, tanim->ScaleKeys()) {
+    for (Keys<Vector3, Vector3>::iterator it = tanim->ScaleKeys().begin();
+         it != tanim->ScaleKeys().end();
+         ++it) {
         Scale(it->value, v48.x, it->value);
     }
-    FOREACH (it, tanim->RotKeys()) {
+    for (Keys<Hmx::Quat, Hmx::Quat>::iterator it = tanim->RotKeys().begin();
+         it != tanim->RotKeys().end();
+         ++it) {
         Multiply(q58, it->value, it->value);
     }
 }

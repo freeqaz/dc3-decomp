@@ -93,6 +93,8 @@ public:
     int SelectedData() const { return mListState.SelectedData(); }
     int FirstShowing() const { return mListState.FirstShowing(); }
     bool IsScrolling() const;
+    UIList *ChildList() { return mListDir->SubList(mListState.SelectedDisplay(), mWidgets); }
+    UIList *ParentList() { return mParent; }
 
     NEW_OBJ(UIList)
     OBJ_MEM_OVERLOAD(0x21)

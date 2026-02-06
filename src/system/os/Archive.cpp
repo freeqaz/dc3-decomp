@@ -15,7 +15,7 @@
 #include <cstdio>
 
 bool gDebugArkOrder;
-const int kArkBlockSize = 0x10000;
+int kArkBlockSize = 0x10000;
 
 #pragma region ArkHash
 
@@ -65,23 +65,35 @@ const char *ArkHash::operator[](int idx) const {
 }
 
 void ArkHash::Read(BinStream &bs, int len) {
+    // Free existing allocations
     MemFree(mHeap);
     MemFree(mTable);
-    int i40;
-    bs >> i40;
-    int iSizeBytes = i40 + len;
-    char *mem = (char *)MemAlloc(iSizeBytes, __FILE__, 0x112, "ArkHash");
-    mHeap = mem;
-    mFree = mem + i40;
-    mHeapEnd = mem + iSizeBytes;
-    bs.Read(mem, iSizeBytes);
+
+    // Read heap size and allocate heap memory (existing strings + headroom)
+    int heapSize;
+    bs >> heapSize;
+    int totalHeapSize = heapSize + len;
+    char *heapBase = (char *)MemAlloc(totalHeapSize, __FILE__, 0x112, "ArkHash");
+    mHeap = heapBase;
+    mHeapEnd = heapBase + totalHeapSize;
+    mFree = heapBase + heapSize; // Free space starts after existing strings
+
+    // Read string data and zero out free space
+    bs.Read(heapBase, totalHeapSize);
     memset(mFree, 0, mHeapEnd - mFree);
+
+    // Read hash table and populate with heap pointers
     bs >> mTableSize;
     mTable = (char **)MemAlloc(mTableSize * 4, __FILE__, 0x11A, "ArkHash");
-    for (char *p = *mTable; p != mTable[mTableSize]; p++) {
-        int offset;
-        bs >> offset;
-        p = offset == 0 ? nullptr : mHeap + offset;
+    char **p = mTable;
+    char **pEnd = mTable + mTableSize;
+    if (p != pEnd) {
+        do {
+            int offset;
+            bs >> offset;
+            *p = offset != 0 ? (mHeap + offset) : nullptr;
+            p++;
+        } while (p != pEnd);
     }
 }
 
@@ -200,12 +212,8 @@ int Archive::GetArkfileCachePriority(int arkfileNum) const {
     return mArkfileCachePriority[arkfileNum];
 }
 
-int Archive::GetArkfileNumBlocks(int file) const {
-    int blockSize = kArkBlockSize;
-    int size = mArkfileSizes[file];
-    int temp = size - 1;
-    int div = temp / blockSize;
-    return div + 1;
+int Archive::GetArkfileNumBlocks(int filenum) const {
+    return (mArkfileSizes[filenum] - 1) / kArkBlockSize + 1;
 }
 
 void Archive::SetLocationHardDrive() {

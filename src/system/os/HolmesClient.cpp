@@ -53,7 +53,14 @@ namespace {
     CriticalSection gCrit;
     std::list<ReadRequest> gRequests;
     String gServerName;
-    // HolmesInput gInput; // fuck you mfc
+
+    class HolmesInput {
+    public:
+        void LoadKeyboard(BinStream &bs) {}
+        void LoadJoypad(BinStream &bs) {}
+        void SendKeyboardMessages() {}
+    } gInput;
+
     String gHolmesTarget;
     bool gPollStreamEof;
 
@@ -80,23 +87,24 @@ namespace {
     void WaitForResponse(Holmes::Protocol prot);
     void WaitForReads();
     bool CheckForResponse(Holmes::Protocol prot, bool b);
-    // this should hopefully be correct when someone does HolmesInput
-    void CheckInput(bool b) {
-        if (CheckForResponse(gPendingResponse, b)) {
+    bool CheckReads(bool b);
+
+    __declspec(noinline) void CheckInput(bool b) {
+        if (CheckForResponse(Holmes::kPollKeyboard, b)) {
             BeginCmd(Holmes::kPollKeyboard, true);
-            // gInput.LoadKeyboard(gHolmesStream);
+            gInput.LoadKeyboard(*gHolmesStream);
             gPendingResponse = Holmes::kInvalidOpcode;
             EndCmd(Holmes::kPollKeyboard);
         }
 
-        if (CheckForResponse(gPendingResponse, b)) {
+        if (CheckForResponse(Holmes::kPollJoypad, b)) {
             BeginCmd(Holmes::kPollJoypad, true);
-            // gInput.LoadJoypad(gHolmesStream);
+            gInput.LoadJoypad(*gHolmesStream);
             gPendingResponse = Holmes::kInvalidOpcode;
             EndCmd(Holmes::kPollJoypad);
         }
-    };
-    bool CheckReads(bool b);
+    }
+
     void HolmesClientPollInternal(bool b) {
         CritSecTracker cst(&gCrit);
 
@@ -150,10 +158,6 @@ NetAddress HolmesResolveIP() {
 
 namespace {
     bool gInputPolling = false;
-    class HolmesInput {
-    public:
-        void SendKeyboardMessages() {}
-    } gInput;
 }
 
 void HolmesClientPollKeyboard() {

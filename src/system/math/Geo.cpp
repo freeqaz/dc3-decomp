@@ -266,13 +266,26 @@ void MultiplyEq(BSPNode *n, const Transform &t) {
 }
 
 void Intersect(const Hmx::Ray &ray1, const Hmx::Ray &ray2, Vector2 &vec) {
-    float dot = ray1.dir.y * ray2.dir.x - ray1.dir.x * ray2.dir.y;
+    // Cache ray components for cleaner computation
+    float r1dx = ray1.dir.x;
+    float r2dx = ray2.dir.x;
+    float r1dy = ray1.dir.y;
+    float r2dy = ray2.dir.y;
+    float r1bx = ray1.base.x;
+    float r1by = ray1.base.y;
+    float r2bx = ray2.base.x;
+    float r2by = ray2.base.y;
+
+    // Compute 2D cross product determinant
+    float dot = r1dy * r2dx - r1dx * r2dy;
+
     if (dot != 0.0f) {
-        float s = ((ray2.base.y - ray1.base.y) * ray1.dir.x + (ray1.base.x - ray2.base.x)
-                    * ray1.dir.y) / dot;
-        vec.Set(s * ray2.dir.x + ray2.base.x, s * ray2.dir.y + ray2.base.y);
-    }
-    else {
+        // Solve for intersection parameter s
+        float s = ((r2by - r1by) * r1dx + (r1bx - r2bx) * r1dy) / dot;
+        // Compute intersection point
+        vec.Set(s * r2dx + r2bx, s * r2dy + r2by);
+    } else {
+        // Rays are parallel, use ray1's base as fallback
         vec = ray1.base;
     }
 }

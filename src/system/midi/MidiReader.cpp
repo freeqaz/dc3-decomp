@@ -451,11 +451,14 @@ void MidiReader::ReadEvent(BinStream &bs) {
 
 void MidiReader::ReadNextEvent() {
     if (sVerify) {
-        TheDebug.SetTry(true);
+        MILO_TRY { ReadNextEventImpl(); }
+        MILO_CATCH(errMsg) {
+            Error(errMsg);
+            mFail = true;
+        }
+    } else {
         ReadNextEventImpl();
-        TheDebug.SetTry(false);
-    } else
-        ReadNextEventImpl();
+    }
 }
 
 void MidiReader::ReadNextEventImpl() {

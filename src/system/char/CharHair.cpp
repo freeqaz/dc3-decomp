@@ -132,13 +132,11 @@ void CharHair::PollDeps(
 void CharHair::SetCloth(bool b) {
     for (int i = 0; i < mStrands.size(); i++) {
         Strand &strand = mStrands[i];
-        int mod = Mod(i + 1, mStrands.size());
-        Strand &modidx = mStrands[mod];
-        for (int j = 0; j < strand.NumPoints(); j++) {
-            Point &point = strand.PointAt(j);
-            point.sideLength = b && j < modidx.NumPoints()
-                ? Distance(point.pos, modidx.PointAt(j).pos)
-                : -1.0f;
+        Strand &modidx = mStrands[Mod(i + 1, mStrands.size())];
+        for (int j = 0; j < strand.Points().size(); j++) {
+            Point &point = strand.Points()[j];
+            bool b1 = b && j < modidx.Points().size();
+            point.sideLength = b1 ? Distance(point.pos, modidx.Points()[j].pos) : -1.0f;
         }
     }
 }

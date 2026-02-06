@@ -299,13 +299,19 @@ bool UIScreen::HasPanel(UIPanel *panel) {
     return false;
 }
 
+// Exits all active panels, then re-enters them.
+// Used to reset panel state without fully unloading.
 void UIScreen::ReenterScreen() {
+    AutoGlitchReport hang(50.0f, "UIScreen::ReenterScreen");
+
+    // Exit all active panels
     FOREACH_POST (it, mPanelList) {
         if (it->Active()) {
             it->mPanel->Exit();
         }
     }
 
+    // Re-enter all active panels
     FOREACH_POST (it, mPanelList) {
         if (it->Active()) {
             it->mPanel->Enter();

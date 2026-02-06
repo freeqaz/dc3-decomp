@@ -462,12 +462,17 @@ void MemPushHeap(int iHeap) {
 }
 
 void MemPopHeap() {
-    if (gInitted == false || gNumHeaps < 1) {
-        return;
+    bool proceed = false;
+    if (gInitted) {
+        if (gNumHeaps > 0) {
+            proceed = true;
+        }
     }
-    MemHeapStack s = ThreadMemStack(true);
-    MILO_ASSERT(s.mSize > 0, 0x1f6);
-    s.mSize--;
+    if (proceed) {
+        MemHeapStack &s = ThreadMemStack(true);
+        MILO_ASSERT(s.mSize > 0, 0x1f6);
+        s.mSize--;
+    }
 }
 
 void MemPushTemp() {

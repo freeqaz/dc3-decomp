@@ -216,7 +216,7 @@ public:
     struct EventSink {
         EventSink(Hmx::Object *owner) : sinks(owner) {}
         void Add(Hmx::Object *, Hmx::Object::SinkMode, Symbol, bool);
-        void Remove(Hmx::Object *, bool);
+        void Remove(Hmx::Object *, bool exporting);
 
         Symbol event; // 0x0
         bool chainProxy; // 0x4

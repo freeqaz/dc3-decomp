@@ -36,25 +36,27 @@ void MultiTempoTempoMap::SetLoopPoints(int start, int end) {
 }
 
 int MultiTempoTempoMap::GetLoopTick(int tick, int &asdf) const {
+    asdf = 0;
+
     if (mStartLoopTick < 0.0f) {
         return tick;
     }
 
-    int startTick = mStartLoopTick;
-    int endTick = mEndLoopTick;
+    int endTick = static_cast<int>(mEndLoopTick);
+    int startTick = static_cast<int>(mStartLoopTick);
 
-    asdf = 0;
     if (tick > mEndLoopTick) {
         if (mStartLoopTick == mEndLoopTick) {
             return tick;
         }
 
-        int loopTick = tick - startTick;
         int loopLength = endTick - startTick;
+        int loopTick = tick - startTick;
         int newTick = (loopTick % loopLength) + startTick;
         asdf = tick - newTick;
         return newTick;
     }
+    return tick;
 }
 
 int MultiTempoTempoMap::GetLoopTick(int tick) const {
@@ -91,16 +93,14 @@ int MultiTempoTempoMap::GetTempoChangePoint(int index) const {
 
 const MultiTempoTempoMap::TempoInfoPoint *MultiTempoTempoMap::PointForTick(float tick
 ) const {
-    TempoInfoPoint pt;
-    pt.mMs = tick;
-
-    if (mTempoPoints.empty()) {
-        MILO_WARN("Tempo map is empty; at least one tempo map entry is required");
+    if (mTempoPoints.size() < 1) {
+        MILO_NOTIFY("Tempo map is empty; at least one tempo map entry is required");
         return mTempoPoints.end();
     }
 
+    // Find first point with tick > search tick, then step back to get point at or before
     const TempoInfoPoint *pt2 =
-        std::upper_bound(mTempoPoints.begin(), mTempoPoints.end(), pt.mMs, CompareTick);
+        std::upper_bound(mTempoPoints.begin(), mTempoPoints.end(), tick, CompareTick);
     if (pt2 != mTempoPoints.begin()) {
         pt2--;
     }

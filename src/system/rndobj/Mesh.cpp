@@ -750,9 +750,10 @@ void RndMesh::SetKeepMeshData(bool keep) {
     if (keep != mKeepMeshData) {
         mKeepMeshData = keep;
         if (!mKeepMeshData) {
-            mVerts.resize(0);
-            ClearAndShrink(mFaces);
-            ClearAndShrink(mPatches);
+            // Clear mesh data and free memory when keep_mesh_data is disabled
+            mVerts.clear();
+            std::vector<Face>().swap(mFaces);        // Clear and shrink to free memory
+            std::vector<unsigned char>().swap(mPatches); // Clear and shrink to free memory
         }
     }
 }

@@ -12,6 +12,7 @@
 #include "synth/Mic.h"
 #include "synth/MicClientMapper.h"
 #include "synth/MidiSynth.h"
+#include "synth/Sfx.h"
 #include "synth/Sound.h"
 #include "synth/StandardStream.h"
 #include "synth/Stream.h"

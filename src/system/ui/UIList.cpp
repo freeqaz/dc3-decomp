@@ -349,6 +349,9 @@ void UIList::SetSelected(int i, int j) {
     mListState.SetSelected(i, j, true);
     Refresh(false);
     mListDir->Poll();
+    if (ChildList())
+        Poll();
+    HandleSelectionUpdated();
 }
 
 bool UIList::SetSelected(Symbol sym, bool b, int i) {
@@ -701,22 +704,23 @@ void UIList::SetCircular(bool b) {
         Refresh(false);
 }
 
+// Limits the number of displayed items to the number of data items (prevents duplicates in circular lists)
 void UIList::LimitCircularDisplay(bool b) {
-    if (&mListState) {
-        int val;
+    if (Circular()) {
         mLimitCircularDisplayNumToDataNum = b;
         if (b) {
             int numprov = NumProviderData();
-            int i = unk160;
-            if (numprov < i)
+            int val = unk160;
+            if (numprov < val) {
                 val = numprov;
-            else
+            }
+            if (val < 1) {
                 val = 1;
-
+            }
+            SetNumDisplay(val);
         } else {
-            val = unk160;
+            SetNumDisplay(unk160);
         }
-        SetNumDisplay(val);
         Refresh(false);
     }
 }

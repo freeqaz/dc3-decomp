@@ -59,9 +59,13 @@ AutoPrepTarget::AutoPrepTarget(CamShotFrame &frame)
 }
 
 AutoPrepTarget::~AutoPrepTarget() {
+    mShot->SetPos(*mFrame, nullptr);
+    mFrame->UpdateTarget();
     mShot->mFilter = mOldFilter;
     mShot->mClampHeight = mOldCamHeight;
+    mFrame->mZoomFOV = mOldZoomFov;
     sChanging = false;
+    mShot->EndAnim();
 }
 
 #pragma endregion
@@ -1261,7 +1265,8 @@ RndCam *CamShot::GetCam() {
 }
 
 void CamShot::ClearCrowds() {
-    for (auto it = mCrowds.begin(); it != mCrowds.end(); it) {
+    ObjVector<CamShotCrowd>::iterator it = mCrowds.begin();
+    while (it != mCrowds.end()) {
         if (!it->mCrowd) {
             it = mCrowds.erase(it);
         } else {

@@ -215,8 +215,10 @@ public:
 
     ~AutoTimer() {
         if (mTimer) {
+            unsigned long long cycles = mTimer->Stop();
+            float elapsed = Timer::CyclesToMs(cycles);
             AutoGlitchReport::EndExternal(
-                Timer::CyclesToMs(mTimer->Stop()),
+                elapsed,
                 mTimeLimit,
                 mTimer->Name().Str(),
                 mCallback,

@@ -410,7 +410,7 @@ void RndText::Init() {
 }
 
 RndText::FontMap::~FontMap() {
-    while (!mPages.empty()) {
+    while (mPages.size() != 0) {
         delete mPages.back();
         mPages.pop_back();
     }

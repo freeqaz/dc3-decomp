@@ -41,6 +41,7 @@ public:
     static float smTotalLeafTime;
 
 private:
+    friend class GlitchFinder;
     static std::vector<float> smNestedStartTimes;
     void PrintResult(TextStream &);
     void PrintNestedStartTimes(TextStream &, float);
@@ -76,20 +77,19 @@ private:
     static DataNode OnGlitchFindPoke(DataArray *);
 
 protected:
-    int unk0; // 0x0
-    int unk4; // 0x0
-    bool unk8; // 0x8
-    Timer unk10; // 0x10
-    //int unk34; // 0x34
-    float unk40; // 0x40
+    int mFrameCount; // 0x0
+    int mGlitchCount; // 0x4
+    bool mStop; // 0x8
+    Timer mTime; // 0x10
+    float mLastTime; // 0x40
     GlitchPoker mPokerPool[2048]; // 0x44
-    int unk30044; // 0x30044
-    GlitchPoker *unk30048; // 0x30048
-    GlitchPoker *unk3004c; // 0x3004c
-    bool unk30050; // 0x30050
-    bool unk30051; // 0x30051
-    float unk30054; // 0x30054
-    double *unk30058; // 0x30058
+    int mPokerIndex; // 0x30044
+    GlitchPoker *mStartPoker; // 0x30048
+    GlitchPoker *mCurPoker; // 0x3004c
+    bool mActive; // 0x30050
+    bool mDumpLeavesOnly; // 0x30051
+    float mLeafThreshold; // 0x30054
+    unsigned int mOverheadCycles; // 0x30058
 };
 
 extern GlitchFinder TheGlitchFinder;

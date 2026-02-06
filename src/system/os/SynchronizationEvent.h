@@ -8,5 +8,5 @@ public:
     SynchronizationEvent();
     ~SynchronizationEvent();
     void Set();
-    bool Wait(int);
+    bool Wait(int timeoutMs);
 };

@@ -218,12 +218,15 @@ float RndCam::WorldToScreen(const Vector3 &w, Vector2 &s) const {
     return projectedVec.z;
 }
 
+// Converts screen coordinates to world space at a given depth
 void RndCam::ScreenToWorld(const Vector2 &v2, float f, Vector3 &vout) const {
-    vout.Set(
-        (((v2.x - mScreenRect.x) / mScreenRect.w) * 2.0f - 1.0f) * f,
-        (((v2.y - mScreenRect.y) / mScreenRect.h) * 2.0f - 1.0f) * f,
-        f
-    );
+    // Normalize screen coords [0,1] to NDC [-1,1], scale by depth
+    float x = (((v2.x - mScreenRect.x) / mScreenRect.w) * 2.0f - 1.0f) * f;
+    float y = (((v2.y - mScreenRect.y) / mScreenRect.h) * 2.0f - 1.0f) * f;
+    // Assignment order affects codegen - do not reorder
+    vout.z = f;
+    vout.y = y;
+    vout.x = x;
     Multiply(vout, mInvWorldProjectXfm, vout);
 }
 

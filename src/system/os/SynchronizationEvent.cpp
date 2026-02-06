@@ -4,8 +4,16 @@
 
 SynchronizationEvent::~SynchronizationEvent() { CloseHandle(mEvent); }
 
-bool SynchronizationEvent::Wait(int i1) {
-    return WaitForSingleObject(mEvent, i1) != 0x102;
+bool SynchronizationEvent::Wait(int timeoutMs) {
+    // Redundant assignment/check required for codegen match
+    // Generates the cmpwi/bne pattern seen in original binary
+    int timeout = timeoutMs;
+    if (timeoutMs == -1) {
+        timeout = -1;
+    }
+    // 0x102 = WAIT_TIMEOUT from Win32/XDK API
+    // Returns true if signaled, false if timeout
+    return WaitForSingleObject(mEvent, timeout) != 0x102;
 }
 
 SynchronizationEvent::SynchronizationEvent()

@@ -30,9 +30,9 @@ bool CharClip::Transitions::Replace(ObjRef *from, Hmx::Object *to) {
 
 void CharClip::Transitions::Clear() {
     for (NodeVector *it = mNodeStart; it < mNodeEnd; it = it->Next()) {
-        it->clip->~CharClip();
+        it->~NodeVector();
     }
-    Resize(0, nullptr);
+    Resize(0, 0);
 }
 
 int CharClip::Transitions::Size() const {

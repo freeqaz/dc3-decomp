@@ -195,11 +195,14 @@ void RndMatAnim::LoadStage(BinStreamRev &d) {
         MILO_NOTIFY("Can't convert old MatAnim stages");
     }
     if (d.rev > 0) {
-        d >> mTransKeys >> mScaleKeys >> mRotKeys;
+        Keys<Vector3, Vector3> &t = TransKeys();
+        Keys<Vector3, Vector3> &s = ScaleKeys();
+        Keys<Vector3, Vector3> &r = RotKeys();
+        d >> t >> s >> r;
     }
-    // if (d.rev > 1) {
-    //     d >> mTexKeys;
-    // }
+    if (d.rev > 1) {
+        d >> mTexKeys;
+    }
 }
 
 int RndMatAnim::TexKeys::Add(RndTex *tex, float frame, bool b) {

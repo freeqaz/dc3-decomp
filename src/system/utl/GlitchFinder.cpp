@@ -169,9 +169,10 @@ void GlitchAverager::PushInstance(float f1, bool b) {
 }
 
 GlitchFinder::GlitchFinder()
-    : unk0(0), unk4(0), unk8(true), unk40(0.0), unk30044(-1), unk30048(0), unk3004c(0),
-      unk30050(true), unk30051(false), unk30054(0.0), unk30058(0) {
-    unk10.Start();
+    : mFrameCount(0), mGlitchCount(0), mStop(true), mLastTime(0.0), mPokerIndex(-1),
+      mStartPoker(0), mCurPoker(0), mActive(true), mDumpLeavesOnly(false),
+      mLeafThreshold(0.0), mOverheadCycles(0) {
+    mTime.Start();
 }
 
 GlitchFinder::~GlitchFinder() {
@@ -206,59 +207,60 @@ void GlitchFinder::Poke(const char *c, unsigned int ui) {
 }
 
 GlitchPoker *GlitchFinder::NewPoker() {
-    if (2048 <= unk30044) {
-        MILO_FAIL("too many glitch pokers : %d\n", unk30044);
+    if (2048 <= mPokerIndex) {
+        MILO_FAIL("too many glitch pokers : %d\n", mPokerIndex);
     }
-    unk30044 += 1;
-    mPokerPool[unk30044].ClearData(); // TODO: fixmeeee
+    mPokerIndex += 1;
+    mPokerPool[mPokerIndex].ClearData();
     return 0;
 }
 
 void GlitchFinder::PokeStart(
     const char *c, unsigned int ui, float f1, float f2, GlitchAverager *avg
 ) {
-    if (!unk30048 && f1 < 0.0)
+    if (!mStartPoker && f1 < 0.0)
         return;
     else {
-        if (unk8) {
-            unk8 = 0;
-            unk10.Restart();
-            unk3004c = 0;
-            unk30048 = 0;
-            unk30044 = 0;
+        if (mStop) {
+            mStop = 0;
+            mTime.Restart();
+            mCurPoker = 0;
+            mStartPoker = 0;
+            mPokerIndex = 0;
         }
         GlitchPoker *poker = NewPoker();
         strncpy(poker->mName, c, 0x40);
-        poker->mTime = unk10.SplitMs();
-        poker->mParent = unk3004c;
+        poker->mTime = mTime.SplitMs();
+        poker->mParent = mCurPoker;
         poker->mBudget = f1;
         poker->mAvg = avg;
-        if (!unk30048) {
-            unk3004c = poker;
-            unk30048 = poker;
-            unk30054 = f2;
-            unk30058 = 0;
+        if (!mStartPoker) {
+            mCurPoker = poker;
+            mStartPoker = poker;
+            mLeafThreshold = f2;
+            mOverheadCycles = 0;
         } else {
-            unk3004c->mChildren.push_back(poker);
-            unk3004c = poker;
+            mCurPoker->mChildren.push_back(poker);
+            mCurPoker = poker;
             if (ui != 0) {
                 unsigned int cycles = __mftb();
-                unk30058 = (double *)((int)unk30058 + cycles - ui);
+                mOverheadCycles += cycles - ui;
             }
         }
     }
 }
 
 void GlitchFinder::PokeEnd(unsigned int ui) {
-    if (unk3004c) {
-        unk3004c->mTimeEnd = unk10.SplitMs();
-        if (!unk3004c->mParent) {
+    if (mCurPoker) {
+        mCurPoker->mTimeEnd = mTime.SplitMs();
+        mCurPoker = mCurPoker->mParent;
+        if (!mCurPoker) {
             CheckDump();
         }
     }
     if (ui) {
         unsigned int mftb = __mftb();
-        unk30058 = unk30058 - ui + mftb;
+        mOverheadCycles = mOverheadCycles - ui + mftb;
     }
 }
 

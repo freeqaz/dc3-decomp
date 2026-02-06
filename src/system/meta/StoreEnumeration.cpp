@@ -6,7 +6,24 @@
 XboxEnumeration::XboxEnumeration(int i, std::vector<unsigned long long> *mOfferIDCount)
     : unk18(i), unk1c(false) {}
 
-XboxEnumeration::~XboxEnumeration() {}
+XboxEnumeration::~XboxEnumeration() {
+    delete *((void**)((u8*)this + 0x10));
+    *((u32*)(void*)((u8*)this + 0x10)) = 0;
+
+    if (*(u32*)(void*)((u8*)this + 0x3C) != 0 && *(u32*)(void*)((u8*)this + 0x20) == 0x3E5U) {
+        XCancelOverlapped((XOVERLAPPED*)(void*)((u8*)this + 0x20));
+    }
+
+    if (*(u32*)(void*)((u8*)this + 0x3C) != 0) {
+        CloseHandle(*(HANDLE*)(void*)((u8*)this + 0x3C));
+        *(u32*)(void*)((u8*)this + 0x3C) = 0;
+    }
+
+    delete *((void**)((u8*)this + 0x44));
+    *((u32*)(void*)((u8*)this + 0x44)) = 0;
+
+    mContentList.clear();
+}
 
 bool XboxEnumeration::IsSuccess() const {
     if (*((u32*)((u8*)this + 0x3c)) != 0) {

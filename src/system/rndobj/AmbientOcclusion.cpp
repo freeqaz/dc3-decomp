@@ -287,6 +287,8 @@ void RndAmbientOcclusion::BuildObjectLists() {
     );
 }
 
+// Transform a normal vector by applying the inverse transpose of a matrix.
+// This is used to correctly transform normals under non-uniform scaling.
 void RndAmbientOcclusion::TransformNormal(
     const Vector3 &vin, const Hmx::Matrix3 &min, Vector3 &vout
 ) const {
@@ -294,7 +296,13 @@ void RndAmbientOcclusion::TransformNormal(
     Normalize(vin, vtmp);
     Hmx::Matrix3 mtmp;
     Invert(min, mtmp);
-    vout.Set(Dot(vtmp, mtmp.x), Dot(vtmp, mtmp.y), Dot(vtmp, mtmp.z));
+    // Compute dot products with inverted matrix rows
+    float z = Dot(vtmp, mtmp.z);
+    float x = Dot(vtmp, mtmp.x);
+    float y = Dot(vtmp, mtmp.y);
+    vout.y = y;
+    vout.x = x;
+    vout.z = z;
     Normalize(vout, vout);
 }
 

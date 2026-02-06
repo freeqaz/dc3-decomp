@@ -24,14 +24,13 @@ void CharClipDisplay::SetText(const char *text) {
 
 float CharClipDisplay::LineSpacing() { return sEm * 2.0f; }
 
-float CharClipDisplay::GetX(float f) const {
-    float f1 = unkc;
-    float f2;
-    if (unk10 > f1)
-        f2 = unk10 - f1;
-
-    float f3 = unk64 + unk14 * sEm * 3.0f;
-    return ((TheRnd.Width() - sEm * 3.0f) - f3) * ((f - f1) / f2) + f3;
+float CharClipDisplay::GetX(float beat) const {
+    float endBeat = unk10;
+    float startBeat = unkc;
+    float beatRange = (endBeat > startBeat) ? (endBeat - startBeat) : 1.0f;
+    float leftMargin = sEm * 3.0f;
+    float textWidth = unk14 + unk64 + leftMargin;
+    return ((TheRnd.Width() - leftMargin) - textWidth) * ((beat - startBeat) / beatRange) + textWidth;
 }
 
 Hmx::Object *CharClipDisplay::FindSource(Hmx::Object *obj) {
@@ -45,6 +44,8 @@ Hmx::Object *CharClipDisplay::FindSource(Hmx::Object *obj) {
 }
 
 void CharClipDisplay::DrawBeatString(char const *c, float f1, Hmx::Color const &color) {
-    // pulls stuff from xdk too
-    TheRnd.DrawString(c, Vector2(GetX(f1), f1), color, true);
+    float posX, posY;
+    posX = GetX(f1) - 18.0f;
+    posY = f1 - 4.0f;
+    TheRnd.DrawString(c, Vector2(posX, posY), color, true);
 }

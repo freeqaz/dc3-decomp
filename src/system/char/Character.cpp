@@ -687,22 +687,27 @@ void Character::SetInterestObjects(
     }
 }
 
-bool Character::SetFocusInterest(Symbol s, int iii) {
+bool Character::SetFocusInterest(Symbol s, int priority) {
     CharEyes *eyes = GetEyes();
-    if (eyes) {
+    if (eyes != nullptr) {
         CharInterest *interest = nullptr;
-        for (int i = 0; i < eyes->NumInterests(); i++) {
-            if (s == eyes->GetInterest(i)->Name()) {
-                interest = eyes->GetInterest(i);
-                break;
-            }
+        int i = 0;
+        int count = eyes->NumInterests();
+        if (0 < count) {
+            do {
+                if (s == eyes->GetInterest(i)->Name()) {
+                    interest = eyes->GetInterest(i);
+                    break;
+                }
+                i++;
+            } while (i < count);
         }
-        if (!s.Null() && !interest) {
+        if (!s.Null() && interest == nullptr) {
             MILO_NOTIFY("Couldn't find interest named %s to force on %s", s.Str(), Name());
         }
-        return SetFocusInterest(interest, iii);
-    } else
-        return false;
+        return SetFocusInterest(interest, priority);
+    }
+    return false;
 }
 
 void Character::SetSphereBase(RndTransformable *trans) {
@@ -753,27 +758,33 @@ DataNode Character::OnGetCurrentInterests(DataArray *da) {
 }
 
 void Character::DrawLodOrShadow(int lod, DrawMode drawMode) {
+    mPollState = (PollState)5;
     mLastLod = Clamp<int>(0, mLods.size() - 1, lod);
     if (drawMode == 4) {
         if (mShadow.size() > 0) {
             mShadow.Draw();
             return;
         }
-        DrawShowing();
     } else {
         if (drawMode & 1) {
-            RndEnvironTracker tracker(unk2a0, unk2b4);
+            RndEnvironTracker tracker(mEnv, &WorldXfm().v);
             DrawShowing();
+            if (drawMode == 1) {
+                unk2a0 = RndEnviron::Current();
+                unk2b4 = RndEnviron::CurrentPos();
+            }
         }
-        if (!(drawMode & 2))
-            return;
-        if (drawMode == 2) {
-            RndEnvironTracker tracker(unk2a0, unk2b4);
+        if (drawMode & 2) {
+            if (drawMode == 2) {
+                RndEnvironTracker tracker(unk2a0, unk2b4);
+                DrawShowing();
+                return;
+            }
             DrawShowing();
             return;
         }
-        DrawShowing();
     }
+    DrawShowing();
 }
 
 #pragma endregion

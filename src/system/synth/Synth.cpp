@@ -354,7 +354,10 @@ void Synth::StopAllSfx(bool stop) {
 
 void Synth::PauseAllSfx(bool pause) {
     FOREACH (it, SynthPollable::Pollables()) {
-        // Sfx* cast
+        Sfx *sfx = dynamic_cast<Sfx *>(*it);
+        if (sfx) {
+            sfx->Pause(pause);
+        }
         Sound *sound = dynamic_cast<Sound *>(*it);
         if (sound) {
             sound->Pause(pause);
@@ -394,7 +397,10 @@ int Synth::GetSampleMem(ObjectDir *dir, Platform p) {
     return num;
 }
 
-void Synth::AddZombie(SampleInst *inst) { mZombieInsts.push_back(inst); }
+void Synth::AddZombie(SampleInst *inst) {
+    inst->SynthPoll();
+    mZombieInsts.insert(mZombieInsts.end(), inst);
+}
 
 DataNode Synth::OnPassthrough(DataArray *a) {
     if (!CheckCommonBank(false))

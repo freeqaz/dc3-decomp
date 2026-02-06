@@ -16,36 +16,36 @@ bool gSplashing = false;
 Splash *TheSplasher;
 
 Splash::Splash()
-    : unk8(SystemConfig("ui")->FindArray("splash_time")->Float(1) * 1000),
-      unkc(SystemConfig("ui")->FindArray("wait_for_splash")->Int(1)), unk48(0), unk4c(0),
-      unk50(0), unk54(0), unk58(-1), unk60(0), unk64(1), unk68(-1), mState(0) {}
+    : mSplashDurationMs(SystemConfig("ui")->FindArray("splash_time")->Float(1) * 1000),
+      mWaitForSplash(SystemConfig("ui")->FindArray("wait_for_splash")->Int(1)), mCurrentDir(0), mCurrentCam(0),
+      mCurrentMovie(0), mCurrentTrigger(0), unk58(-1), unk60(0), mThreaded(1), mThreadId(-1), mState(0) {}
 
 Splash::~Splash() { MILO_ASSERT(!gSplashing, 0x57); }
 
 void Splash::SetWaitForSplash(bool b) {
     MILO_ASSERT(!gSplashing, 0x16e);
-    unkc = b;
+    mWaitForSplash = b;
 }
 
 void Splash::Suspend() {
     MILO_ASSERT(MainThread(), 0xcf);
     if (++unk60 <= 1) {
-        if (unk64) {
+        if (mThreaded) {
             if (SetMutableState(SplashState::s1)) {
                 WaitForState(SplashState::s2);
                 TheNgRnd.Suspend();
-                if (unk50 != NULL) {
-                    unk50->SetShowing(true);
-                    unk50->GetMovie().LockThread();
+                if (mCurrentMovie != NULL) {
+                    mCurrentMovie->SetShowing(true);
+                    mCurrentMovie->GetMovie().LockThread();
                 }
                 *(u8 *)&unk5c = 0;
                 Draw();
             } else {
                 MILO_ASSERT(mState == kWaitingForTerminating, 0xeb);
                 TheNgRnd.Suspend();
-                if (unk50 != NULL) {
-                    unk50->SetShowing(true);
-                    unk50->GetMovie().LockThread();
+                if (mCurrentMovie != NULL) {
+                    mCurrentMovie->SetShowing(true);
+                    mCurrentMovie->GetMovie().LockThread();
                 }
             }
         } else {
@@ -60,20 +60,20 @@ void Splash::Resume() {
     MILO_ASSERT(MainThread(), 0x257);
     if (--unk60 <= 0) {
         MILO_ASSERT(unk60 == 0, 0x264);
-        if (unk64 != 0) {
+        if (mThreaded != 0) {
             // Threaded mode: resume rendering and signal render thread
             if (SetMutableState(SplashState::s3)) {
-                if (unk50 != NULL) {
-                    unk50->SetShowing(false);
-                    unk50->GetMovie().UnlockThread();
+                if (mCurrentMovie != NULL) {
+                    mCurrentMovie->SetShowing(false);
+                    mCurrentMovie->GetMovie().UnlockThread();
                 }
                 MILO_ASSERT(SetMutableState(SplashState::kResuming), 0x279);
                 WaitForState(SplashState::kResumed);
             } else {
                 MILO_ASSERT(mState == SplashState::kWaitingForTerminating, 0x285);
-                if (unk50 != NULL) {
-                    unk50->SetShowing(false);
-                    unk50->GetMovie().UnlockThread();
+                if (mCurrentMovie != NULL) {
+                    mCurrentMovie->SetShowing(false);
+                    mCurrentMovie->GetMovie().UnlockThread();
                 }
             }
         } else {
@@ -130,7 +130,7 @@ void Splash::PrepareRemaining() {
 
 void Splash::EndSplasher() {
     if (TheSplasher) {
-        if (unk64) {
+        if (mThreaded) {
             // Threaded mode: signal termination and wait for worker thread
             MILO_ASSERT(mScreens.empty(), 0xa6);
             MILO_ASSERT(gSplashing, 0xa7);
@@ -157,7 +157,7 @@ void Splash::EndSplasher() {
 
 void Splash::Poll() {
     static bool finished;
-    if (!unk64 || unk60) {
+    if (!mThreaded || unk60) {
         if (!finished) {
             if (!UpdateThreadLoop()) {
                 finished = true;
@@ -173,7 +173,7 @@ void Splash::Poll() {
 }
 
 void Splash::BeginSplasher() {
-    if (unk64) {
+    if (mThreaded) {
         MILO_ASSERT(!gSplashing, 0x6B);
         gSplashing = true;
         MILO_ASSERT(!mPreparedScreens.empty(), 0x6D);
@@ -231,7 +231,7 @@ bool Splash::SetImmutableState(Splash::SplashState state) {
 
 void Splash::WaitForState(Splash::SplashState state) {
     // Can only wait in threaded mode
-    if (unk64 == 0) {
+    if (mThreaded == 0) {
         MILO_FAIL("Can\'t WaitForState");
     }
     // Wait for state change, allowing intermediate states for kResumed
@@ -244,19 +244,19 @@ void Splash::CheckWorkerSuspend(bool) {}
 
 bool Splash::ShowNext() {
     // Clean up previous splash screen
-    if (unk50 != NULL) {
-        unk50->SetShowing(false);
-        unk50->GetMovie().SetPaused(true);
-        unk50 = NULL;
+    if (mCurrentMovie != NULL) {
+        mCurrentMovie->SetShowing(false);
+        mCurrentMovie->GetMovie().SetPaused(true);
+        mCurrentMovie = NULL;
     }
     // Clean up and archive previous splash directory
-    if (unk48 != NULL) {
-        unk48->Exit();
-        unkc0.push_back(unk48);
-        unk48 = NULL;
+    if (mCurrentDir != NULL) {
+        mCurrentDir->Exit();
+        unkc0.push_back(mCurrentDir);
+        mCurrentDir = NULL;
     }
-    unk4c = 0;
-    unk54 = 0;
+    mCurrentCam = 0;
+    mCurrentTrigger = 0;
     CritSecTracker tracker(&unk98);
 
     // Count prepared screens to determine if we're done
@@ -289,46 +289,45 @@ bool Splash::Show() {
     if (&unk98) {
         unk98.Exit();
     }
-    unk48 = mPreparedScreens.begin()->unk0;
-    unk48->Enter();
-    unk4c = unk48->Find<RndCam>(kSplashCam, true);
-    unk50 = unk48->Find<TexMovie>(kSplashMovie, true);
-    if (unk50) {
-        if (unk64) {
-            unk50->SetShowing(true);
-            unk50->GetMovie().SetPaused(false);
-            unk8 = ceil(unk50->GetMovie().MsPerFrame() * unk50->GetMovie().NumFrames());
+    mCurrentDir = mPreparedScreens.begin()->dir;
+    mCurrentDir->Enter();
+    mCurrentCam = mCurrentDir->Find<RndCam>(kSplashCam, true);
+    mCurrentMovie = mCurrentDir->Find<TexMovie>(kSplashMovie, true);
+    if (mCurrentMovie) {
+        if (mThreaded) {
+            mCurrentMovie->SetShowing(true);
+            mCurrentMovie->GetMovie().SetPaused(false);
+            mSplashDurationMs = ceil(mCurrentMovie->GetMovie().MsPerFrame() * mCurrentMovie->GetMovie().NumFrames());
         } else {
             return ShowNext();
         }
     } else {
-        unk8 = mPreparedScreens.begin()->unk4;
+        mSplashDurationMs = mPreparedScreens.begin()->durationMs;
     }
-    unk54 = unk48->Find<EventTrigger>("splash.trig", false);
-    if (unk54) {
-        unk54->Trigger();
+    mCurrentTrigger = mCurrentDir->Find<EventTrigger>("splash.trig", false);
+    if (mCurrentTrigger) {
+        mCurrentTrigger->Trigger();
     }
-    unk18.Restart();
+    mTimer.Restart();
     unk5c = 0;
     return true;
 }
 
+// Main loop for splash screen rendering thread. Returns false when splash sequence is complete.
 bool Splash::UpdateThreadLoop() {
-    // Continue if screen time hasn't elapsed or if we successfully advanced to next screen
-    if (unk18.SplitMs() <= unk8 || ShowNext()) {
-        Draw();
-        // Keep looping unless we're terminating and should wait
-        if (mState != kTerminating || unkc) {
-            return true;
-        }
-        // Drain remaining screens before terminating
-        for (bool b = ShowNext(); b; b = ShowNext()) {}
+    if (mTimer.SplitMs() > mSplashDurationMs && !ShowNext()) {
+        return false;
     }
-    return false;
+    Draw();
+    if (mState == kTerminating && !mWaitForSplash) {
+        while (ShowNext()) {}
+        return false;
+    }
+    return true;
 }
 
 void Splash::UpdateThread() {
-    unk68 = GetCurrentThreadId();
+    mThreadId = GetCurrentThreadId();
     MILO_ASSERT(!MainThread(), 0x21d);
     unk6c.Enter();
     MILO_ASSERT(mState == kResuming, 0x221);
@@ -336,10 +335,10 @@ void Splash::UpdateThread() {
     unk8c.Set();
     unk6c.Exit();
 
-    unk18.Start();
+    mTimer.Start();
 
     // Initialize time reference for performance monitoring
-    if (unk18.SplitMs() == 0) {
+    if (mTimer.SplitMs() == 0) {
         unk60 = __mftb();
     }
 
@@ -365,7 +364,7 @@ void Splash::UpdateThread() {
 
     TheNgRnd.Suspend();
 
-    float elapsed = unk18.SplitMs();
+    float elapsed = mTimer.SplitMs();
     if (TheArchive && Archive::DebugArkOrder()) {
         TheDebug << MakeString("Splash Time: %f", elapsed);
     }

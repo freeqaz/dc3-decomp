@@ -71,11 +71,16 @@ int CharBones::TypeSize(int i) const {
 }
 
 void CharBones::RecomputeSizes() {
-    mOffsets[TYPE_POS] = 0;
-    for (int i = 0; i < NUM_TYPES; i++) {
-        int diff = mCounts[i + 1] - mCounts[i];
-        mOffsets[i + 1] = mOffsets[i] + diff * TypeSize(i);
-    }
+    int i = 0;
+    int *offset = &mOffsets[0];
+    *offset = 0;
+    do {
+        int cur_offset = *offset;
+        int count_diff = offset[-6] - offset[-7];
+        int type_size = TypeSize(i);
+        i++;
+        *++offset = type_size * count_diff + cur_offset;
+    } while (i < NUM_TYPES);
     mTotalSize = mOffsets[TYPE_END] + 0xFU & 0xFFFFFFF0; // round up to the nearest 0x10,
                                                          // alignment moment
 }

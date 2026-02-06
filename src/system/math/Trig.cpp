@@ -6,17 +6,26 @@
 
 float gBigSinTable[0x200];
 
+// Builds sine lookup table with 256 entries (0x200 floats total)
+// Each table entry is 2 floats: [delta from previous, sine value]
+// This enables fast interpolated sine lookups in Lookup()
 void TrigTableInit() {
-    float *temp_r30 = gBigSinTable;
-    int i;
-    for (i = 0; i < 256; i++, temp_r30 += 2) {
-        *temp_r30 = std::sin(0.024543693f * i);
+    int i = 0;
+    float *tablePtr = gBigSinTable - 1;
+    do {
+        float sineValue = std::sin(0.024543693f * i);
+        // Store sine value in odd-indexed slot
+        *(tablePtr + 1) = sineValue;
         if (i != 0) {
-            *(temp_r30 - 1) = *temp_r30 - *(temp_r30 - 2);
+            // Store delta (current - previous) in even-indexed slot
+            *tablePtr = sineValue - *(tablePtr - 1);
         }
-    }
-    int tmp = (i - 1) * 2;
-    *(gBigSinTable + tmp + 1) = std::sin(0.024543693f * i) - *(gBigSinTable + tmp);
+        tablePtr += 2;
+        i++;
+    } while ((long)tablePtr < (long)(gBigSinTable + 0x1FF));
+    // Final entry: compute delta for index 256
+    float sineValue = std::sin(0.024543693f * i);
+    *(tablePtr + 1) = sineValue - *(tablePtr - 1);
 }
 
 void TrigTableTerminate() {}

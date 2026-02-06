@@ -28,13 +28,16 @@ void ProcCounter::SetProcAndLock(bool pandl) {
 void ProcCounter::SetEvenOddDisabled(bool eod) {
     if (mEvenOddDisabled == eod)
         return;
-    else
-        mEvenOddDisabled = eod;
+    mEvenOddDisabled = eod;
     if (mEvenOddDisabled)
         mCount = -1;
 }
 
+// Configure frame rate emulation by calculating frame skip pattern
+// For 24fps on 60Hz: 120/24=5 -> switch every 2-3 frames (alternating via mOdd)
+// For 30fps on 60Hz: 120/30=4 -> switch every 2 frames (mOdd=0)
 unsigned int ProcCounter::SetEmulateFPS(int fps) {
+    // Disable emulation
     if (fps <= 0) {
         if (mFPS != fps) {
             mFPS = 0;
@@ -44,59 +47,80 @@ unsigned int ProcCounter::SetEmulateFPS(int fps) {
         }
         return mFPS;
     }
+
+    // Clamp to valid range and skip if unchanged
     fps = Clamp(1, 60, fps);
     if (fps == mFPS)
         return mFPS;
+
+    // Calculate frame timing: 120 / fps gives us the frame interval
+    // Example: 24fps -> 120/24=5 -> alternate between 2 and 3 frame intervals
     mFPS = fps;
     int round = Round(120.0f / (f32)fps);
-    mOdd = round & 1;
-    mSwitch = round >> 1;
+    mOdd = round & 1;        // Remainder: 0 for even intervals, 1 for odd
+    mSwitch = round >> 1;    // Base interval (divide by 2)
+
+    // Reset counter if it would overshoot the new interval
     if (mCount < mSwitch)
         return fps;
     mCount = 0;
     return fps;
 }
 
+// Frame processing state machine: determines which render passes to execute this frame
+// when emulating lower frame rates (e.g., 24fps film look on 60Hz display)
 ProcessCmd ProcCounter::ProcCommands() {
+    // Proc-and-lock mode: process only once, then lock until reset
     if (mProcAndLock) {
         if (mCount >= 0) {
             return kProcessNone;
-        } else {
-            mCount = 0;
-            return kProcessAll;
         }
-    } else if (mEvenOddDisabled) {
-        return kProcessAll;
-    } else {
-        SetEmulateFPS(
-            RndPostProc::Current() ? Round(RndPostProc::Current()->EmulateFPS()) : 0
-        );
-        if (mSwitch >= 2) {
-            ProcessCmd cmd = kProcessNone;
-            switch (mCount) {
-            case -1:
-                mCount = 1;
-                cmd = kProcessAll;
-                break;
-            case 0:
-                cmd = kProcessWorld;
-                break;
-            case 1:
-                cmd = kProcessPost;
-                break;
-            default:
-                break;
-            }
-            mCount++;
-            if (mCount >= mSwitch) {
-                mCount = 0;
-                mSwitch += mOdd;
-                mOdd = -mOdd;
-            }
-            return cmd;
-        }
+        mCount = 0;
         return kProcessAll;
     }
+
+    // Even-odd disabled: always process everything
+    if (mEvenOddDisabled) {
+        return kProcessAll;
+    }
+
+    // Update FPS emulation settings from current post-processor
+    SetEmulateFPS(
+        RndPostProc::Current() ? Round(RndPostProc::Current()->EmulateFPS()) : 0
+    );
+
+    // No emulation needed: process everything
+    if (mSwitch < 2) {
+        return kProcessAll;
+    }
+
+    // State machine: alternate between world and post-processing passes
+    // mCount cycles through: -1 (init) -> 0 (world) -> 1 (post) -> 2+ (none) -> 0 (reset)
+    ProcessCmd cmd = kProcessNone;
+    switch (mCount) {
+    case -1: // Initial state: process everything and skip to count=1
+        mCount = 1;
+        cmd = kProcessAll;
+        break;
+    case 0: // Process world geometry only
+        cmd = kProcessWorld;
+        break;
+    case 1: // Process post-effects only
+        cmd = kProcessPost;
+        break;
+    default: // Count >= 2: skip rendering (waiting for reset)
+        break;
+    }
+
+    // Advance counter and handle variable frame timing
+    // mOdd flips sign to alternate between floor(rate) and ceil(rate) frames
+    mCount++;
+    if (mCount >= mSwitch) {
+        mCount = 0;
+        mSwitch += mOdd;
+        mOdd = -mOdd;
+    }
+    return cmd;
 }
 
 RndPostProc::RndPostProc()

@@ -185,10 +185,14 @@ void RndPartLauncher::Poll() {
         float delta = TheTaskMgr.DeltaSeconds();
         if (delta > 0.0f) {
             float random = RandomFloat(mEmitRate.x, mEmitRate.y);
-            mEmitCount += delta * random * 30.0f;
+            mEmitCount = delta * random * 30.0f + mEmitCount;
             if (mEmitCount >= 1.0f) {
+                double intpart;
                 int parts = mNumParts;
-                // something here with modf
+                // Split fractional and integer parts of the emit count
+                mEmitCount = (float)modf((double)mEmitCount, &intpart);
+                // Double cast (int)(float) required for correct PPC codegen (frsp instruction)
+                mNumParts = (int)(float)intpart;
                 LaunchParticles();
                 mNumParts = parts;
             }
