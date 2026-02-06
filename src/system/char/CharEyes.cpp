@@ -7,6 +7,7 @@
 #include "obj/Object.h"
 #include "obj/Task.h"
 #include "utl/BinStream.h"
+#include "utl/Std.h"
 
 void NormalizeScale(const Vector3 &param_2, float param_1, Vector3 &param_4) {
     float fVar1;

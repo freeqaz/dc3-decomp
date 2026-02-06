@@ -1,6 +1,7 @@
 #include "char/CharTransDraw.h"
 #include "obj/Object.h"
 #include "rndobj/Draw.h"
+#include "utl/Std.h"
 
 CharTransDraw::CharTransDraw() : mChars(this), unk54(false) {}
 
@@ -10,6 +11,12 @@ CharTransDraw::~CharTransDraw() {
             Character *c = *it;
             *(u32 *)((u32)c + 0x294) = 3;
         }
+    }
+}
+
+void CharTransDraw::SetDrawModes(Character::DrawMode mode) {
+    FOREACH (it, mChars) {
+        (*it)->SetDrawMode(mode);
     }
 }
 
@@ -45,18 +52,11 @@ void CharTransDraw::Load(BinStream &bs) {
     ASSERT_REVS(2, 1)
     LOAD_SUPERCLASS(Hmx::Object)
     LOAD_SUPERCLASS(RndDrawable)
-    bs >> mChars;
+    d >> mChars;
     if (d.altRev > 0)
-        bs >> unk54;
-
-    // Iterate through characters and set flag
-    FOREACH (it, mChars) {
-        auto c = *it;
-        if (c != 0) {
-            *(u32 *)((u32)c + 0x294) = 1;
-        }
-    }
-}
+        d >> unk54;
+    SetDrawModes(Character::kCharDrawOpaque);
+END_LOADS
 
 void CharTransDraw::DrawShowing() {
     int mode2 = 2;

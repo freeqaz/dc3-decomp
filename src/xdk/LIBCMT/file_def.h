@@ -124,7 +124,7 @@ struct _iobuf *__iob_func(void);
 
 #define _STATIC_FILES 4
 
-extern FILE __files[];
+// extern FILE __files[];
 
 #ifdef __cplusplus
 }

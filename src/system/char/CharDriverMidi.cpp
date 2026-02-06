@@ -49,16 +49,13 @@ BEGIN_LOADS(CharDriverMidi)
     }
     if (d.rev == 2) {
         String str;
-        bs >> str;
-    } else if (d.rev > 3) {
-        bs >> mParser;
-    }
-    if (d.rev > 4) {
-        bs >> mFlagParser;
-    }
-    if (d.rev > 5) {
-        bs >> mBlendOverridePct;
-    }
+        d >> str;
+    } else if (d.rev > 3)
+        d >> mParser;
+    if (d.rev > 4)
+        d >> mFlagParser;
+    if (d.rev > 5)
+        d >> mBlendOverridePct;
 END_LOADS
 
 void CharDriverMidi::Poll() { CharDriver::Poll(); }

@@ -10,40 +10,28 @@ CharBonesSamples::CharBonesSamples()
 
 CharBonesSamples::~CharBonesSamples() { MemFree(mRawData); }
 
-// DECOMP: 87.8% match - AT_LIMIT
-// Unfixable diffs:
-// - Register allocation: target uses r25 for 'this', base uses r28; also r26/r27 vs r10/r11
-// - Format strings: target uses MakeString variant with extra unsigned short param (7th arg)
-//   passing max version from a global table at lbl_82020EDC
-// - __FILE__ path: target uses "CharBonesSamples.cpp", build produces full path
-// - MILO_ASSERT MakeString call is ICF-merged to merged_824D1870 (901 MakeString variants)
-// - Stack frame 0xb0 vs 0x90
-// Note: RB3 uses simpler pattern with global gVer and MILO_ASSERT instead of MILO_FAIL
-void CharBonesSamples::Load(BinStream &bs) {
-    int ver;
-    bs >> ver;
-    BinStreamRev d(bs, ver);
+INIT_REVS(0x10, 0)
 
-    if (d.rev > 0x10) {
+BEGIN_LOADS(CharBonesSamples)
+    LOAD_REVS(bs)
+    if (0x10 < d.rev) {
         MILO_FAIL(
-            "%s can't load new %s version %d ",
-            "",
-            "CharBonesSample",
-            d.rev
+            "%s can\'t load new %s version %d > %d", "", "CharBonesSample", d.rev, gRev
         );
     }
-    if (d.altRev > 0) {
+    if (d.rev > 0) {
         MILO_FAIL(
-            "%s can't load new %s alt version",
+            "%s can\'t load new %s alt version %d > %d",
             "",
             "CharBonesSample",
-            d.altRev
+            d.altRev,
+            gAltRev
         );
     }
-    MILO_ASSERT(d.rev > 12, 0x29D);
+    MILO_ASSERT(d.rev > 12, 0x29d);
     LoadHeader(d);
     LoadData(d);
-}
+END_LOADS
 
 int CharBonesSamples::AllocateSize() { return mTotalSize * mNumSamples; }
 
@@ -111,7 +99,13 @@ void CharBonesSamples::Print() {
     auto size = mTotalSize * mNumSamples;
     auto address = mRawData;
     auto compression = mCompression;
-    MILO_LOG("samples: %d size: %d address: %x compression %d\n", samples, size, address, compression);
+    MILO_LOG(
+        "samples: %d size: %d address: %x compression %d\n",
+        samples,
+        size,
+        address,
+        compression
+    );
     if (mNumSamples == 0) {
         TheDebug << "Bones:\n";
         for (int i = 0; i < mBones.size(); i++) {
@@ -134,7 +128,7 @@ void CharBonesSamples::Relativize(CharClip *clip) {
         float startBeat = clip->StartBeat();
         int boneIdx = 0;
         if (mCompression < kCompressVects) {
-            //ShortVector3 *pos =
+            // ShortVector3 *pos =
         }
     }
 }
@@ -168,7 +162,10 @@ int CharBonesSamples::FracToSample(float *frac) const {
     if (ret < 0 || ret >= mNumSamples) {
         MILO_NOTIFY_ONCE(
             "FracToSample: sample is %d, clip only has %d samples, frac was %g, is %g",
-            ret, mNumSamples, inputFrac, *frac
+            ret,
+            mNumSamples,
+            inputFrac,
+            *frac
         );
         ret = 0;
     }
