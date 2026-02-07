@@ -74,7 +74,7 @@ template <class _RandomAccessIterator, class _Distance, class _Tp,
 _STLP_INLINE_LOOP
 void
 __push_heap(_RandomAccessIterator __first, _Distance __holeIndex,
-            _Distance __topIndex, const _Tp __val, _Compare __comp)
+            _Distance __topIndex, _Tp __val, _Compare __comp)
 {
   _Distance __parent = (__holeIndex - 1) / 2;
   while (__holeIndex > __topIndex && __comp(*(__first + __parent), __val)) {
