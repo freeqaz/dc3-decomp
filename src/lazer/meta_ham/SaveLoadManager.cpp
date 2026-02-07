@@ -608,51 +608,49 @@ void SaveLoadManager::SetState(State newState) {
 
     static Symbol saveload_dialog_event("saveload_dialog_event");
 
-    // Cleanup logic - structure must match assembly branch pattern
     bool wasIdle = false;
 
-    // Check for states that need mData or mAction cleanup
-    if (mState > kS_GlobalOptionsWrite) {
-        // curState > 0x3E: check for mAction release states
-        if (mState >= kS_SaveOverwrite) {
-            if (mState <= kS_SaveNoOverwrite) {
-                // 0x46-0x47: release mAction unless going to Abort
+    // Cleanup logic based on current state - structure must match assembly
+    if (mState <= kS_GlobalOptionsWrite) {
+        if (mState == kS_GlobalOptionsWrite) {
+            // 0x3E: free mData unless going to Finish
+            if ((newState != kS_Finish) && mData) {
+                MemFree(mData, "SaveLoadManager.cpp", 0x424);
+                mData = nullptr;
+            }
+        } else if (mState == kS_Idle) {
+            // 0: set wasIdle flag
+            wasIdle = true;
+        } else {
+            if (mState == kS_AutoloadStartLoad) {
+                // 0xB: release mAction unless going to Abort
                 if (newState != kS_Abort) {
                     RELEASE(mAction);
                 }
-            } else if (mState == kS_ManualLoadStartLoad) {
-                // 0x60: release mAction unless going to Abort
-                if (newState != kS_Abort) {
-                    RELEASE(mAction);
-                }
-            } else if (mState == kS_Abort) {
-                // 0x65: release mAction
-                RELEASE(mAction);
-            } else if (mState == kS_Finish) {
-                // 0x67: free mData
-                if (mData) {
-                    MemFree(mData, "SaveLoadManager.cpp", 0x433);
+            } else if (((mState == kS_SongCacheWrite) || (mState == kS_SongCacheDone))
+                       || ((mState > kS_GlobalDoneRead) && (mState < kS_GlobalUnmount))) {
+                // 0x1F, 0x21, or 0x32-0x33: free mData unless going to Finish
+                if ((newState != kS_Finish) && mData) {
+                    MemFree(mData, "SaveLoadManager.cpp", 0x424);
                     mData = nullptr;
                 }
             }
         }
-    } else if (mState == kS_GlobalOptionsWrite || mState == kS_SongCacheWrite
-               || mState == kS_SongCacheDone
-               || (mState > kS_GlobalDoneRead && mState <= kS_GlobalDoneWrite)) {
-        // States 0x3E, 0x1F, 0x21, 0x32-0x33: free mData unless going to Finish
-        if (newState != kS_Finish) {
-            if (mData) {
-                MemFree(mData, "SaveLoadManager.cpp", 0x424);
+    } else if (mState > kS_SaveDeviceInvalid) {  // > 0x45
+        if ((mState < kS_SaveConfirmOverwrite) || (mState == kS_ManualLoadStartLoad)) {
+            // (mState < 0x48) || (mState == 0x60): release mAction unless going to Abort
+            if (newState != kS_Abort) {
+                RELEASE(mAction);
+            }
+        } else {
+            if (mState == kS_Abort) {
+                // 0x65: release mAction unconditionally
+                RELEASE(mAction);
+            } else if ((mState == kS_Finish) && mData) {
+                // 0x67: free mData
+                MemFree(mData, "SaveLoadManager.cpp", 0x433);
                 mData = nullptr;
             }
-        }
-    } else if (mState == kS_Idle) {
-        // State 0: set wasIdle flag
-        wasIdle = true;
-    } else if (mState == kS_AutoloadStartLoad) {
-        // State 0xB: release mAction unless going to Abort
-        if (newState != kS_Abort) {
-            RELEASE(mAction);
         }
     }
 
@@ -674,18 +672,18 @@ void SaveLoadManager::SetState(State newState) {
         mDeviceIDState = 0;
         break;
     case kS_AutoloadInit:
-        if (unk2d) {
-            SetState(kS_SongCacheInit);
-        } else {
+        if (!unk2d) {
             SetState(kS_AutoloadSelectProfile);
+        } else {
+            SetState(kS_SongCacheInit);
         }
         break;
     case kS_AutoloadSelectProfile:
         unk40 = GetNewSigninProfile();
-        if (unk40) {
-            SetState(kS_AutoloadSearchDevice);
-        } else {
+        if (!unk40) {
             SetState(kS_AutoloadDone);
+        } else {
+            SetState(kS_AutoloadSearchDevice);
         }
         break;
     case kS_AutoloadSearchDevice: {

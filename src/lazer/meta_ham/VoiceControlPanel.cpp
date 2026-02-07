@@ -14,6 +14,7 @@
 #include "math/Rand.h"
 #include "math/Utl.h"
 #include "meta/SongPreview.h"
+#include "meta_ham/HamSongMetadata.h"
 #include "meta_ham/HamSongMgr.h"
 #include "meta_ham/HamUI.h"
 #include "meta_ham/MetaPerformer.h"
@@ -218,7 +219,32 @@ void VoiceControlPanel::CreatePlaySongGrammar() const {
     if (TheUI->FocusPanel() != ObjectDir::Main()->Find<UIPanel>("song_select_panel")) {
         TheSongSortMgr->OnEnter();
     }
-    // SongSortMgr member iteration
+    for (std::map<Symbol, SongRecord>::iterator it = TheSongSortMgr->unk78.begin();
+         it != TheSongSortMgr->unk78.end(); ++it) {
+        SongRecord &record = it->second;
+        const HamSongMetadata *data = record.Metadata();
+        std::vector<String> prons = data->Pronunciations();
+        const std::vector<PronunciationsLoc> &locs = data->PronunciationsLocalized();
+        unsigned int loc_size = locs.size();
+        if (loc_size != 0) {
+            std::vector<PronunciationsLoc>::const_iterator loc_it = locs.begin();
+            unsigned int loc_idx = 0;
+            do {
+                if (loc_it->mLanguage == GetSongTitlePronunciationLanguage()) {
+                    prons = loc_it->mPronunciations;
+                }
+                ++loc_it;
+                ++loc_idx;
+            } while (loc_idx != loc_size);
+        }
+        const char *shortname = record.ShortName().Str();
+        for (int i = 0; (unsigned int)i < prons.size(); i++) {
+            String pron = prons[i];
+            TheSpeechMgr->AddDynamicRuleWord(
+                "play_song_grammar", pron.c_str(), shortname, &v8c, nullptr
+            );
+        }
+    }
     TheSpeechMgr->CommitGrammar("play_song_grammar");
     TheSpeechMgr->SetRecognizing(true);
 }

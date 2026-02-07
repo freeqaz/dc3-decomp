@@ -215,15 +215,33 @@ void DanceRemixer::ClearUnscoredMeasureRange(int x, int y, int z) {
     }
 }
 
+// Adds a move to the routine at the given measure, then propagates it to all jump targets
+// originating from that measure (if any are registered in unk54)
 void DanceRemixer::AddRoutineMove(
-    int x, int y, const MoveParent *mp, const MoveVariant *mv
+    int player, int measure, const MoveParent *moveParent, const MoveVariant *moveVariant
 ) {
-    TheMoveMgr->mMoveParents[x][y] = mp;
-    TheMoveMgr->unk134[x][y] = mv;
-    TheMoveMgr->FillInRoutineAt(x, y);
-    TheMoveMgr->InsertMoveInSong(TheMoveMgr->unk150[x][y].first, y, x);
-    MILO_NOTIFY(
-        "Jump target to index %d is out of bounds of the song (0 to %d)!",
-        mTotalMeasures - 1
-    );
+    // Set the move at the initial measure
+    TheMoveMgr->mMoveParents[player][measure] = moveParent;
+    TheMoveMgr->unk134[player][measure] = moveVariant;
+    TheMoveMgr->FillInRoutineAt(player, measure);
+    TheMoveMgr->InsertMoveInSong(TheMoveMgr->unk150[player][measure].first, measure, player);
+
+    // Propagate the same move to all jump targets from this measure
+    std::map<int, int>::iterator it = unk54.find(measure);
+    for (; it != unk54.end(); ++it) {
+        int jumpTarget = it->second;
+        if (jumpTarget >= mTotalMeasures) {
+            MILO_NOTIFY(
+                "Jump target to index %d is out of bounds of the song (0 to %d)!",
+                jumpTarget,
+                mTotalMeasures - 1
+            );
+            return;
+        }
+        // Apply the same move at the jump target measure
+        TheMoveMgr->mMoveParents[player][jumpTarget] = moveParent;
+        TheMoveMgr->unk134[player][jumpTarget] = moveVariant;
+        TheMoveMgr->FillInRoutineAt(player, jumpTarget);
+        TheMoveMgr->InsertMoveInSong(TheMoveMgr->unk150[player][jumpTarget].first, jumpTarget, player);
+    }
 }

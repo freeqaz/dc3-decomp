@@ -422,20 +422,24 @@ void StorePanel::StartReEnum() {
 }
 
 DataNode StorePanel::OnMsg(SigninChangedMsg const &msg) {
-    int mask = msg.mData->Int(2);
-    if (mask != 0) {
-        int changedMask = msg.mData->Node(3).Int(msg.mData);
-        Profile *profile = StoreProfile();
-        int padNum = profile->GetPadNum();
+    Profile *profile = StoreProfile();
+    if (profile != 0) {
+        // Check if this profile's pad number is in the signin change mask
+        int changedMask;
+        int padNum;
+        changedMask = msg.mData->Node(3).Int(msg.mData);
+        padNum = profile->GetPadNum();
+        // If this pad's bit is not set in the change mask, ignore the message
         if (((1 << padNum) & changedMask) == 0) {
-            return DataNode(0);
+            return 0;
         }
     }
+    // Signin changed for this profile - exit the store
     if (mLoadOk) {
         mLoadOk = false;
-        ExitStore(kStoreErrorSignedOut);
+        ExitStore(kStoreErrorLiveServer);
     }
-    return DataNode(0);
+    return 0;
 }
 
 DataNode StorePanel::OnMsg(ProfileSwappedMsg const &) { return 0; }

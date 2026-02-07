@@ -20,53 +20,44 @@ namespace {
 };
 
 bool LoadBitmapIntoJpeg(char *data, int width, int height, int depth, void *destBuffer, int &outSize) {
-    jpeg_error_mgr errorMgr;
-    jpeg_compress_struct cinfo;
+    JSAMPROW rowPtr;
     jpeg_destination_mgr destMgr;
-    int rowIndex;
+    jpeg_compress_struct cinfo;
+    jpeg_error_mgr errorMgr;
     int bytesPerRow;
-    JSAMPROW samprow;
-    int offset;
 
-    // Get error manager
-    jpeg_std_error(&errorMgr);
-
-    // Create compression structure
+    cinfo.err = jpeg_std_error(&errorMgr);
     jpeg_CreateCompress(&cinfo, JPEG_LIB_VERSION, sizeof(jpeg_compress_struct));
 
-    // Initialize destination manager structure (memset to 0 first)
     *(long long*)&destMgr = 0;
     *(long long*)(((char*)&destMgr) + 8) = 0;
+    destMgr.next_output_byte = (JOCTET *)destBuffer;
     *(long long*)(((char*)&destMgr) + 16) = 0;
+    destMgr.free_in_buffer = 2;
     *(long long*)(((char*)&destMgr) + 24) = 0;
 
-    // Set destination callbacks
     destMgr.init_destination = JpegInitDestination;
     destMgr.empty_output_buffer = JpegEmptyOutputBuffer;
     destMgr.term_destination = JpegTermDestination;
-    destMgr.next_output_byte = (JOCTET *)destBuffer;
-    destMgr.free_in_buffer = 2;
 
     cinfo.dest = &destMgr;
 
-    // Set compression parameters
     jpeg_set_defaults(&cinfo);
     jpeg_start_compress(&cinfo, TRUE);
 
-    // Compute bytes per row
     bytesPerRow = depth * width;
-    rowIndex = 0;
 
-    // Write scanlines
-    while (height > rowIndex) {
-        offset = rowIndex * bytesPerRow;
-        samprow = (JSAMPROW)(data + offset);
-        jpeg_write_scanlines(&cinfo, &samprow, 1);
-        rowIndex++;
+    if (height > 0) {
+        do {
+            rowPtr = (JSAMPROW)data;
+            jpeg_write_scanlines(&cinfo, (JSAMPARRAY)&rowPtr, 1);
+            height--;
+            data += bytesPerRow;
+        } while (height != 0);
     }
 
     jpeg_finish_compress(&cinfo);
-    outSize = *(int*)&destMgr;
+    outSize = (int)destMgr.next_output_byte - (int)destBuffer;
 
     return true;
 }

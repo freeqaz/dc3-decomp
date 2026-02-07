@@ -170,14 +170,21 @@ bool HamCamShot::TargetTeleportTransform(Symbol s, Transform &xfm) {
 }
 
 bool HamCamShot::IterateNextShot() {
+    bool ret = true;
     MILO_ASSERT(!mNextShots.empty(), 0x166);
-    if (unk2b4 == 0) {
-        unk2b4 = mNextShots.begin();
-        return true;
-    } else if (unk2b4 != mNextShots.end())
-        return true;
-    else
-        return false;
+    ObjPtrList<HamCamShot>::iterator it = unk2b4;
+    if (it == 0) {
+        it = mNextShots.begin();
+    } else {
+        unk2b4.mNode = it.mNode->next;
+        if (unk2b4.mNode == 0) {
+            ret = false;
+        } else {
+            return ret;
+        }
+    }
+    unk2b4 = it;
+    return ret;
 }
 
 void HamCamShot::Target::Store(HamCamShot *shot) {

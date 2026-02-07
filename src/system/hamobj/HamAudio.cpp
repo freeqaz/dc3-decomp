@@ -252,22 +252,30 @@ void HamAudio::SetLoop(float f1, float f2) {
     SetLoop(BeatToMs(f1), BeatToMs(f2), GetSongStream());
 }
 
-void HamAudio::SetCrossfadeJump(float f1, float f2, float f3) {
+void HamAudio::SetCrossfadeJump(float startTime, float endTime, float fadeDuration) {
     MILO_ASSERT_FMT(unk44[0] && unk44[1], "Crossfade requires 2 song streams");
+
     if (unk68) {
         MILO_NOTIFY("Stomping on current queued crossfade");
     }
-    unk5c = f1;
-    unk60 = f2;
-    unk64 = f3;
+
+    // Store crossfade parameters
+    unk60 = endTime;
+    unk5c = startTime;
+    unk64 = fadeDuration;
     unk68 = 1;
+
+    // Check if crossfade is valid
     float halfFade = 0.5f;
-    bool crossfadeInvalid = f3 * halfFade <= f1;
+    bool crossfadeInvalid = fadeDuration * halfFade <= startTime;
+
     if (crossfadeInvalid) {
         MILO_NOTIFY(
             "Crossfade begins before start of song. Setting up hard jump instead of crossfade."
         );
     }
+
+    // Check if crossfade overlaps with existing crossfade
     if (unk78 > 1) {
         if (-(unk64 * halfFade - unk5c) <= (unk74 * halfFade) + unk70) {
             MILO_NOTIFY(
@@ -276,10 +284,12 @@ void HamAudio::SetCrossfadeJump(float f1, float f2, float f3) {
             crossfadeInvalid = true;
         }
     }
+
     if (crossfadeInvalid) {
         unk68 = 0;
     }
-    SetLoop(f2, f1, unk44[0]);
+
+    SetLoop(endTime, startTime, unk44[0]);
 }
 
 void HamAudio::SetLoop(float f1, float f2, Stream *stream) {

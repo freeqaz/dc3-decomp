@@ -19,6 +19,15 @@
 #include "utl/Symbol.h"
 #include <list>
 
+struct HamSpecialOffer {
+    Symbol unk0;
+    int unk4;
+    int unk8;
+    int unkc;
+    int unk10;
+    int unk14;
+};
+
 class HamStorePanel : public StorePanel, public ContentMgr::Callback {
 public:
     // Hmx::Object
@@ -98,7 +107,7 @@ protected:
     bool unk159;
     std::list<int> unk15c;
     std::list<int> unk164;
-    std::vector<CartRow> unk16c;
+    std::vector<HamSpecialOffer> unk16c;
     std::vector<unsigned long long> unk178;
     int unk184;
     XboxPurchaser *mXboxPurchaser; // 0x188

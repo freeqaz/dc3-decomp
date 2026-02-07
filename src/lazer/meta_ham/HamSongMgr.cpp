@@ -1,6 +1,7 @@
 #include "lazer/meta_ham/HamSongMgr.h"
 #include "HamProfile.h"
 #include "HamSongMetadata.h"
+#include <cstdio>
 #include "SaveLoadManager.h"
 #include "hamobj/HamGameData.h"
 #include "hamobj/HamPlayerData.h"
@@ -13,6 +14,7 @@
 #include "meta_ham/ProfileMgr.h"
 #include "meta_ham/SongStatusMgr.h"
 #include "net_ham/PartyModeJobs.h"
+#include "net_ham/PlaylistJobs.h"
 #include "net_ham/RockCentral.h"
 #include "obj/Data.h"
 #include "obj/Dir.h"
@@ -411,8 +413,10 @@ void HamSongMgr::InitializePlaylists() {
             Playlist *p = new Playlist();
 
             static Symbol is_fitness("is_fitness");
+            bool isFitness = false;
+            playlistEntry->FindData(is_fitness, isFitness, false);
             p->SetName(s);
-            p->SetUnk8(false);
+            p->SetUnk8(isFitness);
             DataArray *songArray = playlistEntry->FindArray(songs, true);
             MILO_ASSERT(songArray, 0xed);
 
@@ -420,14 +424,14 @@ void HamSongMgr::InitializePlaylists() {
                 for (int i = 1; i < songArray->Size(); i++) {
                     Symbol sym = songArray->Sym(i);
                     int songID = GetSongIDFromShortName(sym, 0);
-                    if (songID == 0) {
+                    if (songID != 0) {
+                        p->AddSong(songID);
+                    } else {
                         MILO_NOTIFY(
                             "HMX Playlist: %s is referring to unknown song: %s",
                             sym,
                             songID
                         );
-                    } else {
-                        p->AddSong(songID);
                     }
                 }
             }
@@ -436,7 +440,70 @@ void HamSongMgr::InitializePlaylists() {
             }
         }
     }
-    char buffer[16] = {};
+
+    char decadeBuffer[16];
+    char nameBuffer[32];
+    std::map<Symbol, Playlist *> dynamicPlaylists;
+
+    for (int *it = unk11c.begin(); it != unk11c.end(); ++it) {
+        const HamSongMetadata *metadata = Data(*it);
+        if (metadata->IsComplete() && !metadata->IsFake() &&
+            TheProfileMgr.IsContentUnlocked(metadata->ShortName())) {
+            Symbol outfit = metadata->Outfit();
+            Symbol character = GetOutfitCharacter(outfit, true);
+            Symbol crew = GetCrewForCharacter(character, true);
+
+            sprintf(decadeBuffer, "%d0s", metadata->YearReleased() / 10);
+            Symbol decade(decadeBuffer);
+
+            if (dynamicPlaylists.find(crew) == dynamicPlaylists.end()) {
+                Playlist *crewPlaylist = new Playlist();
+                dynamicPlaylists[crew] = crewPlaylist;
+                sprintf(nameBuffer, "%s_dynamic_playlist", crew.Str());
+                crewPlaylist->SetName(Symbol(nameBuffer));
+            }
+
+            if (dynamicPlaylists.find(decade) == dynamicPlaylists.end()) {
+                Playlist *decadePlaylist = new Playlist();
+                dynamicPlaylists[decade] = decadePlaylist;
+                sprintf(nameBuffer, "%s_dynamic_playlist", decade.Str());
+                decadePlaylist->SetName(Symbol(nameBuffer));
+                decadePlaylist->SetUnk9(true);
+            }
+
+            dynamicPlaylists[crew]->AddSong(*it);
+            dynamicPlaylists[decade]->AddSong(*it);
+        }
+    }
+
+    for (std::map<Symbol, Playlist *>::iterator it = dynamicPlaylists.begin();
+         it != dynamicPlaylists.end();
+         ++it) {
+        mPlaylists.push_back(it->second);
+    }
+
+    int playlistFlags = 0;
+    for (std::map<Symbol, Playlist *>::iterator it = dynamicPlaylists.begin();
+         it != dynamicPlaylists.end();
+         ++it) {
+        playlistFlags |= GetDynamicPlaylistID(it->second->GetName());
+    }
+
+    for (int i = 0; i < 2; i++) {
+        HamPlayerData *playerData = TheGameData->Player(i);
+        MILO_ASSERT(playerData, 0x139);
+        int padNum = playerData->PadNum();
+        HamProfile *profile = TheProfileMgr.GetProfileFromPad(padNum);
+        if (profile) {
+            profile->UpdateOnlineID();
+            if (profile->IsSignedIn() && ThePlatformMgr.IsSignedIntoLive(padNum)) {
+                RCJob *job = new SyncAvailableDynamicPlaylistsJob(
+                    0, profile->GetOnlineID()->ToString(), playlistFlags
+                );
+                TheRockCentral.ManageJob(job);
+            }
+        }
+    }
 }
 
 void HamSongMgr::ClearPlaylists() {

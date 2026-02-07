@@ -10,7 +10,40 @@ const int HttpGet::kMaxRetries = 3;
 const int HttpGet::kRecvBufSize = 0x1000;
 
 namespace {
-    bool ValidateHeader(char *, int, int *, int *) { return false; }
+    // Validates HTTP header by searching for double newline (end of headers)
+    // Returns true when "\n\n" is found (detects both CRLF and LF line endings)
+    bool ValidateHeader(char *buf, int len, int *outPos, int *outLines) {
+        unsigned char sawNewline = 0;
+        int lineCount = 0;
+        char *start = buf;
+
+        if (len > 0) {
+            do {
+                signed char c = *buf;
+                if (c == '\n') {
+                    if (sawNewline) {
+                        // Found double newline - end of headers
+                        if (outPos != 0) {
+                            *outPos = buf - start;
+                        }
+                        if (outLines != 0) {
+                            *outLines = lineCount;
+                        }
+                        return true;
+                    }
+                    lineCount++;
+                    sawNewline = 1;
+                } else {
+                    // Keep sawNewline set only if we just saw '\r' (CRLF handling)
+                    // Bitwise AND ensures sawNewline stays set through '\r' but clears on other chars
+                    sawNewline = (c == '\r') & sawNewline;
+                }
+                len--;
+                buf++;
+            } while (len > 0);
+        }
+        return false;
+    }
     char *GetNextLine(char *, int *) { return 0; }
     int LineLength(char *, int) { return 1; }
     bool StrIStartsWith(String const &, const char *) { return false; }
@@ -113,10 +146,11 @@ void HttpGet::StartSending() {
     }
 }
 
+// Cleanup and free resources. Match: 99.2% (limited by __FILE__ path difference)
 void HttpGet::SafeShutdown() {
     SafeDisconnect();
     if (mFileBuf) {
-        MemFree(mFileBuf);
+        MemFree(mFileBuf, __FILE__, 0x359);
         mFileBuf = nullptr;
     }
     mFileBufSize = 0;

@@ -7,22 +7,23 @@ XboxEnumeration::XboxEnumeration(int i, std::vector<unsigned long long> *mOfferI
     : unk18(i), unk1c(false) {}
 
 XboxEnumeration::~XboxEnumeration() {
-    delete *((void**)((u8*)this + 0x10));
-    *((u32*)(void*)((u8*)this + 0x10)) = 0;
+    delete unk10;
+    unk10 = 0;
 
-    if (*(u32*)(void*)((u8*)this + 0x3C) != 0 && *(u32*)(void*)((u8*)this + 0x20) == 0x3E5U) {
-        XCancelOverlapped((XOVERLAPPED*)(void*)((u8*)this + 0x20));
+    if (mEnumHandle != 0 && mOverlapped.InternalLow == 0x3E5U) {
+        u32 result = XCancelOverlapped(&mOverlapped);
+        if (result != 0) {
+            MILO_FAIL("Error cancelling enum %d", result);
+        }
     }
 
-    if (*(u32*)(void*)((u8*)this + 0x3C) != 0) {
-        CloseHandle(*(HANDLE*)(void*)((u8*)this + 0x3C));
-        *(u32*)(void*)((u8*)this + 0x3C) = 0;
+    if (mEnumHandle != 0) {
+        CloseHandle(mEnumHandle);
+        mEnumHandle = 0;
     }
 
-    delete *((void**)((u8*)this + 0x44));
-    *((u32*)(void*)((u8*)this + 0x44)) = 0;
-
-    mContentList.clear();
+    delete mEnumBuffer;
+    mEnumBuffer = 0;
 }
 
 bool XboxEnumeration::IsSuccess() const {
@@ -94,7 +95,7 @@ void XboxEnumeration::Poll() {
                 // Winsock error handling
             }
             if (unk1c != 0) {
-                u32 calcVal = (unkc.size() * 8) + unk1c;
+                u32 calcVal = (unkc->size() * 8) + unk1c;
                 if (unk18 < calcVal) {
                     typedef void (*VirtFunc)(void*);
                     VirtFunc vf = *(VirtFunc*)(void*)((*(u32*)this) + 4);

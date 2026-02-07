@@ -3,6 +3,7 @@
 #include "game/GameMode.h"
 #include "hamobj/HamPlayerData.h"
 #include "meta/FixedSizeSaveableStream.h"
+#include "meta_ham/AccomplishmentManager.h"
 #include "meta_ham/HamProfile.h"
 #include "meta_ham/HamSongMgr.h"
 #include "meta_ham/SongStatusMgr.h"
@@ -40,7 +41,7 @@ namespace {
         std::vector<Symbol> unk14;
     };
     std::vector<Unlockable> gUnlockables;
-    std::vector<Unlockable *> gTiers;
+    std::vector<std::vector<Unlockable *>> gTiers;
     std::list<DeferredAward> gDeferredAwardQueue;
 }
 
@@ -170,12 +171,13 @@ void MetagameRank::Init() {
     xp_force_one_rank_up = 0;
     DataRegisterFunc("xp_have_deferred_award", HaveDeferredAward);
     DataRegisterFunc("xp_deferred_award", HandleDeferredAward);
+    int unlockablesSize = 0;
     DataArray *rankCfg = SystemConfig("rank");
     DataArray *unlockArr = rankCfg->FindArray("unlockables");
     if (unlockArr) {
-        int newSize = unlockArr->Size() - 1;
-        gUnlockables.resize(newSize);
-        for (int i = 0; i < newSize; i++) {
+        unlockablesSize = unlockArr->Size() - 1;
+        gUnlockables.resize(unlockablesSize);
+        for (int i = 0; i < unlockablesSize; i++) {
             DataArray *curUnlockArray = unlockArr->Array(i + 1);
             Unlockable &cur = gUnlockables[i];
             cur.unk0 = i + 1;
@@ -187,22 +189,32 @@ void MetagameRank::Init() {
             cur.unk14.resize(unlocksToPopulate->Size() - 1);
             for (int j = 1; j < unlocksToPopulate->Size(); j++) {
                 cur.unk14[j - 1] = unlocksToPopulate->Sym(j);
-                // TheAccomplishmentManager AddAssetAward
+                TheAccomplishmentMgr->AddAssetAward(cur.unk14[j - 1], cur.unk4);
             }
         }
     }
     DataArray *tierArr = rankCfg->FindArray("tiers");
     if (tierArr) {
-        int newSize = tierArr->Size() - 1;
-        gTiers.resize(newSize);
-        for (int i = 0; i < newSize; i++) {
-            DataArray *innerTierArr = tierArr->FindArray(i + 1);
+        int tiersSize = tierArr->Size() - 1;
+        gTiers.resize(tiersSize);
+        for (int i = 0; i < tiersSize; i++) {
+            DataArray *innerTierArr = tierArr->Array(i + 1);
             int innerSize = innerTierArr->Size();
-            gTiers.reserve(innerSize);
+            gTiers[i].reserve(innerSize);
             for (int j = 0; j < innerSize; j++) {
-                bool b3 = false;
-                Symbol s128 = innerTierArr->Sym(j);
-                // there's more
+                bool found = false;
+                Symbol unlockSym = innerTierArr->Sym(j);
+                int k;
+                for (k = 0; k < unlockablesSize; k++) {
+                    if (gUnlockables[k].unk4 == unlockSym) {
+                        gTiers[i].push_back(&gUnlockables[k]);
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    TheDebug.Fail(MakeString("Unlock named %s not found in unlockables", unlockSym), 0);
+                }
             }
         }
     }

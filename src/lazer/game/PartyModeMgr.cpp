@@ -101,7 +101,11 @@ PartyModePlayer::PartyModePlayer(PartyModeARObject *obj) : unk0(obj), unk14(0) {
 }
 
 PartyModePlayer::~PartyModePlayer() {
-    RELEASE(unk0);
+    PartyModeARObject *obj = unk0;
+    if (obj) {
+        delete obj;
+    }
+    unk0 = 0;
     unk10->Release();
 }
 
