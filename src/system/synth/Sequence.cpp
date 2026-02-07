@@ -636,14 +636,14 @@ void RandomGroupSeqInst::Poll() {
 #pragma region RandomIntervalGroupSeqInst
 
 RandomIntervalGroupSeqInst::RandomIntervalGroupSeqInst(RandomIntervalGroupSeq *seq)
-    : GroupSeqInst(seq, true) {
-    int count = seq->MaxSimultaneous();
-    std::vector<float> *pv = (std::vector<float> *)((char *)this + 0x4c);
-    pv->resize(count);
-    float *p = &((*pv)[0]);
+    : GroupSeqInst(seq, false), unk4c(seq->MaxSimultaneous()) {
+    unk54 = false;
+    unk40 = seq->MaxSimultaneous();
+    unk44 = seq->AvgIntervalSecs();
+    unk48 = seq->IntervalSpread();
     int i = 0;
-    while (i < count) {
-        p[i] = -1.0f;
+    while (i < seq->MaxSimultaneous()) {
+        unk4c[i] = -1.0f;
         i++;
     }
 }
