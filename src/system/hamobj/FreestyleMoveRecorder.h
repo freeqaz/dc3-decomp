@@ -12,6 +12,7 @@
 
 // size 0x110
 class FreestyleMoveRecorder : public SkeletonCallback {
+    friend class BustAMovePanel;
 public:
     struct JointAngle {
         SkeletonJoint mJoint;

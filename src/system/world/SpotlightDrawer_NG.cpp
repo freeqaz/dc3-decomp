@@ -49,11 +49,12 @@ void NgSpotlightDrawer::EndWorld() {
 void NgSpotlightDrawer::DoPost() { RenderScene(); }
 
 void NgSpotlightDrawer::SetAmbientColor(const Hmx::Color &color) {
+    Hmx::Color c = color;
     sEnviron->SetAmbientColor(color);
-    float b = color.blue;
-    float a = color.alpha;
-    float r = color.red;
-    float g = color.green;
+    float r = c.red;
+    float g = c.green;
+    float b = c.blue;
+    float a = c.alpha;
     TheShaderMgr.SetVConstant((VShaderConstant)1, Vector4(r, g, b, a));
     TheShaderMgr.SetPConstant((PShaderConstant)1, Vector4(r, g, b, a));
 }

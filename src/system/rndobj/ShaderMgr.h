@@ -33,13 +33,13 @@ public:
     virtual void Terminate();
     virtual RndMat *GetWork() { return mWorkMat; }
     virtual RndMat *GetPostProcMat() { return mPostProcMat; }
+    virtual void SetVConstant(VShaderConstant, const Hmx::Matrix4 &) = 0; // 0x18
+    virtual void SetVConstant4x3(VShaderConstant, const Hmx::Matrix4 &) = 0;
     virtual void SetVConstant(VShaderConstant, RndTex *) = 0;
     virtual void SetVConstant(VShaderConstant, const Vector4 &) = 0; // 0x24
     virtual void SetVConstant(VShaderConstant, const float *, unsigned int) = 0;
     virtual void SetVConstant(VShaderConstant, int) = 0;
     virtual void SetVConstant(VShaderConstant, bool) = 0;
-    virtual void SetVConstant(VShaderConstant, const Hmx::Matrix4 &) = 0; // 0x18
-    virtual void SetVConstant4x3(VShaderConstant, const Hmx::Matrix4 &) = 0;
     virtual void SetPConstant(PShaderConstant, const Hmx::Matrix4 &) = 0;
     virtual void SetPConstant(PShaderConstant, RndCubeTex *) = 0;
     virtual void SetPConstant(PShaderConstant, const Vector4 &) = 0; // 0x40

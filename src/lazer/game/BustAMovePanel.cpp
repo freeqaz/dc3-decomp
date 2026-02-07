@@ -711,7 +711,8 @@ void BustAMovePanel::OnBeat() {
 
     mRecorder->ClearFrameScores();
 
-    // Determine next state: pending override takes priority, otherwise use state machine
+    // Determine next state: pending override takes priority, otherwise use state machine.
+    // Unsigned cast acts as a range guard — states above ShowMoveSequence skip the switch.
     BAMState nextState = kBAMState_None;
     if (mPendingState != kBAMState_None) {
         nextState = (BAMState)mPendingState;
@@ -896,6 +897,10 @@ void BustAMovePanel::OnBeat() {
             mRecorder->ClearRecording();
             mRecorder->StartRecording();
         }
+        // 4-beat recording pipeline:
+        //   Beat 1: start dancer take + ghost playback
+        //   Beat 2: re-record over first take + restart playback
+        //   Beat 3: finalize recording, keep playback for preview
         if (mBeatCount == 1) {
             mRecorder->ClearDancerTake();
             mRecorder->StartRecordingDancerTake();
@@ -928,7 +933,9 @@ void BustAMovePanel::OnBeat() {
             mRecorder->StopPlayback();
             MoveRating rating = GetMoveRating(mMoveScore);
             ShowMoveRating(rating, mCreatorSide);
-            // Score Perfect/SuperPerfect moves; clear flawless flag for the other player otherwise
+            // Score Perfect/SuperPerfect moves. The comma operator clears the
+            // opponent's flawless flag as a side-effect before testing Perfect.
+            // mFlawlessFlags is accessed as a bool[2] array (codegen requirement).
             if (rating == kMoveRatingSuperPerfect
                 || (((bool *)&mFlawlessFlags)[!mActivePlayer] = false,
                     rating == kMoveRatingPerfect)) {
@@ -1012,6 +1019,8 @@ void BustAMovePanel::OnBeat() {
                 mRecorder->PlaybackComplete();
                 MoveRating rating = GetMoveRating(mMoveScore);
                 ShowMoveRating(rating, mCreatorSide);
+                // Same comma-operator pattern: clear opponent's flawless flag,
+                // then check for Perfect (see kBAMState_Playing for details)
                 if (rating == kMoveRatingSuperPerfect
                     || (((bool *)&mFlawlessFlags)[!mActivePlayer] = false,
                         rating == kMoveRatingPerfect)) {
@@ -1111,6 +1120,7 @@ void BustAMovePanel::OnBeat() {
                     (SkeletonSide)mCreatorSide == kSkeletonLeft ? "left" : "right";
                 PlayVO(Symbol(MakeString("nar_bam_gen_second_fail_%s", sideStr)));
             }
+            // Round current beat to nearest integer, set 8-beat retry loop
             float beat = MsToBeat(TheMaster->StreamMs());
             int beatInt;
             if (beat > 0.0f) {
@@ -1120,6 +1130,7 @@ void BustAMovePanel::OnBeat() {
             }
             float beatF = (float)beatInt;
             TheMaster->GetAudio()->SetLoop(beatF, beatF + 8.0f);
+            // Re-read beat after setting loop and compute when failure ends
             float beat2 = MsToBeat(TheMaster->StreamMs());
             int beat2Int;
             if (beat2 > 0.0f) {
@@ -1240,6 +1251,10 @@ void BustAMovePanel::OnBeat() {
             if (mFinalSequenceType == 0) {
                 mFinalSequenceType = 1;
             }
+            // Build flashcard sequence based on complexity:
+            //   Type 1: repeat one move 4x, then all 4 moves 2x each, then rotated
+            //   Type 2: two full shuffled passes of all 4 moves (2x each)
+            //   Type 3: one full pass (2x each), half of second, then rotated remainder
             switch (mFinalSequenceType) {
             case 3: {
                 std::vector<int> shuffled1;
@@ -1369,6 +1384,9 @@ void BustAMovePanel::OnBeat() {
             mRecorder->StopPlayback();
             mRecorder->StartPlayback(false);
         }
+        // Score both players for the final sequence.
+        // mPlayerScoreLeft/Right are ints reinterpreted as floats (codegen requirement).
+        // The goto merges Perfect and SuperPerfect into a shared scoring path.
         if (mBeatCount > 0) {
             bool sentMsg = false;
             int player = 0;
@@ -1409,7 +1427,8 @@ void BustAMovePanel::OnBeat() {
     }
 
 end_handling:
-    // End handling - check for recording trigger
+    // Trigger flashcard capture on beats 1-3 of recording measure 2.
+    // Three separate ifs rather than a range check — required for codegen match.
     int loopTrigger = 0;
     bool isRecording = (mState == kBAMState_Recording);
     if (isRecording && mBeatCount == 2 && currentBeat == 1) {
@@ -1430,10 +1449,10 @@ end_handling:
 
 void BustAMovePanel::SetUpSongStructure(Symbol s) {
     mSongStructure.clear();
-    BustAMoveData *bamData = ObjectDir::Main()->Find<BustAMoveData>("bam", false);
-    if (bamData) {
-        int numPhrases = (int)bamData->mPhrases.size();
-        for (int i = 0; i < numPhrases; i++) {
+    BustAMoveData *bamData =
+        TheGame->GetMoveDir()->Find<BustAMoveData>("BustAMoveData.bam", false);
+    if (bamData != NULL) {
+        for (int i = 0; i < (int)bamData->mPhrases.size(); i++) {
             for (int j = 0; j < bamData->mPhrases[i].count; j++) {
                 mSongStructure.push_back(bamData->mPhrases[i].bars);
             }
@@ -1452,17 +1471,16 @@ void BustAMovePanel::SetUpSongStructure(Symbol s) {
     int firstVal = *data;
     mRepsRemaining = firstVal + 4;
     mCountInLength = firstVal;
-    int size = (int)(mSongStructure.end() - mSongStructure.begin());
+    unsigned int size = mSongStructure.size();
     float totalBeats = 0.0f;
-    unsigned int idx = 1;
     if (size > 1) {
         int byteOfs = 4;
         do {
-            idx++;
             int val = *(int *)((char *)data + byteOfs);
             byteOfs += 4;
             totalBeats += (float)val;
-        } while (idx < (unsigned int)size);
+            size--;
+        } while (size > 1);
     }
     float startBeat = (float)(mCountInLength * 4);
     mLoopStartBeat = startBeat;
@@ -1497,127 +1515,217 @@ void BustAMovePanel::Poll() {
 
     HamPanel::Poll();
 
-    static Message hideHudMsg("hide_hud", 0);
-    hideHudMsg[0] = false;
-    for (int i = 0; i < 2; i++) {
-        TheGameData->Player(i)->Provider()->Handle(hideHudMsg, false);
+    HamPlayerData *player0 = TheGameData->Player(0);
+    HamPlayerData *player1 = TheGameData->Player(1);
+    {
+        PropertyEventProvider *prov = player0->Provider();
+        Message hideHudMsg("hide_hud", 0);
+        prov->Handle(hideHudMsg, true);
+    }
+    {
+        PropertyEventProvider *prov = player1->Provider();
+        Message hideHudMsg("hide_hud", 0);
+        prov->Handle(hideHudMsg, true);
     }
 
     mRecorder->Poll();
 
-    int activePlayer;
-    if (mState == kBAMState_PlayCountIn || mState == kBAMState_Playing || mState == kBAMState_ShowMove) {
+    int activePlayer = mActivePlayer;
+    if (mState == kBAMState_PlayCountIn || mState == kBAMState_Playing
+        || mState == kBAMState_ShowMove) {
         activePlayer = !mActivePlayer;
-    } else {
-        activePlayer = mActivePlayer;
     }
     mCreatorSide = TheGameData->Player(activePlayer)->Side();
-    int trackingID = TheGameData->Player(activePlayer)->GetSkeletonTrackingID();
-    int skelIdx = TheGestureMgr->GetSkeletonIndexByTrackingID(trackingID);
+    const Skeleton *skel = TheGameData->Player(activePlayer)->GetSkeleton();
+    int skelIdx = -1;
+    if (skel != NULL) {
+        skelIdx = skel->SkeletonIndex();
+    }
+    int forceSkelIdx = skelIdx;
     mRecorder->unk44 = skelIdx;
     if (mState == kBAMState_Recording || mState == kBAMState_CountIn) {
         unk58 = skelIdx;
     }
 
     if (mState == kBAMState_Recording && mBeatCount >= 3) {
-        mDancerTakeScore = mRecorder->GetScore(unk58, activePlayer, TheTaskMgr.DeltaSeconds(), true);
-        mCurrentMoveScore = mRecorder->GetScore(skelIdx, activePlayer, TheTaskMgr.DeltaSeconds(), false);
-        mRecordScore += mDancerTakeScore;
+        mDancerTakeScore = mRecorder->GetScore(skelIdx, 0, mRecordScore, true);
+        mCurrentMoveScore = mRecorder->GetScore(skelIdx, 1, mRecordScore, true);
+        mRecordScore += TheTaskMgr.DeltaUISeconds();
     }
 
-    if (mState == kBAMState_Playing || mState == kBAMState_ShowMoveSequence) {
-        float score = mRecorder->GetScore(skelIdx, activePlayer, TheTaskMgr.DeltaSeconds(), false);
-        mMoveScore += score;
-        float ratingFrac = score * score * 0.7f;
-        mPhraseMeters[mCreatorSide]->SetRatingFrac(ratingFrac, 4.0f - MsToBeat(mRecordScore * 1000.0f));
+    if (mState == kBAMState_Playing) {
+        mMoveScore = mRecorder->GetScore(skelIdx, 0, -1.0f, false);
         mPhraseMeters[mCreatorSide]->SetShowing(true);
-
-        if (mState == kBAMState_ShowMoveSequence) {
-            for (int p = 0; p < 2; p++) {
-                int pTrackingID = TheGameData->Player(p)->GetSkeletonTrackingID();
-                int pSkelIdx = TheGestureMgr->GetSkeletonIndexByTrackingID(pTrackingID);
-                float pScore = mRecorder->GetScore(pSkelIdx, p, TheTaskMgr.DeltaSeconds(), false);
-                ((float *)&mPlayerScoreLeft)[p] += pScore;
-            }
+        float base = mMoveScore;
+        unsigned int e = 2;
+        float scoreSq = 1.0f;
+        do {
+            if (e & 1) scoreSq *= base;
+            e >>= 1;
+            if (e == 0) break;
+            base *= base;
+        } while (true);
+        mPhraseMeters[mCreatorSide]->SetRatingFrac(
+            scoreSq * 1.4f, 4.0f - MsToBeat(mRecordScore * 1000.0f)
+        );
+        forceSkelIdx = unk58;
+    } else if (mState == kBAMState_ShowMoveSequence) {
+        float *scores = (float *)&mPlayerScoreLeft;
+        for (int p = 0; p < 2; p++) {
+            int pSkelIdx = TheGestureMgr->GetSkeletonIndexByTrackingID(
+                TheGameData->Player(p)->GetSkeletonTrackingID()
+            );
+            SkeletonSide pSide = TheGameData->Player(p)->Side();
+            scores[p] = mRecorder->GetScore(pSkelIdx, p, -1.0f, false);
+            mPhraseMeters[pSide]->SetShowing(true);
+            float pBase = scores[p];
+            unsigned int pE = 2;
+            float pScoreSq = 1.0f;
+            do {
+                if (pE & 1) pScoreSq *= pBase;
+                pE >>= 1;
+                if (pE == 0) break;
+                pBase *= pBase;
+            } while (true);
+            mPhraseMeters[pSide]->SetRatingFrac(
+                pScoreSq * 1.4f, 4.0f - MsToBeat(mRecordScore * 1000.0f)
+            );
         }
+        forceSkelIdx = mRecorder->unk48[mRecorder->unkb8].unkc;
     } else {
+        mPhraseMeters[0]->SetRatingFrac(0.0f, -1.0f);
+        mPhraseMeters[1]->SetRatingFrac(0.0f, -1.0f);
         mPhraseMeters[0]->SetShowing(false);
         mPhraseMeters[1]->SetShowing(false);
     }
 
     if (mState == kBAMState_ShowMoveSequence) {
-        RndTex *pinkTex = DataDir()->Find<RndTex>("gradient_pink.tex", false);
-        RndTex *blueTex = DataDir()->Find<RndTex>("gradient_blue.tex", false);
-        for (ObjDirItr<DepthBuffer3D> it(mBAMVisualizerPanel->DataDir(), true); it != nullptr; ++it) {
-            if (std::strstr(it->Name(), "_left")) {
-                it->SetPlayerPalette(blueTex);
-            } else {
+        RndTex *pinkTex =
+            mBAMVisualizerPanel->DataDir()->Find<RndTex>("gradient_pink.tex", true);
+        RndTex *blueTex =
+            mBAMVisualizerPanel->DataDir()->Find<RndTex>("gradient_blue.tex", true);
+        bool isPlayer0Pink = false;
+        if (TheGameData->Player(0)->Side() == kSkeletonLeft) {
+            if (GetPlayerColor(0) == "pink") {
+                isPlayer0Pink = true;
+            }
+        }
+        for (ObjDirItr<DepthBuffer3D> it(mBAMVisualizerPanel->DataDir(), true);
+             it != nullptr; ++it) {
+            bool isLeft = std::strstr(it->Name(), "_left") != NULL;
+            if ((isLeft && isPlayer0Pink) || (!isLeft && !isPlayer0Pink)) {
                 it->SetPlayerPalette(pinkTex);
+            } else {
+                it->SetPlayerPalette(blueTex);
             }
         }
         unk9bc = -1;
     } else if (unk9bc != activePlayer) {
         Symbol colorSym = GetPlayerColor(activePlayer);
-        RndTex *tex = DataDir()->Find<RndTex>(MakeString("gradient_%s.tex", colorSym), false);
-        for (ObjDirItr<DepthBuffer3D> it(mBAMVisualizerPanel->DataDir(), true); it != nullptr; ++it) {
+        const char *texName;
+        if (colorSym == "pink") {
+            texName = "gradient_pink.tex";
+        } else {
+            texName = "gradient_blue.tex";
+        }
+        RndTex *tex = mBAMVisualizerPanel->DataDir()->Find<RndTex>(texName, true);
+        for (ObjDirItr<DepthBuffer3D> it(mBAMVisualizerPanel->DataDir(), true);
+             it != nullptr; ++it) {
             it->SetPlayerPalette(tex);
         }
         unk9bc = activePlayer;
     }
 
-    if (mState == kBAMState_Recording || mState == kBAMState_End) {
-        for (ObjDirItr<DepthBuffer3D> it(mBAMVisualizerPanel->DataDir(), true); it != nullptr; ++it) {
-            it->ForceDrawSkeletonIndex(skelIdx, false);
-        }
-    } else {
-        for (ObjDirItr<DepthBuffer3D> it(mBAMVisualizerPanel->DataDir(), true); it != nullptr; ++it) {
-            it->ForceDrawSkeletonIndex(skelIdx, true);
-        }
+    bool forceShow = !(mState == kBAMState_Recording || mState == kBAMState_End);
+    for (ObjDirItr<DepthBuffer3D> it(mBAMVisualizerPanel->DataDir(), true);
+         it != nullptr; ++it) {
+        it->ForceDrawSkeletonIndex(forceSkelIdx, forceShow);
     }
 
     PollCaptureFlashcard();
 
-    int currentBeat = (int)(TheTaskMgr.Beat() + 0.5f);
+    float streamMs = TheMaster->StreamMs();
+    float beat = MsToBeat(streamMs);
+    int currentBeat;
+    if (beat > 0.0f) {
+        currentBeat = (int)(beat + 0.5f);
+    } else {
+        currentBeat = (int)(beat - 0.5f);
+    }
     if (currentBeat == mFailureEndBeat) {
+        mFailureEndBeat = -1;
         static Message hideTransitionMsg("bustamove_hide_transition");
         TheHamProvider->Handle(hideTransitionMsg, false);
-        mFailureEndBeat = -1;
     }
 
-    if (mNextVOTime <= TheTaskMgr.Seconds(TaskMgr::kRealTime)) {
+    if (!(mNextVOTime > TheTaskMgr.Seconds(TaskMgr::kRealTime))) {
         PlayMovePromptVO();
         mNextVOTime = FLT_MAX;
     }
 
     if (DataVariable("bam_debug").Int()) {
         static DebugGraph scoreGraph(
-            0.0f, 0.0f, 100.0f, 100.0f,
-            Hmx::Color(1.0f, 0.0f, 0.0f),
-            Hmx::Color(0.0f, 1.0f, 0.0f),
+            0.1f, 0.1f, 0.8f, 0.2f,
+            Hmx::Color(1.0f, 1.0f, 1.0f, 1.0f),
+            Hmx::Color(0.0f, 0.0f, 0.0f, 0.3f),
             100, 0.0f, 1.0f,
-            String("mMoveScore")
+            String("")
         );
         scoreGraph.AddData(mMoveScore, false);
         scoreGraph.Draw();
-        const char *stateName = "?";
+        String stateName;
         switch (mState) {
-        case kBAMState_CountIn: stateName = "CountIn"; break;
-        case kBAMState_Recording: stateName = "Recording"; break;
-        case kBAMState_Playing: stateName = "Playing"; break;
-        case kBAMState_ShowMove: stateName = "ShowMove"; break;
-        case kBAMState_PlayCountIn: stateName = "PlayCountIn"; break;
-        case kBAMState_RecordCountIn: stateName = "RecordCountIn"; break;
-        case kBAMState_FailureToBust: stateName = "FailureToBust"; break;
-        case kBAMState_ShowMoveSequenceSetup: stateName = "ShowMoveSeqSetup"; break;
-        case kBAMState_ShowMoveSequence: stateName = "ShowMoveSeq"; break;
-        case kBAMState_End: stateName = "End"; break;
-        default: break;
+        case kBAMState_CountIn: stateName = "kBAMState_CountIn"; break;
+        case kBAMState_Recording: stateName = "kBAMState_Recording"; break;
+        case kBAMState_Playing: stateName = "kBAMState_Playing"; break;
+        case kBAMState_ShowMove: stateName = "kBAMState_ShowMove"; break;
+        case kBAMState_PlayCountIn: stateName = "kBAMState_PlayCountIn"; break;
+        case kBAMState_RecordCountIn: stateName = "kBAMState_RecordCountIn"; break;
+        case kBAMState_FailureToBust: stateName = "kBAMState_FailureToBust"; break;
+        case kBAMState_ShowMoveSequenceSetup: stateName = "kBAMState_ShowMoveSequenceSetup"; break;
+        case kBAMState_ShowMoveSequence: stateName = "kBAMState_ShowMoveSequence"; break;
+        case kBAMState_End: stateName = "kBAMState_End"; break;
+        case kBAMState_None: stateName = "kBAMState_None"; break;
         }
-        Vector2 pos(200.0f, 200.0f);
-        Hmx::Color white(1.0f, 1.0f, 1.0f);
-        RndGraph::GetOneFrame()->AddScreenString(
-            MakeString("%s reps:%d", stateName, mRepsRemaining),
-            pos, white
+        RndGraph *graph = RndGraph::GetOneFrame();
+        Hmx::Color white(1.0f, 1.0f, 1.0f, 1.0f);
+        Vector2 pos(0.1f, 0.05f);
+        graph->AddScreenString(
+            MakeString("State: %s  Reps left: %d", stateName, mRepsRemaining), pos, white
         );
+        int *data = &mSongStructure[0];
+        unsigned int currentPhrase = 0;
+        int beatInt = (int)(TheTaskMgr.Beat() + 0.5f);
+        int songSize = (int)(mSongStructure.end() - mSongStructure.begin());
+        int remainingBeat = beatInt;
+        if (songSize != 0) {
+            int ofs = 0;
+            do {
+                remainingBeat -= *(int *)((char *)data + ofs) * 4;
+                if (remainingBeat >= 0) {
+                    currentPhrase++;
+                    ofs += 4;
+                    if (currentPhrase < (unsigned int)songSize)
+                        continue;
+                }
+                break;
+            } while (true);
+        }
+        if ((unsigned int)songSize != 0) {
+            int byteOfs = 0;
+            for (int i = 0; i < songSize; i++) {
+                Hmx::Color color;
+                if ((int)currentPhrase == i) {
+                    color = Hmx::Color(0.0f, 1.0f, 0.0f, 1.0f);
+                } else {
+                    color = Hmx::Color(1.0f, 1.0f, 1.0f, 1.0f);
+                }
+                Vector2 elemPos((float)i * 0.02f + 0.1f, 0.08f);
+                graph->AddScreenString(
+                    MakeString("%d", *(int *)((char *)data + byteOfs)), elemPos, color
+                );
+                byteOfs += 4;
+            }
+        }
     }
 }
