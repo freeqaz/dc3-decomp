@@ -2,6 +2,7 @@
 #include "UIComponent.h"
 #include "obj/Data.h"
 #include "obj/DataFile.h"
+#include "obj/DataUtl.h"
 #include "obj/Dir.h"
 #include "obj/MessageTimer.h"
 #include "obj/Msg.h"
@@ -231,53 +232,57 @@ void UIManager::Terminate() {
 }
 
 bool UIManager::IsGameScreenActive() {
+    // Resolve the bottom-most screen (first pushed screen, or current if none pushed)
     UIScreen *screen;
-
-    // Get the bottom-most screen in the stack
     if (!mPushedScreens.empty()) {
         screen = mPushedScreens[0];
     } else {
         screen = mCurrentScreen;
     }
 
-    if (!screen) {
-        return false;
-    }
-
-    // Manual string comparison for "game_screen" (required for codegen matching)
-    const char *screenName = screen->Name();
-    const char *gameScreenLiteral = "game_screen";
-
-    signed char c1;
-    signed char c2;
-    signed char charDiff;
-    do {
-        c1 = *screenName;
-        c2 = *gameScreenLiteral;
-        charDiff = c1 - c2;
-        if (c1 == 0) break;
-        screenName++;
-        gameScreenLiteral++;
-    } while (charDiff == 0);
-
-    // If screen name is "game_screen", verify it's also the current active screen
-    bool isGameScreen = true;
-    if (charDiff == 0) {
-        if (!mCurrentScreen) {
-            return false;
-        }
-
-        // Re-resolve the bottom screen
+    bool result;
+    if (screen) {
+        // Re-resolve bottom screen (required for register allocation to match target)
+        UIScreen *bottomScreen;
         if (!mPushedScreens.empty()) {
-            screen = mPushedScreens[0];
+            bottomScreen = mPushedScreens[0];
         } else {
-            screen = mCurrentScreen;
+            bottomScreen = mCurrentScreen;
         }
 
-        isGameScreen = (screen == mCurrentScreen);
+        // Manual string comparison to check if screen name is "game_screen"
+        // (Cannot use strcmp - must match target's inline comparison)
+        const char *screenName = bottomScreen->Name();
+        const char *gameScreen = "game_screen";
+        signed char c1, c2;
+        do {
+            c1 = *screenName;
+            c2 = *gameScreen;
+            if (!c1) break;
+            screenName++;
+            gameScreen++;
+        } while (c1 == c2);
+
+        result = true;
+        // If strings match, proceed to check if bottom equals current
+        if (c1 == c2) goto check_current;
+    }
+    result = false;
+
+check_current:
+    // Verify that bottom screen is the current screen
+    screen = mCurrentScreen;
+    if (screen) {
+        UIScreen *bottomScreen = screen;
+        if (!mPushedScreens.empty()) {
+            bottomScreen = mPushedScreens[0];
+        }
+        // Bit manipulation: result &= (bottomScreen == screen)
+        // Uses -(bool) to convert true->-1 (all bits set), false->0
+        result = -(bottomScreen == screen) & result;
     }
 
-    return isGameScreen;
+    return result;
 }
 
 bool UIManager::BlockHandlerDuringTransition(Symbol s, DataArray *da) { return false; }
@@ -786,13 +791,14 @@ void Automator::Poll() {}
 
 DataNode Automator::OnMsg(ButtonDownMsg const &msg) {
     Symbol screenName = CurScreenName();
-    if (mScreenScripts && !screenName.Null()) {
-        if (mCurScript) {
-            FillButtonMsg(const_cast<ButtonDownMsg&>(msg), mCurMsgIndex);
-        }
-    }
     if (mRecord && !screenName.Null()) {
-        DataArrayPtr ptr("button_down");
+        static Symbol button_down("button_down");
+        DataArrayPtr ptr(
+            button_down,
+            DataGetMacroByInt(msg.GetPadNum(), "kPad_"),
+            DataGetMacroByInt(msg.GetAction(), "kAction_"),
+            msg.GetButton()
+        );
         AddRecord(screenName, ptr);
     }
     return DATA_UNHANDLED;

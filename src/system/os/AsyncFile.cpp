@@ -115,7 +115,7 @@ bool AsyncFile::ReadAsync(void *iBuff, int iBytes) {
 }
 
 int AsyncFile::Write(const void *iBuf, int iBytes) {
-    int ret; // NOTE: Uninitialized but required for exact codegen match
+    int ret; // Uninitialized but required for exact codegen match
     WriteAsync(iBuf, iBytes);
     if (mFail)
         return 0;
@@ -132,6 +132,7 @@ bool AsyncFile::WriteAsync(const void *v, int i) {
     if (!mBuffer) {
         _WriteAsync(v, i);
     } else {
+        // Buffered write: split across buffer boundaries if needed
         int remaining = i;
         while ((mOffset + remaining) > gBufferSize) {
             int size = gBufferSize - mOffset;
@@ -156,12 +157,16 @@ bool AsyncFile::WriteAsync(const void *v, int i) {
 int AsyncFile::Seek(int i, int j) {
     if (mFail)
         return mTell;
+
+    // Flush write buffer before seeking, or assert no pending reads
     if (mMode & FILE_OPEN_WRITE)
         Flush();
     else
         MILO_ASSERT(!mBytesLeft, 0x1CA);
 
-    int newPos;
+    // Calculate new file position based on seek mode
+    // j=0 (SEEK_SET): absolute, j=1 (SEEK_CUR): relative, j=2 (SEEK_END): from end
+    unsigned int newPos;
     if (j == 1) {
         newPos = mTell + i;
     } else if (j == 0) {
@@ -170,10 +175,10 @@ int AsyncFile::Seek(int i, int j) {
         newPos = mSize + i;
     }
 
-    // Clamp to valid range [0, mSize]
-    if ((unsigned int)newPos > mSize) {
+    // Clamp position to valid file range [0, mSize]
+    if (newPos > mSize) {
         mTell = mSize;
-    } else if (newPos < 0) {
+    } else if ((int)newPos < 0) {
         mTell = 0;
     } else {
         mTell = newPos;

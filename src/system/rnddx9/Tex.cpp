@@ -3,6 +3,7 @@
 #include "Tex.h"
 #include "os/Debug.h"
 #include "rnddx9/Rnd.h"
+#include "rnddx9/TexMgr.h"
 #include "rndobj/Rnd.h"
 #include "rndobj/Tex.h"
 #include "xdk/d3d9i/d3d9.h"
@@ -101,11 +102,36 @@ void DxTex::SwapMovieSurface() {
 }
 
 void DxTex::ResetSurfaces() {
+    // Clean up movie surface double-buffer
     for (int i = 0; i < 2; i++) {
         if (mTexture == unk94[i]) {
             mTexture = nullptr;
         }
-        DX_RELEASE(unk94[i]);
+        TheDxRnd.AutoRelease(unk94[i]);
+        unk94[i] = nullptr;
     }
-    DX_DELETE(mTexture);
+
+    // Delete main texture for certain types (rendered with mips, movie linear, scratch, device)
+    if (((mType & kRendered) && mNumMips) || ((mType & kMovie) && (mType & kRegularLinear))
+        || (mType & kScratch) || (mType & kDeviceTexture)) {
+        TheDxRnd.AutoDelete(mTexture);
+        mTexture = nullptr;
+    }
+
+    // Clear texture pointer for movie/scratch/device types (0x1204 = kMovie | kScratch | kDeviceTexture)
+    if (mType & 0x1204) {
+        mTexture = nullptr;
+    }
+
+    // Release managed texture resource
+    if (!TheDxTexMgr.ReleaseRes(unk2c)) {
+        TheDxRnd.AutoRelease(mTexture);
+    }
+    mTexture = nullptr;
+
+    // Clean up render target surfaces
+    TheDxRnd.AutoRelease(mRenderTarget);
+    mRenderTarget = nullptr;
+    TheDxRnd.AutoRelease(mDepthRT);
+    mDepthRT = nullptr;
 }

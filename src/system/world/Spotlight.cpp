@@ -588,13 +588,23 @@ void Spotlight::BuildBoard() {
 }
 
 void Spotlight::UpdateFlare() {
+    // Configure flare visibility and testing modes based on enabled/visibility flags.
+    // Note: Local variable 'flare' required for register allocation match.
+    RndFlare *flare;
     if (!mFlareEnabled) {
-        mFlare->SetVisible(false);
+        // Flare disabled: hide and disable point testing
+        flare = mFlare;
+        flare->SetOcclusionReady(true);
+        flare->SetVisible(false);
         mFlare->SetPointTest(false);
     } else if (mFlareVisibilityTest) {
-        mFlare->SetVisible(true);
+        // Flare with visibility test: show but disable point testing
+        flare = mFlare;
+        flare->SetOcclusionReady(true);
+        flare->SetVisible(true);
         mFlare->SetPointTest(false);
     } else
+        // Flare always visible: enable point testing (billboard mode)
         mFlare->SetPointTest(true);
 }
 

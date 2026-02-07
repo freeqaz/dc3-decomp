@@ -9,11 +9,19 @@
 
 namespace {
     BreedData tBreed[kNumJoypads];
-    HANDLE tThread;
-    bool tNoHandle;
+    // Thread handle and termination flag grouped for proper codegen
+    // The struct layout is required to match the original binary's data layout
+    struct {
+        HANDLE tThread;
+        bool tNoHandle;
+    } sThreadData;
     XINPUT_STATE tInputStates[kNumJoypads];
     CriticalSection tCritSection;
 }
+
+// Macros to access thread data - required for matching symbol offsets
+#define tThread sThreadData.tThread
+#define tNoHandle sThreadData.tNoHandle
 
 void GetXinputSinceLastFrame(int pad, XINPUT_STATE *state, unsigned int *ui3) {
     CritSecTracker tracker(&tCritSection);
@@ -22,11 +30,12 @@ void GetXinputSinceLastFrame(int pad, XINPUT_STATE *state, unsigned int *ui3) {
     TranslateButtons(&x, tInputStates[pad].Gamepad.wButtons);
 }
 
+// Cleanly terminates the XInput polling thread
 void XinputJoypadThreadDestruction() {
     tNoHandle = true;
-    WaitForSingleObject(tThread, -1);
+    WaitForSingleObject(tThread, INFINITE);
     CloseHandle(tThread);
-    tThread = nullptr;
+    tThread = 0;
 }
 
 void JoypadReset() { JoypadResetXboxPC(4); }

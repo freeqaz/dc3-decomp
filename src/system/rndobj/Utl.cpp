@@ -337,18 +337,31 @@ float AngleBetween(const Hmx::Quat &q1, const Hmx::Quat &q2) {
     }
 }
 
+// Check if UV coordinates are invalid (NaN or out of range), clamping near-zero values.
+// Returns true if the UV is bad (NaN or extreme), false if valid (after clamping).
 bool BadUV(Vector2 &v) {
+    // NaN check: IEEE 754 property that NaN != NaN
+    bool xIsNaN = v.x != v.x;
+    if (xIsNaN) return true;
+    bool yIsNaN = v.y != v.y;
+    if (yIsNaN) return true;
+
+    // Range check: reject extreme values beyond reasonable UV range
     if (fabsf(v.x) > 1000.0f || fabsf(v.y) > 1000.0f) {
         return true;
-    } else {
-        if (NearlyZero(v.x)) {
-            v.x = 0;
-        }
-        if (NearlyZero(v.y)) {
-            v.y = 0;
-        }
-        return false;
     }
+
+    // Clamp near-zero values to exactly zero to avoid floating-point precision issues
+    bool xIsSmall = fabsf(v.x) < 0.0001f;
+    if (xIsSmall) {
+        v.x = 0;
+    }
+    bool yIsSmall = fabsf(v.y) < 0.0001f;
+    if (yIsSmall) {
+        v.y = 0;
+    }
+
+    return false;
 }
 
 void SetLocalScale(RndTransformable *t, const Vector3 &vec) {
@@ -690,12 +703,29 @@ void TransformKeys(RndTransAnim *tanim, const Transform &tf) {
     }
 }
 
+// Swap RGBA byte order in-place for endianness conversion
+// Original uses pointer arithmetic with -4 offset to enable pixel[1] pre-increment pattern
 void EndianSwapBitmap(RndBitmap &bmap) {
-    for (int i = 0; i < bmap.Height(); i++) {
-        u8 *curRow = bmap.Pixels() + bmap.RowBytes() * i - 4;
-        for (int j = 0; j < bmap.Width(); j++) {
-            // EndianSwap()
-        }
+    int row = 0;
+    if (bmap.Height() != 0) {
+        do {
+            int col = 0;
+            if (bmap.Width() > 0) {
+                // Start pointer 4 bytes before first pixel for pre-increment access pattern
+                u32 *pixel = (u32 *)(bmap.Pixels() + bmap.RowBytes() * row - 4);
+                do {
+                    // Read from pixel[1] (next pixel after pointer increment)
+                    u32 val = pixel[1];
+                    col++;
+                    pixel++;
+                    // Swap bytes: RGBA -> BGRA (or vice versa)
+                    // Expression swaps bytes 0↔2, preserving bytes 1 and 3
+                    *pixel = (val >> 16 | val & 0xFFFF0000) >> 8 & 0xFFFF
+                        | ((val << 16 | val & 0xFFFF) & 0xFFFF00) << 8;
+                } while (col < bmap.Width());
+            }
+            row++;
+        } while (row < bmap.Height());
     }
 }
 

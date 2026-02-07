@@ -9,12 +9,15 @@
 #include "xdk/xbdm/xbdm.h"
 #include <vector>
 
+bool gShowTokensCheat = false;
+
 DataNode DataSetLocaleVerboseNotify(DataArray *arr) {
     Locale::SetLocaleVerboseNotify(arr->Int(1));
     return DataNode(0);
 }
 
 DataNode DataToggleShowTokensCheat(DataArray *arr) {
+    gShowTokensCheat = !gShowTokensCheat;
     return DataNode(0);
 }
 

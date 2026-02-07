@@ -15,6 +15,7 @@ extern "C" {
     extern const double __real_bff0000000000000;
 
     void expand(complex*, int, complex*, ...);
+    complex cexp(complex);
     complex expj(complex*, double);
     double exp(double);
 }
@@ -23,49 +24,45 @@ void compute_z_mzt(void) {
     complex sp50;
     int loop_count = 0;
     int array_offset = 0;
-    complex* src_base = lbl_8316EBA8;
-    complex* dst_base = lbl_83172BB0;
 
-    // Load header values from source
-    int src_count1 = *(int*)((char*)src_base + 0x4000);
-    int src_count2 = *(int*)((char*)src_base + 0x4004);
-
-    // Copy headers to destination
-    *(int*)((char*)dst_base + 0x4000) = src_count1;
-    *(int*)((char*)dst_base + 0x4004) = src_count2;
+    // Load and copy header values
+    int src_count1 = *(int*)((char*)lbl_8316EBA8 + 0x4000);
+    int src_count2 = *(int*)((char*)lbl_8316EBA8 + 0x4004);
+    *(int*)((char*)lbl_83172BB0 + 0x4000) = src_count1;
+    *(int*)((char*)lbl_83172BB0 + 0x4004) = src_count2;
 
     // Process first array
     if (src_count1 > 0) {
         do {
-            complex* src = (complex*)((char*)src_base + array_offset);
-            complex* dst = (complex*)((char*)dst_base + array_offset);
+            complex* src = (complex*)((char*)lbl_8316EBA8 + array_offset);
+            complex* dst = (complex*)((char*)lbl_83172BB0 + array_offset);
 
-            expj(&sp50, src->x);
+            sp50 = cexp(*src);
             loop_count++;
             array_offset += 0x10;
             dst->x = sp50.x;
             dst->y = sp50.y;
 
-            src_count1 = *(int*)((char*)dst_base + 0x4000);
+            src_count1 = *(int*)((char*)lbl_83172BB0 + 0x4000);
         } while (loop_count < src_count1);
     }
 
-    src_count2 = *(int*)((char*)dst_base + 0x4004);
+    src_count2 = *(int*)((char*)lbl_83172BB0 + 0x4004);
     loop_count = 0;
 
     // Process second array (offset by 0x2000)
     if (src_count2 > 0) {
         do {
-            complex* src = (complex*)((char*)src_base + 0x2000 + array_offset);
-            complex* dst = (complex*)((char*)dst_base + 0x2000 + array_offset);
+            complex* src = (complex*)((char*)lbl_8316EBA8 + 0x2000 + array_offset);
+            complex* dst = (complex*)((char*)lbl_83172BB0 + 0x2000 + array_offset);
 
-            expj(&sp50, src->x);
+            sp50 = cexp(*src);
             loop_count++;
             array_offset += 0x10;
             dst->x = sp50.x;
             dst->y = sp50.y;
 
-            src_count2 = *(int*)((char*)dst_base + 0x4004);
+            src_count2 = *(int*)((char*)lbl_83172BB0 + 0x4004);
         } while (loop_count < src_count2);
     }
 }

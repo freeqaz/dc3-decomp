@@ -25,7 +25,6 @@ bool gStlAllocNameLookup = false;
 bool gbUseLowestMip = false;
 bool gInsideMemFunc = false;
 bool gMemoryUsageTest;
-int gNumHeaps;
 int gCheckConsistency;
 int gNewOperatorAlign;
 int gSingleHeap;
@@ -38,6 +37,7 @@ unsigned long gThreadIds[MAX_BUF_THREADS];
 bool gInitted;
 
 MemHeap gHeaps[MAX_HEAPS];
+int gNumHeaps;
 
 void *operator new(unsigned int size) {
     return MemAlloc(size, __FILE__, 0x5CF, "new", gNewOperatorAlign);

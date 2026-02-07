@@ -88,15 +88,42 @@ void PlatformMgr::UpdateSigninState() {
 }
 
 bool PlatformMgr::HasCreatedContentPrivilege() const {
-    bool ret = true;
-    for (int i = 0; i < 4; i++) {
-        int bptr = 0;
-        if ((XUserCheckPrivilege(i, XPRIVILEGE_USER_CREATED_CONTENT, &bptr) == 0)
-            && (XUserCheckPrivilege(i, XPRIVILEGE_USER_CREATED_CONTENT_FRIENDS_ONLY, &bptr) == 0)) {
-            ret = ret && (bptr != 0);
+    bool allUsersRestricted = true;
+    int userIndex = 0;
+
+    do {
+        int privilegeResult = 0;
+        bool hasContentCreation;
+        bool hasFriendsOnlyContent;
+        bool userIsRestricted;
+
+        // Check USER_CREATED_CONTENT privilege (general content creation)
+        if (XUserCheckPrivilege(userIndex, XPRIVILEGE_USER_CREATED_CONTENT, &privilegeResult) != 0 || privilegeResult != 0) {
+            hasContentCreation = true;
+        } else {
+            hasContentCreation = false;
         }
-    }
-    return ret;
+
+        // Check USER_CREATED_CONTENT_FRIENDS_ONLY privilege
+        if (XUserCheckPrivilege(userIndex, XPRIVILEGE_USER_CREATED_CONTENT_FRIENDS_ONLY, &privilegeResult) != 0 || privilegeResult != 0) {
+            hasFriendsOnlyContent = true;
+        } else {
+            hasFriendsOnlyContent = false;
+        }
+
+        // User is restricted if they DON'T have both privileges
+        // (having both means no restriction)
+        if (hasContentCreation && hasFriendsOnlyContent) {
+            userIsRestricted = false;
+        } else {
+            userIsRestricted = true;
+        }
+
+        userIndex++;
+        allUsersRestricted = allUsersRestricted && userIsRestricted;
+    } while (userIndex < 4);
+
+    return allUsersRestricted;
 }
 
 bool PlatformMgr::HasKinectSharePrvilege() const {
@@ -135,8 +162,10 @@ void PlatformMgr::ShowFriendsUI(int padNum) {
     }
 }
 
-void PlatformMgr::SetBackgroundDownloadPriority(bool b1) {
-    XBackgroundDownloadSetMode((XBACKGROUND_DOWNLOAD_MODE)(b1 + 1));
+void PlatformMgr::SetBackgroundDownloadPriority(bool highPriority) {
+    XBackgroundDownloadSetMode(highPriority ?
+        XBACKGROUND_DOWNLOAD_MODE_ALWAYS_ALLOW :
+        XBACKGROUND_DOWNLOAD_MODE_AUTO);
 }
 
 // int __cdecl ShowControllerRequiredUIThreaded(void)

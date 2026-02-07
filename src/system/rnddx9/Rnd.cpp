@@ -115,9 +115,9 @@ bool DxRnd::Offscreen() const {
 void DxRnd::DrawLargeQuad(
     const LargeQuadRenderData &data, const Transform &tf, RndMat *mat, ShaderType s
 ) {
-    RndMat *it = mat;
     RndMat *next = mat ? dynamic_cast<RndMat *>(mat->NextPass()) : nullptr;
-    while (true) {
+    RndMat *it = mat;
+    do {
         RndShader::SelectConfig(it, s, false);
         D3DDevice_SetIndices(mD3DDevice, data.unk0);
         D3DDevice_SetStreamSource(mD3DDevice, 0, data.unk4, 0, 20, 1);
@@ -129,11 +129,9 @@ void DxRnd::DrawLargeQuad(
         D3DDevice_DrawIndexedVertices(
             mD3DDevice, D3DPT_QUADLIST, 0, 0, (data.unkc - 1) * (data.unk8 - 1) * 4
         );
-        if (!next)
-            break;
         it = next;
-        next = dynamic_cast<RndMat *>(next->NextPass());
-    }
+        next = next ? dynamic_cast<RndMat *>(next->NextPass()) : nullptr;
+    } while (it != nullptr);
     D3DDevice_SetIndices(mD3DDevice, nullptr);
     D3DDevice_SetStreamSource(mD3DDevice, 0, nullptr, 0, 0, 1);
     D3DDevice_SetTexture(mD3DDevice, 0x10, nullptr, 0x8000);

@@ -355,44 +355,42 @@ void MemTracker::DiffDump(TextStream &ts) {
     if (mTimeSlice) {
         ts << "(executable " << TheSystemArgs.front() << ")\n";
         ts << "(data\n";
+        short curTimeSlice = mTimeSlice;
         int count = 0;
-        for (auto it = mHashTable->Begin(); it != nullptr; it = mHashTable->Next(it)) {
-            AllocInfo *info = *it;
-            if (mTimeSlice == info->mTimeSlice) {
+        for (AllocInfo **it = mHashTable->Begin(); it; it = mHashTable->Next(it)) {
+            if (curTimeSlice == (*it)->mTimeSlice) {
                 count++;
             }
         }
-        AllocInfoVec allocVec(count);
-        for (auto it = mHashTable->Begin(); it != nullptr; it = mHashTable->Next(it)) {
-            AllocInfo *info = *it;
-            if (mTimeSlice == info->mTimeSlice) {
-                allocVec.push_back(info);
+        AllocInfo **allocVec = (AllocInfo **)DebugHeapAlloc(count * 4);
+        AllocInfo **allocEnd = allocVec + count;
+        AllocInfo **allocBegin = allocVec;
+        for (AllocInfo **it = mHashTable->Begin(); it; it = mHashTable->Next(it)) {
+            if (curTimeSlice == (*it)->mTimeSlice) {
+                *allocVec = *it;
+                allocVec++;
             }
         }
-        std::sort(allocVec.begin(), allocVec.end(), StackLess);
+        std::sort(allocBegin, allocEnd, StackLess);
         std::sort(mFreedInfos.begin(), mFreedInfos.end(), StackLess);
 
-        const char *allocStr = "alloc";
-        const char *freeStr = "free";
-        AllocInfo **freedEnd = mFreedInfos.end();
-        AllocInfo **allocEnd = allocVec.end();
         AllocInfo **freedIt = mFreedInfos.begin();
-        AllocInfo **allocIt = allocVec.begin();
+        AllocInfo **allocIt = allocBegin;
 
-        for (; allocIt != allocEnd || freedIt != freedEnd;) {
+        for (; allocIt != allocEnd || freedIt != mFreedInfos.end();) {
             if (allocIt == allocEnd) {
-                ColatedPrint(ts, *freedIt, freeStr);
+                ColatedPrint(ts, *freedIt, "free");
                 freedIt++;
-            } else if (freedIt == freedEnd) {
-                ColatedPrint(ts, *allocIt, allocStr);
+            } else if (freedIt == mFreedInfos.end()) {
+                ColatedPrint(ts, *allocIt, "alloc");
                 allocIt++;
             } else {
                 int cmp = (*allocIt)->StackCompare(**freedIt);
                 if (cmp < 0) {
-                    ColatedPrint(ts, *allocIt, allocStr);
+                    ColatedPrint(ts, *allocIt, "alloc");
                     allocIt++;
                 } else if (cmp > 0) {
-                    ColatedPrint(ts, *freedIt, freeStr);
+                    ColatedPrint(ts, *freedIt, "free");
                     freedIt++;
                 } else {
                     allocIt++;
@@ -400,6 +398,7 @@ void MemTracker::DiffDump(TextStream &ts) {
                 }
             }
         }
+        DebugHeapFree(allocBegin);
         ts << ")\n";
     }
     mFreedInfos.delete_and_clear();

@@ -98,7 +98,7 @@ public:
 protected:
     WorldCrowd();
 
-    void Force3DCrowd(bool);
+    void Force3DCrowd(bool force);
     void SetMatAndCameraLod();
     void AssignRandomColors(bool);
     void Delete3DCrowdHandles();

@@ -462,42 +462,36 @@ void CreateBackBuffers(
     D3DSurface *&colorSurface,
     D3DSurface *&depthSurface
 ) {
-    UINT colorSize = XGSurfaceSize(width, height, D3DFMT_A8R8G8B8, multisample);
     UINT depthSize = XGSurfaceSize(width, height, D3DFMT_D24FS8, multisample);
+    UINT colorSize = XGSurfaceSize(width, height, D3DFMT_A8R8G8B8, multisample);
 
-    int adjustedWidth = width;
-    int adjustedHeight = height;
+    unsigned int adjustedWidth = width;
+    unsigned int adjustedHeight = height;
     if ((int)multisample >= 1) {
-        adjustedHeight = height * 2;
+        adjustedHeight *= 2;
     }
     if ((int)multisample == 2) {
-        adjustedWidth = width * 2;
+        adjustedWidth *= 2;
     }
 
     edramBase = 0x800;
     edramHzBase = 0xE10;
 
-    int base = edramBase;
-    edramBase = base - depthSize;
+    edramBase -= colorSize;
 
-    int hzSize = (((adjustedWidth + 0x1F) >> 5) * ((adjustedHeight + 0xF) >> 4)) & 0x7FFFFF;
-    edramHzBase = edramHzBase - hzSize;
+    edramHzBase -= (((adjustedWidth + 0x1F) >> 5) * ((adjustedHeight + 0xF) >> 4)) & 0x7FFFFF;
 
-    D3DSURFACE_PARAMETERS depthParams;
-    memset(&depthParams, 0, sizeof(D3DSURFACE_PARAMETERS));
-    depthParams.Base = edramBase;
-    depthParams.HierarchicalZBase = edramHzBase;
-    depthSurface = D3DDevice_CreateSurface(width, height, D3DFMT_D24FS8, multisample, &depthParams);
+    D3DSURFACE_PARAMETERS params;
+    params.Base = edramBase;
+    params.HierarchicalZBase = edramHzBase;
+    depthSurface = D3DDevice_CreateSurface(width, height, D3DFMT_D24FS8, multisample, &params);
     DX_ASSERT(depthSurface, 0x2CE);
 
-    int base2 = edramBase;
-    edramBase = base2 - colorSize;
+    edramBase -= depthSize;
 
-    D3DSURFACE_PARAMETERS colorParams;
-    memset(&colorParams, 0, sizeof(D3DSURFACE_PARAMETERS));
-    colorParams.Base = edramBase;
-    colorParams.HierarchicalZBase = -1;
-    colorSurface = D3DDevice_CreateSurface(width, height, D3DFMT_A8R8G8B8, multisample, &colorParams);
+    params.Base = edramBase;
+    params.HierarchicalZBase = -1;
+    colorSurface = D3DDevice_CreateSurface(width, height, D3DFMT_A8R8G8B8, multisample, &params);
     DX_ASSERT(colorSurface, 0x2D4);
 }
 

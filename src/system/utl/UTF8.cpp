@@ -4,14 +4,17 @@
 #include <cstring>
 
 unsigned short WToLower(unsigned short us) {
+    // Latin uppercase (A-Z) and Latin-1 Supplement (À-Þ)
     if ((us >= 0x41 && us <= 0x5A) || (us >= 0xC0 && us <= 0xDE)) {
         return us + 0x20;
+    // Latin Extended-A (Ā-ž) odd/even patterns
     } else if ((us >= 0x100 && us <= 0x137 && (us & 1) == 0)
                || (us >= 0x139 && us <= 0x148 && (us & 1) == 1)
                || (us >= 0x14A && us <= 0x177 && (us & 1) == 0)
                || (us >= 0x179 && us <= 0x17E && (us & 1) == 1)) {
         return us + 1;
     }
+    // Special case for Ÿ (0x178) -> ÿ (0xFF) would go here but is not implemented
     // else if (us != 0x178) {
     //     return us;
     // } else {
@@ -20,19 +23,23 @@ unsigned short WToLower(unsigned short us) {
 }
 
 unsigned short WToUpper(unsigned short us) {
+    unsigned short result;
+    // Latin lowercase (a-z) and Latin-1 Supplement (à-þ)
     if ((us >= 0x61 && us <= 0x7A) || (us >= 0xE0 && us <= 0xFE)) {
-        return us - 0x20;
+        result = us - 0x20;
+    // Latin Extended-A (Ā-ž) odd/even patterns
     } else if ((us >= 0x100 && us <= 0x137 && (us & 1) == 1)
                || (us >= 0x139 && us <= 0x148 && (us & 1) == 0)
                || (us >= 0x14A && us <= 0x177 && (us & 1) == 1)
                || (us >= 0x179 && us <= 0x17E && (us & 1) == 0)) {
-        return us - 1;
+        result = us - 1;
+    } else {
+        // Special case: ÿ (0xFF) -> Ÿ (0x178)
+        if (us == 0xFF)
+            return 0x178;
+        result = us;
     }
-    // else if (us != 0xFF) {
-    //     return us;
-    // } else {
-    //     return 0x178;
-    // }
+    return result;
 }
 
 int WStrniCmp(const unsigned short *str1, const unsigned short *str2, int n) {

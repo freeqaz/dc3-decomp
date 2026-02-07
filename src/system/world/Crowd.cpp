@@ -14,11 +14,11 @@
 #include "world/Crowd.h"
 #include "world/Crowd3DCharHandle.h"
 
+RndTex *gImpostorTex[kNumLods];
 RndCam *gImpostorCamera;
 RndMat *gImpostorMat;
 int gNumCrowd;
 WorldCrowd *gParent;
-RndTex *gImpostorTex[kNumLods];
 
 const Hmx::Color &ColorPalette::GetColor(int idx) const {
     MILO_ASSERT(mColors.size(), 0x18);
@@ -473,10 +473,8 @@ bool WorldCrowd::Crowd3DExists() {
 void WorldCrowd::SetMatAndCameraLod() {
     int lod = mLod;
     RndTex *tex = gImpostorTex[lod];
-    RndCam *cam = gImpostorCamera;
-    RndMat *mat = gImpostorMat;
-    cam->SetTargetTex(tex);
-    mat->SetDiffuseTex(tex);
+    gImpostorCamera->SetTargetTex(tex);
+    gImpostorMat->SetDiffuseTex(gImpostorTex[mLod]);
 }
 
 void WorldCrowd::CreateMeshes() {
@@ -537,12 +535,12 @@ void WorldCrowd::Set3DCharAll() {
 
 void WorldCrowd::Force3DCrowd(bool force) {
     mForce3DCrowd = force;
-    if (mForce3DCrowd)
+    if (mForce3DCrowd) {
         Set3DCharAll();
-    else {
+    } else {
         SetFullness(1, 1);
-        std::vector<std::pair<int, int> > vec;
-        Set3DCharList(vec, this);
+        std::vector<std::pair<int, int> > v;
+        Set3DCharList(v, this);
     }
 }
 

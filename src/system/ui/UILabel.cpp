@@ -136,14 +136,14 @@ void UILabel::PreLoad(BinStream &bs) {
     LOAD_REVS(bs)
     ASSERT_REVS(0x18, 0)
     UIComponent::PreLoad(bs);
-    if (d.rev != 0 && d.rev < 0xE) {
-        bool b;
-        d >> b;
+    if (d.rev > 0 && d.rev < 0xE) {
+        bool deprecated;
+        d >> deprecated;
     }
     d >> mTextToken;
     if (d.rev > 0xD) {
-        String s;
-        d >> s;
+        String str;
+        d >> str;
     }
     if (d.rev > 0xE)
         d >> unk118;
@@ -157,100 +157,164 @@ void UILabel::PreLoad(BinStream &bs) {
         }
     }
     if (d.rev > 4) {
-        // Icon loading was here in some versions
+        // No-op in current revision
     }
-    if ((6 < d.rev) && (d.rev < 0x1b)) {
-        int unkStyle;
-        d >> unkStyle;
+    if (d.rev > 6 && d.rev < 0x1b) {
+        int styleVal;
+        d >> styleVal;
     }
-    if ((8 < d.rev) && (d.rev < 0x10)) {
-        // Shadow style section
+    if (d.rev > 8 && d.rev < 0x10) {
         int shadowVal;
         d >> shadowVal;
     }
-    if ((9 < d.rev) && (d.rev < 0x1a)) {
-        String shadowStr;
-        d >> shadowStr;
+    if (d.rev > 9 && d.rev < 0x1a) {
+        String str;
+        d >> str;
     }
-    if (10 < d.rev) {
-        int unk;
-        d >> unk;
+    if (d.rev > 10) {
+        int val;
+        d >> val;
     }
-    if (0xc < d.rev) {
-        int unk;
-        d >> unk;
+    if (d.rev > 0xc) {
+        int val;
+        d >> val;
     }
-    if ((0x10 < d.rev) && (d.rev < 0x1d)) {
-        int glossVal;
-        d >> glossVal;
+    if (d.rev > 0x10 && d.rev < 0x1d) {
+        int val;
+        d >> val;
     }
-    if (0x11 < d.rev) {
-        int unk;
-        d >> unk;
-        String s;
-        d >> s;
+    if (d.rev > 0x11) {
+        int val;
+        d >> val;
+        String str;
+        d >> str;
     }
     if (d.rev < 0x13) {
-        int unk;
-        d >> unk;
+        int val;
+        d >> val;
     } else {
-        int unk;
-        d >> unk;
+        int val;
+        d >> val;
     }
-    if (0x13 < d.rev) {
-        int unk;
-        d >> unk;
+    if (d.rev > 0x13) {
+        int val;
+        d >> val;
         if (d.rev < 0x19) {
-            int unk2;
-            d >> unk2;
+            int val2;
+            d >> val2;
         }
     }
-    if (0x14 < d.rev) {
-        String s;
-        d >> s;
+    if (d.rev > 0x14) {
+        String str;
+        d >> str;
     }
-    if (0x15 < d.rev) {
+    if (d.rev > 0x15) {
         int elemCount = (*(int *)(((unsigned char *)this) - 0x10) - *(int *)(((unsigned char *)this) - 0x14)) / 0x2c;
         if (elemCount == 2) {
-            String s;
-            d >> s;
+            String str;
+            d >> str;
         } else {
-            String s;
-            d >> s;
+            String str;
+            d >> str;
         }
     }
-    if (0x16 < d.rev) {
-        String s;
-        d >> s;
+    if (d.rev > 0x16) {
+        String str;
+        d >> str;
     }
-    if (0x17 < d.rev) {
-        int unk1, unk2;
-        d >> unk1 >> unk2;
+    if (d.rev > 0x17) {
+        int val1, val2;
+        d >> val1 >> val2;
     }
 }
 
 void UILabel::PostLoad(BinStream &bs) {
+    int *end = (int *)(((unsigned char *)this) - 0x10);
+    int *begin = (int *)(((unsigned char *)this) - 0x14);
+    int rev = bs.PopRev(Dir());
+
+    // Calculate number of styles from vector begin/end pointers
+    int numStyles = (*end - *begin) / 0x2c;
+
+    // PostLoad each style's UILabelDir resource pointer
+    if (numStyles != 0) {
+        int offset = 0;
+        unsigned int i = 0;
+        do {
+            ResourceDirPtr<UILabelDir> *ptr = (ResourceDirPtr<UILabelDir> *)((unsigned char *)*begin + offset + 0x14);
+            ptr->PostLoad(0);
+            i++;
+            offset += 0x2c;
+        } while (i < (unsigned int)numStyles);
+    }
+
+    // Handle font mat loading based on file revision
+    if (rev >= 0x1c) {
+        // Rev 28+: Read font mat strings for each style from stream
+        if (numStyles != 0) {
+            unsigned int i = 0;
+            do {
+                char buffer[0x100];
+                bs.ReadString(buffer, 0x100);
+                SetFontMat(buffer, i);
+                i++;
+            } while (i < (unsigned int)numStyles);
+        }
+    } else if (rev > 0x14) {
+        // Rev 21-27: Legacy revision handling with PopRev for old string fields
+        if (rev > 0x16) {
+            // Rev 23-27: Skip old string field at rev 0x17
+            bs.PopRev(Dir());
+            SetFontMat("", 1);
+        }
+        if (rev > 0x15) {
+            // Rev 22-27: Skip old string field at rev 0x16
+            bs.PopRev(Dir());
+        }
+        SetFontMat("", 0);
+    } else {
+        // Rev <= 20: Initialize all styles with empty font mat strings
+        if (numStyles != 0) {
+            unsigned int i = 0;
+            do {
+                SetFontMat("", i);
+                i++;
+            } while (i < (unsigned int)numStyles);
+        }
+    }
+
     UIComponent::PostLoad(bs);
 
-    LabelUpdate(false);
+    // Initialize label text - defer actual UI updates until end
     sDeferUpdate = true;
     if (!unk118.empty()) {
+        // If edit text is set, use first character as icon
         unk120 = unk118[0];
-    } else {
+    } else if (mTextToken.Null() || (!TheLoadMgr.EditMode() && !AllowEditText())) {
+        // Set text from token (will localize)
         SetTextToken(mTextToken);
+    } else {
+        // In edit mode with allowed edit text, use token string directly
+        RndText::SetText(mTextToken.Str());
     }
+
+    // Validate fixed length requirement for preloaded labels
     if (sRequireFixedLength) {
         if (unk120 == 0) {
-            MILO_WARN(
+            MILO_NOTIFY(
                 "%s: %s is preloaded, but doesn't have fixed length",
                 PathName(Dir()),
                 Name()
             );
         }
     }
+
+    // Re-enable updates and refresh label display if needed
     sDeferUpdate = false;
-    if (!mTextToken.Null() || !unk118.empty()) {
+    if (!mTextToken.Null() || !unk118.empty() || unk120 != 0) {
         LabelUpdate(false);
+    } else {
+        unk121 = true;
     }
 }
 
@@ -467,23 +531,19 @@ void UILabel::LabelUpdate(bool b) {
 }
 
 DataNode UILabel::OnSetHeightFromText(DataArray *da) {
-    if ((*(int *)((unsigned char *)da + 0x20) == 0) &&
-        (*(int *)((unsigned char *)&Style(0) + 0x40) != 0)) {
-        float height = 0.0f;
-        ComputeHeight(*(int *)((unsigned char *)da + 0xc4), 1.0f, height);
-        *(float *)((unsigned char *)da + 0x14) = height;
+    if (mFitType == 0 && Style(0).mFont) {
+        float height;
+        mHeight = ComputeHeight(unkc4, 1.0f, height);
     } else {
-        FormatString fs("Could not set height, either no style or no text");
+        FormatString fs("Could not set height, either no default font set, or fit type is not kFitWrap");
         TheDebug.Notify(fs.Str());
     }
-    *(int *)this = 0;
-    *(int *)((unsigned char *)this + 4) = 0;
-    return (DataNode)this;
+    return DataNode(0);
 }
 
 void UILabel::SetFontMat(char const *c, int i) {
     RndMat *rndmat = nullptr;
-    auto labelStyle = LStyle(i);
+    LabelStyle &labelStyle = LStyle(i);
 
 }
 

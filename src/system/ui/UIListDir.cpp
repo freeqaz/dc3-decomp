@@ -104,22 +104,15 @@ void UIListDir::PreLoad(BinStream &bs) {
 }
 
 void UIListDir::PostLoad(BinStream &bs) {
-    int revs = bs.PopRev(this);
+    BinStreamRev d(bs, bs.PopRev(this));
     RndDir::PostLoad(bs);
     int orientation, numdisplay, compstate;
     float speed;
-    bs >> orientation;
-    bs >> mFadeOffset;
+    d >> orientation >> mFadeOffset;
     mOrientation = (UIListOrientation)orientation;
-    bs >> mTestMode;
-    bs >> numdisplay;
-    bs >> mElementSpacing;
-    bs >> speed;
-    bs >> mTestNumData;
-    bs >> compstate;
-    bs >> mTestGapSize;
-    bs >> mTestDisableElements;
-    if (revs > 0) bs >> mScrollHighlightChange;
+    d >> mTestMode >> numdisplay >> mElementSpacing >> speed >> mTestNumData >> compstate
+        >> mTestGapSize >> mTestDisableElements;
+    if (d.rev > 0) d >> mScrollHighlightChange;
     mTestState.SetNumDisplay(numdisplay, true);
     mTestState.SetSpeed(speed);
     mTestComponentState = (UIComponent::State)compstate;
@@ -277,34 +270,39 @@ void UIListDir::CreateElements(UIList *uilist, std::vector<UIListWidget *> &vec,
     }
 }
 
-// Calculates element position in a grid layout for UI list scrolling
-// position: floating-point index (supports fractional values for smooth scrolling)
-// gridSpan: number of elements per row/column
-// primaryBase: base offset along scroll direction
-// secondaryBase: base offset perpendicular to scroll direction
-// Returns: primary offset (along scroll direction)
+// Calculates element position in 3D space based on grid layout and scroll position.
+// position: fractional position in the list (e.g., 2.5 = between elements 2 and 3)
+// gridSpan: number of columns in the grid
+// primaryBase/secondaryBase: base offsets for primary (scroll) and secondary (grid) axes
+// Returns: the primary axis offset
 float UIListDir::SetElementPos(Vector3 &v, float position, int gridSpan, float primaryBase, float secondaryBase) const {
     v.Zero();
-    // Split position into integer and fractional components
+
+    // Split position into integer and fractional parts
     float floored = std::floor(position);
-    float fractional = position - floored;
     int intPos = (int)floored;
-    // Calculate grid coordinates: row/column indices
+
+    // Calculate grid coordinates (row = scroll position, col = grid column)
     int rowIndex = intPos / gridSpan;
     int colIndex = intPos % gridSpan;
+
+    // Calculate offsets along each axis
     float colOffset = (float)colIndex;
-    float rowOffset = (float)rowIndex;
-    // Calculate offsets along secondary (perpendicular) and primary (scroll) axes
     float secondaryOffset = colOffset * mElementSpacing + secondaryBase;
+
+    float fractional = position - (float)intPos;
+    float rowOffset = (float)rowIndex;
     float primaryOffset = (fractional + rowOffset) * mElementSpacing + primaryBase;
-    // Apply offsets based on list orientation
+
+    // Apply offsets based on orientation
     if (mOrientation == kUIListVertical) {
-        v.z -= primaryOffset;
-        v.x += secondaryOffset;
+        v.z -= primaryOffset;   // Primary axis: vertical scroll (Z)
+        v.x += secondaryOffset; // Secondary axis: horizontal grid (X)
     } else {
-        v.x += primaryOffset;
-        v.z -= secondaryOffset;
+        v.x += primaryOffset;   // Primary axis: horizontal scroll (X)
+        v.z -= secondaryOffset; // Secondary axis: vertical grid (Z)
     }
+
     return primaryOffset;
 }
 

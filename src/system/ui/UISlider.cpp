@@ -70,9 +70,15 @@ void UISlider::PreLoad(BinStream &bs) {
 }
 
 void UISlider::PostLoad(BinStream &bs) {
-    bs.PopRev(this);
+    BinStreamRev d(bs, bs.PopRev(this));
     UIComponent::PostLoad(bs);
-
+    unk50.PostLoad(0);
+    if (d.rev > 0) {
+        d >> mSelectToScroll;
+    }
+    if (d.rev > 1) {
+        d >> mVertical;
+    }
     Update();
 }
 
@@ -167,6 +173,7 @@ void UISlider::Update() {
     static Symbol mesh("mesh");
     static Symbol mats("mats");
 
+    // Clear material pointers for all states
     unk68 = 0;
     unk6c = 0;
     unk70 = 0;
@@ -175,44 +182,45 @@ void UISlider::Update() {
     unk7c = 0;
 
     const DataArray *typeDef = TypeDef();
-    if (typeDef == 0 || unk50 == 0) {
+    if (!typeDef || !unk50) {
         return;
     }
 
+    // Load mesh resource if specified
     DataArray *meshArray = typeDef->FindArray(mesh, false);
-    if (meshArray != 0) {
-        const char *meshStr = meshArray->FindStr(mesh);
-        if (meshStr != 0) {
+    if (meshArray) {
+        DataNode &meshNode = meshArray->Node(1);
+        const char *meshStr = meshNode.Str(meshArray);
+        if (meshStr) {
             unk68 = (int)unk50->Find<RndMesh>(meshStr, true);
         }
     }
 
+    // Load materials for each UI state
     DataArray *matsArray = typeDef->FindArray(mats, false);
-    if (matsArray == 0) {
+    if (!matsArray) {
         return;
     }
 
     int matsArraySize = matsArray->Size();
+    if (matsArraySize <= 1) {
+        return;
+    }
+
     for (int i = 1; i < matsArraySize; i++) {
-        int itemType = matsArray->Type(i);
-        if (itemType != kDataArray) {
-            continue;
-        }
-
-        DataArray *matItemArray = matsArray->Array(i);
-        if (matItemArray == 0) {
-            continue;
-        }
-
-        int itemArraySize = matItemArray->Size();
-        if (itemArraySize <= 0) {
+        DataNode &arrayNode = matsArray->Node(i);
+        DataArray *matItemArray = arrayNode.Array(matsArray);
+        if (!matItemArray || matItemArray->Size() == 0) {
             continue;
         }
 
         Symbol itemSym = matItemArray->Sym(0);
         State itemState = SymToUIComponentState(itemSym);
-        const char *matName = matItemArray->FindStr(mats);
-        if (matName != 0) {
+        DataNode &matNode = matItemArray->Node(1);
+        const char *matName = matNode.Str(matItemArray);
+        if (matName) {
+            // Compute offset into state material array (unk68-unk7c)
+            // Base offset 0x1b maps State enum to member offset
             int stateOffset = itemState + 0x1b;
             int byteOffset = stateOffset * 4;
             int thisAddr = (int)this;
