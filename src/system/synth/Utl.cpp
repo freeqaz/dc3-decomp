@@ -3,8 +3,10 @@
 // No idea if these numbers are right - need to align with measures syms below
 float measuresMs[7] = {0.0625, 0.125, 0.1875, 0.25, 0.375, 0.5, 1.0};
 
+FileCacheHelper gWavFileCacheHelper;
+
 void SynthUtlInit() {
-    FileCache::RegisterWavCacheHelper(gWavFileCacheHelper);
+    FileCache::RegisterWavCacheHelper(&gWavFileCacheHelper);
 }
 
 float CalcSpeedFromTranspose(float f1) {
