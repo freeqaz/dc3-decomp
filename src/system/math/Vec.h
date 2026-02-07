@@ -276,7 +276,7 @@ inline void Interp(const Vector2 &v1, const Vector2 &v2, float f, Vector2 &res) 
 
 inline void Interp(const Vector3 &v1, const Vector3 &v2, float f, Vector3 &dst) {
     if (f == 0.0f) {
-        // Copy as integers for codegen match
+        // Copy all fields including PAD via integer copy to avoid FP operations
         ((u32 *)&dst)[0] = ((u32 *)&v1)[0];
         ((u32 *)&dst)[1] = ((u32 *)&v1)[1];
         ((u32 *)&dst)[2] = ((u32 *)&v1)[2];
@@ -284,21 +284,22 @@ inline void Interp(const Vector3 &v1, const Vector3 &v2, float f, Vector3 &dst) 
         return;
     }
     if (f == 1.0f) {
-        // Copy as integers for codegen match
+        // Copy all fields including PAD via integer copy to avoid FP operations
         ((u32 *)&dst)[0] = ((u32 *)&v2)[0];
         ((u32 *)&dst)[1] = ((u32 *)&v2)[1];
         ((u32 *)&dst)[2] = ((u32 *)&v2)[2];
         ((u32 *)&dst)[3] = ((u32 *)&v2)[3];
         return;
     }
-    // Load values in the order the compiler expects for register allocation
-    float v1_y = v1.y;
-    float v2_y = v2.y;
+    // Cache z and x components to force specific load order for register allocation.
+    // Y is accessed inline in the expression to match target instruction scheduling.
+    float v1_z = v1.z;
+    float v2_z = v2.z;
     float v1_x = v1.x;
     float v2_x = v2.x;
-    // Compute and store in z, y, x order to match target
-    dst.z = f * (v2.z - v1.z) + v1.z;
-    dst.y = f * (v2_y - v1_y) + v1_y;
+    // Compute dst.y, dst.z, dst.x in this specific order to match target stores
+    dst.y = f * (v2.y - v1.y) + v1.y;
+    dst.z = f * (v2_z - v1_z) + v1_z;
     dst.x = f * (v2_x - v1_x) + v1_x;
 }
 
