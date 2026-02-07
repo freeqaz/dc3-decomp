@@ -7,6 +7,7 @@
 #include "os/File.h"
 #include "os/SynchronizationEvent.h"
 #include "os/System.h"
+#include "utl/Std.h"
 
 namespace {
     std::list<DecompressTask> gDecompressionQueue;
@@ -272,8 +273,13 @@ void ChunkStream::DecompressChunkAsync() {
 
 bool ChunkStream::PollDecompressionWorker() {
     gDecompressionCritSec.Enter();
-    if (gDecompressionQueue.size() != 0) {
-        DecompressTask task = gDecompressionQueue.front();
+    unsigned int counter = 0;
+    for (std::list<DecompressTask>::iterator it = gDecompressionQueue.begin(); it != gDecompressionQueue.end(); it++) {
+        counter++;
+    }
+    if (counter != 0) {
+        DecompressTask task;
+        memcpy(&task, &gDecompressionQueue.front(), sizeof(DecompressTask));
         gDecompressionQueue.pop_front();
         gDecompressionCritSec.Exit();
         DecompressChunk(task);

@@ -192,10 +192,12 @@ int MemHeap::AllocSize(int *ptr) {
 
 void MemHeap::FirstFit(int size, int align, FreeBlockInfo &blockinfo) {
     FreeBlock *prev = nullptr;
-    for (auto block = mFreeBlockChain; block != nullptr; block = block->mNextBlock) {
+    for (FreeBlock *block = mFreeBlockChain; block != nullptr; block = block->mNextBlock) {
+        // Calculate the data start position (after FreeBlock header)
         int start = ((int)block >> 2) + 1;
-        int alignment = start + (1 << align) - 1 >> (1 << align);
-        int pad = alignment - start;
+        // Calculate padding needed to align data to (1 << align) bytes
+        int pad = ((((unsigned int)(1 << align) + start) - 1) >> align) << align;
+        pad = pad - start;
         if ((int)block->mSizeWords >= pad + size) {
             blockinfo.mSizeWords = block->mSizeWords;
             blockinfo.mPadWords = pad;
@@ -203,6 +205,7 @@ void MemHeap::FirstFit(int size, int align, FreeBlockInfo &blockinfo) {
             blockinfo.mPrevBlock = prev;
             return;
         }
+        prev = block;
     }
 }
 

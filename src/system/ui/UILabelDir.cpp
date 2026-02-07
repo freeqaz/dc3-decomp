@@ -58,15 +58,16 @@ BEGIN_PROPSYNCS(UILabelDir)
 END_PROPSYNCS
 
 BEGIN_SAVES(UILabelDir)
-    RndDir::Save(bs);
-    bs << 0xB;
+    SAVE_REVS(11, 0)
+    SAVE_SUPERCLASS(RndDir)
     bs << mFocusAnim;
     bs << mPulseAnim;
     bs << mFocusedBackgroundGroup;
     bs << mUnfocusedBackgroundGroup;
     bs << mAllowEditText;
     bs << mDefaultColor;
-    for (int i = 0; i < 10; i++) {
+    // Serialize all UIComponent state colors
+    for (int i = 0; i < UIComponent::kNumStates; i++) {
         bs << mColors[i];
     }
     UIFontImporter::Save(bs);

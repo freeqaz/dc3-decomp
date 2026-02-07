@@ -1183,11 +1183,11 @@ void HamDirector::SetMainFaceOverrideClip(Symbol s) {
 }
 
 Symbol HamDirector::GetMainFaceOverrideClip() const {
-    HamCharacter *hChar = GetCharacter(0);
-    if (hChar) {
+    HamCharacter *hChar;
+    hChar = GetCharacter(0);
+    if (hChar)
         return hChar->GetFaceOverrideClip();
-    } else
-        return Symbol();
+    return Symbol();
 }
 
 void HamDirector::SetMainFaceOverrideWeight(float wt) {
