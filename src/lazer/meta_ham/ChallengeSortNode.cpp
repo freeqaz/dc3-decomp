@@ -206,7 +206,7 @@ void ChallengeSortNode::SetNewIcon(UILabel *label) const {
     int timestamp = TheChallengeSortMgr->GetOwnerChallengeTimeStamp(
         mChallengeRecord->GetChallengeRow().mSongID
     );
-    if (timestamp > mChallengeRecord->GetChallengeRow().mTimeStamp
+    if (timestamp > (int)mChallengeRecord->GetChallengeRow().mTimeStamp
         || mChallengeRecord->GetUnk48() == mChallengeRecord->GetUnk4c()
         || mChallengeRecord->GetUnk50() == 4 || mChallengeRecord->GetUnk50() == 2
         || mChallengeRecord->GetUnk50() == 3) {

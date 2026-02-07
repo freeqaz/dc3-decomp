@@ -9,19 +9,19 @@ Hmx::Rect DrawUtlRect;
 
 namespace {
     void ScreenSpace(Hmx::Rect &rect) {
-        rect.x = DrawUtlVec3.x;
-        rect.y = DrawUtlVec3.y;
-        rect.h = DrawUtlVec3.z;
-        float scale = TheRnd.Width() / TheRnd.Height();
-        float rectW;
+        float vx = DrawUtlVec3.x;
+        float vy = DrawUtlVec3.y;
+        float vz = DrawUtlVec3.z;
+        rect.x = vx;
+        rect.y = vy;
+        rect.w = vz;
+        float scale = (float)TheRnd.Width() / (float)TheRnd.Height();
         if (scale > 1.3333334f) {
-            rectW = 1.3333334f / scale;
-            if (DrawUtlVec3.z - 1.3333334f / scale < 0.0) {
-                rectW = DrawUtlVec3.z;
-            }
-            rect.h = rectW;
+            float rectW = 1.3333334f / scale;
+            float diff = vz - rectW;
+            rect.w = diff >= 0.0f ? rectW : vz;
         }
-        rect.w = scale * 0.75f * rect.h;
+        rect.h = (scale * 0.75f) * rect.w;
     }
 
     void PixelSpace(Hmx::Rect &rect) {

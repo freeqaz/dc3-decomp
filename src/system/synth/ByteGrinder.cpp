@@ -58,7 +58,8 @@ DataNode hashTo5Bits(DataArray *da) {
     unsigned long seed = da->Int(1) & 0xFF;
     unsigned long ret = hashMapping[seed];
 
-    if (da->Size() > 2) {
+    bool moreThanTwo = da->Size() > 2;
+    if (moreThanTwo) {
         seed = da->Int(1);
         int max = DIM(hashMapping);
         for (int idx = 0; idx < max; idx++) {
@@ -75,7 +76,8 @@ DataNode hashTo6Bits(DataArray *da) {
     unsigned long seed = da->Int(1) & 0xFF;
     unsigned long ret = hashMapping[seed];
 
-    if (da->Size() > 2) {
+    bool moreThanTwo = da->Size() > 2;
+    if (moreThanTwo) {
         seed = da->Int(1);
         int max = DIM(hashMapping);
         for (int idx = 0; idx < max; idx++) {
