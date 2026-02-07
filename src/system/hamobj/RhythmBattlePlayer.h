@@ -58,9 +58,15 @@ public:
     void UpdateAnimations(Hmx::Object *);
     void ResetCombo();
     void SetActive(bool);
+    void AnimateOut();
     bool Unk2a8Check() const { return unk2a5 && unk2a8 > 12; }
     int Unk280() const { return unk280; }
     int Unk260() const { return unk260; }
+    int Unk26c() const { return unk26c; }
+    float Unk284() const { return unk284; }
+    void SetUnk2a4(bool b) { unk2a4 = b; }
+    void SetUnk2a5(bool b) { unk2a5 = b; }
+    int ZoneValue() const { return mInTheZone; }
 
 protected:
     RhythmBattlePlayer();

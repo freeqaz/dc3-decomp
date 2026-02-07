@@ -77,6 +77,34 @@ BEGIN_COPYS(HamIKEffector)
     END_COPYING_MEMBERS
 END_COPYS
 
+BinStreamRev &operator>>(BinStreamRev &d, HamIKEffector::Constraint &c) {
+    d >> c.mTarget;
+    if (d.rev < 6) {
+        Symbol s;
+        d >> s;
+    }
+    if (d.rev > 2) {
+        d >> c.mWeight;
+    }
+    return d;
+}
+
+// BinStreamRev * operator>>(BinStreamRev *param_1,Constraint *param_2)
+
+// {
+//   Symbol local_20 [2];
+
+//   ObjRefConcrete<>::Load((ObjRefConcrete<> *)param_2,param_1->stream,true,(ObjectDir
+//   *)0x0); if ((int)param_1->rev < 6) {
+//     local_20[0].mStr = gNullStr;
+//     BinStream::operator>>(param_1->stream,local_20);
+//   }
+//   if (2 < (int)param_1->rev) {
+//     BinStream::ReadEndian(param_1->stream,param_2 + 0x14,4);
+//   }
+//   return param_1;
+// }
+
 void HamIKEffector::SetName(const char *name, ObjectDir *dir) {
     Hmx::Object::SetName(name, dir);
     unkcc = dynamic_cast<Character *>(dir);
