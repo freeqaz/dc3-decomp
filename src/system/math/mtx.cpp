@@ -27,14 +27,16 @@ Hmx::Matrix4::Matrix4(const Transform &tf) {
     w.w = 1.0f;
 }
 
+// Computes determinant of 3x3 matrix and returns its reciprocal (1/det)
+// Used for matrix inversion - returns 0 if matrix is singular
 float Det(const Hmx::Matrix3 &m) {
-    Vector3 cross;
-    Cross(m.z, m.y, cross);
-    float det = Dot(m.x, cross);
-    if (det != 0) {
-        det = 1.0f / det;
+    float det = (m.y.y * m.z.z - m.y.z * m.z.y) * m.x.x
+                - (m.y.x * m.z.z - m.y.z * m.z.x) * m.x.y
+                + (m.y.x * m.z.y - m.y.y * m.z.x) * m.x.z;
+    if (det == 0) {
+        return det;
     }
-    return det;
+    return 1.0f / det;
 }
 
 void Invert(const Hmx::Matrix3 &min, Hmx::Matrix3 &mout) {

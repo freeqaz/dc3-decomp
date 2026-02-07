@@ -1108,9 +1108,14 @@ void MetaPerformer::SaveDanceBattleScores(Symbol s1) {
     }
 }
 
+// Character selection priority:
+// 1. If both players have valid, non-conflicting characters -> use player preferences
+// 2. If skeleton tracking differs -> prioritize active skeleton
+// 3. If one has preference -> use that player as primary
+// 4. Otherwise -> use tracking age (newer player gets priority)
 void MetaPerformer::CalcCharacters(
     const HamSongMetadata *data,
-    bool,
+    bool b2,
     PlayerFlag flags,
     HamPlayerData *&primaryPlayer,
     Symbol &primaryCrew,
@@ -1123,40 +1128,113 @@ void MetaPerformer::CalcCharacters(
 ) {
     HamPlayerData *pPlayer1Data = TheGameData->Player(0);
     HamPlayerData *pPlayer2Data = TheGameData->Player(1);
-    Symbol s8c = pPlayer1Data->Unk48();
-    Symbol s90 = pPlayer2Data->Unk48();
+    Symbol player1Char = pPlayer1Data->Unk48();
+    Symbol player2Char = pPlayer2Data->Unk48();
+
+    // Clear character preferences based on PlayerFlag
     if (flags == 0 || flags == 2) {
-        s8c = gNullStr;
+        player1Char = gNullStr;
     }
     if (flags == 1 || flags == 2) {
-        s90 = gNullStr;
+        player2Char = gNullStr;
     }
-    bool has_s8c = s8c != gNullStr;
-    bool has_s90 = s90 != gNullStr;
-    if (has_s8c && has_s90 && !CharConflict(s8c, s90)) {
+
+    bool hasPlayer1Char = player1Char != gNullStr;
+    bool hasPlayer2Char = player2Char != gNullStr;
+
+    // Fast path: Both players have valid, non-conflicting characters
+    if (hasPlayer1Char && hasPlayer2Char && !CharConflict(player1Char, player2Char)) {
         primaryPlayer = pPlayer1Data;
         secondaryPlayer = pPlayer2Data;
-        primaryCrew = GetCrewForCharacter(s8c);
-        primaryChar = s8c;
-        Symbol primaryPreferredOutfit = primaryPlayer->GetPreferredOutfit();
-        primaryOutfit = GetUnlockedOutfit(primaryPreferredOutfit);
-        secondaryCrew = GetCrewForCharacter(s90);
-        secondaryChar = s90;
-        Symbol secondaryPreferredOutfit = secondaryPlayer->GetPreferredOutfit();
-        secondaryOutfit = GetUnlockedOutfit(secondaryPreferredOutfit);
+        primaryCrew = GetCrewForCharacter(player1Char);
+        primaryChar = player1Char;
+        primaryOutfit = GetUnlockedOutfit(primaryPlayer->GetPreferredOutfit());
+        secondaryCrew = GetCrewForCharacter(player2Char);
+        secondaryChar = player2Char;
+        secondaryOutfit = GetUnlockedOutfit(secondaryPlayer->GetPreferredOutfit());
     } else {
+        // Need to resolve character conflict or missing preferences
         int skeleton1 = pPlayer1Data->GetSkeletonTrackingID();
         int skeleton2 = pPlayer2Data->GetSkeletonTrackingID();
 
+        Symbol primaryPlayerChar;   // Character preference for primary slot
+        Symbol secondaryPlayerChar; // Character preference for secondary slot
+
+        // Determine player priority based on skeleton tracking state
+        if (skeleton1 > 0 && skeleton2 == 0) {
+            // Only P1 is actively tracked
+            primaryPlayer = pPlayer1Data;
+            secondaryPlayer = pPlayer2Data;
+            primaryPlayerChar = player1Char;
+            secondaryPlayerChar = player2Char;
+        } else if (skeleton2 > 0 && skeleton1 == 0) {
+            // Only P2 is actively tracked
+            primaryPlayer = pPlayer2Data;
+            secondaryPlayer = pPlayer1Data;
+            primaryPlayerChar = player2Char;
+            secondaryPlayerChar = player1Char;
+        } else if (hasPlayer1Char && !hasPlayer2Char) {
+            // P1 has character preference, P2 doesn't
+            primaryPlayer = pPlayer1Data;
+            secondaryPlayer = pPlayer2Data;
+            primaryPlayerChar = player1Char;
+            secondaryPlayerChar = player2Char;
+        } else if (hasPlayer2Char && !hasPlayer1Char) {
+            // P2 has character preference, P1 doesn't
+            primaryPlayer = pPlayer2Data;
+            secondaryPlayer = pPlayer1Data;
+            primaryPlayerChar = player2Char;
+            secondaryPlayerChar = player1Char;
+        } else if (pPlayer1Data->TrackingAgeSeconds() < pPlayer2Data->TrackingAgeSeconds()) {
+            // Use tracking age: newer player (P2) gets priority
+            primaryPlayer = pPlayer2Data;
+            secondaryPlayer = pPlayer1Data;
+            primaryPlayerChar = player2Char;
+            secondaryPlayerChar = player1Char;
+        } else {
+            // Default: P1 is primary
+            primaryPlayer = pPlayer1Data;
+            secondaryPlayer = pPlayer2Data;
+            primaryPlayerChar = player1Char;
+            secondaryPlayerChar = player2Char;
+        }
+
+        // Get song's default primary character from metadata
         CalcPrimarySongCharacter(data, primaryCrew, primaryChar, primaryOutfit);
-        if (s90 != gNullStr || s8c != gNullStr) {
-            if (s90 == gNullStr) {
-                if (!CharConflict(s8c, primaryChar)) {
-                    secondaryChar = primaryChar;
+
+        // Try to use player preferences for secondary character
+        if (secondaryPlayerChar != gNullStr || primaryPlayerChar != gNullStr) {
+            if (secondaryPlayerChar == gNullStr) {
+                // Secondary player has no preference, try using primary's preference
+                if (!CharConflict(primaryPlayerChar, primaryChar)) {
+                    secondaryChar = primaryPlayerChar;
+                    secondaryOutfit = GetUnlockedOutfit(secondaryPlayer->GetPreferredOutfit());
+                    secondaryCrew = GetCrewForCharacter(primaryPlayerChar);
+                    return;
                 }
             } else {
+                // Secondary player has preference, check if we can swap
+                Symbol tempCrew = GetCrewForCharacter(primaryPlayerChar);
+                Symbol tempOutfit = GetUnlockedOutfit(primaryPlayer->GetPreferredOutfit());
+                if (!CharConflict(primaryChar, primaryPlayerChar)) {
+                    // Can swap: give primary player their preference, put song character on secondary
+                    secondaryChar = primaryChar;
+                    secondaryOutfit = primaryOutfit;
+                    secondaryCrew = primaryCrew;
+                    primaryCrew = tempCrew;
+                    primaryChar = primaryPlayerChar;
+                    primaryOutfit = tempOutfit;
+                    return;
+                }
+                // Cannot swap: override primary with player preference
+                primaryCrew = tempCrew;
+                primaryChar = primaryPlayerChar;
+                primaryOutfit = tempOutfit;
             }
         }
+
+        // Fall back to song's default secondary character
+        CalcSecondarySongCharacter(data, b2, primaryOutfit, secondaryCrew, secondaryChar, secondaryOutfit);
     }
 }
 
@@ -1164,30 +1242,28 @@ void MetaPerformer::HandleGameplayEnded(const EndGameResult &egr) {
     for (int i = 0; i < 2; i++) {
         HamPlayerData *pPlayer = TheGameData->Player(i);
         MILO_ASSERT(pPlayer, 0x377);
-        HamProfile *pProfileFromPad = TheProfileMgr.GetProfileFromPad(pPlayer->PadNum());
+        int padNum = pPlayer->PadNum();
+        HamProfile *pProfileFromPad = TheProfileMgr.GetProfileFromPad(padNum);
         Hmx::Object *pPlayerProvider = pPlayer->Provider();
         MILO_ASSERT(pPlayerProvider, 0x37e);
 
         static Symbol score("score");
-        const DataNode *scoreNode = pPlayerProvider->Property(score);
-        if (TheGameMode->Infinite() != 0 && 0 < scoreNode->Int()) {
+        int scoreInt = pPlayerProvider->Property(score)->Int();
+        if (TheGameMode->Infinite() && 0 < scoreInt) {
             static Symbol cumulative_score("cumulative_score");
-            const DataNode *cumulativeNode = pPlayerProvider->Property(cumulative_score);
             pPlayerProvider->SetProperty(
-                cumulative_score, scoreNode->Int() + cumulativeNode->Int()
+                cumulative_score, pPlayerProvider->Property(cumulative_score)->Int() + scoreInt
             );
         }
 
-        if (pProfileFromPad) {
-            if (pProfileFromPad->HasValidSaveData()) { // and something else
-                if (0 < scoreNode->Int()) {
-                    pProfileFromPad->GetMetagameStats()->HandleGameplayEnded(
-                        pProfileFromPad, pPlayer, egr
-                    );
-                }
-                if (TheGameMode->InMode("campaign") && egr == kEndGameResult_3) {
-                    pProfileFromPad->DiscardRecentCampaignProgress();
-                }
+        if (pProfileFromPad && pProfileFromPad->HasValidSaveData() && !TheAccomplishmentMgr->Unk30(padNum)) {
+            if (0 < scoreInt) {
+                pProfileFromPad->GetMetagameStats()->HandleGameplayEnded(
+                    pProfileFromPad, pPlayer, egr
+                );
+            }
+            if (TheGameMode->InMode("campaign") && egr == kEndGameResult_3) {
+                pProfileFromPad->DiscardRecentCampaignProgress();
             }
         }
     }

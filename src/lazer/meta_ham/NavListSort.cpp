@@ -91,54 +91,49 @@ void NavListSort::DeleteTree() {
 }
 
 bool NavListSort::SetHighlightID(DataArray *a) {
-    NavListSortNode *tmp = unk50;
+    NavListSortNode *prevHighlight = unk50;
+    unk54 = prevHighlight;
     unk50 = nullptr;
-    unk54 = tmp;
-    int aSize = a->Size();
-    if (aSize == 0)
+    int arraySize = a->Size();
+    if (arraySize == 0)
         return false;
-    if (aSize == 1) {
-        auto it = std::find_if(unk3c.begin(), unk3c.end(), NodeFind(a->Sym(0)));
-        if (it == unk3c.end())
+    if (arraySize == 1) {
+        auto nodeIt = std::find_if(unk3c.begin(), unk3c.end(), NodeFind(a->Sym(0)));
+        if (nodeIt == unk3c.end())
             return false;
-        else {
-            unk50 = *it;
-            return true;
-        }
-    } else {
-        auto si = std::find_if(unk30.begin(), unk30.end(), NodeFind(a->Sym(0)));
-        if (si == unk30.end())
-            return false;
-        MILO_ASSERT(kNodeShortcut == (*si)->GetType(), 0x44);
-        const std::list<NavListSortNode *> &children = (*si)->Children();
-        auto it = std::find_if(children.begin(), children.end(), NodeFind(a->Sym(1)));
-        if (it == children.end())
-            return false;
-        MILO_ASSERT(kNodeHeader == (*it)->GetType(), 0x4E);
-        if (aSize == 2) {
-            unk50 = *it;
-            return true;
-        }
-        const std::list<NavListSortNode *> &grandChildren = (*it)->Children();
-        auto gIt =
-            std::find_if(grandChildren.begin(), grandChildren.end(), NodeFind(a->Sym(2)));
-        if (gIt == grandChildren.end())
-            return false;
-        if (aSize == 3) {
-            unk50 = *gIt;
-            return true;
-        }
-        const std::list<NavListSortNode *> &greatGrandChildren = (*gIt)->Children();
-        auto ggIt = std::find_if(
-            greatGrandChildren.begin(), greatGrandChildren.end(), NodeFind(a->Sym(3))
-        );
-        if (ggIt == greatGrandChildren.end())
-            return false;
-        else {
-            unk50 = *gIt;
-            return true;
-        }
+        unk50 = *nodeIt;
+        return true;
     }
+    auto shortcutIt = std::find_if(unk30.begin(), unk30.end(), NodeFind(a->Sym(0)));
+    if (shortcutIt == unk30.end())
+        return false;
+    MILO_ASSERT(kNodeShortcut == (*shortcutIt)->GetType(), 0x44);
+    const std::list<NavListSortNode *> &children = (*shortcutIt)->Children();
+    auto headerIt = std::find_if(children.begin(), children.end(), NodeFind(a->Sym(1)));
+    if (headerIt == children.end())
+        return false;
+    MILO_ASSERT(kNodeHeader == (*headerIt)->GetType(), 0x4E);
+    if (arraySize == 2) {
+        unk50 = *headerIt;
+        return true;
+    }
+    const std::list<NavListSortNode *> &grandChildren = (*headerIt)->Children();
+    auto itemIt =
+        std::find_if(grandChildren.begin(), grandChildren.end(), NodeFind(a->Sym(2)));
+    if (itemIt == grandChildren.end())
+        return false;
+    if (arraySize == 3) {
+        unk50 = *itemIt;
+        return true;
+    }
+    const std::list<NavListSortNode *> &greatGrandChildren = (*itemIt)->Children();
+    auto subItemIt = std::find_if(
+        greatGrandChildren.begin(), greatGrandChildren.end(), NodeFind(a->Sym(3))
+    );
+    if (subItemIt == greatGrandChildren.end())
+        return false;
+    unk50 = *itemIt;
+    return true;
 }
 
 int NavListSort::GetCurrentShortcut() {
