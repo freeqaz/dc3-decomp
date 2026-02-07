@@ -3,6 +3,7 @@
 
 // void ParseMBT(const char *, int &, int &, int &);
 const char *TickFormat(int, const MeasureMap &);
+
 const char *FormatTimeMSH(float);
 
 struct MBT {
