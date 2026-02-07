@@ -1,4 +1,5 @@
 #include "SynapseAPO.h"
+#include "Synapse_dsp.h"
 #include <new>
 
 namespace DSP {
@@ -13,7 +14,13 @@ SynapseAPO::SynapseAPO() : CSampleXAPOBase<SynapseAPO, SynapseAPOParams>() {
 
 SynapseAPO::~SynapseAPO() {}
 
-void SynapseAPO::SetSamplingRate(float rate) {}
+void SynapseAPO::SetSamplingRate(float rate) {
+  Synapse::Synapse* prevSynapse = unk168;
+  if (prevSynapse != 0) {
+    delete prevSynapse;
+  }
+  unk168 = new Synapse::Synapse(rate);
+}
 
 void SynapseAPO::OnSetParameters(const SynapseAPOParams& params) {}
 

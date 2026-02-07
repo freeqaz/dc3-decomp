@@ -2,6 +2,10 @@
 
 namespace DSP {
 
+namespace Synapse {
+class Synapse;
+}
+
 struct SynapseAPOParams {
   SynapseAPOParams();
 };
@@ -25,6 +29,10 @@ public:
 protected:
   virtual void OnSetParameters(const Params& params) = 0;
   virtual void DoProcess(const Params& params, int* arg1, float arg2, int arg3, int arg4) = 0;
+
+private:
+  // Base class padding - ensures derived class members start at offset 0x168
+  char pad[0x160];
 };
 
 class SynapseAPO : public CSampleXAPOBase<SynapseAPO, SynapseAPOParams> {
@@ -36,7 +44,7 @@ public:
   void DoProcess(const SynapseAPOParams& params, int* arg1, float arg2, int arg3, int arg4);
 
 private:
-  int unk168;
+  Synapse::Synapse* unk168;
   SynapseAPOParams unk16C;
 };
 
