@@ -45,6 +45,7 @@ public:
     const std::vector<PronunciationsLoc> &PronunciationsLocalized() const;
     const char *Album() const;
     const char *Title() const;
+    int YearReleased() const { return mYearReleased; }
 
 private:
     void InitHamSongMetadata();

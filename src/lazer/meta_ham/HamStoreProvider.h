@@ -13,6 +13,7 @@
 
 class PackSongListProvider : public UIListProvider, public Hmx::Object {
 public:
+    virtual ~PackSongListProvider();
     virtual void Text(int, int, UIListLabel *, UILabel *) const;
     virtual Symbol DataSymbol(int);
     virtual int NumData() const;

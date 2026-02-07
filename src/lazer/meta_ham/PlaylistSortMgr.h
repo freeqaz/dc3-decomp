@@ -44,7 +44,7 @@ public:
 
     static void Init(SongPreview &);
 
-    std::vector<Playlist> unk78;
+    std::vector<Playlist*> unk78;
     CustomPlaylist unk84;
     String unkb0;
     String unkb8;

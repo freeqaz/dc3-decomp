@@ -3,7 +3,10 @@
 #include "SongRecord.h"
 #include "SongSort.h"
 
+class VoiceControlPanel;
+
 class SongSortMgr : public NavListSortMgr {
+    friend class VoiceControlPanel;
 public:
     virtual DataNode Handle(DataArray *, bool);
     virtual bool HeadersSelectable(); // 0x6c

@@ -52,6 +52,8 @@ public:
     void SetName(Symbol name) { mName = name; }
     void SetUnk8(bool b) { unk8 = b; }
     bool GetUnk8() const { return unk8; }
+    void SetUnk9(bool b) { unk9 = b; }
+    bool GetUnk9() const { return unk9; }
 
 protected:
     virtual void HandleChange() {}

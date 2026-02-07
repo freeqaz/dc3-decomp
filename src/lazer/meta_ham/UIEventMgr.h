@@ -7,6 +7,8 @@
 class UIEventMgr : public Hmx::Object {
 public:
     enum EventType {
+        kDialogEvent = 0,
+        kTransitionEvent = 1
     };
     class BandEvent {
     public:

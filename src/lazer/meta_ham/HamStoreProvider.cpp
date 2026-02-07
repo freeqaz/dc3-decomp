@@ -44,6 +44,8 @@ Symbol PackSongListProvider::DataSymbol(int idx) {
     return mSongs->Node(idx).Array(mSongs)->Sym(0);
 }
 
+PackSongListProvider::~PackSongListProvider() {}
+
 #pragma endregion PackSongListProvider
 #pragma region HamStoreProvider
 
@@ -57,8 +59,17 @@ HamStoreProvider::HamStoreProvider(
 }
 
 HamStoreProvider::~HamStoreProvider() {
+    // Clean up dynamically allocated vectors in the map
+    for (std::map<Symbol, std::vector<StoreOffer *> *>::iterator it = unk38.begin();
+         it != unk38.end();
+         ++it) {
+        delete it->second;
+        it->second = 0;
+    }
     unk38.clear();
+    mFilteredOffers = 0;
     RELEASE(unk74);
+    unk74 = 0;
 }
 
 int HamStoreProvider::NumOffersInCart() {
