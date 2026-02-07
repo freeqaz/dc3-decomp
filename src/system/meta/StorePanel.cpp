@@ -68,10 +68,10 @@ void StorePanel::Exit() {
 }
 
 bool StorePanel::Exiting() const {
-    if (mPurchaser && mPurchaser->unk8 != 0) {
-        UIPanel::Exiting();
+    if (mPurchaser && mPurchaser->IsPurchasing()) {
+        return true;
     }
-    return true;
+    return UIPanel::Exiting();
 }
 
 void StorePanel::Poll() {}

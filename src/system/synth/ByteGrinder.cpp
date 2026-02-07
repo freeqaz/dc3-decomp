@@ -499,7 +499,7 @@ DataNode op40(DataArray *msg) {
 
 DataNode op41(DataArray *msg) {
     u32 operand = msg->Int(1);
-    u8 w = msg->Int(2);
+    u32 w = (u8)msg->Int(2);
 
     u32 tmp = ((u8)(w >> 2) ^ 0x17) | ((w << 6) & 0xC0);
     return u8(tmp ^ operand);
