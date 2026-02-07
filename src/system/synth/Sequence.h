@@ -162,6 +162,8 @@ public:
     virtual SeqInst *MakeInstImpl();
 
     int MaxSimultaneous() const { return mMaxSimultaneous; }
+    float AvgIntervalSecs() const { return mAvgIntervalSecs; }
+    float IntervalSpread() const { return mIntervalSpread; }
 
     NEW_OBJ(RandomIntervalGroupSeq)
     static void Init() { REGISTER_OBJ_FACTORY(RandomIntervalGroupSeq) }

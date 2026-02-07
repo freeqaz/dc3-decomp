@@ -71,8 +71,8 @@ public:
 
 protected:
     int unk40;
-    int unk44;
-    int unk48;
+    float unk44;
+    float unk48;
     std::vector<float> unk4c;
     bool unk54;
 };
