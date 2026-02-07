@@ -71,18 +71,19 @@ bool MQSongSortMgr::IsCharacter(Symbol sym) const {
 
 void MQSongSortMgr::UpdateList() {
     MILO_ASSERT(TheCampaign, 0x6e);
-    if (!unk90.empty()) {
+    if (unk90.begin() != unk90.end()) {
         unk90.clear();
     }
     Symbol mqCrew = TheCampaign->GetMQCrew();
     unk78.clear();
-    std::vector<int> rankedSongs = TheHamSongMgr.RankedSongs((SongType)1);
+    const std::vector<int> &rankedSongs = TheHamSongMgr.RankedSongs((SongType)1);
     FOREACH (it, rankedSongs) {
         const HamSongMetadata *metadata = TheHamSongMgr.Data(*it);
         Symbol character = GetOutfitCharacter(metadata->Outfit(), true);
         Symbol crew = GetCrewForCharacter(character, true);
-        Symbol mqHeader = MakeString<char>("mqheader_%s", character);
-        if (!metadata->IsFake() && crew == mqCrew
+        Symbol charCopy = character;
+        Symbol mqHeader = MakeString<char>("mqheader_%s", charCopy);
+        if (metadata->IsFake() == false && crew == mqCrew
             && TheProfileMgr.IsContentUnlocked(metadata->ShortName())) {
             unk78[mqHeader].push_back(TheHamSongMgr.GetShortNameFromSongID(*it));
         }
