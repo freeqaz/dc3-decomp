@@ -758,23 +758,30 @@ DataNode Character::OnGetCurrentInterests(DataArray *da) {
 }
 
 void Character::DrawLodOrShadow(int lod, DrawMode drawMode) {
+    // Set poll state to 5 (undocumented draw state)
     mPollState = (PollState)5;
     mLastLod = Clamp<int>(0, mLods.size() - 1, lod);
+
+    // Draw mode 4 is shadow-only mode (not in enum)
     if (drawMode == 4) {
         if (mShadow.size() > 0) {
             mShadow.Draw();
             return;
         }
     } else {
+        // Draw opaque geometry (bit 0)
         if (drawMode & 1) {
             RndEnvironTracker tracker(mEnv, &WorldXfm().v);
             DrawShowing();
+            // If opaque-only, save environment state
             if (drawMode == 1) {
                 unk2a0 = RndEnviron::Current();
                 unk2b4 = RndEnviron::CurrentPos();
             }
         }
+        // Draw translucent geometry (bit 1)
         if (drawMode & 2) {
+            // If translucent-only, restore saved environment
             if (drawMode == 2) {
                 RndEnvironTracker tracker(unk2a0, unk2b4);
                 DrawShowing();
@@ -784,6 +791,7 @@ void Character::DrawLodOrShadow(int lod, DrawMode drawMode) {
             return;
         }
     }
+    // Fall-through for modes that don't explicitly return
     DrawShowing();
 }
 

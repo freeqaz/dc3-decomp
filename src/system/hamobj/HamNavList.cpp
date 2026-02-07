@@ -35,6 +35,9 @@ bool HamNavList::sForceDisengage;
 NavSelectMsg::NavSelectMsg(Symbol sym, int index, HamNavList *list, bool selecting)
     : Message(Type(), sym, index, (Hmx::Object *)list, selecting) {}
 
+NavHighlightMsg::NavHighlightMsg(Symbol sym, int index, HamNavList *list, bool canSelect)
+    : Message(Type(), sym, index, (Hmx::Object *)list, canSelect) {}
+
 HamNavList::HamNavList()
     : mNavInputType(kNavInput_RightHand), mListState(this, this),
       mRibbonMode(HamListRibbon::kRibbonSlide), unkc8(0), mListRibbonResource(this),
@@ -753,7 +756,10 @@ void HamNavList::SendHighlightMsg(int i) {
     MILO_ASSERT(provider, 0x339);
     bool canSel = provider->CanSelect(i);
     Symbol dataSym = provider->DataSymbol(i);
-    // TODO: Send highlight message once NavHighlightMsg is created
+    NavHighlightMsg msg(dataSym, i, this, canSel);
+    TheUI->Handle(msg, false);
+    Handle(msg, true);
+    TheHamProvider->Handle(msg, false);
 }
 
 int HamNavList::GetHighlightItem() const {

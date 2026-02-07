@@ -17,8 +17,12 @@ short MakeShortAng(float f) {
 }
 
 short ShortVector3::ToShort(float f) {
-    float temp = f * 0.039674062281847f + 0.5f;
-    auto clamped = Clamp(-32767.0f, 32767.0f, temp);
+    // Scale float to short range: divide by 1300 scale factor, multiply by short max (32767),
+    // add 0.5 for rounding, clamp to valid range, then floor to convert to integer
+    float mult = f * (1.0f / 1300.0f);
+    float scaled = mult * 32767.0f;
+    float temp = scaled + 0.5f;
+    float clamped = Clamp(-32767.0f, 32767.0f, temp);
     return floor(clamped);
 }
 
