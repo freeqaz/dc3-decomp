@@ -44,8 +44,7 @@ Hmx::Object *CharClipDisplay::FindSource(Hmx::Object *obj) {
 }
 
 void CharClipDisplay::DrawBeatString(char const *c, float f1, Hmx::Color const &color) {
-    float posX, posY;
-    posX = GetX(f1) - 18.0f;
-    posY = f1 - 4.0f;
-    TheRnd.DrawString(c, Vector2(posX, posY), color, true);
+    float posY = unk18 - 4.0f;
+    float posX = GetX(f1) - 18.0f;
+    TheRnd.DrawString(c, Vector2(posY, posX), color, true);
 }

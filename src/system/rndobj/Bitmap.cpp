@@ -474,7 +474,7 @@ void RndBitmap::ConvertColor(
 ) const {
     if (mBpp == 0x20 || mPalette) {
         if (mOrder & 2) {
-            a = (a + 1) >> 1;
+            a = ((unsigned int)a + 1) >> 1;
         }
         if (mOrder & 1) {
             uc[3] = a;
@@ -504,18 +504,15 @@ void RndBitmap::ConvertColor(
         *twobytes = EndianSwap(*twobytes);
         return;
     }
-    if ((mOrder & 0xC0) == 0xC0) {
-        uc[0] = a;
-        return;
-    }
-    uc[1] = g;
     if (mOrder & 1) {
         uc[2] = b;
+        uc[1] = g;
         uc[0] = r;
-        return;
+    } else {
+        uc[2] = r;
+        uc[1] = g;
+        uc[0] = b;
     }
-    uc[0] = b;
-    uc[2] = r;
 }
 
 void RndBitmap::PaletteColor(
@@ -825,29 +822,29 @@ void RndBitmap::Save(BinStream &bs) const {
 //   hasDxt1Alpha: enable DXT1 1-bit alpha mode (color0 <= color1 → idx 3 = transparent)
 //   r, g, b, a: output color components (0-255)
 void DecodeDxtColor(unsigned char *blockData, int pixelX, int pixelY, bool hasDxt1Alpha, unsigned char &r, unsigned char &g, unsigned char &b, unsigned char &a) {
-    // Read two 16-bit RGB565 reference colors
-    unsigned short color0 = *(unsigned short *)blockData;
-    unsigned short color1 = *((unsigned short *)blockData + 1);
+    unsigned char *rowPtr;
+    unsigned short color0;
+    unsigned short color1;
 
-    // DXT uses Morton/Z-order swizzling for cache coherency
-    // Row pairs are swapped: rows 0↔1, 2↔3 in the 4x4 block
-    int rowIndex = (pixelY & 1) == 0 ? pixelY + 1 : pixelY - 1;
+    color0 = *(unsigned short *)blockData;
+    color1 = *((unsigned short *)blockData + 1);
 
-    // Default to fully opaque (may be overridden for DXT1 transparent pixels)
+    if (pixelY & 1) {
+        rowPtr = blockData + pixelY - 1;
+    } else {
+        rowPtr = blockData + pixelY + 1;
+    }
+
     a = 0xFF;
 
-    // Extract RGB components from 16-bit RGB565 colors
-    // RGB565 format: RRRRR GGGGGG BBBBB (5-6-5 bits)
-    // Expand to 8-bit by replicating high bits into low bits
-    unsigned char r0 = (color0 >> 8) & 0xF8;  // Red from color0 (bits 11-15)
-    unsigned char r1 = (color1 >> 8) & 0xF8;  // Red from color1
-    unsigned char g0 = (color0 >> 3) & 0xFC;  // Green from color0 (bits 5-10)
-    unsigned char g1 = (color1 >> 3) & 0xFC;  // Green from color1
-    int colorIdx = (blockData[4 + rowIndex] >> ((pixelX * 2) & 0xFE)) & 3;
-    unsigned char b0 = (color0 << 3) & 0xF8;  // Blue from color0 (bits 0-4)
-    unsigned char b1 = (color1 << 3) & 0xF8;  // Blue from color1
+    unsigned char r0 = (color0 >> 8) & 0xF8;
+    unsigned char r1 = (color1 >> 8) & 0xF8;
+    unsigned char g0 = (color0 >> 3) & 0xFC;
+    unsigned char g1 = (color1 >> 3) & 0xFC;
+    unsigned char b0 = (color0 << 3) & 0xF8;
+    unsigned char b1 = (color1 << 3) & 0xF8;
+    int colorIdx = (rowPtr[4] >> ((pixelX << 1) & 0xFE)) & 3;
 
-    // Index 0: use reference color0
     if (colorIdx == 0) {
         r = r0;
         g = g0;
@@ -855,7 +852,6 @@ void DecodeDxtColor(unsigned char *blockData, int pixelX, int pixelY, bool hasDx
         return;
     }
 
-    // Index 1: use reference color1
     if (colorIdx == 1) {
         r = r1;
         g = g1;
@@ -863,19 +859,16 @@ void DecodeDxtColor(unsigned char *blockData, int pixelX, int pixelY, bool hasDx
         return;
     }
 
-    // Index 2 or 3: interpolated colors (mode depends on color0 vs color1)
     if ((color0 <= color1) && hasDxt1Alpha) {
-        // DXT1 3-color + alpha mode: idx 2 = average, idx 3 = transparent
         r = ((int)r0 + (int)r1) / 2;
         g = ((int)g0 + (int)g1) / 2;
         b = ((int)b0 + (int)b1) / 2;
         if (colorIdx == 3) {
-            a = 0;  // Transparent pixel
+            a = 0;
         }
     } else {
-        // 4-color opaque mode: idx 2 = 2/3 blend, idx 3 = 1/3 blend
-        int w0 = 4 - colorIdx;  // Weight for color0 (2 or 1)
-        int w1 = colorIdx - 1;  // Weight for color1 (1 or 2)
+        int w0 = 4 - colorIdx;
+        int w1 = colorIdx - 1;
         r = (unsigned int) ((r1 * w1) + (r0 * w0)) / 3U;
         g = (unsigned int) ((g1 * w1) + (g0 * w0)) / 3U;
         b = (unsigned int) ((b1 * w1) + (b0 * w0)) / 3U;

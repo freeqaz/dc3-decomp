@@ -245,3 +245,10 @@ void CharHair::Strand::Save(BinStream &bs) const {
 }
 
 #pragma endregion CharHair::Strand
+#pragma region ObjVector_Strand
+
+void ObjVector<CharHair::Strand>::resize(unsigned int n) {
+    std::vector<CharHair::Strand>::resize(n, CharHair::Strand(mOwner));
+}
+
+#pragma endregion ObjVector_Strand

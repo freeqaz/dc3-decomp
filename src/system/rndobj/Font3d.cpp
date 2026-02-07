@@ -9,9 +9,7 @@ RndFont3d::RndFont3d()
       unk8c(0, 0, 0) {}
 
 void RndFont3d::Clear() {
-    for (std::map<unsigned short, CharInfo *>::iterator it = mCharInfoMap.begin();
-         it != mCharInfoMap.end();
-         ++it) {
+    FOREACH (it, mCharInfoMap) {
         delete it->second;
     }
     mCharInfoMap.clear();

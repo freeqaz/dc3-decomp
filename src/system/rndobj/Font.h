@@ -4,6 +4,7 @@
 #include "rndobj/Bitmap.h"
 #include "rndobj/FontBase.h"
 #include "rndobj/Mat.h"
+#include "rndobj/Mesh.h"
 #include "rndobj/Tex.h"
 #include "utl/BinStream.h"
 #include "utl/MemMgr.h"
@@ -110,7 +111,7 @@ public:
 
         Box unk0;
         int unk20;
-        // ObjPtr<RndMesh> unk24;
+        ObjRefConcrete<RndMesh, ObjectDir> unk24;
         bool unk38;
 
         MEM_OVERLOAD(CharInfo, 0x12A);

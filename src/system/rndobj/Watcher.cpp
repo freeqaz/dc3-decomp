@@ -5,11 +5,11 @@
 #include "obj/Object.h"
 #include "os/Debug.h"
 
-// Guard to prevent recursive saves when loading watches from file
-static bool savebool;
+// Prevents SaveWatches() from triggering during LoadWatches() to avoid recursive saves
+static bool sLoadingWatches;
 
 void Watcher::SaveWatches() {
-    if (!savebool) {
+    if (!sLoadingWatches) {
         DataArrayPtr ptr;
         ptr->Resize(mWatches.size());
         int i = 0;
@@ -25,24 +25,30 @@ void Watcher::SaveWatches() {
 
 void Watcher::Update() {
     if (mWatches.size()) {
+        // Reserve two lines per watch: one for the expression, one for the result
         mOverlay->SetLines(mWatches.size() * 2);
         int i = 0;
         for (std::vector<std::pair<DataArray *, DataNode> >::iterator it =
                  mWatches.begin();
              it != mWatches.end();
              ++it, ++i) {
+            DataArray *arr = it->first;
+            // Print watch index and expression
             *mOverlay << i;
             *mOverlay << ": ";
-            it->first->Print(*mOverlay, kDataArray, true, 0);
+            arr->Print(*mOverlay, kDataArray, true, 0);
             *mOverlay << "\n";
+            // Execute the expression and cache the result
             TheDebug.SetTry(true);
-            it->second = it->first->Execute(false);
+            it->second = arr->Execute(false);
             TheDebug.SetTry(false);
+            // Print the evaluation result
             it->second.Print(*mOverlay, false, 0);
             *mOverlay << "\n";
         }
-    } else
+    } else {
         mOverlay->Clear();
+    }
 }
 
 void Watcher::Remove(int i) {
@@ -68,7 +74,7 @@ DataNode Watcher::OnAdd(const DataArray *a) {
 }
 
 void Watcher::LoadWatches() {
-    savebool = true;
+    sLoadingWatches = true;
     mWatches.clear();
     DataArray *watchArr = DataReadFile("watches.dta", false);
     if (watchArr) {
@@ -76,7 +82,7 @@ void Watcher::LoadWatches() {
             Add(watchArr->Array(i));
         }
     }
-    savebool = false;
+    sLoadingWatches = false;
 }
 
 void Watcher::Init() {
