@@ -60,6 +60,7 @@ protected:
 };
 
 extern Locale TheLocale;
+extern bool gShowTokensCheat;
 
 const char *Localize(Symbol token, bool *success, Locale &locale);
 const char *LocalizeSeparatedInt(int num, Locale &locale);

@@ -86,6 +86,7 @@ void UIScreen::LoadPanels() {
 void UIScreen::UnloadPanels() {
     FOREACH_REVERSE(it, mPanelList) {
         if (it->mLoaded) {
+            AutoGlitchReport hang(17.0f, UnloadGlitchCB, it->mPanel);
             it->mPanel->CheckUnload();
         }
     }

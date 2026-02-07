@@ -19,6 +19,8 @@ BinkMovieSys::BinkMovieSys()
 }
 
 BinkMovieSys::~BinkMovieSys() {
+    delete mCriticalSection;
+    mCriticalSection = 0;
 }
 
 DataNode BinkMovieSys::OnMovieSetTrack(DataArray *) {

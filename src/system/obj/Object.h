@@ -1338,7 +1338,7 @@ public:
     void push_back() { resize(size() + 1); }
 
     void push_back(const T &t) {
-        push_back();
+        resize(size() + 1);
         back() = t;
     }
 

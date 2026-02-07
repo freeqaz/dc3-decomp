@@ -45,7 +45,7 @@ bool MsgSinks::HasPropertySink(Hmx::Object *o, DataArray *a) {
     Symbol path = PathToEventName(a);
     if (unk0) {
         for (int i = 1; i < unk0->Size(); i += 2) {
-            if (path == a->Sym(i)) {
+            if (path == unk0->Sym(i)) {
                 return true;
             }
         }

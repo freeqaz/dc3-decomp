@@ -42,14 +42,14 @@ bool UIEventMgr::HasActiveTransitionEvent() const {
     if (mEventQueue.empty())
         return false;
     else
-        return mEventQueue[0]->mType == 1;
+        return mEventQueue[0]->mType == kTransitionEvent;
 }
 
 bool UIEventMgr::HasActiveDialogEvent() const {
     if (mEventQueue.empty())
         return false;
     else
-        return mEventQueue[0]->mType == 0;
+        return mEventQueue[0]->mType == kDialogEvent;
 }
 
 void UIEventMgr::Init() {
@@ -64,9 +64,8 @@ void UIEventMgr::Terminate() { RELEASE(TheUIEventMgr); }
 Symbol UIEventMgr::CurrentEvent() const {
     if (!mEventQueue.empty()) {
         return mEventQueue[0]->unk4->Sym(0);
-    } else {
-        return gNullStr;
     }
+    return gNullStr;
 }
 
 bool UIEventMgr::IsTransitionEventStarted() const {
@@ -99,7 +98,7 @@ void UIEventMgr::ActivateFirstEvent() {
     BandEvent *firstEvent = mEventQueue[0];
     MILO_ASSERT(!firstEvent->mActive, 0x8B);
     firstEvent->mActive = true;
-    if (firstEvent->mType == 1) {
+    if (firstEvent->mType == kTransitionEvent) {
         DataArray *initArr = firstEvent->unk4->FindArray("init", false);
         if (initArr) {
             initArr->ExecuteScript(1, nullptr, firstEvent->unk8, 2);
@@ -109,7 +108,7 @@ void UIEventMgr::ActivateFirstEvent() {
         TheHamUI.GotoEventScreen(
             ObjectDir::Main()->Find<UIScreen>(firstEvent->unk4->FindStr(next_screen))
         );
-    } else if (firstEvent->mType == 0) {
+    } else if (firstEvent->mType == kDialogEvent) {
         static Message init_msg("init");
         static EventDialogStartMsg msg(firstEvent->unk4, init_msg);
         msg[0] = firstEvent->unk4;
@@ -128,7 +127,7 @@ void UIEventMgr::DismissEvent(Symbol s1) {
     EventType t = mEventQueue.front()->mType;
     RELEASE(mEventQueue.front());
     mEventQueue.clear();
-    if (t == 0) {
+    if (t == kDialogEvent) {
         static EventDialogDismissMsg dismiss_msg(gNullStr, gNullStr);
         dismiss_msg[0] = curEvent;
         dismiss_msg[1] = s1;
@@ -140,6 +139,7 @@ void UIEventMgr::DismissEvent(Symbol s1) {
 }
 
 void UIEventMgr::TriggerEvent(Symbol s1, DataArray *a2) {
+    // Check if current screen allows this event
     if (!TheUI->InTransition()) {
         UIScreen *curScreen = TheUI->CurrentScreen();
         if (curScreen) {
@@ -152,17 +152,33 @@ void UIEventMgr::TriggerEvent(Symbol s1, DataArray *a2) {
         }
     }
 
-    // while loop here
+    // Dismiss pending dialog events (keep transition events)
+    while (!mEventQueue.empty()) {
+        BandEvent *backEvent = mEventQueue.back();
+        if (backEvent->mType) {
+            break;
+        }
+        if (mEventQueue.size() == 1 && backEvent->mActive) {
+            DismissEvent(s1);
+        } else {
+            RELEASE(backEvent);
+            mEventQueue.pop_back();
+        }
+    }
 
+    // Look up event definition from typedef
     static Symbol dialog_events("dialog_events");
     static Symbol transition_events("transition_events");
-    DataArray *eventArr =
-        TypeDef()->FindArray(dialog_events)->FindArray(dialog_events, false);
-    bool noDialogEvents = !eventArr;
-    if (!eventArr) {
+    DataArray *eventArr;
+    EventType eventType;
+    eventArr = TypeDef()->FindArray(dialog_events)->FindArray(s1, false);
+    if (eventArr) {
+        eventType = kDialogEvent;
+    } else {
+        eventType = kTransitionEvent;
         eventArr = TypeDef()->FindArray(transition_events, s1);
     }
-    mEventQueue.push_back(new BandEvent((EventType)noDialogEvents, eventArr, a2));
+    mEventQueue.push_back(new BandEvent(eventType, eventArr, a2));
     if (mEventQueue.size() == 1) {
         ActivateFirstEvent();
     }

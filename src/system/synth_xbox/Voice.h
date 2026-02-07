@@ -26,6 +26,8 @@ public:
     // void SetSend(FxSend360 *);
     static bool HasPendingVoices();
     void SetSpeed(float);
+
+    static int sHeadsetTarget;
     void Init(bool);
     void blockingStart(bool);
     void Start();

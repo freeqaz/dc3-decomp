@@ -9,6 +9,7 @@
 
 HANDLE gEvent;
 HANDLE gVoiceThread;
+int Voice::sHeadsetTarget;
 
 extern void StartSynchronizedVoices();
 

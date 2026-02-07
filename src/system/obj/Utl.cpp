@@ -117,7 +117,7 @@ const char *NextName(const char *old_name, ObjectDir *dir) {
     const char *base = FileGetBase(old_name);
     const char *ext = FileGetExt(old_name);
     char *ptr;
-    for (ptr = (char *)base + strlen(base); (base < ptr && (ptr[-1] - 0x30U <= 9)); ptr--)
+    for (ptr = (char *)base + strlen(base); (ptr > base && ptr[-1] >= '0' && ptr[-1] <= '9'); ptr--)
         ;
     int atoied = 0;
     if (*ptr != '\0')
