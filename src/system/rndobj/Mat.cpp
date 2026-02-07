@@ -278,12 +278,15 @@ MatPropEditAction RndMat::GetMetaMatPropAction(Symbol s) {
 bool RndMat::OnGetPropertyDisplay(PropDisplay display, Symbol s) {
     MILO_ASSERT(display == kPropDisplayHidden || display == kPropDisplayReadOnly, 0x357);
     if (mMetaMaterial) {
-        if (mToggleDisplayAllProps)
-            return display == kPropDisplayHidden;
-        return true;
+        MatPropEditAction action = GetMetaMatPropAction(s);
+        // Check if action is kPropDefault or kPropForce (not kPropOverride)
+        if (action != 2 && (action == 0 || action == 1)) {
+            if (mToggleDisplayAllProps)
+                return display == kPropDisplayReadOnly;
+            return true;
+        }
     }
-    MatPropEditAction a = GetMetaMatPropAction(s);
-    return a == 2 || (a != 0 && a != 1);
+    return false;
 }
 
 void RndMat::SetColorMod(const Hmx::Color &color, int index) {

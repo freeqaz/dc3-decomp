@@ -2,7 +2,9 @@
 #include "os/Debug.h"
 #include "os/NetStream.h"
 #include "os/NetworkSocket.h"
+#include "os/System.h"
 #include "os/Timer.h"
+#include "utl/MakeString.h"
 #include "utl/MemMgr.h"
 #include "utl/Option.h"
 #include <cstdio>
@@ -89,6 +91,13 @@ namespace HolmesClient {
     }
 
     NetAddress PlatformResolveIP() {
-        return HolmesResolveIP();
+        String hostname(HolmesFileHostName());
+        NetAddress addr = NetworkSocket::SetIPPortFromHostPort(
+            hostname.c_str(), "harmonixmusic.com", 0x11C0 // Port 4544
+        );
+        if (addr.mIP == 0 && !gHostLogging) {
+            TheDebug.Fail(MakeString("Couldn't resolve holmes_host: %s", hostname), 0);
+        }
+        return addr;
     }
 }

@@ -72,11 +72,15 @@ const char *FileGetExt(const char *root) {
 }
 
 const char *FileGetName(const char *file) {
-    const char *dir = strrchr(file, '/');
-    if ((dir != 0) || (dir = strrchr(file, '\\'), (dir != 0))) {
-        file = dir + 1;
+    const char *dir;
+    dir = strrchr(file, '/');
+    if (dir == 0) {
+        dir = strrchr(file, '\\');
+        if (dir == 0) {
+            return file;
+        }
     }
-    return file;
+    return dir + 1;
 }
 
 static bool FileMatchInternal(const char *arg0, const char *arg1, bool arg2) {

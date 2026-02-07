@@ -59,19 +59,19 @@ void CharTransDraw::Load(BinStream &bs) {
 END_LOADS
 
 void CharTransDraw::DrawShowing() {
-    int mode2 = 2;
-    int mode1 = 1;
-    FOREACH (it, mChars) {
+    ObjPtrList<Character>::iterator it = mChars.begin();
+    for (; it != mChars.end(); ++it) {
         Character *c = *it;
         if (c->Showing()) {
-            *(u32 *)((u32)c + 0x294) = mode2;
+            c->SetDrawMode(Character::kCharDrawTranslucent);
             c->Draw();
+            c->SetDrawMode(Character::kCharDrawOpaque);
         } else if (unk54) {
-            *(u32 *)((u32)c + 0x294) = mode2;
+            c->SetDrawMode(Character::kCharDrawTranslucent);
             c->SetShowing(true);
             c->Draw();
             c->SetShowing(false);
-            *(u32 *)((u32)c + 0x294) = mode1;
+            c->SetDrawMode(Character::kCharDrawOpaque);
         }
     }
 }
