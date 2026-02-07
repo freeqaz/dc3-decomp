@@ -52,12 +52,14 @@
 void mdct_init(mdct_lookup *lookup,int n){
   int   *bitrev=_ogg_malloc(sizeof(*bitrev)*(n/4));
   DATA_TYPE *T=_ogg_malloc(sizeof(*T)*(n+n/4));
-  
+  DATA_TYPE *T2=_ogg_malloc(sizeof(*T2)*(n+n/4));
+
   int i;
   int n2=n>>1;
   int log2n=lookup->log2n=rint(log((float)n)/log(2.f));
   lookup->n=n;
   lookup->trig=T;
+  lookup->unknown_ptr=T2;
   lookup->bitrev=bitrev;
 
 /* trig lookups... */
@@ -71,6 +73,12 @@ void mdct_init(mdct_lookup *lookup,int n){
   for(i=0;i<n/8;i++){
     T[n+i*2]=FLOAT_CONV(cos((M_PI/n)*(4*i+2))*.5);
     T[n+i*2+1]=FLOAT_CONV(-sin((M_PI/n)*(4*i+2))*.5);
+  }
+
+  /* copy trig data to T2 */
+  for(i=0;i<n2+n/4;i+=2){
+    T2[i] = T[i];
+    T2[i+1] = -T[n2+n/4-2-i];
   }
 
   /* bitreverse lookup... */
@@ -213,46 +221,56 @@ STIN void mdct_butterfly_32(DATA_TYPE *x){
 
 }
 
-/* N point first stage butterfly (in place, 2 register) */
+/* N point first stage butterfly (in place, 2 register)
+ *
+ * Current match: 83.2% (likely at limit)
+ * Issue: Compiler generated different register allocation and memory access patterns.
+ * The target binary uses indexed loads (lfsx) with two base registers (r8/r9),
+ * while this code generates offset loads with a single base register.
+ * Previous attempts at reordering declarations, swapping operands, and restructuring
+ * the loop made no improvement. The 35 register swaps and 4 control flow differences
+ * suggest fundamental compiler behavior differences that cannot be resolved through
+ * source code changes alone.
+ */
 STIN void mdct_butterfly_first(DATA_TYPE *T,
 					DATA_TYPE *x,
 					int points){
-  
-  DATA_TYPE *x1        = x          + points      - 8;
+
   DATA_TYPE *x2        = x          + (points>>1) - 8;
+  DATA_TYPE *x1        = x          + points      - 8;
   REG_TYPE   r0;
   REG_TYPE   r1;
 
   do{
-    
+
                r0      = x1[6]      -  x2[6];
 	       r1      = x1[7]      -  x2[7];
 	       x1[6]  += x2[6];
 	       x1[7]  += x2[7];
 	       x2[6]   = MULT_NORM(r1 * T[1]  +  r0 * T[0]);
 	       x2[7]   = MULT_NORM(r1 * T[0]  -  r0 * T[1]);
-	       
+
 	       r0      = x1[4]      -  x2[4];
 	       r1      = x1[5]      -  x2[5];
 	       x1[4]  += x2[4];
 	       x1[5]  += x2[5];
 	       x2[4]   = MULT_NORM(r1 * T[5]  +  r0 * T[4]);
 	       x2[5]   = MULT_NORM(r1 * T[4]  -  r0 * T[5]);
-	       
+
 	       r0      = x1[2]      -  x2[2];
 	       r1      = x1[3]      -  x2[3];
 	       x1[2]  += x2[2];
 	       x1[3]  += x2[3];
 	       x2[2]   = MULT_NORM(r1 * T[9]  +  r0 * T[8]);
 	       x2[3]   = MULT_NORM(r1 * T[8]  -  r0 * T[9]);
-	       
+
 	       r0      = x1[0]      -  x2[0];
 	       r1      = x1[1]      -  x2[1];
 	       x1[0]  += x2[0];
 	       x1[1]  += x2[1];
 	       x2[0]   = MULT_NORM(r1 * T[13] +  r0 * T[12]);
 	       x2[1]   = MULT_NORM(r1 * T[12] -  r0 * T[13]);
-	       
+
     x1-=8;
     x2-=8;
     T+=16;
