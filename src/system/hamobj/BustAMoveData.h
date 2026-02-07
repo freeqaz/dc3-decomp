@@ -10,6 +10,7 @@ public:
 };
 
 class BustAMoveData : public Hmx::Object {
+    friend class BustAMovePanel;
 public:
     // Hmx::Object
     virtual ~BustAMoveData();

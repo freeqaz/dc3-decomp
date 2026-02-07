@@ -32,6 +32,11 @@
 #include "rndobj/TexRenderer.h"
 #include "ui/UIColor.h"
 #include "ui/UIPanel.h"
+#include "gesture/GestureMgr.h"
+#include "lazer/game/Game.h"
+#include "rndobj/Graph.h"
+#include "utl/DebugGraph.h"
+#include "utl/KnownIssues.h"
 #include "utl/Symbol.h"
 #include "utl/TempoMap.h"
 #include "utl/TimeConversion.h"
@@ -320,17 +325,8 @@ void BustAMovePanel::CacheObjects() {
         ->SetFrame(1, 1);
     for (ObjDirItr<DepthBuffer3D> it(mBAMVisualizerPanel->DataDir(), true); it != nullptr;
          ++it) {
-        //   while (local_6c != (DepthBuffer3D *)0x0) {
-        //     DepthBuffer3D::SetGrooviness(local_6c,(float)dVar23);
-        //     if (*(int *)(local_6c + 0x198) != 0) {
-        //       *(undefined4 *)(*(int *)(local_6c + 0x194) + 4) = *(undefined4
-        //       *)(local_6c + 400);
-        //       *(undefined4 *)(*(int *)(local_6c + 400) + 8) = *(undefined4 *)(local_6c
-        //       + 0x194);
-        //     }
-        //     *(undefined4 *)(local_6c + 0x198) = 0;
-        //     ObjDirItr<>::operator++(aOStack_70);
-        //   }
+        it->SetGrooviness(1.0f);
+        it->unk18c.SetObjConcrete(NULL);
     }
     TheMaster->AddSink(this, "beat");
     mStatusLabel = DataDir()->Find<HamLabel>("status.lbl");
@@ -362,8 +358,8 @@ void BustAMovePanel::CacheObjects() {
     mFlashcardSlots.clear();
     ResetScores();
     mMaxRetries = 1;
-    mRetryCount1 = 0;
     mRetryCount0 = 0;
+    mRetryCount1 = 0;
     mPhraseMeters[kSkeletonRight] = DataDir()->Find<HamPhraseMeter>("phrase_meter_right");
     mPhraseMeters[kSkeletonLeft] = DataDir()->Find<HamPhraseMeter>("phrase_meter_left");
     mNextVOTime = FLT_MAX;
@@ -378,7 +374,10 @@ void BustAMovePanel::CacheObjects() {
         const Hmx::Color &color = gray->GetColor();
         mat->SetColor(color.red, color.green, color.blue);
     }
-    Symbol song = MetaPerformer::Current()->GetSong();
+    mRecorder->unk3c = MetaPerformer::Current()->GetSong();
+    for (int i = 0; i < 2; i++) {
+        ((bool *)&mFlawlessFlags)[i] = true;
+    }
     unk9bc = -1;
 }
 
@@ -784,7 +783,7 @@ void BustAMovePanel::OnBeat() {
                 nextState = kBAMState_ShowMoveSequence;
             break;
         case kBAMState_ShowMoveSequence:
-            if (mBeatCount == 0xf)
+            if (mBeatCount == 15)
                 nextState = kBAMState_End;
             break;
         default:
@@ -819,7 +818,6 @@ void BustAMovePanel::OnBeat() {
         if (mBeatCount == 1) {
             // Pick a move name from the shuffled pool (skip moves without clips)
             SetUpMoveNames();
-            int *piVar11 = &mShuffledMoveNames[0];
             unsigned int count = 0;
             if (mShuffledMoveNames.size() != 0) {
                 do {
@@ -1237,8 +1235,8 @@ void BustAMovePanel::OnBeat() {
             mFlashcardSlots.push_back(-1);
             mFlashcardSlots.push_back(-1);
             mFlashcardSlots.push_back(-1);
-            Symbol stay_on_bam_play_sym("bam_final_sequence");
-            mFinalSequenceType = DataVariable(stay_on_bam_play_sym).Int();
+            Symbol bam_final_sequence("bam_final_sequence");
+            mFinalSequenceType = DataVariable(bam_final_sequence).Int();
             if (mFinalSequenceType == 0) {
                 mFinalSequenceType = 1;
             }
@@ -1427,5 +1425,199 @@ end_handling:
     if (loopTrigger != 0) {
         mCaptureTimer = 0.0f;
         mCaptureStep = loopTrigger;
+    }
+}
+
+void BustAMovePanel::SetUpSongStructure(Symbol s) {
+    mSongStructure.clear();
+    BustAMoveData *bamData = ObjectDir::Main()->Find<BustAMoveData>("bam", false);
+    if (bamData) {
+        int numPhrases = (int)bamData->mPhrases.size();
+        for (int i = 0; i < numPhrases; i++) {
+            for (int j = 0; j < bamData->mPhrases[i].count; j++) {
+                mSongStructure.push_back(bamData->mPhrases[i].bars);
+            }
+        }
+    } else {
+        int reps = 8;
+        int val = 4;
+        do {
+            mSongStructure.push_back(val);
+            reps--;
+        } while (reps != 0);
+        TheKnownIssues.Display(String("bustamove_wrong_song"), 5.0f);
+    }
+    MILO_ASSERT(mSongStructure.size() >= 2, 0x62C);
+    int *data = &mSongStructure[0];
+    int firstVal = *data;
+    mRepsRemaining = firstVal + 4;
+    mCountInLength = firstVal;
+    int size = (int)(mSongStructure.end() - mSongStructure.begin());
+    float totalBeats = 0.0f;
+    unsigned int idx = 1;
+    if (size > 1) {
+        int byteOfs = 4;
+        do {
+            idx++;
+            int val = *(int *)((char *)data + byteOfs);
+            byteOfs += 4;
+            totalBeats += (float)val;
+        } while (idx < (unsigned int)size);
+    }
+    float startBeat = (float)(mCountInLength * 4);
+    mLoopStartBeat = startBeat;
+    mLoopEndBeat = (totalBeats * 4.0f) + startBeat;
+    TheMaster->GetAudio()->SetLoop(mLoopStartBeat, mLoopEndBeat);
+}
+
+void BustAMovePanel::PlayIntroVO() {
+    if (!unk9b8)
+        return;
+    unk9b8 = false;
+    float voLength = 0.0f;
+    static Symbol nar_bam_intro("nar_bam_intro");
+    static Message voLengthMsg("get_seq_length", 0);
+    voLengthMsg[0] = nar_bam_intro;
+    DataNode handled = mHUDPanel->Handle(voLengthMsg, true);
+    if (handled != DATA_UNHANDLED) {
+        voLength = handled.Float();
+    }
+    TempoMap *tempoMap = TheMaster->SongData()->GetTempoMap();
+    float secondsPerBeat = 60.0f / tempoMap->GetTempoBPM(0);
+    float introBeats = (float)(mSongStructure[0] * 4);
+    TheGame->SetIntroRealTime(-(voLength - (introBeats * secondsPerBeat)));
+    PlayVO(nar_bam_intro);
+}
+
+void BustAMovePanel::Poll() {
+    if (!InBustAMove())
+        return;
+    if (TheGamePanel->IsGameOver())
+        return;
+
+    HamPanel::Poll();
+
+    static Message hideHudMsg("hide_hud", 0);
+    hideHudMsg[0] = false;
+    for (int i = 0; i < 2; i++) {
+        TheGameData->Player(i)->Provider()->Handle(hideHudMsg, false);
+    }
+
+    mRecorder->Poll();
+
+    int activePlayer;
+    if (mState == kBAMState_PlayCountIn || mState == kBAMState_Playing || mState == kBAMState_ShowMove) {
+        activePlayer = !mActivePlayer;
+    } else {
+        activePlayer = mActivePlayer;
+    }
+    mCreatorSide = TheGameData->Player(activePlayer)->Side();
+    int trackingID = TheGameData->Player(activePlayer)->GetSkeletonTrackingID();
+    int skelIdx = TheGestureMgr->GetSkeletonIndexByTrackingID(trackingID);
+    mRecorder->unk44 = skelIdx;
+    if (mState == kBAMState_Recording || mState == kBAMState_CountIn) {
+        unk58 = skelIdx;
+    }
+
+    if (mState == kBAMState_Recording && mBeatCount >= 3) {
+        mDancerTakeScore = mRecorder->GetScore(unk58, activePlayer, TheTaskMgr.DeltaSeconds(), true);
+        mCurrentMoveScore = mRecorder->GetScore(skelIdx, activePlayer, TheTaskMgr.DeltaSeconds(), false);
+        mRecordScore += mDancerTakeScore;
+    }
+
+    if (mState == kBAMState_Playing || mState == kBAMState_ShowMoveSequence) {
+        float score = mRecorder->GetScore(skelIdx, activePlayer, TheTaskMgr.DeltaSeconds(), false);
+        mMoveScore += score;
+        float ratingFrac = score * score * 0.7f;
+        mPhraseMeters[mCreatorSide]->SetRatingFrac(ratingFrac, 4.0f - MsToBeat(mRecordScore * 1000.0f));
+        mPhraseMeters[mCreatorSide]->SetShowing(true);
+
+        if (mState == kBAMState_ShowMoveSequence) {
+            for (int p = 0; p < 2; p++) {
+                int pTrackingID = TheGameData->Player(p)->GetSkeletonTrackingID();
+                int pSkelIdx = TheGestureMgr->GetSkeletonIndexByTrackingID(pTrackingID);
+                float pScore = mRecorder->GetScore(pSkelIdx, p, TheTaskMgr.DeltaSeconds(), false);
+                ((float *)&mPlayerScoreLeft)[p] += pScore;
+            }
+        }
+    } else {
+        mPhraseMeters[0]->SetShowing(false);
+        mPhraseMeters[1]->SetShowing(false);
+    }
+
+    if (mState == kBAMState_ShowMoveSequence) {
+        RndTex *pinkTex = DataDir()->Find<RndTex>("gradient_pink.tex", false);
+        RndTex *blueTex = DataDir()->Find<RndTex>("gradient_blue.tex", false);
+        for (ObjDirItr<DepthBuffer3D> it(mBAMVisualizerPanel->DataDir(), true); it != nullptr; ++it) {
+            if (std::strstr(it->Name(), "_left")) {
+                it->SetPlayerPalette(blueTex);
+            } else {
+                it->SetPlayerPalette(pinkTex);
+            }
+        }
+        unk9bc = -1;
+    } else if (unk9bc != activePlayer) {
+        Symbol colorSym = GetPlayerColor(activePlayer);
+        RndTex *tex = DataDir()->Find<RndTex>(MakeString("gradient_%s.tex", colorSym), false);
+        for (ObjDirItr<DepthBuffer3D> it(mBAMVisualizerPanel->DataDir(), true); it != nullptr; ++it) {
+            it->SetPlayerPalette(tex);
+        }
+        unk9bc = activePlayer;
+    }
+
+    if (mState == kBAMState_Recording || mState == kBAMState_End) {
+        for (ObjDirItr<DepthBuffer3D> it(mBAMVisualizerPanel->DataDir(), true); it != nullptr; ++it) {
+            it->ForceDrawSkeletonIndex(skelIdx, false);
+        }
+    } else {
+        for (ObjDirItr<DepthBuffer3D> it(mBAMVisualizerPanel->DataDir(), true); it != nullptr; ++it) {
+            it->ForceDrawSkeletonIndex(skelIdx, true);
+        }
+    }
+
+    PollCaptureFlashcard();
+
+    int currentBeat = (int)(TheTaskMgr.Beat() + 0.5f);
+    if (currentBeat == mFailureEndBeat) {
+        static Message hideTransitionMsg("bustamove_hide_transition");
+        TheHamProvider->Handle(hideTransitionMsg, false);
+        mFailureEndBeat = -1;
+    }
+
+    if (mNextVOTime <= TheTaskMgr.Seconds(TaskMgr::kRealTime)) {
+        PlayMovePromptVO();
+        mNextVOTime = FLT_MAX;
+    }
+
+    if (DataVariable("bam_debug").Int()) {
+        static DebugGraph scoreGraph(
+            0.0f, 0.0f, 100.0f, 100.0f,
+            Hmx::Color(1.0f, 0.0f, 0.0f),
+            Hmx::Color(0.0f, 1.0f, 0.0f),
+            100, 0.0f, 1.0f,
+            String("mMoveScore")
+        );
+        scoreGraph.AddData(mMoveScore, false);
+        scoreGraph.Draw();
+        const char *stateName = "?";
+        switch (mState) {
+        case kBAMState_CountIn: stateName = "CountIn"; break;
+        case kBAMState_Recording: stateName = "Recording"; break;
+        case kBAMState_Playing: stateName = "Playing"; break;
+        case kBAMState_ShowMove: stateName = "ShowMove"; break;
+        case kBAMState_PlayCountIn: stateName = "PlayCountIn"; break;
+        case kBAMState_RecordCountIn: stateName = "RecordCountIn"; break;
+        case kBAMState_FailureToBust: stateName = "FailureToBust"; break;
+        case kBAMState_ShowMoveSequenceSetup: stateName = "ShowMoveSeqSetup"; break;
+        case kBAMState_ShowMoveSequence: stateName = "ShowMoveSeq"; break;
+        case kBAMState_End: stateName = "End"; break;
+        default: break;
+        }
+        Vector2 pos(200.0f, 200.0f);
+        Hmx::Color white(1.0f, 1.0f, 1.0f);
+        RndGraph::GetOneFrame()->AddScreenString(
+            MakeString("%s reps:%d", stateName, mRepsRemaining),
+            pos, white
+        );
     }
 }
