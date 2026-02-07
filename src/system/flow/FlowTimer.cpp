@@ -68,21 +68,27 @@ void FlowTimer::ChildFinished(FlowNode *node) {
     FLOW_LOG("Child Finished of class:%s\n", node->ClassName());
     mRunningNodes.remove(node);
 
-    if (!mFlowParent)
-        return;
-
-    if (mFlowParent->HasRunningNode(this))
-        return;
-
-    if (!IsRunning())
-        return;
-
-    MILO_ASSERT(mFlowParent->HasRunningNode(this), 0x10d);
-
-    FLOW_LOG("Timed Release From Parent \n");
-    Timer t;
-    t.Reset();
-    mFlowParent->ChildFinished(this);
+    if (unk5c == 0 && mRunningNodes.empty()) {
+        MILO_ASSERT(mFlowParent->HasRunningNode(this), 0x10d);
+        FLOW_LOG("Timed Release From Parent \n");
+        Timer t;
+        t.Reset();
+        static int depth = 0;
+        static unsigned int start = 0;
+        static unsigned long long cycles = 0;
+        depth++;
+        if (depth == 1) {
+            start = __mftb();
+        }
+        mFlowParent->ChildFinished(this);
+        depth--;
+        if (depth == 0) {
+            unsigned int end = __mftb();
+            cycles += end - start;
+            float ms = Timer::CyclesToMs(cycles);
+            TheFlowMgr->AddMs(ms);
+        }
+    }
 }
 
 void FlowTimer::RequestStop() {

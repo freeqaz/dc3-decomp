@@ -39,9 +39,22 @@ void FreestyleMotionFilter::UpdateFilters(SkeletonUpdateData const &skeletonData
     HamPlayerData *player = TheGameData->Player(0);
     MILO_ASSERT(player, 0x44);
     if (player->IsPlaying() && skeletonData.unk0) {
+        Skeleton *skeleton = *skeletonData.unk0;
         unk30 = 0.0f;
         for (int i = 0; i < 20; i++) {
-            // do something
+            Vector3 velocity;
+            int elapsed;
+            if (skeleton->Velocity(*skeletonData.unkc, kCoordCamera, (SkeletonJoint)i, skeleton->ElapsedMs(), velocity, elapsed) &&
+                skeleton->JointConf((SkeletonJoint)i) == kConfidenceTracked) {
+                float vx = velocity.x;
+                float vz = velocity.z;
+                float vy = velocity.y;
+                if (vx * vx + vz * vz + vy * vy > unk2c) {
+                    unk34 = sqrtf(vx * vx + vz * vz + vy * vy);
+                    unk30 = (float)skeleton->ElapsedMs();
+                    return;
+                }
+            }
         }
     }
 }

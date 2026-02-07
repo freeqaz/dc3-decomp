@@ -1,4 +1,5 @@
 #include "flow/FlowLabel.h"
+#include "flow/Flow.h"
 #include "flow/FlowNode.h"
 #include "flow/FlowQueueable.h"
 #include "obj/Object.h"
@@ -38,11 +39,15 @@ BEGIN_LOADS(FlowLabel)
     LOAD_REVS(bs)
     ASSERT_REVS(1, 0)
     LOAD_SUPERCLASS(FlowQueueable)
+    ObjPtr<FlowNode> node(this);
     d >> mLabel;
     if (d.rev > 0) {
-        ObjPtr<FlowNode> node(this);
         d >> node;
         if (mFlowParent != node) {
+            SetParent(node, true);
+        }
+        if (Flow *flow = dynamic_cast<Flow *>(node.Ptr())) {
+            flow->RefreshPortLabelLists();
         }
     }
 END_LOADS

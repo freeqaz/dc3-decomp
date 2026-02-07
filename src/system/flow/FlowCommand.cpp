@@ -35,15 +35,15 @@ BEGIN_SAVES(FlowCommand)
     bs << mHandler;
 END_SAVES
 
-BEGIN_COPYS(FlowCommand)
-    COPY_SUPERCLASS(FlowNode)
-    CREATE_COPY(FlowCommand)
-    BEGIN_COPYING_MEMBERS
-        COPY_MEMBER(mObject)
-        COPY_MEMBER(mHandler)
+void FlowCommand::Copy(const Hmx::Object *o, Hmx::Object::CopyType ty) {
+    FlowNode::Copy(o, ty);
+    const FlowCommand *c = dynamic_cast<const FlowCommand *>(o);
+    if (c) {
+        mObject = c->mObject;
+        mHandler = c->mHandler;
         PushDrivenProperties();
-    END_COPYING_MEMBERS
-END_COPYS
+    }
+}
 
 INIT_REVS(3, 0)
 

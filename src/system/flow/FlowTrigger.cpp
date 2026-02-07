@@ -9,6 +9,7 @@
 #include "utl/BinStream.h"
 #include "utl/Symbol.h"
 
+
 FlowTrigger::FlowTrigger()
     : mEventProvider(this), mTriggerProperties(this), mStopProperties(this), mHardStop(0),
       unkb1(0) {}
@@ -172,18 +173,16 @@ DataNode FlowTrigger::PropTriggerDefn::GetPathDisplay(DataArray *a) {
     return MakeString("%s->%s", mProvider->Name(), str.c_str());
 }
 
+// Returns the object that provides events for this trigger.
+// Falls back to owner flow's Dir, then this object's Dir if no explicit provider.
 Hmx::Object *FlowTrigger::GetEventProvider() {
     if (mEventProvider) {
         return mEventProvider;
-    } else {
-        ObjectDir *dir;
-        if (GetOwnerFlow()) {
-            dir = GetTopFlow()->Dir();
-        } else {
-            dir = Dir();
-        }
-        return dir;
     }
+    if (GetOwnerFlow()) {
+        return GetTopFlow()->Dir();
+    }
+    return Dir();
 }
 
 DataArray *FlowTrigger::GetEventEditorDef(Symbol s) {

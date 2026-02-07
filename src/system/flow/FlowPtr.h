@@ -42,6 +42,12 @@ class FlowPtr : public FlowPtrBase {
     friend bool
     PropSync(FlowPtr<U> &ptr, DataNode &node, DataArray *prop, int i, PropOp op);
 
+    template <typename U>
+    friend BinStream &operator<<(BinStream &, const FlowPtr<U> &);
+
+    template <typename U>
+    friend BinStream &operator>>(BinStream &, FlowPtr<U> &);
+
 public:
     FlowPtr(Hmx::Object *owner, T *ptr = nullptr)
         : FlowPtrBase(ptr ? ptr->Name() : 0, dynamic_cast<FlowNode *>(owner)),
@@ -92,10 +98,16 @@ private:
 };
 
 template <typename T>
-BinStream &operator<<(BinStream &, const FlowPtr<T> &);
+BinStream &operator<<(BinStream &bs, const FlowPtr<T> &ptr) {
+    bs << ptr.mObjName;
+    return bs;
+}
 
 template <typename T>
-BinStream &operator>>(BinStream &, FlowPtr<T> &);
+BinStream &operator>>(BinStream &bs, FlowPtr<T> &ptr) {
+    ptr.LoadFromMainOrDir(bs);
+    return bs;
+}
 
 template <class T>
 bool PropSync(FlowPtr<T> &ptr, DataNode &node, DataArray *prop, int i, PropOp op) {

@@ -77,7 +77,9 @@ BEGIN_COPYS(FlowSetProperty)
     CREATE_COPY(FlowSetProperty)
     BEGIN_COPYING_MEMBERS
         UnregisterEvents(this);
-
+        mTarget = c->mTarget;
+        unk_0x98 = c->unk_0x98;
+        mValue = c->mValue.Node();
         COPY_MEMBER(mRate)
         COPY_MEMBER(mBlendTime)
         COPY_MEMBER(mChangePerUnit)
@@ -259,11 +261,16 @@ bool FlowSetProperty::Replace(ObjRef *from, Hmx::Object *to) {
 }
 
 BEGIN_SAVES(FlowSetProperty)
-    SAVE_REVS(4, 0) SAVE_SUPERCLASS(FlowNode) bs << mTarget;
+    SAVE_REVS(3, 0)
+    SAVE_SUPERCLASS(FlowNode)
+    bs << mTarget;
     bs << unk_0x98;
-    if (!mValue.Node()) {
+    if (mValue.Node().Type() == kDataObject) {
+        mValue.Node().Save(bs);
+    } else {
+        bs << mValue.Node().Type();
+        mValue.Node().Save(bs);
     }
-
     bs << mRate;
     bs << mBlendTime;
     bs << mChangePerUnit;
