@@ -59,6 +59,8 @@ public:
     MEM_OVERLOAD(FreestyleMoveRecorder, 0x2E);
     static FreestyleMoveRecorder *sInstance;
 
+    friend class BustAMovePanel;
+
 private:
     void UpdateRecordingAttempt(const BaseSkeleton *, float);
     void RecordMoveAttempt(String);
