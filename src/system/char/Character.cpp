@@ -764,7 +764,7 @@ void Character::DrawLodOrShadow(int lod, DrawMode drawMode) {
 
     // Draw mode 4 is shadow-only mode (not in enum)
     if (drawMode == 4) {
-        if (mShadow.size() > 0) {
+        if (mShadow.size() != 0) {
             mShadow.Draw();
             return;
         }

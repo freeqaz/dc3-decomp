@@ -73,57 +73,54 @@ private:
     void SetFlashcardImage(int, int, int);
 
     BAMState mState; // 0x3c
-    FreestyleMoveRecorder *unk40;
-    int unk44;
-    std::list<Symbol> unk48;
-    std::list<int> unk50;
-    int unk58; // FreestyleMoveRecorder*
-    float unk5c;
+    FreestyleMoveRecorder *mRecorder; // 0x40
+    int mBeatCount; // 0x44 - beat counter within current state phase
+    std::list<Symbol> mFlashcardLabels; // 0x48 - queue of flashcard text tokens
+    std::list<int> mFlashcardSlots; // 0x50 - queue of flashcard image indices
+    int unk58; // 0x58
+    float mMoveScore; // 0x5c - accumulated move accuracy score
     ObjectDir *mHUDPanel; // 0x60
-    int unk64;
-    int unk68;
-    int unk6c;
-    int unk70;
+    int mActivePlayer; // 0x64 - current player index (0 or 1)
+    int mCountInLength; // 0x68 - number of beats for count-in
+    int mMatchCount; // 0x6c - number of successfully matched moves this round
+    int mPendingState; // 0x70 - queued next state override (BAMState or kBAMState_None)
     HamLabel *mStatusLabel; // 0x74
     HamLabel *mMovePromptLabel; // 0x78
-    bool unk7c;
-    float unk80;
-    int unk84;
-    int unk88;
-    int unk8c;
-    int unk90;
-    int unk94;
+    bool mRecordSuccess; // 0x7c - whether the last recording attempt passed
+    float mRecordScore; // 0x80
+    int mMoveIndex; // 0x84 - current freestyle move slot (0-3)
+    int unk88; // 0x88
+    int unk8c; // 0x8c
+    int mPlayerScoreLeft; // 0x90 - reinterpreted as float for final sequence scoring
+    int mPlayerScoreRight; // 0x94 - reinterpreted as float for final sequence scoring
     RndDir *mBAMColumns[kNumSkeletonSides]; // 0x98
-    int unka0;
-    DancerSkeleton unka4[3]; // 0xa4
-    int unk92c;
-    float unk930;
-    int unk934;
+    int mCreatorSide; // 0xa0 - side of the move creator (SkeletonSide)
+    DancerSkeleton mCapturePoses[3]; // 0xa4 - skeleton poses for flashcard capture
+    int mCaptureStep; // 0x92c - which capture frame to grab (1-3), 0=idle
+    float mCaptureTimer; // 0x930 - delay timer before taking capture
+    int mCaptureFrames; // 0x934 - frames left to render flashcard capture
     HamPanel *mBAMVisualizerPanel; // 0x938
-    int unk93c[4];
-    int unk94c;
-    int unk950;
-    int unk954;
-    float unk958;
-    float unk95c;
+    int mMoveNameIndices[4]; // 0x93c - indices into shuffled move names per slot
+    int mRetryCount0; // 0x94c - retry count for player 0
+    int mRetryCount1; // 0x950 - retry count for player 1
+    int mMaxRetries; // 0x954 - maximum allowed retries
+    float mLoopStartBeat; // 0x958 - audio loop start (-1 = none)
+    float mLoopEndBeat; // 0x95c - audio loop end (-1 = none)
     HamPhraseMeter *mPhraseMeters[kNumSkeletonSides]; // 0x960
-    int unk968;
-    int unk96c;
-    bool unk970;
-    float unk974;
-    float unk978;
+    int mFailureEndBeat; // 0x968 - beat at which failure loop ends
+    int mFinalSequenceType; // 0x96c - final sequence complexity (1/2/3)
+    bool mIsMulligan; // 0x970 - true if this is a retry attempt
+    float mDancerTakeScore; // 0x974 - score from dancer take recording
+    float mCurrentMoveScore; // 0x978 - score from current move recording
     std::vector<int> mSongStructure; // 0x97c
-    int unk988; // 0x988 - num reps
-    bool unk98c;
+    int mRepsRemaining; // 0x988 - reps remaining until next phrase
+    bool mStreamJumped; // 0x98c - set when audio stream jumps
     std::vector<int> mShuffledMoveNames; // 0x990
-    int unk99c;
-    float unk9a0;
-    int unk9a4;
-    int unk9a8;
-    int unk9ac;
-    int unk9b0;
-    int unk9b4;
-    bool unk9b8;
-    bool unk9b9;
-    int unk9bc;
+    int mMoveNameCursor; // 0x99c - wrapping index into mShuffledMoveNames
+    float mNextVOTime; // 0x9a0 - next scheduled VO play time
+    int mFlawlessFlags; // 0x9a4 - per-player flawless tracking (accessed as bool array)
+    int mMoveCreators[4]; // 0x9a8 - which player created each move
+    bool unk9b8; // 0x9b8
+    bool mNoPosesDetected; // 0x9b9 - set when no skeleton poses found during capture
+    int unk9bc; // 0x9bc
 };

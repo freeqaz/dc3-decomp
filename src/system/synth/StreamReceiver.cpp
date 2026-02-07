@@ -25,17 +25,13 @@ void StreamReceiver::EndData() {
 
 void StreamReceiver::Play() {
     MILO_ASSERT(Ready(), 0x91);
-    switch (mState) {
-    case kPlaying:
-        break;
-    case kStopped:
-        PauseImpl(false);
+    if (mState != kPlaying) {
+        if (mState == kStopped) {
+            PauseImpl(false);
+        } else {
+            PlayImpl();
+        }
         mState = kPlaying;
-        break;
-    default:
-        PlayImpl();
-        mState = kPlaying;
-        break;
     }
 }
 
