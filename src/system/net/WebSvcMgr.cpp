@@ -65,16 +65,21 @@ bool WebSvcMgr::AddRequest(
 
 bool WebSvcMgr::ResolveHostname(WebSvcRequest *req) {
     unsigned int ip = req->GetIPAddr();
-    if (ip == 0) {
-        NetAddress addr = ResolveHostname(req->GetHostName(), kHMXDomain, 80);
-        if (addr.mIP == 0) {
-            addr = ResolveHostname(req->GetHostName(), nullptr, 80);
-            if (addr.mIP == 0) {
-                return false;
-            }
-        }
-        req->UpdateIP(addr.mIP);
+    if (ip != 0) {
+        return true;
     }
+    // Try resolving with HMX domain suffix first
+    NetAddress addr = ResolveHostname(req->GetHostName(), kHMXDomain, 80);
+    if (addr.mIP != 0) {
+        req->UpdateIP(addr.mIP);
+        return true;
+    }
+    // Fallback: try resolving hostname as-is (no domain suffix)
+    addr = ResolveHostname(req->GetHostName(), NULL, 80);
+    if (addr.mIP == 0) {
+        return false;
+    }
+    req->UpdateIP(addr.mIP);
     return true;
 }
 

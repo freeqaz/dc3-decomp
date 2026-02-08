@@ -333,7 +333,7 @@ void GamePanel::SetPausedHelper(bool paused, bool pauseSound) {
                 unkfc->Start();
             } else {
                 // No count-in configured, unpause immediately
-                bool isIntroOrPlaying = (mState < kGameOver);
+                bool isIntroOrPlaying = (mState <= kGamePlaying);
                 mGame->SetGamePaused(paused, isIntroOrPlaying, pauseSound);
 
                 // Pause/unpause venue movie textures

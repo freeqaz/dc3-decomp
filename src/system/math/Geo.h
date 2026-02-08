@@ -134,9 +134,15 @@ bool Intersect(const Transform &, const Hmx::Polygon &, const BSPNode *);
 void MultiplyEq(BSPNode *, const Transform &);
 void Multiply(const Plane &, const Transform &, Plane &);
 
+// Transform sphere by finding maximum scale factor along any axis
 inline void Multiply(const Sphere &s, const Transform &t, Sphere &out) {
     Multiply(s.center, t, out.center);
-    float len = Max(LengthSquared(t.m.z), LengthSquared(t.m.y), LengthSquared(t.m.x));
+    // Find maximum squared length of transform basis vectors (max scale factor)
+    float xsq = LengthSquared(t.m.x);
+    float ysq = LengthSquared(t.m.y);
+    float zsq = LengthSquared(t.m.z);
+    float len = (xsq - ysq < 0) ? ysq : xsq;
+    len = (len - zsq < 0) ? zsq : len;
     len = std::sqrt(len);
     if (NearlyOne(len)) {
         len = 1;

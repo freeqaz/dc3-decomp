@@ -157,7 +157,9 @@ protected:
 
     Symbol ClosestMove();
     void UpdatePlayerFreestyle(bool);
-    void SetCharSpot(Symbol, Symbol);
+
+    /** Send spotlight message for character (e.g., "spotlight_instructor_off") */
+    void SetCharSpot(Symbol charType, Symbol spotState);
     void PausePlayerFreestyle(bool pause) {
         mPlayerFreestylePaused = pause;
         if (mVisualizer)

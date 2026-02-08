@@ -66,12 +66,27 @@ BEGIN_HANDLERS(RndShockwave)
     HANDLE_SUPERCLASS(Hmx::Object)
 END_HANDLERS
 
-void RndShockwave::PrepareShader(float f1) {
-    const Vector3 &v = WorldXfm().v;
-    TheShaderMgr.SetVConstant((VShaderConstant)0x1E, Vector4(v.x, v.y, v.z, 0.0f));
-    const Vector3 &mz = WorldXfm().m.z;
-    TheShaderMgr.SetVConstant((VShaderConstant)0x1F, Vector4(mz.x, mz.y, mz.z, 0.0f));
+void RndShockwave::PrepareShader(float amplitude_scale) {
+    // Set shader constant 0x1E: shockwave center position in world space
+    const Vector3 &world_pos = WorldXfm().v;
+    Vector4 pos;
+    pos.x = world_pos.x;
+    pos.y = world_pos.y;
+    pos.z = world_pos.z;
+    pos.w = 0.0f;
+    TheShaderMgr.SetVConstant((VShaderConstant)0x1E, pos);
+
+    // Set shader constant 0x1F: shockwave normal (z-axis of transform)
+    const Vector3 &world_normal = WorldXfm().m.z;
+    Vector4 normal;
+    normal.x = world_normal.x;
+    normal.y = world_normal.y;
+    normal.z = world_normal.z;
+    normal.w = 0.0f;
+    TheShaderMgr.SetVConstant((VShaderConstant)0x1F, normal);
+
+    // Set shader constant 0x20: shockwave parameters (radius, amplitude, frequency)
     TheShaderMgr.SetVConstant(
-        (VShaderConstant)0x20, Vector4(mRadius, mAmplitude * f1, 1.0f / mWavelength, 0.0f)
+        (VShaderConstant)0x20, Vector4(mRadius, mAmplitude * amplitude_scale, 1.0f / mWavelength, 0.0f)
     );
 }

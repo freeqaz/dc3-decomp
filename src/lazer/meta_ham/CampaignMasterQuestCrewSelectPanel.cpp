@@ -113,11 +113,10 @@ int CampaignMasterQuestCrewSelectPanel::GetTimeSinceEnter() const {
 
 Symbol CampaignMasterQuestCrewSelectPanel::GetSelectedCrew() {
     static Message cGetSelectedCrewMsg("get_selected_crew_index");
-    DataNode selectedCrewIndexNode = Handle(cGetSelectedCrewMsg, true);
-    int node = selectedCrewIndexNode.Int();
+    DataNode node = Handle(cGetSelectedCrewMsg, true);
+    int i = node.Int();
     if (m_pCampaignMqCrewProvider->NumData() > 0)
-        return m_pCampaignMqCrewProvider->DataSymbol(node);
-
+        return m_pCampaignMqCrewProvider->DataSymbol(i);
     return "";
 }
 

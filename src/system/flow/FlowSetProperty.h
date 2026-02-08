@@ -23,12 +23,24 @@ public:
     );
     virtual ~PropertyTask();
     OBJ_CLASSNAME(PropertyTask)
+    virtual bool Replace(ObjRef *, Hmx::Object *);
     virtual void Poll(float);
 
     POOL_OVERLOAD(PropertyTask, 0x17)
 
 protected:
-    EaseFunc *mEaseFunc;
+    void SetProperty(DataNode &);
+
+    ObjOwnerPtr<Hmx::Object> mTarget; // 0x2C
+    DataNode mProperty; // 0x40
+    DataNode mValue; // 0x48
+    DataNode mStartValue; // 0x50
+    float mDuration; // 0x58
+    float mElapsed; // 0x5C
+    float mEasePower; // 0x60
+    EaseFunc *mEaseFunc; // 0x64
+    ObjPtr<Hmx::Object> mListener; // 0x68
+    bool unk_0x7C; // 0x7C
 };
 
 class FlowSetProperty : public FlowNode, public PropertyEventListener {

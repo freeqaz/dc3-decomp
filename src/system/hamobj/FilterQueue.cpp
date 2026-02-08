@@ -9,25 +9,18 @@ FilterQueue::FilterQueue() : jobFinished(0), lastPollMs(0) {}
 bool FilterQueue::GetResults(float &outValue, DetectFrame **frames, float unused) {
     jobFinished = false;
     std::vector<FilterInputFrame> &qframes = mQueuedJob.frames;
-    std::vector<FilterOutputFrame> &oframes = mOutput.frames;
-    // Empty branch structure matches original control flow
-    if (!qframes.empty()) {
-        // Queued frames exist; no action needed in this branch
-    } else {
-        // No queued frames; clear output frames
-        oframes.clear();
+    if (qframes.empty()) {
+        mOutput.frames.clear();
     }
-    outValue = mQueuedJob.unk0;
+    outValue = mQueuedJob.songSeconds;
+    std::vector<FilterOutputFrame> &oframes = mOutput.frames;
     MILO_ASSERT(qframes.size() == oframes.size(), 0x42);
-    frames[0] = nullptr;
     frames[1] = nullptr;
+    frames[0] = nullptr;
     for (int frameIdx = 0; frameIdx < qframes.size(); frameIdx++) {
         DetectFrame *pFrame = qframes[frameIdx].unkc;
         pFrame->AddError(oframes[frameIdx].unk4, qframes[frameIdx].unk4);
-        // Access field at offset +8 in DetectFrame
-        float* pFrameData = (float*)((char*)pFrame + 8);
-        // Check if output value exceeds field data and input error exceeds threshold
-        if ((mQueuedJob.unk0 > *pFrameData) && (qframes[frameIdx].unk4 > unused)) {
+        if (mQueuedJob.songSeconds > pFrame->Seconds() && qframes[frameIdx].unk4 > unused) {
             frames[qframes[frameIdx].unk0] = pFrame;
         }
     }
@@ -42,9 +35,9 @@ void FilterQueue::EnqueueNewJob(float outValue, float duration, MoveMode mode) {
         MILO_NOTIFY("Queuing new job, but there are already queued frames");
         qframes.clear();
     }
-    mQueuedJob.unk0 = outValue;
-    mQueuedJob.unk4 = mode;
-    mQueuedJob.unk8 = duration;
+    mQueuedJob.songSeconds = outValue;
+    mQueuedJob.moveMode = mode;
+    mQueuedJob.songSpeed = duration;
 }
 
 void FilterQueue::EnqueueFrame(
@@ -71,12 +64,12 @@ void FilterQueue::StartJob() {
         }
         mOutput.frames.clear();
     }
-    mOutput.unk0 = mQueuedJob.unk8;
+    mOutput.songSpeed = mQueuedJob.songSpeed;
     jobFinished = false;
-    mOutput.unk4 = mQueuedJob.unk4;
-    int numQFrames = mQueuedJob.frames.size();
-    mOutput.frames.resize(numQFrames);
-    for (int frameIdx = 0; frameIdx < numQFrames; frameIdx++) {
-        mOutput.frames[frameIdx].unk0 = mQueuedJob.frames[frameIdx].unk0;
+    mOutput.moveMode = mQueuedJob.moveMode;
+    int frameCount = mQueuedJob.frames.size();
+    mOutput.frames.resize(frameCount);
+    for (int frameIdx = 0; frameIdx < frameCount; frameIdx++) {
+        mOutput.frames[frameIdx].unk0 = &mQueuedJob.frames[frameIdx];
     }
 }

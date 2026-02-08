@@ -30,15 +30,16 @@
 #include "utl/Symbol.h"
 
 MultiUserGesturePanel::MultiUserGesturePanel() {
-    // Note: unk54/unk58 initialization inside loop is intentional for codegen match
+    // Initialize UI components and providers for both players (left/right sides)
+    // Note: (&unk54)[i] pattern required for codegen - initializes unk54/unk58, unk5c/unk60
     for (int i = 0; i < 2; i++) {
-        unk54 = NULL;
-        unk58 = NULL;
+        (&unk54)[i] = NULL;
+        (&unk5c)[i] = 0;
         mCharacterProviders[i].SetPlayer(i);
-        mCrewProviders[i].SetPlayer(i);
-        mDifficultyProviders[i].SetPlayer(i);
-        mOutfitProviders[i].SetPlayer(i);
         mVenueProviders[i].SetPlayer(i);
+        mCrewProviders[i].SetPlayer(i);
+        mOutfitProviders[i].SetPlayer(i);
+        mDifficultyProviders[i].SetPlayer(i);
     }
 }
 

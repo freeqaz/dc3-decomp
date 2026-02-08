@@ -69,8 +69,9 @@ DefaultPhysicsManager::DefaultPhysicsManager(RndDir *d)
     : PhysicsManager(d), unk40(this, kObjListOwnerControl) {}
 
 bool DefaultPhysicsManager::Replace(ObjRef *from, Hmx::Object *to) {
-    // If the reference isn't owned by unk40, handle removal
+    // If the reference is not owned by our object list, handle removal locally
     if (from->Parent() != &unk40) {
+        // When replacing with null, remove the object from tracking
         if (to == nullptr) {
             Hmx::Object *obj = from->GetObj();
             unk40.remove(obj);
@@ -78,6 +79,7 @@ bool DefaultPhysicsManager::Replace(ObjRef *from, Hmx::Object *to) {
         }
         return true;
     } else {
+        // For references we own, delegate to base class handler
         return Hmx::Object::Replace(from, to);
     }
 }

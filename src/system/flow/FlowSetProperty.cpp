@@ -16,8 +16,10 @@ FlowSetProperty::FlowSetProperty()
       mPersistent(0), mRate(0), mBlendTime(0), mChangePerUnit(0), unk_0xCC(this, nullptr),
       mEase(0), mEasePower(2), unk_0xE8(0), mStopMode(1) {}
 
-PropertyTask::PropertyTask(Hmx::Object *, DataNode &, DataNode &, TaskUnits, float, EaseType t, float, bool, Hmx::Object *) {
-    mEaseFunc = GetEaseFunction(t);
+PropertyTask::PropertyTask(Hmx::Object *obj, DataNode &prop, DataNode &val, TaskUnits units, float dur, EaseType t, float power, bool flag, Hmx::Object *listener)
+    : mTarget(this, obj), mProperty(prop), mValue(val), mStartValue(0),
+      mDuration(dur), mElapsed(0), mEasePower(power), mEaseFunc(GetEaseFunction(t)),
+      mListener(this, listener), unk_0x7C(flag) {
 }
 
 BEGIN_PROPSYNCS(FlowSetProperty)

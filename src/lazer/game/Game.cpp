@@ -571,7 +571,8 @@ void Game::LoadNewSongMoves(Symbol s1, bool b2) {
 
 void Game::LoadNewSong(Symbol s1, Symbol s2) {
     bool loaded = TheGame->IsLoaded();
-    if (s2.Null()) {
+    bool isNull = s2.Null();
+    if (isNull) {
         s2 = s1;
     }
     mWaitState = 5;
@@ -579,6 +580,7 @@ void Game::LoadNewSong(Symbol s1, Symbol s2) {
         TheHamDirector->SetPollEnabled(false);
     }
     mUseMoveGraph = false;
+    // NOTE: These static Symbols appear unused but are required for match
     static Symbol cascade("cascade");
     static Symbol holla_back("holla_back");
     mUseMoveGraph = TheGameMode->Property("use_movegraph")->Int();
@@ -593,6 +595,7 @@ void Game::LoadNewSong(Symbol s1, Symbol s2) {
         RELEASE(mAltTempoMap);
     }
     LoadNewSongAudio(s1);
+    // NOTE: This Symbol is constructed but unused - required for match
     Symbol s48(TheMaster->GetAudio()->Name());
     LoadNewSongMoves(s2, true);
     if (mUseMoveGraph) {

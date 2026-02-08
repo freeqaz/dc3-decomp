@@ -235,16 +235,16 @@ void HamVisDir::Enter() {
     PanelDir::Enter();
     mRunning = TheLoadMgr.EditMode();
     if (TheLoadMgr.EditMode() == 0 && TheGestureMgr != nullptr) {
-        auto freestyle_filter =
+        FreestyleMotionFilter *freestyle_filter =
             ObjectDir::Main()->Find<FreestyleMotionFilter>("freestyle_filter", false);
-        mFilter = freestyle_filter;
+        mFilter = freestyle_filter;  // Store the found filter (may be nullptr)
         if (freestyle_filter == nullptr) {
             freestyle_filter = new FreestyleMotionFilter();
-            mFilter = freestyle_filter;
+            mFilter = freestyle_filter;  // Update mFilter with the new instance
         }
         freestyle_filter->SetName("freestyle_filter", Main());
+        mFilter->Deactivate();
     }
-    mFilter->Deactivate();
 }
 
 void HamVisDir::PostUpdate(const SkeletonUpdateData *data) {

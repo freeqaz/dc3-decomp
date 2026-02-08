@@ -679,7 +679,6 @@ void RhythmBattle::Begin() {
     }
 }
 
-#line 682 "RhythmBattle.cpp"
 void RhythmBattle::OnBeat() {
     MILO_ASSERT(mActive, 0x290);
     static Symbol playing("playing");
@@ -1225,8 +1224,7 @@ void RhythmBattle::OnBeat() {
     }
 
     if (inMindControl && (mPlayerOne->InTheZone() || mPlayerTwo->InTheZone())) {
-        static bool s14bc;
-        s14bc = false;
+        static bool s14bc = false;
     }
     if ((inMindControl && !unk101) || b22) {
         float beatF = (float)beat;

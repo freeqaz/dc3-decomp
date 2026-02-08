@@ -418,17 +418,17 @@ bool SkeletonChooser::IsPlayerInFreestyle(int player) const {
 
 void SkeletonChooser::SwapPlayerSides() {
     static Symbol is_in_party_mode("is_in_party_mode");
-    if (!IsFreestyleMode()) {
-        if (TheHamProvider->Property(is_in_party_mode)->Int() != 1) {
-            TheGameData->SwapPlayerSides();
-            static Message cSwapPlayersMsg("swap_players");
-            TheUI->Handle(cSwapPlayersMsg, false);
-            static Message post_sides_switched("post_sides_switched");
-            TheHamProvider->Export(post_sides_switched, true);
-        }
-    } else {
-        TheGameData->SwapPlayerSidesByIDOnly();
+    // In non-freestyle mode and not in party mode: do full swap with UI updates
+    if (!IsFreestyleMode() && TheHamProvider->Property(is_in_party_mode)->Int() != 1) {
+        TheGameData->SwapPlayerSides();
+        static Message cSwapPlayersMsg("swap_players");
+        TheUI->Handle(cSwapPlayersMsg, false);
+        static Message post_sides_switched("post_sides_switched");
+        TheHamProvider->Export(post_sides_switched, true);
+        return;
     }
+    // Otherwise: just swap the skeleton IDs without full swap logic
+    TheGameData->SwapPlayerSidesByIDOnly();
 }
 
 void SkeletonChooser::ForceSwapPlayerSides() {

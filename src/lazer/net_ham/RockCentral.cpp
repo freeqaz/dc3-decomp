@@ -144,7 +144,8 @@ int RockCentral::GetCommunityMsgCount() const { return mCommunityMsgs.size(); }
 bool RockCentral::HasDlcMsg() { return !(mDLCMsg == gNullStr); }
 void RockCentral::GetDlcMsg(String &str) const { str = mDLCMsg; }
 bool RockCentral::HasUtilityMsg() { return !(mUtilityMsg == gNullStr); }
-void RockCentral::GetUtilityMsg(String &str) const { str = mUtilityMsg; }
+// Note: Returns unkb8 (motdAux), not mUtilityMsg (motdImage) - inconsistent with HasUtilityMsg
+void RockCentral::GetUtilityMsg(String &str) const { str = unkb8; }
 DataNode RockCentral::OnMsg(const UserLoginMsg &) { return 1; }
 
 void RockCentral::ManageJob(RCJob *job) {

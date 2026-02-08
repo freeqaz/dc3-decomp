@@ -283,19 +283,20 @@ void MainMenuPanel::MotdHandleTextScrolledOut(int i) {
 
     mMotdData.pop_front();
 
-    // Ensure enough text to fill the scroll area (2x label width)
-    float targetWidth = mMsgLabel->Width() * 2.0f;
+    // Calculate current width of remaining MOTD texts
+    std::list<MotdData>::iterator it = mMotdData.begin();
     float currentWidth = 0.0f;
+    float targetWidth = mMsgLabel->Width() * 2.0f;
 
-    if (mMotdData.empty()) {
+    if (it == mMotdData.end()) {
         MotdPickNextText();
     } else {
-        FOREACH (it, mMotdData) {
+        for (++it; it != mMotdData.end(); ++it) {
             currentWidth += it->unkc;
         }
     }
 
-    // Keep adding text until we have enough to fill the scroll area
+    // Add more text until we have enough to fill scroll area (2x label width)
     while (currentWidth < targetWidth) {
         currentWidth += MotdPickNextText();
     }
@@ -304,11 +305,11 @@ void MainMenuPanel::MotdHandleTextScrolledOut(int i) {
 
     // Build the full text string from all queued messages
     String text = mMotdData.front().unk4;
-    std::list<MotdData>::iterator it = mMotdData.begin();
+    it = mMotdData.begin();
     ++it;
     for (; it != mMotdData.end(); ++it) {
         text += "\n";
-        text += (*it).unk4;
+        text += it->unk4;
     }
 
     mMsgLabel->ReFitTextScroll(text);

@@ -14,10 +14,10 @@
 
 UIEventMgr *TheUIEventMgr;
 
-UIEventMgr::BandEvent::BandEvent(UIEventMgr::EventType t, DataArray *a1, DataArray *a2)
-    : mType(t), unk4(a1), mActive(false) {
-    if (a2) {
-        unk8 = a2->Clone(true, true, 0);
+UIEventMgr::BandEvent::BandEvent(UIEventMgr::EventType type, DataArray *eventDef, DataArray *eventData)
+    : mType(type), unk4(eventDef), mActive(false) {
+    if (eventData) {
+        unk8 = eventData->Clone(true, true, 0);
     }
 }
 
@@ -120,17 +120,17 @@ void UIEventMgr::ActivateFirstEvent() {
     }
 }
 
-void UIEventMgr::DismissEvent(Symbol s1) {
+void UIEventMgr::DismissEvent(Symbol dismissReason) {
     MILO_ASSERT(!mEventQueue.empty(), 0x2D);
     MILO_ASSERT(mEventQueue.front()->mActive, 0x2E);
     Symbol curEvent = CurrentEvent();
-    EventType t = mEventQueue.front()->mType;
+    EventType eventType = mEventQueue.front()->mType;
     RELEASE(mEventQueue.front());
     mEventQueue.clear();
-    if (t == kDialogEvent) {
+    if (eventType == kDialogEvent) {
         static EventDialogDismissMsg dismiss_msg(gNullStr, gNullStr);
         dismiss_msg[0] = curEvent;
-        dismiss_msg[1] = s1;
+        dismiss_msg[1] = dismissReason;
         Export(dismiss_msg, false);
     }
     if (mEventQueue.size() > 0 && !mEventQueue.front()->mActive) {
@@ -138,13 +138,13 @@ void UIEventMgr::DismissEvent(Symbol s1) {
     }
 }
 
-void UIEventMgr::TriggerEvent(Symbol s1, DataArray *a2) {
+void UIEventMgr::TriggerEvent(Symbol eventName, DataArray *eventData) {
     // Check if current screen allows this event
     if (!TheUI->InTransition()) {
         UIScreen *curScreen = TheUI->CurrentScreen();
         if (curScreen) {
             static Message msg("allow_event", 0);
-            msg[0] = s1;
+            msg[0] = eventName;
             DataNode handled = curScreen->HandleType(msg);
             if (handled.Type() != kDataUnhandled && handled.Int() == 0) {
                 return;
@@ -154,14 +154,14 @@ void UIEventMgr::TriggerEvent(Symbol s1, DataArray *a2) {
 
     // Dismiss pending dialog events (keep transition events)
     while (!mEventQueue.empty()) {
-        BandEvent *backEvent = mEventQueue.back();
-        if (backEvent->mType) {
+        BandEvent *evt = mEventQueue.back();
+        if (evt->mType) {
             break;
         }
-        if (mEventQueue.size() == 1 && backEvent->mActive) {
-            DismissEvent(s1);
+        if (mEventQueue.size() == 1 && evt->mActive) {
+            DismissEvent(eventName);
         } else {
-            RELEASE(backEvent);
+            RELEASE(evt);
             mEventQueue.pop_back();
         }
     }
@@ -169,27 +169,27 @@ void UIEventMgr::TriggerEvent(Symbol s1, DataArray *a2) {
     // Look up event definition from typedef
     static Symbol dialog_events("dialog_events");
     static Symbol transition_events("transition_events");
-    DataArray *eventArr;
+    DataArray *dialogArr = TypeDef()->FindArray(dialog_events);
+    DataArray *eventArr = dialogArr->FindArray(eventName, false);
     EventType eventType;
-    eventArr = TypeDef()->FindArray(dialog_events)->FindArray(s1, false);
     if (eventArr) {
         eventType = kDialogEvent;
     } else {
+        eventArr = TypeDef()->FindArray(transition_events, eventName);
         eventType = kTransitionEvent;
-        eventArr = TypeDef()->FindArray(transition_events, s1);
     }
-    mEventQueue.push_back(new BandEvent(eventType, eventArr, a2));
+    mEventQueue.push_back(new BandEvent(eventType, eventArr, eventData));
     if (mEventQueue.size() == 1) {
         ActivateFirstEvent();
     }
 }
 
-DataNode UIEventMgr::OnTriggerEvent(DataArray *a) {
-    Symbol s = a->Sym(2);
-    DataArray *arr = nullptr;
-    if (a->Size() > 3) {
-        arr = a->Array(3);
+DataNode UIEventMgr::OnTriggerEvent(DataArray *msg) {
+    Symbol eventName = msg->Sym(2);
+    DataArray *eventData = nullptr;
+    if (msg->Size() > 3) {
+        eventData = msg->Array(3);
     }
-    TriggerEvent(s, arr);
+    TriggerEvent(eventName, eventData);
     return 1;
 }

@@ -20,16 +20,18 @@ const char *Award::GetArt() const {
 void Award::GrantAwards(class HamProfile *hp) {
     FOREACH (it, mAwardEntries) {
         GrantAward(*it, hp);
-    };
+    }
 }
 
 Symbol Award::GetDisplayName() const {
     static Symbol asset("asset");
     Symbol name = mName;
     if (!mAwardEntries.empty()) {
-        if (mAwardEntries.size() == 1
-            && mAwardEntries.front().m_symAwardCategory == asset) {
-            name = mAwardEntries.front().m_symAward;
+        if (mAwardEntries.size() == 1) {
+            const AwardEntry &entry = mAwardEntries.front();
+            if (entry.m_symAwardCategory == asset) {
+                name = entry.m_symAward;
+            }
         }
     }
     return name;

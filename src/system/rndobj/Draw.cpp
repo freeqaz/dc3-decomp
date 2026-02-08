@@ -140,6 +140,18 @@ void RndDrawable::CollideList(
     }
 }
 
+void DrawPtrVec::CollideList(const Segment &s, std::list<RndDrawable::Collision> &c) const {
+    FOREACH (it, *this) {
+        (*it)->CollideList(s, c);
+    }
+}
+
+void DrawPtrVec::Draw() const {
+    FOREACH (it, *this) {
+        (*it)->Draw();
+    }
+}
+
 void RndDrawable::Highlight() {
     if (sHighlightStyle != kHighlightNone) {
         Sphere s;

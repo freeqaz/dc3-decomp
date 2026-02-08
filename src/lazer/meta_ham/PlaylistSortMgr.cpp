@@ -47,6 +47,10 @@ bool CompareType(const Playlist *p1, const Playlist *p2) {
     }
 }
 
+// TODO: Remove once HandleCmdGetPlaylistsFromRC is implemented
+// (unkd0 vector ops will trigger Playlist::operator= naturally)
+void _force_playlist_assign(Playlist &a, const Playlist &b) { a = b; }
+
 PlaylistSortMgr *ThePlaylistSortMgr;
 
 PlaylistSortMgr::PlaylistSortMgr(SongPreview &sp) : NavListSortMgr(sp) {

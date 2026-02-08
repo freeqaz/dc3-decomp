@@ -775,8 +775,8 @@ double TDStretch::calcCrossCorrMono(const float *mixingPos, const float *compare
 }
 
 double TDStretch::calcCrossCorrStereo(const float *mixingPos, const float *compare) const {
-    double corr = 0;
     double norm = 0;
+    double corr = 0;
 
     for (int i = 2; i < 2 * overlapLength; i += 2) {
         corr += mixingPos[i] * compare[i] + mixingPos[i + 1] * compare[i + 1];

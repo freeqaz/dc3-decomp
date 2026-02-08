@@ -456,14 +456,16 @@ void RhythmBattlePlayer::SwapObjs(RhythmBattlePlayer *player) {
     player->unk288 = !player->unk288;
 }
 
-void RhythmBattlePlayer::UpdateScore(int i1) {
-    unk280 += (InTheZone() + 1) * i1;
+void RhythmBattlePlayer::UpdateScore(int points) {
+    // Apply score multiplier (1x normally, 2x when in the zone)
+    int multiplier = InTheZone() + 1;
+    unk280 += multiplier * points;
     static Symbol rhythm_battle("rhythm_battle");
     static Symbol gameplay_mode("gameplay_mode");
     if (TheHamProvider->Property(gameplay_mode)->Sym() == rhythm_battle) {
         static Symbol score("score");
-        HamPlayerData *hpd = TheGameData->Player(mPlayer);
-        hpd->Provider()->SetProperty(score, unk280);
+        PropertyEventProvider *provider = TheGameData->Player(mPlayer)->Provider();
+        provider->SetProperty(score, unk280);
     }
 }
 

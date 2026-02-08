@@ -35,20 +35,20 @@ private:
     // size 0x214
     class FilterOutputFrame {
     public:
-        int unk0;
+        FilterInputFrame *unk0;
         Vector3 unk4[kMaxNumErrorNodes]; // 0x4
     };
 
     struct QueuedJob {
-        float unk0; // 0x0 - song seconds minus latency seconds
-        MoveMode unk4; // 0x4 - current move mode
-        float unk8; // 0x8 - song speed
+        float songSeconds; // 0x0 - song seconds minus latency seconds
+        MoveMode moveMode; // 0x4 - current move mode
+        float songSpeed; // 0x8 - song speed
         std::vector<FilterInputFrame> frames; // 0xc
     };
 
     struct Output {
-        float unk0;
-        MoveMode unk4;
+        float songSpeed; // 0x0
+        MoveMode moveMode; // 0x4
         std::vector<FilterOutputFrame> frames; // 0x20
     };
 

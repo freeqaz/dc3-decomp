@@ -182,10 +182,13 @@ int SingleUserCrewSelectPanel::GetPlayerIndex(int i) const {
     SkeletonChooser *pSkeletonChooser = TheHamUI.GetShellInput()->mSkelChooser;
     MILO_ASSERT(pSkeletonChooser, 0x52);
     SkeletonSide skelSide = pSkeletonChooser->GetPlayerSide(0);
-    Symbol is_in_party_mode("is_in_party_mode");
-    if (TheHamProvider->Property(is_in_party_mode, true)->Int() != 0) {
+    // In party mode, player index maps directly: i=0 -> player 0, i=1 -> player 1
+    if (TheHamProvider->Property(Symbol("is_in_party_mode"), true)->Int() != 0) {
         return i == 0;
     }
+    // Otherwise, player index depends on skeleton side:
+    // skelSide=1 (Left)  -> i=0 returns 0, i=1 returns 1
+    // skelSide=2 (Right) -> i=0 returns 1, i=1 returns 0
     if (i == 0) {
         return (skelSide - 1) != 0;
     }

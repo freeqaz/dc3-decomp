@@ -111,7 +111,7 @@ BEGIN_LOADS(SongCollision)
     LOAD_REVS(bs)
     ASSERT_REVS(2, 1)
     LOAD_SUPERCLASS(Hmx::Object)
-    if (d.rev < 1) {
+    if (d.altRev < 1) {
         for (int i = 0; i < kNumDifficultiesDC2; i++) {
             d >> mData[i];
         }

@@ -93,7 +93,7 @@ struct sockaddr {
     char sa_data[14];
 };
 
-typedef unsigned int *SOCKET;
+typedef unsigned int SOCKET;
 
 typedef struct fd_set {
     unsigned int fd_count;

@@ -894,8 +894,9 @@ void HamDirector::SendCurWorldMsg(Symbol s, bool b2) {
     }
 }
 
-void HamDirector::SetCharSpot(Symbol s1, Symbol s2) {
-    SendCurWorldMsg(MakeString("spotlight_%s_%s", s1.Str(), s2.Str()), false);
+void HamDirector::SetCharSpot(Symbol charType, Symbol spotState) {
+    const char *str = MakeString("spotlight_%s_%s", charType.Str(), spotState.Str());
+    SendCurWorldMsg(Symbol(str), false);
 }
 
 DataNode HamDirector::OnToggleCamshotFlag() { return unk33c = !unk33c; }

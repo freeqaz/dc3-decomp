@@ -465,10 +465,13 @@ class WorktreePool:
         worktree_path = Path(row["path"])
 
         try:
-            # First, find any new untracked files in src/ directories
-            # These are commonly new header files created during decomp work
+            # Find new untracked files in directories we care about:
+            # - src/: new header/source files created during decomp work
+            # - config/: new symbol or config entries
+            # - docs/sessions/: agent session logs
             untracked_result = subprocess.run(
-                ["git", "ls-files", "--others", "--exclude-standard", "src/"],
+                ["git", "ls-files", "--others", "--exclude-standard",
+                 "src/", "config/", "docs/sessions/"],
                 cwd=worktree_path,
                 capture_output=True,
                 text=True,
@@ -485,9 +488,11 @@ class WorktreePool:
                     check=True,
                 )
 
-            # Now get the diff for source files only (excludes function_analysis/, symlinks, etc.)
+            # Get diff for source, headers, config (symbols.txt, objects.json, etc.),
+            # and agent session logs
             result = subprocess.run(
-                ["git", "diff", "HEAD", "--", "src/", "include/"],
+                ["git", "diff", "HEAD", "--",
+                 "src/", "include/", "config/", "docs/sessions/"],
                 cwd=worktree_path,
                 capture_output=True,
                 text=True,

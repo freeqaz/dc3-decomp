@@ -81,19 +81,28 @@ bool HamDriver::Replace(ObjRef *ref, Hmx::Object *obj) {
 }
 
 float HamDriver::Display(float f1) {
+    // Scale screen position by normalized height
     float scaledHeight = TheRnd.Height() * f1;
     const char *pathName = PathName(this);
+
+    // Draw debug info: object name and beat position
     Hmx::Color color(1.0f, 1.0f, 1.0f, 1.0f);
     Vector2 screenPos(CharClipDisplay::GetSEm(), scaledHeight);
     const char *stringDisplay = MakeString("%s beat: %.2f", pathName, unk78);
     TheRnd.DrawString(stringDisplay, screenPos, color, true);
-    CharClipDisplay::Init(this->Dir());
+
+    // Initialize character clip display and advance line spacing
+    CharClipDisplay::Init(Dir());
     float lineSpacing = CharClipDisplay::LineSpacing() + scaledHeight;
+
+    // Recursively display layers if list is non-empty and weight is active
     if (mLayers.unk2c.begin() != mLayers.unk2c.end() && !(mLayers.unk8 == 0.0f)) {
         FOREACH (it, mLayers.unk2c) {
             lineSpacing = DisplayRecurse(*it, 0, lineSpacing);
         }
     }
+
+    // Return normalized line position
     return lineSpacing / TheRnd.Height();
 }
 

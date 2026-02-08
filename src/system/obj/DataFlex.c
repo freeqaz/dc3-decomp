@@ -1170,16 +1170,16 @@ static int yy_get_next_buffer(YY_ONLY_ARG) YY_DECL_LAST_ARG
 
     if (YY_G(yy_current_buffer)->yy_fill_buffer == 0) { /* Don't try to fill the buffer,
                                                            so this is an EOF. */
-        if (YY_G(yy_c_buf_p) - yytext_ptr - YY_MORE_ADJ == 1) {
-            /* We matched a single character, the EOB, so
-             * treat this as a final EOF.
-             */
-            return EOB_ACT_END_OF_FILE;
-        } else {
+        if (YY_G(yy_c_buf_p) - yytext_ptr - YY_MORE_ADJ != 1) {
             /* We matched some text prior to the EOB, first
              * process it.
              */
             return EOB_ACT_LAST_MATCH;
+        } else {
+            /* We matched a single character, the EOB, so
+             * treat this as a final EOF.
+             */
+            return EOB_ACT_END_OF_FILE;
         }
 }
 
@@ -1209,10 +1209,8 @@ else {
 
         /* just a shorter name for the current buffer */
         YY_BUFFER_STATE b = YY_G(yy_current_buffer);
-        int yy_c_buf_p_offset;
         int new_size;
-
-        yy_c_buf_p_offset = (int)(YY_G(yy_c_buf_p) - b->yy_ch_buf);
+        int yy_c_buf_p_offset = (int)(YY_G(yy_c_buf_p) - b->yy_ch_buf);
 
         if (b->yy_is_our_buffer) {
             new_size = b->yy_buf_size * 2;

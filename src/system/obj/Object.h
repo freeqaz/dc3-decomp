@@ -262,9 +262,10 @@ public:
         Node &operator*() const { return *it; }
         Node *operator->() const { return &(*it); }
 
-        iterator operator+(int idx) {
-            it += idx;
-            return *this;
+        iterator operator+(int idx) const {
+            iterator result = *this;
+            result.it += idx;
+            return result;
         }
 
         iterator operator++() {
@@ -297,9 +298,10 @@ public:
         const Node &operator*() const { return *it; }
         const Node *operator->() const { return &(*it); }
 
-        const_iterator operator+(int idx) {
-            it += idx;
-            return *this;
+        const_iterator operator+(int idx) const {
+            const_iterator result = *this;
+            result.it += idx;
+            return result;
         }
 
         const_iterator operator++() {
@@ -316,8 +318,14 @@ public:
     virtual ~ObjPtrVec();
 
     iterator begin() { return empty() ? nullptr : mNodes.begin(); }
-    // regswapped and i have no idea why
-    iterator end() { return begin() + size(); }
+    // Register swap pattern: declaring size() before begin() affects PPC register allocation
+    // Variable declaration order is critical for matching FlowNode::MiloPreRun codegen
+    // See STYLEGUIDE.md §Variable Declaration Order
+    iterator end() {
+        int s = size();
+        iterator b = begin();
+        return b + s;
+    }
     const_iterator begin() const { return empty() ? nullptr : mNodes.begin(); }
     const_iterator end() const { return begin() + size(); }
     iterator FindRef(ObjRef *);

@@ -229,44 +229,76 @@ void UILabel::PreLoad(BinStream &bs) {
 }
 
 void UILabel::PostLoad(BinStream &bs) {
+    int *end = (int *)(((unsigned char *)this) - 0x10);
+    int *begin = (int *)(((unsigned char *)this) - 0x14);
     int rev = bs.PopRev(Dir());
 
-    for (int i = 0; i < unk124.size(); i++) {
-        LStyle(i).unk14.PostLoad(0);
+    // Calculate number of styles from vector begin/end pointers
+    int numStyles = (*end - *begin) / 0x2c;
+
+    // PostLoad each style's UILabelDir resource pointer
+    if (numStyles != 0) {
+        int offset = 0;
+        unsigned int i = 0;
+        do {
+            ResourceDirPtr<UILabelDir> *ptr = (ResourceDirPtr<UILabelDir> *)((unsigned char *)*begin + offset + 0x14);
+            ptr->PostLoad(0);
+            i++;
+            offset += 0x2c;
+        } while (i < (unsigned int)numStyles);
     }
 
+    // Handle font mat loading based on file revision
     if (rev >= 0x1c) {
-        for (int i = 0; i < unk124.size(); i++) {
-            char buffer[0x100];
-            bs.ReadString(buffer, 0x100);
-            SetFontMat(buffer, i);
+        // Rev 28+: Read font mat strings for each style from stream
+        if (numStyles != 0) {
+            unsigned int i = 0;
+            do {
+                char buffer[0x100];
+                bs.ReadString(buffer, 0x100);
+                SetFontMat(buffer, i);
+                i++;
+            } while (i < (unsigned int)numStyles);
         }
     } else if (rev > 0x14) {
+        // Rev 21-27: Legacy revision handling with PopRev for old string fields
         if (rev > 0x16) {
+            // Rev 23-27: Skip old string field at rev 0x17
             bs.PopRev(Dir());
             SetFontMat("", 1);
         }
         if (rev > 0x15) {
+            // Rev 22-27: Skip old string field at rev 0x16
             bs.PopRev(Dir());
         }
         SetFontMat("", 0);
     } else {
-        for (int i = 0; i < unk124.size(); i++) {
-            SetFontMat("", i);
+        // Rev <= 20: Initialize all styles with empty font mat strings
+        if (numStyles != 0) {
+            unsigned int i = 0;
+            do {
+                SetFontMat("", i);
+                i++;
+            } while (i < (unsigned int)numStyles);
         }
     }
 
     UIComponent::PostLoad(bs);
-    sDeferUpdate = true;
 
+    // Initialize label text - defer actual UI updates until end
+    sDeferUpdate = true;
     if (!unk118.empty()) {
+        // If edit text is set, use first character as icon
         unk120 = unk118[0];
-    } else if (!mTextToken.Null() && (TheLoadMgr.EditMode() || AllowEditText())) {
-        RndText::SetText(mTextToken.Str());
-    } else {
+    } else if (mTextToken.Null() || (!TheLoadMgr.EditMode() && !AllowEditText())) {
+        // Set text from token (will localize)
         SetTextToken(mTextToken);
+    } else {
+        // In edit mode with allowed edit text, use token string directly
+        RndText::SetText(mTextToken.Str());
     }
 
+    // Validate fixed length requirement for preloaded labels
     if (sRequireFixedLength) {
         if (unk120 == 0) {
             MILO_NOTIFY(
@@ -277,6 +309,7 @@ void UILabel::PostLoad(BinStream &bs) {
         }
     }
 
+    // Re-enable updates and refresh label display if needed
     sDeferUpdate = false;
     if (!mTextToken.Null() || !unk118.empty() || unk120 != 0) {
         LabelUpdate(false);
@@ -395,8 +428,9 @@ const UILabel::LabelStyle &UILabel::LStyle(int i) const { return unk124[i]; }
 void UILabel::OldResourcePreload(BinStream &bs) {
     char buffer[0x100];
     LabelStyle &style = LStyle(0);
+    ResourceDirPtr<UILabelDir> &ptr = *(ResourceDirPtr<UILabelDir> *)&style.unk14;
     bs.ReadString(buffer, 0x100);
-    style.unk14.SetName(buffer, true);
+    ptr.SetName(buffer, true);
 }
 
 void UILabel::SetDisplayText(const char *cc, bool b) {

@@ -41,7 +41,6 @@ public:
         float unk0;
         float unk4;
         float unk8;
-        float unkc; // Padding to 16 bytes
     };
 
     MEM_OVERLOAD(ClipDistMap, 0x24);

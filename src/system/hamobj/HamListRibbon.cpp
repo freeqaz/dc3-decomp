@@ -152,6 +152,8 @@ BEGIN_COPYS(HamListRibbon)
     END_COPYING_MEMBERS
 END_COPYS
 
+const int HamListRibbon::sNumListSelectable = 5;
+
 INIT_REVS(11, 0)
 
 void HamListRibbon::PreLoad(BinStream &bs) {
