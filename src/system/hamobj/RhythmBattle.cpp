@@ -841,21 +841,23 @@ void RhythmBattle::OnBeat() {
                     float f45 = 0.10f;
                     for (int i = 0; i < unk134.size(); i++) {
                         int iPrev = Max(i - 1, 0);
+                        ArchiveSkeleton &current = unk134[i];
+                        ArchiveSkeleton &previous = unk134[iPrev];
                         DancerSkeleton dancerSkeleton;
                         if (i > 0) {
-                            f45 += (float)unk134[i].ElapsedMs() / 1000.0f;
+                            f45 += (float)current.ElapsedMs() / 1000.0f;
                         }
                         for (int j = 0; j < kNumJoints; j++) {
                             Vector3 v;
-                            unk134[i].JointPos(kCoordCamera, (SkeletonJoint)j, v);
-                            dancerSkeleton.SetCamJointPos((SkeletonJoint)j, v);
+                            current.JointPos(kCoordCamera, (SkeletonJoint)j, v);
                             Vector3 v2;
-                            unk134[iPrev].JointPos(kCoordCamera, (SkeletonJoint)j, v2);
+                            previous.JointPos(kCoordCamera, (SkeletonJoint)j, v2);
+                            dancerSkeleton.SetCamJointPos((SkeletonJoint)j, v);
                             Vector3 disp(v.x - v2.x, v.y - v2.y, v.z - v2.z);
                             dancerSkeleton.SetCamJointDisplacement((SkeletonJoint)j, disp);
                         }
-                        dancerSkeleton.SetDisplacementElapsedMs(unk134[i].ElapsedMs());
-                        dancerSkeleton.Set(unk134[i]);
+                        dancerSkeleton.SetDisplacementElapsedMs(current.ElapsedMs());
+                        dancerSkeleton.Set(current);
                         f48 = unk130->GetScore(&dancerSkeleton, 1, f45, false);
                     }
                 }
@@ -955,7 +957,7 @@ void RhythmBattle::OnBeat() {
     }
     bool b43 = i6b4 == 1 || i6b4 == 2;
     bool outOfRange = (unsigned)i28 > 2u;
-    if (outOfRange || b43 || (mEndBeat < curBeat + 12.0f)) {
+    if (b43 || outOfRange || (mEndBeat < curBeat + 12.0f)) {
         remainingValue = -1;
     }
     play_vo[0] = none;
@@ -1223,7 +1225,8 @@ void RhythmBattle::OnBeat() {
     }
 
     if (inMindControl && (mPlayerOne->InTheZone() || mPlayerTwo->InTheZone())) {
-        static bool s14bc = false;
+        static bool s14bc;
+        s14bc = false;
     }
     if ((inMindControl && !unk101) || b22) {
         float beatF = (float)beat;
@@ -1233,7 +1236,7 @@ void RhythmBattle::OnBeat() {
     if (unk101) {
         End();
     }
-    float min84 = Min(mPlayerOne->Unk284(), mPlayerTwo->Unk284());
+    float min84 = Max(mPlayerOne->Unk284(), mPlayerTwo->Unk284());
     static UIPanel *sLoadingPanel =
         ObjectDir::Main()->Find<UIPanel>("loading_panel", false);
     if (sLoadingPanel && sLoadingPanel->LoadedDir()) {
@@ -1253,7 +1256,7 @@ void RhythmBattle::OnBeat() {
         TheHamDirector->SetPlayerSpotlightsEnabled(false);
     }
 
-    int nextUnk148 = ((int)mFinale << 4) + 8 + i6cc;
+    int nextUnk148 = (mFinale ? 16 : 0) + 8;
     if (inMindControl || mFinale) {
         if (unk148 > 0) {
             unk148--;
@@ -1418,7 +1421,7 @@ void RhythmBattle::OnBeat() {
                         break;
                     }
                 }
-                unk148 = nextUnk148;
+                unk148 = nextUnk148 + i6cc;
             }
         }
     }
