@@ -679,6 +679,7 @@ void RhythmBattle::Begin() {
     }
 }
 
+#line 682 "RhythmBattle.cpp"
 void RhythmBattle::OnBeat() {
     MILO_ASSERT(mActive, 0x290);
     static Symbol playing("playing");
@@ -838,7 +839,7 @@ void RhythmBattle::OnBeat() {
                     && (unsigned int)unk130->GetCurrentMoveNumFrames()
                         <= unk134.size()) {
                     float f45 = 0.10f;
-                    for (int i = 0; i < (int)unk134.size(); i++) {
+                    for (int i = 0; i < unk134.size(); i++) {
                         int iPrev = Max(i - 1, 0);
                         DancerSkeleton dancerSkeleton;
                         if (i > 0) {
@@ -943,7 +944,7 @@ void RhythmBattle::OnBeat() {
                 );
                 i6b4 = (int)unk124;
                 b6f0 = !b36;
-                i27 = !b6f0;
+                i27 = b36;
                 i35 = b6f0;
                 unk124 = -1;
             }
@@ -1423,5 +1424,6 @@ void RhythmBattle::OnBeat() {
     }
     UpdateFinaleVO(remainingValue);
 }
+#line 1427 "src/system/hamobj/RhythmBattle.cpp"
 
 bool RhythmBattle::CanTrick(Symbol) { return false; }
