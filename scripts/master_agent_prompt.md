@@ -116,6 +116,7 @@ The orchestrator has already run objdiff and saved the output:
 
 - **File:** `{objdiff_file}` ({objdiff_line_count} lines)
 - **Absolute path:** `{objdiff_file_absolute}`
+- **Baseline JSON:** `{baseline_json}` (for `run_diff_inspect compare` mode)
 
 Use the Read tool to view this file if you need full details. A preview is included below.
 
@@ -198,12 +199,21 @@ mcp__orchestrator__run_objdiff
 
 This tool:
 - Builds with incremental build (fast, 2-4s)
-- Returns match% and verdict
+- Returns match% and verdict (concise by default)
 - Handles large output automatically (writes to file if >500 lines)
 
 **If output is large:** The tool will tell you where the file was saved. Use the Read tool to view details.
 
 **Performance:** Each iteration cycle takes ~5 seconds. Use this speed to try many variations.
+
+**If stuck after 3+ iterations with no progress**, use `run_diff_inspect` to understand WHY:
+```
+mcp__orchestrator__run_diff_inspect
+- symbol: "{symbol}"
+- mode: "diagnose"                  ← Start here for root cause analysis
+- project_dir: "{worktree_dir}"
+```
+Then use targeted modes (`regswaps`, `clusters`, `offsets`, `replaces`) based on what diagnosis shows.
 
 ---
 
@@ -213,7 +223,7 @@ This tool:
 |---------|--------|--------------|
 | **COMPLETE** | 100% match! Go to Phase 6. | Victory - function perfect |
 | **LIKELY_FIXABLE** | Control flow or operator tweaks likely to work. Try: if/else order, loop structure, comparison operators. | Usually fixes in 1-3 tries |
-| **MAYBE_FIXABLE** | Variable reordering or struct member order may help. Try reordering declarations or struct fields. | Moderate difficulty, try 2-5 variations |
+| **MAYBE_FIXABLE** | Variable reordering or struct member order may help. Try reordering declarations or struct fields. If stuck after 3 tries, run `run_diff_inspect` with `mode: "diagnose"` to identify root cause. | Moderate difficulty, try 2-5 variations |
 | **AT_LIMIT** | Patterns detected that may be at their limit (linker-merged calls, bool masks, register allocation). **Verify before accepting** — use `lookup_merged_symbol` for merged calls. If verified, go to Phase 6. If not verified, investigate further. | Don't accept blindly. Verify the pattern applies, then stop. |
 
 Loop back to Phase 3 until verdict stops changing.
@@ -222,6 +232,7 @@ Loop back to Phase 3 until verdict stops changing.
 - With incremental builds (2-4s per cycle), you can try 10+ variations in the time a single full build takes
 - Use this speed advantage to test multiple hypotheses
 - Pattern-based verdicts now tell you exactly what to try next
+- When stuck, use `run_diff_inspect diagnose` before giving up — it often reveals the specific mismatch pattern to target
 
 ---
 
@@ -303,8 +314,8 @@ Some patterns cannot be reproduced at source level. **Verify each before accepti
 | **≥50% merged calls** | Verdict says "high merged call ratio" | Function calls are inlined by linker | Stop, report `at_limit` |
 
 **How to detect these:**
-- Run `mcp__orchestrator__run_analyze_function --symbol "{symbol}" --project-dir "{worktree_dir}"`
-- Check the detailed objdiff output for patterns above
+- Run `mcp__orchestrator__run_objdiff` with `concise: false` for full output + auto-diagnosis
+- Or run `mcp__orchestrator__run_diff_inspect` with `mode: "diagnose"` for root cause analysis
 - For LINKER_MERGED: **verify with `lookup_merged_symbol` before accepting**
 - For other patterns (BOOL_MASK, STRUCT_OFFSET, FILE_PATH): report `at_limit`
 
@@ -350,11 +361,11 @@ Test by making an obvious change (add a comment), then verify match% changes
 
 ### "Verdict keeps saying 'MAYBE_FIXABLE' but match doesn't improve"
 **Probable cause:** Function is at unfixable limit despite verdict label
-**Fix:** Try 10-15 more variations; if no improvement, report `stuck` (it's ok - limits are real)
+**Fix:** Run `run_diff_inspect` with `mode: "diagnose"` to see the actual root causes. Then try targeted modes (`regswaps`, `offsets`, `clusters`) based on what it reports. If all root causes are unfixable patterns, report `at_limit`.
 
 ### "I'm at 95%+ but verdict says 'LIKELY_FIXABLE'"
 **Probable cause:** Verdict may be stale or function structure prevents improvement
-**Action:** Expect slow progress. Try many ideas. This is VERY high value to get right if we can get to `AT_LIMIT` ot 100%
+**Action:** Run `run_diff_inspect` with `mode: "diagnose"` to see exactly what's left. Use `mode: "compare"` to check if your edits are actually changing the right mismatches. This is VERY high value to get right if we can get to `AT_LIMIT` or 100%.
 
 ## Example Session
 
@@ -371,12 +382,21 @@ Test by making an obvious change (add a comment), then verify match% changes
 4. Edit: Reorder variable declarations to match Ghidra order
 
 5. mcp__orchestrator__run_objdiff symbol="{symbol}"
+   → Match: 91% | Verdict: MAYBE_FIXABLE — stuck, no progress from last edit
+
+6. mcp__orchestrator__run_diff_inspect symbol="{symbol}" mode="diagnose"
+   → Root causes: 24 register swaps (r20↔r21 dominant), 2 merged calls, 1 offset shift
+   → Actionable: offset shift at index 340 (stw 0x118 vs 0xf4)
+
+7. Edit: Fix struct member causing offset shift
+
+8. mcp__orchestrator__run_objdiff symbol="{symbol}"
    → Match: 96% | Verdict: AT_LIMIT, 1 linker-merged function detected
 
-6. mcp__orchestrator__report_result
+9. mcp__orchestrator__report_result
    status: "at_limit"
    percent: 96.0
-   notes: "Load function - added missing member reads (+43%), reordered vars (+8%), 1 linker-merged call verified via lookup_merged_symbol"
+   notes: "Load function - added missing member reads (+43%), reordered vars (+3%), fixed offset shift (+5%), 1 linker-merged call verified via lookup_merged_symbol"
 ```
 
 ---
@@ -394,14 +414,23 @@ mcp__orchestrator__run_objdiff
   project_dir: "{worktree_dir}"   # CRITICAL: Include your worktree!
   full_build: false               # Optional: force full rebuild (slower but more accurate)
   context: 3                      # Optional: N instructions of context around mismatches (like grep -C)
+  concise: true                   # Default! Compact output. Set false for full instruction table + auto-diagnosis.
 
-# Enriched analysis — objdiff + struct offset resolution + pattern detection
-# Use when you need detailed mismatch breakdown with field names
-mcp__orchestrator__run_analyze_function
-  symbol: "{symbol}"
+# Deep analysis of WHY a function doesn't match
+mcp__orchestrator__run_diff_inspect
+  symbol: "{symbol}"              # Required
+  mode: "diagnose"                # Required (see modes below)
   project_dir: "{worktree_dir}"   # CRITICAL: Include your worktree!
-  resolve_offsets: true            # Optional: resolve struct field names for offset mismatches
-  output_format: "markdown"       # Optional: "markdown" (default) or "json"
+  baseline_json: "..."            # Optional: path for compare mode
+
+# Modes:
+#   diagnose      - Root cause analysis (start here)
+#   clusters      - Group insert/delete into contiguous clusters
+#   regswaps      - Register swap pair analysis (GPR vs FPR)
+#   offsets       - Offset shift histogram + outlier detection
+#   replaces      - Categorize replaces (noise vs real)
+#   compare       - Compare baseline vs current (delta table)
+#   save_baseline - Save current state as baseline JSON
 
 # Report completion (required at end of session)
 mcp__orchestrator__report_result
@@ -416,23 +445,27 @@ mcp__orchestrator__lookup_struct_offset
   class_name: "Game"              # Class or struct name
   offset: "0x48"                  # Hex (0x prefix) or decimal
 
-# Get full class info with members and inheritance chain
-mcp__orchestrator__struct_info
-  class_name: "RndTransformable"
-
 # Merged symbol lookup — when objdiff shows merged_82331360
 mcp__orchestrator__lookup_merged_symbol
   address: "82331360"             # Or "merged_82331360"
 
-# RB3 reference lookup (usually already pre-computed above)
-mcp__orchestrator__lookup_rb3
-  symbol: "ClassName::MethodName"
-
-# Previous attempt history
-mcp__orchestrator__get_attempts
-  symbol: "{symbol}"
-
 ```
+
+### Analysis Decision Tree
+
+| Match % | Recommended Approach |
+|---------|---------------------|
+| >= 95% | `run_objdiff` with default `concise: true` — verdict is sufficient |
+| < 95% | `run_objdiff` with `concise: false` — auto-diagnosis appended; or `run_diff_inspect diagnose` for deeper analysis |
+| Stuck after diagnosis | Pick specific mode (`regswaps`/`clusters`/`offsets`/`replaces`) based on what diagnosis shows |
+| Before/after comparison | Use `run_diff_inspect compare` — baseline auto-saved by orchestrator |
+
+### Iteration Workflow
+
+- **Quick iteration:** `run_objdiff` with default `concise: true` (fast, minimal tokens)
+- **Deep investigation:** `run_objdiff` with `concise: false` (full output + auto-diagnosis if < 95%)
+- **Targeted analysis:** `run_diff_inspect` with specific mode
+- **Progress check:** `run_diff_inspect` with `compare` mode (compares against orchestrator-saved baseline)
 
 ### Key Documentation
 

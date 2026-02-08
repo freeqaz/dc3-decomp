@@ -21,6 +21,7 @@ Usage:
     python3 scripts/diff_inspect.py /tmp/claude/diff.json --regswaps       # register swap pairs
     python3 scripts/diff_inspect.py /tmp/claude/diff.json --offsets        # offset shift analysis
     python3 scripts/diff_inspect.py /tmp/claude/diff.json --replaces       # replace categorization
+    python3 scripts/diff_inspect.py --compare base.json cand.json           # delta table for two diffs
 
     # Direct invocation (runs objdiff internally):
     python3 scripts/diff_inspect.py --symbol "symbol_name" --diagnose
@@ -190,6 +191,170 @@ def find_clusters(instrs, match_types=("insert", "delete"), gap=2):
     clusters.append(current)
     return clusters
 
+
+def parse_hotspot_ranges(spec: str):
+    """Parse hotspot range list like '930-1075,1235-1415'."""
+    ranges = []
+    for chunk in spec.split(","):
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        if "-" not in chunk:
+            raise ValueError(f"Invalid hotspot range '{chunk}' (expected N-M)")
+        lo_s, hi_s = chunk.split("-", 1)
+        lo, hi = int(lo_s), int(hi_s)
+        if lo > hi:
+            lo, hi = hi, lo
+        ranges.append((lo, hi))
+    return ranges
+
+
+def count_indel_clusters_in_range(instrs, lo, hi, gap=2):
+    """Count insert/delete clusters in an index range."""
+    idxs = [
+        ins["index"]
+        for ins in instrs
+        if lo <= ins["index"] <= hi and ins.get("match_type") in ("insert", "delete")
+    ]
+    if not idxs:
+        return 0
+    idxs.sort()
+    clusters = 1
+    for i in range(1, len(idxs)):
+        if idxs[i] - idxs[i - 1] > gap + 1:
+            clusters += 1
+    return clusters
+
+
+def bool_mask_proxy_count(instrs):
+    """Heuristic count for bool-mask style mismatches from instruction stream only."""
+    mask_roots = {"clrlwi", "rlwinm", "srwi", "extrwi", "andi", "cntlzw", "subfe", "addze"}
+    bit_re = re.compile(r"(?:^|[,\s])(24|31)(?:$|[,\s])")
+    count = 0
+    for ins in instrs:
+        if ins.get("match_type") not in ("diff_op", "replace"):
+            continue
+        t = ins.get("target") or {}
+        b = ins.get("base") or {}
+        t_op = t.get("opcode", "")
+        b_op = b.get("opcode", "")
+        t_root = t_op.rstrip(".")
+        b_root = b_op.rstrip(".")
+        text = f"{t_op} {t.get('args','')} || {b_op} {b.get('args','')}"
+
+        has_mask_root = t_root in mask_roots or b_root in mask_roots
+        dot_flip = (t_root == b_root) and (t_op.endswith(".") != b_op.endswith("."))
+        has_bit = bool(bit_re.search(text))
+        if has_mask_root and (dot_flip or has_bit):
+            count += 1
+    return count
+
+
+def summarize_for_compare(instrs):
+    """Collect compact metrics for compare mode."""
+    counts = Counter(ins.get("match_type") for ins in instrs)
+    reg_swaps, _, _, _ = parse_breakdowns(instrs)
+    pair_data = compute_reg_swap_pairs(reg_swaps)
+    reg_pair_counts = {pair: data["count"] for pair, data in pair_data.items()}
+    return {
+        "counts": counts,
+        "reg_pair_counts": reg_pair_counts,
+        "bool_mask_proxy": bool_mask_proxy_count(instrs),
+    }
+
+
+def cmd_compare(base_data, cand_data, hotspot_spec):
+    """Compare two objdiff JSON payloads and print metric deltas."""
+    base_instrs = base_data.get("instructions", [])
+    cand_instrs = cand_data.get("instructions", [])
+    if not base_instrs or not cand_instrs:
+        print("Error: both baseline and candidate must contain instructions", file=sys.stderr)
+        sys.exit(1)
+
+    base = summarize_for_compare(base_instrs)
+    cand = summarize_for_compare(cand_instrs)
+    metrics = ["insert", "delete", "replace", "diff_op"]
+
+    print("=" * 70)
+    print("COMPARE TWO DIFFS")
+    print("=" * 70)
+    print()
+
+    base_match = base_data.get("fuzzy_match_percent")
+    cand_match = cand_data.get("fuzzy_match_percent")
+    if isinstance(base_match, (int, float)) and isinstance(cand_match, (int, float)):
+        print(f"Match %: baseline {base_match:.2f}  candidate {cand_match:.2f}  "
+              f"delta {cand_match - base_match:+.2f}")
+        print()
+
+    print("Mismatch deltas (candidate - baseline):")
+    print(f"{'Metric':16s} {'Baseline':>9s} {'Candidate':>10s} {'Delta':>8s}")
+    print(f"{'─' * 16} {'─' * 9} {'─' * 10} {'─' * 8}")
+    for m in metrics:
+        b = base["counts"].get(m, 0)
+        c = cand["counts"].get(m, 0)
+        print(f"{m:16s} {b:9d} {c:10d} {c - b:+8d}")
+    b_noneq = len(base_instrs) - base["counts"].get("equal", 0)
+    c_noneq = len(cand_instrs) - cand["counts"].get("equal", 0)
+    print(f"{'total_non_equal':16s} {b_noneq:9d} {c_noneq:10d} {c_noneq - b_noneq:+8d}")
+    print()
+
+    b_bool = base["bool_mask_proxy"]
+    c_bool = cand["bool_mask_proxy"]
+    print(f"BOOL_MASK proxy delta: baseline {b_bool}, candidate {c_bool}, delta {c_bool - b_bool:+d}")
+    print("  (proxy from instruction patterns; final BOOL_MASK verdict should come from run_objdiff)")
+    print()
+
+    print("Top register-pair deltas (candidate - baseline):")
+    pair_keys = set(base["reg_pair_counts"]) | set(cand["reg_pair_counts"])
+    pair_deltas = []
+    for pair in pair_keys:
+        b = base["reg_pair_counts"].get(pair, 0)
+        c = cand["reg_pair_counts"].get(pair, 0)
+        d = c - b
+        if d:
+            pair_deltas.append((abs(d), d, pair, b, c))
+    if not pair_deltas:
+        print("  No register-pair count changes.")
+    else:
+        print(f"  {'Pair':16s} {'Baseline':>9s} {'Candidate':>10s} {'Delta':>8s}")
+        print(f"  {'─' * 16} {'─' * 9} {'─' * 10} {'─' * 8}")
+        for _, d, pair, b, c in sorted(pair_deltas, reverse=True)[:12]:
+            p0, p1 = pair
+            print(f"  {p0}<->{p1:11s} {b:9d} {c:10d} {d:+8d}")
+    print()
+
+    try:
+        hotspots = parse_hotspot_ranges(hotspot_spec)
+    except ValueError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    print("Hotspot deltas (candidate - baseline):")
+    print(f"{'Range':14s} {'I+D Δ':>8s} {'Clusters Δ':>11s} {'Replace Δ':>10s} {'diff_op Δ':>10s}")
+    print(f"{'─' * 14} {'─' * 8} {'─' * 11} {'─' * 10} {'─' * 10}")
+    for lo, hi in hotspots:
+        def in_range(ins):
+            idx = ins["index"]
+            return lo <= idx <= hi
+
+        b_region = [ins for ins in base_instrs if in_range(ins)]
+        c_region = [ins for ins in cand_instrs if in_range(ins)]
+        b_counts = Counter(ins.get("match_type") for ins in b_region)
+        c_counts = Counter(ins.get("match_type") for ins in c_region)
+
+        b_indel = b_counts.get("insert", 0) + b_counts.get("delete", 0)
+        c_indel = c_counts.get("insert", 0) + c_counts.get("delete", 0)
+        b_clusters = count_indel_clusters_in_range(base_instrs, lo, hi)
+        c_clusters = count_indel_clusters_in_range(cand_instrs, lo, hi)
+        b_rep = b_counts.get("replace", 0)
+        c_rep = c_counts.get("replace", 0)
+        b_op = b_counts.get("diff_op", 0)
+        c_op = c_counts.get("diff_op", 0)
+
+        label = f"{lo}-{hi}"
+        print(f"{label:14s} {c_indel - b_indel:+8d} {c_clusters - b_clusters:+11d} "
+              f"{c_rep - b_rep:+10d} {c_op - b_op:+10d}")
 
 # ── Diagnose mode ───────────────────────────────────────────────────────────
 
@@ -606,7 +771,7 @@ def cmd_replaces(instrs):
 
 # ── Symbol invocation ───────────────────────────────────────────────────────
 
-def run_objdiff_for_symbol(symbol):
+def run_objdiff_for_symbol(symbol, project_dir=None):
     """Run objdiff-cli diff and return path to JSON output."""
     # Deterministic filename from symbol
     h = hashlib.md5(symbol.encode()).hexdigest()[:12]
@@ -615,24 +780,31 @@ def run_objdiff_for_symbol(symbol):
     json_path = f"/tmp/claude/diff_{slug}_{h}.json"
 
     # Find project root (where objdiff.json lives)
+    # objdiff binary is always resolved from script's own repo root
+    # (bin/ doesn't exist in worktrees)
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    project_root = os.path.dirname(script_dir)
-    objdiff_bin = os.path.join(project_root, "bin", "objdiff-cli")
+    script_repo_root = os.path.dirname(script_dir)
+    objdiff_bin = os.path.join(script_repo_root, "bin", "objdiff-cli")
 
     if not os.path.exists(objdiff_bin):
         print(f"Error: objdiff-cli not found at {objdiff_bin}", file=sys.stderr)
         sys.exit(1)
 
+    # Use project_dir for builds if specified, otherwise script's repo root
+    effective_project_dir = project_dir if project_dir else script_repo_root
+
     print(f"Running objdiff for: {symbol}", file=sys.stderr)
     print(f"Output: {json_path}", file=sys.stderr)
 
     cmd = [
-        objdiff_bin, "diff", symbol,
+        objdiff_bin, "diff",
+        "-p", str(effective_project_dir),
+        symbol,
         "--include-instructions", "--build", "--incremental",
         "-f", "json", "-o", json_path
     ]
 
-    result = subprocess.run(cmd, cwd=project_root,
+    result = subprocess.run(cmd, cwd=str(effective_project_dir),
                             capture_output=True, text=True)
     if result.returncode != 0:
         print(f"objdiff-cli failed (exit {result.returncode}):", file=sys.stderr)
@@ -661,6 +833,7 @@ Analysis modes (pick one):
   --regswaps    Register swap pair analysis
   --offsets     Offset/immediate shift analysis
   --replaces    Categorize replaces (symbol-reloc noise vs real)
+  --compare     Compare baseline and candidate JSONs (delta table)
 
 Filter modes:
   diff_op       Only opcode mismatches
@@ -703,12 +876,32 @@ Filter modes:
     parser.add_argument(
         "--symbol", type=str, default=None,
         help="Run objdiff-cli diff internally for this symbol")
+    parser.add_argument(
+        "--project-dir", type=str, default=None,
+        help="Project directory for objdiff builds (worktree support)")
+    parser.add_argument(
+        "--compare", nargs=2, metavar=("BASELINE_JSON", "CANDIDATE_JSON"),
+        help="Compare two objdiff JSON files")
+    parser.add_argument(
+        "--hotspots", type=str,
+        default="930-1075,1235-1415,3088-3290,3628-3642",
+        help="Comma-separated hotspot ranges for --compare (default matches OnBeat campaign)")
     args = parser.parse_args()
+
+    # Compare mode uses two JSON files directly.
+    if args.compare:
+        base_path, cand_path = args.compare
+        with open(base_path) as f:
+            base_data = json.load(f)
+        with open(cand_path) as f:
+            cand_data = json.load(f)
+        cmd_compare(base_data, cand_data, args.hotspots)
+        return
 
     # Resolve JSON input
     json_file = args.json_file
     if args.symbol:
-        json_file = run_objdiff_for_symbol(args.symbol)
+        json_file = run_objdiff_for_symbol(args.symbol, project_dir=args.project_dir)
     if not json_file:
         parser.error("Either json_file or --symbol is required")
 

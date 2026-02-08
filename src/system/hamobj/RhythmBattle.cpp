@@ -938,7 +938,7 @@ void RhythmBattle::OnBeat() {
                 if (goofy) {
                     b36 = !b36;
                 }
-                unk124 = b36 == 0 ? 5 : 6;
+                unk124 = (int)b36 + 5;
                 first->SwagJackedBonus(
                     focusPanel,
                     (RhythmBattleJackState)unk124,

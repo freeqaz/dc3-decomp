@@ -15,7 +15,7 @@ DEFAULT_DECOMP_TOOLS = [
     "Read", "Write", "Edit", "Bash", "Glob", "Grep",
     "mcp__orchestrator__report_result",
     "mcp__orchestrator__run_objdiff",
-    "mcp__orchestrator__run_analyze_function",
+    "mcp__orchestrator__run_diff_inspect",
     "mcp__orchestrator__lookup_struct_offset",
     "mcp__orchestrator__lookup_merged_symbol",
 ]

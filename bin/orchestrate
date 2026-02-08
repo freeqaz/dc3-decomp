@@ -58,7 +58,7 @@ from typing import Any, Optional
 # Add scripts and project root to path (needed for tools/ imports)
 _scripts_dir = Path(__file__).resolve().parent
 _project_root = _scripts_dir.parent
-sys.path.insert(0, str(_scripts_dir))
+sys.path.insert(0, str(_project_root / "scripts"))
 sys.path.insert(0, str(_project_root))
 
 # Load environment variables from .env file (for GHIDRA_INSTALL_DIR etc.)

@@ -236,7 +236,7 @@ class DirectGhidraClient:
             if self.verbose:
                 logger.info(f"Decompiling: {symbol}")
 
-            result = self.tools.decompile_function(symbol)
+            result = self.tools.decompile_function_by_name_or_addr(symbol)
 
             if self.verbose:
                 logger.info(f"Decompilation successful: {len(result.code)} chars")

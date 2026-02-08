@@ -4,6 +4,7 @@
 #include "os/DateTime.h"
 #include "os/Debug.h"
 #include "rndobj/Text.h"
+#include "ui/ResourceDirPtr.h"
 #include "ui/UIColor.h"
 #include "ui/UIComponent.h"
 #include "ui/UILabelDir.h"
@@ -14,11 +15,11 @@
 class UILabel : public RndText, public UIComponent, public TextHolder {
 public:
     struct LabelStyle {
-        LabelStyle(Hmx::Object *o) : mColorOverride(o, 0), unk14(o, 0), unk28(0) {}
+        LabelStyle(Hmx::Object *o) : mColorOverride(o, 0), unk14(o), unk28(0) {}
         ~LabelStyle();
 
         ObjPtr<UIColor> mColorOverride; // 0x0
-        ObjPtr<UILabelDir> unk14; // 0x14
+        ResourceDirPtr<UILabelDir> unk14; // 0x14
         int unk28;
     };
     // Hmx::Object

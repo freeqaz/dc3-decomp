@@ -482,6 +482,7 @@ Focus on readability and maintainability while preserving exact behavior and mat
             objdiff_file_absolute=context.get('objdiff_file_absolute', '(unavailable)'),
             objdiff_line_count=context.get('objdiff_line_count', 0),
             objdiff_preview=context.get('objdiff_preview', '(unavailable)'),
+            baseline_json=context.get('baseline_json_absolute', '(unavailable)'),
             # Worktree location (for agents to pass to MCP tools)
             worktree_dir=worktree_dir or '(unknown)',
             # Conditional Task-model hint (non-empty only for non-haiku agents)
@@ -1942,6 +1943,7 @@ Focus on readability and maintainability while preserving exact behavior and mat
             objdiff_file_absolute=context.get('objdiff_file_absolute', '(unavailable)'),
             objdiff_line_count=context.get('objdiff_line_count', 0),
             objdiff_preview=context.get('objdiff_preview', '(unavailable)'),
+            baseline_json=context.get('baseline_json_absolute', '(unavailable)'),
             worktree_dir=worktree_dir or '(unknown)',
             task_model_hint=context.get('task_model_hint', ''),
         )

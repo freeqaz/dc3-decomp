@@ -288,7 +288,74 @@ return result;
 
 ---
 
+## Branch Polarity Steering (beq/bne, ble/bge)
+
+**Impact:** +0.1-1.0% (often via lower diff score, not always visible in rounded match%)
+**Success Rate:** MEDIUM
+**Time:** 10-20 minutes
+
+When you only have a few stubborn `diff_op` mismatches (`beq` vs `bne`, `ble` vs `bge`), keep logic the same but steer compare polarity and branch shape.
+
+### Symptom
+
+- objdiff shows 1-2 `diff_op` mismatches in otherwise stable regions
+- Most remaining mismatches are register/offset noise, but these `diff_op` entries keep reappearing
+
+### Why It Works
+
+PowerPC branch direction is tightly coupled to compare operand order and which path is fallthrough. Equivalent source code can generate:
+- `cmpw a, b` + `ble`
+- or `cmpw b, a` + `bge`
+
+Likewise, whether the compiler emits `beq` or `bne` is sensitive to whether work is in the `if` body or the `else` body.
+
+### Strategies
+
+1. **Swap compare viewpoint without changing semantics**
+```cpp
+// Before
+if (score0 > score1) winner = 0;
+
+// Try
+if (score1 < score0) winner = 0;
+```
+
+2. **Invert condition and swap branch bodies**
+```cpp
+// Before
+if (cond) {
+    do_work();
+}
+
+// Try
+if (!cond) {
+    // empty / cheap path
+} else {
+    do_work();
+}
+```
+
+3. **Use score-gate shaping for multi-rating blocks**
+- Keep shared scoring in one block
+- Feed it via a local `score` value or a guarded `goto` block (if the file already uses this style)
+- This often moves `beq/bne` placement without changing behavior
+
+4. **Change one branch shape at a time**
+- Do not mix branch edits with declaration/static-order edits in the same attempt
+- Evaluate by `diff_op` count and `diff_score`, not just rounded match%
+
+### Real Example
+
+`BustAMovePanel::OnBeat`:
+- Baseline: 95.3%, 2 control-flow inversions
+- After branch-shape rewrite in final-sequence scoring: 95.3%, 1 inversion, lower diff score
+
+Takeaway: even when match% does not move, reducing `diff_op` is still progress toward a cleaner final state.
+
+---
+
 ## See Also
 
 - [fixable-comparison.md](fixable-comparison.md) - Conditional expression patterns
 - [harmful-avoid.md](harmful-avoid.md) - Loop patterns that make things worse
+- [unfixable-compiler.md](unfixable-compiler.md#when-unfixable-may-still-move) - Triage hard 95%+ functions

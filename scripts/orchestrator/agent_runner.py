@@ -356,6 +356,7 @@ class AgentRunner:
         "Grep": ["pattern"],
         "Bash": ["description", "command"],
         "mcp__orchestrator__run_objdiff": ["symbol"],
+        "mcp__orchestrator__run_diff_inspect": ["symbol", "mode"],
         "mcp__orchestrator__run_analyze_function": ["symbol"],
         "mcp__orchestrator__report_result": ["status", "percent", "notes"],
         "mcp__orchestrator__lookup_struct_offset": ["class_name", "offset"],

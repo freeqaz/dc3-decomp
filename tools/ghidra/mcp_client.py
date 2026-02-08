@@ -184,6 +184,31 @@ class MCPClient:
 
         return self._parse_sse_response(response)
 
+    def _send_initialized_notification(self) -> None:
+        """Send the 'initialized' notification required by MCP spec.
+
+        After the initialize request/response, the client must send this
+        notification before making any tool calls. Without it, the server
+        stays in 'Initializing' state and rejects requests.
+        """
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json, text/event-stream",
+        }
+        if self.session_id:
+            headers["mcp-session-id"] = self.session_id
+
+        # Notifications have no "id" field per JSON-RPC spec
+        payload = {
+            "jsonrpc": "2.0",
+            "method": "notifications/initialized",
+        }
+
+        try:
+            requests.post(self.url, headers=headers, json=payload, timeout=10)
+        except requests.exceptions.RequestException:
+            pass  # Best-effort, server may not require it
+
     def initialize(self, force: bool = False) -> str:
         """Initialize MCP session. Returns session ID."""
         # Try cached session first
@@ -191,13 +216,22 @@ class MCPClient:
             cached = self._load_cached_session()
             if cached:
                 self.session_id = cached
-                # Verify session is still valid with a simple request
+                # Re-initialize with the cached session to validate it.
+                # Just probing with a tool call would fail if the server
+                # restarted (no init handshake done for this connection).
                 try:
-                    self.list_binaries()
-                    return cached
+                    result = self._make_request("initialize", {
+                        "protocolVersion": "2024-11-05",
+                        "capabilities": {},
+                        "clientInfo": {"name": "ghidra-cli", "version": "1.0"}
+                    })
+                    if "error" not in result and self.session_id:
+                        self._send_initialized_notification()
+                        return self.session_id
                 except MCPError:
-                    # Session expired, reinitialize
-                    self.session_id = None
+                    pass
+                # Session expired or server restarted, fall through
+                self.session_id = None
 
         result = self._make_request("initialize", {
             "protocolVersion": "2024-11-05",
@@ -211,6 +245,7 @@ class MCPClient:
         if not self.session_id:
             raise MCPError("Server did not return session ID")
 
+        self._send_initialized_notification()
         return self.session_id
 
     def call_tool(self, tool_name: str, arguments: dict) -> Any:

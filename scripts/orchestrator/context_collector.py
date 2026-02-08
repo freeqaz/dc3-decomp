@@ -38,6 +38,7 @@ import json
 import logging
 import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -146,6 +147,14 @@ try:
 except ImportError:
     run_objdiff = None
 
+try:
+    from tools.ghidra.mcp_client import MCPClient as GhidraMCPClient, MCPError as GhidraMCPError
+except ImportError:
+    GhidraMCPClient = None
+    GhidraMCPError = Exception
+
+# Legacy: DirectGhidraClient starts an in-process JVM which hangs when the
+# pyghidra HTTP service is already running.  Prefer GhidraMCPClient above.
 try:
     from tools.ghidra.direct_client import DirectGhidraClient, DirectGhidraClientError
 except ImportError:
@@ -2351,6 +2360,11 @@ def run_objdiff_cli(
         result["output_file"] = f"function_analysis/objdiff_{safe_symbol}.json"
         result["output_file_absolute"] = str(output_file)
 
+        # Also save as baseline for diff_inspect compare workflow
+        baseline_file = analysis_dir / f"baseline_{safe_symbol}.json"
+        shutil.copy2(output_file, baseline_file)
+        result["baseline_json_absolute"] = str(baseline_file)
+
         # Count lines and create preview respecting token budget
         lines = output.split("\n")
         result["line_count"] = len(lines)
@@ -2952,6 +2966,7 @@ def collect_pre_run_context(
     try:
         from scripts.orchestrator.database import get_connection as _get_conn
         from scripts.orchestrator.database import get_decompilation, get_xrefs
+        from scripts.orchestrator.database import put_decompilation, put_xrefs
 
         db_path = Path(project_dir) / "decomp.db"
         cache_conn = _get_conn(str(db_path)) if db_path.exists() else None
@@ -2964,28 +2979,56 @@ def collect_pre_run_context(
                 log.info(f"Cache hit: decompilation for {symbol} ({len(decompilation)} chars)")
 
         if decompilation is None:
-            # Cache miss — fall back to live Ghidra
+            # Cache miss — fall back to live Ghidra (prefer HTTP MCP client)
             log.info(f"Cache miss for decompilation: {symbol}, trying live Ghidra")
-            try:
-                binary_path = get_binary_path(project_dir)
-                if binary_path and DirectGhidraClient:
-                    ghidra_project_dir = Path("/tmp/claude/ghidra_projects")
-                    ghidra_project_dir.mkdir(parents=True, exist_ok=True)
-                    client = DirectGhidraClient.get_instance(
-                        binary_path=binary_path,
-                        project_dir=str(ghidra_project_dir),
-                        project_name="DC3",
-                        verbose=False,
-                    )
-                    decompilation = client.decompile_function(symbol)
-                elif not binary_path:
-                    log.warning("Could not locate binary for Ghidra")
-                else:
-                    log.warning("DirectGhidraClient not available")
-            except DirectGhidraClientError as e:
-                log.warning(f"Live Ghidra decompilation failed: {e}")
-            except Exception as e:
-                log.warning(f"Unexpected Ghidra error: {e}")
+            # Try HTTP MCP client first (fast, no JVM startup)
+            if GhidraMCPClient is not None:
+                try:
+                    mcp_client = GhidraMCPClient()
+                    mcp_client.initialize()
+                    result_data = mcp_client.decompile_function(symbol)
+                    if isinstance(result_data, dict) and "code" in result_data:
+                        decompilation = result_data["code"]
+                    elif isinstance(result_data, str):
+                        decompilation = result_data
+                    if decompilation:
+                        log.info(f"Ghidra HTTP MCP decompilation: {len(decompilation)} chars")
+                except GhidraMCPError as e:
+                    log.warning(f"Ghidra HTTP MCP decompilation failed: {e}")
+                except Exception as e:
+                    log.warning(f"Ghidra HTTP MCP unexpected error: {e}")
+
+            # Fall back to DirectGhidraClient (in-process JVM, slow)
+            if decompilation is None:
+                try:
+                    binary_path = get_binary_path(project_dir)
+                    if binary_path and DirectGhidraClient:
+                        ghidra_project_dir = Path("/tmp/claude/ghidra_projects")
+                        ghidra_project_dir.mkdir(parents=True, exist_ok=True)
+                        client = DirectGhidraClient.get_instance(
+                            binary_path=binary_path,
+                            project_dir=str(ghidra_project_dir),
+                            project_name="DC3",
+                            verbose=False,
+                        )
+                        decompilation = client.decompile_function(symbol)
+                    elif not binary_path:
+                        log.warning("Could not locate binary for Ghidra")
+                    else:
+                        log.warning("DirectGhidraClient not available")
+                except DirectGhidraClientError as e:
+                    log.warning(f"Live Ghidra decompilation failed: {e}")
+                except Exception as e:
+                    log.warning(f"Unexpected Ghidra error: {e}")
+
+            # Write back to cache so future requests are instant
+            if decompilation and cache_conn:
+                try:
+                    put_decompilation(cache_conn, symbol, address=None, code=decompilation)
+                    cache_conn.commit()
+                    log.info(f"Cached decompilation for {symbol}")
+                except Exception as e:
+                    log.debug(f"Failed to cache decompilation: {e}")
 
         if decompilation:
             # Write to file + inline (same logic as before)
@@ -3024,28 +3067,60 @@ def collect_pre_run_context(
                 log.info(f"Cache hit: {len(callers)} callers, {len(callees)} callees")
 
         if callers is None:
-            # Cache miss — fall back to live Ghidra
+            # Cache miss — fall back to live Ghidra (prefer HTTP MCP client)
             log.info(f"Cache miss for xrefs: {symbol}, trying live Ghidra")
-            try:
-                binary_path = get_binary_path(project_dir)
-                if binary_path and DirectGhidraClient:
-                    ghidra_project_dir = Path("/tmp/claude/ghidra_projects")
-                    ghidra_project_dir.mkdir(parents=True, exist_ok=True)
-                    client = DirectGhidraClient.get_instance(
-                        binary_path=binary_path,
-                        project_dir=str(ghidra_project_dir),
-                        project_name="DC3",
-                        verbose=False,
-                    )
-                    callers, callees = client.list_cross_references(symbol)
-                elif not binary_path:
-                    log.warning("Could not locate binary for Ghidra")
-                else:
-                    log.warning("DirectGhidraClient not available")
-            except DirectGhidraClientError as e:
-                log.warning(f"Live Ghidra xrefs lookup failed: {e}")
-            except Exception as e:
-                log.warning(f"Unexpected Ghidra xrefs error: {e}")
+            # Try HTTP MCP client first
+            if GhidraMCPClient is not None:
+                try:
+                    mcp_client = GhidraMCPClient()
+                    mcp_client.initialize()
+                    xref_data = mcp_client.list_xrefs(symbol)
+                    if isinstance(xref_data, dict):
+                        # Extract caller/callee names from cross_references list
+                        xrefs_list = xref_data.get("cross_references", [])
+                        callers = []
+                        callees = []
+                        for xref in xrefs_list:
+                            name = xref.get("function_name") if isinstance(xref, dict) else None
+                            if name:
+                                callers.append(name)
+                        log.info(f"Ghidra HTTP MCP xrefs: {len(callers)} callers")
+                except GhidraMCPError as e:
+                    log.warning(f"Ghidra HTTP MCP xrefs failed: {e}")
+                except Exception as e:
+                    log.warning(f"Ghidra HTTP MCP xrefs unexpected error: {e}")
+
+            # Fall back to DirectGhidraClient (in-process JVM, slow)
+            if callers is None:
+                try:
+                    binary_path = get_binary_path(project_dir)
+                    if binary_path and DirectGhidraClient:
+                        ghidra_project_dir = Path("/tmp/claude/ghidra_projects")
+                        ghidra_project_dir.mkdir(parents=True, exist_ok=True)
+                        client = DirectGhidraClient.get_instance(
+                            binary_path=binary_path,
+                            project_dir=str(ghidra_project_dir),
+                            project_name="DC3",
+                            verbose=False,
+                        )
+                        callers, callees = client.list_cross_references(symbol)
+                    elif not binary_path:
+                        log.warning("Could not locate binary for Ghidra")
+                    else:
+                        log.warning("DirectGhidraClient not available")
+                except DirectGhidraClientError as e:
+                    log.warning(f"Live Ghidra xrefs lookup failed: {e}")
+                except Exception as e:
+                    log.warning(f"Unexpected Ghidra xrefs error: {e}")
+
+            # Write back to cache
+            if callers is not None and cache_conn:
+                try:
+                    put_xrefs(cache_conn, symbol, address=None, callers=callers, callees=callees or [])
+                    cache_conn.commit()
+                    log.info(f"Cached xrefs for {symbol}")
+                except Exception as e:
+                    log.debug(f"Failed to cache xrefs: {e}")
 
         if callers is not None:
             log.info(f"Found {len(callers)} callers, {len(callees)} callees")

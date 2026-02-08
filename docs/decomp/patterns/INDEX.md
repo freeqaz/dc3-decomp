@@ -46,6 +46,7 @@ These patterns can often be fixed with source changes. Sorted by ROI (impact x s
 | Loop Structure | [fixable-control-flow.md](fixable-control-flow.md#loop-structure) |
 | Sequential If vs If-Else | [fixable-control-flow.md](fixable-control-flow.md#sequential-if-vs-if-else) |
 | Single Return for Branch Direction | [fixable-control-flow.md](fixable-control-flow.md#single-return-for-branch-direction) |
+| Branch Polarity Steering | [fixable-control-flow.md](fixable-control-flow.md#branch-polarity-steering-beqbne-blebge) |
 | Boolean Index | [fixable-operators.md](fixable-operators.md#boolean-index) |
 | Bitwise Alignment | [fixable-operators.md](fixable-operators.md#bitwise-alignment) |
 | Commutative Operand Order | [fixable-operators.md](fixable-operators.md#commutative-operand-order) |

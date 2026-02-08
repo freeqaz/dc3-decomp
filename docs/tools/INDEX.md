@@ -14,6 +14,7 @@ Quick reference for tools used in the DC3 decompilation project.
 |------|-------------|-----|
 | [analyze-function](ANALYZE_FUNCTION.md) | Combined objdiff + Ghidra analysis (start here) | [ANALYZE_FUNCTION.md](ANALYZE_FUNCTION.md) |
 | [objdiff](objdiff.md) | Assembly diffing and function matching analysis | [objdiff.md](objdiff.md) |
+| diff_inspect | Deep mismatch analysis (diagnose, clusters, regswaps, offsets, replaces, compare) | [WORKFLOW.md](WORKFLOW.md#diff_inspect) |
 | [Ghidra + pyghidra-mcp](GHIDRA.md) | Binary analysis and decompilation via MCP | [GHIDRA.md](GHIDRA.md) |
 | [XEXLoaderWV](XEXLOADERWV.md) | Ghidra extension for Xbox 360 XEX files | [XEXLOADERWV.md](XEXLOADERWV.md) |
 | [m2c](m2c.md) | Machine code to C decompiler | [m2c.md](m2c.md) |

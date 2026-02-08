@@ -231,7 +231,42 @@ These don't affect match percentage in objdiff scoring. Ignore.
 
 ---
 
+## When "Unfixable" May Still Move
+
+Large functions (especially 95%+ matches) often look dominated by compiler noise, but there is usually a small actionable subset.
+
+### Practical Triage
+
+1. **Separate global noise from local structure**
+- Treat broad `diff_arg` drift (register swaps, symbol relocation, global stack deltas) as background.
+- Prioritize `diff_op`, then small insert/delete clusters, then offset swaps.
+
+2. **Fix one local shape at a time**
+- Apply a single control-flow rewrite in one region.
+- Re-run objdiff immediately.
+- Keep changes that reduce `diff_op` or `diff_score` even if match% is unchanged.
+
+3. **Use branch-polarity steering before declaration churn**
+- Try compare viewpoint swaps (`a > b` vs `b < a`), condition inversion, and if/else body flips.
+- Only after that, try variable declaration reordering for register swaps.
+
+4. **Stop based on signal, not effort alone**
+- If 3-5 branch-shape attempts do not reduce `diff_op`/`diff_score`, that region is likely compiler-fixed.
+- Move to the next actionable region rather than broad refactors.
+
+### Why This Matters
+
+Functions tagged `AT_LIMIT` can still improve incrementally. A common pattern is:
+- one control-flow inversion fixed,
+- rounded match% unchanged,
+- but diff score and mismatch quality improve.
+
+That is real progress and lowers the chance of regressions in future attempts.
+
+---
+
 ## See Also
 
 - [verifiable-icf.md](verifiable-icf.md) - ICF/linker-side verifiable patterns
 - [fixable-declarations.md](fixable-declarations.md#variable-declaration-order) - When register issues are fixable
+- [fixable-control-flow.md](fixable-control-flow.md#branch-polarity-steering-beqbne-blebge) - Branch-shape steering tactics

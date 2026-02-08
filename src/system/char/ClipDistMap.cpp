@@ -144,7 +144,8 @@ void ClipDistMap::FindNodes(float maxError, float maxDist, float endDist) {
     float halfMaxDist = maxDist * 0.45f;
     if (maxDist == 0.0f) {
         // No distance constraints - allow nodes anywhere
-        endDist = halfMaxDist = kHugeFloat;
+        halfMaxDist = kHugeFloat;
+        endDist = kHugeFloat;
     } else if (endDist == 0.0f) {
         // Use half-distance as default end constraint
         endDist = halfMaxDist;
@@ -171,8 +172,11 @@ void ClipDistMap::FindNodes(float maxError, float maxDist, float endDist) {
     // Remove nodes that are too close together (violate maxDist constraint)
     int limit = mNodes.size() - 1;
     if (limit > 1) {
-        for (int i = 1; i < limit;) {
-            float dist = mNodes[i + 1].unk0 - mNodes[i].unk0;
+        int i;
+        for (i = 1; i < limit;) {
+            ClipDistMap::Node &next = mNodes[i + 1];
+            ClipDistMap::Node &curr = mNodes[i];
+            float dist = next.unk0 - curr.unk0;
             if (dist < maxDist) {
                 mNodes.erase(mNodes.begin() + (i + 1));
                 i--;
@@ -243,37 +247,44 @@ void ClipDistMap::Array2d::Resize(int w, int h) {
     this->mData = (float *)new uint[h * w];
 }
 
+// Populate mClipB's transition graph and optionally find best nodes for given constraints.
+// node1/node2 are output parameters updated with the minimum-error node from mNodes.
 void ClipDistMap::SetNodes(ClipDistMap::Node *node1, ClipDistMap::Node *node2) {
     mClipB->GetTransitions().RemoveClip(mClipB);
+
     for (int i = 0; i < mNodes.size(); i++) {
+        // Update node1 if this candidate has lower error
+        // NOTE: Verbose pattern preserved for codegen - modern Min() would break PPC match
         if (node1) {
-            float currentBest = node1->unk8;
             float candidateErr = mNodes[i].unk8;
-            // Use fsel pattern: if (currentBest - candidateErr >= 0.0f) use candidateErr, else use currentBest
+            float currentBest = node1->unk8;
             bool changed = 1;
             float newBest = (currentBest - candidateErr >= 0.0f) ? candidateErr : currentBest;
             node1->unk8 = newBest;
-            if (newBest == currentBest) {
+            if (currentBest == newBest) {
                 changed = 0;
             }
             if (changed) {
                 *node1 = mNodes[i];
             }
         }
+
+        // Update node2 if this candidate has lower error (same logic as node1)
         if (node2) {
-            float currentBest = node2->unk8;
             float candidateErr = mNodes[i].unk8;
-            // Use fsel pattern: if (currentBest - candidateErr >= 0.0f) use candidateErr, else use currentBest
+            float currentBest = node2->unk8;
             bool changed = 1;
             float newBest = (currentBest - candidateErr >= 0.0f) ? candidateErr : currentBest;
             node2->unk8 = newBest;
-            if (newBest == currentBest) {
+            if (currentBest == newBest) {
                 changed = 0;
             }
             if (changed) {
                 *node2 = mNodes[i];
             }
         }
+
+        // Add transition node to graph regardless of node1/node2
         CharGraphNode graphNode;
         graphNode.nextBeat = mNodes[i].unk4;
         graphNode.curBeat = mNodes[i].unk0;

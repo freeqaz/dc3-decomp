@@ -235,7 +235,7 @@ class DecompMCPServer:
                             },
                             "concise": {
                                 "type": "boolean",
-                                "description": "Concise output: match%, compact summary, patterns, verdict headline. Default: false.",
+                                "description": "Concise output: match%, compact summary, patterns, verdict headline. Default: true. Set false for full instruction table + auto-diagnosis.",
                             },
                         },
                         "required": ["symbol", "project_dir"],
@@ -266,6 +266,33 @@ class DecompMCPServer:
                             },
                         },
                         "required": ["symbol", "project_dir"],
+                    },
+                ),
+                Tool(
+                    name="run_diff_inspect",
+                    description="Deep analysis of WHY a function doesn't match. Provides root cause diagnosis, cluster analysis, register swap detection, offset analysis, replace categorization, and before/after comparison. Use after run_objdiff when you need deeper insight into mismatches.\n\n⚠️ CRITICAL: Pass project_dir parameter when in a worktree!",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "symbol": {
+                                "type": "string",
+                                "description": "Function symbol (mangled or demangled name)",
+                            },
+                            "mode": {
+                                "type": "string",
+                                "enum": ["diagnose", "clusters", "regswaps", "offsets", "replaces", "compare", "save_baseline"],
+                                "description": "Analysis mode: diagnose (root cause), clusters (contiguous insert/delete groups), regswaps (register swap pairs), offsets (offset shift histogram), replaces (categorize noise vs real), compare (delta vs baseline), save_baseline (save current state)",
+                            },
+                            "project_dir": {
+                                "type": "string",
+                                "description": "Project directory to build from. Pass your worktree directory here.",
+                            },
+                            "baseline_json": {
+                                "type": "string",
+                                "description": "Optional: path to baseline JSON file for compare mode. If omitted, auto-finds baseline saved by orchestrator.",
+                            },
+                        },
+                        "required": ["symbol", "mode", "project_dir"],
                     },
                 ),
                 Tool(
@@ -366,6 +393,8 @@ class DecompMCPServer:
                 return await self._run_objdiff(arguments)
             elif name == "run_analyze_function":
                 return await self._run_analyze_function(arguments)
+            elif name == "run_diff_inspect":
+                return await self._run_diff_inspect(arguments)
             elif name == "lookup_struct_offset":
                 return await self._lookup_struct_offset(arguments)
             elif name == "struct_info":
@@ -1130,7 +1159,7 @@ class DecompMCPServer:
         full_build = args.get("full_build", False)
         project_dir_arg = args.get("project_dir", None)
         context = args.get("context", 3)
-        concise = args.get("concise", False)
+        concise = args.get("concise", True)
 
         if not symbol:
             return [TextContent(type="text", text="Error: No symbol provided.")]
@@ -1249,6 +1278,36 @@ class DecompMCPServer:
             if enrichment:
                 output += "\n" + enrichment
 
+            # 4) Auto-diagnose when not concise and match < 95%
+            if not concise:
+                try:
+                    parsed = json.loads(json_result.stdout)
+                    match_pct = parsed.get("fuzzy_match_percent", 100)
+                    if match_pct < 95:
+                        # Write JSON to temp file for diff_inspect
+                        tmp_json = Path(tempfile.mktemp(suffix=".json", dir="/tmp/claude"))
+                        tmp_json.parent.mkdir(parents=True, exist_ok=True)
+                        with open(tmp_json, "w") as f:
+                            f.write(json_result.stdout)
+
+                        diff_inspect_script = self.project_root / "scripts" / "diff_inspect.py"
+                        if diff_inspect_script.exists():
+                            diag_result = subprocess.run(
+                                [sys.executable, str(diff_inspect_script), str(tmp_json), "--diagnose"],
+                                capture_output=True, text=True,
+                                timeout=30,
+                            )
+                            if diag_result.returncode == 0 and diag_result.stdout.strip():
+                                output += "\n\n## Auto-Diagnosis (diff_inspect)\n\n" + diag_result.stdout.strip()
+
+                        # Clean up
+                        try:
+                            tmp_json.unlink()
+                        except OSError:
+                            pass
+                except (json.JSONDecodeError, KeyError, subprocess.TimeoutExpired, Exception):
+                    pass  # Best-effort, never break run_objdiff
+
             if stderr_text:
                 output += f"\n\n[stderr]\n{stderr_text}"
 
@@ -1284,6 +1343,13 @@ class DecompMCPServer:
                     text=f"""{summary}Output is large ({line_count} lines). Written to file.
 
 **File:** `{output_file.relative_to(project_dir)}`
+
+**When reading this file:**
+- Never read the entire file at once.
+- First estimate size via bash (`wc -l` / `wc -c`).
+- If > 500 lines or > 200KB, read in chunks of 200 lines.
+- After each chunk, produce <= 8 bullets summarizing what you learned, then continue.
+- Keep each tool result compact; do not emit large verbatim excerpts.
 
 **Next steps:**
 1. If verdict is AT_LIMIT: Report with mcp__orchestrator__report_result
@@ -1415,6 +1481,186 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
             return [TextContent(type="text", text="Error: analyze-function timed out after 5 minutes.")]
         except Exception as e:
             return [TextContent(type="text", text=f"Error running analyze-function: {e}")]
+
+    async def _run_diff_inspect(self, args: dict) -> list[TextContent]:
+        """
+        Handle run_diff_inspect tool call.
+
+        Runs diff_inspect.py analysis modes, save_baseline, or compare workflow.
+        """
+        symbol = args.get("symbol", "")
+        mode = args.get("mode", "")
+        project_dir_arg = args.get("project_dir", None)
+        baseline_json = args.get("baseline_json", None)
+
+        if not symbol:
+            return [TextContent(type="text", text="Error: No symbol provided.")]
+        if not mode:
+            return [TextContent(type="text", text="Error: No mode provided.")]
+
+        valid_modes = {"diagnose", "clusters", "regswaps", "offsets", "replaces", "compare", "save_baseline"}
+        if mode not in valid_modes:
+            return [TextContent(type="text", text=f"Error: Invalid mode '{mode}'. Valid: {', '.join(sorted(valid_modes))}")]
+
+        # Auto-demangle Itanium-style names
+        demangled = _demangle_itanium_to_qualified(symbol)
+        if demangled is not None:
+            symbol = demangled
+
+        # Require project_dir — no silent fallback to main repo
+        if not project_dir_arg:
+            return [TextContent(type="text", text="Error: project_dir is required. Pass your worktree directory so builds test your changes.")]
+        project_dir = Path(project_dir_arg)
+        if not project_dir.exists():
+            return [TextContent(type="text", text=f"Error: project_dir does not exist: {project_dir}")]
+
+        # Safe symbol for filenames
+        safe_symbol = symbol.replace("?", "_Q_").replace("@", "_A_").replace("<", "_L_").replace(">", "_R_")
+
+        # diff_inspect.py is always in the main repo
+        diff_inspect_script = self.project_root / "scripts" / "diff_inspect.py"
+        if not diff_inspect_script.exists():
+            return [TextContent(type="text", text=f"Error: diff_inspect.py not found at {diff_inspect_script}")]
+
+        # objdiff-cli is always in the main repo bin/
+        objdiff_cli = self.project_root / "bin" / "objdiff-cli"
+
+        try:
+            # ── save_baseline mode ──
+            if mode == "save_baseline":
+                if not objdiff_cli.exists():
+                    return [TextContent(type="text", text=f"Error: objdiff-cli not found at {objdiff_cli}")]
+
+                # Run objdiff to produce JSON
+                cmd = [
+                    str(objdiff_cli), "diff",
+                    "-p", str(project_dir),
+                    symbol,
+                    "--include-instructions", "--build", "--incremental",
+                    "-f", "json",
+                ]
+                result = subprocess.run(
+                    cmd, capture_output=True, text=True,
+                    timeout=300, cwd=str(project_dir),
+                )
+                if result.returncode != 0:
+                    return [TextContent(type="text", text=f"Error running objdiff: {result.stderr or result.stdout}")]
+
+                # Save to baseline path
+                analysis_dir = project_dir / "function_analysis"
+                analysis_dir.mkdir(exist_ok=True, parents=True)
+                baseline_file = analysis_dir / f"baseline_{safe_symbol}.json"
+                with open(baseline_file, "w") as f:
+                    f.write(result.stdout)
+
+                return [TextContent(type="text", text=f"Baseline saved: `{baseline_file}`")]
+
+            # ── compare mode ──
+            elif mode == "compare":
+                # Find baseline
+                if baseline_json:
+                    baseline_path = Path(baseline_json)
+                else:
+                    baseline_path = project_dir / "function_analysis" / f"baseline_{safe_symbol}.json"
+
+                if not baseline_path.exists():
+                    return [TextContent(type="text", text=f"Error: No baseline found at `{baseline_path}`.\n"
+                                        "Use `save_baseline` mode first, or pass `baseline_json` parameter.")]
+
+                # Run fresh objdiff to get current JSON
+                if not objdiff_cli.exists():
+                    return [TextContent(type="text", text=f"Error: objdiff-cli not found at {objdiff_cli}")]
+
+                cmd = [
+                    str(objdiff_cli), "diff",
+                    "-p", str(project_dir),
+                    symbol,
+                    "--include-instructions", "--build", "--incremental",
+                    "-f", "json",
+                ]
+                result = subprocess.run(
+                    cmd, capture_output=True, text=True,
+                    timeout=300, cwd=str(project_dir),
+                )
+                if result.returncode != 0:
+                    return [TextContent(type="text", text=f"Error running objdiff: {result.stderr or result.stdout}")]
+
+                # Write current JSON to temp file
+                current_file = Path(tempfile.mktemp(suffix=".json", dir="/tmp/claude"))
+                current_file.parent.mkdir(parents=True, exist_ok=True)
+                with open(current_file, "w") as f:
+                    f.write(result.stdout)
+
+                # Run diff_inspect --compare
+                compare_cmd = [
+                    sys.executable, str(diff_inspect_script),
+                    "--compare", str(baseline_path), str(current_file),
+                ]
+                compare_result = subprocess.run(
+                    compare_cmd, capture_output=True, text=True,
+                    timeout=60,
+                )
+
+                # Clean up temp file
+                try:
+                    current_file.unlink()
+                except OSError:
+                    pass
+
+                output = compare_result.stdout
+                if compare_result.stderr:
+                    output += f"\n[stderr] {compare_result.stderr.strip()}"
+                if compare_result.returncode != 0:
+                    return [TextContent(type="text", text=f"Error in compare:\n{output}")]
+
+                return [TextContent(type="text", text=output)]
+
+            # ── analysis modes (diagnose/clusters/regswaps/offsets/replaces) ──
+            else:
+                cmd = [
+                    sys.executable, str(diff_inspect_script),
+                    "--symbol", symbol,
+                    f"--{mode}",
+                    "--project-dir", str(project_dir),
+                ]
+                result = subprocess.run(
+                    cmd, capture_output=True, text=True,
+                    timeout=300,
+                )
+
+                output = result.stdout
+                if result.stderr:
+                    # Filter ninja progress lines
+                    stderr_lines = result.stderr.strip().splitlines()
+                    error_lines = [
+                        line for line in stderr_lines
+                        if not re.match(r'^\s*\[\d+/\d+\]\s', line)
+                        and not line.startswith("Running objdiff for:")
+                        and not line.startswith("Output:")
+                    ]
+                    if error_lines:
+                        output += f"\n\n[stderr]\n" + "\n".join(error_lines)
+
+                if result.returncode != 0:
+                    return [TextContent(type="text", text=f"Error (exit {result.returncode}):\n{output}")]
+
+                # Handle large output
+                lines = output.split("\n")
+                if len(lines) < MAX_INLINE_LINES:
+                    return [TextContent(type="text", text=output)]
+                else:
+                    analysis_dir = project_dir / "function_analysis"
+                    analysis_dir.mkdir(exist_ok=True, parents=True)
+                    output_file = analysis_dir / f"diff_inspect_{mode}_{safe_symbol}.txt"
+                    with open(output_file, "w") as f:
+                        f.write(output)
+                    return [TextContent(type="text", text=f"Output is large ({len(lines)} lines). Written to file.\n\n"
+                                        f"**File:** `{output_file.relative_to(project_dir)}`")]
+
+        except subprocess.TimeoutExpired:
+            return [TextContent(type="text", text=f"Error: diff_inspect timed out (mode={mode}).")]
+        except Exception as e:
+            return [TextContent(type="text", text=f"Error running diff_inspect: {e}")]
 
     async def _lookup_rb3(self, args: dict) -> list[TextContent]:
         """Handle lookup_rb3 tool call."""

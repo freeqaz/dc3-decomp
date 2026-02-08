@@ -245,3 +245,50 @@ Consistent register swaps. Try:
 - Reordering variable declarations
 - Reordering struct members
 - Changing parameter order (if confirmed via DWARF)
+
+## diff_inspect — Deep Mismatch Analysis
+
+**When:** `objdiff --verdict` tells you something is wrong but you need to understand WHY.
+
+**Why:** Provides structured analysis of mismatch patterns that objdiff's verdict summarizes but doesn't break down.
+
+### Direct Usage
+
+```bash
+# Root cause analysis (start here)
+python3 scripts/diff_inspect.py --symbol "Foo::Bar" --diagnose
+
+# With worktree support
+python3 scripts/diff_inspect.py --symbol "Foo::Bar" --diagnose --project-dir /tmp/claude/my-branch
+
+# From existing JSON
+python3 scripts/diff_inspect.py /tmp/claude/diff.json --diagnose
+python3 scripts/diff_inspect.py /tmp/claude/diff.json --clusters
+python3 scripts/diff_inspect.py /tmp/claude/diff.json --regswaps
+python3 scripts/diff_inspect.py /tmp/claude/diff.json --offsets
+python3 scripts/diff_inspect.py /tmp/claude/diff.json --replaces
+
+# Compare two snapshots (before/after)
+python3 scripts/diff_inspect.py --compare baseline.json current.json
+```
+
+### MCP Tool (for agents)
+
+```
+mcp__orchestrator__run_diff_inspect
+  symbol: "Foo::Bar"
+  mode: "diagnose"              # or clusters/regswaps/offsets/replaces/compare/save_baseline
+  project_dir: "/tmp/worktree"
+```
+
+### Mode Selection Guide
+
+| Mode | Use When | Output |
+|------|----------|--------|
+| `diagnose` | First analysis — don't know what's wrong | Root cause summary with actionable suggestions |
+| `clusters` | Seeing scattered insert/delete mismatches | Contiguous mismatch groups with context |
+| `regswaps` | Verdict mentions register allocation | GPR/FPR swap pairs and frequency |
+| `offsets` | Seeing offset differences in memory ops | Offset shift histogram + outlier detection |
+| `replaces` | Many "replace" diffs, unclear which matter | Categorizes noise (trivial) vs real (structural) |
+| `compare` | Want to see if edits improved things | Delta table: match% change, mismatch deltas |
+| `save_baseline` | About to start editing, want a reference point | Saves current state for later `compare` |

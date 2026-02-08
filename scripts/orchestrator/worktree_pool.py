@@ -164,6 +164,9 @@ class WorktreePool:
                             shutil.copy2(src, dst)
                             print(f"  Copied file: {copy_name}")
 
+            # Write empty .mcp.json to prevent name collisions with SDK mcp_servers
+            self._write_agent_mcp_json(worktree_path)
+
             # Mark available in database
             self._ensure_in_database(conn, worktree_path)
             created.append(worktree_path)
@@ -224,6 +227,19 @@ class WorktreePool:
             # Create symlink
             if not dst.exists():
                 dst.symlink_to(src)
+
+    def _write_agent_mcp_json(self, worktree_path: Path) -> None:
+        """Write an empty .mcp.json to prevent name collisions with SDK mcp_servers.
+
+        The orchestrator MCP server is provided programmatically via the SDK
+        mcp_servers option. The git-tracked .mcp.json also defines "orchestrator",
+        causing a name collision that drops tools (notably run_diff_inspect).
+        Other servers (decomp.me, pyghidra) aren't needed by agents.
+        """
+        import json
+        mcp_json_path = worktree_path / ".mcp.json"
+        with open(mcp_json_path, "w") as f:
+            json.dump({"mcpServers": {}}, f)
 
     def _refresh_tools(self, worktree_path: Path) -> None:
         """Re-copy tool directories from main repo to keep worktree in sync."""
@@ -392,6 +408,9 @@ class WorktreePool:
 
         # Refresh tool directories from main repo so worktrees stay in sync
         self._refresh_tools(worktree_path)
+
+        # Write empty .mcp.json to prevent name collisions with SDK mcp_servers
+        self._write_agent_mcp_json(worktree_path)
 
         return worktree_path
 

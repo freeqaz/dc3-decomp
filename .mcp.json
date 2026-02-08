@@ -1,26 +1,5 @@
 {
   "mcpServers": {
-    "pyghidra-stdio": {
-      "command": "/home/free/code/milohax/dc3-decomp/venv/bin/pyghidra-mcp",
-      "args": [
-        "--transport", "stdio",
-        "--project-name", "DC3",
-        "--project-directory", "/home/free/code/milohax/dc3-decomp/ghidra_projects/DC3",
-        "/home/free/code/milohax/dc3-decomp/orig/373307D9/default.xex"
-      ],
-      "env": {
-        "JAVA_HOME": "/usr/lib/jvm/java-17-openjdk",
-        "GHIDRA_INSTALL_DIR": "/home/free/code/milohax/vmx128-research/ghidra-test/ghidra_12.0_DEV",
-        "GHIDRA_USER_HOME": "/tmp/claude/ghidra_user"
-      }
-    },
-    "decomp": {
-      "command": "/home/free/code/milohax/decomp-me-mcp/.venv/bin/python",
-      "args": ["-m", "decomp_mcp.server"],
-      "env": {
-        "CF_CLEARANCE": "3sy5K80thIrbbrGe.7nEkEUYp75dLz0Y5Lh63Cvv7Cs-1769130811-1.2.1.1-IG_vtvz.mv6hY62lBdBMjPHLKJy4XaClbvekS5YxJq_ii1YO.OTY.GS8N6Tnpf_VQG_Z98fSnnfg9Mfihez9DxCWWUAqRDldYNGqonGudoFbYZX5gsKQHMSAvUxY2XhRHl.8SCLbgFbXhSjkMigMclD7iRzgw3fpwyyl1MenpOGsLNc_J4lfjpRUTzfmjdZQgGH3IBbBmAybBhfPecrultFXNOIzTEexlgP.Wf.Wq5E"
-      }
-    },
     "orchestrator": {
       "command": "/home/free/code/milohax/dc3-decomp/venv/bin/python",
       "args": ["-m", "scripts.orchestrator.mcp_server", "--db", "/home/free/code/milohax/dc3-decomp/decomp.db"],
