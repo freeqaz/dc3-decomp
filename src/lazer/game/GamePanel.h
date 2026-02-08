@@ -6,6 +6,7 @@
 #include "os/Timer.h"
 #include "rndobj/Overlay.h"
 #include "ui/UIPanel.h"
+#include "utl/DebugMeter.h"
 #include "utl/Profiler.h"
 
 class GamePanel : public UIPanel {
@@ -53,6 +54,7 @@ private:
     void StartIntro();
     void SetSoundEventReceiver();
     void UpdateNowBar();
+    void UpdateLatency();
 
     DataNode OnStartLoadSong(DataArray *);
     DataNode OnStartSongNow(DataArray *);
@@ -96,8 +98,12 @@ extern GamePanel *TheGamePanel;
 
 class LatencyCallback : public RndOverlay::Callback {
 public:
+    LatencyCallback() : unk4(0) {}
     virtual ~LatencyCallback() {}
     virtual float UpdateOverlay(RndOverlay *o, float y);
+
+private:
+    bool unk4;
 };
 
 class LoopVizCallback : public RndOverlay::Callback {
@@ -106,5 +112,15 @@ public:
     virtual ~LoopVizCallback() {}
     virtual float UpdateOverlay(RndOverlay *o, float y);
 
+    void DrawHashMarks(float, float, float, int, int, bool);
+
 private:
+    DebugMeter mDebugMeter1; // 0x4
+    DebugMeter mDebugMeter2; // 0x24
+    int unk44;
+    int unk48;
+    int unk4c;
+    int unk50;
+    float unk54;
+    float unk58;
 };

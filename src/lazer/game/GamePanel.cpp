@@ -12,12 +12,14 @@
 #include "hamobj/HamMaster.h"
 #include "hamobj/HamPlayerData.h"
 #include "hamobj/HamWardrobe.h"
+#include "hamobj/MoveDir.h"
 #include "meta/HAQManager.h"
 #include "meta/PreloadPanel.h"
 #include "meta_ham/HamProfile.h"
 #include "meta_ham/HamSongMgr.h"
 #include "meta_ham/MetaPerformer.h"
 #include "meta_ham/ProfileMgr.h"
+#include "meta_ham/UIEventMgr.h"
 #include "movie/TexMovie.h"
 #include "obj/Data.h"
 #include "obj/DataFile.h"
@@ -43,11 +45,105 @@
 #include "ui/UIPanel.h"
 #include "ui/UIScreen.h"
 #include "utl/MBT.h"
+#include "utl/TimeConversion.h"
 #include "world/Dir.h"
 
-GamePanel *TheGamePanel;
+GamePanel *TheGamePanel = nullptr;
 LoopVizCallback gLoopVizCallback;
 LatencyCallback gGamePanelCallback;
+static float sFloat1 = 0;
+static float sFloat2 = 0;
+
+float LatencyCallback::UpdateOverlay(RndOverlay *o, float f2) {
+    Hmx::Color color = unk4 ? Hmx::Color(1, 1, 1) : Hmx::Color(0, 0, 0);
+    TheRnd.DrawRectScreen(
+        Hmx::Rect(0, 0.875f, 0.125f, 0.125f), color, nullptr, nullptr, nullptr
+    );
+    TheRnd.DrawRectScreen(
+        Hmx::Rect(0, 0.125f, 0.125f, 0.125f), color, nullptr, nullptr, nullptr
+    );
+    return f2;
+}
+
+#pragma region LoopVizCallback
+
+LoopVizCallback::LoopVizCallback()
+    : mDebugMeter1(0.1f, 0.12f, 0.8f, 0.03f, Hmx::Color(0.1f, 0.1f, 0.1f)),
+      mDebugMeter2(0.25f, 0.19f, 0.5f, 0.03f, Hmx::Color(0, 0, 0.8f)), unk44(0), unk48(0),
+      unk4c(0), unk50(0), unk54(0), unk58(0) {}
+
+void LoopVizCallback::DrawHashMarks(
+    float f1, float f2, float f3, int i4, int i5, bool b6
+) {
+    if (i4 <= 3000) {
+        for (int i = 0; i <= i4; i++) {
+            int u4 = i + i5;
+            float fvar1 = ((float)i / (float)i4) * f3 + f2;
+            if (u4 % 4 == 0) {
+                TheRnd.DrawRectScreen(
+                    Hmx::Rect(fvar1, f1 - 0.01f, 0.001f, 0.01f),
+                    Hmx::Color(1, 1, 0),
+                    nullptr,
+                    nullptr,
+                    nullptr
+                );
+            } else if (b6) {
+                TheRnd.DrawRectScreen(
+                    Hmx::Rect(fvar1, f1 - 0.003f, 0.001f, 0.003f),
+                    Hmx::Color(1, 1, 0),
+                    nullptr,
+                    nullptr,
+                    nullptr
+                );
+            }
+        }
+    }
+}
+
+float LoopVizCallback::UpdateOverlay(RndOverlay *o, float y) {
+    if (TheMaster && TheMaster->GetAudio() && TheMaster->GetAudio()->GetSongStream()) {
+        unk54 -= TheTaskMgr.DeltaSeconds();
+        unk58 -= TheTaskMgr.DeltaSeconds();
+        TheRnd.DrawRectScreen(
+            Hmx::Rect(0.05f, 0.1f, 0.9f, 0.2f),
+            Hmx::Color(0, 0, 0, 0.6f),
+            nullptr,
+            nullptr,
+            nullptr
+        );
+        int i4c, i48;
+        TheMaster->GetAudio()->GetCurrLoopBeats(i4c, i48);
+        if (i4c != unk44) {
+            unk54 = 3;
+            unk44 = i4c;
+        }
+        if (i48 != unk48) {
+            unk58 = 3;
+            unk48 = i48;
+        }
+        float beat = MsToBeat(TheMaster->StreamMs());
+        float f14 = (beat - (float)i4c) / (float)(i48 - i4c);
+        StandardStream *stream =
+            dynamic_cast<StandardStream *>(TheMaster->GetAudio()->GetSongStream());
+        float beatAhead = MsToBeat(stream->GetBufferAheadTime());
+        float f10 = (beatAhead - beat) / (float)(i48 - i4c);
+        static Symbol end("end");
+        int eventBeat = TheMaster->EventBeat(end);
+        float f16 = (float)i4c / (float)eventBeat;
+        float f12 = (float)i48 / (float)eventBeat;
+        mDebugMeter1.Draw();
+        Hmx::Color color(0.8f, 0.8f, 0.8f);
+        mDebugMeter1.DrawBar(f16, f12 - f16, color);
+        mDebugMeter1.DrawBar(f16, (f12 - f16) * f14, color);
+        // more...
+        if (stream->IsPastStreamJumpPointOfNoReturn()) {
+        }
+    }
+    return y;
+}
+
+#pragma endregion
+#pragma region GamePanel
 
 GamePanel::GamePanel()
     : mGame(0), mTimeOverlay(RndOverlay::Find("time")),
@@ -59,7 +155,7 @@ GamePanel::GamePanel()
     mFitnessFilters[0].SetPlayerIndex(0);
     mFitnessFilters[1].SetPlayerIndex(1);
     unkdc.resize(32);
-    // set two globals/statics
+    sFloat1 = sFloat2 = 0;
     MILO_ASSERT(!TheGamePanel, 0x9E);
     TheGamePanel = this;
     SetType("none");
@@ -123,8 +219,90 @@ void GamePanel::Enter() {
     Reset();
     SetPaused(false);
     ThePresenceMgr.SetInGame(TheHamSongMgr.GetSongIDFromShortName(TheGameData->GetSong()));
-    //   DAT_83117414 = HamMaster::StreamMs(TheMaster);
-    //   DAT_83117418 = 0.0;
+    sFloat1 = TheMaster->StreamMs();
+    sFloat2 = 0;
+}
+
+void GamePanel::Exit() {
+    TheTaskMgr.ClearTimelineTasks(kTaskSeconds);
+    TheTaskMgr.ClearTimelineTasks(kTaskBeats);
+    ThePresenceMgr.SetNotInGame();
+    UIPanel::Exit();
+    unkd8 = true;
+    for (int i = 0; i < 2; i++) {
+        FitnessFilter *filter = GetFitnessFilter(i);
+        if (filter) {
+            filter->StopTracking();
+        }
+    }
+    RndAnimatable *beatRepeatAnim = TheSynth->Find<RndAnimatable>("beat_repeat.anim");
+    if (beatRepeatAnim) {
+        beatRepeatAnim->SetFrame(4.0f, 1.0f);
+    }
+    unk108 = false;
+}
+
+void GamePanel::Poll() {
+    START_AUTO_TIMER("game_poll");
+    SetSoundEventReceiver();
+    if (!IsLoaded()) {
+        return;
+    } else {
+        if (unkfc->SplitMs() >= 100.0f) {
+            while (!FileDiscSpinUp()) {
+                MILO_LOG("Spinning up disc took longer than count in timer\n");
+            }
+            MILO_ASSERT(mState == kGamePlaying, 0x1C5);
+            mGame->SetGamePaused(false, true, true);
+            unkfc->Reset();
+        } else if (unkfc->Running()) {
+            FileDiscSpinUp();
+        }
+        if (!mGame->Paused() && TheUIEventMgr->HasActiveDialogEvent()) {
+            static Message pauseGameMsg("pause_game");
+            Handle(pauseGameMsg, true);
+        }
+        UIPanel::Poll();
+        if (mState == 0) {
+            StartIntro();
+        }
+        if (!unkfc->Running()) {
+            mGame->Poll();
+        }
+        if (mState == kGameInIntro && TheTaskMgr.Seconds(TaskMgr::kRealTime) > -0.025f
+            && !TheHamDirector->Unk33d()) {
+            StartGame();
+        }
+        for (int i = 0; i < 2; i++) {
+            FitnessFilter *filt = GetFitnessFilter(i);
+            if (filt) {
+                filt->Poll();
+            }
+        }
+        MoveDir *moves = TheHamDirector->GetWorld()->Find<MoveDir>("moves", false);
+        static Message isTrackingScoreMsg("is_tracking_score");
+        DataNode handled = Handle(isTrackingScoreMsg, false);
+        if (moves && handled.Type() != kDataUnhandled) {
+            moves->SetFiltersEnabled(handled.Int());
+        }
+        if (mTimeOverlay->Showing()) {
+            UpdateNowBar();
+        }
+        UpdateLatency();
+        if (mFitnessOverlay->Showing()) {
+            UpdateFitnessOverlay();
+        }
+        if (mLoopVizOverlay->Showing()) {
+            mLoopVizOverlay->SetCallback(&gLoopVizCallback);
+        }
+        if (TheMaster) {
+            float ms = TheMaster->StreamMs();
+            sFloat2 = (ms - sFloat1) / 1000.0f;
+            sFloat1 = ms;
+        } else {
+            sFloat2 = 0;
+        }
+    }
 }
 
 void GamePanel::SetPaused(bool b1) { SetPausedHelper(b1, true); }
@@ -436,15 +614,18 @@ DataNode GamePanel::OnMsg(const EndGameMsg &msg) {
         mState = kGameOver;
         unk84 = msg.Result();
         switch (unk84) {
-        case 1:
+        case 1: {
             Export(Message("game_won"), true);
             break;
-        case 2:
+        }
+        case 2: {
             Export(Message("game_won_finale"), true);
             break;
-        case 3:
+        }
+        case 3: {
             Export(Message("game_over"), true);
             break;
+        }
         default:
             MILO_NOTIFY("bad game over state");
             break;
@@ -486,25 +667,6 @@ void GamePanel::PollForLoading() {
     }
 }
 
-void GamePanel::Exit() {
-    TheTaskMgr.ClearTimelineTasks(kTaskSeconds);
-    TheTaskMgr.ClearTimelineTasks(kTaskBeats);
-    ThePresenceMgr.SetNotInGame();
-    UIPanel::Exit();
-    unkd8 = true;
-    for (int i = 0; i < 2; i++) {
-        FitnessFilter *filter = GetFitnessFilter(i);
-        if (filter) {
-            filter->StopTracking();
-        }
-    }
-    RndAnimatable *beatRepeatAnim = TheSynth->Find<RndAnimatable>("beat_repeat.anim");
-    if (beatRepeatAnim) {
-        beatRepeatAnim->SetFrame(4.0f, 1.0f);
-    }
-    unk108 = false;
-}
-
 void GamePanel::ClearDrawGlitch() {
     UIScreen *gameScreen = ObjectDir::Main()->Find<UIScreen>("game_screen");
     gameScreen->SetShowing(false);
@@ -514,3 +676,5 @@ void GamePanel::ClearDrawGlitch() {
         TheRnd.EndDrawing();
     }
 }
+
+#pragma endregion

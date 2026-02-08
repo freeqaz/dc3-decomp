@@ -4,6 +4,7 @@
 #include "obj/Object.h"
 #include "obj/Task.h"
 #include "rndobj/Dir.h"
+#include "utl/BinStream.h"
 
 HamPhraseMeter::HamPhraseMeter()
     : mAnim(this), mRatingFrac(0), mRating("move_bad"), mDesiredFPB(480),
@@ -51,6 +52,42 @@ BEGIN_COPYS(HamPhraseMeter)
     END_COPYING_MEMBERS
 END_COPYS
 
+INIT_REVS(3, 0)
+
+void HamPhraseMeter::PreLoad(BinStream &bs) {
+    LOAD_REVS(bs)
+    ASSERT_REVS(3, 0)
+    RndDir::PreLoad(d.stream);
+    d.PushRev(this);
+}
+
+void HamPhraseMeter::PostLoad(BinStream &bs) {
+    BinStreamRev d(bs, bs.PopRev(this));
+    RndDir::PostLoad(d.stream);
+    mAnim.Load(d.stream, false, this);
+    d >> mRatingFrac;
+    d >> mRating;
+    d >> mDesiredFPB;
+    d >> mFirstPerfectFrame;
+    if (d.rev > 2 && IsProxy()) {
+        d >> mPlayerIndex;
+    }
+}
+
+void HamPhraseMeter::Poll() {
+    RndDir::Poll();
+    if (mAnim) {
+        float frame = mAnim->GetFrame();
+        float delta = TheTaskMgr.DeltaBeat() * unk224;
+        if (frame < unk220) {
+            frame = Min(delta + frame, unk220);
+        } else if (frame > unk220) {
+            frame = Max(frame - delta, unk220);
+        }
+        mAnim->SetFrame(frame, 1);
+    }
+}
+
 void HamPhraseMeter::Enter() {
     RndDir::Enter();
     SetRatingFrac(0, -1);
@@ -82,12 +119,11 @@ void HamPhraseMeter::SetRatingFrac(float f1, float f2) {
         } else {
             unk220 = (mFirstPerfectFrame - mAnim->StartFrame()) * f1;
         }
-        if (!(f2 > 0)) {
+        if (f2 <= 0) {
             mAnim->SetFrame(unk220, 1);
         } else {
-            float temp = std::fabs(unk220 - mAnim->GetFrame());
-            temp = temp / f2;
-            unk224 = (mDesiredFPB - temp >= 0.0f) ? mDesiredFPB : temp;
+            float div = std::fabs(unk220 - mAnim->GetFrame());
+            unk224 = Max<float>(mDesiredFPB, div / f2);
         }
     }
 }

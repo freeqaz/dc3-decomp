@@ -1,16 +1,19 @@
 #include "char/CharLookAt.h"
 #include "char/CharWeightable.h"
+#include "math/Rot.h"
 #include "math/Utl.h"
 #include "obj/Object.h"
 #include "rndobj/Poll.h"
 
+const float sMaxThreshold = 80;
+
 CharLookAt::CharLookAt()
-    : mSource(this), mPivot(this), mTarget(this), mHalfTime(0.0f), mMinYaw(-80.0f),
-      mMaxYaw(-mMinYaw), mMinPitch(-80.0f), mMaxPitch(-mMinPitch), mMinWeightYaw(-1.0f),
-      mMaxWeightYaw(-1.0f), mWeightYawSpeed(10000.0f), unk8c(1.0e30f, 0.0f, 0.0f),
-      unk9c(1.0f), mSourceRadius(0.0f), unka4(0, 0, 0), mShowRange(false),
-      mTestRange(false), mTestRangePitch(0.5f), mTestRangeYaw(0.5f), mAllowRoll(true),
-      unke1(false), mEnableJitter(false), mYawJitterLimit(0.0f), mPitchJitterLimit(0.0f) {
+    : mSource(this), mPivot(this), mTarget(this), mHalfTime(0), mMinYaw(-80), mMaxYaw(80),
+      mMinPitch(-80), mMaxPitch(sMaxThreshold), mMinWeightYaw(-1), mMaxWeightYaw(-1),
+      mWeightYawSpeed(10000), unk8c(kHugeFloat, 0, 0), unk9c(1), mSourceRadius(0),
+      unka4(0, 0, 0), mShowRange(false), mTestRange(false), mTestRangePitch(0.5),
+      mTestRangeYaw(0.5), mAllowRoll(true), unke1(false), mEnableJitter(false),
+      mYawJitterLimit(0), mPitchJitterLimit(0) {
     SyncLimits();
 }
 
@@ -68,6 +71,31 @@ BEGIN_SAVES(CharLookAt)
     bs << mSourceRadius;
 END_SAVES
 
+BEGIN_COPYS(CharLookAt)
+    COPY_SUPERCLASS(Hmx::Object)
+    COPY_SUPERCLASS(CharWeightable)
+    CREATE_COPY(CharLookAt)
+    BEGIN_COPYING_MEMBERS
+        COPY_MEMBER(mSource)
+        COPY_MEMBER(mPivot)
+        COPY_MEMBER(mTarget)
+        COPY_MEMBER(mHalfTime)
+        COPY_MEMBER(mMinYaw)
+        COPY_MEMBER(mMaxYaw)
+        COPY_MEMBER(mMinPitch)
+        COPY_MEMBER(mMaxPitch)
+        COPY_MEMBER(mMinWeightYaw)
+        COPY_MEMBER(mMaxWeightYaw)
+        COPY_MEMBER(mWeightYawSpeed)
+        COPY_MEMBER(mAllowRoll)
+        COPY_MEMBER(mSourceRadius)
+        COPY_MEMBER(mEnableJitter)
+        COPY_MEMBER(mYawJitterLimit)
+        COPY_MEMBER(mPitchJitterLimit)
+    END_COPYING_MEMBERS
+    SyncLimits();
+END_COPYS
+
 INIT_REVS(5, 0)
 
 BEGIN_LOADS(CharLookAt)
@@ -106,31 +134,6 @@ BEGIN_LOADS(CharLookAt)
     SyncLimits();
 END_LOADS
 
-BEGIN_COPYS(CharLookAt)
-    COPY_SUPERCLASS(Hmx::Object)
-    COPY_SUPERCLASS(CharWeightable)
-    CREATE_COPY(CharLookAt)
-    BEGIN_COPYING_MEMBERS
-        COPY_MEMBER(mSource)
-        COPY_MEMBER(mPivot)
-        COPY_MEMBER(mTarget)
-        COPY_MEMBER(mHalfTime)
-        COPY_MEMBER(mMinYaw)
-        COPY_MEMBER(mMaxYaw)
-        COPY_MEMBER(mMinPitch)
-        COPY_MEMBER(mMaxPitch)
-        COPY_MEMBER(mMinWeightYaw)
-        COPY_MEMBER(mMaxWeightYaw)
-        COPY_MEMBER(mWeightYawSpeed)
-        COPY_MEMBER(mAllowRoll)
-        COPY_MEMBER(mSourceRadius)
-        COPY_MEMBER(mEnableJitter)
-        COPY_MEMBER(mYawJitterLimit)
-        COPY_MEMBER(mPitchJitterLimit)
-    END_COPYING_MEMBERS
-    SyncLimits();
-END_COPYS
-
 void CharLookAt::Enter() {
     unk8c.Set(kHugeFloat, 0, 0);
     if (mPivot) {
@@ -168,48 +171,16 @@ void CharLookAt::SetMaxPitch(float pitch) {
 }
 
 void CharLookAt::SyncLimits() {
-    float fMin = -80.0f;
-    float deg2rad = DEG2RAD;
-    float fMax = 80.0f;
-
-    // Clamp all four angle values
-    float fTemp12 = (fMin - mMinYaw >= 0.0f) ? fMin : mMinYaw;
-    mMinYaw = (fTemp12 - fMax >= 0.0f) ? fMax : fTemp12;
-    float fTemp13 = mMaxYaw;
-    fTemp12 = (fMin - fTemp13 >= 0.0f) ? fMin : fTemp13;
-    mMaxYaw = (fTemp12 - fMax >= 0.0f) ? fMax : fTemp12;
-    fTemp13 = mMinPitch;
-    fTemp12 = (fMin - fTemp13 >= 0.0f) ? fMin : fTemp13;
-    mMinPitch = (fTemp12 - fMax >= 0.0f) ? fMax : fTemp12;
-    fTemp13 = mMaxPitch;
-    fTemp12 = (fMin - fTemp13 >= 0.0f) ? fMin : fTemp13;
-    mMaxPitch = (fTemp12 - fMax >= 0.0f) ? fMax : fTemp12;
-
-    // Load and take absolute values
-    fTemp13 = mMaxYaw;
-    fTemp12 = mMinYaw;
-    float fTemp11 = mMaxPitch;
-    float fTemp0 = mMinPitch;
-    fTemp0 = std::fabs(fTemp0);
-    fTemp12 = std::fabs(fTemp12);
-    fTemp11 = std::fabs(fTemp11);
-    fTemp13 = std::fabs(fTemp13);
-
-    // Calculate max pitch and max yaw
-    float fDiff0_11 = fTemp0 - fTemp11;
-    float fDiff12_13 = fTemp12 - fTemp13;
-    float fMax_pitch = (fDiff0_11 >= 0.0f) ? fTemp0 : fTemp11;
-    float fMax_yaw = (fDiff12_13 >= 0.0f) ? fTemp12 : fTemp13;
-
-    // Calculate final max
-    float fDiff_yaw_pitch = fMax_yaw - fMax_pitch;
-    float fMax_overall = (fDiff_yaw_pitch >= 0.0f) ? fMax_yaw : fMax_pitch;
-
-    // Calculate and store results
-    unkb4.mMin.y = (float)std::cos((double)(fMax_overall * deg2rad));
-    unkb4.mMax.y = 1.0E+29f;
-    unkb4.mMin.z = (float)std::tan((double)(mMinYaw * deg2rad)) * unkb4.mMin.y;
-    unkb4.mMax.z = (float)std::tan((double)(mMaxYaw * deg2rad)) * unkb4.mMin.y;
-    unkb4.mMin.x = (float)std::tan((double)(mMinPitch * deg2rad)) * unkb4.mMin.y;
-    unkb4.mMax.x = (float)std::tan((double)(mMaxPitch * deg2rad)) * unkb4.mMin.y;
+    ClampEq(mMinYaw, -sMaxThreshold, sMaxThreshold);
+    ClampEq(mMaxYaw, -sMaxThreshold, sMaxThreshold);
+    ClampEq(mMinPitch, -sMaxThreshold, sMaxThreshold);
+    ClampEq(mMaxPitch, -sMaxThreshold, sMaxThreshold);
+    float yaw = Max<float>(fabsf(mMinYaw), fabsf(mMaxYaw));
+    float pitch = Max<float>(fabsf(mMinPitch), fabsf(mMaxPitch));
+    unkb4.mMin.y = (float)std::cos(Max<float>(yaw, pitch) * DEG2RAD);
+    unkb4.mMax.y = kHugeFloat;
+    unkb4.mMin.z = (float)std::tan(mMinYaw * DEG2RAD) * unkb4.mMin.y;
+    unkb4.mMax.z = (float)std::tan(mMaxYaw * DEG2RAD) * unkb4.mMin.y;
+    unkb4.mMin.x = (float)std::tan(mMinPitch * DEG2RAD) * unkb4.mMin.y;
+    unkb4.mMax.x = (float)std::tan(mMaxPitch * DEG2RAD) * unkb4.mMin.y;
 }

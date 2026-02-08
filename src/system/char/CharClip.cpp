@@ -448,29 +448,27 @@ BEGIN_LOADS(CharClip)
         int x;
         d >> x;
     }
-    if (oldRev > 3)
+    if (oldRev > 3) {
         d >> mRange;
+    }
     if (oldRev > 5) {
         mRelative.Load(d.stream, false, nullptr);
     } else if (oldRev > 4) {
         bool isRelativeToSelf;
         d >> isRelativeToSelf;
         mRelative = isRelativeToSelf ? this : nullptr;
-    } else
+    } else {
         mRelative = nullptr;
-    if (oldRev > 8 && oldRev < 11) {
+    }
+    if (oldRev > 8 && oldRev < 0xB) {
         bool unused;
         d >> unused;
     }
     if (oldRev > 9) {
-        d >> oldVer;
-        // MILO_ASSERT(oldVer < 0x7FFF, 0x557); // removed: likely stripped in retail
-        mOldVer = oldVer;
+        d >> mOldVer;
     }
     if (oldRev > 0xB) {
         d >> mDoNotCompress;
-        if (mDoNotCompress)
-            MILO_NOTIFY("mDoNotCompress %s\n", PathName(this));
     }
     mTransitions.Load(d, oldRev);
     if (oldRev < 3) {
@@ -498,6 +496,7 @@ BEGIN_LOADS(CharClip)
         if (!eventName.empty()) {
             MILO_NOTIFY("%s has old exit event %s, must port", PathName(this), eventName);
         }
+        float f1 = -kHugeFloat;
         int count;
         d >> count;
         float lastFrame = -kHugeFloat;
@@ -520,14 +519,25 @@ BEGIN_LOADS(CharClip)
     tv = TransitionVersion();
     if (tv != mOldVer) {
         // The assert `MILO_ASSERT(tv < 0x7FFF, 0x5A3)` was removed to match retail behavior
-        // (improves match 76.17% -> 76.33%). This assertion likely gets stripped in retail builds.
         mOldVer = tv;
         mDirty = true;
     }
-    mFull.Load(d.stream);
-    mOne.Load(d.stream);
-    if (d.rev > 0xE)
+    if (d.rev > 0xC) {
+        mFull.Load(d.stream);
+        mOne.Load(d.stream);
+    } else {
+        mFull.LoadHeader(d);
+        mOne.LoadHeader(d);
+        if (d.rev > 7) {
+            CharBonesSamples samples;
+            samples.LoadHeader(d);
+        }
+        mFull.LoadData(d);
+        mOne.LoadData(d);
+    }
+    if (d.rev > 0xE) {
         d >> mZeros;
+    }
     mFacing.Set(mFull);
     if (d.rev > 0x11) {
         d >> mBeatTrack;
@@ -552,8 +562,9 @@ BEGIN_LOADS(CharClip)
             }
         }
     }
-    if (d.rev > 0x12)
+    if (d.rev > 0x12) {
         d >> mSyncAnim;
+    }
     if (EndBeat() == StartBeat() && mFull.NumSamples() > 1) {
         MILO_NOTIFY(
             "%s has endframe == startframe == %.3f but %d samples!\n",
@@ -561,6 +572,12 @@ BEGIN_LOADS(CharClip)
             StartBeat(),
             mFull.NumSamples()
         );
+    }
+    if (d.rev > 0x14) {
+        d >> unk18c;
+    }
+    if (d.rev > 0x15) {
+        d >> unk198;
     }
 END_LOADS
 

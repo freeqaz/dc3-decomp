@@ -479,9 +479,9 @@ BEGIN_LOADS(HamMove)
     LOAD_REVS(bs)
     ASSERT_REVS(50, 0)
     if (d.rev > 3) {
-        RndPropAnim::Load(bs);
+        LOAD_SUPERCLASS(RndPropAnim)
     } else {
-        Hmx::Object::Load(bs);
+        LOAD_SUPERCLASS(Hmx::Object)
     }
     if (d.rev > 7) {
         d >> mMirror;
@@ -515,14 +515,15 @@ BEGIN_LOADS(HamMove)
         }
     }
     if (d.rev > 4) {
-        LocalizedName name;
+        Symbol language;
+        String name;
         int count;
         d >> count;
         for (int i = 0; i < count; i++) {
-            d >> name.mLanguage;
-            d >> name.mName;
+            d >> language;
+            d >> name;
             if (!unkd0) {
-                SetName(name.mLanguage, name.mName.c_str());
+                SetName(language, name.c_str());
             }
         }
     }
@@ -586,7 +587,9 @@ BEGIN_LOADS(HamMove)
     if (d.rev > 0x23) {
         for (int i = 0; i < kNumMoveRatings; i++) {
             d >> mThresholds[i];
-            d >> mOverrides[i];
+            if (d.rev > 0x2C) {
+                d >> mOverrides[i];
+            }
         }
     }
     if (d.rev > 0x2A) {

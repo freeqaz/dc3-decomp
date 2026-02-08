@@ -4,6 +4,8 @@
 
 class DebugMeter {
 public:
+    DebugMeter(float x, float y, float w, float h, const Hmx::Color &c)
+        : x(x), y(y), width(w), height(h), color(c) {}
     void DrawBar(
         float startNorm,
         float endNorm,

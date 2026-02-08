@@ -144,6 +144,7 @@ public:
     FileMerger *GetGameModeMerger() const { return mGameModeMerger; }
     void SetPickingDisabled(bool disable) { mDisablePicking = disable; }
     void SetPollEnabled(bool enable) { unk2ac = enable; }
+    bool Unk33d() const { return unk33d; }
 
     DataNode OnGetDancerVisemes(DataArray *);
 

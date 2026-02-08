@@ -127,8 +127,7 @@ void CharCollide::SyncShape() {
     if (mCurLength[0] > mCurLength[1]) {
         mCurLength[0] = mCurLength[1];
     }
-    memcpy(mCurRadius, mOrigRadius, 8);
-    memcpy(mCurLength, mOrigLength, 8);
+    CopyOriginalToCur();
 }
 
 void CharCollide::CopyOriginalToCur() {
