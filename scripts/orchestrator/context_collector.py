@@ -153,14 +153,6 @@ except ImportError:
     GhidraMCPClient = None
     GhidraMCPError = Exception
 
-# Legacy: DirectGhidraClient starts an in-process JVM which hangs when the
-# pyghidra HTTP service is already running.  Prefer GhidraMCPClient above.
-try:
-    from tools.ghidra.direct_client import DirectGhidraClient, DirectGhidraClientError
-except ImportError:
-    DirectGhidraClient = None
-    DirectGhidraClientError = Exception
-
 try:
     from scripts.orchestrator.database import get_attempts_for_function, get_function_by_symbol
 except ImportError:
@@ -2994,32 +2986,9 @@ def collect_pre_run_context(
                     if decompilation:
                         log.info(f"Ghidra HTTP MCP decompilation: {len(decompilation)} chars")
                 except GhidraMCPError as e:
-                    log.warning(f"Ghidra HTTP MCP decompilation failed: {e}")
+                    log.warning(f"Ghidra HTTP decompilation failed, skipping: {e}")
                 except Exception as e:
-                    log.warning(f"Ghidra HTTP MCP unexpected error: {e}")
-
-            # Fall back to DirectGhidraClient (in-process JVM, slow)
-            if decompilation is None:
-                try:
-                    binary_path = get_binary_path(project_dir)
-                    if binary_path and DirectGhidraClient:
-                        ghidra_project_dir = Path("/tmp/claude/ghidra_projects")
-                        ghidra_project_dir.mkdir(parents=True, exist_ok=True)
-                        client = DirectGhidraClient.get_instance(
-                            binary_path=binary_path,
-                            project_dir=str(ghidra_project_dir),
-                            project_name="DC3",
-                            verbose=False,
-                        )
-                        decompilation = client.decompile_function(symbol)
-                    elif not binary_path:
-                        log.warning("Could not locate binary for Ghidra")
-                    else:
-                        log.warning("DirectGhidraClient not available")
-                except DirectGhidraClientError as e:
-                    log.warning(f"Live Ghidra decompilation failed: {e}")
-                except Exception as e:
-                    log.warning(f"Unexpected Ghidra error: {e}")
+                    log.warning(f"Ghidra HTTP unexpected error, skipping: {e}")
 
             # Write back to cache so future requests are instant
             if decompilation and cache_conn:
@@ -3086,32 +3055,9 @@ def collect_pre_run_context(
                                 callers.append(name)
                         log.info(f"Ghidra HTTP MCP xrefs: {len(callers)} callers")
                 except GhidraMCPError as e:
-                    log.warning(f"Ghidra HTTP MCP xrefs failed: {e}")
+                    log.warning(f"Ghidra HTTP xrefs failed, skipping: {e}")
                 except Exception as e:
-                    log.warning(f"Ghidra HTTP MCP xrefs unexpected error: {e}")
-
-            # Fall back to DirectGhidraClient (in-process JVM, slow)
-            if callers is None:
-                try:
-                    binary_path = get_binary_path(project_dir)
-                    if binary_path and DirectGhidraClient:
-                        ghidra_project_dir = Path("/tmp/claude/ghidra_projects")
-                        ghidra_project_dir.mkdir(parents=True, exist_ok=True)
-                        client = DirectGhidraClient.get_instance(
-                            binary_path=binary_path,
-                            project_dir=str(ghidra_project_dir),
-                            project_name="DC3",
-                            verbose=False,
-                        )
-                        callers, callees = client.list_cross_references(symbol)
-                    elif not binary_path:
-                        log.warning("Could not locate binary for Ghidra")
-                    else:
-                        log.warning("DirectGhidraClient not available")
-                except DirectGhidraClientError as e:
-                    log.warning(f"Live Ghidra xrefs lookup failed: {e}")
-                except Exception as e:
-                    log.warning(f"Unexpected Ghidra xrefs error: {e}")
+                    log.warning(f"Ghidra HTTP xrefs unexpected error, skipping: {e}")
 
             # Write back to cache
             if callers is not None and cache_conn:
