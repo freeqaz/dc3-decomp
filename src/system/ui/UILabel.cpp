@@ -228,47 +228,20 @@ void UILabel::PreLoad(BinStream &bs) {
     }
 }
 
-// PostLoad handles version-specific deserialization of UILabel data.
-// Main responsibilities:
-// 1. Initialize UILabelDir resource pointers for each style
-// 2. Load font mat configuration based on file revision
-// 3. Initialize label text (with deferred updates for performance)
-// 4. Validate preloaded labels have fixed length set
 void UILabel::PostLoad(BinStream &bs) {
-    int *end = (int *)(((unsigned char *)this) - 0x10);
-    int *begin = (int *)(((unsigned char *)this) - 0x14);
     int rev = bs.PopRev(Dir());
 
-    // Cache style count for loop iteration
-    int numStyles = (*end - *begin) / 0x2c;
-
-    // Initialize UILabelDir resource pointers for all style entries
-    if (numStyles != 0) {
-        int offset = 0;
-        unsigned int i = 0;
-        do {
-            ResourceDirPtr<UILabelDir> *ptr = (ResourceDirPtr<UILabelDir> *)((unsigned char *)*begin + offset + 0x14);
-            ptr->PostLoad(0);
-            i++;
-            offset += 0x2c;
-        } while (i < (unsigned int)numStyles);
+    for (int i = 0; i < unk124.size(); i++) {
+        LStyle(i).unk14.PostLoad(0);
     }
 
-    // Font mat loading varies by file format revision
     if (rev >= 0x1c) {
-        // Current format: Font mat strings stored in file for each style
-        if (numStyles != 0) {
-            unsigned int i = 0;
-            do {
-                char buffer[0x100];
-                bs.ReadString(buffer, 0x100);
-                SetFontMat(buffer, i);
-                i++;
-            } while (i < (unsigned int)numStyles);
+        for (int i = 0; i < unk124.size(); i++) {
+            char buffer[0x100];
+            bs.ReadString(buffer, 0x100);
+            SetFontMat(buffer, i);
         }
     } else if (rev > 0x14) {
-        // Legacy format: Font mat data stored in deprecated fields
-        // PopRev consumes old string data without using it
         if (rev > 0x16) {
             bs.PopRev(Dir());
             SetFontMat("", 1);
@@ -278,32 +251,22 @@ void UILabel::PostLoad(BinStream &bs) {
         }
         SetFontMat("", 0);
     } else {
-        // Old format: No font mat data in file, initialize to empty
-        if (numStyles != 0) {
-            unsigned int i = 0;
-            do {
-                SetFontMat("", i);
-                i++;
-            } while (i < (unsigned int)numStyles);
+        for (int i = 0; i < unk124.size(); i++) {
+            SetFontMat("", i);
         }
     }
 
     UIComponent::PostLoad(bs);
-
-    // Defer UI updates during initialization to avoid redundant work
     sDeferUpdate = true;
+
     if (!unk118.empty()) {
-        // Edit text mode: Display raw string as icon
         unk120 = unk118[0];
-    } else if (mTextToken.Null() || (!TheLoadMgr.EditMode() && !AllowEditText())) {
-        // Normal mode: Localize and display token
-        SetTextToken(mTextToken);
-    } else {
-        // Edit mode: Display token as literal string (no localization)
+    } else if (!mTextToken.Null() && (TheLoadMgr.EditMode() || AllowEditText())) {
         RndText::SetText(mTextToken.Str());
+    } else {
+        SetTextToken(mTextToken);
     }
 
-    // Warn if preloaded labels lack fixed length (performance issue)
     if (sRequireFixedLength) {
         if (unk120 == 0) {
             MILO_NOTIFY(
@@ -314,7 +277,6 @@ void UILabel::PostLoad(BinStream &bs) {
         }
     }
 
-    // Trigger final UI update now that initialization is complete
     sDeferUpdate = false;
     if (!mTextToken.Null() || !unk118.empty() || unk120 != 0) {
         LabelUpdate(false);

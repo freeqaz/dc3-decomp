@@ -690,17 +690,12 @@ void Character::SetInterestObjects(
 bool Character::SetFocusInterest(Symbol s, int priority) {
     CharEyes *eyes = GetEyes();
     if (eyes) {
-        int count = eyes->NumInterests();
         CharInterest *interest = 0;
-        if (count > 0) {
-            int i = 0;
-            do {
-                if (s == eyes->GetInterest(i)->Name()) {
-                    interest = eyes->GetInterest(i);
-                    break;
-                }
-                i++;
-            } while (i < count);
+        for (int i = 0; i < eyes->NumInterests(); i++) {
+            if (s == eyes->GetInterestUnchecked(i)->Name()) {
+                interest = eyes->GetInterestUnchecked(i);
+                break;
+            }
         }
         if (!s.Null() && !interest) {
             MILO_NOTIFY("Couldn't find interest named %s to force on %s", s.Str(), Name());

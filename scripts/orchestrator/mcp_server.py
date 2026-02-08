@@ -100,9 +100,10 @@ def _demangle_itanium_to_qualified(symbol: str) -> str | None:
 class DecompMCPServer:
     """MCP Server providing decomp orchestration tools."""
 
-    def __init__(self, db_path: str, rb3_path: str | None = None):
+    def __init__(self, db_path: str, rb3_path: str | None = None, record_attempts: bool = True):
         self.db_path = db_path
         self.rb3_path = rb3_path or os.path.expanduser("~/code/milohax/rb3/src")
+        self.record_attempts = record_attempts
         # Determine project root from script location (more reliable than cwd)
         self.project_root = Path(__file__).resolve().parent.parent.parent
         self.server = Server("decomp")
@@ -416,9 +417,12 @@ class DecompMCPServer:
         notes = args.get("notes", "")
         model = args.get("model", "unknown")
 
-        # Store attempt in database if symbol is provided
+        # Store attempt in database if symbol is provided.
+        # When record_attempts is False (orchestrator mode), skip DB writes —
+        # the orchestrator records attempts itself after the agent returns,
+        # preventing phantom attempts from crashes.
         db_stored = False
-        if symbol:
+        if symbol and self.record_attempts:
             func = get_function_by_symbol(symbol, db_path=self.db_path)
             if func:
                 start_percent = func.get("current_percent") or 0
@@ -2033,9 +2037,18 @@ def main():
     parser = argparse.ArgumentParser(description="DC3 Decomp MCP Server")
     parser.add_argument("--db", default="decomp.db", help="Database path")
     parser.add_argument("--rb3", default=None, help="RB3 source path")
+    parser.add_argument(
+        "--no-record-attempts",
+        action="store_true",
+        help="Don't record attempts in report_result (orchestrator records them after agent returns)",
+    )
     args = parser.parse_args()
 
-    server = DecompMCPServer(db_path=args.db, rb3_path=args.rb3)
+    server = DecompMCPServer(
+        db_path=args.db,
+        rb3_path=args.rb3,
+        record_attempts=not args.no_record_attempts,
+    )
     asyncio.run(server.run())
 
 

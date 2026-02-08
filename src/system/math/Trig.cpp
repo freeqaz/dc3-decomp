@@ -7,25 +7,27 @@
 float gBigSinTable[0x200];
 
 // Builds sine lookup table with 256 entries (0x200 floats total)
-// Each table entry is 2 floats: [delta from previous, sine value]
+// Table layout: [sine(0), delta(0→1), sine(1), delta(1→2), ..., sine(255), delta(255→256)]
+// where delta(i→i+1) = sine(i+1) - sine(i)
 // This enables fast interpolated sine lookups in Lookup()
 void TrigTableInit() {
-    int i = 0;
+    // Pointer starts one float before table start, advances by 2 each iteration
+    // On iteration i: tablePtr+1 points to gBigSinTable[i*2+1] (sine value)
+    //                 tablePtr   points to gBigSinTable[i*2]   (delta slot)
     float *tablePtr = gBigSinTable - 1;
+    int i = 0;
     do {
         float sineValue = std::sin(0.024543693f * i);
-        // Store sine value in odd-indexed slot
-        *(tablePtr + 1) = sineValue;
+        tablePtr[1] = sineValue;  // Store sine(i) at index i*2+1
         if (i != 0) {
-            // Store delta (current - previous) in even-indexed slot
-            *tablePtr = sineValue - *(tablePtr - 1);
+            tablePtr[0] = sineValue - tablePtr[-1];  // Store delta at index i*2
         }
         tablePtr += 2;
         i++;
-    } while ((long)tablePtr < (long)(gBigSinTable + 0x1FF));
-    // Final entry: compute delta for index 256
+    } while (i < 256);
+    // Final entry: store delta from sine(255) to sine(256)
     float sineValue = std::sin(0.024543693f * i);
-    *(tablePtr + 1) = sineValue - *(tablePtr - 1);
+    gBigSinTable[i * 2 + 1] = sineValue - gBigSinTable[i * 2 - 1];
 }
 
 void TrigTableTerminate() {}

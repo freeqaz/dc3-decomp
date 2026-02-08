@@ -114,10 +114,11 @@ int MemNumHeaps() { return gNumHeaps; }
 void MemFree(void *mem, const char *file, int line, const char *name) {
     if (mem) {
         CritSecTracker tracker(gMemLock);
-        int freed = 0;
         int i;
-        for (i = 0; i < gNumHeaps; i++) {
-            freed = gHeaps[i].Free((int *)mem);
+        int freed = 0;
+        MemHeap *heap = gHeaps;
+        for (i = 0; i < gNumHeaps; i++, heap++) {
+            freed = heap->Free((int *)mem);
             if (freed)
                 break;
         }
@@ -131,8 +132,7 @@ void MemFree(void *mem, const char *file, int line, const char *name) {
         if (gMemTracker) {
             MemTrackFree(mem);
             if (((char *)gMemTracker)[0x18195]) {
-                HeapStats *stats = (HeapStats *)((char *)gMemTracker + 0xC);
-                stats[i].Free(freed, freed);
+                ((HeapStats *)((char *)gMemTracker + 0xC))[(signed char)i].Free(freed, freed);
             }
         }
     }

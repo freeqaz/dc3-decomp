@@ -80,53 +80,63 @@ bool ClipDistMap::BeatAligned(int i1, int i2) {
     return l1 == mBeatAlignOffset;
 }
 
-bool ClipDistMap::FindBestNode(float f1, float f2, float f3, ClipDistMap::Node &node) {
-    if (!(f2 < f3)) {
+// Find the best transition node within a beat range by searching the distance map
+// for the point with minimum error. Updates the node reference with the best match found.
+// Returns true if a node was found with error below maxError.
+bool ClipDistMap::FindBestNode(float maxError, float startBeat, float endBeat, ClipDistMap::Node &node) {
+    // Validate beat range
+    if (!(startBeat < endBeat)) {
         return false;
     }
 
-    node.unk8 = f1;
+    node.unk8 = maxError;
 
-    int iVar1 = (int)((f3 - mAStart) * mSamplesPerBeat);
-    int uVar6 = (int)((f2 - mAStart) * mSamplesPerBeat);
-    float fVar2 = mAStart;
+    float clipAStart = mAStart;
+    int endCol = (int)((endBeat - mAStart) * mSamplesPerBeat);
+    int startCol = (int)((startBeat - mAStart) * mSamplesPerBeat);
 
-    // Unsigned masking
-    uVar6 = 0xffffffffU - ((int)uVar6 >> 0x1f) & uVar6;
-    int iVar8 = mDists.mWidth;
+    // Clamp startCol to non-negative (unsigned masking pattern for codegen)
+    startCol = 0xffffffffU - ((int)startCol >> 0x1f) & startCol;
+    int maxCol = mDists.mWidth;
 
-    if (iVar1 <= mDists.mWidth) {
-        iVar8 = iVar1;
+    if (mDists.mWidth >= endCol) {
+        maxCol = endCol;
     }
 
-    for (; (int)uVar6 < iVar8; uVar6 = uVar6 + 1) {
-        iVar1 = mAStart;
-        int uVar5 = mDists.mHeight;
-        int lVar7 = uVar5 - 1;
+    // Search columns in beat range
+    while ((int)startCol < maxCol) {
+        int samplesPerBeat = mAStart;
+        int rowIdx = mDists.mHeight - 1;
 
-        if (-1 < lVar7) {
+        // Search all rows in this column (top to bottom)
+        if (rowIdx >= 0) {
+            int rowCount = rowIdx + 1;
             do {
-                float fVar3 = node.unk8;
-                float fVar4 = *(float *)((mDists.mWidth * (int)lVar7 + uVar6) * 4 + mDists.mData);
+                float currentError = node.unk8;
+                u8 foundBetter = 1;
+                // Access distance map: mData[(row * width) + col]
+                float cellError = *(float *)((mDists.mWidth * rowIdx + startCol) * 4 + mDists.mData);
+                float newError = (currentError - cellError >= 0.0f) ? cellError : currentError;
 
-                if (fVar3 - fVar4 < 0.0) {
-                    fVar4 = fVar3;
+                node.unk8 = newError;
+                if (newError == currentError) {
+                    foundBetter = 0;
                 }
 
-                node.unk8 = fVar4;
-
-                if (fVar4 != fVar3) {
-                    node.unk0 = (float)(int)uVar6 / (float)iVar1 + fVar2;
-                    node.unk4 = (float)(int)lVar7 / (float)mAStart + mBStart;
+                // Update node position if we found a better match
+                if (foundBetter != 0) {
+                    node.unk0 = (float)startCol / (float)samplesPerBeat + clipAStart;
+                    node.unk4 = (float)rowIdx / (float)mAStart + mBStart;
                 }
 
-                lVar7 = lVar7 - 1;
-                uVar5 = uVar5 - 1;
-            } while (uVar5 != 0);
+                rowIdx--;
+                rowCount--;
+            } while (rowCount != 0);
         }
+        startCol++;
     }
 
-    return node.unk8 < f1;
+    return node.unk8 < maxError;
 }
 
 // Find transition nodes between clips based on error threshold and distance constraints.
@@ -139,20 +149,17 @@ void ClipDistMap::FindNodes(float maxError, float maxDist, float endDist) {
     mNodes.clear();
     mLastMinErr = maxError;
 
-    // Calculate search bounds for recursive node finding
-    // The 0.45 factor creates asymmetric search bounds around potential nodes
-    float halfMaxDist = maxDist * 0.45f;
+    // searchRadius is 45% of maxDist to create overlap regions for better transitions
+    float searchRadius = maxDist * 0.45f;
     if (maxDist == 0.0f) {
-        // No distance constraints - allow nodes anywhere
-        halfMaxDist = kHugeFloat;
-        endDist = kHugeFloat;
+        searchRadius = kHugeFloat;
+        endDist = searchRadius;
     } else if (endDist == 0.0f) {
-        // Use half-distance as default end constraint
-        endDist = halfMaxDist;
+        endDist = maxDist;
     }
 
     // Recursively find all candidate nodes within the clip range
-    FindBestNodeRecurse(maxError, halfMaxDist, maxDist - halfMaxDist * 2.0f, mAStart, mAEnd);
+    FindBestNodeRecurse(maxError, searchRadius, maxDist - searchRadius * 2.0f, mAStart, mAEnd);
 
     // Sort nodes by position (unk0 field)
     std::sort(mNodes.begin(), mNodes.end(), DistMapNodeSort());
@@ -169,14 +176,13 @@ void ClipDistMap::FindNodes(float maxError, float maxDist, float endDist) {
         }
     }
 
-    // Remove nodes that are too close together (violate maxDist constraint)
+    // Filter out nodes that are too close together
+    // Maintains minimum spacing of maxDist between nodes
     int limit = mNodes.size() - 1;
+    int i = 1;
     if (limit > 1) {
-        int i;
-        for (i = 1; i < limit;) {
-            ClipDistMap::Node &next = mNodes[i + 1];
-            ClipDistMap::Node &curr = mNodes[i];
-            float dist = next.unk0 - curr.unk0;
+        for (; i < limit;) {
+            float dist = mNodes[i + 1].unk0 - mNodes[i].unk0;
             if (dist < maxDist) {
                 mNodes.erase(mNodes.begin() + (i + 1));
                 i--;

@@ -89,6 +89,9 @@ public:
     CharInterest *GetInterest(int idx) {
         return idx >= mInterests.size() ? 0 : mInterests[idx].mInterest;
     }
+    CharInterest *GetInterestUnchecked(int idx) {
+        return mInterests[idx].mInterest;
+    }
 
 protected:
     CharEyes();

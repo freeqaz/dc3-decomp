@@ -823,11 +823,8 @@ void RndBitmap::Save(BinStream &bs) const {
 //   r, g, b, a: output color components (0-255)
 void DecodeDxtColor(unsigned char *blockData, int pixelX, int pixelY, bool hasDxt1Alpha, unsigned char &r, unsigned char &g, unsigned char &b, unsigned char &a) {
     unsigned char *rowPtr;
-    unsigned short color0;
-    unsigned short color1;
-
-    color0 = *(unsigned short *)blockData;
-    color1 = *((unsigned short *)blockData + 1);
+    unsigned short color0 = *(unsigned short *)blockData;
+    unsigned short color1 = *((unsigned short *)blockData + 1);
 
     if (pixelY & 1) {
         rowPtr = blockData + pixelY - 1;
@@ -835,15 +832,15 @@ void DecodeDxtColor(unsigned char *blockData, int pixelX, int pixelY, bool hasDx
         rowPtr = blockData + pixelY + 1;
     }
 
-    a = 0xFF;
-
     unsigned char r0 = (color0 >> 8) & 0xF8;
     unsigned char r1 = (color1 >> 8) & 0xF8;
     unsigned char g0 = (color0 >> 3) & 0xFC;
     unsigned char g1 = (color1 >> 3) & 0xFC;
+    int colorIdx = (rowPtr[4] >> ((pixelX << 1) & 0xFE)) & 3;
     unsigned char b0 = (color0 << 3) & 0xF8;
     unsigned char b1 = (color1 << 3) & 0xF8;
-    int colorIdx = (rowPtr[4] >> ((pixelX << 1) & 0xFE)) & 3;
+
+    a = 0xFF;
 
     if (colorIdx == 0) {
         r = r0;
@@ -859,19 +856,19 @@ void DecodeDxtColor(unsigned char *blockData, int pixelX, int pixelY, bool hasDx
         return;
     }
 
-    if ((color0 <= color1) && hasDxt1Alpha) {
+    if ((color0 > color1) || !hasDxt1Alpha) {
+        int w0 = 4 - colorIdx;
+        int w1 = colorIdx - 1;
+        r = (unsigned int) ((r1 * w1) + (r0 * w0)) / 3U;
+        g = (unsigned int) ((g1 * w1) + (g0 * w0)) / 3U;
+        b = (unsigned int) ((b1 * w1) + (b0 * w0)) / 3U;
+    } else {
         r = ((int)r0 + (int)r1) / 2;
         g = ((int)g0 + (int)g1) / 2;
         b = ((int)b0 + (int)b1) / 2;
         if (colorIdx == 3) {
             a = 0;
         }
-    } else {
-        int w0 = 4 - colorIdx;
-        int w1 = colorIdx - 1;
-        r = (unsigned int) ((r1 * w1) + (r0 * w0)) / 3U;
-        g = (unsigned int) ((g1 * w1) + (g0 * w0)) / 3U;
-        b = (unsigned int) ((b1 * w1) + (b0 * w0)) / 3U;
     }
 }
 

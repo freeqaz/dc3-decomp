@@ -160,7 +160,7 @@ class AgentRunner:
 
         mcp_config: McpStdioServerConfig = {
             "command": "python3",
-            "args": ["-m", "scripts.orchestrator.mcp_server", "--db", str(self.db_path)],
+            "args": ["-m", "scripts.orchestrator.mcp_server", "--db", str(self.db_path), "--no-record-attempts"],
             "env": {"PYTHONPATH": str(self.main_repo)},
         }
 
@@ -445,8 +445,10 @@ class AgentRunner:
                             short = content_str[:150] + "..." if len(content_str) > 150 else content_str
                             print(f"{prefix}    {_clr.BOLD_RED}ERROR:{_clr.RESET} {_clr.RED}{short}{_clr.RESET}")
                         else:
-                            # Show match% from objdiff results
+                            # Show match% from objdiff results (JSON or markdown format)
                             match = re.search(r'"match_percent":\s*([\d.]+)', content_str)
+                            if not match:
+                                match = re.search(r'Match:\s*([\d.]+)%', content_str)
                             if match:
                                 pct = float(match.group(1))
                                 if pct >= 100:
