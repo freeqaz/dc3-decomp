@@ -281,8 +281,8 @@ class DecompMCPServer:
                             },
                             "mode": {
                                 "type": "string",
-                                "enum": ["diagnose", "clusters", "regswaps", "offsets", "replaces", "compare", "save_baseline"],
-                                "description": "Analysis mode: diagnose (root cause), clusters (contiguous insert/delete groups), regswaps (register swap pairs), offsets (offset shift histogram), replaces (categorize noise vs real), compare (delta vs baseline), save_baseline (save current state)",
+                                "enum": ["diagnose", "clusters", "regswaps", "offsets", "replaces", "compare", "save_baseline", "mismatches"],
+                                "description": "Analysis mode: diagnose (root cause), clusters (contiguous insert/delete groups), regswaps (register swap pairs), offsets (offset shift histogram), replaces (categorize noise vs real), compare (delta vs baseline), save_baseline (save current state), mismatches (list all mismatched instructions with target/base details)",
                             },
                             "project_dir": {
                                 "type": "string",
@@ -1137,6 +1137,63 @@ class DecompMCPServer:
                     line += f" (fixable: {fixable})"
                 lines.append(line)
 
+        # Mismatch preview (adaptive limit based on match %)
+        instrs = data.get("instructions", [])
+        if instrs:
+            mismatches = [ins for ins in instrs if ins.get("match_type") != "equal"]
+            if mismatches:
+                match_pct = data.get("fuzzy_match_percent", 0)
+                total = len(instrs)
+
+                # Adaptive limit
+                if match_pct >= 98:
+                    limit = len(mismatches)  # show ALL for near-matches
+                elif match_pct >= 90:
+                    limit = 15
+                else:
+                    limit = 8
+
+                shown = mismatches[:limit]
+                truncated = len(mismatches) > limit
+
+                from diff_inspect import fmt_instr as _fmt_instr, diff_annotation as _diff_annotation
+
+                if truncated:
+                    lines.append("")
+                    lines.append(f"## Key Mismatches ({len(shown)} of {len(mismatches)} shown)")
+                else:
+                    lines.append("")
+                    lines.append(f"## Mismatches ({len(mismatches)} of {total} instructions)")
+
+                lines.append("")
+                for ins in shown:
+                    idx = ins.get("index", "?")
+                    mt = ins.get("match_type", "?")
+                    t = ins.get("target")
+                    b = ins.get("base")
+                    t_op = t.get("opcode", "?") if t else "---"
+                    b_op = b.get("opcode", "?") if b else "---"
+
+                    if mt == "diff_arg":
+                        ann = _diff_annotation(ins).strip()
+                        lines.append(f"- [{idx}] {mt}: `{t_op}` {ann}")
+                    elif mt == "replace":
+                        t_str = _fmt_instr(t).strip()
+                        b_str = _fmt_instr(b).strip()
+                        lines.append(f"- [{idx}] {mt}: `{t_str}` vs `{b_str}`")
+                    elif mt in ("insert", "delete"):
+                        side = b if mt == "insert" else t
+                        s_str = _fmt_instr(side).strip() if side else "---"
+                        lines.append(f"- [{idx}] {mt}: `{s_str}`")
+                    elif mt == "diff_op":
+                        lines.append(f"- [{idx}] {mt}: `{t_op}` vs `{b_op}`")
+                    else:
+                        lines.append(f"- [{idx}] {mt}")
+
+                if truncated:
+                    lines.append("")
+                    lines.append('*(Use `run_diff_inspect mode: "mismatches"` for full list)*')
+
         # RB3 reference (skip in concise mode)
         rb3_ref = data.get("rb3_reference", {})
         if rb3_ref and rb3_ref.get("available") and not skip_rb3:
@@ -1502,7 +1559,7 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
         if not mode:
             return [TextContent(type="text", text="Error: No mode provided.")]
 
-        valid_modes = {"diagnose", "clusters", "regswaps", "offsets", "replaces", "compare", "save_baseline"}
+        valid_modes = {"diagnose", "clusters", "regswaps", "offsets", "replaces", "compare", "save_baseline", "mismatches"}
         if mode not in valid_modes:
             return [TextContent(type="text", text=f"Error: Invalid mode '{mode}'. Valid: {', '.join(sorted(valid_modes))}")]
 
@@ -1617,6 +1674,77 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
                 if compare_result.returncode != 0:
                     return [TextContent(type="text", text=f"Error in compare:\n{output}")]
 
+                return [TextContent(type="text", text=output)]
+
+            # ── mismatches mode (compact table of non-matching instructions) ──
+            elif mode == "mismatches":
+                if not objdiff_cli.exists():
+                    return [TextContent(type="text", text=f"Error: objdiff-cli not found at {objdiff_cli}")]
+
+                # Run objdiff to get JSON with instructions
+                cmd = [
+                    str(objdiff_cli), "diff",
+                    "-p", str(project_dir),
+                    symbol,
+                    "--include-instructions", "--build", "--incremental",
+                    "-f", "json",
+                ]
+                result = subprocess.run(
+                    cmd, capture_output=True, text=True,
+                    timeout=300, cwd=str(project_dir),
+                )
+
+                stderr_text = result.stderr.strip() if result.stderr else ""
+                if result.returncode != 0:
+                    return [TextContent(type="text", text=f"Error running objdiff (exit {result.returncode}):\n{result.stdout}\n{stderr_text}")]
+
+                try:
+                    data = json.loads(result.stdout)
+                except json.JSONDecodeError as e:
+                    return [TextContent(type="text", text=f"Error parsing objdiff JSON: {e}")]
+
+                instrs = data.get("instructions", [])
+                if not instrs:
+                    return [TextContent(type="text", text="No instructions found in objdiff output.")]
+
+                # Filter non-equal instructions
+                mismatches = [ins for ins in instrs if ins.get("match_type") != "equal"]
+                total = len(instrs)
+
+                if not mismatches:
+                    match_pct = data.get("fuzzy_match_percent", 100)
+                    return [TextContent(type="text", text=f"No mismatches — all {total} instructions match ({match_pct}%).")]
+
+                # Cap at 30
+                MAX_MISMATCHES = 30
+                truncated = len(mismatches) > MAX_MISMATCHES
+                shown = mismatches[:MAX_MISMATCHES]
+
+                # Format as compact markdown table
+                from diff_inspect import fmt_instr as _fmt_instr, diff_annotation as _diff_annotation
+
+                header = f"## Mismatched Instructions ({len(mismatches)} of {total} total)\n"
+                if truncated:
+                    header += f"*Showing {MAX_MISMATCHES} of {len(mismatches)} mismatches*\n"
+
+                lines = [header]
+                lines.append("| Idx | Type | Target | Base | Note |")
+                lines.append("|-----|------|--------|------|------|")
+
+                for ins in shown:
+                    idx = ins.get("index", "?")
+                    mt = ins.get("match_type", "?")
+                    t = ins.get("target")
+                    b = ins.get("base")
+                    t_str = _fmt_instr(t).strip()
+                    b_str = _fmt_instr(b).strip()
+                    note = _diff_annotation(ins).strip() if mt == "diff_arg" else ""
+                    lines.append(f"| {idx} | {mt} | `{t_str}` | `{b_str}` | {note} |")
+
+                if truncated:
+                    lines.append(f"\n*{len(mismatches) - MAX_MISMATCHES} more mismatches not shown.*")
+
+                output = "\n".join(lines)
                 return [TextContent(type="text", text=output)]
 
             # ── analysis modes (diagnose/clusters/regswaps/offsets/replaces) ──

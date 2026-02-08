@@ -10,6 +10,7 @@
 class FileCacheHelper {
 public:
     virtual ~FileCacheHelper() {}
+    virtual const char *CacheFile(const char *) { return 0; }
 };
 
 class FileCacheEntry {

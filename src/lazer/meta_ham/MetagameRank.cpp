@@ -103,15 +103,18 @@ void MetagameRank::SaveFixed(FixedSizeSaveableStream &fs) const {
     const_cast<MetagameRank *>(this)->unkca = false;
 }
 
-void MetagameRank::LoadFixed(FixedSizeSaveableStream &fs, int i2) {
+void MetagameRank::LoadFixed(FixedSizeSaveableStream &fs, int saveVersion) {
     fs >> mScore;
-    if (i2 > 0x45) {
+    // Version 0x46+: Added first-time play tracking flag
+    if (saveVersion > 0x45) {
         fs >> unk38;
     }
-    if (i2 > 0x4E) {
+    // Version 0x4F+: Added max rank flag
+    if (saveVersion > 0x4E) {
         fs >> mAtMaxRank;
     }
     fs.Read(unk39, 0x40);
+    // Clear play_first_time task if first-time flag was set
     if (unk38) {
         int idx = -1;
         static Symbol play_first_time("play_first_time");
@@ -121,18 +124,21 @@ void MetagameRank::LoadFixed(FixedSizeSaveableStream &fs, int i2) {
         }
     }
     fs.Read(unk79, 0x40);
-    if (i2 > 0x3D) {
-        if (i2 <= 0x5A) {
+    // Version 0x3E-0x5A: Read and discard obsolete data
+    if (saveVersion > 0x3D) {
+        if (saveVersion <= 0x5A) {
             int x;
             fs >> x;
         }
     }
-    if (i2 > 0x5A) {
+    // Version 0x5B+: Load combined XP from deferred points
+    if (saveVersion > 0x5A) {
         DeferredPoints pt;
         LoadSymbolFromID(fs, pt.unk4);
         fs >> pt.unk0;
         if (pt.unk0 > 0) {
-            mDeferredPoints.push_back(pt);
+            // Insert at front to restore exactly what was saved
+            mDeferredPoints.insert(mDeferredPoints.begin(), pt);
         }
     }
     ComputeRankNumber(true);

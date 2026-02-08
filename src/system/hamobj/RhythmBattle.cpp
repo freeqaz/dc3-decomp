@@ -1388,35 +1388,37 @@ void RhythmBattle::OnBeat() {
                     }
                     TheHamDirector->ForceShot("tan_finale.shot");
                 } else {
-                    mPlayerOne->OnReset(this);
-                    mPlayerTwo->OnReset(this);
-                    static UIPanel *sRhythmDetectorPanel =
-                        ObjectDir::Main()->Find<UIPanel>("rhythm_detector_panel", false);
-                    if (sRhythmDetectorPanel && sRhythmDetectorPanel->LoadedDir()) {
-                        for (int i = 0; i < 6; i++) {
-                            String name = MakeString("RhythmDetectorX%d.rhy", i);
-                            sRhythmDetectorPanel->LoadedDir()
-                                ->Find<RhythmDetector>(name.c_str())
-                                ->ClearData();
+                    {
+                        mPlayerOne->OnReset(this);
+                        mPlayerTwo->OnReset(this);
+                        static UIPanel *sRhythmDetectorPanel =
+                            ObjectDir::Main()->Find<UIPanel>("rhythm_detector_panel", false);
+                        if (sRhythmDetectorPanel && sRhythmDetectorPanel->LoadedDir()) {
+                            for (int i = 0; i < 6; i++) {
+                                String name = MakeString("RhythmDetectorX%d.rhy", i);
+                                sRhythmDetectorPanel->LoadedDir()
+                                    ->Find<RhythmDetector>(name.c_str())
+                                    ->ClearData();
+                            }
                         }
-                    }
-                    static Symbol working("working");
-                    static Message mindControlCompleteMsg("mind_control_complete");
-                    switch (unk14c) {
-                    case 0:
-                        PlayMindControlVO(working);
-                        TheHamDirector->ForceShot("CAMP_6.3_DCI_mind_control_01.shot");
-                        break;
-                    case 1:
-                        PlayMindControlVO(working);
-                        TheHamDirector->ForceShot("CAMP_6.3_DCI_mind_control_02.shot");
-                        break;
-                    case 2:
-                        TheHamProvider->Handle(mindControlCompleteMsg, false);
-                        TheHamDirector->ForceShot("CAMP_6.3_DCI_mind_control_03.shot");
-                        break;
-                    default:
-                        break;
+                        static Symbol working("working");
+                        static Message mindControlCompleteMsg("mind_control_complete");
+                        switch (unk14c) {
+                        case 0:
+                            PlayMindControlVO(working);
+                            TheHamDirector->ForceShot("CAMP_6.3_DCI_mind_control_01.shot");
+                            break;
+                        case 1:
+                            PlayMindControlVO(working);
+                            TheHamDirector->ForceShot("CAMP_6.3_DCI_mind_control_02.shot");
+                            break;
+                        case 2:
+                            TheHamProvider->Handle(mindControlCompleteMsg, false);
+                            TheHamDirector->ForceShot("CAMP_6.3_DCI_mind_control_03.shot");
+                            break;
+                        default:
+                            break;
+                        }
                     }
                 }
                 unk148 = nextUnk148 + i6cc;
@@ -1425,6 +1427,5 @@ void RhythmBattle::OnBeat() {
     }
     UpdateFinaleVO(remainingValue);
 }
-#line 1427 "src/system/hamobj/RhythmBattle.cpp"
 
 bool RhythmBattle::CanTrick(Symbol) { return false; }

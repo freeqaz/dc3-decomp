@@ -329,6 +329,7 @@ When you see these patterns and have verified them, report with `at_limit` and y
 - **CAREFULLY modify MILO_ASSERT() calls** - Original developers placed these deliberately. Only tweak at 95%+ match
 - **Prefer to edit `{unit}` and closely related headers** - Don't scope-creep into unrelated code unless there helps with `{unit}`
 - **DO NOT run `git reset`, `git checkout`, or `git clean`** - Cleanup will happen after we return. Not your job.
+- **DO NOT run objdiff-cli directly via Bash** - Always use MCP tools (run_objdiff, run_diff_inspect). If you need instruction-level details, use `run_diff_inspect` with `mode: "mismatches"`.
 
 ---
 
@@ -431,6 +432,7 @@ mcp__orchestrator__run_diff_inspect
 #   replaces      - Categorize replaces (noise vs real)
 #   compare       - Compare baseline vs current (delta table)
 #   save_baseline - Save current state as baseline JSON
+#   mismatches    - List all mismatched instructions with target/base details
 
 # Report completion (required at end of session)
 mcp__orchestrator__report_result
@@ -458,6 +460,7 @@ mcp__orchestrator__lookup_merged_symbol
 | >= 95% | `run_objdiff` with default `concise: true` — verdict is sufficient |
 | < 95% | `run_objdiff` with `concise: false` — auto-diagnosis appended; or `run_diff_inspect diagnose` for deeper analysis |
 | Stuck after diagnosis | Pick specific mode (`regswaps`/`clusters`/`offsets`/`replaces`) based on what diagnosis shows |
+| Need instruction details | `run_diff_inspect` with `mode: "mismatches"` — shows each non-matching instruction |
 | Before/after comparison | Use `run_diff_inspect compare` — baseline auto-saved by orchestrator |
 
 ### Iteration Workflow

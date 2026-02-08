@@ -91,7 +91,7 @@ void TexLoadPanel::Exit() {
 }
 
 void TexLoadPanel::Poll() {
-    UIPanel::Poll();
+    HamPanel::Poll();
     DLCTex *dlc = NextDLCTex();
     if (dlc) {
         MILO_ASSERT(dlc->mState != DLCTex::kLoaded, 0x78);

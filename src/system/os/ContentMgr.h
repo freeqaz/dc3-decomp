@@ -112,7 +112,7 @@ public:
     virtual void Poll();
     virtual const char *TitleContentPath() { return nullptr; }
     virtual const char *ContentPath(int) { return 0; }
-    bool MountContent(Symbol) { return true; }
+    virtual bool MountContent(Symbol) { return true; }
     virtual bool IsMounted(Symbol) { return true; }
     virtual bool IsCorrupt(Symbol, const char *&) { return false; }
     virtual bool DeleteContent(Symbol) { return true; }

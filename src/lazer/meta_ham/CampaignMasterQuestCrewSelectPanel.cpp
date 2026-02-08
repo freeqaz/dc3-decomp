@@ -47,7 +47,7 @@ void CampaignMqCrewProvider::Text(
 }
 
 Symbol CampaignMqCrewProvider::DataSymbol(int i_iData) const {
-    MILO_ASSERT_RANGE(i_iData, 0,NumData(), 0x7d);
+    MILO_ASSERT_RANGE(i_iData, 0, NumData(), 0x7d);
     return mMQCrews[i_iData];
 }
 
@@ -60,12 +60,15 @@ void CampaignMqCrewProvider::UpdateList() {
     Difficulty mqDiff = (Difficulty)mq_difficulty.Int();
     DataArray *crewsArr = SystemConfig()->FindArray("selectable_crews", false);
     if (crewsArr) {
+        // Iterate starting at 1 to skip array name at index 0
         for (int i = 1; i < crewsArr->Size(); i++) {
             Symbol curSym = crewsArr->Sym(i);
-            int y = 0;
-            int x = 0;
+            int y = 0; // Total stars available
+            int x = 0; // Stars earned
             TheHamSongMgr.GetCrewStarsForDifficulty(pProfile, curSym, mqDiff, x, y);
+            // Mark crew as complete if all stars earned
             TheCampaign->SetUnkC0At(curSym, y - x == 0);
+            // Only add crews that have stars available
             if (y) {
                 mMQCrews.push_back(curSym);
             }
@@ -112,11 +115,16 @@ int CampaignMasterQuestCrewSelectPanel::GetTimeSinceEnter() const {
 }
 
 Symbol CampaignMasterQuestCrewSelectPanel::GetSelectedCrew() {
+    // Ask the UI for the currently selected crew index
     static Message cGetSelectedCrewMsg("get_selected_crew_index");
     DataNode node = Handle(cGetSelectedCrewMsg, true);
     int i = node.Int();
-    if (m_pCampaignMqCrewProvider->NumData() > 0)
-        return m_pCampaignMqCrewProvider->DataSymbol(i);
+
+    // Return the crew symbol if we have data, otherwise empty string
+    if (m_pCampaignMqCrewProvider->NumData() > 0) {
+        Symbol s = m_pCampaignMqCrewProvider->DataSymbol(i);
+        return s;
+    }
     return "";
 }
 
