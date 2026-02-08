@@ -346,14 +346,14 @@ void MetaPanel::CycleVenuePreference() {
         for (int i = 1; i < pVenueArray->Size(); i++) {
             DataArray *pVenueEntryArray = pVenueArray->Array(i);
             MILO_ASSERT(pVenueEntryArray, 0x80);
-            if (pVenueEntryArray->Sym(0) == venuePref) {
-                venuePref = random_venue;
-                if (i + 1 < pVenueArray->Size()) {
-                    pVenueEntryArray = pVenueArray->Array(i + 1);
-                    if (!pVenueEntryArray) {
-                        MILO_ASSERT(pVenueEntryArray, 0x8f);
-                        venuePref = pVenueEntryArray->Sym(0);
-                    }
+            Symbol entrySym = pVenueEntryArray->Sym(0);
+            if (entrySym == venuePref) {
+                if (i + 1 >= pVenueArray->Size()) {
+                    venuePref = random_venue;
+                } else {
+                    DataArray *pVenueEntryArray = pVenueArray->Array(i + 1);
+                    MILO_ASSERT(pVenueEntryArray, 0x8f);
+                    venuePref = pVenueEntryArray->Sym(0);
                 }
                 break;
             }

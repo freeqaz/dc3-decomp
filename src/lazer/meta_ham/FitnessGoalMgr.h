@@ -55,7 +55,7 @@ public:
 struct CmdChangeProfileOnlineID : public QueueableCommand {
 public:
     virtual int GetType() { return 0; }
-    CmdChangeProfileOnlineID(String s) : str(s) {}
+    CmdChangeProfileOnlineID(String s) : str() { str = s; }
     String str;
 };
 

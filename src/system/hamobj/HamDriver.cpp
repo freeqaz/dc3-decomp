@@ -82,16 +82,17 @@ bool HamDriver::Replace(ObjRef *ref, Hmx::Object *obj) {
 
 float HamDriver::Display(float f1) {
     float scaledHeight = TheRnd.Height() * f1;
-    auto pathName = PathName(this);
-    Hmx::Color color(1.0, 1.0, 1.0, 1.0);
+    const char *pathName = PathName(this);
+    Hmx::Color color(1.0f, 1.0f, 1.0f, 1.0f);
     Vector2 screenPos(CharClipDisplay::GetSEm(), scaledHeight);
-    auto stringDisplay = MakeString("%s beat: %.2f", pathName, unk78);
+    const char *stringDisplay = MakeString("%s beat: %.2f", pathName, unk78);
     TheRnd.DrawString(stringDisplay, screenPos, color, true);
     CharClipDisplay::Init(this->Dir());
     float lineSpacing = CharClipDisplay::LineSpacing() + scaledHeight;
-    for (auto it = mLayers.unk2c.begin(); it != mLayers.unk2c.end() && mWeight != 0.0;
-         ++it) {
-        lineSpacing = DisplayRecurse(*it, 0, lineSpacing);
+    if (mLayers.unk2c.begin() != mLayers.unk2c.end() && !(mLayers.unk8 == 0.0f)) {
+        FOREACH (it, mLayers.unk2c) {
+            lineSpacing = DisplayRecurse(*it, 0, lineSpacing);
+        }
     }
     return lineSpacing / TheRnd.Height();
 }
@@ -111,9 +112,12 @@ void HamDriver::Layer::OffsetSec(float f1) {
 
 #pragma region HamDriver::LayerClip
 
-HamDriver::LayerClip::LayerClip(Hmx::Object *obj) : unk10(obj) {}
+HamDriver::LayerClip::LayerClip(Hmx::Object *obj) : unk10(obj)
+{
+}
 
 HamDriver::LayerClip::~LayerClip() {}
+
 
 void HamDriver::LayerClip::OffsetSec(float f1) {
     Layer::OffsetSec(f1);
@@ -133,6 +137,8 @@ void HamDriver::LayerClip::Play(CharBones &bones) {
         bones.ScaleAdd(unk10, unk8, deltaBeat, TheTaskMgr.DeltaBeat());
     }
 }
+
+CharClip *HamDriver::LayerClip::FirstClip() { return unk10; }
 
 bool HamDriver::LayerClip::Replace(ObjRef *ref, Hmx::Object *obj) {
     if ((ObjRef *)unk10.Ptr() == ref && unk10.SetObj(obj) == nullptr) {

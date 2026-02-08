@@ -320,15 +320,14 @@ static CURLcode AllowServerConnect(struct connectdata *conn)
 {
   struct SessionHandle *data = conn->data;
   curl_socket_t sock = conn->sock[SECONDARYSOCKET];
+  curl_socket_t s;
   long timeout_ms;
   long interval_ms;
-  curl_socket_t s = CURL_SOCKET_BAD;
-#ifdef ENABLE_IPV6
-  struct Curl_sockaddr_storage add;
-#else
-  struct sockaddr_in add;
-#endif
-  curl_socklen_t size = (curl_socklen_t) sizeof(add);
+  struct sockaddr add;
+  curl_socklen_t size;
+
+  s = CURL_SOCKET_BAD;
+  size = (curl_socklen_t) sizeof(add);
 
   for(;;) {
     timeout_ms = Curl_timeleft(data, NULL, TRUE);
@@ -343,7 +342,7 @@ static CURLcode AllowServerConnect(struct connectdata *conn)
     if(timeout_ms < interval_ms)
       interval_ms = timeout_ms;
 
-    switch (Curl_socket_ready(sock, CURL_SOCKET_BAD, interval_ms)) {
+    switch (Curl_socket_ready(sock, s, interval_ms)) {
     case -1: /* error */
       /* let's die here */
       failf(data, "Error while waiting for server connect");
@@ -352,10 +351,10 @@ static CURLcode AllowServerConnect(struct connectdata *conn)
       break; /* loop */
     default:
       /* we have received data here */
-      if(0 == getsockname(sock, (struct sockaddr *) &add, &size)) {
+      if(0 == getsockname(sock, &add, &size)) {
         size = sizeof(add);
 
-        s=accept(sock, (struct sockaddr *) &add, &size);
+        s=accept(sock, &add, &size);
       }
       Curl_closesocket(conn, sock); /* close the first socket */
 

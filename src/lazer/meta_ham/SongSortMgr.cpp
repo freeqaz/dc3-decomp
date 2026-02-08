@@ -163,16 +163,13 @@ void SongSortMgr::SetQuasiRandomSong() {
     int numIndices = unk94.size();
     MILO_ASSERT(numIndices > 0, 0x175);
 
-    int random = rand();
-    int uVar8 =
-        (unk94.end() - unk94.begin() >> 3) + (numIndices < 0 && (numIndices & 1) != 0);
-    int iVar2 = (random - (random / uVar8) * uVar8) * 4;
-    int iVar1 = unk94[iVar2];
-    unk94.push_back(iVar1);
-    auto piVar3 = mSorts[mCurrentSortIdx]->DataSymbol(iVar1 * 4);
-    auto ass = MetaPerformer::Current();
-    // auto puVar7 = ass->SelectSong(piVar3, iVar1);
-    ass->SetSong(piVar3);
+    int halfSize = numIndices / 2;
+    int offset = rand() % halfSize;
+    int selectedValue = unk94[offset];
+    unk94.erase(unk94.begin() + offset);
+    unk94.push_back(selectedValue);
+    Symbol song = mSorts[mCurrentSortIdx]->DataSymbol(selectedValue);
+    MetaPerformer::Current()->SetSong(song);
 }
 
 bool SongSortMgr::HeadersSelectable() {

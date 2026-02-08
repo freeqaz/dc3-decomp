@@ -13,9 +13,11 @@
 #include "meta_ham/AccomplishmentManager.h"
 #include "meta_ham/AppLabel.h"
 #include "meta_ham/Campaign.h"
+#include "meta_ham/HamStarsDisplay.h"
 #include "obj/Object.h"
 #include "os/Debug.h"
 #include "os/Timer.h"
+#include "rndobj/Draw.h"
 #include "synth/Sound.h"
 #include "ui/PanelDir.h"
 #include "ui/UIPanel.h"
@@ -176,7 +178,21 @@ void LockedContentPanel::SetUpNoFlashcards(Symbol song, Difficulty diff) {
     Flow *pFlowSingle = DataDir()->Find<Flow>("song_list_single.flow");
     pFlowSingle->Activate();
     int songID = TheHamSongMgr.GetSongIDFromShortName(song);
-    // stuff
+    RndDrawable *pDrawable1 = *(RndDrawable **)((u8 *)this + 0x3c);
+    pDrawable1->SetShowing(true);
+    RndDrawable *pDrawable2 = *(RndDrawable **)((u8 *)this + 0x5c);
+    pDrawable2->SetShowing(true);
+    pContentName->SetSongName(song, -1, false);
+    HamStarsDisplay *pStarsDisplay = *(HamStarsDisplay **)((u8 *)this + 0x5c);
+    pStarsDisplay->SetSongWithDifficulty(songID, diff, true);
+    RndDrawable **pPtr = (RndDrawable **)((u8 *)this + 0x5c);
+    int loopCount = 7;
+    do {
+        pPtr[-7]->SetShowing(false);
+        pPtr++;
+        (*pPtr)->SetShowing(false);
+        loopCount -= 1;
+    } while (loopCount != 0);
 }
 
 void LockedContentPanel::SetUpDifficultyLocked(Symbol s1, Symbol s2) {

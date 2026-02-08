@@ -325,31 +325,31 @@ void StreamRenderer::SetCrewPhotoVerticalColor(DataArray *cfg) {
 ShaderType StreamRenderer::GetShaderType() const {
     ShaderType t = kDrawRectShader;
     switch (mDisplay) {
-    case 0:
+    case kStreamColor:
         t = kYUVtoRGBShader;
         break;
-    case 1:
+    case kStreamBlackAndWhite:
         t = kYUVtoBlackAndWhiteShader;
         break;
-    case 2:
+    case kStreamBasicDepth:
         t = kDrawRectShader;
         break;
-    case 3:
+    case kStreamPlayerDepthVis:
         t = kPlayerDepthVisShader;
         break;
-    case 4:
+    case kStreamPlayerDepthShell:
         t = kPlayerDepthShellShader;
         break;
-    case 5:
+    case kStreamPlayerDepthShell2:
         t = kPlayerDepthShell2Shader;
         break;
-    case 6:
+    case kStreamPlayerGreenscreen:
         t = kPlayerGreenScreenShader;
         break;
-    case 7:
+    case kStreamPlayerDepthGreenscreen:
         t = kPlayerDepthGreenScreenShader;
         break;
-    case 8:
+    case kStreamCrewPhoto:
         t = kCrewPhotoShader;
         break;
     default:

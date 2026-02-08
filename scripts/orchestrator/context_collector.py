@@ -153,6 +153,74 @@ except ImportError:
     GhidraMCPClient = None
     GhidraMCPError = Exception
 
+# JVM-based Ghidra client — disabled by default (broken/hangs).
+# Set GHIDRA_USE_JVM=1 to enable as a fallback when the HTTP service is down.
+try:
+    from tools.ghidra.direct_client import DirectGhidraClient, DirectGhidraClientError
+except ImportError:
+    DirectGhidraClient = None
+    DirectGhidraClientError = Exception
+
+_USE_JVM_GHIDRA = os.environ.get("GHIDRA_USE_JVM", "0") == "1"
+
+
+def _jvm_ghidra_decompile(symbol: str, project_dir: str) -> Optional[str]:
+    """Try decompiling via the in-process JVM Ghidra client.
+
+    Only runs when GHIDRA_USE_JVM=1.  Returns decompiled code or None.
+    """
+    if not _USE_JVM_GHIDRA or DirectGhidraClient is None:
+        return None
+    try:
+        binary_path = get_binary_path(project_dir)
+        if not binary_path:
+            logger.warning("Could not locate binary for Ghidra JVM client")
+            return None
+        ghidra_project_dir = Path("/tmp/claude/ghidra_projects")
+        ghidra_project_dir.mkdir(parents=True, exist_ok=True)
+        client = DirectGhidraClient.get_instance(
+            binary_path=binary_path,
+            project_dir=str(ghidra_project_dir),
+            project_name="DC3",
+            verbose=False,
+        )
+        return client.decompile_function(symbol)
+    except DirectGhidraClientError as e:
+        logger.warning(f"Ghidra JVM decompilation failed: {e}")
+    except Exception as e:
+        logger.warning(f"Ghidra JVM unexpected error: {e}")
+    return None
+
+
+def _jvm_ghidra_xrefs(symbol: str, project_dir: str) -> Optional[tuple[list, list]]:
+    """Try fetching cross-references via the in-process JVM Ghidra client.
+
+    Only runs when GHIDRA_USE_JVM=1.  Returns (callers, callees) or None.
+    """
+    if not _USE_JVM_GHIDRA or DirectGhidraClient is None:
+        return None
+    try:
+        binary_path = get_binary_path(project_dir)
+        if not binary_path:
+            logger.warning("Could not locate binary for Ghidra JVM client")
+            return None
+        ghidra_project_dir = Path("/tmp/claude/ghidra_projects")
+        ghidra_project_dir.mkdir(parents=True, exist_ok=True)
+        client = DirectGhidraClient.get_instance(
+            binary_path=binary_path,
+            project_dir=str(ghidra_project_dir),
+            project_name="DC3",
+            verbose=False,
+        )
+        callers, callees = client.list_cross_references(symbol)
+        return callers, callees
+    except DirectGhidraClientError as e:
+        logger.warning(f"Ghidra JVM xrefs failed: {e}")
+    except Exception as e:
+        logger.warning(f"Ghidra JVM xrefs unexpected error: {e}")
+    return None
+
+
 try:
     from scripts.orchestrator.database import get_attempts_for_function, get_function_by_symbol
 except ImportError:
@@ -2990,6 +3058,12 @@ def collect_pre_run_context(
                 except Exception as e:
                     log.warning(f"Ghidra HTTP unexpected error, skipping: {e}")
 
+            # Fall back to JVM client (only when GHIDRA_USE_JVM=1)
+            if decompilation is None:
+                decompilation = _jvm_ghidra_decompile(symbol, project_dir)
+                if decompilation:
+                    log.info(f"Ghidra JVM decompilation: {len(decompilation)} chars")
+
             # Write back to cache so future requests are instant
             if decompilation and cache_conn:
                 try:
@@ -3058,6 +3132,13 @@ def collect_pre_run_context(
                     log.warning(f"Ghidra HTTP xrefs failed, skipping: {e}")
                 except Exception as e:
                     log.warning(f"Ghidra HTTP xrefs unexpected error, skipping: {e}")
+
+            # Fall back to JVM client (only when GHIDRA_USE_JVM=1)
+            if callers is None:
+                jvm_result = _jvm_ghidra_xrefs(symbol, project_dir)
+                if jvm_result is not None:
+                    callers, callees = jvm_result
+                    log.info(f"Ghidra JVM xrefs: {len(callers)} callers, {len(callees)} callees")
 
             # Write back to cache
             if callers is not None and cache_conn:

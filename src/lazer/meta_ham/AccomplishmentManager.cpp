@@ -226,24 +226,24 @@ void AccomplishmentManager::ConfigureAccomplishmentCategoryData(DataArray *cfg) 
         if (HasAccomplishmentCategory(name)) {
             MILO_NOTIFY("%s accomplishment category already exists, skipping", name.Str());
             delete pAccomplishmentCategory;
-        } else {
-            Symbol group = pAccomplishmentCategory->GetGroup();
-            if (!HasAccomplishmentGroup(group)) {
-                MILO_NOTIFY(
-                    "%s accomplishment category has invalid group: %s, skipping",
-                    name.Str(),
-                    group.Str()
-                );
-                delete pAccomplishmentCategory;
-            } else {
-                mAccomplishmentCategories[name] = pAccomplishmentCategory;
-                if (pAccomplishmentCategory->HasAward()) {
-                    AddAwardSource(
-                        pAccomplishmentCategory->GetAward(),
-                        pAccomplishmentCategory->GetName()
-                    );
-                }
-            }
+            continue;
+        }
+        Symbol group = pAccomplishmentCategory->GetGroup();
+        if (!HasAccomplishmentGroup(group)) {
+            MILO_NOTIFY(
+                "%s accomplishment category has invalid group: %s, skipping",
+                name.Str(),
+                group.Str()
+            );
+            delete pAccomplishmentCategory;
+            continue;
+        }
+        mAccomplishmentCategories[name] = pAccomplishmentCategory;
+        if (pAccomplishmentCategory->HasAward()) {
+            AddAwardSource(
+                pAccomplishmentCategory->GetAward(),
+                pAccomplishmentCategory->GetName()
+            );
         }
     }
 }
@@ -276,23 +276,25 @@ void AccomplishmentManager::ConfigureAccomplishmentData(DataArray *cfg) {
         if (HasAccomplishment(name)) {
             MILO_NOTIFY("%s accomplishment already exists, skipping", name.Str());
             delete pAccomplishment;
-        } else {
-            Symbol cat = pAccomplishment->GetCategory();
-            if (!HasAccomplishmentCategory(cat)) {
-                MILO_NOTIFY(
-                    "%s accomplishment is using unknown category: %s",
-                    name.Str(),
-                    cat.Str()
-                );
-                delete pAccomplishment;
-            } else {
-                mAccomplishments[name] = pAccomplishment;
-                if (pAccomplishment->HasAward()) {
-                    AddAwardSource(
-                        pAccomplishment->GetAward(), pAccomplishment->GetName()
-                    );
-                }
-            }
+            continue;
+        }
+
+        Symbol cat = pAccomplishment->GetCategory();
+        if (!HasAccomplishmentCategory(cat)) {
+            MILO_NOTIFY(
+                "%s accomplishment is using unknown category: %s",
+                name.Str(),
+                cat.Str()
+            );
+            delete pAccomplishment;
+            continue;
+        }
+
+        mAccomplishments[name] = pAccomplishment;
+        if (pAccomplishment->HasAward()) {
+            AddAwardSource(
+                pAccomplishment->GetAward(), pAccomplishment->GetName()
+            );
         }
     }
 }

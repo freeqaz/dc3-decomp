@@ -70,14 +70,15 @@ BEGIN_COPYS(FxSend)
     END_COPYING_MEMBERS
 END_COPYS
 
-INIT_REVS(7, 0)
+INIT_REVS(7, 8)
 
 BEGIN_LOADS(FxSend)
     LOAD_REVS(bs)
-    ASSERT_REVS(7, 0)
-    Hmx::Object::Load(bs);
+    ASSERT_REVS(7, 8)
+    LOAD_SUPERCLASS(Hmx::Object)
     bs >> mNextSend;
     bs >> mStage;
+    // Rev 2-4: Used percentage-based wet/dry mix
     if (d.rev < 5) {
         if (d.rev >= 2) {
             float x;
@@ -89,19 +90,23 @@ BEGIN_LOADS(FxSend)
             d >> mBypass;
         }
     }
+    // Rev 4: Added channel routing
     if (d.rev >= 4) {
         int channels;
         d >> channels;
         mChannels = (SendChannels)channels;
     }
+    // Rev 5: Switched to dB-based gains, added input gain
     if (d.rev >= 5) {
         d >> mDryGain;
         d >> mWetGain;
         d >> mInputGain;
     }
+    // Rev 6: Moved bypass here (was in rev 3 block for old versions)
     if (d.rev >= 6) {
         d >> mBypass;
     }
+    // Rev 7: Added reverb send controls
     if (d.rev >= 7) {
         d >> mReverbMixDb;
         d >> mReverbEnable;
@@ -152,6 +157,7 @@ void FxSend::EnableUpdates(bool enable) {
 }
 
 bool FxSend::CheckChain(FxSend *send, int i) {
+    // Check for cycles in the chain
     FxSend *cur;
     for (cur = send; cur && cur != this; cur = cur->mNextSend)
         ;

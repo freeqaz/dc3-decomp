@@ -5,6 +5,7 @@
 #include "meta_ham/AccomplishmentManager.h"
 #include "meta_ham/ChallengeSortByScore.h"
 #include "meta_ham/ChallengeSortMgr.h"
+#include "meta_ham/ChallengeSortNode.h"
 #include "meta_ham/HamProfile.h"
 #include "meta_ham/HamSongMgr.h"
 #include "meta_ham/NavListNode.h"
@@ -593,7 +594,15 @@ void Challenges::SetupInGameData() {
     NavListSortNode *node = TheChallengeSortMgr->GetHighlightItem();
     MILO_ASSERT(node, 0x2e5);
 
-    // stuff
+    ChallengeRecord *record;
+    ChallengeSortNode *sortNode = dynamic_cast<ChallengeSortNode *>(node);
+    if (sortNode) {
+        record = sortNode->GetChallengeRecord();
+    }
+    MILO_ASSERT(record, 0x2e9);
+
+    int songID = record->GetChallengeRow().mSongID;
+    int cost = record->GetChallengeRow().mDiff;
 
     HamProfile *primaryProfile = TheProfileMgr.GetActiveProfile(true);
     MILO_ASSERT(primaryProfile, 0x2f0);
@@ -604,18 +613,19 @@ void Challenges::SetupInGameData() {
         MILO_ASSERT(playerData, 0x2fb);
         PropertyEventProvider *provider = playerData->Provider();
         MILO_ASSERT(provider, 0x2fd);
-        provider->SetProperty(0, 0);
+        provider->SetProperty(has_valid_challenge_data, DataNode(false));
+        mPlayerChallenges[i].clear();
         HamProfile *profileFromPad =
             TheProfileMgr.GetProfileFromPad(playerData->PadNum());
         if (profileFromPad) {
             if (profileFromPad == primaryProfile) {
                 SetupInGameChallenges(
-                    0, 0, 0, primaryProfile, true, mPlayerChallenges[2], provider
+                    songID, cost, nullptr, primaryProfile, true, mPlayerChallenges[i], provider
                 );
-                TheHamProvider->SetProperty(primary_challenge_player, 0);
+                TheHamProvider->SetProperty(primary_challenge_player, DataNode(0));
             } else {
                 SetupInGameChallenges(
-                    0, 0, 0, profileFromPad, false, mPlayerChallenges[2], provider
+                    songID, cost, nullptr, profileFromPad, false, mPlayerChallenges[i], provider
                 );
             }
         }

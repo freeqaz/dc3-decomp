@@ -75,8 +75,8 @@ BEGIN_HANDLERS(RockCentral)
 END_HANDLERS
 
 void RockCentral::ForceLogout() {
-    if (mState == 2 || mState == 1) {
-        mState = (State)3;
+    if (mState == kConnected || mState == kAuthenticating) {
+        mState = kLoggingOut;
         TheServer.Logout();
     }
 }
@@ -85,7 +85,7 @@ bool RockCentral::IsOnline() {
     if (mLoginBlocked) {
         return false;
     } else {
-        return mState == 2;
+        return mState == kConnected;
     }
 }
 
@@ -95,10 +95,10 @@ void RockCentral::SetLoginPassword(const char *password) {
 }
 
 void RockCentral::Login() {
-    mState = (State)1;
+    mState = kAuthenticating;
     unkdd = false;
     if (!TheServer.Authenticate(0)) { // should be TheServer->unk74
-        Export(ServerStatusChangedMsg((ServerStatusResult)4), false);
+        Export(ServerStatusChangedMsg(kServerStatusDisconnected), false);
     }
 }
 
@@ -180,19 +180,19 @@ void RockCentral::CancelOutstandingCalls(Hmx::Object *obj) {
 }
 
 DataNode RockCentral::OnMsg(const ConnectionStatusChangedMsg &msg) {
-    if (msg.Connected() && (mState == 4 || mState == 0)) {
-        mState = (State)0;
+    if (msg.Connected() && (mState == kFailed || mState == kDisconnected)) {
+        mState = kDisconnected;
         unk78 = unk48.Ms();
-    } else if (!msg.Connected() && (mState == 2 || mState == 1)) {
-        mState = (State)3;
+    } else if (!msg.Connected() && (mState == kConnected || mState == kAuthenticating)) {
+        mState = kLoggingOut;
         TheServer.Logout();
     }
     return 1;
 }
 
 DataNode RockCentral::OnMsg(const TmsDownloadedMsg &msg) {
-    if (ThePlatformMgr.IsConnected() && (mState == 4 || mState == 0)) {
-        mState = (State)0;
+    if (ThePlatformMgr.IsConnected() && (mState == kFailed || mState == kDisconnected)) {
+        mState = kDisconnected;
         unk78 = unk48.Ms();
     }
     return 1;
@@ -242,22 +242,22 @@ DataNode RockCentral::OnMsg(const RCJobCompleteMsg &msg) {
 }
 
 DataNode RockCentral::OnMsg(const ServerStatusChangedMsg &msg) {
-    if (msg.Result() == kServerStatusConnected && mState != 2) {
+    if (msg.Result() == kServerStatusConnected && mState != kConnected) {
         unkdd = true;
-        mState = (State)2;
+        mState = kConnected;
         XNetGetTitleXnAddr(&mXNetAddr);
         XNetXnAddrToMachineId(&mXNetAddr, &mMachineID);
         Hx_snprintf(g_szMachineIdString, 20, "%llu", mMachineID);
     } else if (msg.Result() != kServerStatusConnected) {
-        if (mState == 3) {
-            mState = (State)0;
+        if (mState == kLoggingOut) {
+            mState = kDisconnected;
             unk78 = unk48.Ms() + 8000.0f;
-        } else if (msg.Result() == 1) {
-            mState = (State)4;
+        } else if (msg.Result() == kServerStatusInvalidUserName) {
+            mState = kFailed;
             CreateAccount();
-            unk78 = unk48.Ms();
+            unk78 = unk48.Ms() + 8000.0f;
         } else {
-            mState = (State)4;
+            mState = kFailed;
             unk78 = unk48.Ms() + 40000.0f;
         }
     }

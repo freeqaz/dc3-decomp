@@ -479,12 +479,6 @@ void SynthTerminate() {
     TheSynth->Poll();
     TheDebug.RemoveExitCallback(SynthTerminate);
     TheSynth->Terminate();
-    if (TheSynth != nullptr) {
-        // Manual vtable call to invoke protected destructor (equivalent to delete)
-        typedef void (*DtorFunc)(Synth *, int);
-        void **vtable = *(void ***)TheSynth;
-        DtorFunc dtor = (DtorFunc)vtable[0];
-        dtor(TheSynth, 1);
-    }
+    delete TheSynth;
     TheSynth = nullptr;
 }

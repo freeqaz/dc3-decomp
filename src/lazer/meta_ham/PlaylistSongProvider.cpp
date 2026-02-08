@@ -32,29 +32,32 @@ void PlaylistSongProvider::Text(
     Symbol dataSym = DataSymbol(i_iData);
     if (uiListLabel->Matches("song")) {
         static Symbol playlist_addsong("playlist_addsong");
-        if (DataSymbol(i_iData) == playlist_addsong) {
+        if (dataSym == playlist_addsong) {
             static Symbol songname_numbered("songname_numbered");
             uiLabel->SetTokenFmt(songname_numbered, i_iData + playlist_addsong);
             return;
         }
         AppLabel *pAppLabel = dynamic_cast<AppLabel *>(uiLabel);
         MILO_ASSERT(pAppLabel, 0x31);
-        if (NumData() < 0x15 || (i_iData < 0x13)) {
+        if (NumData() > 0x14 && i_iData >= 0x13) {
+            static Symbol ellipsis("ellipsis");
+            uiLabel->SetTextToken(ellipsis);
+        } else {
             pAppLabel->SetSongName(dataSym, i_iData + 1, false);
-            return;
         }
-
-        static Symbol ellipsis("ellipsis");
     } else if (uiListLabel->Matches("song_length")) {
         static Symbol playlist_addsong("playlist_addsong");
-        if (DataSymbol(i_iData) != playlist_addsong) {
+        if (dataSym == playlist_addsong) {
+            static Symbol ellipsis("ellipsis");
+            uiLabel->SetTextToken(ellipsis);
+        } else if (NumData() > 0x14 && i_iData >= 0x13) {
+            static Symbol ellipsis("ellipsis");
+            uiLabel->SetTextToken(ellipsis);
+        } else {
             AppLabel *pAppLabel = dynamic_cast<AppLabel *>(uiLabel);
             MILO_ASSERT(pAppLabel, 0x4d);
             pAppLabel->SetSongDuration(dataSym);
-            return;
         }
-        static Symbol ellipsis("ellipsis"); // gets declared then never used ?
-        uiLabel->SetTextToken(ellipsis);
     }
 }
 

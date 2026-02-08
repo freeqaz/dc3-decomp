@@ -96,6 +96,7 @@ void LoadingPanel::PlayLoadingMusic() {
         ResetLoadingMusic();
     }
     const char *fileBase = FileGetBase(n.Str());
+    // Verify MIDI file exists (scoped to ensure String destructor runs before next operations)
     {
         String filePath = MakeString("sfx/samples/shell/%s.mid", fileBase);
         File *f = FileCache::GetFileAll(filePath.c_str());

@@ -1161,10 +1161,9 @@ static int yy_get_next_buffer(YY_ONLY_ARG)
 static int yy_get_next_buffer(YY_ONLY_ARG) YY_DECL_LAST_ARG
 #endif
 {
-    register char *dest = YY_G(yy_current_buffer)->yy_ch_buf;
     register char *source = yytext_ptr;
-    register int number_to_move, i;
-    int ret_val;
+    register char *dest = YY_G(yy_current_buffer)->yy_ch_buf;
+    register int i, number_to_move;
 
     if (YY_G(yy_c_buf_p) > &YY_G(yy_current_buffer)->yy_ch_buf[YY_G(yy_n_chars) + 1])
         YY_FATAL_ERROR("fatal flex scanner internal error--end of buffer missed");
@@ -1175,17 +1174,13 @@ static int yy_get_next_buffer(YY_ONLY_ARG) YY_DECL_LAST_ARG
             /* We matched a single character, the EOB, so
              * treat this as a final EOF.
              */
-            return
-EOB_ACT_END_OF_FILE
-;
-}
-
-else {
-    /* We matched some text prior to the EOB, first
-     * process it.
-     */
-    return EOB_ACT_LAST_MATCH;
-}
+            return EOB_ACT_END_OF_FILE;
+        } else {
+            /* We matched some text prior to the EOB, first
+             * process it.
+             */
+            return EOB_ACT_LAST_MATCH;
+        }
 }
 
 /* Try to read more data. */
@@ -1214,16 +1209,17 @@ else {
 
         /* just a shorter name for the current buffer */
         YY_BUFFER_STATE b = YY_G(yy_current_buffer);
+        int yy_c_buf_p_offset;
+        int new_size;
 
-        int yy_c_buf_p_offset = (int)(YY_G(yy_c_buf_p) - b->yy_ch_buf);
+        yy_c_buf_p_offset = (int)(YY_G(yy_c_buf_p) - b->yy_ch_buf);
 
         if (b->yy_is_our_buffer) {
-            int new_size = b->yy_buf_size * 2;
-
+            new_size = b->yy_buf_size * 2;
             if (new_size <= 0)
                 b->yy_buf_size += b->yy_buf_size / 8;
             else
-                b->yy_buf_size *= 2;
+                b->yy_buf_size = new_size;
 
             b->yy_ch_buf = (char *)
                 /* Include room in for 2 EOB chars. */
@@ -1254,33 +1250,29 @@ else {
     YY_G(yy_current_buffer)->yy_n_chars = YY_G(yy_n_chars);
 }
 
-if (YY_G(yy_n_chars) == 0) {
-    if (number_to_move == YY_MORE_ADJ) {
-        ret_val =
-EOB_ACT_END_OF_FILE
-;
-yyrestart(YY_G(yyin) YY_CALL_LAST_ARG);
+{
+    int ret_val;
+
+    if (YY_G(yy_n_chars) == 0) {
+        if (number_to_move == YY_MORE_ADJ) {
+            ret_val = EOB_ACT_END_OF_FILE;
+            yyrestart(YY_G(yyin) YY_CALL_LAST_ARG);
+        } else {
+            ret_val = EOB_ACT_LAST_MATCH;
+            YY_G(yy_current_buffer)->yy_buffer_status = YY_BUFFER_EOF_PENDING;
+        }
+    } else {
+        ret_val = EOB_ACT_CONTINUE_SCAN;
+    }
+
+    YY_G(yy_n_chars) += number_to_move;
+    YY_G(yy_current_buffer)->yy_ch_buf[YY_G(yy_n_chars)] = YY_END_OF_BUFFER_CHAR;
+    YY_G(yy_current_buffer)->yy_ch_buf[YY_G(yy_n_chars) + 1] = YY_END_OF_BUFFER_CHAR;
+
+    yytext_ptr = &YY_G(yy_current_buffer)->yy_ch_buf[0];
+
+    return ret_val;
 }
-
-else {
-    ret_val = EOB_ACT_LAST_MATCH;
-    YY_G(yy_current_buffer)->yy_buffer_status = YY_BUFFER_EOF_PENDING;
-}
-}
-
-else ret_val = EOB_ACT_CONTINUE_SCAN;
-
-YY_G(yy_n_chars) += number_to_move;
-YY_G(yy_current_buffer)->yy_ch_buf[YY_G(yy_n_chars)] =
-YY_END_OF_BUFFER_CHAR
-;
-YY_G(yy_current_buffer)->yy_ch_buf[YY_G(yy_n_chars) + 1] =
-YY_END_OF_BUFFER_CHAR
-;
-
-yytext_ptr = &YY_G(yy_current_buffer)->yy_ch_buf[0];
-
-return ret_val;
 }
 
 /* yy_get_previous_state - get the state just before the EOB char was reached */

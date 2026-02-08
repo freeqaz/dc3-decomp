@@ -104,7 +104,7 @@ public:
 
     ContentMgr() {}
     virtual DataNode Handle(DataArray *, bool);
-    void PreInit() {}
+    virtual void PreInit() {}
     virtual void Init();
     virtual void Terminate() {}
     virtual void StartRefresh() {}

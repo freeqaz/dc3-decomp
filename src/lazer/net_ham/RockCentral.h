@@ -22,6 +22,10 @@ END_MESSAGE
 class RockCentral : public Hmx::Object {
 public:
     enum State {
+        kDisconnected = 0,
+        kAuthenticating = 1,
+        kConnected = 2,
+        kLoggingOut = 3,
         kFailed = 4
     };
     RockCentral();

@@ -1,5 +1,4 @@
 #include "gesture/FreestyleMotionFilter.h"
-#include "FreestyleMotionFilter.h"
 #include "Skeleton.h"
 #include "hamobj/HamGameData.h"
 #include "hamobj/HamPlayerData.h"
@@ -47,10 +46,14 @@ void FreestyleMotionFilter::UpdateFilters(SkeletonUpdateData const &skeletonData
             if (skeleton->Velocity(*skeletonData.unkc, kCoordCamera, (SkeletonJoint)i, skeleton->ElapsedMs(), velocity, elapsed) &&
                 skeleton->JointConf((SkeletonJoint)i) == kConfidenceTracked) {
                 float vx = velocity.x;
-                float vz = velocity.z;
                 float vy = velocity.y;
-                if (vx * vx + vz * vz + vy * vy > unk2c) {
-                    unk34 = sqrtf(vx * vx + vz * vz + vy * vy);
+                float vz = velocity.z;
+                float x2 = vx * vx;
+                float z2 = vz * vz;
+                float y2 = vy * vy;
+                float sum = x2 + z2;
+                if (sum + y2 > unk2c) {
+                    unk34 = sqrtf(x2 + z2 + y2);
                     unk30 = (float)skeleton->ElapsedMs();
                     return;
                 }

@@ -1385,19 +1385,28 @@ void PartyModeMgr::FinalizePlaytestParty() {
 }
 
 DataNode PartyModeMgr::OnMsg(const RCJobCompleteMsg &msg) {
-    bool b;
+    // Handle job failure - cancel all pending party mode jobs
     if (!msg.Success()) {
         MILO_LOG("[PartyModeMgr::OnMsg] Party net API failed.\n");
-        for (int i = 0; i < 5; i++) {
-            if (mSetPartyOptionsJob == msg.Job()) {
-                mSetPartyOptionsJob->Cancel(false);
-                mSetPartyOptionsJob = nullptr;
+        // Iterate through all 5 job pointers and cancel the failed one
+        SetPartyOptionsJob **pJob = &mSetPartyOptionsJob;
+        int count = 5;
+        do {
+            if (*pJob == msg.Job()) {
+                (*pJob)->Cancel(false);
+                *pJob = nullptr;
             }
-        }
+            count--;
+            pJob++;
+        } while (count != 0);
         BroadcastSyncMsg("skipped_sync");
         return 1;
     }
-    b = false;
+
+    // Track whether we need to notify SmartGlass of updates
+    bool b = false;
+
+    // Handle successful job completion - dispatch based on job type
     if (msg.Job() == mSetPartyOptionsJob) {
         BroadcastSyncMsg("options_sent");
         mSetPartyOptionsJob = nullptr;
@@ -1431,6 +1440,7 @@ DataNode PartyModeMgr::OnMsg(const RCJobCompleteMsg &msg) {
         }
     }
 leave:
+    // Notify SmartGlass app if party data changed
     if (b) {
         DataNode party("party");
         DataNode updated("updated");

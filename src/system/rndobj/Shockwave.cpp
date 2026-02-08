@@ -68,10 +68,10 @@ END_HANDLERS
 
 void RndShockwave::PrepareShader(float f1) {
     const Vector3 &v = WorldXfm().v;
-    TheShaderMgr.SetVConstant((VShaderConstant)0x1E, Vector4(v.x, v.y, v.z, 0));
+    TheShaderMgr.SetVConstant((VShaderConstant)0x1E, Vector4(v.x, v.y, v.z, 0.0f));
     const Vector3 &mz = WorldXfm().m.z;
-    TheShaderMgr.SetVConstant((VShaderConstant)0x1F, Vector4(mz.x, mz.y, mz.z, 0));
+    TheShaderMgr.SetVConstant((VShaderConstant)0x1F, Vector4(mz.x, mz.y, mz.z, 0.0f));
     TheShaderMgr.SetVConstant(
-        (VShaderConstant)0x20, Vector4(mRadius, mAmplitude * f1, 1.0f / mWavelength, 0)
+        (VShaderConstant)0x20, Vector4(mRadius, mAmplitude * f1, 1.0f / mWavelength, 0.0f)
     );
 }

@@ -274,34 +274,34 @@ void PlaylistSortMgr::ProcessNextCommand() {
 }
 
 void PlaylistSortMgr::ResolvePlaylists() {
-    auto activeProfile = TheProfileMgr.GetActiveProfile(true);
-    Playlist *playlist;
+    HamProfile *activeProfile = TheProfileMgr.GetActiveProfile(true);
     if (activeProfile) {
         const char *profileName = activeProfile->GetName();
         bool flag = unkb0 != profileName;
         if (!flag) {
-            for (int i = 0; i < unkd0.size(); i++) {
-                *playlist = activeProfile->GetPlaylist(i);
-                auto cusPlaylist = dynamic_cast<CustomPlaylist *>(playlist);
+            int count = (int)unkd0.size();
+            for (int i = 0; i < count; i++) {
+                Playlist *playlist = &activeProfile->GetPlaylist(i);
+                CustomPlaylist *cusPlaylist = dynamic_cast<CustomPlaylist *>(playlist);
                 cusPlaylist->Copy(&unkd0[i]);
                 cusPlaylist->SetParentProfile(activeProfile);
             }
         }
         for (int i = 0; i < 5; i++) {
-            *playlist = activeProfile->GetPlaylist(i);
+            Playlist *playlist = &activeProfile->GetPlaylist(i);
             int numSongs = playlist->GetNumSongs();
-            for (int i = 0; i < numSongs; i++) {
+            while (numSongs-- != 0) {
                 playlist->RemoveSong();
             }
+            playlist->SetOnlineID(-1);
         }
         if (TheSaveLoadMgr) {
             TheSaveLoadMgr->AutoSave();
         }
         BroadcastSyncMsg("playlists_synced");
-        if (unkd0.size() == 0) {
-            return;
+        if (unkd0.size() > 0) {
+            SendPassiveMsg("playlist_syned_with_rc");
         }
-        SendPassiveMsg("playlist_syned_with_rc");
         return;
     }
     BroadcastSyncMsg("sync_failed");

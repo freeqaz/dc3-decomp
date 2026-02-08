@@ -269,33 +269,48 @@ void MainMenuPanel::MotdHandleTextScrolledOut(int i) {
     static Symbol dlc("dlc");
     static Symbol utility("utility");
     static Symbol none("none");
+
+    // Early exit if MOTD system not initialized
     if (!unkb0) {
         return;
     }
+
+    // Clear icon state for DLC/utility messages
     Symbol type = mMotdData.front().unk0;
     if (type == dlc || type == utility) {
         UpdateIconState(none);
     }
 
     mMotdData.pop_front();
-    float f = 0.0f;
-    float width = mMsgLabel->Width() * 2.0f;
+
+    // Ensure enough text to fill the scroll area (2x label width)
+    float targetWidth = mMsgLabel->Width() * 2.0f;
+    float currentWidth = 0.0f;
+
     if (mMotdData.empty()) {
         MotdPickNextText();
     } else {
         FOREACH (it, mMotdData) {
-            f += (*it).unkc;
+            currentWidth += it->unkc;
         }
     }
-    while (f < width) {
-        f += MotdPickNextText();
+
+    // Keep adding text until we have enough to fill the scroll area
+    while (currentWidth < targetWidth) {
+        currentWidth += MotdPickNextText();
     }
+
     MILO_ASSERT(mMotdData.size(), 0x301);
+
+    // Build the full text string from all queued messages
     String text = mMotdData.front().unk4;
-    FOREACH (it, mMotdData) {
+    std::list<MotdData>::iterator it = mMotdData.begin();
+    ++it;
+    for (; it != mMotdData.end(); ++it) {
         text += "\n";
         text += (*it).unk4;
     }
+
     mMsgLabel->ReFitTextScroll(text);
 }
 

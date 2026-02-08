@@ -81,7 +81,6 @@ public:
             unk14.Reset();
             unk54.Reset();
         }
-        BoneDesc& operator=(const BoneDesc &rhs);
         ObjPtr<RndTransformable> unk0;
         Transform unk14;
         Transform unk54;

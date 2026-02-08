@@ -21,7 +21,7 @@ namespace IPP {
         if (size == 0)
             return;
         for (unsigned int i = 0; i < size; i++) {
-            f2[i] = f1[i] * f2[i];
+            f2[i] *= f1[i];
         }
     }
 

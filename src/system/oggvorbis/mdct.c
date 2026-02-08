@@ -221,23 +221,13 @@ STIN void mdct_butterfly_32(DATA_TYPE *x){
 
 }
 
-/* N point first stage butterfly (in place, 2 register)
- *
- * Current match: 83.2% (likely at limit)
- * Issue: Compiler generated different register allocation and memory access patterns.
- * The target binary uses indexed loads (lfsx) with two base registers (r8/r9),
- * while this code generates offset loads with a single base register.
- * Previous attempts at reordering declarations, swapping operands, and restructuring
- * the loop made no improvement. The 35 register swaps and 4 control flow differences
- * suggest fundamental compiler behavior differences that cannot be resolved through
- * source code changes alone.
- */
+/* N point first stage butterfly (in place, 2 register) */
 STIN void mdct_butterfly_first(DATA_TYPE *T,
 					DATA_TYPE *x,
 					int points){
 
-  DATA_TYPE *x2        = x          + (points>>1) - 8;
   DATA_TYPE *x1        = x          + points      - 8;
+  DATA_TYPE *x2        = x          + (points>>1) - 8;
   REG_TYPE   r0;
   REG_TYPE   r1;
 
@@ -271,9 +261,9 @@ STIN void mdct_butterfly_first(DATA_TYPE *T,
 	       x2[0]   = MULT_NORM(r1 * T[13] +  r0 * T[12]);
 	       x2[1]   = MULT_NORM(r1 * T[12] -  r0 * T[13]);
 
+	       T+=16;
     x1-=8;
     x2-=8;
-    T+=16;
 
   }while(x2>=x);
 }
@@ -284,40 +274,40 @@ STIN void mdct_butterfly_generic(DATA_TYPE *T,
 					  int points,
 					  int trigint){
   
-  DATA_TYPE *x1        = x          + points      - 8;
   DATA_TYPE *x2        = x          + (points>>1) - 8;
+  DATA_TYPE *x1        = x          + points      - 8;
   REG_TYPE   r0;
   REG_TYPE   r1;
 
   do{
-    
+
                r0      = x1[6]      -  x2[6];
 	       r1      = x1[7]      -  x2[7];
 	       x1[6]  += x2[6];
 	       x1[7]  += x2[7];
 	       x2[6]   = MULT_NORM(r1 * T[1]  +  r0 * T[0]);
 	       x2[7]   = MULT_NORM(r1 * T[0]  -  r0 * T[1]);
-	       
+
 	       T+=trigint;
-	       
+
 	       r0      = x1[4]      -  x2[4];
 	       r1      = x1[5]      -  x2[5];
 	       x1[4]  += x2[4];
 	       x1[5]  += x2[5];
 	       x2[4]   = MULT_NORM(r1 * T[1]  +  r0 * T[0]);
 	       x2[5]   = MULT_NORM(r1 * T[0]  -  r0 * T[1]);
-	       
+
 	       T+=trigint;
-	       
+
 	       r0      = x1[2]      -  x2[2];
 	       r1      = x1[3]      -  x2[3];
 	       x1[2]  += x2[2];
 	       x1[3]  += x2[3];
 	       x2[2]   = MULT_NORM(r1 * T[1]  +  r0 * T[0]);
 	       x2[3]   = MULT_NORM(r1 * T[0]  -  r0 * T[1]);
-	       
+
 	       T+=trigint;
-	       
+
 	       r0      = x1[0]      -  x2[0];
 	       r1      = x1[1]      -  x2[1];
 	       x1[0]  += x2[0];
@@ -362,7 +352,32 @@ void mdct_clear(mdct_lookup *l){
   }
 }
 
-STIN void mdct_bitreverse(mdct_lookup *init, 
+/* mdct_bitreverse - bit-reversed FFT butterfly with twiddle factors
+ *
+ * Current match: 86.3% (approaching limit)
+ *
+ * Analysis shows 15 register swaps (f10↔f12, f8↔f9, etc.) and 2 offset swaps
+ * indicating different register allocation and stack layout between our build
+ * and the target. The compiler generates functionally equivalent code with
+ * different instruction scheduling.
+ *
+ * Key issues identified:
+ * - GPR/FPR register allocation differences (15 swap pairs)
+ * - Stack offset shifts (-4, -8 deltas) affecting local variable layout
+ * - Instruction scheduling differences in floating-point operations
+ * - Control flow differences (4 detected) in loop structure
+ *
+ * Attempted fixes with no improvement:
+ * - Moving w1 decrement before/after first calculation block
+ * - Hoisting REG_TYPE declarations outside loop
+ * - Reordering expression evaluation
+ *
+ * The 4 control flow differences and persistent register swaps suggest this
+ * is at the limit of what source-level changes can achieve. The target binary
+ * uses different register allocation heuristics that cannot be controlled from
+ * C source code.
+ */
+STIN void mdct_bitreverse(mdct_lookup *init,
 			    DATA_TYPE *x){
   int        n       = init->n;
   int       *bit     = init->bitrev;
@@ -383,7 +398,7 @@ STIN void mdct_bitreverse(mdct_lookup *init,
 
               r0     = HALVE(x0[1] + x1[1]);
               r1     = HALVE(x0[0] - x1[0]);
-      
+
 	      w0[0]  = r0     + r2;
 	      w1[2]  = r0     - r2;
 	      w0[1]  = r1     + r3;
@@ -399,7 +414,7 @@ STIN void mdct_bitreverse(mdct_lookup *init,
 
               r0     = HALVE(x0[1] + x1[1]);
               r1     = HALVE(x0[0] - x1[0]);
-      
+
 	      w0[2]  = r0     + r2;
 	      w1[0]  = r0     - r2;
 	      w0[3]  = r1     + r3;

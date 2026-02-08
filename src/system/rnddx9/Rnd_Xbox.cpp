@@ -283,17 +283,20 @@ void DxRnd::UpdateScalerParams() {
     float width = (float)mVideoMode.dwDisplayWidth;
     float height = (float)mVideoMode.dwDisplayHeight;
     bool letterbox = mAspect == kLetterbox && !unk1f8;
+    // Letterbox: constrain to 16:9 aspect ratio (9/16 = 0.5625)
     if (letterbox && width * 0.5625f < height) {
         height = width * 0.5625f;
     }
+    // Shrink to safe area: 95% of display dimensions
     if (mShrinkToSafe) {
         width *= 0.95f;
         if (!letterbox) {
             height *= 0.95f;
         }
     }
-    mPresentParams.VideoScalerParameters.ScaledOutputWidth = (int)width;
-    mPresentParams.VideoScalerParameters.ScaledOutputHeight = (int)height;
+    D3DVIDEO_SCALER_PARAMETERS& scaler = mPresentParams.VideoScalerParameters;
+    scaler.ScaledOutputWidth = width;
+    scaler.ScaledOutputHeight = height;
 }
 
 void DxRnd::TerminateBuffers() {

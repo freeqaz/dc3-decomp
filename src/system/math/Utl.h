@@ -68,7 +68,7 @@ inline float Min(float x, float y) {
 
 template <class T>
 inline T Max(T x, T y) {
-    return (x > y) ? x : y;
+    return (x < y) ? y : x;
 }
 
 // float specialization for the use of fsel instructions

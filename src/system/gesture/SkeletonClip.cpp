@@ -518,11 +518,13 @@ void SkeletonClip::LoadClip(bool tool_sync) {
 void SkeletonClip::SetAutoplay(bool b1) {
     if (mFile.empty()) {
         MILO_NOTIFY("Recording hasn't been made yet, can't autoplay");
-    } else if (!TheHamDirector) {
-        MILO_NOTIFY("Autoplay not supported in song playback mode");
-    } else {
-        mAutoplay = b1;
+        return;
     }
+    if (TheHamDirector) {
+        MILO_NOTIFY("Autoplay not supported in song playback mode");
+        return;
+    }
+    mAutoplay = b1;
 }
 
 void SkeletonClip::StartXboxRecording(const char *cc) {

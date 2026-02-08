@@ -142,9 +142,17 @@ class DrawPtrVec : public ObjPtrVec<RndDrawable> {
 public:
     DrawPtrVec(Hmx::Object *owner) : ObjPtrVec<RndDrawable>(owner) {}
 
-    void Draw() const;
+    void Draw() const {
+        FOREACH (it, *this) {
+            (*it)->Draw();
+        }
+    }
 
     RndDrawable *CollideShowing(const Segment &, float &, Plane &) const;
-    void CollideList(const Segment &s, std::list<RndDrawable::Collision> &c) const;
+    void CollideList(const Segment &s, std::list<RndDrawable::Collision> &c) const {
+        FOREACH (it, *this) {
+            (*it)->CollideList(s, c);
+        }
+    }
 
 };

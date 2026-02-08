@@ -285,51 +285,70 @@ void GamePanel::SetSoundEventReceiver() {
     }
 }
 
-void GamePanel::SetPausedHelper(bool b1, bool b2) {
+void GamePanel::SetPausedHelper(bool paused, bool pauseSound) {
+    // Pause/unpause fitness tracking for all players
     for (int i = 0; i < 2; i++) {
         FitnessFilter *filt = GetFitnessFilter(i);
         if (filt) {
-            filt->SetPaused(b1);
+            filt->SetPaused(paused);
         }
     }
+
+    // Guard: can't pause unless panel is up
     if (GetState() != kUp) {
         MILO_NOTIFY("trying to pause while not up");
         return;
     }
+
+    // Wait for synth to finish any pending voices
     while (TheSynth->HasPendingVoices()) {
         TheSynth->Poll();
     }
-    if (!b1 && unk101) {
+
+    // Guard: if unpausing while cheat-paused, don't unpause
+    if (!paused && unk101) {
         return;
     }
-    if (b1 == mPaused) {
+
+    // Guard: already in desired pause state
+    if (paused == mPaused) {
         return;
     }
-    mPaused = b1;
+
+    mPaused = paused;
+
+    // Handle pause count-in timer
     if (unkfc->Running()) {
-        if (!b1) {
+        if (!paused) {
             MILO_NOTIFY(
                 "Trying to unpause while the count in is active; should not be possible!"
             );
         }
         unkfc->Reset();
     } else {
-        if (unk100 && mState == 2 && !b1) {
+        // Check if we should start pause count-in when unpausing during gameplay
+        if (unk100 && mState == kGamePlaying && !paused) {
             if (TheGameMode->Property("pause_count_in")->Int() != 0) {
+                // Start the count-in timer instead of immediately unpausing
                 unkfc->Start();
             } else {
-                mGame->SetGamePaused(b1, mState == 0 || mState == 1, b2);
+                // No count-in configured, unpause immediately
+                bool isIntroOrPlaying = (mState < kGameOver);
+                mGame->SetGamePaused(paused, isIntroOrPlaying, pauseSound);
+
+                // Pause/unpause venue movie textures
                 WorldDir *dir = TheHamDirector->GetVenueWorld();
                 for (ObjDirItr<TexMovie> it(dir, true); it != nullptr; ++it) {
                     if (it->IsOpen()) {
-                        it->SetPaused(b1);
+                        it->SetPaused(paused);
                     }
                 }
-                TheWaveToTurnOnLight->SetPaused(b1);
-                if (!b1) {
-                    while (!FileDiscSpinUp())
-                        ;
-                }
+
+                TheWaveToTurnOnLight->SetPaused(paused);
+
+                // When unpausing, wait for disc to spin up
+                while (!paused && !FileDiscSpinUp())
+                    ;
             }
         }
     }

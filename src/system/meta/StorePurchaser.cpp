@@ -6,6 +6,11 @@
 #include "os/PlatformMgr.h"
 #include "ui/UI.h"
 #include "utl/Symbol.h"
+#include "xdk/xapilibi/xbox.h"
+
+extern "C" DWORD XShowMarketplaceDownloadItemsUI(
+    DWORD, DWORD, ULONGLONG *, DWORD, DWORD *, XOVERLAPPED *
+);
 
 #pragma region XboxPurchaser
 
@@ -27,6 +32,7 @@ XboxPurchaser::~XboxPurchaser() {
 void XboxPurchaser::Initiate() {
     MILO_ASSERT(!IsPurchasing(), 0x39a);
 
+    // Register for UI changed notifications to detect when purchase UI closes
     static Symbol ui_changed("ui_changed");
     ThePlatformMgr.AddSink(this, ui_changed);
 }
@@ -48,6 +54,7 @@ bool XboxPurchaser::IsPurchasing() const {
 DataNode XboxPurchaser::OnMsg(UIChangedMsg const &msg) {
     if (mState == purchasestate1) {
         if (!msg.Showing()) {
+            // UI closed - unregister from notifications and mark as successful
             static Symbol ui_changed("ui_changed");
             ThePlatformMgr.RemoveSink(this, ui_changed);
             mState = kSuccess;
@@ -77,7 +84,35 @@ bool XboxMultipleItemsPurchaser::IsPurchasing() const {
     return mState == purchasestate1;
 }
 
-void XboxMultipleItemsPurchaser::Initiate() { MILO_ASSERT(!IsPurchasing(), 0x343); }
+void XboxMultipleItemsPurchaser::Initiate() {
+    MILO_ASSERT(!IsPurchasing(), 0x343);
+    mState = purchasestate1;
+
+    // Initialize overlapped structure for async Xbox marketplace operation
+    static XOVERLAPPED sOverlapped;
+    memset(&sOverlapped, 0, sizeof(XOVERLAPPED));
+
+    unk4c = 0;
+    // Show Xbox marketplace UI for purchasing multiple items
+    // Returns 0x3E5 (ERROR_IO_PENDING) on success
+    unsigned int result = XShowMarketplaceDownloadItemsUI(
+        unk48,         // User index
+        0x3E9,         // Expected success code
+        &unk3c[0],     // Array of offer IDs to purchase
+        unk3c.size(),  // Number of offers
+        &unk4c,        // [out] Count of items selected by user
+        &sOverlapped   // Overlapped I/O structure
+    );
+
+    if (result != 0x3E5) {
+        TheDebug.Notify(MakeString("Error starting checkout UI: %d", result));
+        mState = purchasestate3; // Error state
+    }
+
+    // Register for UI changed notifications to detect when marketplace closes
+    static Symbol ui_changed("ui_changed");
+    ThePlatformMgr.AddSink(this, ui_changed);
+}
 
 XboxMultipleItemsPurchaser::~XboxMultipleItemsPurchaser() {
     static Symbol ui_changed("ui_changed");
@@ -95,6 +130,7 @@ XboxMultipleItemsPurchaser::XboxMultipleItemsPurchaser(
 DataNode XboxMultipleItemsPurchaser::OnMsg(UIChangedMsg const &msg) {
     if (msg.mData->Int(1) == 1) {
         if (msg.mData->Node(2).Int(msg.mData) == 0) {
+            // UI closed successfully - unregister from notifications
             static Symbol ui_changed("ui_changed");
             ThePlatformMgr.RemoveSink(this, ui_changed);
             mState = kSuccess;

@@ -610,7 +610,8 @@ void SaveLoadManager::SetState(State newState) {
 
     bool wasIdle = false;
 
-    // Cleanup logic based on current state - structure must match assembly
+    // Cleanup resources based on current state before transition
+    // WARNING: Control flow structure is critical for codegen - do not refactor
     if (mState <= kS_GlobalOptionsWrite) {
         if (mState == kS_GlobalOptionsWrite) {
             // 0x3E: free mData unless going to Finish

@@ -493,28 +493,34 @@ bool SkeletonChooser::PotentiallyRecoverSkeletons() {
 }
 
 int SkeletonChooser::NextSkeletonIndexToTrack(int i1) {
-    int curSkelIdx = i1 + 1;
+    int i = 0;
+    int curSkelIdx = (i1 + 1) % 6;
     int idxToTrack = -1;
+    int j;
     SkeletonRecoverer &recoverer = TheGestureMgr->Recoverer();
-    for (int i = 0; i < 6; i++, curSkelIdx = (curSkelIdx + 1) % 6) {
-        int ivar1 = TheGestureMgr->GetSkeleton(curSkelIdx).TrackingID();
+    for (; i < 6; i++) {
+        int skelTrackingID = TheGestureMgr->GetSkeleton(curSkelIdx).TrackingID();
         if (idxToTrack >= 0) {
             return idxToTrack;
         }
-        if (ivar1 > 0) {
-            for (int j = 0; j < 2; j++) {
-                idxToTrack = TheGameData->Player(j)->GetSkeletonTrackingID();
-                int i4 = recoverer.GetTrackingIDWithRecovery(idxToTrack, -1);
-                if (ivar1 == idxToTrack || ivar1 == i4) {
+        if (skelTrackingID > 0) {
+            // Assume this skeleton is valid
+            idxToTrack = curSkelIdx;
+            // Check against both players
+            for (j = 0; j < 2; j++) {
+                int playerTrackingID = TheGameData->Player(j)->GetSkeletonTrackingID();
+                int recoveryID = recoverer.GetTrackingIDWithRecovery(playerTrackingID, -1);
+                // If skeleton matches either player or their recovery, it's not available
+                if (skelTrackingID == playerTrackingID || skelTrackingID == recoveryID) {
                     idxToTrack = -1;
                     break;
                 }
-                idxToTrack = curSkelIdx;
             }
         }
         if (idxToTrack >= 0) {
             return idxToTrack;
         }
+        curSkelIdx = (curSkelIdx + 1) % 6;
     }
     return idxToTrack;
 }
@@ -658,75 +664,56 @@ void SkeletonChooser::SetPlayerSkeletonWarningData(int p1ID, int p2ID) {
 }
 
 void SkeletonChooser::SwapPlayerDataForPractice() {
-    HamPlayerData *pPlayer1 = TheGameData->Player(0);
-    const DataNode *player1Prop = pPlayer1->Provider()->Property("using_fitness");
-    int player1PropVal = player1Prop->Int();
-    HamPlayerData *pPlayer2 = TheGameData->Player(0);
-    const DataNode *player2Prop = pPlayer2->Provider()->Property("using_fitness");
-    int player2PropVal = player2Prop->Int();
-    pPlayer1 = TheGameData->Player(0);
-    pPlayer1->SetUsingFitness(player2PropVal == 0);
-    pPlayer2 = TheGameData->Player(1);
-    pPlayer2->SetUsingFitness(player1PropVal == 0);
+    int val0;
+    int val1;
+    Symbol sym0;
+    Symbol sym1;
 
-    pPlayer1 = TheGameData->Player(0);
-    const DataNode *player1CrewProp = pPlayer1->Provider()->Property("crew");
-    Symbol player1Crew = player1CrewProp->Sym();
-    pPlayer2 = TheGameData->Player(1);
-    const DataNode *player2CrewProp = pPlayer2->Provider()->Property("crew");
-    Symbol player2Crew = player2CrewProp->Sym();
-    pPlayer1 = TheGameData->Player(0);
-    pPlayer1->SetCrew(player2Crew);
-    pPlayer2 = TheGameData->Player(1);
-    pPlayer2->SetCrew(player1Crew);
+    // Swap using_fitness
+    val0 = TheGameData->Player(0)->Provider()->Property("using_fitness")->Int();
+    val1 = TheGameData->Player(1)->Provider()->Property("using_fitness")->Int();
+    TheGameData->Player(0)->SetUsingFitness(val1 != 0);
+    TheGameData->Player(1)->SetUsingFitness(val0 != 0);
 
-    pPlayer1 = TheGameData->Player(0);
-    player1Crew = pPlayer1->Crew();
-    pPlayer2 = TheGameData->Player(1);
-    player2Crew = pPlayer2->Crew();
-    pPlayer1 = TheGameData->Player(0);
-    pPlayer1->SetCrew(player2Crew);
-    pPlayer2 = TheGameData->Player(1);
-    pPlayer2->SetCrew(player1Crew);
+    // Swap crew (from property)
+    sym0 = TheGameData->Player(0)->Provider()->Property("crew")->Sym();
+    sym1 = TheGameData->Player(1)->Provider()->Property("crew")->Sym();
+    TheGameData->Player(0)->SetCrew(sym1);
+    TheGameData->Player(1)->SetCrew(sym0);
 
-    pPlayer1 = TheGameData->Player(0);
-    Symbol player1Char = pPlayer1->Char();
-    pPlayer2 = TheGameData->Player(1);
-    Symbol player2Char = pPlayer2->Char();
-    pPlayer1 = TheGameData->Player(0);
-    pPlayer1->SetCharacter(player2Char);
-    pPlayer2 = TheGameData->Player(1);
-    pPlayer2->SetCharacter(player1Char);
+    // Swap crew (from member)
+    sym0 = TheGameData->Player(0)->Crew();
+    sym1 = TheGameData->Player(1)->Crew();
+    TheGameData->Player(0)->SetCrew(sym1);
+    TheGameData->Player(1)->SetCrew(sym0);
 
-    pPlayer1 = TheGameData->Player(0);
-    Symbol player1Symbol = pPlayer1->Unk48();
-    pPlayer2 = TheGameData->Player(1);
-    Symbol player2Symbol = pPlayer1->Unk48();
-    pPlayer1 = TheGameData->Player(0);
-    pPlayer1->SetUnk48(player2Symbol);
-    pPlayer2 = TheGameData->Player(1);
-    pPlayer2->SetUnk48(player1Symbol);
+    // Swap character
+    sym0 = TheGameData->Player(0)->Char();
+    sym1 = TheGameData->Player(1)->Char();
+    TheGameData->Player(0)->SetCharacter(sym1);
+    TheGameData->Player(1)->SetCharacter(sym0);
 
-    pPlayer1 = TheGameData->Player(0);
-    Symbol player1Outfit = pPlayer1->Outfit();
-    pPlayer2 = TheGameData->Player(1);
-    Symbol player2Outfit = pPlayer2->Outfit();
-    pPlayer1 = TheGameData->Player(0);
-    pPlayer1->SetOutfit(player2Outfit);
-    pPlayer2 = TheGameData->Player(1);
-    pPlayer2->SetOutfit(player1Outfit);
+    // Swap unk48
+    sym0 = TheGameData->Player(0)->Unk48();
+    sym1 = TheGameData->Player(1)->Unk48();
+    TheGameData->Player(0)->SetUnk48(sym1);
+    TheGameData->Player(1)->SetUnk48(sym0);
 
-    pPlayer1 = TheGameData->Player(0);
-    Symbol player1PreferredOutfit = pPlayer1->GetPreferredOutfit();
-    pPlayer2 = TheGameData->Player(1);
-    Symbol player2PreferredOutfit = pPlayer2->GetPreferredOutfit();
-    pPlayer1 = TheGameData->Player(0);
-    pPlayer1->SetPreferredOutfit(player2PreferredOutfit);
-    pPlayer2 = TheGameData->Player(1);
-    pPlayer2->SetPreferredOutfit(player1PreferredOutfit);
+    // Swap outfit
+    sym0 = TheGameData->Player(0)->Outfit();
+    sym1 = TheGameData->Player(1)->Outfit();
+    TheGameData->Player(0)->SetOutfit(sym1);
+    TheGameData->Player(1)->SetOutfit(sym0);
 
-    pPlayer1 = TheGameData->Player(0);
-    TheGameData->SetAssociatedPadNum(0, pPlayer2->PadNum());
-    pPlayer2 = TheGameData->Player(1);
-    TheGameData->SetAssociatedPadNum(1, pPlayer1->PadNum());
+    // Swap preferred outfit
+    sym0 = TheGameData->Player(0)->GetPreferredOutfit();
+    sym1 = TheGameData->Player(1)->GetPreferredOutfit();
+    TheGameData->Player(0)->SetPreferredOutfit(sym1);
+    TheGameData->Player(1)->SetPreferredOutfit(sym0);
+
+    // Swap pad numbers
+    val0 = TheGameData->Player(0)->PadNum();
+    val1 = TheGameData->Player(1)->PadNum();
+    TheGameData->SetAssociatedPadNum(0, val1);
+    TheGameData->SetAssociatedPadNum(1, val0);
 }

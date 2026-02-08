@@ -166,14 +166,14 @@ bool DanceRemixer::ScoredDanceMeasure(int x, int y) const {
 void DanceRemixer::UpdateHamDirector() {
     for (int i = 0; i < 2; i++) {
         const auto &mvs_list = TheMoveMgr->unk150[i];
-        for (unsigned int j = 0; j < mvs_list.size(); j++) {
+        for (int j = 0; j < mvs_list.size(); j++) {
             if (j <= mFromMeasure || j >= mToMeasure) {
                 std::pair<const MoveVariant *, const MoveVariant *> mvs = mvs_list[j];
                 if (mvs.first) {
-                    unk30.insert(mvs.first);
+                    unk48 |= unk30.insert(mvs.first).second;
                 }
                 if (mvs.second && mvs.second != mvs.first) {
-                    unk30.insert(mvs.second);
+                    unk48 |= unk30.insert(mvs.second).second;
                 }
             }
         }

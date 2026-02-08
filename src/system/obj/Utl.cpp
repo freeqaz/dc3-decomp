@@ -168,10 +168,10 @@ bool PathCompare(DataArray *arr1, DataArray *arr2) {
 
 const char *PrintPropertyPath(DataArray *arr) {
     StackString<256> str;
-    str << arr;
-    str[0U] = '[';
-    str[str.length() - 1] = ']';
-    return MakeString(str);
+    str << arr;  // Outputs as "(element1 element2 ...)"
+    str[0U] = '[';  // Replace opening paren with bracket
+    str[str.length() - 1U] = ']';  // Replace closing paren with bracket
+    return FormatString(str.c_str()).Str();
 }
 
 int SubDirHashUsed(ObjectDir *dir) {

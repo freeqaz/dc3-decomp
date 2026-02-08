@@ -46,7 +46,7 @@ public:
 private:
     void CreateGame();
     void StartGame();
-    void SetPausedHelper(bool, bool);
+    void SetPausedHelper(bool paused, bool pauseSound);
     void CheatPause(bool);
     void Reset();
     void UpdateFitnessOverlay();

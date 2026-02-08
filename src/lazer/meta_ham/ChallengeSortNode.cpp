@@ -345,18 +345,53 @@ Symbol ChallengeSortNode::Select() {
     static Symbol server_not_available_screen("server_not_available_screen");
     Symbol screen = show_offers_need_to_sign_in_screen;
     HamProfile *activeProfile = TheProfileMgr.GetActiveProfile(true);
-    activeProfile->UpdateOnlineID();
-    if (activeProfile && activeProfile->GetOnlineID()) {
-        if (ThePlatformMgr.IsSignedIntoLive(activeProfile->GetPadNum())
-            && TheRockCentral.IsOnline()) {
-            screen = store_loading_screen;
+    if (activeProfile != 0) {
+        activeProfile->UpdateOnlineID();
+        if (activeProfile->IsSignedIn() && ThePlatformMgr.IsSignedIntoLive(activeProfile->GetPadNum()) != 0) {
+            if (TheRockCentral.IsOnline() != 0) {
+                screen = store_loading_screen;
+            } else {
+                screen = server_not_available_screen;
+            }
         }
     }
     static Symbol should_back_to_challenges("should_back_to_challenges");
-    if (mChallengeRecord->GetUnk50() == 1) {
-        MILO_ASSERT("false", 0x1a9);
+    int unk50 = mChallengeRecord->GetUnk50();
+    if (unk50 != 1) {
+        if (unk50 > 1) {
+            if (unk50 > 3) {
+                if (unk50 == 4) {
+                    if (screen == store_loading_screen) {
+                        static Symbol advertised_songid("advertised_songid");
+                        UIScreen *storeScreen = ObjectDir::Main()->Find<UIScreen>("store_loading_screen", true);
+                        storeScreen->SetProperty(advertised_songid, DataNode(mChallengeRecord->GetChallengeRow().mSongID));
+                        storeScreen->SetProperty(should_back_to_challenges, DataNode(1));
+                    }
+                    return screen;
+                }
+            } else {
+                if (screen == store_loading_screen) {
+                    static Symbol redirect_to_code_redemption("redirect_to_code_redemption");
+                    UIScreen *storeScreen = ObjectDir::Main()->Find<UIScreen>("store_loading_screen", true);
+                    storeScreen->SetProperty(redirect_to_code_redemption, DataNode(1));
+                    storeScreen->SetProperty(should_back_to_challenges, DataNode(1));
+                }
+                return screen;
+            }
+        }
+    } else {
+        MILO_ASSERT(false, 0x1a9);
     }
-    return 0;
+    Symbol token = GetToken();
+    HamProfile *profile = TheProfileMgr.GetActiveProfile(true);
+    if (profile != 0 && profile->IsContentNew(token) != 0) {
+        profile->MarkContentNotNew(token);
+    }
+    if (UseQuickplayPerformer() != 0) {
+        MetaPerformer *performer = MetaPerformer::Current();
+        performer->SetSong(GetToken());
+    }
+    return gNullStr;
 }
 
 Symbol ChallengeSortNode::OnSelect() {

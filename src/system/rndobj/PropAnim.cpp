@@ -501,10 +501,10 @@ int RndPropAnim::GetNumKeys(Hmx::Object *obj, Symbol sym) {
 }
 
 int RndPropAnim::ValueFromFrame(PropKeys *keys, float frame, DataNode *node) {
+    int ret = -1;
     if (!keys)
         return -1;
     else {
-        int ret = -1;
         switch (keys->KeysType()) {
         case PropKeys::kFloat: {
             float fval = 0.0f;
@@ -519,7 +519,7 @@ int RndPropAnim::ValueFromFrame(PropKeys *keys, float frame, DataNode *node) {
             break;
         }
         case PropKeys::kObject: {
-            Hmx::Object *obj = nullptr;
+            Hmx::Object *obj = 0;
             ret = keys->ObjectAt(frame, obj);
             *node = obj;
             break;

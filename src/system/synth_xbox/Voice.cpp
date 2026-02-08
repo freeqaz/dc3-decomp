@@ -15,6 +15,7 @@ extern void StartSynchronizedVoices();
 
 typedef void (*VoiceCallFunc)(int*, int*);
 typedef void (*PoolVoiceCallFunc)(int*, int, int);
+typedef HRESULT (*EndLoopFunc)(int *, int);
 
 Voice::Voice(bool b1, int i, bool b2)
     : unk4(0), unk8(0), unkc(0), mNumSamples(0), mSampleRate(0), unk18(0), mLoopStart(-1),
@@ -115,7 +116,9 @@ void Voice::SetReverbMixDb(float f) {
 }
 
 void Voice::EndLoop() {
-    HRESULT hr = unk58; // change later once 0x58 class type is found
+    // Call IXAudio2SourceVoice::ExitLoop(0) via vtable at offset 0x60
+    int *pSourceVoice = (int *)unk58;
+    HRESULT hr = ((EndLoopFunc)(*(int *)(*(int *)pSourceVoice + 0x60)))(pSourceVoice, 0);
     MILO_ASSERT(SUCCEEDED(hr), 0x2da);
 }
 

@@ -200,51 +200,61 @@ void VoiceControlPanel::DisplaySong(Symbol song) {
 }
 
 void VoiceControlPanel::CreatePlaySongGrammar() const {
+    void *ruleState;
+    void *wordState;
+
     TheSpeechMgr->SetRecognizing(false);
+
     if (TheSpeechMgr->HasGrammar("play_song_grammar")) {
         TheSpeechMgr->UnloadGrammar("play_song_grammar");
     }
+
     TheSpeechMgr->CreateGrammar("play_song_grammar");
-    void *v90;
-    TheSpeechMgr->AddDynamicRule("play_song_grammar", "play_song", &v90);
+
+    TheSpeechMgr->AddDynamicRule("play_song_grammar", "play_song", &ruleState);
+
     static Symbol voice_command_song("voice_command_song");
-    void *v8c;
     TheSpeechMgr->AddDynamicRuleWord(
         "play_song_grammar",
         Localize(voice_command_song, nullptr, TheLocale),
         gNullStr,
-        &v90,
-        &v8c
+        &ruleState,
+        &wordState
     );
+
     if (TheUI->FocusPanel() != ObjectDir::Main()->Find<UIPanel>("song_select_panel")) {
         TheSongSortMgr->OnEnter();
     }
+
     for (std::map<Symbol, SongRecord>::iterator it = TheSongSortMgr->unk78.begin();
          it != TheSongSortMgr->unk78.end(); ++it) {
         SongRecord &record = it->second;
         const HamSongMetadata *data = record.Metadata();
         std::vector<String> prons = data->Pronunciations();
         const std::vector<PronunciationsLoc> &locs = data->PronunciationsLocalized();
-        unsigned int loc_size = locs.size();
-        if (loc_size != 0) {
-            std::vector<PronunciationsLoc>::const_iterator loc_it = locs.begin();
-            unsigned int loc_idx = 0;
+        unsigned int numLocalizations = locs.size();
+
+        if (numLocalizations > 0) {
+            std::vector<PronunciationsLoc>::const_iterator pronLocIter = locs.begin();
+            unsigned int locIdx = 0;
             do {
-                if (loc_it->mLanguage == GetSongTitlePronunciationLanguage()) {
-                    prons = loc_it->mPronunciations;
+                if (pronLocIter->mLanguage == GetSongTitlePronunciationLanguage()) {
+                    prons = pronLocIter->mPronunciations;
                 }
-                ++loc_it;
-                ++loc_idx;
-            } while (loc_idx != loc_size);
+                ++pronLocIter;
+                ++locIdx;
+            } while (locIdx < numLocalizations);
         }
+
         const char *shortname = record.ShortName().Str();
-        for (int i = 0; (unsigned int)i < prons.size(); i++) {
+        for (size_t i = 0; i < prons.size(); i++) {
             String pron = prons[i];
             TheSpeechMgr->AddDynamicRuleWord(
-                "play_song_grammar", pron.c_str(), shortname, &v8c, nullptr
+                "play_song_grammar", pron.c_str(), shortname, &wordState, nullptr
             );
         }
     }
+
     TheSpeechMgr->CommitGrammar("play_song_grammar");
     TheSpeechMgr->SetRecognizing(true);
 }

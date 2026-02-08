@@ -80,14 +80,14 @@ BEGIN_COPYS(FlowSetProperty)
         mTarget = c->mTarget;
         unk_0x98 = c->unk_0x98;
         mValue = c->mValue.Node();
-        COPY_MEMBER(mRate)
-        COPY_MEMBER(mBlendTime)
-        COPY_MEMBER(mChangePerUnit)
-        COPY_MEMBER(mEase)
-        COPY_MEMBER(mEasePower)
-        COPY_MEMBER(unk_0xE8)
-        COPY_MEMBER(mPersistent)
-        COPY_MEMBER(mStopMode)
+        mRate = c->mRate;
+        mBlendTime = c->mBlendTime;
+        mChangePerUnit = c->mChangePerUnit;
+        mEase = c->mEase;
+        mEasePower = c->mEasePower;
+        unk_0xE8 = c->unk_0xE8;
+        mPersistent = c->mPersistent;
+        mStopMode = c->mStopMode;
         GenerateAutoNames(this, true);
     END_COPYING_MEMBERS
 END_COPYS

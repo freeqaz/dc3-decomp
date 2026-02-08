@@ -73,9 +73,10 @@ public:
         int, std::vector<unsigned long long> &, Symbol, unsigned int
     );
 
-    PurchaseState mState; // 0x38
-    std::vector<unsigned long long> unk3c;
-    int unk48;
+    PurchaseState mState;                  // 0x38 - Current purchase state
+    std::vector<unsigned long long> unk3c; // Offer IDs to purchase
+    int unk48;                             // User index
+    DWORD unk4c;                           // Count of items selected by user
 
 private:
     DataNode OnMsg(UIChangedMsg const &);

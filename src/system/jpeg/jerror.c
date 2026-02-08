@@ -96,7 +96,7 @@ output_message (j_common_ptr cinfo)
   char buffer[JMSG_LENGTH_MAX];
 
   /* Create the message */
-  (*cinfo->err->format_message) (cinfo, buffer);
+  (*cinfo->err->format_message) (cinfo, buffer, JMSG_LENGTH_MAX);
 
 #ifdef USE_WINDOWS_MESSAGEBOX
   /* Display it in a message dialog box */
@@ -150,7 +150,7 @@ emit_message (j_common_ptr cinfo, int msg_level)
  */
 
 METHODDEF(void)
-format_message (j_common_ptr cinfo, char * buffer)
+format_message (j_common_ptr cinfo, char * buffer, int size)
 {
   struct jpeg_error_mgr * err = cinfo->err;
   int msg_code = err->msg_code;

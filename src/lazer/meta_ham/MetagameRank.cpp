@@ -243,28 +243,39 @@ Symbol MetagameRank::GetRankTitle() const {
     return buf;
 }
 
+// Search gOneTimeTasks for a task with the given symbol name.
+// If found, optionally return the DataArray* and/or the task index.
+// Returns true if found, false otherwise.
 bool MetagameRank::GetOneTimeTask(Symbol s, DataArray **aptr, int *iptr) {
-    if (aptr || iptr) {
-        for (int i = 1; i < gOneTimeTasks->Size(); i++) {
-            DataNode &n = gOneTimeTasks->Node(i);
-            if (n.Type() == kDataArray) {
-                if (n.Array()->Sym(0) == s) {
-                    if (aptr) {
-                        *aptr = n.Array();
-                    }
-                    if (iptr) {
-                        *iptr = i - 1;
-                    }
-                    return true;
-                }
+    // Early return if no output parameters requested
+    if (!aptr && !iptr) {
+        return false;
+    }
+
+    // Search through one-time tasks array
+    short size = gOneTimeTasks->Size();
+    int i = 1; // Start at 1 to skip the array name
+    while (i < size) {
+        DataNode &n = gOneTimeTasks->Node(i);
+        if (n.Type() == kDataArray && n.Array()->Sym(0) == s) {
+            // Found matching task
+            if (aptr) {
+                *aptr = n.Array();
             }
+            if (iptr) {
+                *iptr = i - 1; // Return 0-based index
+            }
+            return true;
         }
-        if (aptr) {
-            *aptr = nullptr;
-        }
-        if (iptr) {
-            *iptr = -1;
-        }
+        i++;
+    }
+
+    // Not found - set output parameters to default values
+    if (aptr) {
+        *aptr = nullptr;
+    }
+    if (iptr) {
+        *iptr = -1;
     }
     return false;
 }

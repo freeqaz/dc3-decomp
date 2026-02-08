@@ -19,27 +19,28 @@ void JoypadInitXboxPCDeadzone(DataArray *arr) {
     gXboxDeadzone *= (1.0f / 256.0f);
 }
 
-// not sure what the bool's signify yet
-void TranslateStick(char *keys, short s, bool param_a, bool param_b) {
-    float var1 = (s + 0.5f) / 32768.0f;
+void TranslateStick(char *keys, short s, bool invert, bool apply_deadzone) {
+    long long temp;
+    float var_f0 = ((float)(long long)s + 0.5f) * (1.0f / 32768.0f);
 
-    if (param_b) {
-        if (var1 <= gXboxDeadzone) {
-            if (-gXboxDeadzone <= var1) {
-                var1 = 0.0;
-            }
-            var1 += gXboxDeadzone;
+    if (apply_deadzone) {
+        float var_f12;
+        if (var_f0 > gXboxDeadzone) {
+            var_f12 = var_f0 - gXboxDeadzone;
+            var_f0 = var_f12 / (1.0f - gXboxDeadzone);
+        } else if (var_f0 < -gXboxDeadzone) {
+            var_f12 = gXboxDeadzone + var_f0;
+            var_f0 = var_f12 / (1.0f - gXboxDeadzone);
         } else {
-            var1 -= gXboxDeadzone;
+            var_f0 = 0.0f;
         }
-        var1 /= (1.0 - gXboxDeadzone);
     }
 
-    int c = (var1 * 127.0);
-    *keys = c;
+    temp = (int)(var_f0 * 127.0f);
+    *keys = (char)temp;
 
-    if (param_a) {
-        *keys = -c;
+    if (invert) {
+        *keys = -*keys;
     }
 }
 

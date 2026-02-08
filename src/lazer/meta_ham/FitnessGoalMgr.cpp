@@ -121,18 +121,21 @@ void FitnessGoalMgr::HandleCmdDeleteFitnessGoalFromRC() {
 void FitnessGoalMgr::HandleCmdUpdateFitnessGoalToRC() {
     MILO_LOG("===== HandleCmdUpdateFitnessGoalToRC\n");
     unk48 = nullptr;
-    DataNode fitness("fitness");
-    DataNode updated("updated");
-    ThePlatformMgr.SmartGlassSend(0, DataArrayPtr(fitness, updated));
+    {
+        // Scoped to control DataNode/DataArrayPtr lifetimes and Release order
+        DataNode updated("updated");
+        DataNode fitness("fitness");
+        ThePlatformMgr.SmartGlassSend(0, DataArrayPtr(fitness, updated));
+    }
     RELEASE(unk3c.front());
     unk3c.pop_front();
     if (unk4c) {
         unk4c->ClearFitnessGoalNeedUpload();
     }
-    if (unk50.empty()) {
-        unk4c = nullptr;
-    } else {
+    if (!unk50.empty()) {
         UploadNextProfile();
+    } else {
+        unk4c = nullptr;
     }
     ProcessNextCommand();
 }

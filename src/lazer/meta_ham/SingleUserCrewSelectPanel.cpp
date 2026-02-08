@@ -183,10 +183,13 @@ int SingleUserCrewSelectPanel::GetPlayerIndex(int i) const {
     MILO_ASSERT(pSkeletonChooser, 0x52);
     SkeletonSide skelSide = pSkeletonChooser->GetPlayerSide(0);
     Symbol is_in_party_mode("is_in_party_mode");
-    const DataNode *node = TheHamProvider->Property(is_in_party_mode, true);
-    if (node->Int() == 0) {
+    if (TheHamProvider->Property(is_in_party_mode, true)->Int() != 0) {
+        return i == 0;
     }
-    return i == 0;
+    if (i == 0) {
+        return (skelSide - 1) != 0;
+    }
+    return (skelSide - 1) == 0;
 }
 
 BEGIN_HANDLERS(SingleUserCrewSelectPanel)

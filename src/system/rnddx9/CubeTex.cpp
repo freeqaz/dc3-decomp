@@ -11,7 +11,7 @@ DxCubeTex::DxCubeTex() : mTex(0) {}
 DxCubeTex::~DxCubeTex() { Reset(); }
 
 void DxCubeTex::Select(int x) {
-    D3DDevice_SetTexture(TheDxRnd.Device(), x, mTex, x + 0x20U);
+    D3DDevice_SetTexture(TheDxRnd.Device(), x, mTex, 0x8000000000000000 >> (x + 0x20U));
 }
 
 void DxCubeTex::Reset() {

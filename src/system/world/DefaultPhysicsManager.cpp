@@ -69,10 +69,13 @@ DefaultPhysicsManager::DefaultPhysicsManager(RndDir *d)
     : PhysicsManager(d), unk40(this, kObjListOwnerControl) {}
 
 bool DefaultPhysicsManager::Replace(ObjRef *from, Hmx::Object *to) {
+    // If the reference isn't owned by unk40, handle removal
     if (from->Parent() != &unk40) {
-        Hmx::Object *obj = from->GetObj();
-        // unk40.erase(it);
-        RemoveCollidable(obj);
+        if (to == nullptr) {
+            Hmx::Object *obj = from->GetObj();
+            unk40.remove(obj);
+            RemoveCollidable(obj);
+        }
         return true;
     } else {
         return Hmx::Object::Replace(from, to);
@@ -136,8 +139,9 @@ void DefaultPhysicsManager::CastRays(
 void DefaultPhysicsManager::ActivateCollidable(Hmx::Object *o) {
     auto it = std::find(mInactiveCollidables.begin(), mInactiveCollidables.end(), o);
     if (it != mInactiveCollidables.end()) {
+        RndMesh *mesh = *it;
         mInactiveCollidables.erase(it);
-        mActiveCollidables.push_back(*it);
+        mActiveCollidables.insert(mActiveCollidables.begin(), mesh);
     }
 }
 

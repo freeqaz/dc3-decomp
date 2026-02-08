@@ -7,7 +7,9 @@ int SizeLess(const void *v1, const void *v2) {
     const BlockStat *b2 = (const BlockStat *)v2;
     if (b1->mSizeAct < b2->mSizeAct)
         return 1;
-    // else...?
+    if (b1->mSizeAct > b2->mSizeAct)
+        return -1;
+    return 0;
 }
 
 int NameLess(const void *v1, const void *v2) {

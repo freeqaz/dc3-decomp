@@ -97,45 +97,54 @@ void HamStoreProvider::Text(
         return;
     }
     static Symbol store_checkout("store_checkout");
-    if (offer->StoreOfferData()->Sym(0) == store_checkout) {
+    Symbol offerSym = offer->StoreOfferData()->Sym(0);
+    if (offerSym == store_checkout) {
         if (slot->Matches("song")) {
             label->SetTextToken(store_checkout);
+        } else {
+            label->SetTextToken(gNullStr);
+        }
+        return;
+    }
+    if (slot->Matches("song")) {
+        static Symbol by_artist("by_artist");
+        static Symbol song("song");
+        if (CurrentSort() == by_artist && offer->OfferType() == song) {
+            static_cast<AppLabel *>(label)->SetStoreOfferArtist(offer);
+        } else {
+            static_cast<AppLabel *>(label)->SetStoreOfferName(offer);
+        }
+        return;
+    }
+    if (slot->Matches("purchased")) {
+        if (ShowBrowserPurchased(offer)) {
+            label->SetTextToken(Symbol("store_purchased"));
             return;
         }
-    } else {
-        if (slot->Matches("song")) {
-            static Symbol by_artist("by_artist");
-            static Symbol song("song");
-            if (CurrentSort() == by_artist && offer->OfferType() == song) {
-                static_cast<AppLabel *>(label)->SetStoreOfferArtist(offer);
-            } else {
-                static_cast<AppLabel *>(label)->SetStoreOfferName(offer);
-            }
+        if (offer->InLibrary()) {
+            label->SetTextToken(Symbol("store_in_library"));
             return;
-        } else if (slot->Matches("purchased")) {
-            if (ShowBrowserPurchased(offer)) {
-                label->SetTextToken(Symbol("store_purchased"));
-                return;
-            } else if (offer->InLibrary()) {
-                label->SetTextToken(Symbol("store_in_library"));
-                return;
-            } else if (!offer->IsAvailable()) {
-                label->SetTextToken(Symbol("store_unavailable"));
-                return;
-            }
-        } else if (slot->Matches("cost")) {
-            String temp;
-            if (!ShowBrowserPurchased(offer) && !offer->InLibrary() && offer->IsAvailable()) {
-                static_cast<AppLabel *>(label)->SetStoreOfferCost(offer);
-            }
-            return;
-        } else if (slot->Matches("new")) {
-            if (offer->IsNewRelease()) {
-                static Symbol new_content("new_content");
-                label->SetTextToken(new_content);
-                return;
-            }
         }
+        if (!offer->IsAvailable()) {
+            label->SetTextToken(Symbol("store_unavailable"));
+            return;
+        }
+    }
+    if (slot->Matches("cost")) {
+        String temp;
+        if (!ShowBrowserPurchased(offer) && !offer->InLibrary() && offer->IsAvailable()) {
+            static_cast<AppLabel *>(label)->SetStoreOfferCost(offer);
+        }
+        return;
+    }
+    if (slot->Matches("new")) {
+        if (offer->IsNewRelease()) {
+            static Symbol new_content("new_content");
+            label->SetTextToken(new_content);
+        } else {
+            label->SetTextToken(gNullStr);
+        }
+        return;
     }
     label->SetTextToken(gNullStr);
 }

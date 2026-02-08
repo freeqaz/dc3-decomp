@@ -138,23 +138,29 @@ MCResult MCFileXbox::Close() {
 bool MCFileXbox::IsOpen() { return mFile != INVALID_HANDLE_VALUE; }
 
 MCResult MCFileXbox::GetSize(int *iptr) {
+    // GetFileSize returns low-order DWORD, outputs high-order DWORD via second param
     DWORD fileSize = 0;
     DWORD res = GetFileSize(mFile, &fileSize);
-    if (res != -1) {
-        return kMCNoError;
-    } else {
+
+    // Check for API failure (returns -1 and sets error code)
+    if (res == -1) {
         DWORD err = GetLastError();
         if (err != ERROR_SUCCESS) {
             return TranslateCommonWinErrorToMCResult(err);
-        } else if (iptr) {
-            if (fileSize == 0 && res < 0x80000000) {
-                *iptr = res;
-            } else {
-                *iptr = 0x7FFFFFFF;
-            }
         }
-        return kMCNoError;
     }
+
+    // Clamp to INT_MAX if caller wants the size
+    if (iptr) {
+        // If high bits are zero and low bits fit in signed int, use actual size
+        if (fileSize == 0 && res <= 0x7FFFFFFF) {
+            *iptr = res;
+        } else {
+            *iptr = 0x7FFFFFFF; // Clamp to INT_MAX for files >= 2GB
+        }
+    }
+
+    return kMCNoError;
 }
 
 #pragma endregion

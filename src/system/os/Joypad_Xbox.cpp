@@ -15,6 +15,8 @@ namespace {
         HANDLE tThread;
         bool tNoHandle;
     } sThreadData;
+    unsigned int tButtonStatesPrev[kNumJoypads];
+    unsigned int tButtonStatesCurr[kNumJoypads];
     XINPUT_STATE tInputStates[kNumJoypads];
     CriticalSection tCritSection;
 }
@@ -23,11 +25,14 @@ namespace {
 #define tThread sThreadData.tThread
 #define tNoHandle sThreadData.tNoHandle
 
-void GetXinputSinceLastFrame(int pad, XINPUT_STATE *state, unsigned int *ui3) {
+void GetXinputSinceLastFrame(int pad, XINPUT_STATE *state, unsigned int *buttons) {
     CritSecTracker tracker(&tCritSection);
     *state = tInputStates[pad];
     unsigned int x;
     TranslateButtons(&x, tInputStates[pad].Gamepad.wButtons);
+    *buttons = x | tButtonStatesCurr[pad];
+    tButtonStatesPrev[pad] = tButtonStatesCurr[pad];
+    tButtonStatesCurr[pad] = 0;
 }
 
 // Cleanly terminates the XInput polling thread

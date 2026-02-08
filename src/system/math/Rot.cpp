@@ -247,20 +247,32 @@ void MakeRotQuatUnitX(const Vector3 &vec, Hmx::Quat &q) {
 }
 
 void Multiply(const Vector3 &vin, const Hmx::Quat &q, Vector3 &vout) {
-    vout.Set(
-        (vin.z * (q.w * q.y + q.x * q.z) + vin.x * (-q.y * q.y + -q.z * q.z)
-         + vin.y * (q.x * q.y - q.w * q.z))
-                * 2.0f
-            + vin.x,
-        (vin.z * (q.y * q.z - q.w * q.x) + vin.x * (q.w * q.z + q.x * q.y)
-         + vin.y * (-q.x * q.x + -q.z * q.z))
-                * 2.0f
-            + vin.y,
-        (vin.z * (-q.x * q.x + -q.y * q.y) + vin.x * (q.x * q.z - q.w * q.y)
-         + vin.y * (q.w * q.x + q.y * q.z))
-                * 2.0f
-            + vin.z
-    );
+    // Load quaternion components
+    float qx = q.x;
+    float qy = q.y;
+    float qz = q.z;
+    float qw = q.w;
+
+    // Compute cross products interleaved with vector loads
+    float qxqy = qy * qx;
+    float qzqw = qz * qw;
+    float viny = vin.y;
+    float qyqz = qz * qy;
+    float vinz = vin.z;
+    float qxqw = qx * qw;
+    float vinx = vin.x;
+    float qxqz = qz * qx;
+    float qyqw = qy * qw;
+
+    // Negated squared terms
+    float neg_qxqx = -(qx * qx);
+    float neg_qzqz = -(qz * qz);
+    float neg_qyqy = -(qy * qy);
+
+    // Quaternion rotation formula
+    vout.z = ((neg_qyqy + neg_qxqx) * vinz + (qxqz - qyqw) * vinx + (qyqz + qxqw) * viny) * 2.0f + vinz;
+    vout.x = ((qzqw + qxqy) * vinz + (neg_qzqz + neg_qyqy) * vinx + (qxqy - qzqw) * viny) * 2.0f + vinx;
+    vout.y = ((qyqz - qxqw) * vinz + (qxqy + qzqw) * vinx + (neg_qzqz + neg_qxqx) * viny) * 2.0f + viny;
 }
 
 void FastInterp(const Hmx::Quat &q1, const Hmx::Quat &q2, float f, Hmx::Quat &qout) {

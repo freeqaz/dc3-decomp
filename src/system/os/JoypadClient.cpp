@@ -164,18 +164,14 @@ int JoypadClient::OnMsg(const ButtonUpMsg &msg) {
 }
 
 void JoypadClient::Poll() {
-    JoypadRepeat *pRepeat = mRepeats;
-    int i = 0;
-    do {
+    for (int i = 0; i < 4; i++) {
         if (ThePlatformMgr.GuideShowing()) {
-            pRepeat->mHoldTimer.Reset();
-            pRepeat->mRepeatTimer.Reset();
+            mRepeats[i].mHoldTimer.Reset();
+            mRepeats[i].mRepeatTimer.Reset();
         } else {
-            pRepeat->Poll(mHoldMs, mRepeatMs, mSink, i);
+            mRepeats[i].Poll(mHoldMs, mRepeatMs, mSink, i);
         }
-        pRepeat++;
-        i++;
-    } while (i < 4);
+    }
 }
 
 void JoypadClient::Init() {

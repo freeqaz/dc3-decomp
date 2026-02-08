@@ -704,24 +704,25 @@ void TransformKeys(RndTransAnim *tanim, const Transform &tf) {
 }
 
 // Swap RGBA byte order in-place for endianness conversion
-// Original uses pointer arithmetic with -4 offset to enable pixel[1] pre-increment pattern
+// Uses pointer arithmetic pattern: base-4 with pixel[1] access for optimal codegen
 void EndianSwapBitmap(RndBitmap &bmap) {
     int row = 0;
+    int col = 0;
     if (bmap.Height() != 0) {
         do {
-            int col = 0;
+            col = 0;
             if (bmap.Width() > 0) {
-                // Start pointer 4 bytes before first pixel for pre-increment access pattern
+                // Pointer positioned 4 bytes before row start for pre-increment access
+                // This pattern (pixel[1] then pixel++) matches original binary codegen
                 u32 *pixel = (u32 *)(bmap.Pixels() + bmap.RowBytes() * row - 4);
                 do {
-                    // Read from pixel[1] (next pixel after pointer increment)
                     u32 val = pixel[1];
                     col++;
-                    pixel++;
-                    // Swap bytes: RGBA -> BGRA (or vice versa)
-                    // Expression swaps bytes 0↔2, preserving bytes 1 and 3
-                    *pixel = (val >> 16 | val & 0xFFFF0000) >> 8 & 0xFFFF
+                    // Endian swap: exchange bytes 0↔2, preserve bytes 1 and 3
+                    // RGBA (0x RRGB BBAA) becomes BGRA (0x BBGG RRAA)
+                    pixel[1] = (val >> 16 | val & 0xFFFF0000) >> 8 & 0xFFFF
                         | ((val << 16 | val & 0xFFFF) & 0xFFFF00) << 8;
+                    pixel++;
                 } while (col < bmap.Width());
             }
             row++;

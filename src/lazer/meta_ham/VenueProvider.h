@@ -13,6 +13,7 @@ public:
     virtual int NumData() const;
 
     void UpdateList();
+    void SetPlayer(int player) { mPlayer = player; }
 
 private:
     int mPlayer; // 0x30
