@@ -12,22 +12,19 @@
 #include "utl/Symbol.h"
 #include <list>
 
-struct CmdAddPlayListToRC : public QueueableCommand {
+struct CmdAddPlaylistToRC : public QueueableCommand {
     virtual int GetType() { return 4; }
-    CmdAddPlayListToRC(Playlist *pl) : playlist(pl) {}
-    Playlist *playlist;
+    CmdAddPlaylistToRC(Playlist *pl) { unk4.playlist = pl; }
 };
 
 struct CmdDeletePlaylistFromRC : public QueueableCommand {
     virtual int GetType() { return 6; }
-    CmdDeletePlaylistFromRC(int i) : num(i) {}
-    int num;
+    CmdDeletePlaylistFromRC(int i) { unk4.i = i; }
 };
 
 struct CmdEditPlaylist : public QueueableCommand {
     virtual int GetType() { return 5; }
-    CmdEditPlaylist(Playlist *pl) : playlist(pl) {}
-    Playlist *playlist;
+    CmdEditPlaylist(Playlist *pl) { unk4.playlist = pl; }
 };
 
 class PlaylistSortMgr : public NavListSortMgr {

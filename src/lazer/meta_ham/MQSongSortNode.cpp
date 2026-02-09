@@ -57,11 +57,11 @@ const char *MQSongHeaderNode::GetAlbumArtPath() {
     static Symbol singles("singles");
 
     NavListSort *sort = TheMQSongSortMgr->GetCurrentSort();
-
-    if (sort->GetSortName() == by_album && GetToken() != singles && !mChildren.empty())
-        return mChildren.front()->GetAlbumArtPath();
-    else
-        return 0;
+    if (sort->GetSortName() == by_album)
+        if (GetToken() != singles)
+            if (!mChildren.empty())
+                return mChildren.front()->GetAlbumArtPath();
+    return 0;
 }
 
 void MQSongHeaderNode::Text(UIListLabel *listlabel, UILabel *label) const {

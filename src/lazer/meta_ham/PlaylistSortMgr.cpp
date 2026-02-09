@@ -227,7 +227,7 @@ DataNode PlaylistSortMgr::OnMsg(SmartGlassMsg const &) {
 }
 
 void PlaylistSortMgr::QueueCmdAddPlaylistToRC(Playlist *pl) {
-    CmdAddPlayListToRC *cmd = new CmdAddPlayListToRC(pl);
+    CmdAddPlaylistToRC *cmd = new CmdAddPlaylistToRC(pl);
     unkc0.push_back(cmd);
     if (!unkc8) {
         ProcessNextCommand();

@@ -48,7 +48,7 @@ NavListShortcutNode *SongSortByDiff::NewShortcutNode(NavListItemNode *node) cons
 
 NavListHeaderNode *SongSortByDiff::NewHeaderNode(NavListItemNode *node) const {
     int tier = node->GetCmp()->GetDifficultyCmp()->mTier;
-    auto newCmp = new DifficultyCmp(tier, 0, "");
+    DifficultyCmp *newCmp = new DifficultyCmp(tier, 0, "");
     static Symbol no_part("no_part");
     Symbol tierToken = tier != -1 ? TheHamSongMgr.RankTierToken(tier) : no_part;
     return new SongHeaderNode(newCmp, tierToken, true);

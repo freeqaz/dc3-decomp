@@ -81,7 +81,7 @@ void PlaylistSortNode::Text(UIListLabel *uiListLabel, UILabel *uiLabel) const {
     } else if (uiListLabel->Matches("duration")) {
         HamLabel *pHamLabel = app_label;
         MILO_ASSERT(pHamLabel, 0x12d);
-        int duration = unk48->GetDuration();
+        int duration = unk4c->GetDuration();
         if (duration > 0) {
             uiLabel->SetTimeHMS(duration, false);
             return;
@@ -149,10 +149,9 @@ bool PlaylistHeaderNode::IsActive() const {
 
 NavListSortNode *PlaylistHeaderNode::GetFirstActive() {
     FOREACH (it, Children()) {
-        NavListSortNode *node = (*it)->GetFirstActive();
-        if (node) {
-            NavListSortNode *result = ThePlaylistSortMgr->HeadersSelectable() ? node : this;
-            return result;
+        NavListSortNode *result = (*it)->GetFirstActive();
+        if (result) {
+            return ThePlaylistSortMgr->HeadersSelectable() ? result : this;
         }
     }
     return nullptr;
