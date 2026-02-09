@@ -73,10 +73,7 @@ PlaylistSortMgr::~PlaylistSortMgr() {}
 void PlaylistSortMgr::Init(SongPreview &sp) {
     MILO_ASSERT(!ThePlaylistSortMgr, 0x1e);
     ThePlaylistSortMgr = new PlaylistSortMgr(sp);
-    Callback *c;
-    if (!ThePlaylistSortMgr) {
-    }
-    TheContentMgr.RegisterCallback(0, false);
+    TheContentMgr.RegisterCallback(ThePlaylistSortMgr, false);
 }
 
 bool PlaylistSortMgr::IsProfileChanged() {
