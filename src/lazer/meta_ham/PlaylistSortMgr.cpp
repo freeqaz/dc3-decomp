@@ -47,9 +47,8 @@ bool CompareType(const Playlist *p1, const Playlist *p2) {
         } while (diff == 0);
         // Extract sign bit: returns true if diff < 0 (p1 < p2)
         return (unsigned int)diff >> 31;
-    } else {
-        return p2type > p1type;
     }
+    return p2type > p1type;
 }
 
 // TODO: Remove once HandleCmdGetPlaylistsFromRC is implemented
@@ -73,10 +72,7 @@ PlaylistSortMgr::~PlaylistSortMgr() {}
 void PlaylistSortMgr::Init(SongPreview &sp) {
     MILO_ASSERT(!ThePlaylistSortMgr, 0x1e);
     ThePlaylistSortMgr = new PlaylistSortMgr(sp);
-    Callback *c;
-    if (!ThePlaylistSortMgr) {
-    }
-    TheContentMgr.RegisterCallback(0, false);
+    TheContentMgr.RegisterCallback(ThePlaylistSortMgr, false);
 }
 
 bool PlaylistSortMgr::IsProfileChanged() {

@@ -135,16 +135,17 @@ void MQSongSortNode::Text(UIListLabel *listlabel, UILabel *label) const {
         AppLabel *pAppLabel = dynamic_cast<AppLabel *>(label);
         MILO_ASSERT(pAppLabel, 0x10f);
         pAppLabel->SetBlacklightSongName(unk48, -1, false);
-    } else if (listlabel->Matches("song_prefix")) {
-        AppLabel *pAppLabel = dynamic_cast<AppLabel *>(label);
-        MILO_ASSERT(pAppLabel, 0x116);
-        if (IsHeader() || !TheHamUI.IsBlacklightMode()) {
-            label->SetTextToken(gNullStr);
-        } else {
-            static Symbol song_select_song_prefix("song_select_song_prefix");
-            label->SetTextToken(song_select_song_prefix);
-        }
     } else {
+        if (listlabel->Matches("song_prefix")) {
+            AppLabel *pAppLabel = dynamic_cast<AppLabel *>(label);
+            MILO_ASSERT(pAppLabel, 0x116);
+            if (IsHeader() || !TheHamUI.IsBlacklightMode()) {
+                label->SetTextToken(gNullStr);
+            } else {
+                static Symbol song_select_song_prefix("song_select_song_prefix");
+                label->SetTextToken(song_select_song_prefix);
+            }
+        }
         label->SetTextToken(listlabel->GetDefaultText());
     }
 }

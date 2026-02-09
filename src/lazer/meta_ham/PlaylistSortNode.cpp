@@ -160,10 +160,11 @@ NavListSortNode *PlaylistHeaderNode::GetFirstActive() {
 char const *PlaylistHeaderNode::GetAlbumArtPath() {
     static Symbol by_album("by_album");
     static Symbol singles("singles");
-    auto curSort = ThePlaylistSortMgr->GetCurrentSort()->GetSortName();
-    if (curSort == by_album && GetToken() != singles && HasChildren()) {
-        return FirstChild()->GetAlbumArtPath();
-    }
+    NavListSort *sort = ThePlaylistSortMgr->GetCurrentSort();
+    if (sort->GetSortName() == by_album)
+        if (GetToken() != singles)
+            if (mChildren.begin() != mChildren.end())
+                return mChildren.front()->GetAlbumArtPath();
     return 0;
 }
 

@@ -200,12 +200,10 @@ bool SongSortMgr::DataIs(int i1, Symbol sym) {
     NavListSortNode *node = mSorts[mCurrentSortIdx]->GetListFromIdx(i1);
     if (sym == song) {
         return dynamic_cast<SongSortNode *>(node) != 0;
-    }
-    if (sym == header) {
+    } else if (sym == header) {
         return dynamic_cast<SongHeaderNode *>(node) != 0;
-    }
-    if (sym != function) {
-        return node != 0;
+    } else if (sym == function) {
+        return dynamic_cast<SongFunctionNode *>(node) != 0;
     }
     return false;
 }

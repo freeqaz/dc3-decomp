@@ -26,8 +26,8 @@ int MQSongCharCmp::Compare(const NavListItemSortCmp *cmp, NavListNodeType type) 
 
 NavListHeaderNode *MQSongSortByCharacter::NewHeaderNode(NavListItemNode *node) const {
     auto cmp = node->GetCmp()->GetMQSongCharCmp();
-    const char *songName = cmp->mSongName;
     const char *characterName = cmp->mCharacterName;
+    const char *songName = cmp->mSongName;
     MQSongCharCmp *songCharCmp = new MQSongCharCmp(songName, characterName);
     Symbol sym(MakeString("mqheader_%s", characterName));
     return new MQSongHeaderNode(songCharCmp, sym, true);
