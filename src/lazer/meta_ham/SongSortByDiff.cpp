@@ -42,20 +42,14 @@ NavListShortcutNode *SongSortByDiff::NewShortcutNode(NavListItemNode *node) cons
     auto cmp = node->GetCmp()->GetDifficultyCmp();
     auto newCmp = new DifficultyCmp(cmp->mTier, 0, "");
     static Symbol no_part("no_part");
-    Symbol tierToken(no_part);
-    if (tierToken != -1) {
-        tierToken = TheHamSongMgr.RankTierToken(cmp->mTier);
-    }
+    Symbol tierToken = cmp->mTier != -1 ? TheHamSongMgr.RankTierToken(cmp->mTier) : no_part;
     return new NavListShortcutNode(newCmp, tierToken, true);
 }
 
 NavListHeaderNode *SongSortByDiff::NewHeaderNode(NavListItemNode *node) const {
-    auto cmp = node->GetCmp()->GetDifficultyCmp();
-    const auto newCmp = new DifficultyCmp(cmp->mTier, 0.0, "");
+    int tier = node->GetCmp()->GetDifficultyCmp()->mTier;
+    auto newCmp = new DifficultyCmp(tier, 0, "");
     static Symbol no_part("no_part");
-    Symbol tierToken(no_part);
-    if (cmp->mTier != -1) {
-        tierToken = TheHamSongMgr.RankTierToken(cmp->mTier);
-    }
+    Symbol tierToken = tier != -1 ? TheHamSongMgr.RankTierToken(tier) : no_part;
     return new SongHeaderNode(newCmp, tierToken, true);
 }

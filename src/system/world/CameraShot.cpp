@@ -462,37 +462,13 @@ void CamShotCrowd::AddCrowdChars(
         return;
     }
 
-    // Create a temporary vector for character indices
-    std::vector<std::pair<int, int> > charIndices;
-
-    // If no characters provided, add all
     if (crowdChars.empty()) {
         mCrowd->Set3DCharAll();
     } else {
-        // Iterate through each character in the list
-        FOREACH (crowdIt, crowdChars) {
-            RndMultiMesh *mesh = crowdIt->first;
-            std::list<RndMultiMesh::Instance>::iterator instanceIter = crowdIt->second;
-
-            // Find the mesh index in the crowd's MultiMesh
-            int meshIdx = 0;
-            bool foundMesh = false;
-            // Assuming we can iterate through the crowd's data structure
-            // to find matching meshes...
-
-            if (foundMesh) {
-                // Find the instance index
-                int instanceIdx = 0;
-                std::list<RndMultiMesh::Instance>::iterator it = mesh->Instances().begin();
-                while (it != mesh->Instances().end() && it != instanceIter) {
-                    instanceIdx++;
-                    ++it;
-                }
-                charIndices.push_back(std::make_pair(meshIdx, instanceIdx));
-            }
-        }
-
-        mCrowd->Set3DCharList(charIndices, unk24);
+        // Note: This implementation is incomplete in DC3. The proper implementation would require
+        // access to WorldCrowd::mCharacters (which is protected) or a public accessor method.
+        // For now, we just call Set3DCharList with the accumulated indices.
+        mCrowd->Set3DCharList(unk18, unk24);
     }
 }
 
@@ -698,11 +674,12 @@ INIT_REVS(0x34, 0)
 BEGIN_LOADS(CamShot)
     LOAD_REVS(bs)
     ASSERT_REVS(0x34, 0)
-    if (mShotOver) {
+    bool hidden = mShotOver;
+    if (hidden) {
         UnHide();
     }
-    float f19 = 0;
-    float f3f4 = 0;
+    float somefloat = 0;
+    float oldRevFloat = 0;
     if (d.rev > 0) {
         Hmx::Object::Load(bs);
         RndAnimatable::Load(bs);
@@ -719,7 +696,7 @@ BEGIN_LOADS(CamShot)
             mLoopKeyframe = false;
         }
         if (d.rev < 0x28) {
-            d >> f3f4;
+            d >> oldRevFloat;
         }
         d >> mNearPlane;
         d >> mFarPlane;
@@ -746,21 +723,21 @@ BEGIN_LOADS(CamShot)
         d >> vec1;
         d >> vec2;
         if (d.rev < 0x28)
-            d >> f3f4;
+            d >> oldRevFloat;
 
-        float fdummy1;
-        d >> fdummy1;
+        float blendDuration;
+        d >> blendDuration;
         d >> mNearPlane;
         d >> mFarPlane;
         d >> mUseDepthOfField;
-        float someotherfloat = 1.0f;
+        float blurDepth = 1.0f;
         if (d.rev > 9) {
-            float newblurdepth;
-            float ff, ff2;
-            d >> newblurdepth;
-            d >> ff;
-            d >> ff2;
-            someotherfloat = 1.0f - newblurdepth;
+            float newBlurDepth;
+            float dummyFloat1, dummyFloat2;
+            d >> newBlurDepth;
+            d >> dummyFloat1;
+            d >> dummyFloat2;
+            blurDepth = 1.0f - newBlurDepth;
         }
         if (d.rev < 4) {
             bool ratebool;
@@ -771,71 +748,71 @@ BEGIN_LOADS(CamShot)
         if (d.rev < 7)
             mFilter = 0.9f;
         d >> mClampHeight;
-        ObjPtrList<RndTransformable> pList(this);
-        ObjPtr<RndTransformable> ptr(this);
-        int listsize;
-        d >> listsize;
-        for (int i = 0; i < listsize; i++) {
+        ObjPtrList<RndTransformable> targetList(this);
+        ObjPtr<RndTransformable> parentPtr(this);
+        int targetCount;
+        d >> targetCount;
+        for (int i = 0; i < targetCount; i++) {
             RndTransformable *subpart = LoadSubPart(d, this);
             if (subpart)
-                pList.push_back(subpart);
+                targetList.push_back(subpart);
         }
-        ptr = LoadSubPart(d, this);
-        bool somebool = false;
+        parentPtr = LoadSubPart(d, this);
+        bool useParentRotation = false;
         if (d.rev > 10)
-            d >> somebool;
-        CamShotFrame csf1(this);
-        CamShotFrame csf2(this);
-        if (fdummy1 > 0.0f) {
-            csf1.mDuration = 0.0f;
-            csf1.mBlend = fdummy1;
-            csf1.mWorldOffset = tf1;
-            csf1.mScreenOffset = vec1;
-            csf1.mFOV = fov1;
-            csf1.mBlurDepth = someotherfloat;
-            csf1.mMaxBlur = 1;
-            csf1.mMinBlur = 0;
-            csf1.mFocusBlurMultiplier = 0.0f;
-            csf1.mTargets = pList;
-            csf1.mParent = ptr;
-            csf1.mUseParentRotation = somebool;
-            mKeyframes.push_back(csf1);
+            d >> useParentRotation;
+        CamShotFrame frame1(this);
+        CamShotFrame frame2(this);
+        if (blendDuration > 0.0f) {
+            frame1.mDuration = 0.0f;
+            frame1.mBlend = blendDuration;
+            frame1.mWorldOffset = tf1;
+            frame1.mScreenOffset = vec1;
+            frame1.mFOV = fov1;
+            frame1.mBlurDepth = blurDepth;
+            frame1.mMaxBlur = 1;
+            frame1.mMinBlur = 0;
+            frame1.mFocusBlurMultiplier = 0.0f;
+            frame1.mTargets = targetList;
+            frame1.mParent = parentPtr;
+            frame1.mUseParentRotation = useParentRotation;
+            mKeyframes.push_back(frame1);
         }
-        csf2.mDuration = 0.0f;
-        csf2.mBlend = 0.0f;
-        csf2.mWorldOffset = tf2;
-        csf2.mScreenOffset = vec2;
-        csf2.mFOV = fov2;
-        csf2.mBlurDepth = someotherfloat;
-        csf2.mMaxBlur = 1;
-        csf2.mMinBlur = 0;
-        csf2.mFocusBlurMultiplier = 0.0f;
-        csf2.mTargets = pList;
-        csf2.mParent = ptr;
-        csf2.mUseParentRotation = somebool;
-        mKeyframes.push_back(csf2);
+        frame2.mDuration = 0.0f;
+        frame2.mBlend = 0.0f;
+        frame2.mWorldOffset = tf2;
+        frame2.mScreenOffset = vec2;
+        frame2.mFOV = fov2;
+        frame2.mBlurDepth = blurDepth;
+        frame2.mMaxBlur = 1;
+        frame2.mMinBlur = 0;
+        frame2.mFocusBlurMultiplier = 0.0f;
+        frame2.mTargets = targetList;
+        frame2.mParent = parentPtr;
+        frame2.mUseParentRotation = useParentRotation;
+        mKeyframes.push_back(frame2);
     }
 
     d >> mPath;
     if (d.rev > 1 && d.rev < 0x2D) {
-        float f2b;
-        d >> f2b;
+        float unusedPathFloat;
+        d >> unusedPathFloat;
     }
     if (d.rev > 2) {
         d >> mCategory;
         if (d.rev < 0x26) {
-            float f26;
-            d >> f26;
+            float unusedCategoryFloat;
+            d >> unusedCategoryFloat;
         }
     }
     if (d.rev > 0x22) {
         d >> (int &)mPlatform;
     } else if (d.rev > 0x21) {
-        int state;
-        d >> state;
-        if (state == 1) {
+        int platformState;
+        d >> platformState;
+        if (platformState == 1) {
             mPlatform = kPlatformXBox;
-        } else if (state == 2) {
+        } else if (platformState == 2) {
             mPlatform = kPlatformPS3;
         } else {
             mPlatform = kPlatformNone;
@@ -844,14 +821,14 @@ BEGIN_LOADS(CamShot)
     if (d.rev < 1) {
         RndAnimatable::Load(bs);
     }
-    CamShotCrowd csc(this);
+    CamShotCrowd crowdData(this);
 
     if (d.rev > 4 && d.rev < 42) {
-        d >> csc.unk18;
+        d >> crowdData.unk18;
     }
-    int loc240 = -1;
+    int crowdModifyStamp = -1;
     if (d.rev >= 8 && d.rev < 42)
-        d >> loc240;
+        d >> crowdModifyStamp;
     if (d.rev > 5) {
         mGenHideVector.clear();
         mShowList.clear();
@@ -860,7 +837,7 @@ BEGIN_LOADS(CamShot)
             d >> mHideList;
         } else {
             d >> mHideList;
-            d >> mShowList;
+            LoadDrawables(bs, mGenHideVector, Dir());
         }
     }
     if (d.rev > 0x1B) {
@@ -869,46 +846,46 @@ BEGIN_LOADS(CamShot)
 
     if (d.rev > 0xB) {
         if (d.rev < 0x2A)
-            d >> csc.mCrowd;
+            d >> crowdData.mCrowd;
     } else {
         const DataNode *prop = Property("hide_crowd", false);
         if (!prop || prop->Int() == 0) {
             ObjDirItr<WorldCrowd> iter(Dir(), true);
             if (iter) {
-                csc.mCrowd = iter;
+                crowdData.mCrowd = iter;
             }
         }
     }
     if (d.rev > 32 && d.rev < 42)
-        d >> (int &)csc.mCrowdRotate;
+        d >> (int &)crowdData.mCrowdRotate;
     if (d.rev >= 8 && d.rev < 42) {
-        if (csc.mCrowd) {
-            if (loc240 != csc.mCrowd->GetModifyStamp())
-                csc.unk18.clear();
-        } else if (loc240 != -1)
-            csc.unk18.clear();
+        if (crowdData.mCrowd) {
+            if (crowdModifyStamp != crowdData.mCrowd->GetModifyStamp())
+                crowdData.unk18.clear();
+        } else if (crowdModifyStamp != -1)
+            crowdData.unk18.clear();
     }
     if (d.rev == 0xE) {
-        float f244, f248, f24c;
-        d >> f244;
-        d >> f248;
-        d >> f24c;
+        float unused1, unused2, unused3;
+        d >> unused1;
+        d >> unused2;
+        d >> unused3;
     }
 
     if (d.rev > 15 && d.rev < 18) {
-        float f250, f254;
-        bs >> f250;
-        bs >> f254;
+        float shakeFreq, shakeAmp;
+        bs >> shakeFreq;
+        bs >> shakeAmp;
         for (int i = 0; i != mKeyframes.size(); i++) {
-            mKeyframes[i].mShakeNoiseAmp = f254;
-            mKeyframes[i].mShakeNoiseFreq = f250;
+            mKeyframes[i].mShakeNoiseAmp = shakeAmp;
+            mKeyframes[i].mShakeNoiseFreq = shakeFreq;
         }
     }
     if (d.rev > 0x10 && d.rev < 0x12) {
-        Vector2 v210;
-        bs >> v210;
+        Vector2 shakeAngle;
+        bs >> shakeAngle;
         for (int i = 0; i != mKeyframes.size(); i++) {
-            mKeyframes[i].mShakeMaxAngle = v210;
+            mKeyframes[i].mShakeMaxAngle = shakeAngle;
         }
     }
     if (d.rev > 0x13)
@@ -922,12 +899,12 @@ BEGIN_LOADS(CamShot)
     }
     if (d.rev > 0x24)
         d >> mFlags;
-    Symbol s258;
+    Symbol oldAnimSym;
     if (d.rev > 39 && d.rev < 43)
-        d >> s258;
+        d >> oldAnimSym;
     if (d.rev < 0x2A) {
-        if (csc.mCrowd)
-            mCrowds.push_back(csc);
+        if (crowdData.mCrowd)
+            mCrowds.push_back(crowdData);
     } else
         d >> mCrowds;
     if (d.rev > 0x2A)
@@ -938,15 +915,12 @@ BEGIN_LOADS(CamShot)
         static Symbol none("none");
         mCrowdStateOverride = none;
     }
-    if (d.rev > 0x2A) {
-        d >> mAnims;
-    }
 
-    if (!s258.Null()) {
-        mAnims.push_back(Dir()->Find<RndAnimatable>(s258.Str(), false));
+    if (!oldAnimSym.Null()) {
+        mAnims.push_back(Dir()->Find<RndAnimatable>(oldAnimSym.Str(), false));
     }
     CacheFrames();
-    if (mShotOver)
+    if (hidden)
         DoHide();
 END_LOADS
 

@@ -23,7 +23,7 @@ namespace {
     void JpegTermDestination(jpeg_compress_struct *s) {
         ExtendedDestMgr *dest = (ExtendedDestMgr *)s->dest;
         MILO_ASSERT(dest, 0x9c);
-        // No cleanup needed for this simple destination manager
+        *(int *)((char *)dest + 0x1c) = dest->bufferSize - dest->pub.free_in_buffer;
     }
 };
 

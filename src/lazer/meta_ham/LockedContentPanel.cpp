@@ -178,13 +178,16 @@ void LockedContentPanel::SetUpNoFlashcards(Symbol song, Difficulty diff) {
     Flow *pFlowSingle = DataDir()->Find<Flow>("song_list_single.flow");
     pFlowSingle->Activate();
     int songID = TheHamSongMgr.GetSongIDFromShortName(song);
+    // Access drawables via pointer arithmetic (filler array in header)
     RndDrawable *pDrawable1 = *(RndDrawable **)((u8 *)this + 0x3c);
     pDrawable1->SetShowing(true);
     RndDrawable *pDrawable2 = *(RndDrawable **)((u8 *)this + 0x5c);
     pDrawable2->SetShowing(true);
     pContentName->SetSongName(song, -1, false);
+    // Configure stars display for the specified difficulty (no flashcards case)
     HamStarsDisplay *pStarsDisplay = *(HamStarsDisplay **)((u8 *)this + 0x5c);
     pStarsDisplay->SetSongWithDifficulty(songID, diff, true);
+    // Hide 7 drawable pairs via array traversal
     RndDrawable **pPtr = (RndDrawable **)((u8 *)this + 0x5c);
     int loopCount = 7;
     do {
@@ -215,15 +218,15 @@ void LockedContentPanel::SetUpDifficultyLocked(Symbol song, Symbol difficultySym
     static Symbol award_hard_playlist_instruction("award_hard_playlist_instruction");
     static Symbol award_mediummedley_instruction("award_mediummedley_instruction");
     static Symbol award_hardmedley_instruction("award_hardmedley_instruction");
+    Symbol diffInstruction;
     if (TheGameMode->InMode("playlist_perform", true)) {
-        Symbol diffInstruction;
         if (diff == kDifficultyMedium) {
             diffInstruction = award_medium_playlist_instruction;
         } else {
             diffInstruction = award_hard_playlist_instruction;
         }
         pInstructions->SetTokenFmt(diffInstruction, 3);
-        // Hide drawable elements in playlist mode (8 elements starting at offset 0x58)
+        // Hide 8 drawable pairs in playlist mode via array traversal (filler region)
         RndDrawable **pPtr = (RndDrawable **)((u8 *)this + 0x58);
         int loopCount = 8;
         do {
@@ -233,7 +236,6 @@ void LockedContentPanel::SetUpDifficultyLocked(Symbol song, Symbol difficultySym
             loopCount -= 1;
         } while (loopCount != 0);
     } else {
-        Symbol diffInstruction;
         if (diff == kDifficultyMedium) {
             diffInstruction = award_medium_instruction;
         } else {
@@ -243,16 +245,18 @@ void LockedContentPanel::SetUpDifficultyLocked(Symbol song, Symbol difficultySym
         Flow *pFlowPractice = DataDir()->Find<Flow>("song_list_perform_practice.flow");
         pFlowPractice->Activate();
         int songID = TheHamSongMgr.GetSongIDFromShortName(song, true);
-        // Show drawables for song display (offsets 0x3c and 0x5c)
+        // Access drawables via pointer arithmetic (filler array in header at 0x3c-0x7b)
+        // Show song display drawable at offset 0x3c
         RndDrawable *pDrawable1 = *(RndDrawable **)((u8 *)this + 0x3c);
         pDrawable1->SetShowing(true);
+        // Show stars display drawable at offset 0x5c (also used as HamStarsDisplay)
         RndDrawable *pDrawable2 = *(RndDrawable **)((u8 *)this + 0x5c);
         pDrawable2->SetShowing(true);
         pContentName->SetSongName(song, -1, false);
-        // Set up stars display showing one difficulty lower than the locked difficulty
+        // Access HamStarsDisplay at same offset and configure for previous difficulty tier
         HamStarsDisplay *pStarsDisplay = *(HamStarsDisplay **)((u8 *)this + 0x5c);
         pStarsDisplay->SetSongWithDifficulty(songID, (Difficulty)(diff - 1), true);
-        // Hide additional drawable elements (7 elements starting at offset 0x5c)
+        // Hide 7 drawable pairs via array traversal (offsets span filler[16] region)
         RndDrawable **pPtr = (RndDrawable **)((u8 *)this + 0x5c);
         int loopCount = 7;
         do {

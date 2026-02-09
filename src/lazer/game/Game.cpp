@@ -680,16 +680,16 @@ DataNode Game::OnSetShuttle(DataArray *arr) {
     }
     bool active = arr->Int(2);
     if (active) {
-        float time = mMaster->GetAudio()->GetTime();
-        mShuttle->SetMs(time);
+        mShuttle->SetMs(mMaster->GetAudio()->GetTime());
         mShuttle->SetEndMs(mSongDB->GetSongDurationMs());
+        mShuttle->SetActive(active);
     } else {
         Jump(mShuttle->Ms(), true);
         do {
             TheSynth->Poll();
         } while (!IsLoaded());
+        mShuttle->SetActive(active);
     }
-    mShuttle->SetActive(active);
     return 0;
 }
 

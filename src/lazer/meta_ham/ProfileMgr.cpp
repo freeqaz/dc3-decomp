@@ -401,15 +401,21 @@ void ProfileMgr::SetOverscan(bool overscan) {
 }
 
 float ProfileMgr::GetSongToTaskMgrMs(LagContext lc) const {
-    switch (lc) {
-    case kPractice90:
-        return mSongToTaskMgrMs - unk34 - 0x46;
-    case kPractice80:
-    case kPractice70:
-    default:
-        break;
+    int sub_val;
+    if (lc != kPractice90) {
+        if (lc != kPractice80) {
+            if (lc == kPractice70) {
+                sub_val = 0x23;
+            } else {
+                sub_val = 0;
+            }
+        } else {
+            sub_val = 0x37;
+        }
+    } else {
+        sub_val = 0x46;
     }
-    return 0;
+    return mSongToTaskMgrMs - unk34 - sub_val;
 }
 
 // bool ProfileMgr::IsUnlockableContent(Symbol s) const {

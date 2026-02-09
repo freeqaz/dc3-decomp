@@ -48,10 +48,11 @@ template const char *MakeString<const char(&)[9], const char(&)[3], const char(&
 MemTracker::MemTracker(int x, int y)
     : mHashMem(nullptr), mHashTable(nullptr), mTimeSlice(0), mCurStatTable(0),
       mFreedInfos(y), mLog(0), mReport(0), mHeap(x) {
+    int hashSize = y * 2;
     mHashMem = DebugHeapAlloc(y * 8);
     MILO_ASSERT(mHashMem, 0x4E);
     mHashTable = new KeylessHash<void *, AllocInfo *>(
-        x * 2, (AllocInfo *)0, (AllocInfo *)-1, (AllocInfo **)mHashMem
+        hashSize, (AllocInfo *)0, (AllocInfo *)-1, (AllocInfo **)mHashMem
     );
     mFreeSysMem = _GetFreeSystemMemory();
     mFreePhysMem = _GetFreePhysicalMemory();

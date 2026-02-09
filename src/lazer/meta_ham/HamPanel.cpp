@@ -41,7 +41,14 @@ void HamPanel::Poll() { UIPanel::Poll(); }
 UIComponent *HamPanel::FocusComponent() {
     auto pEventDialog = TheHamUI.EventDialogPanel();
     MILO_ASSERT(pEventDialog, 60);
-    return UIPanel::FocusComponent();
+    if (pEventDialog->GetState() == kUp && pEventDialog != this) {
+        return pEventDialog->FocusComponent();
+    }
+    OverlayPanel *overlay = TheHamUI.GetOverlayPanel();
+    if (!overlay || overlay == this) {
+        return UIPanel::FocusComponent();
+    }
+    return overlay->FocusComponent();
 }
 
 BEGIN_HANDLERS(HamPanel)

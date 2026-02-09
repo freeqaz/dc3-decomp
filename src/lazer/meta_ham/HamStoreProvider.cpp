@@ -211,9 +211,7 @@ void HamStoreProvider::SetPackList(StoreOffer const *offer) {
     static Symbol pack("pack");
     if (offer->OfferType() == pack) {
         static Symbol songs("songs");
-        DataArrayPtr ptr = DataArrayPtr(songs);
-        unk78.mSongs = offer->GetData(ptr, false).Array(0);
-        unk78.mSongs->Release();
+        unk78.mSongs = offer->GetData(DataArrayPtr(songs), false).Array(0);
     } else {
         unk78.mSongs = 0;
     }

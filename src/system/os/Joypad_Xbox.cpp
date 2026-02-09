@@ -231,20 +231,32 @@ JoypadType SetupHXGuitar(int pad, const XINPUT_CAPABILITIES &c) {
         return u4 ? kJoypadXboxHxGuitarRb2 : kJoypadXboxHxGuitar;
 }
 
+// Identifies drum controller type based on XInput capabilities
+// Rock Band 2 drums have enhanced features when flag 2 is set,
+// but require either flag 1 or a high sThumbRX value for identification
 JoypadType SetupHXDrums(int pad, const XINPUT_CAPABILITIES &c) {
-    bool u5 = c.Flags & 0x2;
-    bool u1 = c.Flags & 1;
-    bool u4 = u5 && (u1 || c.Gamepad.sThumbRX >= 0x100);
-    bool u2 = u5 && u1;
-    JoypadGetPadData(pad)->unk4b = u5; // wireless?
-    JoypadGetPadData(pad)->unk4a = u1;
+    bool hasFlag1 = c.Flags & 1;
+    bool hasFlag2 = c.Flags & 0x2;
+    bool isRb2Drums;
+    if (!hasFlag1) {
+        isRb2Drums = hasFlag2 && c.Gamepad.sThumbRX >= 0x100;
+    } else {
+        isRb2Drums = hasFlag2;
+    }
+    bool isRockOfAgesDrums = hasFlag2 && hasFlag1;
+    JoypadGetPadData(pad)->unk4b = hasFlag2;
+    JoypadGetPadData(pad)->unk4a = hasFlag1;
     if (c.Gamepad.sThumbLX == 0x1BAD) {
         GetBreedData(pad);
         return kJoypadXboxMidiBoxDrums;
-    } else if (u4) {
+    }
+    if (isRb2Drums) {
         return kJoypadXboxDrumsRb2;
-    } else
-        return u2 ? kJoypadXboxRoDrums : kJoypadXboxDrums;
+    }
+    if (isRockOfAgesDrums) {
+        return kJoypadXboxRoDrums;
+    }
+    return kJoypadXboxDrums;
 }
 
 bool ReceiveUpstreamResponse(int pad, unsigned char *data) {

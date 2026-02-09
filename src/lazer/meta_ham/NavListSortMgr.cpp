@@ -175,14 +175,15 @@ int NavListSortMgr::GetListIndexFromHeaderIndex(int idx) {
         if (0 < size) {
             return mHeadersB.front();
         }
-    }
-    if (idx < size) {
         return 0;
     }
-    if (size > 0) {
-        return mHeadersB[size - 1];
+    if (idx >= size) {
+        if (0 < size) {
+            return mHeadersB[size - 1];
+        }
+        return 0;
     }
-    return 0;
+    return mHeadersB[idx];
 }
 
 void NavListSortMgr::OnExit() {
@@ -210,8 +211,9 @@ RndMat *NavListSortMgr::Mat(int i1, int i2, UIListMesh *mesh) const {
 int NavListSortMgr::NumData() const { return mSorts[mCurrentSortIdx]->GetDataCount(); }
 
 void NavListSortMgr::ClearIconLabels() {
-    for (int i = NumData(); i != 0; i--) {
-        mSorts[mCurrentSortIdx]->GetListFromIdx(i)->SetCollapseIconLabel(nullptr);
+    int numData = NumData();
+    for (int i = 0; i < numData; i++) {
+        mSorts[mCurrentSortIdx]->GetListFromIdx(i)->SetCollapseIconLabel(0);
     }
 }
 

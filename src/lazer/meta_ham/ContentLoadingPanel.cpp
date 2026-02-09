@@ -1,6 +1,7 @@
 #include "meta_ham/ContentLoadingPanel.h"
 #include "obj/Dir.h"
 #include "obj/Object.h"
+#include "obj/Task.h"
 #include "os/ContentMgr.h"
 #include "os/Debug.h"
 #include "rndobj/Group.h"
@@ -52,9 +53,37 @@ void ContentLoadingPanel::ContentDone() {
 }
 
 void ContentLoadingPanel::Poll() {
+    ShowIfPossible();
     if (mShowing) {
         UIPanel::Poll();
-        RndGroup *progressGroup = ObjectDir::Main()->Find<RndGroup>("progress.grp");
+        RndGroup *progressGroup = ObjectDir::Main()->Find<RndGroup>("progress.grp", true);
+        if (unk40 > 0 && progressGroup) {
+            // Animate progress bar smoothly toward target percentage
+            f32 currentFrame = progressGroup->GetFrame();
+            int total = unk44;
+            int current = unk40;
+
+            // Calculate target frame (110% of progress, capped at 100)
+            f32 target = ((f32)total * 110.0f) / (f32)current;
+            if (target > 100.0f) {
+                target = 100.0f;
+            }
+
+            // Clamp delta time to [0, 1] range
+            f32 delta = TheTaskMgr.DeltaSeconds();
+            if (delta < 0.0f) {
+                delta = 0.0f;
+            } else if (delta > 1.0f) {
+                delta = 1.0f;
+            }
+
+            // Interpolate toward target, snap to 100% when fully loaded
+            f32 newFrame = (target - currentFrame) * delta + currentFrame;
+            if (current == total) {
+                newFrame = 100.0f;
+            }
+            progressGroup->SetFrame(newFrame, 1.0f);
+        }
     }
 }
 

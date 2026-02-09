@@ -255,7 +255,12 @@ void HamStorePanel::CreateCartUIs() {
     static Symbol description("description");
     static Symbol art("art");
     static Symbol store_filter_song_import_offers("store_filter_song_import_offers");
-    // something
+
+    HamStoreFilter *filter1 = new HamStoreFilter(store_filter_shopping_cart);
+    unkac.insert(unkac.begin(), filter1);
+
+    HamStoreFilter *filter2 = new HamStoreFilter(store_filter_song_import_offers);
+    unkac.push_back(filter2);
 }
 
 BEGIN_HANDLERS(HamStorePanel)

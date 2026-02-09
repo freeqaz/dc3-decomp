@@ -104,9 +104,11 @@ void SpotlightDrawer::DrawBeams(
     MILO_ASSERT(spotIter != spotEnd, 0x2c7);
     for (; spotIter != spotEnd; ++spotIter) {
         Spotlight *sl = spotIter->unk4;
-        Spotlight::BeamDef &def = sl->GetBeam();
-        MILO_ASSERT(def.mBeam->Showing(), 0x2e4);
-        def.mBeam->DrawShowing();
+        Spotlight::BeamDef &def = sl->mBeam;
+        if (def.mBeam) {
+            MILO_ASSERT(def.mBeam->Showing(), 0x2e4);
+            def.mBeam->DrawShowing();
+        }
     }
 }
 

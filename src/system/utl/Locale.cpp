@@ -99,10 +99,10 @@ void Locale::Init() {
     MILO_ASSERT(!mNumFilesLoaded, 0x5C);
 
     mSize = 0;
-    int i13 = 0;
-    int numChunks = 0;
+    int totalStrLen = 0;  // Total length of all unique localized strings
+    int numChunks = 0;     // Number of locale entries loaded from files
     LocaleChunkSort::OrderedLocaleChunk *chunks = 0;
-    Symbol s60;
+    Symbol prevSym;        // Tracks previous symbol to deduplicate
 
     // Check for alternate devkit locale file
     String devkitPath(FileMakePath("devkit:\\locale", MakeString("%s\\locale_keep.dta", SystemLanguage())));
@@ -130,7 +130,9 @@ void Locale::Init() {
         std::vector<DataArray *> arrVec(cfg->Size() - 1);
         mNumFilesLoaded = arrVec.size();
 
-        int i10 = 0;
+        int totalChunks = 0;
+        // NOTE: mInitialized is uninitialized here (UB). RB3 doesn't have this check.
+        // This appears to be dead code or a bug, but matches the original binary.
         if (mInitialized) {
             for (int i = 1; i < cfg->Size(); i++) {
                 const char *path = FileMakePath(FileGetPath(cfg->File()), cfg->Str(i));
@@ -138,10 +140,10 @@ void Locale::Init() {
                 if (!arrVec[i - 1]) {
                     MILO_FAIL("could not load language file %s", path);
                 }
-                i10 += arrVec[i - 1]->Size();
+                totalChunks += arrVec[i - 1]->Size();
             }
 
-            chunks = new LocaleChunkSort::OrderedLocaleChunk[i10];
+            chunks = new LocaleChunkSort::OrderedLocaleChunk[totalChunks];
 
             numChunks = 0;
             for (int j = cfg->Size() - 2; j >= 0; j--) {
@@ -171,39 +173,34 @@ void Locale::Init() {
 
         mSize = 0;
         for (int i = 0; i < numChunks; i++) {
-            Symbol curSym = chunks[i].node1.LiteralSym(0);
-            if (curSym != s60) {
-                const char *str = chunks[i].node3.LiteralStr(0);
-                const char *p = str;
-                while (*p++) {
-                }
-                i13 += (p - str) - 1;
-                s60 = curSym;
+            Symbol curSym = chunks[i].node1.LiteralSym();
+            if (curSym != prevSym) {
+                totalStrLen += strlen(chunks[i].node3.LiteralStr());
+                prevSym = curSym;
                 mSize++;
             }
         }
     }
 
     mSymTable = new Symbol[mSize];
-    mStringData = new StringTable(i13);
+    mStringData = new StringTable(totalStrLen);
     mStrTable = new const char *[mSize];
     mUploadedFlags = new bool[mSize];
 
-    s60 = Symbol();
+    prevSym = Symbol();
 
     if (numChunks > 0) {
         int chunkIdx = 0;
         for (int i = 0; i < numChunks; i++) {
-            Symbol curSym = chunks[i].node1.LiteralSym(0);
-            if (curSym != s60) {
+            Symbol curSym = chunks[i].node1.LiteralSym();
+            if (curSym != prevSym) {
                 mUploadedFlags[chunkIdx] = 0;
                 mSymTable[chunkIdx] = curSym;
-                mStrTable[chunkIdx] = mStringData->Add(chunks[i].node3.LiteralStr(0));
-                s60 = curSym;
+                mStrTable[chunkIdx] = mStringData->Add(chunks[i].node3.LiteralStr());
+                prevSym = curSym;
                 chunkIdx++;
-            } else {
+            } else
                 MILO_WARN("Locale symbol '%s' redefined\n", curSym);
-            }
         }
     }
 

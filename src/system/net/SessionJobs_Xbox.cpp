@@ -18,10 +18,11 @@ XboxSessionJob::~XboxSessionJob() {
 bool XboxSessionJob::IsFinished() {
     DWORD dw;
     DWORD res = XGetOverlappedResult(&mXOverlapped, &dw, false);
-    if (res == ERROR_IO_PENDING) {
+    bool result = res != ERROR_IO_PENDING;
+    if (!result == false) {
         CheckError(res, &mXOverlapped);
     }
-    return res;
+    return result;
 }
 
 void XboxSessionJob::Cancel(Hmx::Object *) { XCancelOverlapped(&mXOverlapped); }

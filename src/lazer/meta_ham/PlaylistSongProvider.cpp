@@ -1,5 +1,6 @@
 #include "lazer/meta_ham/PlaylistSongProvider.h"
 #include "Playlist.h"
+#include "HamSongMgr.h"
 #include "macros.h"
 #include "meta_ham/AppLabel.h"
 #include "obj/Object.h"
@@ -20,43 +21,48 @@ int PlaylistSongProvider::NumData() const {
     return unk30->GetNumSongs();
 }
 
-Symbol PlaylistSongProvider::DataSymbol(int m_pPlaylist) const {
-    MILO_ASSERT(m_pPlaylist, 0x6d);
-    return Symbol(0);
+Symbol PlaylistSongProvider::DataSymbol(int idx) const {
+    MILO_ASSERT(unk30, 0x6d);
+
+    if (idx >= 0 && idx < NumData()) {
+        if (unk30 != nullptr && unk30->IsValidSong(idx)) {
+            int songID = unk30->GetSong(idx);
+            return TheHamSongMgr.GetShortNameFromSongID(songID, true);
+        }
+    }
+
+    return Symbol(nullptr);
 }
 
 void PlaylistSongProvider::Text(
-    int, int i_iData, UIListLabel *uiListLabel, UILabel *uiLabel
+    int i1, int data, UIListLabel *slot, UILabel *label
 ) const {
-    MILO_ASSERT(i_iData < NumData(), 0x22);
-    Symbol dataSym = DataSymbol(i_iData);
-    if (uiListLabel->Matches("song")) {
+    MILO_ASSERT(data < NumData(), 0x22);
+    Symbol dataSym = DataSymbol(data);
+    if (slot->Matches("song")) {
         static Symbol playlist_addsong("playlist_addsong");
         if (dataSym == playlist_addsong) {
             static Symbol songname_numbered("songname_numbered");
-            uiLabel->SetTokenFmt(songname_numbered, i_iData + playlist_addsong);
+            label->SetTokenFmt(songname_numbered, data + 1, playlist_addsong);
             return;
         }
-        AppLabel *pAppLabel = dynamic_cast<AppLabel *>(uiLabel);
+        AppLabel *pAppLabel = dynamic_cast<AppLabel *>(label);
         MILO_ASSERT(pAppLabel, 0x31);
-        if (NumData() > 0x14 && i_iData >= 0x13) {
-            static Symbol ellipsis("ellipsis");
-            uiLabel->SetTextToken(ellipsis);
+        if (!(NumData() > 0x14 && data > 0x12)) {
+            pAppLabel->SetSongName(dataSym, data + 1, false);
         } else {
-            pAppLabel->SetSongName(dataSym, i_iData + 1, false);
+            static Symbol ellipsis("ellipsis");
+            label->SetTextToken(ellipsis);
         }
-    } else if (uiListLabel->Matches("song_length")) {
+    } else if (slot->Matches("song_length")) {
         static Symbol playlist_addsong("playlist_addsong");
-        if (dataSym == playlist_addsong) {
-            static Symbol ellipsis("ellipsis");
-            uiLabel->SetTextToken(ellipsis);
-        } else if (NumData() > 0x14 && i_iData >= 0x13) {
-            static Symbol ellipsis("ellipsis");
-            uiLabel->SetTextToken(ellipsis);
-        } else {
-            AppLabel *pAppLabel = dynamic_cast<AppLabel *>(uiLabel);
+        if (dataSym != playlist_addsong && (NumData() <= 0x14 || data < 0x13)) {
+            AppLabel *pAppLabel = dynamic_cast<AppLabel *>(label);
             MILO_ASSERT(pAppLabel, 0x4d);
             pAppLabel->SetSongDuration(dataSym);
+        } else {
+            static Symbol ellipsis("ellipsis");
+            label->SetTextToken(ellipsis);
         }
     }
 }

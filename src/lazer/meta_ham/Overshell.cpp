@@ -105,27 +105,35 @@ void Overshell::Poll(const Skeleton *const (&skeletons)[6]) {
 }
 
 void Overshell::ResolveSkeletons() {
-    if (TheGestureMgr != nullptr) {
-        for (int i = 0; i < 2; i++) {
-            HamPlayerData *playerData = TheGameData->Player(i);
-            OvershellSlot *slot = mSlots[i];
+    if (TheGestureMgr == nullptr) return;
 
-            if (playerData->IsPlaying()) {
-                playerData = TheGameData->Player(i);
-                Skeleton *skel = TheGestureMgr->GetSkeletonByTrackingID(
-                    playerData->GetSkeletonTrackingID()
-                );
+    for (int i = 0; i < 2; i++) {
+        HamPlayerData *playerData = TheGameData->Player(i);
 
-                playerData = TheGameData->Player(i);
-                if ((skel != nullptr) || (playerData->IsAutoplaying())
-                    || (TheGestureMgr->Unk425C() == 1)) {
-                    slot->SetState((OvershellSlotState)3);
-                }
+        if (!playerData->IsPlaying()) {
+            mSlots[i]->SetState((OvershellSlotState)0);
+            continue;
+        }
 
-                playerData = TheGameData->Player(i);
-                if (playerData->GetSkeletonTrackingID() < 1) {
-                    slot->SetState((OvershellSlotState)0);
-                }
+        // Redundant assignment required for register allocation
+        playerData = TheGameData->Player(i);
+        int skeletonID = playerData->GetSkeletonTrackingID();
+        Skeleton *skel = TheGestureMgr->GetSkeletonByTrackingID(skeletonID);
+
+        // Load autoplay into local to match original load ordering
+        playerData = TheGameData->Player(i);
+        Symbol autoplay = playerData->Autoplay();
+
+        if ((skel != nullptr) || (!autoplay.Null())
+            || (TheGestureMgr->Unk425C() == 1)) {
+            mSlots[i]->SetState((OvershellSlotState)3);
+        } else {
+            // Awkward structure required for matching
+            playerData = TheGameData->Player(i);
+            if (playerData->GetSkeletonTrackingID() > 0) {
+                // Empty - intentional for matching
+            } else {
+                mSlots[i]->SetState((OvershellSlotState)0);
             }
         }
     }

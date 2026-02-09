@@ -150,8 +150,13 @@ void HamDriver::LayerClip::Play(CharBones &bones) {
 CharClip *HamDriver::LayerClip::FirstClip() { return unk10; }
 
 bool HamDriver::LayerClip::Replace(ObjRef *ref, Hmx::Object *obj) {
-    if ((ObjRef *)unk10.Ptr() == ref && unk10.SetObj(obj) == nullptr) {
-        delete unk10;
+    if (&unk10 == ref) {
+        if (!unk10.SetObj(obj)) {
+            CharClip *ptr = unk10.Ptr();
+            if (ptr) {
+                delete ptr;
+            }
+        }
         return true;
     }
     return false;
@@ -190,14 +195,13 @@ void HamDriver::LayerArray::Play(CharBones &bones) {
 }
 
 CharClip *HamDriver::LayerArray::FirstClip() {
-    CharClip *clip;
     FOREACH (it, unk2c) {
-        clip = (*it)->FirstClip();
+        CharClip *clip = (*it)->FirstClip();
         if (clip != nullptr) {
-            break;
+            return clip;
         }
     }
-    return clip;
+    return nullptr;
 }
 
 void HamDriver::LayerArray::OffsetSec(float f1) {

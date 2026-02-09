@@ -852,11 +852,12 @@ void CampaignPerformer::UnlockAllMoves(Symbol s1, Symbol s2, int i3) {
 }
 
 Symbol CampaignPerformer::GetLastEra() const {
-    for (int i = 0; i < TheCampaign->NumEras(); i++) {
+    for (unsigned int i = 0; i < (unsigned int)TheCampaign->NumEras(); i++) {
         CampaignEra *pEra = TheCampaign->GetEra(i);
         MILO_ASSERT(pEra, 0x3B);
-        // if pEra->unk50
-        return pEra->GetName();
+        if (pEra->GetUnk50()) {
+            return pEra->GetName();
+        }
     }
     return gNullStr;
 }

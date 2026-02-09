@@ -41,20 +41,24 @@ unsigned char asciiDigitToHex(char digit) {
 }
 
 void parseHex16(const char *input, unsigned char *output) {
-    const char *src = input;
     unsigned int val;
-    int i;
+    const char *src = input;
 
-    for (i = 0; i < 0x10; i++, src += 2) {
-        val = asciiDigitToHex(src[1]) + (asciiDigitToHex(src[0]) << 4);
+    for (unsigned int i = 0; i < 0x10; ++i) {
+        val = (asciiDigitToHex(src[0]) << 4) + asciiDigitToHex(src[1]);
         *output++ = val;
+        src += 2;
     }
 }
 
+// Linear congruential generator (LCG) for pseudo-random numbers
+// Constants: multiplier=0x19660E, increment=0x3C6EF35F
+// Pass non-zero value to seed, or 0 to generate next value
 long random(long l) {
     static long s_seed = 0xEB;
-    if (l != 0)
+    if (l) {
         s_seed = l;
+    }
     s_seed = s_seed * 0x19660E + 0x3C6EF35F;
     return s_seed;
 }
@@ -161,9 +165,10 @@ void supershuffle(char *c) {
     shuffle6(c);
 }
 
+extern volatile long lbl_82F5E180;
+
 void opaquePredicate() {
-    static int nTimesCalled = 0;
-    nTimesCalled++;
+    lbl_82F5E180++;
 }
 
 void memcpy_cs(unsigned char *uc, const unsigned char *cuc, unsigned int i) {

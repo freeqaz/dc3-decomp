@@ -162,11 +162,15 @@ bool SaveLoadManager::SongCacheNeedsWrite() {
 void SaveLoadManager::DisableAutosave(HamProfile *pProfile) {
     if (!pProfile) {
         MILO_NOTIFY("Tried to disable autosave without a valid profile.");
-    } else if (!IsIdle()) {
-        MILO_NOTIFY("Tried to disable autosave while saveloadmgr is not idle.");
-    } else {
-        pProfile->SetSaveState(kMetaProfileError); // error?
+        return;
     }
+
+    if (!IsIdle()) {
+        MILO_NOTIFY("Tried to disable autosave while saveloadmgr is not idle.");
+        return;
+    }
+
+    pProfile->SetSaveState(kMetaProfileError);
 }
 
 bool SaveLoadManager::IsSafePlaceToSave() const {

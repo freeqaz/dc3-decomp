@@ -149,9 +149,13 @@ bool PlaylistHeaderNode::IsActive() const {
 
 NavListSortNode *PlaylistHeaderNode::GetFirstActive() {
     FOREACH (it, Children()) {
-        if ((*it)->GetFirstActive())
-            return *it;
+        NavListSortNode *node = (*it)->GetFirstActive();
+        if (node) {
+            NavListSortNode *result = ThePlaylistSortMgr->HeadersSelectable() ? node : this;
+            return result;
+        }
     }
+    return nullptr;
 }
 
 char const *PlaylistHeaderNode::GetAlbumArtPath() {

@@ -32,18 +32,23 @@ bool CompareType(const Playlist *p1, const Playlist *p2) {
     int p1type = p1->GetType();
     int p2type = p2->GetType();
     if (p1type == p2type) {
-        bool p1custom = p1->IsCustom();
-        bool p2custom = p2->IsCustom();
-        for (int i = 0; i == 0; i = p1custom - p2custom) {
-            if (p1custom == 0)
+        // Manual strcmp on playlist name (Symbol mName at offset 0x4)
+        unsigned char *b1 = (unsigned char *)p1 + 4;
+        unsigned char *b2 = (unsigned char *)p2 + 4;
+        int diff;
+        do {
+            unsigned char c1 = *b1;
+            unsigned char c2 = *b2;
+            diff = c1 - c2;
+            if (c1 == 0)
                 break;
-            p1custom++;
-            p2custom++;
-        }
+            b1++;
+            b2++;
+        } while (diff == 0);
+        // Extract sign bit: returns true if diff < 0 (p1 < p2)
+        return (unsigned int)diff >> 31;
     } else {
-        int p1type = p1->GetType();
-        int p2type = p2->GetType();
-        return p2type <= p1type ? false : true;
+        return p2type > p1type;
     }
 }
 

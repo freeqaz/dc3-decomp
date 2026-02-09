@@ -102,15 +102,19 @@ void SongSortMgr::OnHighlightChanged() {
 }
 
 void SongSortMgr::MarkElementsProvided(UIListProvider *prov) {
-    if (prov) {
-        for (int i = 0; i < prov->NumData(); i++) {
+    if (!prov) return;
+    int count = prov->NumData();
+    int i = 0;
+    if (count > 0) {
+        do {
             Symbol sym = prov->DataSymbol(i);
             SongSortNode *ssn =
                 dynamic_cast<SongSortNode *>(GetCurrentSort()->GetNode(sym));
             if (ssn) {
                 ssn->SetInPlaylist(true);
             }
-        }
+            i++;
+        } while (i < count);
     }
 }
 
@@ -122,16 +126,18 @@ void SongSortMgr::MarkElementInPlaylist(Symbol sym, bool b) {
     }
 }
 
-int SongSortMgr::GetListIndexFromHeaderIndex(int i1) {
+int SongSortMgr::GetListIndexFromHeaderIndex(int idx) {
     int size = mHeadersB.size();
-    if (i1 < 0 && 0 < size) {
-        return mHeadersB.front();
+    if (idx < 0) {
+        if (0 < size) {
+            return mHeadersB.front();
+        }
+        return 1;
     }
-    if (i1 < size) {
+    if (idx >= size && 0 < size) {
         return mHeadersB[size - 1];
     }
-
-    return 1;
+    return mHeadersB[idx];
 }
 
 void SongSortMgr::OnSetlistChanged() {
@@ -163,12 +169,12 @@ void SongSortMgr::SetQuasiRandomSong() {
     int numIndices = unk94.size();
     MILO_ASSERT(numIndices > 0, 0x175);
 
-    int halfSize = numIndices / 2;
-    int offset = rand() % halfSize;
+    int offset = rand() % (numIndices / 2);
     int selectedValue = unk94[offset];
     unk94.erase(unk94.begin() + offset);
     unk94.push_back(selectedValue);
-    Symbol song = mSorts[mCurrentSortIdx]->DataSymbol(selectedValue);
+    int sortIdx = mCurrentSortIdx;
+    Symbol song = mSorts[sortIdx]->DataSymbol(selectedValue);
     MetaPerformer::Current()->SetSong(song);
 }
 
@@ -227,13 +233,11 @@ void SongSortMgr::RebuildSongRecordMap() {
     std::vector<int> rankedSongs;
     TheHamSongMgr.GetRankedSongs(rankedSongs);
     unk90 = rankedSongs.size();
-    for (int i = 0; i < rankedSongs.size(); i++) {
-        const HamSongMetadata *metadata = TheHamSongMgr.Data(i);
-        if ((metadata && !metadata->IsFake())
+    FOREACH (it, rankedSongs) {
+        const HamSongMetadata *metadata = TheHamSongMgr.Data(*it);
+        if (metadata && !metadata->IsFake()
             && TheProfileMgr.IsContentUnlocked(metadata->ShortName())) {
-            // auto first = metadata->DefaultCharacter();
-            SongRecord second = SongRecord(metadata);
-            // std::pair<Symbol, SongRecord> p;
+            SongRecord second(metadata);
             unk78.insert(std::pair<Symbol, SongRecord>(metadata->ShortName(), second));
         }
     }

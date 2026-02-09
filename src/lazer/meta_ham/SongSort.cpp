@@ -3,12 +3,14 @@
 #include "AppLabel.h"
 #include "ChallengeSort.h"
 #include "SongSortMgr.h"
+#include "SongSortNode.h"
 #include "game/GameMode.h"
 #include "meta_ham/NavListNode.h"
 #include "meta_ham/SongSortMgr.h"
 #include "os/Debug.h"
 #include "ui/UILabel.h"
 #include "ui/UIListLabel.h"
+#include "utl/Std.h"
 
 SongSort::SongSort() {};
 
@@ -25,15 +27,60 @@ void SongSort::BuildItemList() {
         sym = unk50->GetToken();
     }
     DeleteItemList();
+
     static Symbol song_select_mode("song_select_mode");
     static Symbol song_select_story("song_select_story");
     static Symbol song_select_playlist("song_select_playlist");
     static Symbol random_song("random_song");
     static Symbol perform("perform");
     static Symbol dance_battle("dance_battle");
+
     bool inPerform = TheGameMode->InMode(perform, true);
     bool inDanceBattle = TheGameMode->InMode(dance_battle, true);
-    auto prop = TheGameMode->Property(song_select_mode, true)->Sym();
+    Symbol prop = TheGameMode->Property(song_select_mode, true)->Sym();
+
+    if (TheSongSortMgr->HeadersSelectable() && (inPerform || inDanceBattle) && song_select_playlist != prop) {
+        static Symbol finish_setlist("finish_setlist");
+        SongFunctionNode *node = new SongFunctionNode(nullptr, finish_setlist, "ui/image/song_select_setlist_keep");
+        node->SetShortcut(unk30[0]);
+        unk3c.insert(unk3c.end(), node);
+
+        if (inPerform) {
+            static Symbol playlists("playlists");
+            SongFunctionNode *playlistNode = new SongFunctionNode(nullptr, playlists, "ui/image/song_select_setlist_keep");
+            playlistNode->SetShortcut(unk30[0]);
+            unk3c.insert(unk3c.end(), playlistNode);
+        }
+    } else if (song_select_playlist == prop) {
+        static Symbol finish_setlist("finish_setlist");
+        SongFunctionNode *node = new SongFunctionNode(nullptr, finish_setlist, "ui/image/song_select_setlist_keep");
+        node->SetShortcut(unk30[0]);
+        unk3c.insert(unk3c.end(), node);
+    }
+
+    FOREACH(it, unk3c) {
+        (*it)->Renumber(mList);
+    }
+
+    FOREACH(it, unk30) {
+        (*it)->Renumber(mList);
+    }
+
+    if (song_select_playlist == prop) {
+        FOREACH(it, unk3c) {
+            (*it)->Renumber(mList);
+        }
+    }
+
+    FOREACH(it, unk30) {
+        (*it)->FinishBuildList(this);
+    }
+
+    if (sym != gNullStr) {
+        unk50 = GetNode(sym);
+    }
+
+    TheSongSortMgr->FinalizeHeaders();
 }
 
 void SongSort::SetHighlightedIx(int i1) {

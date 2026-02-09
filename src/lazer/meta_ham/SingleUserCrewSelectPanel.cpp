@@ -65,7 +65,8 @@ void SingleUserCrewSelectPanel::UpdateProviders() {
 }
 
 void SingleUserCrewSelectPanel::UpdateProviderPlayerIndices() {
-    for (int i = 0; i < 2; i++) {
+    int i;
+    for (i = 0; i < 2; i++) {
         int playerIndex = GetPlayerIndex(i);
         mCharProviders[i].SetPlayer(playerIndex);
         mOutfitProviders[i].SetPlayer(playerIndex);

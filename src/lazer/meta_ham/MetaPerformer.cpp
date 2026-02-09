@@ -18,6 +18,7 @@
 #include "meta_ham/HamProfile.h"
 #include "meta_ham/HamSongMetadata.h"
 #include "meta_ham/HamSongMgr.h"
+#include "meta_ham/PassiveMessenger.h"
 #include "meta_ham/ProfileMgr.h"
 #include "meta_ham/SongStatusMgr.h"
 #include "meta_ham/Utl.h"
@@ -1286,17 +1287,71 @@ void MetaPerformer::SaveAndUploadScores(Symbol s, int i1, int i2) {
     }
 
     if (0 < count) {
-        // something here with i1
         static Symbol p1("p1");
         static Symbol p2("p2");
         static Symbol alert_highscore_solo("alert_highscore_solo");
         static Symbol alert_highscore_coop("alert_highscore_coop");
+
+        Difficulty highestDiff = EasiestDifficulty();
 
         for (int i = 0; i < 2; i++) {
             HamPlayerData *pPlayerData = TheGameData->Player(i);
             MILO_ASSERT(pPlayerData, 0x1ad);
             Hmx::Object *pPlayerProvider = pPlayerData->Provider();
             MILO_ASSERT(pPlayerProvider, 0x1af);
+
+            Symbol playerName = (i == 0) ? p1 : p2;
+            Difficulty difficulty = (Difficulty)pPlayerData->GetDifficulty();
+            int padNum = pPlayerData->PadNum();
+
+            if (IsHarderDifficulty(difficulty, highestDiff)) {
+                highestDiff = difficulty;
+            }
+
+            HamProfile *pProfile = TheProfileMgr.GetProfileFromPad(padNum);
+            if (pProfile && !TheAccomplishmentMgr->Unk30(padNum)) {
+                SongStatusMgr *pSongStatusMgr = pProfile->GetSongStatusMgr();
+                MILO_ASSERT(pSongStatusMgr, 0x1c1);
+
+                static Symbol scoreSymbol("score");
+                const DataNode *pScoreNode = pPlayerProvider->Property(scoreSymbol);
+                int playerScore = pScoreNode ? pScoreNode->Int() : 0;
+
+                if (playerScore > 0 || i1 > 0) {
+                    bool baseScoreLocked = false;
+                    int baseScore = pSongStatusMgr->GetScore(i1, baseScoreLocked);
+                    int oldCoopScore = pSongStatusMgr->GetCoopScore(i1);
+
+                    if (baseScore < playerScore) {
+                        ThePassiveMessenger->TriggerGenericMsg(
+                            alert_highscore_solo, playerName, kPassiveMessageGeneral, Symbol(), -1
+                        );
+                    }
+
+                    if (oldCoopScore < i1) {
+                        ThePassiveMessenger->TriggerGenericMsg(
+                            alert_highscore_coop, playerName, kPassiveMessageGeneral, Symbol(), -1
+                        );
+                    }
+
+                    static Symbol moveAwesomeSymbol("move_awesome");
+                    int awesomeCount = GetMovesPassedByType(i, moveAwesomeSymbol);
+
+                    static Symbol movePerfectSymbol("move_perfect");
+                    int perfectCount = GetMovesPassedByType(i, movePerfectSymbol);
+
+                    int totalMovesPassed = GetMovesPassed(i);
+
+                    pProfile->UpdateScore(
+                        i1, pPlayerData, difficulty, playerScore, i1, i2, awesomeCount, perfectCount,
+                        totalMovesPassed, 0, false, false
+                    );
+                }
+            }
+        }
+
+        if (TheGameMode->InMode("campaign", true)) {
+            // Additional campaign-specific logic
         }
     }
 }

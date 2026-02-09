@@ -128,12 +128,13 @@ void XboxContent::Mount() {
 }
 
 void XboxContent::Unmount() {
-    // Cache member access for register allocation
+    // Cache state and overlapped pointer for register allocation
     State state = mState;
     XOVERLAPPED **overlappedPtr = &mOverlapped;
 
     if (state == kMounted) {
         *overlappedPtr = new XOVERLAPPED();
+        // 0x3E5 = ERROR_IO_PENDING - async operation started
         if (XContentClose(mRoot.c_str(), *overlappedPtr) != 0x3E5) {
             RELEASE(*overlappedPtr);
             mState = kContentDeleting;

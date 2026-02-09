@@ -11,12 +11,12 @@ int MQSongCharCmp::Compare(const NavListItemSortCmp *cmp, NavListNodeType type) 
 
     case kNodeHeader: {
         const MQSongCharCmp *mqCmp = cmp->GetMQSongCharCmp();
-        return strcmp(unk8, mqCmp->unk8);
+        return strcmp(mCharacterName, mqCmp->mCharacterName);
     }
 
     case kNodeItem: {
         const MQSongCharCmp *mqCmp = cmp->GetMQSongCharCmp();
-        return strcmp(unk4, mqCmp->unk4);
+        return strcmp(mSongName, mqCmp->mSongName);
     }
     default:
         MILO_FAIL("invalid type of node comparison.\n");
@@ -26,26 +26,25 @@ int MQSongCharCmp::Compare(const NavListItemSortCmp *cmp, NavListNodeType type) 
 
 NavListHeaderNode *MQSongSortByCharacter::NewHeaderNode(NavListItemNode *node) const {
     auto cmp = node->GetCmp()->GetMQSongCharCmp();
-    const char *p1 = cmp->unk4;
-    const char *p2 = cmp->unk8;
-    MQSongCharCmp *songCharCmp = new MQSongCharCmp(p1, p2);
-    Symbol sym(MakeString("mqheader_%s", p2));
+    const char *songName = cmp->mSongName;
+    const char *characterName = cmp->mCharacterName;
+    MQSongCharCmp *songCharCmp = new MQSongCharCmp(songName, characterName);
+    Symbol sym(MakeString("mqheader_%s", characterName));
     return new MQSongHeaderNode(songCharCmp, sym, true);
 }
 
 NavListShortcutNode *MQSongSortByCharacter::NewShortcutNode(NavListItemNode *node) const {
-    const char *p1 = node->GetCmp()->GetMQSongCharCmp()->unk4;
-    const char *p2 = node->GetCmp()->GetMQSongCharCmp()->unk8;
-    MQSongCharCmp *songCharCmp = new MQSongCharCmp(p1, p2);
-    return new NavListShortcutNode(songCharCmp, p2, true);
+    const char *songName = node->GetCmp()->GetMQSongCharCmp()->mSongName;
+    const char *characterName = node->GetCmp()->GetMQSongCharCmp()->mCharacterName;
+    MQSongCharCmp *songCharCmp = new MQSongCharCmp(songName, characterName);
+    return new NavListShortcutNode(songCharCmp, characterName, true);
 }
 
-NavListItemNode *MQSongSortByCharacter::NewItemNode(void *node) const {
-    Symbol outfitChar;
-    Symbol shortName = *static_cast<Symbol *>(node);
-    outfitChar = GetOutfitCharacter(
-        TheHamSongMgr.Data(TheHamSongMgr.GetSongIDFromShortName(shortName, true))->Outfit(),
+NavListItemNode *MQSongSortByCharacter::NewItemNode(void *songSymbol) const {
+    Symbol *pSongSymbol = static_cast<Symbol *>(songSymbol);
+    Symbol outfitChar = GetOutfitCharacter(
+        TheHamSongMgr.Data(TheHamSongMgr.GetSongIDFromShortName(*pSongSymbol, true))->Outfit(),
         true);
-    MQSongCharCmp *songCharCmp = new MQSongCharCmp(shortName.Str(), outfitChar.Str());
-    return new MQSongSortNode(songCharCmp, shortName, outfitChar);
+    MQSongCharCmp *songCharCmp = new MQSongCharCmp(pSongSymbol->Str(), outfitChar.Str());
+    return new MQSongSortNode(songCharCmp, *pSongSymbol, outfitChar);
 }

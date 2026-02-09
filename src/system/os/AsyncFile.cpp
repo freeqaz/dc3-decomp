@@ -138,12 +138,12 @@ bool AsyncFile::WriteAsync(const void *v, int i) {
             int size = gBufferSize - mOffset;
             memcpy(mBuffer + mOffset, v, size);
             mOffset = gBufferSize;
+            remaining -= size;
             v = (void *)((int)v + size);
             mTell += size;
             Flush();
             if (mFail)
                 return false;
-            remaining -= size;
         }
         memcpy(mBuffer + mOffset, v, remaining);
         mTell += remaining;

@@ -14,6 +14,7 @@ namespace {
     float gAdjust = 1;
     int gLog = -1;
     bool gClamp = true;
+    unsigned char gInitCheatDone = 0;
     const char *kConv[] = { "------00++++++00----",
                             "---0+++0-----0+++0--",
                             "-++0--++0--++0--++0-",
@@ -69,17 +70,13 @@ namespace {
     }
 
     void initCheat() {
-        // if(SomeGlobalOrSymbol == 0) {
-        // SomeGlobalOrSymbol = 1;
-        Symbol cycle_movement_bone("cycle_movement_bone");
-        DataRegisterFunc(cycle_movement_bone, CycleDebugBone);
-        Symbol tighten_current_bone("tighten_current_bone");
-        DataRegisterFunc(tighten_current_bone, TightenDebugBone);
-        Symbol loosen_current_bone("loosen_current_bone");
-        DataRegisterFunc(loosen_current_bone, LoosenDebugBone);
-        Symbol ktb_debug_cheat("ktb_debug_cheat");
-        DataRegisterFunc(ktb_debug_cheat, DataSpaceCheat);
-        //}
+        if (!gInitCheatDone) {
+            gInitCheatDone = 1;
+            DataRegisterFunc(Symbol("cycle_movement_bone"), CycleDebugBone);
+            DataRegisterFunc(Symbol("tighten_current_bone"), TightenDebugBone);
+            DataRegisterFunc(Symbol("loosen_current_bone"), LoosenDebugBone);
+            DataRegisterFunc(Symbol("ktb_debug_cheat"), DataSpaceCheat);
+        }
     }
 
     float Mean(const std::vector<float> &vec, int start, int end) {

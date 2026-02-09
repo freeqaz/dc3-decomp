@@ -894,12 +894,19 @@ void AccomplishmentManager::UpdateMiscellaneousSongDataForUser(
 }
 
 HardCoreStatus AccomplishmentManager::GetIconHardCoreStatus(int x) const {
-    int i;
-    for (i = 0; i < 4; i++) {
-        if (x < mIconThresholds[i]) {
+    int i = 0;
+    const int *p = mIconThresholds;
+    const int *end = mIconThresholds + 4;
+
+    do {
+        if (x >= *p) {
+            p++;
+            i++;
+        } else {
             return (HardCoreStatus)i;
         }
-    }
+    } while (p < end);
+
     return (HardCoreStatus)3;
 }
 

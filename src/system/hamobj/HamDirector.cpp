@@ -636,15 +636,16 @@ Key<Symbol> *HamDirector::GetMasterPracticeFrame(Symbol s) {
 HamCamShot *HamDirector::FindNextDircut() {
     float secs = TheTaskMgr.Seconds(TaskMgr::kRealTime);
     const DircutEntry *entry = mDirCutKeys.Cross(secs, secs - TheTaskMgr.DeltaSeconds());
+    HamCamShot *shot = nullptr;
     if (entry) {
-        HamCamShot *ret = nullptr;
-        if (mNumPlayersFailed != 0 || (entry->unk4 && mExcitement < 3)) {
-            ret = entry->unk0;
-            unk140 = true;
+        if (mNumPlayersFailed || (entry->unk4 && mExcitement >= 3)) {
+            shot = entry->unk0;
+            if (shot) {
+                unk140 = true;
+            }
         }
-        return ret;
     }
-    return nullptr;
+    return shot;
 }
 
 void HamDirector::SetDircut(Symbol s, std::vector<CameraManager::PropertyFilter> filters) {
@@ -1955,7 +1956,7 @@ void HamDirector::OnPopulateFromFile() {
         variants->Release();
     }
     TheMoveMgr->ComputeLoadedMoveSet();
-    // LoadRoutineBuilderData()
+    LoadRoutineBuilderData((std::set<const MoveVariant *> &)TheMoveMgr->GetVariants(), true);
     OnPopulateFromMoveMgr();
 }
 

@@ -5,6 +5,7 @@
 #include "utl/MakeString.h"
 #include "utl/Symbol.h"
 
+// Returns 0 for item nodes, 1 for all other node types
 int FitnessCalorieSortCmp::Compare(
     NavListItemSortCmp const *cmp, NavListNodeType type
 ) const {
@@ -18,11 +19,15 @@ FitnessCalorieSortByCalorie::FitnessCalorieSortByCalorie() {
 
 NavListShortcutNode *
 FitnessCalorieSortByCalorie::NewShortcutNode(NavListItemNode *node) const {
-    Symbol s = MakeString("calorie_shortcut_%i", node->Header());
+    Symbol s = MakeString(
+        "calorie_shortcut_%i", static_cast<FitnessCalorieSortNode *>(node)->GetUnk48()
+    );
     FitnessCalorieSortCmp *cmp = new FitnessCalorieSortCmp();
     return new NavListShortcutNode(cmp, s, true);
 }
 
+// Note: Both NewHeaderNode and NewShortcutNode use the same symbol format
+// ("calorie_shortcut_%i"). This appears intentional in the original code.
 NavListHeaderNode *
 FitnessCalorieSortByCalorie::NewHeaderNode(NavListItemNode *node) const {
     Symbol s = MakeString("calorie_shortcut_%i", node->Header());

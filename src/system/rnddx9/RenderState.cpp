@@ -24,10 +24,6 @@ void RndRenderState::SetColorWriteMask(uint mask) {
     D3DDevice_SetRenderState_ColorWriteEnable(TheDxRnd.Device(), mask);
 }
 
-// void RndRenderState::SetTextureFilter(unsigned int, FilterMode, bool) {}
-// void RndRenderState::SetTextureClamp(unsigned int, ClampMode) {}
-// void RndRenderState::SetBorderColor(unsigned int, bool) {}
-
 void RndRenderState::SetFillMode(FillMode mode) {
     D3DDevice_SetRenderState_FillMode(TheDxRnd.Device(), (int)mode);
 }
@@ -76,6 +72,5 @@ void RndRenderState::SetStencilOp(StencilOp fail, StencilOp zfail, StencilOp pas
 void RndRenderState::Init(void) {
     SetTextureClamp(4, (ClampMode)2);
     SetTextureClamp(5, (ClampMode)2);
-
     SetTextureFilter(5, (FilterMode)1, false);
 }

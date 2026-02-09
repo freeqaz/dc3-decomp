@@ -109,20 +109,16 @@ void MoveAsyncDetector::EnqueueDetectFrames(int i1, int i2, float f3, int i4) {
     for (std::set<MoveDetector *>::iterator it = unk10.begin(); it != unk10.end(); ++it) {
         MoveDetector *cur = *it;
         cur->Poll(i1, i2, mDir);
-        mDir->EnqueueDetectFrames(
-            f3, i4, cur->PlayerDetectFrames(i4), cur->Move()->FilterVer()
-        );
+        const HamMove *move = cur->Move();
+        std::vector<DetectFrame> &frames = cur->PlayerDetectFrames(i4);
+        mDir->EnqueueDetectFrames(f3, i4, frames, move->FilterVer());
     }
 }
 
 void MoveAsyncDetector::DisableAllDetectors() {
     unk10.clear();
-    for (std::vector<MoveDetector *>::iterator it = unk4.begin(); it != unk4.end();
-         ++it) {
-        MoveDetector *cur = *it;
-        if (cur) {
-            cur->Reset();
-        }
+    FOREACH (it, unk4) {
+        (*it)->Reset();
     }
 }
 
@@ -146,13 +142,7 @@ void MoveAsyncDetector::EnableDetector(HamMove *move) {
 void MoveAsyncDetector::DisableDetector(HamMove *move) {
     MoveDetector *detector = FindDetector(move);
     if (detector != 0) {
-        if (detector->mActive) {
-            detector->mLastDetectFracs[0] = 0;
-            detector->mLastDetectFracs[1] = 0;
-            detector->unk8 = -1;
-            detector->unkc = -1;
-            detector->mActive = false;
-        }
+        detector->Reset();
         unk10.erase(detector);
     } else if (move != 0) {
         MILO_NOTIFY("Could not disable detector for %s", PathName(move));

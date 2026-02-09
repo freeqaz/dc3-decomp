@@ -231,6 +231,39 @@ These don't affect match percentage in objdiff scoring. Ignore.
 
 ---
 
+## Stack Spill Scheduling
+
+**Prevalence:** Functions with high register pressure
+**Typical Gap:** ~1-2%
+
+The target binary spills a local variable to the stack frame, but our code keeps it in a register.
+
+### Symptom
+
+objdiff shows 1-3 `delete` instructions that are all `stw rN, offset(rFP)` to the stack frame. The stored register contains a local variable that's used later in the function.
+
+### Why Unfixable
+
+Stack spill decisions are made by the register allocator based on register pressure, estimated spill/reload cost, and scheduling heuristics. These are internal compiler decisions with no source-level knob. Hoisting declarations, reordering code, or adding dummy uses generally doesn't change the spill pattern.
+
+### Detection
+
+- 1-3 `delete` instructions, all `stw` to stack frame offsets
+- The function is otherwise very close (97%+)
+- Removing/adding code doesn't change the spill pattern
+
+### What To Do
+
+Accept the ~1-2% gap and mark at_limit.
+
+### Real Example
+
+| Function | Match | Gap | Notes |
+|----------|-------|-----|-------|
+| PhysicsManager::HarvestCollidables | 97.4% | ~2.6% | Target spills `owner` to stack 0x54 twice |
+
+---
+
 ## When "Unfixable" May Still Move
 
 Large functions (especially 95%+ matches) often look dominated by compiler noise, but there is usually a small actionable subset.

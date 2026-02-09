@@ -1,5 +1,4 @@
 #include "hamobj/SongDifficultyDisplay.h"
-#include "SongDifficultyDisplay.h"
 #include "obj/Object.h"
 #include "os/Debug.h"
 #include "rndobj/Anim.h"
@@ -25,14 +24,14 @@ BEGIN_SAVES(SongDifficultyDisplay)
     bs << mResourceDir;
 END_SAVES
 
-BEGIN_COPYS(SongDifficultyDisplay)
-    COPY_SUPERCLASS(UIComponent)
-    CREATE_COPY(SongDifficultyDisplay)
-    BEGIN_COPYING_MEMBERS
-        COPY_MEMBER(mResourceDir)
-    END_COPYING_MEMBERS
+void SongDifficultyDisplay::Copy(const Hmx::Object *o, Hmx::Object::CopyType ty) {
+    UIComponent::Copy(o, ty);
+    const SongDifficultyDisplay *c = dynamic_cast<const SongDifficultyDisplay *>(o);
+    if (c) {
+        mResourceDir = c->mResourceDir;
+    }
     Update();
-END_COPYS
+}
 
 BEGIN_LOADS(SongDifficultyDisplay)
     PreLoad(bs);

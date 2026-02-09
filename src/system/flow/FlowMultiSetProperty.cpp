@@ -3,6 +3,7 @@
 #include "flow/FlowNode.h"
 #include "obj/Data.h"
 #include "obj/Object.h"
+#include "char/CharClipSet.h"
 
 FlowMultiSetProperty::FlowMultiSetProperty()
     : unk5c(this, (EraseMode)1, kObjListNoNull) {}
@@ -10,7 +11,7 @@ FlowMultiSetProperty::FlowMultiSetProperty()
 FlowMultiSetProperty::~FlowMultiSetProperty() {}
 
 BEGIN_PROPSYNCS(FlowMultiSetProperty)
-    SYNC_PROP(targets, unk5c)
+    SYNC_PROP_MODIFY(targets, unk5c, (unk5c.sort(ObjNameSort()), unk5c.unique()))
     SYNC_PROP(value, unk78)
     SYNC_SUPERCLASS(FlowNode)
 END_PROPSYNCS
@@ -52,8 +53,8 @@ bool FlowMultiSetProperty::Activate() {
         }
     }
     FlowNode::PushDrivenProperties();
-    for (ObjPtrVec<Hmx::Object>::iterator it = unk5c.begin(); it != unk5c.end(); ++it) {
-        Hmx::Object *obj = *it;
+    FOREACH (it, unk5c) {
+        Hmx::Object *obj = it->Obj();
         if (obj != nullptr) {
             obj->SetProperty(unk78.Array(), unk80);
         }

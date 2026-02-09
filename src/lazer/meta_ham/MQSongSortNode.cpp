@@ -49,8 +49,7 @@ Symbol MQSongHeaderNode::OnSelectDone() {
 }
 
 bool MQSongHeaderNode::IsActive() const {
-    return TheMQSongSortMgr->HeadersSelectable() != 0; // fruity function not sure whats
-                                                       // going on
+    return TheMQSongSortMgr->HeadersSelectable() != 0;
 }
 
 const char *MQSongHeaderNode::GetAlbumArtPath() {
@@ -68,7 +67,7 @@ const char *MQSongHeaderNode::GetAlbumArtPath() {
 void MQSongHeaderNode::Text(UIListLabel *listlabel, UILabel *label) const {
     if (listlabel->Matches("song")) {
         const MQSongCharCmp *cmp = mCmp->GetMQSongCharCmp();
-        const char *c = cmp->unk8;
+        const char *c = cmp->mCharacterName;
         Symbol s(MakeString("mqheader_%s", c));
         label->SetTextToken(s);
     } else if (listlabel->Matches("song_prefix")) {
@@ -113,6 +112,7 @@ NavListSortNode *MQSongHeaderNode::GetFirstActive() {
     if (!TheMQSongSortMgr->HeadersSelectable()) {
         return this;
     }
+    return nullptr;
 }
 
 void MQSongHeaderNode::Renumber(std::vector<NavListSortNode *> &vec) {

@@ -484,10 +484,11 @@ void RndText::FontMap::CleanupSyncMeshes() {
         Page &page = *(mPages[i]);
         RndMesh *mesh = page.mesh;
         if (mesh) {
-            for (RndMesh::Vert *it = mesh->Verts().begin(); page.unk8 != it; ++it) {
-                RndMesh::Vert *old = page.unk8;
-                page.unk8++;
-                old->pos.Zero();
+            while (page.unk8 != mesh->Verts().begin()) {
+                RndMesh::Vert *old = page.unk8++;
+                old->pos.x = 0.0f;
+                old->pos.y = 0.0f;
+                old->pos.z = 0.0f;
             }
             mesh->Sync(page.unkc);
         }

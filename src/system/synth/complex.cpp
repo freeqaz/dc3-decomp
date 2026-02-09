@@ -14,29 +14,29 @@ complex expj(double d1) {
 
 complex csqrt(complex cplx) {
     complex result;
-    double hypotenuse = hypot(cplx.y, cplx.x); // actually calls _hypot but i cant find
-                                               // it
-    double dVar4 = (hypotenuse - cplx.x) * 0.5;
+    double h;
+    double dy;
+    double dx;
 
-    if (dVar4 >= 0.0)
-        result.y = sqrt(dVar4);
+    h = hypot(cplx.y, cplx.x);
+    dy = (h - cplx.x) * 0.5;
+    result.y = (dy >= 0.0) ? sqrt(dy) : 0.0;
 
-    hypotenuse = (cplx.y + hypotenuse) * 0.5;
-    if (hypotenuse >= 0.0)
-        result.x = sqrt(hypotenuse);
+    dx = (cplx.y + h) * 0.5;
+    result.x = (dx >= 0.0) ? sqrt(dx) : 0.0;
 
-    if (result.x < 0.0)
-        result.y = -result.x;
+    if (cplx.y < 0.0)
+        result.y = -result.y;
 
     return result;
 }
 
 complex cexp(complex cplx) {
-    complex result;
-    complex c = expj(cplx.y);
-    double ex = exp(cplx.x);
-    result.x = c.x * ex;
-    result.y = c.y * ex;
+    struct complex result;
+    complex phase = expj(cplx.y);
+    double magnitude = exp(cplx.x);
+    result.x = magnitude * phase.x;
+    result.y = magnitude * phase.y;
     return result;
 }
 

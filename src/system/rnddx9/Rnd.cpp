@@ -52,17 +52,27 @@ void DxRnd::DrawRect(
 }
 
 void DxRnd::DrawLine(const Vector3 &v1, const Vector3 &v2, const Hmx::Color &c, bool b4) {
+    // Vertex buffer layout: 2 vertices (xyz + color each) + Transform matrix
+    // Total: 8 floats + 48 bytes = 96 bytes (24 floats)
     float vertices[24];
+    unsigned long colorVal = MakeColor(c);
+
+    // First vertex
     vertices[0] = v1.x;
     vertices[1] = v1.y;
     vertices[2] = v1.z;
-    vertices[3] = MakeColor(c);
+    *(unsigned long *)&vertices[3] = colorVal;
+
+    // Second vertex
     vertices[4] = v2.x;
     vertices[5] = v2.y;
     vertices[6] = v2.z;
-    vertices[7] = vertices[3];
+    *(unsigned long *)&vertices[7] = colorVal;
+
+    // Initialize identity transform in-place (vertices[8..19])
     Transform &xfm = reinterpret_cast<Transform &>(vertices[8]);
     xfm.Reset();
+
     TheShaderMgr.SetTransform(xfm);
     RndShader::SelectConfig(nullptr, b4 ? kLineShader : kLineNozShader, false);
     D3DDevice_SetFVF(mD3DDevice, 0x42);
@@ -137,13 +147,13 @@ void DxRnd::DrawLargeQuad(
     D3DDevice_SetTexture(mD3DDevice, 0x10, nullptr, 0x8000);
 }
 
-void DxRnd::SetVertShaderTex(RndTex *tex, int i2) {
+void DxRnd::SetVertShaderTex(RndTex *tex, int sampler) {
     DxTex *dxTex = static_cast<DxTex *>(tex);
     D3DDevice_SetTexture(
         mD3DDevice,
-        i2 + 0x10,
+        sampler + 0x10,
         dxTex ? dxTex->Tex() : nullptr,
-        0x8000000000000000 >> (i2 + 0x30U & 0x7F)
+        0x8000000000000000 >> ((sampler + 0x30) & 0x7FU)
     );
 }
 

@@ -36,9 +36,9 @@ END_PROPSYNCS
 char const *LoadingPanel::GetLoadingScreen(Symbol s) {
     DataArray *screenArray = SystemConfig("loading_screens");
     for (int i = 1; i < screenArray->Size(); i++) {
-        DataArray *loadingScreenArray = screenArray->Array(i);
-        if (loadingScreenArray->Sym(0) == s) {
-            return loadingScreenArray->Str(1);
+        DataArray *entry = screenArray->Array(i);
+        if (entry->Sym(0) == s) {
+            return entry->Str(1);
         }
     }
     MILO_FAIL("can\'t find loadingScreen %s", s);
@@ -46,11 +46,13 @@ char const *LoadingPanel::GetLoadingScreen(Symbol s) {
 }
 
 void LoadingPanel::Unload() {
-    if (unk3c)
+    if (unk3c) {
         SetTheTempoMap(unk3c);
+    }
 
-    if (unk40)
+    if (unk40) {
         SetTheBeatMap(unk40);
+    }
 
     delete sLoadingMaster;
     UIPanel::Unload();
@@ -65,11 +67,12 @@ void LoadingPanel::Load() {
 
 bool LoadingPanel::IsLoaded() const {
     HamAudio *pAudio = sLoadingMaster->GetAudio();
-    if (!pAudio)
+    if (!pAudio) {
         MILO_NOTIFY("missing audio object!\n");
+    }
 
-    return TheContentMgr.RefreshDone() && UIPanel::IsLoaded() && pAudio && !pAudio->Fail()
-        && !pAudio->IsReady();
+    return TheContentMgr.RefreshDone() && UIPanel::IsLoaded() && pAudio
+        && !pAudio->Fail() && !pAudio->IsReady();
 }
 
 bool LoadingPanel::Exiting() {
@@ -83,8 +86,8 @@ void LoadingPanel::Enter() {
     UIPanel::Enter();
     TheTaskMgr.SetSecondsAndBeat(0, 0, true);
     MILO_ASSERT(sLoadingMaster->GetHxAudio()->IsReady(), 0x6a);
-
-    sLoadingMaster->GetHxAudio()->GetSongStream();
+    // Trigger stream initialization
+    Stream *stream = sLoadingMaster->GetHxAudio()->GetSongStream();
 }
 
 Symbol LoadingPanel::ChooseLoadingScreen() {
@@ -98,7 +101,9 @@ void LoadingPanel::PlayLoadingMusic() {
     if (n.Equal(gNullStr, nullptr, true)) {
         ResetLoadingMusic();
     }
+
     const char *fileBase = FileGetBase(n.Str());
+
     // Verify MIDI file exists (scoped to ensure String destructor runs before next operations)
     {
         String filePath = MakeString("sfx/samples/shell/%s.mid", fileBase);
@@ -106,8 +111,11 @@ void LoadingPanel::PlayLoadingMusic() {
         MILO_ASSERT(f != NULL, 0xb7);
         delete f;
     }
-    if (unk38)
+
+    if (unk38) {
         RELEASE(unk38);
+    }
+
     DataArray *sysConfig = SystemConfig("synth", fileBase);
     static Symbol song("song");
     DataArray *songArray = sysConfig->FindArray(song, false);

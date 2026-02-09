@@ -33,17 +33,18 @@ BEGIN_SAVES(FlowRun)
     bs << mImmediateRelease;
 END_SAVES
 
-BEGIN_COPYS(FlowRun)
-    COPY_SUPERCLASS(FlowNode)
-    CREATE_COPY(FlowRun)
-    BEGIN_COPYING_MEMBERS
-        COPY_MEMBER(mTargetDir)
-        COPY_MEMBER(mTargetName)
-        COPY_MEMBER(mTarget)
-        COPY_MEMBER(mStop)
-        COPY_MEMBER(mImmediateRelease)
-    END_COPYING_MEMBERS
-END_COPYS
+void FlowRun::Copy(const Hmx::Object *o, Hmx::Object::CopyType ty) {
+    FlowNode::Copy(o, ty);
+    const FlowRun *c;
+    if ((c = dynamic_cast<const FlowRun *>(o))) {
+        // Pointer cast required for codegen match
+        ((FlowPtr<ObjectDir> *)this)[0] = ((FlowPtr<ObjectDir> *)c)[0];
+        mTargetName = c->mTargetName;
+        ((FlowPtr<Flow> *)this)[0] = ((FlowPtr<Flow> *)c)[0];
+        mStop = c->mStop;
+        mImmediateRelease = c->mImmediateRelease;
+    }
+}
 
 INIT_REVS(2, 0)
 

@@ -18,6 +18,7 @@ These patterns can often be fixed with source changes. Sorted by ROI (impact x s
 | Signed/Unsigned Cast | +1-50% | 100% | [fixable-comparison.md](fixable-comparison.md#signedunsigned-cast) |
 | MILO_NOTIFY vs MILO_NOTIFY_ONCE | +10-35% | HIGH | [fixable-declarations.md](fixable-declarations.md#milo_notify-vs-milo_notify_once) |
 | alloca vs _alloca | +10-15% | 100% | [fixable-declarations.md](fixable-declarations.md#alloca-vs-_alloca-intrinsic-stack-allocation) |
+| Iterator Dereference Caching | +5-10% | LOW (~20%) | [fixable-declarations.md](fixable-declarations.md#iterator-dereference-caching) |
 | Variable Extraction | +1-35% | 95% | [fixable-declarations.md](fixable-declarations.md#variable-extraction) |
 | Explicit Conditional vs Max() | +35% | HIGH | [fixable-control-flow.md](fixable-control-flow.md#explicit-conditional-vs-max) |
 | Explicit Float Cast | +35% | HIGH | [fixable-casting.md](fixable-casting.md#explicit-float-cast) |
@@ -41,6 +42,8 @@ These patterns can often be fixed with source changes. Sorted by ROI (impact x s
 | Static Variable Scope | [fixable-declarations.md](fixable-declarations.md#static-variable-scope) |
 | Braced vs Braceless If (Scope Counter) | [fixable-declarations.md](fixable-declarations.md#braced-vs-braceless-if-scope-counter) |
 | Static Symbol Order | [fixable-declarations.md](fixable-declarations.md#static-symbol-order) |
+| Iterator Dereference Caching | [fixable-declarations.md](fixable-declarations.md#iterator-dereference-caching) |
+| Boolean Init from Existing Register | [fixable-declarations.md](fixable-declarations.md#boolean-init-from-existing-register) |
 | Offset Swap | [fixable-declarations.md](fixable-declarations.md#offset-swap) |
 | sret Return Value Tracing | [fixable-declarations.md](fixable-declarations.md#sret-return-value-tracing) |
 | Loop Structure | [fixable-control-flow.md](fixable-control-flow.md#loop-structure) |
@@ -71,6 +74,7 @@ These patterns are usually not fixable at source level. Verify that the pattern 
 | fmadds vs Separate Ops | float math | 1-3% | [unfixable-compiler.md](unfixable-compiler.md#fmadds-vs-separate-ops) |
 | Commutative Register Swap | float ops | <1% | [unfixable-compiler.md](unfixable-compiler.md#commutative-register-swap) |
 | 64-bit Extraction | rare | ~5% | [unfixable-compiler.md](unfixable-compiler.md#64-bit-extraction) |
+| Stack Spill Scheduling | high register pressure | ~1-2% | [unfixable-compiler.md](unfixable-compiler.md#stack-spill-scheduling) |
 
 ---
 

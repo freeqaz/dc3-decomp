@@ -355,11 +355,10 @@ DataNode op23(DataArray *msg) {
 }
 
 DataNode op24(DataArray *msg) {
-    u32 l = msg->Int(1);
-    u32 r = msg->Int(2);
-    u32 w2 = (r & 0xFF) << 8;
-    u32 w3 = (w2 & 0xFFFFFF00) | (r & 0xFF);
-    return DataNode(u8(w3 >> 4 ^ l));
+    u8 l = msg->Int(1);
+    u8 r = msg->Int(2);
+    u8 swapped = (r >> 4) | (r << 4);
+    return u8(swapped ^ l);
 }
 
 DataNode op25(DataArray *msg) {

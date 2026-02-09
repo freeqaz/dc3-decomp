@@ -95,6 +95,125 @@ arr->Insert(i, value);
 
 ---
 
+## Iterator Dereference Caching
+
+**Impact:** +5-10%
+**Success Rate:** LOW (~20%)
+**Time:** 3 minutes
+
+Cache `ObjDirItr` dereferences into a local pointer before using the object in dynamic_casts or method calls.
+
+### Symptom
+
+Multiple `&*it` or `it->` in an `ObjDirItr` loop body. objdiff shows repeated `lwz` from the iterator stack slot and register allocation cascade — the target keeps the pointer in a callee-saved register (e.g. r30), but our code burns temporaries on repeated loads.
+
+### Why It Works
+
+MWCC doesn't CSE (common subexpression eliminate) through `ObjDirItr::operator*()` indirection. Each `&*it` is treated as a fresh load of `mObj` from the iterator struct on the stack. With 3+ uses in a loop body this cascades into register allocation differences.
+
+### When It Helps
+
+This pattern only helps when the cached pointer is used in **diverse ways** across the loop body — dynamic_casts, method calls on the result, AND passing to other functions. Simple loops that only use `&*it` in dynamic_cast arguments don't benefit; the extra local variable changes register allocation for the worse.
+
+Look for loops where the same object is:
+1. Cast via `dynamic_cast<>(&*it)`, AND
+2. Used for method calls via `it->Method()`, AND
+3. Passed as an argument to other functions
+
+### Fix
+
+```cpp
+// Before - reloads mObj each time
+for (ObjDirItr<RndDrawable> it(dir, true); it != nullptr; ++it) {
+    RndMesh *mesh = dynamic_cast<RndMesh *>(&*it);
+    if (mesh) {
+        const DataNode *prop = it->Property(collidable, false);
+        AddCollidable(it, parentProxy, mesh->Showing());
+    } else {
+        PhysicsVolume *pv = dynamic_cast<PhysicsVolume *>(&*it);
+    }
+    ObjectDir *proxyProxy = dynamic_cast<ObjectDir *>(&*it);
+}
+
+// After - pointer stays in register
+for (ObjDirItr<RndDrawable> it(dir, true); it != nullptr; ++it) {
+    RndDrawable *drawable = it;  // uses operator T*(), caches mObj
+    RndMesh *mesh = dynamic_cast<RndMesh *>(drawable);
+    if (mesh) {
+        const DataNode *prop = drawable->Property(collidable, false);
+        AddCollidable(drawable, parentProxy, mesh->Showing());
+    } else {
+        PhysicsVolume *pv = dynamic_cast<PhysicsVolume *>(drawable);
+    }
+    ObjectDir *proxyProxy = dynamic_cast<ObjectDir *>(drawable);
+}
+```
+
+### Real Examples
+
+| Function | Before | After | Delta | Notes |
+|----------|--------|-------|-------|-------|
+| PhysicsManager::HarvestCollidables | 86.6% | 97.4% | +10.8% | 4x `&*it` + method calls + function args |
+| CharClipSet::SetFrame | 99.0% | 96.8% | **-2.2%** | 3x dynamic_cast only — reverted |
+| Character::CalcBoundingSphere | 98.4% | 96.4% | **-2.0%** | dynamic_cast + `it->` only — reverted |
+| HamDirector::PoseIconMan | 96.6% | 94.0% | **-2.6%** | 3x dynamic_cast only — reverted |
+
+### Warning
+
+**This pattern can make things worse.** If the loop body only uses `&*it` for dynamic_casts (no mixed method calls or function arg passing), the extra local variable changes register allocation unfavorably. Always test with objdiff before committing.
+
+---
+
+## Boolean Init from Existing Register
+
+**Impact:** +0.5-1%
+**Success Rate:** MEDIUM
+**Time:** 5 minutes
+
+Initialize a boolean from a value already in a register rather than a literal, when inside a conditional that already tested that value.
+
+### Symptom
+
+Extra `li r3, 0x0` before a conditional that sets the bool. The target reuses a register already holding a truthy value from the enclosing condition.
+
+### Why It Works
+
+MWCC notices when a register already holds a useful value. Writing `bool u2 = i5` instead of `bool u2 = false` lets the compiler skip the initialization and reuse the register. The restructured if/else also eliminates the `else { u2 = true }` branch.
+
+### Fix
+
+```cpp
+// Before - generates extra li r3, 0x0
+bool u2 = false;
+if (!mesh->GetKeepMeshData()) {
+    RndMesh *owner = mesh->GetGeomOwner();
+    if (mesh != owner) {
+        u2 = HasKeepMeshData(owner);
+    }
+} else {
+    u2 = true;
+}
+
+// After - reuses r3 which already holds 1 from enclosing if (i5 == 1)
+bool u2 = i5;  // i5 is known to be 1 here
+if (!mesh->GetKeepMeshData()) {
+    RndMesh *owner = mesh->GetGeomOwner();
+    if (mesh != owner) {
+        u2 = HasKeepMeshData(owner);
+    } else {
+        u2 = false;
+    }
+}
+```
+
+### Real Examples
+
+| Function | Before | After | Delta | Notes |
+|----------|--------|-------|-------|-------|
+| PhysicsManager::HarvestCollidables | 96.8% | 97.4% | +0.6% | `bool u2 = i5` inside `if (i5 == 1)` |
+
+---
+
 ## Variable Declaration Order
 
 **Impact:** +1-88%

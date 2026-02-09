@@ -122,7 +122,6 @@ namespace {
             MILO_ASSERT(arr->Size() >= 2, 0x98);
             return numRestarts - arr->Int(1) == 0;
         }
-        return false;
     }
 
     bool CheckContextNumRestartsGreater(const DataArray *arr) {
@@ -131,7 +130,6 @@ namespace {
             MILO_ASSERT(arr->Size() >= 2, 0xa9);
             return arr->Int(1) < numRestarts;
         }
-        return false;
     }
 
     bool CheckContextNumRestartsNot(const DataArray *arr) {
@@ -140,7 +138,6 @@ namespace {
             MILO_ASSERT(arr->Size() >= 2, 0xba);
             return numRestarts != arr->Int(1);
         }
-        return false;
     }
 
     bool CheckContextNumPlayers(const DataArray *arr) {

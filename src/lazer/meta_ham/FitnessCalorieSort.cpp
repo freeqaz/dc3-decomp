@@ -94,4 +94,35 @@ void FitnessCalorieSort::BuildTree() {
     NavListSort::DeleteTree();
     Init();
     std::vector<NavListItemNode *> nodes;
+
+    // Populate nodes from TheFitnessCalorieSortMgr calories
+    std::vector<int> &calories = TheFitnessCalorieSortMgr->GetUnk78();
+    for (int i = 0; i < (int)calories.size(); i++) {
+        NavListItemNode *node = NewItemNode((void *)&calories[i]);
+        nodes.push_back(node);
+    }
+
+    // Process shortcuts and insert headers
+    int groupSize = TheFitnessCalorieSortMgr->GetGroupSize();
+    std::vector<NavListItemNode *>::iterator pBegin = nodes.begin();
+    std::vector<NavListItemNode *>::iterator pEnd = nodes.end();
+    while (pBegin != pEnd) {
+        std::vector<NavListItemNode *>::iterator pNext;
+        int remaining = pEnd - pBegin;
+        if (remaining <= groupSize) {
+            pNext = pEnd;
+        } else {
+            pNext = pBegin + groupSize;
+        }
+
+        NavListShortcutNode *shortcut = NewShortcutNode(*pBegin);
+        unk30.push_back(shortcut);
+        shortcut->InsertHeaderRange(&*pBegin, &*pNext, this);
+        pBegin = pNext;
+    }
+
+    // Finalize shortcuts
+    FOREACH (it, unk30) {
+        (*it)->FinishSort(this);
+    }
 }

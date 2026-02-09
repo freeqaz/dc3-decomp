@@ -388,9 +388,10 @@ long vorbis_book_decodevs_add(codebook *book,float *a,oggpack_buffer *b,int n){
     if(entry[i]==-1)return(-1);
     t[i] = book->valuelist+entry[i]*book->dim;
   }
-  for(i=0,o=0;i<book->dim;i++,o+=step)
+  for(i=0,o=0;i<book->dim;i++,o+=step){
     for (j=0;j<step;j++)
       a[o+j]+=t[j][i];
+  }
   return(0);
 }
 

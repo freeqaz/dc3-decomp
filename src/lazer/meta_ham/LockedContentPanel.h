@@ -34,7 +34,10 @@ protected:
 
     void TriggerTeaserText();
 
-    u32 filler[16]; // something to do with HamStarsDisplay, just not sure yet
+    // Array of drawable pointers accessed via offsets 0x3c-0x7b
+    // Includes RndDrawable* and HamStarsDisplay* elements
+    // Used by SetUpDifficultyLocked, SetUpNoFlashcards for showing/hiding UI elements
+    u32 filler[16];
     Sound *mSound; // 0x7c
     Timer *mTimer; // 0x80
     bool unk84;

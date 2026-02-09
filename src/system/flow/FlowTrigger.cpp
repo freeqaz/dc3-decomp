@@ -68,8 +68,9 @@ END_SAVES
 
 void FlowTrigger::Copy(const Hmx::Object *o, CopyType t) {
     FlowQueueable::Copy(o, t);
-    const FlowTrigger *c;
-    if ((c = dynamic_cast<const FlowTrigger *>(o))) {
+    const FlowTrigger *c = dynamic_cast<const FlowTrigger *>(o);
+    if (c) {
+        // Unregister from old event sources before copying new configuration
         UnregisterEvents();
         mTriggerEvents = c->mTriggerEvents;
         mEventProvider = c->mEventProvider;
@@ -77,6 +78,8 @@ void FlowTrigger::Copy(const Hmx::Object *o, CopyType t) {
         mHardStop = c->mHardStop;
         mTriggerProperties = c->mTriggerProperties;
         mStopProperties = c->mStopProperties;
+        // Re-register with new event sources (matches SYNC_PROP_TRIGGERS pattern)
+        RegisterEvents();
     }
 }
 

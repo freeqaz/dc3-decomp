@@ -1,6 +1,7 @@
 #include "Utl.h"
 
-// No idea if these numbers are right - need to align with measures syms below
+// Time values in measures (as fractions of a whole note)
+// Corresponds to: sixteenth, eighth, dotted_eighth, quarter, dotted_quarter, half, whole
 float measuresMs[7] = {0.0625, 0.125, 0.1875, 0.25, 0.375, 0.5, 1.0};
 
 WavFileCacheHelper gWavFileCacheHelper;
@@ -23,17 +24,26 @@ float CalcTransposeFromSpeed(float f1) {
     return log * 17.31234f;
 }
 
-float CalcRateForTempoSync(Symbol sym, float f1) {
+// Calculate playback rate for tempo-synced effects
+// bpm: beats per minute
+// sym: musical measure (sixteenth, eighth, quarter, half, whole, etc.)
+// Returns: rate multiplier for the given tempo and measure
+float CalcRateForTempoSync(Symbol sym, float bpm) {
     static Symbol measures[7] = {"sixteenth", "eighth", "dotted_eighth",
         "quarter", "dotted_quarter", "half", "whole"};
 
-    float temp = 1.0;
+    float measureValue;
+    float bpmInMs;
+    unsigned int i;
 
-    for (int i = 0; i < 7; i++) {
-        if (sym == measures[i]) {
-            temp = measuresMs[i];
+    // Convert BPM to milliseconds (1/60 = 0.016666667)
+    bpmInMs = bpm * 0.016666667f;
+    measureValue = 1.0;
+    for (i = 0; i < 7; i++) {
+        if (measures[i] == sym) {
+            measureValue = measuresMs[i];
             break;
         }
     }
-    return (f1 * 0.016666667f) / temp;
+    return bpmInMs / measureValue;
 }

@@ -177,6 +177,10 @@ public:
     virtual NavListNodeType GetType() const { return kNodeFunction; }
     virtual Symbol GetToken() const { return unk4c; }
     virtual Symbol Select();
+    virtual void OnUnHighlight() {}
+    virtual void SetCollapseIconLabel(UILabel *) {}
+    virtual int GetItemCount() { return 0; }
+    virtual NavListSortNode *GetFirstActive() { return nullptr; }
     virtual bool IsEnabled() const { return IsEnabled(); } // lmao what
     virtual bool IsActive() const { return false; }
     virtual const char *GetAlbumArtPath() { return unk44.c_str(); }

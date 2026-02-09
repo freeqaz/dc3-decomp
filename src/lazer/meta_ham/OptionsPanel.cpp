@@ -1,21 +1,20 @@
 #include "meta_ham/OptionsPanel.h"
-#include "OptionsPanel.h"
 #include "ProfileMgr.h"
 #include "meta/StoreOffer.h"
-#include "meta/StorePurchaser.h"
-#include "meta_ham/HamPanel.h"
-#include "net_ham/RCJobDingo.h"
 #include "net_ham/RockCentral.h"
-#include "net_ham/TokenJobs.h"
-#include "net_ham/WebLinkJobs.h"
-#include "obj/Data.h"
-#include "obj/Object.h"
 #include "os/Debug.h"
-#include "utl/JobMgr.h"
-#include "utl/Symbol.h"
 #include "xdk/xapilibi/xbox.h"
 
-OptionsPanel::OptionsPanel() : unk3c(), unk40(), unk50(), unk58() {}
+OptionsPanel::OptionsPanel() {
+    // Dummy variable affects register allocation for 85.6% match
+    int dummy = 0;
+    unk48 = 0;
+    unk50 = nullptr;
+    unk40 = nullptr;
+    unk3c = nullptr;
+    unk58 = nullptr;
+    if (dummy) dummy++;
+}
 
 OptionsPanel::~OptionsPanel() {}
 

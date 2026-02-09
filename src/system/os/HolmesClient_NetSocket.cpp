@@ -47,8 +47,8 @@ namespace HolmesClient {
         }
         printf("})\n");
 
-        NetStream *stream = 0;
         int attempt = -1;
+        NetStream *stream = 0;
         do {
             attempt++;
             if ((unsigned int)attempt >= hosts.size()) {
