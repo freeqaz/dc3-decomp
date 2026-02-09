@@ -798,7 +798,13 @@ void HamNavList::SetSliding(float f) {
 void HamNavList::Draw(const BaseSkeleton &baseSkeleton, SkeletonViz &skeletonViz) {
     const Skeleton *skeleton = dynamic_cast<const Skeleton *>(&baseSkeleton);
     MILO_ASSERT(skeleton, 0x5a3);
-    // call something idk i cant figure it out rn
+
+    // Call virtual function at vtable[5] on member at offset 0x128
+    void **obj = *(void ***)((char *)this + 0x128);
+    typedef void (*VFunc)(void **, const Skeleton *, SkeletonViz *);
+    void **vtable = (void **)obj[0];
+    VFunc func = (VFunc)vtable[5];
+    func(obj, skeleton, &skeletonViz);
 }
 
 void HamNavList::SetHighlight(int i) {

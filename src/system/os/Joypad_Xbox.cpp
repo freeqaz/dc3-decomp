@@ -25,12 +25,14 @@ namespace {
 #define tThread sThreadData.tThread
 #define tNoHandle sThreadData.tNoHandle
 
+// Retrieves XInput state and button changes since last frame
+// Combines translated buttons with accumulated button state, then resets current state
 void GetXinputSinceLastFrame(int pad, XINPUT_STATE *state, unsigned int *buttons) {
     CritSecTracker tracker(&tCritSection);
+    unsigned int translatedButtons;
     *state = tInputStates[pad];
-    unsigned int x;
-    TranslateButtons(&x, tInputStates[pad].Gamepad.wButtons);
-    *buttons = x | tButtonStatesCurr[pad];
+    TranslateButtons(&translatedButtons, tInputStates[pad].Gamepad.wButtons);
+    *buttons = tButtonStatesCurr[pad] | translatedButtons;
     tButtonStatesPrev[pad] = tButtonStatesCurr[pad];
     tButtonStatesCurr[pad] = 0;
 }

@@ -145,7 +145,16 @@ void MoveAsyncDetector::EnableDetector(HamMove *move) {
 
 void MoveAsyncDetector::DisableDetector(HamMove *move) {
     MoveDetector *detector = FindDetector(move);
-    if (detector) {
+    if (detector != 0) {
+        if (detector->mActive) {
+            detector->mLastDetectFracs[0] = 0;
+            detector->mLastDetectFracs[1] = 0;
+            detector->unk8 = -1;
+            detector->unkc = -1;
+            detector->mActive = false;
+        }
         unk10.erase(detector);
+    } else if (move != 0) {
+        MILO_NOTIFY("Could not disable detector for %s", PathName(move));
     }
 }

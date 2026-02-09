@@ -544,16 +544,49 @@ DataNode UILabel::OnSetHeightFromText(DataArray *da) {
 }
 
 void UILabel::SetFontMat(char const *c, int i) {
-    RndMat *rndmat = nullptr;
-    LabelStyle &labelStyle = LStyle(i);
-
+    RndFontBase *font = 0;
+    LabelStyle &ls = LStyle(i);
+    UILabelDir *dir = ls.unk14;
+    if (dir) {
+        font = dir->FontObj(Symbol(c));
+        if (!font) {
+            if (*c) {
+                TheDebug.Notify(MakeString(
+                    "%s is referencing a mat variation '%s' that is not found in the font resource",
+                    PathName(this), c
+                ));
+                font = dir->FontObj(Symbol(""));
+            }
+            if (!font) {
+                TheDebug.Notify(MakeString(
+                    "%s in resource %s has no default font",
+                    PathName(this), PathName(dir)
+                ));
+            }
+        }
+    } else if (*c) {
+        TheDebug.Notify(MakeString(
+            "%s [styles 0 font_resource] is NULL, couldn't set font mat %s",
+            PathName(this), c
+        ));
+    }
+    if ((unsigned int)i < mStyles.size()) {
+        mStyles[i].mFont = font;
+    }
 }
 
-char const *UILabel::GetFontMat(int) { return 0; }
+char const *UILabel::GetFontMat(int i) {
+    LabelStyle &ls = LStyle(i);
+    UILabelDir *dir = ls.unk14;
+    if (dir) {
+        RndText::Style &s = Style(i);
+        return dir->GetMatVariationName(s.mFont);
+    }
+    return "";
+}
 
 void UILabel::RefreshFontMat(int i) {
-    LabelStyle &style = LStyle(i);
-    const char *mat = GetFontMat(i);
+    auto mat = GetFontMat(i);
     SetFontMat(mat, i);
     if (sDeferUpdate == false) {
         LabelUpdate(false);

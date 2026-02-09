@@ -23,7 +23,8 @@ public:
 
 class MQSongSortNode : public NavListItemNode {
 public:
-    MQSongSortNode(NavListItemSortCmp *cmp, SongRecord *record) : NavListItemNode(cmp) {};
+    MQSongSortNode(NavListItemSortCmp *cmp, Symbol shortName, Symbol character)
+        : NavListItemNode(cmp), unk48(shortName), unk4c(character) {}
     virtual ~MQSongSortNode();
     virtual Symbol OnSelect();
     virtual void Text(UIListLabel *, UILabel *) const;
@@ -31,4 +32,5 @@ public:
 
 protected:
     Symbol unk48; // 0x48
+    Symbol unk4c; // 0x4C
 };

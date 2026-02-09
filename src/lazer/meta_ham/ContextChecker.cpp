@@ -122,6 +122,7 @@ namespace {
             MILO_ASSERT(arr->Size() >= 2, 0x98);
             return numRestarts - arr->Int(1) == 0;
         }
+        return false;
     }
 
     bool CheckContextNumRestartsGreater(const DataArray *arr) {
@@ -130,6 +131,7 @@ namespace {
             MILO_ASSERT(arr->Size() >= 2, 0xa9);
             return arr->Int(1) < numRestarts;
         }
+        return false;
     }
 
     bool CheckContextNumRestartsNot(const DataArray *arr) {
@@ -138,20 +140,21 @@ namespace {
             MILO_ASSERT(arr->Size() >= 2, 0xba);
             return numRestarts != arr->Int(1);
         }
+        return false;
     }
 
     bool CheckContextNumPlayers(const DataArray *arr) {
-        int numPlaying = 0;
+        int count = 0;
         HamPlayerData *player1 = TheGameData->Player(0);
         MILO_ASSERT(player1, 0xCB);
         HamPlayerData *player2 = TheGameData->Player(1);
         MILO_ASSERT(player2, 0xCD);
-        numPlaying += (int)player1->IsPlaying();
+        count += (int)player1->IsPlaying();
         if (player2->IsPlaying()) {
-            numPlaying++;
+            count++;
         }
         MILO_ASSERT(arr->Size() >= 2, 0xD8);
-        return numPlaying == arr->Int(1);
+        return count == arr->Int(1);
     }
 
     bool CheckContextEra(const DataArray *arr) {
@@ -170,23 +173,23 @@ namespace {
 
     bool CheckContextVoiceCommanderEnabled(const DataArray *arr) {
         MILO_ASSERT(arr->Size() >= 2, 0xF7);
-        bool myBool = arr->Int(1);
+        bool expected = arr->Int(1);
         bool enabled = !TheProfileMgr.GetDisableVoiceCommander();
-        return myBool == enabled;
+        return expected == enabled;
     }
 
     bool CheckContextVoicePauseEnabled(const DataArray *arr) {
         MILO_ASSERT(arr->Size() >= 2, 0x103);
-        bool myBool = arr->Int(1);
+        bool expected = arr->Int(1);
         bool enabled = !TheProfileMgr.GetDisableVoicePause();
-        return myBool == enabled;
+        return expected == enabled;
     }
 
     bool CheckContextVoicePracticeEnabled(const DataArray *arr) {
         MILO_ASSERT(arr->Size() >= 2, 0x103);
-        bool myBool = arr->Int(1);
+        bool expected = arr->Int(1);
         bool enabled = !TheProfileMgr.GetDisableVoicePractice();
-        return myBool == enabled;
+        return expected == enabled;
     }
 
     bool InternalCheckContext(const DataArray *a) {
@@ -273,7 +276,11 @@ void HandleContextUsed(Symbol ctx) { gUsedContexts.insert(ctx); }
 
 __declspec(noinline) int CheckContext(const DataArray *a) {
     gContextWeight = 10;
-    return gContextWeight & CheckContextAnd(a);
+    if (CheckContextAnd(a)) {
+        return gContextWeight;
+    } else {
+        return 0;
+    }
 }
 
 bool IsSongSpecificEntry(const DataArray *a) {

@@ -109,19 +109,19 @@ public:
 
     void LoadInlinedFile(const FilePath &fp, BinStream &bs) {
         *this = nullptr;
-        // there's more
-        mLoader = new DirLoader(
-            fp,
-            TheLoadMgr.GetLoaderPos() == kLoadStayBack
-                    || TheLoadMgr.GetLoaderPos() == kLoadFrontStayBack
-                ? kLoadFrontStayBack
-                : kLoadFront,
-            nullptr,
-            &bs,
-            nullptr,
-            false,
-            nullptr
-        );
+        LoaderPos pos;
+        if (TheLoadMgr.GetLoaderPos() == kLoadStayBack
+            || TheLoadMgr.GetLoaderPos() == kLoadFrontStayBack) {
+            pos = kLoadFrontStayBack;
+        } else {
+            pos = kLoadFront;
+        }
+        void *mem = PoolAlloc(sizeof(DirLoader), sizeof(DirLoader), "e:\\lazer_build_gmc1\\system\\src\\obj\\Dir.h", 42, "DirLoader");
+        if (mem) {
+            mLoader = new(mem) DirLoader(fp, pos, nullptr, &bs, nullptr, false, nullptr);
+        } else {
+            mLoader = nullptr;
+        }
     }
 
 protected:

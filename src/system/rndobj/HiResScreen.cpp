@@ -217,14 +217,11 @@ void HiResScreen::Accumulate() {
     int tileY = prevTile / mTiling;
     int left, right, top, bottom;
     GetBorderForTile(tileX, tileY, left, right, top, bottom);
-    int xStep = TheRnd.Width() - 480;
-    int yStep = TheRnd.Height() - 270;
-    int xOff = xStep * tileX;
-    int yOff = yStep * tileY;
-    Merge(bm, left, top, bm.Width(), bm.Height(), xOff, yOff, left, top);
+    int xOff = (TheRnd.Width() - 480) * tileX;
+    int yOff = (TheRnd.Height() - 270) * tileY;
+    Merge(bm, xOff, yOff, left, right, bm.Width(), bm.Height(), top, bottom);
     TheRnd.ResetProcCounter();
     mCurrTile++;
-    bm.Reset();
 }
 
 void HiResScreen::Finish() {

@@ -1,13 +1,11 @@
 #include "hamobj/FilterQueue.h"
-#include "hamobj/DetectFrame.h"
-#include "hamobj/HamMove.h"
 #include "os/Debug.h"
 #include "utl/Loader.h"
 
-FilterQueue::FilterQueue() : jobFinished(0), lastPollMs(0) {}
+FilterQueue::FilterQueue() : mJobFinished(false), mLastPollMs(0.0f) {}
 
 bool FilterQueue::GetResults(float &outValue, DetectFrame **frames, float unused) {
-    jobFinished = false;
+    mJobFinished = false;
     std::vector<FilterInputFrame> &qframes = mQueuedJob.frames;
     if (qframes.empty()) {
         mOutput.frames.clear();
@@ -18,10 +16,10 @@ bool FilterQueue::GetResults(float &outValue, DetectFrame **frames, float unused
     frames[1] = nullptr;
     frames[0] = nullptr;
     for (int frameIdx = 0; frameIdx < qframes.size(); frameIdx++) {
-        DetectFrame *pFrame = qframes[frameIdx].unkc;
-        pFrame->AddError(oframes[frameIdx].unk4, qframes[frameIdx].unk4);
-        if (mQueuedJob.songSeconds > pFrame->Seconds() && qframes[frameIdx].unk4 > unused) {
-            frames[qframes[frameIdx].unk0] = pFrame;
+        FilterInputFrame &frame = qframes[frameIdx];
+        frame.unkc->AddError(oframes[frameIdx].unk4, frame.unk4);
+        if (mQueuedJob.songSeconds > frame.unkc->Seconds() && frame.unk4 > unused) {
+            frames[frame.unk0] = frame.unkc;
         }
     }
     qframes.clear();
@@ -52,8 +50,8 @@ void FilterQueue::EnqueueFrame(
     mQueuedJob.frames.push_back(frame);
 }
 
-bool FilterQueue::IsJobFinished() const { return jobFinished; }
-float FilterQueue::LastPollMs() const { return lastPollMs; }
+bool FilterQueue::IsJobFinished() const { return mJobFinished; }
+float FilterQueue::LastPollMs() const { return mLastPollMs; }
 bool FilterQueue::HasJob() const { return !mOutput.frames.empty(); }
 void FilterQueue::CancelJob() { mQueuedJob.frames.clear(); }
 
@@ -65,7 +63,7 @@ void FilterQueue::StartJob() {
         mOutput.frames.clear();
     }
     mOutput.songSpeed = mQueuedJob.songSpeed;
-    jobFinished = false;
+    mJobFinished = false;
     mOutput.moveMode = mQueuedJob.moveMode;
     int frameCount = mQueuedJob.frames.size();
     mOutput.frames.resize(frameCount);

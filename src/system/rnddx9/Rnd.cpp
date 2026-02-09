@@ -239,7 +239,8 @@ void DxRnd::ResetDevice() {
 }
 
 long DxRnd::GetDeviceCaps(D3DCAPS9 *cap) {
-    return Direct3D_GetDeviceCaps(0, mDeviceType, cap);
+    D3DDEVTYPE deviceType = mDeviceType;
+    return Direct3D_GetDeviceCaps(0, deviceType, cap);
 }
 
 void DxRnd::DrawSafeArea(float percent, bool widescreen, const Hmx::Color &color) {

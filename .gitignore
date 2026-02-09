@@ -8,6 +8,7 @@ __pycache__
 .cache/
 venv/
 .claude/
+function_analysis/
 
 # Original files
 orig/*/*

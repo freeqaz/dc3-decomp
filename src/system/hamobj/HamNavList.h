@@ -105,6 +105,8 @@ public:
     void Disable() { mEnabled = false; }
     bool Enabled() const { return mEnabled; }
     HamNavProvider *GetHelpbarProvider() { return mNavProvider; }
+    void Disengage();
+    void SetSkeletonTrackingID(int id) { mSkeletonTrackingID = id; }
 
     static void Init();
     static bool sLastSelectInControllerMode;
@@ -123,7 +125,6 @@ private:
     int GetDisabledCount(int) const;
     int GetHighlightItem(void) const;
     void DetermineHighlightedItem();
-    void Disengage();
     void UpdateGestures(const Skeleton *);
     float GetTargetSwellAmount(int);
 

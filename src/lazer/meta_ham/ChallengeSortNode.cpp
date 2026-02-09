@@ -29,12 +29,13 @@ ChallengeHeaderNode::ChallengeHeaderNode(NavListItemSortCmp *cmp, Symbol sym, bo
     : NavListHeaderNode(cmp, sym, b), mChallengeCount(0) {}
 
 int ChallengeHeaderNode::GetChallengeExp() {
+    int xp = 0;
     FOREACH (it, Children()) {
-        auto node = *it;
+        NavListSortNode *node = *it;
         MILO_ASSERT(node, 0xd0);
-        // TheChallenges->CalculateChallengeXp()
+        xp += static_cast<ChallengeSortNode *>(node)->GetChallengeExp();
     }
-    return 0;
+    return xp;
 }
 
 NavListSortNode *ChallengeHeaderNode::GetFirstActive() {
@@ -67,9 +68,15 @@ void ChallengeHeaderNode::Text(UIListLabel *uiListLabel, UILabel *uiLabel) const
     MILO_ASSERT(app_label, 0x91);
     if (uiListLabel->Matches("sort_header")) {
         app_label->SetFromGeneralSelectNode(this);
-    } else if (uiListLabel->Matches("challenge_count")) {
-        // something
-    } else if (uiListLabel->Matches("header_collapse")) {
+    } else {
+        bool isChallengeCount = uiListLabel->Matches("challenge_count");
+        if (!isChallengeCount) {
+            if (uiListLabel->Matches("header_collapse")) {
+                SetCollapseStateIcon(TheChallengeSortMgr->GetHighlightItem() == this);
+                return;
+            }
+            uiLabel->SetTextToken(gNullStr);
+        }
     }
 }
 
@@ -134,9 +141,10 @@ END_HANDLERS
 #pragma region ChallengeSortNode
 
 int ChallengeSortNode::GetChallengeExp() {
+    ChallengeRecord *rec = mChallengeRecord;
     return TheChallenges->CalculateChallengeXp(
-        mChallengeRecord->GetChallengeRow().mDiff,
-        mChallengeRecord->GetChallengeRow().mType
+        rec->GetChallengeRow().mDiff,
+        rec->GetChallengeRow().mType
     );
 }
 
@@ -426,6 +434,17 @@ void ChallengeSortNode::Custom(UIListCustom *list, Hmx::Object *obj) const {
         HamStarsDisplay *pStarsDisplay = dynamic_cast<HamStarsDisplay *>(obj);
         MILO_ASSERT(pStarsDisplay, 0x294);
         pStarsDisplay->SetShowing(true);
+        int difficulty = mChallengeRecord->GetChallengeRow().mDiff;
+        // Check if difficulty is in range [0,2] (Easy/Medium/Expert)
+        bool valid = (difficulty >= 0 && difficulty <= 2);
+        if (!valid) {
+            // Check if difficulty is in range [3,5] for song challenge mode
+            valid = (difficulty >= 3 && difficulty <= 5);
+            if (valid) {
+                int type = mChallengeRecord->GetChallengeRow().mType;
+                pStarsDisplay->SetSongChallenge((Difficulty)type);
+            }
+        }
     }
 }
 

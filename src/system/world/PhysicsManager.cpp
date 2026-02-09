@@ -14,12 +14,17 @@
 
 namespace {
     bool HasKeepMeshData(const RndMesh *mesh) {
-        for (const RndMesh *it = mesh; it != nullptr; it = it->GetGeomOwner()) {
-            if (it->GetKeepMeshData()) {
-                return true;
+        while (mesh != 0) {
+            if (mesh->GetKeepMeshData() != 0) {
+                return 1;
             }
+            const RndMesh *owner = mesh->GetGeomOwner();
+            if (mesh == owner) {
+                return 0;
+            }
+            mesh = owner;
         }
-        return false;
+        return 0;
     }
 }
 
@@ -61,16 +66,16 @@ void PhysicsManager::HarvestCollidables(ObjectDir *parentProxy) {
             if (prop) {
                 int i5 = prop->Int();
                 if (i5 == 1) {
-                    bool u2 = false;
+                    bool hasKeepMeshData = false;
                     if (!mesh->GetKeepMeshData()) {
-                        RndMesh *owner = mesh->GetGeomOwner();
+                        const RndMesh *owner = mesh->GetGeomOwner();
                         if (mesh != owner) {
-                            u2 = HasKeepMeshData(owner);
+                            hasKeepMeshData = HasKeepMeshData(owner);
                         }
                     } else {
-                        u2 = true;
+                        hasKeepMeshData = true;
                     }
-                    if (u2) {
+                    if (hasKeepMeshData) {
                         AddCollidable(it, parentProxy, mesh->Showing());
                     } else {
                         MILO_NOTIFY(

@@ -339,6 +339,47 @@ class DecompOrchestrator:
         )
         return bool(untracked.stdout.strip())
 
+    def _precheck_complete(self, func: dict, logger=None) -> bool:
+        """Lightweight pre-check: is this function already complete?
+
+        Runs a quick incremental objdiff to check the verdict before committing
+        resources (quota, worktree, agent). If complete, updates the DB and
+        returns True so the caller can skip it without counting against limits.
+        """
+        if not run_objdiff or not func.get("unit"):
+            return False
+
+        log = logger or self.logger
+
+        try:
+            objdiff_result = run_objdiff(
+                func["symbol"],
+                project_dir=str(self.main_repo),
+                unit=func.get("unit"),
+                incremental=True,
+            )
+            if objdiff_result and not objdiff_result.error:
+                verdict_data = objdiff_result.verdict or {}
+                verdict_class = verdict_data.get("classification", "UNKNOWN")
+                measured_percent = objdiff_result.fuzzy_match_percent
+
+                if verdict_class == "COMPLETE" or (measured_percent is not None and measured_percent >= 100.0):
+                    log.info(
+                        f"Pre-check: {func.get('demangled') or func['symbol']} already complete "
+                        f"(verdict={verdict_class}, measured={measured_percent:.2f}%). Skipping."
+                    )
+                    update_function_status(
+                        function_id=func["id"],
+                        current_percent=measured_percent if measured_percent is not None else 100.0,
+                        verdict="COMPLETE",
+                        db_path=self.db_path,
+                    )
+                    return True
+        except Exception as e:
+            log.debug(f"Pre-check objdiff failed for {func['symbol']}: {e}")
+
+        return False
+
     def _build_refactor_prompt(self, func: dict, worktree: Path, first_pass_percent: float) -> str:
         """Build prompt for refactor-staff second pass."""
         # Read the skill file
@@ -543,7 +584,28 @@ Focus on readability and maintainability while preserving exact behavior and mat
                 "demangled": func.get("demangled"),
             }
 
-        # 1. Preflight quota check
+        # 1. Early short-circuit: check if function is already complete
+        # Run before quota check to avoid wasting a quota probe on complete functions
+        if not pre_locked and self._precheck_complete(func, logger=log):
+            return {
+                "status": "complete",
+                "start_percent": 100.0,
+                "end_percent": 100.0,
+                "verdict": "COMPLETE",
+                "patch": None,
+                "notes": "Already complete per objdiff pre-check - agent skipped",
+                "model": None,
+                "session_id": session_id,
+                "patch_applied": False,
+                "actual_cost_usd": 0.0,
+                "duration_ms": 0,
+                "usage": None,
+                "skipped": True,
+                "unit": func.get("unit"),
+                "demangled": func.get("demangled"),
+            }
+
+        # 2. Preflight quota check
         await self._check_quota(model or "haiku", logger=log)
 
         log.info(f"Starting agent session for symbol: {func['symbol']}")
@@ -568,54 +630,6 @@ Focus on readability and maintainability while preserving exact behavior and mat
 
             log.info(f"Model selected: {selected_model} (reason: {reason})")
             log.debug(f"Worktree: {worktree}, Build strategy: {'incremental' if use_incremental else 'full'}")
-
-            # 5b. Early short-circuit: check if function is already complete
-            # This is a lightweight check to avoid expensive context collection (m2c, Ghidra, etc.)
-            if run_objdiff and func.get("unit"):
-                try:
-                    log.info("Running pre-check objdiff for verdict...")
-                    objdiff_result = run_objdiff(
-                        func["symbol"],
-                        project_dir=str(self.main_repo),
-                        unit=func.get("unit"),
-                        incremental=True,
-                    )
-                    if objdiff_result and not objdiff_result.error:
-                        verdict_data = objdiff_result.verdict or {}
-                        verdict_class = verdict_data.get("classification", "UNKNOWN")
-                        measured_percent = objdiff_result.fuzzy_match_percent
-
-                        if verdict_class == "COMPLETE" or (measured_percent is not None and measured_percent >= 100.0):
-                            log.info(
-                                f"Function already complete (verdict={verdict_class}, "
-                                f"measured={measured_percent:.2f}%). Skipping agent."
-                            )
-                            # Update DB to mark as complete
-                            update_function_status(
-                                function_id=func["id"],
-                                current_percent=measured_percent if measured_percent is not None else 100.0,
-                                verdict="COMPLETE",
-                                db_path=self.db_path,
-                            )
-                            return {
-                                "status": "complete",
-                                "start_percent": measured_percent if measured_percent is not None else 100.0,
-                                "end_percent": measured_percent if measured_percent is not None else 100.0,
-                                "verdict": "COMPLETE",
-                                "patch": None,
-                                "notes": "Already complete per objdiff verdict - agent skipped",
-                                "model": selected_model,
-                                "session_id": session_id,
-                                "patch_applied": False,
-                                "actual_cost_usd": 0.0,
-                                "duration_ms": 0,
-                                "usage": None,
-                                "skipped": True,
-                                "unit": func.get("unit"),
-                                "demangled": func.get("demangled"),
-                            }
-                except Exception as e:
-                    log.warning(f"Pre-check objdiff failed: {e} - continuing with full context collection")
 
             # 6. Collect pre-run context
             context = {}
@@ -1237,6 +1251,7 @@ Focus on readability and maintainability while preserving exact behavior and mat
 
         results = []
         processed = 0
+        skipped_complete = 0
         errors = 0
         batch_count = 0
         consecutive_errors = 0
@@ -1270,6 +1285,11 @@ Focus on readability and maintainability while preserving exact behavior and mat
                 if not self.active_sessions:
                     break
                 await self._wait_for_any_completion()
+                continue
+
+            # Pre-check: skip already-complete functions before counting against limit
+            if self._precheck_complete(func):
+                skipped_complete += 1
                 continue
 
             # Check limit
@@ -1342,6 +1362,7 @@ Focus on readability and maintainability while preserving exact behavior and mat
         summary["periodic_validation"] = periodic_full_interval if use_incremental else 0
         summary["build_metrics"] = build_metrics
         summary["auto_apply_stats"] = self.patch_applier.stats()
+        summary["skipped_complete"] = skipped_complete
         if circuit_tripped:
             summary["circuit_breaker_tripped"] = True
             summary["circuit_breaker_reason"] = circuit_reason
@@ -1406,6 +1427,7 @@ Focus on readability and maintainability while preserving exact behavior and mat
 
         results = []
         processed = 0
+        skipped_complete = 0
         errors = 0
         batch_count = 0
         consecutive_errors = 0
@@ -1433,6 +1455,11 @@ Focus on readability and maintainability while preserving exact behavior and mat
                 if current.get("verdict") in ("COMPLETE", "AT_LIMIT"):
                     if verbose:
                         print(f"  Skipping (complete): {candidate.get('demangled') or candidate['symbol']}")
+                    continue
+
+                # Pre-check: verify not already complete via objdiff
+                if self._precheck_complete(current):
+                    skipped_complete += 1
                     continue
 
                 func = current
@@ -1522,6 +1549,7 @@ Focus on readability and maintainability while preserving exact behavior and mat
         summary["auto_apply_stats"] = self.patch_applier.stats()
         summary["target_count"] = len(targets)
         summary["processed_count"] = processed
+        summary["skipped_complete"] = skipped_complete
         if circuit_tripped:
             summary["circuit_breaker_tripped"] = True
             summary["circuit_breaker_reason"] = circuit_reason
@@ -1710,6 +1738,8 @@ Focus on readability and maintainability while preserving exact behavior and mat
         else:
             print(f"{elapsed:.1f}s (avg {avg_sec:.1f}s/fn)")
         print(f"  Strategy:   {summary['build_strategy']}")
+        if summary.get("skipped_complete", 0) > 0:
+            print(f"  Pre-filtered: {summary['skipped_complete']} already-complete (not counted in limit)")
         if summary.get("periodic_validation"):
             print(f"  Validation: full build every {summary['periodic_validation']} batches")
 

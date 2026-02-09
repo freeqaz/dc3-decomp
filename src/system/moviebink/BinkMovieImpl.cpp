@@ -24,3 +24,11 @@ MovieInternalBuffers::MovieInternalBuffers() {
 
 MovieInternalBuffers::~MovieInternalBuffers() {
 }
+
+BinkMovieImpl::BinkMovieImpl() {
+    // Constructor body to be filled in during decompilation
+}
+
+BinkMovieImpl::~BinkMovieImpl() {
+    // Destructor body to be filled in during decompilation
+}

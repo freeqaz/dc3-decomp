@@ -13,6 +13,7 @@
 #include "os/File.h"
 #include "os/FileCache.h"
 #include "os/System.h"
+#include "synth/Stream.h"
 #include "ui/UI.h"
 #include "ui/UIPanel.h"
 #include "utl/BeatMap.h"
@@ -82,6 +83,8 @@ void LoadingPanel::Enter() {
     UIPanel::Enter();
     TheTaskMgr.SetSecondsAndBeat(0, 0, true);
     MILO_ASSERT(sLoadingMaster->GetHxAudio()->IsReady(), 0x6a);
+
+    sLoadingMaster->GetHxAudio()->GetSongStream();
 }
 
 Symbol LoadingPanel::ChooseLoadingScreen() {

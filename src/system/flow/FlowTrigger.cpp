@@ -66,19 +66,19 @@ BEGIN_SAVES(FlowTrigger)
     bs << mStopProperties;
 END_SAVES
 
-BEGIN_COPYS(FlowTrigger)
-    COPY_SUPERCLASS(FlowQueueable)
-    CREATE_COPY(FlowTrigger)
-    BEGIN_COPYING_MEMBERS
+void FlowTrigger::Copy(const Hmx::Object *o, CopyType t) {
+    FlowQueueable::Copy(o, t);
+    const FlowTrigger *c;
+    if ((c = dynamic_cast<const FlowTrigger *>(o))) {
         UnregisterEvents();
-        COPY_MEMBER(mTriggerEvents)
-        COPY_MEMBER(mEventProvider)
-        COPY_MEMBER(mStopEvents)
-        COPY_MEMBER(mHardStop)
-        COPY_MEMBER(mTriggerProperties)
-        COPY_MEMBER(mStopProperties)
-    END_COPYING_MEMBERS
-END_COPYS
+        mTriggerEvents = c->mTriggerEvents;
+        mEventProvider = c->mEventProvider;
+        mStopEvents = c->mStopEvents;
+        mHardStop = c->mHardStop;
+        mTriggerProperties = c->mTriggerProperties;
+        mStopProperties = c->mStopProperties;
+    }
+}
 
 INIT_REVS(1, 0)
 

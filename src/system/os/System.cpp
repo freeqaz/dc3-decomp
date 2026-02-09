@@ -231,7 +231,7 @@ void SystemPoll(bool b1) {
     }
     ThePlatformMgr.Poll();
     TheVirtualKeyboard.Poll();
-    TheContentMgr.Poll();
+    TheContentMgr.PollRefresh();
 }
 
 DataArray *SupportedLanguages(bool cheats) {

@@ -195,8 +195,8 @@ void LockedContentPanel::SetUpNoFlashcards(Symbol song, Difficulty diff) {
     } while (loopCount != 0);
 }
 
-void LockedContentPanel::SetUpDifficultyLocked(Symbol s1, Symbol s2) {
-    Difficulty diff = SymToDifficulty(s2);
+void LockedContentPanel::SetUpDifficultyLocked(Symbol song, Symbol difficultySymbol) {
+    Difficulty diff = SymToDifficulty(difficultySymbol);
     MILO_ASSERT(diff > kDifficultyEasy, 0x111);
     AppLabel *pContentName = DataDir()->Find<AppLabel>("content_name.lbl");
     HamLabel *pTeaser = DataDir()->Find<HamLabel>("teaser.lbl");
@@ -216,12 +216,51 @@ void LockedContentPanel::SetUpDifficultyLocked(Symbol s1, Symbol s2) {
     static Symbol award_mediummedley_instruction("award_mediummedley_instruction");
     static Symbol award_hardmedley_instruction("award_hardmedley_instruction");
     if (TheGameMode->InMode("playlist_perform", true)) {
-        Symbol diffInstruction = award_hard_playlist_instruction;
+        Symbol diffInstruction;
         if (diff == kDifficultyMedium) {
             diffInstruction = award_medium_playlist_instruction;
+        } else {
+            diffInstruction = award_hard_playlist_instruction;
         }
         pInstructions->SetTokenFmt(diffInstruction, 3);
+        // Hide drawable elements in playlist mode (8 elements starting at offset 0x58)
+        RndDrawable **pPtr = (RndDrawable **)((u8 *)this + 0x58);
+        int loopCount = 8;
+        do {
+            pPtr[-7]->SetShowing(false);
+            pPtr++;
+            (*pPtr)->SetShowing(false);
+            loopCount -= 1;
+        } while (loopCount != 0);
     } else {
+        Symbol diffInstruction;
+        if (diff == kDifficultyMedium) {
+            diffInstruction = award_medium_instruction;
+        } else {
+            diffInstruction = award_expert_instruction;
+        }
+        pInstructions->SetTokenFmt(diffInstruction, 3);
+        Flow *pFlowPractice = DataDir()->Find<Flow>("song_list_perform_practice.flow");
+        pFlowPractice->Activate();
+        int songID = TheHamSongMgr.GetSongIDFromShortName(song, true);
+        // Show drawables for song display (offsets 0x3c and 0x5c)
+        RndDrawable *pDrawable1 = *(RndDrawable **)((u8 *)this + 0x3c);
+        pDrawable1->SetShowing(true);
+        RndDrawable *pDrawable2 = *(RndDrawable **)((u8 *)this + 0x5c);
+        pDrawable2->SetShowing(true);
+        pContentName->SetSongName(song, -1, false);
+        // Set up stars display showing one difficulty lower than the locked difficulty
+        HamStarsDisplay *pStarsDisplay = *(HamStarsDisplay **)((u8 *)this + 0x5c);
+        pStarsDisplay->SetSongWithDifficulty(songID, (Difficulty)(diff - 1), true);
+        // Hide additional drawable elements (7 elements starting at offset 0x5c)
+        RndDrawable **pPtr = (RndDrawable **)((u8 *)this + 0x5c);
+        int loopCount = 7;
+        do {
+            pPtr[-7]->SetShowing(false);
+            pPtr++;
+            (*pPtr)->SetShowing(false);
+            loopCount -= 1;
+        } while (loopCount != 0);
     }
 }
 

@@ -8,6 +8,7 @@ class MoveDir;
 
 // size 0x5c
 class MoveDetector {
+    friend class MoveAsyncDetector;
 public:
     MoveDetector(const FilterVersion *, const HamMove *, const DancerFrame *&);
     ~MoveDetector();

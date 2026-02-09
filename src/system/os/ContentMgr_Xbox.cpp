@@ -128,15 +128,19 @@ void XboxContent::Mount() {
 }
 
 void XboxContent::Unmount() {
-    if (mState == kMounted) {
-        mOverlapped = new XOVERLAPPED();
-        if (XContentClose(mRoot.c_str(), mOverlapped) != 0x3E5) {
-            RELEASE(mOverlapped);
+    // Cache member access for register allocation
+    State state = mState;
+    XOVERLAPPED **overlappedPtr = &mOverlapped;
+
+    if (state == kMounted) {
+        *overlappedPtr = new XOVERLAPPED();
+        if (XContentClose(mRoot.c_str(), *overlappedPtr) != 0x3E5) {
+            RELEASE(*overlappedPtr);
             mState = kContentDeleting;
             return;
         }
         mState = kUnmounting;
-    } else if (mState == kNeedsMounting || mState == kContentDeleting) {
+    } else if (state == kNeedsMounting || state == kContentDeleting) {
         mState = kUnmounted;
     }
 }

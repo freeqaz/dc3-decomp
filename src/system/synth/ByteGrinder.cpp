@@ -389,9 +389,9 @@ DataNode op27(DataArray *msg) {
 DataNode op28(DataArray *msg) {
     u32 l = msg->Int(1);
     u32 r = msg->Int(2);
-    u32 w2 = (r & 0xFF) << 8;
-    u32 w3 = (w2 & 0xFFFFFF00) | (r & 0xFF);
-    return u8((w3 >> 5) + l ^ l);
+    u32 masked = r & 0xFF;
+    u32 shifted = (masked >> 5) | (masked << 3);
+    return u8(shifted + l ^ l);
 }
 
 DataNode op29(DataArray *msg) {

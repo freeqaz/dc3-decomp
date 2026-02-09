@@ -238,15 +238,14 @@ void DxRnd::Suspend() {
 }
 
 void DxRnd::Resume() {
-    if (!mD3DDevice) {
-        return;
+    if ((int)mD3DDevice) {
+        if (unk3f4) {
+            MILO_ASSERT(mAsyncSwapCurrent == false, 0x6AE);
+            D3DDevice_Resume(mD3DDevice);
+            unk360 = false;
+        }
+        unk3f4 = false;
     }
-    if (unk3f4) {
-        MILO_ASSERT(mAsyncSwapCurrent == false, 0x6AE);
-        D3DDevice_Resume(mD3DDevice);
-        unk360 = false;
-    }
-    unk3f4 = false;
 }
 
 D3DSurface *DxRnd::BackBuffer() const {
@@ -523,24 +522,27 @@ void DxRnd::SavePostBuffer() {
 
 void DxRnd::SetShaderRegisterAlloc(RegisterAlloc s) {
     MILO_ASSERT(s >=0 && s < kNumRegAlloc, 0x6BA);
-    if (mRegAlloc == s) {
-        return;
-    }
-    mRegAlloc = s;
-    switch (s) {
-    case 0:
-        D3DDevice_SetShaderGPRAllocation(mD3DDevice, 0, 0, 0);
-        break;
-    case 1:
-        D3DDevice_SetShaderGPRAllocation(mD3DDevice, 0, mDefaultVSRegAlloc, mDefaultPSRegAlloc);
-        break;
-    case 2:
-    case 3:
-        D3DDevice_SetShaderGPRAllocation(mD3DDevice, 0, 0x10, 0x70);
-        break;
-    default:
-        MILO_NOTIFY("Invalid Shader Register Allocation");
-        break;
+    if (mRegAlloc != s) {
+        mRegAlloc = s;
+        switch (s) {
+        case 0:
+            D3DDevice_SetShaderGPRAllocation(mD3DDevice, 0, 0, 0);
+            break;
+        case 1:
+            D3DDevice_SetShaderGPRAllocation(
+                mD3DDevice, 0, mDefaultVSRegAlloc, mDefaultPSRegAlloc
+            );
+            break;
+        case 2:
+            D3DDevice_SetShaderGPRAllocation(mD3DDevice, 0, 0x10, 0x70);
+            break;
+        case 3:
+            D3DDevice_SetShaderGPRAllocation(mD3DDevice, 0, 0x10, 0x70);
+            break;
+        default:
+            MILO_NOTIFY("Invalid Shader Register Allocation");
+            break;
+        }
     }
 }
 

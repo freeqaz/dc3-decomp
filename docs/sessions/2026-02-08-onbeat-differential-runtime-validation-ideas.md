@@ -145,6 +145,47 @@ Why useful:
 Caveat:
 - Significantly more engineering and hooking complexity.
 
+## Where This Fits In Decomp Lifecycle
+
+Dynamic analysis should be treated as a semantic validation layer, not a replacement for decompilation or codegen matching tools.
+
+Practical stack:
+1. `ghidra/m2c`: recover candidate logic and structure.
+2. Dynamic analysis: validate runtime behavior against original binary.
+3. `objdiff`/permuter: tune source/codegen for assembly convergence.
+
+### Why It Is Valuable
+
+- It separates semantic bugs from codegen noise.
+- It reduces false confidence from high match percentages with residual behavioral uncertainty.
+- It gives a concrete stop/go signal before declaring difficult functions `AT_LIMIT`.
+- It catches regressions when source-shape changes are made for assembly matching.
+
+### ROI By Match Stage
+
+1. `0-30%` (from scratch): low-to-medium ROI.
+- Useful when static analysis cannot explain control-flow/state behavior.
+- Usually too expensive as a default first step.
+
+2. `30-70%`: medium ROI.
+- Good for validating state-machine direction and major branch semantics.
+- Prevents investing in matching the wrong logic.
+
+3. `70-95%`: highest ROI.
+- Best point to detect subtle semantic drift before heavy asm tuning.
+- Especially useful for large gameplay/stateful functions.
+
+4. `95-100%`: targeted ROI.
+- Helps decide whether remaining diffs are semantic or compiler-driven.
+- Supports confident `AT_LIMIT` decisions.
+
+### Recommended Use Policy
+
+Use dynamic analysis first for:
+- Large branch-heavy gameplay functions.
+- Functions with persistent control-flow/call-count mismatches near high match%.
+- Functions being considered for `AT_LIMIT` with unresolved semantic doubt.
+
 ## Determinism Plan
 
 Differential validation is only credible if runs are deterministic enough.

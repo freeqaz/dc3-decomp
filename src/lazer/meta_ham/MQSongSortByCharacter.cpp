@@ -41,12 +41,11 @@ NavListShortcutNode *MQSongSortByCharacter::NewShortcutNode(NavListItemNode *nod
 }
 
 NavListItemNode *MQSongSortByCharacter::NewItemNode(void *node) const {
-    Symbol sym;
-    memcpy(&sym, node, sizeof(sym)); // lol
-    int songID = TheHamSongMgr.GetSongIDFromShortName(sym, true);
-    auto outfit = TheHamSongMgr.Data(songID)->Outfit();
-    auto outfitChar = GetOutfitCharacter(outfit, true);
-    MQSongCharCmp *songCharCmp = new MQSongCharCmp((const char *)node, (const char *)node);
-    MQSongSortNode *mqssn = new MQSongSortNode(songCharCmp, (SongRecord *)node);
-    return mqssn;
+    Symbol outfitChar;
+    Symbol shortName = *static_cast<Symbol *>(node);
+    outfitChar = GetOutfitCharacter(
+        TheHamSongMgr.Data(TheHamSongMgr.GetSongIDFromShortName(shortName, true))->Outfit(),
+        true);
+    MQSongCharCmp *songCharCmp = new MQSongCharCmp(shortName.Str(), outfitChar.Str());
+    return new MQSongSortNode(songCharCmp, shortName, outfitChar);
 }

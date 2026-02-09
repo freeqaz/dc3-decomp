@@ -203,11 +203,17 @@ void SkeletonIdentifier::SetUpInitialProfiles() {
         if (p1->PadNum() < 0) {
             int pad0 = -1;
             int pad1 = -1;
-            for (int i = 0; i < 4; i++) {
+            int i = 0;
+            do {
                 if (ThePlatformMgr.IsPadNumSignedIn(i)) {
-                    pad0 = i;
+                    if (pad0 == -1) {
+                        pad0 = i;
+                    } else if (pad1 == -1) {
+                        pad1 = i;
+                    }
                 }
-            }
+                i++;
+            } while (i < 4);
             if (pad0 != -1) {
                 TheGameData->SetAssociatedPadNum(0, pad0);
             }

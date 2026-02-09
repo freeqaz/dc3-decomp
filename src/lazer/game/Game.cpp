@@ -674,20 +674,20 @@ bool Game::IsLoaded() {
     }
 }
 
-DataNode Game::OnSetShuttle(DataArray *a) {
-    if (a->Size() > 3) {
-        mShuttle->SetController(a->Int(3));
+DataNode Game::OnSetShuttle(DataArray *arr) {
+    if (arr->Size() > 3) {
+        mShuttle->SetController(arr->Int(3));
     }
-    bool active = a->Int(2);
+    bool active = arr->Int(2);
     if (active) {
         float time = mMaster->GetAudio()->GetTime();
         mShuttle->SetMs(time);
         mShuttle->SetEndMs(mSongDB->GetSongDurationMs());
     } else {
         Jump(mShuttle->Ms(), true);
-        while (!IsLoaded()) {
+        do {
             TheSynth->Poll();
-        }
+        } while (!IsLoaded());
     }
     mShuttle->SetActive(active);
     return 0;

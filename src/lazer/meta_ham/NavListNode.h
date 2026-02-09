@@ -51,6 +51,7 @@ public:
     int Compare(const NavListNode *, NavListNodeType) const;
     void GetID(DataArray *);
     NavListItemSortCmp *GetCmp() { return mCmp; }
+    const NavListItemSortCmp *GetCmp() const { return mCmp; }
     NavListNode *Parent() const { return mParent; }
     void SetParent(NavListNode *parent) { mParent = parent; }
 

@@ -6,7 +6,9 @@
 #include "xdk/xapilibi/xbox.h"
 
 namespace {
-    unsigned long ExternalMicThreadEntry(void *v) { return 1; }
+    unsigned long ExternalMicThreadEntry(void *v) {
+        return reinterpret_cast<ExternalMic *>(v)->sampleProcessThread();
+    }
 }
 
 ExternalMic::ExternalMic(unsigned long ul)

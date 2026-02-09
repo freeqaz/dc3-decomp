@@ -100,45 +100,163 @@ void LoopVizCallback::DrawHashMarks(
     }
 }
 
+// Debug visualization for music loop timing
+// Shows two meters: song-wide loop position and detailed loop progress
 float LoopVizCallback::UpdateOverlay(RndOverlay *o, float y) {
-    if (TheMaster && TheMaster->GetAudio() && TheMaster->GetAudio()->GetSongStream()) {
-        unk54 -= TheTaskMgr.DeltaSeconds();
-        unk58 -= TheTaskMgr.DeltaSeconds();
-        TheRnd.DrawRectScreen(
-            Hmx::Rect(0.05f, 0.1f, 0.9f, 0.2f),
-            Hmx::Color(0, 0, 0, 0.6f),
-            nullptr,
-            nullptr,
-            nullptr
-        );
-        int i4c, i48;
-        TheMaster->GetAudio()->GetCurrLoopBeats(i4c, i48);
-        if (i4c != unk44) {
-            unk54 = 3;
-            unk44 = i4c;
-        }
-        if (i48 != unk48) {
-            unk58 = 3;
-            unk48 = i48;
-        }
-        float beat = MsToBeat(TheMaster->StreamMs());
-        float f14 = (beat - (float)i4c) / (float)(i48 - i4c);
-        StandardStream *stream =
-            dynamic_cast<StandardStream *>(TheMaster->GetAudio()->GetSongStream());
-        float beatAhead = MsToBeat(stream->GetBufferAheadTime());
-        float f10 = (beatAhead - beat) / (float)(i48 - i4c);
-        static Symbol end("end");
-        int eventBeat = TheMaster->EventBeat(end);
-        float f16 = (float)i4c / (float)eventBeat;
-        float f12 = (float)i48 / (float)eventBeat;
-        mDebugMeter1.Draw();
-        Hmx::Color color(0.8f, 0.8f, 0.8f);
-        mDebugMeter1.DrawBar(f16, f12 - f16, color);
-        mDebugMeter1.DrawBar(f16, (f12 - f16) * f14, color);
-        // more...
-        if (stream->IsPastStreamJumpPointOfNoReturn()) {
-        }
+    if (!TheMaster || !TheMaster->GetAudio() || !TheMaster->GetAudio()->GetSongStream()) {
+        return y;
     }
+
+    // Decrement change notification timers
+    unk54 -= TheTaskMgr.DeltaSeconds();
+    unk58 -= TheTaskMgr.DeltaSeconds();
+
+    // Draw semi-transparent background
+    TheRnd.DrawRectScreen(
+        Hmx::Rect(0.05f, 0.1f, 0.9f, 0.2f), Hmx::Color(0, 0, 0, 0.6f), nullptr, nullptr, nullptr
+    );
+
+    // Get current loop boundaries
+    int loopStart, loopEnd;
+    TheMaster->GetAudio()->GetCurrLoopBeats(loopStart, loopEnd);
+
+    // Detect and track loop boundary changes
+    if (loopStart != unk44) {
+        unk54 = 3.0f; // Show change indicator for 3 seconds
+        unk44 = loopStart;
+    }
+    if (loopEnd != unk48) {
+        unk58 = 3.0f;
+        unk48 = loopEnd;
+    }
+
+    // Calculate current playback position
+    float currentBeat = MsToBeat(TheMaster->StreamMs());
+    int loopRange = loopEnd - loopStart;
+    float loopProgress = (currentBeat - (float)loopStart) / (float)loopRange;
+
+    // Get stream info for buffer-ahead visualization
+    StandardStream *stream =
+        dynamic_cast<StandardStream *>(TheMaster->GetAudio()->GetSongStream());
+    float bufferAheadBeat = MsToBeat(stream->GetBufferAheadTime());
+    float bufferAheadDelta = bufferAheadBeat - currentBeat;
+    float bufferAheadProgress = bufferAheadDelta / (float)loopRange;
+
+    // Calculate normalized positions relative to full song
+    static Symbol end("end");
+    int songEndBeat = TheMaster->EventBeat(end);
+    float loopStartNorm = (float)loopStart / (float)songEndBeat;
+    float loopEndNorm = (float)loopEnd / (float)songEndBeat;
+    float loopRangeNorm = loopEndNorm - loopStartNorm;
+
+    // === FIRST METER: Song-wide loop visualization ===
+    mDebugMeter1.Draw();
+
+    // Draw loop region in gray
+    mDebugMeter1.DrawBar(loopStartNorm, loopRangeNorm, Hmx::Color(0.8f, 0.8f, 0.8f));
+    // Draw progress within loop
+    mDebugMeter1.DrawBar(loopStartNorm, loopRangeNorm * loopProgress, Hmx::Color(0.8f, 0.8f, 0.8f));
+
+    // Handle stream jump point (for looping audio streams)
+    bool pastJumpPoint = stream->IsPastStreamJumpPointOfNoReturn();
+    float playheadPos = loopStartNorm + loopRangeNorm * loopProgress;
+
+    float bufferStart, bufferWidth;
+    if (pastJumpPoint) {
+        // Show gap from playhead to loop end (wraparound imminent)
+        mDebugMeter1.DrawBar(playheadPos, loopEndNorm - playheadPos, Hmx::Color(1.0f, 1.0f, 1.0f));
+        // Buffer visualization starts from loop beginning
+        bufferStart = loopStartNorm;
+        bufferWidth = ((bufferAheadBeat - (float)loopStart) / (float)loopRange) * loopRangeNorm;
+    } else {
+        // Normal case: buffer ahead of playhead
+        bufferStart = playheadPos;
+        bufferWidth = bufferAheadProgress * loopRangeNorm;
+    }
+    mDebugMeter1.DrawBar(bufferStart, bufferWidth, Hmx::Color(0.5f, 1.0f, 1.0f));
+
+    // Draw playhead line
+    mDebugMeter1.DrawLine(playheadPos, Hmx::Color(1.0f, 1.0f, 1.0f), 1.0f, 0.0f);
+
+    // Draw loop boundary labels (highlight if recently changed)
+    Hmx::Color startColor = unk54 > 0 ? Hmx::Color(0, 0, 0) : Hmx::Color(1.0f, 1.0f, 1.0f);
+    mDebugMeter1.DrawText(MakeString("%d", loopStart), loopStartNorm, 0.0f, startColor);
+
+    Hmx::Color endColor = unk54 > 0 ? Hmx::Color(0, 0, 0) : Hmx::Color(1.0f, 1.0f, 1.0f);
+    mDebugMeter1.DrawText(MakeString("%d", loopEnd), loopEndNorm, 0.0f, endColor);
+
+    // Draw current beat label
+    mDebugMeter1.DrawText(MakeString("%d", (int)currentBeat), playheadPos, 1.0f, Hmx::Color(1.0f, 1.0f, 1.0f));
+
+    // Draw tick marks for beats
+    DrawHashMarks(0.12f + 0.03f, 0.1f, 0.8f, loopRange, loopStart, true);
+
+    // === SECOND METER: Detailed loop progress ===
+    mDebugMeter2.Draw();
+
+    // Draw progress bar (blue)
+    mDebugMeter2.DrawBar(0.0f, loopProgress, Hmx::Color(0, 0, 0.8f));
+
+    // Buffer ahead visualization
+    float bufferStart2, bufferWidth2;
+    if (pastJumpPoint) {
+        // Show remaining loop portion in white
+        mDebugMeter2.DrawBar(loopProgress, 1.0f - loopProgress, Hmx::Color(1.0f, 1.0f, 1.0f));
+        // Buffer wraps around to start
+        bufferStart2 = 0.0f;
+        bufferWidth2 = (bufferAheadBeat - (float)loopStart) / (float)loopRange;
+    } else {
+        // Normal buffer ahead display
+        bufferStart2 = loopProgress;
+        bufferWidth2 = bufferAheadProgress;
+    }
+    mDebugMeter2.DrawBar(bufferStart2, bufferWidth2, Hmx::Color(0.5f, 1.0f, 1.0f));
+
+    // Draw playhead line
+    mDebugMeter2.DrawLine(loopProgress, Hmx::Color(0.5f, 0.5f, 0.5f), 0.5f, -0.5f);
+
+    // Draw latency indicator
+    float latency = SecondsToBeat(1.0f) / (float)loopRange;
+    mDebugMeter2.DrawLine(loopProgress + latency, Hmx::Color(1.0f, 1.0f, 1.0f), 1.0f, 0.0f);
+
+    // Draw loop boundary labels with change markers
+    Hmx::Color startColor2 = unk54 > 0 ? Hmx::Color(0, 0, 0) : Hmx::Color(1.0f, 1.0f, 1.0f);
+    char startMarker = unk54 > 0 ? '*' : ' ';
+    mDebugMeter2.DrawText(MakeString("%d%c", loopStart, startMarker), 0.0f, 0.0f, startColor2);
+
+    Hmx::Color endColor2 = unk58 > 0 ? Hmx::Color(0, 0, 0) : Hmx::Color(1.0f, 1.0f, 1.0f);
+    char endMarker = unk58 > 0 ? '*' : ' ';
+    mDebugMeter2.DrawText(MakeString("%d%c", loopEnd, endMarker), 1.0f, 0.0f, endColor2);
+
+    // Draw current beat label
+    mDebugMeter2.DrawText(MakeString("%d", (int)currentBeat), loopProgress, 1.0f, Hmx::Color(1.0f, 1.0f, 1.0f));
+
+    // Draw tick marks
+    DrawHashMarks(0.19f + 0.03f, 0.25f, 0.5f, loopRange, loopStart, true);
+
+    // Show change notifications at top of screen
+    if (unk54 > 0) {
+        TheRnd.DrawStringScreen(
+            MakeString("Loop start changed from %d to %d", unk4c, loopStart),
+            Vector2(0.1f, 0.25f),
+            Hmx::Color(1.0f, 1.0f, 1.0f, 1.0f),
+            true
+        );
+    } else {
+        unk4c = loopStart;
+    }
+
+    if (unk58 > 0) {
+        TheRnd.DrawStringScreen(
+            MakeString("Loop end changed from %d to %d", unk50, loopEnd),
+            Vector2(0.1f, 0.27f),
+            Hmx::Color(1.0f, 1.0f, 1.0f, 1.0f),
+            true
+        );
+    } else {
+        unk50 = loopEnd;
+    }
+
     return y;
 }
 

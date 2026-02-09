@@ -102,7 +102,28 @@ void FitnessCalorieHeaderNode::Text(UIListLabel *uiListLabel, UILabel *uiLabel) 
     AppLabel *app_label = dynamic_cast<AppLabel *>(uiLabel);
     MILO_ASSERT(app_label, 0x94);
     if (uiListLabel->Matches("sort_header")) {
+        FitnessCalorieSortNode *firstChild = static_cast<FitnessCalorieSortNode *>(mChildren.front());
+        FitnessCalorieSortNode *lastChild = static_cast<FitnessCalorieSortNode *>(mChildren.back());
+        String s = MakeString(
+            "%i - %i %s",
+            firstChild->GetUnk48(),
+            lastChild->GetUnk48(),
+            Localize("fitness_goal_calories_generic", 0, TheLocale)
+        );
+        uiLabel->SetPrelocalizedString(s);
+        return;
     }
+    if (uiListLabel->Matches("header_collapse")) {
+        bool is_highlighted;
+        if (TheFitnessCalorieSortMgr->GetHighlightItem() == this) {
+            is_highlighted = true;
+        } else {
+            is_highlighted = false;
+        }
+        SetCollapseStateIcon(is_highlighted);
+        return;
+    }
+    uiLabel->SetTextToken(gNullStr);
 }
 
 void FitnessCalorieHeaderNode::Renumber(std::vector<NavListSortNode *> &vec) {

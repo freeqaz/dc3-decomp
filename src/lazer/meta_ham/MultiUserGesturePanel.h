@@ -60,10 +60,10 @@ public:
     void SetCrew(Symbol, int);
 
 protected:
-    UIComponent *unk54;
-    UIComponent *unk58;
-    u32 unk5c;
-    u32 unk60;
+    HamNavList *mLeftNavList1; // 0x54
+    HamNavList *mRightNavList1; // 0x58
+    HamNavList *mLeftNavList2; // 0x5c
+    HamNavList *mRightNavList2; // 0x60
     CharacterProvider mCharacterProviders[2]; // 0x64
     CrewProvider mCrewProviders[2]; // 0xec
     DifficultyProvider mDifficultyProviders[2]; // 0x174

@@ -48,5 +48,26 @@ END_LOADS
 void PhotoSpotlightPositioner::Init() { REGISTER_OBJ_FACTORY(PhotoSpotlightPositioner); }
 
 Vector3 PhotoSpotlightPositioner::GetImagePos(Vector2 v2) const {
-    return mRefImage->WorldXfm().v;
+    RndMesh *mesh = mRefImage;
+    const Transform *xfm;
+
+    // Check mDirty flag at offset 0xfd in RndMesh
+    // Due to virtual inheritance, accessing directly via offset
+    if (*((unsigned char *)mesh + 0xfd) == 0) {
+        // Use mLocalXfm (part of RndTransformable subobject)
+        xfm = (const Transform *)((char *)mesh + 0x88);
+    } else {
+        // mDirty is set, must compute world transform
+        xfm = &mesh->WorldXfm();
+    }
+
+    Transform localCopy;
+    memcpy(&localCopy, xfm, sizeof(Transform));
+
+    Vector3 result;
+    result.y = 0.0f;
+    result.x = -((1.0f - v2.x) * localCopy.m.x.x - (localCopy.m.x.x * 0.5f + localCopy.v.x));
+    result.z = -(localCopy.m.x.y * v2.y - (localCopy.m.x.y * 0.5f + localCopy.v.z));
+
+    return result;
 }

@@ -317,9 +317,11 @@ void NavListSortMgr::FinalizeHeaders() {
     }
 }
 
+// Given a list index, find which header it corresponds to in mHeadersB
 int NavListSortMgr::GetHeaderIndexFromListIndex(int idx) {
     Symbol token = OnGetToken(idx);
-    for (int i = 0; i < mHeadersB.size(); i++) {
+    int size = mHeadersB.size();
+    for (int i = 0; i < size; i++) {
         if (token == mSorts[mCurrentSortIdx]->GetListFromIdx(mHeadersB[i])->GetToken()) {
             return i;
         }

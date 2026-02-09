@@ -1,5 +1,7 @@
 #pragma once
 
+#include "movie/MovieImpl.h"
+
 struct BINK;
 
 class MovieInternalBuffers {
@@ -20,3 +22,12 @@ private:
 };
 
 static_assert(sizeof(MovieInternalBuffers) == 0xC0, "MovieInternalBuffers size mismatch");
+
+class BinkMovieImpl : public MovieImpl {
+public:
+    BinkMovieImpl();
+    virtual ~BinkMovieImpl();
+
+    // Virtual methods will be added as they're decompiled
+    // Size: 0xE8 (232 bytes)
+};

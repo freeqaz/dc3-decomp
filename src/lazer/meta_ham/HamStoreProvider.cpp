@@ -191,13 +191,18 @@ Symbol HamStoreProvider::CurrentSort() const {
     return gNullStr;
 }
 
+// action: 0 = add to cart, 1 = remove from cart, 2 = clear cart
 void HamStoreProvider::UpdateOffersInCart(StoreOffer *offer, int i) {
-    if (i == 0) {
+    switch (i) {
+    case 0:
         unkb0.push_back(offer);
-    } else if (i == 1) {
+        break;
+    case 1:
         unkb0.remove(offer);
-    } else if (i < 3) {
+        break;
+    case 2:
         unkb0.clear();
+        break;
     }
     RefreshFilteredCartOffers();
 }

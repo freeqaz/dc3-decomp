@@ -57,7 +57,11 @@ bool FitnessGoalMgr::HasValidProfile() {
 }
 
 void FitnessGoalMgr::UploadNextProfile() {
-    unk50.clear();
+    std::list<HamProfile *>::iterator it;
+    if (!unk50.empty()) {
+        unk4c = *unk50.begin();
+        it = unk50.erase(unk50.begin());
+    }
     if (unk4c)
         QueueCmdUpdateFitnessGoalToRC(unk4c);
 }

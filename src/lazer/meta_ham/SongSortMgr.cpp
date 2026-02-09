@@ -191,38 +191,35 @@ bool SongSortMgr::DataIs(int i1, Symbol sym) {
     static Symbol song("song");
     static Symbol header("header");
     static Symbol function("function");
-
+    NavListSortNode *node = mSorts[mCurrentSortIdx]->GetListFromIdx(i1);
     if (sym == song) {
-        return dynamic_cast<SongSortNode *>(mSorts[mCurrentSortIdx]->GetListFromIdx(i1))
-            == 0;
+        return dynamic_cast<SongSortNode *>(node) != 0;
     }
     if (sym == header) {
-        return dynamic_cast<SongHeaderNode *>(mSorts[mCurrentSortIdx]->GetListFromIdx(i1))
-            == 0;
-    } else {
-        if (sym == function) {
-            return false;
-        }
-        // return dynamic_cast<SongFunctionNode
-        // *>(mSorts[mCurrentSortIdx]->GetListFromIdx(i1)) == 0;
+        return dynamic_cast<SongHeaderNode *>(node) != 0;
     }
-    return mSorts[mCurrentSortIdx]->GetListFromIdx(i1) == 0;
+    if (sym != function) {
+        return node != 0;
+    }
+    return false;
 }
 
 int SongSortMgr::FirstArtistSongIndex(Symbol sym) {
+    int result = 0;
     int dataCount = mSorts[mCurrentSortIdx]->GetDataCount();
+
     for (int i = 0; i < dataCount; i++) {
         SongSortNode *ssNode =
             dynamic_cast<SongSortNode *>(mSorts[mCurrentSortIdx]->GetListFromIdx(i));
-        if (ssNode) {
-            Symbol artist = ssNode->GetArtist();
-            if (sym == artist) {
-                int idx = GetHeaderIndexFromChildListIndex(i);
-                return idx;
+        if (ssNode != 0) {
+            const char *artist = ssNode->GetArtist();
+            if (strcmp(artist, sym.Str()) == 0) {
+                result = GetHeaderIndexFromChildListIndex(i);
+                break;
             }
         }
     }
-    return 0;
+    return result;
 }
 
 void SongSortMgr::RebuildSongRecordMap() {

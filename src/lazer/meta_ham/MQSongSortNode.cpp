@@ -5,6 +5,7 @@
 #include "MQSongSortMgr.h"
 #include "HamStarsDisplay.h"
 #include "meta_ham/NavListNode.h"
+#include "meta_ham/MQSongSortByCharacter.h"
 #include "stl/_vector.h"
 #include "utl/MakeString.h"
 #include "utl/Std.h"
@@ -66,17 +67,14 @@ const char *MQSongHeaderNode::GetAlbumArtPath() {
 
 void MQSongHeaderNode::Text(UIListLabel *listlabel, UILabel *label) const {
     if (listlabel->Matches("song")) {
-        // const char *c = mCmp->GetMQSongCharCmp()->unk8;
-        // label->SetTextToken(MakeString("mqheader_%s", c));
-    } else {
-        if (!listlabel->Matches("song_prefix")) {
-            if (!listlabel->Matches("header_collapse")) {
-                return;
-            }
-            SetCollapseStateIcon(unk5c);
-            return;
-        }
+        const MQSongCharCmp *cmp = mCmp->GetMQSongCharCmp();
+        const char *c = cmp->unk8;
+        Symbol s(MakeString("mqheader_%s", c));
+        label->SetTextToken(s);
+    } else if (listlabel->Matches("song_prefix")) {
         label->SetTextToken(gNullStr);
+    } else if (listlabel->Matches("header_collapse")) {
+        SetCollapseStateIcon(unk5c);
     }
 }
 
