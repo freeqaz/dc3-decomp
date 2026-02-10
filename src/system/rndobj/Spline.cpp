@@ -49,7 +49,7 @@ BEGIN_PROPSYNCS(RndSpline)
     SYNC_PROP_SET(end_ctrl_point, mEndCtrlPoint, SetEndCtrlPoint(_val.Int()))
     SYNC_PROP_SET(y_offset, mYOffset, mYOffset = _val.Float())
     SYNC_PROP_SET(
-        y_per_ctrl_point, mYPerCtrlPoint, mYPerCtrlPoint = Min(_val.Float(), 0.1f)
+        y_per_ctrl_point, mYPerCtrlPoint, mYPerCtrlPoint = Max(_val.Float(), 0.1f)
     )
     SYNC_SUPERCLASS(Hmx::Object)
 END_PROPSYNCS
