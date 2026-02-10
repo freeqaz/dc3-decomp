@@ -1114,13 +1114,18 @@ void MoveDir::SetCurrentMove(int player, HamMove *move) {
 }
 
 float MoveDir::SongSeconds() {
-    float secs = TheTaskMgr.Seconds(TaskMgr::kRealTime);
-    if (TheMaster && TheMaster->GetAudio() && TheMaster->GetAudio()->GetSongStream()) {
-        float time = TheMaster->GetAudio()->GetSongStream()->GetJumpBackTotalTime() * secs
-            * 1000.0f;
-        secs += time / 1000.0f;
+    float seconds = TheTaskMgr.Seconds(TaskMgr::kRealTime);
+    if (TheMaster) {
+        HamAudio *audio = TheMaster->GetAudio();
+        if ((int)audio) {
+            Stream *stream = audio->GetSongStream();
+            if (stream) {
+                stream = TheMaster->GetAudio()->GetSongStream();
+                seconds += stream->GetJumpBackTotalTime() * 0.001f;
+            }
+        }
     }
-    return secs;
+    return seconds;
 }
 
 float MoveDir::SongSpeed() const {
