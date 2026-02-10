@@ -210,7 +210,7 @@ void Skeleton::Init() {
         mTrackedJoints[i].unk60.Zero();
     }
     memset(mCamBoneLengths, 0, sizeof(mCamBoneLengths));
-    mCamDisplacements.clear();
+    mCamDisplacements = std::vector<CameraDisplacement>();
 }
 
 bool Skeleton::ProfileMatched() const {
@@ -235,13 +235,11 @@ bool Skeleton::RequestIdentity() {
     if (info) {
         HRESULT hr = NuiIdentityIdentify(mTrackingID, 0, IdentityCallback, info);
         MILO_ASSERT(hr != E_INVALIDARG, 0x2B1);
-        int success = hr == 0;
         if (hr < 0) {
-            if ((unsigned int)hr != 0x8000000A)
+            if (hr != (HRESULT)0x8000000A)
                 return false;
-            success = 0;
         }
-        if (success) {
+        if (hr == 0) {
             info->SetUnk0(true);
         } else {
             GestureMgr::sIdentityOpInProgress = true;
