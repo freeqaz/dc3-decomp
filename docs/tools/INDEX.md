@@ -79,6 +79,16 @@ sqlite3 decomp.db "SELECT symbol, current_percent FROM functions WHERE has_linke
 
 See [../reference/DATABASE_SCHEMA.md](../reference/DATABASE_SCHEMA.md) for full schema documentation.
 
+## Linking Tools
+
+| Script | Description |
+|--------|-------------|
+| `scripts/link_test.py` | Standalone X360 link test (links split/hybrid .obj → PE) |
+| `scripts/compare_pe.py` | Compare linked PE against original `ham_xbox_r.exe` |
+| `scripts/fix_pdata.py` | Workaround for dtk .pdata splitting bug (integrated into `ninja link`) |
+
+See [../sessions/2026-02-11-x360-linking-pipeline.md](../sessions/2026-02-11-x360-linking-pipeline.md) for full status and roadmap.
+
 ## Quick Commands
 
 ```bash
@@ -87,6 +97,9 @@ ninja
 
 # Generate progress report
 ninja build/373307D9/report.json
+
+# Link hybrid PE (requires wine)
+ninja link
 
 # Find near-match functions (90-99%)
 objdiff-cli report query build/373307D9/report.json --functions --min-percent 90 --max-percent 99
@@ -118,17 +131,17 @@ tools/decompile.sh "CharMirror::Load" --context
 python3 tools/decompctx.py src/path/to/file.cpp -I include -I src
 ```
 
-## Experimental Tools
+## Code Transformation Tools
 
 | Tool | Description | Doc |
 |------|-------------|-----|
-| C++ Permuter | Source permutation for register allocation issues | [../permuter/INDEX.md](../permuter/INDEX.md) |
+| C++ Permuter | Tree-sitter based source permutation for register allocation issues | [../permuter/INDEX.md](../permuter/INDEX.md) |
 
 ## Archived Tools
 
 | Tool | Description | Doc | Notes |
 |------|-------------|-----|-------|
-| decomp-permuter | Original C permutation fuzzer | [permuter.md](permuter.md) | C only, not C++ compatible |
+| decomp-permuter | Original C permutation fuzzer | [permuter.md](permuter.md) | C only, uses pycparser which doesn't support C++ |
 
 ## Projects
 

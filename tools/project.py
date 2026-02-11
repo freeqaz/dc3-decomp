@@ -699,6 +699,22 @@ def generate_build_ninja(
     # )
     # n.newline()
 
+    # X360 MSVC Link (requires wine, wibo doesn't support link.exe APIs)
+    msvc_link = compiler_path / "link.exe"
+    wine_cmd = "WINEDEBUG=-all wine " if not is_windows() else ""
+    msvc_link_cmd = f"{wine_cmd}{msvc_link} /NOLOGO @$out.rsp"
+    msvc_link_implicit: List[Optional[Path]] = [compilers_implicit or msvc_link]
+
+    n.comment("X360 MSVC Link")
+    n.rule(
+        name="msvc_link",
+        command=msvc_link_cmd,
+        description="LINK $out",
+        rspfile="$out.rsp",
+        rspfile_content="$in_newline $ldflags",
+    )
+    n.newline()
+
     # MSVC
     msvc = compiler_path / "cl.exe"
     msvc_cmd = f"{wrapper_cmd}{msvc} $cflags /showIncludes /Fo$out $in"
@@ -901,6 +917,37 @@ def generate_build_ninja(
                 )
             n.newline()
 
+    class X360LinkStep:
+        def __init__(self, build_cfg: BuildConfigModule) -> None:
+            self.name = build_cfg["name"]
+            self.entry = build_cfg["entry"]
+            self.inputs: List[str] = []
+            self.extra_implicit: List[Path] = []
+
+        def add(self, obj: Path) -> None:
+            self.inputs.append(serialize_path(obj))
+
+        def output(self) -> Path:
+            return build_path / f"{self.name}.exe"
+
+        def write(self, n: ninja_syntax.Writer) -> None:
+            n.comment(f"Link {self.name}")
+            exe_path = self.output()
+            ldflags_str = make_flags_str(config.ldflags)
+            ldflags_str += f" /ENTRY:{self.entry}"
+            ldflags_str += f" /OUT:{serialize_path(exe_path)}"
+            if config.generate_map:
+                ldflags_str += f" /MAP:{serialize_path(map_path(exe_path))}"
+            n.build(
+                outputs=exe_path,
+                rule="msvc_link",
+                inputs=self.inputs,
+                implicit=[*msvc_link_implicit, *self.extra_implicit],
+                variables={"ldflags": ldflags_str},
+                order_only="post-compile",
+            )
+            n.newline()
+
     link_outputs: List[Path] = []
     if build_config:
         link_steps: List[LinkStep] = []
@@ -1068,10 +1115,13 @@ def generate_build_ninja(
                 # Use the original (extracted) object
                 link_step.add(Path(obj_path))
 
-        # Add DOL link step
+        # Add link steps
         link_step = LinkStep(build_config)
+        x360_link_step = X360LinkStep(build_config)
         for unit in build_config["units"]:
             add_unit(unit, link_step)
+            # Also add to X360 link step (uses same hybrid selection)
+            x360_link_step.inputs = link_step.inputs.copy()
         link_steps.append(link_step)
 
         if config.build_rels:
@@ -1110,13 +1160,30 @@ def generate_build_ninja(
         write_custom_step("post-compile", "pre-compile")
 
         ###
-        # Link
+        # Fix .pdata sections in split objects (workaround for dtk bug)
         ###
-        # TODO: add this functionality back when you have a few objs together you can work with (X360)
-        # for step in link_steps:
-        #     step.write(n)
-        #     link_outputs.append(step.output())
-        # n.newline()
+        fix_pdata = config.tools_dir.parent / "scripts" / "fix_pdata.py"
+        fix_pdata_stamp = build_path / "fix_pdata.stamp"
+        n.comment("Fix .pdata sections in split objects for linking")
+        n.rule(
+            name="fix_pdata",
+            command=f"$python {fix_pdata} && touch $out",
+            description="FIX_PDATA",
+        )
+        n.build(
+            outputs=fix_pdata_stamp,
+            rule="fix_pdata",
+            implicit=[fix_pdata, build_path / "config.json"],
+            order_only="post-compile",
+        )
+        n.newline()
+
+        ###
+        # Link (X360)
+        ###
+        x360_link_step.extra_implicit.append(fix_pdata_stamp)
+        x360_link_step.write(n)
+        link_outputs.append(x360_link_step.output())
 
         # Add all build steps needed after linking and before GC/Wii native format generation
         write_custom_step("post-link", "post-compile")
@@ -1208,6 +1275,18 @@ def generate_build_ninja(
             inputs=source_inputs,
         )
         n.newline()
+
+        ###
+        # Link target
+        ###
+        if link_outputs:
+            n.comment("Link target (build linked PE)")
+            n.build(
+                outputs="link",
+                rule="phony",
+                inputs=link_outputs,
+            )
+            n.newline()
 
         ###
         # Check hash
