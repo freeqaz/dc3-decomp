@@ -1160,7 +1160,7 @@ def generate_build_ninja(
         write_custom_step("post-compile", "pre-compile")
 
         ###
-        # Fix .pdata sections in split objects (workaround for dtk bug)
+        # Fix .pdata sections in split objects (workaround for dtk multi-.text and __unwind$ issues)
         ###
         fix_pdata = config.tools_dir.parent / "scripts" / "fix_pdata.py"
         fix_pdata_stamp = build_path / "fix_pdata.stamp"

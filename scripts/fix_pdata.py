@@ -3,9 +3,13 @@
 Fix COFF objects with .pdata sections that cause LNK1223 errors.
 
 The X360 MSVC linker strictly validates .pdata contributions. Split objects
-from dtk can have invalid .pdata entries (bad function boundaries, multiple
-sections). This script renames ALL .pdata sections to .pdatX to bypass
-the linker's validation while preserving the data in the output.
+from dtk can have .pdata content issues that the linker rejects:
+  - Entries spanning multiple code sections (.text + .text$yc)
+  - Entries referencing __unwind$ symbols instead of function symbols
+
+Note: The original duplicate-.pdata bug (127 objects) is now fixed in dtk
+via section merging in split_obj(). This workaround handles the remaining
+pdata content validation issues.
 
 Usage:
     python3 scripts/fix_pdata.py [--dry-run] [--restore]
@@ -20,8 +24,74 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 
 
+def needs_fix(data):
+    """Check if a COFF object has .pdata content the linker would reject."""
+    if len(data) < 20:
+        return False
+
+    _, num_sections = struct.unpack_from('<HH', data, 0)
+    sym_off_base = struct.unpack_from('<I', data, 8)[0]
+    num_syms = struct.unpack_from('<I', data, 12)[0]
+    opt_hdr_size = struct.unpack_from('<H', data, 16)[0]
+
+    # Parse sections: count .text* sections and find .pdata
+    offset = 20 + opt_hdr_size
+    text_count = 0
+    pdata_relptr = None
+    pdata_nreloc = 0
+    for i in range(num_sections):
+        if offset + 40 > len(data):
+            break
+        name = data[offset:offset+8].rstrip(b'\x00')
+        if name.startswith(b'.text'):
+            text_count += 1
+        if name == b'.pdata':
+            pdata_relptr = struct.unpack_from('<I', data, offset+24)[0]
+            pdata_nreloc = struct.unpack_from('<H', data, offset+32)[0]
+        offset += 40
+
+    if pdata_relptr is None:
+        return False
+
+    # Issue 1: multiple .text sections
+    if text_count > 1:
+        return True
+
+    # Issue 2: pdata references __unwind$ symbols
+    if sym_off_base > 0 and num_syms > 0:
+        str_table_off = sym_off_base + num_syms * 18
+        reloff = pdata_relptr
+        for j in range(pdata_nreloc):
+            if reloff + 10 > len(data):
+                break
+            sym_idx = struct.unpack_from('<I', data, reloff+4)[0]
+            sym_off = sym_off_base + sym_idx * 18
+            if sym_off + 18 > len(data):
+                reloff += 10
+                continue
+            name_bytes = data[sym_off:sym_off+8]
+            if name_bytes[:4] == b'\x00\x00\x00\x00':
+                str_off = struct.unpack_from('<I', name_bytes, 4)[0]
+                abs_off = str_table_off + str_off
+                if abs_off < len(data):
+                    end = data.find(b'\x00', abs_off, abs_off + 200)
+                    if end < 0:
+                        end = abs_off + 200
+                    sym_name = data[abs_off:end]
+                else:
+                    sym_name = b''
+            else:
+                sym_name = name_bytes.rstrip(b'\x00')
+            if b'__unwind$' in sym_name:
+                return True
+            reloff += 10
+
+    return False
+
+
 def fix_object(obj_path, restore=False):
-    """Rename .pdata sections. Returns (path, fixed, error)."""
+    """Rename .pdata sections in objects with content issues.
+    Returns (path, fixed, error)."""
     try:
         with open(obj_path, 'rb') as f:
             data = bytearray(f.read())
@@ -32,6 +102,27 @@ def fix_object(obj_path, restore=False):
         _, num_sections = struct.unpack_from('<HH', data, 0)
         opt_hdr_size = struct.unpack_from('<H', data, 16)[0]
 
+        if restore:
+            modified = False
+            offset = 20 + opt_hdr_size
+            for i in range(num_sections):
+                if offset + 40 > len(data):
+                    break
+                name = data[offset:offset+8]
+                stripped = name.rstrip(b'\x00')
+                if stripped.startswith(b'.pdat') and stripped != b'.pdata':
+                    data[offset:offset+8] = b'.pdata\x00\x00'
+                    modified = True
+                offset += 40
+            if modified:
+                with open(obj_path, 'wb') as f:
+                    f.write(data)
+            return obj_path, modified, None
+
+        if not needs_fix(data):
+            return obj_path, False, None
+
+        # Rename .pdata to .pdatN
         modified = False
         offset = 20 + opt_hdr_size
         pdata_idx = 0
@@ -39,21 +130,11 @@ def fix_object(obj_path, restore=False):
             if offset + 40 > len(data):
                 break
             name = data[offset:offset+8]
-
-            if restore:
-                # Restore .pdatX back to .pdata
-                stripped = name.rstrip(b'\x00')
-                if stripped.startswith(b'.pdat') and stripped != b'.pdata':
-                    data[offset:offset+8] = b'.pdata\x00\x00'
-                    modified = True
-            else:
-                # Rename .pdata to .pdatN
-                if name.rstrip(b'\x00') == b'.pdata':
-                    new_name = f".pdat{pdata_idx}".encode('ascii')
-                    data[offset:offset+8] = new_name.ljust(8, b'\x00')
-                    pdata_idx += 1
-                    modified = True
-
+            if name.rstrip(b'\x00') == b'.pdata':
+                new_name = f".pdat{pdata_idx}".encode('ascii')
+                data[offset:offset+8] = new_name.ljust(8, b'\x00')
+                pdata_idx += 1
+                modified = True
             offset += 40
 
         if modified:
@@ -81,14 +162,13 @@ def main():
     print(f"{action} .pdata sections in {len(obj_paths)} objects...")
 
     if args.dry_run:
-        # Count how many have pdata
         count = 0
         for p in obj_paths:
             with open(p, 'rb') as f:
                 data = f.read()
-            if b'.pdata' in data[:2000]:  # Quick scan of headers
+            if needs_fix(data):
                 count += 1
-        print(f"  {count} objects have .pdata sections")
+        print(f"  {count} objects need .pdata fix")
         return
 
     fixed = 0
