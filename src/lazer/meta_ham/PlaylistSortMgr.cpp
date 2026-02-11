@@ -47,9 +47,8 @@ bool CompareType(const Playlist *p1, const Playlist *p2) {
         } while (diff == 0);
         // Extract sign bit: returns true if diff < 0 (p1 < p2)
         return (unsigned int)diff >> 31;
-    } else {
-        return p2type > p1type;
     }
+    return p2type > p1type;
 }
 
 // TODO: Remove once HandleCmdGetPlaylistsFromRC is implemented
@@ -224,7 +223,7 @@ DataNode PlaylistSortMgr::OnMsg(SmartGlassMsg const &) {
 }
 
 void PlaylistSortMgr::QueueCmdAddPlaylistToRC(Playlist *pl) {
-    CmdAddPlayListToRC *cmd = new CmdAddPlayListToRC(pl);
+    CmdAddPlaylistToRC *cmd = new CmdAddPlaylistToRC(pl);
     unkc0.push_back(cmd);
     if (!unkc8) {
         ProcessNextCommand();

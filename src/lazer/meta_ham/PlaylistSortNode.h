@@ -20,8 +20,8 @@ public:
     PlaylistSortNode(NavListItemSortCmp *, Playlist *);
 
 protected:
-    Symbol unk44;
-    Playlist *unk48;
+    int unk48; // Force Playlist* to 0x4c
+    Playlist *unk4c;
 };
 
 class PlaylistHeaderNode : public NavListHeaderNode {

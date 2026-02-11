@@ -255,16 +255,15 @@ Symbol SongSortMgr::MoveOn() {
         static Message move_on_quickplay_msg("move_on_quickplay");
         songSelectPanel->HandleType(move_on_quickplay_msg);
         return gNullStr;
-    } else {
-        if (song_select_story == mode || song_select_practice == mode
-            || mode == song_select_jukebox) {
-            Symbol ready_screen("ready_screen");
-            const DataNode *prop = TheGameMode->Property(ready_screen);
-            return prop->Sym();
-        }
+    } else if (song_select_story != mode && song_select_practice != mode
+               && mode != song_select_jukebox) {
         MILO_FAIL("Unknown song_select_mode\n");
+        return gNullStr;
+    } else {
+        Symbol ready_screen("ready_screen");
+        const DataNode *prop = TheGameMode->Property(ready_screen);
+        return prop->Sym();
     }
-    return gNullStr;
 }
 
 void SongSortMgr::OnEnter() {

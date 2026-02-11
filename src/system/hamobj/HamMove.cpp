@@ -147,8 +147,9 @@ void MoveFrame::Load(BinStreamRev &d) {
     }
     if (d.rev > 0x2B) {
         d >> unk4;
-    } else
+    } else {
         unk4 = -1;
+    }
     int num_ham2_nodes = FilterVersion::NumHam2Nodes();
     int num_ham1_nodes = kNumHam1Nodes;
     if (d.rev > 0x27) {
@@ -161,12 +162,12 @@ void MoveFrame::Load(BinStreamRev &d) {
                 }
             }
         }
-        for (int i = 0; i < kNumMoveMirrored; i++) {
+        for (int i = 0; i < 2; i++) {
             d >> mFrameWeights[i];
         }
         int count;
         d >> count;
-        for (int i = 0; i < 2; i++) {
+        for (int i = 0; i < kNumMoveMirrored; i++) {
             for (int j = 0; j < count; j++) {
                 if (j >= num_ham2_nodes) {
                     if (d.rev < 0x29) {
@@ -196,7 +197,7 @@ void MoveFrame::Load(BinStreamRev &d) {
                     for (int k = 0; k < 3; k++) {
                         float &cur = mNodeScales[i][j][k];
                         float set = kHugeFloat;
-                        if (0.0000099999997f <= fabsf(cur)) {
+                        if (fabsf(cur) >= 0.0000099999997f) {
                             set = 1.0f / cur;
                         }
                         mNodeScales[i][j][k] = set;
@@ -205,7 +206,7 @@ void MoveFrame::Load(BinStreamRev &d) {
             }
         }
         for (; count < num_ham2_nodes; count++) {
-            for (int mirror = 0; mirror < kNumMoveMirrored; mirror++) {
+            for (int mirror = 0; mirror < 2; mirror++) {
                 SetNodeScale(count, (MoveMirrored)mirror, Vector3(1, 1, 1));
             }
         }
@@ -242,7 +243,7 @@ void MoveFrame::Load(BinStreamRev &d) {
                 }
             }
         } else {
-            for (int i = 0; i < 4; i++) {
+            for (int i = 0; i < 2; i++) {
                 for (int j = 0; j < 2; j++) {
                     for (int k = 0; k < 2; k++) {
                         d >> oldNodeWeights[i + k];
@@ -250,7 +251,29 @@ void MoveFrame::Load(BinStreamRev &d) {
                 }
             }
         }
-        // more...
+        // Copy oldNodeWeights into mNodeWeights arrays
+        int node_idx = 0;
+        for (int mirror = 0; mirror < kNumMoveMirrored; mirror++) {
+            int size = oldNodeWeights[mirror].size();
+            for (int i = 0; i < size; i++) {
+                mNodeWeights[mirror][node_idx][0] = oldNodeWeights[mirror][i].unk0;
+                mNodeWeights[mirror][node_idx][1] = oldNodeWeights[mirror][i].unk0;
+                mNodeWeights[mirror][node_idx][2] = oldNodeWeights[mirror][i].unk0;
+                node_idx++;
+            }
+        }
+        // Process ham2 frame weights
+        if (d.rev > 0x1C) {
+            for (int mirror = 0; mirror < kNumMoveMirrored; mirror++) {
+                d >> mFrameWeights[mirror];
+            }
+        }
+        // Fill remaining nodes with default scale
+        for (int node = node_idx; node < num_ham2_nodes; node++) {
+            for (int mirror = 0; mirror < kNumMoveMirrored; mirror++) {
+                SetNodeScale(node, (MoveMirrored)mirror, Vector3(1, 1, 1));
+            }
+        }
     }
 }
 

@@ -64,8 +64,9 @@ void UsbMidiGuitar::Poll() {
             if (ty == kJoypadXboxButtonGuitar || ty == kJoypadPs3ButtonGuitar
                 || ty == kJoypadWiiButtonGuitar || ty == kJoypadXboxRealGuitar22Fret
                 || ty == kJoypadPs3RealGuitar22Fret || ty == kJoypadWiiRealGuitar22Fret) {
-                proData = &JoypadGetPadData(i)->mProGuitarData;
+                JoypadData *pad = JoypadGetPadData(i);
                 unsigned int uVar9 = 0;
+                proData = &pad->mProGuitarData;
                 for (int j = 5; j >= 0; j--) {
                     int curFret, curVel;
                     switch (j) {
@@ -105,7 +106,7 @@ void UsbMidiGuitar::Poll() {
                         TheGuitar->SetFret(i, j, curFret);
                         TheGuitar->SetVelocity(i, j, curVel);
                         StringStrummedMsg ssmsg(
-                            j, curFret, curVel & -(velUpdated != 0), i
+                            j, curFret, velUpdated ? curVel : 0, i
                         );
                         SendMessage(ssmsg);
                         TheGuitar->UpdateStringStrummed(i, j);
@@ -114,7 +115,7 @@ void UsbMidiGuitar::Poll() {
                         }
                     }
                 }
-                volatile bool someCharArr[8];
+                volatile char someCharArr[5];
                 bool RGFretBool = proData->unk3upper;
                 for (int k = 0; k < 5; k++) {
                     bool padDataFretDown = proData->mStringInfos[k].mDown;
@@ -122,15 +123,18 @@ void UsbMidiGuitar::Poll() {
                     if (padDataFretDown != TheGuitar->GetFretDown(i, k)) {
                         if (padDataFretDown) {
                             TheGuitar->SetFretDown(i, k, true);
-                            SendMessage(RGFretButtonDownMsg(k, i, RGFretBool));
+                            RGFretButtonDownMsg fbdMsg(k, i, RGFretBool);
+                            SendMessage(fbdMsg);
                         } else {
                             TheGuitar->SetFretDown(i, k, false);
-                            SendMessage(RGFretButtonUpMsg(k, i, RGFretBool));
+                            RGFretButtonUpMsg fbuMsg(k, i, RGFretBool);
+                            SendMessage(fbuMsg);
                         }
                     }
                 }
                 if (uVar9 != 0) {
-                    SendMessage(RGSwingMsg(uVar9, i));
+                    RGSwingMsg swMsg(uVar9, i);
+                    SendMessage(swMsg);
                 }
                 int axisVal11 = proData->unkachar;
                 int axisVal12 = proData->unkbchar;
@@ -139,33 +143,39 @@ void UsbMidiGuitar::Poll() {
                     || axisVal12 != TheGuitar->CurrentAccelAxisVal(i, 1)
                     || axisVal10 != TheGuitar->CurrentAccelAxisVal(i, 2)) {
                     TheGuitar->SetAccelerometer(i, axisVal11, axisVal12, axisVal10);
-                    SendMessage(RGAccelerometerMsg(axisVal11, axisVal12, axisVal10, i));
+                    RGAccelerometerMsg accelMsg(axisVal11, axisVal12, axisVal10, i);
+                    SendMessage(accelMsg);
                 }
                 int connAcc = proData->unkdchar;
                 if (connAcc != TheGuitar->GetConnectedAccessory(i)) {
                     TheGuitar->SetConnectedAccessories(i, connAcc);
-                    SendMessage(RGConnectedAccessoriesMsg(connAcc, i));
+                    RGConnectedAccessoriesMsg caMsg(connAcc, i);
+                    SendMessage(caMsg);
                 }
                 int pitchBend = proData->unkdchar;
                 if (pitchBend != TheGuitar->GetPitchBend(i)) {
                     TheGuitar->SetPitchBend(i, pitchBend);
-                    SendMessage(RGPitchBendMsg(pitchBend, i));
+                    RGPitchBendMsg pbMsg(pitchBend, i);
+                    SendMessage(pbMsg);
                 }
                 int muting = proData->mMuting;
                 if (muting != TheGuitar->GetMuting(i)) {
                     TheGuitar->SetMuting(i, muting);
-                    SendMessage(RGMutingMsg(muting, i));
+                    RGMutingMsg mutMsg(muting, i);
+                    SendMessage(mutMsg);
                 }
                 bool stompBox = proData->mStompBox;
                 if (stompBox != TheGuitar->GetStompBox(i)) {
                     TheGuitar->SetStompBox(i, stompBox);
-                    SendMessage(RGStompBoxMsg(stompBox, i));
+                    RGStompBoxMsg sbMsg(stompBox, i);
+                    SendMessage(sbMsg);
                 }
-                int programChange = proData->unkabool + (proData->unkbbool << 1)
-                    + (proData->unkcbool << 2);
+                int programChange = proData->unkabool + (proData->unkcbool << 1)
+                    + (proData->unkbbool << 2);
                 if (programChange != TheGuitar->GetProgramChange(i)) {
                     TheGuitar->SetProgramChange(i, programChange);
-                    SendMessage(RGProgramChangeMsg(programChange, i));
+                    RGProgramChangeMsg pcMsg(programChange, i);
+                    SendMessage(pcMsg);
                 }
             }
         }

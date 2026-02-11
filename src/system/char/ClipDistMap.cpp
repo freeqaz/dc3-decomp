@@ -63,6 +63,8 @@ ClipDistMap::ClipDistMap(
     }
 }
 
+ClipDistMap::~ClipDistMap() {
+}
 
 bool ClipDistMap::BeatAligned(int i1, int i2) {
     int l1;

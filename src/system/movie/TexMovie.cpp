@@ -94,14 +94,22 @@ INIT_REVS(5, 1)
 
 BEGIN_LOADS(TexMovie)
     LOAD_REVS(bs)
-    ASSERT_REVS(5, 1)
+    ASSERT_REVS(8, 0)
     LOAD_SUPERCLASS(Hmx::Object)
     LOAD_SUPERCLASS(RndDrawable)
     LOAD_SUPERCLASS(RndPollable)
-    if (d.altRev < 4)
-        bs >> unk5e;
     bs >> mTex >> unk5c;
-
+    d >> unk5e;
+    if (d.rev < 4)
+        d >> unk5e;
+    bs >> sRoot;
+    if (d.rev > 5)
+        d >> unk5e;
+    if (d.rev == 7)
+        d >> unk5e;
+    if ((d.rev > 1) && (d.rev < 3))
+        d >> unk5e;
+    DoBeginMovieFromFile(nullptr, kLoadBack);
 END_LOADS
 
 void TexMovie::DrawPreClear() {
