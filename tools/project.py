@@ -1160,28 +1160,8 @@ def generate_build_ninja(
         write_custom_step("post-compile", "pre-compile")
 
         ###
-        # Fix .pdata sections in split objects (workaround for dtk multi-.text and __unwind$ issues)
-        ###
-        fix_pdata = config.tools_dir.parent / "scripts" / "fix_pdata.py"
-        fix_pdata_stamp = build_path / "fix_pdata.stamp"
-        n.comment("Fix .pdata sections in split objects for linking")
-        n.rule(
-            name="fix_pdata",
-            command=f"$python {fix_pdata} && touch $out",
-            description="FIX_PDATA",
-        )
-        n.build(
-            outputs=fix_pdata_stamp,
-            rule="fix_pdata",
-            implicit=[fix_pdata, build_path / "config.json"],
-            order_only="post-compile",
-        )
-        n.newline()
-
-        ###
         # Link (X360)
         ###
-        x360_link_step.extra_implicit.append(fix_pdata_stamp)
         x360_link_step.write(n)
         link_outputs.append(x360_link_step.output())
 
