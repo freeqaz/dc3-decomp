@@ -1,5 +1,6 @@
 """Tests for comparator.py — comparison logic with mock ExecutionResults."""
 
+import json
 import struct
 import unittest
 
@@ -63,6 +64,28 @@ class TestCompare(unittest.TestCase):
         self.assertEqual(result.verdict, "DIVERGENT")
         self.assertEqual(result.details["reason"], "call_count_mismatch")
 
+    def test_divergent_call_count_includes_matched_prefix(self):
+        """call_count_mismatch details include matched_prefix count."""
+        d_log = [make_call_log_entry(0, r3=1), make_call_log_entry(1, r3=2),
+                 make_call_log_entry(2, r3=3)]
+        o_log = [make_call_log_entry(0, r3=1), make_call_log_entry(1, r3=2)]
+        decomp = MockExecutionResult(call_log=d_log)
+        orig = MockExecutionResult(call_log=o_log)
+        result = self.compare(decomp, orig, [], [])
+        self.assertEqual(result.details["reason"], "call_count_mismatch")
+        self.assertEqual(result.details["matched_prefix"], 2)
+
+    def test_divergent_call_count_with_arg_diff(self):
+        """call_count_mismatch where args also diverge before count runs out."""
+        d_log = [make_call_log_entry(0, r3=1), make_call_log_entry(1, r3=99),
+                 make_call_log_entry(2, r3=3)]
+        o_log = [make_call_log_entry(0, r3=1), make_call_log_entry(1, r3=2)]
+        decomp = MockExecutionResult(call_log=d_log)
+        orig = MockExecutionResult(call_log=o_log)
+        result = self.compare(decomp, orig, [], [])
+        self.assertEqual(result.details["reason"], "call_count_mismatch")
+        self.assertEqual(result.details["matched_prefix"], 1)
+
     def test_divergent_call_args(self):
         d_log = [make_call_log_entry(0, r3=1, r4=10), make_call_log_entry(1, r3=2, r4=99)]
         o_log = [make_call_log_entry(0, r3=1, r4=10), make_call_log_entry(1, r3=2, r4=50)]
@@ -73,6 +96,16 @@ class TestCompare(unittest.TestCase):
         self.assertEqual(result.details["reason"], "call_arg_mismatch")
         self.assertEqual(result.details["call_index"], 1)
         self.assertEqual(result.details["register"], "r4")
+
+    def test_call_arg_mismatch_includes_full_args(self):
+        """call_arg_mismatch details include full decomp_args and orig_args."""
+        d_log = [make_call_log_entry(0, r3=1, r4=99, r5=3, r6=4)]
+        o_log = [make_call_log_entry(0, r3=1, r4=50, r5=3, r6=4)]
+        decomp = MockExecutionResult(call_log=d_log)
+        orig = MockExecutionResult(call_log=o_log)
+        result = self.compare(decomp, orig, [], [])
+        self.assertEqual(result.details["decomp_args"], {"r3": 1, "r4": 99, "r5": 3, "r6": 4})
+        self.assertEqual(result.details["orig_args"], {"r3": 1, "r4": 50, "r5": 3, "r6": 4})
 
     def test_divergent_memory(self):
         # Write different values at offset 0 in object memory
@@ -146,6 +179,125 @@ class TestFormatResult(unittest.TestCase):
         self.assertIn("Float return value mismatch", output)
         self.assertIn("3FF0000000000000", output)
         self.assertIn("4000000000000000", output)
+
+    def test_format_call_arg_mismatch_shows_all_regs(self):
+        """call_arg_mismatch output shows all 4 registers and 'Differs' line."""
+        d_log = [make_call_log_entry(0, r3=1, r4=99, r5=3, r6=4, source_offset=0x2C)]
+        o_log = [make_call_log_entry(0, r3=1, r4=50, r5=3, r6=4, source_offset=0x2C)]
+        orig_relocs = [make_reloc(0x2C, "Foo::Bar", "REL24")]
+        decomp = MockExecutionResult(call_log=d_log)
+        orig = MockExecutionResult(call_log=o_log)
+        result = self.compare(decomp, orig, [], orig_relocs)
+        output = self.format_result(result, decomp, orig, [], orig_relocs)
+        self.assertIn("Foo::Bar", output)
+        self.assertIn("offset 0x2C", output)
+        self.assertIn("Decomp:", output)
+        self.assertIn("Original:", output)
+        self.assertIn("Differs: r4", output)
+
+    def test_format_call_count_mismatch_shows_detail(self):
+        """call_count_mismatch output shows matched calls and extra calls."""
+        d_log = [make_call_log_entry(0, r3=1, source_offset=0x10),
+                 make_call_log_entry(1, r3=2, source_offset=0x20),
+                 make_call_log_entry(2, r3=3, source_offset=0x30)]
+        o_log = [make_call_log_entry(0, r3=1, source_offset=0x10),
+                 make_call_log_entry(1, r3=2, source_offset=0x20)]
+        orig_relocs = [make_reloc(0x10, "Func::A", "REL24"),
+                       make_reloc(0x20, "Func::B", "REL24")]
+        decomp_relocs = [make_reloc(0x10, "Func::A", "REL24"),
+                         make_reloc(0x20, "Func::B", "REL24"),
+                         make_reloc(0x30, "Func::C", "REL24")]
+        decomp = MockExecutionResult(call_log=d_log)
+        orig = MockExecutionResult(call_log=o_log)
+        result = self.compare(decomp, orig, decomp_relocs, orig_relocs)
+        output = self.format_result(result, decomp, orig, decomp_relocs, orig_relocs)
+        self.assertIn("Call count mismatch: decomp=3, orig=2", output)
+        self.assertIn("Matched calls before divergence", output)
+        self.assertIn("(both match)", output)
+        self.assertIn("Extra decomp calls", output)
+
+
+class TestToDict(unittest.TestCase):
+    """Tests for ComparisonResult.to_dict()."""
+
+    def test_to_dict_equivalent(self):
+        from scripts.unicorn_runner.comparator import ComparisonResult
+        result = ComparisonResult("EQUIVALENT", {"call_count": 5, "r3": 42}, ["warning1"])
+        d = result.to_dict()
+        self.assertEqual(d["verdict"], "EQUIVALENT")
+        self.assertEqual(d["details"]["call_count"], 5)
+        self.assertEqual(d["warnings"], ["warning1"])
+
+    def test_to_dict_divergent(self):
+        from scripts.unicorn_runner.comparator import ComparisonResult
+        result = ComparisonResult("DIVERGENT", {"reason": "call_arg_mismatch"})
+        d = result.to_dict()
+        self.assertEqual(d["verdict"], "DIVERGENT")
+        self.assertEqual(d["details"]["reason"], "call_arg_mismatch")
+        self.assertEqual(d["warnings"], [])
+
+
+class TestFormatJsonResult(unittest.TestCase):
+    """Tests for format_json_result()."""
+
+    def setUp(self):
+        from scripts.unicorn_runner.comparator import compare, format_json_result
+        self.compare = compare
+        self.format_json_result = format_json_result
+
+    def _make_metadata(self, symbol="TestFunc", decomp_size=16, orig_size=16,
+                       coloaded_callees=0, combined_code_size=16):
+        return {
+            "symbol": symbol,
+            "decomp_size": decomp_size,
+            "orig_size": orig_size,
+            "coloaded_callees": coloaded_callees,
+            "combined_code_size": combined_code_size,
+        }
+
+    def test_equivalent_json(self):
+        decomp = MockExecutionResult(r3=42, f1=0)
+        orig = MockExecutionResult(r3=42, f1=0)
+        result = self.compare(decomp, orig, [], [])
+        metadata = self._make_metadata()
+        output = self.format_json_result(result, decomp, orig, [], metadata)
+        data = json.loads(output)
+        self.assertEqual(data["verdict"], "EQUIVALENT")
+        self.assertEqual(data["symbol"], "TestFunc")
+        self.assertEqual(data["decomp_size"], 16)
+        self.assertEqual(data["r3"]["decomp"], 42)
+        self.assertEqual(data["r3"]["orig"], 42)
+
+    def test_divergent_json(self):
+        decomp = MockExecutionResult(r3=1)
+        orig = MockExecutionResult(r3=2)
+        result = self.compare(decomp, orig, [], [])
+        metadata = self._make_metadata()
+        output = self.format_json_result(result, decomp, orig, [], metadata)
+        data = json.loads(output)
+        self.assertEqual(data["verdict"], "DIVERGENT")
+
+    def test_call_log_resolved(self):
+        log = [make_call_log_entry(0, r3=5, source_offset=0x10)]
+        decomp = MockExecutionResult(r3=0, call_log=log)
+        orig = MockExecutionResult(r3=0, call_log=list(log))
+        orig_relocs = [make_reloc(0x10, "Foo::Bar", "REL24")]
+        result = self.compare(decomp, orig, [], orig_relocs)
+        metadata = self._make_metadata()
+        output = self.format_json_result(result, decomp, orig, orig_relocs, metadata)
+        data = json.loads(output)
+        self.assertEqual(data["decomp_calls"][0]["symbol"], "Foo::Bar")
+        self.assertEqual(data["decomp_call_count"], 1)
+
+    def test_coloaded_metadata(self):
+        decomp = MockExecutionResult(r3=0)
+        orig = MockExecutionResult(r3=0)
+        result = self.compare(decomp, orig, [], [])
+        metadata = self._make_metadata(coloaded_callees=3, combined_code_size=128)
+        output = self.format_json_result(result, decomp, orig, [], metadata)
+        data = json.loads(output)
+        self.assertEqual(data["coloaded_callees"], 3)
+        self.assertEqual(data["combined_code_size"], 128)
 
 
 if __name__ == "__main__":

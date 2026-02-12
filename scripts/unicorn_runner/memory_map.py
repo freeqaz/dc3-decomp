@@ -10,6 +10,7 @@ RDATA_BASE      = 0x80020000  # Switch table / jump table data
 VTABLE_BASE     = 0x40000000  # Mock vtable data region
 SENTINEL_ADDR   = 0xDEAD0000
 REGION_SIZE     = 0x10000  # 64KB each
+FILL_BYTE       = 0xCD    # MSVC debug uninitialized heap fill
 
 # Vtable mock parameters
 VTABLE_SLOTS        = 256   # Max virtual methods per class

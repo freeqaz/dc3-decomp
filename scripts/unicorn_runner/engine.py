@@ -34,7 +34,7 @@ class ExecutionResult:
 
 
 def execute_function(patched_code, trampolines, func_size, timeout=5_000_000,
-                     verbose=False, rdata_bytes=None):
+                     verbose=False, rdata_bytes=None, fill_pattern=None):
     """Execute a patched function in Unicorn and return the result.
 
     Args:
@@ -44,6 +44,7 @@ def execute_function(patched_code, trampolines, func_size, timeout=5_000_000,
         timeout: execution timeout in microseconds
         verbose: print execution trace
         rdata_bytes: optional bytes to load at RDATA_BASE (switch table data)
+        fill_pattern: byte value to fill data regions with (e.g. 0xCD), None for zeros
 
     Returns:
         ExecutionResult with call log, return value, and memory snapshots
@@ -56,6 +57,13 @@ def execute_function(patched_code, trampolines, func_size, timeout=5_000_000,
     mu.mem_map(GLOBAL_BASE, REGION_SIZE)
     mu.mem_map(TRAMPOLINE_BASE, REGION_SIZE)
     mu.mem_map(CODE_BASE, REGION_SIZE)
+    mu.mem_map(VTABLE_BASE, REGION_SIZE)
+
+    # Fill data regions with pattern (before writing structured data on top)
+    if fill_pattern is not None:
+        fill_buf = bytes([fill_pattern & 0xFF]) * REGION_SIZE
+        for base in (STACK_BASE, OBJECT_BASE, GLOBAL_BASE, VTABLE_BASE):
+            mu.mem_write(base, fill_buf)
 
     # Map rdata region for switch tables (if provided)
     if rdata_bytes is not None:
@@ -73,7 +81,6 @@ def execute_function(patched_code, trampolines, func_size, timeout=5_000_000,
     # OBJECT_BASE+0 → VTABLE_BASE (vtable pointer)
     # VTABLE_BASE[slot] → trampoline stub address
     # Each vtable slot points to a unique trampoline stub that returns 0.
-    mu.mem_map(VTABLE_BASE, REGION_SIZE)
     vtable_data = bytearray(VTABLE_SLOTS * 4)
     trampoline_data = bytearray(VTABLE_SLOTS * 8)
     for slot in range(VTABLE_SLOTS):
@@ -134,16 +141,21 @@ def execute_function(patched_code, trampolines, func_size, timeout=5_000_000,
     # Safety net: map-on-demand for unmapped memory accesses
     # In auto-fixture mode, functions may dereference zeroed pointers or
     # access memory outside our pre-mapped regions. We map new pages on
-    # demand (zeroed) so execution can continue — both sides see the same
-    # behavior since they start from identical state.
+    # demand so execution can continue — both sides see the same behavior
+    # since they start from identical state.
     mapped_pages = set()
     unmapped_accesses = []
+    fill_page = None
+    if fill_pattern is not None:
+        fill_page = bytes([fill_pattern & 0xFF]) * 0x1000
 
     def hook_unmapped_access(uc, access, address, size, value, user_data):
         page_base = address & ~0xFFF  # 4KB page alignment
         if page_base not in mapped_pages:
             try:
                 uc.mem_map(page_base, 0x1000)
+                if fill_page is not None:
+                    uc.mem_write(page_base, fill_page)
                 mapped_pages.add(page_base)
             except Exception:
                 return False  # Can't map — stop emulation

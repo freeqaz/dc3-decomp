@@ -35,12 +35,16 @@ class TestExecuteFunction(unittest.TestCase):
         from scripts.unicorn_runner.engine import execute_function
         from scripts.unicorn_runner.memory_map import (
             CODE_BASE, TRAMPOLINE_BASE, OBJECT_BASE, RDATA_BASE,
+            GLOBAL_BASE, VTABLE_BASE, REGION_SIZE,
         )
         self.execute = execute_function
         self.CODE_BASE = CODE_BASE
         self.TRAMPOLINE_BASE = TRAMPOLINE_BASE
         self.OBJECT_BASE = OBJECT_BASE
         self.RDATA_BASE = RDATA_BASE
+        self.GLOBAL_BASE = GLOBAL_BASE
+        self.VTABLE_BASE = VTABLE_BASE
+        self.REGION_SIZE = REGION_SIZE
 
     def test_simple_return(self):
         """li r3, 42; blr → r3=42, no error."""
@@ -210,6 +214,61 @@ class TestExecuteFunction(unittest.TestCase):
         self.assertEqual(result.call_log[0]["trampoline_addr"], expected_tramp)
         # Trampoline returns 0 via li r3, 0
         self.assertEqual(result.r3, 0)
+
+    # --- Fill pattern tests ---
+
+    def test_fill_pattern_object_memory(self):
+        """fill_pattern=0xCD fills object memory (after vtable ptr)."""
+        code = bytearray(make_simple_function())
+        result = self.execute(code, {}, len(code), fill_pattern=0xCD)
+        self.assertIsNone(result.error)
+        # Bytes after the vtable pointer (offset 4) should be 0xCD fill
+        self.assertEqual(result.object_memory[4:8], b'\xcd\xcd\xcd\xcd')
+
+    def test_fill_pattern_globals_memory(self):
+        """fill_pattern=0xCD fills globals memory."""
+        code = bytearray(make_simple_function())
+        result = self.execute(code, {}, len(code), fill_pattern=0xCD)
+        self.assertIsNone(result.error)
+        self.assertEqual(result.globals_memory[0:4], b'\xcd\xcd\xcd\xcd')
+
+    def test_fill_pattern_none_is_zeroed(self):
+        """Default (no fill_pattern) leaves globals zeroed."""
+        code = bytearray(make_simple_function())
+        result = self.execute(code, {}, len(code))
+        self.assertIsNone(result.error)
+        self.assertEqual(result.globals_memory[0:4], b'\x00\x00\x00\x00')
+
+    def test_fill_pattern_vtable_preserved(self):
+        """fill_pattern=0xCD still has correct vtable ptr at OBJECT_BASE+0."""
+        code = bytearray(make_simple_function())
+        result = self.execute(code, {}, len(code), fill_pattern=0xCD)
+        self.assertIsNone(result.error)
+        vtable_ptr = struct.unpack_from(">I", result.object_memory, 0)[0]
+        self.assertEqual(vtable_ptr, self.VTABLE_BASE)
+
+    def test_fill_pattern_on_demand_pages(self):
+        """On-demand mapped pages are filled with pattern."""
+        # li r4, 0; lwz r3, 0(r4); blr — read from address 0 (unmapped)
+        code = bytearray(assemble(
+            ppc_li(4, 0),
+            ppc_lwz(3, 0, 4),
+            ppc_blr(),
+        ))
+        result = self.execute(code, {}, len(code), fill_pattern=0xCD)
+        self.assertIsNone(result.error)
+        # Address 0 page mapped on demand, filled with 0xCD
+        self.assertEqual(result.r3, 0xCDCDCDCD)
+
+    def test_fill_pattern_bctrl_still_works(self):
+        """Vtable dispatch works correctly with fill_pattern=0xCD."""
+        from scripts.unicorn_runner.memory_map import VTABLE_TRAMP_OFFSET
+        code = bytearray(make_bctrl_function(vtable_slot=3))
+        result = self.execute(code, {}, len(code), fill_pattern=0xCD)
+        self.assertIsNone(result.error)
+        self.assertEqual(len(result.call_log), 1)
+        expected_tramp = self.TRAMPOLINE_BASE + VTABLE_TRAMP_OFFSET + (3 * 8)
+        self.assertEqual(result.call_log[0]["trampoline_addr"], expected_tramp)
 
 
 if __name__ == "__main__":
