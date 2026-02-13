@@ -92,8 +92,93 @@ If our build generates `clrlwi` that the target doesn't have (`insert` direction
 
 ---
 
+## extrwi vs rlwinm Bit Test Encoding
+
+**Prevalence:** Functions with flag/enum bit tests
+**Fixable** — use `bool` type to select the correct encoding.
+
+When testing individual bits in flags, the compiler can generate two different `rlwinm` encodings:
+
+| Encoding | Assembly | Result |
+|----------|----------|--------|
+| Mask-in-place | `rlwinm. rA, rS, 0, MB, ME` | 0 or bit value (e.g. 0 or 2) |
+| Extract-to-LSB (extrwi) | `rlwinm. rA, rS, rot, 31, 31` | 0 or 1 |
+
+Both are `rlwinm` machine instructions — `extrwi` is an assembler alias for `rlwinm` with rotate+mask that isolates a single bit to the LSB.
+
+### Symptom
+
+objdiff shows `replace` mismatch:
+```
+[21] replace: extrwi.  r10, r11, 1, 30   vs   rlwinm.  r10, r11, 0, 30, 30
+```
+
+The rotate and mask fields differ — target rotates and extracts to LSB; our code masks in place.
+
+### Root Cause (Confirmed via Callgrind-Diff)
+
+Callgrind profiling of c2.dll showed **8,214 divergent addresses across 559 clusters** between the two encodings — the `bool` type triggers a fundamentally different optimization path through UTC (the compiler backend), not just a trivial encoding table selection.
+
+The C++ `bool` type (1-byte, always 0/1) forces the compiler to **materialize a boolean value** in the IR. This propagates through the optimizer and selects the extract-to-LSB encoding. All other forms get optimized back to mask-in-place.
+
+### Source Pattern Matrix
+
+| Source Pattern | Encoding | Why |
+|---------------|----------|-----|
+| `flags & MASK` | rlwinm (mask) | Direct truth test, no bool materialization |
+| `(flags & MASK) != 0` | rlwinm (mask) | Comparison optimized away inline |
+| `!!(flags & MASK)` with `int` | rlwinm (mask) | `int` type, `!!` optimized away |
+| **`bool b = (flags & MASK) != 0;`** | **extrwi (extract)** | **`bool` type forces 0/1** |
+| **`bool(flags & MASK)`** | **extrwi (extract)** | **Cast to `bool` forces 0/1** |
+
+### Fix Patterns
+
+**Pattern A: Extract to local `bool` variable (when result is reused)**
+```cpp
+// BEFORE — generates rlwinm. r,r,0,30,30 (mask-in-place)
+if ((mType & kRendered) && mNumMips) { ... }
+
+// AFTER — generates extrwi. r,r,31,31,31 (extract-to-LSB)
+bool isRendered = (mType & kRendered) != 0;
+if (isRendered && mNumMips) { ... }
+```
+
+**Pattern B: Inline `bool()` cast (when result is used once)**
+```cpp
+// BEFORE — generates rlwinm. (mask-in-place)
+if ((mType & kMovie) && (mType & 0x20)) { ... }
+
+// AFTER — generates extrwi. (extract-to-LSB)
+if (bool(mType & kMovie) && (mType & 0x20)) { ... }
+```
+
+### Worked Example: DxTex::ResetSurfaces
+
+```cpp
+// Before (96.5% match, 2 replace mismatches):
+if (((mType & kRendered) && mNumMips) || ((mType & kMovie) && (mType & 0x20))
+    || (mType & kScratch) || (mType & kRegularLinear)) {
+
+// After (98.4% match, 0 replace mismatches):
+bool isRendered = (mType & kRendered) != 0;
+if ((isRendered && mNumMips) || (bool(mType & kMovie) && (mType & 0x20))
+    || (mType & kScratch) || (mType & kRegularLinear)) {
+```
+
+Both `replace` mismatches eliminated. Remaining differences are register swaps only.
+
+### Detection
+
+Look for `replace` mismatches in objdiff where:
+- Target has `rlwinm.` with non-zero rotate and mask `31, 31` (or `extrwi.` alias)
+- Our build has `rlwinm.` with rotate 0 and single-bit mask (e.g. `0, 30, 30`)
+
+The rotate value in the extrwi form equals `32 - bit_position`, so `extrwi. rA, rS, 1, 30` = `rlwinm. rA, rS, 31, 31, 31` (extracting bit 1 = value 0x2).
+
+---
+
 ## See Also
 
 - [fixable-declarations.md](fixable-declarations.md#variable-extraction) - Variable extraction (related technique)
 - [fixable-casting.md](fixable-casting.md) - Other casting fixes
-- [unfixable-compiler.md](unfixable-compiler.md) - Unfixable compiler patterns
+- [unfixable-compiler.md](unfixable-compiler.md) - Compiler patterns (register allocation now has mechanism details)

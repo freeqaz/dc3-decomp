@@ -54,7 +54,8 @@ These patterns can often be fixed with source changes. Sorted by ROI (impact x s
 | Bitwise Alignment | [fixable-operators.md](fixable-operators.md#bitwise-alignment) |
 | Commutative Operand Order | [fixable-operators.md](fixable-operators.md#commutative-operand-order) |
 | Comparison Operand Order | [fixable-operators.md](fixable-operators.md#comparison-operand-order) |
-| Bool Mask | [fixable-bool-mask.md](fixable-bool-mask.md) |
+| Bool Mask (`clrlwi`) | [fixable-bool-mask.md](fixable-bool-mask.md#step-1-detect) |
+| extrwi vs rlwinm Encoding | [fixable-bool-mask.md](fixable-bool-mask.md#extrwi-vs-rlwinm-bit-test-encoding) |
 | MILO_NOTIFY vs MILO_NOTIFY_ONCE | [fixable-declarations.md](fixable-declarations.md#milo_notify-vs-milo_notify_once) |
 | IsNaN vs Threshold Check | [fixable-comparison.md](fixable-comparison.md#isnan-vs-threshold-check) |
 
@@ -69,7 +70,7 @@ These patterns are usually not fixable at source level. Verify that the pattern 
 | Linker Merged (ICF) | 400 functions | 0.5-3% | [verifiable-icf.md](verifiable-icf.md#linker-merged-icf) (verify first) |
 | LTCG/Global Pooling | varies | 0.5-1% | [verifiable-icf.md](verifiable-icf.md#ltcg-global-pooling) |
 | Float Constant Pooling | common | 1-2 instr | [verifiable-icf.md](verifiable-icf.md#float-constant-pooling) |
-| Register Allocation | 607 functions | 1-3% | [unfixable-compiler.md](unfixable-compiler.md#register-allocation) |
+| Register Allocation | 607 functions | 1-3% | [unfixable-compiler.md](unfixable-compiler.md#register-allocation) (mechanism understood) |
 | ASSERT_REVS Scheduling | ~10% | ~0.8-0.9% | [unfixable-compiler.md](unfixable-compiler.md#assert_revs-scheduling) |
 | fmadds vs Separate Ops | float math | 1-3% | [unfixable-compiler.md](unfixable-compiler.md#fmadds-vs-separate-ops) |
 | Commutative Register Swap | float ops | <1% | [unfixable-compiler.md](unfixable-compiler.md#commutative-register-swap) |

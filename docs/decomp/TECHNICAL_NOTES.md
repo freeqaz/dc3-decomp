@@ -519,6 +519,35 @@ void Free(void *v) {
 
 **Diagnosis:** If allocator functions are sub-90% match, check if free-list pointer chains are being followed correctly. These bugs make allocators completely non-functional.
 
+### Issue: extrwi vs rlwinm Bit Test Encoding
+
+When testing individual bits in flags, the compiler can generate two different encodings:
+- `rlwinm. rA, rS, 0, MB, ME` — mask-in-place (result is 0 or the bit value)
+- `extrwi. rA, rS, 1, N` = `rlwinm. rA, rS, rot, 31, 31` — extract to LSB (result is 0 or 1)
+
+The `bool` type with a separate variable forces the extract-to-LSB encoding:
+
+```cpp
+// Generates rlwinm. r,r,0,30,30 (mask-in-place)
+if ((mType & kRendered) && mNumMips) { ... }
+
+// Also generates rlwinm. (!! and != 0 get optimized away inline)
+if (((mType & kRendered) != 0) && mNumMips) { ... }
+
+// Generates extrwi. / rlwinm. r,r,31,31,31 (extract-to-LSB)
+bool isRendered = (mType & kRendered) != 0;
+if (isRendered && mNumMips) { ... }
+```
+
+The C++ `bool` type forces the compiler to materialize a 0/1 boolean value, selecting the extract encoding. Inline `!!` and `!= 0` get optimized back to mask-in-place. The `bool(expr)` cast also works for inline use:
+
+```cpp
+// Also generates extrwi. form inline
+if (bool(mType & kMovie) && (mType & 0x20)) { ... }
+```
+
+**Diagnosis:** Look for `extrwi.` vs `rlwinm.` with different rotate/mask in objdiff `replace` mismatches. If target uses `rlwinm. rA, rS, 31, 31, 31` (or similar non-zero rotate with mask 31,31), use `bool` type for the bit test.
+
 ### Issue: Loop structure
 
 ```cpp
@@ -669,6 +698,7 @@ Offset  Type          Member
 29. **Commutative register swaps are unfixable** - `fmuls f11, f0, f13` vs `fmuls f11, f13, f0` - same result, different register order
 30. **VMX128 XMVECTOR parameters** - Passed in v1 register, stored to stack via `stvx128`, then read as scalar floats at offsets +0x10 (x), +0x14 (y), +0x18 (z), +0x1c (w)
 31. **64-bit to 16-bit extraction patterns** - Target may use `lhz` to load 16-bit slice from stored `__int64`; our compiler uses `ld` + bit masking (unfixable ~5% gap)
+32. **`bool` type for extrwi encoding** - `bool b = (flags & MASK) != 0;` generates `extrwi.` (extract-to-LSB), while inline `flags & MASK` generates `rlwinm.` (mask-in-place)
 
 ---
 

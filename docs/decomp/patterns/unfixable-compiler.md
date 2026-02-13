@@ -70,23 +70,18 @@ Accept 1-3% gap on math-heavy functions.
 
 **Prevalence:** 607 functions tagged REGISTER_SWAP (most common pattern)
 **Typical Gap:** 1-3% (avg 92.3%)
-
-The compiler's liveness analysis chooses registers differently.
+**Status:** Mechanism fully understood (Experiments 1-9). Source-level fixes work ~30% of the time. Binary patching of c2.dll coloring loop is a viable path to fix the remaining 70%.
 
 ### Symptom
 
 Consistent register swaps (e.g., r30 vs r31, f30 vs f31) throughout function.
 
-### Why Unfixable
-
-The compiler's register allocation is based on liveness analysis - a heuristic we cannot influence from source code in most cases.
-
 ### Common Swaps
 
-- r10 ↔ r11
-- r27 ↔ r28
-- r30 ↔ r31
-- f30 ↔ f31
+- r10 ↔ r11 (volatile GPR)
+- r27 ↔ r28 (callee-saved GPR)
+- r30 ↔ r31 (callee-saved GPR)
+- f30 ↔ f31 (callee-saved FPR)
 
 ### Detection
 
@@ -105,6 +100,34 @@ WHERE primary_pattern = 'REGISTER_SWAP'
   AND excluded = 0
 ORDER BY current_percent DESC;
 ```
+
+### Root Cause: c2.dll Register Allocator Mechanism
+
+**Fully characterized via GDB tracing of c2.dll** (Experiments 1-9 in [compiler-instrumentation.md](../../plans/compiler-instrumentation.md)):
+
+The MSVC Xbox 360 backend (c2.dll) uses graph-coloring register allocation:
+
+1. **Interference graph building**: Each live range becomes a node. Nodes that overlap get interference edges.
+2. **BSF-based coloring** (at c2.dll RVA `0x026780`): The allocator iterates variables by **symbol ID** (which follows declaration order in source). For each variable, it uses x86 `BSF` (Bit Scan Forward) on a bitmask of available colors to find the lowest-numbered free color.
+3. **Color→Register mapping**: Colors map to PPC registers with direction depending on register class:
+   - **Volatile GPR**: top-down (first color → r11, next → r10)
+   - **Callee-saved GPR**: bottom-up (first color → r29, next → r30, r31)
+   - **FPR**: follows similar pattern
+
+**Key insight**: Each variable gets a **deterministic color** based on interference constraints — colors are consistent regardless of declaration order. But the **color→register mapping** depends on allocation ORDER (= declaration order). Swapping declaration order of two variables swaps which color maps to which register, but the colors themselves don't change.
+
+This is why:
+- **Source reordering works ~30% of the time**: When interference constraints allow, reordering declarations changes the color→register mapping to match the target.
+- **Source reordering fails ~70% of the time**: When interference constraints force the same colors regardless of order, or when the correct mapping requires a specific symbol ID sequence that doesn't correspond to any valid declaration order.
+
+### Evidence
+
+| Experiment | Test | Finding |
+|-----------|------|---------|
+| Exp 1-3 | swap_a vs swap_b (volatile) | Declaration order determines r10↔r11 assignment |
+| Exp 4-5 | callee_a vs callee_b (saved) | Declaration order determines r29↔r31 assignment |
+| Exp 6-7 | callgrind-diff on BSF | Identical instruction traces except divergent BSF calls |
+| Exp 8 | Full BSF trace (389 calls) | Only 6 of 389 BSF calls differ; colors consistent, mapping changes |
 
 ### Variable Reordering Heuristics
 
@@ -132,7 +155,7 @@ Declare variables in the order they're first read:
 ```
 
 **3. Separate integer and float declarations**
-The compiler may allocate GPRs and FPRs from separate pools:
+The compiler allocates GPRs and FPRs from separate pools:
 ```cpp
 // Before - interleaved
 int a; float f1; int b; float f2;
@@ -143,7 +166,7 @@ float f1; float f2;
 ```
 
 **4. Try reverse order**
-Sometimes the compiler allocates from the end:
+Callee-saved allocates bottom-up, volatile top-down:
 ```cpp
 // If nothing else works, try reversing declaration order
 float z, y, x;  // Instead of x, y, z
@@ -151,9 +174,9 @@ float z, y, x;  // Instead of x, y, z
 
 ### What To Do
 
-Try [Variable Declaration Order](fixable-declarations.md#variable-declaration-order) with the heuristics above. If 10+ reordering attempts don't help, accept as permanent.
+Try [Variable Declaration Order](fixable-declarations.md#variable-declaration-order) with the heuristics above. If 10+ reordering attempts don't help, the register assignment is fixed by interference constraints.
 
-**Important:** The detection currently doesn't identify *which* variables correspond to swapped registers. You'll need to trace register usage manually in objdiff to identify candidates.
+**Future**: Binary patching of c2.dll's coloring loop (RVA `0x026780`) could reverse the BSF scan direction or reorder the color assignment, fixing all register swap functions at once. See [compiler-instrumentation.md](../../plans/compiler-instrumentation.md) for the full mechanism and address map.
 
 ### Real Example
 
@@ -161,6 +184,7 @@ Try [Variable Declaration Order](fixable-declarations.md#variable-declaration-or
 |----------|-------|----------|--------|
 | FastInvert | 99.45% | 10+ | AT_LIMIT (f30/f31 swap) |
 | CharBonesMeshes::PoseMeshes | 99.24% | 5+ | AT_LIMIT (r10/r9, r28/r30) |
+| DxTex::ResetSurfaces | 98.4% | verified | AT_LIMIT (r28/r29 swap after extrwi fix) |
 
 ---
 
