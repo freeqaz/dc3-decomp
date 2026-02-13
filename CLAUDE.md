@@ -13,19 +13,15 @@ ninja build/373307D9/report.json   # Generate progress report
 
 Check `./docs/tools/INDEX.md` for a full list of decomp tools. Especially `./src/master_agent_prompt.md` for what tool to use + when.
 
-## objdiff CLI
+## Orchestrator MCP Tools
 
-Compares compiled C++ against the original binary. Extended for this project to:
-- Find near-match functions worth investigating
-- Diagnose why code doesn't match (merged calls, register alloc, bool masks)
-- Verdict whether a function is fixable or at its limit
-- Track progress over time
+Use the `mcp__orchestrator__` tools for all decomp analysis. Do not call `objdiff-cli` directly.
 
-**Use `./bin/objdiff-cli`** (not the system `objdiff-cli` which lacks extended commands).
-
-Usage: [docs/tools/objdiff/USAGE.md](docs/tools/objdiff/USAGE.md)
-
-Note: objdiff is the source of truth for decomp percentages. Our database and report.json can be out of sync with the code.
+- `run_objdiff` — build + diff a function, returns match%, verdict, enrichment. Source of truth for decomp percentages.
+- `run_diff_inspect` — deeper analysis: `diagnose` (root cause), `mismatches` (instruction table), `clusters`, `regswaps`, etc.
+- `run_analyze_function` — combines objdiff with struct offset resolution for field-level mismatch context.
+- `query_functions` — find workable functions by unit pattern and match range.
+- `lookup_rb3` — grep RB3 codebase for reference implementations (shared Milo engine).
 
 ## Code Style
 - Be carefuly when modifying MILO_ASSERT() calls or OBJ_MEM_OVERLOAD macros. Whatever is in there should be tested carefully.

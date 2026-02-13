@@ -8,6 +8,7 @@ from pathlib import Path
 
 def main():
     conn = sqlite3.connect('decomp.db')
+    conn.execute("PRAGMA journal_mode = WAL")
     conn.row_factory = sqlite3.Row
 
     symbols = [

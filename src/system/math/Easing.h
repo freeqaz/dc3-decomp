@@ -259,6 +259,7 @@ inline float EaseSigmoid(float t, float, float) {
         return 0;
     if (ret > 1.0f)
         return 1.0f;
+    return ret;
 }
 
 inline float EaseInExp(float t) {

@@ -48,6 +48,7 @@ DataNode EventDialogPanel::OnMsg(UIComponentSelectDoneMsg const &msg) {
     if (component != found) {
         return 1;
     }
+    // C4715: no return when component == found - adding one regresses match (82% -> 66%)
 }
 
 BEGIN_HANDLERS(EventDialogPanel)

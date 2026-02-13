@@ -497,3 +497,240 @@ The `LinkStep` class (lines 821-902) outputs DOL/REL/ELF/PLF formats using the `
 - Runtime validation plan: `docs/sessions/2026-02-08-onbeat-runtime-validation-tooling-handoff.md`
 - VMX128 spec (Xenia): `xenia/docs/ppc/vmx128.txt`
 - Xenia VMX128 implementation: `xenia/src/xenia/cpu/ppc/ppc_emit_altivec.cc`
+
+---
+
+## Appendix: Data-Backed Assessment (2026-02-09)
+
+This appendix replaces estimates in the main document with concrete numbers from `decomp.db` (47,599 functions) and `build/373307D9/report.json` (2,223 compilation units), cross-referenced with binary scans, local tool clones, and source code review.
+
+### A. Function Distribution by Match Percentage
+
+| Band | Functions | AT_LIMIT | COMPLETE | Workable | Code (KB) |
+|------|-----------|----------|----------|----------|-----------|
+| NULL (no source) | 21,060 | 12 | 2,525 | 18,523 | 5,997 |
+| 0% | 645 | 20 | 615 | 10 | 130 |
+| 1-29% | 117 | 79 | 0 | 38 | 70 |
+| 30-69% | 179 | 100 | 0 | 79 | 99 |
+| 70-89% | 592 | 230 | 0 | 362 | 239 |
+| 90-94% | 267 | 185 | 1 | 81 | 117 |
+| 95-99% | 869 | 289 | 0 | 580 | 518 |
+| 100% | 23,870 | 0 | 23,870 | 0 | 3,942 |
+| **Total** | **47,599** | **915** | **27,011** | **19,673** | **11,112** |
+
+**Key metrics**: Weighted match 43.35%. Code at 100%: 35.47%. Unimplemented (0%/NULL): 55.14%. Verdicts: 915 AT_LIMIT, 27,011 COMPLETE, 647 LIKELY_FIXABLE, 334 NEEDS_INVESTIGATION, 154 MAYBE_FIXABLE, 18,538 unclassified (NULL).
+
+**Observations**:
+- The 95-99% band is the highest-value target: **580 workable** functions, 518 KB of code.
+- The 90-94% band is heavily saturated with AT_LIMIT: 185 of 267 (69.3%), making it less productive than 95-99%.
+- 21,060 NULL-percent functions are SDK stubs, XDK libraries, and functions without source files.
+- The 1-29% and 30-69% bands now show 0 COMPLETE (previously had some due to stale verdicts).
+
+### B. What Blocks the 90-100% Functions
+
+1,136 functions in the 90-100% range. 474 AT_LIMIT, 1 COMPLETE (sub-100%), **661 workable**. Of those workable: 281 clean (no linker merged), 380 have linker merged symbols.
+
+#### By blocking pattern (workable functions only, no AT_LIMIT/COMPLETE)
+
+| Pattern | Workable | Clean (no merged) | Has Linker Merged | Avg % |
+|---------|----------|--------------------|-------------------|-------|
+| LINKER_MERGED | 380 | 0 | 380 | 98.1 |
+| (undiagnosed) | 158 | 158 | 0 | 98.2 |
+| REGISTER_SWAP | 81 | 81 | 0 | 96.8 |
+| OFFSET_SWAP | 15 | 15 | 0 | 99.0 |
+| CONTROL_FLOW | 14 | 14 | 0 | 96.7 |
+| COMMUTATIVE_OP_ORDER | 11 | 11 | 0 | 99.5 |
+| COMPARISON_STYLE | 2 | 2 | 0 | 100.0 |
+
+#### By pattern (all verdicts in 90-100%)
+
+| Pattern | Total | 90-94% | 95-99% | AT_LIMIT | Workable | Avg % |
+|---------|-------|--------|--------|----------|----------|-------|
+| LINKER_MERGED | 494 | 47 | 196 | 114 | 380 | 97.7 |
+| REGISTER_SWAP | 279 | 78 | 139 | 198 | 81 | 95.7 |
+| (undiagnosed) | 268 | 51 | 83 | 109 | 158 | 97.4 |
+| CONTROL_FLOW | 49 | 14 | 24 | 35 | 14 | 95.8 |
+| OFFSET_SWAP | 17 | 0 | 5 | 2 | 15 | 98.5 |
+| COMMUTATIVE_OP_ORDER | 16 | 0 | 3 | 5 | 11 | 99.1 |
+| BOOL_MASK | 10 | 2 | 7 | 10 | 0 | 96.3 |
+| COMPARISON_STYLE | 3 | 0 | 1 | 1 | 2 | 98.6 |
+
+Note: REGISTER_SWAP saw the largest AT_LIMIT reclassification (198 AT_LIMIT vs 81 workable), confirming that many register allocation mismatches are genuinely unfixable at the source level.
+
+#### Best candidates: 95-99%, workable, no linker merged
+
+| Pattern | Count |
+|---------|-------|
+| (undiagnosed) | 136 |
+| REGISTER_SWAP | 62 |
+| OFFSET_SWAP | 15 |
+| COMMUTATIVE_OP_ORDER | 11 |
+| CONTROL_FLOW | 10 |
+| COMPARISON_STYLE | 2 |
+
+#### Permuter coverage gap
+
+The existing permuter has **3 patterns** (variable_extraction, signed_unsigned, inline_assignment) that collectively address parts of 2 out of 7 blocking categories (REGISTER_SWAP and COMPARISON_STYLE).
+
+| Category | Addressable by permuter? | Count |
+|----------|--------------------------|-------|
+| LINKER_MERGED | **No** (linker-level, not source) -- many should be reclassified AT_LIMIT | 380 |
+| (undiagnosed) | **Unknown** (need classification first) | 158 |
+| REGISTER_SWAP (clean) | **Partially** (existing patterns help, need variable declaration reordering) | 81 |
+| OFFSET_SWAP | **No** (needs header fixes, not permuter) | 15 |
+| CONTROL_FLOW | **No** (need new control flow restructuring pattern) | 14 |
+| COMMUTATIVE_OP_ORDER | **No** (need new operand swap pattern) | 11 |
+| COMPARISON_STYLE | **Yes** (signed_unsigned pattern) | 2 |
+
+**Highest-priority new patterns**: (1) Variable declaration reordering, (2) commutative operand swap, (3) control flow restructuring (if-else/ternary, while/for conversion).
+
+### C. VMX128 Density -- The Key Finding
+
+**Zero functions in the 90-100% range use VMX128 instructions.**
+
+Of 1,107 functions in the 90-100% range matched to binary addresses and scanned: **100% are pure scalar PPC** (integer + floating-point only). All 661 workable functions in the band are pure scalar.
+
+VMX128 is concentrated almost entirely in Xbox 360 SDK libraries (Kinect/NUI, XHV voice chat, XDSP audio) and the Bink video codec -- none of which are decomp targets in the 90-100% range.
+
+Only 11 functions in the entire decomp scope use VMX128:
+- 7 in `system/synth_xbox/FFT` and `system/gesture/*` (Kinect skeleton processing)
+- 4 in `lib/binkxenon` (Bink video codec, all marked COMPLETE)
+- None in the 90-100% workable range
+
+**Implication**: Unicorn without VMX128 support covers **100% of the permuter sweet spot**. The QEMU VMX128 extension (Section 3, estimated 2-4 weeks) is deprioritized.
+
+### D. Unicorn PPC Feasibility
+
+**Verdict: PARTIALLY WORKS** -- usable for scalar function testing.
+
+Local clone at `/home/free/code/milohax/unicorn/` is Unicorn 2.1.4 (latest stable).
+
+| Capability | Status |
+|-----------|--------|
+| PPC32 Big-Endian | **Works** -- tested, 5 unit tests pass |
+| PPC64 Big-Endian | Code exists, compiles, zero test coverage |
+| GPR r0-r31 read/write | **Available** |
+| FPR f0-f31 read/write | **Available** |
+| CR, LR, CTR, XER, MSR, FPSCR | **Available** |
+| Vector registers (vr0-vr31) | **NOT exposed** via API (internal CPU state has them) |
+| `UC_HOOK_CODE` | **Works** (fires for every instruction) |
+| `UC_HOOK_INSN` for PPC | **Not supported** (only x86/RISC-V) |
+| VMX128 instructions | Not supported |
+| Standard AltiVec | Internally emulated, but registers not exposed via API |
+
+**`bl` interception**: Use `UC_HOOK_CODE` + manual instruction decode (read 4 bytes, check opcode field 18 + LK bit). Alternative: pre-process code bytes to replace `bl` with `sc`, use `UC_HOOK_INTR`.
+
+**Risk**: PPC64 mode has zero upstream test coverage. May have bugs with 64-bit register handling.
+
+### E. BinDiff Integration Path
+
+**Revised estimate: 1.5-2 working days** (original: "1-2 days"). Achievable but at the optimistic end.
+
+| Component | Status |
+|-----------|--------|
+| BinDiff v8 source | Cloned at `/home/free/code/milohax/bindiff/`, not built |
+| BinExport prebuilt | Targets Ghidra 11.0.3 |
+| Local Ghidra | 12.0.1 |
+| BinDiffHelper | v0.7.0 at `/home/free/code/milohax/BinDiffHelper/` |
+
+**Main blocker**: BinExport must be built from source for Ghidra 12.0.1 compatibility. The Ghidra 12 API gap is the primary risk that could push the timeline to 3+ days.
+
+**Output format**: SQLite database (`.BinDiff` extension) with per-function `similarity` (0.0-1.0) and `confidence` (0.0-1.0) scores. Architecture-agnostic matching confirmed for PPC.
+
+**Value assessment revised**: The primary value is **DC3-vs-RB3 cross-binary comparison** to systematically identify shared Milo engine functions. For DC3 decomp-vs-original comparison, objdiff already provides strictly better instruction-level granularity. The existing `lookup_rb3` MCP tool and RB3 reference pairing may reduce the urgency of BinDiff integration.
+
+### F. angr / D-Helix Assessment
+
+**Verdict: NEEDS WORK** -- viable path for non-VMX code, 2-3 weeks.
+
+| Aspect | Status |
+|--------|--------|
+| D-Helix SYMDIFF portability | Mostly architecture-agnostic; needs bitvector width changes (64->32 bit) |
+| RECOMPILER bypass | **Yes** -- use our compiled `.o` files directly, skip KLEE/PROMPT dependency |
+| angr PPC32 symbolic execution | Functional (VEX lifting, `call_state`, `SimCCPowerPC` with args r3-r10) |
+| angr Unicorn support for PPC | Not supported (`# Unicorn not supported` in archinfo) |
+| XEX loader in CLE | Not supported (need blob loading) |
+| VEX PPC lifting coverage | Full for integer, FP, load/store, branch, standard AltiVec; no VMX128 |
+
+**Recommended approach**: Skip D-Helix entirely. Build a lightweight angr-based function comparator:
+1. Load both original binary and compiled `.o` as PPC32 BE blobs
+2. Use `call_state` with symbolic arguments in r3-r10
+3. Compare Z3 constraint trees for semantic equivalence
+4. Restrict to non-VMX128 functions (100% of the 90-100% workable range)
+
+**Effort**: 2-3 weeks for non-VMX functions. VMX128 VEX extension would require months of research-level effort.
+
+### G. Revised Priority Order
+
+Based on the data above, the priority order from the main document is **largely confirmed** with adjustments:
+
+| # | Tool | Change | Rationale |
+|---|------|--------|-----------|
+| 1 | **C++ Permuter** | **Promoted from #2** | 580 workable functions in the 95-99% band. Immediate day-to-day value. Variable declaration reordering is highest-leverage new pattern. |
+| 2 | **BinDiff/BinExport** | Demoted from #1 | Value is narrower than estimated -- only for DC3-vs-RB3 cross-reference, which the existing `lookup_rb3` tool partially covers. Ghidra 12 compat gap adds risk. |
+| 3 | **Unicorn micro-testing** | Unchanged | VMX128 non-issue for permuter sweet spot (100% scalar). PPC32 works today. |
+| 4 | **angr symbolic verification** | Unchanged | 2-3 week investment for non-VMX functions. Skip D-Helix, build lightweight comparator. |
+| 5 | **QEMU VMX128** | **Deprioritized further** | Zero VMX128 functions in the 90-100% workable range. Only 11 VMX128 functions in entire decomp scope. |
+| 6 | ~~RetDec PPC64~~ | Dropped (unchanged) | FPU gap too large, LLVM IR comparison impractical. |
+
+### H. Key Corrections to Main Document
+
+1. **Section 1 lifecycle table**: The "90-95%" row should note that 69.3% of functions in this range are AT_LIMIT. The true sweet spot is **95-99%** (580 workable functions, vs 81 workable in the 90-94% range).
+
+2. **Section 3 VMX128 gap**: The urgency of VMX128 support in QEMU/Unicorn was significantly overstated. With zero VMX128 functions in the 90-100% workable range, this becomes a long-term nice-to-have rather than a near-term blocker.
+
+3. **Section 3 Unicorn**: Vector register API is NOT exposed (no `UC_PPC_REG_VR*` constants). Internal AltiVec emulation exists but cannot be accessed from the host. Adding VR register access is ~1-2 days of work.
+
+4. **Section 2 BinDiff effort**: "1-2 days" is achievable but at the optimistic end. Ghidra 12 compatibility gap is the main risk factor.
+
+5. **Section 4 D-Helix**: The RECOMPILER step can be skipped entirely for our use case. We compile our own C++ source, so both sides can go through angr's VEX lifting directly.
+
+### I. Deferred Questions — Resolved and Next Steps
+
+**Resolved:**
+
+- **Unicorn for decomp verification**: Not pursuing community survey. We can independently evaluate Unicorn's fitness for our use case based on the technical assessment in Section D above.
+
+- **XenonRecomp**: **Could be useful** for DC3's packaging story. XenonRecomp's infrastructure for producing runnable binaries from mixed decomp + original code is worth a deep dive. Deferred to a future session focused on packaging/relinking.
+
+- **XEX generation**: The `jeff` tool is the right place to build XEX generation capability. It already has deep format knowledge from parsing. MSVC's proprietary `link.exe` is a backup option, but extending `jeff` is preferred.
+
+- **Partial relinking**: To be explored alongside `jeff` XEX generation. The question of replacing individual `.obj` files without reproducing the entire link map remains open — likely solvable once `jeff` can generate XEX images.
+
+**Next phase — C++ Permuter Community Research:**
+
+The question of what C++ permuter approaches exist in other decomp communities needs dedicated research. Below is a shareable brief for asking around in decomp community channels.
+
+---
+
+#### C++ Permuter Research Brief (shareable)
+
+**Context**: We're working on a matching decompilation project (Xbox 360 / MSVC / PowerPC) and need a **C++ permuter** — a tool that systematically generates source code variants and scores them against the target binary to find instruction-level matches.
+
+The standard [decomp-permuter](https://github.com/simonlindholm/decomp-permuter) doesn't work for us because:
+1. It uses **pycparser** (C-only) — can't handle classes, templates, virtual functions
+2. It expects **ELF** object format — we produce COFF
+3. It assumes **gcc/mwcc** build syntax — we use MSVC
+
+**What we're looking for:**
+- Has anyone built or adapted a permuter for **C++ codebases**? (BotW, TPHD, Splatoon, any C++ decomp)
+- Are there permuter-like tools that use **clang AST** or **tree-sitter** for source rewriting instead of pycparser?
+- Has anyone integrated a permuter with a **non-ELF toolchain** (MSVC, or any COFF-producing compiler)?
+- Are there text-based (regex/pattern) rewriting approaches that work well enough for C++ without full parsing?
+
+**Our current state:**
+- We have an experimental C++ permuter (text-based, 3 patterns: variable extraction, signed/unsigned, inline assignment)
+- We score variants using [objdiff](https://github.com/encounter/objdiff) (instruction-level diffing)
+- Our highest-value target: **580 workable functions at 95-99% match** — these need small expression-form changes, declaration reordering, bool shaping, etc.
+
+**Specific transformations we need:**
+- Variable declaration reordering (affects register allocation)
+- Commutative operand swapping (`a + b` vs `b + a`)
+- Bool shaping (`!!x`, `x != 0`, `x > 0` for unsigned)
+- Ternary vs if/else conversion
+- Expression splitting/combining (temporaries)
+- Control flow restructuring (for/while, guard hoisting)
+
+**Any pointers, prior art, or "we tried X and it didn't work" would be valuable.**
+
+---

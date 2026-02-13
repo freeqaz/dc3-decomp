@@ -617,7 +617,6 @@
 
 /* Define to enable threaded asynchronous DNS lookups. */
 #define USE_THREADS_WIN32 1
-#define CURLRES_THREADED 1
 
 #if defined(USE_ARES) && defined(USE_THREADS_WIN32)
 #error "Only one DNS lookup specialty may be defined at most"

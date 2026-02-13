@@ -62,6 +62,9 @@ scratch/
 *.db
 *.sqlite
 
+# Compiled extensions
+*.so
+
 # Backup files
 *.backup
 *.bak

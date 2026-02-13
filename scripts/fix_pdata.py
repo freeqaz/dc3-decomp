@@ -1,15 +1,13 @@
 #!/usr/bin/env python3
 """
-Fix COFF objects with .pdata sections that cause LNK1223 errors.
+Rename .pdata sections in split COFF objects to bypass MSVC linker validation.
 
-The X360 MSVC linker strictly validates .pdata contributions. Split objects
-from dtk can have .pdata content issues that the linker rejects:
-  - Entries spanning multiple code sections (.text + .text$yc)
-  - Entries referencing __unwind$ symbols instead of function symbols
-
-Note: The original duplicate-.pdata bug (127 objects) is now fixed in dtk
-via section merging in split_obj(). This workaround handles the remaining
-pdata content validation issues.
+The X360 MSVC linker (link.exe 10.00.11886.00) strictly validates .pdata
+(function table) contributions from each object file. Split objects from dtk
+produce .pdata content that triggers LNK1223 fatal errors. Rather than trying
+to detect specific failure patterns, we rename ALL .pdata sections to .pdat0
+so the linker skips validation. The renamed sections still end up in the PE
+but aren't recognized as function table entries (acceptable for PoC linking).
 
 Usage:
     python3 scripts/fix_pdata.py [--dry-run] [--restore]
@@ -24,67 +22,22 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 
 
-def needs_fix(data):
-    """Check if a COFF object has .pdata content the linker would reject."""
+def has_pdata(data):
+    """Check if a COFF object has a .pdata section."""
     if len(data) < 20:
         return False
 
     _, num_sections = struct.unpack_from('<HH', data, 0)
-    sym_off_base = struct.unpack_from('<I', data, 8)[0]
-    num_syms = struct.unpack_from('<I', data, 12)[0]
     opt_hdr_size = struct.unpack_from('<H', data, 16)[0]
 
-    # Parse sections: count .text* sections and find .pdata
     offset = 20 + opt_hdr_size
-    text_count = 0
-    pdata_relptr = None
-    pdata_nreloc = 0
     for i in range(num_sections):
         if offset + 40 > len(data):
             break
         name = data[offset:offset+8].rstrip(b'\x00')
-        if name.startswith(b'.text'):
-            text_count += 1
         if name == b'.pdata':
-            pdata_relptr = struct.unpack_from('<I', data, offset+24)[0]
-            pdata_nreloc = struct.unpack_from('<H', data, offset+32)[0]
+            return True
         offset += 40
-
-    if pdata_relptr is None:
-        return False
-
-    # Issue 1: multiple .text sections
-    if text_count > 1:
-        return True
-
-    # Issue 2: pdata references __unwind$ symbols
-    if sym_off_base > 0 and num_syms > 0:
-        str_table_off = sym_off_base + num_syms * 18
-        reloff = pdata_relptr
-        for j in range(pdata_nreloc):
-            if reloff + 10 > len(data):
-                break
-            sym_idx = struct.unpack_from('<I', data, reloff+4)[0]
-            sym_off = sym_off_base + sym_idx * 18
-            if sym_off + 18 > len(data):
-                reloff += 10
-                continue
-            name_bytes = data[sym_off:sym_off+8]
-            if name_bytes[:4] == b'\x00\x00\x00\x00':
-                str_off = struct.unpack_from('<I', name_bytes, 4)[0]
-                abs_off = str_table_off + str_off
-                if abs_off < len(data):
-                    end = data.find(b'\x00', abs_off, abs_off + 200)
-                    if end < 0:
-                        end = abs_off + 200
-                    sym_name = data[abs_off:end]
-                else:
-                    sym_name = b''
-            else:
-                sym_name = name_bytes.rstrip(b'\x00')
-            if b'__unwind$' in sym_name:
-                return True
-            reloff += 10
 
     return False
 
@@ -119,7 +72,7 @@ def fix_object(obj_path, restore=False):
                     f.write(data)
             return obj_path, modified, None
 
-        if not needs_fix(data):
+        if not has_pdata(data):
             return obj_path, False, None
 
         # Rename .pdata to .pdatN
@@ -166,9 +119,9 @@ def main():
         for p in obj_paths:
             with open(p, 'rb') as f:
                 data = f.read()
-            if needs_fix(data):
+            if has_pdata(data):
                 count += 1
-        print(f"  {count} objects need .pdata fix")
+        print(f"  {count} objects have .pdata sections")
         return
 
     fixed = 0

@@ -131,6 +131,25 @@ tools/decompile.sh "CharMirror::Load" --context
 python3 tools/decompctx.py src/path/to/file.cpp -I include -I src
 ```
 
+## Dynamic Analysis
+
+| Tool | Description | Doc |
+|------|-------------|-----|
+| [Unicorn Function Runner](UNICORN_FUNCTION_RUNNER.md) | Differential function execution (Unicorn PPC32 BE) — compare decomp vs original behavior | [UNICORN_FUNCTION_RUNNER.md](UNICORN_FUNCTION_RUNNER.md) |
+| [Unicorn Diagnose](../plans/unicorn-runner-value.md) | Combined objdiff + unicorn diagnostic — SKIP/FIX recommendations per function | [unicorn-runner-value.md](../plans/unicorn-runner-value.md) |
+| [Unicorn Roadmap](../plans/unicorn-roadmap.md) | Strategic assessment & improvement roadmap for the unicorn runner | [unicorn-roadmap.md](../plans/unicorn-roadmap.md) |
+
+```bash
+# Compare a single function
+python3 -m scripts.unicorn_runner.run --symbol "?ElapsedMs@Skeleton@@UBAHXZ" --unit system/gesture/Skeleton
+
+# Combined diagnosis with SKIP/FIX recommendations
+python3 -m scripts.unicorn_runner.diagnose --unit system/meta/Profile --batch
+
+# Single function diagnosis
+python3 -m scripts.unicorn_runner.diagnose --unit system/meta/Profile --symbol "??0Profile@@QAA@H@Z"
+```
+
 ## Code Transformation Tools
 
 | Tool | Description | Doc |

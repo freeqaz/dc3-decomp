@@ -73,10 +73,24 @@ class TestClassifyIndirectBranch(unittest.TestCase):
         self.assertEqual(result, "bctr_tailcall")
 
     def test_bctrl_takes_priority(self):
-        """Both bctrl and bctr present → bctrl wins."""
+        """Both bctrl and bctr present, no .rdata → bctrl wins."""
         code = assemble(ppc_bctrl(), ppc_nop(), ppc_bctr())
         result = self.classify(code, [])
         self.assertEqual(result, "bctrl")
+
+    def test_mixed_bctrl_bctr_with_rdata(self):
+        """Both bctrl and bctr + REFHI/REFLO to .rdata → bctrl_switch."""
+        code = assemble(ppc_bctrl(), ppc_nop(), ppc_nop(), ppc_mtctr(12), ppc_bctr())
+        relocs = [
+            make_reloc(4, "$SG5678", "REFHI"),
+            make_reloc(8, "$SG5678", "REFLO"),
+        ]
+        coff = MockCOFF(
+            sections=[{"name": ".rdata$2", "raw_size": 128}],
+            symbol_map={"$SG5678": {"section": 1, "value": 0}},
+        )
+        result = self.classify(code, relocs, coff=coff)
+        self.assertEqual(result, "bctrl_switch")
 
     def test_classify_no_coff(self):
         """bctr + coff=None → bctr_tailcall (conservative)."""

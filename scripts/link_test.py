@@ -127,17 +127,17 @@ def main():
         ldflags.append("/VERBOSE")
 
     # Determine wrapper
+    # link.exe requires wine (not wibo) because it uses mspdb's RPC/named pipe
+    # IPC which wibo cannot emulate, causing a segfault during the output phase.
     if args.wrapper:
         wrapper = args.wrapper
-    elif WIBO.exists():
-        # Try wine first since wibo lacks some Win32 APIs needed by link.exe
+    else:
         import shutil
         if shutil.which("wine"):
             wrapper = "wine"
         else:
-            wrapper = str(WIBO)
-    else:
-        wrapper = "wine"
+            sys.exit("wine is required for linking (wibo crashes due to mspdb RPC).\n"
+                     "Install wine: sudo pacman -S wine  (or apt install wine)")
 
     cmd = [wrapper, str(LINK_EXE)] + ldflags + [f"@{rel_rsp}"]
 

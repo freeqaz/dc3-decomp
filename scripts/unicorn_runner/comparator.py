@@ -3,6 +3,7 @@
 import json
 import struct
 
+from .engine import CL_INDEX, CL_TRAMP_ADDR, CL_SRC_OFFSET, CL_R3, CL_R4, CL_R5, CL_R6
 from .memory_map import OBJECT_BASE, GLOBAL_BASE, REGION_SIZE
 
 
@@ -23,6 +24,12 @@ class ComparisonResult:
         }
 
 
+def _entry_args(entry):
+    """Extract args dict from a call log tuple (for diagnostics)."""
+    return {"r3": entry[CL_R3], "r4": entry[CL_R4],
+            "r5": entry[CL_R5], "r6": entry[CL_R6]}
+
+
 def compare_call_logs(decomp_log, orig_log):
     """Compare call logs by execution sequence.
 
@@ -33,11 +40,10 @@ def compare_call_logs(decomp_log, orig_log):
         min_len = min(len(decomp_log), len(orig_log))
         first_arg_diff = None
         for i in range(min_len):
-            for reg in ("r3", "r4", "r5", "r6"):
-                if decomp_log[i]["args"][reg] != orig_log[i]["args"][reg]:
-                    first_arg_diff = i
-                    break
-            if first_arg_diff is not None:
+            d, o = decomp_log[i], orig_log[i]
+            if (d[CL_R3] != o[CL_R3] or d[CL_R4] != o[CL_R4]
+                    or d[CL_R5] != o[CL_R5] or d[CL_R6] != o[CL_R6]):
+                first_arg_diff = i
                 break
         return "DIVERGENT", {
             "reason": "call_count_mismatch",
@@ -47,18 +53,16 @@ def compare_call_logs(decomp_log, orig_log):
         }
 
     for i, (d, o) in enumerate(zip(decomp_log, orig_log)):
-        for reg in ("r3", "r4", "r5", "r6"):
-            dv = d["args"][reg]
-            ov = o["args"][reg]
-            if dv != ov:
+        for idx, reg in ((CL_R3, "r3"), (CL_R4, "r4"), (CL_R5, "r5"), (CL_R6, "r6")):
+            if d[idx] != o[idx]:
                 return "DIVERGENT", {
                     "reason": "call_arg_mismatch",
                     "call_index": i,
                     "register": reg,
-                    "decomp_val": dv,
-                    "orig_val": ov,
-                    "decomp_args": d["args"],
-                    "orig_args": o["args"],
+                    "decomp_val": d[idx],
+                    "orig_val": o[idx],
+                    "decomp_args": _entry_args(d),
+                    "orig_args": _entry_args(o),
                 }
 
     return "EQUIVALENT", {}
@@ -69,6 +73,9 @@ def compare_memory(decomp_mem, orig_mem, base, size):
 
     Returns list of (address, decomp_word, orig_word) tuples for differences.
     """
+    # Fast path: C-level memcmp via bytes equality
+    if decomp_mem[:size] == orig_mem[:size]:
+        return []
     diffs = []
     for i in range(0, size, 4):
         dw_d = struct.unpack_from(">I", decomp_mem, i)[0]
@@ -96,8 +103,8 @@ def check_call_targets(decomp_relocs, orig_relocs, decomp_log, orig_log):
 
     warnings = []
     for i, (d, o) in enumerate(zip(decomp_log, orig_log)):
-        d_sym = decomp_offset_map.get(d.get("source_offset"))
-        o_sym = orig_offset_map.get(o.get("source_offset"))
+        d_sym = decomp_offset_map.get(d[CL_SRC_OFFSET])
+        o_sym = orig_offset_map.get(o[CL_SRC_OFFSET])
         if d_sym and o_sym and d_sym != o_sym:
             warnings.append(f"Call #{i}: decomp targets {d_sym}, "
                           f"original targets {o_sym}")
@@ -208,12 +215,12 @@ def format_result(result, decomp_result, orig_result, decomp_relocs, orig_relocs
             orig_offset_map = build_offset_symbol_map(orig_relocs)
             for entry in decomp_result.call_log:
                 # Try to resolve symbol name from original relocs
-                sym = orig_offset_map.get(entry["source_offset"], f"<tramp@0x{entry['trampoline_addr']:08X}>")
-                lines.append(f"    #{entry['call_index']} {sym}  "
-                           f"r3=0x{entry['args']['r3']:08X} "
-                           f"r4=0x{entry['args']['r4']:08X} "
-                           f"r5=0x{entry['args']['r5']:08X} "
-                           f"r6=0x{entry['args']['r6']:08X}")
+                sym = orig_offset_map.get(entry[CL_SRC_OFFSET], f"<tramp@0x{entry[CL_TRAMP_ADDR]:08X}>")
+                lines.append(f"    #{entry[CL_INDEX]} {sym}  "
+                           f"r3=0x{entry[CL_R3]:08X} "
+                           f"r4=0x{entry[CL_R4]:08X} "
+                           f"r5=0x{entry[CL_R5]:08X} "
+                           f"r6=0x{entry[CL_R6]:08X}")
 
         lines.append(f"  Return: r3 = 0x{result.details.get('r3', 0):08X} (both)")
         f1 = result.details.get('f1', 0)
@@ -249,25 +256,25 @@ def format_result(result, decomp_result, orig_result, decomp_relocs, orig_relocs
                     lines.append(f"    ... ({start} earlier calls omitted)")
                 for i in range(start, matched):
                     d = decomp_result.call_log[i]
-                    sym = orig_offset_map.get(orig_result.call_log[i].get("source_offset"),
+                    sym = orig_offset_map.get(orig_result.call_log[i][CL_SRC_OFFSET],
                                               f"<call#{i}>")
                     lines.append(f"    #{i} {sym}  "
-                               f"r3=0x{d['args']['r3']:08X} "
-                               f"r4=0x{d['args']['r4']:08X} "
-                               f"r5=0x{d['args']['r5']:08X} "
-                               f"r6=0x{d['args']['r6']:08X}  (both match)")
+                               f"r3=0x{d[CL_R3]:08X} "
+                               f"r4=0x{d[CL_R4]:08X} "
+                               f"r5=0x{d[CL_R5]:08X} "
+                               f"r6=0x{d[CL_R6]:08X}  (both match)")
 
             if matched < min_count:
                 # Args diverged before count diverged
                 i = matched
                 d = decomp_result.call_log[i]
                 o = orig_result.call_log[i]
-                sym = orig_offset_map.get(o.get("source_offset"), f"<call#{i}>")
-                lines.append(f"  First arg mismatch at call #{i} ({sym} @ offset 0x{o.get('source_offset', 0):X}):")
-                lines.append(f"    Decomp:   r3=0x{d['args']['r3']:08X} r4=0x{d['args']['r4']:08X} "
-                           f"r5=0x{d['args']['r5']:08X} r6=0x{d['args']['r6']:08X}")
-                lines.append(f"    Original: r3=0x{o['args']['r3']:08X} r4=0x{o['args']['r4']:08X} "
-                           f"r5=0x{o['args']['r5']:08X} r6=0x{o['args']['r6']:08X}")
+                sym = orig_offset_map.get(o[CL_SRC_OFFSET], f"<call#{i}>")
+                lines.append(f"  First arg mismatch at call #{i} ({sym} @ offset 0x{o[CL_SRC_OFFSET]:X}):")
+                lines.append(f"    Decomp:   r3=0x{d[CL_R3]:08X} r4=0x{d[CL_R4]:08X} "
+                           f"r5=0x{d[CL_R5]:08X} r6=0x{d[CL_R6]:08X}")
+                lines.append(f"    Original: r3=0x{o[CL_R3]:08X} r4=0x{o[CL_R4]:08X} "
+                           f"r5=0x{o[CL_R5]:08X} r6=0x{o[CL_R6]:08X}")
 
             # Show extra calls from the longer side
             longer_side = "decomp" if d_count > o_count else "orig"
@@ -280,10 +287,10 @@ def format_result(result, decomp_result, orig_result, decomp_relocs, orig_relocs
                 offset_map = orig_offset_map if longer_side == "orig" else build_offset_symbol_map(decomp_relocs)
                 for i in range(shorter_count, shorter_count + show):
                     entry = longer_log[i]
-                    sym = offset_map.get(entry.get("source_offset"), f"<call#{i}>")
+                    sym = offset_map.get(entry[CL_SRC_OFFSET], f"<call#{i}>")
                     lines.append(f"    #{i} {sym}  "
-                               f"r3=0x{entry['args']['r3']:08X} "
-                               f"r4=0x{entry['args']['r4']:08X}")
+                               f"r3=0x{entry[CL_R3]:08X} "
+                               f"r4=0x{entry[CL_R4]:08X}")
                 if extra_count > show:
                     lines.append(f"    ... ({extra_count - show} more)")
 
@@ -292,10 +299,10 @@ def format_result(result, decomp_result, orig_result, decomp_relocs, orig_relocs
             reg = result.details["register"]
             orig_offset_map = build_offset_symbol_map(orig_relocs)
             o_entry = orig_result.call_log[idx]
-            sym = orig_offset_map.get(o_entry.get("source_offset"), f"<call#{idx}>")
-            src_off = o_entry.get("source_offset", 0)
+            sym = orig_offset_map.get(o_entry[CL_SRC_OFFSET], f"<call#{idx}>")
+            src_off = o_entry[CL_SRC_OFFSET]
             lines.append(f"  First mismatch: call #{idx} ({sym} @ offset 0x{src_off:X})")
-            # Always show all 4 regs for context (improvement 3b)
+            # Always show all 4 regs for context
             d_args = result.details["decomp_args"]
             o_args = result.details["orig_args"]
             d_line = (f"    Decomp:   r3=0x{d_args['r3']:08X} r4=0x{d_args['r4']:08X} "
@@ -314,13 +321,13 @@ def format_result(result, decomp_result, orig_result, decomp_relocs, orig_relocs
                 for i in range(idx + 1):
                     d = decomp_result.call_log[i]
                     o = orig_result.call_log[i]
-                    call_sym = orig_offset_map.get(o.get("source_offset"), f"<call#{i}>")
+                    call_sym = orig_offset_map.get(o[CL_SRC_OFFSET], f"<call#{i}>")
                     if i < idx:
                         lines.append(f"    #{i} {call_sym}  "
-                                   f"r3=0x{d['args']['r3']:08X} "
-                                   f"r4=0x{d['args']['r4']:08X} "
-                                   f"r5=0x{d['args']['r5']:08X} "
-                                   f"r6=0x{d['args']['r6']:08X}  (match)")
+                                   f"r3=0x{d[CL_R3]:08X} "
+                                   f"r4=0x{d[CL_R4]:08X} "
+                                   f"r5=0x{d[CL_R5]:08X} "
+                                   f"r6=0x{d[CL_R6]:08X}  (match)")
                     else:
                         lines.append(f"    #{i} {call_sym}  MISMATCH")
 
@@ -385,12 +392,12 @@ def format_json_result(result, decomp_result, orig_result, orig_relocs, metadata
     # Resolve call log symbols
     resolved_calls = []
     for entry in decomp_result.call_log[:50]:  # cap for size
-        sym = orig_offset_map.get(entry.get("source_offset"), None)
+        sym = orig_offset_map.get(entry[CL_SRC_OFFSET], None)
         resolved_calls.append({
-            "index": entry["call_index"],
+            "index": entry[CL_INDEX],
             "symbol": sym,
-            "source_offset": entry.get("source_offset"),
-            "args": entry["args"],
+            "source_offset": entry[CL_SRC_OFFSET],
+            "args": _entry_args(entry),
         })
     json_data["decomp_calls"] = resolved_calls
     return json.dumps(json_data)

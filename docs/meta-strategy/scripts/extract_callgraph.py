@@ -22,21 +22,10 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).parent
 PROJECT_ROOT = SCRIPT_DIR.parent.parent.parent
 DB_PATH = PROJECT_ROOT / "decomp.db"
-MAP_FILE = PROJECT_ROOT / "orig" / "373307D9" / "ham_xbox_r.map"
 
 # Add tools directory to path for mcp_client import
 sys.path.insert(0, str(PROJECT_ROOT / "tools" / "ghidra"))
 from mcp_client import MCPClient, MCPError
-
-# Import MapFileParser directly (avoid pyghidra_mcp package which requires pyghidra)
-import importlib.util
-_spec = importlib.util.spec_from_file_location(
-    "symbol_lookup",
-    PROJECT_ROOT / "tools" / "pyghidra-mcp-fork" / "pyghidra_mcp" / "symbol_lookup.py"
-)
-_symbol_lookup = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(_symbol_lookup)
-MapFileParser = _symbol_lookup.MapFileParser
 
 
 def ensure_progress_table(conn: sqlite3.Connection):
@@ -154,6 +143,7 @@ def run_extraction(db_path: Path, limit: int = 0, resume: bool = False,
                    batch_size: int = 100, verbose: bool = False):
     """Main extraction loop."""
     conn = sqlite3.connect(db_path)
+    conn.execute("PRAGMA journal_mode = WAL")
 
     # Ensure progress tracking table exists
     ensure_progress_table(conn)
@@ -181,12 +171,6 @@ def run_extraction(db_path: Path, limit: int = 0, resume: bool = False,
     if resume:
         existing = conn.execute("SELECT COUNT(*) FROM callgraph_progress").fetchone()[0]
         print(f"Already processed: {existing}")
-
-    # Parse map file for address lookups
-    print(f"Parsing map file: {MAP_FILE}")
-    map_parser = MapFileParser(MAP_FILE)
-    map_parser.parse()
-    print(f"  Loaded {len(map_parser._symbols)} symbols")
 
     # Connect to Ghidra MCP
     print("Connecting to Ghidra MCP...")
@@ -216,20 +200,12 @@ def run_extraction(db_path: Path, limit: int = 0, resume: bool = False,
     edges_inserted = 0
     errors = 0
     skipped = 0
-    address_hits = 0  # Track how many times we used address lookup
     start_time = time.time()
 
     for i, symbol in enumerate(symbols):
         try:
-            # Pre-resolve symbol to address for faster lookup
-            query_target = symbol
-            address = map_parser.get_address(symbol)
-            if address:
-                # Format as 8 hex digits without 0x prefix (Ghidra expects this)
-                query_target = f'{address:08x}'
-                address_hits += 1
-
-            xrefs = client.list_xrefs(query_target)
+            # Pass mangled symbol directly - the server resolves addresses via its map file
+            xrefs = client.list_xrefs(symbol)
             edges = extract_call_edges(xrefs, symbol)
 
             if edges:
@@ -296,7 +272,6 @@ def run_extraction(db_path: Path, limit: int = 0, resume: bool = False,
     print(f"  Processed: {processed}")
     print(f"  Edges inserted: {edges_inserted}")
     print(f"  Errors: {errors}")
-    print(f"  Address lookups: {address_hits}/{processed} ({address_hits*100.0/processed if processed > 0 else 0:.1f}%)")
 
     # Update fan_in / fan_out
     print("\nUpdating fan_in/fan_out columns...")

@@ -134,6 +134,7 @@ bool PlatformMgr::HasKinectSharePrvilege() const {
         bool ret = bptr;
         return ret;
     }
+    // C4715: no return after else-if chain - adding one regresses match (81% -> 78%)
 }
 
 bool PlatformMgr::IsSmartGlassConnected() { return gNumSmartGlassClients > 0; }

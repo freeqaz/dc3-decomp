@@ -1313,6 +1313,12 @@ class DecompMCPServer:
                     )
                 return [TextContent(type="text", text=error_msg)]
 
+            # Strip ninja build preamble (e.g. "ninja: no work to do.\n")
+            # that --build writes to stdout before the JSON
+            _json_start = json_output.find("{")
+            if _json_start > 0:
+                json_output = json_output[_json_start:]
+
             # 2) Markdown run (no build, already built) - for display
             # Explicit -f markdown avoids TUI fallback when no TTY is present
             md_cmd = list(base_args) + ["-f", "markdown"]
@@ -1330,7 +1336,7 @@ class DecompMCPServer:
             # 3) Enrich from JSON and append enrichment sections
             enrichment = ""
             try:
-                data = json.loads(json_result.stdout)
+                data = json.loads(json_output)
                 data = self._enrich_objdiff_data(data)
                 enrichment = self._format_enrichment_sections(data, skip_rb3=concise)
             except (json.JSONDecodeError, KeyError):
@@ -1342,14 +1348,14 @@ class DecompMCPServer:
             # 4) Auto-diagnose when not concise and match < 95%
             if not concise:
                 try:
-                    parsed = json.loads(json_result.stdout)
+                    parsed = json.loads(json_output)
                     match_pct = parsed.get("fuzzy_match_percent", 100)
                     if match_pct < 95:
                         # Write JSON to temp file for diff_inspect
                         tmp_json = Path(tempfile.mktemp(suffix=".json", dir="/tmp/claude"))
                         tmp_json.parent.mkdir(parents=True, exist_ok=True)
                         with open(tmp_json, "w") as f:
-                            f.write(json_result.stdout)
+                            f.write(json_output)
 
                         diff_inspect_script = self.project_root / "scripts" / "diff_inspect.py"
                         if diff_inspect_script.exists():
@@ -1392,7 +1398,7 @@ class DecompMCPServer:
                 # Extract summary from JSON for the inline preview
                 summary = ""
                 try:
-                    data = json.loads(json_result.stdout)
+                    data = json.loads(json_output)
                     match_pct = data.get("fuzzy_match_percent", "?")
                     verdict = data.get("verdict", {}).get("classification", "UNKNOWN")
                     summary = f"**Match: {match_pct}% | Verdict: {verdict}**\n\n"
@@ -1698,10 +1704,26 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
                 if result.returncode != 0:
                     return [TextContent(type="text", text=f"Error running objdiff (exit {result.returncode}):\n{result.stdout}\n{stderr_text}")]
 
+                stdout_text = result.stdout
+                if "Symbol not found" in stdout_text or "Failed" in stdout_text:
+                    error_msg = stdout_text.strip()
+                    suggestions = self._suggest_similar_symbols(symbol)
+                    if suggestions:
+                        error_msg += "\n\nDid you mean:\n" + "\n".join(
+                            f"  - {s}" for s in suggestions
+                        )
+                    return [TextContent(type="text", text=error_msg)]
+
+                # Strip ninja build preamble (e.g. "ninja: no work to do.\n")
+                # that --build writes to stdout before the JSON
+                json_start = stdout_text.find("{")
+                if json_start < 0:
+                    return [TextContent(type="text", text=f"No JSON in objdiff output.\n\nstdout: {stdout_text[:500]}\nstderr: {stderr_text[:500]}")]
+
                 try:
-                    data = json.loads(result.stdout)
+                    data = json.loads(stdout_text[json_start:])
                 except json.JSONDecodeError as e:
-                    return [TextContent(type="text", text=f"Error parsing objdiff JSON: {e}")]
+                    return [TextContent(type="text", text=f"Error parsing objdiff JSON: {e}\n\nstdout: {stdout_text[:500]}\nstderr: {stderr_text[:500]}")]
 
                 instrs = data.get("instructions", [])
                 if not instrs:

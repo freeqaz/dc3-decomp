@@ -1399,6 +1399,20 @@ def generate_build_ninja(
         )
         n.newline()
 
+        n.comment("Unicorn behavioral equivalence test")
+        n.rule(
+            name="test_unicorn",
+            command=f"$python -m scripts.unicorn_runner.run --batch-all --dual-fixture -j{os.cpu_count() or 8}",
+            description="TEST-UNICORN",
+            pool="console",
+        )
+        n.build(
+            outputs="test-unicorn",
+            rule="test_unicorn",
+            implicit=["all_source"],
+        )
+        n.newline()
+
         ###
         # Helper tools
         ###

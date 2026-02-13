@@ -53,6 +53,10 @@ def parse_args() -> argparse.Namespace:
         help="Generate and list variants without building/scoring",
     )
     parser.add_argument(
+        "--unit",
+        help="Unit name for unicorn execution guard rail (e.g. system/gesture/Skeleton)",
+    )
+    parser.add_argument(
         "--list-patterns",
         action="store_true",
         help="List available patterns and exit",
@@ -106,9 +110,15 @@ def main():
 
     # Score variants
     results: list[ScoreResult] = []
-    with Scorer(args.source, args.symbol) as scorer:
+    with Scorer(args.source, args.symbol, unit=args.unit) as scorer:
         baseline = scorer.get_baseline()
-        print(f"Baseline: {baseline:.2f}%", file=sys.stderr)
+        baseline_exec = scorer._baseline_equivalent
+        exec_label = ""
+        if baseline_exec is True:
+            exec_label = " [EXEC OK]"
+        elif baseline_exec is False:
+            exec_label = " [EXEC DIVERGENT]"
+        print(f"Baseline: {baseline:.2f}%{exec_label}", file=sys.stderr)
 
         for i, variant in enumerate(variants):
             print(
@@ -123,12 +133,20 @@ def main():
             marker = ""
             if not result.build_success:
                 marker = " BUILD FAILED"
+            elif result.error and "equivalence" in result.error.lower():
+                marker = " EXEC BROKEN"
             elif result.match_percent > baseline:
                 marker = " IMPROVED"
             elif result.match_percent == baseline:
                 marker = " same"
 
-            print(f"{result.match_percent:.2f}%{marker}", file=sys.stderr)
+            exec_tag = ""
+            if result.execution_equivalent is True:
+                exec_tag = " [EXEC OK]"
+            elif result.execution_equivalent is False:
+                exec_tag = " [EXEC BROKEN]"
+
+            print(f"{result.match_percent:.2f}%{marker}{exec_tag}", file=sys.stderr)
 
             if args.stop_on_perfect and result.match_percent >= 100.0:
                 print("Perfect match found!", file=sys.stderr)
@@ -171,6 +189,7 @@ def _print_json(baseline: float, results: list[ScoreResult]):
                 "build_success": r.build_success,
                 "error": r.error,
                 "delta": r.match_percent - baseline,
+                "execution_equivalent": r.execution_equivalent,
             }
             for r in results
         ],
@@ -194,7 +213,12 @@ def _print_table(baseline: float, results: list[ScoreResult]):
         else:
             marker = f" {delta:.2f}%"
 
-        print(f"  {r.variant.name:25s} {r.match_percent:6.2f}%{marker}")
+        exec_info = ""
+        if r.execution_equivalent is True:
+            exec_info = " EXEC OK"
+        elif r.execution_equivalent is False:
+            exec_info = " EXEC BROKEN"
+        print(f"  {r.variant.name:25s} {r.match_percent:6.2f}%{marker}{exec_info}")
         print(f"    {r.variant.description}")
 
     # Summary

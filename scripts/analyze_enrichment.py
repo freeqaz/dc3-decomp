@@ -24,6 +24,7 @@ DEFAULT_DB_PATH = "decomp.db"
 def get_connection(db_path: str = DEFAULT_DB_PATH) -> sqlite3.Connection:
     """Get a database connection."""
     conn = sqlite3.connect(db_path)
+    conn.execute("PRAGMA journal_mode = WAL")
     conn.row_factory = sqlite3.Row
     return conn
 

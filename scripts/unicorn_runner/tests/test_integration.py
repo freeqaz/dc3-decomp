@@ -112,7 +112,7 @@ class TestIntegration(unittest.TestCase):
         from scripts.unicorn_runner.run import run_batch
         self._suppress_stdout()
         try:
-            eq, div, err, sk = run_batch(
+            eq, div, err, sk, _cached = run_batch(
                 SKELETON_DECOMP, SKELETON_ORIG, timeout=2_000_000)
         finally:
             self._restore_stdout()
@@ -157,7 +157,7 @@ class TestIntegration(unittest.TestCase):
         from scripts.unicorn_runner.run import run_batch
         self._suppress_stdout()
         try:
-            eq, div, err, sk = run_batch(
+            eq, div, err, sk, _cached = run_batch(
                 SKELETON_DECOMP, SKELETON_ORIG, timeout=2_000_000)
         finally:
             self._restore_stdout()

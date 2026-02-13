@@ -680,7 +680,7 @@ int HamNavList::NumItems() const {
 
 float HamNavList::StartFrame() {
     if (mListRibbonResource) {
-        mListRibbonResource->StartFrame();
+        return mListRibbonResource->StartFrame();
     } else {
         return 0.0f;
     }
@@ -688,7 +688,7 @@ float HamNavList::StartFrame() {
 
 float HamNavList::EndFrame() {
     if (mListRibbonResource) {
-        mListRibbonResource->EndFrame();
+        return mListRibbonResource->EndFrame();
     } else {
         return 0.0f;
     }

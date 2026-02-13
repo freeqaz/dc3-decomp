@@ -1,20 +1,33 @@
-doesn't support C++ -- ignore
-# decomp-permuter - Automatic Code Permutation Tool
+# decomp-permuter (ARCHIVED)
 
-decomp-permuter automatically permutes C code to find variations that better match a target binary. Useful for resolving register allocation differences and other compiler-specific codegen issues.
+> **This tool is not compatible with DC3.** Use the [C++ Permuter](../permuter/INDEX.md) instead.
+
+decomp-permuter automatically permutes C code to find variations that better match a target binary.
 
 **Repository:** `~/code/milohax/decomp-permuter`
 **Upstream:** https://github.com/simonlindholm/decomp-permuter
 
-## DC3 Compatibility Warning
+## Why This Doesn't Work for DC3
 
-decomp-permuter has **limited compatibility** with DC3 due to:
-
-1. **C++ not supported** - The permuter uses pycparser which only parses C. DC3 is entirely C++.
+1. **C++ not supported** - Uses pycparser which only parses C. DC3 is entirely C++.
 2. **COFF object format** - Xbox 360 MSVC produces COFF files; permuter expects ELF.
 3. **MSVC build syntax** - Uses `/Fo` instead of `-o` flags that import.py expects.
 
-**Practical use**: The PERM macros can still be used manually in isolated C-compatible code sections, but automatic import/randomization won't work. For most DC3 work, use objdiff directly to compare variations you write by hand.
+## Use the C++ Permuter Instead
+
+```bash
+python -m scripts.permuter \
+    --symbol "?BurnXfm@RndMesh@@QAAXXZ" \
+    --source src/system/rndobj/Mesh.cpp \
+    --function "RndMesh::BurnXfm" \
+    --dry-run
+```
+
+See [C++ Permuter documentation](../permuter/INDEX.md) for full usage.
+
+---
+
+## Legacy Documentation (for reference only)
 
 ## Installation
 

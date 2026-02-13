@@ -73,6 +73,7 @@ class StructDB:
     def connect(self):
         """Connect to the database."""
         self.conn = sqlite3.connect(self.db_path)
+        self.conn.execute("PRAGMA journal_mode = WAL")
         self.conn.row_factory = sqlite3.Row
 
     def close(self):

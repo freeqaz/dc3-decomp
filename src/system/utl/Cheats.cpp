@@ -210,6 +210,6 @@ void InitLongJoyCheats(const DataArray *da) {
 
 DataNode CheatsManager::OnMsg(KeyboardKeyReleaseMsg const &msg) {
     if (msg->Int(2) == 0x11 && mIsOverridingKeyboard)
-
         return 0;
+    return DATA_UNHANDLED;
 }

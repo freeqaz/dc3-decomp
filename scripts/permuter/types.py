@@ -43,3 +43,4 @@ class ScoreResult:
     match_percent: float
     build_success: bool
     error: Optional[str] = None
+    execution_equivalent: Optional[bool] = None

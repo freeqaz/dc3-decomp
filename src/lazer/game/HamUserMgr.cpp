@@ -43,15 +43,11 @@ void HamUserMgr::GetUsers(std::vector<User *> &users) const {
 }
 
 User *HamUserMgr::GetUser(UserGuid const &ug, bool b) const {
-    HamUser *user = GetHamUser(ug, b);
-    if (user)
-        return user;
+    return GetHamUser(ug, b);
 }
 
 LocalUser *HamUserMgr::GetLocalUser(UserGuid const &ug, bool b) const {
-    HamUser *user = GetHamUser(ug, b);
-    if (user)
-        return user;
+    return GetHamUser(ug, b);
 }
 
 RemoteUser *HamUserMgr::GetRemoteUser(UserGuid const &, bool) const {

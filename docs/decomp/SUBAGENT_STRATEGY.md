@@ -215,6 +215,21 @@ Compare instruction-by-instruction. Propose specific theories to test.
 ./bin/objdiff-cli report query ... | grep -i "::Load\|::Save\|Init"
 ```
 
+### Step 1b: Triage with Unicorn (Optional but Recommended)
+
+Before assigning near-match (90-99%) functions to agents, run unicorn batch diagnosis to filter out false positives:
+
+```bash
+# Batch triage a unit — shows SKIP/FIX per function
+python3 -m scripts.unicorn_runner.diagnose --unit system/meta/Profile --batch
+```
+
+Functions marked **SKIP** (unicorn=EQUIVALENT) have cosmetic diffs only — don't waste agent time on them. Focus agents on **FIX** functions where behavior actually diverges.
+
+Real-world results: UITransitionHandler had 9 functions flagged by objdiff → all 9 were EQUIVALENT in unicorn. Profile had 7 flagged → 6 were equivalent. This filtering saves significant agent compute.
+
+See [../plans/unicorn-runner-value.md](../plans/unicorn-runner-value.md) for detailed examples.
+
 ### Step 2: Select Non-Overlapping Targets
 - **Don't assign two agents to the same .cpp file**
 - Prefer functions in different subsystems
@@ -267,6 +282,7 @@ Agents should stop and report when encountering:
 1. **LINKER_MERGED calls** - Compiler merged identical functions
 2. **Consistent register swaps** - Compiler chose different registers throughout
 3. **AT_LIMIT verdict** - objdiff-cli determined function is at practical limit
+4. **Unicorn EQUIVALENT** - `diagnose.py` confirms behavioral equivalence despite instruction diffs
 
 **BOOL_MASK patterns are often fixable** — try local `bool` variable, `(bool)` cast, or look for a missing inline before giving up. See [fixable-bool-mask.md](patterns/fixable-bool-mask.md).
 

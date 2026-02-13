@@ -98,27 +98,25 @@ ObjectDir *SyncSubDir(const FilePath &fp, ObjectDir *dir) {
     DirLoader *dirLoader = dir->IsProxy()
         ? dynamic_cast<DirLoader *>(loader)
         : dynamic_cast<DirLoader *>(TheLoadMgr.ForceGetLoader(fp));
-    if (dirLoader) {
-        ObjectDir *retDir = dirLoader->GetDir();
-        if (retDir) {
-            for (ObjDirItr<Hmx::Object> it(dir, false); it != nullptr; ++it) {
-                Hmx::Object *found = retDir->FindObject(it->Name(), false, true);
-                if (found && found != retDir && &*it != dir) {
-                    MILO_NOTIFY(
-                        "%s exists in dir and subdir, so replacing %s with %s",
-                        it->Name(),
-                        PathName(it),
-                        PathName(found)
-                    );
-                    it->ReplaceRefs(found);
-                    delete it;
-                }
+    if (!dirLoader)
+        return nullptr;
+    ObjectDir *retDir = dirLoader->GetDir();
+    if (retDir) {
+        for (ObjDirItr<Hmx::Object> it(dir, false); it != nullptr; ++it) {
+            Hmx::Object *found = retDir->FindObject(it->Name(), false, true);
+            if (found && found != retDir && &*it != dir) {
+                MILO_NOTIFY(
+                    "%s exists in dir and subdir, so replacing %s with %s",
+                    it->Name(),
+                    PathName(it),
+                    PathName(found)
+                );
+                it->ReplaceRefs(found);
+                delete it;
             }
         }
-        return retDir;
     }
-    // i would think you'd wanna return nullptr here if there's no dirLoader
-    // but this is what HMX did
+    return retDir;
 }
 
 bool PropSyncSubDirs(

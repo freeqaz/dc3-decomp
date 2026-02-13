@@ -36,7 +36,7 @@ def prepare_side(code_bytes, relocs, coff, symbol, side_class):
 
     rdata_bytes = None
     rdata_override = {}
-    if side_class == "bctr_switch":
+    if side_class in ("bctr_switch", "bctrl_switch"):
         rdata_bytes, rdata_override = prepare_switch_tables(
             coff, symbol, relocs, CODE_BASE)
         if rdata_bytes is None:
@@ -93,7 +93,7 @@ def prepare_coloaded_side(root_bytes, root_relocs, coff, symbol, side_class,
     # Prepare switch table for root if needed
     rdata_bytes = None
     rdata_override = {}
-    if side_class == "bctr_switch":
+    if side_class in ("bctr_switch", "bctrl_switch"):
         rdata_bytes, rdata_override = prepare_switch_tables(
             coff, symbol, root_relocs, CODE_BASE)
         if rdata_bytes is None:

@@ -369,6 +369,7 @@ bool AccomplishmentProgress::AddAccomplishment(Symbol s) {
             return true;
         }
     }
+    return false;
 }
 
 #pragma endregion

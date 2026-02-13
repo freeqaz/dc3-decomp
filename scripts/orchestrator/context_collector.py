@@ -2100,6 +2100,7 @@ def resolve_callee_info(symbol: str, project_dir: str) -> Optional[Dict[str, Any
         try:
             import sqlite3
             conn = sqlite3.connect(str(db_path))
+            conn.execute("PRAGMA journal_mode = WAL")
             conn.row_factory = sqlite3.Row
             row = conn.execute(
                 "SELECT demangled, unit, current_percent FROM functions WHERE symbol = ?",

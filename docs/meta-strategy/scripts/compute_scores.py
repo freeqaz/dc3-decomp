@@ -268,6 +268,7 @@ def update_scores(db_path: Path, verbose: bool = False):
     global _unit_success_rates, _type_success_rates, _size_success_rates
 
     conn = sqlite3.connect(db_path)
+    conn.execute("PRAGMA journal_mode = WAL")
     conn.row_factory = sqlite3.Row
 
     # Load empirical success rates from recent attempt data

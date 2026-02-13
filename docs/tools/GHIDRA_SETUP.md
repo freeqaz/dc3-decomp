@@ -268,7 +268,7 @@ pyghidra-mcp --transport streamable-http \
 ## See Also
 
 - [XEXLOADERWV.md](XEXLOADERWV.md) - XEX loader build/install
-- [PYGHIDRA_MCP_XEX_SUPPORT.md](PYGHIDRA_MCP_XEX_SUPPORT.md) - XEX integration details
-- [GHIDRA_MCP_INTEGRATION.md](GHIDRA_MCP_INTEGRATION.md) - MCP workflow strategies
+- [PYGHIDRA_MCP_XEX_SUPPORT.md](../plans/PYGHIDRA_MCP_XEX_SUPPORT.md) - XEX integration details
+- [GHIDRA_MCP_INTEGRATION.md](../plans/GHIDRA_MCP_INTEGRATION.md) - MCP workflow strategies
 - [objdiff.md](objdiff.md) - Assembly comparison workflow
 - [INDEX.md](INDEX.md) - Quick command reference

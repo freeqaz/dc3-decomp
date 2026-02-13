@@ -12,6 +12,7 @@ from pathlib import Path
 def get_best_patches(db_path: str, min_percent: float = 0.0) -> list[dict]:
     """Get best patch for each function (highest end_percent)."""
     conn = sqlite3.connect(db_path)
+    conn.execute("PRAGMA journal_mode = WAL")
     conn.row_factory = sqlite3.Row
 
     # Priority: functions.source_patch > attempts.patch (by end_percent)

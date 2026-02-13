@@ -75,6 +75,7 @@ def detect_merged_from_map(
 
     # Connect to database
     conn = sqlite3.connect(db_path)
+    conn.execute("PRAGMA journal_mode = WAL")
     conn.row_factory = sqlite3.Row
 
     # Get all symbols from the database

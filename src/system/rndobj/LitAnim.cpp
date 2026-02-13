@@ -23,6 +23,7 @@ bool RndLightAnim::Replace(ObjRef *from, Hmx::Object *to) {
     } else {
         return Hmx::Object::Replace(from, to);
     }
+    return true;
 }
 
 BEGIN_HANDLERS(RndLightAnim)

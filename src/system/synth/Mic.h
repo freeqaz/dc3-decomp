@@ -61,6 +61,7 @@ protected:
 
 class RingBuffer {
 public:
+    RingBuffer() : mSize(0), mBuffer(0) {}
     ~RingBuffer();
     void Reset();
     void Init(int);

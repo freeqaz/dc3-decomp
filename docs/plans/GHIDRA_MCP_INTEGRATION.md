@@ -135,7 +135,7 @@ The extension provides:
 ls -la /home/free/code/milohax/vmx128-research/ghidra-test/ghidra_12.0_DEV/Extensions/XEXLoaderWV/lib/XEXLoaderWV.jar
 ```
 
-**For detailed XEX support information**, see [PYGHIDRA_MCP_XEX_SUPPORT.md](./PYGHIDRA_MCP_XEX_SUPPORT.md)
+**For detailed XEX support information**, see [PYGHIDRA_MCP_XEX_SUPPORT.md](PYGHIDRA_MCP_XEX_SUPPORT.md)
 
 ---
 

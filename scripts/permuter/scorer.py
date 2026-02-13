@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import io
 import json
 import subprocess
 import shutil
+import sys
 from pathlib import Path
 from typing import Optional
 
@@ -21,11 +23,21 @@ class Scorer:
             result = scorer.score(variant)
     """
 
-    def __init__(self, source_path: Path, symbol: str):
+    def __init__(self, source_path: Path, symbol: str, unit: Optional[str] = None):
         self.source_path = source_path
         self.symbol = symbol
         self._backup_path: Optional[Path] = None
         self._original_source: Optional[bytes] = None
+        self._decomp_path: Optional[str] = None
+        self._orig_path: Optional[str] = None
+        self._baseline_equivalent: Optional[bool] = None
+
+        if unit:
+            try:
+                from scripts.unicorn_runner.run import resolve_unit
+                self._decomp_path, self._orig_path = resolve_unit(unit)
+            except Exception:
+                pass  # Unicorn runner not available or unit not found
 
     def __enter__(self):
         self._original_source = self.source_path.read_bytes()
@@ -69,6 +81,33 @@ class Scorer:
         except (json.JSONDecodeError, KeyError):
             return 0.0
 
+    def _check_equivalence(self) -> Optional[bool]:
+        """Run unicorn comparison and return True if equivalent, False if divergent.
+
+        Uses co-loading and dual-fixture for stronger regression detection.
+        Returns None if unicorn runner is not configured or fails.
+        """
+        if self._decomp_path is None:
+            return None
+
+        try:
+            from scripts.unicorn_runner.run import run_comparison, EXIT_EQUIVALENT
+
+            old_stdout = sys.stdout
+            old_stderr = sys.stderr
+            sys.stdout = io.StringIO()
+            sys.stderr = io.StringIO()
+            try:
+                code = run_comparison(
+                    self.symbol, self._decomp_path, self._orig_path,
+                    coload=True, dual_fixture=True)
+            finally:
+                sys.stdout = old_stdout
+                sys.stderr = old_stderr
+            return code == EXIT_EQUIVALENT
+        except Exception:
+            return None
+
     def score(self, variant: Variant) -> ScoreResult:
         """Write variant source, build, score, and return result."""
         self.source_path.write_bytes(variant.source)
@@ -83,10 +122,25 @@ class Scorer:
             )
 
         match_percent = self._run_objdiff()
+
+        # Guard rail: if baseline was equivalent, check variant equivalence
+        execution_equivalent = None
+        if self._baseline_equivalent and match_percent > 0:
+            execution_equivalent = self._check_equivalence()
+            if execution_equivalent is False:
+                return ScoreResult(
+                    variant=variant,
+                    match_percent=0.0,
+                    build_success=True,
+                    error="Execution equivalence broken",
+                    execution_equivalent=False,
+                )
+
         return ScoreResult(
             variant=variant,
             match_percent=match_percent,
             build_success=True,
+            execution_equivalent=execution_equivalent,
         )
 
     def get_baseline(self) -> float:
@@ -98,4 +152,6 @@ class Scorer:
         build_ok, _ = self._build()
         if not build_ok:
             return 0.0
-        return self._run_objdiff()
+        baseline = self._run_objdiff()
+        self._baseline_equivalent = self._check_equivalence()
+        return baseline

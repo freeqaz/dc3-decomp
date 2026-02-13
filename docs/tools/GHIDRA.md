@@ -19,7 +19,7 @@ export PATH="$GHIDRA_INSTALL_DIR/support:$PATH"
 
 ### XEX Loader Extension
 
-Xbox 360 executables require XEXLoaderWV. The extension must be installed in `$GHIDRA_INSTALL_DIR/Extensions/Ghidra/`. See [XEXLOADERWV.md](XEXLOADERWV.md) for build/install instructions and [PYGHIDRA_MCP_XEX_SUPPORT.md](PYGHIDRA_MCP_XEX_SUPPORT.md) for technical details on XEX handling.
+Xbox 360 executables require XEXLoaderWV. The extension must be installed in `$GHIDRA_INSTALL_DIR/Extensions/Ghidra/`. See [XEXLOADERWV.md](XEXLOADERWV.md) for build/install instructions and [PYGHIDRA_MCP_XEX_SUPPORT.md](../plans/PYGHIDRA_MCP_XEX_SUPPORT.md) for technical details on XEX handling.
 
 ## Symbol Lookup via Map File
 
@@ -68,7 +68,7 @@ pyghidra-mcp (v0.1.6+) includes automatic Xbox 360 XEX binary detection and hand
 - **XEXLoaderWV Integration**: Uses extension from `$GHIDRA_INSTALL_DIR/Extensions/` for import
 - **No Manual Configuration**: XEX files are handled transparently by pyghidra-mcp
 
-See [PYGHIDRA_MCP_XEX_SUPPORT.md](PYGHIDRA_MCP_XEX_SUPPORT.md) for implementation details.
+See [PYGHIDRA_MCP_XEX_SUPPORT.md](../plans/PYGHIDRA_MCP_XEX_SUPPORT.md) for implementation details.
 
 ## pyghidra-mcp (MCP Integration)
 

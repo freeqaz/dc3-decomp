@@ -18,20 +18,17 @@ import time
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-# Add pyghidra_mcp to path
-sys.path.insert(0, str(Path(__file__).parent / "pyghidra-mcp-fork"))
-
-# Import only the cache manager to avoid pyghidra dependency
+# Import cache_manager directly from pyghidra-mcp fork (avoid __init__.py which
+# pulls in heavy deps like pyghidra, click_option_group, etc.)
 import importlib.util
-cache_spec = importlib.util.spec_from_file_location(
+_cache_spec = importlib.util.spec_from_file_location(
     "cache_manager",
-    Path(__file__).parent / "pyghidra-mcp-fork" / "pyghidra_mcp" / "cache_manager.py"
+    Path.home() / "code" / "milohax" / "pyghidra-mcp" / "src" / "pyghidra_mcp" / "cache_manager.py"
 )
-cache_module = importlib.util.module_from_spec(cache_spec)
-cache_spec.loader.exec_module(cache_module)
-
-CacheManager = cache_module.CacheManager
-compute_binary_hash = cache_module.compute_binary_hash
+_cache_module = importlib.util.module_from_spec(_cache_spec)
+_cache_spec.loader.exec_module(_cache_module)
+CacheManager = _cache_module.CacheManager
+compute_binary_hash = _cache_module.compute_binary_hash
 
 
 def test_cache_init():

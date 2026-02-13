@@ -79,6 +79,7 @@ def categorize_merged_symbol(symbol_name: str, resolved_names: list[str] | None 
 def detect_patterns(db_path: Path, min_percent: float = 80.0, limit: int = 5000, verbose: bool = False):
     """Run objdiff --analyze on functions and extract patterns."""
     conn = sqlite3.connect(db_path)
+    conn.execute("PRAGMA journal_mode = WAL")
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
 

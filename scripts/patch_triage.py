@@ -118,6 +118,7 @@ def load_db_patches() -> list[tuple[dict, str]]:
         return []
 
     conn = sqlite3.connect(str(DB_PATH))
+    conn.execute("PRAGMA journal_mode = WAL")
     conn.row_factory = sqlite3.Row
     try:
         rows = conn.execute("""
@@ -186,6 +187,7 @@ def resolve_symbols_from_db(patches: list[tuple[dict, str]]) -> None:
         return
 
     conn = sqlite3.connect(str(DB_PATH))
+    conn.execute("PRAGMA journal_mode = WAL")
     conn.row_factory = sqlite3.Row
     try:
         all_funcs = conn.execute(

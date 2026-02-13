@@ -57,7 +57,7 @@ public:
         if (it != mResources.end()) {
             RefRes<T> &res = it->second;
             res.Release();
-            if (res.NumRefs() <= 0) {
+            if (res.NumRefs() == 0) {
                 OnReleaseResource(res.Data());
                 mResources.erase(it);
             }

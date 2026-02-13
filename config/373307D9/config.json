@@ -56,7 +56,8 @@
             "flags": [
                 "/TC",
                 "/GS",
-                "/D_XBOX360"
+                "/D_XBOX360",
+                "/DCURL_STATICLIB"
             ]
         },
         "net_xbox": {

@@ -48,7 +48,7 @@ def assign_addresses(relocs):
 
     for reloc in relocs:
         sym = reloc["symbol_name"]
-        if reloc["type_name"] == "REL24":
+        if reloc["type_name"] in ("REL24", "REL14"):
             if sym not in trampolines:
                 trampolines[sym] = next_trampoline
                 next_trampoline += 8   # each stub is 8 bytes
@@ -99,7 +99,36 @@ def patch_addr32(code, offset, target_addr):
 
 
 def patch_function(code_bytearray, relocs, trampolines, globals_map, code_base):
-    """Apply all relocation patches to a function's code bytes."""
+    """Apply all relocation patches to a function's code bytes.
+
+    REL14 relocations use relay stubs appended after the function code,
+    since the 14-bit displacement (±32KB) can't reach TRAMPOLINE_BASE.
+    Each relay is a 4-byte unconditional branch to the real trampoline.
+    """
+    # Collect REL14 relocs — these need relay stubs
+    rel14_relocs = [(r["symbol_name"], r["offset"])
+                    for r in relocs if r["type_name"] == "REL14"]
+    relay_map = {}  # sym -> relay_offset (in code buffer)
+
+    if rel14_relocs:
+        # Align relay region to 4 bytes
+        relay_start = (len(code_bytearray) + 3) & ~3
+        if relay_start > len(code_bytearray):
+            code_bytearray.extend(b'\x00' * (relay_start - len(code_bytearray)))
+
+        for sym, _ in rel14_relocs:
+            if sym in relay_map:
+                continue
+            relay_offset = len(code_bytearray)
+            relay_map[sym] = relay_offset
+            # Emit: b <trampoline> — patched below as REL24
+            code_bytearray.extend(b'\x48\x00\x00\x00')  # b +0 (placeholder)
+
+        # Patch relay stubs to jump to their trampolines
+        for sym, relay_offset in relay_map.items():
+            target = trampolines[sym]
+            patch_rel24(code_bytearray, relay_offset, target, code_base)
+
     for reloc in relocs:
         sym = reloc["symbol_name"]
         off = reloc["offset"]
@@ -108,6 +137,16 @@ def patch_function(code_bytearray, relocs, trampolines, globals_map, code_base):
         if rtype == "REL24":
             target = trampolines[sym]
             patch_rel24(code_bytearray, off, target, code_base)
+        elif rtype == "REL14":
+            # Patch conditional branch to point to relay stub
+            relay_addr = code_base + relay_map[sym]
+            insn = struct.unpack_from(">I", code_bytearray, off)[0]
+            pc = code_base + off
+            delta = relay_addr - pc
+            assert -0x8000 <= delta <= 0x7FFC, f"REL14 relay out of range: {delta}"
+            # BD field is bits [16:29], preserve opcode/BO/BI (bits [0:15]) and AA/LK (bits [30:31])
+            insn = (insn & 0xFFFF0003) | (delta & 0x0000FFFC)
+            struct.pack_into(">I", code_bytearray, off, insn)
         elif rtype == "REFHI":
             target = globals_map[sym]
             patch_refhi(code_bytearray, off, target)

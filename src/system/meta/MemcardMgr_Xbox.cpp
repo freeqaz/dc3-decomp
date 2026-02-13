@@ -242,6 +242,7 @@ MCResult MemcardMgr::PerformRead(MCContainer *container) {
             }
         }
     }
+    return res;
 }
 
 MCResult MemcardMgr::PerformWrite(MCContainer *container) {

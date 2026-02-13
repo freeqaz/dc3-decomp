@@ -81,6 +81,7 @@ class COFFParser:
     def _parse_symbols(self):
         self.symbols = []
         self.symbol_map = {}  # name -> symbol
+        self._reloc_cache = {}  # section_idx -> list of reloc dicts
         strtab_base = self.symtab_offset + self.num_symbols * 18
 
         i = 0
@@ -115,7 +116,10 @@ class COFFParser:
             i += 1 + num_aux
 
     def get_section_relocations(self, section_idx):
-        """Get relocations for a section (0-based index)."""
+        """Get relocations for a section (0-based index). Results are cached."""
+        cached = self._reloc_cache.get(section_idx)
+        if cached is not None:
+            return cached
         sec = self.sections[section_idx]
         relocs = []
         for i in range(sec['num_relocs']):
@@ -129,6 +133,7 @@ class COFFParser:
                 'type': reloc_type,
                 'type_name': RELOC_NAMES.get(reloc_type, f"UNKNOWN(0x{reloc_type:04X})"),
             })
+        self._reloc_cache[section_idx] = relocs
         return relocs
 
     def get_text_sections(self):

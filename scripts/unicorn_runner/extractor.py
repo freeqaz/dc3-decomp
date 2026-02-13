@@ -104,6 +104,18 @@ def classify_indirect_branch(code_bytes, relocs, coff=None):
         elif insn == 0x4E800420:
             has_bctr = True
 
+    if has_bctrl and has_bctr:
+        # Both present — check for switch table (.rdata relocs)
+        if coff is not None:
+            for reloc in relocs:
+                if reloc["type_name"] in ("REFHI", "REFLO"):
+                    sym = coff.symbol_map.get(reloc["symbol_name"])
+                    if sym and sym['section'] > 0:
+                        sec = coff.sections[sym['section'] - 1]
+                        if sec['name'].startswith('.rdata'):
+                            return "bctrl_switch"  # vtable + switch table
+        return "bctrl"  # vtable only
+
     if has_bctrl:
         return "bctrl"
 
