@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import difflib
 import json
 import sys
 from pathlib import Path
@@ -51,6 +52,11 @@ def parse_args() -> argparse.Namespace:
         "--dry-run",
         action="store_true",
         help="Generate and list variants without building/scoring",
+    )
+    parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="Apply the best-improving variant to the source file",
     )
     parser.add_argument(
         "--unit",
@@ -109,6 +115,7 @@ def main():
         return
 
     # Score variants
+    original_source = args.source.read_bytes()
     results: list[ScoreResult] = []
     with Scorer(args.source, args.symbol, unit=args.unit) as scorer:
         baseline = scorer.get_baseline()
@@ -158,7 +165,34 @@ def main():
     if args.json_output:
         _print_json(baseline, results)
     else:
-        _print_table(baseline, results)
+        _print_table(baseline, results, original_source)
+
+    # Apply best improvement if requested
+    if args.apply:
+        improved = [r for r in results if r.build_success and r.match_percent > baseline]
+        if improved:
+            best = improved[0]
+            args.source.write_bytes(best.variant.source)
+            print(f"\nApplied: {best.variant.name} ({best.variant.description})", file=sys.stderr)
+            print(f"New match: {best.match_percent:.2f}% (was {baseline:.2f}%)", file=sys.stderr)
+            _print_diff(original_source, best.variant.source, args.source)
+        else:
+            print("\nNo improvements to apply.", file=sys.stderr)
+
+
+def _print_diff(original: bytes, variant: bytes, source_path: Path):
+    """Print a unified diff between original and variant source."""
+    orig_lines = original.decode("utf-8", errors="replace").splitlines(keepends=True)
+    var_lines = variant.decode("utf-8", errors="replace").splitlines(keepends=True)
+    diff = difflib.unified_diff(
+        orig_lines, var_lines,
+        fromfile=f"a/{source_path}",
+        tofile=f"b/{source_path}",
+        n=3,
+    )
+    diff_text = "".join(diff)
+    if diff_text:
+        print(diff_text)
 
 
 def _print_dry_run(variants, json_output: bool):
@@ -197,7 +231,7 @@ def _print_json(baseline: float, results: list[ScoreResult]):
     print(json.dumps(data, indent=2))
 
 
-def _print_table(baseline: float, results: list[ScoreResult]):
+def _print_table(baseline: float, results: list[ScoreResult], original_source: bytes | None = None):
     print(f"\n{'=' * 70}")
     print(f"RESULTS (baseline: {baseline:.2f}%)")
     print(f"{'=' * 70}")
@@ -220,6 +254,10 @@ def _print_table(baseline: float, results: list[ScoreResult]):
             exec_info = " EXEC BROKEN"
         print(f"  {r.variant.name:25s} {r.match_percent:6.2f}%{marker}{exec_info}")
         print(f"    {r.variant.description}")
+
+        # Show diff for improvements
+        if original_source and r.build_success and r.match_percent > baseline:
+            _print_diff(original_source, r.variant.source, Path("source"))
 
     # Summary
     improved = [r for r in results if r.build_success and r.match_percent > baseline]

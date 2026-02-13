@@ -32,6 +32,10 @@ class Scorer:
         self._orig_path: Optional[str] = None
         self._baseline_equivalent: Optional[bool] = None
 
+        # Derive targeted object path from source path
+        # src/system/rndobj/Foo.cpp -> build/373307D9/src/system/rndobj/Foo.obj
+        self._obj_target = f"build/373307D9/{source_path.with_suffix('.obj')}"
+
         if unit:
             try:
                 from scripts.unicorn_runner.run import resolve_unit
@@ -56,9 +60,9 @@ class Scorer:
         return False
 
     def _build(self) -> tuple[bool, str | None]:
-        """Run ninja build. Returns (success, error_message)."""
+        """Run ninja build targeting only this source's object file."""
         result = subprocess.run(
-            ["ninja"],
+            ["ninja", self._obj_target],
             capture_output=True,
             text=True,
         )
