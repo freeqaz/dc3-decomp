@@ -286,14 +286,15 @@ bool HelpBarPanel::UpdateBackButton(UIPanel *panel) {
         prop = panel->Property(back_token, false);
     }
     UILabel *leftHandLabel = DataDir()->Find<UILabel>("left_hand.lbl", false);
-    RndGroup *backIcon = DataDir()->Find<RndGroup>("back_icon.grp", false);
     bool b11 = false;
     bool show;
+    RndGroup *backIcon = DataDir()->Find<RndGroup>("back_icon.grp", false);
     if (prop) {
         if (prop->Type() == kDataSymbol) {
             if (prop->Sym() != gNullStr) {
                 b11 = true;
-                mLeftHandNavList->GetHelpbarProvider()->SetLabel(1, 0, prop->Sym());
+                auto _tmp1 = prop->Sym();
+                mLeftHandNavList->GetHelpbarProvider()->SetLabel(1, 0, _tmp1);
             }
         } else if (prop->Type() == kDataArray) {
             if (prop->Array()->Size() > 0) {

@@ -148,14 +148,14 @@ void SongSequence::LoadNextSongAudio() {
 }
 
 bool SongSequence::DoNext(bool b1, bool b2) {
+    static Symbol perform("perform");
+    static Symbol mind_control("mind_control");
+    static Symbol in_campaign_era_intro("in_campaign_era_intro");
+    static Symbol gameplay_mode("gameplay_mode");
+    static Symbol holla_back("holla_back");
+    static Symbol active("active");
     static Symbol midi_player("midi_player");
     static Symbol holla_back_config("holla_back_config");
-    static Symbol active("active");
-    static Symbol gameplay_mode("gameplay_mode");
-    static Symbol perform("perform");
-    static Symbol in_campaign_era_intro("in_campaign_era_intro");
-    static Symbol holla_back("holla_back");
-    static Symbol mind_control("mind_control");
     unk28 = false;
     if (mEntries.empty())
         return true;
@@ -171,7 +171,8 @@ bool SongSequence::DoNext(bool b1, bool b2) {
         }
     }
     if (!b2 && mCurrentIndex >= 0) {
-        if (TheHamProvider->Property(holla_back_config)->Int()) {
+        auto _tmp2 = TheHamProvider->Property(holla_back_config)->Int();
+        if (_tmp2) {
             static Symbol num_stars("num_stars");
             const DataNode *prop = TheGamePanel->Property(num_stars, false);
             int stars;
@@ -324,7 +325,7 @@ void SongSequence::OnSongLoaded() {
         TheHamDirector->SetProperty(freestyle_enabled, false);
         if (curEntry.unkc >= 0 && curEntry.unk10 >= 0) {
             TheMaster->GetAudio()->SetLoop(
-                BeatToMs(curEntry.unk10 * 4.0f), BeatToMs(curEntry.unkc * 4.0f)
+                BeatToMs(curEntry.unkc * 4.0f), BeatToMs(curEntry.unk10 * 4.0f)
             );
         }
         if (curEntry.unk18 >= 0 && curEntry.unk1c >= 1) {

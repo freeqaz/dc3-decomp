@@ -95,6 +95,7 @@ void RhythmDetectorGroup::AddDebugGraphs() {
     float f6 = 1.0f / (float)(mDetectors.size() + 1);
     float f7 = f6 * 0.9f;
     delete mDebugGraph;
+    float f10 = f6;
     mDebugGraph = new DebugGraph(
         0.1f,
         0.0f,
@@ -108,7 +109,6 @@ void RhythmDetectorGroup::AddDebugGraphs() {
         ""
     );
     mDebugGraph->SetUnk44(1);
-    float f10 = f6;
     FOREACH (it, mDetectors) {
         RhythmDetector *cur = *it;
         cur->RemoveDebugGraphs();

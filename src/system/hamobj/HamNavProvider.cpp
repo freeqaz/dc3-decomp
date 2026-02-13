@@ -321,7 +321,7 @@ DataNode HamNavProvider::OnSetEnabled(const DataArray *a) {
     if (node.Type() == kDataInt) {
         SetEnabled(node.Int(), a->Int(3));
     } else {
-        SetEnabled(FindLabel(node.ForceSym()), a->Int(3));
+        SetEnabled(a->Int(3), FindLabel(node.ForceSym()));
     }
     return 0;
 }
@@ -331,7 +331,7 @@ DataNode HamNavProvider::OnSetHidden(const DataArray *a) {
     if (node.Type() == kDataInt) {
         SetHidden(node.Int(), a->Int(3));
     } else {
-        SetHidden(FindLabel(node.ForceSym()), a->Int(3));
+        SetHidden(a->Int(3), FindLabel(node.ForceSym()));
     }
     return 0;
 }

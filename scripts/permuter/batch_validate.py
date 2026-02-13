@@ -70,6 +70,10 @@ def parse_args() -> argparse.Namespace:
         "--json", action="store_true", dest="json_output",
         help="Output final report as JSON",
     )
+    parser.add_argument(
+        "--no-compose", action="store_true",
+        help="Disable two-step pattern composition (pass through to permuter)",
+    )
     return parser.parse_args()
 
 
@@ -230,6 +234,7 @@ def run_permuter(
     timeout: int,
     apply: bool = False,
     no_guided: bool = False,
+    no_compose: bool = False,
 ) -> tuple[dict, str]:
     """Run the permuter subprocess for a single function.
 
@@ -250,6 +255,8 @@ def run_permuter(
         cmd.append("--no-apply")
     if no_guided:
         cmd.append("--no-guided")
+    if no_compose:
+        cmd.append("--no-compose")
 
     try:
         result = subprocess.run(
@@ -346,6 +353,7 @@ def main():
             timeout=args.timeout,
             apply=not args.no_apply,
             no_guided=args.no_guided,
+            no_compose=args.no_compose,
         )
         func_elapsed = time.time() - func_start
 

@@ -925,7 +925,7 @@ void CampaignPerformer::UpdateEraSong(Difficulty d, Symbol s2, Symbol s3, int i4
 }
 
 void CampaignPerformer::AwardCrazeAccomplishments() {
-    for (int i = 0; i < TheCampaign->NumEras() - 1; i++) {
+    for (int i = 0; (unsigned int)i < TheCampaign->NumEras() - 1; i++) {
         CampaignEra *pEra = TheCampaign->GetEra(i);
         Symbol acc = pEra->CompletionAccomplishment();
         if (acc != gNullStr) {

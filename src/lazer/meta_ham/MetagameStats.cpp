@@ -40,7 +40,8 @@ void MetagameStats::Text(int, int data, UIListLabel *slot, UILabel *label) const
     DataArray *statArr = mStatsCfg->Array(data + 1);
     if (statArr->Int(0) == kStatsLayoutHeader) {
         if (slot->Matches("header")) {
-            label->SetTextToken(statArr->Sym(1));
+            auto _tmp3 = statArr->Sym(1);
+            label->SetTextToken(_tmp3);
         }
     } else if (statArr->Int(0) != kStatsLayoutSpacer) {
         if (slot->Matches("stat") || slot->Matches("title")) {

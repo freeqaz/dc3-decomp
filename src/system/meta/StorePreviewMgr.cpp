@@ -99,9 +99,10 @@ void StorePreviewMgr::PlayCurrentPreview() {
             mStreamPlayer->SetVolume(-unk2c);
         } else {
             int len = str.length();
+            auto _tmp5 = str.find(".bik", len - 4);
             if (str.find(".mogg", len - 5) != String::npos) {
                 str.erase(len - 5);
-            } else if (str.find(".bik", len - 4) != String::npos) {
+            } else if (_tmp5 != String::npos) {
                 str.erase(len - 4);
             }
             mStreamPlayer->PlayFile(str.c_str(), -unk2c, 0.0f, unk30);

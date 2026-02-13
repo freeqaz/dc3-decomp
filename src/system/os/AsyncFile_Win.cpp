@@ -47,8 +47,7 @@ void AsyncFileWin::_OpenAsync() {
         return;
     }
     unk34 = 0x800;
-    mode = mMode;
-    modeCheck = (mode & 0x7fffe) & (mode & 0x40002);
+        modeCheck = (mode & 0x7fffe) & (mode = mMode & 0x40002);
     if (modeCheck == 0) {
         fd = _open(mFilename.c_str(), (mode & 0xfffffffd) | 0x8000, 0x180);
         mFd = fd;

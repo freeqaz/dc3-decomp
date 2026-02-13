@@ -85,9 +85,9 @@ bool LoadingPanel::Exiting() {
 void LoadingPanel::Enter() {
     UIPanel::Enter();
     TheTaskMgr.SetSecondsAndBeat(0, 0, true);
+    Stream *stream = sLoadingMaster->GetHxAudio()->GetSongStream();
     MILO_ASSERT(sLoadingMaster->GetHxAudio()->IsReady(), 0x6a);
     // Trigger stream initialization
-    Stream *stream = sLoadingMaster->GetHxAudio()->GetSongStream();
 }
 
 Symbol LoadingPanel::ChooseLoadingScreen() {

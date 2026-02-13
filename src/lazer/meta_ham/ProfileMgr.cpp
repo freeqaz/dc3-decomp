@@ -891,7 +891,7 @@ HamProfile *ProfileMgr::GetActiveProfile(bool b) const {
         HamProfile *pProfileFromPad =
             TheProfileMgr.GetProfileFromPad(pActivePlayer->PadNum());
         if (!pProfileFromPad || !pProfileFromPad->HasValidSaveData()) {
-            HamPlayerData *pOtherPlayer = TheGameData->Player(index == 0);
+            HamPlayerData *pOtherPlayer = TheGameData->Player(0 == index);
             MILO_ASSERT(pOtherPlayer, 0x579);
             HamProfile *pOtherPlayerFromPad =
                 TheProfileMgr.GetProfileFromPad(pOtherPlayer->PadNum());

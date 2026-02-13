@@ -320,7 +320,10 @@ int CacheXbox::ThreadGetFileSize() {
         int ret = 0;
         DWORD fileSize = 0;
         DWORD res = GetFileSize(file, &fileSize);
-        if (res != -1) {
+        if (!(res != -1)) {
+            int *data = (int *)mData;
+            *data = res;
+        } else {
             DWORD err = GetLastError();
             if (err != 0) {
                 MILO_NOTIFY(
@@ -329,9 +332,6 @@ int CacheXbox::ThreadGetFileSize() {
                 );
                 ret = -1;
             }
-        } else {
-            int *data = (int *)mData;
-            *data = res;
         }
         CloseHandle(file);
         return !IsDeviceConnected(mCacheID.DeviceID()) ? 8 : ret;

@@ -86,14 +86,15 @@ float DetectFrame::Score(const FilterVersion *fv, MoveMode mode) const {
 
 float DetectFrame::LimbPSNR(const FilterVersion *filter_version, int i2) const {
     MILO_ASSERT(filter_version->mType == kFilterVersionHam2, 0x53);
-    float f12 = 0;
     float f13 = 0;
+    float f12 = 0;
     int numNodes = filter_version->NumNodes();
     if (numNodes > 0) {
         for (int i = 0; i < numNodes; i++) {
             ErrorNode *curErrorNode = filter_version->mErrorNodes[i];
+            auto _tmp0 = curErrorNode->GetFeedbackLimbs();
             if (i2 == -1
-                || curErrorNode->GetFeedbackLimbs() & i2
+                || _tmp0 & i2
                     && curErrorNode->Type() & filter_version->mType) {
                 const Vector3 &nodeWeight = unk4->NodeWeight(i, unkc);
                 f12 += Dot(nodeWeight, mBestNodeErrors[i]);

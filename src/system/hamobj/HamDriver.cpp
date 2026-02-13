@@ -96,7 +96,7 @@ float HamDriver::Display(float f1) {
     float lineSpacing = CharClipDisplay::LineSpacing() + scaledHeight;
 
     // Recursively display layers if list is non-empty and weight is active
-    if (mLayers.unk2c.begin() != mLayers.unk2c.end() && !(mLayers.unk8 == 0.0f)) {
+    if (mLayers.unk2c.end() != mLayers.unk2c.begin() && !(mLayers.unk8 == 0.0f)) {
         FOREACH (it, mLayers.unk2c) {
             lineSpacing = DisplayRecurse(*it, 0, lineSpacing);
         }

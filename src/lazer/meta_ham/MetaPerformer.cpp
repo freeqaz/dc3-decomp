@@ -1134,14 +1134,14 @@ void MetaPerformer::CalcCharacters(
     Symbol player2Char = pPlayer2Data->Unk48();
 
     // Clear character preferences based on PlayerFlag
-    if (flags == 0 || flags == 2) {
+    if (0 == flags || flags == 2) {
         player1Char = gNullStr;
     }
-    if (flags == 1 || flags == 2) {
+    if (1 == flags || flags == 2) {
         player2Char = gNullStr;
     }
 
-    bool hasPlayer1Char = player1Char != (int)gNullStr;
+    bool hasPlayer1Char = player1Char != (int)(int)gNullStr;
     bool hasPlayer2Char = player2Char != gNullStr;
 
     // Fast path: Both players have valid, non-conflicting characters

@@ -28,15 +28,15 @@ void SongSort::BuildItemList() {
     }
     DeleteItemList();
 
-    static Symbol song_select_mode("song_select_mode");
-    static Symbol song_select_story("song_select_story");
+    static Symbol perform("perform");
     static Symbol song_select_playlist("song_select_playlist");
     static Symbol random_song("random_song");
-    static Symbol perform("perform");
     static Symbol dance_battle("dance_battle");
+    bool inDanceBattle = TheGameMode->InMode(dance_battle, true);
+    static Symbol song_select_story("song_select_story");
 
     bool inPerform = TheGameMode->InMode(perform, true);
-    bool inDanceBattle = TheGameMode->InMode(dance_battle, true);
+    static Symbol song_select_mode("song_select_mode");
     Symbol prop = TheGameMode->Property(song_select_mode, true)->Sym();
 
     if (TheSongSortMgr->HeadersSelectable() && (inPerform || inDanceBattle) && song_select_playlist != prop) {
@@ -55,7 +55,8 @@ void SongSort::BuildItemList() {
         static Symbol finish_setlist("finish_setlist");
         SongFunctionNode *node = new SongFunctionNode(nullptr, finish_setlist, "ui/image/song_select_setlist_keep");
         node->SetShortcut(unk30[0]);
-        unk3c.insert(unk3c.end(), node);
+        auto _tmp2 = unk3c.end();
+        unk3c.insert(_tmp2, node);
     }
 
     FOREACH(it, unk3c) {

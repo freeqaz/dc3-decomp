@@ -597,12 +597,13 @@ void Challenges::SetupInGameData() {
     ChallengeRecord *record;
     ChallengeSortNode *sortNode = dynamic_cast<ChallengeSortNode *>(node);
     if (sortNode) {
-        record = sortNode->GetChallengeRecord();
+        auto _tmp3 = sortNode->GetChallengeRecord();
+        record = _tmp3;
     }
     MILO_ASSERT(record, 0x2e9);
 
-    int cost = record->GetChallengeRow().mDiff;
     int songID = record->GetChallengeRow().mSongID;
+    int cost = record->GetChallengeRow().mDiff;
 
     HamProfile *primaryProfile = TheProfileMgr.GetActiveProfile(true);
     MILO_ASSERT(primaryProfile, 0x2f0);

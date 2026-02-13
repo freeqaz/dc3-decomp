@@ -471,11 +471,12 @@ void UIManager::Init() {
     mWentBack = false;
     mCam = ObjectDir::Main()->New<RndCam>("[ui.cam]");
     DataArray *camCfg = cfg->FindArray("cam");
+    auto _tmp9 = camCfg->FindFloat("fov");
     auto _tmp5 = camCfg->FindFloat("near");
     mCam->SetFrustum(
         _tmp5,
         camCfg->FindFloat("far"),
-        camCfg->FindFloat("fov") * DEG2RAD,
+        _tmp9 * DEG2RAD,
         1.0f
     );
     // mCam->SetLocalPos(0, camCfg->FindFloat("y"), 0);

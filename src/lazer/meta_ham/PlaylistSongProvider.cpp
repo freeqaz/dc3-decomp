@@ -49,7 +49,7 @@ void PlaylistSongProvider::Text(
         }
         AppLabel *pAppLabel = dynamic_cast<AppLabel *>(label);
         MILO_ASSERT(pAppLabel, 0x31);
-        if (!(NumData() > 0x14 && data > 0x12)) {
+        if (!(NumData() > 0x14 && data > (int)0x12)) {
             pAppLabel->SetSongName(dataSym, data + 1, false);
         } else {
             static Symbol ellipsis("ellipsis");
@@ -57,7 +57,7 @@ void PlaylistSongProvider::Text(
         }
     } else if (slot->Matches("song_length")) {
         static Symbol playlist_addsong("playlist_addsong");
-        if (dataSym != playlist_addsong && (NumData() <= 0x14 || data < 0x13)) {
+        if ((int)dataSym != playlist_addsong && (NumData() <= 0x14 || data <= 18)) {
             AppLabel *pAppLabel = dynamic_cast<AppLabel *>(label);
             MILO_ASSERT(pAppLabel, 0x4d);
             pAppLabel->SetSongDuration(dataSym);

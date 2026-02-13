@@ -522,19 +522,37 @@ def cmd_import_ghidra(args):
     if project_root not in sys.path:
         sys.path.insert(0, project_root)
 
-    from tools.ghidra.batch_export_types import batch_export_types, show_stats
+    from tools.ghidra.batch_export_types import (
+        show_stats, seed_ghidra_dtm, extract_ghidra_structures,
+        import_structures_to_db,
+    )
+    from tools.ghidra.mcp_client import MCPClient, MCPError
 
     if args.stats:
         show_stats(Path(args.db))
         return
 
-    batch_export_types(
-        db_path=Path(args.db),
-        mcp_url=args.mcp_url,
+    # Connect to pyghidra-mcp service
+    client = MCPClient(url=args.mcp_url)
+    try:
+        client.initialize()
+    except MCPError as e:
+        print(f"ERROR: Could not connect to pyghidra-mcp: {e}")
+        print("Start the service with: ./tools/ghidra/pyghidra-service.sh start")
+        return
+
+    db_path = Path(args.db)
+    map_file = Path(project_root) / "orig" / "373307D9" / "ham_xbox_r.map"
+
+    seed_ghidra_dtm(client=client, db_path=db_path, map_file=map_file, dry_run=args.dry_run)
+
+    structures, stats = extract_ghidra_structures(
+        client=client,
         max_functions=args.max_functions,
         timeout_per_func=args.timeout_per_func,
-        dry_run=args.dry_run,
     )
+
+    import_structures_to_db(db_path=db_path, structures=structures, dry_run=args.dry_run)
 
 
 def main():

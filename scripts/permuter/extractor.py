@@ -303,22 +303,20 @@ def reparse_variant(
 
     tree = _PARSER.parse(new_source)
 
-    for child in tree.root_node.children:
-        if child.type != "function_definition":
-            continue
-        name = _get_function_name(child)
+    for func_node in _find_all_function_defs(tree.root_node):
+        name = _get_function_name(func_node)
         if name == func_name:
-            body = child.child_by_field_name("body")
+            body = func_node.child_by_field_name("body")
             if body is None:
                 raise ValueError(f"Function {func_name} has no body after reparse")
             statements = [c for c in body.named_children]
             return FunctionContext(
                 file_path=original_ctx.file_path,
                 file_source=new_source,
-                func_node=child,
+                func_node=func_node,
                 body_node=body,
                 statements=statements,
-                func_byte_range=(child.start_byte, child.end_byte),
+                func_byte_range=(func_node.start_byte, func_node.end_byte),
                 diagnosis=original_ctx.diagnosis,
             )
 
@@ -326,6 +324,21 @@ def reparse_variant(
         f"Function '{func_name}' not found after reparse "
         f"(pattern may have produced invalid syntax)"
     )
+
+
+def _find_all_function_defs(node: Node) -> list[Node]:
+    """Recursively find all function_definition nodes in the tree.
+
+    Tree-sitter can misparse macro-heavy C++ (e.g. BEGIN_COPYING_MEMBERS),
+    causing real top-level function definitions to appear nested inside
+    other nodes. This walks the full tree to find them all.
+    """
+    result: list[Node] = []
+    if node.type == "function_definition":
+        result.append(node)
+    for child in node.children:
+        result.extend(_find_all_function_defs(child))
+    return result
 
 
 def extract_function(file_path: Path, func_name: str) -> FunctionContext:
@@ -346,16 +359,17 @@ def extract_function(file_path: Path, func_name: str) -> FunctionContext:
 
     available: list[str] = []
 
-    for child in tree.root_node.children:
-        if child.type != "function_definition":
-            continue
-
-        name = _get_function_name(child)
+    # Search all function definitions, including those nested due to macro
+    # confusion (tree-sitter can't resolve preprocessor macros, so constructs
+    # like BEGIN_COPYING_MEMBERS cause it to swallow subsequent functions as
+    # children of an earlier node).
+    for func_node in _find_all_function_defs(tree.root_node):
+        name = _get_function_name(func_node)
         if name is not None:
             available.append(name)
 
         if name == func_name:
-            body = child.child_by_field_name("body")
+            body = func_node.child_by_field_name("body")
             if body is None:
                 raise ValueError(f"Function {func_name} has no body")
 
@@ -363,10 +377,10 @@ def extract_function(file_path: Path, func_name: str) -> FunctionContext:
             return FunctionContext(
                 file_path=file_path,
                 file_source=source,
-                func_node=child,
+                func_node=func_node,
                 body_node=body,
                 statements=statements,
-                func_byte_range=(child.start_byte, child.end_byte),
+                func_byte_range=(func_node.start_byte, func_node.end_byte),
             )
 
     # Fallback: try macro extraction (BEGIN_LOADS, BEGIN_HANDLERS, etc.)

@@ -251,7 +251,7 @@ void ChallengeSortNode::Text(UIListLabel *listlabel, UILabel *label) const {
         int ownerChallengeScore = TheChallengeSortMgr->GetOwnerChallengeScore(
             mChallengeRecord->GetChallengeRow().mSongID
         );
-        if (mChallengeRecord->GetChallengeRow().mScore <= ownerChallengeScore) {
+        if (ownerChallengeScore >= mChallengeRecord->GetChallengeRow().mScore) {
             if (mChallengeRecord->GetUnk48() != mChallengeRecord->GetUnk4c()) {
                 unsigned int ownerChallengeTimestamp = TheChallengeSortMgr->GetOwnerChallengeTimeStamp(
                     mChallengeRecord->GetChallengeRow().mSongID

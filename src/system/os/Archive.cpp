@@ -26,13 +26,13 @@ ArkHash::~ArkHash() {
 
 int ArkHash::AddString(const char *str) {
     int hashIdx = HashString(str, mTableSize);
-    MILO_ASSERT(hashIdx < mTableSize, 0xB4);
     int idx = hashIdx;
+    MILO_ASSERT(hashIdx < mTableSize, 0xB4);
     for (char *p = mTable[hashIdx]; p != nullptr;) {
         if (streq(p, str))
             return hashIdx;
         idx = (idx + 1) % mTableSize;
-        if (idx == hashIdx) {
+        if (hashIdx == idx) {
             MILO_FAIL("ERROR: Hash table full!!!");
         }
         p = mTable[idx];
@@ -85,7 +85,11 @@ void ArkHash::Read(BinStream &bs, int len) {
     while (p != pEnd) {
         int offset;
         bs >> offset;
-        *p++ = offset != 0 ? (mHeap + offset) : nullptr;
+                if (offset != 0) {
+            *p++ = (mHeap + offset);
+        } else {
+            *p++ = nullptr;
+        }
     }
 }
 

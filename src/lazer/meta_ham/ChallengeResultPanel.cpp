@@ -141,28 +141,29 @@ void ChallengeResultPanel::Poll() {
 }
 
 void ChallengeResultPanel::UpdateList(int player) {
-    static Symbol score("score");
-    static Symbol challenge_mission_index("challenge_mission_index");
-    static Symbol side("side");
-    static Symbol scroll_past_max_display("scroll_past_max_display");
-    static Symbol max_display("max_display");
-    static Symbol rival_beaten("rival_beaten");
-    static Symbol grade("grade");
-    static Symbol player_name("player_name");
-    static Symbol challenge_mission_score("challenge_mission_score");
-    static Symbol xp_before_mission("xp_before_mission");
-    static Symbol xp_mission("xp_mission");
-    static Symbol xp_total("xp_total");
-    static Symbol is_challenging_self("is_challenging_self");
     static Symbol rival_is_self("rival_is_self");
-    String playerName;
-    int numDisplay = mChallengeList->NumDisplay();
+    static Symbol is_challenging_self("is_challenging_self");
     int totalXP = TheChallenges->GetTotalXpEarned(player);
+    static Symbol rival_beaten("rival_beaten");
+    String playerName;
+    static Symbol score("score");
+    static Symbol xp_before_mission("xp_before_mission");
+    static Symbol max_display("max_display");
+    static Symbol grade("grade");
+    static Symbol challenge_mission_score("challenge_mission_score");
     HamPlayerData *playerData = TheGameData->Player(player);
+    static Symbol xp_mission("xp_mission");
+    static Symbol player_name("player_name");
+    static Symbol challenge_mission_index("challenge_mission_index");
+    static Symbol xp_total("xp_total");
+    static Symbol scroll_past_max_display("scroll_past_max_display");
+    static Symbol side("side");
+    int numDisplay = mChallengeList->NumDisplay();
     MILO_ASSERT(playerData, 0x7D);
     PropertyEventProvider *provider = playerData->Provider();
     MILO_ASSERT(provider, 0x7F);
-    unk5c = provider->Property(score)->Int();
+    auto _tmp0 = provider->Property(score)->Int();
+    unk5c = _tmp0;
     auto missionIndex = provider->Property(challenge_mission_index)->Int();
     unk60 = missionIndex + numDisplay;
     unk68 = provider->Property(side)->Int();

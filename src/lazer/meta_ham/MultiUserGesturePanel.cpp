@@ -337,11 +337,11 @@ void MultiUserGesturePanel::UpdateNavLists(int player) {
     SkeletonChooser *skeletonChooser = TheHamUI.GetShellInput()->GetSkeletonChooser();
     MILO_ASSERT(skeletonChooser, 0xa0);
 
-    HamPlayerData *pPlayerData = TheGameData->Player(player);
-    int trackingID = pPlayerData->GetSkeletonTrackingID();
     SkeletonSide playerSide = skeletonChooser->GetPlayerSide(player);
-
     int sideIdx = playerSide - 1;
+    HamPlayerData *pPlayerData = TheGameData->Player(player);
+
+    int trackingID = pPlayerData->GetSkeletonTrackingID();
 
     // Get nav lists for this player's side using array indexing
     // Array is [mLeftNavList1, mRightNavList1, mLeftNavList2, mRightNavList2]
@@ -360,7 +360,8 @@ void MultiUserGesturePanel::UpdateNavLists(int player) {
     }
 
     int offset2 = (sideIdx + 0x17) * 4;
-    HamNavList *navList2 = *reinterpret_cast<HamNavList **>(reinterpret_cast<u8 *>(this) + offset2);
+    auto _tmp3 = reinterpret_cast<u8 *>(this);
+    HamNavList *navList2 = *reinterpret_cast<HamNavList **>(_tmp3 + offset2);
 
     if (navList2) {
         void **ptr = reinterpret_cast<void **>(reinterpret_cast<u8 *>(navList2) + 4);

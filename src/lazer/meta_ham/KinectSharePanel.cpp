@@ -110,9 +110,9 @@ void KinectSharePanel::ConvertImages() {
     mTex->LockBitmap(bitmapa0, true);
     EndianSwapBitmap(bitmapa0);
     bitmap80.Create(bitmapa0, 24, 1, nullptr);
+    int bpp = bitmap80.Bpp() >> 3;
     int w = bitmap80.Width();
     int h = bitmap80.Height();
-    int bpp = bitmap80.Bpp() >> 3;
     int pixelBytes = bitmap80.PixelBytes();
     char *pixels = (char *)bitmap80.Pixels();
     mBuf = MemAlloc(pixelBytes, __FILE__, 0x3B, "JpegWriter");
@@ -124,6 +124,7 @@ void KinectSharePanel::ConvertImages() {
         mImagePostParams.FullImageByteCount = iref;
         mImagePostParams.pFullImage = (const BYTE *)mBuf;
     }
+    auto _tmp2 = bitmapa0.Height();
     {
         static int _x = MemFindHeap("physical");
         MemHeapTracker mem(_x);
@@ -151,7 +152,7 @@ void KinectSharePanel::ConvertImages() {
             "KinectSharePanel: preview bitmap = 0x%08x %d %d %d 0x%08x\n",
             mPreviewBuf,
             bitmapa0.Width(),
-            bitmapa0.Height(),
+            _tmp2,
             bitmapa0.RowBytes(),
             TheDxRnd.D3DFormatForBitmap(bitmapa0)
         );

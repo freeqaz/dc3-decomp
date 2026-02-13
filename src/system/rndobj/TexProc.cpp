@@ -161,10 +161,10 @@ bool TexProc::CheckParams(DataArray *a, bool b) {
         case kDataProperty: {
             DataNode eval = a->Evaluate(i);
             if (eval.Type() != kDataFloat) {
-                if (eval.Type() == kDataArray) {
-                    b7 &= CheckParams(eval.Array(), false);
-                } else {
+                if (!(eval.Type() == kDataArray)) {
                     b7 = false;
+                } else {
+                    b7 &= CheckParams(eval.Array(), false);
                 }
             }
             break;

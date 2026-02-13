@@ -69,9 +69,9 @@ def parse_args() -> argparse.Namespace:
         help="Disable diagnosis-guided filtering (try all patterns blindly)",
     )
     parser.add_argument(
-        "--compose",
+        "--no-compose",
         action="store_true",
-        help="Enable two-step pattern composition (variable_extraction+declaration_reorder, etc.)",
+        help="Disable two-step pattern composition",
     )
     parser.add_argument(
         "--list-patterns",
@@ -151,7 +151,7 @@ def main():
 
         # Generate variants (after diagnosis so filtering can use it)
         from .composer import _DEFAULT_PAIRS
-        compose_pairs = _DEFAULT_PAIRS if args.compose else None
+        compose_pairs = None if args.no_compose else _DEFAULT_PAIRS
         variants = list(generate_variants(ctx, patterns, args.max_variants, compose_pairs=compose_pairs))
         print(f"Generated {len(variants)} variants", file=sys.stderr)
 

@@ -332,9 +332,9 @@ int Campaign::NumCampaignSongMoves(Symbol s) {
 }
 
 void Campaign::ConfigureCampaignData(DataArray *i_pConfig) {
-    static Symbol venue("venue");
     static Symbol crew("crew");
     static Symbol songs("songs");
+    static Symbol venue("venue");
 
     mIntroVenue = gNullStr;
     mIntroCrew = gNullStr;
@@ -348,7 +348,8 @@ void Campaign::ConfigureCampaignData(DataArray *i_pConfig) {
     DataArray *pSongArray = pIntroArray->FindArray(songs);
     MILO_ASSERT(pSongArray, 0x99);
     MILO_ASSERT(pSongArray->Size() > 1, 0x9a);
-    int numSongs = pSongArray->Size() - 1;
+    auto _tmp5 = pSongArray->Size();
+    int numSongs = _tmp5 - 1;
     for (int i = 0; i < numSongs; i++) {
         DataArray *curArr = pSongArray->Array(i + 1);
         Symbol s1 = curArr->Sym(0);

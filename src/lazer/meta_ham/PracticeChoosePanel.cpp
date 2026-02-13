@@ -207,7 +207,8 @@ int PracticeChoosePanel::NumData() const { return mStepMoves.size(); }
 
 void PracticeChoosePanel::InitData(RndDir *dir) {
     TheGame->GetMaster()->SetMaps();
-    if (unk4c != TheGameData->GetSong()
+    auto _tmp1 = TheGameData->GetSong();
+    if (unk4c != _tmp1
         || unk50
             != DifficultyToSym(
                 TheGameData->Player(TheHamProvider->Property("ui_nav_player")->Int())
@@ -232,9 +233,9 @@ void PracticeChoosePanel::InitData(RndDir *dir) {
     }
     MILO_ASSERT(section, 0x51);
     static Symbol learn("learn");
-    static Symbol review("review");
-    int stepNum = 1;
     auto &steps = section->Steps();
+    int stepNum = 1;
+    static Symbol review("review");
     FOREACH (it, steps) {
         if (it->mType == learn || it->mType == review) {
             StepMoves innerSteps;

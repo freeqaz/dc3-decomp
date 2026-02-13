@@ -132,7 +132,8 @@ void SpotlightDrawer::DrawAdditional(
     MILO_ASSERT(spotIter != spotEnd, 0x298);
     for (; spotIter != spotEnd; ++spotIter) {
         Spotlight *sl = spotIter->unk4;
-        FOREACH (it, sl->GetAdditionalObjects()) {
+        auto _tmp0 = sl->GetAdditionalObjects();
+        FOREACH (it, _tmp0) {
             RndDrawable *add = *it;
             MILO_ASSERT(add != sl, 0x2a3);
             if (add != sl)

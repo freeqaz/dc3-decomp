@@ -391,7 +391,8 @@ int SongStatusMgr::GetBestStars(int songID, bool &bref, Difficulty d) const {
     bref = false;
     if (HasSongStatus(songID)) {
         const SongStatus &status = GetSongStatus(songID);
-        for (; d != kNumDifficulties; d = DifficultyOneHarder(d)) {
+        auto _tmp1 = DifficultyOneHarder(d);
+        for (; d != kNumDifficulties; d = _tmp1) {
             int curStars = status.mStatusData[d].mStars;
             if (curStars >= bestStars) {
                 bref = status.mStatusData[d].unk10;

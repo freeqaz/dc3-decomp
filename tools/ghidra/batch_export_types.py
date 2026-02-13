@@ -2,10 +2,15 @@
 """
 Batch export Ghidra-inferred structure types into struct_db.sqlite.
 
-Three-step pipeline:
-1. Seed: Create structures in Ghidra DTM from struct_db + apply this types from map file
-2. Extract: Batch-decompile functions to trigger type inference, collect enriched structures
-3. Import: Merge Ghidra-inferred structures into struct_db (only new classes)
+Seed pipeline (default — demangled signatures):
+1. Parse map → all CODE-section symbols (~17,700)
+2. bulk_create_functions → create missing function objects (~6,000 new)
+3. apply_demangled_signatures → full signatures from mangled names (~14,000+)
+4. create_structures → supplementary struct_db types (~2,100)
+
+Extract pipeline:
+5. Batch-decompile functions to trigger type inference, collect enriched structures
+6. Merge Ghidra-inferred structures into struct_db (only new classes)
 
 Requires the pyghidra-mcp service to be running:
     ./tools/ghidra/pyghidra-service.sh start
@@ -14,8 +19,11 @@ Usage:
     # Full pipeline: seed + extract
     python3 tools/ghidra/batch_export_types.py --seed --extract
 
-    # Seed only (fast — creates structures + sets this types)
+    # Seed only (fast — creates functions + applies demangled signatures)
     python3 tools/ghidra/batch_export_types.py --seed
+
+    # Legacy seed (old pipeline: create_structures + apply_this_types)
+    python3 tools/ghidra/batch_export_types.py --seed --legacy
 
     # Extract only (assumes already seeded)
     python3 tools/ghidra/batch_export_types.py --extract --max-functions 500
@@ -223,19 +231,192 @@ def parse_map_file_for_class_methods(map_file: Path) -> dict[str, list[str]]:
     return dict(class_methods)
 
 
+def parse_map_file_for_all_code_symbols(map_file: Path) -> list[dict]:
+    """Parse map file to extract ALL CODE-section symbols with mangled names and addresses.
+
+    Returns every symbol from CODE sections (not just class methods), suitable for
+    bulk function creation and demangled signature application.
+
+    Returns:
+        [{"mangled": str, "address": str}, ...] where address is hex without 0x prefix
+    """
+    if not map_file.exists():
+        logger.warning(f"Map file not found: {map_file}")
+        return []
+
+    logger.info(f"Parsing map file for all CODE symbols: {map_file}")
+
+    # Step 1: Parse section header to find CODE sections
+    section_header_pattern = re.compile(
+        r"^\s*([0-9a-fA-F]{4}):[0-9a-fA-F]+\s+[0-9a-fA-F]+H\s+(\S+)\s+(\S+)"
+    )
+    code_sections = set()
+    in_section_header = False
+
+    with open(map_file, "r", encoding="utf-8", errors="replace") as f:
+        for line in f:
+            if "Start" in line and "Length" in line and "Name" in line and "Class" in line:
+                in_section_header = True
+                continue
+            if in_section_header and (not line.strip() or "Publics by Value" in line):
+                in_section_header = False
+                if "Publics by Value" in line:
+                    break
+
+            if in_section_header:
+                match = section_header_pattern.match(line)
+                if match:
+                    section_class = match.group(3)
+                    if section_class == "CODE":
+                        code_sections.add(match.group(1))
+
+    if not code_sections:
+        logger.warning("No CODE sections found in map file")
+        code_sections = None
+
+    # Step 2: Parse "Publics by Value" section
+    symbol_pattern = re.compile(
+        r"^\s*([0-9a-fA-F]{4}):[0-9a-fA-F]+\s+(\S+)\s+([0-9a-fA-F]{8})"
+    )
+
+    symbols = []
+    in_publics = False
+
+    with open(map_file, "r", encoding="utf-8", errors="replace") as f:
+        for line in f:
+            if "Publics by Value" in line:
+                in_publics = True
+                continue
+            if not in_publics:
+                continue
+
+            match = symbol_pattern.match(line)
+            if match:
+                section_num = match.group(1)
+                mangled = match.group(2)
+                address = match.group(3)
+
+                # Filter to CODE sections only
+                if code_sections is not None and section_num not in code_sections:
+                    continue
+
+                symbols.append({"mangled": mangled, "address": address})
+
+    logger.info(f"Parsed {len(symbols)} CODE-section symbols from map file")
+    return symbols
+
+
 def seed_ghidra_dtm(
     client: MCPClient,
     db_path: Path,
     map_file: Path,
     dry_run: bool = False,
+    legacy: bool = False,
 ) -> None:
-    """Seed Ghidra's DTM with structures from struct_db and apply this types from map file.
+    """Seed Ghidra's DTM with DC3 type info using demangled signatures.
 
-    Step 1: Create structures in Ghidra DTM from struct_db
-    Step 2: Apply this pointer types to member functions using map file
+    New pipeline (default):
+        Step 1: Parse map → all CODE-section symbols
+        Step 2: bulk_create_functions → create missing function objects
+        Step 3: apply_demangled_signatures → full signatures from mangled names
+        Step 4: create_structures → supplementary struct_db types
+
+    Legacy pipeline (--legacy):
+        Step 1a: create_structures from struct_db
+        Step 1b: apply_this_types from map file
     """
+    if legacy:
+        _seed_ghidra_dtm_legacy(client, db_path, map_file, dry_run)
+        return
+
     print("\n" + "=" * 70)
-    print("Step 1: Seed Ghidra DTM with DC3 Type Info")
+    print("Seed Ghidra DTM — Demangled Signature Pipeline")
+    print("=" * 70)
+
+    # Step 1: Parse map file for all CODE symbols
+    print("\nStep 1: Parsing map file for CODE symbols...")
+    all_symbols = parse_map_file_for_all_code_symbols(map_file)
+    if not all_symbols:
+        print("ERROR: No symbols found in map file")
+        return
+
+    all_addresses = [s["address"] for s in all_symbols]
+    # Deduplicate addresses (multiple symbols can map to same address via ICF)
+    unique_addresses = list(dict.fromkeys(all_addresses))
+    print(f"    Found {len(all_symbols)} symbols at {len(unique_addresses)} unique addresses")
+
+    # Step 2: Bulk create functions
+    print(f"\nStep 2: Creating functions at {len(unique_addresses)} addresses...")
+    if not dry_run:
+        result = client.bulk_create_functions(unique_addresses)
+        print(f"    Created: {result['created']}")
+        print(f"    Already exist: {result['already_exist']}")
+        print(f"    Failed: {result['failed']}")
+    else:
+        print("    [DRY RUN] Would create functions")
+
+    # Step 3: Apply demangled signatures
+    # Filter to ?-prefixed symbols (MSVC mangled names with type info)
+    mangled_symbols = [s for s in all_symbols if s["mangled"].startswith("?")]
+    print(f"\nStep 3: Applying demangled signatures to {len(mangled_symbols)} symbols...")
+    if not dry_run:
+        result = client.apply_demangled_signatures(mangled_symbols)
+        print(f"    Applied: {result['applied']}")
+        print(f"    Partial: {result['partial']}")
+        print(f"    No function: {result['no_function']}")
+        print(f"    Demangle failed: {result['demangle_failed']}")
+        print(f"    Skipped (non-function): {result['skipped']}")
+    else:
+        print("    [DRY RUN] Would apply demangled signatures")
+
+    # Step 4: Create supplementary structures from struct_db
+    print("\nStep 4: Creating supplementary structures from struct_db...")
+    with StructDB(str(db_path)) as db:
+        all_classes = db.list_classes()
+
+    header_classes = [c for c in all_classes if c["file_path"] != "ghidra"]
+
+    class_defs = []
+    with StructDB(str(db_path)) as db:
+        for cls in header_classes:
+            info = db.get_class_info(cls["name"])
+            if not info:
+                continue
+
+            members = []
+            for m in info["members"]:
+                members.append({
+                    "name": m["name"],
+                    "type_str": m["type_str"],
+                    "offset": m["offset"],
+                    "size": 4,
+                })
+
+            class_defs.append({
+                "name": cls["name"],
+                "members": members,
+                "total_size": 0,
+            })
+
+    print(f"    Creating {len(class_defs)} structures from struct_db...")
+    if not dry_run:
+        result = client.create_structures(class_defs)
+        print(f"    Created: {result['created']}, Errors: {result['errors']}")
+    else:
+        print("    [DRY RUN] Would create structures")
+
+    print("\nSeeding complete!")
+
+
+def _seed_ghidra_dtm_legacy(
+    client: MCPClient,
+    db_path: Path,
+    map_file: Path,
+    dry_run: bool = False,
+) -> None:
+    """Legacy seeding pipeline: create_structures + apply_this_types."""
+    print("\n" + "=" * 70)
+    print("Step 1: Seed Ghidra DTM with DC3 Type Info (Legacy)")
     print("=" * 70)
 
     # Load all classes from struct_db
@@ -435,6 +616,11 @@ def main():
         action="store_true",
         help="Step 2-3: Extract structures by decompiling + import to struct_db",
     )
+    parser.add_argument(
+        "--legacy",
+        action="store_true",
+        help="Use legacy seed pipeline (create_structures + apply_this_types only)",
+    )
 
     # Extract options
     parser.add_argument(
@@ -504,6 +690,7 @@ def main():
             db_path=args.db,
             map_file=args.map_file,
             dry_run=args.dry_run,
+            legacy=args.legacy,
         )
 
     if args.extract:

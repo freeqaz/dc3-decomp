@@ -459,7 +459,8 @@ void RndText::FontMap::AllocateMeshes(RndText *text, int fixedLength) {
                 RndTransformable::kConstraintParentWorld, nullptr, false
             );
             if (mFont) {
-                mesh->SetMat(mFont->Mat(i));
+                auto _tmp2 = mFont->Mat(i);
+                mesh->SetMat(_tmp2);
             }
             mesh->SetShowing(page.displayableChars > 0);
             if (fixedLength == 0) {
@@ -484,7 +485,7 @@ void RndText::FontMap::CleanupSyncMeshes() {
         Page &page = *(mPages[i]);
         RndMesh *mesh = page.mesh;
         if (mesh) {
-            while (page.unk8 != mesh->Verts().begin()) {
+            while (mesh->Verts().begin() != page.unk8) {
                 RndMesh::Vert *old = page.unk8++;
                 old->pos.x = 0.0f;
                 old->pos.y = 0.0f;

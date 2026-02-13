@@ -449,8 +449,8 @@ void BustAMovePanel::AnimateFlashcard(int index) {
     Hmx::Color color = uiColor->GetColor();
 
     // Set flashcard.mat texture
-    RndMat *flashcardMat = DataDir()->Find<RndMat>("flashcard.mat", true);
     String texName(MakeString("flashcard%i.tex", index));
+    RndMat *flashcardMat = DataDir()->Find<RndMat>("flashcard.mat", true);
     RndTex *tex = DataDir()->Find<RndTex>(texName.c_str(), true);
     flashcardMat->SetDiffuseTex(tex);
 
@@ -476,9 +476,11 @@ void BustAMovePanel::AnimateFlashcard(int index) {
     slotBgMat->SetColor(color.red, color.green, color.blue);
 
     // Set flashcard_slot label text
-    String slotLblName(MakeString("flashcard_slot%i.lbl", index));
+    auto _tmp4 = MakeString("flashcard_slot%i.lbl", index);
+    String slotLblName(_tmp4);
     HamLabel *slotLabel = DataDir()->Find<HamLabel>(slotLblName.c_str(), true);
-    slotLabel->SetTextToken(GetMoveNameData(index)->Sym(1));
+    auto _tmp0 = GetMoveNameData(index)->Sym(1);
+    slotLabel->SetTextToken(_tmp0);
 
     // Play capture animation
     RndPropAnim *captureAnim =
@@ -538,9 +540,10 @@ int BustAMovePanel::RepsToNextPhrase() {
         TheMaster->GetAudio()->GetCurrLoopBeats(beat, loopEnd);
     }
 
+    auto _tmp2 = mSongStructure.begin();
+    int size = (int)((mSongStructure.end() - _tmp2));
     int *data = &mSongStructure[0];
     unsigned int count = 0;
-    int size = (int)((mSongStructure.end() - mSongStructure.begin()));
     int repsInPhrase;
 
     if (size != 0) {
@@ -581,21 +584,22 @@ calc_total:;
 }
 
 void BustAMovePanel::SetFlashcardImage(int side, int index, int i3) {
+    RndTex *flashcardTex;
+    RndTex *blankTex = DataDir()->Find<RndTex>("blank.tex");
+    RndTex *bgTex;
+
     RndMat *flashcardMat =
         mBAMColumns[side]->Find<RndMat>(MakeString("flashcard%d.mat", index));
     RndMat *flashcardBgMat =
         mBAMColumns[side]->Find<RndMat>(MakeString("flashcard_background%d.mat", index));
-    RndTex *blankTex = DataDir()->Find<RndTex>("blank.tex");
-
-    RndTex *flashcardTex;
-    RndTex *bgTex;
     if (i3 >= 0) {
         flashcardTex = DataDir()->Find<RndTex>(MakeString("flashcard%i.tex", i3));
     } else if (i3 == -2) {
         flashcardTex = blankTex;
         bgTex = mBAMColumns[side]->Find<RndTex>("blank_bustamove.tex");
     } else {
-        flashcardTex = DataDir()->Find<RndTex>("blank.tex");
+        auto _tmp1 = DataDir()->Find<RndTex>("blank.tex");
+        flashcardTex = _tmp1;
         bgTex = flashcardTex;
     }
 
@@ -640,8 +644,8 @@ void BustAMovePanel::OnBeat() {
 
     // Deduplicate beat events — only process each beat number once
     Symbol beat("beat");
-    static int sLastBeat = -1;
     int currentBeat = TheHamProvider->Property(beat, true)->Int();
+    static int sLastBeat = -1;
     if (currentBeat == sLastBeat)
         return;
     sLastBeat = currentBeat;
@@ -1397,7 +1401,8 @@ void BustAMovePanel::OnBeat() {
             float *scores = (float *)&mPlayerScoreLeft;
             do {
                 MoveRating rating = GetMoveRating(*scores);
-                ShowMoveRating(rating, TheGameData->Player(player)->Side());
+                auto _tmp0 = TheGameData->Player(player)->Side();
+                ShowMoveRating(rating, _tmp0);
                 if (rating != kMoveRatingSuperPerfect) {
                     if (player != mMoveCreators[mFlashcardSlots.front()]) {
                         ((bool *)&mFlawlessFlags)[player] = false;
@@ -1456,7 +1461,7 @@ void BustAMovePanel::SetUpSongStructure(Symbol s) {
     BustAMoveData *bamData =
         TheGame->GetMoveDir()->Find<BustAMoveData>("BustAMoveData.bam", false);
     if (bamData != NULL) {
-        for (int i = 0; i < (int)bamData->mPhrases.size(); i++) {
+        for (int i = 0; (unsigned long)i < (int)bamData->mPhrases.size(); i++) {
             for (int j = 0; j < bamData->mPhrases[i].count; j++) {
                 mSongStructure.push_back(bamData->mPhrases[i].bars);
             }
@@ -1470,7 +1475,7 @@ void BustAMovePanel::SetUpSongStructure(Symbol s) {
         } while (reps != 0);
         TheKnownIssues.Display(String("bustamove_wrong_song"), 5.0f);
     }
-    MILO_ASSERT(mSongStructure.size() >= 2, 0x62C);
+    MILO_ASSERT(mSongStructure.size() > 1, 0x62C);
     int *data = &mSongStructure[0];
     int firstVal = *data;
     mRepsRemaining = firstVal + 4;
@@ -1547,7 +1552,7 @@ void BustAMovePanel::Poll() {
     }
     int forceSkelIdx = skelIdx;
     mRecorder->unk44 = skelIdx;
-    if (mState == kBAMState_Recording || mState == kBAMState_CountIn) {
+    if (mState == kBAMState_Recording || kBAMState_CountIn == mState) {
         unk58 = skelIdx;
     }
 

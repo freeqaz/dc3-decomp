@@ -118,8 +118,9 @@ bool NavListSort::SetHighlightID(DataArray *a) {
         return true;
     }
     const std::list<NavListSortNode *> &grandChildren = (*headerIt)->Children();
+    auto _tmp9 = grandChildren.begin();
     auto itemIt =
-        std::find_if(grandChildren.begin(), grandChildren.end(), NodeFind(a->Sym(2)));
+        std::find_if(_tmp9, grandChildren.end(), NodeFind(a->Sym(2)));
     if (itemIt == grandChildren.end())
         return false;
     if (arraySize == 3) {

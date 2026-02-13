@@ -448,6 +448,45 @@ class MCPClient:
             "class_methods": class_methods,
         })
 
+    def bulk_create_functions(self, addresses: list[str]) -> dict:
+        """Create Function objects at addresses where Ghidra auto-analysis missed them.
+
+        Args:
+            addresses: List of hex address strings without 0x prefix
+
+        Returns:
+            {"created": int, "already_exist": int, "failed": int}
+        """
+        return self.call_tool("bulk_create_functions", {
+            "binary_name": self.binary,
+            "addresses": addresses,
+        }, timeout=600)
+
+    def apply_demangled_signatures(self, symbols: list[dict], batch_size: int = 2000) -> dict:
+        """Apply full function signatures by demangling MSVC mangled names.
+
+        Batches large requests to avoid timeouts.
+
+        Args:
+            symbols: List of {"mangled": str, "address": str} dicts
+            batch_size: Number of symbols per batch (default 2000)
+
+        Returns:
+            Aggregated {"applied": int, "partial": int, "no_function": int, "demangle_failed": int, "skipped": int}
+        """
+        totals = {"applied": 0, "partial": 0, "no_function": 0, "demangle_failed": 0, "skipped": 0}
+
+        for i in range(0, len(symbols), batch_size):
+            batch = symbols[i:i + batch_size]
+            result = self.call_tool("apply_demangled_signatures", {
+                "binary_name": self.binary,
+                "symbols": batch,
+            }, timeout=600)
+            for key in totals:
+                totals[key] += result.get(key, 0)
+
+        return totals
+
     def list_binaries(self) -> dict:
         """List all project binaries."""
         return self.call_tool("list_project_binaries", {})

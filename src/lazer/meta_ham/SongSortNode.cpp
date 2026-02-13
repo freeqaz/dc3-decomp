@@ -259,9 +259,9 @@ bool SongSortNode::IsFake() const {
 
 void SongSortNode::Text(UIListLabel *ull, UILabel *ul) const {
     static Symbol score("score");
-    static Symbol disc("disc");
-    static Symbol dlc("dlc");
     const Symbol shortname = unk_0x48->ShortName();
+    static Symbol dlc("dlc");
+    static Symbol disc("disc");
     if (ull->Matches("song")) {
         AppLabel *app_label = dynamic_cast<AppLabel *>(ul);
         MILO_ASSERT(app_label, 513);
@@ -314,7 +314,8 @@ void SongSortNode::Text(UIListLabel *ull, UILabel *ul) const {
         if (!IsCoverSong(shortname)) {
             ul->SetTextToken(gNullStr);
         } else {
-            ul->SetTextToken(ull->GetDefaultText());
+            auto _tmp1 = ull->GetDefaultText();
+            ul->SetTextToken(_tmp1);
         }
     } else if (ull->Matches("artist")) {
         if (!TheAccomplishmentMgr->IsUnlockableAsset(unk_0x48->ShortName())) {

@@ -73,19 +73,19 @@ void ChooseModeProvider::UpdateList(bool b) {
 
 RndMat *ChooseModeProvider::Mat(int, int i_iData, UIListMesh *mesh) const {
     MILO_ASSERT_RANGE(i_iData, 0, NumData(), 0x5d);
-    static Symbol perform("perform");
-    static Symbol perform_legacy("perform_legacy");
     static Symbol practice("practice");
+    static Symbol perform_legacy("perform_legacy");
+    static Symbol holla_back("holla_back");
+    static Symbol rhythm_battle("rhythm_battle");
     static Symbol dance_battle("dance_battle");
-    static Symbol custom_party("custom_party");
-    static Symbol crew_showdown("crew_showdown");
-    static Symbol start_the_party("start_the_party");
-    static Symbol rtnbldrproto("rtnbldrproto");
     static Symbol namethatdance("namethatdance");
     static Symbol concentration("concentration");
-    static Symbol rhythm_battle("rhythm_battle");
-    static Symbol holla_back("holla_back");
+    static Symbol crew_showdown("crew_showdown");
+    static Symbol perform("perform");
+    static Symbol custom_party("custom_party");
+    static Symbol rtnbldrproto("rtnbldrproto");
     static Symbol bustamove("bustamove");
+    static Symbol start_the_party("start_the_party");
 
     Symbol dataSym = DataSymbol(i_iData);
 
@@ -99,7 +99,7 @@ RndMat *ChooseModeProvider::Mat(int, int i_iData, UIListMesh *mesh) const {
         return mesh->DefaultMat();
     }
     if (mesh->Matches("icon_2p")) {
-        if (dataSym == namethatdance || dataSym == dance_battle || dataSym == concentration || dataSym == rhythm_battle) {
+        if (dataSym == namethatdance || dataSym == dance_battle || dataSym == concentration || rhythm_battle == dataSym) {
             return nullptr;
         }
         return mesh->DefaultMat();

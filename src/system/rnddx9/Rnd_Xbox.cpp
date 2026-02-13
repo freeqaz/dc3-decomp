@@ -572,8 +572,8 @@ bool DxRnd::CanModal(Debug::ModalType t) {
 void DxRnd::ModalDraw(Debug::ModalType t, const char *cc) {
     bool wasSuspended = unk3f4;
     Resume();
-    D3DSurface *savedRenderTarget = D3DDevice_GetRenderTarget(mD3DDevice, 0);
     D3DSurface *savedStencilSurface = D3DDevice_GetDepthStencilSurface(mD3DDevice);
+    D3DSurface *savedRenderTarget = D3DDevice_GetRenderTarget(mD3DDevice, 0);
     D3DDevice_SetRenderTarget_External(mD3DDevice, 0, mBackBuffer);
     D3DDevice_SetDepthStencilSurface(mD3DDevice, 0);
     Hmx::Color color(0, 0.1f, 0.5f, 0);

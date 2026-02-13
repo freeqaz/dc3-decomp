@@ -111,9 +111,9 @@ void DxTex::ResetSurfaces() {
         unk94[i] = nullptr;
     }
 
-    // Delete main texture for certain types (rendered with mips, movie linear, scratch, device)
-    if (((mType & kRendered) && mNumMips) || ((mType & kMovie) && (mType & kRegularLinear))
-        || (mType & kScratch) || (mType & kDeviceTexture)) {
+    // Delete main texture for certain types
+    if (((mType & kRendered) && mNumMips) || ((mType & kMovie) && (mType & 0x20))
+        || (mType & kScratch) || (mType & kRegularLinear)) {
         TheDxRnd.AutoDelete(mTexture);
         mTexture = nullptr;
     }

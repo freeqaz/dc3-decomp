@@ -427,7 +427,8 @@ int CampaignProgress::GetSongStarsEarned(Symbol era, Symbol song) const {
         if (pEraSongProgress) {
             stars = pEraSongProgress->GetStarsEarned();
         }
-        stars = Max(stars, 0);
+        auto _tmp0 = Max(stars, 0);
+        stars = _tmp0;
     }
     return stars;
 }

@@ -31,8 +31,8 @@ void Splash::Suspend() {
     MILO_ASSERT(MainThread(), 0xcf);
     if (++unk60 <= 1) {
         if (mThreaded) {
-            if (SetMutableState(SplashState::s1)) {
-                WaitForState(SplashState::s2);
+            if (SetMutableState(s1)) {
+                WaitForState(s2);
                 TheNgRnd.Suspend();
                 if (mCurrentMovie != NULL) {
                     mCurrentMovie->SetShowing(true);
@@ -49,7 +49,7 @@ void Splash::Suspend() {
                 }
             }
         } else {
-            SetMutableState(SplashState::s2);
+            SetMutableState(s2);
         }
 
         unk200.Reset();
@@ -62,15 +62,15 @@ void Splash::Resume() {
         MILO_ASSERT(unk60 == 0, 0x264);
         if (mThreaded != 0) {
             // Threaded mode: resume rendering and signal render thread
-            if (SetMutableState(SplashState::s3)) {
+            if (SetMutableState(s3)) {
                 if (mCurrentMovie != NULL) {
                     mCurrentMovie->SetShowing(false);
                     mCurrentMovie->GetMovie().UnlockThread();
                 }
-                MILO_ASSERT(SetMutableState(SplashState::kResuming), 0x279);
-                WaitForState(SplashState::kResumed);
+                MILO_ASSERT(SetMutableState(kResuming), 0x279);
+                WaitForState(kResumed);
             } else {
-                MILO_ASSERT(mState == SplashState::kWaitingForTerminating, 0x285);
+                MILO_ASSERT(mState == kWaitingForTerminating, 0x285);
                 if (mCurrentMovie != NULL) {
                     mCurrentMovie->SetShowing(false);
                     mCurrentMovie->GetMovie().UnlockThread();
@@ -78,7 +78,7 @@ void Splash::Resume() {
             }
         } else {
             // Non-threaded mode: resume drawing immediately
-            if (SetMutableState(SplashState::kResumed) == 0)
+            if (SetMutableState(kResumed) == 0)
                 return;
             unk5c = 0;
             Draw();

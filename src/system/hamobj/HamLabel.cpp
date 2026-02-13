@@ -99,7 +99,8 @@ void HamLabel::Poll() {
         SetTokenFmt(unk174, LocalizeSeparatedInt(0, TheLocale));
         if (f3 < ui_ms) {
             unk168.clear();
-            TheUI->Handle(HamLabelCountDoneMsg(this), false);
+            auto _tmp1 = HamLabelCountDoneMsg(this);
+            TheUI->Handle(_tmp1, false);
         }
     }
     UpdateHandler();

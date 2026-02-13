@@ -84,6 +84,15 @@ Configured in `.mcp.json`. The MCP server runs on **port 8000** (default) using 
 | `list_cross_references` | Find xrefs to/from function or address |
 | `gen_callgraph` | Generate mermaid.js call graph |
 
+### Type Seeding Tools
+
+| Tool | Description |
+|------|-------------|
+| `bulk_create_functions` | Create function objects at addresses where auto-analysis missed them |
+| `apply_demangled_signatures` | Apply full signatures (CC, return type, all params) from MSVC mangled names |
+| `create_structures` | Create struct types in DTM from struct_db definitions |
+| `apply_this_types` | (Legacy) Set `this*` parameter only on member functions |
+
 ### Binary Inspection
 
 | Tool | Description |
@@ -161,6 +170,51 @@ export GHIDRA_INSTALL_DIR=/opt/ghidra           # Ghidra installation
 export GHIDRA_USER_HOME=/tmp/claude/ghidra_user # User settings/cache (writable!)
 ```
 
+## Type Seeding Pipeline
+
+Seeds Ghidra with type information from the linker map file, enabling the decompiler to show field names, calling conventions, and full parameter types instead of raw offsets.
+
+### Running the Pipeline
+
+```bash
+# New pipeline (recommended): bulk function creation + demangled signatures
+python3 tools/ghidra/batch_export_types.py --seed
+
+# Legacy pipeline: struct creation + this-pointer only
+python3 tools/ghidra/batch_export_types.py --seed --legacy
+
+# Full pipeline: seed + extract enriched types back to struct_db
+python3 tools/ghidra/batch_export_types.py --seed --extract
+```
+
+### What the Pipeline Does
+
+| Step | Tool | Effect |
+|------|------|--------|
+| 1. Parse map | local | Extracts ~79K CODE-section symbols from `ham_xbox_r.map` |
+| 2. Bulk create functions | `bulk_create_functions` | Creates ~27K function objects where auto-analysis missed them |
+| 3. Demangle signatures | `apply_demangled_signatures` | Applies full signatures to ~53K functions (CC, return type, all params) |
+| 4. Supplementary structs | `create_structures` | Creates ~2.1K struct layouts from struct_db |
+
+### Before/After
+
+| Metric | Before (legacy) | After (demangled) |
+|--------|-----------------|-------------------|
+| Functions in Ghidra | ~42,500 | ~69,400 |
+| Signatures applied | ~7,000 (this-only) | ~53,000 (full) |
+| "Function not found" rate | ~40% | ~0.01% |
+| Calling conventions set | 0 | ~53,000 |
+| Parameter types | `this*` only | All parameters |
+
+### When to Re-seed
+
+Re-run `--seed` after:
+- Importing a new binary into Ghidra
+- Restarting the pyghidra-mcp service with a fresh project
+- Updating struct_db with new header-sourced types
+
+The `--extract` step (batch decompilation) benefits from seeding — with full signatures, the decompiler produces much higher-quality inferred types.
+
 ## Troubleshooting
 
 ### Common Issues (v0.1.6+)
@@ -169,7 +223,7 @@ export GHIDRA_USER_HOME=/tmp/claude/ghidra_user # User settings/cache (writable!
 |-------|-------|-----|
 | "No load spec found" | XEX loader not installed | See [XEXLOADERWV.md](XEXLOADERWV.md) |
 | "Analysis incomplete" | Large binary still analyzing | Wait and retry |
-| "Function not found" | Binary is stripped | Use address from map file |
+| "Function not found" | Binary is stripped or no function object | Use address from map file; run `--seed` to bulk-create functions |
 | Binary shows as x86/DOS | XEX loader not working | Reinstall extension to `$GHIDRA_INSTALL_DIR/Extensions/` |
 | "Failed to init global cache" | `/var/tmp` not writable | Check permissions |
 | Service won't start on port 8000 | Port already in use | Check `lsof -i :8000`, kill conflicting process, or change port |

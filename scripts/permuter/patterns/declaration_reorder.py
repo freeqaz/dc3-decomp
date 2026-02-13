@@ -76,24 +76,56 @@ class DeclarationReorderPattern(Pattern):
 
 
 def _find_declaration_groups(ctx: FunctionContext) -> list[list[Node]]:
-    """Find groups of consecutive declaration statements in the body.
+    """Find groups of declaration statements in the body.
 
-    A group is broken when a non-declaration statement is encountered.
+    First pass: consecutive declarations (original behavior).
+    Second pass: sparse pairs — declarations separated by 1-2 non-declaration
+    statements. These are returned as 2-element groups for pairwise swapping.
+
     Only considers top-level statements in the function body.
     """
     groups: list[list[Node]] = []
     current: list[Node] = []
 
-    for stmt in ctx.statements:
+    # Pass 1: consecutive groups
+    consecutive_indices: set[int] = set()
+    for i, stmt in enumerate(ctx.statements):
         if stmt.type == "declaration":
             current.append(stmt)
         else:
             if len(current) >= 2:
                 groups.append(current)
+                # Track which declarations are already in consecutive groups
+                start = i - len(current)
+                for j in range(start, i):
+                    consecutive_indices.add(j)
             current = []
 
     if len(current) >= 2:
+        n = len(ctx.statements)
+        start = n - len(current)
+        for j in range(start, n):
+            consecutive_indices.add(j)
         groups.append(current)
+
+    # Pass 2: sparse pairs — find declarations separated by 1-2 statements
+    decl_indices = [
+        i for i, stmt in enumerate(ctx.statements)
+        if stmt.type == "declaration" and i not in consecutive_indices
+    ]
+
+    for ai, a_idx in enumerate(decl_indices):
+        for b_idx in decl_indices[ai + 1:]:
+            gap = b_idx - a_idx - 1
+            if gap < 1 or gap > 2:
+                continue
+            # Only pair if all intervening statements are non-declarations
+            all_non_decl = all(
+                ctx.statements[k].type != "declaration"
+                for k in range(a_idx + 1, b_idx)
+            )
+            if all_non_decl:
+                groups.append([ctx.statements[a_idx], ctx.statements[b_idx]])
 
     return groups
 

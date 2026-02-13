@@ -112,7 +112,7 @@ void DxRnd::SetViewport(const Viewport &v) {
 bool DxRnd::Offscreen() const {
     D3DSurface *back = BackBuffer();
     D3DSurface *target = D3DDevice_GetRenderTarget(mD3DDevice, 0);
-    bool ret = back != target;
+    bool ret = target != back;
     if (target) {
         D3DResource_Release(target);
     }

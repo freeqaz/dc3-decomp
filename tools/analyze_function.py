@@ -413,6 +413,25 @@ class MCPClient:
         self._request_id += 1
         return self._request_id
 
+    def _send_initialized_notification(self) -> None:
+        """Send initialized notification to complete MCP handshake."""
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json, text/event-stream",
+        }
+        if self.session_id:
+            headers["mcp-session-id"] = self.session_id
+
+        payload = {
+            "jsonrpc": "2.0",
+            "method": "notifications/initialized",
+        }
+
+        try:
+            requests.post(self.base_url, headers=headers, json=payload, timeout=10)
+        except requests.exceptions.RequestException:
+            pass  # Best-effort
+
     def _parse_sse(self, text: str) -> Dict[str, Any]:
         """Parse Server-Sent Events response to extract JSON data."""
         for line in text.split("\n"):
@@ -448,6 +467,7 @@ class MCPClient:
                 timeout=10
             )
             self.session_id = response.headers.get("mcp-session-id")
+            self._send_initialized_notification()
             return self.session_id is not None
         except requests.exceptions.RequestException as e:
             if not self.quiet:
@@ -487,7 +507,7 @@ class MCPClient:
         """
         result = self.call_tool("decompile_function", {
             "binary_name": self.binary_name,
-            "name": name_or_address
+            "name_or_address": name_or_address
         })
 
         # Check for JSON-RPC error

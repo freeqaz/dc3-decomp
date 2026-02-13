@@ -74,7 +74,7 @@ bool RndTexBlendController::IsValid() const {
     if (!mTex) {
         float refDist = mReferenceDistance;
         bool distValid;
-        if (!(mMinDistance > refDist) || !(refDist > mMaxDistance)) {
+        if (!(mMinDistance > refDist) || !(mMaxDistance < refDist)) {
             distValid = true;
         } else {
             distValid = false;

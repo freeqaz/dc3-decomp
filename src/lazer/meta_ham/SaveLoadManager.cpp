@@ -617,7 +617,7 @@ void SaveLoadManager::SetState(State newState) {
     // Cleanup resources based on current state before transition
     // WARNING: Control flow structure is critical for codegen - do not refactor
     if (mState <= kS_GlobalOptionsWrite) {
-        if (mState == kS_GlobalOptionsWrite) {
+        if (kS_GlobalOptionsWrite == mState) {
             // 0x3E: free mData unless going to Finish
             if ((newState != kS_Finish) && mData) {
                 MemFree(mData, "SaveLoadManager.cpp", 0x424);

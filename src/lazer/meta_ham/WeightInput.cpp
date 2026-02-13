@@ -70,8 +70,8 @@ float WeightInputProvider::GetPoundsForKgs(float kgs) const {
     HamProfile *pProfile = TheProfileMgr.GetActiveProfile(true);
     MILO_ASSERT(pProfile, 0xa7);
 
-    float result = 45.0f;
     float pounds = pProfile->GetPoundsFromKgs(kgs);
+    float result = 45.0f;
     if (pounds > 45.0f) {
         for (int i = 0; i < 80; i++) {
             result = i * 5.0f + 45.0f;

@@ -37,12 +37,12 @@ const char *Instarank::Str() const {
         return MakeString(
             Localize(ir_at_rank, nullptr, TheLocale), ord, among_group, mStr, score
         );
-    } else if (mToken == 'e') {
+    } else if (!(mToken == 'e')) {
+        MILO_NOTIFY("unrecognized instarank token: %c\n", mToken);
+        return "";
+    } else {
         return MakeString(
             Localize(ir_still_rank, nullptr, TheLocale), ord, among_group, mStr, score
         );
-    } else {
-        MILO_NOTIFY("unrecognized instarank token: %c\n", mToken);
-        return "";
     }
 }

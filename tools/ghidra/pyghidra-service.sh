@@ -28,13 +28,37 @@ export GHIDRA_INSTALL_DIR="$HOME/code/milohax/vmx128-research/ghidra-test/ghidra
 # Use writable temp directory for Ghidra user home (avoids read-only filesystem issues)
 export GHIDRA_USER_HOME="/tmp/claude/ghidra_user"
 
+_kill_port_users() {
+    # Kill any process listening on our port (catches orphaned Java/Python processes)
+    local pids
+    pids=$(lsof -ti ":$PORT" 2>/dev/null || true)
+    if [[ -n "$pids" ]]; then
+        echo "Killing orphaned processes on port $PORT: $pids"
+        echo "$pids" | xargs kill 2>/dev/null || true
+        sleep 1
+        # Force-kill any survivors
+        pids=$(lsof -ti ":$PORT" 2>/dev/null || true)
+        if [[ -n "$pids" ]]; then
+            echo "$pids" | xargs kill -9 2>/dev/null || true
+            sleep 0.5
+        fi
+    fi
+}
+
 cmd_start() {
+    # Check if already running via PID file
     if [[ -f "$PIDFILE" ]] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
         echo "Service already running (PID: $(cat "$PIDFILE"))"
         return 0
     fi
 
-    # Clear any stale locks
+    # Check if port is already in use (catches orphaned processes from previous runs)
+    if lsof -ti ":$PORT" > /dev/null 2>&1; then
+        echo "Warning: port $PORT already in use by orphaned process"
+        _kill_port_users
+    fi
+
+    # Clear any stale locks (safe now that orphaned processes are gone)
     rm -f "$PROJECT_PATH"/*.lock* 2>/dev/null || true
 
     # Ensure log directory exists
@@ -46,9 +70,9 @@ cmd_start() {
     echo "  Map file: $MAP_FILE"
     echo "  Log: $LOGFILE"
 
-    # Start service using upstream pyghidra-mcp repo (via uv run with pinned Python)
+    # Start service in a new process group (setsid) so we can kill the whole tree
     # --wait-for-analysis ensures map symbols are applied after the binary is fully analyzed
-    nohup uv run --python 3.10 --project "$PYGHIDRA_MCP" pyghidra-mcp \
+    setsid nohup uv run --python 3.10 --project "$PYGHIDRA_MCP" pyghidra-mcp \
         --transport streamable-http \
         --project-path "$PROJECT_PATH" \
         --map-file "$MAP_FILE" \
@@ -81,12 +105,18 @@ cmd_stop() {
         PID=$(cat "$PIDFILE")
         if kill -0 "$PID" 2>/dev/null; then
             echo "Stopping service (PID: $PID)..."
-            kill "$PID"
+            # Kill the entire process group (uv → python → java)
+            kill -- -"$PID" 2>/dev/null || kill "$PID" 2>/dev/null || true
             rm -f "$PIDFILE"
+            sleep 1
+            # Clean up anything still on the port
+            _kill_port_users
             echo "Stopped."
         else
             echo "PID file exists but process not running. Cleaning up."
             rm -f "$PIDFILE"
+            # Kill any orphaned processes still holding the port
+            _kill_port_users
         fi
     else
         # Try to find and kill any running instance
@@ -94,7 +124,9 @@ cmd_stop() {
         if [[ -n "$PIDS" ]]; then
             echo "Killing pyghidra-mcp processes: $PIDS"
             kill $PIDS 2>/dev/null || true
-        else
+        fi
+        _kill_port_users
+        if [[ -z "$PIDS" ]] && ! lsof -ti ":$PORT" > /dev/null 2>&1; then
             echo "Service not running."
         fi
     fi
@@ -103,15 +135,21 @@ cmd_stop() {
 cmd_status() {
     if [[ -f "$PIDFILE" ]] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
         echo "Service running (PID: $(cat "$PIDFILE"))"
-        echo "URL: http://$HOST:$PORT/mcp/v1"
-        
+        echo "URL: http://$HOST:$PORT/mcp"
+
         # Check if responsive
-        if curl -s "http://$HOST:$PORT/mcp/v1" > /dev/null 2>&1; then
+        if curl -s "http://$HOST:$PORT/mcp" > /dev/null 2>&1; then
             echo "Status: Ready"
         else
             echo "Status: Starting/Not responding"
         fi
     else
+        # Check for orphaned processes on the port
+        if lsof -ti ":$PORT" > /dev/null 2>&1; then
+            echo "Service not running (stale PID), but port $PORT is in use by orphaned process"
+            echo "Run '$0 stop' to clean up"
+            return 1
+        fi
         echo "Service not running."
         return 1
     fi

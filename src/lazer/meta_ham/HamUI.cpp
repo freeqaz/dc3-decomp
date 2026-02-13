@@ -633,8 +633,8 @@ void HamUI::UpdateUIOverlay() {
 }
 
 DataNode HamUI::OnMsg(const UITransitionCompleteMsg &msg) {
-    HAQManager::Print(HAQType::kHAQType_Screen);
-    HAQManager::Print(HAQType::kHAQType_Focus);
+    HAQManager::Print(kHAQType_Screen);
+    HAQManager::Print(kHAQType_Focus);
     Symbol s60(gNullStr);
     UIScreen *newScreen = msg.GetNewScreen();
     if (newScreen) {

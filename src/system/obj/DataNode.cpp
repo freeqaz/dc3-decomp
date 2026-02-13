@@ -613,7 +613,7 @@ bool DataNode::Equal(const DataNode &n, DataArray *a, bool warn) const {
         if (firstType == kDataString) {
             res = streq(first.UncheckedStr(), second.UncheckedStr());
         } else {
-            res = first.UncheckedInt() == second.UncheckedInt();
+            res = second.UncheckedInt() == first.UncheckedInt();
         }
         return res;
     } else {

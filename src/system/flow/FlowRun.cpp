@@ -50,7 +50,7 @@ INIT_REVS(2, 0)
 
 BEGIN_LOADS(FlowRun)
     LOAD_REVS(bs)
-    ASSERT_REVS(2, 0)
+    ASSERT_REVS(0, 2)
     LOAD_SUPERCLASS(FlowNode)
     if (d.rev < 2) {
         Hmx::Object *obj = LoadObjectFromMainOrDir(bs, Dir());
