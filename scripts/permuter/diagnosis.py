@@ -16,6 +16,7 @@ from scripts.diff_inspect import (
     compute_reg_swap_pairs,
     compute_offset_histogram,
     find_clusters,
+    categorize_replaces,
 )
 
 
@@ -79,6 +80,9 @@ def diagnose_baseline(objdiff_json: dict) -> Diagnosis:
             deletes=del_count,
         ))
 
+    # Replace categorization: symbol-reloc noise vs real structural
+    replace_noise, replace_real, _ = categorize_replaces(instrs)
+
     # Noise budget: how many diff_arg instructions are fully explained
     noise_total = sum(1 for ins in instrs if ins.get("match_type") == "diff_arg")
     noise_explained = 0
@@ -116,6 +120,8 @@ def diagnose_baseline(objdiff_json: dict) -> Diagnosis:
         clusters=clusters,
         noise_explained=noise_explained,
         noise_total=noise_total,
+        replace_noise=replace_noise,
+        replace_real=replace_real,
     )
 
 
@@ -139,9 +145,8 @@ def is_all_noise(diagnosis: Diagnosis) -> bool:
     if unexplained > 0:
         return False
 
-    # Check for real replaces
-    replace_count = diagnosis.match_counts.get("replace", 0)
-    if replace_count > 0:
+    # Check for real replaces (symbol-reloc noise doesn't count)
+    if diagnosis.replace_real > 0:
         return False
 
     return True
@@ -172,6 +177,13 @@ def format_diagnosis_summary(diagnosis: Diagnosis) -> str:
 
     # Clusters
     parts.append(f"{len(diagnosis.clusters)} clusters")
+
+    # Replaces
+    total_replaces = diagnosis.replace_noise + diagnosis.replace_real
+    if total_replaces > 0:
+        parts.append(
+            f"replaces {diagnosis.replace_real} real + {diagnosis.replace_noise} noise"
+        )
 
     # Noise
     if diagnosis.noise_total > 0:

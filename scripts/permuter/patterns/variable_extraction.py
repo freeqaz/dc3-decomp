@@ -39,9 +39,22 @@ class VariableExtractionPattern(Pattern):
     name = "variable_extraction"
 
     def relevant(self, diagnosis: Diagnosis) -> bool:
-        # Always relevant — 99.5% build success rate and highest avg delta (+1.91%)
-        # when winning. Wins come from extracting method chains and complex getters.
-        return True
+        # Skip when there are no actionable mismatches (pure noise/unfixable)
+        if diagnosis.diff_ops:
+            return True
+        if diagnosis.clusters:
+            return True
+        if diagnosis.replace_real > 0:
+            return True
+        # GPR swaps can sometimes be fixed by variable extraction changing alloc order
+        if any(p[0].startswith("r") or p[1].startswith("r")
+               for p in diagnosis.reg_swap_pairs):
+            return True
+        # Unexplained diff_arg might respond to extraction
+        unexplained = diagnosis.noise_total - diagnosis.noise_explained
+        if unexplained > 0:
+            return True
+        return False
 
     def generate(self, ctx: FunctionContext) -> Iterator[Variant]:
         counter = 0

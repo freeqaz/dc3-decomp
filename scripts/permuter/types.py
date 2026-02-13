@@ -50,6 +50,8 @@ class Diagnosis:
     clusters: list[Cluster]
     noise_explained: int
     noise_total: int
+    replace_noise: int = 0   # Symbol-reloc replaces (unfixable)
+    replace_real: int = 0    # Real structural replaces (actionable)
 
 
 @dataclass
@@ -88,3 +90,50 @@ class ScoreResult:
     build_success: bool
     error: Optional[str] = None
     execution_equivalent: Optional[bool] = None
+
+
+@dataclass
+class TriageResult:
+    """Classification of a single function's mismatch profile."""
+
+    symbol: str
+    demangled: str
+    unit: str
+    source_path: str
+    qualified_name: str
+    current_percent: float
+    category: str  # REGSWAP_ONLY, REGSWAP_PLUS, STRUCTURAL, NOISE_ONLY, UNFIXABLE, MIXED
+    gpr_swap_pairs: list  # [{pair: [rA, rB], count: N}, ...]
+    diff_op_count: int
+    cluster_count: int
+    total_instructions: int
+    error: Optional[str] = None
+
+
+@dataclass
+class RoundResult:
+    """Result of a single hill-climbing round."""
+
+    round_num: int
+    baseline: float
+    best_name: Optional[str]
+    best_pattern: Optional[str]
+    best_score: float
+    delta: float
+    num_variants: int
+    improved: bool
+
+
+@dataclass
+class HillClimbResult:
+    """Result of a full hill-climbing session for one function."""
+
+    symbol: str
+    function_name: str
+    source_path: str
+    initial_percent: float
+    final_percent: float
+    total_delta: float
+    rounds: list  # list[RoundResult]
+    stopped_reason: str  # "perfect", "plateau", "max_rounds", "no_variants", "noise_only", "error"
+    elapsed_seconds: float
