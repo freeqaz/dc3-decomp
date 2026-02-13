@@ -341,17 +341,17 @@ int FloatKeys::FloatAt(float frame, float &fl) {
         Interp(prev->value, next->value, ref, fl);
         break;
     case kSpline:
-        if ((int)size() < 3 || prev == next) {
+        if (size() < 3 || prev == next) {
             Interp(prev->value, next->value, ref, fl);
         } else {
             float points[4];
             points[1] = prev->value;
             points[2] = next->value;
             int idx = (prev - begin());
-            if (idx == 0) {
-                points[0] = prev->value;
-            } else {
+            if (idx != 0) {
                 points[0] = this->at(idx - 1).value;
+            } else {
+                points[0] = prev->value;
             }
             if (idx == size() - 1) {
                 points[3] = next->value;
@@ -362,7 +362,7 @@ int FloatKeys::FloatAt(float frame, float &fl) {
         }
         break;
     case kHermite:
-        Interp(prev->value, next->value, ref * ref * (ref * -2.0f + 3.0f), fl);
+        Interp(prev->value, next->value, ((ref * -2.0f + 3.0f) * (ref * ref)), fl);
         break;
     case kEaseIn:
         Interp(prev->value, next->value, ref * ref * ref, fl);
