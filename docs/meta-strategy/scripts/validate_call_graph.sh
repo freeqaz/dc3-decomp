@@ -28,7 +28,7 @@ TABLE_EXISTS=$(sqlite3 "$DB" "SELECT COUNT(*) FROM sqlite_master WHERE type='tab
 if [ "$TABLE_EXISTS" -eq 0 ]; then
     echo "call_edges table does not exist."
     echo ""
-    echo "To populate it, run the call graph extraction from PHASE2_INFRASTRUCTURE.md"
+    echo "To populate it, run scripts/extract_callgraph.py"
     echo "or use Ghidra MCP to extract cross-references."
     exit 0
 fi

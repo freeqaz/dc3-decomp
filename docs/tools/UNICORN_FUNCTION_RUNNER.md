@@ -407,6 +407,64 @@ python3 -m scripts.unicorn_runner.run --batch-all
 
 **Test results**: Skeleton.obj batch: 22 equivalent, 8 divergent, 30 total (up from 22 eligible in Phase 1)
 
+### DONE: Phase 4 — Divergence Classification (Feb 13, 2026)
+
+**What's new**: Automatic classification of DIVERGENT results into root-cause categories, eliminating noise from unfixable build-environment artifacts.
+
+**`classify_divergence()` in `comparator.py`** categorizes every DIVERGENT result:
+
+| Category | Detection | Actionable? |
+|----------|-----------|-------------|
+| `build_env` | Args point to GLOBAL_BASE (\_\_FILE\_\_ strings), `merged_` in call target warnings, globals-only memory diffs | No — unfixable compiler/linker artifacts |
+| `regalloc` | Same call count, <=2 calls differ, values are small non-pointer integers | No — compiler register allocation quirk |
+| `logic` | Everything else (errors, FPR mismatches, call count diffs, pointer-valued arg diffs) | Yes — real behavioral difference |
+
+**Pipeline refactoring**: `_run_comparison_core()` extracted from `run_comparison_inner()`, returns `ComparisonBundle` dataclass with raw results. `diagnose_single()` uses this directly for classification.
+
+**Output changes**:
+```
+# diagnose --batch now shows classified FIX types:
+  FIX(build_env)    90.4%  DirLoader::FixClassName
+  FIX(regalloc)     95.2%  SomeOtherFunc
+  FIX               99.8%  MakeString<Symbol, ...>
+
+# Summary includes breakdown:
+  Summary: 13 DONE, 37 SKIP [...], 5 FIX [4 logic, 1 build_env]
+  Unfixable divergences: 1 (1 build_env, 0 regalloc)
+```
+
+**Tests**: 12 unit tests covering all classification categories.
+
+### DONE: Phase 5 — Multi-Input Probing (Feb 13, 2026)
+
+**What's new**: Run each function N times with varied fill patterns for higher-confidence equivalence testing.
+
+**`prober.py`** — new module with `probe_function()` that runs N comparisons with varied inputs:
+- Run 0: zero fill (baseline)
+- Run 1: 0xCD (MSVC debug fill)
+- Run 2+: random byte patterns from seeded RNG
+
+Each run gets full comparison + divergence classification. Results aggregated into `ProbeResult`:
+- `stable_equiv` (all runs equivalent) → confidence: `high`
+- `stable_divergent` (all runs divergent) → confidence: `stable_divergent`
+- `input_sensitive` (mixed) → confidence: `input_sensitive`
+
+**CLI**:
+```bash
+# Single function
+python3 -m scripts.unicorn_runner.probe --unit DirLoader \
+    --symbol "?FixClassName@@YA?AVSymbol@@V1@@Z" --runs 16
+
+# Batch (all eligible functions)
+python3 -m scripts.unicorn_runner.probe --unit DirLoader --batch --runs 8
+```
+
+**Results** (DirLoader, 55 functions, 4 runs): 48 stable equiv, 2 stable div, 5 input-sensitive. Vs dual-fixture which found only 1 fixture-sensitive — multi-input probing provides finer granularity.
+
+**Tests**: 12 unit tests with mocked comparison core.
+
+**See also**: [Structural Probing Plan](../plans/unicorn-structural-probing.md) for the full roadmap (Phase 2: struct field access probing, Phase 3: mock return variation).
+
 ### Phase 3: Hardening (planned)
 
 **Research completed**: [docs/sessions/2026-02-11-unicorn-phase3-research.md](../sessions/2026-02-11-unicorn-phase3-research.md)

@@ -10,24 +10,29 @@ After building and demonstrating the unicorn runner, we've learned where it work
 
 ### What actually works (proven)
 
-**False positive filtering is the killer feature.** Real numbers from the demo:
-- UITransitionHandler: objdiff flagged 9 functions → all 9 were EQUIVALENT. Zero agent work needed.
-- Profile: 7 flagged → 6 equivalent. Only 1 needs attention.
-- ContentMgr: 16 flagged → 10 equivalent. Cut the work list by 63%.
-- keygen_xbox: 16 flagged → 9 equivalent.
+**False positive filtering is the killer feature.** Real numbers:
+- 93.1% equivalence rate across 25,682 functions in 949 units (stress test Feb 13, 2026)
+- DirLoader: objdiff flagged 42 as needing work → 37 are actually equivalent
+- CharPollGroup: 25 flagged → all 25 equivalent
+- ~61% of objdiff-flagged functions are false positives (time saved by unicorn)
 
-At ~70% equivalence rate across tested units, this saves real time. A batch triage of a unit takes ~2 seconds.
+**Divergence classification** (Phase 0, Feb 13, 2026) now auto-tags unfixable FIX results:
+- `FIX(build_env)` — `__FILE__` path differences, merged symbols (ICF) — don't waste time
+- `FIX(regalloc)` — register allocation artifacts — usually unfixable
+- `FIX` — real logic differences — these are the ones worth investigating
+
+**Multi-input probing** (Phase 1, Feb 13, 2026) runs N times with varied fill patterns for higher confidence than dual-fixture (2 runs).
 
 ### What doesn't work (proven)
 
 **Bug localization is mostly a miss.** The plan hypothesized unicorn would say "call #3 diverges, r4 differs" and you'd fix the bug. In practice:
 - **Call count mismatches** dominate (looping over zeroed linked lists) — not actionable
-- **Arg mismatches** are usually register allocation artifacts — not fixable code bugs
+- **Arg mismatches** are usually register allocation artifacts — now auto-classified as `FIX(regalloc)`
 - We found zero functions where unicorn output led directly to a code fix
 
 **DIVERGENT ≠ "broken code."** Most DIVERGENT functions diverge because:
 1. Zeroed memory causes different loop counts (~60% of divergences)
-2. Symbol name differences cause different pointer values (~25%)
+2. Symbol name differences cause different pointer values (~25%) — now auto-classified as `FIX(build_env)`
 3. Structural code differences (decomp isn't done yet) (~10%)
 4. Actual semantic bugs (~5%)
 
@@ -35,26 +40,27 @@ At ~70% equivalence rate across tested units, this saves real time. A batch tria
 
 ## The Core Question: Niche Tool or Significant Value?
 
-**Current state: Niche but useful.** Saves agent time on false positives. That's real value but it's a screening tool, not a primary decomp instrument.
+**Current state: Core workflow tool.** At 93% equivalence with classification, it's no longer a niche screening tool — it's the primary triage mechanism for decomp work prioritization.
 
-**Can it become significantly more valuable?** Yes, but it requires solving the zeroed-memory problem. Everything else is incremental.
+Here's the current tier list:
 
-Here's the honest tier list:
-
-### Tier 1: Already works, just needs workflow integration
-- Batch triage before agent assignment
+### Tier 1: Done and working
+- Batch triage before agent assignment (93% equiv rate)
 - "Unit done" confirmation (all functions EQUIVALENT)
 - AT_LIMIT confidence boost
+- Intra-TU call co-loading (done)
+- Dual-fixture and multi-input probing (done)
+- Divergence classification — auto-filters build_env and regalloc noise (done)
 
-### Tier 2: Feasible improvements (moderate effort, clear payoff)
-- Intra-TU call co-loading (biggest single improvement)
+### Tier 2: Next improvements (moderate effort, clear payoff)
+- Struct field access probing (Phase 2 of structural probing plan)
 - Permuter guard rail
-- bctr switch table support
+- bctr switch table improvements
 
 ### Tier 3: Hard problems (high effort, uncertain payoff)
 - Intelligent fixtures from DWARF struct info
 - Cross-TU call resolution
-- Full symbolic execution
+- Mock return variation (Phase 3 of structural probing plan)
 
 ---
 
@@ -153,25 +159,31 @@ The research doc confirms QEMU has no Xenon CPU model and no VMX128 support. Bui
 
 | Milestone | Equivalence Rate | Functions Testable | Value Level |
 |-----------|------------------|--------------------|-------------|
-| **Today** | ~70% | 21,804 | Niche screening tool |
-| **+ Intra-TU co-loading** | ~80-85% | 21,804 | Reliable triage tool |
-| **+ Smart fixtures (3c)** | ~85-90% | 21,804 | Strong confidence signal |
-| **+ bctr handling** | ~85-90% | 21,986 (+182) | Broader coverage |
-| **+ Permuter guard rail** | ~85-90% | 21,986 | Regression prevention |
-| **Theoretical ceiling** | ~92-95% | ~25,000 | Limited by zeroed inputs + cross-TU calls |
+| ~~Today~~ | ~~70%~~ | ~~21,804~~ | ~~Niche screening tool~~ |
+| **DONE: + Intra-TU co-loading** | ~80-85% | 21,804 | Reliable triage tool |
+| **DONE: + Smart fixtures (3a, 3c)** | ~85-90% | 21,804 | Strong confidence signal |
+| **DONE: + Divergence classification** | ~93% | 25,682 | **Noise-free triage** — build_env/regalloc auto-filtered |
+| **DONE: + Multi-input probing** | ~93% | 25,682 | Higher confidence via N-run probing |
+| + bctr handling | ~93% | 25,864 (+182) | Broader coverage |
+| + Permuter guard rail | ~93% | 25,864 | Regression prevention |
+| + Struct field probing | ~93% | 25,864 | Decomp reconnaissance |
+| **Theoretical ceiling** | ~95% | ~25,000 | Limited by zeroed inputs + cross-TU calls |
 
-The tool will never reach 100% equivalence for all functions — that would require real runtime data from Xenia. But at 85-90% with intra-TU co-loading, it becomes a **reliable** screening tool where EQUIVALENT genuinely means "this function is done" and DIVERGENT is worth investigating.
+**Current state** (Feb 13, 2026): 93.1% equivalence rate (23,899/25,682 functions), 0 crashes, 0 hangs. Divergence classification cuts remaining FIX items by identifying unfixable build-env and regalloc artifacts. Multi-input probing with 4-8 runs provides higher confidence than dual-fixture.
+
+The tool will never reach 100% equivalence for all functions — that would require real runtime data from Xenia. But at 93% with classification, it's already a **core workflow tool** where EQUIVALENT genuinely means "this function is done" and `FIX(build_env)` means "don't waste time on this."
 
 ---
 
 ## Bottom Line
 
-**The tool is not destined to be niche.** The #1 improvement (intra-TU co-loading) would push it from "useful screening" to "reliable triage" by eliminating the biggest source of false divergences. The permuter guard rail adds a new use case entirely. Smart fixtures add confidence.
+**The tool is a core workflow tool.** With intra-TU co-loading, dual-fixture, divergence classification, and multi-input probing all implemented, it's at 93% equivalence — exceeding the original 90% target.
 
-The realistic ceiling is ~90% equivalence across all eligible functions. That means:
-- For any unit, run batch triage in 2 seconds
-- 90% of functions get a confident SKIP/DONE verdict
-- The remaining 10% are genuinely worth investigating
+Current capabilities:
+- For any unit, run batch triage in ~2 seconds with `diagnose --batch`
+- 93% of functions get a confident SKIP/DONE verdict
+- FIX results auto-classified: `FIX(build_env)` and `FIX(regalloc)` are auto-filtered as unfixable
+- Multi-input probing via `probe --batch --runs 8` for higher confidence
 - No agent time wasted on false positives
 
-That's not niche — that's a core workflow tool.
+Next frontier: structural probing (Phase 2-3) turns the tool from a validator into a **decomp reconnaissance tool** — discovering struct field access patterns and call dependencies before you start writing code.

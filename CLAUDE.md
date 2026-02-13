@@ -11,7 +11,7 @@ ninja                              # Build
 ninja build/373307D9/report.json   # Generate progress report
 ```
 
-Check `./docs/tools/INDEX.md` for a full list of decomp tools. Especially `./src/master_agent_prompt.md` for what tool to use + when.
+Check `./docs/tools/INDEX.md` for agent tool selection and `./docs/INDEX.md` for the full docs sitemap.
 
 ## Orchestrator MCP Tools
 

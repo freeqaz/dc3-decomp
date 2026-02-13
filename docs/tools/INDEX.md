@@ -1,12 +1,29 @@
-# Tools Documentation Index
+# Tools Index — Agent Tool Selection
 
-Quick reference for tools used in the DC3 decompilation project.
+Which tool to use for decomp work. For scripts, commands, and reference material, see [REFERENCE.md](REFERENCE.md).
 
 ## Start Here
 
 | Doc | Description |
 |-----|-------------|
 | **[WORKFLOW.md](WORKFLOW.md)** | **Decision guide: which tool to use when** |
+
+## MCP Orchestrator Tools (Primary Interface)
+
+Use `mcp__orchestrator__` tools for all decomp analysis. Do not call `objdiff-cli` directly.
+
+| Tool | Description |
+|------|-------------|
+| `run_objdiff` | Build + diff a function. Returns match%, verdict. Source of truth for percentages. |
+| `run_diff_inspect` | Deep mismatch analysis: `diagnose`, `mismatches`, `clusters`, `regswaps`, `offsets`, `replaces`, `compare` |
+| `run_analyze_function` | Combined objdiff + struct offset resolution for field-level context |
+| `query_functions` | Find workable functions by unit pattern and match range |
+| `lookup_rb3` | Search RB3 codebase for reference implementations (shared Milo engine) |
+| `get_rb3_pair` | Get RB3 file pairing info + optional source for a DC3 unit |
+| `get_rb2_class_info` | Class layout from RB2 DWARF dump (member offsets, sizes, inheritance) |
+| `lookup_struct_offset` | Look up which struct field is at a given offset |
+| `struct_info` | Get class/struct members, parents, inheritance chain |
+| `lookup_merged_symbol` | Resolve `merged_<addr>` to actual symbol names (ICF) |
 
 ## Decompilation Tools
 
@@ -19,135 +36,18 @@ Quick reference for tools used in the DC3 decompilation project.
 | [XEXLoaderWV](XEXLOADERWV.md) | Ghidra extension for Xbox 360 XEX files | [XEXLOADERWV.md](XEXLOADERWV.md) |
 | [m2c](m2c.md) | Machine code to C decompiler | [m2c.md](m2c.md) |
 
-## Project Scripts
-
-| Script | Description |
-|--------|-------------|
-| `tools/decompile.sh` | **Combined m2c decompilation workflow** (objdiff → m2c) |
-| `tools/objdiff_to_m2c.py` | Convert objdiff JSON to m2c assembly format (with jump table resolution) |
-| `tools/ghidra/export_types.py` | Export Ghidra types as m2c context headers |
-| `tools/asm_to_m2c.py` | Convert DC3 dtk assembly to m2c-compatible format |
-| `tools/decompctx.py` | Generate context files for decomp.me |
-| `configure.py` | Generate build files (ninja) |
-
-## Symbol Lookup (Map File)
-
-The linker map file `orig/373307D9/ham_xbox_r.map` contains all symbol names and addresses:
-
-```bash
-# Find function address by name
-grep "FastSin\|Pool::Alloc" orig/373307D9/ham_xbox_r.map
-
-# Example output:
-# 0005:002027e8       ?FastSin@@YAMM@Z           825327e8 f   math:Trig.obj
-#                     ^ mangled name              ^ address    ^ source file
-```
-
-## Merged Symbol Lookup (ICF)
-
-When objdiff shows `LINKER_MERGED` patterns with `merged_<address>` symbols, use the merged-symbols tool to identify the actual symbol names:
-
-```bash
-# Look up what symbols are at a merged address
-./bin/merged-symbols 82331360
-
-# Also accepts the merged_ prefix from objdiff output
-./bin/merged-symbols merged_82331448 -v
-
-# See statistics on all merged symbols
-./bin/merged-symbols --stats -e
-
-# Output as JSON
-./bin/merged-symbols 82331360 --json
-```
-
-ICF (Identical COMDAT Folding) merges functions with identical machine code to save space. Common patterns:
-- `??_G` / `??_E`: Scalar and vector deleting destructors (identical code)
-- Template instantiations like `ObjRefConcrete<T>::GetObj()` (same code for different T)
-
-## Function Database (decomp.db)
-
-SQLite database tracking all functions, patterns, and scoring:
-
-```bash
-# Find high-priority reachable targets
-sqlite3 decomp.db "SELECT symbol, current_percent FROM functions WHERE reachable_100=1 AND current_percent < 100 ORDER BY priority_score DESC LIMIT 10"
-
-# Query functions by pattern
-sqlite3 decomp.db "SELECT symbol, current_percent FROM functions WHERE has_linker_merged=1 ORDER BY current_percent DESC LIMIT 10"
-```
-
-See [../reference/DATABASE_SCHEMA.md](../reference/DATABASE_SCHEMA.md) for full schema documentation.
-
-## Linking Tools
-
-| Script | Description |
-|--------|-------------|
-| `scripts/link_test.py` | Standalone X360 link test (links split/hybrid .obj → PE) |
-| `scripts/compare_pe.py` | Compare linked PE against original `ham_xbox_r.exe` |
-| `scripts/fix_pdata.py` | Workaround for dtk .pdata splitting bug (integrated into `ninja link`) |
-
-See [../sessions/2026-02-11-x360-linking-pipeline.md](../sessions/2026-02-11-x360-linking-pipeline.md) for full status and roadmap.
-
-## Quick Commands
-
-```bash
-# Build the project
-ninja
-
-# Generate progress report
-ninja build/373307D9/report.json
-
-# Link hybrid PE (requires wine)
-ninja link
-
-# Find near-match functions (90-99%)
-objdiff-cli report query build/373307D9/report.json --functions --min-percent 90 --max-percent 99
-
-# Check a specific function (markdown output is default)
-objdiff-cli diff -p . "Game::Poll" --verdict
-
-# Diff with context around mismatches
-objdiff-cli diff -p . "Game::Poll" --verdict -C 3
-
-# Check function info from report
-objdiff-cli report function build/373307D9/report.json "Game::Poll"
-
-# Quick m2c decompilation from target binary
-tools/decompile.sh "CharClip::SetFlags"
-
-# m2c with Ghidra type context
-tools/decompile.sh "CharMirror::Load" --context
-
-# Full analysis with m2c included
-./bin/analyze-function "Game::Poll" --m2c
-
-# Manual m2c pipeline (alternative, with jump table support)
-./bin/objdiff-cli diff -p . "Foo::Bar" -f json --include-instructions | \
-    python3 tools/objdiff_to_m2c.py --project-dir . | \
-    python3 ~/code/milohax/m2c/m2c.py -t ppc -
-
-# Generate decomp.me context
-python3 tools/decompctx.py src/path/to/file.cpp -I include -I src
-```
-
 ## Dynamic Analysis
 
 | Tool | Description | Doc |
 |------|-------------|-----|
 | [Unicorn Function Runner](UNICORN_FUNCTION_RUNNER.md) | Differential function execution (Unicorn PPC32 BE) — compare decomp vs original behavior | [UNICORN_FUNCTION_RUNNER.md](UNICORN_FUNCTION_RUNNER.md) |
-| [Unicorn Diagnose](../plans/unicorn-runner-value.md) | Combined objdiff + unicorn diagnostic — SKIP/FIX recommendations per function | [unicorn-runner-value.md](../plans/unicorn-runner-value.md) |
-| [Unicorn Roadmap](../plans/unicorn-roadmap.md) | Strategic assessment & improvement roadmap for the unicorn runner | [unicorn-roadmap.md](../plans/unicorn-roadmap.md) |
 
 ```bash
-# Compare a single function
-python3 -m scripts.unicorn_runner.run --symbol "?ElapsedMs@Skeleton@@UBAHXZ" --unit system/gesture/Skeleton
-
 # Combined diagnosis with SKIP/FIX recommendations
 python3 -m scripts.unicorn_runner.diagnose --unit system/meta/Profile --batch
 
-# Single function diagnosis
-python3 -m scripts.unicorn_runner.diagnose --unit system/meta/Profile --symbol "??0Profile@@QAA@H@Z"
+# Multi-input probing for higher confidence
+python3 -m scripts.unicorn_runner.probe --unit DirLoader --batch --runs 8
 ```
 
 ## Code Transformation Tools
@@ -155,35 +55,3 @@ python3 -m scripts.unicorn_runner.diagnose --unit system/meta/Profile --symbol "
 | Tool | Description | Doc |
 |------|-------------|-----|
 | C++ Permuter | Tree-sitter based source permutation for register allocation issues | [../permuter/INDEX.md](../permuter/INDEX.md) |
-
-## Archived Tools
-
-| Tool | Description | Doc | Notes |
-|------|-------------|-----|-------|
-| decomp-permuter | Original C permutation fuzzer | [permuter.md](permuter.md) | C only, uses pycparser which doesn't support C++ |
-
-## Projects
-
-| Project | Description | Doc |
-|---------|-------------|-----|
-| VMX128 Ghidra Support | Adding Xbox 360 SIMD instruction support to Ghidra | [../vmx128/README.md](../vmx128/README.md) |
-
-## Compiler Documentation
-
-| Doc | Description |
-|-----|-------------|
-| [PRAGMA_INDEX.md](../decomp/PRAGMA_INDEX.md) | Xbox 360 compiler pragma documentation index |
-| [PRAGMA_MATCHING_CHECKLIST.md](../decomp/PRAGMA_MATCHING_CHECKLIST.md) | Step-by-step guide for using pragmas to match functions |
-| [PRAGMA_CODEGEN_SUMMARY.md](../decomp/PRAGMA_CODEGEN_SUMMARY.md) | Quick reference for pragma impact on code generation |
-| [XBOX360_PRAGMA_REFERENCE.md](../decomp/XBOX360_PRAGMA_REFERENCE.md) | Complete technical reference for all code-generation pragmas |
-
-**Key pragmas for matching:**
-- `#pragma fp_contract(on|off)` - Controls fused multiply-add instruction generation (fmadds)
-- `#pragma optimize("u", on|off)` - Controls prescheduling (instruction ordering)
-- `#pragma bitfield_order(msb_to_lsb|lsb_to_msb)` - Controls bitfield packing order
-
-## External Resources
-
-- [objdiff GUI](https://github.com/encounter/objdiff) - Visual diff tool
-- [m2c online](https://simonsoftware.se/other/m2c.html) - Browser-based m2c
-- [decomp.me](https://decomp.me) - Collaborative decompilation scratches

@@ -145,7 +145,7 @@ From empirical work:
 | decomp.me | Collaborative scratch workspace | N/A (could add) |
 | decomp-permuter | Automatic variation testing | N/A (could add) |
 | m2c | MIPS/PPC decompiler | `tools/decompile.sh` |
-| objdiff | Local assembly diffing | `./bin/objdiff-cli` |
+| objdiff | Local assembly diffing | MCP orchestrator tools (`run_objdiff`, `run_diff_inspect`) |
 | decomp-toolkit | GameCube/Wii automation | `scripts/decomp_orchestrate.py` |
 
 ---
@@ -157,7 +157,7 @@ Based on research, DC3 tooling is more advanced than typical community projects:
 | Capability | Other Projects | DC3 |
 |------------|---------------|-----|
 | Batch orchestration | Manual | `decomp_orchestrate.py` |
-| Pattern detection | Rare | `objdiff-cli --analyze` |
+| Pattern detection | Rare | MCP orchestrator `run_analyze_function` |
 | Verdict classification | BotW Trello labels | Automated in CLI |
 | Scoring model | None documented | This strategy |
 | Ghidra integration | Varies | MCP server with caching |

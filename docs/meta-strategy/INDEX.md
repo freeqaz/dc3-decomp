@@ -29,73 +29,29 @@ Priority = Ease x Impact x Confidence x (1.5 if reachable_100 else 0.5)
 
 ## Documents
 
-### Strategy Documents
-
-| Document | Purpose |
-|----------|---------|
-| [SCORING_MODEL.md](SCORING_MODEL.md) | Formulas for computing scores (pattern-aware) |
-| [PHASE1_QUICK_WINS.md](PHASE1_QUICK_WINS.md) | Immediate actions: triage, exclusions, SQL queries |
-| [PHASE2_INFRASTRUCTURE.md](PHASE2_INFRASTRUCTURE.md) | Pattern detection, call graph, scoring infrastructure |
-| [PHASE3_AUTOMATION.md](PHASE3_AUTOMATION.md) | Agentic orchestration and automated target selection |
-| [SQL_QUERIES.md](SQL_QUERIES.md) | Ready-to-use database queries for prioritization |
-
 ### Reference Documents
 
 | Document | Purpose |
 |----------|---------|
+| [SCORING_MODEL.md](SCORING_MODEL.md) | Formulas for computing priority scores (pattern-aware) |
+| [SQL_QUERIES.md](SQL_QUERIES.md) | Ready-to-use database queries for prioritization |
 | [GOALS.md](GOALS.md) | Realistic targets and success metrics |
-| [Pattern Reference](../decomp/patterns/INDEX.md) | Complete pattern reference (fixable vs unfixable) |
 | [APPENDIX_RESEARCH.md](APPENDIX_RESEARCH.md) | Findings from other decomp projects |
 
-## Implementation Phases
+### Related Resources
 
-### Phase 1: Quick Wins (Now)
-Use existing tools more effectively:
-- **Triage NEAR_COMPLETE functions** - Identify which 606 can actually reach 100%
-- **Mark XDK as excluded** - Filter out ~1,000 SDK functions
-- SQL queries against decomp.db
-- objdiff-cli report analyze for pattern detection
-- RB3 reference targeting
-
-**Investment**: ~1 hour
-**Payoff**: Immediate better targeting, avoid wasted effort
-
-### Phase 2: Infrastructure (1-2 weeks)
-Build scoring infrastructure:
-- **Pattern detection columns** - has_linker_merged, reachable_100, etc.
-- Call graph validation (validate value before full build)
-- Fan-in/fan-out computation (if validated)
-- Ease/impact/confidence score columns
-- Priority views in database
-
-**Investment**: Moderate
-**Payoff**: Systematic prioritization with pattern awareness
-
-### Phase 3: Automation (2-4 weeks)
-Automate the agentic workflow:
-- Automated target selection (pattern-aware)
-- Model escalation tracking
-- Parallel agent orchestration
-- Continuous rescoring
-
-**Investment**: Significant
-**Payoff**: Hands-off progress acceleration
-
-## Trade-off Guidance
-
-| Situation | Recommendation |
-|-----------|----------------|
-| Fresh start, many easy targets | Phase 1 only |
-| Want to find 100%-achievable targets | Phase 1 + pattern triage |
-| Saturated easy targets, need systematic approach | Add Phase 2 |
-| High parallelism desired, willing to invest | Add Phase 3 |
-| Limited time, want immediate progress | Stay in Phase 1 |
+| Resource | Location |
+|----------|----------|
+| Database schema | [docs/reference/DATABASE_SCHEMA.md](../reference/DATABASE_SCHEMA.md) |
+| Pattern reference (fixable vs unfixable) | [docs/decomp/patterns/INDEX.md](../decomp/patterns/INDEX.md) |
+| Automation planning (future) | [docs/plans/PHASE3_AUTOMATION.md](../plans/PHASE3_AUTOMATION.md) |
+| MCP orchestrator tools | [CLAUDE.md](../../CLAUDE.md) (Orchestrator MCP Tools section) |
 
 ## Key Insights
 
 1. **Pattern-based fixability is the most important factor.** A function with LINKER_MERGED at 99% cannot reach 100%—don't waste time on it.
 
-2. **The project already has strong tooling.** The gap is using existing capabilities systematically. Phase 1 can be done today.
+2. **The project already has strong tooling.** The gap is using existing capabilities systematically.
 
 3. **~80% of near-matches are at their limit.** Only ~20% of 90%+ functions can reach 100%. Triage first.
 
