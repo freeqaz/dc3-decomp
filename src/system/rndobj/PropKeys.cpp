@@ -341,7 +341,7 @@ int FloatKeys::FloatAt(float frame, float &fl) {
         Interp(prev->value, next->value, ref, fl);
         break;
     case kSpline:
-        if (size() < 3 || prev == next) {
+        if ((int)size() < 3 || prev == next) {
             Interp(prev->value, next->value, ref, fl);
         } else {
             float points[4];

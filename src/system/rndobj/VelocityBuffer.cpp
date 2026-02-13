@@ -46,7 +46,7 @@ bool RndVelocityBuffer::AdvanceFrame(RndCam *cam) {
         unk36c7c = cam;
         mFrame = 0;
     }
-    return mFrame >= 2;
+    return (unsigned int)mFrame >= 2;
 }
 
 void RndVelocityBuffer::AllocateData(
