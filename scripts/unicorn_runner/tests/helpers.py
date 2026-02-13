@@ -142,13 +142,11 @@ def make_reloc(offset, symbol_name, type_name):
 
 def make_call_log_entry(call_index, r3=0, r4=0, r5=0, r6=0,
                         trampoline_addr=0x80010000, source_offset=0):
-    """Create a call log entry matching engine format."""
-    return {
-        "call_index": call_index,
-        "args": {"r3": r3, "r4": r4, "r5": r5, "r6": r6},
-        "trampoline_addr": trampoline_addr,
-        "source_offset": source_offset,
-    }
+    """Create a call log entry matching engine tuple format.
+
+    Returns (index, tramp_addr, src_offset, r3, r4, r5, r6).
+    """
+    return (call_index, trampoline_addr, source_offset, r3, r4, r5, r6)
 
 
 def make_simple_function():

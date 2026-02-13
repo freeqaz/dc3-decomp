@@ -8,6 +8,8 @@ import sys
 import os
 import unittest
 
+from scripts.unicorn_runner.engine import CL_TRAMP_ADDR
+
 # Unicorn imports (must match engine.py's path setup)
 UNICORN_PATH = "/home/free/code/milohax/unicorn/bindings/python"
 sys.path.insert(0, UNICORN_PATH)
@@ -565,7 +567,7 @@ class TestColoadedExecution(unittest.TestCase):
         self.assertEqual(result.r3, 0)
         # The external call should be logged
         self.assertEqual(len(result.call_log), 1)
-        self.assertEqual(result.call_log[0]["trampoline_addr"], tramp_addr)
+        self.assertEqual(result.call_log[0][CL_TRAMP_ADDR], tramp_addr)
 
 
 if __name__ == "__main__":

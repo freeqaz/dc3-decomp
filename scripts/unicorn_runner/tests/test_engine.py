@@ -8,6 +8,8 @@ import sys
 import os
 import unittest
 
+from scripts.unicorn_runner.engine import CL_INDEX, CL_TRAMP_ADDR
+
 # Unicorn imports (must match engine.py's path setup)
 UNICORN_PATH = "/home/free/code/milohax/unicorn/bindings/python"
 sys.path.insert(0, UNICORN_PATH)
@@ -81,8 +83,8 @@ class TestExecuteFunction(unittest.TestCase):
         result = self.execute(code, trampolines, len(code))
         self.assertIsNone(result.error)
         self.assertEqual(len(result.call_log), 1)
-        self.assertEqual(result.call_log[0]["call_index"], 0)
-        self.assertEqual(result.call_log[0]["trampoline_addr"], tramp_addr)
+        self.assertEqual(result.call_log[0][CL_INDEX], 0)
+        self.assertEqual(result.call_log[0][CL_TRAMP_ADDR], tramp_addr)
 
     def test_multiple_calls(self):
         """Function with 3 bl stubs → call_log has 3 entries in order."""
@@ -108,7 +110,7 @@ class TestExecuteFunction(unittest.TestCase):
         self.assertIsNone(result.error)
         self.assertEqual(len(result.call_log), 3)
         for i in range(3):
-            self.assertEqual(result.call_log[i]["call_index"], i)
+            self.assertEqual(result.call_log[i][CL_INDEX], i)
 
     def test_sentinel_return(self):
         """Normal blr → error=None (sentinel fetch is handled)."""
@@ -211,7 +213,7 @@ class TestExecuteFunction(unittest.TestCase):
         # The bctrl should have dispatched to the vtable trampoline for slot 3
         self.assertEqual(len(result.call_log), 1)
         expected_tramp = self.TRAMPOLINE_BASE + VTABLE_TRAMP_OFFSET + (3 * 8)
-        self.assertEqual(result.call_log[0]["trampoline_addr"], expected_tramp)
+        self.assertEqual(result.call_log[0][CL_TRAMP_ADDR], expected_tramp)
         # Trampoline returns 0 via li r3, 0
         self.assertEqual(result.r3, 0)
 
@@ -268,7 +270,7 @@ class TestExecuteFunction(unittest.TestCase):
         self.assertIsNone(result.error)
         self.assertEqual(len(result.call_log), 1)
         expected_tramp = self.TRAMPOLINE_BASE + VTABLE_TRAMP_OFFSET + (3 * 8)
-        self.assertEqual(result.call_log[0]["trampoline_addr"], expected_tramp)
+        self.assertEqual(result.call_log[0][CL_TRAMP_ADDR], expected_tramp)
 
 
 if __name__ == "__main__":
