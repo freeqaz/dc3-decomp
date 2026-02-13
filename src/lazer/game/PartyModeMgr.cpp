@@ -1057,7 +1057,8 @@ int PartyModeMgr::PickNextPlayer() {
             int idx = 1;
             if (mTeam2Players.size() < mTeam1Players.size())
                 idx = 0;
-            ret = mTeam1Players.size() + arr->Int(idx);
+            auto _tmp11 = arr->Int(idx);
+            ret = mTeam1Players.size() + _tmp11;
         }
     }
     return ret;

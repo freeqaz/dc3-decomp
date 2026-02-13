@@ -189,7 +189,7 @@ void Locale::Init() {
 
     prevSym = Symbol();
 
-    if (numChunks > 0) {
+    if ((unsigned int)numChunks > 0) {
         int chunkIdx = 0;
         for (int i = 0; i < numChunks; i++) {
             Symbol curSym = chunks[i].node1.LiteralSym();

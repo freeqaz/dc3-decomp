@@ -132,7 +132,7 @@ void RndMeshDeform::Print() {
         char *cData = (char *)it.Data();
         int num = (int)*cData++;
         int j = 0;
-        for (; j < num; j++) {
+        for (; (unsigned int)j < num; j++) {
             TheDebug << "(" << (int)*cData++ << " " << (float)*cData++ * 0.003921568859368563f
                      << ") ";
         }

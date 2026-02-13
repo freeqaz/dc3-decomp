@@ -4,7 +4,7 @@ import json
 import struct
 
 from .engine import CL_INDEX, CL_TRAMP_ADDR, CL_SRC_OFFSET, CL_R3, CL_R4, CL_R5, CL_R6
-from .memory_map import OBJECT_BASE, GLOBAL_BASE, REGION_SIZE
+from .memory_map import STACK_BASE, OBJECT_BASE, GLOBAL_BASE, REGION_SIZE
 
 
 class ComparisonResult:
@@ -196,6 +196,117 @@ def compare(decomp_result, orig_result, decomp_relocs, orig_relocs):
     }
 
     return ComparisonResult("EQUIVALENT", details, warnings)
+
+
+def classify_divergence(result, decomp_result, orig_result, decomp_relocs, orig_relocs):
+    """Classify a DIVERGENT result into a root-cause category.
+
+    Returns one of:
+        'build_env'  — __FILE__ string differences or merged symbol calls
+        'regalloc'   — same call structure, only register value differences
+        'logic'      — real behavioral divergence
+    """
+    if result.verdict != "DIVERGENT":
+        return None
+
+    details = result.details
+    reason = details.get("reason", "")
+    warnings = result.warnings or []
+
+    # Check for merged symbol warnings
+    has_merged = any("merged_" in w for w in warnings)
+
+    # Error-based divergences are logic differences
+    if reason in ("error_mismatch", "decomp_error", "orig_error"):
+        return "logic"
+
+    # call_arg_mismatch: check if mismatching values are in globals region
+    # (__FILE__ string references live in GLOBAL_BASE)
+    if reason == "call_arg_mismatch":
+        d_args = details.get("decomp_args", {})
+        o_args = details.get("orig_args", {})
+        diff_regs = [r for r in ("r3", "r4", "r5", "r6")
+                     if d_args.get(r) != o_args.get(r)]
+
+        # Check if ALL differing args point to globals region (string refs)
+        all_globals = True
+        for reg in diff_regs:
+            d_val = d_args.get(reg, 0)
+            o_val = o_args.get(reg, 0)
+            d_in_globals = GLOBAL_BASE <= d_val < GLOBAL_BASE + REGION_SIZE
+            o_in_globals = GLOBAL_BASE <= o_val < GLOBAL_BASE + REGION_SIZE
+            if not (d_in_globals and o_in_globals):
+                all_globals = False
+                break
+
+        if all_globals:
+            return "build_env"
+
+        # Check if merged symbol warning covers the mismatching call
+        if has_merged:
+            call_idx = details.get("call_index", -1)
+            for w in warnings:
+                if f"Call #{call_idx}:" in w and "merged_" in w:
+                    return "build_env"
+
+        # Check for regalloc: same call count, same call targets, only value diffs
+        # If the call logs have identical length and the mismatch is in non-pointer
+        # registers (not globals/object region), likely register allocation
+        if len(decomp_result.call_log) == len(orig_result.call_log):
+            # Count how many calls have arg differences
+            arg_diff_calls = 0
+            for d, o in zip(decomp_result.call_log, orig_result.call_log):
+                if (d[CL_R3] != o[CL_R3] or d[CL_R4] != o[CL_R4]
+                        or d[CL_R5] != o[CL_R5] or d[CL_R6] != o[CL_R6]):
+                    arg_diff_calls += 1
+            # If only 1-2 calls differ and values aren't pointer-like,
+            # this is likely register allocation
+            if arg_diff_calls <= 2:
+                non_pointer_diffs = True
+                for reg in diff_regs:
+                    d_val = d_args.get(reg, 0)
+                    o_val = o_args.get(reg, 0)
+                    # Values in mapped regions are pointer-like
+                    for base in (OBJECT_BASE, GLOBAL_BASE, STACK_BASE):
+                        if (base <= d_val < base + REGION_SIZE
+                                or base <= o_val < base + REGION_SIZE):
+                            non_pointer_diffs = False
+                            break
+                    if not non_pointer_diffs:
+                        break
+                if non_pointer_diffs:
+                    return "regalloc"
+
+        return "logic"
+
+    if reason == "call_count_mismatch":
+        # Merged symbols can cause extra/missing calls
+        if has_merged:
+            return "build_env"
+        return "logic"
+
+    if reason == "return_value_mismatch":
+        # Check if both values are globals-region pointers (string return)
+        d_r3 = details.get("decomp_r3", 0)
+        o_r3 = details.get("orig_r3", 0)
+        if (GLOBAL_BASE <= d_r3 < GLOBAL_BASE + REGION_SIZE
+                and GLOBAL_BASE <= o_r3 < GLOBAL_BASE + REGION_SIZE):
+            return "build_env"
+        return "logic"
+
+    if reason == "memory_mismatch":
+        # Memory diffs in globals region could be string-related
+        obj_diffs = details.get("object_diffs", [])
+        glob_diffs = details.get("globals_diffs", [])
+        if not obj_diffs and glob_diffs:
+            # Only globals diffs — could be __FILE__ written to memory
+            return "build_env"
+        return "logic"
+
+    if reason == "fpr_return_mismatch":
+        return "logic"
+
+    return "logic"
 
 
 def format_result(result, decomp_result, orig_result, decomp_relocs, orig_relocs, verbose=False):

@@ -20,7 +20,9 @@ from typing import Iterator
 from tree_sitter import Node
 
 from .base import Pattern
-from ..types import FunctionContext, Variant
+from ..ast_queries import get_indent, get_line_start
+from ..editor import SourceEditor
+from ..types import Diagnosis, FunctionContext, Variant
 
 # Node types that indicate a call is nested (not a standalone expression_statement)
 _NESTING_TYPES = {
@@ -36,30 +38,30 @@ _NESTING_TYPES = {
 class VariableExtractionPattern(Pattern):
     name = "variable_extraction"
 
+    def relevant(self, diagnosis: Diagnosis) -> bool:
+        # Always relevant — 99.5% build success rate and highest avg delta (+1.91%)
+        # when winning. Wins come from extracting method chains and complex getters.
+        return True
+
     def generate(self, ctx: FunctionContext) -> Iterator[Variant]:
         counter = 0
         # Walk all compound_statements to find extractable calls in their direct children
         for compound, stmt, call_node in _find_extractable_calls(ctx.body_node):
             call_text = ctx.file_source[call_node.start_byte : call_node.end_byte]
 
-            indent = _get_indent(ctx.file_source, stmt)
-            line_start = _get_line_start(ctx.file_source, stmt)
+            indent = get_indent(ctx.file_source, stmt)
+            line_start = get_line_start(ctx.file_source, stmt)
             var_name = f"_tmp{counter}".encode("utf-8")
             counter += 1
 
             # Build the declaration line
             decl_line = indent + b"auto " + var_name + b" = " + call_text + b";\n"
 
-            # Splice: insert decl before the line containing stmt,
-            # then replace call with var_name within the stmt
-            source = ctx.file_source
-            new_source = (
-                source[:line_start]
-                + decl_line
-                + source[line_start : call_node.start_byte]
-                + var_name
-                + source[call_node.end_byte :]
-            )
+            # Use SourceEditor: insert decl at line start, replace call with var_name
+            ed = SourceEditor(ctx.file_source)
+            ed.insert_at(line_start, decl_line)
+            ed.replace_node(call_node, var_name)
+            new_source = ed.apply()
 
             desc = (
                 f"Extract '{call_text.decode('utf-8', errors='replace')}' "
@@ -73,6 +75,44 @@ class VariableExtractionPattern(Pattern):
             )
 
 
+def _call_priority(call_node: Node) -> int:
+    """Score extraction priority for a call node (higher = better candidate).
+
+    Data shows wins come from method chains and complex getter calls,
+    not simple expressions. Prioritize accordingly.
+    """
+    score = 0
+
+    # Method chain: a->b()->c() — high value
+    func = call_node.child_by_field_name("function")
+    if func is not None and func.type == "field_expression":
+        arg = func.child_by_field_name("argument")
+        if arg is not None and arg.type == "call_expression":
+            score += 30  # Method chain like a->Foo()->Bar()
+
+    # Nested call: f(g(x)) — the inner g(x) is high value
+    parent = call_node.parent
+    if parent is not None and parent.type == "argument_list":
+        score += 20  # Call used as argument to another call
+
+    # Call with arguments (more complex = more likely to benefit)
+    args = call_node.child_by_field_name("arguments")
+    if args is not None:
+        n_args = len(args.named_children)
+        score += min(n_args * 5, 15)
+
+    # Arithmetic context: call inside binary_expression
+    if parent is not None and parent.type == "binary_expression":
+        score += 10
+
+    # Simple getter with no args — lower priority
+    if args is not None and len(args.named_children) == 0:
+        # Still potentially useful but lower priority
+        score += 5
+
+    return score
+
+
 def _find_extractable_calls(
     body_node: Node,
 ) -> Iterator[tuple[Node, Node, Node]]:
@@ -81,17 +121,39 @@ def _find_extractable_calls(
     Walks all compound_statements (function body, loop bodies, if/else bodies)
     and for each direct child statement, finds nested call expressions that
     can be extracted to a variable before that statement.
-    """
-    for stmt in body_node.named_children:
-        # For each direct statement in this compound_statement,
-        # find nested calls
-        for call_node in _find_nested_calls(stmt):
-            yield body_node, stmt, call_node
 
-        # Recurse into compound_statements within this statement
-        # (for-loop bodies, if/else bodies, while bodies, etc.)
+    Results are sorted by priority (highest first) so the max_variants cap
+    keeps the best candidates.
+    """
+    candidates: list[tuple[int, Node, Node, Node]] = []
+
+    for stmt in body_node.named_children:
+        for call_node in _find_nested_calls(stmt):
+            pri = _call_priority(call_node)
+            candidates.append((pri, body_node, stmt, call_node))
+
         for compound in _find_compound_children(stmt):
-            yield from _find_extractable_calls(compound)
+            for pri, comp, st, cn in _find_extractable_calls_scored(compound):
+                candidates.append((pri, comp, st, cn))
+
+    # Sort by priority descending
+    candidates.sort(key=lambda x: x[0], reverse=True)
+    for _, comp, st, cn in candidates:
+        yield comp, st, cn
+
+
+def _find_extractable_calls_scored(
+    body_node: Node,
+) -> list[tuple[int, Node, Node, Node]]:
+    """Internal scored version for recursion."""
+    candidates: list[tuple[int, Node, Node, Node]] = []
+    for stmt in body_node.named_children:
+        for call_node in _find_nested_calls(stmt):
+            pri = _call_priority(call_node)
+            candidates.append((pri, body_node, stmt, call_node))
+        for compound in _find_compound_children(stmt):
+            candidates.extend(_find_extractable_calls_scored(compound))
+    return candidates
 
 
 def _find_compound_children(node: Node) -> Iterator[Node]:
@@ -128,25 +190,3 @@ def _find_nested_calls(node: Node, depth: int = 0) -> Iterator[Node]:
         if child.type == "compound_statement":
             continue
         yield from _find_nested_calls(child, next_depth)
-
-
-def _get_line_start(source: bytes, node: Node) -> int:
-    """Get the byte offset of the start of the line containing a node."""
-    pos = node.start_byte
-    while pos > 0 and source[pos - 1 : pos] not in (b"\n", b"\r"):
-        pos -= 1
-    return pos
-
-
-def _get_indent(source: bytes, node: Node) -> bytes:
-    """Get the whitespace indent of the line containing a node."""
-    pos = _get_line_start(source, node)
-
-    indent = b""
-    for i in range(pos, node.start_byte):
-        ch = source[i : i + 1]
-        if ch in (b" ", b"\t"):
-            indent += ch
-        else:
-            break
-    return indent

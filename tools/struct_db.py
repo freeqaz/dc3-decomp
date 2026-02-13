@@ -11,6 +11,7 @@ Usage:
     ./tools/struct_db.py lookup <class> <offset> [--db struct_db.sqlite]
     ./tools/struct_db.py info <class> [--db struct_db.sqlite]
     ./tools/struct_db.py list [--pattern PAT] [--db struct_db.sqlite]
+    ./tools/struct_db.py import-ghidra [--db struct_db.sqlite] [--dry-run]
 """
 
 import argparse
@@ -513,6 +514,29 @@ def cmd_list(args):
         print(f"{keyword} {cls['name']}")
 
 
+def cmd_import_ghidra(args):
+    """Import structure types from Ghidra via pyghidra-mcp."""
+    import sys
+    # Ensure project root is in path for tools.ghidra imports
+    project_root = str(Path(__file__).resolve().parent.parent)
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
+
+    from tools.ghidra.batch_export_types import batch_export_types, show_stats
+
+    if args.stats:
+        show_stats(Path(args.db))
+        return
+
+    batch_export_types(
+        db_path=Path(args.db),
+        mcp_url=args.mcp_url,
+        max_functions=args.max_functions,
+        timeout_per_func=args.timeout_per_func,
+        dry_run=args.dry_run,
+    )
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Struct offset database for DC3 decomp"
@@ -551,6 +575,37 @@ def main():
         help='Filter by glob pattern (e.g., Rnd*)'
     )
 
+    # import-ghidra command
+    ghidra_parser = subparsers.add_parser(
+        'import-ghidra',
+        help='Import structure types by batch-decompiling in Ghidra'
+    )
+    ghidra_parser.add_argument(
+        '--mcp-url',
+        default='http://127.0.0.1:8000/mcp',
+        help='pyghidra-mcp service URL'
+    )
+    ghidra_parser.add_argument(
+        '--max-functions',
+        type=int, default=0,
+        help='Max functions to decompile (0 = all)'
+    )
+    ghidra_parser.add_argument(
+        '--timeout-per-func',
+        type=int, default=30,
+        help='Decompiler timeout per function in seconds'
+    )
+    ghidra_parser.add_argument(
+        '--dry-run',
+        action='store_true',
+        help='Preview what would be imported without writing'
+    )
+    ghidra_parser.add_argument(
+        '--stats',
+        action='store_true',
+        help='Show struct_db statistics and exit'
+    )
+
     args = parser.parse_args()
 
     if args.command == 'build':
@@ -561,6 +616,8 @@ def main():
         cmd_info(args)
     elif args.command == 'list':
         cmd_list(args)
+    elif args.command == 'import-ghidra':
+        cmd_import_ghidra(args)
 
 
 if __name__ == '__main__':

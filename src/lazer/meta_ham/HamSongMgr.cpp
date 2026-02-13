@@ -423,7 +423,8 @@ void HamSongMgr::InitializePlaylists() {
             DataArray *songArray = playlistEntry->FindArray(songs, true);
             MILO_ASSERT(songArray, 0xed);
 
-            if (1 < songArray->Size()) {
+            auto _tmp2 = songArray->Size();
+            if (1 < _tmp2) {
                 for (int i = 1; i < songArray->Size(); i++) {
                     Symbol sym = songArray->Sym(i);
                     int songID = GetSongIDFromShortName(sym, 0);

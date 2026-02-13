@@ -56,7 +56,7 @@ void HamStarsDisplay::SetSongImpl(int songID, Difficulty diff, StarDisplayMode m
             const SongStatus &status = profile->GetSongStatusMgr()->GetSongStatus(songID);
             switch (mode) {
             case 0: {
-                MILO_ASSERT(diff == kNumDifficulties, 0x48);
+                MILO_ASSERT((unsigned int)diff == kNumDifficulties, 0x48);
                 const SongStatusData &data = status.GetBestSongStatusData();
                 if (data.mScore > 0) {
                     u11 = true;

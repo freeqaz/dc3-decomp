@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-from .types import Variant, ScoreResult
+from .types import Variant, ScoreResult, Diagnosis
 
 
 class Scorer:
@@ -31,6 +31,7 @@ class Scorer:
         self._decomp_path: Optional[str] = None
         self._orig_path: Optional[str] = None
         self._baseline_equivalent: Optional[bool] = None
+        self.diagnosis: Optional[Diagnosis] = None
 
         # Derive targeted object path from source path
         # src/system/rndobj/Foo.cpp -> build/373307D9/src/system/rndobj/Foo.obj
@@ -72,18 +73,22 @@ class Scorer:
                 return False, combined
         return True, None
 
-    def _run_objdiff(self) -> float:
-        """Run objdiff-cli and return fuzzy match percentage."""
-        result = subprocess.run(
-            ["./bin/objdiff-cli", "diff", "-p", ".", self.symbol, "-f", "json"],
-            capture_output=True,
-            text=True,
-        )
+    def _run_objdiff(self, include_instructions: bool = False) -> tuple[float, dict | None]:
+        """Run objdiff-cli and return (fuzzy_match_percent, full_json_dict).
+
+        When include_instructions is True, passes --include-instructions for
+        diagnosis. The JSON dict is only returned when include_instructions=True.
+        """
+        cmd = ["./bin/objdiff-cli", "diff", "-p", ".", self.symbol, "-f", "json"]
+        if include_instructions:
+            cmd.append("--include-instructions")
+        result = subprocess.run(cmd, capture_output=True, text=True)
         try:
             data = json.loads(result.stdout)
-            return data.get("fuzzy_match_percent", 0.0)
+            match_pct = data.get("fuzzy_match_percent", 0.0)
+            return match_pct, data if include_instructions else None
         except (json.JSONDecodeError, KeyError):
-            return 0.0
+            return 0.0, None
 
     def _check_equivalence(self) -> Optional[bool]:
         """Run unicorn comparison and return True if equivalent, False if divergent.
@@ -125,7 +130,7 @@ class Scorer:
                 error=build_error,
             )
 
-        match_percent = self._run_objdiff()
+        match_percent, _ = self._run_objdiff()
 
         # Guard rail: if baseline was equivalent, check variant equivalence
         execution_equivalent = None
@@ -147,8 +152,12 @@ class Scorer:
             execution_equivalent=execution_equivalent,
         )
 
-    def get_baseline(self) -> float:
-        """Score the unmodified source. Must be called within context manager."""
+    def get_baseline(self, guided: bool = True) -> float:
+        """Score the unmodified source. Must be called within context manager.
+
+        When guided=True, runs objdiff with --include-instructions and
+        produces a Diagnosis for pattern filtering.
+        """
         if self._original_source is None:
             raise RuntimeError("get_baseline() must be called within context manager")
         # Ensure original source is written
@@ -156,6 +165,11 @@ class Scorer:
         build_ok, _ = self._build()
         if not build_ok:
             return 0.0
-        baseline = self._run_objdiff()
+        baseline, objdiff_data = self._run_objdiff(include_instructions=guided)
+
+        if guided and objdiff_data and objdiff_data.get("instructions"):
+            from .diagnosis import diagnose_baseline
+            self.diagnosis = diagnose_baseline(objdiff_data)
+
         self._baseline_equivalent = self._check_equivalence()
         return baseline

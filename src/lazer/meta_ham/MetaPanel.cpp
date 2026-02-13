@@ -343,7 +343,8 @@ void MetaPanel::CycleVenuePreference() {
         MILO_ASSERT(pVenueEntryArray, 0x76);
         venuePref = pVenueEntryArray->Sym(0);
     } else {
-        for (int i = 1; i < pVenueArray->Size(); i++) {
+        auto _tmp1 = pVenueArray->Size();
+        for (int i = 1; i < _tmp1; i++) {
             DataArray *pVenueEntryArray = pVenueArray->Array(i);
             MILO_ASSERT(pVenueEntryArray, 0x80);
             Symbol entrySym = pVenueEntryArray->Sym(0);

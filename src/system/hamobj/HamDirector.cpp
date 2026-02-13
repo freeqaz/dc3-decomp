@@ -635,8 +635,8 @@ Key<Symbol> *HamDirector::GetMasterPracticeFrame(Symbol s) {
 
 HamCamShot *HamDirector::FindNextDircut() {
     float secs = TheTaskMgr.Seconds(TaskMgr::kRealTime);
-    const DircutEntry *entry = mDirCutKeys.Cross(secs, secs - TheTaskMgr.DeltaSeconds());
     HamCamShot *shot = nullptr;
+    const DircutEntry *entry = mDirCutKeys.Cross(secs, secs - TheTaskMgr.DeltaSeconds());
     if (entry) {
         if (mNumPlayersFailed || (entry->unk4 && mExcitement >= 3)) {
             shot = entry->unk0;

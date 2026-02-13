@@ -5,7 +5,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Iterator
 
-from ..types import FunctionContext, Variant
+from ..types import Diagnosis, FunctionContext, Variant
 
 _REGISTRY: dict[str, Pattern] = {}
 
@@ -26,6 +26,14 @@ class Pattern(ABC):
     @abstractmethod
     def generate(self, ctx: FunctionContext) -> Iterator[Variant]:
         """Yield source variants by applying this pattern to the function."""
+
+    def relevant(self, diagnosis: Diagnosis) -> bool:
+        """Return False to skip this pattern based on diagnosis.
+
+        Default: always relevant. Override in subclasses to filter based
+        on mismatch types present in the diagnosis.
+        """
+        return True
 
 
 def get_pattern(name: str) -> Pattern:

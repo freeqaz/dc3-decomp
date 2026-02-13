@@ -195,12 +195,13 @@ class UnicornEngine:
 
     def execute(self, patched_code, trampolines, func_size, timeout=5_000_000,
                 verbose=False, rdata_bytes=None, fill_pattern=None,
-                max_insns=50_000):
+                max_insns=50_000, object_memory=None, arg_registers=None):
         """Execute a patched function, resetting state from any previous run.
 
         Same interface as the standalone execute_function().
         max_insns caps instruction count to prevent runaway loops from
         dominating batch time via expensive Python hook callbacks.
+        arg_registers: optional dict mapping register IDs to values (e.g., {UC_PPC_REG_4: 1})
         """
         mu = self._mu
 
@@ -242,6 +243,10 @@ class UnicornEngine:
         for addr in trampolines.values():
             mu.mem_write(addr, TRAMPOLINE_STUB)
 
+        # Override object region with typed memory if provided
+        if object_memory is not None:
+            mu.mem_write(OBJECT_BASE, bytes(object_memory[:REGION_SIZE]))
+
         # Write vtable data
         mu.mem_write(VTABLE_BASE, _VTABLE_DATA)
         mu.mem_write(TRAMPOLINE_BASE + VTABLE_TRAMP_OFFSET, _VTABLE_TRAMP_DATA)
@@ -262,6 +267,11 @@ class UnicornEngine:
         mu.reg_write(UC_PPC_REG_LR, SENTINEL_ADDR)
         msr = mu.reg_read(UC_PPC_REG_MSR)
         mu.reg_write(UC_PPC_REG_MSR, msr | MSR_FP_BIT)
+
+        # Set argument registers if provided
+        if arg_registers:
+            for reg_id, val in arg_registers.items():
+                mu.reg_write(reg_id, val)
 
         # Execute (count= caps instructions to prevent runaway loops)
         error = None
@@ -310,7 +320,7 @@ class UnicornEngine:
 
 def execute_function(patched_code, trampolines, func_size, timeout=5_000_000,
                      verbose=False, rdata_bytes=None, fill_pattern=None,
-                     max_insns=50_000):
+                     max_insns=50_000, object_memory=None, arg_registers=None):
     """Execute a patched function in Unicorn and return the result.
 
     Standalone version — creates a fresh engine each call.
@@ -320,4 +330,5 @@ def execute_function(patched_code, trampolines, func_size, timeout=5_000_000,
     return engine.execute(patched_code, trampolines, func_size,
                           timeout=timeout, verbose=verbose,
                           rdata_bytes=rdata_bytes, fill_pattern=fill_pattern,
-                          max_insns=max_insns)
+                          max_insns=max_insns, object_memory=object_memory,
+                          arg_registers=arg_registers)

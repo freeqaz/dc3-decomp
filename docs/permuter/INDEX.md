@@ -2,6 +2,10 @@
 
 Tree-sitter based source permuter for automatic code variation generation. Unlike the original decomp-permuter (C only), this tool works with C++ source code.
 
+See also:
+- [Diagnosis-Guided Permuter](guided-permuter.md) — design for objdiff-driven targeting
+- [Permuter Evolution](evolution/OVERVIEW.md) — primitives, pattern migration, and composition layer
+
 ## Installation
 
 ```bash
@@ -21,18 +25,11 @@ python -m scripts.permuter \
     --function "RndMesh::BurnXfm" \
     --dry-run
 
-# Run and score all variants
+# Run and score all variants (stops on 100% match, auto-applies best improvement)
 python -m scripts.permuter \
     --symbol "?BurnXfm@RndMesh@@QAAXXZ" \
     --source src/system/rndobj/Mesh.cpp \
     --function "RndMesh::BurnXfm"
-
-# Stop when a perfect match is found
-python -m scripts.permuter \
-    --symbol "?BurnXfm@RndMesh@@QAAXXZ" \
-    --source src/system/rndobj/Mesh.cpp \
-    --function "RndMesh::BurnXfm" \
-    --stop-on-perfect
 ```
 
 ## CLI Options
@@ -44,9 +41,13 @@ python -m scripts.permuter \
 | `--function` | Qualified C++ function name (e.g. `RndMesh::BurnXfm`) |
 | `--patterns` | Comma-separated pattern names, or `all` (default: all) |
 | `--max-variants` | Maximum variants to generate (default: 100) |
-| `--stop-on-perfect` | Stop scoring when a 100% match is found |
+| `--no-stop-on-perfect` | Continue scoring even after a 100% match is found |
+| `--no-apply` | Do not auto-apply the best improving variant |
 | `--json` | Output results as JSON |
 | `--dry-run` | Generate and list variants without building/scoring |
+| `--unit` | Unit name for unicorn execution equivalence guard rail |
+| `--compose` | Enable composition: chain pattern pairs for multi-step transforms |
+| `--no-guided` | Disable diagnosis-guided pattern filtering |
 | `--list-patterns` | List available patterns and exit |
 
 ## Patterns
@@ -103,7 +104,7 @@ Key design decisions:
 - **Byte-level splicing**: All mutations operate on raw bytes using tree-sitter node ranges. No regex or string parsing.
 - **Scope-aware**: Variable extraction respects compound_statement boundaries (won't extract loop-scoped variables to function scope)
 - **File restoration**: Scorer uses a context manager to guarantee source file restoration even on errors
-- **Independent variants**: Each variant is generated from the original source, not chained
+- **Independent variants by default**: Each variant is generated from the original source; composition (chaining pattern pairs) is available via `--compose`
 
 ## Example Output
 
@@ -156,15 +157,28 @@ scripts/permuter/
 ├── __init__.py          # Public API exports
 ├── __main__.py          # CLI entry point
 ├── types.py             # FunctionContext, Variant, ScoreResult dataclasses
-├── extractor.py         # tree-sitter function extraction
+├── extractor.py         # tree-sitter function extraction + reparse
 ├── scorer.py            # ninja build + objdiff scoring
-├── generator.py         # Pattern application
+├── generator.py         # Pattern application + composition orchestration
+├── composer.py          # Multi-step pattern composition (--compose)
+├── editor.py            # SourceEditor — byte-level AST splicing primitive
+├── ast_queries.py       # Reusable AST query helpers
+├── diagnosis.py         # Diagnosis dataclass + objdiff mismatch parsing
 └── patterns/
     ├── __init__.py      # Auto-imports all patterns
     ├── base.py          # Pattern ABC with auto-registration
     ├── variable_extraction.py
     ├── signed_unsigned.py
-    └── inline_assignment.py
+    ├── inline_assignment.py
+    ├── declaration_reorder.py
+    ├── argument_swap.py
+    ├── branch_polarity.py
+    ├── commutative_swap.py
+    ├── comparison_equivalence.py
+    ├── comparison_flip.py
+    ├── empty_size_swap.py
+    ├── fma_reorder.py
+    └── ternary_swap.py
 ```
 
 ## Adding New Patterns

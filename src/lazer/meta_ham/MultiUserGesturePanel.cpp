@@ -245,7 +245,7 @@ int MultiUserGesturePanel::GetPlayerIndex(int idx) const {
     int check = prop->Int();
     if (check == 0) {
         check = playerSide - 1;
-        if (idx == 0) {
+        if ((unsigned int)idx == 0) {
             idx = check - ((playerSide - 2) + (playerSide - 1 == 0));
         } else {
             idx = playerSide == 0;

@@ -365,8 +365,7 @@ void Campaign::ConfigureCampaignData(DataArray *i_pConfig) {
     MILO_ASSERT(pOutroArray, 0xAB);
     pOutroArray->FindData(venue, unk94, false);
     pOutroArray->FindData(crew, unk98, false);
-    pSongArray = pIntroArray->FindArray(songs);
-    MILO_ASSERT(pSongArray, 0xB0);
+        MILO_ASSERT(pSongArray = pIntroArray->FindArray(songs), 0xB0);
     MILO_ASSERT(pSongArray->Size() > 1, 0xB1);
     numSongs = pSongArray->Size() - 1;
     for (int i = 0; i < numSongs; i++) {

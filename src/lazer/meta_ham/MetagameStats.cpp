@@ -126,7 +126,7 @@ void MetagameStats::Text(int, int data, UIListLabel *slot, UILabel *label) const
                         SystemConfig()->FindArray("characters", false);
                     MILO_ASSERT(characterArray, 0xDF);
                     for (int i = 1; i < characterArray->Size(); i++) {
-                        if (fave == i) {
+                        if ((unsigned int)(int)(unsigned int)fave == i) {
                             DataArray *characterEntry = characterArray->Array(i);
                             MILO_ASSERT(characterEntry, 0xE5);
                             s15 = characterEntry->Sym(0);

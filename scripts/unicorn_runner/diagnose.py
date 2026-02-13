@@ -12,8 +12,11 @@ import subprocess
 import sys
 
 from .coff import COFFParser
+from .comparator import classify_divergence, format_result
 from .run import (resolve_unit, list_functions, run_comparison_inner,
-                  run_dual_comparison_inner, EXIT_EQUIVALENT, EXIT_SKIPPED)
+                  run_dual_comparison_inner, _run_comparison_core,
+                  EXIT_EQUIVALENT, EXIT_DIVERGENT, EXIT_SKIPPED, EXIT_ERROR)
+from .memory_map import FILL_BYTE
 
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -65,24 +68,41 @@ def diagnose_single(symbol, decomp_coff, orig_coff, verbose=False,
 
     Returns dict with diagnosis data, or None if symbol not found.
     """
-    # Run unicorn
-    if dual_fixture:
-        exit_code, output_text = run_dual_comparison_inner(
-            symbol, decomp_coff, orig_coff, verbose=False, timeout=5_000_000,
-            coload=coload, coload_depth=coload_depth)
-    else:
-        exit_code, output_text = run_comparison_inner(
-            symbol, decomp_coff, orig_coff, verbose=False, timeout=5_000_000,
-            coload=coload, coload_depth=coload_depth, fill_pattern=fill_pattern)
+    # Run 1: primary comparison (zero fill or custom fill)
+    primary_fill = fill_pattern if not dual_fixture else None
+    exit_code, bundle, verbose_lines, error_msg = _run_comparison_core(
+        symbol, decomp_coff, orig_coff, timeout=5_000_000,
+        coload=coload, coload_depth=coload_depth,
+        fill_pattern=primary_fill)
 
     if exit_code == EXIT_SKIPPED:
         return None
+    if bundle is None:
+        return None
 
-    # Extract confidence from dual-fixture output
+    # Dual-fixture confidence scoring
     confidence = None
-    if dual_fixture and output_text.startswith("[confidence="):
-        tag_end = output_text.index("] ")
-        confidence = output_text[len("[confidence="):tag_end]
+    if dual_fixture and exit_code not in (EXIT_ERROR, EXIT_SKIPPED):
+        code_cd, _, _, _ = _run_comparison_core(
+            symbol, decomp_coff, orig_coff, timeout=5_000_000,
+            coload=coload, coload_depth=coload_depth,
+            fill_pattern=FILL_BYTE)
+        if exit_code == code_cd:
+            confidence = "high"
+        else:
+            confidence = "fixture_sensitive"
+
+    # Classify divergence
+    div_class = None
+    if bundle.result.verdict == "DIVERGENT":
+        div_class = classify_divergence(
+            bundle.result, bundle.decomp_result, bundle.orig_result,
+            bundle.decomp_relocs, bundle.orig_relocs)
+
+    # Format output text for summaries
+    output_text = format_result(
+        bundle.result, bundle.decomp_result, bundle.orig_result,
+        bundle.decomp_relocs, bundle.orig_relocs, verbose=verbose)
 
     # Get objdiff verdict
     objdiff = get_objdiff_verdict(symbol)
@@ -97,7 +117,7 @@ def diagnose_single(symbol, decomp_coff, orig_coff, verbose=False,
     unicorn_verdict = "EQUIVALENT" if exit_code == EXIT_EQUIVALENT else "DIVERGENT"
     unicorn_summary = format_unicorn_summary(exit_code, output_text)
 
-    # Determine recommendation with confidence
+    # Determine recommendation with confidence and classification
     if match_pct >= 100.0:
         recommendation = "DONE"
     elif unicorn_verdict == "EQUIVALENT":
@@ -108,7 +128,11 @@ def diagnose_single(symbol, decomp_coff, orig_coff, verbose=False,
         else:
             recommendation = "SKIP"
     else:
-        recommendation = "FIX"
+        # Annotate FIX with divergence classification
+        if div_class and div_class != "logic":
+            recommendation = f"FIX({div_class})"
+        else:
+            recommendation = "FIX"
 
     return {
         "symbol": symbol,
@@ -120,6 +144,7 @@ def diagnose_single(symbol, decomp_coff, orig_coff, verbose=False,
         "unicorn_detail": output_text if verbose else None,
         "recommendation": recommendation,
         "confidence": confidence,
+        "divergence_class": div_class,
     }
 
 
@@ -128,6 +153,8 @@ def print_single(diag, verbose=False):
     print(f"=== {diag['demangled']} ===")
     print(f"  objdiff: {diag['match_pct']:.1f}% match, {diag['objdiff_class']}")
     print(f"  unicorn: {diag['unicorn_summary']}")
+    if diag.get("divergence_class"):
+        print(f"  divergence: {diag['divergence_class']}")
     print(f"  Recommendation: {diag['recommendation']}")
     if verbose and diag.get("unicorn_detail"):
         print()
@@ -137,16 +164,25 @@ def print_single(diag, verbose=False):
 
 def print_batch(results, unit_name):
     """Print batch diagnosis with summary."""
-    # Sort: FIX first, then SKIP(?), then SKIP(high)/SKIP, then DONE
-    order = {"FIX": 0, "SKIP(?)": 1, "SKIP": 2, "SKIP(high)": 3, "DONE": 4}
-    results.sort(key=lambda d: (order.get(d["recommendation"], 5), -d["match_pct"]))
+    # Sort: FIX (logic) first, then FIX(classified), then SKIP(?), then SKIP/SKIP(high), then DONE
+    def sort_key(d):
+        rec = d["recommendation"]
+        if rec == "FIX":
+            return (0, -d["match_pct"])
+        if rec.startswith("FIX("):
+            return (1, -d["match_pct"])
+        order = {"SKIP(?)": 2, "SKIP": 3, "SKIP(high)": 4, "DONE": 5}
+        return (order.get(rec, 6), -d["match_pct"])
+    results.sort(key=sort_key)
 
     print(f"=== {unit_name} ({len(results)} functions) ===")
 
     skip_high = 0
     skip_sensitive = 0
     skip_plain = 0
-    fix_count = 0
+    fix_logic = 0
+    fix_build_env = 0
+    fix_regalloc = 0
     done_count = 0
     objdiff_flagged = 0
 
@@ -163,10 +199,10 @@ def print_batch(results, unit_name):
 
         # Add brief divergence info for FIX items
         suffix = ""
-        if rec == "FIX" and d["unicorn_summary"].startswith("DIVERGENT — "):
+        if rec.startswith("FIX") and d["unicorn_summary"].startswith("DIVERGENT — "):
             suffix = "  (" + d["unicorn_summary"][len("DIVERGENT — "):] + ")"
 
-        print(f"  {rec:10s}  {pct:5.1f}%  {name:<50s}  objdiff={objdiff_label:<20s}  unicorn={unicorn_label}{suffix}")
+        print(f"  {rec:<15s}  {pct:5.1f}%  {name:<50s}  objdiff={objdiff_label:<20s}  unicorn={unicorn_label}{suffix}")
 
         if rec == "SKIP(high)":
             skip_high += 1
@@ -175,7 +211,11 @@ def print_batch(results, unit_name):
         elif rec == "SKIP":
             skip_plain += 1
         elif rec == "FIX":
-            fix_count += 1
+            fix_logic += 1
+        elif rec == "FIX(build_env)":
+            fix_build_env += 1
+        elif rec == "FIX(regalloc)":
+            fix_regalloc += 1
         elif rec == "DONE":
             done_count += 1
 
@@ -183,17 +223,35 @@ def print_batch(results, unit_name):
             objdiff_flagged += 1
 
     total_skip = skip_high + skip_sensitive + skip_plain
+    total_fix = fix_logic + fix_build_env + fix_regalloc
     print()
+
+    # Build FIX breakdown
+    fix_parts = []
+    if fix_logic > 0:
+        fix_parts.append(f"{fix_logic} logic")
+    if fix_build_env > 0:
+        fix_parts.append(f"{fix_build_env} build_env")
+    if fix_regalloc > 0:
+        fix_parts.append(f"{fix_regalloc} regalloc")
+
     if skip_high > 0 or skip_sensitive > 0:
-        print(f"  Summary: {done_count} DONE, {total_skip} SKIP [{skip_high} high, {skip_sensitive} sensitive, {skip_plain} basic], {fix_count} FIX")
+        skip_detail = f" [{skip_high} high, {skip_sensitive} sensitive, {skip_plain} basic]"
     else:
-        print(f"  Summary: {done_count} DONE, {total_skip} SKIP (behaviorally equivalent), {fix_count} FIX (actual differences)")
+        skip_detail = " (behaviorally equivalent)"
+
+    fix_detail = f" [{', '.join(fix_parts)}]" if len(fix_parts) > 1 else ""
+    print(f"  Summary: {done_count} DONE, {total_skip} SKIP{skip_detail}, {total_fix} FIX{fix_detail}")
+
     if total_skip > 0 and objdiff_flagged > 0:
         skip_recs = ("SKIP", "SKIP(high)", "SKIP(?)")
         false_positives = sum(1 for d in results if d["recommendation"] in skip_recs
                              and d["objdiff_class"] in ("LIKELY_FIXABLE", "MAYBE_FIXABLE", "NEEDS_INVESTIGATION"))
         if false_positives > 0:
             print(f"  Without unicorn: objdiff flagged {objdiff_flagged} as needing work → {false_positives} are actually equivalent (time saved)")
+    if fix_build_env > 0 or fix_regalloc > 0:
+        unfixable = fix_build_env + fix_regalloc
+        print(f"  Unfixable divergences: {unfixable} ({fix_build_env} build_env, {fix_regalloc} regalloc)")
 
 
 def main():

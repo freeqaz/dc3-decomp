@@ -163,7 +163,8 @@ void ChallengeResultPanel::UpdateList(int player) {
     PropertyEventProvider *provider = playerData->Provider();
     MILO_ASSERT(provider, 0x7F);
     unk5c = provider->Property(score)->Int();
-    unk60 = provider->Property(challenge_mission_index)->Int() + numDisplay;
+    auto missionIndex = provider->Property(challenge_mission_index)->Int();
+    unk60 = missionIndex + numDisplay;
     unk68 = provider->Property(side)->Int();
     playerName = provider->Property(player_name)->Str();
     int challengeScore = provider->Property(challenge_mission_score)->Int();
@@ -230,7 +231,7 @@ void ChallengeResultPanel::UpdateList(int player) {
     int gradeValue;
     if (beatenCount == 0) {
         gradeValue = 0;
-    } else if ((unsigned int)beatenCount == mItems.size() - numDisplay - 1) {
+    } else if ((unsigned int)(unsigned int)beatenCount == mItems.size() - numDisplay - 1) {
         gradeValue = 4;
     } else if (beatRival) {
         if (beatenCount > unk60 + 1) {

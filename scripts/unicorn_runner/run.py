@@ -11,6 +11,8 @@ import os
 import sys
 from concurrent.futures import ProcessPoolExecutor
 
+from dataclasses import dataclass
+
 from .builder import prepare_side, prepare_coloaded_side
 from .coff import COFFParser
 from .coloader import collect_intra_tu_callees, build_coload_layout
@@ -21,6 +23,16 @@ from .extractor import (
 from .memory_map import CODE_BASE, FILL_BYTE
 from .engine import execute_function, UnicornEngine
 from .comparator import compare, format_result, format_json_result
+
+
+@dataclass
+class ComparisonBundle:
+    """Raw comparison data for downstream analysis (classification, probing)."""
+    result: object           # ComparisonResult
+    decomp_result: object    # ExecutionResult
+    orig_result: object      # ExecutionResult
+    decomp_relocs: list
+    orig_relocs: list
 
 # Exit codes
 EXIT_EQUIVALENT = 0
@@ -113,31 +125,33 @@ def list_functions(decomp_path, orig_path, decomp_coff=None, orig_coff=None):
     return eligible
 
 
-def run_comparison_inner(symbol, decomp_coff, orig_coff, verbose=False, timeout=5_000_000,
-                         json_output=False, coload=True, coload_depth=None,
-                         fill_pattern=None, engine=None):
-    """Core comparison logic operating on pre-parsed COFF instances.
+def _run_comparison_core(symbol, decomp_coff, orig_coff, timeout=5_000_000,
+                         coload=True, coload_depth=None,
+                         fill_pattern=None, engine=None, object_memory=None,
+                         arg_registers=None):
+    """Core comparison logic returning raw structured data.
 
-    Returns (exit_code, output_text) without printing anything.
-    If json_output=True, output_text is a JSON string.
-    If engine is provided, uses it for execution (avoids Uc() init/teardown).
+    Returns (exit_code, ComparisonBundle_or_None, verbose_lines, error_message).
+    On success, bundle contains the ComparisonResult and ExecutionResults.
+    On skip/error, bundle is None and error_message explains why.
+    arg_registers: optional dict mapping register IDs to values for both executions.
     """
     # 1. Extract function bytes and relocations
     decomp_bytes, decomp_relocs = extract_from_decomp(decomp_coff, symbol)
     orig_bytes, orig_relocs = extract_from_original(orig_coff, symbol)
 
     if decomp_bytes is None:
-        return EXIT_SKIPPED, f"SKIPPED: Symbol '{symbol}' not found in decomp .obj"
+        return EXIT_SKIPPED, None, [], f"SKIPPED: Symbol '{symbol}' not found in decomp .obj"
     if orig_bytes is None:
-        return EXIT_SKIPPED, f"SKIPPED: Symbol '{symbol}' not found in original .obj"
+        return EXIT_SKIPPED, None, [], f"SKIPPED: Symbol '{symbol}' not found in original .obj"
     if len(decomp_bytes) == 0 or len(orig_bytes) == 0:
-        return EXIT_SKIPPED, f"SKIPPED: Symbol '{symbol}' has zero size"
+        return EXIT_SKIPPED, None, [], f"SKIPPED: Symbol '{symbol}' has zero size"
 
-    lines = []
-    if verbose:
-        lines.append(f"Symbol: {symbol}")
-        lines.append(f"  Decomp: {len(decomp_bytes)} bytes, {len(decomp_relocs)} relocs")
-        lines.append(f"  Original: {len(orig_bytes)} bytes, {len(orig_relocs)} relocs")
+    verbose_lines = [
+        f"Symbol: {symbol}",
+        f"  Decomp: {len(decomp_bytes)} bytes, {len(decomp_relocs)} relocs",
+        f"  Original: {len(orig_bytes)} bytes, {len(orig_relocs)} relocs",
+    ]
 
     # 2. Classify indirect branches
     d_class = classify_indirect_branch(decomp_bytes, decomp_relocs, decomp_coff)
@@ -165,10 +179,9 @@ def run_comparison_inner(symbol, decomp_coff, orig_coff, verbose=False, timeout=
         intra_tu_addrs = {sym: CODE_BASE + off
                           for sym, off in layout.symbol_offsets.items()}
 
-        if verbose:
-            lines.append(f"  Co-loaded callees: {coloaded_count} ({layout.total_size}B combined)")
-            for csym in layout.coloaded_symbols:
-                lines.append(f"    {csym} @ offset 0x{layout.symbol_offsets[csym]:X}")
+        verbose_lines.append(f"  Co-loaded callees: {coloaded_count} ({layout.total_size}B combined)")
+        for csym in layout.coloaded_symbols:
+            verbose_lines.append(f"    {csym} @ offset 0x{layout.symbol_offsets[csym]:X}")
 
         try:
             decomp_side = prepare_coloaded_side(
@@ -178,7 +191,7 @@ def run_comparison_inner(symbol, decomp_coff, orig_coff, verbose=False, timeout=
                 orig_bytes, orig_relocs, orig_coff, symbol, o_class,
                 o_callees, layout, intra_tu_addrs)
         except Exception as e:
-            return EXIT_ERROR, f"ERROR: Co-load patching failed: {e}"
+            return EXIT_ERROR, None, [], f"ERROR: Co-load patching failed: {e}"
     else:
         try:
             decomp_side = prepare_side(
@@ -186,58 +199,89 @@ def run_comparison_inner(symbol, decomp_coff, orig_coff, verbose=False, timeout=
             orig_side = prepare_side(
                 orig_bytes, orig_relocs, orig_coff, symbol, o_class)
         except Exception as e:
-            return EXIT_ERROR, f"ERROR: Patching failed: {e}"
+            return EXIT_ERROR, None, [], f"ERROR: Patching failed: {e}"
 
-    if verbose:
-        lines.append(f"  Decomp trampolines: {len(decomp_side.trampolines)}")
-        lines.append(f"  Original trampolines: {len(orig_side.trampolines)}")
+    verbose_lines.append(f"  Decomp trampolines: {len(decomp_side.trampolines)}")
+    verbose_lines.append(f"  Original trampolines: {len(orig_side.trampolines)}")
 
     # 5. Execute both sides
     _exec = engine.execute if engine else execute_function
     try:
         decomp_result = _exec(
             decomp_side.code, decomp_side.trampolines, decomp_side.func_size,
-            timeout=timeout, verbose=verbose, rdata_bytes=decomp_side.rdata_bytes,
-            fill_pattern=fill_pattern)
+            timeout=timeout, verbose=False, rdata_bytes=decomp_side.rdata_bytes,
+            fill_pattern=fill_pattern, object_memory=object_memory,
+            arg_registers=arg_registers)
         orig_result = _exec(
             orig_side.code, orig_side.trampolines, orig_side.func_size,
-            timeout=timeout, verbose=verbose, rdata_bytes=orig_side.rdata_bytes,
-            fill_pattern=fill_pattern)
+            timeout=timeout, verbose=False, rdata_bytes=orig_side.rdata_bytes,
+            fill_pattern=fill_pattern, object_memory=object_memory,
+            arg_registers=arg_registers)
     except Exception as e:
-        return EXIT_ERROR, f"ERROR: Execution failed: {e}"
+        return EXIT_ERROR, None, [], f"ERROR: Execution failed: {e}"
 
     # 6. Compare
     result = compare(decomp_result, orig_result, decomp_relocs, orig_relocs)
 
-    # 7. Format output
+    if coloaded_count > 0:
+        verbose_lines.append(f"  Co-loaded: {coloaded_count} callees, {decomp_side.func_size}B combined code")
+
+    bundle = ComparisonBundle(
+        result=result,
+        decomp_result=decomp_result,
+        orig_result=orig_result,
+        decomp_relocs=decomp_relocs,
+        orig_relocs=orig_relocs,
+    )
+    exit_code = EXIT_EQUIVALENT if result.verdict == "EQUIVALENT" else EXIT_DIVERGENT
+    return exit_code, bundle, verbose_lines, None
+
+
+def run_comparison_inner(symbol, decomp_coff, orig_coff, verbose=False, timeout=5_000_000,
+                         json_output=False, coload=True, coload_depth=None,
+                         fill_pattern=None, engine=None, object_memory=None):
+    """Comparison with formatted output, operating on pre-parsed COFF instances.
+
+    Returns (exit_code, output_text) without printing anything.
+    If json_output=True, output_text is a JSON string.
+    If engine is provided, uses it for execution (avoids Uc() init/teardown).
+    """
+    exit_code, bundle, verbose_lines, error_msg = _run_comparison_core(
+        symbol, decomp_coff, orig_coff, timeout=timeout,
+        coload=coload, coload_depth=coload_depth,
+        fill_pattern=fill_pattern, engine=engine, object_memory=object_memory)
+
+    if bundle is None:
+        return exit_code, error_msg
+
+    result = bundle.result
+    decomp_result = bundle.decomp_result
+    orig_result = bundle.orig_result
+    decomp_relocs = bundle.decomp_relocs
+    orig_relocs = bundle.orig_relocs
+
+    # Format output
     if json_output:
+        decomp_bytes, _ = extract_from_decomp(decomp_coff, symbol)
+        orig_bytes, _ = extract_from_original(orig_coff, symbol)
         metadata = {
             "symbol": symbol,
             "decomp_size": len(decomp_bytes),
             "orig_size": len(orig_bytes),
-            "coloaded_callees": coloaded_count,
-            "combined_code_size": (decomp_side.func_size
-                                   if layout
-                                   else max(len(decomp_side.code), len(orig_side.code))),
+            "coloaded_callees": 0,  # approximate
+            "combined_code_size": 0,
         }
         output = format_json_result(
             result, decomp_result, orig_result, orig_relocs, metadata)
-        exit_code = EXIT_EQUIVALENT if result.verdict == "EQUIVALENT" else EXIT_DIVERGENT
         return exit_code, output
 
     output = format_result(
         result, decomp_result, orig_result,
         decomp_relocs, orig_relocs, verbose=verbose)
-    if coloaded_count > 0 and verbose:
-        lines.append(f"  Co-loaded: {coloaded_count} callees, {decomp_side.func_size}B combined code")
-    if lines:
-        output = "\n".join(lines) + "\n" + output
+    if verbose:
+        output = "\n".join(verbose_lines) + "\n" + output
 
-    # 8. Return
-    if result.verdict == "EQUIVALENT":
-        return EXIT_EQUIVALENT, output
-    else:
-        return EXIT_DIVERGENT, output
+    return exit_code, output
 
 
 def run_dual_comparison_inner(symbol, decomp_coff, orig_coff, verbose=False,
@@ -342,19 +386,49 @@ def _find_common_text_symbols(decomp_coff, orig_coff):
 
 def run_batch(decomp_path, orig_path, verbose=False, timeout=5_000_000, quiet=False,
               coload=True, coload_depth=None, fill_pattern=None, dual_fixture=False,
-              cache=None):
+              cache=None, typed=False, unit_name=None):
     """Run comparison for all eligible functions in a unit.
 
     Parses COFF files once and reuses a single Unicorn engine for all functions.
     If quiet=True, suppresses per-function output (for multiprocessing).
+    If typed=True, generates type-aware object memory from struct_db.
+    If unit_name is provided, uses it to extract the primary class for typed fixtures.
 
     Returns (equivalent, divergent, errors, skipped, cached_count) counts.
     """
+    import random
+    from .typed_fixture import extract_class_from_symbol, extract_class_from_unit, generate_typed_object
+
     decomp_coff = COFFParser(decomp_path)
     orig_coff = COFFParser(orig_path)
 
     # Find common symbols directly (avoids redundant extraction in list_functions)
     common = _find_common_text_symbols(decomp_coff, orig_coff)
+
+    # Load struct_db if typed mode requested
+    db = None
+    if typed:
+        try:
+            from tools.struct_db import StructDB
+            project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            db_path = os.path.join(project_root, "struct_db.sqlite")
+            if os.path.exists(db_path):
+                db = StructDB(db_path)
+                db.connect()
+        except ImportError:
+            pass
+
+    # Generate typed memory once for the unit's primary class
+    rng = random.Random(42)
+    unit_typed_mem_zero = None
+    unit_typed_mem_cd = None
+    if db is not None:
+        unit_class = extract_class_from_unit(unit_name) if unit_name else None
+        if unit_class:
+            unit_typed_mem_zero = generate_typed_object(
+                unit_class, db, rng, fill_byte=0x00)
+            unit_typed_mem_cd = generate_typed_object(
+                unit_class, db, rng, fill_byte=0xCD)
 
     equivalent = 0
     divergent = 0
@@ -393,10 +467,22 @@ def run_batch(decomp_path, orig_path, verbose=False, timeout=5_000_000, quiet=Fa
                 tag_end = _output.index("] ")
                 confidence = _output[len("[confidence="):tag_end]
         else:
+            # Standard comparison (with typed memory if available)
             code, _output = run_comparison_inner(
                 sym_name, decomp_coff, orig_coff, verbose=False, timeout=timeout,
-                coload=coload, coload_depth=coload_depth, fill_pattern=fill_pattern)
+                coload=coload, coload_depth=coload_depth, fill_pattern=fill_pattern,
+                object_memory=unit_typed_mem_zero)
             confidence = None
+
+            # If divergent and we have typed memory, retry with CD fill + typed
+            if code == EXIT_DIVERGENT and unit_typed_mem_cd is not None:
+                code2, _output2 = run_comparison_inner(
+                    sym_name, decomp_coff, orig_coff, verbose=False, timeout=timeout,
+                    coload=coload, coload_depth=coload_depth, fill_pattern=0xCD,
+                    object_memory=unit_typed_mem_cd)
+                if code2 == EXIT_EQUIVALENT:
+                    code = code2
+                    _output = _output2
 
         # Store in cache
         if cache is not None and code not in (EXIT_ERROR, EXIT_SKIPPED):
@@ -417,6 +503,9 @@ def run_batch(decomp_path, orig_path, verbose=False, timeout=5_000_000, quiet=Fa
 
         if not quiet:
             print(f"  {status:11s}  {sym_name}")
+
+    if db is not None:
+        db.close()
 
     return equivalent, divergent, errors, skipped, cached_count
 
@@ -454,7 +543,7 @@ def _process_unit(args):
     New results are NOT saved by workers — the main process handles saving
     via a follow-up single-threaded pass (or the next run picks them up).
     """
-    name, decomp_path, orig_path, timeout, coload, coload_depth, fill_pattern, dual_fixture, cache_path = args
+    name, decomp_path, orig_path, timeout, coload, coload_depth, fill_pattern, dual_fixture, cache_path, typed = args
     if not os.path.exists(decomp_path) or not os.path.exists(orig_path):
         return (name, 0, 0, 0, 0, 0, False)
     # Each worker loads a read-only cache snapshot for lookups
@@ -468,7 +557,8 @@ def _process_unit(args):
                                               coload=coload, coload_depth=coload_depth,
                                               fill_pattern=fill_pattern,
                                               dual_fixture=dual_fixture,
-                                              cache=cache)
+                                              cache=cache, typed=typed,
+                                              unit_name=name)
         # Don't save from workers — race condition with other workers.
         # Cache still provides lookup hits from previous runs.
         return (name, eq, div, err, sk, cached, True)
@@ -505,6 +595,8 @@ def main():
                        help="Run twice (zero + 0xCD fill) for confidence scoring")
     parser.add_argument("--no-cache", action="store_true",
                        help="Disable result caching for batch modes")
+    parser.add_argument("--typed", action="store_true",
+                       help="Use type-aware object memory from struct_db")
 
     args = parser.parse_args()
 
@@ -523,7 +615,7 @@ def main():
         units = get_all_units()
         work = [(name, dp, op, args.timeout, coload, coload_depth,
                  args.fill_pattern, args.dual_fixture,
-                 cache_path if use_cache else None) for name, dp, op in units]
+                 cache_path if use_cache else None, args.typed) for name, dp, op in units]
 
         cache_label = "enabled" if use_cache else "disabled"
         print(f"Batch-all: {len(units)} units with both target and base paths")
@@ -571,7 +663,8 @@ def main():
                         coload=coload, coload_depth=coload_depth,
                         fill_pattern=args.fill_pattern,
                         dual_fixture=args.dual_fixture,
-                        cache=main_cache)
+                        cache=main_cache, typed=args.typed,
+                        unit_name=name)
                     _handle_result((name, eq, div, err, sk, cached, True))
                 except Exception:
                     _handle_result((name, 0, 0, 1, 0, 0, True))
@@ -637,7 +730,8 @@ def main():
             verbose=args.verbose, timeout=args.timeout,
             coload=coload, coload_depth=coload_depth,
             fill_pattern=args.fill_pattern, dual_fixture=args.dual_fixture,
-            cache=cache)
+            cache=cache, typed=args.typed,
+            unit_name=args.unit)
         if cache is not None:
             cache.save()
         total = eq + div + err + sk

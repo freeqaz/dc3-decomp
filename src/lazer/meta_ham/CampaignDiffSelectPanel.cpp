@@ -180,7 +180,8 @@ void CampaignDiffSelectPanel::CheatWinDiff(int i) {
             if (i <= count) {
                 CampaignEra *pEra = *it;
                 MILO_ASSERT(pEra, 0xe6);
-                for (int j = 0; j < pEra->GetNumSongs(); j++) {
+                auto _tmp2 = pEra->GetNumSongs();
+                for (int j = 0; j < _tmp2; j++) {
                     Symbol songName = pEra->GetSongName(i);
                     pPerformer->UpdateEraSong(diff, pEra->GetName(), songName, 5);
                     int songID = TheSongMgr.GetSongIDFromShortName(songName);

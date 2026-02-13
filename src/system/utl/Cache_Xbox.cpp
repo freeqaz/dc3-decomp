@@ -194,8 +194,9 @@ bool CacheXbox::GetFreeSpaceSync(u64 *u) {
             XDEVICE_DATA deviceData;
             DWORD err = XContentGetDeviceData(mCacheID.DeviceID(), &deviceData);
             if (err != ERROR_SUCCESS) {
-                if (err != 5 && err != 0x15 && err != 0x456 && err != 0x48F
-                    && err != 0x651 && IsDeviceConnected(mCacheID.DeviceID())) {
+                auto _tmp3 = IsDeviceConnected(mCacheID.DeviceID());
+                if ((int)err != 5 && err != 0x15 && err != 0x456 && err != 0x48F
+                    && err != 0x651 && _tmp3) {
                     MILO_NOTIFY(
                         "CacheXbox::GetFreeSpaceSync(): Unhandled error returned from GetDiskFreeSpaceEx().\n"
                     );

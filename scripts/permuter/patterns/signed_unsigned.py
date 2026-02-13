@@ -21,20 +21,32 @@ from typing import Iterator
 from tree_sitter import Node
 
 from .base import Pattern
-from ..types import FunctionContext, Variant
+from ..ast_queries import find_comparisons
+from ..editor import SourceEditor
+from ..types import Diagnosis, FunctionContext, Variant
 
 _COMPARISON_OPS = {"==", "!=", "<", ">", "<=", ">="}
 _CAST_TYPES = [b"(int)", b"(unsigned int)", b"(unsigned long)"]
 _NULL_LITERALS = {"nullptr", "NULL"}
 
 
+_RELEVANT_OPCODES = {"cmpw", "cmpwi", "cmplw", "cmplwi", "cmpd", "cmpdi", "cmpld", "cmpldi",
+                     "beq", "bne", "ble", "bge", "blt", "bgt"}
+
+
 class SignedUnsignedPattern(Pattern):
     name = "signed_unsigned"
+
+    def relevant(self, diagnosis: Diagnosis) -> bool:
+        for d in diagnosis.diff_ops:
+            if d.target_opcode in _RELEVANT_OPCODES or d.base_opcode in _RELEVANT_OPCODES:
+                return True
+        return False
 
     def generate(self, ctx: FunctionContext) -> Iterator[Variant]:
         counter = 0
         for stmt in ctx.statements:
-            for cmp_node in _find_comparisons(stmt):
+            for cmp_node in find_comparisons(stmt):
                 left = cmp_node.child_by_field_name("left")
                 right = cmp_node.child_by_field_name("right")
                 op_node = cmp_node.child_by_field_name("operator")
@@ -47,7 +59,9 @@ class SignedUnsignedPattern(Pattern):
                 if not _is_likely_pointer(left, right, ctx):
                     # Cast left operand
                     for cast in _CAST_TYPES:
-                        new_source = _wrap_cast(ctx.file_source, left, cast)
+                        ed = SourceEditor(ctx.file_source)
+                        ed.insert_before(left, cast)
+                        new_source = ed.apply()
                         cast_str = cast.decode()
                         yield Variant(
                             name=f"signunsign_{counter}",
@@ -59,7 +73,9 @@ class SignedUnsignedPattern(Pattern):
 
                     # Cast right operand
                     for cast in _CAST_TYPES:
-                        new_source = _wrap_cast(ctx.file_source, right, cast)
+                        ed = SourceEditor(ctx.file_source)
+                        ed.insert_before(right, cast)
+                        new_source = ed.apply()
                         cast_str = cast.decode()
                         yield Variant(
                             name=f"signunsign_{counter}",
@@ -77,11 +93,9 @@ class SignedUnsignedPattern(Pattern):
                     new_op = b">" if op_text == "!=" else b"!="
                     # Replace the operator, preserving surrounding whitespace
                     if op_node is not None:
-                        new_source = (
-                            ctx.file_source[: op_node.start_byte]
-                            + new_op
-                            + ctx.file_source[op_node.end_byte :]
-                        )
+                        ed = SourceEditor(ctx.file_source)
+                        ed.replace_node(op_node, new_op)
+                        new_source = ed.apply()
                         swap_desc = (
                             "!= 0 -> > 0" if op_text == "!=" else "> 0 -> != 0"
                         )
@@ -130,24 +144,3 @@ def _is_likely_pointer(left: Node, right: Node, ctx: FunctionContext) -> bool:
         return True
 
     return False
-
-
-def _find_comparisons(node: Node) -> Iterator[Node]:
-    """Recursively find binary_expression nodes with comparison operators."""
-    if node.type == "binary_expression":
-        op = node.child_by_field_name("operator")
-        if op and op.text and op.text.decode("utf-8") in _COMPARISON_OPS:
-            yield node
-
-    for child in node.children:
-        yield from _find_comparisons(child)
-
-
-def _wrap_cast(source: bytes, node: Node, cast: bytes) -> bytes:
-    """Wrap a node's text in a cast expression."""
-    return (
-        source[: node.start_byte]
-        + cast
-        + source[node.start_byte : node.end_byte]
-        + source[node.end_byte :]
-    )

@@ -63,7 +63,9 @@ void Leaderboards::Text(int, int data, UIListLabel *slot, UILabel *label) const 
                 label->SetTextToken(gNullStr);
             }
         } else if (slot->Matches("rank")) {
-            if (!mFetchingScores) {
+            if (!(!mFetchingScores)) {
+                label->SetTextToken(gNullStr);
+            } else {
                 if (mRows[data].mIsPercentile && mMode != 2) {
                     static char sBuffer[20];
                     Hx_snprintf(sBuffer, 20, "%d%% ", mRows[data].mRank);
@@ -73,8 +75,6 @@ void Leaderboards::Text(int, int data, UIListLabel *slot, UILabel *label) const 
                     static Symbol rank_fmt("rank_fmt");
                     label->SetInt(mRows[data].mRank, false);
                 }
-            } else {
-                label->SetTextToken(gNullStr);
             }
         } else if (slot->Matches("difficulty")) {
             static Symbol beginner_short("beginner_short");

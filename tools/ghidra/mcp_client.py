@@ -143,8 +143,14 @@ class MCPClient:
         except json.JSONDecodeError as e:
             raise MCPError(f"Failed to parse response as JSON: {e}\nResponse: {content[:500]}")
 
-    def _make_request(self, method: str, params: Optional[dict] = None) -> dict:
-        """Make a JSON-RPC request to the MCP server."""
+    def _make_request(self, method: str, params: Optional[dict] = None, timeout: int = 60) -> dict:
+        """Make a JSON-RPC request to the MCP server.
+
+        Args:
+            method: JSON-RPC method name
+            params: Optional parameters dict
+            timeout: Request timeout in seconds (default 60, use higher for long operations)
+        """
         headers = {
             "Content-Type": "application/json",
             "Accept": "application/json, text/event-stream",
@@ -162,7 +168,7 @@ class MCPClient:
             payload["params"] = params
 
         try:
-            response = requests.post(self.url, headers=headers, json=payload, timeout=60)
+            response = requests.post(self.url, headers=headers, json=payload, timeout=timeout)
         except requests.exceptions.ConnectionError:
             raise MCPError(
                 f"Could not connect to MCP server at {self.url}. "
@@ -248,8 +254,14 @@ class MCPClient:
         self._send_initialized_notification()
         return self.session_id
 
-    def call_tool(self, tool_name: str, arguments: dict) -> Any:
-        """Call an MCP tool and return the structured content."""
+    def call_tool(self, tool_name: str, arguments: dict, timeout: int = 60) -> Any:
+        """Call an MCP tool and return the structured content.
+
+        Args:
+            tool_name: Name of the MCP tool to call
+            arguments: Tool arguments dict
+            timeout: Request timeout in seconds (default 60, use higher for long operations)
+        """
         # Ensure we have a session
         if not self.session_id:
             self.initialize()
@@ -257,7 +269,7 @@ class MCPClient:
         result = self._make_request("tools/call", {
             "name": tool_name,
             "arguments": arguments
-        })
+        }, timeout=timeout)
 
         if "error" in result:
             error = result["error"]
@@ -370,6 +382,70 @@ class MCPClient:
             "binary_name": self.binary,
             "address": address,
             "size": size
+        })
+
+    def list_structures(self, query: str = ".*", offset: int = 0, limit: int = 100) -> dict:
+        """Get structure data types from Ghidra's Data Type Manager."""
+        return self.call_tool("list_structures", {
+            "binary_name": self.binary,
+            "query": query,
+            "offset": offset,
+            "limit": limit
+        })
+
+    def extract_structures(self, max_functions: int = 0, timeout_per_func: int = 30) -> dict:
+        """Extract structures by batch-decompiling functions. Long-running.
+
+        This operation can take hours for large binaries. The timeout is set conservatively
+        high to avoid premature connection errors. Progress is logged server-side.
+        """
+        # Estimate timeout: ~30s per function + overhead
+        # For all functions (~60K), this could take 30+ hours, so use a very high timeout
+        # The server will stream progress, so we just need to wait
+        estimated_timeout = 3600 * 10 if max_functions == 0 else max(600, max_functions * timeout_per_func)
+
+        return self.call_tool("extract_structures", {
+            "binary_name": self.binary,
+            "max_functions": max_functions,
+            "timeout_per_func": timeout_per_func,
+        }, timeout=estimated_timeout)
+
+    def create_structures(self, class_defs: list[dict]) -> dict:
+        """Create structure data types in Ghidra's DTM.
+
+        Seeds the DTM with structure definitions from DC3 headers.
+
+        Args:
+            class_defs: List of class definitions. Each dict:
+                {
+                    "name": str,
+                    "members": [{"name": str, "type_str": str, "offset": int, "size": int?}],
+                    "total_size": int?
+                }
+
+        Returns:
+            {"created": int, "errors": int}
+        """
+        return self.call_tool("create_structures", {
+            "binary_name": self.binary,
+            "class_defs": class_defs,
+        })
+
+    def apply_this_types(self, class_methods: dict[str, list[str]]) -> dict:
+        """Apply this pointer types to member functions.
+
+        Sets the first parameter (this) to the appropriate class pointer type.
+
+        Args:
+            class_methods: {class_name: [address_hex, ...]}
+                Addresses should be hex strings without 0x prefix (e.g., "823486e0")
+
+        Returns:
+            {"applied": int, "missing_type": int, "no_function": int}
+        """
+        return self.call_tool("apply_this_types", {
+            "binary_name": self.binary,
+            "class_methods": class_methods,
         })
 
     def list_binaries(self) -> dict:

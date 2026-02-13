@@ -1247,7 +1247,8 @@ void SaveLoadManager::SetState(State newState) {
     case kS_SaveCheckProfile:
         unk40 = GetAutosavableProfile();
         if (unk40) {
-            if (TheMemcardMgr.IsStorageDeviceValid(unk40)) {
+            auto _tmp39 = TheMemcardMgr.IsStorageDeviceValid(unk40);
+            if (_tmp39) {
                 SetState(kS_SaveOverwrite);
             } else {
                 SetState(kS_SaveDeviceInvalid);

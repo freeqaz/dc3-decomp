@@ -422,7 +422,7 @@ void HamNavList::Poll() {
     }
 
     // Check if we should clear scroll tracking
-    if (mRibbonMode == HamListRibbon::kRibbonDisengaged) {
+    if ((unsigned long)mRibbonMode == HamListRibbon::kRibbonDisengaged) {
         bool inControllerMode = false;
         if (TheGestureMgr) {
             inControllerMode = TheGestureMgr->InControllerMode();

@@ -143,7 +143,8 @@ void LockedContentPanel::SetUp(Symbol song) {
     } else {
         pContentName->SetTextToken(song);
     }
-    pTeaser->SetTextToken(MakeString("%s%s", "teaser_award_", song.Str()));
+    auto _tmp1 = MakeString("%s%s", "teaser_award_", song.Str());
+    pTeaser->SetTextToken(_tmp1);
     TriggerTeaserText();
     mSound = nullptr;
     if (!pAccomplishment) {

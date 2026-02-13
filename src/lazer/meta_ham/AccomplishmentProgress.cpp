@@ -229,7 +229,8 @@ void AccomplishmentProgress::Poll() {
             DWORD dw;
             DWORD res = XGetOverlappedResult(&curStatus->mOverlapped, &dw, false);
             if (res == ERROR_SUCCESS) {
-                it = unk50.erase(it);
+                auto _tmp1 = unk50.erase(it);
+                it = _tmp1;
                 mParentProfile->MakeDirty();
                 continue;
             }

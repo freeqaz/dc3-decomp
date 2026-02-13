@@ -234,7 +234,8 @@ void BustAMovePanel::ResetScores() {
 void BustAMovePanel::SetFlashcardName(int side, int index, int i3) {
     Symbol s(gNullStr);
     if (i3 >= 0) {
-        s = GetMoveNameData(i3)->Sym(1);
+        auto _tmp0 = GetMoveNameData(i3)->Sym(1);
+        s = _tmp0;
     }
     HamLabel *label =
         mBAMColumns[side]->Find<HamLabel>(MakeString("flashcard_name_%d.lbl", index));
@@ -460,7 +461,8 @@ void BustAMovePanel::AnimateFlashcard(int index) {
 
     // Set flashcard_capture.lbl text
     HamLabel *capLabel = DataDir()->Find<HamLabel>("flashcard_capture.lbl", true);
-    capLabel->SetTextToken(GetMoveNameData(index)->Sym(1));
+    auto _tmp3 = GetMoveNameData(index)->Sym(1);
+    capLabel->SetTextToken(_tmp3);
 
     // Set flashcard_slot mat and texture
     String slotMatName(MakeString("flashcard_slot%i.mat", index));
@@ -520,7 +522,7 @@ void BustAMovePanel::AdvanceFlashcards() {
     std::list<int>::iterator intIt = mFlashcardSlots.begin();
     for (int i = 0; i < 4; i++) {
         int val = -1;
-        if (intIt != mFlashcardSlots.end()) {
+        if (mFlashcardSlots.end() != intIt) {
             val = *intIt;
             ++intIt;
         }
@@ -1104,7 +1106,8 @@ void BustAMovePanel::OnBeat() {
         }
         if (mRepsRemaining != 2)
             break;
-        ShowGetReadyCard(Symbol("get_ready"), (SkeletonSide)mCreatorSide);
+        auto _tmp46 = Symbol("get_ready");
+        ShowGetReadyCard(_tmp46, (SkeletonSide)mCreatorSide);
         break;
     }
     case kBAMState_FailureToBust:
@@ -1121,7 +1124,8 @@ void BustAMovePanel::OnBeat() {
                 PlayVO(Symbol(MakeString("nar_bam_gen_second_fail_%s", sideStr)));
             }
             // Round current beat to nearest integer, set 8-beat retry loop
-            float beat = MsToBeat(TheMaster->StreamMs());
+            auto _tmp49 = TheMaster->StreamMs();
+            float beat = MsToBeat(_tmp49);
             int beatInt;
             if (beat > 0.0f) {
                 beatInt = (int)(beat + 0.5f);

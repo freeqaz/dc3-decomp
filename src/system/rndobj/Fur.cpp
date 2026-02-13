@@ -77,7 +77,7 @@ bool RndFur::LoadOld(BinStreamRev &bs) {
         if (bs.rev > 0x1E) {
             bs >> mFurDetail >> mFurTiling;
         }
-        if (bs.rev < 0x24) {
+        if ((unsigned int)bs.rev < 0x24) {
             Vector3 v;
             float f;
             bs >> v >> f;

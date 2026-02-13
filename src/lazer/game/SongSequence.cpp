@@ -157,7 +157,7 @@ bool SongSequence::DoNext(bool b1, bool b2) {
     static Symbol holla_back("holla_back");
     static Symbol mind_control("mind_control");
     unk28 = false;
-    if (mEntries.size() == 0)
+    if (mEntries.empty())
         return true;
     bool isLoaded = TheGame->IsLoaded();
     if (!b1 && !isLoaded) {
@@ -311,7 +311,8 @@ void SongSequence::OnSongLoaded() {
             }
         }
         if (mCurrentIndex != 0 || !inHollaback) {
-            gamePanel->Handle(Message(reset), true);
+            auto _tmp4 = Message(reset);
+            gamePanel->Handle(_tmp4, true);
         }
         if (!inMindControl) {
             TheHamProvider->SetProperty("game_stage", Symbol("intro"));

@@ -144,10 +144,10 @@ FileStream *HDCache::OpenHeader() {
             if (FileExists(str, 0x10000, nullptr))
                 break;
         }
-        if (i != 2) {
-            return new FileStream(str, FileStream::kReadNoArk, true);
-        } else {
+        if (!(i != 2)) {
             return nullptr;
+        } else {
+            return new FileStream(str, FileStream::kReadNoArk, true);
         }
     }
 }

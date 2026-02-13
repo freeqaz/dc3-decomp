@@ -186,7 +186,7 @@ void CharEyes::SetEnableBlinks(bool b1, bool b2) {
 }
 
 bool CharEyes::SetFocusInterest(CharInterest *interest, int i) {
-    if (unk114 && unk128 > i)
+    if (unk114 && (unsigned int)unk128 > i)
         return false;
 
     unk114 = interest;

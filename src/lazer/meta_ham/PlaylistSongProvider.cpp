@@ -27,7 +27,8 @@ Symbol PlaylistSongProvider::DataSymbol(int idx) const {
     if (idx >= 0 && idx < NumData()) {
         if (unk30 != nullptr && unk30->IsValidSong(idx)) {
             int songID = unk30->GetSong(idx);
-            return TheHamSongMgr.GetShortNameFromSongID(songID, true);
+            auto _tmp2 = TheHamSongMgr.GetShortNameFromSongID(songID, true);
+            return _tmp2;
         }
     }
 

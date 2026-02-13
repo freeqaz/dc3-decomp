@@ -607,7 +607,7 @@ void GamePanel::SetPausedHelper(bool paused, bool pauseSound) {
     }
 
     // Guard: already in desired pause state
-    if (paused == mPaused) {
+    if (mPaused == paused) {
         return;
     }
 
@@ -713,7 +713,7 @@ DataNode GamePanel::OnMsg(const EndGameMsg &msg) {
         HamProfile *profile = TheProfileMgr.GetProfileFromPad(pPlayerData->PadNum());
         FitnessFilter *filter = GetFitnessFilter(i);
         float f1, f2;
-        if (filter && filter->GetFitnessDataAndReset(f1, f2)) {
+        if (filter && filter->GetFitnessDataAndReset(f2, f1)) {
             profile->SetFitnessStats(i, f1, f2);
         }
     }

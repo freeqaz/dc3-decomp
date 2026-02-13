@@ -8,6 +8,7 @@ import json
 import sys
 from pathlib import Path
 
+from .diagnosis import format_diagnosis_summary, is_all_noise
 from .extractor import extract_function
 from .generator import generate_variants
 from .scorer import Scorer
@@ -41,9 +42,9 @@ def parse_args() -> argparse.Namespace:
         help="Maximum variants to generate (default: 100)",
     )
     parser.add_argument(
-        "--stop-on-perfect",
+        "--no-stop-on-perfect",
         action="store_true",
-        help="Stop scoring when a 100%% match is found",
+        help="Continue scoring even after a 100%% match is found",
     )
     parser.add_argument(
         "--json", action="store_true", dest="json_output", help="Output results as JSON"
@@ -54,13 +55,23 @@ def parse_args() -> argparse.Namespace:
         help="Generate and list variants without building/scoring",
     )
     parser.add_argument(
-        "--apply",
+        "--no-apply",
         action="store_true",
-        help="Apply the best-improving variant to the source file",
+        help="Do not apply the best-improving variant (default: apply)",
     )
     parser.add_argument(
         "--unit",
         help="Unit name for unicorn execution guard rail (e.g. system/gesture/Skeleton)",
+    )
+    parser.add_argument(
+        "--no-guided",
+        action="store_true",
+        help="Disable diagnosis-guided filtering (try all patterns blindly)",
+    )
+    parser.add_argument(
+        "--compose",
+        action="store_true",
+        help="Enable two-step pattern composition (variable_extraction+declaration_reorder, etc.)",
     )
     parser.add_argument(
         "--list-patterns",
@@ -106,26 +117,47 @@ def main():
         file=sys.stderr,
     )
 
-    # Generate variants
-    variants = list(generate_variants(ctx, patterns, args.max_variants))
-    print(f"Generated {len(variants)} variants", file=sys.stderr)
-
-    if args.dry_run:
-        _print_dry_run(variants, args.json_output)
-        return
-
-    # Score variants
+    # Score variants (need baseline for diagnosis before generating)
     original_source = args.source.read_bytes()
+    guided = not args.no_guided
+
     results: list[ScoreResult] = []
     with Scorer(args.source, args.symbol, unit=args.unit) as scorer:
-        baseline = scorer.get_baseline()
+        baseline = scorer.get_baseline(guided=guided)
         baseline_exec = scorer._baseline_equivalent
+
+        # Wire diagnosis into context and print summary
+        if scorer.diagnosis:
+            ctx.diagnosis = scorer.diagnosis
+            print(format_diagnosis_summary(scorer.diagnosis), file=sys.stderr)
+
+            # Early skip: if all mismatches are noise, nothing to permute
+            if is_all_noise(scorer.diagnosis) and not args.no_guided:
+                print(
+                    "All mismatches are noise (offset/symbol/branch reloc). "
+                    "Nothing to permute.",
+                    file=sys.stderr,
+                )
+                if args.json_output:
+                    _print_json(baseline, [], scorer.diagnosis)
+                return
+
         exec_label = ""
         if baseline_exec is True:
             exec_label = " [EXEC OK]"
         elif baseline_exec is False:
             exec_label = " [EXEC DIVERGENT]"
         print(f"Baseline: {baseline:.2f}%{exec_label}", file=sys.stderr)
+
+        # Generate variants (after diagnosis so filtering can use it)
+        from .composer import _DEFAULT_PAIRS
+        compose_pairs = _DEFAULT_PAIRS if args.compose else None
+        variants = list(generate_variants(ctx, patterns, args.max_variants, compose_pairs=compose_pairs))
+        print(f"Generated {len(variants)} variants", file=sys.stderr)
+
+        if args.dry_run:
+            _print_dry_run(variants, args.json_output)
+            return
 
         for i, variant in enumerate(variants):
             print(
@@ -155,7 +187,7 @@ def main():
 
             print(f"{result.match_percent:.2f}%{marker}{exec_tag}", file=sys.stderr)
 
-            if args.stop_on_perfect and result.match_percent >= 100.0:
+            if not args.no_stop_on_perfect and result.match_percent >= 100.0:
                 print("Perfect match found!", file=sys.stderr)
                 break
 
@@ -163,12 +195,12 @@ def main():
     results.sort(key=lambda r: r.match_percent, reverse=True)
 
     if args.json_output:
-        _print_json(baseline, results)
+        _print_json(baseline, results, ctx.diagnosis)
     else:
         _print_table(baseline, results, original_source)
 
-    # Apply best improvement if requested
-    if args.apply:
+    # Apply best improvement (default behavior, opt out with --no-apply)
+    if not args.no_apply:
         improved = [r for r in results if r.build_success and r.match_percent > baseline]
         if improved:
             best = improved[0]
@@ -180,8 +212,10 @@ def main():
             print("\nNo improvements to apply.", file=sys.stderr)
 
 
-def _print_diff(original: bytes, variant: bytes, source_path: Path):
+def _print_diff(original: bytes, variant: bytes, source_path: Path, file=None):
     """Print a unified diff between original and variant source."""
+    if file is None:
+        file = sys.stderr
     orig_lines = original.decode("utf-8", errors="replace").splitlines(keepends=True)
     var_lines = variant.decode("utf-8", errors="replace").splitlines(keepends=True)
     diff = difflib.unified_diff(
@@ -192,7 +226,7 @@ def _print_diff(original: bytes, variant: bytes, source_path: Path):
     )
     diff_text = "".join(diff)
     if diff_text:
-        print(diff_text)
+        print(diff_text, file=file)
 
 
 def _print_dry_run(variants, json_output: bool):
@@ -211,7 +245,8 @@ def _print_dry_run(variants, json_output: bool):
             print(f"  [{v.pattern_name}] {v.name}: {v.description}")
 
 
-def _print_json(baseline: float, results: list[ScoreResult]):
+def _print_json(baseline: float, results: list[ScoreResult], diagnosis=None):
+    from .types import Diagnosis
     data = {
         "baseline": baseline,
         "results": [
@@ -228,6 +263,26 @@ def _print_json(baseline: float, results: list[ScoreResult]):
             for r in results
         ],
     }
+    if diagnosis is not None:
+        data["diagnosis"] = {
+            "total_instructions": diagnosis.total_instructions,
+            "match_counts": diagnosis.match_counts,
+            "diff_ops": [
+                {"index": d.index, "target": d.target_opcode, "base": d.base_opcode}
+                for d in diagnosis.diff_ops
+            ],
+            "reg_swap_pairs": {
+                f"{k[0]}<->{k[1]}": {"count": v.count, "first": v.first_idx, "last": v.last_idx}
+                for k, v in diagnosis.reg_swap_pairs.items()
+            },
+            "clusters": [
+                {"start": c.start_idx, "end": c.end_idx, "size": c.size,
+                 "inserts": c.inserts, "deletes": c.deletes}
+                for c in diagnosis.clusters
+            ],
+            "noise_explained": diagnosis.noise_explained,
+            "noise_total": diagnosis.noise_total,
+        }
     print(json.dumps(data, indent=2))
 
 

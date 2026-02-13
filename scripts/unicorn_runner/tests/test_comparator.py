@@ -237,6 +237,133 @@ class TestToDict(unittest.TestCase):
         self.assertEqual(d["warnings"], [])
 
 
+class TestClassifyDivergence(unittest.TestCase):
+    """Tests for classify_divergence()."""
+
+    def setUp(self):
+        from scripts.unicorn_runner.comparator import compare, classify_divergence
+        from scripts.unicorn_runner.memory_map import GLOBAL_BASE, OBJECT_BASE
+        self.compare = compare
+        self.classify = classify_divergence
+        self.GLOBAL_BASE = GLOBAL_BASE
+        self.OBJECT_BASE = OBJECT_BASE
+
+    def test_equivalent_returns_none(self):
+        decomp = MockExecutionResult(r3=0)
+        orig = MockExecutionResult(r3=0)
+        result = self.compare(decomp, orig, [], [])
+        self.assertIsNone(self.classify(result, decomp, orig, [], []))
+
+    def test_build_env_globals_arg_mismatch(self):
+        """Args pointing to globals region = likely __FILE__ string diff."""
+        d_log = [make_call_log_entry(0, r4=self.GLOBAL_BASE + 0x100)]
+        o_log = [make_call_log_entry(0, r4=self.GLOBAL_BASE + 0x200)]
+        decomp = MockExecutionResult(call_log=d_log)
+        orig = MockExecutionResult(call_log=o_log)
+        result = self.compare(decomp, orig, [], [])
+        self.assertEqual(result.verdict, "DIVERGENT")
+        cls = self.classify(result, decomp, orig, [], [])
+        self.assertEqual(cls, "build_env")
+
+    def test_build_env_merged_symbol_warning(self):
+        """Merged symbol in warning at same call index = build_env."""
+        d_log = [make_call_log_entry(0, r3=1, source_offset=0x10)]
+        o_log = [make_call_log_entry(0, r3=2, source_offset=0x10)]
+        decomp = MockExecutionResult(call_log=d_log)
+        orig = MockExecutionResult(call_log=o_log)
+        # Manually build result with merged_ warning
+        from scripts.unicorn_runner.comparator import ComparisonResult
+        result = ComparisonResult("DIVERGENT", {
+            "reason": "call_arg_mismatch",
+            "call_index": 0,
+            "register": "r3",
+            "decomp_val": 1,
+            "orig_val": 2,
+            "decomp_args": {"r3": 1, "r4": 0, "r5": 0, "r6": 0},
+            "orig_args": {"r3": 2, "r4": 0, "r5": 0, "r6": 0},
+        }, warnings=["Call #0: decomp targets merged_82004C00, original targets RealFunc"])
+        cls = self.classify(result, decomp, orig, [], [])
+        self.assertEqual(cls, "build_env")
+
+    def test_build_env_call_count_merged(self):
+        """Call count mismatch with merged symbol warning = build_env."""
+        d_log = [make_call_log_entry(0)]
+        o_log = [make_call_log_entry(0), make_call_log_entry(1)]
+        decomp = MockExecutionResult(call_log=d_log)
+        orig = MockExecutionResult(call_log=o_log)
+        from scripts.unicorn_runner.comparator import ComparisonResult
+        result = ComparisonResult("DIVERGENT", {
+            "reason": "call_count_mismatch",
+            "decomp_calls": 1,
+            "orig_calls": 2,
+            "matched_prefix": 1,
+        }, warnings=["Call #0: decomp targets merged_82004C00, original targets RealFunc"])
+        cls = self.classify(result, decomp, orig, [], [])
+        self.assertEqual(cls, "build_env")
+
+    def test_build_env_return_globals(self):
+        """Return value in globals region = build_env (string return)."""
+        decomp = MockExecutionResult(r3=self.GLOBAL_BASE + 0x50)
+        orig = MockExecutionResult(r3=self.GLOBAL_BASE + 0x100)
+        result = self.compare(decomp, orig, [], [])
+        cls = self.classify(result, decomp, orig, [], [])
+        self.assertEqual(cls, "build_env")
+
+    def test_build_env_globals_only_memory(self):
+        """Only globals diffs (no object diffs) = build_env."""
+        decomp_glob = bytearray(0x10000)
+        orig_glob = bytearray(0x10000)
+        import struct
+        struct.pack_into(">I", decomp_glob, 0, 0xAA)
+        struct.pack_into(">I", orig_glob, 0, 0xBB)
+        decomp = MockExecutionResult(r3=0, globals_memory=bytes(decomp_glob))
+        orig = MockExecutionResult(r3=0, globals_memory=bytes(orig_glob))
+        result = self.compare(decomp, orig, [], [])
+        cls = self.classify(result, decomp, orig, [], [])
+        self.assertEqual(cls, "build_env")
+
+    def test_regalloc_small_value_diff(self):
+        """Same call count, small non-pointer arg diff = regalloc."""
+        d_log = [make_call_log_entry(0, r3=1, r4=42)]
+        o_log = [make_call_log_entry(0, r3=1, r4=99)]
+        decomp = MockExecutionResult(call_log=d_log)
+        orig = MockExecutionResult(call_log=o_log)
+        result = self.compare(decomp, orig, [], [])
+        cls = self.classify(result, decomp, orig, [], [])
+        self.assertEqual(cls, "regalloc")
+
+    def test_logic_error_mismatch(self):
+        decomp = MockExecutionResult(error="fetch 0x00")
+        orig = MockExecutionResult(error="fetch 0xFF")
+        result = self.compare(decomp, orig, [], [])
+        cls = self.classify(result, decomp, orig, [], [])
+        self.assertEqual(cls, "logic")
+
+    def test_logic_decomp_error(self):
+        decomp = MockExecutionResult(error="crash")
+        orig = MockExecutionResult()
+        result = self.compare(decomp, orig, [], [])
+        cls = self.classify(result, decomp, orig, [], [])
+        self.assertEqual(cls, "logic")
+
+    def test_logic_fpr_mismatch(self):
+        decomp = MockExecutionResult(r3=0, f1=0x3FF0000000000000)
+        orig = MockExecutionResult(r3=0, f1=0x4000000000000000)
+        result = self.compare(decomp, orig, [], [])
+        cls = self.classify(result, decomp, orig, [], [])
+        self.assertEqual(cls, "logic")
+
+    def test_logic_call_count_no_merged(self):
+        """Call count mismatch without merged warning = logic."""
+        d_log = [make_call_log_entry(0)]
+        o_log = [make_call_log_entry(0), make_call_log_entry(1)]
+        decomp = MockExecutionResult(call_log=d_log)
+        orig = MockExecutionResult(call_log=o_log)
+        result = self.compare(decomp, orig, [], [])
+        cls = self.classify(result, decomp, orig, [], [])
+        self.assertEqual(cls, "logic")
+
+
 class TestFormatJsonResult(unittest.TestCase):
     """Tests for format_json_result()."""
 

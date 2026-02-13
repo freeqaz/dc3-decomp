@@ -29,7 +29,7 @@ NavListHeaderNode *MQSongSortByCharacter::NewHeaderNode(NavListItemNode *node) c
     const char *characterName = cmp->mCharacterName;
     const char *songName = cmp->mSongName;
     MQSongCharCmp *songCharCmp = new MQSongCharCmp(songName, characterName);
-    Symbol sym(MakeString("mqheader_%s", characterName));
+    Symbol sym(MakeString(characterName, "mqheader_%s"));
     return new MQSongHeaderNode(songCharCmp, sym, true);
 }
 

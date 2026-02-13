@@ -18,17 +18,26 @@ from typing import Iterator, Optional
 from tree_sitter import Node
 
 from .base import Pattern
-from ..types import FunctionContext, Variant
+from ..ast_queries import walk
+from ..editor import SourceEditor
+from ..types import Diagnosis, FunctionContext, Variant
+
+
+# Max statements gap between assignment and use to try inlining across
+_MAX_GAP = 3
 
 
 class InlineAssignmentPattern(Pattern):
     name = "inline_assignment"
 
+    def relevant(self, diagnosis: Diagnosis) -> bool:
+        return bool(diagnosis.clusters)
+
     def generate(self, ctx: FunctionContext) -> Iterator[Variant]:
         counter = 0
-        for i in range(len(ctx.statements) - 1):
+        # Look for assignment stmt_a with uses in stmt_b up to _MAX_GAP statements later
+        for i in range(len(ctx.statements)):
             stmt_a = ctx.statements[i]
-            stmt_b = ctx.statements[i + 1]
 
             assign_info = _extract_assignment(stmt_a)
             if assign_info is None:
@@ -36,45 +45,54 @@ class InlineAssignmentPattern(Pattern):
 
             var_name, rhs_text, assign_node = assign_info
 
-            # Find uses of var_name in call arguments of stmt_b
-            uses = list(_find_var_in_call_args(stmt_b, var_name, ctx.file_source))
-            if not uses:
-                continue
+            # Search up to _MAX_GAP statements ahead for uses
+            for gap in range(1, min(_MAX_GAP + 1, len(ctx.statements) - i)):
+                stmt_b = ctx.statements[i + gap]
 
-            # Generate one variant per use site
-            for use_node in uses:
-                # Build "var = rhs" as the inline expression
-                inline_expr = var_name + b" = " + rhs_text
+                # Check intervening statements don't modify or use the variable
+                # (only relevant when gap > 1)
+                if gap > 1:
+                    conflict = False
+                    for k in range(1, gap):
+                        mid_stmt = ctx.statements[i + k]
+                        if _stmt_references_var(mid_stmt, var_name):
+                            conflict = True
+                            break
+                    if conflict:
+                        break  # Can't skip past a conflicting statement
 
-                # Remove stmt A and replace the use in stmt B
-                source = ctx.file_source
+                # Find uses in call arguments, binary expressions, return statements
+                uses = list(_find_var_uses(stmt_b, var_name, ctx.file_source))
+                if not uses:
+                    continue
 
-                # Remove statement A (including trailing newline)
-                stmt_a_end = stmt_a.end_byte
-                # Skip any trailing whitespace/newline after stmt A
-                while stmt_a_end < len(source) and source[stmt_a_end : stmt_a_end + 1] in (b"\n", b"\r"):
-                    stmt_a_end += 1
+                # Generate one variant per use site
+                for use_node in uses:
+                    # Build "var = rhs" as the inline expression
+                    inline_expr = var_name + b" = " + rhs_text
 
-                # Offset adjustment: removing stmt A shifts everything after it
-                removed_len = stmt_a_end - stmt_a.start_byte
+                    source = ctx.file_source
 
-                # Build new source: remove stmt A, replace use with inline expr
-                # The use_node offsets are relative to original source
-                new_source = (
-                    source[: stmt_a.start_byte]  # everything before stmt A
-                    + source[stmt_a_end : use_node.start_byte]  # between stmt A end and use
-                    + inline_expr
-                    + source[use_node.end_byte :]  # after use
-                )
+                    # Remove statement A (including trailing newline)
+                    stmt_a_end = stmt_a.end_byte
+                    while stmt_a_end < len(source) and source[stmt_a_end : stmt_a_end + 1] in (b"\n", b"\r"):
+                        stmt_a_end += 1
 
-                var_str = var_name.decode("utf-8", errors="replace")
-                yield Variant(
-                    name=f"inline_{counter}",
-                    pattern_name=self.name,
-                    description=f"Inline assignment of '{var_str}' into call argument",
-                    source=new_source,
-                )
-                counter += 1
+                    # Use SourceEditor: delete stmt A, replace use with inline expr
+                    ed = SourceEditor(source)
+                    ed.delete_range(stmt_a.start_byte, stmt_a_end)
+                    ed.replace_node(use_node, inline_expr)
+                    new_source = ed.apply()
+
+                    var_str = var_name.decode("utf-8", errors="replace")
+                    context = "expression" if gap == 1 else f"expression ({gap} stmts apart)"
+                    yield Variant(
+                        name=f"inline_{counter}",
+                        pattern_name=self.name,
+                        description=f"Inline assignment of '{var_str}' into {context}",
+                        source=new_source,
+                    )
+                    counter += 1
 
 
 def _extract_assignment(
@@ -111,23 +129,38 @@ def _extract_assignment(
     return var_name, rhs_text, expr
 
 
-def _find_var_in_call_args(
+# Contexts where inlining an assignment is valid C++ (parenthesized assignment in expr)
+_INLINE_CONTEXTS = {
+    "argument_list",
+    "binary_expression",
+    "return_statement",
+    "parenthesized_expression",
+    "condition_clause",
+    "assignment_expression",
+}
+
+
+def _find_var_uses(
     stmt: Node, var_name: bytes, source: bytes
 ) -> Iterator[Node]:
-    """Find uses of var_name inside argument_list nodes within stmt."""
-    for node in _walk(stmt):
+    """Find uses of var_name in inlinable contexts within stmt.
+
+    Looks in call arguments, binary expressions, return statements, and
+    other contexts where `(var = expr)` is valid.
+    """
+    for node in walk(stmt):
         if node.type == "identifier" and node.text == var_name:
-            # Check that this identifier is inside an argument_list
             parent = node.parent
             while parent is not None and parent != stmt:
-                if parent.type == "argument_list":
+                if parent.type in _INLINE_CONTEXTS:
                     yield node
                     break
                 parent = parent.parent
 
 
-def _walk(node: Node) -> Iterator[Node]:
-    """Depth-first walk of all nodes."""
-    yield node
-    for child in node.children:
-        yield from _walk(child)
+def _stmt_references_var(stmt: Node, var_name: bytes) -> bool:
+    """Check if a statement reads or writes the given variable."""
+    for node in walk(stmt):
+        if node.type == "identifier" and node.text == var_name:
+            return True
+    return False

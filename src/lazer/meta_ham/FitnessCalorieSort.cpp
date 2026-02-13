@@ -97,7 +97,7 @@ void FitnessCalorieSort::BuildTree() {
 
     // Populate nodes from TheFitnessCalorieSortMgr calories
     std::vector<int> &calories = TheFitnessCalorieSortMgr->GetUnk78();
-    for (int i = 0; i < (int)calories.size(); i++) {
+    for (int i = 0; (unsigned int)i < (int)calories.size(); i++) {
         NavListItemNode *node = NewItemNode((void *)&calories[i]);
         nodes.push_back(node);
     }

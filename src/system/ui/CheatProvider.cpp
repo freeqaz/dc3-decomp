@@ -118,9 +118,9 @@ void CheatProvider::Text(int i, int j, UIListLabel *listlabel, UILabel *label) c
 }
 
 void CheatProvider::ApplyFilter() {
+    static Symbol modes("modes");
     static Symbol all("all");
     static Symbol filters("filters");
-    static Symbol modes("modes");
     Symbol curFilt = mFilters[mFilterIdx];
     mFilterCheats.clear();
     Cheat *curCheat = nullptr;

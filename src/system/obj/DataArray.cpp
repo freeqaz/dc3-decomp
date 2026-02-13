@@ -228,7 +228,7 @@ void DataArray::Remove(int index) {
     int newCnt = mSize - 1;
     mNodes = NodesAlloc(newCnt * sizeof(DataNode));
     int cnt = 0;
-    for (cnt = 0; cnt < index; cnt++) {
+    for (cnt = 0; index > cnt; cnt++) {
         new (&mNodes[cnt]) DataNode(oldNodes[cnt]);
     }
     for (; index < newCnt; index++) {

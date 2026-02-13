@@ -7,7 +7,8 @@ __pycache__
 .mypy_cache
 .cache/
 venv/
-.claude/
+.claude/*
+!.claude/skills/
 function_analysis/
 
 # Original files
@@ -48,6 +49,7 @@ tmp/
 logs/
 ghidra_projects/
 .env
+/notes/
 
 # Doxygen output
 doxygen/

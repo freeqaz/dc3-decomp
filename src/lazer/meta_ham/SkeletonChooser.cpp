@@ -305,7 +305,7 @@ bool SkeletonChooser::IsSinglePlayerMode() const {
     if (TheGameMode->Property(gameplay_mode)->Sym() == practice
         && (navModeSym == game || navModeSym == results || navModeSym == loading
             || navModeSym == pause || navModeSym == practice_shell
-            || navModeSym == store)) {
+            || store == navModeSym)) {
         ret = true;
     }
     return ret;
@@ -706,7 +706,8 @@ void SkeletonChooser::SwapPlayerDataForPractice() {
     TheGameData->Player(1)->SetOutfit(sym0);
 
     // Swap preferred outfit
-    sym0 = TheGameData->Player(0)->GetPreferredOutfit();
+    auto _tmp12 = TheGameData->Player(0)->GetPreferredOutfit();
+    sym0 = _tmp12;
     sym1 = TheGameData->Player(1)->GetPreferredOutfit();
     TheGameData->Player(0)->SetPreferredOutfit(sym1);
     TheGameData->Player(1)->SetPreferredOutfit(sym0);

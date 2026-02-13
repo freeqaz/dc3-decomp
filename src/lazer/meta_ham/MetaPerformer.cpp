@@ -1016,13 +1016,13 @@ void MetaPerformer::OnReviewMovePassed(
     static Symbol move_awesome("move_awesome");
     int awesomeIdx = RatingStateToIndex(move_awesome);
     int i90, i80;
-    GetCurrentRecapMove(i90, i80);
+    GetCurrentRecapMove(i80, i90);
     if (i90 >= 0 && i80 >= 0) {
         auto &set = unk74[i90][i80];
-        if (ratingIndex <= awesomeIdx) {
-            set = false;
-        } else {
+        if (!(ratingIndex <= awesomeIdx)) {
             set = true;
+        } else {
+            set = false;
         }
     }
 }
@@ -1078,7 +1078,8 @@ void MetaPerformer::SaveDanceBattleScores(Symbol s1) {
         MILO_ASSERT(pPlayerProvider, 0x205);
         const DataNode *pScoreNode = pPlayerProvider->Property(score);
         MILO_ASSERT(pScoreNode, 0x207);
-        if (pScoreNode->Int() > 0) {
+        auto _tmp0 = pScoreNode->Int();
+        if (_tmp0 > 0) {
             i6++;
         }
     }
@@ -1101,7 +1102,7 @@ void MetaPerformer::SaveDanceBattleScores(Symbol s1) {
                 int scoreValue = pPlayerProvider->Property(score)->Int();
                 if (scoreValue > 0) {
                     profile->UpdateBattleScore(
-                        songID, pPlayerData, scoreValue, winner - i == 0
+                        songID, pPlayerData, scoreValue, 0 == winner - i
                     );
                 }
             }
@@ -1140,7 +1141,7 @@ void MetaPerformer::CalcCharacters(
         player2Char = gNullStr;
     }
 
-    bool hasPlayer1Char = player1Char != gNullStr;
+    bool hasPlayer1Char = player1Char != (int)gNullStr;
     bool hasPlayer2Char = player2Char != gNullStr;
 
     // Fast path: Both players have valid, non-conflicting characters
