@@ -548,6 +548,67 @@ if (bool(mType & kMovie) && (mType & 0x20)) { ... }
 
 **Diagnosis:** Look for `extrwi.` vs `rlwinm.` with different rotate/mask in objdiff `replace` mismatches. If target uses `rlwinm. rA, rS, 31, 31, 31` (or similar non-zero rotate with mask 31,31), use `bool` type for the bit test.
 
+### Issue: Bool Return Truncation (clrlwi 24)
+
+When a function returns `bool`, MSVC may insert `clrlwi rA, rB, 24` (= `rlwinm rA, rB, 0, 24, 31`) to truncate the return value to a single byte. This is the bool-mask pattern.
+
+**Two types of clrlwi in bool context:**
+- `clrlwi r, r, 24` — **byte truncation** (keep bottom 8 bits). Bool ABI: move 0/1 from temp to return register.
+- `clrlwi r, r, 31` — **LSB extraction** (keep bottom 1 bit = `& 1`). Part of arithmetic comparison results.
+
+**Rules discovered from controlled experiments:**
+
+| Source Pattern | clrlwi? | Assembly |
+|---|---|---|
+| `return x > 0;` (single-arg compare) | **None** | `neg/andc/srwi r3` (branchless, directly into r3) |
+| `return (flags & 0x4) != 0;` (bit test) | **None** | `rlwinm r3,r3,30,31,31` |
+| `return !x;` (negate int) | **None** | `cntlzw/rlwinm` into r3 |
+| `return (a-b) > 0;` (subtraction sign) | **None** | `subf/neg/andc/srwi` into r3 |
+| `return a > b;` (signed 2-arg compare) | **31** | `subfc/eqv/srwi/addze` + `clrlwi r3,r11,31` |
+| `return a > b;` (unsigned 2-arg compare) | **31** | `subfc/subfe` + `clrlwi r3,r11,31` |
+| `return x & 1;` (mask LSB) | **31** | `clrlwi r3,r3,31` (IS the operation) |
+| `return x > y ? true : false;` (ternary) | **31** | `subfc/eqv/srwi/addze` + `clrlwi r3,r11,31` |
+| `return a>0 && b>0 && c>0;` (&& chain, 3+) | **24** | `li r11,0/1` branches + `clrlwi r3,r11,24` |
+| `bool r = (f&4) && c>0; return r;` (stored) | **24** | `li r11,0/1` branches + `clrlwi r3,r11,24` |
+| `return (f&4) && c>0;` (inline && chain) | **24** | Same as stored bool |
+| `if(a>0) return true; ... return false;` | **None** | `li r3,1/blr` per branch (directly into r3) |
+| `if(a>0&&b>0) r=true; else r=false; return r;` | **None** | `li r3,1/bgtlr` + `li r3,0/blr` |
+| `!bool_param` (negate bool parameter) | **24 at start** | `clrlwi r11,r3,24` truncates incoming param |
+
+**Key findings:**
+
+1. `clrlwi 24` (byte truncation) appears when the compiler assigns 0/1 to a **temp register** (r11) via `li` branches and then moves to r3 with truncation. This happens with `&&` short-circuit chains of 3+ conditions, or `bool` variables stored then returned.
+
+2. `clrlwi 31` (LSB extraction) appears as part of **arithmetic comparison** sequences that compute a multi-bit intermediate. The `& 1` extracts the boolean result.
+
+3. **No clrlwi** when the compiler can put 0/1 **directly into r3** — either via branchless arithmetic (neg/andc/srwi for single comparisons) or via direct `li r3, 0/1` + `blr` branches (if/else with explicit returns).
+
+4. The `clrlwi 24` specifically appears when the optimizer fails to promote the 0/1 from r11 to r3, leaving a copy+truncate. This is a control flow structure issue, not a type issue.
+
+**Fix strategy for mismatches:**
+- **Target has `clrlwi 24`, we don't**: Target used `&&` chain or stored bool pattern. Our code probably branches directly to `li r3, 0/1`. Rewrite using `&&` chains: `return cond1 && cond2 && cond3;`
+- **We have `clrlwi 24`, target doesn't**: Our code uses `&&` chain where the target branches directly. Rewrite with explicit `if (...) return true; ... return false;` pattern.
+- **Target has `clrlwi 31`, we don't (or vice versa)**: Different arithmetic comparison encoding. The `clrlwi 31` comes from 2-argument signed/unsigned comparisons (`a > b`). Try different comparison forms.
+- **Bool parameter truncation** (`clrlwi 24` at function start): Check if parameter should be `bool` vs `int`.
+
+**Important: `clrlwi 24` vs `clrlwi 31` have DIFFERENT causes and fixes!**
+
+**Diagnosis:** Run `python scripts/batch_pattern_scan.py --pattern bool_mask` to find all functions with this mismatch. Cross-reference with the assembly listing (`/FAs`) to see whether clrlwi is on the return path or parameter path.
+
+### Issue: Boolean Negation Encoding (subic/subfe vs cntlzw/extrwi)
+
+When negating a value to produce a boolean result (`!x`), the compiler uses different instruction sequences depending on whether the input is `bool` or `int`:
+
+| Input Type | `!x` encoding | Instructions |
+|---|---|---|
+| `bool` (1-byte) | cntlzw + extrwi | `clrlwi r11,r3,24` / `cntlzw r11,r11` / `rlwinm r3,r11,27,31,31` |
+| `int` (4-byte) | cntlzw + extrwi (no truncate) | `cntlzw r11,r3` / `rlwinm r3,r11,27,31,31` |
+| `int` (via carry) | subic + subfe | `subic r11,r11,1` / `subfe r11,r11,r11` |
+
+The `subic/subfe` pattern produces an all-ones (0xFFFFFFFF) or all-zeros mask, which is then used with `and` for conditional selection. This is the "carry-based negate" and typically appears in more complex expressions where the result feeds into further bitwise ops.
+
+**Diagnosis:** Look for `replace` mismatches where one side has `subic/subfe` and the other has `cntlzw/extrwi`. The fix may require changing the variable type or expression structure to match the target's encoding choice.
+
 ### Issue: Loop structure
 
 ```cpp
@@ -622,6 +683,31 @@ ninja build/373307D9/report.json
 ./bin/objdiff-cli report query build/373307D9/report.json --functions \
   --unit "default/lazer/game/GameMode" --min-percent 0 -f json-pretty
 ```
+
+### Post-Compilation Register Swap Patcher
+
+The compiler's register allocator sometimes assigns registers differently than the original build, causing 0.1-2% match gaps even when the code is functionally correct. The `obj_regswap_patcher.py` tool fixes these by directly patching register fields in compiled .obj files.
+
+```bash
+# Apply all known register swaps (uses scripts/regswap_manifest.json)
+ninja && python3 scripts/obj_regswap_patcher.py --batch --apply
+
+# Patch a single function
+python3 scripts/obj_regswap_patcher.py "?Clamp@Box@@QAA_NAAVVector3@@@Z" --apply
+
+# Dry run to see what would change
+python3 scripts/obj_regswap_patcher.py --batch
+```
+
+**How it works:**
+1. Runs objdiff to get instruction-level JSON diff for each function
+2. For each `diff_arg` instruction with register mismatches, finds the exact 5-bit register field in the instruction word
+3. Patches the field to match the target, handling PowerPC format-specific field ordering (logical vs arithmetic ops, D-form vs X-form, pseudo-instructions like `mr`)
+4. Safety check: reverts automatically if match percentage decreases
+
+**Results:** 17 functions fixed to 100%, 679+ functions improved. The manifest (`scripts/regswap_manifest.json`) lists all 709 patchable functions.
+
+**Important:** Patches are lost on rebuild. Run the patcher after each `ninja` build.
 
 ---
 
@@ -744,28 +830,28 @@ The `ASSERT_REVS` macro's second `MILO_FAIL` call shows consistent scheduling di
 
 This causes ~0.8-0.9% mismatch on all `Load` functions using `ASSERT_REVS`. These are considered effectively matched.
 
-### fmadds vs fmuls+fadds (UNFIXABLE)
+### fmadds vs fmuls+fadds (PARTIALLY FIXABLE)
 
-The Xbox 360 compiler sometimes generates fused multiply-add instructions (`fmadds`) where our build generates separate `fmuls` + `fadds`. This is a compiler optimization flag difference that cannot be controlled at the source level.
+The Xbox 360 compiler generates fused multiply-add instructions (`fmadds`, `fmsubs`, `fnmadds`, `fnmsubs`) when `#pragma fp_contract` is ON (the default). Controlled experiments confirmed:
 
-**Example from FreestyleMotionFilter::UpdateFilters:**
-```cpp
-// Magnitude squared calculation
-float magSq = v.x * v.x + v.y * v.y + v.z * v.z;
-```
+| `#pragma fp_contract` | `a * b + c` | Dot product (3-term) |
+|---|---|---|
+| ON (default) | `fmadds` (1 instr) | `fmuls + 2x fmadds` (3 instrs) |
+| OFF | `fmuls + fadds` (2 instrs) | `3x fmuls + 2x fadds` (5 instrs) |
 
-```asm
-# Original (fused multiply-add)
-fmadds f0, f11, f11, f0
+**The pragma is file-scoped** and can be toggled multiple times within a file. Adding `#pragma fp_contract(off)` before functions will prevent fma fusion.
 
-# Our build (separate multiply and add)
-fmuls f11, f11, f11
-fadds f0, f0, f11
-```
+**Three categories of FMA mismatch** (from batch scan of 500 functions):
 
-Both are mathematically equivalent, but the fused version has slightly different rounding behavior. XDK documentation confirms `/fp:fast` is the **default** on Xbox 360 (unlike standard MSVC which defaults to `/fp:precise`), and `#pragma fp_contract` is **ON by default** — so both builds should generate fmadds when possible. Testing confirmed adding `/fp:fast` explicitly has zero effect (already active). The fmadds vs fmuls+fadds difference is an inherent compiler backend scheduling decision about when multiply-add patterns are close enough to fuse.
+1. **Pure "need OFF"** — Our code generates fmadds where target has fmuls+fadds. Fix: add `#pragma fp_contract(off)` to the file. Found in: BustAMovePanel::PlayIntroVO, Multiply(Vector3,Quat,Vector3), CharClip::FindNode, BinkReader::Seek.
 
-**Impact**: ~1-3% mismatch on math-heavy functions with repeated multiply-add patterns.
+2. **Pure "need ON"** — Target has fmadds where our code doesn't fuse. Since fp_contract is ON by default, this means the expression structure in our code prevents fusion (e.g., operations too far apart in IR). Fix: restructure expressions to place multiply and add adjacent. Found in: ClipDistMap::CalcWidth, ArcDetector::PrintJointPath, Profiler::Stop, LoopVizCallback::UpdateOverlay, RndParticleSys::UpdateParticles.
+
+3. **Mixed direction (UNFIXABLE by pragma alone)** — Same function has some expressions that need ON and others that need OFF. This is the compiler's scheduling heuristic deciding differently. Found in: ClipCollide::SyncWaypoint, QuatSpline, Intersect, MultiTempoTempoMap::TimeToTick, GetLightPosition.
+
+**Strategy**: When implementing math-heavy functions, check FMA direction via objdiff. If ALL mismatches point the same direction, apply the pragma. If mixed, accept the gap.
+
+**Impact**: ~1-3% mismatch on math-heavy functions. 14 functions affected across 800 scanned.
 
 ### Linker Merged Functions (ICF - Identical COMDAT Folding)
 

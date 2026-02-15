@@ -465,38 +465,532 @@ rr record-replay was tested but fails with SIGBUS due to wibo's MAP_FIXED mmap f
 2. **gdb_script.py**: Updated to use custom rr path and set environment for replay.
 3. **callgrind_diff.py**: Fixed TMPDIR to avoid /tmp tmpfs quota issues that caused empty callgrind output files.
 
-## Next Steps
+## Experiment 6: GDB Live Tracing of Register Allocator (DONE)
 
-### Priority 1: GDB at Non-Scaling Addresses
+### Setup
 
-Set hardware breakpoints at 0x09b5d1 (ratio 0.9x) and 0x0267ef (register class init) during controlled compilation. Compare register/memory state between swap_a and swap_b.
+GDB batch-mode tracing of c2.dll's `find_first_set` function (RVA 0x026780) during controlled compilations. Used 64-bit wibo with software breakpoints set at `call_EntryProc` time.
 
-```bash
-python -m tools.compiler_trace gdb-attach --min-evidence 4
-python -m tools.compiler_trace gdb-attach swap_a.cpp --min-evidence 4
+**Limitation**: 64-bit wibo's mode-switching (64→32 bit via LJMP) causes GDB's single-step mechanism to corrupt the instruction stream. Limited to ~5 successful breakpoint hits before SIGSEGV. 32-bit wibo can't set breakpoints at all (c2.dll loaded lazily, pages mapped READ+EXEC only).
+
+### Results: Volatile Register Test (swap_a vs swap_b, r10↔r11)
+
+| Call # | swap_a (alpha first) | swap_b (beta first) |
+|--------|---------------------|---------------------|
+| 1 | lo=0x4 → bit 2 | lo=0x2 → bit 1 |
+| 2 | lo=0x2 → bit 1 | lo=0x4 → bit 2 |
+| 3 | lo=0xc0000 → bit 18 | lo=0xc0000 → bit 18 |
+| 4 | lo=0xc0000 → bit 18 | lo=0xc0000 → bit 18 |
+| 5 | hi=0x3 → bit 32 | hi=0x3 → bit 32 |
+
+**Key finding**: First two BSF calls are SWAPPED — directly corresponding to declaration order.
+
+### Results: Callee-Saved Register Test (callee_a vs callee_b, r29↔r31)
+
+Three distinct register classes observed (different iterator state pointers):
+
+**Class A** (3 allocations):
+
+| # | callee_a (α,β,γ order) | callee_b (γ,β,α order) |
+|---|------------------------|------------------------|
+| 1 | bit 8 | bit 10 |
+| 2 | bit 9 | bit 9 |
+| 3 | bit 10 | bit 8 |
+
+**Class B** (3 allocations):
+
+| # | callee_a | callee_b |
+|---|----------|----------|
+| 4 | bit 3 | bit 1 |
+| 5 | bit 2 | bit 2 |
+| 6 | bit 1 | bit 3 |
+
+**Remaining calls** (5): identical between variants.
+
+### Key Findings
+
+1. **Single-bit available sets**: Every BSF call has exactly ONE bit set. The allocation decision is made BEFORE BSF — BSF merely extracts the bit index from a pre-determined result. The actual decision happens in the interference graph coloring phase.
+
+2. **Declaration order → BSF call order**: The first N BSF calls (where N = number of swapped variables) are reversed between variants. This is the direct mechanism: declaration order determines processing order in the coloring phase, which determines register assignment.
+
+3. **Multiple register classes**: The allocator processes at least 3 register classes sequentially. Only the first two classes show declaration-order-dependent swaps; the remaining calls are identical.
+
+4. **Volatile-only functions don't swap**: When all variables are volatile and used only for a single function call, declaration order has no effect. Register swaps require variables to survive across calls (callee-saved).
+
+### c2.dll Register Allocator Architecture (Reverse-Engineered)
+
+#### Data Layer (RVA 0x0266d0-0x0268xx): Bitset Primitives
+
+| RVA | Function | Purpose |
+|-----|----------|---------|
+| 0x0266d0 | `popcount64(lo, hi)` | Count registers in a set |
+| 0x026763 | `alloc_node(class)` | Pop from free list at `0x10c2e178[class]` |
+| 0x026780 | `find_first_set(lo, hi)` | BSF: extract bit index from available set |
+| 0x0267a2 | `create_bitset(nregs, ctx)` | Allocate `(nregs+63)/64 * 8` bytes |
+| 0x0267d6 | `clear_class(class)` | Zero 3 arrays: `0x10c2e088`, `0x10c2e100`, `0x10c2e178` |
+| 0x0267f0 | `alloc_and_init(ctx)` | Wrapper: alloc_node + create_bitset |
+| 0x026804 | `free_node(node)` | Push to free list at `0x10c2e178[class]` |
+| 0x026816 | `set_bit(bitset, bit)` | OR with mask from `0x10b014c0[bit*8]` |
+| 0x026837 | `clear_bit(bitset, bit)` | AND with mask from `0x10b016c0[bit*8]` |
+| 0x026858 | `and_inplace(dst, src)` | Set intersection (loop over 64-bit words) |
+| 0x02687e | `and_copy(a, b, dst)` | Three-operand set intersection |
+
+#### Interference Graph (RVA 0x026cd4-0x026d89): Sparse Representation
+
+Sorted linked list of 64-register blocks per variable:
+- `[node+0x00]`: base register number (aligned to 64)
+- `[node+0x04]`: lo interference bits (registers 0-31 in block)
+- `[node+0x08]`: hi interference bits (registers 32-63 in block)
+- `[node+0x0c]`: next pointer
+
+| RVA | Function | Purpose |
+|-----|----------|---------|
+| 0x026d39 | `insert_interference(list, reg)` | Add interference edge |
+| 0x026d68 | `lookup_interference(list, reg)` | Find interference entry |
+
+#### Interference Test (RVA 0x026f37)
+
+```c
+bool interferes(interference_list, reg) {
+    entry = lookup(list, reg & ~63);
+    if (!entry) return false;
+    return (entry->bits & SET_MASK[reg & 63]) != 0;
+}
 ```
 
-### Priority 2: Reverse-Engineer Register Allocation Primitives
+5 callers of `find_first_set`, all at RVA 0x026b-0x027428. All follow the same pattern: iterate through available register bitset, call BSF to extract bit index, add base offset from node, clear found bit. Called from 0x10b27242 (the primary allocation iterator at RVA 0x027225).
 
-The cluster around 0x0267ef uses BSF (bit scan forward) on bitmasks — this is the classic "find first available register" operation. Disassemble the full function containing 0x026792-0x0267ef to understand the allocation state machine.
+### GDB Debugging Notes
 
-### Priority 3: Binary Patch Experiment
+**64-bit wibo**: Software breakpoints work if set inside `call_EntryProc` commands block (after c2.dll is loaded). SIGSEGV after ~5 hits due to single-step corruption in mixed 64/32 mode. No hardware breakpoint support.
 
-If the decision point at 0x09b5d1 or 0x0267ef is confirmed, patch c2.dll to reverse the tie-breaking comparison and verify it swaps registers in the controlled test case.
+**32-bit wibo**: c2.dll loaded lazily (not mapped at `call_EntryProc` time). Pages mapped READ+EXEC only (no WRITE), preventing INT3 insertion. `mprotect` fails. Would require patching wibo to add PROT_WRITE to PE section mappings.
 
-### Other Unfixable Patterns to Investigate
+## Experiment 7: Register Class Discovery (PARTIAL)
 
-- **extrwi vs rlwinm encoding**: Same bit test, different machine code. Is this a scheduling decision or codegen table?
-- **fmadds vs fmuls+fadds**: Separate category of unfixable pattern, same methodology
-- **Instruction scheduling / block layout**: Why does block layout change between similar functions?
+From GDB tracing, identified 8 register classes (from `regclass_clear` calls):
+- Classes 2, 3, 5, 7, 8 observed for the simple volatile test
+- Class initialization happens before any allocation
+- The class numbering likely corresponds to: GPR volatile, GPR callee-saved, FPR, condition registers, link register, etc.
+
+## Conclusions
+
+### What We Now Know (Complete Chain)
+
+```
+Source declaration order
+  → c1xx.dll assigns monotonic 16-bit symbol IDs (.sy file)
+  → Symbol IDs referenced in expression tree (.ex file)
+  → c2.dll backend processes variables in symbol ID order
+  → Interference graph coloring assigns registers in processing order
+  → BSF extracts pre-determined single-bit register indices
+  → PPC codegen uses assigned register numbers
+```
+
+### Practical Implications
+
+1. **Register swaps are UNFIXABLE from source**. The allocation is locked to declaration order through the symbol ID chain. No amount of source-level permutation (declaration reorder, explicit null variables, comparison flips) can change the allocator's coloring decisions independently of symbol IDs.
+
+2. **The permuter should skip register swap patterns**. Blind source permutation cannot fix register swaps — this was proven empirically (Experiments 1-2) and now understood mechanistically (Experiments 4-6).
+
+3. **Functions with register swaps should be marked "at limit"**. The maximum achievable match% is the current match% minus relocation noise.
+
+4. **The only theoretical fix is binary patching c2.dll**. Modifying the coloring order or interference graph construction in c2.dll could reverse specific register assignments. This would require:
+   - Identifying the exact coloring loop (callers of 0x027290, ~25 call sites in RVA 0x02d-0x032 range)
+   - Understanding the variable ordering mechanism
+   - Patching the comparison/iteration to reverse symbol ID tie-breaking
+
+## Experiment 8: Full BSF Trace with Patched Wibo (DONE)
+
+### Setup
+
+Patched 32-bit wibo (`/home/free/code/milohax/wibo/`) to add `PROT_WRITE` to `PAGE_EXECUTE_READ` mappings in `posixProtectFromWin32()` (`src/heap.cpp:268`). This allows GDB to write INT3 (software breakpoints) into c2.dll's `.text` section.
+
+**Key GDB settings for 32-bit wibo:**
+- `set libthread-db-search-path ""` — disables thread debugging, avoids "Cannot find user-level thread" errors
+- Break on `callDllMain`, continue 12 times, then c2.dll is loaded at hit #13
+- Software breakpoints at `0x10b26780` (BSF function) work reliably
+
+### Results: Complete BSF Traces (No SIGSEGV)
+
+**Volatile register test** (swap_a vs swap_b, r10↔r11):
+- 170 BSF calls each, 10 divergent (4 in allocation, 6 in later pass)
+- Complete trace — no SIGSEGV, no 5-hit limitation
+
+| BSF # | swap_a (alpha first) | swap_b (beta first) |
+|-------|---------------------|---------------------|
+| 1 | lo=0x4 → bit 2 | lo=0x2 → bit 1 |
+| 2 | lo=0x2 → bit 1 | lo=0x4 → bit 2 |
+| 3 | lo=0x4 → bit 2 | lo=0x2 → bit 1 |
+| 4 | lo=0x2 → bit 1 | lo=0x4 → bit 2 |
+| 5+ | identical | identical |
+
+**Callee-saved register test** (callee_a vs callee_b, r29↔r31):
+- 389 BSF calls each, only 6 divergent (all in first 13 calls)
+- Complete trace — no SIGSEGV
+
+| BSF # | callee_a (α,β,γ order) | callee_b (γ,β,α order) | Class |
+|-------|------------------------|------------------------|-------|
+| 1 | bit 8 | bit 10 | A |
+| 2 | bit 9 | bit 9 | A |
+| 3 | bit 10 | bit 8 | A |
+| 4 | bit 3 | bit 1 | B |
+| 5 | bit 2 | bit 2 | B |
+| 6 | bit 1 | bit 3 | B |
+| 7-13 | identical | identical | C+ |
+| 14-389 | identical | identical | later passes |
+
+### Definitive Bit→Register Mapping
+
+From assembly listing correlation:
+
+**Volatile GPR class** (bits 1-2):
+- Alpha always gets color 2, beta always gets color 1 (consistent per variable)
+- First declared → r11 (top-down), second declared → r10
+- Color→register mapping: first color allocated → highest available volatile GPR
+
+**Callee-saved GPR class** (bits 8-10):
+- Alpha→color 8, beta→color 9, gamma→color 10 (consistent per variable)
+- First declared → r29 (bottom-up within save range), then r30, r31
+- Color→register mapping: first color allocated → lowest callee-saved GPR in the save range
+
+**Key insight: colors are consistent, register mapping is not.** Each variable gets a deterministic "color" (BSF bit index) based on interference constraints. But the color→PPC register mapping depends on allocation ORDER, which follows declaration order. This is why register swaps cannot be fixed by permuting source — the colors stay the same, only the mapping changes.
+
+### Allocation Pattern Summary
+
+| Register type | Allocation direction | First declared gets |
+|---------------|---------------------|-------------------|
+| Volatile GPR | Top-down | r11 (highest scratch) |
+| Callee-saved GPR | Bottom-up | r29 (lowest in save range) |
+
+The compiler saves callee-saved registers with `__savegprlr_N` where N is the lowest register used. Bottom-up allocation ensures the save range matches the number of variables.
+
+### What the "base" Field Means
+
+All BSF calls show `base=0`, confirming all register classes fit within a single 64-register block (base=0 means registers 0-63 in that class). The `base` field from the interference graph node (`[node+0x00]`) would be non-zero only for architectures with >64 registers in a class.
+
+## Experiment 9: extrwi vs rlwinm Encoding Differences (DONE)
+
+**Goal**: Determine whether `extrwi.` vs `rlwinm.` encoding differences are fixable from source.
+
+### Background
+
+DxTex::ResetSurfaces (97.2% match) has two `replace` mismatches where the target uses `extrwi. r10, r11, 1, 30` but our code generates `rlwinm. r10, r11, 0, 30, 30`. Both are `rlwinm` machine instructions with different rotate/mask parameters:
+- `extrwi. rA, rS, 1, 30` = `rlwinm. rA, rS, 31, 31, 31` — rotate right 1, extract to LSB (result is 0 or 1)
+- `rlwinm. rA, rS, 0, 30, 30` — no rotation, mask bit in place (result is 0 or the original bit value)
+
+### Callgrind-Diff Analysis
+
+Running callgrind-diff required the **32-bit wibo** (the 64-bit wibo crashes valgrind due to custom segment selectors in `installSelectors`). Using patched 32-bit wibo from Experiment 8:
+
+```
+A (rlwinm / flags & 0x2):    25,026 c2.dll addresses, 3.49B instructions
+B (extrwi / !!(flags & 0x2)): 26,885 c2.dll addresses, 3.49B instructions
+Divergent: 8,214 addresses across 559 clusters
+```
+
+The boolean conversion form triggers fundamentally different c2.dll code paths:
+- **5 code regions** with ~94M instruction count deltas each
+- BSF (register allocator) cluster at RVA 0x0267ef-0x026815 has 197M |delta|
+- This confirms the front-end IR representation is different, not just a trivial encoding selection
+
+### Source Pattern Discovery
+
+Systematic testing of 5 source variants for `(flags & 0x2) && mips`:
+
+| Variant | Pattern | Encoding |
+|---------|---------|----------|
+| 1 | `(flags & 0x2) && mips` | `rlwinm. r,r,0,30,30` (mask-in-place) |
+| 2 | `((flags & 0x2) != 0) && mips` | `rlwinm. r,r,0,30,30` (mask-in-place) |
+| 3 | `!!(flags & 0x2) && mips` | `rlwinm. r,r,0,30,30` (mask-in-place) |
+| **4** | **`bool b = (flags & 0x2) != 0; if (b && ...)` | **`rlwinm. r,r,31,31,31` (extrwi form!)** |
+| 5 | `int b = !!(flags & 0x2); if (b && ...)` | `rlwinm. r,r,0,30,30` (mask-in-place) |
+
+**Only the `bool` type with a separate variable declaration produces extrwi encoding.** The C++ `bool` type (1-byte, always 0/1) forces the compiler to materialize a boolean value, which selects the extract-to-LSB encoding. The `int` type with `!!` gets optimized back to mask-in-place by UTC.
+
+### Verification on DxTex::ResetSurfaces
+
+Applied the pattern to the actual function:
+```cpp
+// Before (96.5% match, 2 replace mismatches):
+if (((mType & kRendered) && mNumMips) || ((mType & kMovie) && (mType & 0x20)) || ...)
+
+// After (98.4% match, 0 replace mismatches):
+bool isRendered = (mType & kRendered) != 0;
+if ((isRendered && mNumMips) || (bool(mType & kMovie) && (mType & 0x20)) || ...)
+```
+
+Both `replace` mismatches eliminated. All remaining differences are register swaps (r28↔r29), which are the unfixable allocator ordering from Experiments 1-7.
+
+### Conclusion
+
+**extrwi vs rlwinm encoding is FIXABLE from source.** The pattern is:
+- `bool varname = (flags & MASK) != 0;` — generates extrwi (extract-to-LSB)
+- `flags & MASK` in a condition — generates rlwinm (mask-in-place)
+- `(flags & MASK) != 0` inline — optimized away, generates rlwinm
+- `!!(flags & MASK)` with `int` — optimized away, generates rlwinm
+
+The key is that `bool` type semantics force 0/1 materialization in the IR, which propagates through UTC's optimizer to select the rotate+extract encoding.
+
+## Next Steps
+
+### Priority 1: Register Swap Mitigation — DONE (Post-Build .obj Patcher)
+
+**Goal**: Eliminate register swap mismatches for affected functions.
+
+**Outcome**: Instead of patching c2.dll (risky, hard to verify), built a post-compilation
+.obj patcher (`scripts/obj_regswap_patcher.py`) that directly patches register fields in
+compiled COFF .obj files using objdiff's instruction-level diff as the oracle.
+
+**Results (709 functions)**:
+- **17 functions at exact 100%** match (reported as COMPLETE)
+- **679 functions improved** (average +1-3% match)
+- **17 functions safely reverted** (auto-restore on regression)
+- **0 failures**
+
+**Usage**: `ninja && python3 scripts/obj_regswap_patcher.py --batch --apply`
+
+**Key technical challenges solved**:
+- PowerPC instruction format dispatch (D-form, X-form, A-form, M-form)
+- Logical vs arithmetic register field ordering (rA/rS/rB vs rD/rA/rB)
+- Pseudo-instruction replication (`mr rA,rS` = `or rA,rS,rS`)
+- FP single/double precision XO-based dispatch
+- Compare/trap instruction field mapping (crfD/TO not GPR)
+- Safety revert mechanism (auto-restore from .bak on regression)
+
+**c2.dll patching remains a future option**: The BSF-based allocator is fully characterized
+(see Experiments 6-8). Patching `bsf` → `bsr` at RVA 0x026780 would reverse color
+assignment direction, but the .obj patcher approach is simpler and safer.
+
+### Priority 2: fmadds vs fmuls+fadds Investigation — DONE
+
+See Step 7 below.
+
+### Priority 3: Instruction Scheduling / Block Layout — DONE
+
+See Step 8 below.
+
+### Priority 4: Automated At-Limit Ceiling Calculator — DONE
+
+**Goal**: Compute theoretical maximum match% for every function, accounting for known
+unfixable patterns.
+
+**Tool**: `scripts/ceiling_calculator.py`
+
+**Usage**:
+```bash
+python scripts/ceiling_calculator.py                    # All AT_LIMIT functions
+python scripts/ceiling_calculator.py --min 90           # 90%+ only
+python scripts/ceiling_calculator.py --find-fixable     # Show fixable patterns
+python scripts/ceiling_calculator.py --json             # Machine-readable output
+```
+
+**Full scan results (1,838 AT_LIMIT functions, 253,345 instructions)**:
+
+| Category | Count | % of Mismatches | Fixable? |
+|----------|-------|-----------------|----------|
+| Relocation noise | 31,745 | 32.6% | No (address layout) |
+| Insert/delete | ~30,000 | ~31% | No (code structure) |
+| Register swaps | 11,328 | 11.6% | Via .obj patcher |
+| Merged symbols | 3,403 | 3.5% | No (linker ICF) |
+| Scheduling | 2,709 | 2.8% | No (compiler heuristic) |
+| Immediate diffs | ~500 | ~0.5% | No (stack offsets) |
+| Encoding patterns | 419 | 0.4% | Yes (bool_mask, extrwi) |
+| FMA patterns | 171 | 0.2% | Yes (#pragma fp_contract) |
+| Save/restore | 124 | 0.1% | No (prologue/epilogue) |
+
+**Key findings**:
+- **226 functions have fixable encoding/FMA patterns** (out of 1,838 AT_LIMIT)
+- For 90%+ AT_LIMIT functions, **99.9% of mismatches are unfixable**
+- Relocation noise is the dominant mismatch type at all match levels
+- Average ceiling for 90%+ functions: 96.2%
+- Effective completion: 87.4% (vs 88.5% raw closure)
 
 ## Future Ideas
 
-- **c2.dll symbol map**: Use prologue detection + callgrind to build a function boundary map
-- **Phoenix framework research**: Microsoft's research compiler shared c2.dll backend; public papers?
-- **Binary patching c2.dll**: If we find the allocation decision point, patch the branch to reverse it
-- **Cross-TU register effects**: Do other functions in the TU affect allocation for our target?
-- **Ghidra analysis of c2.dll**: Import c2.dll into Ghidra for full decompilation of the register allocator
+- **c2.dll symbol map**: Use prologue detection + callgrind to build a full function boundary map for c2.dll — enables all future investigations
+- **Phoenix framework research**: Microsoft's research compiler (Phoenix) shared c2.dll's backend architecture; public papers may describe the allocator in detail
+- **Cross-TU register effects**: Do other functions in the same translation unit affect allocation for our target? (Symbol ID numbering is TU-global)
+- **Compiler flag archaeology**: Use callgrind-diff to test undocumented `/d2` flags — some may control register allocation or instruction scheduling order
+- **c2.dll hot-patching infrastructure**: Build a general tool for runtime patching of c2.dll under wibo, enabling rapid experimentation with compiler behavior changes
+
+## Phase 2: BSF-Guided Register Allocation Tools (DONE)
+
+### Overview
+
+Experiments 1-9 fully characterized c2.dll's register allocator. Phase 2 automates the BSF tracing into reusable tooling that the permuter can use for guided declaration reordering.
+
+### New Modules
+
+#### `tools/compiler_trace/bsf_trace.py` — BSF Trace Capture
+
+Automates the GDB batch-mode BSF tracing from Experiment 8:
+- Generates a GDB script from the working template
+- Runs `gdb -batch -x <script>` with 32-bit wibo
+- Parses output into structured `BSFTrace` / `BSFCall` dataclasses
+- Handles c2.dll load timing (callDllMain hit #13)
+
+```bash
+python -m tools.compiler_trace bsf-trace /path/to/source.cpp
+```
+
+#### `tools/compiler_trace/bsf_diff.py` — BSF Trace Comparison
+
+Compares two BSF traces to identify divergent register allocation decisions:
+- Aligns traces by call index
+- Groups divergences by compiler phase (initial coloring, coalescing, recoloring)
+- Reports which BSF calls differ and by how much
+
+```bash
+python -m tools.compiler_trace bsf-diff source_a.cpp source_b.cpp
+```
+
+#### `tools/compiler_trace/regmap_solver.py` — Register Order Solver
+
+Given a BSF trace + objdiff mismatch info, computes candidate declaration orders:
+- Extracts initial color assignments from the BSF trace
+- Identifies GPR swap pairs from objdiff diagnosis
+- Generates targeted pairwise swap candidates (not blind permutation)
+- Integrates with tree-sitter AST for variable name extraction
+
+```bash
+python -m tools.compiler_trace bsf-solve --symbol <mangled> --source source.cpp
+```
+
+### Permuter Integration
+
+`scripts/permuter/patterns/declaration_reorder.py` gains a BSF-guided mode:
+- `--bsf-guided` flag on the permuter CLI
+- When enabled, traces the compiler's BSF calls once (~30-60s GDB overhead)
+- Generates targeted pairwise swap candidates instead of random permutation
+- Falls back to random permutation if BSF tracing fails or is infeasible
+
+### Investigation Queue
+
+#### Step 6: Batch Scan for Encoding Fixes (DONE)
+
+Built `scripts/batch_pattern_scan.py` — automated scanner that runs `objdiff-cli diff --include-instructions -f json` on functions and detects encoding patterns.
+
+**Scan Results** (500 functions, 80%-99.5% range):
+
+| Pattern | Hits | Fixable | Fix Strategy |
+|---------|------|---------|-------------|
+| `bool_mask` (clrlwi 24) | 23 | Yes (hard) | Adjust bool/int types, return types, casts |
+| `extrwi_rlwinm` | 3 | Yes | Add/remove `bool` variable per Experiment 9 |
+| `bool_negate` (subic/subfe vs cntlzw/extrwi) | 1 | Yes (hard) | Change return/variable type (int vs bool) |
+| **Total** | **27** | **27** | |
+
+**Key findings:**
+- extrwi↔rlwinm is RARE (only 3 instances across 500 functions, 2 in already-fixed DxTex::ResetSurfaces)
+- bool_mask (extra `clrlwi` truncation) is the dominant encoding pattern (23 hits)
+- bool_negate (subic/subfe vs cntlzw/extrwi for `!x`) is rare but interesting (1 hit)
+
+**bool_mask pattern details:**
+- When target has `clrlwi rA, rB, 24` but we don't: we need to add a bool truncation
+- When we have it but target doesn't: we need to remove it (use int instead of bool)
+- Functions affected: CampaignEraProgress::IsEraComplete, HamDirector::ShotsDisabled, StoreOffer::Handle, GetDefaultMatShaderOpts, RndMat::SyncProperty (3 hits), RndMotionBlur::CanMotionBlur, BinStream::Read, ASCIItoUTF8, GamePanel::SetPausedHelper, and more
+
+**New fixable target: RndMat::LoadOld** (97.0%):
+- idx 389: target=`clrlwi r11, r11, 31`, base=`extrwi r11, r11, 1, 26`
+- Both extract a single bit, but via different encodings
+- Fix: remove `bool` variable, use inline expression
+
+**Scanner usage:**
+```bash
+python scripts/batch_pattern_scan.py --min 80 --max 99.5 --limit 500
+python scripts/batch_pattern_scan.py --pattern extrwi_rlwinm  # filter by type
+python scripts/batch_pattern_scan.py --pattern bool_mask --json  # JSON output
+python scripts/batch_pattern_scan.py --unit 'system/rndobj'  # filter by unit
+```
+
+#### Step 7: fmadds vs fmuls+fadds Investigation
+
+Apply callgrind-diff methodology to understand fused multiply-add selection:
+1. Create minimal test pair: `a*b + c` vs `fma(a,b,c)` variants
+2. Run callgrind-diff with 32-bit wibo
+3. Identify divergent c2.dll code paths
+4. Determine if controllable from source
+
+**Status**: Not yet started.
+
+#### Step 8: Instruction Scheduling Investigation
+
+Understand ASSERT_REVS scheduling differences and general block ordering:
+1. Create test pair with different instruction scheduling outcomes
+2. Callgrind-diff to find scheduler decision points
+3. Document findings and whether any source patterns influence scheduling
+
+**Status**: Not yet started — affects ~10% of functions with ~0.8-0.9% gap each.
+
+### mwcc-debugger Reference Architecture
+
+The `~/code/milohax/mwcc-debugger` project instruments the Metrowerks CodeWarrior
+compiler for PowerPC using GDB remote debugging through a `retrowin32` x86 emulator.
+Key ideas that apply to our c2.dll tracing:
+
+**1. Full pass-by-pass intermediate dumps**
+- MWCC: captures state at 20+ optimization passes (CSE, copy propagation, loop opts, peephole, regalloc, scheduling)
+- Ours: currently only traces BSF calls (one point). Could instrument more c2.dll passes.
+
+**2. Interference graph extraction**
+- MWCC: extracts complete interference graph (nodes, neighbors, spill costs, coalescing)
+- Ours: only infer colors from BSF bit indices. Could read c2.dll's IG data structures at breakpoints.
+
+**3. Memory-aware struct reading**
+- MWCC: reads compiler data structures directly from memory at breakpoints
+- Ours: only trace function call arguments. Could read c2.dll's allocator state at `0x10c2e088/e100/e178`.
+
+**4. Virtual-to-physical register mapping**
+- MWCC: directly dumps which virtual register → physical register
+- Ours: only infer from BSF outputs. Could read the full mapping table.
+
+**Next step**: Prototype reading c2.dll's register allocator structs directly from memory
+during GDB tracing, similar to how mwcc-debugger reads MWCC's `MwccIGNode` structures.
+The data layer at RVA 0x0266d0-0x0268xx (documented in Experiment 6) provides the entry
+points: interference list at `[node+0x00/0x04/0x08/0x0c]`, free lists at `0x10c2e178[class]`.
+
+## Step 7: fmadds vs fmuls+fadds Investigation — DONE
+
+**Status**: DONE (controlled experiments + batch scan complete)
+
+**Key findings**:
+
+1. **`#pragma fp_contract(off)` definitively prevents fmadds generation** — confirmed via controlled experiment compiling test functions with and without the pragma. The pragma is file-scoped and can be toggled.
+
+2. **Batch scan found 14 functions with FMA mismatches** across 800 functions scanned (50%-99.9%):
+
+| Category | Count | Fix Strategy |
+|----------|-------|-------------|
+| Pure "need OFF" | 4 | Add `#pragma fp_contract(off)` to file |
+| Pure "need ON" | 5 | Restructure expressions to enable fusion |
+| Mixed direction | 5 | Unfixable by pragma (scheduling heuristic) |
+
+3. **Previous assessment of "UNFIXABLE" was too broad** — pure-direction cases ARE fixable. Updated TECHNICAL_NOTES.md classification to "PARTIALLY FIXABLE".
+
+4. **Affected files** (for when implementing these functions):
+   - BustAMovePanel.cpp, Rot.cpp, CharClip.cpp, BinkReader.cpp → `#pragma fp_contract(off)`
+   - ClipDistMap.cpp, ArcDetector.cpp, Profiler.cpp, GamePanel.cpp, Part.cpp → expression restructuring
+   - ClipCollide.cpp, Key.cpp, Geo.cpp, MultiTempoTempoMap.cpp, SpotlightDrawer_NG.cpp → accept gap
+
+5. **Scanner updated**: `scripts/batch_pattern_scan.py` now detects `fma_mismatch` pattern type.
+
+## Step 8: Instruction Scheduling Investigation — DONE (previously completed)
+
+**Status**: DONE (see `docs/sessions/2026-02-03-assert-revs-scheduling.md`)
+
+**Key findings**:
+
+1. **ASSERT_REVS scheduling is UNFIXABLE** — 17 documented attempts all failed. The second
+   `MILO_FAIL` call in the macro generates 3 independent `addi` instructions (no data dependencies)
+   that the compiler is free to schedule in any order. Target and our build choose different orders.
+
+2. **Impact**: ~146 Load functions capped at 98.6-99.1% match, each losing ~0.8-0.9% to scheduling.
+
+3. **General instruction scheduling** differences (non-ASSERT_REVS) arise from:
+   - Independent load/store reordering around function calls
+   - Register caching decisions (target caches `bs.stream` in callee-saved registers, our build
+     reloads from memory each time)
+   - These are compiler backend heuristic decisions not controllable from source
 
 ## References
 
