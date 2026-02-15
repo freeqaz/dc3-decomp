@@ -5,6 +5,8 @@
 
 Licenses sLicense("system/src/math/Easing.h", Licenses::kRequirementNotification);
 
+float EaseLinear(float t, float, float) { return t; }
+
 float EaseBounceOut(float t, float, float) {
     MILO_ASSERT(t >= 0 && t <= 1, 0x13);
     if (t < 0.36363637f) {
