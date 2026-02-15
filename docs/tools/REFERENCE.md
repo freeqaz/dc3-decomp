@@ -72,6 +72,30 @@ See [../reference/DATABASE_SCHEMA.md](../reference/DATABASE_SCHEMA.md) for full 
 
 See [../sessions/2026-02-11-x360-linking-pipeline.md](../sessions/2026-02-11-x360-linking-pipeline.md) for full status and roadmap.
 
+## Register Swap Patcher
+
+Post-build tool that patches compiled `.obj` files to fix register allocation mismatches.
+Uses objdiff's instruction-level diff as an oracle to identify register swaps, then
+directly modifies the register fields in the PowerPC instructions.
+
+**Not run by default** — must be invoked manually after `ninja`.
+
+```bash
+# Dry run: show what would be patched (no changes)
+python3 scripts/obj_regswap_patcher.py --batch
+
+# Apply patches to .obj files
+python3 scripts/obj_regswap_patcher.py --batch --apply
+
+# Regenerate report to see patched progress (without rebuilding)
+build/tools/objdiff-cli report generate -o build/373307D9/report.json
+python3 configure.py progress
+```
+
+Note: `ninja` will overwrite patched `.obj` files on the next rebuild, so the patcher
+must be re-run after each build. The patcher auto-reverts any function where patching
+causes a regression.
+
 ## Quick Commands
 
 ```bash

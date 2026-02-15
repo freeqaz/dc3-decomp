@@ -67,6 +67,12 @@ python -m tools.compiler_trace capture-il test.cpp --output-dir /tmp/il_out
 python -m tools.compiler_trace callgrind-diff test_a.cpp test_b.cpp
 ```
 
+## Post-Build Tools
+
+| Tool | Description | Doc |
+|------|-------------|-----|
+| Register Swap Patcher | Patches .obj register fields using objdiff diff as oracle (manual, not run by default) | [REFERENCE.md](REFERENCE.md#register-swap-patcher) |
+
 ## Code Transformation Tools
 
 | Tool | Description | Doc |
