@@ -7,6 +7,8 @@
 #include "obj/Dir.h"
 #include "obj/Object.h"
 
+int HamSong::mPreferStreaming;
+
 void HamSong::Unload() {
     Song::Unload();
     RELEASE(TheMidiParserMgr);

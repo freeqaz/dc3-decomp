@@ -64,6 +64,8 @@
 #include "os/Debug.h"
 #include "os/System.h"
 
+PropertyEventProvider *TheHamProvider;
+
 void HamTerminate() {
     DataArray *dataMacro = DataGetMacro("INIT_HAM");
     if (dataMacro) {
