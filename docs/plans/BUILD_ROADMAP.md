@@ -49,24 +49,26 @@ the title screen. Here's what that requires and where we stand:
 |-------------|--------|-----------|
 | Code compiles | Yes (all decomp source builds) | No |
 | Linker runs | Yes (with /FORCE) | No |
-| PE produced | Yes (19.6MB, +2.3MB vs original) | No |
-| Clean link (no /FORCE) | No — 5,545 duplicate + 223 unresolved symbols | **Yes** |
+| PE produced | Yes (19.6MB) | No |
+| XEX packaging | **Done** — `scripts/build_xex.py` | No |
+| Clean link (no /FORCE) | No — 243 unique unresolved symbols | **Yes** |
 | Code matches original | 36% by bytes, 70% for game code | Partial |
 | Data sections present | Yes (from split objects) | No |
 | .pdata (exception tables) | Partial — split objects in .pdat0 (invisible to kernel) | **Yes for EH** |
-| XEX packaging | Not attempted | **Yes** |
 | Boot on Xenia | Not attempted | Unknown |
 
 ### The Three Real Blockers
 
-#### 1. Unresolved Symbols (223 unique)
+#### 1. Unresolved Symbols (243 unique)
 
 | Category | Count | Fix |
 |----------|-------|-----|
 | Local data labels (`lbl_*`) | 96 | dtk needs to globalize these |
-| Decomp cross-references | 84 | Resolve as more code is decompiled |
-| .CRT dynamic initializers | 24 | Expected for hybrid build |
-| Third-party (JPEG, Ogg) | 16 | Missing split objects |
+| .CRT dynamic initializers (`??__E`/`??__F`) | 24 | Expected for hybrid build |
+| Exception handling (`__catch`/`__unwind`/`__try`) | 17 | EH symbol mismatches |
+| Merged symbols (`merged_*`) | 12 | ICF aliasing needed |
+| Decomp cross-references (operator delete, DataArray::Node, etc.) | ~85 | Object collision — decomp .obj overrides split but missing some symbols |
+| Third-party (JPEG, Ogg, curl, zlib) | ~20 | Missing split objects |
 | Jump tables | 3 | dtk fix needed |
 
 **Most critical:** The 96 `lbl_*` symbols need dtk to export local data
@@ -86,15 +88,14 @@ basic testing, but it's a correctness issue.
 **Fix:** Either merge .pdat0 into .pdata post-link, or get dtk's section
 merging working properly.
 
-#### 3. XEX Packaging
+#### 3. XEX Packaging — DONE
 
 The linker produces a PE, but Xbox 360 (and Xenia) expects an XEX container.
-We haven't attempted XEX packaging yet.
 
-**Options:**
-- `makexex` from the XDK (available, runs under wine)
-- Xenia may accept raw PEs in dev mode (needs investigation)
-- Post-link PE patching might be simpler than full XEX flow
+**Status:** `scripts/build_xex.py` creates a minimal XEX2 container around the PE.
+Copies optional headers from the original XEX (entry point, execution ID, imports,
+game ratings, TLS info, etc.). Unencrypted, raw compression — suitable for devkit
+and Xenia testing.
 
 ---
 
@@ -103,13 +104,16 @@ We haven't attempted XEX packaging yet.
 ### Phase 0: What Works Today
 
 ```bash
-ninja                    # Build all decomp .obj files
-ninja link               # Link hybrid PE (with /FORCE)
-scripts/compare_pe.py    # Compare against original (anchor-based)
+ninja                              # Build all decomp .obj files
+python3 scripts/fix_pdata.py       # Rename .pdata→.pdat0 in split objects (avoids LNK1223)
+ninja link                         # Link hybrid PE (with /FORCE)
+python3 scripts/build_xex.py       # Package PE → XEX2 container
+scripts/compare_pe.py              # Compare against original (anchor-based)
 ```
 
 The hybrid PE links decomp code alongside split objects from the original
-binary. It's structurally valid but can't run.
+binary. The XEX packer wraps it in a valid XEX2 container suitable for
+Xenia testing. Output: `build/373307D9/default.xex` (~19.6MB).
 
 ### Phase 1: Clean Link (eliminate /FORCE)
 
@@ -144,7 +148,7 @@ checks magic bytes and rejects MZ/PE headers.
 
 | Task | Effort | Impact |
 |------|--------|--------|
-| XEX packaging via XDK `imagexex` (runs under wine) | Medium | Produces loadable XEX |
+| ~~XEX packaging~~ | ~~Medium~~ | **DONE** — `scripts/build_xex.py` |
 | Xenia boot test with `--debug --break_on_start` | Small | First real validation |
 | Analyze Xenia crash log (PC + register dump) | Small | Identifies first failure |
 | Fix crashes iteratively (see debugging strategy below) | Ongoing | Progress toward boot |
@@ -362,19 +366,22 @@ The crashes will tell us exactly what matters and what doesn't.
 
 ## Next Steps (Immediate)
 
-1. **Try XEX packaging now** — Use the XDK's `imagexex` (runs under wine)
-   to wrap our current PE. Attempt a Xenia boot with `--debug --log_level=3`.
-   Even a crash is valuable — it tells us where the first failure is.
+1. ~~**Try XEX packaging now**~~ — **DONE.** `scripts/build_xex.py` wraps PE → XEX2.
+   Full pipeline: `ninja && python3 scripts/fix_pdata.py && ninja link && python3 scripts/build_xex.py`
 
-2. **dtk PR for symbol globalization** — The 96 `lbl_*` unresolved symbols
+2. **Boot test on Xenia** — Load `build/373307D9/default.xex` on Xenia with
+   `--debug --log_level=3`. Even a crash is valuable — it tells us where the
+   first failure is. Requires Xenia on a Windows machine (not available in dev env).
+
+3. **Investigate link quality** — Analyze the unresolved symbols and duplicate
+   symbol warnings from the `/FORCE` link to understand what's actually broken
+   vs. benign. Some unresolved symbols may not be on the boot path.
+
+4. **dtk PR for symbol globalization** — The 96 `lbl_*` unresolved symbols
    are the biggest link-time blocker for a clean link. But the `/FORCE` link
    might work well enough to skip this for initial testing.
 
-3. **Profile the critical boot path** — Use Ghidra to trace `App::Init()`
-   and identify which functions are on the critical path to title screen.
-   Focus decomp effort on those functions first.
-
-4. **Build XEXP patch tool** — For iterative debugging, we need a way to
+5. **Build XEXP patch tool** — For iterative debugging, we need a way to
    patch individual functions into the original XEX. This is the gap between
    "it crashes" and "we can isolate why."
 
