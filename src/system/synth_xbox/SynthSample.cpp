@@ -3,12 +3,13 @@
 #include "synth/SampleData.h"
 #include "utl/MemMgr.h"
 
-static void *SampleAlloc(int size, const char *file, int line, const char *name, int) {
+void *SampleAlloc(int size, const char *file, int line, const char *name, int) {
     return MemAlloc(size, file, line, name, 0x20);
 }
 
-static void SampleFree(void *mem, const char *file, int line, const char *name) {
-    MemFree(mem, file, line, name);
+void SampleFree(void *mem, const char *, int, const char *) {
+    if (mem)
+        MemFree(mem, __FILE__, __LINE__, "");
 }
 
 SynthSample360::SynthSample360() {}
