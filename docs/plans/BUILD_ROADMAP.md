@@ -17,14 +17,29 @@ XDK Code:     0.01% matched (excluded)
 
 After register swap patcher: +36KB code, +101 functions matched.
 
+### Orchestrator DB Progress
+
+```
+Non-excluded functions: 31,814
+COMPLETE:  29,252 (91.9%)
+AT_LIMIT:   1,938 (6.1%)
+Remaining:    624 (2.0%)
+Done total: 31,190 (98.0%)
+```
+
+A batch sweep of 3,380 previously-untracked functions found **2,774 hidden
+100% matches** — template instantiations and inline functions emitted in
+compilation units different from their "home" unit. These were invisible to
+per-unit batch checking but found by objdiff symbol lookup.
+
 ### What "Matched" Means
 
-- **36.15% matched** = objdiff fuzzy match across all code bytes
+- **36.15% matched** = objdiff fuzzy match across all code bytes (report.json)
 - **2.07% linked** = units where every function is 100% (164 files)
-- **83.2% of functions** are COMPLETE or AT_LIMIT in the orchestrator DB
-- The gap between "83% functions done" and "36% code matched" is because
-  the report counts code bytes, not function count, and many large functions
-  remain unmatched
+- **98.0% of functions** are COMPLETE or AT_LIMIT in the orchestrator DB
+- The gap between "98% functions done" and "36% code matched" is because
+  the report counts code bytes (not function count), includes third-party/XDK
+  code, and many of the remaining large functions are in the 36% denominator
 
 ### Linking Status
 
@@ -51,7 +66,7 @@ the title screen. Here's what that requires and where we stand:
 | Linker runs | Yes (with /FORCE) | No |
 | PE produced | Yes (19.6MB) | No |
 | XEX packaging | **Done** — `scripts/build_xex.py` | No |
-| Clean link (no /FORCE) | No — 243 unique unresolved symbols | **Yes** |
+| Clean link (no /FORCE) | No — 81 unique unresolved symbols (437 errors) | **Yes** |
 | Code matches original | 36% by bytes, 70% for game code | Partial |
 | Data sections present | Yes (from split objects) | No |
 | .pdata (exception tables) | Partial — split objects in .pdat0 (invisible to kernel) | **Yes for EH** |
@@ -59,21 +74,24 @@ the title screen. Here's what that requires and where we stand:
 
 ### The Three Real Blockers
 
-#### 1. Unresolved Symbols (243 unique)
+#### 1. Unresolved Symbols (81 unique, 437 total errors)
 
-| Category | Count | Fix |
-|----------|-------|-----|
-| Local data labels (`lbl_*`) | 96 | dtk needs to globalize these |
-| .CRT dynamic initializers (`??__E`/`??__F`) | 24 | Expected for hybrid build |
-| Exception handling (`__catch`/`__unwind`/`__try`) | 17 | EH symbol mismatches |
-| Merged symbols (`merged_*`) | 12 | ICF aliasing needed |
-| Decomp cross-references (operator delete, DataArray::Node, etc.) | ~85 | Object collision — decomp .obj overrides split but missing some symbols |
-| Third-party (JPEG, Ogg, curl, zlib) | ~20 | Missing split objects |
-| Jump tables | 3 | dtk fix needed |
+| Category | Errors | Unique Symbols | Fix |
+|----------|--------|----------------|-----|
+| DataArray::Node (ICF) | 86 | 1 | ICF merged — needs COMDAT aliasing |
+| operator delete (ICF) | 64 | 1 | ICF merged — same address as other deletes |
+| MemOrPoolFreeSTL (ICF) | 39 | 1 | ICF merged |
+| .CRT dynamic initializers (`??__E`) | 24 | 24 | Expected for hybrid build |
+| Exception handling (`__unwind`) | 15 | 15 | EH symbol mismatches |
+| Local data labels (`lbl_*`) | 14 | 14 | dtk needs to globalize these |
+| Ogg Vorbis | 13 | 5 | Missing split objects |
+| Merged symbols (`merged_*`) | 11 | 4 | ICF aliasing needed |
+| Other (individual symbols) | ~170 | ~17 | Mixed: decomp cross-refs, jump tables |
 
-**Most critical:** The 96 `lbl_*` symbols need dtk to export local data
-labels as global symbols. Without this, the linker can't resolve cross-object
-data references.
+**Most impactful:** The ICF-merged symbols (DataArray::Node, operator delete,
+MemOrPoolFreeSTL) account for 189 of 437 errors but are just 3 unique symbols.
+These are structural — the original linker merged identically-compiled functions
+to single addresses, and dtk's splitter can't reconstruct the aliases.
 
 #### 2. .pdata Exception Handling
 
@@ -121,11 +139,11 @@ Xenia testing. Output: `build/373307D9/default.xex` (~19.6MB).
 
 | Task | Effort | Impact |
 |------|--------|--------|
-| Globalize `lbl_*` data labels in dtk | Medium (dtk PR) | Fixes 96 unresolved |
-| Mark ICF functions as COMDAT | Medium (dtk/build change) | Fixes 5,545 duplicates |
-| Add missing split objects (JPEG, Ogg) | Small | Fixes 16 unresolved |
-| Fix remaining jump table symbols | Small (dtk) | Fixes 3 unresolved |
-| Accept .CRT + decomp cross-refs | None | 108 expected, resolve over time |
+| Globalize `lbl_*` data labels in dtk | Medium (dtk PR) | Fixes 14 unresolved |
+| Mark ICF functions as COMDAT | Medium (dtk/build change) | Fixes 189 errors (3 symbols) |
+| Add missing split objects (Ogg Vorbis) | Small | Fixes 13 unresolved |
+| Fix remaining jump table symbols | Small (dtk) | Fixes ~3 unresolved |
+| Accept .CRT + decomp cross-refs | None | ~39 expected, resolve over time |
 
 **Dependency:** Requires dtk changes (globalize locals, COMDAT marking).
 
