@@ -16,11 +16,11 @@ void DeJitter::Reset() {
 }
 
 float DeJitter::NewMs(float f1, float &fref) {
-    static DataNode &n = DataVariable("dejitter_disable");
+    float var_f31 = 1.0000000150474662e+30;
     // Ring buffer indices (0-31 wrapping): temp_r29 is previous write position, temp_r28 is the
     // position unk84 steps back (for averaging interval)
     float var_f30 = f1;
-    float var_f31 = 1.0000000150474662e+30; // FLT_MAX-like sentinel for uninitialized result
+    static DataNode &n = DataVariable("dejitter_disable"); // FLT_MAX-like sentinel for uninitialized result
     int temp_r29 = (unk80 - 1) & 0x1F;
     int temp_r28 = (temp_r29 - unk84) & 0x1F;
 

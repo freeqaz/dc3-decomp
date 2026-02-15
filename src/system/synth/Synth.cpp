@@ -28,6 +28,7 @@
 #include "os/Platform.h"
 #include "os/System.h"
 #include "rndobj/Overlay.h"
+#include "rndobj/Rnd.h"
 #include "synth/ADSR.h"
 #include "synth/FxSend.h"
 #include "synth/FxSendDelay.h"
@@ -232,6 +233,8 @@ void Synth::Poll() {
 //     return new StreamNull(f1);
 // }
 
+bool BufFile::Eof() { return (mPos - mBuf) >= mSize; }
+
 void Synth::NewStreamFile(const char *cc, File *&file, Symbol &sym) {
     static char gFakeFile[16];
     file = new BufFile(gFakeFile, sizeof(gFakeFile));
@@ -261,6 +264,22 @@ void Synth::ToggleHud() {
 const ADSRImpl *Synth::DefaultADSR() {
     MILO_ASSERT(mADSR, 0x498);
     return mADSR;
+}
+
+void Synth::DrawMeterScale(float &y) {
+    int db = -40;
+    float height = (float)TheRnd.Width();
+    Hmx::Color color(1.0f, 1.0f, 1.0f, 1.0f);
+    float left = height * 0.2f;
+    float width = height * 0.7f;
+    Vector2 pos(left, y);
+    TheRnd.DrawString(MakeString("%i", db), pos, color, true);
+    db = -20;
+    Vector2 pos2(left + width * 0.5f, y);
+    TheRnd.DrawString(MakeString("%i", db), pos2, color, true);
+    Vector2 pos3(left + width, y);
+    TheRnd.DrawString("0", pos3, color, true);
+    y += 16.0f;
 }
 
 void Synth::SetFX(const DataArray *data) {
@@ -400,6 +419,18 @@ int Synth::GetSampleMem(ObjectDir *dir, Platform p) {
 void Synth::AddZombie(SampleInst *inst) {
     inst->SynthPoll();
     mZombieInsts.insert(mZombieInsts.end(), inst);
+}
+
+void Synth::CullZombies() {
+    std::list<SampleInst *>::iterator next = mZombieInsts.begin();
+    std::list<SampleInst *>::iterator it;
+    while (next != mZombieInsts.end()) {
+        it = next;
+        ++next;
+        if ((*it)->DonePlaying()) {
+            mZombieInsts.erase(it);
+        }
+    }
 }
 
 DataNode Synth::OnPassthrough(DataArray *a) {

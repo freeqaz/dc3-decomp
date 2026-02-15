@@ -214,8 +214,9 @@ void PanelDir::SetFocusComponent(UIComponent *newComponent, Symbol nav_type) {
         mFocusComponent = newComponent;
         UpdateFocusComponentState();
         if (gSendFocusMsg) {
+            auto _tmp0 = UIComponentFocusChangeMsg(newComponent, focused, this, nav_type);
             TheUI->Handle(
-                UIComponentFocusChangeMsg(newComponent, focused, this, nav_type), false
+                _tmp0, false
             );
         }
     }

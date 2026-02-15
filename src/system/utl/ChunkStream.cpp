@@ -198,7 +198,7 @@ int ChunkStream::WriteChunk() {
         } else
             flags |= 0x1000000;
     }
-    if (size != mFile->Write(firstbuf, size)) {
+    if (mFile->Write(firstbuf, size) != size) {
         mFail = true;
     }
     MILO_ASSERT((size & ~kChunkSizeMask) == 0, 820);

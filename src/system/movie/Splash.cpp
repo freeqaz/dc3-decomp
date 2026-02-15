@@ -147,7 +147,8 @@ void Splash::EndSplasher() {
         SetRndSplasherCallback(0, 0, 0);
         *(bool *)((char *)&TheRnd + 0x1b4) = false;
         // Clean up archived screen directories
-        for (std::list<RndDir *>::iterator it = unkc0.begin(); it != unkc0.end(); ++it) {
+        auto _tmp3 = unkc0.end();
+        for (std::list<RndDir *>::iterator it = unkc0.begin(); _tmp3 != it; ++it) {
             delete *it;
         }
         Movie::Validate();

@@ -104,7 +104,7 @@ void FlowWhile::ChildFinished(FlowNode *n) {
                 ActivateValueCases(mValue, unk64);
             }
         } else {
-            if (mValue != unk64) {
+            if (unk64 != mValue) {
                 DataNode dupe(unk64);
                 unk64 = mValue;
                 if (!ActivateTransitionCases(mValue, dupe)) {

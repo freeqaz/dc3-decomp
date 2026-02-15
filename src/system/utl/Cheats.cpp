@@ -94,7 +94,7 @@ void CheatsManager::AppendLog(FixedString &fs) {
             it->mScript.Print(str, 1, 0);
             fs += MakeString(buf, str);
         }
-        if (mMaxBuffer == mBuffer.size()) {
+        if (mBuffer.size() == mMaxBuffer) {
             fs += "\n   ...";
         }
     }

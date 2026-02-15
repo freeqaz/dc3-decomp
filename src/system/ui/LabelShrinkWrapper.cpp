@@ -129,7 +129,8 @@ void LabelShrinkWrapper::DrawShowing() {
         RndDir *pDir = mResourceDir;
         MILO_ASSERT(pDir, 0xa7);
         UpdateAndDrawWrapper();
-        pDir->SetWorldXfm(WorldXfm());
+        auto _tmp0 = WorldXfm();
+        pDir->SetWorldXfm(_tmp0);
         pDir->Draw();
     }
 }

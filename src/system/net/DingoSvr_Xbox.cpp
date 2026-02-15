@@ -136,6 +136,50 @@ void DingoSvrXbox::EndSessionComplete(bool b1) {
     }
 }
 
+void DingoSvrXbox::Poll() {
+    if (!ThePlatformMgr.IsConnected()) {
+        return;
+    }
+    mJobMgr.Poll();
+    switch (unkb0) {
+    case 0: {
+        bool found;
+        {
+            String svc("dingo");
+            found = ThePlatformMgr.GetServiceID(svc, (unsigned int &)unk148);
+        }
+        if (found) {
+            if (*mXLSPFilter.c_str() == '\0') {
+                MILO_NOTIFY("DingoSvrXbox: Empty XLSP filter string.");
+            } else if ((unsigned int)unk148 == 0U) {
+                MILO_NOTIFY("DingoSvrXbox: Invalid Dingo service ID.");
+            } else {
+                unkc8.Connect(mXLSPFilter.c_str(), unk148);
+                unkb0 = 1;
+            }
+        }
+        break;
+    }
+    case 1:
+        if (unkc8.GetState() == 3) {
+            unkb0 = 2;
+            mIPAddr = unkc8.GetServiceIP();
+            mHostName.erase();
+        }
+        break;
+    case 2:
+        break;
+    default:
+        MILO_FAIL("DingoSvrXbox: State %d unhandled.", unkb0);
+        break;
+    }
+    unkc8.Poll();
+    if (unkc8.GetState() == 4
+        && !(unkc8.unk48.SplitMs() < mMsBetweenReconnDingo)) {
+        Disconnect();
+    }
+}
+
 void DingoSvrXbox::DeleteSessionComplete(bool b1) { mJobState = 0; }
 
 void DingoSvrXbox::StartUploadCareerScore(u64 u) {

@@ -81,7 +81,7 @@ bool StorePanel::IsLoaded() const {
 }
 
 void StorePanel::Unload() {
-    if (unk68 > 0) {
+    if ((int)unk68 >= 1) {
         ThePlatformMgr.CancelEnumJob(unk68);
     }
     unk68 = -1;

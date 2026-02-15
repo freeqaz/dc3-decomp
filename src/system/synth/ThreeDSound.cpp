@@ -151,7 +151,7 @@ void ThreeDSound::Highlight() {
         } else {
             UtilDrawCylinder(xfm, mRadius, mMinFalloffDistance, Hmx::Color(1, 0, 0), 0x40);
         }
-        if (mRadius > mSilenceDistance) {
+        if (mSilenceDistance < mRadius) {
             UtilDrawSphere(WorldXfm().v, mSilenceDistance, Hmx::Color(0, 1, 0), nullptr);
             return;
         }

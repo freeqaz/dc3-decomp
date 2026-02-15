@@ -39,7 +39,8 @@ StoreOffer::StoreOffer(DataArray *a, SongMgr *mgr) : mStoreOfferData(a), mSongMg
 
     DataArray *dateArray = mStoreOfferData->FindArray(release_date, false);
     if (dateArray) {
-        date = DateTime(dateArray->Int(1), dateArray->Int(2), dateArray->Int(3), 0, 0, 0);
+        auto _tmp4 = DateTime(dateArray->Int(1), dateArray->Int(2), dateArray->Int(3), 0, 0, 0);
+        date = _tmp4;
     }
 
     static Symbol song_ids("song_ids");

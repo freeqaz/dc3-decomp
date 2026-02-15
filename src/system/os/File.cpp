@@ -164,6 +164,8 @@ void OnFrameRateRecurseCB(const char *cc1, const char *cc2) {
     gFrameRateArray->Insert(gFrameRateArray->Size(), str);
 }
 
+void DirListCB(const char *, const char *cc2) { gDirList.push_back(String(cc2)); }
+
 bool FileExists(const char *iFilename, int iMode, String *str) {
     MILO_ASSERT((iMode & ~FILE_OPEN_NOARK) == 0, 0x2A8);
     File *theFile = NewFile(iFilename, iMode | 0x40002);

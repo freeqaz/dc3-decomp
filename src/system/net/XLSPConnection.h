@@ -24,6 +24,8 @@ public:
     static bool SecureDisconnect(IN_ADDR);
     static int StartGatewayConnection(IN_ADDR);
 
+    friend class DingoSvrXbox;
+
 private:
     void SetState(State);
     void StartEnumeration();

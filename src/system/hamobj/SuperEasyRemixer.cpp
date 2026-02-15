@@ -126,8 +126,8 @@ void SuperEasyRemixer::DumpSongLayout() {
                         str += "_";
                     }
                     if (TheMoveMgr->HasVariantPair(
-                            GetMoveParentsByDifficulty(d)[i - 1],
-                            GetMoveParentsByDifficulty(next)[i]
+                            GetMoveParentsByDifficulty(next)[i],
+                            GetMoveParentsByDifficulty(d)[i - 1]
                         )) {
                         str += ">";
                     } else {

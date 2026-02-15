@@ -495,8 +495,8 @@ void Hmx::Object::PropertyClear(DataArray *propArr) {
 }
 
 void Hmx::Object::SetProperty(DataArray *prop, const DataNode &val) {
-    DataNode n;
     const DataNode *prop_n = nullptr;
+    DataNode n;
     Symbol handler;
     if (mSinks) {
         handler = mSinks->GetPropSyncHandler(prop);

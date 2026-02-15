@@ -139,7 +139,7 @@ void CompressionEffect::Process(float *samples, int numFrames, int numChannels) 
             int channel2 = 0;
             for (int ch_idx2 = 0; ch_idx2 < numChannels; ch_idx2++) {
                 int idx = frame * numChannels + channel2;
-                samples[idx] = samples[idx] * unk34 * envelope * unk10;
+                samples[idx] = (unk10 * (envelope * (unk34 * samples[idx])));
                 channel2 += 1;
             }
         }

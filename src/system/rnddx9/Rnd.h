@@ -78,6 +78,7 @@ public:
     virtual void UpdateScalerParams();
 
     D3DDevice *Device() { return mD3DDevice; }
+    XVIDEO_MODE *VideoMode() { return &mVideoMode; }
     void AutoRelease(D3DResource *r) {
         if (r) {
             if (unk1b4) {

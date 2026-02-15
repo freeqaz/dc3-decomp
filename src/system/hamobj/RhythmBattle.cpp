@@ -788,7 +788,17 @@ void RhythmBattle::OnBeat() {
         focusPanel->HandleType(finish_intro);
     }
     if (mFullKTB) {
-        if (mEndBeat < curBeat && !mFinale) {
+        if (!(mEndBeat < curBeat && !mFinale)) {
+            if (mFinale) {
+                bool p1Active = unk148 == 0 || (int)curBeat > 0x10;
+                mPlayerOne->SetActive(p1Active);
+                bool p2Active = unk148 == 0 || (int)curBeat > 0x10;
+                mPlayerTwo->SetActive(p2Active);
+            } else {
+                mPlayerOne->SetActive(true);
+                mPlayerTwo->SetActive(true);
+            }
+        } else {
             unk101 = true;
             mPlayerOne->SetActive(false);
             mPlayerTwo->SetActive(false);
@@ -807,16 +817,6 @@ void RhythmBattle::OnBeat() {
                     unk80->Animate(unk80->StartFrame(), unk80->EndFrame(), unk80->Units());
                 }
                 unkfc = false;
-            }
-        } else {
-            if (mFinale) {
-                bool p1Active = unk148 == 0 || (int)curBeat > 0x10;
-                mPlayerOne->SetActive(p1Active);
-                bool p2Active = unk148 == 0 || (int)curBeat > 0x10;
-                mPlayerTwo->SetActive(p2Active);
-            } else {
-                mPlayerOne->SetActive(true);
-                mPlayerTwo->SetActive(true);
             }
         }
     }
@@ -938,10 +938,11 @@ void RhythmBattle::OnBeat() {
                     b36 = !b36;
                 }
                 unk124 = (int)b36 + 5;
+                auto _tmp2 = second->SwagJacked(focusPanel, (RhythmBattleJackState)unk124);
                 first->SwagJackedBonus(
                     focusPanel,
                     (RhythmBattleJackState)unk124,
-                    second->SwagJacked(focusPanel, (RhythmBattleJackState)unk124)
+                    _tmp2
                 );
                 i6b4 = (int)unk124;
                 b6f0 = !b36;

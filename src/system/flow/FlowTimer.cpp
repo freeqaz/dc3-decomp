@@ -127,7 +127,7 @@ void FlowTimer::Execute(FlowNode::QueueState state) {
 bool FlowTimer::IsRunning() { return unk60 || FlowNode::IsRunning(); }
 
 void FlowTimer::OnKeyframe(FlowNode *node) {
-    if (!node->HasRunningNode(node))
+    if (!node->IsRunning())
         FlowNode::ActivateChild(node);
 }
 

@@ -1,4 +1,5 @@
 #include "obj/Data.h"
+#include "obj/DataFile.h"
 #include "obj/DataFunc.h"
 #include "obj/Dir.h"
 #include "obj/Object.h"
@@ -30,7 +31,9 @@ void DataMacroWarning(bool b) { gDataMacroWarning = b; }
 
 Hmx::Object *DataThis() { return gDataThis; }
 
-Loader *DataFactory(const FilePath &, LoaderPos);
+Loader *DataFactory(const FilePath &f, LoaderPos l) {
+    return new DataLoader(f, l, true);
+}
 
 bool DataUpdateArray(DataArray *a1, DataArray *a2) {
     if (a2->Size() != 0) {

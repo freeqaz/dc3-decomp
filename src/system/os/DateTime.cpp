@@ -70,6 +70,12 @@ bool DateTime::IsLeapYear() const {
     return (!(year & 3) && year % 100) || !(year % 400);
 }
 
+int DateTime::DayOfYear() const {
+    static const unsigned short days[12] = { 0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334 };
+    int leap = (mMonth > 1 && IsLeapYear()) ? 1 : 0;
+    return days[mMonth] + mDay + leap;
+}
+
 unsigned int DateTime::DiffSeconds(DateTime &dt) { return ToSeconds() - dt.ToSeconds(); }
 
 void DateTime::FromFileTime(const FILETIME &ft) {

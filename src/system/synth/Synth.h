@@ -106,6 +106,7 @@ public:
     float GetMasterVolume();
     void ToggleHud();
     const ADSRImpl *DefaultADSR();
+    void DrawMeterScale(float &);
     void SetFX(const DataArray *);
     void SetMic(const DataArray *);
     int GetFXOverhead();

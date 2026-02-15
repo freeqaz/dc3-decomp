@@ -12,10 +12,8 @@ const char *TickFormat(int tick, const MeasureMap &map) {
 }
 
 const char *FormatTimeMSH(float f) {
-    return MakeString(
-        "%d:%02d.%02d",
-        (int)(f / 60000.0f),
-        (int)(std::fmod(f, 60000.0) / 1000.0),
-        (int)(std::fmod(f, 1000.0) / 10.0)
-    );
+    int min = (int)(f * (1.0f / 60000.0f));
+    int sec = (int)((float)std::fmod(f, 60000.0) * 0.001f);
+    int hun = (int)((float)std::fmod(f, 1000.0) * 0.1f);
+    return MakeString("%d:%02d.%02d", min, sec, hun);
 }

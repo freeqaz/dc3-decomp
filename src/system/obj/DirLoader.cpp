@@ -518,7 +518,8 @@ void DirLoader::SaveObjects(BinStream &bs, ObjectDir *dir) {
             objects.push_back(it);
         }
     }
-    objects.sort(ClassAndNameSort());
+    auto _tmp2 = ClassAndNameSort();
+    objects.sort(_tmp2);
     bs << objects.size();
     for (std::list<Hmx::Object *>::const_iterator it = objects.begin();
          it != objects.end();

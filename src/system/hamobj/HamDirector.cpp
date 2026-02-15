@@ -928,7 +928,8 @@ DataNode HamDirector::OnLoadSong(DataArray *a) {
         else
             speed = "fast";
         unk330 = speed;
-        TheGameData->SetSong(FileGetBase(str.c_str()));
+        auto _tmp1 = FileGetBase(str.c_str());
+        TheGameData->SetSong(_tmp1);
         mMerger->Select("song", str.c_str(), true);
         if (i4) {
             mMerger->StartLoad(b5);
@@ -1649,14 +1650,14 @@ bool HamDirector::GetPracticeFrames(Key<Symbol> *&k1, Key<Symbol> *&k2) {
             Keys<Symbol, Symbol> *keys = propKeys->AsSymbolKeys();
             int numKeys = keys->size();
             int startIdx = 0;
-            for (; startIdx < numKeys; startIdx++) {
+            for (; (unsigned int)startIdx < numKeys; startIdx++) {
                 if (mPracticeStart == (*keys)[startIdx].value)
                     goto next;
             }
             startIdx = -1;
         next:
             int endIdx = 0;
-            for (; endIdx < numKeys; endIdx++) {
+            for (; (unsigned int)endIdx < numKeys; endIdx++) {
                 if (mPracticeEnd == (*keys)[endIdx].value)
                     goto end;
             }
@@ -2134,7 +2135,8 @@ void HamDirector::Reteleport() {
     if (propKeys) {
         float frameTime = BeatToSeconds(beat) * 30.0f;
         frameIdx = propKeys->AsSymbolKeys()->AtFrame(frameTime, s);
-        clip = GetClipStartAndEndBeats(s, endBeat, beat, 0);
+        auto _tmp7 = GetClipStartAndEndBeats(s, endBeat, beat, 0);
+        clip = _tmp7;
     }
     Vector3 v = Vector3::ZeroVec();
     if (clip && frameIdx > 0) {
@@ -2158,9 +2160,9 @@ bool HamDirector::ReactToCollision(float frame) {
     if (strncmp(cat.Str(), "Area", 4) != 0) {
         return false;
     }
+    Symbol symAt;
     static Symbol shot("shot");
     PropKeys *propKeys = GetPropKeysByPlayer(0, shot);
-    Symbol symAt;
     if (!propKeys)
         return false;
     int keyIdx = propKeys->SymbolAt(frame, symAt);
@@ -2168,8 +2170,8 @@ bool HamDirector::ReactToCollision(float frame) {
         cat = symAt;
     }
     float frame2;
-    bool idxExists = propKeys->FrameFromIndex(keyIdx, frame2);
     Symbol symAt2;
+    bool idxExists = propKeys->FrameFromIndex(keyIdx, frame2);
     if (!idxExists)
         return false;
     int keyIdx2 = propKeys->SymbolAt(frame, symAt2);

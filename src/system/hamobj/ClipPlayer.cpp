@@ -42,7 +42,7 @@ bool ClipPlayer::Init(RndPropAnim *anim) {
         if (mClipKeys && mMasterClipKeys && mClipDir) {
             Key<Symbol> *k1;
             Key<Symbol> *k2;
-            if (TheHamDirector->GetPracticeFrames(k1, k2)) {
+            if (TheHamDirector->GetPracticeFrames(k2, k1)) {
                 unk20 = Round(FrameToBeat(k1->frame));
                 unk24 = Round(FrameToBeat(k2->frame)) - 1.0f;
                 String str(k1->value);

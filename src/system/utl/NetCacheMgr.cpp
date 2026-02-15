@@ -148,7 +148,8 @@ Symbol NetCacheMgr::CheatNextServer() {
     for (; s != mServers.end() && s->type != mServerType; s++)
         ;
     MILO_ASSERT(s != mServers.end(), 0x22B);
-    if (s == mServers.end()) {
+    auto _tmp2 = mServers.end();
+    if (s == _tmp2) {
         s = mServers.begin();
     }
     mServerType = s->type;

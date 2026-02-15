@@ -173,6 +173,18 @@ void TimerStats::Clear() {
     }
 }
 
+const char *FormatTime(float f) {
+    if (f < 0.001) {
+        return MakeString("%.2fns", f * 1e6f);
+    } else if (f < 1.0f) {
+        return MakeString("%.2fus", f * 1000.0f);
+    } else if (f >= 1000.0f) {
+        return MakeString("%.2fs", f * 0.001f);
+    } else {
+        return MakeString("%.2fms", f);
+    }
+}
+
 #pragma endregion
 #pragma region Handlers
 

@@ -7,6 +7,9 @@
 enum HttpGetFailType {
     kHttpFail_None = 0,
     kHttpFail_Send = 1,
+    kHttpFail_Timeout = 2,
+    kHttpFail_ClientError = 3,
+    kHttpFail_ServerError = 4,
 };
 
 class HttpGet {

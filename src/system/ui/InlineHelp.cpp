@@ -64,6 +64,20 @@ BEGIN_PROPSYNCS(InlineHelp)
     SYNC_SUPERCLASS(UIComponent)
 END_PROPSYNCS
 
+void InlineHelp::UpdateTextColors() {
+    for (std::vector<UILabel *>::iterator it = mTextLabels.begin();
+         it != mTextLabels.end();
+         ++it) {
+        (*it)->LStyle(0).mColorOverride = mTextColor;
+    }
+}
+
+void InlineHelp::OldResourcePreload(BinStream &bs) {
+    char name[256];
+    bs.ReadString(name, 256);
+    mResourceDir.SetName(name, true);
+}
+
 void InlineHelp::PostLoad(BinStream &bs) {
     bs.PopRev(this);
     mResourceDir.PostLoad(nullptr);

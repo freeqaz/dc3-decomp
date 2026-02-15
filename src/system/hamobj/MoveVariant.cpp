@@ -294,7 +294,8 @@ bool MoveVariant::IsValidForMinigame() const {
     if (size < 8) {
         return false;
     }
-    if (IsFinalPose())
+    bool omitMinigame = (mFlags >> 5) & 1;
+    if (omitMinigame)
         return false;
     unsigned int invFlags = ~mFlags;
     return (invFlags >> 3) & 1;

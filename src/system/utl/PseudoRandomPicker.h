@@ -49,7 +49,7 @@ public:
         return GetItem(idx);
     }
 
-private:
+public:
     std::list<T> mItems; // 0x0 - items?
     int mMode; // 0x8
     float mSeed; // 0xc
