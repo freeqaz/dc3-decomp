@@ -1,12 +1,26 @@
 #include "synth/SynthSample.h"
 #include "SampleData.h"
 #include "obj/Object.h"
+#include "os/Debug.h"
 #include "os/Platform.h"
+#include "synth/SampleInst.h"
 #include "utl/BinStream.h"
 #include "utl/BufStream.h"
 #include "utl/Loader.h"
+#include "utl/MemMgr.h"
+
+static void *SampleAlloc(int size, const char *file, int line, const char *name, int) {
+    return MemAlloc(size, file, line, name, 0x20);
+}
 
 bool sDisabled;
+SynthSample *SynthSample::sLoading;
+FileLoader *SynthSample::sLoader;
+
+void SynthSample::Init() {
+    Register();
+    SampleData::SetAllocator(SampleAlloc, MemFree);
+}
 
 void SynthSample::Disable() { sDisabled = true; }
 int SynthSample::GetNumChannels() const { return mSampleData.NumChannels(); }
@@ -51,6 +65,21 @@ BEGIN_SAVES(SynthSample)
         mSampleData.Save(bs);
     }
 END_SAVES
+
+void SynthSample::RegisterChild(SampleInst *inst) {
+    mSampleInsts.push_back(inst);
+}
+
+void SynthSample::UnregisterChild(SampleInst *inst) {
+    for (std::list<SampleInst *>::iterator it = mSampleInsts.begin();
+         it != mSampleInsts.end(); ++it) {
+        if (*it == inst) {
+            mSampleInsts.erase(it);
+            return;
+        }
+    }
+    MILO_NOTIFY("Could not find child instance for unregister\n");
+}
 
 BEGIN_CUSTOM_PROPSYNC(SampleMarker)
     SYNC_PROP(sample, o.sample)

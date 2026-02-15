@@ -38,6 +38,8 @@ public:
     void RegisterChild(SampleInst *);
     void UnregisterChild(SampleInst *);
 
+    NEW_OBJ(SynthSample)
+    static void Register() { REGISTER_OBJ_FACTORY(SynthSample) }
     static void Init();
     static void Disable();
 
