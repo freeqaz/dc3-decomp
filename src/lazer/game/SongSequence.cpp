@@ -148,14 +148,14 @@ void SongSequence::LoadNextSongAudio() {
 }
 
 bool SongSequence::DoNext(bool b1, bool b2) {
+    static Symbol active("active");
+    static Symbol holla_back_config("holla_back_config");
     static Symbol perform("perform");
-    static Symbol mind_control("mind_control");
     static Symbol in_campaign_era_intro("in_campaign_era_intro");
     static Symbol gameplay_mode("gameplay_mode");
-    static Symbol holla_back("holla_back");
-    static Symbol active("active");
     static Symbol midi_player("midi_player");
-    static Symbol holla_back_config("holla_back_config");
+    static Symbol mind_control("mind_control");
+    static Symbol holla_back("holla_back");
     unk28 = false;
     if (mEntries.empty())
         return true;
@@ -188,7 +188,8 @@ bool SongSequence::DoNext(bool b1, bool b2) {
             int p0Score = p0->Provider()->Property(score)->Int();
             int p1Score = p1->Provider()->Property(score)->Int();
             mEntries[mCurrentIndex].unk34 = p0Score + p1Score;
-            CampaignPerformer *cp = static_cast<CampaignPerformer *>(MetaPerformer::Current());
+            auto _tmp4 = MetaPerformer::Current();
+            CampaignPerformer *cp = static_cast<CampaignPerformer *>(_tmp4);
             Entry &entry = mEntries[mCurrentIndex];
             cp->UpdateEraSong(cp->GetDifficulty(), entry.unk4, entry.unk4, stars);
             cp->TriggerSongCompletion(entry.unk34, (float)entry.unk38);
@@ -233,7 +234,7 @@ bool SongSequence::DoNext(bool b1, bool b2) {
         static Symbol clear_all_flashcard_campaign_states(
             "clear_all_flashcard_campaign_states"
         );
-        TheMidiParserMgr->GetParser(midi_player)->SetProperty(active, nextEntry.unk14);
+        TheMidiParserMgr->GetParser(midi_player)->SetProperty(nextEntry.unk14, active);
         TheHamProvider->SetProperty(holla_back_config, nextEntry.unk14);
         if (isLoaded) {
             ObjectDir *hudPanel = DataVariable(hud_panel).Obj<ObjectDir>();

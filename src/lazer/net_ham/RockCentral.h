@@ -37,6 +37,7 @@ public:
     virtual void CreateAccount();
     virtual unsigned int GetPrincipalID() const { return 0; }
 
+    void Poll();
     void Init();
     void Terminate();
     void GetCommunityMsg(int, String &) const;
@@ -104,7 +105,7 @@ protected:
     XNADDR mXNetAddr; // 0xf0
     ULONGLONG mMachineID; // 0x118
     KinectShareConnection *mKinectShareConnection; // 0x120
-    int unk124;
+    Hmx::Object *unk124;
     int unk128;
     int unk12c;
 };

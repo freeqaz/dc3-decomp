@@ -129,6 +129,22 @@ Symbol ChallengeHeaderNode::OnSelectDone() {
     return gNullStr;
 }
 
+int ChallengeHeaderNode::GetSongID() {
+    if (mChildren.size() != 0) {
+        ChallengeSortNode *node = static_cast<ChallengeSortNode *>(mChildren.front());
+        MILO_ASSERT(node, 0x136);
+        return node->GetChallengeRecord()->GetChallengeRow().mSongID;
+    }
+    return 0;
+}
+
+Symbol ChallengeHeaderNode::GetSongShortName() {
+    if (mChildren.size() != 0) {
+        return mChildren.front()->GetToken();
+    }
+    return gNullStr;
+}
+
 BEGIN_HANDLERS(ChallengeHeaderNode)
     HANDLE_EXPR(get_challenge_count, mChallengeCount)
     HANDLE_SUPERCLASS(NavListHeaderNode)
@@ -268,7 +284,7 @@ void ChallengeSortNode::Text(UIListLabel *listlabel, UILabel *label) const {
         int ownerChallengeScore = TheChallengeSortMgr->GetOwnerChallengeScore(
             mChallengeRecord->GetChallengeRow().mSongID
         );
-        if (mChallengeRecord->GetChallengeRow().mScore <= ownerChallengeScore
+        if (ownerChallengeScore >= mChallengeRecord->GetChallengeRow().mScore
             && TheChallengeSortMgr->GetOwnerChallengeTimeStamp(
                    mChallengeRecord->GetChallengeRow().mSongID
                ) > mChallengeRecord->GetChallengeRow().mTimeStamp) {

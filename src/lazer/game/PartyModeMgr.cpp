@@ -1125,7 +1125,7 @@ void PartyModeMgr::CrewShowdownRematch() {
     mIsShowdown = false;
     unk1c8 = 2;
     mLeftTeamScore = 0;
-    mRightTeamPrevScore = 0;
+    mRightTeamScore = 0;
     unk2e4 = 0;
     unk2e8 = 0;
     SetCurrEvent();
@@ -1140,6 +1140,8 @@ void PartyModeMgr::SetupInfinitePartyMode() {
     TheHamSongMgr.GetRandomlySelectableRankedSongs(unk1d4);
     if (!(mPlaylist)) {
         ResetSongs();
+        unkf8.mNumGets = 0;
+        unkf8.mMode = 2;
     } else {
         unkf8.SetMode(0);
     }

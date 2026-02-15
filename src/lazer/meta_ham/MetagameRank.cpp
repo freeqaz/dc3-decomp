@@ -164,11 +164,11 @@ DataNode HandleDeferredAward(DataArray *) {
 
 void MetagameRank::Init() {
     static DataNode &xp_force_award_small = DataVariable("xp_force_award_small");
-    static DataNode &xp_force_award_medium = DataVariable("xp_force_award_medium");
-    static DataNode &xp_force_award_large = DataVariable("xp_force_award_large");
-    static DataNode &xp_force_award_one_time = DataVariable("xp_force_award_one_time");
     static DataNode &xp_force_award_all = DataVariable("xp_force_award_all");
+    static DataNode &xp_force_award_large = DataVariable("xp_force_award_large");
     static DataNode &xp_force_one_rank_up = DataVariable("xp_force_one_rank_up");
+    static DataNode &xp_force_award_one_time = DataVariable("xp_force_award_one_time");
+    static DataNode &xp_force_award_medium = DataVariable("xp_force_award_medium");
     xp_force_award_small = 0;
     xp_force_award_medium = 0;
     xp_force_award_large = 0;
@@ -212,7 +212,7 @@ void MetagameRank::Init() {
                 Symbol unlockSym = innerTierArr->Sym(j);
                 int k;
                 for (k = 0; k < unlockablesSize; k++) {
-                    if (gUnlockables[k].unk4 == unlockSym) {
+                    if (unlockSym == gUnlockables[k].unk4) {
                         gTiers[i].push_back(&gUnlockables[k]);
                         found = true;
                         break;

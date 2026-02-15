@@ -86,6 +86,20 @@ String StepMoves::GetDisplayName(bool b1) const {
     return out;
 }
 
+bool StepMoves::operator<(const StepMoves &other) const {
+    if (MoveRecapCheck()) return true;
+    if (other.MoveRecapCheck()) return false;
+    if (sIndex == 1) {
+        if (IsRecap()) {
+            if (!other.IsRecap()) return false;
+        } else {
+            if (other.IsRecap()) return true;
+            if (GetOverallRating() > other.GetOverallRating()) return true;
+        }
+    }
+    return unk2c < other.unk2c;
+}
+
 BEGIN_CUSTOM_PROPSYNC(StepMoves)
     SYNC_PROP(moves, o.mMoves)
     SYNC_PROP(selected, o.mSelected)

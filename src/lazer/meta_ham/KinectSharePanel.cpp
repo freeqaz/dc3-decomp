@@ -104,17 +104,18 @@ void KinectSharePanel::Poll() {
 }
 
 void KinectSharePanel::ConvertImages() {
-    MILO_ASSERT(mTex.Ptr(), 0x2B);
+    auto _tmp0 = mTex.Ptr();
+    MILO_ASSERT(_tmp0, 0x2B);
     RndBitmap bitmapa0;
     RndBitmap bitmap80;
     mTex->LockBitmap(bitmapa0, true);
     EndianSwapBitmap(bitmapa0);
     bitmap80.Create(bitmapa0, 24, 1, nullptr);
-    int bpp = bitmap80.Bpp() >> 3;
     int w = bitmap80.Width();
     int h = bitmap80.Height();
-    int pixelBytes = bitmap80.PixelBytes();
+    int bpp = bitmap80.Bpp() >> 3;
     char *pixels = (char *)bitmap80.Pixels();
+    int pixelBytes = bitmap80.PixelBytes();
     mBuf = MemAlloc(pixelBytes, __FILE__, 0x3B, "JpegWriter");
     MILO_ASSERT(mBuf != NULL, 0x3C);
     if (mBuf) {
@@ -140,7 +141,8 @@ void KinectSharePanel::ConvertImages() {
         MILO_ASSERT(mPreviewBuf != NULL, 0x57);
         if (mPreviewBuf) {
             EndianSwapBitmap(bitmapa0);
-            memcpy(mPreviewBuf, bitmapa0.Pixels(), mult);
+            auto _tmp4 = bitmapa0.Pixels();
+            memcpy(mPreviewBuf, _tmp4, mult);
             unsigned char *previewPtr = (unsigned char *)mPreviewBuf;
             int area = bitmapa0.Height() * bitmapa0.Width();
             for (int i = 0; i < area; i++) {

@@ -57,6 +57,7 @@ class KinectShareConnection {
 public:
     ~KinectShareConnection();
     void Poll();
+    int GetState() const { return unk78; }
 
 private:
     XLSPConnection mConnection; // 0x0

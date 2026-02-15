@@ -98,12 +98,12 @@ void LockedContentPanel::SetUpCampaignSong(Symbol song) {
 }
 
 void LockedContentPanel::SetUpCampaignMasterQuestHeader(Symbol song) {
-    HamLabel *pInstructions = DataDir()->Find<HamLabel>("instructions.lbl");
-    AppLabel *pContentName = DataDir()->Find<AppLabel>("content_name.lbl");
-    Symbol s = TheAccomplishmentMgr->GetAssetSource(song);
     String str;
+    Symbol s = TheAccomplishmentMgr->GetAssetSource(song);
     Accomplishment *pAccomplishment = TheAccomplishmentMgr->GetAccomplishment(s);
     HamLabel *pPracticeScore = DataDir()->Find<HamLabel>("practice_score.lbl");
+    HamLabel *pInstructions = DataDir()->Find<HamLabel>("instructions.lbl");
+    AppLabel *pContentName = DataDir()->Find<AppLabel>("content_name.lbl");
     HamLabel *pProgress = DataDir()->Find<HamLabel>("progress.lbl");
     HamLabel *pTeaser = DataDir()->Find<HamLabel>("teaser.lbl");
     pContentName->SetTextToken(gNullStr);
@@ -123,7 +123,8 @@ void LockedContentPanel::SetUpCampaignMasterQuestHeader(Symbol song) {
                 dynamic_cast<AccomplishmentCountConditional *>(pAccomplishment);
             Flow *pFlow = DataDir()->Find<Flow>("one_shot.flow");
             pFlow->Activate();
-            pTeaser->SetTextToken(MakeString("%s%s%s", "award_", song, "_instruction"));
+            auto _tmp0 = MakeString("%s%s%s", "award_", song, "_instruction");
+            pTeaser->SetTextToken(_tmp0);
         } else {
             MILO_ASSERT(false, 0xbe);
         }
@@ -138,13 +139,13 @@ void LockedContentPanel::SetUp(Symbol song) {
     HamLabel *pTeaser = DataDir()->Find<HamLabel>("teaser.lbl");
     HamLabel *pInstructions = DataDir()->Find<HamLabel>("instructions.lbl");
     HamLabel *pProgress = DataDir()->Find<HamLabel>("progress.lbl");
-    int songID = TheHamSongMgr.GetSongIDFromShortName(song, false) != 0;
+    bool songID = TheHamSongMgr.GetSongIDFromShortName(song, false) != 0;
     if (songID != 0) {
         pContentName->SetSongName(song, -1, false);
     } else {
         pContentName->SetTextToken(song);
     }
-    auto _tmp1 = MakeString("%s%s", "teaser_award_", song.Str());
+    auto _tmp1 = MakeString("%s%s", "teaser_award_", song);
     pTeaser->SetTextToken(_tmp1);
     TriggerTeaserText();
     mSound = nullptr;

@@ -42,7 +42,7 @@ void PlaylistSongProvider::Text(
     Symbol dataSym = DataSymbol(data);
     if (slot->Matches("song")) {
         static Symbol playlist_addsong("playlist_addsong");
-        if (dataSym == playlist_addsong) {
+        if ((unsigned int)dataSym == playlist_addsong) {
             static Symbol songname_numbered("songname_numbered");
             label->SetTokenFmt(songname_numbered, data + 1, playlist_addsong);
             return;
@@ -57,7 +57,7 @@ void PlaylistSongProvider::Text(
         }
     } else if (slot->Matches("song_length")) {
         static Symbol playlist_addsong("playlist_addsong");
-        if ((int)dataSym != playlist_addsong && (NumData() <= 0x14 || data <= 18)) {
+        if ((int)dataSym != playlist_addsong && (NumData() <= 0x14 || data < 19)) {
             AppLabel *pAppLabel = dynamic_cast<AppLabel *>(label);
             MILO_ASSERT(pAppLabel, 0x4d);
             pAppLabel->SetSongDuration(dataSym);

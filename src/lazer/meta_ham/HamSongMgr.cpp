@@ -72,7 +72,14 @@ END_HANDLERS
 
 struct SongRankCmp {
     SongRankCmp(HamSongMgr *h) : mMgr(h) {}
-    bool operator()(int, int) const;
+    bool operator()(int x, int y) const {
+        float rankX = mMgr->Data(x)->Rank();
+        float rankY = mMgr->Data(y)->Rank();
+        if (rankX == rankY)
+            return x < y;
+        else
+            return rankX < rankY;
+    }
 
     HamSongMgr *mMgr;
 };
@@ -463,7 +470,8 @@ void HamSongMgr::InitializePlaylists() {
             if (dynamicPlaylists.find(crew) == dynamicPlaylists.end()) {
                 Playlist *crewPlaylist = new Playlist();
                 dynamicPlaylists[crew] = crewPlaylist;
-                sprintf(nameBuffer, "%s_dynamic_playlist", crew.Str());
+                auto _tmp1 = crew.Str();
+                sprintf(nameBuffer, "%s_dynamic_playlist", _tmp1);
                 crewPlaylist->SetName(Symbol(nameBuffer));
             }
 

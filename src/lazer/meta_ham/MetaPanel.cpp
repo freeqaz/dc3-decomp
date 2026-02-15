@@ -7,6 +7,7 @@
 #include "hamobj/HamMaster.h"
 #include "hamobj/HamSongData.h"
 #include "macros.h"
+#include "math/Rand.h"
 #include "meta/CreditsPanel.h"
 #include "meta/HAQManager.h"
 #include "meta/MemcardMgr.h"
@@ -176,6 +177,28 @@ void MetaPanel::Init() {
     REGISTER_OBJ_FACTORY(VoiceInputPanel)
     DataRegisterFunc("toggle_unlock_all", ToggleUnlockAll);
     DataRegisterFunc("toggle_motd_cheat", ToggleMotdCheat);
+}
+
+int MetaPanel::PickLoopIndex(int numEntries) {
+    int vecSize = unk38.size();
+    int idx = RandomInt(1, numEntries);
+    if (numEntries >= vecSize + 2) {
+        for (;;) {
+            int i = 0;
+            for (; i < vecSize; i++) {
+                if (idx == unk38[i])
+                    break;
+            }
+            if (i == vecSize)
+                break;
+            idx = RandomInt(1, numEntries);
+        }
+        unk38[unk44++] = idx;
+        if (unk44 == vecSize) {
+            unk44 = 0;
+        }
+    }
+    return idx;
 }
 
 void MetaPanel::Load() {

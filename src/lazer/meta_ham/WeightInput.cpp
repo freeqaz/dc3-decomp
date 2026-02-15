@@ -75,7 +75,7 @@ float WeightInputProvider::GetPoundsForKgs(float kgs) const {
     if (pounds > 45.0f) {
         for (int i = 0; i < 80; i++) {
             result = i * 5.0f + 45.0f;
-            if (fabs(pounds - result) <= 2.5f) {
+            if (2.5f >= fabs(pounds - result)) {
                 return result;
             }
         }

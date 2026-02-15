@@ -352,15 +352,16 @@ void MultiUserGesturePanel::UpdateNavLists(int player) {
 
     if (navList1) {
         navList1->SetSkeletonTrackingID(trackingID);
+        auto _tmp2 = reinterpret_cast<u8 *>(&TheHamUI);
         if (((trackingID <= 0) && (*(char *)(reinterpret_cast<u8 *>(TheGestureMgr) + 0x426d) == '\0')) ||
-            (*reinterpret_cast<u32 *>(reinterpret_cast<u8 *>(&TheHamUI) + 0xf0) != 0)) {
+            (*reinterpret_cast<u32 *>(_tmp2 + 0xf0) != 0)) {
             navList1->SetSkeletonTrackingID(0);
             navList1->Disengage();
         }
     }
 
-    int offset2 = (sideIdx + 0x17) * 4;
     auto _tmp3 = reinterpret_cast<u8 *>(this);
+    int offset2 = (sideIdx + 0x17) * 4;
     HamNavList *navList2 = *reinterpret_cast<HamNavList **>(_tmp3 + offset2);
 
     if (navList2) {

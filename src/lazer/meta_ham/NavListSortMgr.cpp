@@ -186,6 +186,23 @@ int NavListSortMgr::GetListIndexFromHeaderIndex(int idx) {
     return mHeadersB[idx];
 }
 
+int NavListSortMgr::GetHeaderIndexFromChildListIndex(int idx) {
+    int i = 0;
+    int size = (int)mHeadersB.size();
+    if (size <= 0) return -1;
+    do {
+        int headerVal = mHeadersB[i];
+        if (headerVal == idx) return idx;
+        if (headerVal > idx) {
+            if (i == 0) return mHeadersB.front();
+            return mHeadersB[i - 1];
+        }
+        if (i == size - 1) return mHeadersB[size - 1];
+        i++;
+    } while (i < size);
+    return -1;
+}
+
 void NavListSortMgr::OnExit() {
     NavListSortNode *node = GetHighlightItem();
     if (node) {

@@ -1,7 +1,10 @@
 #include "net_ham/RockCentral.h"
 #include "meta/ConnectionStatusPanel.h"
+#include "meta_ham/Challenges.h"
 #include "meta_ham/ProfileMgr.h"
 #include "net/DingoSvr.h"
+#include "net_ham/DataMinerJobs.h"
+#include "net_ham/KinectShareJobs.h"
 #include "net_ham/RCJobDingo.h"
 #include "obj/Dir.h"
 #include "obj/Msg.h"
@@ -9,6 +12,7 @@
 #include "os/Debug.h"
 #include "os/PlatformMgr.h"
 #include "os/System.h"
+#include "rnddx9/Rnd.h"
 #include "rndobj/Bitmap.h"
 #include "rndobj/Tex.h"
 #include "ui/UIPanel.h"
@@ -110,6 +114,89 @@ void RockCentral::CreateAccount() {
 void RockCentral::OnJobFinished(RCJob *job) {
     MILO_ASSERT(job->IsFinished(), 0x24A);
     delete job;
+}
+
+static bool sSentScreenRes;
+
+void RockCentral::Poll() {
+    unk48.Split();
+
+    switch (mState) {
+    case kDisconnected:
+    case kFailed:
+        if (ThePlatformMgr.IsConnected()) {
+            if (unk48.Ms() >= unk78 && !mLoginBlocked) {
+                Login();
+            }
+        }
+        break;
+    case kAuthenticating:
+    case kConnected:
+    case kLoggingOut:
+        break;
+    default:
+        MILO_FAIL("Bad Rock Central state");
+        break;
+    }
+
+    if (IsOnline()) {
+        TheProfileMgr.UploadDeferredFlaunt();
+        TheProfileMgr.UploadDeferredFitnessGoal();
+    }
+
+    if (unkdd) {
+        mMOTDJob = new GetMotdJob(this);
+        if (!mLoginBlocked) {
+            TheServer.ManageJob(mMOTDJob);
+        }
+        if (!sSentScreenRes) {
+            sSentScreenRes = true;
+            ScreenResJob *job = new ScreenResJob(nullptr, TheDxRnd.VideoMode());
+            if (!TheRockCentral.IsLoginBlocked()) {
+                TheServer.ManageJob(job);
+            }
+        }
+        TheChallenges->DownloadOfficialChallenges();
+        unkdd = false;
+    }
+
+    if (mKinectShareConnection) {
+        mKinectShareConnection->Poll();
+        int kinectState = mKinectShareConnection->GetState();
+        if (kinectState == 3) {
+            if (unk124) {
+                RockCentralOpCompleteMsg msg(false, -1, DataNode());
+                unk124->Handle(msg, true);
+                unk124 = nullptr;
+            }
+            RELEASE(mKinectShareConnection);
+        } else if (kinectState == 2) {
+            if (unk124) {
+                RockCentralOpCompleteMsg msg(true, 0, DataNode());
+                unk124->Handle(msg, true);
+                unk124 = nullptr;
+            }
+            RELEASE(mKinectShareConnection);
+            KinectShareJob *job = new KinectShareJob(nullptr);
+            if (!TheRockCentral.IsLoginBlocked()) {
+                TheServer.ManageJob(job);
+            }
+        }
+    }
+
+    if (unk48.Ms() >= unk7c) {
+        if (unk128 != 0 || unk12c != 0) {
+            ControllerModeJob *job = new ControllerModeJob(nullptr, unk128, unk12c);
+            if (!mLoginBlocked) {
+                TheServer.ManageJob(job);
+            }
+        }
+        unk128 = 0;
+        unk12c = 0;
+        unk7c = unk48.Ms() + 600000.0f;
+    }
+
+    TheServer.Poll();
 }
 
 void RockCentral::Init() {

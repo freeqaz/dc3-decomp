@@ -74,25 +74,26 @@ void ChooseModeProvider::UpdateList(bool b) {
 RndMat *ChooseModeProvider::Mat(int, int i_iData, UIListMesh *mesh) const {
     MILO_ASSERT_RANGE(i_iData, 0, NumData(), 0x5d);
     static Symbol practice("practice");
-    static Symbol perform_legacy("perform_legacy");
+    static Symbol perform("perform");
     static Symbol holla_back("holla_back");
-    static Symbol rhythm_battle("rhythm_battle");
     static Symbol dance_battle("dance_battle");
     static Symbol namethatdance("namethatdance");
-    static Symbol concentration("concentration");
-    static Symbol crew_showdown("crew_showdown");
-    static Symbol perform("perform");
-    static Symbol custom_party("custom_party");
-    static Symbol rtnbldrproto("rtnbldrproto");
-    static Symbol bustamove("bustamove");
+    static Symbol perform_legacy("perform_legacy");
     static Symbol start_the_party("start_the_party");
+    static Symbol rhythm_battle("rhythm_battle");
+    static Symbol bustamove("bustamove");
+    static Symbol custom_party("custom_party");
+    static Symbol crew_showdown("crew_showdown");
+    static Symbol rtnbldrproto("rtnbldrproto");
+    static Symbol concentration("concentration");
 
     Symbol dataSym = DataSymbol(i_iData);
 
     if (mesh->Matches("icon_1p")) {
         return nullptr;
     }
-    if (mesh->Matches("icon_1p_plus")) {
+    auto _tmp2 = mesh->Matches("icon_1p_plus");
+    if (_tmp2) {
         if (dataSym == custom_party) {
             return nullptr;
         }

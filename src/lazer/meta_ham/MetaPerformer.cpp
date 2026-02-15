@@ -28,6 +28,7 @@
 #include "obj/DataUtl.h"
 #include "obj/Dir.h"
 #include "obj/Object.h"
+#include "obj/Task.h"
 #include "os/DateTime.h"
 #include "os/Debug.h"
 #include "os/PlatformMgr.h"
@@ -789,6 +790,59 @@ void MetaPerformer::SendSpeechDatapoint(DataArray *a, float confidence, Symbol r
     }
 }
 
+void MetaPerformer::CalculatePracticeResults() {
+    mNumLearnMovesPassed = 0;
+    mNumLearnMovesFastLaned = 0;
+    mNumLearnMovesTotal = 0;
+    mPracticeLearnScore = 0;
+    mNumReviewMovesPassed = 0;
+    mNumReviewMovesTotal = 0;
+    mPracticeReviewScore = 0;
+    WorldDir *world = TheHamDirector->GetWorld();
+    MoveDir *moves = world->Find<MoveDir>("moves", true);
+    MILO_ASSERT(moves, 0x4A4);
+    PracticeSection *section = nullptr;
+    {
+        ObjDirItr<PracticeSection> it(moves, true);
+        for (; it != nullptr; ++it) {
+            int diff = it->GetDifficulty();
+            int navPlayer =
+                TheHamProvider->Property("ui_nav_player", true)->Int();
+            HamPlayerData *pPlayer = TheGameData->Player(navPlayer);
+            if (diff == pPlayer->GetDifficulty())
+                break;
+        }
+        section = it;
+    }
+    MILO_ASSERT(section, 0x4B0);
+    static Symbol learn("learn");
+    const std::vector<PracticeStep> &steps = section->Steps();
+    for (std::vector<PracticeStep>::const_iterator it = steps.begin(); it != steps.end();
+         ++it) {
+        if (it->mType == learn) {
+            mNumLearnMovesTotal++;
+        }
+    }
+    mNumLearnMovesPassed = mSkillsAwards->AwardCount((SkillsAward)2);
+    mNumLearnMovesFastLaned = mSkillsAwards->AwardCount((SkillsAward)3);
+    for (unsigned int i = 0; i < unk74.size(); i++) {
+        for (unsigned int j = 0; j < unk74[i].size(); j++) {
+            if (unk74[i][j]) {
+                mNumReviewMovesPassed++;
+            }
+            mNumReviewMovesTotal++;
+        }
+    }
+    if (mNumLearnMovesTotal > 0) {
+        mPracticeLearnScore =
+            (mNumLearnMovesFastLaned + mNumLearnMovesPassed) * 100 / mNumLearnMovesTotal;
+    }
+    if (mNumReviewMovesTotal > 0) {
+        mPracticeReviewScore = mNumReviewMovesPassed * 100 / mNumReviewMovesTotal;
+    }
+    mPracticeOverallScore = (mPracticeLearnScore + mPracticeReviewScore) / 2;
+}
+
 #pragma endregion
 #pragma region QuickplayPerformer
 
@@ -900,6 +954,50 @@ void MetaPerformer::CheckForFitnessAccomplishments() {
     }
 }
 
+void MetaPerformer::SetDefaultSongCharacter(int playerFlag) {
+    Symbol nullSym;
+    Symbol primaryCrew;
+    Symbol primaryChar;
+    Symbol primaryOutfit;
+    int songID = TheHamSongMgr.GetSongIDFromShortName(TheGameData->GetSong(), true);
+    const HamSongMetadata *pSongData = TheHamSongMgr.Data(songID);
+    MILO_ASSERT(pSongData, 0x592);
+    bool b2 = TheGameMode->InMode("dance_battle", true)
+        || TheGameMode->InMode("strike_a_pose", true);
+    HamPlayerData *pPrimary;
+    HamPlayerData *pSecondary;
+    Symbol secondaryCrew;
+    Symbol secondaryChar;
+    Symbol secondaryOutfit;
+    CalcCharacters(
+        pSongData, b2, (PlayerFlag)playerFlag, pPrimary, primaryCrew, primaryChar,
+        primaryOutfit, pSecondary, secondaryCrew, secondaryChar, secondaryOutfit
+    );
+    HamPlayerData *pPlayerData = TheGameData->Player(playerFlag);
+    if (pPlayerData == pPrimary) {
+        pPrimary->SetCharacter(primaryChar);
+        pPrimary->SetOutfit(primaryOutfit);
+        pPrimary->SetCrew(primaryCrew);
+        if (pPrimary->Char() != pSecondary->Char()) {
+            return;
+        }
+        pSecondary->SetCharacter(nullSym);
+        pSecondary->SetOutfit(nullSym);
+        pSecondary->SetCrew(nullSym);
+    } else {
+        MILO_ASSERT(pPlayerData == pSecondary, 0x5A8);
+        pSecondary->SetCharacter(nullSym);
+        pSecondary->SetOutfit(nullSym);
+        pSecondary->SetCrew(nullSym);
+        if (pPrimary->Char() != pSecondary->Char()) {
+            return;
+        }
+        pPrimary->SetCharacter(primaryChar);
+        pPrimary->SetOutfit(primaryOutfit);
+        pPrimary->SetCrew(primaryCrew);
+    }
+}
+
 void MetaPerformer::SetupCharacters() {
     Symbol song = TheGameData->GetSong();
     Symbol s38;
@@ -943,6 +1041,31 @@ void MetaPerformer::OnGameInit() {
     if (TheGameMode->IsGameplayModePractice()) {
         SetUpRecapResults();
     }
+}
+
+void MetaPerformer::GetCurrentRecapMove(int &moveIndex, int &stepIndex) const {
+    int reviewIdx = 0;
+    static Symbol review("review");
+    const std::vector<PracticeStep> &steps = GetPracticeSteps();
+    for (std::vector<PracticeStep>::const_iterator it = steps.begin(); it != steps.end();
+         ++it) {
+        if (it->mType == review) {
+            std::vector<bool> bVec;
+            int startBeat = Round(TheHamDirector->BeatFromTag(it->mStart));
+            int endBeat = Round(TheHamDirector->BeatFromTag(it->mEnd));
+            int currentBeat = Round(TheTaskMgr.Beat());
+            if (startBeat <= currentBeat && endBeat >= currentBeat) {
+                moveIndex = reviewIdx;
+                stepIndex = (currentBeat - startBeat) / 4 - 1;
+                return;
+            }
+            reviewIdx++;
+        }
+    }
+    float beat = TheTaskMgr.Beat();
+    MILO_NOTIFY("Couldn't find a recap move at beat %f", beat);
+    moveIndex = -1;
+    stepIndex = -1;
 }
 
 void MetaPerformer::SetUpRecapResults() {
@@ -1016,7 +1139,7 @@ void MetaPerformer::OnReviewMovePassed(
     static Symbol move_awesome("move_awesome");
     int awesomeIdx = RatingStateToIndex(move_awesome);
     int i90, i80;
-    GetCurrentRecapMove(i80, i90);
+    GetCurrentRecapMove(i90, i80);
     if (i90 >= 0 && i80 >= 0) {
         auto &set = unk74[i90][i80];
         if (!(ratingIndex <= awesomeIdx)) {

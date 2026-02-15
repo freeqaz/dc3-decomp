@@ -48,7 +48,7 @@ void OvershellSlot::Poll(const Skeleton *const (&skeletons)[6]) {
     int trackingID = mPlayerData.GetSkeletonTrackingID();
     Skeleton *skel = TheGestureMgr->GetSkeletonByTrackingID(trackingID);
 
-    if (((int)mState != 3) || (trackingID <= 0) || skel == nullptr) {
+    if (((int)(int)mState != 3) || (trackingID <= 0) || skel == nullptr) {
         if (skel->IsValid()) {
             if (mState != 0)
                 return;
@@ -60,7 +60,7 @@ void OvershellSlot::Poll(const Skeleton *const (&skeletons)[6]) {
 
                 HamPlayerData *playerData = TheGameData->Player(mPlayerNum);
 
-                if (playerData->GetSkeletonTrackingID() < 1)
+                if (playerData->GetSkeletonTrackingID() <= 0)
                     return;
             }
 

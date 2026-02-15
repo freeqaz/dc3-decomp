@@ -259,9 +259,9 @@ bool SongSortNode::IsFake() const {
 
 void SongSortNode::Text(UIListLabel *ull, UILabel *ul) const {
     static Symbol score("score");
-    const Symbol shortname = unk_0x48->ShortName();
-    static Symbol dlc("dlc");
     static Symbol disc("disc");
+    static Symbol dlc("dlc");
+    const Symbol shortname = unk_0x48->ShortName();
     if (ull->Matches("song")) {
         AppLabel *app_label = dynamic_cast<AppLabel *>(ul);
         MILO_ASSERT(app_label, 513);
@@ -303,10 +303,10 @@ void SongSortNode::Text(UIListLabel *ull, UILabel *ul) const {
             ul->SetTextToken(gNullStr);
         }
     } else if (ull->Matches("header_text")) {
-        if (!IsHeader()) {
-            ul->SetTextToken(gNullStr);
-        } else {
+        if (!(!IsHeader())) {
             ul->SetTextToken(HeaderText());
+        } else {
+            ul->SetTextToken(gNullStr);
         }
     } else if (ull->Matches("asmadefamous")) {
         static Symbol by_artist("by_artist");
@@ -318,7 +318,8 @@ void SongSortNode::Text(UIListLabel *ull, UILabel *ul) const {
             ul->SetTextToken(_tmp1);
         }
     } else if (ull->Matches("artist")) {
-        if (!TheAccomplishmentMgr->IsUnlockableAsset(unk_0x48->ShortName())) {
+        auto _tmp1 = unk_0x48->ShortName();
+        if (!TheAccomplishmentMgr->IsUnlockableAsset(_tmp1)) {
             ul->SetTextToken(gNullStr);
         }
         AppLabel *app_label = dynamic_cast<AppLabel *>(ul);
