@@ -2,27 +2,31 @@
 
 This document identifies where to invest effort for maximum decompilation progress. Updated periodically with fresh data from the build report.
 
-**Last Updated:** 2026-01-23
+**Last Updated:** 2026-02-14
 
 ---
 
 ## Current Status Snapshot
 
-### Core Code (Game + Engine) - What We Care About
+### Overall
 
 | Metric | Value |
 |--------|-------|
-| **Matched Code** | **55.41%** (3,408KB / 6,150KB) |
-| **Fuzzy Match** | **70.23%** |
-| Matched Functions | 68.67% (21,270 / 30,972) |
+| Total Functions | 47,124 |
+| Matched Functions | 23,950 (50.82%) |
+| **Fuzzy Match** | **43.62%** |
+| Matched Code | 35.76% (3,957KB / 11,063KB) |
+| Complete Code (100%) | 2.07% (229KB) |
+| Complete Units | 164 / 2,223 |
 
-### Overall (includes SDK/libs we won't decompile)
+### Database Triage Status
 
-| Metric | Value |
-|--------|-------|
-| Total Functions | 46,958 |
-| Matched Code | 30.81% |
-| Fuzzy Match | 39.08% |
+| Category | Count |
+|----------|-------|
+| Complete (100%) | 23,956 |
+| AT_LIMIT (classified stuck) | 1,821 |
+| Partial (1-99%) | ~1,993 |
+| Unimplemented (0%) | 21,886 |
 
 **Quick check:** Run `./tools/progress.sh` to get current stats.
 

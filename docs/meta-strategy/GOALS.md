@@ -2,16 +2,16 @@
 
 Based on pattern analysis and current project state.
 
-## Current State (as of analysis)
+## Current State (2026-02-14)
 
 | Metric | Value |
 |--------|-------|
-| Total functions | 47,213 |
-| Matched (100%) | 21,386 (45.3%) |
-| Never attempted | 46,871 (99.3%) |
-| NEAR_COMPLETE (99%+) | 606 |
-| AT_LIMIT (stuck) | 137 |
-| XDK (excluded) | ~1,000 |
+| Total functions | 47,124 |
+| Matched (100%) | 23,956 (50.8%) |
+| AT_LIMIT (classified stuck) | 1,821 |
+| Unimplemented (0%) | 21,886 |
+| Fuzzy match | 43.62% |
+| Matched code | 35.76% |
 
 ## Realistic Achievable Targets
 
