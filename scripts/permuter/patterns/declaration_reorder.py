@@ -5,6 +5,10 @@ PowerPC compiler assigns callee-saved registers (r19-r31) based on
 variable declaration/first-use order, so reordering declarations can
 fix register swap pairs.
 
+Supports BSF-guided mode: when enabled, traces the compiler's BSF
+(Bit Scan Forward) calls to capture the exact register allocation
+sequence, then generates targeted reorderings instead of blind permutation.
+
 Example:
     int a = 1;
     int b = 2;
@@ -19,6 +23,7 @@ from __future__ import annotations
 
 import itertools
 import random
+import sys
 from typing import Iterator
 
 from tree_sitter import Node
@@ -35,6 +40,12 @@ _MAX_PERMS = 20
 class DeclarationReorderPattern(Pattern):
     name = "declaration_reorder"
 
+    # Set by the permuter when --bsf-guided is enabled
+    bsf_guided: bool = False
+    # Cache BSF trace to avoid re-tracing on composition passes
+    _bsf_cache: object = None  # BSFTrace or None
+    _bsf_cache_path: object = None  # Path that was traced
+
     def relevant(self, diagnosis: Diagnosis) -> bool:
         # Only relevant when there are GPR swap pairs
         for (r0, r1) in diagnosis.reg_swap_pairs:
@@ -44,7 +55,14 @@ class DeclarationReorderPattern(Pattern):
 
     def generate(self, ctx: FunctionContext) -> Iterator[Variant]:
         counter = 0
-        # Find groups of consecutive declarations in the function body
+
+        # Try BSF-guided generation first
+        if self.bsf_guided:
+            for variant in self._try_bsf_guided(ctx, counter):
+                yield variant
+                counter += 1
+
+        # Then fill remaining budget with random permutations
         for group in _find_declaration_groups(ctx):
             if len(group) < 2:
                 continue
@@ -73,6 +91,116 @@ class DeclarationReorderPattern(Pattern):
                     source=new_source,
                 )
                 counter += 1
+
+    def _try_bsf_guided(self, ctx: FunctionContext, start_counter: int) -> Iterator[Variant]:
+        """Generate BSF-guided reorder variants.
+
+        Traces the compiler's register allocation, identifies which
+        variables get which colors, then generates targeted pairwise
+        swaps instead of blind permutation.
+        """
+        try:
+            from tools.compiler_trace.bsf_trace import trace_bsf
+            from tools.compiler_trace.regmap_solver import (
+                extract_initial_colorings,
+                guided_pairwise_search,
+            )
+        except ImportError:
+            print(
+                "BSF guidance unavailable (tools.compiler_trace not found)",
+                file=sys.stderr,
+            )
+            return
+
+        # Get all declarations as a flat group
+        all_decls = [s for s in ctx.statements if s.type == "declaration"]
+        if len(all_decls) < 2:
+            return
+
+        decl_names = []
+        for decl in all_decls:
+            name = _get_declared_name(decl)
+            decl_names.append(name or "?")
+
+        # Trace BSF on current source (cached across composition passes)
+        if self._bsf_cache is not None and self._bsf_cache_path == ctx.file_path:
+            bsf = self._bsf_cache
+        else:
+            try:
+                print("  BSF tracing...", end="", flush=True, file=sys.stderr)
+                bsf = trace_bsf(ctx.file_path)
+                print(f" {bsf.total_calls} calls", file=sys.stderr)
+                self._bsf_cache = bsf
+                self._bsf_cache_path = ctx.file_path
+            except Exception as e:
+                print(f" failed: {e}", file=sys.stderr)
+                return
+
+        # Get swap pairs from diagnosis
+        if not ctx.diagnosis:
+            return
+        swap_pairs = [
+            pair for pair in ctx.diagnosis.reg_swap_pairs
+            if pair[0].startswith("r") or pair[1].startswith("r")
+        ]
+        if not swap_pairs:
+            return
+
+        # Generate guided candidates
+        candidates = guided_pairwise_search(bsf, swap_pairs, decl_names)
+        if not candidates:
+            return
+
+        print(
+            f"  BSF guidance: {len(candidates)} candidates for "
+            f"{len(swap_pairs)} swap pair(s)",
+            file=sys.stderr,
+        )
+
+        # Build dependency edges for the full declarations group
+        deps = _build_dependency_edges(all_decls)
+
+        counter = start_counter
+        for candidate_names in candidates:
+            # Map candidate name order back to node order
+            name_to_node = {}
+            for decl in all_decls:
+                name = _get_declared_name(decl)
+                if name:
+                    name_to_node[name] = decl
+
+            reordered = []
+            valid = True
+            for name in candidate_names:
+                if name in name_to_node:
+                    reordered.append(name_to_node[name])
+                else:
+                    valid = False
+                    break
+
+            if not valid or len(reordered) != len(all_decls):
+                continue
+
+            # Check dependency safety
+            perm_indices = [all_decls.index(n) for n in reordered]
+            if not _respects_deps(perm_indices, deps):
+                continue
+
+            new_source = _apply_reorder(ctx.file_source, all_decls, reordered)
+            if new_source == ctx.file_source:
+                continue
+
+            moved = [n for i, n in enumerate(candidate_names)
+                     if candidate_names[i] != decl_names[i]]
+            desc = f"BSF-guided reorder: {', '.join(moved[:4])}"
+
+            yield Variant(
+                name=f"bsf_declreorder_{counter}",
+                pattern_name=self.name,
+                description=desc,
+                source=new_source,
+            )
+            counter += 1
 
 
 def _find_declaration_groups(ctx: FunctionContext) -> list[list[Node]]:

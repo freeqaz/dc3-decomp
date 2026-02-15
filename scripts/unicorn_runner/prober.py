@@ -1,16 +1,22 @@
-"""Multi-input probing for divergence profiling.
+"""Multi-input probing for divergence profiling and struct field access analysis.
 
 Runs each function N times with varied inputs (fill patterns, register values)
 to build a behavioral profile that goes beyond simple dual-fixture testing.
+
+Also provides sentinel-based field access probing to discover which struct
+offsets a function reads/writes.
 """
 
 import os
 import random
+import struct
 from dataclasses import dataclass, field
 
 from .comparator import compare, classify_divergence
+from .engine import CL_R3, CL_R4, CL_R5, CL_R6
+from .memory_map import OBJECT_BASE, REGION_SIZE, VTABLE_BASE
 from .run import _run_comparison_core, EXIT_EQUIVALENT, EXIT_DIVERGENT, EXIT_ERROR, EXIT_SKIPPED
-from .typed_fixture import extract_class_from_symbol, generate_typed_object
+from .typed_fixture import extract_class_from_symbol, generate_typed_object, generate_sentinel_object
 
 
 @dataclass
@@ -254,6 +260,156 @@ def _analyze_sensitivity_dimensions(per_run):
             dimensions.append("fill")
 
     return dimensions if dimensions else ["unknown"]
+
+
+# ============================================================================
+# Struct Field Access Probing
+# ============================================================================
+
+@dataclass
+class FieldAccess:
+    """A detected struct field access."""
+    offset: int                     # byte offset from object base
+    access_type: str                # "READ", "WRITE", or "READ_WRITE"
+    source: str                     # e.g., "call #2 arg r4", "return r3", "memory write"
+    field_name: str | None = None   # resolved from struct_db if available
+
+
+def _is_sentinel(value, region_size=REGION_SIZE):
+    """Check if a value looks like a sentinel (OBJECT_BASE + offset in range)."""
+    if value < OBJECT_BASE or value >= OBJECT_BASE + region_size:
+        return False
+    offset = value - OBJECT_BASE
+    return offset % 4 == 0
+
+
+def _sentinel_offset(value):
+    """Extract offset from a sentinel value."""
+    return value - OBJECT_BASE
+
+
+def probe_field_access(symbol, decomp_coff, orig_coff, timeout=5_000_000,
+                       coload=True, coload_depth=None, struct_db=None,
+                       class_name=None):
+    """Probe which struct fields a function accesses.
+
+    Fills object memory with sentinel values where each 4-byte word =
+    OBJECT_BASE + offset, then runs the original side and observes:
+    1. Call log args (r3-r6) containing sentinel values -> READ
+    2. Return value (r3) containing sentinel value -> READ
+    3. Memory words that changed from their sentinel value -> WRITE
+
+    Args:
+        symbol: Mangled function symbol
+        decomp_coff: Pre-parsed decomp COFF
+        orig_coff: Pre-parsed original COFF
+        timeout: Execution timeout in microseconds
+        coload: Enable intra-TU callee co-loading
+        coload_depth: Max co-load recursion depth
+        struct_db: Optional connected StructDB for field name resolution
+        class_name: Optional class name for struct_db lookups
+
+    Returns:
+        List of FieldAccess objects, or None on error/skip.
+    """
+    sentinel_mem = generate_sentinel_object()
+
+    # Run the original side with sentinel memory
+    exit_code, bundle, _, error_msg = _run_comparison_core(
+        symbol, decomp_coff, orig_coff, timeout=timeout,
+        coload=coload, coload_depth=coload_depth,
+        object_memory=sentinel_mem)
+
+    if bundle is None:
+        return None
+
+    orig_result = bundle.orig_result
+    if orig_result.error:
+        return None
+
+    accesses = {}  # offset -> FieldAccess
+
+    def _record(offset, access_type, source):
+        if offset in accesses:
+            existing = accesses[offset]
+            if existing.access_type != access_type:
+                existing.access_type = "READ_WRITE"
+            existing.source += f"; {source}"
+        else:
+            accesses[offset] = FieldAccess(
+                offset=offset, access_type=access_type, source=source)
+
+    # 1. Scan call log args for sentinel values
+    reg_names = {CL_R3: "r3", CL_R4: "r4", CL_R5: "r5", CL_R6: "r6"}
+    for i, entry in enumerate(orig_result.call_log):
+        for reg_idx, reg_name in reg_names.items():
+            val = entry[reg_idx]
+            if _is_sentinel(val):
+                offset = _sentinel_offset(val)
+                _record(offset, "READ", f"call #{i} arg {reg_name}")
+
+    # 2. Check return value
+    if _is_sentinel(orig_result.r3):
+        offset = _sentinel_offset(orig_result.r3)
+        _record(offset, "READ", "return r3")
+
+    # 3. Diff sentinel memory vs result memory for writes
+    result_mem = orig_result.object_memory
+    for off in range(0, min(REGION_SIZE, len(result_mem)), 4):
+        expected = OBJECT_BASE + off
+        if off == 0:
+            expected = VTABLE_BASE  # vtable slot was set differently
+        actual = struct.unpack_from(">I", result_mem, off)[0]
+        if actual != expected:
+            _record(off, "WRITE", "memory write")
+
+    # 4. Resolve field names from struct_db
+    if struct_db and class_name:
+        _resolve_field_names(accesses, struct_db, class_name)
+
+    return sorted(accesses.values(), key=lambda a: a.offset)
+
+
+def _resolve_field_names(accesses, struct_db, class_name):
+    """Resolve offsets to field names using struct_db."""
+    info = struct_db.get_class_info(class_name)
+    if not info:
+        return
+
+    # Build offset -> member name map from class + parents
+    offset_map = {}
+    all_members = list(info.get("members", []))
+    chain = struct_db.resolve_inheritance_chain(class_name)
+    for parent in chain:
+        if parent == "virtual":
+            continue
+        pinfo = struct_db.get_class_info(parent)
+        if pinfo and pinfo.get("members"):
+            all_members.extend(pinfo["members"])
+
+    for m in all_members:
+        offset_map[m["offset"]] = f"{m['name']} : {m['type_str']}"
+
+    for offset, access in accesses.items():
+        if offset in offset_map:
+            access.field_name = offset_map[offset]
+
+
+def format_field_access_map(accesses, symbol):
+    """Format field access list for human-readable display."""
+    if not accesses:
+        return f"No field accesses detected for {symbol}"
+
+    lines = [f"Field Access Map: {symbol}"]
+    for a in accesses:
+        field_str = f"({a.field_name})" if a.field_name else ""
+        lines.append(
+            f"  {a.access_type:10s} 0x{a.offset:03X} {field_str:40s} via {a.source}")
+
+    reads = sum(1 for a in accesses if "READ" in a.access_type)
+    writes = sum(1 for a in accesses if "WRITE" in a.access_type)
+    lines.append(f"\n  Total: {len(accesses)} fields ({reads} reads, {writes} writes)")
+    return "\n".join(lines)
 
 
 def format_probe_result(probe, symbol=None):

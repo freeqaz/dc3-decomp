@@ -104,6 +104,26 @@ def main():
         help="Minimum evidence count for breakpoints (default: 2)",
     )
 
+    # bsf-trace
+    p_bsf = sub.add_parser("bsf-trace", help="Trace BSF calls during compilation")
+    p_bsf.add_argument("source", help="Source file to compile")
+    p_bsf.add_argument("--extra-flags", help="Additional cl.exe flags (space-separated)")
+    p_bsf.add_argument("--verbose", action="store_true", help="Print raw GDB output")
+
+    # bsf-diff
+    p_bd = sub.add_parser("bsf-diff", help="Compare BSF traces for two source variants")
+    p_bd.add_argument("source_a", help="First source file")
+    p_bd.add_argument("source_b", help="Second source file")
+
+    # bsf-solve
+    p_bs = sub.add_parser(
+        "bsf-solve", help="Solve register order for a specific function"
+    )
+    p_bs.add_argument("--symbol", required=True, help="Mangled symbol name")
+    p_bs.add_argument("--source", required=True, help="Path to source file")
+    p_bs.add_argument("--function", help="Qualified C++ function name")
+    p_bs.add_argument("--json", action="store_true", dest="json_output", help="Output JSON")
+
     args = parser.parse_args()
 
     if args.command == "diff-asm":
@@ -130,6 +150,18 @@ def main():
         from .gdb_script import cmd_gdb_attach
 
         cmd_gdb_attach(args)
+    elif args.command == "bsf-trace":
+        from .bsf_trace import cmd_bsf_trace
+
+        cmd_bsf_trace(args)
+    elif args.command == "bsf-diff":
+        from .bsf_diff import cmd_bsf_diff
+
+        cmd_bsf_diff(args)
+    elif args.command == "bsf-solve":
+        from .regmap_solver import cmd_bsf_solve
+
+        cmd_bsf_solve(args)
 
 
 if __name__ == "__main__":

@@ -74,6 +74,11 @@ def parse_args() -> argparse.Namespace:
         help="Disable two-step pattern composition",
     )
     parser.add_argument(
+        "--no-bsf-guided",
+        action="store_true",
+        help="Disable BSF-guided declaration reordering",
+    )
+    parser.add_argument(
         "--list-patterns",
         action="store_true",
         help="List available patterns and exit",
@@ -107,6 +112,13 @@ def main():
     else:
         pattern_names = [p.strip() for p in args.patterns.split(",")]
         patterns = [get_pattern(name) for name in pattern_names]
+
+    # Enable BSF-guided mode on declaration_reorder pattern if requested
+    if not args.no_bsf_guided:
+        for p in patterns:
+            if p.name == "declaration_reorder":
+                p.bsf_guided = True
+                print("BSF-guided declaration reordering enabled", file=sys.stderr)
 
     # Extract function
     print(f"Extracting {args.function} from {args.source}...", file=sys.stderr)

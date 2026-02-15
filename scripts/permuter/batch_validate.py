@@ -74,6 +74,10 @@ def parse_args() -> argparse.Namespace:
         "--no-compose", action="store_true",
         help="Disable two-step pattern composition (pass through to permuter)",
     )
+    parser.add_argument(
+        "--include-at-limit", action="store_true",
+        help="Include functions with AT_LIMIT verdict (excluded by default)",
+    )
     return parser.parse_args()
 
 
@@ -96,6 +100,7 @@ def query_candidates(
     min_pct: float,
     max_pct: float,
     limit: int,
+    include_at_limit: bool = False,
 ) -> list[dict]:
     """Query decomp.db for candidate functions."""
     import sqlite3
@@ -103,18 +108,21 @@ def query_candidates(
     conn = sqlite3.connect(str(DECOMP_DB))
     conn.row_factory = sqlite3.Row
 
+    excluded = ("COMPLETE",) if include_at_limit else ("AT_LIMIT", "COMPLETE")
+    placeholders = ",".join("?" for _ in excluded)
+
     rows = conn.execute(
-        """
+        f"""
         SELECT symbol, demangled, unit, current_percent, verdict
         FROM functions
         WHERE current_percent >= ? AND current_percent <= ?
-          AND (verdict IS NULL OR verdict NOT IN ('AT_LIMIT', 'COMPLETE'))
+          AND (verdict IS NULL OR verdict NOT IN ({placeholders}))
           AND symbol NOT LIKE 'merged_%'
           AND symbol NOT LIKE 'fn_%'
           AND demangled NOT LIKE '%stlpmtx_std::%'
         ORDER BY current_percent DESC
         """,
-        (min_pct, max_pct),
+        (min_pct, max_pct, *excluded),
     ).fetchall()
     conn.close()
 
@@ -314,7 +322,7 @@ def main():
 
     # Query candidates
     print(f"Querying decomp.db for candidates ({args.min_pct}-{args.max_pct}%)...", file=sys.stderr)
-    candidates = query_candidates(unit_source_map, args.min_pct, args.max_pct, args.limit)
+    candidates = query_candidates(unit_source_map, args.min_pct, args.max_pct, args.limit, args.include_at_limit)
     print(f"  {len(candidates)} candidates selected", file=sys.stderr)
 
     if not candidates:

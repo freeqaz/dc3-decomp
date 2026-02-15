@@ -14,7 +14,7 @@ from typing import Any
 DEFAULT_DB_PATH = "decomp.db"
 
 # Schema version for migrations
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 
 # Default maximum attempts before deprioritizing a function
 # Functions with >= this many attempts are excluded from normal queries
@@ -343,6 +343,26 @@ def _run_migrations(conn: sqlite3.Connection, from_version: int, to_version: int
             CREATE INDEX IF NOT EXISTS idx_xrefs_address ON xrefs(address);
         """)
 
+    if from_version < 8 <= to_version:
+        # Migration v7 -> v8: Add unicorn verdict columns to functions table
+        print("  Migration v8: Adding unicorn verdict columns...")
+        new_columns = [
+            ("unicorn_verdict", "TEXT"),       # EQUIVALENT, DIVERGENT, SKIPPED, ERROR
+            ("unicorn_class", "TEXT"),          # build_env, regalloc, logic, NULL
+            ("unicorn_confidence", "TEXT"),     # high, stable_divergent, input_sensitive
+            ("unicorn_tested_at", "TIMESTAMP"),
+        ]
+        for col_name, col_def in new_columns:
+            try:
+                conn.execute(f"ALTER TABLE functions ADD COLUMN {col_name} {col_def}")
+            except sqlite3.OperationalError as e:
+                if "duplicate column" not in str(e).lower():
+                    raise
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_functions_unicorn_verdict
+            ON functions(unicorn_verdict)
+        """)
+
     # Update schema version
     conn.execute("UPDATE schema_version SET version = ?", (to_version,))
     conn.commit()
@@ -402,7 +422,7 @@ def ingest_report(
 
             # Check if function exists
             existing = conn.execute(
-                "SELECT id, current_percent, best_percent FROM functions WHERE symbol = ?",
+                "SELECT id, current_percent, best_percent, verdict FROM functions WHERE symbol = ?",
                 (symbol,),
             ).fetchone()
 
@@ -413,6 +433,14 @@ def ingest_report(
                     if percent is not None and percent > best:
                         best = percent
 
+                    # Never overwrite terminal verdicts (AT_LIMIT, COMPLETE)
+                    # set by agents/humans. Only upgrade NULL -> verdict.
+                    existing_verdict = existing["verdict"]
+                    if existing_verdict in ("AT_LIMIT", "COMPLETE"):
+                        safe_verdict = existing_verdict
+                    else:
+                        safe_verdict = verdict or existing_verdict
+
                     conn.execute(
                         """
                         UPDATE functions SET
@@ -421,11 +449,11 @@ def ingest_report(
                             size = COALESCE(?, size),
                             current_percent = ?,
                             best_percent = ?,
-                            verdict = COALESCE(?, verdict),
+                            verdict = ?,
                             updated_at = CURRENT_TIMESTAMP
                         WHERE id = ?
                         """,
-                        (demangled, unit_name, size, percent, best, verdict, existing["id"]),
+                        (demangled, unit_name, size, percent, best, safe_verdict, existing["id"]),
                     )
                     updated += 1
                 else:
@@ -627,6 +655,16 @@ def _build_unit_glob_clause(
     return include_clause, params
 
 
+BOILERPLATE_SYMBOL_PREFIXES = [
+    "??__F",   # dynamic atexit destructors
+    "??__E",   # dynamic initializers
+    "??$MakeString",  # MakeString template instantiations
+    "??_9",    # vcall thunks
+    "??_E",    # vector constructor iterators
+    "??_G",    # vector destructor iterators
+]
+
+
 def query_functions(
     pattern: str | list[str] = "*",
     min_percent: float = 0,
@@ -639,6 +677,7 @@ def query_functions(
     db_path: str | Path = DEFAULT_DB_PATH,
     exclude_patterns: list[str] | None = None,
     max_attempts: int | None = DEFAULT_MAX_ATTEMPTS,
+    skip_boilerplate: bool = False,
 ) -> list[dict[str, Any]]:
     """
     Query multiple functions matching criteria.
@@ -687,6 +726,10 @@ def query_functions(
 
     query += " AND symbol NOT LIKE 'merged_%'"
     query += " AND demangled NOT LIKE '%stlpmtx_std::%'"
+
+    if skip_boilerplate:
+        for prefix in BOILERPLATE_SYMBOL_PREFIXES:
+            query += f" AND symbol NOT LIKE '{prefix}%'"
 
     # Exclude functions that have been tried too many times
     if max_attempts is not None:

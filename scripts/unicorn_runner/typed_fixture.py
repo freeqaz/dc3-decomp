@@ -179,6 +179,28 @@ def extract_class_from_unit(unit_name):
     return unit_name.rstrip('/').rsplit('/', 1)[-1]
 
 
+def generate_sentinel_object(size=REGION_SIZE):
+    """Generate sentinel memory where each 4-byte word encodes its own offset.
+
+    value = OBJECT_BASE + offset. Vtable pointer preserved at offset 0.
+    Used by the field access prober to detect which struct offsets are read.
+
+    Args:
+        size: Total memory region size (default: REGION_SIZE = 64KB)
+
+    Returns:
+        bytearray of `size` bytes with sentinel pattern.
+    """
+    from .memory_map import OBJECT_BASE
+
+    mem = bytearray(size)
+    for off in range(0, size, 4):
+        struct.pack_into(">I", mem, off, OBJECT_BASE + off)
+    # Preserve vtable pointer at offset 0
+    struct.pack_into(">I", mem, 0, VTABLE_BASE)
+    return mem
+
+
 def generate_typed_object(class_name, db, rng, fill_byte=0x00, size=REGION_SIZE):
     """Generate type-aware object memory from struct_db class layout.
 

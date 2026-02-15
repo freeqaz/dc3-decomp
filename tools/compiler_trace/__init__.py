@@ -9,4 +9,7 @@ Usage:
     python -m tools.compiler_trace annotate --address 0x1234 --callgrind path/to/callgrind.out
     python -m tools.compiler_trace rr-record test_a.cpp --trace-dir /tmp/claude/rr_a
     python -m tools.compiler_trace gdb-attach test_a.cpp --print-only
+    python -m tools.compiler_trace bsf-trace source.cpp
+    python -m tools.compiler_trace bsf-diff source_a.cpp source_b.cpp
+    python -m tools.compiler_trace bsf-solve --symbol <mangled> --source source.cpp
 """

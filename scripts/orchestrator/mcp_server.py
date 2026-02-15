@@ -50,6 +50,9 @@ from orchestrator.database import (
     get_file_pair,
     query_file_pairs,
     search_functions_by_name,
+    normalize_unit_pattern,
+    BOILERPLATE_SYMBOL_PREFIXES,
+    DEFAULT_EXCLUDE_PATTERNS,
 )
 from orchestrator.rb3_pairing import get_rb3_source_for_unit, find_rb3_file
 from orchestrator.rb2_dwarf import RB2DwarfParser, DEFAULT_RB2_DUMP
@@ -180,6 +183,10 @@ class DecompMCPServer:
                                 "type": "string",
                                 "description": "Filter by function status: 'workable' (default, excludes complete/at_limit), 'all' (no filtering), 'complete' (only complete), 'at_limit' (only at_limit)",
                                 "enum": ["workable", "all", "complete", "at_limit"],
+                            },
+                            "skip_boilerplate": {
+                                "type": "boolean",
+                                "description": "Filter out boilerplate symbols: atexit destructors (??__F), dynamic initializers (??__E), MakeString templates, vcall thunks (??_9), vector ctor/dtor iterators. Default: true.",
                             },
                         },
                     },
@@ -378,6 +385,62 @@ class DecompMCPServer:
                         "required": ["address"],
                     },
                 ),
+                Tool(
+                    name="run_recon",
+                    description="Run full reconnaissance on a function. Returns unified report: DB status, objdiff match%, unicorn behavioral verdict + divergence class, struct field access map. Use this before starting work on a function to understand its state and viability.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "symbol": {
+                                "type": "string",
+                                "description": "Function symbol (mangled name)",
+                            },
+                            "unit": {
+                                "type": "string",
+                                "description": "Unit name (auto-detected from DB if omitted)",
+                            },
+                            "run_unicorn": {
+                                "type": "boolean",
+                                "description": "Run live unicorn comparison (default: true)",
+                            },
+                            "run_field_access": {
+                                "type": "boolean",
+                                "description": "Run field access probing (default: true)",
+                            },
+                        },
+                        "required": ["symbol"],
+                    },
+                ),
+                Tool(
+                    name="batch_check",
+                    description="Batch-check all untracked functions in a unit. Runs objdiff on each, auto-reports 100% matches as COMPLETE. Returns summary with counts and partial-match details. Use this instead of manual query+objdiff+report loops.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "unit_pattern": {
+                                "type": "string",
+                                "description": "Glob pattern for unit path (e.g., 'system/rndobj/*', 'system/char/CharBones')",
+                            },
+                            "skip_boilerplate": {
+                                "type": "boolean",
+                                "description": "Skip boilerplate symbols (atexit, MakeString, thunks, etc.). Default: false (check everything).",
+                            },
+                            "dry_run": {
+                                "type": "boolean",
+                                "description": "If true, check functions but don't update the database. Default: false.",
+                            },
+                        },
+                        "required": ["unit_pattern"],
+                    },
+                ),
+                Tool(
+                    name="get_progress",
+                    description="Get decomp progress summary. Returns total/complete/at_limit counts, percentages, and top units with remaining work.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {},
+                    },
+                ),
             ]
 
         @self.server.call_tool()
@@ -406,6 +469,12 @@ class DecompMCPServer:
                 return await self._get_rb2_class_info(arguments)
             elif name == "lookup_merged_symbol":
                 return await self._lookup_merged_symbol(arguments)
+            elif name == "run_recon":
+                return await self._run_recon(arguments)
+            elif name == "batch_check":
+                return await self._batch_check(arguments)
+            elif name == "get_progress":
+                return await self._get_progress(arguments)
             else:
                 return [TextContent(type="text", text=f"Unknown tool: {name}")]
 
@@ -484,6 +553,7 @@ class DecompMCPServer:
         pattern = args.get("unit_pattern", "*")
         limit = args.get("limit", 20)
         status = args.get("status", "workable")
+        skip_boilerplate = args.get("skip_boilerplate", True)
 
         # Map status filter to database query params
         if status == "all":
@@ -512,6 +582,7 @@ class DecompMCPServer:
             verdict_filter=verdict_filter,
             limit=limit,
             db_path=self.db_path,
+            skip_boilerplate=skip_boilerplate,
         )
 
         # When filtering by unit, check if there are hidden functions
@@ -2176,6 +2247,224 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
 
         except Exception as e:
             return [TextContent(type="text", text=f"Error looking up merged symbol: {e}")]
+
+    async def _run_recon(self, args: dict) -> list[TextContent]:
+        """Run unified function reconnaissance."""
+        symbol = args.get("symbol", "")
+        if not symbol:
+            return [TextContent(type="text", text="Error: symbol is required")]
+
+        unit = args.get("unit")
+        run_unicorn = args.get("run_unicorn", True)
+        run_field_access = args.get("run_field_access", True)
+
+        try:
+            from scripts.recon import recon, format_recon
+            data = recon(
+                symbol,
+                unit_name=unit,
+                db_path=self.db_path,
+                run_unicorn=run_unicorn,
+                run_field_access=run_field_access,
+            )
+            output = format_recon(data)
+            return [TextContent(type="text", text=output)]
+        except Exception as e:
+            return [TextContent(type="text", text=f"Error running recon: {e}")]
+
+    async def _batch_check(self, args: dict) -> list[TextContent]:
+        """Batch-check untracked functions in a unit, auto-reporting 100% matches."""
+        unit_pattern = args.get("unit_pattern", "")
+        skip_boilerplate = args.get("skip_boilerplate", False)
+        dry_run = args.get("dry_run", False)
+
+        if not unit_pattern:
+            return [TextContent(type="text", text="Error: unit_pattern is required")]
+
+        # Direct query: all functions without a terminal verdict in the unit.
+        # Minimal filtering — only exclude merged symbols and SDK code.
+        conn = get_connection(self.db_path)
+        norm_pattern = normalize_unit_pattern(unit_pattern)
+        query = """
+            SELECT id, symbol, demangled, unit, current_percent
+            FROM functions
+            WHERE unit GLOB ?
+              AND (verdict IS NULL OR verdict NOT IN ('COMPLETE', 'AT_LIMIT'))
+              AND symbol NOT LIKE 'merged_%'
+        """
+        params: list = [norm_pattern]
+
+        # Exclude SDK
+        for ep in DEFAULT_EXCLUDE_PATTERNS:
+            norm_ep = normalize_unit_pattern(ep)
+            query += " AND unit NOT GLOB ?"
+            params.append(norm_ep)
+
+        if skip_boilerplate:
+            for prefix in BOILERPLATE_SYMBOL_PREFIXES:
+                query += f" AND symbol NOT LIKE '{prefix}%'"
+
+        rows = conn.execute(query, params).fetchall()
+        functions = [dict(row) for row in rows]
+
+        if not functions:
+            return [TextContent(type="text", text=f"No unchecked functions found for pattern: {unit_pattern}")]
+
+        objdiff_cli = self.project_root / "bin" / "objdiff-cli"
+        if not objdiff_cli.exists():
+            return [TextContent(type="text", text=f"Error: objdiff-cli not found at {objdiff_cli}")]
+
+        checked = 0
+        newly_complete = 0
+        unimplemented = 0
+        partial = []
+        failed = []
+        errors = []
+
+        for func in functions:
+            symbol = func["symbol"]
+
+            # Skip merged symbols
+            if symbol.startswith("merged_"):
+                continue
+
+            # Auto-demangle Itanium-style names
+            lookup_symbol = symbol
+            demangled = _demangle_itanium_to_qualified(symbol)
+            if demangled is not None:
+                lookup_symbol = demangled
+
+            try:
+                result = subprocess.run(
+                    [str(objdiff_cli), "diff", "-p", str(self.project_root),
+                     lookup_symbol, "-f", "json"],
+                    capture_output=True, text=True, timeout=30,
+                    cwd=str(self.project_root),
+                )
+
+                if result.returncode != 0 or "Symbol not found" in result.stdout:
+                    failed.append(symbol)
+                    continue
+
+                data = json.loads(result.stdout)
+                match_pct = data.get("fuzzy_match_percent") or 0
+                base_size = data.get("base_size") or 0
+                checked += 1
+
+                # Skip unimplemented functions (no decomp object)
+                if base_size == 0:
+                    unimplemented += 1
+                    continue
+
+                if match_pct == 100.0:
+                    newly_complete += 1
+                    if not dry_run:
+                        update_function_status(
+                            function_id=func["id"],
+                            current_percent=100.0,
+                            verdict="COMPLETE",
+                            db_path=self.db_path,
+                        )
+                elif match_pct > 0:
+                    partial.append({
+                        "symbol": symbol,
+                        "demangled": func.get("demangled", ""),
+                        "percent": round(match_pct, 1),
+                    })
+                    if not dry_run:
+                        update_function_status(
+                            function_id=func["id"],
+                            current_percent=match_pct,
+                            db_path=self.db_path,
+                        )
+
+            except subprocess.TimeoutExpired:
+                errors.append(f"{symbol}: timeout")
+            except json.JSONDecodeError:
+                errors.append(f"{symbol}: invalid JSON output")
+            except Exception as e:
+                errors.append(f"{symbol}: {e}")
+
+        # Format summary
+        mode = " (DRY RUN)" if dry_run else ""
+        output = f"## Batch Check Results{mode}\n\n"
+        output += f"**Pattern:** `{unit_pattern}`\n"
+        output += f"**Checked:** {checked} | **Newly COMPLETE:** {newly_complete} | **Partial:** {len(partial)} | **Unimplemented:** {unimplemented} | **Failed:** {len(failed)}\n"
+
+        if partial:
+            output += f"\n### Partial Matches ({len(partial)})\n\n"
+            # Sort by match % descending
+            partial.sort(key=lambda x: x["percent"], reverse=True)
+            for p in partial:
+                output += f"- `{p['symbol']}` ({p['demangled']}) — {p['percent']}%\n"
+
+        if failed and len(failed) <= 20:
+            output += f"\n### Not Found ({len(failed)})\n\n"
+            for f in failed:
+                output += f"- `{f}`\n"
+        elif failed:
+            output += f"\n### Not Found: {len(failed)} symbols (too many to list)\n"
+
+        if errors:
+            output += f"\n### Errors ({len(errors)})\n\n"
+            for e in errors[:10]:
+                output += f"- {e}\n"
+
+        return [TextContent(type="text", text=output)]
+
+    async def _get_progress(self, args: dict) -> list[TextContent]:
+        """Return decomp progress summary with per-unit breakdown."""
+        conn = get_connection(self.db_path)
+
+        # Overall stats
+        stats = get_stats(self.db_path)
+        total = stats["total_functions"]
+        complete = stats["complete"]
+        at_limit = stats["at_limit"]
+
+        # Count excluded (xdk) functions
+        excluded = conn.execute(
+            "SELECT COUNT(*) FROM functions WHERE unit LIKE '%xdk%'"
+        ).fetchone()[0]
+        non_excluded = total - excluded
+        remaining = non_excluded - complete - at_limit
+
+        complete_pct = (complete / non_excluded * 100) if non_excluded else 0
+        done_pct = ((complete + at_limit) / non_excluded * 100) if non_excluded else 0
+
+        output = "## Decomp Progress\n\n"
+        output += f"| Metric | Count | % of non-excluded |\n"
+        output += f"|--------|------:|---:|\n"
+        output += f"| Total functions | {total:,} | - |\n"
+        output += f"| Excluded (SDK) | {excluded:,} | - |\n"
+        output += f"| Non-excluded | {non_excluded:,} | 100% |\n"
+        output += f"| COMPLETE | {complete:,} | {complete_pct:.1f}% |\n"
+        output += f"| AT_LIMIT | {at_limit:,} | {at_limit / non_excluded * 100:.1f}% |\n"
+        output += f"| Remaining | {remaining:,} | {remaining / non_excluded * 100:.1f}% |\n"
+        output += f"| **Done (COMPLETE + AT_LIMIT)** | **{complete + at_limit:,}** | **{done_pct:.1f}%** |\n"
+
+        # Top units with remaining work (NULL verdict, non-excluded)
+        rows = conn.execute("""
+            SELECT unit, COUNT(*) as cnt
+            FROM functions
+            WHERE verdict IS NULL
+              AND unit NOT LIKE '%xdk%'
+              AND symbol NOT LIKE 'merged_%'
+              AND demangled NOT LIKE '%stlpmtx_std::%'
+            GROUP BY unit
+            ORDER BY cnt DESC
+            LIMIT 15
+        """).fetchall()
+
+        if rows:
+            output += f"\n### Top Units with Remaining Work\n\n"
+            output += f"| Unit | Remaining |\n"
+            output += f"|------|----------:|\n"
+            for row in rows:
+                unit = row["unit"].replace("default/", "")
+                output += f"| {unit} | {row['cnt']} |\n"
+
+        return [TextContent(type="text", text=output)]
 
     async def run(self):
         """Run the MCP server."""

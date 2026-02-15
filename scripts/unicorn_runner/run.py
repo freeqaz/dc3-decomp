@@ -22,7 +22,7 @@ from .extractor import (
 )
 from .memory_map import CODE_BASE, FILL_BYTE
 from .engine import execute_function, UnicornEngine
-from .comparator import compare, format_result, format_json_result
+from .comparator import compare, format_result, format_json_result, classify_divergence
 
 
 @dataclass
@@ -324,10 +324,12 @@ def run_dual_comparison_inner(symbol, decomp_coff, orig_coff, verbose=False,
 def run_comparison(symbol, decomp_path, orig_path, verbose=False, timeout=5_000_000,
                    decomp_coff=None, orig_coff=None, json_output=False,
                    coload=True, coload_depth=None,
-                   fill_pattern=None, dual_fixture=False):
+                   fill_pattern=None, dual_fixture=False,
+                   field_access=True):
     """Run the full comparison pipeline for a single function.
 
     Returns exit code. Accepts optional pre-parsed COFF instances.
+    If field_access=True (default), appends struct field access map to output.
     """
     # Parse COFF files if not provided
     if decomp_coff is None or orig_coff is None:
@@ -359,6 +361,35 @@ def run_comparison(symbol, decomp_path, orig_path, verbose=False, timeout=5_000_
             print(output, file=sys.stderr)
     else:
         print(output)
+
+    # Append field access map for single-function mode
+    if field_access and code not in (EXIT_SKIPPED, EXIT_ERROR):
+        try:
+            from .prober import probe_field_access, format_field_access_map
+            from .typed_fixture import extract_class_from_symbol
+            cls_name = extract_class_from_symbol(symbol)
+            sdb = None
+            try:
+                from tools.struct_db import StructDB
+                db_path = os.path.join(
+                    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+                    "struct_db.sqlite")
+                if os.path.exists(db_path):
+                    sdb = StructDB(db_path)
+                    sdb.connect()
+            except ImportError:
+                pass
+            accesses = probe_field_access(
+                symbol, decomp_coff, orig_coff,
+                timeout=timeout, coload=coload, coload_depth=coload_depth,
+                struct_db=sdb, class_name=cls_name)
+            if sdb is not None:
+                sdb.close()
+            if accesses:
+                print(f"\n{format_field_access_map(accesses, symbol)}")
+        except Exception:
+            pass  # field-access is best-effort, don't fail the comparison
+
     return code
 
 
@@ -386,13 +417,14 @@ def _find_common_text_symbols(decomp_coff, orig_coff):
 
 def run_batch(decomp_path, orig_path, verbose=False, timeout=5_000_000, quiet=False,
               coload=True, coload_depth=None, fill_pattern=None, dual_fixture=False,
-              cache=None, typed=False, unit_name=None):
+              cache=None, typed=False, unit_name=None, emit_file=None):
     """Run comparison for all eligible functions in a unit.
 
     Parses COFF files once and reuses a single Unicorn engine for all functions.
     If quiet=True, suppresses per-function output (for multiprocessing).
     If typed=True, generates type-aware object memory from struct_db.
     If unit_name is provided, uses it to extract the primary class for typed fixtures.
+    If emit_file is a file object, writes one JSON line per function result.
 
     Returns (equivalent, divergent, errors, skipped, cached_count) counts.
     """
@@ -437,6 +469,8 @@ def run_batch(decomp_path, orig_path, verbose=False, timeout=5_000_000, quiet=Fa
     cached_count = 0
 
     for sym_name in common:
+        div_class = None  # divergence classification
+
         # Check cache first
         if cache is not None:
             cached = cache.lookup(sym_name, decomp_path, orig_path)
@@ -455,6 +489,14 @@ def run_batch(decomp_path, orig_path, verbose=False, timeout=5_000_000, quiet=Fa
                     status = {EXIT_EQUIVALENT: "EQUIVALENT", EXIT_DIVERGENT: "DIVERGENT",
                               EXIT_SKIPPED: "SKIPPED"}.get(code, "ERROR")
                     print(f"  {status:11s}  {sym_name}  (cached)")
+                # Emit cached results (no classification available from cache)
+                if emit_file is not None:
+                    verdict_str = {EXIT_EQUIVALENT: "EQUIVALENT", EXIT_DIVERGENT: "DIVERGENT",
+                                   EXIT_SKIPPED: "SKIPPED"}.get(code, "ERROR")
+                    emit_file.write(json.dumps({
+                        "symbol": sym_name, "verdict": verdict_str,
+                        "class": None, "confidence": cached[1],
+                    }) + "\n")
                 continue
 
         if dual_fixture:
@@ -484,6 +526,17 @@ def run_batch(decomp_path, orig_path, verbose=False, timeout=5_000_000, quiet=Fa
                     code = code2
                     _output = _output2
 
+        # Classify divergent results
+        if code == EXIT_DIVERGENT:
+            exit_code_d, bundle_d, _, _ = _run_comparison_core(
+                sym_name, decomp_coff, orig_coff, timeout=timeout,
+                coload=coload, coload_depth=coload_depth,
+                fill_pattern=fill_pattern, object_memory=unit_typed_mem_zero)
+            if bundle_d is not None:
+                div_class = classify_divergence(
+                    bundle_d.result, bundle_d.decomp_result, bundle_d.orig_result,
+                    bundle_d.decomp_relocs, bundle_d.orig_relocs)
+
         # Store in cache
         if cache is not None and code not in (EXIT_ERROR, EXIT_SKIPPED):
             cache.store(sym_name, decomp_path, orig_path, code, confidence)
@@ -503,6 +556,13 @@ def run_batch(decomp_path, orig_path, verbose=False, timeout=5_000_000, quiet=Fa
 
         if not quiet:
             print(f"  {status:11s}  {sym_name}")
+
+        # Emit per-function result
+        if emit_file is not None:
+            emit_file.write(json.dumps({
+                "symbol": sym_name, "verdict": status,
+                "class": div_class, "confidence": confidence,
+            }) + "\n")
 
     if db is not None:
         db.close()
@@ -543,7 +603,7 @@ def _process_unit(args):
     New results are NOT saved by workers — the main process handles saving
     via a follow-up single-threaded pass (or the next run picks them up).
     """
-    name, decomp_path, orig_path, timeout, coload, coload_depth, fill_pattern, dual_fixture, cache_path, typed = args
+    name, decomp_path, orig_path, timeout, coload, coload_depth, fill_pattern, dual_fixture, cache_path, typed, emit_path = args
     if not os.path.exists(decomp_path) or not os.path.exists(orig_path):
         return (name, 0, 0, 0, 0, 0, False)
     # Each worker loads a read-only cache snapshot for lookups
@@ -551,6 +611,9 @@ def _process_unit(args):
     if cache_path:
         from .cache import ResultCache
         cache = ResultCache(cache_path)
+    emit_file = None
+    if emit_path:
+        emit_file = open(emit_path, "a")
     try:
         eq, div, err, sk, cached = run_batch(decomp_path, orig_path,
                                               timeout=timeout, quiet=True,
@@ -558,12 +621,16 @@ def _process_unit(args):
                                               fill_pattern=fill_pattern,
                                               dual_fixture=dual_fixture,
                                               cache=cache, typed=typed,
-                                              unit_name=name)
+                                              unit_name=name,
+                                              emit_file=emit_file)
         # Don't save from workers — race condition with other workers.
         # Cache still provides lookup hits from previous runs.
         return (name, eq, div, err, sk, cached, True)
     except Exception as e:
         return (name, 0, 0, 1, 0, 0, True)
+    finally:
+        if emit_file is not None:
+            emit_file.close()
 
 
 def main():
@@ -597,6 +664,12 @@ def main():
                        help="Disable result caching for batch modes")
     parser.add_argument("--typed", action="store_true",
                        help="Use type-aware object memory from struct_db")
+    parser.add_argument("--emit-results", type=str, default=None,
+                       help="Write per-function JSON lines to this path (batch modes)")
+    parser.add_argument("--field-access", action="store_true",
+                       help="Probe struct field access patterns only (no comparison)")
+    parser.add_argument("--no-field-access", action="store_true",
+                       help="Disable field access map in single-function output")
 
     args = parser.parse_args()
 
@@ -612,10 +685,13 @@ def main():
             from .cache import ResultCache, DEFAULT_CACHE_PATH
             cache_path = DEFAULT_CACHE_PATH
 
+        emit_path = args.emit_results
+
         units = get_all_units()
         work = [(name, dp, op, args.timeout, coload, coload_depth,
                  args.fill_pattern, args.dual_fixture,
-                 cache_path if use_cache else None, args.typed) for name, dp, op in units]
+                 cache_path if use_cache else None, args.typed,
+                 emit_path) for name, dp, op in units]
 
         cache_label = "enabled" if use_cache else "disabled"
         print(f"Batch-all: {len(units)} units with both target and base paths")
@@ -653,6 +729,7 @@ def main():
             main_cache = None
             if use_cache:
                 main_cache = ResultCache(cache_path)
+            emit_fh = open(emit_path, "w") if emit_path else None
             for name, dp, op, *rest in work:
                 if not os.path.exists(dp) or not os.path.exists(op):
                     _handle_result((name, 0, 0, 0, 0, 0, False))
@@ -664,12 +741,14 @@ def main():
                         fill_pattern=args.fill_pattern,
                         dual_fixture=args.dual_fixture,
                         cache=main_cache, typed=args.typed,
-                        unit_name=name)
+                        unit_name=name, emit_file=emit_fh)
                     _handle_result((name, eq, div, err, sk, cached, True))
                 except Exception:
                     _handle_result((name, 0, 0, 1, 0, 0, True))
             if main_cache is not None:
                 main_cache.save()
+            if emit_fh is not None:
+                emit_fh.close()
         else:
             with ProcessPoolExecutor(max_workers=args.jobs) as pool:
                 for result in pool.map(_process_unit, work):
@@ -724,6 +803,7 @@ def main():
         if not args.no_cache:
             from .cache import ResultCache
             cache = ResultCache()
+        emit_fh = open(args.emit_results, "w") if args.emit_results else None
         print(f"Batch: {decomp_path}")
         eq, div, err, sk, cached = run_batch(
             decomp_path, orig_path,
@@ -731,9 +811,11 @@ def main():
             coload=coload, coload_depth=coload_depth,
             fill_pattern=args.fill_pattern, dual_fixture=args.dual_fixture,
             cache=cache, typed=args.typed,
-            unit_name=args.unit)
+            unit_name=args.unit, emit_file=emit_fh)
         if cache is not None:
             cache.save()
+        if emit_fh is not None:
+            emit_fh.close()
         total = eq + div + err + sk
         fresh = total - cached
         cache_note = f", {fresh} fresh, {cached} cached" if cached > 0 else ""
@@ -742,6 +824,41 @@ def main():
             return EXIT_DIVERGENT
         if err > 0:
             return EXIT_ERROR
+        return EXIT_EQUIVALENT
+
+    # Field access probing mode
+    if args.field_access:
+        if not args.symbol:
+            parser.error("--symbol is required for --field-access mode")
+            return EXIT_ERROR
+        from .coff import COFFParser as _COFF
+        from .prober import probe_field_access, format_field_access_map
+        from .typed_fixture import extract_class_from_symbol
+        decomp_coff = _COFF(decomp_path)
+        orig_coff = _COFF(orig_path)
+        # Try to load struct_db for field name resolution
+        sdb = None
+        cls_name = extract_class_from_symbol(args.symbol)
+        try:
+            from tools.struct_db import StructDB
+            db_path = os.path.join(
+                os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                "struct_db.sqlite")
+            if os.path.exists(db_path):
+                sdb = StructDB(db_path)
+                sdb.connect()
+        except ImportError:
+            pass
+        accesses = probe_field_access(
+            args.symbol, decomp_coff, orig_coff,
+            timeout=args.timeout, coload=coload, coload_depth=coload_depth,
+            struct_db=sdb, class_name=cls_name)
+        if sdb is not None:
+            sdb.close()
+        if accesses is None:
+            print(f"SKIPPED: Could not probe {args.symbol}", file=sys.stderr)
+            return EXIT_SKIPPED
+        print(format_field_access_map(accesses, args.symbol))
         return EXIT_EQUIVALENT
 
     # Single function comparison
@@ -754,7 +871,8 @@ def main():
         verbose=args.verbose, timeout=args.timeout,
         json_output=args.json,
         coload=coload, coload_depth=coload_depth,
-        fill_pattern=args.fill_pattern, dual_fixture=args.dual_fixture)
+        fill_pattern=args.fill_pattern, dual_fixture=args.dual_fixture,
+        field_access=not args.no_field_access)
 
 
 if __name__ == "__main__":
