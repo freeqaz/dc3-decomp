@@ -419,6 +419,12 @@ Vector2 &Rnd::DrawString(const char *, const Vector2 &v, const Hmx::Color &, boo
     return s;
 }
 
+void AutoTimer::ResetTimers() {
+    FOREACH (it, sTimers) {
+        it->first.Reset();
+    }
+}
+
 void Rnd::BeginDrawing() {
     mDrawing = true;
     mWorldEnded = false;

@@ -58,7 +58,7 @@ void BoxMapLighting::ApplyQueuedLights(Hmx::Color *color, const Vector3 *v3) con
 }
 
 bool BoxMapLighting::CacheData(LightParams_Spot &spot) {
-    if (spot.unk50 > 0 && spot.unk58 >= spot.unk54
+    if (spot.unk50 > 0 && spot.unk54 <= spot.unk58
         && (spot.mColor.red > 0.003921569f || spot.mColor.green > 0.003921569f
             || spot.mColor.blue > 0.003921569f)) {
         float f3 = (spot.unk54 * spot.unk50) / (spot.unk58 - spot.unk54);

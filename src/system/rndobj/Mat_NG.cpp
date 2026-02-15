@@ -114,8 +114,9 @@ void NgMat::SetBasicState() {
 void NgMat::SetupAmbient() {
     f32 x, y, z, w;
     if (mUseEnviron) {
+        auto _tmp0 = RndEnviron::Current()->AmbientColor();
         const Vector4 &v4 =
-            reinterpret_cast<const Vector4 &>(RndEnviron::Current()->AmbientColor());
+            reinterpret_cast<const Vector4 &>(_tmp0);
         x = v4.x;
         y = v4.y;
         z = v4.z;

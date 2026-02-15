@@ -536,7 +536,7 @@ void RndMat::LoadOld(BinStreamRev &bs) {
     }
     if (bs.rev < 0x25) {
         if (mSpecularMap) {
-            mSpecularRGB.Set(1, 1, 1);
+            mSpecularRGB.Set(1, 1, 1, mSpecularRGB.alpha);
         }
     }
     if (bs.rev > 0x19) {
@@ -613,7 +613,7 @@ void RndMat::LoadOld(BinStreamRev &bs) {
         } else {
             int pointLightsValue;
             bs >> pointLightsValue;
-            mPointLights = pointLightsValue == 1;
+            mPointLights = pointLightsValue > 1;
         }
         if (bs.rev < 0x3F) {
             bool unusedValue;
@@ -631,7 +631,7 @@ void RndMat::LoadOld(BinStreamRev &bs) {
     if (bs.rev > 0x2F) {
         bs >> mRimRGB;
         bs >> mRimMap;
-        if (bs.rev >= 0x3A) {
+        if (bs.rev > 0x39) {
             bs >> mRimLightUnder;
         } else {
             bool unusedValue;

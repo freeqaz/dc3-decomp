@@ -1,9 +1,12 @@
 #include "world/SpotlightDrawer.h"
 #include "obj/Object.h"
+#include "os/Platform.h"
+#include "os/System.h"
 #include "rndobj/Draw.h"
 #include "rndobj/Env.h"
 #include "rndobj/Rnd.h"
 #include "utl/BinStream.h"
+#include "utl/Loader.h"
 #include "world/Spotlight.h"
 
 RndEnviron *SpotlightDrawer::sEnviron;
@@ -130,7 +133,7 @@ void SpotlightDrawer::DrawAdditional(
     SpotlightDrawer::SpotlightEntry *const &spotEnd
 ) {
     MILO_ASSERT(spotIter != spotEnd, 0x298);
-    for (; spotIter != spotEnd; ++spotIter) {
+    for (; spotEnd != spotIter; ++spotIter) {
         Spotlight *sl = spotIter->unk4;
         auto _tmp0 = sl->GetAdditionalObjects();
         FOREACH (it, _tmp0) {
@@ -147,7 +150,7 @@ void SpotlightDrawer::DrawLenses(
     SpotlightDrawer::SpotlightEntry *const &spotEnd
 ) {
     MILO_ASSERT(spotIter != spotEnd, 0x2b1);
-    for (; spotIter != spotEnd; ++spotIter) {
+    for (; spotEnd != spotIter; ++spotIter) {
         Spotlight *sl = spotIter->unk4;
         if (Spotlight::sDiskMesh) {
             MILO_ASSERT(sl->LensMesh(), 0x2b9);
@@ -169,6 +172,15 @@ void SpotlightDrawer::SortLights() {
 void SpotlightDrawer::ClearPostDraw() {
     ClearLights();
     sNeedDraw = false;
+}
+
+void SpotlightDrawer::SetAmbientColor(const Hmx::Color &c) {
+    sEnviron->SetAmbientColor(c);
+    sEnviron->Select(nullptr);
+}
+
+bool SpotlightDrawer::DrawNGSpotlights() {
+    return GetGfxMode() == kNewGfx && TheLoadMgr.GetPlatform() != kPlatformPC;
 }
 
 void SpotlightDrawer::EndWorld() {

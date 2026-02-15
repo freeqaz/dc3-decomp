@@ -988,9 +988,9 @@ void CamShot::SetFrame(float frame, float blend) {
     EndFrame();
     static CamShotFrame nullFrame(nullptr);
     nullFrame.mCamShot = this;
-    float f48 = 1.0f;
-    CamShotFrame *frame4c = nullptr;
     CamShotFrame *frame50 = nullptr;
+    CamShotFrame *frame4c = nullptr;
+    float f48 = 1.0f;
     GetKey(frame, frame4c, frame50, f48);
     if (mDisabled != 0) {
         frame50->UpdateTarget();

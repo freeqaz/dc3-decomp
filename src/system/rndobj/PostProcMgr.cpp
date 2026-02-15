@@ -59,6 +59,26 @@ BEGIN_LOADS(RndPostProcMgr)
     bs >> mSelectedPostProc;
 END_LOADS
 
+void RndPostProcMgr::Poll() {
+    if (mSelectedPostProc) {
+        if (IsEnabled()) {
+            mSelectedPostProc->Select();
+        } else {
+            mSelectedPostProc->Unselect();
+        }
+        if (unk20) {
+            float pct = (TheTaskMgr.Seconds(TaskMgr::kRealTime) - unk38) / unk34;
+            pct = Clamp(0.0f, 1.0f, pct);
+            mSelectedPostProc->Interp(unk1c, unk20, pct);
+            if (NearlyOne(pct)) {
+                unk20 = nullptr;
+                unk34 = -1;
+                unk38 = -1;
+            }
+        }
+    }
+}
+
 void RndPostProcMgr::Enter() {
     if (mSelectedPostProc && IsEnabled()) {
         mSelectedPostProc->Select();

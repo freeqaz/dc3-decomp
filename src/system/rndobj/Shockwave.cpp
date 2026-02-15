@@ -47,9 +47,41 @@ void RndShockwave::Save(BinStream &bs) {
 }
 
 
+void RndShockwave::Load(BinStream &bs) {
+    int revs;
+    bs >> revs;
+    BinStreamRev d(bs, revs);
+    static const unsigned short gRevs[4] = { 0, 0, 0, 0 };
+    if (d.rev > 0) {
+        MILO_FAIL(
+            "%s can't load new %s version %d > %d",
+            PathName(this),
+            ClassName(),
+            d.rev,
+            gRevs[0]
+        );
+    }
+    if (d.altRev > 0) {
+        MILO_FAIL(
+            "%s can't load new %s alt version %d > %d",
+            PathName(this),
+            ClassName(),
+            d.altRev,
+            gRevs[2]
+        );
+    }
+    Hmx::Object::Load(d.stream);
+    RndTransformable::Load(d.stream);
+    RndPollable::Load(d.stream);
+    d >> mAutoSelect;
+    d >> mRadius;
+    d >> mAmplitude;
+    d >> mWavelength;
+}
+
 BEGIN_PROPSYNCS(RndShockwave)
     SYNC_PROP_SET(
-        selected, sSelected == this, sSelected = _val.Int() != 0 ? this : nullptr
+        selected, this == sSelected, sSelected = _val.Int() != 0 ? this : nullptr
     )
     SYNC_PROP(auto_select, mAutoSelect)
     SYNC_PROP(radius, mRadius)

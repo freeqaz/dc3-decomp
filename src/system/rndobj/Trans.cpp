@@ -131,8 +131,8 @@ INIT_REVS(9, 0)
 
 BEGIN_LOADS(RndTransformable)
     LOAD_REVS(bs)
-    int gRev = d.rev;
     ASSERT_REVS(9, 0)
+    int gRev = d.rev;
     if (ClassName() == StaticClassName()) {
         Hmx::Object::Load(bs);
     }
@@ -211,11 +211,7 @@ BEGIN_LOADS(RndTransformable)
         int numb4;
         bs >> numb4;
         int sp80[6] = { 0, 0, 0, 5, 6, 7 };
-        if (numb4 >= 0x18) {
-            mConstraint = kConstraintNone;
-        } else {
-            mConstraint = (Constraint)sp80[numb4];
-        }
+                mConstraint = numb4 >= 0x18 ? kConstraintNone : (Constraint)sp80[numb4];
         break;
     }
     case 0:

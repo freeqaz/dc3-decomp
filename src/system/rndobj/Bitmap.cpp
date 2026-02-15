@@ -611,8 +611,8 @@ void RndBitmap::GenerateMips() {
 }
 
 void RndBitmap::SelfMip() {
-    int pixelBytes = PixelBytes();
     int rowOffset = mRowBytes / 2;
+    int pixelBytes = PixelBytes();
     mWidth /= 2;
     unsigned short w = Width();
     unsigned short h = Height();
@@ -677,10 +677,19 @@ bool RndBitmap::ProcessFlags(const char *filename, bool wantMips) {
     return true;
 }
 
+bool RndBitmap::SamePixelFormat(const RndBitmap &bm) const {
+    if (mBpp != bm.Bpp() || mOrder != bm.Order())
+        return false;
+    if (mPalette && bm.Palette()) {
+        return SamePaletteColors(bm);
+    } else
+        return true;
+}
+
 void RndBitmap::Blt(
     const RndBitmap &bm, int dX, int dY, int sX, int sY, int width, int height
 ) {
-    MILO_ASSERT(dX + width <= mWidth, 1728);
+    MILO_ASSERT((int)(int)mWidth >= dX + width, 1728);
     MILO_ASSERT(dY + height <= mHeight, 1729);
     MILO_ASSERT(sX + width <= bm.Width(), 1730);
     MILO_ASSERT(sY + height <= bm.Height(), 1731);
@@ -710,13 +719,13 @@ void RndBitmap::Blt(
                 bm.PaletteColor(i, r, g, b, a);
                 *idx = NearestColor(r, g, b, a);
             }
-            for (int h = height, dy = dY, sy = sY; h > 0; h--, dy++, sy++) {
+            for (int h = height, dy = dY, sy = sY; h >= 1; h--, dy++, sy++) {
                 for (int w = width, sx = sX, dx = dX; w > 0; w--, sx++, dx++) {
                     SetPixelIndex(dx, dy, colorBuffer[bm.PixelIndex(sx, sy)]);
                 }
             }
         } else {
-            for (int h = height, dy = dY, sy = sY; h > 0; h--, dy++, sy++) {
+            for (int h = height, dy = dY, sy = sY; h >= 1; h--, dy++, sy++) {
                 for (int w = width, sx = sX, dx = dX; w > 0; w--, sx++, dx++) {
                     unsigned char r, g, b, a;
                     bm.PixelColor(sx, sy, r, g, b, a);

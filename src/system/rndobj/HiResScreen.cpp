@@ -138,7 +138,7 @@ void HiResScreen::BmpCache::SetPixelColor(
     if (newPixel != oldPixel) {
         *(unsigned int *)bufPtr = newPixel;
         unsigned int minDirty = mDirtyStart;
-        if (offset < minDirty) {
+        if (minDirty > offset) {
             minDirty = offset;
         }
         mDirtyStart = minDirty;

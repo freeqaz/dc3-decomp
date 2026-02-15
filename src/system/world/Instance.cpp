@@ -42,6 +42,13 @@ END_COPYS
 
 void WorldInstance::PostSave(BinStream &bs) { SyncDir(); }
 
+void WorldInstance::DrawShowing() {
+    RndDir::DrawShowing();
+    if (mSharedGroup) {
+        mSharedGroup->Draw(WorldXfm());
+    }
+}
+
 RndDrawable *WorldInstance::CollideShowing(const Segment &s, float &f, Plane &pl) {
     if (RndDir::CollideShowing(s, f, pl))
         return this;
