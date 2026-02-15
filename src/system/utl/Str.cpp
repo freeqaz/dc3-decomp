@@ -137,6 +137,10 @@ bool FixedString::contains(const char *str) const { return find(str) != -1; }
 
 String::String() {}
 
+String::String(const char *str) { *this = str; }
+
+String::String(Symbol s) { *this = s; }
+
 String::String(unsigned int len, char c) {
     reserve(len);
     for (unsigned int i = 0; i < len; i++)
