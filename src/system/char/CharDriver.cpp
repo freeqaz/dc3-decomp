@@ -26,6 +26,21 @@ CharClip *CharDriver::FirstClip() {
         return nullptr;
 }
 
+CharClipDriver *CharDriver::FirstPlaying() {
+    CharClipDriver *d;
+    for (d = mFirst; d != nullptr && !d->mBlendFrac; d = d->Next())
+        ;
+    return d;
+}
+
+CharClip *CharDriver::FirstPlayingClip() {
+    CharClipDriver *d = FirstPlaying();
+    if (d)
+        return d->GetClip();
+    else
+        return nullptr;
+}
+
 CharClipDriver *CharDriver::Last() {
     CharClipDriver *d = mFirst;
     while (d && d->Next())

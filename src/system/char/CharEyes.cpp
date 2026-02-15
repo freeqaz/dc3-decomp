@@ -167,6 +167,14 @@ BEGIN_COPYS(CharEyes)
     END_COPYING_MEMBERS
 END_COPYS
 
+CharInterest *CharEyes::GetCurrentInterest() {
+    if (unk114)
+        return unk114;
+    if (unk100)
+        return unk100;
+    return 0;
+}
+
 void CharEyes::ForceBlink() {
     if (unk1b1 && !unk18c) {
         unk18c = true;
@@ -247,8 +255,8 @@ void CharEyes::ProceduralBlinkUpdate() {
     if (!unk18c)
         return;
 
-    float elapsed = TheTaskMgr.Seconds(TaskMgr::kRealTime) - unk190;
     CharFaceServo *servo = mFaceServo;
+    float elapsed = TheTaskMgr.Seconds(TaskMgr::kRealTime) - unk190;
     if (elapsed < 0.115f) {
         // Closing phase
         float t = Clamp(0.0f, 1.0f, elapsed * 8.695652f);
@@ -264,6 +272,53 @@ void CharEyes::ProceduralBlinkUpdate() {
         unk18c = false;
         unk78 = unk1a0;
     }
+}
+
+RndTransformable *CharEyes::GetHead() {
+    if (mViewDirection)
+        return mViewDirection;
+    else if (!mEyes.empty() && mEyes[0].mEye) {
+        RndTransformable *src = mEyes[0].mEye->GetSource();
+        if (src)
+            return src->TransParent();
+    }
+    return 0;
+}
+
+void CharEyes::Enter() {
+    unkd8.Zero();
+    unkec = 0;
+    unkf4 = 0;
+    unke8 = 1.0f;
+    unkf8 = -1.0f;
+    unkfc = 0;
+    unk170 = 0;
+    unk174 = -1.0f;
+    unk178 = -1;
+    unk18c = 0;
+    unk190 = -1.0f;
+    unk194 = 0;
+    unk198 = -1.0f;
+    unk19c = -1.0f;
+    unkfd = 0;
+    mInterestFilterFlags = mDefaultFilterFlags;
+    unk1b0 = 0;
+    unk12c = 0;
+    unk140 = 0;
+    RndTransformable *head = GetHead();
+    if (head) {
+        unkd8 = head->WorldXfm().m.y;
+        Normalize(unkd8, unkd8);
+    }
+    for (ObjVector<EyeDesc>::iterator it = mEyes.begin(); it != mEyes.end(); ++it) {
+        it->mEye->Enter();
+    }
+    for (ObjVector<CharInterestState>::iterator it = mInterests.begin();
+         it != mInterests.end();
+         ++it) {
+        it->unk14 = -1.0f;
+    }
+    RndPollable::Enter();
 }
 
 namespace stlpmtx_std {

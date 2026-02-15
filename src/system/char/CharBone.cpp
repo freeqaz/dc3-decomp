@@ -1,4 +1,6 @@
 #include "char/CharBone.h"
+#include "char/CharBoneDir.h"
+#include "char/CharBones.h"
 #include "obj/Object.h"
 #include "rndobj/Trans.h"
 
@@ -24,6 +26,53 @@ void CharBone::ClearContext(int i) {
     mPositionContext &= mask;
     mScaleContext &= mask;
     mRotationContext &= mask;
+}
+
+void CharBone::StuffBones(std::list<CharBones::Bone> &bonelist, int i) const {
+    if (mPositionContext & i) {
+        bonelist.push_back(CharBones::Bone(
+            CharBones::ChannelName(Name(), CharBones::TYPE_POS), GetWeight(i)
+        ));
+    }
+    if (mScaleContext & i) {
+        bonelist.push_back(CharBones::Bone(
+            CharBones::ChannelName(Name(), CharBones::TYPE_SCALE), GetWeight(i)
+        ));
+    }
+    if (mRotation != CharBones::TYPE_END && mRotationContext & i) {
+        bonelist.push_back(
+            CharBones::Bone(CharBones::ChannelName(Name(), mRotation), GetWeight(i))
+        );
+    }
+}
+
+float CharBone::GetWeight(int i) const {
+    const WeightContext *ctx = FindWeight(i);
+    if (ctx)
+        return ctx->mWeight;
+    else
+        return 1.0f;
+}
+
+const CharBone::WeightContext *CharBone::FindWeight(int i) const {
+    for (std::list<WeightContext>::const_iterator it = mWeights.begin();
+         it != mWeights.end();
+         ++it) {
+        if ((*it).mContext & i)
+            return &(*it);
+    }
+    return 0;
+}
+
+DataNode CharBone::OnGetContextFlags(DataArray *da) {
+    CharBoneDir *dir = dynamic_cast<CharBoneDir *>(Dir());
+    if (dir)
+        return dir->GetContextFlags();
+    else {
+        MILO_NOTIFY("CharBone: No CharBoneDir for context flags.");
+        DataArrayPtr ptr;
+        return ptr;
+    }
 }
 
 BEGIN_HANDLERS(CharBone)

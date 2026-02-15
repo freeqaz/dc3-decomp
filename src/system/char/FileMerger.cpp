@@ -451,8 +451,9 @@ bool FileMerger::StartLoadInternal(bool async, bool loading) {
 }
 
 FileMerger::Merger *FileMerger::NotifyFileLoaded(Loader *l, DirLoader *dl) {
+    auto _tmp1 = l->LoaderFile();
     MILO_ASSERT_FMT(
-        l->LoaderFile() == mFilesPending.front()->loading,
+        _tmp1 == mFilesPending.front()->loading,
         "%s != %s",
         l->LoaderFile(),
         mFilesPending.front()->loading

@@ -42,6 +42,8 @@ public:
     bool BakeOutAsTopLevel() const { return mBakeOutAsTopLevel; }
     void ClearContext(int);
     void StuffBones(std::list<CharBones::Bone> &, int) const;
+    float GetWeight(int) const;
+    const WeightContext *FindWeight(int) const;
 
 protected:
     CharBone();

@@ -118,7 +118,7 @@ void CharCuff::Highlight() {
     const float kInv32 = 1.0f / 32.0f;
     for (int i = 0; i < 2; i++) {
         for (int j = 0; j < 32; j++) {
-            float toSine = j * kTwoPi * kInv32;
+            float toSine = (kInv32 * (kTwoPi * j));
             Vector3 va8(Sine(toSine), Cosine(toSine), mShape[i].offset);
             Vector3 vb4(Sine(toSine), Cosine(toSine), mShape[i + 1].offset);
             (Vector2 &)va8 *= mShape[i].radius * Eccentricity((Vector2 &)va8);
@@ -129,7 +129,7 @@ void CharCuff::Highlight() {
             Multiply(vb4, WorldXfm(), vcc);
             TheRnd.DrawLine(vc0, vcc, white, false);
             if (i < 2) {
-                float toSinePlus1 = (j + 1) * kTwoPi * kInv32;
+                float toSinePlus1 = (kInv32 * (kTwoPi * (j + 1)));
                 va8.Set(Sine(toSinePlus1), Cosine(toSinePlus1), mShape[i].offset);
                 (Vector2 &)va8 *= mShape[i].radius * Eccentricity((Vector2 &)va8);
                 Multiply(va8, WorldXfm(), vcc);

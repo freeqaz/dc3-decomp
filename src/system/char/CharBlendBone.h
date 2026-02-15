@@ -47,4 +47,4 @@ protected:
     CharBlendBone();
 };
 
-BinStream &operator<<(BinStream &, CharBlendBone::ConstraintSystem &);
+BinStream &operator<<(BinStream &, const CharBlendBone::ConstraintSystem &);

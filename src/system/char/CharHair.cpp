@@ -1,9 +1,11 @@
 #include "char/CharHair.h"
 #include "char/CharCollide.h"
 #include "char/Character.h"
+#include "math/Rot.h"
 #include "obj/Object.h"
 #include "obj/Task.h"
 #include "rndobj/Poll.h"
+#include "rndobj/PostProc.h"
 #include "utl/BinStream.h"
 #include "world/Dir.h"
 
@@ -160,7 +162,50 @@ void CharHair::FreezePose() {
     FreezePoseRaw();
 }
 
+float CharHair::GetFPS() {
+    if (mUsePostProc && RndPostProc::Current()
+        && RndPostProc::Current()->EmulateFPS() > 0) {
+        float fps = RndPostProc::Current()->EmulateFPS();
+        if (fps != 60.0f)
+            fps = 60.0f - fps;
+        return fps;
+    }
+    return 60.0f;
+}
+
+void CharHair::SimulateZeroTime() {
+    if (mSimulate) {
+        for (int i = 0; i < mStrands.size(); i++) {
+            Strand &curStrand = mStrands[i];
+            RndTransformable *root = curStrand.Root();
+            if (root && curStrand.Root()->TransParent()) {
+                Transform tf50;
+                Vector3 v2c = curStrand.Root()->WorldXfm().v;
+                Multiply(
+                    curStrand.RootMat(),
+                    curStrand.Root()->TransParent()->WorldXfm().m,
+                    tf50.m
+                );
+                ObjVector<Point> &points = curStrand.Points();
+                for (int j = 0; j < points.size(); j++) {
+                    Point &curPoint = points[j];
+                    Hmx::Matrix3 m78;
+                    Subtract(curPoint.pos, v2c, m78.y);
+                    m78.z = curPoint.lastZ;
+                    Normalize(m78, tf50.m);
+                    if (curPoint.bone) {
+                        curPoint.bone->SetWorldXfm(tf50);
+                    }
+                    v2c = curPoint.pos;
+                }
+            }
+        }
+    }
+}
+
 INIT_REVS(11, 0)
+
+BinStream &operator>>(BinStreamRev &bsrev, ObjVector<CharHair::Strand> &vec);
 
 void CharHair::Load(BinStream &bs) {
     LOAD_REVS(bs);
@@ -172,7 +217,7 @@ void CharHair::Load(BinStream &bs) {
         mMaxSlack = 0.0f;
     } else
         bs >> mMinSlack >> mMaxSlack;
-    // bs >> mStrands;
+    d >> mStrands;
     d >> mSimulate;
     bs >> mWindObj;
     if (d.rev > 11)
@@ -203,6 +248,50 @@ void operator<<(BinStream &bs, const CharHair::Point &p) {
     bs << p.unk78;
 }
 
+BinStream &operator>>(BinStream &bs, CharHair::Point &pt) {
+    bs >> pt.pos;
+    bs >> pt.bone;
+    bs >> pt.length;
+    bs >> pt.radius;
+    bs >> pt.outerRadius;
+    bs >> pt.sideLength;
+    bs >> pt.unk78;
+    pt.collides.clear();
+    pt.force.Zero();
+    pt.lastFriction.Zero();
+    pt.lastZ.Zero();
+    return bs;
+}
+
+void operator>>(BinStreamRev &d, CharHair::Point &pt) {
+    d >> pt.pos;
+    d >> pt.bone;
+    d >> pt.length;
+    d >> pt.radius;
+    d >> pt.outerRadius;
+    d >> pt.sideLength;
+    d >> pt.unk78;
+    pt.collides.clear();
+    pt.force.Zero();
+    pt.lastFriction.Zero();
+    pt.lastZ.Zero();
+}
+
+BinStream &operator>>(BinStreamRev &bsrev, ObjVector<CharHair::Point> &vec) {
+    BinStream &bs = bsrev.stream;
+    int count;
+    bs.ReadEndian(&count, 4);
+    vec.resize(count);
+
+    CharHair::Point *pt = vec.begin();
+    while (pt != vec.end()) {
+        bsrev >> *pt;
+        pt++;
+    }
+
+    return bs;
+}
+
 #pragma endregion CharHair::Point
 #pragma region CharHair::Strand
 
@@ -222,7 +311,23 @@ CharHair::Strand::Strand(const Strand &rhs)
     mRootMat = rhs.mRootMat;
 }
 
+void CharHair::Strand::SetAngle(float angle) {
+    mAngle = angle;
+    Hmx::Matrix3 m38;
+    MakeRotMatrixX(mAngle * DEG2RAD, m38);
+    Multiply(m38, mBaseMat, mRootMat);
+}
 
+void CharHair::Strand::Load(BinStreamRev &d) {
+    d >> mRoot;
+    d >> mAngle;
+    d >> mPoints;
+    d >> mBaseMat >> mRootMat;
+    if (d.rev > 2) {
+        d >> mHookupFlags;
+    } else
+        mHookupFlags = 0;
+}
 
 BEGIN_CUSTOM_PROPSYNC(CharHair::Strand)
     gStrand = &o;
@@ -249,6 +354,21 @@ void CharHair::Strand::Save(BinStream &bs) const {
 
 void ObjVector<CharHair::Strand>::resize(unsigned int n) {
     std::vector<CharHair::Strand>::resize(n, CharHair::Strand(mOwner));
+}
+
+BinStream &operator>>(BinStreamRev &bsrev, ObjVector<CharHair::Strand> &vec) {
+    BinStream &bs = bsrev.stream;
+    int count;
+    bs.ReadEndian(&count, 4);
+    vec.resize(count);
+
+    CharHair::Strand *strand = vec.begin();
+    while (strand != vec.end()) {
+        strand->Load(bsrev);
+        strand++;
+    }
+
+    return bs;
 }
 
 #pragma endregion ObjVector_Strand

@@ -55,9 +55,9 @@ DataNode ClipGraphGenerator::OnGenerateTransitions(DataArray *da) {
     da->FindData("end_dist", end_dist, false);
     DataArray *restrictArr = da->FindArray("restrict", false);
 
-    int bflag = mClipB->PlayFlags() >> 12 & 15;
     int aflag = mClipA->PlayFlags() >> 12 & 15;
-    if (bflag >= aflag)
+    int bflag = mClipB->PlayFlags() >> 12 & 15;
+    if (aflag <= bflag)
         aflag = bflag;
     if (beat_align < (float)aflag)
         beat_align = aflag;

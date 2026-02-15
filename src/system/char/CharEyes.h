@@ -153,7 +153,7 @@ protected:
     RndOverlay *mEyeStatusOverlay; // 0xd0
     int mInterestFilterFlags; // 0xd4
     Vector3 unkd8; // 0xd8
-    int unke8;
+    float unke8;
     float unkec;
     float unkf0;
     int unkf4;

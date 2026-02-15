@@ -89,10 +89,12 @@ void CharIKFoot::DoFSM(Character *mMe, Transform &tf) {
     tf.m = mFinger->WorldXfm().m;
     tf.v.z = mFinger->WorldXfm().v.z;
     unke0.z = tf.v.z;
-    float vecat = mData->LocalXfm().v[mDataIndex];
     float f10;
     bool b2 = false;
-    if (vecat < 1.0f) {
+    float vecat = mData->LocalXfm().v[mDataIndex];
+    if (!(vecat < 1.0f)) {
+        b2 = true;
+    } else {
         if (vecat <= 0.0f) {
             ;
         } else {
@@ -101,12 +103,10 @@ void CharIKFoot::DoFSM(Character *mMe, Transform &tf) {
             } else {
                 f10 = 0.5f;
             }
-            if (f10 > tf.v.z) {
+            if (tf.v.z < f10) {
                 b2 = true;
             }
         }
-    } else {
-        b2 = true;
     }
     if (unkc4 == 0) {
         tf.v = mFinger->WorldXfm().v;

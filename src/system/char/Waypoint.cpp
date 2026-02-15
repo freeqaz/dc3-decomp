@@ -147,3 +147,24 @@ float Waypoint::ShapeDelta(float f) { return ShapeDeltaAng(mAngRadius, f); }
 void Waypoint::ShapeDelta(const Vector3 &v, Vector3 &vout) {
     ShapeDeltaBox(v, mRadius, mYRadius, vout);
 }
+
+void Waypoint::ShapeDeltaBox(const Vector3 &v1, float f1, float f2, Vector3 &res) {
+    const Transform &world = WorldXfm();
+    if (f2 > 0.0f) {
+        Subtract(v1, WorldXfm().v, res);
+        float dotx = Dot(res, world.m.x);
+        float doty = Dot(world.m.y, res);
+        float clamped1 = Clamp(-f1, f1, dotx);
+        float clamped2 = Clamp(-f2, f2, doty);
+        Scale(world.m.x, clamped1 - dotx, res);
+        ScaleAdd(res, world.m.y, clamped2 - doty, res);
+    } else {
+        Subtract(WorldXfm().v, v1, res);
+        res.z = 0;
+        float lensq = LengthSquared(res);
+        if (lensq <= f1 * f1)
+            res.Zero();
+        else
+            res *= 1.0f - (f1 / sqrtf(lensq));
+    }
+}

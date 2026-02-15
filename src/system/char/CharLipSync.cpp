@@ -218,7 +218,7 @@ void CharLipSync::Generator::RemoveViseme(int visemeIdx) {
             int j = 0;
             int count = lipSync->mData[cur++];
             // For each viseme entry in this frame
-            if (count != 0) {
+            if (count > 0) {
                 do {
                     // Adjust indices for visemes after the removed one
                     if (lipSync->mData[cur] >= visemeIdx) {
@@ -246,6 +246,9 @@ CharLipSync *CharLipSync::FindLipSyncForSound(Sound *sound) {
     }
     return nullptr;
 }
+
+CharLipSync::PlayBack::PlayBack()
+    : mLipSync(nullptr), mClips(nullptr), mIndex(0), mOldIndex(0), mFrame(-1) {}
 
 void CharLipSync::PlayBack::Set(CharLipSync *lipsync, ObjPtr<ObjectDir> clips) {
     mClips = clips;

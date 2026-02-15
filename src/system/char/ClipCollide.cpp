@@ -194,7 +194,8 @@ void ClipCollide::TestClips() {
     if (!mWaypoint || !mChar)
         return;
     for (ObjDirItr<CharClip> it(Clips(), true); it != 0; ++it) {
-        if (ValidClip(it)) {
+        auto _tmp0 = ValidClip(it);
+        if (_tmp0) {
             const char *directions[4] = { "front", "back", "left", "right" };
             for (int i = 0; i < 4; i++) {
                 mPosition = directions[i];

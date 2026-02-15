@@ -26,7 +26,7 @@ END_PROPSYNCS
 BEGIN_SAVES(CharBlendBone)
     SAVE_REVS(4, 0)
     SAVE_SUPERCLASS(Hmx::Object)
-    bs >> mTargets;
+    bs << mTargets;
     bs << mSrc1;
     bs << mSrc2;
     bs << mTransX;
@@ -58,9 +58,9 @@ BEGIN_LOADS(CharBlendBone)
     ASSERT_REVS(4, 0)
     MILO_ASSERT(d.rev > 2, 0x66);
     LOAD_SUPERCLASS(Hmx::Object)
-    bs >> mTargets;
-    bs >> mSrc1;
-    bs >> mSrc2;
+    d >> mTargets;
+    d >> mSrc1;
+    d >> mSrc2;
     d >> mTransX;
     d >> mTransY;
     d >> mTransZ;
@@ -126,6 +126,21 @@ CharBlendBone::ConstraintSystem::ConstraintSystem(Hmx::Object *o)
 BinStream &operator>>(BinStream &bs, CharBlendBone::ConstraintSystem &cs) {
     bs >> cs.mTarget;
     bs >> cs.mWeight;
+    return bs;
+}
+
+BinStream &operator>>(BinStreamRev &bsrev, ObjVector<CharBlendBone::ConstraintSystem> &vec) {
+    BinStream &bs = bsrev.stream;
+    int count;
+    bs.ReadEndian(&count, 4);
+    vec.resize(count);
+
+    CharBlendBone::ConstraintSystem *cs = vec.begin();
+    while (cs != vec.end()) {
+        bs >> *cs;
+        cs++;
+    }
+
     return bs;
 }
 
