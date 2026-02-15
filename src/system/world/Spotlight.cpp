@@ -541,7 +541,12 @@ void Spotlight::SetFlareIsBillboard(bool b) {
     UpdateFlare();
 }
 
-void Spotlight::SetColor(int packed) { SetColorIntensity(packed, Intensity()); }
+void Spotlight::SetColor(int packed) {
+    Hmx::Color color;
+    color.Unpack(packed);
+    color.alpha = 1.0f;
+    SetColorIntensity(color, Intensity());
+}
 void Spotlight::SetIntensity(float f) { SetColorIntensity(Color(), f); }
 
 void Spotlight::SetColorIntensity(const Hmx::Color &c, float f) {

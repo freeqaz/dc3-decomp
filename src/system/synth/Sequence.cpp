@@ -219,12 +219,12 @@ BEGIN_LOADS(WaitSeq)
     bs >> rev;
     if (rev > 2) {
         MILO_NOTIFY("Can't load new WaitSeq");
-    } else {
-        Sequence::Load(bs);
-        bs >> mAvgWaitSecs;
-        if (rev >= 2) {
-            bs >> mWaitSpread;
-        }
+        return;
+    }
+    Sequence::Load(bs);
+    bs >> mAvgWaitSecs;
+    if (rev >= 2) {
+        bs >> mWaitSpread;
     }
 END_LOADS
 

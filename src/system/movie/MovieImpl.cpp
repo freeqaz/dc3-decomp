@@ -19,7 +19,10 @@ bool MovieImpl::BeginFromFile(
 }
 
 void MovieImpl::Save(BinStream *stream) {
-    MILO_ASSERT(stream, 0x30);
+    if (!stream) {
+        TheDebugFailer
+            << MakeString(kAssertStr, "MovieImpl.cpp", 0x30, "stream");
+    }
     if (stream->Cached()) {
         MILO_FAIL("cached save not implemented for stub movie implementation");
     }

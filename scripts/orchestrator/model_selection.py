@@ -112,14 +112,11 @@ def get_escalation_reason(func: dict[str, Any], new_model: str) -> str:
 from .config import MODEL_REGISTRY
 
 MODEL_MAPS = {
-    "anthropic": {
+    backend: {
         name: info["model_id"]
-        for name, info in MODEL_REGISTRY.get("anthropic", {}).items()
-    },
-    "openrouter": {
-        name: info["model_id"]
-        for name, info in MODEL_REGISTRY.get("openrouter", {}).items()
-    },
+        for name, info in models.items()
+    }
+    for backend, models in MODEL_REGISTRY.items()
 }
 
 # Backward compatibility: derive COST_TABLES from registry token rates

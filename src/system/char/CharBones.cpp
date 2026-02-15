@@ -237,6 +237,57 @@ void CharBones::ScaleAdd(CharClip *clip, float f1, float f2, float f3) {
     clip->ScaleAdd(*this, f1, f2, f3);
 }
 
+void CharBones::ScaleDown(CharBones &dst, float f) const {
+    const Bone *bone = mBones.begin();
+    if (bone == mBones.end())
+        return;
+    if (f == 0.0f)
+        return;
+
+    // POS + SCALE (both Vector3, contiguous)
+    Vector3 *pos = (Vector3 *)(mStart + mOffsets[TYPE_POS]);
+    for (int i = mCounts[TYPE_POS]; i < mCounts[TYPE_QUAT]; i++, pos++, bone++) {
+        int off = dst.FindOffset(bone->name);
+        if (off < 0) {
+            TestDstComplain(bone->name);
+            continue;
+        }
+        Vector3 *dp = (Vector3 *)(dst.mStart + off);
+        float w = bone->weight * f;
+        dp->x -= pos->x * w;
+        dp->y -= pos->y * w;
+        dp->z -= pos->z * w;
+    }
+
+    // QUAT
+    Hmx::Quat *quat = (Hmx::Quat *)(mStart + mOffsets[TYPE_QUAT]);
+    for (int i = mCounts[TYPE_QUAT]; i < mCounts[TYPE_ROTX]; i++, quat++, bone++) {
+        int off = dst.FindOffset(bone->name);
+        if (off < 0) {
+            TestDstComplain(bone->name);
+            continue;
+        }
+        Hmx::Quat *dq = (Hmx::Quat *)(dst.mStart + off);
+        float w = bone->weight * f;
+        dq->x += quat->x * -w;
+        dq->y += quat->y * -w;
+        dq->z += quat->z * -w;
+        dq->w += quat->w * -w;
+    }
+
+    // ROTX + ROTY + ROTZ (all float, contiguous)
+    float *ang = (float *)(mStart + mOffsets[TYPE_ROTX]);
+    for (int i = mCounts[TYPE_ROTX]; i < mCounts[TYPE_END]; i++, ang++, bone++) {
+        int off = dst.FindOffset(bone->name);
+        if (off < 0) {
+            TestDstComplain(bone->name);
+            continue;
+        }
+        float *da = (float *)(dst.mStart + off);
+        *da -= *ang * (bone->weight * f);
+    }
+}
+
 CharBonesAlloc::~CharBonesAlloc() {
     MemFree(mStart);
 }

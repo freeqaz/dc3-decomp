@@ -107,7 +107,9 @@ from orchestrator.config import (
     get_token_budget,
     get_available_models,
     _get_openrouter_api_key,
+    _get_zai_api_key,
     requires_openrouter,
+    requires_zai,
     TOKEN_BUDGETS,
 )
 
@@ -155,14 +157,18 @@ def parse_manifest_timestamp(timestamp_str: str) -> Optional[datetime]:
 def validate_model_backend(model: Optional[str]) -> None:
     """Validate model is usable with current configuration.
 
-    Exits with clear error if an OpenRouter-only model is specified
-    but OPENROUTER_API_KEY is not configured.
+    Exits with clear error if a backend-specific model is specified
+    but the required API key is not configured.
 
     Args:
         model: Model tier (may be None if using auto-selection)
     """
     if not model:
         return
+    if requires_zai(model) and not _get_zai_api_key():
+        print(f"Error: Model '{model}' requires Z.AI.")
+        print("Create .env.zai with ZAI_API_KEY, or set it in environment.")
+        sys.exit(1)
     if requires_openrouter(model) and not _get_openrouter_api_key():
         print(f"Error: Model '{model}' requires OpenRouter.")
         print("Set OPENROUTER_API_KEY in .env or environment.")
@@ -520,25 +526,28 @@ def cmd_info(args):
     backend = get_backend()
 
     if args.json:
-        # JSON output
+        # JSON output — show models from all backends
         models_info = []
-        for model_name in sorted(TOKEN_BUDGETS[backend].keys()):
-            try:
-                model_id = get_model_id(model_name)
-                thinking_tokens = get_token_budget(model_name)
-                cost = get_model_cost(model_name)
-                models_info.append({
-                    "name": model_name,
-                    "model_id": model_id,
-                    "thinking_tokens": thinking_tokens,
-                    "cost_per_function_usd": cost,
-                })
-            except KeyError:
-                pass  # Skip models not available for this backend
+        for be, be_models in TOKEN_BUDGETS.items():
+            for model_name in sorted(be_models.keys()):
+                try:
+                    model_id = get_model_id(model_name)
+                    thinking_tokens = get_token_budget(model_name)
+                    cost = get_model_cost(model_name)
+                    models_info.append({
+                        "name": model_name,
+                        "model_id": model_id,
+                        "backend": be,
+                        "thinking_tokens": thinking_tokens,
+                        "cost_per_function_usd": cost,
+                    })
+                except KeyError:
+                    pass
 
         info = {
             "backend": backend,
             "openrouter_configured": bool(_get_openrouter_api_key()),
+            "zai_configured": bool(_get_zai_api_key()),
             "models": models_info,
         }
         print(json.dumps(info, indent=2))
@@ -549,10 +558,9 @@ def cmd_info(args):
     print("Orchestrator Backend Information")
     print(f"{'='*70}\n")
 
-    print(f"Current Backend: {backend.upper()}")
+    print(f"Default Backend: {backend.upper()}")
 
     if backend == "openrouter":
-        # Show masked API key
         api_key = _get_openrouter_api_key()
         if api_key:
             masked_key = api_key[:10] + "..." + api_key[-10:]
@@ -560,32 +568,36 @@ def cmd_info(args):
         else:
             print("OpenRouter API Key: NOT CONFIGURED")
 
-    print(f"\nAvailable Models ({len(TOKEN_BUDGETS[backend])} total):\n")
+    # Show Z.AI status
+    zai_key = _get_zai_api_key()
+    if zai_key:
+        masked_key = zai_key[:10] + "..." + zai_key[-10:]
+        print(f"Z.AI API Key: {masked_key} (auto-routes for glm-* models)")
+    else:
+        print("Z.AI: not configured (.env.zai not found)")
 
-    # Display models grouped by thinking token budget
-    models_by_tokens = {}
-    for model_name in sorted(TOKEN_BUDGETS[backend].keys()):
-        thinking_tokens = get_token_budget(model_name)
-        if thinking_tokens not in models_by_tokens:
-            models_by_tokens[thinking_tokens] = []
-        models_by_tokens[thinking_tokens].append(model_name)
+    # Show models from all backends
+    all_models = get_available_models("all")
+    print(f"\nAvailable Models ({len(all_models)} total):\n")
 
-    # Display in descending order by thinking tokens
-    for thinking_tokens in sorted(models_by_tokens.keys(), reverse=True):
-        for model_name in sorted(models_by_tokens[thinking_tokens]):
-            try:
-                model_id = get_model_id(model_name)
-                cost = get_model_cost(model_name)
+    from orchestrator.config import MODEL_REGISTRY, estimate_per_function_cost
+    for be_name, be_models in MODEL_REGISTRY.items():
+        if not be_models:
+            continue
+        print(f"  [{be_name}]")
+        for model_name in sorted(be_models.keys()):
+            info = be_models[model_name]
+            model_id = info["model_id"]
+            thinking_tokens = info["token_budget"]
+            cost = estimate_per_function_cost(info["prompt_rate"], info["completion_rate"])
 
-                # Format model display
-                model_display = f"{model_name:20s}"
-                model_id_display = f"{model_id:35s}"
-                thinking_display = f"{thinking_tokens:5d} tokens"
-                cost_display = f"${cost:7.2f}/func"
+            model_display = f"{model_name:20s}"
+            model_id_display = f"{model_id:35s}"
+            thinking_display = f"{thinking_tokens:5d} tokens"
+            cost_display = f"${cost:7.2f}/func"
 
-                print(f"  {model_display} → {model_id_display}  ({thinking_display}, {cost_display})")
-            except KeyError:
-                pass  # Skip models not available
+            print(f"    {model_display} → {model_id_display}  ({thinking_display}, {cost_display})")
+        print()
 
     print()
 
@@ -1253,8 +1265,8 @@ def main():
         epilog="Example: ./bin/orchestrate single '?Load@CharClip@@UAAXAAVBinStream@@@Z' --model sonnet"
     )
     p_single.add_argument("symbol", help="Mangled function symbol (copy from progress report)")
-    # Model choices generated dynamically from registry (supports all backends)
-    available_models = sorted(set(get_available_models("anthropic") + get_available_models("openrouter")))
+    # Model choices generated dynamically from registry (all backends)
+    available_models = get_available_models("all")
     p_single.add_argument("--model", choices=available_models, help="Force specific model (default: auto-select)")
     p_single.add_argument("--quiet", "-q", action="store_true", help="Suppress all output")
     p_single.add_argument("--verbose", "-v", action="store_true", help="Full agent output (tool args, results, text)")

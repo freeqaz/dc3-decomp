@@ -17,6 +17,13 @@ if not os.getenv("GHIDRA_INSTALL_DIR"):
         from dotenv import load_dotenv
         load_dotenv(env_file)
 
+# Always load .env.zai if it exists (provides ZAI_* credentials).
+# This lets `--model glm-5` work without manually sourcing anything.
+_zai_env_file = Path(__file__).resolve().parent.parent.parent / ".env.zai"
+if _zai_env_file.exists():
+    from dotenv import load_dotenv as _load_dotenv_zai
+    _load_dotenv_zai(_zai_env_file, override=False)  # Don't override existing env vars
+
 # Backend selection (read from environment, support both .env and command-line)
 # Note: These are evaluated each time they're accessed to support runtime env var changes
 def _get_openrouter_enabled() -> bool:
@@ -35,12 +42,31 @@ def _get_openrouter_base_url() -> str:
     """
     return os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api")
 
+def _get_zai_enabled() -> bool:
+    """Check if Z.AI backend is enabled via environment variable."""
+    return os.getenv("USE_ZAI", "false").lower() == "true"
+
+def _get_zai_api_key() -> str:
+    """Get Z.AI API key from environment."""
+    return os.getenv("ZAI_API_KEY", "")
+
+def _get_zai_base_url() -> str:
+    """Get Z.AI base URL from environment."""
+    return os.getenv("ZAI_BASE_URL", "https://api.z.ai/api/anthropic")
+
+def _get_zai_timeout() -> str:
+    """Get Z.AI API timeout from environment."""
+    return os.getenv("ZAI_API_TIMEOUT_MS", "3000000")
+
 # For backward compatibility, also expose as properties
 # These allow code to do: from config import OPENROUTER_API_KEY
 OPENROUTER_API_KEY = _get_openrouter_api_key()
 OPENROUTER_BASE_URL = _get_openrouter_base_url()
+ZAI_API_KEY = _get_zai_api_key()
+ZAI_BASE_URL = _get_zai_base_url()
+ZAI_TIMEOUT = _get_zai_timeout()
 
-BackendType = Literal["anthropic", "openrouter"]
+BackendType = Literal["anthropic", "openrouter", "zai"]
 
 # ============================================================================
 # CENTRAL MODEL REGISTRY - Single source of truth for all models
@@ -211,6 +237,21 @@ MODEL_REGISTRY = {
             "completion_rate": 0.50,
         },
     },
+    "zai": {
+        # Z.AI backend - GLM models optimized for code/reasoning
+        "glm-4.7": {
+            "model_id": "glm-4.7",
+            "token_budget": 30000,
+            "prompt_rate": 0.40,
+            "completion_rate": 1.50,
+        },
+        "glm-5": {
+            "model_id": "glm-5",
+            "token_budget": 35000,
+            "prompt_rate": 0.50,
+            "completion_rate": 2.00,
+        },
+    },
 }
 
 
@@ -218,11 +259,17 @@ def get_available_models(backend: Optional[str] = None) -> list[str]:
     """Get list of available model names for a backend.
 
     Args:
-        backend: Backend name ("anthropic" or "openrouter"). If None, uses current backend.
+        backend: Backend name ("anthropic", "openrouter", or "zai").
+                 If None, uses current backend. Use "all" for all backends.
 
     Returns:
         Sorted list of model names available for the backend
     """
+    if backend == "all":
+        all_models: set[str] = set()
+        for models in MODEL_REGISTRY.values():
+            all_models.update(models.keys())
+        return sorted(all_models)
     if backend is None:
         backend = get_backend()
     return sorted(MODEL_REGISTRY.get(backend, {}).keys())
@@ -250,19 +297,23 @@ def _derive_openrouter_only_models() -> set[str]:
     return all_openrouter_models - anthropic_models
 
 
+def _derive_zai_only_models() -> set[str]:
+    """Derive Z.AI-only models from registry (don't maintain separately)."""
+    # All models in zai backend are exclusive to Z.AI
+    return set(MODEL_REGISTRY.get("zai", {}).keys())
+
+
 # Backward compatibility: derive these from registry
 OPENROUTER_ONLY_MODELS = _derive_openrouter_only_models()
+ZAI_ONLY_MODELS = _derive_zai_only_models()
 
 # Backward compatibility: derive from registry
 TOKEN_BUDGETS = {
-    "anthropic": {
+    backend: {
         name: info["token_budget"]
-        for name, info in MODEL_REGISTRY.get("anthropic", {}).items()
-    },
-    "openrouter": {
-        name: info["token_budget"]
-        for name, info in MODEL_REGISTRY.get("openrouter", {}).items()
-    },
+        for name, info in models.items()
+    }
+    for backend, models in MODEL_REGISTRY.items()
 }
 
 
@@ -278,8 +329,24 @@ def requires_openrouter(model: str) -> bool:
     return model in OPENROUTER_ONLY_MODELS
 
 
+def requires_zai(model: str) -> bool:
+    """Check if model requires Z.AI backend.
+
+    Args:
+        model: Model name (e.g., "glm-4.7", "glm-5")
+
+    Returns:
+        True if model is only available via Z.AI
+    """
+    return model in ZAI_ONLY_MODELS
+
+
 def get_backend(model: str = None) -> BackendType:
     """Get current backend type.
+
+    Returns "zai" if:
+    - A Z.AI-only model is specified (glm-4.7, glm-5), OR
+    - Z.AI is enabled via USE_ZAI=true and API key is configured
 
     Returns "openrouter" if:
     - An OpenRouter-only model is specified, OR
@@ -291,15 +358,23 @@ def get_backend(model: str = None) -> BackendType:
     configuration changes (e.g., USE_OPENROUTER=true on command line).
 
     Args:
-        model: Optional model name. If an OpenRouter-only model, auto-selects OpenRouter.
+        model: Optional model name. If a backend-specific model, auto-selects that backend.
 
     Returns:
-        BackendType: Either "openrouter" or "anthropic"
+        BackendType: Either "zai", "openrouter", or "anthropic"
     """
+    # Auto-select Z.AI for Z.AI-only models (highest priority)
+    if model and requires_zai(model):
+        return "zai"
     # Auto-select OpenRouter for OpenRouter-only models
     if model and requires_openrouter(model):
         return "openrouter"
-    return "openrouter" if _get_openrouter_enabled() and _get_openrouter_api_key() else "anthropic"
+    # Check explicit backend enablement (Z.AI takes priority over OpenRouter)
+    if _get_zai_enabled() and _get_zai_api_key():
+        return "zai"
+    if _get_openrouter_enabled() and _get_openrouter_api_key():
+        return "openrouter"
+    return "anthropic"
 
 
 def get_token_budget(model_tier: str) -> int:

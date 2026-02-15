@@ -50,6 +50,7 @@ logs/
 ghidra_projects/
 .env
 /notes/
+.env.*
 
 # Doxygen output
 doxygen/

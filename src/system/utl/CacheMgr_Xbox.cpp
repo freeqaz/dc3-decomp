@@ -29,26 +29,26 @@ CacheMgrXbox::~CacheMgrXbox() {}
 
 void CacheMgrXbox::Poll() {
     switch (GetOp()) {
-    case kOpNone:
-        break;
-    case kOpSearch:
-        PollSearch();
-        break;
-    case kOpChoose:
-        PollChoose();
-        break;
-    case kOpMount:
-        PollMount();
-        break;
-    case kOpUnmount:
-        PollUnmount();
-        break;
+    default:
+        TheDebug.Fail(MakeString("Unknown OpType encountered in CacheMgr::Poll()\n"), nullptr);
+        return;
     case kOpDelete:
         PollDelete();
-        break;
-    default:
-        MILO_FAIL("Unknown OpType encountered in CacheMgr::Poll()\n");
-        break;
+        return;
+    case kOpUnmount:
+        PollUnmount();
+        return;
+    case kOpMount:
+        PollMount();
+        return;
+    case kOpChoose:
+        PollChoose();
+        return;
+    case kOpSearch:
+        PollSearch();
+        return;
+    case kOpNone:
+        return;
     }
 }
 

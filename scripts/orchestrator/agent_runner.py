@@ -41,8 +41,13 @@ from .config import (
     _get_openrouter_enabled,
     _get_openrouter_api_key,
     _get_openrouter_base_url,
+    _get_zai_enabled,
+    _get_zai_api_key,
+    _get_zai_base_url,
+    _get_zai_timeout,
     get_token_budget,
     requires_openrouter,
+    requires_zai,
 )
 from .model_selection import get_model_id
 
@@ -123,14 +128,26 @@ class AgentRunner:
 
         Returns environment variables for API authentication.
         SDK auto-detects OAuth credentials, but we still need to set
-        OpenRouter environment variables when that backend is enabled
-        or when the model requires OpenRouter.
+        backend-specific environment variables when that backend is enabled
+        or when the model requires a specific backend.
         """
         env: dict[str, str] = {}
 
+        use_zai = _get_zai_enabled() or (model and requires_zai(model))
         use_openrouter = _get_openrouter_enabled() or (model and requires_openrouter(model))
 
-        if use_openrouter and _get_openrouter_api_key():
+        # Z.AI takes priority over OpenRouter
+        if use_zai and _get_zai_api_key():
+            env["ANTHROPIC_BASE_URL"] = _get_zai_base_url()
+            env["ANTHROPIC_AUTH_TOKEN"] = _get_zai_api_key()
+            env["ANTHROPIC_API_KEY"] = ""  # Must be explicitly empty
+            env["API_TIMEOUT_MS"] = _get_zai_timeout()
+
+            if model and requires_zai(model):
+                zai_model_id = get_model_id(model)
+                env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = zai_model_id
+
+        elif use_openrouter and _get_openrouter_api_key():
             env["ANTHROPIC_BASE_URL"] = _get_openrouter_base_url()
             env["ANTHROPIC_AUTH_TOKEN"] = _get_openrouter_api_key()
             env["ANTHROPIC_API_KEY"] = ""  # Must be explicitly empty
@@ -149,7 +166,7 @@ class AgentRunner:
         if not SDK_AVAILABLE:
             raise RuntimeError("claude-agent-sdk not installed")
 
-        if requires_openrouter(config.model):
+        if requires_zai(config.model) or requires_openrouter(config.model):
             cli_model = "sonnet"
         else:
             cli_model = get_model_id(config.model)
@@ -478,11 +495,15 @@ class AgentRunner:
 
         options = self.build_sdk_options(config)
 
+        use_zai = _get_zai_enabled() or requires_zai(config.model)
         use_openrouter = _get_openrouter_enabled() or requires_openrouter(config.model)
-        if config.verbose >= 2 and use_openrouter and _get_openrouter_api_key():
-            actual_model = get_model_id(config.model)
+
+        if config.verbose >= 2:
             pfx = _clr.colored_prefix(config.session_id)
-            print(f"{pfx}Using OpenRouter backend at {_get_openrouter_base_url()}")
+            if use_zai and _get_zai_api_key():
+                print(f"{pfx}Using Z.AI backend at {_get_zai_base_url()}")
+            elif use_openrouter and _get_openrouter_api_key():
+                print(f"{pfx}Using OpenRouter backend at {_get_openrouter_base_url()}")
 
         if config.verbose >= 1:
             actual_model = get_model_id(config.model)
@@ -534,8 +555,8 @@ class AgentRunner:
 
     async def _run_process(self, config: AgentRunConfig) -> dict[str, Any]:
         """Run Claude CLI agent as subprocess."""
-        # OpenRouter-only models route through ANTHROPIC_DEFAULT_SONNET_MODEL
-        if requires_openrouter(config.model):
+        # Backend-specific models route through ANTHROPIC_DEFAULT_SONNET_MODEL
+        if requires_zai(config.model) or requires_openrouter(config.model):
             cli_model = "sonnet"
         else:
             cli_model = get_model_id(config.model)
@@ -556,8 +577,20 @@ class AgentRunner:
 
         env = {**os.environ, **self.build_env(config.model)}
 
+        use_zai = _get_zai_enabled() or requires_zai(config.model)
         use_openrouter = _get_openrouter_enabled() or requires_openrouter(config.model)
-        if use_openrouter and _get_openrouter_api_key():
+
+        # Z.AI takes priority
+        if use_zai and _get_zai_api_key():
+            env["ANTHROPIC_BASE_URL"] = _get_zai_base_url()
+            env["ANTHROPIC_API_KEY"] = _get_zai_api_key()
+            env["API_TIMEOUT_MS"] = _get_zai_timeout()
+            if requires_zai(config.model):
+                env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = get_model_id(config.model)
+            if config.verbose >= 2:
+                pfx = _clr.colored_prefix(config.session_id)
+                print(f"{pfx}Using Z.AI backend at {_get_zai_base_url()}")
+        elif use_openrouter and _get_openrouter_api_key():
             env["ANTHROPIC_BASE_URL"] = _get_openrouter_base_url()
             env["ANTHROPIC_API_KEY"] = _get_openrouter_api_key()
             if requires_openrouter(config.model):

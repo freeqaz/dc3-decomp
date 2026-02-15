@@ -414,7 +414,7 @@ void CamShotCrowd::AddCrowdChars() {
     if (selectedCrowd.empty()) {
         MILO_NOTIFY("No selected crowd members in this crowd");
     } else {
-        AddCrowdChars(selectedCrowd);
+        AddCrowdChars(&selectedCrowd);
     }
 }
 
@@ -426,7 +426,7 @@ void CamShotCrowd::SetCrowdChars() {
         MILO_NOTIFY("No selected crowd members in this crowd");
     } else {
         ClearCrowdChars();
-        AddCrowdChars(selectedCrowd);
+        AddCrowdChars(&selectedCrowd);
     }
 }
 
@@ -454,7 +454,7 @@ void CamShotCrowd::GetSelectedCrowd(
 }
 
 void CamShotCrowd::AddCrowdChars(
-    const std::list<std::pair<RndMultiMesh *, std::list<RndMultiMesh::Instance>::iterator> > &
+    const std::list<std::pair<RndMultiMesh *, std::list<RndMultiMesh::Instance>::iterator> > *
         crowdChars
 ) {
     if (!mCrowd) {
@@ -462,7 +462,7 @@ void CamShotCrowd::AddCrowdChars(
         return;
     }
 
-    if (crowdChars.empty()) {
+    if (crowdChars->empty()) {
         mCrowd->Set3DCharAll();
     } else {
         // Note: This implementation is incomplete in DC3. The proper implementation would require

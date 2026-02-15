@@ -38,7 +38,17 @@ from .database import (
 )
 from .worktree_pool import WorktreePool
 from .model_selection import select_model, should_retry, get_escalation_reason, get_model_id, compute_cost_from_tokens
-from .config import requires_openrouter, _get_openrouter_enabled, _get_openrouter_api_key, _get_openrouter_base_url
+from .config import (
+    requires_openrouter,
+    requires_zai,
+    _get_openrouter_enabled,
+    _get_openrouter_api_key,
+    _get_openrouter_base_url,
+    _get_zai_enabled,
+    _get_zai_api_key,
+    _get_zai_base_url,
+    _get_zai_timeout,
+)
 from .patch_applier import PatchApplier
 from .rb3_pairing import get_rb3_source_for_unit
 
@@ -246,9 +256,9 @@ class DecompOrchestrator:
         Raises RuntimeError if quota is exhausted.
         """
         log = logger or self.logger
-        # OpenRouter-only models (e.g. deepseek) route through ANTHROPIC_DEFAULT_SONNET_MODEL,
+        # Backend-specific models (e.g. deepseek, glm-4.7) route through ANTHROPIC_DEFAULT_SONNET_MODEL,
         # so tell the CLI to use "sonnet" as the model name
-        cli_model = "sonnet" if requires_openrouter(model) else get_model_id(model)
+        cli_model = "sonnet" if (requires_zai(model) or requires_openrouter(model)) else get_model_id(model)
 
         agent_home = Path(os.environ.get("AGENT_HOME", "/home/free/code/milohax/dc3-decomp/agent-home"))
         agent_home.mkdir(parents=True, exist_ok=True)
@@ -260,8 +270,17 @@ class DecompOrchestrator:
         }
 
         # Auth for CLI subprocess (not SDK - CLI needs ANTHROPIC_API_KEY, not AUTH_TOKEN)
+        use_zai = _get_zai_enabled() or requires_zai(model)
         use_openrouter = _get_openrouter_enabled() or requires_openrouter(model)
-        if use_openrouter and _get_openrouter_api_key():
+
+        # Z.AI takes priority
+        if use_zai and _get_zai_api_key():
+            env["ANTHROPIC_BASE_URL"] = _get_zai_base_url()
+            env["ANTHROPIC_API_KEY"] = _get_zai_api_key()
+            env["API_TIMEOUT_MS"] = _get_zai_timeout()
+            if requires_zai(model):
+                env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = get_model_id(model)
+        elif use_openrouter and _get_openrouter_api_key():
             env["ANTHROPIC_BASE_URL"] = _get_openrouter_base_url()
             env["ANTHROPIC_API_KEY"] = _get_openrouter_api_key()
             if requires_openrouter(model):
