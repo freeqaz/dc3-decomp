@@ -397,7 +397,10 @@ The crashes will tell us exactly what matters and what doesn't.
 
 4. **dtk PR for symbol globalization** — The 96 `lbl_*` unresolved symbols
    are the biggest link-time blocker for a clean link. But the `/FORCE` link
-   might work well enough to skip this for initial testing.
+   might work well enough to skip this for initial testing. See also:
+   [LBL_SYMBOL_MATCHING.md](LBL_SYMBOL_MATCHING.md) for a two-phase plan to
+   improve `lbl_` symbol matching in objdiff (Phase 1: map-based renaming,
+   Phase 2: positional matching for function-local statics).
 
 5. **Build XEXP patch tool** — For iterative debugging, we need a way to
    patch individual functions into the original XEX. This is the gap between
@@ -412,3 +415,4 @@ The crashes will tell us exactly what matters and what doesn't.
 - [Runtime Validation Ideas](../sessions/2026-02-08-onbeat-differential-runtime-validation-ideas.md) — differential testing design
 - [XEX Format Reference](../reference/FREE60_XEX_FORMAT.md) — XEX2 header structure
 - [Compiler Instrumentation](compiler-instrumentation.md) — register allocator research (DONE)
+- [LBL Symbol Matching](LBL_SYMBOL_MATCHING.md) — plan to fix `lbl_` symbol matching for function-local statics (match% accuracy)

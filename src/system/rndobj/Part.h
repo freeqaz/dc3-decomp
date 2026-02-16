@@ -30,7 +30,7 @@ public:
     RndParticle *prev; // 0x58
     RndParticle *next; // 0x5c
     int unk60;
-    int unk64;
+    float unk64;
 };
 
 // size 0xd0
@@ -50,8 +50,8 @@ public:
     float bubblePhase; // 0xa4
     float RPF; // 0xa8
     float swingArmVel; // 0xac
-    int unkb0, unkb4, unkb8, unkbc, unkc0, unkc4;
-    int unkc8, unkcc;
+    float unkb0, unkb4, unkb8, unkbc, unkc0, unkc4;
+    float unkc8, unkcc;
 };
 
 class ParticleCommonPool {

@@ -2,16 +2,19 @@
 #include "math/Geo.h"
 #include "math/Rand.h"
 #include "math/Rot.h"
+#include "math/Trig.h"
 #include "obj/Data.h"
 #include "obj/DataFunc.h"
 #include "obj/Object.h"
 #include "os/System.h"
+#include "os/Timer.h"
 #include "rndobj/Anim.h"
 #include "rndobj/Draw.h"
 #include "rndobj/Mesh.h"
 #include "rndobj/Poll.h"
 #include "rndobj/Trans.h"
 #include "utl/BinStream.h"
+#include <cmath>
 
 PartOverride gNoPartOverride;
 ParticleCommonPool *gParticlePool;
@@ -760,7 +763,313 @@ void RndParticleSys::UpdateRelativeXfm() {
     }
 }
 
-void RndParticleSys::MoveParticles(float dt, float frameSpan) {}
+// TODO: 69.3% match (AT_LIMIT). 2340-byte function, implemented from 0.1% stub.
+//
+// Remaining diff breakdown (614 instructions total):
+//   - r29<->r30 register swap: 117 instructions. Target uses r30 for 'this',
+//     our compiler picks r29. Unfixable compiler register allocation choice.
+//   - 111 deletes: target has dead stores to stack slots 0x60/0x64 where it
+//     caches intermediate pointers (addi rX, rBase, offset; stw rX, 0x60, r31).
+//     Our compiler optimizes these away. Also target caches &p->pos in r25 and
+//     &p->vel in r26 as dedicated pointer registers throughout the inner loop.
+//   - 2 diff_ops remaining:
+//     (1) idx 126: bounce WorldXfm call uses bl (call) in target vs b (branch)
+//         in ours. Target reuses a shared branch point for the two WorldXfm calls.
+//     (2) idx 340: attractor strength==0.015625 check uses beq (branch-if-equal
+//         to special case) in target vs bne (skip special case) in ours. Target
+//         also has dead code after (li 0; clrlwi. 0; beq - always-taken branch),
+//         suggesting original code had a boolean variable for the condition.
+//   - fmadds vs fmuls+fadds: our compiler fuses multiply-add in position update,
+//     bounce reflection (fnmsubs vs fmuls+fsubs), and basic particle color/size.
+//     Target uses separate instructions. Hard to prevent without volatile temps.
+//   - Stack frame: target 0x1c0, ours larger. Target saves from r14 (savegprlr_14),
+//     ours from r17 (3 fewer callee-saved GPRs).
+//
+// Potential improvements to investigate:
+//   - Restructure bounce WorldXfm calls to match target's shared-branch pattern
+//   - Try a bool variable for the attractor strength check to match dead code
+//   - Volatile or separate-statement tricks to prevent fmadds fusion
+//   - Declaration order changes to shift r14-r16 register assignment
+//
+// RndFancyParticle offset note: header comments are wrong by -8 bytes.
+// RndParticle is 0x68 bytes (not 0x60), so RndFancyParticle fields start at 0x68.
+// E.g. growFrame comment says 0x60 but actual compiled offset is 0x68,
+// midcolFrame comment says 0x80 but actual is 0x88, etc.
+void RndParticleSys::MoveParticles(float dt, float frameSpan) {
+    START_AUTO_TIMER("psysmove");
+
+    if (mActiveParticles == NULL || frameSpan == 0.0f)
+        return;
+
+    float oneOverThirty = 1.0f / 30.0f;
+
+    float dragFactor;
+    if (mDrag > 0.0f) {
+        dragFactor = std::pow(1.0f - mDrag, frameSpan * oneOverThirty);
+    } else {
+        dragFactor = 1.0f;
+    }
+
+    float rpmDragFactor;
+    if (mRotate && mRPMDrag > 0.0f) {
+        rpmDragFactor = std::pow(1.0f - mRPMDrag, frameSpan * oneOverThirty);
+    } else {
+        rpmDragFactor = 1.0f;
+    }
+
+    RndTransformable *bounce = mBounce;
+
+    // Force direction scaled by frameSpan
+    float forceZ_dt = mForceDir.z * frameSpan;
+    float forceY_dt = mForceDir.y * frameSpan;
+    float forceX_dt = mForceDir.x * frameSpan;
+
+    // Individual matrix components needed for fmadds sequence in pre-computation.
+    // Removing these and using mRelativeXfm.m.x.x etc. directly drops match by ~0.4%.
+    float m_yz = mRelativeXfm.m.y.z;
+    float m_xz = mRelativeXfm.m.x.z;
+    float m_yy = mRelativeXfm.m.y.y;
+    float m_xy = mRelativeXfm.m.x.y;
+    bool isBubble = mBubble;
+    bool isFancy = (mType == kFancy);
+    bool isRotate = mRotate;
+    float m_yx = mRelativeXfm.m.y.x;
+    float m_xx = mRelativeXfm.m.x.x;
+
+    // Pre-compute all 3 transformed force rows (target does this before bounce check).
+    // Row 2 uses mRelativeXfm.m.z directly (not cached into locals) to match target.
+    float relForceRow0 =
+        m_xx * forceX_dt + m_xy * forceY_dt + m_xz * forceZ_dt;
+    float relForceRow1 =
+        m_yx * forceX_dt + m_yy * forceY_dt + m_yz * forceZ_dt;
+    float relForceRow2 =
+        mRelativeXfm.m.z.x * forceX_dt + mRelativeXfm.m.z.y * forceY_dt
+        + mRelativeXfm.m.z.z * forceZ_dt;
+
+    // TODO: target calls WorldXfm twice via a shared branch point (bl+b pattern).
+    // Our compiler generates a different call sequence (diff_op at idx 126).
+    float planeNx, planeNy, planeNz, planeD;
+    if (bounce != NULL) {
+        const Transform &bxf = bounce->WorldXfm();
+        planeNy = bxf.m.z.y;
+        planeNz = bxf.m.z.z;
+        planeNx = bxf.m.z.x;
+        const Transform &bxf2 = bounce->WorldXfm();
+        planeD = -(bxf2.v.x * planeNx + bxf2.v.z * planeNz + bxf2.v.y * planeNy);
+    }
+
+    RndParticle *p = mActiveParticles;
+    int endTile = mNumTilesTotal + mStartingTile;
+
+    if (p != NULL) {
+        float sixf = 6.0f;
+        float halfPi = 1.5707963705062866f;
+        float epsilon = 1.1920928955078125e-07f;
+        float magicStrength = 0.015625f;
+        float two = 2.0f;
+
+        do {
+            bool dead;
+            if (dt >= p->deathFrame || dt < p->birthFrame) {
+                dead = true;
+            } else {
+                dead = false;
+            }
+
+            if (dead) {
+                p = FreeParticle(p);
+            } else {
+                // UV tile animation
+                if (mAnimateUVs) {
+                    float tileTime = p->unk64 + frameSpan;
+                    p->unk64 = tileTime;
+                    if (p->unk60 < endTile && tileTime > mTileHoldTime) {
+                        int newTile = p->unk60 + 1;
+                        p->unk60 = newTile;
+                        if (newTile >= endTile) {
+                            if (mLoopUVAnim) {
+                                p->unk60 = mStartingTile;
+                            } else {
+                                p->unk60 = endTile - 1;
+                            }
+                        }
+                        p->unk64 = std::fmod(tileTime, mTileHoldTime);
+                    }
+                }
+
+                // Birth momentum (fancy only) - unkb8/unkbc/unkc0 are birth velocity xyz
+                if (isFancy && mBirthMomentum) {
+                    RndFancyParticle *fp = (RndFancyParticle *)p;
+                    float momentumScale = mBirthMomentumAmount * frameSpan * oneOverThirty;
+                    p->pos.x += momentumScale * fp->unkb8;
+                    p->pos.z += fp->unkc0 * momentumScale;
+                    p->pos.y += fp->unkbc * momentumScale;
+                }
+
+                // Position integration
+                // TODO: target uses fmuls+fadds (separate multiply then add) here,
+                // our compiler generates fmadds (fused multiply-add). This accounts
+                // for ~6 instruction differences in the inner loop.
+                p->pos.x += frameSpan * p->vel.x;
+                p->pos.y += p->vel.y * frameSpan;
+                p->pos.z += frameSpan * p->vel.z;
+
+                // Bounce plane reflection
+                if (bounce != NULL) {
+                    float dist = planeNx * p->pos.x + planeNy * p->pos.y + planeNz * p->pos.z
+                        + planeD;
+                    if (dist < 0.0f) {
+                        float velDotN =
+                            planeNy * p->vel.y + p->vel.x * planeNx + planeNz * p->vel.z;
+                        if (velDotN < 0.0f) {
+                            // TODO: target uses fmuls+fsubs (separate), our compiler
+                            // generates fnmsubs (fused negate-multiply-subtract).
+                            float reflect = velDotN * two;
+                            p->vel.z -= planeNz * reflect;
+                            p->vel.x -= reflect * planeNx;
+                            p->vel.y -= planeNy * reflect;
+                        }
+                    }
+                }
+
+                // Attractors
+                unsigned int numAttractors = mAttractors.size();
+                for (unsigned int i = 0; i < numAttractors; i++) {
+                    Attractor &a = mAttractors[i];
+                    RndTransformable *trans = a.mAttractor;
+                    if (trans != NULL) {
+                        const Transform &axf = trans->WorldXfm();
+                        float dz = axf.v.z - p->pos.z;
+                        float dy = axf.v.y - p->pos.y;
+                        float strength = a.mStrength;
+                        float dx = axf.v.x - p->pos.x;
+
+                        // TODO: target uses beq (to special case) + dead code after,
+                        // ours uses bne (skip special case). diff_op at idx 340.
+                        // Target dead code: li r11,0; clrlwi. r11,r11,24; beq (always taken).
+                        // Suggests original may have used a bool for this condition.
+                        if (strength == magicStrength) {
+                            dz = 0.0f;
+                            RndParticleSys *ps =
+                                dynamic_cast<RndParticleSys *>(a.mAttractor.Owner());
+                            if (ps != NULL) {
+                                const Transform &t1xf = a.mAttractor->WorldXfm();
+                                const Transform &t2xf = ps->WorldXfm();
+                                float relY = t2xf.v.y - t1xf.v.y;
+                                float relX = t2xf.v.x - t1xf.v.x;
+                                strength *= (relX * relX + relY * relY) + epsilon;
+                            }
+                        }
+
+                        float distSq =
+                            dy * dy + (dx * dx + dz * dz) + epsilon;
+                        float scale = (strength * frameSpan) / distSq;
+                        p->vel.z += scale * dz;
+                        p->vel.x += scale * dx;
+                        p->vel.y += scale * dy;
+                    }
+                }
+
+                p->vel.y += relForceRow1;
+                p->vel.x += relForceRow0;
+                p->vel.z += relForceRow2;
+
+                if (isFancy) {
+                    p->vel.y *= dragFactor;
+                    p->vel.z *= dragFactor;
+                    p->vel.x *= dragFactor;
+
+                    RndFancyParticle *fp = (RndFancyParticle *)p;
+
+                    // Bubble oscillation effect
+                    if (isBubble) {
+                        float sinVal =
+                            FastSin(fp->RPF * dt + fp->swingArmVel + halfPi);
+                        float bubbleScale = fp->RPF * sinVal * frameSpan;
+                        p->pos.x += fp->bubbleDir.z * bubbleScale;
+                        p->pos.y += fp->bubbleDir.w * bubbleScale;
+                        p->pos.z += fp->bubbleFreq * bubbleScale;
+                    }
+
+                    // RPM rotation and swing arm
+                    if (isRotate) {
+                        float rpmVel = fp->unkb0;
+                        p->angle += rpmVel * frameSpan;
+                        fp->unkb0 = rpmVel * rpmDragFactor;
+                        p->swingArm += fp->unkb4 * frameSpan;
+                    }
+
+                    // Fancy color: 2-phase Hermite-like blend (before/after midcolFrame).
+                    // Blend formula: colorScale = (1-t)*t*frameSpan*6 where t is normalized
+                    // time within the current phase. Phase 1 uses midcolVel, phase 2 uses colVel.
+                    float colorScale;
+                    float cr, cg, cb, ca;
+                    if (dt < fp->midcolFrame) {
+                        float t = (dt - p->birthFrame) * p->vel.w;
+                        colorScale = (1.0f - t) * t * frameSpan * sixf;
+                        ca = fp->midcolVel.alpha * colorScale;
+                        cb = fp->midcolVel.blue * colorScale;
+                        cg = fp->midcolVel.green * colorScale;
+                        cr = colorScale * fp->midcolVel.red;
+                    } else {
+                        float t = (dt - fp->midcolFrame) * fp->bubblePhase;
+                        colorScale = (1.0f - t) * t * frameSpan * sixf;
+                        ca = p->colVel.alpha * colorScale;
+                        cb = p->colVel.blue * colorScale;
+                        cg = p->colVel.green * colorScale;
+                        cr = p->colVel.red * colorScale;
+                    }
+
+                    // Clamp color channels to [0, 1] using fneg+fsel pattern
+                    float newR = cr + p->col.red;
+                    float newA = ca + p->col.alpha;
+                    float newB = cb + p->col.blue;
+                    float newG = cg + p->col.green;
+
+                    newR = (-newR >= 0.0f) ? 0.0f : newR;
+                    newA = (-newA >= 0.0f) ? 0.0f : newA;
+                    newB = (-newB >= 0.0f) ? 0.0f : newB;
+                    newG = (-newG >= 0.0f) ? 0.0f : newG;
+
+                    p->col.red = (newR - 1.0f >= 0.0f) ? 1.0f : newR;
+                    p->col.alpha = (newA - 1.0f >= 0.0f) ? 1.0f : newA;
+                    p->col.blue = (newB - 1.0f >= 0.0f) ? 1.0f : newB;
+                    p->col.green = (newG - 1.0f >= 0.0f) ? 1.0f : newG;
+
+                    // Fancy size: 3-phase (grow / sustain / shrink)
+                    float sizeVelRate, timeSince, invDuration;
+                    if (dt < fp->growFrame) {
+                        invDuration = fp->beginGrow;
+                        timeSince = dt - p->birthFrame;
+                        sizeVelRate = fp->growVel;
+                    } else if (dt < fp->shrinkFrame) {
+                        invDuration = fp->midGrow;
+                        timeSince = dt - fp->growFrame;
+                        sizeVelRate = p->sizeVel;
+                    } else {
+                        timeSince = dt - fp->shrinkFrame;
+                        invDuration = fp->endGrow;
+                        sizeVelRate = fp->shrinkVel;
+                    }
+                    float st = timeSince * invDuration;
+                    p->size +=
+                        sizeVelRate * ((1.0f - st) * st * frameSpan * sixf);
+                } else {
+                    // Basic particle: single-phase color/size update
+                    // TODO: same fmadds vs fmuls+fadds issue as position update
+                    float t = (dt - p->birthFrame) * p->pos.w;
+                    float scale = (1.0f - t) * t * frameSpan * sixf;
+                    p->size += p->sizeVel * scale;
+                    p->col.red += p->colVel.red * scale;
+                    p->col.alpha += p->colVel.alpha * scale;
+                    p->col.blue += p->colVel.blue * scale;
+                    p->col.green += p->colVel.green * scale;
+                }
+                p = p->next;
+            }
+        } while (p != NULL);
+    }
+}
 
 void RndParticleSys::CreateParticles(float f1, float f2, const Transform &tf) {
     if (f2 <= 0 || mNumActive >= mMaxParticles)

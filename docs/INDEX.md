@@ -90,6 +90,7 @@ Tool-specific deep docs live in subdirectories:
 | [plans/unicorn-runner-value.md](plans/unicorn-runner-value.md) | Unicorn value demonstration alongside objdiff/Ghidra |
 | [plans/unicorn-structural-probing.md](plans/unicorn-structural-probing.md) | Structural probing beyond yes/no equivalence |
 | [plans/BUILD_ROADMAP.md](plans/BUILD_ROADMAP.md) | Path to a bootable build — phases, blockers, what's needed |
+| [plans/LBL_SYMBOL_MATCHING.md](plans/LBL_SYMBOL_MATCHING.md) | Fix `lbl_` symbol matching for function-local statics (match% accuracy) |
 | [plans/compiler-instrumentation.md](plans/compiler-instrumentation.md) | Compiler introspection: register allocator, encoding patterns (DONE) |
 
 ## General

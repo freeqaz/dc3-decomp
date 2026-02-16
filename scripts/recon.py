@@ -218,6 +218,7 @@ def format_recon(data):
     db = data.get("db", {})
     demangled = db.get("demangled") or symbol
     lines.append(f"=== RECON: {demangled} ===")
+    lines.append(f"Symbol: {symbol}")
     if db.get("unit"):
         lines.append(f"Unit: {db['unit']}")
     if db.get("size"):
