@@ -113,20 +113,14 @@ void ContentMgr::PollRefresh() {
                 it = mContents.erase(it);
             } else if (newContentState == 2 || newContentState == 3 || newContentState == 6) {
                 return;
-            } else if (newContentState == 4) {
-                if (oldContentState == 2) {
-                    NotifyMounted(*it);
-                }
+            } else if (newContentState == 4 && oldContentState == 2) {
+                NotifyMounted(*it);
                 return;
-            } else if (newContentState == 0) {
-                if (oldContentState == 3) {
-                    NotifyUnmounted(*it);
-                }
+            } else if (newContentState == 0 && oldContentState == 3) {
+                NotifyUnmounted(*it);
                 return;
-            } else if (newContentState == 7) {
-                if (oldContentState == 6) {
-                    NotifyDeleted(*it);
-                }
+            } else if (newContentState == 7 && oldContentState == 6) {
+                NotifyDeleted(*it);
                 return;
             } else {
                 ++it;
@@ -150,8 +144,14 @@ void ContentMgr::PollRefresh() {
         } else if (mCallbackFiles.empty()) {
             FOREACH (it, mContents) {
                 auto curContentState = (*it)->GetState();
-                if ((curContentState == 5 && mRootLoaded > 0) || curContentState == 4) {
-                    FOREACH (cit, mCallbacks) {
+                if (curContentState == 5) {
+                    if (mRootLoaded <= 0) {
+                        continue;
+                    }
+                } else if (curContentState != 4) {
+                    continue;
+                }
+                FOREACH (cit, mCallbacks) {
                         mCallback = *cit;
                         mLocation = (*it)->Location();
                         mName = (*it)->FileName();
@@ -187,9 +187,8 @@ void ContentMgr::PollRefresh() {
                             }
                         }
                     }
-                    if (curContentState == 5) {
-                        mRootLoaded--;
-                    }
+                if (curContentState == 5) {
+                    mRootLoaded--;
                 }
             }
         }

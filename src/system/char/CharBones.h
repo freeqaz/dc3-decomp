@@ -103,6 +103,7 @@ public:
 protected:
     virtual void ReallocateInternal() {}
 
+    void AddBoneInternal(const Bone &);
     void RecomputeSizes();
 
     CompressionType mCompression; // 0x4

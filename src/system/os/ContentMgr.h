@@ -109,7 +109,6 @@ public:
     virtual void Terminate() {}
     virtual void StartRefresh() {}
     virtual void PollRefresh();
-    virtual void Poll();
     virtual const char *TitleContentPath() { return nullptr; }
     virtual const char *ContentPath(int) { return 0; }
     virtual bool MountContent(Symbol) { return true; }

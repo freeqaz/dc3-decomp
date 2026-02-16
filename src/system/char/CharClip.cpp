@@ -916,10 +916,10 @@ DataNode CharClip::GetClipEvents() {
 void CharClip::ApplyBlendedSkeletons(
     CharClip **clips, CharBones &bones, float f1, float f2
 ) {
-    float f60 = f2;
+    float f60;
     int sample = BeatToSample(f1, &f60);
-    float f7 = 0;
-    float f6 = 1;
+    float f7 = 0.0f;
+    float f6 = 1.0f;
     FOREACH (it, unk18c[sample]) {
         clips[it->first]->ScaleAdd(bones, (f6 - f60) * it->second * f2, f7, f7);
     }
@@ -990,26 +990,15 @@ CharBoneDir *CharClip::GetResource() const {
 }
 
 float CharClip::SampleToBeat(int sample) const {
-    float *begin = *(float **)((char *)this + 0xf8);
-    float *end = *(float **)((char *)this + 0xfc);
+    const float *end = *(const float **)((char *)this + 0xfc);
+    const float *begin = *(const float **)((char *)this + 0xf8);
 
-    s64 sampleExt = sample;
-    float fSample = (float)(double)sampleExt;
-    float result;
-
-    if ((int)(end - begin) & 0xFFFFFFFC) {
-        float *lower = std::lower_bound(begin, end, fSample);
-        int index = (int)(lower - begin);
-        s64 indexExt = index;
-        float fIndex = (float)(double)indexExt;
-        float beat = 0.0f;
-        mBeatTrack.Linear(fIndex, beat);
-        result = beat;
+    if (!((end - begin) & ~3)) {
+        return FrameToBeat((float)sample);
     } else {
-        result = fSample;
+        const float *lower = std::lower_bound(begin, end, (float)sample);
+        return FrameToBeat(lower - begin);
     }
-
-    return result;
 }
 
 void CharClip::LockAndDelete(CharClip **const clips, int remaining, int maxToDelete) {
