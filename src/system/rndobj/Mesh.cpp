@@ -505,7 +505,7 @@ next:
     Sync(0xBF);
 END_LOADS
 
-TextStream &operator<<(TextStream &ts, RndMesh::Volume v) {
+__forceinline TextStream &operator<<(TextStream &ts, RndMesh::Volume v) {
     if (v == RndMesh::kVolumeEmpty)
         ts << "Empty";
     else if (v == RndMesh::kVolumeTriangles)

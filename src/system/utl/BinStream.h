@@ -209,8 +209,7 @@ public:
 template <class E> // E is an enum type
 class BinStreamEnum {
 public:
-    BinStreamEnum(E e) : mEnum(e) {}
-    E &mEnum;
+    E mEnum;
 };
 
 template <class E>

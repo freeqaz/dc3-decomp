@@ -111,7 +111,7 @@ float StandardStream::GetTime() {
 
 float StandardStream::GetInSongTime() {
     float time = GetTime();
-    return time + GetJumpBackTotalTime();
+    return time + GetJumpBackTotalTime(time);
 }
 
 void StandardStream::SetVolume(int chan, float vol) {
@@ -375,9 +375,11 @@ void StandardStream::InitInfo(int i1, int sampleRate, bool floatSamples, int i4)
                         new StreamReceiverFile(bufBytes, mChanParams[i]->mSlipEnabled)
                     );
                 } else {
-                    mChannels.push_back(StreamReceiver::New(
-                        bufBytes, sampleRate, mChanParams[i]->mSlipEnabled, i
-                    ));
+                    mChannels.push_back(
+                        StreamReceiver::New(
+                            bufBytes, sampleRate, mChanParams[i]->mSlipEnabled, i
+                        )
+                    );
                 }
             }
             for (int i = 0; i < mVirtualChans; i++) {

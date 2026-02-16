@@ -6,13 +6,13 @@
 // forward declaration
 class ChunkAllocator;
 
-#define MAX_FIXED_ALLOCS 0x40
+#define MAX_FIXED_ALLOCS 64
 
 class FixedSizeAlloc {
     friend class ChunkAllocator;
 
 public:
-    FixedSizeAlloc(int, int);
+    FixedSizeAlloc(int allocSizeWords, int nodesPerChunk);
     virtual ~FixedSizeAlloc() {}
 
     void *Alloc();
@@ -21,7 +21,7 @@ public:
     MEM_OVERLOAD(FixedSizeAlloc, 0x1C);
 
 protected:
-    virtual int *RawAlloc(int);
+    virtual int *RawAlloc(int size);
 
     void Refill();
 
@@ -43,18 +43,18 @@ public:
     MEM_OVERLOAD(ChunkAllocator, 0x38);
 
 private:
-    FixedSizeAlloc *mAllocs[64]; // 0x0
+    FixedSizeAlloc *mAllocs[MAX_FIXED_ALLOCS]; // 0x0
 };
 
 class ReclaimableAlloc : public FixedSizeAlloc {
 public:
-    ReclaimableAlloc(int, const char *);
+    ReclaimableAlloc(int, const char *name);
 
-    void *CustAlloc(int);
-    void CustFree(void *);
+    void *CustAlloc(int bytes);
+    void CustFree(void *mem);
 
 protected:
-    virtual int *RawAlloc(int);
+    virtual int *RawAlloc(int size);
 
     void DeallocAll();
 
@@ -62,8 +62,7 @@ protected:
     std::vector<void *> mChunks; // 0x20
 };
 
-void PoolAllocInit(class DataArray *);
-
+void PoolAllocInit(class DataArray *cfg);
 void *PoolAlloc(int classSize, int reqSize, const char *file, int line, const char *name);
 void PoolFree(int, void *mem, const char *file, int line, const char *name);
 void PoolReport(TextStream &);

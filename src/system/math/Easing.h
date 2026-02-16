@@ -182,12 +182,12 @@ inline float EaseBackOutIn(float t, float power, float) {
 
 inline float EaseSineIn(float t, float power, float) {
     MILO_ASSERT(t >= 0 && t <= 1, 210);
-    return 1.0f - FastSin((t + 1) * 1.570796370506287f);
+    return 1.0f - FastSin((t + 1) * (PI / 2));
 }
 
 inline float EaseSineOut(float t, float power, float) {
     MILO_ASSERT(t >= 0 && t <= 1, 216);
-    return FastSin((t + 1) * 1.570796370506287f);
+    return FastSin((t + 1) * (PI / 2));
 }
 
 inline float EaseSineInOut(float t, float power, float) {
@@ -255,16 +255,12 @@ inline float EaseCircIn(float t, float power, float) {
 inline float EaseSigmoid(float t, float, float) {
     MILO_ASSERT(t >= 0 && t <= 1, 0x51);
     float ret = (t * t * 3.0f) - (t * t * t * 2.0f);
-    if (ret < 0)
-        return 0;
-    if (ret > 1.0f)
-        return 1.0f;
-    return ret;
+    return Clamp(0.0f, 1.0f, ret);
 }
 
 inline float EaseInExp(float t) {
     MILO_ASSERT(t >= 0 && t <= 1, 0x39);
-    return std::pow(t, 3.03);
+    return std::pow(t, 3.03f);
 }
 
 inline float EaseCircOut(float t, float power, float) {

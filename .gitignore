@@ -38,8 +38,12 @@ compile_commands.json
 # Local binaries
 bin/objdiff-cli
 
+# Python
+.venv/
+
 # Miscellaneous
 /*.txt
+!requirements.txt
 *.exe
 *.pdb
 _CL_*

@@ -230,8 +230,3 @@ void GameModeTerminate() {
     RELEASE(TheGameMode);
     TheGameMode = nullptr;
 }
-
-bool GameMode::IsGameplayModePerform() const {
-    static Symbol perform("perform");
-    return mGameplayMode == perform;
-}

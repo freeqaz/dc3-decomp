@@ -24,13 +24,13 @@ class DataPointMgr {
 private:
     DataPointRecordFunc *mDataPointRecorder; // 0x0
     DataPointRecordFunc *mDebugDataPointRecorder; // 0x4
-    const char *mHostName; // 0x8
-    const char *mApp; // 0xc
-    const char *mProject; // 0x10
-    int mVersion; // 0x14
-    String unk18; // 0x18
-    String unk20; // 0x20
-    String unk28; // 0x28
+    const char *mCrucibleHostname; // 0x8
+    const char *mCrucibleApp; // 0xc
+    const char *mCrucibleProject; // 0x10
+    int mCrucibleVersion; // 0x14
+    String mCrucibleUser; // 0x18
+    String mCrucibleConfig; // 0x20
+    String mCrucibleWorkingDir; // 0x28
 
 public:
     DataPointMgr();

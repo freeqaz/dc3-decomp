@@ -23,7 +23,10 @@ public:
     int Infinite() const { return mInfinite; }
 
     Symbol GameplayMode() const { return mGameplayMode; }
-    bool IsGameplayModePerform() const;
+    bool IsGameplayModePerform() const {
+        static Symbol perform("perform");
+        return mGameplayMode == perform;
+    }
     bool IsGameplayModePractice() const {
         static Symbol practice("practice");
         return mGameplayMode == practice;

@@ -5,14 +5,16 @@
 #include "os/Debug.h"
 #include "obj/Data.h"
 #include "utl/TextStream.h"
+#include "utl/Std.h"
 
 int gBigHunk = 0xC800;
-bool gPoolAllocInitted;
-int gPoolCapacity;
-ChunkAllocator *gChunkAlloc;
+int gSmallHunk = 0xC800;
+int gPoolCapacity = 0;
+bool gPoolAllocInitted = 0;
+ChunkAllocator *gChunkAlloc = nullptr;
 
 void PoolAllocInit(DataArray *a) {
-    a->FindData("big_hunk", gBigHunk, true);
+    a->FindData("big_hunk", gBigHunk);
     gPoolAllocInitted = true;
 }
 
@@ -42,9 +44,11 @@ void PoolReport(TextStream &ts) {
     gChunkAlloc->Print(ts);
 }
 
-FixedSizeAlloc::FixedSizeAlloc(int x, int y)
-    : mAllocSizeWords(x), mNumAllocs(0), mMaxAllocs(0), mNumChunks(0), mFreeList(nullptr),
-      mNodesPerChunk(y) {
+#pragma region FixedSizeAlloc
+
+FixedSizeAlloc::FixedSizeAlloc(int allocSizeWords, int nodesPerChunk)
+    : mAllocSizeWords(allocSizeWords), mNumAllocs(0), mMaxAllocs(0), mNumChunks(0),
+      mFreeList(nullptr), mNodesPerChunk(nodesPerChunk) {
     MILO_ASSERT(mAllocSizeWords != 0, 0x9D);
 }
 
@@ -86,8 +90,11 @@ void FixedSizeAlloc::Refill() {
     *cur = 0;
 }
 
+#pragma endregion
+#pragma region ChunkAllocator
+
 ChunkAllocator::ChunkAllocator() {
-    for (int i = 0; i < 64; i++) {
+    for (int i = 0; i < MAX_FIXED_ALLOCS; i++) {
         mAllocs[i] = new FixedSizeAlloc((i + 1) * 4, 20);
     }
 }
@@ -131,6 +138,9 @@ void ChunkAllocator::Print(TextStream &ts) {
     ts << MakeString("                             Total Waste = %8d\n", wasted);
 }
 
+#pragma endregion
+#pragma region ReclaimableAlloc
+
 ReclaimableAlloc::ReclaimableAlloc(int x, const char *name)
     : FixedSizeAlloc(((x + 15) >> 2) & ~3, 0x2800 / x), mName(name) {}
 
@@ -154,7 +164,7 @@ void ReclaimableAlloc::CustFree(void *mem) {
 
 void ReclaimableAlloc::DeallocAll() {
     MILO_ASSERT(mNumAllocs == 0, 0x19D);
-    for (std::vector<void *>::iterator it = mChunks.begin(); it != mChunks.end(); ++it) {
+    FOREACH (it, mChunks) {
         MemFree(*it);
     }
     mChunks.clear();

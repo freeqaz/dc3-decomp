@@ -101,10 +101,8 @@ bool AccomplishmentSongConditional::CheckConditionsForSong(
             if (!CheckNoFlashcardsCondition(mgr, s)) {
                 return false;
             }
-        } else {
-            if (curCond.mMode != gNullStr && TheGameMode->Mode() != curCond.mMode) {
-                return false;
-            }
+        } else if (curCond.mMode != gNullStr && TheGameMode->Mode() != curCond.mMode) {
+            return false;
         }
         if (curSym == stars) {
             if (CheckStarsCondition(mgr, s, curCond)) {

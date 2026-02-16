@@ -92,7 +92,8 @@ BEGIN_HANDLERS(RhythmBattle)
     HANDLE_ACTION(set_jump, SetJump(_msg->Int(2), _msg->Int(3)))
     HANDLE_ACTION(clear_jump, ClearJump())
     HANDLE_EXPR(
-        both_players_dancing_bad, !mPlayerOne->InTheZone() && !mPlayerTwo->InTheZone()
+        both_players_dancing_bad,
+        !mPlayerOne->InTheZone() && !mPlayerTwo->InTheZone()
     )
     HANDLE_SUPERCLASS(RndPollable)
     HANDLE_SUPERCLASS(Hmx::Object)

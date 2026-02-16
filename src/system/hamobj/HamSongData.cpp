@@ -41,7 +41,7 @@ SongPos HamSongData::CalcSongPos(HxMaster *master, float f1) {
     if (hamMaster) {
         Stream *stream = hamMaster->GetAudio()->GetSongStream();
         if (stream) {
-            f1 += stream->GetJumpBackTotalTime();
+            f1 += stream->GetJumpBackTotalTime(f1);
         }
     }
     float tick = mTempoMap->TimeToTick(f1);

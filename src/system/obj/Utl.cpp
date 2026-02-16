@@ -170,8 +170,8 @@ const char *PrintPropertyPath(DataArray *arr) {
     StackString<256> str;
     str << arr;
     str[0U] = '[';
-    str[str.length() - 1U] = ']';
-    return FormatString(str.c_str()).Str();
+    str[str.length() - 1] = ']';
+    return MakeString(str.c_str());
 }
 
 int SubDirHashUsed(ObjectDir *dir) {
