@@ -358,13 +358,14 @@ bool Intersect(const Segment &seg, const Triangle &tri, bool b, float &out) {
     return true;
 }
 
-// Comparator stub for BSPFace
+// Comparator and list operations for BSPFace
 namespace stlpmtx_std {
-    // Provide a less<BSPFace> specialization that doesn't actually compare
-    // The actual comparison is handled at a lower level
+    // Compare BSPFace by area field - used for sorting in descending order
     template<>
     struct less<BSPFace> {
-        bool operator()(const BSPFace& /*a*/, const BSPFace& /*b*/) const { return false; }
+        bool operator()(const BSPFace& a, const BSPFace& b) const {
+            return a.area > b.area; // Note: greater for descending sort
+        }
     };
 
     template<>

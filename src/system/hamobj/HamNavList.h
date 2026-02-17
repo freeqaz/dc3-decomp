@@ -28,6 +28,10 @@ DECLARE_MESSAGE(NavHighlightMsg, "nav_highlight")
 NavHighlightMsg(Symbol, int, HamNavList *, bool);
 END_MESSAGE
 
+DECLARE_MESSAGE(NavHighlightSettledMsg, "nav_highlight_settled")
+NavHighlightSettledMsg(Symbol, int, HamNavList *, bool);
+END_MESSAGE
+
 /** "List of navigation actions controlled by a single hand with gestures" */
 class HamNavList : public UIComponent,
                    public RndAnimatable,

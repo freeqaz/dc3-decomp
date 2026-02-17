@@ -758,9 +758,9 @@ void RndParticleSys::UpdateRelativeXfm() {
         Normalize(mRelativeXfm.m, mRelativeXfm.m);
         Interp(mLastWorldXfm.v, worldXfm.v, mRelativeMotion, mLastWorldXfm.v);
         Add(mRelativeXfm.v, mLastWorldXfm.v, mRelativeXfm.v);
-        Subtract(mMotionParent->WorldXfm().v, mLastWorldXfm.v, unk2b4);
-        mLastWorldXfm = mMotionParent->WorldXfm();
     }
+    Subtract(mMotionParent->WorldXfm().v, mLastWorldXfm.v, unk2b4);
+    mLastWorldXfm = mMotionParent->WorldXfm();
 }
 
 // TODO: 69.3% match (AT_LIMIT). 2340-byte function, implemented from 0.1% stub.
@@ -1135,9 +1135,9 @@ void RndParticleSys::UpdateParticles() {
 
         if (frameUpdate != 0.0f) {
             if (mPauseOffscreen != 0) {
-                if (frameUpdate > 100.0f) {
-                    float excess = frameUpdate - 100.0f;
-                    frameUpdate = 100.0f;
+                if (frameUpdate > 4.0f) {
+                    float excess = frameUpdate - 4.0f;
+                    frameUpdate = 4.0f;
                     unk144 = unk144 + excess;
                 }
                 currentFrame -= unk144;
@@ -1146,41 +1146,48 @@ void RndParticleSys::UpdateParticles() {
             MoveParticles(currentFrame, frameUpdate);
 
             if ((mExplicitParts != 0) || (mEmitRate.x > 0.0f) || (mEmitRate.y > 0.0f) || (mMaxBurst != 0)) {
-                MakeLocToRel(mRelativeXfm);
+                Transform locToRel;
+                MakeLocToRel(locToRel);
 
                 if (mSubSamples > 1) {
-                    if (mExplicitParts == 0) {
+                    Vector3 baseVel;
+                    if (!mMeshEmitter) {
                         f32 halfSample = 0.5f;
                         f32 pitchMid = LimitAng(mPitch.y - mPitch.x) * halfSample + mPitch.x;
                         f32 yawMid = LimitAng(mYaw.y - mYaw.x) * halfSample + mYaw.x;
                         f32 speedMid = (mSpeed.y - mSpeed.x) * halfSample + mSpeed.x;
 
-                        f32 pi = 3.14159265f;
-                        f32 sinYawPlus = FastSin(yawMid + pi);
+                        f32 halfPi = 1.57079637f;
+                        f32 cosPitch = FastSin(pitchMid + halfPi);
+                        f32 negXVel = -(FastSin(yawMid) * cosPitch * speedMid);
+                        f32 yVel = FastSin(yawMid + halfPi) * cosPitch * speedMid;
                         f32 sinPitch = FastSin(pitchMid);
-                        f32 cosPitch = FastSin(pitchMid);
-                        f32 sinPitchPlus = FastSin(pitchMid + pi);
 
-                        Vector3 baseVel(
-                            -sinPitch * sinYawPlus * speedMid,
-                            sinPitchPlus * sinYawPlus * speedMid,
-                            cosPitch * speedMid
+                        baseVel.Set(
+                            negXVel * frameUpdate,
+                            yVel * frameUpdate,
+                            sinPitch * speedMid * frameUpdate
                         );
 
-                        memcpy(&mRelativeXfm, &mSubSampleXfm, sizeof(Transform));
-
-                        f32 invSamples = 1.0f / (f32)mSubSamples;
-                        for (int i = 1; i < mSubSamples; i++) {
-                            f32 interpT = (f32)i * invSamples;
-                            CreateParticles(currentFrame, frameUpdate, mRelativeXfm);
-                            Vector3 interpOffset;
-                            Interp(unk2b4, baseVel, interpT, interpOffset);
-                        }
+                        Multiply(baseVel, mSubSampleXfm, baseVel);
                     } else {
-                        CreateParticles(currentFrame, frameUpdate, mRelativeXfm);
+                        baseVel = mSubSampleXfm.v;
+                    }
+
+                    memcpy(&mSubSampleXfm, &locToRel, sizeof(Transform));
+
+                    int count = mSubSamples;
+                    f32 stepSize = frameUpdate / (f32)mSubSamples;
+                    Vector3 interpOffset;
+                    if (count != 0) {
+                        do {
+                            CreateParticles(currentFrame, stepSize, locToRel);
+                            Interp(interpOffset, baseVel, 1.0f / (f32)count, interpOffset);
+                            count--;
+                        } while (count != 0);
                     }
                 } else {
-                    CreateParticles(currentFrame, frameUpdate, mRelativeXfm);
+                    CreateParticles(currentFrame, frameUpdate, locToRel);
                 }
             }
         }

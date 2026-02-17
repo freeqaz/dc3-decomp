@@ -190,12 +190,19 @@ END_COPYS
 BEGIN_LOADS(UIFontImporter)
     u32 vers;
     bs.ReadEndian(&vers, 4);
-    u16 minVers = vers & 0xFFFF;
-    u16 altVers = vers >> 16;
+    int minVers = vers & 0xFFFF;
+    int altVers = vers >> 16;
+
+    if (minVers > 10) {
+        MILO_FAIL("%s can't load new %s version %d", PathName(this), ClassName(), minVers);
+    }
+    if (altVers > 4) {
+        MILO_FAIL("%s can't load new %s alt version %d", PathName(this), ClassName(), altVers);
+    }
 
     BinStreamRev rev(bs, vers);
-    rev >> mUpperCaseAthroughZ;
     rev >> mLowerCaseAthroughZ;
+    rev >> mUpperCaseAthroughZ;
     rev >> mNumbers0through9;
     rev >> mPunctuation;
     rev >> mUpperEuro;
@@ -205,95 +212,97 @@ BEGIN_LOADS(UIFontImporter)
         rev >> mRussian;
         rev >> mPolish;
         rev >> mIncludeLocale;
-        rev >> mIncludeFile;
+        bs >> mIncludeFile;
     }
 
-    String str1, str2;
+    String str2;
+    String str1;
     bs >> str1;
     bs >> str2;
 
     if (altVers < 4) {
         ASCIItoWideVector(mPlus, str1.c_str());
+        ASCIItoWideVector(mMinus, str2.c_str());
     } else {
         UTF8toWideVector(mPlus, str1.c_str());
+        UTF8toWideVector(mMinus, str2.c_str());
     }
 
     bs >> mFontName;
 
-    if (minVers <= 4) {
+    if (minVers < 5) {
         s32 val;
         bs.ReadEndian(&val, 4);
-        mFontPctSize = fabs((f32)(s64)(-val) * 0.0013888889f);
+        mFontPctSize = std::fabs((f32)(s64)(-val) * 0.0013888889f);
     } else {
         bs.ReadEndian(&mFontPctSize, 4);
     }
 
     bs.ReadEndian(&mFontWeight, 4);
-    rev >> mDropShadow;
+    rev >> mItalics;
 
     if (altVers > 1) {
-        bs.ReadEndian(&mFontWeight, 4);
+        bs.ReadEndian(&mDropShadow, 4);
     }
 
     if (altVers > 2) {
+        bs.ReadEndian(&mDropShadowOpacity, 4);
+    }
+
+    bs.ReadEndian(&mPitchAndFamily, 4);
+    bs.ReadEndian(&mFontQuality, 4);
+    bs.ReadEndian(&mFontCharset, 4);
+
+    if (minVers > 1) {
         bs.ReadEndian(&mFontSupersample, 4);
     }
 
+    bs >> mBitmapSavePath;
+    bs >> mBitMapSaveName;
     bs.ReadEndian(&mLeft, 4);
     bs.ReadEndian(&mRight, 4);
     bs.ReadEndian(&mTop, 4);
     bs.ReadEndian(&mBottom, 4);
-    bs.ReadEndian(&mFontQuality, 4);
-
-    if (minVers > 1) {
-        bs.ReadEndian(&mFontWeight, 4);
-    }
-
-    bs >> mFontName;
-    bs >> mIncludeFile;
-    bs.ReadEndian(&mFontPctSize, 4);
-    bs.ReadEndian(&mFontWeight, 4);
-    bs.ReadEndian(&mFontWeight, 4);
-    bs.ReadEndian(&mFontWeight, 4);
-    rev >> mDropShadow;
+    rev >> mFillWithSafeWhite;
 
     if (minVers < 8) {
-        mFontToImportFrom.Load(bs, 1, 0);
+        mFontToImportFrom.Load(bs, true, 0);
     }
 
     if (minVers > 2) {
-        mGennedFonts.Load(bs, 1, 0, 1);
-        mReferenceKerning.Load(bs, 1, 0);
+        mGennedFonts.Load(bs, true, 0, true);
+        mReferenceKerning.Load(bs, true, 0);
     }
 
     if (minVers == 3) {
-        // Load temporary mat at version 3
-        bs.ReadEndian(&mFontWeight, 4);
+        ObjPtr<RndMat> tempMat(this);
+        tempMat.Load(bs, true, 0);
     }
 
     if (minVers > 3) {
-        mMatVariations.Load(bs, 1, 0, 1);
+        mMatVariations.Load(bs, true, 0, true);
     }
 
     if ((minVers > 5) && (minVers < 10)) {
-        // Load temporary mat at version 5-9
-        bs.ReadEndian(&mFontWeight, 4);
+        ObjPtr<RndMat> tempMat(this);
+        tempMat.Load(bs, true, 0);
     }
 
     if (minVers > 6) {
-        mHandmadeFont.Load(bs, 1, 0);
+        mHandmadeFont.Load(bs, true, 0);
     }
 
     if (minVers > 7) {
-        bs >> mBitMapSaveName;
+        bs >> mSyncResource;
     }
 
     if (minVers > 8) {
-        rev >> mCheckNG;
+        rev >> mLastGenWasNG;
     }
 
     if (altVers == 1) {
-        bs.ReadEndian(&mSyncResource, 4);
+        s32 temp;
+        bs.ReadEndian(&temp, 4);
     }
 END_LOADS
 
@@ -563,9 +572,7 @@ DataNode UIFontImporter::OnGetGennedBitmapPath(DataArray *da) {
             RndMat *mat = font->Mat(0);
             if (mat) {
                 if (mat->GetDiffuseTex()) {
-                    if (mat->GetDiffuseTex()) {
-                        path = mat->GetDiffuseTex()->File().c_str();
-                    }
+                    path = mat->GetDiffuseTex()->File().c_str();
                 }
             }
         }

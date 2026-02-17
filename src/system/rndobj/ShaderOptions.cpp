@@ -95,57 +95,21 @@ const char *ShaderCachedPath(const char *file, u64 i2, bool b3) {
 }
 
 bool IsPostProcShaderType(ShaderType s) {
-    switch (s) {
-    case kBloomShader:
-    case kBlurShader:
-    case kDepthVolumeShader:
-    case kDownsampleShader:
-    case kDownsample4xShader:
-    case kDownsampleDepthShader:
-    case kDrawRectShader:
-        return false;
-    case kErrorShader:
-        return true;
-    case kFurShader:
-    case kLineNozShader:
-    case kLineShader:
-    case kMovieShader:
-        return false;
-    case kMultimeshShader:
-    case kMultimeshBBShader:
-    case kParticlesShader:
-        return true;
-    case kPostprocessErrorShader:
-    case kPostprocessShader:
-    case kShadowmapShader:
-        return false;
-    case kStandardShader:
-    case kStandardBBShader:
-    case kSyncTrackShader:
-    case kSyncTrackChargeEffectShader:
-        return true;
-    case kUnwrapUVShader:
-    case kVelocityCameraShader:
-    case kVelocityObjectShader:
-    case kPlayerDepthVisShader:
-    case kPlayerDepthShellShader:
-    case kBloomGlareShader:
-    case kPlayerDepthShell2Shader:
-    case kDepthBuffer3DShader:
-    case kYUVtoRGBShader:
-    case kYUVtoBlackAndWhiteShader:
-    case kPlayerGreenScreenShader:
-    case kPlayerDepthGreenScreenShader:
-    case kCrewPhotoShader:
-    case kTwirlShader:
-    case kKillAlphaShader:
-        return false;
-    case kAllWhiteShader:
-        return true;
-    default:
-        MILO_FAIL("unknown shader type %s", ShaderTypeName(s));
-        return false;
+    if ((int)s > kShadowmapShader) {
+        if ((int)s > 0x24) {
+            if ((unsigned int)s == kAllWhiteShader) return true;
+        } else {
+            if ((int)s < 0x16) return true;
+        }
+    } else {
+        if ((int)s > kParticlesShader) return false;
+        if ((unsigned)s < kErrorShader) return false;
+        if (s == kErrorShader) return true;
+        if ((unsigned)s < kMultimeshShader) return false;
+        if ((unsigned)s < kPostprocessErrorShader) return true;
     }
+    MILO_FAIL("unknown shader type %s", ShaderTypeName(s));
+    return false;
 }
 
 void ShaderOptions::GenerateMacros(ShaderType t, std::vector<ShaderMacro> &macros) const {

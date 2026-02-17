@@ -230,7 +230,36 @@ RndCam *PanelDir::CamOverride() {
     return TheUI->GetCam();
 }
 
-void PanelDir::DrawShowing() {}
+void PanelDir::DrawShowing() {
+    if (mCanEndWorld) {
+        TheRnd.EndWorld();
+    }
+    RndCam *curCam = RndCam::Current();
+    RndCam *camOverride = CamOverride();
+    if (camOverride && camOverride != RndCam::Current()) {
+        camOverride->Select();
+    }
+    if (!mEnv) {
+        RndEnviron *curEnv = TheUI->GetEnv();
+        if (curEnv != RndEnviron::Current()) {
+            curEnv->Select(nullptr);
+        }
+    }
+    FOREACH (it, mBackPanels) {
+        if (*it) {
+            (*it)->DrawShowing();
+        }
+    }
+    RndDir::DrawShowing();
+    FOREACH (it, mFrontPanels) {
+        if (*it) {
+            (*it)->DrawShowing();
+        }
+    }
+    if (curCam && curCam != RndCam::Current()) {
+        curCam->Select();
+    }
+}
 
 void PanelDir::Enter() {
     RndDir::Enter();

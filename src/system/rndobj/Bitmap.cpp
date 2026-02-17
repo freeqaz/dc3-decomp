@@ -888,7 +888,95 @@ void DecodeDxt3Alpha(unsigned char *uc, int i, int j, unsigned char &alpha) {
 }
 
 void DecodeDxt5Alpha(unsigned char *uc, int i, int j, unsigned char &alpha) {
-    // Placeholder - full DXT5 alpha decompression would go here
+    // Stack-allocated lookup tables matching target's exact initialization order
+    unsigned char local_60[32];
+
+    // Initialize in the exact order shown in Ghidra
+    local_60[0] = 0;
+    local_60[1] = 0;
+    local_60[2] = 0;
+    local_60[3] = 1;
+    local_60[4] = 1;
+    local_60[5] = 1;
+    local_60[6] = 2;
+    local_60[7] = 2;
+    local_60[8] = 3;
+    local_60[9] = 3;
+    local_60[10] = 3;
+    local_60[11] = 4;
+    local_60[12] = 4;
+    local_60[13] = 4;
+    local_60[14] = 5;
+    local_60[15] = 5;
+
+    local_60[16] = 0;
+    local_60[17] = 3;
+    local_60[18] = 6;
+    local_60[19] = 1;
+    local_60[20] = 4;
+    local_60[21] = 7;
+    local_60[22] = 2;
+    local_60[23] = 5;
+    local_60[24] = 0;
+    local_60[25] = 3;
+    local_60[26] = 6;
+    local_60[27] = 1;
+    local_60[28] = 4;
+    local_60[29] = 7;
+    local_60[30] = 2;
+    local_60[31] = 5;
+
+    // Read alpha values - order matches target: alpha1 first, alpha0 second
+    unsigned char alpha1 = uc[1];
+    unsigned char alpha0 = uc[0];
+
+    int iVar3 = j << 2;
+    unsigned char byteOff = local_60[iVar3 + i];
+    unsigned char bitPos = local_60[i + iVar3 + 16];
+
+    // Calculate adjusted offset
+    unsigned int adjustedOff;
+    if ((byteOff & 1) == 0) {
+        adjustedOff = byteOff + 1;
+    } else {
+        adjustedOff = byteOff + 0xFF;
+    }
+
+    unsigned int index;
+    if (bitPos < 6) {
+        index = (uc[adjustedOff + 2] >> bitPos) & 7;
+    } else {
+        unsigned int off2 = byteOff + 1;
+        unsigned int adjustedOff2;
+        if ((off2 & 1) == 0) {
+            adjustedOff2 = off2 + 2;
+        } else {
+            adjustedOff2 = off2 + 1;
+        }
+        if (bitPos == 6) {
+            index = ((uc[adjustedOff2 + 2] & 1) << 2) | (uc[adjustedOff + 2] >> 6);
+        } else {
+            index = ((uc[adjustedOff2 + 2] & 3) << 1) | (uc[adjustedOff + 2] >> 7);
+        }
+    }
+
+    if (index == 0) {
+        alpha = alpha1;
+    } else if (index == 1) {
+        alpha = alpha0;
+    } else {
+        if (alpha0 < alpha1) {
+            if (index == 6) {
+                alpha = 0;
+            } else if (index == 7) {
+                alpha = 0xFF;
+            } else {
+                alpha = ((6 - index) * (unsigned int)alpha1 + (index - 1) * (unsigned int)alpha0 + 2) / 5;
+            }
+        } else {
+            alpha = ((8 - index) * (unsigned int)alpha1 + (index - 1) * (unsigned int)alpha0 + 3) / 7;
+        }
+    }
 }
 
 void RndBitmap::DxtColor(

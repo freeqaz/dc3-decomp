@@ -92,6 +92,7 @@ Tool-specific deep docs live in subdirectories:
 | [plans/BUILD_ROADMAP.md](plans/BUILD_ROADMAP.md) | Path to a bootable build — phases, blockers, what's needed |
 | [plans/LBL_SYMBOL_MATCHING.md](plans/LBL_SYMBOL_MATCHING.md) | Fix `lbl_` symbol matching for function-local statics (match% accuracy) |
 | [plans/compiler-instrumentation.md](plans/compiler-instrumentation.md) | Compiler introspection: register allocator, encoding patterns (DONE) |
+| [plans/XENIA_BOOT_VALIDATION.md](plans/XENIA_BOOT_VALIDATION.md) | Xenia emulator build, hybrid XEX boot validation, headless mode plan |
 
 ## General
 

@@ -70,7 +70,8 @@ the title screen. Here's what that requires and where we stand:
 | Code matches original | 36% by bytes, 70% for game code | Partial |
 | Data sections present | Yes (from split objects) | No |
 | .pdata (exception tables) | Partial — split objects in .pdat0 (invisible to kernel) | **Yes for EH** |
-| Boot on Xenia | Not attempted | Unknown |
+| Xenia built | **Yes** — 56.9 MB, requires headless mode for testing | **No** |
+| Boot on Xenia | Blocked by GUI dependencies (GTK+, Cg, SSG) | **Yes — Headless Mode** |
 
 ### The Three Real Blockers
 
@@ -387,9 +388,17 @@ The crashes will tell us exactly what matters and what doesn't.
 1. ~~**Try XEX packaging now**~~ — **DONE.** `scripts/build_xex.py` wraps PE → XEX2.
    Full pipeline: `ninja && python3 scripts/fix_pdata.py && ninja link && python3 scripts/build_xex.py`
 
-2. **Boot test on Xenia** — Load `build/373307D9/default.xex` on Xenia with
-   `--debug --log_level=3`. Even a crash is valuable — it tells us where the
-   first failure is. Requires Xenia on a Windows machine (not available in dev env).
+2. **Xenia Headless Mode** — **ACTIVE PRIORITY.** Modify Xenia to run without GUI
+   dependencies (GTK+, NVIDIA Cg, SSG, GLXew). Current location: `/tmp/claude/xenia`
+
+   Required changes:
+   - Conditionally compile out `ui-*` targets (imgui, windowing)
+   - Add `--headless` command-line flag
+   - Implement console-based status output
+   - Keep CPU/GPU emulation cores, drop UI layer
+
+3. **Boot test on Xenia** — After headless fix, load `build/373307D9/default.xex` with
+   `xenia --debug --headless --log_level=3`. Document:
 
 3. **Investigate link quality** — Analyze the unresolved symbols and duplicate
    symbol warnings from the `/FORCE` link to understand what's actually broken

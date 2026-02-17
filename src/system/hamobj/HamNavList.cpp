@@ -38,6 +38,11 @@ NavSelectMsg::NavSelectMsg(Symbol sym, int index, HamNavList *list, bool selecti
 NavHighlightMsg::NavHighlightMsg(Symbol sym, int index, HamNavList *list, bool canSelect)
     : Message(Type(), sym, index, (Hmx::Object *)list, canSelect) {}
 
+NavHighlightSettledMsg::NavHighlightSettledMsg(
+    Symbol sym, int index, HamNavList *list, bool canSelect
+)
+    : Message(Type(), sym, index, (Hmx::Object *)list, canSelect) {}
+
 HamNavList::HamNavList()
     : mNavInputType(kNavInput_RightHand), mListState(this, this),
       mRibbonMode(HamListRibbon::kRibbonSlide), unkc8(0), mListRibbonResource(this),
@@ -697,16 +702,13 @@ float HamNavList::EndFrame() {
 void HamNavList::SendHighlightSettledMsg(int i) {
     UIListProvider *provider = mListState.Provider();
     MILO_ASSERT(provider, 0x327);
-
-    if (provider) {
-        bool canSel = provider->CanSelect(i);
-        bool isActive = provider->IsActive(i);
-
-        if (isActive) {
-            Symbol dataSym = provider->DataSymbol(i);
-            int idx = provider->DataIndex(Symbol());
-            // TODO: Send highlight settled message once NavHighlightSettledMsg is created
-        }
+    bool canSel = provider->CanSelect(i);
+    if (provider->IsActive(i)) {
+        Symbol dataSym = provider->DataSymbol(i);
+        NavHighlightSettledMsg msg(dataSym, i, this, canSel);
+        TheUI->Handle(msg, false);
+        Handle(msg, true);
+        TheHamProvider->Handle(msg, false);
     }
 }
 

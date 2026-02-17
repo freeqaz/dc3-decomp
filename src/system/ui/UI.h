@@ -44,6 +44,7 @@ public:
     bool InTransition() { return mTransitionState != kTransitionNone; }
     TransitionState GetTransitionState() const { return mTransitionState; }
     RndCam *GetCam() { return mCam; }
+    RndEnviron *GetEnv() { return mEnv; }
     bool WentBack() { return mWentBack; }
     void SetScreenBlacklghtDisabled(bool);
     UIPanel *FocusPanel();
