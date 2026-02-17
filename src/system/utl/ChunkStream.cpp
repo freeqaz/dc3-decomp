@@ -30,16 +30,15 @@ namespace {
     }
 
     void StartDecompressionThread() {
-        if (gDecompressionThread) {
-            gDataReadyEvt.Set();
-        }
-        else {
+        if (!gDecompressionThread) {
             gDecompressionThread = true;
             mThreadHandle = CreateThread(nullptr, 0, DecompressionThread, nullptr, 4, nullptr);
-            //MILO_ASSERT(mThreadHandle[i], 0x82); // no idea where i comes from
+            MILO_ASSERT(mThreadHandle, 0x82);
+            XSetThreadProcessor(mThreadHandle, 3);
+            ResumeThread(mThreadHandle);
+        } else {
+            gDataReadyEvt.Set();
         }
-        XSetThreadProcessor(mThreadHandle, 3);
-        ResumeThread(mThreadHandle);
     }
 }
 

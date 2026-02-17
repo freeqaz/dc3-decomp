@@ -1,4 +1,5 @@
 #pragma once
+#include "utl/MemMgr.h"
 
 class Rand {
 public:
@@ -10,6 +11,8 @@ public:
     float Float();
     float Float(float, float);
     float Gaussian();
+
+    MEM_OVERLOAD(Rand, 0x16);
 
     static Rand sRand;
 

@@ -3,13 +3,116 @@
 #include "obj/Object.h"
 #include "utl/BinStream.h"
 #include "math/Rand.h"
+#include "math/Utl.h"
+#include "math/Mtx.h"
 
 float gUnitsPerMeter = 39.370079f;
-float sWindField[0x401] = { 0 }, sWhiteField[0x400] = { 0 };
 Rand *sRand;
+float sWhiteField[0x400] = { 0 };
+float sWindField[0x401] = { 0 };
 Vector3 sOffset(0.0f, 0.3384f, 0.66843998f);
 
-void SetWind(int, int, float, float, float) {}
+void SetWind(int start, int end, float startVal, float endVal, float amplitude) {
+    sWindField[start] = startVal;
+    if (end - start >= 2) {
+        float half = 0.5f;
+        float decay = 1.0f / sqrtf(2.0f);
+        do {
+            int mid = (start + end) / 2;
+            float midVal =
+                sRand->Gaussian() * amplitude + (startVal + endVal) * half;
+            amplitude *= decay;
+            SetWind(start, mid, startVal, midVal, amplitude);
+            startVal = midVal;
+            start = mid;
+            sWindField[mid] = midVal;
+        } while (end - start >= 2);
+    }
+}
+
+void RndWind::Init() {
+    REGISTER_OBJ_FACTORY(RndWind)
+    sRand = new Rand(0x7FEF8A);
+    SetWind(0, 0x400, 0.0f, 0.0f, 0.5f);
+    sWindField[0x400] = sWindField[0];
+    for (int i = 0; i < 0x400; i++) {
+        sWhiteField[i] = RandomFloat(0.0f, 1.0f);
+    }
+    delete sRand;
+    sRand = 0;
+}
+
+float RndWind::GetWind(float x) {
+    float f = Mod(x, 1.0f) * 1024.0f;
+    int i = (int)f;
+    return sWindField[i] + (sWindField[i + 1] - sWindField[i]) * (f - (float)(int)f);
+}
+
+float RndWind::GetWhiteNoise(float x) {
+    float f = Mod(x, 1023.0f);
+    int i = (int)f;
+    return sWhiteField[i] + (sWhiteField[i + 1] - sWhiteField[i]) * (f - (float)(int)f);
+}
+
+void RndWind::SelfGetWind(const Vector3 &pos, float time, Vector3 &result) {
+    result.x = GetWind(mTimeRate.x * time + mSpaceRate.x * pos.x + sOffset.x) * mRandom.x
+        + mPrevailing.x;
+    result.y = GetWind(mTimeRate.y * time + mSpaceRate.y * pos.y + sOffset.y) * mRandom.y
+        + mPrevailing.y;
+    result.z = GetWind(mSpaceRate.z * pos.z + mTimeRate.z * time + sOffset.z) * mRandom.z
+        + mPrevailing.z;
+
+    RndTransformable *trans = mTrans.Ptr();
+    if (trans) {
+        const Transform &xfm = trans->WorldXfm();
+        if (mAboutZ) {
+            Vector3 zAxis(xfm.m.z.x, xfm.m.z.y, xfm.m.z.z);
+            Vector3 diff(pos.x - xfm.v.x, pos.y - xfm.v.y, pos.z - xfm.v.z);
+            float dot = -(diff.x * zAxis.x + diff.y * zAxis.y + diff.z * zAxis.z);
+            Vector3 proj(diff.x + zAxis.x * dot, diff.y + zAxis.y * dot,
+                diff.z + zAxis.z * dot);
+            Vector3 cross(
+                zAxis.y * proj.z - zAxis.z * proj.y,
+                zAxis.z * proj.x - zAxis.x * proj.z,
+                zAxis.x * proj.y - zAxis.y * proj.x);
+            Normalize(cross, cross);
+            float rx = result.x;
+            float ry = result.y;
+            float rz = result.z;
+            result.y = rx * (cross.z * zAxis.x - zAxis.z * cross.x)
+                + ry * cross.y + rz * zAxis.y;
+            result.z = rz * zAxis.z
+                + rx * (zAxis.y * cross.x - cross.y * zAxis.x) + ry * cross.z;
+            result.x = rz * zAxis.x
+                + ry * cross.x + rx * (cross.y * zAxis.z - cross.z * zAxis.y);
+        } else {
+            float rx = result.x;
+            float ry = result.y;
+            float rz = result.z;
+            result.z = xfm.m.y.z * ry + xfm.m.x.z * rx + xfm.m.z.z * rz;
+            result.y = xfm.m.y.y * ry + xfm.m.x.y * rx + xfm.m.z.y * rz;
+            result.x = xfm.m.x.x * rx + xfm.m.z.x * rz + xfm.m.y.x * ry;
+        }
+    }
+
+    float lenSq = result.x * result.x + result.y * result.y + result.z * result.z;
+    float len = sqrtf(lenSq);
+    float limit;
+    if (len > 0.0f) {
+        if (len > mMaxSpeed) {
+            limit = mMaxSpeed;
+        } else if (len < mMinSpeed) {
+            limit = mMinSpeed;
+        } else {
+            goto done;
+        }
+        float scale = limit / len;
+        result.x *= scale;
+        result.y *= scale;
+        result.z *= scale;
+    }
+done:;
+}
 
 RndWind::RndWind()
     : mPrevailing(0.0f, 0.0f, 0.0f), mRandom(0.0f, 0.0f, 0.0f), mTimeLoop(100.0f),

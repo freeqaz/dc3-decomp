@@ -19,18 +19,19 @@ public:
     virtual void Highlight() {}
 
     OBJ_MEM_OVERLOAD(0x1A);
-    static void Init() { REGISTER_OBJ_FACTORY(RndWind) }
+    static void Init();
 
     void SetWindOwner(RndWind *wind);
     void Zero();
     void SetDefaults();
-    // float GetWind(float);
-    // void GetWind(const Vector3 &v, float f, Vector3 &v2) {
-    //     return mWindOwner->SelfGetWind(v, f, v2);
-    // }
-    // void SelfGetWind(const Vector3 &, float, Vector3 &);
+    static float GetWind(float);
+    static float GetWhiteNoise(float);
+    void GetWind(const Vector3 &v, float f, Vector3 &v2) {
+        mWindOwner->SelfGetWind(v, f, v2);
+    }
 protected:
     RndWind();
+    void SelfGetWind(const Vector3 &, float, Vector3 &);
     void SyncLoops();
 
     Vector3 mPrevailing; // 0x8
