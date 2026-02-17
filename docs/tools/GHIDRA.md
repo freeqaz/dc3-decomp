@@ -255,6 +255,82 @@ The `--extract` step (batch decompilation) benefits from seeding — with full s
    touch $GHIDRA_USER_HOME/test && rm $GHIDRA_USER_HOME/test
    ```
 
+## CLI Analysis Tools
+
+Standalone scripts that query the running pyghidra-mcp server. Require service to be running and DTM seeded (see [Setup](#prerequisites) and [Type Seeding Pipeline](#type-seeding-pipeline)).
+
+### Struct Validation — `tools/ghidra/struct_check.py`
+
+Compares our C++ header struct layouts (from `struct_db.sqlite`) against Ghidra's DTM. Catches offset misalignments, missing fields, and size discrepancies.
+
+```bash
+# Compare a single class
+python3 tools/ghidra/struct_check.py HamDirector
+
+# Compare all classes referenced in a translation unit
+python3 tools/ghidra/struct_check.py --unit system/char/CharBones
+
+# Compare multiple classes
+python3 tools/ghidra/struct_check.py HamDirector RndPostProc BaseMaterial
+
+# JSON output (for CI/scripting)
+python3 tools/ghidra/struct_check.py --json HamDirector
+```
+
+Output shows field-by-field comparison with OK / GHIDRA_MISSING / OURS_MISSING status. Exit code 1 if any mismatches found.
+
+**When to use:** After changing class layouts. When objdiff shows offset mismatches across many functions in the same class. Before submitting PRs that modify headers.
+
+**Note:** After seeding, data persists to disk and survives restarts. Only need to seed once (or after importing a new binary).
+
+### Pcode Inspection — `tools/ghidra/pcode_inspect.py`
+
+Analyzes Ghidra decompilation output + raw PPC bytes for switch tables and cast operations.
+
+```bash
+# Full analysis (switches + casts + decompiled output)
+python3 tools/ghidra/pcode_inspect.py "Hmx::Object::Handle"
+
+# By address
+python3 tools/ghidra/pcode_inspect.py "0x82878b58"
+
+# Switch statements only
+python3 tools/ghidra/pcode_inspect.py "DataNode::Handle" --switches
+
+# Cast/extension operations only
+python3 tools/ghidra/pcode_inspect.py "DataNode::Handle" --casts
+```
+
+Detects:
+- **Switch patterns**: PPC jump tables (cmplwi/lwzx/mtctr/bctr) and comparison chains, with case counts
+- **Cast operations**: PPC sign/zero extensions (extsb, extsh, extsw, rlwinm), Ghidra cast patterns ((int), (uint), SUBn(), SEXTn(), ZEXTn())
+
+**When to use:** When a function has switch statements that don't match. When objdiff shows branch structure differences. When signed/unsigned confusion is suspected.
+
+### Semantic Code Search — `tools/ghidra/code_search.py`
+
+Vector search over all 42K+ decompiled functions via ChromaDB. Find functions with similar patterns by natural language description or code snippet.
+
+```bash
+# Search by description
+python3 tools/ghidra/code_search.py "iterate list and delete each element"
+
+# Search by code pattern
+python3 tools/ghidra/code_search.py --code "for (i = 0; i < count; i++) { arr[i]->Save(bs); }"
+
+# Search string literals
+python3 tools/ghidra/code_search.py --strings "CharBones"
+
+# Limit results
+python3 tools/ghidra/code_search.py "poll timer update" --limit 5
+```
+
+Returns ranked results with function name, address, similarity score, and full decompiled code.
+
+**When to use:** Starting work on a new function and want to see similar implementations. Looking for how the codebase handles a pattern (null checks, container iteration, error paths). Finding string references.
+
+**Note:** ChromaDB indexes on first startup (~10 min). If results are empty, the index may need rebuilding — delete `ghidra_projects/DC3/DC3/chromadb/` and restart.
+
 ## See Also
 
 - [XEXLOADERWV.md](XEXLOADERWV.md) - XEX loader build/install

@@ -122,76 +122,72 @@ float DirectionGestureFilterSingleUser::UpdateOverlay(RndOverlay *overlay, float
 }
 
 bool DirectionGestureFilterSingleUser::IsValidSwipePosition(const Skeleton &skeleton) const {
-    // Load shoulder center position (camera space) first - order matches base
-    float shoulderCenterZ = *((const float*)&skeleton + 0x3D);  // 0xF4 / 4
-    float shoulderCenterY = *((const float*)&skeleton + 0x3C);  // 0xF0 / 4
-    float shoulderCenterX = *((const float*)&skeleton + 0x3B);  // 0xEC / 4
+    // Read from mTrackedJoints[0] directly (NOT HandJoint)
+    float handX = *((float*)(&skeleton) + 1);  // offset 0x4 / 4 = +1
+    float handY = *((float*)(&skeleton) + 2);  // offset 0x8 / 4 = +2
+    float handZ = *((float*)(&skeleton) + 3);  // offset 0xC / 4 = +3
 
-    // Call HandJoint
-    const TrackedJoint *handPtr = &skeleton.HandJoint(unk4);
-    float handX = handPtr->mJointPos[0].x;
-    float handZ = handPtr->mJointPos[0].z;
-    float handY = handPtr->mJointPos[0].y;
+    // ShoulderCenter camera-space position
+    float shoulderX = *((float*)(&skeleton) + 0x3B);  // 0xEC / 4
+    float shoulderY = *((float*)(&skeleton) + 0x3C);  // 0xF0 / 4
+    float shoulderZ = *((float*)(&skeleton) + 0x3D);  // 0xF4 / 4
 
-    // Compute deltas (hand - shoulder center)
-    float deltaX = handX - shoulderCenterX;
-    float deltaZ = handZ - shoulderCenterZ;
-    float deltaY = handY - shoulderCenterY;
+    float deltaX = handX - shoulderX;
+    float deltaY = handY - shoulderY;
+    float deltaZ = handZ - shoulderZ;
 
-    // Load shoulder positions for distance calc
-    float shoulderLeftZ = *((const float*)&skeleton + 0x76);   // 0x1D8 / 4
-    float shoulderRightZ = *((const float*)&skeleton + 0xEA);  // 0x3A8 / 4
-    float shoulderLeftY = *((const float*)&skeleton + 0x77);   // 0x1DC / 4
-    float shoulderRightY = *((const float*)&skeleton + 0xEB);  // 0x3AC / 4
-    float shoulderLeftX = *((const float*)&skeleton + 0x75);   // 0x1D4 / 4
-    float shoulderRightX = *((const float*)&skeleton + 0xE9);  // 0x3A4 / 4
+    // LeftShoulder and RightShoulder positions
+    float shoulderLeftX = *((float*)(&skeleton) + 0x75);   // 0x1D4 / 4
+    float shoulderRightX = *((float*)(&skeleton) + 0xE9);  // 0x3A4 / 4
+    float shoulderLeftY = *((float*)(&skeleton) + 0x76);   // 0x1D8 / 4
+    float shoulderRightY = *((float*)(&skeleton) + 0xEA);  // 0x3A8 / 4
+    float shoulderLeftZ = *((float*)(&skeleton) + 0x77);   // 0x1DC / 4
+    float shoulderRightZ = *((float*)(&skeleton) + 0xEB);  // 0x3AC / 4
 
-    // Compute shoulder distance
     float dx = shoulderRightX - shoulderLeftX;
     float dy = shoulderRightY - shoulderLeftY;
     float dz = shoulderRightZ - shoulderLeftZ;
     float shoulderDist = sqrtf(dx * dx + dy * dy + dz * dz);
 
-    // Compute corner points for ClosestPoint
     Vector3 corner1, corner2;
-    corner1.x = shoulderCenterX - deltaX;
-    corner1.z = shoulderCenterZ - deltaZ;
-    corner1.y = shoulderCenterY - deltaY;
+    corner1.x = shoulderX - deltaX;
     corner2.x = handX + deltaX;
-    corner2.z = handZ + deltaZ;
+    corner1.y = shoulderY - deltaY;
     corner2.y = handY + deltaY;
+    corner1.z = shoulderZ - deltaZ;
+    corner2.z = handZ + deltaZ;
 
-    // Find closest point
+    // NOW call HandJoint for ClosestPoint
+    const TrackedJoint &handJoint = skeleton.HandJoint(unk4);
     Vector3 closest;
-    ClosestPoint(corner1, corner2, handPtr->mJointPos[0], &closest);
+    ClosestPoint(corner1, corner2, handJoint.mJointPos[0], &closest);
 
-    // Load hip positions for direction
-    float hipLeftX = *((const float*)&skeleton + 0x15D);
-    float hipRightX = *((const float*)&skeleton + 0x1B4);
-    float hipLeftZ = *((const float*)&skeleton + 0x15F);
-    float hipRightZ = *((const float*)&skeleton + 0x1B6);
-    float hipLeftY = *((const float*)&skeleton + 0x15E);
-    float hipRightY = *((const float*)&skeleton + 0x1B5);
+    // Call HandJoint AGAIN for delta calculation
+    const TrackedJoint &handJoint2 = skeleton.HandJoint(unk4);
+    float closestDeltaX = closest.x - handJoint2.mJointPos[0].x;
+    float closestDeltaZ = closest.z - handJoint2.mJointPos[0].z;
 
-    // Compute direction and normalize
+    // HipRight - HipLeft
+    float hipLeftX = *((float*)(&skeleton) + 0x15D);
+    float hipRightX = *((float*)(&skeleton) + 0x1B4);
+    float hipLeftY = *((float*)(&skeleton) + 0x15E);
+    float hipRightY = *((float*)(&skeleton) + 0x1B5);
+    float hipLeftZ = *((float*)(&skeleton) + 0x15F);
+    float hipRightZ = *((float*)(&skeleton) + 0x1B6);
+
     Vector3 direction;
     direction.x = hipRightX - hipLeftX;
-    direction.z = hipRightZ - hipLeftZ;
     direction.y = hipRightY - hipLeftY;
+    direction.z = hipRightZ - hipLeftZ;
     Normalize(direction, direction);
 
-    // Compute rotation angle and sines
     float angle = atan2(direction.z, direction.x);
     float s1 = Sine(1.5707963267948966f - angle);
     float s2 = Sine(-angle);
 
-    // Compute rotated closest point delta
-    float closestDeltaX = closest.x - handX;
-    float closestDeltaZ = closest.z - handZ;
     float rotX = closestDeltaX * s2 + closestDeltaZ * s1;
     float rotY = closestDeltaX * s1 - closestDeltaZ * s2;
 
-    // Select height/width based on mEngaged flag
     float width, height;
     if (mEngaged) {
         height = 0.4f;
@@ -201,19 +197,19 @@ bool DirectionGestureFilterSingleUser::IsValidSwipePosition(const Skeleton &skel
         width = 0.25f;
     }
 
-    // Scale by shoulder distance
-    float scaledHeight = height * shoulderDist;
-    float scaledWidth = width * shoulderDist;
+    height *= shoulderDist;
+    width *= shoulderDist;
 
-    // Ellipse test
-    float ellipseTest = (rotX * rotX) / (scaledHeight * scaledHeight) + (rotY * rotY) / (scaledWidth * scaledWidth);
+    float ellipseTest = (rotX * rotX) / (height * height) + (rotY * rotY) / (width * width);
 
     if (ellipseTest < 1.0f) {
         return 0;
     }
 
     if (!mAllowAboveShoulder || mHighButtonMode) {
-        float yTest = handY - shoulderCenterY;
+        // Call HandJoint AGAIN for Y-test
+        const TrackedJoint &handJoint3 = skeleton.HandJoint(unk4);
+        float yTest = handJoint3.mJointPos[0].y - shoulderY;
         if (mHighButtonMode) {
             if (yTest < 0.0f) {
                 return 0;

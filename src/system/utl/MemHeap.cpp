@@ -214,10 +214,9 @@ void MemHeap::LastFit(int size, int align, FreeBlockInfo &blockinfo) {
     if (block == nullptr) {
         return;
     }
+    int alignShift = align + 2;
     FreeBlock *prev = nullptr;
     do {
-        // Calculate aligned position where allocation would end
-        int alignShift = align + 2;
         int blockAddr = (int)block;
         int blockSize = block->mSizeWords;
         int allocEnd = blockAddr + (blockSize - size);

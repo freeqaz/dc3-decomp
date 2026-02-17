@@ -383,19 +383,34 @@ def seed_ghidra_dtm(
             if not info:
                 continue
 
+            # Build member list with sizes inferred from offset gaps
+            raw_members = sorted(info["members"], key=lambda m: m["offset"])
             members = []
-            for m in info["members"]:
+            for i, m in enumerate(raw_members):
+                # Infer size from gap to next member, default 4
+                if i + 1 < len(raw_members):
+                    gap = raw_members[i + 1]["offset"] - m["offset"]
+                    size = min(gap, 4) if gap > 0 else 4
+                else:
+                    size = 4
                 members.append({
                     "name": m["name"],
                     "type_str": m["type_str"],
                     "offset": m["offset"],
-                    "size": 4,
+                    "size": size,
                 })
+
+            # Calculate total_size from max member offset + size
+            total_size = 0
+            for m in members:
+                end = m["offset"] + m["size"]
+                if end > total_size:
+                    total_size = end
 
             class_defs.append({
                 "name": cls["name"],
                 "members": members,
-                "total_size": 0,
+                "total_size": total_size,
             })
 
     print(f"    Creating {len(class_defs)} structures from struct_db...")

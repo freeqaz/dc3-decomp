@@ -187,31 +187,24 @@ BEGIN_COPYS(UIFontImporter)
     END_COPYING_MEMBERS
 END_COPYS
 
+INIT_REVS(10, 4)
+
 BEGIN_LOADS(UIFontImporter)
-    u32 vers;
-    bs.ReadEndian(&vers, 4);
-    int minVers = vers & 0xFFFF;
-    int altVers = vers >> 16;
-
-    if (minVers > 10) {
-        MILO_FAIL("%s can't load new %s version %d", PathName(this), ClassName(), minVers);
-    }
-    if (altVers > 4) {
-        MILO_FAIL("%s can't load new %s alt version %d", PathName(this), ClassName(), altVers);
-    }
-
-    BinStreamRev rev(bs, vers);
-    rev >> mLowerCaseAthroughZ;
-    rev >> mUpperCaseAthroughZ;
-    rev >> mNumbers0through9;
-    rev >> mPunctuation;
-    rev >> mUpperEuro;
-    rev >> mLowerEuro;
+    LOAD_REVS(bs)
+    ASSERT_REVS(10, 4)
+    int altVers = d.altRev;
+    int minVers = d.rev;
+    d >> mLowerCaseAthroughZ;
+    d >> mUpperCaseAthroughZ;
+    d >> mNumbers0through9;
+    d >> mPunctuation;
+    d >> mUpperEuro;
+    d >> mLowerEuro;
 
     if (altVers > 0) {
-        rev >> mRussian;
-        rev >> mPolish;
-        rev >> mIncludeLocale;
+        d >> mRussian;
+        d >> mPolish;
+        d >> mIncludeLocale;
         bs >> mIncludeFile;
     }
 
@@ -230,7 +223,7 @@ BEGIN_LOADS(UIFontImporter)
 
     bs >> mFontName;
 
-    if (minVers < 5) {
+    if (minVers <= 4) {
         s32 val;
         bs.ReadEndian(&val, 4);
         mFontPctSize = std::fabs((f32)(s64)(-val) * 0.0013888889f);
@@ -239,7 +232,7 @@ BEGIN_LOADS(UIFontImporter)
     }
 
     bs.ReadEndian(&mFontWeight, 4);
-    rev >> mItalics;
+    d >> mItalics;
 
     if (altVers > 1) {
         bs.ReadEndian(&mDropShadow, 4);
@@ -263,7 +256,7 @@ BEGIN_LOADS(UIFontImporter)
     bs.ReadEndian(&mRight, 4);
     bs.ReadEndian(&mTop, 4);
     bs.ReadEndian(&mBottom, 4);
-    rev >> mFillWithSafeWhite;
+    d >> mFillWithSafeWhite;
 
     if (minVers < 8) {
         mFontToImportFrom.Load(bs, true, 0);
@@ -297,7 +290,7 @@ BEGIN_LOADS(UIFontImporter)
     }
 
     if (minVers > 8) {
-        rev >> mLastGenWasNG;
+        d >> mLastGenWasNG;
     }
 
     if (altVers == 1) {

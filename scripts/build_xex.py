@@ -6,6 +6,9 @@ Creates an unencrypted, uncompressed XEX container around a PPC PE executable.
 Copies essential optional headers from the original XEX (entry point, image base,
 execution ID, etc.) but updates the PE offset and image size for the new PE.
 
+Also patches the PE's import thunks from PE ordinal format (0x80XXXXXX) to
+XEX import format (0x00XXXXXX) so Xenia can properly resolve imports.
+
 Usage:
     python3 scripts/build_xex.py                           # Default: build PE → XEX
     python3 scripts/build_xex.py --pe path/to/pe.exe       # Custom PE
@@ -17,6 +20,350 @@ import struct
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+
+
+def find_pe_offset_for_rva(pe_data, rva):
+    """Find the file offset in PE data for a given RVA. Returns None if not found."""
+    if pe_data[0:2] != b'MZ':
+        return None
+
+    pe_offset = struct.unpack_from('<I', pe_data, 0x3C)[0]
+    if pe_data[pe_offset:pe_offset+4] != b'PE\x00\x00':
+        return None
+
+    # COFF header
+    num_sections = struct.unpack_from('<H', pe_data, pe_offset + 6)[0]
+    opt_hdr_size = struct.unpack_from('<H', pe_data, pe_offset + 20)[0]
+
+    # Parse sections to find which one contains this RVA
+    section_off = pe_offset + 24 + opt_hdr_size
+    for i in range(num_sections):
+        vsize = struct.unpack_from('<I', pe_data, section_off + 8)[0]
+        vaddr = struct.unpack_from('<I', pe_data, section_off + 12)[0]
+        raw_size = struct.unpack_from('<I', pe_data, section_off + 16)[0]
+        raw_offset = struct.unpack_from('<I', pe_data, section_off + 20)[0]
+
+        if vaddr <= rva < vaddr + max(vsize, raw_size):
+            # Found the section - convert RVA to file offset
+            return raw_offset + (rva - vaddr)
+
+        section_off += 40
+
+    return None
+
+
+def find_idata_section(pe_data):
+    """Find the .idata section in PE and return (rva, size, file_offset)."""
+    if pe_data[0:2] != b'MZ':
+        return None
+
+    pe_offset = struct.unpack_from('<I', pe_data, 0x3C)[0]
+    if pe_data[pe_offset:pe_offset+4] != b'PE\x00\x00':
+        return None
+
+    # COFF header
+    num_sections = struct.unpack_from('<H', pe_data, pe_offset + 6)[0]
+    opt_hdr_size = struct.unpack_from('<H', pe_data, pe_offset + 20)[0]
+
+    # Parse sections
+    section_off = pe_offset + 24 + opt_hdr_size
+    for i in range(num_sections):
+        name = pe_data[section_off:section_off+8].rstrip(b'\x00')
+        vsize = struct.unpack_from('<I', pe_data, section_off + 8)[0]
+        vaddr = struct.unpack_from('<I', pe_data, section_off + 12)[0]
+        raw_size = struct.unpack_from('<I', pe_data, section_off + 16)[0]
+        raw_offset = struct.unpack_from('<I', pe_data, section_off + 20)[0]
+
+        if name == b'.idata':
+            return vaddr, vsize, raw_offset
+
+        section_off += 40
+
+    return None
+
+
+def copy_import_data_from_original(pe_data, orig_xex_data, orig_image_base=0x82000000):
+    """
+    Copy import ordinal data from original XEX to the decompiled PE.
+
+    The original XEX has import ordinal data at RVA 0x600+ in the PE.
+    The decompiled PE may have different data there.
+    This function copies the import ordinal data from the original.
+
+    Returns: patched PE data
+    """
+    # Find PE offset in original XEX
+    orig_pe_offset = struct.unpack_from('>I', orig_xex_data, 8)[0]
+
+    # Import data is typically at RVA 0x600-0x1000
+    # Find the extent of import data by looking for record_type 0x00 values
+    import_rva_start = 0x600
+    import_rva_end = 0x1000
+
+    # Scan to find where import data actually ends
+    for rva in range(0x600, 0x2000, 4):
+        file_off = orig_pe_offset + rva
+        if file_off + 4 > len(orig_xex_data):
+            break
+        val = struct.unpack_from('>I', orig_xex_data, file_off)[0]
+        record_type = (val >> 24) & 0xFF
+        ordinal = val & 0xFFFFFF
+
+        # Check if this looks like valid import data
+        if record_type == 0x00 and 0 < ordinal < 0x10000:
+            import_rva_end = rva + 4
+
+    import_size = import_rva_end - import_rva_start
+    print(f"  Found import data in original XEX: RVA 0x{import_rva_start:X}-0x{import_rva_end:X} ({import_size} bytes)")
+
+    # Copy import data from original XEX to PE
+    pe_data = bytearray(pe_data)
+    src_off = orig_pe_offset + import_rva_start
+    dst_off = import_rva_start  # File offset = RVA for our PE
+
+    pe_data[dst_off:dst_off + import_size] = orig_xex_data[src_off:src_off + import_size]
+    print(f"  Copied import data from original XEX to RVA 0x{import_rva_start:X}")
+
+    return bytes(pe_data)
+
+
+def patch_and_relocate_imports(pe_data, image_base, expected_import_rva=0x600):
+    """
+    Patch PE import thunks from little-endian ordinal format to big-endian XEX format.
+
+    The Xbox 360 linker generates import thunks with bit 31 set (0x80XXXXXX format)
+    in little-endian. Xenia's XEX parser expects record_type in the high byte
+    (big-endian): 0x00=variable, 0x01=thunk.
+
+    This function:
+    1. Finds .idata section
+    2. Converts data entries from 0x80XXXXXX (LE) to 0x00XXXXXX (BE)
+    3. Builds a mapping: ordinal -> RVA in .idata
+
+    Returns: (patched PE data, .idata RVA, dict of ordinal -> RVA)
+    """
+    idata_info = find_idata_section(pe_data)
+    if not idata_info:
+        print("  Warning: No .idata section found, skipping import patching")
+        return pe_data, 0, {}
+
+    idata_rva, idata_vsize, idata_file_offset = idata_info
+    print(f"  Found .idata at RVA 0x{idata_rva:X}, size 0x{idata_vsize:X}")
+
+    pe_data = bytearray(pe_data)
+    patched = 0
+    ordinal_to_rva = {}
+
+    # Scan and patch data entries to 0x00XXXXXX format (record_type=0x00)
+    off = 0
+    while off < idata_vsize - 3:
+        val_le = struct.unpack_from('<I', pe_data, idata_file_offset + off)[0]
+
+        # Check if this looks like an ordinal import (0x80XXXXXX with reasonable ordinal)
+        if (val_le & 0xFF000000) == 0x80000000:
+            ordinal = val_le & 0xFFFFFF  # Full 24-bit ordinal
+            if 0x001 <= ordinal <= 0x1FFFF:  # Reasonable ordinal range
+                # Convert to XEX data format: big-endian with record_type=0x00
+                # Value is just the ordinal (0x00XXXXXX)
+                struct.pack_into('>I', pe_data, idata_file_offset + off, ordinal)
+                patched += 1
+                ordinal_to_rva[ordinal] = idata_rva + off
+
+        off += 4
+
+    print(f"  Converted {patched} import entries to XEX data format (0x00XXXXXX)")
+    print(f"  Mapped {len(ordinal_to_rva)} ordinals to RVAs")
+
+    return bytes(pe_data), idata_rva, ordinal_to_rva
+
+
+def parse_import_library_header(data, header_offset):
+    """
+    Parse xex2_opt_import_libraries structure.
+
+    Structure:
+    +0x00: total_size (4 bytes)
+    +0x04: string_table_size (4 bytes)
+    +0x08: string_table_count (4 bytes)
+    +0x0C: string_table data
+    ... library headers follow
+    """
+    total_size = struct.unpack_from('>I', data, header_offset)[0]
+    str_table_size = struct.unpack_from('>I', data, header_offset + 4)[0]
+    str_table_count = struct.unpack_from('>I', data, header_offset + 8)[0]
+
+    # Parse string table (null-terminated strings)
+    str_table_off = header_offset + 12
+    strings = []
+    pos = 0
+    while pos < str_table_size:
+        end = data.find(b'\x00', str_table_off + pos)
+        if end == -1:
+            break
+        s = data[str_table_off + pos:end].decode('utf-8', errors='replace')
+        strings.append(s)
+        pos = end - str_table_off + 1
+
+    # Parse library headers
+    libs = []
+    lib_off = str_table_off + str_table_size
+
+    while lib_off < header_offset + total_size:
+        lib_size = struct.unpack_from('>I', data, lib_off)[0]
+        if lib_size == 0:
+            break
+
+        # Parse xex2_import_library structure
+        # +0x00: size (4)
+        # +0x04: digest (20)
+        # +0x18: id (4)
+        # +0x1C: version (4)
+        # +0x20: version_min (4)
+        # +0x24: name_index (2)
+        # +0x26: count (2)
+        # +0x28: import_table[] (4 each)
+
+        name_index = struct.unpack_from('>H', data, lib_off + 0x24)[0]
+        count = struct.unpack_from('>H', data, lib_off + 0x26)[0]
+
+        lib_name = strings[name_index] if name_index < len(strings) else f"unknown_{name_index}"
+
+        import_table = []
+        for i in range(count):
+            va = struct.unpack_from('>I', data, lib_off + 0x28 + i * 4)[0]
+            import_table.append(va)
+
+        libs.append({
+            'offset': lib_off,
+            'size': lib_size,
+            'name': lib_name,
+            'name_index': name_index,
+            'count': count,
+            'import_table': import_table,
+        })
+
+        lib_off += lib_size
+
+    return {
+        'total_size': total_size,
+        'string_table_size': str_table_size,
+        'strings': strings,
+        'libraries': libs,
+        'raw_data': data[header_offset:header_offset + total_size],
+    }
+
+
+def build_ordinal_to_rva_map(pe_data):
+    """
+    Build mapping from ordinal -> RVA in patched .idata section.
+
+    The .idata has already been patched to XEX format (0x00XXXXXX).
+    Returns: dict mapping ordinal -> RVA
+    """
+    idata_info = find_idata_section(pe_data)
+    if not idata_info:
+        return {}
+
+    idata_rva, idata_vsize, idata_file_offset = idata_info
+    ordinal_map = {}
+
+    for off in range(0, idata_vsize - 3, 4):
+        # Read big-endian (already converted to XEX format)
+        val = struct.unpack_from('>I', pe_data, idata_file_offset + off)[0]
+        record_type = (val >> 24) & 0xFF
+        if record_type == 0x00:  # Data import (ordinal in low 24 bits)
+            ordinal = val & 0xFFFFFF
+            if ordinal > 0:  # Valid ordinal
+                ordinal_map[ordinal] = idata_rva + off
+
+    return ordinal_map
+
+
+def build_va_to_ordinal_map(orig_xex_data, orig_image_base, import_libs_info):
+    """
+    Build mapping from original VA -> ordinal by reading values from original XEX.
+
+    The original import_table VAs point to locations where ordinal values were stored.
+    Returns: dict mapping VA -> ordinal
+    """
+    va_to_ordinal = {}
+
+    for lib in import_libs_info['libraries']:
+        for va in lib['import_table']:
+            if va == 0:
+                continue
+
+            # Calculate where this VA is in the original PE data
+            # Original XEX has PE at some offset, need to find it
+            orig_pe_offset = struct.unpack_from('>I', orig_xex_data, 8)[0]
+            rva = va - orig_image_base
+            file_offset = orig_pe_offset + rva
+
+            if file_offset < len(orig_xex_data) - 4:
+                # Read the ordinal value stored at this location
+                # In original XEX, this should be in big-endian format
+                val = struct.unpack_from('>I', orig_xex_data, file_offset)[0]
+                record_type = (val >> 24) & 0xFF
+                ordinal = val & 0xFFFFFF
+
+                if record_type == 0x00 and ordinal > 0:
+                    va_to_ordinal[va] = ordinal
+
+    return va_to_ordinal
+
+
+def patch_import_library_header(orig_header_data, import_libs_info,
+                                  va_to_ordinal, ordinal_to_rva, new_image_base):
+    """
+    Patch import_table VAs to point to decompiled PE's .idata section.
+
+    For each import_table entry:
+    1. Look up the ordinal from the original VA
+    2. Find the new RVA for that ordinal in our .idata
+    3. Update the VA to point to the new location
+    """
+    patched = bytearray(orig_header_data)
+    patched_count = 0
+    missing_count = 0
+
+    for lib in import_libs_info['libraries']:
+        lib_offset = lib['offset']
+        # Find where this library starts in the header data
+        # Libraries are after the string table
+        str_table_size = import_libs_info['string_table_size']
+        # Calculate offset from start of libraries section
+        lib_data_offset = 12 + str_table_size  # 12 = size(4) + str_size(4) + str_count(4)
+        for prev_lib in import_libs_info['libraries']:
+            if prev_lib['offset'] < lib['offset']:
+                lib_data_offset += prev_lib['size']
+
+        for i, orig_va in enumerate(lib['import_table']):
+            if orig_va == 0:
+                continue
+
+            # Look up ordinal for this original VA
+            ordinal = va_to_ordinal.get(orig_va)
+            if ordinal is None:
+                missing_count += 1
+                continue
+
+            # Find new RVA for this ordinal
+            new_rva = ordinal_to_rva.get(ordinal)
+            if new_rva is None:
+                missing_count += 1
+                continue
+
+            # Calculate new VA
+            new_va = new_image_base + new_rva
+
+            # Patch the import_table entry
+            # Import table is at lib_data_offset + 0x28 + i*4 in the raw data
+            entry_offset = lib_data_offset + 0x28 + i * 4
+            struct.pack_into('>I', patched, entry_offset, new_va)
+            patched_count += 1
+
+    print(f"  Patched {patched_count} import table entries, {missing_count} missing")
+    return bytes(patched)
 
 
 def parse_pe_header(pe_data):
@@ -86,6 +433,9 @@ def parse_original_xex(xex_path):
     #   0xFF: variable-length (first 4 bytes at offset = total size)
     #   0x02-0xFE: fixed-size (key_type * 4 bytes at offset)
     bff_headers = {}
+    import_libs_offset = None
+    import_libs_info = None
+
     for hdr_id, hdr_val in opt_headers:
         key_type = hdr_id & 0xFF
         if key_type <= 0x01:
@@ -95,10 +445,19 @@ def parse_original_xex(xex_path):
             # Pointer to variable-length data
             size = struct.unpack('>I', data[hdr_val:hdr_val+4])[0]
             bff_headers[hdr_id] = ('blob', data[hdr_val:hdr_val+size])
+            # Special handling for import libraries
+            if hdr_id == 0x000103FF:
+                import_libs_offset = hdr_val
+                import_libs_info = parse_import_library_header(data, hdr_val)
         else:
             # Fixed-size data (key_type * 4 bytes)
             size = key_type * 4
             bff_headers[hdr_id] = ('fixed', data[hdr_val:hdr_val+size])
+
+    # Get original image base
+    orig_image_base = 0x82000000  # Default
+    if 0x00010201 in bff_headers and bff_headers[0x00010201][0] == 'inline':
+        orig_image_base = bff_headers[0x00010201][1]
 
     return {
         'mod_flags': mod_flags,
@@ -106,11 +465,16 @@ def parse_original_xex(xex_path):
         'bff_headers': bff_headers,
         'security_info': si_data,
         'original_data': data,
+        'import_libs_offset': import_libs_offset,
+        'import_libs_info': import_libs_info,
+        'orig_image_base': orig_image_base,
     }
 
 
-def build_xex(pe_data, original_xex_info, pe_info):
+def build_xex(pe_data, original_xex_info, pe_info, idata_rva=0x2B0A00, ordinal_to_rva=None):
     """Build a minimal XEX2 container around the PE data."""
+    if ordinal_to_rva is None:
+        ordinal_to_rva = {}
     # We'll build the XEX in pieces:
     # 1. XEX2 header (24 bytes)
     # 2. Optional headers (8 bytes each)
@@ -181,9 +545,14 @@ def build_xex(pe_data, original_xex_info, pe_info):
     if 0x000183FF in orig:
         blob_headers.append((0x000183FF, orig[0x000183FF][1]))
 
-    # Import Libraries (0x103FF) - copy from original
-    if 0x000103FF in orig:
-        blob_headers.append((0x000103FF, orig[0x000103FF][1]))
+    # Import Libraries (0x103FF) - SKIP for now
+    # The original XEX is compressed, and its import_table VAs point to
+    # decompressed memory locations. Our PE is uncompressed and has different
+    # structure. Including the header with unpatched VAs causes Xenia to
+    # read garbage values and crash.
+    print("  Skipping import library header (PE structure mismatch)")
+    # if 0x000103FF in orig:
+    #     blob_headers.append((0x000103FF, orig[0x000103FF][1]))
 
     # TLS Info (0x20104) - copy from original
     if 0x00020104 in orig:
@@ -328,16 +697,28 @@ def main():
     print(f"  Size of image: {pe_info['size_of_image']:#x} ({pe_info['size_of_image']:,} bytes)")
     print(f"  Entry point: {pe_info['image_base'] + pe_info['entry_rva']:#x}")
 
-    # Parse original XEX
+    # Parse original XEX first (needed for import data)
     orig_xex_path = Path(args.original_xex)
     print(f"\nParsing original XEX: {orig_xex_path}")
     orig_info = parse_original_xex(orig_xex_path)
     print(f"  {len(orig_info['opt_headers'])} optional headers")
     print(f"  Security info: {len(orig_info['security_info'])} bytes")
 
+    # Note: We do NOT copy import data from original XEX because:
+    # 1. Original XEX's PE is compressed
+    # 2. The "import data" in the file is actually compressed bytes
+    # 3. Xenia decompresses the PE and then reads import data from memory
+    # 4. Our PE is uncompressed, so we can't use the original's compressed data
+
+    # Patch and relocate import thunks
+    print("\nPatching import thunks...")
+    pe_data, idata_rva, ordinal_to_rva = patch_and_relocate_imports(pe_data, pe_info['image_base'])
+    if idata_rva == 0:
+        print("  Warning: Could not find .idata section!")
+
     # Build XEX
     print(f"\nBuilding XEX...")
-    xex_data = build_xex(pe_data, orig_info, pe_info)
+    xex_data = build_xex(pe_data, orig_info, pe_info, idata_rva, ordinal_to_rva)
     print(f"  XEX size: {len(xex_data):,} bytes")
 
     # Verify

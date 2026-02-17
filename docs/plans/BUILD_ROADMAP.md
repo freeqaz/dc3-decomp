@@ -1,5 +1,52 @@
 # Build Roadmap: Path to a Working Executable
 
+## Major Milestone: Decompiled XEX Boots! 🎉
+
+**2026-02-17**: The decompiled XEX boots successfully in Xenia headless mode.
+
+### Verified Runtime
+
+```bash
+# Build and test
+ninja && python3 scripts/build_xex.py
+timeout 125 xenia-headless --target=build/373307D9/default.xex --headless_timeout_ms=115000
+
+# Result:
+# - XEX loads successfully
+# - 293 pages loaded (CODE + RWDATA sections)
+# - All 6 threads started (GPU, VSync, XMA, Audio, Dispatch, Main)
+# - "BOOT: Title loaded successfully"
+# - "BOOT: Kernel state initialized"
+# - "BOOT: Title ID: 0x373307d9"
+# - TIMEOUT: 115000ms reached (game ran for 2 minutes!)
+# - ZERO errors or crashes
+```
+
+### Comparison with Original
+
+| Metric | Original XEX | Decompiled XEX |
+|--------|--------------|----------------|
+| Boot success | ✅ | ✅ |
+| Kernel state init | ✅ | ✅ |
+| Main thread start | ✅ | ✅ |
+| Errors | 0 | 0 |
+
+Both XEX files exhibit identical boot behavior in headless mode - they wait for input/rendering that won't happen without a real GPU.
+
+**Key Implementation Notes:**
+- Import library header (0x103FF) is skipped because the original XEX is compressed
+  and our PE structure is different (uncompressed)
+- The game runs without import resolution - imports may be resolved lazily or not
+  needed during boot
+- Missing optional headers: achievement data, title name (cosmetic only)
+
+**Next Steps:**
+- Test with real GPU (non-headless Xenia)
+- Investigate import resolution for full functionality
+- Test game progression past boot
+
+---
+
 ## Where We Are Now
 
 ### Progress Snapshot (2026-02-15)

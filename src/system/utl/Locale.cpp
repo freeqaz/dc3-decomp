@@ -222,8 +222,8 @@ struct LocaleFloatBuffer {
     char buffers[4][0x32];
 };
 static LocaleFloatBuffer gLocalizeFloatBuf;
-static int gLocalizeFloatIdx = 0;
 static bool gLocalizeFloatInitialized = false;
+static int gLocalizeFloatIdx = 0;
 static Symbol gLocalizeFloatSeparator;
 
 const char *LocalizeFloat(const char *fmt, float num) {

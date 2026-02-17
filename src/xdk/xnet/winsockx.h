@@ -8,7 +8,7 @@ extern "C" {
 #define IOCPARAM_MASK 0x7f
 #define IOC_VOID 0x20000000
 #define IOC_OUT 0x40000000
-#define IOC_IN 0x800000000
+#define IOC_IN 0x80000000
 
 #define _IOW(x, y, t)                                                                    \
     (IOC_IN | (((long)sizeof(t) & IOCPARAM_MASK) << 16) | ((x) << 8) | (y))

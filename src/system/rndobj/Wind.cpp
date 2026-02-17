@@ -132,7 +132,7 @@ void RndWind::SetDefaults() {
     mPrevailing.Set(0.0f, 0.0f, 0.0f);
     mRandom.Set(17.0f, 17.0f, 0.0f);
     mTimeLoop = 100.0f;
-    mSpaceLoop = 100.0f;
+    mSpaceLoop = gUnitsPerMeter * 10.0f;
 }
 
 BEGIN_HANDLERS(RndWind)

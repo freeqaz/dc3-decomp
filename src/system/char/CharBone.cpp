@@ -30,19 +30,16 @@ void CharBone::ClearContext(int i) {
 
 void CharBone::StuffBones(std::list<CharBones::Bone> &bonelist, int i) const {
     if (mPositionContext & i) {
-        bonelist.push_back(CharBones::Bone(
-            CharBones::ChannelName(Name(), CharBones::TYPE_POS), GetWeight(i)
-        ));
+        Symbol s = CharBones::ChannelName(Name(), CharBones::TYPE_POS);
+        bonelist.push_back(CharBones::Bone(s, GetWeight(i)));
     }
     if (mScaleContext & i) {
-        bonelist.push_back(CharBones::Bone(
-            CharBones::ChannelName(Name(), CharBones::TYPE_SCALE), GetWeight(i)
-        ));
+        Symbol s = CharBones::ChannelName(Name(), CharBones::TYPE_SCALE);
+        bonelist.push_back(CharBones::Bone(s, GetWeight(i)));
     }
     if (mRotation != CharBones::TYPE_END && mRotationContext & i) {
-        bonelist.push_back(
-            CharBones::Bone(CharBones::ChannelName(Name(), mRotation), GetWeight(i))
-        );
+        Symbol s = CharBones::ChannelName(Name(), mRotation);
+        bonelist.push_back(CharBones::Bone(s, GetWeight(i)));
     }
 }
 

@@ -64,7 +64,7 @@ DataNode XboxPurchaser::OnMsg(UIChangedMsg const &msg) {
 }
 
 BEGIN_HANDLERS(XboxPurchaser)
-    HANDLE_SUPERCLASS(Hmx::Object)
+    HANDLE_MESSAGE(UIChangedMsg)
 END_HANDLERS
 
 #pragma endregion XboxPurchaser
@@ -140,7 +140,7 @@ DataNode XboxMultipleItemsPurchaser::OnMsg(UIChangedMsg const &msg) {
 }
 
 BEGIN_HANDLERS(XboxMultipleItemsPurchaser)
-    HANDLE_SUPERCLASS(Hmx::Object)
+    HANDLE_MESSAGE(UIChangedMsg)
 END_HANDLERS
 
 #pragma endregion XboxMultipleItemsPurchaser

@@ -2,7 +2,7 @@
 
 Prioritized list of functions that are good candidates for quick wins. Updated after each session.
 
-**Last Updated:** January 2026
+**Last Updated:** 2026-02-17
 
 ---
 
@@ -80,6 +80,9 @@ Functions that have been matched to 100%.
 | `PresenceMgr::SetInGame()` | 32b | PresenceMgr.cpp | Jan 2026 | Already correct |
 | `PresenceMgr::SetNotInGame()` | 32b | PresenceMgr.cpp | Jan 2026 | Already correct |
 | `PresenceMgr::OnPlayerPresentChange()` | 72b | PresenceMgr.cpp | Jan 2026 | Already correct |
+| `RndWind::GetWind(float)` | ~80b | Wind.cpp | Feb 2026 | Linear interp, `Mod(x,1.0f)*1024` indexing |
+| `RndWind::GetWhiteNoise(float)` | ~80b | Wind.cpp | Feb 2026 | Linear interp, `Mod(x,1023.0f)` indexing |
+| `StartDecompressionThread` | ~100b | ChunkStream.cpp | Feb 2026 | Inverted control flow fix |
 
 ---
 
@@ -98,25 +101,18 @@ Close but need final tweaks. Many were improved this session.
 
 ---
 
-## Improved This Session
+## Improved This Session (Feb 2026)
 
-Functions that were improved but not yet 100%:
+Functions implemented from stub (0%) or significantly improved:
 
 | Function | Before | After | Fix Applied |
 |----------|--------|-------|-------------|
-| `BustAMovePanel::SetFlashcardName` | 95.5% | Improved | `side == 0` → `1 - side` |
-| `BustAMovePanel::SetFlashcardText` | 94.8% | Improved | `side == 0` → `1 - side` |
-| `AccomplishmentManager::IsAvailable` | 99.9% | Improved | Threshold check inside `if` |
-| `AccomplishmentManager::HandleSongCompleted` | 94.5% | Improved | Array index fix |
-| `CampaignProgress::IsEraSongAvailable` | 99.9% | Improved | Variable order |
-| `CampaignProgress::GetTotalStarsEarned` | 96.5% | Improved | Variable order |
-| `CampaignProgress::IsEraComplete` | 97.9% | Improved | Combined declaration |
-| `CampaignProgress::GetFirstIncompleteEra` | 98.7% | Improved | Ternary + assignment |
-| `CampaignProgress::GetNumCompletedEras` | 99.5% | Improved | Ternary operator |
-| `Game::LoadNewSongAudio` | 98.5% | Improved | nullptr consistency |
-| `Game::LoadSong` | 98.3% | Improved | 0 vs nullptr |
-| `Game::Game` constructor | 97.4% | Improved | Initializer list |
-| `MetaPanel::Exiting` | 87.8% | 90.9% | Missing returns |
+| `SetWind` | 0.8% | 91% | Midpoint displacement with `sqrtf(2.0f)` decay |
+| `RndWind::Init` | 0% | 82% | REGISTER_OBJ_FACTORY + Rand alloc + field init |
+| `RndWind::GetWind(float)` | 0% | 98.8% | Completed stub |
+| `RndWind::GetWhiteNoise(float)` | 0% | 99.1% | Completed stub |
+| `RndWind::SelfGetWind` | 0% | 71.4% | Wind vector + transform + speed clamp |
+| `StartDecompressionThread` | 40% | 98% | Inverted if/else control flow |
 
 ---
 

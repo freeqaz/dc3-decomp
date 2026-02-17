@@ -36,6 +36,16 @@ Use `mcp__orchestrator__` tools for all decomp analysis. Do not call `objdiff-cl
 | [XEXLoaderWV](XEXLOADERWV.md) | Ghidra extension for Xbox 360 XEX files | [XEXLOADERWV.md](XEXLOADERWV.md) |
 | [m2c](m2c.md) | Machine code to C decompiler | [m2c.md](m2c.md) |
 
+## Ghidra CLI Analysis Tools
+
+Require running pyghidra-mcp service (`./tools/ghidra/pyghidra-service.sh start`) and seeded DTM (`python3 tools/ghidra/batch_export_types.py --seed`). See [GHIDRA.md](GHIDRA.md#cli-analysis-tools).
+
+| Tool | Description | Usage |
+|------|-------------|-------|
+| `struct_check.py` | Compare header struct layouts vs Ghidra DTM | `python3 tools/ghidra/struct_check.py HamDirector` |
+| `pcode_inspect.py` | Switch table + cast analysis from decompiled output | `python3 tools/ghidra/pcode_inspect.py "Class::Method" --switches` |
+| `code_search.py` | Semantic search over 42K+ decompiled functions | `python3 tools/ghidra/code_search.py "iterate list delete"` |
+
 ## Dynamic Analysis
 
 | Tool | Description | Doc |

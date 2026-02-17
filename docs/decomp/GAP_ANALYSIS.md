@@ -2,7 +2,7 @@
 
 This document identifies where to invest effort for maximum decompilation progress. Updated periodically with fresh data from the build report.
 
-**Last Updated:** 2026-02-14
+**Last Updated:** 2026-02-17
 
 ---
 
@@ -12,21 +12,20 @@ This document identifies where to invest effort for maximum decompilation progre
 
 | Metric | Value |
 |--------|-------|
-| Total Functions | 47,124 |
-| Matched Functions | 23,950 (50.82%) |
-| **Fuzzy Match** | **43.62%** |
-| Matched Code | 35.76% (3,957KB / 11,063KB) |
-| Complete Code (100%) | 2.07% (229KB) |
+| Total Functions | 47,835 |
+| Non-excluded (game+engine) | 31,814 |
+| **Fuzzy Match** | **~43.9%** |
+| Matched Code Bytes | 35.96% (4,073KB / 11,326KB) |
 | Complete Units | 164 / 2,223 |
 
 ### Database Triage Status
 
-| Category | Count |
-|----------|-------|
-| Complete (100%) | 23,956 |
-| AT_LIMIT (classified stuck) | 1,821 |
-| Partial (1-99%) | ~1,993 |
-| Unimplemented (0%) | 21,886 |
+| Category | Count | % non-excluded |
+|----------|-------|----------------|
+| COMPLETE (100%) | 10,719 | 33.7% |
+| AT_LIMIT (classified stuck) | 3,368 | 10.6% |
+| Done (COMPLETE + AT_LIMIT) | 14,087 | 44.3% |
+| Remaining (unclassified) | 17,727 | 55.7% |
 
 **Quick check:** Run `./tools/progress.sh` to get current stats.
 
