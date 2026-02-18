@@ -462,6 +462,143 @@ The crashes will tell us exactly what matters and what doesn't.
    patch individual functions into the original XEX. This is the gap between
    "it crashes" and "we can isolate why."
 
+## Import Resolution: Thunk Markers Plan
+
+**Status:** ✅ COMPLETED (2026-02-17) — Full import resolution working with thunk section.
+
+### Current State
+
+The XEX boots successfully with **full import resolution** enabled:
+
+| Component | Original PE | Decompiled PE |
+|-----------|-------------|---------------|
+| Variable imports (0x00XXXXXX) | RVA 0x600-0x1E48 | ✅ Copied from original |
+| Thunk markers (0x01XXXXXX) | RVA 0xEE5544-0xEE6B04 | ✅ New section at RVA 0x140C000 |
+| Import library header | VAs point to both locations | ✅ Patched to point to new thunk section |
+
+### The Problem (SOLVED)
+
+Xenia's import resolver expects the import_table to alternate between:
+1. **Variable entries** — VAs pointing to `0x00XXXXXX` values (ordinal data)
+2. **Thunk entries** — VAs pointing to `0x01XXXXXX` values (thunk markers)
+
+The original thunk VAs (0x82EE5xxx) pointed to RVA 0xEE5xxx in the PE, which is in the middle of the `.text` section. Our decompiled PE has different code there, so we needed to create a new thunk section and patch the import_table VAs.
+
+### Statistics
+
+- 360 variable imports (type 0x00)
+- 347 thunk imports (type 0x01)
+- Thunk RVA range: 0xEE5544 - 0xEE6B04 (5 KB span)
+- Space needed for thunk code: 347 × 16 bytes = 5552 bytes
+
+### Solution: Add Thunk Section + Patch Import Header (IMPLEMENTED)
+
+**Goal:** Create a dedicated thunk section and patch import_table VAs to point there. ✅ **COMPLETED**
+
+#### Step 1: Create Thunk Marker Section
+
+Add a new PE section (`.ithunk`) to hold thunk markers:
+
+```
+Location: After .idata at RVA 0x2B1000 (page-aligned)
+Size: 347 thunks × 16 bytes = 0x2B00 (rounded to page = 0x3000)
+Content: 0x01XXXXXX values (record_type=1, ordinal in low 16 bits)
+```
+
+#### Step 2: Generate Thunk Marker Data
+
+For each thunk in the original import_table:
+1. Extract the ordinal from the original thunk marker value
+2. Generate new `0x01XXXXXX` value with same ordinal
+3. Write to `.ithunk` section at sequential 16-byte offsets
+
+#### Step 3: Patch Import Library Header
+
+Modify `scripts/build_xex.py` to:
+1. Parse the import_table entries
+2. For each thunk entry (odd index):
+   - Calculate new RVA in `.ithunk` section
+   - Patch the VA to `image_base + new_rva`
+3. Include the patched import library header in XEX
+
+#### Implementation Details
+
+```python
+# Pseudocode for build_xex.py changes
+
+def create_thunk_section(import_libs_info, image_base):
+    """Create thunk marker section and return (data, va_mapping)."""
+    thunk_data = bytearray()
+    va_mapping = {}  # old_va -> new_va
+    thunk_idx = 0
+
+    for lib in import_libs_info['libraries']:
+        for i, va in enumerate(lib['import_table']):
+            if va == 0:
+                continue
+            rva = va - image_base
+            # Thunks are at high RVAs (0xEE5xxx), vars at low (0x6xx)
+            if rva > 0x1000000:  # Is thunk
+                # Get ordinal from original thunk marker
+                ordinal = read_ordinal_from_thunk(rva)
+                # Generate new thunk marker
+                marker = 0x01000000 | ordinal  # record_type=1
+                offset = thunk_idx * 16
+                struct.pack_into('>I', thunk_data, offset, marker)
+                # Map old VA to new VA
+                new_rva = 0x2B1000 + offset  # .ithunk section
+                va_mapping[va] = image_base + new_rva
+                thunk_idx += 1
+
+    return bytes(thunk_data), va_mapping
+
+def patch_import_table(orig_header, va_mapping):
+    """Patch import_table VAs to point to new thunk section."""
+    # For each import_table entry, if VA in va_mapping, patch it
+    ...
+```
+
+#### Step 4: Integrate into PE
+
+Options for adding `.ithunk` to the PE:
+1. **Post-link patching** — Append section to linked PE
+2. **Linker script** — Add section during link (requires XDK linker changes)
+3. **XEX-level injection** — Add section when building XEX (simpler)
+
+The XEX-level approach is cleanest: we already build the XEX from scratch, so we can inject a new section.
+
+### Implementation Summary
+
+| Task | Status | Notes |
+|------|--------|-------|
+| Create thunk section generator | ✅ Done | `generate_thunk_data()` in build_xex.py |
+| Patch import_table VAs | ✅ Done | `patch_import_library_header()` in build_xex.py |
+| Integrate into build_xex.py | ✅ Done | Lines 774-798 in `build_xex()` |
+| Test with Xenia | ✅ Done | All 707 imports resolve successfully |
+
+**Key Implementation Details:**
+1. Fixed thunk detection threshold from 0x1000000 (16MB) to 0x100000 (1MB)
+   - Thunks at RVA 0xEE5xxx (~15.6MB) were being missed
+2. Added `orig_pe_data` parameter passing to `build_xex()` (line 1019)
+3. Initialized `orig_pe_data = None` before try block to handle failures gracefully
+4. Thunk section created at RVA 0x140C000 with 347 entries (5552 bytes + 2640 padding)
+5. PE SizeOfImage extended from 0x12E0200 to 0x140E000
+
+**Verification:**
+```bash
+python3 scripts/build_xex.py
+# Output: Generated 347 thunk markers
+#         Patched 347 thunk VA entries in import header
+
+xenia-headless --target=build/373307D9/default.xex --headless_timeout_ms=25000
+# Output: d3d9 - 318 imports
+#         xboxkrnl - 379 imports
+#         xbdm - 10 imports
+#         BOOT: Title loaded successfully
+```
+
+---
+
 ## Related Documentation
 
 - [X360 Linking Pipeline](../sessions/2026-02-11-x360-linking-pipeline.md) — full link status

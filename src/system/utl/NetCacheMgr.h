@@ -14,8 +14,6 @@ class NetCacheLoader;
 enum NetCacheMgrFailType {
     kNCMFT_Unknown,
     kNCMFT_StoreServer,
-    kNCMFT_ClientError,
-    kNCMFT_NoEthernetCable,
     kNCMFT_NoSpace,
     kNCMFT_StorageDeviceMissing,
     kNCMFT_Max

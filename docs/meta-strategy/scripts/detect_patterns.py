@@ -210,6 +210,7 @@ def detect_patterns(db_path: Path, min_percent: float = 80.0, limit: int = 5000,
                 reachable = False
 
             # Update database with all pattern info
+            # Only set verdict_reason if NULL - preserve existing classification reasons
             conn.execute("""
                 UPDATE functions SET
                     has_linker_merged = ?,
@@ -222,7 +223,7 @@ def detect_patterns(db_path: Path, min_percent: float = 80.0, limit: int = 5000,
                     has_makestring = ?,
                     has_setobjconcrete = ?,
                     merged_symbol_count = ?,
-                    verdict_reason = ?
+                    verdict_reason = COALESCE(verdict_reason, ?)
                 WHERE id = ?
             """, (has_linker, has_bool, has_assert, has_ltcg, primary, reachable,
                   has_addtostrings, has_makestring, has_setobjconcrete, merged_count,

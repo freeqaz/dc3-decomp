@@ -69,6 +69,7 @@ protected:
     virtual void FinishEnum(std::list<EnumProduct> const &, bool);
     virtual StoreError UpdateOffers(std::list<EnumProduct> const &, bool);
     virtual void UpdateFromEnumProduct(StorePurchaseable *, EnumProduct const *);
+    virtual StoreOffer *MakeNewOffer(DataArray *arr) { return new StoreOffer(arr, 0); }
 
     void StartReEnum();
     DataNode OnMsg(SigninChangedMsg const &);

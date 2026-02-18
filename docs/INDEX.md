@@ -18,7 +18,7 @@ Tool-specific deep docs live in subdirectories:
 | [tools/cache/](tools/cache/) | Decompilation cache layer (SQLite-backed, ~200x speedup) |
 | [tools/orchestrator/](tools/orchestrator/) | Orchestrator incremental builds, prompt updates |
 | [tools/ghidra/](tools/ghidra/) | PyGhidra MCP service hardening |
-| [tools/GHIDRA.md](tools/GHIDRA.md) | Ghidra setup, type seeding pipeline, troubleshooting |
+| [tools/GHIDRA.md](tools/GHIDRA.md) | Ghidra setup, type seeding pipeline, CLI tools (`/ghidra-search`, `/ghidra-decompile`, `/ghidra-struct`) |
 
 ## Decomp Knowledge
 

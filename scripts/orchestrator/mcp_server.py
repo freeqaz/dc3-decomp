@@ -188,6 +188,16 @@ class DecompMCPServer:
                                 "type": "boolean",
                                 "description": "Filter out boilerplate symbols: atexit destructors (??__F), dynamic initializers (??__E), MakeString templates, vcall thunks (??_9), vector ctor/dtor iterators. Default: true.",
                             },
+                            "unicorn_verdict": {
+                                "type": "string",
+                                "description": "Filter by unicorn verdict: 'DIVERGENT' (behavior differs), 'EQUIVALENT' (behavior matches), 'SKIPPED', 'ERROR'",
+                                "enum": ["DIVERGENT", "EQUIVALENT", "SKIPPED", "ERROR"],
+                            },
+                            "unicorn_class": {
+                                "type": "string",
+                                "description": "Filter by divergence class (only when unicorn_verdict='DIVERGENT'): 'logic' (real bug), 'build_env' (unfixable artifact), 'regalloc' (register quirk)",
+                                "enum": ["logic", "build_env", "regalloc"],
+                            },
                         },
                     },
                 ),
@@ -554,6 +564,8 @@ class DecompMCPServer:
         limit = args.get("limit", 20)
         status = args.get("status", "workable")
         skip_boilerplate = args.get("skip_boilerplate", True)
+        unicorn_verdict = args.get("unicorn_verdict")
+        unicorn_class = args.get("unicorn_class")
 
         # Map status filter to database query params
         if status == "all":
@@ -583,6 +595,8 @@ class DecompMCPServer:
             limit=limit,
             db_path=self.db_path,
             skip_boilerplate=skip_boilerplate,
+            unicorn_verdict=unicorn_verdict,
+            unicorn_class=unicorn_class,
         )
 
         # When filtering by unit, check if there are hidden functions

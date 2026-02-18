@@ -72,6 +72,7 @@ from orchestrator.database import (
     query_functions,
     query_functions_by_priority,
     query_functions_for_unit_completion,
+    query_divergent_logic,
     get_priority_stats,
     get_function_by_symbol,
     get_stats,
@@ -310,6 +311,22 @@ def _print_unit_completion_summary(targets, reachable_only):
     print()
 
 
+def _print_divergent_summary(targets, min_priority):
+    """Print summary of divergent targets."""
+    n = len(targets)
+    pcts = [t.get('current_percent') or 0 for t in targets]
+    avg_pct = sum(pcts) / n if n else 0
+    attempts = sum(t.get('attempt_count', 0) for t in targets)
+
+    pri_str = f", min_priority={min_priority}" if min_priority > 0 else ""
+
+    print(f"\nStrategy: DIVERGENT LOGIC{pri_str}")
+    print(f"Selected {n} functions with behavioral divergences.")
+    print("These are real bugs to fix (not build_env/regalloc artifacts).")
+    print(f"Avg match: {avg_pct:.1f}%, Total attempts: {attempts}")
+    print()
+
+
 def cmd_batch(args):
     """Run batch of functions with parallel agents."""
     validate_model_backend(args.model)
@@ -353,6 +370,24 @@ def cmd_batch(args):
             return
         if not args.quiet:
             _print_unit_completion_summary(targets, reachable_only)
+
+    elif strategy == "divergent":
+        # Focus on DIVERGENT logic functions (real behavioral bugs)
+        targets = query_divergent_logic(
+            min_priority=min_priority,
+            min_percent=args.min_percent,
+            max_percent=args.max_percent,
+            limit=args.limit if args.limit > 0 else 1000,
+            db_path=args.db,
+            max_attempts=max_attempts,
+        )
+        if not targets:
+            print("No DIVERGENT logic functions found.")
+            print("\nTo populate unicorn verdict data, run:")
+            print("  python3 scripts/unicorn_batch_to_db.py")
+            return
+        if not args.quiet:
+            _print_divergent_summary(targets, min_priority)
 
     else:
         # Default pattern-based selection
@@ -777,6 +812,59 @@ def cmd_targets(args):
         if args.reachable_only:
             cmd += " --reachable-only"
 
+    print(f"Run batch with: {cmd}")
+    print()
+
+
+def cmd_divergent(args):
+    """Query DIVERGENT logic functions for investigation."""
+    # Convert max_attempts=0 to None
+    max_attempts = args.max_attempts if args.max_attempts > 0 else None
+
+    targets = query_divergent_logic(
+        min_priority=args.min_priority,
+        min_percent=args.min_percent,
+        max_percent=args.max_percent,
+        exclude_locked=not args.include_locked,
+        limit=args.limit if args.limit > 0 else 1000,
+        db_path=args.db,
+        max_attempts=max_attempts,
+    )
+
+    if args.json:
+        print(json.dumps(targets, indent=2, default=str))
+        return
+
+    if not targets:
+        print("No DIVERGENT logic functions found matching criteria.")
+        print("\nTo populate unicorn verdict data, run:")
+        print("  python3 scripts/unicorn_batch_to_db.py")
+        return
+
+    # Pretty print
+    print(f"\n{'='*70}")
+    print("DIVERGENT Logic Functions")
+    print(f"{'='*70}\n")
+    print(f"Found {len(targets)} functions with behavioral differences.\n")
+    print("These are real bugs to fix (not build_env/regalloc artifacts).\n")
+
+    print(f"{'Pri':>6} | {'Match':>7} | {'Attempts':>8} | {'Function'}")
+    print("-" * 82)
+
+    for t in targets:
+        pri = t.get('priority_score') or 0
+        pct = t.get('current_percent') or 0
+        attempts = t.get('attempt_count', 0)
+        name = (t.get('demangled') or t['symbol'])[:52]
+
+        print(f"{pri:6.1f} | {pct:6.2f}% | {attempts:8d} | {name}")
+
+    print()
+
+    # Show command to run batch
+    cmd = f"./bin/orchestrate batch --strategy divergent --limit {args.limit}"
+    if args.min_priority > 0:
+        cmd += f" --min-priority {args.min_priority}"
     print(f"Run batch with: {cmd}")
     print()
 
@@ -1334,9 +1422,9 @@ def main():
     # Strategy selection (Phase 2 scoring infrastructure)
     p_batch.add_argument(
         "--strategy",
-        choices=["pattern", "priority", "unit-completion"],
+        choices=["pattern", "priority", "unit-completion", "divergent"],
         default="pattern",
-        help="Target selection strategy: 'pattern' (default, filter by unit glob), 'priority' (use Phase 2 scoring), 'unit-completion' (focus on nearly-done units)"
+        help="Target selection strategy: 'pattern' (default, filter by unit glob), 'priority' (use Phase 2 scoring), 'unit-completion' (focus on nearly-done units), 'divergent' (fix behavioral bugs)"
     )
     p_batch.add_argument(
         "--reachable-only",
@@ -1568,6 +1656,58 @@ def main():
     )
     p_targets.add_argument("--json", action="store_true", help="Output as JSON")
 
+    # divergent
+    p_divergent = subparsers.add_parser(
+        "divergent",
+        help="Query DIVERGENT logic functions for investigation",
+        description="List functions with behavioral divergences (unicorn DIVERGENT + logic class). These are real bugs to fix, not unfixable compiler artifacts.",
+        epilog="""Examples:
+  # Show top 20 divergent logic functions
+  ./bin/orchestrate divergent
+
+  # Only show functions with priority score >= 10
+  ./bin/orchestrate divergent --min-priority 10
+
+  # Export as JSON
+  ./bin/orchestrate divergent --json --limit 100"""
+    )
+    p_divergent.add_argument(
+        "--min-priority",
+        type=float,
+        default=0,
+        help="Minimum priority score (default: 0)"
+    )
+    p_divergent.add_argument(
+        "--min-percent",
+        type=float,
+        default=0,
+        help="Minimum match percentage (default: 0)"
+    )
+    p_divergent.add_argument(
+        "--max-percent",
+        type=float,
+        default=100,
+        help="Maximum match percentage (default: 100)"
+    )
+    p_divergent.add_argument(
+        "--limit",
+        type=int,
+        default=20,
+        help="Maximum targets to show (default: 20)"
+    )
+    p_divergent.add_argument(
+        "--max-attempts",
+        type=int,
+        default=20,
+        help="Skip functions with >= this many attempts (default: 20). Use 0 to disable."
+    )
+    p_divergent.add_argument(
+        "--include-locked",
+        action="store_true",
+        help="Include functions locked by other agents"
+    )
+    p_divergent.add_argument("--json", action="store_true", help="Output as JSON")
+
     # sync
     p_sync = subparsers.add_parser(
         "sync",
@@ -1757,6 +1897,7 @@ def main():
         "cleanup": cmd_cleanup,
         "release-locks": cmd_release_locks,
         "targets": cmd_targets,
+        "divergent": cmd_divergent,
         "sync": cmd_sync,
         "analyze-models": cmd_analyze_models,
         "rb3-sync": cmd_rb3_sync,

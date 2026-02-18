@@ -552,21 +552,21 @@ void UILabel::SetFontMat(char const *c, int i) {
         if (!font) {
             if (*c) {
                 TheDebug.Notify(MakeString(
-                    "%s is referencing a mat variation '%s' that is not found in the font resource",
+                    "%s is referencing a mat variation '%s' that no longer exists, trying default...",
                     PathName(this), c
                 ));
                 font = dir->FontObj(Symbol(""));
             }
             if (!font) {
                 TheDebug.Notify(MakeString(
-                    "%s in resource %s has no default font",
+                    "%s in resource %s has no default mat variation",
                     PathName(this), PathName(dir)
                 ));
             }
         }
     } else if (*c) {
         TheDebug.Notify(MakeString(
-            "%s [styles 0 font_resource] is NULL, couldn't set font mat %s",
+            "%s [styles 0 font_resource] is NULL, can't set fontmat %s",
             PathName(this), c
         ));
     }

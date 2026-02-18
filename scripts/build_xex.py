@@ -279,6 +279,112 @@ def build_ordinal_to_rva_map(pe_data):
     return ordinal_map
 
 
+def decompress_xex_pe(xex_data):
+    """
+    Decompress XEX with basic compression (type 1) and return the PE data.
+
+    For debug/devkit XEXs (encryption type 0), this reads the block
+    descriptors and concatenates data blocks with zero padding.
+    """
+    # Parse XEX2 header
+    if xex_data[0:4] != b'XEX2':
+        raise ValueError(f"Not a XEX2 file: {xex_data[0:4]}")
+
+    pe_offset = struct.unpack('>I', xex_data[8:12])[0]
+    opt_count = struct.unpack('>I', xex_data[20:24])[0]
+
+    # Find the Base File Format header (0x3FF)
+    off = 24
+    bff_offset = None
+    for i in range(opt_count):
+        hdr_id = struct.unpack('>I', xex_data[off:off+4])[0]
+        hdr_val = struct.unpack('>I', xex_data[off+4:off+8])[0]
+        if hdr_id == 0x000003FF:  # Base File Format
+            bff_offset = hdr_val
+            break
+        off += 8
+
+    if bff_offset is None:
+        raise ValueError("No Base File Format header found")
+
+    # Read XEXFileDataDescriptor
+    size = struct.unpack('>I', xex_data[bff_offset:bff_offset+4])[0]
+    enc_type = struct.unpack('>H', xex_data[bff_offset+4:bff_offset+6])[0]
+    comp_type = struct.unpack('>H', xex_data[bff_offset+6:bff_offset+8])[0]
+
+    if enc_type != 0:
+        raise ValueError(f"Encrypted XEX not supported (enc_type={enc_type})")
+
+    if comp_type == 0:
+        # Raw - just copy PE directly
+        return xex_data[pe_offset:]
+    elif comp_type == 1:
+        # Basic compression - block-based with zero padding
+        num_blocks = (size - 8) // 8
+
+        pe_data = bytearray()
+        data_offset = pe_offset
+
+        for i in range(num_blocks):
+            block_off = bff_offset + 8 + i * 8
+            blk_size = struct.unpack('>I', xex_data[block_off:block_off+4])[0]
+            blk_zeros = struct.unpack('>I', xex_data[block_off+4:block_off+8])[0]
+
+            # Read data block
+            pe_data.extend(xex_data[data_offset:data_offset + blk_size])
+            data_offset += blk_size
+
+            # Add zero padding
+            pe_data.extend(b'\x00' * blk_zeros)
+
+        return bytes(pe_data)
+    elif comp_type == 2:
+        raise ValueError("LZX compression not supported - use xextool -cu first")
+    else:
+        raise ValueError(f"Unknown compression type: {comp_type}")
+
+
+def build_va_to_ordinal_map_from_decompressed(original_xex_info, import_libs_info):
+    """
+    Build mapping from original VA -> ordinal by decompressing the XEX and reading ordinals.
+
+    The original import_table VAs point to locations where ordinal values were stored
+    in the decompressed PE (at RVA 0x600-0x1E48).
+
+    Returns: dict mapping VA -> ordinal
+    """
+    xex_data = original_xex_info['original_data']
+    orig_image_base = original_xex_info['orig_image_base']
+
+    # Decompress the original XEX to get the PE data
+    try:
+        decomp_pe = decompress_xex_pe(xex_data)
+    except ValueError as e:
+        print(f"  Warning: Could not decompress original XEX: {e}")
+        return {}
+
+    va_to_ordinal = {}
+
+    for lib in import_libs_info['libraries']:
+        for va in lib['import_table']:
+            if va == 0:
+                continue
+
+            # Convert VA to RVA
+            rva = va - orig_image_base
+
+            # Read ordinal from decompressed PE at this RVA
+            if rva >= 0 and rva + 4 <= len(decomp_pe):
+                val = struct.unpack_from('>I', decomp_pe, rva)[0]
+                record_type = (val >> 24) & 0xFF
+                ordinal = val & 0xFFFFFF
+
+                if record_type in (0x00, 0x01) and ordinal > 0:
+                    va_to_ordinal[va] = ordinal
+
+    return va_to_ordinal
+
+
 def build_va_to_ordinal_map(orig_xex_data, orig_image_base, import_libs_info):
     """
     Build mapping from original VA -> ordinal by reading values from original XEX.
@@ -363,6 +469,146 @@ def patch_import_library_header(orig_header_data, import_libs_info,
             patched_count += 1
 
     print(f"  Patched {patched_count} import table entries, {missing_count} missing")
+    return bytes(patched)
+
+
+def generate_thunk_data(orig_pe_data, import_libs_info, image_base=0x82000000):
+    """
+    Generate thunk marker data and VA mapping from decompressed original PE.
+
+    The original PE has thunk markers at RVA 0xEE5xxx with 0x01XXXXXX format.
+    We need to extract the ordinals and create new thunk markers.
+
+    Returns: (thunk_data, old_va_to_new_va, thunk_rva_base)
+    """
+    thunk_count = 347  # Known from analysis
+    thunk_data = bytearray(thunk_count * 16)  # 16 bytes per thunk
+    va_mapping = {}  # old_va -> new_va
+
+    # Parse PE to get SizeOfImage for thunk placement
+    if orig_pe_data[0:2] != b'MZ':
+        return bytes(thunk_data), va_mapping, 0
+
+    pe_offset = struct.unpack_from('<I', orig_pe_data, 0x3C)[0]
+    if orig_pe_data[pe_offset:pe_offset+4] != b'PE\x00\x00':
+        return bytes(thunk_data), va_mapping, 0
+
+    size_of_image = struct.unpack_from('<I', orig_pe_data, pe_offset + 24 + 56)[0]
+
+    # New thunk section RVA (at end of PE image, page-aligned)
+    thunk_rva_base = (size_of_image + 0xFFF) & ~0xFFF
+
+    thunk_idx = 0
+    thunks_found = 0
+
+    for lib in import_libs_info['libraries']:
+        for i, va in enumerate(lib['import_table']):
+            if va == 0:
+                continue
+
+            rva = va - image_base
+
+            # Thunks are at high RVAs (0xEE5xxx), variables at low (0x6xx)
+            # Variables are at 0x600-0x1E48 (< 8KB), thunks at 0xEE5xxx (> 15MB)
+            # Use 1MB as threshold to distinguish them
+            if rva > 0x100000:  # Is thunk (> 1MB)
+                # Read ordinal from original thunk marker in decompressed PE
+                if rva + 4 <= len(orig_pe_data):
+                    val = struct.unpack_from('>I', orig_pe_data, rva)[0]
+                    record_type = (val >> 24) & 0xFF
+                    ordinal = val & 0xFFFFFF
+
+                    if record_type == 0x01:  # Thunk marker
+                        # Generate thunk marker: 0x01XXXXXX
+                        marker = 0x01000000 | ordinal
+
+                        # Write to thunk data
+                        offset = thunk_idx * 16
+                        struct.pack_into('>I', thunk_data, offset, marker)
+
+                        # Map old VA to new VA
+                        new_rva = thunk_rva_base + offset
+                        va_mapping[va] = image_base + new_rva
+
+                        thunk_idx += 1
+                        thunks_found += 1
+
+    return bytes(thunk_data), va_mapping, thunk_rva_base
+
+
+def extend_pe_with_thunks(pe_data, thunk_data, thunk_rva_base):
+    """
+    Extend PE to include thunk section at end.
+
+    Updates:
+    - SizeOfImage in optional header
+    - Appends thunk data to file
+
+    Returns: extended PE data
+    """
+    pe_data = bytearray(pe_data)
+
+    # Parse PE header
+    pe_offset = struct.unpack_from('<I', pe_data, 0x3C)[0]
+    size_of_image_offset = pe_offset + 24 + 56
+
+    old_size_of_image = struct.unpack_from('<I', pe_data, size_of_image_offset)[0]
+
+    # Page-align thunk data
+    thunk_size_aligned = (len(thunk_data) + 0xFFF) & ~0xFFF
+
+    # Update SizeOfImage
+    new_size_of_image = thunk_rva_base + thunk_size_aligned
+    struct.pack_into('<I', pe_data, size_of_image_offset, new_size_of_image)
+
+    # Append thunk data (padded to page boundary)
+    pe_data.extend(thunk_data)
+    padding = thunk_size_aligned - len(thunk_data)
+    pe_data.extend(b'\x00' * padding)
+
+    print(f"    Extended PE with thunk section:")
+    print(f"      Old SizeOfImage: 0x{old_size_of_image:X}")
+    print(f"      New SizeOfImage: 0x{new_size_of_image:X}")
+    print(f"      Thunk RVA base: 0x{thunk_rva_base:X}")
+    print(f"      Thunk size: {len(thunk_data)} bytes + {padding} padding")
+
+    return bytes(pe_data), new_size_of_image
+
+
+def patch_import_library_header(header_data, import_libs_info, va_mapping):
+    """
+    Patch import_table VAs to point to new thunk section.
+
+    Returns: patched header data
+    """
+    patched = bytearray(header_data)
+
+    str_table_size = import_libs_info['string_table_size']
+    patched_count = 0
+
+    for lib in import_libs_info['libraries']:
+        # Calculate offset to this library's import_table in the header
+        # Libraries start after string table (12 bytes for header fields)
+        lib_data_offset = 12 + str_table_size
+
+        # Add sizes of previous libraries
+        for prev_lib in import_libs_info['libraries']:
+            if prev_lib['offset'] < lib['offset']:
+                lib_data_offset += prev_lib['size']
+
+        # Patch each import_table entry
+        for i, orig_va in enumerate(lib['import_table']):
+            if orig_va == 0:
+                continue
+
+            if orig_va in va_mapping:
+                new_va = va_mapping[orig_va]
+                # import_table starts at offset 0x28 in library header
+                entry_offset = lib_data_offset + 0x28 + i * 4
+                struct.pack_into('>I', patched, entry_offset, new_va)
+                patched_count += 1
+
+    print(f"    Patched {patched_count} thunk VA entries in import header")
     return bytes(patched)
 
 
@@ -471,8 +717,14 @@ def parse_original_xex(xex_path):
     }
 
 
-def build_xex(pe_data, original_xex_info, pe_info, idata_rva=0x2B0A00, ordinal_to_rva=None):
-    """Build a minimal XEX2 container around the PE data."""
+def build_xex(pe_data, original_xex_info, pe_info, idata_rva=0x2B0A00, ordinal_to_rva=None, orig_pe_data=None):
+    """Build a minimal XEX2 container around the PE data.
+
+    If orig_pe_data is provided, enables full import resolution by:
+    1. Generating thunk markers from the decompressed original PE
+    2. Extending the PE with a thunk section
+    3. Patching the import library header to point to new thunks
+    """
     if ordinal_to_rva is None:
         ordinal_to_rva = {}
     # We'll build the XEX in pieces:
@@ -512,6 +764,45 @@ def build_xex(pe_data, original_xex_info, pe_info, idata_rva=0x2B0A00, ordinal_t
     # System flags (0x30000) - inline
     inline_headers.append((0x00030000, get_inline(0x00030000, 0x00000220)))
 
+    # Import Libraries (0x103FF) - Process FIRST to extend PE before Base File Format
+    # We need to patch the import_table VAs to point to our new thunk section.
+    # The import_table has interleaved entries:
+    # - Even indices: variable imports (0x00XXXXXX) at RVA 0x600+ (we have these)
+    # - Odd indices: thunk markers (0x01XXXXXX) at RVA 0xEE5xxx (we DON'T have these)
+    #
+    # Solution: Generate thunk markers, extend PE with thunk section, patch import header.
+    import_libs_info = original_xex_info.get('import_libs_info')
+    import_header_blob = None
+    if 0x000103FF in orig and import_libs_info and orig_pe_data:
+        print("  Processing import library header with thunk section...")
+        # Generate thunk data and VA mapping
+        thunk_data, va_mapping, thunk_rva_base = generate_thunk_data(
+            orig_pe_data,
+            import_libs_info,
+            original_xex_info['orig_image_base']
+        )
+        print(f"    Generated {len(va_mapping)} thunk markers")
+
+        # Extend PE with thunk section
+        pe_data, new_size_of_image = extend_pe_with_thunks(pe_data, thunk_data, thunk_rva_base)
+
+        # Update pe_info with new size
+        pe_info = dict(pe_info)  # Make a copy
+        pe_info['size_of_image'] = new_size_of_image
+
+        # Patch import library header
+        patched_header = patch_import_library_header(
+            orig[0x000103FF][1],
+            import_libs_info,
+            va_mapping
+        )
+        import_header_blob = (0x000103FF, patched_header)
+        print("  Including patched import library header")
+    elif 0x000103FF in orig:
+        print("  Skipping import library header (no decompressed original PE available)")
+    else:
+        print("  No import library header in original XEX")
+
     # Base File Format (0x3FF) - create unencrypted/raw descriptor
     # struct { uint32_t size; uint16_t enc_type; uint16_t comp_type;
     #          ... hash entries for raw blocks }
@@ -545,14 +836,9 @@ def build_xex(pe_data, original_xex_info, pe_info, idata_rva=0x2B0A00, ordinal_t
     if 0x000183FF in orig:
         blob_headers.append((0x000183FF, orig[0x000183FF][1]))
 
-    # Import Libraries (0x103FF) - SKIP for now
-    # The original XEX is compressed, and its import_table VAs point to
-    # decompressed memory locations. Our PE is uncompressed and has different
-    # structure. Including the header with unpatched VAs causes Xenia to
-    # read garbage values and crash.
-    print("  Skipping import library header (PE structure mismatch)")
-    # if 0x000103FF in orig:
-    #     blob_headers.append((0x000103FF, orig[0x000103FF][1]))
+    # Add import header if we processed it
+    if import_header_blob:
+        blob_headers.append(import_header_blob)
 
     # TLS Info (0x20104) - copy from original
     if 0x00020104 in orig:
@@ -704,13 +990,28 @@ def main():
     print(f"  {len(orig_info['opt_headers'])} optional headers")
     print(f"  Security info: {len(orig_info['security_info'])} bytes")
 
-    # Note: We do NOT copy import data from original XEX because:
-    # 1. Original XEX's PE is compressed
-    # 2. The "import data" in the file is actually compressed bytes
-    # 3. Xenia decompresses the PE and then reads import data from memory
-    # 4. Our PE is uncompressed, so we can't use the original's compressed data
+    # Decompress original XEX to get import data
+    print("\nDecompressing original XEX for import data...")
+    orig_pe_data = None  # Initialize to None in case decompression fails
+    try:
+        orig_pe_data = decompress_xex_pe(orig_info['original_data'])
+        print(f"  Decompressed PE: {len(orig_pe_data):,} bytes")
 
-    # Patch and relocate import thunks
+        # Copy import data from original PE (RVA 0x600-0x1E48) to our PE
+        import_start = 0x600
+        import_end = 0x1E48
+        import_size = import_end - import_start
+
+        pe_data = bytearray(pe_data)
+        pe_data[import_start:import_end] = orig_pe_data[import_start:import_end]
+        pe_data = bytes(pe_data)
+        print(f"  Copied {import_size} bytes of import data from RVA 0x{import_start:X} to 0x{import_end:X}")
+
+    except ValueError as e:
+        print(f"  Warning: Could not decompress original XEX: {e}")
+        print("  Import resolution may not work correctly")
+
+    # Patch and relocate import thunks in .idata section
     print("\nPatching import thunks...")
     pe_data, idata_rva, ordinal_to_rva = patch_and_relocate_imports(pe_data, pe_info['image_base'])
     if idata_rva == 0:
@@ -718,7 +1019,7 @@ def main():
 
     # Build XEX
     print(f"\nBuilding XEX...")
-    xex_data = build_xex(pe_data, orig_info, pe_info, idata_rva, ordinal_to_rva)
+    xex_data = build_xex(pe_data, orig_info, pe_info, idata_rva, ordinal_to_rva, orig_pe_data)
     print(f"  XEX size: {len(xex_data):,} bytes")
 
     # Verify

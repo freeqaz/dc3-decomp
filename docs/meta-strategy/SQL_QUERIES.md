@@ -84,6 +84,39 @@ LIMIT 20;
 
 ---
 
+## Unicorn Divergent Queries
+
+These find functions that compile but behave differently from the target — real bugs to fix.
+
+### DIVERGENT Logic Functions (Real Bugs)
+
+```sql
+-- Functions with behavioral bugs (not build_env/regalloc artifacts)
+SELECT symbol, demangled, unit, current_percent, priority_score
+FROM functions
+WHERE unicorn_verdict = 'DIVERGENT'
+  AND unicorn_class = 'logic'
+  AND verdict IS NULL
+  AND has_linker_merged = 0
+  AND excluded = 0
+ORDER BY priority_score DESC, current_percent DESC
+LIMIT 20;
+```
+
+**CLI equivalent**: `./bin/orchestrate divergent --limit 20`
+
+### All Divergence Classes
+
+```sql
+-- Breakdown by divergence class
+SELECT unicorn_class, COUNT(*) as count, ROUND(AVG(current_percent), 1) as avg_match
+FROM functions
+WHERE unicorn_verdict = 'DIVERGENT' AND excluded = 0
+GROUP BY unicorn_class;
+```
+
+---
+
 ## Exclusion Queries
 
 ### Mark XDK as Excluded

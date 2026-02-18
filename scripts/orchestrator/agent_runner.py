@@ -96,30 +96,33 @@ class AgentRunner:
             parsed.output = raw.get("output", "")
             return parsed
 
+    # Environment variables to strip from subprocess (inherited from parent session)
+    _STRIP_ENV_VARS = frozenset({
+        # Proxy vars from parent session aren't accessible from subprocesses
+        "HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy",
+        "ALL_PROXY", "all_proxy",
+        "CLAUDE_CODE_HOST_HTTP_PROXY_PORT", "CLAUDE_CODE_HOST_SOCKS_PROXY_PORT",
+        # CLAUDECODE triggers nested session check in CLI
+        "CLAUDECODE",
+    })
+
     def build_env(self, model: str = None) -> dict[str, str]:
-        """Build environment dict for agent process. Public for testing."""
+        """Build environment dict for agent process. Public for testing.
+
+        Note: We explicitly do NOT set proxy vars here. The parent session's
+        proxy (CLAUDE_CODE_HOST_*_PROXY_PORT) is not accessible from subprocesses.
+        CLAUDECODE is also stripped to avoid nested session detection.
+        """
         agent_home = Path(os.environ.get(
             "AGENT_HOME",
             "/home/free/code/milohax/dc3-decomp/agent-home",
         ))
         agent_home.mkdir(parents=True, exist_ok=True)
 
-        http_proxy_port = os.environ.get("CLAUDE_CODE_HOST_HTTP_PROXY_PORT")
-        socks_proxy_port = os.environ.get("CLAUDE_CODE_HOST_SOCKS_PROXY_PORT")
-
         env: dict[str, str] = {
             "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
             "HOME": str(agent_home),
         }
-
-        if http_proxy_port:
-            env["HTTP_PROXY"] = f"http://localhost:{http_proxy_port}"
-            env["HTTPS_PROXY"] = f"http://localhost:{http_proxy_port}"
-            env["http_proxy"] = f"http://localhost:{http_proxy_port}"
-            env["https_proxy"] = f"http://localhost:{http_proxy_port}"
-        if socks_proxy_port:
-            env["ALL_PROXY"] = f"socks5h://localhost:{socks_proxy_port}"
-            env["all_proxy"] = f"socks5h://localhost:{socks_proxy_port}"
 
         return env
 
@@ -174,6 +177,11 @@ class AgentRunner:
         env = self.build_env(config.model)
         env.update(self.build_auth_env(config.model))
         env["REPO_ROOT"] = str(config.worktree)
+
+        # Explicitly clear vars that shouldn't be inherited from parent session
+        # SDK merges provided env with os.environ, so we must set to empty string
+        for var in self._STRIP_ENV_VARS:
+            env[var] = ""
 
         mcp_config: McpStdioServerConfig = {
             "command": "python3",
@@ -575,33 +583,31 @@ class AgentRunner:
             pfx = _clr.colored_prefix(config.session_id)
             print(f"{pfx}{_clr.DIM}Starting agent with model {cli_model}...{_clr.RESET}")
 
-        env = {**os.environ, **self.build_env(config.model)}
+        # Start with clean environment, stripping vars that won't work in subprocess
+        # - Proxy vars from parent session aren't accessible
+        # - CLAUDECODE triggers nested session check in CLI
+        proxy_vars = {"HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy",
+                      "ALL_PROXY", "all_proxy", "CLAUDE_CODE_HOST_HTTP_PROXY_PORT",
+                      "CLAUDE_CODE_HOST_SOCKS_PROXY_PORT", "CLAUDECODE"}
+        env = {k: v for k, v in os.environ.items() if k not in proxy_vars}
+        env.update(self.build_env(config.model))
+        env.update(self.build_auth_env(config.model))
 
-        use_zai = _get_zai_enabled() or requires_zai(config.model)
-        use_openrouter = _get_openrouter_enabled() or requires_openrouter(config.model)
-
-        # Z.AI takes priority
-        if use_zai and _get_zai_api_key():
-            env["ANTHROPIC_BASE_URL"] = _get_zai_base_url()
-            env["ANTHROPIC_API_KEY"] = _get_zai_api_key()
-            env["API_TIMEOUT_MS"] = _get_zai_timeout()
-            if requires_zai(config.model):
-                env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = get_model_id(config.model)
-            if config.verbose >= 2:
-                pfx = _clr.colored_prefix(config.session_id)
-                print(f"{pfx}Using Z.AI backend at {_get_zai_base_url()}")
-        elif use_openrouter and _get_openrouter_api_key():
-            env["ANTHROPIC_BASE_URL"] = _get_openrouter_base_url()
-            env["ANTHROPIC_API_KEY"] = _get_openrouter_api_key()
-            if requires_openrouter(config.model):
-                env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = get_model_id(config.model)
-            if config.verbose >= 2:
-                pfx = _clr.colored_prefix(config.session_id)
-                print(f"{pfx}Using OpenRouter backend at {_get_openrouter_base_url()}")
-        else:
+        # Fall back to OAuth if no backend auth configured
+        if not env.get("ANTHROPIC_API_KEY") and not env.get("ANTHROPIC_AUTH_TOKEN"):
             oauth_token = get_oauth_token()
             if oauth_token:
                 env["CLAUDE_CODE_OAUTH_TOKEN"] = oauth_token
+
+        # Verbose logging of backend selection
+        if config.verbose >= 2:
+            pfx = _clr.colored_prefix(config.session_id)
+            use_zai = _get_zai_enabled() or requires_zai(config.model)
+            use_openrouter = _get_openrouter_enabled() or requires_openrouter(config.model)
+            if use_zai and _get_zai_api_key():
+                print(f"{pfx}Using Z.AI backend at {_get_zai_base_url()}")
+            elif use_openrouter and _get_openrouter_api_key():
+                print(f"{pfx}Using OpenRouter backend at {_get_openrouter_base_url()}")
 
         process = await asyncio.create_subprocess_exec(
             *cmd,

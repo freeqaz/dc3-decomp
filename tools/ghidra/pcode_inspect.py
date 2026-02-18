@@ -12,6 +12,9 @@ Usage:
     pcode_inspect.py "0x82878b58"
     pcode_inspect.py "CharBones::PoseMeshes" --switches
     pcode_inspect.py "CharBones::PoseMeshes" --casts
+
+The tool first searches for matching symbols to ensure the correct function
+is decompiled. If multiple matches are found, it shows them and uses the best match.
 """
 
 import argparse
@@ -23,6 +26,98 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from mcp_client import MCPClient, MCPError
+
+
+def resolve_function(client: MCPClient, name_or_addr: str, verbose: bool = True) -> tuple[str, str]:
+    """Resolve a function name or address to the exact symbol to decompile.
+
+    Returns:
+        Tuple of (resolved_name, address_hex) for decompilation
+
+    Raises:
+        MCPError if function cannot be found
+    """
+    # Check if input is already an address
+    stripped = name_or_addr.strip().lower().replace("0x", "")
+    if all(c in "0123456789abcdef" for c in stripped) and len(stripped) >= 6:
+        # It's an address, use it directly
+        addr = int(stripped, 16)
+        return name_or_addr, f"0x{addr:08x}"
+
+    # Search for the symbol
+    if verbose:
+        print(f"Searching for symbol: {name_or_addr}...", file=sys.stderr)
+
+    search_result = client.search_symbols(name_or_addr, limit=20)
+
+    if isinstance(search_result, dict):
+        symbols = search_result.get("symbols", search_result.get("results", []))
+    elif isinstance(search_result, list):
+        symbols = search_result
+    else:
+        symbols = []
+
+    if not symbols:
+        raise MCPError(f"No symbols found matching '{name_or_addr}'")
+
+    # Filter and score matches
+    candidates = []
+    for sym in symbols:
+        if isinstance(sym, dict):
+            sym_name = sym.get("name", "")
+            sym_addr = sym.get("address", "")
+        else:
+            continue
+
+        # Detect thunk/vtable/RTTI entries
+        is_thunk = (
+            "thunk" in sym_name.lower() or
+            "$4PPPPPPPM" in sym_name or
+            "vtordisp" in sym_name.lower() or
+            "`vftable'" in sym_name
+        )
+
+        # Score based on how well it matches
+        score = 0
+        name_lower = sym_name.lower()
+        query_lower = name_or_addr.lower()
+
+        # Exact match on demangled name portion
+        if query_lower in sym_name.lower():
+            score += 10
+
+        # STRONGLY prefer non-thunk functions (negative score for thunks)
+        if is_thunk:
+            score -= 50
+
+        # Prefer longer symbol names (more specific)
+        score += min(len(sym_name) / 100, 3)
+
+        # Prefer symbols with actual function signatures
+        if "@@" in sym_name and ("QAAX" in sym_name or "UAAX" in sym_name or "IAAX" in sym_name):
+            score += 3
+
+        candidates.append((score, sym_name, sym_addr, is_thunk))
+
+    # Sort by score descending
+    candidates.sort(key=lambda x: x[0], reverse=True)
+
+    if not candidates:
+        raise MCPError(f"No valid function symbols found for '{name_or_addr}'")
+
+    # If multiple good candidates and verbose, show them
+    if verbose and len(candidates) > 1:
+        top_score = candidates[0][0]
+        good_candidates = [c for c in candidates if c[0] >= top_score - 3]
+        if len(good_candidates) > 1:
+            print(f"Found {len(good_candidates)} candidate functions:", file=sys.stderr)
+            for i, (score, name, addr, is_thunk) in enumerate(good_candidates[:5]):
+                thunk_marker = " [thunk]" if is_thunk else ""
+                print(f"  {i+1}. {name}{thunk_marker} @ 0x{addr}", file=sys.stderr)
+            print(f"Using best match: {candidates[0][1]}", file=sys.stderr)
+
+    best = candidates[0]
+    return best[1], f"0x{best[2]}".lower()
 
 
 # PowerPC instruction decoding helpers
@@ -358,6 +453,10 @@ def main():
         "--no-decompile", action="store_true",
         help="Skip decompilation, only analyze raw bytes",
     )
+    parser.add_argument(
+        "--address", action="store_true",
+        help="Treat input as raw address (skip symbol search)",
+    )
     args = parser.parse_args()
 
     show_all = not args.switches and not args.casts
@@ -370,14 +469,27 @@ def main():
         print("Is pyghidra-mcp running? Check: ./tools/ghidra/pyghidra-service.sh status", file=sys.stderr)
         sys.exit(1)
 
+    # Resolve the function to decompile
+    func_to_decompile = args.function
+    func_address = None
+
+    if not args.address:
+        try:
+            resolved_name, resolved_addr = resolve_function(client, args.function)
+            func_to_decompile = resolved_addr  # Use address for more reliable lookup
+            if resolved_addr.startswith("0x"):
+                func_address = int(resolved_addr, 16)
+        except MCPError as e:
+            print(f"Warning: Symbol search failed: {e}", file=sys.stderr)
+            print("Trying direct lookup...", file=sys.stderr)
+
     # Decompile the function
     decompiled_code = None
-    func_address = None
 
     if not args.no_decompile:
         try:
-            print(f"Decompiling {args.function}...", file=sys.stderr)
-            result = client.decompile_function(args.function)
+            print(f"Decompiling {func_to_decompile}...", file=sys.stderr)
+            result = client.decompile_function(func_to_decompile)
 
             if isinstance(result, dict):
                 decompiled_code = result.get("code", result.get("decompiled_code", ""))

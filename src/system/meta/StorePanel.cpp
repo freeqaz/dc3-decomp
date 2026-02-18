@@ -278,14 +278,12 @@ void StorePanel::PopulateOffers(DataArray *arr, bool b) {
             if (count > 1) {
                 do {
                     DataArray *child_arr = arr->Array(i);
-                    StoreOffer *offer = new StoreOffer(child_arr, 0);
+                    StoreOffer *offer = MakeNewOffer(child_arr);
 
-                    if ((unk52 == 0) && (offer->IsTest())) {
+                    if (((unk52 == 0) && offer->IsTest()) || !offer->ValidTitle()) {
                         delete offer;
-                    } else if (offer->ValidTitle()) {
-                        offerVec->push_back(offer);
                     } else {
-                        delete offer;
+                        offerVec->push_back(offer);
                     }
 
                     i++;

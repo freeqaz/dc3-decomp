@@ -678,6 +678,8 @@ def query_functions(
     exclude_patterns: list[str] | None = None,
     max_attempts: int | None = DEFAULT_MAX_ATTEMPTS,
     skip_boilerplate: bool = False,
+    unicorn_verdict: str | None = None,
+    unicorn_class: str | None = None,
 ) -> list[dict[str, Any]]:
     """
     Query multiple functions matching criteria.
@@ -687,6 +689,8 @@ def query_functions(
                         (e.g. 'COMPLETE', 'AT_LIMIT'). Overrides exclude_* flags.
         exclude_patterns: Glob patterns for units to exclude (default: XDK)
         max_attempts: Skip functions with >= this many attempts (None to disable)
+        unicorn_verdict: Filter by unicorn verdict (DIVERGENT, EQUIVALENT, SKIPPED, ERROR)
+        unicorn_class: Filter by divergence class (logic, build_env, regalloc)
 
     Returns list of function dicts.
     """
@@ -730,6 +734,12 @@ def query_functions(
     if skip_boilerplate:
         for prefix in BOILERPLATE_SYMBOL_PREFIXES:
             query += f" AND symbol NOT LIKE '{prefix}%'"
+
+    # Unicorn verdict filter
+    if unicorn_verdict:
+        query += f" AND unicorn_verdict = '{unicorn_verdict}'"
+        if unicorn_class:
+            query += f" AND unicorn_class = '{unicorn_class}'"
 
     # Exclude functions that have been tried too many times
     if max_attempts is not None:
@@ -1535,6 +1545,76 @@ def query_functions_for_unit_completion(
 
     query += """
         ORDER BY f.priority_score DESC
+        LIMIT ?
+    """
+    params.append(limit)
+
+    rows = conn.execute(query, params).fetchall()
+    return [dict(row) for row in rows]
+
+
+def query_divergent_logic(
+    min_priority: float = 0,
+    min_percent: float = 0,
+    max_percent: float = 100,
+    exclude_locked: bool = True,
+    limit: int = 20,
+    db_path: str | Path = DEFAULT_DB_PATH,
+    max_attempts: int | None = DEFAULT_MAX_ATTEMPTS,
+) -> list[dict[str, Any]]:
+    """
+    Query DIVERGENT functions with logic class (real behavioral bugs).
+
+    Filters for:
+    - unicorn_verdict = 'DIVERGENT' (behavior differs from target)
+    - unicorn_class = 'logic' (real bugs, not build_env/regalloc artifacts)
+    - verdict IS NULL (not yet reported/decided)
+    - has_linker_merged = 0 (no unfixable ICF-merged calls)
+
+    These are real bugs to fix - functions that compile but behave differently
+    from the target. The "logic" class excludes unfixable build_env and regalloc
+    artifacts.
+
+    Args:
+        min_priority: Minimum priority_score threshold
+        min_percent: Minimum current_percent
+        max_percent: Maximum current_percent
+        exclude_locked: Skip functions locked by other agents
+        limit: Max results to return
+        db_path: Database path
+        max_attempts: Skip functions with >= this many attempts (None to disable)
+
+    Returns:
+        List of function dicts sorted by priority_score DESC, current_percent DESC
+    """
+    conn = get_connection(db_path)
+
+    query = """
+        SELECT id, symbol, demangled, unit, size, current_percent, best_percent,
+               verdict, locked_by, attempt_count, unicorn_verdict, unicorn_class,
+               has_linker_merged, priority_score
+        FROM functions
+        WHERE unicorn_verdict = 'DIVERGENT'
+          AND unicorn_class = 'logic'
+          AND verdict IS NULL
+          AND has_linker_merged = 0
+          AND excluded = 0
+          AND (current_percent IS NULL OR (current_percent >= ? AND current_percent <= ?))
+    """
+    params: list[Any] = [min_percent, max_percent]
+
+    if min_priority > 0:
+        query += " AND (priority_score IS NOT NULL AND priority_score >= ?)"
+        params.append(min_priority)
+
+    if exclude_locked:
+        query += " AND locked_by IS NULL"
+
+    if max_attempts is not None:
+        query += f" AND (attempt_count IS NULL OR attempt_count < {max_attempts})"
+
+    query += """
+        ORDER BY priority_score DESC, current_percent DESC
         LIMIT ?
     """
     params.append(limit)

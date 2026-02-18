@@ -489,6 +489,23 @@ python3 -m scripts.unicorn_runner.probe --unit DirLoader --batch --runs 8
 
 **Deprioritized**: Intra-TU call co-loading, custom fixtures, CI integration
 
+## Finding Divergent Functions
+
+After running unicorn tests, query the database for functions with real behavioral bugs:
+
+```bash
+# Find DIVERGENT logic functions (real bugs, not build_env/regalloc artifacts)
+./bin/orchestrate divergent --limit 20
+
+# Run batch to fix them
+./bin/orchestrate batch --strategy divergent --limit 10
+```
+
+**Divergence Classes**:
+- `logic` — real bugs to fix (wrong code)
+- `build_env` — `__FILE__` path differences, unfixable
+- `regalloc` — register allocation quirks, usually unfixable
+
 ## Dependencies
 
 | Dependency | Purpose | Status |

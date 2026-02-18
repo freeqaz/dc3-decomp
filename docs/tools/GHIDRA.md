@@ -259,6 +259,11 @@ The `--extract` step (batch decompilation) benefits from seeding — with full s
 
 Standalone scripts that query the running pyghidra-mcp server. Require service to be running and DTM seeded (see [Setup](#prerequisites) and [Type Seeding Pipeline](#type-seeding-pipeline)).
 
+**Skill shortcuts:** These tools are also available as Claude Code skills:
+- `/ghidra-struct` — Struct validation
+- `/ghidra-decompile` — Pcode inspection
+- `/ghidra-search` — Semantic code search
+
 ### Struct Validation — `tools/ghidra/struct_check.py`
 
 Compares our C++ header struct layouts (from `struct_db.sqlite`) against Ghidra's DTM. Catches offset misalignments, missing fields, and size discrepancies.
@@ -285,14 +290,14 @@ Output shows field-by-field comparison with OK / GHIDRA_MISSING / OURS_MISSING s
 
 ### Pcode Inspection — `tools/ghidra/pcode_inspect.py`
 
-Analyzes Ghidra decompilation output + raw PPC bytes for switch tables and cast operations.
+Analyzes Ghidra decompilation output + raw PPC bytes for switch tables and cast operations. Automatically resolves symbol names to the correct function (skips thunks).
 
 ```bash
 # Full analysis (switches + casts + decompiled output)
 python3 tools/ghidra/pcode_inspect.py "Hmx::Object::Handle"
 
-# By address
-python3 tools/ghidra/pcode_inspect.py "0x82878b58"
+# By address (skip symbol search)
+python3 tools/ghidra/pcode_inspect.py "0x82878b58" --address
 
 # Switch statements only
 python3 tools/ghidra/pcode_inspect.py "DataNode::Handle" --switches
@@ -309,7 +314,7 @@ Detects:
 
 ### Semantic Code Search — `tools/ghidra/code_search.py`
 
-Vector search over all 42K+ decompiled functions via ChromaDB. Find functions with similar patterns by natural language description or code snippet.
+Vector search over all 42K+ decompiled functions via ChromaDB. Find functions with similar patterns by natural language description or code snippet. Automatically filters noise (`__unwind$`, `__ehhandler$`, etc.).
 
 ```bash
 # Search by description
@@ -323,6 +328,12 @@ python3 tools/ghidra/code_search.py --strings "CharBones"
 
 # Limit results
 python3 tools/ghidra/code_search.py "poll timer update" --limit 5
+
+# Add custom exclude patterns
+python3 tools/ghidra/code_search.py "wind" --exclude "thunk" --exclude "vtable"
+
+# Disable default noise filtering
+python3 tools/ghidra/code_search.py "query" --no-default-exclude
 ```
 
 Returns ranked results with function name, address, similarity score, and full decompiled code.
