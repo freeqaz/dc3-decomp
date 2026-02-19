@@ -5,12 +5,12 @@ Reads from scratch/patches/manifest.json, applies each patch, builds the
 affected unit, and verifies with objdiff. Reverts on regression.
 
 Usage:
-    python scripts/patch_apply_safe.py                          # Apply all ready/ patches
-    python scripts/patch_apply_safe.py --category needs-merge   # Apply needs-merge patches
-    python scripts/patch_apply_safe.py --unit src/system/char/CharBones.cpp  # One file only
-    python scripts/patch_apply_safe.py --dry-run                # Report only
-    python scripts/patch_apply_safe.py --limit 10               # Stop after 10
-    python scripts/patch_apply_safe.py --min-delta 5            # Only 5%+ improvement
+    python scripts/patches/apply_safe.py                          # Apply all ready/ patches
+    python scripts/patches/apply_safe.py --category needs-merge   # Apply needs-merge patches
+    python scripts/patches/apply_safe.py --unit src/system/char/CharBones.cpp  # One file only
+    python scripts/patches/apply_safe.py --dry-run                # Report only
+    python scripts/patches/apply_safe.py --limit 10               # Stop after 10
+    python scripts/patches/apply_safe.py --min-delta 5            # Only 5%+ improvement
 """
 
 import argparse
@@ -19,7 +19,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 SCRATCH_DIR = REPO_ROOT / "scratch" / "patches"
 MANIFEST_PATH = SCRATCH_DIR / "manifest.json"
 OBJDIFF_CLI = REPO_ROOT / "bin" / "objdiff-cli"

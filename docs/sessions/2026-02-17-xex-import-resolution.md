@@ -119,7 +119,7 @@ Since we can't easily replicate the original's import structure (would require d
 
 ### Code Changes
 
-Modified `scripts/build_xex.py`:
+Modified `scripts/build/build_xex.py`:
 
 ```python
 # Import Libraries (0x103FF) - SKIP for now
@@ -215,7 +215,7 @@ Alternative approach: Generate import data from scratch based on the ordinals we
 
 ## Files Modified
 
-- `scripts/build_xex.py`:
+- `scripts/build/build_xex.py`:
   - Added import parsing functions (lines 180-330)
   - Modified `parse_original_xex()` to extract import library info
   - Modified `build_xex()` to skip import library header

@@ -14,7 +14,7 @@ from typing import Any
 DEFAULT_DB_PATH = "decomp.db"
 
 # Schema version for migrations
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 
 # Default maximum attempts before deprioritizing a function
 # Functions with >= this many attempts are excluded from normal queries
@@ -362,6 +362,15 @@ def _run_migrations(conn: sqlite3.Connection, from_version: int, to_version: int
             CREATE INDEX IF NOT EXISTS idx_functions_unicorn_verdict
             ON functions(unicorn_verdict)
         """)
+
+    if from_version < 9 <= to_version:
+        # Migration v8 -> v9: Add unicorn_reason column for fine-grained divergence tracking
+        print("  Migration v9: Adding unicorn_reason column...")
+        try:
+            conn.execute("ALTER TABLE functions ADD COLUMN unicorn_reason TEXT")
+        except sqlite3.OperationalError as e:
+            if "duplicate column" not in str(e).lower():
+                raise
 
     # Update schema version
     conn.execute("UPDATE schema_version SET version = ?", (to_version,))

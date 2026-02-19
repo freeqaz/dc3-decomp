@@ -16,7 +16,7 @@ Quick reference for continuing DC3 decomp work. Each section has context and a c
 | Link errors | 242 (down from 437 after ICF glue + pdata fix) |
 | Divergent (logic) | 754 functions with behavioral bugs |
 | XEX built | `build/373307D9/default.xex` (19.6MB) |
-| Build pipeline | `ninja build/373307D9/default.exe && python3 scripts/build_xex.py` (pdata fix + glue automated) |
+| Build pipeline | `ninja build/373307D9/default.exe && python3 scripts/build/build_xex.py` (pdata fix + glue automated) |
 
 ---
 
@@ -231,7 +231,7 @@ See docs/sessions/2026-02-11-xexp-patch-generation-investigation.md for format d
 
 ### Option C: Full PE replacement
 1. Link our hybrid PE (decomp + split objects)
-2. Package as XEX (already working: scripts/build_xex.py)
+2. Package as XEX (already working: scripts/build/build_xex.py)
 3. This is Strategy A — already done, just needs boot testing
 
 ## Deliverable
@@ -297,7 +297,7 @@ Missing split objects for floor0_unpack, OggFree, and 3 other Ogg/Vorbis symbols
 
 ```bash
 # Full build + link + XEX (pdata fix and ICF glue are automated)
-ninja build/373307D9/default.exe && python3 scripts/build_xex.py
+ninja build/373307D9/default.exe && python3 scripts/build/build_xex.py
 
 # Build single unit
 ninja build/373307D9/src/system/hamobj/RhythmBattle.obj

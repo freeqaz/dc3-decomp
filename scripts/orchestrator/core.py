@@ -256,18 +256,39 @@ class DecompOrchestrator:
         Raises RuntimeError if quota is exhausted.
         """
         log = logger or self.logger
-        # Backend-specific models (e.g. deepseek, glm-4.7) route through ANTHROPIC_DEFAULT_SONNET_MODEL,
-        # so tell the CLI to use "sonnet" as the model name
-        cli_model = "sonnet" if (requires_zai(model) or requires_openrouter(model)) else get_model_id(model)
+        # For non-Anthropic backends, the CLI model is always "sonnet" because:
+        # - OpenRouter-only models (e.g. deepseek) route through ANTHROPIC_DEFAULT_SONNET_MODEL
+        # - When USE_OPENROUTER=true with standard models, ANTHROPIC_BASE_URL/KEY are set
+        #   and the CLI needs a standard model name ("sonnet"), not an OpenRouter ID
+        # - Z.AI similarly proxies through the Anthropic-compatible API
+        use_alt_backend = (requires_zai(model) or requires_openrouter(model)
+                          or _get_openrouter_enabled() or _get_zai_enabled())
+        cli_model = "sonnet" if use_alt_backend else get_model_id(model)
 
         agent_home = Path(os.environ.get("AGENT_HOME", "/home/free/code/milohax/dc3-decomp/agent-home"))
         agent_home.mkdir(parents=True, exist_ok=True)
 
-        env = {
-            **os.environ,
+        # Strip stale system proxy vars and translate parent's proxy port
+        # into standard HTTP_PROXY so the child claude process can reach the API.
+        _strip_proxy = {"HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy",
+                        "ALL_PROXY", "all_proxy", "CLAUDECODE"}
+        env = {k: v for k, v in os.environ.items() if k not in _strip_proxy}
+        env.update({
             "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
             "HOME": str(agent_home),
-        }
+        })
+
+        # Translate parent session's proxy ports into standard proxy vars
+        http_proxy_port = os.environ.get("CLAUDE_CODE_HOST_HTTP_PROXY_PORT")
+        socks_proxy_port = os.environ.get("CLAUDE_CODE_HOST_SOCKS_PROXY_PORT")
+        if http_proxy_port:
+            env["HTTP_PROXY"] = f"http://localhost:{http_proxy_port}"
+            env["HTTPS_PROXY"] = f"http://localhost:{http_proxy_port}"
+            env["http_proxy"] = f"http://localhost:{http_proxy_port}"
+            env["https_proxy"] = f"http://localhost:{http_proxy_port}"
+        if socks_proxy_port:
+            env["ALL_PROXY"] = f"socks5h://localhost:{socks_proxy_port}"
+            env["all_proxy"] = f"socks5h://localhost:{socks_proxy_port}"
 
         # Auth for CLI subprocess (not SDK - CLI needs ANTHROPIC_API_KEY, not AUTH_TOKEN)
         use_zai = _get_zai_enabled() or requires_zai(model)
@@ -283,8 +304,11 @@ class DecompOrchestrator:
         elif use_openrouter and _get_openrouter_api_key():
             env["ANTHROPIC_BASE_URL"] = _get_openrouter_base_url()
             env["ANTHROPIC_API_KEY"] = _get_openrouter_api_key()
-            if requires_openrouter(model):
-                env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = get_model_id(model)
+            # Always set ANTHROPIC_DEFAULT_SONNET_MODEL for OpenRouter
+            from .config import MODEL_REGISTRY
+            or_models = MODEL_REGISTRY.get("openrouter", {})
+            if model in or_models:
+                env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = or_models[model]["model_id"]
 
         cmd = [
             "claude",
@@ -300,19 +324,32 @@ class DecompOrchestrator:
         process = await asyncio.create_subprocess_exec(
             *cmd,
             cwd=self.main_repo,
+            stdin=asyncio.subprocess.DEVNULL,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
             env=env,
         )
 
-        output_lines = []
-        async for line in process.stdout:
-            output_lines.append(line.decode("utf-8", errors="replace"))
-        await process.wait()
+        try:
+            stdout_bytes, _ = await asyncio.wait_for(
+                process.communicate(), timeout=30
+            )
+            output = stdout_bytes.decode("utf-8", errors="replace") if stdout_bytes else ""
+        except asyncio.TimeoutError:
+            process.kill()
+            await process.wait()
+            log.warning("Quota preflight timed out after 30s. Proceeding anyway.")
+            return
 
-        output = "".join(output_lines)
-
-        if "hit your limit" in output.lower() or "you've hit your limit" in output.lower():
+        output_lower = output.lower()
+        rate_limit_phrases = [
+            "hit your limit",
+            "you've hit your limit",
+            "limit exhausted",
+            "rate limit",
+            "quota exceeded",
+        ]
+        if any(phrase in output_lower for phrase in rate_limit_phrases):
             raise RuntimeError(
                 f"Quota exhausted - Claude API reports rate limit reached. "
                 f"Wait for quota to reset before running agents.\n"

@@ -6,8 +6,8 @@ Analyzes A/B test results for context enrichment experiments.
 Compares control vs treatment groups and computes statistical significance.
 
 Usage:
-    python scripts/analyze_enrichment.py --experiment diff_patterns
-    python scripts/analyze_enrichment.py --all --output docs/context-enrichment/
+    python scripts/analysis/analyze_enrichment.py --experiment diff_patterns
+    python scripts/analysis/analyze_enrichment.py --all --output docs/context-enrichment/
 """
 
 import argparse

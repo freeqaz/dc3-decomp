@@ -8,9 +8,9 @@ Scans all functions in a match% range for known fixable instruction patterns:
   - comparison encoding (> 0 vs != 0)
 
 Usage:
-    python scripts/batch_pattern_scan.py [--min 90] [--max 99.9] [--limit 200]
-    python scripts/batch_pattern_scan.py --unit 'src/system/*' --min 95
-    python scripts/batch_pattern_scan.py --pattern extrwi  # filter by pattern type
+    python scripts/analysis/batch_pattern_scan.py [--min 90] [--max 99.9] [--limit 200]
+    python scripts/analysis/batch_pattern_scan.py --unit 'src/system/*' --min 95
+    python scripts/analysis/batch_pattern_scan.py --pattern extrwi  # filter by pattern type
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
-PROJECT_DIR = Path(__file__).resolve().parent.parent
+PROJECT_DIR = Path(__file__).resolve().parent.parent.parent
 OBJDIFF_CLI = PROJECT_DIR / "bin" / "objdiff-cli"
 REPORT_JSON = PROJECT_DIR / "build" / "373307D9" / "report.json"
 

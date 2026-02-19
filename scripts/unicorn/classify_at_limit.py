@@ -18,7 +18,7 @@ import argparse
 import os
 import sys
 
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, PROJECT_ROOT)
 
 from scripts.orchestrator.database import get_connection, init_database
@@ -63,6 +63,20 @@ def find_rule2_candidates(conn):
         """SELECT id, symbol, demangled, current_percent, unicorn_class
            FROM functions
            WHERE unicorn_class = 'build_env'
+             AND (verdict IS NULL OR verdict NOT IN ('COMPLETE', 'AT_LIMIT'))"""
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def find_rule2b_candidates(conn):
+    """Rule 2b: Unfixable unicorn sub-classes.
+
+    merged_call, merged_arg, fpr_precision — all unfixable from source.
+    """
+    rows = conn.execute(
+        """SELECT id, symbol, demangled, current_percent, unicorn_class
+           FROM functions
+           WHERE unicorn_class IN ('merged_call', 'merged_arg', 'fpr_precision')
              AND (verdict IS NULL OR verdict NOT IN ('COMPLETE', 'AT_LIMIT'))"""
     ).fetchall()
     return [dict(r) for r in rows]
@@ -166,6 +180,27 @@ def main():
         conn.commit()
         print(f"  -> Marked {len(rule2)} as AT_LIMIT")
 
+    # Rule 2b: Unfixable unicorn sub-classes (merged_call, merged_arg, fpr_precision)
+    rule2b = find_rule2b_candidates(conn)
+    print(f"\nRule 2b (unfixable unicorn sub-classes): {len(rule2b)} candidates")
+    if rule2b and args.verbose:
+        for f in rule2b[:20]:
+            print(f"  {f['current_percent'] or '?':>6}%  [{f['unicorn_class']}]  {f['demangled'] or f['symbol']}")
+        if len(rule2b) > 20:
+            print(f"  ... ({len(rule2b) - 20} more)")
+    if rule2b and not dry_run:
+        for f in rule2b:
+            conn.execute(
+                """UPDATE functions SET
+                    verdict = 'AT_LIMIT',
+                    verdict_reason = ?,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?""",
+                (f"unicorn_{f['unicorn_class']}", f["id"]),
+            )
+        conn.commit()
+        print(f"  -> Marked {len(rule2b)} as AT_LIMIT")
+
     # Rule 3: unreachable + linker merged
     rule3 = find_rule3_candidates(conn)
     print(f"\nRule 3 (unreachable + linker merged): {len(rule3)} candidates")
@@ -188,7 +223,7 @@ def main():
         print(f"  -> Marked {len(rule3)} as AT_LIMIT")
 
     # Summary
-    total_candidates = len(rule1) + len(rule2) + len(rule3)
+    total_candidates = len(rule1) + len(rule2) + len(rule2b) + len(rule3)
     print(f"\n{'=' * 40}")
     print(f"Total candidates: {total_candidates}")
     print(f"Corrupted verdicts: {len(corrupted)}")

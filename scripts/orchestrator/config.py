@@ -128,7 +128,7 @@ MODEL_REGISTRY = {
             "completion_rate": 5.00,
         },
         "sonnet": {
-            "model_id": "anthropic/claude-sonnet-4.5",
+            "model_id": "anthropic/claude-sonnet-4.6",
             "token_budget": 20000,
             "prompt_rate": 3.00,
             "completion_rate": 15.00,

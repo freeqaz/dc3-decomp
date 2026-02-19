@@ -59,8 +59,8 @@ All 5 are at their practical limits. The remaining diffs are unfixable compiler/
 
 ## Scripts Added
 
-- `scripts/patch_apply_safe.py` — Apply patches with build + objdiff verification (3 bugs fixed)
-- `scripts/patch_candidates.py` — Find patches that apply cleanly, show delta/target/size info
+- `scripts/patches/apply_safe.py` — Apply patches with build + objdiff verification (3 bugs fixed)
+- `scripts/patches/candidates.py` — Find patches that apply cleanly, show delta/target/size info
 
 ## Takeaways
 

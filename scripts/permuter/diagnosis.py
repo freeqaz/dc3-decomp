@@ -1,6 +1,6 @@
 """Diagnosis layer — extract structured mismatch info from objdiff JSON.
 
-Reuses pure analysis functions from scripts/diff_inspect.py to avoid
+Reuses pure analysis functions from scripts/analysis/diff_inspect.py to avoid
 duplicating logic. Produces a Diagnosis dataclass for pattern filtering.
 """
 
@@ -11,7 +11,7 @@ from collections import Counter
 from .types import Cluster, DiffOp, Diagnosis, SwapInfo
 
 # Import pure analysis functions from diff_inspect
-from scripts.diff_inspect import (
+from scripts.analysis.diff_inspect import (
     parse_breakdowns,
     compute_reg_swap_pairs,
     compute_offset_histogram,

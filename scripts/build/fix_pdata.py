@@ -10,7 +10,7 @@ so the linker skips validation. The renamed sections still end up in the PE
 but aren't recognized as function table entries (acceptable for PoC linking).
 
 Usage:
-    python3 scripts/fix_pdata.py [--dry-run] [--restore]
+    python3 scripts/build/fix_pdata.py [--dry-run] [--restore]
 """
 
 import argparse
@@ -19,7 +19,7 @@ import struct
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parent.parent.parent
 
 
 def has_pdata(data):

@@ -50,7 +50,7 @@ Successfully built both Xenia emulator from source and the decompiled DC3 hybrid
 
 ### 2. Hybrid XEX Build ✅
 
-**Script:** `scripts/build_xex.py`
+**Script:** `scripts/build/build_xex.py`
 
 **Input:** `build/373307D9/default.exe` (19.6 MB hybrid PE)
 
@@ -138,7 +138,7 @@ gtk_progress_get_type                → GTK+ internals
 | `/tmp/claude/xenia/build/bin/Linux/Release/xenia` | Xenia emulator binary |
 | `/home/free/code/milohax/dc3-decomp/build/373307D9/default.xex` | Decompiled hybrid XEX |
 | `/home/free/code/milohax/dc3-decomp/build/373307D9/default.map` | Address-to-function mapping |
-| `scripts/build_xex.py` | XEX generator from PE |
+| `scripts/build/build_xex.py` | XEX generator from PE |
 | `tools/project.py` | Linker configuration |
 
 ---

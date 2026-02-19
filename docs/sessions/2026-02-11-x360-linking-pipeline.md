@@ -17,9 +17,9 @@ Added the ability to link decomp-compiled .obj files with original split .obj fi
 ### What works
 
 - `ninja link` produces `build/373307D9/default.exe` (hybrid PE: decomp .obj where Matching, original split .obj elsewhere)
-- `scripts/link_test.py` can produce a split-only PE for round-trip verification
-- `scripts/compare_pe.py` analyzes byte-level differences between linked and original PE
-- `scripts/fix_pdata.py` available as diagnostic tool (no longer in build pipeline)
+- `scripts/build/link_test.py` can produce a split-only PE for round-trip verification
+- `scripts/build/compare_pe.py` analyzes byte-level differences between linked and original PE
+- `scripts/build/fix_pdata.py` available as diagnostic tool (no longer in build pipeline)
 
 ### Results (hybrid link, 2026-02-12)
 
@@ -81,9 +81,9 @@ The `fix_pdata.py` workaround has been removed from the build pipeline. The scri
 |------|-------------|
 | `tools/project.py` | `msvc_link` rule, `X360LinkStep` class, `link` phony target |
 | `config/373307D9/config.json` | `ldflags` populated with X360 linker flags |
-| `scripts/link_test.py` | Standalone PoC link script (useful for testing outside ninja) |
-| `scripts/fix_pdata.py` | Diagnostic tool (no longer in build pipeline) |
-| `scripts/compare_pe.py` | PE section comparison tool |
+| `scripts/build/link_test.py` | Standalone PoC link script (useful for testing outside ninja) |
+| `scripts/build/fix_pdata.py` | Diagnostic tool (no longer in build pipeline) |
+| `scripts/build/compare_pe.py` | PE section comparison tool |
 | `docs/sessions/2026-02-11-dtk-pdata-splitting-bug.md` | Detailed bug analysis + fix plan for dtk upstream |
 
 ## Road to 100%
@@ -106,7 +106,7 @@ The +0x1800 VA shift comes from extra sections (.pdat0, .xidata, .xedata, .CRT, 
 
 ### 4. Relocation-aware comparison
 
-Extend `scripts/compare_pe.py` to parse the MAP file and compare function-by-function, subtracting relocation fixups. This would show the true code match % independent of VA shift.
+Extend `scripts/build/compare_pe.py` to parse the MAP file and compare function-by-function, subtracting relocation fixups. This would show the true code match % independent of VA shift.
 
 ## Architecture
 

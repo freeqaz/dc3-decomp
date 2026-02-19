@@ -99,7 +99,7 @@ The `run_analyze_function` MCP tool (Ghidra + m2c decompilation of the target bi
 
 ---
 
-## Tooling: `scripts/diff_inspect.py`
+## Tooling: `scripts/analysis/diff_inspect.py`
 
 This was the major tooling outcome of the two OnBeat sessions. What started as a simple filter script grew into a comprehensive instruction-level analysis tool that fills the gap between raw instruction dumps and objdiff's high-level pattern engine.
 
@@ -131,12 +131,12 @@ This rich data allows diff_inspect to classify *why* instructions differ, not ju
 #### 1. Filter Mode (default)
 
 ```bash
-python3 scripts/diff_inspect.py diff.json                  # all non-equal
-python3 scripts/diff_inspect.py diff.json diff_op          # only opcode mismatches
-python3 scripts/diff_inspect.py diff.json replace          # only replaced instructions
-python3 scripts/diff_inspect.py diff.json insert,delete    # structural differences
-python3 scripts/diff_inspect.py diff.json all              # every instruction
-python3 scripts/diff_inspect.py diff.json diff_op -C 8     # with 8 lines context
+python3 scripts/analysis/diff_inspect.py diff.json                  # all non-equal
+python3 scripts/analysis/diff_inspect.py diff.json diff_op          # only opcode mismatches
+python3 scripts/analysis/diff_inspect.py diff.json replace          # only replaced instructions
+python3 scripts/analysis/diff_inspect.py diff.json insert,delete    # structural differences
+python3 scripts/analysis/diff_inspect.py diff.json all              # every instruction
+python3 scripts/analysis/diff_inspect.py diff.json diff_op -C 8     # with 8 lines context
 ```
 
 Shows matching instructions with surrounding context. Groups nearby matches to avoid redundant output. Annotates diff_arg instructions with what changed (register swap, offset shift, symbol relocation, branch destination).
@@ -144,7 +144,7 @@ Shows matching instructions with surrounding context. Groups nearby matches to a
 #### 2. Range Mode
 
 ```bash
-python3 scripts/diff_inspect.py diff.json --range 920-930
+python3 scripts/analysis/diff_inspect.py diff.json --range 920-930
 ```
 
 Shows all instructions in an index range regardless of match type. Essential for examining a specific code region in detail.
@@ -152,7 +152,7 @@ Shows all instructions in an index range regardless of match type. Essential for
 #### 3. Summary Mode
 
 ```bash
-python3 scripts/diff_inspect.py diff.json --summary
+python3 scripts/analysis/diff_inspect.py diff.json --summary
 ```
 
 Quick count of instructions by match type. Use this to verify changes improved the right metrics.
@@ -160,7 +160,7 @@ Quick count of instructions by match type. Use this to verify changes improved t
 #### 4. Diagnose Mode
 
 ```bash
-python3 scripts/diff_inspect.py diff.json --diagnose
+python3 scripts/analysis/diff_inspect.py diff.json --diagnose
 ```
 
 Full root cause analysis. Outputs:
@@ -175,7 +175,7 @@ This is the primary triage tool for deciding whether a function is worth more wo
 #### 5. Clusters Mode
 
 ```bash
-python3 scripts/diff_inspect.py diff.json --clusters
+python3 scripts/analysis/diff_inspect.py diff.json --clusters
 ```
 
 Groups insert/delete instructions into contiguous clusters (gap <= 2 instructions). For each cluster shows:
@@ -188,7 +188,7 @@ Clusters represent actual structural code differences (extra null checks, differ
 #### 6. Register Swaps Mode
 
 ```bash
-python3 scripts/diff_inspect.py diff.json --regswaps
+python3 scripts/analysis/diff_inspect.py diff.json --regswaps
 ```
 
 Detailed register swap pair analysis:
@@ -200,7 +200,7 @@ Detailed register swap pair analysis:
 #### 7. Offsets Mode
 
 ```bash
-python3 scripts/diff_inspect.py diff.json --offsets
+python3 scripts/analysis/diff_inspect.py diff.json --offsets
 ```
 
 Analyzes immediate/offset value differences:
@@ -213,7 +213,7 @@ A single dominant delta means "pure stack frame shift" (unfixable). Outliers may
 #### 8. Replaces Mode
 
 ```bash
-python3 scripts/diff_inspect.py diff.json --replaces
+python3 scripts/analysis/diff_inspect.py diff.json --replaces
 ```
 
 Categorizes `replace` instructions into:
@@ -225,7 +225,7 @@ For OnBeat: 165 of 195 replaces were symbol-reloc noise, leaving only 30 real st
 #### Direct Invocation
 
 ```bash
-python3 scripts/diff_inspect.py --symbol "private: void __cdecl RhythmBattle::OnBeat(void)" --diagnose
+python3 scripts/analysis/diff_inspect.py --symbol "private: void __cdecl RhythmBattle::OnBeat(void)" --diagnose
 ```
 
 Runs objdiff-cli internally, generates JSON to a temp file, then analyzes. Avoids the two-step workflow.
@@ -251,24 +251,24 @@ The typical workflow for investigating a hard function:
     -f json -o /tmp/claude/diff.json
 
 # 2. Quick triage: is this worth investigating?
-python3 scripts/diff_inspect.py /tmp/claude/diff.json --summary
+python3 scripts/analysis/diff_inspect.py /tmp/claude/diff.json --summary
 
 # 3. Root cause analysis: what's causing the mismatch?
-python3 scripts/diff_inspect.py /tmp/claude/diff.json --diagnose
+python3 scripts/analysis/diff_inspect.py /tmp/claude/diff.json --diagnose
 
 # 4. If promising, drill into specific areas:
-python3 scripts/diff_inspect.py /tmp/claude/diff.json --clusters    # find structural diffs
-python3 scripts/diff_inspect.py /tmp/claude/diff.json --regswaps    # check if register-driven
-python3 scripts/diff_inspect.py /tmp/claude/diff.json --replaces    # filter replace noise
+python3 scripts/analysis/diff_inspect.py /tmp/claude/diff.json --clusters    # find structural diffs
+python3 scripts/analysis/diff_inspect.py /tmp/claude/diff.json --regswaps    # check if register-driven
+python3 scripts/analysis/diff_inspect.py /tmp/claude/diff.json --replaces    # filter replace noise
 
 # 5. Examine specific regions found in step 4:
-python3 scripts/diff_inspect.py /tmp/claude/diff.json --range 920-930
+python3 scripts/analysis/diff_inspect.py /tmp/claude/diff.json --range 920-930
 
 # 6. After making a code change, rebuild and compare:
 ./bin/objdiff-cli diff "symbol" --include-instructions --build --incremental \
     -f json -o /tmp/claude/diff.json
-python3 scripts/diff_inspect.py /tmp/claude/diff.json --summary     # did it improve?
-python3 scripts/diff_inspect.py /tmp/claude/diff.json --diagnose    # what changed?
+python3 scripts/analysis/diff_inspect.py /tmp/claude/diff.json --summary     # did it improve?
+python3 scripts/analysis/diff_inspect.py /tmp/claude/diff.json --diagnose    # what changed?
 ```
 
 ---
@@ -309,7 +309,7 @@ This was error-prone enough that it should probably be scripted for future use.
 | File | Change |
 |---|---|
 | `src/system/hamobj/RhythmBattle.cpp:837` | Removed redundant `&& unk130` null guard |
-| `scripts/diff_inspect.py` | Added `--replaces` mode, `categorize_replaces()` function, updated `--diagnose` to show replace breakdown |
+| `scripts/analysis/diff_inspect.py` | Added `--replaces` mode, `categorize_replaces()` function, updated `--diagnose` to show replace breakdown |
 | `scripts/analyze_replaces.py` | Deleted (functionality integrated into diff_inspect.py) |
 
 ## Conclusion

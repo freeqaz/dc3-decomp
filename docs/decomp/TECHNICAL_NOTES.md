@@ -593,7 +593,7 @@ When a function returns `bool`, MSVC may insert `clrlwi rA, rB, 24` (= `rlwinm r
 
 **Important: `clrlwi 24` vs `clrlwi 31` have DIFFERENT causes and fixes!**
 
-**Diagnosis:** Run `python scripts/batch_pattern_scan.py --pattern bool_mask` to find all functions with this mismatch. Cross-reference with the assembly listing (`/FAs`) to see whether clrlwi is on the return path or parameter path.
+**Diagnosis:** Run `python scripts/analysis/batch_pattern_scan.py --pattern bool_mask` to find all functions with this mismatch. Cross-reference with the assembly listing (`/FAs`) to see whether clrlwi is on the return path or parameter path.
 
 ### Issue: Boolean Negation Encoding (subic/subfe vs cntlzw/extrwi)
 

@@ -94,13 +94,13 @@ record_attempt(
 
 ```bash
 # Analyze specific experiment
-python scripts/analyze_enrichment.py --experiment diff_patterns
+python scripts/analysis/analyze_enrichment.py --experiment diff_patterns
 
 # Analyze all experiments
-python scripts/analyze_enrichment.py --all --output docs/context-enrichment/
+python scripts/analysis/analyze_enrichment.py --all --output docs/context-enrichment/
 
 # JSON output for programmatic use
-python scripts/analyze_enrichment.py --experiment diff_patterns --json
+python scripts/analysis/analyze_enrichment.py --experiment diff_patterns --json
 ```
 
 ## Analysis Output

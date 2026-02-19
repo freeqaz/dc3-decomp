@@ -6,10 +6,10 @@ to the orchestrator database (functions.unicorn_verdict, unicorn_class,
 unicorn_confidence, unicorn_tested_at).
 
 Usage:
-    python3 scripts/unicorn_batch_to_db.py                     # all units, default parallelism
-    python3 scripts/unicorn_batch_to_db.py --unit system/char/CharBones  # single unit
-    python3 scripts/unicorn_batch_to_db.py -j 8                # 8 workers
-    python3 scripts/unicorn_batch_to_db.py --force             # re-test everything
+    python3 scripts/unicorn/batch_to_db.py                     # all units, default parallelism
+    python3 scripts/unicorn/batch_to_db.py --unit system/char/CharBones  # single unit
+    python3 scripts/unicorn/batch_to_db.py -j 8                # 8 workers
+    python3 scripts/unicorn/batch_to_db.py --force             # re-test everything
 """
 
 import argparse
@@ -20,7 +20,7 @@ from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime, timezone
 
 # Add project root to path
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, PROJECT_ROOT)
 
 from scripts.orchestrator.database import get_connection, init_database, DEFAULT_DB_PATH
@@ -71,6 +71,8 @@ def process_unit(name, decomp_path, orig_path, timeout=5_000_000):
             })
             continue
 
+        reason = None
+
         if exit_code == EXIT_EQUIVALENT:
             verdict = "EQUIVALENT"
         elif exit_code == EXIT_DIVERGENT:
@@ -79,6 +81,7 @@ def process_unit(name, decomp_path, orig_path, timeout=5_000_000):
                 div_class = classify_divergence(
                     bundle.result, bundle.decomp_result, bundle.orig_result,
                     bundle.decomp_relocs, bundle.orig_relocs)
+                reason = bundle.result.details.get("reason")
         elif exit_code == EXIT_SKIPPED:
             verdict = "SKIPPED"
         else:
@@ -102,6 +105,7 @@ def process_unit(name, decomp_path, orig_path, timeout=5_000_000):
             "verdict": verdict,
             "class": div_class,
             "confidence": confidence,
+            "reason": reason,
         })
 
     return results
@@ -133,11 +137,13 @@ def write_results_to_db(conn, results, now_str):
                 unicorn_verdict = ?,
                 unicorn_class = ?,
                 unicorn_confidence = ?,
+                unicorn_reason = ?,
                 unicorn_tested_at = ?,
                 updated_at = CURRENT_TIMESTAMP
             WHERE symbol = ?
             """,
-            (r["verdict"], r["class"], r["confidence"], now_str, r["symbol"]),
+            (r["verdict"], r["class"], r["confidence"], r.get("reason"),
+             now_str, r["symbol"]),
         )
         if cursor.rowcount > 0:
             updated += 1

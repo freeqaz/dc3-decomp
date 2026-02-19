@@ -3,30 +3,30 @@
 Compare decomp progress between two report.json files, or show current snapshot.
 
 Usage:
-    python3 scripts/compare_progress.py <baseline_report> <current_report>
-    python3 scripts/compare_progress.py --snapshot [report.json]
+    python3 scripts/analysis/compare_progress.py <baseline_report> <current_report>
+    python3 scripts/analysis/compare_progress.py --snapshot [report.json]
 
 Examples:
     # Compare against baseline
-    python3 scripts/compare_progress.py ../og-dc3-decomp/build/373307D9/report.json build/373307D9/report.json
+    python3 scripts/analysis/compare_progress.py ../og-dc3-decomp/build/373307D9/report.json build/373307D9/report.json
 
     # Show detailed unit breakdown
-    python3 scripts/compare_progress.py --detailed ../og-dc3-decomp/build/373307D9/report.json build/373307D9/report.json
+    python3 scripts/analysis/compare_progress.py --detailed ../og-dc3-decomp/build/373307D9/report.json build/373307D9/report.json
 
     # Show function-level changes (regressions and improvements)
-    python3 scripts/compare_progress.py --functions baseline.json current.json
+    python3 scripts/analysis/compare_progress.py --functions baseline.json current.json
 
     # Only show regressions across all views
-    python3 scripts/compare_progress.py --regressions --functions --detailed baseline.json current.json
+    python3 scripts/analysis/compare_progress.py --regressions --functions --detailed baseline.json current.json
 
     # Show current snapshot (all subsystems)
-    python3 scripts/compare_progress.py --snapshot
-    python3 scripts/compare_progress.py --snapshot --sort=percent
+    python3 scripts/analysis/compare_progress.py --snapshot
+    python3 scripts/analysis/compare_progress.py --snapshot --sort=percent
 
     # Filter to specific paths using glob patterns
-    python3 scripts/compare_progress.py --snapshot --filter 'system/ui/*'
-    python3 scripts/compare_progress.py --filter 'system/char/*' --functions baseline.json current.json
-    python3 scripts/compare_progress.py --snapshot --filter '*/synth/*' --filter '*/midi/*'
+    python3 scripts/analysis/compare_progress.py --snapshot --filter 'system/ui/*'
+    python3 scripts/analysis/compare_progress.py --filter 'system/char/*' --functions baseline.json current.json
+    python3 scripts/analysis/compare_progress.py --snapshot --filter '*/synth/*' --filter '*/midi/*'
 """
 
 import argparse

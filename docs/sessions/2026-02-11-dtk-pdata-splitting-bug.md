@@ -57,7 +57,7 @@ A sample:
 
 ## Workaround Applied
 
-`scripts/fix_pdata.py` renames extra `.pdata` sections to `.pdat1`, `.pdat2` etc. This bypasses the linker validation while preserving the data in the output PE (just under a different section name).
+`scripts/build/fix_pdata.py` renames extra `.pdata` sections to `.pdat1`, `.pdat2` etc. This bypasses the linker validation while preserving the data in the output PE (just under a different section name).
 
 This is lossy — the renamed sections won't be recognized as proper function table entries. However, for PoC linking and `.text` comparison, this is acceptable.
 

@@ -256,20 +256,20 @@ Consistent register swaps. Try:
 
 ```bash
 # Root cause analysis (start here)
-python3 scripts/diff_inspect.py --symbol "Foo::Bar" --diagnose
+python3 scripts/analysis/diff_inspect.py --symbol "Foo::Bar" --diagnose
 
 # With worktree support
-python3 scripts/diff_inspect.py --symbol "Foo::Bar" --diagnose --project-dir /tmp/claude/my-branch
+python3 scripts/analysis/diff_inspect.py --symbol "Foo::Bar" --diagnose --project-dir /tmp/claude/my-branch
 
 # From existing JSON
-python3 scripts/diff_inspect.py /tmp/claude/diff.json --diagnose
-python3 scripts/diff_inspect.py /tmp/claude/diff.json --clusters
-python3 scripts/diff_inspect.py /tmp/claude/diff.json --regswaps
-python3 scripts/diff_inspect.py /tmp/claude/diff.json --offsets
-python3 scripts/diff_inspect.py /tmp/claude/diff.json --replaces
+python3 scripts/analysis/diff_inspect.py /tmp/claude/diff.json --diagnose
+python3 scripts/analysis/diff_inspect.py /tmp/claude/diff.json --clusters
+python3 scripts/analysis/diff_inspect.py /tmp/claude/diff.json --regswaps
+python3 scripts/analysis/diff_inspect.py /tmp/claude/diff.json --offsets
+python3 scripts/analysis/diff_inspect.py /tmp/claude/diff.json --replaces
 
 # Compare two snapshots (before/after)
-python3 scripts/diff_inspect.py --compare baseline.json current.json
+python3 scripts/analysis/diff_inspect.py --compare baseline.json current.json
 ```
 
 ### MCP Tool (for agents)

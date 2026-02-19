@@ -58,7 +58,7 @@ A `xenia-headless` binary runs Xenia without a graphical window, using null/nop 
 The original XEX uses **basic compression** (type 1), which has been fully analyzed and **import resolution is now fully working**:
 
 **What's Implemented:**
-- ✅ Decompression code added to `scripts/build_xex.py` via `decompress_xex_pe()`
+- ✅ Decompression code added to `scripts/build/build_xex.py` via `decompress_xex_pe()`
 - ✅ Import ordinal data (RVA 0x600-0x1E48, 6216 bytes) copied from original to decompiled PE
 - ✅ Import thunks in `.idata` section patched to XEX format (0x00XXXXXX)
 - ✅ **Thunk section generation** - Creates `.ithunk` section with 347 thunk markers (0x01XXXXXX)
@@ -68,7 +68,7 @@ The original XEX uses **basic compression** (type 1), which has been fully analy
 **Verification:**
 ```bash
 # Build XEX with import resolution
-python3 scripts/build_xex.py
+python3 scripts/build/build_xex.py
 
 # Test with Xenia
 xenia-headless --target=build/373307D9/default.xex --headless_timeout_ms=25000
@@ -112,7 +112,7 @@ However, no actual display is required - the null GPU backend doesn't create win
 
 ```bash
 # Build XEX
-python3 scripts/build_xex.py
+python3 scripts/build/build_xex.py
 
 # Test decompiled XEX (30 second timeout)
 /tmp/claude/xenia/build/bin/Linux/Checked/xenia-headless \
@@ -123,8 +123,8 @@ python3 scripts/build_xex.py
 
 ## Related Files
 
-- `scripts/build_xex.py` - XEX packer with decompression support
-- `scripts/decompress_xex.py` - Standalone XEX decompression tool
+- `scripts/build/build_xex.py` - XEX packer with decompression support
+- `scripts/build/decompress_xex.py` - Standalone XEX decompression tool
 - `docs/sessions/2026-02-17-xex-import-resolution.md` - Import debugging session
 
 ## Future Work

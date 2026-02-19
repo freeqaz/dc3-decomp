@@ -160,7 +160,7 @@ fi
 
 # --- Compare ---
 echo ""
-python3 "${MAIN_REPO}/scripts/compare_progress.py" \
+python3 "${MAIN_REPO}/scripts/analysis/compare_progress.py" \
     "${COMPARE_FLAGS[@]}" \
     "${BASELINE_REPORT}" \
     "${MAIN_REPO}/${REPORT_REL}"

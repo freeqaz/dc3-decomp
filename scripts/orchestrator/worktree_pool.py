@@ -95,6 +95,13 @@ class WorktreePool:
         """
         self.pool_dir.mkdir(parents=True, exist_ok=True)
 
+        # Prune stale worktree registrations (paths deleted but still tracked by git)
+        subprocess.run(
+            ["git", "worktree", "prune"],
+            cwd=self.main_repo,
+            capture_output=True,
+        )
+
         conn = get_connection(self.db_path)
         created = []
 

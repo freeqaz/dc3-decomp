@@ -18,7 +18,7 @@ The anchor-based comparison:
 4. Reports full instruction match and opcode-level match (relocation-adjusted)
 
 Usage:
-    python3 scripts/compare_pe.py [linked_pe] [--map MAP_FILE]
+    python3 scripts/build/compare_pe.py [linked_pe] [--map MAP_FILE]
 """
 
 import argparse
@@ -28,7 +28,7 @@ import struct
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parent.parent.parent
 
 
 def parse_pe(path):

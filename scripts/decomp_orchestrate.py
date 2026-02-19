@@ -1052,7 +1052,7 @@ def cmd_patch_refresh(args):
     manifest_path = _project_root / "scratch" / "patches" / "manifest.json"
     if not manifest_path.exists():
         print(f"Error: No manifest found at {manifest_path}")
-        print("Run: python scripts/patch_triage.py")
+        print("Run: python scripts/patches/triage.py")
         sys.exit(1)
 
     manifest = json.loads(manifest_path.read_text())

@@ -30,7 +30,7 @@ Added a new mode that runs objdiff internally, parses the JSON, filters to non-e
 
 Capped at 30 mismatches to avoid blowing up context on large functions.
 
-Implementation reuses `fmt_instr()` and `diff_annotation()` from `scripts/diff_inspect.py` (already on `sys.path` via the MCP server's path setup at line 39).
+Implementation reuses `fmt_instr()` and `diff_annotation()` from `scripts/analysis/diff_inspect.py` (already on `sys.path` via the MCP server's path setup at line 39).
 
 ### 2. Mismatch preview in concise `run_objdiff` output
 

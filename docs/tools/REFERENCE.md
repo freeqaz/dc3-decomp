@@ -66,9 +66,9 @@ See [../reference/DATABASE_SCHEMA.md](../reference/DATABASE_SCHEMA.md) for full 
 
 | Script | Description |
 |--------|-------------|
-| `scripts/link_test.py` | Standalone X360 link test (links split/hybrid .obj → PE) |
-| `scripts/compare_pe.py` | Compare linked PE against original `ham_xbox_r.exe` |
-| `scripts/fix_pdata.py` | Workaround for dtk .pdata splitting bug (integrated into `ninja link`) |
+| `scripts/build/link_test.py` | Standalone X360 link test (links split/hybrid .obj → PE) |
+| `scripts/build/compare_pe.py` | Compare linked PE against original `ham_xbox_r.exe` |
+| `scripts/build/fix_pdata.py` | Workaround for dtk .pdata splitting bug (integrated into `ninja link`) |
 
 See [../sessions/2026-02-11-x360-linking-pipeline.md](../sessions/2026-02-11-x360-linking-pipeline.md) for full status and roadmap.
 

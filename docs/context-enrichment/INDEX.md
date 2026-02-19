@@ -36,13 +36,13 @@ Context enrichments are pre-computed data injected into agent prompts to reduce 
 
 ```bash
 # Analyze all experiments
-python scripts/analyze_enrichment.py --all
+python scripts/analysis/analyze_enrichment.py --all
 
 # Analyze specific experiment
-python scripts/analyze_enrichment.py --experiment diff_patterns
+python scripts/analysis/analyze_enrichment.py --experiment diff_patterns
 
 # Generate markdown reports
-python scripts/analyze_enrichment.py --all --output docs/context-enrichment/
+python scripts/analysis/analyze_enrichment.py --all --output docs/context-enrichment/
 ```
 
 ### Checking Assignments
@@ -84,7 +84,7 @@ context = collect_pre_run_context(
 | `scripts/orchestrator/context_collector.py` | All enrichment implementations |
 | `scripts/orchestrator/database.py` | Schema v4 with `enrichment_flags` |
 | `scripts/orchestrator/rb2_dwarf.py` | RB2 class layout parser |
-| `scripts/analyze_enrichment.py` | A/B analysis script |
+| `scripts/analysis/analyze_enrichment.py` | A/B analysis script |
 
 ## Key Metrics
 

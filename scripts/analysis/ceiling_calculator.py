@@ -17,11 +17,11 @@ Mismatch categories:
 Ceiling = 100% - (unfixable_instructions / total_instructions * 100)
 
 Usage:
-    python scripts/ceiling_calculator.py                    # All AT_LIMIT functions
-    python scripts/ceiling_calculator.py --unit 'system/*'  # Filter by unit
-    python scripts/ceiling_calculator.py --min 90 --max 99  # Filter by match%
-    python scripts/ceiling_calculator.py --json             # JSON output
-    python scripts/ceiling_calculator.py --find-fixable     # Show functions with fixable issues
+    python scripts/analysis/ceiling_calculator.py                    # All AT_LIMIT functions
+    python scripts/analysis/ceiling_calculator.py --unit 'system/*'  # Filter by unit
+    python scripts/analysis/ceiling_calculator.py --min 90 --max 99  # Filter by match%
+    python scripts/analysis/ceiling_calculator.py --json             # JSON output
+    python scripts/analysis/ceiling_calculator.py --find-fixable     # Show functions with fixable issues
 """
 
 from __future__ import annotations
@@ -35,13 +35,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
-PROJECT_DIR = Path(__file__).resolve().parent.parent
+PROJECT_DIR = Path(__file__).resolve().parent.parent.parent
 OBJDIFF_CLI = PROJECT_DIR / "bin" / "objdiff-cli"
 
 sys.path.insert(0, str(PROJECT_DIR))
 
 # Import pattern detection from batch_pattern_scan
-from scripts.batch_pattern_scan import detect_patterns
+from scripts.analysis.batch_pattern_scan import detect_patterns
 
 
 @dataclass

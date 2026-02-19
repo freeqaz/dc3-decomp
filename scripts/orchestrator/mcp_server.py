@@ -1241,7 +1241,7 @@ class DecompMCPServer:
                 shown = mismatches[:limit]
                 truncated = len(mismatches) > limit
 
-                from diff_inspect import fmt_instr as _fmt_instr, diff_annotation as _diff_annotation
+                from analysis.diff_inspect import fmt_instr as _fmt_instr, diff_annotation as _diff_annotation
 
                 if truncated:
                     lines.append("")
@@ -1442,7 +1442,7 @@ class DecompMCPServer:
                         with open(tmp_json, "w") as f:
                             f.write(json_output)
 
-                        diff_inspect_script = self.project_root / "scripts" / "diff_inspect.py"
+                        diff_inspect_script = self.project_root / "scripts" / "analysis" / "diff_inspect.py"
                         if diff_inspect_script.exists():
                             diag_result = subprocess.run(
                                 [sys.executable, str(diff_inspect_script), str(tmp_json), "--diagnose"],
@@ -1670,7 +1670,7 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
         safe_symbol = symbol.replace("?", "_Q_").replace("@", "_A_").replace("<", "_L_").replace(">", "_R_")
 
         # diff_inspect.py is always in the main repo
-        diff_inspect_script = self.project_root / "scripts" / "diff_inspect.py"
+        diff_inspect_script = self.project_root / "scripts" / "analysis" / "diff_inspect.py"
         if not diff_inspect_script.exists():
             return [TextContent(type="text", text=f"Error: diff_inspect.py not found at {diff_inspect_script}")]
 
@@ -1828,7 +1828,7 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
                 shown = mismatches[:MAX_MISMATCHES]
 
                 # Format as compact markdown table
-                from diff_inspect import fmt_instr as _fmt_instr, diff_annotation as _diff_annotation
+                from analysis.diff_inspect import fmt_instr as _fmt_instr, diff_annotation as _diff_annotation
 
                 header = f"## Mismatched Instructions ({len(mismatches)} of {total} total)\n"
                 if truncated:

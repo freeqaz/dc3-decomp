@@ -90,9 +90,24 @@ Tool-specific deep docs live in subdirectories:
 | [plans/unicorn-runner-value.md](plans/unicorn-runner-value.md) | Unicorn value demonstration alongside objdiff/Ghidra |
 | [plans/unicorn-structural-probing.md](plans/unicorn-structural-probing.md) | Structural probing beyond yes/no equivalence |
 | [plans/BUILD_ROADMAP.md](plans/BUILD_ROADMAP.md) | Path to a bootable build — phases, blockers, what's needed |
+| [plans/XENIA_HEADLESS_STATUS.md](plans/XENIA_HEADLESS_STATUS.md) | XEX boots successfully, import resolution complete |
+| [plans/THUNK_SECTION_IMPLEMENTATION.md](plans/THUNK_SECTION_IMPLEMENTATION.md) | Import resolution implementation (COMPLETED) |
+| [plans/SCRIPTED_INPUT_IMPLEMENTATION.md](plans/SCRIPTED_INPUT_IMPLEMENTATION.md) | Automated input injection for testing — enables regression tests |
 | [plans/LBL_SYMBOL_MATCHING.md](plans/LBL_SYMBOL_MATCHING.md) | Fix `lbl_` symbol matching for function-local statics (match% accuracy) |
 | [plans/compiler-instrumentation.md](plans/compiler-instrumentation.md) | Compiler introspection: register allocator, encoding patterns (DONE) |
 | [plans/XENIA_BOOT_VALIDATION.md](plans/XENIA_BOOT_VALIDATION.md) | Xenia emulator build, hybrid XEX boot validation, headless mode plan |
+
+## Runtime & Testing
+
+| Doc | Description |
+|-----|-------------|
+| [runtime/XENIA_HEADLESS_STATUS.md](runtime/XENIA_HEADLESS_STATUS.md) | Xenia headless status — rendered screenshots captured, performance data, all fixes |
+| [sessions/2026-02-18-xenia-screenshot-breakthrough.md](sessions/2026-02-18-xenia-screenshot-breakthrough.md) | **Screenshot breakthrough** — full journey from black frames to rendered DC3 boot animation |
+| [sessions/2026-02-18-xenia-frame-capture-attempts.md](sessions/2026-02-18-xenia-frame-capture-attempts.md) | Frame capture approaches tried — trace, deferred draws, async worker (resolved) |
+| [sessions/2026-02-18-vulkan-headless-rendering.md](sessions/2026-02-18-vulkan-headless-rendering.md) | Vulkan headless rendering — async pipelines, GPU readback (resolved) |
+| [sessions/2026-02-18-vulkan-performance-investigation.md](sessions/2026-02-18-vulkan-performance-investigation.md) | Vulkan perf investigation — draw path at 30fps, readback is sole bottleneck (resolved) |
+| [runtime/BOOT_ANALYSIS.md](runtime/BOOT_ANALYSIS.md) | Boot progress analysis — how far we're getting, visibility limitations |
+| [runtime/SCRIPTED_INPUT_TESTING.md](runtime/SCRIPTED_INPUT_TESTING.md) | Scripted input testing design — automated validation |
 
 ## General
 

@@ -202,9 +202,20 @@ def classify_divergence(result, decomp_result, orig_result, decomp_relocs, orig_
     """Classify a DIVERGENT result into a root-cause category.
 
     Returns one of:
-        'build_env'  — __FILE__ string differences or merged symbol calls
-        'regalloc'   — same call structure, only register value differences
-        'logic'      — real behavioral divergence
+        'build_env'     — __FILE__ string differences or merged symbol calls
+        'regalloc'      — same call structure, only register value differences
+
+        Fine-grained sub-classes (replacing broad 'logic'):
+        'merged_call'   — call_count_mismatch with merged warnings (unfixable)
+        'merged_arg'    — call_arg_mismatch at a merged symbol call (unfixable)
+        'stack_layout'  — call_arg_mismatch with stack-region values (hard to fix)
+        'fpr_precision' — float return value differs (FMA/precision, unfixable)
+        'object_memory' — memory_mismatch with object region diffs (maybe fixable)
+        'error'         — execution error differences (real bug)
+        'call_count'    — call count mismatch without merged indicators (real bug)
+        'call_arg'      — call arg mismatch not matched by other rules (real bug)
+        'return_value'  — integer return value mismatch (real bug)
+        'logic'         — remaining fallthrough (should be minimal)
     """
     if result.verdict != "DIVERGENT":
         return None
@@ -216,9 +227,9 @@ def classify_divergence(result, decomp_result, orig_result, decomp_relocs, orig_
     # Check for merged symbol warnings
     has_merged = any("merged_" in w for w in warnings)
 
-    # Error-based divergences are logic differences
+    # Error-based divergences
     if reason in ("error_mismatch", "decomp_error", "orig_error"):
-        return "logic"
+        return "error"
 
     # call_arg_mismatch: check if mismatching values are in globals region
     # (__FILE__ string references live in GLOBAL_BASE)
@@ -247,7 +258,7 @@ def classify_divergence(result, decomp_result, orig_result, decomp_relocs, orig_
             call_idx = details.get("call_index", -1)
             for w in warnings:
                 if f"Call #{call_idx}:" in w and "merged_" in w:
-                    return "build_env"
+                    return "merged_arg"
 
         # Check for regalloc: same call count, same call targets, only value diffs
         # If the call logs have identical length and the mismatch is in non-pointer
@@ -277,13 +288,29 @@ def classify_divergence(result, decomp_result, orig_result, decomp_relocs, orig_
                 if non_pointer_diffs:
                     return "regalloc"
 
-        return "logic"
+        # Check for stack-region arg differences
+        any_stack = False
+        for reg in diff_regs:
+            d_val = d_args.get(reg, 0)
+            o_val = o_args.get(reg, 0)
+            if (STACK_BASE <= d_val < STACK_BASE + REGION_SIZE
+                    or STACK_BASE <= o_val < STACK_BASE + REGION_SIZE):
+                any_stack = True
+                break
+        if any_stack:
+            return "stack_layout"
+
+        # Generic merged arg (merged warning exists but didn't match exact call)
+        if has_merged:
+            return "merged_arg"
+
+        return "call_arg"
 
     if reason == "call_count_mismatch":
         # Merged symbols can cause extra/missing calls
         if has_merged:
-            return "build_env"
-        return "logic"
+            return "merged_call"
+        return "call_count"
 
     if reason == "return_value_mismatch":
         # Check if both values are globals-region pointers (string return)
@@ -292,7 +319,7 @@ def classify_divergence(result, decomp_result, orig_result, decomp_relocs, orig_
         if (GLOBAL_BASE <= d_r3 < GLOBAL_BASE + REGION_SIZE
                 and GLOBAL_BASE <= o_r3 < GLOBAL_BASE + REGION_SIZE):
             return "build_env"
-        return "logic"
+        return "return_value"
 
     if reason == "memory_mismatch":
         # Memory diffs in globals region could be string-related
@@ -301,10 +328,12 @@ def classify_divergence(result, decomp_result, orig_result, decomp_relocs, orig_
         if not obj_diffs and glob_diffs:
             # Only globals diffs — could be __FILE__ written to memory
             return "build_env"
+        if obj_diffs:
+            return "object_memory"
         return "logic"
 
     if reason == "fpr_return_mismatch":
-        return "logic"
+        return "fpr_precision"
 
     return "logic"
 

@@ -31,7 +31,7 @@ Session 3 investigated whether OFFSET_SWAP patterns could be fixed through local
 
 ### 2. Offset Analysis
 ```bash
-python3 scripts/diff_inspect.py baseline.json --offsets
+python3 scripts/analysis/diff_inspect.py baseline.json --offsets
 ```
 
 **Key Findings:**

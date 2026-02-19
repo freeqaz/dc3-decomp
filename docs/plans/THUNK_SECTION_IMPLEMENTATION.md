@@ -204,7 +204,7 @@ def build_xex(pe_data, original_xex_info, pe_info, ...):
 
 1. **Build XEX with thunks** ✅
    ```bash
-   python3 scripts/build_xex.py
+   python3 scripts/build/build_xex.py
    # Output: Generated 347 thunk markers
    #         Patched 347 thunk VA entries in import header
    ```
@@ -228,7 +228,7 @@ def build_xex(pe_data, original_xex_info, pe_info, ...):
 
 | File | Change |
 |------|--------|
-| `scripts/build_xex.py` | Add thunk generation, PE extension, header patching |
+| `scripts/build/build_xex.py` | Add thunk generation, PE extension, header patching |
 
 ## Estimated Effort
 

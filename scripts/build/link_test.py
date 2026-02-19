@@ -6,7 +6,7 @@ Reads build/373307D9/config.json for the ordered unit list,
 writes a response file, and invokes X360 link.exe via wibo.
 
 Usage:
-    python3 scripts/link_test.py [--force-multiple] [--verbose] [--map]
+    python3 scripts/build/link_test.py [--force-multiple] [--verbose] [--map]
 """
 
 import argparse
@@ -16,7 +16,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parent.parent.parent
 BUILD_DIR = ROOT / "build" / "373307D9"
 CONFIG_JSON = BUILD_DIR / "config.json"
 ORIG_PE = ROOT / "orig" / "373307D9" / "ham_xbox_r.exe"

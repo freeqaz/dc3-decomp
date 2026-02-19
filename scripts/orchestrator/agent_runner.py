@@ -96,12 +96,11 @@ class AgentRunner:
             parsed.output = raw.get("output", "")
             return parsed
 
-    # Environment variables to strip from subprocess (inherited from parent session)
+    # Environment variables to strip from subprocess (inherited from parent session).
+    # Note: Proxy vars (HTTP_PROXY etc.) are NOT stripped here because build_env()
+    # sets them correctly from CLAUDE_CODE_HOST_*_PROXY_PORT. Since SDK merges
+    # provided env over os.environ, build_env()'s values override stale system ones.
     _STRIP_ENV_VARS = frozenset({
-        # Proxy vars from parent session aren't accessible from subprocesses
-        "HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy",
-        "ALL_PROXY", "all_proxy",
-        "CLAUDE_CODE_HOST_HTTP_PROXY_PORT", "CLAUDE_CODE_HOST_SOCKS_PROXY_PORT",
         # CLAUDECODE triggers nested session check in CLI
         "CLAUDECODE",
     })
@@ -109,9 +108,9 @@ class AgentRunner:
     def build_env(self, model: str = None) -> dict[str, str]:
         """Build environment dict for agent process. Public for testing.
 
-        Note: We explicitly do NOT set proxy vars here. The parent session's
-        proxy (CLAUDE_CODE_HOST_*_PROXY_PORT) is not accessible from subprocesses.
-        CLAUDECODE is also stripped to avoid nested session detection.
+        Translates parent session's proxy ports into standard HTTP_PROXY/HTTPS_PROXY
+        vars so child processes can route through the parent's proxy. This is required
+        when direct internet access is unavailable (e.g. DNS doesn't resolve without proxy).
         """
         agent_home = Path(os.environ.get(
             "AGENT_HOME",
@@ -119,10 +118,22 @@ class AgentRunner:
         ))
         agent_home.mkdir(parents=True, exist_ok=True)
 
+        http_proxy_port = os.environ.get("CLAUDE_CODE_HOST_HTTP_PROXY_PORT")
+        socks_proxy_port = os.environ.get("CLAUDE_CODE_HOST_SOCKS_PROXY_PORT")
+
         env: dict[str, str] = {
             "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
             "HOME": str(agent_home),
         }
+
+        if http_proxy_port:
+            env["HTTP_PROXY"] = f"http://localhost:{http_proxy_port}"
+            env["HTTPS_PROXY"] = f"http://localhost:{http_proxy_port}"
+            env["http_proxy"] = f"http://localhost:{http_proxy_port}"
+            env["https_proxy"] = f"http://localhost:{http_proxy_port}"
+        if socks_proxy_port:
+            env["ALL_PROXY"] = f"socks5h://localhost:{socks_proxy_port}"
+            env["all_proxy"] = f"socks5h://localhost:{socks_proxy_port}"
 
         return env
 
@@ -155,9 +166,14 @@ class AgentRunner:
             env["ANTHROPIC_AUTH_TOKEN"] = _get_openrouter_api_key()
             env["ANTHROPIC_API_KEY"] = ""  # Must be explicitly empty
 
-            if model and requires_openrouter(model):
-                openrouter_model_id = get_model_id(model)
-                env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = openrouter_model_id
+            # Always set ANTHROPIC_DEFAULT_SONNET_MODEL for OpenRouter so the CLI
+            # sends the OpenRouter model ID (e.g. "anthropic/claude-sonnet-4.6")
+            # instead of Anthropic's internal ID.
+            if model:
+                from .config import MODEL_REGISTRY
+                or_models = MODEL_REGISTRY.get("openrouter", {})
+                if model in or_models:
+                    env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = or_models[model]["model_id"]
 
         return env
 
@@ -169,7 +185,13 @@ class AgentRunner:
         if not SDK_AVAILABLE:
             raise RuntimeError("claude-agent-sdk not installed")
 
-        if requires_zai(config.model) or requires_openrouter(config.model):
+        # When using alt backends (OpenRouter/Z.AI), CLI model must be a standard
+        # name ("sonnet") because the CLI doesn't understand full model IDs like
+        # "anthropic/claude-sonnet-4.6". Backend-specific models route through
+        # ANTHROPIC_DEFAULT_SONNET_MODEL.
+        use_alt = (requires_zai(config.model) or requires_openrouter(config.model)
+                   or _get_openrouter_enabled() or _get_zai_enabled())
+        if use_alt:
             cli_model = "sonnet"
         else:
             cli_model = get_model_id(config.model)
@@ -563,8 +585,10 @@ class AgentRunner:
 
     async def _run_process(self, config: AgentRunConfig) -> dict[str, Any]:
         """Run Claude CLI agent as subprocess."""
-        # Backend-specific models route through ANTHROPIC_DEFAULT_SONNET_MODEL
-        if requires_zai(config.model) or requires_openrouter(config.model):
+        # When using alt backends, CLI model must be a standard name ("sonnet")
+        use_alt = (requires_zai(config.model) or requires_openrouter(config.model)
+                   or _get_openrouter_enabled() or _get_zai_enabled())
+        if use_alt:
             cli_model = "sonnet"
         else:
             cli_model = get_model_id(config.model)
@@ -583,13 +607,12 @@ class AgentRunner:
             pfx = _clr.colored_prefix(config.session_id)
             print(f"{pfx}{_clr.DIM}Starting agent with model {cli_model}...{_clr.RESET}")
 
-        # Start with clean environment, stripping vars that won't work in subprocess
-        # - Proxy vars from parent session aren't accessible
-        # - CLAUDECODE triggers nested session check in CLI
-        proxy_vars = {"HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy",
-                      "ALL_PROXY", "all_proxy", "CLAUDE_CODE_HOST_HTTP_PROXY_PORT",
-                      "CLAUDE_CODE_HOST_SOCKS_PROXY_PORT", "CLAUDECODE"}
-        env = {k: v for k, v in os.environ.items() if k not in proxy_vars}
+        # Strip stale system proxy vars but keep CLAUDE_CODE_HOST_*_PROXY_PORT
+        # so child claude sessions route through the parent's proxy (needed when
+        # direct internet access is unavailable).
+        strip_vars = {"HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy",
+                      "ALL_PROXY", "all_proxy", "CLAUDECODE"}
+        env = {k: v for k, v in os.environ.items() if k not in strip_vars}
         env.update(self.build_env(config.model))
         env.update(self.build_auth_env(config.model))
 

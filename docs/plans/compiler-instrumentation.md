@@ -775,14 +775,14 @@ See Step 8 below.
 **Goal**: Compute theoretical maximum match% for every function, accounting for known
 unfixable patterns.
 
-**Tool**: `scripts/ceiling_calculator.py`
+**Tool**: `scripts/analysis/ceiling_calculator.py`
 
 **Usage**:
 ```bash
-python scripts/ceiling_calculator.py                    # All AT_LIMIT functions
-python scripts/ceiling_calculator.py --min 90           # 90%+ only
-python scripts/ceiling_calculator.py --find-fixable     # Show fixable patterns
-python scripts/ceiling_calculator.py --json             # Machine-readable output
+python scripts/analysis/ceiling_calculator.py                    # All AT_LIMIT functions
+python scripts/analysis/ceiling_calculator.py --min 90           # 90%+ only
+python scripts/analysis/ceiling_calculator.py --find-fixable     # Show fixable patterns
+python scripts/analysis/ceiling_calculator.py --json             # Machine-readable output
 ```
 
 **Full scan results (1,838 AT_LIMIT functions, 253,345 instructions)**:
@@ -869,7 +869,7 @@ python -m tools.compiler_trace bsf-solve --symbol <mangled> --source source.cpp
 
 #### Step 6: Batch Scan for Encoding Fixes (DONE)
 
-Built `scripts/batch_pattern_scan.py` — automated scanner that runs `objdiff-cli diff --include-instructions -f json` on functions and detects encoding patterns.
+Built `scripts/analysis/batch_pattern_scan.py` — automated scanner that runs `objdiff-cli diff --include-instructions -f json` on functions and detects encoding patterns.
 
 **Scan Results** (500 functions, 80%-99.5% range):
 
@@ -897,10 +897,10 @@ Built `scripts/batch_pattern_scan.py` — automated scanner that runs `objdiff-c
 
 **Scanner usage:**
 ```bash
-python scripts/batch_pattern_scan.py --min 80 --max 99.5 --limit 500
-python scripts/batch_pattern_scan.py --pattern extrwi_rlwinm  # filter by type
-python scripts/batch_pattern_scan.py --pattern bool_mask --json  # JSON output
-python scripts/batch_pattern_scan.py --unit 'system/rndobj'  # filter by unit
+python scripts/analysis/batch_pattern_scan.py --min 80 --max 99.5 --limit 500
+python scripts/analysis/batch_pattern_scan.py --pattern extrwi_rlwinm  # filter by type
+python scripts/analysis/batch_pattern_scan.py --pattern bool_mask --json  # JSON output
+python scripts/analysis/batch_pattern_scan.py --unit 'system/rndobj'  # filter by unit
 ```
 
 #### Step 7: fmadds vs fmuls+fadds Investigation
@@ -972,7 +972,7 @@ points: interference list at `[node+0x00/0x04/0x08/0x0c]`, free lists at `0x10c2
    - ClipDistMap.cpp, ArcDetector.cpp, Profiler.cpp, GamePanel.cpp, Part.cpp → expression restructuring
    - ClipCollide.cpp, Key.cpp, Geo.cpp, MultiTempoTempoMap.cpp, SpotlightDrawer_NG.cpp → accept gap
 
-5. **Scanner updated**: `scripts/batch_pattern_scan.py` now detects `fma_mismatch` pattern type.
+5. **Scanner updated**: `scripts/analysis/batch_pattern_scan.py` now detects `fma_mismatch` pattern type.
 
 ## Step 8: Instruction Scheduling Investigation — DONE (previously completed)
 

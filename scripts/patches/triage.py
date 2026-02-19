@@ -6,9 +6,9 @@ and categorizes each patch by applicability. Produces a scratch workspace
 with a manifest for safe integration.
 
 Usage:
-    python scripts/patch_triage.py                    # Full triage run
-    python scripts/patch_triage.py --stats            # Just print category counts
-    python scripts/patch_triage.py --refresh          # Re-triage (preserves status)
+    python scripts/patches/triage.py                    # Full triage run
+    python scripts/patches/triage.py --stats            # Just print category counts
+    python scripts/patches/triage.py --refresh          # Re-triage (preserves status)
 """
 
 import argparse
@@ -25,10 +25,10 @@ from pathlib import Path
 from typing import Optional
 
 # Add parent dir so we can import from orchestrator
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 from orchestrator.patch_applier import clean_patch
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 PATCHES_DIR = REPO_ROOT / "generated-patches"
 DB_PATH = REPO_ROOT / "decomp.db"
 SCRATCH_DIR = REPO_ROOT / "scratch" / "patches"

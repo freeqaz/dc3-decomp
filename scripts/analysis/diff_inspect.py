@@ -6,25 +6,25 @@ Usage:
     ./bin/objdiff-cli diff "symbol_name" --include-instructions --build --incremental -f json -o /tmp/claude/diff.json
 
     # Then inspect it:
-    python3 scripts/diff_inspect.py /tmp/claude/diff.json                  # show all non-equal
-    python3 scripts/diff_inspect.py /tmp/claude/diff.json diff_op          # only diff_op
-    python3 scripts/diff_inspect.py /tmp/claude/diff.json replace          # only replace
-    python3 scripts/diff_inspect.py /tmp/claude/diff.json insert,delete    # insert and delete
-    python3 scripts/diff_inspect.py /tmp/claude/diff.json diff_op -C 8     # 8 lines context
-    python3 scripts/diff_inspect.py /tmp/claude/diff.json all              # every instruction
-    python3 scripts/diff_inspect.py /tmp/claude/diff.json --range 950-970  # specific index range
-    python3 scripts/diff_inspect.py /tmp/claude/diff.json --summary        # count by match type
+    python3 scripts/analysis/diff_inspect.py /tmp/claude/diff.json                  # show all non-equal
+    python3 scripts/analysis/diff_inspect.py /tmp/claude/diff.json diff_op          # only diff_op
+    python3 scripts/analysis/diff_inspect.py /tmp/claude/diff.json replace          # only replace
+    python3 scripts/analysis/diff_inspect.py /tmp/claude/diff.json insert,delete    # insert and delete
+    python3 scripts/analysis/diff_inspect.py /tmp/claude/diff.json diff_op -C 8     # 8 lines context
+    python3 scripts/analysis/diff_inspect.py /tmp/claude/diff.json all              # every instruction
+    python3 scripts/analysis/diff_inspect.py /tmp/claude/diff.json --range 950-970  # specific index range
+    python3 scripts/analysis/diff_inspect.py /tmp/claude/diff.json --summary        # count by match type
 
     # Analysis modes:
-    python3 scripts/diff_inspect.py /tmp/claude/diff.json --diagnose       # root cause analysis
-    python3 scripts/diff_inspect.py /tmp/claude/diff.json --clusters       # insert/delete clusters
-    python3 scripts/diff_inspect.py /tmp/claude/diff.json --regswaps       # register swap pairs
-    python3 scripts/diff_inspect.py /tmp/claude/diff.json --offsets        # offset shift analysis
-    python3 scripts/diff_inspect.py /tmp/claude/diff.json --replaces       # replace categorization
-    python3 scripts/diff_inspect.py --compare base.json cand.json           # delta table for two diffs
+    python3 scripts/analysis/diff_inspect.py /tmp/claude/diff.json --diagnose       # root cause analysis
+    python3 scripts/analysis/diff_inspect.py /tmp/claude/diff.json --clusters       # insert/delete clusters
+    python3 scripts/analysis/diff_inspect.py /tmp/claude/diff.json --regswaps       # register swap pairs
+    python3 scripts/analysis/diff_inspect.py /tmp/claude/diff.json --offsets        # offset shift analysis
+    python3 scripts/analysis/diff_inspect.py /tmp/claude/diff.json --replaces       # replace categorization
+    python3 scripts/analysis/diff_inspect.py --compare base.json cand.json           # delta table for two diffs
 
     # Direct invocation (runs objdiff internally):
-    python3 scripts/diff_inspect.py --symbol "symbol_name" --diagnose
+    python3 scripts/analysis/diff_inspect.py --symbol "symbol_name" --diagnose
 """
 
 import argparse

@@ -100,7 +100,7 @@ These are the only genuinely different opcodes:
 
 All 5 represent compiler optimization choices that can't be matched by source-level changes.
 
-## Tool Built: `scripts/diff_inspect.py`
+## Tool Built: `scripts/analysis/diff_inspect.py`
 
 Created a new utility for inspecting objdiff JSON output, filling the gap between `show_instrs.py` (raw dump) and `objdiff --analyze` (full pattern engine).
 
@@ -111,14 +111,14 @@ Created a new utility for inspecting objdiff JSON output, filling the gap betwee
 ./bin/objdiff-cli diff "symbol_name" --include-instructions --build --incremental -f json -o /tmp/claude/diff.json
 
 # Inspect it
-python3 scripts/diff_inspect.py /tmp/claude/diff.json                  # all non-equal mismatches
-python3 scripts/diff_inspect.py /tmp/claude/diff.json diff_op          # only diff_op (opcode mismatches)
-python3 scripts/diff_inspect.py /tmp/claude/diff.json replace          # only replace
-python3 scripts/diff_inspect.py /tmp/claude/diff.json insert,delete    # structural differences
-python3 scripts/diff_inspect.py /tmp/claude/diff.json diff_op -C 8     # 8 lines context
-python3 scripts/diff_inspect.py /tmp/claude/diff.json all              # every instruction
-python3 scripts/diff_inspect.py /tmp/claude/diff.json --range 950-970  # specific index range
-python3 scripts/diff_inspect.py /tmp/claude/diff.json --summary        # count by match type
+python3 scripts/analysis/diff_inspect.py /tmp/claude/diff.json                  # all non-equal mismatches
+python3 scripts/analysis/diff_inspect.py /tmp/claude/diff.json diff_op          # only diff_op (opcode mismatches)
+python3 scripts/analysis/diff_inspect.py /tmp/claude/diff.json replace          # only replace
+python3 scripts/analysis/diff_inspect.py /tmp/claude/diff.json insert,delete    # structural differences
+python3 scripts/analysis/diff_inspect.py /tmp/claude/diff.json diff_op -C 8     # 8 lines context
+python3 scripts/analysis/diff_inspect.py /tmp/claude/diff.json all              # every instruction
+python3 scripts/analysis/diff_inspect.py /tmp/claude/diff.json --range 950-970  # specific index range
+python3 scripts/analysis/diff_inspect.py /tmp/claude/diff.json --summary        # count by match type
 ```
 
 ### Features

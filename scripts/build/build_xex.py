@@ -10,16 +10,16 @@ Also patches the PE's import thunks from PE ordinal format (0x80XXXXXX) to
 XEX import format (0x00XXXXXX) so Xenia can properly resolve imports.
 
 Usage:
-    python3 scripts/build_xex.py                           # Default: build PE → XEX
-    python3 scripts/build_xex.py --pe path/to/pe.exe       # Custom PE
-    python3 scripts/build_xex.py --output path/to/out.xex  # Custom output
+    python3 scripts/build/build_xex.py                           # Default: build PE → XEX
+    python3 scripts/build/build_xex.py --pe path/to/pe.exe       # Custom PE
+    python3 scripts/build/build_xex.py --output path/to/out.xex  # Custom output
 """
 
 import argparse
 import struct
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parent.parent.parent
 
 
 def find_pe_offset_for_rva(pe_data, rva):

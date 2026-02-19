@@ -1,49 +1,59 @@
 # Build Roadmap: Path to a Working Executable
 
-## Major Milestone: Decompiled XEX Boots! 🎉
+## Major Milestone: Original XEX Fully Rendering in Xenia Headless
 
-**2026-02-17**: The decompiled XEX boots successfully in Xenia headless mode.
+**2026-02-18**: The original debug XEX runs at ~30fps in xenia-headless with full
+subsystem initialization. 36K+ draw calls, 600+ swaps, 16 game threads active.
 
-### Verified Runtime
+### Current Runtime Status
 
 ```bash
-# Build and test
-ninja && python3 scripts/build_xex.py
-timeout 125 xenia-headless --target=build/373307D9/default.xex --headless_timeout_ms=115000
+# Run original debug XEX
+cd ~/code/milohax/xenia/build
+./bin/Linux/Checked/xenia-headless --gpu=null \
+    --target=~/code/milohax/dc3-decomp/orig/373307D9/default.xex \
+    --headless_timeout_ms=20000
 
 # Result:
-# - XEX loads successfully
-# - 293 pages loaded (CODE + RWDATA sections)
-# - All 6 threads started (GPU, VSync, XMA, Audio, Dispatch, Main)
-# - "BOOT: Title loaded successfully"
-# - "BOOT: Kernel state initialized"
-# - "BOOT: Title ID: 0x373307d9"
-# - TIMEOUT: 115000ms reached (game ran for 2 minutes!)
-# - ZERO errors or crashes
+# - 36,000+ draw calls in 20 seconds
+# - 600+ swap calls (~30fps, double-buffered)
+# - 16 game threads spawned and running
+# - Loads .hdr, .ark, DTA configs, .milo assets
+# - UI rendering active (shaders, meshes, textures loaded)
 ```
 
-### Comparison with Original
+### Comparison: Original vs Decompiled XEX
 
-| Metric | Original XEX | Decompiled XEX |
-|--------|--------------|----------------|
-| Boot success | ✅ | ✅ |
-| Kernel state init | ✅ | ✅ |
-| Main thread start | ✅ | ✅ |
+| Metric | Original (debug) XEX | Decompiled XEX |
+|--------|---------------------|----------------|
+| Boot success | ~30fps, 36K+ draws | Boots, 6 threads, no GPU |
+| Kernel state init | Full | Full |
+| Main thread | Rendering loop | Waiting (no GPU draws) |
+| Import resolution | Full (707 imports) | Full (707 imports) |
 | Errors | 0 | 0 |
 
-Both XEX files exhibit identical boot behavior in headless mode - they wait for input/rendering that won't happen without a real GPU.
+The decomp XEX boots and initializes but doesn't enter the main render loop
+because non-copy draws are skipped (CP timing sensitivity). See
+[runtime/XENIA_HEADLESS_STATUS.md](../runtime/XENIA_HEADLESS_STATUS.md) for
+full details on the xenia modifications.
 
-**Key Implementation Notes:**
-- Import library header (0x103FF) is skipped because the original XEX is compressed
-  and our PE structure is different (uncompressed)
-- The game runs without import resolution - imports may be resolved lazily or not
-  needed during boot
-- Missing optional headers: achievement data, title name (cosmetic only)
+### PE Override: Blocked by Address Mismatch
 
-**Next Steps:**
-- Test with real GPU (non-headless Xenia)
-- Investigate import resolution for full functionality
-- Test game progression past boot
+An attempt to boot the decomp binary by overlaying its PE sections onto the
+original XEX's memory space was implemented but is blocked:
+
+- Original `.text` at VA `0x330000`, decomp `.text` at VA `0x331600` (+0x1600 shift)
+- Original `mainCRTStartup` = `0x82335EE0`, decomp = `0x82337534` (+0x1654)
+
+**Object ordering is now fixed** (2026-02-19): `scripts/build/generate_link_order.py`
+parses the original map file and extracts the exact .text object order. `configure.py`
+applies this via `link_order_callback`. Verified: first 30+ objects match exactly,
+`xapi0.obj` at position 73 in both maps.
+
+**Remaining blocker:** The +0x1600 VA shift comes from extra/differently-sized
+sections before `.text` in our PE (`.idata` separate, `.xidata` before `.text`,
+`.pdat0` workaround artifact). Fixing this requires section merging or linker
+flags to match the original section layout.
 
 ---
 
@@ -93,10 +103,15 @@ per-unit batch checking but found by objdiff symbol lookup.
 **Hybrid linking works today.** `ninja link` produces a 19.6MB PE:
 
 ```bash
-ninja link  # Uses wine + X360 link.exe → build/373307D9/default.exe
+python3 scripts/build/fix_pdata.py  # Rename .pdata→.pdat0 (workaround for LNK1223)
+ninja link                          # Uses wine + X360 link.exe → build/373307D9/default.exe
 ```
 
 But it's held together with `/FORCE` flags and has issues.
+
+**Link order is now correct** (2026-02-19): Objects are linked in the same order
+as the original binary. Map file comparison shows function layout within `.text`
+matches. The `--map` flag generates `build/373307D9/default.exe.MAP` for verification.
 
 ---
 
@@ -112,7 +127,7 @@ the title screen. Here's what that requires and where we stand:
 | Code compiles | Yes (all decomp source builds) | No |
 | Linker runs | Yes (with /FORCE) | No |
 | PE produced | Yes (19.6MB) | No |
-| XEX packaging | **Done** — `scripts/build_xex.py` | No |
+| XEX packaging | **Done** — `scripts/build/build_xex.py` | No |
 | Clean link (no /FORCE) | No — 81 unique unresolved symbols (437 errors) | **Yes** |
 | Code matches original | 36% by bytes, 70% for game code | Partial |
 | Data sections present | Yes (from split objects) | No |
@@ -144,21 +159,34 @@ to single addresses, and dtk's splitter can't reconstruct the aliases.
 #### 2. .pdata Exception Handling
 
 Split objects have their .pdata in renamed `.pdat0` sections (workaround for
-a dtk bug). The Xbox 360 kernel's `RtlLookupFunctionEntry` only searches
-`.pdata` — so exception unwinding won't work for functions from split objects.
+LNK1223 validation errors). The Xbox 360 kernel's `RtlLookupFunctionEntry`
+only searches `.pdata` — so exception unwinding won't work for functions from
+split objects.
 
 **Impact:** C++ exceptions and stack unwinding in non-decomp code will crash.
 DC3 rarely uses exceptions (mainly MIDI parsing), so this might not block
 basic testing, but it's a correctness issue.
 
-**Fix:** Either merge .pdat0 into .pdata post-link, or get dtk's section
-merging working properly.
+**Root cause investigated (2026-02-19):** Jeff v1.9.0 already has the
+multi-.pdata section merge fix (commit 3a19d33). No objects have duplicate
+`.pdata` sections (verified: 0 occurrences). The LNK1223 error is about
+`.pdata` **content validation** — the linker rejects the RUNTIME_FUNCTION
+entries as malformed, not because there are multiple sections. This needs
+further investigation in jeff's pdata content generation.
+
+**Current workaround:** `scripts/build/fix_pdata.py` renames `.pdata` → `.pdat0`
+in all 1924 split objects before linking. This bypasses the linker validation
+but makes exception tables invisible to the kernel.
+
+**Fix:** Investigate why jeff generates .pdata entries that fail MSVC linker
+validation. The content format may differ from what the X360 linker expects
+(e.g., wrong sorting, overlapping ranges, invalid unwind info references).
 
 #### 3. XEX Packaging — DONE
 
 The linker produces a PE, but Xbox 360 (and Xenia) expects an XEX container.
 
-**Status:** `scripts/build_xex.py` creates a minimal XEX2 container around the PE.
+**Status:** `scripts/build/build_xex.py` creates a minimal XEX2 container around the PE.
 Copies optional headers from the original XEX (entry point, execution ID, imports,
 game ratings, TLS info, etc.). Unencrypted, raw compression — suitable for devkit
 and Xenia testing.
@@ -170,40 +198,51 @@ and Xenia testing.
 ### Phase 0: What Works Today
 
 ```bash
-ninja                              # Build all decomp .obj files
-python3 scripts/fix_pdata.py       # Rename .pdata→.pdat0 in split objects (avoids LNK1223)
-ninja link                         # Link hybrid PE (with /FORCE)
-python3 scripts/build_xex.py       # Package PE → XEX2 container
-scripts/compare_pe.py              # Compare against original (anchor-based)
+ninja                                    # Build all decomp .obj files
+python3 scripts/build/fix_pdata.py       # Rename .pdata→.pdat0 (workaround for LNK1223)
+ninja link                               # Link hybrid PE (with /FORCE, correct object order)
+python3 scripts/build/build_xex.py       # Package PE → XEX2 container
+scripts/build/compare_pe.py              # Compare against original (anchor-based)
 ```
 
 The hybrid PE links decomp code alongside split objects from the original
-binary. The XEX packer wraps it in a valid XEX2 container suitable for
-Xenia testing. Output: `build/373307D9/default.xex` (~19.6MB).
+binary. Link order now matches the original map file (2045 objects ordered).
+The XEX packer wraps it in a valid XEX2 container suitable for Xenia testing.
+Output: `build/373307D9/default.xex` (~19.6MB).
 
-### Phase 1: Clean Link (eliminate /FORCE)
+**New tools (2026-02-19):**
+- `scripts/build/generate_link_order.py` — Parses `orig/373307D9/ham_xbox_r.map`
+  to extract .text object ordering, maps to dtk unit names
+- `config/373307D9/link_order.txt` — 2045 unit names in original link order
+- `configure.py` `link_order_callback` — Reorders objects at configure time
+
+### Phase 1: Fix VA Shift + .pdata (Unblock PE Override)
+
+**Goal:** `.text` at VA `0x82330000` (matching original), valid exception tables.
+
+| Task | Effort | Impact |
+|------|--------|--------|
+| ~~Match link object order~~ | ~~Medium~~ | ✅ Done (2026-02-19) |
+| Eliminate extra pre-.text sections | Medium (linker flags) | Fixes +0x1600 VA shift |
+| Fix jeff .pdata content generation | Medium (upstream fix) | Eliminates fix_pdata.py workaround |
+| Merge .pdat0 into .pdata post-link | Medium (fallback) | Exception handling works |
+
+**Object order:** ✅ Verified correct. The +0x1600 shift is from sections before
+`.text` having different total sizes, not from wrong object ordering.
+
+### Phase 2: Clean Link (eliminate /FORCE)
 
 **Goal:** Link without `/FORCE` — all symbols resolved, no duplicates.
 
 | Task | Effort | Impact |
 |------|--------|--------|
-| Globalize `lbl_*` data labels in dtk | Medium (dtk PR) | Fixes 14 unresolved |
-| Mark ICF functions as COMDAT | Medium (dtk/build change) | Fixes 189 errors (3 symbols) |
+| Globalize `lbl_*` data labels in jeff | Medium (upstream PR) | Fixes 14 unresolved |
+| Mark ICF functions as COMDAT | Medium (jeff/build change) | Fixes 189 errors (3 symbols) |
 | Add missing split objects (Ogg Vorbis) | Small | Fixes 13 unresolved |
-| Fix remaining jump table symbols | Small (dtk) | Fixes ~3 unresolved |
+| Fix remaining jump table symbols | Small (jeff) | Fixes ~3 unresolved |
 | Accept .CRT + decomp cross-refs | None | ~39 expected, resolve over time |
 
-**Dependency:** Requires dtk changes (globalize locals, COMDAT marking).
-
-### Phase 2: Fix .pdata + VA Shift
-
-**Goal:** Valid exception tables, minimal section bloat.
-
-| Task | Effort | Impact |
-|------|--------|--------|
-| Merge .pdata + .pdat0 post-link | Medium | Exception handling works |
-| Eliminate extra sections (.xidata, .xedata, .CRT, .edata) | Medium | Reduce VA shift from +0x1800 |
-| Relocation-aware PE comparison | Small | Accurate match % |
+**Dependency:** Requires jeff (dtk fork at `~/code/milohax/jeff`) changes.
 
 ### Phase 3: XEX Packaging + Boot Test
 
@@ -214,7 +253,7 @@ checks magic bytes and rejects MZ/PE headers.
 
 | Task | Effort | Impact |
 |------|--------|--------|
-| ~~XEX packaging~~ | ~~Medium~~ | **DONE** — `scripts/build_xex.py` |
+| ~~XEX packaging~~ | ~~Medium~~ | **DONE** — `scripts/build/build_xex.py` |
 | Xenia boot test with `--debug --break_on_start` | Small | First real validation |
 | Analyze Xenia crash log (PC + register dump) | Small | Identifies first failure |
 | Fix crashes iteratively (see debugging strategy below) | Ongoing | Progress toward boot |
@@ -414,9 +453,9 @@ doesn't care about register allocation differences.
 
 | Phase | Blocking On | Feasibility |
 |-------|-------------|-------------|
-| Phase 1 (clean link) | dtk changes | Achievable — well-understood fixes |
-| Phase 2 (.pdata fix) | Post-link tooling | Achievable — known problem |
-| Phase 3 (XEX + boot) | XDK imagexex or custom tooling | Medium — tooling exists, untested |
+| Phase 1 (VA shift + .pdata) | Linker flags + jeff investigation | Achievable — well-understood |
+| Phase 2 (clean link) | jeff changes (symbol globalization) | Achievable — well-understood fixes |
+| Phase 3 (XEX + boot) | XEX packaging done, needs clean PE | Medium — tooling exists |
 | Phase 4 (debug loop) | Xenia debug capabilities | Good — extensive debug infra available |
 
 **The hybrid approach is our biggest advantage.** We don't need to decomp
@@ -432,35 +471,64 @@ The crashes will tell us exactly what matters and what doesn't.
 
 ## Next Steps (Immediate)
 
-1. ~~**Try XEX packaging now**~~ — **DONE.** `scripts/build_xex.py` wraps PE → XEX2.
-   Full pipeline: `ninja && python3 scripts/fix_pdata.py && ninja link && python3 scripts/build_xex.py`
+### Priority 1: Fix +0x1600 VA Shift (Unblock PE Override)
 
-2. **Xenia Headless Mode** — **ACTIVE PRIORITY.** Modify Xenia to run without GUI
-   dependencies (GTK+, NVIDIA Cg, SSG, GLXew). Current location: `/tmp/claude/xenia`
+Link order is correct, but `.text` starts at VA `0x82331600` instead of
+`0x82330000`. The shift comes from extra/differently-sized sections before
+`.text` in our PE. The original layout:
 
-   Required changes:
-   - Conditionally compile out `ui-*` targets (imgui, windowing)
-   - Add `--headless` command-line flag
-   - Implement console-based status output
-   - Keep CPU/GPU emulation cores, drop UI layer
+```
+Segment 0001: .idata$5 + .rdata + .rdata$debug + .rdata$r + .xdata    (~0x2AF160)
+Segment 0002: .pdata                                                    (~0x724D0)
+Segment 0003: BINKCONST                                                 (~0x29C0)
+Segment 0004: RADCONST                                                  (~0x44)
+Segment 0005: .text → VA 0x82330000
+```
 
-3. **Boot test on Xenia** — After headless fix, load `build/373307D9/default.xex` with
-   `xenia --debug --headless --log_level=3`. Document:
+Our PE has `.text` at segment 0008 (VA `0x82331600`) due to extra sections.
+**Approach:** Compare section layouts with `/MAP`, use `/MERGE` linker flags
+to consolidate sections, or adjust PE Override to apply per-section VA deltas.
 
-3. **Investigate link quality** — Analyze the unresolved symbols and duplicate
-   symbol warnings from the `/FORCE` link to understand what's actually broken
-   vs. benign. Some unresolved symbols may not be on the boot path.
+### Priority 2: Fix .pdata Content Validation (LNK1223)
 
-4. **dtk PR for symbol globalization** — The 96 `lbl_*` unresolved symbols
-   are the biggest link-time blocker for a clean link. But the `/FORCE` link
-   might work well enough to skip this for initial testing. See also:
-   [LBL_SYMBOL_MATCHING.md](LBL_SYMBOL_MATCHING.md) for a two-phase plan to
-   improve `lbl_` symbol matching in objdiff (Phase 1: map-based renaming,
-   Phase 2: positional matching for function-local statics).
+Jeff's .pdata entries are rejected by the MSVC linker (`xapobase.obj : fatal
+error LNK1223`). The multi-section merge fix is already in jeff v1.9.0 but
+the content itself fails validation. Need to investigate:
 
-5. **Build XEXP patch tool** — For iterative debugging, we need a way to
-   patch individual functions into the original XEX. This is the gap between
-   "it crashes" and "we can isolate why."
+- Compare jeff's RUNTIME_FUNCTION entries against MSVC-generated ones
+- Check sorting requirements (entries must be sorted by BeginAddress)
+- Verify unwind info references point to valid `.xdata` entries
+- May need to fix in `~/code/milohax/jeff`
+
+### Priority 3: Clean Link (Eliminate /FORCE)
+
+81 unique unresolved symbols (437 total errors). See blocker table above.
+Highest-impact fixes: ICF aliases (3 symbols, 189 errors), missing Ogg Vorbis
+objects (5 symbols, 13 errors).
+
+### Completed
+
+- ~~**XEX packaging**~~ — `scripts/build/build_xex.py` wraps PE -> XEX2
+- ~~**Xenia headless mode**~~ — Built and running at `~/code/milohax/xenia/`
+- ~~**Import resolution**~~ — 707 imports resolved (347 thunks + 360 variables)
+- ~~**XAudio2/Async I/O/XAM stubs**~~ — Game enters main render loop
+- ~~**Vulkan backend**~~ — Frame capture pipeline working (610 PPM frames/20s)
+- ~~**PE override**~~ — Implemented but blocked by VA shift
+- ~~**Link order matching**~~ — `generate_link_order.py` + `link_order_callback`
+  in configure.py. 2045/2061 objects mapped from original map file. Object
+  order verified correct via map file comparison (2026-02-19).
+
+### Backlog
+
+1. **dtk PR for symbol globalization** — The 96 `lbl_*` unresolved symbols
+   are the biggest link-time blocker for a clean link. See also:
+   [LBL_SYMBOL_MATCHING.md](LBL_SYMBOL_MATCHING.md).
+
+2. **XEXP patch tool** — For iterative debugging, patch individual functions
+   into the original XEX.
+
+3. **Screenshots from original XEX** — Non-copy draws must be skipped due to
+   CP timing sensitivity. See [runtime/XENIA_HEADLESS_STATUS.md](../runtime/XENIA_HEADLESS_STATUS.md).
 
 ## Import Resolution: Thunk Markers Plan
 
@@ -514,7 +582,7 @@ For each thunk in the original import_table:
 
 #### Step 3: Patch Import Library Header
 
-Modify `scripts/build_xex.py` to:
+Modify `scripts/build/build_xex.py` to:
 1. Parse the import_table entries
 2. For each thunk entry (odd index):
    - Calculate new RVA in `.ithunk` section
@@ -586,7 +654,7 @@ The XEX-level approach is cleanest: we already build the XEX from scratch, so we
 
 **Verification:**
 ```bash
-python3 scripts/build_xex.py
+python3 scripts/build/build_xex.py
 # Output: Generated 347 thunk markers
 #         Patched 347 thunk VA entries in import header
 
