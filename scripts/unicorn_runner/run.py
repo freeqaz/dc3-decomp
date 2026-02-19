@@ -15,7 +15,7 @@ from dataclasses import dataclass
 
 from .builder import prepare_side, prepare_coloaded_side
 from .coff import COFFParser
-from .coloader import collect_intra_tu_callees, build_coload_layout
+from .coloader import collect_intra_tu_callees, build_coload_layout, resolve_section_rel24_targets
 from .extractor import (
     extract_from_decomp, extract_from_original,
     classify_indirect_branch,
@@ -146,6 +146,13 @@ def _run_comparison_core(symbol, decomp_coff, orig_coff, timeout=5_000_000,
         return EXIT_SKIPPED, None, [], f"SKIPPED: Symbol '{symbol}' not found in original .obj"
     if len(decomp_bytes) == 0 or len(orig_bytes) == 0:
         return EXIT_SKIPPED, None, [], f"SKIPPED: Symbol '{symbol}' has zero size"
+
+    # Resolve section-symbol REL24 targets (e.g. .text -> actual function name)
+    # Critical for original .obj files where all functions share one .text section
+    decomp_relocs = resolve_section_rel24_targets(
+        decomp_coff, symbol, decomp_bytes, decomp_relocs)
+    orig_relocs = resolve_section_rel24_targets(
+        orig_coff, symbol, orig_bytes, orig_relocs)
 
     verbose_lines = [
         f"Symbol: {symbol}",

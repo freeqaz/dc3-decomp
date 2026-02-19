@@ -225,6 +225,162 @@ class TestCollectCallees(unittest.TestCase):
         result = self.collect(coff, "Root", self._make_extract_fn(func_data))
         self.assertEqual(set(result.keys()), {"InternalA"})
 
+    def test_section_symbol_targets_resolved(self):
+        """REL24 targets to .text section symbol are resolved to actual functions."""
+        # Simulate original .obj: one big .text, relocs target '.text' symbol
+        # FuncA at offset 0, FuncB at offset 100
+        coff = _make_coff_with_text_symbols([
+            ('.text', 0),       # section symbol
+            ("Root", 0),        # root function at offset 0
+            ("FuncB", 100),     # callee at offset 100
+        ])
+
+        # Root code: li r3, 0 | bl +96 | blr
+        # bl at function offset 4, section offset 4, target section offset 100
+        # displacement = 100 - 4 = 96
+        root_code = assemble(ppc_li(3, 0), ppc_bl(96), ppc_blr())
+        funcb_code = assemble(ppc_li(3, 1), ppc_blr())
+
+        # Reloc targets '.text' (section symbol), not 'FuncB'
+        root_relocs = [make_reloc(4, ".text", "REL24")]
+
+        func_data = {
+            "Root": (root_code, root_relocs),
+            "FuncB": (funcb_code, []),
+        }
+
+        result = self.collect(coff, "Root", self._make_extract_fn(func_data))
+        # Should discover FuncB via displacement resolution
+        self.assertEqual(set(result.keys()), {"FuncB"})
+
+    def test_section_symbol_transitive(self):
+        """Section-symbol resolution works transitively: Root ->.text-> A ->.text-> B."""
+        # A at offset 200, B at offset 400
+        coff = _make_coff_with_text_symbols([
+            ('.text', 0),
+            ("Root", 0),
+            ("A", 200),
+            ("B", 400),
+        ])
+
+        # Root bl at offset 4: target = 0+4+196 = 200 (A), disp = 196
+        root_code = assemble(ppc_li(3, 0), ppc_bl(196), ppc_blr())
+        # A bl at offset 4: target = 200+4+196 = 400 (B), disp = 196
+        a_code = assemble(ppc_li(3, 1), ppc_bl(196), ppc_blr())
+        b_code = assemble(ppc_li(3, 2), ppc_blr())
+
+        func_data = {
+            "Root": (root_code, [make_reloc(4, ".text", "REL24")]),
+            "A": (a_code, [make_reloc(4, ".text", "REL24")]),
+            "B": (b_code, []),
+        }
+
+        result = self.collect(coff, "Root", self._make_extract_fn(func_data))
+        self.assertEqual(set(result.keys()), {"A", "B"})
+
+    def test_section_symbol_self_call_skipped(self):
+        """REL24 to .text resolving to root itself is not collected."""
+        coff = _make_coff_with_text_symbols([
+            ('.text', 0),
+            ("Root", 0),
+        ])
+
+        # bl at offset 4, disp = -4, target = 0+4+(-4) = 0 = Root itself
+        root_code = assemble(ppc_li(3, 0), ppc_bl(-4), ppc_blr())
+
+        func_data = {
+            "Root": (root_code, [make_reloc(4, ".text", "REL24")]),
+        }
+
+        result = self.collect(coff, "Root", self._make_extract_fn(func_data))
+        self.assertEqual(set(result.keys()), set())
+
+
+class TestResolveSectionRel24(unittest.TestCase):
+    """Tests for resolve_section_rel24_targets()."""
+
+    def setUp(self):
+        from scripts.unicorn_runner.coloader import resolve_section_rel24_targets
+        self.resolve = resolve_section_rel24_targets
+
+    def test_resolves_text_target(self):
+        """REL24 targeting .text is resolved to actual function symbol."""
+        coff = _make_coff_with_text_symbols([
+            ('.text', 0),
+            ("Caller", 0),
+            ("Callee", 200),
+        ])
+
+        # bl at offset 4: section_offset=4, disp=196, target=200
+        code = assemble(ppc_li(3, 0), ppc_bl(196), ppc_blr())
+        relocs = [make_reloc(4, ".text", "REL24")]
+
+        resolved = self.resolve(coff, "Caller", code, relocs)
+        self.assertEqual(len(resolved), 1)
+        self.assertEqual(resolved[0]['symbol_name'], "Callee")
+        self.assertEqual(resolved[0]['offset'], 4)
+
+    def test_non_text_relocs_unchanged(self):
+        """REFHI/REFLO relocs are not modified."""
+        coff = _make_coff_with_text_symbols([('.text', 0), ("Caller", 0)])
+        code = assemble(ppc_li(3, 0), ppc_nop(), ppc_blr())
+        relocs = [
+            make_reloc(0, "some_global", "REFHI"),
+            make_reloc(4, "some_global", "REFLO"),
+        ]
+
+        resolved = self.resolve(coff, "Caller", code, relocs)
+        self.assertEqual(len(resolved), 2)
+        self.assertEqual(resolved[0]['symbol_name'], "some_global")
+        self.assertEqual(resolved[1]['symbol_name'], "some_global")
+
+    def test_named_rel24_unchanged(self):
+        """REL24 targeting a named function (not section symbol) is unchanged."""
+        coff = _make_coff_with_text_symbols([("Caller", 0), ("Target", 100)])
+        code = assemble(ppc_li(3, 0), ppc_bl(96), ppc_blr())
+        relocs = [make_reloc(4, "Target", "REL24")]
+
+        resolved = self.resolve(coff, "Caller", code, relocs)
+        self.assertEqual(len(resolved), 1)
+        self.assertEqual(resolved[0]['symbol_name'], "Target")
+
+    def test_unresolvable_left_unchanged(self):
+        """REL24 to .text that doesn't match any function is left as .text."""
+        coff = _make_coff_with_text_symbols([
+            ('.text', 0),
+            ("Caller", 0),
+            # No function at offset 200
+        ])
+
+        code = assemble(ppc_li(3, 0), ppc_bl(196), ppc_blr())
+        relocs = [make_reloc(4, ".text", "REL24")]
+
+        resolved = self.resolve(coff, "Caller", code, relocs)
+        self.assertEqual(len(resolved), 1)
+        self.assertEqual(resolved[0]['symbol_name'], ".text")  # unchanged
+
+    def test_multiple_targets_resolved(self):
+        """Multiple .text REL24 relocs each resolved independently."""
+        coff = _make_coff_with_text_symbols([
+            ('.text', 0),
+            ("Caller", 0),
+            ("FuncA", 100),
+            ("FuncB", 300),
+        ])
+
+        # bl at offset 4: target = 0+4+96 = 100 (FuncA)
+        # bl at offset 8: target = 0+8+292 = 300 (FuncB)
+        code = assemble(ppc_li(3, 0), ppc_bl(96), ppc_bl(292), ppc_blr())
+        relocs = [
+            make_reloc(4, ".text", "REL24"),
+            make_reloc(8, ".text", "REL24"),
+        ]
+
+        resolved = self.resolve(coff, "Caller", code, relocs)
+        self.assertEqual(len(resolved), 2)
+        self.assertEqual(resolved[0]['symbol_name'], "FuncA")
+        self.assertEqual(resolved[1]['symbol_name'], "FuncB")
+
 
 class TestBuildLayout(unittest.TestCase):
     """Tests for build_coload_layout()."""

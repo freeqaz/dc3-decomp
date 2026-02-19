@@ -21,6 +21,82 @@ class ColoadResult:
     total_size: int  # total size of combined buffer
 
 
+def _is_section_symbol(coff, name):
+    """Check if a symbol name matches a section name (section symbol).
+
+    In COFF, section symbols like '.text' appear in the symbol table
+    with value 0 and are used as relocation targets for intra-section refs.
+    """
+    return any(s['name'] == name for s in coff.sections)
+
+
+def _find_function_at_offset(coff, sec_num, offset):
+    """Find a function symbol at the given offset in the given section.
+
+    Skips compiler-internal labels ($M, $T, $LN) and section symbols.
+    Returns the symbol name, or None if not found.
+    """
+    section_names = {s['name'] for s in coff.sections}
+    for sym in coff.symbols:
+        if (sym['section'] == sec_num
+                and sym['value'] == offset
+                and not sym['name'].startswith('$')
+                and sym['name'] not in section_names):
+            return sym['name']
+    return None
+
+
+def resolve_section_rel24_targets(coff, symbol_name, code_bytes, relocs):
+    """Resolve REL24 relocations targeting section symbols to actual functions.
+
+    In original .obj files, all functions share a single .text section.
+    When one function calls another in the same section, the COFF relocation
+    targets the .text section symbol (value 0) rather than the callee's
+    function symbol. The actual callee offset is encoded in the bl
+    instruction's displacement field.
+
+    This reads those displacements and resolves them to the actual function
+    symbols, enabling proper callee discovery and co-loading.
+
+    Returns a new list of relocs with section-symbol REL24 targets resolved.
+    Unresolvable targets are left unchanged.
+    """
+    sym = coff.symbol_map.get(symbol_name)
+    if sym is None or sym['section'] <= 0:
+        return relocs
+
+    func_start = sym['value']
+    sec_num = sym['section']
+
+    resolved = []
+    for r in relocs:
+        if (r['type_name'] == 'REL24'
+                and _is_section_symbol(coff, r['symbol_name'])):
+            # Read bl instruction displacement
+            if r['offset'] + 4 <= len(code_bytes):
+                insn = struct.unpack_from(">I", code_bytes, r['offset'])[0]
+                disp = insn & 0x03FFFFFC
+                if disp & 0x02000000:  # sign extend 26-bit
+                    disp -= 0x04000000
+
+                # Compute section-relative target offset
+                section_offset = func_start + r['offset']
+                target_offset = section_offset + disp
+
+                # Find function symbol at that offset
+                target_name = _find_function_at_offset(
+                    coff, sec_num, target_offset)
+                if target_name and target_name != symbol_name:
+                    adj = dict(r)
+                    adj['symbol_name'] = target_name
+                    resolved.append(adj)
+                    continue
+
+        resolved.append(r)
+
+    return resolved
+
+
 def is_intra_tu_callee(coff, symbol_name):
     """Check if a REL24 target is defined in this .obj's .text section.
 
@@ -42,6 +118,11 @@ def _get_rel24_targets(relocs):
 def collect_intra_tu_callees(coff, root_symbol, extract_fn, max_depth=None):
     """BFS from root's REL24 relocs, collecting transitive intra-TU callees.
 
+    Handles both COMDAT-style sections (decomp: per-function .text$mn sections
+    where REL24 targets name the callee directly) and monolithic sections
+    (original: one big .text section where REL24 targets the section symbol
+    and the callee offset is encoded in the instruction displacement).
+
     Args:
         coff: COFFParser instance
         root_symbol: mangled symbol name of the root function
@@ -61,6 +142,10 @@ def collect_intra_tu_callees(coff, root_symbol, extract_fn, max_depth=None):
     if root_bytes is None:
         return callees
 
+    # Resolve section-symbol REL24 targets to actual function symbols
+    root_relocs = resolve_section_rel24_targets(
+        coff, root_symbol, root_bytes, root_relocs)
+
     # Seed BFS with root's REL24 targets
     for target in _get_rel24_targets(root_relocs):
         if target not in visited and is_intra_tu_callee(coff, target):
@@ -73,6 +158,10 @@ def collect_intra_tu_callees(coff, root_symbol, extract_fn, max_depth=None):
         callee_bytes, callee_relocs = extract_fn(coff, sym_name)
         if callee_bytes is None or len(callee_bytes) == 0:
             continue
+
+        # Resolve section-symbol targets in callee relocs
+        callee_relocs = resolve_section_rel24_targets(
+            coff, sym_name, callee_bytes, callee_relocs)
 
         callees[sym_name] = (callee_bytes, callee_relocs)
 

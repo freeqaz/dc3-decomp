@@ -81,6 +81,7 @@ class COFFParser:
     def _parse_symbols(self):
         self.symbols = []
         self.symbol_map = {}  # name -> symbol
+        self._symbol_by_index = {}  # COFF table index -> symbol (handles aux gaps)
         self._reloc_cache = {}  # section_idx -> list of reloc dicts
         strtab_base = self.symtab_offset + self.num_symbols * 18
 
@@ -111,6 +112,7 @@ class COFFParser:
             }
             self.symbols.append(sym)
             self.symbol_map[name] = sym
+            self._symbol_by_index[i] = sym
 
             # Skip aux symbols
             i += 1 + num_aux
@@ -125,7 +127,7 @@ class COFFParser:
         for i in range(sec['num_relocs']):
             off = sec['reloc_offset'] + i * 10
             vaddr, sym_idx, reloc_type = struct.unpack_from("<IIH", self.data, off)
-            sym = self.symbols[sym_idx] if sym_idx < len(self.symbols) else {'name': f'<sym#{sym_idx}>'}
+            sym = self._symbol_by_index.get(sym_idx, {'name': f'<sym#{sym_idx}>'})
             relocs.append({
                 'offset': vaddr,
                 'symbol_index': sym_idx,
