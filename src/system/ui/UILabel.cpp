@@ -601,7 +601,7 @@ DataNode UILabel::OnSetInt(DataArray const *da) {
 
 DataNode UILabel::OnSetTimeHMS(DataArray const *) { return NULL_OBJ; }
 
-__declspec(noinline) bool UILabel::AllowEditText() const { return false; }
+bool UILabel::AllowEditText() const { return false; }
 
 void UILabel::LabelUpdate(bool b) {
     unk122 = false;
@@ -663,21 +663,21 @@ void UILabel::SetFontMat(char const *c, int i) {
         if (!font) {
             if (*c) {
                 TheDebug.Notify(MakeString(
-                    "%s is referencing a mat variation '%s' that no longer exists, trying default...",
+                    "%s is referencing a mat variation '%s' that is not found in the font resource",
                     PathName(this), c
                 ));
                 font = dir->FontObj(Symbol(""));
             }
             if (!font) {
                 TheDebug.Notify(MakeString(
-                    "%s in resource %s has no default mat variation",
+                    "%s in resource %s has no default font",
                     PathName(this), PathName(dir)
                 ));
             }
         }
     } else if (*c) {
         TheDebug.Notify(MakeString(
-            "%s [styles 0 font_resource] is NULL, can't set fontmat %s",
+            "%s [styles 0 font_resource] is NULL, couldn't set font mat %s",
             PathName(this), c
         ));
     }
@@ -705,17 +705,18 @@ void UILabel::RefreshFontMat(int i) {
 }
 
 BEGIN_HANDLERS(UILabel)
-    HANDLE(set_token_fmt, OnSetTokenFmt)
-    HANDLE(set_prelocalized_string, OnSetPrelocalizedString)
-    HANDLE(set_int, OnSetInt)
+    HANDLE_ACTION(set_token_fmt, OnSetTokenFmt(_msg))
+    HANDLE_ACTION(set_prelocalized_string, OnSetPrelocalizedString(_msg))
+    HANDLE_ACTION(set_int, OnSetInt(_msg))
     HANDLE_ACTION(set_float, SetFloat(_msg->Str(2), _msg->Float(3)))
-    HANDLE(set_time_hms, OnSetTimeHMS)
+    HANDLE_ACTION(set_time_hms, OnSetTimeHMS(_msg))
     HANDLE_ACTION(center_with_label, CenterWithLabel(_msg->Obj<UILabel>(2), _msg->Int(3), _msg->Float(4)))
     HANDLE_EXPR(get_font_mats, UILabelDir::GetMatVariations(LStyle(_msg->Int(2)).unk14))
-    HANDLE(set_height_from_text, OnSetHeightFromText)
+    HANDLE_ACTION(set_height_from_text, OnSetHeightFromText(_msg))
     HANDLE_EXPR(draw_rect_width, unkbc)
-    HANDLE_ACTION(reload_string, SetTextToken(mTextToken))
+    HANDLE_ACTION(reload_string, UIComponent::Poll())
     HANDLE_SUPERCLASS(UIComponent)
+    HANDLE_SUPERCLASS(RndText)
 END_HANDLERS
 
 // Static initialization for symbol caching - PropSync template for LabelStyle

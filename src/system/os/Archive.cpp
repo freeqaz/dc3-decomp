@@ -197,7 +197,7 @@ void Archive::Enumerate(
             if (isDtb) {
                 cb(FileGetPath(curPath), FileGetBase(curPath));
             } else {
-                cb(curPath, curName);
+                cb(curName, curPath);
             }
         }
     }

@@ -111,11 +111,11 @@ void KinectSharePanel::ConvertImages() {
     mTex->LockBitmap(bitmapa0, true);
     EndianSwapBitmap(bitmapa0);
     bitmap80.Create(bitmapa0, 24, 1, nullptr);
+    int bpp = bitmap80.Bpp() >> 3;
     int w = bitmap80.Width();
     int h = bitmap80.Height();
-    int bpp = bitmap80.Bpp() >> 3;
-    char *pixels = (char *)bitmap80.Pixels();
     int pixelBytes = bitmap80.PixelBytes();
+    char *pixels = (char *)bitmap80.Pixels();
     mBuf = MemAlloc(pixelBytes, __FILE__, 0x3B, "JpegWriter");
     MILO_ASSERT(mBuf != NULL, 0x3C);
     if (mBuf) {

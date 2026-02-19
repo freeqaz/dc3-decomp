@@ -100,39 +100,28 @@ void XboxEnumeration::Poll() {
 
     DWORD productCount = 0;
     if (bytesReceived > 0) {
-        u8 *entryPtr = (u8 *)mEnumBuffer;
         std::list<EnumProduct>::iterator it = mContentList.end();
+        u32 offset = 0;
         while (productCount < bytesReceived) {
             String str;
             char buf[256];
-            DWORD nameLen = *(DWORD *)(entryPtr + 0x10);
-            LPCWSTR wideName = *(LPCWSTR *)(entryPtr + 0x14);
-            WideCharToMultiByte(0, 0, wideName, nameLen, buf, 0xFF, 0, 0);
+            u8 *entryPtr = (u8 *)mEnumBuffer + offset;
+            WideCharToMultiByte(0, 0, (LPCWSTR)(entryPtr + 0x14), *(int *)(entryPtr + 0x10), buf, 0xFF, 0, 0);
             str = buf;
 
             EnumProduct prod;
-            u64 offerID = *(u64 *)entryPtr;
-            prod.unk0 = 0;
-            prod.unk4 = 0;
-            prod.unk8 = (u32)(offerID >> 32);
-            prod.unkc = (u32)(offerID);
-            prod.unk10 = *(int *)(entryPtr + 0x2A20);
-            prod.unk14 = *(int *)(entryPtr + 0x2A24);
+            *(u64 *)&prod.unk8 = *(u64 *)entryPtr;
+            prod.unk10 = *(int *)(entryPtr + 0x48);
+            prod.unk14 = *(int *)(entryPtr + 0x64);
             mContentList.insert(it, prod);
 
-            entryPtr += 0x2A40;
+            offset += 0x68;
             productCount++;
         }
     }
 
-    if (overlappedResult == 0 && bytesReceived >= 99) {
-        if (unk1c) {
-            u32 remaining = mOfferIDCount - (u32)(mCurOffers - unk10);
-            if (remaining > 0) {
-                Start();
-            }
-        }
-        return;
+    if (unk10 == 0 && overlappedResult == 0 && bytesReceived >= 99) {
+        goto continue_enum;
     }
 
     if (mHandle != 0) {
@@ -140,24 +129,72 @@ void XboxEnumeration::Poll() {
         mHandle = 0;
     }
 
-    delete (char *)mEnumBuffer;
+    delete mEnumBuffer;
     mEnumBuffer = 0;
 
-    if (overlappedResult == 0x12) {
-        // ERROR_NO_MORE_FILES - enumeration complete
-    } else if (overlappedResult == 0x65B) {
-        // ERROR_FUNCTION_FAILED
-        DWORD extError = XGetOverlappedExtendedError(&mOverlapped);
-        TheDebug << MakeString(" store enum: funciton failed with: %d (0x%X)", overlappedResult, overlappedResult);
-        if (extError >= 0x2710 && extError < 0x2EE0) {
-            TheDebug << " which is a winsock error, so fail.";
-        }
-    } else if (overlappedResult != 0) {
-        DWORD extError = XGetOverlappedExtendedError(&mOverlapped);
-        FormatString fs(" store enum: overlapped failed with: %d, extended: %d (0x%X)");
-        fs << overlappedResult << extError << extError;
-        TheDebug << fs.Str();
+    if (overlappedResult == 0) {
+        goto done;
     }
 
+    if (overlappedResult == 0x12) {
+        goto handle_12;
+    }
+
+    if (overlappedResult == 0x65b) {
+        goto handle_65b;
+    }
+
+    XGetOverlappedExtendedError(&mOverlapped);
+    goto check_more_offers;
+
+handle_65b:
+    {
+        DWORD extError = XGetOverlappedExtendedError(&mOverlapped);
+        TheDebug << MakeString(" store enum: overlapped failed with: %d, extended: %d (0x%X)", (unsigned long)overlappedResult, (unsigned long)extError, (unsigned long)extError);
+    }
+    goto check_more_offers;
+
+handle_12:
+    {
+        DWORD extError = XGetOverlappedExtendedError(&mOverlapped);
+        if ((WORD)extError == 0x12) {
+            goto done;
+        }
+        TheDebug << MakeString(" store enum: funciton failed with: %d (0x%X)", (unsigned long)extError, (unsigned long)extError);
+        if ((WORD)extError >= 0x2710 && (WORD)extError < 0x2EE0) {
+            TheDebug << MakeString(" which is a winsock error, so fail.");
+        }
+    }
+
+check_more_offers:
+    if (unk10 != 0) {
+        if (mCurOffers < unk10 + mOfferIDCount) {
+            goto continue_enum;
+        }
+    }
+    goto done;
+
+error_no_more:
+    if (unk10 != 0) {
+        TheDebug << MakeString(" store enum: error no more files (%d)", (unsigned long)overlappedResult);
+        unk1c = false;
+        return;
+    }
+    goto done;
+
+continue_enum:
+    if (unk10 != 0) {
+        if (mCurOffers < unk10 + mOfferIDCount) {
+            Start();
+            return;
+        }
+    } else {
+        if (bytesReceived >= 99) {
+            Start();
+            return;
+        }
+    }
+
+done:
     unk1c = false;
 }

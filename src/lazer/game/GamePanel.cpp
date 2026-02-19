@@ -182,7 +182,7 @@ float LoopVizCallback::UpdateOverlay(RndOverlay *o, float y) {
     Hmx::Color startColor = unk54 > 0 ? Hmx::Color(0, 0, 0) : Hmx::Color(1.0f, 1.0f, 1.0f);
     mDebugMeter1.DrawText(MakeString("%d", loopStart), loopStartNorm, 0.0f, startColor);
 
-    Hmx::Color endColor = unk54 > 0 ? Hmx::Color(0, 0, 0) : Hmx::Color(1.0f, 1.0f, 1.0f);
+    Hmx::Color endColor = 0 < unk54 ? Hmx::Color(0, 0, 0) : Hmx::Color(1.0f, 1.0f, 1.0f);
     mDebugMeter1.DrawText(MakeString("%d", loopEnd), loopEndNorm, 0.0f, endColor);
 
     // Draw current beat label

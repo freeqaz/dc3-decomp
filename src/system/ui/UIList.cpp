@@ -193,10 +193,10 @@ __declspec(noinline) void UIList::CalcBoundingBox(Box &box) {
     Transform xfm = WorldXfm();
     box.Set(xfm.v, xfm.v);
 
-    int selectedDisplay = mListState.SelectedDisplay();
-    UIList *subList = mListDir->SubList(selectedDisplay, mWidgets);
-
     float elementSpacing = 0.0f;
+    int selectedDisplay = mListState.SelectedDisplay();
+
+    UIList *subList = mListDir->SubList(selectedDisplay, mWidgets);
     if (subList) {
         int subSelectedDisplay = mListState.SelectedDisplay();
         float spacing = mListDir->ElementSpacing();

@@ -2130,19 +2130,22 @@ void HamDirector::Reteleport() {
         GetPropAnim(TheGameData->Player(0)->GetDifficulty(), "song.anim", false);
     PropKeys *propKeys = anim->GetKeys(this, DataArrayPtr(practice));
     int frameIdx = 0;
-    CharClip *clip = nullptr;
+    CharClip *clip;
     float endBeat;
+    float frameTime;
     if (propKeys) {
-        float frameTime = BeatToSeconds(beat) * 30.0f;
+        frameTime = BeatToSeconds(beat) * 30.0f;
         frameIdx = propKeys->AsSymbolKeys()->AtFrame(frameTime, s);
         auto _tmp7 = GetClipStartAndEndBeats(s, endBeat, beat, 0);
         clip = _tmp7;
     }
     Vector3 v = Vector3::ZeroVec();
-    if (clip && frameIdx > 0) {
-        ClipPredict predict(clip, Vector3::ZeroVec(), 0);
-        predict.PredictDeltaPos(beat - 4.0f, beat);
-        v = predict.mPos;
+    if (clip) {
+        if (frameIdx > 0) {
+            ClipPredict predict(clip, Vector3::ZeroVec(), 0);
+            predict.PredictDeltaPos(beat - 4.0f, beat);
+            v = predict.mPos;
+        }
     }
     if (mCurShot) {
         mCurShot->Reteleport(v, false, Symbol(gNullStr));
@@ -2224,22 +2227,32 @@ void HamDirector::UnloadMergers() {
     if (mMerger) {
         mMerger->Clear();
         mMoveMerger->Clear();
-        if (TheHamWardrobe) {
+        ObjVector<FileMerger::Merger> *mergers =
+            (ObjVector<FileMerger::Merger> *)((char *)mMoveMerger.Ptr() + 0x40);
+        mergers->erase(mergers->begin(), mergers->end());
+        HamWardrobe *wardrobe = TheHamWardrobe;
+        if (wardrobe) {
             for (int i = 0; i < 2; i++) {
-                HamCharacter *hc = TheHamWardrobe->GetCharacter(i);
+                HamCharacter *hc = wardrobe->GetCharacter(i);
                 if (hc) {
                     hc->UnloadAll();
                 }
             }
             int i = 0;
             while (true) {
-                HamCharacter *hc = TheHamWardrobe->GetBackup(i);
+                HamWardrobe *curWardrobe = TheHamWardrobe;
+                HamCharacter *hc;
+                if (curWardrobe) {
+                    hc = curWardrobe->GetBackup(i);
+                } else {
+                    hc = 0;
+                }
                 i++;
                 if (!hc)
                     break;
                 hc->UnloadAll();
             }
-            TheHamWardrobe->ClearCrowdClips();
+            wardrobe->ClearCrowdClips();
         }
         unk370.clear();
     }

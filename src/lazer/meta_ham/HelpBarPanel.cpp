@@ -290,14 +290,13 @@ bool HelpBarPanel::UpdateBackButton(UIPanel *panel) {
     bool show;
     RndGroup *backIcon = DataDir()->Find<RndGroup>("back_icon.grp", false);
     if (prop) {
-        auto _tmp4 = prop->Type();
         if (prop->Type() == kDataSymbol) {
             if (prop->Sym() != gNullStr) {
                 b11 = true;
                 auto _tmp1 = prop->Sym();
                 mLeftHandNavList->GetHelpbarProvider()->SetLabel(1, 0, _tmp1);
             }
-        } else if (_tmp4 == kDataArray) {
+        } else if (prop->Type() == kDataArray) {
             if (prop->Array()->Size() > 0) {
                 b11 = true;
                 mLeftHandNavList->GetHelpbarProvider()->SetLabels(1, prop->Array());

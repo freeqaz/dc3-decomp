@@ -332,9 +332,9 @@ int Campaign::NumCampaignSongMoves(Symbol s) {
 }
 
 void Campaign::ConfigureCampaignData(DataArray *i_pConfig) {
+    static Symbol venue("venue");
     static Symbol crew("crew");
     static Symbol songs("songs");
-    static Symbol venue("venue");
 
     mIntroVenue = gNullStr;
     mIntroCrew = gNullStr;

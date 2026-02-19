@@ -255,8 +255,7 @@ BEGIN_HANDLERS(HamStoreProvider)
     HANDLE_EXPR(show_unavailable, TheNetCacheMgr->IsDebug())
     HANDLE_EXPR(is_partially_purchased, IsPartiallyPurchased(_msg->Obj<StoreOffer>(2)))
     // HANDLE_EXPR(allow_sort_toggle, expr)
-    auto _tmp7 = CurrentSort();
-    HANDLE_EXPR(get_current_sort_time, _tmp7)
+    HANDLE_EXPR(get_current_sort_time, CurrentSort())
     HANDLE_ACTION(next_sort, OnNextSort())
     // is offer in cart
     HANDLE_ACTION(find_song, FindSong(_msg->Int(2)))

@@ -140,7 +140,8 @@ int ChallengeHeaderNode::GetSongID() {
 
 Symbol ChallengeHeaderNode::GetSongShortName() {
     if (mChildren.size() != 0) {
-        return mChildren.front()->GetToken();
+        auto _tmp0 = mChildren.front()->GetToken();
+        return _tmp0;
     }
     return gNullStr;
 }
@@ -284,7 +285,7 @@ void ChallengeSortNode::Text(UIListLabel *listlabel, UILabel *label) const {
         int ownerChallengeScore = TheChallengeSortMgr->GetOwnerChallengeScore(
             mChallengeRecord->GetChallengeRow().mSongID
         );
-        if (ownerChallengeScore >= mChallengeRecord->GetChallengeRow().mScore
+        if (mChallengeRecord->GetChallengeRow().mScore <= ownerChallengeScore
             && TheChallengeSortMgr->GetOwnerChallengeTimeStamp(
                    mChallengeRecord->GetChallengeRow().mSongID
                ) > mChallengeRecord->GetChallengeRow().mTimeStamp) {

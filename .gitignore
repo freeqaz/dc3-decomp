@@ -20,6 +20,7 @@ orig/*/*
 *.o
 *.map
 *.MAP
+*.permuter_bak
 
 # Build files
 build/*
