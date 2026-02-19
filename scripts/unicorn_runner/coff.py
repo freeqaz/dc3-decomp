@@ -117,6 +117,16 @@ class COFFParser:
             # Skip aux symbols
             i += 1 + num_aux
 
+        # Build lookup caches for coloader performance
+        self._section_names = frozenset(s['name'] for s in self.sections)
+        self._symbols_by_section_offset = {}  # (sec_num, offset) -> symbol name
+        for sym in self.symbols:
+            if sym['section'] > 0 and not sym['name'].startswith('$'):
+                key = (sym['section'], sym['value'])
+                # First non-internal symbol at this offset wins
+                if key not in self._symbols_by_section_offset:
+                    self._symbols_by_section_offset[key] = sym['name']
+
     def get_section_relocations(self, section_idx):
         """Get relocations for a section (0-based index). Results are cached."""
         cached = self._reloc_cache.get(section_idx)

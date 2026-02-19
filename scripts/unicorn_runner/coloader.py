@@ -27,7 +27,7 @@ def _is_section_symbol(coff, name):
     In COFF, section symbols like '.text' appear in the symbol table
     with value 0 and are used as relocation targets for intra-section refs.
     """
-    return any(s['name'] == name for s in coff.sections)
+    return name in coff._section_names
 
 
 def _find_function_at_offset(coff, sec_num, offset):
@@ -36,13 +36,9 @@ def _find_function_at_offset(coff, sec_num, offset):
     Skips compiler-internal labels ($M, $T, $LN) and section symbols.
     Returns the symbol name, or None if not found.
     """
-    section_names = {s['name'] for s in coff.sections}
-    for sym in coff.symbols:
-        if (sym['section'] == sec_num
-                and sym['value'] == offset
-                and not sym['name'].startswith('$')
-                and sym['name'] not in section_names):
-            return sym['name']
+    name = coff._symbols_by_section_offset.get((sec_num, offset))
+    if name is not None and name not in coff._section_names:
+        return name
     return None
 
 

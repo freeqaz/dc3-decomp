@@ -44,7 +44,7 @@ EXIT_SKIPPED = 3
 def resolve_unit(unit_name, project_root=None):
     """Resolve unit name to (decomp_obj_path, orig_obj_path) via objdiff.json.
 
-    Returns (target_path, base_path) or raises ValueError.
+    Returns (base_path, target_path) — i.e. (decomp, original).
     """
     if project_root is None:
         project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -64,8 +64,8 @@ def resolve_unit(unit_name, project_root=None):
             if not base_path:
                 raise ValueError(f"Unit '{unit_name}' has no base_path (original .obj)")
             return (
-                os.path.join(project_root, target_path),
                 os.path.join(project_root, base_path),
+                os.path.join(project_root, target_path),
             )
 
     raise ValueError(f"Unit '{unit_name}' not found in objdiff.json")
@@ -593,8 +593,8 @@ def get_all_units(project_root=None):
         if target_path and base_path:
             units.append((
                 entry.get("name", ""),
-                os.path.join(project_root, target_path),
                 os.path.join(project_root, base_path),
+                os.path.join(project_root, target_path),
             ))
 
     return units

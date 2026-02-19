@@ -46,6 +46,7 @@ def _make_coff_with_text_symbols(symbol_defs, section_data=None):
 
     coff = MockCOFF(sections=sections, symbol_map=symbol_map)
     coff.symbols = symbols
+    coff._rebuild_caches()
     coff._section_data = section_data or {}
     return coff
 
@@ -73,6 +74,7 @@ def _make_coff_with_external(internal_syms, external_syms):
 
     coff = MockCOFF(sections=sections, symbol_map=symbol_map)
     coff.symbols = symbols
+    coff._rebuild_caches()
     coff._section_data = {}
     return coff
 

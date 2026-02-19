@@ -1,32 +1,46 @@
-"""Function extraction from both .obj flavors (decomp and original)."""
+"""Function extraction from COFF .obj files (decomp and original)."""
 
 import struct
 
 
-def extract_from_decomp(coff, symbol):
-    """Extract function bytes and relocations from a decomp .obj (multi-symbol sections).
+def _is_internal_label(name):
+    """Check if a symbol is a compiler-internal label, not a function boundary.
 
-    Returns (bytearray, list[dict]) or (None, None) if symbol not found.
+    MSVC generates these symbols within function bodies:
+      $M<digits>  - branch/switch case labels
+      $T<digits>  - compiler temporaries
+      $LN<digits> - local numeric labels
+      .text       - section name pseudo-symbol (always at offset 0)
     """
-    sym = coff.symbol_map.get(symbol)
-    if not sym or sym['section'] <= 0:
-        return None, None
+    return name.startswith('$') or name == '.text'
 
-    sec_idx = sym['section'] - 1
-    sec = coff.sections[sec_idx]
-    sec_data = coff.get_section_data(sec_idx)
+
+def _find_function_end(coff, sym):
+    """Find the end boundary for a function symbol within its section.
+
+    Scans for the next meaningful symbol (skipping compiler-internal labels)
+    in the same section. Falls back to section end for COMDAT-style sections.
+    """
+    sec = coff.sections[sym['section'] - 1]
     start = sym['value']
-
-    # Find next symbol in same section to determine function size
     end = sec['raw_size']
-    for s in coff.symbols:
-        if s['section'] == sym['section'] and s['value'] > start:
-            if s['value'] < end:
-                end = s['value']
 
+    for s in coff.symbols:
+        if (s['section'] == sym['section']
+                and s['value'] > start
+                and s['value'] < end
+                and not _is_internal_label(s['name'])):
+            end = s['value']
+
+    return end
+
+
+def _extract_with_relocs(coff, sym, start, end):
+    """Extract bytes and relocations for a function range within its section."""
+    sec_idx = sym['section'] - 1
+    sec_data = coff.get_section_data(sec_idx)
     func_bytes = bytearray(sec_data[start:end])
 
-    # Filter and adjust relocations to be function-relative
     all_relocs = coff.get_section_relocations(sec_idx)
     relocs = []
     for r in all_relocs:
@@ -38,8 +52,11 @@ def extract_from_decomp(coff, symbol):
     return func_bytes, relocs
 
 
-def extract_from_original(coff, symbol):
-    """Extract function bytes and relocations from an original .obj (COMDAT sections).
+def extract_from_decomp(coff, symbol):
+    """Extract function bytes and relocations from a .obj file.
+
+    Handles both multi-function sections and COMDAT sections.
+    Skips compiler-internal labels ($M, $T, $LN) when finding boundaries.
 
     Returns (bytearray, list[dict]) or (None, None) if symbol not found.
     """
@@ -47,29 +64,34 @@ def extract_from_original(coff, symbol):
     if not sym or sym['section'] <= 0:
         return None, None
 
-    sec_idx = sym['section'] - 1
-    sec = coff.sections[sec_idx]
-    sec_data = coff.get_section_data(sec_idx)
-
-    # symbol.value gives code start (skips EH header at offset 0-7 if present)
     start = sym['value']
-    func_size = sec['raw_size'] - start
+    end = _find_function_end(coff, sym)
 
-    if func_size <= 0:
+    if end <= start:
         return None, None
 
-    func_bytes = bytearray(sec_data[start:])
+    return _extract_with_relocs(coff, sym, start, end)
 
-    # Filter and adjust relocations to be function-relative
-    all_relocs = coff.get_section_relocations(sec_idx)
-    relocs = []
-    for r in all_relocs:
-        if r['offset'] >= start:
-            adj = dict(r)
-            adj['offset'] = r['offset'] - start
-            relocs.append(adj)
 
-    return func_bytes, relocs
+def extract_from_original(coff, symbol):
+    """Extract function bytes and relocations from a .obj file.
+
+    Uses the same boundary-scanning logic as extract_from_decomp,
+    handling both multi-function and COMDAT sections correctly.
+
+    Returns (bytearray, list[dict]) or (None, None) if symbol not found.
+    """
+    sym = coff.symbol_map.get(symbol)
+    if not sym or sym['section'] <= 0:
+        return None, None
+
+    start = sym['value']
+    end = _find_function_end(coff, sym)
+
+    if end <= start:
+        return None, None
+
+    return _extract_with_relocs(coff, sym, start, end)
 
 
 def has_indirect_branch(code_bytes):

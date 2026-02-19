@@ -194,3 +194,15 @@ class MockCOFF:
     def __init__(self, sections=None, symbol_map=None):
         self.sections = sections or []
         self.symbol_map = symbol_map or {}
+        self.symbols = []
+        self._rebuild_caches()
+
+    def _rebuild_caches(self):
+        """Build lookup caches matching COFFParser._parse_symbols()."""
+        self._section_names = frozenset(s['name'] for s in self.sections)
+        self._symbols_by_section_offset = {}
+        for sym in self.symbols:
+            if sym.get('section', 0) > 0 and not sym['name'].startswith('$'):
+                key = (sym['section'], sym['value'])
+                if key not in self._symbols_by_section_offset:
+                    self._symbols_by_section_offset[key] = sym['name']
