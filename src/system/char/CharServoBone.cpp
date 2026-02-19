@@ -1,11 +1,16 @@
 #include "char/CharServoBone.h"
 #include "char/CharBoneDir.h"
 #include "char/CharBonesMeshes.h"
+#include "char/CharClipDriver.h"
+#include "char/CharDriver.h"
 #include "char/CharPollable.h"
 #include "char/CharUtl.h"
+#include "char/Character.h"
 #include "math/Mtx.h"
 #include "math/Rot.h"
 #include "math/Trig.h"
+#include "math/Utl.h"
+#include "obj/Dir.h"
 #include "obj/Object.h"
 #include "utl/Symbol.h"
 
@@ -57,7 +62,62 @@ BEGIN_LOADS(CharServoBone)
     SetClipType(s);
 END_LOADS
 
-void CharServoBone::Poll() {}
+void CharServoBone::Poll() {
+    if (!mMeshes.empty()) {
+        PoseMeshes();
+        Character *me = Character::Current();
+        if (mFacingPosDelta) {
+            if (!mMoveSelf) {
+                if (mDeltaChanged) {
+                    Transform tf48 = me->LocalXfm();
+                    MoveToDeltaFacing(tf48);
+                    Transform tf78;
+                    Multiply(((RndTransformable *)unk84)->LocalXfm(), tf48, tf78);
+                    MoveToFacing(((RndTransformable *)unk84)->DirtyLocalXfm());
+                    Transform tfa8;
+                    FastInvert(((RndTransformable *)unk84)->DirtyLocalXfm(), tfa8);
+                    Multiply(tfa8, tf78, me->DirtyLocalXfm());
+                } else {
+                    MoveToFacing(((RndTransformable *)unk84)->DirtyLocalXfm());
+                }
+                for (ObjDirItr<CharBone> it(
+                         CharBoneDir::FindResourceFromClipType(mClipType), false
+                     );
+                     it != nullptr;
+                     ++it) {
+                    if (it->BakeOutAsTopLevel()) {
+                        String str(it->Name());
+                        if (str.find(".cb") != String::npos) {
+                            str = str.substr(0, str.length() - 3);
+                        }
+                        RndTransformable *boneTrans =
+                            CharUtlFindBoneTrans(str.c_str(), Dir());
+                        if (mDeltaChanged) {
+                            MoveToDeltaFacing(boneTrans->DirtyLocalXfm());
+                            MoveToFacing(boneTrans->DirtyLocalXfm());
+                        } else {
+                            MoveToFacing(boneTrans->DirtyLocalXfm());
+                        }
+                    }
+                }
+            } else {
+                if (mDeltaChanged) {
+                    Transform tfd8(((RndTransformable *)unk84)->LocalXfm());
+                    MoveToFacing(tfd8);
+                    Multiply(tfd8, me->LocalXfm(), tfd8);
+                    Transform tf108;
+                    FastInvert(((RndTransformable *)unk84)->LocalXfm(), tf108);
+                    Multiply(tf108, tfd8, me->DirtyLocalXfm());
+                } else {
+                    MoveToDeltaFacing(me->DirtyLocalXfm());
+                }
+                RegulateInternal(me);
+            }
+            mDeltaChanged = false;
+        }
+        ZeroDeltas();
+    }
+}
 
 void CharServoBone::ReallocateInternal() {
     CharBonesMeshes::ReallocateInternal();
@@ -101,6 +161,17 @@ void CharServoBone::SetMoveSelf(bool b) {
 
     mMoveSelf = b;
     mDeltaChanged = true;
+}
+
+void CharServoBone::RegulateInternal(Character *me) {
+    if (mRegulate) {
+        CharClipDriver *driver = me->Driver()->Before(me->Driver()->Last());
+        CharClipDriver *next = driver && driver->mRampIn > 0 ? driver->Next() : nullptr;
+        if (next) {
+            DoRegulate(me, mRegulate, next, driver->mRampIn, Max(2.0f, driver->mRampIn / 1.5f));
+        }
+        mRegulate->Constrain(me->DirtyLocalXfm());
+    }
 }
 
 void CharServoBone::MoveToDeltaFacing(Transform &tf) {

@@ -5,10 +5,12 @@
 #include "obj/Object.h"
 #include "os/Debug.h"
 #include "rndobj/Dir.h"
+#include "rndobj/Font.h"
 #include "rndobj/FontBase.h"
 #include "ui/UIComponent.h"
 #include "ui/UIFontImporter.h"
 #include "utl/BinStream.h"
+#include "utl/Str.h"
 #include "utl/Symbol.h"
 
 
@@ -97,7 +99,47 @@ void UILabelDir::PreLoad(BinStream &bs) {
     bs.PushRev(packRevs(d.altRev, d.rev), this);
 }
 
-void UILabelDir::PostLoad(BinStream &bs) {}
+void UILabelDir::PostLoad(BinStream &bs) {
+    BinStreamRev d(bs, bs.PopRev(this));
+    RndDir::PostLoad(bs);
+    if (d.rev < 10) {
+        String str;
+        bs >> str;
+    }
+    if (d.rev >= 3 && d.rev < 9) {
+        ObjPtr<RndFont> fontPtr(this);
+        bs >> fontPtr;
+    }
+    if (d.rev >= 1)
+        bs >> mFocusAnim;
+    if (d.rev >= 2)
+        bs >> mPulseAnim;
+    if (d.rev >= 4 && d.rev < 11) {
+        Symbol s1; bs >> s1;
+        Symbol s2; bs >> s2;
+        Symbol s3; bs >> s3;
+    }
+    if (d.rev >= 5 && d.rev < 11) {
+        Symbol s1; bs >> s1;
+        Symbol s2; bs >> s2;
+    }
+    if (d.rev >= 6) {
+        bs >> mFocusedBackgroundGroup;
+        bs >> mUnfocusedBackgroundGroup;
+    }
+    if (d.rev >= 7) {
+        d >> mAllowEditText;
+    }
+    bs >> mDefaultColor;
+    for (int i = 0; i < UIComponent::kNumStates; i++) {
+        ObjPtr<UIColor> uiCol(this);
+        bs >> uiCol;
+        mColors[i] = uiCol;
+    }
+    if (d.rev >= 8) {
+        UIFontImporter::Load(bs);
+    }
+}
 
 bool UILabelDir::AllowEditText() const { return mAllowEditText; }
 

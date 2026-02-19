@@ -23,7 +23,7 @@ float gGuitarScale = 0.7f;
 float gGuitarZOffset = 0.2f;
 
 RndText::RndText()
-    : mWidth(0), mHeight(0), mCircle(0), mAlign(kMiddleCenter), mFitType(kFitWrap),
+    : mWidth(0), mHeight(0), mCircle(0), mAlignment(kMiddleCenter), mFitType(kFitWrap),
       mCapsMode(kCapsModeNone), mLeading(1), mFixedLength(0), mMarkup(true),
       mBasicMarkup(true), mScrollDelay(0), mScrollRate(1), mScrollPause(0), unk40(0),
       unk58(0), unk5c(0), unk60(0), mIndentation(0), unk78(nullptr), unk8c(0), unk90(-1),
@@ -64,7 +64,7 @@ END_CUSTOM_PROPSYNC
 BEGIN_PROPSYNCS(RndText)
     SYNC_PROP_SET(text, TextASCII(), SetTextASCII(_val.Str()))
     SYNC_PROP_SET(fixed_length, mFixedLength, SetFixedLength(_val.Int()))
-    SYNC_PROP(align, (int &)mAlign)
+    SYNC_PROP(align, (int &)mAlignment)
     SYNC_PROP(caps_mode, (int &)mCapsMode)
     SYNC_PROP(width, mWidth)
     SYNC_PROP(height, mHeight)
@@ -110,7 +110,7 @@ BEGIN_SAVES(RndText)
     SAVE_SUPERCLASS(Hmx::Object)
     SAVE_SUPERCLASS(RndDrawable)
     SAVE_SUPERCLASS(RndTransformable)
-    bs << mAlign;
+    bs << mAlignment;
     bs << mText;
     bs << mWidth;
     bs << mLeading;
@@ -135,7 +135,7 @@ BEGIN_COPYS(RndText)
     if (ty != kCopyFromMax) {
         CREATE_COPY(RndText)
         BEGIN_COPYING_MEMBERS
-            COPY_MEMBER(mAlign)
+            COPY_MEMBER(mAlignment)
             COPY_MEMBER(mCapsMode)
             COPY_MEMBER(mFitType)
             COPY_MEMBER(mWidth)
@@ -198,9 +198,9 @@ BEGIN_LOADS(RndText)
         bs >> idx;
         Alignment align_choices[6] = { kTopLeft,    kTopCenter,    kTopRight,
                                        kBottomLeft, kBottomCenter, kBottomRight };
-        mAlign = align_choices[idx];
+        mAlignment = align_choices[idx];
     } else {
-        bs >> (int &)mAlign;
+        bs >> (int &)mAlignment;
     }
     if (d.rev < 2) {
         Vector2 v2;

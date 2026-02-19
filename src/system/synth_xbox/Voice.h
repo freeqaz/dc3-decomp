@@ -4,6 +4,8 @@
 #include "xdk/XAPILIB.h"
 #include "xdk/XAUDIO2.h"
 
+class FxSend360;
+
 class Voice {
 public:
     Voice(bool, int, bool);
@@ -23,7 +25,7 @@ public:
     void SetVolume(float);
     void SetPan(float);
     void SetReverbEnable(bool);
-    // void SetSend(FxSend360 *);
+    void SetSend(FxSend360 *);
     static bool HasPendingVoices();
     void SetSpeed(float);
 
@@ -65,7 +67,7 @@ private:
     void UpdateMix();
     void UpdateSends();
     void SafeRestart();
-    // void SetSendImpl(FxSend360 *);
+    void SetSendImpl(FxSend360 *);
     void dispose(int *, unsigned int);
 };
 

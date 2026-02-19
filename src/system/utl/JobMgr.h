@@ -3,7 +3,9 @@
 #include "obj/Object.h"
 #include "stdlib.h"
 #include "utl/MemMgr.h"
+#include "utl/Symbol.h"
 #include "xdk/xapilibi/xbase.h"
+#include <vector>
 
 class Job {
 public:
@@ -60,7 +62,7 @@ protected:
 
 class PostPurchaseEnumJob : public SingleItemEnumJob {
 public:
-    PostPurchaseEnumJob(Hmx::Object *, int, u64);
+    PostPurchaseEnumJob(Hmx::Object *, int, u64, Symbol, unsigned int);
     virtual ~PostPurchaseEnumJob();
     virtual void OnCompletion(Hmx::Object *);
 };
@@ -101,7 +103,7 @@ protected:
 
 class MultipleItemsPostPurchaseEnumJob : public MultipleItemsEnumJob {
 public:
-    MultipleItemsPostPurchaseEnumJob(Hmx::Object *, int);
+    MultipleItemsPostPurchaseEnumJob(Hmx::Object *, int, std::vector<unsigned long long> &, Symbol, unsigned int);
     virtual ~MultipleItemsPostPurchaseEnumJob();
     virtual void OnCompletion(Hmx::Object *);
 };

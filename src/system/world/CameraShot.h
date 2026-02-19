@@ -134,8 +134,8 @@ public:
     ObjPtr<WorldCrowd> mCrowd; // 0x0
     /** "How to rotate crowd" */
     CrowdRotate mCrowdRotate; // 0x14
-    std::vector<std::pair<int, int> > unk18; // 0x18
-    CamShot *unk24; // 0x24
+    std::vector<std::pair<int, int> > m3DCharIndices; // 0x18
+    CamShot *mCamShot; // 0x24
 };
 
 inline BinStream &operator<<(BinStream &bs, const CamShotCrowd &f) {
@@ -277,10 +277,10 @@ protected:
     int mFlags; // 0x1e4
     ObjPtrList<RndDrawable> mEndHideList; // 0x1e8
     ObjPtrList<RndDrawable> mEndShowList; // 0x1fc
-    Vector3 unk210;
-    Vector3 unk220;
-    Vector3 unk230;
-    Vector3 unk240;
+    Vector3 mLastDesiredShakeOffset; // 0x210
+    Vector3 mLastDesiredShakeAngOffset; // 0x220
+    Vector3 mLastShakeOffset; // 0x230
+    Vector3 mLastShakeAngOffset; // 0x240
     Vector3 unk250;
     Vector3 unk260;
     CamShotFrame *mLastNext; // 0x270

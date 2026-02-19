@@ -87,7 +87,113 @@ void CharClipSet::PreLoad(BinStream &bs) {
     bs.PushRev(packRevs(d.altRev, d.rev), this);
 }
 
-void CharClipSet::PostLoad(BinStream &) {}
+void CharClipSet::PostLoad(BinStream &bs) {
+    BinStreamRev d(bs, bs.PopRev(this));
+    ObjectDir::PostLoad(bs);
+    if (IsProxy())
+        return;
+    if (d.rev < 0x11) {
+        int x, y;
+        d >> x;
+        d >> y;
+    }
+    if (d.rev >= 0xF && d.rev < 0x11) {
+        int x;
+        d >> x;
+    }
+    if (d.rev < 9) {
+        FilePath fp;
+        d >> fp;
+        if (!fp.empty())
+            MILO_NOTIFY(
+                "Set the type and resave %s, graph_path was \"%s\"",
+                PathName(this),
+                fp.c_str()
+            );
+    }
+    if (d.rev < 6) {
+        String str;
+        d >> str;
+        MILO_NOTIFY("You'll need to reexport some clips into this clipset");
+    }
+    if (d.rev < 7) {
+        int x;
+        d >> x;
+    }
+    if (d.rev < 0x18) {
+        int count = 0;
+        for (ObjDirItr<CharClip> it(this, true); it != 0; ++it) {
+            count++;
+        }
+        for (int i = 0; i < count; i++) {
+            ObjPtr<CharClip> clipPtr(this);
+            d >> clipPtr;
+            int x, y;
+            d >> x;
+            d >> y;
+        }
+    }
+    if (d.rev > 0xD) {
+        if (d.rev < 0x18) {
+            bool b1, b2;
+            d >> b1;
+            if (d.rev > 0x12)
+                d >> b2;
+        }
+    } else {
+        int count;
+        d >> count;
+        for (int i = 0; i < count; i++) {
+            Symbol s;
+            d >> s;
+        }
+    }
+    if (d.rev > 4 && d.rev < 0x18) {
+        int count;
+        d >> count;
+        char buf[0x100];
+        for (int i = 0; i < count; i++) {
+            bs.ReadString(buf, 0x100);
+        }
+        d >> count;
+        for (int i = 0; i < count; i++) {
+            bs.ReadString(buf, 0x100);
+        }
+        bool b;
+        d >> b;
+    }
+    if (d.rev > 9 && d.rev < 24) {
+        Symbol s;
+        d >> s;
+        int x;
+        d >> x;
+    }
+    if (d.rev == 0xB) {
+        bool b;
+        d >> b;
+    }
+    if (d.rev < 0xC && !Type().Null())
+        MILO_NOTIFY(
+            "%s may have a bug in the transition graph, need to resave from milo",
+            PathName(this)
+        );
+    if (d.rev < 0xD) {
+        static Message filter_clips_msg("filter_clips");
+        Handle(filter_clips_msg, false);
+    }
+    if (d.rev > 0x11) {
+        d >> mCharFilePath;
+        d >> mPreviewClip;
+    }
+    if (d.rev > 0x13)
+        d >> mFilterFlags;
+    if (d.rev > 0x14)
+        d >> mBpm;
+    if (d.rev > 0x15)
+        d >> mPreviewWalk;
+    if (d.rev > 0x16)
+        d >> mStillClip;
+}
 
 void CharClipSet::SetFrame(float frame, float blend) {
     if (mPreviewClip && mPreviewChar) {

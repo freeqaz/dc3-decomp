@@ -109,6 +109,7 @@ protected:
 
     static bool sDeferUpdate;
     static bool sDebugHighlight;
+    static bool sInDebugHighlight;
 
     Symbol mTextToken; // 0x114
     String unk118; // 0x118

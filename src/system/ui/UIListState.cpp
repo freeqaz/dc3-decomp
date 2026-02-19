@@ -339,7 +339,29 @@ void UIListState::PageScroll(int amount) {
     Scroll(direction, false);
 }
 
-void UIListState::SetSelectedSimulateScroll(int) {}
+void UIListState::SetSelectedSimulateScroll(int i) {
+    int showing = WrapShowing(i);
+    mFirstShowing = mTargetShowing;
+    mStepTime = -1.0f;
+    mStepPercent = 0.0f;
+    int diff = showing - SelectedNoWrap();
+    if (diff != 0) {
+        if ((diff > 0 ? diff : -diff) > mNumDisplay * 2) {
+            int dir = diff > 0 ? 1 : -1;
+            SetSelected(showing - mNumDisplay * dir * 2, -1, true);
+        }
+        while (SelectedNoWrap() != showing) {
+            int nowrap = SelectedNoWrap();
+            int dir = nowrap - showing > 0 ? 1 : -1;
+            Scroll(dir, true);
+            mStepTime = -1.0f;
+            mStepPercent = 0.0f;
+            mFirstShowing = mTargetShowing;
+        }
+        MILO_ASSERT(showing == SelectedNoWrap(), 0x1BC);
+        mCallback->CompleteScroll(*this);
+    }
+}
 
 int UIListState::MinDisplay() const { return 1; }
 

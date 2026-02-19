@@ -1,7 +1,19 @@
 #include "char/CharSleeve.h"
+#include "char/Character.h"
+#include "math/Utl.h"
+#include "math/Vec.h"
 #include "obj/Object.h"
+#include "obj/Task.h"
 #include "rndobj/Rnd.h"
 #include "rndobj/Utl.h"
+
+void NormalizeScale(const Vector3 &, float, Vector3 &);
+
+static inline void ScaleAddEq(Vector3 &v1, const Vector3 &v2, float f) {
+    v1.x += v2.x * f;
+    v1.y += v2.y * f;
+    v1.z += v2.z * f;
+}
 
 CharSleeve::CharSleeve()
     : mSleeve(this), mTopSleeve(this), unk38(0, 0, 0), unk48(0, 0, 0), unk58(0),
@@ -60,7 +72,76 @@ BEGIN_LOADS(CharSleeve)
     bs >> mInertia >> mGravity >> mStiffness >> mRange >> mNegLength >> mPosLength;
 END_LOADS
 
-void CharSleeve::Poll() {}
+void CharSleeve::Poll() {
+    if (mSleeve && mSleeve->TransParent()) {
+        float deltasecs = TheTaskMgr.DeltaSeconds();
+        float dvar12 = deltasecs * 60.0f;
+        float powed = std::pow(1.0f - mStiffness, dvar12 * dvar12);
+        float gravity_z = (mGravity * (deltasecs * (dvar12 * -3.858268f)));
+        RndTransformable *sleeveparent = mSleeve->TransParent();
+        float absed = std::fabs(mSleeve->LocalXfm().v.z);
+        bool b2 = false;
+        Character *me = Character::Current();
+        if (me && me->Teleported()) {
+            unk38 = mSleeve->WorldXfm().v;
+            Vector3 v9c(0.0f, 0.0f, -(absed + mPosLength));
+            float dotted = Dot(v9c, sleeveparent->WorldXfm().m.x);
+            ClampEq(dotted, -mRange, mRange);
+            ScaleAddEq(v9c, sleeveparent->WorldXfm().m.x, dotted);
+            unk38 += v9c;
+            Vector3 va8;
+            ScaleAdd(sleeveparent->WorldXfm().v, sleeveparent->WorldXfm().m.x, dotted, va8);
+            Subtract(unk38, va8, v9c);
+            NormalizeScale(v9c, absed + mPosLength, v9c);
+            Add(va8, v9c, unk38);
+            unk48 = unk38;
+            b2 = true;
+            unk58 = 0;
+        }
+        Vector3 vb4(unk38);
+        if (unk58 > 0.0f && deltasecs > 0.0f) {
+            Vector3 vc0;
+            Subtract(unk38, unk48, vc0);
+            ScaleAddEq(vb4, vc0, (mInertia / unk58) * deltasecs);
+        }
+        vb4.z += gravity_z;
+        Vector3 vcc;
+        Subtract(vb4, sleeveparent->WorldXfm().v, vcc);
+        float dotted2 = Dot(vcc, sleeveparent->WorldXfm().m.x);
+        float d4 = (1.0f - (1.0f - powed)) * dotted2;
+        ClampEq(d4, -mRange, mRange);
+        ScaleAddEq(vcc, sleeveparent->WorldXfm().m.x, (d4 - dotted2));
+        float len = Length(vcc);
+        float interped = (absed - len) * powed + len;
+        ClampEq(interped, absed - mNegLength, absed + mPosLength);
+        NormalizeScale(vcc, interped, vcc);
+        Add(sleeveparent->WorldXfm().v, vcc, vb4);
+        Transform tf90;
+        tf90.v = vb4;
+        Scale(vcc, -1.0f, tf90.m.z);
+        Cross(tf90.m.z, sleeveparent->WorldXfm().m.x, tf90.m.y);
+        Normalize(tf90.m.z, tf90.m.z);
+        Normalize(tf90.m.y, tf90.m.y);
+        Cross(tf90.m.y, tf90.m.z, tf90.m.x);
+        mSleeve->SetWorldXfm(tf90);
+        unk48 = unk38;
+        unk58 = deltasecs;
+        unk38 = vb4;
+        if (b2)
+            unk48 = unk38;
+        if (mTopSleeve) {
+            float dotcc = Dot(vcc, sleeveparent->WorldXfm().m.x);
+            ScaleAddEq(vcc, sleeveparent->WorldXfm().m.x, -dotcc);
+            Add(sleeveparent->WorldXfm().v, vcc, tf90.v);
+            Scale(vcc, -1.0f, tf90.m.z);
+            Cross(tf90.m.z, sleeveparent->WorldXfm().m.x, tf90.m.y);
+            Normalize(tf90.m.z, tf90.m.z);
+            Normalize(tf90.m.y, tf90.m.y);
+            Cross(tf90.m.y, tf90.m.z, tf90.m.x);
+            mTopSleeve->SetWorldXfm(tf90);
+        }
+    }
+}
 
 void CharSleeve::PollDeps(
     std::list<Hmx::Object *> &changedBy, std::list<Hmx::Object *> &change

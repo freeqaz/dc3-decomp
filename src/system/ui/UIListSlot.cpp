@@ -130,7 +130,16 @@ void UIListSlot::StartScroll(int i, bool b) {
     }
 }
 
-void UIListSlot::CompleteScroll(const UIListState &, int) {}
+void UIListSlot::CompleteScroll(const UIListState &liststate, int i) {
+    if (RootTrans()) {
+        if (mElements.size() == (unsigned)(liststate.NumDisplay() + 1)) {
+            int idx = i > 0 ? 0 : liststate.NumDisplay();
+            UIListSlotElement *elem = mElements[idx];
+            mElements.erase(std::find(mElements.begin(), mElements.end(), elem));
+            mNextElement = elem;
+        }
+    }
+}
 
 void UIListSlot::Poll() {
     FOREACH (it, mElements) {

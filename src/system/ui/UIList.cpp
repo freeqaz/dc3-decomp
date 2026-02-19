@@ -340,9 +340,29 @@ DataNode UIList::OnSelectedSym(DataArray *da) {
     }
 }
 
-void UIList::FinishValueChange() {}
+void UIList::FinishValueChange() {
+    UpdateExtendedEntries(mListState);
+    UITransitionHandler::FinishValueChange();
+}
 
-void UIList::PreLoadWithRev(BinStreamRev &bs) {}
+INIT_REVS(0x15, 0)
+
+void UIList::PreLoadWithRev(BinStreamRev &bs) {
+    if (bs.rev > gRev) {
+        MILO_FAIL(
+            "%s can't load new %s version %d > %d",
+            PathName(this),
+            ClassName(),
+            bs.rev,
+            gRev
+        );
+    }
+    UIComponent::PreLoad(bs.stream);
+    if (bs.rev >= 0x14) {
+        bs.stream >> mListDir;
+    }
+    bs.PushRev(this);
+}
 
 void UIList::SetSelected(int i, int j) {
     mListDir->CompleteScroll(mListState, mWidgets);
@@ -432,8 +452,6 @@ void UIList::CompleteScroll(UIListState const &state) {
 }
 
 DataNode UIList::OnSetSelected(DataArray *) { return NULL_OBJ; }
-
-INIT_REVS(0x15, 0)
 
 void UIList::PreLoad(BinStream &bs) {
     LOAD_REVS(bs)

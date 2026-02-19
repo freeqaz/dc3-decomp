@@ -405,7 +405,77 @@ void UIManager::FakeKeyboardAction(JoypadButton btn, JoypadAction action) {
     mCurrentScreen->Handle(msg, false);
 }
 
-void UIManager::Poll() {}
+void UIManager::Poll() {
+    START_AUTO_TIMER("ui_poll_raw");
+    if (mAutomator)
+        mAutomator->Poll();
+    TheTaskMgr.SetUISeconds(mTimer.SplitMs() * 0.001f, false);
+    for (std::vector<UIScreen *>::iterator it = mPushedScreens.begin();
+         it != mPushedScreens.end();
+         ++it) {
+        (*it)->Poll();
+    }
+    if (mCurrentScreen)
+        mCurrentScreen->Poll();
+    if (mTransitionState == kTransitionTo) {
+        if ((!mTransitionScreen || mTransitionScreen->CheckIsLoaded())
+            && (!mCurrentScreen || !mCurrentScreen->Exiting())
+            && !IsBlockingTransition()) {
+            UIScreen *trans = mTransitionScreen;
+            UIScreen *oldCur = mCurrentScreen;
+            mTransitionState = kTransitionFrom;
+            mCurrentScreen = trans;
+            mTransitionScreen = oldCur;
+            if (trans) {
+                if (trans->AllPanelsDown() && mPushedScreens.empty()
+                    && IsTimelineResetAllowed()) {
+                    mTimer.Restart();
+                    TheTaskMgr.SetUISeconds(0, true);
+                }
+                mCurrentScreen->Enter(mTransitionScreen);
+            }
+        }
+    }
+    if (mTransitionState == kTransitionPop) {
+        if (!mCurrentScreen || !mCurrentScreen->Exiting()) {
+            if (mCurrentScreen)
+                mCurrentScreen->UnloadPanels();
+            UIScreen *oldCurScreen = mCurrentScreen;
+            MILO_ASSERT(!mPushedScreens.empty(), 0x2D8);
+            mCurrentScreen = mPushedScreens.back();
+            mPushedScreens.pop_back();
+            mTransitionState = kTransitionNone;
+            if (mTransitionScreen == mCurrentScreen) {
+                mTransitionScreen = nullptr;
+                UITransitionCompleteMsg completeMsg(mCurrentScreen, oldCurScreen);
+                Handle(completeMsg, false);
+            } else {
+                GotoScreenImpl(mTransitionScreen, false, false);
+            }
+        }
+    }
+    if (mTransitionState == kTransitionFrom) {
+        if (!mCurrentScreen || !mCurrentScreen->Entering()) {
+            if (mOverlay && mOverlay->Showing() && mLoadTimer.Running()
+                && mCurrentScreen) {
+                mLoadTimer.Stop();
+                mOverlay->CurrentLine() = MakeString(
+                    "%s entered in %f seconds",
+                    mCurrentScreen->Name(),
+                    mLoadTimer.Ms() * 0.001f
+                );
+                TheDebug << MakeString("%s\n", mOverlay->CurrentLine());
+            }
+            UIScreen *oldTrans = mTransitionScreen;
+            UITransitionCompleteMsg completeMsg2(mCurrentScreen, oldTrans);
+            mTransitionState = kTransitionNone;
+            mTransitionScreen = nullptr;
+            Handle(completeMsg2, false);
+        }
+    }
+    TheKnownIssues.Draw();
+    TheOSCMessenger.Poll();
+}
 
 void UIManager::PushScreen(UIScreen *screen) {
     // Function prologue
@@ -789,7 +859,33 @@ Symbol Automator::CurScreenName() {
     return gNullStr;
 }
 
-void Automator::Poll() {}
+void Automator::Poll() {
+    static Symbol button_down("button_down");
+    static Symbol quick_cheat("quick_cheat");
+    static ButtonDownMsg b_msg(nullptr, kPad_NumButtons, kAction_None, -1);
+    if (!mCurScript)
+        return;
+    mFramesSinceAdvance++;
+    DataArray *curEntry = mCurScript->Array(mCurMsgIndex);
+    Symbol sym = curEntry->Sym(0);
+    if (sym == button_down) {
+        FillButtonMsg(b_msg, mCurMsgIndex);
+        static Symbol button_down("button_down");
+        AdvanceScript(button_down);
+        mUIManager.Handle(b_msg, false);
+    } else if (sym == quick_cheat) {
+        DataArray *cheatArr = curEntry->Node(1).Array();
+        AdvanceScript(quick_cheat);
+        CallQuickCheat(cheatArr, nullptr);
+    } else if (mCurMsgIndex > 1 && mFramesSinceAdvance > 0x1e) {
+        int prevIdx = mCurMsgIndex - 1;
+        DataArray *prevEntry = mCurScript->Array(prevIdx);
+        if (prevEntry->Sym(0) == button_down) {
+            FillButtonMsg(b_msg, prevIdx);
+            mUIManager.Handle(b_msg, false);
+        }
+    }
+}
 
 DataNode Automator::OnMsg(ButtonDownMsg const &msg) {
     Symbol screenName = CurScreenName();

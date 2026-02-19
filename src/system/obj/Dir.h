@@ -335,6 +335,7 @@ public:
     void RemoveSubDir(const ObjDirPtr<ObjectDir> &subdir);
 
     void SetCurViewport(ViewportId id, Hmx::Object *o);
+    Hmx::Object *CurCam() { return mCurCam; }
     void SetSubDirFlag(bool flag);
     /** Set this ObjectDir's path name.
      * @param [in] path The path name to set.

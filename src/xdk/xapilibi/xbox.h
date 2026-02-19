@@ -163,6 +163,22 @@ DWORD XShowDeviceSelectorUI(
 DWORD XGetGameRegion();
 __declspec(noreturn) DWORD XShowNuiDirtyDiscErrorUI(DWORD dwTrackingID, DWORD dwUserIndex);
 __declspec(noreturn) DWORD XShowDirtyDiscErrorUI(DWORD dwUserIndex);
+DWORD XMarketplaceCreateOfferEnumerator(
+    DWORD dwUserIndex,
+    DWORD dwOfferType,
+    ULONGLONG qwOfferID,
+    DWORD cItems,
+    DWORD *pcbBuffer,
+    HANDLE *phEnum
+);
+DWORD XMarketplaceCreateOfferEnumeratorByOffering(
+    DWORD dwUserIndex,
+    DWORD wNumOffers,
+    ULONGLONG *pqwOfferIDs,
+    WORD wMaxItems,
+    DWORD *pcbBuffer,
+    HANDLE *phEnum
+);
 
 #ifdef __cplusplus
 }

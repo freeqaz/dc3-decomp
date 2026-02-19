@@ -1,6 +1,7 @@
 #include "movie/Splash.h"
 #include "Splash.h"
 #include "obj/Object.h"
+#include "obj/Task.h"
 #include "os/Archive.h"
 #include "os/CritSec.h"
 #include "os/Debug.h"
@@ -195,7 +196,55 @@ void Splash::BeginSplasher() {
     ((Rnd *)&TheRnd)->unk1b4 = 1;
 }
 
-void Splash::Draw() {}
+void Splash::Draw() {
+    float splitMs = mTimer.SplitMs();
+    if (splitMs <= (float)(long long)mSplashDurationMs) {
+        if (unk5c == 0 || mCurrentMovie != NULL || mCurrentTrigger != NULL) {
+            if (mCurrentTrigger != NULL) {
+                TheTaskMgr.Poll();
+                mCurrentDir->Poll();
+            }
+            if (mCurrentMovie != NULL) {
+                if (MainThread()) {
+                    float msPerFrame = mCurrentMovie->GetMovie().MsPerFrame() - 1.0f;
+                    if (unk200.Running() && unk200.SplitMs() < msPerFrame) {
+                        return;
+                    }
+                    unk200.Restart();
+                }
+                if (!mCurrentMovie->GetMovie().Poll()) {
+                    mSplashDurationMs = 0;
+                    return;
+                }
+            } else {
+                int i = 0;
+                do {
+                    TheRnd.BeginDrawing();
+                    mCurrentCam->Select();
+                    mCurrentDir->DrawShowing();
+                    TheRnd.EndDrawing();
+                    if (mCurrentMovie != NULL) goto splashing_done;
+                } while (mCurrentTrigger == NULL && ++i < 2);
+                if (mCurrentTrigger == NULL) {
+                    TheNgRnd.Suspend();
+                }
+            }
+splashing_done:
+            unk5c = 1;
+        }
+        if (!MainThread()) {
+            int waitMs = mSplashDurationMs - (int)mTimer.SplitMs();
+            if (mCurrentMovie != NULL) {
+                int movieWait = (int)(mCurrentMovie->GetMovie().MsPerFrame() - 1.0f);
+                if (movieWait < waitMs) waitMs = movieWait;
+                if (waitMs < 0) waitMs = 0;
+            } else if (mCurrentTrigger != NULL) {
+                waitMs = 0x10;
+            }
+            unk90.Wait(waitMs);
+        }
+    }
+}
 
 bool Splash::SetMutableState(Splash::SplashState state) {
     MILO_ASSERT(state <= kResumed, 0x13b);
@@ -241,7 +290,38 @@ void Splash::WaitForState(Splash::SplashState state) {
     }
 }
 
-void Splash::CheckWorkerSuspend(bool) {}
+void Splash::CheckWorkerSuspend(bool b) {
+    MILO_ASSERT(!MainThread(), 0x1f0);
+    while (mState == s1) {
+        TheNgRnd.Suspend();
+        if (mCurrentMovie != NULL) {
+            mCurrentMovie->SetShowing(false);
+            mCurrentMovie->GetMovie().UnlockThread();
+        }
+        {
+            CritSecTracker cst(&unk6c);
+            MILO_ASSERT(mState == s1, 0x1ff);
+            mState = s2;
+            unk8c.Set();
+        }
+        WaitForState(kResuming);
+        TheNgRnd.Resume();
+        {
+            CritSecTracker cst(&unk6c);
+            MILO_ASSERT(mState == kResuming, 0x209);
+            mState = kResumed;
+            unk8c.Set();
+        }
+        if (mCurrentMovie != NULL) {
+            mCurrentMovie->SetShowing(true);
+            mCurrentMovie->GetMovie().LockThread();
+        }
+        if (b) {
+            unk5c = 0;
+            Draw();
+        }
+    }
+}
 
 bool Splash::ShowNext() {
     // Clean up previous splash screen
@@ -330,18 +410,15 @@ bool Splash::UpdateThreadLoop() {
 void Splash::UpdateThread() {
     mThreadId = GetCurrentThreadId();
     MILO_ASSERT(!MainThread(), 0x21d);
-    unk6c.Enter();
-    MILO_ASSERT(mState == kResuming, 0x221);
-    mState = kResumed;
-    unk8c.Set();
-    unk6c.Exit();
-
-    mTimer.Start();
-
-    // Initialize time reference for performance monitoring
-    if (mTimer.SplitMs() == 0) {
-        unk60 = __mftb();
+    {
+        CritSecTracker cst(&unk6c);
+        MILO_ASSERT(mState == kResuming, 0x221);
+        mState = kResumed;
+        unk8c.Set();
     }
+
+    Timer timer;
+    timer.Start();
 
     Show();
 
@@ -349,28 +426,28 @@ void Splash::UpdateThread() {
         CheckWorkerSuspend(true);
     }
 
-    MILO_ASSERT(mPreparedScreens.empty(), 0x23a);
+    MILO_ASSERT(mScreens.empty(), 0x23a);
 
     for (int i = 0; i < 2; i++) {
         TheRnd.BeginDrawing();
         TheRnd.EndDrawing();
     }
 
-    if (!SetImmutableState(kTerminating)) {
-        while (mState != s1) {
+    if (!SetImmutableState(kWaitingForTerminating)) {
+        do {
+            MILO_ASSERT(mState == s1, 0x246);
             CheckWorkerSuspend(false);
-        }
-        SetImmutableState(kTerminating);
+        } while (!SetImmutableState(kWaitingForTerminating));
     }
 
     TheNgRnd.Suspend();
 
-    float elapsed = mTimer.SplitMs();
+    float elapsed = timer.SplitMs();
     if (TheArchive && Archive::DebugArkOrder()) {
-        TheDebug << MakeString("Splash Time: %f", elapsed);
+        TheDebug << MakeString("Splash Time: %f\n", elapsed);
     }
 
-    WaitForState(kWaitingForTerminating);
+    WaitForState(kTerminating);
 
     MILO_ASSERT(SetImmutableState(kTerminated), 0x257);
 }

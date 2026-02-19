@@ -66,6 +66,8 @@ protected:
     // UIPanel
     virtual void PopulateOffers(DataArray *, bool);
     virtual void EnumerateOffers(bool);
+    virtual bool EnumerateSubsetOfOfferIDs() const { return false; }
+    virtual void GetOfferIDsToEnumerate(std::vector<u64> &, bool) const {}
     virtual void FinishEnum(std::list<EnumProduct> const &, bool);
     virtual StoreError UpdateOffers(std::list<EnumProduct> const &, bool);
     virtual void UpdateFromEnumProduct(StorePurchaseable *, EnumProduct const *);
@@ -90,6 +92,8 @@ class StoreEnumJob : public Job {
 public:
     StoreEnumJob(StorePanel *, int, std::vector<UINT64> *);
     virtual ~StoreEnumJob();
+    virtual void Start();
+    virtual void Cancel(Hmx::Object *);
     virtual bool IsFinished();
     virtual void OnCompletion(Hmx::Object *);
 

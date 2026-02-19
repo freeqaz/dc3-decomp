@@ -2,7 +2,7 @@
 name: unicorn-query
 description: Query unicorn behavioral test results from the database. Filter functions by verdict (EQUIVALENT/DIVERGENT), divergence class (logic/build_env/regalloc), and unit. Use to find functions with real behavioral bugs to fix.
 argument-hint: "[--class logic|build_env|regalloc] [--verdict DIVERGENT|EQUIVALENT] [--unit pattern] [--status workable|complete|all] [--limit N] [--summary-only]"
-allowed-tools: Bash(python3 scripts/unicorn_query.py *)
+allowed-tools: Bash(python3 scripts/unicorn/query.py *)
 ---
 
 # Unicorn Query Skill
@@ -18,7 +18,7 @@ by their runtime behavioral equivalence status.
 
 1. **Build the command** from the arguments and run:
    ```bash
-   python3 scripts/unicorn_query.py $ARGUMENTS
+   python3 scripts/unicorn/query.py $ARGUMENTS
    ```
 
    If no arguments were provided, default to `--verdict DIVERGENT` to show all divergent functions.

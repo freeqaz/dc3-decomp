@@ -82,7 +82,16 @@ void UISlider::PostLoad(BinStream &bs) {
     Update();
 }
 
-void UISlider::DrawShowing() {}
+void UISlider::DrawShowing() {
+    SyncSlider();
+    if ((RndMesh*)unk68) {
+        int idx = (int)DrawState(this) - 0x18;
+        ((RndMesh*)unk68)->SetMat(*(RndMat**)((int*)this + idx + 0x33));
+    }
+    if (unk50) {
+        unk50->DrawShowing();
+    }
+}
 
 RndDrawable *UISlider::CollideShowing(const Segment &seg, float &f, Plane &pl) {
     SyncSlider();

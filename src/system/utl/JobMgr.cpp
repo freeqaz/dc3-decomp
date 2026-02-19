@@ -69,7 +69,7 @@ void JobMgr::CancelAllJobs() {
 
 JobMgr::~JobMgr() { CancelAllJobs(); }
 
-PostPurchaseEnumJob::PostPurchaseEnumJob(Hmx::Object *obj, int unk, u64 u) : SingleItemEnumJob(obj, unk, u) {}
+PostPurchaseEnumJob::PostPurchaseEnumJob(Hmx::Object *obj, int unk, u64 u, Symbol s, unsigned int ui) : SingleItemEnumJob(obj, unk, u) {}
 
 PostPurchaseEnumJob::~PostPurchaseEnumJob() {}
 
@@ -114,7 +114,7 @@ void MultipleItemsEnumJob::Cancel(Hmx::Object *obj) {}
 
 void MultipleItemsEnumJob::OnCompletion(Hmx::Object *obj) {}
 
-MultipleItemsPostPurchaseEnumJob::MultipleItemsPostPurchaseEnumJob(Hmx::Object *obj, int unk) : MultipleItemsEnumJob(obj, unk) {}
+MultipleItemsPostPurchaseEnumJob::MultipleItemsPostPurchaseEnumJob(Hmx::Object *obj, int unk, std::vector<unsigned long long> &vec, Symbol s, unsigned int ui) : MultipleItemsEnumJob(obj, unk) {}
 
 MultipleItemsPostPurchaseEnumJob::~MultipleItemsPostPurchaseEnumJob() {}
 

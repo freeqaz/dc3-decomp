@@ -43,19 +43,20 @@ bool AutoPrepTarget::sChanging = false;
 
 AutoPrepTarget::AutoPrepTarget(CamShotFrame &frame)
     : mFrame(&frame), mShot(frame.mCamShot) {
-    mOldZoomFov = frame.mFOV;
+    mShot->StartAnim();
     mOldFilter = mShot->mFilter;
     mOldCamHeight = mShot->mClampHeight;
+    mOldZoomFov = mFrame->mZoomFOV;
+    mFrame->mZoomFOV = 0;
     mShot->mFilter = 0.0f;
     mShot->mClampHeight = -1.0f;
-    mShot->unk210.Zero();
-    mShot->unk220.Zero();
-    mShot->unk230.Zero();
-    mShot->unk240.Zero();
-    mShot->unk250.Zero();
-    mShot->unk260.Zero();
+    mShot->mLastDesiredShakeOffset.Zero();
+    mShot->mLastDesiredShakeAngOffset.Zero();
+    mShot->mLastShakeOffset.Zero();
+    mShot->mLastShakeAngOffset.Zero();
     sChanging = true;
-    frame.UpdateTarget();
+    mFrame->UpdateTarget();
+    mShot->SetFrame(mFrame->mFrame, 1.0f);
 }
 
 AutoPrepTarget::~AutoPrepTarget() {
@@ -374,16 +375,16 @@ END_CUSTOM_PROPSYNC
 
 CamShotCrowd::CamShotCrowd(Hmx::Object *owner)
     : mCrowd(owner), mCrowdRotate(kCrowdRotateNone),
-      unk24(dynamic_cast<CamShot *>(owner)) {}
+      mCamShot(dynamic_cast<CamShot *>(owner)) {}
 
 CamShotCrowd::CamShotCrowd(Hmx::Object *owner, const CamShotCrowd &other)
-    : mCrowd(other.mCrowd), mCrowdRotate(other.mCrowdRotate), unk18(other.unk18),
-      unk24(dynamic_cast<CamShot *>(owner)) {}
+    : mCrowd(other.mCrowd), mCrowdRotate(other.mCrowdRotate), m3DCharIndices(other.m3DCharIndices),
+      mCamShot(dynamic_cast<CamShot *>(owner)) {}
 
 void CamShotCrowd::Save(BinStream &bs) const {
     bs << mCrowd;
     bs << mCrowdRotate;
-    bs << unk18;
+    bs << m3DCharIndices;
     int num = -1;
     if (mCrowd) {
         num = mCrowd->GetModifyStamp();
@@ -394,11 +395,11 @@ void CamShotCrowd::Save(BinStream &bs) const {
 void CamShotCrowd::Load(BinStream &bs) {
     bs >> mCrowd;
     bs >> (int &)mCrowdRotate;
-    bs >> unk18;
+    bs >> m3DCharIndices;
     int num;
     bs >> num;
     if (mCrowd && num != mCrowd->GetModifyStamp() || (!mCrowd && num != -1)) {
-        unk18.clear();
+        m3DCharIndices.clear();
     }
 }
 
@@ -431,11 +432,11 @@ void CamShotCrowd::SetCrowdChars() {
 }
 
 void CamShotCrowd::ClearCrowdChars() {
-    unk18.clear();
+    m3DCharIndices.clear();
     if (!mCrowd) {
         MILO_NOTIFY("No crowd selected");
     }
-    mCrowd->Set3DCharList(unk18, unk24);
+    mCrowd->Set3DCharList(m3DCharIndices, mCamShot);
 }
 
 void CamShotCrowd::GetSelectedCrowd(
@@ -461,19 +462,55 @@ void CamShotCrowd::AddCrowdChars(
         MILO_NOTIFY("No crowd selected");
         return;
     }
+    if (mCrowd->mForce3DCrowd)
+        return;
 
-    if (crowdChars->empty()) {
+    float fullness = mCrowd->mFlatFullness;
+    mCrowd->Set3DCharList(std::vector<std::pair<int, int> >(), mCamShot);
+    mCrowd->SetFullness(1, mCrowd->mCharFullness);
+
+    if (!crowdChars) {
+        ObjList<WorldCrowd::CharData>::iterator it = mCrowd->mCharacters.begin();
+        int charIdx = 0;
+        for (; it != mCrowd->mCharacters.end(); ++it, ++charIdx) {
+            int instIdx = 0;
+            RndMultiMesh::InstanceList &insts = it->mMMesh->Instances();
+            for (RndMultiMesh::InstanceList::iterator instIt = insts.begin();
+                 instIt != insts.end(); ++instIt, ++instIdx) {
+                m3DCharIndices.push_back(std::make_pair(charIdx, instIdx));
+            }
+        }
         mCrowd->Set3DCharAll();
     } else {
-        // Note: This implementation is incomplete in DC3. The proper implementation would require
-        // access to WorldCrowd::mCharacters (which is protected) or a public accessor method.
-        // For now, we just call Set3DCharList with the accumulated indices.
-        mCrowd->Set3DCharList(unk18, unk24);
+        FOREACH_PTR (it, crowdChars) {
+            RndMultiMesh *mmesh = it->first;
+            int charIdx = 0;
+            for (ObjList<WorldCrowd::CharData>::iterator it2 = mCrowd->mCharacters.begin();
+                 it2 != mCrowd->mCharacters.end() && it2->mMMesh != mmesh; it2++) {
+                charIdx++;
+            }
+            if (charIdx != mCrowd->mCharacters.size()) {
+                int instIdx = 0;
+                for (RndMultiMesh::InstanceList::iterator mmit =
+                         mmesh->Instances().begin();
+                     mmit != mmesh->Instances().end() && mmit != it->second;
+                     ++mmit, ++instIdx)
+                    ;
+                MILO_ASSERT(instIdx != mmesh->Instances().size(), 0xBE1);
+                std::pair<int, int> iPair = std::make_pair(charIdx, instIdx);
+                if (std::find(m3DCharIndices.begin(), m3DCharIndices.end(), iPair)
+                    == m3DCharIndices.end()) {
+                    m3DCharIndices.push_back(iPair);
+                }
+            }
+        }
+        mCrowd->Set3DCharList(m3DCharIndices, mCamShot);
     }
+    mCrowd->SetFullness(fullness, mCrowd->mCharFullness);
 }
 
 BEGIN_CUSTOM_PROPSYNC(CamShotCrowd)
-    SYNC_PROP_MODIFY(crowd, o.mCrowd, o.unk18.clear())
+    SYNC_PROP_MODIFY(crowd, o.mCrowd, o.m3DCharIndices.clear())
     SYNC_PROP(crowd_rotate, (int &)o.mCrowdRotate)
 END_CUSTOM_PROPSYNC
 
@@ -493,8 +530,9 @@ CamShot::CamShot()
       mPlatform(kPlatformNone), mHideList(this), mShowList(this), mGenHideList(this),
       mDrawOverrides(this), mPostProcOverrides(this), unk1a4(this), mCrowds(this),
       mCrowdStateOverride(gNullStr), mPS3PerPixel(true), mGlowSpot(this), mFlags(0),
-      mEndHideList(this), mEndShowList(this), unk210(0, 0, 0), unk220(0, 0, 0),
-      unk230(0, 0, 0), unk240(0, 0, 0), unk250(0, 0, 0), unk260(0, 0, 0), mLastNext(0),
+      mEndHideList(this), mEndShowList(this), mLastDesiredShakeOffset(0, 0, 0),
+      mLastDesiredShakeAngOffset(0, 0, 0), mLastShakeOffset(0, 0, 0),
+      mLastShakeAngOffset(0, 0, 0), unk250(0, 0, 0), unk260(0, 0, 0), mLastNext(0),
       mLastPrev(0), mDuration(0), mDisabled(0), mShotStarted(1), mShotOver(0), mHidden(0),
       unk283(0) {}
 
@@ -824,7 +862,7 @@ BEGIN_LOADS(CamShot)
     CamShotCrowd crowdData(this);
 
     if (d.rev > 4 && d.rev < 42) {
-        d >> crowdData.unk18;
+        d >> crowdData.m3DCharIndices;
     }
     int crowdModifyStamp = -1;
     if (d.rev >= 8 && d.rev < 42)
@@ -861,9 +899,9 @@ BEGIN_LOADS(CamShot)
     if (d.rev >= 8 && d.rev < 42) {
         if (crowdData.mCrowd) {
             if (crowdModifyStamp != crowdData.mCrowd->GetModifyStamp())
-                crowdData.unk18.clear();
+                crowdData.m3DCharIndices.clear();
         } else if (crowdModifyStamp != -1)
-            crowdData.unk18.clear();
+            crowdData.m3DCharIndices.clear();
     }
     if (d.rev == 0xE) {
         float unused1, unused2, unused3;
@@ -942,17 +980,17 @@ void CamShot::StartAnim() {
     mLastNext = 0;
     mLastPrev = 0;
     mShotStarted = true;
-    unk210.Zero();
-    unk230.Zero();
+    mLastDesiredShakeOffset.Zero();
+    mLastShakeOffset.Zero();
     unk250.Zero();
-    unk220.Zero();
-    unk240.Zero();
+    mLastDesiredShakeAngOffset.Zero();
+    mLastShakeAngOffset.Zero();
     unk260.Zero();
     StartAnims(mAnims);
     for (int i = 0; i != mCrowds.size(); i++) {
         CamShotCrowd &cur = mCrowds[i];
         if (cur.mCrowd) {
-            cur.mCrowd->Set3DCharList(cur.unk18, cur.unk24);
+            cur.mCrowd->Set3DCharList(cur.m3DCharIndices, cur.mCamShot);
         }
     }
     RndVelocityBuffer::Singleton().ResetFrame();

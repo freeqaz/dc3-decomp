@@ -23,6 +23,7 @@ public:
 class RndText : public virtual RndDrawable, public virtual RndTransformable {
 public:
     enum Alignment {
+        kCenter = 0x2,
         kTopLeft = 0x11,
         kTopCenter = 0x12,
         kTopRight = 0x14,
@@ -281,6 +282,7 @@ public:
     int GetTextSize() const { return Max<int>(mFixedLength, mText.length()); }
     void SetCapsMode(CapsMode c) { mCapsMode = c; }
     void UpdateText();
+    void GetWidthHeightBox(Box &) const;
     void SetText(const char *);
     int FontMapIndex(RndFontBase *, bool);
     float ComputeHeight(int, float, float &);
@@ -309,7 +311,7 @@ protected:
     /** "Lay text around circle of this circumference. Negative values face other way." */
     float mCircle; // 0x18
     /** "Alignment option for the text" */
-    Alignment mAlign; // 0x1c
+    Alignment mAlignment; // 0x1c
     FitType mFitType; // 0x20
     /** "Defines the CAPS mode for the text" */
     CapsMode mCapsMode; // 0x24

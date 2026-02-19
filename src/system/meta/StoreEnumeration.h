@@ -3,6 +3,7 @@
 #include "types.h"
 #include "utl/Str.h"
 #include "xdk/xapilibi/xbase.h"
+#include "xdk/xapilibi/stringapiset.h"
 #include <list>
 
 enum StoreError {
@@ -59,12 +60,13 @@ public:
     XboxEnumeration(int, std::vector<unsigned long long> *);
 
 protected:
-    void *unk10;                            // 0x10 - pointer deleted in destructor
-    std::vector<unsigned long long> *unkc;  // 0x14 - pointer to vector (not owned)
-    int unk18;                              // 0x18
-    bool unk1c;                             // 0x1c
+    u32 mOfferIDCount;                      // 0xC - total count of offer IDs
+    unsigned long long *unk10;              // 0x10 - begin pointer of offer IDs array
+    unsigned long long *mCurOffers;         // 0x14 - current position pointer in offer IDs array
+    int unk18;                              // 0x18 - user index
+    bool unk1c;                             // 0x1c - enumerating flag
     XOVERLAPPED mOverlapped;                // 0x20 - Xbox overlapped I/O structure (28 bytes)
-    HANDLE mEnumHandle;                     // 0x3C - enumeration handle
-    u32 unk40;                              // 0x40
+    HANDLE mHandle;                         // 0x3C - enumeration handle
+    u32 unk40;                              // 0x40 - buffer size
     void *mEnumBuffer;                      // 0x44 - buffer for enumeration results
 };

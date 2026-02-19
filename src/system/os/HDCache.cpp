@@ -289,9 +289,75 @@ void HDCache::Init() {
         OpenFiles(numFilesToOpen);
         mBlockState = new int *[numArkfiles];
         CSHA1 sha;
-        // more
+        unsigned char blockBuf[0x1000];
+        for (int i = 0; i < numArkfiles; i++) {
+            unsigned int blockSize = 0;
+            if (i < numFilesToOpen) {
+                *header >> blockSize;
+                if (blockSize <= 0x1000 && (blockSize & 3) == 0) {
+                    header->Read(blockBuf, blockSize);
+                } else {
+                    next = false;
+                }
+                if (header->Fail() || !next) {
+                    blockSize = 0;
+                    next = false;
+                    numFilesToOpen = 0;
+                }
+                if (next) {
+                    sha.Update(blockBuf, blockSize);
+                }
+            }
+            // Check if read/write files are valid
+            File **readFiles = &mReadArkFiles[0];
+            File **writeFiles = &mWriteArkFiles[0];
+            if (readFiles[i] == NULL || readFiles[i]->Fail() ||
+                writeFiles[i] == NULL || writeFiles[i]->Fail()) {
+                File *rf = readFiles[i];
+                if (rf != NULL) { delete rf; }
+                readFiles[i] = NULL;
+                File *wf = writeFiles[i];
+                if (wf != NULL) { delete wf; }
+                writeFiles[i] = NULL;
+            }
+            if (readFiles[i] != NULL) {
+                int numDwords = (TheArchive->GetArkfileNumBlocks(i) + 0x1F) / 32;
+                int *blockMem = new int[numDwords];
+                memcpy(blockMem, blockBuf, blockSize);
+                memset((char *)blockMem + blockSize, 0, numDwords * 4 - blockSize);
+                mBlockState[i] = blockMem;
+            } else {
+                mBlockState[i] = NULL;
+            }
+        }
+        bool hashValid = false;
+        if (next) {
+            char hash1[256], hash2[256];
+            memset(hash1, 0, 256);
+            memset(hash2, 0, 256);
+            sha.Final().ReportHash(hash1, 0);
+            header->Read(hash2, 0x100);
+            if (!header->Fail()) {
+                hashValid = memcmp(hash1, hash2, 256) == 0;
+            }
+        }
+        bool skipHdcache = OptionBool("skip_hdcache", false);
+        if (!skipHdcache & hashValid) {
+            unk64 = true;
+            TheDebug << MakeString("Using the archive cache\n");
+        } else {
+            for (int i = 0; i < numArkfiles; i++) {
+                if (mBlockState[i] != NULL) {
+                    int numDwords = (TheArchive->GetArkfileNumBlocks(i) + 0x1F) / 32;
+                    memset(mBlockState[i], 0, numDwords * 4);
+                }
+            }
+        }
+        if (header != NULL) {
+            delete header;
+        }
+        mHdrFmt = "";
+        mFileFmt = "";
+        mHdrBuf = new MemStream(true);
     }
-    mHdrFmt = "";
-    mFileFmt = "";
-    mHdrBuf = new MemStream(true);
 }

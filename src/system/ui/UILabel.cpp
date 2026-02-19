@@ -1,13 +1,16 @@
 #include "ui/UILabel.h"
 
 #include "macros.h"
+#include "math/Geo.h"
 #include "ui/ResourceDirPtr.h"
 #include "obj/Data.h"
 #include "obj/Object.h"
 #include "obj/Task.h"
 #include "rndobj/Text.h"
 #include "rndobj/Trans.h"
+#include "rndobj/Utl.h"
 #include "ui/UI.h"
+#include "ui/UIColor.h"
 #include "ui/UILabelDir.h"
 #include "ui/UIListWidget.h"
 #include "utl/BinStream.h"
@@ -19,6 +22,7 @@
 #include <cstring>
 
 bool UILabel::sDeferUpdate;
+bool UILabel::sInDebugHighlight;
 
 void UILabel::Load(BinStream &bs) {
     PreLoad(bs);
@@ -322,9 +326,65 @@ Symbol UILabel::TextToken() { return mTextToken; }
 
 void UILabel::Poll() {}
 
-void UILabel::Highlight() {}
+void UILabel::Highlight() {
+    RndTransformable::Highlight();
+    Box box;
+    GetWidthHeightBox(box);
+    Hmx::Color color(1.0f, 1.0f, 0.5f, 1.0f);
+    if (!CheckValid(false)) {
+        int secs = (int)(TheTaskMgr.UISeconds() * 2.0f);
+        if (secs % 2 == 0) {
+            color.red = 1.0f;
+            color.alpha = 1.0f;
+            color.green = 0.2f;
+            color.blue = 0.2f;
+        }
+    }
+    RndDrawable::Highlight();
+    const Transform &xfm = WorldXfm();
+    UtilDrawBox(xfm, box, color, false);
+}
 
-void UILabel::DrawShowing() {}
+void UILabel::DrawShowing() {
+    if (!(Style(0).mFontColor.alpha > 0.0f))
+        return;
+
+    if (unk122 && !sDeferUpdate) {
+        LabelUpdate(false);
+    }
+
+    MILO_ASSERT(unk124.size() == mStyles.size(), 0x1EF);
+
+    UILabelDir *labelDir = LStyle(0).unk14;
+    if (labelDir) {
+        UIColor *stateColor = labelDir->GetStateColor(mState);
+        unsigned int numStyles = unk124.size();
+        if (numStyles != 0) {
+            unsigned int i = 0;
+            do {
+                RndText::Style &style = Style(i);
+                style.mFontColorOverride = true;
+                UIColor *uiColor = LStyle(i).mColorOverride;
+                if (!uiColor) {
+                    uiColor = stateColor;
+                }
+                const Hmx::Color &color = uiColor->GetColor();
+                style.mFontColor.red = color.red;
+                style.mFontColor.green = color.green;
+                style.mFontColor.blue = color.blue;
+                i++;
+            } while (i < numStyles);
+        }
+    }
+
+    RndText::DrawShowing();
+
+    if (sDebugHighlight && !sInDebugHighlight) {
+        sInDebugHighlight = true;
+        Highlight();
+        sInDebugHighlight = false;
+    }
+}
 
 void UILabel::SetTextToken(Symbol s) {
     mTextToken = s;
@@ -387,7 +447,25 @@ void UILabel::SetPrelocalizedString(String &s) { SetDisplayText(s.c_str(), true)
 
 void UILabel::SetSubtitle(const DataArray *da) { SetDisplayText(da->Str(2), true); }
 
-void UILabel::SetTimeHMS(int, bool) {}
+void UILabel::SetTimeHMS(int seconds, bool showHours) {
+    int hours = seconds / 3600;
+    if (hours >= 99) {
+        hours = 99;
+    }
+    int minutes = seconds / 60 - hours * 60;
+    if (minutes >= 99) {
+        minutes = 99;
+    }
+    int secs = seconds - (hours * 60 + minutes) * 60;
+    if (secs >= 99) {
+        secs = 99;
+    }
+    if (hours > 0 || showHours) {
+        SetDisplayText(MakeString("%02d:%02d:%02d", hours, minutes, secs), true);
+    } else {
+        SetDisplayText(MakeString("%d:%02d", minutes, secs), true);
+    }
+}
 
 bool UILabel::CheckValid(bool warn) {
     if (mFixedLength != 0 && UTF8StrLen(mText.c_str()) > (unsigned int)mFixedLength) {
@@ -406,7 +484,27 @@ bool UILabel::CheckValid(bool warn) {
     return true;
 }
 
-void UILabel::SetEditText(const char *c) {}
+void UILabel::SetEditText(const char *c) {
+    if (!TheLoadMgr.EditMode()) {
+        bool allowed = AllowEditText();
+        if (!allowed) {
+            MILO_FAIL(
+                "Called SetEditText, not in milo and type %s does not allow edit text",
+                Type()
+            );
+        }
+    }
+    unk118 = c;
+    if (unk120 == '\0') {
+        if (unk118.empty()) {
+            SetTextToken(mTextToken);
+        } else {
+            char buf[0x100];
+            ASCIItoUTF8(buf, 0x100, c);
+            SetDisplayText(buf, !TheLoadMgr.EditMode());
+        }
+    }
+}
 
 char const *UILabel::GetDefaultText() const {
     if (unk120 != 0) {
@@ -419,7 +517,20 @@ char const *UILabel::GetDefaultText() const {
         return Localize(mTextToken, nullptr, TheLocale);
 }
 
-void UILabel::CenterWithLabel(UILabel *, bool, float) {}
+void UILabel::CenterWithLabel(UILabel *label, bool b, float f) {
+    MILO_ASSERT(
+        (mAlignment & RndText::kCenter) || (label->mAlignment & RndText::kCenter),
+        0x400
+    );
+    int num = b ? -1 : 1;
+    Transform thisXfm = LocalXfm();
+    Transform otherXfm = label->LocalXfm();
+    float halfF = f * 0.5f;
+    thisXfm.v.x = -((unkbc * 0.5f + halfF) * (float)num - thisXfm.v.x);
+    otherXfm.v.x = (label->unkbc * 0.5f + halfF) * (float)num + otherXfm.v.x;
+    SetLocalXfm(thisXfm);
+    label->SetLocalXfm(otherXfm);
+}
 
 UILabel::LabelStyle &UILabel::LStyle(int i) { return unk124[i]; }
 
@@ -490,7 +601,7 @@ DataNode UILabel::OnSetInt(DataArray const *da) {
 
 DataNode UILabel::OnSetTimeHMS(DataArray const *) { return NULL_OBJ; }
 
-bool UILabel::AllowEditText() const { return false; }
+__declspec(noinline) bool UILabel::AllowEditText() const { return false; }
 
 void UILabel::LabelUpdate(bool b) {
     unk122 = false;
@@ -594,18 +705,17 @@ void UILabel::RefreshFontMat(int i) {
 }
 
 BEGIN_HANDLERS(UILabel)
-    HANDLE_ACTION(set_token_fmt, OnSetTokenFmt(_msg))
-    HANDLE_ACTION(set_prelocalized_string, OnSetPrelocalizedString(_msg))
-    HANDLE_ACTION(set_int, OnSetInt(_msg))
+    HANDLE(set_token_fmt, OnSetTokenFmt)
+    HANDLE(set_prelocalized_string, OnSetPrelocalizedString)
+    HANDLE(set_int, OnSetInt)
     HANDLE_ACTION(set_float, SetFloat(_msg->Str(2), _msg->Float(3)))
-    HANDLE_ACTION(set_time_hms, OnSetTimeHMS(_msg))
+    HANDLE(set_time_hms, OnSetTimeHMS)
     HANDLE_ACTION(center_with_label, CenterWithLabel(_msg->Obj<UILabel>(2), _msg->Int(3), _msg->Float(4)))
     HANDLE_EXPR(get_font_mats, UILabelDir::GetMatVariations(LStyle(_msg->Int(2)).unk14))
-    HANDLE_ACTION(set_height_from_text, OnSetHeightFromText(_msg))
+    HANDLE(set_height_from_text, OnSetHeightFromText)
     HANDLE_EXPR(draw_rect_width, unkbc)
-    HANDLE_ACTION(reload_string, UIComponent::Poll())
+    HANDLE_ACTION(reload_string, SetTextToken(mTextToken))
     HANDLE_SUPERCLASS(UIComponent)
-    HANDLE_SUPERCLASS(RndText)
 END_HANDLERS
 
 // Static initialization for symbol caching - PropSync template for LabelStyle

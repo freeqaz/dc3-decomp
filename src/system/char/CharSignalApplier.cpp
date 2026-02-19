@@ -1,5 +1,8 @@
 #include "char/CharSignalApplier.h"
 #include "char/CharWeightable.h"
+#include "math/Mtx.h"
+#include "math/Rot.h"
+#include "math/Utl.h"
 #include "obj/Object.h"
 
 CharSignalApplier::BoneOp &
@@ -93,7 +96,79 @@ BEGIN_LOADS(CharSignalApplier)
     bs >> mSmoothIncrement;
 END_LOADS
 
-void CharSignalApplier::Poll() {}
+void CharSignalApplier::Poll() {
+    if (mBoneOps.size() == 0)
+        return;
+    float clamped = Clamp(mSignalMin, mSignalMax, mSignal);
+    mSignal = clamped;
+    BoneOp *cur = mBoneOps.begin();
+    if (!mDoSmoothing) {
+        mSmoothedSignal = clamped;
+    } else {
+        float target = mSignal;
+        float smoothed = mSmoothedSignal;
+        if (smoothed != target) {
+            float inc = mSmoothIncrement;
+            if (fabs(target - smoothed) < inc) {
+                mSmoothedSignal = target;
+            } else {
+                if (target > smoothed) {
+                    mSmoothedSignal = inc + smoothed;
+                } else {
+                    mSmoothedSignal = smoothed - inc;
+                }
+            }
+        }
+    }
+    mSmoothedSignal *= Weight();
+    if (cur != mBoneOps.end()) {
+        do {
+            BoneOp op(this);
+            op = *cur;
+            RndTransformable *bone = op.mBone;
+            if (bone) {
+                Transform boneTf;
+                memcpy(&boneTf, &bone->WorldXfm(), sizeof(Transform));
+                float t = 1.0f;
+                if (mSignalMax != mSignalMin) {
+                    t = (mSmoothedSignal * op.mApplyPercent - mSignalMin)
+                        / (mSignalMax - mSignalMin);
+                }
+                float angle
+                    = ((op.mMaxAngle - op.mMinAngle) * t + op.mMinAngle) * DEG2RAD;
+                Hmx::Matrix3 rotMatX, rotMatY, rotMatZ;
+                Hmx::Matrix3 *rotMat;
+                switch ((unsigned int)op.mOp) {
+                case 0:
+                    MakeRotMatrixX(angle, rotMatX);
+                    rotMat = &rotMatX;
+                    break;
+                case 1:
+                    MakeRotMatrixY(angle, rotMatY);
+                    rotMat = &rotMatY;
+                    break;
+                default:
+                    MakeRotMatrixZ(angle, rotMatZ);
+                    rotMat = &rotMatZ;
+                    break;
+                }
+                Multiply(*rotMat, boneTf.m, boneTf.m);
+                RndTransformable *parent = bone->TransParent();
+                if (parent) {
+                    Transform invParent;
+                    Invert(parent->WorldXfm(), invParent);
+                    Vector3 savedV = bone->LocalXfm().v;
+                    Transform localTf;
+                    Multiply(boneTf, invParent, localTf);
+                    Normalize(localTf.m, localTf.m);
+                    localTf.v = savedV;
+                    bone->DirtyLocalXfm() = localTf;
+                }
+            }
+            cur++;
+        } while (cur != mBoneOps.end());
+    }
+}
 
 void CharSignalApplier::PollDeps(std::list<Hmx::Object *> &a, std::list<Hmx::Object *> &b) {
     for (size_t i = 0; i < mBoneOps.size(); i++) {

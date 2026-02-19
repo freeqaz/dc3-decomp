@@ -32,6 +32,8 @@ public:
     virtual void ListAnimChildren(std::list<RndAnimatable *> &) const;
     // RndPollable: `this` at 0x50
     virtual void ListPollChildren(std::list<RndPollable *> &) const;
+    virtual void DrawBefore() {}
+    virtual void DrawAfter() {}
 
     OBJ_MEM_OVERLOAD(0x1A)
     NEW_OBJ(RndTexRenderer)
