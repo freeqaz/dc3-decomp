@@ -16,37 +16,42 @@ We're running the original DC3 XEX in xenia-headless to compare behavior between
 
 Multi-frame capture is fully operational. 14+ captures per run confirmed with deferred draws, 15-35ms readback latency per frame.
 
-### debug.xex: BOOTS SUCCESSFULLY (2026-02-20)
+### debug.xex: BOOTS TO MAIN MENU (2026-02-20)
 
-The DC3 debug build now boots past all SDK initialization barriers with `--stub_nui_functions=true`:
+The DC3 debug build boots to the main menu with `--stub_nui_functions=true` + scripted input:
 
 - **60 guest memory patches** applied (57 NUI + 3 XBC/SmartGlass)
-- Shows DC3 loading animation (magenta sine wave), transitions to main game loop
-- 26 threads spawned, 10K+ VdSwap cycles, 100+ frame captures in 90 seconds
-- Same deferred rendering quality issues as retail XEX (dark red/black color corruption)
-- No MILO_ASSERT failures, no crashes during sustained 90-second runs
+- **XEnumerate fix**: `ERROR_NO_MORE_FILES` mapped to `SUCCESS` with count=0 (was crashing `CacheMgrXbox::PollSearch`)
+- Boot sequence: DC logo → Harmonix splash → Fitness HUD → **DC3 Main Menu** → Kinect player detection
+- Game reaches "THE PARTY" main menu screen, then waits for Kinect player detection
+- 26 threads, 7800+ frames in 140s, 26 captures, no crashes
+- **Current blocker**: Kinect player detection screen (needs fake skeleton data)
 
-**Previously**: Halted on `NuiInitialize` failure (error `0x8301000b`), then on "Failed to initialize Xbox SmartGlass library."
+**Previously**: Halted on `NuiInitialize` failure, then SmartGlass init, then `CacheMgrXbox::PollSearch() error 18`.
 
 ### default.xex (retail)
 
 - Works correctly. DC logo boot animation renders with deferred draw cache fix.
 - Build info from debug screen: Build 120916, Plat: xbox, SystemConfig: config/ham_preinit_keep.dta
 
-### Rendering Quality: PARTIALLY FIXED
+### Rendering Quality: VERIFIED WORKING (2026-02-20)
 
-Cache invalidation fix applied — deferred draws now produce real rendered content (151K bright pixels, R=255 warm tones) instead of flat B=0x3F.
+Two rendering issues identified and fixed, now **verified with visual inspection**:
+1. **Cache invalidation** (Feb 20): Deferred draws now produce real content instead of flat B=0x3F
+2. **Readback correction** (Feb 20): Channel swizzle + sRGB gamma correction applied to PPM output
 
 | Mode | Behavior | Render Quality |
 |------|----------|----------------|
 | **Inline draws** (Feb 19) | Deadlocks at frame 12 | Correct DC logo (orange/gold neon) |
 | **Deferred draws** (Feb 20, pre-fix) | Runs indefinitely | Wrong colors (solid B=0x3F everywhere) |
-| **Deferred draws** (Feb 20, post-fix) | Runs indefinitely, 16+ threads | **Real content: 525 unique colors, R=255 warm tones** |
+| **Deferred draws** (Feb 20, cache fix) | Runs indefinitely, 16+ threads | Real content but very dark (linear-space, wrong channel order) |
+| **Deferred draws** (Feb 20, full fix) | Runs indefinitely | **Correct rendering: 220K unique colors, full game scenes** |
 | **Force_all_draws** (Feb 20) | Runs indefinitely, 16+ threads | Flat R=2,G=1,B=2 (different failure mode) |
 
-**Root cause (B=0x3F)**: `FlushDeferredDraws()` raw memcpy bypassed `WriteRegister()` side effects, leaving constant buffer and texture binding caches stale. Fix: invalidate `current_constant_buffers_up_to_date_` and `texture_bindings_in_sync_` after register restore.
+**Root cause 1 (B=0x3F)**: `FlushDeferredDraws()` raw memcpy bypassed `WriteRegister()` side effects.
+**Root cause 2 (dark frames)**: `vkCmdCopyImageToBuffer` bypassed VkImageView swizzle; missing gamma correction.
 
-**Remaining**: Overall frame still dark despite real content — possible gamma ramp or readback format issue.
+**No display server needed**: xenia-headless works fully headless — Vulkan initializes without DISPLAY env var (tested with RTX 3090).
 
 ### Screenshots Captured
 
@@ -64,20 +69,23 @@ DC3 boot animation successfully rendered (single capture per run due to frame 12
 | 275 | DC card tilting/shrinking — animation ending |
 | 300+ | Screen transition (half black / half dark red) |
 
-#### Debug XEX — Deferred Draws with NUI Stubs (Feb 20)
+#### Debug XEX — With Scripted Input (Feb 20, cache fix + rendering fix)
 
-100+ captures across 5200 swaps (90 seconds). Game boots through loading and enters main loop.
+26 captures across 7800+ frames (140 seconds). Game boots to **main menu** with scripted START+A presses.
 
 | Frame | Content |
 |-------|---------|
-| 50-100 | Black (startup) |
-| 150-200 | Golden vertical line (UI transition effect) |
-| 250-350 | DC3 logo/icon appearing in golden frame |
-| 450-550 | **DC3 loading animation** (magenta sine wave — unmistakable) |
-| 650-750 | Loading animation fading, red/black diagonal transition |
-| 800-950 | Dark red fullscreen, scanline patterns |
-| 1000+ | Alternating dark red / black / split screens with geometric patterns |
-| 2500-5000 | Continues cycling (game is alive, rendering corrupted by deferred draw issue) |
+| 300 | **DC3 neon card logo** — boot animation with reflection |
+| 750 | **Harmonix splash screen** — "EXIT CONTROLLER MODE" / "SELECT" prompts |
+| 900 | **Fitness HUD** — Kinect body silhouettes, debug: "DataNode::Equal: 0.00 and dance_battle (kDataFloat/kDataSymbol) not compatible" |
+| 1200 | **DC3 MAIN MENU** — "DANCE CENTRAL 3" title, "MAIN MENU", "THE PARTY" visible! |
+| 1800-3600 | **Kinect player detection** — body silhouette zones waiting for players (black screen) |
+| 6000 | Title screen again (cycled back after no player detection) |
+| 7800 | Blue/black split screen transition |
+
+**Without scripted input** (attract mode): Game enters demo/teaser loop — loading animation → 3D gameplay demo (220K unique colors, 848 draws) → loop.
+
+**With scripted input** (START+A every 5s): Game navigates boot → splash → main menu → stuck on Kinect player detection.
 
 ### Performance Summary
 
@@ -106,25 +114,25 @@ DC3 boot animation successfully rendered (single capture per run due to frame 12
 
 These are the remaining barriers between "game boots" and "game is playable":
 
-#### 1. Deferred Draw Rendering Quality (affects both retail and debug XEX)
+#### 1. Deferred Draw Rendering Quality: FIXED AND VERIFIED
 
-The primary blocker. Deferred draws produce dark red/black output instead of correct colors. The game IS running (frames change, geometric patterns animate, 26 threads active) but the rendered output is too corrupted to see menus or UI.
+Two root causes identified, fixed, and **visually verified**:
+1. **Cache invalidation** — constant buffers + texture bindings invalidated after deferred draw register restore
+2. **Readback correction** — VkImageView swizzle applied CPU-side + sRGB gamma correction LUT
 
-**Symptoms**: Captures show solid dark red, black, red/black split screens, and occasionally scanline/geometric patterns. Early boot frames (loading animation) render recognizably (magenta sine wave, DC3 logo icon), but main game rendering is broken.
+Captures show correct DC3 game content: loading animation, 3D environments, dancers, HUD, debug text. 220K unique colors at gameplay frames. No display server required.
 
-**Root cause**: Partially fixed (B=0x3F cache invalidation), but remaining issues include:
-- Gamma ramp not applied in readback path
-- Possible format conversion issue in staging buffer copy
-- EDRAM resolve may not be producing correct output for all render target configs
-- `force_all_draws` mode produces uniform R=2,G=1,B=2 (different failure)
+**Minor remaining**: `force_all_draws` mode produces uniform R=2,G=1,B=2 (different failure mode, lower priority).
 
-**Impact**: Cannot see game menus, cannot determine what screen the game is on, cannot plan scripted input sequences.
+#### 2. Kinect Player Detection (NEW PRIMARY BLOCKER)
 
-#### 2. No Controller Input in Headless Mode
+The game reaches the main menu with scripted input but then transitions to the Kinect player detection screen, waiting for `NuiSkeletonGetNextFrame` to return tracked skeleton data. Without this, the game loops between title screen and player detection indefinitely.
 
-Headless mode uses nop HID (no input devices). The game likely reaches a "Press Start" or title screen and waits. Scripted input (`--scripted_input='5s:A,7s:START'`) exists but requires knowing what screen the game is on — blocked by rendering quality.
+**Fix path**: Implement fake Kinect skeleton data injection. `NuiSkeletonGetNextFrame` currently returns `E_UNEXPECTED` — change it to return `S_OK` with a valid `NUI_SKELETON_FRAME` containing a tracked player in T-pose. Gate behind `--fake_kinect_data=true`.
 
-**Workaround path**: Fix rendering → identify screens → craft input sequence → automate boot to gameplay.
+#### 3. Controller Input for Menu Navigation: WORKING
+
+Scripted input (`--scripted_input='15s:START,20s:A,...'`) successfully navigates boot → splash → main menu. The game responds to START and A button presses at the right timing.
 
 #### 3. Missing devkit: Device (debug.xex only)
 
@@ -224,6 +232,15 @@ Frame N (CAPTURE):
 ```
 
 ## Changes Made
+
+### XEnumerate NO_MORE_FILES Fix (completed) — CACHE SEARCH CRASH FIX
+
+**Root cause of CacheMgrXbox::PollSearch() crash**: DC3's `PollSearch()` calls `XGetOverlappedResult` after async `XEnumerate`. When xenia's enumerator had no items, `WriteItems` returned `X_ERROR_NO_MORE_FILES` (0x12 = decimal 18). DC3 only handles result codes 0 and 0x65B, treating 18 as fatal (`MILO_FAIL`).
+
+On real Xbox 360, empty enumeration completes with `ERROR_SUCCESS` and count=0, not `NO_MORE_FILES`.
+
+**File modified:**
+- `src/xenia/kernel/xam/xam_enum.cc` — Map `X_ERROR_NO_MORE_FILES` to `X_ERROR_SUCCESS` with count=0 in the `xeXamEnumerate` overlapped completion lambda
 
 ### NUI + SmartGlass Guest Memory Stubbing (completed) — DEBUG XEX BOOT FIX
 
@@ -421,14 +438,59 @@ texture_cache_->ResetTextureBindingsInSync();
 
 ### Remaining Issues
 
-1. **Overall frame darkness**: While content is real, most of the frame is very dark (max brightness in top colors is R=17, G=3, B=7 outside the hot spot). Possible causes:
-   - Gamma ramp not applied in readback path
-   - Format conversion issue in staging buffer copy
-   - Readback endianness partially wrong
+1. **E10 (force_all_draws) flat color**: Produces uniform R=2,G=1,B=2. Different failure from E20 — may be capture timing or different draw scheduling path.
 
-2. **E10 (force_all_draws) flat color**: Produces uniform R=2,G=1,B=2. Different failure from E20 — may be capture timing or different draw scheduling path.
+2. **Inline draw deadlock**: Still present at frame 12 (not tested post-fix).
 
-3. **Inline draw deadlock**: Still present at frame 12 (not tested post-fix).
+### Frame Darkness Root Cause Analysis (2026-02-20)
+
+Deep investigation of the dark frame issue revealed TWO contributing factors:
+
+#### 1. Channel Order Mismatch (VkImageView Swizzle Bypass)
+
+**The rendering pipeline:**
+```
+Game draws → EDRAM → Resolve (IssueCopy) → guest memory
+→ RequestSwapTexture → VkImage (via compute load shader) → readback → PPM
+```
+
+The compute load shader (`kLoadShaderIndex32bpb`) copies 32bpp guest data after endian swap (k_8in32 = full byte reversal) directly into a `VK_FORMAT_R8G8B8A8_UNORM` VkImage. The byte order in the VkImage depends on the guest format's endian convention.
+
+In the **normal xenia path**, the swap texture is sampled through a `VkImageView` that applies a component mapping (swizzle) to reorder channels correctly. The headless readback used `vkCmdCopyImageToBuffer` which bypasses the VkImageView and reads raw image bytes.
+
+**Fix**: Store the host swizzle computed by `RequestSwapTexture` (via `GuestToHostSwizzle(fetch.swizzle, GetHostFormatSwizzle(key))`), then apply the same channel reordering on the CPU side when writing PPM pixels.
+
+#### 2. Missing Gamma Correction
+
+In the **normal xenia path**, IssueSwap renders the swap texture through a gamma correction shader (`apply_gamma_table.ps.xesl`) that maps linear-space render target values through the game's gamma ramp lookup table. The gamma application pipeline (`swap_apply_gamma_render_pass_`, `swap_apply_gamma_pwl_pipeline_`, etc.) is initialized even in headless mode, but was never invoked.
+
+The game stores render target values in linear space. Without gamma correction, these values are extremely dark when viewed directly (mean brightness 3.55/255 for frame 50, with max=255 for some pixels).
+
+**Fix (v1)**: Apply CPU-side sRGB gamma correction (`linear → sRGB` conversion) to each channel. This approximates the game's gamma ramp.
+
+**Upgrade path (v2)**: The game writes custom gamma ramps via `DC_LUT_RW_INDEX`/`DC_LUT_RW_DATA` registers. The 256-entry table is already maintained by the command processor (`gamma_ramp_256_entry_table_`). For exact results, either:
+- Read the actual gamma ramp table on the CPU side and build a game-specific LUT
+- Connect the existing GPU-side gamma pipeline (`swap_apply_gamma_render_pass_`, `swap_apply_gamma_256_entry_table_pipeline_`) to the headless readback path
+
+#### Implementation
+
+**Files modified:**
+- `src/xenia/gpu/vulkan/vulkan_texture_cache.h` — Added `last_swap_host_swizzle_` member and `GetLastSwapHostSwizzle()` getter
+- `src/xenia/gpu/vulkan/vulkan_texture_cache.cc` — Store computed host swizzle in `RequestSwapTexture()`
+- `src/xenia/gpu/vulkan/vulkan_command_processor.cc` — PPM writer now:
+  - Reads the host swizzle and reorders channels accordingly
+  - Applies sRGB gamma correction via lookup table
+  - Logs fetch constant details (endianness, guest swizzle, host swizzle)
+  - Saves both corrected (`frame_NNNN.ppm`) and raw (`frame_NNNN_raw.ppm`) for comparison
+
+#### Key Architecture Insight
+
+The normal xenia swap texture display always passes through:
+1. `RequestSwapTexture()` → VkImageView with swizzle correction
+2. Gamma application render pass → shader samples through VkImageView, applies gamma LUT
+3. Presenter → renders gamma-corrected image to screen
+
+The headless path was only doing step 1 (partially — got VkImage but not view), then reading raw bytes. The fix applies steps 1+2 equivalent on the CPU side.
 
 ### Previously Tested Hypotheses
 
@@ -436,16 +498,19 @@ texture_cache_->ResetTextureBindingsInSync();
 |-----------|--------|
 | BeginSubmission blocking causes deadlock | NO — hangs with both blocking and non-blocking |
 | VBlank missing in headless | NO — VSync worker fires every 16ms |
-| Format/endian mismatch in capture pipeline | NO — raw bytes confirm correct R8G8B8A8 interpretation |
+| Format/endian mismatch in capture pipeline | PARTIALLY — VkImageView swizzle bypass causes channel reorder |
 | Missing barriers between draws and resolve | NO — added EndSubmission + AwaitAll |
 | **Stale constant/texture cache in deferred replay** | **YES — ROOT CAUSE. Fixed with cache invalidation.** |
+| **Missing gamma correction in readback** | **YES — linear-space values too dark without gamma.** |
+| **VkImageView swizzle bypassed by vkCmdCopyImageToBuffer** | **YES — raw bytes in wrong channel order.** |
 
-### Next Debugging Steps
+### Verified Results (2026-02-20)
 
-1. **Gamma ramp investigation** — check if gamma ramp tables are applied during readback, compare raw EDRAM values vs post-gamma
-2. **Vulkan validation** (`--vulkan_validation`) — verify no API errors in deferred replay path
-3. **Inline draw comparison** — if deadlock can be worked around, compare inline vs deferred output quality
-4. **Dense capture** — capture every 10 frames to see rendering progression through boot animation
+The rendering fix has been **visually confirmed** via headless captures (no display server needed):
+- Loading animation: Harmonix glowing orb with magenta energy trails
+- Gameplay: 3D club environment, dancers, props, HUD overlay with debug text
+- 220K unique colors at gameplay frames, correct DC3 purple/blue/magenta palette
+- Raw frames (pre-fix) show clear R/B swap with red/orange tones — swizzle correction verified
 
 ## Available Xenia Debug Flags
 
@@ -465,33 +530,49 @@ Useful flags for debugging the rendering pipeline:
 
 ## Next Steps
 
-### Priority 1: Fix Deferred Draw Rendering Quality
+### Priority 1: COMPLETE — Rendering Fix Verified
 
-The primary blocker for both retail and debug XEX. Deferred draws produce dark red/black output instead of correct colors. The game IS running (26 threads, 10K+ swaps, changing frames) but rendered output is too corrupted to see UI/menus.
+Rendering pipeline fully operational. Captures show correct DC3 game content across boot → loading → gameplay. Both channel swizzle and gamma correction working. No display server needed.
 
-**Approach: Research first, then fix.** We partially fixed one symptom (B=0x3F stale cache) but don't fully understand xenia's deferred draw replay path, render target management, or EDRAM resolve pipeline. The next session should start with reading and understanding the relevant xenia code before attempting fixes.
+**Upgrade path (optional)**: Replace CPU-side sRGB approximation with game's actual gamma ramp via `gamma_ramp_256_entry_table_` for exact color reproduction. Current sRGB is good enough for testing.
 
-Research phase:
-1. **Read `FlushDeferredDraws()`** end-to-end — understand the full register save/restore, draw replay, and resolve flow
-2. **Read `WriteRegister()` override** in VulkanCommandProcessor — identify ALL side effects that raw memcpy bypasses (not just constant buffers and texture bindings)
-3. **Read the EDRAM resolve path** — understand how `IssueCopy()` converts EDRAM tile data to linear textures for presentation
-4. **Read the readback/capture path** — understand how `RequestSwapTexture()` gets the final framebuffer for PPM output
-5. **Compare with upstream xenia** — understand what our headless changes modify vs stock behavior
+### Priority 2: Menu Navigation via Scripted Input
 
-Investigation phase (after research):
-1. **Vulkan validation** — run with `--vulkan_validation` to catch API errors in deferred replay
-2. **Gamma ramp investigation** — verify gamma correction is applied in readback path
-3. **Cache invalidation experiment** — try full cache clear before deferred draws
-4. **E10 flat color diagnosis** — investigate why `force_all_draws` produces uniform R=2,G=1,B=2
-5. **Inline vs deferred comparison** — if deadlock can be worked around, compare output quality
+The game reaches demo/teaser mode without input. Use `--scripted_input` to navigate:
+1. To main menu (may need specific timing/buttons)
+2. Through song selection
+3. Into gameplay — this exercises the most code paths
 
-### Priority 2: Boot Screen Advancement
+### Priority 3: Automated Regression Testing
 
-Once rendering is readable, use scripted input to navigate:
-1. Past DC logo (boot animation ends ~frame 275)
-2. Through "Press Start" / title screen
-3. To main menu — this is where the game exercises most code paths
+Build a test harness that:
+1. Boots DC3 debug.xex headlessly
+2. Captures frames at known intervals
+3. Compares against reference screenshots (pixel hashing or perceptual diff)
+4. Reports rendering regressions as decomp code changes
 
-### Priority 3: PE Override
+### Priority 4: PE Override
 
 Generate COMDAT order file from original map to enable matching linker layout for PE override. This would allow running our decomp code against the original game's data.
+
+### Stretch Goal: Fake Kinect Support for Testing
+
+DC3 is a Kinect game — many code paths depend on NUI (Natural User Interface) SDK functions. Current NUI stubs return S_OK/E_UNEXPECTED to prevent crashes, but the game can't exercise dance/fitness code without simulated Kinect data.
+
+**MVP approach**: Fake Kinect skeleton data injection:
+1. Implement `NuiSkeletonGetNextFrame` to return pre-recorded or procedurally generated skeleton data
+2. Provide synthetic body tracking (20 joint positions per player, 1-2 players)
+3. Feed recorded dance move sequences from captured `.xsf` (Xbox Skeleton File) or custom format
+4. Allow scripted skeleton poses timed to game events (like scripted controller input)
+
+**Benefits for decomp testing**:
+- Exercise `CharBones`, `CharServoBone`, `CharIKHand`, `CharIKFoot` and other character animation code
+- Test fitness mode code paths (`FITNESS_HUD.MILO`, calorie tracking)
+- Validate Kinect-dependent UI flows (player detection, pose calibration, move scoring)
+- Enable automated gameplay testing with pre-recorded dance sequences
+
+**Implementation path**:
+1. Extend `NuiSkeletonGetNextFrame` stub to fill `NUI_SKELETON_FRAME` with valid joint positions
+2. Set tracking state to `NUI_SKELETON_TRACKED` for player 1
+3. Provide T-pose as default, with option for scripted skeleton sequences
+4. Gate behind `--fake_kinect_data=true` cvar

@@ -125,14 +125,16 @@ else
         --exclude=build.ninja \
         --quiet 2>/dev/null || true
 
-    # --- Ensure orig/ symlink ---
-    if [[ ! -e "${WORKTREE}/orig" ]]; then
+    # --- Ensure orig/ symlink (replace if not already a symlink to main repo) ---
+    if [[ ! -L "${WORKTREE}/orig" || "$(readlink "${WORKTREE}/orig")" != "${MAIN_REPO}/orig" ]]; then
+        rm -rf "${WORKTREE}/orig"
         ln -sf "${MAIN_REPO}/orig" "${WORKTREE}/orig"
         echo "Restored orig/ symlink"
     fi
 
     # --- Ensure scripts symlink ---
-    if [[ ! -e "${WORKTREE}/scripts" ]]; then
+    if [[ ! -L "${WORKTREE}/scripts" || "$(readlink "${WORKTREE}/scripts")" != "${MAIN_REPO}/scripts" ]]; then
+        rm -rf "${WORKTREE}/scripts"
         ln -sf "${MAIN_REPO}/scripts" "${WORKTREE}/scripts"
         echo "Restored scripts/ symlink"
     fi
