@@ -139,12 +139,18 @@ else
         echo "Restored scripts/ symlink"
     fi
 
-    # --- Ensure build tools are available (avoid re-downloading dtk) ---
-    if [[ -d "${MAIN_REPO}/build/tools" && ! -d "${WORKTREE}/build/tools" ]]; then
-        mkdir -p "${WORKTREE}/build"
-        cp -a "${MAIN_REPO}/build/tools" "${WORKTREE}/build/tools"
-        echo "Copied build/tools/"
+    # --- Ensure build tools and compilers are available (avoid downloads) ---
+    mkdir -p "${WORKTREE}/build/tools"
+    for tool in "${MAIN_REPO}/build/tools"/*; do
+        dest="${WORKTREE}/build/tools/$(basename "$tool")"
+        [[ -f "$dest" ]] || cp "$tool" "$dest"
+    done
+    if [[ -d "${MAIN_REPO}/build/compilers" && ! -d "${WORKTREE}/build/compilers" ]]; then
+        ln -sf "${MAIN_REPO}/build/compilers" "${WORKTREE}/build/compilers"
     fi
+    # Copy current download_tool.py (has existence check to skip downloads)
+    cp "${MAIN_REPO}/tools/download_tool.py" "${WORKTREE}/tools/download_tool.py"
+    echo "Synced build tools"
 
     # --- Reconfigure for baseline's file set ---
     echo "Reconfiguring baseline..."
