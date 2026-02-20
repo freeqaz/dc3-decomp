@@ -401,26 +401,22 @@ namespace {
             char charBuf[256];
             charBuf[0] = '\0';
 
-            if (tokenType > 4 && (tokenType < 7 || tokenType == 10)) {
+            if ((int)tokenType >= 5 && ((int)tokenType <= 6 || tokenType == 10)) {
                 wchar_t wcharBuf[128];
                 XJSONGetTokenValue(reader, wcharBuf, 0x80);
                 wcstombs(charBuf, wcharBuf, 0x100);
             }
 
             switch (tokenType) {
-            case kJSONTokenBeginArray: {
-                DataArrayPtr sub = JsonToDta(reader, false);
-                node = DataNode(sub);
+            case kJSONTokenBeginArray:
+                node = DataNode(JsonToDta(reader, false));
                 break;
-            }
             case kJSONTokenEndArray:
             case kJSONTokenEndMap:
                 return container;
-            case kJSONTokenBeginMap: {
-                DataArrayPtr sub = JsonToDta(reader, false);
-                node = DataNode(sub);
+            case kJSONTokenBeginMap:
+                node = DataNode(JsonToDta(reader, false));
                 break;
-            }
             case kJSONTokenString:
                 node = DataNode(charBuf);
                 break;
@@ -435,6 +431,8 @@ namespace {
                 node = DataNode(1);
                 break;
             case kJSONTokenFalse:
+                node = DataNode(0);
+                break;
             case kJSONTokenNull:
                 node = DataNode(0);
                 break;

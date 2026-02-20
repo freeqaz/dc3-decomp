@@ -753,11 +753,14 @@ void UILabel::SetFontMat(char const *c, int i) {
 }
 
 char const *UILabel::GetFontMat(int i) {
+    RndFontBase *font = NULL;
+    if ((unsigned int)i < mStyles.size()) {
+        font = mStyles[i].mFont;
+    }
     LabelStyle &ls = LStyle(i);
     UILabelDir *dir = ls.unk14;
     if (dir) {
-        RndText::Style &s = Style(i);
-        return dir->GetMatVariationName(s.mFont);
+        return dir->GetMatVariationName(font);
     }
     return "";
 }

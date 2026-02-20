@@ -143,7 +143,13 @@ void UILabelDir::PostLoad(BinStream &bs) {
 
 bool UILabelDir::AllowEditText() const { return mAllowEditText; }
 
-RndFontBase *UILabelDir::FontObj(Symbol s) const { return nullptr; }
+RndFontBase *UILabelDir::FontObj(Symbol s) const {
+    if (NumGennedFonts() > 0) {
+        return GetGennedFont(s);
+    }
+    TheDebug.Notify(MakeString("%s has no genned fonts", PathName(this)));
+    return nullptr;
+}
 
 UIColor *UILabelDir::GetStateColor(UIComponent::State state) const {
     MILO_ASSERT(state < UIComponent::kNumStates, 0x39);
