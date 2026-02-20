@@ -15,6 +15,7 @@
 #include "rndobj/Cam.h"
 #include "ui/CheatProvider.h"
 #include "utl/Cheats.h"
+#include "utl/FilePath.h"
 #include "ui/InlineHelp.h"
 #include "ui/LabelNumberTicker.h"
 #include "ui/LabelShrinkWrapper.h"
@@ -380,7 +381,22 @@ void UIManager::PopScreen(UIScreen *screen) {
     }
 }
 
-DataNode UIManager::OnIsResource(DataArray *arr) { return 0; }
+DataNode UIManager::OnIsResource(DataArray *arr) {
+    Symbol sym = arr->Sym(3);
+    static Symbol objects("objects");
+    static Symbol resources_path("resources_path");
+    DataArray *cfg = SystemConfig(objects, sym);
+    DataArray *rsrcArr = cfg->FindArray(resources_path, false);
+    if (rsrcArr) {
+        FilePath rsrcPath(FileMakePath(FileGetPath(rsrcArr->File()), rsrcArr->Str(1)));
+        FilePath inputPath(FileRoot(), arr->Str(2));
+        if (rsrcPath == FileGetPath(inputPath.c_str()))
+            return 1;
+    } else {
+        MILO_NOTIFY("%s does not have a resources_path set", sym);
+    }
+    return 0;
+}
 
 DataNode UIManager::OnGotoScreen(DataArray const *arr) {
     Hmx::Object *obj = arr->GetObj(2);

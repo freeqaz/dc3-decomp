@@ -451,7 +451,28 @@ void UIList::CompleteScroll(UIListState const &state) {
     }
 }
 
-DataNode UIList::OnSetSelected(DataArray *) { return NULL_OBJ; }
+DataNode UIList::OnSetSelected(DataArray *da) {
+    DataNode node = da->Evaluate(2);
+    int i6 = -1;
+    if (node.Type() == kDataInt) {
+        if (da->Size() == 4)
+            i6 = da->Int(3);
+        SetSelected(node.Int(), i6);
+        return 1;
+    } else if (node.Type() == kDataSymbol || node.Type() == kDataString) {
+        int i3;
+        if (da->Size() == 4)
+            i3 = da->Int(3);
+        else
+            i3 = 1;
+        if (da->Size() == 5)
+            i6 = da->Int(4);
+        return SetSelected(node.ForceSym(), i3 != 0, i6);
+    } else {
+        MILO_FAIL("bad arg to set_selected");
+        return 0;
+    }
+}
 
 void UIList::PreLoad(BinStream &bs) {
     LOAD_REVS(bs)
