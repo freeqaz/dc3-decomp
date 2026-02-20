@@ -55,12 +55,26 @@ The script does three passes:
 
 Save after. One-time operation.
 
-## 4. Other Scripts
+## 4. String Search with Xrefs
 
-Also in `tools/ghidra/`:
+[`SearchString.java`](../../tools/ghidra/SearchString.java) — finds strings matching a pattern and shows which functions reference each one. More useful than Ghidra's built-in string search because it resolves xrefs inline instead of making you click through each string.
 
-- **`SearchString.java`** — search defined strings + raw memory by pattern. CLI wrapper: `./tools/ghidra/search-string.sh "pattern"`
-- **`StringSearch.java`** — dump memory blocks and enumerate defined strings
+```
+GUI:      Script Manager > Search > SearchString (prompts for pattern)
+Headless: ./tools/ghidra/search-string.sh "CharBones"
+```
+
+Example output:
+```
+  828a1234: "CharBones::PoseMeshes"
+    <- CharBones::PoseMeshes (82348700)
+    <- CharBones::Save (82348a20)
+
+  828a5678: "CharBones.milo"
+    <- DirLoader::OpenFile (82401200)
+```
+
+Also searches raw memory for ASCII patterns that Ghidra's auto-analysis didn't identify as strings (skips duplicates from the defined strings pass).
 
 ## Reading PPC Decompilation
 

@@ -1,17 +1,17 @@
 #!/bin/bash
-# Search for strings in DC3 Ghidra project
+# Search for strings (with xrefs) in DC3 Ghidra project — headless wrapper
 #
 # Usage: ./tools/ghidra/search-string.sh <pattern>
 #
-# Examples:
-#   ./tools/ghidra/search-string.sh dance
-#   ./tools/ghidra/search-string.sh "App.cpp"
+# Requires: GHIDRA_INSTALL_DIR set, and ghidra_projects/DC3 created via import-xex.sh
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
-GHIDRA="/opt/ghidra/support/analyzeHeadless"
+
+GHIDRA_INSTALL_DIR="${GHIDRA_INSTALL_DIR:-/opt/ghidra}"
+GHIDRA="$GHIDRA_INSTALL_DIR/support/analyzeHeadless"
 
 PROJECT_LOC="$PROJECT_DIR/ghidra_projects"
 PROJECT_NAME="DC3"
@@ -19,16 +19,25 @@ PROJECT_NAME="DC3"
 if [[ $# -eq 0 ]]; then
     echo "Usage: $0 <pattern>"
     echo ""
+    echo "Searches defined strings and raw memory, shows function xrefs."
     echo "Examples:"
-    echo "  $0 dance"
+    echo "  $0 CharBones"
     echo "  $0 \"App.cpp\""
+    echo "  $0 milo_assert"
     exit 1
 fi
 
 PATTERN="$1"
 
+if [[ ! -x "$GHIDRA" ]]; then
+    echo "Error: analyzeHeadless not found at $GHIDRA"
+    echo "Set GHIDRA_INSTALL_DIR to your Ghidra installation."
+    exit 1
+fi
+
 if [[ ! -f "$PROJECT_LOC/$PROJECT_NAME.gpr" ]]; then
-    echo "Error: Project not found. Run import-xex.sh first."
+    echo "Error: Project not found at $PROJECT_LOC/$PROJECT_NAME.gpr"
+    echo "Run import-xex.sh first."
     exit 1
 fi
 
@@ -37,4 +46,4 @@ fi
     -scriptPath "$SCRIPT_DIR" \
     -postScript SearchString.java "$PATTERN" \
     -noanalysis \
-    2>&1 | grep -E "(Searching|===|Found|  [0-9a-f]{8}:)"
+    2>&1 | grep -E "(Searching|===|Found|matching|raw memory|  [0-9a-f]{8}:|    <-)"

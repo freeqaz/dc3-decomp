@@ -11,7 +11,8 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
-GHIDRA="/opt/ghidra/support/analyzeHeadless"
+GHIDRA_INSTALL_DIR="${GHIDRA_INSTALL_DIR:-/opt/ghidra}"
+GHIDRA="$GHIDRA_INSTALL_DIR/support/analyzeHeadless"
 
 XEX="$PROJECT_DIR/orig/373307D9/default.xex"
 MAP="$PROJECT_DIR/orig/373307D9/ham_xbox_r.map"
