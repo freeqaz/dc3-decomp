@@ -566,8 +566,12 @@ void UILabel::SetTokenFmtImp(
     Symbol s, const DataArray *da1, const DataArray *da2, int i, bool b
 ) {}
 
-DataNode UILabel::OnSetPrelocalizedString(DataArray const *da) {
-    return NULL_OBJ;
+DataNode UILabel::OnSetPrelocalizedString(DataArray const *arr) {
+    const DataNode &stringNode = arr->Node(2).Evaluate();
+    MILO_ASSERT(stringNode.Type() == kDataString, 0x386);
+    String str(stringNode.Str(0));
+    SetPrelocalizedString(str);
+    return 1;
 }
 
 DataNode UILabel::OnSetTokenFmt(const DataArray *da) {
@@ -599,7 +603,16 @@ DataNode UILabel::OnSetInt(DataArray const *da) {
     return DataNode(1);
 }
 
-DataNode UILabel::OnSetTimeHMS(DataArray const *) { return NULL_OBJ; }
+DataNode UILabel::OnSetTimeHMS(DataArray const *arr) {
+    int val;
+    if (arr->Node(2).Type() == kDataFloat) {
+        val = (int)arr->Float(2);
+    } else {
+        val = arr->Int(2);
+    }
+    SetTimeHMS(val, true);
+    return 1;
+}
 
 __declspec(noinline) bool UILabel::AllowEditText() const { return false; }
 

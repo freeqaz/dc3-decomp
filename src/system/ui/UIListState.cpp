@@ -318,6 +318,8 @@ bool UIListState::ShouldHoldDisplayInPlace(int i2) const {
     return false;
 }
 
+// TODO: BuildScroll 95.2%, Scroll 81.9% — remaining mismatches are register swaps and
+// comparison operand order. Could try more variable reordering but diminishing returns.
 bool UIListState::BuildScroll(int direction, int firstShowing, int selectedDisplay, ScrollState &state) const {
     state.mFirstShowing = firstShowing;
     state.mSelectedDisplay = selectedDisplay;

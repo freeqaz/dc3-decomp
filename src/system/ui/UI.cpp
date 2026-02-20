@@ -662,6 +662,11 @@ void UIManager::Init() {
     TheKnownIssues.Init();
 }
 
+// TODO: these small handlers are inlined into UIManager::Handle (0xCE4 bytes, 55.8% match).
+// RB3 equivalents: set_sink=HANDLE_MEMBER_PTR(mSink), push_screen=PushScreen(Obj<UIScreen>(2)),
+// pop_screen=PopScreen(Obj<UIScreen>(2)), reset_screen=ResetScreen(Obj<UIScreen>(2)),
+// focus_panel=HANDLE_EXPR(FocusPanel()). Implementing them individually doesn't improve Handle's
+// match due to cascading register allocation changes. Need to fix all stubs at once to see improvement.
 DataNode UIManager::OnSetSink(DataArray *arr) { return 0; }
 DataNode UIManager::OnUseJoypad(DataArray *arr) {
     int val = arr->Int(2);
@@ -957,6 +962,10 @@ DataNode Automator::OnMsg(ButtonDownMsg const &msg) {
     return DATA_UNHANDLED;
 }
 
+// TODO: OnCheatInvoked is 388 bytes. Ghidra shows: checks mRecord (0x34), a missing bool
+// member at 0x58 (not in header), arr->Int(2) != 0, CurScreenName vs mUIManager.mCurrentScreen,
+// builds DataArrayPtr("quick_cheat", arr->Array(3)) and calls AddRecord. Need to add the
+// missing bool member to Automator class before implementing.
 DataNode Automator::OnCheatInvoked(DataArray const *arr) { return DATA_UNHANDLED; }
 
 void Automator::HandleMessage(Symbol msgType) {
