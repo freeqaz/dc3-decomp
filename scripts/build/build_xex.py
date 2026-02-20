@@ -472,12 +472,16 @@ def patch_import_library_header(orig_header_data, import_libs_info,
     return bytes(patched)
 
 
-def generate_thunk_data(orig_pe_data, import_libs_info, image_base=0x82000000):
+def generate_thunk_data(orig_pe_data, import_libs_info, image_base=0x82000000,
+                        target_size_of_image=None):
     """
     Generate thunk marker data and VA mapping from decompressed original PE.
 
     The original PE has thunk markers at RVA 0xEE5xxx with 0x01XXXXXX format.
     We need to extract the ordinals and create new thunk markers.
+
+    target_size_of_image: SizeOfImage of the PE we're extending (our decomp PE).
+    If None, falls back to the original PE's SizeOfImage.
 
     Returns: (thunk_data, old_va_to_new_va, thunk_rva_base)
     """
@@ -485,15 +489,16 @@ def generate_thunk_data(orig_pe_data, import_libs_info, image_base=0x82000000):
     thunk_data = bytearray(thunk_count * 16)  # 16 bytes per thunk
     va_mapping = {}  # old_va -> new_va
 
-    # Parse PE to get SizeOfImage for thunk placement
-    if orig_pe_data[0:2] != b'MZ':
-        return bytes(thunk_data), va_mapping, 0
-
-    pe_offset = struct.unpack_from('<I', orig_pe_data, 0x3C)[0]
-    if orig_pe_data[pe_offset:pe_offset+4] != b'PE\x00\x00':
-        return bytes(thunk_data), va_mapping, 0
-
-    size_of_image = struct.unpack_from('<I', orig_pe_data, pe_offset + 24 + 56)[0]
+    if target_size_of_image is not None:
+        size_of_image = target_size_of_image
+    else:
+        # Fallback: read from original PE
+        if orig_pe_data[0:2] != b'MZ':
+            return bytes(thunk_data), va_mapping, 0
+        pe_offset = struct.unpack_from('<I', orig_pe_data, 0x3C)[0]
+        if orig_pe_data[pe_offset:pe_offset+4] != b'PE\x00\x00':
+            return bytes(thunk_data), va_mapping, 0
+        size_of_image = struct.unpack_from('<I', orig_pe_data, pe_offset + 24 + 56)[0]
 
     # New thunk section RVA (at end of PE image, page-aligned)
     thunk_rva_base = (size_of_image + 0xFFF) & ~0xFFF
@@ -610,6 +615,111 @@ def patch_import_library_header(header_data, import_libs_info, va_mapping):
 
     print(f"    Patched {patched_count} thunk VA entries in import header")
     return bytes(patched)
+
+
+def generate_page_descriptors(pe_data, page_size=0x10000):
+    """
+    Generate XEX page descriptors from PE section headers.
+
+    Maps each 64KB page to a section type:
+      CODE (1) = executable sections (.text, BINK, RADCODE)
+      DATA (2) = writable sections (.data, .bss, etc.)
+      RODATA (3) = read-only sections (.rdata, .pdata, .reloc, etc.)
+
+    XEX page descriptor encoding (MSVC bitfield, LSB-first):
+      value = (page_count << 4) | info
+    Stored as big-endian uint32 + 20 bytes SHA-1 digest (zeros for unsigned).
+
+    Returns: list of (info, page_count) tuples
+    """
+    pe_off = struct.unpack_from('<I', pe_data, 0x3C)[0]
+    num_sections = struct.unpack_from('<H', pe_data, pe_off + 6)[0]
+    opt_hdr_size = struct.unpack_from('<H', pe_data, pe_off + 20)[0]
+    size_of_image = struct.unpack_from('<I', pe_data, pe_off + 24 + 56)[0]
+
+    total_pages = (size_of_image + page_size - 1) // page_size
+
+    # Default all pages to RODATA (3) — covers PE headers and gaps
+    page_types = [3] * total_pages
+
+    # Parse sections and assign types
+    section_off = pe_off + 24 + opt_hdr_size
+    for i in range(num_sections):
+        vaddr = struct.unpack_from('<I', pe_data, section_off + 12)[0]
+        vsize = struct.unpack_from('<I', pe_data, section_off + 8)[0]
+        chars = struct.unpack_from('<I', pe_data, section_off + 36)[0]
+
+        if vsize == 0:
+            section_off += 40
+            continue
+
+        # Determine type from characteristics
+        is_exec = bool(chars & 0x20000000)   # IMAGE_SCN_MEM_EXECUTE
+        is_write = bool(chars & 0x80000000)  # IMAGE_SCN_MEM_WRITE
+
+        if is_exec:
+            stype = 1  # CODE
+        elif is_write:
+            stype = 2  # DATA
+        else:
+            stype = 3  # RODATA
+
+        # Mark pages covered by this section
+        start_page = vaddr // page_size
+        end_page = (vaddr + vsize + page_size - 1) // page_size
+        for p in range(start_page, min(end_page, total_pages)):
+            # CODE takes priority over other types on shared pages
+            if stype == 1 or page_types[p] == 3:
+                page_types[p] = stype
+
+        section_off += 40
+
+    # Consolidate into contiguous ranges of same type
+    descriptors = []
+    i = 0
+    while i < total_pages:
+        cur_type = page_types[i]
+        count = 1
+        while i + count < total_pages and page_types[i + count] == cur_type:
+            count += 1
+        descriptors.append((cur_type, count))
+        i += count
+
+    return descriptors
+
+
+def build_security_info(original_si, size_of_image, page_descriptors):
+    """
+    Build updated security info with new image size and page descriptors.
+
+    Keeps the first 0x184 bytes from the original (RSA sig, keys, flags, etc.)
+    and replaces the page_descriptor_count and page_descriptors.
+
+    Args:
+        original_si: Original security info bytes
+        size_of_image: New PE SizeOfImage
+        page_descriptors: List of (info, page_count) tuples
+
+    Returns: New security info bytes
+    """
+    # Take the header portion (up to and including page_descriptor_count field)
+    si = bytearray(original_si[:0x184])
+
+    # Update image size at offset 4
+    struct.pack_into('>I', si, 4, size_of_image)
+
+    # Update page descriptor count at offset 0x180
+    struct.pack_into('>I', si, 0x180, len(page_descriptors))
+
+    # Append page descriptors
+    for info, page_count in page_descriptors:
+        # Encode: value = (page_count << 4) | info, as BE uint32
+        value = (page_count << 4) | info
+        si.extend(struct.pack('>I', value))
+        # 20 bytes SHA-1 digest (zeros for unsigned/debug)
+        si.extend(b'\x00' * 20)
+
+    return bytes(si)
 
 
 def parse_pe_header(pe_data):
@@ -776,10 +886,13 @@ def build_xex(pe_data, original_xex_info, pe_info, idata_rva=0x2B0A00, ordinal_t
     if 0x000103FF in orig and import_libs_info and orig_pe_data:
         print("  Processing import library header with thunk section...")
         # Generate thunk data and VA mapping
+        # Use OUR PE's SizeOfImage for thunk placement (not the original's)
+        # to ensure thunks don't overlap with our larger PE sections
         thunk_data, va_mapping, thunk_rva_base = generate_thunk_data(
             orig_pe_data,
             import_libs_info,
-            original_xex_info['orig_image_base']
+            original_xex_info['orig_image_base'],
+            target_size_of_image=pe_info['size_of_image']
         )
         print(f"    Generated {len(va_mapping)} thunk markers")
 
@@ -904,12 +1017,21 @@ def build_xex(pe_data, original_xex_info, pe_info, idata_rva=0x2B0A00, ordinal_t
     while si_offset % 4:
         si_offset += 1
 
-    # Build security info
-    # Minimal security info: header_size(4) + image_size(4) + RSA sig(256) +
-    # ... lots of fields. Let's copy from original and patch image size.
-    orig_si = bytearray(original_xex_info['security_info'])
-    # Update image size at offset 4
-    struct.pack_into('>I', orig_si, 4, pe_info['size_of_image'])
+    # Build security info with proper page descriptors for our PE layout
+    page_descs = generate_page_descriptors(pe_data)
+    section_types = {1: "CODE", 2: "DATA", 3: "RODATA"}
+    print(f"  Page descriptors ({len(page_descs)} entries):")
+    page_offset = 0
+    for info, count in page_descs:
+        stype = section_types.get(info, f"?({info})")
+        print(f"    {stype:8s} {count:4d} pages, "
+              f"RVA 0x{page_offset * 0x10000:08X}-0x{(page_offset + count) * 0x10000:08X}")
+        page_offset += count
+    orig_si = build_security_info(
+        original_xex_info['security_info'],
+        pe_info['size_of_image'],
+        page_descs
+    )
 
     # PE data offset - align to 0x1000
     pe_file_offset = si_offset + len(orig_si)
