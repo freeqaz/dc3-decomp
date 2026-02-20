@@ -228,4 +228,4 @@ Use `scripts/build/rebuild_jeff_link.sh` to rebuild jeff, re-split, and link in 
 - [x] LNK1223 = 0 (fix_pdata.py removed)
 - [x] objdiff match% restored: 44.06% (above pre-COMDAT baseline)
 - [ ] `/FORCE:UNRESOLVED` works (no LNK1169) — blocked by 36 LNK2013 fixup overflow
-- [ ] Linked PE still produces valid XEX via `build_xex.py`
+- [x] Linked PE produces valid XEX via `build_xex.py` — boots in xenia-headless (2026-02-21)

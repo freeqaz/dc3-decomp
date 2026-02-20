@@ -344,6 +344,7 @@ Returns ranked results with function name, address, similarity score, and full d
 
 ## See Also
 
+- **[GHIDRA_MANUAL_SETUP.md](GHIDRA_MANUAL_SETUP.md) - GUI-only setup guide (no MCP server needed)**
 - [XEXLOADERWV.md](XEXLOADERWV.md) - XEX loader build/install
 - [objdiff.md](objdiff.md) - Assembly comparison workflow
 - [INDEX.md](INDEX.md) - Quick command reference

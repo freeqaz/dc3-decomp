@@ -7,6 +7,7 @@
 #include "obj/DataFunc.h"
 #include "os/System.h"
 #include "utl/BinStream.h"
+#include <cmath>
 
 float gUnitsPerMeter = 39.370079f;
 float gBSPPosTol = 0.01f;
@@ -418,4 +419,273 @@ namespace stlpmtx_std {
     }
 }
 
+void Multiply(const Box &box, float f, Box &out) {
+    Vector3 center;
+    Interp(box.mMin, box.mMax, 0.5f, center);
+    Vector3 halfSize;
+    Subtract(box.mMax, center, halfSize);
+    Scale(halfSize, f, halfSize);
+    Subtract(center, halfSize, out.mMin);
+    Add(center, halfSize, out.mMax);
+}
 
+void Multiply(const Plane &p, const Transform &t, Plane &out) {
+    Hmx::Matrix3 invM;
+    FastInvert(t.m, invM);
+    Vector3 n(p.a, p.b, p.c);
+    Vector3 nOut;
+    Multiply(n, invM, nOut);
+    Vector3 on = p.On();
+    Vector3 pOut;
+    Multiply(on, t, pOut);
+    out.Set(nOut.x, nOut.y, nOut.z, -Dot(nOut, pOut));
+}
+
+void Sphere::GrowToContain(const Sphere &s) {
+    if (s.radius == 0.0f)
+        return;
+    if (radius != 0.0f) {
+        float dx = s.center.x - center.x;
+        float dz = s.center.z - center.z;
+        float dy = s.center.y - center.y;
+        float dist = std::sqrt(dy * dy + dz * dz + dx * dx);
+        if (s.radius + dist <= radius)
+            return;
+        if (s.radius <= radius + dist) {
+            if (dist == 0.0f)
+                return;
+            float invDist = 1.0f / dist;
+            Vector3 a, b;
+            a.x = center.x - dx * invDist * radius;
+            a.y = center.y - invDist * dy * radius;
+            a.z = center.z - dz * invDist * radius;
+            b.x = s.center.x + s.radius * (dx * invDist);
+            b.y = s.center.y + s.radius * (invDist * dy);
+            b.z = s.center.z + dz * invDist * s.radius;
+            Interp(a, b, 0.5f, center);
+            radius = (dist + s.radius + radius) * 0.5f;
+            return;
+        }
+    }
+    center = s.center;
+    radius = s.radius;
+}
+
+void Frustum::Set(float near, float far, float fovY, float ratio) {
+    front.Set(0, 0, 1, -near);
+    back.Set(0, 0, -1, far);
+    float halfY = fovY * 0.5f;
+    float sy = std::sin(halfY);
+    float cy = std::cos(halfY);
+    top.Set(0, -cy, sy, 0);
+    bottom.Set(0, cy, sy, 0);
+    float sx = sy / ratio;
+    float len = std::sqrt(cy * cy + sx * sx);
+    if (len != 0.0f) {
+        left.Set(cy / len, 0, sx / len, 0);
+        right.Set(-(cy / len), 0, sx / len, 0);
+    } else {
+        left.Set(1, 0, 0, 0);
+        right.Set(-1, 0, 0, 0);
+    }
+}
+
+bool operator>(const Sphere &s, const Frustum &f) {
+    if (s < f.front)
+        return false;
+    if (s < f.back)
+        return false;
+    if (s < f.left)
+        return false;
+    if (s < f.right)
+        return false;
+    if (s < f.top)
+        return false;
+    if (s < f.bottom)
+        return false;
+    return true;
+}
+
+bool Intersect(const Segment &seg, const Sphere &sphere) {
+    float start_z = seg.start.z;
+    float end_z = seg.end.z;
+    float zero = 0.0f;
+    float dir_z = end_z - start_z;
+    float start_x = seg.start.x;
+    float end_x = seg.end.x;
+    float dir_x = end_x - start_x;
+    float start_y = seg.start.y;
+    float center_z = sphere.center.z;
+    float diff_z = center_z - start_z;
+    float end_y = seg.end.y;
+    float dir_y = end_y - start_y;
+    float center_x = sphere.center.x;
+    float diff_x = center_x - start_x;
+    float center_y = sphere.center.y;
+    float diff_y = center_y - start_y;
+    float a = dir_z * dir_z + dir_x * dir_x + dir_y * dir_y;
+    if (a == 0.0f)
+        return false;
+    float t = (diff_z * dir_z + diff_x * dir_x + diff_y * dir_y) / a;
+    float one = 1.0f;
+    float neg_t = -t;
+    t = (neg_t >= 0.0f) ? zero : t;
+    float t_minus_one = t - one;
+    t = (t_minus_one >= 0.0f) ? one : t;
+    Vector3 closest;
+    Interp(seg.start, seg.end, t, closest);
+    float dz = closest.z - center_z;
+    float dx = closest.x - center_x;
+    float dy = closest.y - center_y;
+    float r = sphere.radius;
+    float r2 = r * r;
+    float dist2 = dz * dz + dx * dx + dy * dy;
+    if (dist2 > r2)
+        return false;
+    return true;
+}
+
+bool Intersect(const Vector3 &v, const BSPNode *n) {
+    if (!n)
+        return true;
+    MILO_ASSERT(n, 0x4ca);
+    if (n->plane.Dot(v) >= 0)
+        return Intersect(v, n->left);
+    else
+        return Intersect(v, n->right);
+}
+
+bool Intersect(const Segment &seg, const BSPNode *n, float &t, Plane &p) {
+    if (!n)
+        return false;
+    MILO_ASSERT(n, 0x4e6);
+    float zero = 0.0f;
+    float startDot = n->plane.Dot(seg.start);
+    float endDot = n->plane.Dot(seg.end);
+    if (startDot >= 0 && endDot >= 0) {
+        if (!n->left)
+            return false;
+        return Intersect(seg, n->left, t, p);
+    }
+    if (!(startDot > 0) && !(endDot > 0)) {
+        if (!n->right) {
+            t = zero;
+            return true;
+        }
+        return Intersect(seg, n->right, t, p);
+    }
+    float denom = startDot - endDot;
+    if (denom == 0.0f)
+        return false;
+    float frac = startDot / denom;
+    Vector3 mid;
+    Interp(seg.start, seg.end, frac, mid);
+    if (startDot >= 0) {
+        Segment seg1;
+        seg1.start = seg.start;
+        seg1.end = mid;
+        if (Intersect(seg1, n->left, t, p))
+            return true;
+        t = frac;
+        p = n->plane;
+        Segment seg2;
+        seg2.start = mid;
+        seg2.end = seg.end;
+        float t2;
+        if (Intersect(seg2, n->right, t2, p)) {
+            t = frac + t2 * (1.0f - frac);
+            return true;
+        }
+        return true;
+    } else {
+        Segment seg1;
+        seg1.start = seg.start;
+        seg1.end = mid;
+        if (Intersect(seg1, n->right, t, p))
+            return true;
+        t = frac;
+        p = n->plane;
+        Segment seg2;
+        seg2.start = mid;
+        seg2.end = seg.end;
+        float t2;
+        if (Intersect(seg2, n->left, t2, p)) {
+            t = frac + t2 * (1.0f - frac);
+            return true;
+        }
+        return true;
+    }
+}
+
+bool Intersect(
+    const Vector3 &v1, const Vector3 &v2, const Triangle &tri, float &out
+) {
+    // h = cross(v2, tri.frame.y)
+    // Compute components using fmsubs pattern: a*b - c
+    float fy_x = tri.frame.y.x;
+    float fy_y = tri.frame.y.y;
+    float fy_z = tri.frame.y.z;
+    float v2_y = v2.y;
+    float v2_z = v2.z;
+    float v2_x = v2.x;
+    float eps = 1e-4f;
+
+    // h.z = v2.x * fy.y - fy.x * v2.y
+    float hz_partial = fy_x * v2_y;   // fy.x * v2.y
+    // h.x = v2.y * fy.z - v2.z * fy.y
+    float hx_partial = v2_z * fy_y;   // v2.z * fy.y
+    // h.y = fy.x * v2.z - v2.x * fy.z
+    float hy_partial = v2_x * fy_z;   // v2.x * fy.z
+
+    float h_z = v2_x * fy_y - hz_partial;   // h.z = v2.x*fy.y - fy.x*v2.y
+    float h_x = v2_y * fy_z - hx_partial;   // h.x = v2.y*fy.z - v2.z*fy.y
+    float h_y = fy_x * v2_z - hy_partial;   // h.y = fy.x*v2.z - v2.x*fy.z
+
+    // s = v1 - tri.origin
+    float s_z = v1.z - tri.origin.z;
+    float s_x = v1.x - tri.origin.x;
+    float s_y = v1.y - tri.origin.y;
+
+    float fx_z = tri.frame.x.z;
+    float fx_x = tri.frame.x.x;
+    float fx_y = tri.frame.x.y;
+
+    // Compute a = dot(frame.x, h) and u_num = dot(s, h) simultaneously
+    float u_z_part = s_z * h_z;
+    float a_z_part = fx_z * h_z;
+    float u_num = s_x * h_x + u_z_part;
+    float a = fx_x * h_x + a_z_part;
+    u_num = s_y * h_y + u_num;
+    a = fx_y * h_y + a;
+
+    if (u_num < eps)
+        return false;
+    if (u_num > a)
+        return false;
+
+    // q = cross(s, frame.x)
+    // q.z = s.x * fx.y - fx.x * s.y
+    // q.y = fx.x * s.z - fx.z * s.x
+    // q.x = fx.z * s.y - fx.y * s.z
+    float q_z = fx_y * s_x - fx_x * s_y;
+    float q_y = fx_x * s_z - fx_z * s_x;
+    float q_x = fx_z * s_y - fx_y * s_z;
+
+    // v_num = dot(v2, q)
+    float v_num = v2_y * q_y + v2_z * q_z + v2_x * q_x;
+
+    if (v_num < eps)
+        return false;
+    if (v_num + u_num > a)
+        return false;
+
+    // t = dot(frame.y, q) / a
+    float t_num = fy_y * q_y + fy_z * q_z + fy_x * q_x;
+    float t = t_num / a;
+    out = t;
+
+    float min_t = 1.192093e-7f;   // FLT_EPSILON (0x34000000)
+    if (t < min_t)
+        return false;
+    return true;
+}

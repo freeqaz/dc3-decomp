@@ -36,12 +36,12 @@ void RndOverlay::Terminate() {
 }
 
 String &RndOverlay::CurrentLine() {
-    std::list<String>::iterator begin_it = mLines.begin();
-    if (mLine == begin_it) {
+    if (mLine == mLines.end()) {
         String newstr;
         mLines.pop_front();
         mLines.push_back(newstr);
-        mLine = --begin_it;
+        std::list<String>::iterator it = mLines.end();
+        mLine = --it;
         mLine->reserve(0x7F);
     }
     return *mLine;
@@ -88,6 +88,67 @@ RndOverlay::RndOverlay(const DataArray *da)
     da->FindData("color", mBackColor, false);
     da->FindData("modal", mModal, false);
     da->FindData("text_color", mTextColor, false);
+}
+
+void RndOverlay::Print(const char *str) {
+    if (*str != '\0') {
+        do {
+            if (mLine == mLines.end()) {
+                String newstr;
+                mLines.pop_front();
+                mLines.push_back(newstr);
+                std::list<String>::iterator it = mLines.end();
+                mLine = --it;
+                mLine->reserve(0x7F);
+            }
+            if (*str == '\n') {
+                ++mLine;
+            } else {
+                *mLine += *str;
+            }
+            str++;
+        } while (*str != '\0');
+    }
+}
+
+float RndOverlay::Draw(float y) {
+    if (mTimeout > 0.0f && mShowing) {
+        if (SystemMs() > mTimeout) {
+            mShowing = false;
+            mTimeout = 0.0f;
+        }
+    }
+    if (!mShowing)
+        return y;
+    if (mCallback) {
+        float updated = mCallback->UpdateOverlay(this, y);
+        if (updated != y)
+            return updated;
+    }
+    Hmx::Rect rect(0.0f, y, 1.0f, Height());
+    TheRnd.DrawRectScreen(rect, mBackColor, TheRnd.OverlayMat(), nullptr, nullptr);
+    Vector2 pos(0.0134f, y + 0.005f);
+    if (mCursorChar > -1 && !mLines.empty()) {
+        String str;
+        for (int i = 0; i < mCursorChar; i++) {
+            str += " ";
+        }
+        str += String("_");
+        Vector2 cursorPos = pos;
+        cursorPos.y += 0.005f;
+        TheRnd.DrawStringScreen(str.c_str(), cursorPos, mTextColor, true);
+    }
+    for (std::list<String>::iterator it = mLines.begin(); it != mLines.end(); ++it) {
+        const Vector2 &sz = TheRnd.DrawStringScreen(it->c_str(), pos, mTextColor, true);
+        pos.y = sz.y;
+    }
+    if (mDumpCount > 0) {
+        mDumpCount--;
+        for (std::list<String>::iterator it = mLines.begin(); it != mLines.end(); ++it) {
+            TheDebug << it->c_str() << "\n";
+        }
+    }
+    return rect.y + rect.h;
 }
 
 void RndOverlay::Init() {

@@ -17,6 +17,7 @@
 #include "utl/Loader.h"
 #include "utl/Locale.h"
 #include "utl/Str.h"
+#include "utl/SuperFormatString.h"
 #include "utl/Symbol.h"
 #include "utl/UTF8.h"
 #include <cstring>
@@ -388,7 +389,12 @@ void UILabel::DrawShowing() {
 
 void UILabel::SetTextToken(Symbol s) {
     mTextToken = s;
-
+    if (TheLoadMgr.EditMode()) {
+        if (!unk118.empty())
+            return;
+        if (unk120 != '\0')
+            return;
+    }
     SetTokenFmtImp(mTextToken, 0, 0, 0, true);
 }
 
@@ -411,10 +417,11 @@ void UILabel::SetDateTime(DateTime const &dt, Symbol s) {
 
 void UILabel::SetIcon(char c) {
     unk120 = c;
-    if (c == '\0' && TheLoadMgr.EditMode() != 0) {
+    if (c == '\0' && TheLoadMgr.EditMode()) {
         SetEditText(unk118.c_str());
         return;
     }
+    SetDisplayText(&unk120, !TheLoadMgr.EditMode());
 }
 
 void UILabel::SetTokenFmt(const DataArray *da) {
@@ -532,9 +539,21 @@ void UILabel::CenterWithLabel(UILabel *label, bool b, float f) {
     label->SetLocalXfm(otherXfm);
 }
 
-UILabel::LabelStyle &UILabel::LStyle(int i) { return unk124[i]; }
+UILabel::LabelStyle &UILabel::LStyle(int i) {
+    if ((unsigned int)i < unk124.size()) {
+        return unk124[i];
+    }
+    static LabelStyle s(0);
+    return s;
+}
 
-const UILabel::LabelStyle &UILabel::LStyle(int i) const { return unk124[i]; }
+const UILabel::LabelStyle &UILabel::LStyle(int i) const {
+    if ((unsigned int)i < unk124.size()) {
+        return unk124[i];
+    }
+    static LabelStyle s(0);
+    return s;
+}
 
 void UILabel::OldResourcePreload(BinStream &bs) {
     char buffer[0x100];
@@ -564,7 +583,31 @@ void UILabel::Init() {
 
 void UILabel::SetTokenFmtImp(
     Symbol s, const DataArray *da1, const DataArray *da2, int i, bool b
-) {}
+) {
+    mTextToken = s;
+    if (mTextToken.Null()) {
+        SetDisplayText(gNullStr, true);
+    } else {
+        bool found;
+        const char *localized = Localize(mTextToken, &found, TheLocale);
+        if (found) {
+            SuperFormatString str(localized, da1, b, TheLocale, gNullStr);
+            if (da2) {
+                for (; i < da2->Size(); i++) {
+                    const DataNode &n = da2->Evaluate(i);
+                    if (n.Type() == kDataSymbol) {
+                        str << Localize(n.Sym(), 0, TheLocale);
+                    } else {
+                        str << n;
+                    }
+                }
+            }
+            SetDisplayText(str.FinalStr(), false);
+        } else {
+            SetDisplayText(localized, false);
+        }
+    }
+}
 
 DataNode UILabel::OnSetPrelocalizedString(DataArray const *arr) {
     const DataNode &stringNode = arr->Node(2).Evaluate();
@@ -614,7 +657,17 @@ DataNode UILabel::OnSetTimeHMS(DataArray const *arr) {
     return 1;
 }
 
-__declspec(noinline) bool UILabel::AllowEditText() const { return false; }
+bool UILabel::AllowEditText() const {
+    if (TheUI->DefaultAllowEditText()) {
+        return true;
+    }
+    if (LStyle(0).unk14 == 0) {
+        FormatString fs("LabelDir is not yet loaded, can't tell if edit text is allowed");
+        TheDebug.Notify(fs.Str());
+        return false;
+    }
+    return LStyle(0).unk14->AllowEditText();
+}
 
 void UILabel::LabelUpdate(bool b) {
     unk122 = false;

@@ -962,11 +962,29 @@ DataNode Automator::OnMsg(ButtonDownMsg const &msg) {
     return DATA_UNHANDLED;
 }
 
-// TODO: OnCheatInvoked is 388 bytes. Ghidra shows: checks mRecord (0x34), a missing bool
-// member at 0x58 (not in header), arr->Int(2) != 0, CurScreenName vs mUIManager.mCurrentScreen,
-// builds DataArrayPtr("quick_cheat", arr->Array(3)) and calls AddRecord. Need to add the
-// missing bool member to Automator class before implementing.
-DataNode Automator::OnCheatInvoked(DataArray const *arr) { return DATA_UNHANDLED; }
+DataNode Automator::OnCheatInvoked(DataArray const *arr) {
+    if (!mRecord)
+        return DATA_UNHANDLED;
+    if (mSkipNextQuickCheat) {
+        mSkipNextQuickCheat = false;
+        return DATA_UNHANDLED;
+    }
+    if (arr->Int(2) == 0)
+        return DATA_UNHANDLED;
+    Symbol screenName = CurScreenName();
+    if (!mUIManager.CurrentScreen()) {
+        if (screenName.Null())
+            return DATA_UNHANDLED;
+    } else if (screenName.Null()) {
+        screenName = CurRecordScreen();
+        if (screenName.Null())
+            return DATA_UNHANDLED;
+    }
+    static Symbol quick_cheat("quick_cheat");
+    DataArrayPtr ptr(quick_cheat, arr->Array(3));
+    AddRecord(screenName, ptr);
+    return DATA_UNHANDLED;
+}
 
 void Automator::HandleMessage(Symbol msgType) {
     if (!mUIManager.InTransition()) {
@@ -982,14 +1000,41 @@ void Automator::HandleMessage(Symbol msgType) {
     }
 }
 
+void Automator::AddMessageType(Hmx::Object *obj, Symbol sym) {
+    obj->AddSink(this, sym);
+    mCustomMsgs.push_back(sym);
+}
+
 BEGIN_HANDLERS(Automator)
-    HANDLE_EXPR("toggle_auto", DataNode(ToggleAuto()))
-    HANDLE_EXPR("toggle_record", DataNode(ToggleRecord()))
-    HANDLE_EXPR("auto_script", DataNode((mScreenScripts && !mRecord) ? mAutoPath.c_str() : "OFF"))
-    HANDLE_EXPR("record_script", DataNode(mRecord ? mRecordPath.c_str() : "OFF"))
-    HANDLE_ACTION("set_auto_script", (mAutoPath = _msg->Str(2)))
-    HANDLE_ACTION("set_record_script", (mRecordPath = _msg->Str(2)))
-    HANDLE_ACTION("add_message_type", (AddMessageType(_msg->GetObj(2), _msg->Sym(3))))
+    HANDLE_EXPR(toggle_auto, DataNode(ToggleAuto()))
+    HANDLE_EXPR(auto_script, DataNode((mScreenScripts && !mRecord) ? mAutoPath.c_str() : "OFF"))
+    HANDLE_EXPR(toggle_record, DataNode(ToggleRecord()))
+    HANDLE_EXPR(record_script, DataNode(mRecord ? mRecordPath.c_str() : "OFF"))
+    HANDLE_ACTION(set_auto_script, (mAutoPath = _msg->Str(2)))
+    HANDLE_ACTION(set_record_script, (mRecordPath = _msg->Str(2)))
+    HANDLE_ACTION(add_message_type, (AddMessageType(_msg->GetObj(2), _msg->Sym(3))))
+    if (!mScreenScripts && !mRecord)
+        return DataNode(kDataUnhandled);
+    HANDLE_MESSAGE(UITransitionCompleteMsg)
+    HANDLE_MESSAGE(ButtonDownMsg)
+    if (sym == UIComponentSelectMsg::Type())
+        _HANDLE_CHECKED(OnCustomMsg(UIComponentSelectMsg(_msg)))
+    if (sym == UIComponentScrollMsg::Type())
+        _HANDLE_CHECKED(OnCustomMsg(UIComponentScrollMsg(_msg)))
+    if (sym == UIComponentFocusChangeMsg::Type())
+        _HANDLE_CHECKED(OnCustomMsg(UIComponentFocusChangeMsg(_msg)))
+    if (sym == UIScreenChangeMsg::Type())
+        _HANDLE_CHECKED(OnCustomMsg(UIScreenChangeMsg(_msg)))
+    {
+        static Symbol _s("cheat_invoked");
+        if (sym == _s)
+            _HANDLE_CHECKED(OnCheatInvoked(_msg))
+    }
+    {
+        Message msg(_msg);
+        _HANDLE_CHECKED(OnCustomMsg(msg))
+    }
+    HANDLE_SUPERCLASS(Hmx::Object)
 END_HANDLERS
 
 #pragma endregion Automator

@@ -43,6 +43,51 @@ void Hmx::Quat::Set(const Vector3 &v, float f) {
     z = v.z * scale;
 }
 
+void Hmx::Quat::Set(const Vector3 &v) {
+    float halfX = v.x * 0.5f;
+    float halfY = v.y * 0.5f;
+    float halfZ = v.z * 0.5f;
+    float sx = Sine(halfX);
+    float cx = Cosine(halfX);
+    float sy = Sine(halfY);
+    float cy = Cosine(halfY);
+    float sz = Sine(halfZ);
+    float cz = Cosine(halfZ);
+    x = cy * sx * cz + sy * cx * sz;
+    y = sy * cx * cz - cy * sx * sz;
+    z = cy * cx * sz - sy * sx * cz;
+    w = cy * cx * cz + sy * sx * sz;
+}
+
+void Hmx::Quat::Set(const Hmx::Matrix3 &m) {
+    float trace = m.x.x + m.y.y + m.z.z;
+    if (trace > 0) {
+        float root = std::sqrt(trace + 1.0f);
+        w = root * 0.5f;
+        float recip = 0.5f / root;
+        x = (m.y.z - m.z.y) * recip;
+        y = (m.z.x - m.x.z) * recip;
+        z = (m.x.y - m.y.x) * recip;
+    } else {
+        const int nxt[] = { 1, 2, 0 };
+        int i = 0;
+        if (m.y.y > m.x.x)
+            i = 1;
+        if (m.z.z > m[i][i])
+            i = 2;
+        int j = nxt[i];
+        int k = nxt[j];
+        float root = std::sqrt(m[i][i] - m[j][j] - m[k][k] + 1.0f);
+        (*this)[i] = root * 0.5f;
+        if (root != 0.0f) {
+            root = 0.5f / root;
+        }
+        w = (m[j][k] - m[k][j]) * root;
+        (*this)[j] = (m[i][j] + m[j][i]) * root;
+        (*this)[k] = (m[i][k] + m[k][i]) * root;
+    }
+}
+
 float GetXAngle(const Hmx::Matrix3 &m) { return atan2(m.y.z, m.y.y); }
 float GetYAngle(const Hmx::Matrix3 &m) { return atan2(-m.x.z, m.z.z); }
 float GetZAngle(const Hmx::Matrix3 &m) {

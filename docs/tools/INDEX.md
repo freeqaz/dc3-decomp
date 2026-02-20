@@ -33,6 +33,7 @@ Use `mcp__orchestrator__` tools for all decomp analysis. Do not call `objdiff-cl
 | [objdiff](objdiff.md) | Assembly diffing and function matching analysis | [objdiff.md](objdiff.md) |
 | diff_inspect | Deep mismatch analysis (diagnose, clusters, regswaps, offsets, replaces, compare) | [WORKFLOW.md](WORKFLOW.md#diff_inspect) |
 | [Ghidra + pyghidra-mcp](GHIDRA.md) | Binary analysis, decompilation, and type seeding via MCP | [GHIDRA.md](GHIDRA.md) |
+| [Ghidra Manual Setup](GHIDRA_MANUAL_SETUP.md) | GUI-only Ghidra setup (no MCP) — symbol import, fork install | [GHIDRA_MANUAL_SETUP.md](GHIDRA_MANUAL_SETUP.md) |
 | [XEXLoaderWV](XEXLOADERWV.md) | Ghidra extension for Xbox 360 XEX files | [XEXLOADERWV.md](XEXLOADERWV.md) |
 | [m2c](m2c.md) | Machine code to C decompiler | [m2c.md](m2c.md) |
 

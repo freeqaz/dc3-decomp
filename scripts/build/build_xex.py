@@ -566,6 +566,11 @@ def extend_pe_with_thunks(pe_data, thunk_data, thunk_rva_base):
     new_size_of_image = thunk_rva_base + thunk_size_aligned
     struct.pack_into('<I', pe_data, size_of_image_offset, new_size_of_image)
 
+    # Pad PE to reach thunk_rva_base (may need gap if PE is virtual-layout)
+    current_len = len(pe_data)
+    if current_len < thunk_rva_base:
+        pe_data.extend(b'\x00' * (thunk_rva_base - current_len))
+
     # Append thunk data (padded to page boundary)
     pe_data.extend(thunk_data)
     padding = thunk_size_aligned - len(thunk_data)
@@ -720,6 +725,47 @@ def build_security_info(original_si, size_of_image, page_descriptors):
         si.extend(b'\x00' * 20)
 
     return bytes(si)
+
+
+def pe_file_to_virtual(pe_data):
+    """
+    Convert a PE file from disk layout to virtual memory layout.
+
+    On disk, sections are at PointerToRawData (file alignment).
+    In memory, sections are at VirtualAddress (section alignment).
+    XEX decompression maps the blob contiguously into guest memory,
+    so the PE must be in virtual layout for sections to be at correct VAs.
+
+    Returns: bytes of SizeOfImage length with sections at VirtualAddress offsets
+    """
+    pe_off = struct.unpack_from('<I', pe_data, 0x3C)[0]
+    num_sections = struct.unpack_from('<H', pe_data, pe_off + 6)[0]
+    opt_hdr_size = struct.unpack_from('<H', pe_data, pe_off + 20)[0]
+    size_of_headers = struct.unpack_from('<I', pe_data, pe_off + 24 + 60)[0]
+    size_of_image = struct.unpack_from('<I', pe_data, pe_off + 24 + 56)[0]
+
+    # Start with zero-filled buffer of SizeOfImage
+    virtual = bytearray(size_of_image)
+
+    # Copy PE headers (DOS header, PE header, section table)
+    virtual[:size_of_headers] = pe_data[:size_of_headers]
+
+    # Copy each section from file offset to virtual address
+    section_off = pe_off + 24 + opt_hdr_size
+    for i in range(num_sections):
+        name = pe_data[section_off:section_off+8].rstrip(b'\x00').decode('ascii', errors='replace')
+        vaddr = struct.unpack_from('<I', pe_data, section_off + 12)[0]
+        raw_size = struct.unpack_from('<I', pe_data, section_off + 16)[0]
+        raw_off = struct.unpack_from('<I', pe_data, section_off + 20)[0]
+
+        if raw_size > 0 and raw_off < len(pe_data):
+            copy_size = min(raw_size, len(pe_data) - raw_off)
+            if vaddr + copy_size <= size_of_image:
+                virtual[vaddr:vaddr + copy_size] = pe_data[raw_off:raw_off + copy_size]
+
+        section_off += 40
+
+    return bytes(virtual)
 
 
 def parse_pe_header(pe_data):
@@ -1138,6 +1184,13 @@ def main():
     pe_data, idata_rva, ordinal_to_rva = patch_and_relocate_imports(pe_data, pe_info['image_base'])
     if idata_rva == 0:
         print("  Warning: Could not find .idata section!")
+
+    # Convert PE from file layout to virtual memory layout.
+    # XEX decompression maps the PE blob contiguously into guest memory,
+    # so sections must be at their VirtualAddress offsets (not file offsets).
+    print("\nConverting PE to virtual memory layout...")
+    pe_data = pe_file_to_virtual(pe_data)
+    print(f"  Virtual image: {len(pe_data):,} bytes (SizeOfImage)")
 
     # Build XEX
     print(f"\nBuilding XEX...")

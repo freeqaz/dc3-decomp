@@ -1,5 +1,8 @@
 #include "os/PlatformMgr.h"
 #include "game/PartyModeMgr.h"
+#include <cstdlib>
+#include <cstring>
+#include <cwchar>
 #include "os/OnlineID.h"
 #include "system/utl/GlitchFinder.h"
 #include "xdk/XAPILIB.h"
@@ -385,6 +388,82 @@ namespace {
         if (result != 0) {
             MILO_NOTIFY("SmartGlass: error: %d\n", result);
         }
+    }
+
+    DataArrayPtr JsonToDta(HJSONREADER__ *reader, bool topLevel) {
+        DataArrayPtr container;
+        DataArray *fieldName = 0;
+        _JSONTokenType tokenType;
+        unsigned long param1, param2;
+
+        while (XJSONReadToken(reader, &tokenType, &param1, &param2) == 0) {
+            DataNode node(0);
+            char charBuf[256];
+            charBuf[0] = '\0';
+
+            if (tokenType > 4 && (tokenType < 7 || tokenType == 10)) {
+                wchar_t wcharBuf[128];
+                XJSONGetTokenValue(reader, wcharBuf, 0x80);
+                wcstombs(charBuf, wcharBuf, 0x100);
+            }
+
+            switch (tokenType) {
+            case kJSONTokenBeginArray: {
+                DataArrayPtr sub = JsonToDta(reader, false);
+                node = DataNode(sub);
+                break;
+            }
+            case kJSONTokenEndArray:
+            case kJSONTokenEndMap:
+                return container;
+            case kJSONTokenBeginMap: {
+                DataArrayPtr sub = JsonToDta(reader, false);
+                node = DataNode(sub);
+                break;
+            }
+            case kJSONTokenString:
+                node = DataNode(charBuf);
+                break;
+            case kJSONTokenNumber:
+                if (strchr(charBuf, '.')) {
+                    node = DataNode((float)atof(charBuf));
+                } else {
+                    node = DataNode(atoi(charBuf));
+                }
+                break;
+            case kJSONTokenTrue:
+                node = DataNode(1);
+                break;
+            case kJSONTokenFalse:
+            case kJSONTokenNull:
+                node = DataNode(0);
+                break;
+            case kJSONTokenFieldName:
+                fieldName = new DataArray(2);
+                fieldName->Node(0) = DataNode(Symbol(charBuf));
+                continue;
+            case kJSONTokenEnd:
+            case kJSONTokenComment:
+            case kJSONTokenError:
+            default:
+                continue;
+            }
+
+            if (fieldName) {
+                fieldName->Node(1) = node;
+                node = DataNode(fieldName, kDataArray);
+                fieldName = 0;
+            }
+
+            if (topLevel && node.Type() == kDataArray) {
+                container = node.Array();
+                topLevel = false;
+            } else {
+                ((DataArray *)container)->Insert(((DataArray *)container)->Size(), node);
+            }
+        }
+
+        return container;
     }
 
     void XbcRecieveMsg(unsigned long clientID, HJSONREADER__ *reader) {

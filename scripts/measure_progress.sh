@@ -139,6 +139,13 @@ else
         echo "Restored scripts/ symlink"
     fi
 
+    # --- Ensure build tools are available (avoid re-downloading dtk) ---
+    if [[ -d "${MAIN_REPO}/build/tools" && ! -d "${WORKTREE}/build/tools" ]]; then
+        mkdir -p "${WORKTREE}/build"
+        cp -a "${MAIN_REPO}/build/tools" "${WORKTREE}/build/tools"
+        echo "Copied build/tools/"
+    fi
+
     # --- Reconfigure for baseline's file set ---
     echo "Reconfiguring baseline..."
     (cd "${WORKTREE}" && python3 configure.py) >/dev/null

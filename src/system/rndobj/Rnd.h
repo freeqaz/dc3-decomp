@@ -150,6 +150,7 @@ public:
     DataArray *Font() const { return mFont; }
     RndEnviron *DefaultEnv() const { return mDefaultEnv; }
     RndMat *DefaultMat() const { return mDefaultMat; }
+    RndMat *OverlayMat() const { return mOverlayMat; }
     bool Unk140() const { return unk140; }
     bool VerboseTimers() const { return mVerboseTimers; }
     void ShowConsole(bool);

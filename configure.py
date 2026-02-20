@@ -99,6 +99,7 @@ parser.add_argument(
 if not is_windows():
     parser.add_argument(
         "--wrapper",
+        "--wibo",
         metavar="BINARY",
         type=Path,
         help="path to wibo or wine (optional)",

@@ -91,6 +91,7 @@ namespace Hmx {
             return *this;
         }
         Vector3 &operator[](int i) { return *(&x + i); }
+        const Vector3 &operator[](int i) const { return *(&x + i); }
 
         bool operator==(const Matrix3 &mtx) const {
             return x == mtx.x && y == mtx.y && z == mtx.z;

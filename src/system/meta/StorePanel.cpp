@@ -618,9 +618,32 @@ DataNode StorePanel::OnMsg(SigninChangedMsg const &msg) {
 
 DataNode StorePanel::OnMsg(ProfileSwappedMsg const &) { return 0; }
 
-DataNode StorePanel::OnMsg(SingleItemEnumCompleteMsg const &) {
-    static Message doneMsg("store_enum_done");
-    static Message enumMsg("store_enum_msg");
+DataNode StorePanel::OnMsg(SingleItemEnumCompleteMsg const &msg) {
+    bool hasOffer = false;
+    if (msg.Success()) {
+        if (msg.HasOfferID()) {
+            hasOffer = true;
+        }
+    }
+
+    if (hasOffer) {
+        u64 offerId = msg.OfferID();
+        for (std::vector<StoreOffer *>::iterator it = unk38.begin(); it != unk38.end();
+             ++it) {
+            StoreOffer *offer = *it;
+            if (offer->songID == offerId) {
+                offer->isPurchased = true;
+                static Message enumMsg("enum_finished");
+                HandleType(enumMsg);
+                TheUI->Handle(enumMsg, false);
+                break;
+            }
+        }
+    }
+
+    static Message doneMsg("reenum_finished", DataNode(0));
+    doneMsg->Node(2) = DataNode((int)hasOffer);
+    TheUI->Handle(doneMsg, false);
     return DataNode(0);
 }
 
@@ -681,7 +704,32 @@ void StorePanel::ValidateOffers(std::vector<StoreOffer *> &offers) {
     }
 }
 
+DataNode StorePanel::OnMsg(MultipleItemsEnumCompleteMsg const &) { return 0; }
+
 BEGIN_HANDLERS(StorePanel)
+    HANDLE_EXPR(toggle_test_offers, unk52 = !unk52)
+    HANDLE_EXPR(test_offers, unk52)
+    HANDLE_ACTION(load_art, LoadArt(_msg->Str(2), _msg->Obj<UIPanel>(3)))
+    HANDLE_EXPR(album_tex, unk60)
+    HANDLE_ACTION(cancel_art, (unk5c = 0, mPendingArtCallback = 0))
+    HANDLE_ACTION(check_out, CheckOut(_msg->Obj<StorePurchaseable>(2)))
+    HANDLE_ACTION(re_download, CheckOut(_msg->Obj<StorePurchaseable>(2)))
+    {
+        static Symbol _s("set_source");
+        if (sym == _s) {
+            Symbol src = _msg->Sym(2);
+            unk8c = src;
+            if (_msg->Int(3))
+                unk90 = src;
+            return 0;
+        }
+    }
+    HANDLE_ACTION(set_source_to_backup, unk8c = unk90)
+    HANDLE_ACTION(start_reenum_if_needed, StartReEnum())
+    HANDLE_MESSAGE(SigninChangedMsg)
+    HANDLE_MESSAGE(ProfileSwappedMsg)
+    HANDLE_MESSAGE(SingleItemEnumCompleteMsg)
+    HANDLE_MESSAGE(MultipleItemsEnumCompleteMsg)
     HANDLE_SUPERCLASS(UIPanel)
 END_HANDLERS
 

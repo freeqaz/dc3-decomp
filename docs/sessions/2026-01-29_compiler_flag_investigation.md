@@ -172,7 +172,7 @@ Update TECHNICAL_NOTES.md section "LTCG/Global Pooling (UNFIXABLE)" to:
 
 ## XDK Documentation Review
 
-Extracted and reviewed the official Xbox 360 XDK documentation (`xbox360sdk.chm`, 85MB, 13,837 files).
+Reviewed the official Xbox 360 XDK documentation solely for compiler flag identification (proprietary material, since removed from repo — do not redistribute or re-acquire).
 
 ### Key Findings from XDK Docs
 
@@ -258,7 +258,7 @@ This is **permanently unfixable** but now fully understood.
 - [x] Rich header decoded
 - [x] LTCG claim investigated
 - [x] Update TECHNICAL_NOTES.md to correct LTCG claim and add fmadds findings
-- [x] Review XDK documentation (xbox360sdk.chm)
+- [x] Review XDK documentation for compiler flags
 - [x] Test `/Ou` (prescheduling) — wrong
 - [x] Test `/Oc` (disable traps) — no effect
 - [x] Test `/Oz` (inline assembly optimization) — **no effect** (tested 2026-01-29)

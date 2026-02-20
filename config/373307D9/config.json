@@ -13,7 +13,8 @@
         "/NODEFAULTLIB",
         "/XEX:NO",
         "/FORCE",
-        "/MERGE:.xidata=.text"
+        "/MERGE:.xidata=.text",
+        "/MAP"
     ],
     "cflags": {
         "base": {

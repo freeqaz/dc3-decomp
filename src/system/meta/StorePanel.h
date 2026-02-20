@@ -5,6 +5,7 @@
 #include "meta/StoreOffer.h"
 #include "meta/StorePreviewMgr.h"
 #include "obj/Data.h"
+#include "obj/Msg.h"
 #include "obj/Object.h"
 #include "os/PlatformMgr.h"
 #include "rndobj/Tex.h"
@@ -14,6 +15,13 @@
 #include "utl/NetCacheLoader.h"
 #include "utl/Symbol.h"
 #include <list>
+
+DECLARE_MESSAGE(MultipleItemsEnumCompleteMsg, "multiple_items_enum_complete")
+bool Purchased(int index) const {
+    DataArray *arr = mData->Node(6).Array(mData);
+    return arr->Node(index).Int(arr);
+}
+END_MESSAGE
 
 class StorePanel : public UIPanel {
 public:
@@ -77,16 +85,9 @@ protected:
     DataNode OnMsg(SigninChangedMsg const &);
     DataNode OnMsg(ProfileSwappedMsg const &);
     DataNode OnMsg(SingleItemEnumCompleteMsg const &);
+    DataNode OnMsg(MultipleItemsEnumCompleteMsg const &);
     void ValidateOffers(std::vector<StoreOffer *> &);
-    // DataNode __cdecl OnMsg(MultipleItemsEnumCompleteMsg const &);
 };
-
-DECLARE_MESSAGE(MultipleItemsEnumCompleteMsg, "multiple_items_enum_complete")
-bool Purchased(int index) const {
-    DataArray *arr = mData->Node(6).Array(mData);
-    return arr->Node(index).Int(arr);
-}
-END_MESSAGE
 
 class StoreEnumJob : public Job {
 public:
