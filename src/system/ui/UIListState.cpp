@@ -303,7 +303,20 @@ bool UIListState::CanScrollNext(bool b) const {
     return false;
 }
 
-bool UIListState::ShouldHoldDisplayInPlace(int i2) const { return false; }
+bool UIListState::ShouldHoldDisplayInPlace(int i2) const {
+    if ((mTargetShowing > mFirstShowing && i2 == 0)
+        || (mTargetShowing < mFirstShowing && i2 == -1)) {
+        if (SnappedDataForDisplay(i2) >= 0) {
+            int numdisp = NumDisplay();
+            if (i2 + 1 != numdisp && Display2Data(numdisp) != -1) {
+                if (!Provider()->IsSnappableAtData(Display2Data(i2 + 1))) {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
 
 void UIListState::Scroll(int, bool) {}
 

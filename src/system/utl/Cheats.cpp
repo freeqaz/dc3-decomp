@@ -162,7 +162,27 @@ void CheatsTerminate() {
     }
 }
 
-void CheatsManager::RebuildKeyCheatsForMode() { return; }
+void CheatsManager::RebuildKeyCheatsForMode() {
+    static Symbol modes("modes");
+    mKeyCheatPtrsMode.clear();
+    for (std::vector<KeyCheat>::iterator it = mKeyCheats.begin();
+         it != mKeyCheats.end(); ++it) {
+        DataArray *modesArr = it->mScript->FindArray(modes, false);
+        if (!modesArr || modesArr->Contains(mSymMode)) {
+            mKeyCheatPtrsMode.push_back(&*it);
+        }
+    }
+    for (int i = 0; i < 2; i++) {
+        mJoyCheatPtrsMode[i].clear();
+        for (std::vector<QuickJoyCheat>::iterator it = mQuickJoyCheats[i].begin();
+             it != mQuickJoyCheats[i].end(); ++it) {
+            DataArray *modesArr = it->mScript->FindArray(modes, false);
+            if (!modesArr || modesArr->Contains(mSymMode)) {
+                mJoyCheatPtrsMode[i].push_back(&*it);
+            }
+        }
+    }
+}
 
 __declspec(noinline) void CheatsManager::SetSymMode(Symbol sym) {
     mSymMode = sym;
