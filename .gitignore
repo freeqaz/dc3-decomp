@@ -14,6 +14,7 @@ function_analysis/
 # Original files
 orig/*/*
 !orig/*/.gitkeep
+orig-assets/
 *.dol
 *.rel
 *.elf
