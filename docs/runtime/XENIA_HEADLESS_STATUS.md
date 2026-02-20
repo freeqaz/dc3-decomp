@@ -10,7 +10,7 @@ We're running the original DC3 XEX in xenia-headless to compare behavior between
 - Headless binary: `build/bin/Linux/Checked/xenia-headless`
 - Built with premake5 + gmake2, `config=checked_linux`
 
-## Current Status (2026-02-20)
+## Current Status (2026-02-21)
 
 ### Multi-Frame Capture: WORKING
 
@@ -158,7 +158,7 @@ Each xenia run creates `xenia_code_cache_*` and `xenia_memory_*` in `/dev/shm`. 
 
 ### Other Limitations
 
-- **PE Override blocked** — decomp linker produces different function addresses (+0x1600 .text shift + non-uniform per-function offsets).
+- **PE Override superseded** — decomp XEX now boots directly via `build_xex.py`; PE Override no longer needed.
 - **Inline draw deadlock** — still deadlocks at frame 12 (untested post-fix).
 - **XAudio2 stubbed** — audio CreateDriver fails, returns dummy handle. Audio doesn't play but game doesn't crash.
 - **SaveLoadManager error paths** all crash via `MILO_FAIL` — cannot make content ops fail gracefully.
@@ -243,6 +243,16 @@ Frame N (CAPTURE):
 ```
 
 ## Changes Made
+
+### Decomp XEX Builder Fixes (completed) — DECOMP XEX BOOT
+
+**Root cause of "Execute(830EAFF8): failed to find function"**: `build_xex.py` copied security info (including page descriptors) verbatim from the debug XEX template. Xenia's `XexModule::ContainsAddress()` uses CODE page descriptors to build the valid address range — with the debug XEX's descriptors, our entry point fell outside any CODE region.
+
+**Files modified (dc3-decomp):**
+- `scripts/build/build_xex.py`:
+  - `generate_page_descriptors()` — parses PE sections, maps 64KB pages to CODE/DATA/RODATA
+  - `build_security_info()` — replaces page descriptors in security info blob
+  - `generate_thunk_data()` — accepts `target_size_of_image` to avoid thunk/code overlap
 
 ### XEnumerate NO_MORE_FILES Fix (completed) — CACHE SEARCH CRASH FIX
 
@@ -404,6 +414,12 @@ cd build && make xenia-headless config=checked_linux -j$(nproc)
     --headless_capture_interval=50 \
     --target=~/code/milohax/dc3-decomp/orig-assets/debug.xex
 
+# Run DECOMP XEX (our built binary)
+./bin/Linux/Checked/xenia-headless --gpu=null \
+    --stub_nui_functions=true \
+    --target=~/code/milohax/dc3-decomp/build/373307D9/default.xex \
+    --headless_timeout_ms=30000
+
 # Run with scripted input
 ./bin/Linux/Checked/xenia-headless --gpu=vulkan \
     --target=~/code/milohax/dc3-decomp/orig-assets/default.xex \
@@ -417,11 +433,49 @@ cd build && make xenia-headless config=checked_linux -j$(nproc)
 # resolution strips the home directory from symlink targets)
 ```
 
-## PE Override Feature (implemented, blocked)
+## Decomp XEX Boot (2026-02-21)
+
+### build_xex.py Fixes
+
+Two critical bugs in `scripts/build/build_xex.py` prevented the decomp XEX from booting:
+
+#### 1. Page Descriptor Generation (root cause of "failed to find function")
+
+**Problem**: `build_xex()` copied the security info (including page descriptors) verbatim from the debug XEX template. The debug XEX's page descriptors describe a different section layout than our decomp PE. Xenia's `XexModule::ContainsAddress()` uses CODE page descriptors to determine the valid address range — with wrong descriptors, the entry point fell outside any CODE region.
+
+**XEX page descriptor encoding**: MSVC packs bitfields from LSB on both PPC and x86. In the `xex2_page_descriptor` struct, `info` occupies the LOW 4 bits and `page_count` the upper 28 bits: `value = (page_count << 4) | info`. Each descriptor is a big-endian uint32 followed by a 20-byte SHA-1 digest (24 bytes total).
+
+**Fix**: `generate_page_descriptors()` parses the PE section headers, maps each 64KB page to CODE/DATA/RODATA based on section characteristics (IMAGE_SCN_MEM_EXECUTE for CODE, IMAGE_SCN_MEM_WRITE for DATA, neither for RODATA), and consolidates into contiguous ranges. `build_security_info()` replaces the page descriptors in the security info blob.
+
+**Result**: Decomp XEX page layout: RODATA (66 pages) → CODE (370) → DATA (53) → RODATA (33) = 522 pages. Entry point at page 270, within CODE range.
+
+#### 2. Thunk Placement Overlap
+
+**Problem**: `generate_thunk_data()` placed import thunks at the original PE's SizeOfImage (~18MB). Our decomp PE is larger (~20.6MB), so thunks overlapped with valid .text code.
+
+**Fix**: Added `target_size_of_image` parameter, passing our PE's SizeOfImage for thunk placement.
+
+### Import Variable Warnings
+
+347 "import variable not resolved" warnings remain. All import variable VAs point to the original PE's .rdata layout (RVA 0x600-0x1E48). While ordinal data is copied there, the import library header's variable VAs may not correctly map to our PE's section layout. The game boots and runs despite these warnings — they're a secondary issue.
+
+### Boot Verification
+
+```bash
+# Run decomp XEX
+./bin/Linux/Checked/xenia-headless --gpu=null \
+    --stub_nui_functions=true \
+    --target=~/code/milohax/dc3-decomp/build/373307D9/default.xex \
+    --headless_timeout_ms=30000
+```
+
+Output confirms: NUI patched (60/60), title loaded, enters main loop, runs 30+ seconds.
+
+## PE Override Feature (implemented, superseded)
 
 A `--pe_override` flag loads the original XEX then replaces PE sections with a decomp binary. Re-patches all 347 import thunks and 360 variable imports.
 
-**Status: BLOCKED** — decomp linker produces functions at different addresses. Need matching linker layout.
+**Status: SUPERSEDED** — the direct decomp XEX boot path (above) is now the primary approach. PE Override is no longer needed since `build_xex.py` produces a valid bootable XEX directly.
 
 ## Rendering Investigation (2026-02-20)
 
@@ -548,13 +602,13 @@ Useful flags for debugging the rendering pipeline:
 - Fake Kinect skeleton data gets past player detection into gameplay
 - Save/load crash fixed
 
-### Priority 2: Decomp XEX Boot Testing
+### Priority 2: COMPLETE — Decomp XEX Boots Successfully
 
-Boot our decomp-built XEX (`build_xex.py` → valid XEX2) in xenia-headless:
-1. Generate XEX from current linked PE
-2. Boot with same NUI/XBC stubs as debug.xex
-3. Compare behavior and identify first crash point
-4. Use as regression signal for decomp work
+Our decomp-built XEX (`build_xex.py` → valid XEX2) boots in xenia-headless:
+- 60/60 NUI/XBC stubs patched, title loads successfully, enters main loop
+- 30+ seconds clean execution with null GPU, no crashes or assertions
+- 347 "import variable not resolved" warnings (known — see below)
+- Two critical fixes in `build_xex.py`: page descriptor generation + thunk placement
 
 ### Priority 3: Automated Regression Testing
 
@@ -584,10 +638,10 @@ DC3 is a Kinect game — many code paths depend on NUI (Natural User Interface) 
 - Pre-recorded dance move replay from captured data
 - Multiple player support (currently single player T-pose)
 
-### Priority: Decomp XEX Boot Testing
+### Priority: Decomp XEX Behavioral Comparison
 
-The next major milestone is booting our **decomp-built XEX** in xenia-headless and comparing behavior against the original. This requires:
-1. Generating a valid XEX from our linked PE (`build_xex.py`)
-2. Booting it in xenia with the same NUI/XBC stubs
-3. Identifying crashes, assert failures, or behavioral differences
-4. Using these as regression signals for decomp correctness
+Now that the decomp XEX boots, the next milestone is comparing its runtime behavior against the original debug XEX:
+1. Boot decomp XEX with Vulkan GPU + frame capture
+2. Compare rendered frames against debug XEX reference screenshots
+3. Identify behavioral divergences (crashes, visual differences, assert failures)
+4. Use runtime differences as regression signals for decomp correctness
