@@ -112,6 +112,26 @@ Current state:
 
 All have been triaged. Remaining gaps are unfixable compiler artifacts (merged symbols, register allocation, FMA direction, bool masks).
 
+## Known Gaps to Investigate
+
+### Inlined Handler Functions (Not Individually Tracked)
+
+Small handler functions called via the `HANDLE()` macro in `Handle()` dispatch methods are **inlined by the compiler** into the parent `Handle()` function. They don't exist as separate symbols in the binary, so they aren't tracked individually in `symbols.txt` or `decomp.db`.
+
+**Impact**: These inlined handlers contribute to the parent `Handle()` function's match percentage but can't be measured or reported independently. For example, `UIManager::Handle` is 3,300 bytes (940 instructions) at 55.8% match — many of its mismatches come from stub handlers like `OnPushScreen`, `OnPopScreen`, `OnFocusPanel`, `OnSetSink`, `OnToggleDevMenu`, and `OnResetScreen` that currently return 0 but should have real implementations.
+
+**Known affected Handle functions**:
+- `UIManager::Handle` (0xCE4 bytes, 55.8%) — ~10 stub handlers inlined
+- `Automator::Handle` (0x82C bytes, 41.1%) — stub handlers inlined
+
+**Investigation needed**:
+1. Audit all large `Handle()` functions to identify which have stub handlers folded in
+2. Use Ghidra to recover the correct handler implementations
+3. Track improvement via the parent Handle function's match percentage
+4. Quantify the total byte impact of fixing these inlined stubs
+
+This is potentially a significant source of recoverable match percentage, since Handle functions are large and their stubs are often simple to implement from Ghidra decompilation.
+
 ## Anti-Goals (What NOT to Do)
 
 1. **Don't chase 100% on AT_LIMIT functions** — All 6,406 have been triaged as unfixable

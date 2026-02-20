@@ -563,7 +563,22 @@ void UIManager::PushScreen(UIScreen *screen) {
     GotoScreenImpl(screen, false, false);
 }
 
-DataNode UIManager::OnForeachCurrentScreen(DataArray const *) { return NULL_OBJ; }
+DataNode UIManager::OnForeachCurrentScreen(DataArray const *arr) {
+    DataNode *var = arr->Node(2).Var(arr);
+    DataNode saved(*var);
+    std::vector<UIScreen *> screens(mPushedScreens);
+    if (mCurrentScreen) {
+        screens.push_back(mCurrentScreen);
+    }
+    for (UIScreen **it = screens.begin(); it != screens.end(); it++) {
+        *var = DataNode(*it);
+        for (int i = 3; i < arr->Size(); i++) {
+            arr->Node(i).Command(arr)->Execute();
+        }
+    }
+    *var = saved;
+    return 0;
+}
 
 void UITerminateCallback() { TheUI->Terminate(); }
 
@@ -683,7 +698,7 @@ DataNode UIManager::OnInTransition(DataArray *arr) {
     return DataNode((bool)(mTransitionState != kTransitionNone));
 }
 DataNode UIManager::OnFocusPanel(DataArray *arr) {
-    return 0;
+    return DataNode(FocusPanel());
 }
 DataNode UIManager::OnWentBack(DataArray *arr) {
     return DataNode((bool)mWentBack);
