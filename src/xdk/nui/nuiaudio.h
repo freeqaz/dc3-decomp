@@ -30,6 +30,20 @@ void NuiAudioUnregisterCallbacks(
     const HANDLE Handle, NUIAUDIO_CALLBACK *pfnProcessingCallback
 );
 
+HRESULT NuiAudioCreatePrivate(
+    UINT32 uHardwareThreadRequested,
+    NUIAUDIO_ERROR_CALLBACK *pfnErrorCallback,
+    DWORD Flags,
+    HANDLE Handle,
+    UINT32 *pHardwareThreadUsed
+);
+void NuiAudioRegisterCallbacksPrivate(
+    const HANDLE Handle, DWORD Flags, NUIAUDIO_CALLBACK *pfnProcessingCallback
+);
+void NuiAudioUnregisterCallbacksPrivate(
+    const HANDLE Handle, NUIAUDIO_CALLBACK *pfnProcessingCallback
+);
+
 #ifdef __cplusplus
 }
 #endif

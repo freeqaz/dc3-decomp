@@ -2,115 +2,122 @@
 
 Based on pattern analysis and current project state.
 
-## Current State (2026-02-14)
+## Current State (2026-02-20)
 
 | Metric | Value |
 |--------|-------|
-| Total functions | 47,124 |
-| Matched (100%) | 23,956 (50.8%) |
-| AT_LIMIT (classified stuck) | 1,821 |
-| Unimplemented (0%) | 21,886 |
-| Fuzzy match | 43.62% |
-| Matched code | 35.76% |
+| Total functions | 47,849 |
+| Excluded (SDK/lib) | 16,021 |
+| Non-excluded | 31,828 |
+| COMPLETE (100%) | 25,442 (79.9% of non-excluded) |
+| AT_LIMIT (classified stuck) | 6,406 (20.1% of non-excluded) |
+| Remaining workable | 0 |
+| Fuzzy match | 44.06% |
+| Matched code | 35.99% |
+| Complete units | 165 / 2,224 |
+
+### What Changed Since 2026-02-14
+
+- **Exhaustive triage complete**: All 31,828 non-excluded functions classified (COMPLETE or AT_LIMIT)
+- **Regswap patching**: +0.32% code match (709 functions patched, 114 promoted to 100%)
+- **Stub burndown**: 43 stubs implemented, +0.21% fuzzy match
+- **SmartGlass send path**: 8 functions implemented (DtaToJson, XbcSendMsg, etc.)
+- **Unicorn behavioral testing**: 93.1% equivalence rate across 25,682 functions
+- **X360 linking**: VA shift fixed, XEX builds working, debug.xex boots in Xenia
+
+## Active Work Streams
+
+### 1. SmartGlass Receive Path (In Progress)
+
+**JsonToDta** — 1,132-byte recursive JSON-to-DataArray parser. Forward-declared but unimplemented.
+- Symbol: `?JsonToDta@?A0x8a9ffbf2@@YA?AVDataArrayPtr@@PAUHJSONREADER__@@_N@Z`
+- DB shows 100% from a previous batch-check (may be stale — needs validation)
+- Completes the SmartGlass bidirectional communication path
+
+### 2. XDK Header Improvements (In Progress)
+
+Missing XDK declarations block stub implementation and future decomp work.
+
+| Subsystem | Missing | Priority | Status |
+|-----------|---------|----------|--------|
+| NUI/Kinect (xnui.h) | 18 XNui* title-wrapper functions | High | New header needed |
+| NUI skeleton | 3 functions | High | Add to nuiskeleton.h |
+| NUI camera/image | 4 functions | High | Add to nuidetroit.h |
+| NUI identity | 1 function (NuiIdentityEnroll) | Medium | Add to nuiidentity.h |
+| NUI audio | 3 private functions | Medium | Add to nuiaudio.h |
+| MMIO | 3 functions (mmioAscend/CreateChunk/Descend) | Medium | Add to mmio.h |
+| XMic (Microphone) | ~8 public functions | Low | New header needed |
+| XHV (Voice) | ~20 engine functions | Low | New header needed |
+
+### 3. Stub Burndown (Ongoing)
+
+Implementing function bodies for forward-declared stubs. Each stub implemented improves fuzzy match.
+- Previous session: 43 stubs → +0.21% fuzzy match
+- Remaining stubs: TBD (need audit)
 
 ## Realistic Achievable Targets
 
-### By Match Percentage
-
-| Target | Functions | Realistic? | Notes |
-|--------|-----------|------------|-------|
-| 100% match | ~4,000 | Yes | No unfixable patterns |
-| 99-99.9% | ~16,000 | Yes | LINKER_MERGED ceiling |
-| 97-99% | ~3,000 | Yes | BOOL_MASK/other ceilings |
-| <97% | ~2,000 | Partial | Complex issues |
-| XDK | ~1,000 | No | External SDK, excluded |
-
 ### Why 100% Is Rare
 
-**~80% of near-match functions have LINKER_MERGED issues** creating permanent 0.5-3% gaps.
+**~80% of near-match functions have unfixable patterns** creating permanent gaps.
 
 | Pattern | Prevalence | Impact | Fixable |
 |---------|-----------|--------|---------|
 | LINKER_MERGED | 80% | 0.5-3% gap | No |
 | BOOL_MASK | 5% | ~3% gap | No |
-| ASSERT_REVS | 5% | ~0.9% gap | No |
+| REGISTER_SWAP | 80% | 1-3% gap | Patched post-build |
+| FMA direction | Mixed | ~1% gap | No (mixed directions per function) |
 | CONTROL_FLOW | 40% | 1-5% gap | 70% success |
-| REGISTER_SWAP | 80% | 1-3% gap | 30% success |
+
+### Match Quality Audit Results (2026-02-18)
+
+- **95-100% range**: 0 fixable encoding patterns (all relocation/merged/regswap noise)
+- **50-80% range**: 193 pattern hits in 79 functions (bool_mask: 108, FMA: 63) — all unfixable
+- **Regswap patching**: 709 functions, +0.32% code match (post-build step, re-run after ninja)
 
 ## Goal Categories
 
-### Tier 1: Perfect Matches (100%)
+### Tier 1: Implement Missing Function Bodies
 
-**Target**: ~4,000 functions that can actually reach 100%
+**Target**: Implement stubs and missing functions to increase fuzzy match percentage.
 
-Criteria:
-- `reachable_100 = 1`
-- No LINKER_MERGED, BOOL_MASK, ASSERT_REVS patterns
+This is the **highest-impact remaining work**. Each function body implementation directly increases the fuzzy match metric.
 
-Priority: Highest for maintaining code quality
+Priority targets:
+- SmartGlass receive path (JsonToDta)
+- Functions with RB3 reference implementations (shared Milo engine)
+- Large functions (more bytes matched per function)
 
-### Tier 2: Practical Matches (97-99.9%)
+### Tier 2: XDK Header Coverage
 
-**Target**: ~19,000 functions at their practical limit
+**Target**: Declare all XDK functions used by the game to unblock future decomp.
 
-Criteria:
-- Has unfixable patterns but otherwise matched
-- Current % is within ~1% of theoretical ceiling
+Benefits:
+- Enables proper type checking in decomp source
+- Unblocks stub implementation for callers
+- Improves code readability
 
-Priority: Accept as "done" and move on
+### Tier 3: Runtime Validation (Xenia Headless)
 
-### Tier 3: Bulk Progress (50-96%)
+**Target**: Validate decomp output runs correctly in Xenia.
 
-**Target**: Make progress on the ~23,000 untouched functions
+Current state:
+- Debug.xex boots with 60 guest memory patches (57 NUI + 3 XBC/SmartGlass stubs)
+- Deferred rendering has gamma/readback issues
+- PE Override blocked (decomp linker produces different function addresses)
 
-Criteria:
-- Never attempted (`attempt_count = 0`)
-- Not excluded
+### Tier 4: Accept AT_LIMIT Functions
 
-Priority: Run bulk Haiku sweeps to establish baselines
+**Target**: 0 further effort on the 6,406 AT_LIMIT functions.
 
-### Tier 4: Excluded (Skip)
-
-**Target**: 0 effort on ~1,000 XDK functions
-
-Criteria:
-- `excluded = 1`
-- Unit starts with `xdk/`
-
-Priority: Do not attempt
-
-## Success Metrics
-
-### Short-Term (Phase 1)
-
-| Metric | Target | Measurement |
-|--------|--------|-------------|
-| NEAR_COMPLETE triaged | 606 functions | Pattern analysis complete |
-| XDK excluded | ~1,000 functions | `excluded = 1` marked |
-| True 100%-achievable identified | ~100-150 | `reachable_100 = 1` AND high match |
-
-### Medium-Term (Phase 2)
-
-| Metric | Target | Measurement |
-|--------|--------|-------------|
-| Pattern columns populated | 5,000+ functions | All 80%+ analyzed |
-| Call graph validated | Decision made | >= 10 functions with 20+ callers? |
-| Scoring infrastructure | Complete | Priority views working |
-
-### Long-Term (Phase 3)
-
-| Metric | Target | Measurement |
-|--------|--------|-------------|
-| Perfect matches (100%) | +500-1,000 | From 21,386 baseline |
-| Practical matches (97%+) | +5,000-10,000 | Bulk progress |
-| Bulk attempted | 10,000+ | First-pass coverage |
+All have been triaged. Remaining gaps are unfixable compiler artifacts (merged symbols, register allocation, FMA direction, bool masks).
 
 ## Anti-Goals (What NOT to Do)
 
-1. **Don't chase 100% on LINKER_MERGED functions** - Accept 99.x% as done
-2. **Don't count XDK progress** - It's excluded, don't measure it
-3. **Don't over-invest in call graph** if validation fails - Use simpler scoring
-4. **Don't skip triage** - Pattern analysis prevents wasted effort
+1. **Don't chase 100% on AT_LIMIT functions** — All 6,406 have been triaged as unfixable
+2. **Don't count XDK progress** — 16,021 functions excluded from metrics
+3. **Don't retry exhaustive batch sweeps** — Full triage already complete
+4. **Don't spend >3-4 attempts on register allocation** — Diminishing returns
 
 ## Decision Framework
 
@@ -118,19 +125,17 @@ Priority: Do not attempt
 
 ```
 IF excluded = 1:
-    SKIP (XDK)
-ELIF reachable_100 = 1 AND current_percent < 100:
-    YES, priority target for 100%
-ELIF current_percent >= 99 AND reachable_100 = 0:
-    SKIP (at practical limit)
-ELIF current_percent >= 80 AND primary_pattern IN (CONTROL_FLOW, COMPARISON):
-    YES, likely fixable
-ELIF attempt_count = 0:
-    YES, bulk sweep candidate
-ELIF attempt_count >= 5:
-    SKIP (stuck, needs manual review)
+    SKIP (XDK/SDK)
+ELIF status = 'AT_LIMIT':
+    SKIP (already triaged as unfixable)
+ELIF function has no implementation body (stub/forward-decl):
+    YES, implement it (highest impact)
+ELIF RB3 reference exists:
+    YES, use as guide
+ELIF function is large (>200 bytes):
+    YES, high byte-count impact
 ELSE:
-    MAYBE, use scoring model
+    Use scoring model or skip
 ```
 
 ### "Is this function done?"
@@ -138,56 +143,22 @@ ELSE:
 ```
 IF current_percent = 100:
     YES, perfect match
+ELIF status = 'AT_LIMIT':
+    YES, at practical limit (accept)
 ELIF current_percent >= 99 AND has_linker_merged:
-    YES, at practical limit (accept)
+    YES, at practical limit
 ELIF current_percent >= 97 AND has_bool_mask:
-    YES, at practical limit (accept)
-ELIF verdict = 'AT_LIMIT':
-    YES, marked as stuck (accept for now)
+    YES, at practical limit
 ELSE:
     NO, more work possible
 ```
 
-## Tracking Progress
+## Key Metrics to Track
 
-### Weekly Metrics
-
-```sql
--- Weekly progress snapshot
-SELECT
-    date('now') as snapshot_date,
-    SUM(CASE WHEN current_percent >= 100 THEN 1 ELSE 0 END) as perfect_matches,
-    SUM(CASE WHEN current_percent >= 99 THEN 1 ELSE 0 END) as practical_matches,
-    SUM(CASE WHEN reachable_100 = 1 AND current_percent >= 100 THEN 1 ELSE 0 END) as true_100,
-    SUM(CASE WHEN attempt_count > 0 THEN 1 ELSE 0 END) as attempted,
-    COUNT(*) as total
-FROM functions
-WHERE excluded = 0;
-```
-
-### Progress by Category
-
-```sql
-SELECT
-    CASE
-        WHEN current_percent >= 100 THEN '100% (done)'
-        WHEN current_percent >= 99 AND reachable_100 = 0 THEN '99%+ (at limit)'
-        WHEN current_percent >= 99 AND reachable_100 = 1 THEN '99%+ (can improve)'
-        WHEN current_percent >= 90 THEN '90-99%'
-        WHEN current_percent >= 50 THEN '50-89%'
-        ELSE '<50%'
-    END as category,
-    COUNT(*) as count
-FROM functions
-WHERE excluded = 0
-GROUP BY category
-ORDER BY
-    CASE category
-        WHEN '100% (done)' THEN 1
-        WHEN '99%+ (at limit)' THEN 2
-        WHEN '99%+ (can improve)' THEN 3
-        WHEN '90-99%' THEN 4
-        WHEN '50-89%' THEN 5
-        ELSE 6
-    END;
-```
+| Metric | Current | Notes |
+|--------|---------|-------|
+| Fuzzy match % | 44.06% | Source of truth for decomp progress |
+| Matched code % | 35.99% | Byte-level accuracy |
+| Complete units | 165 / 2,224 | Units where all functions match |
+| COMPLETE functions | 25,442 | Out of 31,828 non-excluded |
+| Stubs remaining | TBD | Forward-declared but unimplemented |

@@ -44,6 +44,19 @@ MMRESULT mmioAdvance(HMMIO hmmio, LPMMIOINFO pmmioinfo, UINT fuAdvance);
 
 FOURCC mmioStringToFOURCCW(LPCSTR sz, UINT uFlags);
 
+typedef struct _MMCKINFO {
+    FOURCC ckid;
+    DWORD cksize;
+    FOURCC fccType;
+    DWORD dwDataOffset;
+    DWORD dwFlags;
+} MMCKINFO, *LPMMCKINFO;
+typedef const MMCKINFO *LPCMMCKINFO;
+
+MMRESULT mmioAscend(HMMIO hmmio, LPMMCKINFO pmmcki, UINT fuAscend);
+MMRESULT mmioCreateChunk(HMMIO hmmio, LPMMCKINFO pmmcki, UINT fuCreate);
+MMRESULT mmioDescend(HMMIO hmmio, LPMMCKINFO pmmcki, LPCMMCKINFO pmmckiParent, UINT fuDescend);
+
 #ifdef __cplusplus
 }
 #endif

@@ -150,6 +150,23 @@ HRESULT NuiImageStreamGetNextFrame(
 
 HRESULT NuiImageStreamReleaseFrame(HANDLE hStream, const NUI_IMAGE_FRAME *pImageFrame);
 
+HRESULT NuiCameraGetNormalToGravity(XMVECTOR *pvNormalToGravity);
+HRESULT NuiCameraSetProperty(
+    NUI_CAMERA_TYPE CameraType, NUI_CAMERA_PROPERTY eCameraProperty, LONG lValue
+);
+HRESULT NuiCameraSetExposureRegionOfInterest(
+    NUI_CAMERA_TYPE CameraType, const NUI_CAMERA_AE_ROI *pRegionOfInterest
+);
+HRESULT NuiImageGetColorPixelCoordinatesFromDepthPixel(
+    NUI_IMAGE_RESOLUTION eColorResolution,
+    const NUI_IMAGE_VIEW_AREA *pcViewArea,
+    LONG lDepthX,
+    LONG lDepthY,
+    USHORT usDepthValue,
+    LONG *plColorX,
+    LONG *plColorY
+);
+
 #ifdef __cplusplus
 }
 #endif

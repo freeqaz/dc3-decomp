@@ -56,6 +56,12 @@ HRESULT NuiIdentityIdentify(
     NUI_IDENTITY_CALLBACK *pfnIdentityCallback,
     VOID *pvContext
 );
+HRESULT NuiIdentityEnroll(
+    DWORD dwTrackingID,
+    DWORD dwFlags,
+    NUI_IDENTITY_CALLBACK *pfnIdentityCallback,
+    VOID *pvContext
+);
 
 #ifdef __cplusplus
 }
