@@ -16,6 +16,23 @@ We're running the original DC3 XEX in xenia-headless to compare behavior between
 
 Multi-frame capture is fully operational. 14+ captures per run confirmed with deferred draws, 15-35ms readback latency per frame.
 
+### debug.xex: BOOTS SUCCESSFULLY (2026-02-20)
+
+The DC3 debug build now boots past all SDK initialization barriers with `--stub_nui_functions=true`:
+
+- **60 guest memory patches** applied (57 NUI + 3 XBC/SmartGlass)
+- Shows DC3 loading animation (magenta sine wave), transitions to main game loop
+- 26 threads spawned, 10K+ VdSwap cycles, 100+ frame captures in 90 seconds
+- Same deferred rendering quality issues as retail XEX (dark red/black color corruption)
+- No MILO_ASSERT failures, no crashes during sustained 90-second runs
+
+**Previously**: Halted on `NuiInitialize` failure (error `0x8301000b`), then on "Failed to initialize Xbox SmartGlass library."
+
+### default.xex (retail)
+
+- Works correctly. DC logo boot animation renders with deferred draw cache fix.
+- Build info from debug screen: Build 120916, Plat: xbox, SystemConfig: config/ham_preinit_keep.dta
+
 ### Rendering Quality: PARTIALLY FIXED
 
 Cache invalidation fix applied — deferred draws now produce real rendered content (151K bright pixels, R=255 warm tones) instead of flat B=0x3F.
@@ -31,9 +48,11 @@ Cache invalidation fix applied — deferred draws now produce real rendered cont
 
 **Remaining**: Overall frame still dark despite real content — possible gamma ramp or readback format issue.
 
-### Screenshots Captured (Feb 19, inline draws)
+### Screenshots Captured
 
-DC3 boot animation successfully rendered and captured via inline draws (single capture per run due to frame 12 deadlock).
+#### Retail XEX — Inline Draws (Feb 19)
+
+DC3 boot animation successfully rendered (single capture per run due to frame 12 deadlock).
 
 | Frame | Content |
 |-------|---------|
@@ -45,14 +64,31 @@ DC3 boot animation successfully rendered and captured via inline draws (single c
 | 275 | DC card tilting/shrinking — animation ending |
 | 300+ | Screen transition (half black / half dark red) |
 
+#### Debug XEX — Deferred Draws with NUI Stubs (Feb 20)
+
+100+ captures across 5200 swaps (90 seconds). Game boots through loading and enters main loop.
+
+| Frame | Content |
+|-------|---------|
+| 50-100 | Black (startup) |
+| 150-200 | Golden vertical line (UI transition effect) |
+| 250-350 | DC3 logo/icon appearing in golden frame |
+| 450-550 | **DC3 loading animation** (magenta sine wave — unmistakable) |
+| 650-750 | Loading animation fading, red/black diagonal transition |
+| 800-950 | Dark red fullscreen, scanline patterns |
+| 1000+ | Alternating dark red / black / split screens with geometric patterns |
+| 2500-5000 | Continues cycling (game is alive, rendering corrupted by deferred draw issue) |
+
 ### Performance Summary
 
-| Configuration | Swaps/20s | FPS | Notes |
-|---|---|---|---|
-| Null GPU (no draws) | 600+ | ~30 | Baseline — game logic only |
-| Vulkan all draws, no readback | 611 | ~30.5 | Full speed, async pipelines |
-| Vulkan 120s sustained run | 3,931/120s | ~33 | Locked at game's internal timestep |
-| Multi-frame capture (every 100 frames) | 700+ | ~33 | Game survives, 15-35ms per capture |
+| Configuration | Swaps | Duration | FPS | Notes |
+|---|---|---|---|---|
+| Retail: Null GPU (no draws) | 600+ | 20s | ~30 | Baseline — game logic only |
+| Retail: Vulkan all draws, no readback | 611 | 20s | ~30.5 | Full speed, async pipelines |
+| Retail: Vulkan 120s sustained run | 3,931 | 120s | ~33 | Locked at game's internal timestep |
+| Retail: Multi-frame capture (every 100) | 700+ | 20s | ~33 | Game survives, 15-35ms per capture |
+| **Debug: Vulkan + NUI stubs** (every 50) | **5,200+** | **90s** | **~58** | **26 threads, 100+ captures, no crash** |
+| Debug: Null GPU + NUI stubs | 884K+ draws | 60s | N/A | Game logic running, no rendering |
 
 ### What Works
 
@@ -66,13 +102,47 @@ DC3 boot animation successfully rendered and captured via inline draws (single c
 - Scripted controller input (`--scripted_input='5s:A,7s:START'`)
 - Pipeline cache warms up in <10 seconds (only 2-3 initial stalls)
 
-### What's Limited
+### Current Blockers for Full Gameplay
 
-- **Rendering partially dark** — deferred draws now produce real content (151K bright pixels, warm tones) but overall frame is dark. Possible gamma ramp or readback format issue.
-- **force_all_draws flat color** — E10 mode produces uniform R=2,G=1,B=2 (different failure from deferred).
-- **Inline draw deadlock** — still deadlocks at frame 12 (untested post-fix).
-- **Boot animation only** — game needs scripted input to advance past the DC logo to menus.
+These are the remaining barriers between "game boots" and "game is playable":
+
+#### 1. Deferred Draw Rendering Quality (affects both retail and debug XEX)
+
+The primary blocker. Deferred draws produce dark red/black output instead of correct colors. The game IS running (frames change, geometric patterns animate, 26 threads active) but the rendered output is too corrupted to see menus or UI.
+
+**Symptoms**: Captures show solid dark red, black, red/black split screens, and occasionally scanline/geometric patterns. Early boot frames (loading animation) render recognizably (magenta sine wave, DC3 logo icon), but main game rendering is broken.
+
+**Root cause**: Partially fixed (B=0x3F cache invalidation), but remaining issues include:
+- Gamma ramp not applied in readback path
+- Possible format conversion issue in staging buffer copy
+- EDRAM resolve may not be producing correct output for all render target configs
+- `force_all_draws` mode produces uniform R=2,G=1,B=2 (different failure)
+
+**Impact**: Cannot see game menus, cannot determine what screen the game is on, cannot plan scripted input sequences.
+
+#### 2. No Controller Input in Headless Mode
+
+Headless mode uses nop HID (no input devices). The game likely reaches a "Press Start" or title screen and waits. Scripted input (`--scripted_input='5s:A,7s:START'`) exists but requires knowing what screen the game is on — blocked by rendering quality.
+
+**Workaround path**: Fix rendering → identify screens → craft input sequence → automate boot to gameplay.
+
+#### 3. Missing devkit: Device (debug.xex only)
+
+The debug build tries to load files from the `devkit:` path, which doesn't have a corresponding device mapped in xenia:
+- `devkit:\locale\eng\locale_keep.dta` — locale overrides
+- `devkit:\dancers.dta` — dancer data overrides
+
+These are debug-mode overlay paths for dev kit workflows. The game handles the file-not-found gracefully (falls back to disc content), so this is **not a boot blocker** but may cause missing debug features.
+
+#### 4. Missing Patch File
+
+`d:\gen\patch_xbox.hdr` — title update / DLC patch file. Not available. The game handles this gracefully.
+
+### Other Limitations
+
 - **PE Override blocked** — decomp linker produces different function addresses (+0x1600 .text shift + non-uniform per-function offsets).
+- **Inline draw deadlock** — still deadlocks at frame 12 (untested post-fix).
+- **XAudio2 stubbed** — audio CreateDriver fails, returns dummy handle. Audio doesn't play but game doesn't crash.
 
 ## Root Cause Analysis: Why Draws Killed the Game (SOLVED)
 
@@ -154,6 +224,25 @@ Frame N (CAPTURE):
 ```
 
 ## Changes Made
+
+### NUI + SmartGlass Guest Memory Stubbing (completed) — DEBUG XEX BOOT FIX
+
+**Root cause of debug.xex crash:** The DC3 debug build statically links the Xbox 360 Kinect SDK (NUI) and SmartGlass SDK (XBC). These are PPC code embedded in the XEX, NOT kernel imports. `NuiInitialize` and `XbcInitialize` (CXbcImpl::Initialize) fail because no hardware exists in xenia. The debug build's `MILO_ASSERT_FMT` halts on NUI failures, and SmartGlass prints "Failed to initialize Xbox SmartGlass library" and triggers program end.
+
+**Approach:** Write PPC stub instructions (`li r3, 0; blr` = return S_OK) directly into guest memory at each function address before the JIT compiles them. This is the standard emulator approach for HLE of statically-linked SDK functions (like Dolphin's OS HLE patches).
+
+**Key discovery:** XEX code pages are loaded as read-only. Writing stubs without first calling `heap->Protect(addr, 8, kMemoryProtectRead | kMemoryProtectWrite)` causes a SIGSEGV that deadlocks in xenia's signal handler (the handler tries to acquire a mutex, but the faulting thread may already hold it). Linux `mprotect` does not support `out_old_access` (asserts null on POSIX).
+
+**Files modified:**
+- `src/xenia/gpu/gpu_flags.cc/h` — `stub_nui_functions` cvar (bool, default false)
+- `src/xenia/emulator.cc` — 60 guest memory patches in `CompleteLaunch()`:
+  - 57 NUI functions: lifecycle, skeleton tracking, image streams, audio, camera properties, identity, fitness, wave gestures, head tracking, speech recognition
+  - 3 XBC/SmartGlass functions: CXbcImpl::Initialize, DoWork, SendJSON
+  - Functions returning S_OK: NuiInitialize, NuiSkeletonTrackingEnable, NuiImageStreamOpen, all camera/speech/identity stubs
+  - Functions returning E_UNEXPECTED: NuiImageStreamGetNextFrame, NuiSkeletonGetNextFrame, NuiAudioCreate (game handles failure gracefully)
+  - Extensive TODO comments for future proper NUI emulation
+
+**Usage:** `--stub_nui_functions=true --target=/path/to/debug.xex`
 
 ### SharedMemory Page Watch Suppression (completed) — ROOT CAUSE FIX
 
@@ -251,22 +340,41 @@ Created in SetupContext, destroyed in ShutdownContext. Eliminates per-frame allo
 
 ## How to Reproduce
 
+### CLI Flag Notes
+
+Previous attempts used wrong flag names. Correct flags:
+- `--headless_timeout_ms=N` (NOT `--headless_timeout`)
+- `--target=/path/to/xex` (NOT positional argument or `--capture_start_frame` which doesn't exist)
+- `--headless_capture_interval=N` for multi-frame capture spacing
+- `--dump_frames_path=/path/` for capture output directory
+
+### SDL2-compat Issue (Arch Linux)
+
+Arch replaced `sdl2` with `sdl2-compat` (SDL3 shim). When Xenia tries to show error dialogs, the call path goes through SDL2-compat -> SDL3 -> zenity, and crashes if zenity is not installed. Installing `zenity` is an optional fix to prevent crashes on dialog display. Not required for normal headless operation.
+
 ```bash
 # Build
 cd ~/code/milohax/xenia
 cd build && make xenia-headless config=checked_linux -j$(nproc)
 
-# Run with null GPU (fast, no rendering)
+# Run retail XEX with null GPU (fast, no rendering)
 ./bin/Linux/Checked/xenia-headless --gpu=null \
     --target=~/code/milohax/dc3-decomp/orig-assets/default.xex \
     --headless_timeout_ms=20000
 
-# Run with Vulkan + multi-frame capture (every 100 frames)
-# --force_all_draws is required for captures to contain rendered content
+# Run retail XEX with Vulkan + multi-frame capture
 ./bin/Linux/Checked/xenia-headless --gpu=vulkan \
-    --target=~/code/milohax/dc3-decomp/orig-assets/default.xex \
-    --dump_frames_path=/tmp/frames/ --headless_capture_interval=100 \
-    --headless_timeout_ms=30000 --force_all_draws=true
+    --headless_timeout_ms=90000 \
+    --dump_frames_path=/tmp/frames/ \
+    --headless_capture_interval=100 \
+    --target=~/code/milohax/dc3-decomp/orig-assets/default.xex
+
+# Run DEBUG XEX (requires NUI stubs)
+./bin/Linux/Checked/xenia-headless --gpu=vulkan \
+    --stub_nui_functions=true \
+    --dump_frames_path=/tmp/dc3-debug-frames/ \
+    --headless_capture_interval=50 \
+    --target=~/code/milohax/dc3-decomp/orig-assets/debug.xex
 
 # Run with scripted input
 ./bin/Linux/Checked/xenia-headless --gpu=vulkan \
@@ -277,6 +385,8 @@ cd build && make xenia-headless config=checked_linux -j$(nproc)
 
 # Note: game data (gen/main_xbox.hdr, .ark files) must be accessible
 # orig/373307D9/gen is symlinked to orig-assets/gen
+# IMPORTANT: Use absolute paths for --target, NOT symlinks (xenia path
+# resolution strips the home directory from symlink targets)
 ```
 
 ## PE Override Feature (implemented, blocked)
@@ -355,18 +465,33 @@ Useful flags for debugging the rendering pipeline:
 
 ## Next Steps
 
-### Priority 1: Fix Remaining Rendering Issues
+### Priority 1: Fix Deferred Draw Rendering Quality
 
-Deferred draw cache invalidation fix produces real content but frames are dark. Next:
-1. **Gamma ramp investigation** — verify gamma correction is applied in readback path
-2. **Vulkan validation** — run with `--vulkan_validation` to catch any remaining API errors
-3. **Dense capture test** — capture every 10 frames to see full boot animation progression
-4. **E10 flat color diagnosis** — investigate why force_all_draws produces uniform color
+The primary blocker for both retail and debug XEX. Deferred draws produce dark red/black output instead of correct colors. The game IS running (26 threads, 10K+ swaps, changing frames) but rendered output is too corrupted to see UI/menus.
+
+**Approach: Research first, then fix.** We partially fixed one symptom (B=0x3F stale cache) but don't fully understand xenia's deferred draw replay path, render target management, or EDRAM resolve pipeline. The next session should start with reading and understanding the relevant xenia code before attempting fixes.
+
+Research phase:
+1. **Read `FlushDeferredDraws()`** end-to-end — understand the full register save/restore, draw replay, and resolve flow
+2. **Read `WriteRegister()` override** in VulkanCommandProcessor — identify ALL side effects that raw memcpy bypasses (not just constant buffers and texture bindings)
+3. **Read the EDRAM resolve path** — understand how `IssueCopy()` converts EDRAM tile data to linear textures for presentation
+4. **Read the readback/capture path** — understand how `RequestSwapTexture()` gets the final framebuffer for PPM output
+5. **Compare with upstream xenia** — understand what our headless changes modify vs stock behavior
+
+Investigation phase (after research):
+1. **Vulkan validation** — run with `--vulkan_validation` to catch API errors in deferred replay
+2. **Gamma ramp investigation** — verify gamma correction is applied in readback path
+3. **Cache invalidation experiment** — try full cache clear before deferred draws
+4. **E10 flat color diagnosis** — investigate why `force_all_draws` produces uniform R=2,G=1,B=2
+5. **Inline vs deferred comparison** — if deadlock can be worked around, compare output quality
 
 ### Priority 2: Boot Screen Advancement
 
-With partially-correct rendering, iterate on scripted input sequences to navigate past the DC logo. The boot animation ends around frame 275. Need to capture frames 400-800 with input to see menu screens.
+Once rendering is readable, use scripted input to navigate:
+1. Past DC logo (boot animation ends ~frame 275)
+2. Through "Press Start" / title screen
+3. To main menu — this is where the game exercises most code paths
 
 ### Priority 3: PE Override
 
-Generate COMDAT order file from original map to enable matching linker layout for PE override.
+Generate COMDAT order file from original map to enable matching linker layout for PE override. This would allow running our decomp code against the original game's data.

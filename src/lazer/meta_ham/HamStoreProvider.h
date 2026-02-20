@@ -50,6 +50,7 @@ public:
     void OnNextSort();
     void Refresh();
     bool AllowSortToggle() { return mSorts.size() > 1; }
+    bool IsOfferInCart(StoreOffer *);
 
     PackSongListProvider GetPackProvider() { return unk78; }
     HamStoreFilterProvider *GetFilterProvider() { return unk74; }

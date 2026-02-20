@@ -209,6 +209,81 @@ XenonRecomp does **not support exceptions** in recompiled code — it redirects 
 ### Long Term (Correct Link)
 **Use jeff fork's section merging.** The upstream fix properly merges duplicate .pdata sections during COFF splitting, producing objects that the MSVC linker handles correctly. Once all jeff fork changes are integrated, the `.pdat0` workaround becomes unnecessary.
 
+## 8. Root Cause of LNK1223 in Split Objects (2026-02-19)
+
+### Why jeff's .pdata Triggers LNK1223
+
+The MSVC linker (for RISC platforms including PowerPC) validates `.pdata` contributions from each object file. LNK1223 fires when `.pdata` entries are **unsorted** by `BeginAddress` or contain **invalid entries**.
+
+Jeff's `write_coff()` produces `.pdata` sections with two problems:
+
+#### Problem 1: `__unwind$` Functions as .pdata Entries
+
+Jeff treats `__unwind$` functions like normal functions and generates `.pdata` entries for them. But `__unwind$` functions are **exception handler thunks** — they don't need their own `.pdata` entries. Their exception handling context is provided by the parent function's `PDATA_EH` blob.
+
+When `.pdata` contains entries for both normal functions and `__unwind$` functions interleaved, the linker's sort validation can fail because:
+- Each object's `.pdata` entries reference symbols via relocations (`func_rva=0` + reloc)
+- After relocation, `__unwind$` entries may not maintain sorted order relative to the normal function entries
+- LNK1223 fires: "invalid or unsorted .pdata contributions"
+
+#### Problem 2: Missing ADDR32 Relocations on PDATA_EH
+
+The `except_data_*` symbols in `.text` contain the PDATA_EH blobs (8 bytes before functions with `ExceptionFlag=1`). These blobs contain **absolute virtual addresses** baked in from the original binary:
+
+```
+except_data_82DF7860 at .text+0x58:
+  pHandler    = 0x8299E5E0  (__CxxFrameHandler)
+  pHandlerData = 0x82252EE8  (FuncInfo in .rdata)
+```
+
+But there are **no ADDR32 relocations** at these offsets. The addresses only work if the final PE has the same VA layout as the original. In our hybrid link, these addresses will be wrong because:
+- `__CxxFrameHandler` may be at a different address in our linked PE
+- The `.rdata` FuncInfo structs are at shifted addresses
+
+### Verified Data (FitnessFilter.obj)
+
+All 7 `except_data_*` symbols in this split object share:
+- `pHandler = 0x8299E5E0` = `__CxxFrameHandler` (confirmed via `symbols.txt`)
+- `pHandlerData = 0x8225xxxx` range = `.rdata` section (before `.text` at `0x82330000`)
+- Zero relocations at the PDATA_EH offsets
+- Each sits exactly 8 bytes before its associated function
+- Preceding bytes show `blr` (0x4E800020) or nop padding (0x00000000)
+
+### Scope of the Problem (Across All Split Objects)
+
+A scan of all 2,223 split objects found **221 objects** with `except_data_*` symbols where the associated function either has NO `.pdata` entry or the entry's ExceptionFlag is not set. This means the PDATA_EH data exists correctly in `.text` but `.pdata` doesn't reference it. The problem is **bilateral**:
+
+| Issue | Count | Description |
+|-------|-------|-------------|
+| `__unwind$` in `.pdata` | All objects with `__unwind$` | Jeff creates `.pdata` entries for EH thunks (shouldn't exist in `.pdata`) |
+| Missing `.pdata` for EH functions | 221 objects | Functions with `except_data_*` / PDATA_EH blobs lack corresponding `.pdata` entries with ExceptionFlag=1 |
+
+Objects span every subsystem: XDK/LIBCMT, gesture, hamobj, rndobj, synth, ui, meta_ham, net_ham, etc. This is a systemic issue in how jeff emits `.pdata` during `write_coff()`, not limited to specific compilation units.
+
+### The Fix Path
+
+To generate correct `.pdata` in jeff:
+
+1. **Filter out `__unwind$` entries from .pdata**: These are exception handler thunks that should not have their own .pdata entries. Only emit `.pdata` entries for actual functions.
+
+2. **Generate .pdata entries for functions with `except_data_*`**: When a function has a PDATA_EH blob at offset-8, generate a proper `IMAGE_CE_RUNTIME_FUNCTION_ENTRY` with `ExceptionFlag=1`. Jeff already knows about these (it reads them in `xex.rs:1036-1093`).
+
+3. **Add ADDR32 relocations to PDATA_EH blobs**: Each `except_data_*` symbol needs two ADDR32 relocations:
+   - Offset+0: reloc to `__CxxFrameHandler` symbol
+   - Offset+4: reloc to the appropriate FuncInfo symbol (or section+offset)
+
+4. **Ensure .pdata entry endianness**: The packed word (PrologLen, FuncLen, ThirtyTwoBit, ExceptionFlag) must be in the correct endianness for the target platform (big-endian for PPC).
+
+5. **Validate .pdata sorting**: Entries within each split object's `.pdata` must be sorted by `BeginAddress` (ascending).
+
+### References
+
+- [IMAGE_CE_RUNTIME_FUNCTION_ENTRY (MS WinCE docs)](https://learn.microsoft.com/en-us/previous-versions/windows/embedded/ms879748(v=msdn.10))
+- [PDATA_EH (MS WinCE docs)](https://learn.microsoft.com/en-us/previous-versions/windows/embedded/ms864326(v=msdn.10))
+- [LNK1223 documentation](https://learn.microsoft.com/en-us/cpp/error-messages/tool-errors/linker-tools-error-lnk1223?view=msvc-170)
+- `XenonRecomp/XenonUtils/xbox.h:143-160` — `IMAGE_CE_RUNTIME_FUNCTION` struct definition
+- `xenia/src/xenia/cpu/xex_module.cc:826` — Confirms EXCEPTION directory = `IMAGE_CE_RUNTIME_FUNCTION_ENTRY[]`
+
 ## Key Files Referenced
 
 | File | Relevance |

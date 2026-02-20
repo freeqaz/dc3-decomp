@@ -80,6 +80,14 @@ int HamStoreProvider::NumOffersInCart() {
     return offers;
 }
 
+bool HamStoreProvider::IsOfferInCart(StoreOffer *offer) {
+    FOREACH (it, unkb0) {
+        if (*it == offer)
+            return true;
+    }
+    return false;
+}
+
 int HamStoreProvider::NumData() const { return mFilteredOffers->size(); }
 
 Symbol HamStoreProvider::DataSymbol(int idx) const {
@@ -249,16 +257,16 @@ BEGIN_HANDLERS(HamStoreProvider)
     HANDLE_ACTION(refresh, Refresh())
     HANDLE_EXPR(get_offer, OnGetOffer(_msg->Int(2)))
     HANDLE_ACTION(set_pack, SetPackList(_msg->Obj<StoreOffer>(2)))
-    HANDLE_EXPR(get_pack_provider, &GetPackProvider()) // recheck
-    HANDLE_ACTION(find_pack, FindPack(_msg->Obj<StoreOffer>(2)))
+    HANDLE_EXPR(get_pack_provider, (Hmx::Object *)&unk78)
+    HANDLE_EXPR(find_pack, (Hmx::Object *)FindPack(_msg->Obj<StoreOffer>(2)))
     HANDLE_EXPR(show_browser_purchased, ShowBrowserPurchased(_msg->Obj<StoreOffer>(2)))
     HANDLE_EXPR(show_unavailable, TheNetCacheMgr->IsDebug())
     HANDLE_EXPR(is_partially_purchased, IsPartiallyPurchased(_msg->Obj<StoreOffer>(2)))
-    // HANDLE_EXPR(allow_sort_toggle, expr)
-    HANDLE_EXPR(get_current_sort_time, CurrentSort())
+    HANDLE_EXPR(allow_sort_toggle, mSorts.size() > 1)
+    HANDLE_EXPR(get_current_sort_name, CurrentSort())
     HANDLE_ACTION(next_sort, OnNextSort())
-    // is offer in cart
-    HANDLE_ACTION(find_song, FindSong(_msg->Int(2)))
+    HANDLE_EXPR(is_offer_in_cart, IsOfferInCart(_msg->Obj<StoreOffer>(2)))
+    HANDLE_EXPR(find_song, (Hmx::Object *)FindSong(_msg->Int(2)))
     HANDLE_EXPR(get_offer_index, OnGetOfferIndex(_msg->Obj<StoreOffer>(2)))
     HANDLE_SUPERCLASS(UIListProvider)
     HANDLE_SUPERCLASS(Hmx::Object)

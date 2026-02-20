@@ -12,6 +12,7 @@ Scripts, commands, and reference material for the DC3 decompilation project. For
 | `tools/asm_to_m2c.py` | Convert DC3 dtk assembly to m2c-compatible format |
 | `tools/decompctx.py` | Generate context files for decomp.me |
 | `configure.py` | Generate build files (ninja) |
+| `scripts/build/rebuild_jeff_link.sh` | Rebuild jeff (dtk), re-split XEX objects, link, show error summary |
 
 ## Symbol Lookup (Map File)
 

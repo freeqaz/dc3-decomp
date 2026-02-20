@@ -234,7 +234,7 @@ bool SongSequence::DoNext(bool b1, bool b2) {
         static Symbol clear_all_flashcard_campaign_states(
             "clear_all_flashcard_campaign_states"
         );
-        TheMidiParserMgr->GetParser(midi_player)->SetProperty(active, nextEntry.unk14);
+        TheMidiParserMgr->GetParser(midi_player)->SetProperty(nextEntry.unk14, active);
         TheHamProvider->SetProperty(holla_back_config, nextEntry.unk14);
         if (isLoaded) {
             ObjectDir *hudPanel = DataVariable(hud_panel).Obj<ObjectDir>();

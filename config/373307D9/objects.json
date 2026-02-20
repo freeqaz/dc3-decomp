@@ -13,7 +13,8 @@
                 ]
             },
             "Main.cpp": "Matching",
-            "Memory_Xbox.cpp": "NonMatching"
+            "Memory_Xbox.cpp": "NonMatching",
+            "link_glue.cpp": "Matching"
         }
     },
     "lazer": {

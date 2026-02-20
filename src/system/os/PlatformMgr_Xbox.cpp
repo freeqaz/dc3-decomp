@@ -1,19 +1,14 @@
 #include "os/PlatformMgr.h"
+#include "game/PartyModeMgr.h"
 #include "os/OnlineID.h"
 #include "system/utl/GlitchFinder.h"
 #include "xdk/XAPILIB.h"
+#include "xdk/XBC.h"
 #include "xdk/XMP.h"
 #include "xdk/XNET.h"
 #include "xdk/NUI.h"
 #include "xdk/xapilibi/winerror.h"
 #include "xdk/xapilibi/xbox.h"
-
-// Forward declarations for JSON writing functions
-extern int XJSONBeginArray(void*);
-extern int XJSONEndArray(void*);
-extern int XJSONWriteNullValue(void*);
-extern int XJSONWriteNumberValue(void*, double);
-extern int XJSONWriteStringValue(void*, const unsigned char*, int);
 
 // Forward declarations for merged functions
 extern void* merged_DataArrayNode(void*, int);
@@ -23,6 +18,8 @@ namespace {
     int mSigninSameGuest;
     XUID mXuidCache[4];
     int gNumSmartGlassClients;
+    unsigned long gSmartGlassClientIDs[XBC_MAX_CLIENTS];
+    int gNumSmartGlassSendsInProgress;
     void *mFriendsEnum;
     void *mFriendsBuffer;
     Hmx::Object *mFriendsCallback;
@@ -287,7 +284,16 @@ void PlatformMgr::RegionInit() {
 }
 
 namespace {
-    void DtaToJsonHelper(void* writer, const DataArray* arr) {
+    void DtaToJsonHelper(HJSONWRITER__ *writer, const DataArray *arr);
+    HJSONWRITER__ *DtaToJson(const DataArray *arr);
+    void XbcSendMsg(unsigned long clientID, const DataArray *arr);
+    void SmartGlassPoll();
+    DataArrayPtr JsonToDta(HJSONREADER__ *reader, bool topLevel);
+    void XbcRecieveMsg(unsigned long clientID, HJSONREADER__ *reader);
+    void XbcCallback(long error, _XBC_EVENT_PARAMS *params, void *state);
+    void SmartGlassInit();
+
+    void DtaToJsonHelper(HJSONWRITER__ *writer, const DataArray *arr) {
         short count = *(short*)((char*)arr + 8);
         if (count != 0 && count > 0) {
             for (int i = 0; i < count; i++) {
@@ -305,7 +311,7 @@ namespace {
                             }
                             int len = str - start - 1;
                             const char* str2 = node->Str();
-                            XJSONWriteStringValue(writer, (unsigned char*)str2, len);
+                            XJSONWriteStringValue(writer, str2, len);
                             break;
                         }
                         case 16: {
@@ -324,7 +330,7 @@ namespace {
                             }
                             int len = symStr - symStart - 1;
                             Symbol sym2 = node->Sym();
-                            XJSONWriteStringValue(writer, (unsigned char*)sym2.Str(), len);
+                            XJSONWriteStringValue(writer, sym2.Str(), len);
                             break;
                         }
                         case 1: {
@@ -349,4 +355,88 @@ namespace {
             }
         }
     }
+
+    HJSONWRITER__ *DtaToJson(const DataArray *arr) {
+        HJSONWRITER__ *writer = XJSONCreateWriter();
+        XJSONBeginArray(writer);
+        DtaToJsonHelper(writer, arr);
+        XJSONEndArray(writer);
+        return writer;
+    }
+
+    void XbcSendMsg(unsigned long clientID, const DataArray *arr) {
+        HJSONWRITER__ *writer = DtaToJson(arr);
+        if (clientID == 0) {
+            for (int i = 0; i < XBC_MAX_CLIENTS; i++) {
+                if (gSmartGlassClientIDs[i] != 0) {
+                    XbcSendJSON(XBC_DELIVERY_DEFAULT, gSmartGlassClientIDs[i], writer, 0);
+                    gNumSmartGlassSendsInProgress++;
+                }
+            }
+        } else {
+            XbcSendJSON(XBC_DELIVERY_DEFAULT, clientID, writer, 0);
+            gNumSmartGlassSendsInProgress++;
+        }
+        XJSONCloseWriter(writer);
+    }
+
+    void SmartGlassPoll() {
+        long result = XbcDoWork();
+        if (result != 0) {
+            MILO_NOTIFY("SmartGlass: error: %d\n", result);
+        }
+    }
+
+    void XbcRecieveMsg(unsigned long clientID, HJSONREADER__ *reader) {
+        DataArrayPtr dta = JsonToDta(reader, false);
+        SmartGlassMsg msg(clientID, (DataArray *)dta);
+        ThePlatformMgr.Handle(msg.Data(), true);
+    }
+
+    void XbcCallback(long error, _XBC_EVENT_PARAMS *params, void *state) {
+        if (error != 0) {
+            MILO_NOTIFY("SmartGlass: Error in cb: 0x%08x", error);
+            return;
+        }
+        unsigned int userIdx = params->userIndex;
+        if (userIdx >= XBC_MAX_CLIENTS) {
+            MILO_NOTIFY("SmartGlass: Error in cb: user index %d (event: %d)", userIdx, params->eventType);
+            return;
+        }
+        switch (params->eventType) {
+        case XBC_EVENT_CLIENT_CONNECTED:
+            gNumSmartGlassClients++;
+            gSmartGlassClientIDs[userIdx] = params->clientID;
+            MILO_ASSERT(gNumSmartGlassClients <= XBC_MAX_CLIENTS, 0x20C);
+            break;
+        case XBC_EVENT_CLIENT_DISCONNECTED:
+            gSmartGlassClientIDs[userIdx] = 0;
+            gNumSmartGlassClients--;
+            MILO_ASSERT(gNumSmartGlassClients >= 0, 0x214);
+            break;
+        case XBC_EVENT_SEND_COMPLETE:
+            gNumSmartGlassSendsInProgress--;
+            break;
+        case XBC_EVENT_DATA_RECEIVED:
+            XbcRecieveMsg(params->clientID, params->jsonReader);
+            break;
+        default:
+            break;
+        }
+    }
+
+    void SmartGlassInit() {
+        gSmartGlassClientIDs[0] = 0;
+        gSmartGlassClientIDs[1] = 0;
+        gSmartGlassClientIDs[2] = 0;
+        gSmartGlassClientIDs[3] = 0;
+        long result = XbcInitialize(XbcCallback, 0);
+        if (result < 0) {
+            MILO_FAIL("Failed to initialize Xbox SmartGlass library.\n");
+        }
+    }
+}
+
+void PlatformMgr::SmartGlassSend(unsigned long clientID, const DataArray *arr) {
+    XbcSendMsg(clientID, arr);
 }

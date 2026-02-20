@@ -1,6 +1,8 @@
 # Scripted Input Testing - Implementation Plan
 
-**Status:** Ready for implementation
+> **Note (2026-02-20):** Scripted input is **IMPLEMENTED** via `--scripted_input` flag in NopInputDriver. A simpler approach was used than this plan proposed. See [runtime/SCRIPTED_INPUT_TESTING.md](../runtime/SCRIPTED_INPUT_TESTING.md) for current usage.
+
+**Status:** ~~Ready for implementation~~ **COMPLETED** (simpler implementation than planned)
 **Priority:** High - Enables automated regression testing and deep state validation
 **Estimated Effort:** 8-10 hours (MVP), 18-25 hours (full features)
 **Owner:** TBD

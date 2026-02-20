@@ -14,6 +14,8 @@
 #include "utl/PseudoRandomPicker.h"
 
 DECLARE_MESSAGE(SmartGlassMsg, "smart_glass_msg")
+SmartGlassMsg(int clientID, DataArray *arr)
+    : Message(Type(), DataNode(clientID), DataNode(arr, kDataArray)) {}
 END_MESSAGE
 
 class PartyModeARObject {

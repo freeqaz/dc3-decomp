@@ -1,5 +1,7 @@
 # Xenia Headless Mode - Implementation Status
 
+> **Note (2026-02-20):** This is an early plan doc. For current status, see [runtime/XENIA_HEADLESS_STATUS.md](../runtime/XENIA_HEADLESS_STATUS.md) which tracks the full Vulkan rendering pipeline, multi-frame capture, scripted input, and ongoing rendering investigation.
+
 ## Summary
 
 **Status: ✅ WORKING** - The decompiled XEX boots successfully in Xenia headless mode and runs for 2+ minutes without crashes.
