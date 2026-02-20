@@ -5,6 +5,11 @@
 class UIListProvider;
 class UIListStateCallback;
 
+struct ScrollState {
+    int mFirstShowing;
+    int mSelectedDisplay;
+};
+
 class UIListState {
 public:
     UIListState(UIListProvider *, UIListStateCallback *);
@@ -57,7 +62,7 @@ public:
 
 protected:
     int ScrollToTarget(int) const;
-    // bool BuildScroll(int, int, int, ScrollState &) const;
+    bool BuildScroll(int, int, int, ScrollState &) const;
 
 private:
     /** "Does the list scrolling wrap?" */

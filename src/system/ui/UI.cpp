@@ -285,7 +285,31 @@ check_current:
     return result;
 }
 
-bool UIManager::BlockHandlerDuringTransition(Symbol s, DataArray *da) { return false; }
+bool UIManager::BlockHandlerDuringTransition(Symbol s, DataArray *da) {
+    if (s != KeyboardKeyMsg::Type()) {
+        if (s == ButtonDownMsg::Type() || s == ButtonUpMsg::Type()) {
+            UIPanel *focus = FocusPanel();
+            if (focus) {
+                static Symbol allowed_transition_actions("allowed_transition_actions");
+                const DataNode *prop = focus->Property(allowed_transition_actions, false);
+                DataArray *arr;
+                if (prop)
+                    arr = prop->Array();
+                else
+                    arr = nullptr;
+                if (arr) {
+                    for (int i = 0; i < arr->Size(); i++) {
+                        if (arr->Int(i) == da->Int(4))
+                            return false;
+                    }
+                }
+            }
+        } else {
+            return false;
+        }
+    }
+    return true;
+}
 
 void UIManager::GotoScreenImpl(UIScreen *scr, bool b1, bool b2) {
     // Only proceed if:
