@@ -16,18 +16,24 @@ We're running the original DC3 XEX in xenia-headless to compare behavior between
 
 Multi-frame capture is fully operational. 14+ captures per run confirmed with deferred draws, 15-35ms readback latency per frame.
 
-### debug.xex: BOOTS TO MAIN MENU (2026-02-20)
+### debug.xex: BOOTS TO GAMEPLAY (2026-02-20)
 
-The DC3 debug build boots to the main menu with `--stub_nui_functions=true` + scripted input:
+The DC3 debug build boots past the main menu with fake Kinect skeleton data:
 
 - **60 guest memory patches** applied (57 NUI + 3 XBC/SmartGlass)
 - **XEnumerate fix**: `ERROR_NO_MORE_FILES` mapped to `SUCCESS` with count=0 (was crashing `CacheMgrXbox::PollSearch`)
-- Boot sequence: DC logo → Harmonix splash → Fitness HUD → **DC3 Main Menu** → Kinect player detection
-- Game reaches "THE PARTY" main menu screen, then waits for Kinect player detection
-- 26 threads, 7800+ frames in 140s, 26 captures, no crashes
-- **Current blocker**: Kinect player detection screen (needs fake skeleton data)
+- **Fake Kinect WORKING**: `--fake_kinect_data=true` injects T-pose skeleton data
+  - PPC stub at `0x829C2790` copies skeleton template from heap-allocated guest memory (`SystemHeapAlloc`)
+  - Binary patches: SkeletonUpdateThread timeout (INFINITE→33ms at `0x8242E74C`), NOP IsOverride branch (`0x8242E1B0`)
+  - Skeleton data MUST NOT be placed adjacent to stub — NUI functions at `0x829C2A10`/`0x829C2C50` would be overwritten
+- **Save/load crash FIXED**: Auto-cleanup of stale content cache in `emulator.cc` before DC3 patches
+  - Root cause: Previous xenia runs wrote partial/corrupt cache data to `content_root/373307D9/`
+  - `SaveLoadManager` deserializes stale data → garbage file size → `_MemAllocTemp(2GB)` → crash
+  - Fix: `std::filesystem::remove_all(content_root / "373307D9")` at DC3 launch
+- Boot sequence: DC logo → Harmonix splash → Fitness HUD → Main Menu → Player detection → **Gameplay**
+- Game detects player, shows body silhouettes, reaches dance/gameplay code paths
 
-**Previously**: Halted on `NuiInitialize` failure, then SmartGlass init, then `CacheMgrXbox::PollSearch() error 18`.
+**Previously**: Halted on Kinect player detection (needed fake skeleton data).
 
 ### default.xex (retail)
 
@@ -124,11 +130,11 @@ Captures show correct DC3 game content: loading animation, 3D environments, danc
 
 **Minor remaining**: `force_all_draws` mode produces uniform R=2,G=1,B=2 (different failure mode, lower priority).
 
-#### 2. Kinect Player Detection (NEW PRIMARY BLOCKER)
+#### 2. Kinect Player Detection: SOLVED
 
-The game reaches the main menu with scripted input but then transitions to the Kinect player detection screen, waiting for `NuiSkeletonGetNextFrame` to return tracked skeleton data. Without this, the game loops between title screen and player detection indefinitely.
+Fake Kinect skeleton data injection via `--fake_kinect_data=true`. Game detects player, shows body silhouettes, proceeds past player detection into gameplay.
 
-**Fix path**: Implement fake Kinect skeleton data injection. `NuiSkeletonGetNextFrame` currently returns `E_UNEXPECTED` — change it to return `S_OK` with a valid `NUI_SKELETON_FRAME` containing a tracked player in T-pose. Gate behind `--fake_kinect_data=true`.
+**Implementation**: PPC stub at `0x829C2790` injects T-pose skeleton data from heap-allocated guest memory. Binary patches for SkeletonUpdateThread timeout and IsOverride branch.
 
 #### 3. Controller Input for Menu Navigation: WORKING
 
@@ -146,11 +152,16 @@ These are debug-mode overlay paths for dev kit workflows. The game handles the f
 
 `d:\gen\patch_xbox.hdr` — title update / DLC patch file. Not available. The game handles this gracefully.
 
+#### 5. Stale /dev/shm Files
+
+Each xenia run creates `xenia_code_cache_*` and `xenia_memory_*` in `/dev/shm`. Never cleaned up. Can fill 38GB+ → SIGBUS on next launch. Periodically run: `rm -f /dev/shm/xenia_*`
+
 ### Other Limitations
 
 - **PE Override blocked** — decomp linker produces different function addresses (+0x1600 .text shift + non-uniform per-function offsets).
 - **Inline draw deadlock** — still deadlocks at frame 12 (untested post-fix).
 - **XAudio2 stubbed** — audio CreateDriver fails, returns dummy handle. Audio doesn't play but game doesn't crash.
+- **SaveLoadManager error paths** all crash via `MILO_FAIL` — cannot make content ops fail gracefully.
 
 ## Root Cause Analysis: Why Draws Killed the Game (SOLVED)
 
@@ -530,18 +541,20 @@ Useful flags for debugging the rendering pipeline:
 
 ## Next Steps
 
-### Priority 1: COMPLETE — Rendering Fix Verified
+### Priority 1: COMPLETE — Rendering, Input, Kinect All Working
 
-Rendering pipeline fully operational. Captures show correct DC3 game content across boot → loading → gameplay. Both channel swizzle and gamma correction working. No display server needed.
+- Rendering pipeline fully operational (channel swizzle + gamma correction)
+- Scripted controller input navigates boot → main menu
+- Fake Kinect skeleton data gets past player detection into gameplay
+- Save/load crash fixed
 
-**Upgrade path (optional)**: Replace CPU-side sRGB approximation with game's actual gamma ramp via `gamma_ramp_256_entry_table_` for exact color reproduction. Current sRGB is good enough for testing.
+### Priority 2: Decomp XEX Boot Testing
 
-### Priority 2: Menu Navigation via Scripted Input
-
-The game reaches demo/teaser mode without input. Use `--scripted_input` to navigate:
-1. To main menu (may need specific timing/buttons)
-2. Through song selection
-3. Into gameplay — this exercises the most code paths
+Boot our decomp-built XEX (`build_xex.py` → valid XEX2) in xenia-headless:
+1. Generate XEX from current linked PE
+2. Boot with same NUI/XBC stubs as debug.xex
+3. Compare behavior and identify first crash point
+4. Use as regression signal for decomp work
 
 ### Priority 3: Automated Regression Testing
 
@@ -551,28 +564,30 @@ Build a test harness that:
 3. Compares against reference screenshots (pixel hashing or perceptual diff)
 4. Reports rendering regressions as decomp code changes
 
-### Priority 4: PE Override
+### Priority 4: Reduce Remaining Link Errors
 
-Generate COMDAT order file from original map to enable matching linker layout for PE override. This would allow running our decomp code against the original game's data.
+Current: 239 unique unresolved, 16 unique LNK4006, 36 LNK2013 fixup overflow.
+Target: Minimize errors so the linked PE is as close to the original as possible.
 
-### Stretch Goal: Fake Kinect Support for Testing
+### Fake Kinect Support: IMPLEMENTED
 
-DC3 is a Kinect game — many code paths depend on NUI (Natural User Interface) SDK functions. Current NUI stubs return S_OK/E_UNEXPECTED to prevent crashes, but the game can't exercise dance/fitness code without simulated Kinect data.
+DC3 is a Kinect game — many code paths depend on NUI (Natural User Interface) SDK functions. Fake Kinect data injection is now working via `--fake_kinect_data=true`.
 
-**MVP approach**: Fake Kinect skeleton data injection:
-1. Implement `NuiSkeletonGetNextFrame` to return pre-recorded or procedurally generated skeleton data
-2. Provide synthetic body tracking (20 joint positions per player, 1-2 players)
-3. Feed recorded dance move sequences from captured `.xsf` (Xbox Skeleton File) or custom format
-4. Allow scripted skeleton poses timed to game events (like scripted controller input)
+**Current implementation**:
+- PPC stub at `0x829C2790` copies T-pose skeleton template from heap-allocated guest memory
+- Binary patches: SkeletonUpdateThread timeout (INFINITE→33ms), NOP IsOverride branch
+- Game detects player, shows body silhouettes, enters gameplay code paths
+- Skeleton data placement: MUST NOT be adjacent to stub (NUI functions at `0x829C2A10`/`0x829C2C50` would be overwritten)
 
-**Benefits for decomp testing**:
-- Exercise `CharBones`, `CharServoBone`, `CharIKHand`, `CharIKFoot` and other character animation code
-- Test fitness mode code paths (`FITNESS_HUD.MILO`, calorie tracking)
-- Validate Kinect-dependent UI flows (player detection, pose calibration, move scoring)
-- Enable automated gameplay testing with pre-recorded dance sequences
+**Future enhancements**:
+- Scripted skeleton pose sequences (timed to game events, like scripted controller input)
+- Pre-recorded dance move replay from captured data
+- Multiple player support (currently single player T-pose)
 
-**Implementation path**:
-1. Extend `NuiSkeletonGetNextFrame` stub to fill `NUI_SKELETON_FRAME` with valid joint positions
-2. Set tracking state to `NUI_SKELETON_TRACKED` for player 1
-3. Provide T-pose as default, with option for scripted skeleton sequences
-4. Gate behind `--fake_kinect_data=true` cvar
+### Priority: Decomp XEX Boot Testing
+
+The next major milestone is booting our **decomp-built XEX** in xenia-headless and comparing behavior against the original. This requires:
+1. Generating a valid XEX from our linked PE (`build_xex.py`)
+2. Booting it in xenia with the same NUI/XBC stubs
+3. Identifying crashes, assert failures, or behavioral differences
+4. Using these as regression signals for decomp correctness

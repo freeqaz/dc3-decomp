@@ -1,7 +1,7 @@
 # Clean Link Plan for DC3 Xbox 360 Decomp
 
 **Date**: 2026-02-20
-**Status**: In progress — COMDAT Phase 2 partially complete
+**Status**: Tasks 1-2 complete. COMDAT byte dedup fix applied. Remaining: LNK2013 fixup overflow (36)
 **Depends on**: [.pdata root cause analysis](2026-02-12-pdata-role-in-x360-linking.md), [Jeff link limitations](JEFF_LINK_LIMITATIONS.md)
 
 ## Problem
@@ -54,13 +54,17 @@ The CE spec requires **one `.pdata` entry per function** — every function with
 
 ## Impact Summary
 
-| Metric | Before | After Task 1 | After Task 2 |
-|--------|--------|-------------|-------------|
-| Linker flag | `/FORCE` (= `/FORCE:MULTIPLE` + `/FORCE:UNRESOLVED`) | `/FORCE:UNRESOLVED` only | `/FORCE:UNRESOLVED` only |
-| LNK4006 warnings | 3,562 | 0 | 0 |
-| LNK1223 workaround | `fix_pdata.py` renames .pdata→.pdat0 | `fix_pdata.py` still needed | Removed |
-| Runtime C++ exceptions | Broken (221 units invisible to kernel) | Broken (221 units) | Functional |
-| Build pipeline | `split → fix_pdata → ninja → link` | `split → fix_pdata → ninja → link` | `split → ninja → link` |
+| Metric | Before | After All Fixes |
+|--------|--------|----------------|
+| Linker flag | `/FORCE` | `/FORCE` (blocked by 36 LNK2013) |
+| LNK4006 unique symbols | 981 | **16** |
+| LNK1223 | Required `fix_pdata.py` | **0** (fix_pdata.py removed) |
+| Unique unresolved | 238 | 239 (unchanged) |
+| LNK2013 fixup overflow | 168 | **36** |
+| Runtime C++ exceptions | Broken (221 units) | **Functional** |
+| Build pipeline | `split → fix_pdata → ninja → link` | `split → ninja → link` |
+| objdiff fuzzy match | 43.93% | **44.06%** |
+| Total code bytes | 11,326,112 | 11,343,996 |
 
 Tasks are independent and can be done in either order. Task 1 is simpler (extending existing COMDAT infrastructure). Task 2 is more complex (new .pdata generation logic + PDATA_EH placement in Rust).
 
