@@ -559,7 +559,18 @@ void UIList::SetSelectedSimulateScroll(int i) {
     }
 }
 
-bool UIList::SetSelectedSimulateScroll(Symbol, bool) { return false; }
+bool UIList::SetSelectedSimulateScroll(Symbol sym, bool b) {
+    int index = mListState.Provider()->DataIndex(sym);
+    if (index == -1) {
+        if (b) {
+            MILO_WARN("Couldn't find %s in UIList provider", sym);
+        }
+        return false;
+    } else {
+        SetSelectedSimulateScroll(index);
+        return true;
+    }
+}
 
 void UIList::Update() {
     if (!gLoading) {
@@ -894,7 +905,31 @@ void UIList::BoundingBoxTriangles(std::vector<std::vector<Vector3> > &vec) {
     }
 }
 
-RndDrawable *UIList::CollideShowing(const Segment &, float &, Plane &) { return nullptr; }
+RndDrawable *UIList::CollideShowing(const Segment &seg, float &fref, Plane &p) {
+    std::vector<std::vector<Vector3> > vecOfVecs;
+    BoundingBoxTriangles(vecOfVecs);
+    Segment s(seg);
+    Vector3 vset;
+    bool intersects = false;
+    fref = 1;
+    for (std::vector<std::vector<Vector3> >::iterator it = vecOfVecs.begin();
+         it != vecOfVecs.end();
+         ++it) {
+        Triangle tri;
+        tri.Set((*it)[0], (*it)[1], (*it)[2]);
+        float loc_f;
+        if (Intersect(s, tri, (int)0, loc_f)) {
+            Interp(s.start, s.end, loc_f, s.end);
+            fref *= loc_f;
+            p.Set(s.end, vset, vset);
+            intersects = true;
+        }
+    }
+    if (intersects)
+        return this;
+    else
+        return nullptr;
+}
 
 int UIList::CollidePlane(const Plane &p) {
     std::vector<std::vector<Vector3> > triangles;
