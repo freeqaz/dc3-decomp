@@ -12,6 +12,8 @@ venv/
 function_analysis/
 
 # Original files
+orig/*
+!orig/*/
 orig/*/*
 !orig/*/.gitkeep
 orig-assets/
@@ -39,6 +41,7 @@ compile_commands.json
 
 # Local binaries
 bin/objdiff-cli
+scripts/bin/objdiff-cli
 
 # Python
 .venv/
@@ -67,6 +70,10 @@ generated-patches/
 # Scratch workspace for patch triage
 scratch/
 
+# One-off analysis scripts
+tools/retriage_85_100.py
+scripts/build/inspect_pdata.py
+
 # Generated databases
 *.db
 *.sqlite
@@ -79,3 +86,22 @@ scratch/
 *.bak
 *.bak2
 *.tmp
+
+# Shell config files (accidentally committed)
+/.bash_profile
+/.bashrc
+/.profile
+/.zprofile
+/.zshrc
+
+# Git internal files (accidentally committed)
+/HEAD
+/hooks
+/objects
+/refs
+
+# Log files
+*.log
+
+# Temp obj files
+Z:*
