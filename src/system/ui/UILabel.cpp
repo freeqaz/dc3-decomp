@@ -6,6 +6,7 @@
 #include "obj/Data.h"
 #include "obj/Object.h"
 #include "obj/Task.h"
+#include "rndobj/Cam.h"
 #include "rndobj/Text.h"
 #include "rndobj/Trans.h"
 #include "rndobj/Utl.h"
@@ -20,10 +21,12 @@
 #include "utl/SuperFormatString.h"
 #include "utl/Symbol.h"
 #include "utl/UTF8.h"
+#include <cmath>
 #include <cstring>
 
 bool UILabel::sDeferUpdate;
 bool UILabel::sInDebugHighlight;
+static UILabel *sLabel;
 
 void UILabel::Load(BinStream &bs) {
     PreLoad(bs);
@@ -39,7 +42,7 @@ UILabel::UILabel() : unk122(1), unk124(this) {
 BEGIN_PROPSYNCS(UILabel)
     SYNC_PROP_SET(text_token, mTextToken, SetTextToken(_val.ForceSym()))
     SYNC_PROP_SET(icon, unk118, SetIcon(_val.Str(0)[0]))
-    SYNC_PROP(edit_text, unk118)
+    SYNC_PROP_SET(edit_text, unk118, SetEditText(_val.Str(0)))
     SYNC_PROP(width, *(float *)(((unsigned char *)this) - 0x128))
     SYNC_PROP(height, *(float *)(((unsigned char *)this) - 0x124))
     SYNC_PROP(circle, *(float *)(((unsigned char *)this) - 0x120))
@@ -53,9 +56,15 @@ BEGIN_PROPSYNCS(UILabel)
     SYNC_PROP(leading, *(float *)(((unsigned char *)this) - 0x110))
     SYNC_PROP(indentation, *(float *)(((unsigned char *)this) - 0xD4))
     SYNC_PROP(basic_markup, *(bool *)(((unsigned char *)this) - 0x107))
-    SYNC_PROP(fixed_length, mFixedLength)
+    SYNC_PROP_SET(fixed_length, mFixedLength, SetFixedLength(_val.Int(0)))
     SYNC_PROP(draw_width, unkbc)
-    SYNC_PROP(styles, unk124)
+    {
+        _NEW_STATIC_SYMBOL(styles)
+        if (sym == _s) {
+            sLabel = this;
+            return PropSync(unk124, _val, _prop, _i + 1, _op);
+        }
+    }
     SYNC_SUPERCLASS(UIComponent)
     SYNC_SUPERCLASS(RndText)
 END_PROPSYNCS
@@ -787,38 +796,86 @@ BEGIN_HANDLERS(UILabel)
     HANDLE_SUPERCLASS(UIComponent)
 END_HANDLERS
 
-// Static initialization for symbol caching - PropSync template for LabelStyle
-static int g_PropSync_LabelStyle_init = 0;
-static Symbol g_list_sym;
-static Symbol g_file_path_sym;
+float GetTextSizeFromPctHeight(float f) {
+    if (TheLoadMgr.EditMode()) {
+        float depth = -TheUI->GetCam()->LocalXfm().v.y;
+        Vector2 v2a(0.0f, 0.0f);
+        Vector3 v3a;
+        TheUI->GetCam()->ScreenToWorld(v2a, depth, v3a);
+        Vector2 v2b(0.0f, f);
+        Vector3 v3b;
+        TheUI->GetCam()->ScreenToWorld(v2b, depth, v3b);
+        return std::fabs(v3a.z - v3b.z);
+    } else
+        return f;
+}
 
-bool PropSync(UILabel::LabelStyle &style, DataNode &node, DataArray *array, int index, PropOp op) {
-    // Bounds check
-    if (index >= array->Size()) {
-        return false;
+float GetPctHeightFromTextSize(float f) {
+    if (TheLoadMgr.EditMode()) {
+        Vector3 v3a(0.0f, 0.0f, 0.0f);
+        Vector2 v2a;
+        TheUI->GetCam()->WorldToScreen(v3a, v2a);
+        Vector3 v3b(0.0f, 0.0f, -f);
+        Vector2 v2b;
+        TheUI->GetCam()->WorldToScreen(v3b, v2b);
+        return std::fabs(v2a.y - v2b.y);
+    } else
+        return f;
+}
+
+bool PropSync(UILabel::LabelStyle &style, DataNode &_val, DataArray *_prop, int _i, PropOp _op) {
+    if (_i == _prop->Size())
+        return true;
+
+    Symbol sym = _prop->Sym(_i);
+    int styleIdx = &style - &sLabel->LStyle(0);
+
+    SYNC_PROP_MODIFY(font_resource, style.unk14, sLabel->RefreshFontMat(styleIdx))
+    SYNC_PROP(color_override, style.mColorOverride)
+
+    {
+        _NEW_STATIC_SYMBOL(font_mat_variation)
+        if (sym == _s) {
+            if (_op == kPropSet) {
+                sLabel->SetFontMat(_val.Str(0), styleIdx);
+                if (!UILabel::sDeferUpdate) {
+                    sLabel->LabelUpdate(false);
+                }
+            } else {
+                if (_op == (PropOp)0x40)
+                    return false;
+                _val = DataNode(sLabel->GetFontMat(styleIdx));
+            }
+            return true;
+        }
     }
 
-    // Initialize symbols on first check
-    if (!g_PropSync_LabelStyle_init) {
-        g_PropSync_LabelStyle_init = 1;
-        g_list_sym = Symbol("list");
-        g_file_path_sym = Symbol("file_path");
+    RndText::Style &textStyle = sLabel->Style(styleIdx);
+
+    {
+        _NEW_STATIC_SYMBOL(text_size)
+        if (sym == _s) {
+            if (_op == kPropSet) {
+                textStyle.mSize = GetTextSizeFromPctHeight(_val.Float(0));
+                if (!UILabel::sDeferUpdate) {
+                    sLabel->LabelUpdate(false);
+                }
+            } else {
+                if (_op == (PropOp)0x40)
+                    return false;
+                _val = DataNode(GetPctHeightFromTextSize(textStyle.mSize));
+            }
+            return true;
+        }
     }
 
-    // Get the current property symbol
-    Symbol prop_sym = array->Sym(index);
+    SYNC_PROP_SET(font_alpha, textStyle.mFontColor.alpha, textStyle.mFontColor.alpha = _val.Float(0))
 
-    // Handle "list" property - recurse to UILabelDir PropSync
-    if (prop_sym == g_list_sym) {
-        return PropSync(style.unk14, node, array, index + 1, op);
-    }
+    SYNC_PROP_MODIFY(italics, textStyle.mItalics, if (!UILabel::sDeferUpdate) sLabel->LabelUpdate(false))
+    SYNC_PROP_MODIFY(kerning, textStyle.mKerning, if (!UILabel::sDeferUpdate) sLabel->LabelUpdate(false))
+    SYNC_PROP_MODIFY(z_offset, textStyle.mZOffset, if (!UILabel::sDeferUpdate) sLabel->LabelUpdate(false))
+    SYNC_PROP_MODIFY(blacklight, textStyle.mBlacklight, if (!UILabel::sDeferUpdate) sLabel->LabelUpdate(false))
 
-    // Handle "file_path" property - recurse to UILabelDir PropSync
-    if (prop_sym == g_file_path_sym) {
-        return PropSync(style.unk14, node, array, index + 1, op);
-    }
-
-    // Unknown property
     return false;
 }
 

@@ -278,6 +278,8 @@ public:
     float a, b, c, d;
 };
 
+inline bool operator<=(const Vector3 &v, const Plane &p) { return p.Dot(v) >= 0.0f; }
+
 void Normalize(const Plane &, Plane &);
 
 inline BinStream &operator<<(BinStream &bs, const Plane &p) {

@@ -113,11 +113,15 @@ namespace {
 }
 
 void EraseNewerData(std::vector<RhythmDetector::Frame> &vec, float time) {
+    std::vector<RhythmDetector::Frame>::iterator found = vec.end();
     FOREACH (it, vec) {
         if (it->unk0 >= time) {
-            vec.erase(it, vec.end());
+            found = it;
             break;
         }
+    }
+    if (found != vec.end()) {
+        vec.erase(found, vec.end());
     }
 }
 

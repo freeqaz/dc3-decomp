@@ -1,7 +1,7 @@
 # Clean Link Plan for DC3 Xbox 360 Decomp
 
 **Date**: 2026-02-20
-**Status**: Tasks 1-2 complete. COMDAT byte dedup fix applied. Remaining: LNK2013 fixup overflow (36)
+**Status**: Tasks 1-2 complete. REL24 displacement fix applied. CRT stub COMDAT exclusion done. Remaining: 255 errors (240 unresolved, 15 REL14 overflow), 275 LNK4006 (unfixable). Bad bls: 99 (98 unresolved + 1 .bss).
 **Depends on**: [.pdata root cause analysis](2026-02-12-pdata-role-in-x360-linking.md), [Jeff link limitations](JEFF_LINK_LIMITATIONS.md)
 
 ## Problem

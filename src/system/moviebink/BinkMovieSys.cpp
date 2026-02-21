@@ -14,8 +14,10 @@ extern int BinkStartAsyncThread(int, int);
 extern void *RadAlloc(int);
 
 BinkMovieSys::BinkMovieSys()
-    : MovieSys(), mCriticalSection(nullptr), mHasAsyncThread(false),
-      mBinkCore0(0), mBinkCore1(0) {
+    : MovieSys(), mCriticalSection(0),
+      mBinkCore0(-1), mBinkCore1(-1), unk1c(0) {
+    mHasAsyncThread = true;
+    unk10 = 1;
 }
 
 BinkMovieSys::~BinkMovieSys() {
@@ -67,6 +69,24 @@ void BinkMovieSys::Init() {
 }
 
 void BinkMovieSys::Terminate() {
+    CriticalSection *cs = mCriticalSection;
+    if (cs) {
+        cs->Enter();
+    }
+
+    while (mMovies.size() > 0) {
+        mMovies.back()->Terminate();
+    }
+
+    if (cs) {
+        cs->Exit();
+    }
+
+    if (mCriticalSection) {
+        delete mCriticalSection;
+    }
+    mCriticalSection = 0;
+
     MovieSys::Terminate();
 }
 

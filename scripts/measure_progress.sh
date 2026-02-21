@@ -143,18 +143,38 @@ else
     mkdir -p "${WORKTREE}/build/tools"
     for tool in "${MAIN_REPO}/build/tools"/*; do
         dest="${WORKTREE}/build/tools/$(basename "$tool")"
-        [[ -f "$dest" ]] || cp "$tool" "$dest"
+        [[ -e "$dest" ]] || ln -sf "$tool" "$dest"
     done
     if [[ -d "${MAIN_REPO}/build/compilers" && ! -d "${WORKTREE}/build/compilers" ]]; then
         ln -sf "${MAIN_REPO}/build/compilers" "${WORKTREE}/build/compilers"
     fi
-    # Copy current download_tool.py (has existence check to skip downloads)
-    cp "${MAIN_REPO}/tools/download_tool.py" "${WORKTREE}/tools/download_tool.py"
-    echo "Synced build tools"
+    # Symlink binutils if present
+    if [[ -d "${MAIN_REPO}/build/binutils" && ! -d "${WORKTREE}/build/binutils" ]]; then
+        ln -sf "${MAIN_REPO}/build/binutils" "${WORKTREE}/build/binutils"
+    fi
+
+    # --- Extract configure args from main repo (resolve relative paths to absolute) ---
+    CONFIGURE_ARGS=()
+    if [[ -f "${MAIN_REPO}/build.ninja" ]]; then
+        # Read configure_args, joining continuation lines
+        raw_args=$(sed -n '/^configure_args/{ :a; /\$$/{ N; s/\$\n\s*/ /; ba }; s/^configure_args = //; p }' \
+            "${MAIN_REPO}/build.ninja")
+        # Resolve relative paths to absolute (relative to MAIN_REPO)
+        for arg in $raw_args; do
+            if [[ "$arg" == --* ]]; then
+                CONFIGURE_ARGS+=("$arg")
+            elif [[ "$arg" == ../* || "$arg" == ./* ]]; then
+                CONFIGURE_ARGS+=("$(cd "${MAIN_REPO}" && realpath "$arg")")
+            else
+                CONFIGURE_ARGS+=("$arg")
+            fi
+        done
+    fi
+    echo "Using configure args: ${CONFIGURE_ARGS[*]}"
 
     # --- Reconfigure for baseline's file set ---
     echo "Reconfiguring baseline..."
-    (cd "${WORKTREE}" && python3 configure.py) >/dev/null
+    (cd "${WORKTREE}" && python3 configure.py "${CONFIGURE_ARGS[@]}") >/dev/null
 
     # --- Build baseline report ---
     echo "Building baseline report (this may take a moment)..."

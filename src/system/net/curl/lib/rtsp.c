@@ -565,8 +565,8 @@ static CURLcode rtsp_do(struct connectdata *conn, bool *done)
   }
 
   Curl_setup_transfer(conn, FIRSTSOCKET, -1, TRUE, &http->readbytecount,
-                      putsize?FIRSTSOCKET:-1,
-                      putsize?&http->writebytecount:NULL);
+                      putsize ? FIRSTSOCKET : -1,
+                      putsize ? &http->writebytecount : NULL);
 
   /* Increment the CSeq on success */
   data->state.rtsp_next_client_CSeq++;

@@ -1,11 +1,11 @@
 #include "xboxheap.h"
 
 NUISPEECH::CXboxHeap::CXboxHeap(unsigned int initSize, unsigned int size) {
-    mCount = 0;
     mSize = size;
     mFreeHead = this;
+    mCount = 0;
     mUsedHead = this;
-    mNext = nullptr;
-    mPrev = nullptr;
+    mListHead.mNext = &mListHead;
+    mListHead.mPrev = &mListHead;
     AllocatePageBlock(initSize);
 }

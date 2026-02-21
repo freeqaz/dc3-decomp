@@ -18,7 +18,7 @@ Generated 2026-02-18. Updated 2026-02-19 with implementation results.
 | Not in target binary (deadstripped) | 25 |
 | **Total stubs analyzed** | **74** |
 
-Overall progress: 43.90% -> 44.10% (+0.20% fuzzy match)
+Overall progress: 43.90% -> 44.24% (+0.34% fuzzy match from stubs, 44.24% total current)
 
 ## Implemented Functions -- COMPLETE (100%)
 
@@ -117,7 +117,7 @@ Adding stub implementations changes translation unit layout, cascading register 
 | UILabel::Handle | 79.8% | ~73% | ~-7% | New DrawShowing/Highlight bodies shift register alloc |
 | XboxEnumeration::Poll | 26.2% | 23.5% | -2.7% | StoreEnumeration.h member layout corrections |
 | Splash::UpdateThread | 80.9% | ~78% | ~-3% | New Draw/CheckWorkerSuspend bodies |
-| UILabel::SyncProperty | 85.1% | ~78% | ~-7% | Same as UILabel::Handle |
+| UILabel::SyncProperty | 85.1% | 85.7% | +0.6% | Fixed: edit_text→SetEditText, fixed_length→SetFixedLength |
 
 **Verdict**: All regressions are unfixable register allocation cascades. Net gain is positive.
 

@@ -8,7 +8,7 @@
 
 #define kNumBlockBuffers 0x13
 
-static char *gBuffers;
+static char gBuffers[kNumBlockBuffers * 0x10000];
 int gCurrBuffNum;
 int Block::sCurrTimestamp;
 Timer gReadTime;

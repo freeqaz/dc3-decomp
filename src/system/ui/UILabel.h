@@ -107,6 +107,8 @@ protected:
     char const *GetFontMat(int);
     void RefreshFontMat(int);
 
+    friend bool PropSync(LabelStyle &, DataNode &, DataArray *, int, PropOp);
+
     static bool sDeferUpdate;
     static bool sDebugHighlight;
     static bool sInDebugHighlight;

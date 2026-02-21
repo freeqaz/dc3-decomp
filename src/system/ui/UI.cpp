@@ -678,12 +678,8 @@ DataNode UIManager::OnSetVirtualDpad(DataArray *arr) {
     mJoyClient->SetVirtualDpad(val != 0);
     return 0;
 }
-DataNode UIManager::OnPushScreen(DataArray *arr) {
-    return 0;
-}
-DataNode UIManager::OnPopScreen(DataArray *arr) {
-    return 0;
-}
+DataNode UIManager::OnPushScreen(DataArray *arr) { return 0; }
+DataNode UIManager::OnPopScreen(DataArray *arr) { return 0; }
 DataNode UIManager::OnCurrentScreen(DataArray *arr) {
     return DataNode(mCurrentScreen);
 }
@@ -726,9 +722,7 @@ DataNode UIManager::OnShowDevMenu(DataArray *arr) {
     u8 result = 0;
     return DataNode(result);
 }
-DataNode UIManager::OnResetScreen(DataArray *arr) {
-    return 0;
-}
+DataNode UIManager::OnResetScreen(DataArray *arr) { return 0; }
 DataNode UIManager::OnFakeKeyboardAction(DataArray *arr) {
     int button = arr->Int(3);
     int action = arr->Int(2);

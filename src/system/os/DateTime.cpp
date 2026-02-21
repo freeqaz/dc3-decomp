@@ -36,9 +36,17 @@ void GetTimeZoneBias(long &bias) {
 }
 
 DateTime::DateTime(unsigned int code) {
-    mYear = (code / 0x1FA4000) + 100;
-    mMonth = (code % 0x1FA4000) / 0x2A3000;
-    // the rest
+    unsigned int a = code / 0x1FA4000;
+    unsigned int b = code - a * 0x1FA4000;
+    mMonth = b / 0x2A3000;
+    mYear = a + 100;
+    b = b - mMonth * 0x2A3000;
+    mDay = b / 0x15180;
+    b = b - mDay * 0x15180;
+    mHour = b / 0xE10;
+    b = b - mHour * 0xE10;
+    mMin = b / 0x3C;
+    mSec = b - mMin * 0x3C;
 }
 
 DateTime::DateTime(

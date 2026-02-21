@@ -2,37 +2,23 @@
 
 namespace DSP {
 
+struct SynapseBand {
+    char enabled;       // 0x00
+    char pad[3];        // 0x01-0x03
+    float freq;         // 0x04
+    float gain;         // 0x08
+    float q;            // 0x0c
+    float unk10;        // 0x10
+    float unk14;        // 0x14
+    float unk18;        // 0x18
+};  // size = 0x1c
+
 struct SynapseAPOParams {
     SynapseAPOParams();
 
-    float param0_0x00;  // 0x00
-    float param0_0x04;  // 0x04
-    float param0_0x08;  // 0x08
-    float param0_0x0c;  // 0x0c
-
-    float param1_0x10;  // 0x10
-    float param1_0x14;  // 0x14
-    float param1_0x18;  // 0x18
-    float param1_0x1c;  // 0x1c
-
-    float param2_0x20;  // 0x20
-    float param2_0x24;  // 0x24
-    float param2_0x28;  // 0x28
-    float param2_0x2c;  // 0x2c
-
-    float param3_0x30;  // 0x30
-    float param3_0x34;  // 0x34
-    float param3_0x38;  // 0x38
-    float param3_0x3c;  // 0x3c
-
-    float param4_0x40;  // 0x40
-    float param4_0x44;  // 0x44
-    float param4_0x48;  // 0x48
-    float param4_0x4c;  // 0x4c
-
-    float field_0x50;   // 0x50
-    float field_0x54;   // 0x54 (assigned 0x41a00000)
-    float field_0x58;   // 0x58 (assigned merged_8201FFCC)
+    SynapseBand bands[3];  // 0x00 - 0x53
+    float field_0x54;      // 0x54
+    float field_0x58;      // 0x58
 };
 
 }  // namespace DSP

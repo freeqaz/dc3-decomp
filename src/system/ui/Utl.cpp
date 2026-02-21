@@ -5,8 +5,9 @@
 int PageDirection(JoypadAction act) {
     if (act == kAction_PageDown)
         return 1;
-
-    return act != kAction_PageUp;
+    if (act == kAction_PageUp)
+        return -1;
+    return 0;
 }
 
 bool IsNavAction(JoypadAction act) {

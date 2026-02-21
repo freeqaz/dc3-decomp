@@ -2,6 +2,7 @@
 #include "ChecksumData_xbox.h"
 #include "game/Game.h"
 #include "gesture/GestureMgr.h"
+#include "gesture/SkeletonUpdate.h"
 #include "hamobj/HamNavList.h"
 #include "obj/Dir.h"
 #include "os/Debug.h"
@@ -9,6 +10,7 @@
 #include "rndobj/HiResScreen.h"
 #include "rndobj/Rnd.h"
 #include "ui/UI.h"
+#include <cstring>
 
 App::App(int, char **) {
     ObjDirPtr<ObjectDir> dPtr;
@@ -59,5 +61,48 @@ bool XShowNuiCallback(u32 &p1) {
     }
 
     return ret;
-    
+
+}
+
+bool EndsWith(const char *str, const char *suffix) {
+    int strLen = strlen(str);
+    int suffixLen = strlen(suffix);
+    return strstr(str, suffix) == str + strLen - suffixLen;
+}
+
+namespace {
+    bool gListenForKinectGuide;
+}
+
+DWORD KinectGuideThread(void *) {
+    HRESULT hr;
+    hr = NuiSkeletonTrackingDisable();
+    if (hr < 0) {
+        MILO_FAIL("NuiSkeletonTrackingDisable failed");
+    }
+    hr = NuiSkeletonTrackingEnable(0, 0);
+    if (hr < 0) {
+        MILO_FAIL("NuiSkeletonTrackingEnable failed");
+    }
+    HANDLE kinect_listener = XNotifyCreateListener(1);
+    MILO_ASSERT(kinect_listener, 0xa2);
+    while (gListenForKinectGuide) {
+        DWORD dwId;
+        ULONG_PTR param;
+        while (XNotifyGetNext(kinect_listener, 0, &dwId, &param)) {
+            if (dwId == 0x6001a) {
+                XShowNuiGuideUI(param);
+            }
+        }
+    }
+    CloseHandle(kinect_listener);
+    hr = NuiSkeletonTrackingDisable();
+    if (hr < 0) {
+        MILO_FAIL("NuiSkeletonTrackingDisable failed");
+    }
+    hr = NuiSkeletonTrackingEnable(SkeletonUpdate::NewSkeletonEvent(), 2);
+    if (hr < 0) {
+        MILO_FAIL("NuiSkeletonTrackingEnable failed");
+    }
+    return 0;
 }

@@ -179,6 +179,8 @@ DWORD XMarketplaceCreateOfferEnumeratorByOffering(
     DWORD *pcbBuffer,
     HANDLE *phEnum
 );
+HANDLE XNotifyCreateListener(DWORD dwNotificationArea);
+BOOL XNotifyGetNext(HANDLE hNotification, DWORD dwMsgFilter, DWORD *pdwId, ULONG_PTR *pParam);
 
 #ifdef __cplusplus
 }

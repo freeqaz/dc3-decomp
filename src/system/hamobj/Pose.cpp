@@ -9,7 +9,9 @@ void Pose::AddElement(PoseElement *e) { mElements.push_back(e); }
 JointDistPoseElement::JointDistPoseElement(
     SkeletonJoint j1, SkeletonJoint j2, float minDist, float maxDist
 )
-    : unk8(j1), unkc(j2), unk10(minDist), unk14(maxDist) {}
+    : unk4(1.0f), unk8(j1), unkc(j2), unk10(minDist), unk14(maxDist), unk18(0) {
+    MILO_ASSERT(minDist <= maxDist, 0x2f);
+}
 
 float JointDistPoseElement::Score(const Skeleton &skeleton) const {
     Vector3 pos1, pos2;

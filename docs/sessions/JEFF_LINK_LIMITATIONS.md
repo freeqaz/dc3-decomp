@@ -1,6 +1,6 @@
 # Jeff (dtk) Linking Limitations
 
-Date: 2026-02-19
+Date: 2026-02-20
 
 ## Context
 
@@ -8,19 +8,31 @@ Jeff (`../jeff`, our custom dtk fork) splits the original XEX into relocatable C
 
 ## Current Link Status
 
-**242 unresolved errors + 275 LNK4006 duplicate warnings** (178 unique unresolved symbols).
+**666 errors + 275 LNK4006 duplicate warnings** (384 string COMDATs, 98 lbl_*, 24 CRT init, 15 __unwind, 15 REL14, 10 merged, ~120 other).
 LNK4006 reduced: 5,545 → 3,562 (COMDAT Phase 1, 2026-02-19) → 275 (COMDAT Phase 2, 2026-02-20).
 Remaining 275 LNK4006 are MSVC `NODUPLICATES` selection type — not fixable in jeff.
+Bad bl instructions: 10,951 → 99 (REL24 displacement fix, 2026-02-20).
+**Linker flags**: `/FORCE:MULTIPLE` + `/FORCE:UNRESOLVED` (was blanket `/FORCE`).
+**DECOMP XEX BOOTS** in xenia-headless (2026-02-21). Crashes in xenia JIT after entering main loop.
 
-### Fixed 2026-02-20 (COMDAT Phase 2)
+### Fixed 2026-02-21 (REFHI/REFLO, linker flags, string COMDATs)
+- **REFHI/REFLO immediate zeroing**: COFF additive relocations read existing instruction immediates as addends. Baked-in XEX values (e.g., `lis r11, 0x8200`) caused overflow (`0x8200 + 0x823A = 0x043A`). Fix: zero bits [15:0] in REFHI/REFLO relocation sites (`insn & 0xFFFF0000`).
+- **Granular linker flags**: `/FORCE` → `/FORCE:MULTIPLE` + `/FORCE:UNRESOLVED`. 275 LNK4006 are warnings (MULTIPLE), 666 LNK2001/2019 are errors (UNRESOLVED).
+- **??_C@_ string COMDATs identified**: 384 unresolved string symbols due to different hash manglings between decomp and split compilers. Inherent to hybrid linking — zero overlap in mangled names for same string content.
+- **Configure script**: `scripts/build/configure.sh` wraps `configure.py` with custom `--dtk`, `--objdiff`, `--wibo` paths.
+- **Xenia headless fixes**: `ShowSimpleMessageBox` stderr fallback when no DISPLAY; correct flag `--headless_timeout_ms`.
+
+### Fixed 2026-02-20 (REL24, CRT stubs, COMDAT Phase 2)
+- **REL24 displacement convention**: MSVC PPC linker uses `disp = (S + A) - section_VA`, not `(S + A) - instruction_VA`. Jeff now sets A = `-(offset_in_section)` for all REL24 relocation sites, matching the compiler convention. Separate handling for parent sections vs COMDAT sections. Reduced bad bls from 10,951 to 99 (98 unresolved + 1 .bss).
+- **CRT save/restore stub exclusion**: `__savegprlr`/`__restgprlr`/`__savefpr`/`__restfpr` excluded from COMDAT extraction in `split.rs` to preserve fall-through chains. Entry point `bl` now correctly targets `__savegprlr_28`.
 - **All global symbols in split objects now COMDAT**: marks every global defined symbol (not just inter-split duplicates) as `IMAGE_COMDAT_SELECT_ANY`
 - **Zero-size symbol support**: infers size for `__real@*` (4/8 bytes), RTTI, string literals, vftables via distance-to-next-symbol
 - **Single COMDAT symbol emission**: removed dual LOCAL+EXTERNAL pattern; now only EXTERNAL in COMDAT section
+- **.pdata reconstruction**: jeff generates correct `.pdata` entries with ADDR32 relocs, filters `__unwind$`. `fix_pdata.py` removed from pipeline.
 - **Rebuild script**: `scripts/build/rebuild_jeff_link.sh` — builds jeff, re-splits, links, shows error summary
 
 ### Fixed 2026-02-19 (COMDAT Phase 1, ICF, etc.)
 - **ICF symbols resolved**: `link_glue.cpp` provides definitions for `operator delete`, `DataArray::Node`, `MemOrPoolFreeSTL` (eliminated 292 errors)
-- **.pdata LNK1223 fixed**: `fix_pdata.py` now chains after split automatically
 - **VA shift fixed**: `/MERGE:.xidata=.text` puts `.text` at correct VA `0x82330000`
 - **COMDAT Phase 1**: marked global symbols with `size > 0` duplicated across split objects
 
@@ -83,21 +95,20 @@ Missing vorbis (`floor0_*`, `vorbis_lpc_*`), zlib (`zcfree`, `_tr_stored_block`,
 
 | Issue | Workaround | Automated? |
 |-------|-----------|------------|
-| .pdata LNK1223 | `fix_pdata.py` renames .pdata→.pdat0 (see [detailed analysis](2026-02-12-pdata-role-in-x360-linking.md#8-root-cause-of-lnk1223-in-split-objects-2026-02-19)) | Yes (chained after split in build.ninja) |
 | VA shift +0x1600 | `/MERGE:.xidata=.text` in ldflags | Yes (config.json) |
 | ICF op delete/Node/MemPool | `link_glue.cpp` provides definitions | Yes (injected in configure.py) |
-| All remaining | `/FORCE` linker flag | Yes (config.json) |
+| Multiply-defined symbols (275) | `/FORCE:MULTIPLE` linker flag | Yes (config.json) |
+| Unresolved symbols (666) | `/FORCE:UNRESOLVED` linker flag | Yes (config.json) |
 
 ## Build Pipeline
 
 ```
-dtk xex split → fix_pdata.py → configure.py (injects link_glue unit) → ninja → link with /FORCE
+dtk xex split → configure.py (injects link_glue unit) → ninja → link with /FORCE
 ```
 
-## Priority for Jeff Fixes
+## Priority for Remaining Jeff Fixes
 
-1. **COMDAT marking — phase 2** (handle size-0 symbols: `__real@*`, RTTI, string literals → eliminates remaining 3,562 LNK4006)
-2. **.pdata content fix** (filter `__unwind$` from .pdata entries, add ADDR32 relocs to PDATA_EH blobs → eliminates LNK1223 without `fix_pdata.py`)
-3. **Cross-unit label resolution** (eliminates 96 lbl_* errors)
-4. **EH colocation** (eliminates 17 __unwind/__catch errors)
-5. **CRT init colocation** (eliminates 24 ??__E errors)
+1. **Cross-unit label resolution** (eliminates 96 lbl_* errors)
+2. **EH colocation** (eliminates 17 __unwind/__catch errors)
+3. **CRT init colocation** (eliminates 24 ??__E errors)
+4. **REL14 overflow mitigation** (15 conditional branches can't reach lbl_* targets >32KB away)

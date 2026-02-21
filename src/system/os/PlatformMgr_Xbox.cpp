@@ -128,13 +128,10 @@ bool PlatformMgr::HasCreatedContentPrivilege() const {
 
 bool PlatformMgr::HasKinectSharePrvilege() const {
     int bptr = 0;
-    if (XUserCheckPrivilege(0xFF, XPRIVILEGE_SHARE_CONTENT_OUTSIDE_LIVE, &bptr) == 0) {
-        return true;
-    } else if (bptr == 0) {
-        bool ret = bptr;
-        return ret;
+    if (XUserCheckPrivilege(0xFF, XPRIVILEGE_SHARE_CONTENT_OUTSIDE_LIVE, &bptr) != 0 || bptr == 0) {
+        return false;
     }
-    // C4715: no return after else-if chain - adding one regresses match (81% -> 78%)
+    return true;
 }
 
 bool PlatformMgr::IsSmartGlassConnected() { return gNumSmartGlassClients > 0; }

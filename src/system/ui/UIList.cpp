@@ -273,7 +273,15 @@ void UIList::Poll() {
     UpdateHandler();
 }
 
-int UIList::CollidePlane(std::vector<Vector3> const &vec, Plane const &p) { return 0; }
+int UIList::CollidePlane(std::vector<Vector3> const &vec, Plane const &p) {
+    bool le0 = vec[0] <= p;
+    bool le1 = vec[1] <= p;
+    bool le2 = vec[2] <= p;
+    if (le0 == le1 && le1 == le2) {
+        return le0 ? 1 : -1;
+    } else
+        return 0;
+}
 
 void UIList::StartScroll(UIListState const &state, int i, bool b) {
     mListDir->StartScroll(state, mWidgets, i, b);
@@ -955,14 +963,14 @@ RndDrawable *UIList::CollideShowing(const Segment &seg, float &fref, Plane &p) {
 int UIList::CollidePlane(const Plane &p) {
     std::vector<std::vector<Vector3> > triangles;
     BoundingBoxTriangles(triangles);
-    int result = 0;
-    if (triangles.size() > 0) {
-        for (size_t i = 0; i < triangles.size(); ++i) {
-            int ret = CollidePlane(triangles[i], p);
-            if (ret) {
-                result = ret;
-            }
-        }
+    std::vector<std::vector<Vector3> >::iterator it = triangles.begin();
+    int result = CollidePlane(*it, p);
+    if (result == 0)
+        return 0;
+    ++it;
+    for (; it != triangles.end(); ++it) {
+        if (result != CollidePlane(*it, p))
+            return 0;
     }
     return result;
 }

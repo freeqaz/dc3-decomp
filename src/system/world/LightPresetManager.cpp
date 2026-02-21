@@ -120,6 +120,74 @@ DataNode LightPresetManager::OnToggleLightingEvents(DataArray *da) {
     return mIgnoreLightingEvents = !mIgnoreLightingEvents;
 }
 
+void LightPresetManager::Poll() {
+    LightPreset *pNew = mPresetNew;
+    float timeNew = unk30;
+    LightPreset *pPrev = mPresetPrev;
+    float timePrev = unk34;
+    float blend = mBlend;
+
+    if (mPresetOverride) {
+        TaskUnits units = mPresetOverride->Units();
+        float time = TheTaskMgr.Time(units);
+        float t = 1.0f;
+        if (0.0f < unk44) {
+            t = (time - unk38) / unk44;
+        }
+        float clamped = 0.0f;
+        if (-t < 0.0f) {
+            clamped = t;
+        }
+        t = 1.0f;
+        if ((clamped - 1.0f) < 0.0f) {
+            t = clamped;
+        }
+        if (unk48 == 1) {
+            t = 1.0f - t;
+        }
+        if (t > 0.0f) {
+            timePrev = timeNew;
+            blend = t;
+            timeNew = unk38;
+            pPrev = pNew;
+            pNew = mPresetOverride;
+        } else {
+            if (unk48 == 1) {
+                unk38 = 0.0f;
+                mPresetOverride = 0;
+                unk44 = 0.0f;
+                unk48 = 0;
+            }
+        }
+    }
+
+    if (pNew) {
+        TaskUnits units = pNew->Units();
+        float time = TheTaskMgr.Time(units);
+        float frame = pNew->FramesPerUnit() * (time - timeNew);
+        float f = 0.0f;
+        if (-frame < 0.0f) {
+            f = frame;
+        }
+        if (pPrev == 0 || pPrev == pNew) {
+            pNew->SetFrameEx(f, 1.0f, (bool)units);
+            unk3c = true;
+        } else {
+            TaskUnits prevUnits = pPrev->Units();
+            float prevTime = TheTaskMgr.Time(prevUnits);
+            float prevFrame = pPrev->FramesPerUnit() * (prevTime - timePrev);
+            float pf = 0.0f;
+            if (-prevFrame < 0.0f) {
+                pf = prevFrame;
+            }
+            pPrev->SetFrameEx(pf, 1.0f - blend, (bool)prevUnits);
+            pNew->SetFrameEx(f, blend, (bool)prevUnits);
+            unk3c = false;
+        }
+    }
+    UpdateOverlay();
+}
+
 DataNode LightPresetManager::OnForcePreset(DataArray *da) {
     LightPreset *p = da->Obj<LightPreset>(2);
     ForcePreset(p, da->Size() > 2 ? da->Float(3) : 0);

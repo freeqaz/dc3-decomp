@@ -12,7 +12,8 @@
         "/BASE:0x82000000",
         "/NODEFAULTLIB",
         "/XEX:NO",
-        "/FORCE",
+        "/FORCE:MULTIPLE",
+        "/FORCE:UNRESOLVED",
         "/MERGE:.xidata=.text",
         "/MAP"
     ],

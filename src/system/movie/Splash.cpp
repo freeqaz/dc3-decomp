@@ -338,27 +338,29 @@ bool Splash::ShowNext() {
     }
     mCurrentCam = 0;
     mCurrentTrigger = 0;
-    CritSecTracker tracker(&unk98);
+    {
+        CritSecTracker tracker(&unk98);
 
-    // Count prepared screens to determine if we're done
-    std::list<PreparedScreenParams>::iterator begin = mPreparedScreens.begin();
-    std::list<PreparedScreenParams>::iterator end = mPreparedScreens.end();
-    std::list<PreparedScreenParams>::iterator node = begin;
-    unsigned int num = 0;
+        // Count prepared screens to determine if we're done
+        std::list<PreparedScreenParams>::iterator begin = mPreparedScreens.begin();
+        std::list<PreparedScreenParams>::iterator end = mPreparedScreens.end();
+        std::list<PreparedScreenParams>::iterator node = begin;
+        unsigned int num = 0;
 
-    if (node != end) {
-        do {
-            ++node;
-            ++num;
-        } while (node != end);
-        // If only one screen remains, signal that we're done
-        if (num == 1U) {
-            return true;
+        if (node != end) {
+            do {
+                ++node;
+                ++num;
+            } while (node != end);
+            // If only one screen remains, check if more screens are queued
+            if (num == 1U) {
+                return !mScreens.empty();
+            }
         }
-    }
 
-    // Display the next screen
-    mPreparedScreens.clear();
+        // Remove the front screen and display the next one
+        mPreparedScreens.erase(mPreparedScreens.begin());
+    }
     return Show();
 }
 

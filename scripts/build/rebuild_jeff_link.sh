@@ -15,7 +15,10 @@ cargo build --release 2>&1 | tail -3
 
 echo "=== Reconfiguring ==="
 cd "$DC3_DIR"
-python3 configure.py --dtk "$JEFF_DIR/target/release/dtk" 2>&1
+python3 configure.py \
+    --dtk "$JEFF_DIR/target/release/dtk" \
+    --objdiff ../objdiff/target/release/objdiff-cli \
+    --wibo ../wibo/build/release/wibo 2>&1
 
 echo "=== Cleaning split objects ==="
 rm -rf build/373307D9/obj

@@ -107,7 +107,7 @@ DC3 boot animation successfully rendered (single capture per run due to frame 12
 ### What Works
 
 - XEX boots successfully in xenia-headless (both debug and retail)
-- All 707 imports resolved (347 thunks + 360 variables)
+- All 707 imports resolved (323 thunks + 334 variables + 50 stubs)
 - 36,000+ draw calls, 600+ swaps at ~30fps
 - 16 game threads spawned and running
 - Vulkan rendering at full game speed with async pipeline compilation
@@ -155,6 +155,21 @@ These are debug-mode overlay paths for dev kit workflows. The game handles the f
 #### 5. Stale /dev/shm Files
 
 Each xenia run creates `xenia_code_cache_*` and `xenia_memory_*` in `/dev/shm`. Never cleaned up. Can fill 38GB+ → SIGBUS on next launch. Periodically run: `rm -f /dev/shm/xenia_*`
+
+### Decomp XEX: BOOTS TO MAIN LOOP (2026-02-20)
+
+The decomp-linked PE (`build/373307D9/default.exe`) packaged as XEX via `build_xex.py` boots in xenia-headless:
+
+- **All imports resolved**: xam 159 (100%), xboxkrnl 196 (100%), xbdm 5 (100%)
+- **334 vars + 323 thunks** mapped from our PE, 50 stubs for unmapped overlapping ordinals
+- **NUI patching**: 60/60 functions patched
+- **Boot progress**: CRT init → thread creation → main loop entry → hangs at `RtlEnterCriticalSection` (LR=0x830DBFC8)
+- **Hang root cause**: CRT initialization deadlock, likely critical section not initialized or held by a thread that never completes
+
+**Import resolution fixes** (2026-02-20):
+1. **Ordinal prefix stripping**: Original XEX uses prefixed ordinals (xam=0x0XXXX, xboxkrnl=0x1XXXX, xbdm=0x2XXXX). Our PE has plain ordinals (1-2500). Strip prefix: `real_ordinal = prefixed_ordinal & 0xFFFF`
+2. **IAT grouping**: Thunk IAT addresses are contiguous per library. Group by proximity, assign to libraries by unique ordinal overlap scoring
+3. **Consumed-VA tracking**: Prevent double-mapping when overlapping ordinals (18 between xam/xboxkrnl) would assign two libraries to the same thunk VA. Second library gets a stub instead.
 
 ### Other Limitations
 
@@ -455,9 +470,16 @@ Two critical bugs in `scripts/build/build_xex.py` prevented the decomp XEX from 
 
 **Fix**: Added `target_size_of_image` parameter, passing our PE's SizeOfImage for thunk placement.
 
-### Import Variable Warnings
+#### 3. Import Ordinal Namespace Collision (root cause of xenia assert crash)
 
-347 "import variable not resolved" warnings remain. All import variable VAs point to the original PE's .rdata layout (RVA 0x600-0x1E48). While ordinal data is copied there, the import library header's variable VAs may not correctly map to our PE's section layout. The game boots and runs despite these warnings — they're a secondary issue.
+**Problem**: The original XEX uses prefixed ordinals (xam=0x0XXXX, xboxkrnl=0x1XXXX, xbdm=0x2XXXX) while our PE linker emits plain ordinals (1-2500). A flat `ordinal → VA` dictionary caused cross-library collisions — 18 ordinals overlap between xam and xboxkrnl. When two libraries shared the same thunk VA, xenia's sequential processing overwrote the ordinal marker with a syscall stub (0x44000042) before the second library read it, triggering `assert_always()` on `record_type=0x44`.
+
+**Fix (3 parts)**:
+1. **Ordinal prefix stripping**: `real_ordinal = prefixed_ordinal & 0xFFFF`
+2. **IAT grouping**: Thunk IAT addresses are contiguous per library. Group by address proximity (>32 byte gap = new group), assign to libraries by unique ordinal overlap scoring
+3. **Consumed-VA tracking**: Track assigned VAs in a set. When an ordinal overlaps, the second library gets a stub instead of re-using the same VA
+
+**Result**: 334 vars + 323 thunks mapped, 50 stubs for unresolvable overlaps. All 707 markers verified valid.
 
 ### Boot Verification
 
@@ -607,8 +629,8 @@ Useful flags for debugging the rendering pipeline:
 Our decomp-built XEX (`build_xex.py` → valid XEX2) boots in xenia-headless:
 - 60/60 NUI/XBC stubs patched, title loads successfully, enters main loop
 - 30+ seconds clean execution with null GPU, no crashes or assertions
-- 347 "import variable not resolved" warnings (known — see below)
-- Two critical fixes in `build_xex.py`: page descriptor generation + thunk placement
+- All 707 imports resolved (334 vars, 323 thunks, 50 stubs)
+- Three critical fixes in `build_xex.py`: page descriptors, thunk placement, ordinal collision
 
 ### Priority 3: Automated Regression Testing
 

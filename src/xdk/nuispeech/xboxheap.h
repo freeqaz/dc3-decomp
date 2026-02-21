@@ -2,7 +2,10 @@
 
 namespace NUISPEECH {
     class CXboxHeap {
-        struct _BLOCK_ENTRY {};
+        struct _BLOCK_ENTRY {
+            _BLOCK_ENTRY *mNext; // 0x0
+            _BLOCK_ENTRY *mPrev; // 0x4
+        };
 
     public:
         CXboxHeap(unsigned int, unsigned int);
@@ -19,8 +22,7 @@ namespace NUISPEECH {
     protected:
         CXboxHeap *mFreeHead; // 0x0
         CXboxHeap *mUsedHead; // 0x4
-        CXboxHeap *mNext; // 0x8
-        CXboxHeap *mPrev; // 0xc
+        _BLOCK_ENTRY mListHead; // 0x8 (mNext at 0x8, mPrev at 0xC)
         unsigned int mSize; // 0x10
         unsigned int mCount; // 0x14
     };
