@@ -154,6 +154,11 @@ public:
 
     AutoSlowFrame(const char *reason, float);
     ~AutoSlowFrame();
+
+private:
+    float mStartMs;       // 0x0
+    const char *mReason;  // 0x4
+    float mWaiver;        // 0x8
 };
 
 class AutoGlitchReport {
