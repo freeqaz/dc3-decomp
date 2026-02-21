@@ -98,90 +98,77 @@ int CharClipGroup::QueueRandom(int pos, int end) const {
 }
 
 CharClip *CharClipGroup::GetClip(int flags) {
-    int size = mClips.size();
-    if (!size) {
+    if (!mClips.size()) {
         return nullptr;
     }
 
-    // Clamp mWhich to valid range
-    if (mWhich >= size) {
-        mWhich = size - 1;
+    if (mWhich >= mClips.size()) {
+        mWhich = mClips.size() - 1;
     }
 
-    // Clamp mLRUBoundary to valid range
-    if (mLRUBoundary >= size) {
-        mLRUBoundary = size - 1;
+    if (mLRUBoundary >= mClips.size()) {
+        mLRUBoundary = mClips.size() - 1;
     }
 
     int origWhich = mWhich;
     int origUnk24 = mLRUBoundary;
 
-    // Calculate starting position (next after mWhich, wrapping)
     int pos = mWhich + 1;
-    if (pos >= size) {
-        pos -= size;
+    if (pos >= mClips.size()) {
+        pos -= mClips.size();
     }
     mWhich = pos;
 
-    // First loop: search from pos to origUnk24
     if (pos != origUnk24) {
         do {
             int swapIdx = QueueRandom(pos, origUnk24);
             mClips.swap(pos, swapIdx);
             CharClip *clip = mClips[pos];
             if ((clip->Flags() & flags) == flags) {
-                // Found matching clip
                 mClips.swap(pos, mWhich);
-                // Update mLRUBoundary
                 int newUnk24 = origUnk24 + 1;
-                if (newUnk24 >= size) {
-                    newUnk24 -= size;
+                if (newUnk24 >= mClips.size()) {
+                    newUnk24 -= mClips.size();
                 }
                 mLRUBoundary = newUnk24;
                 return clip;
             }
             pos = pos + 1;
-            if (pos >= size) {
-                pos -= size;
+            if (pos >= mClips.size()) {
+                pos -= mClips.size();
             }
         } while (pos != origUnk24);
     }
 
-    // Second loop: search from pos to origWhich
     if (pos != origWhich) {
         do {
             int swapIdx = QueueRandom(pos, origWhich);
             mClips.swap(pos, swapIdx);
             CharClip *clip = mClips[pos];
             if ((clip->Flags() & flags) == flags) {
-                // Found matching clip
                 mClips.swap(pos, mWhich);
                 mClips.swap(pos, mLRUBoundary);
-                // Update mLRUBoundary
                 int newUnk24 = mLRUBoundary + 1;
-                if (newUnk24 >= size) {
-                    newUnk24 -= size;
+                if (newUnk24 >= mClips.size()) {
+                    newUnk24 -= mClips.size();
                 }
                 mLRUBoundary = newUnk24;
                 return clip;
             }
             pos = pos + 1;
-            if (pos >= size) {
-                pos -= size;
+            if (pos >= mClips.size()) {
+                pos -= mClips.size();
             }
         } while (pos != origWhich);
     }
 
-    // Final check at current position
     CharClip *clip = mClips[pos];
     if ((clip->Flags() & flags) == flags) {
-        // Found matching clip, update state
         mClips.swap(pos, mWhich);
         mClips.swap(pos, mLRUBoundary);
-        // Update mLRUBoundary
         int newUnk24 = mLRUBoundary + 1;
-        if (newUnk24 >= size) {
-            newUnk24 -= size;
+        if (newUnk24 >= mClips.size()) {
+            newUnk24 -= mClips.size();
         }
         mLRUBoundary = newUnk24;
         return clip;
