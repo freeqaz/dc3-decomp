@@ -83,10 +83,11 @@ private:
     void* mTreeRight;     // 0xC8 - RB-tree _M_right
     int mTreeCount;       // 0xCC - RB-tree _M_node_count
     bool mOpen;           // 0xD0
+    char _padD1[3];       // 0xD1 - align to 0xD4
     bool mEndianSwapped;  // 0xD4
     bool mHasAudio;       // 0xD5
     unsigned int mThreadId; // 0xD8
     int unkDC;            // 0xDC
-    int mMaxBuffer;       // 0xE0 - initialized to 0x8000
+    int mBinkVolume;      // 0xE0 - Bink volume level (0x8000 = max)
     int mBufferOffset;    // 0xE4
 };

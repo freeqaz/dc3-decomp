@@ -61,7 +61,7 @@ BinkMovieImpl::BinkMovieImpl()
     mTreeRight = &mTreeColor;
     mEndianSwapped = false;
     mHasAudio = false;
-    mMaxBuffer = 0x8000;
+    mBinkVolume = 0x8000;
     mBufferOffset = 0;
     mThreadId = gMainThreadID;
 
