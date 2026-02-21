@@ -12,11 +12,11 @@
 MoveDetector::MoveDetector(
     const FilterVersion *fv, const HamMove *move, const DancerFrame *&dancer_frame
 )
-    : mMove(move), mActive(false), unk8(-1), unkc(-1) {
+    : mMove(move), mActive(false), mLastDetectFrameIdx(-1), mDetectFrameOffset(-1) {
     MILO_ASSERT(mMove, 0x18);
     bool mirrored = mMove->Mirrored();
     const std::vector<MoveFrame> &moveFrames = mMove->GetMoveFrames();
-    unk10.resize(moveFrames.size());
+    mDancerFrames.resize(moveFrames.size());
     for (int i = 0; i < 2; i++) {
         mLastDetectFracs[i] = 0;
         mPlayerDetectFrames[i].resize(moveFrames.size());
@@ -25,7 +25,7 @@ MoveDetector::MoveDetector(
         if (dancer_frame->mMoveFrameIdx != mf) {
             const char *path = move ? PathName(move) : "NULL";
             MILO_FAIL("HamMove '%s': dancer_frame->mMoveFrameIdx != mf", path);
-            DancerFrame &cur = unk10[mf];
+            DancerFrame &cur = mDancerFrames[mf];
             cur.unk0 = -1;
             cur.mMoveFrameIdx = mf;
             cur.mSkeleton = dancer_frame->mSkeleton;
@@ -38,7 +38,7 @@ MoveDetector::MoveDetector(
     }
     for (int i = 0; i < 2; i++) {
         for (int j = 0; j < 4; j++) {
-            unk3c[i][j] = 0;
+            mDetectThresholds[i][j] = 0;
         }
     }
 }
@@ -90,23 +90,23 @@ MoveAsyncDetector::MoveAsyncDetector(MoveDir *md) : mDir(md) {
                 if (seq) {
                     const FilterVersion *curFv = it->FilterVer();
                     const DancerFrame *curFrame = seq->GetDancerFrames().begin();
-                    unk4.push_back(new MoveDetector(curFv, it, curFrame));
+                    mDetectors.push_back(new MoveDetector(curFv, it, curFrame));
                 } else {
                     MILO_NOTIFY("Could not find %s in expert keys", PathName(it));
                 }
             }
-            std::sort(unk4.begin(), unk4.end(), MoveDetectorCmp());
+            std::sort(mDetectors.begin(), mDetectors.end(), MoveDetectorCmp());
         }
     }
 }
 
 MoveAsyncDetector::~MoveAsyncDetector() {
-    unk10.clear();
-    DeleteAll(unk4);
+    mActiveDetectors.clear();
+    DeleteAll(mDetectors);
 }
 
 void MoveAsyncDetector::EnqueueDetectFrames(int i1, int i2, float f3, int i4) {
-    for (std::set<MoveDetector *>::iterator it = unk10.begin(); it != unk10.end(); ++it) {
+    for (std::set<MoveDetector *>::iterator it = mActiveDetectors.begin(); it != mActiveDetectors.end(); ++it) {
         MoveDetector *cur = *it;
         cur->Poll(i1, i2, mDir);
         const HamMove *move = cur->Move();
@@ -116,26 +116,34 @@ void MoveAsyncDetector::EnqueueDetectFrames(int i1, int i2, float f3, int i4) {
 }
 
 void MoveAsyncDetector::DisableAllDetectors() {
-    unk10.clear();
-    FOREACH (it, unk4) {
+    mActiveDetectors.clear();
+    FOREACH (it, mDetectors) {
         (*it)->Reset();
     }
 }
 
 MoveDetector *MoveAsyncDetector::FindDetector(const HamMove *move) {
-    for (std::vector<MoveDetector *>::iterator it = unk4.begin(); it != unk4.end();
-         ++it) {
-        if ((*it)->Move() == move) {
-            return *it;
+    std::pair<std::vector<MoveDetector *>::iterator, std::vector<MoveDetector *>::iterator>
+        range = std::equal_range(mDetectors.begin(), mDetectors.end(), move, MoveDetectorCmp());
+    if (range.first == range.second) {
+        DancerSequence *seq = move->GetDancerSequence();
+        if (seq) {
+            const DancerFrame *frame = &seq->GetDancerFrames().front();
+            MoveDetector *detector =
+                new MoveDetector(move->FilterVer(), move, frame);
+            mDetectors.push_back(detector);
+            std::sort(mDetectors.begin(), mDetectors.end(), MoveDetectorCmp());
+            return detector;
         }
+        return 0;
     }
-    return 0;
+    return *range.first;
 }
 
 void MoveAsyncDetector::EnableDetector(HamMove *move) {
     MoveDetector *detector = FindDetector(move);
     if (detector) {
-        unk10.insert(detector);
+        mActiveDetectors.insert(detector);
     }
 }
 
@@ -143,7 +151,7 @@ void MoveAsyncDetector::DisableDetector(HamMove *move) {
     MoveDetector *detector = FindDetector(move);
     if (detector != 0) {
         detector->Reset();
-        unk10.erase(detector);
+        mActiveDetectors.erase(detector);
     } else if (move != 0) {
         MILO_NOTIFY("Could not disable detector for %s", PathName(move));
     }

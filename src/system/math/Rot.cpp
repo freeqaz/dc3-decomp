@@ -370,9 +370,9 @@ void Nlerp(const Hmx::Quat &q1, const Hmx::Quat &q2, float f, Hmx::Quat &qout) {
         return;
     }
     float dot = q1.x * q2.x;
-    dot = dot + q1.y * q2.y;
-    dot = dot + q1.z * q2.z;
     dot = dot + q1.w * q2.w;
+    dot = dot + q1.z * q2.z;
+    dot = dot + q1.y * q2.y;
     if (dot < 0.0f) {
         qout.x = -((q1.x + q2.x) * f - q1.x);
         qout.y = -((q1.y + q2.y) * f - q1.y);

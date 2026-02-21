@@ -23,8 +23,8 @@ public:
         if (mActive) {
             mLastDetectFracs[0] = 0;
             mLastDetectFracs[1] = 0;
-            unk8 = -1;
-            unkc = -1;
+            mLastDetectFrameIdx = -1;
+            mDetectFrameOffset = -1;
             mActive = false;
         }
     }
@@ -32,12 +32,12 @@ public:
 protected:
     const HamMove *mMove; // 0x0
     bool mActive; // 0x4
-    int unk8; // 0x8
-    int unkc; // 0xc
-    std::vector<DancerFrame> unk10; // 0x10
+    int mLastDetectFrameIdx; // 0x8
+    int mDetectFrameOffset; // 0xc
+    std::vector<DancerFrame> mDancerFrames; // 0x10
     std::vector<DetectFrame> mPlayerDetectFrames[2]; // 0x1c
     float mLastDetectFracs[2]; // 0x34
-    float unk3c[2][4]; // 0x3c
+    float mDetectThresholds[2][4]; // 0x3c
 };
 
 // size 0x28
@@ -59,12 +59,18 @@ private:
     MoveDetector *FindDetector(const HamMove *);
 
     MoveDir *mDir; // 0x0
-    std::vector<MoveDetector *> unk4; // 0x4
-    std::set<MoveDetector *> unk10; // 0x10
+    std::vector<MoveDetector *> mDetectors; // 0x4
+    std::set<MoveDetector *> mActiveDetectors; // 0x10
 };
 
 struct MoveDetectorCmp {
     bool operator()(MoveDetector *md1, MoveDetector *md2) const {
         return md1->Move() < md2->Move();
+    }
+    bool operator()(MoveDetector *md, const HamMove *move) const {
+        return md->Move() < move;
+    }
+    bool operator()(const HamMove *move, MoveDetector *md) const {
+        return move < md->Move();
     }
 };
