@@ -14,7 +14,71 @@
 
 SongSort::SongSort() {};
 
-void SongSort::BuildTree() {};
+void SongSort::BuildTree() {
+    DeleteTree();
+    Init();
+
+    // Build a sorted list of song nodes, grouped by header type
+    std::vector<NavListItemNode *> sortedNodes;
+    FOREACH (songEntry, TheSongSortMgr->unk78) {
+        NavListItemNode *songNode = NewItemNode(&songEntry->second);
+        auto insertPos =
+            std::lower_bound(sortedNodes.begin(), sortedNodes.end(), songNode, CompareHeaders());
+        sortedNodes.insert(insertPos, songNode);
+    }
+
+    // Group items into shortcuts with smart header merging.
+    // For "by_song" and "by_artist" sorts, small groups are combined
+    // to avoid too many tiny header sections.
+    bool deferring = false;
+    int cumulativeCount = 0;
+    NavListItemNode **shortcutStart = sortedNodes.begin();
+    NavListItemNode **groupStart = sortedNodes.begin();
+
+    if (groupStart != sortedNodes.end()) {
+        do {
+            auto range = std::equal_range(
+                sortedNodes.begin(), sortedNodes.end(), *groupStart, CompareHeaders()
+            );
+            NavListItemNode **rangeEnd = range.second;
+            int groupSize = range.second - range.first;
+            int remaining = sortedNodes.end() - groupStart;
+            cumulativeCount += groupSize;
+            int leftover = remaining - groupSize;
+
+            static Symbol by_song("by_song");
+            static Symbol by_artist("by_artist");
+            if (leftover <= 0 || cumulativeCount >= 4
+                || (mSortName != by_song
+                    && (mSortName != by_artist || TheSongSortMgr->IsInHeaderMode())))
+            {
+                // Flush: determine the end of this shortcut's range
+                NavListItemNode **endPtr = groupStart;
+                if ((deferring && cumulativeCount <= 12) || !deferring) {
+                    endPtr = rangeEnd;
+                }
+
+                NavListShortcutNode *shortcut = NewShortcutNode(*shortcutStart);
+                unk30.push_back(shortcut);
+                shortcut->InsertHeaderRange(shortcutStart, endPtr, this);
+
+                cumulativeCount = 0;
+                deferring = false;
+                shortcutStart = endPtr;
+                groupStart = endPtr;
+            } else {
+                // Defer: accumulate this group with the next one
+                deferring = true;
+                groupStart = rangeEnd;
+            }
+        } while (shortcutStart != sortedNodes.end());
+    }
+
+    // Finalize each shortcut's internal structure
+    FOREACH (it, unk30) {
+        (*it)->FinishSort(this);
+    }
+}
 
 void SongSort::DeleteItemList() {
     NavListSort::DeleteItemList();
@@ -124,4 +188,26 @@ void SongSort::Text(int i1, int i2, UIListLabel *listlabel, UILabel *uilabel) co
     app_label->SetFromSongSelectNode(unk30[i2]);
 };
 
-Symbol SongSort::DetermineHeaderSymbolFromSong(Symbol sym) { return sym; };
+Symbol SongSort::DetermineHeaderSymbolFromSong(Symbol sym) {
+    std::map<Symbol, SongRecord>::iterator it = TheSongSortMgr->unk78.find(sym);
+    if (it != TheSongSortMgr->unk78.end()) {
+        NavListItemNode *node = NewItemNode(&it->second);
+        for (NavListShortcutNode **shortcutIt = unk30.begin(); shortcutIt != unk30.end();
+             shortcutIt++) {
+            NavListShortcutNode *shortcut = *shortcutIt;
+            const std::list<NavListSortNode *> &children = shortcut->Children();
+            MILO_ASSERT(children.size() == 1, 0xea);
+            NavListHeaderNode *header =
+                dynamic_cast<NavListHeaderNode *>(shortcut->FirstChild());
+            MILO_ASSERT(header != NULL, 0xec);
+            if (node->Compare(header, kNodeHeader) == 0) {
+                delete node;
+                return header->GetToken();
+            }
+        }
+        delete node;
+        Symbol nullSym(gNullStr);
+        return nullSym;
+    }
+    return sym;
+};

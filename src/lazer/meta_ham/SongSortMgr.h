@@ -6,6 +6,7 @@
 class VoiceControlPanel;
 
 class SongSortMgr : public NavListSortMgr {
+    friend class SongSort;
     friend class VoiceControlPanel;
 public:
     virtual DataNode Handle(DataArray *, bool);
