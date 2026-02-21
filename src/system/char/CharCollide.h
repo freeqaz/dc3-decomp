@@ -19,7 +19,7 @@ public:
 
     struct CharCollideStruct {
         int unk0;
-        Vector3 unk4;
+        Vector3 vec;
     };
 
     // Hmx::Object

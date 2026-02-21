@@ -10,8 +10,8 @@ public:
 
     static const char *HeaderString(const char *);
 
-    int unk0[16]; // 0x0
-    int unk40; // 0x40
+    int mHeapFreeBlocks[16]; // 0x0
+    int mPhysicalFree; // 0x40
 };
 
 struct MemPoint {
@@ -24,6 +24,6 @@ public:
     MemPoint(eInitType = kInitType1);
     MemPointDelta operator-(const MemPoint &);
 
-    int unk0[16]; // 0x0
-    int unk40; // 0x40
+    int mHeapFreeBlocks[16]; // 0x0
+    int mPhysicalFree; // 0x40
 };

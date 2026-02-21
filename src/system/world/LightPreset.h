@@ -55,7 +55,7 @@ public:
             return *this;
         }
 
-        Hmx::Quat unk0;
+        Hmx::Quat mOrientation; // 0x0
         /** "Light's position" */
         Vector3 mPosition; // 0x10
         /** "Light's color" */

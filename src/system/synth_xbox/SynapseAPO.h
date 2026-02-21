@@ -44,8 +44,8 @@ public:
   void DoProcess(const SynapseAPOParams& params, int* arg1, float arg2, int arg3, int arg4);
 
 private:
-  Synapse::Synapse* unk168;
-  SynapseAPOParams unk16C;
+  Synapse::Synapse* mSynapse;
+  SynapseAPOParams mParams;
 };
 
 }  // namespace DSP

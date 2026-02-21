@@ -12,20 +12,20 @@
 #include "utl/Symbol.h"
 
 BEGIN_HANDLERS(MQSongHeaderNode)
-    HANDLE_EXPR(get_challenge_count, unk58)
+    HANDLE_EXPR(get_challenge_count, mChallengeCount)
     HANDLE_SUPERCLASS(NavListHeaderNode)
 END_HANDLERS
 
 MQSongHeaderNode::MQSongHeaderNode(NavListItemSortCmp *cmp, Symbol sym, bool b)
-    : NavListHeaderNode(cmp, sym, b), unk5c(0), unk58(0) {}
+    : NavListHeaderNode(cmp, sym, b), mHighlighted(0), mChallengeCount(0) {}
 
 void MQSongHeaderNode::OnHighlight() {
-    unk5c = true;
+    mHighlighted = true;
     SetCollapseStateIcon(true);
 }
 
 void MQSongHeaderNode::OnUnHighlight() {
-    unk5c = false;
+    mHighlighted = false;
     SetCollapseStateIcon(false);
 }
 
@@ -73,7 +73,7 @@ void MQSongHeaderNode::Text(UIListLabel *listlabel, UILabel *label) const {
     } else if (listlabel->Matches("song_prefix")) {
         label->SetTextToken(gNullStr);
     } else if (listlabel->Matches("header_collapse")) {
-        SetCollapseStateIcon(unk5c);
+        SetCollapseStateIcon(mHighlighted);
     }
 }
 
@@ -134,7 +134,7 @@ void MQSongSortNode::Text(UIListLabel *listlabel, UILabel *label) const {
     if (listlabel->Matches("song")) {
         AppLabel *pAppLabel = dynamic_cast<AppLabel *>(label);
         MILO_ASSERT(pAppLabel, 0x10f);
-        pAppLabel->SetBlacklightSongName(unk48, -1, false);
+        pAppLabel->SetBlacklightSongName(mShortName, -1, false);
     } else {
         if (listlabel->Matches("song_prefix")) {
             AppLabel *pAppLabel = dynamic_cast<AppLabel *>(label);
@@ -157,7 +157,7 @@ void MQSongSortNode::Custom(UIListCustom *list, Hmx::Object *obj) const {
         static DataNode &mq_difficulty = DataVariable("mq_difficulty");
         Difficulty difficulty = (Difficulty)mq_difficulty.Int();
         pStarDisplay->SetShowing(true);
-        int songID = TheSongMgr.GetSongIDFromShortName(unk48, true);
+        int songID = TheSongMgr.GetSongIDFromShortName(mShortName, true);
         pStarDisplay->SetSongWithDifficulty(songID, difficulty, false);
     }
 }

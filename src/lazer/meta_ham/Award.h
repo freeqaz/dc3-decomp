@@ -23,7 +23,7 @@ public:
 
 private:
     Symbol mName; // 0x4
-    int unk8; // 0x8
+    int mAwardIndex; // 0x8
     bool mIsSecret; // 0xc
     bool mIsSilent; // 0xd
     std::list<AwardEntry> mAwardEntries; // 0x10

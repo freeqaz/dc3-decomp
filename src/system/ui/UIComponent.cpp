@@ -28,7 +28,7 @@ void UIComponent::Enter() {
 
 UIComponent::UIComponent()
     : mState(kNormal), mNavRight(this), mNavDown(this), mSelectScreen(nullptr),
-      mSelected(0), unk40(0) {}
+      mSelected(0), mSelectCancelled(0) {}
 
 BEGIN_PROPSYNCS(UIComponent)
     SYNC_PROP(nav_right, mNavRight)
@@ -138,13 +138,13 @@ void UIComponent::SendSelect(LocalUser *user) {
 void UIComponent::FinishSelecting() {
     if (mState != kDisabled && mState != kNormal)
         SetState(kFocused);
-    if (!unk40 && mSelectScreen == TheUI->CurrentScreen()) {
+    if (!mSelectCancelled && mSelectScreen == TheUI->CurrentScreen()) {
         static UIComponentSelectDoneMsg select_msg(this, 0);
         select_msg[0] = DataNode(this);
         select_msg[1] = DataNode(mSelectingUser);
         TheUI->Handle(select_msg, false);
     } else
-        unk40 = false;
+        mSelectCancelled = false;
 }
 
 BEGIN_HANDLERS(UIComponent)

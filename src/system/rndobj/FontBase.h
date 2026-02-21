@@ -8,7 +8,7 @@ class RndFontBase : public Hmx::Object {
 public:
     class KernInfo {
     public:
-        unsigned short unk0, unk2;
+        unsigned short mFirstChar, mSecondChar;
         float kerning; // 0x4
     };
 
@@ -59,11 +59,11 @@ __forceinline BinStreamRev &operator>>(BinStreamRev &bs, RndFontBase::KernInfo &
     if (bs.rev < 0x11) {
         char x;
         bs >> x;
-        info.unk0 = x;
+        info.mFirstChar = x;
         bs >> x;
-        info.unk2 = x;
+        info.mSecondChar = x;
     } else {
-        bs >> info.unk0 >> info.unk2;
+        bs >> info.mFirstChar >> info.mSecondChar;
     }
     if (bs.rev < 6) {
         char x;

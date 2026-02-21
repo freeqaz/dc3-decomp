@@ -6,14 +6,14 @@
 class LeaderboardRow {
 public:
     String mName; // 0x0 - gamertag
-    int unk8;
+    int mPlayerID; // 0x8
     int mScore; // 0xc
     unsigned int mRank; // 0x10
-    int unk14;
+    int mModeID; // 0x14
     Difficulty mDiffID; // 0x18
     bool mNoFlashcards; // 0x1c
     bool mIsPercentile; // 0x1d
-    bool unk1e;
+    bool mIsHardcore; // 0x1e
     XUID mXUID; // 0x20
 };
 

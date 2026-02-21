@@ -37,9 +37,9 @@ private:
     virtual ~SongSortMgr();
 
 protected:
-    std::map<Symbol, SongRecord> unk78; // 0x78
-    int unk90; // 0x90
-    std::vector<int> unk94; // 0x94
+    std::map<Symbol, SongRecord> mSongRecordMap; // 0x78
+    int mRankedSongCount; // 0x90
+    std::vector<int> mQuasiRandomIndices; // 0x94
 };
 
 extern SongSortMgr *TheSongSortMgr;

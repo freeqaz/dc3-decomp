@@ -17,11 +17,11 @@
 class Sound : public virtual Hmx::Object, public SynthPollable {
 public:
     struct DelayArgs {
-        float unk0;
-        float unk4;
-        float unk8;
-        Hmx::Object *unkc;
-        float unk10;
+        float mVolume;
+        float mPan;
+        float mTranspose;
+        Hmx::Object *mEventReceiver;
+        float mDelayMs;
     };
     // Hmx::Object
     virtual ~Sound();
@@ -56,7 +56,7 @@ public:
     bool IsMoggReady() const;
     SynthSample *Sample();
 
-    void SetSoundEventReceiver(Hmx::Object *rcvr) { unkb8 = rcvr; }
+    void SetSoundEventReceiver(Hmx::Object *rcvr) { mEventReceiver = rcvr; }
 
     OBJ_MEM_OVERLOAD(0x16)
     NEW_OBJ(Sound)
@@ -104,7 +104,7 @@ protected:
         Use 0 for no limit. (SynthSample only)" */
     int mMaxPolyphony; // 0xb0
     bool unkb4;
-    ObjPtr<Hmx::Object> unkb8;
+    ObjPtr<Hmx::Object> mEventReceiver;
     std::list<DelayArgs *> mDelayArgs; // 0xcc
 };
 

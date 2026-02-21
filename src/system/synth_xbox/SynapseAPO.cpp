@@ -7,19 +7,19 @@ namespace DSP {
 SynapseAPOParams::SynapseAPOParams() {}
 
 SynapseAPO::SynapseAPO() : CSampleXAPOBase<SynapseAPO, SynapseAPOParams>() {
-  unk168 = 0;
-  new (&unk16C) SynapseAPOParams();
+  mSynapse = 0;
+  new (&mParams) SynapseAPOParams();
   SetSamplingRate(48000.0f);
 }
 
 SynapseAPO::~SynapseAPO() {}
 
 void SynapseAPO::SetSamplingRate(float rate) {
-  Synapse::Synapse* prevSynapse = unk168;
+  Synapse::Synapse* prevSynapse = mSynapse;
   if (prevSynapse != 0) {
     delete prevSynapse;
   }
-  unk168 = new Synapse::Synapse(rate);
+  mSynapse = new Synapse::Synapse(rate);
 }
 
 void SynapseAPO::OnSetParameters(const SynapseAPOParams& params) {}

@@ -264,6 +264,6 @@ protected:
     CharBonesSamples mOne; // 0x104
     FacingSet mFacing; // 0x170
     std::vector<CharBones::Bone> mZeros; // 0x180
-    std::vector<std::map<int, float> > unk18c; // 0x18c
+    std::vector<std::map<int, float> > mBlendSamples; // 0x18c
     int unk198; // 0x198
 };

@@ -21,12 +21,12 @@ class CharFeedback : public RndDrawable, public RndPollable {
 public:
     // size 0x20
     struct LimbState {
-        LimbState() : unkc(nullptr) {}
+        LimbState() : mMesh(nullptr) {}
         bool unk0; // 0x0
-        bool unk1; // 0x1
-        float unk4; // 0x4
+        bool mFailing; // 0x1
+        float mLastChangeTime; // 0x4
         float unk8; // 0x8
-        ObjPtr<RndMesh> unkc; // 0xc
+        ObjPtr<RndMesh> mMesh; // 0xc
     };
     // Hmx::Object
     virtual ~CharFeedback();

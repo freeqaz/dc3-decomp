@@ -11,9 +11,9 @@
 float HamScrollBehavior::sScrollSettleTime = 0.1;
 
 HamScrollBehavior::HamScrollBehavior(HamNavList *nav, UIListState *state)
-    : unk0(0), unk4(0), unk5(0), unk8(1), unkc(0), unk10(0.3), unk14(0), unk18(0),
-      unk1c(0), unk1d(0), unk20(0), unk24(0), unk28(0), unk2c(0), unk30(0),
-      unk34(0, 10, 0), unk48(2), unk4c(state), unk50(nav) {}
+    : mSettleTimer(0), unk4(0), unk5(0), mScrollStep(1), unkc(0), mScrollSpeed(0.3), unk14(0), mScrollCooldown(0),
+      unk1c(0), unk1d(0), unk20(0), mPendingScrollDir(0), unk28(0), unk2c(0), mScrollDir(0),
+      mSmoother(0, 10, 0), unk48(2), mListState(state), mNavList(nav) {}
 
 void HamScrollBehavior::Init() {
     static Symbol ui("ui");
@@ -57,67 +57,67 @@ void HamScrollBehavior::Init() {
 }
 
 bool HamScrollBehavior::ScrollUp(bool b) {
-    if (unk18 > 0.0f && !b)
+    if (mScrollCooldown > 0.0f && !b)
         return false;
-    int i = unk4c->FirstShowing() - unk8;
+    int i = mListState->FirstShowing() - mScrollStep;
     if (i < 0)
         return false;
-    unk4c->Scroll(-1, false);
-    unk4c->Poll(0.0f);
-    unk50->HandleHighlightChanged(i);
-    unk24 = 1;
-    unk0 = sScrollSettleTime;
+    mListState->Scroll(-1, false);
+    mListState->Poll(0.0f);
+    mNavList->HandleHighlightChanged(i);
+    mPendingScrollDir = 1;
+    mSettleTimer = sScrollSettleTime;
     return true;
 }
 
 bool HamScrollBehavior::ScrollDown(bool b1) {
-    if (unk18 > 0.0f && !b1)
+    if (mScrollCooldown > 0.0f && !b1)
         return false;
-    int i2 = unk4c->FirstShowing() + unk8 + HamListRibbon::sNumListSelectable - 1;
-    if (i2 - unk8 >= unk4c->NumShowing())
+    int i2 = mListState->FirstShowing() + mScrollStep + HamListRibbon::sNumListSelectable - 1;
+    if (i2 - mScrollStep >= mListState->NumShowing())
         return false;
-    unk50->HandleHighlightChanged(i2);
-    unk24 = 2;
-    unk0 = sScrollSettleTime;
+    mNavList->HandleHighlightChanged(i2);
+    mPendingScrollDir = 2;
+    mSettleTimer = sScrollSettleTime;
     return true;
 }
 
 bool HamScrollBehavior::IsScrolling() const {
-    return unk24 != 0 || (unk30 == 1 && unk4c->FirstShowing() != 0)
-        || (unk30 == 2 && !AtBottom());
+    return mPendingScrollDir != 0 || (mScrollDir == 1 && mListState->FirstShowing() != 0)
+        || (mScrollDir == 2 && !AtBottom());
 }
 
-bool HamScrollBehavior::AtTop() const { return unk4c->FirstShowing() == 0; }
+bool HamScrollBehavior::AtTop() const { return mListState->FirstShowing() == 0; }
 
 bool HamScrollBehavior::AtBottom() const {
-    return unk4c->FirstShowing()
-        == unk4c->NumShowing() - HamListRibbon::sNumListSelectable;
+    return mListState->FirstShowing()
+        == mListState->NumShowing() - HamListRibbon::sNumListSelectable;
 }
 
 void HamScrollBehavior::Enter() {
-    unk50->SetScrollSoundFrame(0);
-    unk50->PlayScrollSound();
+    mNavList->SetScrollSoundFrame(0);
+    mNavList->PlayScrollSound();
 }
 
 void HamScrollBehavior::Reset() {
-    unk30 = 0;
+    mScrollDir = 0;
     unk2c = 0;
     unk28 = 0;
-    unk0 = 0.0f;
-    unk24 = 0;
-    unk34.Reset();
-    unk50->SetScrollSoundFrame(unk34.Level());
+    mSettleTimer = 0.0f;
+    mPendingScrollDir = 0;
+    mSmoother.Reset();
+    mNavList->SetScrollSoundFrame(mSmoother.Level());
     unkc = 0.0f;
     unk4 = false;
     unk20 = 0.0f;
     unk5 = false;
-    unk18 = 0.0f;
+    mScrollCooldown = 0.0f;
     unk48 = 2;
 }
 
 void HamScrollBehavior::Exit() {
     Reset();
-    unk50->StopScrollSound();
+    mNavList->StopScrollSound();
 }
 
 void HamNavList::PlayScrollSound() {

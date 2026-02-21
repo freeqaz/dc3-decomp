@@ -31,7 +31,7 @@ protected:
     unsigned short unkdb;
     unsigned char unkdd;
     unsigned short unkde;
-    unsigned char unke0;
+    unsigned char mContentType;
     int unke1[4];
     int unkf1;
     unsigned short unkf5;
@@ -45,11 +45,11 @@ protected:
     int unk11b[4];
     int unk12b;
     int unk12f;
-    unsigned short unk133;
-    unsigned short unk135;
+    unsigned short mLanguage;
+    unsigned short mLocale;
     bool unk137;
-    int unk138;
-    int unk13c;
+    int mHeaderSize;
+    int mHeaderBytesRemaining;
 };
 #pragma pack(pop)
 
@@ -57,15 +57,15 @@ class KinectShareConnection {
 public:
     ~KinectShareConnection();
     void Poll();
-    int GetState() const { return unk78; }
+    int GetState() const { return mState; }
 
 private:
     XLSPConnection mConnection; // 0x0
-    int unk78; // 0x78 - state?
+    int mState; // 0x78 - connection state machine (0=connecting, 1=uploading, 2=success, 3=failed)
     KinectShare *mKinectShare; // 0x7c
-    const char *unk80;
-    int unk84;
-    KinectShare::EContentType unk88;
+    const char *mContent;
+    int mContentLength;
+    KinectShare::EContentType mContentType;
     u64 unk90;
     u64 unk98;
     u64 unka0;

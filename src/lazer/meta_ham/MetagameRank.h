@@ -34,7 +34,7 @@ public:
     static void Init();
 
     int RankNumber() { return mRankNumber; }
-    bool UnkCA() const { return unkca; }
+    bool HasXpAwarded() const { return mXpAwarded; }
 
 private:
     // FixedSizeSaveable
@@ -54,6 +54,6 @@ protected:
     float mPctToNextRank; // 0xc4
     bool mAtMaxRank; // 0xc8
     bool unkc9;
-    bool unkca;
+    bool mXpAwarded; // true when new XP was awarded since last save/reset
     std::list<DeferredPoints> mDeferredPoints; // 0xcc
 };

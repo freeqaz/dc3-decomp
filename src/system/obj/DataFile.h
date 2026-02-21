@@ -47,7 +47,7 @@ public:
 
 private:
     DataLoader *mLoader; // 0x4
-    DataArray *unk8; // 0x8
+    DataArray *mResult; // 0x8
     File *mFile; // 0xc
     int mBufLen; // 0x10
     char *mBuffer; // 0x14

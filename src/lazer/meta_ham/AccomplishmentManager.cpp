@@ -1063,7 +1063,7 @@ void AccomplishmentManager::CheckForSpecificModesAccomplishments(
         DateTime dt;
         DateTime dt2;
         GetDateAndTime(dt);
-        dt2 = ThePartyModeMgr->GetDateTime315();
+        dt2 = ThePartyModeMgr->GetRoundStartTime();
         if (dt2.ToDayNumber() != dt.ToDayNumber()) {
             static Symbol acc_night_till_morning("acc_night_till_morning");
             TheAccomplishmentMgr->EarnAccomplishmentForAll(acc_night_till_morning, false);

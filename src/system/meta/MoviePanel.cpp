@@ -94,7 +94,7 @@ void MoviePanel::Load() {
 }
 
 void MoviePanel::Draw() {
-    if (GetState() != kUnloaded && unk34 == GetFinalDrawPass())
+    if (GetState() != kUnloaded && mFinalDrawPassFlag == GetFinalDrawPass())
         mMovie.Draw();
     UIPanel::Draw();
 }

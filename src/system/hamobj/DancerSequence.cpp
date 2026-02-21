@@ -26,7 +26,7 @@ BEGIN_SAVES(DancerSequence)
     bs << numFrames;
     for (int i = 0; i < numFrames; i++) {
         const DancerFrame &curFrame = mDancerFrames[i];
-        bs << curFrame.unk0;
+        bs << curFrame.mMoveIdx;
         bs << curFrame.mMoveFrameIdx;
         const DancerSkeleton &skeleton = curFrame.mSkeleton;
         for (int j = 0; j < kNumJoints; j++) {
@@ -60,15 +60,15 @@ BEGIN_LOADS(DancerSequence)
         if (d.rev < 1) {
             int val;
             d >> val;
-            curFrame.unk0 = curFrame.mMoveFrameIdx = -1;
+            curFrame.mMoveIdx = curFrame.mMoveFrameIdx = -1;
         } else if (d.rev < 7) {
             int val0, val1;
             d >> val0;
             d >> val1;
-            curFrame.unk0 = val0;
+            curFrame.mMoveIdx = val0;
             curFrame.mMoveFrameIdx = val1;
         } else {
-            d >> curFrame.unk0;
+            d >> curFrame.mMoveIdx;
             d >> curFrame.mMoveFrameIdx;
         }
         DancerSkeleton &skeleton = curFrame.mSkeleton;

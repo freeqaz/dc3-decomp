@@ -12,10 +12,10 @@ public:
     virtual void Text(UIListLabel *, UILabel *) const;
 
     FitnessCalorieSortNode(NavListItemSortCmp *, int);
-    int GetUnk48() const { return unk48; }
+    int GetCalories() const { return mCalories; }
 
 protected:
-    int unk48;
+    int mCalories;
 };
 
 class FitnessCalorieHeaderNode : public NavListHeaderNode {

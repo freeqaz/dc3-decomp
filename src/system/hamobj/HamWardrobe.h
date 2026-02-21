@@ -55,12 +55,12 @@ protected:
     ObjPtrList<Character> mCrowdMembers; // 0x4
     ObjPtrVec<HamCharacter> mMainCharacters; // 0x18
     Symbol unk34; // 0x34
-    bool unk38; // 0x38
-    Symbol unk3c; // 0x3c
-    int unk40; // 0x40
-    Symbol unk44; // 0x44
-    Symbol unk48; // 0x48
-    Symbol unk4c[2]; // 0x4c
+    bool mCrowdOverrideActive; // 0x38
+    Symbol mForcedCrowdAnimation; // 0x3c
+    int mCrowdAnimationFlags; // 0x40
+    Symbol mPreviousCrowdAnimation; // 0x44
+    Symbol mForcedCharacter; // 0x48
+    Symbol mBackupOutfitOverrides[2]; // 0x4c
     RndOverlay *mOverlay; // 0x54
 };
 

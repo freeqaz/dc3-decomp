@@ -162,10 +162,10 @@ protected:
     std::vector<CampaignMove *> mCampaignMoves; // 0xa8
     DirLoader *m_pCurLoader; // 0xb4
     bool unkb8;
-    Symbol unkbc;
+    Symbol mCurrentEraSong;
     // key = crew, value = ???
     std::map<Symbol, bool> unkc0;
-    ObjectDir *unkd8;
+    ObjectDir *mCurrentObjectDir;
 };
 
 extern Campaign *TheCampaign;

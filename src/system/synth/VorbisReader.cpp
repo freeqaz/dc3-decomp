@@ -33,7 +33,7 @@ namespace {
     MILO_NOTIFY("Ogg Vorbis failure: %s, error code %i", name, err);
 
 VorbisReader::VorbisReader(File *file, bool expectMap, StandardStream *stream, bool b2)
-    : unk28(-1), unk2c(-1), mFile(file), mHeadersRead(0), mReadBuffer(0),
+    : mNumChannels(-1), mSampleRate(-1), mFile(file), mHeadersRead(0), mReadBuffer(0),
       mEnableReads(true), unk40(0), unk44(0), mDone(0), mStream(stream), mOggSync(0),
       mOggStream(0), mVorbisInfo(0), mVorbisComment(0), mVorbisDsp(0), mVorbisBlock(0),
       unka0(0), mSeekTarget(-1), mSamplesToSkip(0), mHdrSize(0), mHdrBuf(0), mCtrState(0),
@@ -46,7 +46,7 @@ VorbisReader::VorbisReader(File *file, bool expectMap, StandardStream *stream, b
     }
     mOggSync = new ogg_sync_state;
     ogg_sync_init(mOggSync);
-    unk24 = false;
+    mTerminating = false;
     if (gEvent == INVALID_HANDLE_VALUE) {
         gEvent = CreateEventA(nullptr, false, false, nullptr);
         MILO_ASSERT(gEvent, 0xFE);
@@ -62,9 +62,9 @@ VorbisReader::VorbisReader(File *file, bool expectMap, StandardStream *stream, b
 }
 
 VorbisReader::~VorbisReader() {
-    unk24 = true;
+    mTerminating = true;
     unked = false;
-    while (unk24) {
+    while (mTerminating) {
         SetEvent(gEvent);
     }
     delete[] mHdrBuf;
@@ -106,7 +106,7 @@ void VorbisReader::Seek(int sample) {
 
 void VorbisReader::Init() {
     MILO_ASSERT(mStream, 0x41F);
-    mStream->InitInfo(unk28, unk2c, false, mOggMap.GetSongLengthSamples());
+    mStream->InitInfo(mNumChannels, mSampleRate, false, mOggMap.GetSongLengthSamples());
 }
 
 int VorbisReader::ConsumeData(void **v, int i1, int i2) {
@@ -294,8 +294,8 @@ void VorbisReader::DoRawSeek(int byte) {
             DoFileRead();
         mEnableReads = true;
     }
-    for (int i = 0; i < unk28; i++) {
-        unkf4[i].clear();
+    for (int i = 0; i < mNumChannels; i++) {
+        mPcmBuffers[i].clear();
     }
     unk108 = 0;
     unk100 = -1;

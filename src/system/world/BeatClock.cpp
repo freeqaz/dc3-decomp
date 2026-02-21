@@ -7,13 +7,13 @@
 BeatClock::BeatClock()
     : mMeasureMap(new MeasureMap()), mSound(this), mBeatsPerMinute(100),
       mBeatsPerMeasure(4), mMeasuresPerPhrase(0), mUseGlobal(0), mTotalSeconds(0),
-      unk50(0), unk54(0), mTimeline(kTaskSeconds) {}
+      unk50(0), mIsRunning(0), mTimeline(kTaskSeconds) {}
 
 BeatClock::~BeatClock() { RELEASE(mMeasureMap); }
 
 BEGIN_HANDLERS(BeatClock)
-    HANDLE_ACTION(start, unk54 = true)
-    HANDLE_ACTION(pause, unk54 = false)
+    HANDLE_ACTION(start, mIsRunning = true)
+    HANDLE_ACTION(pause, mIsRunning = false)
     HANDLE_ACTION(reset, Reset())
     HANDLE(sync, OnSyncState)
     HANDLE_SUPERCLASS(RndPollable)

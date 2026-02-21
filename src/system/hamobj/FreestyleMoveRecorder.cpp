@@ -14,8 +14,8 @@
 DancerSkeleton sLastComparedDancerSkel;
 
 FreestyleMoveRecorder::FreestyleMoveRecorder()
-    : unk4(0), mClipFrames(0), mClipFrameCount(0), mRecordingFrames(0), unk20(-1), mMaxFrames(60), mRecordPos(-1), mPlaybackPos(-1),
-      unk30(15), unk34(-1), mRecording(0), unk39(0), mSkeletonIndex(-1), mCurrentTakeIndex(0) {
+    : mPlaybackSpeed(0), mClipFrames(0), mClipFrameCount(0), mRecordingFrames(0), mLastFrameIndex(-1), mMaxFrames(60), mRecordPos(-1), mPlaybackPos(-1),
+      mDefaultTimeout(15), mPlaybackIndex(-1), mRecording(0), mPlaybackActive(0), mSkeletonIndex(-1), mCurrentTakeIndex(0) {
     mPlayerPalette = Hmx::Object::New<RndTex>();
     mPlayerPalette->SetBitmap(320, 240, 16, RndTex::kRegularLinear, false, nullptr);
 
@@ -87,17 +87,17 @@ void FreestyleMoveRecorder::Free() {
 }
 
 void FreestyleMoveRecorder::StartRecording() {
-    unk34 = 0xffffffff;
+    mPlaybackIndex = 0xffffffff;
     mRecording = false;
     mRecordPos = 0;
     mPlaybackPos = -1;
-    if (unk20 != mCurrentTakeIndex) {
+    if (mLastFrameIndex != mCurrentTakeIndex) {
         mTakes[mCurrentTakeIndex].Init(mMaxFrames);
     }
 }
 
 void FreestyleMoveRecorder::ClearRecording() {
-    if (unk20 != mCurrentTakeIndex) {
+    if (mLastFrameIndex != mCurrentTakeIndex) {
         mTakes[mCurrentTakeIndex].Clear();
     }
     mFrameIndex = 0;
@@ -109,7 +109,7 @@ void FreestyleMoveRecorder::StartRecordingDancerTake() {
 }
 
 void FreestyleMoveRecorder::StartPlayback(bool param_1) {
-    unk39 = param_1;
+    mPlaybackActive = param_1;
     mPlaybackPos = 0;
 }
 
@@ -124,7 +124,7 @@ void FreestyleMoveRecorder::UpdateRecordingAttempt(
 ) {
     if (mClipName != gNullStr) {
         mRecordingFrames[mRecordingFrameCount].skeleton.Set(*skeleton);
-        mRecordingFrames[mRecordingFrameCount].unk2d8 = f2;
+        mRecordingFrames[mRecordingFrameCount].mBeat = f2;
         mRecordingFrameCount++;
     }
 }
@@ -171,11 +171,11 @@ void FreestyleMoveRecorder::WriteFreestyleMoveClip(
     str += ".bamclp";
     const char *path = MakeString("devkit:\\%s", str);
     FileStream stream(path, FileStream::kWrite, true);
-    stream << unk3c;
+    stream << mRecordingTarget;
     stream << framecount;
     for (int i = 0; i < framecount; i++) {
         frames[i].skeleton.Write(stream);
-        stream << frames[i].unk2d8;
+        stream << frames[i].mBeat;
     }
     MILO_LOG("Saved clip to %s, framecount: %d\n", path, framecount);
 }
@@ -194,7 +194,7 @@ void FreestyleMoveRecorder::ReadFreestyleMoveClip(
     stream >> framecount;
     for (int i = 0; i < framecount; i++) {
         frames[i].skeleton.Read(stream);
-        stream >> frames[i].unk2d8;
+        stream >> frames[i].mBeat;
     }
     MILO_LOG("Loaded clip that was recorded with %s, framecount: %d\n", s, framecount);
 }
@@ -204,7 +204,7 @@ DataNode FreestyleMoveRecorder::OnRecordAttempt(DataArray *a) {
     if (a->Size() >= 2) {
         str = a->Str(1);
     } else {
-        str = sInstance->unk3c.Str();
+        str = sInstance->mRecordingTarget.Str();
         str += "_attempt_";
         DateTime dt;
         GetDateAndTime(dt);
@@ -219,7 +219,7 @@ DataNode FreestyleMoveRecorder::OnWriteCreated(DataArray *a) {
     if (a->Size() >= 2) {
         str = a->Str(1);
     } else {
-        str = sInstance->unk3c.Str();
+        str = sInstance->mRecordingTarget.Str();
         str += "_created_";
         DateTime dt;
         GetDateAndTime(dt);
@@ -228,7 +228,7 @@ DataNode FreestyleMoveRecorder::OnWriteCreated(DataArray *a) {
     sInstance->WriteFreestyleMoveClip(
         str,
         sInstance->mTakes[sInstance->mCurrentTakeIndex].mNumFrames,
-        sInstance->mTakes[sInstance->mCurrentTakeIndex].unk18
+        sInstance->mTakes[sInstance->mCurrentTakeIndex].mFrames
     );
     return 0;
 }
@@ -236,11 +236,11 @@ DataNode FreestyleMoveRecorder::OnWriteCreated(DataArray *a) {
 DataNode FreestyleMoveRecorder::OnReadCreated(DataArray *a) {
     int framecount;
     sInstance->ReadFreestyleMoveClip(
-        a->Str(1), framecount, sInstance->mTakes[sInstance->mCurrentTakeIndex].unk18
+        a->Str(1), framecount, sInstance->mTakes[sInstance->mCurrentTakeIndex].mFrames
     );
     sInstance->mTakes[sInstance->mCurrentTakeIndex].Init(sInstance->mMaxFrames);
     sInstance->mTakes[sInstance->mCurrentTakeIndex].mNumFrames = framecount;
-    sInstance->unk20 = sInstance->mCurrentTakeIndex;
+    sInstance->mLastFrameIndex = sInstance->mCurrentTakeIndex;
     return 0;
 }
 

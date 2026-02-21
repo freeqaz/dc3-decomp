@@ -9,6 +9,7 @@
 #include "utl/Symbol.h"
 
 class Character;
+class RndTransformable;
 
 class CharServoBone : public RndHighlightable,
                       public CharPollable,
@@ -40,7 +41,7 @@ public:
     OBJ_MEM_OVERLOAD(0x1B)
     NEW_OBJ(CharServoBone)
 
-    int unk84;
+    RndTransformable *mPelvis; // 0x84
     float *mFacingRotDelta; // 0x88
     Vector3 *mFacingPosDelta; // 0x8c
     float *mFacingRot; // 0x90

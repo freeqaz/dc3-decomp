@@ -52,7 +52,7 @@ private:
     int mDebugLevel; // 0x18
     Strategy mStrategy; // 0x1c
     bool mAllowTemp; // 0x20
-    int unk24; // 0x24
+    int mMinFreeBytes; // 0x24
 };
 
 class MemHeapStack {

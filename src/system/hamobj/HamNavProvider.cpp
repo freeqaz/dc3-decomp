@@ -15,8 +15,8 @@ HamNavProvider::HamNavProvider() : mNavList(0) {}
 
 HamNavProvider::~HamNavProvider() {
     for (int i = 0; i < mNavItems.size(); i++) {
-        if (mNavItems[i].unk24) {
-            RELEASE(mNavItems[i].unk24);
+        if (mNavItems[i].mSubListProvider) {
+            RELEASE(mNavItems[i].mSubListProvider);
         }
     }
 }
@@ -91,7 +91,7 @@ BEGIN_LOADS(HamNavProvider)
     LOAD_SUPERCLASS(Hmx::Object)
     d >> mNavItems;
     for (int i = 0; i < mNavItems.size(); i++) {
-        mNavItems[i].unk24 = 0;
+        mNavItems[i].mSubListProvider = 0;
     }
     if (mNavList)
         mNavList->Refresh();
@@ -102,9 +102,9 @@ void HamNavProvider::Text(int i1, int i2, UIListLabel *list, UILabel *label) con
     UIListLabel *plist = list;
     int idx = i2;
     if (plist->Matches("label")) {
-        if (mNavItems[idx].unk14) {
-            mNavItems[idx].unk14->Node(0) = mNavItems[idx].mLabel;
-            Message msg("set_token_fmt", mNavItems[idx].unk14);
+        if (mNavItems[idx].mFormatArgs) {
+            mNavItems[idx].mFormatArgs->Node(0) = mNavItems[idx].mLabel;
+            Message msg("set_token_fmt", mNavItems[idx].mFormatArgs);
             plbl->Handle(msg, false);
             return;
         }
@@ -124,9 +124,9 @@ void HamNavProvider::Text(int i1, int i2, UIListLabel *list, UILabel *label) con
             break;
         }
     } else if (plist->Matches("song")) {
-        if (mNavItems[idx].unk14) {
-            mNavItems[idx].unk14->Node(0) = mNavItems[idx].mLabel;
-            Message msg("set_token_fmt", mNavItems[idx].unk14);
+        if (mNavItems[idx].mFormatArgs) {
+            mNavItems[idx].mFormatArgs->Node(0) = mNavItems[idx].mLabel;
+            Message msg("set_token_fmt", mNavItems[idx].mFormatArgs);
             plbl->Handle(msg, false);
             return;
         }
@@ -137,14 +137,14 @@ void HamNavProvider::Text(int i1, int i2, UIListLabel *list, UILabel *label) con
 
 UIListProvider *HamNavProvider::Provider(int, int data, UIListSubList *) const {
     MILO_ASSERT(data < mNavItems.size(), 0x81);
-    return mNavItems[data].unk24;
+    return mNavItems[data].mSubListProvider;
 }
 
 Symbol HamNavProvider::DataSymbol(int idx) const {
     if (idx >= 0 && idx < mNavItems.size()) {
         MILO_ASSERT((0) <= (idx) && (idx) < (mNavItems.size()), 99);
         for (int i = 0; i <= idx; i++) {
-            if (mNavItems[i].unk11)
+            if (mNavItems[i].mHidden)
                 idx++;
         }
         return mNavItems[idx].mLabel;
@@ -158,14 +158,14 @@ Symbol HamNavProvider::DataSymbol(int idx) const {
 
 bool HamNavProvider::IsActive(int idx) const {
     if (idx >= 0 && idx < mNavItems.size()) {
-        return mNavItems[idx].unk10;
+        return mNavItems[idx].mEnabled;
     } else
         return true;
 }
 
 bool HamNavProvider::IsHidden(int idx) const {
     if (idx >= 0 && idx < mNavItems.size()) {
-        return mNavItems[idx].unk11;
+        return mNavItems[idx].mHidden;
     } else
         return false;
 }
@@ -174,13 +174,13 @@ void HamNavProvider::Init() { REGISTER_OBJ_FACTORY(HamNavProvider); }
 
 void HamNavProvider::CreateSubListProvider(int i1) {
     NavItem &curItem = mNavItems[i1];
-    if (!curItem.unk24) {
+    if (!curItem.mSubListProvider) {
         int numLabels = curItem.mLabels.size();
         DataArray *arr = new DataArray(numLabels);
         for (int i = 0; i < numLabels; i++) {
             arr->Node(i) = curItem.mLabels[i];
         }
-        curItem.unk24 = new DataProvider(arr, 0, false, false, nullptr);
+        curItem.mSubListProvider = new DataProvider(arr, 0, false, false, nullptr);
         arr->Release();
     }
 }
@@ -206,12 +206,12 @@ void HamNavProvider::SetLabel(int elementIndex, int i2, Symbol s) {
     NavItem &curItem = mNavItems[elementIndex];
     curItem.mLabels.clear();
     curItem.mLabels.push_back(s);
-    if (curItem.unk24) {
-        DataArray *provData = curItem.unk24->Data();
+    if (curItem.mSubListProvider) {
+        DataArray *provData = curItem.mSubListProvider->Data();
         if (i2 < provData->Size()) {
             DataArray *cloned = provData->Clone(true, false, 0);
             cloned->Node(i2) = s;
-            curItem.unk24->SetData(cloned);
+            curItem.mSubListProvider->SetData(cloned);
             cloned->Release();
         }
     } else {
@@ -226,8 +226,8 @@ void HamNavProvider::SetLabels(int index, DataArray *a) {
     for (int i = 0; i < a->Size(); i++) {
         curItem.mLabels.push_back(a->Sym(i));
     }
-    if (curItem.unk24) {
-        curItem.unk24->SetData(a);
+    if (curItem.mSubListProvider) {
+        curItem.mSubListProvider->SetData(a);
     } else {
         CreateSubListProvider(index);
     }
@@ -263,9 +263,9 @@ void HamNavProvider::SetStars(Symbol s, int songID, bool b3) {
     int index = FindLabel(s);
     mNavItems[index].mSongID = songID;
     if (b3) {
-        mNavItems[index].unkc = 3;
+        mNavItems[index].mStarMode = 3;
     } else {
-        mNavItems[index].unkc = 1;
+        mNavItems[index].mStarMode = 1;
     }
     if (mNavList) {
         mNavList->Refresh();
@@ -274,8 +274,8 @@ void HamNavProvider::SetStars(Symbol s, int songID, bool b3) {
 
 void HamNavProvider::ResetLabelProvider(int idx) {
     NavItem &curItem = mNavItems[idx];
-    if (curItem.unk24) {
-        RELEASE(curItem.unk24);
+    if (curItem.mSubListProvider) {
+        RELEASE(curItem.mSubListProvider);
     }
 }
 
@@ -289,12 +289,12 @@ void HamNavProvider::SetLabel(int index, Symbol label) {
 
 void HamNavProvider::SetEnabled(int index, bool b2) {
     MILO_ASSERT(index >= 0 && index < mNavItems.size(), 0x123);
-    mNavItems[index].unk10 = b2;
+    mNavItems[index].mEnabled = b2;
     if (!b2) {
-        if (mNavItems[index].unk24) {
-            DataArray *data = mNavItems[index].unk24->Data();
+        if (mNavItems[index].mSubListProvider) {
+            DataArray *data = mNavItems[index].mSubListProvider->Data();
             for (int i = 0; i < data->Size(); i++) {
-                mNavItems[index].unk24->Disable(data->Node(i).Sym());
+                mNavItems[index].mSubListProvider->Disable(data->Node(i).Sym());
             }
         }
     }
@@ -305,12 +305,12 @@ void HamNavProvider::SetEnabled(int index, bool b2) {
 
 bool HamNavProvider::IsEnabled(int index) const {
     MILO_ASSERT(index >= 0 && index < mNavItems.size(), 0x137);
-    return mNavItems[index].unk10;
+    return mNavItems[index].mEnabled;
 }
 
 void HamNavProvider::SetHidden(int index, bool b2) {
     MILO_ASSERT(index >= 0 && index < mNavItems.size(), 0x14D);
-    mNavItems[index].unk11 = b2;
+    mNavItems[index].mHidden = b2;
     if (mNavList) {
         mNavList->Refresh();
     }

@@ -61,11 +61,11 @@ public:
     int mSongID; // 0x0
     SongStatusData mStatusData[kNumDifficulties]; // 0x4
     unsigned int mLastPlayed; // 0x74
-    unsigned char unk78; // 0x78 - stars related
-    bool unk79; // 0x79
-    Difficulty unk7c; // 0x7c
+    unsigned char mPeakStarRating; // 0x78
+    bool mLastNoFlashcards; // 0x79
+    Difficulty mLastPlayedDifficulty; // 0x7c
     int mLastScore; // 0x80
-    int unk84;
+    int mLastCoopScore; // 0x84
     int mBattleScore; // 0x88
     int mTotalBattleWins; // 0x8c
     int mTotalBattleLosses; // 0x90

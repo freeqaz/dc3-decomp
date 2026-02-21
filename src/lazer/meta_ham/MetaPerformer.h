@@ -183,7 +183,7 @@ protected:
     Symbol mLastPlayedMode; // 0x60
     std::vector<String> mRecommendedPracticeMoves; // 0x64
     SkillsAwardList *mSkillsAwards; // 0x70
-    std::vector<std::vector<bool> > unk74;
+    std::vector<std::vector<bool> > mReviewMoveMaskBySection; // 0x74
     int mNumLearnMovesPassed; // 0x80
     int mNumLearnMovesFastLaned; // 0x84
     int mNumLearnMovesTotal; // 0x88
@@ -199,10 +199,10 @@ protected:
     std::set<int> mSkippedSongs; // 0xc0
     int mPlaylistIndex; // 0xd8
     int mPlaylistElapsedTime; // 0xdc
-    bool unke0; // 0xe0
+    bool mPlaylistIsLong; // 0xe0
     bool mJustBeatGame; // 0xe1
     bool mSkipPracticeWelcome; // 0xe2
-    bool unke3; // 0xe3
+    bool mPlaylistIsShuffled; // 0xe3
     FitnessFilter mFitnessFilters[2]; // 0xe4
 };
 

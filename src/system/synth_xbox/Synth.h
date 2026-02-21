@@ -48,12 +48,12 @@ public:
     int unkf8;
     int unkfc;
     u32 unk100;
-    bool unk104;
-    bool unk105;
+    bool mDolbyEnabled;
+    bool mDolbyPending;
     Timer unk108;
     bool unk138;
     int unk13c;
-    std::vector<FxSend360 *> unk140;
+    std::vector<FxSend360 *> mFxSends;
     bool unk14c;
 
     Synth360();

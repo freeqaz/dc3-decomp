@@ -44,6 +44,6 @@ protected:
     Difficulty mDesiredDiffs[2]; // 0xe4
     std::vector<int> unkec[2]; // 0xec
 
-    int unk104; // 0x104 - start move idx?
-    int unk108; // 0x108 - end move idx?
+    int mIntroMoveIndex; // 0x104 - index of first non-rest move
+    int mFinalPoseMoveIndex; // 0x108 - index of final pose move
 };

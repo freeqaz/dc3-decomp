@@ -2,17 +2,17 @@
 
 class MicClientID {
 public:
-    MicClientID(int i = -1, int j = -1) : unk0(i), mPlayerID(j) {}
-    MicClientID(const MicClientID &id) : unk0(id.unk0), mPlayerID(id.mPlayerID) {}
+    MicClientID(int i = -1, int j = -1) : mClientID(i), mPlayerID(j) {}
+    MicClientID(const MicClientID &id) : mClientID(id.mClientID), mPlayerID(id.mPlayerID) {}
 
     MicClientID &operator=(const MicClientID &id) {
         if (this != &id) {
-            unk0 = id.unk0;
+            mClientID = id.mClientID;
             mPlayerID = id.mPlayerID;
         }
         return *this;
     }
-    int unk0; // mic id - 0, 1 or 2
+    int mClientID; // mic id - 0, 1 or 2
     int mPlayerID; // 0x4
 };
 

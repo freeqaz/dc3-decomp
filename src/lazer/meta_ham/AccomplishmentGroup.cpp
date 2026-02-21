@@ -5,7 +5,7 @@
 #include "utl/Symbol.h"
 
 AccomplishmentGroup::AccomplishmentGroup(DataArray *d, int i)
-    : mName(""), unk8(i), mAward("") {
+    : mName(""), mIndex(i), mAward("") {
     Configure(d);
 }
 

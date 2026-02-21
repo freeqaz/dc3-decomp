@@ -85,7 +85,7 @@ bool SpeechMgr::Grammar::FinishLoad(SpeechMgr *mgr) {
 #pragma region SpeechMgr
 
 SpeechMgr::SpeechMgr(const DataArray *)
-    : mEnabled(0), mRecognizing(0), unk3e(0), mOverlay(RndOverlay::Find("speech_mgr")) {
+    : mEnabled(0), mRecognizing(0), mRecognitionBegun(0), mOverlay(RndOverlay::Find("speech_mgr")) {
     TheSpeechMgr = this;
     SetName("speech_mgr", ObjectDir::Main());
     mSpeechSupported = GetSpeechLanguage(mLanguage);
@@ -306,7 +306,7 @@ String SpeechMgr::GetSpeechLanguageDir() const {
 }
 
 void SpeechMgr::SetRecognizing(bool recognizing) {
-    if (mEnabled && unk3e) {
+    if (mEnabled && mRecognitionBegun) {
         mRecognizing = recognizing;
         if (recognizing) {
             HRESULT res = NuiSpeechStartRecognition();
@@ -329,9 +329,9 @@ void SpeechMgr::SetRecognizing(bool recognizing) {
 }
 
 void SpeechMgr::BeginRecognition() {
-    if (!unk3e) {
+    if (!mRecognitionBegun) {
         MILO_ASSERT(!mRecognizing, 0x2E2);
-        unk3e = true;
+        mRecognitionBegun = true;
         SetRecognizing(true);
     }
 }

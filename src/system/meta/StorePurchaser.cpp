@@ -22,7 +22,7 @@ XboxPurchaser::XboxPurchaser(
     Symbol s,
     unsigned int ui
 )
-    : StorePurchaser(s, ui), mState(purchasestate0), unk40(param2), unk48(param1) {}
+    : StorePurchaser(s, ui), mState(purchasestate0), mOfferID(param2), mUserIndex(param1) {}
 
 XboxPurchaser::~XboxPurchaser() {
     static Symbol ui_changed("ui_changed");
@@ -92,15 +92,15 @@ void XboxMultipleItemsPurchaser::Initiate() {
     static XOVERLAPPED sOverlapped;
     memset(&sOverlapped, 0, sizeof(XOVERLAPPED));
 
-    unk4c = 0;
+    mSelectedCount = 0;
     // Show Xbox marketplace UI for purchasing multiple items
     // Returns 0x3E5 (ERROR_IO_PENDING) on success
     unsigned int result = XShowMarketplaceDownloadItemsUI(
-        unk48,         // User index
+        mUserIndex,         // User index
         0x3E9,         // Expected success code
-        &unk3c[0],     // Array of offer IDs to purchase
-        unk3c.size(),  // Number of offers
-        &unk4c,        // [out] Count of items selected by user
+        &mOfferIDs[0],     // Array of offer IDs to purchase
+        mOfferIDs.size(),  // Number of offers
+        &mSelectedCount,        // [out] Count of items selected by user
         &sOverlapped   // Overlapped I/O structure
     );
 
@@ -122,9 +122,9 @@ XboxMultipleItemsPurchaser::~XboxMultipleItemsPurchaser() {
 XboxMultipleItemsPurchaser::XboxMultipleItemsPurchaser(
     int i, std::vector<unsigned long long> &offerIDs, Symbol s, unsigned int ui
 )
-    : StorePurchaser(s, ui), mState(purchasestate0), unk48(i) {
+    : StorePurchaser(s, ui), mState(purchasestate0), mUserIndex(i) {
     MILO_ASSERT(offerIDs.size() >= 1 && offerIDs.size() <= 6, 0x337);
-    unk3c = offerIDs;
+    mOfferIDs = offerIDs;
 }
 
 DataNode XboxMultipleItemsPurchaser::OnMsg(UIChangedMsg const &msg) {

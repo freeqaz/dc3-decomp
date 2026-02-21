@@ -7,7 +7,7 @@
 #include "utl/Symbol.h"
 
 Award::Award(DataArray *d, int i)
-    : mName(""), unk8(i), mIsSecret(false), mIsSilent(false), mArt(gNullStr) {
+    : mName(""), mAwardIndex(i), mIsSecret(false), mIsSilent(false), mArt(gNullStr) {
     Configure(d);
 }
 

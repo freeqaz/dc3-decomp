@@ -42,10 +42,10 @@ protected:
     virtual void FinishValueChange();
     virtual bool IsEmptyValue() const { return mText == gNullStr; }
 
-    Keys<float, float> unk168; // 0x168
-    Symbol unk174; // 0x174
-    String unk178; // 0x178
-    bool unk180; // 0x180
+    Keys<float, float> mCountKeys; // 0x168
+    Symbol mCountToken; // 0x174
+    String mPendingText; // 0x178
+    bool mPendingMarkup; // 0x180
     bool mCanHaveFocus; // 0x181
 };
 

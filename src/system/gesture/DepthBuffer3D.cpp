@@ -22,11 +22,11 @@ namespace {
 
 DepthBuffer3D::DepthBuffer3D()
     : mDrawSheet(0), mDrawPlayer1(1), mDrawPlayer2(1), mDrawNonPlayers(1),
-      mDebugLayout(0), mNobodyColor(0, 0, 0, 0), mPlayerPalette(this), unk12c(this),
-      unk140(1), mPlayerPaletteOffset(0), mPlayerPaletteScale(1), mMinimalMat(this),
-      mMesh(this), mStretchNearCamera(1), mOpacity(1), unk17c(0), unk180(0),
-      unk184(0xfffffc19), unk188(1), unk18c(this), mTile(1.5, 1.5), mScaleVoxel(1),
-      mScaleVoxelGap(1), mFishEyeX(0), mFishEyeY(0), unk1d8(this), unk1ec(this),
+      mDebugLayout(0), mNobodyColor(0, 0, 0, 0), mPlayerPalette(this), mBoxymanPalette(this),
+      mBoxymanPaletteAnim(1), mPlayerPaletteOffset(0), mPlayerPaletteScale(1), mMinimalMat(this),
+      mMesh(this), mStretchNearCamera(1), mOpacity(1), mPlayer1Grooviness(0), mPlayer2Grooviness(0),
+      mForceDrawSkeletonIdx(0xfffffc19), mForceDrawEnabled(1), unk18c(this), mTile(1.5, 1.5), mScaleVoxel(1),
+      mScaleVoxelGap(1), mFishEyeX(0), mFishEyeY(0), mGroovinessDetector1(this), mGroovinessDetector2(this),
       unk20c(80, 4, 4), unk220(40, 4, 4), unk234(60, 3, 3), unk248(30, 3, 3),
       unk25c(2048, 204.8f, 204.8f), unk270(4096, 204.8f, 204.8f), mMaxZoom(1),
       mMaxDepthZoom(1), unk28c(0) {}
@@ -86,7 +86,7 @@ void DepthBuffer3D::UpdateAttachment(
         Skeleton &skeleton = TheGestureMgr->GetSkeleton(skelIdx);
         Vector3 localPos = LocalXfm().v;
         Vector3 pos;
-        JointToVertexData(pos, skeleton, (SkeletonJoint)attachment.unk8, v1);
+        JointToVertexData(pos, skeleton, (SkeletonJoint)attachment.mJoint, v1);
         VertexToWorld(pos, LocalXfm(), mStretchNearCamera, v2);
         Add(pos, localPos, newPos);
         attachment.obj->SetTransConstraint(mConstraint, nullptr, false);
@@ -102,46 +102,46 @@ void DepthBuffer3D::UpdateAttachment(
 void DepthBuffer3D::AddAttachment(const DepthBuffer3DAttachment &attachment) {
     MILO_ASSERT(attachment.obj, 0x390);
     bool found = false;
-    FOREACH (it, unk200) {
+    FOREACH (it, mAttachments) {
         if (it->obj == attachment.obj) {
             found = true;
             break;
         }
     }
     if (!found) {
-        unk200.resize(unk200.size() + 1);
-        unk200.back() = attachment;
-        unk200.back().obj->SetTransParent(this, false);
-        unk200.back().obj->SetTransConstraint(mConstraint, nullptr, false);
+        mAttachments.resize(mAttachments.size() + 1);
+        mAttachments.back() = attachment;
+        mAttachments.back().obj->SetTransParent(this, false);
+        mAttachments.back().obj->SetTransConstraint(mConstraint, nullptr, false);
     }
 }
 
 void DepthBuffer3D::SetPlayerPalette(RndTex *tex) {
     if (tex && mPlayerPalette != tex) {
-        if (unk140 != 1) {
-            MILO_WARN_ONCE("dropping boxyman palette animation %f\n", unk140);
+        if (mBoxymanPaletteAnim != 1) {
+            MILO_WARN_ONCE("dropping boxyman palette animation %f\n", mBoxymanPaletteAnim);
         }
-        unk140 = 0;
-        if (unk12c) {
-            unk12c = mPlayerPalette;
+        mBoxymanPaletteAnim = 0;
+        if (mBoxymanPalette) {
+            mBoxymanPalette = mPlayerPalette;
         }
         mPlayerPalette = tex;
     }
 }
 
 void DepthBuffer3D::SetGrooviness(float f1) {
-    unk17c = f1;
-    unk180 = f1;
-    unk1d8 = nullptr;
-    unk1ec = nullptr;
+    mPlayer1Grooviness = f1;
+    mPlayer2Grooviness = f1;
+    mGroovinessDetector1 = nullptr;
+    mGroovinessDetector2 = nullptr;
 }
 
 void DepthBuffer3D::SetGrooviness(RhythmDetector *r1, RhythmDetector *r2) {
-    unk1d8 = r1;
-    unk1ec = r2;
+    mGroovinessDetector1 = r1;
+    mGroovinessDetector2 = r2;
 }
 
 void DepthBuffer3D::ForceDrawSkeletonIndex(int i1, bool b2) {
-    unk184 = i1;
-    unk188 = b2;
+    mForceDrawSkeletonIdx = i1;
+    mForceDrawEnabled = b2;
 }

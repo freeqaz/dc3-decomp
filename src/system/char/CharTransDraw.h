@@ -27,7 +27,7 @@ public:
     NEW_OBJ(CharTransDraw);
 
     ObjPtrList<Character> mChars; // 0x40
-    bool unk54;
+    bool mForceDraw;
 
 protected:
     CharTransDraw();

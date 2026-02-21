@@ -8,9 +8,9 @@
 Symbol MsgSinks::sCurrentExportEvent(gNullStr);
 
 Symbol MsgSinks::GetPropSyncHandler(DataArray *arr) {
-    if (unk0) {
-        for (int i = 0; i < unk0->Size(); i += 2) {
-            DataArray *array = unk0->Array(i);
+    if (mPropSyncHandlers) {
+        for (int i = 0; i < mPropSyncHandlers->Size(); i += 2) {
+            DataArray *array = mPropSyncHandlers->Array(i);
             if (array->Size() == arr->Size()) {
                 bool ret = true;
                 for (int j = 0; j < array->Size(); j++) {
@@ -20,7 +20,7 @@ Symbol MsgSinks::GetPropSyncHandler(DataArray *arr) {
                     }
                 }
                 if (ret)
-                    return unk0->Sym(0);
+                    return mPropSyncHandlers->Sym(0);
             }
         }
     }
@@ -43,9 +43,9 @@ Symbol PathToEventName(DataArray *arr) {
 
 bool MsgSinks::HasPropertySink(Hmx::Object *o, DataArray *a) {
     Symbol path = PathToEventName(a);
-    if (unk0) {
-        for (int i = 1; i < unk0->Size(); i += 2) {
-            if (path == unk0->Sym(i)) {
+    if (mPropSyncHandlers) {
+        for (int i = 1; i < mPropSyncHandlers->Size(); i += 2) {
+            if (path == mPropSyncHandlers->Sym(i)) {
                 return true;
             }
         }
@@ -101,12 +101,12 @@ void MsgSinks::EventSink::Add(
 }
 
 MsgSinks::~MsgSinks() {
-    if (unk0)
-        unk0->Release();
+    if (mPropSyncHandlers)
+        mPropSyncHandlers->Release();
 }
 
 MsgSinks::MsgSinks(Hmx::Object *o)
-    : unk0(nullptr), mSinks(o), mEventSinks(o), mExporting(0), mOwner(o) {}
+    : mPropSyncHandlers(nullptr), mSinks(o), mEventSinks(o), mExporting(0), mOwner(o) {}
 
 // BEGIN_CUSTOM_PROPSYNC(MsgSinks::Sink)
 //     SYNC_PROP(obj, (Hmx::Object *&)o.obj)
@@ -160,13 +160,13 @@ void MsgSinks::AddSink(
 void MsgSinks::AddPropertySink(Hmx::Object *o, DataArray *a, Symbol s) {
     Symbol handler = GetPropSyncHandler(a);
     Symbol path = PathToEventName(a);
-    if (!unk0) {
-        unk0 = new DataArray(2);
+    if (!mPropSyncHandlers) {
+        mPropSyncHandlers = new DataArray(2);
     } else {
-        unk0->Resize(unk0->Size() + 2);
+        mPropSyncHandlers->Resize(mPropSyncHandlers->Size() + 2);
     }
-    unk0->Node(unk0->Size() - 2) = DataNode(a->Clone(true, false, 0), kDataArray);
-    unk0->Node(unk0->Size() - 2).LiteralArray()->Release();
-    unk0->Node(unk0->Size() - 1) = path;
+    mPropSyncHandlers->Node(mPropSyncHandlers->Size() - 2) = DataNode(a->Clone(true, false, 0), kDataArray);
+    mPropSyncHandlers->Node(mPropSyncHandlers->Size() - 2).LiteralArray()->Release();
+    mPropSyncHandlers->Node(mPropSyncHandlers->Size() - 1) = path;
     AddSink(o, path, s, Hmx::Object::kHandle, false);
 }

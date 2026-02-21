@@ -13,9 +13,9 @@
 #include "utl/Symbol.h"
 #include <cstring>
 
-DingoServer::DingoServer() : mAuthState(kServerUnauthed), mPort(0), unk70(-1), unk74(-1) {
-    for (int i = 0; i < DIM(unk78); i++) {
-        unk78[i] = false;
+DingoServer::DingoServer() : mAuthState(kServerUnauthed), mPort(0), mPendingPadNum(-1), mAuthedPadNum(-1) {
+    for (int i = 0; i < DIM(mPadAuthed); i++) {
+        mPadAuthed[i] = false;
     }
 }
 
@@ -37,9 +37,9 @@ void DingoServer::Init() {
 void DingoServer::Logout() {
     unk40 = "";
     mAuthState = kServerUnauthed;
-    unk74 = -1;
-    for (int i = 0; i < DIM(unk78); i++) {
-        unk78[i] = false;
+    mAuthedPadNum = -1;
+    for (int i = 0; i < DIM(mPadAuthed); i++) {
+        mPadAuthed[i] = false;
     }
     mOnlineId.Clear();
 }
@@ -61,7 +61,7 @@ void DingoServer::ManageJob(DingoJob *job) {
         if (!IsAuthenticated()) {
             MILO_NOTIFY("ManageJob without authentication.");
             if (ThePlatformMgr.IsConnected()) {
-                authSucceeded = TheServer.Authenticate(unk74);
+                authSucceeded = TheServer.Authenticate(mAuthedPadNum);
                 justAuthenticated = true;
             } else {
                 authSucceeded = false;
@@ -90,11 +90,11 @@ void DingoServer::DoAdditionalLogin() {
     if (mAuthState == kServerAuthed) {
         if (mAuthUrl.length() != 0) {
             for (int i = 0; i < 4; i++) {
-                if (!unk78[i]) {
+                if (!mPadAuthed[i]) {
                     DataPoint pt;
                     if (FillAuthParamsFromPadNum(pt, i)
                         && SendAuthenticateMsg(mAuthUrl.c_str(), pt, nullptr)) {
-                        unk78[i] = true;
+                        mPadAuthed[i] = true;
                     }
                 }
             }

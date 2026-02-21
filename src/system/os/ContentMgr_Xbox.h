@@ -9,12 +9,12 @@ class XboxContent : public Content {
 public:
     XboxContent(const XCONTENT_CROSS_TITLE_DATA &, int, int, bool);
     virtual ~XboxContent();
-    virtual const char *Root() { return unk150.c_str(); }
+    virtual const char *Root() { return mContentPath.c_str(); }
     virtual bool OnMemcard() { return Location() == kLocationRemovableMem; }
     virtual ContentLocT Location();
     virtual unsigned long LicenseBits() { return mLicenseBits; }
     virtual bool HasValidLicenseBits() { return mValidLicenseBits; }
-    virtual bool IsCorrupt() { return mState == 8 && unk161; }
+    virtual bool IsCorrupt() { return mState == 8 && mCorrupt; }
     virtual State GetState() { return mState; }
     virtual void Poll();
     virtual void Mount();
@@ -34,11 +34,11 @@ private:
     unsigned long mLicenseBits; // 0x140
     bool mValidLicenseBits; // 0x144
     String mRoot; // 0x148
-    String unk150; // 0x150
+    String mContentPath; // 0x150
     State mState; // 0x158
     int mPadNum; // 0x15c
-    bool unk160; // 0x160
-    bool unk161; // 0x161
+    bool mPendingDelete; // 0x160
+    bool mCorrupt; // 0x161
     Symbol mFilename; // 0x164
     unsigned int mLRM; // 0x168
 };

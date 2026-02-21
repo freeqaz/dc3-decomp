@@ -497,36 +497,36 @@ BinStream &operator>>(BinStream &bs, ObjPtrList<T1, ObjectDir> &list);
 // DataNodeObjTrack
 class DataNodeObjTrack {
 public:
-    DataNodeObjTrack(const DataNode &node) : unk0(nullptr, nullptr) {
-        unk14 = node.Evaluate();
-        if (unk14.Type() == kDataObject) {
-            unk0 = unk14.GetObj();
+    DataNodeObjTrack(const DataNode &node) : mObj(nullptr, nullptr) {
+        mNode = node.Evaluate();
+        if (mNode.Type() == kDataObject) {
+            mObj = mNode.GetObj();
         }
     }
     DataNode Node() const {
-        if (unk14.Type() == kDataObject) {
-            return unk0.Ptr();
+        if (mNode.Type() == kDataObject) {
+            return mObj.Ptr();
         } else
-            return unk14;
+            return mNode;
     }
     DataNodeObjTrack &operator=(const DataNode &node) {
-        unk14 = node.Evaluate();
-        if (unk14.Type() == kDataObject) {
-            unk0 = unk14.GetObj();
+        mNode = node.Evaluate();
+        if (mNode.Type() == kDataObject) {
+            mObj = mNode.GetObj();
         }
         return *this;
     }
     DataNodeObjTrack &operator=(const DataNodeObjTrack &other) {
-        unk14 = other.Node().Evaluate();
-        if (unk14.Type() == kDataObject) {
-            unk0 = unk14.GetObj();
+        mNode = other.Node().Evaluate();
+        if (mNode.Type() == kDataObject) {
+            mObj = mNode.GetObj();
         }
         return *this;
     }
 
 protected:
-    ObjPtr<Hmx::Object> unk0; // 0x0
-    DataNode unk14; // 0x14
+    ObjPtr<Hmx::Object> mObj; // 0x0
+    DataNode mNode; // 0x14
 };
 
 #pragma endregion

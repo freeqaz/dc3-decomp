@@ -23,9 +23,9 @@ public:
     virtual int GetOnlineID() { return -1; } // 0xc
     virtual bool IsDirty() { return false; } // 0x10
     virtual PlaylistType GetType() const {
-        if (unk9) {
+        if (mIsFriendPlaylist) {
             return (PlaylistType)2;
-        } else if (unk8) {
+        } else if (mIsBattlePlaylist) {
             return (PlaylistType)4;
         } else {
             return IsCustom() ? (PlaylistType)1 : (PlaylistType)3;
@@ -50,17 +50,17 @@ public:
     bool IsFull() const { return m_vSongs.size() >= 20; }
     Symbol GetName() const { return mName; }
     void SetName(Symbol name) { mName = name; }
-    void SetUnk8(bool b) { unk8 = b; }
-    bool GetUnk8() const { return unk8; }
-    void SetUnk9(bool b) { unk9 = b; }
-    bool GetUnk9() const { return unk9; }
+    void SetIsBattlePlaylist(bool b) { mIsBattlePlaylist = b; }
+    bool GetIsBattlePlaylist() const { return mIsBattlePlaylist; }
+    void SetIsFriendPlaylist(bool b) { mIsFriendPlaylist = b; }
+    bool GetIsFriendPlaylist() const { return mIsFriendPlaylist; }
 
 protected:
     virtual void HandleChange() {}
 
     Symbol mName; // 0x4
-    bool unk8; // 0x8
-    bool unk9; // 0x9
+    bool mIsBattlePlaylist; // 0x8
+    bool mIsFriendPlaylist; // 0x9
     std::vector<int> m_vSongs; // 0xc
 };
 

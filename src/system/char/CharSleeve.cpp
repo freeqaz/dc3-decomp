@@ -16,7 +16,7 @@ static inline void ScaleAddEq(Vector3 &v1, const Vector3 &v2, float f) {
 }
 
 CharSleeve::CharSleeve()
-    : mSleeve(this), mTopSleeve(this), unk38(0, 0, 0), unk48(0, 0, 0), unk58(0),
+    : mSleeve(this), mTopSleeve(this), mPos(0, 0, 0), mLastPos(0, 0, 0), mLastDT(0),
       mInertia(0.5f), mGravity(1.0f), mRange(0), mNegLength(0), mPosLength(0),
       mStiffness(0.02f) {}
 
@@ -83,26 +83,26 @@ void CharSleeve::Poll() {
         bool b2 = false;
         Character *me = Character::Current();
         if (me && me->Teleported()) {
-            unk38 = mSleeve->WorldXfm().v;
+            mPos = mSleeve->WorldXfm().v;
             Vector3 v9c(0.0f, 0.0f, -(absed + mPosLength));
             float dotted = Dot(v9c, sleeveparent->WorldXfm().m.x);
             ClampEq(dotted, -mRange, mRange);
             ScaleAddEq(v9c, sleeveparent->WorldXfm().m.x, dotted);
-            unk38 += v9c;
+            mPos += v9c;
             Vector3 va8;
             ScaleAdd(sleeveparent->WorldXfm().v, sleeveparent->WorldXfm().m.x, dotted, va8);
-            Subtract(unk38, va8, v9c);
+            Subtract(mPos, va8, v9c);
             NormalizeScale(v9c, absed + mPosLength, v9c);
-            Add(va8, v9c, unk38);
-            unk48 = unk38;
+            Add(va8, v9c, mPos);
+            mLastPos = mPos;
             b2 = true;
-            unk58 = 0;
+            mLastDT = 0;
         }
-        Vector3 vb4(unk38);
-        if (unk58 > 0.0f && deltasecs > 0.0f) {
+        Vector3 vb4(mPos);
+        if (mLastDT > 0.0f && deltasecs > 0.0f) {
             Vector3 vc0;
-            Subtract(unk38, unk48, vc0);
-            ScaleAddEq(vb4, vc0, (mInertia / unk58) * deltasecs);
+            Subtract(mPos, mLastPos, vc0);
+            ScaleAddEq(vb4, vc0, (mInertia / mLastDT) * deltasecs);
         }
         vb4.z += gravity_z;
         Vector3 vcc;
@@ -124,11 +124,11 @@ void CharSleeve::Poll() {
         Normalize(tf90.m.y, tf90.m.y);
         Cross(tf90.m.y, tf90.m.z, tf90.m.x);
         mSleeve->SetWorldXfm(tf90);
-        unk48 = unk38;
-        unk58 = deltasecs;
-        unk38 = vb4;
+        mLastPos = mPos;
+        mLastDT = deltasecs;
+        mPos = vb4;
         if (b2)
-            unk48 = unk38;
+            mLastPos = mPos;
         if (mTopSleeve) {
             float dotcc = Dot(vcc, sleeveparent->WorldXfm().m.x);
             ScaleAddEq(vcc, sleeveparent->WorldXfm().m.x, -dotcc);

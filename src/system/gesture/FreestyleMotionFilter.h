@@ -17,8 +17,8 @@ public:
     bool Detected();
     void UpdateFilters(SkeletonUpdateData const &);
 
-    float unk2c;
-    float unk30;
-    float unk34;
+    float mVelocityThreshold;
+    float mMoveTime;
+    float mMovementAmount;
     bool mIsActive; // 0x38
 };

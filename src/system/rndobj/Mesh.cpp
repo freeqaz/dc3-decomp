@@ -41,7 +41,7 @@ RndMesh::RndMesh()
     : mMat(this), mGeomOwner(this, this), mBones(this), mMutable(0),
       mVolume(kVolumeTriangles), mBSPTree(nullptr), mMultiMesh(nullptr), mHasAOCalc(0),
       mKeepMeshData(0), mCompressedVerts(nullptr), mNumCompressedVerts(0) {
-    unk180 = 0x26;
+    mMeshVersion = 0x26;
 }
 
 RndMesh::~RndMesh() {

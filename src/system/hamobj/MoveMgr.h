@@ -15,13 +15,13 @@ class SuperEasyRemixer;
 
 class CategoryData {
 public:
-    Symbol unk0;
-    Symbol unk4;
+    Symbol mName;
+    Symbol mToken;
 };
 
 class MoveChoiceSet {
 public:
-    const MoveParent *unk0[kNumDifficulties];
+    const MoveParent *mChoices[kNumDifficulties];
 };
 
 class MoveMgr : public Hmx::Object {
@@ -47,7 +47,7 @@ public:
     const std::map<Symbol, MoveVariant *> &MoveVariants() const {
         return mMoveGraph.MoveVariants();
     }
-    const std::set<const MoveVariant *> &GetVariants() const { return unk104; }
+    const std::set<const MoveVariant *> &GetVariants() const { return mVariants; }
     const DataArrayPtr &Layout() const { return mMoveGraph.Layout(); }
     void Clear();
     bool HasRoutine() const;
@@ -89,7 +89,7 @@ public:
     }
     MoveGraph &Graph() { return mMoveGraph; }
     ObjectDir *MoveDataDir() const { return mMoveDataDir; }
-    void SetSong(Symbol song) { unk14c = song; }
+    void SetSong(Symbol song) { mCurrentSong = song; }
 
     static void Init(const char *);
 
@@ -102,29 +102,29 @@ private:
     DataNode OnFindVariants(DataArray *);
 
     Keys<Symbol, Symbol> *mClipPropKeys[kNumDifficultiesDC2]; // 0x2c
-    int unk38; // 0x38
+    int mLoadsInProgress; // 0x38 - tracks in-progress loads
     Keys<Symbol, Symbol> *mPracticePropKeys; // 0x3c
-    SongLayout *unk40; // 0x40
-    SongLayout *unk44; // 0x44
+    SongLayout *mCurrentSongLayout; // 0x40
+    SongLayout *mDefaultSongLayout; // 0x44
     Keys<Symbol, Symbol> *mMovePropKeys[kNumDifficultiesDC2]; // 0x48
     std::map<int, MoveVariant *> unk54[kNumDifficultiesDC2]; // 0x54
     MoveDir *mMovesDir; // 0x9c
-    int unka0; // 0xa0
+    int mLoadingProgressCounter; // 0xa0 - loading progress counter, set to 0 multiple times
     MoveGraph mMoveGraph; // 0xa4
-    std::set<const MoveVariant *> unk104; // 0x104
+    std::set<const MoveVariant *> mVariants; // 0x104
     // indexed by number of players
     std::vector<const MoveParent *> mMoveParents[2]; // 0x11c
     // indexed by number of players
-    std::vector<const MoveVariant *> unk134[2]; // 0x134
-    Symbol unk14c; // 0x14c
+    std::vector<const MoveVariant *> mPreferredVariants[2]; // 0x134
+    Symbol mCurrentSong; // 0x14c
     // indexed by number of players
-    std::vector<std::pair<const MoveVariant *, const MoveVariant *> > unk150[2]; // 0x150
-    bool unk168; // 0x168
-    std::vector<MoveChoiceSet> unk16c; // 0x16c
-    std::vector<CategoryData> unk178; // 0x178 - genre data
-    std::vector<CategoryData> unk184; // 0x184 - era data
-    std::vector<CategoryData> unk190; // 0x190 - also genre data
-    std::vector<CategoryData> unk19c; // 0x19c - also era data
+    std::vector<std::pair<const MoveVariant *, const MoveVariant *> > mRoutineMeasures[2]; // 0x150
+    bool mRoutineLoaded; // 0x168
+    std::vector<MoveChoiceSet> mChoiceSets; // 0x16c
+    std::vector<CategoryData> mGenres; // 0x178 - genre data
+    std::vector<CategoryData> mEras; // 0x184 - era data
+    std::vector<CategoryData> mFilteredGenres; // 0x190 - also genre data
+    std::vector<CategoryData> mFilteredEras; // 0x19c - also era data
     ObjectDir *mMoveDataDir; // 0x1a8
     SuperEasyRemixer *mSuperEasyRemixer; // 0x1ac
 };

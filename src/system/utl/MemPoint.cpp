@@ -10,40 +10,40 @@ MemPoint::MemPoint(eInitType t) {
     if (t == kInitType1) {
         for (int i = 0; i < MemNumHeaps(); i++) {
             int a, b, c, d;
-            MemFreeBlockStats(i, a, b, unk0[i], c, d);
+            MemFreeBlockStats(i, a, b, mHeapFreeBlocks[i], c, d);
         }
-        unk40 = PhysicalUsage();
+        mPhysicalFree = PhysicalUsage();
     } else {
-        memset(unk0, 0, 0x44);
+        memset(mHeapFreeBlocks, 0, 0x44);
     }
 }
 
 MemPointDelta MemPoint::operator-(const MemPoint &mp) {
     MemPointDelta mpd;
     for (int i = 0; i < MemNumHeaps(); i++) {
-        mpd.unk0[i] = mp.unk0[i] - unk0[i];
+        mpd.mHeapFreeBlocks[i] = mp.mHeapFreeBlocks[i] - mHeapFreeBlocks[i];
     }
-    mpd.unk40 = unk40 - mp.unk40;
+    mpd.mPhysicalFree = mPhysicalFree - mp.mPhysicalFree;
     return mpd;
 }
 
-MemPointDelta::MemPointDelta() { memset(unk0, 0, 0x44); }
+MemPointDelta::MemPointDelta() { memset(mHeapFreeBlocks, 0, 0x44); }
 
 MemPointDelta &MemPointDelta::operator+=(const MemPointDelta &mpd) {
     for (int i = 0; i < MemNumHeaps(); i++) {
-        unk0[i] += mpd.unk0[i];
+        mHeapFreeBlocks[i] += mpd.mHeapFreeBlocks[i];
     }
-    unk40 += mpd.unk40;
+    mPhysicalFree += mpd.mPhysicalFree;
     return *this;
 }
 
 bool MemPointDelta::AnyGreaterThan(int i1) const {
     for (int i = 0; i < MemNumHeaps(); i++) {
-        if (unk0[i] > i1) {
+        if (mHeapFreeBlocks[i] > i1) {
             return true;
         }
     }
-    return (i1 < unk40) & 1;
+    return (i1 < mPhysicalFree) & 1;
 }
 
 const char *MemPointDelta::HeaderString(const char *s) {
@@ -72,10 +72,10 @@ const char *MemPointDelta::ToString(int divideBy) const {
         if (i != 0) {
             st << ',';
         }
-        st << unk0[i] / divideBy;
+        st << mHeapFreeBlocks[i] / divideBy;
     }
     st << ',';
-    st << unk40 / divideBy;
+    st << mPhysicalFree / divideBy;
     const char *c = MakeString("%s", st);
     return c;
 }

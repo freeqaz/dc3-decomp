@@ -22,20 +22,20 @@
 #include "utl/Symbol.h"
 
 SkeletonChooser::SkeletonChooser()
-    : mDrawDebug(false), unk3c(0), unk44(1), unk48(true), unk80(0), unk84(0), unk88(0),
+    : mDrawDebug(false), mActivePlayerIndex(0), mSwitchDelay(1), unk48(true), unk80(0), unk84(0), unk88(0),
       unk8c(0), unk90(0), mNextSkelIdxToTrack(-1), mInMultiPlayerUpdateMode(false),
       unkbc(-1), mEnrollmentLocked(false) {
     SetName("skeleton_chooser", ObjectDir::Main());
-    unk2c = new DirectionGestureFilterSingleUser(kSkeletonRight, kSkeletonLeft, 0, 0);
-    unk30 = new DirectionGestureFilterSingleUser(kSkeletonLeft, kSkeletonRight, 0, 0);
+    mRightDirFilter = new DirectionGestureFilterSingleUser(kSkeletonRight, kSkeletonLeft, 0, 0);
+    mLeftDirFilter = new DirectionGestureFilterSingleUser(kSkeletonLeft, kSkeletonRight, 0, 0);
     unk7c = Hmx::Object::New<HighFiveGestureFilter>();
     for (int i = 0; i < 6; i++) {
-        unk4c[i] = Hmx::Object::New<HandRaisedGestureFilter>();
-        unk4c[i]->SetRequiredMs(750);
-        unk4c[i]->Clear();
-        unk64[i] = new StandingStillGestureFilter();
-        unk64[i]->SetRequiredMs(750);
-        unka4[i] = 0;
+        mSkeletonHandRaisedFilters[i] = Hmx::Object::New<HandRaisedGestureFilter>();
+        mSkeletonHandRaisedFilters[i]->SetRequiredMs(750);
+        mSkeletonHandRaisedFilters[i]->Clear();
+        mSkeletonStandingStillFilters[i] = new StandingStillGestureFilter();
+        mSkeletonStandingStillFilters[i]->SetRequiredMs(750);
+        mSkeletonHandRaisedState[i] = 0;
     }
     for (int i = 0; i < 2; i++) {
         mHandRaisedFilters[i] = Hmx::Object::New<HandRaisedGestureFilter>();
@@ -45,11 +45,11 @@ SkeletonChooser::SkeletonChooser()
 }
 
 SkeletonChooser::~SkeletonChooser() {
-    delete unk2c;
-    delete unk30;
+    delete mRightDirFilter;
+    delete mLeftDirFilter;
     for (int i = 0; i < 6; i++) {
-        delete unk4c[i];
-        delete unk64[i];
+        delete mSkeletonHandRaisedFilters[i];
+        delete mSkeletonStandingStillFilters[i];
     }
     delete unk7c;
 }
@@ -96,7 +96,7 @@ void SkeletonChooser::GetJointDepthPos(int i1, int i2, Vector3 &v) {
     if (pSkeleton) {
         Vector2 jointPos;
         pSkeleton->ScreenPos((SkeletonJoint)i2, jointPos);
-        Vector3 jointV3 = pSkeleton->TrackedJoints()[i2].unk60;
+        Vector3 jointV3 = pSkeleton->TrackedJoints()[i2].mSmoothedPos;
         v.z = jointV3.z;
         v.x = jointPos.x;
         v.y = jointPos.y;
@@ -113,7 +113,7 @@ bool SkeletonChooser::IsSkeletonValid(int idx) {
 
 bool SkeletonChooser::IsHandRaised(int idx) {
     if (IsSkeletonValid(idx)) {
-        return unka4[idx];
+        return mSkeletonHandRaisedState[idx];
     } else {
         return false;
     }
@@ -143,7 +143,7 @@ SkeletonSide SkeletonChooser::GetPlayerSide(int player) {
 
 void SkeletonChooser::SetActivePlayer(int playerIndex) {
     MILO_ASSERT_RANGE(playerIndex, 0, 2, 0x635);
-    unk3c = playerIndex;
+    mActivePlayerIndex = playerIndex;
     int skeletonTrackingID = TheGameData->Player(playerIndex)->GetSkeletonTrackingID();
     TheGestureMgr->SetActiveSkeletonTrackingID(skeletonTrackingID);
 }
@@ -169,20 +169,20 @@ bool SkeletonChooser::IsRightPlayerHandRaised() {
 void SkeletonChooser::Poll() {
     if (!PotentiallyRecoverSkeletons()) {
         CheckToSwitchActivePlayer();
-        if (unk38 >= 0) {
-            unk40 += TheTaskMgr.DeltaUISeconds();
-            if (unk40 > unk44) {
+        if (mPendingPlayerSwitchIndex >= 0) {
+            mSwitchTimer += TheTaskMgr.DeltaUISeconds();
+            if (mSwitchTimer > mSwitchDelay) {
                 Skeleton *pSkeleton = TheGestureMgr->GetSkeletonByTrackingID(
-                    TheGestureMgr->GetPlayerSkeletonID(unk38)
+                    TheGestureMgr->GetPlayerSkeletonID(mPendingPlayerSwitchIndex)
                 );
                 if (pSkeleton && pSkeleton->IsTracked()) {
-                    SetActivePlayer(unk38);
+                    SetActivePlayer(mPendingPlayerSwitchIndex);
                 }
-                unk38 = -1;
-                unk40 = 0;
+                mPendingPlayerSwitchIndex = -1;
+                mSwitchTimer = 0;
             }
         }
-        if (unk38 < 0) {
+        if (mPendingPlayerSwitchIndex < 0) {
             UpdateTrackedSkeletonsElective();
             unk7c->Update(
                 TheGestureMgr->GetSkeletonByTrackingID(
@@ -242,10 +242,10 @@ void SkeletonChooser::EnterMultiPlayerUpdateMode() {
         TheGestureMgr->StartTrackAllSkeletons();
         mInMultiPlayerUpdateMode = true;
         for (int i = 0; i < 6; i++) {
-            unka4[i] = 0;
-            unk4c[i]->SetRequiredMs(500);
-            unk4c[i]->SetForwardFacingCutoff(0.82f);
-            unk4c[i]->Clear();
+            mSkeletonHandRaisedState[i] = 0;
+            mSkeletonHandRaisedFilters[i]->SetRequiredMs(500);
+            mSkeletonHandRaisedFilters[i]->SetForwardFacingCutoff(0.82f);
+            mSkeletonHandRaisedFilters[i]->Clear();
         }
     }
 }
@@ -255,10 +255,10 @@ void SkeletonChooser::ExitMultiPlayerUpdateMode() {
         TheGestureMgr->CancelTrackAllSkeletons();
         mInMultiPlayerUpdateMode = false;
         for (int i = 0; i < 6; i++) {
-            unka4[i] = 0;
-            unk4c[i]->SetRequiredMs(750);
-            unk4c[i]->RestoreDefaultForwardFacingCutoff();
-            unk4c[i]->Clear();
+            mSkeletonHandRaisedState[i] = 0;
+            mSkeletonHandRaisedFilters[i]->SetRequiredMs(750);
+            mSkeletonHandRaisedFilters[i]->RestoreDefaultForwardFacingCutoff();
+            mSkeletonHandRaisedFilters[i]->Clear();
         }
     }
 }
@@ -362,9 +362,9 @@ bool SkeletonChooser::IsCentered(int id) {
 
 void SkeletonChooser::QueueActivePlayerSwitch(int playerIndex) {
     MILO_ASSERT_RANGE(playerIndex, 0, 2, 0x589);
-    if (unk38 != playerIndex) {
-        unk38 = playerIndex;
-        unk40 = 0;
+    if (mPendingPlayerSwitchIndex != playerIndex) {
+        mPendingPlayerSwitchIndex = playerIndex;
+        mSwitchTimer = 0;
     }
 }
 
@@ -373,7 +373,7 @@ bool SkeletonChooser::IsHandUp(int id) {
     if (!pSkeleton)
         return false;
     return !AreArmsCrossed(id)
-        && (unk2c->IsHandValid(*pSkeleton) || unk30->IsHandValid(*pSkeleton));
+        && (mRightDirFilter->IsHandValid(*pSkeleton) || mLeftDirFilter->IsHandValid(*pSkeleton));
 }
 
 bool SkeletonChooser::IsAtEdge(int id) {
@@ -442,7 +442,7 @@ void SkeletonChooser::ForceSwapPlayerSides() {
 
 void SkeletonChooser::SwitchActiveToPlayerIndexImmediate(int playerIndex) {
     MILO_ASSERT_RANGE(playerIndex, 0, 2, 0x581);
-    unk38 = -1;
+    mPendingPlayerSwitchIndex = -1;
     SetActivePlayer(playerIndex);
 }
 
@@ -537,7 +537,7 @@ void SkeletonChooser::ResolveFreestyle() {
 }
 
 void SkeletonChooser::ResolveSinglePlayer() {
-    int player = unk3c;
+    int player = mActivePlayerIndex;
     int otherPlayer = !player;
     int skel = GetAssignedPlayerSkeletonID(player); // goes unused
     int otherSkel = GetAssignedPlayerSkeletonID(otherPlayer);
@@ -548,7 +548,7 @@ void SkeletonChooser::ResolveSinglePlayer() {
         TheGameData->SwapPlayerSidesByIDOnly();
         player = 0;
         TheHamProvider->SetProperty("ui_nav_player", 0);
-        unk3c = 0;
+        mActivePlayerIndex = 0;
         HamPlayerData *hpd = TheGameData->Player(0);
         otherPlayer = 1;
         TheGestureMgr->SetActiveSkeletonTrackingID(hpd->GetSkeletonTrackingID());
@@ -693,11 +693,11 @@ void SkeletonChooser::SwapPlayerDataForPractice() {
     TheGameData->Player(0)->SetCharacter(sym1);
     TheGameData->Player(1)->SetCharacter(sym0);
 
-    // Swap unk48
-    sym0 = TheGameData->Player(0)->Unk48();
-    sym1 = TheGameData->Player(1)->Unk48();
-    TheGameData->Player(0)->SetUnk48(sym1);
-    TheGameData->Player(1)->SetUnk48(sym0);
+    // Swap mini game character
+    sym0 = TheGameData->Player(0)->MiniGameCharacter();
+    sym1 = TheGameData->Player(1)->MiniGameCharacter();
+    TheGameData->Player(0)->SetMiniGameCharacter(sym1);
+    TheGameData->Player(1)->SetMiniGameCharacter(sym0);
 
     // Swap outfit
     sym0 = TheGameData->Player(0)->Outfit();

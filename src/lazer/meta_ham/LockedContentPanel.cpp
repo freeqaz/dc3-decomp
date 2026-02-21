@@ -26,7 +26,7 @@
 
 LockedContentPanel *TheLockedContentPanel;
 
-LockedContentPanel::LockedContentPanel() : mSound(), mTimer(new Timer()), unk84(false) {
+LockedContentPanel::LockedContentPanel() : mSound(), mTimer(new Timer()), mIsTeaserTextShowing(false) {
     MILO_ASSERT(TheLockedContentPanel == NULL, 0x27);
     TheLockedContentPanel = this;
 }
@@ -38,12 +38,12 @@ LockedContentPanel::~LockedContentPanel() {
 }
 
 void LockedContentPanel::Exit() {
-    if (mSound && unk84) {
+    if (mSound && mIsTeaserTextShowing) {
         mSound->Stop(nullptr, false);
     }
     mSound = nullptr;
     mTimer->Reset();
-    unk84 = false;
+    mIsTeaserTextShowing = false;
     UIPanel::Exit();
 }
 
@@ -53,9 +53,9 @@ void LockedContentPanel::Enter() {
 }
 
 void LockedContentPanel::Poll() {
-    if (mSound && !unk84 && mTimer->SplitMs() >= 750.0f) {
+    if (mSound && !mIsTeaserTextShowing && mTimer->SplitMs() >= 750.0f) {
         mSound->Play(0, 0, 0, nullptr, 0);
-        unk84 = true;
+        mIsTeaserTextShowing = true;
         mTimer->Reset();
     }
     HamPanel::Poll();
@@ -63,7 +63,7 @@ void LockedContentPanel::Poll() {
 
 void LockedContentPanel::SetVoiceOver(Sound *s, bool b) {
     mSound = s;
-    unk84 = b;
+    mIsTeaserTextShowing = b;
 }
 
 void LockedContentPanel::TriggerTeaserText() {

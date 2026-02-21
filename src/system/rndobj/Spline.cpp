@@ -25,8 +25,8 @@ void RndSpline::CtrlPoint::Load(BinStreamRev &d) {
 
 RndSpline::RndSpline()
     : mManual(false), mPulseLength(10), mPulseAmplitude(10), mStartCtrlPoint(-1),
-      mEndCtrlPoint(-1), mYOffset(0), mYPerCtrlPoint(10), unk144(0), unk145(0), unk146(0),
-      unk148(-1000), unk14c(0) {}
+      mEndCtrlPoint(-1), mYOffset(0), mYPerCtrlPoint(10), unk144(0), unk145(0), mPulseDrawing(0),
+      mPulseOffset(-1000), mTestPulseActive(0) {}
 
 BEGIN_HANDLERS(RndSpline)
     HANDLE(test_pulse, OnTestPulse)
@@ -121,10 +121,10 @@ BEGIN_LOADS(RndSpline)
 END_LOADS
 
 DataNode RndSpline::OnTestPulse(DataArray *) {
-    if (!unk14c) {
-        unk14c = true;
-        unk146 = true;
-        unk148 = -1;
+    if (!mTestPulseActive) {
+        mTestPulseActive = true;
+        mPulseDrawing = true;
+        mPulseOffset = -1;
     }
     return 0;
 }
@@ -198,10 +198,10 @@ void RndSpline::PrepareShader(float farg0, float farg1) const {
         float countAsFloat = (float)(double)count;
         Vector4 shader1(countAsFloat, invFarg1, 0.0f, zero);
         TheShaderMgr.SetVConstant((VShaderConstant)0x19, shader1);
-        if ((unsigned char)unk146 != 0) {
+        if ((unsigned char)mPulseDrawing != 0) {
             float startAsFloat = (float)(double)actualStart;
             float amp = mPulseAmplitude;
-            float offset = unk148 - startAsFloat;
+            float offset = mPulseOffset - startAsFloat;
             float perPt = (mYPerCtrlPoint / mPulseLength) * 2.0f;
             Vector4 shader2(offset, amp, perPt, zero);
             TheShaderMgr.SetVConstant((VShaderConstant)0x1A, shader2);

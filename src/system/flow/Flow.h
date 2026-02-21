@@ -78,21 +78,21 @@ public:
     OBJ_MEM_OVERLOAD(0x39)
     NEW_OBJ(Flow)
 
-    int GetNumParams() const { return unk178; }
+    int GetNumParams() const { return mParamApplyCount; }
     void RefreshPortLabelLists();
     FlowLabel *GetLabelForSym(Symbol);
     void ApplyParams(DataArray *, FlowTrigger *);
 
     void StartOnEnter(bool start) {
         if (start)
-            unk170 = 2;
+            mStartMode = 2;
         else
-            unk170 = 0;
+            mStartMode = 0;
     }
 
     void StartAfterGameCode(bool start) {
-        if (unk170 != 0)
-            unk170 = start ? 2 : 1;
+        if (mStartMode != 0)
+            mStartMode = start ? 2 : 1;
     }
 
 protected:
@@ -108,12 +108,12 @@ protected:
     ObjPtrVec<FlowLabel> mFlowLabels; // 0x11c
     ObjPtrVec<FlowOutPort> mFlowOutPorts; // 0x138
     ObjPtrVec<Hmx::Object> mObjects; // 0x154
-    int unk170; // 0x170
+    int mStartMode; // 0x170
     /** "Are we hidden from run nodes?" */
     bool mPrivate; // 0x174
     /** "force things to stop immediately?" */
     bool mHardStop; // 0x175
-    int unk178; // 0x178
+    int mParamApplyCount; // 0x178
 };
 
 // FLOW_PROPANIM_COMMANDS_ENUM

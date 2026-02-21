@@ -15,7 +15,7 @@ public:
     void AddEventTime(Symbol, float);
     void QueueCommand(FlowNode *, FlowNode::QueueState);
     void CancelCommand(FlowNode *);
-    void AddMs(float ms) { unk7c += ms; }
+    void AddMs(float ms) { mFrameTimeAccumulator += ms; }
 
 protected:
     bool unk2c;
@@ -23,17 +23,17 @@ protected:
     std::map<FlowNode *, FlowNode::QueueState> mFlowQueue; // 0x30
     ObjPtrVec<FlowNode> mPollables; // 0x48
     std::map<Symbol, DataNode> unk64; // 0x64
-    float unk7c; // 0x7c
-    float unk80; // 0x80
+    float mFrameTimeAccumulator; // 0x7c
+    float mPeakFrameTime; // 0x80
     RndOverlay *mFlowOverlay; // 0x84
     RndOverlay *mFlowPeakOverlay; // 0x88
     RndOverlay *mFlowTaskOverlay; // 0x8c
     RndOverlay *mFlowEventOverlay; // 0x90
-    int unk94;
-    int unk98[60];
+    int mFrameCounterModulo;
+    int mFrameTimeSamples[60];
     int unk188;
-    float unk18c;
-    float unk190; // 0x190
+    float mLastFrameTime;
+    float mElapsedTime; // 0x190
     DataNode unk194;
 };
 

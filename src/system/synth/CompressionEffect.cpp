@@ -6,7 +6,7 @@
 CompressionEffect::CompressionEffect(IXAudioBatchAllocator *) {
     Params params;
     params.unk0 = false;
-    unk34 = 1.0f;
+    mDCBlock = 1.0f;
     Reset();
     params.unk4 = -6.0f;
     params.unk8 = 1.0f;
@@ -21,38 +21,38 @@ CompressionEffect::CompressionEffect(IXAudioBatchAllocator *) {
 }
 
 void CompressionEffect::Reset() {
-    unk38 = 1.0f;
-    unk3c = 1.0f;
+    mEnvelope = 1.0f;
+    mEnvelope2 = 1.0f;
 }
 
 void CompressionEffect::SetParameters(CompressionEffect::Params const &params) {
-    unk4 = params.unk4;
-    unk0 = DbToRatio(unk4);
-    unk8 = DbToRatio(unk4 / unkc - unk4);
-    unkc = params.unk8;
-    unk8 = DbToRatio(unk4 / unkc - unk4);
-    unk10 = DbToRatio(params.unkc);
-    unk8 = DbToRatio(unk4 / unkc - unk4);
-    unk14 = 1.0f - (float)exp(-1.0f / (params.unk10 * 48000.0f));
-    unk8 = DbToRatio(unk4 / unkc - unk4);
-    unk18 = 1.0f - (float)exp(-1.0f / (params.unk14 * 48000.0f));
-    unk8 = DbToRatio(unk4 / unkc - unk4);
-    unk1c = params.unk18;
-    unk8 = DbToRatio(unk4 / unkc - unk4);
-    unk20 = 1.0f - (float)exp(-1.0f / (params.unk1c * 48000.0f));
-    unk8 = DbToRatio(unk4 / unkc - unk4);
-    unk24 = 1.0f - (float)exp(-1.0f / (params.unk20 * 48000.0f));
-    unk8 = DbToRatio(unk4 / unkc - unk4);
-    unk28 = params.unk24;
-    float ratio = DbToRatio(unk28);
-    unk30 = ratio;
-    unk2c = ratio;
-    unk8 = DbToRatio(unk4 / unkc - unk4);
+    mThresholdDb = params.unk4;
+    mThresholdRatio = DbToRatio(mThresholdDb);
+    mMakeupGainRatio = DbToRatio(mThresholdDb / mRatio - mThresholdDb);
+    mRatio = params.unk8;
+    mMakeupGainRatio = DbToRatio(mThresholdDb / mRatio - mThresholdDb);
+    mOutputGainRatio = DbToRatio(params.unkc);
+    mMakeupGainRatio = DbToRatio(mThresholdDb / mRatio - mThresholdDb);
+    mAttackCoeff = 1.0f - (float)exp(-1.0f / (params.unk10 * 48000.0f));
+    mMakeupGainRatio = DbToRatio(mThresholdDb / mRatio - mThresholdDb);
+    mReleaseCoeff = 1.0f - (float)exp(-1.0f / (params.unk14 * 48000.0f));
+    mMakeupGainRatio = DbToRatio(mThresholdDb / mRatio - mThresholdDb);
+    mPostGain = params.unk18;
+    mMakeupGainRatio = DbToRatio(mThresholdDb / mRatio - mThresholdDb);
+    mPeakAttackCoeff = 1.0f - (float)exp(-1.0f / (params.unk1c * 48000.0f));
+    mMakeupGainRatio = DbToRatio(mThresholdDb / mRatio - mThresholdDb);
+    mPeakReleaseCoeff = 1.0f - (float)exp(-1.0f / (params.unk20 * 48000.0f));
+    mMakeupGainRatio = DbToRatio(mThresholdDb / mRatio - mThresholdDb);
+    mGateThreshDb = params.unk24;
+    float ratio = DbToRatio(mGateThreshDb);
+    mGateMax = ratio;
+    mGateMin = ratio;
+    mMakeupGainRatio = DbToRatio(mThresholdDb / mRatio - mThresholdDb);
 }
 
 void CompressionEffect::Process(float *samples, int numFrames, int numChannels) {
-    if (unkc > 0.999999046f) {
-        float envelope = unk38;
+    if (mRatio > 0.999999046f) {
+        float envelope = mEnvelope;
         float prev_peak = 0.0f;
         float prev_sample = 0.0f;
 
@@ -74,11 +74,11 @@ void CompressionEffect::Process(float *samples, int numFrames, int numChannels) 
                         if (((tmp > 0.012483216f) || (tmp < -0.012483216f)) &&
                             (fabsf(tmp - prev_peak) < 0.004999995f) &&
                             (fabsf(sample - prev_peak) < 0.004999995f)) {
-                            float ratio = unk34;
-                            unk34 = ((1.0f - ratio) * 0.004999995f) + ratio;
+                            float ratio = mDCBlock;
+                            mDCBlock = ((1.0f - ratio) * 0.004999995f) + ratio;
                         }
-                        float ratio = unk34;
-                        unk34 = ((1.0f - ratio) * 0.01f) + ratio;
+                        float ratio = mDCBlock;
+                        mDCBlock = ((1.0f - ratio) * 0.01f) + ratio;
                     }
 
                     float abs_sample = fabsf(sample);
@@ -89,25 +89,25 @@ void CompressionEffect::Process(float *samples, int numFrames, int numChannels) 
                 }
             }
 
-            float ratio = unk8;
-            float threshold = unk0;
+            float ratio = mMakeupGainRatio;
+            float threshold = mThresholdRatio;
             float gain_reduction = ratio * peak_level;
 
             if (peak_level > threshold) {
-                gain_reduction = ((((peak_level - threshold) / unkc) + threshold) * ratio);
+                gain_reduction = ((((peak_level - threshold) / mRatio) + threshold) * ratio);
                 if (gain_reduction > 100000.0f) {
                     gain_reduction = 100000.0f;
                 }
             }
 
-            float min_level = unk2c;
+            float min_level = mGateMin;
             float attack_release;
             if (peak_level < min_level) {
                 attack_release = (((peak_level - min_level) * 0.2f) + min_level);
             } else {
-                attack_release = (((unk30 - min_level) * 0.1f) + min_level);
+                attack_release = (((mGateMax - min_level) * 0.1f) + min_level);
             }
-            unk2c = attack_release;
+            mGateMin = attack_release;
 
             if (peak_level < (attack_release * 0.579999983f)) {
                 detect_peak = 1;
@@ -117,16 +117,16 @@ void CompressionEffect::Process(float *samples, int numFrames, int numChannels) 
             float gain = gain_reduction / peak_level;
             float envelope_coef;
             if (envelope > gain) {
-                envelope_coef = unk14;
+                envelope_coef = mAttackCoeff;
             } else {
-                envelope_coef = unk18;
+                envelope_coef = mReleaseCoeff;
             }
 
             if (detect_peak != 0) {
                 if (envelope > gain) {
-                    envelope_coef = unk24;
+                    envelope_coef = mPeakReleaseCoeff;
                 } else {
-                    envelope_coef = unk20;
+                    envelope_coef = mPeakAttackCoeff;
                 }
             }
 
@@ -139,11 +139,11 @@ void CompressionEffect::Process(float *samples, int numFrames, int numChannels) 
             int channel2 = 0;
             for (int ch_idx2 = 0; ch_idx2 < numChannels; ch_idx2++) {
                 int idx = frame * numChannels + channel2;
-                samples[idx] = (unk10 * (envelope * (unk34 * samples[idx])));
+                samples[idx] = (mOutputGainRatio * (envelope * (mDCBlock * samples[idx])));
                 channel2 += 1;
             }
         }
 
-        unk38 = envelope;
+        mEnvelope = envelope;
     }
 }

@@ -23,7 +23,7 @@ public:
     virtual void Update(const Skeleton &, int);
     virtual void Draw(const Skeleton &, SkeletonViz &);
     virtual bool HasDirection() const { return mHasDirection; }
-    virtual float GetPercentPulled() const { return unk18; }
+    virtual float GetPercentPulled() const { return mPercentPulled; }
     virtual bool IsHandValid(const Skeleton &) const;
     virtual bool IsValidScrollPos(const Skeleton &) const;
     virtual void ClearSwipe();
@@ -40,16 +40,16 @@ private:
     bool IsValidSwipePosition(const Skeleton &) const;
 
 protected:
-    SkeletonSide unk4;
+    SkeletonSide mHandSide; // 0x4
     JointConfidence mConfidence; // 0x8
-    SkeletonSide unkc;
+    SkeletonSide mSwipeSide; // 0xc
     bool mHasDirection; // 0x10
     float mSwipeAmt; // 0x14
-    float unk18;
+    float mPercentPulled; // 0x18
     bool mEngaged; // 0x1c
     bool mAllowAboveShoulder; // 0x1d
     bool mHighButtonMode; // 0x1e
-    float unk20;
+    float mSwipeCooldown; // 0x20
     ArcDetector mArcDetector; // 0x24
 };
 
@@ -75,7 +75,7 @@ public:
 private:
     void GetValidSkeletons(int &, int &) const;
 
-    DirectionGestureFilterSingleUser *unk4; // 0x4
-    DirectionGestureFilterSingleUser *unk8; // 0x8
-    StandingStillGestureFilter *unkc[2]; // 0xc
+    DirectionGestureFilterSingleUser *mFilter1; // 0x4
+    DirectionGestureFilterSingleUser *mFilter2; // 0x8
+    StandingStillGestureFilter *mStillFilters[2]; // 0xc
 };

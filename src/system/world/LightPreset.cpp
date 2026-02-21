@@ -79,14 +79,14 @@ BinStreamRev &operator>>(BinStreamRev &d, LightPreset::EnvironmentEntry &e) {
 #pragma region EnvLightEntry
 
 LightPreset::EnvLightEntry::EnvLightEntry() : mRange(0), mLightType(RndLight::kPoint) {
-    unk0.Reset();
+    mOrientation.Reset();
     mPosition.Zero();
     mColor.Zero();
     mRotation.Zero();
 }
 
 void LightPreset::EnvLightEntry::Save(BinStream &bs) const {
-    bs << unk0;
+    bs << mOrientation;
     bs << mPosition;
     bs << mColor;
     bs << mRange;
@@ -94,7 +94,7 @@ void LightPreset::EnvLightEntry::Save(BinStream &bs) const {
 }
 
 void LightPreset::EnvLightEntry::Load(BinStream &bs) {
-    bs >> unk0;
+    bs >> mOrientation;
     bs >> mPosition;
     bs >> mColor;
     mColor.alpha = 1;
@@ -107,7 +107,7 @@ bool LightPreset::EnvLightEntry::operator!=(const LightPreset::EnvLightEntry &e)
         return true;
     else if ((unsigned int)mLightType != e.mLightType)
         return true;
-    else if (unk0 != e.unk0)
+    else if (mOrientation != e.mOrientation)
         return true;
     else if (mPosition != e.mPosition)
         return true;
@@ -389,7 +389,7 @@ BEGIN_CUSTOM_PROPSYNC(LightPreset::EnvLightEntry)
     SYNC_PROP_SET(type, RndLight::TypeToStr(o.mLightType), ) {
         static Symbol _s("rotation");
         if (sym == _s) {
-            MakeRotMatrix(o.unk0, o.mRotation);
+            MakeRotMatrix(o.mOrientation, o.mRotation);
             if (PropSync(o.mRotation, _val, _prop, _i + 1, _op))
                 return true;
             else
@@ -564,7 +564,7 @@ void LightPreset::AdvanceManual(LightPreset::KeyframeCmd cmd) {
 
 void LightPreset::FillLightPresetData(RndLight *light, LightPreset::EnvLightEntry &entry) {
     entry.mColor = light->GetColor();
-    entry.unk0 = Hmx::Quat(light->WorldXfm().m);
+    entry.mOrientation = Hmx::Quat(light->WorldXfm().m);
     entry.mPosition = light->WorldXfm().v;
     entry.mRange = light->Range();
     entry.mLightType = light->GetType();

@@ -8,15 +8,15 @@
 #include "rndobj/PostProc.h"
 
 RndPostProcMgr::RndPostProcMgr()
-    : mSelectedPostProc(this), unk1c(nullptr), unk20(this), unk34(-1), unk38(-1) {
-    unk1c = Hmx::Object::New<RndPostProc>();
+    : mSelectedPostProc(this), mBlendFromPostProc(nullptr), mBlendToPostProc(this), mBlendDuration(-1), mBlendStartTime(-1) {
+    mBlendFromPostProc = Hmx::Object::New<RndPostProc>();
 }
 
 RndPostProcMgr::~RndPostProcMgr() {
     if (mSelectedPostProc) {
         mSelectedPostProc->Unselect();
     }
-    RELEASE(unk1c);
+    RELEASE(mBlendFromPostProc);
 }
 
 BEGIN_HANDLERS(RndPostProcMgr)
@@ -66,14 +66,14 @@ void RndPostProcMgr::Poll() {
         } else {
             mSelectedPostProc->Unselect();
         }
-        if (unk20) {
-            float pct = (TheTaskMgr.Seconds(TaskMgr::kRealTime) - unk38) / unk34;
+        if (mBlendToPostProc) {
+            float pct = (TheTaskMgr.Seconds(TaskMgr::kRealTime) - mBlendStartTime) / mBlendDuration;
             pct = Clamp(0.0f, 1.0f, pct);
-            mSelectedPostProc->Interp(unk1c, unk20, pct);
+            mSelectedPostProc->Interp(mBlendFromPostProc, mBlendToPostProc, pct);
             if (NearlyOne(pct)) {
-                unk20 = nullptr;
-                unk34 = -1;
-                unk38 = -1;
+                mBlendToPostProc = nullptr;
+                mBlendDuration = -1;
+                mBlendStartTime = -1;
             }
         }
     }
@@ -110,10 +110,10 @@ void RndPostProcMgr::BlendToPostProc(RndPostProc *iPostProc, float iBlendTime) {
         if (NearlyZero(iBlendTime)) {
             CopyFromPostProc(iPostProc);
         } else if (mSelectedPostProc) {
-            unk1c->Copy(mSelectedPostProc, kCopyShallow);
-            unk20 = iPostProc;
-            unk34 = iBlendTime;
-            unk38 = TheTaskMgr.Seconds(TaskMgr::kRealTime);
+            mBlendFromPostProc->Copy(mSelectedPostProc, kCopyShallow);
+            mBlendToPostProc = iPostProc;
+            mBlendDuration = iBlendTime;
+            mBlendStartTime = TheTaskMgr.Seconds(TaskMgr::kRealTime);
         }
     }
 }

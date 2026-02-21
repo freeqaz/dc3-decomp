@@ -11,7 +11,7 @@
 CharIKHand::CharIKHand()
     : mHand(this), mFinger(this), mTargets(this), mOrientation(true), mStretch(true),
       mScalable(false), mMoveElbow(true), mElbowSwing(0), mAlwaysIKElbow(false),
-      mPullShoulder(true), unk8c(0), mConstraintWrist(false), mWristRadians(0),
+      mPullShoulder(true), mAAPlusBB(0), mConstraintWrist(false), mWristRadians(0),
       mElbowCollide(this), mClockwise(false) {}
 
 CharIKHand::~CharIKHand() {}
@@ -190,11 +190,11 @@ void CharIKHand::MeasureLengths() {
             if (mHand->TransParent()->TransParent()) {
                 float len = Length(mHand->LocalXfm().v);
                 float parentlen = Length(mHand->TransParent()->LocalXfm().v);
-                unk84 = parentlen * 2.0f * len;
-                unk88 = (parentlen * parentlen) + len * len;
-                if (unk84 != 0.0f)
-                    unk84 = 1.0f / unk84;
-                unk8c = len + parentlen;
+                mInv2ab = parentlen * 2.0f * len;
+                mAABB = (parentlen * parentlen) + len * len;
+                if (mInv2ab != 0.0f)
+                    mInv2ab = 1.0f / mInv2ab;
+                mAAPlusBB = len + parentlen;
             }
         }
     }

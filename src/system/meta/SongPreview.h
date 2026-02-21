@@ -48,7 +48,7 @@ private:
     const SongMgr &mSongMgr; // 0x30
     Stream *mStream; // 0x34
     ObjPtr<TexMovie> mTexMovie; // 0x38
-    bool unk4c; // 0x4c - initted?
+    bool mInitted; // 0x4c
     Fader *mFader; // 0x50
     Fader *mMusicFader; // 0x54
     Fader *mCrowdSingFader; // 0x58
@@ -68,7 +68,7 @@ private:
     float mStartPreviewMs; // 0x84
     float mEndPreviewMs; // 0x88
     bool mRegisteredWithCM; // 0x8c
-    bool unk8d; // 0x8d - preview currently playing?
+    bool mSameSongRequested; // 0x8d
     bool mSecurePreview; // 0x8e
 
     void DetachFader(Fader *);

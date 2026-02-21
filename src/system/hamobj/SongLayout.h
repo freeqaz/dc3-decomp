@@ -40,13 +40,13 @@ public:
     Range mPatternRange; // 0x8
     /** "The pattern this section is using" */
     Symbol mPattern; // 0x10
-    SongPattern *unk14; // 0x14
+    SongPattern *mSongPattern; // 0x14
 };
 
 struct MoveReplacer {
-    Symbol unk0; // 0x0 - from
-    Symbol unk4; // 0x4 - to
-    const MoveParent *unk8; // 0x8
+    Symbol mFrom; // 0x0
+    Symbol mTo; // 0x4
+    const MoveParent *mMoveParent; // 0x8
     std::vector<int> mMeasures; // 0xc
 };
 

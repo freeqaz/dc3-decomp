@@ -37,8 +37,8 @@ DirLoader::DirLoader(
 )
     : Loader(fp, pos), mOwnStream(false), mStream(stream), mRev(0), mCounter(0),
       mObjects(nullptr, kObjListAllowNull), mCallback(cb), mDir(dir), mPostLoad(false),
-      mLoadDir(true), mDeleteSelf(false), mProxyName(nullptr), unk98(0), unk99(0),
-      unk9a(0), unk9b(bbb), unk9c(dir2), mProxyDir(this) {
+      mLoadDir(true), mDeleteSelf(false), mProxyName(nullptr), mAccessed(0), unk99(0),
+      unk9a(0), mSubDir(bbb), unk9c(dir2), mProxyDir(this) {
     if (dir) {
         mDeleteSelf = true;
         mProxyName = dir->Name();
@@ -77,7 +77,7 @@ DirLoader::~DirLoader() {
         Cleanup(nullptr);
     } else if (mDir) {
         mDir->SetLoader(nullptr);
-        if (!unk98 && !mProxyName) {
+        if (!mAccessed && !mProxyName) {
             RELEASE(mDir);
         }
     }
@@ -124,7 +124,7 @@ void DirLoader::SetCacheMode(bool mode) { sCacheMode = mode; }
 
 ObjectDir *DirLoader::GetDir() {
     MILO_ASSERT(IsLoaded(), 0x82);
-    unk98 = true;
+    mAccessed = true;
     return mDir;
 }
 
@@ -449,7 +449,7 @@ void DirLoader::Cleanup(const char *str) {
         }
         if (IsLoaded() && mDir) {
             AutoGlitchReport report(50.0f, SyncObjectsGlitchCB, mDir);
-            mDir->SetSubDirFlag(unk9b);
+            mDir->SetSubDirFlag(mSubDir);
             mDir->SyncObjects();
             mDir->SetSubDirFlag(false);
         }

@@ -30,10 +30,10 @@ extern HeadsetConfig lbl_82F474C8;
 #pragma region MicXbox
 
 MicXbox::MicXbox(int, float volume)
-    : unkd(false), unk10(0), mChangeNotify(false), unk18(0), unk301c(unk1c),
+    : mRunning(false), unk10(0), mChangeNotify(false), mPlaybackVoice(0), unk301c(unk1c),
       unk9054(1.0f), unk9058(0), unk905c(0), unk9060(0), mVolume(volume), mMute(false),
       unk906c(0), mGain(1.0f), mOutputGain(1.0f), mSensitivity(1.0f), unk907c(0),
-      mDroppedSamples(0), unk90c4("generic_usb"), mClipping(false) {
+      mDroppedSamples(0), mDeviceName("generic_usb"), mClipping(false) {
     unk302c.Init(0xc00);
     unk3040.Init(0x6000);
     unk3020.reserve(0x1800);
@@ -41,11 +41,11 @@ MicXbox::MicXbox(int, float volume)
 }
 
 MicXbox::~MicXbox() {
-    if (unkd)
+    if (mRunning)
         Stop();
-    if (unk18)
-        delete unk18;
-    unk18 = 0;
+    if (mPlaybackVoice)
+        delete mPlaybackVoice;
+    mPlaybackVoice = 0;
 }
 
 bool MicXbox::GetClipping() const { return mClipping; }
@@ -79,23 +79,23 @@ void MicXbox::SetChangeNotify(bool b) { mChangeNotify = b; }
 
 void MicXbox::SetMute(bool b) { mMute = b; }
 
-bool MicXbox::IsPlaying() { return unk18; }
+bool MicXbox::IsPlaying() { return mPlaybackVoice; }
 
 void MicXbox::Start() {
-    if (!unkd) {
+    if (!mRunning) {
         unk301c = unk1c;
         MicManagerXbox *x = MicManagerXbox::GetInstance();
         x->AddMic(this);
-        unkd = true;
+        mRunning = true;
     }
 }
 
 void MicXbox::Stop() {
-    if (unkd) {
+    if (mRunning) {
         MicManagerXbox *x = MicManagerXbox::GetInstance();
         x->RemoveMic(this);
-        unkd = false;
-        if (unk18) {
+        mRunning = false;
+        if (mPlaybackVoice) {
             StopPlayback();
         }
     }
@@ -103,21 +103,21 @@ void MicXbox::Stop() {
 
 void MicXbox::OnMicConnected(unsigned long ul, bool b, Symbol const &s) {
     unkc = b;
-    unk90c4 = s;
+    mDeviceName = s;
     MicManagerXbox *x = MicManagerXbox::GetInstance();
-    x->unk30 = true;
+    x->mMicsChanged = true;
 }
 
 void MicXbox::OnMicDisconnected() {
     MicManagerXbox *x = MicManagerXbox::GetInstance();
-    x->unk30 = true;
+    x->mMicsChanged = true;
 }
 
 #pragma endregion MicXbox
 #pragma region MicManagerXbox
 
 MicManagerXbox::MicManagerXbox()
-    : unk18(-1), unk1c(0), unk2c(0), unk30(false), unk88(-1) {
+    : unk18(-1), unk1c(0), unk2c(0), mMicsChanged(false), mPushToTalkPad(-1) {
     for (int i = 0; i < 4; i++) {
         unkc.push_back(0);
     }
@@ -146,9 +146,9 @@ void MicManagerXbox::RequirePushToTalk(bool b, int pad) {
     unk68.Enter();
     if (b) {
         MILO_ASSERT(pad >= 0, 0x2c7);
-        unk88 = pad;
+        mPushToTalkPad = pad;
     } else {
-        unk88 = -1;
+        mPushToTalkPad = -1;
     }
 
     unk68.Exit();

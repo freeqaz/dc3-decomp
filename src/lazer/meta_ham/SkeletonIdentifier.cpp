@@ -69,8 +69,9 @@ bool SkeletonIdentifier::EnrolledPlayer::UpdatePlayerBinding() {
 }
 
 SkeletonIdentifier::SkeletonIdentifier()
-    : mIdentityStatus(kIdentityStatus_None), unk30(-1), unk34(-1), unk38(-1), unk3c(-1),
-      unk40(-1), unk44(-1), mDrawDebug(false) {
+    : mIdentityStatus(kIdentityStatus_None), mTrackingSkelIndex(-1), mIdentifyingPlayerIndex(-1),
+      mWaitingPlayerIndex(-1), mCorrectingPlayerIndex(-1), mCorrectionTrackingID(-1),
+      mIdentificationTimeout(-1), mDrawDebug(false) {
     TheSkeletonIdentifier = this;
 }
 
@@ -103,8 +104,8 @@ void SkeletonIdentifier::SetEnrolling() {
 void SkeletonIdentifier::CorrectIdentity(int i) {
     Skeleton *skel = TheGestureMgr->GetActiveSkeleton();
     if (skel) {
-        unk3c = i;
-        unk40 = skel->TrackingID();
+        mCorrectingPlayerIndex = i;
+        mCorrectionTrackingID = skel->TrackingID();
     }
 }
 
@@ -121,7 +122,7 @@ void SkeletonIdentifier::SearchForIdentity() {
     if (TheGestureMgr->IDEnabled()) {
         MILO_ASSERT(mIdentityStatus == kIdentityStatus_Identifying, 0x81);
         if (!GestureMgr::sIdentityOpInProgress) {
-            Skeleton &skel = TheGestureMgr->GetSkeleton(unk30);
+            Skeleton &skel = TheGestureMgr->GetSkeleton(mTrackingSkelIndex);
             if (skel.IsTracked()) {
                 TheGestureMgr->AddSink(this, "skeleton_identified");
                 skel.RequestIdentity();
@@ -135,12 +136,12 @@ void SkeletonIdentifier::SearchForIdentity() {
 
 IdentityStatus SkeletonIdentifier::GetIdentityStatus(int i) {
     if (mIdentityStatus != kIdentityStatus_None) {
-        Skeleton &skel = TheGestureMgr->GetSkeleton(unk30);
+        Skeleton &skel = TheGestureMgr->GetSkeleton(mTrackingSkelIndex);
         if (!skel.IsTracked()) {
             mIdentityStatus = kIdentityStatus_None;
         }
     }
-    if (unk34 == i) {
+    if (mIdentifyingPlayerIndex == i) {
         return mIdentityStatus;
     } else
         return kIdentityStatus_None;
@@ -234,7 +235,7 @@ void SkeletonIdentifier::UpdateEnrolledPlayers() {
             unk48[i].unk4 = gNullStr;
         } else {
             unk48[i].mPadNum = info.dwUserIndex;
-            if (mIdentityStatus == 4 && unk38 == i) {
+            if (mIdentityStatus == 4 && mWaitingPlayerIndex == i) {
                 if (IsAssociatedWithProfile(i)) {
                     mIdentityStatus = kIdentityStatus_None;
                 }
@@ -251,25 +252,25 @@ void SkeletonIdentifier::Poll() {
         if (mIdentityStatus == kIdentityStatus_Identifying) {
             SearchForIdentity();
         } else {
-            Skeleton *skeleton = TheGestureMgr->GetSkeletonByTrackingID(unk40);
+            Skeleton *skeleton = TheGestureMgr->GetSkeletonByTrackingID(mCorrectionTrackingID);
             if (skeleton) {
-                if (skeleton->EnrollIdentity(unk3c)) {
+                if (skeleton->EnrollIdentity(mCorrectingPlayerIndex)) {
                     mIdentityStatus = (IdentityStatus)3;
                     SetEnrolling();
                 } else {
                     mIdentityStatus = (IdentityStatus)0;
                 }
-                unk40 = -1;
-                unk3c = -1;
+                mCorrectionTrackingID = -1;
+                mCorrectingPlayerIndex = -1;
             } else if (!GestureMgr::sIdentityOpInProgress) {
                 for (int i = 0; i < NUM_SKELETONS; i++) {
                     Skeleton &skeleton = TheGestureMgr->GetSkeleton(i);
                     int player = TheGameData->GetPlayerFromSkeleton(skeleton);
                     if (skeleton.IsTracked() && skeleton.IsValid()
-                        && skeleton.NeedIdentify() && skeleton.TrackingID() != unk44
+                        && skeleton.NeedIdentify() && skeleton.TrackingID() != mIdentificationTimeout
                         && player >= 0 && mIdentityStatus == (IdentityStatus)0) {
-                        unk30 = i;
-                        unk34 = player;
+                        mTrackingSkelIndex = i;
+                        mIdentifyingPlayerIndex = player;
                         RequestIdentity();
                         break;
                     }

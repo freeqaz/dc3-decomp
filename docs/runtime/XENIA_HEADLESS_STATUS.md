@@ -156,20 +156,101 @@ These are debug-mode overlay paths for dev kit workflows. The game handles the f
 
 Each xenia run creates `xenia_code_cache_*` and `xenia_memory_*` in `/dev/shm`. Never cleaned up. Can fill 38GB+ → SIGBUS on next launch. Periodically run: `rm -f /dev/shm/xenia_*`
 
-### Decomp XEX: BOOTS TO MAIN LOOP (2026-02-20)
+### Decomp XEX: PAST CRT INIT, CRASHES IN GAME INIT (2026-02-21)
 
-The decomp-linked PE (`build/373307D9/default.exe`) packaged as XEX via `build_xex.py` boots in xenia-headless:
+The decomp-linked PE (`build/373307D9/default.exe`) packaged as XEX via `build_xex.py` boots in xenia-headless, completes CRT startup, and crashes during game initialization code.
 
 - **All imports resolved**: xam 159 (100%), xboxkrnl 196 (100%), xbdm 5 (100%)
 - **334 vars + 323 thunks** mapped from our PE, 50 stubs for unmapped overlapping ordinals
 - **NUI patching**: 60/60 functions patched
-- **Boot progress**: CRT init → thread creation → main loop entry → hangs at `RtlEnterCriticalSection` (LR=0x830DBFC8)
-- **Hang root cause**: CRT initialization deadlock, likely critical section not initialized or held by a thread that never completes
+- **CRT init**: COMPLETE — RtlEnterCS=99 balanced with 99 leaves, 2 CS inits
+- **Stack**: Healthy — ~100KB used of 1024KB
+- **Crash**: Guest PC=0x8362906C (game init code, SIGSEGV writing to RODATA section)
+- **Emulator catch**: Working — crash dump printed, thread suspended, no infinite loop
+
+**CRT init fixes applied** (4 root causes resolved):
+1. **CS wait_list corruption**: `xeRtlInitializeCriticalSection` didn't init `wait_list_flink`/`blink`. `StashHandle()` wrote `kXObjSignature` (0x58454E00) into these fields, corrupting `XapiThreadNotifyHead` list. Fixed: initialize as empty circular list.
+2. **Thread notify stubs**: Stubbed `XapiCallThreadNotifyRoutines` at both call sites (0x830DBC18, 0x830DBC88) with `li r3, 0; blr`.
+3. **NUI patch adjacency bug**: NUI patch at 0x82A24AB0 corrupted adjacent function at 0x82A24A98, causing infinite recursion. Fixed: stub 0x82A24A98 independently.
+4. **Stack size**: Increased from 256KB (XEX default) to 1024KB.
+
+**Linux platform fixes** (2 critical bugs resolved):
+1. **QueryProtect stub**: `memory::QueryProtect` always returned false. MMIO handler used uninitialized data, caused SIGSEGV retry loops. Fixed: parse `/proc/self/maps`.
+2. **Unhandled SIGSEGV infinite loop**: Signal handler returned without action when no handler matched, causing instruction retry loop. Fixed: restore original handler for proper crash.
 
 **Import resolution fixes** (2026-02-20):
 1. **Ordinal prefix stripping**: Original XEX uses prefixed ordinals (xam=0x0XXXX, xboxkrnl=0x1XXXX, xbdm=0x2XXXX). Our PE has plain ordinals (1-2500). Strip prefix: `real_ordinal = prefixed_ordinal & 0xFFFF`
 2. **IAT grouping**: Thunk IAT addresses are contiguous per library. Group by proximity, assign to libraries by unique ordinal overlap scoring
 3. **Consumed-VA tracking**: Prevent double-mapping when overlapping ordinals (18 between xam/xboxkrnl) would assign two libraries to the same thunk VA. Second library gets a stub instead.
+
+### Decomp XEX CRT Init Investigation — RESOLVED (2026-02-21)
+
+The CRT init hang was investigated across four debugging sessions and fully resolved. The decomp XEX now boots past CRT init and reaches game initialization code.
+
+#### Root Causes Found and Fixed (4 Total)
+
+1. **CS wait_list corruption** (Sessions 2-3): `xeRtlInitializeCriticalSection` didn't initialize `wait_list_flink`/`blink`. `StashHandle()` wrote `kXObjSignature` (0x58454E00 = "XEN\0") into these fields, corrupting `XapiThreadNotifyHead` list. **Fix**: Initialize as self-referential empty circular list.
+
+2. **Thread notify functions** (Session 3): Stubbed `XapiCallThreadNotifyRoutines` at 0x830DBC18 and 0x830DBC88 with `li r3, 0; blr` since the notify list was corrupted and these aren't essential for boot.
+
+3. **NUI patch adjacency infinite recursion** (Session 3): NUI patch at 0x82A24AB0 (`NuiSpeechEmulateRecognition`) wrote `blr` into the body of adjacent function at 0x82A24A98. The function's `bl __savegprlr` set LR inside itself; the patched `blr` returned to that LR → infinite recursion → stack overflow regardless of stack size. **Fix**: Stub 0x82A24A98 independently in NUI patch table.
+
+4. **Stack size** (Session 3): Increased from 256KB (XEX default) to 1024KB.
+
+Additionally, **two critical Linux platform bugs** were blocking progress:
+
+5. **QueryProtect stub** (Session 4): `memory::QueryProtect()` on Linux always returned false. MMIO handler used uninitialized `cur_access`, returned true ("handled") without fixing anything → SIGSEGV retry loop. **Fix**: Parse `/proc/self/maps` for page permissions + check return value in MMIO handler.
+
+6. **Unhandled SIGSEGV infinite loop** (Session 4): Signal handler returned without action when no handler matched → instruction retried → infinite signal loop. **Fix**: Restore original handler; next retry produces proper crash/core dump.
+
+#### Current State (Run 25)
+
+| Metric | Value |
+|--------|-------|
+| RtlEnterCriticalSection calls | 99 (balanced with 99 leaves) |
+| SIGSEGV total | 1 (properly handled) |
+| Stack usage | ~100KB of 1024KB |
+| Crash PC | 0x8362906C (game init, past CRT) |
+| Crash type | SIGSEGV writing to RODATA section (0x82000000) |
+| Thread state | Properly suspended by emulator crash handler |
+
+#### JIT Architecture Reference (Retained for Future Debugging)
+
+When guest code executes `bl <thunk_addr>`:
+```
+JIT compiles as:
+  mov(ebx, thunk_addr)     // guest address = index into indirection table
+  mov(eax, dword[ebx])     // load compiled code addr (or resolve thunk)
+  call(rax)                // dispatch
+
+First call → resolve thunk → ResolveFunction() → compile → update table
+sc 2 inside thunk → CallExtern() → extern_handler()
+```
+
+Indirection table at host address 0x80000000, 512MB. Guest addresses are direct indices. `CommitExecutableRange()` fills with resolve thunk; `PlaceGuestCode()` updates with compiled address.
+
+#### Next Steps
+
+Investigate guest crash at PC=0x8362906C:
+- Determine if it's a decomp code issue (writing to RODATA) or section permissions mismatch
+- Check if the original XEX has the same section writable
+- May need to adjust section permissions in `build_xex.py`
+
+### Linux Platform Audit (2026-02-21)
+
+Comprehensive audit of xenia's Linux support identified several stubs and incomplete implementations. Two critical issues were fixed this session; remaining issues are documented for awareness.
+
+| Severity | Issue | File | Status |
+|----------|-------|------|--------|
+| CRITICAL | `QueryProtect()` always returns false | `memory_posix.cc` | **FIXED** — parses `/proc/self/maps` |
+| CRITICAL | Unhandled SIGSEGV infinite loop | `exception_handler_posix.cc` | **FIXED** — restores original handler |
+| CRITICAL | `AlertableSleep()` not alertable | `threading_posix.cc` | Open — I/O callbacks won't interrupt sleep |
+| HIGH | `StackWalker::Create()` returns nullptr | `stack_walker_posix.cc` | Open — no stack traces |
+| HIGH | `LookupUnwindInfo()` returns nullptr | `x64_code_cache_posix.cc` | Open — JIT exception unwinding broken |
+| HIGH | `ChunkedMappedMemoryWriter` returns nullptr | `mapped_memory_posix.cc` | Open — trace recording disabled |
+| HIGH | `WaitMultiple()` deadlock risk (#1677) | `threading_posix.cc` | Open — intermittent with thread suspend |
+
+Full audit details in xenia's `docs/DC3_HEADLESS_CHANGE_AUDIT_2026-02-20.md`.
 
 ### Other Limitations
 

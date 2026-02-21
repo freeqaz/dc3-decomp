@@ -4,8 +4,8 @@
 #include "os/Debug.h"
 
 FlowSequence::FlowSequence()
-    : mItr(nullptr), mLooping(0), mRepeats(0), unk68(0), mStopMode(kStopImmediate),
-      unk70(0) {}
+    : mItr(nullptr), mLooping(0), mRepeats(0), mRepeatCount(0), mStopMode(kStopImmediate),
+      mIsAdvancing(0) {}
 
 FlowSequence::~FlowSequence() {}
 
@@ -56,7 +56,7 @@ void FlowSequence::ChildFinished(FlowNode *node) {
     );
     mRunningNodes.remove(node);
     MILO_ASSERT(mRunningNodes.empty(), 0x74);
-    if (unk70)
+    if (mIsAdvancing)
         return;
     if (unk58) {
         unk58 = false;
@@ -68,22 +68,22 @@ void FlowSequence::ChildFinished(FlowNode *node) {
         ++mItr;
     }
     FLOW_LOG("Advancing sequence\n");
-    unk70 = true;
+    mIsAdvancing = true;
     while (mItr != mChildNodes.end()) {
         ActivateChild(mItr->Obj());
         if (unk58 || !mRunningNodes.empty())
             break;
         ++mItr;
     }
-    unk70 = false;
+    mIsAdvancing = false;
     if (!unk58 || !mRunningNodes.empty()) {
         if (mItr != mChildNodes.end())
             goto ret;
-        if (!mLooping && unk68 >= mRepeats - 1) {
+        if (!mLooping && mRepeatCount >= mRepeats - 1) {
             MILO_ASSERT(mRunningNodes.empty(), 0xA1);
             FLOW_LOG("Releasing\n");
         } else if (Activate()) {
-            unk68++;
+            mRepeatCount++;
             goto ret;
         }
     }

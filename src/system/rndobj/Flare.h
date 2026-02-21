@@ -39,8 +39,8 @@ public:
     bool GetPointTest() const { return mPointTest; }
     bool GetAreaTest() const { return mAreaTest; }
     Hmx::Rect &GetArea() { return mArea; }
-    void SetOcclusionResult(float f) { unk144 = f; }
-    void SetOcclusionReady(bool b) { unk148 = b; }
+    void SetOcclusionResult(float f) { mOcclusionResult = f; }
+    void SetOcclusionReady(bool b) { mOcclusionReady = b; }
 
 protected:
     RndFlare();
@@ -63,9 +63,9 @@ protected:
     int mSteps; // 0x12c
     int mStep; // 0x130
     Hmx::Rect mArea; // 0x134
-    float unk144; // 0x144
-    bool unk148; // 0x148
-    bool unk149; // 0x149
+    float mOcclusionResult; // 0x144
+    bool mOcclusionReady; // 0x148
+    bool mOcclusionPending; // 0x149
     Hmx::Matrix3 mMatrix; // 0x14c
-    Vector2 unk17c; // 0x17c
+    Vector2 mScaleFactors; // 0x17c
 };

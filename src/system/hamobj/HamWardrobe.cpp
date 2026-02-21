@@ -19,7 +19,7 @@ HamWardrobe *TheHamWardrobe;
 
 HamWardrobe::HamWardrobe()
     : mCrowdMembers(this), mMainCharacters(this, (EraseMode)1, kObjListAllowNull),
-      unk34("medium"), unk38(0), unk3c(gNullStr), unk40(0) {
+      unk34("medium"), mCrowdOverrideActive(0), mForcedCrowdAnimation(gNullStr), mCrowdAnimationFlags(0) {
     static DataNode &n = DataVariable("hamwardrobe");
     if (TheHamWardrobe) {
         MILO_NOTIFY("Trying to make > 1 HamWardrobe, which should be single");
@@ -46,7 +46,7 @@ BEGIN_HANDLERS(HamWardrobe)
     HANDLE_EXPR(get_character, GetCharacter(_msg->Int(2)))
     HANDLE_EXPR(get_backup, GetBackup(_msg->Int(2)))
     HANDLE(add_crowd, OnAddCrowd)
-    HANDLE_ACTION(set_force_character, unk48 = _msg->Sym(2))
+    HANDLE_ACTION(set_force_character, mForcedCharacter = _msg->Sym(2))
     HANDLE_ACTION(crowd, PlayCrowdAnimation(_msg->Sym(2), 1, false))
     HANDLE_ACTION(crowd_end_override, EndCrowdOverride())
     HANDLE_ACTION(crowd_force_state_enable, ForceCrowdAnimationStart(_msg->Sym(2)))
@@ -90,8 +90,8 @@ BEGIN_COPYS(HamWardrobe)
 END_COPYS
 
 void HamWardrobe::SetBackupOverrideOutfits(Symbol s1, Symbol s2) {
-    unk4c[0] = s1;
-    unk4c[1] = s2;
+    mBackupOutfitOverrides[0] = s1;
+    mBackupOutfitOverrides[1] = s2;
 }
 
 namespace {
@@ -112,7 +112,7 @@ namespace {
 
 Symbol HamWardrobe::GetBackupOutfitOverride(int x) {
     if (x >= 0 && x < 2) {
-        return unk4c[x];
+        return mBackupOutfitOverrides[x];
     } else
         return gNullStr;
 }
@@ -172,42 +172,42 @@ HamCharacter *HamWardrobe::GetBackup(int i) const {
 }
 
 void HamWardrobe::EndCrowdOverride() {
-    if (unk38) {
-        if (unk3c == gNullStr) {
-            unk38 = false;
-            int flags = unk40;
-            if (unk40 & 2) {
+    if (mCrowdOverrideActive) {
+        if (mForcedCrowdAnimation == gNullStr) {
+            mCrowdOverrideActive = false;
+            int flags = mCrowdAnimationFlags;
+            if (mCrowdAnimationFlags & 2) {
                 // If flag 1 is set, clear bits 0-1 and set bit 0
-                flags = (unk40 & ~3) | 1;
+                flags = (mCrowdAnimationFlags & ~3) | 1;
             }
-            PlayCrowdAnimation(unk44, flags, false);
+            PlayCrowdAnimation(mPreviousCrowdAnimation, flags, false);
         }
     }
 }
 
 void HamWardrobe::ForceCrowdAnimationEnd() {
-    unk3c = gNullStr;
+    mForcedCrowdAnimation = gNullStr;
     EndCrowdOverride();
 }
 
 void HamWardrobe::ForceCrowdAnimationStart(Symbol s) {
     static Symbol none("none");
-    if (s == gNullStr || s == none || s == unk3c) {
-        if (unk3c != gNullStr) {
+    if (s == gNullStr || s == none || s == mForcedCrowdAnimation) {
+        if (mForcedCrowdAnimation != gNullStr) {
             ForceCrowdAnimationEnd();
         }
     } else {
         MILO_LOG(
             "HamWardrobe::ForceCrowdAnimationStart: %s : current mCrowdForceState = '%s'\n",
             s.Str(),
-            unk3c.Str()
+            mForcedCrowdAnimation.Str()
         );
-        unk3c = gNullStr;
+        mForcedCrowdAnimation = gNullStr;
         PlayCrowdAnimation(s, 1, true);
-        unk3c = s;
+        mForcedCrowdAnimation = s;
         static Symbol none2("none");
         if (s == none2) {
-            unk3c = gNullStr;
+            mForcedCrowdAnimation = gNullStr;
         }
     }
 }
@@ -259,8 +259,8 @@ void HamWardrobe::ClearCrowdClips() { LoadCrowdClips(gNullStr, gNullStr, false);
 
 void HamWardrobe::ClearCrowd() {
     mCrowdMembers.clear();
-    unk3c = gNullStr;
-    unk38 = false;
+    mForcedCrowdAnimation = gNullStr;
+    mCrowdOverrideActive = false;
 }
 
 void HamWardrobe::SyncInterestObjects(ObjectDir *dir) {

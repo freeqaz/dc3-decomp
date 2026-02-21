@@ -142,7 +142,7 @@ int FileCacheFile::Seek(int offset, int whence) {
 #pragma region FileCache
 
 FileCache::FileCache(int size, LoaderPos lp, bool b1, bool b2)
-    : mMaxSize(size), mTryClear(0), unk14(lp), unk18(b1), unk19(b2) {
+    : mMaxSize(size), mTryClear(0), mLoaderPos(lp), unk18(b1), unk19(b2) {
     gCaches.push_back(this);
     mEntries.reserve(0x200);
 }

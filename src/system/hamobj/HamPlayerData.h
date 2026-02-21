@@ -44,25 +44,25 @@ public:
     void AssignSkeleton(int id) { SetSkeletonTrackingID(id); }
     int PadNum() const { return mPadNum; }
     bool IsAutoplaying() const { return !mAutoplay.Null(); }
-    void SetUnk48(Symbol s) { unk48 = s; }
-    Symbol Unk48() const { return unk48; }
+    void SetMiniGameCharacter(Symbol s) { mMiniGameCharacter = s; }
+    Symbol MiniGameCharacter() const { return mMiniGameCharacter; }
     void SetAutoplay(Symbol s) { mAutoplay = s; }
-    const String &Unk2c() const { return unk2c; }
+    const String &CurrentDancer() const { return mCurrentDancer; }
 
 private:
     void SetSkeletonTrackingID(int);
 
 protected:
-    String unk2c; // 0x2c - current dancer?
-    std::vector<String> unk34; // 0x34 - dancers?
-    int unk40; // 0x40 - character index in the big char array?
+    String mCurrentDancer; // 0x2c - set from available dancers list front
+    std::vector<String> mAvailableDancers; // 0x34 - populated from dancer data
+    int mPlayerIndex; // 0x40 - initialized from constructor parameter
     Symbol mChar; // 0x44
-    Symbol unk48; // 0x48
+    Symbol mMiniGameCharacter; // 0x48
     Symbol mPreferredOutfit; // 0x4c
     Symbol mOutfit; // 0x50
     Symbol mCrew; // 0x54
     Difficulty mDifficulty; // 0x58
-    float unk5c; // 0x5c
+    float mSkeletonTrackingStartTime; // 0x5c - initialized to -1, time tracking started
     int mSkeletonTrackingID; // 0x60
     Symbol mAutoplay; // 0x64
     ObjPtr<PropertyEventProvider> mProvider; // 0x68

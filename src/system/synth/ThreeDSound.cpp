@@ -15,7 +15,7 @@ namespace {
 }
 
 ThreeDSound::ThreeDSound()
-    : unk194(0), unk195(0), unk198(0), unk19c(0), unk1a0(0), unk1a4(0), unk1a8(0),
+    : mIsLooping(0), unk195(0), mDelayedVolume(0), mDelayedPan(0), mDelayedTranspose(0), unk1a4(0), mDelayMs(0),
       mFalloffType(kEaseLinear), mFalloffParameter(2), mMinFalloffDistance(10),
       mSilenceDistance(100), mDopplerEnabled(1), mPanEnabled(1), mShape(0), mRadius(10),
       unk20c(100), unk210(0), mDopplerPower(1), mStartedPlaying(0) {
@@ -168,29 +168,29 @@ void ThreeDSound::Play(
 ) {
     mStartedPlaying = true;
     if (mLoop && !unk195) {
-        unk198 = volume;
+        mDelayedVolume = volume;
         unk1a4 = o4;
-        unk19c = pan;
-        unk194 = true;
-        unk1a0 = transpose;
-        unk1a8 = delayMs;
+        mDelayedPan = pan;
+        mIsLooping = true;
+        mDelayedTranspose = transpose;
+        mDelayMs = delayMs;
     } else {
         Sound::Play(volume, pan, transpose, o4, delayMs);
     }
 }
 
 void ThreeDSound::Stop(Hmx::Object *obj, bool b2) {
-    unk194 = false;
+    mIsLooping = false;
     Sound::Stop(obj, b2);
 }
 
 bool ThreeDSound::IsPlaying() const {
-    return !unk194 && (!mSamples.empty() || !mDelayArgs.empty());
+    return !mIsLooping && (!mSamples.empty() || !mDelayArgs.empty());
 }
 
-void ThreeDSound::SaveWorldXfm() { unk1cc = WorldXfm(); }
+void ThreeDSound::SaveWorldXfm() { mSavedWorldTransform = WorldXfm(); }
 
-bool ThreeDSound::HasMoved() { return WorldXfm() != unk1cc; }
+bool ThreeDSound::HasMoved() { return WorldXfm() != mSavedWorldTransform; }
 
 void ThreeDSound::EnablePan(bool enable) {
     unk1c8->SetPan(0);
@@ -198,7 +198,7 @@ void ThreeDSound::EnablePan(bool enable) {
     BroadcastPropertyChange("fader_pan");
 }
 
-void ThreeDSound::GetVelocity(Vector3 &vel) { Subtract(WorldXfm().v, unk1cc.v, vel); }
+void ThreeDSound::GetVelocity(Vector3 &vel) { Subtract(WorldXfm().v, mSavedWorldTransform.v, vel); }
 
 void ThreeDSound::SetAngle(float radians) {
     MILO_ASSERT(radians >= -PI && radians <= PI, 0x191);

@@ -59,8 +59,8 @@ private:
     Symbol mTrackName; // 0x58
     Symbol mSongName; // 0x5c
     std::vector<Symbol> mTrackNames; // 0x60
-    bool unk6c; // 0x6c
-    bool unk6d; // 0x6d
+    bool mWarnUnnamedTracks; // 0x6c
+    bool mPlaybackEnabled; // 0x6d
 };
 
 extern MidiParserMgr *TheMidiParserMgr;

@@ -49,26 +49,26 @@ public:
     void HandleNetCacheLoaderFailure(int);
     void MultipleItemsCheckout(std::list<StoreOffer *> *);
 
-    std::vector<StoreOffer *> unk38;
-    std::vector<StoreOffer *> unk44;
-    bool unk50;
+    std::vector<StoreOffer *> mOffers;
+    std::vector<StoreOffer *> mPendingOffers;
+    bool mNeedsCacheLoad;
     bool mLoadOk; // 0x51
-    bool unk52;
-    std::list<NetCacheLoader *> unk54;
-    int unk5c;
-    RndTex *unk60;
+    bool mShowTestOffers;
+    std::list<NetCacheLoader *> mNetCacheLoaders;
+    int mArtLoader;
+    RndTex *mAlbumTex;
     UIPanel *mPendingArtCallback; // 0x64
-    int unk68;
+    int mEnumJobID;
     StorePreviewMgr *mStorePreviewMgr; // 0x6c
-    bool unk70;
+    bool mNeedsReEnum;
     StorePurchaser *mPurchaser; // 0x74
-    StorePurchaseable *unk78;
-    int unk7c;
-    std::vector<StoreOffer *> unk80;
-    Symbol unk8c;
-    Symbol unk90;
+    StorePurchaseable *mCheckoutItem;
+    int mCheckoutProfile;
+    std::vector<StoreOffer *> mCartOffers;
+    Symbol mPurchaseSource;
+    Symbol mBackupPurchaseSource;
     int unk94;
-    Job *unk98;
+    Job *mPostPurchaseJob;
 
 protected:
     // UIPanel

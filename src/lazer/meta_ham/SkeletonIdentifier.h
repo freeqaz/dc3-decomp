@@ -62,12 +62,12 @@ private:
     DataNode OnMsg(const SkeletonIdentifiedMsg &);
 
     IdentityStatus mIdentityStatus; // 0x2c
-    int unk30; // 0x30 - skeleton idx
-    int unk34; // 0x34 - player from skeleton
-    int unk38;
-    int unk3c;
-    int unk40; // 0x40 - skeleton tracking id
-    int unk44;
+    int mTrackingSkelIndex; // 0x30 - skeleton idx
+    int mIdentifyingPlayerIndex; // 0x34 - player from skeleton
+    int mWaitingPlayerIndex; // 0x38
+    int mCorrectingPlayerIndex; // 0x3c
+    int mCorrectionTrackingID; // 0x40 - skeleton tracking id
+    int mIdentificationTimeout; // 0x44
     EnrolledPlayer unk48[8];
     bool mDrawDebug; // 0xc8
 };

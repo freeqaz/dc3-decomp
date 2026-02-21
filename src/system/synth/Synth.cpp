@@ -309,7 +309,7 @@ void Synth::SetMic(const DataArray *data) {
 }
 
 bool Synth::CheckCommonBank(bool notify) {
-    bool loaded = unk64 && unk64.IsLoaded();
+    bool loaded = mCommonBank && mCommonBank.IsLoaded();
     if (!loaded && notify) {
         MILO_LOG("Synth::Find() - Common sound bank not loaded!\n");
     }
@@ -356,7 +356,7 @@ void Synth::RunFlow(const char *flowName) {
             flow->Activate();
         } else {
             MILO_NOTIFY(
-                "Synth::RunFlow() - %s not found in %s", flowName, unk64->GetPathName()
+                "Synth::RunFlow() - %s not found in %s", flowName, mCommonBank->GetPathName()
             );
         }
     }
@@ -393,7 +393,7 @@ void Synth::PlaySound(const char *name, float f1, float f2, float f3) {
             MILO_NOTIFY(
                 "Synth::PlaySound() - Sound %s not found in %s",
                 name,
-                unk64->GetPathName()
+                mCommonBank->GetPathName()
             );
         }
     }
@@ -443,7 +443,7 @@ DataNode Synth::OnPassthrough(DataArray *a) {
             obj->Handle(a, true);
         else
             MILO_NOTIFY(
-                "Synth::OnPassthrough() - %s not found in %s", name, unk64->GetPathName()
+                "Synth::OnPassthrough() - %s not found in %s", name, mCommonBank->GetPathName()
             );
         return 0;
     }

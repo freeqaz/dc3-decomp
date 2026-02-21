@@ -27,7 +27,7 @@ public:
     void Poll();
 
     DataNode OnGetJointDepthPos(const DataArray *);
-    int Unk3C() { return unk3c; }
+    int GetActivePlayerIndex() { return mActivePlayerIndex; }
 
 private:
     void SwitchActiveToPlayerIndexImmediate(int);
@@ -67,16 +67,16 @@ private:
     void SetPlayerSkeletonWarningData(int, int);
 
 protected:
-    DirectionGestureFilterSingleUser *unk2c;
-    DirectionGestureFilterSingleUser *unk30;
+    DirectionGestureFilterSingleUser *mRightDirFilter;
+    DirectionGestureFilterSingleUser *mLeftDirFilter;
     bool mDrawDebug; // 0x34
-    int unk38;
-    int unk3c; // 0x3c - current player index?
-    float unk40;
-    float unk44;
+    int mPendingPlayerSwitchIndex; // 0x38
+    int mActivePlayerIndex; // 0x3c
+    float mSwitchTimer; // 0x40
+    float mSwitchDelay; // 0x44
     bool unk48;
-    HandRaisedGestureFilter *unk4c[6]; // 0x4c
-    StandingStillGestureFilter *unk64[6]; // 0x64
+    HandRaisedGestureFilter *mSkeletonHandRaisedFilters[6]; // 0x4c
+    StandingStillGestureFilter *mSkeletonStandingStillFilters[6]; // 0x64
     HighFiveGestureFilter *unk7c; // 0x7c
     float unk80;
     float unk84;
@@ -86,7 +86,7 @@ protected:
     int mNextSkelIdxToTrack; // 0x94
     HandRaisedGestureFilter *mHandRaisedFilters[2]; // 0x98
     bool mInMultiPlayerUpdateMode; // 0xa0
-    int unka4[6];
+    int mSkeletonHandRaisedState[6];
     int unkbc;
     bool mEnrollmentLocked; // 0xc0
 };

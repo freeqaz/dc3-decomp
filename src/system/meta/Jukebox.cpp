@@ -3,7 +3,7 @@
 #include "os/Debug.h"
 #include <algorithm>
 
-Jukebox::Jukebox(int numItems) : unkc(0) { mJukeboxItems.reserve(numItems); }
+Jukebox::Jukebox(int numItems) : mPlayCounter(0) { mJukeboxItems.reserve(numItems); }
 
 void Jukebox::AddItem(int i1, int i2) {
     JukeboxItem item(i1, i2);
@@ -28,16 +28,16 @@ int Jukebox::Pick(const std::vector<int> &valid_names) {
         items.push_back(*jit);
     }
     std::random_shuffle(items.begin(), items.end());
-    return items[RandomInt(0, items.size())].unk0;
+    return items[RandomInt(0, items.size())].mName;
 }
 
 void Jukebox::Play(int x) {
     std::vector<JukeboxItem>::iterator jit =
         std::find(mJukeboxItems.begin(), mJukeboxItems.end(), x);
     if (jit == mJukeboxItems.end()) {
-        AddItem(x, unkc);
+        AddItem(x, mPlayCounter);
     } else {
-        jit->unk4 = unkc;
+        jit->mLastPlayed = mPlayCounter;
     }
-    unkc++;
+    mPlayCounter++;
 }

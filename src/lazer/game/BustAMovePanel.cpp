@@ -77,10 +77,10 @@ namespace {
 }
 
 BustAMovePanel::BustAMovePanel()
-    : mRecorder(0), mBeatCount(0), unk58(-1), mMoveScore(0), mHUDPanel(0), mActivePlayer(0), mCountInLength(4), mMatchCount(0),
+    : mRecorder(0), mBeatCount(0), mRecordSkelIdx(-1), mMoveScore(0), mHUDPanel(0), mActivePlayer(0), mCountInLength(4), mMatchCount(0),
       mPendingState(10), mRecordScore(0), mCreatorSide(1), mCaptureStep(0), mCaptureTimer(0), mCaptureFrames(0), mLoopStartBeat(-1),
       mLoopEndBeat(-1), mFailureEndBeat(-1), mIsMulligan(0), mRepsRemaining(0), mStreamJumped(0), mMoveNameCursor(0), mNextVOTime(FLT_MAX),
-      mNoPosesDetected(0), unk9bc(-1) {
+      mNoPosesDetected(0), mDepthBufPlayer(-1) {
     mRecorder = new FreestyleMoveRecorder();
     mRecorder->AssignStaticInstance();
 }
@@ -137,7 +137,7 @@ void BustAMovePanel::Enter() {
     mHUDPanel = 0;
     if (InBustAMove()) {
         CacheObjects();
-        unk9b8 = true;
+        mPlayIntroVO = true;
     }
 }
 
@@ -375,11 +375,11 @@ void BustAMovePanel::CacheObjects() {
         const Hmx::Color &color = gray->GetColor();
         mat->SetColor(color.red, color.green, color.blue);
     }
-    mRecorder->unk3c = MetaPerformer::Current()->GetSong();
+    mRecorder->mRecordingTarget = MetaPerformer::Current()->GetSong();
     for (int i = 0; i < 2; i++) {
         ((bool *)&mFlawlessFlags)[i] = true;
     }
-    unk9bc = -1;
+    mDepthBufPlayer = -1;
 }
 
 void BustAMovePanel::SetUpMoveNames() {
@@ -1504,9 +1504,9 @@ void BustAMovePanel::SetUpSongStructure(Symbol s) {
 
 #pragma fp_contract(off)
 void BustAMovePanel::PlayIntroVO() {
-    if (!unk9b8)
+    if (!mPlayIntroVO)
         return;
-    unk9b8 = false;
+    mPlayIntroVO = false;
     float voLength = 0.0f;
     static Symbol nar_bam_intro("nar_bam_intro");
     static Message voLengthMsg("get_seq_length", 0);
@@ -1560,7 +1560,7 @@ void BustAMovePanel::Poll() {
     int forceSkelIdx = skelIdx;
     mRecorder->mSkeletonIndex = skelIdx;
     if (mState == kBAMState_Recording || kBAMState_CountIn == mState) {
-        unk58 = skelIdx;
+        mRecordSkelIdx = skelIdx;
     }
 
     if (mState == kBAMState_Recording && mBeatCount >= 3) {
@@ -1585,7 +1585,7 @@ void BustAMovePanel::Poll() {
         mPhraseMeters[mCreatorSide]->SetRatingFrac(
             scoreSq * 1.4f, 4.0f - MsToBeat(mRecordScore * 1000.0f)
         );
-        forceSkelIdx = unk58;
+        forceSkelIdx = mRecordSkelIdx;
     } else if (mState == kBAMState_ShowMoveSequence) {
         float *scores = (float *)&mPlayerScoreLeft;
         for (int p = 0; p < 2; p++) {
@@ -1636,8 +1636,8 @@ void BustAMovePanel::Poll() {
                 it->SetPlayerPalette(blueTex);
             }
         }
-        unk9bc = -1;
-    } else if (unk9bc != activePlayer) {
+        mDepthBufPlayer = -1;
+    } else if (mDepthBufPlayer != activePlayer) {
         Symbol colorSym = GetPlayerColor(activePlayer);
         const char *texName;
         if (colorSym == "pink") {
@@ -1650,7 +1650,7 @@ void BustAMovePanel::Poll() {
              it != nullptr; ++it) {
             it->SetPlayerPalette(tex);
         }
-        unk9bc = activePlayer;
+        mDepthBufPlayer = activePlayer;
     }
 
     bool forceShow = !(mState == kBAMState_Recording || mState == kBAMState_End);

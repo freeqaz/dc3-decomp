@@ -19,11 +19,11 @@ public:
     static void Terminate();
     static void Init(SongPreview &);
 
-    std::vector<int> &GetUnk78() { return unk78; }
+    std::vector<int> &GetCalorieValues() { return mCalorieValues; }
     int GetGroupSize() const { return mGroupSize; }
 
 protected:
-    std::vector<int> unk78;
+    std::vector<int> mCalorieValues;
     int mGroupSize; // 0x84
 };
 

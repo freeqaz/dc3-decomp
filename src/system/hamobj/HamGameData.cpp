@@ -301,7 +301,7 @@ Symbol GetOutfitCharacter(Symbol outfit, bool fail) {
         return gNullStr;
 }
 
-HamGameData::HamGameData() : mPlayerSidesLocked(0), unk35(0), mPlayers(this), unk50(0) {
+HamGameData::HamGameData() : mPlayerSidesLocked(0), mInTimeyWimey(0), mPlayers(this), unk50(0) {
     GetDateAndTime(unk48);
     for (int i = 0; i < kMaxPlayers; i++) {
         mPlayers.push_back(new HamPlayerData(i));
@@ -386,7 +386,7 @@ void HamGameData::Clear() {
 
 Symbol HamGameData::Venue() const {
     static Symbol bid("bid");
-    return unk35 ? bid : mVenue;
+    return mInTimeyWimey ? bid : mVenue;
 }
 
 const DataNode *HamGameData::PlayerProp(int index, Symbol s2) const {
@@ -507,9 +507,9 @@ void HamGameData::UpdateAssociatedPads() {
 void HamGameData::AutoAssignSkeletons(const SkeletonUpdateData *data) {
     MILO_ASSERT(data, 0x259);
     for (int i = 0; i < 2; i++) {
-        if (!(int)data->unk0[i]) {
+        if (!(int)data->mSkeletonsLeft[i]) {
             for (int j = 0; j < 6; j++) {
-                Skeleton *cur = data->unk4[j];
+                Skeleton *cur = data->mSkeletonsRight[j];
                 if (cur->IsValid()) {
                     int id = cur->TrackingID();
                     bool b1;

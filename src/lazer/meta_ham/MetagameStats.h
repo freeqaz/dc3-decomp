@@ -126,6 +126,6 @@ private:
     int mCountStats[kNumCountStats]; // 0x38
     FavoriteStat mFavoriteStats[kNumFavoriteStats]; // 0x94
     DataArray *mStatsCfg; // 0x13c
-    int unk140; // 0x140 - total time played?
+    int mTotalTimePlayedMs; // 0x140
     bool mDirty; // 0x144
 };

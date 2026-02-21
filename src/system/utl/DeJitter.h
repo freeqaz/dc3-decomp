@@ -9,9 +9,9 @@ public:
     static float sTimeScale;
 
 private:
-    float unk0[0x20]; // 0x0
-    int unk80; // 0x80
-    int unk84; // 0x84
-    float unk88; // 0x88
-    float unk8c; // 0x8c
+    float mHistoryBuffer[0x20]; // 0x0
+    int mCurrentIndex; // 0x80
+    int mHistoryCount; // 0x84
+    float mFilteredDelta; // 0x88
+    float mPreviousOutput; // 0x8c
 };

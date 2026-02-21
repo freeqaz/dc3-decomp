@@ -43,9 +43,9 @@ private:
     void UnloadStreamFx();
     void UpdateMix();
 
-    bool unk2c; // 0x2c
-    bool unk2d; // 0x2d - loop?
-    float unk30; // 0x30
+    bool mPlaying; // 0x2c
+    bool mLoop; // 0x2d
+    float mElapsedTime; // 0x30
     float mFadeTime; // 0x34
     float mMuteFadeTime; // 0x38
     float mVolume; // 0x3c
@@ -53,19 +53,19 @@ private:
     Fader *mFader; // 0x44
     Fader *mFaderMute; // 0x48
     ObjPtrList<Fader> mExtraFaders; // 0x4c
-    FilePath unk60; // 0x60
+    FilePath mShellFxPath; // 0x60
     ObjDirPtr<ObjectDir> mShellFx; // 0x68
     std::vector<ObjectDir *> mStreamChanFx; // 0x7c
     bool mStarted; // 0x88
-    DataArray *unk8c; // 0x8c - pre?
-    DataArray *unk90; // 0x90 - post?
-    int unk94; // 0x94
-    bool unk98; // 0x98
+    DataArray *mPreMix; // 0x8c
+    DataArray *mPostMix; // 0x90
+    int mCrossfadeFrame; // 0x94
+    bool mRestartEnabled; // 0x98
     std::vector<int> mStartTimes; // 0x9c
-    bool unka8; // 0xa8
-    bool unka9; // 0xa9
+    bool mMuted; // 0xa8
+    bool mHasStarted; // 0xa9
     DataArraySongInfo *mSongInfo; // 0xac
-    HxMaster *unkb0; // 0xb0
+    HxMaster *mMaster; // 0xb0
 };
 
 extern MetaMusic *TheMetaMusic;

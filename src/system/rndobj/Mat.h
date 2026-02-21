@@ -177,8 +177,8 @@ protected:
     std::vector<Hmx::Color> mColorMod; // 0x210
     MatShaderOptions mShaderOptions; // 0x21c
     bool mToggleDisplayAllProps; // 0x224
-    bool unk225;
-    bool unk226;
+    bool mOwnsMetaMat; // 0x225 - whether this mat retains ownership of its MetaMaterial
+    bool mUpdatingFromMetaMat; // 0x226 - guard against re-entrant UpdatePropertiesFromMetaMat
     int mDirty; // 0x228
 };
 

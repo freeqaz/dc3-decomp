@@ -52,9 +52,9 @@ protected:
     int unk84;
     D3DSurface *mRenderTarget; // 0x88
     D3DSurface *mDepthRT; // 0x8c
-    int unk90;
-    D3DTexture *unk94[2];
-    D3DLOCKED_RECT unk9c; // 0x9c
+    int mMovieBufIdx;
+    D3DTexture *mMovieTextures[2];
+    D3DLOCKED_RECT mLockedRect; // 0x9c
     D3DSurface *unka4; // 0xa4
     int unka8;
     bool unkac;

@@ -35,7 +35,7 @@ float KerningTable::Kerning(unsigned short us1, unsigned short us2) {
 }
 
 bool KerningTable::Valid(const RndFont::KernInfo &info, RndFontBase *font) {
-    return !font || (font->CharDefined(info.unk0) && font->CharDefined(info.unk2));
+    return !font || (font->CharDefined(info.mFirstChar) && font->CharDefined(info.mSecondChar));
 }
 
 void KerningTable::Save(BinStream &bs) {
@@ -66,9 +66,9 @@ void KerningTable::SetKerning(
         const RndFont::KernInfo &curInfo = info[i];
         if (Valid(curInfo, font)) {
             Entry &curEntry = mEntries[entryIdx++];
-            curEntry.key = Key(curInfo.unk0, curInfo.unk2);
+            curEntry.key = Key(curInfo.mFirstChar, curInfo.mSecondChar);
             curEntry.kerning = curInfo.kerning;
-            int index = TableIndex(curInfo.unk2, curInfo.unk0);
+            int index = TableIndex(curInfo.mSecondChar, curInfo.mFirstChar);
             curEntry.next = mTable[index];
             mTable[index] = &curEntry;
         }
@@ -78,8 +78,8 @@ void KerningTable::SetKerning(
 void KerningTable::GetKerning(std::vector<RndFontBase::KernInfo> &info) const {
     info.resize(mNumEntries);
     for (int i = 0; i < mNumEntries; i++) {
-        info[i].unk0 = mEntries[i].key;
-        info[i].unk2 = (unsigned int)(mEntries[i].key) >> 16;
+        info[i].mFirstChar = mEntries[i].key;
+        info[i].mSecondChar = (unsigned int)(mEntries[i].key) >> 16;
         info[i].kerning = mEntries[i].kerning;
     }
 }
@@ -208,18 +208,18 @@ BEGIN_SAVES(RndFont)
     } else {
         bs << 0 << 0;
     }
-    bs << unk98;
+    bs << mMaterialOffsets;
     bs << mCharInfoMap.size();
     for (std::map<unsigned short, CharInfo>::iterator it = mCharInfoMap.begin();
          it != mCharInfoMap.end();
          ++it) {
         bs << it->first;
         const CharInfo &info = it->second;
-        bs << info.unk0;
-        bs << info.unk4;
-        bs << info.unk8;
+        bs << info.mPage;
+        bs << info.mU;
+        bs << info.mV;
         bs << info.charWidth;
-        bs << info.unk10;
+        bs << info.mAdvance;
     }
 END_SAVES
 
@@ -229,7 +229,7 @@ BEGIN_COPYS(RndFont)
     MILO_ASSERT(f, 0x451);
     COPY_MEMBER_FROM(f, mMats)
     COPY_MEMBER_FROM(f, mCellSize)
-    COPY_MEMBER_FROM(f, unk98)
+    COPY_MEMBER_FROM(f, mMaterialOffsets)
     COPY_MEMBER_FROM(f, mDeprecatedSize)
     COPY_MEMBER_FROM(f, mPacked)
     COPY_MEMBER_FROM(f, mCharInfoMap)
@@ -372,30 +372,30 @@ BEGIN_LOADS(RndFont)
             }
         }
     }
-    unk98.resize(mMats.size());
+    mMaterialOffsets.resize(mMats.size());
     if (d.rev > 0xd) {
         if (d.altRev < 1) {
-            bs >> unk98[0];
+            bs >> mMaterialOffsets[0];
         } else {
-            d >> unk98;
+            d >> mMaterialOffsets;
         }
         if (d.rev < 0x11) {
             for (int i = 0; i < 0x100; i++) {
                 CharInfo &info = mCharInfoMap[i];
-                info.unk0 = 0;
-                bs >> info.unk4;
-                bs >> info.unk8;
+                info.mPage = 0;
+                bs >> info.mU;
+                bs >> info.mV;
                 bs >> info.charWidth;
                 if (info.charWidth < 0) {
                     info.charWidth = 0;
                 }
                 if (d.rev > 0xe) {
-                    bs >> info.unk10;
+                    bs >> info.mAdvance;
                 } else {
-                    info.unk10 = info.charWidth;
+                    info.mAdvance = info.charWidth;
                 }
-                if (info.unk10 < 0) {
-                    info.unk10 = 0;
+                if (info.mAdvance < 0) {
+                    info.mAdvance = 0;
                 }
             }
         } else {
@@ -406,14 +406,14 @@ BEGIN_LOADS(RndFont)
                 bs >> keyChar;
                 CharInfo &info = mCharInfoMap[keyChar];
                 if (d.altRev > 0) {
-                    bs >> info.unk0;
+                    bs >> info.mPage;
                 } else {
-                    info.unk0 = 0;
+                    info.mPage = 0;
                 }
-                bs >> info.unk4;
-                bs >> info.unk8;
+                bs >> info.mU;
+                bs >> info.mV;
                 bs >> info.charWidth;
-                bs >> info.unk10;
+                bs >> info.mAdvance;
             }
         }
     } else {
@@ -449,8 +449,8 @@ bool RndFont::CharAdvance(unsigned short u1, unsigned short c, float &f3) const 
     } else {
         auto it = mCharInfoMap.find(c);
         if (it != mCharInfoMap.end()
-            && (it->second.unk4 != 0 || it->second.unk8 != 0 || it->second.unk10 != 0)) {
-            f3 = mMonospace ? 1 : it->second.unk10;
+            && (it->second.mU != 0 || it->second.mV != 0 || it->second.mAdvance != 0)) {
+            f3 = mMonospace ? 1 : it->second.mAdvance;
             f3 += Kerning(u1, c);
             return true;
         }
@@ -463,7 +463,7 @@ float RndFont::CharAdvance(unsigned short c) const {
     if (mMonospace) {
         return 1;
     } else {
-        return mTextureOwner->mCharInfoMap[c].unk10;
+        return mTextureOwner->mCharInfoMap[c].mAdvance;
     }
 }
 
@@ -471,7 +471,7 @@ bool RndFont::CharDefined(unsigned short c) const {
     if (HasChar(c)) {
         auto it = mCharInfoMap.find(c);
         const CharInfo &info = it->second;
-        return info.unk4 != 0 || info.unk8 != 0 || info.unk10 != 0;
+        return info.mU != 0 || info.mV != 0 || info.mAdvance != 0;
     } else {
         return false;
     }
@@ -524,7 +524,7 @@ void RndFont::SetCellSize(float x, float y) {
 
 int RndFont::CharPage(unsigned short c) const {
     if (HasChar(c)) {
-        return mCharInfoMap.find(c)->second.unk0;
+        return mCharInfoMap.find(c)->second.mPage;
     } else {
         return -1;
     }

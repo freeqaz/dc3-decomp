@@ -6,7 +6,7 @@
 
 struct DistMapNodeSort {
     bool operator()(const ClipDistMap::Node &n1, const ClipDistMap::Node &n2) const {
-        return n1.unk0 < n2.unk0;
+        return n1.curBeat < n2.curBeat;
     }
 };
 
@@ -91,7 +91,7 @@ bool ClipDistMap::FindBestNode(float maxError, float startBeat, float endBeat, C
         return false;
     }
 
-    node.unk8 = maxError;
+    node.err = maxError;
 
     float clipAStart = mAStart;
     int endCol = (int)((endBeat - mAStart) * mSamplesPerBeat);
@@ -114,21 +114,21 @@ bool ClipDistMap::FindBestNode(float maxError, float startBeat, float endBeat, C
         if (rowIdx >= 0) {
             int rowCount = rowIdx + 1;
             do {
-                float currentError = node.unk8;
+                float currentError = node.err;
                 u8 foundBetter = 1;
                 // Access distance map: mData[(row * width) + col]
                 float cellError = *(float *)((mDists.mWidth * rowIdx + startCol) * 4 + mDists.mData);
                 float newError = (currentError - cellError >= 0.0f) ? cellError : currentError;
 
-                node.unk8 = newError;
+                node.err = newError;
                 if (newError == currentError) {
                     foundBetter = 0;
                 }
 
                 // Update node position if we found a better match
                 if (foundBetter != 0) {
-                    node.unk0 = (float)startCol / (float)samplesPerBeat + clipAStart;
-                    node.unk4 = (float)rowIdx / (float)mAStart + mBStart;
+                    node.curBeat = (float)startCol / (float)samplesPerBeat + clipAStart;
+                    node.nextBeat = (float)rowIdx / (float)mAStart + mBStart;
                 }
 
                 rowIdx--;
@@ -138,7 +138,7 @@ bool ClipDistMap::FindBestNode(float maxError, float startBeat, float endBeat, C
         startCol++;
     }
 
-    return node.unk8 < maxError;
+    return node.err < maxError;
 }
 
 // Find transition nodes between clips based on error threshold and distance constraints.
@@ -163,12 +163,12 @@ void ClipDistMap::FindNodes(float maxError, float maxDist, float endDist) {
     // Recursively find all candidate nodes within the clip range
     FindBestNodeRecurse(maxError, searchRadius, maxDist - searchRadius * 2.0f, mAStart, mAEnd);
 
-    // Sort nodes by position (unk0 field)
+    // Sort nodes by position (curBeat field)
     std::sort(mNodes.begin(), mNodes.end(), DistMapNodeSort());
 
     // Ensure we have a node near the end of the clip if needed
     if (!mNodes.empty() && endDist > 0.0f) {
-        float lastNodeDist = mAEnd - mNodes.back().unk0;
+        float lastNodeDist = mAEnd - mNodes.back().curBeat;
         if (lastNodeDist > endDist) {
             ClipDistMap::Node node;
             if (FindBestNode(maxError, mAEnd - endDist, mAEnd, node)) {
@@ -184,7 +184,7 @@ void ClipDistMap::FindNodes(float maxError, float maxDist, float endDist) {
     int i = 1;
     if (limit > 1) {
         for (; i < limit;) {
-            float dist = mNodes[i + 1].unk0 - mNodes[i].unk0;
+            float dist = mNodes[i + 1].curBeat - mNodes[i].curBeat;
             if (dist < maxDist) {
                 mNodes.erase(mNodes.begin() + (i + 1));
                 i--;
@@ -264,11 +264,11 @@ void ClipDistMap::SetNodes(ClipDistMap::Node *node1, ClipDistMap::Node *node2) {
         // Update node1 if this candidate has lower error
         // NOTE: Verbose pattern preserved for codegen - modern Min() would break PPC match
         if (node1) {
-            float candidateErr = mNodes[i].unk8;
-            float currentBest = node1->unk8;
+            float candidateErr = mNodes[i].err;
+            float currentBest = node1->err;
             bool changed = 1;
             float newBest = (currentBest - candidateErr >= 0.0f) ? candidateErr : currentBest;
-            node1->unk8 = newBest;
+            node1->err = newBest;
             if (currentBest == newBest) {
                 changed = 0;
             }
@@ -279,11 +279,11 @@ void ClipDistMap::SetNodes(ClipDistMap::Node *node1, ClipDistMap::Node *node2) {
 
         // Update node2 if this candidate has lower error (same logic as node1)
         if (node2) {
-            float candidateErr = mNodes[i].unk8;
-            float currentBest = node2->unk8;
+            float candidateErr = mNodes[i].err;
+            float currentBest = node2->err;
             bool changed = 1;
             float newBest = (currentBest - candidateErr >= 0.0f) ? candidateErr : currentBest;
-            node2->unk8 = newBest;
+            node2->err = newBest;
             if (currentBest == newBest) {
                 changed = 0;
             }
@@ -294,8 +294,8 @@ void ClipDistMap::SetNodes(ClipDistMap::Node *node1, ClipDistMap::Node *node2) {
 
         // Add transition node to graph regardless of node1/node2
         CharGraphNode graphNode;
-        graphNode.nextBeat = mNodes[i].unk4;
-        graphNode.curBeat = mNodes[i].unk0;
+        graphNode.nextBeat = mNodes[i].nextBeat;
+        graphNode.curBeat = mNodes[i].curBeat;
         mClipB->GetTransitions().AddNode(mClipB, graphNode);
     }
 }

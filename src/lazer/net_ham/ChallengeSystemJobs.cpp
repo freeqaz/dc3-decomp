@@ -117,7 +117,7 @@ void GetOfficialChallengesJob::GetRows(
                     for (int i = 0; i < 3; i++) {
                         ChallengeRow &row = localRows[i];
                         row.mSongID = songID;
-                        row.unk0 = i;
+                        row.mChallengeIndex = i;
                         JsonObject *artistName = reader.GetByName(response, "hmx_artist");
                         if (artistName) {
                             row.mArtist = artistName->Str();
@@ -130,7 +130,7 @@ void GetOfficialChallengesJob::GetRows(
                         if (diffName) {
                             row.mDiff = diffName->Int();
                         }
-                        row.unk2c = "";
+                        row.mNotes = "";
                         row.mTimeStamp = startTime.ToCode();
                         row.mChallengerXp = 0;
                         calcedRows.push_back(row);
@@ -168,7 +168,7 @@ void GetOfficialChallengesJob::GetRows(
                     for (int i = 0; i < 3; i++) {
                         ChallengeRow &row = localRows[i];
                         row.mSongID = dlcSongID;
-                        row.unk0 = i;
+                        row.mChallengeIndex = i;
                         JsonObject *artistName = reader.GetByName(response, "dlc_artist");
                         if (artistName) {
                             row.mArtist = artistName->Str();
@@ -181,7 +181,7 @@ void GetOfficialChallengesJob::GetRows(
                         if (diffName) {
                             row.mDiff = diffName->Int();
                         }
-                        row.unk2c = "";
+                        row.mNotes = "";
                         row.mTimeStamp = startTime.ToCode();
                         row.mChallengerXp = 0;
                         calcedRows.push_back(row);
@@ -294,7 +294,7 @@ void GetRows(
     for (int i = 0; i < aSize; i++) {
         JsonArray *cur = static_cast<JsonArray *>(c.GetValue(a, i));
         ChallengeRow curRow;
-        curRow.unk0 = c.GetValue(cur, 0)->Int();
+        curRow.mChallengeIndex = c.GetValue(cur, 0)->Int();
         curRow.mGamertag = c.GetValue(cur, 1)->Str();
         curRow.mSongID = c.GetValue(cur, 2)->Int();
         curRow.mArtist = c.GetValue(cur, 3)->Str();
@@ -302,14 +302,14 @@ void GetRows(
         curRow.mScore = c.GetValue(cur, 5)->Int();
         curRow.mDiff = c.GetValue(cur, 6)->Int();
         curRow.mType = ChallengeRow::kNumChallengeTypes;
-        curRow.unk2c = c.GetValue(cur, 7)->Str();
+        curRow.mNotes = c.GetValue(cur, 7)->Str();
         unsigned int timeStamp;
         DateTime dt;
         dt.ParseDate(c.GetValue(cur, 8)->Str());
         timeStamp = dt.ToCode();
         curRow.mTimeStamp = timeStamp;
         curRow.mChallengerXp = c.GetValue(cur, 9)->Int();
-        calcedRows[curRow.unk2c].push_back(curRow);
+        calcedRows[curRow.mNotes].push_back(curRow);
     }
     bref = false;
     FOREACH (it, calcedRows) {

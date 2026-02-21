@@ -15,7 +15,7 @@ DingoSvrXbox gDingoSvrXbox;
 DingoServer &TheServer = gDingoSvrXbox;
 
 DingoSvrXbox::DingoSvrXbox()
-    : unkb0(0), mXUID(0), unk148(0), mJobMgr(this), mJobState(0), mScoreXUID(0), mCareerScore(0),
+    : mXLSPState(0), mXUID(0), mDingoServiceId(0), mJobMgr(this), mJobState(0), mScoreXUID(0), mCareerScore(0),
       mSessionHandle(0), mMsBetweenReconnDingo(0), mLeaderboardID(-1),
       mLeaderboardScorePropID(-1) {}
 
@@ -36,7 +36,7 @@ void DingoSvrXbox::Init() {
 }
 
 bool DingoSvrXbox::Authenticate(int i1) {
-    if (unkb0 != 2) {
+    if (mXLSPState != 2) {
         SendDebugDataPoint(
             "no_xlsp_connection",
             "location",
@@ -60,8 +60,8 @@ void DingoSvrXbox::Logout() {
 }
 
 void DingoSvrXbox::Disconnect() {
-    unkb0 = 0;
-    unkc8.Disconnect();
+    mXLSPState = 0;
+    mXLSPConnection.Disconnect();
 }
 
 bool DingoSvrXbox::HasValidLoginCandidate() const {
@@ -80,7 +80,7 @@ bool DingoSvrXbox::IsValidLoginCandidate(int pad) const {
 
 void DingoSvrXbox::MakeSessionJobComplete(bool b1) {
     if (b1 && mSessionHandle) {
-        mJobMgr.QueueJob(new AddLocalPlayerJob(mSessionHandle, unk74, false));
+        mJobMgr.QueueJob(new AddLocalPlayerJob(mSessionHandle, mAuthedPadNum, false));
         mJobState = 2;
     } else {
         mJobState = 0;
@@ -129,7 +129,7 @@ void DingoSvrXbox::LeaveSessionComplete(bool b1) {
 
 void DingoSvrXbox::EndSessionComplete(bool b1) {
     if (b1) {
-        mJobMgr.QueueJob(new RemoveLocalPlayerJob(mSessionHandle, unk74));
+        mJobMgr.QueueJob(new RemoveLocalPlayerJob(mSessionHandle, mAuthedPadNum));
         mJobState = 6;
     } else {
         mJobState = 0;
@@ -141,41 +141,41 @@ void DingoSvrXbox::Poll() {
         return;
     }
     mJobMgr.Poll();
-    switch (unkb0) {
+    switch (mXLSPState) {
     case 0: {
         bool found;
         {
             String svc("dingo");
-            found = ThePlatformMgr.GetServiceID(svc, (unsigned int &)unk148);
+            found = ThePlatformMgr.GetServiceID(svc, (unsigned int &)mDingoServiceId);
         }
         if (found) {
             if (*mXLSPFilter.c_str() == '\0') {
                 MILO_NOTIFY("DingoSvrXbox: Empty XLSP filter string.");
-            } else if ((unsigned int)unk148 == 0U) {
+            } else if ((unsigned int)mDingoServiceId == 0U) {
                 MILO_NOTIFY("DingoSvrXbox: Invalid Dingo service ID.");
             } else {
-                unkc8.Connect(mXLSPFilter.c_str(), unk148);
-                unkb0 = 1;
+                mXLSPConnection.Connect(mXLSPFilter.c_str(), mDingoServiceId);
+                mXLSPState = 1;
             }
         }
         break;
     }
     case 1:
-        if (unkc8.GetState() == 3) {
-            unkb0 = 2;
-            mIPAddr = unkc8.GetServiceIP();
+        if (mXLSPConnection.GetState() == 3) {
+            mXLSPState = 2;
+            mIPAddr = mXLSPConnection.GetServiceIP();
             mHostName.erase();
         }
         break;
     case 2:
         break;
     default:
-        MILO_FAIL("DingoSvrXbox: State %d unhandled.", unkb0);
+        MILO_FAIL("DingoSvrXbox: State %d unhandled.", mXLSPState);
         break;
     }
-    unkc8.Poll();
-    if (unkc8.GetState() == 4
-        && !(unkc8.unk48.SplitMs() < mMsBetweenReconnDingo)) {
+    mXLSPConnection.Poll();
+    if (mXLSPConnection.GetState() == 4
+        && !(mXLSPConnection.mReconnectTimer.SplitMs() < mMsBetweenReconnDingo)) {
         Disconnect();
     }
 }
@@ -194,7 +194,7 @@ void DingoSvrXbox::FillAuthParams(DataPoint &pt) {
     DingoServer::FillAuthParams(pt);
     if (HasValidLoginCandidate()) {
         char buf[32];
-        unk70 = GetValidLoginCandidate(buf, mXUID);
+        mPendingPadNum = GetValidLoginCandidate(buf, mXUID);
         mUserName = buf;
     }
     static Symbol username("username");
@@ -224,8 +224,8 @@ bool DingoSvrXbox::FillAuthParamsFromPadNum(DataPoint &pt, int padnum) {
             bool ret;
             if (i3 == 0 && i4 == 0) {
                 str70 = name;
-                if (unk74 == -1) {
-                    unk70 = padnum;
+                if (mAuthedPadNum == -1) {
+                    mPendingPadNum = padnum;
                     mUserName = name;
                     mXUID = xuid;
                 }
@@ -247,23 +247,23 @@ bool DingoSvrXbox::FillAuthParamsFromPadNum(DataPoint &pt, int padnum) {
 }
 
 void DingoSvrXbox::OnAuthSuccess() {
-    unk78[unk70] = true;
+    mPadAuthed[mPendingPadNum] = true;
     mOnlineId.SetXUID(mXUID);
-    mOnlineId.SetPlayerName(ThePlatformMgr.GetName(unk70));
-    int old = unk70;
-    unk70 = -1;
-    unk74 = old;
+    mOnlineId.SetPlayerName(ThePlatformMgr.GetName(mPendingPadNum));
+    int old = mPendingPadNum;
+    mPendingPadNum = -1;
+    mAuthedPadNum = old;
 }
 
 void DingoSvrXbox::CreateSession() {
-    XUserSetContext(unk74, 0x800A, 1);
-    mJobMgr.QueueJob(new MakeSessionJob(&mSessionHandle, 0x706, unk74));
+    XUserSetContext(mAuthedPadNum, 0x800A, 1);
+    mJobMgr.QueueJob(new MakeSessionJob(&mSessionHandle, 0x706, mAuthedPadNum));
     mJobState = 1;
 }
 
 int DingoSvrXbox::GetValidLoginCandidate(char *name, u64 &xuid) const {
     for (int i = 0; i < 4; i++) {
-        if (unk78[i]) {
+        if (mPadAuthed[i]) {
             return -1;
         }
     }

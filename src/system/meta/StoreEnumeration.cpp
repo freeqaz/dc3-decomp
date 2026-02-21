@@ -5,7 +5,7 @@
 #include <cstring>
 
 XboxEnumeration::XboxEnumeration(int i, std::vector<unsigned long long> *offerIDs)
-    : unk18(i), mOfferIDCount(0), unk10(0), mCurOffers(0), unk1c(false), mHandle(0), unk40(0), mEnumBuffer(0) {
+    : mUserIndex(i), mOfferIDCount(0), mOfferIDsBegin(0), mCurOffers(0), mEnumerating(false), mHandle(0), mBufferSize(0), mEnumBuffer(0) {
     if (offerIDs != 0) {
         mOfferIDCount = (offerIDs->end() - offerIDs->begin());
         MILO_ASSERT(mOfferIDCount, 0x197);
@@ -13,15 +13,15 @@ XboxEnumeration::XboxEnumeration(int i, std::vector<unsigned long long> *offerID
         if (mOfferIDCount > 0x1FFFFFFFU) {
             allocSize = 0xFFFFFFFF;
         }
-        unk10 = (unsigned long long *)new char[allocSize];
-        memcpy(unk10, &(*offerIDs)[0], mOfferIDCount << 3);
-        mCurOffers = unk10;
+        mOfferIDsBegin = (unsigned long long *)new char[allocSize];
+        memcpy(mOfferIDsBegin, &(*offerIDs)[0], mOfferIDCount << 3);
+        mCurOffers = mOfferIDsBegin;
     }
 }
 
 XboxEnumeration::~XboxEnumeration() {
-    delete[] unk10;
-    unk10 = 0;
+    delete[] mOfferIDsBegin;
+    mOfferIDsBegin = 0;
 
     if (mHandle != 0 && mOverlapped.InternalLow == 0x3E5U) {
         u32 result = XCancelOverlapped(&mOverlapped);
@@ -47,31 +47,31 @@ bool XboxEnumeration::IsSuccess() const {
 }
 
 void XboxEnumeration::Start() {
-    unk1c = true;
+    mEnumerating = true;
     if (mHandle == 0) {
         int error;
-        unk40 = 0;
-        if (mCurOffers == unk10) {
+        mBufferSize = 0;
+        if (mCurOffers == mOfferIDsBegin) {
             mContentList.clear();
         }
-        if (unk10 == 0) {
-            error = XMarketplaceCreateOfferEnumerator(unk18, 0x100002, 0xFFFFFFFFFFFFFFFFULL, 99, &unk40, &mHandle);
+        if (mOfferIDsBegin == 0) {
+            error = XMarketplaceCreateOfferEnumerator(mUserIndex, 0x100002, 0xFFFFFFFFFFFFFFFFULL, 99, &mBufferSize, &mHandle);
         } else {
-            int remaining = (int)(mOfferIDCount - (u32)(mCurOffers - unk10));
+            int remaining = (int)(mOfferIDCount - (u32)(mCurOffers - mOfferIDsBegin));
             if (remaining >= 99) remaining = 99;
-            error = XMarketplaceCreateOfferEnumeratorByOffering(unk18, remaining, mCurOffers, (WORD)remaining, &unk40, &mHandle);
+            error = XMarketplaceCreateOfferEnumeratorByOffering(mUserIndex, remaining, mCurOffers, (WORD)remaining, &mBufferSize, &mHandle);
             mCurOffers += remaining;
         }
         MILO_ASSERT(!mEnumBuffer, 0x1EA);
-        mEnumBuffer = new char[unk40];
+        mEnumBuffer = new char[mBufferSize];
         if (error != 0) {
             goto error_path;
         }
     }
-    memset(mEnumBuffer, 0, unk40);
+    memset(mEnumBuffer, 0, mBufferSize);
     memset(&mOverlapped, 0, 0x1c);
     {
-        DWORD result = XEnumerate(mHandle, mEnumBuffer, unk40, 0, &mOverlapped);
+        DWORD result = XEnumerate(mHandle, mEnumBuffer, mBufferSize, 0, &mOverlapped);
         if (result == 0x3e5) {
             return;
         }
@@ -82,12 +82,12 @@ error_path:
         mHandle = 0;
     }
     delete[] (char*)mEnumBuffer;
-    unk1c = false;
+    mEnumerating = false;
     mEnumBuffer = 0;
 }
 
 bool XboxEnumeration::IsEnumerating() const {
-    return unk1c;
+    return mEnumerating;
 }
 
 void XboxEnumeration::Poll() {
@@ -110,9 +110,9 @@ void XboxEnumeration::Poll() {
             str = buf;
 
             EnumProduct prod;
-            *(u64 *)&prod.unk8 = *(u64 *)entryPtr;
-            prod.unk10 = *(int *)(entryPtr + 0x48);
-            prod.unk14 = *(int *)(entryPtr + 0x64);
+            *(u64 *)&prod.mOfferIDLo = *(u64 *)entryPtr;
+            prod.mPurchased = *(int *)(entryPtr + 0x48);
+            prod.mPrice = *(int *)(entryPtr + 0x64);
             mContentList.insert(it, prod);
 
             offset += 0x68;
@@ -120,7 +120,7 @@ void XboxEnumeration::Poll() {
         }
     }
 
-    if (unk10 == 0 && overlappedResult == 0 && bytesReceived >= 99) {
+    if (mOfferIDsBegin == 0 && overlappedResult == 0 && bytesReceived >= 99) {
         goto continue_enum;
     }
 
@@ -167,24 +167,24 @@ handle_12:
     }
 
 check_more_offers:
-    if (unk10 != 0) {
-        if (mCurOffers < unk10 + mOfferIDCount) {
+    if (mOfferIDsBegin != 0) {
+        if (mCurOffers < mOfferIDsBegin + mOfferIDCount) {
             goto continue_enum;
         }
     }
     goto done;
 
 error_no_more:
-    if (unk10 != 0) {
+    if (mOfferIDsBegin != 0) {
         TheDebug << MakeString(" store enum: error no more files (%d)", (unsigned long)overlappedResult);
-        unk1c = false;
+        mEnumerating = false;
         return;
     }
     goto done;
 
 continue_enum:
-    if (unk10 != 0) {
-        if (mCurOffers < unk10 + mOfferIDCount) {
+    if (mOfferIDsBegin != 0) {
+        if (mCurOffers < mOfferIDsBegin + mOfferIDCount) {
             Start();
             return;
         }
@@ -196,5 +196,5 @@ continue_enum:
     }
 
 done:
-    unk1c = false;
+    mEnumerating = false;
 }

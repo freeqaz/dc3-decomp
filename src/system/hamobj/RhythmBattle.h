@@ -38,7 +38,7 @@ public:
     void Begin();
     bool CanTrick(Symbol);
     bool InFullKTB() const { return mFullKTB; }
-    bool Unk102() const { return unk102; }
+    bool Unk102() const { return mPaused; }
 
 protected:
     RhythmBattle();
@@ -65,8 +65,8 @@ private:
     /** "player 1 object" */
     ObjPtr<RhythmBattlePlayer> mPlayerTwo; // 0x44
     ObjPtr<RndTransformable> mBoxyLeadHeadTrans; // 0x58
-    ObjPtr<RndAnimatable> unk6c;
-    ObjPtr<RndAnimatable> unk80;
+    ObjPtr<RndAnimatable> mIntroAnim;
+    ObjPtr<RndAnimatable> mBattleEndAnim;
     ObjPtr<RndAnimatable> unk94;
     ObjPtr<RndAnimatable> mSwagJack1BarP2ToP1Anim; // 0xa8
     ObjPtr<RndAnimatable> mSwagJack1BarP1ToP2Anim; // 0xbc
@@ -77,31 +77,31 @@ private:
     bool mFullKTB; // 0xf9
     bool mFinale; // 0xfa
     bool mActive; // 0xfb
-    bool unkfc;
-    bool unkfd;
-    bool unkfe;
-    bool unkff;
-    bool unk100;
-    bool unk101;
-    bool unk102;
+    bool mIntroAnimStarted;
+    bool mIsGrooveMode;
+    bool mHalftimePlayed;
+    bool mAlmostOverPlayed;
+    bool mBattleStarted;
+    bool mBattleFinished;
+    bool mPaused;
     float mStartBeat; // 0x104
     float mEndBeat; // 0x108
-    float unk10c;
-    float unk110;
-    float unk114;
-    float unk118;
-    int unk11c;
+    float mMindControlIntensity;
+    float mMindControlTimer;
+    float mHalftimeBeat;
+    float mAlmostOverBeat;
+    int mMoveKeyCount;
     float unk120;
-    int unk124; // 0x124 - RhythmBattleJackState
-    int unk128;
+    int mSwagJackState; // 0x124 - RhythmBattleJackState
+    int mSwagJackCounter;
     Symbol mLeader; // 0x12c
-    FreestyleMoveRecorder *unk130;
-    std::vector<ArchiveSkeleton> unk134;
-    int unk140;
-    int unk144;
-    int unk148;
-    int unk14c;
-    std::vector<Symbol> unk150;
+    FreestyleMoveRecorder *mMoveRecorder;
+    std::vector<ArchiveSkeleton> mSkeletonHistory;
+    int mJackCooldown;
+    int mLastBeatTracked;
+    int mFinaleSequenceTimer;
+    int mFinalePhaseIndex;
+    std::vector<Symbol> mFinaleVOQueue;
 };
 
 void SetJump(int, int);

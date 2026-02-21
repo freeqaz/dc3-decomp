@@ -72,13 +72,13 @@ public:
     static void Init();
 
 protected:
-    String unk2c;
-    String unk34;
-    std::list<QueueableCommand *> unk3c;
-    bool unk44;
-    RCJob *unk48;
-    HamProfile *unk4c;
-    std::list<HamProfile *> unk50;
+    String mProfileName;
+    String mOnlineID;
+    std::list<QueueableCommand *> mCommandQueue;
+    bool mIsProcessingCommand;
+    RCJob *mCurrentRCJob;
+    HamProfile *mCurrentProfile;
+    std::list<HamProfile *> mPendingProfiles;
 
 private:
     bool IsProfileChanged();

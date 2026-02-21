@@ -8,7 +8,7 @@
 #include "rndobj/Tex.h"
 
 NgDOFProc::NgDOFProc()
-    : mEnabled(0), unk34(1), unk38(0), mFocalPlane(1), mBlurDepth(1), mMinBlur(0),
+    : mEnabled(0), mDepthOfFieldScale(1), mDepthOfFieldBias(0), mFocalPlane(1), mBlurDepth(1), mMinBlur(0),
       mMaxBlur(1) {
     TheRnd.RegisterPostProcessor(this);
     MILO_ASSERT(TheNgRnd.PreProcessTexture(), 0x41);

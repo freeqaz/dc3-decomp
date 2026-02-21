@@ -2,30 +2,30 @@
 #include "ui/UIPanel.h"
 #include "utl/DeJitter.h"
 
-DeJitterPanel::DeJitterPanel() : unkf8(true) {}
+DeJitterPanel::DeJitterPanel() : mFirstFrame(true) {}
 
 DeJitterPanel::~DeJitterPanel() {}
 
 void DeJitterPanel::Enter() {
-    unk68.Reset();
-    unkf8 = true;
-    DeJitterSetter setter(unk68, 0);
+    mDeJitter.Reset();
+    mFirstFrame = true;
+    DeJitterSetter setter(mDeJitter, 0);
     UIPanel::Enter();
 }
 
 void DeJitterPanel::Poll() {
     // First frame only: prime the jitter state
-    if (unkf8) {
-        unk38.Restart();
+    if (mFirstFrame) {
+        mTimer.Restart();
         float f;
-        unk68.NewMs(0, f);
+        mDeJitter.NewMs(0, f);
     }
     {
         // Use scoped time correction: pass timer on subsequent frames, nullptr on first
-        DeJitterSetter setter(unk68, unkf8 ? nullptr : &unk38);
+        DeJitterSetter setter(mDeJitter, mFirstFrame ? nullptr : &mTimer);
         UIPanel::Poll();
     }
-    unkf8 = false;
+    mFirstFrame = false;
 }
 
 DeJitterSetter::DeJitterSetter(DeJitter &dj, Timer *t) {

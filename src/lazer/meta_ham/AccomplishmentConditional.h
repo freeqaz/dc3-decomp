@@ -6,9 +6,9 @@
 #include <vector>
 
 struct AccomplishmentCondition {
-    Symbol unk0;
-    int unk4;
-    Symbol unk8; // 0x8
+    Symbol mConditionType;
+    int mCount;
+    Symbol mSymbolArg; // 0x8
     Difficulty mDifficulty; // 0xc
     Symbol mCharacter; // 0x10
     Symbol mMode; // 0x14

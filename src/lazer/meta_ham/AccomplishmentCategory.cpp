@@ -6,7 +6,7 @@
 #include "utl/Symbol.h"
 
 AccomplishmentCategory::AccomplishmentCategory(DataArray const *d, int i)
-    : unk4(i), mName(""), mGroup(""), mAward("") {
+    : mIndex(i), mName(""), mGroup(""), mAward("") {
     Configure(d);
 }
 

@@ -21,7 +21,7 @@
 #include <algorithm>
 #include <climits>
 
-MoveMgr::MoveMgr() : unk40(0), unka0(0) {
+MoveMgr::MoveMgr() : mCurrentSongLayout(0), mLoadingProgressCounter(0) {
     mMovesDir = nullptr;
     for (int i = 0; i < kNumDifficultiesDC2; i++) {
         unk54[i].clear();
@@ -29,21 +29,21 @@ MoveMgr::MoveMgr() : unk40(0), unka0(0) {
         mClipPropKeys[i] = nullptr;
     }
     mPracticePropKeys = nullptr;
-    unk168 = false;
-    unk14c = "";
+    mRoutineLoaded = false;
+    mCurrentSong = "";
     mSuperEasyRemixer = Hmx::Object::New<SuperEasyRemixer>();
     mSuperEasyRemixer->SetType("easeup_remixer");
     mMoveDataDir = nullptr;
-    unk44 = dynamic_cast<SongLayout *>(Hmx::Object::NewObject("SongLayout"));
+    mDefaultSongLayout = dynamic_cast<SongLayout *>(Hmx::Object::NewObject("SongLayout"));
 }
 
 MoveMgr::~MoveMgr() {
     RELEASE(mSuperEasyRemixer);
-    unk178.clear();
-    unk184.clear();
-    unk190.clear();
-    unk19c.clear();
-    unka0 = 0;
+    mGenres.clear();
+    mEras.clear();
+    mFilteredGenres.clear();
+    mFilteredEras.clear();
+    mLoadingProgressCounter = 0;
     mMovesDir = nullptr;
     for (int i = 0; i < kNumDifficultiesDC2; i++) {
         unk54[i].clear();
@@ -52,7 +52,7 @@ MoveMgr::~MoveMgr() {
     }
     mPracticePropKeys = nullptr;
     mMoveDataDir = nullptr;
-    RELEASE(unk44);
+    RELEASE(mDefaultSongLayout);
 }
 
 BEGIN_HANDLERS(MoveMgr)
@@ -83,10 +83,10 @@ BEGIN_HANDLERS(MoveMgr)
 END_HANDLERS
 
 Symbol MoveMgr::GetGenreTokenName(Symbol s) {
-    Symbol ret = unk178.front().unk4;
-    FOREACH (it, unk178) {
-        if (it->unk0 == s) {
-            ret = it->unk4;
+    Symbol ret = mGenres.front().mToken;
+    FOREACH (it, mGenres) {
+        if (it->mName == s) {
+            ret = it->mToken;
             break;
         }
     }
@@ -103,7 +103,7 @@ Difficulty MoveMgr::GetMoveDifficulty(Symbol s) {
 }
 
 void MoveMgr::Clear() {
-    unka0 = 0;
+    mLoadingProgressCounter = 0;
     mMovesDir = 0;
     for (int i = 0; i < kNumDifficultiesDC2; i++) {
         unk54[i].clear();
@@ -111,20 +111,20 @@ void MoveMgr::Clear() {
         mClipPropKeys[i] = nullptr;
     }
     mPracticePropKeys = nullptr;
-    unk40 = 0;
-    unk104.clear();
+    mCurrentSongLayout = 0;
+    mVariants.clear();
     for (int i = 0; i < 2; i++) {
-        unk150[i].clear();
+        mRoutineMeasures[i].clear();
         mMoveParents[i].clear();
-        unk134[i].clear();
+        mPreferredVariants[i].clear();
     }
-    unk168 = false;
-    unk16c.clear();
-    unk178.clear();
-    unk184.clear();
-    unk190.clear();
-    unk19c.clear();
-    unk14c = "";
+    mRoutineLoaded = false;
+    mChoiceSets.clear();
+    mGenres.clear();
+    mEras.clear();
+    mFilteredGenres.clear();
+    mFilteredEras.clear();
+    mCurrentSong = "";
     mMoveGraph.Clear();
     mMoveDataDir = nullptr;
 }
@@ -138,7 +138,7 @@ bool MoveVariantsWithHamMove(const MoveVariant *var, void *v) {
 bool MoveMgr::HasRoutine() const {
     static Symbol gameplay_mode("gameplay_mode");
     static Symbol practice("practice");
-    return unk168 && TheHamProvider->Property(gameplay_mode, true)->Sym() != practice;
+    return mRoutineLoaded && TheHamProvider->Property(gameplay_mode, true)->Sym() != practice;
 }
 
 void MoveMgr::InsertMoveInSong(const MoveVariant *var, int measure, int player) {
@@ -237,8 +237,8 @@ void MoveMgr::PickRandomMoveSet(Symbol s1, int count, DataArray *a3, DataArray *
 }
 
 void MoveMgr::LoadCategoryData(const char *filename) {
-    unk178.clear();
-    unk184.clear();
+    mGenres.clear();
+    mEras.clear();
     static Symbol genres("genres");
     static Symbol eras("eras");
     DataArray *file = DataReadFile(filename, false);
@@ -247,18 +247,18 @@ void MoveMgr::LoadCategoryData(const char *filename) {
         if (genreArr) {
             for (int i = 1; i < genreArr->Size(); i++) {
                 CategoryData data;
-                data.unk0 = genreArr->Array(i)->Sym(0);
-                data.unk4 = genreArr->Array(i)->Sym(1);
-                unk178.push_back(data);
+                data.mName = genreArr->Array(i)->Sym(0);
+                data.mToken = genreArr->Array(i)->Sym(1);
+                mGenres.push_back(data);
             }
         }
         DataArray *eraArr = file->FindArray(eras, true);
         if (eraArr) {
             for (int i = 1; i < eraArr->Size(); i++) {
                 CategoryData data;
-                data.unk0 = eraArr->Array(i)->Sym(0);
-                data.unk4 = eraArr->Array(i)->Sym(1);
-                unk184.push_back(data);
+                data.mName = eraArr->Array(i)->Sym(0);
+                data.mToken = eraArr->Array(i)->Sym(1);
+                mEras.push_back(data);
             }
         }
         file->Release();
@@ -309,8 +309,8 @@ void MoveMgr::Init(const char *filename) {
 }
 
 const MoveVariant *MoveMgr::GetRoutinePreferredVariant(int i1, int i2) const {
-    if (i2 < unk134[i1].size()) {
-        const MoveVariant *var = unk134[i1][i2];
+    if (i2 < mPreferredVariants[i1].size()) {
+        const MoveVariant *var = mPreferredVariants[i1][i2];
         if (var && var->Parent() == mMoveParents[i1].at(i2)) {
             return var;
         }
@@ -327,14 +327,14 @@ void MoveMgr::ComputePotentialMoves(std::set<const MoveParent *> &moves, int i2)
     if (mMoveParents[0][i2]) {
         moves.insert(mMoveParents[0][i2]);
     } else {
-        if (unk16c.size() < i2 + 1) {
-            unk16c.resize(i2 + 1);
+        if (mChoiceSets.size() < i2 + 1) {
+            mChoiceSets.resize(i2 + 1);
         }
-        MoveChoiceSet &curChoice = unk16c[i2];
-        if (curChoice.unk0[0]) {
+        MoveChoiceSet &curChoice = mChoiceSets[i2];
+        if (curChoice.mChoices[0]) {
             for (int i = 0; i < kNumDifficulties; i++) {
-                if (curChoice.unk0[i]) {
-                    moves.insert(curChoice.unk0[i]);
+                if (curChoice.mChoices[i]) {
+                    moves.insert(curChoice.mChoices[i]);
                 }
             }
         } else {
@@ -372,27 +372,27 @@ void MoveMgr::AutoFillParents() {
             int set = ComputeRandomChoiceSet(i);
             if (set != 0) {
                 set = RandomInt(0, set);
-                *it = unk16c[i].unk0[set];
+                *it = mChoiceSets[i].mChoices[set];
             }
         }
     }
 }
 
 SongLayout *MoveMgr::GetSongLayout() {
-    if (!unk40) {
-        unk40 = unk44;
-        unk44->SetDefaultPattern(0x40);
+    if (!mCurrentSongLayout) {
+        mCurrentSongLayout = mDefaultSongLayout;
+        mDefaultSongLayout->SetDefaultPattern(0x40);
     }
-    if (unk40->NumReplacers() == 0) {
-        unk40->SetDefaultReplacer();
+    if (mCurrentSongLayout->NumReplacers() == 0) {
+        mCurrentSongLayout->SetDefaultReplacer();
     }
-    return unk40;
+    return mCurrentSongLayout;
 }
 
 Symbol MoveMgr::PickRandomGenre() {
     static Symbol genre_none("genre_none");
-    int size = unk190.size();
-    return size != 0 ? unk190[RandomInt(0, size)].unk0 : genre_none;
+    int size = mFilteredGenres.size();
+    return size != 0 ? mFilteredGenres[RandomInt(0, size)].mName : genre_none;
 }
 
 Symbol MoveMgr::PickRandomCategory() { return PickRandomGenre(); }
@@ -409,7 +409,7 @@ bool IsSuperEasyMove(Symbol move) {
 }
 
 void MoveMgr::SongInit() {
-    unka0 = 0;
+    mLoadingProgressCounter = 0;
     MILO_ASSERT(TheHamDirector, 0x123);
     mMovesDir = TheHamDirector->GetWorld()->Find<MoveDir>("moves", false);
     MILO_ASSERT(mMovesDir, 0x126);
@@ -434,26 +434,26 @@ void MoveMgr::SongInit() {
 
 void MoveMgr::NextMovesToShow(DataArray *a, int measure) {
     MILO_LOG("MoveMgr: next moves to show for measure %d\n", measure);
-    if (unk16c.size() < measure + 1) {
-        unk16c.resize(measure + 1);
+    if (mChoiceSets.size() < measure + 1) {
+        mChoiceSets.resize(measure + 1);
     }
-    if (!unk16c[measure].unk0[0]) {
+    if (!mChoiceSets[measure].mChoices[0]) {
         MILO_LOG("MoveMgr: oh no they are not ready yet!\n");
         PrepareNextChoiceSet(measure - 1);
     }
     for (int i = 0; i < 4; i++) {
-        MILO_LOG("\t%s\n", unk16c[measure].unk0[i]->Name());
+        MILO_LOG("\t%s\n", mChoiceSets[measure].mChoices[i]->Name());
     }
     a->Resize(4);
     for (int i = 0; i < 4; i++) {
-        a->Node(i) = unk16c[measure].unk0[i]->Name();
+        a->Node(i) = mChoiceSets[measure].mChoices[i]->Name();
     }
 }
 
 void MoveMgr::PrepareNextChoiceSet(int measure) {
     ComputeRandomChoiceSet(measure + 1);
     ComputeLoadedMoveSet();
-    TheHamDirector->LoadRoutineBuilderData(unk104, true);
+    TheHamDirector->LoadRoutineBuilderData(mVariants, true);
 }
 
 void MoveMgr::FillRoutineFromParents(int x) {
@@ -464,12 +464,12 @@ void MoveMgr::FillRoutineFromParents(int x) {
         FillInRoutineAt(0, i);
     }
     for (int i = 0; i <= x; i++) {
-        const MoveVariant *var = unk150[0][i].first;
+        const MoveVariant *var = mRoutineMeasures[0][i].first;
         for (int j = 0; j < 2; j++) {
             InsertMoveInSong(var, i, j);
         }
     }
-    unk168 = true;
+    mRoutineLoaded = true;
 }
 
 void MoveMgr::ResetRemixer() {
@@ -477,18 +477,18 @@ void MoveMgr::ResetRemixer() {
         mSuperEasyRemixer->Reset();
 }
 
-void MoveMgr::RegisterSongLayout(SongLayout *sl) { unk40 = sl; }
+void MoveMgr::RegisterSongLayout(SongLayout *sl) { mCurrentSongLayout = sl; }
 
 void MoveMgr::UnRegisterSongLayout(SongLayout *sl) {
-    if (unk40 == sl) {
-        unk40 = nullptr;
+    if (mCurrentSongLayout == sl) {
+        mCurrentSongLayout = nullptr;
     }
 }
 
 const std::pair<const MoveVariant *, const MoveVariant *> *
 MoveMgr::GetRoutineMeasure(int x, int y) const {
     const std::vector<std::pair<const MoveVariant *, const MoveVariant *> > &vec =
-        unk150[(int)unk150[x].size() - x];
+        mRoutineMeasures[(int)mRoutineMeasures[x].size() - x];
     if (vec.size() <= y) {
         return 0;
     }
@@ -496,26 +496,26 @@ MoveMgr::GetRoutineMeasure(int x, int y) const {
 }
 
 CategoryData MoveMgr::GetCategoryByName(Symbol name) {
-    for (int i = 0; i < unk178.size(); i++) {
-        if (unk178[i].unk0 == name) {
-            return unk178[i];
+    for (int i = 0; i < mGenres.size(); i++) {
+        if (mGenres[i].mName == name) {
+            return mGenres[i];
         }
     }
-    for (int i = 0; i < unk184.size(); i++) {
-        if (unk184[i].unk0 == name) {
-            return unk184[i];
+    for (int i = 0; i < mEras.size(); i++) {
+        if (mEras[i].mName == name) {
+            return mEras[i];
         }
     }
     CategoryData data;
-    data.unk0 = name;
-    data.unk4 = "category_unknown";
+    data.mName = name;
+    data.mToken = "category_unknown";
     return data;
 }
 
 void MoveMgr::SaveRoutineVariants(DataArray *a) const {
-    a->Resize(unk150[0].size());
+    a->Resize(mRoutineMeasures[0].size());
     int idx = 0;
-    FOREACH (it, unk150[0]) {
+    FOREACH (it, mRoutineMeasures[0]) {
         if (it->first) {
             Symbol first_name = it->first->Name();
             a->Node(idx) =
@@ -530,8 +530,8 @@ void MoveMgr::SaveRoutineVariants(DataArray *a) const {
 void MoveMgr::LoadRoutineVariants(const DataArray *a) {
     int aSize = a->Size();
     int idx = 0;
-    auto it = unk150[0].begin();
-    for (; it != unk150[0].end() && idx < aSize; ++it, ++idx) {
+    auto it = mRoutineMeasures[0].begin();
+    for (; it != mRoutineMeasures[0].end() && idx < aSize; ++it, ++idx) {
         mMoveParents[0][idx] = nullptr;
         it->first = nullptr;
         it->second = nullptr;
@@ -544,18 +544,18 @@ void MoveMgr::LoadRoutineVariants(const DataArray *a) {
             }
         }
     }
-    for (; it != unk150[0].end(); ++it, ++idx) {
+    for (; it != mRoutineMeasures[0].end(); ++it, ++idx) {
         mMoveParents[0][idx] = nullptr;
         it->first = nullptr;
         it->second = nullptr;
     }
-    for (int i = 0; i < unk150[0].size(); i++) {
-        const MoveVariant *mv = unk150[0][i].first;
+    for (int i = 0; i < mRoutineMeasures[0].size(); i++) {
+        const MoveVariant *mv = mRoutineMeasures[0][i].first;
         for (int j = 0; j < 2; j++) {
             InsertMoveInSong(mv, i, j);
         }
     }
-    unk168 = true;
+    mRoutineLoaded = true;
 }
 
 HamMove *MoveMgr::FindHamMoveFromName(Symbol name) const {
@@ -580,7 +580,7 @@ HamMove *MoveMgr::FindHamMoveFromName(Symbol name) const {
 
 CharClip *MoveMgr::FindCharClip(Symbol name) const {
     Symbol nameSym = name;
-    FOREACH (it, unk104) {
+    FOREACH (it, mVariants) {
         if ((*it)->Parent()->Name() == nameSym) {
             nameSym = (*it)->Name();
             break;
@@ -623,7 +623,7 @@ HamMove *MoveMgr::FindHamMove(Symbol name) const {
         return nullptr;
     } else {
         Symbol nameSym = name;
-        FOREACH (it, unk104) {
+        FOREACH (it, mVariants) {
             if ((*it)->Parent()->Name() == nameSym) {
                 nameSym = (*it)->Name();
                 break;
@@ -660,11 +660,11 @@ Symbol MoveMgr::FindVariantNameFromHamMoveName(Symbol name) const {
 
 void MoveMgr::InitSong() {
     SongInit();
-    unk16c.clear();
+    mChoiceSets.clear();
     int i12 = INT_MAX;
     int i13 = 0;
-    unk40 = GetSongLayout();
-    FOREACH (it, unk40->SongSections()) {
+    mCurrentSongLayout = GetSongLayout();
+    FOREACH (it, mCurrentSongLayout->SongSections()) {
         if (i12 >= it->mMeasureRange.start) {
             i12 = it->mMeasureRange.start;
         }
@@ -673,21 +673,21 @@ void MoveMgr::InitSong() {
         }
     }
     mMoveParents[0].resize(i13 + 2);
-    unk150[0].resize(i13 + 2);
-    unk16c.resize(i13 + 2);
-    unk104.clear();
+    mRoutineMeasures[0].resize(i13 + 2);
+    mChoiceSets.resize(i13 + 2);
+    mVariants.clear();
     FOREACH (it, mMoveParents[0]) {
         *it = nullptr;
     }
-    FOREACH (it, unk150[0]) {
+    FOREACH (it, mRoutineMeasures[0]) {
         it->first = nullptr;
         it->second = nullptr;
     }
-    FOREACH (it, unk16c) {
-        it->unk0[0] = 0;
-        it->unk0[1] = 0;
-        it->unk0[2] = 0;
-        it->unk0[3] = 0;
+    FOREACH (it, mChoiceSets) {
+        it->mChoices[0] = 0;
+        it->mChoices[1] = 0;
+        it->mChoices[2] = 0;
+        it->mChoices[3] = 0;
     }
     ComputeRandomChoiceSet(0);
     ComputeLoadedMoveSet();
@@ -696,8 +696,8 @@ void MoveMgr::InitSong() {
 }
 
 void MoveMgr::LoadSubCategoryData() {
-    unk190.clear();
-    unk19c.clear();
+    mFilteredGenres.clear();
+    mFilteredEras.clear();
     std::map<Symbol, int> map70;
     std::map<Symbol, int> map90;
     map70.clear();
@@ -717,9 +717,9 @@ void MoveMgr::LoadSubCategoryData() {
     DataArray *superEasy = SystemConfig("super_easy_moves");
     MILO_ASSERT(superEasy, 0x540);
     FOREACH (it, map70) {
-        unk190.push_back(GetCategoryByName(it->first));
+        mFilteredGenres.push_back(GetCategoryByName(it->first));
     }
     FOREACH (it, map90) {
-        unk19c.push_back(GetCategoryByName(it->first));
+        mFilteredEras.push_back(GetCategoryByName(it->first));
     }
 }

@@ -528,11 +528,11 @@ CamShot::CamShot()
       mFarPlane(mNearPlane * RndCam::MaxFarNearPlaneRatio()), mUseDepthOfField(true),
       mFilter(0.9), mClampHeight(-1), mAnims(this), mPath(this), mPathFrame(-1),
       mPlatform(kPlatformNone), mHideList(this), mShowList(this), mGenHideList(this),
-      mDrawOverrides(this), mPostProcOverrides(this), unk1a4(this), mCrowds(this),
+      mDrawOverrides(this), mPostProcOverrides(this), mParentDir(this), mCrowds(this),
       mCrowdStateOverride(gNullStr), mPS3PerPixel(true), mGlowSpot(this), mFlags(0),
       mEndHideList(this), mEndShowList(this), mLastDesiredShakeOffset(0, 0, 0),
       mLastDesiredShakeAngOffset(0, 0, 0), mLastShakeOffset(0, 0, 0),
-      mLastShakeAngOffset(0, 0, 0), unk250(0, 0, 0), unk260(0, 0, 0), mLastNext(0),
+      mLastShakeAngOffset(0, 0, 0), mShakeVelocity(0, 0, 0), mShakeAngVelocity(0, 0, 0), mLastNext(0),
       mLastPrev(0), mDuration(0), mDisabled(0), mShotStarted(1), mShotOver(0), mHidden(0),
       unk283(0) {}
 
@@ -561,7 +561,7 @@ BEGIN_HANDLERS(CamShot)
 END_HANDLERS
 
 WorldDir *CamShot::GetCrowdDir() const {
-    ObjectDir *dir = unk1a4.Ptr() ? unk1a4.Ptr() : Dir();
+    ObjectDir *dir = mParentDir.Ptr() ? mParentDir.Ptr() : Dir();
     return dynamic_cast<WorldDir *>(dir);
 }
 
@@ -982,10 +982,10 @@ void CamShot::StartAnim() {
     mShotStarted = true;
     mLastDesiredShakeOffset.Zero();
     mLastShakeOffset.Zero();
-    unk250.Zero();
+    mShakeVelocity.Zero();
     mLastDesiredShakeAngOffset.Zero();
     mLastShakeAngOffset.Zero();
-    unk260.Zero();
+    mShakeAngVelocity.Zero();
     StartAnims(mAnims);
     for (int i = 0; i != mCrowds.size(); i++) {
         CamShotCrowd &cur = mCrowds[i];

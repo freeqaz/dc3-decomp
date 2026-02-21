@@ -76,22 +76,22 @@ protected:
     RndOverlay *mLatencyOverlay; // 0x70
     RndOverlay *mFitnessOverlay; // 0x74
     RndOverlay *mLoopVizOverlay; // 0x78
-    bool unk7c;
+    bool mStartPaused; // 0x7c
     State mState; // 0x80
-    int unk84;
-    Profiler unk88;
-    bool unkd8;
-    std::vector<float> unkdc;
-    int unke8;
-    int unkec;
-    float unkf0;
+    int mEndGameResult;
+    Profiler mPerformanceProfiler;
+    bool mIsReplay; // 0xd8
+    std::vector<float> mFrameTimeSamples;
+    int mJitterSampleCount;
+    int mJitterBufferIndex;
+    float mCurrentJitterValue;
     int unkf4;
     bool unkf8;
-    Timer *unkfc;
-    bool unk100;
-    bool unk101;
-    int unk104;
-    bool unk108;
+    Timer *mPauseCountInTimer;
+    bool mNormalPauseEnabled;
+    bool mCheatPaused;
+    int mPollLoadState;
+    bool mSoundEventReceiverSet;
 };
 
 extern GamePanel *TheGamePanel;
@@ -117,10 +117,10 @@ public:
 private:
     DebugMeter mDebugMeter1; // 0x4
     DebugMeter mDebugMeter2; // 0x24
-    int unk44;
-    int unk48;
-    int unk4c;
-    int unk50;
-    float unk54;
-    float unk58;
+    int mCurrLoopStart;
+    int mCurrLoopEnd;
+    int mPrevLoopStart;
+    int mPrevLoopEnd;
+    float mLoopStartChangeTimer;
+    float mLoopEndChangeTimer;
 };

@@ -173,7 +173,7 @@ void MultiUserGesturePanel::SetDefaultCharacter(int idx) {
     pPerformer->SetDefaultSongCharacter(index);
     if (!TheGameMode->InMode("dance_battle", true)) {
         if (!TheGameMode->InMode("campaign", true)) {
-            pPlayerData->SetUnk48(gNullStr);
+            pPlayerData->SetMiniGameCharacter(gNullStr);
             pPlayerData->SetPreferredOutfit(gNullStr);
         }
     }
@@ -267,7 +267,7 @@ void MultiUserGesturePanel::SetCharacter(Symbol s, int idx) {
     pPlayerData->SetCrew(crewForChar);
     pPlayerData->SetOutfit(GetCharacterOutfit(s, false));
     if (!TheGameMode->InMode("campaign", true)) {
-        pPlayerData->SetUnk48(s);
+        pPlayerData->SetMiniGameCharacter(s);
         pPlayerData->SetPreferredOutfit(GetCharacterOutfit(s, false));
     }
     if (pOtherPlayerData->Char() == s) {
@@ -292,7 +292,7 @@ void MultiUserGesturePanel::SetRandomCharacter(int idx) {
     pPlayerData->SetCrew(crewForChar);
     if (!TheGameMode->InMode("dance_battle", true)) {
         if (!TheGameMode->InMode("campaign", true)) {
-            pPlayerData->SetUnk48(gNullStr);
+            pPlayerData->SetMiniGameCharacter(gNullStr);
             pPlayerData->SetPreferredOutfit(gNullStr);
         }
     }

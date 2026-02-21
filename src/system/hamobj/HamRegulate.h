@@ -29,7 +29,7 @@ public:
     NEW_OBJ(HamRegulate)
 
     void RegulateWay(Waypoint *, float);
-    void SetWaypoint(Waypoint *w) { unk14 = w; }
+    void SetWaypoint(Waypoint *w) { mWaypoint = w; }
 
 protected:
     HamRegulate();
@@ -38,14 +38,14 @@ protected:
 
     void Regulate(Vector3 &, float);
 
-    Character *unk10; // 0x10
-    ObjPtr<Waypoint> unk14; // 0x14
-    int unk28;
-    float unk2c;
-    Vector3 unk30;
-    Vector3 unk40;
-    int unk50;
-    float unk54;
+    Character *mCharacter; // 0x10
+    ObjPtr<Waypoint> mWaypoint; // 0x14
+    int mRegulateMode;
+    float mArriveRadius;
+    Vector3 mPosDelta;
+    Vector3 mAccumVelocity;
+    int mFootState;
+    float mMaxSpeed;
     ObjPtr<CharIKFoot> mLeftFoot; // 0x58
     ObjPtr<CharIKFoot> mRightFoot; // 0x6c
 };

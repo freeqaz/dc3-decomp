@@ -11,15 +11,15 @@
 
 CharLipSyncDriver::CharLipSyncDriver()
     : mLipSync(this), mClips(this), mBlinkClip(this), mSongOwner(this), mSongOffset(0),
-      mLoop(0), unk88(0), unk8c(0), unk90(1), unk94(0), mBones(this), mTestClip(this),
-      mTestWeight(1), unkc4(0), unkc8(0), unkc9(0), unkcc(0), unkd4(0),
+      mLoop(0), mMainPlayback(0), mIsOverrideActive(0), unk90(1), mOverridePlayback(0), mBones(this), mTestClip(this),
+      mTestWeight(1), unkc4(0), mBlendingIn(0), mBlendingOut(0), mOverrideBlendTarget(0), unkd4(0),
       mOverrideClip(this), mOverrideWeight(0), mOverrideOptions(this),
       mApplyOverrideAdditively(0), unk108(this), unk11c(0), unk120(0), unk124(0),
       unk128(0), mAlternateDriver(this) {}
 
 CharLipSyncDriver::~CharLipSyncDriver() {
-    RELEASE(unk88);
-    RELEASE(unk94);
+    RELEASE(mMainPlayback);
+    RELEASE(mOverridePlayback);
 }
 
 BEGIN_HANDLERS(CharLipSyncDriver)
@@ -140,14 +140,14 @@ void CharLipSyncDriver::SetClips(ObjectDir *dir) {
 }
 
 bool CharLipSyncDriver::SetLipSync(CharLipSync *sync) {
-    if (unk8c) {
+    if (mIsOverrideActive) {
         MILO_LOG(
             "CharLipSyncDriver::SetLipSync() - previous VO Lipsync was fading out.  Deleting now - Name:%s\n",
             SafeName(mLipSync)
         );
-        RELEASE(unk88);
+        RELEASE(mMainPlayback);
         mLipSync = nullptr;
-        unk8c = false;
+        mIsOverrideActive = false;
         unk90 = 1;
     }
 
@@ -155,10 +155,10 @@ bool CharLipSyncDriver::SetLipSync(CharLipSync *sync) {
         if (!streq(sync->Name(), "player1_cam.lipsync")
             && !streq(sync->Name(), "player2_cam.lipsync")
             && !streq(sync->Name(), "dancer_face.lipsync")) {
-            RELEASE(unk94);
-            unk94 = new CharLipSync::PlayBack();
-            unk94->Set(sync, mClips);
-            unk94->Reset();
+            RELEASE(mOverridePlayback);
+            mOverridePlayback = new CharLipSync::PlayBack();
+            mOverridePlayback->Set(sync, mClips);
+            mOverridePlayback->Reset();
             return true;
         } else if (sync != mLipSync) {
             mLipSync = sync;
@@ -196,39 +196,39 @@ void CharLipSyncDriver::Sync() {
     } else {
         mBlinkClip = nullptr;
     }
-    RELEASE(unk88);
-    if (unk94 && mClips) {
-        unk94->SetClips(mClips);
+    RELEASE(mMainPlayback);
+    if (mOverridePlayback && mClips) {
+        mOverridePlayback->SetClips(mClips);
     }
     if (mLipSync && mClips) {
-        unk88 = new CharLipSync::PlayBack();
-        unk88->Set(mLipSync, mClips);
-        unk88->Reset();
-        unk8c = false;
+        mMainPlayback = new CharLipSync::PlayBack();
+        mMainPlayback->Set(mLipSync, mClips);
+        mMainPlayback->Reset();
+        mIsOverrideActive = false;
         unk90 = 1;
     }
 }
 
 void CharLipSyncDriver::ClearLipSync() {
-    RELEASE(unk94);
-    RELEASE(unk88);
+    RELEASE(mOverridePlayback);
+    RELEASE(mMainPlayback);
     mLipSync = nullptr;
-    unk8c = false;
+    mIsOverrideActive = false;
     unk90 = 1;
 }
 
 void CharLipSyncDriver::BlendInOverrides(float f) {
-    unkcc = f;
-    unkc8 = true;
-    unkc9 = false;
-    unkd0 = true;
+    mOverrideBlendTarget = f;
+    mBlendingIn = true;
+    mBlendingOut = false;
+    mIsBlending = true;
 }
 
 void CharLipSyncDriver::BlendOutOverrides(float f) {
-    unkcc = f;
-    unkc9 = true;
-    unkc8 = false;
-    unkd0 = true;
+    mOverrideBlendTarget = f;
+    mBlendingOut = true;
+    mBlendingIn = false;
+    mIsBlending = true;
 }
 
 void CharLipSyncDriver::Highlight() {
@@ -239,11 +239,11 @@ void CharLipSyncDriver::Highlight() {
         Vector2 v2(5.0f, gCharHighlightY);
         float y = TheRnd.DrawString(MakeString("%s:", PathName(this)), v2, white, true).y;
         v2.y += y;
-        if (unk88) {
-            int frame = unk88->mFrame;
+        if (mMainPlayback) {
+            int frame = mMainPlayback->mFrame;
             TheRnd.DrawString(MakeString("frame %d", frame), v2, white, true);
             v2.y += y;
-            std::vector<CharLipSync::PlayBack::Weight> &weights = unk88->mWeights;
+            std::vector<CharLipSync::PlayBack::Weight> &weights = mMainPlayback->mWeights;
             for (int i = 0; i < weights.size(); i++) {
                 CharLipSync::PlayBack::Weight &curWeight = weights[i];
                 float f14 = curWeight.mCurWeight;

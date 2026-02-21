@@ -207,7 +207,7 @@ void Skeleton::Init() {
             mTrackedJoints[i].mJointPos[j].Zero();
         }
         mTrackedJoints[i].mJointConf = kConfidenceNotTracked;
-        mTrackedJoints[i].unk60.Zero();
+        mTrackedJoints[i].mSmoothedPos.Zero();
     }
     memset(mCamBoneLengths, 0, sizeof(mCamBoneLengths));
     mCamDisplacements = std::vector<CameraDisplacement>();

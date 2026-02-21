@@ -62,7 +62,7 @@ protected:
     /** "Total seconds" */
     float mTotalSeconds; // 0x4c
     float unk50; // 0x50
-    bool unk54; // 0x54
+    bool mIsRunning; // 0x54
     /** "which timeline does this beatclock run on?" */
     TaskUnits mTimeline; // 0x58
 };

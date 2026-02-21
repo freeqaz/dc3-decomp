@@ -10,17 +10,17 @@ public:
     ChallengeRecord &operator=(const ChallengeRecord &other);
 
     ChallengeRow &GetChallengeRow() { return mRow; }
-    Symbol GetUnk40() { return unk40; }
-    Symbol GetUnk44() { return unk44; }
-    Symbol GetUnk48() { return unk48; }
-    Symbol GetUnk4c() { return unk4c; }
-    int GetUnk50() { return unk50; }
+    Symbol GetUnk40() { return mSongShortName; }
+    Symbol GetUnk44() { return mSongTitle; }
+    Symbol GetUnk48() { return mChallengerGamertag; }
+    Symbol GetUnk4c() { return mMissionInfo; }
+    int GetUnk50() { return mSongContentLockState; }
 
 private:
     ChallengeRow mRow; // 0x4
-    Symbol unk40; // 0x40
-    Symbol unk44; // 0x44
-    Symbol unk48; // 0x48
-    Symbol unk4c; // 0x4c
-    int unk50; // 0x50
+    Symbol mSongShortName; // 0x40
+    Symbol mSongTitle; // 0x44
+    Symbol mChallengerGamertag; // 0x48
+    Symbol mMissionInfo; // 0x4c
+    int mSongContentLockState; // 0x50
 };

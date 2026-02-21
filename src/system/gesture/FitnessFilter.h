@@ -20,14 +20,14 @@ public:
     bool GetFitnessDataAndReset(float &, float &);
     void SetPaused(bool);
     void StopTracking();
-    void StartTracking() { unk6 = true; }
+    void StartTracking() { mActive = true; }
 
 private:
-    bool unk4; // 0x4 - paused?
-    bool unk5;
-    bool unk6;
+    bool mPaused; // 0x4
+    bool mNuiStarted; // 0x5
+    bool mActive; // 0x6
     int mTrackingID; // 0x8
-    bool unkc; // 0xc - actively tracking?
+    bool mNuiTrackingActive; // 0xc
     RndOverlay *mFitnessMeterOverlay; // 0x10
     int mPlayerIndex; // 0x14
 };

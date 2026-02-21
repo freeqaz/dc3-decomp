@@ -33,7 +33,7 @@ public:
     OBJ_MEM_OVERLOAD(0x11)
     NEW_OBJ(HamScrollSpeedIndicator)
 
-    bool IsShowing() const { return unk1fc; }
+    bool IsShowing() const { return mIsShowing; }
     void Show(bool);
     void Update(float, float, float);
     void HandleEnter();
@@ -41,7 +41,7 @@ public:
     void Draw(const Transform &);
 
 protected:
-    bool unk1fc; // 0x1fc
+    bool mIsShowing; // 0x1fc
     /** "Frame at which the bar reaches the slow-scroll indicator" */
     float mSlowScrollThresholdFrame; // 0x200
     /** "Frame at which the bar reaches the fast-scroll indicator" */

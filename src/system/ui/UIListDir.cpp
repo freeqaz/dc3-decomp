@@ -25,7 +25,7 @@ UIListDir::UIListDir()
     mTestState.SetSelected(0, -1, true);
 }
 
-UIListDir::~UIListDir() { DeleteAll(unk270); }
+UIListDir::~UIListDir() { DeleteAll(mTestWidgets); }
 
 BEGIN_PROPSYNCS(UIListDir)
     SYNC_PROP_SET(orientation, mOrientation, mOrientation = (UIListOrientation)_val.Int())
@@ -121,8 +121,8 @@ void UIListDir::PostLoad(BinStream &bs) {
 void UIListDir::SyncObjects() {
     RndDir::SyncObjects();
     if (TheLoadMgr.EditMode()) {
-        CreateElements(0, unk270, mTestState.NumDisplay());
-        FillElements(mTestState, unk270);
+        CreateElements(0, mTestWidgets, mTestState.NumDisplay());
+        FillElements(mTestState, mTestWidgets);
     }
 }
 
@@ -130,7 +130,7 @@ void UIListDir::DrawShowing() {
     if (mTestMode && TheLoadMgr.EditMode()) {
         UIListWidgetDrawState drawState;
         BuildDrawState(drawState, mTestState, mTestComponentState, 0, false);
-        DrawWidgets(drawState, mTestState, unk270, WorldXfm(), mTestComponentState, nullptr, false);
+        DrawWidgets(drawState, mTestState, mTestWidgets, WorldXfm(), mTestComponentState, nullptr, false);
     } else
         RndDir::DrawShowing();
 }
@@ -140,7 +140,7 @@ void UIListDir::Poll() {
         RndDir::Poll();
         if (mTestMode) {
             mTestState.Poll(TheTaskMgr.Seconds(TaskMgr::kRealTime));
-            PollWidgets(unk270);
+            PollWidgets(mTestWidgets);
         }
     }
 }
@@ -157,11 +157,11 @@ bool UIListDir::IsActive(int i) const {
 }
 
 void UIListDir::StartScroll(const UIListState &state, int i, bool b) {
-    StartScroll(state, unk270, i, b);
+    StartScroll(state, mTestWidgets, i, b);
 }
 
 void UIListDir::CompleteScroll(const UIListState &state) {
-    CompleteScroll(state, unk270);
+    CompleteScroll(state, mTestWidgets);
 }
 
 UIListOrientation UIListDir::Orientation() const { return mOrientation; }
@@ -308,7 +308,7 @@ float UIListDir::SetElementPos(Vector3 &v, float position, int gridSpan, float p
 
 void UIListDir::Reset() {
     mTestState.SetSelected(0, -1, true);
-    FillElements(mTestState, unk270);
+    FillElements(mTestState, mTestWidgets);
 }
 
 BEGIN_HANDLERS(UIListDir)

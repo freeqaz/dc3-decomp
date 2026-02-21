@@ -46,7 +46,7 @@ protected:
 
 class MemcardXbox : public Memcard {
 public:
-    MemcardXbox() : unk156(0), unk158(0), unk15c(0) {}
+    MemcardXbox() : mSelectorPending(0), mSelectorCallback(0), mSelectedDevice(0) {}
     virtual ~MemcardXbox() {}
     virtual void Init() { Memcard::Init(); }
     virtual void Terminate() { Memcard::Terminate(); }
@@ -68,9 +68,9 @@ public:
 protected:
     char mFileName[XCONTENT_MAX_FILENAME_LENGTH]; // 0x2c
     wchar_t mDisplayName[XCONTENT_MAX_DISPLAYNAME_LENGTH]; // 0x56
-    bool unk156; // 0x156
-    Hmx::Object *unk158; // 0x158
-    DWORD unk15c; // 0x15c
+    bool mSelectorPending; // 0x156
+    Hmx::Object *mSelectorCallback; // 0x158
+    DWORD mSelectedDevice; // 0x15c
     XOVERLAPPED mXOverlapped; // 0x160
 };
 

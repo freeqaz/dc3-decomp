@@ -50,7 +50,7 @@ SetPartyOptionsJob::SetPartyOptionsJob(Hmx::Object *callback, const char *online
                 playlistId = 0;
             }
         } else {
-            if (playlist->GetUnk8()) {
+            if (playlist->GetIsBattlePlaylist()) {
                 static Symbol playlists("playlists");
                 playlistType = 1;
                 DataArray *sysConfig = SystemConfig(playlists);
@@ -198,10 +198,10 @@ void GetSongQueue(JsonConverter &c, const JsonObject *o, std::list<SongQueueRow>
     for (int i = 0; i < aSize; i++) {
         JsonArray *cur = static_cast<JsonArray *>(c.GetValue(a, i));
         SongQueueRow row;
-        row.unk0 = c.GetValue(cur, 0)->Int();
+        row.mQueueIndex = c.GetValue(cur, 0)->Int();
         row.mSongID = c.GetValue(cur, 1)->Int();
-        row.unk8 = c.GetValue(cur, 2)->Str();
-        row.unk10 = c.GetValue(cur, 3)->Str();
+        row.mPlayerName = c.GetValue(cur, 2)->Str();
+        row.mAdditionalInfo = c.GetValue(cur, 3)->Str();
         rows->push_back(row);
     }
 }

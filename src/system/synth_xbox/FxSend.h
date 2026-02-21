@@ -25,7 +25,7 @@ public:
     std::vector<IUnknown *> unk20;
     FxSend *mThis; // 0x2c
     bool unk30;
-    std::vector<Voice *> unk34;
+    std::vector<Voice *> mOwnerVoices;
 
 private:
     struct IXAudio2Voice *OutputVoice();

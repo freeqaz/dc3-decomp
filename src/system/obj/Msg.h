@@ -249,7 +249,7 @@ public:
     MEM_OVERLOAD(MsgSinks, 0xAF);
 
 private:
-    DataArray *unk0;
+    DataArray *mPropSyncHandlers; // 0x0 - array of {DataArray*, Symbol} pairs for property sync export handlers
     ObjList<Sink> mSinks; // 0x4
     ObjList<EventSink> mEventSinks; // 0x10
     int mExporting; // 0x1c

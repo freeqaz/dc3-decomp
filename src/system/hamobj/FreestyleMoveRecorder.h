@@ -75,21 +75,21 @@ private:
     static DataNode OnReadAttempt(DataArray *);
     static DataNode OnClearAttempt(DataArray *);
 
-    float unk4;
+    float mPlaybackSpeed; // 0x4
     FreestyleMoveFrame *mClipFrames; // 0x8 - frames
     int mClipFrameCount; // 0xc - frame count for mClipFrames
     String mClipName;
     FreestyleMoveFrame *mRecordingFrames;
     int mRecordingFrameCount;
-    int unk20;
+    int mLastFrameIndex; // 0x20 - initialized to -1
     int mMaxFrames;
     int mRecordPos;
     int mPlaybackPos;
-    float unk30;
-    int unk34;
+    float mDefaultTimeout; // 0x30 - initialized to 15
+    int mPlaybackIndex; // 0x34 - initialized to -1, playback position
     bool mRecording;
-    bool unk39;
-    Symbol unk3c;
+    bool mPlaybackActive; // 0x39
+    Symbol mRecordingTarget; // 0x3c
     int unk40;
     int mSkeletonIndex;
     FreestyleMove mTakes[4]; // 0x48

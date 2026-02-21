@@ -150,7 +150,7 @@ void ShellInput::Poll() {
             TheGameMode->Property(gameplay_mode, true)->Sym(nullptr);
         if (gameplayModeValue == practice) {
             HandInvokeGestureFilter *filter = mHandInvokeGestureFilter;
-            if (filter && filter->GetUnk140()) {
+            if (filter && filter->GetInvokeDetected()) {
                 if (!unk_practice_flag) {
                     int suppress =
                         TheHamProvider->Property(suppress_practice_options, true)->Int();
@@ -181,7 +181,7 @@ void ShellInput::Poll() {
                     TheHamProvider->Property(suppress_practice_options, true)->Int();
                 if (!noPartyOptions) {
                     HandInvokeGestureFilter *filter = mHandInvokeGestureFilter;
-                    if (filter && filter->GetUnk140()) {
+                    if (filter && filter->GetInvokeDetected()) {
                         if (!unk_party_flag) {
                             static Symbol invoke_practice_options("invoke_practice_options"
                             );
@@ -292,7 +292,7 @@ void ShellInput::EnterControllerMode(bool b) {
         unk_0xA4 = false;
         static Symbol in_controller_mode("in_controller_mode");
         TheHamProvider->SetProperty(in_controller_mode, true);
-        TheRockCentral.SetUnk128(TheRockCentral.GetUnk128() + 1);
+        TheRockCentral.SetControllerModeEnterCount(TheRockCentral.GetControllerModeEnterCount() + 1);
         unk_0x68.Restart();
         int hamUIPadNum = TheHamUI.GetPadNum();
         if (!TheProfileMgr.CriticalProfile()) {
@@ -318,7 +318,7 @@ void ShellInput::ExitControllerMode(bool b) {
     TheUI->Handle(controllerModeExited, false);
     static Symbol in_controller_mode("in_controller_mode");
     TheHamProvider->SetProperty(in_controller_mode, 0);
-    TheRockCentral.SetUnk12c(TheRockCentral.GetUnk12c() + 1);
+    TheRockCentral.SetControllerModeExitCount(TheRockCentral.GetControllerModeExitCount() + 1);
 }
 
 void ShellInput::DrawDebug() {
@@ -356,7 +356,7 @@ void ShellInput::SyncToCurrentScreen() {
     } else {
         mInputPanel = TheHamUI.FocusPanel();
     }
-    TheGestureMgr->SetBool4271(!IsGameplayPanel());
+    TheGestureMgr->SetInShellMode(!IsGameplayPanel());
     TheHamUI.GetHelpBarPanel()->SyncToPanel(mInputPanel);
     unk_0x98 = 5000;
     if (TheHamUI.GetHelpBarPanel()) {

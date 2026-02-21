@@ -23,7 +23,7 @@ struct DecompressTask {
     int *mChunk; // 0x0
     void *mBuffer; // 0x4
     BufferState *mState; // 0x8
-    int unkc; // 0xc i think this is the expected decompressed size
+    int mDecompressedSize; // 0xc expected decompressed size
     int mID; // 0x10
     char *mTempBuf; // 0x14
 };

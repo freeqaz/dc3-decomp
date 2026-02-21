@@ -42,9 +42,9 @@ private:
     int unk10c;
     int unk110;
     String unk114;
-    String unk11c;
+    String mKernelVersion;
     String unk124;
-    String unk12c;
+    String mHostName;
 
 public:
     Debug();

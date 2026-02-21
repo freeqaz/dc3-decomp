@@ -12,17 +12,17 @@ int SongCmp::Compare(const NavListItemSortCmp *cmp, NavListNodeType type) const 
 
     case kNodeHeader: {
         const SongCmp *songCmp = cmp->GetSongCmp();
-        int iVar3 = unk4 - songCmp->unk4;
-        if (unk8 == 0)
+        int iVar3 = mSortKey - songCmp->mSortKey;
+        if (mSortKeyEnd == 0)
             return iVar3;
         if (0 < iVar3)
             return iVar3;
-        return unk8 - songCmp->unk4 >> 31 & unk8 - songCmp->unk4; // something strange
+        return mSortKeyEnd - songCmp->mSortKey >> 31 & mSortKeyEnd - songCmp->mSortKey; // something strange
                                                                   // here
     }
     case kNodeItem: {
         const SongCmp *songCmp = cmp->GetSongCmp();
-        return AlphaKeyStrCmp(unk4, songCmp->unk4, false);
+        return AlphaKeyStrCmp(mSortKey, songCmp->mSortKey, false);
     }
     default:
         MILO_FAIL("invalid type of node comparison.\n");

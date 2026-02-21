@@ -14,8 +14,8 @@
 struct DepthBuffer3DAttachment {
     RndTransformable *obj; // 0x0
     int player; // 0x4
-    int unk8;
-    Vector3 unkc;
+    int mJoint; // 0x8
+    Vector3 mOffset; // 0xc
     bool unk1c;
     int unk20;
 };
@@ -70,8 +70,8 @@ protected:
     Hmx::Color mNobodyColor; // 0x108
     /** "1D palette for player depth" */
     ObjPtr<RndTex> mPlayerPalette; // 0x118
-    ObjPtr<RndTex> unk12c;
-    float unk140;
+    ObjPtr<RndTex> mBoxymanPalette; // 0x12c
+    float mBoxymanPaletteAnim; // 0x140
     /** "Starting point for palette". Ranges from -1 to 1. */
     float mPlayerPaletteOffset; // 0x144
     /** "Scale the coordinate used to look up the palette value.
@@ -88,10 +88,10 @@ protected:
     float mStretchNearCamera; // 0x174
     /** "Multiply palette alpha by this value.". Ranges from 0 to 1. */
     float mOpacity; // 0x178
-    float unk17c;
-    float unk180;
-    int unk184;
-    bool unk188;
+    float mPlayer1Grooviness; // 0x17c
+    float mPlayer2Grooviness; // 0x180
+    int mForceDrawSkeletonIdx; // 0x184
+    bool mForceDrawEnabled; // 0x188
     ObjPtr<RndTex> unk18c;
     int unk1a0;
     int unk1a4;
@@ -111,9 +111,9 @@ protected:
     float mFishEyeX; // 0x1d0
     /** "vertical fisheye coefficient" */
     float mFishEyeY; // 0x1d4
-    ObjPtr<RhythmDetector> unk1d8;
-    ObjPtr<RhythmDetector> unk1ec;
-    std::vector<DepthBuffer3DAttachment> unk200;
+    ObjPtr<RhythmDetector> mGroovinessDetector1; // 0x1d8
+    ObjPtr<RhythmDetector> mGroovinessDetector2; // 0x1ec
+    std::vector<DepthBuffer3DAttachment> mAttachments; // 0x200
     DoubleExponentialSmoother unk20c;
     DoubleExponentialSmoother unk220;
     DoubleExponentialSmoother unk234;

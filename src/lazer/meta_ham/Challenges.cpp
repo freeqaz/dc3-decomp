@@ -276,7 +276,7 @@ void Challenges::PollInGameStatus() {
                 if (mPlayerChallenges[i].size() != 0) {
                     if ((unsigned int)mPlayerChallenges[i][0].mType
                         == ChallengeRow::kNumChallengeTypes) {
-                        if (mPlayerChallenges[i][0].unk2c
+                        if (mPlayerChallenges[i][0].mNotes
                             != provider->Property(player_name)->Str()) {
                             provider->SetProperty(has_valid_challenge_data, false);
                         }
@@ -871,7 +871,7 @@ void Challenges::DownloadPlayerChallenges() {
 
 void Challenges::Poll() {
     if (mOfficialChallengeTimer.Running()) {
-        if (1.0f <= mOfficialChallengeTimer.SplitMs() / TheRockCentral.GetUnk84()) {
+        if (1.0f <= mOfficialChallengeTimer.SplitMs() / TheRockCentral.GetChallengeInterval()) {
             mOfficialChallengeTimer.Stop();
             DownloadOfficialChallenges();
         }
@@ -886,7 +886,7 @@ void Challenges::Poll() {
     }
 
     if (mPlayerChallengeTimer.Running()) {
-        if (1.0f <= mPlayerChallengeTimer.SplitMs() / TheRockCentral.GetUnk84()) {
+        if (1.0f <= mPlayerChallengeTimer.SplitMs() / TheRockCentral.GetChallengeInterval()) {
             mPlayerChallengeTimer.Stop();
             AutoDownloadPlayerChallenges();
         }

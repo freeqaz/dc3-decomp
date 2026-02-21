@@ -20,17 +20,17 @@ BEGIN_HANDLERS(ChallengeSort)
 END_HANDLERS
 
 void ChallengeSort::SetHighlightedIx(int idx) {
-    unk54 = unk50;
+    mPrevHighlightNode = mHighlightNode;
     if (idx >= 0) {
         if (mList.size() >= idx) {
             if (mList.size() == 0)
                 return;
-            unk50 = mList[idx];
+            mHighlightNode = mList[idx];
             TheChallengeSortMgr->OnHighlightChanged();
             return;
         }
     }
-    unk50 = nullptr;
+    mHighlightNode = nullptr;
 }
 
 void ChallengeSort::DeleteItemList() {
@@ -55,17 +55,17 @@ void ChallengeSort::OnSelectShortcut(int idx) {
 void ChallengeSort::Text(int i1, int i2, UIListLabel *listlabel, UILabel *label) const {
     AppLabel *app_label = dynamic_cast<AppLabel *>(label);
     MILO_ASSERT(app_label, 0xe1);
-    app_label->SetFromGeneralSelectNode(unk30[i2]);
+    app_label->SetFromGeneralSelectNode(mShortcutNodes[i2]);
 }
 
 void ChallengeSort::SetHighlightItem(const NavListSortNode *node) {
-    unk54 = unk50;
-    unk50 = nullptr;
+    mPrevHighlightNode = mHighlightNode;
+    mHighlightNode = nullptr;
     if (node) {
         if (node->GetType() == 5 || node->GetType() == 4) {
             auto findNode = std::find_if(mList.begin(), mList.end(), SortNodeFind(node));
             if (findNode != mList.end()) {
-                unk50 = *findNode;
+                mHighlightNode = *findNode;
                 TheChallengeSortMgr->OnHighlightChanged();
             }
         }
@@ -74,22 +74,22 @@ void ChallengeSort::SetHighlightItem(const NavListSortNode *node) {
 
 void ChallengeSort::BuildItemList() {
     Symbol sym(gNullStr);
-    auto sortNode = unk50;
+    auto sortNode = mHighlightNode;
     if (sortNode && sortNode->GetType() == 5) {
         sym = sortNode->GetToken();
     }
     DeleteItemList();
-    FOREACH (it, unk3c) {
+    FOREACH (it, mAllNodes) {
         (*it)->Renumber(mList);
     }
-    FOREACH (it, unk30) {
+    FOREACH (it, mShortcutNodes) {
         (*it)->Renumber(mList);
     }
-    FOREACH (it, unk30) {
+    FOREACH (it, mShortcutNodes) {
         (*it)->FinishBuildList(this);
     }
     if (!sym.Null()) {
-        unk50 = GetNode(sym);
+        mHighlightNode = GetNode(sym);
     }
     TheChallengeSortMgr->FinalizeHeaders();
 }

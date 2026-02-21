@@ -5,7 +5,7 @@
 #include "obj/Data.h"
 #include "obj/Object.h"
 
-FlowSwitch::FlowSwitch() : mFirstValidCaseOnly(1) { unk64 = DataNode(kDataUndef, 0); }
+FlowSwitch::FlowSwitch() : mFirstValidCaseOnly(1) { mPreviousValue = DataNode(kDataUndef, 0); }
 FlowSwitch::~FlowSwitch() {}
 
 BEGIN_HANDLERS(FlowSwitch)
@@ -41,7 +41,7 @@ BEGIN_LOADS(FlowSwitch)
     d >> mFirstValidCaseOnly;
     VerifyTypes();
     PushDrivenProperties();
-    unk64 = mValue;
+    mPreviousValue = mValue;
 END_LOADS
 
 bool FlowSwitch::Activate() {
@@ -56,20 +56,20 @@ bool FlowSwitch::Activate() {
     } else {
         PushDrivenProperties();
         if (mValue.NotNull()) {
-            if (unk64.Type() != mValue.Type()) {
-                unk64 = mValue;
+            if (mPreviousValue.Type() != mValue.Type()) {
+                mPreviousValue = mValue;
             }
         } else {
             if (mValue.Type() == kDataObject) {
-                unk64 = NULL_OBJ;
+                mPreviousValue = NULL_OBJ;
             } else {
-                unk64 = 0;
+                mPreviousValue = 0;
             }
         }
-        if (!ActivateTransitionCases(mValue, unk64)) {
-            ActivateValueCases(mValue, unk64);
+        if (!ActivateTransitionCases(mValue, mPreviousValue)) {
+            ActivateValueCases(mValue, mPreviousValue);
         }
-        unk64 = mValue;
+        mPreviousValue = mValue;
         return FlowNode::IsRunning();
     }
 }
@@ -80,14 +80,14 @@ void FlowSwitch::ChildFinished(FlowNode *n) {
     FlowSwitchCase *switchCase = static_cast<FlowSwitchCase *>(n);
     if (switchCase && switchCase->Op() == kTransition) {
         mRunningNodes.remove(n);
-        if (mValue != unk64) {
-            DataNode dupe(unk64);
-            unk64 = mValue;
+        if (mValue != mPreviousValue) {
+            DataNode dupe(mPreviousValue);
+            mPreviousValue = mValue;
             if (!ActivateTransitionCases(mValue, dupe)) {
                 ActivateValueCases(mValue, dupe);
             }
         } else {
-            ActivateValueCases(mValue, unk64);
+            ActivateValueCases(mValue, mPreviousValue);
         }
         if (!FlowNode::IsRunning()) {
             mFlowParent->ChildFinished(this);

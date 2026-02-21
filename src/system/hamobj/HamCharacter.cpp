@@ -41,9 +41,9 @@ namespace {
 String mCampaignVO;
 
 HamCharacter::HamCharacter()
-    : mCampaignVOBank(0), mCampaignVODir(0), mFileMerger(0), unk2f8(0), mShowBox(0),
-      unk2fa(1), mEyes(this), mGender(kHamFemale), unk314(0), mPollWhenHidden(0),
-      mTexBlendersActive(1), mIKEffectors(this), unk330(0), mNeutralSkelDir(0),
+    : mCampaignVOBank(0), mCampaignVODir(0), mFileMerger(0), mIsCampaignChar(0), mShowBox(0),
+      mNeedsAcquirePose(1), mEyes(this), mGender(kHamFemale), mAnimationState(0), mPollWhenHidden(0),
+      mTexBlendersActive(1), mIKEffectors(this), mBaseLipsyncOffset(0), mNeutralSkelDir(0),
       mSkeletonBones(0), mCrewCardMesh(nullptr), mUseCameraSkeleton(0) {
     mWaypoint = Hmx::Object::New<Waypoint>();
     mWaypoint->SetAngRadius(0);
@@ -187,8 +187,8 @@ void HamCharacter::SyncObjects() {
             t->SetTransParent(this, false);
         }
     }
-    if (unk2fa && BoneServo()) {
-        unk2fa = false;
+    if (mNeedsAcquirePose && BoneServo()) {
+        mNeedsAcquirePose = false;
         BoneServo()->AcquirePose();
     }
     SetTexBlendersActive(mTexBlendersActive);
@@ -229,7 +229,7 @@ void HamCharacter::Enter() {
     if (Regulator()) {
         Regulator()->SetWaypoint(nullptr);
     }
-    unk314 = 0;
+    mAnimationState = 0;
     TheSynth->AddPlayHandler(this);
 }
 
@@ -368,7 +368,7 @@ void HamCharacter::EnableFacialAnimation(CharLipSync *sync, float f2) {
     if (visemeDir && !visemeDir->Find<CharClip>("Base", false)) {
         return;
     }
-    unk330 = f2;
+    mBaseLipsyncOffset = f2;
     CharLipSyncDriver *driver = Find<CharLipSyncDriver>("face.lipdrv", false);
     if (sync && driver) {
         if (!driver->SetLipSync(sync)) {
@@ -434,7 +434,7 @@ void HamCharacter::BlendOutFaceOverrides(float f1) {
 void HamCharacter::SetLipsyncOffset(float offset) {
     CharLipSyncDriver *driver = Find<CharLipSyncDriver>("face.lipdrv", false);
     if (driver) {
-        driver->SetSongOffset(unk330 + offset);
+        driver->SetSongOffset(mBaseLipsyncOffset + offset);
     }
 }
 
@@ -539,18 +539,18 @@ DataNode HamCharacter::OnConfigureFileMerger(DataArray *a) {
     if (!mFileMerger) {
         return 0;
     } else {
-        unk2fa = true;
+        mNeedsAcquirePose = true;
         FilePath outfitPath = "";
         FilePath visemePath = "";
         FilePath voPath = "";
-        unk2f8 = !strstr(mOutfitDir.Str(), "dancer");
+        mIsCampaignChar = !strstr(mOutfitDir.Str(), "dancer");
         if (!mOutfit.Null()) {
             const char *model = GetOutfitModel(mOutfit);
             outfitPath.Set(FilePath::Root().c_str(), model);
             Symbol charSym = GetOutfitCharacter(mOutfit);
             const char *viseme = GetCharacterViseme(charSym);
             visemePath.Set(FilePath::Root().c_str(), viseme);
-            if (!unk2f8) {
+            if (!mIsCampaignChar) {
                 String vo = GetCampaignVo();
                 if (!vo.empty()) {
                     voPath.Set(FilePath::Root().c_str(), GetCampaignVoMilo().c_str());

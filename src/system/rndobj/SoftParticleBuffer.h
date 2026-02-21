@@ -25,5 +25,5 @@ private:
 
     RndTex *mSurfaces[2]; // 0x30
     int unk38; // 0x38
-    ObjPtrList<RndDrawable> unk3c; // 0x3c
+    ObjPtrList<RndDrawable> mSoftParticleDrawList; // 0x3c
 };

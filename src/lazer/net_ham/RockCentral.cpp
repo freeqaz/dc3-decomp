@@ -58,9 +58,10 @@ namespace {
 }
 
 RockCentral::RockCentral()
-    : mState(), unk7c(0), mMOTDJob(0), unk84(60000), mRockCentralTime(-1), unk8c(0),
-      unk90(0), mMiscArt(0), mLoginBlocked(0), unkdd(0), mKinectShareConnection(0),
-      unk124(0), unk128(0), unk12c(0) {}
+    : mState(), mNextControllerUploadMs(0), mMOTDJob(0), mChallengeInterval(60000), mRockCentralTime(-1),
+      mMotdXPFlag(0), mMotdFreq(0), mMiscArt(0), mLoginBlocked(0), mJustConnected(0),
+      mKinectShareConnection(0), mKinectShareCallback(0), mControllerModeEnterCount(0),
+      mControllerModeExitCount(0) {}
 
 RockCentral::~RockCentral() { RELEASE(mKinectShareConnection); }
 
@@ -100,7 +101,7 @@ void RockCentral::SetLoginPassword(const char *password) {
 
 void RockCentral::Login() {
     mState = kAuthenticating;
-    unkdd = false;
+    mJustConnected = false;
     if (!TheServer.Authenticate(0)) { // should be TheServer->unk74
         Export(ServerStatusChangedMsg(kServerStatusDisconnected), false);
     }
@@ -119,13 +120,13 @@ void RockCentral::OnJobFinished(RCJob *job) {
 static bool sSentScreenRes;
 
 void RockCentral::Poll() {
-    unk48.Split();
+    mTimer.Split();
 
     switch (mState) {
     case kDisconnected:
     case kFailed:
         if (ThePlatformMgr.IsConnected()) {
-            if (unk48.Ms() >= unk78 && !mLoginBlocked) {
+            if (mTimer.Ms() >= mNextLoginMs && !mLoginBlocked) {
                 Login();
             }
         }
@@ -144,7 +145,7 @@ void RockCentral::Poll() {
         TheProfileMgr.UploadDeferredFitnessGoal();
     }
 
-    if (unkdd) {
+    if (mJustConnected) {
         mMOTDJob = new GetMotdJob(this);
         if (!mLoginBlocked) {
             TheServer.ManageJob(mMOTDJob);
@@ -157,24 +158,24 @@ void RockCentral::Poll() {
             }
         }
         TheChallenges->DownloadOfficialChallenges();
-        unkdd = false;
+        mJustConnected = false;
     }
 
     if (mKinectShareConnection) {
         mKinectShareConnection->Poll();
         int kinectState = mKinectShareConnection->GetState();
         if (kinectState == 3) {
-            if (unk124) {
+            if (mKinectShareCallback) {
                 RockCentralOpCompleteMsg msg(false, -1, DataNode());
-                unk124->Handle(msg, true);
-                unk124 = nullptr;
+                mKinectShareCallback->Handle(msg, true);
+                mKinectShareCallback = nullptr;
             }
             RELEASE(mKinectShareConnection);
         } else if (kinectState == 2) {
-            if (unk124) {
+            if (mKinectShareCallback) {
                 RockCentralOpCompleteMsg msg(true, 0, DataNode());
-                unk124->Handle(msg, true);
-                unk124 = nullptr;
+                mKinectShareCallback->Handle(msg, true);
+                mKinectShareCallback = nullptr;
             }
             RELEASE(mKinectShareConnection);
             KinectShareJob *job = new KinectShareJob(nullptr);
@@ -184,16 +185,17 @@ void RockCentral::Poll() {
         }
     }
 
-    if (unk48.Ms() >= unk7c) {
-        if (unk128 != 0 || unk12c != 0) {
-            ControllerModeJob *job = new ControllerModeJob(nullptr, unk128, unk12c);
+    if (mTimer.Ms() >= mNextControllerUploadMs) {
+        if (mControllerModeEnterCount != 0 || mControllerModeExitCount != 0) {
+            ControllerModeJob *job =
+                new ControllerModeJob(nullptr, mControllerModeEnterCount, mControllerModeExitCount);
             if (!mLoginBlocked) {
                 TheServer.ManageJob(job);
             }
         }
-        unk128 = 0;
-        unk12c = 0;
-        unk7c = unk48.Ms() + 600000.0f;
+        mControllerModeEnterCount = 0;
+        mControllerModeExitCount = 0;
+        mNextControllerUploadMs = mTimer.Ms() + 600000.0f;
     }
 
     TheServer.Poll();
@@ -208,9 +210,9 @@ void RockCentral::Init() {
     TheDebug.AddExitCallback(RockCentralTerminate);
     TheDataPointMgr.SetDataPointRecorder(SendDataPointNoReturn);
     unke0.Generate();
-    unk48.Start();
-    unk78 = unk48.Ms();
-    unk7c = unk48.Ms() + 600000.0f;
+    mTimer.Start();
+    mNextLoginMs = mTimer.Ms();
+    mNextControllerUploadMs = mTimer.Ms() + 600000.0f;
     mDLCMsg = gNullStr;
     mUtilityMsg = gNullStr;
     mCommunityMsgs.clear();
@@ -253,13 +255,13 @@ void RockCentral::DeleteMiscArt() {
 }
 
 void RockCentral::CancelOutstandingCalls(Hmx::Object *obj) {
-    for (auto it = unk2c.begin(); it != unk2c.end();) {
+    for (auto it = mManagedJobs.begin(); it != mManagedJobs.end();) {
         RCJob *cur = *it;
         if (cur->GetCallback() == obj) {
-            unk2c.erase(it);
+            mManagedJobs.erase(it);
             cur->Cancel(false);
             OnJobFinished(cur);
-            it = unk2c.begin();
+            it = mManagedJobs.begin();
         } else {
             ++it;
         }
@@ -269,7 +271,7 @@ void RockCentral::CancelOutstandingCalls(Hmx::Object *obj) {
 DataNode RockCentral::OnMsg(const ConnectionStatusChangedMsg &msg) {
     if (msg.Connected() && (mState == kFailed || mState == kDisconnected)) {
         mState = kDisconnected;
-        unk78 = unk48.Ms();
+        mNextLoginMs = mTimer.Ms();
     } else if (!msg.Connected() && (mState == kConnected || mState == kAuthenticating)) {
         mState = kLoggingOut;
         TheServer.Logout();
@@ -280,7 +282,7 @@ DataNode RockCentral::OnMsg(const ConnectionStatusChangedMsg &msg) {
 DataNode RockCentral::OnMsg(const TmsDownloadedMsg &msg) {
     if (ThePlatformMgr.IsConnected() && (mState == kFailed || mState == kDisconnected)) {
         mState = kDisconnected;
-        unk78 = unk48.Ms();
+        mNextLoginMs = mTimer.Ms();
     }
     return 1;
 }
@@ -288,18 +290,18 @@ DataNode RockCentral::OnMsg(const TmsDownloadedMsg &msg) {
 DataNode RockCentral::OnMsg(const RCJobCompleteMsg &msg) {
     if (msg.Success()) {
         mMOTDJob->GetMotdData(
-            unk84,
+            mChallengeInterval,
             mRockCentralTime,
-            unk8c,
-            unk90,
+            mMotdXPFlag,
+            mMotdFreq,
             mCommunityMsgs,
             mDLCMsg,
-            unka8,
-            unkb0,
+            mDLCImagePath,
+            mDLCSoundPath,
             mUtilityMsg,
-            unkc0,
-            unkc8,
-            unkd0
+            mUtilityImagePath,
+            mUtilitySoundPath,
+            mMiscArtImagePath
         );
 
         // void GetMotdData(
@@ -330,7 +332,7 @@ DataNode RockCentral::OnMsg(const RCJobCompleteMsg &msg) {
 
 DataNode RockCentral::OnMsg(const ServerStatusChangedMsg &msg) {
     if (msg.Result() == kServerStatusConnected && mState != kConnected) {
-        unkdd = true;
+        mJustConnected = true;
         mState = kConnected;
         XNetGetTitleXnAddr(&mXNetAddr);
         XNetXnAddrToMachineId(&mXNetAddr, &mMachineID);
@@ -338,14 +340,14 @@ DataNode RockCentral::OnMsg(const ServerStatusChangedMsg &msg) {
     } else if (msg.Result() != kServerStatusConnected) {
         if (mState == kLoggingOut) {
             mState = kDisconnected;
-            unk78 = unk48.Ms() + 8000.0f;
+            mNextLoginMs = mTimer.Ms() + 8000.0f;
         } else if (msg.Result() == kServerStatusInvalidUserName) {
             mState = kFailed;
             CreateAccount();
-            unk78 = unk48.Ms() + 8000.0f;
+            mNextLoginMs = mTimer.Ms() + 8000.0f;
         } else {
             mState = kFailed;
-            unk78 = unk48.Ms() + 40000.0f;
+            mNextLoginMs = mTimer.Ms() + 40000.0f;
         }
     }
     Hmx::Object::Handle(msg, false);

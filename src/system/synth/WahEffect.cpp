@@ -4,21 +4,21 @@
 #include <cmath>
 
 WahEffect::WahEffect(IXAudioBatchAllocator *) {
-    unk2c = 96000;
-    unk0 = 7;
-    unk4 = 1000.0f;
-    unk8 = 5000.0f;
-    unkc = 1.35f;
-    unk10 = 0.3f;
-    unk14 = -1.0f;
-    unk18 = 0.5f;
-    unk1c = 1.0f;
-    unk20 = 0.5f;
-    unk24 = 0;
-    unk28 = 1e+30;
-    unk30 = 0;
-    unk44 = 0;
-    unk48 = 0;
+    mSampleRate = 96000;
+    mGain = 7;
+    mFreqLo = 1000.0f;
+    mFreqHi = 5000.0f;
+    mResonance = 1.35f;
+    mBandwidth = 0.3f;
+    mSweepRate = -1.0f;
+    mSweepRange = 0.5f;
+    mEnvAmount = 1.0f;
+    mStaticSweep = 0.5f;
+    mCurrentSweep = 0;
+    mPrevEnv = 1e+30;
+    mPhase = 0;
+    mLastInput = 0;
+    mLastOutput = 0;
     unk40 = 0;
     unk3c = 0;
     unk38 = 0;
@@ -26,7 +26,7 @@ WahEffect::WahEffect(IXAudioBatchAllocator *) {
 }
 
 void WahEffect::Reset() {
-    unk30 = 0;
+    mPhase = 0;
     unk38 = 0;
     unk34 = 0;
     unk40 = 0;
@@ -34,26 +34,26 @@ void WahEffect::Reset() {
 }
 
 void WahEffect::SetParameters(WahEffect::Params const &params) {
-    unk0 = params.unk4;
-    unk8 = params.unk8;
-    unk4 = params.unkc;
-    unkc = params.unk10;
-    unk10 = params.unk14;
-    unk14 = params.unk18;
-    unk18 = params.unk1c;
-    unk1c = params.unk20;
-    unk20 = params.unk24;
+    mGain = params.unk4;
+    mFreqHi = params.unk8;
+    mFreqLo = params.unkc;
+    mResonance = params.unk10;
+    mBandwidth = params.unk14;
+    mSweepRate = params.unk18;
+    mSweepRange = params.unk1c;
+    mEnvAmount = params.unk20;
+    mStaticSweep = params.unk24;
 }
 
 void WahEffect::Process(float *buf, int numSamples, int numChans) {
     MILO_ASSERT(numChans <= 2, 0x34);
 
     // Load parameters in target order
-    float f0_unk18 = unk18;
-    float f10 = unk4;
-    float f9 = unk8;
-    float f8 = unk10;
-    float f13_unk14 = unk14;
+    float f0_unk18 = mSweepRange;
+    float f10 = mFreqLo;
+    float f9 = mFreqHi;
+    float f8 = mBandwidth;
+    float f13_unk14 = mSweepRate;
 
     // Constants
     float f26 = 2.0f;
@@ -71,7 +71,7 @@ void WahEffect::Process(float *buf, int numSamples, int numChans) {
     float f0_state = unk38;
     float f12_state = unk3c;
     float f11_state = unk40;
-    float f27 = unk30;
+    float f27 = mPhase;
     float f30 = 0.5f;
 
     // Copy state to stack arrays
@@ -86,7 +86,7 @@ void WahEffect::Process(float *buf, int numSamples, int numChans) {
     stack58[0] = f12_state;
     stack58[1] = f11_state;
 
-    // Compute sweep value based on unk14 - comparison happens AFTER state loading
+    // Compute sweep value based on mSweepRate - comparison happens AFTER state loading
     float sweepVal;
     if (f13_unk14 < 0.0f) {
         sweepVal = f31;
@@ -107,14 +107,14 @@ void WahEffect::Process(float *buf, int numSamples, int numChans) {
     }
 
     // Apply resonance scaling
-    float f13_scaled = unkc * sweepVal;
-    float f0_unk0 = unk0;
+    float f13_scaled = mResonance * sweepVal;
+    float f0_unk0 = mGain;
     float f0_scale = 1.3089970e-4f;   // 0x3909421f
     float f18 = f13_scaled * f0_scale;
 
-    // Clamp unk0 to >= 1.0
+    // Clamp mGain to >= 1.0
     if (f0_unk0 < f31) {
-        unk0 = f31;
+        mGain = f31;
     }
 
     // Process samples
@@ -129,39 +129,39 @@ void WahEffect::Process(float *buf, int numSamples, int numChans) {
             // Compute sin of phase
             float sinVal = sin(f27);
             sinVal = (float)sinVal;
-            float f13_unk1c = unk1c;
+            float f13_unk1c = mEnvAmount;
             float f12_coef = f22;
 
             // Compute sweep
             float f0_sweep = (sinVal + f31) * f30;
 
-            // Check unk1c
+            // Check mEnvAmount
             if (f13_unk1c < f30) {
-                f0_sweep = unk20;
+                f0_sweep = mStaticSweep;
             } else {
-                float f11_unk28 = unk28;
+                float f11_unk28 = mPrevEnv;
                 if (f11_unk28 != f13_unk1c) {
-                    unk2c = 0;
+                    mSampleRate = 0;
                 }
             }
 
             // Counter interpolation
-            int counter = unk2c;
+            int counter = mSampleRate;
             if (counter <= 96000) {
                 int nextCounter = counter + 1;
                 float counterF = (float)counter;
                 float prod = counterF * f20;
                 f12_coef = prod + f19;
-                unk2c = nextCounter;
+                mSampleRate = nextCounter;
             }
 
             // Frequency tracking
-            float f11_unk24 = unk24;
+            float f11_unk24 = mCurrentSweep;
             float f11_diff = f11_unk24 - f0_sweep;
-            unk28 = f13_unk1c;
-            float f13_unk0 = unk0;
+            mPrevEnv = f13_unk1c;
+            float f13_unk0 = mGain;
             float newFreq = f11_diff * f12_coef + f0_sweep;
-            unk24 = newFreq;
+            mCurrentSweep = newFreq;
 
             // Filter coefficients
             float f12_inv = f31 - newFreq;
@@ -193,7 +193,7 @@ void WahEffect::Process(float *buf, int numSamples, int numChans) {
                     float sample = bufPtr[ch];
 
                     float state1 = stack50[ch];
-                    unk44 = sample;
+                    mLastInput = sample;
                     float state2 = stack58[ch];
 
                     stack58[ch] = state1;
@@ -211,7 +211,7 @@ void WahEffect::Process(float *buf, int numSamples, int numChans) {
                     absOut = absOut * f21 + f31;
                     out = out / absOut;
 
-                    unk48 = out;
+                    mLastOutput = out;
                     bufPtr[ch] = out;
                 }
             }
@@ -224,9 +224,9 @@ void WahEffect::Process(float *buf, int numSamples, int numChans) {
     }
 
     // Store phase - compare f27 with 2*PI, subtract if greater
-    unk30 = f27;
+    mPhase = f27;
     if (f27 > f12_twopi) {
-        unk30 = f27 - f12_twopi;
+        mPhase = f27 - f12_twopi;
     }
 
     // Copy state back from stack

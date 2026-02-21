@@ -55,8 +55,8 @@ protected:
     DataNode OnStartRecording(DataArray *);
     DataNode OnReset(DataArray *);
 
-    ObjPtr<RndDir> unk4c; // 0x4c
-    ObjPtr<RndTexRenderer> unk60; // 0x60
+    ObjPtr<RndDir> mInputDir; // 0x4c
+    ObjPtr<RndTexRenderer> mTexRenderer; // 0x60
     ObjPtrVec<RndTex> mBuffers; // 0x74
     ObjPtr<RndMat> mOutputMat; // 0x90
     int mMaxFrames; // 0xa4
@@ -66,11 +66,11 @@ protected:
     int unkb4;
     int mDebugFrame; // 0xb8
     int mPlaybackSpeed; // 0xbc - actually an enum StreamPlaybackSpeed
-    float unkc0;
-    float unkc4;
-    float unkc8;
-    std::list<int> unkcc; // 0xcc
+    float mRecordingPos; // 0xc0
+    float mPlaybackPos; // 0xc4
+    float mPausedPos; // 0xc8
+    std::list<int> mCompressQueue; // 0xcc
     bool mUseAlpha; // 0xd4
-    int unkd8;
-    int unkdc;
+    int mStopDelay; // 0xd8
+    int mStopTimer; // 0xdc
 };

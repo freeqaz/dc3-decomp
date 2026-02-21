@@ -20,7 +20,7 @@ enum UIListWidgetState {
 
 class UIListElementDrawState {
 public:
-    bool unk0; // 0x0
+    bool mActive; // 0x0
     Vector3 mPos; // 0x4
     float mAlpha; // 0x10
     UIListWidgetState mElementState; // 0x14

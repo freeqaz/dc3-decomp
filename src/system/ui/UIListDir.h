@@ -85,7 +85,7 @@ protected:
     UIComponent::State mTestComponentState; // 0x268
     /** "test disable every other element" */
     bool mTestDisableElements; // 0x26c
-    std::vector<UIListWidget *> unk270; // 0x270
+    std::vector<UIListWidget *> mTestWidgets; // 0x270
     int mDirection; // 0x27c
 
 private:

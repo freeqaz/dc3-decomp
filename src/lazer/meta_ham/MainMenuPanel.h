@@ -54,16 +54,16 @@ public:
 protected:
     HamLabel *mMsgLabel; // 0x40
     MainMenuProvider unk44;
-    bool unk80;
-    bool unk81;
-    std::list<NetCacheLoader *> unk84;
-    RndTex *unk8c;
-    RndTex *unk90;
-    bool unk94;
-    bool unk95;
-    bool unk96;
-    std::map<Symbol, std::list<String> > unk98;
-    bool unkb0;
+    bool mIsEntering; // 0x80
+    bool mNetCacheActive; // 0x81
+    std::list<NetCacheLoader *> mNetCacheLoaders; // 0x84
+    RndTex *mDownloadedTexture1; // 0x8c
+    RndTex *mDownloadedTexture2; // 0x90
+    bool mDLCArtPending; // 0x94
+    bool mUtilityArtPending; // 0x95
+    bool mMiscArtPending; // 0x96
+    std::map<Symbol, std::list<String> > mMotdMessagesByCategory; // 0x98
+    bool mMotdProcessingActive; // 0xb0
     std::list<MotdData> mMotdData; // 0xb4
     int unkbc;
     int unkc0;
@@ -72,7 +72,7 @@ protected:
     int unkcc;
     int unkd0;
     Symbol unkd4;
-    PropertyEventProvider *unkd8;
+    PropertyEventProvider *mPlayerEventProvider;
 
 private:
     void DeleteDownloadedArts();

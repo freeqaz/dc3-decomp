@@ -16,7 +16,7 @@ MidiParserMgr *TheMidiParserMgr;
 
 MidiParserMgr::MidiParserMgr(GemListInterface *gListInt, Symbol sym)
     : mGems(gListInt), mLoaded(0), mFilename(0), mTrackName(), mSongName(), mTrackNames(),
-      unk6c(true), unk6d(true) {
+      mWarnUnnamedTracks(true), mPlaybackEnabled(true) {
     MILO_ASSERT(!TheMidiParserMgr, 0x27);
     TheMidiParserMgr = this;
     SetName("midiparsermgr", ObjectDir::Main());
@@ -45,7 +45,7 @@ void MidiParserMgr::OnNewTrack(int) {
     FreeAllData();
     mNoteOns.resize(128);
     mText.reserve(2000);
-    unk6c = true;
+    mWarnUnnamedTracks = true;
 }
 
 void MidiParserMgr::OnEndOfTrack() {
@@ -189,9 +189,9 @@ bool MidiParserMgr::CreateNote(
     int tick, unsigned char status, unsigned char data1, int &start_tick
 ) {
     if (mNoteOns.empty()) {
-        if (unk6c) {
+        if (mWarnUnnamedTracks) {
             MILO_NOTIFY("%s has a track that was not named.", mFilename);
-            unk6c = false;
+            mWarnUnnamedTracks = false;
         }
         return true;
     } else {
@@ -221,7 +221,7 @@ bool MidiParserMgr::CreateNote(
 }
 
 void MidiParserMgr::Reset(int i) {
-    if (mLoaded && unk6d) {
+    if (mLoaded && mPlaybackEnabled) {
         float beat = TickToBeat(i);
         std::list<MidiParser *> &parsers = MidiParser::Parsers();
         for (std::list<MidiParser *>::iterator it = parsers.begin(); it != parsers.end();
@@ -242,7 +242,7 @@ void MidiParserMgr::Reset() {
 }
 
 void MidiParserMgr::Poll() {
-    if (unk6d) {
+    if (mPlaybackEnabled) {
         std::list<MidiParser *> &parsers = MidiParser::Parsers();
         for (std::list<MidiParser *>::iterator it = parsers.begin(); it != parsers.end();
              ++it) {

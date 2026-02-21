@@ -99,7 +99,7 @@ public:
     Fader *MasterFader() const { return mMasterFader; }
     Fader *SfxFader() const { return mSfxFader; }
     Fader *InstFader() const { return mMidiInstrumentFader; }
-    void SetDir(ObjectDir *dir) { unk64 = dir; }
+    void SetDir(ObjectDir *dir) { mCommonBank = dir; }
     ByteGrinder &Grinder() { return mByteGrinder; }
     bool CheckCommonBank(bool);
     void SetMasterVolume(float);
@@ -129,13 +129,13 @@ public:
         if (!CheckCommonBank(false))
             return nullptr;
         else {
-            T *obj = unk64->Find<T>(name, false);
+            T *obj = mCommonBank->Find<T>(name, false);
             if (!obj && fail) {
                 MILO_FAIL(
                     "Synth::Find() - %s %s not found in %s",
                     T::StaticClassName(),
                     name,
-                    unk64->GetPathName()
+                    mCommonBank->GetPathName()
                 );
             }
             return obj;
@@ -166,7 +166,7 @@ protected:
     std::vector<Mic *> mMics; // 0x4c
     bool mMuted; // 0x58
     std::list<ObjectDir *> unk5c; // 0x5c
-    ObjDirPtr<ObjectDir> unk64; // 0x64
+    ObjDirPtr<ObjectDir> mCommonBank; // 0x64
     std::list<SampleInst *> mZombieInsts; // 0x78
     Fader *mMasterFader; // 0x80
     Fader *mSfxFader; // 0x84

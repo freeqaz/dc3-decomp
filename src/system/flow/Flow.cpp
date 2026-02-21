@@ -41,7 +41,7 @@ bool Flow::sReflectingProperty;
 
 Flow::Flow()
     : mDynamicProperties(this), mFlowLabels(this), mFlowOutPorts(this), mObjects(this),
-      unk170(0), mPrivate(1), mHardStop(0), unk178(0) {}
+      mStartMode(0), mPrivate(1), mHardStop(0), mParamApplyCount(0) {}
 
 Flow::~Flow() {
     if (!mRunningNodes.empty()) {
@@ -89,8 +89,8 @@ END_CUSTOM_PROPSYNC
 
 BEGIN_PROPSYNCS(Flow)
     SYNC_PROP(dynamic_properties, mDynamicProperties)
-    SYNC_PROP_SET(start_on_enter, unk170 != 0, StartOnEnter(_val.Int()))
-    SYNC_PROP_SET(start_after_game_code, unk170 == 2, StartAfterGameCode(_val.Int()))
+    SYNC_PROP_SET(start_on_enter, mStartMode != 0, StartOnEnter(_val.Int()))
+    SYNC_PROP_SET(start_after_game_code, mStartMode == 2, StartAfterGameCode(_val.Int()))
     SYNC_PROP(hard_stop, mHardStop)
     SYNC_PROP(intensity, FlowNode::sIntensity)
     SYNC_PROP(private, mPrivate)
@@ -178,7 +178,7 @@ BEGIN_SAVES(Flow)
         SAVE_SUPERCLASS(FlowQueueable)
         bs << mHardStop;
         bs << mDynamicProperties;
-        bs << unk170;
+        bs << mStartMode;
         bs << mPrivate;
     }
 END_SAVES
@@ -345,12 +345,12 @@ void Flow::PostLoad(BinStream &bs) {
             bool startOnEnter;
             d >> startOnEnter;
             if (startOnEnter) {
-                unk170 = 2;
+                mStartMode = 2;
             } else {
-                unk170 = 0;
+                mStartMode = 0;
             }
         } else {
-            bs.ReadEndian(&unk170, 4);
+            bs.ReadEndian(&mStartMode, 4);
         }
         if (d.rev > 0) {
             d >> mPrivate;
@@ -358,13 +358,13 @@ void Flow::PostLoad(BinStream &bs) {
             mPrivate = false;
         }
     }
-    if (unk170 != 0) {
+    if (mStartMode != 0) {
         mPrivate = true;
     }
     RefreshPortLabelLists();
     if (Loader() && Loader()->ProxyDir()) {
         if (Loader()->ProxyDir()->InlineProxyType() == kInlineAlways) {
-            unk170 = 5;
+            mStartMode = 5;
         }
     }
 }
@@ -614,7 +614,7 @@ void Flow::OnInternalPropertyChanged(DataArray *a) {
 }
 
 void Flow::ApplyParams(DataArray *msg, FlowTrigger *trigger) {
-    unk178++;
+    mParamApplyCount++;
     if (msg && msg->Size() >= 3) {
         DataArray *def = trigger->GetEventEditorDef(MsgSinks::CurrentExportEvent());
         if (def) {

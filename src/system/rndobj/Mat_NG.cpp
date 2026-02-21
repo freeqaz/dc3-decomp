@@ -68,7 +68,7 @@ void NgMat::SetBasicState() {
     TheRenderState.SetCullMode(cm);
     TheRenderState.SetBlendEnable(mBlendEnable);
     TheRenderState.SetBlendOp(mBlendOp);
-    TheRenderState.SetBlend(unk23c, unk240, unk23c, unk240);
+    TheRenderState.SetBlend(mBlendSrc, mBlendDest, mBlendSrc, mBlendDest);
     TheRenderState.SetAlphaTestEnable(mAlphaCut);
     if (mAlphaCut) {
         TheRenderState.SetAlphaFunc((RndRenderState::TestFunc)5, mAlphaThreshold);
@@ -82,7 +82,7 @@ void NgMat::SetBasicState() {
         TheRenderState.SetStencilTestEnable(true);
         TheRenderState.SetStencilFunc(mStencilFunc, 0);
         TheRenderState.SetStencilOp(
-            (RndRenderState::StencilOp)0, (RndRenderState::StencilOp)0, unk250
+            (RndRenderState::StencilOp)0, (RndRenderState::StencilOp)0, mStencilZFail
         );
     }
     RndRenderState::ClampMode cur = sTexWrapClampModes[mTexWrap];

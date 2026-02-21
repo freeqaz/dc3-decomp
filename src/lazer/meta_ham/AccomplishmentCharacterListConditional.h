@@ -21,9 +21,9 @@ public:
 private:
     void Configure(DataArray *);
 
-    std::vector<Symbol> unk70;
-    std::vector<Symbol> unk7c;
-    std::vector<Symbol> unk88;
-    std::vector<Symbol> unk94;
-    std::vector<bool> unka0;
+    std::vector<Symbol> mCharacters;
+    std::vector<Symbol> mCrews;
+    std::vector<Symbol> mOldOutfits;
+    std::vector<Symbol> mUnlockableOutfits;
+    std::vector<bool> mOutfitEquipped;
 };

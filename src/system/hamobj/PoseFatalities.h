@@ -56,28 +56,28 @@ private:
     bool mInFatality[2]; // 0x2c
     int mFatalStartBeats[2]; // 0x30 - per player
     int mFatalEndBeat; // 0x38
-    int unk3c[2];
-    int unk44[2];
+    int mComboStartBeat[2]; // 0x3c - beat-relative combo start per player
+    int mFatalityPoseIndex[2]; // 0x44 - 1-8 random pose index
     Skeleton mPlayerSkeletons[2]; // 0x4c
-    float unk15f4[2]; // 0x15f4
-    float unk15fc; // 0x15fc - hold duration?
+    float mFatalityProgress[2]; // 0x15f4 - accumulates completion progress per player
+    float mHoldDuration; // 0x15fc - default 0.5f, loaded from OSC /holdduration
     FreestyleMoveRecorder mRecorder; // 0x1600
     float unk1710[2];
     float unk1718[2];
-    bool unk1720[2];
+    bool mMatchingActive[2]; // 0x1720 - tracks active matching state per player
     std::list<CharClip *> mAllFatalityClips; // 0x1724
     int mFatalityBeatLeadIn; // 0x172c
     HamLabel *mPoseComboLabels[kNumSkeletonSides]; // 0x1730
     int mCurrentCombo[2]; // 0x1738
     bool mGotFullCombo[2]; // 0x1740
     ObjectDir *mHudPanel; // 0x1744
-    bool unk1748;
+    bool mValidPose; // 0x1748 - set to InStrikeAPose() result
     int mJumpStart; // 0x174c
     int mJumpEnd; // 0x1750
-    int unk1754; // 0x1754 - some sort of beat
+    int mCurrentBeat; // 0x1754 - current beat/frame counter for beat logic
     RndAnimatable *mPoseBeatAnims[kNumSkeletonSides]; // 0x1758
-    float unk1760;
-    float unk1764;
-    int unk1768; // 0x1768 - flags/mask
-    float unk176c;
+    float mAnimTimer; // 0x1760 - countdown from 4, triggers at 0
+    float mDisplayCooldown; // 0x1764 - countdown from 5, controls display state
+    int mFeedbackFlags; // 0x1768 - bitmask with bits 0,1,2,4 set for display states
+    float mDisplayProgress; // 0x176c - accumulator clamped 0.0-1.0, incremented by DeltaSeconds()
 };

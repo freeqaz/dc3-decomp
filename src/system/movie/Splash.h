@@ -51,18 +51,18 @@ public:
     TexMovie *mCurrentMovie;
     EventTrigger *mCurrentTrigger;
     int unk58;
-    u32 unk5c;
-    int unk60;
+    u32 mHasDrawn;
+    int mSuspendCount;
     bool mThreaded;
     DWORD mThreadId;
-    CriticalSection unk6c;
-    SynchronizationEvent unk8c;
-    SynchronizationEvent unk90;
+    CriticalSection mStateLock;
+    SynchronizationEvent mWorkerEvent;
+    SynchronizationEvent mMainEvent;
     int mState; // 0x94
-    CriticalSection unk98;
+    CriticalSection mScreenLock;
     std::list<PreparedScreenParams> mPreparedScreens;
-    std::list<RndDir *> unkc0;
-    Timer unk200;
+    std::list<RndDir *> mOldDirs;
+    Timer mFrameTimer;
     void *mThreadStack;
 
 protected:

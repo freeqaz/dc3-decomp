@@ -55,7 +55,7 @@ HamStoreProvider::HamStoreProvider(
     std::vector<CartRow> *rows
 )
     : unk30(offers), unk34(filters), unk5c(0), mFilteredOffers(0), unkac(rows), unkb8(0) {
-    unk74 = new HamStoreFilterProvider(unk34);
+    mFilterProvider = new HamStoreFilterProvider(unk34);
 }
 
 HamStoreProvider::~HamStoreProvider() {
@@ -68,8 +68,8 @@ HamStoreProvider::~HamStoreProvider() {
     }
     unk38.clear();
     mFilteredOffers = 0;
-    RELEASE(unk74);
-    unk74 = 0;
+    RELEASE(mFilterProvider);
+    mFilterProvider = 0;
 }
 
 int HamStoreProvider::NumOffersInCart() {
@@ -219,9 +219,9 @@ void HamStoreProvider::SetPackList(StoreOffer const *offer) {
     static Symbol pack("pack");
     if (offer->OfferType() == pack) {
         static Symbol songs("songs");
-        unk78.mSongs = offer->GetData(DataArrayPtr(songs), false).Array(0);
+        mPackProvider.mSongs = offer->GetData(DataArrayPtr(songs), false).Array(0);
     } else {
-        unk78.mSongs = 0;
+        mPackProvider.mSongs = 0;
     }
 }
 
@@ -257,7 +257,7 @@ BEGIN_HANDLERS(HamStoreProvider)
     HANDLE_ACTION(refresh, Refresh())
     HANDLE_EXPR(get_offer, OnGetOffer(_msg->Int(2)))
     HANDLE_ACTION(set_pack, SetPackList(_msg->Obj<StoreOffer>(2)))
-    HANDLE_EXPR(get_pack_provider, (Hmx::Object *)&unk78)
+    HANDLE_EXPR(get_pack_provider, (Hmx::Object *)&mPackProvider)
     HANDLE_EXPR(find_pack, (Hmx::Object *)FindPack(_msg->Obj<StoreOffer>(2)))
     HANDLE_EXPR(show_browser_purchased, ShowBrowserPurchased(_msg->Obj<StoreOffer>(2)))
     HANDLE_EXPR(show_unavailable, TheNetCacheMgr->IsDebug())

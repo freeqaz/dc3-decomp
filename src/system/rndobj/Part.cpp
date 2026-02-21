@@ -881,29 +881,29 @@ void RndParticleSys::MoveParticles(float dt, float frameSpan) {
             } else {
                 // UV tile animation
                 if (mAnimateUVs) {
-                    float tileTime = p->unk64 + frameSpan;
-                    p->unk64 = tileTime;
-                    if (p->unk60 < endTile && tileTime > mTileHoldTime) {
-                        int newTile = p->unk60 + 1;
-                        p->unk60 = newTile;
+                    float tileTime = p->mTileTime + frameSpan;
+                    p->mTileTime = tileTime;
+                    if (p->mCurrentTileIndex < endTile && tileTime > mTileHoldTime) {
+                        int newTile = p->mCurrentTileIndex + 1;
+                        p->mCurrentTileIndex = newTile;
                         if (newTile >= endTile) {
                             if (mLoopUVAnim) {
-                                p->unk60 = mStartingTile;
+                                p->mCurrentTileIndex = mStartingTile;
                             } else {
-                                p->unk60 = endTile - 1;
+                                p->mCurrentTileIndex = endTile - 1;
                             }
                         }
-                        p->unk64 = std::fmod(tileTime, mTileHoldTime);
+                        p->mTileTime = std::fmod(tileTime, mTileHoldTime);
                     }
                 }
 
-                // Birth momentum (fancy only) - unkb8/unkbc/unkc0 are birth velocity xyz
+                // Birth momentum (fancy only)
                 if (isFancy && mBirthMomentum) {
                     RndFancyParticle *fp = (RndFancyParticle *)p;
                     float momentumScale = mBirthMomentumAmount * frameSpan * oneOverThirty;
-                    p->pos.x += momentumScale * fp->unkb8;
-                    p->pos.z += fp->unkc0 * momentumScale;
-                    p->pos.y += fp->unkbc * momentumScale;
+                    p->pos.x += momentumScale * fp->mBirthVelocityX;
+                    p->pos.z += fp->mBirthVelocityZ * momentumScale;
+                    p->pos.y += fp->mBirthVelocityY * momentumScale;
                 }
 
                 // Position integration
@@ -993,10 +993,10 @@ void RndParticleSys::MoveParticles(float dt, float frameSpan) {
 
                     // RPM rotation and swing arm
                     if (isRotate) {
-                        float rpmVel = fp->unkb0;
+                        float rpmVel = fp->mRPMVelocity;
                         p->angle += rpmVel * frameSpan;
-                        fp->unkb0 = rpmVel * rpmDragFactor;
-                        p->swingArm += fp->unkb4 * frameSpan;
+                        fp->mRPMVelocity = rpmVel * rpmDragFactor;
+                        p->swingArm += fp->mPitchAngularVel * frameSpan;
                     }
 
                     // Fancy color: 2-phase Hermite-like blend (before/after midcolFrame).

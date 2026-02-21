@@ -68,9 +68,9 @@ public:
     void SetPlayerSkeletonID(int, int);
     int GetPlayerFilteredSkeletonID(int, bool);
     bool IDEnabled() { return mIDEnabled; }
-    bool GetBool4271() { return unk4271; } // change once context found
-    void SetBool4271(bool b) { unk4271 = b; }
-    int GetVal425C() { return unk425c; } // change once context found
+    bool GetInShellMode() { return mInShellMode; }
+    void SetInShellMode(bool b) { mInShellMode = b; }
+    int GetPauseOnSkeletonLossMode() { return mPauseOnSkeletonLossMode; }
 
     void ShowGestureGuide() {
         int id = 0;
@@ -80,11 +80,11 @@ public:
         XShowNuiGuideUI(id);
     }
 
-    int Unk425C() const { return unk425c; }
+    int PauseOnSkeletonLossMode() const { return mPauseOnSkeletonLossMode; }
 
     int TogglePauseOnSkeletonLoss() {
-        unk425c = (unk425c + 1) % 3;
-        return unk425c;
+        mPauseOnSkeletonLossMode = (mPauseOnSkeletonLossMode + 1) % 3;
+        return mPauseOnSkeletonLossMode;
     }
     void AutoTilt() {
         if (mOverlapped.InternalLow != ERROR_IO_PENDING) {
@@ -124,7 +124,7 @@ private:
     SkeletonQualityFilter mFilters[NUM_SKELETONS]; // 0x41a4
     bool mTrackingAllSkeletons; // 0x424c
     SkeletonRecoverer mRecoverer; // 0x4250
-    int unk425c;
+    int mPauseOnSkeletonLossMode; // 0x425c - cycles 0/1/2 via TogglePauseOnSkeletonLoss
     int mActiveSkelTrackingID; // 0x4260 - active skeleton tracking ID
     int mPlayerSkeletonIDs[2]; // 0x4264
     bool mIDEnabled; // 0x426c
@@ -132,7 +132,7 @@ private:
     bool mInVoiceMode; // 0x426e
     bool mGesturingWithVoice; // 0x426f
     bool mInDoubleUserMode; // 0x4270
-    bool unk4271; // 0x4271 - not in gameplay?
+    bool mInShellMode; // 0x4271 - true when not in gameplay panel
     RndDir *unk4274;
     XOVERLAPPED mOverlapped; // 0x4278
 };

@@ -10,9 +10,9 @@ public:
     HamStoreFilter(Symbol s);
     HamStoreFilter(DataArray const *);
 
-    Symbol unk0;
-    String unk4;
-    std::vector<Symbol> unkc;
+    Symbol mFilterSym;
+    String mDisplayName;
+    std::vector<Symbol> mSortTypes;
 };
 
 class HamStoreFilterProvider : public UIListProvider, public Hmx::Object {

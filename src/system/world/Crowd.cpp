@@ -67,7 +67,7 @@ BinStreamRev &operator>>(BinStreamRev &d, WorldCrowd::CharData &cd) {
 #pragma region WorldCrowd
 
 WorldCrowd::WorldCrowd()
-    : mPlacementMesh(this), mCharacters(this), mNum(0), unk6c(0), mForce3DCrowd(0),
+    : mPlacementMesh(this), mCharacters(this), mNum(0), mCrowdRotate((CrowdRotate)0), mForce3DCrowd(0),
       mShow3DOnly(0), mCharFullness(1), mFlatFullness(1), mLod(0), mEnviron(this),
       mEnviron3D(this), mFocus(this), mCharForceLod(kLODPerFrame), unkd0(0),
       mModifyStamp(0) {
@@ -455,7 +455,7 @@ void WorldCrowd::Delete3DCrowdHandles() {
     if (TheLoadMgr.EditMode()) {
         FOREACH (it, mCharacters) {
             for (int i = 0; i != it->m3DChars.size(); i++) {
-                RELEASE(it->m3DChars[i].unk50);
+                RELEASE(it->m3DChars[i].mHandle);
             }
         }
     }
@@ -500,7 +500,7 @@ struct Sort3DChars {
         const WorldCrowd::CharData::Char3D &char1,
         const WorldCrowd::CharData::Char3D &char2
     ) const {
-        return char1.unk40 < char2.unk40;
+        return char1.mIdx < char2.mIdx;
     }
 };
 

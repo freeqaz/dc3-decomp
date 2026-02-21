@@ -165,9 +165,9 @@ class AutoGlitchReport {
 public:
     AutoGlitchReport(float f1, const char *func) {
         if (MainThread()) {
-            unk3c = f1;
+            mLimit = f1;
             mFunc = func;
-            unk38 = 0;
+            mContext = 0;
             mCallback = nullptr;
             sDepth++;
             mTimer.Start();
@@ -175,8 +175,8 @@ public:
     }
     AutoGlitchReport(float f1, AutoTimerCallback cb, void *v3) {
         if (MainThread()) {
-            unk3c = f1;
-            unk38 = v3;
+            mLimit = f1;
+            mContext = v3;
             mCallback = cb;
             mFunc = nullptr;
             sDepth++;
@@ -187,7 +187,7 @@ public:
     ~AutoGlitchReport() {
         if (MainThread()) {
             sDepth--;
-            SendCallback(mTimer.SplitMs(), unk3c, mFunc, mCallback, unk38);
+            SendCallback(mTimer.SplitMs(), mLimit, mFunc, mCallback, mContext);
         }
     }
     static void EnableCallback();
@@ -199,8 +199,8 @@ private:
     Timer mTimer; // 0x0
     const char *mFunc; // 0x30
     AutoTimerCallback mCallback; // 0x34
-    void *unk38; // 0x38 - context?
-    float unk3c; // 0x3c - limit?
+    void *mContext; // 0x38
+    float mLimit; // 0x3c
 };
 
 class AutoTimer {

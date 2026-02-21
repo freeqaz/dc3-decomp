@@ -157,8 +157,8 @@ protected:
     CharDriver *mDriver; // 0x24c
     /** "Whether this character should be self-shadowed." */
     bool mSelfShadow; // 0x250
-    bool unk251; // 0x251
-    bool unk252; // 0x252
+    bool mSpotCutout; // 0x251
+    bool mFloorShadow; // 0x252
     /** "Base for bounding sphere, such as bone_pelvis.mesh" */
     ObjOwnerPtr<RndTransformable> mSphereBase; // 0x254
     /** "bounding sphere for the character, fixed" */
@@ -174,8 +174,10 @@ protected:
     /** "select an interest object here and select 'force_interest' below
         to force the character to look at it." */
     Symbol mInterestToForce; // 0x29c
-    ObjPtr<RndEnviron> unk2a0;
-    Vector3 *unk2b4;
+    /** Saved RndEnviron during opaque pass, restored for translucent pass */
+    ObjPtr<RndEnviron> mSavedEnviron; // 0x2a0
+    /** Saved RndEnviron position during opaque pass, restored for translucent pass */
+    Vector3 *mSavedEnvironPos; // 0x2b4
     /** "Props to show and hide for cut scenes" */
     DrawPtrVec mShowableProps; // 0x2b8
     bool mDebugDrawInterestObjects; // 0x2d4

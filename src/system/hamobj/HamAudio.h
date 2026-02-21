@@ -54,25 +54,25 @@ private:
     void SetLoop(float, float, Stream *);
 
     FileLoader *mFileLoader; // 0x30
-    char *unk34;
-    int unk38;
+    char *mRawBuffer; // 0x34
+    int mRawBufferSize; // 0x38
     SongInfo *mSongInfo; // 0x3c
     Stream *mSongStream; // 0x40
-    Stream *unk44[2]; // 0x44
+    Stream *mStreams[2]; // 0x44
     bool mReady; // 0x4c
     Fader *mMasterFader; // 0x50
     float mMasterVolume; // 0x54
     bool mMuteMaster; // 0x58
-    bool unk59;
-    float unk5c;
-    float unk60;
-    float unk64;
-    int unk68;
+    bool mFXSendApplied; // 0x59
+    float mCrossfadeStartTime; // 0x5c
+    float mCrossfadeEndTime; // 0x60
+    float mCrossfadeDuration; // 0x64
+    int mCrossfadePending; // 0x68
     float unk6c;
-    float unk70;
-    float unk74;
-    int unk78;
+    float mActiveCrossfadeStart; // 0x70
+    float mActiveCrossfadeDuration; // 0x74
+    int mCrossfadeState; // 0x78
     Fader *mCrossFaders[2]; // 0x7c
-    std::vector<Fader *> unk84; // 0x84
-    std::map<Symbol, Fader *> unk90; // 0x90
+    std::vector<Fader *> mChannelFaders; // 0x84
+    std::map<Symbol, Fader *> mTrackFaders; // 0x90
 };

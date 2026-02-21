@@ -21,7 +21,7 @@ void RotateAboutZ(const Vector3 &v, float f, Vector3 &res) {
 }
 
 CharServoBone::CharServoBone()
-    : unk84(0), mFacingRotDelta(0), mFacingPosDelta(0), mFacingRot(0), mFacingPos(0),
+    : mPelvis(0), mFacingRotDelta(0), mFacingPosDelta(0), mFacingRot(0), mFacingPos(0),
       mMoveSelf(false), mDeltaChanged(false), mRegulate(this) {}
 
 CharServoBone::~CharServoBone() {}
@@ -72,13 +72,13 @@ void CharServoBone::Poll() {
                     Transform tf48 = me->LocalXfm();
                     MoveToDeltaFacing(tf48);
                     Transform tf78;
-                    Multiply(((RndTransformable *)unk84)->LocalXfm(), tf48, tf78);
-                    MoveToFacing(((RndTransformable *)unk84)->DirtyLocalXfm());
+                    Multiply(mPelvis->LocalXfm(), tf48, tf78);
+                    MoveToFacing(mPelvis->DirtyLocalXfm());
                     Transform tfa8;
-                    FastInvert(((RndTransformable *)unk84)->DirtyLocalXfm(), tfa8);
+                    FastInvert(mPelvis->DirtyLocalXfm(), tfa8);
                     Multiply(tfa8, tf78, me->DirtyLocalXfm());
                 } else {
-                    MoveToFacing(((RndTransformable *)unk84)->DirtyLocalXfm());
+                    MoveToFacing(mPelvis->DirtyLocalXfm());
                 }
                 for (ObjDirItr<CharBone> it(
                          CharBoneDir::FindResourceFromClipType(mClipType), false
@@ -102,11 +102,11 @@ void CharServoBone::Poll() {
                 }
             } else {
                 if (mDeltaChanged) {
-                    Transform tfd8(((RndTransformable *)unk84)->LocalXfm());
+                    Transform tfd8(mPelvis->LocalXfm());
                     MoveToFacing(tfd8);
                     Multiply(tfd8, me->LocalXfm(), tfd8);
                     Transform tf108;
-                    FastInvert(((RndTransformable *)unk84)->LocalXfm(), tf108);
+                    FastInvert(mPelvis->LocalXfm(), tf108);
                     Multiply(tf108, tfd8, me->DirtyLocalXfm());
                 } else {
                     MoveToDeltaFacing(me->DirtyLocalXfm());
@@ -125,8 +125,8 @@ void CharServoBone::ReallocateInternal() {
     mFacingPosDelta = (Vector3 *)FindPtr("bone_facing_delta.pos");
     if ((void *)mFacingPosDelta) {
         mFacingPos = (Vector3 *)FindPtr("bone_facing.pos");
-        RndTransformable *pelvis = CharUtlFindBoneTrans("bone_pelvis", Dir());
-        MILO_ASSERT(mFacingPos && pelvis, 0xB3);
+        mPelvis = CharUtlFindBoneTrans("bone_pelvis", Dir());
+        MILO_ASSERT(mFacingPos && mPelvis, 0xB3);
         mFacingRot = (float *)FindPtr("bone_facing.rotz");
         mFacingRotDelta = (float *)FindPtr("bone_facing_delta.rotz");
     }

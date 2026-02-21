@@ -65,6 +65,6 @@ public:
     void PollLoading();
 
 private:
-    NetLoader *unk0; // 0x0
-    DataArray *unk4; // 0x4
+    NetLoader *mNetLoader; // 0x0
+    DataArray *mData; // 0x4
 };

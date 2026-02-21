@@ -18,7 +18,7 @@
 #include "utl/Str.h"
 
 HamSkeletonConverter::HamSkeletonConverter()
-    : mBones(this), unk28(0), unk2c(this), unk750(0), unk751(0), unk754(0) {}
+    : mBones(this), unk28(0), mCharacter(this), mIsActive(0), unk751(0), unk754(0) {}
 
 HamSkeletonConverter::~HamSkeletonConverter() {
     SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
@@ -63,7 +63,7 @@ END_LOADS
 
 void HamSkeletonConverter::SetName(const char *name, ObjectDir *dir) {
     Hmx::Object::SetName(name, dir);
-    unk2c = dynamic_cast<HamCharacter *>(dir);
+    mCharacter = dynamic_cast<HamCharacter *>(dir);
 }
 
 void HamSkeletonConverter::Enter() {
@@ -71,21 +71,21 @@ void HamSkeletonConverter::Enter() {
     if (!handle.HasCallback(this)) {
         handle.AddCallback(this);
     }
-    unk6cc = unk2c->Find<RndTransformable>("bone_pelvis.mesh", true);
-    unk758 = unk6cc->LocalXfm().v.z;
-    unk6c0.clear();
-    unk6c0.resize(kNumJoints);
+    mPelvisMesh = mCharacter->Find<RndTransformable>("bone_pelvis.mesh", true);
+    mPelvisInitialZ = mPelvisMesh->LocalXfm().v.z;
+    mBoneMeshes.clear();
+    mBoneMeshes.resize(kNumJoints);
     for (int i = 0; i < kNumJoints; i++) {
         RndTransformable *t =
-            unk2c->Find<RndTransformable>(MirrorBoneName((SkeletonJoint)i), true);
-        unk6c0[i] = t;
+            mCharacter->Find<RndTransformable>(MirrorBoneName((SkeletonJoint)i), true);
+        mBoneMeshes[i] = t;
     }
-    Vector3 z = unk6c0[kJointHipLeft]->WorldXfm().m.z;
-    unk730 = z;
-    z = unk6c0[kJointHipRight]->WorldXfm().m.z;
-    unk740 = z;
-    unk710 = unk730;
-    unk720 = unk740;
+    Vector3 z = mBoneMeshes[kJointHipLeft]->WorldXfm().m.z;
+    mLeftHipZAxis = z;
+    z = mBoneMeshes[kJointHipRight]->WorldXfm().m.z;
+    mRightHipZAxis = z;
+    mLeftHipZAxisInit = mLeftHipZAxis;
+    mRightHipZAxisInit = mRightHipZAxis;
 }
 
 void HamSkeletonConverter::Exit() {
@@ -104,8 +104,8 @@ void HamSkeletonConverter::PollDeps(
 
 void HamSkeletonConverter::Highlight() {
     for (int i = 0; i < kNumJoints; i++) {
-        Vector3 curV = unk80[i];
-        Transform curXfm = unk1c0[i];
+        Vector3 curV = mJointPositions[i];
+        Transform curXfm = mBoneTransforms[i];
         UtilDrawSphere(curV, 1.0f, Hmx::Color(0.0f, 0.0f, 1.0f), nullptr);
 
         Vector3 scaledX;
@@ -126,11 +126,11 @@ void HamSkeletonConverter::Highlight() {
 }
 
 void HamSkeletonConverter::PostUpdate(const SkeletonUpdateData *data) {
-    if (unk750 && data) {
+    if (mIsActive && data) {
         BaseSkeleton *skeleton = nullptr;
         for (int i = 0; i < 6; i++) {
-            if (data->unk0[i] && data->unk0[i]->IsTracked()) {
-                skeleton = data->unk0[i];
+            if (data->mSkeletonsLeft[i] && data->mSkeletonsLeft[i]->IsTracked()) {
+                skeleton = data->mSkeletonsLeft[i];
                 break;
             }
         }
@@ -143,12 +143,12 @@ void HamSkeletonConverter::GetParentWorldXfm(
 ) {
     RndTransformable *meshParent = t->TransParent();
     if (streq(meshParent->Name(), "bone_pelvis.mesh")) {
-        xfm.m = unk6d0.m;
-        xfm.v = unk6d0.v;
+        xfm.m = mPelvisTransform.m;
+        xfm.v = mPelvisTransform.v;
     } else if (IsSkeletonBone(meshParent->Name())) {
         MILO_ASSERT(streq(meshParent->Name(), CharBoneName(parent)), 0x2B2);
-        xfm.m = unk1c0[parent].m;
-        xfm.v = unk1c0[parent].v;
+        xfm.m = mBoneTransforms[parent].m;
+        xfm.v = mBoneTransforms[parent].v;
     } else {
         GetParentWorldXfm(meshParent, xfm, parent);
         Multiply(meshParent->LocalXfm(), xfm, xfm);
@@ -202,8 +202,8 @@ void HamSkeletonConverter::RotateTowards(
     Hmx::Quat q40;
     MakeRotQuat(v1, v2, q40);
     float angle = acos(Dot(v1, v2));
-    int isValid = (angle != angle) ? 0 : 1;
-    if ((isValid & 0xFF) != 0) {
+    int isValid = (angle != angle) ? 1 : 0;
+    if ((isValid & 0xFF) == 0) {
         float absAngle = fabs(angle);
         if (absAngle >= 1.0e-9) {
             float fabsed = fabsf(f / angle);

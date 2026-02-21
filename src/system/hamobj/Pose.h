@@ -28,11 +28,11 @@ public:
 
 protected:
     float unk4;
-    SkeletonJoint unk8;
-    SkeletonJoint unkc;
-    float unk10;
-    float unk14;
-    int unk18;
+    SkeletonJoint mJoint1;
+    SkeletonJoint mJoint2;
+    float mMinDist;
+    float mMaxDist;
+    int mCoordSys;
 };
 
 class BoneAngleRangePoseElement : public PoseElement {
@@ -42,7 +42,7 @@ public:
 
 protected:
     float unk4; // 0x4
-    SkeletonBone unk8; // 0x8
+    SkeletonBone mBone; // 0x8
     Vector3 mAngle; // 0xc
     float unk1c; // 0x1c
 };

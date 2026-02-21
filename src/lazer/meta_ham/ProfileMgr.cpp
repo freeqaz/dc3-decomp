@@ -45,12 +45,12 @@ ProfileMgr::ProfileMgr()
     : mPlatformAudioLatency(5), mPlatformVideoLatency(22), unk34(22), unk38(50),
       mGlobalOptionsSaveState(kMetaProfileUnloaded), mGlobalOptionsDirty(0), unk45(0),
       mTutorialsSeen(0), unk4c(0), mMusicVolume(4), mFxVolume(4), mCrowdVolume(4),
-      mMono(0), mSyncOffset(0), mSongToTaskMgrMs(0), mBassBoost(0), mDolby(0), unk6a(0),
+      mMono(0), mSyncOffset(0), mSongToTaskMgrMs(0), mBassBoost(0), mDolby(0), mFxMuted(0),
       mSyncPresetIx(0), mOverscan(0), mDisablePhotos(0), mNoFlashcards(0),
       mDisableVoice(0), mDisableVoiceCommander(0), mDisableVoicePause(0),
-      mDisableVoicePractice(0), mShowVoiceTip(1), unk78(0), mDisableFreestyle(0),
-      mVenuePreference(gNullStr), unk80(0), unk84(0), mCriticalProfile(0),
-      mAllUnlocked(0), mProfileSaveBuffer(0), unka8(0), unka9(0), mProfilesOverlay(0),
+      mDisableVoicePractice(0), mShowVoiceTip(1), mForceSpeechLanguageSupport(0), mDisableFreestyle(0),
+      mVenuePreference(gNullStr), mSystemLocale(0), mSystemLanguage(0), mCriticalProfile(0),
+      mAllUnlocked(0), mProfileSaveBuffer(0), mPendingFlauntUpload(0), mPendingFitnessGoalUpload(0), mProfilesOverlay(0),
       unkb0(0) {
     mSyncOffset = -mPlatformVideoLatency;
 }
@@ -158,7 +158,7 @@ bool ProfileMgr::GlobalOptionsNeedsSave() {
 }
 
 int ProfileMgr::GetMusicVolume() const { return mMusicVolume; }
-int ProfileMgr::GetFxVolume() const { return unk6a ? 0 : mFxVolume; }
+int ProfileMgr::GetFxVolume() const { return mFxMuted ? 0 : mFxVolume; }
 int ProfileMgr::GetCrowdVolume() const { return mCrowdVolume; }
 
 float ProfileMgr::GetMusicVolumeDb() const { return SliderIxToDb(GetMusicVolume()); }
@@ -274,7 +274,7 @@ void ProfileMgr::EnableForceSpeechLanguageSupport() {
     mDisableVoice = false;
     mDisableVoicePause = false;
     mDisableVoicePractice = false;
-    unk78 = true;
+    mForceSpeechLanguageSupport = true;
     mGlobalOptionsDirty = true;
 }
 
@@ -529,9 +529,9 @@ void ProfileMgr::SaveGlobalOptions(FixedSizeSaveableStream &fs) {
     fs << mOverscan;
     fs << mTutorialsSeen;
     fs << unk4c;
-    fs << unk78;
-    fs << (u64)unk80;
-    fs << (u64)unk84;
+    fs << mForceSpeechLanguageSupport;
+    fs << (u64)mSystemLocale;
+    fs << (u64)mSystemLanguage;
     mGlobalOptionsDirty = false;
 }
 
@@ -625,7 +625,7 @@ void ProfileMgr::PushAllOptions() {
     static DataNode &n = DataVariable("crowd_audio.volume");
     n = GetCrowdVolumeDb();
     if (TheSpeechMgr) {
-        if (unk78 && TheSpeechMgr->OnIsSpeechSupportable()) {
+        if (mForceSpeechLanguageSupport && TheSpeechMgr->OnIsSpeechSupportable()) {
             TheSpeechMgr->ForceLanguageSupport();
         } else if (!TheSpeechMgr->SpeechSupported() && !mDisableVoice) {
             mDisableVoice = !mDisableVoice;
@@ -637,7 +637,7 @@ void ProfileMgr::PushAllOptions() {
     }
     DWORD locale = ULSystemLocale();
     DWORD language = ULSystemLanguage();
-    if (TheSpeechMgr && (locale != unk80 || language != unk84)
+    if (TheSpeechMgr && (locale != mSystemLocale || language != mSystemLanguage)
         && TheSpeechMgr->SpeechSupported() && mDisableVoice) {
         mDisableVoice = !mDisableVoice;
         mGlobalOptionsDirty = true;
@@ -645,8 +645,8 @@ void ProfileMgr::PushAllOptions() {
         mDisableVoicePause = !mDisableVoicePause;
         mDisableVoicePractice = !mDisableVoicePractice;
     }
-    unk80 = locale;
-    unk84 = language;
+    mSystemLocale = locale;
+    mSystemLanguage = language;
     mGlobalOptionsDirty = true;
 }
 
@@ -671,7 +671,7 @@ void ProfileMgr::HandlePlayerNameChange() {
     Symbol nodeSym = pNavPlayerNode->Sym();
     static Symbol store("store");
     if (nodeSym == store
-        && TheHamUI.GetShellInput()->GetSkeletonChooser()->Unk3C() == 0) {
+        && TheHamUI.GetShellInput()->GetSkeletonChooser()->GetActivePlayerIndex() == 0) {
         HamPlayerData *pPlayer0 = TheGameData->Player(0);
         MILO_ASSERT(pPlayer0, 0x704);
         HamProfile *pProfile = GetProfileFromPad(pPlayer0->PadNum());
@@ -719,8 +719,8 @@ void ProfileMgr::HandleProfileSaveComplete() {
 void ProfileMgr::HandleProfileLoadComplete() {
     UpdateFriendsList();
     UpdateUsingFitnessState();
-    unka8 = true;
-    unka9 = true;
+    mPendingFlauntUpload = true;
+    mPendingFitnessGoalUpload = true;
 }
 
 int ProfileMgr::GetNumValidProfiles() const {
@@ -749,7 +749,7 @@ bool ProfileMgr::HasActiveProfileWithInvalidSaveData() const {
         MILO_ASSERT(pShellInput, 0x5bb);
         SkeletonChooser *pSkeletonChooser = pShellInput->mSkelChooser;
         MILO_ASSERT(pSkeletonChooser, 0x5be);
-        HamPlayerData *pActivePlayer = TheGameData->Player(pSkeletonChooser->Unk3C());
+        HamPlayerData *pActivePlayer = TheGameData->Player(pSkeletonChooser->GetActivePlayerIndex());
         MILO_ASSERT(pActivePlayer, 0x5c2);
         HamProfile *pProfileFromPad =
             TheProfileMgr.GetProfileFromPad(pActivePlayer->PadNum());
@@ -764,9 +764,9 @@ bool ProfileMgr::IsUnlockableContent(Symbol s) const {
 }
 
 void ProfileMgr::UploadDeferredFlaunt() {
-    if (!unka8)
+    if (!mPendingFlauntUpload)
         return;
-    unka8 = false;
+    mPendingFlauntUpload = false;
     TheChallenges->UploadFlauntForAll(true);
 }
 
@@ -861,8 +861,8 @@ void ProfileMgr::UpdateUsingFitnessState() {
 }
 
 void ProfileMgr::UploadDeferredFitnessGoal() {
-    if (unka9) {
-        unka9 = false;
+    if (mPendingFitnessGoalUpload) {
+        mPendingFitnessGoalUpload = false;
         FOREACH (it, unk90) {
             HamProfile *profile = *it;
             MILO_ASSERT(profile, 0x74a);
@@ -885,7 +885,7 @@ HamProfile *ProfileMgr::GetActiveProfile(bool b) const {
         MILO_ASSERT(pShellInput, 0x565);
         SkeletonChooser *pSkeletonChooser = pShellInput->GetSkeletonChooser();
         MILO_ASSERT(pSkeletonChooser, 0x568);
-        int index = pSkeletonChooser->Unk3C();
+        int index = pSkeletonChooser->GetActivePlayerIndex();
         HamPlayerData *pActivePlayer = TheGameData->Player(index);
         MILO_ASSERT(pActivePlayer, 0x56c);
         HamProfile *pProfileFromPad =

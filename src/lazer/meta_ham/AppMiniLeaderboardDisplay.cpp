@@ -21,7 +21,7 @@
 #include "utl/Symbol.h"
 
 AppMiniLeaderboardDisplay::AppMiniLeaderboardDisplay()
-    : unk60(0), mLeaderboardList(0), mSongID(0), unk6c(0) {}
+    : mState(0), mLeaderboardList(0), mSongID(0), mLoadTime(0) {}
 
 AppMiniLeaderboardDisplay::~AppMiniLeaderboardDisplay() {
     TheRockCentral.CancelOutstandingCalls(this);
@@ -37,14 +37,14 @@ END_HANDLERS
 void AppMiniLeaderboardDisplay::Poll() {
     UIComponent::Poll();
     if (mSongID != 0) {
-        if (unk60 == 0) {
+        if (mState == 0) {
             float uiSeconds = TheTaskMgr.UISeconds();
-            if (unk6c > uiSeconds)
-                unk6c = uiSeconds;
-            if (1.0f <= uiSeconds - unk6c) {
+            if (mLoadTime > uiSeconds)
+                mLoadTime = uiSeconds;
+            if (1.0f <= uiSeconds - mLoadTime) {
                 UpdateLeaderboardOnline(mSongID);
             }
-        } else if (unk60 == 5 && ThePlatformMgr.IsConnected()) {
+        } else if (mState == 5 && ThePlatformMgr.IsConnected()) {
             Symbol name = TheSongMgr.GetShortNameFromSongID(mSongID);
             UpdateLeaderboard(name);
         }
@@ -54,8 +54,8 @@ void AppMiniLeaderboardDisplay::Poll() {
 void AppMiniLeaderboardDisplay::Enter() {
     UIComponent::Enter();
     TheServer.AddSink(this);
-    if (unk60 != 0) {
-        unk60 = 0;
+    if (mState != 0) {
+        mState = 0;
         Flow *f = mResourceDir->Find<Flow>("pending.flow");
         f->Activate();
     }
@@ -66,7 +66,7 @@ void AppMiniLeaderboardDisplay::Exit() {
     TheServer.RemoveSink(this);
     TheRockCentral.CancelOutstandingCalls(this);
     mSongID = 0;
-    unk6c = 0;
+    mLoadTime = 0;
 }
 
 void AppMiniLeaderboardDisplay::DrawShowing() {
@@ -120,12 +120,12 @@ DataNode AppMiniLeaderboardDisplay::OnMsg(const RCJobCompleteMsg &msg) {
         if (job && job->SongID() == mSongID) {
             UpdateData(job);
         }
-        if (unk60 != 1) {
-            unk60 = 1;
+        if (mState != 1) {
+            mState = 1;
             mResourceDir->Find<Flow>("ready.flow")->Activate();
         }
-    } else if (unk60 != 3) {
-        unk60 = 3;
+    } else if (mState != 3) {
+        mState = 3;
         mResourceDir->Find<Flow>("connection_error.flow")->Activate();
     }
     return 1;
@@ -144,16 +144,16 @@ void AppMiniLeaderboardDisplay::UpdateLeaderboardOnline(int i1) {
     HamProfile *profile = TheProfileMgr.GetActiveProfile(true);
     if (profile && profile->IsSignedIn() && ThePlatformMgr.IsConnected()) {
         TheRockCentral.ManageJob(new GetMiniLeaderboardJob(this, profile, i1));
-        if (unk60 != 2) {
-            unk60 = 2;
+        if (mState != 2) {
+            mState = 2;
             mResourceDir->Find<Flow>("pending.flow")->Activate();
         }
     } else if (!ThePlatformMgr.IsConnected()) {
-        if (unk60 != 5) {
-            unk60 = 5;
+        if (mState != 5) {
+            mState = 5;
             mResourceDir->Find<Flow>("no_profile.flow")->Activate();
-        } else if (unk60 != 4) {
-            unk60 = 4;
+        } else if (mState != 4) {
+            mState = 4;
             mResourceDir->Find<Flow>("no_profile.flow")->Activate();
         }
     }
@@ -161,8 +161,8 @@ void AppMiniLeaderboardDisplay::UpdateLeaderboardOnline(int i1) {
 
 bool AppMiniLeaderboardDisplay::UpdateLeaderboard(Symbol s) { // has one small discrepancy
     if (!TheProfileMgr.HasActiveProfile(true)) {
-        if (unk60 != 4) {
-            unk60 = 4;
+        if (mState != 4) {
+            mState = 4;
             Flow *f = mResourceDir->Find<Flow>("no_profile.flow", true);
             f->Activate();
             return true;
@@ -173,8 +173,8 @@ bool AppMiniLeaderboardDisplay::UpdateLeaderboard(Symbol s) { // has one small d
         profile->UpdateOnlineID();
         if (profile->IsSignedIn()) {
             if (!ThePlatformMgr.IsConnected()) { // mismatch right here?
-                if (unk60 != 5) {
-                    unk60 = 5;
+                if (mState != 5) {
+                    mState = 5;
                     Flow *f = mResourceDir->Find<Flow>("no_profile.flow", true);
                     f->Activate();
                     return true;
@@ -186,12 +186,12 @@ bool AppMiniLeaderboardDisplay::UpdateLeaderboard(Symbol s) { // has one small d
                 if (mSongID == 0) {
                     return true;
                 }
-                if (unk60 != 0) {
-                    unk60 = 0;
+                if (mState != 0) {
+                    mState = 0;
                     Flow *f = mResourceDir->Find<Flow>("pending.flow", true);
                     f->Activate();
                 }
-                unk6c = TheTaskMgr.UISeconds();
+                mLoadTime = TheTaskMgr.UISeconds();
             }
         }
     }

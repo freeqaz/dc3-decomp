@@ -38,9 +38,9 @@ public:
 
     struct Node {
     public:
-        float unk0;
-        float unk4;
-        float unk8;
+        float curBeat;
+        float nextBeat;
+        float err;
     };
 
     MEM_OVERLOAD(ClipDistMap, 0x24);

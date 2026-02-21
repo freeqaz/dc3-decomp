@@ -36,7 +36,7 @@ public:
     struct MoveRating {
         String mName; // 0x0
         Symbol mExpected; // 0x8
-        int unkc; // 0xc
+        int mWeightType; // 0xc
     };
     // Hmx::Object
     virtual ~SkeletonClip();
@@ -110,8 +110,8 @@ protected:
     static void LoadFrame(BinStream &, RecordedFrame &, int);
 
     std::vector<RecordedFrame> *mRecordedFrames; // 0x11f0
-    SkeletonFrame *unk11f4; // 0x11f4 - current cam frame?
-    String *unk11f8; // 0x11f8 - current loaded file?
+    SkeletonFrame *mCamFrame; // 0x11f4
+    String *mLoadedFile; // 0x11f8
     int unk11fc; // 0x11fc
     DateTime mTimeRecorded; // 0x1200
     Symbol mSong; // 0x1208
@@ -125,7 +125,7 @@ protected:
     bool unk1231;
     FileStream *mFileStream; // 0x1234
     String mFile; // 0x1238
-    int unk1240;
+    int mPlaybackFrame; // 0x1240
     bool mAutoplay; // 0x1244
 };
 

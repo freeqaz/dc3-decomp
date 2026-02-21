@@ -45,7 +45,7 @@ SongSortMgr::SongSortMgr(SongPreview &sp) : NavListSortMgr(sp) {
     mSorts.push_back(new SongSortByDiff());
     mSorts.push_back(new SongSortBySong());
     mSorts.push_back(new SongSortByLocation());
-    unk90 = 0;
+    mRankedSongCount = 0;
 }
 
 SongSortMgr::~SongSortMgr() {}
@@ -169,13 +169,13 @@ Symbol SongSortMgr::DetermineHeaderSymbolForSong(Symbol sym) {
 }
 
 void SongSortMgr::SetQuasiRandomSong() {
-    int numIndices = unk94.size();
+    int numIndices = mQuasiRandomIndices.size();
     MILO_ASSERT(numIndices > 0, 0x175);
 
     int offset = rand() % (numIndices / 2);
-    int selectedValue = unk94[offset];
-    unk94.erase(unk94.begin() + offset);
-    unk94.push_back(selectedValue);
+    int selectedValue = mQuasiRandomIndices[offset];
+    mQuasiRandomIndices.erase(mQuasiRandomIndices.begin() + offset);
+    mQuasiRandomIndices.push_back(selectedValue);
     int sortIdx = mCurrentSortIdx;
     Symbol song = mSorts[sortIdx]->DataSymbol(selectedValue);
     MetaPerformer::Current()->SetSong(song);
@@ -230,16 +230,16 @@ int SongSortMgr::FirstArtistSongIndex(Symbol sym) {
 }
 
 void SongSortMgr::RebuildSongRecordMap() {
-    unk78.clear();
+    mSongRecordMap.clear();
     std::vector<int> rankedSongs;
     TheHamSongMgr.GetRankedSongs(rankedSongs);
-    unk90 = rankedSongs.size();
+    mRankedSongCount = rankedSongs.size();
     FOREACH (it, rankedSongs) {
         const HamSongMetadata *metadata = TheHamSongMgr.Data(*it);
         if (metadata && !metadata->IsFake()
             && TheProfileMgr.IsContentUnlocked(metadata->ShortName())) {
             SongRecord second(metadata);
-            unk78.insert(std::pair<Symbol, SongRecord>(metadata->ShortName(), second));
+            mSongRecordMap.insert(std::pair<Symbol, SongRecord>(metadata->ShortName(), second));
         }
     }
 }
@@ -280,9 +280,9 @@ void SongSortMgr::OnEnter() {
     }
     auto current = mSorts[mCurrentSortIdx];
     current->BuildItemList();
-    if (unk48) {
-        current->SetHighlightID(unk44);
-        unk48 = false;
+    if (mHighlightSaved) {
+        current->SetHighlightID(mSavedHighlightID);
+        mHighlightSaved = false;
     }
     current->UpdateHighlight();
 }

@@ -14,14 +14,14 @@ public:
     RndOcclusionQueryMgr() {
         for (unsigned int i = 0; i < kMaxQueries; i++) {
             for (int j = 0; j < 2; j++) {
-                unk1004[i][j] = 0;
+                mQueryResults[i][j] = 0;
                 mQueryFrameIDs[i][j] = 0;
                 mQueryStates[i][j] = kQueryStateInvalid;
             }
         }
         mCurrentFrameIndex = 0;
-        unk1808 = 0;
-        unk180c = 0;
+        mFrameCounter = 0;
+        mNextQueryIndex = 0;
     }
 
     virtual ~RndOcclusionQueryMgr() {}
@@ -38,7 +38,7 @@ public:
         if (idx < kMaxQueries) {
             for (unsigned int i = 0; i < 2; i++) {
                 OnReleaseQuery(idx, i);
-                unk1004[idx][i] = 0;
+                mQueryResults[idx][i] = 0;
                 mQueryStates[idx][i] = kQueryStateInvalid;
                 mQueryFrameIDs[idx][i] = 0;
             }
@@ -55,7 +55,7 @@ public:
             SetQueryState(queryIndex, kQueryStateReady);
             bool ret = OnGetQueryResult(queryIndex, uiRef);
             if (ret) {
-                unk1004[queryIndex][mCurrentFrameIndex] = uiRef;
+                mQueryResults[queryIndex][mCurrentFrameIndex] = uiRef;
             }
             return ret;
         } else {
@@ -63,13 +63,13 @@ public:
         }
     }
     bool CreateQuery(unsigned int &uiRef) {
-        unsigned int newIndex = unk180c;
-        if (GetQueryFrameID(newIndex) < unk1808) {
+        unsigned int newIndex = mNextQueryIndex;
+        if (GetQueryFrameID(newIndex) < mFrameCounter) {
             OnCreateQuery(newIndex);
             MILO_ASSERT(GetQueryState(newIndex) == kQueryStateReady, 0x4E);
             uiRef = newIndex;
-            mQueryFrameIDs[newIndex][mCurrentFrameIndex] = unk1808;
-            unk180c = (unk180c + 1) & (kMaxQueries - 1);
+            mQueryFrameIDs[newIndex][mCurrentFrameIndex] = mFrameCounter;
+            mNextQueryIndex = (mNextQueryIndex + 1) & (kMaxQueries - 1);
             return true;
         } else {
             uiRef = -1;
@@ -111,13 +111,13 @@ protected:
 
 public:
     void ToggleFrameIndex() { mCurrentFrameIndex = (mCurrentFrameIndex - 1) & 1; }
-    void IncrementFrameCounter() { unk1808++; }
+    void IncrementFrameCounter() { mFrameCounter++; }
 
 protected:
     QueryState mQueryStates[kMaxQueries][2]; // 0x4
     unsigned int mQueryFrameIDs[kMaxQueries][2]; // 0x804
-    unsigned int unk1004[kMaxQueries][2]; // 0x1004
+    unsigned int mQueryResults[kMaxQueries][2]; // 0x1004
     unsigned int mCurrentFrameIndex; // 0x1804
-    unsigned int unk1808; // 0x1808
-    unsigned int unk180c; // 0x180c
+    unsigned int mFrameCounter; // 0x1808
+    unsigned int mNextQueryIndex; // 0x180c
 };

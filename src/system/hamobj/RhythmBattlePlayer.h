@@ -59,7 +59,7 @@ public:
     void ResetCombo();
     void SetActive(bool);
     void AnimateOut();
-    bool Unk2a8Check() const { return unk2a5 && unk2a8 > 12; }
+    bool Unk2a8Check() const { return unk2a5 && mFramesSinceLastTrigger > 12; }
     int GetScore() const { return mScore; }
     int GetZoneLevel() const { return mZoneLevel; }
     int GetPrevInTheZone() const { return mPrevInTheZone; }
@@ -115,31 +115,31 @@ private:
     int mPlayer; // 0x238
     RhythmBattle *mRhythmBattle; // 0x23c
     bool mActive; // 0x240 - active?
-    float unk244;
-    float unk248;
-    float unk24c;
-    float unk250;
-    float unk254;
-    float unk258;
-    float unk25c;
+    float mRhythmSuccessFraction; // 0x244 - 0.0-1.0 rhythm detection success from RhythmDetector
+    float mFreshnessScore; // 0x248 - 0=stale, 1=fresh, from rd->Freshness()
+    float mMaxRhythmInWindow; // 0x24c - peak rhythm fraction in current window
+    float mFreshnessAccumulator; // 0x250 - cumulative freshness over time window
+    float mMovePresenceAccumulator; // 0x254 - cumulative move presence counter
+    float mWindowElapsedTime; // 0x258 - elapsed time in scoring window
+    float mLastBeatTime; // 0x25c - previous beat time for deltaTime calculation
     int mZoneLevel;
     int mPrevZoneLevel;
     int mInTheZone; // 0x268
     int mPrevInTheZone;
-    float unk270;
-    float unk274;
-    float unk278;
-    Symbol unk27c;
+    float mNormalizedRhythmScore; // 0x270 - 0.0-1.0 normalized rhythm score
+    float mNormalizedFreshnessScore; // 0x274 - 0.0-1.0 normalized freshness average
+    float mMoveConsistencyScore; // 0x278 - 0.0-1.0 move consistency metric
+    Symbol mTrickSymbol; // 0x27c - trickpose/trickjump/none
     int mScore;
     float mComboMeter;
     bool mSwapped;
-    float unk28c;
-    float unk290;
-    int unk294;
+    float mScoringWindowStart; // 0x28c - start beat of scoring window
+    float mScoringWindowEnd; // 0x290 - end beat of scoring window
+    int mDebugScoreValue; // 0x294 - debug score value, -1=not logging
     Symbol mSwagJackedState;
     int unk29c;
-    float unk2a0;
+    float mPrevMaxFootY; // 0x2a0 - previous max foot Y for jump detection
     bool unk2a4;
     bool unk2a5;
-    int unk2a8;
+    int mFramesSinceLastTrigger; // 0x2a8 - incremented in UpdateScore
 };

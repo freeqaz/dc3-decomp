@@ -19,7 +19,7 @@ DataArray *gSupportedEvents;
 EventTrigger::EventTrigger()
     : mAnims(this), mSpawnedTasks(this), mProxyCalls(this), mSounds(this), mShows(this),
       mResetTriggers(this), mHideDelays(this), mNextLink(this), mPartLaunchers(this),
-      unkd0(false), mAnimTrigger(kTriggerAnimNone), mAnimFrame(0), mEnabled(true),
+      mParticleTriggerConverted(false), mAnimTrigger(kTriggerAnimNone), mAnimFrame(0), mEnabled(true),
       mEnabledAtStart(true), mWaiting(false), mHidden(this), mShown(this),
       mTriggered(false), mTriggerOrder(kTriggerRandom), mLastTriggerIndex(-1) {
     RegisterEvents();
@@ -658,7 +658,7 @@ void EventTrigger::LoadOldEvent(
 }
 
 void EventTrigger::ConvertParticleTriggerType() {
-    if (!unkd0) {
+    if (!mParticleTriggerConverted) {
         if (Type() == "particle_trigger") {
             MILO_NOTIFY(
                 "Converting particle trigger %s to standard EventTrigger; should re-save %s",
@@ -675,7 +675,7 @@ void EventTrigger::ConvertParticleTriggerType() {
             SetTypeDef(nullptr);
         }
     }
-    unkd0 = true;
+    mParticleTriggerConverted = true;
 }
 
 DataNode EventTrigger::OnProxyCalls(DataArray *) {

@@ -7,7 +7,7 @@
 #include "utl/BinStream.h"
 
 HamScrollSpeedIndicator::HamScrollSpeedIndicator()
-    : unk1fc(0), mEnterAnim(this), mExitAnim(this), mIndicatorAnim(this) {}
+    : mIsShowing(0), mEnterAnim(this), mExitAnim(this), mIndicatorAnim(this) {}
 
 BEGIN_HANDLERS(HamScrollSpeedIndicator)
     HANDLE_SUPERCLASS(RndDir)
@@ -73,7 +73,7 @@ void HamScrollSpeedIndicator::Show(bool enter) {
         mEnterAnim->Animate(0, false, 0, nullptr, kEaseLinear, 0, false);
     } else
         mExitAnim->Animate(0, false, 0, nullptr, kEaseLinear, 0, false);
-    unk1fc = enter;
+    mIsShowing = enter;
 }
 
 void HamScrollSpeedIndicator::Draw(const Transform &xfm) {

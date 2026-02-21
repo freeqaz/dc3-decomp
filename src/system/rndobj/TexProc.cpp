@@ -17,7 +17,7 @@ RndCam *TexProc::mCam;
 
 TexProc::TexProc()
     : mInputTex(this), mOutputTex(this), mShaderType(kShaderTwirl), mDrawPreClear(1),
-      unk70(0), mFrequency(0), unk78(0), mAmplitude(0), mAmplitudeBump(0), mPhase(0),
+      mStoredParams(0), mFrequency(0), unk78(0), mAmplitude(0), mAmplitudeBump(0), mPhase(0),
       mPhaseVel(0) {}
 
 BEGIN_HANDLERS(TexProc)
@@ -138,10 +138,10 @@ void TexProc::SetRegisters() {
 
 DataNode TexProc::OnSetParams(DataArray *a) {
     if (CheckParams(a, true)) {
-        if (unk70)
-            unk70->Release();
-        unk70 = new DataArray(a->Size() - 2);
-        SetParams(unk70, a);
+        if (mStoredParams)
+            mStoredParams->Release();
+        mStoredParams = new DataArray(a->Size() - 2);
+        SetParams(mStoredParams, a);
     } else {
         MILO_NOTIFY("----- TexProc::OnSetParams() - one or more parameters is invalid");
     }

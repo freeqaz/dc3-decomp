@@ -12,7 +12,7 @@ namespace {
 }
 
 ExternalMic::ExternalMic(unsigned long ul)
-    : unk4(ul), unk8(false), unk9(false), unkc(-1.0f) {
+    : mDeviceId(ul), mQuit(false), unk9(false), unkc(-1.0f) {
     mThread = CreateThread(0, 0, ExternalMicThreadEntry, this, 4, 0);
     MILO_ASSERT(mThread, 0x6a);
     SetThreadPriority(mThread, 15);
@@ -21,7 +21,7 @@ ExternalMic::ExternalMic(unsigned long ul)
 }
 
 ExternalMic::~ExternalMic() {
-    unk8 = true;
+    mQuit = true;
     WaitForSingleObject(mThread, -1);
     CloseHandle(mThread);
 }

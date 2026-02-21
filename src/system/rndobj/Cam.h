@@ -66,7 +66,7 @@ public:
     static RndCam *Current() { return sCurrent; }
     static float DefaultNearPlane() { return sDefaultNearPlane; }
     static float MaxFarNearPlaneRatio() { return sMaxFarNearPlaneRatio; }
-    const Hmx::Matrix4 &GetMatrix300() const { return unk300; }
+    const Hmx::Matrix4 &GetViewProjMatrix() const { return mViewProjMatrix; }
 
 protected:
     RndCam();
@@ -112,7 +112,7 @@ protected:
      */
     float mFarPlane; // 0x2c4
     float mYFov; // 0x2c8
-    float unk2cc; // 0x2cc
+    float mAspectRatio; // 0x2cc
     /**
      * @brief
      * Original _objects description:
@@ -127,6 +127,6 @@ protected:
     Hmx::Rect mScreenRect; // 0x2d8
     ObjPtr<RndTex> mTargetTex; // 0x2e8
     Rnd::Aspect mAspect; // 0x2fc
-    Hmx::Matrix4 unk300; // 0x300
-    Hmx::Matrix4 unk340; // 0x340
+    Hmx::Matrix4 mViewProjMatrix; // 0x300
+    Hmx::Matrix4 mInvViewProjMatrix; // 0x340
 };

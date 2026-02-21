@@ -24,8 +24,8 @@
 Synth360 *TheXboxSynth;
 
 Synth360::Synth360()
-    : unke8(0), unkec(0), unkf0(0), unkf4(0), unkf8(0), unkfc(0), unk104(true),
-      unk105(false), unk138(false), unk13c(0), unk14c(false) {}
+    : unke8(0), unkec(0), unkf0(0), unkf4(0), unkf8(0), unkfc(0), mDolbyEnabled(true),
+      mDolbyPending(false), unk138(false), unk13c(0), unk14c(false) {}
 
 BEGIN_HANDLERS(Synth360)
     HANDLE_ACTION(set_headset_target, Voice::sHeadsetTarget = _msg->Int(2))
@@ -55,14 +55,14 @@ bool Synth360::DidMicsChange() const {
         return false;
     else {
         MicManagerXbox *x = MicManagerXbox::GetInstance();
-        return x->unk30;
+        return x->mMicsChanged;
     }
 }
 
 void Synth360::ResetMicsChanged() {
     if (!mMics.empty()) {
         MicManagerXbox *x = MicManagerXbox::GetInstance();
-        x->unk30 = false;
+        x->mMicsChanged = false;
     }
 }
 
@@ -78,7 +78,7 @@ void Synth360::ReleaseAllMics() {
     }
 }
 
-void Synth360::AddFxSend(FxSend360 *fx) { unk140.push_back(fx); }
+void Synth360::AddFxSend(FxSend360 *fx) { mFxSends.push_back(fx); }
 
 bool Synth360::IsMicConnected(int i) const {
     if (i < 0 || i >= mMics.size())
@@ -103,9 +103,9 @@ void Synth360::ReleaseMic(int micID) {
 }
 
 void Synth360::RemoveFxSend(FxSend360 *fx) {
-    auto *findFx = std::find(unk140.begin(), unk140.end(), fx);
-    if (findFx != unk140.end()) {
-        unk140.erase(findFx);
+    auto *findFx = std::find(mFxSends.begin(), mFxSends.end(), fx);
+    if (findFx != mFxSends.end()) {
+        mFxSends.erase(findFx);
     }
 }
 
@@ -126,11 +126,11 @@ int Synth360::GetNextAvailableMicID() const {
 
 void Synth360::SetDolby(bool b1, bool b2) {
     if (b2) {
-        unk104 = b1;
+        mDolbyEnabled = b1;
         UpdateDolby();
-    } else if (unk104 != b1) {
+    } else if (mDolbyEnabled != b1) {
         unk108.Restart();
-        unk104 = b1;
-        unk105 = true;
+        mDolbyEnabled = b1;
+        mDolbyPending = true;
     }
 }

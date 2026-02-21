@@ -4,12 +4,12 @@
 #include "obj/Object.h"
 #include "rndobj/Trans.h"
 
-CharIKFoot::CharIKFoot() : unkb0(this), unkc4(0), mData(this), mDataIndex(0) {
-    unkb0 = Hmx::Object::New<RndTransformable>();
-    unkb0->DirtyLocalXfm().Reset();
+CharIKFoot::CharIKFoot() : mFootBone(this), mFootFsmState(0), mData(this), mDataIndex(0) {
+    mFootBone = Hmx::Object::New<RndTransformable>();
+    mFootBone->DirtyLocalXfm().Reset();
 }
 
-CharIKFoot::~CharIKFoot() { delete unkb0; }
+CharIKFoot::~CharIKFoot() { delete mFootBone; }
 
 BEGIN_HANDLERS(CharIKFoot)
     HANDLE_SUPERCLASS(CharIKHand)
@@ -62,8 +62,8 @@ BEGIN_LOADS(CharIKFoot)
 END_LOADS
 
 void CharIKFoot::Enter() {
-    unkc4 = 0;
-    unkf0 = 0.0f;
+    mFootFsmState = 0;
+    mFootBlendTime = 0.0f;
 }
 
 void CharIKFoot::PollDeps(std::list<Hmx::Object *> &l1, std::list<Hmx::Object *> &l2) {
@@ -73,8 +73,8 @@ void CharIKFoot::PollDeps(std::list<Hmx::Object *> &l1, std::list<Hmx::Object *>
 void CharIKFoot::Poll() {
     if (mFinger && mHand && mData) {
         mTargets.clear();
-        mTargets.push_back(IKTarget(unkb0, 0));
-        DoFSM(Character::Current(), unkb0->DirtyLocalXfm());
+        mTargets.push_back(IKTarget(mFootBone, 0));
+        DoFSM(Character::Current(), mFootBone->DirtyLocalXfm());
         CharIKHand::Poll();
         mTargets.clear();
     }
@@ -82,13 +82,13 @@ void CharIKFoot::Poll() {
 
 void CharIKFoot::DoFSM(Character *mMe, Transform &tf) {
     if (mMe && mMe->Teleported())
-        unkc4 = 0;
+        mFootFsmState = 0;
     float deltasecs = TheTaskMgr.DeltaSeconds();
     if (deltasecs < 0.0f)
         deltasecs = 0.0f;
     tf.m = mFinger->WorldXfm().m;
     tf.v.z = mFinger->WorldXfm().v.z;
-    unke0.z = tf.v.z;
+    mFootPosition.z = tf.v.z;
     float f10;
     bool b2 = false;
     float vecat = mData->LocalXfm().v[mDataIndex];
@@ -98,7 +98,7 @@ void CharIKFoot::DoFSM(Character *mMe, Transform &tf) {
         if (vecat <= 0.0f) {
             ;
         } else {
-            if (unkc4 == 1) {
+            if (mFootFsmState == 1) {
                 f10 = 0.6f;
             } else {
                 f10 = 0.5f;
@@ -108,40 +108,40 @@ void CharIKFoot::DoFSM(Character *mMe, Transform &tf) {
             }
         }
     }
-    if (unkc4 == 0) {
+    if (mFootFsmState == 0) {
         tf.v = mFinger->WorldXfm().v;
         if (b2) {
-            unke0 = tf.v;
-            unkc4 = 1;
+            mFootPosition = tf.v;
+            mFootFsmState = 1;
         }
     }
-    if (unkc4 == 1) {
+    if (mFootFsmState == 1) {
         if (!b2) {
-            unkc4 = 2;
-            unkf0 = Distance(mFinger->WorldXfm().v, tf.v);
+            mFootFsmState = 2;
+            mFootBlendTime = Distance(mFinger->WorldXfm().v, tf.v);
         } else {
             Vector3 v3c;
-            Subtract(mFinger->WorldXfm().v, unke0, v3c);
+            Subtract(mFinger->WorldXfm().v, mFootPosition, v3c);
             float len = Length(v3c);
             if (len > 0.125f)
                 v3c *= 0.125f / len;
-            Add(unke0, v3c, tf.v);
+            Add(mFootPosition, v3c, tf.v);
             return;
         }
     }
-    if (unkc4 == 2) {
+    if (mFootFsmState == 2) {
         Vector3 v48;
         Subtract(mFinger->WorldXfm().v, tf.v, v48);
         float len = Length(v48);
-        unkf0 = Min(-(deltasecs * 25.0f - unkf0), len);
-        if (unkf0 <= 0.0f)
-            unkc4 = 0;
+        mFootBlendTime = Min(-(deltasecs * 25.0f - mFootBlendTime), len);
+        if (mFootBlendTime <= 0.0f)
+            mFootFsmState = 0;
         else
-            v48 *= (len - unkf0) / len;
+            v48 *= (len - mFootBlendTime) / len;
         tf.v += v48;
         if (b2) {
-            unke0 = tf.v;
-            unkc4 = 1;
+            mFootPosition = tf.v;
+            mFootFsmState = 1;
         }
     }
 }

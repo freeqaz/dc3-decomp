@@ -66,9 +66,10 @@ protected:
     /** "graphically displays the screensize and lod next to the character" */
     bool mShowScreenSize; // 0x8b
     bool mShowFootExtents; // 0x8c
-    float unk90; // 0x90 - transition beat threshold
-    int unk94; // 0x94
-    ClipDistMap *unk98;
+    /** "Beat threshold at which the transition from clip2 fires" */
+    float mTransEndBeat; // 0x90
+    int mTransitionIdx; // 0x94
+    ClipDistMap *mDistMap;
     RndOverlay *mOverlay; // 0x9c
 };
 

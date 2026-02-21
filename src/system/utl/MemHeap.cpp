@@ -34,8 +34,8 @@ void MemHeap::FreeBlockStats(int &lFrags, int &rFrags, int &freeBytes, int &i4, 
     i5 = ivar5;
     lFrags = ivar6;
     rFrags = (i - ivar6) - 1;
-    unk24 = Min<unsigned int>(ivar3, unk24);
-    i4 = unk24;
+    mMinFreeBytes = Min<unsigned int>(ivar3, mMinFreeBytes);
+    i4 = mMinFreeBytes;
 }
 
 void MemHeap::Print(TextStream &ts, bool verbose) {
@@ -161,7 +161,7 @@ void MemHeap::Init(
     mStrategy = strat;
     mStart = i7;
     mAllowTemp = allowTemp;
-    unk24 = -1;
+    mMinFreeBytes = -1;
     mDebugLevel = debugLevel;
     mSizeWords = size - (i7 - start >> 2);
     gTimeStamp++;

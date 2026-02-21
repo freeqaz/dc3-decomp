@@ -31,12 +31,12 @@ protected:
     LightPreset *mPresetOverride; // 0x24
     LightPreset *mPresetNew; // 0x28
     LightPreset *mPresetPrev; // 0x2c
-    float unk30; // 0x30
-    float unk34; // 0x34
-    float unk38; // 0x38
-    bool unk3c; // 0x3c
+    float mTimeNew; // 0x30
+    float mTimePrev; // 0x34
+    float mTimeOverride; // 0x38
+    bool mSingleBlend; // 0x3c
     float mBlend; // 0x40
-    float unk44; // 0x44
-    int unk48; // 0x48
+    float mOverrideDuration; // 0x44
+    int mOverrideMode; // 0x48
     bool mIgnoreLightingEvents; // 0x4c
 };

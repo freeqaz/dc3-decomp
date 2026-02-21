@@ -17,9 +17,9 @@ public:
 private:
     Hmx::Rect GetViewBox() const;
 
-    float unk2c;
-    float unk30;
-    float unk34;
-    float unk38;
-    int unk3c;
+    float mMinX; // 0x2c
+    float mMinY; // 0x30
+    float mMaxX; // 0x34
+    float mMaxY; // 0x38
+    int mTrackingID; // 0x3c
 };

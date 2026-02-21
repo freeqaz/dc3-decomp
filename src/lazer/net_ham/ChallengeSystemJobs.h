@@ -17,11 +17,11 @@ public:
         kNumChallengeTypes = 6
     };
     bool operator!=(const ChallengeRow &other) const {
-        return (unsigned int)unk0 != other.unk0 || mGamertag != other.mGamertag
+        return (unsigned int)mChallengeIndex != other.mChallengeIndex || mGamertag != other.mGamertag
             || (unsigned int)mSongID != other.mSongID || mArtist != other.mArtist
             || mSongTitle != other.mSongTitle || (unsigned int)mScore != other.mScore
             || (unsigned int)mDiff != other.mDiff || (unsigned int)mType != other.mType
-            || unk2c != other.unk2c || mTimeStamp != other.mTimeStamp
+            || mNotes != other.mNotes || mTimeStamp != other.mTimeStamp
             || (unsigned int)mChallengerXp != other.mChallengerXp;
     }
     bool IsHMXChallenge() const {
@@ -31,7 +31,7 @@ public:
         return mType >= kChallengeDlcGold && mType <= kChallengeDlcBronze;
     }
 
-    int unk0; // 0x0
+    int mChallengeIndex; // 0x0
     String mGamertag; // 0x4
     int mSongID; // 0xc
     String mArtist; // 0x10
@@ -41,7 +41,7 @@ public:
     // doesn't look like the choreo difficulty easy/medium/expert
     int mDiff; // 0x24
     Type mType; // 0x28
-    String unk2c; // 0x2c
+    String mNotes; // 0x2c
     unsigned int mTimeStamp; // 0x34
     int mChallengerXp; // 0x38
 };

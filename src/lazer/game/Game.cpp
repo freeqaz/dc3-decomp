@@ -58,7 +58,7 @@ std::vector<Symbol> sAutoplayStates;
 Game::Game()
     : mSongDB(new SongDB()), mSongInfo(0), mGameInput(0), mRestartCount(0), unk5c(false),
       mUseMoveGraph(false), mPaused(true), mTimePaused(false), mRealTime(false), unk64(0),
-      unk68(false), mMusicSpeed(1), mNeverAllowInput(false), unk71(false), mOvershell(0), mMoveDir(this),
+      unk68(false), mMusicSpeed(1), mNeverAllowInput(false), mPauseRequested(false), mOvershell(0), mMoveDir(this),
       mLoadState(0), mShuttle(new Shuttle()), mLoadedSongAudio(gNullStr), mWaitState(0), unka8(0), mAltTempoMap(0) {
     if (TheSongDB) {
         RELEASE(TheSongDB);
@@ -75,9 +75,9 @@ Game::Game()
     SetForegroundVolume(TheProfileMgr.GetMusicVolumeDb());
     mMaster->GetAudio()->SetStereo(!TheProfileMgr.Mono());
     LoadSong();
-    unk72 = false;
-    unk73 = false;
-    unk74 = true;
+    mDeferredPausePending = false;
+    mDeferredPauseSoundArg = false;
+    mDeferredPauseGameArg = true;
     SkeletonUpdateHandle h = SkeletonUpdate::InstanceHandle();
     h.AddCallback(this);
 }
@@ -158,9 +158,9 @@ void Game::PostUpdate(const SkeletonUpdateData *data) {
                 static Symbol practice("practice");
                 static Symbol gameplay_mode("gameplay_mode");
                 if (TheGameMode->Property(gameplay_mode)->Sym() != practice) {
-                    mOvershell->Poll((const Skeleton *(&)[6])data->unk4);
+                    mOvershell->Poll((const Skeleton *(&)[6])data->mSkeletonsRight);
                 }
-                CheckForSkeletonLoss((const Skeleton *(&)[6])data->unk4);
+                CheckForSkeletonLoss((const Skeleton *(&)[6])data->mSkeletonsRight);
             }
         }
     }
@@ -217,10 +217,10 @@ void Game::PostLoad() {
 }
 
 void Game::CheckPauseRequest() {
-    unk71 = false;
-    if (unk72) {
-        SetGamePaused(true, unk73, unk74);
-        unk72 = false;
+    mPauseRequested = false;
+    if (mDeferredPausePending) {
+        SetGamePaused(true, mDeferredPauseSoundArg, mDeferredPauseGameArg);
+        mDeferredPausePending = false;
     }
 }
 
@@ -515,16 +515,16 @@ void Game::SetPaused(bool b1, bool b2) {
 }
 
 void Game::SetGamePaused(bool b1, bool b2, bool b3) {
-    if (unk71 && b1) {
-        unk73 = b2;
-        unk74 = b3;
-        unk72 = true;
+    if (mPauseRequested && b1) {
+        mDeferredPauseSoundArg = b2;
+        mDeferredPauseGameArg = b3;
+        mDeferredPausePending = true;
     } else {
         if (!b1 || b3) {
             TheSynth->PauseAllSfx(b1);
         }
         SetPaused(b1, b2);
-        unk71 = true;
+        mPauseRequested = true;
         if (b1) {
             TheTaskMgr.SetSecondsAndBeat(
                 TheTaskMgr.Seconds(TaskMgr::kRealTime), TheTaskMgr.Beat(), false
@@ -609,7 +609,7 @@ void Game::LoadNewSong(Symbol s1, Symbol s2) {
 
 void Game::PauseForSkeletonLoss() {
     if (!mPaused) {
-        int gestureVal = TheGestureMgr->GetVal425C();
+        int gestureVal = TheGestureMgr->GetPauseOnSkeletonLossMode();
         if (gestureVal != 0 && gestureVal != 1 && !TheSynth->HasPendingVoices()
             && !TheUI->InTransition()) {
             static Message pauseOnSkeletonLossMsg("pause_on_skeleton_loss");

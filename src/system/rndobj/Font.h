@@ -43,11 +43,11 @@ public:
 class RndFont : public RndFontBase {
 public:
     struct CharInfo {
-        int unk0; // 0x0 - page?
-        float unk4;
-        float unk8;
+        int mPage; // 0x0
+        float mU;
+        float mV;
         float charWidth; // 0xc
-        float unk10;
+        float mAdvance;
         float unk14;
     };
     virtual ~RndFont();
@@ -100,7 +100,7 @@ protected:
     std::map<unsigned short, CharInfo> mCharInfoMap; // 0x74
     Vector2 mCellSize; // 0x8c
     float mDeprecatedSize; // 0x94
-    std::vector<Vector2> unk98; // 0x98
+    std::vector<Vector2> mMaterialOffsets; // 0x98
     bool mPacked; // 0xa4
 };
 
@@ -111,7 +111,7 @@ public:
 
         Box unk0;
         int unk20;
-        ObjRefConcrete<RndMesh, ObjectDir> unk24;
+        ObjRefConcrete<RndMesh, ObjectDir> mMesh;
         bool unk38;
 
         MEM_OVERLOAD(CharInfo, 0x12A);
@@ -145,7 +145,7 @@ protected:
 
     void Clear();
 
-    ObjPtr<RndMat> unk44; // 0x44
+    ObjPtr<RndMat> mMat; // 0x44
     ObjOwnerPtr<RndFont3d> mTextureOwner; // 0x58
     Vector3 unk6c; // 0x6c
     Vector3 unk7c; // 0x7c

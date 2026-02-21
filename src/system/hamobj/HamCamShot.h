@@ -115,9 +115,9 @@ private:
 protected:
     HamCamShot();
 
-    virtual bool CheckShotStarted() { return !unk2d4 && CamShot::CheckShotStarted(); }
+    virtual bool CheckShotStarted() { return !mInSetFrame && CamShot::CheckShotStarted(); }
     virtual bool CheckShotOver(float f1) {
-        return !unk2d4 && f1 >= unk2d8 && CamShot::CheckShotOver(f1);
+        return !mInSetFrame && f1 >= mTotalDuration && CamShot::CheckShotOver(f1);
     }
     virtual void SetFrameEx(float, float);
 
@@ -144,18 +144,18 @@ protected:
     HamPlayerFlags mPlayerFlag; // 0x29c
     /** "Next camshots, in order" */
     ObjPtrList<HamCamShot> mNextShots; // 0x2a0
-    ObjPtrList<HamCamShot>::iterator unk2b4; // 0x2b4
+    ObjPtrList<HamCamShot>::iterator mNextShotIt; // 0x2b4
     ObjPtr<HamCamShot> mCurrentShot; // 0x2b8
     float unk2cc; // 0x2cc
     float unk2d0; // 0x2d0 - duration
-    bool unk2d4; // 0x2d4
-    float unk2d8; // 0x2d8
-    bool unk2dc; // 0x2dc
+    bool mInSetFrame; // 0x2d4
+    float mTotalDuration; // 0x2d8
+    bool mListingShots; // 0x2dc
     bool unk2dd; // 0x2dd
     /** "Anims set throughout this shot and any next shots
         Not valid entries for a next shot." */
     ObjPtrList<RndAnimatable> mMasterAnims; // 0x2e0
-    int unk2f4; // 0x2f4
+    int mOriginalSizeNextShots; // 0x2f4
     ObjPtrList<RndDrawable> unk2f8; // 0x2f8
     ObjPtrList<RndDrawable> unk30c; // 0x30c
     ObjPtrList<RndDrawable> unk320; // 0x320

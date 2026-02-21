@@ -38,9 +38,9 @@ protected:
     void setupCypher(int);
     void DoRawSeek(int);
 
-    bool unk24;
-    int unk28;
-    int unk2c;
+    bool mTerminating;  // set true in destructor to signal decode thread to drop this reader
+    int mNumChannels;   // number of audio channels (from vorbis_info)
+    int mSampleRate;    // sample rate in Hz (from vorbis_info)
     File *mFile; // 0x30
     int mHeadersRead; // 0x34
     char *mReadBuffer; // 0x38
@@ -77,7 +77,7 @@ protected:
     bool unkee;
     bool mFail; // 0xef
     int mVersion; // 0xf0 - mogg version?
-    std::vector<std::vector<short> > unkf4; // 0xf4
+    std::vector<std::vector<short> > mPcmBuffers; // 0xf4 - per-channel PCM sample buffers
     s64 unk100;
     int unk108;
 };

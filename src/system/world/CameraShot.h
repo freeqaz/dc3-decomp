@@ -104,15 +104,6 @@ inline BinStream &operator<<(BinStream &bs, const CamShotFrame &f) {
     return bs;
 }
 
-enum CrowdRotate {
-    /** "Face along the placement mesh, or along focus, if set" */
-    kCrowdRotateNone = 0,
-    /** "Face towards the camera" */
-    kCrowdRotateFace = 1,
-    /** "Face away from the camera" */
-    kCrowdRotateAway = 2
-};
-
 class CamShotCrowd {
 public:
     CamShotCrowd(Hmx::Object *);
@@ -188,7 +179,7 @@ public:
     bool ShotOk(CamShot *);
     bool SetPos(CamShotFrame &, RndCam *);
     RndCam *GetCam();
-    void SetParent(RndDir *d) { unk1a4 = d; }
+    void SetParent(RndDir *d) { mParentDir = d; }
     class WorldDir *GetCrowdDir() const;
     void AddAnim(RndAnimatable *);
     void ClearCrowds();
@@ -263,7 +254,7 @@ protected:
     ObjPtrList<RndDrawable> mDrawOverrides; // 0x17c
     /** "List of objects to draw after post-processing" */
     ObjPtrList<RndDrawable> mPostProcOverrides; // 0x190
-    ObjPtr<RndDir> unk1a4;
+    ObjPtr<RndDir> mParentDir; // 0x1a4
     ObjVector<CamShotCrowd> mCrowds; // 0x1b8
     /** "Force the croawd into a particular state".
         Options are: (none bad ok great
@@ -281,8 +272,8 @@ protected:
     Vector3 mLastDesiredShakeAngOffset; // 0x220
     Vector3 mLastShakeOffset; // 0x230
     Vector3 mLastShakeAngOffset; // 0x240
-    Vector3 unk250;
-    Vector3 unk260;
+    Vector3 mShakeVelocity; // 0x250
+    Vector3 mShakeAngVelocity; // 0x260
     CamShotFrame *mLastNext; // 0x270
     CamShotFrame *mLastPrev; // 0x274
     /** "duration of the camshot" */

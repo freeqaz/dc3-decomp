@@ -5,14 +5,14 @@
 #include "obj/Object.h"
 #include "os/Debug.h"
 
-FlowTimer::FlowTimer() : unk5c(0), unk60(this), mRate(0), mTotalTime(0.0f) {}
+FlowTimer::FlowTimer() : mStopMode(0), mTask(this), mRate(0), mTotalTime(0.0f) {}
 
 FlowTimer::~FlowTimer() { TheFlowMgr->CancelCommand(this); }
 
 BEGIN_PROPSYNCS(FlowTimer)
     SYNC_PROP(total_time, mTotalTime)
     SYNC_PROP(rate, mRate)
-    SYNC_PROP(stop_mode, unk5c)
+    SYNC_PROP(stop_mode, mStopMode)
     SYNC_SUPERCLASS(FlowNode)
 END_PROPSYNCS
 
@@ -21,7 +21,7 @@ BEGIN_SAVES(FlowTimer)
     SAVE_SUPERCLASS(FlowNode)
     bs << mTotalTime;
     bs << mRate;
-    bs << unk5c;
+    bs << mStopMode;
 END_SAVES
 
 BEGIN_COPYS(FlowTimer)
@@ -30,7 +30,7 @@ BEGIN_COPYS(FlowTimer)
     BEGIN_COPYING_MEMBERS_FROM(node)
         COPY_MEMBER_FROM(node, mTotalTime)
         COPY_MEMBER_FROM(node, mRate)
-        COPY_MEMBER_FROM(node, unk5c)
+        COPY_MEMBER_FROM(node, mStopMode)
     END_COPYING_MEMBERS
 
 END_COPYS
@@ -43,7 +43,7 @@ BEGIN_LOADS(FlowTimer)
     LOAD_SUPERCLASS(FlowNode)
     bs >> mTotalTime >> mRate;
     if (d.rev > 0)
-        bs >> unk5c;
+        bs >> mStopMode;
 END_LOADS
 
 bool FlowTimer::Activate() {
@@ -59,7 +59,7 @@ bool FlowTimer::Activate() {
 
 void FlowTimer::Deactivate(bool b) {
     FLOW_LOG("Deactivated\n");
-    delete unk60;
+    delete mTask;
     TheFlowMgr->CancelCommand(this);
     FlowNode::Deactivate(b);
 }
@@ -68,7 +68,7 @@ void FlowTimer::ChildFinished(FlowNode *node) {
     FLOW_LOG("Child Finished of class:%s\n", node->ClassName());
     mRunningNodes.remove(node);
 
-    if (unk5c == 0 && mRunningNodes.empty()) {
+    if (mStopMode == 0 && mRunningNodes.empty()) {
         MILO_ASSERT(mFlowParent->HasRunningNode(this), 0x10d);
         FLOW_LOG("Timed Release From Parent \n");
         Timer t;
@@ -93,7 +93,7 @@ void FlowTimer::ChildFinished(FlowNode *node) {
 
 void FlowTimer::RequestStop() {
     FLOW_LOG("RequestStop\n");
-    if (unk5c == 0) {
+    if (mStopMode == 0) {
         unk58 = true;
         TheFlowMgr->QueueCommand(this, kIgnore);
         FlowNode::RequestStop();
@@ -124,7 +124,7 @@ void FlowTimer::Execute(FlowNode::QueueState state) {
     }
 }
 
-bool FlowTimer::IsRunning() { return unk60 || FlowNode::IsRunning(); }
+bool FlowTimer::IsRunning() { return mTask || FlowNode::IsRunning(); }
 
 void FlowTimer::OnKeyframe(FlowNode *node) {
     if (!node->IsRunning())

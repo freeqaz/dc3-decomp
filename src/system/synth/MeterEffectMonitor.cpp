@@ -3,7 +3,7 @@
 #include "obj/Object.h"
 #include "rndobj/Poll.h"
 
-MeterEffectMonitor::MeterEffectMonitor() : mMeterEffect(this), unk1c(0), unk20(0) {}
+MeterEffectMonitor::MeterEffectMonitor() : mMeterEffect(this), mLastData0(0), mLastData1(0) {}
 MeterEffectMonitor::~MeterEffectMonitor() {}
 
 BEGIN_HANDLERS(MeterEffectMonitor)
@@ -46,12 +46,12 @@ void MeterEffectMonitor::Poll() {
         data1 = mMeterEffect->ChannelData(0);
         data2 = mMeterEffect->ChannelData(1);
     }
-    if (data1 != unk1c || data2 != unk20) {
+    if (data1 != mLastData0 || data2 != mLastData1) {
         static Message channel_data("channel_data", 0.0f, 0.0f);
-        channel_data[0] = (unk1c + data1) / 2.0f;
-        channel_data[1] = (unk20 + data2) / 2.0f;
+        channel_data[0] = (mLastData0 + data1) / 2.0f;
+        channel_data[1] = (mLastData1 + data2) / 2.0f;
         Export(channel_data, true);
-        unk1c = data1;
-        unk20 = data2;
+        mLastData0 = data1;
+        mLastData1 = data2;
     }
 }

@@ -20,7 +20,7 @@ bool IsDeviceConnected(DWORD deviceID) {
 }
 
 CacheMgrXbox::CacheMgrXbox()
-    : mFile(INVALID_HANDLE_VALUE), mppCacheID(nullptr), mppCache(0), unk40(0) {
+    : mFile(INVALID_HANDLE_VALUE), mppCacheID(nullptr), mppCache(0), mCallback(0) {
     memset(&mContentData, 0, sizeof(XCONTENT_DATA));
     mContentData.DeviceID = 0;
 }
@@ -229,7 +229,7 @@ bool CacheMgrXbox::MountAsync(CacheID *pCacheIDXbox, Cache **ppCache, Hmx::Objec
             } else {
                 mCacheIDXbox = myCacheXbox;
                 mppCache = ppCache;
-                unk40 = o;
+                mCallback = o;
                 SetLastResult(kCache_NoError);
                 SetOp(kOpMount);
                 return true;
@@ -270,7 +270,7 @@ bool CacheMgrXbox::UnmountAsync(Cache **ppCache, Hmx::Object *o) {
             }
         } else {
             mppCache = ppCache;
-            unk40 = o;
+            mCallback = o;
             SetLastResult(kCache_NoError);
             SetOp(kOpUnmount);
             return true;
@@ -470,11 +470,11 @@ void CacheMgrXbox::PollMount() {
     mCacheIDXbox = nullptr;
     mppCache = nullptr;
     SetOp(kOpNone);
-    if (unk40) {
+    if (mCallback) {
         static Message msg("cache_mgr_mount_result", GetLastResult());
         msg[0] = GetLastResult();
-        unk40->Handle(msg, true);
-        unk40 = nullptr;
+        mCallback->Handle(msg, true);
+        mCallback = nullptr;
     }
 }
 
@@ -498,11 +498,11 @@ void CacheMgrXbox::PollUnmount() {
         RELEASE(*mppCache);
         mppCache = nullptr;
         SetOp(kOpNone);
-        if (unk40) {
+        if (mCallback) {
             static Message msg("cache_mgr_unmount_result", GetLastResult());
             msg[0] = GetLastResult();
-            unk40->Handle(msg, true);
-            unk40 = nullptr;
+            mCallback->Handle(msg, true);
+            mCallback = nullptr;
         }
     }
 }

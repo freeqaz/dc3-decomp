@@ -14,4 +14,4 @@ FxSend360::~FxSend360() {
     CleanChain();
 }
 
-void FxSend360::AddOwnerVoice(Voice *v) { unk34.push_back(v); }
+void FxSend360::AddOwnerVoice(Voice *v) { mOwnerVoices.push_back(v); }

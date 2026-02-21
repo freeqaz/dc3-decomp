@@ -27,7 +27,7 @@ StreamRenderer::StreamRenderer()
       mPlayer2DepthPaletteOffset(0), mPlayerOtherDepthPaletteOffset(0),
       mBackgroundDepthPaletteOffset(0), mDrawPreClear(0), mForceDraw(0),
       mStaticColorIndices(0), mPCTestTex(this), mLagPrimaryTexture(0), unk154(0),
-      unk190(0), unk194(0), unk198(0), unk19c(0), unk1a0(0), unk1a4(0), mPinkPlayer(0),
+      mCrewPhotoPlayer0Detected(0), mCrewPhotoPlayer1Detected(0), mCrewPhotoPlayer2Detected(0), mCrewPhotoPlayer3Detected(0), mCrewPhotoPlayer4Detected(0), mCrewPhotoPlayer5Detected(0), mPinkPlayer(0),
       mBluePlayer(0) {
     for (int i = 0; i < 6; i++) {
         mSmoothers[i].SetSmoothParameters(6, 0);
@@ -364,22 +364,22 @@ void StreamRenderer::SetCrewPhotoPlayerDetected(int player, bool b2) {
     float set = b2 ? 1.0f : 0.0f;
     switch (player) {
     case 0:
-        unk190 = set;
+        mCrewPhotoPlayer0Detected = set;
         break;
     case 1:
-        unk194 = set;
+        mCrewPhotoPlayer1Detected = set;
         break;
     case 2:
-        unk198 = set;
+        mCrewPhotoPlayer2Detected = set;
         break;
     case 3:
-        unk19c = set;
+        mCrewPhotoPlayer3Detected = set;
         break;
     case 4:
-        unk1a0 = set;
+        mCrewPhotoPlayer4Detected = set;
         break;
     case 5:
-        unk1a4 = set;
+        mCrewPhotoPlayer5Detected = set;
         break;
     default:
         break;

@@ -60,8 +60,10 @@ public:
     };
 
     struct PointTest {
-        int unk0, unk4, unk8;
-        RndFlare *unkc;
+        int z; // 0x0 - raw depth value
+        int x; // 0x4 - screen x position
+        int y; // 0x8 - screen y position
+        RndFlare *mFlare; // 0xc
     };
 
     struct CompressTextureCallback;
@@ -151,7 +153,7 @@ public:
     RndEnviron *DefaultEnv() const { return mDefaultEnv; }
     RndMat *DefaultMat() const { return mDefaultMat; }
     RndMat *OverlayMat() const { return mOverlayMat; }
-    bool Unk140() const { return unk140; }
+    bool ResourceCached() const { return mResourceCached; }
     bool VerboseTimers() const { return mVerboseTimers; }
     void ShowConsole(bool);
     bool ConsoleShowing();
@@ -275,14 +277,14 @@ protected:
     bool mWorldEnded; // 0x137
     Aspect mAspect; // 0x138
     DrawMode mDrawMode; // 0x13c
-    bool unk140; // 0x140 - mResourceCached
-    bool unk141; // 0x141 - mShowShaderCost
+    bool mResourceCached; // 0x140
+    bool mShowShaderCost; // 0x141
     bool mShrinkToSafe; // 0x142
     bool mInGame; // 0x143
     bool mVerboseTimers; // 0x144
     bool mDisablePostProc; // 0x145
     bool unk146;
-    bool unk147;
+    bool mWorldCamCopied; // 0x147 - set by CopyWorldCam, cleared by DoWorldEnd
     bool unk148;
     void (*unk14c)(); // 0x14c - funcptr
     void (*unk150)(); // 0x150 - another funcptr
@@ -300,7 +302,7 @@ protected:
     ProcCounter mProcCounter; // 0x1b8
     ProcessCmd mProcCmds; // 0x1d0
     ProcessCmd mLastProcCmds; // 0x1d4
-    std::list<CompressTexDesc *> unk1d8; // 0x1d8
+    std::list<CompressTexDesc *> mCompressTexQueue; // 0x1d8
 };
 
 extern Rnd &TheRnd;

@@ -93,8 +93,8 @@ public:
 protected:
     std::vector<NavListSort *> mSorts; // 0x34
     int mCurrentSortIdx; // 0x40
-    DataArray *unk44; // 0x44
-    bool unk48; // 0x48 mHighlightSaved maybe?
+    DataArray *mSavedHighlightID; // 0x44
+    bool mHighlightSaved; // 0x48
     SongPreview *mSongPreview; // 0x4c
     bool mHeaderMode; // 0x50
     bool mEnteringHeaderMode; // 0x51
@@ -102,5 +102,5 @@ protected:
     std::vector<int> mHeadersA; // 0x54
     std::vector<int> mHeadersB; // 0x60
     bool mHeadersSelectable; // 0x6c
-    std::list<Symbol> unk70; // 0x70 mSortNames?
+    std::list<Symbol> mExpandedHeaders; // 0x70
 };

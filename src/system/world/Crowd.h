@@ -13,6 +13,15 @@
 #include "utl/MemMgr.h"
 
 /** "A quickly-rendered bunch of instanced characters within an area" */
+enum CrowdRotate {
+    /** "Face along the placement mesh, or along focus, if set" */
+    kCrowdRotateNone = 0,
+    /** "Face towards the camera" */
+    kCrowdRotateFace = 1,
+    /** "Face away from the camera" */
+    kCrowdRotateAway = 2
+};
+
 class CameraManager;
 
 class WorldCrowd : public RndDrawable, public RndPollable {
@@ -42,15 +51,15 @@ public:
 
     struct CharData {
         struct Char3D {
-            Char3D(const Char3D &o) : unk0(o.unk0), unk40(o.unk40), unk50(0) {
-                unk44 = o.unk44;
+            Char3D(const Char3D &o) : mXfm(o.mXfm), mIdx(o.mIdx), mHandle(0) {
+                mColors = o.mColors;
             }
-            Char3D(const Transform &t, int idx) : unk0(t), unk40(idx), unk50(nullptr) {}
+            Char3D(const Transform &t, int idx) : mXfm(t), mIdx(idx), mHandle(nullptr) {}
 
-            Transform unk0;
-            int unk40;
-            std::vector<Hmx::Color> unk44;
-            class WorldCrowd3DCharHandle *unk50;
+            Transform mXfm;
+            int mIdx;
+            std::vector<Hmx::Color> mColors;
+            class WorldCrowd3DCharHandle *mHandle;
         };
         CharData(Hmx::Object *owner) : mDef(owner), mMMesh(nullptr) {}
         void Save(BinStream &) const;
@@ -118,7 +127,7 @@ protected:
     ObjList<CharData> mCharacters; // 0x5c
     /** "Number of characters to place" */
     int mNum; // 0x68
-    int unk6c; // 0x6c
+    CrowdRotate mCrowdRotate; // 0x6c
     Vector3 unk70; // 0x70
     /** "Makes crowd be 3D regardless of the CamShot" */
     bool mForce3DCrowd; // 0x80

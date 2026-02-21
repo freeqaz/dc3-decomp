@@ -48,5 +48,5 @@ protected:
     bool mAffectScale; // 0x50
     /** "Whether or not to use UI timing.  Default is to use game time." */
     bool mUseUITime; // 0x51
-    bool unk52; // 0x52
+    bool mEnabled; // 0x52
 };

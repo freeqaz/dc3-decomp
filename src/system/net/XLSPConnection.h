@@ -13,8 +13,8 @@ public:
     virtual int ThreadStart();
     virtual void ThreadDone(int);
 
-    State GetState() { return unk4; }
-    int GetUnk8() const { return unk8; }
+    State GetState() { return mState; }
+    int GetConnectionRequest() const { return mConnectionRequest; }
     void Poll();
     unsigned int GetServiceIP();
     void Connect(const char *, unsigned int);
@@ -32,15 +32,15 @@ private:
 
     static const int kTitleServerEnumMaxCount;
 
-    State unk4;
-    int unk8;
-    String unkc;
-    unsigned int unk14;
-    HANDLE unk18;
-    void *unk1c;
-    DWORD unk20;
+    State mState;
+    int mConnectionRequest;
+    String mServerInfo;
+    unsigned int mServiceId;
+    HANDLE mEnumHandle;
+    void *mEnumBuffer;
+    DWORD mEnumBufferSize;
     int unk24;
     XOVERLAPPED mXOverlapped; // 0x28
     int unk44;
-    Timer unk48;
+    Timer mReconnectTimer;
 };

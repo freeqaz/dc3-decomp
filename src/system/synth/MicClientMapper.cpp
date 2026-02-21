@@ -101,7 +101,7 @@ void MicClientMapper::RefreshPlayerMapping() {
 //     for (std::vector<MicMappingData>::iterator it = mMappingData.begin();
 //          it != mMappingData.end();
 //          ++it) {
-//         if (it->unk0 != -1 && it->mMicID != -1 &&
+//         if (it->mClientID != -1 && it->mMicID != -1 &&
 //         !TheSynth->IsMicConnected(it->mMicID)) {
 //             TheSynth->ReleaseMic(it->mMicID);
 //             int playerID = GetPlayerIDForMicID(it->mMicID);
@@ -115,7 +115,7 @@ void MicClientMapper::RefreshPlayerMapping() {
 //     for (std::vector<MicMappingData>::iterator iter = mMappingData.begin();
 //          iter != mMappingData.end();
 //          ++iter) {
-//         if (iter->unk0 != -1 && iter->mMicID == -1) {
+//         if (iter->mClientID != -1 && iter->mMicID == -1) {
 //             iter->mMicID = TheSynth->GetNextAvailableMicID();
 //             MILO_ASSERT(iter->bLocked == false, 0x186);
 //             if (iter->mMicID != -1) {
@@ -144,7 +144,7 @@ int MicClientMapper::GetMicIDForClientID(const MicClientID &clientID) const {
         for (std::vector<MicMappingData>::const_iterator it = mMappingData.begin();
              it != mMappingData.end();
              ++it) {
-            if (it->unk0 == clientID.unk0)
+            if (it->mClientID == clientID.mClientID)
                 return it->mMicID;
         }
         return -1;

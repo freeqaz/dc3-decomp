@@ -100,7 +100,7 @@ void MetagameRank::SaveFixed(FixedSizeSaveableStream &fs) const {
     }
     SaveSymbolID(fs, combined_xp_disp);
     fs << sum;
-    const_cast<MetagameRank *>(this)->unkca = false;
+    const_cast<MetagameRank *>(this)->mXpAwarded = false;
 }
 
 void MetagameRank::LoadFixed(FixedSizeSaveableStream &fs, int saveVersion) {
@@ -142,7 +142,7 @@ void MetagameRank::LoadFixed(FixedSizeSaveableStream &fs, int saveVersion) {
         }
     }
     ComputeRankNumber(true);
-    unkca = false;
+    mXpAwarded = false;
 }
 
 void MetagameRank::Preinit() {
@@ -230,7 +230,7 @@ void MetagameRank::Init() {
 }
 
 void MetagameRank::Clear() {
-    unkca = false;
+    mXpAwarded = false;
     mScore = 0;
     unk38 = true;
     memset(unk39, 0, 0x40);
@@ -306,7 +306,7 @@ DataNode MetagameRank::GetNextDeferredPoints(DataArray *a) {
         mDeferredPoints.pop_front();
         mScore += pt.unk0;
         ComputeRankNumber(false);
-        unkca = true;
+        mXpAwarded = true;
         DataArrayPtr ptr(pt.unk4, pt.unk0);
         return ptr;
     }
@@ -532,14 +532,14 @@ void MetagameRank::UpdateScore(
 }
 
 void MetagameRank::AwardPoints(int i, Symbol s) {
-    if (TheRockCentral.GetUnk8c()) {
+    if (TheRockCentral.GetMotdXPFlag()) {
         i = i << 1;
     }
     DeferredPoints df;
     df.unk0 = i;
     df.unk4 = s;
     mDeferredPoints.push_back(df);
-    unkca = true;
+    mXpAwarded = true;
 }
 
 void MetagameRank::AwardPointsForTask(Symbol task) {

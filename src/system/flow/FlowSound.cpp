@@ -8,9 +8,10 @@
 #include "synth/Sound.h"
 
 FlowSound::FlowSound()
-    : mImmediateRelease(true), mStopMode(kStopLastFrame), unk64(false), unk68(0),
-      unk6c(false), mSound(this), mVolume(0), mTranspose(0), mPan(0), unk9c(false),
-      mForceStop(false), mUseIntensity(true), unka0(1) {}
+    : mImmediateRelease(true), mStopMode(kStopLastFrame), mHasMarkerFired(false),
+      mStopMarkerType(0), mStopRequested(false), mSound(this), mVolume(0), mTranspose(0),
+      mPan(0), mIsPlaying(false), mForceStop(false), mUseIntensity(true),
+      mCurrentIntensity(1) {}
 
 FlowSound::~FlowSound() { TheFlowMgr->CancelCommand(this); }
 
@@ -85,14 +86,14 @@ bool FlowSound::Activate() {
         return false;
     else {
         PushDrivenProperties();
-        unka0 = FlowNode::sIntensity;
+        mCurrentIntensity = FlowNode::sIntensity;
         if (mImmediateRelease && !mForceStop) {
-            unk9c = false;
-            float db = RatioToDb(unka0) + mVolume;
+            mIsPlaying = false;
+            float db = RatioToDb(mCurrentIntensity) + mVolume;
             mSound->Play(db, mPan, mTranspose, nullptr, 0);
             return false;
         } else if (mForceStop) {
-            unk9c = false;
+            mIsPlaying = false;
             mSound->Stop(nullptr, false);
             return false;
         } else {
@@ -104,7 +105,7 @@ bool FlowSound::Activate() {
 
 void FlowSound::Deactivate(bool b1) {
     FLOW_LOG("Deactivated\n");
-    unk9c = false;
+    mIsPlaying = false;
     if (mSound) {
         mSound->Stop(this, false);
     }
@@ -114,7 +115,7 @@ void FlowSound::Deactivate(bool b1) {
 void FlowSound::ChildFinished(FlowNode *child) {
     FLOW_LOG("Child Finished of class:%s\n", child->ClassName());
     mRunningNodes.remove(child);
-    if (!unk9c) {
+    if (!mIsPlaying) {
         FLOW_LOG("Timed Release From Parent \n");
         Timer timer;
         timer.Reset();
@@ -130,22 +131,22 @@ void FlowSound::RequestStop() {
     switch (mStopMode) {
     case FlowNode::kStopImmediate:
     case FlowNode::kReleaseAndContinue:
-        unk6c = true;
+        mStopRequested = true;
         TheFlowMgr->QueueCommand(this, kIgnore);
         break;
     case FlowNode::kStopLastFrame:
-        unk6c = true;
+        mStopRequested = true;
         break;
     case FlowNode::kStopOnMarker:
-        unk68 = 2;
-        unk6c = true;
+        mStopMarkerType = 2;
+        mStopRequested = true;
         break;
     case FlowNode::kStopBetweenMarkers:
-        if (unk64) {
+        if (mHasMarkerFired) {
             TheFlowMgr->QueueCommand(this, kIgnore);
         } else {
-            unk68 = 3;
-            unk6c = true;
+            mStopMarkerType = 3;
+            mStopRequested = true;
         }
         break;
     default:
@@ -157,8 +158,8 @@ void FlowSound::RequestStop() {
 void FlowSound::RequestStopCancel() {
     FLOW_LOG("RequestStopCancel\n");
     FlowNode::RequestStopCancel();
-    if (unk6c) {
-        unk6c = false;
+    if (mStopRequested) {
+        mStopRequested = false;
         TheFlowMgr->QueueCommand(this, kQueue);
     }
 }
@@ -167,7 +168,7 @@ void FlowSound::Execute(QueueState qs) {
     FLOW_LOG("Execute: state = %i\n", qs);
     if (IsRunning()) {
         if (qs == kIgnore) {
-            unk9c = false;
+            mIsPlaying = false;
             if (mStopMode == kReleaseAndContinue) {
                 mSound->EndLoop(this);
             } else {
@@ -186,11 +187,11 @@ void FlowSound::Execute(QueueState qs) {
         }
     } else {
         if (qs == kQueue) {
-            unk6c = false;
-            unk68 = 0;
-            if (!unk9c) {
-                unk9c = true;
-                float db = RatioToDb(unka0) + mVolume;
+            mStopRequested = false;
+            mStopMarkerType = 0;
+            if (!mIsPlaying) {
+                mIsPlaying = true;
+                float db = RatioToDb(mCurrentIntensity) + mVolume;
                 mSound->Play(db, mPan, mTranspose, this, 0);
             }
         } else if (qs == kIgnore) {
@@ -199,13 +200,13 @@ void FlowSound::Execute(QueueState qs) {
     }
 }
 
-bool FlowSound::IsRunning() { return unk9c || FlowNode::IsRunning(); }
+bool FlowSound::IsRunning() { return mIsPlaying || FlowNode::IsRunning(); }
 
 void FlowSound::UpdateIntensity() {
     FLOW_LOG("Updating Intensity: %0.2f\n", FlowNode::sIntensity);
     if (mUseIntensity) {
         float db = RatioToDb(FlowNode::sIntensity);
-        unka0 = FlowNode::sIntensity;
+        mCurrentIntensity = FlowNode::sIntensity;
         db += mVolume;
         mSound->SetVolume(db, this);
     }

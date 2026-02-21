@@ -5,7 +5,7 @@ bool RndFont3d::HasChar(unsigned short us) const {
 }
 
 RndFont3d::RndFont3d()
-    : unk44(this), mTextureOwner(this, this), unk6c(0, 0, 0), unk7c(0, 0, 0),
+    : mMat(this), mTextureOwner(this, this), unk6c(0, 0, 0), unk7c(0, 0, 0),
       unk8c(0, 0, 0) {}
 
 void RndFont3d::Clear() {

@@ -29,11 +29,11 @@ public:
     };
     // size 0x18
     struct Buffer {
-        HANDLE unk0;
-        const NUI_IMAGE_FRAME *unk4[2];
-        int unkc;
-        int unk10;
-        RndMat *unk14;
+        HANDLE mHandle;
+        const NUI_IMAGE_FRAME *mFrames[2];
+        int mWriteIdx;
+        int mReadIdx;
+        RndMat *mMat;
     };
     class TextureStore {
     public:
@@ -104,16 +104,16 @@ protected:
 
     static void Terminate();
 
-    int unk11d4;
-    HANDLE unk11d8;
+    int mAudioInitialized; // 0x11d4
+    HANDLE mAudioHandle; // 0x11d8
     int unk11dc;
     int unk11e0;
     int unk11e4;
     bool mConnected; // 0x11e8
-    bool unk11e9;
-    bool unk11ea;
-    bool unk11eb;
-    bool unk11ec;
+    bool mColorPolled; // 0x11e9
+    bool mDepthPolled; // 0x11ea
+    bool mColorReceived; // 0x11eb
+    bool mDepthReceived; // 0x11ec
     int mMaxSnapshots; // 0x11f0
     std::vector<RndMat *> mSnapshots; // 0x11f4
     int mNumSnapshots; // 0x1200
@@ -124,7 +124,7 @@ protected:
     CamTexClip mTexClips[8]; // 0x1224
     SpeechMgr *mSpeechMgr; // 0x1444
     Buffer mStreams[kBufferNum]; // 0x1448
-    DxTex *unk14a8;
-    DxTex *unk14ac;
-    RndTex *unk14b0;
+    DxTex *mColorStreamTex; // 0x14a8
+    DxTex *mDepthStreamTex; // 0x14ac
+    RndTex *mDebugDepthTex; // 0x14b0
 };

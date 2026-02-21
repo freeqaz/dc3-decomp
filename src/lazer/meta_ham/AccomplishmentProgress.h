@@ -75,15 +75,15 @@ public:
     int GetTotalCampaignSongsPlayed() const;
     int GetNumCompleted() const;
     int GetFlawlessMoveCount() const;
-    bool HasAward(Symbol s) const { return unk94.find(s) != unk94.end(); }
-    int NumDays() const { return unk114; }
-    void SetNumDays(int i) { unk114 = i; }
-    int NumWeekends() const { return unk11c; }
-    int GetUnk118() const { return unk118; }
-    void SetUnk118(int i) { unk118 = i; }
-    int GetUnk120() const { return unk120; }
-    void SetWeekends(int i) { unk11c = i; }
-    void SetUnk120(int i) { unk120 = i; }
+    bool HasAward(Symbol s) const { return mUnlockedAwards.find(s) != mUnlockedAwards.end(); }
+    int NumDays() const { return mTotalDaysActive; }
+    void SetNumDays(int i) { mTotalDaysActive = i; }
+    int NumWeekends() const { return mWeekendCount; }
+    int GetUnk118() const { return mChallengeProgress; }
+    void SetUnk118(int i) { mChallengeProgress = i; }
+    int GetUnk120() const { return mWeeklyPlayCount; }
+    void SetWeekends(int i) { mWeekendCount = i; }
+    void SetUnk120(int i) { mWeeklyPlayCount = i; }
 
 private:
     void GiveGamerpic(Accomplishment *);
@@ -91,30 +91,30 @@ private:
 
     std::map<Symbol, int> unk34;
     HamProfile *mParentProfile; // 0x4c
-    std::list<GamerAwardStatus *> unk50;
-    std::set<Symbol> unk58;
-    std::set<Symbol> unk70;
-    std::vector<Symbol> unk88;
-    std::set<Symbol> unk94;
+    std::list<GamerAwardStatus *> mPendingAwards; // 0x50
+    std::set<Symbol> mCompletedAchievements; // 0x58
+    std::set<Symbol> mHardcoreAchievements; // 0x70
+    std::vector<Symbol> mCharacterAchievementList; // 0x88
+    std::set<Symbol> mUnlockedAwards; // 0x94
     // award, reason
     std::list<std::pair<Symbol, Symbol> > mNewAwards; // 0xac
     int mTotalSongsPlayed; // 0xb4
     int mTotalCampaignSongsPlayed; // 0xb8
-    std::map<Symbol, int> unkbc; // 0xbc
+    std::map<Symbol, int> mAchievementCounts; // 0xbc
     int mDanceBattleCount; // 0xd4
     int mFreestylePhotoCount; // 0xd8
     bool mPerfectMovesCleared; // 0xdc - completely flawless?
-    int unke0;
-    int unke4; // 0xe4
-    int unke8; // 0xe8
+    int mGamerscoreAccumulator; // 0xe0
+    int mSessionGamerScore; // 0xe4
+    int mPendingGamerScore; // 0xe8
     // symbol = char, int = use count
     std::map<Symbol, int> mCharacterUseCounts; // 0xec
     int mFlawlessMoveCount; // 0x104
     int mNiceMoveCount; // 0x108
     Symbol unk10c;
     int unk110;
-    int unk114; // 0x114
-    int unk118;
-    int unk11c;
-    int unk120;
+    int mTotalDaysActive; // 0x114
+    int mChallengeProgress; // 0x118
+    int mWeekendCount; // 0x11c
+    int mWeeklyPlayCount; // 0x120
 };

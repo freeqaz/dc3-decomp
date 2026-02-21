@@ -34,8 +34,8 @@ void OSCMessenger::Poll() {
         str[0x7f] = 0;
         int pos = strlen(str) / 4 + 1;
         OSCValue value;
-        value.unk0 = str;
-        value.unk89 = 1;
+        value.mAddress = str;
+        value.mHasNewValue = 1;
         MILO_ASSERT(data[pos] == ',', 0x46);
         char c4 = data[pos + 1];
         if (c4 == 's') {
@@ -65,10 +65,10 @@ void OSCMessenger::Poll() {
         }
         bool found = false;
         FOREACH (it, mValues) {
-            if (it->unk0 == str) {
+            if (it->mAddress == str) {
                 memcpy(it->buffer, value.buffer, 0x80);
                 found = true;
-                it->unk89 = 1;
+                it->mHasNewValue = 1;
                 break;
             }
         }
@@ -83,12 +83,12 @@ int OSCMessenger::GetInt(String str, int intValue) {
     if (val) {
         MILO_ASSERT(val->mType == 'i', 0x131);
         intValue = ((int *)val->buffer)[0];
-        val->unk89 = 0;
+        val->mHasNewValue = 0;
         return intValue;
     } else {
         OSCValue newValue;
-        newValue.unk0 = str;
-        newValue.unk89 = 0;
+        newValue.mAddress = str;
+        newValue.mHasNewValue = 0;
         newValue.mType = 'i';
         mValues.push_back(newValue);
         return intValue;
@@ -97,7 +97,7 @@ int OSCMessenger::GetInt(String str, int intValue) {
 
 OSCMessenger::OSCValue *OSCMessenger::GetValue(String str) {
     FOREACH (it, mValues) {
-        if (it->unk0 == str) {
+        if (it->mAddress == str) {
             return &(*it);
         }
     }
@@ -109,11 +109,11 @@ float OSCMessenger::GetFloat(String str, float fValue) {
     if (val) {
         MILO_ASSERT(val->mType == 'f', 0x149);
         fValue = *(float *)val->buffer;
-        val->unk89 = 0;
+        val->mHasNewValue = 0;
     } else {
         OSCValue newValue;
-        newValue.unk0 = str;
-        newValue.unk89 = 0;
+        newValue.mAddress = str;
+        newValue.mHasNewValue = 0;
         newValue.mType = 'f';
         *(float *)newValue.buffer = fValue;
         mValues.push_back(newValue);

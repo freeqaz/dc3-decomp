@@ -19,9 +19,9 @@ public:
 
     NEW_OBJ(DeJitterPanel)
 
-    Timer unk38;
-    DeJitter unk68;
-    bool unkf8;
+    Timer mTimer;
+    DeJitter mDeJitter;
+    bool mFirstFrame;
 };
 
 class DeJitterSetter {

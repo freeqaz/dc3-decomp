@@ -8,7 +8,7 @@
 #include "rndobj/Trans.h"
 
 TransConstraint::TransConstraint()
-    : mParent(this), mChild(this), mSpeed(10), mAffectScale(0), mUseUITime(0), unk52(1) {
+    : mParent(this), mChild(this), mSpeed(10), mAffectScale(0), mUseUITime(0), mEnabled(1) {
     mStaticCube.Zero();
     for (int i = 0; i < 3; i++) {
         mTracks[i] = false;

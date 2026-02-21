@@ -139,7 +139,7 @@ BEGIN_LOADS(SongLayout)
     FOREACH (it, mSongSections) {
         FOREACH (pit, mSongPatterns) {
             if (pit->mName == it->mPattern) {
-                it->unk14 = pit;
+                it->mSongPattern = pit;
                 break;
             }
         }
@@ -199,15 +199,15 @@ void SongLayout::SetReplacerMove(int i, Symbol s2) {
     MILO_LOG(
         "Replacer %d replacing %s with %s at measures:",
         i,
-        mMoveReplacers[i].unk0.Str(),
+        mMoveReplacers[i].mFrom.Str(),
         s2.Str()
     );
     for (int n = 0; n < mMoveReplacers[i].mMeasures.size(); n++) {
         MILO_LOG(" %d", mMoveReplacers[i].mMeasures[n] + 1);
     }
     MILO_LOG("\n");
-    mMoveReplacers[i].unk4 = s2;
-    mMoveReplacers[i].unk8 = TheMoveMgr->Graph().GetMoveParent(s2);
+    mMoveReplacers[i].mTo = s2;
+    mMoveReplacers[i].mMoveParent = TheMoveMgr->Graph().GetMoveParent(s2);
 }
 
 int SongLayout::ReplacerFirstMeasure(int i) const {
@@ -231,7 +231,7 @@ int SongLayout::FirstUnfilledPattern() const {
 
 int SongLayout::FirstUnfilledReplacer() const {
     for (int i = 0; i < mMoveReplacers.size(); i++) {
-        if (mMoveReplacers[i].unk8 == 0) {
+        if (mMoveReplacers[i].mMoveParent == 0) {
             return i;
         }
     }

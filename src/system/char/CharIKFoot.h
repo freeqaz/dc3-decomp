@@ -31,11 +31,11 @@ protected:
 
     void DoFSM(Character *, Transform &);
 
-    ObjPtr<RndTransformable> unkb0; // 0xb0
-    int unkc4; // 0xc4
+    ObjPtr<RndTransformable> mFootBone; // 0xb0
+    int mFootFsmState; // 0xc4
     ObjPtr<RndTransformable> mData; // 0xc8
     int mDataIndex; // 0xdc
-    Vector3 unke0; // 0xe0
-    float unkf0; // 0xf0
-    Transform unkf4; // 0xf4
+    Vector3 mFootPosition; // 0xe0
+    float mFootBlendTime; // 0xf0
+    Transform mFootTransform; // 0xf4
 };

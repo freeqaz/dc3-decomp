@@ -39,15 +39,15 @@ void ReserveFrames() {
 }
 
 SkeletonClip::SkeletonClip()
-    : mRecordedFrames(sFrames), unk11f4(sCamFrame), unk11f8(sLoadedFile), unk11fc(-1),
+    : mRecordedFrames(sFrames), mCamFrame(sCamFrame), mLoadedFile(sLoadedFile), unk11fc(-1),
       mDifficulty(kNumDifficulties), mWeighted(0), unk1230(0), unk1231(0),
-      mFileStream(nullptr), unk1240(0), mAutoplay(false) {
+      mFileStream(nullptr), mPlaybackFrame(0), mAutoplay(false) {
     SetRate(k30_fps);
 }
 
 SkeletonClip::~SkeletonClip() {
-    if (*unk11f8 == mFile)
-        *unk11f8 = gNullStr;
+    if (*mLoadedFile == mFile)
+        *mLoadedFile = gNullStr;
     RELEASE(mFileStream);
 }
 
@@ -99,7 +99,7 @@ BEGIN_SAVES(SkeletonClip)
         std::vector<MoveRating> moves;
         bs << moves;
     }
-    bs << unk1240;
+    bs << mPlaybackFrame;
     bs << mAutoplay;
     bs << mDefaultRating;
     bs << mWeighted;
@@ -171,7 +171,7 @@ BEGIN_LOADS(SkeletonClip)
         d >> mMoveRatings;
     }
     if (d.rev > 0) {
-        d >> unk1240;
+        d >> mPlaybackFrame;
         d >> mAutoplay;
         if (d.rev < 4) {
             bool b;
@@ -231,12 +231,12 @@ void SkeletonClip::Poll() {
     } else {
         SkeletonDir *dir = dynamic_cast<SkeletonDir *>(Dir());
         if (mAutoplay && TheLoadMgr.EditMode() && dir && dir->TestClip() == this) {
-            unk1240++;
+            mPlaybackFrame++;
             float end = EndFrame() * 2;
-            if (unk1240 >= end) {
-                unk1240 = 0;
+            if (mPlaybackFrame >= end) {
+                mPlaybackFrame = 0;
             }
-            SetFrame(unk1240, 1);
+            SetFrame(mPlaybackFrame, 1);
         }
     }
 }
@@ -284,12 +284,12 @@ void SkeletonClip::EnableAlternateRecord(int recordingBuffer) {
     MILO_ASSERT(mFile.empty(), 0x7F);
     MILO_ASSERT_RANGE(recordingBuffer, 0, 4, 0x80);
     mRecordedFrames = &sFrames[recordingBuffer];
-    unk11f4 = &sCamFrame[recordingBuffer];
-    unk11f8 = &sLoadedFile[recordingBuffer];
+    mCamFrame = &sCamFrame[recordingBuffer];
+    mLoadedFile = &sLoadedFile[recordingBuffer];
 }
 
 BinStream &operator<<(BinStream &bs, const SkeletonClip::MoveRating &mr) {
-    bs << mr.mName << mr.mExpected << mr.unkc;
+    bs << mr.mName << mr.mExpected << mr.mWeightType;
     return bs;
 }
 
@@ -299,19 +299,19 @@ BinStream &operator>>(BinStreamRev &d, SkeletonClip::MoveRating &mr) {
     if (d.altRev > 0) {
         int x;
         d >> x;
-        mr.unkc = x;
+        mr.mWeightType = x;
     } else if (d.rev > 8) {
         Symbol s;
         d >> s;
         if (s == "weighted") {
-            mr.unkc = 1;
+            mr.mWeightType = 1;
         } else if (s == "unweighted") {
-            mr.unkc = 0;
+            mr.mWeightType = 0;
         } else {
-            mr.unkc = 2;
+            mr.mWeightType = 2;
         }
     } else {
-        mr.unkc = 2;
+        mr.mWeightType = 2;
     }
     return d.stream;
 }
@@ -406,8 +406,8 @@ const SkeletonFrame *SkeletonClip::PollNewFrame() {
     int idk1, idk2;
     const RecordedFrame *recordedFrame = CurRecordedFrame(idk1, idk2);
     if (recordedFrame && recordedFrame->unk28) {
-        recordedFrame->MakeSkeletonFrame(*unk11f4, 0);
-        return unk11f4;
+        recordedFrame->MakeSkeletonFrame(*mCamFrame, 0);
+        return mCamFrame;
     } else
         return nullptr;
 }
@@ -510,7 +510,7 @@ void SkeletonClip::LoadClip(bool tool_sync) {
         mRecordedFrames->clear();
         if (Dir()) {
             LoadClipFromFile(mFile, this);
-            *unk11f8 = mFile;
+            *mLoadedFile = mFile;
         }
     }
 }

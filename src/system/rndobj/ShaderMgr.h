@@ -63,12 +63,12 @@ public:
     void ToggleShowShaderErrors() { mShowShaderErrors = !mShowShaderErrors; }
     RndShaderProgram &FindShader(ShaderType, const ShaderOptions &);
     void *AllocShader();
-    int Unk20() const { return unk20; }
+    int CullModeOverride() const { return mCullModeOverride; }
     bool ShowShaderErrors() const { return mShowShaderErrors; }
-    bool Unk18() const { return unk18; }
+    bool InDepthVolume() const { return mInDepthVolume; }
     bool ShowMetaMatErrors() const { return mShowMetaMatErrors; }
-    int Unk10() const { return unk10; }
-    bool UseAO() const { return unkc; }
+    int BoneCount() const { return mBoneCount; }
+    bool UseAO() const { return mUseAO; }
     bool AllowPerPixel() const { return mAllowPerPixel; }
 
 protected:
@@ -79,12 +79,12 @@ protected:
     void ShaderPoolAlloc(int);
 
     std::list<ShaderTree> mShaderTrees; // 0x4
-    bool unkc;
-    int unk10;
+    bool mUseAO;
+    int mBoneCount;
     int unk14;
-    bool unk18;
+    bool mInDepthVolume;
     int unk1c;
-    int unk20; // 0x20 - some sort of enum
+    int mCullModeOverride; // 0x20 - cull mode override enum (1=none, 2=back, 3=shadow)
     bool unk24;
     bool unk25;
     bool unk26;
@@ -117,12 +117,12 @@ protected:
     RndMat *mDrawRectMat; // 0x50
     void *mShaderPool; // 0x54
     int mShaderPoolCount; // 0x58
-    int unk5c; // 0x5c - shader pool alloc
+    int mShaderPoolAlloc; // 0x5c - shader pool alloc
     int unk60;
     float *mConstantCache; // 0x64
-    int unk68;
+    int mConstantCacheSize; // 0x68
     bool mCacheShaders; // 0x6c
-    bool unk6d;
+    bool mPreInitialized; // 0x6d
     bool mShowShaderErrors; // 0x6e
     bool mShowMetaMatErrors; // 0x6f
 };

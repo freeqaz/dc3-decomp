@@ -50,7 +50,7 @@ public:
             mLoadedObjects = m.mLoadedObjects;
             mLoadedSubdirs = m.mLoadedSubdirs;
             mPreClear = m.mPreClear;
-            unk21 = m.unk21;
+            mForceReload = m.mForceReload;
             return *this;
         }
 
@@ -70,7 +70,7 @@ public:
 
         void SetSelected(const FilePath &fp, bool b) {
             mSelected = fp;
-            unk21 = b;
+            mForceReload = b;
         }
 
         bool IsProxy() const { return mProxy; }
@@ -85,7 +85,7 @@ public:
         FilePath mLoaded; // 0x18
         /** "If true, merges the Dir in as a proxy, rather than the individual objects" */
         bool mProxy; // 0x20
-        bool unk21; // 0x21
+        bool mForceReload; // 0x21
         /** "Delete the old objects right at StartLoad time" */
         bool mPreClear; // 0x22
         /** "How to treat subdirs in the source" */

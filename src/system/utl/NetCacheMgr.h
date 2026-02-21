@@ -49,8 +49,8 @@ struct NetLoaderRef {
     void DeleteLoader();
     bool IsValid() const;
 
-    String unk0; // 0x0 - name?
-    int unk8; // 0x8 - refs/ref count?
+    String mName; // 0x0
+    int mRefCount; // 0x8
     NetLoader *mNetLoader; // 0xc
     NetCacheLoader *mCacheLoader; // 0x10
 };
@@ -98,7 +98,7 @@ public:
     NetLoader *AddNetLoader(const char *, NetLoaderPos);
     NetCacheLoader *AddNetCacheLoader(const char *, NetLoaderPos);
 
-    bool GetUnk30() const { return unk30; }
+    bool GetHasFailed() const { return mHasFailed; }
 
 private:
     void EnterLoadState();
@@ -120,12 +120,12 @@ protected:
     void DebugClearCache();
     NetLoaderRef *AddLoaderRef(const char *, RefType, NetLoaderPos);
 
-    int unk2c;
-    bool unk30;
+    int mState;
+    bool mHasFailed;
     NetCacheMgrFailType mFailType; // 0x34
     String mXLSPFilter; // 0x38
     unsigned int mServiceId; // 0x40
-    bool unk44;
+    bool mServiceIDObtained;
     std::list<ServerData> mServers; // 0x48
     Symbol mServerType; // 0x50
     int mLoadCacheSize; // 0x54

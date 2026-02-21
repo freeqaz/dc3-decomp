@@ -17,9 +17,9 @@ bool FilterQueue::GetResults(float &outValue, DetectFrame **frames, float unused
     frames[0] = nullptr;
     for (int frameIdx = 0; frameIdx < qframes.size(); frameIdx++) {
         FilterInputFrame &frame = qframes[frameIdx];
-        frame.unkc->AddError(oframes[frameIdx].unk4, frame.unk4);
-        if (mQueuedJob.songSeconds > frame.unkc->Seconds() && frame.unk4 > unused) {
-            frames[frame.unk0] = frame.unkc;
+        frame.mDetectFrame->AddError(oframes[frameIdx].mErrors, frame.mSongBeats);
+        if (mQueuedJob.songSeconds > frame.mDetectFrame->Seconds() && frame.mSongBeats > unused) {
+            frames[frame.mSlot] = frame.mDetectFrame;
         }
     }
     qframes.clear();
@@ -42,11 +42,11 @@ void FilterQueue::EnqueueFrame(
     int frameNumber, float f2, float f3, DetectFrame *df, const FilterVersion *fv
 ) {
     FilterInputFrame frame;
-    frame.unk0 = frameNumber;
-    frame.unk4 = f2;
-    frame.unk8 = f3;
-    frame.unkc = df;
-    frame.unk10 = fv;
+    frame.mSlot = frameNumber;
+    frame.mSongBeats = f2;
+    frame.mSongSpeed = f3;
+    frame.mDetectFrame = df;
+    frame.mFilterVersion = fv;
     mQueuedJob.frames.push_back(frame);
 }
 
@@ -68,6 +68,6 @@ void FilterQueue::StartJob() {
     int frameCount = mQueuedJob.frames.size();
     mOutput.frames.resize(frameCount);
     for (int frameIdx = 0; frameIdx < frameCount; frameIdx++) {
-        mOutput.frames[frameIdx].unk0 = &mQueuedJob.frames[frameIdx];
+        mOutput.frames[frameIdx].mInputFrame = &mQueuedJob.frames[frameIdx];
     }
 }

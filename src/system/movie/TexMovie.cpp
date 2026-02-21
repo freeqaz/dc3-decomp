@@ -15,7 +15,7 @@
 #include <cstddef>
 
 TexMovie::TexMovie()
-    : mTex(this), unk5c(1), unk5d(0), unk5e(0), unk5f(0), sRoot(), mMovie() {}
+    : mTex(this), mLoop(1), mEntered(0), mIsLocalized(0), mPaused(0), sRoot(), mMovie() {}
 
 TexMovie::~TexMovie() { mMovie.End(); }
 
@@ -27,7 +27,7 @@ BEGIN_COPYS(TexMovie)
     BEGIN_COPYING_MEMBERS
         COPY_MEMBER(mTex)
         COPY_MEMBER(sRoot)
-        COPY_MEMBER(unk5e)
+        COPY_MEMBER(mIsLocalized)
     END_COPYING_MEMBERS
 END_COPYS
 
@@ -61,8 +61,8 @@ BEGIN_PROPSYNCS(TexMovie)
             return true;
         }
     }
-    SYNC_PROP(loop, unk5c)
-    SYNC_PROP(is_localized, unk5e)
+    SYNC_PROP(loop, mLoop)
+    SYNC_PROP(is_localized, mIsLocalized)
     {
         _NEW_STATIC_SYMBOL(is_empty)
         if (sym == _s) {
@@ -86,7 +86,7 @@ BEGIN_SAVES(TexMovie)
     SAVE_SUPERCLASS(Hmx::Object)
     SAVE_SUPERCLASS(RndDrawable)
     SAVE_SUPERCLASS(RndPollable)
-    bs << mTex << unk5c << sRoot << unk5e;
+    bs << mTex << mLoop << sRoot << mIsLocalized;
     mMovie.Save(&bs);
 END_SAVES
 
@@ -98,17 +98,17 @@ BEGIN_LOADS(TexMovie)
     LOAD_SUPERCLASS(Hmx::Object)
     LOAD_SUPERCLASS(RndDrawable)
     LOAD_SUPERCLASS(RndPollable)
-    bs >> mTex >> unk5c;
-    d >> unk5e;
+    bs >> mTex >> mLoop;
+    d >> mIsLocalized;
     if (d.rev < 4)
-        d >> unk5e;
+        d >> mIsLocalized;
     bs >> sRoot;
     if (d.rev > 5)
-        d >> unk5e;
+        d >> mIsLocalized;
     if (d.rev == 7)
-        d >> unk5e;
+        d >> mIsLocalized;
     if ((d.rev > 1) && (d.rev < 3))
-        d >> unk5e;
+        d >> mIsLocalized;
     DoBeginMovieFromFile(nullptr, kLoadBack);
 END_LOADS
 
@@ -118,13 +118,13 @@ void TexMovie::DrawPreClear() {
 }
 
 void TexMovie::UpdatePreClearState() {
-    if (!unk5d)
+    if (!mEntered)
         return;
     TheRnd.PreClearDrawAddOrRemove(this, true, TheRnd.GetUnk1b4());
 }
 
 void TexMovie::Poll() {
-    if (!unk5f) {
+    if (!mPaused) {
         if (mShowing) {
             mMovie.SetPaused(false);
             if (mTex && !mMovie.Poll()) {
@@ -137,7 +137,7 @@ void TexMovie::Poll() {
 }
 
 void TexMovie::Enter() {
-    unk5d = true;
+    mEntered = true;
     RndPollable::Enter();
     bool b = (mTex && mTex->Width() && mTex->Height());
     if (b) {
@@ -153,12 +153,12 @@ void TexMovie::Enter() {
 }
 
 void TexMovie::Exit() {
-    unk5d = false;
+    mEntered = false;
     RndPollable::Exit();
 }
 
 void TexMovie::SetPaused(bool b) {
-    unk5f = b;
+    mPaused = b;
     if (b) {
         if (!mMovie.IsOpen())
             return;
@@ -171,7 +171,7 @@ void TexMovie::SetPaused(bool b) {
 }
 
 void TexMovie::Reset() {
-    unk5f = false;
+    mPaused = false;
     mMovie.End();
 }
 
@@ -199,7 +199,7 @@ void TexMovie::DoBeginMovieFromFile(BinStream *stream, LoaderPos lp) {
     if (!sRoot.empty() && mTex) {
         MILO_ASSERT(mTex->IsRenderTarget(), 0x83);
         int i = 1;
-        if (unk5e) {
+        if (mIsLocalized) {
             i = mMovie.LocalizationTrack();
         }
         mMovie.SetWidthHeight(mTex->Width(), mTex->Height());
@@ -208,7 +208,7 @@ void TexMovie::DoBeginMovieFromFile(BinStream *stream, LoaderPos lp) {
             0.0f,
             0,
             true,
-            unk5c,
+            mLoop,
             false,
             i,
             stream,

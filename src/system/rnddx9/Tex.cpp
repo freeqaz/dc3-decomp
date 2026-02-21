@@ -13,10 +13,10 @@ std::vector<DxTex *> gAllTextures;
 
 DxTex::DxTex()
     : mFormat((D3DFORMAT)-1), mTexture(0), unk84(0), mRenderTarget(0), mDepthRT(0),
-      unk90(0), unk9c(), unka4(0), unka8(0), unkac(0) {
+      mMovieBufIdx(0), mLockedRect(), unka4(0), unka8(0), unkac(0) {
     gAllTextures.push_back(this);
     for (int i = 0; i < 2; i++) {
-        unk94[i] = 0;
+        mMovieTextures[i] = 0;
     }
 }
 
@@ -90,25 +90,25 @@ D3DSurface *DxTex::GetMovieSurface() {
     if (!(mType & kMovie)) {
         return nullptr;
     } else {
-        mTexture = unk94[unk90];
+        mTexture = mMovieTextures[mMovieBufIdx];
         return GetSurfaceLevel(0);
     }
 }
 
 void DxTex::SwapMovieSurface() {
     MILO_ASSERT((mType & kMovie) > 0, 0x2F5);
-    unk90 = (unk90 + 1) % 2;
-    mTexture = unk94[unk90];
+    mMovieBufIdx = (mMovieBufIdx + 1) % 2;
+    mTexture = mMovieTextures[mMovieBufIdx];
 }
 
 void DxTex::ResetSurfaces() {
     // Clean up movie surface double-buffer
     for (int i = 0; i < 2; i++) {
-        if (mTexture == unk94[i]) {
+        if (mTexture == mMovieTextures[i]) {
             mTexture = nullptr;
         }
-        TheDxRnd.AutoRelease(unk94[i]);
-        unk94[i] = nullptr;
+        TheDxRnd.AutoRelease(mMovieTextures[i]);
+        mMovieTextures[i] = nullptr;
     }
 
     // Delete main texture for certain types

@@ -239,9 +239,9 @@ void Debug::Init() {
     (void)pad;
     sysInfo.SizeOfStruct = 0x20;
     if (DmGetSystemInfo(&sysInfo) >= 0) {
-        unk11c = MakeString("%d.%d", sysInfo.KernelVersion.Major, sysInfo.KernelVersion.Minor);
+        mKernelVersion = MakeString("%d.%d", sysInfo.KernelVersion.Major, sysInfo.KernelVersion.Minor);
     }
-    unk12c = NetworkSocket::GetHostName();
+    mHostName = NetworkSocket::GetHostName();
 }
 
 const char *GetExpCode(int code) {

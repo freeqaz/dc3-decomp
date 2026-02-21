@@ -147,7 +147,7 @@ protected:
     void SetControllerFocus(int);
 
     NavInputType mNavInputType; // 0x60
-    std::vector<UIListWidget *> unk64; // 0x64
+    std::vector<UIListWidget *> mListWidgets; // 0x64
     UIListState mListState; // 0x70
     std::vector<HamListRibbonDrawState> mRibbonDrawStates; // 0xb8
     /** "Mode for animations" */
@@ -163,35 +163,35 @@ protected:
     ResourceDirPtr<HamScrollSpeedIndicator> mScrollSpeedIndicatorResource; // 0x114
     ObjPtr<HamNavProvider> mNavProvider; // 0x12c
     ObjPtr<RndAnimatable> mScrollSpeedAnim; // 0x140
-    bool unk154; // 0x154
+    bool mPendingEnterAnim; // 0x154
     /** "Skip the enter anim altogether" */
     bool mSkipEnterAnim; // 0x155
     /** "Don't automatically play the enter anim when this component enters" */
     bool mSuppressAutomaticEnter; // 0x156
-    bool unk157; // 0x157
+    bool mTestEnteringOverride; // 0x157
     float unk158; // 0x158
-    DoubleExponentialSmoother unk15c; // 0x15c
-    DoubleExponentialSmoother unk170; // 0x170
+    DoubleExponentialSmoother mSlideSmoother; // 0x15c
+    DoubleExponentialSmoother mDisengageSmoother; // 0x170
     int unk184;
     int unk188;
     int mSkeletonTrackingID; // 0x18c
-    HamScrollBehavior unk190;
+    HamScrollBehavior mScrollBehavior;
     bool mDisableSlideSound; // 0x1e4
     bool mDisableSelectSound; // 0x1e5
     bool mEnabled; // 0x1e6
-    bool unk1e7; // 0x1e7
+    bool mSelectionEnabled; // 0x1e7
     /** "Automatically tie this navlist to the active skeleton" */
     bool mAlwaysUseActiveSkeleton; // 0x1e8
     /** "This list can only be used when it is focused" */
     bool mOnlyUseWhenFocused; // 0x1e9
-    float unk1ec; // 0x1ec
-    bool unk1f0; // 0x1f0
-    Symbol unk1f4; // 0x1f4
-    int unk1f8;
-    bool unk1fc;
-    bool unk1fd;
-    bool unk1fe;
+    float mScrollSettleTime; // 0x1ec
+    bool mRefreshPending; // 0x1f0
+    Symbol mSelectDoneSymbol; // 0x1f4
+    int mSelectDoneIndex;
+    bool mSelectDoneSelecting;
+    bool mWasInDoubleUserMode;
+    bool mHighButtonMode;
     /** "Elements that match these will be bigger than the other elements" */
     std::vector<Symbol> mBigElements; // 0x200
-    std::vector<int> unk20c; // 0x20c
+    std::vector<int> mBigElementIndices; // 0x20c
 };

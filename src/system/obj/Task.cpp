@@ -181,7 +181,7 @@ DataNode ThreadTask::OnExit(DataArray *arr) {
 
 void TaskTimeline::ClearTasks() {
     for (std::list<TaskInfo>::iterator it = mTasks.begin(); it != mTasks.end(); ++it) {
-        Task *task = it->unk0;
+        Task *task = it->mTask;
         if (task != mPollingTask) {
             delete task;
         }
@@ -191,11 +191,11 @@ void TaskTimeline::ClearTasks() {
 void TaskTimeline::ResetTaskTime(float time) {
     float delta = time - mTime;
     for (std::list<TaskInfo>::iterator it = mTasks.begin(); it != mTasks.end(); ++it) {
-        it->unk14 += delta;
+        it->mStartTime += delta;
     }
     for (std::list<TaskInfo>::iterator it = mAddedTasks.begin(); it != mAddedTasks.end();
          ++it) {
-        it->unk14 += delta;
+        it->mStartTime += delta;
     }
     mTime += delta;
     mLastTime += delta;
@@ -304,13 +304,13 @@ BEGIN_HANDLERS(TaskMgr)
 END_HANDLERS
 
 void TaskTimeline::AddTask(const TaskInfo &info) {
-    if (info.unk14 > mTime || info.unk0) {
+    if (info.mStartTime > mTime || info.mTask) {
         if (mPollingTask) {
             mAddedTasks.push_back(info);
         } else {
             for (std::list<TaskInfo>::iterator it = mTasks.begin(); it != mTasks.end();
                  ++it) {
-                if (info.unk14 < (*it).unk14) {
+                if (info.mStartTime < (*it).mStartTime) {
                     mTasks.insert(it, info);
                     return;
                 }
@@ -342,14 +342,14 @@ ThreadTask::ThreadTask(DataArray *script, DataArray *updateVarsObjs)
 
 void TaskTimeline::Poll() {
     for (std::list<TaskInfo>::iterator it = mTasks.begin(); it != mTasks.end();) {
-        if (it->unk14 > mTime)
+        if (it->mStartTime > mTime)
             break;
-        float f1 = it->unk14;
+        float f1 = it->mStartTime;
         float f2 = mTime;
         float diff = f2 - f1;
-        if ((*it).unk0) {
-            mPollingTask = (*it).unk0;
-            (*it).unk0->Poll(diff);
+        if ((*it).mTask) {
+            mPollingTask = (*it).mTask;
+            (*it).mTask->Poll(diff);
             ++it;
         } else {
             it = mTasks.erase(it);

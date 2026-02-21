@@ -175,7 +175,7 @@ public:
     virtual ~NavListFunctionNode() {}
     virtual DataNode Handle(DataArray *, bool);
     virtual NavListNodeType GetType() const { return kNodeFunction; }
-    virtual Symbol GetToken() const { return unk4c; }
+    virtual Symbol GetToken() const { return mFunctionToken; }
     virtual Symbol Select();
     virtual void OnUnHighlight() {}
     virtual void SetCollapseIconLabel(UILabel *) {}
@@ -183,15 +183,15 @@ public:
     virtual NavListSortNode *GetFirstActive() { return nullptr; }
     virtual bool IsEnabled() const { return IsEnabled(); } // lmao what
     virtual bool IsActive() const { return false; }
-    virtual const char *GetAlbumArtPath() { return unk44.c_str(); }
+    virtual const char *GetAlbumArtPath() { return mAlbumArtPath.c_str(); }
     virtual void Renumber(std::vector<NavListSortNode *> &);
     virtual int GetTier() const { return -1; }
     virtual const char *GetShortcutStr() { return gNullStr; }
     virtual const char *GetArtist() const { return gNullStr; }
 
 protected:
-    String unk44;
-    Symbol unk4c;
+    String mAlbumArtPath;
+    Symbol mFunctionToken;
 };
 
 class NavListHeaderNode : public NavListSortNode {

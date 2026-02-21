@@ -5,10 +5,10 @@
 
 class SongQueueRow {
 public:
-    int unk0;
+    int mQueueIndex; // 0x0
     int mSongID; // 0x4
-    String unk8;
-    String unk10;
+    String mPlayerName; // 0x8
+    String mAdditionalInfo; // 0x10
 };
 
 class SetPartyOptionsJob : public RCJob {

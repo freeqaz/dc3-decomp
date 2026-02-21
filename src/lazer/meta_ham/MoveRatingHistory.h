@@ -7,15 +7,15 @@ class MoveRatingHistory : public FixedSizeSaveable {
 public:
     class Key {
     public:
-        bool operator<(const Key &k) const { return unk0 < k.unk0; }
+        bool operator<(const Key &k) const { return mMoveSymbol < k.mMoveSymbol; }
 
-        Symbol unk0;
+        Symbol mMoveSymbol;
     };
     class RatingHistory {
     public:
-        MoveRating unk0[4];
+        MoveRating mRatingArray[4];
     };
-    MoveRatingHistory() : unk20(0) { mSaveSizeMethod = SaveSize; }
+    MoveRatingHistory() : mHasModifiedHistory(0) { mSaveSizeMethod = SaveSize; }
     virtual ~MoveRatingHistory() {}
     virtual void SaveFixed(FixedSizeSaveableStream &) const;
     virtual void LoadFixed(FixedSizeSaveableStream &, int);
@@ -23,13 +23,13 @@ public:
     void Clear();
     void AddHistory(Symbol, int);
     int GetRating(Symbol, int);
-    bool HasRatingHistory(const Key &key) const { return unk8.find(key) != unk8.end(); }
+    bool HasRatingHistory(const Key &key) const { return mMoveRatingMap.find(key) != mMoveRatingMap.end(); }
 
     static int SaveSize(int);
 
-    bool Unk20() const { return unk20; }
+    bool Unk20() const { return mHasModifiedHistory; }
 
 private:
-    std::map<Key, RatingHistory> unk8;
-    bool unk20;
+    std::map<Key, RatingHistory> mMoveRatingMap;
+    bool mHasModifiedHistory;
 };

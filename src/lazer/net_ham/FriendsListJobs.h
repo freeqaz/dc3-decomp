@@ -27,9 +27,9 @@ public:
 
 protected:
     HamProfile *mProfile; // 0xb0
-    int unkb4;
-    int unkb8;
-    std::vector<Friend *> unkbc;
+    int mFriendsCount; // 0xb4
+    int mEnumerationToken; // 0xb8
+    std::vector<Friend *> mFriendsList; // 0xbc
     FriendsListJobState mFriendsListJobState; // 0xc8
 
 private:

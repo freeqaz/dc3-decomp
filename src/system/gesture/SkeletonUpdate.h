@@ -60,10 +60,10 @@ private:
     static HANDLE sNewSkeletonEvent;
     static HANDLE sSkeletonUpdatedEvent;
 
-    bool unk78; // 0x78
+    bool mHasNewFrame; // 0x78
     ObjOwnerPtr<CameraInput> mCameraInput; // 0x7c
-    bool unk90;
-    bool unk91;
+    bool mIsCameraConnected; // 0x90
+    bool mIsCameraOverride; // 0x91
     std::vector<SkeletonCallback *> mCallbacks; // 0x94
     SkeletonFrame mSkeletonFrame; // 0xa0
     Skeleton mSkeletons[6]; // 0x1268
@@ -76,10 +76,10 @@ private:
     int unk5380[2]; // 0x5380
     int unk5388; // 0x5388
     int unk538c; // 0x538c
-    bool unk5390; // 0x5390 - sides swapped?
+    bool mSwapSides; // 0x5390 - sides swapped?
     int unk5394;
     float unk5398;
-    bool unk539c; // 0x539c - update thread?
+    bool mIsUpdateThreadActive; // 0x539c
     HANDLE unk53a0;
     NUI_SKELETON_FRAME *mNUISkeletonFrame; // 0x53a4
 };

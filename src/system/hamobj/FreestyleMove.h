@@ -5,7 +5,7 @@
 
 struct FreestyleMoveFrame {
     DancerSkeleton skeleton; // 0x0
-    float unk2d8; // 0x2d8
+    float mBeat; // 0x2d8
 
     static void *operator new[](unsigned int s) {
         return _MemAllocTemp(s, __FILE__, 0x10, "FreestyleMoveFrame", 0);
@@ -42,12 +42,12 @@ public:
 
     MEM_OVERLOAD(FreestyleMove, 0x18);
 
-    DepthFrame *unk4; // 0x4
+    DepthFrame *mDepthFrames; // 0x4
     int mNumFrames; // 0x8 - num frames
     int unkc;
     int unk10;
     int unk14;
-    FreestyleMoveFrame *unk18; // 0x18
+    FreestyleMoveFrame *mFrames; // 0x18
 };
 
 // size 0x10

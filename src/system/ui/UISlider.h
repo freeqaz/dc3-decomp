@@ -7,6 +7,9 @@
 #include "os/JoypadMsgs.h"
 #include "utl/MemMgr.h"
 
+class RndMesh;
+class RndMat;
+
 /** "A component with animatable whose frames correspond to a
  *  range of values. The resources don't have to look like a slider;
  *  they could easily be a knob, dial, etc." */
@@ -50,13 +53,9 @@ protected:
     void Update();
     DataNode OnMsg(const ButtonDownMsg &);
 
-    ResourceDirPtr<RndDir> unk50; // 0x50
-    int unk68;
-    int unk6c;
-    int unk70;
-    int unk74;
-    int unk78;
-    int unk7c;
+    ResourceDirPtr<RndDir> mSliderResource; // 0x50
+    RndMesh *mSliderMesh; // 0x68
+    RndMat *mStateMats[5]; // 0x6c - indexed by UIComponent::State
     int mCurrent; // 0x80
     int mNumSteps; // 0x84
     bool mVertical; // 0x88

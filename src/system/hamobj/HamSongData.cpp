@@ -17,7 +17,7 @@
 #include "utl/TempoMap.h"
 
 HamSongData::HamSongData()
-    : unk10(0), mSongInfo(0), mTempoMap(nullptr), mMeasureMap(nullptr), mBeatMap(nullptr),
+    : mLoaded(0), mSongInfo(0), mTempoMap(nullptr), mMeasureMap(nullptr), mBeatMap(nullptr),
       mStream(0), mMidiReader(0) {
     sInstance = this;
 }
@@ -74,7 +74,7 @@ void HamSongData::PostLoad() {
     RELEASE(mStream);
     MILO_ASSERT(mTempoMap, 0xA5);
     mTempoMap->Finalize();
-    unk10 = true;
+    mLoaded = true;
 }
 
 void Validate(MemStream *ms, const char *cc, bool b) {

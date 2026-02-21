@@ -48,7 +48,7 @@ public:
     void SetSong(Symbol song) { mSong = song; }
     Symbol GetSong() const { return mSong; }
     void SetVenue(Symbol venue) { mVenue = venue; }
-    void SetInTimeyWimey(bool set) { unk35 = set; }
+    void SetInTimeyWimey(bool set) { mInTimeyWimey = set; }
 
 protected:
     HamGameData();
@@ -56,7 +56,7 @@ protected:
     Symbol mVenue; // 0x2c
     Symbol mSong; // 0x30
     bool mPlayerSidesLocked; // 0x34
-    bool unk35; // 0x35
+    bool mInTimeyWimey; // 0x35
     ObjVector<HamPlayerData *> mPlayers; // 0x38
     DateTime unk48; // 0x48
     int unk50; // 0x50

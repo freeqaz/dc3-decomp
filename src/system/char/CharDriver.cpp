@@ -9,8 +9,8 @@
 #include "obj/Utl.h"
 
 CharDriver::CharDriver()
-    : mBones(this), mClips(this), mFirst(), unk5c(this), mDefaultClip(this), unk84(this),
-      unk98(false), mOldBeat(1e+30), mRealign(false), mBeatScale(1.0f), mBlendWidth(1.0f),
+    : mBones(this), mClips(this), mFirst(), mTestClip(this), mDefaultClip(this), mClipGroup(this),
+      mDefaultPlayStarved(false), mOldBeat(1e+30), mRealign(false), mBeatScale(1.0f), mBlendWidth(1.0f),
       mApply(kApplyBlend), mInternalBones(), mPlayMultipleClips(false) {}
 
 CharDriver::~CharDriver() {
@@ -241,7 +241,7 @@ CharDriver::PlayGroup(const char *cc, int i, float f1, float f2, float f3) {
 
 CharClipDriver *
 CharDriver::PlayGroup(CharClipGroup *grp, int i, float f1, float f2, float f3) {
-    unk84 = grp;
+    mClipGroup = grp;
     CharClip *clip = grp->GetClip(0);
     return Play(clip, i, f1, f2, f3);
 }
@@ -295,9 +295,9 @@ BEGIN_SAVES(CharDriver)
     bs << mApply;
     bs << mClipType;
     bs << mPlayMultipleClips;
-    bs << unk5c;
+    bs << mTestClip;
     bs << mDefaultClip;
-    bs << unk98;
+    bs << mDefaultPlayStarved;
 END_SAVES
 
 INIT_REVS(0xe, 0)
@@ -352,13 +352,13 @@ BEGIN_LOADS(CharDriver)
     }
     SyncInternalBones();
     if (d.rev > 3) {
-        unk5c.Load(bs, false, mClips);
+        mTestClip.Load(bs, false, mClips);
     }
     if (d.rev > 0xB) {
         mDefaultClip.Load(bs, false, mClips);
     }
     if (d.rev > 0xD)
-        d >> unk98;
+        d >> mDefaultPlayStarved;
 END_LOADS
 
 // Template instantiation for std::map<CharClip*, float>

@@ -35,8 +35,9 @@ UIList::UIList()
     : UITransitionHandler(this), mListDir(this), mListState(this, this), mDataProvider(0),
       mNumData(100), mPaginate(0), mUser(0), mParent(0), mExtendedLabelEntries(this),
       mExtendedMeshEntries(this), mExtendedCustomEntries(this), mAutoScrollPause(2),
-      mAutoScrollSendMsgs(0), unk150(1), mAutoScrolling(0), unk158(-1), unk15c(0),
-      unk15d(0), unk160(1), mAllowHighlight(1) {}
+      mAutoScrollSendMsgs(0), mAutoScrollDir(1), mAutoScrolling(0), mAutoScrollTimer(-1),
+      mScrolling(0), mDrawManuallyControlledWidgets(0), mUncappedNumDisplay(1),
+      mAllowHighlight(1) {}
 
 UIList::~UIList() {
     DeleteAll(mWidgets);
@@ -61,7 +62,7 @@ BEGIN_HANDLERS(UIList)
     HANDLE(set_selected_simulate_scroll, OnSetSelectedSimulateScroll)
     HANDLE_ACTION(set_scroll_user, mUser = _msg->Obj<LocalUser>(2))
     HANDLE_ACTION(refresh, Refresh(true))
-    HANDLE_ACTION(set_draw_manually_controlled_widgets, unk15d = _msg->Int(2))
+    HANDLE_ACTION(set_draw_manually_controlled_widgets, mDrawManuallyControlledWidgets = _msg->Int(2))
     HANDLE(scroll, OnScroll)
     HANDLE_EXPR(is_scrolling, IsScrolling())
     HANDLE_EXPR(is_scrolling_down, mListState.CurrentScroll() > 0)
@@ -209,7 +210,7 @@ __declspec(noinline) void UIList::CalcBoundingBox(Box &box) {
 
     Transform xfm2 = WorldXfm();
     UIComponent::State state2 = DrawState(this);
-    mListDir->DrawWidgets(drawState, mListState, mWidgets, xfm2, state2, &box, (bool)unk15d);
+    mListDir->DrawWidgets(drawState, mListState, mWidgets, xfm2, state2, &box, (bool)mDrawManuallyControlledWidgets);
 }
 
 Symbol UIList::SelectedSym(bool fail) const {
@@ -222,7 +223,7 @@ Symbol UIList::SelectedSym(bool fail) const {
 }
 
 void UIList::Scroll(int i) {
-    unk15c = true;
+    mScrolling = true;
     mListState.Scroll(i, false);
 }
 
@@ -248,8 +249,8 @@ void UIList::AutoScroll() {
         StopAutoScroll();
     } else {
         mAutoScrolling = true;
-        unk150 = 1;
-        unk158 = mAutoScrollPause + TheTaskMgr.UISeconds();
+        mAutoScrollDir = 1;
+        mAutoScrollTimer = mAutoScrollPause + TheTaskMgr.UISeconds();
     }
 }
 
@@ -262,14 +263,14 @@ void UIList::Enter() {
 void UIList::Poll() {
     UIComponent::Poll();
     if (mAutoScrolling) {
-        if (unk158 >= 0.0f && TheTaskMgr.UISeconds() >= unk158) {
-            Scroll(unk150);
-            unk158 = -1.0f;
+        if (mAutoScrollTimer >= 0.0f && TheTaskMgr.UISeconds() >= mAutoScrollTimer) {
+            Scroll(mAutoScrollDir);
+            mAutoScrollTimer = -1.0f;
         }
     }
     mListState.Poll(TheTaskMgr.UISeconds());
     mListDir->PollWidgets(mWidgets);
-    unk15c = false;
+    mScrolling = false;
     UpdateHandler();
 }
 
@@ -444,12 +445,12 @@ void UIList::CompleteScroll(UIListState const &state) {
     if (mAutoScrolling) {
         int firstshowing = FirstShowing();
         state.Provider();
-        int i3 = unk150 > 0 ? mListState.MaxFirstShowing() : 0;
+        int i3 = mAutoScrollDir > 0 ? mListState.MaxFirstShowing() : 0;
         if (firstshowing == i3) {
-            unk150 = unk150 - unk150 * 2;
-            unk158 = mAutoScrollPause + TheTaskMgr.UISeconds();
+            mAutoScrollDir = mAutoScrollDir - mAutoScrollDir * 2;
+            mAutoScrollTimer = mAutoScrollPause + TheTaskMgr.UISeconds();
         } else
-            Scroll(unk150);
+            Scroll(mAutoScrollDir);
     }
     if (state.Provider()->IsActive(state.SelectedData())) {
         if (!mAutoScrolling || mAutoScrollSendMsgs) {
@@ -768,7 +769,7 @@ void UIList::LimitCircularDisplay(bool b) {
         mLimitCircularDisplayNumToDataNum = b;
         if (b) {
             int numprov = NumProviderData();
-            int val = unk160;
+            int val = mUncappedNumDisplay;
             if (numprov < val) {
                 val = numprov;
             }
@@ -777,7 +778,7 @@ void UIList::LimitCircularDisplay(bool b) {
             }
             SetNumDisplay(val);
         } else {
-            SetNumDisplay(unk160);
+            SetNumDisplay(mUncappedNumDisplay);
         }
         Refresh(false);
     }
@@ -811,9 +812,9 @@ DataNode UIList::OnSetData(DataArray *da) {
 }
 
 void UIList::DrawShowing() {
-    if (unk15d) {
+    if (mDrawManuallyControlledWidgets) {
         mListState.Poll(TheTaskMgr.UISeconds());
-        unk15d = false;
+        mDrawManuallyControlledWidgets = false;
     }
     bool b = mAllowHighlight;
     if (mParent) {

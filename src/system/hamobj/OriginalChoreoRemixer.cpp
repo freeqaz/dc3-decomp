@@ -44,8 +44,8 @@ BEGIN_COPYS(OriginalChoreoRemixer)
             COPY_MEMBER(mDesiredDiffs[i])
             COPY_MEMBER(unkec[i])
         }
-        COPY_MEMBER(unk104)
-        COPY_MEMBER(unk108)
+        COPY_MEMBER(mIntroMoveIndex)
+        COPY_MEMBER(mFinalPoseMoveIndex)
     END_COPYING_MEMBERS
 END_COPYS
 
@@ -80,7 +80,7 @@ void OriginalChoreoRemixer::PostMoveFinished() {
 
 bool OriginalChoreoRemixer::ScoredDanceMeasure(int x, int y) const {
     int idx = JumpedMoveIdx(y - 1);
-    if (idx >= unk104 && idx <= unk108) {
+    if (idx >= mIntroMoveIndex && idx <= mFinalPoseMoveIndex) {
         return DanceRemixer::ScoredDanceMeasure(x, y);
     } else
         return false;
@@ -146,7 +146,7 @@ OriginalChoreoRemixer::GetMoveVariantsByDifficulty(int aDiff) {
 }
 
 void OriginalChoreoRemixer::SaveOriginalMoveParents() {
-    unk104 = unk108 = -1;
+    mIntroMoveIndex = mFinalPoseMoveIndex = -1;
     DataArray *layout = TheMoveMgr->Layout();
     Symbol song = TheGameData->GetSong();
     if (!layout) {
@@ -178,26 +178,26 @@ void OriginalChoreoRemixer::SaveOriginalMoveParents() {
             if (variant) {
                 if (!variant->IsRest() && b2) {
                     b2 = false;
-                    if (unk104 != -1 && unk104 != j) {
+                    if (mIntroMoveIndex != -1 && mIntroMoveIndex != j) {
                         MILO_FAIL(
                             "Different difficulties have different number of intro moves\n"
                         );
                     }
-                    unk104 = j;
+                    mIntroMoveIndex = j;
                 }
                 if (variant->IsFinalPose()) {
-                    if (unk108 != -1 && unk108 != j) {
+                    if (mFinalPoseMoveIndex != -1 && mFinalPoseMoveIndex != j) {
                         MILO_FAIL(
                             "Different difficulties have final pose at different position\n"
                         );
                     }
-                    unk108 = j;
+                    mFinalPoseMoveIndex = j;
                     break;
                 }
             }
         }
     }
-    if (unk104 == -1 || unk108 == -1) {
+    if (mIntroMoveIndex == -1 || mFinalPoseMoveIndex == -1) {
         MILO_FAIL("Remixer could not determine start and end moves in %s", song.Str());
     }
 }
@@ -215,7 +215,7 @@ void OriginalChoreoRemixer::BridgeGapsInMoveParents(int i1) {
             int i12 = i + 1;
             for (; i12 < mTotalMeasures && !moveParentsByDiff[i12]; i12++) {
             }
-            if (i12 > unk108) {
+            if (i12 > mFinalPoseMoveIndex) {
                 MILO_FAIL(
                     "MixItMgr: Gap beyond finishing move in song %s\n",
                     TheGameData->GetSong()

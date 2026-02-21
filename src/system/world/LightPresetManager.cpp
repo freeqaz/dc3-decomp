@@ -23,8 +23,8 @@ void PrintPreset(const char *str, LightPreset *preset) {
 }
 
 LightPresetManager::LightPresetManager(WorldDir *dir)
-    : mParent(dir), mPresetOverride(0), mPresetNew(0), mPresetPrev(0), unk30(0), unk34(0),
-      unk38(0), unk3c(0), mBlend(1.0f), unk44(0), unk48(0), mIgnoreLightingEvents(0) {
+    : mParent(dir), mPresetOverride(0), mPresetNew(0), mPresetPrev(0), mTimeNew(0), mTimePrev(0),
+      mTimeOverride(0), mSingleBlend(0), mBlend(1.0f), mOverrideDuration(0), mOverrideMode(0), mIgnoreLightingEvents(0) {
     MILO_ASSERT(mParent, 0x22);
 }
 
@@ -41,15 +41,15 @@ void LightPresetManager::Reset() {
     mPresetNew = 0;
     mPresetPrev = 0;
     mPresetOverride = 0;
-    unk30 = 0;
-    unk34 = 0;
-    unk38 = 0;
-    unk3c = false;
+    mTimeNew = 0;
+    mTimePrev = 0;
+    mTimeOverride = 0;
+    mSingleBlend = false;
     mLastCategory = Symbol();
     mIgnoreLightingEvents = false;
     mBlend = 1.0f;
-    unk48 = 0;
-    unk44 = 0;
+    mOverrideMode = 0;
+    mOverrideDuration = 0;
 }
 
 void LightPresetManager::Enter() { Reset(); }
@@ -84,26 +84,26 @@ void LightPresetManager::StartPreset(LightPreset *preset, bool b) {
     preset->StartAnim();
     float time = TheTaskMgr.Time(preset->Units());
     if (b)
-        unk30 = time;
+        mTimeNew = time;
     else
-        unk34 = time;
-    unk3c = false;
+        mTimePrev = time;
+    mSingleBlend = false;
     UpdateOverlay();
 }
 
 void LightPresetManager::ForcePreset(LightPreset *p, float f) {
     if (p) {
-        if (mPresetOverride != p || unk48 == 1) {
+        if (mPresetOverride != p || mOverrideMode == 1) {
             mPresetOverride = p;
-            unk38 = TheTaskMgr.Time(p->Units());
-            unk44 = f;
-            unk48 = 0;
+            mTimeOverride = TheTaskMgr.Time(p->Units());
+            mOverrideDuration = f;
+            mOverrideMode = 0;
         }
         return;
     } else if (mPresetOverride) {
-        unk38 = TheTaskMgr.Time(mPresetOverride->Units());
-        unk44 = f;
-        unk48 = 1;
+        mTimeOverride = TheTaskMgr.Time(mPresetOverride->Units());
+        mOverrideDuration = f;
+        mOverrideMode = 1;
     }
 }
 
@@ -122,17 +122,17 @@ DataNode LightPresetManager::OnToggleLightingEvents(DataArray *da) {
 
 void LightPresetManager::Poll() {
     LightPreset *pNew = mPresetNew;
-    float timeNew = unk30;
+    float timeNew = mTimeNew;
     LightPreset *pPrev = mPresetPrev;
-    float timePrev = unk34;
+    float timePrev = mTimePrev;
     float blend = mBlend;
 
     if (mPresetOverride) {
         TaskUnits units = mPresetOverride->Units();
         float time = TheTaskMgr.Time(units);
         float t = 1.0f;
-        if (0.0f < unk44) {
-            t = (time - unk38) / unk44;
+        if (0.0f < mOverrideDuration) {
+            t = (time - mTimeOverride) / mOverrideDuration;
         }
         float clamped = 0.0f;
         if (-t < 0.0f) {
@@ -142,21 +142,21 @@ void LightPresetManager::Poll() {
         if ((clamped - 1.0f) < 0.0f) {
             t = clamped;
         }
-        if (unk48 == 1) {
+        if (mOverrideMode == 1) {
             t = 1.0f - t;
         }
         if (t > 0.0f) {
             timePrev = timeNew;
             blend = t;
-            timeNew = unk38;
+            timeNew = mTimeOverride;
             pPrev = pNew;
             pNew = mPresetOverride;
         } else {
-            if (unk48 == 1) {
-                unk38 = 0.0f;
+            if (mOverrideMode == 1) {
+                mTimeOverride = 0.0f;
                 mPresetOverride = 0;
-                unk44 = 0.0f;
-                unk48 = 0;
+                mOverrideDuration = 0.0f;
+                mOverrideMode = 0;
             }
         }
     }
@@ -171,7 +171,7 @@ void LightPresetManager::Poll() {
         }
         if (pPrev == 0 || pPrev == pNew) {
             pNew->SetFrameEx(f, 1.0f, (bool)units);
-            unk3c = true;
+            mSingleBlend = true;
         } else {
             TaskUnits prevUnits = pPrev->Units();
             float prevTime = TheTaskMgr.Time(prevUnits);
@@ -182,7 +182,7 @@ void LightPresetManager::Poll() {
             }
             pPrev->SetFrameEx(pf, 1.0f - blend, (bool)prevUnits);
             pNew->SetFrameEx(f, blend, (bool)prevUnits);
-            unk3c = false;
+            mSingleBlend = false;
         }
     }
     UpdateOverlay();

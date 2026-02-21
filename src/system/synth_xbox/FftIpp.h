@@ -25,8 +25,8 @@ public:
     FftIpp();
     void SetMode(int);
 
-    int unk0;
-    int unk4;
+    int mSize;
+    int mOrder;
     IppBuf mBuf1;   // 0x08
     IppBuf mBuf2;   // 0x14
     IppBuf mBuf3;   // 0x20

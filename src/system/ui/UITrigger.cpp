@@ -8,7 +8,7 @@
 #include "utl/Loader.h"
 
 UITrigger::UITrigger()
-    : mBlockTransition(0), mCallbackObject(this), mEndTime(0), unk13c(1) {}
+    : mBlockTransition(0), mCallbackObject(this), mEndTime(0), mDone(1) {}
 
 BEGIN_PROPSYNCS(UITrigger)
     SYNC_PROP(block_transition, mBlockTransition)
@@ -87,7 +87,7 @@ void UITrigger::Trigger() {
         );
     }
     mEndTime += TheTaskMgr.UISeconds();
-    unk13c = false;
+    mDone = false;
 }
 
 DataArray *UITrigger::SupportedEvents() {
@@ -111,9 +111,9 @@ void UITrigger::CheckAnims() {
 }
 
 void UITrigger::Poll() {
-    if (!unk13c) {
+    if (!mDone) {
         if (IsDone()) {
-            unk13c = true;
+            mDone = true;
             if (mCallbackObject) {
                 mCallbackObject->Handle(UITriggerCompleteMsg(this), true);
             }

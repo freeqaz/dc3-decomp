@@ -151,7 +151,7 @@ protected:
     float mSongToTaskMgrMs; // 0x64
     bool mBassBoost; // 0x68
     bool mDolby; // 0x69
-    bool unk6a; // 0x6a
+    bool mFxMuted; // 0x6a
     int mSyncPresetIx; // 0x6c
     bool mOverscan; // 0x70
     bool mDisablePhotos; // 0x71
@@ -161,19 +161,19 @@ protected:
     bool mDisableVoicePause; // 0x75
     bool mDisableVoicePractice; // 0x76
     bool mShowVoiceTip; // 0x77
-    bool unk78; // 0x78
+    bool mForceSpeechLanguageSupport; // 0x78
     bool mDisableFreestyle; // 0x79
     Symbol mVenuePreference; // 0x7c
-    int unk80;
-    int unk84;
+    int mSystemLocale; // 0x80
+    int mSystemLanguage; // 0x84
     DataArray *mSliderConfig; // 0x88
     DataArray *mVoiceChatSliderConfig; // 0x8c
     std::vector<HamProfile *> unk90;
     HamProfile *mCriticalProfile; // 0x9c
     bool mAllUnlocked; // 0xa0
     void *mProfileSaveBuffer; // 0xa4
-    bool unka8;
-    bool unka9;
+    bool mPendingFlauntUpload; // 0xa8
+    bool mPendingFitnessGoalUpload; // 0xa9
     RndOverlay *mProfilesOverlay; // 0xac
     bool unkb0;
     Timer unkb8;

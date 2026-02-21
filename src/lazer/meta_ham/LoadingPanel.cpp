@@ -22,7 +22,7 @@
 #include "utl/Symbol.h"
 #include "utl/TempoMap.h"
 
-LoadingPanel::LoadingPanel() : unk38(0), unk3c(), unk40(0) { sSongDB = new SongDB(); }
+LoadingPanel::LoadingPanel() : mSongInfo(0), mTempoMap(), mBeatMap(0) { sSongDB = new SongDB(); }
 
 LoadingPanel::~LoadingPanel() {
     RELEASE(sSongDB);
@@ -46,12 +46,12 @@ char const *LoadingPanel::GetLoadingScreen(Symbol s) {
 }
 
 void LoadingPanel::Unload() {
-    if (unk3c) {
-        SetTheTempoMap(unk3c);
+    if (mTempoMap) {
+        SetTheTempoMap(mTempoMap);
     }
 
-    if (unk40) {
-        SetTheBeatMap(unk40);
+    if (mBeatMap) {
+        SetTheBeatMap(mBeatMap);
     }
 
     delete sLoadingMaster;
@@ -112,15 +112,15 @@ void LoadingPanel::PlayLoadingMusic() {
         delete f;
     }
 
-    if (unk38) {
-        RELEASE(unk38);
+    if (mSongInfo) {
+        RELEASE(mSongInfo);
     }
 
     DataArray *sysConfig = SystemConfig("synth", fileBase);
     static Symbol song("song");
     DataArray *songArray = sysConfig->FindArray(song, false);
-    unk38 = new DataArraySongInfo(songArray, nullptr, "loadmusic");
-    sLoadingMaster->Load(unk38, false, 0, false, (HamSongDataValidate)0, nullptr);
+    mSongInfo = new DataArraySongInfo(songArray, nullptr, "loadmusic");
+    sLoadingMaster->Load(mSongInfo, false, 0, false, (HamSongDataValidate)0, nullptr);
 }
 
 BEGIN_HANDLERS(LoadingPanel)

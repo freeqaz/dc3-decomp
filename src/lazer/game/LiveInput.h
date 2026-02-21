@@ -15,7 +15,7 @@ public:
 
 protected:
     HamAudio &mAudio; // 0x4
-    float unk8; // 0x8
+    float mTimeOffset; // 0x8
     Timer mTimer; // 0x10
     int unk44; // 0x44
 };

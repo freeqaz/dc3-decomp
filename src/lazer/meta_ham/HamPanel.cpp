@@ -22,9 +22,9 @@ void HamPanel::Enter() {
     static Symbol draw_after_letterbox("draw_after_letterbox");
     auto letterbox = Property(draw_after_letterbox, false);
     if (letterbox && letterbox->Int() != 0)
-        unk34 = 1;
+        mFinalDrawPassFlag = 1;
     else
-        unk34 = 0;
+        mFinalDrawPassFlag = 0;
 }
 
 bool HamPanel::Exiting() const {

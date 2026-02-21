@@ -16,15 +16,15 @@ FftIpp::~FftIpp() {
 }
 
 FftIpp::FftIpp()
-    : unk0(0), unk4(0) {}
+    : mSize(0), mOrder(0) {}
 
 void FftIpp::SetMode(int mode) {
-    unk0 = mode;
-    unk4 = 1;
+    mSize = mode;
+    mOrder = 1;
     if (mode > 2) {
         do {
-            unk4 = unk4 + 1;
-        } while ((1 << unk4) < unk0);
+            mOrder = mOrder + 1;
+        } while ((1 << mOrder) < mSize);
     }
 
     // First vector - offset 0x8 (begin, end, cap)
@@ -38,27 +38,27 @@ void FftIpp::SetMode(int mode) {
 
     // Second vector - offset 0x14
     int size2 = (mBuf2.mEnd - mBuf2.mBegin) >> 2;
-    if ((unsigned int)unk0 < (unsigned int)size2) {
-        merged_827BD118((void *)(&mBuf2.mBegin + 1), (void *)((unk0 * 4) + mBuf2.mBegin));
+    if ((unsigned int)mSize < (unsigned int)size2) {
+        merged_827BD118((void *)(&mBuf2.mBegin + 1), (void *)((mSize * 4) + mBuf2.mBegin));
     } else {
         merged_827BD118((void *)(&mBuf2.mBegin + 1), (void *)(&mBuf2.mBegin + 1));
     }
 
     // Third vector - offset 0x20
     int size3 = (mBuf3.mEnd - mBuf3.mBegin) >> 2;
-    if ((unsigned int)unk0 < (unsigned int)size3) {
-        merged_827BD118((void *)(&mBuf3.mBegin + 1), (void *)((unk0 * 4) + mBuf3.mBegin));
+    if ((unsigned int)mSize < (unsigned int)size3) {
+        merged_827BD118((void *)(&mBuf3.mBegin + 1), (void *)((mSize * 4) + mBuf3.mBegin));
     } else {
         merged_827BD118((void *)(&mBuf3.mBegin + 1), (void *)(&mBuf3.mBegin + 1));
     }
 
     // Fourth vector - offset 0x38 (sincos)
     int size4 = (mSinCos.mEnd - mSinCos.mBegin) >> 2;
-    if ((unsigned int)unk0 < (unsigned int)size4) {
-        merged_827BD118((void *)(&mSinCos.mBegin + 1), (void *)((unk0 * 4) + mSinCos.mBegin));
+    if ((unsigned int)mSize < (unsigned int)size4) {
+        merged_827BD118((void *)(&mSinCos.mBegin + 1), (void *)((mSize * 4) + mSinCos.mBegin));
     } else {
         merged_827BD118((void *)(&mSinCos.mBegin + 1), (void *)(&mSinCos.mBegin + 1));
     }
 
-    CalculateSinCosTable(unk0 / 2, (void *)(&mSinCos.mBegin + 1));
+    CalculateSinCosTable(mSize / 2, (void *)(&mSinCos.mBegin + 1));
 }

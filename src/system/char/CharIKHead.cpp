@@ -111,17 +111,17 @@ void CharIKHead::UpdatePoints(bool b) {
             RndTransformable *curtrans = mHead;
             for (i = 0; i < mPoints.size(); i++) {
                 Point &pt = mPoints[i];
-                pt.unk0 = curtrans;
-                pt.unk18 = Length(curtrans->LocalXfm().v);
+                pt.mBone = curtrans;
+                pt.mLen = Length(curtrans->LocalXfm().v);
                 curtrans = curtrans->TransParent();
-                f1 += pt.unk18;
+                f1 += pt.mLen;
             }
             mSpineLength = f1;
             float f2 = 1.0f / f1;
             for (int i = 0; i < mPoints.size(); i++) {
                 Point &curPt = mPoints[i];
-                curPt.unk1c = f1 * f2;
-                f1 = f1 - mPoints[i].unk18;
+                curPt.mLenRatio = f1 * f2;
+                f1 = f1 - mPoints[i].mLen;
             }
         }
     }
@@ -136,10 +136,10 @@ void CharIKHead::Highlight() {
         UtilDrawString(MakeString("%.2f", weight), mDebugTarget, Hmx::Color(1, 1, 1));
         for (int i = 1; i < mPoints.size(); i++) {
             TheRnd.DrawLine(
-                mPoints[i].unk20, mPoints[i - 1].unk20, Hmx::Color(1, 0, 0), false
+                mPoints[i].mWorldPos, mPoints[i - 1].mWorldPos, Hmx::Color(1, 0, 0), false
             );
             TheRnd.DrawLine(
-                mPoints[i].unk14, mPoints[i - 1].unk14, Hmx::Color(0, 1, 0), false
+                mPoints[i].mPos, mPoints[i - 1].mPos, Hmx::Color(0, 1, 0), false
             );
         }
     }
@@ -149,9 +149,9 @@ void CharIKHead::Highlight() {
 #pragma region CharIKHead::Point
 
 CharIKHead::Point::Point(Hmx::Object *owner)
-    : unk0(owner), unk14(0, 0, 0), unk18(0), unk1c(0) {}
+    : mBone(owner), mPos(0, 0, 0), mLen(0), mLenRatio(0) {}
 
 CharIKHead::Point::Point(CharIKHead::Point const &point)
-    : unk0(point.unk0), unk14(point.unk14), unk18(point.unk18), unk1c(point.unk1c) {}
+    : mBone(point.mBone), mPos(point.mPos), mLen(point.mLen), mLenRatio(point.mLenRatio) {}
 
 #pragma endregion CharIKHead::Point

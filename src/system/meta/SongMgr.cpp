@@ -149,7 +149,7 @@ void SongMgr::ContentLoaded(Loader *loader, ContentLocT location, Symbol content
 }
 
 void SongMgr::ContentDone() {
-    if (unkcc)
+    if (mHasNewContent)
         mSongCacheNeedsWrite = true;
 }
 
@@ -160,7 +160,7 @@ void SongMgr::Init() {
     mState = kSongMgr_Nil;
     mSongCacheID = nullptr;
     mSongCache = nullptr;
-    unkcc = false;
+    mHasNewContent = false;
     mSongCacheNeedsWrite = false;
 }
 
@@ -500,7 +500,7 @@ void SongMgr::CacheSongData(
             MILO_ASSERT(mContentUsedForSong.find(id) == mContentUsedForSong.end(), 0x2AF);
             mContentUsedForSong[id] = contentName;
         }
-        unkcc = true;
+        mHasNewContent = true;
     }
 }
 
@@ -530,7 +530,7 @@ void SongMgr::OnCacheUnmountResult(int res) {
     } else {
         if (res != 0)
             MILO_LOG("SongMgr: Unmount result error %d - aborting cache unmount.\n", res);
-        unkcc = false;
+        mHasNewContent = false;
         SetState(kSongMgr_Ready);
     }
 }

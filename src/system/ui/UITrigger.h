@@ -39,7 +39,7 @@ protected:
     ObjPtr<Hmx::Object> mCallbackObject; // 0x120
     float mStartTime;
     float mEndTime; // 0x138
-    bool unk13c; // 0x13c
+    bool mDone; // 0x13c
 };
 
 #include "obj/Msg.h"

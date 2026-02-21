@@ -336,7 +336,7 @@ void Song::LoadSong() {
         if (poll)
             poll->Enter();
         mSongEndFrame = mHxMaster->SongDurationMs() / 1000.0f;
-        if (mSongName != unk54) {
+        if (mSongName != mLastLoadedSong) {
             SetLoopStart(0);
             SetLoopEnd(mSongEndFrame);
         } else {
@@ -350,7 +350,7 @@ void Song::LoadSong() {
         if (SystemConfig("milo_tool")->FindInt("mute_song")) {
             mHxMaster->GetHxAudio()->SetMasterVolume(-96.0f);
         }
-        unk54 = mSongName;
+        mLastLoadedSong = mSongName;
     } else {
         MILO_NOTIFY("Could not create song");
     }

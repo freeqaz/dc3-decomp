@@ -32,9 +32,9 @@ void MQSongSortMgr::OnEnter() {
     }
     NavListSort *sort = mSorts[mCurrentSortIdx];
     sort->BuildItemList();
-    if (unk48) {
-        sort->SetHighlightID(unk44);
-        unk48 = false;
+    if (mHighlightSaved) {
+        sort->SetHighlightID(mSavedHighlightID);
+        mHighlightSaved = false;
     }
     sort->UpdateHighlight();
 }

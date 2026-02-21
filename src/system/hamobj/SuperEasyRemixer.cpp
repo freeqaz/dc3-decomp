@@ -18,7 +18,7 @@ SuperEasyRemixer::SuperEasyRemixer() {}
 
 BEGIN_HANDLERS(SuperEasyRemixer)
     HANDLE_SUPERCLASS(OriginalChoreoRemixer)
-    HANDLE_EXPR(super_easy_data_error, unk124)
+    HANDLE_EXPR(super_easy_data_error, mDataError)
     HANDLE_ACTION(
         send_downgrade_datapoint,
         SendDowngradeDatapoint(
@@ -201,7 +201,7 @@ void SuperEasyRemixer::SaveSuperEasyMoveParents() {
         mSuperEasyParents = GetMoveParentsByDifficulty(kDifficultyEasy);
         mSuperEasyVariants = GetMoveVariantsByDifficulty(kDifficultyEasy);
     }
-    unk124 = i7 == 0;
+    mDataError = i7 == 0;
 }
 
 void SuperEasyRemixer::LoadAllVariants() {

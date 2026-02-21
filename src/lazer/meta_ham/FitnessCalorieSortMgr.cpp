@@ -31,9 +31,9 @@ FitnessCalorieSortMgr::FitnessCalorieSortMgr(SongPreview &sp) : NavListSortMgr(s
     int group_size = sysConfig->FindArray("group_size")->Int(1);
     mGroupSize = group_size;
     MILO_ASSERT(mGroupSize >= 1, 0x34);
-    unk78.clear();
+    mCalorieValues.clear();
     for (int i = increment; i <= max; i += increment) {
-        unk78.push_back(i);
+        mCalorieValues.push_back(i);
     }
 }
 
@@ -61,9 +61,9 @@ void FitnessCalorieSortMgr::OnEnter() {
     }
     NavListSort *sort = mSorts[mCurrentSortIdx];
     sort->BuildItemList();
-    if (unk48) {
-        sort->SetHighlightID(unk44);
-        unk48 = false;
+    if (mHighlightSaved) {
+        sort->SetHighlightID(mSavedHighlightID);
+        mHighlightSaved = false;
     }
     sort->UpdateHighlight();
 }
@@ -74,7 +74,7 @@ Symbol FitnessCalorieSortMgr::MoveOn() {
     MILO_ASSERT(node, 0x55);
     UIPanel *fitnessPanel = ObjectDir::Main()->Find<UIPanel>("fitness_panel");
     if (fitnessPanel && fitnessPanel->GetState() == 1) {
-        fitnessPanel->Handle(Message("calorie_selected", node->GetUnk48()), true);
+        fitnessPanel->Handle(Message("calorie_selected", node->GetCalories()), true);
     }
     return gNullStr;
 }

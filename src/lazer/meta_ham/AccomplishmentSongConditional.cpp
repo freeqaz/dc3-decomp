@@ -52,7 +52,7 @@ bool AccomplishmentSongConditional::CheckStarsCondition(
     bool b;
     int songID = TheHamSongMgr.GetSongIDFromShortName(s);
     int bestStars = statusMgr->GetBestStars(songID, b, ac.mDifficulty);
-    return (bestStars >= ac.unk4);
+    return (bestStars >= ac.mCount);
 }
 
 bool AccomplishmentSongConditional::CheckScoreCondition(
@@ -61,7 +61,7 @@ bool AccomplishmentSongConditional::CheckScoreCondition(
     bool b;
     int songID = TheHamSongMgr.GetSongIDFromShortName(s);
     int bestScore = statusMgr->GetBestScore(songID, b, ac.mDifficulty);
-    return (bestScore >= ac.unk4);
+    return (bestScore >= ac.mCount);
 }
 
 bool AccomplishmentSongConditional::CheckPracticePercentageCondition(
@@ -69,7 +69,7 @@ bool AccomplishmentSongConditional::CheckPracticePercentageCondition(
 ) const {
     int songID = TheHamSongMgr.GetSongIDFromShortName(s);
     int pracScore = statusMgr->GetPracticeScore(songID);
-    return (pracScore >= ac.unk4);
+    return (pracScore >= ac.mCount);
 }
 
 bool AccomplishmentSongConditional::CheckNoFlashcardsCondition(
@@ -94,7 +94,7 @@ bool AccomplishmentSongConditional::CheckConditionsForSong(
     static Symbol played("played");
     FOREACH (it, m_lConditions) {
         const AccomplishmentCondition &curCond = *it;
-        Symbol curSym = curCond.unk0;
+        Symbol curSym = curCond.mConditionType;
         MetaPerformer *pMetaPerformer = MetaPerformer::Current();
         MILO_ASSERT(pMetaPerformer, 0x60);
         if (curCond.mNoFlashcards) {

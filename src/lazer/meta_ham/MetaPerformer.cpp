@@ -67,8 +67,8 @@ MetaPerformer::MetaPerformer(const HamSongMgr &mgr, const char *)
       mUnlockedNoFlashcards(0), mCompletedSongWithNoFlashcards(0),
       mUnlockedMediumDifficulty(0), mUnlockedExpertDifficulty(0), unk38(0),
       mPracticeOverallScore(0), mMoveScored(0), mCheckMoveScored(1), mPlaylist(0),
-      mPlaylistIndex(0), mPlaylistElapsedTime(0), unke0(0), mSkipPracticeWelcome(0),
-      unke3(0) {
+      mPlaylistIndex(0), mPlaylistElapsedTime(0), mPlaylistIsLong(0),
+      mSkipPracticeWelcome(0), mPlaylistIsShuffled(0) {
     mNumCompleted.reserve(100);
     mSkippedSongs.clear();
     mEnrollmentIndex[0] = -1;
@@ -253,7 +253,7 @@ void MetaPerformer::CompleteSong(int i1, int i2, int i3, float f4, bool b5) {
     }
     CheckForFitnessAccomplishments();
     HandleGameplayEnded((EndGameResult)1);
-    if (unke0 && mPlaylist) {
+    if (mPlaylistIsLong && mPlaylist) {
         if (IsLastSong() && IsPlaylistCustom()) {
             static Symbol acc_play_custom_play_list("acc_play_custom_play_list");
             TheAccomplishmentMgr->EarnAccomplishmentForAll(
@@ -304,8 +304,8 @@ void MetaPerformer::OnMovePassed(
         }
         HamMoveScore score;
         score.unk8 = f4;
-        score.unk0 = move;
-        score.unk4 = ratingIndex;
+        score.mMove = move;
+        score.mRatingStateIndex = ratingIndex;
         score.unkc = false;
         mMoveScores[playerIndex].push_back(score);
         if (profile) {
@@ -452,7 +452,7 @@ int MetaPerformer::GetMovesPassed(int i1) {
         for (int i = 0; i < mMoveScores[i1].size(); i++) {
             static Symbol move_perfect("move_perfect");
             static Symbol move_awesome("move_awesome");
-            Symbol rating = RatingState(mMoveScores[i1][i].unk4);
+            Symbol rating = RatingState(mMoveScores[i1][i].mRatingStateIndex);
             if (rating == move_perfect || rating == move_awesome) {
                 loop_moves++;
             }
@@ -466,7 +466,7 @@ int MetaPerformer::GetMovesPassedByType(int i1, Symbol s2) {
     int numPassed = 0;
     if (mMoveScores[i1].size()) {
         for (int i = 0; i < mMoveScores[i1].size(); i++) {
-            Symbol rating = RatingState(mMoveScores[i1][i].unk4);
+            Symbol rating = RatingState(mMoveScores[i1][i].mRatingStateIndex);
             if (rating == s2) {
                 numPassed++;
             }
@@ -619,9 +619,9 @@ void MetaPerformer::UpdateIsLastSong() {
 
 void MetaPerformer::SetPlaylist(Playlist *playlist) {
     ResetSongs();
-    if (unke3) {
+    if (mPlaylistIsShuffled) {
         RELEASE(mPlaylist);
-        unke3 = false;
+        mPlaylistIsShuffled = false;
     }
     mPlaylist = playlist;
     mPlaylistIndex = 0;
@@ -642,7 +642,7 @@ void MetaPerformer::StartPlaylist() {
         }
     }
     if (mPlaylist->GetDuration() >= 900) {
-        unke0 = true;
+        mPlaylistIsLong = true;
     }
     UpdateSongFromPlaylist();
     UpdateIsLastSong();
@@ -665,10 +665,10 @@ void MetaPerformer::ContinuePlaylist() {
 }
 
 void MetaPerformer::ShufflePlaylist() {
-    if (!unke3) {
+    if (!mPlaylistIsShuffled) {
         mPlaylist = new Playlist(*mPlaylist);
         mPlaylist->ShuffleSongs();
-        unke3 = true;
+        mPlaylistIsShuffled = true;
     }
 }
 
@@ -741,8 +741,8 @@ void MetaPerformer::OnPracticeMovePassed(
     default:
         break;
     }
-    score.unk0 = theMove;
-    score.unk4 = i4;
+    score.mMove = theMove;
+    score.mRatingStateIndex = i4;
     score.unk8 = 0;
     score.unkc = b4;
     mMoveScores[playerIndex].push_back(score);
@@ -758,7 +758,7 @@ void MetaPerformer::GenerateRecommendedPracticeMoves(int player) {
     MILO_ASSERT(player>=0 && player < MULTIPLAYER_SLOTS, 0x4D4);
     ClearAndShrink(mRecommendedPracticeMoves);
     for (int i = 0; i < mMoveScores[player].size(); i++) {
-        String name = mMoveScores[player][i].unk0->DisplayName();
+        String name = mMoveScores[player][i].mMove->DisplayName();
         if (!IsRecommendedPracticeMove(name)) {
             if (CheckRecommendedPracticeMove(name, player)) {
                 mRecommendedPracticeMoves.push_back(name);
@@ -825,9 +825,9 @@ void MetaPerformer::CalculatePracticeResults() {
     }
     mNumLearnMovesPassed = mSkillsAwards->AwardCount((SkillsAward)2);
     mNumLearnMovesFastLaned = mSkillsAwards->AwardCount((SkillsAward)3);
-    for (unsigned int i = 0; i < unk74.size(); i++) {
-        for (unsigned int j = 0; j < unk74[i].size(); j++) {
-            if (unk74[i][j]) {
+    for (unsigned int i = 0; i < mReviewMoveMaskBySection.size(); i++) {
+        for (unsigned int j = 0; j < mReviewMoveMaskBySection[i].size(); j++) {
+            if (mReviewMoveMaskBySection[i][j]) {
                 mNumReviewMovesPassed++;
             }
             mNumReviewMovesTotal++;
@@ -920,7 +920,7 @@ String MetaPerformer::GetPlaylistNameAndDuration() const {
 
 void MetaPerformer::TriggerSongCompletion(int i1, float f2) {
     if (!mPlaylist) {
-        unke0 = false;
+        mPlaylistIsLong = false;
     }
     ThePlatformMgr.RemoveSink(TheAccomplishmentMgr);
     mJustBeatGame = false;
@@ -1037,7 +1037,7 @@ void MetaPerformer::OnGameInit() {
     }
     ClearAndShrink(mRecommendedPracticeMoves);
     mSkillsAwards->Clear();
-    ClearAndShrink(unk74);
+    ClearAndShrink(mReviewMoveMaskBySection);
     if (TheGameMode->IsGameplayModePractice()) {
         SetUpRecapResults();
     }
@@ -1080,7 +1080,7 @@ void MetaPerformer::SetUpRecapResults() {
             for (int i = 0; i < diff; i++) {
                 bVec.push_back(false);
             }
-            unk74.push_back(bVec);
+            mReviewMoveMaskBySection.push_back(bVec);
         }
     }
 }
@@ -1132,8 +1132,8 @@ void MetaPerformer::OnReviewMovePassed(
     }
     HamMoveScore score;
     score.unk8 = f4;
-    score.unk0 = move;
-    score.unk4 = ratingIndex;
+    score.mMove = move;
+    score.mRatingStateIndex = ratingIndex;
     score.unkc = false;
     mMoveScores[playerIndex].push_back(score);
     static Symbol move_awesome("move_awesome");
@@ -1141,7 +1141,7 @@ void MetaPerformer::OnReviewMovePassed(
     int i90, i80;
     GetCurrentRecapMove(i90, i80);
     if (i90 >= 0 && i80 >= 0) {
-        auto &set = unk74[i90][i80];
+        auto &set = mReviewMoveMaskBySection[i90][i80];
         if (!(ratingIndex <= awesomeIdx)) {
             set = true;
         } else {
@@ -1169,7 +1169,7 @@ const std::vector<PracticeStep> &MetaPerformer::GetPracticeSteps() const {
 void MetaPerformer::OnRecallMovePassed(int playerIndex, HamMove *move) {
     MILO_ASSERT_RANGE(playerIndex, 0, 2, 0x443);
     FOREACH (it, mMoveScores[playerIndex]) {
-        if (it->unk0 == move) {
+        if (it->mMove == move) {
             break;
         }
     }
@@ -1253,8 +1253,8 @@ void MetaPerformer::CalcCharacters(
 ) {
     HamPlayerData *pPlayer1Data = TheGameData->Player(0);
     HamPlayerData *pPlayer2Data = TheGameData->Player(1);
-    Symbol player1Char = pPlayer1Data->Unk48();
-    Symbol player2Char = pPlayer2Data->Unk48();
+    Symbol player1Char = pPlayer1Data->MiniGameCharacter();
+    Symbol player2Char = pPlayer2Data->MiniGameCharacter();
 
     // Clear character preferences based on PlayerFlag
     if (0 == flags || flags == 2) {

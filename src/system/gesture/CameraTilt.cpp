@@ -14,9 +14,9 @@
 CameraTilt *TheCameraTilt;
 
 CameraTilt::CameraTilt()
-    : unk2c(0), unk60(0), unk68(0), unk6c(0), unk70(0), unk74(0), mDelayBetweenStates(0),
+    : mScanActive(0), mElapsedMs(0), mCycles(0), mConsecutiveErrors(0), mState(0), mPrevState(0), mDelayBetweenStates(0),
       mDelayBetweenRetry(0), mUpDownCyclesPerScan(1), mAngleWiggleRoom(3),
-      mErrorRepeatedTimes(0), mCycleSafetyTimeout(4), unk180(0) {
+      mErrorRepeatedTimes(0), mCycleSafetyTimeout(4), mTiltMovingFlags(0) {
     memset(&mOverlapped, 0, sizeof(XOVERLAPPED));
     memset(&mTiltObjects, 0, sizeof(NUI_TILT_OBJECTS));
     DataArray *camArr = SystemConfig()->FindArray("camera_tilt", false);
@@ -46,16 +46,16 @@ END_PROPSYNCS
 void CameraTilt::UpdateTiltingToInital() {
     if (mOverlapped.InternalLow != ERROR_IO_PENDING) {
         MILO_LOG("NuiCameraAdjustTilt - completed tilt to inital\n");
-        unk70 = 8;
-        unk60 = 0;
+        mState = 8;
+        mElapsedMs = 0;
     }
 }
 
 void CameraTilt::UpdateGetInitialTiltData() {
     if (mOverlapped.InternalLow != ERROR_IO_PENDING) {
         MILO_LOG("NuiCameraAdjustTilt - got initial tilt data\n");
-        unk70 = 4;
-        unk60 = 0;
+        mState = 4;
+        mElapsedMs = 0;
     }
 }
 
@@ -66,15 +66,15 @@ void CameraTilt::Init() {
 }
 
 void CameraTilt::StartCameraScan() {
-    if (unk70 != 0) {
+    if (mState != 0) {
         MILO_LOG(
             "StartCameraScan: ERROR : Scan is trying to be initiated while in a scan sequence. Ignoring Scan Request!!!"
         );
     } else {
-        unk70 = 1;
-        unk2c = true;
-        unk68 = 0;
-        unk60 = 0;
+        mState = 1;
+        mScanActive = true;
+        mCycles = 0;
+        mElapsedMs = 0;
         mTimer.Start();
         ThePlatformMgr.AddSink(TheCameraTilt);
     }
@@ -83,67 +83,67 @@ void CameraTilt::StartCameraScan() {
 void CameraTilt::StartGetInitialTiltData() {
     DWORD ret =
         NuiCameraAdjustTilt(0x20, 0, 2.1336f, 2.1336f, &mTiltObjects, &mOverlapped);
-    unk60 = 0;
+    mElapsedMs = 0;
     if (ret == ERROR_SUCCESS) {
-        unk70 = 3;
+        mState = 3;
         MILO_LOG(
             "NuiCameraAdjustTilt completed immediately - camera tilt already optimal?\n"
         );
     } else if (ret == ERROR_IO_PENDING) {
-        unk70 = 3;
-        if (unk74 == 1) {
-            unk6c++;
+        mState = 3;
+        if (mPrevState == 1) {
+            mConsecutiveErrors++;
         } else {
-            unk6c = 0;
+            mConsecutiveErrors = 0;
         }
-        if (unk6c <= mErrorRepeatedTimes) {
+        if (mConsecutiveErrors <= mErrorRepeatedTimes) {
             MILO_LOG("NuiCameraAdjustTilt - Camera is getting initial camera data\n");
         }
-        unk74 = 1;
+        mPrevState = 1;
     } else if (ret == ERROR_RETRY) {
-        unk70 = 2;
-        if (unk74 == 2) {
-            unk6c++;
+        mState = 2;
+        if (mPrevState == 2) {
+            mConsecutiveErrors++;
         } else {
-            unk6c = 0;
+            mConsecutiveErrors = 0;
         }
-        if (unk6c <= mErrorRepeatedTimes) {
+        if (mConsecutiveErrors <= mErrorRepeatedTimes) {
             MILO_LOG("NuiCameraAdjustTilt called too soon after previous call\n");
         }
-        unk74 = 2;
+        mPrevState = 2;
     } else if (ret == ERROR_BUSY) {
-        unk70 = 2;
-        if (unk74 == 3) {
-            unk6c++;
+        mState = 2;
+        if (mPrevState == 3) {
+            mConsecutiveErrors++;
         } else {
-            unk6c = 0;
+            mConsecutiveErrors = 0;
         }
-        if (unk6c <= mErrorRepeatedTimes) {
+        if (mConsecutiveErrors <= mErrorRepeatedTimes) {
             MILO_LOG("NuiCameraAdjustTilt failed because camera was busy\n");
         }
-        unk74 = 3;
+        mPrevState = 3;
     } else if (ret == ERROR_TOO_MANY_CMDS) {
-        unk70 = 2;
-        if (unk74 == 4) {
-            unk6c++;
+        mState = 2;
+        if (mPrevState == 4) {
+            mConsecutiveErrors++;
         } else {
-            unk6c = 0;
+            mConsecutiveErrors = 0;
         }
-        if (unk6c <= mErrorRepeatedTimes) {
+        if (mConsecutiveErrors <= mErrorRepeatedTimes) {
             MILO_LOG("NuiCameraAdjustTilt failed to find player candidate; waiting\n");
         }
-        unk74 = 4;
+        mPrevState = 4;
     } else {
-        unk70 = 0;
-        if (unk74 == 5) {
-            unk6c++;
+        mState = 0;
+        if (mPrevState == 5) {
+            mConsecutiveErrors++;
         } else {
-            unk6c = 0;
+            mConsecutiveErrors = 0;
         }
-        if (unk6c <= mErrorRepeatedTimes) {
+        if (mConsecutiveErrors <= mErrorRepeatedTimes) {
             MILO_LOG("Unexpected result from NuiCameraAdjustTilt - %x\n", ret);
         }
-        unk74 = 5;
+        mPrevState = 5;
     }
 }
 
@@ -151,62 +151,62 @@ void CameraTilt::StartCameraTiltingUp() {
     HRESULT res = NuiCameraElevationSetAngle(27);
     if (res == ERROR_SUCCESS) {
         MILO_LOG("NuiCameraElevationSetAngle - Camera is tilting to Up\n");
-        unk70 = 15;
-        unk60 = 0;
+        mState = 15;
+        mElapsedMs = 0;
     } else if (res == E_INVALIDARG) {
-        unk70 = 5;
-        unk60 = 0;
-        if (unk74 == 6) {
-            unk6c++;
+        mState = 5;
+        mElapsedMs = 0;
+        if (mPrevState == 6) {
+            mConsecutiveErrors++;
         } else {
-            unk6c = 0;
+            mConsecutiveErrors = 0;
         }
-        if (unk6c <= mErrorRepeatedTimes) {
+        if (mConsecutiveErrors <= mErrorRepeatedTimes) {
             MILO_LOG(
                 "NuiCameraElevationSetAngle failed because the input angle is outside the accepted range\n"
             );
         }
-        unk74 = 6;
+        mPrevState = 6;
     } else if (res == E_NUI_DEVICE_NOT_CONNECTED) {
-        unk70 = 0;
-        unk60 = 0;
-        if (unk74 == 7) {
-            unk6c++;
+        mState = 0;
+        mElapsedMs = 0;
+        if (mPrevState == 7) {
+            mConsecutiveErrors++;
         } else {
-            unk6c = 0;
+            mConsecutiveErrors = 0;
         }
-        if (unk6c <= mErrorRepeatedTimes) {
+        if (mConsecutiveErrors <= mErrorRepeatedTimes) {
             MILO_LOG(
                 "NuiCameraElevationSetAngle failed because the Kinect sensor array is not attached\n"
             );
         }
-        unk74 = 7;
+        mPrevState = 7;
     } else if (res == E_NUI_SYSTEM_UI_PRESENT) {
-        unk70 = 5;
-        unk60 = 0;
-        if (unk74 == 8) {
-            unk6c++;
+        mState = 5;
+        mElapsedMs = 0;
+        if (mPrevState == 8) {
+            mConsecutiveErrors++;
         } else {
-            unk6c = 0;
+            mConsecutiveErrors = 0;
         }
-        if (unk6c <= mErrorRepeatedTimes) {
+        if (mConsecutiveErrors <= mErrorRepeatedTimes) {
             MILO_LOG(
                 "NuiCameraElevationSetAngle failed because the Xbox Guide UI is active so elevation will not be changed\n"
             );
         }
-        unk74 = 8;
+        mPrevState = 8;
     } else {
-        unk70 = 5;
-        unk60 = 0;
-        if (unk74 == 5) {
-            unk6c++;
+        mState = 5;
+        mElapsedMs = 0;
+        if (mPrevState == 5) {
+            mConsecutiveErrors++;
         } else {
-            unk6c = 0;
+            mConsecutiveErrors = 0;
         }
-        if (unk6c <= mErrorRepeatedTimes) {
+        if (mConsecutiveErrors <= mErrorRepeatedTimes) {
             MILO_LOG("Unexpected result from NuiCameraElevationSetAngle - %x\n", res);
         }
-        unk74 = 5;
+        mPrevState = 5;
     }
 }
 
@@ -214,282 +214,282 @@ void CameraTilt::StartCameraTiltingDown() {
     HRESULT res = NuiCameraElevationSetAngle(-27);
     if (res == ERROR_SUCCESS) {
         MILO_LOG("NuiCameraElevationSetAngle - Camera is tilting to Down\n");
-        unk70 = 11;
-        unk60 = 0;
+        mState = 11;
+        mElapsedMs = 0;
     } else if (res == E_INVALIDARG) {
-        unk70 = 5;
-        unk60 = 0;
-        if (unk74 == 6) {
-            unk6c++;
+        mState = 5;
+        mElapsedMs = 0;
+        if (mPrevState == 6) {
+            mConsecutiveErrors++;
         } else {
-            unk6c = 0;
+            mConsecutiveErrors = 0;
         }
-        if (unk6c <= mErrorRepeatedTimes) {
+        if (mConsecutiveErrors <= mErrorRepeatedTimes) {
             MILO_LOG(
                 "NuiCameraElevationSetAngle failed because the input angle is outside the accepted range\n"
             );
         }
-        unk74 = 6;
+        mPrevState = 6;
     } else if (res == E_NUI_DEVICE_NOT_CONNECTED) {
-        unk70 = 0;
-        unk60 = 0;
-        if (unk74 == 7) {
-            unk6c++;
+        mState = 0;
+        mElapsedMs = 0;
+        if (mPrevState == 7) {
+            mConsecutiveErrors++;
         } else {
-            unk6c = 0;
+            mConsecutiveErrors = 0;
         }
-        if (unk6c <= mErrorRepeatedTimes) {
+        if (mConsecutiveErrors <= mErrorRepeatedTimes) {
             MILO_LOG(
                 "NuiCameraElevationSetAngle failed because the Kinect sensor array is not attached\n"
             );
         }
-        unk74 = 7;
+        mPrevState = 7;
     } else if (res == E_NUI_SYSTEM_UI_PRESENT) {
-        unk70 = 5;
-        unk60 = 0;
-        if (unk74 == 8) {
-            unk6c++;
+        mState = 5;
+        mElapsedMs = 0;
+        if (mPrevState == 8) {
+            mConsecutiveErrors++;
         } else {
-            unk6c = 0;
+            mConsecutiveErrors = 0;
         }
-        if (unk6c <= mErrorRepeatedTimes) {
+        if (mConsecutiveErrors <= mErrorRepeatedTimes) {
             MILO_LOG(
                 "NuiCameraElevationSetAngle failed because the Xbox Guide UI is active so elevation will not be changed\n"
             );
         }
-        unk74 = 8;
+        mPrevState = 8;
     } else {
-        unk70 = 5;
-        unk60 = 0;
-        if (unk74 == 5) {
-            unk6c++;
+        mState = 5;
+        mElapsedMs = 0;
+        if (mPrevState == 5) {
+            mConsecutiveErrors++;
         } else {
-            unk6c = 0;
+            mConsecutiveErrors = 0;
         }
-        if (unk6c <= mErrorRepeatedTimes) {
+        if (mConsecutiveErrors <= mErrorRepeatedTimes) {
             MILO_LOG("Unexpected result from NuiCameraElevationSetAngle - %x\n", res);
         }
-        unk74 = 5;
+        mPrevState = 5;
     }
 }
 
 void CameraTilt::StartCameraTiltingToInital() {
     DWORD res = NuiCameraAdjustTilt(0, 0, 0, 2.1336f, &mTiltObjects, &mOverlapped);
-    unk60 = 0;
+    mElapsedMs = 0;
     if (res == ERROR_SUCCESS) {
-        unk70 = 7;
+        mState = 7;
         MILO_LOG(
             "NuiCameraAdjustTilt completed immediately - camera tilt already optimal?\n"
         );
     } else if (res == ERROR_IO_PENDING) {
-        unk70 = 7;
-        if (unk74 == 1) {
-            unk6c++;
+        mState = 7;
+        if (mPrevState == 1) {
+            mConsecutiveErrors++;
         } else {
-            unk6c = 0;
+            mConsecutiveErrors = 0;
         }
-        if (unk6c <= mErrorRepeatedTimes) {
+        if (mConsecutiveErrors <= mErrorRepeatedTimes) {
             MILO_LOG("NuiCameraAdjustTilt - Camera is getting initial camera data\n");
         }
-        unk74 = 1;
+        mPrevState = 1;
     } else if (res == ERROR_RETRY) {
-        unk70 = 2;
-        if (unk74 == 2) {
-            unk6c++;
+        mState = 2;
+        if (mPrevState == 2) {
+            mConsecutiveErrors++;
         } else {
-            unk6c = 0;
+            mConsecutiveErrors = 0;
         }
-        if (unk6c <= mErrorRepeatedTimes) {
+        if (mConsecutiveErrors <= mErrorRepeatedTimes) {
             MILO_LOG("NuiCameraAdjustTilt called too soon after previous call\n");
         }
-        unk74 = 2;
+        mPrevState = 2;
     } else if (res == ERROR_BUSY) {
-        unk70 = 2;
-        if (unk74 == 3) {
-            unk6c++;
+        mState = 2;
+        if (mPrevState == 3) {
+            mConsecutiveErrors++;
         } else {
-            unk6c = 0;
+            mConsecutiveErrors = 0;
         }
-        if (unk6c <= mErrorRepeatedTimes) {
+        if (mConsecutiveErrors <= mErrorRepeatedTimes) {
             MILO_LOG("NuiCameraAdjustTilt failed because camera was busy\n");
         }
-        unk74 = 3;
+        mPrevState = 3;
     } else if (res == ERROR_TOO_MANY_CMDS) {
-        unk70 = 2;
-        if (unk74 == 4) {
-            unk6c++;
+        mState = 2;
+        if (mPrevState == 4) {
+            mConsecutiveErrors++;
         } else {
-            unk6c = 0;
+            mConsecutiveErrors = 0;
         }
-        if (unk6c <= mErrorRepeatedTimes) {
+        if (mConsecutiveErrors <= mErrorRepeatedTimes) {
             MILO_LOG("NuiCameraAdjustTilt failed to find player candidate; waiting\n");
         }
-        unk74 = 4;
+        mPrevState = 4;
     } else {
-        unk70 = 0;
-        if (unk74 == 5) {
-            unk6c++;
+        mState = 0;
+        if (mPrevState == 5) {
+            mConsecutiveErrors++;
         } else {
-            unk6c = 0;
+            mConsecutiveErrors = 0;
         }
-        if (unk6c <= mErrorRepeatedTimes) {
+        if (mConsecutiveErrors <= mErrorRepeatedTimes) {
             MILO_LOG("Unexpected result from NuiCameraAdjustTilt - %x\n", res);
         }
-        unk74 = 5;
+        mPrevState = 5;
     }
 }
 
 void CameraTilt::UpdateTiltingUp() {
     LONG lAngleDegrees;
-    HRESULT res = NuiCameraElevationGetAngle(&lAngleDegrees, &unk180);
+    HRESULT res = NuiCameraElevationGetAngle(&lAngleDegrees, &mTiltMovingFlags);
     if (res == ERROR_SUCCESS) {
         mAngle = (float)lAngleDegrees * 0.018518519f + 0.5f;
         if (lAngleDegrees > 27 - mAngleWiggleRoom) {
             MILO_LOG("NuiCameraElevationGetAngle : Up : Normal angle end\n");
-            unk70 = 16;
-            unk60 = 0;
-        } else if (unk60 > mCycleSafetyTimeout) {
+            mState = 16;
+            mElapsedMs = 0;
+        } else if (mElapsedMs > mCycleSafetyTimeout) {
             MILO_LOG("NuiCameraElevationGetAngle : Up : Safety timer end\n");
-            unk70 = 16;
-            unk60 = 0;
+            mState = 16;
+            mElapsedMs = 0;
         }
     } else if (res == E_INVALIDARG) {
-        unk70 = 5;
-        unk60 = 0;
-        if (unk74 == 6) {
-            unk6c++;
+        mState = 5;
+        mElapsedMs = 0;
+        if (mPrevState == 6) {
+            mConsecutiveErrors++;
         } else {
-            unk6c = 0;
+            mConsecutiveErrors = 0;
         }
-        if (unk6c <= mErrorRepeatedTimes) {
+        if (mConsecutiveErrors <= mErrorRepeatedTimes) {
             MILO_LOG(
                 "NuiCameraElevationSetAngle failed because the input angle is outside the accepted range\n"
             );
         }
-        unk74 = 6;
+        mPrevState = 6;
     } else if (res == E_NUI_DEVICE_NOT_CONNECTED) {
-        unk70 = 0;
-        unk60 = 0;
-        if (unk74 == 7) {
-            unk6c++;
+        mState = 0;
+        mElapsedMs = 0;
+        if (mPrevState == 7) {
+            mConsecutiveErrors++;
         } else {
-            unk6c = 0;
+            mConsecutiveErrors = 0;
         }
-        if (unk6c <= mErrorRepeatedTimes) {
+        if (mConsecutiveErrors <= mErrorRepeatedTimes) {
             MILO_LOG(
                 "NuiCameraElevationSetAngle failed because the Kinect sensor array is not attached\n"
             );
         }
-        unk74 = 7;
+        mPrevState = 7;
     } else if (res == E_NUI_SYSTEM_UI_PRESENT) {
-        unk70 = 5;
-        unk60 = 0;
-        if (unk74 == 8) {
-            unk6c++;
+        mState = 5;
+        mElapsedMs = 0;
+        if (mPrevState == 8) {
+            mConsecutiveErrors++;
         } else {
-            unk6c = 0;
+            mConsecutiveErrors = 0;
         }
-        if (unk6c <= mErrorRepeatedTimes) {
+        if (mConsecutiveErrors <= mErrorRepeatedTimes) {
             MILO_LOG(
                 "NuiCameraElevationSetAngle failed because the Xbox Guide UI is active so elevation will not be changed\n"
             );
         }
-        unk74 = 8;
+        mPrevState = 8;
     } else {
-        unk70 = 5;
-        unk60 = 0;
-        if (unk74 == 5) {
-            unk6c++;
+        mState = 5;
+        mElapsedMs = 0;
+        if (mPrevState == 5) {
+            mConsecutiveErrors++;
         } else {
-            unk6c = 0;
+            mConsecutiveErrors = 0;
         }
-        if (unk6c <= mErrorRepeatedTimes) {
+        if (mConsecutiveErrors <= mErrorRepeatedTimes) {
             MILO_LOG("Unexpected result from NuiCameraElevationSetAngle - %x\n", res);
         }
-        unk74 = 5;
+        mPrevState = 5;
     }
 }
 
 void CameraTilt::UpdateTiltingDown() {
     LONG lAngleDegrees;
-    HRESULT res = NuiCameraElevationGetAngle(&lAngleDegrees, &unk180);
+    HRESULT res = NuiCameraElevationGetAngle(&lAngleDegrees, &mTiltMovingFlags);
     if (res == ERROR_SUCCESS) {
         mAngle = (float)lAngleDegrees * 0.018518519f + 0.5f;
         if (lAngleDegrees < mAngleWiggleRoom - 27) {
             MILO_LOG("NuiCameraElevationGetAngle : Down : Normal angle end\n");
-            unk70 = 12;
-            unk60 = 0;
-        } else if (unk60 > mCycleSafetyTimeout) {
+            mState = 12;
+            mElapsedMs = 0;
+        } else if (mElapsedMs > mCycleSafetyTimeout) {
             MILO_LOG("NuiCameraElevationGetAngle : down : Safety timer end\n");
-            unk70 = 12;
-            unk60 = 0;
+            mState = 12;
+            mElapsedMs = 0;
         }
     } else if (res == E_INVALIDARG) {
-        unk70 = 5;
-        unk60 = 0;
-        if (unk74 == 6) {
-            unk6c++;
+        mState = 5;
+        mElapsedMs = 0;
+        if (mPrevState == 6) {
+            mConsecutiveErrors++;
         } else {
-            unk6c = 0;
+            mConsecutiveErrors = 0;
         }
-        if (unk6c <= mErrorRepeatedTimes) {
+        if (mConsecutiveErrors <= mErrorRepeatedTimes) {
             MILO_LOG(
                 "NuiCameraElevationSetAngle failed because the input angle is outside the accepted range\n"
             );
         }
-        unk74 = 6;
+        mPrevState = 6;
     } else if (res == E_NUI_DEVICE_NOT_CONNECTED) {
-        unk70 = 0;
-        unk60 = 0;
-        if (unk74 == 7) {
-            unk6c++;
+        mState = 0;
+        mElapsedMs = 0;
+        if (mPrevState == 7) {
+            mConsecutiveErrors++;
         } else {
-            unk6c = 0;
+            mConsecutiveErrors = 0;
         }
-        if (unk6c <= mErrorRepeatedTimes) {
+        if (mConsecutiveErrors <= mErrorRepeatedTimes) {
             MILO_LOG(
                 "NuiCameraElevationSetAngle failed because the Kinect sensor array is not attached\n"
             );
         }
-        unk74 = 7;
+        mPrevState = 7;
     } else if (res == E_NUI_SYSTEM_UI_PRESENT) {
-        unk70 = 5;
-        unk60 = 0;
-        if (unk74 == 8) {
-            unk6c++;
+        mState = 5;
+        mElapsedMs = 0;
+        if (mPrevState == 8) {
+            mConsecutiveErrors++;
         } else {
-            unk6c = 0;
+            mConsecutiveErrors = 0;
         }
-        if (unk6c <= mErrorRepeatedTimes) {
+        if (mConsecutiveErrors <= mErrorRepeatedTimes) {
             MILO_LOG(
                 "NuiCameraElevationSetAngle failed because the Xbox Guide UI is active so elevation will not be changed\n"
             );
         }
-        unk74 = 8;
+        mPrevState = 8;
     } else {
-        unk70 = 5;
-        unk60 = 0;
-        if (unk74 == 5) {
-            unk6c++;
+        mState = 5;
+        mElapsedMs = 0;
+        if (mPrevState == 5) {
+            mConsecutiveErrors++;
         } else {
-            unk6c = 0;
+            mConsecutiveErrors = 0;
         }
-        if (unk6c <= mErrorRepeatedTimes) {
+        if (mConsecutiveErrors <= mErrorRepeatedTimes) {
             MILO_LOG("Unexpected result from NuiCameraElevationSetAngle - %x\n", res);
         }
-        unk74 = 5;
+        mPrevState = 5;
     }
 }
 
 void CameraTilt::Poll() {
-    if (!unk2c)
+    if (!mScanActive)
         return;
-    unsigned int state = unk70;
+    unsigned int state = mState;
     switch (state) {
     case 0:
-        unk2c = false;
-        unk68 = 0;
-        unk60 = 0;
+        mScanActive = false;
+        mCycles = 0;
+        mElapsedMs = 0;
         mTimer.Stop();
         ThePlatformMgr.RemoveSink(TheCameraTilt);
         break;
@@ -497,92 +497,92 @@ void CameraTilt::Poll() {
         StartGetInitialTiltData();
         break;
     case 2:
-        if (unk60 > mDelayBetweenRetry) {
-            unk70 = 1;
-            unk60 = 0;
+        if (mElapsedMs > mDelayBetweenRetry) {
+            mState = 1;
+            mElapsedMs = 0;
         }
         break;
     case 3:
         UpdateGetInitialTiltData();
         break;
     case 4:
-        if (unk60 > mDelayBetweenStates) {
-            unk70 = 9;
-            unk60 = 0;
+        if (mElapsedMs > mDelayBetweenStates) {
+            mState = 9;
+            mElapsedMs = 0;
         }
         break;
     case 5:
         StartCameraTiltingToInital();
         break;
     case 6:
-        if (unk60 > mDelayBetweenRetry) {
-            unk70 = 5;
-            unk60 = 0;
+        if (mElapsedMs > mDelayBetweenRetry) {
+            mState = 5;
+            mElapsedMs = 0;
         }
         break;
     case 7:
         UpdateTiltingToInital();
         break;
     case 8:
-        if (unk60 > mDelayBetweenStates) {
-            unk70 = 0;
-            unk60 = 0;
+        if (mElapsedMs > mDelayBetweenStates) {
+            mState = 0;
+            mElapsedMs = 0;
         }
         break;
     case 9:
         StartCameraTiltingDown();
         break;
     case 10:
-        if (unk60 > mDelayBetweenRetry) {
-            unk70 = 9;
-            unk60 = 0;
+        if (mElapsedMs > mDelayBetweenRetry) {
+            mState = 9;
+            mElapsedMs = 0;
         }
         break;
     case 11:
         UpdateTiltingDown();
         break;
     case 12:
-        if (unk60 > mDelayBetweenStates) {
-            unk70 = 12;
-            unk60 = 0;
+        if (mElapsedMs > mDelayBetweenStates) {
+            mState = 12;
+            mElapsedMs = 0;
         }
         break;
     case 13:
         StartCameraTiltingUp();
         break;
     case 14:
-        if (unk60 > mDelayBetweenRetry) {
-            unk70 = 12;
-            unk60 = 0;
+        if (mElapsedMs > mDelayBetweenRetry) {
+            mState = 12;
+            mElapsedMs = 0;
         }
         break;
     case 15:
         UpdateTiltingUp();
         break;
     case 16:
-        if (unk60 > mDelayBetweenStates) {
-            unk68++;
-            unk60 = 0;
-            if (unk68 < mUpDownCyclesPerScan) {
-                unk70 = 9;
+        if (mElapsedMs > mDelayBetweenStates) {
+            mCycles++;
+            mElapsedMs = 0;
+            if (mCycles < mUpDownCyclesPerScan) {
+                mState = 9;
             } else {
-                unk70 = 5;
+                mState = 5;
             }
         }
         break;
     }
     mTimer.Stop();
-    unk60 = mTimer.Ms();
+    mElapsedMs = mTimer.Ms();
     mTimer.Start();
 }
 
 DataNode CameraTilt::OnMsg(const UIChangedMsg &msg) {
-    if (unk70 != 0) {
+    if (mState != 0) {
         if (!msg.Showing()) {
-            unk2c = true;
+            mScanActive = true;
             mTimer.Start();
         } else {
-            unk2c = false;
+            mScanActive = false;
             mTimer.Stop();
         }
     }

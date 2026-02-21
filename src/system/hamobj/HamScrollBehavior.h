@@ -18,7 +18,7 @@ public:
     void Update(float);
     void PlayScrollSound();
 
-    float GetFirstVal() { return unk0; } // change once context found
+    float GetFirstVal() { return mSettleTimer; }
 
     static void Init();
     static float mNeutralToSlowDownDelay;
@@ -42,23 +42,23 @@ public:
 private:
     static float sScrollSettleTime;
 
-    float unk0;
+    float mSettleTimer;
     bool unk4;
     bool unk5;
-    int unk8;
+    int mScrollStep;
     float unkc;
-    float unk10;
+    float mScrollSpeed;
     float unk14;
-    float unk18;
+    float mScrollCooldown;
     bool unk1c;
     bool unk1d;
     float unk20;
-    int unk24;
+    int mPendingScrollDir;
     int unk28;
     int unk2c;
-    int unk30;
-    DoubleExponentialSmoother unk34;
+    int mScrollDir;
+    DoubleExponentialSmoother mSmoother;
     int unk48;
-    UIListState *unk4c;
-    HamNavList *unk50;
+    UIListState *mListState;
+    HamNavList *mNavList;
 };

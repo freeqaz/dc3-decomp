@@ -159,7 +159,7 @@ protected:
     std::map<Symbol, String> unkmap5; // 0xac - mounted content?
     CacheID *mSongCacheID; // 0xc4
     Cache *mSongCache; // 0xc8
-    bool unkcc; // 0xcc
+    bool mHasNewContent; // 0xcc
     bool mSongCacheNeedsWrite; // 0xcd
     bool mSongCacheWriteAllowed; // 0xce
 };

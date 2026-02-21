@@ -13,7 +13,7 @@ public:
     Symbol GetGroup() const;
     bool HasAward() const;
 
-    int unk4;
+    int mIndex;
     Symbol mName; // 0x8
     Symbol mGroup; // 0xc
     Symbol mAward; // 0x10

@@ -124,21 +124,21 @@ protected:
     Waypoint *mWaypoint; // 0x2f0
     /** "where to load outfits from" */
     Symbol mOutfitDir; // 0x2f4
-    bool unk2f8; // 0x2f8
+    bool mIsCampaignChar; // 0x2f8
     /** "Draws a 6 foot square box around the character teleport point" */
     bool mShowBox; // 0x2f9
-    bool unk2fa; // 0x2fa
+    bool mNeedsAcquirePose; // 0x2fa
     ObjPtr<CharEyes> mEyes; // 0x2fc
     /** "Gender of this character" */
     HamGender mGender; // 0x310
-    int unk314; // 0x314
+    int mAnimationState; // 0x314 - animation regulator state, initialized to 0
     /** "Updates the character's animation even though showing is set to FALSE.
         Useful for rendering the character to a texture." */
     bool mPollWhenHidden; // 0x318
     /** "True if the internal TexBlenders are working." */
     bool mTexBlendersActive; // 0x319
     ObjPtrList<CharWeightable> mIKEffectors; // 0x31c
-    float unk330; // 0x330 - song offset?
+    float mBaseLipsyncOffset; // 0x330
     ObjectDir *mNeutralSkelDir; // 0x334
     CharServoBone *mSkeletonBones; // 0x338
     ObjPtr<RndMesh> mCrewCardMesh; // 0x33c

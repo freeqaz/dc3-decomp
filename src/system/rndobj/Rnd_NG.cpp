@@ -26,14 +26,14 @@ NgStats gNgStats[3];
 NgStats *TheNgStats = &gNgStats[0];
 
 NgRnd::NgRnd()
-    : unk1e0(), unk1f8(0), mShadowMap(0), mShadowCam(0), mOcclusionQueryMgr(0), unk208(0),
-      unk218(0) {}
+    : mViewport(), unk1f8(0), mShadowMap(0), mShadowCam(0), mOcclusionQueryMgr(0), mParticleBuffer(0),
+      mInited(0) {}
 
 NgRnd::~NgRnd() {}
 
 void NgRnd::PreInit() {
-    if (!unk218) {
-        unk218 = true;
+    if (!mInited) {
+        mInited = true;
         Rnd::PreInit();
         REGISTER_OBJ_FACTORY(NgEnviron)
         REGISTER_OBJ_FACTORY(NgMat)
@@ -48,16 +48,16 @@ void NgRnd::PreInit() {
 void NgRnd::Init() {
     PreInit();
     TheShaderMgr.Init();
-    unk20c.reserve(0x200);
+    mPointTestQueries.reserve(0x200);
     Rnd::Init();
-    unk208 = Hmx::Object::New<RndSoftParticleBuffer>();
+    mParticleBuffer = Hmx::Object::New<RndSoftParticleBuffer>();
 }
 
 void NgRnd::ReInit() { TheShaderMgr.InitShaders(); }
 
 void NgRnd::Terminate() {
     RELEASE(mOcclusionQueryMgr);
-    RELEASE(unk208);
+    RELEASE(mParticleBuffer);
     TheShaderMgr.Terminate();
     NgPostProc::Terminate();
     NgDOFProc::Terminate();
@@ -85,11 +85,11 @@ void NgRnd::SetShadowMap(RndTex *tex, RndCam *cam, const Hmx::Color *color) {
 
 void NgRnd::RemovePointTest(RndFlare *flare) {
     Rnd::RemovePointTest(flare);
-    FOREACH (it, unk20c) {
-        if (it->unk0 == flare) {
-            mOcclusionQueryMgr->ReleaseQuery(it->unk8);
-            mOcclusionQueryMgr->ReleaseQuery(it->unk4);
-            unk20c.erase(it);
+    FOREACH (it, mPointTestQueries) {
+        if (it->mFlare == flare) {
+            mOcclusionQueryMgr->ReleaseQuery(it->mAreaQueryIdx);
+            mOcclusionQueryMgr->ReleaseQuery(it->mPointQueryIdx);
+            mPointTestQueries.erase(it);
             return;
         }
     }

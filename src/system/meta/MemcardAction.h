@@ -17,5 +17,5 @@ protected:
     MCResult mResult; // 0x4
     int unk8;
     int unkc;
-    Profile *unk10;
+    Profile *mProfile;
 };

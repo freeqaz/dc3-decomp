@@ -38,9 +38,9 @@ enum CacheResourceResult {
 
 class CacheDirEntry {
 public:
-    String unk0;
-    DateTime unk8;
-    int unk10;
+    String mName;
+    DateTime mDateTime;
+    int mSize;
 };
 
 class CacheID {

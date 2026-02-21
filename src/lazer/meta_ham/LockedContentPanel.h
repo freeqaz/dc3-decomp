@@ -40,7 +40,7 @@ protected:
     u32 filler[16];
     Sound *mSound; // 0x7c
     Timer *mTimer; // 0x80
-    bool unk84;
+    bool mIsTeaserTextShowing;
 };
 
 extern LockedContentPanel *TheLockedContentPanel;

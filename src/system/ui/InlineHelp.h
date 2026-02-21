@@ -77,7 +77,7 @@ protected:
     bool mHorizontal; // 0x69
     float mSpacing; // 0x6c
     ResourceDirPtr<ObjectDir> mResourceDir; // 0x70
-    UILabel *unk88;
+    UILabel *mTemplateLabel;
     ObjPtr<UIColor> mTextColor; // 0x8c
 
     virtual void SyncLabelsToConfig();

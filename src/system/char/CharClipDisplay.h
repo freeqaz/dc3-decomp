@@ -7,8 +7,8 @@
 class CharClipDisplay {
 public:
     CharClipDisplay()
-        : unk0(0), unk4(0), unk8(0), unkc(0), unk10(0), unk14(0), unk18(0), unk1c(0),
-          unk20(0), unk64(0) {}
+        : mClip(0), unk4(0), unk8(0), mStartBeat(0), mEndBeat(0), mTextWidth(0), mDrawPosY(0), unk1c(0),
+          unk20(0), mPadding(0) {}
 
     static float LineSpacing();
     static void Init(ObjectDir *);
@@ -24,16 +24,16 @@ public:
     void DrawTrack();
     static float GetSEm() { return sEm; }
 
-    CharClip *unk0;
+    CharClip *mClip;
     float unk4;
     float unk8;
-    float unkc;
-    float unk10;
-    float unk14;
-    float unk18;
+    float mStartBeat;
+    float mEndBeat;
+    float mTextWidth;
+    float mDrawPosY;
     float unk1c;
     float unk20;
-    char *unk24;
+    char *mClipNameBuffer;
     int unk28;
     int unk2c;
     int unk30;
@@ -49,7 +49,7 @@ public:
     int unk58;
     int unk5c;
     int unk60;
-    float unk64;
+    float mPadding;
 
 protected:
     static float sZoom;

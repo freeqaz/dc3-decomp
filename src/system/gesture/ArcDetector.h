@@ -34,16 +34,16 @@ private:
     static float _acceptablePathErrorRatio;
 
     SkeletonSide mSide; // 0x4
-    SkeletonJoint unk8; // 0x8
-    SkeletonJoint unkc; // 0xc
+    SkeletonJoint mPrimaryJoint; // 0x8
+    SkeletonJoint mSecondaryJoint; // 0xc
     std::list<Vector3> mJointPath; // 0x10
-    Vector3 unk18;
-    float unk28;
-    float unk2c;
-    float unk30;
-    bool unk34;
-    bool unk35;
-    float unk38;
-    int unk3c;
+    Vector3 mArcOffset; // 0x18
+    float mSwipeExtentX; // 0x28
+    float mSwipeExtentY; // 0x2c
+    float mSwipeThreshold; // 0x30
+    bool mInitialized; // 0x34
+    bool mHadProgress; // 0x35
+    float mCurrentSwipeAmt; // 0x38
+    int mHoverTimer; // 0x3c
     Vector3 unk40;
 };

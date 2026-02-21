@@ -65,10 +65,10 @@ protected:
     float mSongOffset; // 0x80
     /** "should we loop this song, resets on song change" */
     bool mLoop; // 0x84
-    CharLipSync::PlayBack *unk88; // 0x88
-    bool unk8c; // 0x8c
+    CharLipSync::PlayBack *mMainPlayback; // 0x88
+    bool mIsOverrideActive; // 0x8c
     float unk90; // 0x90
-    CharLipSync::PlayBack *unk94; // 0x94
+    CharLipSync::PlayBack *mOverridePlayback; // 0x94
     /** "The CharBones object to add or blend into." */
     ObjPtr<CharBonesObject> mBones; // 0x98
     /** "Test charclip to apply, does nothing else" */
@@ -76,10 +76,10 @@ protected:
     /** "weight to apply this clip with" */
     float mTestWeight; // 0xc0
     float unkc4; // 0xc4
-    bool unkc8; // 0xc8
-    bool unkc9; // 0xc9
-    float unkcc; // 0xcc
-    bool unkd0; // 0xd0
+    bool mBlendingIn; // 0xc8
+    bool mBlendingOut; // 0xc9
+    float mOverrideBlendTarget; // 0xcc
+    bool mIsBlending; // 0xd0
     float unkd4; // 0xd4
     /** "default clip to be used as the override - maybe be overriden programatically" */
     ObjPtr<CharClip> mOverrideClip; // 0xd8

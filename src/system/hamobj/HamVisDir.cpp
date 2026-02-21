@@ -262,7 +262,7 @@ void HamVisDir::PostUpdate(const SkeletonUpdateData *data) {
                     HamPlayerData *player_data = TheGameData->Player(i);
                     MILO_ASSERT(player_data, 0x101);
                     if (player_data->IsPlaying()) {
-                        Skeleton *cur = data->unk0[i];
+                        Skeleton *cur = data->mSkeletonsLeft[i];
                         if (cur && cur->IsTracked()) {
                             UpdateGestureFilter(*cur, i);
                             mSquatPoses[i].pose->Update(*cur);

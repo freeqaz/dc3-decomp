@@ -9,14 +9,14 @@ NetCacheMgrXbox::~NetCacheMgrXbox() {}
 void NetCacheMgrXbox::Poll() {
     NetCacheMgr::Poll();
     mConnection.Poll();
-    if (unk2c < 2U) {
+    if (mState < 2U) {
         if (IsServerLocal()) {
             mDoneLoading = true;
         } else {
             if (!mDoneLoading && mConnection.GetState() == 3) {
                 mDoneLoading = true;
             }
-            if (!unk30 && mConnection.GetState() == 4) {
+            if (!mHasFailed && mConnection.GetState() == 4) {
                 // Convert ethernet cable connected bool to FailType (3 or 4)
                 u32 r3 = (u32)ThePlatformMgr.IsEthernetCableConnected();
                 u32 r11 = -(s32)r3;
@@ -42,7 +42,7 @@ void NetCacheMgrXbox::UnloadInit() {
 }
 
 bool NetCacheMgrXbox::IsDoneUnloading() const {
-    return (mConnection.GetUnk8() == 0);
+    return (mConnection.GetConnectionRequest() == 0);
 }
 
 unsigned int NetCacheMgrXbox::GetIP() {

@@ -30,13 +30,13 @@ protected:
     float unk230;
     float unk234;
     float unk238;
-    RndRenderState::Blend unk23c; // 0x23c
-    RndRenderState::Blend unk240; // 0x240
+    RndRenderState::Blend mBlendSrc; // 0x23c
+    RndRenderState::Blend mBlendDest; // 0x240
     bool mDepthTestEnable; // 0x244
     bool mDepthWriteEnable; // 0x245
     RndRenderState::TestFunc mDepthFunc; // 0x248
     RndRenderState::TestFunc mStencilFunc; // 0x24c
-    RndRenderState::StencilOp unk250; // 0x250
+    RndRenderState::StencilOp mStencilZFail; // 0x250
     int unk254;
     int unk258;
     int unk25c;

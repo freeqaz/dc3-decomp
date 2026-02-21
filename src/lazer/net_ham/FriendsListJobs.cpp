@@ -10,19 +10,19 @@ UpdateFriendsListJob::UpdateFriendsListJob(Hmx::Object *callback, HamProfile *pr
     : RCJob("friends/updatefriends/", callback) {
     MILO_ASSERT(callback == NULL, 0x18);
     mProfile = profile;
-    unkb4 = profile->GetPadNum();
+    mFriendsCount = profile->GetPadNum();
     mFriendsListJobState = kFriendsListState_0;
 }
 
 void UpdateFriendsListJob::EnumerateFriends() {
     mFriendsListJobState = kEnumeratingFriends;
-    ThePlatformMgr.EnumerateFriends(unkb4, unkbc, this);
+    ThePlatformMgr.EnumerateFriends(mFriendsCount, mFriendsList, this);
 }
 
 DataNode UpdateFriendsListJob::OnMsg(RCJobCompleteMsg const &msg) {
     MILO_ASSERT(mFriendsListJobState == kUpdatingFriends, 0x7d);
     if (msg.Success() && mProfile->HasValidSaveData()) {
-        mProfile->SetUploadFriendsToken(unkb8);
+        mProfile->SetUploadFriendsToken(mEnumerationToken);
     }
     mFriendsListJobState = kFriendsListState_3;
     return 1;

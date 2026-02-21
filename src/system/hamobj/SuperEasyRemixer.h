@@ -34,5 +34,5 @@ protected:
 
     std::vector<const MoveParent *> mSuperEasyParents; // 0x10c
     std::vector<const MoveVariant *> mSuperEasyVariants; // 0x118
-    bool unk124; // 0x124
+    bool mDataError; // 0x124
 };

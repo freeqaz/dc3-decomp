@@ -75,7 +75,7 @@ void UIListSlot::Draw(
         UIColor *uicolor;
         for (int i = 0; i < thesize; i++) {
             const UIListElementDrawState &curdrawstate = drawstate.mElements[i];
-            if (curdrawstate.unk0) {
+            if (curdrawstate.mActive) {
                 d10 = 1.0f;
                 uicolor = 0;
                 if (!box) {

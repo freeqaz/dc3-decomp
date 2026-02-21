@@ -90,9 +90,9 @@ public:
 class TaskTimeline {
 public:
     struct TaskInfo {
-        TaskInfo(Task *t, float f) : unk0(nullptr, t), unk14(f) {}
-        ObjPtr<Task> unk0;
-        float unk14;
+        TaskInfo(Task *t, float f) : mTask(nullptr, t), mStartTime(f) {}
+        ObjPtr<Task> mTask;
+        float mStartTime;
     };
 
     TaskTimeline();

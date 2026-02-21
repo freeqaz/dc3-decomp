@@ -285,11 +285,11 @@ AnimTask::AnimTask(
     bool b10
 )
     : mAnim(this), mListener(this), mAnimTarget(this), mBlendTask(this),
-      mBlendPeriod(blend), mLoop(loop), unka4(f9) {
+      mBlendPeriod(blend), mLoop(loop), mEasePower(f9) {
     mBlending = false;
     mBlendTime = 0;
-    unka8 = b10;
-    unkb0 = true;
+    mWait = b10;
+    mActive = true;
     mEaseFunc = GetEaseFunction(easeType);
     mListener = listener;
     MILO_ASSERT(anim, 0x213);
@@ -298,7 +298,7 @@ AnimTask::AnimTask(
     if (NearlyZero(fpu)) {
         fpu = 1;
     }
-    unkac = (mMax - mMin) / fpu;
+    mFrameSpan = (mMax - mMin) / fpu;
     if (start < end) {
         mScale = fpu;
         mOffset = mMin;

@@ -12,7 +12,7 @@ public:
     Symbol GetAward() const;
 
     Symbol mName;
-    int unk8;
+    int mIndex;
     Symbol mAward;
 
 protected:

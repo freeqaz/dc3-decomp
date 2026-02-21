@@ -28,14 +28,14 @@ public:
 protected:
     DataNode OnMsg(const UIChangedMsg &);
 
-    bool unk2c;
+    bool mScanActive; // 0x2c
     Timer mTimer; // 0x30
-    float unk60;
+    float mElapsedMs; // 0x60
     float mAngle; // 0x64
-    int unk68;
-    int unk6c;
-    int unk70; // 0x70 - some sort of state?
-    int unk74;
+    int mCycles; // 0x68
+    int mConsecutiveErrors; // 0x6c
+    int mState; // 0x70
+    int mPrevState; // 0x74
     int mDelayBetweenStates; // 0x78
     int mDelayBetweenRetry; // 0x7c
     int mUpDownCyclesPerScan; // 0x80
@@ -44,7 +44,7 @@ protected:
     float mCycleSafetyTimeout; // 0x8c
     XOVERLAPPED mOverlapped; // 0x90
     NUI_TILT_OBJECTS mTiltObjects; // 0xb0
-    DWORD unk180;
+    DWORD mTiltMovingFlags; // 0x180
     int unk184;
     int unk188;
     int unk18c;

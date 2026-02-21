@@ -166,7 +166,7 @@ protected:
     /** "Height offset of the floor disc" */
     float mSpotHeight; // 0x12c
     Transform mFloorSpotXfm; // 0x130
-    Transform unk170; // 0x170
+    Transform mLensXfm; // 0x170
     /** "Color of the spotlight" */
     Hmx::Color mColor; // 0x1b0
     /** "Intensity of the spotlight" */
@@ -190,10 +190,11 @@ protected:
         Note that it's easier to move a targetted spotlight
         in World space when in Milo." */
     ObjPtr<RndTransformable> mTarget; // 0x2dc
-    bool unk2f0;
+    bool mTargetLoaded; // true if mTarget loaded successfully
     /** "Reference object for floor height, uses spot target if not set" */
     ObjPtr<RndTransformable> mSpotTarget; // 0x2f4
-    float unk308;
+    /** Cached floor spot target Z coordinate, sentinel -1e33 when unset */
+    float mFloorSpotTargetZ;
     /** "Whether the target should cast a shadow" */
     bool mTargetShadow; // 0x30c
     /** "Can't optimize render end of render batching of light can with others" */

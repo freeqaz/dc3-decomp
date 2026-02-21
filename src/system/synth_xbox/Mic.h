@@ -54,10 +54,10 @@ public:
     void OnMicDisconnected();
 
     u8 unkc;
-    bool unkd;
+    bool mRunning;
     int unk10;
     bool mChangeNotify; // 0x14
-    Voice *unk18;
+    Voice *mPlaybackVoice;
     short unk1c[6144];
     short *unk301c;
     std::vector<short> unk3020;
@@ -81,7 +81,7 @@ public:
     u32 unk9088;
     Timer unk9090;
     int mDroppedSamples; // 0x90c0
-    Symbol unk90c4;
+    Symbol mDeviceName;
     bool mClipping; // 0x90c8
 
 private:
@@ -114,11 +114,11 @@ public:
     int unk1c;
     std::vector<MicManagerXbox::ChatBuffer> unk20;
     int unk2c;
-    bool unk30;
+    bool mMicsChanged;
     u32 unk34;
     Timer unk38;
     CriticalSection unk68;
-    int unk88;
+    int mPushToTalkPad;
 
 private:
     ~MicManagerXbox();

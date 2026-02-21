@@ -9,19 +9,19 @@ const int XLSPConnection::kTitleServerEnumMaxCount = 8;
 std::map<unsigned long, int> XLSPConnection::mXLSPRefCountMap;
 
 XLSPConnection::XLSPConnection()
-    : unk4((State)-1), unk8(0), unk14(0), unk18(INVALID_HANDLE_VALUE), unk1c(0),
-      unk20(0) {
+    : mState((State)-1), mConnectionRequest(0), mServiceId(0), mEnumHandle(INVALID_HANDLE_VALUE), mEnumBuffer(0),
+      mEnumBufferSize(0) {
     memset(&mXOverlapped, 0, sizeof(XOVERLAPPED));
     unk44 = 0;
-    unk48.Reset();
+    mReconnectTimer.Reset();
     SetState((State)0);
 }
 
 XLSPConnection::~XLSPConnection() { SetState((State)-1); }
 
 int XLSPConnection::ThreadStart() {
-    if (unk4 != 5) {
-        MILO_FAIL("Unhandled state %d in ThreadStart", unk4);
+    if (mState != 5) {
+        MILO_FAIL("Unhandled state %d in ThreadStart", mState);
     } else {
         XCancelOverlapped(&mXOverlapped);
     }
@@ -29,49 +29,49 @@ int XLSPConnection::ThreadStart() {
 }
 
 void XLSPConnection::ThreadDone(int i1) {
-    if (unk4 != 5) {
-        MILO_FAIL("Unhandled state %d in ThreadStart", unk4);
+    if (mState != 5) {
+        MILO_FAIL("Unhandled state %d in ThreadStart", mState);
     } else {
         memset(&mXOverlapped, 0, sizeof(XOVERLAPPED));
-        CloseHandle(unk18);
-        unk20 = 0;
-        unk18 = INVALID_HANDLE_VALUE;
-        if (unk1c) {
-            MemFree(unk1c, __FILE__, 299);
-            unk1c = nullptr;
+        CloseHandle(mEnumHandle);
+        mEnumBufferSize = 0;
+        mEnumHandle = INVALID_HANDLE_VALUE;
+        if (mEnumBuffer) {
+            MemFree(mEnumBuffer, __FILE__, 299);
+            mEnumBuffer = nullptr;
         }
         SetState((State)0);
     }
 }
 
 void XLSPConnection::Connect(const char *cc, unsigned int ui) {
-    unkc = cc;
-    unk14 = ui;
-    if (unk8 != 3) {
-        unk8 = 3;
+    mServerInfo = cc;
+    mServiceId = ui;
+    if (mConnectionRequest != 3) {
+        mConnectionRequest = 3;
     }
-    if (unk4 == 0) {
+    if (mState == 0) {
         SetState((State)1);
     }
 }
 
 void XLSPConnection::Disconnect() {
-    if (unk8 != 0) {
-        unk8 = 0;
+    if (mConnectionRequest != 0) {
+        mConnectionRequest = 0;
     }
-    if (unk4 > 0 && unk4 <= 4) {
+    if (mState > 0 && mState <= 4) {
         SetState((State)5);
     }
 }
 
 void XLSPConnection::StartEnumeration() {
-    DWORD res = XTitleServerCreateEnumerator(unkc.c_str(), 8, &unk20, &unk18);
+    DWORD res = XTitleServerCreateEnumerator(mServerInfo.c_str(), 8, &mEnumBufferSize, &mEnumHandle);
     if (res != ERROR_SUCCESS) {
         MILO_NOTIFY("XTitleServerCreateEnumerator failed with error %d", res);
         SetState((State)4);
     } else {
-        unk1c = _MemAllocTemp(unk20, __FILE__, 0x1CB, "XLSPConnection", 0);
-        res = XEnumerate(unk18, unk1c, unk20, nullptr, &mXOverlapped);
+        mEnumBuffer = _MemAllocTemp(mEnumBufferSize, __FILE__, 0x1CB, "XLSPConnection", 0);
+        res = XEnumerate(mEnumHandle, mEnumBuffer, mEnumBufferSize, nullptr, &mXOverlapped);
         if (res != ERROR_IO_PENDING) {
             MILO_NOTIFY("XEnumerate failed with error %d", res);
             SetState((State)4);

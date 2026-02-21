@@ -21,10 +21,10 @@ public:
     virtual bool IsSuccess() const = 0;
     virtual bool PurchaseMade() const = 0;
 
-    StorePurchaser(Symbol s, unsigned int i) : unk4(s), unk8(i) {}
+    StorePurchaser(Symbol s, unsigned int i) : mSource(s), mUserIndex(i) {}
 
-    Symbol unk4;
-    int unk8;
+    Symbol mSource;
+    int mUserIndex;
 };
 
 class XboxPurchaser : public StorePurchaser, public Hmx::Object {
@@ -50,8 +50,8 @@ public:
 
     PurchaseState mState; // 0x38
     u32 unk3c;
-    unsigned long long unk40;
-    int unk48;
+    unsigned long long mOfferID;
+    int mUserIndex;
 
 private:
     DataNode OnMsg(UIChangedMsg const &);
@@ -74,9 +74,9 @@ public:
     );
 
     PurchaseState mState;                  // 0x38 - Current purchase state
-    std::vector<unsigned long long> unk3c; // Offer IDs to purchase
-    int unk48;                             // User index
-    DWORD unk4c;                           // Count of items selected by user
+    std::vector<unsigned long long> mOfferIDs; // Offer IDs to purchase
+    int mUserIndex;                             // User index
+    DWORD mSelectedCount;                       // Count of items selected by user
 
 private:
     DataNode OnMsg(UIChangedMsg const &);

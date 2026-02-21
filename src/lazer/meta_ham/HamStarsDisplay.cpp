@@ -77,9 +77,9 @@ void HamStarsDisplay::SetSongImpl(int songID, Difficulty diff, StarDisplayMode m
             }
             case 3: {
                 MILO_ASSERT(diff == kNumDifficulties, 0x67);
-                if (status.unk7c != kNumDifficulties) {
+                if (status.mLastPlayedDifficulty != kNumDifficulties) {
                     u11 = true;
-                    c10 = status.unk79;
+                    c10 = status.mLastNoFlashcards;
                 }
                 break;
             }

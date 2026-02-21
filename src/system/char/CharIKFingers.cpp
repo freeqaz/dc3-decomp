@@ -9,7 +9,7 @@ CharIKFingers::CharIKFingers()
     : mHand(nullptr), mForeArm(nullptr), mUpperArm(nullptr), mBlendInFrames(0),
       mBlendOutFrames(0), mResetHandDest(1), mResetCurHandTrans(1),
       mFingerCurledLength(0.85), mHandMoveForward(1), mHandPinkyRotation(-0.06),
-      mHandThumbRotation(0.23), mHandDestOffset(-0.4), mIsRightHand(1), unk16d(0),
+      mHandThumbRotation(0.23), mHandDestOffset(-0.4), mIsRightHand(1), mMoveHand(0),
       mIsSetup(0), mOutputTrans(this), mKeyboardRefBone(this) {
     mFingers.resize(5);
     mCurHandTrans.Zero();
@@ -255,9 +255,9 @@ void CharIKFingers::PollDeps(
 void CharIKFingers::Highlight() {
     for (int i = 0; i < 5; i++) {
         FingerDesc desc(mFingers[i]);
-        if (desc.unk0) {
-            UtilDrawSphere(desc.unk8, 0.2f, Hmx::Color(1, 0, 0), 0);
-            UtilDrawSphere(desc.unk18, 0.2f, Hmx::Color(0, 1, 0), 0);
+        if (desc.mIsEngaged) {
+            UtilDrawSphere(desc.mTargetWorldPos, 0.2f, Hmx::Color(1, 0, 0), 0);
+            UtilDrawSphere(desc.mRefWorldPos, 0.2f, Hmx::Color(0, 1, 0), 0);
             UtilDrawAxes(desc.mFinger01->WorldXfm(), 1.0f, Hmx::Color(1, 1, 1));
             TheRnd.DrawLine(
                 desc.mFinger01->WorldXfm().v,
@@ -306,7 +306,7 @@ void CharIKFingers::Poll() {
             float f8 = 1.0f;
             int i1 = -1;
             for (int i = 0; i < 5; i++) {
-                if (mFingers[i].unk0) {
+                if (mFingers[i].mIsEngaged) {
                     if (i1 == -1)
                         i1 = i;
                     i3++;
@@ -331,7 +331,7 @@ void CharIKFingers::Poll() {
                 for (int i = 2; i <= 4; i++) {
                     FingerDesc &prevFinger = mFingers[i - 1];
                     FingerDesc &curFinger = mFingers[i];
-                    if (!curFinger.unk0) {
+                    if (!curFinger.mIsEngaged) {
                         if (i == 4) {
                             FixSingleFinger(
                                 prevFinger.mFinger01, curFinger.mFinger01, nullptr

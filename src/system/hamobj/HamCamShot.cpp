@@ -19,12 +19,12 @@ std::list<HamCamShot::TargetCache> HamCamShot::sCache;
 
 HamCamShot::HamCamShot()
     : mTargets(this), mMinTime(0), mMaxTime(0), mZeroTime(0), mPlayerFlag(kHamPlayerOff),
-      mNextShots(this), mCurrentShot(this), unk2cc(0), unk2d0(0), unk2d4(0), unk2d8(0),
-      unk2dc(0), unk2dd(0), mMasterAnims(this), unk2f4(0), unk2f8(this), unk30c(this),
+      mNextShots(this), mCurrentShot(this), unk2cc(0), unk2d0(0), mInSetFrame(0), mTotalDuration(0),
+      mListingShots(0), unk2dd(0), mMasterAnims(this), mOriginalSizeNextShots(0), unk2f8(this), unk30c(this),
       unk320(this), unk340(this), unk354(this), unk368(this), unk388(false) {
     mNearPlane = 10;
     mFarPlane = 10000;
-    unk2b4 = 0;
+    mNextShotIt = 0;
 }
 
 BEGIN_HANDLERS(HamCamShot)
@@ -39,7 +39,7 @@ BEGIN_HANDLERS(HamCamShot)
     HANDLE(list_all_next_shots, OnListAllNextShots)
     HANDLE_EXPR(find_target, FindTarget(_msg->Sym(2)))
     HANDLE(list_targets, OnListTargets)
-    HANDLE_EXPR(get_original_size_next_shots, unk2f4)
+    HANDLE_EXPR(get_original_size_next_shots, mOriginalSizeNextShots)
     HANDLE_ACTION(flip_target_anim_groups, FlipTargetAnimGroups())
     HANDLE_SUPERCLASS(CamShot)
 END_HANDLERS
@@ -143,7 +143,7 @@ void HamCamShot::StartAnim() {
         }
     }
     Reteleport(Vector3::ZeroVec(), true, gNullStr);
-    unk2d8 = GetTotalDuration();
+    mTotalDuration = GetTotalDuration();
     static Message camshot_changed("camshot_changed");
     TheHamProvider->Export(camshot_changed, true);
     sCache.clear();
@@ -172,18 +172,18 @@ bool HamCamShot::TargetTeleportTransform(Symbol s, Transform &xfm) {
 bool HamCamShot::IterateNextShot() {
     bool ret = true;
     MILO_ASSERT(!mNextShots.empty(), 0x166);
-    ObjPtrList<HamCamShot>::iterator it = unk2b4;
+    ObjPtrList<HamCamShot>::iterator it = mNextShotIt;
     if (it == 0) {
         it = mNextShots.begin();
     } else {
-        unk2b4.mNode = it.mNode->next;
-        if (unk2b4.mNode == 0) {
+        mNextShotIt.mNode = it.mNode->next;
+        if (mNextShotIt.mNode == 0) {
             ret = false;
         } else {
             return ret;
         }
     }
-    unk2b4 = it;
+    mNextShotIt = it;
     return ret;
 }
 
@@ -276,18 +276,18 @@ void HamCamShot::TeleportTarget(RndTransformable *trans, const Transform &xfm, b
 }
 
 void HamCamShot::ResetNextShot() {
-    unk2b4 = 0;
+    mNextShotIt = 0;
     mCurrentShot = this;
     unk2cc = 0;
     unk2d0 = 0;
 }
 
 bool HamCamShot::ListNextShots(std::list<HamCamShot *> &shots) {
-    if (unk2dc) {
+    if (mListingShots) {
         MILO_NOTIFY("%s infinite camera shot loop detected!", PathName(this));
         return false;
     } else {
-        unk2dc = true;
+        mListingShots = true;
         for (ObjPtrList<HamCamShot>::iterator it = mNextShots.begin();
              it != mNextShots.end();
              it) {
@@ -298,7 +298,7 @@ bool HamCamShot::ListNextShots(std::list<HamCamShot *> &shots) {
                 ++it;
             }
         }
-        unk2dc = false;
+        mListingShots = false;
         return true;
     }
 }
@@ -333,14 +333,14 @@ void HamCamShot::CheckNextShots() {
     std::list<HamCamShot *> shots;
     ListNextShots(shots);
     if (TheLoadMgr.EditMode()) {
-        unk2f4 = mNextShots.size();
+        mOriginalSizeNextShots = mNextShots.size();
     }
 }
 
 float HamCamShot::EndFrame() { return GetTotalDuration(); }
 
 void HamCamShot::SetFrameEx(float frame, float blend) {
-    unk2d4 = true;
+    mInSetFrame = true;
     SetFrame(frame, blend);
-    unk2d4 = false;
+    mInSetFrame = false;
 }

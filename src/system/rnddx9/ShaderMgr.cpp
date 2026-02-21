@@ -45,7 +45,7 @@ DxShader::~DxShader() {
 void DxShader::Select(bool b1) {
     D3DDevice_SetVertexShader(TheDxRnd.Device(), mVShader);
     D3DDevice_SetPixelShader(TheDxRnd.Device(), b1 ? nullptr : mPShader);
-    if (TheRnd.Unk140()) {
+    if (TheRnd.ResourceCached()) {
         float min, max;
         EstimatedCost(min, max);
         static float div = SystemConfig("rnd", "estimated_cost_divisor")->Float(1);

@@ -35,18 +35,18 @@ public:
         MovePlayerData() : mCurMove(nullptr) {}
         void Reset() {
             mCurMove = nullptr;
-            unk30 = nullptr;
+            mPhraseMeter = nullptr;
             mFeedback = nullptr;
-            unk38 = nullptr;
-            unk2c = 0;
+            mTextFeedback = nullptr;
+            mFeedbackMode = 0;
         }
         ObjPtr<HamMove> mCurMove; // 0x0
-        std::vector<DetectFrame> unk14; // 0x14
-        std::vector<HamMoveKey> unk20; // 0x20
-        int unk2c; // 0x2c
-        HamPhraseMeter *unk30; // 0x30
+        std::vector<DetectFrame> mDetectFrames; // 0x14
+        std::vector<HamMoveKey> mMoveKeys; // 0x20
+        int mFeedbackMode; // 0x2c
+        HamPhraseMeter *mPhraseMeter; // 0x30
         CharFeedback *mFeedback; // 0x34
-        RndDrawable *unk38; // 0x38
+        RndDrawable *mTextFeedback; // 0x38
     };
     // Hmx::Object
     virtual ~MoveDir();
@@ -154,8 +154,8 @@ protected:
     ObjPtr<SkeletonClip> mPlayClip; // 0x294
     /** "Clip to use for song recording" */
     ObjPtr<SkeletonClip> mRecordClip; // 0x2a8
-    ObjPtr<SkeletonClip> unk2bc; // 0x2bc
-    ObjPtr<SkeletonClip> unk2d0; // 0x2d0
+    ObjPtr<SkeletonClip> mAlternateRecordClip; // 0x2bc
+    ObjPtr<SkeletonClip> mSkeletonRecordClip; // 0x2d0
     int unk2e4; // 0x2e4
     /** "If set, report will be limited to this move" */
     ObjPtr<HamMove> mReportMove; // 0x2e8
@@ -164,7 +164,7 @@ protected:
     bool mFiltersEnabled; // 0x304
     Hmx::Object *mGamePanel; // 0x308
     float unk30c; // 0x30c
-    float unk310; // 0x310
+    float mDebugLoopMarker; // 0x310
     FilterQueue *mFilterQueue; // 0x314
     MovePlayerData mMovePlayerData[2]; // 0x318
     MoveAsyncDetector *mAsyncDetector; // 0x390
@@ -177,19 +177,19 @@ protected:
     HamMove *filler[2]; // 0x3c8
     HamMove *mCurMove[2]; // 0x3d0
     float mCurMoveNormalizedResult[2]; // 0x3d8
-    float unk3e8[2]; // 0x3e8
+    float mPrevMoveNormalizedResult[2]; // 0x3e8
     MoveRating mCurMoveRating[2]; // 0x3e0
-    int unk3f0[2]; // 0x3f0
+    int mPrevMoveRating[2]; // 0x3f0
 
     int mFinishingMoveMeasure; // 0x3f8
     RndOverlay *mMoveOverlay; // 0x3fc
     ObjPtr<DancerSequence> mDancerSeq; // 0x400
     DancerSkeleton *unk414; // 0x414
     SkeletonViz *mSkeletonViz; // 0x418
-    int unk41c; // 0x41c
+    int mShowErrorFrames; // 0x41c
     /** "Offset debug skeleton by latency offset" */
     bool mDebugLatencyOffset; // 0x420
-    Skeleton unk424; // 0x424
+    Skeleton mDebugSkeleton; // 0x424
     bool mDebugLoop; // 0xef8
     float mLastPollMs; // 0xefc
     /** "Show collision debug" */

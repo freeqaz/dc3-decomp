@@ -4,16 +4,16 @@
 #include "synth/SynthSample.h"
 
 SampleInst::SampleInst(SynthSample *sample)
-    : unk38(this, sample), mVolume(1), mBankVolume(1), mPan(0), mBankPan(0), mSpeed(1),
+    : mSample(this, sample), mVolume(1), mBankVolume(1), mPan(0), mBankPan(0), mSpeed(1),
       mBankSpeed(1), mSend(this), mEventReceiver(this), unk98(-1), unka0(0), unka1(0) {
-    if (unk38) {
-        unk38->RegisterChild(this);
+    if (mSample) {
+        mSample->RegisterChild(this);
     }
 }
 
 SampleInst::~SampleInst() {
-    if (unk38) {
-        unk38->UnregisterChild(this);
+    if (mSample) {
+        mSample->UnregisterChild(this);
     }
 }
 

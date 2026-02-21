@@ -7,13 +7,13 @@ FlowManager *TheFlowMgr;
 
 FlowManager::FlowManager() : unk2c(0), unk2d(0), mPollables(this) {
     mFlowQueue.clear();
-    unk94 = 0;
-    unk7c = 0;
-    unk80 = 0;
-    unk18c = 0;
-    unk190 = 0;
+    mFrameCounterModulo = 0;
+    mFrameTimeAccumulator = 0;
+    mPeakFrameTime = 0;
+    mLastFrameTime = 0;
+    mElapsedTime = 0;
     for (int i = 0; i < 60; i++) {
-        unk98[i] = 0;
+        mFrameTimeSamples[i] = 0;
     }
     mFlowOverlay = RndOverlay::Find("flow", false);
     mFlowPeakOverlay = RndOverlay::Find("flow_peak", false);
@@ -36,26 +36,26 @@ void FlowManager::QueueCommand(FlowNode *n, FlowNode::QueueState q) {
 void FlowManager::CancelCommand(FlowNode *n) { mFlowQueue[n] = FlowNode::kImmediate; }
 
 void FlowManager::AddEventTime(Symbol s, float f1) {
-    float fsub = f1 - unk190;
+    float fsub = f1 - mElapsedTime;
     if (unk64.find(s) != unk64.end()) {
         DataNode &n = unk64[s];
         float f7 = n.Array()->Float(0);
         int i5 = n.Array()->Int(1);
-        float f8 = n.Array()->Float(2) + unk190;
+        float f8 = n.Array()->Float(2) + mElapsedTime;
         i5++;
         n.Array()->Node(0) = f7 + fsub;
         n.Array()->Node(1) = i5;
         n.Array()->Node(2) = f8;
     } else {
-        DataArrayPtr ptr(fsub, 1, unk190);
+        DataArrayPtr ptr(fsub, 1, mElapsedTime);
         unk64[s] = ptr;
     }
-    unk190 = 0;
+    mElapsedTime = 0;
 }
 
 void FlowManager::Poll() {
-    float f31 = unk18c;
-    unk18c = 0;
+    float f31 = mLastFrameTime;
+    mLastFrameTime = 0;
     Timer timer;
     timer.Reset();
     unk2d = true;
@@ -75,8 +75,8 @@ void FlowManager::Poll() {
     }
 
     unk2d = false;
-    float f27 = timer.Ms() - unk18c;
-    unk190 = f27 + unk7c + f31;
+    float f27 = timer.Ms() - mLastFrameTime;
+    mElapsedTime = f27 + mFrameTimeAccumulator + f31;
 
     float f30 = -1.0f;
     float f29 = -1.0f;
@@ -90,31 +90,31 @@ void FlowManager::Poll() {
 
         if (!(fval < f30)) {
             f30 = fval;
-            unk7c = fval;
+            mFrameTimeAccumulator = fval;
         }
         if (!(fval2 < f29)) {
             f29 = fval2;
         }
     }
 
-    float total = f27 + f31 + unk7c;
+    float total = f27 + f31 + mFrameTimeAccumulator;
 
-    if (total > unk80) {
-        unk80 = total;
-        unk94++;
-        if (unk94 >= 0x3C) {
-            unk80 = 0;
+    if (total > mPeakFrameTime) {
+        mPeakFrameTime = total;
+        mFrameCounterModulo++;
+        if (mFrameCounterModulo >= 0x3C) {
+            mPeakFrameTime = 0;
             float avg = 0;
             for (int i = 0; i < 60; i++) {
-                avg += unk98[i];
+                avg += mFrameTimeSamples[i];
             }
-            unk94 = 0;
-            unk190 = avg * 0.01666667f;
+            mFrameCounterModulo = 0;
+            mElapsedTime = avg * 0.01666667f;
         }
     }
 
     unk64.clear();
-    unk7c = 0;
-    unk18c = 0;
+    mFrameTimeAccumulator = 0;
+    mLastFrameTime = 0;
     unk2c = false;
 }

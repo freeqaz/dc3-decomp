@@ -39,7 +39,7 @@ private:
     stlpmtx_std::list<Voice *, stlpmtx_std::StlNodeAlloc<Voice *>> mPendingVoices; // 0x802C
 
     unsigned char *mStreamBuf; // 0x8034
-    Voice *unk8038;            // 0x8038
+    Voice *mSlipVoice;          // 0x8038
     Voice *mVoice;             // 0x803C
     int mSampleRate;           // 0x8040
     int mNumBufs;              // 0x8044
@@ -47,8 +47,8 @@ private:
     float mPan;                // 0x804C
     float mSpeed;              // 0x8050
     ADSRImpl mADSR;            // 0x8054
-    int unk8078;               // 0x8078
-    bool unk807C;              // 0x807C
+    int mFxSend;                // 0x8078
+    bool mTagged;               // 0x807C
 };
 
 StreamReceiver *New360Receiver(int, int, bool, int);

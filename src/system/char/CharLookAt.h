@@ -68,12 +68,12 @@ protected:
     float mMaxWeightYaw; // 0x84
     /** "Max speed in weight/sec that the auto-weight can change" */
     float mWeightYawSpeed; // 0x88
-    Vector3 unk8c; // 0x8c
-    float unk9c; // 0x9c
+    Vector3 mPivotLookTarget; // 0x8c
+    float mPivotLookWeight; // 0x9c
     /** "radius in degrees of filtered source motion that's allowed through" */
     float mSourceRadius; // 0xa0
     Vector3 unka4; // 0xa4
-    Box unkb4; // 0xb4
+    Box mLookLimits; // 0xb4
     /** "Graphically show the extreme ranges of motion" */
     bool mShowRange; // 0xd4
     /** "Graphically show range of motion with user specified values" */
@@ -86,7 +86,7 @@ protected:
         keeps the local pivot z axis down to prevent rolling.
         Eyeballs can't roll, for instance, but heads can." */
     bool mAllowRoll; // 0xe0
-    bool unke1;
+    bool mDisableRoll;
     /** "If enabled, high frequency noise is added to pitch and/or yaw each frame" */
     bool mEnableJitter; // 0xe2
     /** "if enable_jitter is on, random noise from

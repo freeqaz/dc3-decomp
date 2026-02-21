@@ -7,11 +7,11 @@
 
 #pragma region UIListLabel
 
-UIListLabel::UIListLabel() : mLabel(this), unk8c(0) {}
+UIListLabel::UIListLabel() : mLabel(this), mHighlightAltStyles(0) {}
 
 BEGIN_PROPSYNCS(UIListLabel)
     SYNC_PROP(label, mLabel)
-    SYNC_PROP(highlight_alt_styles, unk8c)
+    SYNC_PROP(highlight_alt_styles, mHighlightAltStyles)
     SYNC_SUPERCLASS(UIListSlot)
 END_PROPSYNCS
 
@@ -19,7 +19,7 @@ BEGIN_SAVES(UIListLabel)
     SAVE_REVS(1, 1)
     SAVE_SUPERCLASS(UIListSlot)
     bs << mLabel;
-    bs << unk8c;
+    bs << mHighlightAltStyles;
 END_SAVES
 
 BEGIN_COPYS(UIListLabel)
@@ -27,7 +27,7 @@ BEGIN_COPYS(UIListLabel)
     CREATE_COPY_AS(UIListLabel, l)
     MILO_ASSERT(l, 0xba);
     COPY_MEMBER_FROM(l, mLabel)
-    COPY_MEMBER_FROM(l, unk8c)
+    COPY_MEMBER_FROM(l, mHighlightAltStyles)
 END_COPYS
 
 INIT_REVS(1, 0)

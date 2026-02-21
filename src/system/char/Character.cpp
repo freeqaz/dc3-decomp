@@ -49,10 +49,10 @@ private:
 
 Character::Character()
     : mLods(this), mLastLod(0), mForceLod(kLOD0), mShadow(this), mTranslucent(this),
-      mDriver(0), mSelfShadow(0), unk251(0), unk252(1), mSphereBase(this, this),
+      mDriver(0), mSelfShadow(0), mSpotCutout(0), mFloorShadow(1), mSphereBase(this, this),
       mBounding(Vector3(0, 0, 0), 0), mPollState(kCharCreated),
       mTest(new CharacterTest(this)), mFrozen(0), mDrawMode(kCharDrawAll), mTeleported(1),
-      unk2a0(this), mShowableProps(this), mDebugDrawInterestObjects(false) {}
+      mSavedEnviron(this), mShowableProps(this), mDebugDrawInterestObjects(false) {}
 
 Character::~Character() {
     UnhookShadow();
@@ -770,15 +770,15 @@ void Character::DrawLodOrShadow(int lod, DrawMode drawMode) {
             DrawShowing();
             // If opaque-only, save environment state
             if (drawMode == 1) {
-                unk2a0 = RndEnviron::Current();
-                unk2b4 = RndEnviron::CurrentPos();
+                mSavedEnviron = RndEnviron::Current();
+                mSavedEnvironPos = RndEnviron::CurrentPos();
             }
         }
         // Draw translucent geometry (bit 1)
         if (drawMode & 2) {
             // If translucent-only, restore saved environment
             if (drawMode == 2) {
-                RndEnvironTracker tracker(unk2a0, unk2b4);
+                RndEnvironTracker tracker(mSavedEnviron, mSavedEnvironPos);
                 DrawShowing();
                 return;
             }

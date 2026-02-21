@@ -15,7 +15,7 @@
 class RhythmDetector : public RndPollable, public SkeletonCallback {
 public:
     struct Frame {
-        float unk0; // 0x0 time created?
+        float mTime; // 0x0
         std::vector<Vector3> mJointVelocities; // 0x4 - could be vec<vec3> - ghidra
                                                // doesnt make it clear
     };
@@ -27,7 +27,7 @@ public:
         float unkc; // 0xc
         float unk10; // 0x10
         float unk14; // 0x14
-        bool unk18; // 0x18
+        bool mFinalized; // 0x18
         std::vector<Frame> frames; // 0x1c
     };
 
@@ -76,10 +76,10 @@ protected:
     bool mTracked; // 0xc
     char mRecording; // 0xd - used in recording funcs
     int mSkeletonID; // 0x10
-    std::list<Frame> unk14; // 0x14
-    Frame unk1c; // 0x1c
-    std::vector<Frame> unk2c; // 0x2c
-    std::vector<Frame> unk38; // 0x38
+    std::list<Frame> mFrameHistory; // 0x14
+    Frame mCurrentFrame; // 0x1c
+    std::vector<Frame> mAnalysisFrames1; // 0x2c
+    std::vector<Frame> mAnalysisFrames2; // 0x38
     float mBeats; // 0x44
     float mGroove; // 0x48
     float mRhythmDecay; // 0x4c
@@ -92,7 +92,7 @@ protected:
     DebugGraph *mDebugGraphC; // 0x74
     DebugGraph *mDebugGraphD; // 0x78
     DebugGraph *mDebugGraphE; // 0x7c
-    int unk80; // 0x80
+    int mDivergenceCounter; // 0x80
     char buffer[0xA00]; // 0x84 some big ass buffer maybe who knows
     float mTimestamps[8]; // 0xa84 - cached beat timestamps
     int unkaa4;

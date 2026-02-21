@@ -44,14 +44,15 @@
 #include "xdk/xapilibi/xbox.h"
 
 HamProfile::HamProfile(int i1)
-    : Profile(i1), mAccProgress(this), unk2fc(0), mInFitnessMode(0), mFitnessPounds(130),
-      mIsFitnessWeightEntered(0), mFitnessTime(0), mFitnessCalories(0), unk310(0),
-      mUploadFriendsToken(0), mOnlineID(new OnlineID()), mSignedIn(0), unk320(0),
-      unk324(0), mSkippedSongCount(0), unk32c(0), unk330(0), unk334(0), unk338(gNullStr),
-      mIsFitnessGoalSet(0), mFitnessGoalStartDay(0), mFitnessGoalStartMonth(0),
-      mFitnessGoalStartYear(0), mFitnessGoalDaysActive(0), mFitnessGoalCalories(0),
-      mTrackedDaysActive(0), mTrackedCalories(0), unk35c(0), unk360(0), mProfileTime(0),
-      unk368(0), unk36c(1), unk370(0), unk374(3) {
+    : Profile(i1), mAccProgress(this), mPlaylistNeedsRefresh(0), mInFitnessMode(0),
+      mFitnessPounds(130), mIsFitnessWeightEntered(0), mFitnessTime(0), mFitnessCalories(0),
+      mCurrentSessionCalories(0), mUploadFriendsToken(0), mOnlineID(new OnlineID()),
+      mSignedIn(0), mProfileSaveCounter(0), unk324(0), mSkippedSongCount(0),
+      mProfileFlags(0), unk330(0), unk334(0), unk338(gNullStr), mIsFitnessGoalSet(0),
+      mFitnessGoalStartDay(0), mFitnessGoalStartMonth(0), mFitnessGoalStartYear(0),
+      mFitnessGoalDaysActive(0), mFitnessGoalCalories(0), mTrackedDaysActive(0),
+      mTrackedCalories(0), unk35c(0), unk360(0), mProfileTime(0), unk368(0),
+      mNagNeedsRefresh(1), mCurrentNagIndex(0), mCompletedNagsMask(3) {
     mSaveSizeMethod = SaveSize;
     mSongStatusMgr = new SongStatusMgr(&TheHamSongMgr);
     mStats = new MetagameStats();
@@ -111,12 +112,12 @@ void HamProfile::SaveFixed(FixedSizeSaveableStream &fs) const {
     fs << mTrackedDaysActive;
     fs << mTrackedCalories;
     fs << unk35c;
-    fs << unk32c;
+    fs << mProfileFlags;
     fs << mProfileTime;
     fs << unk368;
-    fs << unk36c;
-    fs << unk370;
-    fs << unk374;
+    fs << mNagNeedsRefresh;
+    fs << mCurrentNagIndex;
+    fs << mCompletedNagsMask;
     fs << mIsFitnessGoalSet;
     fs << unk360;
     const_cast<HamProfile *>(this)->mDirty = false;
@@ -165,16 +166,16 @@ void HamProfile::LoadFixed(FixedSizeSaveableStream &fs, int i2) {
     fs >> mTrackedCalories;
     fs >> unk35c;
     mSkippedSongCount = 0;
-    fs >> unk32c;
+    fs >> mProfileFlags;
     fs >> mProfileTime;
     fs >> unk368;
-    fs >> unk36c;
-    fs >> unk370;
-    fs >> unk374;
+    fs >> mNagNeedsRefresh;
+    fs >> mCurrentNagIndex;
+    fs >> mCompletedNagsMask;
     fs >> mIsFitnessGoalSet;
     fs >> unk360;
     mDirty = false;
-    unk2fc = false;
+    mPlaylistNeedsRefresh = false;
 }
 
 BEGIN_HANDLERS(HamProfile)
@@ -264,7 +265,7 @@ bool HamProfile::IsUnsaved() const {
         return true;
     }
 
-    if (mRank->UnkCA()) {
+    if (mRank->HasXpAwarded()) {
         return true;
     }
 
@@ -301,14 +302,14 @@ void HamProfile::DeleteAll() {
     }
     mIsFitnessWeightEntered = false;
     mInFitnessMode = false;
-    unk320 = 0;
+    mProfileSaveCounter = 0;
     mFitnessPounds = 130;
     unk324 = 0;
     mFitnessTime = 0;
     mIsFitnessGoalSet = false;
     mFitnessCalories = 0;
     mFitnessGoalStartDay = 0;
-    unk310 = 0;
+    mCurrentSessionCalories = 0;
     mFitnessGoalStartMonth = 0;
     mFitnessGoalStartYear = 0;
     mFitnessGoalDaysActive = 0;
@@ -320,9 +321,9 @@ void HamProfile::DeleteAll() {
     mSkippedSongCount = 0;
     mProfileTime = 0;
     unk368 = 0;
-    unk36c = true;
-    unk370 = 0;
-    unk374 = 3;
+    mNagNeedsRefresh = true;
+    mCurrentNagIndex = 0;
+    mCompletedNagsMask = 3;
     Profile::DeleteAll();
 }
 
@@ -468,7 +469,7 @@ void HamProfile::SetFitnessPounds(float lbs) {
 void HamProfile::GetFitnessStats(float &time, float &calories, float &f3) {
     time = mFitnessTime;
     calories = mFitnessCalories;
-    f3 = unk310;
+    f3 = mCurrentSessionCalories;
 }
 
 void HamProfile::DiscardRecentCampaignProgress() {
@@ -485,9 +486,9 @@ void HamProfile::UpdateOnlineID() {
 }
 
 bool HamProfile::NeedsToBeNagged() {
-    if (unk370 == 3) {
+    if (mCurrentNagIndex == 3) {
         return false;
-    } else if (unk36c) {
+    } else if (mNagNeedsRefresh) {
         return unk368 >= 2;
     } else {
         return unk368 >= 4;
@@ -495,16 +496,16 @@ bool HamProfile::NeedsToBeNagged() {
 }
 
 Symbol HamProfile::Nag() {
-    if (unk36c) {
-        unk36c = false;
+    if (mNagNeedsRefresh) {
+        mNagNeedsRefresh = false;
     }
     static Symbol main_screen("main_screen");
     static const char *sNagScreens[] = { "pre_redeem_code_nag_screen",
                                          "pre_facebook_nag_screen",
                                          "pre_mobile_app_nag_screen" };
     Symbol out;
-    if ((1 << unk370) & unk374) {
-        out = Symbol(sNagScreens[unk370]);
+    if ((1 << mCurrentNagIndex) & mCompletedNagsMask) {
+        out = Symbol(sNagScreens[mCurrentNagIndex]);
     } else {
         MILO_NOTIFY(
             "Attempted to nag, but there is no valid nag screen! Just going to main menu..."
@@ -518,16 +519,16 @@ Symbol HamProfile::Nag() {
 void HamProfile::CompleteCurrentNag(bool b1) {
     if (IsOkToUpdateProfile()) {
         if (b1) {
-            unk374 ^= (1 << unk370);
+            mCompletedNagsMask ^= (1 << mCurrentNagIndex);
         }
         int i;
         for (i = 0; i < 3; i++) {
-            unk370 = (unk370 + 1) % 3;
-            if ((1 << unk370) & unk374)
+            mCurrentNagIndex = (mCurrentNagIndex + 1) % 3;
+            if ((1 << mCurrentNagIndex) & mCompletedNagsMask)
                 break;
         }
         if (i == 3) {
-            unk370 = 3;
+            mCurrentNagIndex = 3;
         }
         MakeDirty();
         if (TheSaveLoadMgr) {
@@ -539,21 +540,21 @@ void HamProfile::CompleteCurrentNag(bool b1) {
 void HamProfile::CompleteNag(int i1, bool b2) {
     if (IsOkToUpdateProfile()) {
         if (b2) {
-            unk374 ^= (1 << i1);
+            mCompletedNagsMask ^= (1 << i1);
         }
-        if (unk370 != i1) {
+        if (mCurrentNagIndex != i1) {
             if (!b2) {
                 return;
             }
         } else {
             int i;
             for (i = 0; i < 3; i++) {
-                unk370 = (unk370 + 1) % 3;
-                if ((1 << unk370) & unk374)
+                mCurrentNagIndex = (mCurrentNagIndex + 1) % 3;
+                if ((1 << mCurrentNagIndex) & mCompletedNagsMask)
                     break;
             }
             if (i == 3) {
-                unk370 = 3;
+                mCurrentNagIndex = 3;
             }
         }
         MakeDirty();
@@ -566,9 +567,9 @@ void HamProfile::CompleteNag(int i1, bool b2) {
 void HamProfile::ResetNags() {
     if (IsOkToUpdateProfile()) {
         unk368 = 0;
-        unk36c = true;
-        unk370 = 0;
-        unk374 = 3;
+        mNagNeedsRefresh = true;
+        mCurrentNagIndex = 0;
+        mCompletedNagsMask = 3;
         MakeDirty();
         if (TheSaveLoadMgr) {
             TheSaveLoadMgr->AutoSave();
@@ -649,8 +650,8 @@ void HamProfile::ClearFitnessGoalNeedUpload() {
 }
 
 void HamProfile::RefreshPlaylists() {
-    if (IsOkToUpdateProfile() && unk2fc) {
-        unk2fc = false;
+    if (IsOkToUpdateProfile() && mPlaylistNeedsRefresh) {
+        mPlaylistNeedsRefresh = false;
         TheHamSongMgr.InitializePlaylists();
     }
 }
@@ -788,7 +789,7 @@ void HamProfile::SetFitnessStats(int, float calories, float time) {
         int nearestCalories = Round(calories);
         mFitnessTime += nearestTime;
         mFitnessCalories += nearestCalories;
-        unk310 = nearestCalories;
+        mCurrentSessionCalories = nearestCalories;
         mStats->IncrementCount((MetagameStats::CountStatID)0xC, nearestTime);
         mStats->IncrementCount((MetagameStats::CountStatID)0xD, nearestCalories);
         if (mStats->GetCount((MetagameStats::CountStatID)0xD) >= 100) {
@@ -817,10 +818,10 @@ void HamProfile::SaveLoadComplete(ProfileSaveState state) {
     static ProfileChangedMsg msg(this);
     msg[0] = this;
     TheProfileMgr.Handle(msg, false);
-    if (unk320 == 0) {
+    if (mProfileSaveCounter == 0) {
         int padnum = GetPadNum();
         if (ThePlatformMgr.IsSignedIntoLive(padnum)) {
-            unk320 = 1;
+            mProfileSaveCounter = 1;
             ThePlatformMgr.QueueEnumJob(
                 new SingleItemEnumJob(this, padnum, 0x373307d200000004)
             );
@@ -937,7 +938,7 @@ void HamProfile::UnlockContent(Symbol content) {
             mUnlockedContent.push_back(content);
             MarkContentNew(content);
             mDirty = true;
-            unk2fc = true;
+            mPlaylistNeedsRefresh = true;
         }
     }
 }
@@ -959,10 +960,10 @@ int HamProfile::SaveSize(int i1) {
 }
 
 DataNode HamProfile::OnMsg(const SingleItemEnumCompleteMsg &msg) {
-    if (unk320 != 1) {
+    if (mProfileSaveCounter != 1) {
         return 0;
     }
-    unk320 = 0;
+    mProfileSaveCounter = 0;
     return 0;
 }
 
@@ -1011,7 +1012,7 @@ void HamProfile::UpdateBattleScore(
     if (IsOkToUpdateProfile()) {
         if (playerdata) {
             mRank->UpdateScore(songID, playerdata, mSongStatusMgr, stars, 0);
-            mDirty = mDirty || mRank->UnkCA();
+            mDirty = mDirty || mRank->HasXpAwarded();
         }
         bool updatedSong = mSongStatusMgr->UpdateBattleSong(songID, stars, b);
         mDirty = mDirty || updatedSong;
@@ -1035,7 +1036,7 @@ void HamProfile::UpdateScore(
     if (IsOkToUpdateProfile()) {
         if (playerdata) {
             mRank->UpdateScore(songID, playerdata, mSongStatusMgr, score, stars);
-            mDirty = mDirty || mRank->UnkCA();
+            mDirty = mDirty || mRank->HasXpAwarded();
         }
         bool updateSong = mSongStatusMgr->UpdateSong(
             songID,

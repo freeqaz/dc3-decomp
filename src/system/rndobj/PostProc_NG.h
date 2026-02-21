@@ -65,10 +65,10 @@ protected:
 
     static void ReleaseTex();
 
-    float unk22c; // 0x22c
-    float unk230; // 0x230
+    float mRandomSeed1; // 0x22c
+    float mRandomSeed2; // 0x230
     float unk234; // 0x234
     float unk238; // 0x238
-    ObjPtrList<RndDrawable> unk23c; // 0x23c
-    bool unk250; // 0x250
+    ObjPtrList<RndDrawable> mMotionBlurDrawList; // 0x23c
+    bool mMotionBlurEnabled; // 0x250
 };

@@ -69,8 +69,8 @@ float LatencyCallback::UpdateOverlay(RndOverlay *o, float f2) {
 
 LoopVizCallback::LoopVizCallback()
     : mDebugMeter1(0.1f, 0.12f, 0.8f, 0.03f, Hmx::Color(0.1f, 0.1f, 0.1f)),
-      mDebugMeter2(0.25f, 0.19f, 0.5f, 0.03f, Hmx::Color(0, 0, 0.8f)), unk44(0), unk48(0),
-      unk4c(0), unk50(0), unk54(0), unk58(0) {}
+      mDebugMeter2(0.25f, 0.19f, 0.5f, 0.03f, Hmx::Color(0, 0, 0.8f)), mCurrLoopStart(0), mCurrLoopEnd(0),
+      mPrevLoopStart(0), mPrevLoopEnd(0), mLoopStartChangeTimer(0), mLoopEndChangeTimer(0) {}
 
 void LoopVizCallback::DrawHashMarks(
     float f1, float f2, float f3, int i4, int i5, bool b6
@@ -108,8 +108,8 @@ float LoopVizCallback::UpdateOverlay(RndOverlay *o, float y) {
     }
 
     // Decrement change notification timers
-    unk54 -= TheTaskMgr.DeltaSeconds();
-    unk58 -= TheTaskMgr.DeltaSeconds();
+    mLoopStartChangeTimer -= TheTaskMgr.DeltaSeconds();
+    mLoopEndChangeTimer -= TheTaskMgr.DeltaSeconds();
 
     // Draw semi-transparent background
     TheRnd.DrawRectScreen(
@@ -121,13 +121,13 @@ float LoopVizCallback::UpdateOverlay(RndOverlay *o, float y) {
     TheMaster->GetAudio()->GetCurrLoopBeats(loopStart, loopEnd);
 
     // Detect and track loop boundary changes
-    if (loopStart != unk44) {
-        unk54 = 3.0f; // Show change indicator for 3 seconds
-        unk44 = loopStart;
+    if (loopStart != mCurrLoopStart) {
+        mLoopStartChangeTimer = 3.0f; // Show change indicator for 3 seconds
+        mCurrLoopStart = loopStart;
     }
-    if (loopEnd != unk48) {
-        unk58 = 3.0f;
-        unk48 = loopEnd;
+    if (loopEnd != mCurrLoopEnd) {
+        mLoopEndChangeTimer = 3.0f;
+        mCurrLoopEnd = loopEnd;
     }
 
     // Calculate current playback position
@@ -179,10 +179,10 @@ float LoopVizCallback::UpdateOverlay(RndOverlay *o, float y) {
     mDebugMeter1.DrawLine(playheadPos, Hmx::Color(1.0f, 1.0f, 1.0f), 1.0f, 0.0f);
 
     // Draw loop boundary labels (highlight if recently changed)
-    Hmx::Color startColor = unk54 > 0 ? Hmx::Color(0, 0, 0) : Hmx::Color(1.0f, 1.0f, 1.0f);
+    Hmx::Color startColor = mLoopStartChangeTimer > 0 ? Hmx::Color(0, 0, 0) : Hmx::Color(1.0f, 1.0f, 1.0f);
     mDebugMeter1.DrawText(MakeString("%d", loopStart), loopStartNorm, 0.0f, startColor);
 
-    Hmx::Color endColor = 0 < unk54 ? Hmx::Color(0, 0, 0) : Hmx::Color(1.0f, 1.0f, 1.0f);
+    Hmx::Color endColor = 0 < mLoopStartChangeTimer ? Hmx::Color(0, 0, 0) : Hmx::Color(1.0f, 1.0f, 1.0f);
     mDebugMeter1.DrawText(MakeString("%d", loopEnd), loopEndNorm, 0.0f, endColor);
 
     // Draw current beat label
@@ -220,12 +220,12 @@ float LoopVizCallback::UpdateOverlay(RndOverlay *o, float y) {
     mDebugMeter2.DrawLine(loopProgress + latency, Hmx::Color(1.0f, 1.0f, 1.0f), 1.0f, 0.0f);
 
     // Draw loop boundary labels with change markers
-    Hmx::Color startColor2 = unk54 > 0 ? Hmx::Color(0, 0, 0) : Hmx::Color(1.0f, 1.0f, 1.0f);
-    char startMarker = unk54 > 0 ? '*' : ' ';
+    Hmx::Color startColor2 = mLoopStartChangeTimer > 0 ? Hmx::Color(0, 0, 0) : Hmx::Color(1.0f, 1.0f, 1.0f);
+    char startMarker = mLoopStartChangeTimer > 0 ? '*' : ' ';
     mDebugMeter2.DrawText(MakeString("%d%c", loopStart, startMarker), 0.0f, 0.0f, startColor2);
 
-    Hmx::Color endColor2 = unk58 > 0 ? Hmx::Color(0, 0, 0) : Hmx::Color(1.0f, 1.0f, 1.0f);
-    char endMarker = unk58 > 0 ? '*' : ' ';
+    Hmx::Color endColor2 = mLoopEndChangeTimer > 0 ? Hmx::Color(0, 0, 0) : Hmx::Color(1.0f, 1.0f, 1.0f);
+    char endMarker = mLoopEndChangeTimer > 0 ? '*' : ' ';
     mDebugMeter2.DrawText(MakeString("%d%c", loopEnd, endMarker), 1.0f, 0.0f, endColor2);
 
     // Draw current beat label
@@ -235,26 +235,26 @@ float LoopVizCallback::UpdateOverlay(RndOverlay *o, float y) {
     DrawHashMarks(0.19f + 0.03f, 0.25f, 0.5f, loopRange, loopStart, true);
 
     // Show change notifications at top of screen
-    if (unk54 > 0) {
+    if (mLoopStartChangeTimer > 0) {
         TheRnd.DrawStringScreen(
-            MakeString("Loop start changed from %d to %d", unk4c, loopStart),
+            MakeString("Loop start changed from %d to %d", mPrevLoopStart, loopStart),
             Vector2(0.1f, 0.25f),
             Hmx::Color(1.0f, 1.0f, 1.0f, 1.0f),
             true
         );
     } else {
-        unk4c = loopStart;
+        mPrevLoopStart = loopStart;
     }
 
-    if (unk58 > 0) {
+    if (mLoopEndChangeTimer > 0) {
         TheRnd.DrawStringScreen(
-            MakeString("Loop end changed from %d to %d", unk50, loopEnd),
+            MakeString("Loop end changed from %d to %d", mPrevLoopEnd, loopEnd),
             Vector2(0.1f, 0.27f),
             Hmx::Color(1.0f, 1.0f, 1.0f, 1.0f),
             true
         );
     } else {
-        unk50 = loopEnd;
+        mPrevLoopEnd = loopEnd;
     }
 
     return y;
@@ -267,12 +267,12 @@ GamePanel::GamePanel()
     : mGame(0), mTimeOverlay(RndOverlay::Find("time")),
       mLatencyOverlay(RndOverlay::Find("latency")),
       mFitnessOverlay(RndOverlay::Find("fitness")),
-      mLoopVizOverlay(RndOverlay::Find("loop_viz")), unk7c(0), mState(), unk84(0),
-      unk88("game_panel_load", 1), unkd8(0), unke8(0), unkec(-2), unkf0(0), unkf8(1),
-      unkfc(new Timer()), unk100(1), unk101(0), unk104(0), unk108(0) {
+      mLoopVizOverlay(RndOverlay::Find("loop_viz")), mStartPaused(0), mState(), mEndGameResult(0),
+      mPerformanceProfiler("game_panel_load", 1), mIsReplay(0), mJitterSampleCount(0), mJitterBufferIndex(-2), mCurrentJitterValue(0), unkf8(1),
+      mPauseCountInTimer(new Timer()), mNormalPauseEnabled(1), mCheatPaused(0), mPollLoadState(0), mSoundEventReceiverSet(0) {
     mFitnessFilters[0].SetPlayerIndex(0);
     mFitnessFilters[1].SetPlayerIndex(1);
-    unkdc.resize(32);
+    mFrameTimeSamples.resize(32);
     sFloat1 = sFloat2 = 0;
     MILO_ASSERT(!TheGamePanel, 0x9E);
     TheGamePanel = this;
@@ -281,11 +281,11 @@ GamePanel::GamePanel()
 
 GamePanel::~GamePanel() {
     TheGamePanel = nullptr;
-    RELEASE(unkfc);
+    RELEASE(mPauseCountInTimer);
 }
 
 BEGIN_HANDLERS(GamePanel)
-    HANDLE_ACTION(set_start_paused, unk7c = _msg->Int(2))
+    HANDLE_ACTION(set_start_paused, mStartPaused = _msg->Int(2))
     HANDLE_EXPR(in_intro, mState == kGameInIntro)
     HANDLE_EXPR(is_game_over, mState == kGameOver)
     HANDLE_EXPR(is_playing, mState == kGamePlaying)
@@ -309,7 +309,7 @@ BEGIN_PROPSYNCS(GamePanel)
     {
         static Symbol _s("replay");
         if (sym == _s && (_op & kPropGet)) {
-            return PropSync(unkd8, _val, _prop, _i + 1, _op);
+            return PropSync(mIsReplay, _val, _prop, _i + 1, _op);
         }
     }
     SYNC_SUPERCLASS(UIPanel)
@@ -323,8 +323,8 @@ void GamePanel::SetTypeDef(DataArray *def) {
 }
 
 void GamePanel::Load() {
-    unkd8 = false;
-    unk88.Start();
+    mIsReplay = false;
+    mPerformanceProfiler.Start();
     CreateGame();
     UIPanel::Load();
 }
@@ -333,7 +333,7 @@ void GamePanel::Enter() {
     TheTaskMgr.ClearTimelineTasks(kTaskSeconds);
     TheTaskMgr.ClearTimelineTasks(kTaskBeats);
     UIPanel::Enter();
-    unk88.Stop();
+    mPerformanceProfiler.Stop();
     Reset();
     SetPaused(false);
     ThePresenceMgr.SetInGame(TheHamSongMgr.GetSongIDFromShortName(TheGameData->GetSong()));
@@ -346,7 +346,7 @@ void GamePanel::Exit() {
     TheTaskMgr.ClearTimelineTasks(kTaskBeats);
     ThePresenceMgr.SetNotInGame();
     UIPanel::Exit();
-    unkd8 = true;
+    mIsReplay = true;
     for (int i = 0; i < 2; i++) {
         FitnessFilter *filter = GetFitnessFilter(i);
         if (filter) {
@@ -357,7 +357,7 @@ void GamePanel::Exit() {
     if (beatRepeatAnim) {
         beatRepeatAnim->SetFrame(4.0f, 1.0f);
     }
-    unk108 = false;
+    mSoundEventReceiverSet = false;
 }
 
 void GamePanel::Poll() {
@@ -366,14 +366,14 @@ void GamePanel::Poll() {
     if (!IsLoaded()) {
         return;
     } else {
-        if (unkfc->SplitMs() >= 100.0f) {
+        if (mPauseCountInTimer->SplitMs() >= 100.0f) {
             while (!FileDiscSpinUp()) {
                 MILO_LOG("Spinning up disc took longer than count in timer\n");
             }
             MILO_ASSERT(mState == kGamePlaying, 0x1C5);
             mGame->SetGamePaused(false, true, true);
-            unkfc->Reset();
-        } else if (unkfc->Running()) {
+            mPauseCountInTimer->Reset();
+        } else if (mPauseCountInTimer->Running()) {
             FileDiscSpinUp();
         }
         if (!mGame->Paused() && TheUIEventMgr->HasActiveDialogEvent()) {
@@ -384,7 +384,7 @@ void GamePanel::Poll() {
         if (mState == 0) {
             StartIntro();
         }
-        if (!unkfc->Running()) {
+        if (!mPauseCountInTimer->Running()) {
             mGame->Poll();
         }
         if (mState == kGameInIntro && TheTaskMgr.Seconds(TaskMgr::kRealTime) > -0.025f
@@ -429,14 +429,14 @@ bool GamePanel::IsLoaded() const {
     if (!UIPanel::IsLoaded()) {
         return false;
     } else {
-        return unk104 == 4;
+        return mPollLoadState == 4;
     }
 }
 
 void GamePanel::Unload() {
     UIPanel::Unload();
     RELEASE(mGame);
-    unk104 = 0;
+    mPollLoadState = 0;
     mPaused = false;
 }
 
@@ -462,9 +462,9 @@ FitnessFilter *GamePanel::GetFitnessFilter(int i1) {
 }
 
 void GamePanel::ResetJitter() {
-    unke8 = 0;
-    unkec = -2;
-    unkf0 = 0;
+    mJitterSampleCount = 0;
+    mJitterBufferIndex = -2;
+    mCurrentJitterValue = 0;
 }
 
 void GamePanel::CreateGame() {
@@ -482,10 +482,10 @@ void GamePanel::StartGame() {
 }
 
 void GamePanel::CheatPause(bool b1) {
-    unk101 = b1;
-    unk100 = false;
-    SetPaused(unk101);
-    unk100 = true;
+    mCheatPaused = b1;
+    mNormalPauseEnabled = false;
+    SetPaused(mCheatPaused);
+    mNormalPauseEnabled = true;
 }
 
 void GamePanel::UpdateFitnessOverlay() {
@@ -508,7 +508,7 @@ void GamePanel::StartIntro() {
     mState = kGameInIntro;
     static Message pick_intro("pick_intro");
     HandleType(pick_intro);
-    if (unk7c) {
+    if (mStartPaused) {
         mGame->SetTimePaused(true);
     }
     mGame->StartIntro();
@@ -554,9 +554,9 @@ void GamePanel::Reset() {
     }
     mGame->Reset();
     mState = (State)0;
-    unk84 = 0;
-    unkfc->Reset();
-    unk101 = false;
+    mEndGameResult = 0;
+    mPauseCountInTimer->Reset();
+    mCheatPaused = false;
     WorldDir *dir = TheHamDirector->GetVenueWorld();
     for (ObjDirItr<TexMovie> it(dir, true); it != nullptr; ++it) {
         it->Reset();
@@ -567,7 +567,7 @@ void GamePanel::Reset() {
 }
 
 void GamePanel::SetSoundEventReceiver() {
-    if (!unk108) {
+    if (!mSoundEventReceiverSet) {
         ObjectDir *hudPanel = DataVariable("hud_panel").Obj<ObjectDir>();
         ObjectDir *soundBank = hudPanel->Find<ObjectDir>("sound_bank", false);
         if (soundBank) {
@@ -576,7 +576,7 @@ void GamePanel::SetSoundEventReceiver() {
                     it->SetSoundEventReceiver(this);
                 }
             }
-            unk108 = true;
+            mSoundEventReceiverSet = true;
         }
     }
 }
@@ -602,7 +602,7 @@ void GamePanel::SetPausedHelper(bool paused, bool pauseSound) {
     }
 
     // Guard: if unpausing while cheat-paused, don't unpause
-    if (!paused && unk101) {
+    if (!paused && mCheatPaused) {
         return;
     }
 
@@ -614,19 +614,19 @@ void GamePanel::SetPausedHelper(bool paused, bool pauseSound) {
     mPaused = paused;
 
     // Handle pause count-in timer
-    if (unkfc->Running()) {
+    if (mPauseCountInTimer->Running()) {
         if (!paused) {
             MILO_NOTIFY(
                 "Trying to unpause while the count in is active; should not be possible!"
             );
         }
-        unkfc->Reset();
+        mPauseCountInTimer->Reset();
     } else {
         // Check if we should start pause count-in when unpausing during gameplay
-        if (unk100 && mState == kGamePlaying && !paused) {
+        if (mNormalPauseEnabled && mState == kGamePlaying && !paused) {
             if (TheGameMode->Property("pause_count_in")->Int() != 0) {
                 // Start the count-in timer instead of immediately unpausing
-                unkfc->Start();
+                mPauseCountInTimer->Start();
             } else {
                 // No count-in configured, unpause immediately
                 bool isIntroOrPlaying = (mState <= kGamePlaying);
@@ -730,8 +730,8 @@ DataNode GamePanel::OnMsg(const EndGameMsg &msg) {
         restart->Execute();
     } else {
         mState = kGameOver;
-        unk84 = msg.Result();
-        switch (unk84) {
+        mEndGameResult = msg.Result();
+        switch (mEndGameResult) {
         case 1: {
             Export(Message("game_won"), true);
             break;
@@ -759,10 +759,10 @@ bool GamePanel::IsPastStreamJumpPointOfNoReturn() {
 }
 
 void GamePanel::PollForLoading() {
-    unk104 = 0;
+    mPollLoadState = 0;
     UIPanel::PollForLoading();
     if (UIPanel::IsLoaded()) {
-        unk104 = 1;
+        mPollLoadState = 1;
         UIPanel *worldPanel = ObjectDir::Main()->Find<UIPanel>("world_panel");
         if (TheUI->TransitionScreen()
             && TheUI->TransitionScreen()->HasPanel(worldPanel)) {
@@ -773,14 +773,14 @@ void GamePanel::PollForLoading() {
                 return;
             }
         }
-        unk104 = 2;
+        mPollLoadState = 2;
         const DataNode *prop = TheGameMode->Property("load_chars");
         if (prop->Int() != 0 && !TheHamWardrobe->AllCharsLoaded()) {
             return;
         }
-        unk104 = 3;
+        mPollLoadState = 3;
         if (mGame->IsReady()) {
-            unk104 = 4;
+            mPollLoadState = 4;
         }
     }
 }

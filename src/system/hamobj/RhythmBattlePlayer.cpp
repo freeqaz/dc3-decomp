@@ -39,11 +39,11 @@ RhythmBattlePlayer::RhythmBattlePlayer()
       mOutTheZoneBadFlow(this), mSwagJackedFlow(this), mPhraseMeter(this),
       mTransConstraint(this), mBoxyWaistTrans(this), mBoxyman1(this), mBoxyman2(this),
       mTextFeedback(this), mMoveFeedback(this), mStealPart(this), mStealAnim(this),
-      mPlayer(0), mRhythmBattle(0), unk244(0), unk248(0), unk24c(0), unk250(0), unk258(0),
-      unk25c(0), mZoneLevel(0), mInTheZone(-2), unk270(0), unk274(0), mScore(0), mComboMeter(0),
-      mSwapped(false), unk294(-1), mSwagJackedState("none"), unk29c(0), unk2a4(false),
+      mPlayer(0), mRhythmBattle(0), mRhythmSuccessFraction(0), mFreshnessScore(0), mMaxRhythmInWindow(0), mFreshnessAccumulator(0), mWindowElapsedTime(0),
+      mLastBeatTime(0), mZoneLevel(0), mInTheZone(-2), mNormalizedRhythmScore(0), mNormalizedFreshnessScore(0), mScore(0), mComboMeter(0),
+      mSwapped(false), mDebugScoreValue(-1), mSwagJackedState("none"), unk29c(0), unk2a4(false),
       unk2a5(false),
-      unk2a8(0) {}
+      mFramesSinceLastTrigger(0) {}
 
 RhythmBattlePlayer::~RhythmBattlePlayer() {}
 
@@ -139,56 +139,56 @@ void RhythmBattlePlayer::Poll() {
                 TheGameData->Player(mPlayer)->GetSkeletonTrackingID()
             );
             RhythmDetector *rd = nullptr;
-            unk244 = 0;
-            unk248 = 0;
+            mRhythmSuccessFraction = 0;
+            mFreshnessScore = 0;
             if (skelIdx != -1 && sRhythmDetectorPanel->LoadedDir()) {
                 String name = MakeString("RhythmDetectorX%d.rhy", skelIdx);
                 rd = sRhythmDetectorPanel->LoadedDir()->Find<RhythmDetector>(
                     name.c_str(), false
                 );
             }
-            if (unk258 >= 1) {
+            if (mWindowElapsedTime >= 1) {
                 if (rd) {
                     const RhythmDetector::RecordData &recordData =
-                        rd->GetRecord(unk28c, unk290, false, "", nullptr);
-                    unk244 = recordData.unk10;
+                        rd->GetRecord(mScoringWindowStart, mScoringWindowEnd, false, "", nullptr);
+                    mRhythmSuccessFraction = recordData.unk10;
                     if (Unk2a8Check() && 1 < recordData.unk14) {
-                        unk244 = 1;
+                        mRhythmSuccessFraction = 1;
                     }
-                    unk248 = Unk2a8Check() ? 1 : rd->Freshness();
+                    mFreshnessScore = Unk2a8Check() ? 1 : rd->Freshness();
                 }
                 Symbol autoplay = TheGameData->Player(mPlayer)->Autoplay();
                 if (!autoplay.Null()) {
                     static Symbol move_ok("move_ok");
                     static Symbol maximum("maximum");
                     if (autoplay == move_ok) {
-                        unk244 = 1;
-                        unk248 = 0;
+                        mRhythmSuccessFraction = 1;
+                        mFreshnessScore = 0;
                     } else if (autoplay == maximum) {
-                        unk244 = 1;
-                        unk248 = 1;
+                        mRhythmSuccessFraction = 1;
+                        mFreshnessScore = 1;
                     } else {
-                        unk244 = RatingToDetectFrac(autoplay, nullptr);
-                        unk248 = 1;
+                        mRhythmSuccessFraction = RatingToDetectFrac(autoplay, nullptr);
+                        mFreshnessScore = 1;
                     }
                 }
             }
-            float f17 = f12 - unk25c;
+            float f17 = f12 - mLastBeatTime;
             if (f17 < 0) {
                 f17 = 0;
             }
-            float f13 = unk244 <= 0 && unk248 <= 0 ? 0.0f : 1.0f;
-            if (unk24c <= unk244) {
-                unk24c = unk244;
+            float f13 = mRhythmSuccessFraction <= 0 && mFreshnessScore <= 0 ? 0.0f : 1.0f;
+            if (mMaxRhythmInWindow <= mRhythmSuccessFraction) {
+                mMaxRhythmInWindow = mRhythmSuccessFraction;
             }
             if (unk2a4) {
-                unk24c = 0;
+                mMaxRhythmInWindow = 0;
             }
-            unk250 += unk248 * f17;
-            unk254 += f13 * f17;
-            unk258 += f17;
-            f13 = unk24c > 1.0f ? 1.0f : unk24c;
-            float f16 = 4.0f - unk258 - f17;
+            mFreshnessAccumulator += mFreshnessScore * f17;
+            mMovePresenceAccumulator += f13 * f17;
+            mWindowElapsedTime += f17;
+            f13 = mMaxRhythmInWindow > 1.0f ? 1.0f : mMaxRhythmInWindow;
+            float f16 = 4.0f - mWindowElapsedTime - f17;
             if (mPhraseMeter) {
                 f16 = Max(f16, 0.0f);
                 mPhraseMeter->SetRatingFrac(f13, f16);
@@ -214,7 +214,7 @@ void RhythmBattlePlayer::Poll() {
                 mBoxyman2->SetGrooviness(rd, rd);
             }
         }
-        unk25c = f12;
+        mLastBeatTime = f12;
     }
 }
 
@@ -296,8 +296,8 @@ void RhythmBattlePlayer::Enter() {
             DepthBuffer3DAttachment attachment;
             attachment.obj = mBoxyWaistTrans;
             attachment.player = mPlayer;
-            attachment.unk8 = 0;
-            attachment.unkc = Vector3::ZeroVec();
+            attachment.mJoint = 0;
+            attachment.mOffset = Vector3::ZeroVec();
             attachment.unk1c = 0;
             attachment.unk20 = 0;
             mBoxyman1->AddAttachment(attachment);
@@ -334,8 +334,8 @@ int RhythmBattlePlayer::InTheZone() const { return mInTheZone == 1; }
 float RhythmBattlePlayer::InAnimBeatLength() const { return 4.0f; }
 
 void RhythmBattlePlayer::SetWindow(float f1, float f2) {
-    unk28c = f1;
-    unk290 = f2;
+    mScoringWindowStart = f1;
+    mScoringWindowEnd = f2;
 }
 
 void RhythmBattlePlayer::SetInTheZone(int i, bool b1, bool b2) {
@@ -359,9 +359,9 @@ void RhythmBattlePlayer::AnimateIn() { AnimateBoxyState(0, true, false); }
 bool RhythmBattlePlayer::UpdateState() {
     mPrevInTheZone = mInTheZone;
     mPrevZoneLevel = mZoneLevel;
-    if (unk270 < 0.5f) {
+    if (mNormalizedRhythmScore < 0.5f) {
         mZoneLevel = 0;
-    } else if (unk274 >= 0.6f) {
+    } else if (mNormalizedFreshnessScore >= 0.6f) {
         mZoneLevel = 1;
     } else if (mZoneLevel <= 1) {
         mZoneLevel = 2;
@@ -378,7 +378,7 @@ void RhythmBattlePlayer::ResetCombo() {
         AnimateBoxyState(i, false, false);
 
     mPrevZoneLevel = 0;
-    unk2a8 = 0;
+    mFramesSinceLastTrigger = 0;
     mPrevInTheZone = mInTheZone;
     mComboMeter = 0.0f;
 }
@@ -473,24 +473,24 @@ void RhythmBattlePlayer::OnReset(RhythmBattle *rb) {
     static Symbol none("none");
     mRhythmBattle = rb;
     unk29c = 0;
-    unk27c = none;
+    mTrickSymbol = none;
     mZoneLevel = 0;
-    unk278 = 0;
+    mMoveConsistencyScore = 0;
     mPrevZoneLevel = 0;
-    unk254 = 0;
+    mMovePresenceAccumulator = 0;
     mScore = 0;
-    unk244 = 0;
+    mRhythmSuccessFraction = 0;
     mPrevInTheZone = -1;
-    unk248 = 0;
+    mFreshnessScore = 0;
     mInTheZone = -2;
     mComboMeter = 0;
-    unk250 = 0;
-    unk24c = 0;
-    unk258 = 0;
-    unk270 = 0;
-    unk274 = 0;
-    unk25c = 0;
-    unk2a0 = -1;
+    mFreshnessAccumulator = 0;
+    mMaxRhythmInWindow = 0;
+    mWindowElapsedTime = 0;
+    mNormalizedRhythmScore = 0;
+    mNormalizedFreshnessScore = 0;
+    mLastBeatTime = 0;
+    mPrevMaxFootY = -1;
     if (mResetComboAnim) {
         mResetComboAnim->Animate(
             mResetComboAnim->StartFrame(),
@@ -518,7 +518,7 @@ void RhythmBattlePlayer::OnReset(RhythmBattle *rb) {
     if (mBattleMeterStaleAnim) {
         mBattleMeterStaleAnim->SetFrame(mBattleMeterStaleAnim->EndFrame(), 1);
     }
-    unk2a8 = 0;
+    mFramesSinceLastTrigger = 0;
     UpdateScore(0);
     AnimateBoxyState(-1, false, false);
 }
@@ -550,10 +550,10 @@ void RhythmBattlePlayer::UpdateAnimations(Hmx::Object *handler) {
         player += 3;
         groove_passed[player] = none;
         Symbol playerNodeValue;
-        if (unk27c != none) {
+        if (mTrickSymbol != none) {
             groove_passed[1] = move_perfect;
-            playerNodeValue = unk27c;
-        } else if (unk270 < 0.5f) {
+            playerNodeValue = mTrickSymbol;
+        } else if (mNormalizedRhythmScore < 0.5f) {
             groove_passed[1] = move_bad;
             if (mPrevZoneLevel) {
                 playerNodeValue = rhythmbattle_groovelost;
@@ -580,13 +580,13 @@ void RhythmBattlePlayer::UpdateAnimations(Hmx::Object *handler) {
         }
         bool d13 = false;
         if (gDebugGroove) {
-            unk294 = unk270 * 100.0f;
+            mDebugScoreValue = mNormalizedRhythmScore * 100.0f;
         } else if (gDebugFresh) {
-            unk294 = unk274 * 100.0f;
+            mDebugScoreValue = mNormalizedFreshnessScore * 100.0f;
         }
-        if (unk294 != -1) {
-            MILO_LOG("measure score: %d\n", unk294);
-            unk294 = -1;
+        if (mDebugScoreValue != -1) {
+            MILO_LOG("measure score: %d\n", mDebugScoreValue);
+            mDebugScoreValue = -1;
         } else if (mSwagJackedState != none) {
             d13 = true;
             static Symbol rhythmbattle_swagjackeddd1("rhythmbattle_swagjackeddd1");
@@ -633,7 +633,7 @@ void RhythmBattlePlayer::UpdateAnimations(Hmx::Object *handler) {
 }
 
 void RhythmBattlePlayer::UpdateScore(Hmx::Object *handler) {
-    unk2a8++;
+    mFramesSinceLastTrigger++;
     if (mStealPart) {
         mStealPart->SetEmitRate(0, 0);
     }
@@ -649,36 +649,36 @@ void RhythmBattlePlayer::UpdateScore(Hmx::Object *handler) {
             sRhythmDetectorPanel->LoadedDir()->Find<RhythmDetector>(name.c_str(), false);
         if (rd) {
             const RhythmDetector::RecordData &recordData =
-                rd->GetRecord(unk28c, unk290, true, "", nullptr);
-            unk244 = recordData.unk10;
+                rd->GetRecord(mScoringWindowStart, mScoringWindowEnd, true, "", nullptr);
+            mRhythmSuccessFraction = recordData.unk10;
             if (Unk2a8Check() && 1 < recordData.unk14) {
-                unk244 = 1;
+                mRhythmSuccessFraction = 1;
             }
-            unk248 = Unk2a8Check() ? 1 : rd->Freshness();
+            mFreshnessScore = Unk2a8Check() ? 1 : rd->Freshness();
             Symbol autoplay = TheGameData->Player(mPlayer)->Autoplay();
             if (!autoplay.Null()) {
                 static Symbol move_ok("move_ok");
                 static Symbol maximum("maximum");
                 if (autoplay == move_ok) {
-                    unk244 = 1;
-                    unk248 = 0;
+                    mRhythmSuccessFraction = 1;
+                    mFreshnessScore = 0;
                 } else if (autoplay == maximum) {
-                    unk244 = 1;
-                    unk248 = 1;
+                    mRhythmSuccessFraction = 1;
+                    mFreshnessScore = 1;
                 } else {
-                    unk244 = RatingToDetectFrac(autoplay, nullptr);
-                    unk248 = 1;
+                    mRhythmSuccessFraction = RatingToDetectFrac(autoplay, nullptr);
+                    mFreshnessScore = 1;
                 }
             }
-            float set = unk244;
-            if (unk24c > unk244) {
-                set = unk24c;
+            float set = mRhythmSuccessFraction;
+            if (mMaxRhythmInWindow > mRhythmSuccessFraction) {
+                set = mMaxRhythmInWindow;
             }
-            unk24c = set;
+            mMaxRhythmInWindow = set;
         }
     }
     if (unk2a4) {
-        unk24c = 0;
+        mMaxRhythmInWindow = 0;
     }
     static Symbol none("none");
     static Symbol pose("pose");
@@ -687,11 +687,11 @@ void RhythmBattlePlayer::UpdateScore(Hmx::Object *handler) {
     static Symbol rhythmbattle_trickpose("rhythmbattle_trickpose");
     static Symbol rhythmbattle_trickgetlow("rhythmbattle_trickgetlow");
     static Symbol rhythmbattle_trickjump("rhythmbattle_trickjump");
-    unk27c = none;
-    unk278 = unk254 / unk258;
+    mTrickSymbol = none;
+    mMoveConsistencyScore = mMovePresenceAccumulator / mWindowElapsedTime;
     static Symbol autotrick(OptionStr("autotrick", "none"));
-    if ((unk278 < 0.5f || autotrick == pose) && mRhythmBattle->CanTrick(pose)) {
-        unk27c = rhythmbattle_trickpose;
+    if ((mMoveConsistencyScore < 0.5f || autotrick == pose) && mRhythmBattle->CanTrick(pose)) {
+        mTrickSymbol = rhythmbattle_trickpose;
     }
     skelIdx = TheGestureMgr->GetSkeletonIndexByTrackingID(
         TheGameData->Player(mPlayer)->GetSkeletonTrackingID()
@@ -702,31 +702,31 @@ void RhythmBattlePlayer::UpdateScore(Hmx::Object *handler) {
         float yRight = skeleton.TrackedJoints()[kJointFootRight].mJointPos[0].y;
         float yMin = yLeft < yRight ? yLeft : yRight;
         float yMax = yLeft > yRight ? yLeft : yRight;
-        if (unk2a0 != -1 && (yMin - unk2a0 > 0.1f) && mRhythmBattle->CanTrick(jump)) {
-            unk27c = rhythmbattle_trickjump;
+        if (mPrevMaxFootY != -1 && (yMin - mPrevMaxFootY > 0.1f) && mRhythmBattle->CanTrick(jump)) {
+            mTrickSymbol = rhythmbattle_trickjump;
         }
-        unk2a0 = yMax;
+        mPrevMaxFootY = yMax;
     }
-    unk270 = unk24c;
-    if (unk270 > 1) {
-        unk270 = 1;
+    mNormalizedRhythmScore = mMaxRhythmInWindow;
+    if (mNormalizedRhythmScore > 1) {
+        mNormalizedRhythmScore = 1;
     }
-    unk274 = unk250 / unk258;
-    if (unk274 > 1) {
-        unk274 = 1;
+    mNormalizedFreshnessScore = mFreshnessAccumulator / mWindowElapsedTime;
+    if (mNormalizedFreshnessScore > 1) {
+        mNormalizedFreshnessScore = 1;
     }
-    unk254 = 0;
-    unk250 = 0;
-    unk24c = 0;
-    unk258 = 0;
+    mMovePresenceAccumulator = 0;
+    mFreshnessAccumulator = 0;
+    mMaxRhythmInWindow = 0;
+    mWindowElapsedTime = 0;
     if (mPhraseMeter) {
         mPhraseMeter->SetRatingFrac(0, -1);
     }
     MILO_ASSERT(handler != NULL, 0x305);
-    if (unk27c == none) {
+    if (mTrickSymbol == none) {
         static Message m("rating_to_score", 0, 0);
-        m[0] = unk270;
-        m[1] = unk274;
+        m[0] = mNormalizedRhythmScore;
+        m[1] = mNormalizedFreshnessScore;
         DataNode handled = handler->HandleType(m);
         if (handled.Type() == kDataInt) {
             i10 = handled.Int();

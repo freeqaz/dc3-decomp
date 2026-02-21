@@ -160,7 +160,7 @@ namespace {
 };
 
 HttpGet::HttpGet(unsigned int ip, unsigned short port, const char *c1, const char *c2)
-    : mSocket(nullptr), mPath(c1), mPort(port), mState(-1), unk1c(false),
+    : mSocket(nullptr), mPath(c1), mPort(port), mState(-1), mFlags(false),
       mTimeoutMs(kDefaultTimeoutMs), mIP(ip), mHeaders(c2), mRecvBuf(nullptr), mRecvBufPos(0),
       mFileBuf(nullptr), mFileBufSize(0), mFileBufRecvPos(0), mRetryCount(0), mFailType(),
       mPrevState(kHttpGet_Nil) {
@@ -171,7 +171,7 @@ HttpGet::HttpGet(unsigned int ip, unsigned short port, const char *c1, const cha
 HttpGet::HttpGet(
     unsigned int ip, unsigned short port, const char *c1, unsigned char uc, const char *c2
 )
-    : mSocket(nullptr), mPath(c1), mPort(port), mState(-1), unk1c(uc & 3),
+    : mSocket(nullptr), mPath(c1), mPort(port), mState(-1), mFlags(uc & 3),
       mTimeoutMs(kDefaultTimeoutMs), mIP(ip), mHeaders(c2), mRecvBuf(nullptr), mRecvBufPos(0),
       mFileBuf(nullptr), mFileBufSize(0), mFileBufRecvPos(0), mRetryCount(0), mFailType() {
     SetState((uc & 4) == 0 ? kHttpGet_Pending : kHttpGet_Connecting);
@@ -385,7 +385,7 @@ void HttpGet::Poll() {
         return;
     case kHttpGet_ReceivingHeaders:
         if (mSocket->CanRead()) {
-            if (unk1c & 1) {
+            if (mFlags & 1) {
                 SetState(kHttpGet_Downloaded);
             } else {
                 SetState(kHttpGet_ReceivingBody);
@@ -424,7 +424,7 @@ void HttpGet::Poll() {
             }
             ParseHeader((char *)mRecvBuf, headerEnd, &lines);
             int statusCode = ParseStatusCode(lines);
-            unk68 = statusCode;
+            mHttpStatus = statusCode;
 
             if (statusCode != 200) {
                 bool is4xx;
@@ -450,7 +450,7 @@ void HttpGet::Poll() {
                 }
                 SetState(kHttpGet_Failed);
             } else {
-                if (unk1c & 2) {
+                if (mFlags & 2) {
                     SetState(kHttpGet_Downloaded);
                 } else {
                     int contentLen = GetContentLength(lines);
@@ -524,7 +524,7 @@ HttpPost::HttpPost(unsigned int ip, unsigned short port, const char *cc, unsigne
     post += newLine;
     post += "Connection: close";
     post += newLine;
-    unk94 = post.c_str();
+    mRequestHeaders = post.c_str();
 }
 
 HttpPost::~HttpPost() {}
@@ -532,15 +532,15 @@ HttpPost::~HttpPost() {}
 void HttpPost::SetContentLength(unsigned int len) {
     MILO_ASSERT(mContent, 0x3C1);
     mContentLength = len;
-    unk90 = len;
-    unk94 += "Content-Length: ";
-    unk94 += MakeString("%d\r\n", mContentLength);
-    unk94 += MakeString("\r\n");
+    mBytesRemaining = len;
+    mRequestHeaders += "Content-Length: ";
+    mRequestHeaders += MakeString("%d\r\n", mContentLength);
+    mRequestHeaders += MakeString("\r\n");
 }
 
 bool HttpPost::CanRetry() {
     if (mRetryCount < 3) {
-        unk90 = mContentLength;
+        mBytesRemaining = mContentLength;
         return true;
     }
     return false;
@@ -549,8 +549,8 @@ bool HttpPost::CanRetry() {
 void HttpPost::StartSending() {
     MILO_ASSERT(mSocket, 0x3CD);
     if (mSocket->CanSend()) {
-        unk9c = unk94.length();
-        if (mSocket->Send(unk94.c_str(), unk9c) == unk9c) {
+        mHeaderLength = mRequestHeaders.length();
+        if (mSocket->Send(mRequestHeaders.c_str(), mHeaderLength) == mHeaderLength) {
             SetState(kHttpGet_SendingBody);
             return;
         }
@@ -562,7 +562,7 @@ void HttpPost::StartSending() {
 void HttpPost::Sending() {
     MILO_ASSERT(mSocket, 0x3EF);
     String debugStr;
-    int start = mContentLength - unk90;
+    int start = mContentLength - mBytesRemaining;
     if (start < (int)mContentLength) {
         do {
             debugStr += MakeString("%c", mContent[start]);
@@ -570,15 +570,15 @@ void HttpPost::Sending() {
         } while (start < (int)mContentLength);
     }
     int sent = mSocket->Send(
-        mContent + mContentLength - unk90, unk90
+        mContent + mContentLength - mBytesRemaining, mBytesRemaining
     );
     if (sent == -1) {
         mFailType = kHttpFail_Send;
         SetState(kHttpGet_FailedSend);
-    } else if (sent != unk90) {
-        unk90 = unk90 - sent;
+    } else if (sent != mBytesRemaining) {
+        mBytesRemaining = mBytesRemaining - sent;
     } else {
-        unk90 = 0;
+        mBytesRemaining = 0;
         SetState(kHttpGet_ReceivingHeaders);
     }
 }

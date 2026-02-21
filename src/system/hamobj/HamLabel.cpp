@@ -10,7 +10,7 @@
 #include "utl/Str.h"
 
 HamLabel::HamLabel()
-    : UITransitionHandler(this), unk178(""), unk180(0), mCanHaveFocus(0) {}
+    : UITransitionHandler(this), mPendingText(""), mPendingMarkup(0), mCanHaveFocus(0) {}
 
 HamLabel::~HamLabel() {}
 
@@ -68,16 +68,16 @@ void HamLabel::PostLoad(BinStream &bs) {
 }
 
 void HamLabel::Count(int i1, int i2, float f3, Symbol s) {
-    unk168.clear();
-    unk168.push_back(Key<float>(TheTaskMgr.UISeconds() * 1000, i1));
-    unk168.push_back(Key<float>((float)(i2) + f3, i2));
-    unk174 = s;
+    mCountKeys.clear();
+    mCountKeys.push_back(Key<float>(TheTaskMgr.UISeconds() * 1000, i1));
+    mCountKeys.push_back(Key<float>((float)(i2) + f3, i2));
+    mCountToken = s;
 }
 
 void HamLabel::FinishCount() {
-    if (unk168.size() >= 2) {
-        SetTokenFmt(unk174, LocalizeSeparatedInt(unk168[1].value, TheLocale));
-        unk168.clear();
+    if (mCountKeys.size() >= 2) {
+        SetTokenFmt(mCountToken, LocalizeSeparatedInt(mCountKeys[1].value, TheLocale));
+        mCountKeys.clear();
     }
 }
 
@@ -92,13 +92,13 @@ void HamLabel::SetMoveName(HamMove *move) {
 
 void HamLabel::Poll() {
     UILabel::Poll();
-    if (unk168.size() >= 2) {
+    if (mCountKeys.size() >= 2) {
         float f3 = 0;
         float ui_ms = TheTaskMgr.UISeconds() * 1000;
-        unk168.AtFrame(ui_ms, f3);
-        SetTokenFmt(unk174, LocalizeSeparatedInt(0, TheLocale));
+        mCountKeys.AtFrame(ui_ms, f3);
+        SetTokenFmt(mCountToken, LocalizeSeparatedInt(0, TheLocale));
         if (f3 < ui_ms) {
-            unk168.clear();
+            mCountKeys.clear();
             auto _tmp1 = HamLabelCountDoneMsg(this);
             TheUI->Handle(_tmp1, false);
         }
@@ -107,15 +107,15 @@ void HamLabel::Poll() {
 }
 
 void HamLabel::SetDisplayText(const char *cc, bool b2) {
-    if (!streq(cc, unk178.c_str()) || b2 != unk180) {
-        unk178 = cc;
-        unk180 = b2;
+    if (!streq(cc, mPendingText.c_str()) || b2 != mPendingMarkup) {
+        mPendingText = cc;
+        mPendingMarkup = b2;
         UITransitionHandler::StartValueChange();
     }
 }
 
 void HamLabel::FinishValueChange() {
-    UILabel::SetDisplayText(unk178.c_str(), unk180);
+    UILabel::SetDisplayText(mPendingText.c_str(), mPendingMarkup);
     UITransitionHandler::FinishValueChange();
 }
 

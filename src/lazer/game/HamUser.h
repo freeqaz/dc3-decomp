@@ -21,5 +21,5 @@ protected:
     HamUser(int);
 
     int unk4;
-    int unk8; // 0x8 - player index
+    int mPlayerIndex; // 0x8
 };

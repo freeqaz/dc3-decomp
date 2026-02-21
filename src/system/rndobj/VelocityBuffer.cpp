@@ -22,9 +22,9 @@ bool RndXfmCache::GetXfms(
 }
 
 RndVelocityBuffer::RndVelocityBuffer()
-    : unk36be8(0), unk36c6c(0), mFrame(0), mVelocityTex(nullptr), mMat(nullptr),
-      unk36c7c(nullptr) {
-    memset(&unk8, 0, 0xa4);
+    : unk36be8(0), mActiveXfmCacheIndex(0), mFrame(0), mVelocityTex(nullptr), mMat(nullptr),
+      mLastFrameCamera(nullptr) {
+    memset(&mViewProjXfm, 0, 0xa4);
 }
 
 void RndVelocityBuffer::CacheCameraSettings(RndCam *camera) {
@@ -32,18 +32,18 @@ void RndVelocityBuffer::CacheCameraSettings(RndCam *camera) {
     Transform tfa0;
     Hmx::Matrix4 me0;
     camera->GetViewProjectXfms(tfa0, me0);
-    unk8 = tfa0 * me0;
-    camera->GetDepthRangeValues(unk48);
-    camera->GetCamFrustum(unk58, unk68);
+    mViewProjXfm = tfa0 * me0;
+    camera->GetDepthRangeValues(mDepthRangeValues);
+    camera->GetCamFrustum(mFrustumNear, mFrustumCorners);
     mCam = camera;
 }
 
 bool RndVelocityBuffer::AdvanceFrame(RndCam *cam) {
-    unk36c80 = false;
-    unk36c6c ^= 1;
+    mFrameAdvanced = false;
+    mActiveXfmCacheIndex ^= 1;
     mFrame++;
-    if (cam != unk36c7c) {
-        unk36c7c = cam;
+    if (cam != mLastFrameCamera) {
+        mLastFrameCamera = cam;
         mFrame = 0;
     }
     return (unsigned int)mFrame >= 2;

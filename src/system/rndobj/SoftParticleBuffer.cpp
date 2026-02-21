@@ -4,7 +4,7 @@
 #include "os/Debug.h"
 #include "rndobj/Tex.h"
 
-RndSoftParticleBuffer::RndSoftParticleBuffer() : unk38(4), unk3c(this) {
+RndSoftParticleBuffer::RndSoftParticleBuffer() : unk38(4), mSoftParticleDrawList(this) {
     for (int i = 0; i < 2; i++) {
         mSurfaces[i] = nullptr;
     }

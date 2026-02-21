@@ -243,9 +243,9 @@ public:
     bool mHasYellowCymbal; // 0x81
     bool mHasBlueCymbal; // 0x82
     bool mHasSecondaryPedal; // 0x83
-    Hmx::Object *unk84; // 0x84 - some sort of Hmx::Object*
-    BreedData unk88; // 0x88
-    BreedData *unk94; // 0x94
+    Hmx::Object *mBreedCallback; // 0x84 - callback object for breed data read/write results
+    BreedData mBreedData; // 0x88
+    BreedData *mBreedDataDest; // 0x94
     int unk98;
     int unk9c;
     int unka0;
@@ -256,7 +256,7 @@ public:
     int unkb4;
     int unkb8;
     int unkbc;
-    bool unkc0;
+    bool mEepromWriteDone;
     int unkc4;
     int unkc8;
     int unkcc;

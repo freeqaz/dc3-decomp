@@ -8,7 +8,7 @@
 
 NetCacheLoader::NetCacheLoader(FileCache *f, const String &s)
     : mState(kS_Nil), mCache(f), mRemotePath(s), mFileLoader(0), mFileLoaderBuffer(0),
-      mNetLoader(0), mNetLoaderBuffer(0), unk20(0) {
+      mNetLoader(0), mNetLoaderBuffer(0), mFailType(0) {
     if (TheNetCacheMgr->IsLocalFile(mRemotePath.c_str())) {
         SetState((NetCacheLoader::State)0);
     } else {
@@ -52,7 +52,7 @@ char *NetCacheLoader::GetBuffer() {
 
 void NetCacheLoader::WriteToCache() {
     if (!TheNetCacheMgr->IsReady()) {
-        unk20 = 0;
+        mFailType = 0;
         SetState((NetCacheLoader::State)4);
     } else {
         MILO_ASSERT(!mNetLoaderBuffer, 0x103);
@@ -86,12 +86,12 @@ void NetCacheLoader::Poll() {
                 MILO_LOG(
                     "Failed to find file on server: %s\n", mNetLoader->GetRemotePath()
                 );
-                unk20 = 2;
+                mFailType = 2;
             } else {
                 MILO_NOTIFY(
                     "NetCacheLoader failed for file: %s", mNetLoader->GetRemotePath()
                 );
-                unk20 = 1;
+                mFailType = 1;
             }
             SetState((NetCacheLoader::State)4);
         }

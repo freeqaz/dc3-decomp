@@ -77,11 +77,11 @@ BEGIN_COPYS(DanceRemixer)
         for (int i = 0; i < 2; i++) {
             COPY_MEMBER(mUnscoredMeasures[i])
         }
-        COPY_MEMBER(unk30)
-        COPY_MEMBER(unk48)
+        COPY_MEMBER(mPendingVariants)
+        COPY_MEMBER(mNeedsUpdate)
         COPY_MEMBER(mFromMeasure)
         COPY_MEMBER(mToMeasure)
-        COPY_MEMBER(unk54)
+        COPY_MEMBER(mJumpMap)
     END_COPYING_MEMBERS
 END_COPYS
 
@@ -96,26 +96,26 @@ void DanceRemixer::Init(int x) {
     mTotalMeasures = x;
     for (int i = 0; i < 2; i++) {
         TheMoveMgr->mMoveParents[i].resize(mTotalMeasures);
-        TheMoveMgr->unk134[i].resize(mTotalMeasures);
-        TheMoveMgr->unk150[i].resize(mTotalMeasures);
+        TheMoveMgr->mPreferredVariants[i].resize(mTotalMeasures);
+        TheMoveMgr->mRoutineMeasures[i].resize(mTotalMeasures);
     }
     ClearJump();
     HandleType(Message("post_init"));
 }
 
 void DanceRemixer::Reset() {
-    unk30.clear();
-    unk48 = false;
+    mPendingVariants.clear();
+    mNeedsUpdate = false;
     ClearJump();
     for (int i = 0; i < 2; i++) {
         for (int j = 0; j < mTotalMeasures; j++) {
             TheMoveMgr->mMoveParents[i][j] = 0;
-            TheMoveMgr->unk134[i][j] = 0;
-            TheMoveMgr->unk150[i][j] = std::make_pair<const MoveVariant *, const MoveVariant *>(0, 0);
+            TheMoveMgr->mPreferredVariants[i][j] = 0;
+            TheMoveMgr->mRoutineMeasures[i][j] = std::make_pair<const MoveVariant *, const MoveVariant *>(0, 0);
         }
         mUnscoredMeasures[i].clear();
     }
-    TheMoveMgr->unk168 = 1;
+    TheMoveMgr->mRoutineLoaded = 1;
     HandleType(Message("post_reset"));
 }
 
@@ -141,7 +141,7 @@ void DanceRemixer::PostMoveFinished() {
     }
     for (int i = 0; i < 2; i++) {
         if (ScoredDanceMeasure(i, moveIdx)) {
-            const MoveVariant *mv = TheMoveMgr->unk150[i][moveIdx].first;
+            const MoveVariant *mv = TheMoveMgr->mRoutineMeasures[i][moveIdx].first;
             if (mv) {
                 const char *hamMoveName = mv->HamMoveName().Str();
                 HamMove *move = moveDir->Find<HamMove>(hamMoveName, false);
@@ -166,22 +166,22 @@ bool DanceRemixer::ScoredDanceMeasure(int x, int y) const {
 
 void DanceRemixer::UpdateHamDirector() {
     for (int i = 0; i < 2; i++) {
-        const auto &mvs_list = TheMoveMgr->unk150[i];
+        const auto &mvs_list = TheMoveMgr->mRoutineMeasures[i];
         for (int j = 0; j < mvs_list.size(); j++) {
             if (j <= mFromMeasure || j >= mToMeasure) {
                 std::pair<const MoveVariant *, const MoveVariant *> mvs = mvs_list[j];
                 if (mvs.first) {
-                    unk48 |= unk30.insert(mvs.first).second;
+                    mNeedsUpdate |= mPendingVariants.insert(mvs.first).second;
                 }
                 if (mvs.second && mvs.second != mvs.first) {
-                    unk48 |= unk30.insert(mvs.second).second;
+                    mNeedsUpdate |= mPendingVariants.insert(mvs.second).second;
                 }
             }
         }
     }
-    if (unk48 && TheHamDirector->IsMoveMergerFinished()) {
-        TheHamDirector->LoadRoutineBuilderData(unk30, true);
-        unk48 = false;
+    if (mNeedsUpdate && TheHamDirector->IsMoveMergerFinished()) {
+        TheHamDirector->LoadRoutineBuilderData(mPendingVariants, true);
+        mNeedsUpdate = false;
     }
 }
 
@@ -217,19 +217,19 @@ void DanceRemixer::ClearUnscoredMeasureRange(int x, int y, int z) {
 }
 
 // Adds a move to the routine at the given measure, then propagates it to all jump targets
-// originating from that measure (if any are registered in unk54)
+// originating from that measure (if any are registered in mJumpMap)
 void DanceRemixer::AddRoutineMove(
     int player, int measure, const MoveParent *moveParent, const MoveVariant *moveVariant
 ) {
     // Set the move at the initial measure
     TheMoveMgr->mMoveParents[player][measure] = moveParent;
-    TheMoveMgr->unk134[player][measure] = moveVariant;
+    TheMoveMgr->mPreferredVariants[player][measure] = moveVariant;
     TheMoveMgr->FillInRoutineAt(player, measure);
-    TheMoveMgr->InsertMoveInSong(TheMoveMgr->unk150[player][measure].first, measure, player);
+    TheMoveMgr->InsertMoveInSong(TheMoveMgr->mRoutineMeasures[player][measure].first, measure, player);
 
     // Propagate the same move to all jump targets from this measure
-    std::map<int, int>::iterator it = unk54.find(measure);
-    for (; it != unk54.end(); ++it) {
+    std::map<int, int>::iterator it = mJumpMap.find(measure);
+    for (; it != mJumpMap.end(); ++it) {
         int jumpTarget = it->second;
         if (jumpTarget >= mTotalMeasures) {
             MILO_NOTIFY(
@@ -241,8 +241,8 @@ void DanceRemixer::AddRoutineMove(
         }
         // Apply the same move at the jump target measure
         TheMoveMgr->mMoveParents[player][jumpTarget] = moveParent;
-        TheMoveMgr->unk134[player][jumpTarget] = moveVariant;
+        TheMoveMgr->mPreferredVariants[player][jumpTarget] = moveVariant;
         TheMoveMgr->FillInRoutineAt(player, jumpTarget);
-        TheMoveMgr->InsertMoveInSong(TheMoveMgr->unk150[player][jumpTarget].first, jumpTarget, player);
+        TheMoveMgr->InsertMoveInSong(TheMoveMgr->mRoutineMeasures[player][jumpTarget].first, jumpTarget, player);
     }
 }

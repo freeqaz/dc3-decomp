@@ -39,24 +39,24 @@ void AccomplishmentCharacterListConditional::Configure(DataArray *i_pConfig) {
             if (pCharConditionEntryArray->Node(0).Sym(0) == characters) {
                 for (int j = 1; j < pCharConditionEntryArray->Size(); j++) {
                     Symbol sym = pCharConditionEntryArray->Node(j).Sym();
-                    unk70.push_back(sym);
+                    mCharacters.push_back(sym);
                 }
             }
             if (pCharConditionEntryArray->Node(0).Sym(0) == crews) {
                 for (int j = 1; j < pCharConditionEntryArray->Size(); j++) {
                     Symbol sym = pCharConditionEntryArray->Node(j).Sym();
-                    unk7c.push_back(sym);
+                    mCrews.push_back(sym);
                 }
             } else if (pCharConditionEntryArray->Node(0).Sym(0) == oldoutfits) {
                 for (int j = 1; j < pCharConditionEntryArray->Size(); j++) {
                     Symbol sym = pCharConditionEntryArray->Node(j).Sym();
-                    unk88.push_back(sym);
+                    mOldOutfits.push_back(sym);
                 }
             } else if (pCharConditionEntryArray->Node(0).Sym(0) == unlockableoutfits) {
                 for (int j = 1; j < pCharConditionEntryArray->Size(); j++) {
                     Symbol sym = pCharConditionEntryArray->Node(j).Sym();
-                    unk94.push_back(sym);
-                    unka0.push_back(false);
+                    mUnlockableOutfits.push_back(sym);
+                    mOutfitEquipped.push_back(false);
                 }
             }
         }
@@ -82,9 +82,9 @@ bool AccomplishmentCharacterListConditional::AreOldOutfitListConditionsMet() {
             } else {
                 bool p1 = false;
                 bool p2 = false;
-                if (1 < unk88.size()) {
-                    for (int i = 0; i < unk88.size(); i++) {
-                        Symbol curOutfit = unk88[i];
+                if (1 < mOldOutfits.size()) {
+                    for (int i = 0; i < mOldOutfits.size(); i++) {
+                        Symbol curOutfit = mOldOutfits[i];
                         if (pPlayer1Data->Outfit() == curOutfit
                             && pPlayer1Data->IsPlaying()) {
                             p1 = true;
@@ -112,11 +112,11 @@ bool AccomplishmentCharacterListConditional::AreCharacterListConditionsMet(
     const AccomplishmentProgress &progress = profile->GetAccomplishmentProgress();
     FOREACH (it, m_lConditions) {
         AccomplishmentCondition &curCond = *it;
-        Symbol curSym = curCond.unk0;
-        int cur4 = curCond.unk4;
+        Symbol curSym = curCond.mConditionType;
+        int cur4 = curCond.mCount;
         if (curSym == dance_use_count) {
-            for (int i = 0; i < unk70.size(); i++) {
-                if (progress.GetCharacterUseCount(unk70[i]) >= cur4) {
+            for (int i = 0; i < mCharacters.size(); i++) {
+                if (progress.GetCharacterUseCount(mCharacters[i]) >= cur4) {
                     return true;
                 }
             }
@@ -127,8 +127,8 @@ bool AccomplishmentCharacterListConditional::AreCharacterListConditionsMet(
                 DataArray *birthdayCfg = SystemConfig(birthday);
                 DateTime dt;
                 GetDateAndTime(dt);
-                for (int i = 0; i < unk70.size(); i++) {
-                    Symbol cur = unk70[i];
+                for (int i = 0; i < mCharacters.size(); i++) {
+                    Symbol cur = mCharacters[i];
                     if (hpd->Char() == cur) {
                         DataArray *arr = birthdayCfg->FindArray(birthday)->FindArray(cur);
                         if (arr->Node(1).Int() == dt.mMonth + 1) {
@@ -141,8 +141,8 @@ bool AccomplishmentCharacterListConditional::AreCharacterListConditionsMet(
             }
         } else if (curSym == crew_use_count) {
             int i5 = 0;
-            for (int i = 0; i < unk7c.size(); i++) {
-                i5 += progress.GetCharacterUseCount(unk7c[i]);
+            for (int i = 0; i < mCrews.size(); i++) {
+                i5 += progress.GetCharacterUseCount(mCrews[i]);
             }
             if (i5 >= cur4) {
                 return true;
@@ -158,11 +158,11 @@ bool AccomplishmentCharacterListConditional::AreCharacterListConditionsMet(
 bool AccomplishmentCharacterListConditional::AreUnlockableOutfitListConditionsMet(
     HamPlayerData *hpd, HamProfile *profile
 ) {
-    if (unk94.size() > 1) {
-        for (int i = 0; i < unk94.size(); i++) {
-            if (hpd->Outfit() == unk94[i] && hpd->IsPlaying()) {
-                if (unka0[i + 1] & unka0[i] == 0) {
-                    unka0[i] |= unka0[i + 1];
+    if (mUnlockableOutfits.size() > 1) {
+        for (int i = 0; i < mUnlockableOutfits.size(); i++) {
+            if (hpd->Outfit() == mUnlockableOutfits[i] && hpd->IsPlaying()) {
+                if (mOutfitEquipped[i + 1] & mOutfitEquipped[i] == 0) {
+                    mOutfitEquipped[i] |= mOutfitEquipped[i + 1];
                 }
                 break;
             }

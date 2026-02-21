@@ -39,10 +39,10 @@ void ChallengeResultPanel::Text(int, int data, UIListLabel *slot, UILabel *label
     String result;
     const ChallengeRow &row = mItems[data];
 
-    if (row.unk2c == gNullStr) {
+    if (row.mNotes == gNullStr) {
         result = gNullStr;
     } else {
-        result = row.unk2c;
+        result = row.mNotes;
 
         if (slot->Matches("white_small_gamertag")) {
             if ((unk5c > row.mScore) || (data == unk60) || (data == unk6c)) {
@@ -184,7 +184,7 @@ void ChallengeResultPanel::UpdateList(int player) {
     ChallengeRow playerRow;
     playerRow.mScore = unk5c;
     playerRow.mGamertag = playerName;
-    playerRow.unk2c = playerName;
+    playerRow.mNotes = playerName;
 
     // Get player challenges from TheChallenges
     std::vector<ChallengeRow> &challenges = TheChallenges->mPlayerChallenges[player];

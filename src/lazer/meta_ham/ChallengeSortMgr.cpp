@@ -14,16 +14,17 @@
 #include "utl/Symbol.h"
 
 ChallengeRecord::ChallengeRecord(const ChallengeRecord &other)
-    : mRow(other.mRow), unk40(other.unk40), unk44(other.unk44), unk48(other.unk48),
-      unk4c(other.unk4c), unk50(other.unk50) {}
+    : mRow(other.mRow), mSongShortName(other.mSongShortName), mSongTitle(other.mSongTitle),
+      mChallengerGamertag(other.mChallengerGamertag), mMissionInfo(other.mMissionInfo),
+      mSongContentLockState(other.mSongContentLockState) {}
 
 ChallengeRecord &ChallengeRecord::operator=(const ChallengeRecord &other) {
     this->mRow = other.mRow;
-    this->unk40 = other.unk40;
-    this->unk44 = other.unk44;
-    this->unk48 = other.unk48;
-    this->unk4c = other.unk4c;
-    this->unk50 = other.unk50;
+    this->mSongShortName = other.mSongShortName;
+    this->mSongTitle = other.mSongTitle;
+    this->mChallengerGamertag = other.mChallengerGamertag;
+    this->mMissionInfo = other.mMissionInfo;
+    this->mSongContentLockState = other.mSongContentLockState;
     return *this;
 }
 

@@ -18,9 +18,9 @@ static Transform sFlipYZ;
 
 RndCam::RndCam()
     : mNearPlane(sDefaultNearPlane), mFarPlane(mNearPlane * sMaxFarNearPlaneRatio),
-      mYFov(0.6024178), unk2cc(1), mZRange(0.0f, 1.0f),
-      mScreenRect(0.0f, 0.0f, 1.0f, 1.0f), mTargetTex(this), unk300(Hmx::Matrix4::ID()),
-      unk340(Hmx::Matrix4::ID()) {
+      mYFov(0.6024178), mAspectRatio(1), mZRange(0.0f, 1.0f),
+      mScreenRect(0.0f, 0.0f, 1.0f, 1.0f), mTargetTex(this), mViewProjMatrix(Hmx::Matrix4::ID()),
+      mInvViewProjMatrix(Hmx::Matrix4::ID()) {
     UpdateLocal();
 }
 
@@ -154,8 +154,8 @@ Transform RndCam::GetInvViewXfm() {
 }
 
 void RndCam::SetViewProj(const Hmx::Matrix4 &mtx) {
-    Invert(unk300 = mtx, unk340);
-    Transpose(unk340, unk340);
+    Invert(mViewProjMatrix = mtx, mInvViewProjMatrix);
+    Transpose(mInvViewProjMatrix, mInvViewProjMatrix);
 }
 
 void RndCam::SetTargetTex(RndTex *tex) {
@@ -197,7 +197,7 @@ void RndCam::SetFrustum(float near, float far, float yfov, float f4) {
     mNearPlane = near;
     mFarPlane = far;
     mYFov = yfov;
-    unk2cc = f4;
+    mAspectRatio = f4;
     UpdateLocal();
 }
 

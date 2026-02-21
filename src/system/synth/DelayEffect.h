@@ -17,9 +17,9 @@ public:
     void SetParameter(int, float);
     void SetParameters(DelayEffect::Params const &);
 
-    int unk0;
-    int unk4;
-    float unk8;
-    float unkc;
-    float *unk10;
+    int mDelaySamples;
+    int mWritePos;
+    float mDecay;
+    float mWetAmount;
+    float *mBuffer;
 };

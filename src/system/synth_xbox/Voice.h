@@ -35,29 +35,29 @@ public:
     void Start();
 
     u32 unk0;
-    int unk4;
-    const void *unk8;
-    int unkc;
+    int mState; // 0x4 - voice play state (2 = pending)
+    const void *mAudioData; // 0x8 - audio buffer pointer (pAudioData)
+    int mAudioBytes; // 0xc - audio buffer size in bytes
     int mNumSamples; // 0x10
     int mSampleRate; // 0x14
-    int unk18;
+    int mStartSamp; // 0x18 - start sample position (PlayBegin)
     int mLoopStart; // 0x1c
     int mLoopEnd; // 0x20
     float mVolume; // 0x24
     float mPan; // 0x28
     float unk2c;
-    float unk30;
-    float unk34;
+    float mAttackRate; // 0x30 - ADSR attack rate
+    float mReleaseRate; // 0x34 - ADSR release rate
     bool mXMA; // 0x38
     int *unk3c; // 0x3c
-    bool unk40;
-    float unk44;
+    bool mReverbEnabled; // 0x40
+    float mReverbMixDb; // 0x44 - reverb mix in dB
     bool unk48;
-    bool unk49;
+    bool mSynchronized; // 0x49 - requires synchronized voice start
     int mChannels; // 0x4c
-    int unk50;
+    int mTagState; // 0x50 - stream tag state
     bool unk54;
-    int unk58;
+    int mSourceVoice; // 0x58 - IXAudio2SourceVoice* (as int for vtable dispatch)
     int unk5c;
     int unk60; // PoolVoice
 

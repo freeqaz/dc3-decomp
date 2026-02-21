@@ -93,11 +93,11 @@ void SongStatus::Clear() {
         mStatusData[i].mSongID = mSongID;
     }
     mLastPlayed = 0;
-    unk78 = false;
-    unk79 = false;
-    unk7c = kNumDifficulties;
+    mPeakStarRating = false;
+    mLastNoFlashcards = false;
+    mLastPlayedDifficulty = kNumDifficulties;
     mLastScore = 0;
-    unk84 = 0;
+    mLastCoopScore = 0;
     mLastPlayedPractice = 0;
     unk9c = 0;
     unka0 = 4;
@@ -142,11 +142,11 @@ BinStream &operator<<(BinStream &bs, const SongStatus &stat) {
         stat.mStatusData[i].SaveToStream(bs);
     }
     bs << stat.mLastPlayed;
-    bs << stat.unk78;
-    bs << stat.unk79;
-    bs << (unsigned char)stat.unk7c;
+    bs << stat.mPeakStarRating;
+    bs << stat.mLastNoFlashcards;
+    bs << (unsigned char)stat.mLastPlayedDifficulty;
     bs << stat.mLastScore;
-    bs << stat.unk84;
+    bs << stat.mLastCoopScore;
     bs << stat.mLastPlayedPractice;
     bs << stat.unk9c;
     bs << (unsigned char)stat.unka0;
@@ -166,13 +166,13 @@ BinStream &operator>>(BinStream &bs, SongStatus &stat) {
         stat.mStatusData[i].mSongID = stat.mSongID;
     }
     bs >> stat.mLastPlayed;
-    bs >> stat.unk78;
-    bs >> stat.unk79;
+    bs >> stat.mPeakStarRating;
+    bs >> stat.mLastNoFlashcards;
     unsigned char uc;
     bs >> uc;
-    stat.unk7c = (Difficulty)uc;
+    stat.mLastPlayedDifficulty = (Difficulty)uc;
     bs >> stat.mLastScore;
-    bs >> stat.unk84;
+    bs >> stat.mLastCoopScore;
     bs >> stat.mLastPlayedPractice;
     bs >> stat.unk9c;
     bs >> uc;
@@ -265,7 +265,7 @@ void SongStatusMgr::GetScoresToUpload(std::list<SongStatusData> &data) {
 void SongStatusMgr::GetFlauntsToUpload(std::list<FlauntStatusData> &data) {
     FOREACH (it, mSongStatusMap) {
         SongStatus cur = it->second;
-        if (cur.unk78) {
+        if (cur.mPeakStarRating) {
             data.push_back(cur.mFlauntData);
         }
     }
@@ -452,7 +452,7 @@ int SongStatusMgr::GetLastScore(int songID, bool &bref) const {
     bref = false;
     if (HasSongStatus(songID)) {
         const SongStatus &status = GetSongStatus(songID);
-        bref = status.unk79;
+        bref = status.mLastNoFlashcards;
         return status.mLastScore;
     } else {
         return 0;
@@ -578,13 +578,13 @@ bool SongStatusMgr::UpdateSong(
             DateTime dt;
             GetDateAndTime(dt);
             status.mLastPlayed = dt.ToCode();
-            status.unk78 = stars;
+            status.mPeakStarRating = stars;
             if (stars >= 5) {
-                status.unk79 = b11;
+                status.mLastNoFlashcards = b11;
             }
-            status.unk7c = difficulty;
+            status.mLastPlayedDifficulty = difficulty;
             status.mLastScore = score;
-            status.unk84 = i3;
+            status.mLastCoopScore = i3;
             if (status.mStatusData[difficulty].mScore <= score) {
                 status.mStatusData[difficulty].mScore = score;
                 status.mStatusData[difficulty].mNoFlashcards = b11;
@@ -626,13 +626,13 @@ bool SongStatusMgr::UpdateSong(
             status.mStatusData[difficulty].mNeedUpload = !b10;
             GetDateAndTime(dt);
             status.mLastPlayed = dt.ToCode();
-            status.unk78 = stars;
+            status.mPeakStarRating = stars;
             if (5 <= stars) {
-                status.unk79 = b11;
+                status.mLastNoFlashcards = b11;
             }
-            status.unk7c = difficulty;
+            status.mLastPlayedDifficulty = difficulty;
             status.mLastScore = score;
-            status.unk84 = i3;
+            status.mLastCoopScore = i3;
             status.mStatusData[difficulty].mNumNices = numNices;
             status.mStatusData[difficulty].mNumPerfects = numPerfects;
             status.mStatusData[difficulty].mPercentPassed = percentPassed;

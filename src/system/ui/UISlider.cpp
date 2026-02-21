@@ -19,13 +19,13 @@ extern UIComponent::State SymToUIComponentState(Symbol);
 void UISlider::OldResourcePreload(BinStream &bs) {
     char buf[256];
     bs.ReadString(buf, 256);
-    unk50.SetName(buf, true);
+    mSliderResource.SetName(buf, true);
 }
 
-UISlider::UISlider() : unk50(this), mCurrent(0), mNumSteps(10), mVertical(0) {}
+UISlider::UISlider() : mSliderResource(this), mCurrent(0), mNumSteps(10), mVertical(0) {}
 
 BEGIN_PROPSYNCS(UISlider)
-    SYNC_PROP_MODIFY(slider_resource, unk50, Update())
+    SYNC_PROP_MODIFY(slider_resource, mSliderResource, Update())
     SYNC_PROP(vertical, mVertical)
     SYNC_SUPERCLASS(ScrollSelect)
     SYNC_SUPERCLASS(UIComponent)
@@ -34,7 +34,7 @@ END_PROPSYNCS
 BEGIN_SAVES(UISlider)
     SAVE_REVS(3, 0)
     SAVE_SUPERCLASS(UIComponent)
-    bs << unk50;
+    bs << mSliderResource;
     bs << mVertical;
 END_SAVES
 
@@ -44,7 +44,7 @@ BEGIN_COPYS(UISlider)
     BEGIN_COPYING_MEMBERS_FROM(c)
         COPY_MEMBER(mSelectToScroll)
         COPY_MEMBER(mVertical)
-        COPY_MEMBER(unk50)
+        COPY_MEMBER(mSliderResource)
     END_COPYING_MEMBERS
 END_COPYS
 
@@ -65,14 +65,14 @@ void UISlider::PreLoad(BinStream &bs) {
     ASSERT_REVS(3, 0);
     UIComponent::PreLoad(bs);
     if (d.rev >= 3)
-        bs >> unk50;
+        bs >> mSliderResource;
     bs.PushRev(packRevs(d.altRev, d.rev), this);
 }
 
 void UISlider::PostLoad(BinStream &bs) {
     BinStreamRev d(bs, bs.PopRev(this));
     UIComponent::PostLoad(bs);
-    unk50.PostLoad(0);
+    mSliderResource.PostLoad(0);
     if (d.rev > 0) {
         d >> mSelectToScroll;
     }
@@ -84,23 +84,22 @@ void UISlider::PostLoad(BinStream &bs) {
 
 void UISlider::DrawShowing() {
     SyncSlider();
-    if ((RndMesh*)unk68) {
-        int idx = (int)DrawState(this) - 0x18;
-        ((RndMesh*)unk68)->SetMat(*(RndMat**)((int*)this + idx + 0x33));
+    if (mSliderMesh) {
+        mSliderMesh->SetMat(mStateMats[(int)DrawState(this)]);
     }
-    if (unk50) {
-        unk50->DrawShowing();
+    if (mSliderResource) {
+        mSliderResource->DrawShowing();
     }
 }
 
 RndDrawable *UISlider::CollideShowing(const Segment &seg, float &f, Plane &pl) {
     SyncSlider();
-    return unk50->CollideShowing(seg, f, pl) ? this : nullptr;
+    return mSliderResource->CollideShowing(seg, f, pl) ? this : nullptr;
 }
 
 int UISlider::CollidePlane(const Plane &pl) {
     SyncSlider();
-    return unk50->CollidePlane(pl);
+    return mSliderResource->CollidePlane(pl);
 }
 
 void UISlider::Enter() {
@@ -149,9 +148,9 @@ DataNode UISlider::OnMsg(const ButtonDownMsg &msg) {
 }
 
 void UISlider::SyncSlider() {
-    if (unk50) {
-        unk50->SetFrame(Frame(), 1.0f);
-        unk50->SetWorldXfm(WorldXfm());
+    if (mSliderResource) {
+        mSliderResource->SetFrame(Frame(), 1.0f);
+        mSliderResource->SetWorldXfm(WorldXfm());
     }
 }
 
@@ -183,15 +182,11 @@ void UISlider::Update() {
     static Symbol mats("mats");
 
     // Clear material pointers for all states
-    unk68 = 0;
-    unk6c = 0;
-    unk70 = 0;
-    unk74 = 0;
-    unk78 = 0;
-    unk7c = 0;
+    mSliderMesh = nullptr;
+    for (int s = 0; s < UIComponent::kNumStates; s++) mStateMats[s] = nullptr;
 
     const DataArray *typeDef = TypeDef();
-    if (!typeDef || !unk50) {
+    if (!typeDef || !mSliderResource) {
         return;
     }
 
@@ -201,7 +196,7 @@ void UISlider::Update() {
         DataNode &meshNode = meshArray->Node(1);
         const char *meshStr = meshNode.Str(meshArray);
         if (meshStr) {
-            unk68 = (int)unk50->Find<RndMesh>(meshStr, true);
+            mSliderMesh = mSliderResource->Find<RndMesh>(meshStr, true);
         }
     }
 
@@ -228,13 +223,7 @@ void UISlider::Update() {
         DataNode &matNode = matItemArray->Node(1);
         const char *matName = matNode.Str(matItemArray);
         if (matName) {
-            // Compute offset into state material array (unk68-unk7c)
-            // Base offset 0x1b maps State enum to member offset
-            int stateOffset = itemState + 0x1b;
-            int byteOffset = stateOffset * 4;
-            int thisAddr = (int)this;
-            int matPtr = (int)unk50->Find<RndMat>(matName, true);
-            *(int *)(thisAddr + byteOffset) = matPtr;
+            mStateMats[itemState] = mSliderResource->Find<RndMat>(matName, true);
         }
     }
 }

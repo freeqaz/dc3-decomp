@@ -34,7 +34,7 @@ public:
     char *mFileLoaderBuffer; // 0x14
     NetLoader *mNetLoader; // 0x18
     char *mNetLoaderBuffer; // 0x1c
-    int unk20; // 0x20
+    int mFailType; // 0x20
 
 protected:
     void SetState(NetCacheLoader::State);

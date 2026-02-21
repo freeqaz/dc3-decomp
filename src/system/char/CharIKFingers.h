@@ -21,13 +21,13 @@ public:
     };
     struct FingerDesc {
         FingerDesc()
-            : unk0(0), unk8(0, 0, 0), unk18(0, 0, 0), mFinger01(nullptr),
-              mFinger02(nullptr), mFinger03(nullptr), mFingertip(nullptr), unk88(0),
-              unk8c(0), unk90(1) {}
-        bool unk0;
-        float unk4;
-        Vector3 unk8;
-        Vector3 unk18;
+            : mIsEngaged(0), mTargetWorldPos(0, 0, 0), mRefWorldPos(0, 0, 0), mFinger01(nullptr),
+              mFinger02(nullptr), mFinger03(nullptr), mFingertip(nullptr), mBlendFrames(0),
+              unk8c(0), mNeedsUpdate(1) {}
+        bool mIsEngaged;
+        float mBoneTotalLength;
+        Vector3 mTargetWorldPos;
+        Vector3 mRefWorldPos;
         ObjPtr<RndTransformable> mFinger01; // 0x28
         ObjPtr<RndTransformable> mFinger02; // 0x3c
         ObjPtr<RndTransformable> mFinger03; // 0x50
@@ -36,9 +36,9 @@ public:
         float unk7c;
         float unk80;
         float unk84;
-        int unk88;
+        int mBlendFrames;
         int unk8c;
-        bool unk90;
+        bool mNeedsUpdate;
         Vector3 unk94;
         Vector3 unka4;
         bool unkb4;
@@ -96,7 +96,7 @@ protected:
     float mHandDestOffset; // 0x168
     /** "Does this run the right or left hand?" */
     bool mIsRightHand; // 0x16c
-    bool unk16d;
+    bool mMoveHand; // 0x16d
     bool mIsSetup; // 0x16e
     std::vector<FingerDesc> mFingers; // 0x170
     int unk17c;

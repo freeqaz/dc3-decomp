@@ -3,10 +3,10 @@
 #include "xdk/xaudio2/xaudio2.h"
 
 BitCrushEffect::BitCrushEffect(IXAudioBatchAllocator *)
-    : unk0(0), unk4(0), unk8(0), unkc(0) {}
+    : mHoldPeriod(0), mHoldCounter(0), mHeldLeft(0), mHeldRight(0) {}
 
 void BitCrushEffect::SetParameters(BitCrushEffect::Params const &params) {
-    unk0 = params.unk4;
+    mHoldPeriod = params.unk4;
 }
 
 void BitCrushEffect::Process(float *f, int numSamples, int numChans) {
@@ -24,24 +24,24 @@ void BitCrushEffect::Process(float *f, int numSamples, int numChans) {
         right = f + 1;
 
         do {
-            if (unk4 > 0) {
-                *left = unk8;
+            if (mHoldCounter > 0) {
+                *left = mHeldLeft;
                 if (numChans == 2) {
-                    *right = unkc;
+                    *right = mHeldRight;
                 }
-                unk4--;
+                mHoldCounter--;
             } else {
                 float temp;
                 temp = *left;
                 temp = (float)(int)temp;
                 *left = temp;
-                unk8 = temp;
+                mHeldLeft = temp;
 
                 if (numChans == 2) {
                     temp = *right;
                     temp = (float)(int)temp;
                     *right = temp;
-                    unkc = temp;
+                    mHeldRight = temp;
                 }
             }
 

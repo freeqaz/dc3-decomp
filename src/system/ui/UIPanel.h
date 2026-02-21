@@ -88,5 +88,5 @@ protected:
     FilePath mFilePath; // 0x28
     /** This panel's ID. */
     int mPanelId; // 0x30
-    bool unk34; // 0x34 - something involving a final draw pass
+    bool mFinalDrawPassFlag; // 0x34
 };

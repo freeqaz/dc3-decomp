@@ -13,10 +13,10 @@
 #include <types.h>
 
 struct LargeQuadRenderData {
-    D3DIndexBuffer *unk0;
-    D3DVertexBuffer *unk4;
-    int unk8;
-    int unkc;
+    D3DIndexBuffer *mIndexBuffer;
+    D3DVertexBuffer *mVertexBuffer;
+    int mWidth;
+    int mHeight;
 };
 
 class DxRnd : public NgRnd {
@@ -47,7 +47,7 @@ public:
     virtual void MakeDrawTarget();
     virtual void SetSync(int sync);
     virtual RndTex *GetCurrentFrameTex(bool);
-    virtual void CaptureNextGpuFrame() { unk3f6 = true; }
+    virtual void CaptureNextGpuFrame() { mCaptureNextFrame = true; }
     virtual void SetAspect(Aspect a);
     virtual void SetShrinkToSafeArea(bool shrink);
     virtual void PushClipPlanesInternal(ObjPtrVec<RndTransformable> &);
@@ -85,7 +85,7 @@ public:
                 MILO_ASSERT(CurrentThreadId() != TheSplasher->SplashThreadId(), 0xF4);
                 D3DResource_Release(r);
             } else {
-                unk304.push_back(r);
+                mPendingReleases.push_back(r);
             }
         }
     }
@@ -110,7 +110,7 @@ public:
                 PhysicalFreeTracked((void *)data, __FILE__, 0x109, "");
                 delete t;
             } else {
-                unk310.push_back(t);
+                mPendingDeletes.push_back(t);
             }
         }
     }
@@ -162,13 +162,13 @@ private:
 
     // static D3DXMATRIX sIdentityMtx;
 
-    int unk220;
+    int mInited;
     D3DDevice *mD3DDevice; // 0x224
-    int unk228; // 0x228 - current thread id?
-    void *unk22c;
+    int mRenderThreadId; // 0x228
+    void *mFocusWindow;
     D3DDEVTYPE mDeviceType; // 0x230
     D3DPRESENT_PARAMETERS mPresentParams; // 0x234
-    std::list<DxObject *> unk2b0;
+    std::list<DxObject *> mDxObjects;
     int unk2b8;
     int unk2bc;
     int unk2c0;
@@ -178,37 +178,37 @@ private:
     Timer unk2d0;
     bool unk300;
     u8 unk_0x301;
-    std::vector<D3DResource *> unk304; // 0x304 - released resources?
-    std::vector<D3DBaseTexture *> unk310; // 0x310 - deleted textures?
+    std::vector<D3DResource *> mPendingReleases; // 0x304
+    std::vector<D3DBaseTexture *> mPendingDeletes; // 0x310
     XVIDEO_MODE mVideoMode; // 0x31c
-    bool unk34c;
+    bool mTilingActive;
     bool unk34d;
     D3DTexture *mFrontBuffers[2]; // 0x350
     D3DTexture *mFrontBufferDepth; // 0x358
-    int unk35c; // 0x35c - buffer idx?
-    bool unk360;
+    int mFrontBufIdx; // 0x35c
+    bool mAsyncSwapNext;
     bool mAsyncSwapCurrent; // 0x361
     D3DPerfCounters *mPerfCounterStart; // 0x364
     D3DPerfCounters *mPerfCounterEnd; // 0x368
     Timer *mGPUTimer; // 0x36c
-    float unk370;
-    float unk374;
+    float mGPUBusyMs;
+    float mGPUCountMs;
     bool mCreatedPerfCounters; // 0x378
-    int unk37c; // 0x37c - flags
+    int mFlags; // 0x37c
     D3DSurface *mBackBuffer; // 0x380
-    D3DSurface *unk384;
-    D3DSurface *unk388;
-    D3DSurface *unk38c;
+    D3DSurface *mOffscreenRT;
+    D3DSurface *mWorldDepth;
+    D3DSurface *mOffscreenDepth;
     D3DTexture *mPreProcessBuffer; // 0x390
     D3DTexture *mPostProcessBuffer; // 0x394
     DxTex *mPreProcessTex; // 0x398
     DxTex *mPostProcessTex; // 0x39c
     DxTex *mPreDepthTex; // 0x3a0
-    bool unk3a4;
-    unsigned int unk3a8;
-    unsigned int unk3ac;
+    bool mPostProcDone;
+    unsigned int mEdramBase;
+    unsigned int mEdramHzBase;
     int mNumTiles; // 0x3b0
-    D3DRECT unk3b4; // 0x3b4
+    D3DRECT mTileRect; // 0x3b4
     int unk3c4;
     int unk3c8;
     int unk3cc;
@@ -221,14 +221,14 @@ private:
     int unk3e8;
     int unk3ec;
     int unk3f0;
-    bool unk3f4;
-    bool unk3f5;
-    bool unk3f6;
-    u8 unk3f7;
+    bool mSuspended;
+    bool mPrintGlitches;
+    bool mCaptureNextFrame;
+    u8 mPIXCaptureState;
     RegisterAlloc mRegAlloc; // 0x3f8
     int mDefaultVSRegAlloc; // 0x3fc
     int mDefaultPSRegAlloc; // 0x400
-    bool unk404;
+    bool mPreInited;
     int unk408;
 };
 

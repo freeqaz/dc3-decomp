@@ -148,14 +148,14 @@ protected:
     float mAutoScrollPause; // 0x148
     /** "Should this list send UIComponentScroll* messages while auto-scrolling?" */
     bool mAutoScrollSendMsgs; // 0x14c
-    int unk150;
+    int mAutoScrollDir; // 0x150
     bool mAutoScrolling; // 0x154
-    float unk158;
-    bool unk15c;
-    bool unk15d;
+    float mAutoScrollTimer; // 0x158
+    bool mScrolling; // 0x15c
+    bool mDrawManuallyControlledWidgets; // 0x15d
     /** "Allow multiple instances of same option to be displayed?" */
     bool mLimitCircularDisplayNumToDataNum; // 0x15e
-    int unk160;
+    int mUncappedNumDisplay; // 0x160
     bool mAllowHighlight; // 0x164
 };
 

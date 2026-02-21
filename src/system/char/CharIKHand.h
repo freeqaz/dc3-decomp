@@ -73,13 +73,13 @@ protected:
         or do we lock the elbow when goal is too far?" */
     bool mPullShoulder; // 0x71
     bool mHandChanged; // 0x72
-    float unk74;
-    float unk78;
-    float unk7c;
-    float unk80;
-    float unk84;
-    float unk88;
-    float unk8c;
+    float mWorldDstX; // 0x74 - world-space IK destination X
+    float mWorldDstY; // 0x78 - world-space IK destination Y
+    float mWorldDstZ; // 0x7c - world-space IK destination Z
+    float unk80; // 0x80
+    float mInv2ab; // 0x84 - precomputed: 1/(2*forearm*hand), law-of-cosines IK denominator inverse
+    float mAABB; // 0x88 - precomputed: forearm^2 + hand^2, law-of-cosines constant
+    float mAAPlusBB; // 0x8c - total arm reach: forearm + hand
     /** "Constrain the wrist rotation to be believable" */
     bool mConstraintWrist; // 0x90
     /** "Constrain wrist rotation to this angle (in radians)" */

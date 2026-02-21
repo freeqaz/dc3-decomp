@@ -6,13 +6,13 @@
 
 class RecordScoreData {
 public:
-    RecordScoreData() : mProfile(0), mStatus(0), unkc(0), unk10(0) {}
+    RecordScoreData() : mProfile(0), mStatus(0), mChallengeScore(0), mChainChallengeScore(0) {}
     virtual ~RecordScoreData() {}
 
     HamProfile *mProfile; // 0x4
     SongStatusData *mStatus; // 0x8
-    int unkc; // 0xc - c score
-    int unk10; // 0x10 - cc score
+    int mChallengeScore; // 0xc - c score
+    int mChainChallengeScore; // 0x10 - cc score
 };
 
 class RecordScoreJob : public RCJob {

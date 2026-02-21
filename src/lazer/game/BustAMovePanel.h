@@ -77,7 +77,7 @@ private:
     int mBeatCount; // 0x44 - beat counter within current state phase
     std::list<Symbol> mFlashcardLabels; // 0x48 - queue of flashcard text tokens
     std::list<int> mFlashcardSlots; // 0x50 - queue of flashcard image indices
-    int unk58; // 0x58
+    int mRecordSkelIdx; // 0x58
     float mMoveScore; // 0x5c - accumulated move accuracy score
     ObjectDir *mHUDPanel; // 0x60
     int mActivePlayer; // 0x64 - current player index (0 or 1)
@@ -120,7 +120,7 @@ private:
     float mNextVOTime; // 0x9a0 - next scheduled VO play time
     int mFlawlessFlags; // 0x9a4 - per-player flawless tracking (accessed as bool array)
     int mMoveCreators[4]; // 0x9a8 - which player created each move
-    bool unk9b8; // 0x9b8
+    bool mPlayIntroVO; // 0x9b8
     bool mNoPosesDetected; // 0x9b9 - set when no skeleton poses found during capture
-    int unk9bc; // 0x9bc
+    int mDepthBufPlayer; // 0x9bc
 };

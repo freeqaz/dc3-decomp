@@ -24,7 +24,7 @@ BEGIN_PROPSYNCS(RndMeshDeform)
 END_PROPSYNCS
 
 void operator<<(BinStream &bs, const RndMeshDeform::BoneDesc &desc) {
-    bs << desc.unk0;
+    bs << desc.mBone;
     bs << desc.unk14 << desc.unk54;
 }
 
@@ -55,7 +55,7 @@ BEGIN_COPYS(RndMeshDeform)
 END_COPYS
 
 void operator>>(BinStream &bs, RndMeshDeform::BoneDesc &desc) {
-    bs >> desc.unk0;
+    bs >> desc.mBone;
     bs >> desc.unk14 >> desc.unk54;
 }
 
@@ -121,7 +121,7 @@ void RndMeshDeform::Print() {
     for (int i = 0; i < mBones.size(); i++) {
         BoneDesc &cur = mBones[i];
         TheDebug << "bone" << i << ":\n";
-        TheDebug << "   " << cur.unk0.Ptr() << "\n";
+        TheDebug << "   " << cur.mBone.Ptr() << "\n";
         TheDebug << "   " << cur.unk14 << "\n";
         TheDebug << "   " << cur.unk54 << "\n";
     }

@@ -29,9 +29,9 @@ GestureMgr *TheGestureMgr;
 bool GestureMgr::sIdentityOpInProgress;
 
 GestureMgr::GestureMgr()
-    : mLiveCamInput(LiveCameraInput::sInstance), unk425c(2), mIDEnabled(1),
+    : mLiveCamInput(LiveCameraInput::sInstance), mPauseOnSkeletonLossMode(2), mIDEnabled(1),
       mInControllerMode(0), mInVoiceMode(0), mGesturingWithVoice(0), mInDoubleUserMode(0),
-      unk4271(0), unk4274(0) {
+      mInShellMode(0), unk4274(0) {
     MILO_ASSERT(mLiveCamInput, 0x40);
     mPlayerSkeletonIDs[0] = -1;
     mPlayerSkeletonIDs[1] = -1;
@@ -54,7 +54,7 @@ GestureMgr::~GestureMgr() {
 }
 
 BEGIN_HANDLERS(GestureMgr)
-    HANDLE_EXPR(pause_on_skeleton_loss, unk425c)
+    HANDLE_EXPR(pause_on_skeleton_loss, mPauseOnSkeletonLossMode)
     HANDLE_EXPR(toggle_pause_on_skeleton_loss, TogglePauseOnSkeletonLoss())
     HANDLE_EXPR(get_max_snapshots, mLiveCamInput->MaxSnapshots())
     HANDLE_ACTION(init_snapshots, mLiveCamInput->InitSnapshots(_msg->Int(2)))

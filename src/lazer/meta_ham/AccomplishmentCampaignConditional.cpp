@@ -20,9 +20,9 @@ bool AccomplishmentCampaignConditional::IsFulfilled(HamProfile *profile) const {
     FOREACH (it, m_lConditions) {
         const AccomplishmentCondition &curCond = *it;
         Difficulty curDiff = curCond.mDifficulty;
-        Symbol cur8 = curCond.unk8;
-        int cur4 = curCond.unk4;
-        Symbol curSym = curCond.unk0;
+        Symbol cur8 = curCond.mSymbolArg;
+        int cur4 = curCond.mCount;
+        Symbol curSym = curCond.mConditionType;
         const CampaignProgress &progress = profile->GetCampaignProgress(curDiff);
         if (curSym == crewsong) {
             if (progress.IsDanceCrazeSongAvailable(cur8))

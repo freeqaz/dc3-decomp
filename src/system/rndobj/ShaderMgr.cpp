@@ -16,18 +16,18 @@
 #include "utl/MemMgr.h"
 
 RndShaderMgr::RndShaderMgr()
-    : mShaderPoolCount(0), unk5c(0), mConstantCache(0), unk68(0), unk6d(0),
+    : mShaderPoolCount(0), mShaderPoolAlloc(0), mConstantCache(0), mConstantCacheSize(0), mPreInitialized(0),
       mShowShaderErrors(1), mShowMetaMatErrors(0) {}
 
 void RndShaderMgr::PreInit() {
-    if (!unk6d) {
-        unkc = 0;
-        unk6d = true;
-        unk10 = 0;
+    if (!mPreInitialized) {
+        mUseAO = 0;
+        mPreInitialized = true;
+        mBoneCount = 0;
         unk14 = 1;
-        unk18 = 0;
+        mInDepthVolume = 0;
         unk1c = 0;
-        unk20 = 0;
+        mCullModeOverride = 0;
         unk24 = 0;
         unk25 = 0;
         unk26 = 0;
@@ -67,10 +67,10 @@ void RndShaderMgr::PreInit() {
         CreateAndSetMetaMat(mDrawHighlightMat);
         CreateAndSetMetaMat(mDrawRectMat);
         MILO_ASSERT(mConstantCache == NULL, 104);
-        unk68 = 516;
+        mConstantCacheSize = 516;
         {
             MemTemp tmp;
-            mConstantCache = new float[unk68];
+            mConstantCache = new float[mConstantCacheSize];
         }
         LoadShaders("%s_preinit_shaders");
     }
@@ -84,7 +84,7 @@ void RndShaderMgr::Init() {
 void RndShaderMgr::Terminate() {
     Invalidate(kMaxShaderTypes);
     RELEASE(mConstantCache);
-    unk68 = 0;
+    mConstantCacheSize = 0;
 }
 
 void RndShaderMgr::UpdateCache(const Transform &xfm, int idx) {
@@ -120,11 +120,11 @@ void RndShaderMgr::UpdateCache(const Transform &xfm, int idx) {
     p[11] = tz;
 }
 
-void RndShaderMgr::ShaderPoolAlloc(int i) { unk5c = i; }
+void RndShaderMgr::ShaderPoolAlloc(int i) { mShaderPoolAlloc = i; }
 
 void RndShaderMgr::SetMeshInfo(int i, bool b) {
-    unk10 = i;
-    unkc = b;
+    mBoneCount = i;
+    mUseAO = b;
 }
 
 void RndShaderMgr::SetShaderErrorDisplay(bool disp) { mDisplayShaderError = disp; }
@@ -164,7 +164,7 @@ void RndShaderMgr::LoadShaders(const char *cc) {
 }
 
 void RndShaderMgr::SetTransform(const Transform &xfm) {
-    unk10 = 0;
+    mBoneCount = 0;
     SetVConstant4x3((VShaderConstant)0x5c, Hmx::Matrix4(xfm));
 }
 
@@ -199,7 +199,7 @@ void RndShaderMgr::LoadShaderFile(FileStream &fs) {
         ShaderType shaderType = ShaderTypeFromName(name.Str());
         int alloc;
         fs >> alloc;
-        unk5c = alloc;
+        mShaderPoolAlloc = alloc;
         while (alloc--) {
             u64 u50;
             fs >> u50;
@@ -220,16 +220,16 @@ void RndShaderMgr::LoadShaderFile(FileStream &fs) {
 }
 
 void *RndShaderMgr::AllocShader() {
-    if (mShaderPoolCount == 0 && unk5c > 0) {
-        mShaderPoolCount = unk5c;
-        unk5c = 0;
+    if (mShaderPoolCount == 0 && mShaderPoolAlloc > 0) {
+        mShaderPoolCount = mShaderPoolAlloc;
+        mShaderPoolAlloc = 0;
         mShaderPool = MemAlloc(unk60 * mShaderPoolCount, __FILE__, 0x11c, "ShaderPool");
     }
     if (mShaderPoolCount <= 0) {
         if (UsingCD()) {
             MILO_NOTIFY_ONCE("Shader Pool is allocating dynamically");
         }
-        unk5c = 0;
+        mShaderPoolAlloc = 0;
         mShaderPoolCount = 0x100;
         mShaderPool = MemAlloc(unk60 << 8, __FILE__, 0x127, "ShaderPool");
     }
@@ -239,7 +239,7 @@ void *RndShaderMgr::AllocShader() {
     char *pool = (char *)mShaderPool;
     pool += unk60;
     mShaderPool = pool;
-    unk5c--;
+    mShaderPoolAlloc--;
     return old;
 }
 

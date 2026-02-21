@@ -126,9 +126,9 @@ Rnd::Rnd()
       mDefaultCam(0), mWorldCamCopy(0), mDefaultEnv(0), mDefaultLit(0), unk110(nullptr),
       unk114(nullptr), unk118(0), unk120(5), mFrameID(0), mRateGate("    "),
       mFont(nullptr), mSync(1), mGsTiming(0), mShowSafeArea(0), mDrawing(0),
-      mWorldEnded(1), mAspect(kWidescreen), mDrawMode(kDrawNormal), unk140(0), unk141(0),
+      mWorldEnded(1), mAspect(kWidescreen), mDrawMode(kDrawNormal), mResourceCached(0), mShowShaderCost(0),
       mShrinkToSafe(1), mInGame(0), mVerboseTimers(0), mDisablePostProc(0), unk146(0),
-      unk147(0), unk148(0), unk14c(0), unk150(0), mPostProcOverride(this),
+      mWorldCamCopied(0), unk148(0), unk14c(0), unk150(0), mPostProcOverride(this),
       mPostProcBlackLightOverride(nullptr), unk18c(this), mDraws(this), unk1b4(0),
       mProcCmds(kProcessAll), mLastProcCmds(kProcessAll) {
     for (int i = 0; i < 8; i++)
@@ -487,7 +487,7 @@ void Rnd::RemovePointTest(RndFlare *flare) {
     if (!TheHiResScreen.IsActive()) {
         for (std::list<PointTest>::iterator it = mPointTests.begin();
              it != mPointTests.end();) {
-            if (it->unkc == flare) {
+            if (it->mFlare == flare) {
                 it = mPointTests.erase(it);
             } else
                 ++it;
@@ -594,10 +594,10 @@ void Rnd::DoWorldBegin() {
 void Rnd::DoWorldEnd() {
     std::list<PostProcessor *>::iterator it;
     std::list<PostProcessor *>::iterator end;
-    if (!unk147) {
+    if (!mWorldCamCopied) {
         CopyWorldCam(nullptr);
     }
-    unk147 = false;
+    mWorldCamCopied = false;
     if (mPostProcBlackLightOverride) {
         mPostProcBlackLightOverride->EndWorld();
     } else if (mPostProcOverride) {
@@ -762,7 +762,7 @@ void Rnd::CopyWorldCam(RndCam *cam) {
             cam = RndCam::Current();
         mWorldCamCopy->Copy(cam, kCopyShallow);
         mWorldCamCopy->SetTransParent(nullptr, false);
-        unk147 = true;
+        mWorldCamCopied = true;
     }
 }
 
@@ -890,14 +890,14 @@ void Rnd::CreateDefaults() {
 int Rnd::CompressTexture(
     RndTex *tex, RndTex::AlphaCompress a, CompressTextureCallback *cb
 ) {
-    for (std::list<CompressTexDesc *>::iterator it = unk1d8.begin(); it != unk1d8.end();
+    for (std::list<CompressTexDesc *>::iterator it = mCompressTexQueue.begin(); it != mCompressTexQueue.end();
          ++it) {
         if (tex == (*it)->tex) {
             MILO_NOTIFY("%s: texture added to compression twice", PathName(tex));
         }
     }
     CompressTexDesc *desc = new CompressTexDesc(tex, a, cb);
-    unk1d8.push_back(desc);
+    mCompressTexQueue.push_back(desc);
     return (int)desc;
 }
 

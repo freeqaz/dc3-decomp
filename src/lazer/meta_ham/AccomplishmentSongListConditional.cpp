@@ -19,7 +19,7 @@ AccomplishmentSongListConditional::~AccomplishmentSongListConditional() {}
 bool AccomplishmentSongListConditional::IsFulfilled(HamProfile *hp) const {
     SongStatusMgr *pSongStatusMgr = hp->GetSongStatusMgr();
     int num = 0;
-    FOREACH (it, unk70) {
+    FOREACH (it, mSongs) {
         if (CheckConditionsForSong(pSongStatusMgr, *it)) {
             num++;
         }
@@ -32,7 +32,7 @@ bool AccomplishmentSongListConditional::IsFulfilled(HamProfile *hp) const {
 }
 
 bool AccomplishmentSongListConditional::IsRelevantForSong(Symbol s) const {
-    FOREACH (it, unk70) {
+    FOREACH (it, mSongs) {
         if (*it == s)
             return true;
     }
@@ -42,21 +42,21 @@ bool AccomplishmentSongListConditional::IsRelevantForSong(Symbol s) const {
 bool AccomplishmentSongListConditional::InqIncrementalSymbols(
     HamProfile *hp, std::vector<Symbol> &vec
 ) const {
-    vec = unk70;
+    vec = mSongs;
     return true;
 }
 
 int AccomplishmentSongListConditional::GetNumCompletedSongs(HamProfile *hp) const {
     SongStatusMgr *pSongStatusMgr = hp->GetSongStatusMgr();
     int songs = 0;
-    FOREACH (it, unk70) {
+    FOREACH (it, mSongs) {
         if (CheckConditionsForSong(pSongStatusMgr, *it))
             songs++;
     }
     return songs;
 }
 
-int AccomplishmentSongListConditional::GetTotalNumSongs() const { return unk70.size(); }
+int AccomplishmentSongListConditional::GetTotalNumSongs() const { return mSongs.size(); }
 
 void AccomplishmentSongListConditional::Configure(DataArray *i_pConfig) {
     MILO_ASSERT(i_pConfig, 0x1f);
@@ -65,12 +65,12 @@ void AccomplishmentSongListConditional::Configure(DataArray *i_pConfig) {
     MILO_ASSERT(pSongArray->Size() > 1, 0x26);
     for (int i = 1; i < pSongArray->Size(); i++) {
         Symbol s = pSongArray->Node(i).Sym(0);
-        unk70.push_back(s);
+        mSongs.push_back(s);
     }
     mSongCount = 0;
     static Symbol song_count("song_count");
     i_pConfig->FindData(song_count, mSongCount, false);
     if (mSongCount == 0) {
-        mSongCount = unk70.size();
+        mSongCount = mSongs.size();
     }
 }

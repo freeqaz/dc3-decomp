@@ -82,7 +82,7 @@ private:
     CtrlPoint unkec; // 0xec
     bool unk144;
     bool unk145;
-    bool unk146;
-    float unk148;
-    bool unk14c;
+    bool mPulseDrawing; // 0x146
+    float mPulseOffset; // 0x148
+    bool mTestPulseActive; // 0x14c
 };

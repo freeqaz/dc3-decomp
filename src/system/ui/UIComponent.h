@@ -70,7 +70,7 @@ protected:
     LocalUser *mSelectingUser; // 0x34
     UIScreen *mSelectScreen; // 0x38
     int mSelected; // 0x3c
-    bool unk40; // 0x40
+    bool mSelectCancelled; // 0x40
 
 private:
     void FinishSelecting();

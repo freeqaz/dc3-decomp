@@ -388,7 +388,7 @@ BEGIN_SAVES(CharClip)
     bs << mZeros;
     bs << mBeatTrack;
     bs << mSyncAnim;
-    bs << unk18c;
+    bs << mBlendSamples;
     bs << unk198;
 END_SAVES
 
@@ -417,7 +417,7 @@ BEGIN_COPYS(CharClip)
         COPY_MEMBER(mZeros)
         mFacing.Set(mFull);
         mDirty = true;
-        COPY_MEMBER(unk18c)
+        COPY_MEMBER(mBlendSamples)
         COPY_MEMBER(unk198)
     END_COPYING_MEMBERS
 END_COPYS
@@ -574,7 +574,7 @@ BEGIN_LOADS(CharClip)
         );
     }
     if (d.rev > 0x14) {
-        d >> unk18c;
+        d >> mBlendSamples;
     }
     if (d.rev > 0x15) {
         d >> unk198;
@@ -920,11 +920,11 @@ void CharClip::ApplyBlendedSkeletons(
     int sample = BeatToSample(f1, &f60);
     float f7 = 0.0f;
     float f6 = 1.0f;
-    FOREACH (it, unk18c[sample]) {
+    FOREACH (it, mBlendSamples[sample]) {
         clips[it->first]->ScaleAdd(bones, (f6 - f60) * it->second * f2, f7, f7);
     }
     if (f7 < f60) {
-        FOREACH (it, unk18c[sample + 1]) {
+        FOREACH (it, mBlendSamples[sample + 1]) {
             clips[it->first]->ScaleAdd(bones, f60 * it->second * f2, f7, f7);
         }
     }

@@ -31,9 +31,9 @@ bool AccomplishmentOneShot::AreOneShotConditionsMet(
     static Symbol flawless_a("flawless_a");
     static Symbol days("days");
     FOREACH (it, m_lConditions) {
-        Symbol sbc = it->unk0;
+        Symbol sbc = it->mConditionType;
         Difficulty d2 = it->mDifficulty;
-        int i3 = it->unk4;
+        int i3 = it->mCount;
         bool b6;
         if (d2 == kDifficultyBeginner) {
             b6 = true;

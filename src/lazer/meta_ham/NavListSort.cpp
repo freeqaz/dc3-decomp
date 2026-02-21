@@ -14,7 +14,7 @@ struct NodeFind {
     Symbol token;
 };
 
-NavListSort::NavListSort() : unk30(0), unk50(0), unk54(0) {}
+NavListSort::NavListSort() : mShortcutNodes(0), mHighlightNode(0), mPrevHighlightNode(0) {}
 
 BEGIN_HANDLERS(NavListSort)
     HANDLE_EXPR(get_current_shortcut, GetCurrentShortcut())
@@ -27,41 +27,41 @@ END_HANDLERS
 
 void NavListSort::DeleteItemList() {
     mList.clear();
-    FOREACH (it, unk3c) {
+    FOREACH (it, mAllNodes) {
         (*it)->DeleteAll();
         RELEASE(*it);
     }
-    unk3c.clear();
+    mAllNodes.clear();
 }
 
 void NavListSort::UpdateHighlight() {
     MILO_ASSERT(mList.size() && mList[0], 0xE1);
     int i6 = -1;
-    unk54 = unk50;
-    if (!unk50) {
-        unk50 = mList[0];
+    mPrevHighlightNode = mHighlightNode;
+    if (!mHighlightNode) {
+        mHighlightNode = mList[0];
     } else {
-        i6 = unk50->StartIndex();
+        i6 = mHighlightNode->StartIndex();
     }
-    int idx = unk50->StartIndex();
-    while (!unk50->IsEnabled()) {
+    int idx = mHighlightNode->StartIndex();
+    while (!mHighlightNode->IsEnabled()) {
         idx = (idx + 1) % mList.size();
         if (i6 == idx)
             break;
-        unk50 = mList[idx];
+        mHighlightNode = mList[idx];
     }
 }
 
 void NavListSort::OnSelectShortcut(int idx) {
-    unk50 = unk30[idx]->GetFirstActive();
+    mHighlightNode = mShortcutNodes[idx]->GetFirstActive();
     static Symbol skip_to_ix("skip_to_ix");
     static Message msg(skip_to_ix, 0);
-    msg[0] = unk50->StartIndex();
+    msg[0] = mHighlightNode->StartIndex();
     TheUI->Handle(msg, false);
 }
 
 const char *NavListSort::HighlightTokenStr() const {
-    NavListShortcutNode *shortcut = unk50->GetShortcut();
+    NavListShortcutNode *shortcut = mHighlightNode->GetShortcut();
     if (shortcut->LocalizeToken()) {
         return Localize(shortcut->GetToken(), nullptr, TheLocale);
     } else {
@@ -80,32 +80,32 @@ NavListSortNode *NavListSort::GetNode(Symbol s) const {
 int NavListSort::GetDataCount() const { return mList.size(); }
 
 void NavListSort::DeleteTree() {
-    unk54 = 0;
-    unk50 = 0;
+    mPrevHighlightNode = 0;
+    mHighlightNode = 0;
     mList.clear();
-    FOREACH (it, unk30) {
+    FOREACH (it, mShortcutNodes) {
         (*it)->DeleteAll();
         RELEASE(*it);
     }
-    unk30.clear();
+    mShortcutNodes.clear();
 }
 
 bool NavListSort::SetHighlightID(DataArray *a) {
-    NavListSortNode *prevHighlight = unk50;
-    unk54 = prevHighlight;
-    unk50 = nullptr;
+    NavListSortNode *prevHighlight = mHighlightNode;
+    mPrevHighlightNode = prevHighlight;
+    mHighlightNode = nullptr;
     int arraySize = a->Size();
     if (arraySize == 0)
         return false;
     if (arraySize == 1) {
-        auto nodeIt = std::find_if(unk3c.begin(), unk3c.end(), NodeFind(a->Sym(0)));
-        if (nodeIt == unk3c.end())
+        auto nodeIt = std::find_if(mAllNodes.begin(), mAllNodes.end(), NodeFind(a->Sym(0)));
+        if (nodeIt == mAllNodes.end())
             return false;
-        unk50 = *nodeIt;
+        mHighlightNode = *nodeIt;
         return true;
     }
-    auto shortcutIt = std::find_if(unk30.begin(), unk30.end(), NodeFind(a->Sym(0)));
-    if (shortcutIt == unk30.end())
+    auto shortcutIt = std::find_if(mShortcutNodes.begin(), mShortcutNodes.end(), NodeFind(a->Sym(0)));
+    if (shortcutIt == mShortcutNodes.end())
         return false;
     MILO_ASSERT(kNodeShortcut == (*shortcutIt)->GetType(), 0x44);
     const std::list<NavListSortNode *> &children = (*shortcutIt)->Children();
@@ -114,7 +114,7 @@ bool NavListSort::SetHighlightID(DataArray *a) {
         return false;
     MILO_ASSERT(kNodeHeader == (*headerIt)->GetType(), 0x4E);
     if (arraySize == 2) {
-        unk50 = *headerIt;
+        mHighlightNode = *headerIt;
         return true;
     }
     const std::list<NavListSortNode *> &grandChildren = (*headerIt)->Children();
@@ -124,7 +124,7 @@ bool NavListSort::SetHighlightID(DataArray *a) {
     if (itemIt == grandChildren.end())
         return false;
     if (arraySize == 3) {
-        unk50 = *itemIt;
+        mHighlightNode = *itemIt;
         return true;
     }
     const std::list<NavListSortNode *> &greatGrandChildren = (*itemIt)->Children();
@@ -133,17 +133,17 @@ bool NavListSort::SetHighlightID(DataArray *a) {
     );
     if (subItemIt == greatGrandChildren.end())
         return false;
-    unk50 = *itemIt;
+    mHighlightNode = *itemIt;
     return true;
 }
 
 int NavListSort::GetCurrentShortcut() {
-    if (!unk50)
+    if (!mHighlightNode)
         return 0;
     else {
-        NavListShortcutNode *shortcut = unk50->GetShortcut();
-        for (int i = 0; i < unk30.size(); i++) {
-            if (!unk30[i]->Compare(shortcut, kNodeShortcut)) {
+        NavListShortcutNode *shortcut = mHighlightNode->GetShortcut();
+        for (int i = 0; i < mShortcutNodes.size(); i++) {
+            if (!mShortcutNodes[i]->Compare(shortcut, kNodeShortcut)) {
                 return i;
             }
         }

@@ -10,9 +10,9 @@ const float sMaxThreshold = 80;
 CharLookAt::CharLookAt()
     : mSource(this), mPivot(this), mTarget(this), mHalfTime(0), mMinYaw(-80), mMaxYaw(80),
       mMinPitch(-80), mMaxPitch(sMaxThreshold), mMinWeightYaw(-1), mMaxWeightYaw(-1),
-      mWeightYawSpeed(10000), unk8c(kHugeFloat, 0, 0), unk9c(1), mSourceRadius(0),
+      mWeightYawSpeed(10000), mPivotLookTarget(kHugeFloat, 0, 0), mPivotLookWeight(1), mSourceRadius(0),
       unka4(0, 0, 0), mShowRange(false), mTestRange(false), mTestRangePitch(0.5),
-      mTestRangeYaw(0.5), mAllowRoll(true), unke1(false), mEnableJitter(false),
+      mTestRangeYaw(0.5), mAllowRoll(true), mDisableRoll(false), mEnableJitter(false),
       mYawJitterLimit(0), mPitchJitterLimit(0) {
     SyncLimits();
 }
@@ -135,7 +135,7 @@ BEGIN_LOADS(CharLookAt)
 END_LOADS
 
 void CharLookAt::Enter() {
-    unk8c.Set(kHugeFloat, 0, 0);
+    mPivotLookTarget.Set(kHugeFloat, 0, 0);
     if (mPivot) {
         mPivot->DirtyLocalXfm().m.Identity();
     }
@@ -177,10 +177,10 @@ void CharLookAt::SyncLimits() {
     ClampEq(mMaxPitch, -sMaxThreshold, sMaxThreshold);
     float yaw = Max<float>(fabsf(mMinYaw), fabsf(mMaxYaw));
     float pitch = Max<float>(fabsf(mMinPitch), fabsf(mMaxPitch));
-    unkb4.mMin.y = (float)std::cos(Max<float>(yaw, pitch) * DEG2RAD);
-    unkb4.mMax.y = kHugeFloat;
-    unkb4.mMin.z = (float)std::tan(mMinYaw * DEG2RAD) * unkb4.mMin.y;
-    unkb4.mMax.z = (float)std::tan(mMaxYaw * DEG2RAD) * unkb4.mMin.y;
-    unkb4.mMin.x = (float)std::tan(mMinPitch * DEG2RAD) * unkb4.mMin.y;
-    unkb4.mMax.x = (float)std::tan(mMaxPitch * DEG2RAD) * unkb4.mMin.y;
+    mLookLimits.mMin.y = (float)std::cos(Max<float>(yaw, pitch) * DEG2RAD);
+    mLookLimits.mMax.y = kHugeFloat;
+    mLookLimits.mMin.z = (float)std::tan(mMinYaw * DEG2RAD) * mLookLimits.mMin.y;
+    mLookLimits.mMax.z = (float)std::tan(mMaxYaw * DEG2RAD) * mLookLimits.mMin.y;
+    mLookLimits.mMin.x = (float)std::tan(mMinPitch * DEG2RAD) * mLookLimits.mMin.y;
+    mLookLimits.mMax.x = (float)std::tan(mMaxPitch * DEG2RAD) * mLookLimits.mMin.y;
 }

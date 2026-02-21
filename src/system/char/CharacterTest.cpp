@@ -25,7 +25,7 @@ CharacterTest::CharacterTest(Character *theChar)
     : mMe(theChar), mDriver(theChar), mClip1(theChar), mClip2(theChar),
       mFilterGroup(theChar), mTeleportTo(theChar), mWalkPath(theChar), mTransition(0),
       mCycleTransition(1), mMetronome(0), mZeroTravel(0), mShowScreenSize(0),
-      mShowFootExtents(0), unk94(0), unk98(0),
+      mShowFootExtents(0), mTransitionIdx(0), mDistMap(0),
       mOverlay(RndOverlay::Find("char_test", true)) {
     static Symbol none("none");
     mShowDistMap = none;
@@ -77,7 +77,7 @@ BEGIN_SAVES(CharacterTest)
     bs << mShowDistMap;
     bs << mTransition;
     bs << mCycleTransition;
-    bs << unk94;
+    bs << mTransitionIdx;
     bs << mMetronome;
     bs << mZeroTravel;
     bs << mShowScreenSize;
@@ -124,7 +124,7 @@ BEGIN_LOADS(CharacterTest)
     d >> mShowDistMap;
     d >> mTransition;
     d >> mCycleTransition;
-    d >> unk94;
+    d >> mTransitionIdx;
     if (d.rev < 10) {
         int i;
         d >> i;
@@ -213,8 +213,8 @@ DataNode CharacterTest::OnGetFilteredClips(DataArray *arr) {
 }
 
 float CharacterTest::UpdateOverlay(RndOverlay *o, float f) {
-    if (unk98)
-        unk98->Draw(40.0f, 40.0f, mDriver);
+    if (mDistMap)
+        mDistMap->Draw(40.0f, 40.0f, mDriver);
     return f;
 }
 
@@ -321,37 +321,37 @@ void CharacterTest::SetDistMap(Symbol s) {
     static Symbol nodes("nodes");
     static Symbol raw("raw");
     mShowDistMap = s;
-    RELEASE(unk98);
+    RELEASE(mDistMap);
     if (s != none) {
         mOverlay->SetCallback(this);
         mOverlay->SetShowing(true);
         if (mClip1 && mClip2 && Clips()) {
             if (s == raw) {
-                unk98 = new ClipDistMap(mClip1, mClip2, 1, 1, 3, nullptr);
-                unk98->FindDists(0, nullptr);
+                mDistMap = new ClipDistMap(mClip1, mClip2, 1, 1, 3, nullptr);
+                mDistMap->FindDists(0, nullptr);
             } else {
                 ClipGraphGenerator gen;
-                unk98 = gen.GeneratePair(mClip1, mClip2, nullptr, nullptr);
+                mDistMap = gen.GeneratePair(mClip1, mClip2, nullptr, nullptr);
             }
         }
     }
 }
 
 void CharacterTest::PlayNew() {
-    unk90 = kHugeFloat;
+    mTransEndBeat = kHugeFloat;
     if (!mClip1)
         return;
     CharClipDriver *drv =
         mDriver->Play(mClip1, CharClip::kPlayNoBlend, -1.0f, kHugeFloat, 0.0f);
     if (mClip2) {
-        unk90 = mClip2->EndBeat();
+        mTransEndBeat = mClip2->EndBeat();
         CharClip::NodeVector *nodes = mClip1->GetTransitions().FindNodes(mClip2);
         if (nodes) {
             drv->mPlayFlags = drv->mPlayFlags & 0xffff0fff;
-            int idx = unk94 % nodes->size;
-            unk94 = idx;
+            int idx = mTransitionIdx % nodes->size;
+            mTransitionIdx = idx;
             if (mCycleTransition) {
-                unk94 = idx + 1;
+                mTransitionIdx = idx + 1;
             } else {
                 idx = mTransition;
             }
@@ -362,7 +362,7 @@ void CharacterTest::PlayNew() {
                 mClip2, CharClip::kPlayNow, -1.0f, node.nextBeat, node.curBeat - drv->mBeat
             );
             float endBeat = node.nextBeat + 4.0f;
-            MinEq(unk90, endBeat);
+            MinEq(mTransEndBeat, endBeat);
         } else {
             mDriver->Play(mClip2, CharClip::kPlayLast, -1.0f, kHugeFloat, 0.0f);
         }
@@ -395,7 +395,7 @@ void CharacterTest::Poll() {
             if (drivclip != mClip1)
                 PlayNew();
         } else if ((drivclip != mClip1 && drivclip != mClip2)
-                   || (drivclip == mClip2 && drivs->mBeat > unk90)) {
+                   || (drivclip == mClip2 && drivs->mBeat > mTransEndBeat)) {
             PlayNew();
         }
     } else {
@@ -413,7 +413,7 @@ void CharacterTest::Poll() {
 }
 
 void CharacterTest::Sync() {
-    unk94 = 0;
+    mTransitionIdx = 0;
     if (!mDriver || (mClip1 && mClip1->Dir() != Clips())) {
         mClip1 = nullptr;
     }
@@ -438,7 +438,7 @@ void CharacterTest::Sync() {
     RndGraph::Get(0)->Reset();
     if (!mClip2)
         mTransition = 0;
-    if (unk98 && (unk98->ClipA() != mClip1 || unk98->ClipB() != mClip2)) {
+    if (mDistMap && (mDistMap->ClipA() != mClip1 || mDistMap->ClipB() != mClip2)) {
         SetDistMap(mShowDistMap);
     }
     if (mClip1) {
@@ -464,5 +464,5 @@ void CharacterTest::Sync() {
     if (mClip1 || mClip2) {
         mDriver->Enter();
     }
-    unk94 = 0;
+    mTransitionIdx = 0;
 }

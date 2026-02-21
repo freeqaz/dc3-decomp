@@ -58,7 +58,7 @@ END_PROPSYNCS
 void HamStorePanel::Load() {
     StorePanel::Load();
     MILO_ASSERT(!mOfferProvider, 0xd3);
-    mOfferProvider = new HamStoreProvider(&unk38, &unkac, &unk12c);
+    mOfferProvider = new HamStoreProvider(&mOffers, &unkac, &unk12c);
     unkc0 = false;
     unkc4.Restart();
     RefreshSpecialOfferStatus();
@@ -113,7 +113,7 @@ void HamStorePanel::RemoveOfferFromCart(StoreOffer *offer) {
 
 bool HamStorePanel::IsCurrFilterCart(int id) {
     static Symbol store_filter_shopping_cart("store_filter_shopping_cart");
-    return unkac[id]->unk0 == store_filter_shopping_cart;
+    return unkac[id]->mFilterSym == store_filter_shopping_cart;
 }
 
 void HamStorePanel::GetCart() {
@@ -176,7 +176,7 @@ void HamStorePanel::ReadCartData() {
 }
 
 StoreOffer *HamStorePanel::FindOffer(Symbol offerName) const {
-    FOREACH (it, unk38) {
+    FOREACH (it, mOffers) {
         StoreOffer *offer = *it;
         Symbol s = offer->StoreOfferData()->Sym(0);
         if (s == offerName)
@@ -188,7 +188,7 @@ StoreOffer *HamStorePanel::FindOffer(Symbol offerName) const {
 void HamStorePanel::SetFilterToCart() {
     static Symbol store_filter_shopping_cart("store_filter_shopping_cart");
     for (int i = unkac.size() - 1; i >= 0; i--) {
-        if (unkac[i]->unk0 == store_filter_shopping_cart) {
+        if (unkac[i]->mFilterSym == store_filter_shopping_cart) {
             mOfferProvider->SetFilter(unkac[i]);
             return;
         }
@@ -198,7 +198,7 @@ void HamStorePanel::SetFilterToCart() {
 int HamStorePanel::SetFilterToSongs() {
     static Symbol songs("songs");
     for (int i = unkac.size() - 1; i >= 0; i--) {
-        if (unkac[i]->unk0 == songs) {
+        if (unkac[i]->mFilterSym == songs) {
             mOfferProvider->SetFilter(unkac[i]);
             return i;
         }

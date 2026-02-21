@@ -6,7 +6,7 @@
 // TrackedJoint size: 0x74
 struct TrackedJoint {
     Vector3 mJointPos[kNumCoordSys]; // 0x0
-    Vector3 unk60;
+    Vector3 mSmoothedPos; // 0x60
     JointConfidence mJointConf; // 0x70
 };
 
@@ -118,11 +118,11 @@ struct SkeletonData {
 };
 
 struct SkeletonUpdateData {
-    Skeleton **unk0; // 0x0
-    Skeleton **unk4; // 0x4
-    SkeletonFrame *unk8; // 0x8
-    SkeletonHistory *unkc; // 0xc
-    CameraInput *unk10; // 0x10
+    Skeleton **mSkeletonsLeft; // 0x0
+    Skeleton **mSkeletonsRight; // 0x4
+    SkeletonFrame *mFrame; // 0x8
+    SkeletonHistory *mHistory; // 0xc
+    CameraInput *mCameraInput; // 0x10
 };
 
 // size 0x11c8

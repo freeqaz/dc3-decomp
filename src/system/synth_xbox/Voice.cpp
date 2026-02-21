@@ -18,13 +18,13 @@ typedef void (*PoolVoiceCallFunc)(int*, int, int);
 typedef HRESULT (*EndLoopFunc)(int *, int);
 
 Voice::Voice(bool b1, int i, bool b2)
-    : unk4(0), unk8(0), unkc(0), mNumSamples(0), mSampleRate(0), unk18(0), mLoopStart(-1),
-      mLoopEnd(-1), mVolume(1.0f), mPan(0), unk2c(1.0f), unk30(0.001f), unk34(0.001f),
-      mXMA(b1), unk3c(), unk40(false), unk44(-96.0f), unk48(false), unk49(b2),
-      mChannels(i), unk50(0), unk54(false) {
+    : mState(0), mAudioData(0), mAudioBytes(0), mNumSamples(0), mSampleRate(0), mStartSamp(0), mLoopStart(-1),
+      mLoopEnd(-1), mVolume(1.0f), mPan(0), unk2c(1.0f), mAttackRate(0.001f), mReleaseRate(0.001f),
+      mXMA(b1), unk3c(), mReverbEnabled(false), mReverbMixDb(-96.0f), unk48(false), mSynchronized(b2),
+      mChannels(i), mTagState(0), unk54(false) {
     unk5c = 0;
     unk60 = 0;
-    unk58 = 0;
+    mSourceVoice = 0;
     if (gEvent == INVALID_HANDLE_VALUE) {
         gEvent = CreateEventA(0, 0, 0, 0);
         MILO_ASSERT(gEvent, 0xfa);
@@ -40,11 +40,11 @@ Voice::Voice(bool b1, int i, bool b2)
 
 Voice::~Voice() {
     for (;;) {
-        int state = unk4;
+        int state = mState;
         if (state != 2)
             break;
 
-        if (unk49) {
+        if (mSynchronized) {
             StartSynchronizedVoices();
         }
         Sleep(0);
@@ -57,12 +57,12 @@ Voice::~Voice() {
         fn(pVar1, (int*)this);
     }
 
-    if (unk58) {
-        int *pVar1 = (int *)unk58;
+    if (mSourceVoice) {
+        int *pVar1 = (int *)mSourceVoice;
         int *pVar2 = (int *)(*pVar1);
         PoolVoiceCallFunc fn = (PoolVoiceCallFunc)(*(int *)(*pVar2 + 0x50));
         fn(pVar1, 0, 0);
-        dispose(pVar1, unk4);
+        dispose(pVar1, mState);
     }
 }
 
@@ -79,9 +79,9 @@ void Voice::SetLoopRegion(int loopStart, int loopEnd) {
 }
 
 void Voice::SetReverbEnable(bool b) {
-    if (unk40 == b)
+    if (mReverbEnabled == b)
         return;
-    unk40 = b;
+    mReverbEnabled = b;
     UpdateSends();
 }
 
@@ -107,17 +107,17 @@ void Voice::SetPan(float f) {
 void Voice::SetStartSamp(int samp) {
     MILO_ASSERT(samp >= 0, 0x31e);
     MILO_ASSERT(samp < mNumSamples, 799);
-    unk18 = samp;
+    mStartSamp = samp;
 }
 
 void Voice::SetReverbMixDb(float f) {
-    unk44 = f;
+    mReverbMixDb = f;
     UpdateMix();
 }
 
 void Voice::EndLoop() {
     // Call IXAudio2SourceVoice::ExitLoop(0) via vtable at offset 0x60
-    int *pSourceVoice = (int *)unk58;
+    int *pSourceVoice = (int *)mSourceVoice;
     HRESULT hr = ((EndLoopFunc)(*(int *)(*(int *)pSourceVoice + 0x60)))(pSourceVoice, 0);
     MILO_ASSERT(SUCCEEDED(hr), 0x2da);
 }
@@ -127,8 +127,8 @@ void Voice::Start() { blockingStart(false); }
 void Voice::SetData(const void *buffer, int bytes, int i) {
     MILO_ASSERT(buffer, 299);
     MILO_ASSERT(bytes >= 0, 300);
-    unk8 = buffer;
-    unkc = bytes;
+    mAudioData = buffer;
+    mAudioBytes = bytes;
     if (i != 0) {
         mNumSamples = i;
     } else {
@@ -142,10 +142,10 @@ void Voice::SetData(const void *buffer, int bytes, int i) {
 }
 
 void Voice::InitSourceBuffer(XAUDIO2_BUFFER &audio_buffer) {
-    audio_buffer.pAudioData = (BYTE *)unk8;
-    audio_buffer.AudioBytes = unkc;
+    audio_buffer.pAudioData = (BYTE *)mAudioData;
+    audio_buffer.AudioBytes = mAudioBytes;
     audio_buffer.pContext = 0;
-    audio_buffer.PlayBegin = unk18;
+    audio_buffer.PlayBegin = mStartSamp;
     audio_buffer.PlayLength = 0;
     if (mLoopStart >= 0) {
         if (mLoopEnd < 0) {

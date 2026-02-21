@@ -87,9 +87,9 @@ FileLoader::FileLoader(
     const char *cc8
 )
     : Loader(fp, pos), mFile(nullptr), mStream(bs), mBuffer(nullptr), mBufLen(0),
-      mAccessed(false), mTemp(b5), mWarn(b6), mFlags(i4), mFilename(cc), unk3c(0),
-      unk40(-1), mState(nullptr) {
-    unk44 = cc8 ? cc8 : "main";
+      mAccessed(false), mTemp(b5), mWarn(b6), mFlags(i4), mFilename(cc), mBytesLoaded(0),
+      mChunkSize(-1), mState(nullptr) {
+    mHeapName = cc8 ? cc8 : "main";
     if (mStream) {
         mState = &FileLoader::LoadStream;
     } else {
@@ -114,7 +114,7 @@ void FileLoader::DoneLoading() {}
 
 void FileLoader::AllocBuffer() {
     const char *filename = mFilename.c_str();
-    MemHeapTracker tmp(MemFindHeap(unk44.c_str()));
+    MemHeapTracker tmp(MemFindHeap(mHeapName.c_str()));
     BeginMemTrackFileName(filename);
     if (mTemp) {
         mBuffer =
@@ -149,25 +149,25 @@ void FileLoader::LoadStream() {
         int size;
         *mStream >> size;
         if (size == -1) {
-            *mStream >> unk40;
+            *mStream >> mChunkSize;
             *mStream >> mBufLen;
         } else {
-            unk40 = 0;
+            mChunkSize = 0;
             mBufLen = size;
         }
         AllocBuffer();
     }
-    int i2 = unk40 > 0 ? 0x10000 : mBufLen;
+    int i2 = mChunkSize > 0 ? 0x10000 : mBufLen;
     while (true) {
-        int i3 = Min(mBufLen - unk3c, i2);
+        int i3 = Min(mBufLen - mBytesLoaded, i2);
         while (mStream->Eof() != NotEof) {
             if (TheLoadMgr.CheckSplit())
                 return;
         }
         if (i3 == 0)
             break;
-        mStream->Read((void *)(mBuffer + unk3c), i3);
-        unk3c += i3;
+        mStream->Read((void *)(mBuffer + mBytesLoaded), i3);
+        mBytesLoaded += i3;
     }
     mState = &FileLoader::DoneLoading;
 }
@@ -290,7 +290,7 @@ Loader *LoadMgr::ForceGetLoader(const FilePath &fp) {
 void LoadMgr::Poll() {
     if (mPeriod > 0) {
         mTimer.Restart();
-        unk1c = mPeriod;
+        mCurrentPeriod = mPeriod;
         while (!mLoading.empty()) {
             PollFrontLoader();
             if (!mLoading.empty()) {
@@ -345,9 +345,9 @@ Loader *LoadMgr::AddLoader(const FilePath &file, LoaderPos pos) {
 
 void LoadMgr::PollUntilLoaded(Loader *ldr1, Loader *ldr2) {
     AutoGlitchReport hang(1e9f, __FUNCTION__);
-    float saved_period = unk1c;
+    float saved_period = mCurrentPeriod;
     while (!ldr1->IsLoaded()) {
-        unk1c = 1e+30f;
+        mCurrentPeriod = 1e+30f;
         if (ldr2 && ldr2 == mLoading.front()) {
 #ifdef MILO_DEBUG
             MILO_FAIL(
@@ -364,7 +364,7 @@ void LoadMgr::PollUntilLoaded(Loader *ldr1, Loader *ldr2) {
             mLoading.pop_front();
         }
     }
-    unk1c = saved_period;
+    mCurrentPeriod = saved_period;
 }
 
 #pragma endregion

@@ -16,8 +16,8 @@ public:
     static void Init();
 
     HANDLE mThread; // 0x0
-    unsigned long unk4;
-    bool unk8;
+    unsigned long mDeviceId;
+    bool mQuit;
     bool unk9;
     float unkc;
 };

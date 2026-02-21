@@ -12,5 +12,5 @@ public:
     void Process(float *, int, int);
     void SetParameters(DistortionEffect::Params const &);
 
-    float unk0;
+    float mDrive;
 };

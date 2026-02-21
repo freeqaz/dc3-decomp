@@ -72,14 +72,14 @@ protected:
     String mPath; // 0xc - URL path for GET/POST requests
     unsigned short mPort; // 0x14
     int mState; // 0x18
-    bool unk1c;
+    bool mFlags;
     Timer mTimer; // 0x20
     float mTimeoutMs; // 0x50
     unsigned int mIP; // 0x54
     String mHeaders; // 0x58 - additional HTTP headers
     void *mRecvBuf; // 0x60 - receive buffer (allocated as 0x1000 bytes)
     int mRecvBufPos; // 0x64
-    u32 unk68;
+    u32 mHttpStatus;
     char *mFileBuf; // 0x6c
     int mFileBufSize; // 0x70
     int mFileBufRecvPos; // 0x74
@@ -102,7 +102,7 @@ protected:
 
     const char *mContent; // 0x88
     unsigned int mContentLength; // 0x8c
-    int unk90; // 0x90
-    String unk94; // 0x94
-    int unk9c;
+    int mBytesRemaining; // 0x90
+    String mRequestHeaders; // 0x94
+    int mHeaderLength;
 };

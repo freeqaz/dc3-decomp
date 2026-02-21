@@ -14,7 +14,7 @@ class StepMoves : public PracticeStep {
     friend bool PropSync(StepMoves &, DataNode &, DataArray *, int, PropOp);
 
 public:
-    StepMoves() : mSelected(false), unk28(0), unk2c(0) {}
+    StepMoves() : mSelected(false), mDisplayNum(0), mStepNum(0) {}
     ~StepMoves() {}
     bool operator<(const StepMoves &) const;
 
@@ -32,8 +32,8 @@ public:
 
     std::vector<HamMove *> mMoves; // 0x18
     bool mSelected; // 0x24
-    int unk28;
-    int unk2c;
+    int mDisplayNum;
+    int mStepNum;
 };
 
 class PracticeChoosePanel : public HamPanel, public UIListProvider {
@@ -72,8 +72,8 @@ private:
     std::vector<HamMove *> GetMovesInStep(PracticeStep);
 
     std::vector<StepMoves> mStepMoves; // 0x40
-    Symbol unk4c; // 0x4c - song
-    Symbol unk50; // 0x50 - difficulty sym
-    std::vector<int> unk54; // 0x54 - memory?
-    RndMat *unk60; // 0x60
+    Symbol mCurrentSong; // 0x4c
+    Symbol mCurrentDifficulty; // 0x50
+    std::vector<int> mSelectedStepNums; // 0x54
+    RndMat *mProblemCalloutMat; // 0x60
 };

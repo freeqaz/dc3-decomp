@@ -108,7 +108,7 @@ void FileMergerOrganizer::Init() {
                 Symbol key = curCatArr->Sym(i);
                 CatData &val = gCatPriority[key];
                 val.priority = gNextCatPriority;
-                val.unk4 = genderArr && genderArr->Contains(key);
+                val.mInGenderOrder = genderArr && genderArr->Contains(key);
             }
             gOrganizing = true;
         }

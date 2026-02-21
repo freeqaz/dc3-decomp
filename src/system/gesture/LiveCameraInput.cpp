@@ -87,15 +87,15 @@ update:
 #pragma region LiveCameraInput
 
 LiveCameraInput::LiveCameraInput()
-    : mConnected(true), unk11e9(0), unk11ea(0), unk11eb(0), unk11ec(0), mSpeechMgr(0) {
+    : mConnected(true), mColorPolled(0), mDepthPolled(0), mColorReceived(0), mDepthReceived(0), mSpeechMgr(0) {
     for (int i = 0; i < DIM(mTexClips); i++) {
         mTexClips[i].mTex = nullptr;
     }
     mSpeechMgr = nullptr;
     mNumSnapshots = 0;
-    unk14a8 = 0;
-    unk14ac = 0;
-    unk14b0 = 0;
+    mColorStreamTex = 0;
+    mDepthStreamTex = 0;
+    mDebugDepthTex = 0;
     mSnapshotBatches.clear();
     mNumSnapshots = 0;
     SkeletonUpdate::Init();
@@ -107,12 +107,12 @@ LiveCameraInput::LiveCameraInput()
     }
     for (int i = 0; i < kBufferNum; i++) {
         Buffer &cur = mStreams[i];
-        cur.unk0 = nullptr;
-        cur.unk4[0] = nullptr;
-        cur.unk4[1] = nullptr;
-        cur.unkc = 0;
-        cur.unk10 = 1;
-        cur.unk14 = nullptr;
+        cur.mHandle = nullptr;
+        cur.mFrames[0] = nullptr;
+        cur.mFrames[1] = nullptr;
+        cur.mWriteIdx = 0;
+        cur.mReadIdx = 1;
+        cur.mMat = nullptr;
     }
     int initFlags = 0x4049;
     if (!UsingCD()) {
@@ -130,10 +130,10 @@ LiveCameraInput::LiveCameraInput()
     if (b17) {
         mSpeechMgr = new SpeechMgr(kinectArr);
     }
-    unk11d4 = 0;
-    if (SUCCEEDED(NuiAudioCreate(5, NuiAudioErrorCallback, 1, &unk11d8, nullptr))) {
-        NuiAudioRegisterCallbacks(&unk11d8, 1, NuiAudioDataCallback);
-        unk11d4 = 1;
+    mAudioInitialized = 0;
+    if (SUCCEEDED(NuiAudioCreate(5, NuiAudioErrorCallback, 1, &mAudioHandle, nullptr))) {
+        NuiAudioRegisterCallbacks(&mAudioHandle, 1, NuiAudioDataCallback);
+        mAudioInitialized = 1;
     }
     bool i6 = kinectArr->FindArray("title_tracked_skeletons")->Int(1);
     HANDLE new_skeleton_event = SkeletonUpdate::NewSkeletonEvent();
@@ -150,12 +150,12 @@ LiveCameraInput::LiveCameraInput()
             0,
             2,
             nullptr,
-            &mStreams[kBufferColor].unk0
+            &mStreams[kBufferColor].mHandle
         )),
         "NuiImageStreamOpen color failed"
     );
     EndMemTrackObjectName();
-    mStreams[kBufferColor].unk14 = CreateCameraBufferMat(640, 480, RndTex::kScratch);
+    mStreams[kBufferColor].mMat = CreateCameraBufferMat(640, 480, RndTex::kScratch);
     BeginMemTrackObjectName("NuiImageStreamOpen:depth");
     MILO_ASSERT_FMT(
         SUCCEEDED(NuiImageStreamOpen(
@@ -164,19 +164,19 @@ LiveCameraInput::LiveCameraInput()
             0,
             2,
             0,
-            &mStreams[kBufferDepth].unk0
+            &mStreams[kBufferDepth].mHandle
         )),
         "NuiImageStreamOpen depth failed"
     );
     EndMemTrackObjectName();
-    mStreams[kBufferDepth].unk14 = CreateCameraBufferMat(320, 240, RndTex::kScratch);
-    mStreams[kBufferPlayer].unk14 = CreateCameraBufferMat(320, 240, RndTex::kScratch);
-    mStreams[kBufferPlayerColor].unk14 =
+    mStreams[kBufferDepth].mMat = CreateCameraBufferMat(320, 240, RndTex::kScratch);
+    mStreams[kBufferPlayer].mMat = CreateCameraBufferMat(320, 240, RndTex::kScratch);
+    mStreams[kBufferPlayerColor].mMat =
         CreateCameraBufferMat(640, 480, RndTex::kScratch);
-    RELEASE(unk14a8);
-    unk14a8 = Hmx::Object::New<DxTex>();
-    RELEASE(unk14ac);
-    unk14ac = Hmx::Object::New<DxTex>();
+    RELEASE(mColorStreamTex);
+    mColorStreamTex = Hmx::Object::New<DxTex>();
+    RELEASE(mDepthStreamTex);
+    mDepthStreamTex = Hmx::Object::New<DxTex>();
     DataArray *maxArr = kinectArr->FindArray("camera")->FindArray("max_snapshots", false);
     if (maxArr) {
         mMaxSnapshots = maxArr->Int(1);
@@ -191,28 +191,28 @@ LiveCameraInput::LiveCameraInput()
 LiveCameraInput::~LiveCameraInput() {
     SkeletonUpdate::Terminate();
     for (int i = 0; i < 4; i++) {
-        RndMat *curMat = mStreams[i].unk14;
+        RndMat *curMat = mStreams[i].mMat;
         RndTex *diffuseTex = curMat ? curMat->GetDiffuseTex() : nullptr;
         delete diffuseTex;
         delete curMat;
-        if (mStreams[i].unk0) {
-            CloseHandle(mStreams[i].unk0);
+        if (mStreams[i].mHandle) {
+            CloseHandle(mStreams[i].mHandle);
         }
     }
     ClearSnapshots();
-    if (unk11d4) {
-        NuiAudioUnregisterCallbacks(&unk11d8, NuiAudioDataCallback);
-        NuiAudioRelease(&unk11d8);
+    if (mAudioInitialized) {
+        NuiAudioUnregisterCallbacks(&mAudioHandle, NuiAudioDataCallback);
+        NuiAudioRelease(&mAudioHandle);
     }
     delete mSpeechMgr;
     NuiShutdown();
 }
 
 void LiveCameraInput::PollTracking() {
-    unk11e9 = false;
-    unk11ea = false;
-    unk11eb = false;
-    unk11ec = false;
+    mColorPolled = false;
+    mDepthPolled = false;
+    mColorReceived = false;
+    mDepthReceived = false;
     PollNewStream(kBufferColor);
     CameraInput::PollTracking();
 }
@@ -227,7 +227,7 @@ void LiveCameraInput::PreInit() {
         TheDebug.AddExitCallback(LiveCameraInput::Terminate);
         DataRegisterFunc("camera_dump", OnCameraDumpUnique);
         DataRegisterFunc("camera_debug_depth", OnCameraDebugDepth);
-        LoadDebugDepthBuffer(sInstance->unk14b0);
+        LoadDebugDepthBuffer(sInstance->mDebugDepthTex);
     }
 }
 
@@ -339,32 +339,32 @@ void LiveCameraInput::PollNewStream(BufferType buf) {
     MILO_ASSERT(kBufferColor == buf || kBufferDepth == buf, 0x227);
     MILO_ASSERT_RANGE(buf, 0, DIM(mStreams), 0x22C);
     Buffer &curBuf = mStreams[buf];
-    if (curBuf.unk0) {
+    if (curBuf.mHandle) {
         HRESULT hr =
-            NuiImageStreamGetNextFrame(curBuf.unk0, 0, &curBuf.unk4[curBuf.unkc]);
+            NuiImageStreamGetNextFrame(curBuf.mHandle, 0, &curBuf.mFrames[curBuf.mWriteIdx]);
         if (buf == kBufferColor) {
             g_ColorPollCnt++;
-            unk11e9 = true;
+            mColorPolled = true;
         } else {
-            unk11ea = true;
+            mDepthPolled = true;
         }
         if (SUCCEEDED(hr)) {
             if (buf == kBufferColor) {
-                unk11eb = true;
+                mColorReceived = true;
             } else {
-                unk11ec = true;
+                mDepthReceived = true;
             }
             mConnected = true;
-            unk14a8->SetDeviceTex(nullptr);
-            unk14ac->SetDeviceTex(nullptr);
-            if (curBuf.unk4[curBuf.unk10]) {
+            mColorStreamTex->SetDeviceTex(nullptr);
+            mDepthStreamTex->SetDeviceTex(nullptr);
+            if (curBuf.mFrames[curBuf.mReadIdx]) {
                 HRESULT hr =
-                    NuiImageStreamReleaseFrame(curBuf.unk0, curBuf.unk4[curBuf.unk10]);
+                    NuiImageStreamReleaseFrame(curBuf.mHandle, curBuf.mFrames[curBuf.mReadIdx]);
                 MILO_ASSERT(SUCCEEDED(hr), 0x24E);
-                curBuf.unk4[curBuf.unk10] = 0;
+                curBuf.mFrames[curBuf.mReadIdx] = 0;
             }
-            curBuf.unkc = curBuf.unkc - 1U & 1;
-            curBuf.unk10 = curBuf.unk10 - 1U & 1;
+            curBuf.mWriteIdx = curBuf.mWriteIdx - 1U & 1;
+            curBuf.mReadIdx = curBuf.mReadIdx - 1U & 1;
         } else if (hr == E_NUI_DEVICE_NOT_CONNECTED) {
             mConnected = false;
         } else if (hr == (HRESULT)0x83010001 && buf == kBufferColor) {
@@ -381,8 +381,8 @@ void *LiveCameraInput::StreamBufferData(BufferType type) const {
     } else {
         i3 = type == kBufferPlayerColor ? 1 : 0;
     }
-    if (mStreams[type].unk4[i3]) {
-        return mStreams[type].unk4[i3]->pFrameTexture;
+    if (mStreams[type].mFrames[i3]) {
+        return mStreams[type].mFrames[i3]->pFrameTexture;
     } else {
         return nullptr;
     }
@@ -390,7 +390,7 @@ void *LiveCameraInput::StreamBufferData(BufferType type) const {
 
 RndMat *LiveCameraInput::DisplayMat(BufferType type) const {
     MILO_ASSERT(type < kBufferNum, 0x20F);
-    return mStreams[type].unk14;
+    return mStreams[type].mMat;
 }
 
 RndTex *LiveCameraInput::DisplayTex(BufferType type) const {
@@ -604,15 +604,15 @@ RndTex *LiveCameraInput::GetStreamTex(BufferType type) const {
     void *bufferData = StreamBufferData(type);
     DxTex *tex;
     if (type == kBufferColor) {
-        tex = unk14a8;
+        tex = mColorStreamTex;
     } else {
-        tex = unk14ac;
+        tex = mDepthStreamTex;
     }
     tex->SetDeviceTex((D3DTexture *)bufferData);
     RndTex *result = tex;
     if (type == kBufferDepth) {
-        if (unk14b0 != nullptr && (bufferData == nullptr || *gDebugDepth != 0)) {
-            result = unk14b0;
+        if (mDebugDepthTex != nullptr && (bufferData == nullptr || *gDebugDepth != 0)) {
+            result = mDebugDepthTex;
         }
     }
     return result;

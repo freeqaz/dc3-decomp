@@ -11,14 +11,14 @@
 #include "utl/Symbol.h"
 
 NavListSortMgr::NavListSortMgr(SongPreview &songprev)
-    : mSongPreview(&songprev), mCurrentSortIdx(0), unk48(false), mHeaderMode(false),
+    : mSongPreview(&songprev), mCurrentSortIdx(0), mHighlightSaved(false), mHeaderMode(false),
       mEnteringHeaderMode(false), mExitingHeaderMode(false), mHeadersSelectable(false) {
-    unk44 = new DataArray(0);
+    mSavedHighlightID = new DataArray(0);
 };
 
 NavListSortMgr::~NavListSortMgr() {
     DeleteAll(mSorts);
-    unk44->Release();
+    mSavedHighlightID->Release();
 }
 
 void NavListSortMgr::StopPreview() { mSongPreview->Start(gNullStr, 0); }
@@ -75,7 +75,7 @@ Symbol NavListSortMgr::GetCurrentSortName() {
 
 void NavListSortMgr::SetSort(int idx) {
     if (idx >= 0 && idx < mSorts.size()) {
-        unk70.clear();
+        mExpandedHeaders.clear();
         ClearIconLabels();
         mCurrentSortIdx = idx;
         mSorts[idx]->BuildItemList();
@@ -95,25 +95,25 @@ void NavListSortMgr::SetSort(Symbol sym) {
 }
 
 void NavListSortMgr::SetHeaderUncollapsed(Symbol sym) {
-    FOREACH (it, unk70) {
+    FOREACH (it, mExpandedHeaders) {
         if (*it == sym) {
             return;
         }
     }
-    unk70.push_back(sym);
+    mExpandedHeaders.push_back(sym);
 }
 
 void NavListSortMgr::SetHeaderCollapsed(Symbol sym) {
-    FOREACH (it, unk70) {
+    FOREACH (it, mExpandedHeaders) {
         if (*it == sym) {
-            unk70.erase(it);
+            mExpandedHeaders.erase(it);
             return;
         }
     }
 }
 
 bool NavListSortMgr::IsHeaderCollapsed(Symbol sym) {
-    FOREACH (it, unk70) {
+    FOREACH (it, mExpandedHeaders) {
         if (*it == sym) {
             return false;
         }
@@ -138,14 +138,14 @@ void NavListSortMgr::Text(int i1, int i2, UIListLabel *listlabel, UILabel *label
 }
 
 void NavListSortMgr::UnHighlightCurrent() {
-    if (mSorts[mCurrentSortIdx]->GetUnk54()) {
-        mSorts[mCurrentSortIdx]->GetUnk54()->OnUnHighlight();
-        mSorts[mCurrentSortIdx]->SetUnk54(0);
+    if (mSorts[mCurrentSortIdx]->GetPrevHighlightNode()) {
+        mSorts[mCurrentSortIdx]->GetPrevHighlightNode()->OnUnHighlight();
+        mSorts[mCurrentSortIdx]->SetPrevHighlightNode(0);
     }
 }
 
 void NavListSortMgr::ContentMounted(const char *c1, const char *c2) {
-    NavListSortNode *node = mSorts[mCurrentSortIdx]->GetUnk50();
+    NavListSortNode *node = mSorts[mCurrentSortIdx]->GetHighlightNode();
     if (!node) {
         return;
     }
@@ -206,8 +206,8 @@ int NavListSortMgr::GetHeaderIndexFromChildListIndex(int idx) {
 void NavListSortMgr::OnExit() {
     NavListSortNode *node = GetHighlightItem();
     if (node) {
-        node->GetID(unk44);
-        unk48 = true;
+        node->GetID(mSavedHighlightID);
+        mHighlightSaved = true;
     }
 }
 
@@ -284,7 +284,7 @@ void NavListSortMgr::OnUnload() {
 }
 
 NavListSortNode *NavListSortMgr::GetHighlightItem() {
-    return mSorts[mCurrentSortIdx]->GetUnk50();
+    return mSorts[mCurrentSortIdx]->GetHighlightNode();
 }
 
 void NavListSortMgr::StartPreview(int idx, TexMovie *tex) {
@@ -391,7 +391,7 @@ BEGIN_HANDLERS(NavListSortMgr)
     HANDLE_EXPR(on_select_done, OnSelectDone(_msg->Int(2)))
     HANDLE_EXPR(on_cancel, OnCancel())
     HANDLE_EXPR(move_on, MoveOn())
-    HANDLE_EXPR(clear_saved_highlight, unk48 = false)
+    HANDLE_EXPR(clear_saved_highlight, mHighlightSaved = false)
     HANDLE_ACTION(set_highlighted_ix, SetHighlightedIx(_msg->Int(2)))
     HANDLE_EXPR(get_highlight_item, GetHighlightItem())
     HANDLE_ACTION(next_sort, NextSort())

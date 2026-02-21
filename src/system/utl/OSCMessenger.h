@@ -6,10 +6,10 @@
 class OSCMessenger {
 public:
     struct OSCValue {
-        String unk0; // 0x0
+        String mAddress; // 0x0
         char buffer[0x80]; // 0x8
         char mType; // 0x88
-        bool unk89; // 0x89
+        bool mHasNewValue; // 0x89
     };
     virtual ~OSCMessenger();
 

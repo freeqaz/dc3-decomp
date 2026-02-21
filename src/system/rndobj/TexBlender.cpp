@@ -14,7 +14,7 @@
 
 RndTexBlender::RndTexBlender()
     : mBaseMap(this), mNearMap(this), mFarMap(this), mOutputTextures(this),
-      mControllerList(this), mOwner(this), mControllerInfluence(1), unkbc(0),
+      mControllerList(this), mOwner(this), mControllerInfluence(1), mRenderedStates(0),
       unkc0(true) {}
 
 BEGIN_HANDLERS(RndTexBlender)
@@ -61,7 +61,7 @@ BEGIN_COPYS(RndTexBlender)
         COPY_MEMBER(mOwner)
         COPY_MEMBER(mControllerInfluence)
     END_COPYING_MEMBERS
-    unkbc = 0;
+    mRenderedStates = 0;
 END_COPYS
 
 INIT_REVS(2, 0)
@@ -81,7 +81,7 @@ BEGIN_LOADS(RndTexBlender)
         bs >> mControllerInfluence;
     else
         mControllerInfluence = 0.7071068f;
-    unkbc = 0;
+    mRenderedStates = 0;
 END_LOADS
 
 #pragma endregion
@@ -133,7 +133,7 @@ void RndTexBlender::DrawBlendList(
     }
 
     if (((texdata != 0) || (state == 8)) && (!list.empty())) {
-        unkbc |= state;
+        mRenderedStates |= state;
 
         RndMat *mat = TheShaderMgr.GetWork();
         float f31 = 1.0f;
@@ -180,8 +180,8 @@ void RndTexBlender::DrawBlendList(
 
         RndCam *cam = RndCam::Current();
         if (cam) {
-            // Reinterpret unk300 (Matrix4) as Transform - first 48 bytes match Transform layout
-            TheShaderMgr.SetTransform(*(const Transform *)&cam->GetMatrix300());
+            // Reinterpret mViewProjMatrix (Matrix4) as Transform - first 48 bytes match Transform layout
+            TheShaderMgr.SetTransform(*(const Transform *)&cam->GetViewProjMatrix());
         }
     }
 }

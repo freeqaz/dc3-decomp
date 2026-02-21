@@ -46,14 +46,14 @@ void GetRows(JsonConverter &c, const JsonObject *o, std::vector<LeaderboardRow> 
         JsonArray *cur = static_cast<JsonArray *>(c.GetValue(a, i));
         LeaderboardRow row;
         row.mName = c.GetValue(cur, 1)->Str();
-        row.unk8 = c.GetValue(cur, 0)->Int();
+        row.mPlayerID = c.GetValue(cur, 0)->Int();
         row.mScore = c.GetValue(cur, 4)->Int();
         row.mRank = c.GetValue(cur, 3)->Int();
-        row.unk14 = c.GetValue(cur, 7)->Int();
+        row.mModeID = c.GetValue(cur, 7)->Int();
         row.mDiffID = (Difficulty)c.GetValue(cur, 2)->Int();
         row.mNoFlashcards = false;
         row.mIsPercentile = c.GetValue(cur, 5)->Bool();
-        row.unk1e = c.GetValue(cur, 6)->Bool();
+        row.mIsHardcore = c.GetValue(cur, 6)->Bool();
         const char *str = c.GetValue(cur, 8)->Str();
         if (strcmp(str, gNullStr) != 0) {
             row.mXUID = 0;

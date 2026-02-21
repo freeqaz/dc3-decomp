@@ -12,8 +12,8 @@ public:
     void Process(float *, int, int);
     void SetParameters(BitCrushEffect::Params const &);
 
-    float unk0;
-    int unk4;
-    float unk8;
-    float unkc;
+    float mHoldPeriod;
+    int mHoldCounter;
+    float mHeldLeft;
+    float mHeldRight;
 };

@@ -13,44 +13,44 @@
 #include "xdk/d3d9i/d3d9.h"
 #include "xdk/d3d9i/d3d9types.h"
 
-DxMovie::DxMovie() : unk44(0), unk4c(0) {}
+DxMovie::DxMovie() : mFrameBuf(0), mStream(0) {}
 
 DxMovie::~DxMovie() {
-    RELEASE(unk4c);
-    if (unk44) {
-        MemFree(unk44, __FILE__, 0x1F);
-        unk44 = nullptr;
+    RELEASE(mStream);
+    if (mFrameBuf) {
+        MemFree(mFrameBuf, __FILE__, 0x1F);
+        mFrameBuf = nullptr;
     }
 }
 
 void DxMovie::StreamReadFinish() {
-    while (!unk4c->ReadDone())
+    while (!mStream->ReadDone())
         ;
 }
 
 void DxMovie::SetFile(const FilePath &file, bool stream) {
-    RELEASE(unk4c);
-    if (unk44) {
-        MemFree(unk44, __FILE__, 0x2B);
-        unk44 = nullptr;
+    RELEASE(mStream);
+    if (mFrameBuf) {
+        MemFree(mFrameBuf, __FILE__, 0x2B);
+        mFrameBuf = nullptr;
     }
     mVideo.Reset();
     RndMovie::SetFile(file, stream);
     if (!mFile.empty()) {
         if (stream) {
-            unk4c = NewFile(CacheResource(mFile.c_str(), this), 2);
-            if (!unk4c) {
+            mStream = NewFile(CacheResource(mFile.c_str(), this), 2);
+            if (!mStream) {
                 MILO_NOTIFY("%s: %s not found", PathName(this), mFile);
                 return;
             }
-            FileStream fStream(unk4c, true);
+            FileStream fStream(mStream, true);
             mVideo.Load(fStream, true);
             void *frames =
                 MemAlloc(mVideo.FrameSize() * 2, __FILE__, 0x44, "RndMovie frames");
-            unk54 = 0;
-            unk44 = frames;
-            unk58 = frames;
-            unk50 = fStream.Tell();
+            mBufOffset = 0;
+            mFrameBuf = frames;
+            mReadPtr = frames;
+            mStreamDataOffset = fStream.Tell();
         } else {
             FileLoader *fl = dynamic_cast<FileLoader *>(TheLoadMgr.ForceGetLoader(file));
             char *buffer;
@@ -67,7 +67,7 @@ void DxMovie::SetFile(const FilePath &file, bool stream) {
             mVideo.Load(bStream, false);
             MemFree(buffer, __FILE__, 0x58);
         }
-        unk48 = mVideo.NumFrames();
+        mNumFrames = mVideo.NumFrames();
         SetTex(mTex);
         SetFrame(0, 1);
     }
@@ -100,11 +100,11 @@ void DxMovie::Update() {
         int srcPitch = mVideo.Bpp() * mVideo.Width() * 4;
         D3DSurface_LockRect(surface, &lock, nullptr, 0);
         if (srcPitch == lock.Pitch) {
-            memcpy(lock.pBits, unk58, mVideo.FrameSize());
+            memcpy(lock.pBits, mReadPtr, mVideo.FrameSize());
         } else {
             MILO_ASSERT(srcPitch < lock.Pitch, 0xB5);
             char *curBits = (char *)lock.pBits;
-            char *c58 = (char *)unk58;
+            char *c58 = (char *)mReadPtr;
             for (int i = mVideo.FrameSize(); i > 0; i -= srcPitch) {
                 memcpy(curBits, c58, srcPitch);
                 c58 += srcPitch;
@@ -117,22 +117,22 @@ void DxMovie::Update() {
 }
 
 int DxMovie::StreamChunkSize() {
-    return Min(mVideo.FrameSize(), unk4c->Size() - unk4c->Tell());
+    return Min(mVideo.FrameSize(), mStream->Size() - mStream->Tell());
 }
 
 void DxMovie::StreamNextBuffer() {
     StreamReadFinish();
-    unk54 = unk54 ? 0 : mVideo.FrameSize();
-    char *c44 = (char *)unk44;
+    mBufOffset = mBufOffset ? 0 : mVideo.FrameSize();
+    char *c44 = (char *)mFrameBuf;
     int size = StreamChunkSize();
-    unk4c->ReadAsync(c44 + unk54, size);
+    mStream->ReadAsync(c44 + mBufOffset, size);
 }
 
 void DxMovie::StreamRestart(int frame) {
     StreamReadFinish();
-    unk4c->Seek(mVideo.FrameSize() * frame + unk50, FILE_SEEK_SET);
-    unk4c->Read(unk44, StreamChunkSize());
-    unk54 = 0;
-    unk58 = unk44;
+    mStream->Seek(mVideo.FrameSize() * frame + mStreamDataOffset, FILE_SEEK_SET);
+    mStream->Read(mFrameBuf, StreamChunkSize());
+    mBufOffset = 0;
+    mReadPtr = mFrameBuf;
     StreamNextBuffer();
 }

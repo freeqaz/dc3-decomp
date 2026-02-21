@@ -16,8 +16,8 @@ public:
         void CacheDestination();
 
         EventType mType; // 0x0
-        DataArray *unk4; // 0x4
-        DataArrayPtr unk8; // 0x8
+        DataArray *mDataArray; // 0x4
+        DataArrayPtr mEventParams; // 0x8 - cloned event parameters payload
         String mDestScreen; // 0xc
         bool mActive; // 0x14
     };

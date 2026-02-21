@@ -51,11 +51,11 @@ protected:
     void AddRoutineMove(int, int, const MoveParent *, const MoveVariant *);
 
     int mTotalMeasures; // 0x2c
-    std::set<const MoveVariant *> unk30; // 0x30
-    unsigned char unk48; // 0x48
+    std::set<const MoveVariant *> mPendingVariants; // 0x30
+    unsigned char mNeedsUpdate; // 0x48
     int mFromMeasure; // 0x4c
     int mToMeasure; // 0x50
-    std::map<int, int> unk54; // 0x54
+    std::map<int, int> mJumpMap; // 0x54
     std::set<int> mUnscoredMeasures[2]; // 0x6c
 };
 

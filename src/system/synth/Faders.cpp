@@ -9,8 +9,8 @@
 Fader::Fader()
     : mLevel(0), mLevelEaseParam(2), mLevelTarget(0), mPan(0), mPanEaseParam(1),
       mPanTarget(0), mTranspose(0), mTransposeEaseParam(1), mTransposeTarget(0),
-      unkd0(0) {
-    unkd4.clear();
+      mFadeDuration(0) {
+    mVolumeContributions.clear();
     mLevelEaseType = kEasePolyOut;
     mLevelEaseFunc = gEaseFuncs[mLevelEaseType];
     mPanEaseType = kEaseLinear;
@@ -132,7 +132,7 @@ BEGIN_LOADS(Fader)
 END_LOADS
 
 void Fader::SynthPoll() {
-    float t = mTimer.SplitMs() / unkd0;
+    float t = mTimer.SplitMs() / mFadeDuration;
     if (t >= 1.0f) {
         mTimer.Stop();
         CancelPolling();
@@ -142,27 +142,27 @@ void Fader::SynthPoll() {
     float levelEase = mLevelEaseFunc(t, mLevelEaseParam, 0.0f);
     levelEase = (float)__fsel(-levelEase, 0.0f, levelEase);
     levelEase = (float)__fsel(levelEase - 1.0f, 1.0f, levelEase);
-    float level = unk48 + (mLevelTarget - unk48) * levelEase;
+    float level = mLevelStart + (mLevelTarget - mLevelStart) * levelEase;
 
     float panEase = mPanEaseFunc(t, mPanEaseParam, 0.0f);
     panEase = (float)__fsel(-panEase, 0.0f, panEase);
     panEase = (float)__fsel(panEase - 1.0f, 1.0f, panEase);
-    float pan = unk60 + (mPanTarget - unk60) * panEase;
+    float pan = mPanStart + (mPanTarget - mPanStart) * panEase;
 
     float transposeEase = mTransposeEaseFunc(t, mTransposeEaseParam, 0.0f);
     transposeEase = (float)__fsel(-transposeEase, 0.0f, transposeEase);
     transposeEase = (float)__fsel(transposeEase - 1.0f, 1.0f, transposeEase);
-    float transpose = unk78 + (mTransposeTarget - unk78) * transposeEase;
+    float transpose = mTransposeStart + (mTransposeTarget - mTransposeStart) * transposeEase;
 
     UpdateValue(level, pan, transpose);
 }
 
 void Fader::DoFade(float durationMs) {
     MILO_ASSERT(durationMs >= 0.0f, 0x5B);
-    unkd0 = durationMs;
-    unk48 = mLevel;
-    unk60 = mPan;
-    unk78 = mTranspose;
+    mFadeDuration = durationMs;
+    mLevelStart = mLevel;
+    mPanStart = mPan;
+    mTransposeStart = mTranspose;
     mTimer.Stop();
     CancelPolling();
     StartPolling();
@@ -172,7 +172,7 @@ void Fader::DoFade(float durationMs) {
 
 float Fader::GetDuckedVolume() const {
     float vol = 0;
-    FOREACH (it, unkd4) {
+    FOREACH (it, mVolumeContributions) {
         if (*it < vol) {
             vol = *it;
         }
@@ -195,10 +195,10 @@ void Fader::UpdateValue(float vol, float pan, float transpose) {
 }
 
 void Fader::RemoveDuckedVolume(float f1) {
-    std::list<float>::iterator it = unkd4.begin();
-    for (; it != unkd4.end(); ++it) {
+    std::list<float>::iterator it = mVolumeContributions.begin();
+    for (; it != mVolumeContributions.end(); ++it) {
         if (*it == f1) {
-            unkd4.erase(it);
+            mVolumeContributions.erase(it);
             FOREACH (it, mClients) {
                 (*it)->SetDirty();
             }
@@ -226,7 +226,7 @@ void Fader::SetTranspose(float transpose) {
 }
 
 void Fader::AddDuckedVolume(float vol) {
-    unkd4.push_back(vol);
+    mVolumeContributions.push_back(vol);
     FOREACH (it, mClients) {
         (*it)->SetDirty();
     }
@@ -287,7 +287,7 @@ float FaderGroup::GetVolume() const {
     FOREACH (it, mFaders) {
         Fader *fader = *it;
         float duckedVol = 0;
-        FOREACH (cit, fader->unkd4) {
+        FOREACH (cit, fader->mVolumeContributions) {
             if (*cit < duckedVol) {
                 duckedVol = *cit;
             }
@@ -304,7 +304,7 @@ void FaderGroup::GetVal(float &vol, float &pan, float &transpose) const {
     FOREACH (it, mFaders) {
         Fader *fader = *it;
         float val = 0;
-        FOREACH (cit, fader->unkd4) {
+        FOREACH (cit, fader->mVolumeContributions) {
             if (*cit < val) {
                 val = *cit;
             }

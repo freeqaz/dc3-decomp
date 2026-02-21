@@ -146,7 +146,7 @@ void SingleUserCrewSelectPanel::SetRandomCharacter(int idx) {
     pPlayerData->SetCrew(crewForChar);
     if (!TheGameMode->InMode("dance_battle", true)) {
         if (!TheGameMode->InMode("campaign", true)) {
-            pPlayerData->SetUnk48(gNullStr);
+            pPlayerData->SetMiniGameCharacter(gNullStr);
             pPlayerData->SetPreferredOutfit(gNullStr);
         }
     }

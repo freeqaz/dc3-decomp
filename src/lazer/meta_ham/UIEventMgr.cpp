@@ -15,14 +15,14 @@
 UIEventMgr *TheUIEventMgr;
 
 UIEventMgr::BandEvent::BandEvent(UIEventMgr::EventType type, DataArray *eventDef, DataArray *eventData)
-    : mType(type), unk4(eventDef), mActive(false) {
+    : mType(type), mDataArray(eventDef), mActive(false) {
     if (eventData) {
-        unk8 = eventData->Clone(true, true, 0);
+        mEventParams = eventData->Clone(true, true, 0);
     }
 }
 
 void UIEventMgr::BandEvent::CacheDestination() {
-    unk4->FindData("destination_screen", mDestScreen, false);
+    mDataArray->FindData("destination_screen", mDestScreen, false);
 }
 
 UIEventMgr::UIEventMgr() {}
@@ -63,7 +63,7 @@ void UIEventMgr::Terminate() { RELEASE(TheUIEventMgr); }
 
 Symbol UIEventMgr::CurrentEvent() const {
     if (!mEventQueue.empty()) {
-        return mEventQueue[0]->unk4->Sym(0);
+        return mEventQueue[0]->mDataArray->Sym(0);
     }
     return gNullStr;
 }
@@ -71,7 +71,7 @@ Symbol UIEventMgr::CurrentEvent() const {
 bool UIEventMgr::IsTransitionEventStarted() const {
     MILO_ASSERT(HasActiveTransitionEvent(), 0xDC);
     static Symbol next_screen("next_screen");
-    const char *nextScreen = mEventQueue[0]->unk4->FindStr(next_screen);
+    const char *nextScreen = mEventQueue[0]->mDataArray->FindStr(next_screen);
     const char *bottomScreen;
     if (TheUI->BottomScreen()) {
         bottomScreen = TheUI->BottomScreen()->Name();
@@ -99,23 +99,23 @@ void UIEventMgr::ActivateFirstEvent() {
     MILO_ASSERT(!firstEvent->mActive, 0x8B);
     firstEvent->mActive = true;
     if (firstEvent->mType == kTransitionEvent) {
-        DataArray *initArr = firstEvent->unk4->FindArray("init", false);
+        DataArray *initArr = firstEvent->mDataArray->FindArray("init", false);
         if (initArr) {
-            initArr->ExecuteScript(1, nullptr, firstEvent->unk8, 2);
+            initArr->ExecuteScript(1, nullptr, firstEvent->mEventParams, 2);
         }
         firstEvent->CacheDestination();
         static Symbol next_screen("next_screen");
         TheHamUI.GotoEventScreen(
-            ObjectDir::Main()->Find<UIScreen>(firstEvent->unk4->FindStr(next_screen))
+            ObjectDir::Main()->Find<UIScreen>(firstEvent->mDataArray->FindStr(next_screen))
         );
     } else if (firstEvent->mType == kDialogEvent) {
         static Message init_msg("init");
-        static EventDialogStartMsg msg(firstEvent->unk4, init_msg);
-        msg[0] = firstEvent->unk4;
-        if (firstEvent->unk8->Size() == 0) {
-            firstEvent->unk8 = init_msg;
+        static EventDialogStartMsg msg(firstEvent->mDataArray, init_msg);
+        msg[0] = firstEvent->mDataArray;
+        if (firstEvent->mEventParams->Size() == 0) {
+            firstEvent->mEventParams = init_msg;
         }
-        msg[1] = firstEvent->unk8;
+        msg[1] = firstEvent->mEventParams;
         Export(msg, false);
     }
 }

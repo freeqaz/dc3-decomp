@@ -180,8 +180,8 @@ public:
     bool mLoop; // 0x98
     float unk9c;
     EaseFunc *mEaseFunc; // 0xa0
-    float unka4;
-    bool unka8;
-    float unkac;
-    bool unkb0;
+    float mEasePower;
+    bool mWait;
+    float mFrameSpan;
+    bool mActive;
 };

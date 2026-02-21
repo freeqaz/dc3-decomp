@@ -29,8 +29,8 @@ protected:
     virtual void UnSet() { mEnabled = false; }
 
     bool mEnabled; // 0x30
-    float unk34; // 0x34
-    float unk38; // 0x38
+    float mDepthOfFieldScale; // 0x34
+    float mDepthOfFieldBias; // 0x38
     float mFocalPlane; // 0x3c
     float mBlurDepth; // 0x40
     float mMinBlur; // 0x44

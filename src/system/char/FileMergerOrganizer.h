@@ -18,7 +18,7 @@ protected:
 
 struct CatData {
     int priority; // 0x0
-    bool unk4; // 0x4 - true if gender_order array contains category_order key
+    bool mInGenderOrder; // 0x4 - true if gender_order array contains category_order key
 };
 
 class FileMergerOrganizer : public Hmx::Object, public Loader::Callback {

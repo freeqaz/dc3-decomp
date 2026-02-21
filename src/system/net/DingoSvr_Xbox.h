@@ -39,13 +39,13 @@ protected:
     virtual bool FillAuthParamsFromPadNum(DataPoint &pt, int padnum);
     virtual void OnAuthSuccess();
 
-    int unkb0;
+    int mXLSPState;
     int unkb4;
     XUID mXUID; // 0xb8
     String mUserName; // 0xc0
-    XLSPConnection unkc8;
+    XLSPConnection mXLSPConnection;
     String mXLSPFilter; // 0x140
-    int unk148;
+    int mDingoServiceId;
     JobMgr mJobMgr; // 0x14c
     int mJobState; // 0x15c - tracks current job: 0=idle, 1=making, 2=joining, 3=starting, 4=writing, 5=ending, 6=leaving, 7=deleting
     u64 mScoreXUID; // 0x160 - XUID for leaderboard score submission

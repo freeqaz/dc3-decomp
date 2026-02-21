@@ -8,12 +8,12 @@
 #include "rndobj/Trans.h"
 
 WorldReflection::WorldReflection()
-    : mDraws(this), mLodChars(this), mVerticalStretch(1), unk138(false), mHideList(this),
-      mShowList(this), unk164(this), unk178(this) {
-    unk134 = ObjectDir::Main()->New<RndCam>("");
+    : mDraws(this), mLodChars(this), mVerticalStretch(1), mInDrawShowing(false), mHideList(this),
+      mShowList(this), mPreviouslyShownDrawables(this), mPreviouslyHiddenDrawables(this) {
+    mReflectionCamera = ObjectDir::Main()->New<RndCam>("");
 }
 
-WorldReflection::~WorldReflection() { delete unk134; }
+WorldReflection::~WorldReflection() { delete mReflectionCamera; }
 
 BEGIN_HANDLERS(WorldReflection)
     HANDLE_SUPERCLASS(RndTransformable)
@@ -78,14 +78,14 @@ BEGIN_LOADS(WorldReflection)
 END_LOADS
 
 void WorldReflection::DoHide() {
-    unk164.clear();
-    unk178.clear();
+    mPreviouslyShownDrawables.clear();
+    mPreviouslyHiddenDrawables.clear();
     for (ObjPtrList<RndDrawable>::iterator it = mHideList.begin(); it != mHideList.end();
          ++it) {
         RndDrawable *cur = *it;
         if (cur->Showing()) {
             cur->SetShowing(false);
-            unk178.push_back(cur);
+            mPreviouslyHiddenDrawables.push_back(cur);
         }
     }
     for (ObjPtrList<RndDrawable>::iterator it = mShowList.begin(); it != mShowList.end();
@@ -93,22 +93,22 @@ void WorldReflection::DoHide() {
         RndDrawable *cur = *it;
         if (!cur->Showing()) {
             cur->SetShowing(true);
-            unk164.push_back(cur);
+            mPreviouslyShownDrawables.push_back(cur);
         }
     }
 }
 
 void WorldReflection::UnHide() {
-    for (ObjPtrList<RndDrawable>::iterator it = unk164.begin(); it != unk164.end();
-         ++it) {
+    for (ObjPtrList<RndDrawable>::iterator it = mPreviouslyShownDrawables.begin();
+         it != mPreviouslyShownDrawables.end(); ++it) {
         (*it)->SetShowing(false);
     }
-    for (ObjPtrList<RndDrawable>::iterator it = unk178.begin(); it != unk178.end();
-         ++it) {
+    for (ObjPtrList<RndDrawable>::iterator it = mPreviouslyHiddenDrawables.begin();
+         it != mPreviouslyHiddenDrawables.end(); ++it) {
         (*it)->SetShowing(true);
     }
-    unk164.clear();
-    unk178.clear();
+    mPreviouslyShownDrawables.clear();
+    mPreviouslyHiddenDrawables.clear();
 }
 
 void WorldReflection::DoLOD(int i) {
@@ -121,10 +121,10 @@ void WorldReflection::DoLOD(int i) {
 
 void WorldReflection::DrawShowing() {
     START_AUTO_TIMER("world_reflect");
-    if (unk138) {
-        unk138 = true;
+    if (!mInDrawShowing) {
+        mInDrawShowing = true;
         RndCam *cur2 = RndCam::Current();
-        unk134->Copy(cur2, kCopyDeep);
+        mReflectionCamera->Copy(cur2, kCopyDeep);
         Transform tf48(WorldXfm());
         Transform tf78;
         Invert(tf48, tf78);
@@ -133,8 +133,8 @@ void WorldReflection::DrawShowing() {
         tfa8.m.z.z = -mVerticalStretch;
         Multiply(tf78, tfa8, tfa8);
         Multiply(tfa8, tf48, tfa8);
-        Multiply(cur2->WorldXfm(), tfa8, unk134->DirtyLocalXfm());
-        unk134->Select();
+        Multiply(cur2->WorldXfm(), tfa8, mReflectionCamera->DirtyLocalXfm());
+        mReflectionCamera->Select();
         Rnd::DrawMode oldMode = TheRnd.GetDrawMode();
         TheRnd.SetDrawMode((Rnd::DrawMode)8);
         DoHide();
@@ -148,6 +148,6 @@ void WorldReflection::DrawShowing() {
         UnHide();
         TheRnd.SetDrawMode(oldMode);
         cur2->Select();
-        unk138 = false;
+        mInDrawShowing = false;
     }
 }

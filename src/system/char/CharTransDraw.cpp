@@ -3,7 +3,7 @@
 #include "rndobj/Draw.h"
 #include "utl/Std.h"
 
-CharTransDraw::CharTransDraw() : mChars(this), unk54(false) {}
+CharTransDraw::CharTransDraw() : mChars(this), mForceDraw(false) {}
 
 CharTransDraw::~CharTransDraw() {
     for (ObjPtrList<Character>::iterator it = mChars.begin(); it != NULL; ++it) {
@@ -22,7 +22,7 @@ void CharTransDraw::SetDrawModes(Character::DrawMode mode) {
 
 BEGIN_PROPSYNCS(CharTransDraw)
     SYNC_PROP(chars, mChars)
-    SYNC_PROP(force_draw, unk54)
+    SYNC_PROP(force_draw, mForceDraw)
     SYNC_SUPERCLASS(RndDrawable)
     SYNC_SUPERCLASS(Hmx::Object)
 END_PROPSYNCS
@@ -32,7 +32,7 @@ BEGIN_SAVES(CharTransDraw)
     SAVE_SUPERCLASS(Hmx::Object)
     SAVE_SUPERCLASS(RndDrawable)
     bs << mChars;
-    bs << unk54;
+    bs << mForceDraw;
 END_SAVES
 
 BEGIN_COPYS(CharTransDraw)
@@ -41,7 +41,7 @@ BEGIN_COPYS(CharTransDraw)
     CREATE_COPY(CharTransDraw)
     BEGIN_COPYING_MEMBERS
         COPY_MEMBER(mChars)
-        COPY_MEMBER(unk54)
+        COPY_MEMBER(mForceDraw)
     END_COPYING_MEMBERS
 END_COPYS
 
@@ -54,7 +54,7 @@ void CharTransDraw::Load(BinStream &bs) {
     LOAD_SUPERCLASS(RndDrawable)
     d >> mChars;
     if (d.altRev > 0)
-        d >> unk54;
+        d >> mForceDraw;
     SetDrawModes(Character::kCharDrawOpaque);
 END_LOADS
 
@@ -66,7 +66,7 @@ void CharTransDraw::DrawShowing() {
             c->SetDrawMode(Character::kCharDrawTranslucent);
             c->Draw();
             c->SetDrawMode(Character::kCharDrawOpaque);
-        } else if (unk54) {
+        } else if (mForceDraw) {
             c->SetDrawMode(Character::kCharDrawTranslucent);
             c->SetShowing(true);
             c->Draw();

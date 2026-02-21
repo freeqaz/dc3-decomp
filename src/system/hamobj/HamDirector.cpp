@@ -85,20 +85,20 @@ ObjectDir *OfflineCallback::SongMainDir() {
 HamDirector::HamDirector()
     : mMasterClipAnim(this), mPlayer1RoutineBuilderAnim(this),
       mPlayer2RoutineBuilderAnim(this), unkc8(0), unkcc(""), mBackupDrift(1),
-      mMerger(this), mMoveMerger(this), mGameModeMerger(this), mVenue(this), unk124(this),
-      unk140(0), unk14c(0), mWorldPostProc(this), mCamPostProc(this),
+      mMerger(this), mMoveMerger(this), mGameModeMerger(this), mVenue(this), mSongCollision(this),
+      mPickNewShot(0), mSyncScene(0), mWorldPostProc(this), mCamPostProc(this),
       mForcePostProc(this), unk18c(this), mForcePostProcBlend(0),
-      mForcePostProcBlendRate(1), unk1a8(this), unk1bc(this), unk1d0(0), unk1d4(0),
-      unk1d8(this), mVisualizerPostProc(this), mFreestyleEnabled(1), mPlayer0Char(this),
-      mPlayer1Char(this), mBackup0Char(this), mBackup1Char(this), unk254(0), mDisabled(0),
-      unk25a(0), mCurShot(this), mNextShot(this), unk284(this), unk29c(-kHugeFloat),
-      mDisablePicking(0), mSuppressIntroShot(0), mSuppressNextShot(0), unk2a8(-kHugeFloat), mPollEnabled(1),
+      mForcePostProcBlendRate(1), mPostProcInterpA(this), mPostProcInterpB(this), mPostProcInterpBlend(0), unk1d4(0),
+      mSavedForcePostProc(this), mVisualizerPostProc(this), mFreestyleEnabled(1), mPlayer0Char(this),
+      mPlayer1Char(this), mBackup0Char(this), mBackup1Char(this), mBackupHidden(0), mDisabled(0),
+      mAsyncLoaded(0), mCurShot(this), mNextShot(this), mIntroShot(this), mLastShotTime(-kHugeFloat),
+      mDisablePicking(0), mSuppressIntroShot(0), mSuppressNextShot(0), mLastCollisionTime(-kHugeFloat), mPollEnabled(1),
       mPlayerFreestyle(0), mPlayerFreestylePaused(0), mVisualizer(this),
       mPracticeStart(0), mPracticeEnd(0), mStartLoopMargin(1), mEndLoopMargin(1),
       mBlendDebug(0), mBackupDancers((HamBackupDancers)0), mClipDir(this), mMoveDir(this),
       mNoTransitions(0), mCollisionChecks(1), mLoadedNewSong(1), mPoseFatalities(0),
-      unk33c(RandomInt(0, 2)), mGameStartHold(0), mIconManChar(this), mIconManTex(this),
-      unk369(0), mOfflineSong(0) {
+      mCamshotFlag(RandomInt(0, 2)), mGameStartHold(0), mIconManChar(this), mIconManTex(this),
+      mPhraseMetersFlipped(0), mOfflineSong(0) {
     static DataNode &n = DataVariable("hamdirector");
     n = this;
     TheHamDirector = this;
@@ -127,7 +127,7 @@ BEGIN_HANDLERS(HamDirector)
     HANDLE(load_song, OnLoadSong)
     HANDLE_EXPR(is_world_loaded, IsWorldLoaded())
     HANDLE_ACTION(unload_all, UnloadAll())
-    HANDLE_ACTION(pick_new_shot, unk140 = true)
+    HANDLE_ACTION(pick_new_shot, mPickNewShot = true)
     HANDLE(select_camera, OnSelectCamera)
     HANDLE(cycle_shot, OnCycleShot)
     HANDLE(force_shot, OnForceShot)
@@ -320,11 +320,11 @@ void HamDirector::Enter() {
     if (mMerger) {
         mExcitement = 3;
         mNumPlayersFailed = 0;
-        unk29c = -kHugeFloat;
-        unk2a8 = -kHugeFloat;
+        mLastShotTime = -kHugeFloat;
+        mLastCollisionTime = -kHugeFloat;
         mShot = "";
         mCurShot = nullptr;
-        unk14c = true;
+        mSyncScene = true;
         mGameStartHold = false;
         mWorldPostProc = GetWorld()->Find<RndPostProc>("world.pp", true);
         RndPostProc *start = GetWorld()->Find<RndPostProc>("world_start.pp", true);
@@ -332,19 +332,19 @@ void HamDirector::Enter() {
             mWorldPostProc->Copy(start, kCopyDeep);
         }
         mWorldPostProc->Select();
-        unk1a8 = mWorldPostProc;
-        unk1bc = mWorldPostProc;
-        unk1d0 = 0;
+        mPostProcInterpA = mWorldPostProc;
+        mPostProcInterpB = mWorldPostProc;
+        mPostProcInterpBlend = 0;
         mCamPostProc = nullptr;
         mForcePostProc = nullptr;
         mForcePostProcBlend = 0;
         mForcePostProcBlendRate = 1;
-        unk1d8 = nullptr;
+        mSavedForcePostProc = nullptr;
         mVisualizerPostProc =
             mVisualizer ? mVisualizer->Find<RndPostProc>("viz_start.pp", false) : nullptr;
         unk2e4 = -kHugeFloat;
         mDisabled = false;
-        unk368 = false;
+        mVisualizerRunning = false;
         static Message msg("set_force_postproc_no_blend", "performance_high");
         HandleType(msg);
         if (TheHamWardrobe) {
@@ -418,14 +418,14 @@ DataNode HamDirector::OnSaveFaceAnims(DataArray *) { return 0; }
 DataNode HamDirector::OnFileMerged(DataArray *) { return 0; }
 
 void HamDirector::ForceScene(Symbol s) {
-    unk13c = s;
-    unk138 = gNullStr;
+    mForcedScene = s;
+    mForcedMiniVenue = gNullStr;
 }
 
 __forceinline void HamDirector::ForceMiniVenue(Symbol s) {
     Symbol idk(gNullStr);
-    unk138 = idk;
-    unk138 = s;
+    mForcedMiniVenue = idk;
+    mForcedMiniVenue = s;
 }
 
 void HamDirector::DrawDebug() {
@@ -444,15 +444,15 @@ void HamDirector::HudEntered() {
 }
 
 void HamDirector::PlayIntroShot() {
-    if (!unk284)
+    if (!mIntroShot)
         PickIntroShot();
     if (!mSuppressIntroShot) {
-        if (unk284) {
+        if (mIntroShot) {
             static Message msg("set_intro_shot", 0);
-            msg[0] = unk284.Ptr();
+            msg[0] = mIntroShot.Ptr();
             DataNode handled = HandleType(msg);
-            mNextShot = unk284;
-            unk284 = nullptr;
+            mNextShot = mIntroShot;
+            mIntroShot = nullptr;
         } else
             FindNextShot();
         PlayNextShot();
@@ -472,7 +472,7 @@ void HamDirector::SetupAnims() {
     mMoveDir = mMerger->Dir()->Find<ObjectDir>("moves", false);
     ObjDirItr<SongCollision> it(mMoveDir, true);
     if (it)
-        unk124 = &*it;
+        mSongCollision = &*it;
 }
 
 WorldDir *HamDirector::GetWorld() {
@@ -559,7 +559,7 @@ void HamDirector::VenueEnter(WorldDir *dir) {
     if (b1) {
         b1->SetLocalXfm(Transform::IDXfm());
     }
-    unk254 = false;
+    mBackupHidden = false;
     for (int i = 0; i < 4; i++) {
         mCharsShowing[i] = false;
     }
@@ -583,7 +583,7 @@ void HamDirector::PickIntroShot() {
         mNextShot = nullptr;
         static Message m("pick_intro_shot");
         DataNode n = HandleType(m);
-        unk284 = mNextShot;
+        mIntroShot = mNextShot;
         mNextShot = nullptr;
     }
 }
@@ -641,7 +641,7 @@ HamCamShot *HamDirector::FindNextDircut() {
         if (mNumPlayersFailed || (entry->mForced && mExcitement >= 3)) {
             shot = entry->mShot;
             if (shot) {
-                unk140 = true;
+                mPickNewShot = true;
             }
         }
     }
@@ -745,7 +745,7 @@ void HamDirector::TriggerNextIntro() {
     std::vector<CameraManager::PropertyFilter> filters;
     static Symbol s("CAMP_SONG1_INTRO_CONTINUE");
     SetDircut(s, filters);
-    unk284 = mNextShot;
+    mIntroShot = mNextShot;
     mNextShot = nullptr;
     PlayIntroShot();
     mGameStartHold = false;
@@ -776,8 +776,8 @@ bool HamDirector::ShouldDoCollisionPrevention() const {
 }
 
 void HamDirector::StartStopVisualizer(bool b1, int i2) {
-    if (mVisualizer && unk368 != b1) {
-        unk368 = b1;
+    if (mVisualizer && mVisualizerRunning != b1) {
+        mVisualizerRunning = b1;
         mVisualizer->SetShowing(b1);
         mVisualizer->Run(b1);
         if (b1) {
@@ -832,7 +832,7 @@ void HamDirector::UpdatePlayerFreestyle(bool b1) {
         mPlayerFreestyle = b1;
         if (mPlayerFreestyle) {
             unk1d4 = 0;
-            unk1d8 = mForcePostProc;
+            mSavedForcePostProc = mForcePostProc;
             mForcePostProc = mVisualizerPostProc;
             mForcePostProcBlend = 0;
             mForcePostProcBlendRate = 0.625;
@@ -853,7 +853,7 @@ void HamDirector::UpdatePlayerFreestyle(bool b1) {
             }
         } else {
             StartStopVisualizer();
-            mForcePostProc = unk1d8;
+            mForcePostProc = mSavedForcePostProc;
             mForcePostProcBlendRate = 0;
             mForcePostProcBlend = 1;
             if (GetWorld()) {
@@ -900,7 +900,7 @@ void HamDirector::SetCharSpot(Symbol charType, Symbol spotState) {
     SendCurWorldMsg(Symbol(str), false);
 }
 
-DataNode HamDirector::OnToggleCamshotFlag() { return unk33c = !unk33c; }
+DataNode HamDirector::OnToggleCamshotFlag() { return mCamshotFlag = !mCamshotFlag; }
 
 DataNode HamDirector::OnLoadSong(DataArray *a) {
     FilePathTracker tracker(FileRoot());
@@ -958,9 +958,9 @@ DataNode HamDirector::OnPostProcs(DataArray *a) {
 
 DataNode HamDirector::OnShotOver(DataArray *a) {
     if (strneq(a->Obj<HamCamShot>(2)->Category().Str(), "dc_", 3)) {
-        unk140 = true;
+        mPickNewShot = true;
     }
-    unk29c = -kHugeFloat;
+    mLastShotTime = -kHugeFloat;
     return 0;
 }
 
@@ -1050,7 +1050,7 @@ DataNode HamDirector::OnFileLoaded(DataArray *a) {
     static Symbol game_hud("game_hud");
     Symbol sym = a->Sym(2);
     if (sym != game_hud || mMerger) {
-        unk25a = mMerger->AsyncLoad();
+        mAsyncLoaded = mMerger->AsyncLoad();
         if (sym == song) {
             if (!TheGameData->Venue().Null()) {
                 if (TheHamWardrobe) {
@@ -1062,7 +1062,7 @@ DataNode HamDirector::OnFileLoaded(DataArray *a) {
                         mBackupDancers,
                         mSongSpeed,
                         TheGameData->Venue().Str(),
-                        unk25a
+                        mAsyncLoaded
                     );
                 }
                 FilePath path;
@@ -1076,10 +1076,10 @@ DataNode HamDirector::OnFileLoaded(DataArray *a) {
                 if (mGameModeMerger) {
                     static Message load_game_hud("load_game_hud", 0, 0, 0, 0);
                     mGameModeMerger->HandleType(load_game_hud);
-                    mGameModeMerger->StartLoad(unk25a);
+                    mGameModeMerger->StartLoad(mAsyncLoaded);
                 }
             }
-            mMerger->StartLoad(unk25a);
+            mMerger->StartLoad(mAsyncLoaded);
         } else {
             ObjectDir *dir = a->Obj<ObjectDir>(3);
             if (sym == venue && dir) {
@@ -1093,9 +1093,9 @@ DataNode HamDirector::OnFileLoaded(DataArray *a) {
 }
 
 DataNode HamDirector::OnPostProcInterp(DataArray *a) {
-    unk1a8 = a->Obj<RndPostProc>(2);
-    unk1bc = a->Obj<RndPostProc>(3);
-    unk1d0 = a->Float(4);
+    mPostProcInterpA = a->Obj<RndPostProc>(2);
+    mPostProcInterpB = a->Obj<RndPostProc>(3);
+    mPostProcInterpBlend = a->Float(4);
     return 0;
 }
 
@@ -1346,14 +1346,14 @@ bool HamDirector::ShotsDisabled() {
 }
 
 void HamDirector::SyncScene() {
-    unk14c = false;
+    mSyncScene = false;
     if (!ShotsDisabled() && mVenue) {
         SetNewWorld();
     }
 }
 
 void HamDirector::RestoreBackups() {
-    if (unk254) {
+    if (mBackupHidden) {
         if (mPlayer0Char) {
             mPlayer0Char->SetShowing(mCharsShowing[0]);
         }
@@ -1369,7 +1369,7 @@ void HamDirector::RestoreBackups() {
         }
         for (int i = 0; i < 4; i++)
             mCharsShowing[i] = false;
-        unk254 = false;
+        mBackupHidden = false;
     }
 }
 
@@ -1421,7 +1421,7 @@ void HamDirector::EnableFacialAnimation() {
 }
 
 Symbol HamDirector::ClosestMove() {
-    Symbol out = unk2f0;
+    Symbol out = mPrevMove;
     char buf[256];
     Difficulty playerDiff = TheGameData->Player(0)->GetDifficulty();
     if (playerDiff != kDifficultyExpert) {
@@ -1518,7 +1518,7 @@ void HamDirector::SetNewWorld() {
     if (TheHamWardrobe) {
         TheHamWardrobe->SetDir(mVenue);
     }
-    unk140 = true;
+    mPickNewShot = true;
     GetWorld()->SetSphere(mVenue->GetSphere());
 }
 
@@ -1540,7 +1540,7 @@ void HamDirector::HideBackups(bool b1, bool b2) {
     if (mBackup1Char) {
         mBackup1Char->SetShowing(false);
     }
-    unk254 = true;
+    mBackupHidden = true;
 }
 
 void HamDirector::LoadCrew(Symbol s1, Symbol s2) {
@@ -1674,8 +1674,8 @@ bool HamDirector::GetPracticeFrames(Key<Symbol> *&k1, Key<Symbol> *&k2) {
 }
 
 void HamDirector::SetPhraseMetersFlipped(bool b1) {
-    if (unk369 != b1) {
-        unk369 = b1;
+    if (mPhraseMetersFlipped != b1) {
+        mPhraseMetersFlipped = b1;
         static Symbol spotlight_constraint("spotlight_constraint");
         WorldDir *venue = TheHamDirector->GetVenueWorld();
         if (venue) {
@@ -1725,14 +1725,14 @@ void HamDirector::SetPlayerSpotlightsEnabled(bool b1) {
             if (b1) {
                 constraints[i]->SetParent(players[i]);
                 constraints[i]->SnapToParent();
-                // constraints[i]->unk52 = true;
+                // constraints[i]->mEnabled = true;
                 constraints[i]->SnapToParent();
                 phraseMeters[i]->SetShowing(true);
                 moveFeedbacks[i]->SetShowing(true);
             } else {
                 constraints[i]->SetParent(nullptr);
                 constraints[i]->SnapToParent();
-                // constraints[i]->unk52 = false;
+                // constraints[i]->mEnabled = false;
                 Vector3 v(-1000000.0f, -1000000.0f, 0);
                 phraseMeters[i]->SetLocalPos(v);
                 phraseMeters[i]->SetShowing(false);
@@ -1884,10 +1884,10 @@ void HamDirector::LoadRoutineBuilderData(
     std::set<const MoveVariant *> &moveVariants, bool b2
 ) {
     if (moveVariants.empty()) {
-        FOREACH (it, unk370) {
+        FOREACH (it, mRoutineBuilderObjects) {
             delete *it;
         }
-        unk370.clear();
+        mRoutineBuilderObjects.clear();
     } else {
         ObjectDir *moveMgrDir = TheMoveMgr->MoveDataDir();
         if (!moveMgrDir) {
@@ -1908,7 +1908,7 @@ void HamDirector::LoadRoutineBuilderData(
                 Hmx::Object *find = movesDir->FindObject(name, false, false);
                 if (!find) {
                     cur->SetName(name, movesDir);
-                    unk370.insert(cur);
+                    mRoutineBuilderObjects.insert(cur);
                 }
             }
             objects.clear();
@@ -1925,7 +1925,7 @@ void HamDirector::LoadRoutineBuilderData(
                 Hmx::Object *find = clipsDir->FindObject(name, false, false);
                 if (!find) {
                     cur->SetName(name, clipsDir);
-                    unk370.insert(cur);
+                    mRoutineBuilderObjects.insert(cur);
                 }
             }
         }
@@ -2100,7 +2100,7 @@ void HamDirector::SetShot(Symbol s) {
             }
             if (strncmp(s.Str(), "dc_", 3) != 0) {
                 mShot = s;
-                unk140 = true;
+                mPickNewShot = true;
             }
         }
     }
@@ -2181,7 +2181,7 @@ bool HamDirector::ReactToCollision(float frame) {
     if (keyIdx2 == -1 || keyIdx2 == propKeys->NumKeys() - 1
         || strncmp(symAt2.Str(), "Area", 4) != 0) {
         mShot = cat;
-        unk140 = true;
+        mPickNewShot = true;
         return true;
     }
     float beat2 = FrameToBeat(frame2);
@@ -2254,7 +2254,7 @@ void HamDirector::UnloadMergers() {
             }
             wardrobe->ClearCrowdClips();
         }
-        unk370.clear();
+        mRoutineBuilderObjects.clear();
     }
 }
 

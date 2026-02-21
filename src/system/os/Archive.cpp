@@ -102,21 +102,21 @@ Archive::~Archive() {}
 
 Archive::Archive(const char *name, int heap_headroom)
     : mNumArkfiles(0), mBasename(name), mMode(kRead), mMaxArkfileSize(0),
-      mIsPatched(false), unk6c(0), unk70(0) {
+      mIsPatched(false), mPermissionCodes(0), mPermissionCount(0) {
     Read(heap_headroom);
 }
 
 bool Archive::HasArchivePermission(int x) const {
-    for (int i = 0; i < unk70; i++) {
-        if (unk6c[i] == x)
+    for (int i = 0; i < mPermissionCount; i++) {
+        if (mPermissionCodes[i] == x)
             return true;
     }
     return false;
 }
 
 void Archive::SetArchivePermission(int i, const int *ci) {
-    unk70 = i;
-    unk6c = ci;
+    mPermissionCount = i;
+    mPermissionCodes = ci;
 }
 
 void Archive::GetGuid(HxGuid &guid) const { guid = mGuid; }

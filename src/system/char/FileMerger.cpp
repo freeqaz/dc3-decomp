@@ -371,10 +371,10 @@ FileMerger::MergeAction(Hmx::Object *o1, Hmx::Object *o2, ObjectDir *dir) {
 bool FileMerger::NeedsLoading(FileMerger::Merger &merger) {
     FOREACH (it, mFilesPending) {
         if (*it == &merger) {
-            return merger.mSelected != merger.loading || merger.unk21;
+            return merger.mSelected != merger.loading || merger.mForceReload;
         }
     }
-    return merger.mLoaded != merger.mSelected || merger.unk21;
+    return merger.mLoaded != merger.mSelected || merger.mForceReload;
 }
 
 void FileMerger::LaunchNextLoader() {
@@ -475,7 +475,7 @@ FileMerger::Merger *FileMerger::NotifyFileLoaded(Loader *l, DirLoader *dl) {
 }
 
 void FileMerger::AppendLoader(FileMerger::Merger &merger) {
-    merger.unk21 = false;
+    merger.mForceReload = false;
     FOREACH (it, mFilesPending) {
         if (*it == &merger) {
             if (mCurLoader) {

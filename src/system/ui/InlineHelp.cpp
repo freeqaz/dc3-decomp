@@ -15,7 +15,7 @@
 
 InlineHelp::InlineHelp()
     : mUseConnectedControllers(false), mHorizontal(true), mSpacing(0), mResourceDir(this),
-      unk88(0), mTextColor(this) {}
+      mTemplateLabel(0), mTextColor(this) {}
 
 InlineHelp::~InlineHelp() {
     int siz = mTextLabels.size();
@@ -137,7 +137,7 @@ void InlineHelp::Update() {
     const DataArray *pTypeDef = TypeDef();
     if (pTypeDef && mResourceDir) {
         static Symbol text_label("text_label");
-        unk88 = mResourceDir->Find<UILabel>(pTypeDef->FindStr(text_label), true);
+        mTemplateLabel = mResourceDir->Find<UILabel>(pTypeDef->FindStr(text_label), true);
         SyncLabelsToConfig();
     }
 }
@@ -211,8 +211,8 @@ void InlineHelp::SyncLabelsToConfig() {
     if (cfg_size > labels_size) {
         for (int i = labels_size; i < cfg_size; i++) {
             UILabel *lbl = Hmx::Object::New<UILabel>();
-            if (unk88 != nullptr) {
-                ((UILabel *)unk88)->Copy(lbl, Hmx::Object::kCopyShallow);
+            if (mTemplateLabel != nullptr) {
+                ((UILabel *)mTemplateLabel)->Copy(lbl, Hmx::Object::kCopyShallow);
             }
             lbl->LStyle(0).mColorOverride = mTextColor;
             mTextLabels.push_back(lbl);

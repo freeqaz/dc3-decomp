@@ -52,8 +52,8 @@ public:
     bool AllowSortToggle() { return mSorts.size() > 1; }
     bool IsOfferInCart(StoreOffer *);
 
-    PackSongListProvider GetPackProvider() { return unk78; }
-    HamStoreFilterProvider *GetFilterProvider() { return unk74; }
+    PackSongListProvider GetPackProvider() { return mPackProvider; }
+    HamStoreFilterProvider *GetFilterProvider() { return mFilterProvider; }
     std::list<StoreOffer *> *GetCartOffers() { return &unkb0; }
 
 protected:
@@ -65,8 +65,8 @@ protected:
     int mSortIndex; // 0x60
     std::vector<StoreOffer *> *mFilteredOffers; // 0x64
     std::vector<Symbol> mSorts; // 0x68
-    HamStoreFilterProvider *unk74;
-    PackSongListProvider unk78;
+    HamStoreFilterProvider *mFilterProvider;
+    PackSongListProvider mPackProvider;
     std::vector<CartRow> *unkac;
     std::list<StoreOffer *> unkb0;
     int unkb8;

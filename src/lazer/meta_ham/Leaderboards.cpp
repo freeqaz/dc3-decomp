@@ -222,8 +222,8 @@ void Leaderboards::UploadNextScore() {
     static Symbol ham3("ham3");
     mRecordScoreData.mStatus = &mScoresToUpload.front();
     mRecordScoreData.mProfile = mUploadProfile;
-    mRecordScoreData.unkc = mUploadProfile->GetSongStatusMgr()->CalculateTotalScore(gNullStr);
-    mRecordScoreData.unk10 = mUploadProfile->GetSongStatusMgr()->CalculateTotalScore(ham3);
+    mRecordScoreData.mChallengeScore = mUploadProfile->GetSongStatusMgr()->CalculateTotalScore(gNullStr);
+    mRecordScoreData.mChainChallengeScore = mUploadProfile->GetSongStatusMgr()->CalculateTotalScore(ham3);
     TheRockCentral.ManageJob(new RecordScoreJob(
         this, mRecordScoreData, mRecordScoreData.mStatus->mSongID, true
     ));

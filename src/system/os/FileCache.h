@@ -112,7 +112,7 @@ protected:
     int mMaxSize; // 0x0
     bool mTryClear; // 0x4
     std::vector<FileCacheEntry *> mEntries; // 0x8
-    LoaderPos unk14;
+    LoaderPos mLoaderPos;
     bool unk18;
     bool unk19;
 

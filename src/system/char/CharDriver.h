@@ -82,11 +82,13 @@ protected:
     /** "pointer to clips object" */
     ObjPtr<ObjectDir> mClips; // 0x44 / -0xa0
     CharClipDriver *mFirst; // 0x58 / -0x8c
-    ObjPtr<CharClip> unk5c; // 0x5c / -0x88
+    /** "Pick a clip to play" */
+    ObjPtr<CharClip> mTestClip; // 0x5c / -0x88
     ObjPtr<Hmx::Object> mDefaultClip; // 0x70
-    ObjPtr<CharClipGroup> unk84;
-    bool unk98; // 0x98 / -0x74
-    Symbol unk9c;
+    ObjPtr<CharClipGroup> mClipGroup; // 0x84
+    /** "If true, plays the default_clip_or_group whenever starved" */
+    bool mDefaultPlayStarved; // 0x98 / -0x74
+    Symbol mStarvedHandler;
     DataNode mLastNode; // 0xa0
     float mOldBeat; // 0xa8
     bool mRealign; // 0xac / -0x38
@@ -96,5 +98,5 @@ protected:
     ApplyMode mApply; // 0xbc / -0x28;
     CharBonesAlloc *mInternalBones; // 0xc0
     bool mPlayMultipleClips; // 0xc4 / -0x20
-    std::map<CharClip *, float> unkc8;
+    std::map<CharClip *, float> mClipWeightMap;
 };

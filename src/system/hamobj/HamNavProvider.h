@@ -16,20 +16,20 @@ public:
     };
     struct NavItem {
         NavItem()
-            : mLabel(gNullStr), mCheckboxState(kCheckbox_None), unkc(0), unk10(1),
-              unk11(0), unk14(0), unk24(0) {}
+            : mLabel(gNullStr), mCheckboxState(kCheckbox_None), mStarMode(0), mEnabled(1),
+              mHidden(0), mFormatArgs(0), mSubListProvider(0) {}
         NavItem(const NavItem &other)
             : mLabel(other.mLabel), mCheckboxState(other.mCheckboxState),
-              mSongID(other.mSongID), unkc(other.unkc), unk10(other.unk10),
-              unk11(other.unk11), unk14(other.unk14), mLabels(other.mLabels),
-              unk24(other.unk24) {
-            if (unk14)
-                unk14->AddRef();
+              mSongID(other.mSongID), mStarMode(other.mStarMode), mEnabled(other.mEnabled),
+              mHidden(other.mHidden), mFormatArgs(other.mFormatArgs), mLabels(other.mLabels),
+              mSubListProvider(other.mSubListProvider) {
+            if (mFormatArgs)
+                mFormatArgs->AddRef();
         }
         ~NavItem() {
-            if (unk14) {
-                unk14->Release();
-                unk14 = nullptr;
+            if (mFormatArgs) {
+                mFormatArgs->Release();
+                mFormatArgs = nullptr;
             }
         }
 
@@ -37,13 +37,13 @@ public:
         Symbol mLabel; // 0x0
         CheckboxMode mCheckboxState; // 0x4
         int mSongID; // 0x8 - song ID
-        int unkc;
-        bool unk10;
-        bool unk11;
-        DataArray *unk14;
+        int mStarMode;
+        bool mEnabled;
+        bool mHidden;
+        DataArray *mFormatArgs;
         /** "used for a list entry with a list of labels" */
         std::vector<Symbol> mLabels; // 0x18
-        DataProvider *unk24;
+        DataProvider *mSubListProvider;
     };
     // Hmx::Object
     virtual ~HamNavProvider();

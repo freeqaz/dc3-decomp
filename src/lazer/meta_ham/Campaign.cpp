@@ -48,7 +48,7 @@ static const char *sCampaignStateDescs[] = { "kCampaignStateInactive",
 
 Campaign::Campaign(DataArray *d)
     : mCampaignState(kCampaignStateInactive), mWorkItActive(false),
-      mOutroIntroSeen(false), m_pCurLoader(0), unkbc(gNullStr), unkd8(0) {
+      mOutroIntroSeen(false), m_pCurLoader(0), mCurrentEraSong(gNullStr), mCurrentObjectDir(0) {
     MILO_ASSERT(!TheCampaign, 0x41);
     TheCampaign = this;
     SetName("campaign", ObjectDir::Main());
@@ -61,7 +61,7 @@ Campaign::~Campaign() {
         s_pReloadedCampaignData->Release();
     }
     Cleanup();
-    RELEASE(unkd8);
+    RELEASE(mCurrentObjectDir);
 }
 
 BEGIN_HANDLERS(Campaign)
@@ -114,11 +114,11 @@ void Campaign::FinishLoading(Loader *l) {
     DirLoader *dl = dynamic_cast<DirLoader *>(l);
     MILO_ASSERT(dl == m_pCurLoader, 0x315);
     MILO_ASSERT(m_pCurLoader->IsLoaded(), 0x316);
-    unkd8 = m_pCurLoader->GetDir();
+    mCurrentObjectDir = m_pCurLoader->GetDir();
     FOREACH (it, mCampaignMoves) {
         CampaignMove *pActiveLoad = *it;
         MILO_ASSERT(pActiveLoad, 0x31D);
-        HamMove *move = unkd8->Find<HamMove>(pActiveLoad->mMoveVariantName.Str(), false);
+        HamMove *move = mCurrentObjectDir->Find<HamMove>(pActiveLoad->mMoveVariantName.Str(), false);
         if (move) {
             pActiveLoad->mMove = move;
             pActiveLoad->unk10 = 3;
@@ -269,7 +269,7 @@ CampaignEra *Campaign::GetCampaignEra(int i_iIndex) const {
 void Campaign::LoadHamMoves(Symbol s) {
     MILO_ASSERT(m_pCurLoader==NULL, 0x347);
     unkb8 = false;
-    RELEASE(unkd8);
+    RELEASE(mCurrentObjectDir);
     FilePath movesPath(MakeString("modular_song_data/%s_moves.milo", s.Str()));
     m_pCurLoader =
         new DirLoader(movesPath, kLoadFront, this, nullptr, nullptr, false, nullptr);
@@ -434,9 +434,9 @@ void Campaign::ConfigureCampaignData(DataArray *i_pConfig) {
 }
 
 void Campaign::LoadCampaignDanceMoves(Symbol s) {
-    if (s != unkbc) {
+    if (s != mCurrentEraSong) {
         mCampaignMoves.clear();
-        unkbc = s;
+        mCurrentEraSong = s;
         GatherMoveData(s);
         unkb8 = false;
         m_pCurLoader = nullptr;

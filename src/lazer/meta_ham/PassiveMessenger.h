@@ -21,13 +21,13 @@ public:
     String GetText();
     PassiveMessageType Type() const { return mType; }
     Symbol Channel() const { return mChannel; }
-    int Unk14() const { return unk14; }
+    int Priority() const { return mPriority; }
 
 private:
     String mText; // 0x4
     PassiveMessageType mType; // 0xc
     Symbol mChannel; // 0x10
-    int unk14; // 0x14
+    int mPriority; // 0x14
 };
 
 class PassiveMessageQueue {
@@ -49,11 +49,11 @@ protected:
     void ClearPassiveMessage();
     void HandlePassiveMessage(PassiveMessage *);
 
-    float unk8;
-    float unkc; // 0xc - seconds?
+    float mDisplayDurationMs;
+    float mLastDismissTime; // 0xc
     std::list<PassiveMessage *> mQueue; // 0x10
     Hmx::Object *mCallback; // 0x18
-    Symbol unk1c; // 0x1c
+    Symbol mPlayerChannel; // 0x1c
     Timer mTimer; // 0x20
 };
 

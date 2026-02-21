@@ -155,20 +155,20 @@ private:
     MoveRatingHistory *mRatingHistory; // 0x210
     std::vector<CharacterPref> mCharPrefs; // 0x214
     CustomPlaylist mPlaylists[5]; // 0x220
-    bool unk2fc; // 0x2fc - needs refresh?
+    bool mPlaylistNeedsRefresh; // 0x2fc
     bool mInFitnessMode; // 0x2fd
     float mFitnessPounds; // 0x300
     bool mIsFitnessWeightEntered; // 0x304
     float mFitnessTime; // 0x308 - lifetime time?
     float mFitnessCalories; // 0x30c - lifetime calories?
-    float unk310; // 0x310 - calories this current session?
+    float mCurrentSessionCalories; // 0x310
     int mUploadFriendsToken; // 0x314
     OnlineID *mOnlineID; // 0x318
     bool mSignedIn; // 0x31c
-    int unk320;
+    int mProfileSaveCounter; // 0x320
     int unk324; // 0x324 - challenge timestamp?
     int mSkippedSongCount; // 0x328
-    int unk32c;
+    int mProfileFlags; // 0x32c
     int unk330;
     bool unk334;
     Symbol unk338;
@@ -191,7 +191,7 @@ private:
     bool unk360;
     int mProfileTime; // 0x364
     int unk368;
-    bool unk36c;
-    int unk370; // 0x370 - nag index?
-    int unk374; // 0x374 - nag mask?
+    bool mNagNeedsRefresh; // 0x36c
+    int mCurrentNagIndex; // 0x370
+    int mCompletedNagsMask; // 0x374
 };

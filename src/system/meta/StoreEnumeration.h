@@ -22,10 +22,10 @@ enum StoreError {
 struct EnumProduct {
     u32 unk0;
     u32 unk4;
-    u32 unk8;
-    u32 unkc;
-    int unk10;
-    int unk14;
+    u32 mOfferIDLo;
+    u32 mOfferIDHi;
+    int mPurchased;
+    int mPrice;
 };
 
 class StoreEnumeration {
@@ -61,12 +61,12 @@ public:
 
 protected:
     u32 mOfferIDCount;                      // 0xC - total count of offer IDs
-    unsigned long long *unk10;              // 0x10 - begin pointer of offer IDs array
+    unsigned long long *mOfferIDsBegin;              // 0x10 - begin pointer of offer IDs array
     unsigned long long *mCurOffers;         // 0x14 - current position pointer in offer IDs array
-    int unk18;                              // 0x18 - user index
-    bool unk1c;                             // 0x1c - enumerating flag
+    int mUserIndex;                              // 0x18 - user index
+    bool mEnumerating;                             // 0x1c - enumerating flag
     XOVERLAPPED mOverlapped;                // 0x20 - Xbox overlapped I/O structure (28 bytes)
     HANDLE mHandle;                         // 0x3C - enumeration handle
-    u32 unk40;                              // 0x40 - buffer size
+    u32 mBufferSize;                              // 0x40 - buffer size
     void *mEnumBuffer;                      // 0x44 - buffer for enumeration results
 };

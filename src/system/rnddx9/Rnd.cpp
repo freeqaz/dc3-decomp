@@ -81,11 +81,11 @@ void DxRnd::DrawLine(const Vector3 &v1, const Vector3 &v2, const Hmx::Color &c, 
 
 void DxRnd::MakeDrawTarget() {
     if (mWorldEnded) {
-        D3DDevice_SetRenderTarget_External(mD3DDevice, 0, unk384);
-        D3DDevice_SetDepthStencilSurface(mD3DDevice, unk38c);
+        D3DDevice_SetRenderTarget_External(mD3DDevice, 0, mOffscreenRT);
+        D3DDevice_SetDepthStencilSurface(mD3DDevice, mOffscreenDepth);
     } else {
         D3DDevice_SetRenderTarget_External(mD3DDevice, 0, mBackBuffer);
-        D3DDevice_SetDepthStencilSurface(mD3DDevice, unk388);
+        D3DDevice_SetDepthStencilSurface(mD3DDevice, mWorldDepth);
     }
     NgMat::SetCurrent(nullptr);
 }
@@ -95,16 +95,16 @@ void DxRnd::SetViewport(const Viewport &v) {
         NgRnd::SetViewport(v);
     }
     D3DVIEWPORT9 dxViewport;
-    dxViewport.X = v.unk0;
-    dxViewport.Y = v.unk4;
-    dxViewport.Width = v.unk8;
-    dxViewport.Height = v.unkc;
+    dxViewport.X = v.X;
+    dxViewport.Y = v.Y;
+    dxViewport.Width = v.Width;
+    dxViewport.Height = v.Height;
     if (unk_0x301) {
-        dxViewport.MinZ = 1.0f - v.unk10;
-        dxViewport.MaxZ = 1.0f - v.unk14;
+        dxViewport.MinZ = 1.0f - v.MinZ;
+        dxViewport.MaxZ = 1.0f - v.MaxZ;
     } else {
-        dxViewport.MinZ = v.unk10;
-        dxViewport.MaxZ = v.unk14;
+        dxViewport.MinZ = v.MinZ;
+        dxViewport.MaxZ = v.MaxZ;
     }
     D3DDevice_SetViewport(mD3DDevice, &dxViewport);
 }
@@ -129,15 +129,15 @@ void DxRnd::DrawLargeQuad(
     RndMat *it = mat;
     do {
         RndShader::SelectConfig(it, s, false);
-        D3DDevice_SetIndices(mD3DDevice, data.unk0);
-        D3DDevice_SetStreamSource(mD3DDevice, 0, data.unk4, 0, 20, 1);
+        D3DDevice_SetIndices(mD3DDevice, data.mIndexBuffer);
+        D3DDevice_SetStreamSource(mD3DDevice, 0, data.mVertexBuffer, 0, 20, 1);
         D3DDevice_SetFVF(mD3DDevice, 0x102);
         TheShaderMgr.SetVConstant((VShaderConstant)0x5c, Hmx::Matrix4(tf));
         DxTex *tex = static_cast<DxTex *>(mat->GetDiffuseTex());
         D3DDevice_SetTexture(mD3DDevice, 0x10, tex->Tex(), 0x8000);
         D3DDevice_SetTexture(mD3DDevice, 0, tex->Tex(), 0x80000000);
         D3DDevice_DrawIndexedVertices(
-            mD3DDevice, D3DPT_QUADLIST, 0, 0, (data.unkc - 1) * (data.unk8 - 1) * 4
+            mD3DDevice, D3DPT_QUADLIST, 0, 0, (data.mHeight - 1) * (data.mWidth - 1) * 4
         );
         it = next;
         next = next ? dynamic_cast<RndMat *>(next->NextPass()) : nullptr;
@@ -161,14 +161,14 @@ void DxRnd::PreDeviceReset() {
     if (mOcclusionQueryMgr) {
         mOcclusionQueryMgr->ReleaseQueries();
     }
-    FOREACH (it, unk2b0) {
+    FOREACH (it, mDxObjects) {
         (*it)->PreDeviceReset();
     }
     ReleaseAutoRelease();
 }
 
 void DxRnd::PostDeviceReset() {
-    FOREACH (it, unk2b0) {
+    FOREACH (it, mDxObjects) {
         (*it)->PostDeviceReset();
     }
     MakeDrawTarget();

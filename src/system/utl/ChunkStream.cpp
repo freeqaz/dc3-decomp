@@ -226,7 +226,7 @@ void ChunkStream::DecompressChunk(DecompressTask &task) {
     int data = *task.mChunk;
     int dataMsk = data & kChunkSizeMask;
     MILO_ASSERT((data & ~kChunkSizeMask) == 0, 0x3c5);
-    int out_len = task.unkc;
+    int out_len = task.mDecompressedSize;
     int id = task.mID;
     if (id == 0xCDBEDEAF) {
         char *dataOffset = (char *)task.mBuffer + (out_len - dataMsk);
@@ -236,7 +236,7 @@ void ChunkStream::DecompressChunk(DecompressTask &task) {
         DecompressMem(dataOffset, dataMsk - 0x12, task.mBuffer, out_len, task.mTempBuf);
     } else {
         MILO_ASSERT(task.mID == CHUNKSTREAM_Z_ID, 0x3d7);
-        char *dataOffset = (char *)task.mBuffer + (task.unkc - dataMsk);
+        char *dataOffset = (char *)task.mBuffer + (task.mDecompressedSize - dataMsk);
         DecompressMem(dataOffset, dataMsk, task.mBuffer, out_len, task.mTempBuf);
     }
     *task.mChunk = out_len;
@@ -260,7 +260,7 @@ void ChunkStream::DecompressChunkAsync() {
             dtask.mChunk = &mCurChunk[bufIdx];
             dtask.mBuffer = mBuffers[idx];
             dtask.mState = &mBuffersState[idx];
-            dtask.unkc = mBufSize;
+            dtask.mDecompressedSize = mBufSize;
             dtask.mID = mChunkInfo.mID;
             dtask.mTempBuf = (char *)mFilename.c_str();
             gDecompressionQueue.push_back(dtask);

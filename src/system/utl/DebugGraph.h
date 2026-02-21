@@ -21,25 +21,25 @@ public:
         float f6,
         String s
     )
-        : mRect(f1, f2, f3, f4), mColorA(c1), mColorB(c2), unk38(i1), unk3c(f5),
-          unk40(f6), unk44(FLT_MAX), unk48(s), unk50(1) {}
+        : mRect(f1, f2, f3, f4), mColorA(c1), mColorB(c2), mMaxSamples(i1), mMinValue(f5),
+          mMaxValue(f6), mThresholdValue(FLT_MAX), mGraphName(s), mIsVisible(1) {}
     ~DebugGraph() {}
     void AddData(float, bool);
     void Draw();
-    void SetUnk50(bool b) { unk50 = b; }
-    bool GetUnk50() { return unk50; }
-    void SetUnk44(float f) { unk44 = f; }
-    int GetUnk38() { return unk38; }
+    void SetIsVisible(bool b) { mIsVisible = b; }
+    bool GetIsVisible() { return mIsVisible; }
+    void SetThresholdValue(float f) { mThresholdValue = f; }
+    int GetMaxSamples() { return mMaxSamples; }
 
 protected:
     Hmx::Rect mRect; // 0x0
     Hmx::Color mColorA; // 0x10
     Hmx::Color mColorB; // 0x20
     std::list<Sample> mSamples; // 0x30
-    int unk38; // 0x38
-    float unk3c; // 0x3c
-    float unk40; // 0x40
-    float unk44; // 0x44
-    String unk48; // 0x48
-    bool unk50; // 0x50
+    int mMaxSamples; // 0x38
+    float mMinValue; // 0x3c
+    float mMaxValue; // 0x40
+    float mThresholdValue; // 0x44
+    String mGraphName; // 0x48
+    bool mIsVisible; // 0x50
 };

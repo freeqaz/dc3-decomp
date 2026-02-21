@@ -52,7 +52,7 @@ private:
     bool mCacheMode; // 0xD
     std::list<std::pair<class String, LoaderFactoryFunc *> > mFactories; // 0x10
     float mPeriod; // 0x18
-    float unk1c;
+    float mCurrentPeriod;
     std::list<Loader *> mLoading; // 0x20
     Timer mTimer; // 0x28
     int mAsyncUnload; // 0x58
@@ -77,10 +77,10 @@ public:
     float SetLoaderPeriod(float period) {
         float ret = mPeriod;
         mPeriod = period;
-        unk1c = period;
+        mCurrentPeriod = period;
         return ret;
     }
-    bool CheckSplit() { return mTimer.SplitMs() > unk1c; }
+    bool CheckSplit() { return mTimer.SplitMs() > mCurrentPeriod; }
 
     void SetEditMode(bool);
     void SetCacheMode(bool mode) { mCacheMode = mode; }
@@ -130,8 +130,8 @@ private:
     bool mWarn; // 0x2e
     int mFlags; // 0x30
     String mFilename; // 0x34
-    int unk3c; // 0x3c
-    int unk40; // 0x40
-    String unk44; // 0x44
+    int mBytesLoaded; // 0x3c
+    int mChunkSize; // 0x40
+    String mHeapName; // 0x44
     FileLoaderStateFunc mState; // 0x4c
 };

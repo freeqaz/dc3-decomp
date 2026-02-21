@@ -15,88 +15,88 @@
 #include "utl/Symbol.h"
 
 StorePreviewMgr::StorePreviewMgr()
-    : unk2c(0.0f), unk30(1), mStreamPlayer(nullptr), unk40(0), unk48(0) {
+    : mAttenuation(0.0f), mLoopForever(1), mStreamPlayer(nullptr), mNetCacheLoader(0), mHasFailure(0) {
     mStreamPlayer = new StreamPlayer();
     MILO_ASSERT(mStreamPlayer, 0x1d);
     DataArray *d = SystemConfig("song_select", "sound");
-    d->FindData("loop_forever", unk30);
-    d->FindData("attenuation", unk2c);
+    d->FindData("loop_forever", mLoopForever);
+    d->FindData("attenuation", mAttenuation);
     SetName("store_preview_mgr", ObjectDir::Main());
 }
 
 StorePreviewMgr::~StorePreviewMgr() {
     RELEASE(mStreamPlayer);
-    if (unk40) {
-        TheNetCacheMgr->DeleteNetCacheLoader(unk40);
-        unk40 = 0;
+    if (mNetCacheLoader) {
+        TheNetCacheMgr->DeleteNetCacheLoader(mNetCacheLoader);
+        mNetCacheLoader = 0;
     }
 }
 
 bool StorePreviewMgr::GetLastFailure(NetCacheMgrFailType &t) {
-    if (unk48) {
-        t = unk44;
-        unk48 = false;
+    if (mHasFailure) {
+        t = mLastFailType;
+        mHasFailure = false;
         return true;
     }
     return false;
 }
 
 bool StorePreviewMgr::IsPlaying() const {
-    return (!unk34.empty() && TheNetCacheMgr->IsLocalFile(unk34.c_str()));
+    return (!mCurrentPreviewFile.empty() && TheNetCacheMgr->IsLocalFile(mCurrentPreviewFile.c_str()));
 }
 
 void StorePreviewMgr::ClearCurrentPreview() {
-    if (!unk34.empty()) {
-        unk34 = gNullStr;
+    if (!mCurrentPreviewFile.empty()) {
+        mCurrentPreviewFile = gNullStr;
         PlayCurrentPreview();
     }
 }
 
 void StorePreviewMgr::SetCurrentPreviewFile(String const &str, TexMovie *tex) {
-    if (unk34 == str && unk4c == tex)
+    if (mCurrentPreviewFile == str && mTexMovie == tex)
         return;
-    unk4c = tex;
-    unk34 = str;
+    mTexMovie = tex;
+    mCurrentPreviewFile = str;
     PlayCurrentPreview();
 }
 
 bool StorePreviewMgr::IsDownloadingFile(String const &str) {
-    if (unk40) {
-        if (str == unk40->GetRemotePath()) {
+    if (mNetCacheLoader) {
+        if (str == mNetCacheLoader->GetRemotePath()) {
             return true;
         }
     }
-    return unk50.end() != std::find(unk50.begin(), unk50.end(), str);
+    return mDownloadQueue.end() != std::find(mDownloadQueue.begin(), mDownloadQueue.end(), str);
 }
 
 bool StorePreviewMgr::AllowPreviewDownload(String const &str) {
-    if (unk40) {
-        if (str == unk40->GetRemotePath())
+    if (mNetCacheLoader) {
+        if (str == mNetCacheLoader->GetRemotePath())
             return false;
     }
     if (TheNetCacheMgr->IsLocalFile(str.c_str()))
         return false;
     else
-        return std::find(unk50.begin(), unk50.end(), str) == unk50.end();
+        return std::find(mDownloadQueue.begin(), mDownloadQueue.end(), str) == mDownloadQueue.end();
 }
 
 void StorePreviewMgr::PlayCurrentPreview() {
     MILO_ASSERT(mStreamPlayer, 0xd8);
-    if (unk34.empty() || !TheNetCacheMgr->IsLocalFile(unk34.c_str())) {
+    if (mCurrentPreviewFile.empty() || !TheNetCacheMgr->IsLocalFile(mCurrentPreviewFile.c_str())) {
         mStreamPlayer->StopPlaying();
-        if (unk4c) {
+        if (mTexMovie) {
             FilePath fp(gNullStr);
-            unk4c->SetFile(fp);
+            mTexMovie->SetFile(fp);
         }
     } else {
-        String str(unk34.c_str());
-        if (unk4c) {
+        String str(mCurrentPreviewFile.c_str());
+        if (mTexMovie) {
             mStreamPlayer->StopPlaying();
             {
                 FilePath fp(str.c_str());
-                unk4c->SetFile(fp);
+                mTexMovie->SetFile(fp);
             }
-            mStreamPlayer->SetVolume(-unk2c);
+            mStreamPlayer->SetVolume(-mAttenuation);
         } else {
             int len = str.length();
             auto _tmp5 = str.find(".bik", len - 4);
@@ -105,20 +105,20 @@ void StorePreviewMgr::PlayCurrentPreview() {
             } else if (_tmp5 != String::npos) {
                 str.erase(len - 4);
             }
-            mStreamPlayer->PlayFile(str.c_str(), -unk2c, 0.0f, unk30);
+            mStreamPlayer->PlayFile(str.c_str(), -mAttenuation, 0.0f, mLoopForever);
         }
     }
 }
 
 void StorePreviewMgr::AddToDownloadQueue(String const &str) {
-    if (unk40) {
-        if (str == unk40->GetRemotePath()) {
+    if (mNetCacheLoader) {
+        if (str == mNetCacheLoader->GetRemotePath()) {
             return;
         }
     }
     if (!TheNetCacheMgr->IsLocalFile(str.c_str())) {
-        if (std::find(unk50.begin(), unk50.end(), str) == unk50.end())
-            unk50.push_back(str);
+        if (std::find(mDownloadQueue.begin(), mDownloadQueue.end(), str) == mDownloadQueue.end())
+            mDownloadQueue.push_back(str);
     }
 }
 

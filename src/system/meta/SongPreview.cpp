@@ -22,10 +22,10 @@ const float SongPreview::kSilenceVal = -48;
 #pragma region Hmx::Object
 
 SongPreview::SongPreview(const SongMgr &mgr)
-    : mSongMgr(mgr), mStream(0), mTexMovie(this), unk4c(0), mFader(0), mMusicFader(0),
+    : mSongMgr(mgr), mStream(0), mTexMovie(this), mInitted(0), mFader(0), mMusicFader(0),
       mCrowdSingFader(0), mNumChannels(0), mAttenuation(0.0f), mPreviewDb(0.0f),
       mState(kIdle), mStartMs(0.0f), mEndMs(0.0f), mStartPreviewMs(0.0f),
-      mEndPreviewMs(0.0f), mRegisteredWithCM(0), unk8d(0), mSecurePreview(0) {}
+      mEndPreviewMs(0.0f), mRegisteredWithCM(0), mSameSongRequested(0), mSecurePreview(0) {}
 
 SongPreview::~SongPreview() { Terminate(); }
 
@@ -68,7 +68,7 @@ bool SongPreview::IsWaitingToDelete() const { return mState == kDeletingSong; }
 bool SongPreview::IsFadingOut() const { return mState == kFadingOutSong; }
 
 void SongPreview::SetMusicVol(float f) {
-    if (unk4c == 0) {
+    if (mInitted == 0) {
         return;
     }
     if (f < mMusicFader->GetLevelTarget()) {
@@ -79,13 +79,13 @@ void SongPreview::SetMusicVol(float f) {
 }
 
 void SongPreview::SetCrowdSingVol(float f) {
-    if (unk4c)
+    if (mInitted)
         mCrowdSingFader->DoFade(f, 0.0f);
 }
 
 void SongPreview::Init() {
-    if (!unk4c) {
-        unk4c = true;
+    if (!mInitted) {
+        mInitted = true;
         mSong = 0;
         mSongContent = 0;
         RELEASE(mStream);
@@ -106,8 +106,8 @@ void SongPreview::Init() {
 }
 
 void SongPreview::Terminate() {
-    if (unk4c) {
-        unk4c = 0;
+    if (mInitted) {
+        mInitted = 0;
         DetachFader(mMusicFader);
         DetachFader(mCrowdSingFader);
         mSong = 0;
@@ -125,11 +125,11 @@ void SongPreview::Terminate() {
 }
 
 void SongPreview::Start(Symbol song, TexMovie *texMovie) {
-    if (unk4c || !song.Null()) {
+    if (mInitted || !song.Null()) {
         MILO_ASSERT(mFader && mMusicFader && mCrowdSingFader,0x6c);
         mTexMovie = texMovie;
         if (song == mSong) {
-            unk8d = true;
+            mSameSongRequested = true;
         } else {
             if (!song.Null()) {
                 if (!mSongMgr.HasSong(song, false)) {
@@ -277,10 +277,10 @@ void SongPreview::Poll() {
             } else {
                 PreparePreview();
             }
-        } else if (unk8d) {
+        } else if (mSameSongRequested) {
             mState = kFadingOutSong;
             mFader->DoFade(kSilenceVal, mFadeTime);
-            unk8d = false;
+            mSameSongRequested = false;
         }
         break;
     }

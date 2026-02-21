@@ -38,7 +38,7 @@ public:
     virtual void Reset();
     virtual HxAudio *GetHxAudio() { return mAudio ? mAudio : nullptr; }
     virtual float SongDurationMs();
-    virtual bool IsLoaded() { return unk45; }
+    virtual bool IsLoaded() { return mLoaded; }
 
     void
     Load(SongInfo *, bool, int, bool, HamSongDataValidate, std::vector<MidiReceiver *> *);
@@ -50,9 +50,9 @@ public:
     void AddMusicFader(Fader *);
     void SetMaps();
     void LoaderPoll();
-    int Unk70() const { return unk60.GetMeasure(); }
-    float TotalBeat1() const { return unk60.GetTotalBeat(); }
-    float TotalBeat2() const { return unk78.GetTotalBeat(); }
+    int Unk70() const { return mSongPos.GetMeasure(); }
+    float TotalBeat1() const { return mSongPos.GetTotalBeat(); }
+    float TotalBeat2() const { return mPrevSongPos.GetTotalBeat(); }
     HamAudio *GetAudio() const { return mAudio; }
     HamSongData *SongData() const { return mSongData; }
     MidiParserMgr *GetMidiParserMgr() const { return mMidiParserMgr; }
@@ -66,21 +66,21 @@ private:
     MidiParserMgr *mMidiParserMgr; // 0x38
     SongInfo *mSongInfo; // 0x3c
     HamMasterLoader *mLoader; // 0x40
-    bool unk44;
-    bool unk45;
-    float unk48;
+    bool mSyncLoad; // 0x44
+    bool mLoaded; // 0x45
+    float mSongMs; // 0x48
     float mStreamMs; // 0x4c
-    bool unk50;
+    bool mStreamJumped; // 0x50
     float unk54;
     float unk58;
-    float unk5c;
-    SongPos unk60;
-    SongPos unk78;
-    std::vector<int> unk90;
+    float mStreamMsAtJump; // 0x5c
+    SongPos mSongPos; // 0x60
+    SongPos mPrevSongPos; // 0x78
+    std::vector<int> mSubmixIdxs; // 0x90
     float unk9c;
     float unka0;
     float unka4;
-    std::list<Vector2> unka8;
+    std::list<Vector2> mLevelHistory; // 0xa8
     int unkb0;
     int unkb4;
     int unkb8;

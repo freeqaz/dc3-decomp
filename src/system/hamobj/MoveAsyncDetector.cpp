@@ -26,7 +26,7 @@ MoveDetector::MoveDetector(
             const char *path = move ? PathName(move) : "NULL";
             MILO_FAIL("HamMove '%s': dancer_frame->mMoveFrameIdx != mf", path);
             DancerFrame &cur = mDancerFrames[mf];
-            cur.unk0 = -1;
+            cur.mMoveIdx = -1;
             cur.mMoveFrameIdx = mf;
             cur.mSkeleton = dancer_frame->mSkeleton;
             for (int i = 0; i < 2; i++) {

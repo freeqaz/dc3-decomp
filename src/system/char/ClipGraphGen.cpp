@@ -3,7 +3,7 @@
 #include "obj/Data.h"
 #include "obj/Object.h"
 
-ClipGraphGenerator::ClipGraphGenerator() : unk2c(0), mDmap(0), mClipA(0), mClipB(0) {}
+ClipGraphGenerator::ClipGraphGenerator() : mTypeData(0), mDmap(0), mClipA(0), mClipB(0) {}
 
 ClipGraphGenerator::~ClipGraphGenerator() {}
 
@@ -11,11 +11,11 @@ ClipDistMap *ClipGraphGenerator::GeneratePair(
     CharClip *c1, CharClip *c2, ClipDistMap::Node *n1, ClipDistMap::Node *n2
 ) {
     c1->GetTransitions().RemoveClip(c2);
-    unk2c = c1->TypeDef();
-    if (unk2c) {
+    mTypeData = c1->TypeDef();
+    if (mTypeData) {
         if (c1->Type() == c2->Type()) {
             if ((c1->PlayFlags() & 0xF0) != 0x10) {
-                DataArray *transarr = unk2c->FindArray("on_transition", false);
+                DataArray *transarr = mTypeData->FindArray("on_transition", false);
                 if (transarr) {
                     static DataNode &a_clip = DataVariable("a_clip");
                     static DataNode &b_clip = DataVariable("b_clip");
@@ -62,7 +62,7 @@ DataNode ClipGraphGenerator::OnGenerateTransitions(DataArray *da) {
     if (beat_align < (float)aflag)
         beat_align = aflag;
 
-    DataArray *boneweightarr = unk2c->FindArray("transition_bone_weights", false);
+    DataArray *boneweightarr = mTypeData->FindArray("transition_bone_weights", false);
     mDmap = new ClipDistMap(mClipA, mClipB, beat_align, blend_width, 3, boneweightarr);
     mDmap->FindDists(max_facing * DEG2RAD, restrictArr);
     mDmap->FindNodes(max_error, max_dist, end_dist);

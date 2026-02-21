@@ -14,18 +14,18 @@
 #pragma region FitnessFilter
 
 FitnessFilter::FitnessFilter()
-    : unk4(true), unk5(false), unk6(false), unkc(false),
+    : mPaused(true), mNuiStarted(false), mActive(false), mNuiTrackingActive(false),
       mFitnessMeterOverlay(RndOverlay::Find("fitness_meter")), mPlayerIndex(0) {
     Clear();
 }
 
 void FitnessFilter::Clear() {
     mTrackingID = -1;
-    unk4 = unk5 = unk6 = false;
+    mPaused = mNuiStarted = mActive = false;
 }
 
 void FitnessFilter::Poll() {
-    if (!unk4 && unk6) {
+    if (!mPaused && mActive) {
         HamPlayerData *player = TheGameData->Player(mPlayerIndex);
         MILO_ASSERT(player, 0x3e);
         if (player->IsPlaying()) {
@@ -37,7 +37,7 @@ void FitnessFilter::Poll() {
                 b4 = TheGestureMgr->GetSkeletonByTrackingID(id);
             }
             if (b4) {
-                if (!unk5) {
+                if (!mNuiStarted) {
                     HRESULT hr = NuiFitnessStartTracking(
                         NUI_FITNESS_TRACKING_AUTO, id, player->PadNum()
                     );
@@ -45,12 +45,12 @@ void FitnessFilter::Poll() {
                         MILO_NOTIFY(
                             "NuiFitnessStartTracking failed with error 0x%08x", hr
                         );
-                        unkc = false;
+                        mNuiTrackingActive = false;
                     } else {
-                        unkc = true;
+                        mNuiTrackingActive = true;
                     }
                     mTrackingID = id;
-                    unk5 = true;
+                    mNuiStarted = true;
                 }
                 if (mTrackingID != id && mTrackingID > 0) {
                     HRESULT pauseHr = NuiFitnessPauseTracking(mTrackingID);
@@ -86,7 +86,7 @@ void FitnessFilter::SetPlayerIndex(int index) {
 bool FitnessFilter::GetFitnessData(float &f1, float &f2) const {
     f1 = 0;
     f2 = 0;
-    if (mTrackingID > 0 && unk6 && unkc) {
+    if (mTrackingID > 0 && mActive && mNuiTrackingActive) {
         NUI_FITNESS_DATA data;
         HRESULT hr = NuiFitnessGetCurrentFitnessData(mTrackingID, &data);
         if (SUCCEEDED(hr)) {
@@ -124,8 +124,8 @@ void FitnessFilter::SetPaused(bool b1) {
     if (player->IsPlaying()) {
         playerId = player->GetSkeletonTrackingID();
     }
-    if (unk5) {
-        if (b1 && !unk4) {
+    if (mNuiStarted) {
+        if (b1 && !mPaused) {
             HRESULT hr = NuiFitnessPauseTracking(mTrackingID);
             if (!SUCCEEDED(hr)) {
                 MILO_NOTIFY("NuiFitnessPauseTracking failed with error 0x%08x", hr);
@@ -137,7 +137,7 @@ void FitnessFilter::SetPaused(bool b1) {
             } else {
                 b4 = TheGestureMgr->GetSkeletonByTrackingID(playerId);
             }
-            if (b4 && unk4 && !b1) {
+            if (b4 && mPaused && !b1) {
                 HRESULT hr = NuiFitnessResumeTracking(mTrackingID, playerId);
                 if (!SUCCEEDED(hr)) {
                     MILO_NOTIFY("NuiFitnessResumeTracking failed with error 0x%08x", hr);
@@ -146,7 +146,7 @@ void FitnessFilter::SetPaused(bool b1) {
             }
         }
     }
-    unk4 = b1;
+    mPaused = b1;
 }
 
 void FitnessFilter::StopTracking() {

@@ -18,8 +18,8 @@
 
 HamMaster::HamMaster(HamSongData *data, MidiParserMgr *mgr)
     : mSongData(data), mAudio(nullptr), mMidiParserMgr(mgr), mSongInfo(nullptr),
-      mLoader(0), unk45(0), unk48(0), mStreamMs(-1), unk50(0), unk54(-1), unk58(-1),
-      unk5c(-1), unk9c(0), unka0(0), unka4(0), unkb0(0), mMetronome(0) {
+      mLoader(0), mLoaded(0), mSongMs(0), mStreamMs(-1), mStreamJumped(0), unk54(-1), unk58(-1),
+      mStreamMsAtJump(-1), unk9c(0), unka0(0), unka4(0), unkb0(0), mMetronome(0) {
     Reset();
     mAudio = new HamAudio();
 }
@@ -40,31 +40,31 @@ END_PROPSYNCS
 
 void HamMaster::Poll(float f1) {
     if (IsLoaded() && mAudio->GetSongStream()) {
-        unk48 = f1;
-        unk60 = mSongData->CalcSongPos(this, unk48);
+        mSongMs = f1;
+        mSongPos = mSongData->CalcSongPos(this, mSongMs);
         float f8 = mAudio->GetSongStream()->GetJumpBackTotalTime(f1);
-        float f9 = f8 + unk48;
-        unk50 = f9 < mStreamMs;
+        float f9 = f8 + mSongMs;
+        mStreamJumped = f9 < mStreamMs;
         Marker marker1, marker2;
         bool jp = mAudio->GetSongStream()->CurrentJumpPoints(marker1, marker2);
-        if (!unk50 && jp && marker1.posMS <= marker2.posMS) {
+        if (!mStreamJumped && jp && marker1.posMS <= marker2.posMS) {
             if (mStreamMs <= marker2.posMS && marker2.posMS < f9) {
-                unk50 = true;
+                mStreamJumped = true;
             } else {
-                unk50 = false;
+                mStreamJumped = false;
             }
         }
-        if (unk50) {
+        if (mStreamJumped) {
             float f10;
             if (jp) {
                 f10 = MsToTick(marker2.posMS) - 1.0f;
             } else {
-                f10 = unk60.GetTotalTick();
+                f10 = mSongPos.GetTotalTick();
             }
             if (mMidiParserMgr) {
                 mMidiParserMgr->Reset();
             }
-            unk5c = mStreamMs;
+            mStreamMsAtJump = mStreamMs;
             static Message msg("stream_jump");
             Export(msg, true);
         }
@@ -76,9 +76,9 @@ void HamMaster::Poll(float f1) {
 
 void HamMaster::Jump(float f1) {
     SongPos calcedPos = mSongData->CalcSongPos(this, f1);
-    const SongPos &tmp = unk60;
-    unk60 = calcedPos;
-    unk78 = tmp;
+    const SongPos &tmp = mSongPos;
+    mSongPos = calcedPos;
+    mPrevSongPos = tmp;
     unkb4 = -1;
     unkb8 = 0;
     if (mMidiParserMgr) {
@@ -88,11 +88,11 @@ void HamMaster::Jump(float f1) {
 }
 
 void HamMaster::Reset() {
-    unk78 = SongPos();
+    mPrevSongPos = SongPos();
     unkb8 = 0;
     unkb4 = -1;
-    for (int i = 0; i < unk90.size(); i++) {
-        unk90[i] = 0;
+    for (int i = 0; i < mSubmixIdxs.size(); i++) {
+        mSubmixIdxs[i] = 0;
     }
     if (mMidiParserMgr) {
         mMidiParserMgr->Reset();
@@ -102,8 +102,8 @@ void HamMaster::Reset() {
     ResetAudio();
     mStreamMs = 0;
     unk54 = 0;
-    unk50 = false;
-    unk48 = 0;
+    mStreamJumped = false;
+    mSongMs = 0;
     if (TheSynth->CheckCommonBank(false)) {
         Fader *fade = TheSynth->Find<Fader>("music_level.fade", false);
         if (fade) {
@@ -143,12 +143,12 @@ void HamMaster::Load(
     HamSongDataValidate v,
     std::vector<MidiReceiver *> *
 ) {
-    unk44 = b2;
+    mSyncLoad = b2;
     mSongInfo = s;
     mSongData->Load(s, b4, v);
     MILO_ASSERT(!mLoader, 0x69);
     mLoader = new HamMasterLoader(this);
-    unk45 = false;
+    mLoaded = false;
     if (b4) {
         TheLoadMgr.PollUntilLoaded(mLoader, nullptr);
     }
@@ -168,12 +168,12 @@ void HamMaster::ResetAudio() {
 float HamMaster::StreamMs() const { return mStreamMs; }
 
 bool HamMaster::DetectStreamJump(float &f1, float &f2, float &f3) const {
-    if (!unk50) {
+    if (!mStreamJumped) {
         return false;
     } else {
         f1 = unk54;
         f2 = unk58;
-        f3 = unk5c;
+        f3 = mStreamMsAtJump;
         return true;
     }
 }
@@ -207,21 +207,21 @@ void HamMaster::LoaderPoll() {
             dir.LoadFile(cfg->Str(1), false, true, kLoadFront, false);
             TheSynth->SetDir(dir);
         }
-        mAudio->Load(mSongInfo, unk44);
+        mAudio->Load(mSongInfo, mSyncLoad);
         mSongInfo = nullptr;
         if (mMidiParserMgr) {
             mMidiParserMgr->FinishLoad();
         }
-        unk45 = true;
+        mLoaded = true;
         RELEASE(mLoader);
     }
 }
 
 void HamMaster::CheckBeat() {
-    int totalbeat1 = unk60.GetTotalBeat();
-    int totalbeat2 = unk78.GetTotalBeat();
+    int totalbeat1 = mSongPos.GetTotalBeat();
+    int totalbeat2 = mPrevSongPos.GetTotalBeat();
     if (totalbeat1 != totalbeat2) {
-        int beat = unk60.GetBeat();
+        int beat = mSongPos.GetBeat();
         TheHamProvider->SetProperty("beat", beat + 1);
         if (mMetronome) {
             if (beat == 0) {
@@ -235,21 +235,21 @@ void HamMaster::CheckBeat() {
         static Message msg("beat");
         Export(msg, true);
     }
-    if (unk78.GetMeasure() != unk60.GetMeasure()) {
+    if (mPrevSongPos.GetMeasure() != mSongPos.GetMeasure()) {
         static DataNode &n = DataVariable("measure");
-        n = unk60.GetMeasure();
+        n = mSongPos.GetMeasure();
         static Message msg("downbeat");
         TheHamProvider->Export(msg, true);
     }
-    if (unk78.GetTick() / 240 != unk60.GetTick() / 240) {
+    if (mPrevSongPos.GetTick() / 240 != mSongPos.GetTick() / 240) {
         static Message msg("halfbeat");
         TheHamProvider->Export(msg, true);
     }
-    if (unk78.GetTick() / 120 != unk60.GetTick() / 120) {
+    if (mPrevSongPos.GetTick() / 120 != mSongPos.GetTick() / 120) {
         static Message msg("quarterbeat");
         TheHamProvider->Export(msg, true);
     }
-    unk78 = unk60;
+    mPrevSongPos = mSongPos;
 }
 
 HamMasterLoader::HamMasterLoader(HamMaster *master)

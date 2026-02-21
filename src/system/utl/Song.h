@@ -101,7 +101,7 @@ protected:
     std::map<int, Symbol> mSongSections; // 0x24
     ObjPtrList<Hmx::Object> mDebugParsers; // 0x3c
     Symbol mSongName; // 0x50
-    Symbol unk54; // 0x54
+    Symbol mLastLoadedSong; // 0x54
     float mSongEndFrame; // 0x58
     float mSpeed; // 0x5c
     Vector2 mLoopPoints; // 0x60

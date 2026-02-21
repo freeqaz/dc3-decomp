@@ -63,7 +63,7 @@ private:
     std::vector<Grammar> mGrammars; // 0x30
     bool mEnabled; // 0x3c
     bool mRecognizing; // 0x3d
-    bool unk3e;
+    bool mRecognitionBegun; // 0x3e
     bool mSpeechSupported; // 0x3f
     float mSpeechConfThresh; // 0x40
     int mVoiceDirection; // 0x44

@@ -39,9 +39,10 @@ MainMenuPanel::MotdData::MotdData(MotdData const &motdData)
 #pragma region MainMenuPanel
 
 MainMenuPanel::MainMenuPanel()
-    : mMsgLabel(), unk80(false), unk81(false), unk8c(), unk90(), unk94(false),
-      unk95(false), unk96(false), unkb0(false), unkbc(), unkc0(), unkc4(), unkc8(),
-      unkcc(), unkd0(), unkd8() {}
+    : mMsgLabel(), mIsEntering(false), mNetCacheActive(false), mDownloadedTexture1(),
+      mDownloadedTexture2(), mDLCArtPending(false), mUtilityArtPending(false),
+      mMiscArtPending(false), mMotdProcessingActive(false), unkbc(), unkc0(), unkc4(),
+      unkc8(), unkcc(), unkd0(), mPlayerEventProvider() {}
 
 MainMenuPanel::~MainMenuPanel() { DeleteDownloadedArts(); }
 
@@ -52,32 +53,32 @@ END_PROPSYNCS
 void MainMenuPanel::Load() {
     UIPanel::Load();
     TheContentMgr.StartRefresh();
-    unk81 = false;
-    unk80 = true;
-    unk94 = false;
-    unk95 = false;
-    unk96 = false;
+    mNetCacheActive = false;
+    mIsEntering = true;
+    mDLCArtPending = false;
+    mUtilityArtPending = false;
+    mMiscArtPending = false;
     DeleteDownloadedArts();
-    unk8c = New<RndTex>();
-    unk90 = New<RndTex>();
+    mDownloadedTexture1 = New<RndTex>();
+    mDownloadedTexture2 = New<RndTex>();
 }
 
 void MainMenuPanel::Enter() {
     HamPanel::Enter();
-    if (unk80) {
+    if (mIsEntering) {
         TheNetCacheMgr->Load((NetCacheMgr::CacheSize)1);
-        unk80 = false;
-        unk81 = true;
+        mIsEntering = false;
+        mNetCacheActive = true;
     }
     TheContentMgr.RegisterCallback(this, true);
 }
 
 void MainMenuPanel::Exit() {
     UIPanel::Exit();
-    unk98.clear();
+    mMotdMessagesByCategory.clear();
     mMotdData.clear();
     mMsgLabel = 0;
-    unkb0 = false;
+    mMotdProcessingActive = false;
     TheContentMgr.UnregisterCallback(this, true);
 }
 
@@ -94,7 +95,7 @@ void MainMenuPanel::Poll() {
 }
 
 void MainMenuPanel::Unload() {
-    if (unk81)
+    if (mNetCacheActive)
         CleanupNetCacheRelated();
     DeleteDownloadedArts();
     UIPanel::Unload();
@@ -102,7 +103,7 @@ void MainMenuPanel::Unload() {
 
 void MainMenuPanel::FinishLoad() {
     UIPanel::FinishLoad();
-    unkd8 = DataDir()->Find<PropertyEventProvider>("player.ep", true);
+    mPlayerEventProvider = DataDir()->Find<PropertyEventProvider>("player.ep", true);
 }
 
 void MainMenuPanel::UpdateIconState(Symbol s) {
@@ -115,16 +116,16 @@ void MainMenuPanel::UpdateIconState(Symbol s) {
     static Symbol tier("tier");
     static Symbol gamertag("gamertag");
     if (s == dlc || s == utility) {
-        unkd8->SetProperty(state, s);
+        mPlayerEventProvider->SetProperty(state, s);
     } else {
         HamProfile *pProfile = TheProfileMgr.GetActiveProfile(true);
         if (pProfile) {
-            unkd8->SetProperty(state, profile);
-            unkd8->SetProperty(rank, pProfile->GetMetagameRank()->RankNumber());
-            unkd8->SetProperty(tier, pProfile->GetMetagameRank()->GetTier());
-            unkd8->SetProperty(gamertag, pProfile->GetName());
+            mPlayerEventProvider->SetProperty(state, profile);
+            mPlayerEventProvider->SetProperty(rank, pProfile->GetMetagameRank()->RankNumber());
+            mPlayerEventProvider->SetProperty(tier, pProfile->GetMetagameRank()->GetTier());
+            mPlayerEventProvider->SetProperty(gamertag, pProfile->GetName());
         } else {
-            unkd8->SetProperty(state, no_profile);
+            mPlayerEventProvider->SetProperty(state, no_profile);
         }
     }
     Flow *f = DataDir()->Find<Flow>("udpate_icon_state.flow", true);
@@ -132,34 +133,34 @@ void MainMenuPanel::UpdateIconState(Symbol s) {
 }
 
 void MainMenuPanel::CleanupNetCacheRelated() {
-    FOREACH (it, unk84)
+    FOREACH (it, mNetCacheLoaders)
         TheNetCacheMgr->DeleteNetCacheLoader(*it);
-    unk84.clear();
+    mNetCacheLoaders.clear();
     TheNetCacheMgr->Unload();
-    unk81 = false;
+    mNetCacheActive = false;
 }
 
 void MainMenuPanel::ContentDone() { HandleType(Message("content_refresh_Done")); }
 
 void MainMenuPanel::DownloadMotdArt() {
-    if (unk80) {
+    if (mIsEntering) {
         TheNetCacheMgr->Load((NetCacheMgr::CacheSize)1);
-        unk81 = true;
-        unk80 = false;
+        mNetCacheActive = true;
+        mIsEntering = false;
     }
-    unk94 = true;
-    unk95 = true;
-    unk96 = true;
+    mDLCArtPending = true;
+    mUtilityArtPending = true;
+    mMiscArtPending = true;
 }
 
 void MainMenuPanel::DeleteDownloadedArts() {
-    if (unk8c) {
-        delete unk8c;
-        unk8c = nullptr;
+    if (mDownloadedTexture1) {
+        delete mDownloadedTexture1;
+        mDownloadedTexture1 = nullptr;
     }
-    if (unk90) {
-        delete unk90;
-        unk90 = nullptr;
+    if (mDownloadedTexture2) {
+        delete mDownloadedTexture2;
+        mDownloadedTexture2 = nullptr;
     }
 }
 
@@ -213,24 +214,24 @@ void MainMenuPanel::MotdSetup(HamLabel *label) {
     static Symbol community("community");
     static Symbol stats("stats");
     static Symbol no_profile("no_profile");
-    unk98.clear();
+    mMotdMessagesByCategory.clear();
     HamProfile *activeProfile = TheProfileMgr.GetActiveProfile(true);
     if (activeProfile) {
         if (TheRockCentral.HasDlcMsg()) {
             String msg;
             TheRockCentral.GetDlcMsg(msg);
-            unk98[dlc].push_back(msg);
+            mMotdMessagesByCategory[dlc].push_back(msg);
         }
         if (TheRockCentral.HasUtilityMsg()) {
             String msg;
             TheRockCentral.GetUtilityMsg(msg);
-            unk98[utility].push_back(msg);
+            mMotdMessagesByCategory[utility].push_back(msg);
         }
         int commMsgCount = TheRockCentral.GetCommunityMsgCount();
         for (int i = 0; i < commMsgCount; i++) {
             String msg;
             TheRockCentral.GetCommunityMsg(i, msg);
-            unk98[community].push_back(msg);
+            mMotdMessagesByCategory[community].push_back(msg);
         }
 
         MetagameStats *playerStats = activeProfile->GetMetagameStats();
@@ -246,7 +247,7 @@ void MainMenuPanel::MotdSetup(HamLabel *label) {
             for (int i = 0; i < numData; i++) {
                 String stat;
                 playerStats->InqStatString(i, stat);
-                unk98[stats].push_back(stat);
+                mMotdMessagesByCategory[stats].push_back(stat);
             }
             if (TheContentMgr.RefreshDone()) {
                 static Symbol stat_curr_library_size("stat_curr_library_size");
@@ -255,17 +256,17 @@ void MainMenuPanel::MotdSetup(HamLabel *label) {
                     Localize(stat_curr_library_size, false, TheLocale),
                     LocalizeSeparatedInt(totalNumSongs, TheLocale)
                 );
-                unk98[stats].push_back(retval);
+                mMotdMessagesByCategory[stats].push_back(retval);
             }
         } else {
             static Symbol stat_welcome("stat_welcome");
             String locale = Localize(stat_welcome, false, TheLocale);
-            unk98[stats].push_back(locale);
+            mMotdMessagesByCategory[stats].push_back(locale);
         }
     } else {
         static Symbol message_noprofile("message_noprofile");
         String locale = Localize(message_noprofile, false, TheLocale);
-        unk98[no_profile].push_back(locale);
+        mMotdMessagesByCategory[no_profile].push_back(locale);
     }
     mMsgLabel = label;
     MotdInitializeTexts();
@@ -277,7 +278,7 @@ void MainMenuPanel::MotdHandleTextScrolledOut(int i) {
     static Symbol none("none");
 
     // Early exit if MOTD system not initialized
-    if (!unkb0) {
+    if (!mMotdProcessingActive) {
         return;
     }
 
@@ -322,27 +323,27 @@ void MainMenuPanel::MotdHandleTextScrolledOut(int i) {
 }
 
 void MainMenuPanel::UpdateArtLoaders() {
-    if (TheNetCacheMgr->GetUnk30()) {
+    if (TheNetCacheMgr->GetHasFailed()) {
         HandleNetCacheMgrFailure();
-        if (unk81) {
+        if (mNetCacheActive) {
             CleanupNetCacheRelated();
         }
-        unk80 = true;
+        mIsEntering = true;
     } else {
         if (TheNetCacheMgr->IsReady()) {
-            if (unk94) {
-                unk94 = false;
+            if (mDLCArtPending) {
+                mDLCArtPending = false;
                 LoadArt(TheRockCentral.GetDLCImage());
             }
-            if (unk95) {
-                unk95 = false;
+            if (mUtilityArtPending) {
+                mUtilityArtPending = false;
                 LoadArt(TheRockCentral.GetUtilityImage());
             }
-            if (unk96) {
-                unk96 = false;
+            if (mMiscArtPending) {
+                mMiscArtPending = false;
                 LoadArt(TheRockCentral.GetMiscImage());
             }
-            FOREACH (it, unk84) {
+            FOREACH (it, mNetCacheLoaders) {
                 NetCacheLoader *loader = *it;
                 if (loader->IsLoaded()) {
                     int size = loader->GetSize();
@@ -354,14 +355,14 @@ void MainMenuPanel::UpdateArtLoaders() {
                     bitmap.SetMip(nullptr);
                     TheNetCacheMgr->DeleteNetCacheLoader(loader);
                     if (TheRockCentral.GetDLCImage() == loader->GetRemotePath()) {
-                        unk8c->SetBitmap(bitmap, nullptr, false, RndTex::kRegular);
+                        mDownloadedTexture1->SetBitmap(bitmap, nullptr, false, RndTex::kRegular);
                         if (mState == 1) {
                             static Message dlc_image_loaded("dlc_image_loaded");
                             Handle(dlc_image_loaded, false);
                         }
                     }
                     if (TheRockCentral.GetUtilityImage() == loader->GetRemotePath()) {
-                        unk90->SetBitmap(bitmap, nullptr, false, RndTex::kRegular);
+                        mDownloadedTexture2->SetBitmap(bitmap, nullptr, false, RndTex::kRegular);
                         if (mState == 1) {
                             static Message utility_image_loaded("utility_image_loaded");
                             Handle(utility_image_loaded, false);
@@ -370,12 +371,12 @@ void MainMenuPanel::UpdateArtLoaders() {
                     if (TheRockCentral.GetMiscImage() == loader->GetRemotePath()) {
                         TheRockCentral.SetMiscArtBitMap(bitmap);
                     }
-                    unk84.pop_front();
+                    mNetCacheLoaders.pop_front();
                 } else {
                     if (loader->HasFailed()) {
                         NetCacheMgrFailType failType = loader->GetFailType();
                         TheNetCacheMgr->DeleteNetCacheLoader(loader);
-                        unk84.pop_front();
+                        mNetCacheLoaders.pop_front();
                         HandleNetCacheLoaderFailure(failType);
                     }
                 }
@@ -389,8 +390,8 @@ BEGIN_HANDLERS(MainMenuPanel)
         update_main_menu_provider, unk44.UpdateList(_msg->Obj<UIListProvider>(2))
     )
     HANDLE_EXPR(get_main_menu_provider, &unk44) // not a perfect match for some reason
-    HANDLE_EXPR(dlc_image, unk8c)
-    HANDLE_EXPR(utility_image, unk90)
+    HANDLE_EXPR(dlc_image, mDownloadedTexture1)
+    HANDLE_EXPR(utility_image, mDownloadedTexture2)
     HANDLE_ACTION(update_icon_state, UpdateIconState(_msg->Sym(2)))
     HANDLE_ACTION(motd_setup, MotdSetup(_msg->Obj<HamLabel>(2)))
     HANDLE_ACTION(download_motd_art, DownloadMotdArt())

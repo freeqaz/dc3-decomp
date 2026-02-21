@@ -29,8 +29,8 @@ public:
     float swingArm; // 0x54
     RndParticle *prev; // 0x58
     RndParticle *next; // 0x5c
-    int unk60;
-    float unk64;
+    int mCurrentTileIndex;
+    float mTileTime;
 };
 
 // size 0xd0
@@ -50,7 +50,7 @@ public:
     float bubblePhase; // 0xa4
     float RPF; // 0xa8
     float swingArmVel; // 0xac
-    float unkb0, unkb4, unkb8, unkbc, unkc0, unkc4;
+    float mRPMVelocity, mPitchAngularVel, mBirthVelocityX, mBirthVelocityY, mBirthVelocityZ, unkc4;
     float unkc8, unkcc;
 };
 

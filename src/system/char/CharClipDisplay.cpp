@@ -11,25 +11,25 @@ void CharClipDisplay::Init(ObjectDir *dir) {
 }
 
 void CharClipDisplay::SetClip(CharClip *clip, bool b) {
-    unk0 = clip;
+    mClip = clip;
     SetText(clip->Name());
     SetStartEnd(clip->StartBeat(), clip->EndBeat(), b);
 }
 
 void CharClipDisplay::SetText(const char *text) {
-    strcpy(unk24, text);
-    unk14 = TheRnd.DrawString(text, Vector2(0, 0), Hmx::Color(1.0f, 0.0f, 0.0f), false).x
+    strcpy(mClipNameBuffer, text);
+    mTextWidth = TheRnd.DrawString(text, Vector2(0, 0), Hmx::Color(1.0f, 0.0f, 0.0f), false).x
         + sEm;
 }
 
 float CharClipDisplay::LineSpacing() { return sEm * 2.0f; }
 
 float CharClipDisplay::GetX(float beat) const {
-    float endBeat = unk10;
-    float startBeat = unkc;
+    float endBeat = mEndBeat;
+    float startBeat = mStartBeat;
     float beatRange = (endBeat > startBeat) ? (endBeat - startBeat) : 1.0f;
     float leftMargin = sEm * 3.0f;
-    float textWidth = unk14 + unk64 + leftMargin;
+    float textWidth = mTextWidth + mPadding + leftMargin;
     return ((TheRnd.Width() - leftMargin) - textWidth) * ((beat - startBeat) / beatRange) + textWidth;
 }
 
@@ -44,7 +44,7 @@ Hmx::Object *CharClipDisplay::FindSource(Hmx::Object *obj) {
 }
 
 void CharClipDisplay::DrawBeatString(char const *c, float f1, Hmx::Color const &color) {
-    float posY = unk18 - 4.0f;
+    float posY = mDrawPosY - 4.0f;
     float posX = GetX(f1) - 18.0f;
     TheRnd.DrawString(c, Vector2(posY, posX), color, true);
 }

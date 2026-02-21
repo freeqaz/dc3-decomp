@@ -108,7 +108,7 @@ void RhythmDetectorGroup::AddDebugGraphs() {
         2.0,
         ""
     );
-    mDebugGraph->SetUnk44(1);
+    mDebugGraph->SetThresholdValue(1);
     FOREACH (it, mDetectors) {
         RhythmDetector *cur = *it;
         cur->RemoveDebugGraphs();

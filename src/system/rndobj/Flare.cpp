@@ -10,8 +10,8 @@
 
 RndFlare::RndFlare()
     : mPointTest(true), mAreaTest(true), mVisible(false), mSizes(0.1, 0.1), mMat(this),
-      mRange(0, 0), mOffset(0), mSteps(1), mStep(0), unk144(0), unk148(false),
-      unk149(false), unk17c(1, 1) {
+      mRange(0, 0), mOffset(0), mSteps(1), mStep(0), mOcclusionResult(0), mOcclusionReady(false),
+      mOcclusionPending(false), mScaleFactors(1, 1) {
     mMatrix.Identity();
 }
 
@@ -60,8 +60,8 @@ BEGIN_COPYS(RndFlare)
     COPY_MEMBER_FROM(f, mOffset)
     COPY_MEMBER_FROM(f, mSteps)
     COPY_MEMBER_FROM(f, mPointTest)
-    unk149 = false;
-    unk148 = false;
+    mOcclusionPending = false;
+    mOcclusionReady = false;
 END_COPYS
 
 INIT_REVS(7, 0)
@@ -92,8 +92,8 @@ BEGIN_LOADS(RndFlare)
     if (d.rev > 6) {
         bs >> mOffset;
     }
-    unk149 = false;
-    unk148 = false;
+    mOcclusionPending = false;
+    mOcclusionReady = false;
     CalcScale();
 END_LOADS
 
@@ -134,7 +134,7 @@ void RndFlare::CalcScale() {
         mMatrix = WorldXfm().m;
         float len = Length(mMatrix.z);
         Cross(mMatrix.x, mMatrix.y, v28);
-        unk17c.Set(Length(mMatrix.x), Dot(v28, mMatrix.z) > 0.0f ? len : -len);
+        mScaleFactors.Set(Length(mMatrix.x), Dot(v28, mMatrix.z) > 0.0f ? len : -len);
     }
 }
 

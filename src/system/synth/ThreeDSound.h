@@ -80,13 +80,13 @@ private:
 protected:
     ThreeDSound();
 
-    bool unk194; // 0x194
+    bool mIsLooping; // 0x194
     bool unk195; // 0x195
-    float unk198; // 0x198
-    float unk19c; // 0x19c
-    float unk1a0; // 0x1a0
+    float mDelayedVolume; // 0x198
+    float mDelayedPan; // 0x19c
+    float mDelayedTranspose; // 0x1a0
     Hmx::Object *unk1a4; // 0x1a4
-    float unk1a8; // 0x1a8
+    float mDelayMs; // 0x1a8
     /** "Equation used to determine falloff.
         See http://deki/Projects/Tool_Projects/Milo/Flow/Easing_equations" */
     EaseType mFalloffType; // 0x1ac
@@ -103,7 +103,7 @@ protected:
     int mShape; // 0x1c0
     float mRadius; // 0x1c4
     Fader *unk1c8; // 0x1c8
-    Transform unk1cc; // 0x1cc
+    Transform mSavedWorldTransform; // 0x1cc
     float unk20c; // 0x20c
     float unk210; // 0x210
     float mDopplerPower; // 0x214

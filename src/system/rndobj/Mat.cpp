@@ -47,13 +47,13 @@ namespace {
 }
 
 RndMat::RndMat()
-    : mMetaMaterial(this), unk20c(0), mToggleDisplayAllProps(0), unk225(0), unk226(0),
+    : mMetaMaterial(this), unk20c(0), mToggleDisplayAllProps(0), mOwnsMetaMat(0), mUpdatingFromMetaMat(0),
       mDirty(3) {
     ResetColors(mColorMod, 3);
 }
 
 RndMat::~RndMat() {
-    if (unk225 && mMetaMaterial) {
+    if (mOwnsMetaMat && mMetaMaterial) {
         if (mMetaMaterial->RefCount() == 1) {
             RELEASE(mMetaMaterial);
         }
@@ -95,7 +95,7 @@ BEGIN_PROPSYNCS(RndMat)
     SYNC_PROP_SET(metamaterial, mMetaMaterial.Ptr(),
         mMetaMaterial = _val.Obj<MetaMaterial>();
         UpdatePropertiesFromMetaMat();
-        unk225 = false;
+        mOwnsMetaMat = false;
     )
     // clang-format on
     SYNC_MAT_PROP(intensify, mIntensify, 2)
@@ -325,7 +325,7 @@ void RndMat::SetSpecularMap(RndTex *tex) {
 void RndMat::SetMetaMat(MetaMaterial *mat, bool b) {
     mMetaMaterial = mat;
     UpdatePropertiesFromMetaMat();
-    unk225 = b;
+    mOwnsMetaMat = b;
 }
 
 void RndMat::UpdateAllMatPropertiesFromMetaMat(ObjectDir *dir) {
@@ -445,7 +445,7 @@ MetaMaterial *RndMat::CreateMetaMaterial(bool notify) {
 }
 
 bool RndMat::IsEditable(Symbol s) {
-    if (mMetaMaterial && !unk226) {
+    if (mMetaMaterial && !mUpdatingFromMetaMat) {
         bool isEditable = mMetaMaterial->Property(s, true)->Int() == 2;
         if (!isEditable) {
             String propName(s);
@@ -467,7 +467,7 @@ bool RndMat::IsEditable(Symbol s) {
 
 void RndMat::UpdatePropertiesFromMetaMat() {
     if (mMetaMaterial) {
-        unk226 = true;
+        mUpdatingFromMetaMat = true;
         String overriddenProps;
         std::list<Symbol> properties;
         ListProperties(properties, "Mat", 0, nullptr, false);
@@ -492,7 +492,7 @@ void RndMat::UpdatePropertiesFromMetaMat() {
         }
         if (!overriddenProps.empty())
             overriddenProps += ".";
-        unk226 = false;
+        mUpdatingFromMetaMat = false;
     }
     mDirty |= 2;
 }

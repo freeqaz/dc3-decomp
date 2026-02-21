@@ -14,12 +14,12 @@ LoadMemcardAction::LoadMemcardAction(Profile *profile) : MemcardAction(profile) 
 }
 
 void SaveMemcardAction::PreAction() {
-    FixedSizeSaveableStream fsss(TheMemcardMgr.unk34, TheMemcardMgr.unk38, true);
+    FixedSizeSaveableStream fsss(TheMemcardMgr.mSaveDataBuffer, TheMemcardMgr.mSaveDataLength, true);
     int ver = 92;
     fsss << ver;
     fsss.InitializeTable();
     fsss.EnableWriteEncryption();
-    fsss << *unk10;
+    fsss << *mProfile;
     fsss.DisableEncryption();
     fsss.SaveTable();
     mResult = fsss.Fail() ? kMCGeneralError : kMCNoError;
@@ -31,7 +31,7 @@ void LoadMemcardAction::PreAction() {}
 
 void LoadMemcardAction::PostAction() {
     if (mResult == kMCNoError) {
-        FixedSizeSaveableStream fsss(TheMemcardMgr.unk34, TheMemcardMgr.unk38, true);
+        FixedSizeSaveableStream fsss(TheMemcardMgr.mSaveDataBuffer, TheMemcardMgr.mSaveDataLength, true);
         int ver;
         fsss >> ver;
         FixedSizeSaveable::sCurrentMemcardLoadVer = ver;
@@ -45,7 +45,7 @@ void LoadMemcardAction::PostAction() {
         }
         fsss.LoadTable(ver);
         fsss.EnableReadEncryption();
-        fsss >> *unk10;
+        fsss >> *mProfile;
         fsss.DisableEncryption();
         FixedSizeSaveable::sCurrentMemcardLoadVer = 92;
         mResult = fsss.Fail() ? kMCGeneralError : kMCNoError;

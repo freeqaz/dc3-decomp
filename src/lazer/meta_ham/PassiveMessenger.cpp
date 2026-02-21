@@ -17,7 +17,7 @@ PassiveMessenger *ThePassiveMessenger;
 #pragma region PassiveMessage
 
 PassiveMessage::PassiveMessage(String text, PassiveMessageType type, Symbol channel, int i)
-    : mText(text), mType(type), mChannel(channel), unk14(i) {}
+    : mText(text), mType(type), mChannel(channel), mPriority(i) {}
 
 PassiveMessage::~PassiveMessage() {}
 
@@ -27,7 +27,7 @@ String PassiveMessage::GetText() { return mText; }
 #pragma region PassiveMessageQueue
 
 PassiveMessageQueue::PassiveMessageQueue(Hmx::Object *callback, Symbol sym)
-    : unk8(4000.0f), unkc(0), mCallback(callback), unk1c(sym) {}
+    : mDisplayDurationMs(4000.0f), mLastDismissTime(0), mCallback(callback), mPlayerChannel(sym) {}
 
 PassiveMessageQueue::~PassiveMessageQueue() {
     FOREACH (it, mQueue) {
@@ -48,7 +48,7 @@ void PassiveMessageQueue::AddMessage(PassiveMessage *msg) {
 }
 
 bool PassiveMessageQueue::HasRecentlyDismissedMessage() const {
-    float seconds = TheTaskMgr.UISeconds() - unkc;
+    float seconds = TheTaskMgr.UISeconds() - mLastDismissTime;
     if (seconds > 0)
         return 10.0f > seconds;
     return false;
@@ -62,7 +62,7 @@ void PassiveMessageQueue::Poll() {
     static Symbol alert_showing("alert_showing");
 
     if (mTimer.Running()) {
-        if (mTimer.SplitMs() >= unk8) {
+        if (mTimer.SplitMs() >= mDisplayDurationMs) {
             mTimer.Stop();
             ClearPassiveMessage();
         }
@@ -89,12 +89,12 @@ void PassiveMessageQueue::ClearRunningMessage() {
 bool PassiveMessageQueue::RemoveLowerPriorityMessage(PassiveMessage *msg) {
     Symbol symChannel = msg->Channel();
     MILO_ASSERT(symChannel != gNullStr, 0x10c);
-    int i5 = msg->Unk14();
+    int i5 = msg->Priority();
     FOREACH (it, mQueue) {
         PassiveMessage *queueMessage = *it;
         MILO_ASSERT(queueMessage, 0x115);
         if (queueMessage->Channel() == symChannel) {
-            if (i5 >= queueMessage->Unk14())
+            if (i5 >= queueMessage->Priority())
                 return false;
             else {
                 PassiveMessage *pMessage = *it;
@@ -114,19 +114,19 @@ void PassiveMessageQueue::ClearPassiveMessage() {
     static Symbol p2("p2");
     Symbol which = none;
     String str = "";
-    unkc = TheTaskMgr.UISeconds();
-    if (unk1c == none) {
+    mLastDismissTime = TheTaskMgr.UISeconds();
+    if (mPlayerChannel == none) {
         static Message cSetupAlertMsg("setup_alert", 0, 0);
         cSetupAlertMsg[0] = which;
         cSetupAlertMsg[1] = str;
         static Symbol setup_alert("setup_alert");
         TheHamProvider->Handle(cSetupAlertMsg, false);
-    } else if (unk1c == p1) {
+    } else if (mPlayerChannel == p1) {
         static Message cSetup0AlertMsg("setup_0_alert", 0, 0);
         cSetup0AlertMsg[0] = which;
         cSetup0AlertMsg[1] = str;
         TheHamProvider->Handle(cSetup0AlertMsg, false);
-    } else if (unk1c == p2) {
+    } else if (mPlayerChannel == p2) {
         static Message cSetup1AlertMsg("setup_1_alert", 0, 0);
         cSetup1AlertMsg[0] = which;
         cSetup1AlertMsg[1] = str;
@@ -176,18 +176,18 @@ void PassiveMessageQueue::HandlePassiveMessage(PassiveMessage *msg) {
         MILO_ASSERT(false, 0xE2);
         break;
     }
-    if (unk1c == none) {
+    if (mPlayerChannel == none) {
         static Message cSetupAlertMsg("setup_alert", 0, 0);
         cSetupAlertMsg[0] = which;
         cSetupAlertMsg[1] = text;
         static Symbol setup_alert("setup_alert");
         TheHamProvider->Handle(cSetupAlertMsg, false);
-    } else if (unk1c == p1) {
+    } else if (mPlayerChannel == p1) {
         static Message cSetup0AlertMsg("setup_0_alert", 0, 0);
         cSetup0AlertMsg[0] = which;
         cSetup0AlertMsg[1] = text;
         TheHamProvider->Handle(cSetup0AlertMsg, false);
-    } else if (unk1c == p2) {
+    } else if (mPlayerChannel == p2) {
         static Message cSetup1AlertMsg("setup_1_alert", 0, 0);
         cSetup1AlertMsg[0] = which;
         cSetup1AlertMsg[1] = text;

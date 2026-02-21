@@ -9,7 +9,7 @@ public:
     virtual ~HandInvokeGestureFilter();
 
     void Update(const Skeleton &, int ms);
-    bool GetUnk140() const { return unk140; }
+    bool GetInvokeDetected() const { return mInvokeDetected; }
 
 private:
     float GetBend(const Vector3 &, const Vector3 &, const Vector3 &) const;
@@ -20,6 +20,6 @@ private:
     Vector3DESmoother unk8c; // 0x8c
     Vector3DESmoother unkc8; // 0xc8
     Vector3DESmoother unk104; // 0x104
-    bool unk140;
+    bool mInvokeDetected; // 0x140
     int unk144;
 };

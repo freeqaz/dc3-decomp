@@ -5,21 +5,21 @@
 
 ChallengeRecord::ChallengeRecord(ChallengeRow row) {
     mRow = row;
-    unk40 = TheHamSongMgr.GetShortNameFromSongID(mRow.mSongID, false);
-    if (unk40.Null()) {
+    mSongShortName = TheHamSongMgr.GetShortNameFromSongID(mRow.mSongID, false);
+    if (mSongShortName.Null()) {
         if (TheChallenges->IsExportedSongDC1(mRow.mSongID)) {
-            unk50 = 2;
+            mSongContentLockState = 2;
         } else if (TheChallenges->IsExportedSongDC2(mRow.mSongID)) {
-            unk50 = 3;
+            mSongContentLockState = 3;
         } else {
-            unk50 = 4;
+            mSongContentLockState = 4;
         }
-    } else if (TheProfileMgr.IsContentUnlocked(unk40)) {
-        unk50 = 0;
+    } else if (TheProfileMgr.IsContentUnlocked(mSongShortName)) {
+        mSongContentLockState = 0;
     } else {
-        unk50 = 1;
+        mSongContentLockState = 1;
     }
-    unk44 = mRow.mSongTitle.c_str();
-    unk48 = Symbol(mRow.mGamertag.c_str());
-    unk4c = Symbol(mRow.unk2c.c_str());
+    mSongTitle = mRow.mSongTitle.c_str();
+    mChallengerGamertag = Symbol(mRow.mGamertag.c_str());
+    mMissionInfo = Symbol(mRow.mNotes.c_str());
 }

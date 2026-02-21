@@ -26,7 +26,7 @@ public:
     }
 
 private:
-    UIPanel *unk2c; // 0x2c
+    UIPanel *mPanel; // 0x2c
     State mState; // 0x30
-    bool unk34;
+    bool mNeedsRedraw;
 };

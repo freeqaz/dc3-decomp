@@ -131,13 +131,13 @@ Spotlight::Spotlight()
       mFlareVisibilityTest(true), mFlareOffset(0), mSpotScale(30), mSpotHeight(0.25),
       mColor(1, 1, 1), mIntensity(1), mColorOwner(this, this), mLensSize(0),
       mLensOffset(0), mLensMaterial(this), mBeam(this), mSlaves(this),
-      mLightCanMesh(this), mLightCanOffset(0), mTarget(this), unk2f0(true),
-      mSpotTarget(this), unk308(-1e33), mTargetShadow(false), mLightCanSort(false),
+      mLightCanMesh(this), mLightCanOffset(0), mTarget(this), mTargetLoaded(true),
+      mSpotTarget(this), mFloorSpotTargetZ(-1e33), mTargetShadow(false), mLightCanSort(false),
       unk340(true), mDampingConstant(1), mAdditionalObjects(this),
       mAnimateColorFromPreset(true), mAnimateOrientationFromPreset(true), unk36e(false) {
     mFlare->SetTransParent(this, false);
     mFloorSpotXfm.Reset();
-    unk170.Reset();
+    mLensXfm.Reset();
     mLightCanXfm.Reset();
     unk310.Identity();
     unk35c.Zero();
@@ -358,7 +358,7 @@ BEGIN_LOADS(Spotlight)
             ConvertGroupToMesh(group);
         }
         if (!mTarget.Load(bs, false, 0)) {
-            unk2f0 = false;
+            mTargetLoaded = false;
         }
         if (d.rev > 0x1C) {
             d >> mSpotTarget;
@@ -662,7 +662,7 @@ void Spotlight::UpdateSlaves() {
 
 void Spotlight::CheckFloorSpotTransform() {
     if (DoFloorSpot()) {
-        if (GetFloorSpotTarget()->WorldXfm().v.z != unk308) {
+        if (GetFloorSpotTarget()->WorldXfm().v.z != mFloorSpotTargetZ) {
             UpdateFloorSpotTransform(WorldXfm());
         }
     }

@@ -190,7 +190,7 @@ void MetagameStats::Clear() {
     for (int i = 0; i < kNumFavoriteStats; i++) {
         mFavoriteStats[i].mCounts.clear();
     }
-    unk140 = 0;
+    mTotalTimePlayedMs = 0;
 }
 
 int MetagameStats::GetCount(CountStatID id) const {
@@ -284,7 +284,7 @@ void MetagameStats::WriteTimePlayed(HamProfile *profile, int i2) {
         mFavoriteStats[kFavoriteStat_FavoriteMode].mCounts[2] += i2;
         mDirty = true;
     }
-    unk140 += i2;
+    mTotalTimePlayedMs += i2;
 }
 
 void MetagameStats::IncrementCount(CountStatID id, int cnt) {

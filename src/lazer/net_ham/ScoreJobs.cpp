@@ -32,9 +32,9 @@ RecordScoreJob::RecordScoreJob(
         pt.AddPair(buffer, 0);
     }
     Hx_snprintf(buffer, 36, "c_score%03d", 0);
-    pt.AddPair(buffer, data.unkc);
+    pt.AddPair(buffer, data.mChallengeScore);
     Hx_snprintf(buffer, 36, "cc_score%03d", 0);
-    pt.AddPair(buffer, data.unk10);
+    pt.AddPair(buffer, data.mChainChallengeScore);
     float f1 = 0;
     float f2 = 0;
     float f3 = 0;

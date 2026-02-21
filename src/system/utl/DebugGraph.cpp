@@ -8,7 +8,7 @@ void DebugGraph::AddData(float data, bool b)  {
     sample.b = b;
     mSamples.push_front(sample);
 
-    if (mSamples.size() == unk38 + 1) {
+    if (mSamples.size() == mMaxSamples + 1) {
         mSamples.pop_back();
     }
 }
@@ -17,16 +17,16 @@ void DebugGraph::Draw() {
     RndGraph *graph = RndGraph::GetOneFrame();
     graph->AddRectFilled2D(mRect, mColorB);
 
-    if (unk50) {
+    if (mIsVisible) {
         Vector2 minPos(mRect.x, (mRect.y + mRect.h) - 0.02f);
-        graph->AddScreenString(MakeString("%.3f", unk3c), minPos, mColorA);
+        graph->AddScreenString(MakeString("%.3f", mMinValue), minPos, mColorA);
         Vector2 maxPos(mRect.x, mRect.y);
-        graph->AddScreenString(MakeString("%.3f", unk40), maxPos, mColorA);
+        graph->AddScreenString(MakeString("%.3f", mMaxValue), maxPos, mColorA);
     }
 
-    float range = unk40 - unk3c;
-    if (unk44 != FLT_MAX) {
-        float normThresh = (unk44 - unk3c) / range;
+    float range = mMaxValue - mMinValue;
+    if (mThresholdValue != FLT_MAX) {
+        float normThresh = (mThresholdValue - mMinValue) / range;
         float clampedX = 0.0f;
         if (-normThresh < 0.0f) {
             clampedX = normThresh;
@@ -49,7 +49,7 @@ void DebugGraph::Draw() {
         graph->AddScreenLine(lineStart, lineEnd, white, false);
 
         Vector2 labelPos(mRect.x, 0.0f);
-        float normThresh2 = (unk44 - unk3c) / range;
+        float normThresh2 = (mThresholdValue - mMinValue) / range;
         float clamped2 = 0.0f;
         if (-normThresh2 < 0.0f) {
             clamped2 = normThresh2;
@@ -60,18 +60,18 @@ void DebugGraph::Draw() {
         }
         labelPos.y = (1.0f - c2) * mRect.h + mRect.y;
         Hmx::Color white2(1.0f, 1.0f, 1.0f, 1.0f);
-        graph->AddScreenString(MakeString("%.3f", unk44), labelPos, white2);
+        graph->AddScreenString(MakeString("%.3f", mThresholdValue), labelPos, white2);
     }
 
     Vector2 namePos(mRect.x + 0.1f, mRect.y);
     Hmx::Color white3(1.0f, 1.0f, 1.0f, 1.0f);
-    graph->AddScreenString(unk48.c_str(), namePos, white3);
+    graph->AddScreenString(mGraphName.c_str(), namePos, white3);
 
     std::list<Sample>::iterator it = mSamples.begin();
     if (it != mSamples.end()) {
         int idx = 1;
-        float normVal = (it->data - unk3c) / range;
-        float normIdx = 0.0f / (float)(unk38 - 1);
+        float normVal = (it->data - mMinValue) / range;
+        float normIdx = 0.0f / (float)(mMaxSamples - 1);
         float clampedVal = 0.0f;
         if (-normVal < 0.0f) {
             clampedVal = normVal;
@@ -91,8 +91,8 @@ void DebugGraph::Draw() {
         Vector2 prevPt((1.0f - ci) * mRect.w + mRect.x, (1.0f - cv) * mRect.h + mRect.y);
         ++it;
         while (it != mSamples.end()) {
-            float normVal2 = (it->data - unk3c) / range;
-            float normIdx2 = (float)idx / (float)(unk38 - 1);
+            float normVal2 = (it->data - mMinValue) / range;
+            float normIdx2 = (float)idx / (float)(mMaxSamples - 1);
             float clampedVal2 = 0.0f;
             if (-normVal2 < 0.0f) {
                 clampedVal2 = normVal2;

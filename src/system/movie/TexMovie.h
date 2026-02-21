@@ -48,10 +48,10 @@ public:
 
 protected:
     ObjOwnerPtr<RndTex> mTex; // 0x48 ObjOwnerPtr | 0x54, RndTex
-    bool unk5c;
-    bool unk5d;
-    bool unk5e;
-    bool unk5f;
+    bool mLoop;
+    bool mEntered;
+    bool mIsLocalized;
+    bool mPaused;
     FilePath sRoot;
     Movie mMovie; // 0x68
 

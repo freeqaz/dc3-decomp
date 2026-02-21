@@ -8,7 +8,7 @@
 
 HamPhraseMeter::HamPhraseMeter()
     : mAnim(this), mRatingFrac(0), mRating("move_bad"), mDesiredFPB(480),
-      mFirstPerfectFrame(1920), unk220(0), mPlayerIndex(0) {}
+      mFirstPerfectFrame(1920), mTargetFrame(0), mPlayerIndex(0) {}
 
 BEGIN_HANDLERS(HamPhraseMeter)
     HANDLE_SUPERCLASS(RndDir)
@@ -78,11 +78,11 @@ void HamPhraseMeter::Poll() {
     RndDir::Poll();
     if (mAnim) {
         float frame = mAnim->GetFrame();
-        float delta = TheTaskMgr.DeltaBeat() * unk224;
-        if (frame < unk220) {
-            frame = Min(delta + frame, unk220);
-        } else if (frame > unk220) {
-            frame = Max(frame - delta, unk220);
+        float delta = TheTaskMgr.DeltaBeat() * mCurrentFPB;
+        if (frame < mTargetFrame) {
+            frame = Min(delta + frame, mTargetFrame);
+        } else if (frame > mTargetFrame) {
+            frame = Max(frame - delta, mTargetFrame);
         }
         mAnim->SetFrame(frame, 1);
     }
@@ -91,7 +91,7 @@ void HamPhraseMeter::Poll() {
 void HamPhraseMeter::Enter() {
     RndDir::Enter();
     SetRatingFrac(0, -1);
-    unk224 = mDesiredFPB;
+    mCurrentFPB = mDesiredFPB;
 }
 
 void HamPhraseMeter::SetBounds(float startBeat, float endBeat, const TempoMap *tempoMap) {
@@ -115,15 +115,15 @@ void HamPhraseMeter::SetBounds(float startBeat, float endBeat, const TempoMap *t
 void HamPhraseMeter::SetRatingFrac(float f1, float f2) {
     if (mAnim) {
         if (f1 == 1) {
-            unk220 = mAnim->EndFrame();
+            mTargetFrame = mAnim->EndFrame();
         } else {
-            unk220 = (mFirstPerfectFrame - mAnim->StartFrame()) * f1;
+            mTargetFrame = (mFirstPerfectFrame - mAnim->StartFrame()) * f1;
         }
         if (f2 <= 0) {
-            mAnim->SetFrame(unk220, 1);
+            mAnim->SetFrame(mTargetFrame, 1);
         } else {
-            float div = std::fabs(unk220 - mAnim->GetFrame());
-            unk224 = Max<float>(mDesiredFPB, div / f2);
+            float div = std::fabs(mTargetFrame - mAnim->GetFrame());
+            mCurrentFPB = Max<float>(mDesiredFPB, div / f2);
         }
     }
 }

@@ -15,11 +15,11 @@
 FitnessCalorieSortNode::FitnessCalorieSortNode(NavListItemSortCmp *cmp, int i)
     : NavListItemNode(cmp) {
     mHeader = gNullStr;
-    unk48 = i;
+    mCalories = i;
 }
 
 Symbol FitnessCalorieSortNode::GetToken() const {
-    return MakeString("calorie_node_%i", unk48);
+    return MakeString("calorie_node_%i", mCalories);
 }
 
 Symbol FitnessCalorieSortNode::OnSelect() { return TheFitnessCalorieSortMgr->MoveOn(); }
@@ -29,7 +29,7 @@ void FitnessCalorieSortNode::Text(UIListLabel *uiListLabel, UILabel *uiLabel) co
     MILO_ASSERT(app_label, 0xee);
     if (uiListLabel->Matches("calorie")) {
         String s = MakeString(
-            "%i %s", unk48, Localize("fitness_goal_calories_generic", 0, TheLocale)
+            "%i %s", mCalories, Localize("fitness_goal_calories_generic", 0, TheLocale)
         );
         uiLabel->SetPrelocalizedString(s);
     } else {
@@ -106,8 +106,8 @@ void FitnessCalorieHeaderNode::Text(UIListLabel *uiListLabel, UILabel *uiLabel) 
         FitnessCalorieSortNode *lastChild = static_cast<FitnessCalorieSortNode *>(mChildren.back());
         String s = MakeString(
             "%i - %i %s",
-            firstChild->GetUnk48(),
-            lastChild->GetUnk48(),
+            firstChild->GetCalories(),
+            lastChild->GetCalories(),
             Localize("fitness_goal_calories_generic", 0, TheLocale)
         );
         uiLabel->SetPrelocalizedString(s);

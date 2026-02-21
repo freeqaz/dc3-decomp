@@ -54,7 +54,7 @@ protected:
     /** "Shader to apply" */
     TexProcShaderType mShaderType; // 0x68
     bool mDrawPreClear; // 0x6c
-    DataArray *unk70; // 0x70
+    DataArray *mStoredParams; // 0x70
     /** "Wave frequency (for twirl shader only!)" */
     float mFrequency; // 0x74
     float unk78; // 0x78

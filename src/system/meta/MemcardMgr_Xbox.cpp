@@ -217,12 +217,12 @@ MCResult MemcardMgr::PerformRead(MCContainer *container) {
         if (size <= 0) {
             return kMCGeneralError;
         } else {
-            if (size > unk38) {
+            if (size > mSaveDataLength) {
                 MILO_LOG(
                     "%s [MemcardMgrXbox] Found save file that is %d bytes, but we only have RAM for %d bytes.\n",
                     kSaveFilename,
                     size,
-                    unk38
+                    mSaveDataLength
                 );
             }
             MCResult openRes = file->Open(kSaveFilename, kAccessRead, (CreateType)0);
@@ -230,8 +230,8 @@ MCResult MemcardMgr::PerformRead(MCContainer *container) {
                 container->DestroyMCFile(file);
                 return openRes;
             } else {
-                int minSize = Min(size, unk38);
-                MCResult readRes = file->Read(unk34, minSize);
+                int minSize = Min(size, mSaveDataLength);
+                MCResult readRes = file->Read(mSaveDataBuffer, minSize);
                 MCResult closeRes = file->Close();
                 container->DestroyMCFile(file);
                 if (readRes == kMCNoError) {
@@ -252,7 +252,7 @@ MCResult MemcardMgr::PerformWrite(MCContainer *container) {
         container->DestroyMCFile(file);
         return res;
     }
-    MCResult writeRes = file->Write(unk34, unk38);
+    MCResult writeRes = file->Write(mSaveDataBuffer, mSaveDataLength);
     MCResult closeRes = file->Close();
     container->DestroyMCFile(file);
     if (writeRes == kMCNoError) {

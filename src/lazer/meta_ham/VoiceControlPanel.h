@@ -40,16 +40,16 @@ private:
     void CycleTip();
 
     float unk44;
-    bool unk48;
+    bool mActive;
     float unk4c;
     float unk50;
-    bool unk54;
-    bool unk55;
-    bool unk56;
+    bool mDifficultySelected;
+    bool mModeSelected;
+    bool mMusicWasStarted;
     Symbol mSong; // 0x58 - song shortname
     Difficulty mDifficulty; // 0x5c
     Symbol mGameMode; // 0x60 - game mode
-    bool unk64;
+    bool mEnteredGame;
     int unk68;
     int unk6c;
 };

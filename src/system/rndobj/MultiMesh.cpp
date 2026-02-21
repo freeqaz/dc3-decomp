@@ -180,10 +180,10 @@ void RndMultiMesh::SetMesh(RndMesh *mesh) {
     UpdateMesh();
 }
 
-RndMultiMesh::Instance::Instance() : unk0(1) { mXfm.Reset(); }
+RndMultiMesh::Instance::Instance() : mIsVisible(1) { mXfm.Reset(); }
 
 void RndMultiMesh::Instance::Save(BinStream &bs) const {
-    bs << unk0;
+    bs << mIsVisible;
     bs << mXfm;
 }
 
@@ -191,7 +191,7 @@ void RndMultiMesh::Instance::Load(BinStreamRev &bs) { LoadRev(bs.stream, bs.rev)
 
 void RndMultiMesh::Instance::LoadRev(BinStream &bs, int rev) {
     if (rev >= 5) {
-        bs >> unk0;
+        bs >> mIsVisible;
     }
     bs >> mXfm;
     if (rev < 3) {

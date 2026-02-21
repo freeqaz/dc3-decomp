@@ -79,8 +79,9 @@ DWORD SkeletonUpdateThread(LPVOID) {
 }
 
 SkeletonUpdate::SkeletonUpdate()
-    : unk78(0), mCameraInput(this), unk90(0), unk91(0), unk5388(0), unk538c(0),
-      unk5390(0), unk5394(0), unk5398(0), unk539c(true) {
+    : mHasNewFrame(0), mCameraInput(this), mIsCameraConnected(0), mIsCameraOverride(0),
+      unk5388(0), unk538c(0), mSwapSides(0), unk5394(0), unk5398(0),
+      mIsUpdateThreadActive(true) {
     MILO_ASSERT(sInstance == NULL, 0x119);
     SetCameraInput(LiveCameraInput::sInstance);
     for (int i = 0; i < 2; i++) {
@@ -147,13 +148,13 @@ void SkeletonUpdate::PostUpdate() {
     MILO_ASSERT(MainThread(), 0x26F);
     MILO_ASSERT(mCameraInput, 0x273);
     mCameraInput->PollTracking();
-    unk90 = mCameraInput->IsConnected();
-    unk91 = mCameraInput->IsOverride();
-    if (unk91) {
+    mIsCameraConnected = mCameraInput->IsConnected();
+    mIsCameraOverride = mCameraInput->IsOverride();
+    if (mIsCameraOverride) {
         const SkeletonFrame *newFrame = mCameraInput->NewFrame();
         if (newFrame) {
             mSkeletonFrame = *newFrame;
-            unk78 = true;
+            mHasNewFrame = true;
         }
     }
     if (TheGameData) {
@@ -163,26 +164,26 @@ void SkeletonUpdate::PostUpdate() {
             unk5380[i] = player_data->GetSkeletonTrackingID();
         }
     }
-    if (unk539c) {
+    if (mIsUpdateThreadActive) {
         WaitForSingleObject(sSkeletonUpdatedEvent, 1);
         ResetEvent(sSkeletonUpdatedEvent);
     } else {
         Update();
     }
-    if (unk78) {
+    if (mHasNewFrame) {
         LiveCameraInput::sInstance->SetNewFrame(&mSkeletonFrame);
     }
     SkeletonUpdateData updateData;
-    updateData.unk0 = &unk5360[0];
-    updateData.unk4 = &unk5368[0];
-    updateData.unk8 = &mSkeletonFrame;
-    updateData.unkc = this;
-    updateData.unk10 = mCameraInput;
+    updateData.mSkeletonsLeft = &unk5360[0];
+    updateData.mSkeletonsRight = &unk5368[0];
+    updateData.mFrame = &mSkeletonFrame;
+    updateData.mHistory = this;
+    updateData.mCameraInput = mCameraInput;
     FOREACH (it, mCallbacks) {
         AutoGlitchReport report(4.0f, SkeletonUpdateCallbackSlowdownCB, *it);
-        (*it)->PostUpdate(unk78 ? &updateData : nullptr);
+        (*it)->PostUpdate(mHasNewFrame ? &updateData : nullptr);
     }
-    unk78 = false;
+    mHasNewFrame = false;
     for (int i = 0; i < NUM_SKELETONS; i++) {
         mSkeletons[i].PostUpdate();
     }

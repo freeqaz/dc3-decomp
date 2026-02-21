@@ -35,7 +35,7 @@ public:
     virtual void Disconnect() {}
     virtual void Poll() {} // 0x70
     virtual void ManageJob(DingoJob *job);
-    virtual bool IsAuthenticated() { return mAuthState == kServerAuthed && unk74 != -1; }
+    virtual bool IsAuthenticated() { return mAuthState == kServerAuthed && mAuthedPadNum != -1; }
     virtual bool IsAuthenticating() { return mAuthState == kServerAuthenticating; }
     virtual const char *GetPlatform() = 0;
     virtual const char *GetHostName() const { return mHostName.c_str(); }
@@ -95,9 +95,9 @@ protected:
     String mLocale; // 0x58
     String mLanguage; // 0x60
     String mUserAgent; // 0x68
-    int unk70; // 0x70 - padnum?
-    int unk74; // 0x74
-    bool unk78[4]; // 0x78
+    int mPendingPadNum; // 0x70 - pad index currently being authenticated
+    int mAuthedPadNum; // 0x74 - pad index of authenticated user, -1 if none
+    bool mPadAuthed[4]; // 0x78
     OnlineID mOnlineId; // 0x80
     std::vector<String> mDisabledUrls; // 0x98
     std::vector<DingoJob *> mDelayedJobs; // 0xa4

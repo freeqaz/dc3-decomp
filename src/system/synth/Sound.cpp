@@ -19,7 +19,7 @@ Sound::Sound()
     : mVolume(0), mSpeed(1), mPan(0), mSend(this), mReverbMixDb(kDbSilence),
       mReverbEnable(0), unk3d(1), mSynthSample(this), mMoggClip(this), mEnvelope(this),
       mFaders(this), mDuckers(this), mLoop(0), mLoopStart(0), mLoopEnd(-1),
-      mMaxPolyphony(0), unkb4(0), unkb8(this) {
+      mMaxPolyphony(0), unkb4(0), mEventReceiver(this) {
     mFaders.Add(TheSynth->MasterFader());
 }
 
@@ -182,11 +182,11 @@ void Sound::Play(
     if (delayMs > 0.0f) {
         DelayArgs *args = new DelayArgs;
         if (args) {
-            args->unk0 = volume;
-            args->unk4 = pan;
-            args->unk8 = transpose;
-            args->unkc = obj;
-            args->unk10 = delayMs;
+            args->mVolume = volume;
+            args->mPan = pan;
+            args->mTranspose = transpose;
+            args->mEventReceiver = obj;
+            args->mDelayMs = delayMs;
         }
         mDelayArgs.push_back(args);
         StartPolling();
@@ -217,7 +217,7 @@ void Sound::Play(
                 4.0f,
                 CalcSpeedFromTranspose(faderTranspose + transpose) * mSpeed
             ));
-            sample->SetEventReceiver(obj ? obj : unkb8);
+            sample->SetEventReceiver(obj ? obj : mEventReceiver);
             if (mEnvelope) {
                 sample->SetADSR(mEnvelope->Impl());
             } else {
@@ -413,9 +413,9 @@ void Sound::SynthPoll() {
         float dummy = 0.0f;
         for (auto it = mDelayArgs.begin(); it != mDelayArgs.end();) {
             DelayArgs *args = *it;
-            args->unk10 -= deltaTime;
-            if (args->unk10 <= dummy) {
-                Play(args->unk0, args->unk4, args->unk8, args->unkc, 0.0f);
+            args->mDelayMs -= deltaTime;
+            if (args->mDelayMs <= dummy) {
+                Play(args->mVolume, args->mPan, args->mTranspose, args->mEventReceiver, 0.0f);
                 delete args;
                 it = mDelayArgs.erase(it);
             } else {

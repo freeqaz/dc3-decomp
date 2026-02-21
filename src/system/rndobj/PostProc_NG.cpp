@@ -36,15 +36,15 @@ void NgPostProc::BloomTextureSet::AllocateTextures(unsigned int w, unsigned int 
 void NgPostProc::BloomTextureSet::FreeTextures() { RELEASE(mBloomTexture[0]); }
 
 NgPostProc::NgPostProc()
-    : unk22c(RandomFloat()), unk230(RandomFloat()), unk234(0), unk238(0), unk23c(this),
-      unk250(1) {}
+    : mRandomSeed1(RandomFloat()), mRandomSeed2(RandomFloat()), unk234(0), unk238(0),
+      mMotionBlurDrawList(this), mMotionBlurEnabled(1) {}
 
 NgPostProc::~NgPostProc() {}
 
 void NgPostProc::Select() {
     RndPostProc::Select();
-    unk22c = RandomFloat();
-    unk230 = RandomFloat();
+    mRandomSeed1 = RandomFloat();
+    mRandomSeed2 = RandomFloat();
 }
 
 void NgPostProc::Init() {
@@ -70,7 +70,7 @@ void NgPostProc::DoVelocity() {
     typedef void (*ShaderFunc)(void*, int, float*);
     *(s8*)((u8*)&TheShaderMgr + 0x39) = 0;
     if ((mMotionBlurVelocity) && (*(u8*)((u8*)&TheHiResScreen + 0x4) == 0) &&
-        (RndVelocityBuffer::Singleton().Draw(*(RndCam**)((u8*)&TheRnd + 0xE4), unk23c) != 0)) {
+        (RndVelocityBuffer::Singleton().Draw(*(RndCam**)((u8*)&TheRnd + 0xE4), mMotionBlurDrawList) != 0)) {
         *(s8*)((u8*)&TheShaderMgr + 0x39) = 1;
         float sp50 = *(float*)((u8*)&RndVelocityBuffer::Singleton() + 0x36BE8);
         void* shaderMgrVTable = *(void**)&TheShaderMgr;

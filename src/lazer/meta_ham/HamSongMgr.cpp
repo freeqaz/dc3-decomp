@@ -426,7 +426,7 @@ void HamSongMgr::InitializePlaylists() {
             bool isFitness = false;
             playlistEntry->FindData(is_fitness, isFitness, false);
             p->SetName(s);
-            p->SetUnk8(isFitness);
+            p->SetIsBattlePlaylist(isFitness);
             DataArray *songArray = playlistEntry->FindArray(songs, true);
             MILO_ASSERT(songArray, 0xed);
 
@@ -480,7 +480,7 @@ void HamSongMgr::InitializePlaylists() {
                 dynamicPlaylists[decade] = decadePlaylist;
                 sprintf(nameBuffer, "%s_dynamic_playlist", decade.Str());
                 decadePlaylist->SetName(Symbol(nameBuffer));
-                decadePlaylist->SetUnk9(true);
+                decadePlaylist->SetIsFriendPlaylist(true);
             }
 
             dynamicPlaylists[crew]->AddSong(*it);

@@ -47,40 +47,40 @@
 void CreateBackBuffers(int, int, D3DMULTISAMPLE_TYPE, unsigned int &, unsigned int &, D3DSurface *&, D3DSurface *&);
 
 DxRnd::DxRnd()
-    : unk220(0),
+    : mInited(0),
       mD3DDevice(nullptr),
-      unk22c(0),
+      mFocusWindow(0),
       mDeviceType(D3DDEVTYPE_HAL),
       unk_0x301(1),
-      unk360(false),
+      mAsyncSwapNext(false),
       mAsyncSwapCurrent(false),
       mPerfCounterStart(nullptr),
       mPerfCounterEnd(nullptr),
       mGPUTimer(nullptr),
-      unk370(0.0f),
-      unk374(0.0f),
+      mGPUBusyMs(0.0f),
+      mGPUCountMs(0.0f),
       mCreatedPerfCounters(false),
-      unk3a4(false),
-      unk3f4(false),
-      unk3f7(false),
-      unk404(false),
+      mPostProcDone(false),
+      mSuspended(false),
+      mPIXCaptureState(false),
+      mPreInited(false),
       unk408(0) {
-    unk220 = 1;
+    mInited = 1;
     mFrontBuffers[0] = nullptr;
     mFrontBuffers[1] = nullptr;
     mBackBuffer = nullptr;
-    unk388 = nullptr;
-    unk384 = nullptr;
-    unk38c = nullptr;
-    unk37c = 0;
-    unk35c = 0;
+    mWorldDepth = nullptr;
+    mOffscreenRT = nullptr;
+    mOffscreenDepth = nullptr;
+    mFlags = 0;
+    mFrontBufIdx = 0;
     mNumTiles = 0;
     unk34d = true;
 }
 
 DxRnd::~DxRnd() {
-    if ((unsigned int)unk220) {
-        unk220 = 0;
+    if ((unsigned int)mInited) {
+        mInited = 0;
     }
 }
 
@@ -92,8 +92,8 @@ void CDError() {
 void DxModal(Debug::ModalType &t, FixedString &s, bool b) { TheDxRnd.Modal(t, s, b); }
 
 void DxRnd::PreInit(HWND__ *) {
-    if (!unk404) {
-        unk404 = true;
+    if (!mPreInited) {
+        mPreInited = true;
         DataArray *cfg = SystemConfig("rnd");
         mDefaultVSRegAlloc = 32;
         mDefaultPSRegAlloc = 96;
@@ -106,10 +106,10 @@ void DxRnd::PreInit(HWND__ *) {
         MILO_ASSERT(mDefaultVSRegAlloc >= 16, 0x1F1);
         MILO_ASSERT(mDefaultPSRegAlloc >= 16, 0x1F2);
         SetDiskErrorCallback(CDError);
-        unk3f5 = OptionBool("print_glitches", false);
-        unk3f6 = false;
+        mPrintGlitches = OptionBool("print_glitches", false);
+        mCaptureNextFrame = false;
         mD3DDevice = nullptr;
-        unk22c = 0;
+        mFocusWindow = 0;
         NgRnd::PreInit();
         InitBuffers();
         TheShaderMgr.PreInit();
@@ -142,7 +142,7 @@ void DxRnd::Init(HWND__ *h) {
     mOcclusionQueryMgr = new DxRndOcclusionQueryMgr();
     NgRnd::Init();
     DxTex::Init();
-    unk360 = false;
+    mAsyncSwapNext = false;
 }
 
 void DxRnd::Terminate() {
@@ -208,8 +208,8 @@ void DxRnd::DoPostProcess() {
         NgRnd::DoPostProcess();
         FinishPostProcess();
     }
-    D3DDevice_SetRenderTarget_External(mD3DDevice, 0, unk384);
-    D3DDevice_SetDepthStencilSurface(mD3DDevice, unk38c);
+    D3DDevice_SetRenderTarget_External(mD3DDevice, 0, mOffscreenRT);
+    D3DDevice_SetDepthStencilSurface(mD3DDevice, mOffscreenDepth);
     BeginTiling(Hmx::Color(0, 0, 0.3), 0, 0);
     CopyPostProcess();
     if (mRegAlloc != 1) {
@@ -218,7 +218,7 @@ void DxRnd::DoPostProcess() {
             mD3DDevice, 0, mDefaultVSRegAlloc, mDefaultPSRegAlloc
         );
     }
-    unk3a4 = true;
+    mPostProcDone = true;
 }
 
 void DxRnd::Suspend() {
@@ -226,25 +226,25 @@ void DxRnd::Suspend() {
         return;
     }
     MILO_ASSERT(!mDrawing, 0x695);
-    if (!unk3f4) {
+    if (!mSuspended) {
         static Timer *cpuTimer = AutoTimer::GetTimer("cpu");
-        if (unk3f5 && cpuTimer->SplitMs() > 30.0f) {
+        if (mPrintGlitches && cpuTimer->SplitMs() > 30.0f) {
             MILO_LOG("GLITCH (pre-suspend): %i ms\n", (int)cpuTimer->SplitMs());
         }
-        unk360 = false;
+        mAsyncSwapNext = false;
         D3DDevice_Suspend(mD3DDevice);
     }
-    unk3f4 = true;
+    mSuspended = true;
 }
 
 void DxRnd::Resume() {
     if ((int)mD3DDevice) {
-        if (unk3f4) {
+        if (mSuspended) {
             MILO_ASSERT(mAsyncSwapCurrent == false, 0x6AE);
             D3DDevice_Resume(mD3DDevice);
-            unk360 = false;
+            mAsyncSwapNext = false;
         }
-        unk3f4 = false;
+        mSuspended = false;
     }
 }
 
@@ -253,13 +253,13 @@ D3DSurface *DxRnd::BackBuffer() const {
     return mBackBuffer;
 }
 
-D3DTexture *DxRnd::FrontBuffer() { return mFrontBuffers[unk35c - 1 & 1]; }
-D3DTexture *DxRnd::NotFrontBuffer() { return mFrontBuffers[unk35c]; }
+D3DTexture *DxRnd::FrontBuffer() { return mFrontBuffers[mFrontBufIdx - 1 & 1]; }
+D3DTexture *DxRnd::NotFrontBuffer() { return mFrontBuffers[mFrontBufIdx]; }
 
 const char *DxRnd::Error(long code) { return MakeString("code %d", code); }
 
 void DxRnd::Present() {
-    unk35c = (unk35c - 1) & 1;
+    mFrontBufIdx = (mFrontBufIdx - 1) & 1;
     if (mAsyncSwapCurrent) {
         static D3DSWAP_STATUS swapStatus;
         while (D3DDevice_QuerySwapStatus(mD3DDevice, &swapStatus),
@@ -270,12 +270,12 @@ void DxRnd::Present() {
         D3DDevice_SynchronizeToPresentationInterval(mD3DDevice);
     }
     D3DDevice_Swap(mD3DDevice, NotFrontBuffer(), nullptr);
-    if (mAsyncSwapCurrent != unk360) {
-        mAsyncSwapCurrent = unk360;
+    if (mAsyncSwapCurrent != mAsyncSwapNext) {
+        mAsyncSwapCurrent = mAsyncSwapNext;
         D3DDevice_BlockUntilIdle(mD3DDevice);
         D3DDevice_SetSwapMode(mD3DDevice, mAsyncSwapCurrent);
     }
-    unk3f7 = PIXGetCaptureState() & 2;
+    mPIXCaptureState = PIXGetCaptureState() & 2;
 }
 
 void DxRnd::UpdateScalerParams() {
@@ -364,8 +364,8 @@ void DxRnd::BeginTiling(const Hmx::Color &c, float f, unsigned int ui) {
         D3DDevice_Clear(mD3DDevice, 0, nullptr, 0x31, MakeColor(c), f, ui, 0);
     } else {
         XMVECTOR v = {c.red, c.green, c.blue, c.alpha};
-        D3DDevice_BeginTiling(mD3DDevice, 0, mNumTiles, &unk3b4, &v, f, ui);
-        unk34c = true;
+        D3DDevice_BeginTiling(mD3DDevice, 0, mNumTiles, &mTileRect, &v, f, ui);
+        mTilingActive = true;
     }
 }
 
@@ -413,7 +413,7 @@ void DxRnd::PerfCountersStart() {
     MILO_ASSERT(mGPUTimer != NULL, 0x24B);
     MILO_ASSERT(mPerfCounterStart != NULL, 0x24C);
     MILO_ASSERT(mPerfCounterEnd != NULL, 0x24D);
-    mGPUTimer->SetLastMs(unk370 * 1.075f);
+    mGPUTimer->SetLastMs(mGPUBusyMs * 1.075f);
     D3DDevice_QueryPerfCounters(mD3DDevice, mPerfCounterStart, 1);
 }
 
@@ -435,8 +435,8 @@ void DxRnd::PerfCountersStop() {
     for (size_t i = 0; i < sizeof(D3DPERFCOUNTER_VALUES) / sizeof(ULARGE_INTEGER); i++) {
         endLargeIntegers[i].QuadPart -= startLargeIntegers[i].QuadPart;
     }
-    unk370 = endLargeIntegers[1].QuadPart * 2e-06f;
-    unk374 = endLargeIntegers[2].QuadPart * 2e-06f;
+    mGPUBusyMs = endLargeIntegers[1].QuadPart * 2e-06f;
+    mGPUCountMs = endLargeIntegers[2].QuadPart * 2e-06f;
 }
 
 void DxRnd::EndTiling(D3DBaseTexture *tex, int flags) {
@@ -444,11 +444,11 @@ void DxRnd::EndTiling(D3DBaseTexture *tex, int flags) {
     if (tex && flags) {
         tileMode = (flags & 0x3F) << 0x1A;
     }
-    if (unk34c) {
+    if (mTilingActive) {
         MILO_ASSERT(mNumTiles > 0, 0x480);
         HRESULT hr = D3DDevice_EndTiling(mD3DDevice, tileMode, nullptr, tex, nullptr, 0, 0, nullptr);
         DX_ASSERT_CODE(hr, 0x481);
-        unk34c = false;
+        mTilingActive = false;
     } else {
         MILO_ASSERT(mNumTiles == 0, 0x486);
         D3DDevice_Resolve(mD3DDevice, tileMode, nullptr, tex, nullptr, 0, 0, nullptr, 0, 0, nullptr);
@@ -547,7 +547,7 @@ void DxRnd::SetShaderRegisterAlloc(RegisterAlloc s) {
 }
 
 RndTex *DxRnd::GetCurrentFrameTex(bool resolvePreProcess) {
-    if (!unk3a4) {
+    if (!mPostProcDone) {
         if (resolvePreProcess) {
             D3DDevice_Resolve(
                 mD3DDevice, 0, nullptr, mPreProcessBuffer, nullptr, 0, 0, nullptr, 0, 0, nullptr
@@ -559,7 +559,7 @@ RndTex *DxRnd::GetCurrentFrameTex(bool resolvePreProcess) {
 }
 
 bool DxRnd::CanModal(Debug::ModalType t) {
-    if (unk34c) {
+    if (mTilingActive) {
         if (t == Debug::kModalFail) {
             EndTiling(FrontBuffer(), 0);
         } else {
@@ -570,7 +570,7 @@ bool DxRnd::CanModal(Debug::ModalType t) {
 }
 
 void DxRnd::ModalDraw(Debug::ModalType t, const char *cc) {
-    bool wasSuspended = unk3f4;
+    bool wasSuspended = mSuspended;
     Resume();
     D3DSurface *savedStencilSurface = D3DDevice_GetDepthStencilSurface(mD3DDevice);
     D3DSurface *savedRenderTarget = D3DDevice_GetRenderTarget(mD3DDevice, 0);
@@ -612,9 +612,9 @@ void DxRnd::InitBuffers() {
         mVideoMode.fIsHiDef = true;
         mVideoMode.fIsWideScreen = true;
     } else if (SystemConfig(rnd)->FindInt(low_res) != 0) {
-        unk37c |= 1;
+        mFlags |= 1;
     }
-    unk1f8 = unk37c & 1;
+    unk1f8 = mFlags & 1;
     mAspect = unk1f8 ? kWidescreen : kRegular;
     mHeight = unk1f8 ? 540 : 720;
     int i11, i10;
@@ -626,9 +626,9 @@ void DxRnd::InitBuffers() {
         i10 = (mHeight << 2) / 3;
     }
     mWidth = i11;
-    if (!(unk37c & 1)) {
+    if (!(mFlags & 1)) {
         mNumTiles = 2;
-        if (unk37c & 2) {
+        if (mFlags & 2) {
             i11 = i11 / 2;
             i10 = i10 / 2;
         } else {
@@ -643,36 +643,36 @@ void DxRnd::InitBuffers() {
     mPresentParams.PresentationInterval = 0;
     mPresentParams.SwapEffect = D3DSWAPEFFECT_DISCARD;
     UpdateScalerParams();
-    unk228 = GetCurrentThreadId();
+    mRenderThreadId = GetCurrentThreadId();
     {
         BeginMemTrackObjectName("D3D->CreateDevice");
         HRESULT hr = Direct3D_CreateDevice(
-            0, mDeviceType, &unk22c, 1, &mPresentParams, &mD3DDevice
+            0, mDeviceType, &mFocusWindow, 1, &mPresentParams, &mD3DDevice
         );
         DX_ASSERT_CODE(hr, 0x367);
         EndMemTrackObjectName();
     }
-    if (!(unk37c & 1)) {
+    if (!(mFlags & 1)) {
         MILO_ASSERT(mNumTiles > 0, 0x36D);
         BeginMemTrackObjectName("CreateBackBuffers:World");
         CreateBackBuffers(
-            mWidth, mHeight, D3DMULTISAMPLE_NONE, unk3a8, unk3ac, mBackBuffer, unk388
+            mWidth, mHeight, D3DMULTISAMPLE_NONE, mEdramBase, mEdramHzBase, mBackBuffer, mWorldDepth
         );
         EndMemTrackObjectName();
         BeginMemTrackObjectName("CreateBackBuffers:UI");
         CreateBackBuffers(
-            i10, i11, D3DMULTISAMPLE_2_SAMPLES, unk3a8, unk3ac, unk384, unk38c
+            i10, i11, D3DMULTISAMPLE_2_SAMPLES, mEdramBase, mEdramHzBase, mOffscreenRT, mOffscreenDepth
         );
     } else {
         MILO_ASSERT(mNumTiles == 0, 0x37E);
         BeginMemTrackObjectName("CreateBackBuffers:World");
         CreateBackBuffers(
-            mWidth, mHeight, D3DMULTISAMPLE_2_SAMPLES, unk3a8, unk3ac, mBackBuffer, unk388
+            mWidth, mHeight, D3DMULTISAMPLE_2_SAMPLES, mEdramBase, mEdramHzBase, mBackBuffer, mWorldDepth
         );
         EndMemTrackObjectName();
         BeginMemTrackObjectName("CreateBackBuffers:UI");
         CreateBackBuffers(
-            mWidth, mHeight, D3DMULTISAMPLE_2_SAMPLES, unk3a8, unk3ac, unk384, unk38c
+            mWidth, mHeight, D3DMULTISAMPLE_2_SAMPLES, mEdramBase, mEdramHzBase, mOffscreenRT, mOffscreenDepth
         );
     }
     EndMemTrackObjectName();
@@ -746,15 +746,15 @@ void DxRnd::DoPointTests() {
         return;
 
     // Process query results from previous frame
-    for (std::vector<RndPointTest>::iterator it = unk20c.begin(); it != unk20c.end(); ++it) {
+    for (std::vector<RndPointTest>::iterator it = mPointTestQueries.begin(); it !=mPointTestQueries.end(); ++it) {
         unsigned int result;
-        if (mOcclusionQueryMgr->GetQueryResults(it->unk4, result)) {
-            it->unk0->SetOcclusionReady(true);
-            it->unk0->SetVisible(result != 0);
+        if (mOcclusionQueryMgr->GetQueryResults(it->mPointQueryIdx, result)) {
+            it->mFlare->SetOcclusionReady(true);
+            it->mFlare->SetVisible(result != 0);
         }
-        if (mOcclusionQueryMgr->GetQueryResults(it->unk8, result)) {
-            it->unk0->SetOcclusionResult((float)(int)result);
-            it->unk0->SetOcclusionReady(true);
+        if (mOcclusionQueryMgr->GetQueryResults(it->mAreaQueryIdx, result)) {
+            it->mFlare->SetOcclusionResult((float)(int)result);
+            it->mFlare->SetOcclusionReady(true);
         }
     }
 
@@ -766,12 +766,12 @@ void DxRnd::DoPointTests() {
 
     // Count point tests needed
     int numTests = 0;
-    for (std::list<PointTest>::iterator it = mPointTests.begin(); it != mPointTests.end(); ++it) {
+    for (std::list<PointTest>::iterator it = mPointTests.begin(); it !=mPointTests.end(); ++it) {
         numTests++;
     }
 
-    // Resize unk20c to match
-    unk20c.resize(numTests);
+    // Resize mPointTestQueries to match mPointTests count
+    mPointTestQueries.resize(numTests);
 
     // Early out if no point tests
     if (mPointTests.empty())
@@ -809,14 +809,14 @@ void DxRnd::DoPointTests() {
 
     // Process each point test
     int idx = 0;
-    for (std::list<PointTest>::iterator it = mPointTests.begin(); it != mPointTests.end(); ++it, ++idx) {
+    for (std::list<PointTest>::iterator it = mPointTests.begin(); it !=mPointTests.end(); ++it, ++idx) {
         TheNgStats->mFlares++;
 
-        RndFlare *flare = it->unkc;
-        RndPointTest &test = unk20c[idx];
-        test.unk4 = -1;
-        test.unk8 = -1;
-        test.unk0 = flare;
+        RndFlare *flare = it->mFlare;
+        RndPointTest &test = mPointTestQueries[idx];
+        test.mPointQueryIdx = -1;
+        test.mAreaQueryIdx = -1;
+        test.mFlare = flare;
 
         // Point test
         if (flare->GetPointTest()) {
@@ -826,18 +826,18 @@ void DxRnd::DoPointTests() {
                 DWORD color;
             };
             PointVertex vtx;
-            vtx.x = (float)it->unk4;
-            vtx.y = (float)it->unk8;
-            vtx.z = (float)it->unk0 * 5.9604651881e-08f;
+            vtx.x = (float)it->x;
+            vtx.y = (float)it->y;
+            vtx.z = (float)it->z * 5.9604651881e-08f;
             vtx.w = 1.0f;
             vtx.color = 0;
 
             unsigned int queryIdx;
             if (mOcclusionQueryMgr->CreateQuery(queryIdx)) {
-                test.unk4 = queryIdx;
-                mOcclusionQueryMgr->BeginQuery(test.unk4);
+                test.mPointQueryIdx = queryIdx;
+                mOcclusionQueryMgr->BeginQuery(test.mPointQueryIdx);
                 D3DDevice_DrawVerticesUP(mD3DDevice, D3DPT_POINTLIST, 1, &vtx, sizeof(PointVertex));
-                mOcclusionQueryMgr->EndQuery(test.unk4);
+                mOcclusionQueryMgr->EndQuery(test.mPointQueryIdx);
             }
         }
 
@@ -848,7 +848,7 @@ void DxRnd::DoPointTests() {
                 float w;
                 DWORD color;
             };
-            float z = (float)it->unk0 * 5.9604651881e-08f;
+            float z = (float)it->z * 5.9604651881e-08f;
             QuadVertex verts[4];
 
             // Initialize vertices
@@ -869,10 +869,10 @@ void DxRnd::DoPointTests() {
 
             unsigned int queryIdx;
             if (mOcclusionQueryMgr->CreateQuery(queryIdx)) {
-                test.unk8 = queryIdx;
-                mOcclusionQueryMgr->BeginQuery(test.unk8);
+                test.mAreaQueryIdx = queryIdx;
+                mOcclusionQueryMgr->BeginQuery(test.mAreaQueryIdx);
                 D3DDevice_DrawVerticesUP(mD3DDevice, D3DPT_TRIANGLESTRIP, 4, verts, sizeof(QuadVertex));
-                mOcclusionQueryMgr->EndQuery(test.unk8);
+                mOcclusionQueryMgr->EndQuery(test.mAreaQueryIdx);
             }
         } else {
             flare->SetOcclusionReady(true);
@@ -893,6 +893,6 @@ void DxRnd::DoPointTests() {
 
     // Restore camera if set
     if (RndCam::Current()) {
-        TheShaderMgr.SetVConstant((VShaderConstant)4, RndCam::Current()->GetMatrix300());
+        TheShaderMgr.SetVConstant((VShaderConstant)4, RndCam::Current()->GetViewProjMatrix());
     }
 }

@@ -241,7 +241,7 @@ protected:
     bool mHasAOCalc; // 0x170
     bool mKeepMeshData; // 0x171
     MotionBlurCache mMotionCache; // 0x174
-    int unk180;
+    int mMeshVersion; // mesh format version, initialized to 0x26
     unsigned char *mCompressedVerts; // 0x184
     unsigned int mNumCompressedVerts; // 0x188
 };

@@ -28,7 +28,7 @@ void OvershellSlot::SetPlaying(bool playing) {
 
 void OvershellSlot::SetState(OvershellSlotState state) {
     bool state3 = mState == 3;
-    if (!state3 || TheGestureMgr->Unk425C() != 1) {
+    if (!state3 || TheGestureMgr->PauseOnSkeletonLossMode() != 1) {
         PropertyEventProvider *prov = mPlayerData.Provider();
         if (prov) {
             Hmx::Object *provObj = prov;
@@ -125,7 +125,7 @@ void Overshell::ResolveSkeletons() {
         Symbol autoplay = playerData->Autoplay();
 
         if ((skel != nullptr) || (!autoplay.Null())
-            || (TheGestureMgr->Unk425C() == 1)) {
+            || (TheGestureMgr->PauseOnSkeletonLossMode() == 1)) {
             mSlots[i]->SetState((OvershellSlotState)3);
         } else {
             // Awkward structure required for matching

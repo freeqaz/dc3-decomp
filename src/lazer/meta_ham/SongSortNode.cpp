@@ -380,7 +380,7 @@ void SongFunctionNode::OnHighlight() { TheSongSortMgr->GetSongPreview()->Start(0
 
 bool SongFunctionNode::IsActive() const {
     static Symbol play_setlist("play_setlist");
-    return unk4c != play_setlist;
+    return mFunctionToken != play_setlist;
 }
 
 Symbol SongFunctionNode::OnSelect() {

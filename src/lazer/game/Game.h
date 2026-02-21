@@ -102,10 +102,10 @@ private:
     bool unk69;
     float mMusicSpeed;
     bool mNeverAllowInput;
-    bool unk71;
-    bool unk72;
-    bool unk73;
-    bool unk74;
+    bool mPauseRequested;
+    bool mDeferredPausePending;
+    bool mDeferredPauseSoundArg;
+    bool mDeferredPauseGameArg;
     Overshell *mOvershell; // 0x78
     ObjPtr<MoveDir> mMoveDir; // 0x7c
     int mLoadState;

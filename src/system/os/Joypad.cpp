@@ -38,8 +38,8 @@ JoypadData::JoypadData()
       mYellowCymbalMask(0), mBlueCymbalMask(0), mSecondaryPedalMask(0), mCymbalMask(0),
       mIsDrum(false), mType(kJoypadNone), mControllerType(), mDistFromRest(0),
       mHasGreenCymbal(false), mHasYellowCymbal(false), mHasBlueCymbal(false),
-      mHasSecondaryPedal(false), unk84(0), unk94(0), unk9c(0), unka0(0), unka4(0),
-      unka8(0), unkac(0), unkc0(0), unkd8(0) {
+      mHasSecondaryPedal(false), mBreedCallback(0), mBreedDataDest(0), unk9c(0), unka0(0), unka4(0),
+      unka8(0), unkac(0), mEepromWriteDone(0), unkd8(0) {
     for (int i = 0; i < 2; i++) {
         for (int j = 0; j < 2; j++) {
             mSticks[i][j] = 0;
@@ -488,23 +488,23 @@ JoypadAction ButtonToAction(JoypadButton btn, Symbol sym) {
 void JoypadPushThroughMsg(const Message &msg) { Export(msg); }
 
 void JoypadHandleBreedDataResponse(int pad) {
-    if (gJoypadData[pad].unk94) {
-        memcpy(gJoypadData[pad].unk94, &gJoypadData[pad].unk88, sizeof(BreedData));
+    if (gJoypadData[pad].mBreedDataDest) {
+        memcpy(gJoypadData[pad].mBreedDataDest, &gJoypadData[pad].mBreedData, sizeof(BreedData));
     }
     JoypadBreedDataReadMsg msg(gJoypadData[pad].mUser, (JoypadBreedDataStatus)0);
-    if (gJoypadData[pad].unk84) {
-        gJoypadData[pad].unk84->Handle(msg, true);
-        gJoypadData[pad].unk84 = nullptr;
+    if (gJoypadData[pad].mBreedCallback) {
+        gJoypadData[pad].mBreedCallback->Handle(msg, true);
+        gJoypadData[pad].mBreedCallback = nullptr;
     }
 }
 
 void JoypadHandleEepromWriteResponse(int pad, JoypadBreedDataStatus status) {
-    gJoypadData[pad].unkc0 = true;
+    gJoypadData[pad].mEepromWriteDone = true;
     if (!gJoypadData[pad].unk9c) {
         JoypadBreedDataWriteMsg msg(gJoypadData[pad].mUser, status);
-        if (gJoypadData[pad].unk84) {
-            gJoypadData[pad].unk84->Handle(msg, true);
-            gJoypadData[pad].unk84 = nullptr;
+        if (gJoypadData[pad].mBreedCallback) {
+            gJoypadData[pad].mBreedCallback->Handle(msg, true);
+            gJoypadData[pad].mBreedCallback = nullptr;
         }
     }
 }

@@ -13,8 +13,8 @@ class ClipPlayer {
 public:
     ClipPlayer()
         : mClipKeys(nullptr), mClipCrossoverKeys(nullptr), mMasterClipKeys(nullptr),
-          unk14(0), unk20(-kHugeFloat), unk24(kHugeFloat), mInClip(nullptr),
-          mOutClip(nullptr), unk48(0), unk50(0) {}
+          mPlayerIndex(0), mPracticeStart(-kHugeFloat), mPracticeEnd(kHugeFloat), mInClip(nullptr),
+          mOutClip(nullptr), mTargetClip(0), mBeatOffset(0) {}
 
     void PlayAnims(HamCharacter *, float, float, int);
     bool Init(int);
@@ -41,19 +41,19 @@ protected:
     Keys<Symbol, Symbol> *mClipKeys; // 0x0
     Keys<Symbol, Symbol> *mClipCrossoverKeys; // 0x4
     Keys<Symbol, Symbol> *mMasterClipKeys; // 0x8
-    float unkc;
-    float unk10;
-    int unk14;
+    float mBeat;
+    float mPrevBeat;
+    int mPlayerIndex;
     ObjectDir *mClipDir; // 0x18
-    HamDriver *unk1c;
-    float unk20;
-    float unk24;
+    HamDriver *mDriver;
+    float mPracticeStart;
+    float mPracticeEnd;
     CharClip *mInClip; // 0x28
     CharClip *mOutClip; // 0x2c
     CharClip *mRestClip; // 0x30
     CharClip *mRestStepClips[4]; // 0x34
-    int unk44;
-    int unk48;
+    int mClipCount;
+    int mTargetClip;
     int unk4c;
-    float unk50;
+    float mBeatOffset;
 };

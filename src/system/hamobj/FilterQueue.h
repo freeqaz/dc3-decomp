@@ -25,18 +25,18 @@ private:
     // size 0x14
     class FilterInputFrame {
     public:
-        int unk0;
-        float unk4;
-        float unk8;
-        DetectFrame *unkc;
-        const FilterVersion *unk10;
+        int mSlot;
+        float mSongBeats;
+        float mSongSpeed;
+        DetectFrame *mDetectFrame;
+        const FilterVersion *mFilterVersion;
     };
 
     // size 0x214
     class FilterOutputFrame {
     public:
-        FilterInputFrame *unk0;
-        Vector3 unk4[kMaxNumErrorNodes]; // 0x4
+        FilterInputFrame *mInputFrame;
+        Vector3 mErrors[kMaxNumErrorNodes]; // 0x4
     };
 
     struct QueuedJob {

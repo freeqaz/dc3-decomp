@@ -15,18 +15,18 @@ class NgRnd : public Rnd {
 public:
     // size 0x18
     struct Viewport {
-        Viewport() : unk0(0), unk4(0), unk8(0), unkc(0), unk10(0), unk14(0) {}
-        int unk0; // x
-        int unk4; // y
-        int unk8; // width
-        int unkc; // height
-        float unk10; // minz
-        float unk14; // maxz
+        Viewport() : X(0), Y(0), Width(0), Height(0), MinZ(0), MaxZ(0) {}
+        int X; // 0x0
+        int Y; // 0x4
+        int Width; // 0x8
+        int Height; // 0xc
+        float MinZ; // 0x10
+        float MaxZ; // 0x14
     };
     struct RndPointTest {
-        RndFlare *unk0;
-        unsigned int unk4;
-        unsigned int unk8;
+        RndFlare *mFlare; // 0x0
+        unsigned int mPointQueryIdx; // 0x4
+        unsigned int mAreaQueryIdx; // 0x8
     };
 
     NgRnd();
@@ -43,8 +43,8 @@ public:
     virtual RndCam *GetShadowCam() { return mShadowCam; }
     virtual void DoPostProcess();
 
-    virtual void SetViewport(const Viewport &v) { unk1e0 = v; }
-    virtual const Viewport &GetViewport() const { return unk1e0; }
+    virtual void SetViewport(const Viewport &v) { mViewport = v; }
+    virtual const Viewport &GetViewport() const { return mViewport; }
     virtual void
     DrawRect(const Hmx::Rect &, RndMat *, ShaderType, const Hmx::Color &, const Hmx::Color *, const Hmx::Color *) {
     }
@@ -57,7 +57,7 @@ public:
     virtual RndTex *PreDepthTexture() { return nullptr; }
     virtual void Suspend() {}
     virtual void Resume() {}
-    virtual RndSoftParticleBuffer *ParticleBuffer() { return unk208; }
+    virtual RndSoftParticleBuffer *ParticleBuffer() { return mParticleBuffer; }
     virtual void CreateLargeQuad(int, int, LargeQuadRenderData &);
     virtual void
     DrawLargeQuad(const LargeQuadRenderData &, const Transform &, RndMat *, ShaderType);
@@ -67,14 +67,14 @@ protected:
     virtual void ResetStats();
     virtual float UpdateOverlay(RndOverlay *, float);
 
-    Viewport unk1e0;
+    Viewport mViewport; // 0x1e0
     bool unk1f8;
     RndTex *mShadowMap; // 0x1fc
     RndCam *mShadowCam; // 0x200
     RndOcclusionQueryMgr *mOcclusionQueryMgr; // 0x204
-    RndSoftParticleBuffer *unk208; // 0x208
-    std::vector<RndPointTest> unk20c; // 0x20c
-    bool unk218; // 0x218
+    RndSoftParticleBuffer *mParticleBuffer; // 0x208
+    std::vector<RndPointTest> mPointTestQueries; // 0x20c
+    bool mInited; // 0x218
 };
 
 extern NgRnd &TheNgRnd;

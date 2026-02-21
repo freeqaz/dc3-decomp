@@ -139,7 +139,7 @@ protected:
     ObjPtr<EventTrigger> mNextLink; // 0xa4
     Symbol mHandler; // 0xb8
     ObjPtrList<RndPartLauncher> mPartLaunchers; // 0xbc
-    bool unkd0;
+    bool mParticleTriggerConverted; // 0xd0
     TriggerAnim mAnimTrigger; // 0xd4
     float mAnimFrame; // 0xd8
     bool mEnabled; // 0xdc

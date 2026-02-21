@@ -20,7 +20,7 @@ FitnessCalorieSortByCalorie::FitnessCalorieSortByCalorie() {
 NavListShortcutNode *
 FitnessCalorieSortByCalorie::NewShortcutNode(NavListItemNode *node) const {
     Symbol s = MakeString(
-        "calorie_shortcut_%i", static_cast<FitnessCalorieSortNode *>(node)->GetUnk48()
+        "calorie_shortcut_%i", static_cast<FitnessCalorieSortNode *>(node)->GetCalories()
     );
     FitnessCalorieSortCmp *cmp = new FitnessCalorieSortCmp();
     return new NavListShortcutNode(cmp, s, true);

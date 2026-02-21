@@ -244,7 +244,7 @@ void DataLoader::LoadFile() {
 DataLoaderThreadObj::DataLoaderThreadObj(
     DataLoader *dl, File *file, char *buffer, int bufSize, bool dtb, const char *filename
 )
-    : mLoader(dl), unk8(nullptr), mFile(file), mBufLen(bufSize), mBuffer(buffer),
+    : mLoader(dl), mResult(nullptr), mFile(file), mBufLen(bufSize), mBuffer(buffer),
       mFilename(filename), mDtb(dtb), mLocal(FileIsLocal(filename)) {}
 
 int DataLoaderThreadObj::ThreadStart() {
@@ -255,14 +255,14 @@ int DataLoaderThreadObj::ThreadStart() {
         if (runChecksum) {
             bs.StartChecksum(mFilename);
         }
-        unk8 = ReadCacheStream(bs, mLoader->LoaderFile().c_str());
+        mResult = ReadCacheStream(bs, mLoader->LoaderFile().c_str());
         if (runChecksum) {
             bs.ValidateChecksum();
         }
     } else {
-        unk8 = DataReadStream(&bs);
+        mResult = DataReadStream(&bs);
     }
     return 0;
 }
 
-void DataLoaderThreadObj::ThreadDone(int) { mLoader->ThreadDone(unk8); }
+void DataLoaderThreadObj::ThreadDone(int) { mLoader->ThreadDone(mResult); }

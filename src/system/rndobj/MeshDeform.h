@@ -77,11 +77,11 @@ public:
 
     // size 0x6c
     struct BoneDesc {
-        BoneDesc(Hmx::Object *owner) : unk0(owner) {
+        BoneDesc(Hmx::Object *owner) : mBone(owner) {
             unk14.Reset();
             unk54.Reset();
         }
-        ObjPtr<RndTransformable> unk0;
+        ObjPtr<RndTransformable> mBone; // 0x0
         Transform unk14;
         Transform unk54;
     };

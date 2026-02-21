@@ -14,11 +14,11 @@
 class UILabel : public RndText, public UIComponent, public TextHolder {
 public:
     struct LabelStyle {
-        LabelStyle(Hmx::Object *o) : mColorOverride(o, 0), unk14(o, 0), unk28(0) {}
+        LabelStyle(Hmx::Object *o) : mColorOverride(o, 0), mLabelDir(o, 0), unk28(0) {}
         ~LabelStyle();
 
         ObjPtr<UIColor> mColorOverride; // 0x0
-        ObjPtr<UILabelDir> unk14; // 0x14
+        ObjPtr<UILabelDir> mLabelDir; // 0x14
         int unk28;
     };
     // Hmx::Object
@@ -114,11 +114,11 @@ protected:
     static bool sInDebugHighlight;
 
     Symbol mTextToken; // 0x114
-    String unk118; // 0x118
-    char unk120;
-    bool unk121;
-    bool unk122;
-    ObjVector<LabelStyle> unk124; // 0x124
+    String mLabelText; // 0x118
+    char mIconChar;
+    bool mTextEmpty;
+    bool mDirty;
+    ObjVector<LabelStyle> mLabelStyles; // 0x124
 };
 
 bool PropSync(UILabel::LabelStyle &, DataNode &, DataArray *, int, PropOp);

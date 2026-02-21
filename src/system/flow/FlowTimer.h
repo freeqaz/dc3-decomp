@@ -32,8 +32,8 @@ public:
     OBJ_MEM_OVERLOAD(0x17)
     NEW_OBJ(FlowTimer)
 
-    int unk5c;
-    ObjPtr<Task> unk60;
+    int mStopMode;
+    ObjPtr<Task> mTask;
     int mRate; // 0x74
     float mTotalTime; // 0x78
 

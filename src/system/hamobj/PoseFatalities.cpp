@@ -31,14 +31,14 @@
 #include "utl/Symbol.h"
 
 PoseFatalities::PoseFatalities()
-    : unk15fc(0.5f), mHudPanel(0), mJumpStart(0), mJumpEnd(0), unk1754(0), unk1764(0),
-      unk1768(0), unk176c(0) {
+    : mHoldDuration(0.5f), mHudPanel(0), mJumpStart(0), mJumpEnd(0), mCurrentBeat(0),
+      mDisplayCooldown(0), mFeedbackFlags(0), mDisplayProgress(0) {
     for (int i = 0; i < 2; i++) {
         mInFatality[i] = 0;
         unk1710[i] = 0;
-        unk1720[i] = 0;
+        mMatchingActive[i] = 0;
         mGotFullCombo[i] = 0;
-        unk3c[i] = 0;
+        mComboStartBeat[i] = 0;
     }
     static DataNode &n = DataVariable("pose_fatalities");
     n = this;
@@ -89,7 +89,7 @@ Symbol PoseFatalities::GetFatalityFace() {
 }
 
 bool PoseFatalities::InFatality(int player) const {
-    int max = unk1754;
+    int max = mCurrentBeat;
     if (player == -1) {
         bool b1 = false;
         for (int i = 0; i < 2; i++) {
@@ -125,7 +125,7 @@ void PoseFatalities::SetCombo(int player, int combo) {
 void PoseFatalities::SetFatalitiesStart(int player) {
     mInFatality[player] = true;
     if (InStrikeAPose()) {
-        mFatalStartBeats[player] = unk1754 + 3;
+        mFatalStartBeats[player] = mCurrentBeat + 3;
         for (int i = 0; i < 4; i++) {
             if (TheBeatMap->IsDownbeat(mFatalStartBeats[player])) {
                 return;
@@ -133,7 +133,7 @@ void PoseFatalities::SetFatalitiesStart(int player) {
             mFatalStartBeats[player]++;
         }
     } else {
-        mFatalStartBeats[player] = unk1754 + 7;
+        mFatalStartBeats[player] = mCurrentBeat + 7;
     }
 }
 
@@ -141,7 +141,7 @@ void PoseFatalities::Reset() {
     for (int i = 0; i < 2; i++) {
         mFatalStartBeats[i] = -1;
         mInFatality[i] = false;
-        unk15f4[i] = 0;
+        mFatalityProgress[i] = 0;
     }
     TheHamProvider->SetProperty("in_fatalities", 0);
     RndAnimatable *anim = TheSynth->Find<RndAnimatable>("beat_repeat.anim", true);
@@ -156,7 +156,7 @@ void PoseFatalities::PlayVO(Symbol s) {
     static Message playVOMsg("play", 0);
     playVOMsg[0] = s;
     mHudPanel->Handle(playVOMsg, true);
-    unk1764 = 5;
+    mDisplayCooldown = 5;
 }
 
 String PoseFatalities::GetCelebrationClip(int player) {
@@ -171,7 +171,7 @@ String PoseFatalities::GetCelebrationClip(int player) {
 void PoseFatalities::EndFatal(int player) {
     bool b10 = true;
     mInFatality[player] = false;
-    unk1720[player] = true;
+    mMatchingActive[player] = true;
     static Message endFatalityMsg("fatality_end", 0);
     endFatalityMsg[0] = player;
     TheHamProvider->Handle(endFatalityMsg, false);
@@ -200,7 +200,7 @@ void PoseFatalities::EndFatal(int player) {
             b10 &= mInFatality[i] != 0;
         }
         if (b10) {
-            unk1760 = 4;
+            mAnimTimer = 4;
         }
         TheHamDirector->GetCharacter(player)->BlendOutFaceOverrides(100);
     } else {
@@ -222,7 +222,7 @@ void PoseFatalities::ActivateFatal(int player) {
         if (!InStrikeAPose()) {
             TheHamDirector->ForceShot("area1_far01.shot");
         }
-        unk1748 = true;
+        mValidPose = true;
         if (!FatalActive()) {
             static Message fatalityActivateMsg("fatality_active");
             TheHamProvider->Handle(fatalityActivateMsg, false);
@@ -247,21 +247,21 @@ void PoseFatalities::ActivateFatal(int player) {
 
 float PoseFatalities::BeatsLeftToMatch(int player) {
     float beat = TheTaskMgr.Beat();
-    if (fabsf(beat - unk1754) > 2.0f) {
+    if (fabsf(beat - mCurrentBeat) > 2.0f) {
         beat = (mJumpEnd - mJumpStart) + beat;
     }
     int num = 4;
-    if (unk44[player] == 1 && !InStrikeAPose()) {
+    if (mFatalityPoseIndex[player] == 1 && !InStrikeAPose()) {
         num = 8;
     }
-    return (unk3c[player] + num) - beat;
+    return (mComboStartBeat[player] + num) - beat;
 }
 
 void PoseFatalities::BeginFatal(int player) {
     if (mInFatality[player]) {
-        unk1720[player] = false;
+        mMatchingActive[player] = false;
         if (!InStrikeAPose()) {
-            unk44[player] = 0;
+            mFatalityPoseIndex[player] = 0;
         }
         mCurrentCombo[player] = 0;
         mGotFullCombo[player] = false;
@@ -274,7 +274,7 @@ void PoseFatalities::BeginFatal(int player) {
 }
 
 bool PoseFatalities::CheckMatchingPose(int player) {
-    return InFatality(player) && unk15f4[player] >= unk15fc;
+    return InFatality(player) && mFatalityProgress[player] >= mHoldDuration;
 }
 
 void PoseFatalities::LoadFatalityClips() {
@@ -322,14 +322,14 @@ void PoseFatalities::Enter() {
         mPoseBeatAnims[kSkeletonRight] =
             mHudPanel->Find<ObjectDir>("hud_right", true)
                 ->Find<RndAnimatable>("pose_beat.anim", true);
-        unk1748 = InStrikeAPose();
+        mValidPose = InStrikeAPose();
         FxSendDelay *delay = TheSynth->Find<FxSendDelay>("BeatRepeat.send", true);
         if (delay) {
             float bpm = TheMaster->SongData()->GetTempoMap()->GetTempoBPM(0);
             delay->SetProperty("tempo", bpm);
         }
-        unk1754 = 0;
-        unk1760 = -1;
+        mCurrentBeat = 0;
+        mAnimTimer = -1;
     }
 }
 
@@ -338,7 +338,7 @@ void PoseFatalities::PollVO() {
         return;
     }
 
-    uint flag_val = unk1768;
+    uint flag_val = mFeedbackFlags;
     bool flag1 = flag_val & 1;
     bool flag2 = (flag_val >> 1) & 1;
     if ((flag1 || !flag2) && flag1) {
@@ -350,19 +350,19 @@ void PoseFatalities::PollVO() {
     } else if (flag1 == 0 && flag2 != 0) {
         PlayVO("nar_sap_right_fc");
     }
-    if (unk1764 <= 0) {
-        if (unk1768 & 4) {
+    if (mDisplayCooldown <= 0) {
+        if (mFeedbackFlags & 4) {
             PlayVO("nar_sap_gen_pos");
-        } else if (unk176c > 8.0f) {
+        } else if (mDisplayProgress > 8.0f) {
             PlayVO("nar_sap_time_limit");
-            unk176c = 0;
+            mDisplayProgress = 0;
         }
     } else {
-        unk1764 -= TheTaskMgr.DeltaSeconds();
+        mDisplayCooldown -= TheTaskMgr.DeltaSeconds();
     }
-    unk1768 = 0;
+    mFeedbackFlags = 0;
     if (InFatality(-1) != 0) {
-        unk176c += Clamp(0.0f, 1.0f, TheTaskMgr.DeltaSeconds());
+        mDisplayProgress += Clamp(0.0f, 1.0f, TheTaskMgr.DeltaSeconds());
     }
 }
 
@@ -375,35 +375,35 @@ void PoseFatalities::Poll() {
             ->Find<HamCharacter>("backup1", true)
             ->SetShowing(false);
     }
-    if (unk1760 > 0) {
-        unk1760 -= TheTaskMgr.DeltaBeat();
-        if (unk1760 <= 0) {
+    if (mAnimTimer > 0) {
+        mAnimTimer -= TheTaskMgr.DeltaBeat();
+        if (mAnimTimer <= 0) {
             static Message msg("fatals_over");
             TheHamDirector->HandleType(msg);
             TheHamProvider->SetProperty("in_fatalities", 0);
         }
     }
     int deltaBeat = TheTaskMgr.Beat() + 0.2f;
-    if (deltaBeat > unk1754) {
-        unk1754 = deltaBeat;
-        if (unk1754 == mJumpStart) {
-            unk1754 = mJumpEnd;
+    if (deltaBeat > mCurrentBeat) {
+        mCurrentBeat = deltaBeat;
+        if (mCurrentBeat == mJumpStart) {
+            mCurrentBeat = mJumpEnd;
         }
-        if (unk1754 == mJumpEnd) {
+        if (mCurrentBeat == mJumpEnd) {
             MILO_LOG("Jump detected! %d to %d\n", mJumpStart, mJumpEnd);
             int diff = mJumpEnd - mJumpStart;
             for (int i = 0; i < 2; i++) {
                 if (mFatalStartBeats[i] != -1) {
                     mFatalStartBeats[i] += diff;
-                    unk3c[i] += diff;
+                    mComboStartBeat[i] += diff;
                 }
             }
         }
-        OnBeat(unk1754);
+        OnBeat(mCurrentBeat);
     }
-    if (unk1748) {
+    if (mValidPose) {
         for (int i = 0; i < 2; i++) {
-            if (InFatality(i) || unk1720[i]) {
+            if (InFatality(i) || mMatchingActive[i]) {
                 UpdateClipDriver(i);
             }
             if (InFatality(i)) {
@@ -422,15 +422,15 @@ void PoseFatalities::Poll() {
         }
 
         // probably an inline
-        bool p12 = unk1754 < mFatalStartBeats[0] ? false : mInFatality[0];
+        bool p12 = mCurrentBeat < mFatalStartBeats[0] ? false : mInFatality[0];
 
         bool b9 = p12 || mGotFullCombo[0]
-            || !(InStrikeAPose() || unk1754 >= mFatalStartBeats[0]);
+            || !(InStrikeAPose() || mCurrentBeat >= mFatalStartBeats[0]);
 
         // also probably an inline
-        p12 = unk1754 < mFatalStartBeats[1] ? false : mInFatality[1];
+        p12 = mCurrentBeat < mFatalStartBeats[1] ? false : mInFatality[1];
         bool b10 = p12 || mGotFullCombo[1]
-            || !(InStrikeAPose() || unk1754 >= mFatalStartBeats[1]);
+            || !(InStrikeAPose() || mCurrentBeat >= mFatalStartBeats[1]);
 
         int prop;
         if (b9 && b10) {
@@ -444,24 +444,24 @@ void PoseFatalities::Poll() {
         }
         static Symbol dance_battle_config("dance_battle_config");
         TheHamProvider->SetProperty(dance_battle_config, prop);
-        unk15fc = TheOSCMessenger.GetFloat("/holdduration", 0.5f);
+        mHoldDuration = TheOSCMessenger.GetFloat("/holdduration", 0.5f);
         PollVO();
     }
 }
 
 void PoseFatalities::AddFatal(int player) {
-    unk3c[player] = unk1754;
+    mComboStartBeat[player] = mCurrentBeat;
     if (InStrikeAPose() && !DataVarExists("debug_pose_char")) {
-        int cur = unk44[player];
+        int cur = mFatalityPoseIndex[player];
         int rand;
         do {
             rand = RandomInt(1, 9);
         } while (rand == cur);
-        unk44[player] = rand;
+        mFatalityPoseIndex[player] = rand;
     } else {
-        unk44[player]++;
+        mFatalityPoseIndex[player]++;
     }
-    unk15f4[player] = 0;
+    mFatalityProgress[player] = 0;
     unk1718[player] = -0.5f;
     HamCharacter *hChar = TheHamDirector->GetCharacter(player);
     CharDriver *driver = hChar->Driver();
@@ -477,7 +477,7 @@ void PoseFatalities::AddFatal(int player) {
                     MILO_LOG(
                         "%s %s\n",
                         fatalStr,
-                        MakeString("pose_fatality_%i", unk44[player] - 1)
+                        MakeString("pose_fatality_%i", mFatalityPoseIndex[player] - 1)
                     );
                     goto lab5548;
                 }
@@ -528,8 +528,8 @@ void PoseFatalities::OnFatalResult(int player, bool hit) {
             poseMatchedMsg[1] = mCurrentCombo[player];
             poseMatchedMsg[2] = TheGameData->Player(player)->Side();
             TheHamProvider->Handle(poseMatchedMsg, false);
-            unk176c = 0;
-            unk1768 |= 4;
+            mDisplayProgress = 0;
+            mFeedbackFlags |= 4;
             if (InStrikeAPose()) {
                 TheSynth->Find<RndAnimatable>("beat_repeat.anim", true)
                     ->Animate(0, false, 0, nullptr, kEaseLinear, 0, false);
@@ -556,14 +556,14 @@ void PoseFatalities::OnFatalResult(int player, bool hit) {
                 poseAllMatchedMsg[1] = TheGameData->Player(player)->Side();
                 TheHamProvider->Handle(poseAllMatchedMsg, false);
                 mGotFullCombo[player] = true;
-                unk15f4[player] = 0;
+                mFatalityProgress[player] = 0;
                 if (TheGameData->Player(player)->Side() == kSkeletonLeft) {
-                    unk176c = 0;
-                    unk1768 |= 1;
+                    mDisplayProgress = 0;
+                    mFeedbackFlags |= 1;
                 }
                 if (TheGameData->Player(player)->Side() == kSkeletonRight) {
-                    unk176c = 0;
-                    unk1768 |= 2;
+                    mDisplayProgress = 0;
+                    mFeedbackFlags |= 2;
                 }
                 CharDriver *driver = TheHamDirector->GetCharacter(player)->Driver();
                 CharClip *celebrationClip =
@@ -571,7 +571,7 @@ void PoseFatalities::OnFatalResult(int player, bool hit) {
                 if (celebrationClip) {
                     driver->Play(celebrationClip, 2, -1, kHugeFloat, 0);
                 }
-            } else if (unk1754 < mFatalEndBeat) {
+            } else if (mCurrentBeat < mFatalEndBeat) {
                 AddFatal(player);
                 b11 = true;
             }
@@ -644,14 +644,14 @@ void PoseFatalities::OnBeat(int beat) {
         }
     }
     DataVariable("debug_endless_strikeapose") = 1;
-    bool p9 = unk1754 < mFatalStartBeats[0] ? false : mInFatality[0];
+    bool p9 = mCurrentBeat < mFatalStartBeats[0] ? false : mInFatality[0];
     if (p9) {
         JoypadData *jData = JoypadGetPadData(0);
         if (jData->GetRX() > 0.5f) {
             AddFatal(0);
         }
         if (jData->GetRX() < -0.5f) {
-            unk44[0] -= 2;
+            mFatalityPoseIndex[0] -= 2;
             AddFatal(0);
         }
         if (jData->GetLY() > 0.5f) {

@@ -88,11 +88,11 @@ void RndShader::Init() {
 }
 
 void RndShader::CheckForceCull(ShaderType s) {
-    int shader20 = TheShaderMgr.Unk20();
-    if (TheRnd.GetDrawMode() == Rnd::kDrawShadowColor || shader20 == 1) {
+    int cullOverride = TheShaderMgr.CullModeOverride();
+    if (TheRnd.GetDrawMode() == Rnd::kDrawShadowColor || cullOverride == 1) {
         TheRenderState.SetCullMode((RndRenderState::CullMode)0);
-    } else if (s != kShadowmapShader && shader20 != 3 && TheRnd.GetDrawMode() != 8) {
-        if (shader20 == 2) {
+    } else if (s != kShadowmapShader && cullOverride != 3 && TheRnd.GetDrawMode() != 8) {
+        if (cullOverride == 2) {
             TheRenderState.SetCullMode((RndRenderState::CullMode)2);
         }
     } else {
@@ -190,7 +190,7 @@ void RndShader::SelectConfig(RndMat *mat, ShaderType shader_type, bool b3) {
         shader_type = kShadowmapShader;
     } else if (TheRnd.GetDrawMode() == 6) {
         shader_type = kVelocityObjectShader;
-    } else if (TheShaderMgr.Unk18()) {
+    } else if (TheShaderMgr.InDepthVolume()) {
         shader_type = kDepthVolumeShader;
     }
     if (!b3 && (TheLoadMgr.EditMode() || !UsingCD())) {
@@ -238,7 +238,7 @@ void RndShaderSimple::Select(RndMat *mat, ShaderType s, bool b) {
         }
     }
     TheRenderState.SetFillMode((RndRenderState::FillMode)0);
-    bool isSkinned = TheShaderMgr.Unk10() && (s == kErrorShader || s == kShadowmapShader);
+    bool isSkinned = TheShaderMgr.BoneCount() && (s == kErrorShader || s == kShadowmapShader);
     if (!RedundantState(mat, s, isSkinned, TheShaderMgr.UseAO(), b)) {
         TheNgStats->mMats++;
         ((NgMat *)mat)->SetupShader(TheShaderMgr.AllowPerPixel(), true);

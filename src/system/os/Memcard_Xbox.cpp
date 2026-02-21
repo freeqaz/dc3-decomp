@@ -383,17 +383,17 @@ MCResult MCContainerXbox::PrintDir(const char *cc, bool b2) {
 
 void MemcardXbox::Poll() {
     Memcard::Poll();
-    if (unk156 && mXOverlapped.InternalLow != 0x3E5) {
-        unk156 = false;
-        if (unk158) {
-            if (unk15c == 0) {
+    if (mSelectorPending && mXOverlapped.InternalLow != 0x3E5) {
+        mSelectorPending = false;
+        if (mSelectorCallback) {
+            if (mSelectedDevice == 0) {
                 NoDeviceChosenMsg msg;
-                unk158->Handle(msg, false);
-                unk158 = nullptr;
+                mSelectorCallback->Handle(msg, false);
+                mSelectorCallback = nullptr;
             } else {
-                DeviceChosenMsg msg(unk15c);
-                unk158->Handle(msg, false);
-                unk158 = nullptr;
+                DeviceChosenMsg msg(mSelectedDevice);
+                mSelectorCallback->Handle(msg, false);
+                mSelectorCallback = nullptr;
             }
         }
     }
@@ -413,8 +413,8 @@ void MemcardXbox::ShowDeviceSelector(
     const ContainerId &c, Hmx::Object *o, int i3, bool b4
 ) {
     memset(&mXOverlapped, 0, sizeof(XOVERLAPPED));
-    unk158 = o;
-    unk15c = 0;
+    mSelectorCallback = o;
+    mSelectedDevice = 0;
     int i1 = 0;
     if (b4) {
         i1 = 0x200;
@@ -424,13 +424,13 @@ void MemcardXbox::ShowDeviceSelector(
     }
     ULARGE_INTEGER u;
     u.QuadPart = 0;
-    if (ThePlatformMgr.ShowDeviceSelectorUI(i3, 1, i1, u, &unk15c, &mXOverlapped)
+    if (ThePlatformMgr.ShowDeviceSelectorUI(i3, 1, i1, u, &mSelectedDevice, &mXOverlapped)
         == 0x3E5) {
-        unk156 = true;
-    } else if (unk158) {
+        mSelectorPending = true;
+    } else if (mSelectorCallback) {
         NoDeviceChosenMsg msg;
-        unk158->Handle(msg, false);
-        unk158 = nullptr;
+        mSelectorCallback->Handle(msg, false);
+        mSelectorCallback = nullptr;
     }
 }
 

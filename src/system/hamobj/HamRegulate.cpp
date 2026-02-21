@@ -8,8 +8,8 @@
 const float kConstFloats[2] = { 4, 4 };
 
 HamRegulate::HamRegulate()
-    : unk14(this), unk28(0), unk2c(0), unk30(0, 0, 0), unk40(0, 0, 0), unk50(0),
-      unk54(kConstFloats[0]), mLeftFoot(this), mRightFoot(this) {}
+    : mWaypoint(this), mRegulateMode(0), mArriveRadius(0), mPosDelta(0, 0, 0), mAccumVelocity(0, 0, 0), mFootState(0),
+      mMaxSpeed(kConstFloats[0]), mLeftFoot(this), mRightFoot(this) {}
 
 HamRegulate::~HamRegulate() {}
 
@@ -54,25 +54,25 @@ END_COPYS
 
 void HamRegulate::SetName(const char *name, ObjectDir *dir) {
     Hmx::Object::SetName(name, dir);
-    unk10 = dynamic_cast<Character *>(Dir());
+    mCharacter = dynamic_cast<Character *>(Dir());
 }
 
 void HamRegulate::Enter() {
     RegulateWay(nullptr, 0);
-    unk40.Zero();
-    unk50 = 0;
+    mAccumVelocity.Zero();
+    mFootState = 0;
 }
 
 void HamRegulate::PollDeps(
     std::list<Hmx::Object *> &changedBy, std::list<Hmx::Object *> &change
 ) {
-    changedBy.push_back(unk10->BoneServo());
-    change.push_back(unk10);
+    changedBy.push_back(mCharacter->BoneServo());
+    change.push_back(mCharacter);
 }
 
 void HamRegulate::RegulateWay(Waypoint *w, float f) {
-    unk14 = w;
-    unk2c = f;
-    unk30.Zero();
-    unk28 = 0;
+    mWaypoint = w;
+    mArriveRadius = f;
+    mPosDelta.Zero();
+    mRegulateMode = 0;
 }

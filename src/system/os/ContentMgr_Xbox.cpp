@@ -17,8 +17,8 @@ const char *kContentRootFormat = "cnt%08x";
 
 XboxContent::XboxContent(const XCONTENT_CROSS_TITLE_DATA &data, int i2, int i3, bool b4)
     : mOverlapped(0), mLicenseBits(0), mValidLicenseBits(0),
-      mRoot(MakeString(kContentRootFormat, i2)), unk150(MakeString("%s:", mRoot.c_str())),
-      mState(kUnmounted), mPadNum(i3), unk160(0), unk161(0), mLRM(0) {
+      mRoot(MakeString(kContentRootFormat, i2)), mContentPath(MakeString("%s:", mRoot.c_str())),
+      mState(kUnmounted), mPadNum(i3), mPendingDelete(0), mCorrupt(0), mLRM(0) {
     MILO_ASSERT(mRoot.size() < kContentRootMaxLength, 0x6F);
     MILO_ASSERT(mPadNum < kNumberOfBuffers, 0x70);
     mXData = data;
@@ -99,13 +99,13 @@ void XboxContent::Poll() {
         if (res == 0) {
             mValidLicenseBits = true;
             mState = mState == kMounting ? kMounted : kUnmounted;
-            if (unk160) {
+            if (mPendingDelete) {
                 Delete();
             }
         } else {
             unsigned short err = XGetOverlappedExtendedError(mOverlapped);
             mState = kContentDeleting;
-            unk161 = err == 0x570;
+            mCorrupt = err == 0x570;
         }
         RELEASE(mOverlapped);
     }
@@ -147,7 +147,7 @@ void XboxContent::Unmount() {
 }
 
 void XboxContent::Delete() {
-    unk160 = true;
+    mPendingDelete = true;
     if (mState == 4 || mState == 1) {
         Unmount();
     } else if (mState == 0) {

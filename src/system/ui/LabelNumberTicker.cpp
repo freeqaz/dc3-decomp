@@ -9,7 +9,7 @@
 
 LabelNumberTicker::LabelNumberTicker()
     : mLabel(this), mDesiredValue(0), mAnimTime(0), mAnimDelay(0), mWrapperText(gNullStr),
-      mAcceleration(0), unk6c(0), unk70(0), mTickTrigger(this), mTickEvery(0) {}
+      mAcceleration(0), mAnimStartValue(0), mCurrentValue(0), mTickTrigger(this), mTickEvery(0) {}
 
 LabelNumberTicker::~LabelNumberTicker() {}
 
@@ -62,7 +62,7 @@ void LabelNumberTicker::Init() { REGISTER_OBJ_FACTORY(LabelNumberTicker) }
 void LabelNumberTicker::UpdateDisplay() {
     if (mLabel) {
         if (mWrapperText != gNullStr) {
-            mLabel->SetTokenFmt(mWrapperText, LocalizeSeparatedInt(unk70, TheLocale));
+            mLabel->SetTokenFmt(mWrapperText, LocalizeSeparatedInt(mCurrentValue, TheLocale));
         }
     }
 }
@@ -73,10 +73,10 @@ void LabelNumberTicker::SetLabel(UILabel *l) {
 }
 
 void LabelNumberTicker::SetDesiredValue(int i) {
-    unk6c = unk70;
+    mAnimStartValue = mCurrentValue;
     mDesiredValue = i;
     if (mAnimDelay + mAnimTime <= 0.0f)
-        unk70 = i;
+        mCurrentValue = i;
     else {
         mTimer.Reset();
         mTimer.Start();
@@ -89,7 +89,7 @@ void LabelNumberTicker::SetDesiredValue(int i) {
 
 void LabelNumberTicker::CountUp() {
     int val = mDesiredValue;
-    unk70 = 0;
+    mCurrentValue = 0;
     mDesiredValue = 0;
     UpdateDisplay();
     SetDesiredValue(val);
@@ -97,8 +97,8 @@ void LabelNumberTicker::CountUp() {
 
 void LabelNumberTicker::CountUpFromCurrentValue() {
     int val = mDesiredValue;
-    if (unk70 >= val) {
-        unk70 = 0;
+    if (mCurrentValue >= val) {
+        mCurrentValue = 0;
         mDesiredValue = 0;
         UpdateDisplay();
     }
@@ -131,7 +131,7 @@ void LabelNumberTicker::PreLoad(BinStream &bs) {
 }
 
 void LabelNumberTicker::SnapToValue(int i) {
-    unk70 = i;
+    mCurrentValue = i;
     mDesiredValue = i;
     UpdateDisplay();
 }
@@ -154,23 +154,23 @@ void LabelNumberTicker::Poll() {
             float powered = std::pow(progress, mAcceleration);
             progress *= powered;
 
-            // Interpolate from start value (unk6c) to desired value
-            int valueDelta = mDesiredValue - unk6c;
-            int newValue = unk6c + (int)(progress * valueDelta);
+            // Interpolate from start value (mAnimStartValue) to desired value
+            int valueDelta = mDesiredValue - mAnimStartValue;
+            int newValue = mAnimStartValue + (int)(progress * valueDelta);
 
             // Trigger events when crossing mTickEvery thresholds
             if (mTickTrigger && mTickEvery != 0) {
-                if ((newValue / mTickEvery) > (unk70 / mTickEvery)) {
+                if ((newValue / mTickEvery) > (mCurrentValue / mTickEvery)) {
                     mTickTrigger->Trigger();
                 }
             }
 
-            // Update current display value (unk70)
-            unk70 = newValue;
+            // Update current display value (mCurrentValue)
+            mCurrentValue = newValue;
 
             // Stop animation when target reached or time exceeded
-            if (unk70 == mDesiredValue || elapsedMs >= totalMs) {
-                unk70 = mDesiredValue;
+            if (mCurrentValue == mDesiredValue || elapsedMs >= totalMs) {
+                mCurrentValue = mDesiredValue;
                 mTimer.Stop();
             }
         }

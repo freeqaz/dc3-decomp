@@ -60,16 +60,16 @@ bool FlowWhile::Activate() {
         }
         PushDrivenProperties();
         if (mValue.NotNull()) {
-            if (unk64.Type() != mValue.Type()) {
-                unk64 = mValue;
+            if (mPreviousValue.Type() != mValue.Type()) {
+                mPreviousValue = mValue;
             }
         } else if (mValue.Type() == kDataObject) {
-            unk64 = NULL_OBJ;
+            mPreviousValue = NULL_OBJ;
         } else {
-            unk64 = 0;
+            mPreviousValue = 0;
         }
-        DataNode n(unk64);
-        unk64 = mValue;
+        DataNode n(mPreviousValue);
+        mPreviousValue = mValue;
         ActivateValueCases(mValue, n);
         if (mEventsRegistered) {
             return true;
@@ -94,19 +94,19 @@ void FlowWhile::ChildFinished(FlowNode *n) {
         PushDrivenProperties();
         mRunningNodes.remove(n);
         if (n) {
-            if (mValue != unk64) {
-                DataNode dupe(unk64);
-                unk64 = mValue;
+            if (mValue != mPreviousValue) {
+                DataNode dupe(mPreviousValue);
+                mPreviousValue = mValue;
                 if (!ActivateTransitionCases(mValue, dupe)) {
                     ActivateValueCases(mValue, dupe);
                 }
             } else {
-                ActivateValueCases(mValue, unk64);
+                ActivateValueCases(mValue, mPreviousValue);
             }
         } else {
-            if (unk64 != mValue) {
-                DataNode dupe(unk64);
-                unk64 = mValue;
+            if (mPreviousValue != mValue) {
+                DataNode dupe(mPreviousValue);
+                mPreviousValue = mValue;
                 if (!ActivateTransitionCases(mValue, dupe)) {
                     ActivateValueCases(mValue, dupe);
                 }
