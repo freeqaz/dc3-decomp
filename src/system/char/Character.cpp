@@ -602,7 +602,7 @@ void Character::SetInterestFilterFlags(int i) {
     CharEyes *eyes = GetEyes();
     if (eyes) {
         eyes->SetInterestFilterFlags(i);
-        eyes->SetUnk1b0(true);
+        eyes->SetEnabled(true);
     }
 }
 

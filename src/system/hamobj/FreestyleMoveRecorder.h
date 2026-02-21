@@ -46,15 +46,15 @@ public:
     void ReadFreestyleMoveClip(String, int &, FreestyleMoveFrame *);
     float GetScore(const BaseSkeleton *, int, float, bool);
     float GetScore(int, int, float, bool);
-    RndTex *GetPlayerPalette() const { return unkbc; }
-    int GetDancerTakeFrameCount() const { return unkc4; }
-    int GetCurrentMoveNumFrames() const { return unk48[unkb8].mNumFrames; }
+    RndTex *GetPlayerPalette() const { return mPlayerPalette; }
+    int GetDancerTakeFrameCount() const { return mDancerTakeFrameCount; }
+    int GetCurrentMoveNumFrames() const { return mTakes[mCurrentTakeIndex].mNumFrames; }
 
-    void SetVal44(int i) { unk44 = i; } // change once context found
+    void SetVal44(int i) { mSkeletonIndex = i; } // change once context found
 
     void SetFreestyleMove(int index) {
         MILO_ASSERT(index >= 0 && index < MAX_FREESTYLE_MOVES, 0x50);
-        unkb8 = index;
+        mCurrentTakeIndex = index;
     }
 
     MEM_OVERLOAD(FreestyleMoveRecorder, 0x2E);
@@ -76,30 +76,30 @@ private:
     static DataNode OnClearAttempt(DataArray *);
 
     float unk4;
-    FreestyleMoveFrame *unk8; // 0x8 - frames
-    int unkc; // 0xc - frame count for unk8
-    String unk10;
-    FreestyleMoveFrame *unk18;
-    int unk1c;
+    FreestyleMoveFrame *mClipFrames; // 0x8 - frames
+    int mClipFrameCount; // 0xc - frame count for mClipFrames
+    String mClipName;
+    FreestyleMoveFrame *mRecordingFrames;
+    int mRecordingFrameCount;
     int unk20;
-    int unk24;
-    float unk28;
-    float unk2c;
+    int mMaxFrames;
+    int mRecordPos;
+    int mPlaybackPos;
     float unk30;
     int unk34;
-    bool unk38;
+    bool mRecording;
     bool unk39;
     Symbol unk3c;
     int unk40;
-    int unk44;
-    FreestyleMove unk48[4]; // 0x48
-    int unkb8;
-    RndTex *unkbc;
-    FreestyleMoveFrame *unkc0;
-    int unkc4;
-    int unkc8;
-    std::vector<JointAngle> unkcc;
-    std::vector<SkeletonJoint> unkd8;
+    int mSkeletonIndex;
+    FreestyleMove mTakes[4]; // 0x48
+    int mCurrentTakeIndex;
+    RndTex *mPlayerPalette;
+    FreestyleMoveFrame *mFrameBuffer;
+    int mDancerTakeFrameCount;
+    int mFrameIndex;
+    std::vector<JointAngle> mAngleLimits;
+    std::vector<SkeletonJoint> mTrackedJoints;
     FreestyleFrameScores unke4[2];
-    std::vector<JointPos> unk104;
+    std::vector<JointPos> mPositions;
 };

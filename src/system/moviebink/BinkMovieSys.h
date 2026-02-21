@@ -24,9 +24,9 @@ public:
 private:
     CriticalSection *mCriticalSection; // 0x8
     bool mHasAsyncThread; // 0xC
-    int unk10; // 0x10
+    int mNumAsyncThreads; // 0x10
     int mBinkCore0; // 0x14
     int mBinkCore1; // 0x18
-    int unk1c; // 0x1C
+    int mMovieCount; // 0x1C
     std::list<BinkMovieImpl*> mMovies; // 0x20
 };

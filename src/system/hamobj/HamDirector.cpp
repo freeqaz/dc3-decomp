@@ -92,12 +92,12 @@ HamDirector::HamDirector()
       unk1d8(this), mVisualizerPostProc(this), mFreestyleEnabled(1), mPlayer0Char(this),
       mPlayer1Char(this), mBackup0Char(this), mBackup1Char(this), unk254(0), mDisabled(0),
       unk25a(0), mCurShot(this), mNextShot(this), unk284(this), unk29c(-kHugeFloat),
-      mDisablePicking(0), unk2a1(0), unk2a4(0), unk2a8(-kHugeFloat), unk2ac(1),
+      mDisablePicking(0), mSuppressIntroShot(0), mSuppressNextShot(0), unk2a8(-kHugeFloat), mPollEnabled(1),
       mPlayerFreestyle(0), mPlayerFreestylePaused(0), mVisualizer(this),
       mPracticeStart(0), mPracticeEnd(0), mStartLoopMargin(1), mEndLoopMargin(1),
       mBlendDebug(0), mBackupDancers((HamBackupDancers)0), mClipDir(this), mMoveDir(this),
       mNoTransitions(0), mCollisionChecks(1), mLoadedNewSong(1), mPoseFatalities(0),
-      unk33c(RandomInt(0, 2)), unk33d(0), mIconManChar(this), mIconManTex(this),
+      unk33c(RandomInt(0, 2)), mGameStartHold(0), mIconManChar(this), mIconManTex(this),
       unk369(0), mOfflineSong(0) {
     static DataNode &n = DataVariable("hamdirector");
     n = this;
@@ -161,7 +161,7 @@ BEGIN_HANDLERS(HamDirector)
     )
     HANDLE_EXPR(dancer_face_anim_by_player, DancerFaceAnimByPlayer(_msg->Int(2)))
     HANDLE_EXPR(toggle_camshot_flag, OnToggleCamshotFlag())
-    HANDLE_EXPR(get_character_sym, unk2f4[_msg->Int(2)])
+    HANDLE_EXPR(get_character_sym, mCharacterOutfits[_msg->Int(2)])
     HANDLE_ACTION(hide_backups, HideBackups(_msg->Int(2), _msg->Int(3)))
     HANDLE_ACTION(restore_backups, RestoreBackups())
     HANDLE_ACTION(teleport_chars, TeleportChars())
@@ -176,12 +176,12 @@ BEGIN_HANDLERS(HamDirector)
         change_player_character,
         ChangePlayerCharacter(_msg->Int(2), _msg->Sym(3), _msg->Sym(4), _msg->Sym(5))
     )
-    HANDLE_ACTION(set_suppress_intro_shot, unk2a1 = _msg->Int(2))
+    HANDLE_ACTION(set_suppress_intro_shot, mSuppressIntroShot = _msg->Int(2))
     HANDLE_EXPR(get_suppress_intro_shot, 0)
-    HANDLE_ACTION(set_suppress_next_shot, unk2a4 = _msg->Int(2))
-    HANDLE_EXPR(get_suppress_next_shot, unk2a4)
-    HANDLE_EXPR(is_game_start_hold, unk33d)
-    HANDLE_ACTION(enable_poll, unk2ac = _msg->Int(2))
+    HANDLE_ACTION(set_suppress_next_shot, mSuppressNextShot = _msg->Int(2))
+    HANDLE_EXPR(get_suppress_next_shot, mSuppressNextShot)
+    HANDLE_EXPR(is_game_start_hold, mGameStartHold)
+    HANDLE_ACTION(enable_poll, mPollEnabled = _msg->Int(2))
     HANDLE(clip_annotate, OnClipAnnotate)
     HANDLE(clip_safetoadd, OnClipSafeToAdd)
     HANDLE(clip_list, OnClipList)
@@ -325,7 +325,7 @@ void HamDirector::Enter() {
         mShot = "";
         mCurShot = nullptr;
         unk14c = true;
-        unk33d = false;
+        mGameStartHold = false;
         mWorldPostProc = GetWorld()->Find<RndPostProc>("world.pp", true);
         RndPostProc *start = GetWorld()->Find<RndPostProc>("world_start.pp", true);
         if (start) {
@@ -434,7 +434,7 @@ void HamDirector::DrawDebug() {
 }
 
 void HamDirector::ArmMultiIntroMode() {
-    unk33d = true;
+    mGameStartHold = true;
     mDisablePicking = true;
 }
 
@@ -446,7 +446,7 @@ void HamDirector::HudEntered() {
 void HamDirector::PlayIntroShot() {
     if (!unk284)
         PickIntroShot();
-    if (!unk2a1) {
+    if (!mSuppressIntroShot) {
         if (unk284) {
             static Message msg("set_intro_shot", 0);
             msg[0] = unk284.Ptr();
@@ -638,8 +638,8 @@ HamCamShot *HamDirector::FindNextDircut() {
     HamCamShot *shot = nullptr;
     const DircutEntry *entry = mDirCutKeys.Cross(secs, secs - TheTaskMgr.DeltaSeconds());
     if (entry) {
-        if (mNumPlayersFailed || (entry->unk4 && mExcitement >= 3)) {
-            shot = entry->unk0;
+        if (mNumPlayersFailed || (entry->mForced && mExcitement >= 3)) {
+            shot = entry->mShot;
             if (shot) {
                 unk140 = true;
             }
@@ -748,7 +748,7 @@ void HamDirector::TriggerNextIntro() {
     unk284 = mNextShot;
     mNextShot = nullptr;
     PlayIntroShot();
-    unk33d = false;
+    mGameStartHold = false;
 }
 
 void HamDirector::ReactToCollision_InsertRealShot(Symbol s, float f2) {
@@ -908,8 +908,8 @@ DataNode HamDirector::OnLoadSong(DataArray *a) {
     for (int i = 0; i < 2; i++) {
         HamPlayerData *hpd = TheGameData->Player(i);
         MILO_ASSERT(hpd, 0xC21);
-        unk2fc[i] = hpd->Crew();
-        unk2f4[i] = hpd->CharacterOutfit(unk2fc[i]);
+        mCrews[i] = hpd->Crew();
+        mCharacterOutfits[i] = hpd->CharacterOutfit(mCrews[i]);
     }
     int i3 = a->Int(3);
     bool i4 = a->Int(4);
@@ -927,7 +927,7 @@ DataNode HamDirector::OnLoadSong(DataArray *a) {
             speed = "medium";
         else
             speed = "fast";
-        unk330 = speed;
+        mSongSpeed = speed;
         auto _tmp1 = FileGetBase(str.c_str());
         TheGameData->SetSong(_tmp1);
         mMerger->Select("song", str.c_str(), true);
@@ -1055,12 +1055,12 @@ DataNode HamDirector::OnFileLoaded(DataArray *a) {
             if (!TheGameData->Venue().Null()) {
                 if (TheHamWardrobe) {
                     TheHamWardrobe->LoadCharacters(
-                        unk2f4[0],
-                        unk2f4[1],
-                        unk2fc[0],
-                        unk2fc[1],
+                        mCharacterOutfits[0],
+                        mCharacterOutfits[1],
+                        mCrews[0],
+                        mCrews[1],
                         mBackupDancers,
-                        unk330,
+                        mSongSpeed,
                         TheGameData->Venue().Str(),
                         unk25a
                     );
@@ -1163,15 +1163,15 @@ void HamDirector::ChangePlayerCharacter(int i1, Symbol s1, Symbol s2, Symbol s3)
     HamPlayerData *hpd = TheGameData->Player(i1);
     hpd->SetCharacter(s1);
     hpd->SetCharacterOutfit(s3);
-    unk2f4[i1] = s1;
-    unk2fc[i1] = s2;
+    mCharacterOutfits[i1] = s1;
+    mCrews[i1] = s2;
     TheHamWardrobe->LoadCharacters(
-        unk2f4[0],
-        unk2f4[1],
-        unk2fc[0],
-        unk2fc[1],
+        mCharacterOutfits[0],
+        mCharacterOutfits[1],
+        mCrews[0],
+        mCrews[1],
         mBackupDancers,
-        unk330,
+        mSongSpeed,
         TheGameData->Venue().Str(),
         true
     );
@@ -1551,8 +1551,8 @@ void HamDirector::LoadCrew(Symbol s1, Symbol s2) {
     for (int i = 0; i < 2; i++) {
         HamPlayerData *hpd = TheGameData->Player(i);
         MILO_ASSERT(hpd, 0x98B);
-        unk2fc[i] = symbols[i];
-        strcpy(buffer, hpd->CharacterOutfit(unk2fc[i]).Str());
+        mCrews[i] = symbols[i];
+        strcpy(buffer, hpd->CharacterOutfit(mCrews[i]).Str());
         if (strstr(buffer, "lima") || strstr(buffer, "rasa")) {
             buffer[strlen(buffer)] = '0';
             buffer[strlen(buffer)] = gameplaySym == mind_control ? '6' : '5';
@@ -1560,15 +1560,15 @@ void HamDirector::LoadCrew(Symbol s1, Symbol s2) {
             buffer[strlen(buffer)] = '0';
             buffer[strlen(buffer)] = '4';
         }
-        unk2f4[i] = buffer;
+        mCharacterOutfits[i] = buffer;
     }
     TheHamWardrobe->LoadCharacters(
-        unk2f4[0],
-        unk2f4[1],
-        unk2fc[0],
-        unk2fc[1],
+        mCharacterOutfits[0],
+        mCharacterOutfits[1],
+        mCrews[0],
+        mCrews[1],
         mBackupDancers,
-        unk330,
+        mSongSpeed,
         TheGameData->Venue().Str(),
         true
     );

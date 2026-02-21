@@ -134,12 +134,12 @@ void CameraToScreenUnit(Vector3 &vec, const Skeleton &skeleton, SkeletonJoint jo
 
 RhythmDetector::RhythmDetector()
     : mTracked(false), mRecording(0), mSkeletonID(-1), mBeats(8), mGroove(0),
-      mRhythmDecay(0), mFold(2), mToleranceFactor(1.5f), mDirection(0, 0, 0), unk68(0),
+      mRhythmDecay(0), mFold(2), mToleranceFactor(1.5f), mDirection(0, 0, 0), mFrameCount(0),
       mDebugGraphA(0), mDebugGraphB(0), mDebugGraphC(0), mDebugGraphD(0), mDebugGraphE(0),
       unk80(0), unkaa4(0) {
     unk1c.mJointVelocities.clear();
     for (int i = 0; i < 8; i++) {
-        unka84[i] = -1;
+        mTimestamps[i] = -1;
     }
     initCheat();
 }
@@ -331,7 +331,7 @@ void RhythmDetector::AddFullDebugGraphs() {
 void RhythmDetector::StartRecording() {
     if (++mRecording == 1) {
         AddFullDebugGraphs();
-        unkaa8 = TheTaskMgr.Beat();
+        mLastBeatTime = TheTaskMgr.Beat();
         ClearData();
     }
     MILO_ASSERT(mRecording >= 1, 0x3cc);
@@ -340,7 +340,7 @@ void RhythmDetector::StartRecording() {
 
 void RhythmDetector::StopRecording() {
     if (--mRecording == 0) {
-        unkaa8 = TheTaskMgr.Beat();
+        mLastBeatTime = TheTaskMgr.Beat();
         ClearData();
     }
     MILO_ASSERT(mRecording >= 0, 0x3da);
@@ -348,7 +348,7 @@ void RhythmDetector::StopRecording() {
 }
 
 void RhythmDetector::ClearData() {
-    unk68 = 0;
+    mFrameCount = 0;
     unk2c.clear();
     unk38.clear();
     mRecordData.frames.clear();
@@ -357,8 +357,8 @@ void RhythmDetector::ClearData() {
     mRecordData.unk18 = true;
     mRecordData.unk8 = -1;
     mRecordData.unkc = -1;
-    mRecordData.unk0 = -1;
-    mRecordData.unk4 = -1;
+    mRecordData.mWindowStart = -1;
+    mRecordData.mWindowEnd = -1;
     mRecordData.unk10 = -1;
     mRecordData.unk14 = -1;
     unk14.clear();
@@ -376,7 +376,7 @@ void RhythmDetector::ClearData() {
 //         }
 //         float beat = TheTaskMgr.Beat();
 //         float seconds = TheTaskMgr.Seconds(TaskMgr::kRealTime);
-//         float beatDiff = beat - unkaa8;
+//         float beatDiff = beat - mLastBeatTime;
 //         if (beatDiff < 0.0) {
 //             ClearData();
 //             beatDiff = 0.0;

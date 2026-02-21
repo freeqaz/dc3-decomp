@@ -33,15 +33,15 @@ namespace {
 RhythmBattlePlayer::RhythmBattlePlayer()
     : mComboPosAnim(this), mComboColorAnim(this), mResetComboAnim(this),
       m2xMultAnim(this), m3xMultAnim(this), m4xMultAnim(this), mRhythmBattleAnim(this),
-      unk94(this), mBattleMeterStaleAnim(this), mBattleMeterInAnim(this),
-      mShowScoreAnim(this), mBattleMeterOutAnim(this), mBoxyDir(this), unk10c(this),
+      mBattleMeterAnim(this), mBattleMeterStaleAnim(this), mBattleMeterInAnim(this),
+      mShowScoreAnim(this), mBattleMeterOutAnim(this), mBoxyDir(this), mBattleLabel(this),
       mScoreLabel(this), mInTheZoneFlow(this), mOutTheZoneOkFlow(this),
       mOutTheZoneBadFlow(this), mSwagJackedFlow(this), mPhraseMeter(this),
       mTransConstraint(this), mBoxyWaistTrans(this), mBoxyman1(this), mBoxyman2(this),
       mTextFeedback(this), mMoveFeedback(this), mStealPart(this), mStealAnim(this),
       mPlayer(0), mRhythmBattle(0), unk244(0), unk248(0), unk24c(0), unk250(0), unk258(0),
-      unk25c(0), unk260(0), mInTheZone(-2), unk270(0), unk274(0), unk280(0), unk284(0),
-      unk288(false), unk294(-1), unk298("none"), unk29c(0), unk2a4(false),
+      unk25c(0), mZoneLevel(0), mInTheZone(-2), unk270(0), unk274(0), mScore(0), mComboMeter(0),
+      mSwapped(false), unk294(-1), mSwagJackedState("none"), unk29c(0), unk2a4(false),
       unk2a5(false),
       unk2a8(0) {}
 
@@ -77,8 +77,8 @@ BEGIN_SAVES(RhythmBattlePlayer)
     bs << m2xMultAnim;
     bs << m3xMultAnim;
     bs << m4xMultAnim;
-    unk10c = nullptr;
-    bs << unk10c;
+    mBattleLabel = nullptr;
+    bs << mBattleLabel;
     mScoreLabel = nullptr;
     bs << mScoreLabel;
     bs << mPlayer;
@@ -116,8 +116,8 @@ BEGIN_LOADS(RhythmBattlePlayer)
     d >> m2xMultAnim;
     d >> m3xMultAnim;
     d >> m4xMultAnim;
-    d >> unk10c;
-    unk10c = nullptr;
+    d >> mBattleLabel;
+    mBattleLabel = nullptr;
     d >> mScoreLabel;
     mScoreLabel = nullptr;
     d >> mPlayer;
@@ -134,7 +134,7 @@ void RhythmBattlePlayer::Poll() {
             HamPlayerData *hpd = TheGameData->Player(mPlayer);
             hpd->Provider()->Export(Message("hide_hud", 0), true);
         }
-        if (unk240 && mRhythmBattle && !mRhythmBattle->Unk102()) {
+        if (mActive && mRhythmBattle && !mRhythmBattle->Unk102()) {
             int skelIdx = TheGestureMgr->GetSkeletonIndexByTrackingID(
                 TheGameData->Player(mPlayer)->GetSkeletonTrackingID()
             );
@@ -194,11 +194,11 @@ void RhythmBattlePlayer::Poll() {
                 mPhraseMeter->SetRatingFrac(f13, f16);
             }
             if (mInTheZone == 1 && mRhythmBattle && mRhythmBattle->InFullKTB()) {
-                unk284 -= f17 * 1.125f;
-                if (unk284 < 0) {
-                    unk284 = 0;
+                mComboMeter -= f17 * 1.125f;
+                if (mComboMeter < 0) {
+                    mComboMeter = 0;
                     int i7 = 0;
-                    if (!unk240) {
+                    if (!mActive) {
                         i7 = -1;
                     }
                     if (i7 != 1) {
@@ -206,7 +206,7 @@ void RhythmBattlePlayer::Poll() {
                     }
                 }
                 if (mComboPosAnim) {
-                    mComboPosAnim->Animate(unk284, unk284, mComboPosAnim->Units());
+                    mComboPosAnim->Animate(mComboMeter, mComboMeter, mComboPosAnim->Units());
                 }
             }
             if (mBoxyman1) {
@@ -249,8 +249,8 @@ void RhythmBattlePlayer::Enter() {
             mPlayer != 0 ? "swag_jacked_p2.flow" : "swag_jacked_p1.flow", false
         );
     }
-    unk240 = false;
-    unk94 = nullptr;
+    mActive = false;
+    mBattleMeterAnim = nullptr;
     mTransConstraint = nullptr;
     if (!mBoxyDir && TheHamDirector) {
         WorldDir *wdir = TheHamDirector->GetVenueWorld();
@@ -309,8 +309,8 @@ void RhythmBattlePlayer::Enter() {
 int RhythmBattlePlayer::SwagJacked(Hmx::Object *, RhythmBattleJackState) {
     MILO_ASSERT(mInTheZone == 1, 0x44a);
     static Symbol rhythmbattle_swagjackeddd1("rhythmbattle_swagjackeddd1");
-    unk298 = rhythmbattle_swagjackeddd1;
-    unk260 = 0;
+    mSwagJackedState = rhythmbattle_swagjackeddd1;
+    mZoneLevel = 0;
     if (mSwagJackedFlow)
         mSwagJackedFlow->Activate();
     return 1;
@@ -339,7 +339,7 @@ void RhythmBattlePlayer::SetWindow(float f1, float f2) {
 }
 
 void RhythmBattlePlayer::SetInTheZone(int i, bool b1, bool b2) {
-    if (!unk240) {
+    if (!mActive) {
         i = -1;
     }
     if (mInTheZone != i) {
@@ -348,8 +348,8 @@ void RhythmBattlePlayer::SetInTheZone(int i, bool b1, bool b2) {
 }
 
 void RhythmBattlePlayer::SetActive(bool b1) {
-    unk240 = b1;
-    if (!unk240 && mRhythmBattle && mRhythmBattle->InFullKTB() && mInTheZone != -1) {
+    mActive = b1;
+    if (!mActive && mRhythmBattle && mRhythmBattle->InFullKTB() && mInTheZone != -1) {
         AnimateBoxyState(-1, true, false);
     }
 }
@@ -357,30 +357,30 @@ void RhythmBattlePlayer::SetActive(bool b1) {
 void RhythmBattlePlayer::AnimateIn() { AnimateBoxyState(0, true, false); }
 
 bool RhythmBattlePlayer::UpdateState() {
-    unk26c = mInTheZone;
-    unk264 = unk260;
+    mPrevInTheZone = mInTheZone;
+    mPrevZoneLevel = mZoneLevel;
     if (unk270 < 0.5f) {
-        unk260 = 0;
+        mZoneLevel = 0;
     } else if (unk274 >= 0.6f) {
-        unk260 = 1;
-    } else if (unk260 <= 1) {
-        unk260 = 2;
+        mZoneLevel = 1;
+    } else if (mZoneLevel <= 1) {
+        mZoneLevel = 2;
     }
-    return unk264 != unk260;
+    return mPrevZoneLevel != mZoneLevel;
 }
 
 void RhythmBattlePlayer::ResetCombo() {
     int i = 0;
-    if (!unk240)
+    if (!mActive)
         i = -1;
 
     if (mInTheZone != i)
         AnimateBoxyState(i, false, false);
 
-    unk264 = 0;
+    mPrevZoneLevel = 0;
     unk2a8 = 0;
-    unk26c = mInTheZone;
-    unk284 = 0.0f;
+    mPrevInTheZone = mInTheZone;
+    mComboMeter = 0.0f;
 }
 
 void RhythmBattlePlayer::SwagJackedBonus(Hmx::Object *, RhythmBattleJackState, int i) {
@@ -392,10 +392,10 @@ void RhythmBattlePlayer::SwagJackedBonus(Hmx::Object *, RhythmBattleJackState, i
     static Symbol swag_jacked("swag_jacked");
     TheGameData->Player(mPlayer)->Provider()->Export(Message(swag_jacked), true);
     static Symbol rhythmbattle_swagjackeddd2("rhythmbattle_swagjackeddd2");
-    unk298 = rhythmbattle_swagjackeddd2;
+    mSwagJackedState = rhythmbattle_swagjackeddd2;
     if (i != 0) {
-        unk260 = 1;
-        unk284 = 16.0f;
+        mZoneLevel = 1;
+        mComboMeter = 16.0f;
     }
 }
 
@@ -440,32 +440,32 @@ void RhythmBattlePlayer::SwapObjs(RhythmBattlePlayer *player) {
     player->mBattleMeterOutAnim = mBattleMeterOutAnim;
     mBattleMeterOutAnim = temp;
 
-    HamLabel *tempLabel = player->unk10c;
-    player->unk10c = unk10c;
-    unk10c = tempLabel;
+    HamLabel *tempLabel = player->mBattleLabel;
+    player->mBattleLabel = mBattleLabel;
+    mBattleLabel = tempLabel;
 
     tempLabel = player->mScoreLabel;
     player->mScoreLabel = mScoreLabel;
     mScoreLabel = tempLabel;
 
-    temp = player->unk94;
-    player->unk94 = unk94;
-    unk94 = temp;
+    temp = player->mBattleMeterAnim;
+    player->mBattleMeterAnim = mBattleMeterAnim;
+    mBattleMeterAnim = temp;
 
-    unk288 = !unk288;
-    player->unk288 = !player->unk288;
+    mSwapped = !mSwapped;
+    player->mSwapped = !player->mSwapped;
 }
 
 void RhythmBattlePlayer::UpdateScore(int points) {
     // Apply score multiplier (1x normally, 2x when in the zone)
     int multiplier = InTheZone() + 1;
-    unk280 += multiplier * points;
+    mScore += multiplier * points;
     static Symbol rhythm_battle("rhythm_battle");
     static Symbol gameplay_mode("gameplay_mode");
     if (TheHamProvider->Property(gameplay_mode)->Sym() == rhythm_battle) {
         static Symbol score("score");
         PropertyEventProvider *provider = TheGameData->Player(mPlayer)->Provider();
-        provider->SetProperty(score, unk280);
+        provider->SetProperty(score, mScore);
     }
 }
 
@@ -474,16 +474,16 @@ void RhythmBattlePlayer::OnReset(RhythmBattle *rb) {
     mRhythmBattle = rb;
     unk29c = 0;
     unk27c = none;
-    unk260 = 0;
+    mZoneLevel = 0;
     unk278 = 0;
-    unk264 = 0;
+    mPrevZoneLevel = 0;
     unk254 = 0;
-    unk280 = 0;
+    mScore = 0;
     unk244 = 0;
-    unk26c = -1;
+    mPrevInTheZone = -1;
     unk248 = 0;
     mInTheZone = -2;
-    unk284 = 0;
+    mComboMeter = 0;
     unk250 = 0;
     unk24c = 0;
     unk258 = 0;
@@ -498,10 +498,10 @@ void RhythmBattlePlayer::OnReset(RhythmBattle *rb) {
             mResetComboAnim->Units()
         );
     }
-    if (unk94) {
-        unk94->Animate(unk94->StartFrame(), unk94->StartFrame(), unk94->Units());
+    if (mBattleMeterAnim) {
+        mBattleMeterAnim->Animate(mBattleMeterAnim->StartFrame(), mBattleMeterAnim->StartFrame(), mBattleMeterAnim->Units());
     }
-    unk94 = nullptr;
+    mBattleMeterAnim = nullptr;
     if (mBattleMeterOutAnim) {
         mBattleMeterOutAnim->Animate(
             mBattleMeterOutAnim->EndFrame(),
@@ -513,7 +513,7 @@ void RhythmBattlePlayer::OnReset(RhythmBattle *rb) {
         mComboColorAnim->SetFrame(0, 1);
     }
     if (mComboPosAnim) {
-        mComboPosAnim->SetFrame(unk284, 1);
+        mComboPosAnim->SetFrame(mComboMeter, 1);
     }
     if (mBattleMeterStaleAnim) {
         mBattleMeterStaleAnim->SetFrame(mBattleMeterStaleAnim->EndFrame(), 1);
@@ -546,7 +546,7 @@ void RhythmBattlePlayer::UpdateAnimations(Hmx::Object *handler) {
         static Symbol none("none");
         static Message groove_passed("groove_passed", 0, 0, 0, none, none);
         groove_passed[0] = mPlayer;
-        int player = unk288 ? !mPlayer : mPlayer;
+        int player = mSwapped ? !mPlayer : mPlayer;
         player += 3;
         groove_passed[player] = none;
         Symbol playerNodeValue;
@@ -555,18 +555,18 @@ void RhythmBattlePlayer::UpdateAnimations(Hmx::Object *handler) {
             playerNodeValue = unk27c;
         } else if (unk270 < 0.5f) {
             groove_passed[1] = move_bad;
-            if (unk264) {
+            if (mPrevZoneLevel) {
                 playerNodeValue = rhythmbattle_groovelost;
             } else {
                 playerNodeValue = rhythmbattle_nogroove;
             }
         } else {
             groove_passed[1] = move_awesome;
-            if (InTheZone() && unk26c != 1) {
+            if (InTheZone() && mPrevInTheZone != 1) {
                 groove_passed[1] = move_perfect;
                 playerNodeValue = rhythmbattle_inthezone;
             } else {
-                if (unk264) {
+                if (mPrevZoneLevel) {
                     playerNodeValue = rhythmbattle_samegroove;
                 } else {
                     playerNodeValue = rhythmbattle_fresh;
@@ -587,20 +587,20 @@ void RhythmBattlePlayer::UpdateAnimations(Hmx::Object *handler) {
         if (unk294 != -1) {
             MILO_LOG("measure score: %d\n", unk294);
             unk294 = -1;
-        } else if (unk298 != none) {
+        } else if (mSwagJackedState != none) {
             d13 = true;
             static Symbol rhythmbattle_swagjackeddd1("rhythmbattle_swagjackeddd1");
             static Symbol rhythmbattle_swagjackeddd2("rhythmbattle_swagjackeddd2");
-            if (unk298 == rhythmbattle_swagjackeddd1) {
+            if (mSwagJackedState == rhythmbattle_swagjackeddd1) {
                 groove_passed[1] = move_bad;
                 playerNodeValue = rhythmbattle_jacked;
-            } else if (unk298 == rhythmbattle_swagjackeddd2) {
+            } else if (mSwagJackedState == rhythmbattle_swagjackeddd2) {
                 groove_passed[1] = move_perfect;
                 playerNodeValue = rhythmbattle_jacked_bonus;
             } else {
                 MILO_LOG("unknown token %s\n", playerNodeValue);
             }
-            unk298 = none;
+            mSwagJackedState = none;
         }
         groove_passed[player] = playerNodeValue;
         groove_passed[2] = d13;
@@ -617,17 +617,17 @@ void RhythmBattlePlayer::UpdateAnimations(Hmx::Object *handler) {
         if (mInTheZone == 1U) {
             anim = m4xMultAnim;
         }
-        if (anim != unk94) {
+        if (anim != mBattleMeterAnim) {
             if (anim) {
                 static Symbol loop("loop");
                 static Symbol dest("dest");
                 anim->EndFrame();
                 anim->EndFrame();
             }
-            unk94 = anim;
+            mBattleMeterAnim = anim;
         }
         if (mComboPosAnim) {
-            mComboPosAnim->Animate(unk284, unk284, mComboPosAnim->Units());
+            mComboPosAnim->Animate(mComboMeter, mComboMeter, mComboPosAnim->Units());
         }
     }
 }

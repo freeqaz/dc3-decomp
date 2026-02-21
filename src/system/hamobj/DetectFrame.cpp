@@ -24,9 +24,9 @@ void DetectFrame::Reset(
 ) {
     Reset();
     mSeconds = secs;
-    unk4 = mf;
-    unk0 = df;
-    unkc = mirror;
+    mMoveFrame = mf;
+    mDancerFrame = df;
+    mMirror = mirror;
     const ErrorNode *const *nodes = fv->mErrorNodes;
     if (fv->mType == kFilterVersionHam1) {
         for (int i = 0; i < MoveFrame::kNumHam1Nodes; i++) {
@@ -74,7 +74,7 @@ float DetectFrame::Score(const FilterVersion *fv, MoveMode mode) const {
         float f5 = 0;
         int numNodes = fv->NumNodes();
         for (int i = 0; i < numNodes; i++) {
-            if (unk4->NodeWeightHam1(i, mode, unkc).unk0) {
+            if (mMoveFrame->NodeWeightHam1(i, mode, mMirror).unk0) {
                 f5 += mBestNodeErrors[i].x;
             }
         }
@@ -89,14 +89,14 @@ float DetectFrame::LimbPSNR(const FilterVersion *filter_version, int i2) const {
     float f13 = 0;
     float f12 = 0;
     int numNodes = filter_version->NumNodes();
-    int typeMask = unk4->TypeMask();
+    int typeMask = mMoveFrame->TypeMask();
     for (int i = 0; i < numNodes; i++) {
         ErrorNode *curErrorNode = filter_version->mErrorNodes[i];
         auto _tmp0 = curErrorNode->GetFeedbackLimbs();
         if (i2 == -1
             || _tmp0 & i2
                 && curErrorNode->Type() & typeMask) {
-            const Vector3 &nodeWeight = unk4->NodeWeight(i, unkc);
+            const Vector3 &nodeWeight = mMoveFrame->NodeWeight(i, mMirror);
             float d = Dot(nodeWeight, mBestNodeErrors[i]);
             f12 += d * d;
             f13 += Length(nodeWeight);

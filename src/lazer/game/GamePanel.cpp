@@ -388,7 +388,7 @@ void GamePanel::Poll() {
             mGame->Poll();
         }
         if (mState == kGameInIntro && TheTaskMgr.Seconds(TaskMgr::kRealTime) > -0.025f
-            && !TheHamDirector->Unk33d()) {
+            && !TheHamDirector->IsGameStartHold()) {
             StartGame();
         }
         for (int i = 0; i < 2; i++) {

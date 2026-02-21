@@ -50,14 +50,14 @@ public:
     virtual void OnCompletion(Hmx::Object *);
 
 protected:
-    Hmx::Object *unk8;
-    int unkc;
-    u64 unk10;
-    int unk18;
-    bool unk1c;
+    Hmx::Object *mObject;           // 0x8
+    int mUnkc;                      // 0xc
+    u64 mItemID;                    // 0x10
+    int mStatus;                    // 0x18
+    bool mSuccess;                  // 0x1c
     int unk20;
     int unk24;
-    XOVERLAPPED unk28;
+    XOVERLAPPED mOverlapped;        // 0x28
 };
 
 class PostPurchaseEnumJob : public SingleItemEnumJob {
@@ -65,6 +65,10 @@ public:
     PostPurchaseEnumJob(Hmx::Object *, int, u64, Symbol, unsigned int);
     virtual ~PostPurchaseEnumJob();
     virtual void OnCompletion(Hmx::Object *);
+
+private:
+    Symbol mOfferSymbol;            // 0x48
+    int mPurchaserID;               // 0x4C
 };
 
 class MultipleItemsEnumJob : public Job {
@@ -77,15 +81,15 @@ public:
     virtual void OnCompletion(Hmx::Object *);
 
 protected:
-    Hmx::Object *unk8;
-    int unkc;
+    Hmx::Object *mObject;           // 0x8
+    int mUnkc;                      // 0xc
     u64 *unk10;
     u64 *unk14;
-    int unk18;
-    bool unk1c;
+    int mStatus;                    // 0x18
+    bool mSuccess;                  // 0x1c
     int unk20;
     int unk24;
-    XOVERLAPPED unk28;
+    XOVERLAPPED mOverlapped;        // 0x28
     int unk30;
     bool unk34;
     int unk38;

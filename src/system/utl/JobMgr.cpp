@@ -74,7 +74,7 @@ PostPurchaseEnumJob::PostPurchaseEnumJob(Hmx::Object *obj, int unk, u64 u, Symbo
 PostPurchaseEnumJob::~PostPurchaseEnumJob() {}
 
 void PostPurchaseEnumJob::OnCompletion(Hmx::Object *obj) {
-    if ((unk18 == 2) && (unk1c != 0)) {
+    if ((mStatus == 2) && (mSuccess != 0)) {
         static int sInitFlags = 0;
         static Symbol sSourceSymbol;
         static Symbol sOfferSymbol;
@@ -93,15 +93,15 @@ void PostPurchaseEnumJob::OnCompletion(Hmx::Object *obj) {
             sPurchaserSymbol = Symbol("purchaser");
         }
 
-        String dataStr(MakeString("%016llX", *(u64 *)(((char *)this) + 0x10)));
-        SendDataPoint("store/purchase", sSourceSymbol, *(Symbol *)(((char *)this) + 0x48), sOfferSymbol, dataStr, sPurchaserSymbol, *(int *)(((char *)this) + 0x4C));
+        String dataStr(MakeString("%016llX", mItemID));
+        SendDataPoint("store/purchase", sSourceSymbol, mOfferSymbol, sOfferSymbol, dataStr, sPurchaserSymbol, mPurchaserID);
     }
     SingleItemEnumJob::OnCompletion(obj);
 }
 
 MultipleItemsEnumJob::MultipleItemsEnumJob(Hmx::Object *obj, int unk) : Job() {
-    unk8 = obj;
-    unkc = unk;
+    mObject = obj;
+    mUnkc = unk;
 }
 
 MultipleItemsEnumJob::~MultipleItemsEnumJob() {}

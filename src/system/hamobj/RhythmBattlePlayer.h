@@ -60,10 +60,10 @@ public:
     void SetActive(bool);
     void AnimateOut();
     bool Unk2a8Check() const { return unk2a5 && unk2a8 > 12; }
-    int Unk280() const { return unk280; }
-    int Unk260() const { return unk260; }
-    int Unk26c() const { return unk26c; }
-    float Unk284() const { return unk284; }
+    int GetScore() const { return mScore; }
+    int GetZoneLevel() const { return mZoneLevel; }
+    int GetPrevInTheZone() const { return mPrevInTheZone; }
+    float GetComboMeter() const { return mComboMeter; }
     void SetUnk2a4(bool b) { unk2a4 = b; }
     void SetUnk2a5(bool b) { unk2a5 = b; }
     int ZoneValue() const { return mInTheZone; }
@@ -88,14 +88,14 @@ private:
     /** "instruction display" */
     ObjPtr<RndAnimatable> m4xMultAnim; // 0x6c
     ObjPtr<RndAnimatable> mRhythmBattleAnim; // 0x80
-    ObjPtr<RndAnimatable> unk94; // 0x94
+    ObjPtr<RndAnimatable> mBattleMeterAnim; // 0x94
     ObjPtr<RndAnimatable> mBattleMeterStaleAnim; // 0xa8
     ObjPtr<RndAnimatable> mBattleMeterInAnim; // 0xbc
     ObjPtr<RndAnimatable> mShowScoreAnim; // 0xd0
     ObjPtr<RndAnimatable> mBattleMeterOutAnim; // 0xe4
     /** "override the world boxydir" */
     ObjPtr<RndDir> mBoxyDir; // 0xf8
-    ObjPtr<HamLabel> unk10c;
+    ObjPtr<HamLabel> mBattleLabel;
     /** "instruction display" */
     ObjPtr<HamLabel> mScoreLabel; // 0x120
     ObjPtr<Flow> mInTheZoneFlow; // 0x134
@@ -114,7 +114,7 @@ private:
     /** "which player is this" */
     int mPlayer; // 0x238
     RhythmBattle *mRhythmBattle; // 0x23c
-    bool unk240; // 0x240 - active?
+    bool mActive; // 0x240 - active?
     float unk244;
     float unk248;
     float unk24c;
@@ -122,21 +122,21 @@ private:
     float unk254;
     float unk258;
     float unk25c;
-    int unk260;
-    int unk264;
+    int mZoneLevel;
+    int mPrevZoneLevel;
     int mInTheZone; // 0x268
-    int unk26c;
+    int mPrevInTheZone;
     float unk270;
     float unk274;
     float unk278;
     Symbol unk27c;
-    int unk280;
-    float unk284;
-    bool unk288;
+    int mScore;
+    float mComboMeter;
+    bool mSwapped;
     float unk28c;
     float unk290;
     int unk294;
-    Symbol unk298;
+    Symbol mSwagJackedState;
     int unk29c;
     float unk2a0;
     bool unk2a4;

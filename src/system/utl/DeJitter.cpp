@@ -16,51 +16,51 @@ void DeJitter::Reset() {
 }
 
 float DeJitter::NewMs(float f1, float &fref) {
-    float var_f31 = 1.0000000150474662e+30;
-    // Ring buffer indices (0-31 wrapping): temp_r29 is previous write position, temp_r28 is the
+    float filteredValue = 1.0000000150474662e+30;
+    // Ring buffer indices (0-31 wrapping): prevPos is previous write position, historyPos is the
     // position unk84 steps back (for averaging interval)
-    float var_f30 = f1;
+    float sample = f1;
     static DataNode &n = DataVariable("dejitter_disable"); // FLT_MAX-like sentinel for uninitialized result
-    int temp_r29 = (unk80 - 1) & 0x1F;
-    int temp_r28 = (temp_r29 - unk84) & 0x1F;
+    int prevPos = (unk80 - 1) & 0x1F;
+    int historyPos = (prevPos - unk84) & 0x1F;
 
     // Only apply jitter correction if enabled and have accumulated enough samples
     if (!n.Int()) {
         if (unk84 > 8) { // Need more than 8 samples in the history
             // Calculate average delta since unk84 steps ago
-            float f0 = (unk0[temp_r29] - unk0[temp_r28]) / (float)unk84;
+            float f0 = (unk0[prevPos] - unk0[historyPos]) / (float)unk84;
             // Smooth the average with exponential moving average (alpha=0.1)
             if (unk88 == 0.0f) {
                 unk88 = f0;
             }
             f0 = (f0 - unk88) * 0.1f + unk88;
-            var_f31 = f0;
+            filteredValue = f0;
             unk88 = f0;
             if (sTimeScale != 1.0f) {
                 // With time scale, output is scaled delta
                 f0 = f0 * sTimeScale;
                 unk88 = f0;
-                var_f31 = f0 + unk8c;
+                filteredValue = f0 + unk8c;
             } else {
                 // Without time scale, clamp output to ±33ms from previous value
                 float f12 = unk8c + f0;
-                float f11 = var_f30 - 33.0f;
-                float f13 = var_f30 + 33.0f;
+                float f11 = sample - 33.0f;
+                float f13 = sample + 33.0f;
                 float f10 = ((f11 - f12) >= 0.0f) ? f11 : f12;
-                var_f31 = ((f10 - f13) >= 0.0f) ? f13 : f10;
+                filteredValue = ((f10 - f13) >= 0.0f) ? f13 : f10;
             }
             // Don't let result go below previous output value
-            if (var_f31 < unk8c) {
-                var_f31 = unk8c;
+            if (filteredValue < unk8c) {
+                filteredValue = unk8c;
             }
         }
     }
 
     // Store new sample in ring buffer
-    unk0[unk80] = var_f30;
+    unk0[unk80] = sample;
     // Use computed jittered value if it was calculated, otherwise use raw input
-    if (var_f31 != 1.0000000150474662e+30) {
-        var_f30 = var_f31;
+    if (filteredValue != 1.0000000150474662e+30) {
+        sample = filteredValue;
     }
     unk80 = (unk80 + 1) & 0x1F;
 
@@ -68,7 +68,7 @@ float DeJitter::NewMs(float f1, float &fref) {
     if (unk84 == -2) {
         fref = 16.666f; // Default 60 FPS frame time
     } else {
-        fref = var_f30 - unk8c;
+        fref = sample - unk8c;
     }
 
     // Count up to stabilization threshold
@@ -77,6 +77,6 @@ float DeJitter::NewMs(float f1, float &fref) {
     }
 
     // Remember output for next iteration
-    unk8c = var_f30;
-    return var_f30;
+    unk8c = sample;
+    return sample;
 }

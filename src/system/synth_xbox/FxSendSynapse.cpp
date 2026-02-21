@@ -9,8 +9,8 @@ SynapseAPOParams::SynapseAPOParams() {
         bands[i].enabled = 0;
         bands[i].q = 0.0f;
     }
-    field_0x54 = 20.0f;
-    field_0x58 = 40.0f;
+    lowCutoffFreq = 20.0f;
+    highCutoffFreq = 40.0f;
 }
 
 }  // namespace DSP

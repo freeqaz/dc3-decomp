@@ -42,20 +42,20 @@ bool SearchReplace(
     const char *src, const char *substr_old, const char *substr_new, char *dest
 ) {
     bool changed;
-    int temp_r31;
-    char *temp_r3;
+    int matchOffset;
+    char *matchPtr;
 
     *dest = 0;
     changed = false;
 
     while (true) {
-        temp_r3 = strstr(src, substr_old);
-        if (temp_r3 == 0)
+        matchPtr = strstr(src, substr_old);
+        if (matchPtr == 0)
             break;
-        temp_r31 = temp_r3 - src;
-        strncat(dest, src, temp_r31);
+        matchOffset = matchPtr - src;
+        strncat(dest, src, matchOffset);
         strcat(dest, substr_new);
-        src = strlen(substr_old) + (src + temp_r31);
+        src = strlen(substr_old) + (src + matchOffset);
         changed = true;
     }
 
@@ -318,8 +318,8 @@ void String::resize(unsigned int arg) {
 // length: how many chars you want the replacement to be
 // buffer: the replacement chars
 String &String::replace(unsigned int pos, unsigned int n, const char *buffer) {
-    char *var_r4;
-    char *var_r5;
+    char *destPtr;
+    char *srcPtr;
     unsigned int bufferLength, end;
     MILO_ASSERT(pos <= capacity(), 0x241);
     end = pos + n;
@@ -336,12 +336,12 @@ String &String::replace(unsigned int pos, unsigned int n, const char *buffer) {
         swap(str_tmp);
     } else {
         strncpy(mStr + pos, buffer, bufferLength);
-        var_r4 = mStr + pos + bufferLength;
-        var_r5 = mStr + pos + n;
-        while (*var_r5 != '\0') {
-            *var_r4++ = *var_r5++;
+        destPtr = mStr + pos + bufferLength;
+        srcPtr = mStr + pos + n;
+        while (*srcPtr != '\0') {
+            *destPtr++ = *srcPtr++;
         }
-        *var_r4 = *var_r5;
+        *destPtr = *srcPtr;
     }
     return *this;
 }

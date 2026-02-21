@@ -44,12 +44,12 @@ public:
         ObjPtr<RndTransformable> mUpperLidBlink; // 0x50
     };
     struct CharInterestState {
-        CharInterestState(Hmx::Object *owner) : mInterest(owner), unk14(-1) {}
+        CharInterestState(Hmx::Object *owner) : mInterest(owner), mRefractoryTime(-1) {}
 
         float RefractoryTimeRemaining();
 
         ObjOwnerPtr<CharInterest> mInterest; // 0x0
-        float unk14; // 0x14
+        float mRefractoryTime; // 0x14
     };
 
     // Hmx::Object
@@ -76,7 +76,7 @@ public:
 
     void SetInterestFilterFlags(int i) { mInterestFilterFlags = i; }
     void ClearInterestFilterFlags() { mInterestFilterFlags = mDefaultFilterFlags; }
-    void SetUnk1b0(bool b) { unk1b0 = b; } // change once context found
+    void SetEnabled(bool b) { mEnabled = b; } // change once context found
 
     void ForceBlink();
     CharInterest *GetCurrentInterest();
@@ -121,7 +121,7 @@ protected:
     ObjPtr<CharFaceServo> mFaceServo; // 0x50
     /** "The weight setter for eyes tracking the camera" */
     ObjPtr<CharWeightSetter> mCamWeight; // 0x64
-    Vector3 unk78; // 0x78
+    Vector3 mTarget; // 0x78
     int mDefaultFilterFlags; // 0x88
     /** "optional bone that serves as the reference for which direction
         the character is looking. If not set, one of the eyes will be used" */
@@ -152,36 +152,36 @@ protected:
     bool mLowerLidTrackRotate; // 0xcc
     RndOverlay *mEyeStatusOverlay; // 0xd0
     int mInterestFilterFlags; // 0xd4
-    Vector3 unkd8; // 0xd8
-    float unke8;
-    float unkec;
-    float unkf0;
-    int unkf4;
-    float unkf8;
-    bool unkfc;
-    bool unkfd;
-    ObjPtr<CharInterest> unk100; // 0x100
-    ObjPtr<CharInterest> unk114; // 0x114
-    int unk128;
-    bool unk12c;
-    Vector3 unk130;
-    float unk140;
+    Vector3 mLastFacing; // 0xd8
+    float mLastCang;
+    float mLastLook;
+    float mMaxEyeCang;
+    int mAvDelta;
+    float mLastBlinkWeight;
+    bool mBlinkDetect;
+    bool mBlinkActive;
+    ObjPtr<CharInterest> mForceFocusInterest; // 0x100
+    ObjPtr<CharInterest> mCurrentInterest; // 0x114
+    int mFocusTimer;
+    bool mNeedRecalc;
+    Vector3 mDartOffset;
+    float mDartTimer;
     CharEyeDartRuleset::EyeDartRulesetData mData; // 0x144
-    bool unk170;
-    float unk174;
-    int unk178;
+    bool mDartEnabled;
+    float mDartInterval;
+    int mEyeClampCount;
     int unk17c;
     int unk180;
     int unk184;
     int unk188;
-    bool unk18c;
-    float unk190;
-    int unk194;
-    float unk198;
-    float unk19c;
-    Vector3 unk1a0;
-    bool unk1b0;
-    bool unk1b1;
-    bool unk1b2;
-    bool unk1b3;
+    bool mBlinkEnabled;
+    float mBlinkTimer;
+    int mBlinkState;
+    float mUpperBlinkAngle;
+    float mLowerBlinkAngle;
+    Vector3 mHeadForward;
+    bool mEnabled;
+    bool mHeadIKActive;
+    bool mInterestsEnabled;
+    bool mProceduralBlinkEnabled;
 };

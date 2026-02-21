@@ -21,16 +21,16 @@ public:
     void AddError(const Vector3 (&)[kMaxNumErrorNodes], float);
     float LimbPSNR(const FilterVersion *, int) const;
     float Score(const FilterVersion *, MoveMode) const;
-    const DancerFrame *GetDancerFrame() const { return unk0; }
-    const MoveFrame *GetMoveFrame() const { return unk4; }
-    MoveMirrored Mirror() const { return unkc; }
+    const DancerFrame *GetDancerFrame() const { return mDancerFrame; }
+    const MoveFrame *GetMoveFrame() const { return mMoveFrame; }
+    MoveMirrored Mirror() const { return mMirror; }
     float Seconds() const { return mSeconds; }
 
 protected:
-    const DancerFrame *unk0; // 0x0
-    const MoveFrame *unk4; // 0x4
+    const DancerFrame *mDancerFrame; // 0x0
+    const MoveFrame *mMoveFrame; // 0x4
     float mSeconds; // 0x8
-    MoveMirrored unkc; // 0xc
+    MoveMirrored mMirror; // 0xc
     Vector3 mBestNodeErrors[kMaxNumErrorNodes]; // 0x10, 33*16=0x210, ends at 0x220
     Vector3 mNodeComponentWeights[MoveFrame::kNumHam1Nodes]; // 0x220, 16*16=0x100, ends
                                                              // at 0x320

@@ -57,7 +57,7 @@ BEGIN_PROPSYNCS(UILabel)
     SYNC_PROP(indentation, *(float *)(((unsigned char *)this) - 0xD4))
     SYNC_PROP(basic_markup, *(bool *)(((unsigned char *)this) - 0x107))
     SYNC_PROP_SET(fixed_length, mFixedLength, SetFixedLength(_val.Int(0)))
-    SYNC_PROP(draw_width, unkbc)
+    SYNC_PROP(draw_width, mBoundsRight)
     {
         _NEW_STATIC_SYMBOL(styles)
         if (sym == _s) {
@@ -542,8 +542,8 @@ void UILabel::CenterWithLabel(UILabel *label, bool b, float f) {
     Transform thisXfm = LocalXfm();
     Transform otherXfm = label->LocalXfm();
     float halfF = f * 0.5f;
-    thisXfm.v.x = -((unkbc * 0.5f + halfF) * (float)num - thisXfm.v.x);
-    otherXfm.v.x = (label->unkbc * 0.5f + halfF) * (float)num + otherXfm.v.x;
+    thisXfm.v.x = -((mBoundsRight * 0.5f + halfF) * (float)num - thisXfm.v.x);
+    otherXfm.v.x = (label->mBoundsRight * 0.5f + halfF) * (float)num + otherXfm.v.x;
     SetLocalXfm(thisXfm);
     label->SetLocalXfm(otherXfm);
 }
@@ -721,7 +721,7 @@ void UILabel::LabelUpdate(bool b) {
 DataNode UILabel::OnSetHeightFromText(DataArray *da) {
     if (mFitType == 0 && Style(0).mFont) {
         float height;
-        mHeight = ComputeHeight(unkc4, 1.0f, height);
+        mHeight = ComputeHeight(mCurScrollChars, 1.0f, height);
     } else {
         FormatString fs("Could not set height, either no default font set, or fit type is not kFitWrap");
         TheDebug.Notify(fs.Str());
@@ -791,7 +791,7 @@ BEGIN_HANDLERS(UILabel)
     HANDLE_ACTION(center_with_label, CenterWithLabel(_msg->Obj<UILabel>(2), _msg->Int(3), _msg->Float(4)))
     HANDLE_EXPR(get_font_mats, UILabelDir::GetMatVariations(LStyle(_msg->Int(2)).unk14))
     HANDLE(set_height_from_text, OnSetHeightFromText)
-    HANDLE_EXPR(draw_rect_width, unkbc)
+    HANDLE_EXPR(draw_rect_width, mBoundsRight)
     HANDLE_ACTION(reload_string, SetTextToken(mTextToken))
     HANDLE_SUPERCLASS(UIComponent)
 END_HANDLERS

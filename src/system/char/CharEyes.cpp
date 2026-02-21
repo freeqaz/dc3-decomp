@@ -35,15 +35,15 @@ void NormalizeScale(const Vector3 &param_2, float param_1, Vector3 &param_4) {
 }
 
 CharEyes::CharEyes()
-    : mEyes(this), mInterests(this), mFaceServo(this), mCamWeight(this), unk78(0, 0, 0),
+    : mEyes(this), mInterests(this), mFaceServo(this), mCamWeight(this), mTarget(0, 0, 0),
       mDefaultFilterFlags(0), mViewDirection(this), mHeadLookAt(this),
       mMaxExtrapolation(19.5), mMinTargetDist(35), mUpperLidTrackUp(1),
       mUpperLidTrackDown(1), mLowerLidTrackUp(0.75), mLowerLidTrackDown(0.75),
-      mLowerLidTrackRotate(false), mInterestFilterFlags(0), unkd8(0, 0, 0), unkec(0),
-      unkf8(0), unkfc(0), unkfd(0), unk100(this), unk114(this), unk128(-1), unk12c(0),
-      unk130(0, 1, 0), unk140(0), unk170(0), unk174(-1), unk178(-1), unk18c(0),
-      unk190(-1), unk194(0), unk198(-1), unk19c(-1), unk1b0(0), unk1b1(1) {
-    unkf0 = std::cos(0.5235987715423107);
+      mLowerLidTrackRotate(false), mInterestFilterFlags(0), mLastFacing(0, 0, 0), mLastLook(0),
+      mLastBlinkWeight(0), mBlinkDetect(0), mBlinkActive(0), mForceFocusInterest(this), mCurrentInterest(this), mFocusTimer(-1), mNeedRecalc(0),
+      mDartOffset(0, 1, 0), mDartTimer(0), mDartEnabled(0), mDartInterval(-1), mEyeClampCount(-1), mBlinkEnabled(0),
+      mBlinkTimer(-1), mBlinkState(0), mUpperBlinkAngle(-1), mLowerBlinkAngle(-1), mEnabled(0), mHeadIKActive(1) {
+    mMaxEyeCang = std::cos(0.5235987715423107);
     mEyeStatusOverlay = RndOverlay::Find("eye_status", false);
 }
 
@@ -151,8 +151,8 @@ BEGIN_COPYS(CharEyes)
         COPY_MEMBER(mEyes)
         COPY_MEMBER(mInterests)
         COPY_MEMBER(mFaceServo)
-        COPY_MEMBER(unkd8)
-        COPY_MEMBER(unkec)
+        COPY_MEMBER(mLastFacing)
+        COPY_MEMBER(mLastLook)
         COPY_MEMBER(mCamWeight)
         COPY_MEMBER(mDefaultFilterFlags)
         COPY_MEMBER(mViewDirection)
@@ -168,41 +168,41 @@ BEGIN_COPYS(CharEyes)
 END_COPYS
 
 CharInterest *CharEyes::GetCurrentInterest() {
-    if (unk114)
-        return unk114;
-    if (unk100)
-        return unk100;
+    if (mCurrentInterest)
+        return mCurrentInterest;
+    if (mForceFocusInterest)
+        return mForceFocusInterest;
     return 0;
 }
 
 void CharEyes::ForceBlink() {
-    if (unk1b1 && !unk18c) {
-        unk18c = true;
-        unk190 = TheTaskMgr.Seconds(TaskMgr::kRealTime);
-        unk194++;
+    if (mHeadIKActive && !mBlinkEnabled) {
+        mBlinkEnabled = true;
+        mBlinkTimer = TheTaskMgr.Seconds(TaskMgr::kRealTime);
+        mBlinkState++;
     }
 }
 
 void CharEyes::SetEnableBlinks(bool b1, bool b2) {
-    unk1b1 = b1;
-    if (!b2 || b1 || !unk18c || !mFaceServo)
+    mHeadIKActive = b1;
+    if (!b2 || b1 || !mBlinkEnabled || !mFaceServo)
         return;
 
     mFaceServo->SetProceduralBlinkWeight(0.0f);
-    unk18c = false;
-    unk78 = unk1a0;
+    mBlinkEnabled = false;
+    mTarget = mHeadForward;
 }
 
 bool CharEyes::SetFocusInterest(CharInterest *interest, int i) {
-    if (unk114 && (unsigned int)unk128 > i)
+    if (mCurrentInterest && (unsigned int)mFocusTimer > i)
         return false;
 
-    unk114 = interest;
-    unk128 = i;
-    if (interest != unk114)
-        unk12c = true;
-    if (!unk114)
-        unk128 = -1;
+    mCurrentInterest = interest;
+    mFocusTimer = i;
+    if (interest != mCurrentInterest)
+        mNeedRecalc = true;
+    if (!mCurrentInterest)
+        mFocusTimer = -1;
 
     return true;
 }
@@ -215,7 +215,7 @@ void CharEyes::ToggleInterestsDebugOverlay() {
 bool CharEyes::IsHeadIKWeightIncreasing() {
     if (mHeadLookAt) {
         float weight = mHeadLookAt->Weight();
-        return (weight > 0 && weight - unk140 > 0);
+        return (weight > 0 && weight - mDartTimer > 0);
     }
     return false;
 }
@@ -223,10 +223,10 @@ bool CharEyes::IsHeadIKWeightIncreasing() {
 void CharEyes::ClearAllInterestObjects() { mInterests.clear(); }
 
 float CharEyes::CharInterestState::RefractoryTimeRemaining() {
-    if (!mInterest || unk14 < 0.0)
+    if (!mInterest || mRefractoryTime < 0.0)
         return 0.0f;
     else {
-        float secs = TheTaskMgr.Seconds(TaskMgr::kRealTime) - unk14;
+        float secs = TheTaskMgr.Seconds(TaskMgr::kRealTime) - mRefractoryTime;
         if (secs < mInterest->RefractoryPeriod())
             return mInterest->RefractoryPeriod() - secs;
         else
@@ -241,22 +241,22 @@ void CharEyes::ProceduralBlinkUpdate() {
         return;
     if (disableCheat.Int(0))
         return;
-    if (!unk1b1 && !unk18c)
+    if (!mHeadIKActive && !mBlinkEnabled)
         return;
 
-    unk198 = unk198 - TheTaskMgr.DeltaSeconds();
-    if (unk198 < 0.0f) {
-        unk194 = 0;
-        unk198 = 15.0f;
+    mUpperBlinkAngle = mUpperBlinkAngle - TheTaskMgr.DeltaSeconds();
+    if (mUpperBlinkAngle < 0.0f) {
+        mBlinkState = 0;
+        mUpperBlinkAngle = 15.0f;
     }
 
     if (!mFaceServo)
         return;
-    if (!unk18c)
+    if (!mBlinkEnabled)
         return;
 
     CharFaceServo *servo = mFaceServo;
-    float elapsed = TheTaskMgr.Seconds(TaskMgr::kRealTime) - unk190;
+    float elapsed = TheTaskMgr.Seconds(TaskMgr::kRealTime) - mBlinkTimer;
     if (elapsed < 0.115f) {
         // Closing phase
         float t = Clamp(0.0f, 1.0f, elapsed * 8.695652f);
@@ -265,12 +265,12 @@ void CharEyes::ProceduralBlinkUpdate() {
         // Opening phase
         float t = Clamp(0.0f, 1.0f, 1.0f - (elapsed - 0.115f) * 5.405405f);
         servo->SetProceduralBlinkWeight(EaseSigmoid(t, 0.0f, 0.0f));
-        unk78 = unk1a0;
+        mTarget = mHeadForward;
     } else {
         // Blink complete
         servo->SetProceduralBlinkWeight(0.0f);
-        unk18c = false;
-        unk78 = unk1a0;
+        mBlinkEnabled = false;
+        mTarget = mHeadForward;
     }
 }
 
@@ -286,29 +286,29 @@ RndTransformable *CharEyes::GetHead() {
 }
 
 void CharEyes::Enter() {
-    unkd8.Zero();
-    unkec = 0;
-    unkf4 = 0;
-    unke8 = 1.0f;
-    unkf8 = -1.0f;
-    unkfc = 0;
-    unk170 = 0;
-    unk174 = -1.0f;
-    unk178 = -1;
-    unk18c = 0;
-    unk190 = -1.0f;
-    unk194 = 0;
-    unk198 = -1.0f;
-    unk19c = -1.0f;
-    unkfd = 0;
+    mLastFacing.Zero();
+    mLastLook = 0;
+    mAvDelta = 0;
+    mLastCang = 1.0f;
+    mLastBlinkWeight = -1.0f;
+    mBlinkDetect = 0;
+    mDartEnabled = 0;
+    mDartInterval = -1.0f;
+    mEyeClampCount = -1;
+    mBlinkEnabled = 0;
+    mBlinkTimer = -1.0f;
+    mBlinkState = 0;
+    mUpperBlinkAngle = -1.0f;
+    mLowerBlinkAngle = -1.0f;
+    mBlinkActive = 0;
     mInterestFilterFlags = mDefaultFilterFlags;
-    unk1b0 = 0;
-    unk12c = 0;
-    unk140 = 0;
+    mEnabled = 0;
+    mNeedRecalc = 0;
+    mDartTimer = 0;
     RndTransformable *head = GetHead();
     if (head) {
-        unkd8 = head->WorldXfm().m.y;
-        Normalize(unkd8, unkd8);
+        mLastFacing = head->WorldXfm().m.y;
+        Normalize(mLastFacing, mLastFacing);
     }
     for (ObjVector<EyeDesc>::iterator it = mEyes.begin(); it != mEyes.end(); ++it) {
         it->mEye->Enter();
@@ -316,7 +316,7 @@ void CharEyes::Enter() {
     for (ObjVector<CharInterestState>::iterator it = mInterests.begin();
          it != mInterests.end();
          ++it) {
-        it->unk14 = -1.0f;
+        it->mRefractoryTime = -1.0f;
     }
     RndPollable::Enter();
 }

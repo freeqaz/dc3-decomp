@@ -25,10 +25,10 @@ float gGuitarZOffset = 0.2f;
 RndText::RndText()
     : mWidth(0), mHeight(0), mCircle(0), mAlignment(kMiddleCenter), mFitType(kFitWrap),
       mCapsMode(kCapsModeNone), mLeading(1), mFixedLength(0), mMarkup(true),
-      mBasicMarkup(true), mScrollDelay(0), mScrollRate(1), mScrollPause(0), unk40(0),
-      unk58(0), unk5c(0), unk60(0), mIndentation(0), unk78(nullptr), unk8c(0), unk90(-1),
-      unk94(-1), mStyles(this), unkb4(0), unkb8(0), unkbc(0), unkc0(0), unkc4(0),
-      unkc8(0) {
+      mBasicMarkup(true), mScrollDelay(0), mScrollRate(1), mScrollPause(0), mWrapEnabled(0),
+      mLineHeight(0), mTotalHeight(0), mTotalWidth(0), mIndentation(0), mAltStyle(nullptr), mZeroAlphaTime(0), mDirtyFlags(-1),
+      mLastSyncFlags(-1), mStyles(this), mBoundsLeft(0), mBoundsTop(0), mBoundsRight(0), mBoundsBottom(0), mCurScrollChars(0),
+      mScrollSpeed(0) {
     mStyles.resize(1);
     mFontMaps.reserve(1);
 }
@@ -309,8 +309,8 @@ BEGIN_LOADS(RndText)
             bs >> str;
         }
         if (d.altRev > 0) {
-            bs >> unk90;
-            bs >> unk94;
+            bs >> mDirtyFlags;
+            bs >> mLastSyncFlags;
         }
         d >> mStyles;
     } else {
@@ -451,8 +451,8 @@ void RndText::FontMap::AllocateMeshes(RndText *text, int fixedLength) {
             page.mesh = Hmx::Object::New<RndMesh>();
         }
         RndMesh *mesh = page.mesh;
-        page.unkc = 0x1F;
-        page.unk8 = 0;
+        page.mSyncFlags = 0x1F;
+        page.mVertStart = 0;
         if (mesh) {
             mesh->SetTransParent(text, false);
             mesh->SetTransConstraint(
@@ -466,12 +466,12 @@ void RndText::FontMap::AllocateMeshes(RndText *text, int fixedLength) {
             if (fixedLength == 0) {
                 mesh->SetMutable(0);
                 ResetFontMapPageMeshFaces(mesh, page.displayableChars * 2);
-                page.unkc |= 0xA0;
+                page.mSyncFlags |= 0xA0;
                 mesh->Verts().resize(page.displayableChars * 4);
             } else if (mesh->Mutable() == 0 || mesh->Verts().size() != fixedLength * 4) {
                 mesh->SetMutable(0x1F);
                 ResetFontMapPageMeshFaces(mesh, page.displayableChars * 2);
-                page.unkc |= 0xA0;
+                page.mSyncFlags |= 0xA0;
                 mesh->Verts().resize(page.displayableChars * 4);
             }
             MILO_ASSERT(mesh->Verts().size() >= page.displayableChars * 4, 0xD2);
@@ -485,13 +485,13 @@ void RndText::FontMap::CleanupSyncMeshes() {
         Page &page = *(mPages[i]);
         RndMesh *mesh = page.mesh;
         if (mesh) {
-            while (mesh->Verts().begin() != page.unk8) {
-                RndMesh::Vert *old = page.unk8++;
+            while (mesh->Verts().begin() != page.mVertStart) {
+                RndMesh::Vert *old = page.mVertStart++;
                 old->pos.x = 0.0f;
                 old->pos.y = 0.0f;
                 old->pos.z = 0.0f;
             }
-            mesh->Sync(page.unkc);
+            mesh->Sync(page.mSyncFlags);
         }
     }
 }

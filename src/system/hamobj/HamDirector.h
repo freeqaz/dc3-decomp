@@ -47,8 +47,8 @@ public:
 class HamDirector : public RndPollable, public RndDrawable {
 public:
     struct DircutEntry {
-        HamCamShot *unk0;
-        bool unk4;
+        HamCamShot *mShot;
+        bool mForced;
     };
     // Hmx::Object
     virtual ~HamDirector();
@@ -143,8 +143,8 @@ public:
     HamCamShot *CurShot() const { return mCurShot; }
     FileMerger *GetGameModeMerger() const { return mGameModeMerger; }
     void SetPickingDisabled(bool disable) { mDisablePicking = disable; }
-    void SetPollEnabled(bool enable) { unk2ac = enable; }
-    bool Unk33d() const { return unk33d; }
+    void SetPollEnabled(bool enable) { mPollEnabled = enable; }
+    bool IsGameStartHold() const { return mGameStartHold; }
 
     DataNode OnGetDancerVisemes(DataArray *);
 
@@ -279,10 +279,10 @@ protected:
     Symbol mShot; // 0x298
     float unk29c; // 0x29c
     bool mDisablePicking; // 0x2a0
-    bool unk2a1; // 0x2a1
-    int unk2a4; // 0x2a4
+    bool mSuppressIntroShot; // 0x2a1
+    int mSuppressNextShot; // 0x2a4
     float unk2a8; // 0x2a8
-    bool unk2ac; // 0x2ac
+    bool mPollEnabled; // 0x2ac
     Keys<DircutEntry, DircutEntry> mDirCutKeys; // 0x2b0
     bool mPlayerFreestyle; // 0x2bc
     bool mPlayerFreestylePaused; // 0x2bd
@@ -302,12 +302,12 @@ protected:
     int mBlendDebug; // 0x2e8
     int unk2ec; // 0x2ec
     Symbol unk2f0; // 0x2f0
-    Symbol unk2f4[2]; // 0x2f4
-    Symbol unk2fc[2]; // 0x2fc
+    Symbol mCharacterOutfits[2]; // 0x2f4
+    Symbol mCrews[2]; // 0x2fc
     HamBackupDancers mBackupDancers; // 0x304
     ObjPtr<ObjectDir> mClipDir; // 0x308
     ObjPtr<ObjectDir> mMoveDir; // 0x31c
-    Symbol unk330; // 0x330
+    Symbol mSongSpeed; // 0x330
     /** "If true, does not play transitions" */
     bool mNoTransitions; // 0x334
     /** "If true, check character collisions when picking cam shots" */
@@ -315,7 +315,7 @@ protected:
     bool mLoadedNewSong; // 0x336
     PoseFatalities *mPoseFatalities; // 0x338
     bool unk33c; // 0x33c
-    bool unk33d; // 0x33d
+    bool mGameStartHold; // 0x33d
     ObjPtr<Character> mIconManChar; // 0x340
     ObjPtr<RndTexRenderer> mIconManTex; // 0x354
     bool unk368; // 0x368

@@ -21,8 +21,8 @@ public:
     };
 
     struct RecordData {
-        float unk0; // 0x0 - window start
-        float unk4; // 0x4 - window end
+        float mWindowStart; // 0x0 - analysis window start time
+        float mWindowEnd; // 0x4 - analysis window end time
         float unk8; // 0x8
         float unkc; // 0xc
         float unk10; // 0x10
@@ -86,7 +86,7 @@ protected:
     int mFold; // 0x50
     float mToleranceFactor; // 0x54
     Vector3 mDirection; // 0x58
-    float unk68; // 0x68 - used in cleardata
+    float mFrameCount; // 0x68 - frame counter
     DebugGraph *mDebugGraphA; // 0x6c
     DebugGraph *mDebugGraphB; // 0x70
     DebugGraph *mDebugGraphC; // 0x74
@@ -94,9 +94,9 @@ protected:
     DebugGraph *mDebugGraphE; // 0x7c
     int unk80; // 0x80
     char buffer[0xA00]; // 0x84 some big ass buffer maybe who knows
-    float unka84[8]; // 0xa84
+    float mTimestamps[8]; // 0xa84 - cached beat timestamps
     int unkaa4;
-    float unkaa8; // 0xaa8 - mLastBeatTime?
+    float mLastBeatTime; // 0xaa8 - last beat time at recording start
     Vector3 unkaac[kNumJoints]; // 0xaac
     RecordData mRecordData; // 0xbec
 

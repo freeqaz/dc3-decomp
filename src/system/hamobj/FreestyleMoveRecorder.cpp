@@ -14,56 +14,56 @@
 DancerSkeleton sLastComparedDancerSkel;
 
 FreestyleMoveRecorder::FreestyleMoveRecorder()
-    : unk4(0), unk8(0), unkc(0), unk18(0), unk20(-1), unk24(60), unk28(-1), unk2c(-1),
-      unk30(15), unk34(-1), unk38(0), unk39(0), unk44(-1), unkb8(0) {
-    unkbc = Hmx::Object::New<RndTex>();
-    unkbc->SetBitmap(320, 240, 16, RndTex::kRegularLinear, false, nullptr);
+    : unk4(0), mClipFrames(0), mClipFrameCount(0), mRecordingFrames(0), unk20(-1), mMaxFrames(60), mRecordPos(-1), mPlaybackPos(-1),
+      unk30(15), unk34(-1), mRecording(0), unk39(0), mSkeletonIndex(-1), mCurrentTakeIndex(0) {
+    mPlayerPalette = Hmx::Object::New<RndTex>();
+    mPlayerPalette->SetBitmap(320, 240, 16, RndTex::kRegularLinear, false, nullptr);
 
     JointAngle angle;
     angle.mJoint = kJointHandRight;
-    unkcc.push_back(angle);
+    mAngleLimits.push_back(angle);
     angle.mJoint = kJointHandLeft;
-    unkcc.push_back(angle);
+    mAngleLimits.push_back(angle);
     angle.mJoint = kJointAnkleRight;
-    unkcc.push_back(angle);
+    mAngleLimits.push_back(angle);
     angle.mJoint = kJointAnkleLeft;
-    unkcc.push_back(angle);
+    mAngleLimits.push_back(angle);
     angle.mJoint = kJointKneeRight;
-    unkcc.push_back(angle);
+    mAngleLimits.push_back(angle);
     angle.mJoint = kJointKneeLeft;
-    unkcc.push_back(angle);
-    unkd8.push_back(kJointHandRight); // 11
-    unkd8.push_back(kJointHandLeft); // 7
-    unkd8.push_back(kJointAnkleRight); // 17
-    unkd8.push_back(kJointAnkleLeft); // 14
-    unkd8.push_back(kJointHead); // 3
-    unkd8.push_back(kJointHipCenter); // 0
+    mAngleLimits.push_back(angle);
+    mTrackedJoints.push_back(kJointHandRight); // 11
+    mTrackedJoints.push_back(kJointHandLeft); // 7
+    mTrackedJoints.push_back(kJointAnkleRight); // 17
+    mTrackedJoints.push_back(kJointAnkleLeft); // 14
+    mTrackedJoints.push_back(kJointHead); // 3
+    mTrackedJoints.push_back(kJointHipCenter); // 0
     JointPos pos;
     pos.unk0 = 11;
     pos.unk4 = 2;
-    unk104.push_back(pos);
+    mPositions.push_back(pos);
     pos.unk0 = 7;
     pos.unk4 = 1;
-    unk104.push_back(pos);
+    mPositions.push_back(pos);
     pos.unk0 = 9;
     pos.unk4 = 2;
-    unk104.push_back(pos);
+    mPositions.push_back(pos);
     pos.unk0 = 5;
     pos.unk4 = 1;
-    unk104.push_back(pos);
+    mPositions.push_back(pos);
     pos.unk0 = 17;
     pos.unk4 = 4;
-    unk104.push_back(pos);
+    mPositions.push_back(pos);
     pos.unk0 = 14;
     pos.unk4 = 3;
-    unk104.push_back(pos);
+    mPositions.push_back(pos);
     pos.unk0 = 16;
     pos.unk4 = 4;
-    unk104.push_back(pos);
+    mPositions.push_back(pos);
     pos.unk0 = 13;
     pos.unk4 = 3;
-    unk104.push_back(pos);
-    unkc0 = new FreestyleMoveFrame[unk24];
+    mPositions.push_back(pos);
+    mFrameBuffer = new FreestyleMoveFrame[mMaxFrames];
     DataRegisterFunc("bam_record_attempt", OnRecordAttempt);
     DataRegisterFunc("bam_write_created", OnWriteCreated);
     DataRegisterFunc("bam_read_created", OnReadCreated);
@@ -72,86 +72,86 @@ FreestyleMoveRecorder::FreestyleMoveRecorder()
 }
 
 FreestyleMoveRecorder::~FreestyleMoveRecorder() {
-    delete unkbc;
-    delete[] unkc0;
-    delete[] unk18;
-    delete[] unk8;
+    delete mPlayerPalette;
+    delete[] mFrameBuffer;
+    delete[] mRecordingFrames;
+    delete[] mClipFrames;
 }
 
 void FreestyleMoveRecorder::Free() {
-    unk28 = -1;
-    unk2c = -1;
+    mRecordPos = -1;
+    mPlaybackPos = -1;
     for (int i = 4; i != 0; i--) {
-        unk48[unkb8].Free();
+        mTakes[mCurrentTakeIndex].Free();
     }
 }
 
 void FreestyleMoveRecorder::StartRecording() {
     unk34 = 0xffffffff;
-    unk38 = false;
-    unk28 = 0;
-    unk2c = -1;
-    if (unk20 != unkb8) {
-        unk48[unkb8].Init(unk24);
+    mRecording = false;
+    mRecordPos = 0;
+    mPlaybackPos = -1;
+    if (unk20 != mCurrentTakeIndex) {
+        mTakes[mCurrentTakeIndex].Init(mMaxFrames);
     }
 }
 
 void FreestyleMoveRecorder::ClearRecording() {
-    if (unk20 != unkb8) {
-        unk48[unkb8].Clear();
+    if (unk20 != mCurrentTakeIndex) {
+        mTakes[mCurrentTakeIndex].Clear();
     }
-    unkc8 = 0;
+    mFrameIndex = 0;
 }
 
 void FreestyleMoveRecorder::StartRecordingDancerTake() {
     StartRecording();
-    unk38 = true;
+    mRecording = true;
 }
 
 void FreestyleMoveRecorder::StartPlayback(bool param_1) {
     unk39 = param_1;
-    unk2c = 0;
+    mPlaybackPos = 0;
 }
 
-void FreestyleMoveRecorder::StopPlayback() { unk2c = -1; }
+void FreestyleMoveRecorder::StopPlayback() { mPlaybackPos = -1; }
 
-void FreestyleMoveRecorder::ClearDancerTake() { unkc4 = 0; }
+void FreestyleMoveRecorder::ClearDancerTake() { mDancerTakeFrameCount = 0; }
 
 void FreestyleMoveRecorder::AssignStaticInstance() { sInstance = this; }
 
 void FreestyleMoveRecorder::UpdateRecordingAttempt(
     const BaseSkeleton *skeleton, float f2
 ) {
-    if (unk10 != gNullStr) {
-        unk18[unk1c].skeleton.Set(*skeleton);
-        unk18[unk1c].unk2d8 = f2;
-        unk1c++;
+    if (mClipName != gNullStr) {
+        mRecordingFrames[mRecordingFrameCount].skeleton.Set(*skeleton);
+        mRecordingFrames[mRecordingFrameCount].unk2d8 = f2;
+        mRecordingFrameCount++;
     }
 }
 
 void FreestyleMoveRecorder::RecordMoveAttempt(String str) {
-    unk10 = str;
-    delete[] unk18;
-    unk18 = new FreestyleMoveFrame[480];
-    unk1c = 0;
+    mClipName = str;
+    delete[] mRecordingFrames;
+    mRecordingFrames = new FreestyleMoveFrame[480];
+    mRecordingFrameCount = 0;
 }
 
 void FreestyleMoveRecorder::WriteRecordedMoveAttempt() {
-    WriteFreestyleMoveClip(unk10, unk1c, unk18);
-    unk10 = gNullStr;
-    delete[] unk18;
-    unk18 = nullptr;
-    unk1c = 0;
+    WriteFreestyleMoveClip(mClipName, mRecordingFrameCount, mRecordingFrames);
+    mClipName = gNullStr;
+    delete[] mRecordingFrames;
+    mRecordingFrames = nullptr;
+    mRecordingFrameCount = 0;
 }
 
 void FreestyleMoveRecorder::ClearFreestyleMoveClip() {
-    delete[] unk8;
-    unk8 = nullptr;
-    unkc = 0;
+    delete[] mClipFrames;
+    mClipFrames = nullptr;
+    mClipFrameCount = 0;
 }
 
 void FreestyleMoveRecorder::PlaybackComplete() {
-    if (unk10 != gNullStr) {
+    if (mClipName != gNullStr) {
         WriteRecordedMoveAttempt();
     }
 }
@@ -227,8 +227,8 @@ DataNode FreestyleMoveRecorder::OnWriteCreated(DataArray *a) {
     }
     sInstance->WriteFreestyleMoveClip(
         str,
-        sInstance->unk48[sInstance->unkb8].mNumFrames,
-        sInstance->unk48[sInstance->unkb8].unk18
+        sInstance->mTakes[sInstance->mCurrentTakeIndex].mNumFrames,
+        sInstance->mTakes[sInstance->mCurrentTakeIndex].unk18
     );
     return 0;
 }
@@ -236,18 +236,18 @@ DataNode FreestyleMoveRecorder::OnWriteCreated(DataArray *a) {
 DataNode FreestyleMoveRecorder::OnReadCreated(DataArray *a) {
     int framecount;
     sInstance->ReadFreestyleMoveClip(
-        a->Str(1), framecount, sInstance->unk48[sInstance->unkb8].unk18
+        a->Str(1), framecount, sInstance->mTakes[sInstance->mCurrentTakeIndex].unk18
     );
-    sInstance->unk48[sInstance->unkb8].Init(sInstance->unk24);
-    sInstance->unk48[sInstance->unkb8].mNumFrames = framecount;
-    sInstance->unk20 = sInstance->unkb8;
+    sInstance->mTakes[sInstance->mCurrentTakeIndex].Init(sInstance->mMaxFrames);
+    sInstance->mTakes[sInstance->mCurrentTakeIndex].mNumFrames = framecount;
+    sInstance->unk20 = sInstance->mCurrentTakeIndex;
     return 0;
 }
 
 DataNode FreestyleMoveRecorder::OnReadAttempt(DataArray *a) {
-    delete[] sInstance->unk8;
-    sInstance->unk8 = new FreestyleMoveFrame[480];
-    sInstance->ReadFreestyleMoveClip(a->Str(1), sInstance->unkc, sInstance->unk8);
+    delete[] sInstance->mClipFrames;
+    sInstance->mClipFrames = new FreestyleMoveFrame[480];
+    sInstance->ReadFreestyleMoveClip(a->Str(1), sInstance->mClipFrameCount, sInstance->mClipFrames);
     return 0;
 }
 
@@ -266,10 +266,10 @@ float FreestyleMoveRecorder::GetScore(int i1, int i2, float f, bool b) {
     // Check if there's a live skeleton that should override the default
     BaseSkeleton *liveSkeleton = GetLiveSkeleton();
     if (liveSkeleton) {
-        // Get the reference skeleton (if unk44 is set)
+        // Get the reference skeleton (if mSkeletonIndex is set)
         BaseSkeleton *referenceSkeleton;
-        if (unk44 >= 0) {
-            referenceSkeleton = &TheGestureMgr->GetSkeleton(unk44);
+        if (mSkeletonIndex >= 0) {
+            referenceSkeleton = &TheGestureMgr->GetSkeleton(mSkeletonIndex);
         } else {
             referenceSkeleton = nullptr;
         }

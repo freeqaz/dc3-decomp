@@ -1558,7 +1558,7 @@ void BustAMovePanel::Poll() {
         skelIdx = skel->SkeletonIndex();
     }
     int forceSkelIdx = skelIdx;
-    mRecorder->unk44 = skelIdx;
+    mRecorder->mSkeletonIndex = skelIdx;
     if (mState == kBAMState_Recording || kBAMState_CountIn == mState) {
         unk58 = skelIdx;
     }
@@ -1608,7 +1608,7 @@ void BustAMovePanel::Poll() {
                 pScoreSq * 1.4f, 4.0f - MsToBeat(mRecordScore * 1000.0f)
             );
         }
-        forceSkelIdx = mRecorder->unk48[mRecorder->unkb8].unkc;
+        forceSkelIdx = mRecorder->mTakes[mRecorder->mCurrentTakeIndex].unkc;
     } else {
         mPhraseMeters[0]->SetRatingFrac(0.0f, -1.0f);
         mPhraseMeters[1]->SetRatingFrac(0.0f, -1.0f);

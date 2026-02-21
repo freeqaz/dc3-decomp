@@ -14,7 +14,7 @@
 class HamDriver : public RndHighlightable, public CharWeightable, public CharPollable {
 public:
     struct Layer {
-        Layer() : unk4(-kHugeFloat) {}
+        Layer() : mBeat(-kHugeFloat) {}
         virtual ~Layer() {}
         virtual void Eval(float) = 0;
         virtual void Play(CharBones &) = 0;
@@ -24,7 +24,7 @@ public:
 
         MEM_OVERLOAD(Layer, 0x27)
 
-        float unk4; // 0x4 - beat?
+        float mBeat; // 0x4 - layer start beat position
     };
 
     struct LayerArray : public Layer {
@@ -38,9 +38,9 @@ public:
 
         void Clear();
 
-        float unk8;
+        float mWeight; // 0x8 - layer weight/blend value
         char unkc[0x20];
-        std::list<Layer *> unk2c;
+        std::list<Layer *> mLayers; // 0x2c - child layers
     };
 
     struct LayerClip : public Layer {
@@ -52,9 +52,9 @@ public:
         virtual CharClip *FirstClip();
         virtual void OffsetSec(float);
 
-        float unk8;
-        float unkc;
-        ObjOwnerPtr<CharClip> unk10; // 0x10
+        float mEaseWeight; // 0x8 - eased blend weight
+        float mClipBeat; // 0xc - clip playback beat offset
+        ObjOwnerPtr<CharClip> mClip; // 0x10 - character clip reference
     };
 
     // Hmx::Object
@@ -95,6 +95,6 @@ protected:
     /** "The CharBones object to add into." */
     ObjPtr<CharBonesObject> mBones; // 0x30
     LayerArray mLayers; // 0x44
-    float unk78; // 0x78 - beat?
-    std::map<CharClip *, float> unk7c; // 0x7c
+    float mDisplayBeat; // 0x78 - current beat position for display
+    std::map<CharClip *, float> mClipTimingMap; // 0x7c - clip timing cache
 };

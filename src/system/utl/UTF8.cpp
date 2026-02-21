@@ -196,50 +196,50 @@ const char *UTF8strchr(const char *str, unsigned short us) {
 }
 
 void UTF8ToLower(unsigned short arg0, char *arg1) {
-    int temp_r6;
-    int var_r3;
+    int middleByte;
+    int codepoint;
 
-    var_r3 = arg0;
-    if (var_r3 < 0x80U) {
-        if ((unsigned short)(var_r3 + 0xFFBF) <= 0x19U) {
-            arg1[0] = (var_r3 + 0x20);
+    codepoint = arg0;
+    if (codepoint < 0x80U) {
+        if ((unsigned short)(codepoint + 0xFFBF) <= 0x19U) {
+            arg1[0] = (codepoint + 0x20);
         } else
-            arg1[0] = var_r3;
-    } else if (var_r3 < 0x800U) {
-        if ((unsigned short)(var_r3 + 0xFF40) <= 0x1DU) {
-            var_r3 = (var_r3 + 0x20) & 0xffff;
+            arg1[0] = codepoint;
+    } else if (codepoint < 0x800U) {
+        if ((unsigned short)(codepoint + 0xFF40) <= 0x1DU) {
+            codepoint = (codepoint + 0x20) & 0xffff;
         }
-        arg1[0] = (((var_r3 >> 6) & 0x3FF) + 0xC0);
-        arg1[1] = ((var_r3 % 64) + 0x80);
+        arg1[0] = (((codepoint >> 6) & 0x3FF) + 0xC0);
+        arg1[1] = ((codepoint % 64) + 0x80);
     } else {
-        temp_r6 = (var_r3 >> 6) & 0x3FF;
-        arg1[0] = (((var_r3 >> 0xCU) & 0xF) + 0xE0);
-        arg1[1] = ((temp_r6 % 64) + 0x80);
-        arg1[2] = ((var_r3 % 64) + 0x80);
+        middleByte = (codepoint >> 6) & 0x3FF;
+        arg1[0] = (((codepoint >> 0xCU) & 0xF) + 0xE0);
+        arg1[1] = ((middleByte % 64) + 0x80);
+        arg1[2] = ((codepoint % 64) + 0x80);
     }
 }
 
 void UTF8ToUpper(unsigned short arg0, char *arg1) {
-    int temp_r6;
-    int var_r3;
+    int middleByte;
+    int codepoint;
 
-    var_r3 = arg0;
-    if (var_r3 < 0x80U) {
-        if ((unsigned short)(var_r3 + 0xFF9F) <= 0x19U) {
-            arg1[0] = (var_r3 - 0x20);
+    codepoint = arg0;
+    if (codepoint < 0x80U) {
+        if ((unsigned short)(codepoint + 0xFF9F) <= 0x19U) {
+            arg1[0] = (codepoint - 0x20);
         } else
-            arg1[0] = var_r3;
-    } else if (var_r3 < 0x800U) {
-        if ((unsigned short)(var_r3 + 0xFF20) <= 0x1DU) {
-            var_r3 = (var_r3 - 0x20) & 0xffff;
+            arg1[0] = codepoint;
+    } else if (codepoint < 0x800U) {
+        if ((unsigned short)(codepoint + 0xFF20) <= 0x1DU) {
+            codepoint = (codepoint - 0x20) & 0xffff;
         }
-        arg1[0] = (((var_r3 >> 6) & 0x3FF) + 0xC0);
-        arg1[1] = ((var_r3 % 64) + 0x80);
+        arg1[0] = (((codepoint >> 6) & 0x3FF) + 0xC0);
+        arg1[1] = ((codepoint % 64) + 0x80);
     } else {
-        temp_r6 = (var_r3 >> 6) & 0x3FF;
-        arg1[0] = (((var_r3 >> 0xCU) & 0xF) + 0xE0);
-        arg1[1] = ((temp_r6 % 64) + 0x80);
-        arg1[2] = ((var_r3 % 64) + 0x80);
+        middleByte = (codepoint >> 6) & 0x3FF;
+        arg1[0] = (((codepoint >> 0xCU) & 0xF) + 0xE0);
+        arg1[1] = ((middleByte % 64) + 0x80);
+        arg1[2] = ((codepoint % 64) + 0x80);
     }
 }
 
@@ -307,11 +307,11 @@ int UTF16toUTF8(char *c, const unsigned short *us) {
     int ctr = 0;
     while (*us != 0) {
         String sp8;
-        int temp_r3 = EncodeUTF8(sp8, *us);
-        ctr += temp_r3;
+        int byteLen = EncodeUTF8(sp8, *us);
+        ctr += byteLen;
         if (c != 0) {
-            strncpy(c, sp8.c_str(), temp_r3);
-            c = &c[temp_r3];
+            strncpy(c, sp8.c_str(), byteLen);
+            c = &c[byteLen];
         }
         us++;
     }
@@ -343,28 +343,28 @@ String WideVectorToASCII(const std::vector<unsigned short> &wideVec) {
 }
 
 unsigned int WideVectorToUTF8(const std::vector<unsigned short> &vec, String &str) {
-    int i3 = 0;
+    int totalBytes = 0;
     String thisStr;
     for (int i = 0; i < vec.size(); i++) {
         int curChar = vec[i];
         if (curChar < 0x80U)
-            i3 += 1;
+            totalBytes += 1;
         else if (curChar <= 0x7FFU)
-            i3 += 2;
+            totalBytes += 2;
         else if (curChar <= 0xFFFFU)
-            i3 += 3;
+            totalBytes += 3;
         else {
             MILO_FAIL("HMX wide chars cannot exceed 16 bits");
             return 0;
         }
     }
-    str.resize(i3 + 1);
+    str.resize(totalBytes + 1);
     str.erase();
     for (int i = 0; i < vec.size(); i++) {
         EncodeUTF8(thisStr, vec[i]);
         str << thisStr;
     }
-    return i3;
+    return totalBytes;
 }
 
 void UTF8toWideVector(std::vector<unsigned short> &vec, const char *cc) {

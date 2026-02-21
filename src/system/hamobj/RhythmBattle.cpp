@@ -256,8 +256,8 @@ Symbol RhythmBattle::GetLeader() const {
     static Symbol right("right");
     bool goofy = GetGoofy();
     Symbol ret = both;
-    int p1 = mPlayerOne ? mPlayerOne->Unk280() : 0;
-    int p2 = mPlayerTwo ? mPlayerTwo->Unk280() : 0;
+    int p1 = mPlayerOne ? mPlayerOne->GetScore() : 0;
+    int p2 = mPlayerTwo ? mPlayerTwo->GetScore() : 0;
     if (p1 != p2) {
         bool u4 = p2 < p1;
         if (goofy) {
@@ -484,7 +484,7 @@ void RhythmBattle::UpdateMindControl() {
                 TheHamDirector->SetProperty("shot", CAMP_MINDCONTROL_DANCE);
             }
         }
-    } else if (mPlayerOne->Unk260() || mPlayerTwo->Unk260()) {
+    } else if (mPlayerOne->GetZoneLevel() || mPlayerTwo->GetZoneLevel()) {
         unk10c += TheTaskMgr.DeltaBeat() / 10.0f;
     }
     for (int i = 0; i < 2; i++) {
@@ -869,7 +869,7 @@ void RhythmBattle::OnBeat() {
                     RhythmBattlePlayer *jacker = mPlayerOne;
                     RhythmBattlePlayer *jackee = mPlayerTwo;
                     if (jacker->InTheZone() && jackee->InTheZone()) {
-                        if (jacker->Unk280() > jackee->Unk280()) {
+                        if (jacker->GetScore() > jackee->GetScore()) {
                             jackee = jacker;
                         }
                     } else if (jacker->InTheZone()) {
@@ -905,14 +905,14 @@ void RhythmBattle::OnBeat() {
         p1Update = mPlayerOne->UpdateState();
         p2Update = mPlayerTwo->UpdateState();
     }
-    int i16 = p1Update ? mPlayerOne->Unk260() : -1;
-    int i19 = p2Update ? mPlayerTwo->Unk260() : -1;
+    int i16 = p1Update ? mPlayerOne->GetZoneLevel() : -1;
+    int i19 = p2Update ? mPlayerTwo->GetZoneLevel() : -1;
     int i6b4 = (i16 > i19)
-        ? (p1Update ? mPlayerOne->Unk260() : -1)
-        : (p2Update ? mPlayerTwo->Unk260() : -1);
-    int i28 = Max(mPlayerOne->Unk260(), mPlayerTwo->Unk260());
-    bool i35 = i6b4 == mPlayerOne->Unk260();
-    bool i27 = i6b4 == mPlayerTwo->Unk260();
+        ? (p1Update ? mPlayerOne->GetZoneLevel() : -1)
+        : (p2Update ? mPlayerTwo->GetZoneLevel() : -1);
+    int i28 = Max(mPlayerOne->GetZoneLevel(), mPlayerTwo->GetZoneLevel());
+    bool i35 = i6b4 == mPlayerOne->GetZoneLevel();
+    bool i27 = i6b4 == mPlayerTwo->GetZoneLevel();
     bool b6f0 = i35;
     if (goofy) {
         b6f0 = i27;
@@ -930,7 +930,7 @@ void RhythmBattle::OnBeat() {
                 RhythmBattlePlayer *second = mPlayerTwo;
                 if (mPlayerTwo->InTheZone()
                     && (!mPlayerOne->InTheZone()
-                        || mPlayerOne->Unk280() > mPlayerTwo->Unk280())) {
+                        || mPlayerOne->GetScore() > mPlayerTwo->GetScore())) {
                     b36 = false;
                     first = mPlayerTwo;
                     second = mPlayerOne;
@@ -962,8 +962,8 @@ void RhythmBattle::OnBeat() {
         remainingValue = -1;
     }
     play_vo[0] = none;
-    if (i27 || i35 || (mPlayerOne->ZoneValue() != 0 && mPlayerOne->Unk26c() == 0)
-        || (mPlayerTwo->ZoneValue() != 0 && mPlayerTwo->Unk26c() == 0)) {
+    if (i27 || i35 || (mPlayerOne->ZoneValue() != 0 && mPlayerOne->GetPrevInTheZone() == 0)
+        || (mPlayerTwo->ZoneValue() != 0 && mPlayerTwo->GetPrevInTheZone() == 0)) {
         static Symbol rhythmbattle_off_beat_p1p2("rhythmbattle_off_beat_p1p2");
         static Symbol rhythmbattle_off_beat_p1("rhythmbattle_off_beat_p1");
         static Symbol rhythmbattle_off_beat_p2("rhythmbattle_off_beat_p2");
@@ -1143,8 +1143,8 @@ void RhythmBattle::OnBeat() {
         if (play_vo[0].Sym() != intro && remainingValue > 0) {
             static Symbol inzone("inzone");
             static Symbol inzone_warning("inzone_warning");
-            if ((mPlayerOne->ZoneValue() && !mPlayerOne->Unk26c())
-                || (mPlayerTwo->ZoneValue() && !mPlayerTwo->Unk26c())) {
+            if ((mPlayerOne->ZoneValue() && !mPlayerOne->GetPrevInTheZone())
+                || (mPlayerTwo->ZoneValue() && !mPlayerTwo->GetPrevInTheZone())) {
                 bool b43 = false;
                 bool b42 = false;
                 if (mPlayerOne->InTheZone() || mPlayerTwo->InTheZone()) {
@@ -1236,7 +1236,7 @@ void RhythmBattle::OnBeat() {
     if (unk101) {
         End();
     }
-    float min84 = Max(mPlayerOne->Unk284(), mPlayerTwo->Unk284());
+    float min84 = Max(mPlayerOne->GetComboMeter(), mPlayerTwo->GetComboMeter());
     static UIPanel *sLoadingPanel =
         ObjectDir::Main()->Find<UIPanel>("loading_panel", false);
     if (sLoadingPanel && sLoadingPanel->LoadedDir()) {

@@ -10,16 +10,16 @@
 #include "os/Debug.h"
 #include "Memory.h"
 
-DxMultiMesh::DxMultiMesh() : unk5c(0), unk60(0) {
+DxMultiMesh::DxMultiMesh() : mGeomDirtyFlags(0), mBufferCycleIndex(0) {
     for (int i = 0; i < 3; i++) {
-        unk64[i] = unk70[i] = nullptr;
+        mVertexBuffers[i] = mIndexBuffers[i] = nullptr;
     }
 }
 
 DxMultiMesh::~DxMultiMesh() {
     for (int i = 0; i < 3; i++) {
-        DX_RELEASE(unk70[i]);
-        DX_RELEASE(unk64[i]);
+        DX_RELEASE(mIndexBuffers[i]);
+        DX_RELEASE(mVertexBuffers[i]);
     }
 }
 

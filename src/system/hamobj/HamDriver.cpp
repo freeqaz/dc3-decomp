@@ -12,7 +12,7 @@
 #include "rndobj/Rnd.h"
 #include "utl/BinStream.h"
 
-HamDriver::HamDriver() : mBones(this), unk78(-kHugeFloat) {}
+HamDriver::HamDriver() : mBones(this), mDisplayBeat(-kHugeFloat) {}
 
 HamDriver::~HamDriver() { Clear(); }
 
@@ -88,7 +88,7 @@ float HamDriver::Display(float f1) {
     // Draw debug info: object name and beat position
     Hmx::Color color(1.0f, 1.0f, 1.0f, 1.0f);
     Vector2 screenPos(CharClipDisplay::GetSEm(), scaledHeight);
-    const char *stringDisplay = MakeString("%s beat: %.2f", pathName, unk78);
+    const char *stringDisplay = MakeString("%s beat: %.2f", pathName, mDisplayBeat);
     TheRnd.DrawString(stringDisplay, screenPos, color, true);
 
     // Initialize character clip display and advance line spacing
@@ -96,8 +96,8 @@ float HamDriver::Display(float f1) {
     float lineSpacing = CharClipDisplay::LineSpacing() + scaledHeight;
 
     // Recursively display layers if list is non-empty and weight is active
-    if (mLayers.unk2c.end() != mLayers.unk2c.begin() && !(mLayers.unk8 == 0.0f)) {
-        FOREACH (it, mLayers.unk2c) {
+    if (mLayers.mLayers.end() != mLayers.mLayers.begin() && !(mLayers.mWeight == 0.0f)) {
+        FOREACH (it, mLayers.mLayers) {
             lineSpacing = DisplayRecurse(*it, 0, lineSpacing);
         }
     }
@@ -114,14 +114,14 @@ CharClip *HamDriver::FirstClip() { return mLayers.FirstClip(); }
 #pragma region HamDriver::Layer
 
 void HamDriver::Layer::OffsetSec(float f1) {
-    unk4 = SecondsToBeat(BeatToSeconds(unk4) + f1);
+    mBeat = SecondsToBeat(BeatToSeconds(mBeat) + f1);
 }
 
 #pragma endregion
 
 #pragma region HamDriver::LayerClip
 
-HamDriver::LayerClip::LayerClip(Hmx::Object *obj) : unk10(obj)
+HamDriver::LayerClip::LayerClip(Hmx::Object *obj) : mClip(obj)
 {
 }
 
@@ -130,29 +130,29 @@ HamDriver::LayerClip::~LayerClip() {}
 
 void HamDriver::LayerClip::OffsetSec(float f1) {
     Layer::OffsetSec(f1);
-    unkc = SecondsToBeat(BeatToSeconds(unkc) + f1);
+    mClipBeat = SecondsToBeat(BeatToSeconds(mClipBeat) + f1);
 }
 
 void HamDriver::LayerClip::Eval(float f1) {
     float beat = TheTaskMgr.Beat();
-    auto clamped = Clamp(0.0f, 1.0f, beat - unk4);
-    unk8 = EaseSigmoid(clamped, 0.0, 0.0) * f1;
+    auto clamped = Clamp(0.0f, 1.0f, beat - mBeat);
+    mEaseWeight = EaseSigmoid(clamped, 0.0, 0.0) * f1;
 }
 
 void HamDriver::LayerClip::Play(CharBones &bones) {
-    if (unk8 > 0.0f) {
-        float beat = unk10->StartBeat();
-        float deltaBeat = (TheTaskMgr.Beat() - unkc) + beat;
-        bones.ScaleAdd(unk10, unk8, deltaBeat, TheTaskMgr.DeltaBeat());
+    if (mEaseWeight > 0.0f) {
+        float beat = mClip->StartBeat();
+        float deltaBeat = (TheTaskMgr.Beat() - mClipBeat) + beat;
+        bones.ScaleAdd(mClip, mEaseWeight, deltaBeat, TheTaskMgr.DeltaBeat());
     }
 }
 
-CharClip *HamDriver::LayerClip::FirstClip() { return unk10; }
+CharClip *HamDriver::LayerClip::FirstClip() { return mClip; }
 
 bool HamDriver::LayerClip::Replace(ObjRef *ref, Hmx::Object *obj) {
-    if (&unk10 == ref) {
-        if (!unk10.SetObj(obj)) {
-            CharClip *ptr = unk10.Ptr();
+    if (&mClip == ref) {
+        if (!mClip.SetObj(obj)) {
+            CharClip *ptr = mClip.Ptr();
             if (ptr) {
                 delete ptr;
             }
@@ -166,20 +166,20 @@ bool HamDriver::LayerClip::Replace(ObjRef *ref, Hmx::Object *obj) {
 #pragma region HamDriver::LayerArray
 
 void HamDriver::LayerArray::Clear() {
-    FOREACH (it, unk2c) {
+    FOREACH (it, mLayers) {
         delete *it;
     }
-    unk2c.clear();
+    mLayers.clear();
 }
 
 bool HamDriver::LayerArray::Replace(ObjRef *ref, Hmx::Object *obj) {
-    FOREACH (it, unk2c) {
-        if (it == unk2c.end()) {
+    FOREACH (it, mLayers) {
+        if (it == mLayers.end()) {
             return false;
         }
         bool replaced = (*it)->Replace(ref, obj);
         if (replaced) {
-            unk2c.erase(it);
+            mLayers.erase(it);
             break;
         }
     }
@@ -187,15 +187,15 @@ bool HamDriver::LayerArray::Replace(ObjRef *ref, Hmx::Object *obj) {
 }
 
 void HamDriver::LayerArray::Play(CharBones &bones) {
-    if (unk8 > 0.0) {
-        FOREACH (it, unk2c) {
+    if (mWeight > 0.0) {
+        FOREACH (it, mLayers) {
             (*it)->Play(bones);
         }
     }
 }
 
 CharClip *HamDriver::LayerArray::FirstClip() {
-    FOREACH (it, unk2c) {
+    FOREACH (it, mLayers) {
         CharClip *clip = (*it)->FirstClip();
         if (clip != nullptr) {
             return clip;
@@ -206,7 +206,7 @@ CharClip *HamDriver::LayerArray::FirstClip() {
 
 void HamDriver::LayerArray::OffsetSec(float f1) {
     Layer::OffsetSec(f1);
-    FOREACH (it, unk2c) {
+    FOREACH (it, mLayers) {
         (*it)->OffsetSec(f1);
     }
 }

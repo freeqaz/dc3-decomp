@@ -146,12 +146,12 @@ void ClipPlayer::PlayClip(CharClip *clip, float f1, float f2, HamDriver::LayerAr
         unk44++;
         if (!TheLoadMgr.EditMode() || (unk48 <= 0 || unk44 == unk48)) {
             HamDriver::LayerClip *layerClip = unk1c->NewLayerClip();
-            layerClip->unk10 = clip;
-            layerClip->unkc = f50 - unk50;
-            layerClip->unk4 = f2 - unk50;
-            arr->unk2c.push_back(layerClip);
+            layerClip->mClip = clip;
+            layerClip->mClipBeat = f50 - unk50;
+            layerClip->mBeat = f2 - unk50;
+            arr->mLayers.push_back(layerClip);
             if (TheLoadMgr.EditMode() && unk48 > 0) {
-                layerClip->unk4 = -kHugeFloat;
+                layerClip->mBeat = -kHugeFloat;
             }
         }
     }
@@ -234,12 +234,12 @@ void ClipPlayer::PlayNormal(float f1, HamDriver::LayerArray *arr, const char *cc
     HamDriver::LayerArray *newArr;
     if (arr != NULL) {
         newArr = new HamDriver::LayerArray();
-        arr->unk2c.push_back(newArr);
+        arr->mLayers.push_back(newArr);
         strncpy(newArr->unkc, cc, 0x1F);
     } else {
         newArr = &unk1c->Layers();
     }
-    newArr->unk4 = f1 - unk50;
+    newArr->mBeat = f1 - unk50;
     if (!mClipKeys) {
         if (TheLoadMgr.EditMode()) {
             const char *msg = "No 'clips' keyframes in your song.anim.  Please don't save this song!";

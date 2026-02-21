@@ -25,11 +25,11 @@ void TrigTableInit() {
 void TrigTableTerminate() {}
 
 inline float Lookup(float arg8) {
-    float x = arg8 * 40.743664f;
-    int temp_r5 = (int)x;
-    int idx = (temp_r5 & 0xFF) * 2;
+    float scaledArg = arg8 * 40.743664f;
+    int index = (int)scaledArg;
+    int idx = (index & 0xFF) * 2;
     float *offset = &gBigSinTable[idx];
-    float res = x - (float)temp_r5;
+    float res = scaledArg - (float)index;
     return (res * offset[1]) + offset[0];
 }
 

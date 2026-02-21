@@ -327,56 +327,56 @@ int RndBitmap::PixelOffset(int x, int y, bool &nibble) const {
 
     if (mOrder & 4) {
         if (mBpp == 8) {
-            int temp_r9 = (int)mRowBytes * 2;
+            int doubleRowStride = (int)mRowBytes * 2;
             char *lookup = (((y >> 2) % 4) & 1) ? hbytes13 : hbytes02;
-            unsigned char var_r11_3 = lookup[(y % 4) * 0x10 + (x % 16)];
-            if ((int)var_r11_3 > 0x1F) {
-                var_r11_3 = (var_r11_3 + temp_r9) - 0x20;
+            unsigned char lookupOffset = lookup[(y % 4) * 0x10 + (x % 16)];
+            if ((int)lookupOffset > 0x1F) {
+                lookupOffset = (lookupOffset + doubleRowStride) - 0x20;
             }
-            return var_r11_3 + ((((y >> 1) & 0xFFFFFFFE) * temp_r9) + (((x >> 1) * 4) & 0xFFFFFFE0));
+            return lookupOffset + ((((y >> 1) & 0xFFFFFFFE) * doubleRowStride) + (((x >> 1) * 4) & 0xFFFFFFE0));
         }
-        int temp_r10_2 = (y >> 2) % 4;
-        int var_r3, var_r8, var_r11_2;
+        int yQuadMod = (y >> 2) % 4;
+        int tiledOffsetX, tiledOffsetY, tiledStride;
         if ((mWidth > 0x80U) && (mHeight > 0x80U)) {
-            var_r3 = (((int)(y - ((y / 128) << 7)) >> 1) & 0xFFFFFFF8) + ((x >> 1) & 0xFFFFFFC0);
-            var_r8 = (((int)(x - ((x / 128) << 7)) >> 2) & 0xFFFFFFF8) + ((y >> 2) & 0xFFFFFFE0) + (temp_r10_2 * 2);
-            var_r11_2 = (((mHeight - (((int)mHeight / 128) << 7)) & 0xFFFFFFF0) + (mWidth & 0xFFFFFF80)) * 2;
+            tiledOffsetX = (((int)(y - ((y / 128) << 7)) >> 1) & 0xFFFFFFF8) + ((x >> 1) & 0xFFFFFFC0);
+            tiledOffsetY = (((int)(x - ((x / 128) << 7)) >> 2) & 0xFFFFFFF8) + ((y >> 2) & 0xFFFFFFE0) + (yQuadMod * 2);
+            tiledStride = (((mHeight - (((int)mHeight / 128) << 7)) & 0xFFFFFFF0) + (mWidth & 0xFFFFFF80)) * 2;
         } else {
-            var_r3 = (y >> 1) & 0xFFFFFFF8;
-            var_r8 = ((x >> 2) & 0xFFFFFFF8) + (temp_r10_2 * 2);
-            var_r11_2 = (int)mHeight * 2;
+            tiledOffsetX = (y >> 1) & 0xFFFFFFF8;
+            tiledOffsetY = ((x >> 2) & 0xFFFFFFF8) + (yQuadMod * 2);
+            tiledStride = (int)mHeight * 2;
         }
-        char *lookup2 = (temp_r10_2 & 1) ? hbytes13 : hbytes02;
-        unsigned char temp_r10_3 = lookup2[(y % 4) << 5 + (x - ((x / 32) << 5))];
-        int var_r10_2 = (int)temp_r10_3 >> 1;
-        nibble = temp_r10_3 & 1;
-        if (var_r10_2 > 0x1F) {
-            var_r10_2 = (var_r10_2 + var_r11_2) - 0x20;
+        char *lookup2 = (yQuadMod & 1) ? hbytes13 : hbytes02;
+        unsigned char nibbleOffset = lookup2[(y % 4) << 5 + (x - ((x / 32) << 5))];
+        int offsetShifted = (int)nibbleOffset >> 1;
+        nibble = nibbleOffset & 1;
+        if (offsetShifted > 0x1F) {
+            offsetShifted = (offsetShifted + tiledStride) - 0x20;
         }
-        return var_r10_2 + ((var_r11_2 * var_r8) + (var_r3 * 4));
+        return offsetShifted + ((tiledStride * tiledOffsetY) + (tiledOffsetX * 4));
     }
     if (mOrder & 0x40) {
-        unsigned char temp_r11_3 = mBpp;
-        int var_r10_3 = 8;
-        if (temp_r11_3 != 4) {
-            var_r10_3 = 4;
+        unsigned char bpp = mBpp;
+        int blockSize = 8;
+        if (bpp != 4) {
+            blockSize = 4;
         }
-        unsigned short temp_r31 = mWidth;
-        int temp_r11_4 = temp_r11_3 - 0x10;
+        unsigned short width = mWidth;
+        int bppOffset = bpp - 0x10;
         nibble = x & 1;
-        int temp_r11_5 = (((temp_r11_4 - temp_r11_4) - !(temp_r11_4 >> 31)) & 4) + 4;
-        int temp_r9_2 = (((temp_r11_3 - 0x20) == 0) & 1) + 1;
-        int temp_r7_2 = x % temp_r11_5;
-        int temp_r8_2 = ((((((int)temp_r31 / temp_r11_5) * (y / var_r10_3)) + (x / temp_r11_5)) * temp_r9_2 * var_r10_3) + (y % var_r10_3)) * temp_r11_5;
-        unsigned int temp_r27 = temp_r31 * temp_r9_2;
-        int var_r11 = (int)(mBpp * ((temp_r8_2 + temp_r7_2) % temp_r27)) >> (temp_r9_2 + 2);
-        int var_r10 = mRowBytes * ((unsigned int)(temp_r8_2 + temp_r7_2) / temp_r27);
-        return var_r11 + var_r10;
+        int blockWidth = (((bppOffset - bppOffset) - !(bppOffset >> 31)) & 4) + 4;
+        int pixelScale = (((bpp - 0x20) == 0) & 1) + 1;
+        int xModBlockWidth = x % blockWidth;
+        int tiledBaseOffset = ((((((int)width / blockWidth) * (y / blockSize)) + (x / blockWidth)) * pixelScale * blockSize) + (y % blockSize)) * blockWidth;
+        unsigned int scaledWidth = width * pixelScale;
+        int offsetMod = (int)(mBpp * ((tiledBaseOffset + xModBlockWidth) % scaledWidth)) >> (pixelScale + 2);
+        int rowOffset = mRowBytes * ((unsigned int)(tiledBaseOffset + xModBlockWidth) / scaledWidth);
+        return offsetMod + rowOffset;
     }
     nibble = x & 1;
-    int var_r11 = (int)(mBpp * x) >> 3;
-    int var_r10 = mRowBytes * y;
-    return var_r11 + var_r10;
+    int byteOffsetX = (int)(mBpp * x) >> 3;
+    int byteOffsetY = mRowBytes * y;
+    return byteOffsetX + byteOffsetY;
 }
 
 unsigned char RndBitmap::NearestColor(

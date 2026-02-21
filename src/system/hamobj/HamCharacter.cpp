@@ -327,8 +327,9 @@ bool HamCharacter::InClipTest() {
 
 void HamCharacter::SetIKEffectorWeights(float weight) {
     FOREACH (it, mIKEffectors) {
-        if (*it) {
-            (*it)->SetWeight(weight);
+        CharWeightable *cw = *it;
+        if (cw) {
+            cw->SetWeight(weight);
         }
     }
 }

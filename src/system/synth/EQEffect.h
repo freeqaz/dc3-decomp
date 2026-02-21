@@ -3,21 +3,33 @@
 #include "xdk/xaudio2/xaudio2.h"
 class EQEffect {
 public:
+    struct BiquadBand {
+        bool enabled;    // 0x00
+        char _pad[3];    // 0x01
+        float b0;        // 0x04
+        float b1;        // 0x08
+        float b2;        // 0x0C
+        float a1;        // 0x10
+        float a2;        // 0x14
+        float z1;        // 0x18 - filter state
+    };  // size = 0x1C (28 bytes)
+
     struct Params {
-        u32 unk0;
-        float unk4;
-        float unk8;
-        float unkc;
-        float unk10;
-        float unk14;
-        float unk18;
-        float unk1c;
-        float unk20;
-        float unk24;
-        float unk28;
-        float unk2c;
-        float unk30;
-        float unk34;
+        u32 mActiveBands;
+        float mBand1Freq;
+        float mBand1Gain;
+        float mBand1Q;
+        float mBand2Freq;
+        float mBand2Gain;
+        float mBand2Q;
+        float mBand3Freq;
+        float mBand3Gain;
+        float mBand3Q;
+        float mBand4Freq;
+        float mBand4Gain;
+        float mBand4Q;
+        float mBand5Freq;
+        float mBand5Q;
     };
 
     EQEffect(IXAudioBatchAllocator *);
@@ -26,52 +38,24 @@ public:
     void SetParameter(int, float);
     void SetParameters(EQEffect::Params const &);
 
-    float unk0;
-    float unk4;
-    float unk8;
-    float unkc;
-    float unk10;
-    float unk14;
-    float unk18;
-    float unk1c;
-    float unk20;
-    float unk24;
-    float unk28;
-    float unk2c;
-    float unk30;
-    u32 unk34;
-    bool unk38;
-    float unk3c;
-    float unk40;
-    float unk44;
-    float unk48;
-    float unk4c;
-    float unk50;
-    bool unk54;
-    float unk58;
-    float unk5c;
-    float unk60;
-    float unk64;
-    float unk68;
-    float unk6c;
-    float unk70;
-    bool unk74;
-    float unk78;
-    float unk7c;
-    float unk80;
-    float unk84;
-    float unk88;
-    float unk8c;
-    bool unk90;
-    float unk94;
-    float unk98;
-    float unk9c;
-    float unka0;
-    float unka4;
-    bool unka8;
-    float unkac;
-    float unkb0;
-    float unkb4;
-    float unkb8;
-    float unkbc;
+    // Band parameters (fed from SetParameter)
+    float mBand1Freq;       // 0x00
+    float mBand1Gain;       // 0x04
+    float mBand1Q;          // 0x08
+    float mBand2Freq;       // 0x0C
+    float mBand2Gain;       // 0x10
+    float mBand2Q;          // 0x14
+    float mBand3Freq;       // 0x18
+    float mBand3Gain;       // 0x1C
+    float mBand3Q;          // 0x20
+    float mBand4Freq;       // 0x24
+    float mBand4Gain;       // 0x28
+    float mBand4Q;          // 0x2C
+    float mBand5Freq;       // 0x30
+
+    u32 mActiveBands;       // 0x34
+    
+    // Biquad filter coefficients for each band
+    BiquadBand mBands[5];   // 0x38-0xC3: [0]=0x38-0x53, [1]=0x54-0x6F, [2]=0x70-0x8B, [3]=0x8C-0xA7, [4]=0xA8-0xC3
+    // Total size: 0xC4 bytes
 };

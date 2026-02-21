@@ -162,8 +162,8 @@ public:
 
             RndMesh *mesh; // 0x0
             int displayableChars; // 0x4
-            RndMesh::Vert *unk8; // 0x8
-            int unkc; // 0xc - mesh sync flags?
+            RndMesh::Vert *mVertStart; // 0x8
+            int mSyncFlags; // 0xc
         };
 
         virtual ~FontMap();
@@ -241,7 +241,7 @@ public:
         RndFont3d *mFont; // 0x8
         int mDisplayableChars; // 0xc
         std::vector<RndMesh *> mMeshes; // 0x10
-        int unk1c;
+        int mPrevDisplayableChars;
     };
 
     // Hmx::Object
@@ -336,32 +336,32 @@ protected:
     /** "If scrolling oversized text - delay this many seconds between scrolls.
         When the fit type is kFitScrollMarqueeWrapAlways, this value will be ignored." */
     float mScrollPause; // 0x3c
-    bool unk40;
-    int unk44;
-    int unk48;
-    int unk4c;
-    int unk50;
-    int unk54;
-    float unk58;
-    int unk5c;
-    int unk60;
+    bool mWrapEnabled;
+    int mScrollState;
+    int mScrollOffset;
+    int mScrollTimer;
+    int mScrollPos;
+    int mNumLines;
+    float mLineHeight;
+    int mTotalHeight;
+    int mTotalWidth;
     /** "Space between continuous scrolling messages.
         This value is only considered when the fit type
         is set to kFitScrollMarqueeWrapAlways." */
     float mIndentation; // 0x64
-    std::list<float> unk68;
-    std::list<float> unk70;
-    ObjPtr<Hmx::Object> unk78;
-    float unk8c;
-    int unk90;
-    int unk94;
+    std::list<float> mLineWidths;
+    std::list<float> mLineOffsets;
+    ObjPtr<Hmx::Object> mAltStyle;
+    float mZeroAlphaTime;
+    int mDirtyFlags;
+    int mLastSyncFlags;
     /** "The different styles this text can have" */
     ObjVector<Style> mStyles; // 0x98
     std::vector<FontMapBase *> mFontMaps; // 0xa8
-    float unkb4;
-    float unkb8;
-    float unkbc;
-    float unkc0;
-    int unkc4;
-    float unkc8;
+    float mBoundsLeft;
+    float mBoundsTop;
+    float mBoundsRight;
+    float mBoundsBottom;
+    int mCurScrollChars;
+    float mScrollSpeed;
 };

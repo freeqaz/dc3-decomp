@@ -15,9 +15,9 @@ extern void *RadAlloc(int);
 
 BinkMovieSys::BinkMovieSys()
     : MovieSys(), mCriticalSection(0),
-      mBinkCore0(-1), mBinkCore1(-1), unk1c(0) {
+      mBinkCore0(-1), mBinkCore1(-1), mMovieCount(0) {
     mHasAsyncThread = true;
-    unk10 = 1;
+    mNumAsyncThreads = 1;
 }
 
 BinkMovieSys::~BinkMovieSys() {
