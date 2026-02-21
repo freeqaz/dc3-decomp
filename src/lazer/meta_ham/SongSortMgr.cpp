@@ -134,8 +134,11 @@ int SongSortMgr::GetListIndexFromHeaderIndex(int idx) {
         }
         return 1;
     }
-    if (idx >= size && 0 < size) {
-        return mHeadersB[size - 1];
+    if (idx >= size) {
+        if (0 < size) {
+            return mHeadersB[size - 1];
+        }
+        return 1;
     }
     return mHeadersB[idx];
 }

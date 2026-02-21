@@ -46,7 +46,8 @@ DateTime::DateTime(unsigned int code) {
     mHour = b / 0xE10;
     b = b - mHour * 0xE10;
     mMin = b / 0x3C;
-    mSec = b - mMin * 0x3C;
+    b -= mMin * 0x3C;
+    mSec = b;
 }
 
 DateTime::DateTime(
