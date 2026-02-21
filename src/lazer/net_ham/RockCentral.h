@@ -60,7 +60,7 @@ public:
     DataNode OnMsg(const UserLoginMsg &);
 
     bool IsLoginBlocked() const { return mLoginBlocked; }
-    String GetDLCImage() { return mUtilityMsg; }
+    String GetDLCImage() { return unka8; }
     String GetUtilityImage() { return unkc0; }
     String GetUtilitySound() { return unkc8; }
     String GetMiscImage() { return unkd0; }
@@ -92,9 +92,9 @@ protected:
     int unk90;
     std::vector<String> mCommunityMsgs; // 0x94
     String mDLCMsg; // 0xa0
-    String mUtilityMsg; // 0xa8
+    String unka8;
     String unkb0;
-    String unkb8;
+    String mUtilityMsg; // 0xb8
     String unkc0;
     String unkc8;
     String unkd0;
