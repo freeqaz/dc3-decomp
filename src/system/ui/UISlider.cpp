@@ -182,8 +182,12 @@ void UISlider::Update() {
     static Symbol mats("mats");
 
     // Clear material pointers for all states
-    mSliderMesh = nullptr;
-    for (int s = 0; s < UIComponent::kNumStates; s++) mStateMats[s] = nullptr;
+    mSliderMesh = 0;
+    mStateMats[0] = 0;
+    mStateMats[1] = 0;
+    mStateMats[2] = 0;
+    mStateMats[3] = 0;
+    mStateMats[4] = 0;
 
     const DataArray *typeDef = TypeDef();
     if (!typeDef || !mSliderResource) {

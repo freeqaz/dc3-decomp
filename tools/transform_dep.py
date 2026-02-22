@@ -86,7 +86,11 @@ def resolve_windows_path(raw_path: str) -> str:
     if os.path.isabs(result):
         result = os.path.normpath(result)
         return normalize_path_case(result)
-    return result
+    # For relative paths, resolve case on case-sensitive filesystems
+    # (e.g. MSVC reports src\memory.h for src/Memory.h)
+    abs_result = os.path.abspath(result)
+    corrected = normalize_path_case(abs_result)
+    return os.path.relpath(corrected)
 
 
 def transform_line(line: str) -> str:

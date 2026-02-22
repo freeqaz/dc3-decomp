@@ -83,8 +83,8 @@ private:
     int mRecordingFrameCount;
     int mLastFrameIndex; // 0x20 - initialized to -1
     int mMaxFrames;
-    int mRecordPos;
-    int mPlaybackPos;
+    float mRecordPos;
+    float mPlaybackPos;
     float mDefaultTimeout; // 0x30 - initialized to 15
     int mPlaybackIndex; // 0x34 - initialized to -1, playback position
     bool mRecording;

@@ -125,8 +125,9 @@ void CharServoBone::ReallocateInternal() {
     mFacingPosDelta = (Vector3 *)FindPtr("bone_facing_delta.pos");
     if ((void *)mFacingPosDelta) {
         mFacingPos = (Vector3 *)FindPtr("bone_facing.pos");
-        mPelvis = CharUtlFindBoneTrans("bone_pelvis", Dir());
-        MILO_ASSERT(mFacingPos && mPelvis, 0xB3);
+        RndTransformable *pelvis = CharUtlFindBoneTrans("bone_pelvis", Dir());
+        MILO_ASSERT(mFacingPos && pelvis, 0xB3);
+        mPelvis = pelvis;
         mFacingRot = (float *)FindPtr("bone_facing.rotz");
         mFacingRotDelta = (float *)FindPtr("bone_facing_delta.rotz");
     }
