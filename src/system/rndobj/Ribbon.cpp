@@ -7,7 +7,7 @@
 #include "utl/Loader.h"
 
 RndRibbon::RndRibbon()
-    : unk48(-1.0f), mNumSides(4), mMat(this), mWidth(1), mDirty(1), mActive(true),
+    : mLastTime(-1.0f), mNumSides(4), mMat(this), mWidth(1), mDirty(1), mActive(true),
       mNumSegments(0), mDecay(1), mFollowA(this), mFollowB(this), mFollowWeight(0),
       mTaper(0) {
     mMesh = Hmx::Object::New<RndMesh>();
@@ -112,7 +112,7 @@ void RndRibbon::DrawShowing() {
 void RndRibbon::SetActive(bool b) {
     if (mActive != b) {
         mTransforms.clear();
-        unk48 = -1.0;
+        mLastTime = -1.0;
     }
     mActive = b;
 }

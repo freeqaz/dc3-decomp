@@ -4,7 +4,7 @@
 #include "rndobj/Anim.h"
 
 FlowAnimate::FlowAnimate()
-    : unk5c(this), mAnim(this), mStopMode(kStopLastFrame), unk98(0), mBlend(0), mWait(0),
+    : mAnimTask(this), mAnim(this), mStopMode(kStopLastFrame), unk98(0), mBlend(0), mWait(0),
       mDelay(0), mEnable(0), mRate(RndAnimatable::k30_fps), mStart(0), mEnd(0),
       mPeriod(0), mScale(1), unkc4(0), mEase(kEaseLinear), mEasePower(2), mWrap(0),
       mImmediateRelease(0) {

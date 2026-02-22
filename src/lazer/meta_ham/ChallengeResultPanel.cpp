@@ -16,7 +16,7 @@
 #include "utl/Symbol.h"
 
 ChallengeResultPanel::ChallengeResultPanel()
-    : mChallengeList(0), unk4c(0), unk5c(0), unk60(0), unk64(0), unk6c(0) {}
+    : mChallengeList(0), mPhase(0), mPlayerScore(0), mRivalIndex(0), mHalfDisplayCount(0), mPlayerIndex(0) {}
 
 ChallengeResultPanel::~ChallengeResultPanel() {}
 
@@ -45,23 +45,23 @@ void ChallengeResultPanel::Text(int, int data, UIListLabel *slot, UILabel *label
         result = row.mNotes;
 
         if (slot->Matches("white_small_gamertag")) {
-            if ((unk5c > row.mScore) || (data == unk60) || (data == unk6c)) {
+            if ((mPlayerScore > row.mScore) || (data == mRivalIndex) || (data == mPlayerIndex)) {
                 result = gNullStr;
             }
         } else if (slot->Matches("grey_small_gamertag")) {
-            if ((unk5c <= row.mScore) || (data == unk60)) {
+            if ((mPlayerScore <= row.mScore) || (data == mRivalIndex)) {
                 result = gNullStr;
             }
         } else if (slot->Matches("white_large_gamertag")) {
-            if ((unk5c > row.mScore) || (data == unk6c)) {
+            if ((mPlayerScore > row.mScore) || (data == mPlayerIndex)) {
                 result = gNullStr;
             }
         } else if (slot->Matches("grey_large_gamertag")) {
-            if ((unk5c <= row.mScore) || (data == unk6c)) {
+            if ((mPlayerScore <= row.mScore) || (data == mPlayerIndex)) {
                 result = gNullStr;
             }
         } else if (slot->Matches("gold_large_gamertag")) {
-            if ((unk5c != row.mScore) || (data != unk6c)) {
+            if ((mPlayerScore != row.mScore) || (data != mPlayerIndex)) {
                 result = gNullStr;
             }
         } else {
@@ -71,23 +71,23 @@ void ChallengeResultPanel::Text(int, int data, UIListLabel *slot, UILabel *label
 
     if (result == gNullStr) {
         if (slot->Matches("white_small_score")) {
-            if ((unk5c <= row.mScore) && (data != unk60) && (data == unk6c)) {
+            if ((mPlayerScore <= row.mScore) && (data != mRivalIndex) && (data == mPlayerIndex)) {
                 result = LocalizeSeparatedInt(row.mScore, TheLocale);
             }
         } else if (slot->Matches("grey_small_score")) {
-            if ((unk5c > row.mScore) && (data == unk60)) {
+            if ((mPlayerScore > row.mScore) && (data == mRivalIndex)) {
                 result = LocalizeSeparatedInt(row.mScore, TheLocale);
             }
         } else if (slot->Matches("white_large_score")) {
-            if ((unk5c <= row.mScore) && (data != unk60)) {
+            if ((mPlayerScore <= row.mScore) && (data != mRivalIndex)) {
                 result = LocalizeSeparatedInt(row.mScore, TheLocale);
             }
         } else if (slot->Matches("grey_large_score")) {
-            if ((unk5c > row.mScore) && (data == unk60)) {
+            if ((mPlayerScore > row.mScore) && (data == mRivalIndex)) {
                 result = LocalizeSeparatedInt(row.mScore, TheLocale);
             }
         } else if (slot->Matches("gold_large_score")) {
-            if ((unk5c == row.mScore) && (data == unk6c)) {
+            if ((mPlayerScore == row.mScore) && (data == mPlayerIndex)) {
                 result = LocalizeSeparatedInt(row.mScore, TheLocale);
             }
         }
@@ -107,30 +107,30 @@ void ChallengeResultPanel::FinishLoad() {
 
 void ChallengeResultPanel::Poll() {
     HamPanel::Poll();
-    switch (unk4c) {
+    switch (mPhase) {
     case 0:
         if (!DataDir()->Find<Flow>("result_init.flow")->IsRunning()) {
             DataDir()->Find<Flow>("score.flow")->Activate();
-            unk4c = 1;
+            mPhase = 1;
             mChallengeList->AutoScroll();
         }
         break;
     case 2:
         if (!DataDir()->Find<Flow>("rival_result.flow")->IsRunning()) {
-            unk4c = 3;
+            mPhase = 3;
             mChallengeList->AutoScroll();
         }
         break;
     case 3:
         if (!mChallengeList->IsScrolling()) {
             mChallengeList->StopAutoScroll();
-            unk4c = 4;
+            mPhase = 4;
             DataDir()->Find<Flow>("final_result.flow")->Activate();
         }
         break;
     case 4:
         if (!DataDir()->Find<Flow>("final_result.flow")->IsRunning()) {
-            unk4c = 5;
+            mPhase = 5;
             mRightHandNavList->Enable();
             mRightHandNavList->SetShowing(true);
         }
@@ -163,17 +163,17 @@ void ChallengeResultPanel::UpdateList(int player) {
     PropertyEventProvider *provider = playerData->Provider();
     MILO_ASSERT(provider, 0x7F);
     auto _tmp0 = provider->Property(score)->Int();
-    unk5c = _tmp0;
+    mPlayerScore = _tmp0;
     auto missionIndex = provider->Property(challenge_mission_index)->Int();
-    unk60 = missionIndex + numDisplay;
-    unk68 = provider->Property(side)->Int();
+    mRivalIndex = missionIndex + numDisplay;
+    mSide = provider->Property(side)->Int();
     auto _tmp1 = provider->Property(player_name)->Str();
     playerName = _tmp1;
     int challengeScore = provider->Property(challenge_mission_score)->Int();
     bool challengeSelf = provider->Property(is_challenging_self)->Int();
-    unk64 = (numDisplay / 2) + 1;
-    if (unk5c <= challengeScore) {
-        unk60++;
+    mHalfDisplayCount = (numDisplay / 2) + 1;
+    if (mPlayerScore <= challengeScore) {
+        mRivalIndex++;
     }
     mItems.clear();
     for (int i = 0; i < mChallengeList->NumDisplay(); i++) {
@@ -182,7 +182,7 @@ void ChallengeResultPanel::UpdateList(int player) {
 
     // Create temp ChallengeRow with player's info
     ChallengeRow playerRow;
-    playerRow.mScore = unk5c;
+    playerRow.mScore = mPlayerScore;
     playerRow.mGamertag = playerName;
     playerRow.mNotes = playerName;
 
@@ -193,8 +193,8 @@ void ChallengeResultPanel::UpdateList(int player) {
     // Insert player row and challenges in sorted order by score
     for (int n = challenges.size(); n > 0; n--) {
         int i = challenges.size() - n;
-        if (unk5c <= challenges[i].mScore && !inserted) {
-            unk6c = mItems.size();
+        if (mPlayerScore <= challenges[i].mScore && !inserted) {
+            mPlayerIndex = mItems.size();
             mItems.push_back(playerRow);
             inserted = true;
         }
@@ -203,7 +203,7 @@ void ChallengeResultPanel::UpdateList(int player) {
 
     // If player wasn't inserted yet, insert at end
     if (!inserted) {
-        unk6c = mItems.size();
+        mPlayerIndex = mItems.size();
         mItems.push_back(playerRow);
     }
 
@@ -214,12 +214,12 @@ void ChallengeResultPanel::UpdateList(int player) {
     int beatenCount = 0;
 
     for (unsigned int i = numDisplay; mItems.size() > i; i++) {
-        if (unk5c > mItems[i].mScore) {
-            if (i < (unsigned int)unk60) {
+        if (mPlayerScore > mItems[i].mScore) {
+            if (i < (unsigned int)mRivalIndex) {
                 xpBefore += TheChallenges->CalculateChallengeXp(
                     mItems[i].mScore, mItems[i].mDiff
                 );
-            } else if (i == (unsigned int)unk60) {
+            } else if (i == (unsigned int)mRivalIndex) {
                 xpMission = xpBefore + TheChallenges->CalculateChallengeXp(
                     mItems[i].mScore, mItems[i].mDiff
                 );
@@ -236,7 +236,7 @@ void ChallengeResultPanel::UpdateList(int player) {
     } else if ((unsigned int)(unsigned int)beatenCount == mItems.size() - numDisplay - 1) {
         gradeValue = 4;
     } else if (beatRival) {
-        if (beatenCount > unk60 + 1) {
+        if (beatenCount > mRivalIndex + 1) {
             gradeValue = 3;
         } else {
             gradeValue = 2;
@@ -258,12 +258,12 @@ void ChallengeResultPanel::UpdateList(int player) {
     // Set properties on mResultEventProvider
     mResultEventProvider->SetProperty(rival_beaten, DataNode((int)beatRival));
     mResultEventProvider->SetProperty(grade, DataNode(gradeValue));
-    mResultEventProvider->SetProperty(side, DataNode((int)unk68));
+    mResultEventProvider->SetProperty(side, DataNode((int)mSide));
     mResultEventProvider->SetProperty(xp_before_mission, DataNode(xpBefore));
     mResultEventProvider->SetProperty(xp_mission, DataNode(xpMission));
     mResultEventProvider->SetProperty(xp_total, DataNode(totalXP));
     mResultEventProvider->SetProperty(rival_is_self, DataNode((int)challengeSelf));
 
-    unk4c = 0;
+    mPhase = 0;
     DataDir()->Find<Flow>("result_init.flow")->Activate();
 }

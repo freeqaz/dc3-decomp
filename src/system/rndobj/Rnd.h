@@ -142,7 +142,7 @@ public:
     int Height() const { return mHeight; }
     int Bpp() const { return mScreenBpp; }
     bool WorldEnded() const { return mWorldEnded; }
-    bool GetUnk1b4() { return unk1b4; } // When named, can replace
+    bool GetReleaseImmediate() { return mReleaseImmediate; }
     Aspect GetAspect() const { return mAspect; }
     DrawMode GetDrawMode() { return mDrawMode; }
     void SetDrawMode(DrawMode d) { mDrawMode = d; }
@@ -296,7 +296,7 @@ protected:
     ObjPtrList<RndDrawable> mDraws; // 0x1a0
 
 public:
-    bool unk1b4; // 0x1b4
+    bool mReleaseImmediate; // 0x1b4
 
 protected:
     ProcCounter mProcCounter; // 0x1b8

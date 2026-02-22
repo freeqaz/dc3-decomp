@@ -90,12 +90,12 @@ protected:
 
     void ClearPlaylists();
 
-    DataArraySongInfo *unkd0; // 0xd0
+    DataArraySongInfo *mSongInfo; // 0xd0
     std::map<int, Symbol> mSongNameLookup; // 0xd4
     std::map<Symbol, int> mSongIDLookup; // 0xec
     std::map<int, Symbol> mExtraSongIDMap; // 0x104
-    std::vector<int> unk11c; // 0x11c - ranked?
-    std::vector<int> unk128; // 0x128
+    std::vector<int> mRankedSongs; // 0x11c
+    std::vector<int> mRankedDiscSongs; // 0x128
     std::vector<std::pair<int, int> > mRankTiers; // 0x134
     Jukebox mJukebox; // 0x140
     std::vector<String> mContentAltDirs; // 0x150

@@ -36,7 +36,7 @@ void SetLocalizedFBText(const Symbol &s, wchar_t *wStr) {
 }
 
 KinectSharePanel::KinectSharePanel()
-    : mTex(this), unk4c(0), mBuf(0), mPreviewBuf(0), unk58(0) {
+    : mTex(this), mUploadState(0), mBuf(0), mPreviewBuf(0), unk58(0) {
     memset(&mOverlapped, 0, sizeof(XOVERLAPPED));
 }
 
@@ -55,7 +55,7 @@ END_PROPSYNCS
 
 void KinectSharePanel::Poll() {
     UIPanel::Poll();
-    switch (unk4c) {
+    switch (mUploadState) {
     case 2: {
         MILO_LOG("KinectSharePanel reporting successful upload\n");
         RockCentralOpCompleteMsg msg(true, -1, 0);
@@ -65,21 +65,21 @@ void KinectSharePanel::Poll() {
         TheAccomplishmentMgr->EarnAccomplishmentForProfile(
             profile, acc_photo_share, false
         );
-        unk4c = 0;
+        mUploadState = 0;
         break;
     }
     case 3: {
         MILO_LOG("KinectSharePanel reporting failed upload\n");
         RockCentralOpCompleteMsg msg(false, -1, 0);
         Handle(msg, true);
-        unk4c = 0;
+        mUploadState = 0;
         break;
     }
     case 4: {
         MILO_LOG("KinectSharePanel reporting cancelled upload\n");
         RockCentralOpCompleteMsg msg(true, -1, 1);
         Handle(msg, true);
-        unk4c = 0;
+        mUploadState = 0;
         break;
     }
     default:
@@ -92,9 +92,9 @@ void KinectSharePanel::Poll() {
             "KinectSharePanel asynch I/O completed 0x%08x\n", mOverlapped.dwExtendedError
         );
         if (mOverlapped.dwExtendedError != 0) {
-            unk4c = mOverlapped.dwExtendedError == 0x4C7 ? 4 : 3;
+            mUploadState = mOverlapped.dwExtendedError == 0x4C7 ? 4 : 3;
         } else {
-            unk4c = 2;
+            mUploadState = 2;
         }
         if (mOverlapped.hEvent) {
             CloseHandle(mOverlapped.hEvent);
@@ -303,11 +303,11 @@ DataNode KinectSharePanel::OnPostLink(DataArray *a) {
             res = XShowSocialNetworkLinkPostUI(padnum, &mLinkPostParams, &mOverlapped);
         }
         if (res == ERROR_IO_PENDING) {
-            unk4c = 1;
+            mUploadState = 1;
         } else if (res == ERROR_SUCCESS) {
-            unk4c = 2;
+            mUploadState = 2;
         } else {
-            unk4c = 3;
+            mUploadState = 3;
         }
     }
     return DataNode(kDataInt, 0);
@@ -392,11 +392,11 @@ DataNode KinectSharePanel::OnUpload(DataArray *arr) {
         }
 
         if (res == ERROR_IO_PENDING) {
-            unk4c = 1;
+            mUploadState = 1;
         } else if (res == ERROR_SUCCESS) {
-            unk4c = 2;
+            mUploadState = 2;
         } else {
-            unk4c = 3;
+            mUploadState = 3;
         }
     }
     return DataNode(kDataInt, 0);

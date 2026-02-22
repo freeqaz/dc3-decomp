@@ -27,11 +27,11 @@
 #include "utl/Symbol.h"
 
 HamStorePanel::HamStorePanel()
-    : unka0(), unka4(), mOfferProvider(), unkb8(), unkc0(false), unk128(), unk154(false),
-      unk155(true), unk156(false), unk157(false), unk158(false), unk159(false), unk184(),
+    : unka0(), unka4(), mOfferProvider(), mMotd(), mAllowCancel(false), mLockData(), unk154(false),
+      mCartEnabled(true), mCartLocked(false), mCartDataLoaded(false), mRemovingFromCart(false), mAddingToCart(false), unk184(),
       mXboxPurchaser() {
     for (int i = 0; i < 7; i++) {
-        unk138[i] = 0;
+        mJobs[i] = 0;
     }
     DataArray *sysConfig = SystemConfig("store");
     Symbol specialOffersSym("special_offers");
@@ -58,9 +58,9 @@ END_PROPSYNCS
 void HamStorePanel::Load() {
     StorePanel::Load();
     MILO_ASSERT(!mOfferProvider, 0xd3);
-    mOfferProvider = new HamStoreProvider(&mOffers, &unkac, &unk12c);
-    unkc0 = false;
-    unkc4.Restart();
+    mOfferProvider = new HamStoreProvider(&mOffers, &mFilters, &mCartRows);
+    mAllowCancel = false;
+    mCancelTimer.Restart();
     RefreshSpecialOfferStatus();
 }
 
@@ -83,25 +83,25 @@ StoreOffer *HamStorePanel::MakeNewOffer(DataArray *d) {
 }
 
 void HamStorePanel::DisableCart() {
-    if (unk157) {
+    if (mCartDataLoaded) {
         MILO_FAIL("Can\'t disable the cart after it is loaded");
     }
-    unk155 = false;
-    unk128 = 0;
+    mCartEnabled = false;
+    mLockData = 0;
 }
 
 void HamStorePanel::RemoveDLCFromCart(int id) {
-    unk15c.push_back(id);
-    if (!unk158) {
-        unk158 = true;
+    mPendingRemoves.push_back(id);
+    if (!mRemovingFromCart) {
+        mRemovingFromCart = true;
         RemoveNextDLCFromCart();
     }
 }
 
 void HamStorePanel::AddDLCToCart(int id) {
-    unk164.push_back(id);
-    if (!unk159) {
-        unk159 = true;
+    mPendingAdds.push_back(id);
+    if (!mAddingToCart) {
+        mAddingToCart = true;
         AddNextDLCToCart();
     }
 }
@@ -113,48 +113,48 @@ void HamStorePanel::RemoveOfferFromCart(StoreOffer *offer) {
 
 bool HamStorePanel::IsCurrFilterCart(int id) {
     static Symbol store_filter_shopping_cart("store_filter_shopping_cart");
-    return unkac[id]->mFilterSym == store_filter_shopping_cart;
+    return mFilters[id]->mFilterSym == store_filter_shopping_cart;
 }
 
 void HamStorePanel::GetCart() {
     HamProfile *profile = dynamic_cast<HamProfile *>(StoreProfile());
     MILO_ASSERT(profile, 0x23d);
-    unk138[3] = new GetCartJob(this, profile);
-    TheRockCentral.ManageJob(unk138[3]);
+    mJobs[3] = new GetCartJob(this, profile);
+    TheRockCentral.ManageJob(mJobs[3]);
 }
 
 void HamStorePanel::LockCart() {
     HamProfile *profile = dynamic_cast<HamProfile *>(StoreProfile());
     MILO_ASSERT(profile, 0x246);
-    unk156 = true;
-    unk128 = 0;
-    unk138[4] = new LockCartJob(this, profile->GetOnlineID()->ToString());
-    TheRockCentral.ManageJob(unk138[4]);
+    mCartLocked = true;
+    mLockData = 0;
+    mJobs[4] = new LockCartJob(this, profile->GetOnlineID()->ToString());
+    TheRockCentral.ManageJob(mJobs[4]);
 }
 
 void HamStorePanel::UnlockCart() {
     HamProfile *profile = dynamic_cast<HamProfile *>(StoreProfile());
     MILO_ASSERT(profile, 0x252);
-    unk156 = false;
-    unk138[5] = new UnlockCartJob(this, profile->GetOnlineID()->ToString());
-    TheRockCentral.ManageJob(unk138[5]);
+    mCartLocked = false;
+    mJobs[5] = new UnlockCartJob(this, profile->GetOnlineID()->ToString());
+    TheRockCentral.ManageJob(mJobs[5]);
 }
 
 void HamStorePanel::RelockCart() {
     HamProfile *profile = dynamic_cast<HamProfile *>(StoreProfile());
     MILO_ASSERT(profile, 0x25d);
-    unk156 = true;
-    unk138[6] = new LockCartJob(this, profile->GetOnlineID()->ToString());
-    TheRockCentral.ManageJob(unk138[6]);
-    unkf8.Restart();
+    mCartLocked = true;
+    mJobs[6] = new LockCartJob(this, profile->GetOnlineID()->ToString());
+    TheRockCentral.ManageJob(mJobs[6]);
+    mRelockTimer.Restart();
 }
 
 void HamStorePanel::EmptyCart() {
     mOfferProvider->UpdateOffersInCart(nullptr, 2);
     HamProfile *profile = dynamic_cast<HamProfile *>(StoreProfile());
     MILO_ASSERT(profile, 0x26c);
-    unk138[2] = new EmptyCartJob(this, profile->GetOnlineID()->ToString());
-    TheRockCentral.ManageJob(unk138[2]);
+    mJobs[2] = new EmptyCartJob(this, profile->GetOnlineID()->ToString());
+    TheRockCentral.ManageJob(mJobs[2]);
 }
 
 void HamStorePanel::StoreUserProfileSwappedToUser(LocalUser *) {
@@ -162,17 +162,17 @@ void HamStorePanel::StoreUserProfileSwappedToUser(LocalUser *) {
 }
 
 void HamStorePanel::ReadLockData() {
-    ((LockCartJob *)unk138[4])->GetLockData(unk128);
-    unk138[4] = nullptr;
-    unkf8.Restart();
+    ((LockCartJob *)mJobs[4])->GetLockData(mLockData);
+    mJobs[4] = nullptr;
+    mRelockTimer.Restart();
 }
 
 void HamStorePanel::ReadCartData() {
-    GetCartJob *job = (GetCartJob *)unk138[3];
-    unk12c.clear();
-    job->GetRows(&unk12c);
-    unk138[3] = nullptr;
-    unk157 = true;
+    GetCartJob *job = (GetCartJob *)mJobs[3];
+    mCartRows.clear();
+    job->GetRows(&mCartRows);
+    mJobs[3] = nullptr;
+    mCartDataLoaded = true;
 }
 
 StoreOffer *HamStorePanel::FindOffer(Symbol offerName) const {
@@ -187,9 +187,9 @@ StoreOffer *HamStorePanel::FindOffer(Symbol offerName) const {
 
 void HamStorePanel::SetFilterToCart() {
     static Symbol store_filter_shopping_cart("store_filter_shopping_cart");
-    for (int i = unkac.size() - 1; i >= 0; i--) {
-        if (unkac[i]->mFilterSym == store_filter_shopping_cart) {
-            mOfferProvider->SetFilter(unkac[i]);
+    for (int i = mFilters.size() - 1; i >= 0; i--) {
+        if (mFilters[i]->mFilterSym == store_filter_shopping_cart) {
+            mOfferProvider->SetFilter(mFilters[i]);
             return;
         }
     }
@@ -197,9 +197,9 @@ void HamStorePanel::SetFilterToCart() {
 
 int HamStorePanel::SetFilterToSongs() {
     static Symbol songs("songs");
-    for (int i = unkac.size() - 1; i >= 0; i--) {
-        if (unkac[i]->mFilterSym == songs) {
-            mOfferProvider->SetFilter(unkac[i]);
+    for (int i = mFilters.size() - 1; i >= 0; i--) {
+        if (mFilters[i]->mFilterSym == songs) {
+            mOfferProvider->SetFilter(mFilters[i]);
             return i;
         }
     }
@@ -209,18 +209,18 @@ int HamStorePanel::SetFilterToSongs() {
 void HamStorePanel::AddNextDLCToCart() {
     HamProfile *profile = dynamic_cast<HamProfile *>(StoreProfile());
     MILO_ASSERT(profile, 0x2da);
-    unk138[0] =
-        new AddDLCToCartJob(this, profile->GetOnlineID()->ToString(), unk164.front());
-    TheRockCentral.ManageJob(unk138[0]);
+    mJobs[0] =
+        new AddDLCToCartJob(this, profile->GetOnlineID()->ToString(), mPendingAdds.front());
+    TheRockCentral.ManageJob(mJobs[0]);
 }
 
 void HamStorePanel::RemoveNextDLCFromCart() {
     HamProfile *profile = dynamic_cast<HamProfile *>(StoreProfile());
     MILO_ASSERT(profile, 0x2c0);
-    unk138[1] = new RemoveDLCFromCartJob(
-        this, profile->GetOnlineID()->ToString(), unk15c.front()
+    mJobs[1] = new RemoveDLCFromCartJob(
+        this, profile->GetOnlineID()->ToString(), mPendingRemoves.front()
     );
-    TheRockCentral.ManageJob(unk138[1]);
+    TheRockCentral.ManageJob(mJobs[1]);
 }
 
 void HamStorePanel::AddOfferToCart(StoreOffer *offer) {
@@ -257,23 +257,23 @@ void HamStorePanel::CreateCartUIs() {
     static Symbol store_filter_song_import_offers("store_filter_song_import_offers");
 
     HamStoreFilter *filter1 = new HamStoreFilter(store_filter_shopping_cart);
-    unkac.insert(unkac.begin(), filter1);
+    mFilters.insert(mFilters.begin(), filter1);
 
     HamStoreFilter *filter2 = new HamStoreFilter(store_filter_song_import_offers);
-    unkac.push_back(filter2);
+    mFilters.push_back(filter2);
 }
 
 BEGIN_HANDLERS(HamStorePanel)
-    HANDLE_EXPR(get_motd, unkb8)
-    HANDLE_ACTION(set_filter, mOfferProvider->SetFilter(unkac[_msg->Int(2)]))
+    HANDLE_EXPR(get_motd, mMotd)
+    HANDLE_ACTION(set_filter, mOfferProvider->SetFilter(mFilters[_msg->Int(2)]))
     HANDLE_ACTION(
         set_filter_pack_singles, mOfferProvider->SetFilter(_msg->Obj<StoreOffer>(2))
     )
     HANDLE_EXPR(offer_provider, (Hmx::Object *)mOfferProvider)
     HANDLE_EXPR(filter_provider, (Hmx::Object *)mOfferProvider->GetFilterProvider())
-    HANDLE_ACTION(reset_cancel_timer, (unkc0 = false, unkc4.Restart()))
-    HANDLE_EXPR(allow_cancel, unkc0)
-    HANDLE_EXPR(is_cart_enabled, unk155)
+    HANDLE_ACTION(reset_cancel_timer, (mAllowCancel = false, mCancelTimer.Restart()))
+    HANDLE_EXPR(allow_cancel, mAllowCancel)
+    HANDLE_EXPR(is_cart_enabled, mCartEnabled)
     HANDLE_ACTION(disable_cart, DisableCart())
     HANDLE_ACTION(get_cart, GetCart())
     HANDLE_ACTION(add_offer_to_cart, AddOfferToCart(_msg->Obj<StoreOffer>(2)))

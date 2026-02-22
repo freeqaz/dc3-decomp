@@ -73,7 +73,7 @@ MetaPerformer::MetaPerformer(const HamSongMgr &mgr, const char *)
     mSkippedSongs.clear();
     mEnrollmentIndex[0] = -1;
     mEnrollmentIndex[1] = -1;
-    unk29 = DateTime(0);
+    mGameplayTimerStart = DateTime(0);
     mSkillsAwards = new SkillsAwardList();
 }
 
@@ -81,7 +81,7 @@ MetaPerformer::~MetaPerformer() { delete mSkillsAwards; }
 
 void MetaPerformer::HandleSkippedSong() { mSkippedSongs.insert(mPlaylistIndex); }
 void MetaPerformer::HandleSongRestart() { mNumRestarts++; }
-bool MetaPerformer::IsGameplayTimerRunning() const { return unk29.ToCode(); }
+bool MetaPerformer::IsGameplayTimerRunning() const { return mGameplayTimerStart.ToCode(); }
 bool MetaPerformer::GetPlayedLongIntro(Symbol intro) {
     return mLongIntrosPlayed.count(intro) > 0;
 }
@@ -270,7 +270,7 @@ void MetaPerformer::CompleteSong(int i1, int i2, int i3, float f4, bool b5) {
         int padnum = pPlayer->PadNum();
         HamProfile *profile = TheProfileMgr.GetProfileFromPad(padnum);
         if (profile) {
-            TheAccomplishmentMgr->SetUnk30(padnum, false);
+            TheAccomplishmentMgr->SetSigninChanged(padnum, false);
         }
     }
 }
@@ -354,16 +354,16 @@ void MetaPerformer::SetSong(Symbol song) {
 }
 
 void MetaPerformer::StartGameplayTimer() {
-    if (unk29.ToCode() == 0) {
-        GetDateAndTime(unk29);
+    if (mGameplayTimerStart.ToCode() == 0) {
+        GetDateAndTime(mGameplayTimerStart);
     }
 }
 
 void MetaPerformer::JumpGameplayTimerForward(int x) {
-    if (unk29.ToCode() == 0) {
+    if (mGameplayTimerStart.ToCode() == 0) {
         MILO_NOTIFY("This cheat only works while the gameplay timer is running!");
     } else {
-        unk29 = DateTime(unk29.ToCode() - x);
+        mGameplayTimerStart = DateTime(mGameplayTimerStart.ToCode() - x);
     }
 }
 
@@ -421,8 +421,8 @@ bool MetaPerformer::IsLastSong() const {
 }
 
 void MetaPerformer::StopGameplayTimer() {
-    if (unk29.ToCode()) {
-        unsigned int curCode = unk29.ToCode();
+    if (mGameplayTimerStart.ToCode()) {
+        unsigned int curCode = mGameplayTimerStart.ToCode();
         DateTime now;
         GetDateAndTime(now);
         unsigned int nowCode = now.ToCode();
@@ -435,7 +435,7 @@ void MetaPerformer::StopGameplayTimer() {
                 pProfile->GetMetagameStats()->WriteTimePlayed(pProfile, timeDiff);
             }
         }
-        unk29 = DateTime(0);
+        mGameplayTimerStart = DateTime(0);
     }
 }
 
@@ -939,7 +939,7 @@ void MetaPerformer::CheckForFitnessAccomplishments() {
         MILO_ASSERT(pPlayerData, 0x2EC);
         int pad = pPlayerData->PadNum();
         HamProfile *profile = TheProfileMgr.GetProfileFromPad(pad);
-        if (profile && profile->InFitnessMode() && !TheAccomplishmentMgr->Unk30(pad)) {
+        if (profile && profile->InFitnessMode() && !TheAccomplishmentMgr->IsSigninChanged(pad)) {
             float f88, f8c;
             if (mFitnessFilters[i].GetFitnessDataAndReset(f88, f8c)) {
                 profile->SetFitnessStats(i, f88, f8c);
@@ -1218,7 +1218,7 @@ void MetaPerformer::SaveDanceBattleScores(Symbol s1) {
             MILO_ASSERT(pPlayerProvider, 0x220);
             int padnum = pPlayerData->PadNum();
             HamProfile *profile = TheProfileMgr.GetProfileFromPad(padnum);
-            if (profile && !TheAccomplishmentMgr->Unk30(padnum)) {
+            if (profile && !TheAccomplishmentMgr->IsSigninChanged(padnum)) {
                 SongStatusMgr *songStatusMgr = profile->GetSongStatusMgr();
                 MILO_ASSERT(songStatusMgr, 0x229);
                 static Symbol score("score");
@@ -1381,7 +1381,7 @@ void MetaPerformer::HandleGameplayEnded(const EndGameResult &egr) {
             );
         }
 
-        if (pProfileFromPad && pProfileFromPad->HasValidSaveData() && !TheAccomplishmentMgr->Unk30(padNum)) {
+        if (pProfileFromPad && pProfileFromPad->HasValidSaveData() && !TheAccomplishmentMgr->IsSigninChanged(padNum)) {
             if (0 < scoreInt) {
                 pProfileFromPad->GetMetagameStats()->HandleGameplayEnded(
                     pProfileFromPad, pPlayer, egr
@@ -1433,7 +1433,7 @@ void MetaPerformer::SaveAndUploadScores(Symbol s, int i1, int i2) {
             }
 
             HamProfile *pProfile = TheProfileMgr.GetProfileFromPad(padNum);
-            if (pProfile && !TheAccomplishmentMgr->Unk30(padNum)) {
+            if (pProfile && !TheAccomplishmentMgr->IsSigninChanged(padNum)) {
                 SongStatusMgr *pSongStatusMgr = pProfile->GetSongStatusMgr();
                 MILO_ASSERT(pSongStatusMgr, 0x1c1);
 

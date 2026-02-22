@@ -54,11 +54,11 @@ public:
 
     PackSongListProvider GetPackProvider() { return mPackProvider; }
     HamStoreFilterProvider *GetFilterProvider() { return mFilterProvider; }
-    std::list<StoreOffer *> *GetCartOffers() { return &unkb0; }
+    std::list<StoreOffer *> *GetCartOffers() { return &mCartOffers; }
 
 protected:
-    std::vector<StoreOffer *> *unk30;
-    std::vector<HamStoreFilter *> *unk34;
+    std::vector<StoreOffer *> *mAllOffers;
+    std::vector<HamStoreFilter *> *mFilters;
     std::map<Symbol, std::vector<StoreOffer *> *> unk38;
     std::vector<StoreOffer *> unk54;
     int unk5c;
@@ -67,8 +67,8 @@ protected:
     std::vector<Symbol> mSorts; // 0x68
     HamStoreFilterProvider *mFilterProvider;
     PackSongListProvider mPackProvider;
-    std::vector<CartRow> *unkac;
-    std::list<StoreOffer *> unkb0;
+    std::vector<CartRow> *mCartRows;
+    std::list<StoreOffer *> mCartOffers;
     int unkb8;
 
 private:

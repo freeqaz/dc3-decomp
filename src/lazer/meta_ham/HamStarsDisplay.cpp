@@ -62,7 +62,7 @@ void HamStarsDisplay::SetSongImpl(int songID, Difficulty diff, StarDisplayMode m
                     u11 = true;
                     for (int i = 0; i < 4; i++)
                         ;
-                    c10 = data.unk10;
+                    c10 = data.mFiveStarNoFlashcards;
                 }
                 break;
             }
@@ -71,7 +71,7 @@ void HamStarsDisplay::SetSongImpl(int songID, Difficulty diff, StarDisplayMode m
                 MILO_ASSERT(diff < kNumDifficulties, 0x5C);
                 if (status.mStatusData[diff].mScore > 0) {
                     u11 = true;
-                    c10 = status.mStatusData[diff].unk10;
+                    c10 = status.mStatusData[diff].mFiveStarNoFlashcards;
                 }
                 break;
             }

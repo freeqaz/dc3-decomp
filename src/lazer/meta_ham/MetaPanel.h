@@ -54,12 +54,12 @@ protected:
     int PickLoopIndex(int);
     DataNode OnMsg(XMPStateChangedMsg const &);
 
-    std::vector<int> unk38;
-    int unk44;
+    std::vector<int> mLoopHistory;
+    int mLoopHistoryCursor;
     int unk48;
-    SongPreview unk4c;
-    bool unkdc;
-    MetaMusicManager *unke0;
-    Campaign *unke4;
-    HAQManager *unke8;
+    SongPreview mSongPreview;
+    bool mXMPPlaying;
+    MetaMusicManager *mMetaMusicManager;
+    Campaign *mCampaign;
+    HAQManager *mHAQManager;
 };

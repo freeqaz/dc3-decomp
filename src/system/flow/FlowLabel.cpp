@@ -53,6 +53,6 @@ BEGIN_LOADS(FlowLabel)
 END_LOADS
 
 bool FlowLabel::Activate(FlowNode *node) {
-    unk58 = false;
+    mStopRequested = false;
     return FlowQueueable::Activate(node);
 }

@@ -115,7 +115,7 @@ public:
     );
 
     void IncrementSkippedSongCount() { mSkippedSongCount++; }
-    void UpdateNag() { unk368++; }
+    void IncrementNagCounter() { mNagCounter++; }
     MoveRatingHistory *GetMoveRatingHistory() const { return mRatingHistory; }
     bool InFitnessMode() { return mInFitnessMode; }
     MetagameRank *GetMetagameRank() const { return mRank; }
@@ -125,15 +125,15 @@ public:
     float FitnessTime() const { return mFitnessTime; }
     float FitnessCalories() const { return mFitnessCalories; }
     int GetProfileTime() const { return mProfileTime; }
-    bool GetUnk360() const { return unk360; }
-    void SetUnk388(Symbol s) { unk338 = s; }
-    Symbol GetUnk388() const { return unk338; }
-    void SetUnk324(int i) { unk324 = i; }
-    int GetUnk324() const { return unk324; }
-    void SetUnk334(bool b) { unk334 = b; }
-    bool GetUnk334() const { return unk334; }
-    int GetUnk330() const { return unk330; }
-    void SetUnk330(int i) { unk330 = i; }
+    bool GetFitnessGoalNeedsUpload() const { return mFitnessGoalNeedsUpload; }
+    void SetLastPracticeSong(Symbol s) { mLastPracticeSong = s; }
+    Symbol GetLastPracticeSong() const { return mLastPracticeSong; }
+    void SetChallengeTimeStamp(int i) { mChallengeTimeStamp = i; }
+    int GetChallengeTimeStamp() const { return mChallengeTimeStamp; }
+    void SetHasPracticedSong(bool b) { mHasPracticedSong = b; }
+    bool GetHasPracticedSong() const { return mHasPracticedSong; }
+    int GetPrePracticeBestScore() const { return mPrePracticeBestScore; }
+    void SetPrePracticeBestScore(int i) { mPrePracticeBestScore = i; }
 
 private:
     // FixedSizeSaveable
@@ -166,12 +166,12 @@ private:
     OnlineID *mOnlineID; // 0x318
     bool mSignedIn; // 0x31c
     int mProfileSaveCounter; // 0x320
-    int unk324; // 0x324 - challenge timestamp?
+    int mChallengeTimeStamp; // 0x324 - challenge timestamp?
     int mSkippedSongCount; // 0x328
     int mProfileFlags; // 0x32c
-    int unk330;
-    bool unk334;
-    Symbol unk338;
+    int mPrePracticeBestScore;
+    bool mHasPracticedSong;
+    Symbol mLastPracticeSong;
     bool mIsFitnessGoalSet; // 0x33c
     /** The day/month/year from which this fitness goal started. */
     int mFitnessGoalStartDay; // 0x340
@@ -187,10 +187,10 @@ private:
     int mTrackedDaysActive; // 0x354
     /** The actual number of calories this profile has burnt. */
     int mTrackedCalories; // 0x358
-    int unk35c;
-    bool unk360;
+    int mLastActiveDayNumber;
+    bool mFitnessGoalNeedsUpload;
     int mProfileTime; // 0x364
-    int unk368;
+    int mNagCounter;
     bool mNagNeedsRefresh; // 0x36c
     int mCurrentNagIndex; // 0x370
     int mCompletedNagsMask; // 0x374

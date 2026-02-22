@@ -21,7 +21,7 @@ struct SongStatusData {
         mPercentPassed = 0;
         mNumPerfects = 0;
         mNumNices = 0;
-        unk10 = 0;
+        mFiveStarNoFlashcards = 0;
         mNoFlashcards = 0;
         mNeedUpload = false;
     }
@@ -33,7 +33,7 @@ struct SongStatusData {
     unsigned char mPercentPassed; // 0xd
     unsigned char mNumPerfects; // 0xe
     unsigned char mNumNices; // 0xf
-    bool unk10;
+    bool mFiveStarNoFlashcards;
     bool mNoFlashcards; // 0x11
     bool mNeedUpload; // 0x12
     Difficulty mDifficulty; // 0x14

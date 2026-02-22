@@ -81,8 +81,8 @@ protected:
     void BlurRT();
     void SetupForPostProcess();
 
-    RndCam *unk94; // 0x94
-    ObjPtr<RndCam> unk98; // 0x98
+    RndCam *mSpotCam; // 0x94
+    ObjPtr<RndCam> mSavedCam; // 0x98
     RndTex *mFogDensityMap; // 0xac
     bool unkb0; // 0xb0
 };

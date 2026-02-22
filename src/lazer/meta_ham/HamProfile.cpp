@@ -47,11 +47,11 @@ HamProfile::HamProfile(int i1)
     : Profile(i1), mAccProgress(this), mPlaylistNeedsRefresh(0), mInFitnessMode(0),
       mFitnessPounds(130), mIsFitnessWeightEntered(0), mFitnessTime(0), mFitnessCalories(0),
       mCurrentSessionCalories(0), mUploadFriendsToken(0), mOnlineID(new OnlineID()),
-      mSignedIn(0), mProfileSaveCounter(0), unk324(0), mSkippedSongCount(0),
-      mProfileFlags(0), unk330(0), unk334(0), unk338(gNullStr), mIsFitnessGoalSet(0),
+      mSignedIn(0), mProfileSaveCounter(0), mChallengeTimeStamp(0), mSkippedSongCount(0),
+      mProfileFlags(0), mPrePracticeBestScore(0), mHasPracticedSong(0), mLastPracticeSong(gNullStr), mIsFitnessGoalSet(0),
       mFitnessGoalStartDay(0), mFitnessGoalStartMonth(0), mFitnessGoalStartYear(0),
       mFitnessGoalDaysActive(0), mFitnessGoalCalories(0), mTrackedDaysActive(0),
-      mTrackedCalories(0), unk35c(0), unk360(0), mProfileTime(0), unk368(0),
+      mTrackedCalories(0), mLastActiveDayNumber(0), mFitnessGoalNeedsUpload(0), mProfileTime(0), mNagCounter(0),
       mNagNeedsRefresh(1), mCurrentNagIndex(0), mCompletedNagsMask(3) {
     mSaveSizeMethod = SaveSize;
     mSongStatusMgr = new SongStatusMgr(&TheHamSongMgr);
@@ -103,7 +103,7 @@ void HamProfile::SaveFixed(FixedSizeSaveableStream &fs) const {
     fs << mInFitnessMode;
     fs << mFitnessPounds;
     fs << mIsFitnessWeightEntered;
-    fs << unk324;
+    fs << mChallengeTimeStamp;
     fs << mFitnessGoalStartDay;
     fs << mFitnessGoalStartMonth;
     fs << mFitnessGoalStartYear;
@@ -111,15 +111,15 @@ void HamProfile::SaveFixed(FixedSizeSaveableStream &fs) const {
     fs << mFitnessGoalCalories;
     fs << mTrackedDaysActive;
     fs << mTrackedCalories;
-    fs << unk35c;
+    fs << mLastActiveDayNumber;
     fs << mProfileFlags;
     fs << mProfileTime;
-    fs << unk368;
+    fs << mNagCounter;
     fs << mNagNeedsRefresh;
     fs << mCurrentNagIndex;
     fs << mCompletedNagsMask;
     fs << mIsFitnessGoalSet;
-    fs << unk360;
+    fs << mFitnessGoalNeedsUpload;
     const_cast<HamProfile *>(this)->mDirty = false;
 }
 
@@ -156,7 +156,7 @@ void HamProfile::LoadFixed(FixedSizeSaveableStream &fs, int i2) {
     fs >> mInFitnessMode;
     fs >> mFitnessPounds;
     fs >> mIsFitnessWeightEntered;
-    fs >> unk324;
+    fs >> mChallengeTimeStamp;
     fs >> mFitnessGoalStartDay;
     fs >> mFitnessGoalStartMonth;
     fs >> mFitnessGoalStartYear;
@@ -164,16 +164,16 @@ void HamProfile::LoadFixed(FixedSizeSaveableStream &fs, int i2) {
     fs >> mFitnessGoalCalories;
     fs >> mTrackedDaysActive;
     fs >> mTrackedCalories;
-    fs >> unk35c;
+    fs >> mLastActiveDayNumber;
     mSkippedSongCount = 0;
     fs >> mProfileFlags;
     fs >> mProfileTime;
-    fs >> unk368;
+    fs >> mNagCounter;
     fs >> mNagNeedsRefresh;
     fs >> mCurrentNagIndex;
     fs >> mCompletedNagsMask;
     fs >> mIsFitnessGoalSet;
-    fs >> unk360;
+    fs >> mFitnessGoalNeedsUpload;
     mDirty = false;
     mPlaylistNeedsRefresh = false;
 }
@@ -236,7 +236,7 @@ BEGIN_HANDLERS(HamProfile)
     )
     HANDLE_ACTION(send_fitness_goal_to_rc, SendFitnessGoalToRC())
     HANDLE_ACTION(set_last_new_song, SetLastNewSong())
-    HANDLE_ACTION(update_nag, UpdateNag())
+    HANDLE_ACTION(update_nag, IncrementNagCounter())
     HANDLE_EXPR(needs_to_be_nagged, NeedsToBeNagged())
     HANDLE_EXPR(nag, Nag())
     HANDLE_ACTION(complete_current_nag, CompleteCurrentNag(_msg->Int(2)))
@@ -269,7 +269,7 @@ bool HamProfile::IsUnsaved() const {
         return true;
     }
 
-    return mRatingHistory->Unk20() != false;
+    return mRatingHistory->HasModifiedHistory() != false;
 }
 
 bool HamProfile::HasSomethingToUpload() {
@@ -304,7 +304,7 @@ void HamProfile::DeleteAll() {
     mInFitnessMode = false;
     mProfileSaveCounter = 0;
     mFitnessPounds = 130;
-    unk324 = 0;
+    mChallengeTimeStamp = 0;
     mFitnessTime = 0;
     mIsFitnessGoalSet = false;
     mFitnessCalories = 0;
@@ -316,11 +316,11 @@ void HamProfile::DeleteAll() {
     mFitnessGoalCalories = 0;
     mTrackedDaysActive = 0;
     mTrackedCalories = 0;
-    unk35c = 0;
-    unk360 = false;
+    mLastActiveDayNumber = 0;
+    mFitnessGoalNeedsUpload = false;
     mSkippedSongCount = 0;
     mProfileTime = 0;
-    unk368 = 0;
+    mNagCounter = 0;
     mNagNeedsRefresh = true;
     mCurrentNagIndex = 0;
     mCompletedNagsMask = 3;
@@ -489,9 +489,9 @@ bool HamProfile::NeedsToBeNagged() {
     if (mCurrentNagIndex == 3) {
         return false;
     } else if (mNagNeedsRefresh) {
-        return unk368 >= 2;
+        return mNagCounter >= 2;
     } else {
-        return unk368 >= 4;
+        return mNagCounter >= 4;
     }
 }
 
@@ -512,7 +512,7 @@ Symbol HamProfile::Nag() {
         );
         out = main_screen;
     }
-    unk368 = 0;
+    mNagCounter = 0;
     return out;
 }
 
@@ -566,7 +566,7 @@ void HamProfile::CompleteNag(int i1, bool b2) {
 
 void HamProfile::ResetNags() {
     if (IsOkToUpdateProfile()) {
-        unk368 = 0;
+        mNagCounter = 0;
         mNagNeedsRefresh = true;
         mCurrentNagIndex = 0;
         mCompletedNagsMask = 3;
@@ -632,7 +632,7 @@ void HamProfile::ResetFitnessGoal() {
         mFitnessGoalCalories = 0;
         mTrackedDaysActive = 0;
         mTrackedCalories = 0;
-        unk35c = 0;
+        mLastActiveDayNumber = 0;
         mDirty = true;
     }
 }
@@ -644,7 +644,7 @@ void HamProfile::GetFitnessGoalStatus(int &curDaysActive, int &curCalories) {
 
 void HamProfile::ClearFitnessGoalNeedUpload() {
     if (IsOkToUpdateProfile()) {
-        unk360 = false;
+        mFitnessGoalNeedsUpload = false;
         mDirty = true;
     }
 }
@@ -803,11 +803,11 @@ void HamProfile::SetFitnessStats(int, float calories, float time) {
             DateTime dt;
             GetDateAndTime(dt);
             int dayNum = dt.ToDayNumber();
-            if (dayNum != unk35c) {
-                unk35c = dayNum;
+            if (dayNum != mLastActiveDayNumber) {
+                mLastActiveDayNumber = dayNum;
                 mTrackedDaysActive++;
             }
-            unk360 = true;
+            mFitnessGoalNeedsUpload = true;
         }
         mDirty = true;
     }
@@ -847,7 +847,7 @@ void HamProfile::UpdateFitnessWeight(HamLabel *label) {
     MILO_ASSERT(label, 0x3CE);
     if (mIsFitnessWeightEntered) {
         float weight_lbs = mFitnessPounds;
-        if (!TheProfileMgr.GetUnk4c()) {
+        if (!TheProfileMgr.GetWeightUnits()) {
             static Symbol weight_pounds("weight_pounds");
             label->SetTokenFmt(weight_pounds, (int)weight_lbs);
         } else {

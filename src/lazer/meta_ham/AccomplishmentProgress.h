@@ -30,9 +30,9 @@ public:
 
     static int SaveSize(int);
 
-    int unk8;
+    int mRewardId;
     GamerAwardType mType; // 0xc
-    bool unk10;
+    bool mIsPending;
     XUSER_AVATARASSET mAsset; // 0x14
     XOVERLAPPED mOverlapped; // 0x1c
 };
@@ -79,11 +79,11 @@ public:
     int NumDays() const { return mTotalDaysActive; }
     void SetNumDays(int i) { mTotalDaysActive = i; }
     int NumWeekends() const { return mWeekendCount; }
-    int GetUnk118() const { return mChallengeProgress; }
-    void SetUnk118(int i) { mChallengeProgress = i; }
-    int GetUnk120() const { return mWeeklyPlayCount; }
+    int GetChallengeProgress() const { return mChallengeProgress; }
+    void SetChallengeProgress(int i) { mChallengeProgress = i; }
+    int GetWeeklyPlayCount() const { return mWeeklyPlayCount; }
     void SetWeekends(int i) { mWeekendCount = i; }
-    void SetUnk120(int i) { mWeeklyPlayCount = i; }
+    void SetWeeklyPlayCount(int i) { mWeeklyPlayCount = i; }
 
 private:
     void GiveGamerpic(Accomplishment *);

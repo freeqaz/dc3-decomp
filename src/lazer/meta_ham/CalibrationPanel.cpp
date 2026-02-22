@@ -21,7 +21,7 @@
 
 CalibrationOffsetProvider::CalibrationOffsetProvider(UIPanel *up) {
     SetName("calibration_offset_provider", ObjectDir::Main());
-    unk3c = up;
+    mPanel = up;
 }
 
 BEGIN_HANDLERS(CalibrationOffsetProvider)
@@ -45,7 +45,7 @@ void CalibrationOffsetProvider::Text(
         }
     } else if (uiListLabel->Matches("check")) {
         static Symbol chosen_offset("chosen_offset");
-        const DataNode *node = unk3c->Property(chosen_offset, true);
+        const DataNode *node = mPanel->Property(chosen_offset, true);
         int f = node->Float();
         if (mOffsets[data] == f) {
             uiLabel->SetIcon('b');
@@ -74,7 +74,7 @@ int CalibrationOffsetProvider::GetOffset(int selectedPos) {
 #pragma region CalibrationPanel
 
 CalibrationPanel::CalibrationPanel()
-    : mProvider(this), unk7c(500.0f), mVolume(-6.0f), mStream(), unk88(false) {}
+    : mProvider(this), mBeatIntervalMs(500.0f), mVolume(-6.0f), mStream(), mPendingPlay(false) {}
 
 CalibrationPanel::~CalibrationPanel() { mProvider.ClearOffsets(); }
 
@@ -90,7 +90,7 @@ void CalibrationPanel::Enter() {
 
 void CalibrationPanel::Exit() {
     UIPanel::Exit();
-    unk88 = false;
+    mPendingPlay = false;
     if (mStream)
         mStream->Stop();
 }
@@ -105,10 +105,10 @@ void CalibrationPanel::InitializeContent() {
     if (mStream)
         RELEASE(mStream);
     mStream =
-        TheSynth->NewStream("sfx/samples/shell/sync_clap", unk7c * 0.5f, 2.0f, false);
+        TheSynth->NewStream("sfx/samples/shell/sync_clap", mBeatIntervalMs * 0.5f, 2.0f, false);
     MILO_ASSERT(mStream, 0x36);
     if (mStream) {
-        mStream->SetJump(unk7c, 0, 0);
+        mStream->SetJump(mBeatIntervalMs, 0, 0);
         mStream->SetVolume(mVolume);
     }
 }
@@ -122,7 +122,7 @@ void CalibrationPanel::StartAudio() {
     if (mStream->IsReady())
         mStream->Play();
     else
-        unk88 = true;
+        mPendingPlay = true;
 }
 
 float CalibrationPanel::GetAudioTimeMs() const {
@@ -136,15 +136,15 @@ float CalibrationPanel::GetAudioTimeMs() const {
 }
 
 void CalibrationPanel::UpdateStream() {
-    if (mStream && unk88 && mStream->IsReady()) {
+    if (mStream && mPendingPlay && mStream->IsReady()) {
         mStream->Play();
-        unk88 = false;
+        mPendingPlay = false;
     }
 }
 
 void CalibrationPanel::UpdateAnimation() {
-    float f3 = fmod(unk7c * 0.5f + GetAudioTimeMs(), unk7c);
-    f3 = LoadedDir()->Find<RndGroup>("tick.grp")->EndFrame() * (f3 / unk7c);
+    float f3 = fmod(mBeatIntervalMs * 0.5f + GetAudioTimeMs(), mBeatIntervalMs);
+    f3 = LoadedDir()->Find<RndGroup>("tick.grp")->EndFrame() * (f3 / mBeatIntervalMs);
     float f2 = fmod(f3, LoadedDir()->Find<RndGroup>("tick.grp")->EndFrame());
     LoadedDir()->Find<RndGroup>("tick.grp")->SetFrame(f2, 1);
 }

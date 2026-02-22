@@ -126,7 +126,7 @@ void CampaignPerformer::SelectSong(Symbol song, int i) {
         Symbol crew = pEra->Crew();
         CampaignEraSongEntry *pSongEntry = pEra->GetSongEntry(song);
         MILO_ASSERT(pSongEntry, 0x5c);
-        Symbol introCrew = pSongEntry->GetUnk8();
+        Symbol introCrew = pSongEntry->GetIntroCrew();
         SetupCampaignCharacters(crew, introCrew);
     } else if (TheGameMode->InMode("campaign_intro", true)) {
         static Symbol era_tan_battle("era_tan_battle");
@@ -855,7 +855,7 @@ Symbol CampaignPerformer::GetLastEra() const {
     for (unsigned int i = 0; i < (unsigned int)TheCampaign->NumEras(); i++) {
         CampaignEra *pEra = TheCampaign->GetEra(i);
         MILO_ASSERT(pEra, 0x3B);
-        if (pEra->GetUnk50()) {
+        if (pEra->HasTanBattle()) {
             return pEra->GetName();
         }
     }

@@ -13,8 +13,8 @@ void PropertyEventListener::RegisterEvents(FlowNode *node) {
             for (ObjVector<AutoPropEntry>::iterator it = mAutoPropEntries.begin();
                  it != mAutoPropEntries.end();
                  ++it) {
-                if (it->unk4) {
-                    it->unk4->AddPropertySink(node, it->unk0, reactivate);
+                if (it->mProvider) {
+                    it->mProvider->AddPropertySink(node, it->mPropertyArray, reactivate);
                 }
             }
         }
@@ -28,8 +28,8 @@ void PropertyEventListener::UnregisterEvents(FlowNode *node) {
             for (ObjVector<AutoPropEntry>::iterator it = mAutoPropEntries.begin();
                  it != mAutoPropEntries.end();
                  ++it) {
-                if (it->unk4) {
-                    it->unk4->RemovePropertySink(node, it->unk0);
+                if (it->mProvider) {
+                    it->mProvider->RemovePropertySink(node, it->mPropertyArray);
                 }
             }
         }

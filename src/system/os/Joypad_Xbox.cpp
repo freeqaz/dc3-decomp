@@ -91,7 +91,7 @@ void ReceiveUpstreamBreedDataResponse(int pad, unsigned char *data) {
     tBreed[pad].mDesignIter = data[6];
     tBreed[pad].mManuDate = data[8] * 0x100 + data[7];
     tBreed[pad].mIdent = data[10] * 0x100 + data[9];
-    tBreed[pad].unka = 0;
+    tBreed[pad].mPending = 0;
     JoypadHandleBreedDataResponse(pad);
 }
 
@@ -179,7 +179,7 @@ void SendRawData(
 );
 
 BreedData *GetBreedData(int pad) {
-    if (tBreed[pad].unka) {
+    if (tBreed[pad].mPending) {
         SendRawData(pad, 0x81, 0, 0, 0, 0, 0, 0);
         return nullptr;
     } else {
@@ -222,8 +222,8 @@ JoypadType SetupHXGuitar(int pad, const XINPUT_CAPABILITIES &c) {
     bool u5 = c.Flags & 0x2;
     bool u1 = c.Flags & 1;
     bool u4 = u5 && (u1 || c.Gamepad.sThumbRX >= 0x100);
-    JoypadGetPadData(pad)->unk4b = u5; // wireless?
-    JoypadGetPadData(pad)->unk4a = u1;
+    JoypadGetPadData(pad)->mIsWireless = u5; // wireless?
+    JoypadGetPadData(pad)->mHasCapFlag1 = u1;
     if (c.Gamepad.sThumbLX == 0x1BAD) {
         GetBreedData(pad);
         return kJoypadXboxCoreGuitar;
@@ -244,8 +244,8 @@ JoypadType SetupHXDrums(int pad, const XINPUT_CAPABILITIES &c) {
         isRb2Drums = hasFlag2;
     }
     bool isRockOfAgesDrums = hasFlag2 && hasFlag1;
-    JoypadGetPadData(pad)->unk4b = hasFlag2;
-    JoypadGetPadData(pad)->unk4a = hasFlag1;
+    JoypadGetPadData(pad)->mIsWireless = hasFlag2;
+    JoypadGetPadData(pad)->mHasCapFlag1 = hasFlag1;
     if (c.Gamepad.sThumbLX == 0x1BAD) {
         GetBreedData(pad);
         return kJoypadXboxMidiBoxDrums;

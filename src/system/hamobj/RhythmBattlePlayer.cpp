@@ -41,8 +41,8 @@ RhythmBattlePlayer::RhythmBattlePlayer()
       mTextFeedback(this), mMoveFeedback(this), mStealPart(this), mStealAnim(this),
       mPlayer(0), mRhythmBattle(0), mRhythmSuccessFraction(0), mFreshnessScore(0), mMaxRhythmInWindow(0), mFreshnessAccumulator(0), mWindowElapsedTime(0),
       mLastBeatTime(0), mZoneLevel(0), mInTheZone(-2), mNormalizedRhythmScore(0), mNormalizedFreshnessScore(0), mScore(0), mComboMeter(0),
-      mSwapped(false), mDebugScoreValue(-1), mSwagJackedState("none"), unk29c(0), unk2a4(false),
-      unk2a5(false),
+      mSwapped(false), mDebugScoreValue(-1), mSwagJackedState("none"), unk29c(0), mSuppressRhythm(false),
+      mAutoPass(false),
       mFramesSinceLastTrigger(0) {}
 
 RhythmBattlePlayer::~RhythmBattlePlayer() {}
@@ -134,7 +134,7 @@ void RhythmBattlePlayer::Poll() {
             HamPlayerData *hpd = TheGameData->Player(mPlayer);
             hpd->Provider()->Export(Message("hide_hud", 0), true);
         }
-        if (mActive && mRhythmBattle && !mRhythmBattle->Unk102()) {
+        if (mActive && mRhythmBattle && !mRhythmBattle->IsPaused()) {
             int skelIdx = TheGestureMgr->GetSkeletonIndexByTrackingID(
                 TheGameData->Player(mPlayer)->GetSkeletonTrackingID()
             );
@@ -152,10 +152,10 @@ void RhythmBattlePlayer::Poll() {
                     const RhythmDetector::RecordData &recordData =
                         rd->GetRecord(mScoringWindowStart, mScoringWindowEnd, false, "", nullptr);
                     mRhythmSuccessFraction = recordData.unk10;
-                    if (Unk2a8Check() && 1 < recordData.unk14) {
+                    if (ShouldAutoPass() && 1 < recordData.unk14) {
                         mRhythmSuccessFraction = 1;
                     }
-                    mFreshnessScore = Unk2a8Check() ? 1 : rd->Freshness();
+                    mFreshnessScore = ShouldAutoPass() ? 1 : rd->Freshness();
                 }
                 Symbol autoplay = TheGameData->Player(mPlayer)->Autoplay();
                 if (!autoplay.Null()) {
@@ -181,7 +181,7 @@ void RhythmBattlePlayer::Poll() {
             if (mMaxRhythmInWindow <= mRhythmSuccessFraction) {
                 mMaxRhythmInWindow = mRhythmSuccessFraction;
             }
-            if (unk2a4) {
+            if (mSuppressRhythm) {
                 mMaxRhythmInWindow = 0;
             }
             mFreshnessAccumulator += mFreshnessScore * f17;
@@ -651,10 +651,10 @@ void RhythmBattlePlayer::UpdateScore(Hmx::Object *handler) {
             const RhythmDetector::RecordData &recordData =
                 rd->GetRecord(mScoringWindowStart, mScoringWindowEnd, true, "", nullptr);
             mRhythmSuccessFraction = recordData.unk10;
-            if (Unk2a8Check() && 1 < recordData.unk14) {
+            if (ShouldAutoPass() && 1 < recordData.unk14) {
                 mRhythmSuccessFraction = 1;
             }
-            mFreshnessScore = Unk2a8Check() ? 1 : rd->Freshness();
+            mFreshnessScore = ShouldAutoPass() ? 1 : rd->Freshness();
             Symbol autoplay = TheGameData->Player(mPlayer)->Autoplay();
             if (!autoplay.Null()) {
                 static Symbol move_ok("move_ok");
@@ -677,7 +677,7 @@ void RhythmBattlePlayer::UpdateScore(Hmx::Object *handler) {
             mMaxRhythmInWindow = set;
         }
     }
-    if (unk2a4) {
+    if (mSuppressRhythm) {
         mMaxRhythmInWindow = 0;
     }
     static Symbol none("none");

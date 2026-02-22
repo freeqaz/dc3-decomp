@@ -32,7 +32,7 @@ public:
     const char *ProxyName() const { return mProxyName; }
     ObjectDir *ProxyDir() const { return mProxyDir; }
     void SetDeleteSelf(bool set) { mDeleteSelf = set; }
-    void SetUnk99(bool b) { unk99 = b; }
+    void SetForceFailCallback(bool b) { mForceFailCallback = b; }
 
     POOL_OVERLOAD(DirLoader, 0x2A);
 
@@ -83,7 +83,7 @@ private:
     int unk64;
     Timer mTimer; // 0x68
     bool mAccessed;
-    bool unk99;
+    bool mForceFailCallback;
     bool unk9a;
     bool mSubDir;
     class ObjectDir *unk9c;

@@ -10,7 +10,7 @@
 #pragma region CampaignEraSongEntry
 
 CampaignEraSongEntry::CampaignEraSongEntry(DataArray *d1, DataArray *d2)
-    : m_symSong(gNullStr), unk8(gNullStr), m_iRequiredStars(0) {
+    : m_symSong(gNullStr), mIntroCrew(gNullStr), m_iRequiredStars(0) {
     Configure(d1, d2);
 }
 
@@ -82,7 +82,7 @@ void CampaignEraSongEntry::Configure(DataArray *pSongEntry, DataArray *pSongEntr
     MILO_ASSERT(pSongEntry->Size() >= 4, 0x5d);
 
     m_symSong = pSongEntry->Sym(0);
-    unk8 = pSongEntry->Sym(1);
+    mIntroCrew = pSongEntry->Sym(1);
     m_iRequiredStars = pSongEntry->Int(2);
     Symbol sym_songNameLookup = pSongEntry2->Sym(0);
     MILO_ASSERT(sym_songNameLookup == m_symSong, 0x65);
@@ -115,7 +115,7 @@ void CampaignEraSongEntry::Configure(DataArray *pSongEntry, DataArray *pSongEntr
 
 CampaignEra::CampaignEra(DataArray *d1, DataArray *d2)
     : mEra(gNullStr), mCrew(gNullStr), mVenue(gNullStr), mEraSongUnlockedToken(gNullStr),
-      mEraSongCompleteToken(gNullStr), mEraIntroMovie(gNullStr), unk50(false),
+      mEraSongCompleteToken(gNullStr), mEraIntroMovie(gNullStr), mHasTanBattle(false),
       mCompletionAccomplishment(gNullStr), unk58(0), mCrazeSong(gNullStr),
       mStarsRequiredForMastery(0), mMovesRequiredForMastery(0),
       mStarsRequiredForOutfits(0), mOutfitAward(gNullStr) {
@@ -146,8 +146,8 @@ CampaignEraSongEntry *CampaignEra::GetSongEntry(int i_iIndex) const {
 }
 
 CampaignEraSongEntry *CampaignEra::GetSongEntry(Symbol song) const {
-    auto it = unk8.find(song);
-    if (it != unk8.end()) {
+    auto it = mSongIndexMap.find(song);
+    if (it != mSongIndexMap.end()) {
         return GetSongEntry(it->second);
     } else
         return nullptr;
@@ -160,8 +160,8 @@ Symbol CampaignEra::GetSongName(int i_iIndex) const {
 }
 
 int CampaignEra::GetSongIndex(Symbol song) const {
-    auto it = unk8.find(song);
-    return it != unk8.end() ? it->second : -1;
+    auto it = mSongIndexMap.find(song);
+    return it != mSongIndexMap.end() ? it->second : -1;
 }
 
 int CampaignEra::GetNumSongCrazeMoves(Symbol song) const {
@@ -213,7 +213,7 @@ void CampaignEra::Cleanup() {
         RELEASE(*it);
     }
     m_vSongs.clear();
-    unk8.clear();
+    mSongIndexMap.clear();
 }
 
 void CampaignEra::Configure(DataArray *i_pConfig, DataArray *d2) {
@@ -260,7 +260,7 @@ void CampaignEra::Configure(DataArray *i_pConfig, DataArray *d2) {
         CampaignEraSongEntry *pSongEntry =
             new CampaignEraSongEntry(pSongEntryArray, pSongLookupDataArray);
         m_vSongs.push_back(pSongEntry);
-        unk8[pSongEntry->GetSongName()] = m_vSongs.size() - 1;
+        mSongIndexMap[pSongEntry->GetSongName()] = m_vSongs.size() - 1;
         if (pSongEntry->GetSongRequiredStars() != 0) {
             mCrazeSong = pSongEntry->GetSongName();
             mStarsRequiredForMastery = pSongEntry->GetSongRequiredStars();

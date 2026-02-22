@@ -8,7 +8,7 @@
 #include "ui/PanelDir.h"
 #include "ui/UIPanel.h"
 
-ContentLoadingPanel::ContentLoadingPanel() : unk3c(false), unk40(0), unk44(0) {
+ContentLoadingPanel::ContentLoadingPanel() : mAllowedToShow(false), mContentCount(0), mMountedCount(0) {
     TheContentMgr.RegisterCallback(this, false);
     mShowing = false;
 }
@@ -18,15 +18,15 @@ ContentLoadingPanel::~ContentLoadingPanel() {
 }
 
 void ContentLoadingPanel::AllowedToShow(bool b) {
-    unk3c = b;
+    mAllowedToShow = b;
     if (b) {
         ShowIfPossible();
     }
 }
 
 void ContentLoadingPanel::ContentMountBegun(int i) {
-    unk40 = i;
-    unk44 = 0;
+    mContentCount = i;
+    mMountedCount = 0;
     RndGroup *r = LoadedDir()->Find<RndGroup>("progress.grp", true);
     r->SetFrame(0, 1.0f);
     ShowIfPossible();
@@ -34,7 +34,7 @@ void ContentLoadingPanel::ContentMountBegun(int i) {
 
 void ContentLoadingPanel::ShowIfPossible() {
     if (!mShowing) {
-        if (unk3c && unk40 != 1) { // theres an extra check here
+        if (mAllowedToShow && mContentCount != 1) { // theres an extra check here
             MILO_ASSERT(CheckIsLoaded(), 0x84);
             Enter();
             mShowing = true;
@@ -43,9 +43,9 @@ void ContentLoadingPanel::ShowIfPossible() {
 }
 
 void ContentLoadingPanel::ContentDone() {
-    unk40 = 0;
-    unk44 = 0;
-    unk3c = false;
+    mContentCount = 0;
+    mMountedCount = 0;
+    mAllowedToShow = false;
     if (mState == 1 && mShowing) {
         Exit();
         mShowing = false;
@@ -57,11 +57,11 @@ void ContentLoadingPanel::Poll() {
     if (mShowing) {
         UIPanel::Poll();
         RndGroup *progressGroup = ObjectDir::Main()->Find<RndGroup>("progress.grp", true);
-        if (unk40 > 0 && progressGroup) {
+        if (mContentCount > 0 && progressGroup) {
             // Animate progress bar smoothly toward target percentage
             f32 currentFrame = progressGroup->GetFrame();
-            int total = unk44;
-            int current = unk40;
+            int total = mMountedCount;
+            int current = mContentCount;
 
             // Calculate target frame (110% of progress, capped at 100)
             f32 target = ((f32)total * 110.0f) / (f32)current;

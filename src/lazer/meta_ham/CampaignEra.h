@@ -19,7 +19,7 @@ public:
     Symbol GetHamMoveNameFromVariant(Symbol) const;
 
     Symbol GetSongName() const { return m_symSong; }
-    Symbol GetUnk8() const { return unk8; }
+    Symbol GetIntroCrew() const { return mIntroCrew; }
     int GetSongRequiredStars() const { return m_iRequiredStars; }
     int GetNumSongCrazeMoves() const { return m_vCrazeMoveNames.size(); }
 
@@ -27,7 +27,7 @@ private:
     void Configure(DataArray *, DataArray *);
 
     Symbol m_symSong; // 0x4
-    Symbol unk8; // 0x8
+    Symbol mIntroCrew; // 0x8
     int m_iRequiredStars; // 0xc
     std::vector<Symbol> m_vCrazeMoveNames; // 0x10
     std::vector<Symbol> m_vCrazeMoveVariantNames; // 0x1c
@@ -66,13 +66,13 @@ public:
     int MovesRequiredForMastery() const { return mMovesRequiredForMastery; }
     Symbol OutfitAward() const { return mOutfitAward; }
     Symbol GetMasteryStars(Difficulty d) { return mMasteryStars[d]; }
-    bool GetUnk50() const { return unk50; }
-    void SetUnk50(bool b) { unk50 = b; }
+    bool HasTanBattle() const { return mHasTanBattle; }
+    void SetHasTanBattle(bool b) { mHasTanBattle = b; }
     const std::vector<CampaignEraSongEntry *> &Songs() const { return m_vSongs; }
 
 protected:
     Symbol mEra; // 0x4
-    std::map<Symbol, int> unk8; // 0x8
+    std::map<Symbol, int> mSongIndexMap; // 0x8
     std::vector<CampaignEraSongEntry *> m_vSongs; // 0x20
     Symbol mCrew; // 0x2c
     Symbol mVenue; // 0x30
@@ -81,7 +81,7 @@ protected:
     Symbol mEraIntroMovie; // 0x3c
     String unk40;
     String unk48;
-    bool unk50;
+    bool mHasTanBattle;
     Symbol mCompletionAccomplishment; // 0x54
     int unk58;
     Symbol mCrazeSong; // 0x5c

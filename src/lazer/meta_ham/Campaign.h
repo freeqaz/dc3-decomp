@@ -79,12 +79,12 @@ public:
 class CampaignMove {
 public:
     CampaignMove(Symbol s1, Symbol s2, Symbol s3)
-        : mSongName(s1), mMoveName(s2), mMoveVariantName(s3), mMove(0), unk10(0) {}
+        : mSongName(s1), mMoveName(s2), mMoveVariantName(s3), mMove(0), mLoadState(0) {}
     Symbol mSongName; // 0x0
     Symbol mMoveName; // 0x4
     Symbol mMoveVariantName; // 0x8
     HamMove *mMove; // 0xc
-    int unk10; // 0x10 - state?
+    int mLoadState; // 0x10 - 0=unloaded, 2=failed, 3=loaded
 };
 
 class Campaign : public Hmx::Object, public Loader::Callback {
@@ -132,7 +132,7 @@ public:
     const std::vector<CampaignEra *> &Eras() const { return m_vEras; }
     Symbol GetMQCrew() { return mMasterQuestCrew; }
     bool InDCICutscene() const { return mCampaignState == kCampaignStateDciCutscene; }
-    void SetUnkC0At(Symbol key, bool b) { unkc0[key] = b; }
+    void SetCrewComplete(Symbol key, bool b) { mCrewCompletionMap[key] = b; }
 
 protected:
     CampaignEra *GetCampaignEra(int index) const;
@@ -164,7 +164,7 @@ protected:
     bool unkb8;
     Symbol mCurrentEraSong;
     // key = crew, value = ???
-    std::map<Symbol, bool> unkc0;
+    std::map<Symbol, bool> mCrewCompletionMap;
     ObjectDir *mCurrentObjectDir;
 };
 

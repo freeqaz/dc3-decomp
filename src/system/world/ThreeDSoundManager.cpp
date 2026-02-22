@@ -7,7 +7,7 @@
 #include "world/Dir.h"
 
 ThreeDSoundManager::ThreeDSoundManager(WorldDir *dir)
-    : mParent(dir), mSounds(dir), mListener(dir), unk6c(0), mDopplerPower(1) {}
+    : mParent(dir), mSounds(dir), mListener(dir), mListenerDirty(0), mDopplerPower(1) {}
 
 ThreeDSoundManager::~ThreeDSoundManager() {}
 

@@ -26,7 +26,7 @@ END_HANDLERS
 
 void DxRnd::Clear(unsigned int ui, const Hmx::Color &c) {
     float f1;
-    if (unk_0x301) {
+    if (mReverseZ) {
         f1 = 0;
     } else {
         f1 = 1;
@@ -99,7 +99,7 @@ void DxRnd::SetViewport(const Viewport &v) {
     dxViewport.Y = v.Y;
     dxViewport.Width = v.Width;
     dxViewport.Height = v.Height;
-    if (unk_0x301) {
+    if (mReverseZ) {
         dxViewport.MinZ = 1.0f - v.MinZ;
         dxViewport.MaxZ = 1.0f - v.MaxZ;
     } else {

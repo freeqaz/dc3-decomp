@@ -40,7 +40,7 @@
 HamSongMgr TheHamSongMgr;
 SongMgr &TheSongMgr = TheHamSongMgr;
 
-HamSongMgr::HamSongMgr() : unkd0(0), mJukebox(2000), mRandomSongDebug(false) {
+HamSongMgr::HamSongMgr() : mSongInfo(0), mJukebox(2000), mRandomSongDebug(false) {
     ClearAndShrink<String>(mContentAltDirs);
 }
 
@@ -86,18 +86,18 @@ struct SongRankCmp {
 
 void HamSongMgr::ContentDone() {
     SongMgr::ContentDone();
-    unk11c.clear();
+    mRankedSongs.clear();
     FOREACH (it, mAvailableSongs) {
         const HamSongMetadata *data = Data(*it);
         if (data->IsRanked()) {
-            unk11c.push_back(*it);
+            mRankedSongs.push_back(*it);
         }
     }
-    std::sort(unk11c.begin(), unk11c.end(), SongRankCmp(this));
-    unk128.clear();
-    FOREACH (it, unk11c) {
+    std::sort(mRankedSongs.begin(), mRankedSongs.end(), SongRankCmp(this));
+    mRankedDiscSongs.clear();
+    FOREACH (it, mRankedSongs) {
         if (!Data(*it)->IsDownload()) {
-            unk128.push_back(*it);
+            mRankedDiscSongs.push_back(*it);
         }
     }
     InitializePlaylists();
@@ -137,7 +137,7 @@ void HamSongMgr::Init() {
 }
 
 void HamSongMgr::Terminate() {
-    RELEASE(unkd0);
+    RELEASE(mSongInfo);
     TheContentMgr.UnregisterCallback(this, false);
     mSongNameLookup.clear();
     mSongIDLookup.clear();
@@ -157,18 +157,18 @@ SongInfo *HamSongMgr::SongAudioData(int songID) const {
         SongInfo *songInfo = data->SongBlock();
         MILO_ASSERT(songInfo, 0x19E);
         HamSongMgr *me = const_cast<HamSongMgr *>(this);
-        RELEASE(me->unkd0);
-        me->unkd0 = new DataArraySongInfo(songInfo);
+        RELEASE(me->mSongInfo);
+        me->mSongInfo = new DataArraySongInfo(songInfo);
         const char *content = ContentName(songID);
         if (content && TheContentMgr.IsMounted(content)) {
             const char *root = ContentNameRoot(content);
             if (root) {
-                const char *base = unkd0->GetBaseFileName();
+                const char *base = mSongInfo->GetBaseFileName();
                 MILO_ASSERT(!streq(root, ""), 0x1B1);
-                unkd0->SetBaseFileName(MakeString("%s/%s", root, base));
+                mSongInfo->SetBaseFileName(MakeString("%s/%s", root, base));
             }
         }
-        return unkd0;
+        return mSongInfo;
     }
 }
 
@@ -456,7 +456,7 @@ void HamSongMgr::InitializePlaylists() {
     char nameBuffer[32];
     std::map<Symbol, Playlist *> dynamicPlaylists;
 
-    for (int *it = unk11c.begin(); it != unk11c.end(); ++it) {
+    for (int *it = mRankedSongs.begin(); it != mRankedSongs.end(); ++it) {
         const HamSongMetadata *metadata = Data(*it);
         if (metadata->IsComplete() && !metadata->IsFake() &&
             TheProfileMgr.IsContentUnlocked(metadata->ShortName())) {
@@ -528,7 +528,7 @@ void HamSongMgr::ClearPlaylists() {
 DataNode HamSongMgr::OnGetRandomSong(DataArray *) { return GetRandomSong(); }
 
 const std::vector<int> &HamSongMgr::RankedSongs(SongType s) const {
-    return s == 1 ? unk128 : unk11c;
+    return s == 1 ? mRankedDiscSongs : mRankedSongs;
 }
 
 bool HamSongMgr::IsDummySong(Symbol s) const {

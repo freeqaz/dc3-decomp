@@ -46,7 +46,7 @@ END_LOADS
 
 bool FlowSwitch::Activate() {
     FLOW_LOG("Activate\n");
-    unk58 = false;
+    mStopRequested = false;
     if (IsRunning()) {
         MILO_NOTIFY(
             "FlowSwitch re-entrance error, activated when already running, deactivating and aborting, check your logic"
@@ -102,7 +102,7 @@ bool FlowSwitch::ActivateTransitionCases(DataNode &n1, DataNode &n2) {
         FlowSwitchCase *cur = static_cast<FlowSwitchCase *>(it->Obj());
         if (cur->Op() == kTransition && cur->IsValidCase(this, &n1, &n2, true)) {
             ActivateChild(cur);
-            if (unk58) {
+            if (mStopRequested) {
                 return !FlowNode::IsRunning();
             }
             if (FlowNode::IsRunning()) {

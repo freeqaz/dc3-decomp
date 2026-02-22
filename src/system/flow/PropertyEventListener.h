@@ -6,10 +6,10 @@
 class PropertyEventListener {
 public:
     struct AutoPropEntry {
-        AutoPropEntry(Hmx::Object *obj) : unk0(0), unk4(obj) {}
+        AutoPropEntry(Hmx::Object *obj) : mPropertyArray(0), mProvider(obj) {}
 
-        DataArray *unk0;
-        ObjPtr<Hmx::Object> unk4;
+        DataArray *mPropertyArray;
+        ObjPtr<Hmx::Object> mProvider;
     };
     PropertyEventListener(Hmx::Object *);
     virtual ~PropertyEventListener() {}

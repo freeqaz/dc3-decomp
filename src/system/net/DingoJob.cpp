@@ -16,7 +16,7 @@
 DingoJob::DingoJob(char const *url, Hmx::Object *callback)
     : WebSvcRequest(url, "", callback), mResult(0), mDataPoint(0), mJsonResponse(0),
       mJsonResponseVersion(0), mTimeoutMs(10000) {
-    unk84 = 0;
+    mContentBuffer = 0;
 }
 
 DingoJob::~DingoJob() { RELEASE(mDataPoint); }
@@ -119,14 +119,14 @@ void DingoJob::AddContent(HttpReq *httpReq) {
 
     // Allocate buffer for the complete request body
     char *buf = (char *)_MemAllocTemp(size + 1, __FILE__, 0x6D, "", 0);
-    unk84 = buf;
+    mContentBuffer = buf;
 
     // Copy the "params=" prefix into the buffer
     *(s64 *)buf = *(s64 *)"params=";
 
     // Find the end of the prefix (after the null terminator byte)
     char *end;
-    for (end = (char *)unk84; *end != '\0'; end++) {
+    for (end = (char *)mContentBuffer; *end != '\0'; end++) {
     }
     end--;
 
@@ -136,7 +136,7 @@ void DingoJob::AddContent(HttpReq *httpReq) {
         *end++ = *data;
     }
 
-    httpReq->SetContent((const char *)unk84);
+    httpReq->SetContent((const char *)mContentBuffer);
     httpReq->SetContentLength(size);
 }
 

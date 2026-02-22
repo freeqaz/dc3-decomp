@@ -70,7 +70,7 @@ void FitnessGoalMgr::UpdateFitnessGoal(HamProfile *profile) {
     profile->UpdateOnlineID();
     if (profile->IsSignedIn()) {
         int padNum = profile->GetPadNum();
-        if (ThePlatformMgr.IsSignedIntoLive(padNum) && profile->GetUnk360()) {
+        if (ThePlatformMgr.IsSignedIntoLive(padNum) && profile->GetFitnessGoalNeedsUpload()) {
             if (!mCurrentProfile || mCurrentProfile == profile) {
                 mCurrentProfile = profile;
                 UploadNextProfile();
@@ -91,25 +91,25 @@ void FitnessGoalMgr::BroadcastSyncMsg(Symbol s) {
 
 void FitnessGoalMgr::StartCmdSendFitnessGoalToRC() {
     QueueableCommand *cmd = mCommandQueue.front();
-    mCurrentRCJob = new SetFitnessGoalJob(this, cmd->unk4.profile);
+    mCurrentRCJob = new SetFitnessGoalJob(this, cmd->mData.profile);
     TheRockCentral.ManageJob(mCurrentRCJob);
 }
 
 void FitnessGoalMgr::StartCmdUpdateFitnessGoalToRC() {
     QueueableCommand *cmd = mCommandQueue.front();
-    mCurrentRCJob = new UpdateFitnessGoalJob(this, cmd->unk4.profile);
+    mCurrentRCJob = new UpdateFitnessGoalJob(this, cmd->mData.profile);
     TheRockCentral.ManageJob(mCurrentRCJob);
 }
 
 void FitnessGoalMgr::StartCmdDeleteFitnessGoalFromRC() {
     QueueableCommand *cmd = mCommandQueue.front();
-    mCurrentRCJob = new DeleteFitnessGoalJob(this, cmd->unk4.profile);
+    mCurrentRCJob = new DeleteFitnessGoalJob(this, cmd->mData.profile);
     TheRockCentral.ManageJob(mCurrentRCJob);
 }
 
 void FitnessGoalMgr::HandleCmdChangeProfileOnlineID() {
     MILO_LOG("===== HandleCmdChangeProfileOnlineID\n");
-    mOnlineID = mCommandQueue.front()->unk4.onlineID;
+    mOnlineID = mCommandQueue.front()->mData.onlineID;
     RELEASE(mCommandQueue.front());
     mCommandQueue.pop_front();
     ProcessNextCommand();

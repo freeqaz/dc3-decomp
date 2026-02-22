@@ -32,7 +32,7 @@ private:
     DataNode OnMsg(const RockCentralOpCompleteMsg &);
 
     ObjPtr<RndTex> mTex; // 0x38
-    int unk4c; // 0x4c - upload state
+    int mUploadState; // 0x4c
     void *mBuf; // 0x50
     void *mPreviewBuf; // 0x54
     int unk58; // 0x58

@@ -77,7 +77,7 @@ protected:
     bool unk48;
     HandRaisedGestureFilter *mSkeletonHandRaisedFilters[6]; // 0x4c
     StandingStillGestureFilter *mSkeletonStandingStillFilters[6]; // 0x64
-    HighFiveGestureFilter *unk7c; // 0x7c
+    HighFiveGestureFilter *mHighFiveFilter; // 0x7c
     float unk80;
     float unk84;
     float unk88;

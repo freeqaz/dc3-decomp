@@ -20,7 +20,7 @@ struct RecordedFrame {
     int unk4;
     Vector3 unk8;
     Vector4 unk18; // could also be an XMVECTOR?
-    bool unk28;
+    bool mIsTracked;
     Vector3 unk2c[kNumJoints];
     int unk16c[kNumJoints];
     int unk1bc;

@@ -21,7 +21,7 @@ public:
 
 protected:
     int unk48; // Force Playlist* to 0x4c
-    Playlist *unk4c;
+    Playlist *mPlaylist;
 };
 
 class PlaylistHeaderNode : public NavListHeaderNode {

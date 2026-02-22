@@ -23,13 +23,13 @@
 
 #pragma region GamerAwardStatus
 
-GamerAwardStatus::GamerAwardStatus() : unk8(-1), mType(type0), unk10(false) {
+GamerAwardStatus::GamerAwardStatus() : mRewardId(-1), mType(type0), mIsPending(false) {
     memset(&mOverlapped, 0, sizeof(XOVERLAPPED));
     mSaveSizeMethod = SaveSize;
 }
 
 GamerAwardStatus::GamerAwardStatus(int i, GamerAwardType type)
-    : unk8(i), mType(type), unk10(false) {
+    : mRewardId(i), mType(type), mIsPending(false) {
     memset(&mOverlapped, 0, sizeof(XOVERLAPPED));
     mSaveSizeMethod = SaveSize;
 }
@@ -41,12 +41,12 @@ GamerAwardStatus::~GamerAwardStatus() {
 }
 
 void GamerAwardStatus::SaveFixed(FixedSizeSaveableStream &fs) const {
-    fs << unk8;
+    fs << mRewardId;
     fs << mType;
 }
 
 void GamerAwardStatus::LoadFixed(FixedSizeSaveableStream &fs, int) {
-    fs >> unk8;
+    fs >> mRewardId;
     int type = 0;
     fs >> type;
     mType = (GamerAwardType)type;
@@ -178,7 +178,7 @@ void AccomplishmentProgress::GiveGamerpic(Accomplishment *a) {
         mParentProfile->GetPadNum(), reward, 0, &gStatus->mOverlapped
     );
     if (res == ERROR_IO_PENDING) {
-        gStatus->unk10 = true;
+        gStatus->mIsPending = true;
     }
 }
 
@@ -225,7 +225,7 @@ void AccomplishmentProgress::Clear() {
 void AccomplishmentProgress::Poll() {
     for (auto it = mPendingAwards.begin(); it != mPendingAwards.end();) {
         GamerAwardStatus *curStatus = *it;
-        if (curStatus->unk10) {
+        if (curStatus->mIsPending) {
             DWORD dw;
             DWORD res = XGetOverlappedResult(&curStatus->mOverlapped, &dw, false);
             if (res == ERROR_SUCCESS) {
@@ -235,7 +235,7 @@ void AccomplishmentProgress::Poll() {
                 continue;
             }
             if (res != ERROR_IO_INCOMPLETE) {
-                curStatus->unk10 = false;
+                curStatus->mIsPending = false;
             }
         }
         ++it;
@@ -278,7 +278,7 @@ void AccomplishmentProgress::GiveAvatarAsset(Accomplishment *acc) {
     status->mAsset.dwAwardId = reward;
     DWORD res = XUserAwardAvatarAssets(1, &status->mAsset, &status->mOverlapped);
     if (res == ERROR_IO_PENDING) {
-        status->unk10 = true;
+        status->mIsPending = true;
     }
 }
 

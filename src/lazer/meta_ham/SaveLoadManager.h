@@ -151,13 +151,13 @@ public:
     void HandleEventResponseStart(int);
     bool IsIdle() const;
     bool GetDialogFocusOption();
-    bool IsInitialLoadDone() const { return !unk2d; }
+    bool IsInitialLoadDone() const { return !mInitialLoadPending; }
 
     DataNode GetDialogMsg();
 
     static void Init();
 
-    bool GetUnk2c() { return unk2c; }
+    bool IsActivated() const { return mActivated; }
 
 private:
     bool SongCacheNeedsWrite();
@@ -178,15 +178,15 @@ protected:
     bool IsSafePlaceToSave() const;
     bool IsSafePlaceToLoad() const;
 
-    bool unk2c;
-    bool unk2d;
+    bool mActivated;
+    bool mInitialLoadPending;
     SaveLoadMode mMode; // 0x30
     State mState; // 0x34
     State mStateAtSelectStart; // 0x38
-    int unk3c; // 0x3c
-    HamProfile *unk40; // 0x40
-    String unk44;
-    int unk4c;
+    int mPadNum; // 0x3c
+    HamProfile *mActiveProfile; // 0x40
+    String mCacheName;
+    int mCacheFileSize;
     bool unk50;
     CacheID *mCacheID; // 0x54
     Cache *mCache; // 0x58

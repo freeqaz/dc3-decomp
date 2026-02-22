@@ -88,19 +88,19 @@
 #include "utl/TimeConversion.h"
 #include <cstring>
 
-MetaPanel::MetaPanel() : unk44(0), unk4c(TheHamSongMgr), unkdc(false) {
-    unke0 = new MetaMusicManager(SystemConfig("synth", "metamusic"));
-    unke4 = new Campaign(SystemConfig("campaign"));
-    unke8 = new HAQManager();
-    unk4c.SetName("song_preview", ObjectDir::Main());
-    SongSortMgr::Init(unk4c);
-    ChallengeSortMgr::Init(unk4c);
-    PlaylistSortMgr::Init(unk4c);
-    MQSongSortMgr::Init(unk4c);
-    FitnessCalorieSortMgr::Init(unk4c);
-    unk38.reserve(3);
+MetaPanel::MetaPanel() : mLoopHistoryCursor(0), mSongPreview(TheHamSongMgr), mXMPPlaying(false) {
+    mMetaMusicManager = new MetaMusicManager(SystemConfig("synth", "metamusic"));
+    mCampaign = new Campaign(SystemConfig("campaign"));
+    mHAQManager = new HAQManager();
+    mSongPreview.SetName("song_preview", ObjectDir::Main());
+    SongSortMgr::Init(mSongPreview);
+    ChallengeSortMgr::Init(mSongPreview);
+    PlaylistSortMgr::Init(mSongPreview);
+    MQSongSortMgr::Init(mSongPreview);
+    FitnessCalorieSortMgr::Init(mSongPreview);
+    mLoopHistory.reserve(3);
     for (int i = 3; i != 0; i--) {
-        unk38.push_back(-1);
+        mLoopHistory.push_back(-1);
     }
     ThePlatformMgr.AddSink(this, "xmp_state_changed");
     sSongDB = new SongDB();
@@ -180,22 +180,22 @@ void MetaPanel::Init() {
 }
 
 int MetaPanel::PickLoopIndex(int numEntries) {
-    int vecSize = unk38.size();
+    int vecSize = mLoopHistory.size();
     int idx = RandomInt(1, numEntries);
     if (numEntries >= vecSize + 2) {
         for (;;) {
             int i = 0;
             for (; i < vecSize; i++) {
-                if (idx == unk38[i])
+                if (idx == mLoopHistory[i])
                     break;
             }
             if (i == vecSize)
                 break;
             idx = RandomInt(1, numEntries);
         }
-        unk38[unk44++] = idx;
-        if (unk44 == vecSize) {
-            unk44 = 0;
+        mLoopHistory[mLoopHistoryCursor++] = idx;
+        if (mLoopHistoryCursor == vecSize) {
+            mLoopHistoryCursor = 0;
         }
     }
     return idx;
@@ -219,10 +219,10 @@ void MetaPanel::Load() {
             TheMetaMusic->SongInfo(), true, 0, false, (HamSongDataValidate)0, nullptr
         );
     }
-    unk4c.Init();
+    mSongPreview.Init();
     SystemConfig("sound", "banks");
     if (TheMetaMusic) {
-        if (unkdc)
+        if (mXMPPlaying)
             TheMetaMusic->Mute();
         else
             TheMetaMusic->UnMute();
@@ -266,7 +266,7 @@ void MetaPanel::Poll() {
         }
     }
     UIPanel::Poll();
-    unk4c.Poll();
+    mSongPreview.Poll();
     MILO_ASSERT(TheMetaMusic, 0x176);
     TheMetaMusic->Poll();
     float beat = MsToBeat(sHamMaster->StreamMs());
@@ -293,7 +293,7 @@ void MetaPanel::Exit() {
         }
     }
     UIPanel::Exit();
-    unk4c.Start(gNullStr, nullptr);
+    mSongPreview.Start(gNullStr, nullptr);
     TheMetaMusic->Stop();
     ThePlatformMgr.DisableXMP();
 }
@@ -307,7 +307,7 @@ bool MetaPanel::Exiting() const {
     if (mState != 2) {
         return UIPanel::Exiting();
     }
-    bool ret = unk4c.IsWaitingToDelete() || unk4c.IsFadingOut() || TheMetaMusic->IsActive() || UIPanel::Exiting();
+    bool ret = mSongPreview.IsWaitingToDelete() || mSongPreview.IsFadingOut() || TheMetaMusic->IsActive() || UIPanel::Exiting();
     if (!ret) {
         TheTaskMgr.SetAutoSecondsBeats(true);
     }
@@ -340,7 +340,7 @@ DataNode MetaPanel::ToggleMotdCheat(DataArray *) {
 
 DataNode MetaPanel::OnMsg(const XMPStateChangedMsg &msg) {
     bool success = msg.Success();
-    unkdc = success;
+    mXMPPlaying = success;
     if (TheMetaMusic) {
         if (success) {
             TheMetaMusic->Mute();
@@ -394,7 +394,7 @@ BEGIN_HANDLERS(MetaPanel)
             TheMetaMusic->SongInfo(), true, 0, false, (HamSongDataValidate)0, 0
         )
     )
-    HANDLE_ACTION(init_songpreview, unk4c.Init())
+    HANDLE_ACTION(init_songpreview, mSongPreview.Init())
     HANDLE_ACTION(unlock_all, UnlockAll())
     HANDLE_ACTION(unlock_classic, UnlockClassicOutfit(_msg->Sym(2)))
     HANDLE_ACTION(cycle_venue_preference, CycleVenuePreference())

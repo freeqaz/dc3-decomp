@@ -15,9 +15,9 @@ enum HardCoreStatus {
 };
 
 struct GoalAcquisitionInfo {
-    Symbol unk0;
-    String unk4;
-    Symbol unkc;
+    Symbol mAccomplishment;
+    String mPlayerName;
+    Symbol mSong;
 };
 
 struct GoalProgressionInfo {
@@ -86,8 +86,8 @@ public:
     HardCoreStatus GetIconHardCoreStatus(int) const;
     void HandleSongCompleted(Symbol);
     const std::vector<Symbol> &GetDiscSongs() const { return mDiscSongs; }
-    bool Unk30(int i) const { return unk30[i]; }
-    void SetUnk30(int i, bool b) { unk30[i] = b; }
+    bool IsSigninChanged(int i) const { return mSigninChanged[i]; }
+    void SetSigninChanged(int i, bool b) { mSigninChanged[i] = b; }
 
     static void Init(DataArray *);
 
@@ -110,7 +110,7 @@ protected:
 
     DataNode OnMsg(const SigninChangedMsg &);
 
-    bool unk30[2]; // 0x30
+    bool mSigninChanged[2]; // 0x30
     std::map<Symbol, Accomplishment *> mAccomplishments; // 0x34
     std::map<Symbol, AccomplishmentCategory *> mAccomplishmentCategories; // 0x4c
     std::map<Symbol, AccomplishmentGroup *> mAccomplishmentGroups; // 0x64

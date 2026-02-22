@@ -18,7 +18,7 @@ namespace {
 }
 
 MemcardMgr::MemcardMgr()
-    : mState(kS_None), mAction(0), unk40(0), unk88(-1), mSelectDeviceWaiting(0),
+    : mState(kS_None), mAction(0), mSaveCreateType(0), mPendingDeviceSelectorIndex(-1), mSelectDeviceWaiting(0),
       mSelectDeviceCallBackObj(0), mPadNum(-1), mProfile(0) {}
 
 MemcardMgr::~MemcardMgr() {}
@@ -156,7 +156,7 @@ void MemcardMgr::OnLoadGame(Profile *pProfile, MemcardAction *pAction) {
 
 void MemcardMgr::OnSaveGame(Profile *pProfile, MemcardAction *pAction, int i3) {
     MILO_ASSERT(pProfile, 0x26D);
-    unk40 = i3;
+    mSaveCreateType = i3;
     mProfile = pProfile;
     mPadNum = mProfile->GetPadNum();
     mAction = pAction;
@@ -192,7 +192,7 @@ void MemcardMgr::SelectDevice(
     mSelectDeviceCallBackObj = callbackObj;
     mPadNum = mProfile->GetPadNum();
     if (ThePlatformMgr.GuideShowing()) {
-        unk88 = i3;
+        mPendingDeviceSelectorIndex = i3;
         mSelectDeviceWaiting = true;
     } else {
         TheMC.ShowDeviceSelector(mContainerIDs[mPadNum], this, i3, waiting);
@@ -330,7 +330,7 @@ DataNode MemcardMgr::OnMsg(const UIChangedMsg &msg) {
     if (mSelectDeviceWaiting) {
         if (!msg.Showing()) {
             mSelectDeviceWaiting = false;
-            TheMC.ShowDeviceSelector(mContainerIDs[mPadNum], this, unk88, false);
+            TheMC.ShowDeviceSelector(mContainerIDs[mPadNum], this, mPendingDeviceSelectorIndex, false);
         }
     }
     return 0;

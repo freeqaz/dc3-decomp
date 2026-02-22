@@ -37,7 +37,7 @@ DirLoader::DirLoader(
 )
     : Loader(fp, pos), mOwnStream(false), mStream(stream), mRev(0), mCounter(0),
       mObjects(nullptr, kObjListAllowNull), mCallback(cb), mDir(dir), mPostLoad(false),
-      mLoadDir(true), mDeleteSelf(false), mProxyName(nullptr), mAccessed(0), unk99(0),
+      mLoadDir(true), mDeleteSelf(false), mProxyName(nullptr), mAccessed(0), mForceFailCallback(0),
       unk9a(0), mSubDir(bbb), unk9c(dir2), mProxyDir(this) {
     if (dir) {
         mDeleteSelf = true;
@@ -82,7 +82,7 @@ DirLoader::~DirLoader() {
         }
     }
     mProxyDir = nullptr;
-    if (mCallback && unk99) {
+    if (mCallback && mForceFailCallback) {
         mCallback->FailedLoading(this);
         mCallback = 0;
     }
@@ -459,7 +459,7 @@ void DirLoader::Cleanup(const char *str) {
     if (sPrintTimes) {
         MILO_LOG("%s: %f ms\n", mFile, mTimer.Ms());
     }
-    if (mCallback && (str || unk99)) {
+    if (mCallback && (str || mForceFailCallback)) {
         mCallback->FailedLoading(this);
         mCallback = nullptr;
     }

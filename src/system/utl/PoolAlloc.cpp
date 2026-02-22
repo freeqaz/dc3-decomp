@@ -1,6 +1,7 @@
 #include "utl/PoolAlloc.h"
 #include "MemMgr.h"
 #include "math/Utl.h"
+#include <cstdio>
 #include "os/CritSec.h"
 #include "os/Debug.h"
 #include "obj/Data.h"
@@ -12,6 +13,8 @@ int gSmallHunk = 0xC800;
 int gPoolCapacity = 0;
 bool gPoolAllocInitted = 0;
 ChunkAllocator *gChunkAlloc = nullptr;
+static int *sPoolEnd;
+static int *sPoolBuf;
 
 void PoolAllocInit(DataArray *a) {
     a->FindData("big_hunk", gBigHunk);
@@ -72,6 +75,35 @@ void FixedSizeAlloc::Free(void *v) {
     mFreeList = (int *)v;
     MILO_ASSERT_FMT(mNumAllocs > 0, "mNumAllocs is %d", mNumAllocs);
     mNumAllocs--;
+}
+
+int *FixedSizeAlloc::RawAlloc(int size) {
+    int alignedSize = (size >> 2) << 2;
+    gPoolCapacity += size;
+
+    int *buf = sPoolBuf;
+    if ((unsigned int)((char *)buf + alignedSize) > (unsigned int)sPoolEnd) {
+        if (MemNumHeaps() > 0) {
+            if (gBigHunk == gSmallHunk) {
+                printf("PoolAlloc warning: allocating small pool chunk\n");
+            }
+            MemPushHeap(0);
+        }
+
+        sPoolBuf = (int *)_MemAllocTemp(gBigHunk, __FILE__, 0x71, "PoolChunk", 0);
+
+        if (MemNumHeaps() > 0) {
+            MemPopHeap();
+        }
+
+        int hunkSize = gBigHunk;
+        buf = (int *)((char *)sPoolBuf + 0x40);
+        sPoolEnd = (int *)((char *)sPoolBuf + ((hunkSize >> 2) << 2));
+        gBigHunk = gSmallHunk;
+    }
+
+    sPoolBuf = (int *)((char *)buf + alignedSize);
+    return buf;
 }
 
 void FixedSizeAlloc::Refill() {

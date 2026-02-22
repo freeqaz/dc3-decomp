@@ -39,11 +39,11 @@ protected:
     float mDistance; // 0x9c
     /** "Is the node persistent?" */
     bool mPersistent; // 0xa0
-    bool unka1; // 0xa1
-    bool unka2; // 0xa2
+    bool mPolling; // 0xa1
+    bool mOutOfRange; // 0xa2
     /** "Run children when closer than distance value" */
     bool mRunInRange; // 0xa3
     /** "Applies current distance to flow intensity, closer being higher intensity" */
     bool mDriveIntensity; // 0xa4
-    float unka8; // 0xa8
+    float mIntensityScale; // 0xa8
 };

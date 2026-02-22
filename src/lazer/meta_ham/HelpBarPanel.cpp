@@ -19,15 +19,15 @@
 #include "utl/Symbol.h"
 
 HelpBarPanel::HelpBarPanel()
-    : mLeftHandNavList(0), mAll(0), unk44(false), unk78(false), mAllowController(true),
-      unk7a(false), unk7b(false), mWaveGestureEnabled(false), unkb0(0) {
+    : mLeftHandNavList(0), mAll(0), mSaveDeactivationPending(false), mDisabled(false), mAllowController(true),
+      mSaving(false), mWriteIconShowing(false), mWaveGestureEnabled(false), mSyncedPanel(0) {
     sInstance = this;
 }
 
 HelpBarPanel::~HelpBarPanel() { sInstance = nullptr; }
 
 BEGIN_HANDLERS(HelpBarPanel)
-    HANDLE_ACTION(resync, SyncToPanel(unkb0))
+    HANDLE_ACTION(resync, SyncToPanel(mSyncedPanel))
     HANDLE_ACTION(sync_to_panel, SyncToPanel(_msg->Obj<UIPanel>(2)))
     HANDLE_EXPR(get_helpbar_provider, mLeftHandNavList->GetHelpbarProvider())
     HANDLE_EXPR(is_write_icon_up, IsWriteIconUp())
@@ -46,7 +46,7 @@ BEGIN_PROPSYNCS(HelpBarPanel)
 END_PROPSYNCS
 
 void HelpBarPanel::Draw() {
-    bool show = (!ShouldHideHelpbar() && !unk78) || TheGestureMgr->InControllerMode();
+    bool show = (!ShouldHideHelpbar() && !mDisabled) || TheGestureMgr->InControllerMode();
     mAll->SetShowing(show);
     UIPanel::Draw();
 }
@@ -85,15 +85,15 @@ void HelpBarPanel::Poll() {
     HamPanel::Poll();
     if (ShouldHideHelpbar() && mLeftHandNavList->Enabled()) {
         mLeftHandNavList->Disable();
-    } else if (!ShouldHideHelpbar() && !mLeftHandNavList->Enabled() && !unk78) {
+    } else if (!ShouldHideHelpbar() && !mLeftHandNavList->Enabled() && !mDisabled) {
         mLeftHandNavList->Enable();
     }
-    if (unk7b && !unk7a && unk80.SplitMs() >= 3000.0f) {
-        unk7b = false;
+    if (mWriteIconShowing && !mSaving && mWriteIconTimer.SplitMs() >= 3000.0f) {
+        mWriteIconShowing = false;
         HidePhysicalWriteIcon();
-        if (!unk44) {
-            unk44 = true;
-            unk48.Restart();
+        if (!mSaveDeactivationPending) {
+            mSaveDeactivationPending = true;
+            mSaveDeactivationTimer.Restart();
         }
     }
     PollSaveDeactivation();
@@ -167,16 +167,16 @@ void HelpBarPanel::HideWaveGestureIcon() {
 }
 
 void HelpBarPanel::PollSaveDeactivation() {
-    if (unk44 && 1000.0f <= unk48.SplitMs()) {
-        unk44 = false;
+    if (mSaveDeactivationPending && 1000.0f <= mSaveDeactivationTimer.SplitMs()) {
+        mSaveDeactivationPending = false;
         DeactivatePhysicalWriteIcon();
     }
 }
 
 bool HelpBarPanel::ShouldHideHelpbar() const {
     static Symbol hide_helpbar("hide_helpbar");
-    if (unkb0) {
-        const DataNode *prop = unkb0->Property(hide_helpbar, false);
+    if (mSyncedPanel) {
+        const DataNode *prop = mSyncedPanel->Property(hide_helpbar, false);
         if (prop && prop->Int()) {
             return true;
         }
@@ -184,7 +184,7 @@ bool HelpBarPanel::ShouldHideHelpbar() const {
     return false;
 }
 
-bool HelpBarPanel::IsWriteIconUp() const { return unk7b ? true : unk44 != false; }
+bool HelpBarPanel::IsWriteIconUp() const { return mWriteIconShowing ? true : mSaveDeactivationPending != false; }
 
 void HelpBarPanel::SetTertiaryLabels(DataArray *a) {
     if (mLeftHandNavList) {
@@ -215,19 +215,19 @@ bool HelpBarPanel::IsWriteIconShowing() {
 }
 
 void HelpBarPanel::SyncToPanel(UIPanel *panel) {
-    unkb0 = panel;
+    mSyncedPanel = panel;
     bool updateback = UpdateBackButton(panel);
     bool updatetert = UpdateTertiaryButton(panel);
     if (updateback || updatetert) {
         if (mLeftHandNavList) {
             mLeftHandNavList->Enable();
         }
-        unk78 = false;
+        mDisabled = false;
     } else {
         if (mLeftHandNavList) {
             mLeftHandNavList->Disable();
         }
-        unk78 = true;
+        mDisabled = true;
     }
     const DataNode *prop = nullptr;
     if (mLeftHandNavList) {
@@ -408,19 +408,19 @@ DataNode HelpBarPanel::OnMsg(const ButtonDownMsg &msg) {
 DataNode HelpBarPanel::OnMsg(const SaveLoadMgrStatusUpdateMsg &msg) {
     switch (msg.Status()) {
     case 1:
-        if (unk44) {
-            unk44 = false;
+        if (mSaveDeactivationPending) {
+            mSaveDeactivationPending = false;
         }
-        if (!unk7a) {
-            unk7a = true;
-            unk7b = true;
-            unk80.Restart();
+        if (!mSaving) {
+            mSaving = true;
+            mWriteIconShowing = true;
+            mWriteIconTimer.Restart();
             ShowPhysicalWriteIcon();
         }
         break;
     case 2:
     case 5:
-        unk7a = false;
+        mSaving = false;
         break;
     default:
         break;

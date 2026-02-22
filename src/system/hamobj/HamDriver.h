@@ -28,7 +28,7 @@ public:
     };
 
     struct LayerArray : public Layer {
-        LayerArray() { unkc[0] = 0; }
+        LayerArray() { mName[0] = 0; }
         virtual ~LayerArray() { Clear(); }
         virtual void Eval(float);
         virtual void Play(CharBones &);
@@ -39,7 +39,7 @@ public:
         void Clear();
 
         float mWeight; // 0x8 - layer weight/blend value
-        char unkc[0x20];
+        char mName[0x20];
         std::list<Layer *> mLayers; // 0x2c - child layers
     };
 

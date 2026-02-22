@@ -42,7 +42,7 @@ BEGIN_HANDLERS(SongSequence)
     HANDLE_EXPR(
         loop_start,
         mCurrentIndex > mEntries.size() ? 0
-                                        : BeatToMs(mEntries[mCurrentIndex].mEventStartMs * 4.0f)
+                                        : BeatToMs(mEntries[mCurrentIndex].mEventStartMeasure * 4.0f)
     )
     HANDLE_EXPR(empty, mEntries.size() == 0)
     HANDLE_EXPR(current_index, mCurrentIndex)
@@ -70,11 +70,11 @@ void SongSequence::Add(const DataArray *a) {
         entry.mSongLongName = aSize > 2 ? a->Sym(2) : babygotback;
         entry.mSongShortName = aSize > 3 ? a->Sym(3) : babygotback;
         entry.mGameplayMode = aSize > 4 ? a->Sym(4) : perform;
-        entry.mIntroTempo = aSize > 5 ? a->Float(5) : -1;
-        entry.mOutroTempo = aSize > 6 ? a->Float(6) : -1;
+        entry.mIntroLoopMeasure = aSize > 5 ? a->Float(5) : -1;
+        entry.mOutroLoopMeasure = aSize > 6 ? a->Float(6) : -1;
         entry.mModeConfig = aSize > 7 ? a->Sym(7) : holla_back_config_default;
-        entry.mEventStartMs = aSize > 8 ? a->Float(8) : -1;
-        entry.mEventEndMs = aSize > 9 ? a->Float(9) : -1;
+        entry.mEventStartMeasure = aSize > 8 ? a->Float(8) : -1;
+        entry.mEventEndMeasure = aSize > 9 ? a->Float(9) : -1;
         entry.mIsIntro = aSize > 10 ? a->Int(10) : false;
         entry.mIsOutro = aSize > 11 ? a->Int(11) : entry.mIsIntro;
         entry.mIntroCamShot = aSize > 12 ? a->Sym(12) : "";
@@ -324,14 +324,14 @@ void SongSequence::OnSongLoaded() {
             TheMaster->GetAudio()->ClearLoop();
         }
         TheHamDirector->SetProperty(freestyle_enabled, false);
-        if (curEntry.mIntroTempo >= 0 && curEntry.mOutroTempo >= 0) {
+        if (curEntry.mIntroLoopMeasure >= 0 && curEntry.mOutroLoopMeasure >= 0) {
             TheMaster->GetAudio()->SetLoop(
-                BeatToMs(curEntry.mIntroTempo * 4.0f), BeatToMs(curEntry.mOutroTempo * 4.0f)
+                BeatToMs(curEntry.mIntroLoopMeasure * 4.0f), BeatToMs(curEntry.mOutroLoopMeasure * 4.0f)
             );
         }
-        if (curEntry.mEventStartMs >= 0 && curEntry.mEventEndMs >= 1) {
-            TheMaster->GetAudio()->SetLoop(curEntry.mEventStartMs * 4.0f, curEntry.mEventEndMs * 4.0f);
-            TheGame->Jump(curEntry.mEventStartMs * 4.0f, true);
+        if (curEntry.mEventStartMeasure >= 0 && curEntry.mEventEndMeasure >= 1) {
+            TheMaster->GetAudio()->SetLoop(curEntry.mEventStartMeasure * 4.0f, curEntry.mEventEndMeasure * 4.0f);
+            TheGame->Jump(curEntry.mEventStartMeasure * 4.0f, true);
         }
         if (curEntry.mIsIntro) {
             ObjectDir *hudPanel = DataVariable("hud_panel").Obj<ObjectDir>();

@@ -50,7 +50,7 @@ public:
     void AddMusicFader(Fader *);
     void SetMaps();
     void LoaderPoll();
-    int Unk70() const { return mSongPos.GetMeasure(); }
+    int GetMeasure() const { return mSongPos.GetMeasure(); }
     float TotalBeat1() const { return mSongPos.GetTotalBeat(); }
     float TotalBeat2() const { return mPrevSongPos.GetTotalBeat(); }
     HamAudio *GetAudio() const { return mAudio; }

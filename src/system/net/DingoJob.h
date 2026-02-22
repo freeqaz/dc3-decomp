@@ -35,7 +35,7 @@ protected:
 
     int mResult; // 0x7c
     DataPoint *mDataPoint; // 0x80
-    void *unk84;
+    void *mContentBuffer;
     String mResponseStr; // 0x88
     JsonConverter mJsonReader; // 0x90
     JsonObject *mJsonResponse; // 0xa4

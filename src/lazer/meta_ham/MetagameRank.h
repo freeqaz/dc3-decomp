@@ -6,8 +6,8 @@
 class HamProfile;
 
 struct DeferredPoints {
-    int unk0; // score?
-    Symbol unk4;
+    int mPoints;
+    Symbol mSource;
 };
 
 class MetagameRank : public Hmx::Object, public FixedSizeSaveable {

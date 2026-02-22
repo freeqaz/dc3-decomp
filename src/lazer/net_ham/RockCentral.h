@@ -72,6 +72,7 @@ public:
     int GetControllerModeEnterCount() const { return mControllerModeEnterCount; }
     void SetControllerModeEnterCount(int i) { mControllerModeEnterCount = i; }
     bool GetMotdXPFlag() const { return mMotdXPFlag; }
+    int GetMotdFreq() const { return mMotdFreq; }
 
 private:
     static const String kServerVer;

@@ -6,30 +6,30 @@
 #include "char/CharClipSet.h"
 
 FlowMultiSetProperty::FlowMultiSetProperty()
-    : unk5c(this, (EraseMode)1, kObjListNoNull) {}
+    : mTargets(this, (EraseMode)1, kObjListNoNull) {}
 
 FlowMultiSetProperty::~FlowMultiSetProperty() {}
 
 BEGIN_PROPSYNCS(FlowMultiSetProperty)
-    SYNC_PROP_MODIFY(targets, unk5c, (unk5c.sort(ObjNameSort()), unk5c.unique()))
-    SYNC_PROP(value, unk78)
+    SYNC_PROP_MODIFY(targets, mTargets, (mTargets.sort(ObjNameSort()), mTargets.unique()))
+    SYNC_PROP(value, mProperty)
     SYNC_SUPERCLASS(FlowNode)
 END_PROPSYNCS
 
 BEGIN_SAVES(FlowMultiSetProperty)
     SAVE_REVS(0, 0)
     SAVE_SUPERCLASS(FlowNode)
-    bs << unk5c;
-    bs << unk78 << unk80;
+    bs << mTargets;
+    bs << mProperty << mPropertyValue;
 END_SAVES
 
 BEGIN_COPYS(FlowMultiSetProperty)
     COPY_SUPERCLASS(FlowNode)
     CREATE_COPY_AS(FlowMultiSetProperty, c)
     BEGIN_COPYING_MEMBERS_FROM(c)
-        COPY_MEMBER(unk5c)
-        COPY_MEMBER(unk78)
-        COPY_MEMBER(unk80)
+        COPY_MEMBER(mTargets)
+        COPY_MEMBER(mProperty)
+        COPY_MEMBER(mPropertyValue)
     END_COPYING_MEMBERS
 END_COPYS
 
@@ -39,24 +39,24 @@ BEGIN_LOADS(FlowMultiSetProperty)
     LOAD_REVS(bs)
     ASSERT_REVS(0, 0)
     LOAD_SUPERCLASS(FlowNode)
-    bs >> unk5c;
-    bs >> unk78 >> unk80;
+    bs >> mTargets;
+    bs >> mProperty >> mPropertyValue;
 END_LOADS
 
 bool FlowMultiSetProperty::Activate() {
     FLOW_LOG("Activate\n");
-    unk58 = false;
-    if (!unk5c.empty()) {
+    mStopRequested = false;
+    if (!mTargets.empty()) {
         DrivenPropertyEntry *node = GetDrivenEntry("value");
         if (node != nullptr) {
-            unk80 = unk5c.front()->Property(unk78.Array(), true)->Evaluate();
+            mPropertyValue = mTargets.front()->Property(mProperty.Array(), true)->Evaluate();
         }
     }
     FlowNode::PushDrivenProperties();
-    FOREACH (it, unk5c) {
+    FOREACH (it, mTargets) {
         Hmx::Object *obj = it->Obj();
         if (obj != nullptr) {
-            obj->SetProperty(unk78.Array(), unk80);
+            obj->SetProperty(mProperty.Array(), mPropertyValue);
         }
     }
     return false;

@@ -48,7 +48,7 @@ END_LOADS
 
 bool FlowTimer::Activate() {
     FLOW_LOG("Activate\n");
-    unk58 = false;
+    mStopRequested = false;
     FlowNode::PushDrivenProperties();
     if (0.0f >= mTotalTime) {
         return false;
@@ -94,7 +94,7 @@ void FlowTimer::ChildFinished(FlowNode *node) {
 void FlowTimer::RequestStop() {
     FLOW_LOG("RequestStop\n");
     if (mStopMode == 0) {
-        unk58 = true;
+        mStopRequested = true;
         TheFlowMgr->QueueCommand(this, kIgnore);
         FlowNode::RequestStop();
     }
@@ -102,7 +102,7 @@ void FlowTimer::RequestStop() {
 
 void FlowTimer::RequestStopCancel() {
     FLOW_LOG("RequestStopC\n");
-    unk58 = false;
+    mStopRequested = false;
     TheFlowMgr->QueueCommand(this, kQueue);
     FlowNode::RequestStopCancel();
 }

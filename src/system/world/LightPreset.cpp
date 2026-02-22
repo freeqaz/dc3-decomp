@@ -129,31 +129,31 @@ BinStreamRev &operator>>(BinStreamRev &d, LightPreset::EnvLightEntry &e) {
 #pragma region SpotlightEntry
 
 LightPreset::SpotlightEntry::SpotlightEntry(Hmx::Object *owner)
-    : mIntensity(0), mColor(0), unk8(3), mTarget(owner) {
-    unk20.Reset();
-    unk30.Zero();
+    : mIntensity(0), mColor(0), mFlags(3), mTarget(owner) {
+    mRotation.Reset();
+    mRotationMatrix.Zero();
 }
 
 void LightPreset::SpotlightEntry::Save(BinStream &bs) const {
     Hmx::Color color(mColor);
     bs << mIntensity;
-    bs << unk20;
+    bs << mRotation;
     bs << color;
     bs << mTarget;
-    bs << (bool)(unk8 & 1);
+    bs << (bool)(mFlags & 1);
 }
 
 void LightPreset::SpotlightEntry::Load(BinStreamRev &d) {
     float intensity;
     d >> intensity;
     mIntensity = intensity;
-    d >> unk20;
+    d >> mRotation;
     Hmx::Color color;
     d >> color;
     color.alpha = 1;
     mColor = color.Pack();
     if (!mTarget.Load(d.stream, false, nullptr)) {
-        unk8 &= ~2;
+        mFlags &= ~2;
     }
     if (d.rev < 0x13) {
         Symbol s;
@@ -163,23 +163,23 @@ void LightPreset::SpotlightEntry::Load(BinStreamRev &d) {
         bool b;
         d >> b;
         if (b) {
-            unk8 |= kEnabled;
+            mFlags |= kEnabled;
         } else {
-            unk8 &= ~kEnabled;
+            mFlags &= ~kEnabled;
         }
         if (d.rev < 9) {
             int x;
             d >> x;
         }
     }
-    if (mTarget || !(unk8 & 2)) {
-        unk20.Set(0, 0, 0, 0);
+    if (mTarget || !(mFlags & 2)) {
+        mRotation.Set(0, 0, 0, 0);
     }
 }
 
 bool LightPreset::SpotlightEntry::operator!=(const LightPreset::SpotlightEntry &e) const {
-    return e.mIntensity != mIntensity || e.unk8 != unk8 || e.mTarget != mTarget
-        || (unsigned int)e.mColor != mColor || e.unk20 != unk20;
+    return e.mIntensity != mIntensity || e.mFlags != mFlags || e.mTarget != mTarget
+        || (unsigned int)e.mColor != mColor || e.mRotation != mRotation;
 }
 
 BinStream &operator<<(BinStream &bs, const LightPreset::SpotlightEntry &e) {
@@ -406,11 +406,11 @@ BEGIN_CUSTOM_PROPSYNC(LightPreset::SpotlightEntry)
     SYNC_PROP_SET(intensity, o.mIntensity, )
     SYNC_PROP_SET(color, o.mColor, )
     SYNC_PROP(target, o.mTarget)
-    SYNC_PROP_SET(flare_enabled, o.unk8 & LightPreset::SpotlightEntry::kEnabled, ) {
+    SYNC_PROP_SET(flare_enabled, o.mFlags & LightPreset::SpotlightEntry::kEnabled, ) {
         static Symbol _s("rotation");
         if (sym == _s) {
-            MakeRotMatrix(o.unk20, o.unk30);
-            if (PropSync(o.unk30, _val, _prop, _i + 1, _op))
+            MakeRotMatrix(o.mRotation, o.mRotationMatrix);
+            if (PropSync(o.mRotationMatrix, _val, _prop, _i + 1, _op))
                 return true;
             else
                 return false;
@@ -704,11 +704,11 @@ void LightPreset::FillSpotPresetData(
     }
     if (mask & 2) {
         entry.mTarget = spot->GetTarget();
-        entry.unk20 =
+        entry.mRotation =
             entry.mTarget ? Hmx::Quat(0, 0, 0, 0) : Hmx::Quat(spot->mWorldXfm.m);
     }
     if (mask != 0 && spot->IsFlareEnabled()) {
-        entry.unk8 |= SpotlightEntry::kEnabled;
+        entry.mFlags |= SpotlightEntry::kEnabled;
     }
 }
 

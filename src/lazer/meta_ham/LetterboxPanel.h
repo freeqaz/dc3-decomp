@@ -40,13 +40,13 @@ public:
     void ToggleBlacklightMode(bool);
 
 private:
-    UIPanel *unk3c;
-    RndGroup *unk40;
+    UIPanel *mSyncedPanel;
+    RndGroup *mLetterboxGroup;
     bool mIsBlacklightMode; // 0x44
-    bool unk45;
-    Timer unk48;
-    int unk78;
-    int unk7c;
-    float unk80;
+    bool mBlacklightActive;
+    Timer mBlacklightTimer;
+    int mBlacklightTimeout;
+    int mBlacklightPhase;
+    float mBlacklightTimeoutMs;
     float unk84;
 };

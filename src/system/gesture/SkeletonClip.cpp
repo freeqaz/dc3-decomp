@@ -335,8 +335,8 @@ void SkeletonClip::WriteClipFrame(FileStream &stream, const RecordedFrame &recor
     stream << recordedFrame.unk4;
     stream << recordedFrame.unk8;
     stream << recordedFrame.unk18;
-    stream << recordedFrame.unk28;
-    if (recordedFrame.unk28) {
+    stream << recordedFrame.mIsTracked;
+    if (recordedFrame.mIsTracked) {
         for (int i = 0; i < kNumJoints; i++) {
             stream << recordedFrame.unk2c[i];
             stream << recordedFrame.unk16c[i];
@@ -405,7 +405,7 @@ void SkeletonClip::StopRecording() {
 const SkeletonFrame *SkeletonClip::PollNewFrame() {
     int idk1, idk2;
     const RecordedFrame *recordedFrame = CurRecordedFrame(idk1, idk2);
-    if (recordedFrame && recordedFrame->unk28) {
+    if (recordedFrame && recordedFrame->mIsTracked) {
         recordedFrame->MakeSkeletonFrame(*mCamFrame, 0);
         return mCamFrame;
     } else

@@ -357,7 +357,7 @@ void Leaderboards::GetScores(int i) {
             static Message leaderboards_failed("leaderboards_failed");
             TheUI->Handle(leaderboards_failed, false);
         } else {
-            unk90 = i;
+            mCurrentSongID = i;
             mLoading = true;
             if (mType == 1 || mType == 5) {
                 i = 1000; // idk

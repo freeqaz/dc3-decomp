@@ -30,13 +30,13 @@ public:
 protected:
     DataNode OnMsg(RCJobCompleteMsg const &);
 
-    RedeemTokenJob *unk3c;
-    XboxPurchaser *unk40;
+    RedeemTokenJob *mRedeemTokenJob;
+    XboxPurchaser *mXboxPurchaser;
     int unk44;
-    unsigned long long unk48;
-    HamProfile *unk50;
+    unsigned long long mOfferID;
+    HamProfile *mPurchaseProfile;
     int unk54;
-    GetWebLinkCodeJob *unk58;
+    GetWebLinkCodeJob *mGetWebLinkCodeJob;
     int unk5c;
 
 private:

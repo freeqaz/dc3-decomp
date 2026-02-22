@@ -4,14 +4,14 @@
 
 DrivenPropertyEntry::DrivenPropertyEntry(Hmx::Object *owner) : mMathOps(owner) {
     static Symbol none("none");
-    unk0 = none;
+    mNode = none;
 }
 
 DrivenPropertyEntry::~DrivenPropertyEntry() { mMathOps.clear(); }
 
 void DrivenPropertyEntry::Save(BinStream &bs) {
     bs << 0;
-    bs << unk0;
+    bs << mNode;
     bs << mMathOps.size();
     for (ObjVector<FlowMathOp>::iterator it = mMathOps.begin(); it != mMathOps.end();
          ++it) {

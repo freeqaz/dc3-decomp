@@ -40,11 +40,11 @@ void FxSendChorus::Save(BinStream &bs) {
     bs << mTempo;
 }
 
-INIT_REVS(3, 0)
+INIT_REVS(4, 0)
 
 BEGIN_LOADS(FxSendChorus)
     LOAD_REVS(bs)
-    ASSERT_REVS(3, 0)
+    ASSERT_REVS(4, 0)
     LOAD_SUPERCLASS(FxSend)
     if (d.rev == 1) {
         mDryGain = -3.0f;

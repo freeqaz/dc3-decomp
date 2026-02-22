@@ -193,7 +193,7 @@ void Splash::BeginSplasher() {
     }
     TheSplasher = this;
     SetRndSplasherCallback(PollFunc, SuspendFunc, ResumeFunc);
-    ((Rnd *)&TheRnd)->unk1b4 = 1;
+    ((Rnd *)&TheRnd)->mReleaseImmediate = 1;
 }
 
 void Splash::Draw() {

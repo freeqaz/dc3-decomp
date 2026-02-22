@@ -560,7 +560,7 @@ void MoveDir::Poll() {
             }
             mCurMoveSmoothers[i].Smooth(
                 mCurMoveNormalizedResult[i],
-                TheMaster && TheMaster->Unk70() == 3 ? TheTaskMgr.DeltaUISeconds() * 4.0f
+                TheMaster && TheMaster->GetMeasure() == 3 ? TheTaskMgr.DeltaUISeconds() * 4.0f
                                                      : TheTaskMgr.DeltaUISeconds()
             );
             if (mCurMoveRating[i] <= kMoveRatingPerfect && mPrevMoveRating[i] > 1) {

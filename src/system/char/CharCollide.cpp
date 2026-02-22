@@ -10,7 +10,7 @@ CharCollide::CharCollide()
     }
     CopyOriginalToCur();
     for (int i = 0; i < 8; i++) {
-        unkStructs[i].unk0 = 0;
+        unkStructs[i].vertIdx = 0;
         unkStructs[i].vec.Zero();
     }
     unk1a0.Reset();
@@ -53,7 +53,7 @@ BEGIN_SAVES(CharCollide)
     bs << unk1a0;
     bs << mMesh;
     for (int i = 0; i < 8; i++) {
-        bs << unkStructs[i].unk0;
+        bs << unkStructs[i].vertIdx;
         bs << unkStructs[i].vec;
     }
     bs << mDigest;
@@ -90,7 +90,7 @@ BEGIN_LOADS(CharCollide)
         bs >> unk1a0;
         bs >> mMesh;
         for (int i = 0; i < 8; i++) {
-            bs >> unkStructs[i].unk0;
+            bs >> unkStructs[i].vertIdx;
             bs >> unkStructs[i].vec;
         }
         bs >> mDigest;

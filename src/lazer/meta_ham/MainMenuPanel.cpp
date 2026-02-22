@@ -27,13 +27,15 @@
 #include "utl/NetCacheMgr.h"
 #include "utl/Std.h"
 #include "utl/Symbol.h"
+#include "math/Rand.h"
+#include "synth/Pollable.h"
 
 #pragma region MotdData
 
-MainMenuPanel::MotdData::MotdData() : unkc(0) {}
+MainMenuPanel::MotdData::MotdData() : mWidth(0) {}
 
 MainMenuPanel::MotdData::MotdData(MotdData const &motdData)
-    : unk0(motdData.unk0), unk4(motdData.unk4), unkc(motdData.unkc) {}
+    : mType(motdData.mType), mText(motdData.mText), mWidth(motdData.mWidth) {}
 
 #pragma endregion MotdData
 #pragma region MainMenuPanel
@@ -283,7 +285,7 @@ void MainMenuPanel::MotdHandleTextScrolledOut(int i) {
     }
 
     // Clear icon state for DLC/utility messages
-    Symbol type = mMotdData.front().unk0;
+    Symbol type = mMotdData.front().mType;
     if (type == dlc || type == utility) {
         UpdateIconState(none);
     }
@@ -299,7 +301,7 @@ void MainMenuPanel::MotdHandleTextScrolledOut(int i) {
         MotdPickNextText();
     } else {
         for (++it; it != mMotdData.end(); ++it) {
-            currentWidth += it->unkc;
+            currentWidth += it->mWidth;
         }
     }
 
@@ -311,15 +313,256 @@ void MainMenuPanel::MotdHandleTextScrolledOut(int i) {
     MILO_ASSERT(mMotdData.size(), 0x301);
 
     // Build the full text string from all queued messages
-    String text = mMotdData.front().unk4;
+    String text = mMotdData.front().mText;
     it = mMotdData.begin();
     ++it;
     for (; it != mMotdData.end(); ++it) {
         text += "\n";
-        text += it->unk4;
+        text += it->mText;
     }
 
     mMsgLabel->ReFitTextScroll(text);
+}
+
+void MainMenuPanel::MotdHandleTextScrolledIn(int idx) {
+    static Symbol dlc("dlc");
+    static Symbol utility("utility");
+
+    if (!mMotdProcessingActive)
+        return;
+
+    std::list<MotdData>::iterator it = mMotdData.begin();
+    std::advance(it, idx);
+
+    Sound *snd;
+    if (it->mType == dlc) {
+        snd = DataDir()->Find<Sound>("motd_store_item_new.snd", false);
+        if (!snd)
+            goto done;
+    } else if (it->mType == utility) {
+        String soundName = TheRockCentral.GetUtilitySound();
+        snd = DataDir()->Find<Sound>(soundName.c_str(), false);
+        if (!snd)
+            goto done;
+    } else {
+        return;
+    }
+
+    snd->Play(0, 0, 0, 0, 0);
+
+done:
+    UpdateIconState(it->mType);
+}
+
+float MainMenuPanel::MotdPickNextText() {
+    MILO_ASSERT(mMsgLabel, 0x269);
+
+    static Symbol dlc("dlc");
+    static Symbol utility("utility");
+    static Symbol community("community");
+    static Symbol stats("stats");
+
+    MotdData data;
+    data.mType = community;
+    int iVar8;
+
+    if (unkbc == 0) {
+        goto normal_pick;
+    }
+    if (unkc0 % unkbc != 0) {
+        goto normal_pick;
+    }
+
+    {
+        // Promo path
+        Symbol *pPromoType = &dlc;
+        if (unkd4 != utility) {
+            pPromoType = &utility;
+        }
+        data.mType = *pPromoType;
+
+        Symbol cat = data.mType;
+        data.mText = mMotdMessagesByCategory[cat].front();
+        String textCopy(data.mText);
+        data.mWidth = mMsgLabel->ComputeCharWidthsForText(textCopy)
+            + mMsgLabel->Indentation();
+
+        iVar8 = 1;
+        unkd4 = data.mType;
+    }
+    goto set_counter;
+
+normal_pick:
+    if (unkcc == 0 || unkcc <= unkd0) {
+        iVar8 = 1;
+    pick_stats:
+        data.mType = stats;
+        unkd0 = 0;
+        unkc8 = iVar8;
+    } else if (unkc8 < unkc4) {
+        iVar8 = RandomInt(0, 2);
+        data.mType = community;
+        if (iVar8 == 0) {
+            iVar8 = unkc8 + 1;
+            goto pick_stats;
+        }
+        unkc8 = 0;
+        unkd0 = unkd0 + 1;
+    } else {
+        unkd0 = 1;
+        unkc8 = 0;
+    }
+
+    {
+        Symbol cat = data.mType;
+        int offset = 0;
+        if (mMotdMessagesByCategory[cat].size() > 1) {
+            offset = RandomInt(0, (unsigned int)mMotdMessagesByCategory[cat].size() >> 1);
+        }
+
+        std::list<String>::iterator it = mMotdMessagesByCategory[cat].begin();
+        std::advance(it, offset);
+
+        data.mText = *it;
+        String textCopy(data.mText);
+        data.mWidth = mMsgLabel->ComputeCharWidthsForText(textCopy)
+            + mMsgLabel->Indentation();
+
+        mMotdMessagesByCategory[cat].push_back(*it);
+        mMotdMessagesByCategory[cat].erase(it);
+
+        if (unkbc == 0)
+            goto end;
+        iVar8 = unkc0 + 1;
+    }
+
+set_counter:
+    unkc0 = iVar8;
+
+end:
+    mMotdData.push_back(data);
+    return mMotdData.back().mWidth;
+}
+
+void MainMenuPanel::MotdInitializeTexts() {
+    static Symbol dlc("dlc");
+    static Symbol utility("utility");
+    static Symbol community("community");
+    static Symbol stats("stats");
+    static Symbol no_profile("no_profile");
+
+    Symbol *pCategory = &no_profile;
+
+    // Ensure label uses scroll marquee wrap always
+    if (mMsgLabel->GetFitType() != RndText::kFitScrollMarqueeWrapAlways) {
+        MILO_LOG(
+            ">>>>>>>>>> Forcing the souce lable to use "
+            "kFitScrollMarqueeWrapAlways as the text fit type.\n"
+        );
+        mMsgLabel->SetFitType(RndText::kFitScrollMarqueeWrapAlways);
+    }
+
+    // Clear existing alt style reference and scroll state
+    mMsgLabel->SetAltStyle(nullptr);
+
+    mMotdProcessingActive = false;
+    mMotdData.clear();
+
+    // Check for no_profile messages - simple case
+    if (!mMotdMessagesByCategory[no_profile].empty()) {
+        goto show_single;
+    }
+
+    // If both DLC and utility are empty...
+    if (mMotdMessagesByCategory[dlc].empty() && mMotdMessagesByCategory[utility].empty()) {
+        unsigned int commCount = mMotdMessagesByCategory[community].size();
+        unsigned int statsCount = mMotdMessagesByCategory[stats].size();
+        if (commCount + statsCount == 1) {
+            pCategory = &stats;
+            goto show_single;
+        }
+    }
+
+    // Enable scrolling mode
+    mMotdProcessingActive = true;
+    mMsgLabel->SetAltStyle(this);
+    {
+        float targetWidth = mMsgLabel->Width() * 2.0f;
+        unkbc = TheRockCentral.GetMotdFreq();
+
+        // Count community and stats
+        int communityCount = mMotdMessagesByCategory[community].size();
+        int statsCount = mMotdMessagesByCategory[stats].size();
+
+        // Adjust promo frequency
+        if (mMotdMessagesByCategory[dlc].empty()
+            && mMotdMessagesByCategory[utility].empty()) {
+            unkbc = 0;
+        } else if (unkbc < 1) {
+            unkbc = 1;
+        } else if (communityCount + statsCount < unkbc - 1) {
+            unkbc = communityCount + statsCount + 1;
+        }
+
+        // Set community max rotation count
+        {
+            unsigned int commSize = mMotdMessagesByCategory[community].size();
+            if (commSize == 0) {
+                unkcc = 0;
+            } else {
+                unsigned int commSize2 = mMotdMessagesByCategory[community].size();
+                if (commSize2 > 1) {
+                    unkcc = 2;
+                }
+            }
+        }
+
+        // Set stats max rotation count
+        {
+            unsigned int statsSize = mMotdMessagesByCategory[stats].size();
+            if (statsSize > 1) {
+                unkc4 = 2;
+            } else {
+                unkc4 = 1;
+            }
+        }
+
+        // Initialize counters
+        unkc8 = 0;
+        unkd0 = 0;
+        unkc0 = 0;
+        unkd4 = utility;
+
+        // Pick first text
+        MotdPickNextText();
+
+        // Fill scroll area with enough text (2x label width)
+        float currentWidth = 0.0f;
+        while (currentWidth < targetWidth) {
+            currentWidth += MotdPickNextText();
+        }
+
+        // Assert we have at least one text
+        MILO_ASSERT(mMotdData.size(), 0x258);
+
+        // Build combined text string
+        String text = mMotdData.front().mText;
+        std::list<MotdData>::iterator it = mMotdData.begin();
+        ++it;
+        for (; it != mMotdData.end(); ++it) {
+            text += "\n";
+            text += it->mText;
+        }
+
+        mMsgLabel->SetPrelocalizedString(text);
+    }
+    return;
+
+show_single:
+    {
+        std::list<String> &msgList = mMotdMessagesByCategory[*pCategory];
+        mMsgLabel->SetPrelocalizedString(msgList.front());
+    }
 }
 
 void MainMenuPanel::UpdateArtLoaders() {

@@ -166,7 +166,7 @@ protected:
     const HamSongMgr &mSongMgr; // 0x20
     Instarank *mInstarank; // 0x24
     bool mNoFail; // 0x28
-    DateTime unk29; // 0x29
+    DateTime mGameplayTimerStart; // 0x29
     bool mGotNewHighScore; // 0x2f
     bool unk30; // 0x30
     bool mGotNewBestStars; // 0x31

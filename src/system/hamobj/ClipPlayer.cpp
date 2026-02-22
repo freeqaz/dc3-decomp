@@ -235,7 +235,7 @@ void ClipPlayer::PlayNormal(float f1, HamDriver::LayerArray *arr, const char *cc
     if (arr != NULL) {
         newArr = new HamDriver::LayerArray();
         arr->mLayers.push_back(newArr);
-        strncpy(newArr->unkc, cc, 0x1F);
+        strncpy(newArr->mName, cc, 0x1F);
     } else {
         newArr = &mDriver->Layers();
     }

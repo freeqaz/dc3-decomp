@@ -24,15 +24,15 @@
 float HamMove::sMinFrameDistBeats = 0.2;
 
 BinStream &operator<<(BinStream &bs, const Ham1NodeWeight &wt) {
-    bs << wt.unk4 << wt.unk8 << wt.unkc << wt.unk10 << wt.unk0;
+    bs << wt.mPerfectDist << wt.mRate << wt.mPerfectDist2 << wt.mRate2 << wt.unk0;
     return bs;
 }
 
 BinStream &operator>>(BinStreamRev &d, Ham1NodeWeight &wt) {
-    d >> wt.unk4;
-    d >> wt.unk8;
-    d >> wt.unkc;
-    d >> wt.unk10;
+    d >> wt.mPerfectDist;
+    d >> wt.mRate;
+    d >> wt.mPerfectDist2;
+    d >> wt.mRate2;
     if (d.rev > 39) {
         d >> wt.unk0;
     } else if (d.rev > 32) {

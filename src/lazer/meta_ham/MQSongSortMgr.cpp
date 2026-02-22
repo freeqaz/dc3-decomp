@@ -56,7 +56,7 @@ bool MQSongSortMgr::SelectionIs(Symbol sym) {
 }
 
 bool MQSongSortMgr::IsCharacter(Symbol sym) const {
-    FOREACH (it, unk78) {
+    FOREACH (it, mCharacterSongs) {
         if (it->first == sym) {
             return true;
         }
@@ -66,11 +66,11 @@ bool MQSongSortMgr::IsCharacter(Symbol sym) const {
 
 void MQSongSortMgr::UpdateList() {
     MILO_ASSERT(TheCampaign, 0x6e);
-    if (unk90.begin() != unk90.end()) {
-        unk90.clear();
+    if (mFlatList.begin() != mFlatList.end()) {
+        mFlatList.clear();
     }
     Symbol mqCrew = TheCampaign->GetMQCrew();
-    unk78.clear();
+    mCharacterSongs.clear();
     const std::vector<int> &rankedSongs = TheHamSongMgr.RankedSongs((SongType)1);
     FOREACH (it, rankedSongs) {
         const HamSongMetadata *metadata = TheHamSongMgr.Data(*it);
@@ -80,19 +80,19 @@ void MQSongSortMgr::UpdateList() {
         Symbol mqHeader = MakeString<char>("mqheader_%s", charCopy);
         if (metadata->IsFake() == false && crew == mqCrew
             && TheProfileMgr.IsContentUnlocked(metadata->ShortName())) {
-            unk78[mqHeader].push_back(TheHamSongMgr.GetShortNameFromSongID(*it));
+            mCharacterSongs[mqHeader].push_back(TheHamSongMgr.GetShortNameFromSongID(*it));
         }
     }
-    FOREACH (it, unk78) {
-        unk90.push_back(it->first);
+    FOREACH (it, mCharacterSongs) {
+        mFlatList.push_back(it->first);
         FOREACH (it2, it->second) {
-            unk90.push_back(*it2);
+            mFlatList.push_back(*it2);
         }
     }
 }
 
 bool MQSongSortMgr::IsSong(Symbol sym) const {
-    for (auto it = unk78.begin(); it != unk78.end() && it->first != sym; ++it) {
+    for (auto it = mCharacterSongs.begin(); it != mCharacterSongs.end() && it->first != sym; ++it) {
         std::vector<Symbol> syms = it->second;
         FOREACH (it2, syms) {
             if (*it2 == sym) {

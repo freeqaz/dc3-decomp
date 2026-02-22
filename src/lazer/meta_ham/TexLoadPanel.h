@@ -28,9 +28,9 @@ public:
 
     void StartLoading();
 
-    Symbol unk18; // 0x18
+    Symbol mContentSymbol; // 0x18
     int mState; // 0x1c
-    RndTex *unk24; // 0x20
+    RndTex *mFallbackTex; // 0x20
 };
 
 class TexLoadPanel : public HamPanel, public ContentMgr::Callback {

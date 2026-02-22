@@ -1,14 +1,17 @@
 #include "flow/FlowSwitchCase.h"
 #include "flow/DrivenPropertyEntry.h"
+#include "flow/Flow.h"
 #include "flow/FlowManager.h"
 #include "flow/FlowNode.h"
 #include "flow/FlowWhile.h"
 #include "obj/Data.h"
+#include "obj/Dir.h"
+#include "obj/DirLoader.h"
 #include "obj/Object.h"
 
 FlowSwitchCase::FlowSwitchCase()
     : mToValue(0), mFromValue(0), mOperator(kEqual), mUseLastValue(0),
-      mUnregisterParent(0), unk9a(0) {
+      mUnregisterParent(0), mContinuous(0) {
     mFlowParent = nullptr;
 }
 
@@ -66,44 +69,21 @@ BEGIN_LOADS(FlowSwitchCase)
     ASSERT_REVS(3, 0)
     LOAD_SUPERCLASS(FlowNode)
 
-    u16 version = d.rev;
-
-    if (version > 3) {
-        TheDebug.Fail(MakeString("FlowSwitchCase: can't load new version %d", version), 0);
-    }
-    if (d.altRev > 0) {
-        TheDebug.Fail(MakeString("FlowSwitchCase: can't load new alt version"), 0);
-    }
-
-    if (version < 2) {
-        DataNode n;
-        d >> n;
-        mFromValue = n;
-    } else {
-        u32 type;
-        d >> type;
-        if (type == 4) {
-            mFromValue = LoadObjectFromMainOrDir(d.stream, nullptr);
-        } else {
-            DataNode n;
-            d >> n;
-            mFromValue = n;
-        }
-    }
-
-    int opValue;
-    d >> opValue;
-    mOperator = (OperatorType)opValue;
-
-    if (version < 2) {
+    if (d.rev < 2) {
         DataNode n;
         d >> n;
         mToValue = n;
     } else {
-        u32 type;
+        int type;
         d >> type;
-        if (type == 4) {
-            mToValue = LoadObjectFromMainOrDir(d.stream, nullptr);
+        if (type == kDataObject) {
+            Flow *owner = GetOwnerFlow();
+            if (!owner) {
+                owner = dynamic_cast<Flow *>(this);
+            }
+            DirLoader *loader = owner->Loader();
+            ObjectDir *dir = loader ? loader->ProxyDir() : owner->Dir();
+            mToValue = LoadObjectFromMainOrDir(d.stream, dir);
         } else {
             DataNode n;
             d >> n;
@@ -111,21 +91,47 @@ BEGIN_LOADS(FlowSwitchCase)
         }
     }
 
-    if (version > 0) {
+    int opValue;
+    d >> opValue;
+    mOperator = (OperatorType)opValue;
+
+    if (d.rev < 2) {
+        DataNode n;
+        d >> n;
+        mFromValue = n;
+    } else {
+        int type;
+        d >> type;
+        if (type == kDataObject) {
+            Flow *owner = GetOwnerFlow();
+            if (!owner) {
+                owner = dynamic_cast<Flow *>(this);
+            }
+            DirLoader *loader = owner->Loader();
+            ObjectDir *dir = loader ? loader->ProxyDir() : owner->Dir();
+            mFromValue = LoadObjectFromMainOrDir(d.stream, dir);
+        } else {
+            DataNode n;
+            d >> n;
+            mFromValue = n;
+        }
+    }
+
+    if (d.rev > 0) {
         d >> mUseLastValue;
     }
 
-    if (version > 2) {
+    if (d.rev > 2) {
         d >> mUnregisterParent;
     }
 END_LOADS
 
 bool FlowSwitchCase::Activate() {
     FLOW_LOG("Activate\n");
-    unk58 = false;
+    mStopRequested = false;
     if (mFlowParent->ClassName() == FlowWhile::StaticClassName()
         && mOperator != kTransition) {
-        unk9a = true;
+        mContinuous = true;
         FlowNode::Activate();
         if (mUnregisterParent) {
             TheFlowMgr->QueueCommand(this, kQueue);
@@ -137,16 +143,16 @@ bool FlowSwitchCase::Activate() {
 }
 
 void FlowSwitchCase::Deactivate(bool b1) {
-    unk9a = false;
+    mContinuous = false;
     FlowNode::Deactivate(b1);
 }
 
 void FlowSwitchCase::ChildFinished(FlowNode *n) {
     FLOW_LOG("Child Finished of class:%s\n", n->ClassName());
-    if (unk9a && mOperator != kTransition) {
+    if (mContinuous && mOperator != kTransition) {
         mRunningNodes.remove(n);
     } else {
-        unk9a = false;
+        mContinuous = false;
         FlowNode::ChildFinished(n);
     }
 }
@@ -154,7 +160,7 @@ void FlowSwitchCase::ChildFinished(FlowNode *n) {
 void FlowSwitchCase::RequestStop() {
     FLOW_LOG("RequestStop\n");
     FlowNode::RequestStop();
-    if (unk9a) {
+    if (mContinuous) {
         TheFlowMgr->QueueCommand(this, kIgnore);
     }
 }
@@ -170,10 +176,10 @@ void FlowSwitchCase::Execute(QueueState qs) {
     if (qs == kQueue) {
         // FlowWhile *propEventListener = static_cast<FlowWhile *>(mFlowParent);
         // propEventListener->UnregisterEvents(propEventListener);
-        if (!unk9a)
+        if (!mContinuous)
             return;
     } else if (qs == kIgnore) {
-        unk9a = false;
+        mContinuous = false;
         if (!FlowNode::IsRunning() && mFlowParent->HasRunningNode(this)) {
             mFlowParent->ChildFinished(this);
         }
@@ -181,7 +187,7 @@ void FlowSwitchCase::Execute(QueueState qs) {
 }
 
 bool FlowSwitchCase::IsRunning() {
-    if (unk9a)
+    if (mContinuous)
         return true;
     else
         return FlowNode::IsRunning();

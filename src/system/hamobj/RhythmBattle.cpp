@@ -691,11 +691,11 @@ void RhythmBattle::OnBeat() {
     static Symbol mind_control("mind_control");
     bool inMindControl = TheHamProvider->Property(gameplay_mode)->Sym() == mind_control;
     if (mFullKTB && !mFinale && !inMindControl) {
-        mPlayerOne->SetUnk2a5(false);
-        mPlayerTwo->SetUnk2a5(false);
+        mPlayerOne->SetAutoPass(false);
+        mPlayerTwo->SetAutoPass(false);
     } else {
-        mPlayerOne->SetUnk2a5(true);
-        mPlayerTwo->SetUnk2a5(true);
+        mPlayerOne->SetAutoPass(true);
+        mPlayerTwo->SetAutoPass(true);
     }
     static Message remaining_vo_ms("remaining_vo_ms");
     DataNode handled = focusPanel->HandleType(remaining_vo_ms);
@@ -1326,8 +1326,8 @@ void RhythmBattle::OnBeat() {
                         TheHamProvider->Handle(hideCharProjection, false);
                         static Message tanPhaseOut("tan_finale_phaseout01");
                         TheHamProvider->Handle(tanPhaseOut, false);
-                        mPlayerOne->SetUnk2a4(false);
-                        mPlayerTwo->SetUnk2a4(false);
+                        mPlayerOne->SetSuppressRhythm(false);
+                        mPlayerTwo->SetSuppressRhythm(false);
                     }
                 } else if (mFinalePhaseIndex == 2) {
                     if (mFinale) {
@@ -1341,8 +1341,8 @@ void RhythmBattle::OnBeat() {
                         TheHamProvider->Handle(hideCharProjection, false);
                         static Message tanPhaseOut("tan_finale_phaseout02");
                         TheHamProvider->Handle(tanPhaseOut, false);
-                        mPlayerOne->SetUnk2a4(false);
-                        mPlayerTwo->SetUnk2a4(false);
+                        mPlayerOne->SetSuppressRhythm(false);
+                        mPlayerTwo->SetSuppressRhythm(false);
                     }
                     ResetCombo();
                 } else if (mFinalePhaseIndex == 3) {
@@ -1370,8 +1370,8 @@ void RhythmBattle::OnBeat() {
             }
             if ((mFinale && min84 == 16.0f) || (!mFinale && mMindControlIntensity >= 1 && mMindControlTimer > 5.0f)) {
                 if (mFinale) {
-                    mPlayerOne->SetUnk2a4(true);
-                    mPlayerTwo->SetUnk2a4(true);
+                    mPlayerOne->SetSuppressRhythm(true);
+                    mPlayerTwo->SetSuppressRhythm(true);
                     if (mFinalePhaseIndex == 0) {
                         static Symbol finale_setcomplete_01("finale_setcomplete_01");
                         static Symbol finale_phasein_01("finale_phasein_01");

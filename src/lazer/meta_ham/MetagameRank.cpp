@@ -78,7 +78,7 @@ void MetagameRank::SaveFixed(FixedSizeSaveableStream &fs) const {
     if (!b1) {
         static Symbol play_first_time_disp("play_first_time_disp");
         FOREACH (it, mDeferredPoints) {
-            if (it->unk4 == play_first_time_disp) {
+            if (it->mSource == play_first_time_disp) {
                 b1 = true;
                 break;
             }
@@ -93,7 +93,7 @@ void MetagameRank::SaveFixed(FixedSizeSaveableStream &fs) const {
     if (mDeferredPoints.size() != 0) {
         sum = 0;
         FOREACH (it, mDeferredPoints) {
-            sum += it->unk0;
+            sum += it->mPoints;
         }
     } else {
         sum = 0;
@@ -134,9 +134,9 @@ void MetagameRank::LoadFixed(FixedSizeSaveableStream &fs, int saveVersion) {
     // Version 0x5B+: Load combined XP from deferred points
     if (saveVersion > 0x5A) {
         DeferredPoints pt;
-        LoadSymbolFromID(fs, pt.unk4);
-        fs >> pt.unk0;
-        if (pt.unk0 > 0) {
+        LoadSymbolFromID(fs, pt.mSource);
+        fs >> pt.mPoints;
+        if (pt.mPoints > 0) {
             // Insert at front to restore exactly what was saved
             mDeferredPoints.insert(mDeferredPoints.begin(), pt);
         }
@@ -304,10 +304,10 @@ DataNode MetagameRank::GetNextDeferredPoints(DataArray *a) {
     } else {
         DeferredPoints pt = mDeferredPoints.front();
         mDeferredPoints.pop_front();
-        mScore += pt.unk0;
+        mScore += pt.mPoints;
         ComputeRankNumber(false);
         mXpAwarded = true;
-        DataArrayPtr ptr(pt.unk4, pt.unk0);
+        DataArrayPtr ptr(pt.mSource, pt.mPoints);
         return ptr;
     }
 }
@@ -536,8 +536,8 @@ void MetagameRank::AwardPoints(int i, Symbol s) {
         i = i << 1;
     }
     DeferredPoints df;
-    df.unk0 = i;
-    df.unk4 = s;
+    df.mPoints = i;
+    df.mSource = s;
     mDeferredPoints.push_back(df);
     mXpAwarded = true;
 }

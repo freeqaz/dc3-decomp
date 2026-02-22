@@ -18,12 +18,12 @@ public:
 
         Vector3 mPos; // 0x0
         float mRoll; // 0x10
-        bool unk14;
+        bool mDirtyPosition;
         bool mDirtyConstants; // 0x15
-        Vector4 unk18;
-        Vector4 unk28;
-        Vector4 unk38;
-        Vector4 unk48;
+        Vector4 mCoeff0;
+        Vector4 mCoeff1;
+        Vector4 mCoeff2;
+        Vector4 mCoeff3;
     };
     // Hmx::Object
     virtual ~RndSpline() {
@@ -77,9 +77,9 @@ private:
     float mYOffset; // 0x28
     float mYPerCtrlPoint; // 0x2c
     std::vector<CtrlPoint> mDeformedCtrlPoints; // 0x30
-    CtrlPoint unk3c; // 0x3c
-    CtrlPoint unk94; // 0x94
-    CtrlPoint unkec; // 0xec
+    CtrlPoint mDummyBefore; // 0x3c
+    CtrlPoint mDummyAfter; // 0x94
+    CtrlPoint mDummyAfterEnd; // 0xec
     bool unk144;
     bool unk145;
     bool mPulseDrawing; // 0x146

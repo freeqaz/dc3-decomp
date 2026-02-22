@@ -469,7 +469,7 @@ Symbol CampaignProgress::GetFirstIncompleteEra() const {
         bool canContinue = progress ? progress->IsEraComplete() : false;
         if (!canContinue)
             break;
-        if (pEra->GetUnk50()) {
+        if (pEra->HasTanBattle()) {
             static Symbol era_tan_battle("era_tan_battle");
             return era_tan_battle;
         }

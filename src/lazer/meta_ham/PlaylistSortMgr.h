@@ -14,17 +14,17 @@
 
 struct CmdAddPlaylistToRC : public QueueableCommand {
     virtual int GetType() { return 4; }
-    CmdAddPlaylistToRC(Playlist *pl) { unk4.playlist = pl; }
+    CmdAddPlaylistToRC(Playlist *pl) { mData.playlist = pl; }
 };
 
 struct CmdDeletePlaylistFromRC : public QueueableCommand {
     virtual int GetType() { return 6; }
-    CmdDeletePlaylistFromRC(int i) { unk4.i = i; }
+    CmdDeletePlaylistFromRC(int i) { mData.i = i; }
 };
 
 struct CmdEditPlaylist : public QueueableCommand {
     virtual int GetType() { return 5; }
-    CmdEditPlaylist(Playlist *pl) { unk4.playlist = pl; }
+    CmdEditPlaylist(Playlist *pl) { mData.playlist = pl; }
 };
 
 class PlaylistSortMgr : public NavListSortMgr {
@@ -41,14 +41,14 @@ public:
 
     static void Init(SongPreview &);
 
-    std::vector<Playlist*> unk78;
-    CustomPlaylist unk84;
-    String unkb0;
-    String unkb8;
-    std::list<QueueableCommand *> unkc0;
-    bool unkc8;
-    RCJob *unkcc;
-    std::vector<CustomPlaylist> unkd0;
+    std::vector<Playlist*> mPlaylists;
+    CustomPlaylist mCustomPlaylist;
+    String mProfileName;
+    String mOnlineID;
+    std::list<QueueableCommand *> mCommandQueue;
+    bool mProcessingCommand;
+    RCJob *mCurrentJob;
+    std::vector<CustomPlaylist> mCustomPlaylists;
 
 private:
     virtual ~PlaylistSortMgr();

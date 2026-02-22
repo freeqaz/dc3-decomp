@@ -223,7 +223,7 @@ void *RndShaderMgr::AllocShader() {
     if (mShaderPoolCount == 0 && mShaderPoolAlloc > 0) {
         mShaderPoolCount = mShaderPoolAlloc;
         mShaderPoolAlloc = 0;
-        mShaderPool = MemAlloc(unk60 * mShaderPoolCount, __FILE__, 0x11c, "ShaderPool");
+        mShaderPool = MemAlloc(mShaderSize * mShaderPoolCount, __FILE__, 0x11c, "ShaderPool");
     }
     if (mShaderPoolCount <= 0) {
         if (UsingCD()) {
@@ -231,13 +231,13 @@ void *RndShaderMgr::AllocShader() {
         }
         mShaderPoolAlloc = 0;
         mShaderPoolCount = 0x100;
-        mShaderPool = MemAlloc(unk60 << 8, __FILE__, 0x127, "ShaderPool");
+        mShaderPool = MemAlloc(mShaderSize << 8, __FILE__, 0x127, "ShaderPool");
     }
     MILO_ASSERT(mShaderPoolCount-- > 0, 0x12A);
-    // increment mShaderPool by unk60
+    // increment mShaderPool by mShaderSize
     void *old = mShaderPool;
     char *pool = (char *)mShaderPool;
-    pool += unk60;
+    pool += mShaderSize;
     mShaderPool = pool;
     mShaderPoolAlloc--;
     return old;
@@ -252,7 +252,7 @@ RndShaderProgram &RndShaderMgr::FindShader(ShaderType t, const ShaderOptions &op
     ShaderTree tree;
     tree.shaderType = t;
     RndShaderProgram *p = NewShaderProgram();
-    p->unk8 = opts.flags;
+    p->mFlags = opts.flags;
     tree.obj = p;
     if (t == kStandardShader) {
         mShaderTrees.push_front(tree);

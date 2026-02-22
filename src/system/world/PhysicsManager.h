@@ -117,9 +117,9 @@ protected:
     DataNode OnGetVelocity(const DataArray *);
     DataNode OnApplyForce(const DataArray *);
 
-    RndDir *unk2c; // 0x2c
+    RndDir *mDir; // 0x2c
     float mPhysicsClampTime; // 0x30
-    bool unk34; // 0x34
+    bool mSynced; // 0x34
     bool unk35; // 0x35
     float unk38; // 0x38
     int unk3c; // 0x3c

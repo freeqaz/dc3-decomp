@@ -31,7 +31,7 @@ bool GestureMgr::sIdentityOpInProgress;
 GestureMgr::GestureMgr()
     : mLiveCamInput(LiveCameraInput::sInstance), mPauseOnSkeletonLossMode(2), mIDEnabled(1),
       mInControllerMode(0), mInVoiceMode(0), mGesturingWithVoice(0), mInDoubleUserMode(0),
-      mInShellMode(0), unk4274(0) {
+      mInShellMode(0), mDebugDir(0) {
     MILO_ASSERT(mLiveCamInput, 0x40);
     mPlayerSkeletonIDs[0] = -1;
     mPlayerSkeletonIDs[1] = -1;
@@ -50,7 +50,7 @@ GestureMgr::GestureMgr()
 GestureMgr::~GestureMgr() {
     SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
     handle.RemoveCallback(this);
-    RELEASE(unk4274);
+    RELEASE(mDebugDir);
 }
 
 BEGIN_HANDLERS(GestureMgr)
@@ -124,8 +124,8 @@ void GestureMgr::DebugInit() {
     const char *debugStr = nullptr;
     if (SystemConfig("kinect")->FindData("gesture_debug", debugStr, false) && debugStr) {
         ObjectDir *dir = DirLoader::LoadObjects(debugStr, nullptr, nullptr);
-        TheGestureMgr->unk4274 = dynamic_cast<RndDir *>(dir);
-        if (!TheGestureMgr->unk4274 && dir) {
+        TheGestureMgr->mDebugDir = dynamic_cast<RndDir *>(dir);
+        if (!TheGestureMgr->mDebugDir && dir) {
             delete dir;
         }
     }

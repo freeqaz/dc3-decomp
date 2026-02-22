@@ -14,7 +14,7 @@ public:
 
         /** "The object providing the properties" */
         FlowPtr<Hmx::Object> mProvider; // 0x0
-        DataNode unk20; // 0x20 - property?
+        DataNode mProperty; // 0x20 - property?
     };
     // Hmx::Object
     virtual ~FlowTrigger();
@@ -50,11 +50,11 @@ protected:
     ObjList<PropTriggerDefn> mStopProperties; // 0xa4
     /** "force things to stop immediately?" */
     bool mHardStop; // 0xb0
-    bool unkb1; // 0xb1
+    bool mAutoRegister; // 0xb1
 };
 
 inline BinStream &operator<<(BinStream &bs, const FlowTrigger::PropTriggerDefn &defn) {
-    bs << defn.mProvider << defn.unk20;
+    bs << defn.mProvider << defn.mProperty;
     return bs;
 }
 

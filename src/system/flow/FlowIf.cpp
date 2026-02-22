@@ -95,7 +95,7 @@ END_LOADS
 
 bool FlowIf::Activate() {
     FLOW_LOG("Activate\n");
-    unk58 = false;
+    mStopRequested = false;
     if (IsRunning()) {
         MILO_NOTIFY(
             "FlowIf re-entrance error, activated when already running, deactivating and aborting, check your logic"

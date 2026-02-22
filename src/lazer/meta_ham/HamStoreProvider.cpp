@@ -54,8 +54,8 @@ HamStoreProvider::HamStoreProvider(
     std::vector<HamStoreFilter *> *filters,
     std::vector<CartRow> *rows
 )
-    : unk30(offers), unk34(filters), unk5c(0), mFilteredOffers(0), unkac(rows), unkb8(0) {
-    mFilterProvider = new HamStoreFilterProvider(unk34);
+    : mAllOffers(offers), mFilters(filters), unk5c(0), mFilteredOffers(0), mCartRows(rows), unkb8(0) {
+    mFilterProvider = new HamStoreFilterProvider(mFilters);
 }
 
 HamStoreProvider::~HamStoreProvider() {
@@ -74,14 +74,14 @@ HamStoreProvider::~HamStoreProvider() {
 
 int HamStoreProvider::NumOffersInCart() {
     int offers = 0;
-    FOREACH (it, unkb0) {
+    FOREACH (it, mCartOffers) {
         offers++;
     }
     return offers;
 }
 
 bool HamStoreProvider::IsOfferInCart(StoreOffer *offer) {
-    FOREACH (it, unkb0) {
+    FOREACH (it, mCartOffers) {
         if (*it == offer)
             return true;
     }
@@ -175,7 +175,7 @@ StoreOffer *HamStoreProvider::OnGetOffer(int idx) {
 StoreOffer const *HamStoreProvider::FindPack(StoreOffer const *song) const {
     MILO_ASSERT(song->OfferType() == "song", 0x18e);
     static Symbol pack("pack");
-    FOREACH_PTR (it, unk30) {
+    FOREACH_PTR (it, mAllOffers) {
         if ((*it)->OfferType() == pack && (*it)->HasSong(song))
             return *it;
     }
@@ -184,7 +184,7 @@ StoreOffer const *HamStoreProvider::FindPack(StoreOffer const *song) const {
 
 StoreOffer const *HamStoreProvider::FindSong(int id) const {
     static Symbol song("song");
-    FOREACH_PTR (it, unk30) {
+    FOREACH_PTR (it, mAllOffers) {
         StoreOffer *so = *it;
         if (so->OfferType() == song && so->GetSingleSongID() == id)
             return so;
@@ -203,13 +203,13 @@ Symbol HamStoreProvider::CurrentSort() const {
 void HamStoreProvider::UpdateOffersInCart(StoreOffer *offer, int i) {
     switch (i) {
     case 0:
-        unkb0.push_back(offer);
+        mCartOffers.push_back(offer);
         break;
     case 1:
-        unkb0.remove(offer);
+        mCartOffers.remove(offer);
         break;
     case 2:
-        unkb0.clear();
+        mCartOffers.clear();
         break;
     }
     RefreshFilteredCartOffers();

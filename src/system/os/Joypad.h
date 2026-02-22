@@ -149,7 +149,7 @@ struct BreedData {
     unsigned char mDesignIter; // 0x5
     unsigned short mManuDate; // 0x6
     unsigned short mIdent; // 0x8
-    unsigned char unka; // 0xa
+    unsigned char mPending; // 0xa
 };
 
 struct ProGuitarStringInfo {
@@ -193,17 +193,17 @@ struct ProGuitarData {
         };
     };
 
-    bool unkabool : 1;
-    unsigned char unkachar : 7;
+    bool mProgramChangeBit0 : 1;
+    unsigned char mAccelX : 7;
 
-    bool unkbbool : 1;
-    unsigned char unkbchar : 7;
+    bool mProgramChangeBit2 : 1;
+    unsigned char mAccelY : 7;
 
-    bool unkcbool : 1;
-    unsigned char unkcchar : 7;
+    bool mProgramChangeBit1 : 1;
+    unsigned char mAccelZ : 7;
 
     bool mStompBox : 1;
-    unsigned char unkdchar : 7;
+    unsigned char mPitchBend : 7;
 
     bool unkebool : 1;
     unsigned char mMuting : 7;
@@ -226,7 +226,7 @@ public:
     class LocalUser *mUser; // 0x44
     bool mConnected; // 0x48
     bool mVibrateEnabled; // 0x49
-    bool unk4a, unk4b, unk4c;
+    bool mHasCapFlag1, mIsWireless, unk4c;
     int mNumAnalogSticks; // 0x50
     bool mTranslateSticks; // 0x54
     int mIgnoreButtonMask; // 0x58
@@ -247,7 +247,7 @@ public:
     BreedData mBreedData; // 0x88
     BreedData *mBreedDataDest; // 0x94
     int unk98;
-    int unk9c;
+    int mSuppressWriteCallback;
     int unka0;
     int unka4;
     int unka8;

@@ -97,7 +97,7 @@ protected:
     JoypadClient *mJoyClient; // 0x44
     UIScreen *mCurrentScreen; // 0x48
     UIScreen *mTransitionScreen; // 0x4c
-    int unk50;
+    Hmx::Object *mSink; // 0x50
     RndCam *mCam; // 0x54
     RndEnviron *mEnv; // 0x58
     Timer mTimer; // 0x60

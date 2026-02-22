@@ -92,7 +92,7 @@ protected:
     float mPlayer2Grooviness; // 0x180
     int mForceDrawSkeletonIdx; // 0x184
     bool mForceDrawEnabled; // 0x188
-    ObjPtr<RndTex> unk18c;
+    ObjPtr<RndTex> mPlayerPaletteTex;
     int unk1a0;
     int unk1a4;
     int unk1a8;

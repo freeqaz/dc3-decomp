@@ -189,7 +189,7 @@ void DxShader::SetShaders(D3DVertexShader *v, D3DPixelShader *p) {
 #pragma region DxShaderMgr
 
 void DxShaderMgr::PreInit() {
-    unk60 = 0x38;
+    mShaderSize = 0x38;
     RndShaderMgr::PreInit();
     RELEASE(mWorkMat);
     mWorkMat = Hmx::Object::New<RndMat>();

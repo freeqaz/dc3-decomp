@@ -13,11 +13,11 @@ public:
         Symbol mSongShortName; // 0x00
         Symbol mSongLongName;  // 0x04
         Symbol mGameplayMode;  // 0x08 - gameplay mode (perform/holla_back/mind_control)
-        float mIntroTempo;     // 0x0c - intro loop beat position
-        float mOutroTempo;     // 0x10 - outro loop beat position
-        Symbol mModeConfig;    // 0x14 - holla_back_config mode symbol
-        float mEventStartMs;   // 0x18 - event loop start (beats)
-        float mEventEndMs;     // 0x1c - event loop end (beats)
+        float mIntroLoopMeasure;  // 0x0c - intro loop measure position
+        float mOutroLoopMeasure;  // 0x10 - outro loop measure position
+        Symbol mModeConfig;       // 0x14 - holla_back_config mode symbol
+        float mEventStartMeasure; // 0x18 - event loop start (measures)
+        float mEventEndMeasure;   // 0x1c - event loop end (measures)
         bool mIsIntro;         // 0x20
         bool mIsOutro;         // 0x21
         Symbol mIntroCamShot;  // 0x24
@@ -42,8 +42,8 @@ public:
     void Init();
     void Add(const DataArray *);
     int CurrentIndex() const { return mCurrentIndex; }
-    bool GetUnk28() const { return mVenueEntered; }
-    void SetUnk28(bool val) { mVenueEntered = val; }
+    bool GetVenueEntered() const { return mVenueEntered; }
+    void SetVenueEntered(bool val) { mVenueEntered = val; }
 
 protected:
     std::vector<Entry> mEntries;       // 0x8

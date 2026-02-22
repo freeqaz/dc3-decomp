@@ -68,7 +68,7 @@ protected:
     virtual float UpdateOverlay(RndOverlay *, float);
 
     Viewport mViewport; // 0x1e0
-    bool unk1f8;
+    bool mLowRes;
     RndTex *mShadowMap; // 0x1fc
     RndCam *mShadowCam; // 0x200
     RndOcclusionQueryMgr *mOcclusionQueryMgr; // 0x204

@@ -433,8 +433,8 @@ void Game::PostWaitJump() {
     if (mRealTime) {
         mGameInput->SetPostWaitJumpOffset(mJumpMs);
     }
-    if (TheSongSequence.CurrentIndex() > 0 && !TheSongSequence.GetUnk28()) {
-        TheSongSequence.SetUnk28(true);
+    if (TheSongSequence.CurrentIndex() > 0 && !TheSongSequence.GetVenueEntered()) {
+        TheSongSequence.SetVenueEntered(true);
         TheHamDirector->VenueEnter(TheHamDirector->GetVenueWorld());
     }
     if (!mHasIntro) {

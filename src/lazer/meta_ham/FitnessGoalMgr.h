@@ -22,7 +22,7 @@ public:
         Playlist *playlist;
         CustomPlaylist *customPlaylist;
         const char *onlineID;
-    } unk4;
+    } mData;
 };
 
 struct CmdGetFitnessGoalFromRC : public QueueableCommand {

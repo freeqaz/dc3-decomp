@@ -29,7 +29,7 @@ public:
         bool UpdatePlayerBinding();
 
         int mPadNum; // 0x0 - padnum/user index
-        String unk4; // 0x4 - name
+        String mName; // 0x4
         int mEnrollmentIndex; // 0xc
     };
 
@@ -40,8 +40,8 @@ public:
 
     void Init();
     void Poll();
-    String GetPlayerName(int idx) const { return unk48[idx].unk4; }
-    int GetPlayerPadNum(int idx) const { return unk48[idx].mPadNum; }
+    String GetPlayerName(int idx) const { return mEnrolledPlayers[idx].mName; }
+    int GetPlayerPadNum(int idx) const { return mEnrolledPlayers[idx].mPadNum; }
     IdentityStatus GetIdentityStatus(int);
     void CorrectIdentity(int);
     bool IsAssociatedWithProfile(int) const;
@@ -68,7 +68,7 @@ private:
     int mCorrectingPlayerIndex; // 0x3c
     int mCorrectionTrackingID; // 0x40 - skeleton tracking id
     int mIdentificationTimeout; // 0x44
-    EnrolledPlayer unk48[8];
+    EnrolledPlayer mEnrolledPlayers[8];
     bool mDrawDebug; // 0xc8
 };
 

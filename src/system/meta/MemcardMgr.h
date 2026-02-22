@@ -64,12 +64,12 @@ protected:
     void *mSaveDataBuffer; // 0x34
     int mSaveDataLength; // 0x38
     MemcardAction *mAction; // 0x3c
-    int unk40;
+    int mSaveCreateType;
     // indexed by padnums
     ContainerId mContainerIDs[4]; // 0x44
     MCContainer *mContainers[4]; // 0x74
     bool mValidDevices[4]; // 0x84
-    int unk88;
+    int mPendingDeviceSelectorIndex;
     bool mSelectDeviceWaiting; // 0x8c
     Hmx::Object *mSelectDeviceCallBackObj; // 0x90
     int mPadNum; // 0x94

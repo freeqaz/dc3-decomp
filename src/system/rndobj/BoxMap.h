@@ -29,7 +29,7 @@ public:
 
     // size 0x28
     struct LightParams_Point {
-        Vector3 unk0; // 0x0
+        Vector3 mPosition; // 0x0
         Hmx::Color mColor; // 0x10
         float mRange; // 0x20
         float mFalloffStart; // 0x24
@@ -37,17 +37,17 @@ public:
 
     // size 0x5c
     struct LightParams_Spot {
-        Vector3 unk0; // 0x0
+        Vector3 mDirection; // 0x0
         Hmx::Color mColor; // 0x10
-        Vector3 unk20; // 0x20
-        float unk30; // 0x30
-        float unk34; // 0x34
-        float unk38; // 0x38
-        float unk3c; // 0x3c
-        Vector3 unk40; // 0x40
-        float unk50; // 0x50 - beam length?
-        float unk54; // 0x54 - top beam radius
-        float unk58; // 0x58 - bottom beam radius
+        Vector3 mApex; // 0x20
+        float mConeAngleFactor; // 0x30
+        float mConeAngleInverse; // 0x34
+        float mHalfLengthRecip; // 0x38
+        float mOffsetFactor; // 0x3c
+        Vector3 mPosition; // 0x40
+        float mBeamLength; // 0x50
+        float mTopRadius; // 0x54
+        float mBottomRadius; // 0x58
     };
 
     BoxMapLighting();

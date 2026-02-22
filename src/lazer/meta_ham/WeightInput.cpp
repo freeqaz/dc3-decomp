@@ -16,7 +16,7 @@ void WeightInputProvider::Text(
     static Symbol weight_done("weight_done");
     HamProfile *pProfile = TheProfileMgr.GetActiveProfile(true);
     MILO_ASSERT(pProfile, 0x22);
-    int units = TheProfileMgr.GetUnk4c();
+    int units = TheProfileMgr.GetWeightUnits();
     float weight = GetWeight(data);
     if (listlabel->Matches("label")) {
         if (units == 0) {
@@ -59,7 +59,7 @@ int WeightInputProvider::GetIndexForWeight(float f1) const {
 
 float WeightInputProvider::GetWeight(int i_iIndex) const {
     MILO_ASSERT_RANGE(i_iIndex, 0, NumData(), 0x76);
-    if (TheProfileMgr.GetUnk4c() == 0) {
+    if (TheProfileMgr.GetWeightUnits() == 0) {
         return (float)i_iIndex * 2.5f + 20.0f;
     } else {
         return (float)i_iIndex * 5.0f + 45.0f;
@@ -100,7 +100,7 @@ void WeightInputPanel::SetWeight(float weight) {
     if (!pProfile) {
         MILO_ASSERT(pProfile, 0xec);
     }
-    if (TheProfileMgr.GetUnk4c() == 1) {
+    if (TheProfileMgr.GetWeightUnits() == 1) {
         weight = mWeightInputProvider.GetPoundsForKgs(weight);
     }
     pProfile->SetFitnessPounds(weight);
@@ -111,7 +111,7 @@ float WeightInputPanel::GetWeight() {
     MILO_ASSERT(pProfile, 0xdc);
     float weight = pProfile->GetFitnessPounds();
 
-    if (TheProfileMgr.GetUnk4c() == 1) {
+    if (TheProfileMgr.GetWeightUnits() == 1) {
         weight = mWeightInputProvider.GetKgForPounds(weight);
     }
 
@@ -122,7 +122,7 @@ Symbol WeightInputPanel::GetPreferredUnits() {
     static Symbol pounds("pounds");
     static Symbol kilograms("kilograms");
     Symbol result = pounds;
-    const int units = TheProfileMgr.GetUnk4c();
+    const int units = TheProfileMgr.GetWeightUnits();
     if (units == 1) {
         result = kilograms;
     }
@@ -135,5 +135,5 @@ void WeightInputPanel::SetPreferredUnits(Symbol units) {
     int i = 0;
     if (units != pounds)
         i = 1;
-    TheProfileMgr.SetUnk4c(i);
+    TheProfileMgr.SetWeightUnits(i);
 }

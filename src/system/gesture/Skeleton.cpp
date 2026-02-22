@@ -17,7 +17,7 @@ Vector3DESmoother SkeletonFrame::sUpVectorSmoother;
 
 #pragma region SkeletonFrame
 
-float SkeletonFrame::TiltAngle() const { return (PI / 2) - (float)atan2(unk8.y, unk8.z); }
+float SkeletonFrame::TiltAngle() const { return (PI / 2) - (float)atan2(mFloorNormal.y, mFloorNormal.z); }
 
 void SkeletonFrame::Init() {
     static Symbol kinect("kinect");
@@ -32,7 +32,7 @@ void SkeletonFrame::Init() {
 }
 
 void SkeletonFrame::Create(const NUI_SKELETON_FRAME &nui_frame, int i2) {
-    unk0 = nui_frame.dwFrameNumber;
+    mFrameNumber = nui_frame.dwFrameNumber;
     mElapsedMs = i2;
 
     sUpVectorSmoother.Smooth(
@@ -41,8 +41,8 @@ void SkeletonFrame::Create(const NUI_SKELETON_FRAME &nui_frame, int i2) {
         true
     );
 
-    unk8 = sUpVectorSmoother.Value();
-    unk18.Set(
+    mFloorNormal = sUpVectorSmoother.Value();
+    mFloorClipPlane.Set(
         nui_frame.vFloorClipPlane.x,
         nui_frame.vFloorClipPlane.y,
         nui_frame.vFloorClipPlane.z,
@@ -240,7 +240,7 @@ bool Skeleton::RequestIdentity() {
                 return false;
         }
         if (hr == 0) {
-            info->SetUnk0(true);
+            info->SetIdentified(true);
         } else {
             GestureMgr::sIdentityOpInProgress = true;
         }

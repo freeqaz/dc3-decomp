@@ -33,12 +33,12 @@ namespace {
 
 JoypadData::JoypadData()
     : mButtons(0), mNewPressed(0), mNewReleased(0), mUser(nullptr), mConnected(false),
-      mVibrateEnabled(true), unk4a(0), unk4b(0), unk4c(0), mNumAnalogSticks(0),
+      mVibrateEnabled(true), mHasCapFlag1(0), mIsWireless(0), unk4c(0), mNumAnalogSticks(0),
       mTranslateSticks(false), mIgnoreButtonMask(0), mGreenCymbalMask(0),
       mYellowCymbalMask(0), mBlueCymbalMask(0), mSecondaryPedalMask(0), mCymbalMask(0),
       mIsDrum(false), mType(kJoypadNone), mControllerType(), mDistFromRest(0),
       mHasGreenCymbal(false), mHasYellowCymbal(false), mHasBlueCymbal(false),
-      mHasSecondaryPedal(false), mBreedCallback(0), mBreedDataDest(0), unk9c(0), unka0(0), unka4(0),
+      mHasSecondaryPedal(false), mBreedCallback(0), mBreedDataDest(0), mSuppressWriteCallback(0), unka0(0), unka4(0),
       unka8(0), unkac(0), mEepromWriteDone(0), unkd8(0) {
     for (int i = 0; i < 2; i++) {
         for (int j = 0; j < 2; j++) {
@@ -500,7 +500,7 @@ void JoypadHandleBreedDataResponse(int pad) {
 
 void JoypadHandleEepromWriteResponse(int pad, JoypadBreedDataStatus status) {
     gJoypadData[pad].mEepromWriteDone = true;
-    if (!gJoypadData[pad].unk9c) {
+    if (!gJoypadData[pad].mSuppressWriteCallback) {
         JoypadBreedDataWriteMsg msg(gJoypadData[pad].mUser, status);
         if (gJoypadData[pad].mBreedCallback) {
             gJoypadData[pad].mBreedCallback->Handle(msg, true);

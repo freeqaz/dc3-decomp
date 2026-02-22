@@ -139,7 +139,7 @@ void FlowSetProperty::MoveIntoDir(ObjectDir *r4, ObjectDir *r5) {
 
 bool FlowSetProperty::Activate() {
     FLOW_LOG("Activate\n");
-    unk58 = false;
+    mStopRequested = false;
     if (mTarget != nullptr) {
         if (unk_0x98.Type() == kDataArray && unk_0x98.Array()->Size() > 0) {
             if (mPersistent && !mEventsRegistered) {
@@ -322,7 +322,7 @@ bool FlowSetProperty::IsRunning() {
 
 void FlowSetProperty::RequestStop() {
     FLOW_LOG("RequestStop\n");
-    unk58 = true;
+    mStopRequested = true;
     if (mStopMode == 0 || unk_0xCC == nullptr) {
         TheFlowMgr->QueueCommand(this, kIgnore);
     }
@@ -331,7 +331,7 @@ void FlowSetProperty::RequestStop() {
 
 void FlowSetProperty::RequestStopCancel() {
     FLOW_LOG("RequestStopCancel\n");
-    unk58 = false;
+    mStopRequested = false;
     if (mStopMode != 0) {
         TheFlowMgr->QueueCommand(this, kQueue);
     }

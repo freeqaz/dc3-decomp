@@ -18,14 +18,14 @@
 #include "utl/Symbol.h"
 
 LetterboxPanel::LetterboxPanel()
-    : unk3c(0), unk40(0), mIsBlacklightMode(false), unk45(false), unk7c(0), unk78(13000) {
+    : mSyncedPanel(0), mLetterboxGroup(0), mIsBlacklightMode(false), mBlacklightActive(false), mBlacklightPhase(0), mBlacklightTimeout(13000) {
     sInstance = this;
 }
 
 LetterboxPanel::~LetterboxPanel() { sInstance = nullptr; }
 
 BEGIN_HANDLERS(LetterboxPanel)
-    HANDLE_ACTION(resync, SyncToPanel(unk3c))
+    HANDLE_ACTION(resync, SyncToPanel(mSyncedPanel))
     HANDLE_ACTION(sync_to_panel, SyncToPanel(_msg->Obj<UIPanel>(2)))
     HANDLE_SUPERCLASS(HamPanel)
 END_HANDLERS
@@ -35,38 +35,38 @@ BEGIN_PROPSYNCS(LetterboxPanel)
 END_PROPSYNCS
 
 void LetterboxPanel::Draw() {
-    if (unk40) {
-        unk40->SetShowing(!ShouldHideLetterbox());
+    if (mLetterboxGroup) {
+        mLetterboxGroup->SetShowing(!ShouldHideLetterbox());
     }
     UIPanel::Draw();
 }
 
 void LetterboxPanel::Enter() {
-    unk40 = DataDir()->Find<RndGroup>("letterbox_main.grp");
+    mLetterboxGroup = DataDir()->Find<RndGroup>("letterbox_main.grp");
     static Symbol blacklight_timeout("blacklight_timeout");
     const DataNode *property = Property(blacklight_timeout, false);
     if (property) {
-        unk78 = property->Int();
+        mBlacklightTimeout = property->Int();
     }
     HamPanel::Enter();
 }
 
 void LetterboxPanel::Poll() {
     HamPanel::Poll();
-    if (!ShouldHideLetterbox() && mIsBlacklightMode && unk7c != 0) {
-        if (unk7c == 1) {
-            unk48.Restart();
-            unk7c = 2;
-            unk80 = unk78;
+    if (!ShouldHideLetterbox() && mIsBlacklightMode && mBlacklightPhase != 0) {
+        if (mBlacklightPhase == 1) {
+            mBlacklightTimer.Restart();
+            mBlacklightPhase = 2;
+            mBlacklightTimeoutMs = mBlacklightTimeout;
         } else {
-            if (unk48.SplitMs() >= unk80) {
-                unk48.Restart();
-                if (unk7c != 2) {
-                    if (unk7c == 6)
-                        unk7c = 0;
+            if (mBlacklightTimer.SplitMs() >= mBlacklightTimeoutMs) {
+                mBlacklightTimer.Restart();
+                if (mBlacklightPhase != 2) {
+                    if (mBlacklightPhase == 6)
+                        mBlacklightPhase = 0;
                 } else {
-                    unk7c = 6;
-                    unk80 = 100.0f;
+                    mBlacklightPhase = 6;
+                    mBlacklightTimeoutMs = 100.0f;
                     SetBlacklightMode(false);
                 }
             }
@@ -114,8 +114,8 @@ void LetterboxPanel::EnterBlacklightMode() {
     Flow *f = DataDir()->Find<Flow>("activate_letterbox.flow", false);
     if (f)
         f->Activate();
-    if (unk45 != true) // wont let me do !unk45
-        unk45 = true;
+    if (mBlacklightActive != true) // wont let me do !mBlacklightActive
+        mBlacklightActive = true;
     RndText::SetBlacklightModeEnabled(true);
     static Message enter_blacklight_mode("enter_blacklight_mode");
     Handle(enter_blacklight_mode, false);
@@ -131,8 +131,8 @@ void LetterboxPanel::ExitBlacklightMode(bool b) {
     }
     if (f)
         f->Activate();
-    if (unk45 != false)
-        unk45 = false;
+    if (mBlacklightActive != false)
+        mBlacklightActive = false;
     RndText::SetBlacklightModeEnabled(false);
     DataNode handle;
     if (b) {
@@ -146,8 +146,8 @@ void LetterboxPanel::ExitBlacklightMode(bool b) {
 
 bool LetterboxPanel::ShouldHideLetterbox() const {
     static Symbol hide_letterbox("hide_letterbox");
-    if (unk3c) {
-        const DataNode *prop = unk3c->Property(hide_letterbox, false);
+    if (mSyncedPanel) {
+        const DataNode *prop = mSyncedPanel->Property(hide_letterbox, false);
         if (prop && prop->Int()) {
             return true;
         }
@@ -157,8 +157,8 @@ bool LetterboxPanel::ShouldHideLetterbox() const {
 
 bool LetterboxPanel::ShouldShowHandHelp() const {
     static Symbol show_letterbox_hand_help("show_letterbox_hand_help");
-    if (unk3c) {
-        const DataNode *prop = unk3c->Property(show_letterbox_hand_help, false);
+    if (mSyncedPanel) {
+        const DataNode *prop = mSyncedPanel->Property(show_letterbox_hand_help, false);
         if (prop && prop->Int()) {
             return true;
         }
@@ -182,18 +182,18 @@ void LetterboxPanel::SetBlacklightMode(bool b) {
                 mIsBlacklightMode = b;
                 if (b) {
                     EnterBlacklightMode();
-                    unk7c = 1;
-                    unk48.Restart();
-                    int temp = unk78;
-                    unk80 = temp;
+                    mBlacklightPhase = 1;
+                    mBlacklightTimer.Restart();
+                    int temp = mBlacklightTimeout;
+                    mBlacklightTimeoutMs = temp;
                 } else
                     ExitBlacklightMode(false);
             }
         }
     }
-    if (unk7c == 2) {
-        unk48.Restart();
-        unk80 = unk78;
+    if (mBlacklightPhase == 2) {
+        mBlacklightTimer.Restart();
+        mBlacklightTimeoutMs = mBlacklightTimeout;
     }
 }
 
@@ -204,24 +204,24 @@ void LetterboxPanel::SetBlacklightModeImmediately(bool b) {
             mIsBlacklightMode = b;
             if (b) {
                 EnterBlacklightMode();
-                unk7c = 1;
-                unk48.Restart();
-                int temp = unk78;
-                unk80 = temp;
+                mBlacklightPhase = 1;
+                mBlacklightTimer.Restart();
+                int temp = mBlacklightTimeout;
+                mBlacklightTimeoutMs = temp;
             } else
                 ExitBlacklightMode(true);
         }
     }
-    if (unk7c == 2) {
-        unk48.Restart();
-        unk80 = unk78;
+    if (mBlacklightPhase == 2) {
+        mBlacklightTimer.Restart();
+        mBlacklightTimeoutMs = mBlacklightTimeout;
     }
 }
 
 void LetterboxPanel::SyncToPanel(UIPanel *panel) {
-    unk3c = panel;
-    if (unk40) {
-        unk40->SetShowing(!ShouldHideLetterbox());
+    mSyncedPanel = panel;
+    if (mLetterboxGroup) {
+        mLetterboxGroup->SetShowing(!ShouldHideLetterbox());
         if (ShouldShowHandHelp()) {
             RndPropAnim *anim = LoadedDir()->Find<RndPropAnim>("handDown_icon_show.anim");
             if (anim) {

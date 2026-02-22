@@ -24,9 +24,9 @@ public:
     ContentLoadingPanel();
     void AllowedToShow(bool);
 
-    bool unk3c;
-    volatile int unk40;
-    int unk44;
+    bool mAllowedToShow;
+    volatile int mContentCount;
+    int mMountedCount;
 
 private:
     void ShowIfPossible();

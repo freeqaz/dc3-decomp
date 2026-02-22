@@ -44,7 +44,7 @@ DynamicTex::~DynamicTex() {
 
 void DLCTex::StartLoading() {
     MILO_ASSERT(mState == kMounting, 0x3d);
-    const char *path = TheHamSongMgr.GetAlbumArtPath(unk18);
+    const char *path = TheHamSongMgr.GetAlbumArtPath(mContentSymbol);
     MILO_ASSERT(path != gNullStr, 0x3f);
     mLoader = dynamic_cast<FileLoader *>(TheLoadMgr.AddLoader(path, kLoadFront));
     MILO_ASSERT(mLoader, 0x41);
@@ -97,7 +97,7 @@ void TexLoadPanel::Poll() {
         MILO_ASSERT(dlc->mState != DLCTex::kLoaded, 0x78);
         switch (dlc->mState) {
         case 0: {
-            const char *c = TheHamSongMgr.ContentName(dlc->unk18, true);
+            const char *c = TheHamSongMgr.ContentName(dlc->mContentSymbol, true);
             MILO_ASSERT(c, 0x7f);
             dlc->mState = 1;
             if (TheContentMgr.MountContent(c))
@@ -148,7 +148,7 @@ void TexLoadPanel::FinishLoad() {
 void TexLoadPanel::ContentMounted(const char *c1, const char *c2) {
     DLCTex *dlc = NextDLCTex();
     if (dlc) {
-        String name(TheHamSongMgr.ContentName(dlc->unk18, true));
+        String name(TheHamSongMgr.ContentName(dlc->mContentSymbol, true));
         if (name == c1)
             dlc->StartLoading();
         else
@@ -159,9 +159,9 @@ void TexLoadPanel::ContentMounted(const char *c1, const char *c2) {
 void TexLoadPanel::ContentFailed(const char *c1) {
     DLCTex *dlc = NextDLCTex();
     if (dlc) {
-        String name(TheHamSongMgr.ContentName(dlc->unk18, true));
+        String name(TheHamSongMgr.ContentName(dlc->mContentSymbol, true));
         if (name == c1) {
-            dlc->mMat->SetDiffuseTex(dlc->unk24);
+            dlc->mMat->SetDiffuseTex(dlc->mFallbackTex);
             dlc->mState = 3;
         } else
             MILO_NOTIFY("Someone else is mounting %s", c1);

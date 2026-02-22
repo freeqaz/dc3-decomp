@@ -19,8 +19,8 @@ CharCameraInput::CharCameraInput(Character *c) : mChar(c), unk2430(0) {
         }
     }
     memset(&unk11d8, 0, sizeof(SkeletonFrame));
-    unk11d8.unk8.Set(0, 1, 0);
-    unk11d8.unk18.Set(0, 0, 0, 0);
+    unk11d8.mFloorNormal.Set(0, 1, 0);
+    unk11d8.mFloorClipPlane.Set(0, 0, 0, 0);
     unk11d8.mElapsedMs = 33;
     for (int i = 0; i < 6; i++) {
         // skeleton frame edits

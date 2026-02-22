@@ -59,9 +59,11 @@ public:
         kFitScrollMarqueeReset = 4,
         /** "Reverse scroll direction whenever string end or beginning is reached" */
         kFitScrollPingPong = 5,
+        /** "Stretch text to fit width" */
+        kFitStretch = 6,
         /** "Continuous right-to-left scroll with wrapping and not care about string size.
             '\n' will be replaced with indentation." */
-        kFitScrollMarqueeWrapAlways = 6
+        kFitScrollMarqueeWrapAlways = 7
     };
 
     class Style {
@@ -272,6 +274,11 @@ public:
     void SetTextASCII(const char *);
     void SetFixedLength(int);
     void ReFitTextScroll(String);
+    float ComputeCharWidthsForText(String);
+    void SetAltStyle(Hmx::Object *obj) { mAltStyle = obj; }
+    FitType GetFitType() const { return mFitType; }
+    void SetFitType(FitType f) { mFitType = f; }
+    float Indentation() const { return mIndentation; }
 
     static void Init();
     static void DrawBlacklight();

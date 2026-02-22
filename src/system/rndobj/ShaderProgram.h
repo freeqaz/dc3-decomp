@@ -15,7 +15,7 @@ public:
 
 class RndShaderProgram {
 public:
-    RndShaderProgram() : unk8(-1), unk10(0), unk14(0), mCached(0) {}
+    RndShaderProgram() : mFlags(-1), unk10(0), unk14(0), mCached(0) {}
     virtual ~RndShaderProgram() {
         delete unk10;
         delete unk14;
@@ -35,7 +35,7 @@ public:
 
     static unsigned long InitModTime();
 
-    u64 unk8;
+    u64 mFlags;
     Hmx::Object *unk10; // 0x10 - unsure if it's an Object but it's a ptr to something
     Hmx::Object *unk14; // 0x14 - ditto
     bool mCached; // 0x18

@@ -22,9 +22,9 @@ public:
         MotdData();
         MotdData(MotdData const &);
 
-        Symbol unk0;
-        String unk4;
-        float unkc;
+        Symbol mType;
+        String mText;
+        float mWidth;
     };
 
     // Hmx::Object

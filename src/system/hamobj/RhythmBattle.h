@@ -38,7 +38,7 @@ public:
     void Begin();
     bool CanTrick(Symbol);
     bool InFullKTB() const { return mFullKTB; }
-    bool Unk102() const { return mPaused; }
+    bool IsPaused() const { return mPaused; }
 
 protected:
     RhythmBattle();

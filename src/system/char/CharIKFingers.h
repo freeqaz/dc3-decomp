@@ -99,8 +99,8 @@ protected:
     bool mMoveHand; // 0x16d
     bool mIsSetup; // 0x16e
     std::vector<FingerDesc> mFingers; // 0x170
-    int unk17c;
-    int unk180;
+    float mInv2ab; // 0x17c
+    float mAAPlusBB; // 0x180
     /** "This trans will be set to the desired hand position." */
     ObjPtr<RndTransformable> mOutputTrans; // 0x184
     /** "A keyboard bone so we can calculate in local space. use rh/lh targets." */

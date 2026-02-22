@@ -22,7 +22,7 @@ public:
 
 private:
     std::vector<int> mOffsets; // 0x30
-    UIPanel *unk3c;
+    UIPanel *mPanel;
 };
 
 class CalibrationPanel : public HamPanel {
@@ -50,8 +50,8 @@ private:
     void UpdateAnimation();
 
     CalibrationOffsetProvider mProvider; // 0x3c
-    float unk7c;
+    float mBeatIntervalMs;
     float mVolume; // 0x80
     Stream *mStream; // 0x84
-    bool unk88; // 0x88
+    bool mPendingPlay; // 0x88
 };

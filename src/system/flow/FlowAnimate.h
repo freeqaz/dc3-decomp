@@ -38,7 +38,7 @@ protected:
     void ResetAnim();
     void OnAnimEvent(Symbol);
 
-    ObjOwnerPtr<AnimTask> unk5c; // 0x5c
+    ObjOwnerPtr<AnimTask> mAnimTask; // 0x5c
     /** "Anim object to animate" */
     FlowPtr<RndAnimatable> mAnim; // 0x70
     /** "How should we handle stop requests?" */

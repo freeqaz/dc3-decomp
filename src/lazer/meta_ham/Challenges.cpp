@@ -40,11 +40,11 @@ bool ChallengeScoreCmp(ChallengeRow cRow1, ChallengeRow cRow2) {
 Challenges::Challenges() {
     mFlauntingProfile = nullptr;
     mHasFlaunted = false;
-    unk2c = false;
+    mPendingDownload = false;
     mGetPlayerChallengesJob = nullptr;
     mGetOfficialChallengesJob = nullptr;
     mGetChallengeBadgeCountsJob = nullptr;
-    unkd8 = -1;
+    mExpireCountdown = -1;
     mOfficialChallengesDirty = false;
     mPlayerChallengesDirty = false;
     SetName("challenges", ObjectDir::Main());
@@ -355,7 +355,7 @@ void Challenges::ReadPlayerChallengesComplete(bool b1) {
 void Challenges::ReadOfficialChallengesComplete(bool b1) {
     mOfficialChallengesDirty = false;
     mGetOfficialChallengesJob->GetRows(
-        mOfficialChallenges, unkd8, mOfficialChallengesDirty
+        mOfficialChallenges, mExpireCountdown, mOfficialChallengesDirty
     );
     mGetOfficialChallengesJob = nullptr;
     static Message allUpdatedMsg("all_challenges_updated", 0);
@@ -387,11 +387,11 @@ void Challenges::UpdateChallengeTimeStamp() {
                 if (it->first == profile->GetName()) {
                     MILO_LOG(
                         ">>>> Update challenge time stamp from %i to %i\n",
-                        profile->GetUnk324(),
+                        profile->GetChallengeTimeStamp(),
                         it->second[0].mTimeStamp
                     );
                     profile->MakeDirty();
-                    profile->SetUnk324(it->second[0].mTimeStamp);
+                    profile->SetChallengeTimeStamp(it->second[0].mTimeStamp);
                     return;
                 }
             }
@@ -831,7 +831,7 @@ void Challenges::DownloadPlayerChallenges() {
         mPlayerChallengeTimer.Stop();
     }
     if (mHasFlaunted) {
-        unk2c = true;
+        mPendingDownload = true;
         return;
     }
     if (mGetPlayerChallengesJob) {
@@ -877,9 +877,9 @@ void Challenges::Poll() {
         }
     }
 
-    if (unk2c) {
+    if (mPendingDownload) {
         if (!mHasFlaunted) {
-            unk2c = false;
+            mPendingDownload = false;
             DownloadPlayerChallenges();
             goto jump;
         }
@@ -892,10 +892,10 @@ void Challenges::Poll() {
         }
     }
 jump:
-    if (unkd8 != -1.0) {
-        unkd8 -= TheTaskMgr.DeltaUISeconds();
-        if (unkd8 < 0) {
-            unkd8 = 0;
+    if (mExpireCountdown != -1.0) {
+        mExpireCountdown -= TheTaskMgr.DeltaUISeconds();
+        if (mExpireCountdown < 0) {
+            mExpireCountdown = 0;
             UIPanel *challengeFeedPanel =
                 ObjectDir::Main()->Find<UIPanel>("challenge_feed_panel");
             if (challengeFeedPanel->GetState() == 1) {
@@ -914,10 +914,10 @@ extern unsigned int lbl_82F1AB9C; // 3600 (seconds per hour)
 extern unsigned int lbl_82F1ABA0; // 86400 (seconds per day)
 
 bool Challenges::GetExpireTime(int &days, int &hours, int &minutes, int &seconds) {
-    if (unkd8 == -1.0) {
+    if (mExpireCountdown == -1.0) {
         return false;
     }
-    unsigned int totalSeconds = (unsigned int)unkd8;
+    unsigned int totalSeconds = (unsigned int)mExpireCountdown;
     unsigned int secsPerHour = lbl_82F1AB9C;
     unsigned int secsPerMin = lbl_82F1AB98;
     unsigned int secsPerDay = lbl_82F1ABA0;

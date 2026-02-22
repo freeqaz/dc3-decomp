@@ -22,7 +22,7 @@ RayCastDefaultContainer::RayCastDefaultContainer(
             if (d->MakeWorldSphere(s, false)) {
                 if (box.Contains(s)) {
                     MILO_ASSERT(objMap.find(d) != objMap.end(), 0x73);
-                    unk4.push_back(std::make_pair(d, objMap[d]));
+                    mMeshes.push_back(std::make_pair(d, objMap[d]));
                 }
             }
         }
@@ -36,7 +36,7 @@ Hmx::Object *RayCastDefaultContainer::FindNearest(
     f = 1;
     Segment localSegment = s;
     Hmx::Object *ret = nullptr;
-    FOREACH (it, unk4) {
+    FOREACH (it, mMeshes) {
         RndMesh *curMesh = it->first;
         Vector3 curVec;
         Plane curPlane;
@@ -66,15 +66,15 @@ DefaultDetectionVolume::DefaultDetectionVolume(DetectionVolumeListener *dvl)
 #pragma region DefaultPhysicsManager
 
 DefaultPhysicsManager::DefaultPhysicsManager(RndDir *d)
-    : PhysicsManager(d), unk40(this, kObjListOwnerControl) {}
+    : PhysicsManager(d), mCollidables(this, kObjListOwnerControl) {}
 
 bool DefaultPhysicsManager::Replace(ObjRef *from, Hmx::Object *to) {
     // If the reference is not owned by our object list, handle removal locally
-    if (from->Parent() != &unk40) {
+    if (from->Parent() != &mCollidables) {
         // When replacing with null, remove the object from tracking
         if (to == nullptr) {
             Hmx::Object *obj = from->GetObj();
-            unk40.remove(obj);
+            mCollidables.remove(obj);
             RemoveCollidable(obj);
         }
         return true;
@@ -112,7 +112,7 @@ void DefaultPhysicsManager::Poll() {
 }
 
 RayCastContainer *DefaultPhysicsManager::MakeContainer(const Box &box, unsigned int ui) {
-    return new RayCastDefaultContainer(box, mActiveCollidables, unk54);
+    return new RayCastDefaultContainer(box, mActiveCollidables, mCollidableDirs);
 }
 
 DetectionVolume *DefaultPhysicsManager::MakeDetectionVolume(
@@ -148,8 +148,8 @@ void DefaultPhysicsManager::ActivateCollidable(Hmx::Object *o) {
 }
 
 void DefaultPhysicsManager::RemoveAll() {
-    unk54.clear();
+    mCollidableDirs.clear();
     mActiveCollidables.clear();
     mInactiveCollidables.clear();
-    unk40.clear();
+    mCollidables.clear();
 }

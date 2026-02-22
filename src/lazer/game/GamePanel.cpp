@@ -182,7 +182,7 @@ float LoopVizCallback::UpdateOverlay(RndOverlay *o, float y) {
     Hmx::Color startColor = mLoopStartChangeTimer > 0 ? Hmx::Color(0, 0, 0) : Hmx::Color(1.0f, 1.0f, 1.0f);
     mDebugMeter1.DrawText(MakeString("%d", loopStart), loopStartNorm, 0.0f, startColor);
 
-    Hmx::Color endColor = 0 < mLoopStartChangeTimer ? Hmx::Color(0, 0, 0) : Hmx::Color(1.0f, 1.0f, 1.0f);
+    Hmx::Color endColor = 0 < mLoopStartChangeTimer ? Hmx::Color(0, 0, 0) : Hmx::Color(1.0f, 1.0f, 1.0f); // NOTE: likely original game bug - should be mLoopEndChangeTimer (was unk54, same as start)
     mDebugMeter1.DrawText(MakeString("%d", loopEnd), loopEndNorm, 0.0f, endColor);
 
     // Draw current beat label

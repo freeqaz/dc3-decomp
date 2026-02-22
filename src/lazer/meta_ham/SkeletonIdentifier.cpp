@@ -37,13 +37,13 @@ String EnrollmentIndexString(int idx) {
 bool SkeletonIdentifier::EnrolledPlayer::UpdatePlayerBinding() {
     bool b3 = false;
     Skeleton *skeleton = TheGestureMgr->GetSkeletonByEnrollmentIndex(mEnrollmentIndex);
-    String str(unk4);
+    String str(mName);
     if (TheSkeletonIdentifier->IsAssociatedWithProfile(mEnrollmentIndex)) {
-        unk4 = ThePlatformMgr.GetName(mPadNum);
+        mName = ThePlatformMgr.GetName(mPadNum);
     } else {
         if (skeleton && skeleton->ProfileMatched()) {
             static Symbol signing_in("signing_in");
-            unk4 = Localize(signing_in, nullptr, TheLocale);
+            mName = Localize(signing_in, nullptr, TheLocale);
         }
     }
     if (skeleton) {
@@ -57,9 +57,9 @@ bool SkeletonIdentifier::EnrolledPlayer::UpdatePlayerBinding() {
         }
     }
     static Symbol signing_in("signing_in");
-    if (unk4 != "") {
-        if (unk4 != str) {
-            if (unk4 != Localize(signing_in, nullptr, TheLocale)) {
+    if (mName != "") {
+        if (mName != str) {
+            if (mName != Localize(signing_in, nullptr, TheLocale)) {
                 b3 = true;
             }
         }
@@ -92,7 +92,7 @@ void SkeletonIdentifier::Init() {
     TheGestureMgr->AddSink(this, "skeleton_enrollment_changed");
     ThePlatformMgr.AddSink(this, "signin_changed");
     for (int i = 0; i < 8; i++) {
-        unk48[i].mEnrollmentIndex = i;
+        mEnrolledPlayers[i].mEnrollmentIndex = i;
     }
     UpdateEnrolledPlayers();
 }
@@ -188,7 +188,7 @@ void SkeletonIdentifier::UpdateIdentityStatus() {
 }
 
 bool SkeletonIdentifier::IsAssociatedWithProfile(int i1) const {
-    int userIndex = unk48[i1].mPadNum;
+    int userIndex = mEnrolledPlayers[i1].mPadNum;
     if (userIndex >= 0 && userIndex != 0xFE) {
         MILO_ASSERT(userIndex < user_max_count, 0x1E0);
         return true;
@@ -231,16 +231,16 @@ void SkeletonIdentifier::UpdateEnrolledPlayers() {
         NUI_ENROLLMENT_INFORMATION info;
         NuiIdentityGetEnrollmentInformation(i, &info);
         if (info.dwEnrollmentFlags == 0) {
-            unk48[i].mPadNum = -1;
-            unk48[i].unk4 = gNullStr;
+            mEnrolledPlayers[i].mPadNum = -1;
+            mEnrolledPlayers[i].mName = gNullStr;
         } else {
-            unk48[i].mPadNum = info.dwUserIndex;
+            mEnrolledPlayers[i].mPadNum = info.dwUserIndex;
             if (mIdentityStatus == 4 && mWaitingPlayerIndex == i) {
                 if (IsAssociatedWithProfile(i)) {
                     mIdentityStatus = kIdentityStatus_None;
                 }
             }
-            if (unk48[i].UpdatePlayerBinding()) {
+            if (mEnrolledPlayers[i].UpdatePlayerBinding()) {
                 NotifyOfRecognition(i);
             }
         }

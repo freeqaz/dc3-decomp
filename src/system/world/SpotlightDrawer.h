@@ -46,9 +46,9 @@ public:
 
     class SpotlightEntry { // from RB3 decomp
     public:
-        SpotlightEntry() : unk0(0), unk4(0) {}
+        SpotlightEntry() : unk0(0), mSpotlight(0) {}
         unsigned int unk0; // 0x0 - id?
-        Spotlight *unk4; // 0x4 - the spotlight
+        Spotlight *mSpotlight; // 0x4
     };
 
     // Hmx::Object

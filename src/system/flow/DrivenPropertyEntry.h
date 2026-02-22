@@ -14,10 +14,10 @@ public:
     void Load(BinStream &, FlowNode *);
 
     bool Empty() { return mMathOps.empty(); }
-    const DataNode &Node() const { return unk0; }
+    const DataNode &Node() const { return mNode; }
     const ObjVector<FlowMathOp> &MathOps() const { return mMathOps; }
 
 protected:
-    DataNode unk0; // 0x0
+    DataNode mNode; // 0x0
     ObjVector<FlowMathOp> mMathOps; // 0x8
 };

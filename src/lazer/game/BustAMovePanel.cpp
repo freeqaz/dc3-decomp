@@ -327,7 +327,7 @@ void BustAMovePanel::CacheObjects() {
     for (ObjDirItr<DepthBuffer3D> it(mBAMVisualizerPanel->DataDir(), true); it != nullptr;
          ++it) {
         it->SetGrooviness(1.0f);
-        it->unk18c.SetObjConcrete(NULL);
+        it->mPlayerPaletteTex.SetObjConcrete(NULL);
     }
     TheMaster->AddSink(this, "beat");
     mStatusLabel = DataDir()->Find<HamLabel>("status.lbl");
@@ -882,7 +882,7 @@ void BustAMovePanel::OnBeat() {
             mNoPosesDetected = false;
             for (ObjDirItr<DepthBuffer3D> it(mBAMVisualizerPanel->DataDir(), true);
                  it != nullptr; ++it) {
-                it->unk18c.SetObjConcrete(NULL);
+                it->mPlayerPaletteTex.SetObjConcrete(NULL);
                 it->SetShowing(true);
             }
         } else {
@@ -890,9 +890,9 @@ void BustAMovePanel::OnBeat() {
                  it != nullptr; ++it) {
                 if (std::strstr(it->Name(), "live")) {
                     it->SetShowing(DataVariable(Symbol("hide_bam_ghost")).Int() == 0);
-                    it->unk18c.SetObjConcrete(NULL);
+                    it->mPlayerPaletteTex.SetObjConcrete(NULL);
                 } else {
-                    it->unk18c.SetObjConcrete(mRecorder->GetPlayerPalette());
+                    it->mPlayerPaletteTex.SetObjConcrete(mRecorder->GetPlayerPalette());
                 }
             }
         }
@@ -960,7 +960,7 @@ void BustAMovePanel::OnBeat() {
         mRecorder->StartPlayback(false);
         for (ObjDirItr<DepthBuffer3D> it(mBAMVisualizerPanel->DataDir(), true);
              it != nullptr; ++it) {
-            it->unk18c.SetObjConcrete(mRecorder->GetPlayerPalette());
+            it->mPlayerPaletteTex.SetObjConcrete(mRecorder->GetPlayerPalette());
         }
         break;
     }
@@ -1017,7 +1017,7 @@ void BustAMovePanel::OnBeat() {
         // Transition between rounds — score previous round, set up next move
         for (ObjDirItr<DepthBuffer3D> it(mBAMVisualizerPanel->DataDir(), true);
              it != nullptr; ++it) {
-            it->unk18c.SetObjConcrete(NULL);
+            it->mPlayerPaletteTex.SetObjConcrete(NULL);
             it->SetShowing(true);
         }
         if (mBeatCount == 0) {
@@ -1180,7 +1180,7 @@ void BustAMovePanel::OnBeat() {
             if (winner >= 0) {
                 for (ObjDirItr<DepthBuffer3D> it(mBAMVisualizerPanel->DataDir(), true);
                      it != nullptr; ++it) {
-                    it->unk18c.SetObjConcrete(NULL);
+                    it->mPlayerPaletteTex.SetObjConcrete(NULL);
                 }
                 RndAnimatable *numPlayers =
                     DataDir()->Find<RndAnimatable>("num_players.anim", true);
@@ -1391,7 +1391,7 @@ void BustAMovePanel::OnBeat() {
         if (mBeatCount < 16) {
             for (ObjDirItr<DepthBuffer3D> it(mBAMVisualizerPanel->DataDir(), true);
                  it != nullptr; ++it) {
-                it->unk18c.SetObjConcrete(mRecorder->GetPlayerPalette());
+                it->mPlayerPaletteTex.SetObjConcrete(mRecorder->GetPlayerPalette());
                 it->SetShowing(true);
             }
             mRecorder->SetFreestyleMove(mFlashcardSlots.front());

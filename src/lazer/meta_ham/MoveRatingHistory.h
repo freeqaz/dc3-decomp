@@ -27,7 +27,7 @@ public:
 
     static int SaveSize(int);
 
-    bool Unk20() const { return mHasModifiedHistory; }
+    bool HasModifiedHistory() const { return mHasModifiedHistory; }
 
 private:
     std::map<Key, RatingHistory> mMoveRatingMap;

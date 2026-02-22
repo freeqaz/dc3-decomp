@@ -14,8 +14,8 @@ public:
     bool IsCharacter(Symbol) const;
     bool IsSong(Symbol) const;
 
-    std::map<Symbol, std::vector<Symbol> > GetUnk78() { return unk78; }
-    std::vector<Symbol> &GetUnk90() { return unk90; }
+    std::map<Symbol, std::vector<Symbol> > GetCharacterSongs() { return mCharacterSongs; }
+    std::vector<Symbol> &GetFlatList() { return mFlatList; }
 
 private:
     MQSongSortMgr(SongPreview &);
@@ -23,13 +23,13 @@ private:
 
 protected:
     // std::set<Symbol> unk78; // 0x78
-    std::map<Symbol, std::vector<Symbol> > unk78; // 0x78
+    std::map<Symbol, std::vector<Symbol> > mCharacterSongs; // 0x78
     // double *unk7c; // 0x7c
     // double *unk80;
     // double *unk84;
     // double *unk88;
     // bool unk8c; // 0x8c
-    std::vector<Symbol> unk90; // 0x90
+    std::vector<Symbol> mFlatList; // 0x90
 };
 
 extern MQSongSortMgr *TheMQSongSortMgr;

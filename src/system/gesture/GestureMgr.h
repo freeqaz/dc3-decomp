@@ -133,7 +133,7 @@ private:
     bool mGesturingWithVoice; // 0x426f
     bool mInDoubleUserMode; // 0x4270
     bool mInShellMode; // 0x4271 - true when not in gameplay panel
-    RndDir *unk4274;
+    RndDir *mDebugDir;
     XOVERLAPPED mOverlapped; // 0x4278
 };
 

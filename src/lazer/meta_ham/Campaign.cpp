@@ -121,7 +121,7 @@ void Campaign::FinishLoading(Loader *l) {
         HamMove *move = mCurrentObjectDir->Find<HamMove>(pActiveLoad->mMoveVariantName.Str(), false);
         if (move) {
             pActiveLoad->mMove = move;
-            pActiveLoad->unk10 = 3;
+            pActiveLoad->mLoadState = 3;
         } else {
             MILO_NOTIFY(
                 "Loading Campaign Move Data: move '%s' not found in %s!",
@@ -129,7 +129,7 @@ void Campaign::FinishLoading(Loader *l) {
                 pActiveLoad->mMoveVariantName.Str()
             );
             pActiveLoad->mMove = nullptr;
-            pActiveLoad->unk10 = 2;
+            pActiveLoad->mLoadState = 2;
         }
     }
     RELEASE(m_pCurLoader);
@@ -142,7 +142,7 @@ void Campaign::FailedLoading(Loader *l) {
     MILO_NOTIFY("Loading Campaign Move Data: move data not found");
     FOREACH (it, mCampaignMoves) {
         CampaignMove *move = *it;
-        move->unk10 = 2;
+        move->mLoadState = 2;
         move->mMove = nullptr;
     }
 }
@@ -325,7 +325,7 @@ int Campaign::NumCampaignSongMoves(Symbol s) {
     int moves = 0;
     FOREACH (it, mCampaignMoves) {
         CampaignMove *move = *it;
-        if (move->unk10 == 3 && move->mSongName == s)
+        if (move->mLoadState == 3 && move->mSongName == s)
             moves++;
     }
     return moves;
@@ -409,7 +409,7 @@ void Campaign::ConfigureCampaignData(DataArray *i_pConfig) {
         } else {
             if (pCampaignEra->IsTanBattleEra()) {
                 MILO_ASSERT(m_vEras.size(), 0xE4);
-                GetCampaignEra(m_vEras.size() - 1)->SetUnk50(true);
+                GetCampaignEra(m_vEras.size() - 1)->SetHasTanBattle(true);
             }
             mEraLookup[name] = m_vEras.size();
             m_vEras.push_back(pCampaignEra);
@@ -457,7 +457,7 @@ HamMove *Campaign::GetHamMove(Symbol s1, int i2) {
     int i = -1;
     FOREACH (it, mCampaignMoves) {
         CampaignMove *curMove = *it;
-        if (curMove->unk10 == 3 && curMove->mSongName == s1) {
+        if (curMove->mLoadState == 3 && curMove->mSongName == s1) {
             i++;
         }
         if (i == i2) {
@@ -471,7 +471,7 @@ Symbol Campaign::GetMoveName(Symbol s1, int i2) {
     int i = -1;
     FOREACH (it, mCampaignMoves) {
         CampaignMove *curMove = *it;
-        if (curMove->unk10 == 3 && curMove->mSongName == s1) {
+        if (curMove->mLoadState == 3 && curMove->mSongName == s1) {
             i++;
         }
         if (i == i2) {

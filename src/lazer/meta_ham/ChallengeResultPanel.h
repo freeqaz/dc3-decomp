@@ -27,13 +27,13 @@ protected:
     UIList *mChallengeList; // 0x40
     HamNavList *mRightHandNavList; // 0x44
     PropertyEventProvider *mResultEventProvider; // 0x48
-    int unk4c;
+    int mPhase;
     std::vector<ChallengeRow> mItems; // 0x50
-    int unk5c;
-    int unk60;
-    int unk64;
-    u32 unk68;
-    int unk6c;
+    int mPlayerScore;
+    int mRivalIndex;
+    int mHalfDisplayCount;
+    u32 mSide;
+    int mPlayerIndex;
 
 private:
     virtual ~ChallengeResultPanel();

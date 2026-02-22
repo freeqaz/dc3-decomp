@@ -8,9 +8,9 @@
 #include "utl/BinStream.h"
 
 RndSpline::CtrlPoint::CtrlPoint()
-    : mPos(Vector3::ZeroVec()), mRoll(0), unk14(1), mDirtyConstants(1),
-      unk18(Vector4::ZeroVec()), unk28(Vector4::ZeroVec()), unk38(Vector4::ZeroVec()),
-      unk48(Vector4::ZeroVec()) {}
+    : mPos(Vector3::ZeroVec()), mRoll(0), mDirtyPosition(1), mDirtyConstants(1),
+      mCoeff0(Vector4::ZeroVec()), mCoeff1(Vector4::ZeroVec()), mCoeff2(Vector4::ZeroVec()),
+      mCoeff3(Vector4::ZeroVec()) {}
 
 void RndSpline::CtrlPoint::Save(BinStream &bs) const {
     bs << mPos;
@@ -20,7 +20,7 @@ void RndSpline::CtrlPoint::Save(BinStream &bs) const {
 void RndSpline::CtrlPoint::Load(BinStreamRev &d) {
     d >> mPos;
     d >> mRoll;
-    unk14 = false;
+    mDirtyPosition = false;
 }
 
 RndSpline::RndSpline()
@@ -147,11 +147,11 @@ const RndSpline::CtrlPoint &RndSpline::GetDeformedCtrlPoint(int iIndex) const {
 const RndSpline::CtrlPoint &RndSpline::GetDeformedCtrlPointOrDummy(int iIndex) const {
     MILO_ASSERT_RANGE_EQ(iIndex, -1, (int)(mDeformedCtrlPoints.size()) + 1, 0x2F7);
     if (iIndex == -1) {
-        return unk3c;
+        return mDummyBefore;
     } else if (iIndex == (int)mDeformedCtrlPoints.size()) {
-        return unk94;
+        return mDummyAfter;
     } else if (iIndex == (int)mDeformedCtrlPoints.size() + 1) {
-        return unkec;
+        return mDummyAfterEnd;
     } else {
         return mDeformedCtrlPoints[iIndex];
     }

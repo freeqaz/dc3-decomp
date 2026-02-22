@@ -181,7 +181,7 @@ const char *ChallengeSortNode::GetChallengerGamertag() {
         // Check if type is in range [3,5] (song challenges)
         isHarmonix = (type >= 3 && type <= 5);
         if (!isHarmonix) {
-            return mChallengeRecord->GetUnk48().Str();
+            return mChallengeRecord->GetChallengerGamertag().Str();
         }
     }
     return "HARMONIX";
@@ -227,9 +227,9 @@ void ChallengeSortNode::SetNewIcon(UILabel *label) const {
         mChallengeRecord->GetChallengeRow().mSongID
     );
     if (timestamp > (int)mChallengeRecord->GetChallengeRow().mTimeStamp
-        || mChallengeRecord->GetUnk48() == mChallengeRecord->GetUnk4c()
-        || mChallengeRecord->GetUnk50() == 4 || mChallengeRecord->GetUnk50() == 2
-        || mChallengeRecord->GetUnk50() == 3) {
+        || mChallengeRecord->GetChallengerGamertag() == mChallengeRecord->GetMissionInfo()
+        || mChallengeRecord->GetSongContentLockState() == 4 || mChallengeRecord->GetSongContentLockState() == 2
+        || mChallengeRecord->GetSongContentLockState() == 3) {
         appLabel->SetNew(false);
     } else {
         appLabel->SetNew(true);
@@ -240,8 +240,8 @@ void ChallengeSortNode::SetBuyIcon(UILabel *label) const {
     MILO_ASSERT(label, 0x2f4);
     AppLabel *appLabel = dynamic_cast<AppLabel *>(label);
     MILO_ASSERT(appLabel, 0x2f6);
-    if (mChallengeRecord->GetUnk50() == 4 || mChallengeRecord->GetUnk50() == 2
-        || mChallengeRecord->GetUnk50() == 3) {
+    if (mChallengeRecord->GetSongContentLockState() == 4 || mChallengeRecord->GetSongContentLockState() == 2
+        || mChallengeRecord->GetSongContentLockState() == 3) {
         appLabel->SetNew(true);
     } else {
         appLabel->SetNew(false);
@@ -259,7 +259,7 @@ int ChallengeSortNode::GetPlayerSide() const {
     return provider->Property(side, true)->Int();
 }
 
-Symbol ChallengeSortNode::GetToken() const { return mChallengeRecord->GetUnk40(); }
+Symbol ChallengeSortNode::GetToken() const { return mChallengeRecord->GetSongShortName(); }
 
 void ChallengeSortNode::Text(UIListLabel *listlabel, UILabel *label) const {
     AppLabel *app_label = dynamic_cast<AppLabel *>(label);
@@ -269,16 +269,16 @@ void ChallengeSortNode::Text(UIListLabel *listlabel, UILabel *label) const {
             mChallengeRecord->GetChallengeRow().mSongID
         );
         if (ownerChallengeScore >= mChallengeRecord->GetChallengeRow().mScore) {
-            if (mChallengeRecord->GetUnk48() != mChallengeRecord->GetUnk4c()) {
+            if (mChallengeRecord->GetChallengerGamertag() != mChallengeRecord->GetMissionInfo()) {
                 unsigned int ownerChallengeTimestamp = TheChallengeSortMgr->GetOwnerChallengeTimeStamp(
                     mChallengeRecord->GetChallengeRow().mSongID
                 );
                 if (mChallengeRecord->GetChallengeRow().mTimeStamp
                     < ownerChallengeTimestamp) {
-                    app_label->SetChallengerName(mChallengeRecord->GetUnk48().Str());
+                    app_label->SetChallengerName(mChallengeRecord->GetChallengerGamertag().Str());
                 }
             } else {
-                app_label->SetChallengerName(mChallengeRecord->GetUnk48().Str());
+                app_label->SetChallengerName(mChallengeRecord->GetChallengerGamertag().Str());
             }
         }
     } else if (listlabel->Matches("low_gamertag")) {
@@ -289,24 +289,24 @@ void ChallengeSortNode::Text(UIListLabel *listlabel, UILabel *label) const {
             && TheChallengeSortMgr->GetOwnerChallengeTimeStamp(
                    mChallengeRecord->GetChallengeRow().mSongID
                ) > mChallengeRecord->GetChallengeRow().mTimeStamp) {
-            app_label->SetChallengerName(mChallengeRecord->GetUnk48().Str());
+            app_label->SetChallengerName(mChallengeRecord->GetChallengerGamertag().Str());
         }
     } else if (listlabel->Matches("right_gamertag")) {
-        if (mChallengeRecord->GetUnk48() == mChallengeRecord->GetUnk4c()
+        if (mChallengeRecord->GetChallengerGamertag() == mChallengeRecord->GetMissionInfo()
             && GetPlayerSide() == 1) {
-            app_label->SetChallengerName(mChallengeRecord->GetUnk48().Str());
+            app_label->SetChallengerName(mChallengeRecord->GetChallengerGamertag().Str());
         }
     } else if (listlabel->Matches("left_gamertag")) {
-        if (mChallengeRecord->GetUnk48() == mChallengeRecord->GetUnk4c()
+        if (mChallengeRecord->GetChallengerGamertag() == mChallengeRecord->GetMissionInfo()
             && !GetPlayerSide()) {
-            app_label->SetChallengerName(mChallengeRecord->GetUnk48().Str());
+            app_label->SetChallengerName(mChallengeRecord->GetChallengerGamertag().Str());
         }
     } else if (listlabel->Matches("score")) {
         int ownerChallengeScore = TheChallengeSortMgr->GetOwnerChallengeScore(
             mChallengeRecord->GetChallengeRow().mSongID
         );
         if (mChallengeRecord->GetChallengeRow().mScore < ownerChallengeScore) {
-            if (mChallengeRecord->GetUnk48() == mChallengeRecord->GetUnk4c()) {
+            if (mChallengeRecord->GetChallengerGamertag() == mChallengeRecord->GetMissionInfo()) {
                 int ownerChallengeTimestamp = TheChallengeSortMgr->GetOwnerChallengeTimeStamp(
                     mChallengeRecord->GetChallengeRow().mSongID
                 );
@@ -333,12 +333,12 @@ void ChallengeSortNode::Text(UIListLabel *listlabel, UILabel *label) const {
             app_label->SetChallengeScoreLabel(mChallengeRecord->GetChallengeRow().mScore);
         }
     } else if (listlabel->Matches("right_score")) {
-        if (mChallengeRecord->GetUnk48() == mChallengeRecord->GetUnk4c()
+        if (mChallengeRecord->GetChallengerGamertag() == mChallengeRecord->GetMissionInfo()
             && GetPlayerSide() == 1) {
             app_label->SetChallengeScoreLabel(mChallengeRecord->GetChallengeRow().mScore);
         }
     } else if (listlabel->Matches("left_score")) {
-        if (mChallengeRecord->GetUnk48() == mChallengeRecord->GetUnk4c()
+        if (mChallengeRecord->GetChallengerGamertag() == mChallengeRecord->GetMissionInfo()
             && !GetPlayerSide()) {
             app_label->SetChallengeScoreLabel(mChallengeRecord->GetChallengeRow().mScore);
         }
@@ -371,7 +371,7 @@ Symbol ChallengeSortNode::Select() {
         }
     }
     static Symbol should_back_to_challenges("should_back_to_challenges");
-    int unk50 = mChallengeRecord->GetUnk50();
+    int unk50 = mChallengeRecord->GetSongContentLockState();
     if (unk50 != 1) {
         if (unk50 > 1) {
             if (unk50 > 3) {

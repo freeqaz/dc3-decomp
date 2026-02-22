@@ -87,7 +87,7 @@ int ChallengeSortMgr::GetPotentialChallengeExp(int i1) {
 int ChallengeSortMgr::GetOwnerChallengeScore(int songID) {
     for (int i = 0; i < mChallengeRecords.size(); i++) {
         if (songID == mChallengeRecords[i].GetChallengeRow().mSongID
-            && mChallengeRecords[i].GetUnk48() == mChallengeRecords[i].GetUnk4c()) {
+            && mChallengeRecords[i].GetChallengerGamertag() == mChallengeRecords[i].GetMissionInfo()) {
             return mChallengeRecords[i].GetChallengeRow().mScore;
         }
     }
@@ -126,7 +126,7 @@ Symbol ChallengeSortMgr::GetSongShortName(int songID) {
 int ChallengeSortMgr::GetOwnerChallengeTimeStamp(int i1) {
     for (int i = 0; i < mChallengeRecords.size(); i++) {
         if (i1 == mChallengeRecords[i].GetChallengeRow().mSongID
-            && mChallengeRecords[i].GetUnk48() == mChallengeRecords[i].GetUnk4c()) {
+            && mChallengeRecords[i].GetChallengerGamertag() == mChallengeRecords[i].GetMissionInfo()) {
             return mChallengeRecords[i].GetChallengeRow().mTimeStamp;
         }
     }
@@ -145,7 +145,7 @@ int ChallengeSortMgr::GetChallengeScore(int i1) {
 Symbol ChallengeSortMgr::GetChallengerName() {
     auto node = dynamic_cast<ChallengeSortNode *>(GetHighlightItem());
     MILO_ASSERT(node, 0xdb);
-    return node->GetChallengeRecord()->GetUnk4c();
+    return node->GetChallengeRecord()->GetMissionInfo();
 }
 
 int ChallengeSortMgr::GetBestChallengeScore(int songID) {
@@ -170,7 +170,7 @@ String ChallengeSortMgr::GetSongTitle(int songID) {
     } else {
         return static_cast<ChallengeSortNode *>(mSorts[mCurrentSortIdx]->GetList()[songID])
             ->GetChallengeRecord()
-            ->GetUnk44(); // FIXME
+            ->GetSongTitle(); // FIXME
     }
 }
 

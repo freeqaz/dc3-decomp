@@ -3,7 +3,7 @@
 #include "obj/Object.h"
 
 FlowPickOne::FlowPickOne()
-    : unk5c(this), mChoiceType(kChoiceRandom), mIndex(0), mChance(1) {}
+    : mChoiceHistory(this), mChoiceType(kChoiceRandom), mIndex(0), mChance(1) {}
 FlowPickOne::~FlowPickOne() {}
 
 BEGIN_HANDLERS(FlowPickOne)

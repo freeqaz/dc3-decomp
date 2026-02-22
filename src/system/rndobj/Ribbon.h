@@ -40,7 +40,7 @@ protected:
     void ExposeMesh(void);
     void SetActive(bool);
 
-    float unk48; // 0x48
+    float mLastTime; // 0x48
     /** "Number of sides, the more sides, the more cylindrical it is".
         Ranges from 3 to 20. */
     int mNumSides; // 0x4c

@@ -118,7 +118,7 @@ protected:
     void *mShaderPool; // 0x54
     int mShaderPoolCount; // 0x58
     int mShaderPoolAlloc; // 0x5c - shader pool alloc
-    int unk60;
+    int mShaderSize;
     float *mConstantCache; // 0x64
     int mConstantCacheSize; // 0x68
     bool mCacheShaders; // 0x6c

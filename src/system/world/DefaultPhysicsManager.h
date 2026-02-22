@@ -24,8 +24,8 @@ protected:
     virtual void AddCollidable(Hmx::Object *, ObjectDir *, bool);
     virtual void RemoveCollidable(Hmx::Object *);
 
-    ObjPtrList<Hmx::Object> unk40; // 0x40
-    std::map<Hmx::Object *, ObjectDir *> unk54; // 0x54
+    ObjPtrList<Hmx::Object> mCollidables; // 0x40
+    std::map<Hmx::Object *, ObjectDir *> mCollidableDirs; // 0x54
     std::list<RndMesh *> mActiveCollidables; // 0x6c
     std::list<RndMesh *> mInactiveCollidables; // 0x74
 };
@@ -38,7 +38,7 @@ public:
     virtual void SetFilter(int);
 
 protected:
-    std::list<std::pair<RndMesh *, ObjectDir *> > unk4; // 0x4
+    std::list<std::pair<RndMesh *, ObjectDir *> > mMeshes; // 0x4
 };
 
 class DefaultDetectionVolume : public DetectionVolume {

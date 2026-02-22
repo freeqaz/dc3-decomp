@@ -28,7 +28,7 @@ SkeletonChooser::SkeletonChooser()
     SetName("skeleton_chooser", ObjectDir::Main());
     mRightDirFilter = new DirectionGestureFilterSingleUser(kSkeletonRight, kSkeletonLeft, 0, 0);
     mLeftDirFilter = new DirectionGestureFilterSingleUser(kSkeletonLeft, kSkeletonRight, 0, 0);
-    unk7c = Hmx::Object::New<HighFiveGestureFilter>();
+    mHighFiveFilter = Hmx::Object::New<HighFiveGestureFilter>();
     for (int i = 0; i < 6; i++) {
         mSkeletonHandRaisedFilters[i] = Hmx::Object::New<HandRaisedGestureFilter>();
         mSkeletonHandRaisedFilters[i]->SetRequiredMs(750);
@@ -51,7 +51,7 @@ SkeletonChooser::~SkeletonChooser() {
         delete mSkeletonHandRaisedFilters[i];
         delete mSkeletonStandingStillFilters[i];
     }
-    delete unk7c;
+    delete mHighFiveFilter;
 }
 
 BEGIN_HANDLERS(SkeletonChooser)
@@ -184,7 +184,7 @@ void SkeletonChooser::Poll() {
         }
         if (mPendingPlayerSwitchIndex < 0) {
             UpdateTrackedSkeletonsElective();
-            unk7c->Update(
+            mHighFiveFilter->Update(
                 TheGestureMgr->GetSkeletonByTrackingID(
                     TheGameData->Player(0)->GetSkeletonTrackingID()
                 ),
@@ -192,7 +192,7 @@ void SkeletonChooser::Poll() {
                     TheGameData->Player(1)->GetSkeletonTrackingID()
                 )
             );
-            if (unk7c->CheckHighFive()) {
+            if (mHighFiveFilter->CheckHighFive()) {
                 static Message highFiveMsg("high_five");
                 TheHamProvider->Handle(highFiveMsg, false);
             }

@@ -8,33 +8,33 @@
 OptionsPanel::OptionsPanel() {
     // Dummy variable affects register allocation for 85.6% match
     int dummy = 0;
-    unk48 = 0;
-    unk50 = nullptr;
-    unk40 = nullptr;
-    unk3c = nullptr;
-    unk58 = nullptr;
+    mOfferID = 0;
+    mPurchaseProfile = nullptr;
+    mXboxPurchaser = nullptr;
+    mRedeemTokenJob = nullptr;
+    mGetWebLinkCodeJob = nullptr;
     if (dummy) dummy++;
 }
 
 OptionsPanel::~OptionsPanel() {}
 
 bool OptionsPanel::OnRedeemToken(int i, char const *str) {
-    unk3c = new RedeemTokenJob(this, i, str);
-    TheRockCentral.ManageJob(unk3c);
+    mRedeemTokenJob = new RedeemTokenJob(this, i, str);
+    TheRockCentral.ManageJob(mRedeemTokenJob);
     return true;
 }
 
 void OptionsPanel::OnPurchaseOfferByOfferString(int i, char const *c) {
     unsigned long long ID = StorePurchaseable::OfferStringToID(c);
-    unk40 = new XboxPurchaser(i, ID, 0, 0, gNullStr, 0);
-    unk48 = ID;
-    unk50 = TheProfileMgr.GetProfileFromPad(i);
-    unk40->Initiate();
+    mXboxPurchaser = new XboxPurchaser(i, ID, 0, 0, gNullStr, 0);
+    mOfferID = ID;
+    mPurchaseProfile = TheProfileMgr.GetProfileFromPad(i);
+    mXboxPurchaser->Initiate();
 }
 
 bool OptionsPanel::OnGetLinkingCode(int i) {
-    unk58 = new GetWebLinkCodeJob(this, i);
-    TheRockCentral.ManageJob(unk58);
+    mGetWebLinkCodeJob = new GetWebLinkCodeJob(this, i);
+    TheRockCentral.ManageJob(mGetWebLinkCodeJob);
     return true;
 }
 
@@ -52,8 +52,8 @@ DataNode OptionsPanel::OnMsg(SingleItemEnumCompleteMsg const &msg) {
 
 DataNode OptionsPanel::OnMsg(RCJobCompleteMsg const &msg) {
     int i;
-    if (msg.Job() == unk3c) {
-        MILO_LOG("Token: server response: %s\n", unk3c->GetResponseString());
+    if (msg.Job() == mRedeemTokenJob) {
+        MILO_LOG("Token: server response: %s\n", mRedeemTokenJob->GetResponseString());
         String str;
         static Symbol token_redemption_ready("token_redemption_ready");
         static Symbol token_redemption_error("token_redemption_error");
@@ -63,13 +63,13 @@ DataNode OptionsPanel::OnMsg(RCJobCompleteMsg const &msg) {
         static Symbol token_redemption_too_early("token_redemption_too_early");
         static Symbol token_redemption_too_late("token_redemption_too_late");
         static Symbol leaderboard_no_net("leaderboard_no_net");
-        unk3c->GetRedeemTokenData(i, str);
-    } else if (msg.Job() != unk58) {
+        mRedeemTokenJob->GetRedeemTokenData(i, str);
+    } else if (msg.Job() != mGetWebLinkCodeJob) {
         return 1;
     }
     String temp1;
     String temp2;
-    unk58->GetWebLinkCodeData(temp1);
+    mGetWebLinkCodeJob->GetWebLinkCodeData(temp1);
 
     return 1;
 }

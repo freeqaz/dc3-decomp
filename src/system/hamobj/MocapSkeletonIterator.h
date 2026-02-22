@@ -14,19 +14,19 @@ public:
     operator bool();
     void operator++();
 
-    int Unk24b8() const { return unk24b8; }
+    int CurrentFrame() const { return mCurrentFrame; }
 
 private:
     void Update();
 
     HamCharacter *mDancer; // 0x4c
     CharCameraInput mInput; // 0x50
-    int unk24b0; // 0x24b0
-    int unk24b4; // 0x24b4
-    int unk24b8;
-    float unk24bc;
+    int mStartFrame; // 0x24b0
+    int mEndFrame; // 0x24b4
+    int mCurrentFrame;
+    float mPrevFrame;
     int unk24c0;
-    Skeleton unk24c4; // 0x24c4
-    float unk2f98; // 0x2f98
-    Transform unk2f9c; // 0x2f9c
+    Skeleton mSkeleton; // 0x24c4
+    float mSavedSeconds; // 0x2f98
+    Transform mSavedXfm; // 0x2f9c
 };

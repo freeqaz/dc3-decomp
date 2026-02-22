@@ -38,5 +38,5 @@ protected:
 
     /** "Do we only work on interuption request, or when forced to stop immediately" */
     RunMode mMode; // 0x5c
-    bool unk60; // 0x60
+    bool mArmed; // 0x60
 };

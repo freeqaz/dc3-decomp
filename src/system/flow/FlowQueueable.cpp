@@ -46,7 +46,7 @@ void FlowQueueable::ReleaseListener(Hmx::Object *obj) {
 }
 
 void FlowQueueable::RequestStopCancel() {
-    if (!unk58)
+    if (!mStopRequested)
         return;
     FlowNode::RequestStopCancel();
 }

@@ -23,7 +23,7 @@ void SongStatusData::SaveToStream(BinStream &bs) const {
     bs << mPercentPassed;
     bs << mNumPerfects;
     bs << mNumNices;
-    bs << unk10;
+    bs << mFiveStarNoFlashcards;
     bs << mNoFlashcards;
     bs << mNeedUpload;
 }
@@ -36,7 +36,7 @@ void SongStatusData::LoadFromStream(BinStream &bs) {
     bs >> mPercentPassed;
     bs >> mNumPerfects;
     bs >> mNumNices;
-    bs >> unk10;
+    bs >> mFiveStarNoFlashcards;
     bs >> mNoFlashcards;
     bs >> mNeedUpload;
 }
@@ -255,7 +255,7 @@ void SongStatusMgr::GetScoresToUpload(std::list<SongStatusData> &data) {
     FOREACH (it, mSongStatusMap) {
         SongStatus cur = it->second;
         for (int i = 0; i < kNumDifficulties; i++) {
-            if (cur.mStatusData[i].unk10) {
+            if (cur.mStatusData[i].mFiveStarNoFlashcards) {
                 data.push_back(cur.mStatusData[i]);
             }
         }
@@ -368,7 +368,7 @@ int SongStatusMgr::GetStars(int songID, bool &bref) const {
     bref = false;
     if (HasSongStatus(songID)) {
         const SongStatusData &data = GetSongStatus(songID).GetBestSongStatusData();
-        bref = data.unk10;
+        bref = data.mFiveStarNoFlashcards;
         return data.mStars;
     } else {
         return 0;
@@ -379,7 +379,7 @@ int SongStatusMgr::GetStarsForDifficulty(int songID, Difficulty d, bool &bref) c
     bref = false;
     if (HasSongStatus(songID)) {
         const SongStatus &status = GetSongStatus(songID);
-        bref = status.mStatusData[d].unk10;
+        bref = status.mStatusData[d].mFiveStarNoFlashcards;
         return status.mStatusData[d].mStars;
     } else {
         return 0;
@@ -395,7 +395,7 @@ int SongStatusMgr::GetBestStars(int songID, bool &bref, Difficulty d) const {
         for (; d != kNumDifficulties; d = _tmp1) {
             int curStars = status.mStatusData[d].mStars;
             if (curStars >= bestStars) {
-                bref = status.mStatusData[d].unk10;
+                bref = status.mStatusData[d].mFiveStarNoFlashcards;
                 bestStars = curStars;
             }
         }
@@ -597,7 +597,7 @@ bool SongStatusMgr::UpdateSong(
             if (status.mStatusData[difficulty].mStars <= stars) {
                 status.mStatusData[difficulty].mStars = stars;
                 if (b11 && 5 <= stars) {
-                    status.mStatusData[difficulty].unk10 = b11;
+                    status.mStatusData[difficulty].mFiveStarNoFlashcards = b11;
                 }
             }
             if (status.mStatusData[difficulty].mNumNices <= numNices) {
@@ -620,7 +620,7 @@ bool SongStatusMgr::UpdateSong(
             status.mStatusData[difficulty].mStars = stars;
             status.mStatusData[difficulty].mNoFlashcards = b11;
             if (5 <= stars) {
-                status.mStatusData[difficulty].unk10 = b11;
+                status.mStatusData[difficulty].mFiveStarNoFlashcards = b11;
             }
             DateTime dt;
             status.mStatusData[difficulty].mNeedUpload = !b10;

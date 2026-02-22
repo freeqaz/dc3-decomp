@@ -40,7 +40,7 @@ public:
     void SyncToPanel(UIPanel *);
     void SetTertiaryLabels(DataArray *);
 
-    bool GetUnk7a() const { return unk7a; }
+    bool IsSaving() const { return mSaving; }
     bool AllowController() const { return mAllowController; }
 
     DataNode OnEnterBlacklightMode(const DataArray *);
@@ -61,13 +61,13 @@ private:
 
     HamNavList *mLeftHandNavList; // 0x3c
     RndGroup *mAll; // 0x40
-    bool unk44;
-    Timer unk48;
-    bool unk78;
+    bool mSaveDeactivationPending;
+    Timer mSaveDeactivationTimer;
+    bool mDisabled;
     bool mAllowController; // 0x79
-    bool unk7a;
-    bool unk7b;
+    bool mSaving;
+    bool mWriteIconShowing;
     bool mWaveGestureEnabled; // 0x7c
-    Timer unk80;
-    UIPanel *unkb0;
+    Timer mWriteIconTimer;
+    UIPanel *mSyncedPanel;
 };

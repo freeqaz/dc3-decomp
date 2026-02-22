@@ -106,7 +106,7 @@ void SpotlightDrawer::DrawBeams(
 ) {
     MILO_ASSERT(spotIter != spotEnd, 0x2c7);
     for (; spotIter != spotEnd; ++spotIter) {
-        Spotlight *sl = spotIter->unk4;
+        Spotlight *sl = spotIter->mSpotlight;
         Spotlight::BeamDef &def = sl->mBeam;
         if (def.mBeam) {
             MILO_ASSERT(def.mBeam->Showing(), 0x2e4);
@@ -121,7 +121,7 @@ void SpotlightDrawer::DrawFlares(
 ) {
     MILO_ASSERT(spotIter != spotEnd, 0x2f4);
     for (; spotIter != spotEnd; ++spotIter) {
-        Spotlight *sl = spotIter->unk4;
+        Spotlight *sl = spotIter->mSpotlight;
         if (sl->GetFlare() && sl->GetFlare()->GetMat()) {
             sl->GetFlare()->Draw();
         }
@@ -134,7 +134,7 @@ void SpotlightDrawer::DrawAdditional(
 ) {
     MILO_ASSERT(spotIter != spotEnd, 0x298);
     for (; spotEnd != spotIter; ++spotIter) {
-        Spotlight *sl = spotIter->unk4;
+        Spotlight *sl = spotIter->mSpotlight;
         auto _tmp0 = sl->GetAdditionalObjects();
         FOREACH (it, _tmp0) {
             RndDrawable *add = *it;
@@ -151,7 +151,7 @@ void SpotlightDrawer::DrawLenses(
 ) {
     MILO_ASSERT(spotIter != spotEnd, 0x2b1);
     for (; spotEnd != spotIter; ++spotIter) {
-        Spotlight *sl = spotIter->unk4;
+        Spotlight *sl = spotIter->mSpotlight;
         if (Spotlight::sDiskMesh) {
             MILO_ASSERT(sl->LensMesh(), 0x2b9);
             Spotlight::sDiskMesh->SetMat(sl->LensMesh());

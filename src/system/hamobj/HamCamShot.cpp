@@ -125,7 +125,7 @@ void HamCamShot::StartAnim() {
     for (ObjList<Target>::iterator it = mTargets.begin(); it != mTargets.end(); ++it) {
         if (!it->mTarget.Null()) {
             std::list<TargetCache>::iterator cache = CreateTargetCache(it->mTarget);
-            Character *theChar = dynamic_cast<Character *>(cache->unk4);
+            Character *theChar = dynamic_cast<Character *>(cache->mTrans);
             if (theChar) {
                 theChar->SetSelfShadow(it->mSelfShadow);
                 theChar->SetLodType((LODType)it->mForceLOD);
@@ -190,8 +190,8 @@ bool HamCamShot::IterateNextShot() {
 void HamCamShot::Target::Store(HamCamShot *shot) {
     if (!mTarget.Null()) {
         std::list<TargetCache>::iterator it = shot->CreateTargetCache(mTarget);
-        if (it->unk4) {
-            mTo = it->unk4->LocalXfm();
+        if (it->mTrans) {
+            mTo = it->mTrans->LocalXfm();
         }
         HamCamShot::sCache.erase(it);
     }
@@ -208,8 +208,8 @@ void HamCamShot::Target::UpdateTarget(Symbol s, HamCamShot *shot) {
 std::list<HamCamShot::TargetCache>::iterator HamCamShot::CreateTargetCache(Symbol s) {
     TargetCache cache;
     sCache.push_back(cache);
-    cache.unksym = s;
-    cache.unk4 = FindTarget(s);
+    cache.mTargetName = s;
+    cache.mTrans = FindTarget(s);
     return sCache.begin();
 }
 

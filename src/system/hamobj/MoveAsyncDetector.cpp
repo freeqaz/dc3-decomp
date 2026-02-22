@@ -126,9 +126,8 @@ MoveDetector *MoveAsyncDetector::FindDetector(const HamMove *move) {
     std::pair<std::vector<MoveDetector *>::iterator, std::vector<MoveDetector *>::iterator>
         range = std::equal_range(mDetectors.begin(), mDetectors.end(), move, MoveDetectorCmp());
     if (range.first == range.second) {
-        DancerSequence *seq = move->GetDancerSequence();
-        if (seq) {
-            const DancerFrame *frame = &seq->GetDancerFrames().front();
+        if (move->GetDancerSequence()) {
+            const DancerFrame *frame = &move->GetDancerSequence()->GetDancerFrames().front();
             MoveDetector *detector =
                 new MoveDetector(move->FilterVer(), move, frame);
             mDetectors.push_back(detector);

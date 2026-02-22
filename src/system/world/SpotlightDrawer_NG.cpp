@@ -33,11 +33,11 @@ void GetLightPosition(Spotlight *s, Vector3 &v) {
 }
 
 NgSpotlightDrawer::NgSpotlightDrawer()
-    : unk94(), unk98(this), mFogDensityMap(0), unkb0(false) {
-    unk94 = Hmx::Object::New<RndCam>();
+    : mSpotCam(), mSavedCam(this), mFogDensityMap(0), unkb0(false) {
+    mSpotCam = Hmx::Object::New<RndCam>();
 }
 
-NgSpotlightDrawer::~NgSpotlightDrawer() { RELEASE(unk94); }
+NgSpotlightDrawer::~NgSpotlightDrawer() { RELEASE(mSpotCam); }
 
 void NgSpotlightDrawer::EndWorld() {
     if (SpotlightDrawer::sNeedDraw) {
@@ -113,8 +113,8 @@ void NgSpotlightDrawer::SetXSectionTexture(const Spotlight::BeamDef &def) {
 }
 
 bool NgSpotlightDrawer::RestoreCam() {
-    if (unk98) {
-        unk98->Select();
+    if (mSavedCam) {
+        mSavedCam->Select();
     } else {
         TheRnd.GetDefaultCam()->Select();
     }

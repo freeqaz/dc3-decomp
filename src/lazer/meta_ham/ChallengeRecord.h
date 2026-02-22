@@ -10,11 +10,11 @@ public:
     ChallengeRecord &operator=(const ChallengeRecord &other);
 
     ChallengeRow &GetChallengeRow() { return mRow; }
-    Symbol GetUnk40() { return mSongShortName; }
-    Symbol GetUnk44() { return mSongTitle; }
-    Symbol GetUnk48() { return mChallengerGamertag; }
-    Symbol GetUnk4c() { return mMissionInfo; }
-    int GetUnk50() { return mSongContentLockState; }
+    Symbol GetSongShortName() { return mSongShortName; }
+    Symbol GetSongTitle() { return mSongTitle; }
+    Symbol GetChallengerGamertag() { return mChallengerGamertag; }
+    Symbol GetMissionInfo() { return mMissionInfo; }
+    int GetSongContentLockState() { return mSongContentLockState; }
 
 private:
     ChallengeRow mRow; // 0x4

@@ -45,7 +45,7 @@ END_LOADS
 
 bool FlowWhile::Activate() {
     FLOW_LOG("Activated \n");
-    unk58 = false;
+    mStopRequested = false;
     if (IsRunning()) {
         MILO_NOTIFY(
             "FlowWhile re-entrance error, activated when already running, forcing stop, check your logic"

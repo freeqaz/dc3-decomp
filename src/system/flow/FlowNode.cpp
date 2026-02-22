@@ -14,7 +14,7 @@ bool FlowNode::sPushDrivenProperties = false;
 
 FlowNode::FlowNode()
     : mChildNodes(this, (EraseMode)0, kObjListNoNull), mRunningNodes(this),
-      mFlowParent(nullptr), mDrivenPropEntries(this), unk58(0) {
+      mFlowParent(nullptr), mDrivenPropEntries(this), mStopRequested(0) {
     mDebugOutput = false;
 }
 
@@ -126,7 +126,7 @@ void FlowNode::Load(BinStream &bs) {
     if (d.rev > 0) {
         bool unk;
         d >> unk;
-        unk58 = unk;
+        mStopRequested = unk;
     }
     if (d.rev > 1) {
         d >> mDebugComment;
@@ -160,10 +160,10 @@ void FlowNode::SetParent(class FlowNode *new_parent, bool b) {
 
 bool FlowNode::Activate() {
     FLOW_LOG("Activating Children\n");
-    unk58 = false;
+    mStopRequested = false;
     FOREACH (it, mChildNodes) {
         ActivateChild(*it);
-        if (unk58)
+        if (mStopRequested)
             break;
     }
     return !mRunningNodes.empty();
@@ -194,7 +194,7 @@ void FlowNode::ChildFinished(FlowNode *node) {
 
 void FlowNode::RequestStop() {
     FLOW_LOG("RequestStop\n");
-    unk58 = true;
+    mStopRequested = true;
     auto it = mRunningNodes.begin();
     while (it != mRunningNodes.end()) {
         auto next_it = it;
@@ -206,7 +206,7 @@ void FlowNode::RequestStop() {
 
 void FlowNode::RequestStopCancel() {
     FLOW_LOG("RequestStopCancel\n");
-    unk58 = false;
+    mStopRequested = false;
     FOREACH (it, mRunningNodes) {
         (*it)->RequestStopCancel();
     }
@@ -289,7 +289,7 @@ Flow *FlowNode::GetTopFlow() {
 
 void FlowNode::ActivateLabel(FlowLabel *label) {
     FLOW_LOG("Activating Label:%s\n", label->Label());
-    unk58 = false;
+    mStopRequested = false;
     mRunningNodes.push_back(label);
     if (!label->Activate(this)) {
         mRunningNodes.remove(label);

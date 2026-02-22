@@ -51,7 +51,7 @@ DxRnd::DxRnd()
       mD3DDevice(nullptr),
       mFocusWindow(0),
       mDeviceType(D3DDEVTYPE_HAL),
-      unk_0x301(1),
+      mReverseZ(1),
       mAsyncSwapNext(false),
       mAsyncSwapCurrent(false),
       mPerfCounterStart(nullptr),
@@ -281,7 +281,7 @@ void DxRnd::Present() {
 void DxRnd::UpdateScalerParams() {
     float width = (float)mVideoMode.dwDisplayWidth;
     float height = (float)mVideoMode.dwDisplayHeight;
-    bool letterbox = mAspect == kLetterbox && !unk1f8;
+    bool letterbox = mAspect == kLetterbox && !mLowRes;
     // Letterbox: constrain to 16:9 aspect ratio (9/16 = 0.5625)
     if (letterbox && width * 0.5625f < height) {
         height = width * 0.5625f;
@@ -614,11 +614,11 @@ void DxRnd::InitBuffers() {
     } else if (SystemConfig(rnd)->FindInt(low_res) != 0) {
         mFlags |= 1;
     }
-    unk1f8 = mFlags & 1;
-    mAspect = unk1f8 ? kWidescreen : kRegular;
-    mHeight = unk1f8 ? 540 : 720;
+    mLowRes = mFlags & 1;
+    mAspect = mLowRes ? kWidescreen : kRegular;
+    mHeight = mLowRes ? 540 : 720;
     int i11, i10;
-    if (mVideoMode.fIsHiDef != 0 || unk1f8 != 0) {
+    if (mVideoMode.fIsHiDef != 0 || mLowRes != 0) {
         i11 = (mHeight << 4) / 9;
         i10 = (mHeight << 4) / 9;
     } else {
@@ -798,8 +798,8 @@ void DxRnd::DoPointTests() {
     D3DDevice_SetRenderState_ZWriteEnable(TheDxRnd.Device(), 0);
     D3DDevice_SetRenderState_ZEnable(TheDxRnd.Device(), 1);
 
-    // Set z-compare function based on unk_0x301
-    D3DDevice_SetRenderState_ZFunc(TheDxRnd.Device(), (D3DCMPFUNC)(unk_0x301 ? 3 : 1));
+    // Set z-compare function based on mReverseZ
+    D3DDevice_SetRenderState_ZFunc(TheDxRnd.Device(), (D3DCMPFUNC)(mReverseZ ? 3 : 1));
 
     // Set point size
     float pointSize = 1.0f;

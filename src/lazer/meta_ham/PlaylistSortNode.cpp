@@ -81,7 +81,7 @@ void PlaylistSortNode::Text(UIListLabel *uiListLabel, UILabel *uiLabel) const {
     } else if (uiListLabel->Matches("duration")) {
         HamLabel *pHamLabel = app_label;
         MILO_ASSERT(pHamLabel, 0x12d);
-        int duration = unk4c->GetDuration();
+        int duration = mPlaylist->GetDuration();
         if (duration > 0) {
             uiLabel->SetTimeHMS(duration, false);
             return;

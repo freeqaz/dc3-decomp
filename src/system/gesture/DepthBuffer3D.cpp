@@ -25,7 +25,7 @@ DepthBuffer3D::DepthBuffer3D()
       mDebugLayout(0), mNobodyColor(0, 0, 0, 0), mPlayerPalette(this), mBoxymanPalette(this),
       mBoxymanPaletteAnim(1), mPlayerPaletteOffset(0), mPlayerPaletteScale(1), mMinimalMat(this),
       mMesh(this), mStretchNearCamera(1), mOpacity(1), mPlayer1Grooviness(0), mPlayer2Grooviness(0),
-      mForceDrawSkeletonIdx(0xfffffc19), mForceDrawEnabled(1), unk18c(this), mTile(1.5, 1.5), mScaleVoxel(1),
+      mForceDrawSkeletonIdx(0xfffffc19), mForceDrawEnabled(1), mPlayerPaletteTex(this), mTile(1.5, 1.5), mScaleVoxel(1),
       mScaleVoxelGap(1), mFishEyeX(0), mFishEyeY(0), mGroovinessDetector1(this), mGroovinessDetector2(this),
       unk20c(80, 4, 4), unk220(40, 4, 4), unk234(60, 3, 3), unk248(30, 3, 3),
       unk25c(2048, 204.8f, 204.8f), unk270(4096, 204.8f, 204.8f), mMaxZoom(1),

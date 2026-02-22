@@ -67,7 +67,7 @@ void CampaignMqCrewProvider::UpdateList() {
             int x = 0; // Stars earned
             TheHamSongMgr.GetCrewStarsForDifficulty(pProfile, curSym, mqDiff, x, y);
             // Mark crew as complete if all stars earned
-            TheCampaign->SetUnkC0At(curSym, y - x == 0);
+            TheCampaign->SetCrewComplete(curSym, y - x == 0);
             // Only add crews that have stars available
             if (y) {
                 mMQCrews.push_back(curSym);

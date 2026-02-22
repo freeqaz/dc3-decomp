@@ -17,7 +17,7 @@ namespace {
 }
 
 PhysicsVolume::PhysicsVolume()
-    : mDetectionVolume(nullptr), mShapeType(kPhysicsVolumeBox), unk124(0),
+    : mDetectionVolume(nullptr), mShapeType(kPhysicsVolumeBox), mOverlapCount(0),
       mDirectionalForce(Vector3::ZeroVec()), mTangentialForce(Vector3::ZeroVec()),
       mDirectionalVelocity(Vector3::ZeroVec()), mRadialForce(0),
       mFilter(kCollidePhysicsVolumeDynamicFixed), mActive(true),
@@ -74,7 +74,7 @@ BEGIN_COPYS(PhysicsVolume)
     CREATE_COPY(PhysicsVolume)
     BEGIN_COPYING_MEMBERS
         COPY_MEMBER(mShapeType)
-        COPY_MEMBER(unk124)
+        COPY_MEMBER(mOverlapCount)
         COPY_MEMBER(unk128)
         COPY_MEMBER(mDirectionalForce)
         COPY_MEMBER(mTangentialForce)
@@ -115,7 +115,7 @@ void PhysicsVolume::Poll() {
                 mDetectionVolume->ApplyDirectionalLinearVelocity(mDirectionalVelocity);
             }
         }
-        if (unk124) {
+        if (mOverlapCount) {
             if (mReportOnOverlaps) {
                 static Symbol while_has_overlaps("while_has_overlaps");
                 Handle(Message(while_has_overlaps, this), false);
@@ -132,14 +132,14 @@ void PhysicsVolume::Enter() {
 void PhysicsVolume::OnCollidableEnter(Hmx::Object *object, ObjectDir *dir) {
     static Symbol object_enter("object_enter");
     Handle(Message(object_enter, this, object, dir), false);
-    unk124++;
+    mOverlapCount++;
 }
 
 void PhysicsVolume::OnCollidableExit(Hmx::Object *object, ObjectDir *dir) {
     static Symbol object_exit("object_exit");
     Handle(Message(object_exit, this, object, dir), false);
-    if (--unk124 < 0) {
-        unk124 = 0;
+    if (--mOverlapCount < 0) {
+        mOverlapCount = 0;
     }
 }
 

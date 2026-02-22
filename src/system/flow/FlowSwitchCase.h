@@ -41,5 +41,5 @@ protected:
     /** "Use the last value to compare against" */
     bool mUseLastValue; // 0x98
     bool mUnregisterParent; // 0x99
-    bool unk9a; // 0x9a
+    bool mContinuous; // 0x9a
 };

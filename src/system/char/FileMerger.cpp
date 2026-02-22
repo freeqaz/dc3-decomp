@@ -69,7 +69,7 @@ void FileMerger::Merger::Clear(bool shouldDraw) {
         mLoadedSubdirs.clear();
     }
     // Finish any pending drawing operations
-    if (shouldDraw && !TheRnd.GetUnk1b4()) {
+    if (shouldDraw && !TheRnd.GetReleaseImmediate()) {
         TheRnd.BeginDrawing();
         TheRnd.EndDrawing();
     }
@@ -320,7 +320,7 @@ void FileMerger::DeleteCurLoader() {
     if (mCurLoader) {
         DirLoader *d = dynamic_cast<DirLoader *>(mCurLoader);
         if (d)
-            d->SetUnk99(true);
+            d->SetForceFailCallback(true);
         delete mCurLoader;
     }
 }

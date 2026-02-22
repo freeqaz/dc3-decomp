@@ -94,7 +94,7 @@ void FailAppendCallback(FixedString &str) {
 #pragma region UIManager
 
 UIManager::UIManager()
-    : mWentBack(0), mMaxPushDepth(100), mJoyClient(0), mCurrentScreen(0), unk50(0),
+    : mWentBack(0), mMaxPushDepth(100), mJoyClient(0), mCurrentScreen(0), mSink(0),
       mOverloadHorizontalNav(0), mCancelTransitionNotify(0), mDefaultAllowEditText(1),
       mDisableScreenBlacklight(0), mOverlay(0), mAutomator(0), unkd0(0) {}
 

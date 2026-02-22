@@ -18,7 +18,7 @@ public:
     };
 
     struct CharCollideStruct {
-        int unk0;
+        int vertIdx;
         Vector3 vec;
     };
 

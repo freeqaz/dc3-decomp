@@ -121,8 +121,8 @@ public:
     HamProfile *CriticalProfile() const { return mCriticalProfile; }
     bool DisableVoice() const { return mDisableVoice; }
 
-    int GetUnk4c() { return unk4c; }
-    void SetUnk4c(int i) { unk4c = i; };
+    int GetWeightUnits() const { return mWeightUnits; }
+    void SetWeightUnits(int i) { mWeightUnits = i; }
     void SetGlobalOptionsDirty(bool b) { mGlobalOptionsDirty = b; }
     bool Mono() const { return mMono; }
 
@@ -142,7 +142,7 @@ protected:
     bool mGlobalOptionsDirty; // 0x44
     bool unk45;
     int mTutorialsSeen; // 0x48
-    int unk4c; // 0x4c - mPreferredWeightUnits? 0 = pounds, 1 = kilograms
+    int mWeightUnits; // 0x4c - 0=pounds, 1=kilograms
     int mMusicVolume; // 0x50
     int mFxVolume; // 0x54
     int mCrowdVolume; // 0x58
@@ -168,7 +168,7 @@ protected:
     int mSystemLanguage; // 0x84
     DataArray *mSliderConfig; // 0x88
     DataArray *mVoiceChatSliderConfig; // 0x8c
-    std::vector<HamProfile *> unk90;
+    std::vector<HamProfile *> mProfiles;
     HamProfile *mCriticalProfile; // 0x9c
     bool mAllUnlocked; // 0xa0
     void *mProfileSaveBuffer; // 0xa4

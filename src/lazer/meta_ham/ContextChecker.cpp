@@ -265,8 +265,8 @@ namespace {
 }
 
 struct WeightedEntry {
-    int unk0;
-    Symbol unk4;
+    int mCumulativeWeight;
+    Symbol mSymbol;
 };
 
 void HandleContextUsed(Symbol ctx) { gUsedContexts.insert(ctx); }
@@ -324,8 +324,8 @@ void PotentiallyCreateAndAddEntry(
     }
     WeightedEntry entry;
     iref += x;
-    entry.unk0 = iref;
-    entry.unk4 = s;
+    entry.mCumulativeWeight = iref;
+    entry.mSymbol = s;
     entries.push_back(entry);
 }
 
@@ -366,8 +366,8 @@ Symbol RandomContextSensitiveItemInternal(const DataArray *a, bool b2, bool fail
     } else {
         int randInt = gContextRand.Int(0, inq);
         for (int i = 0; i < entries.size(); i++) {
-            if (randInt < entries[i].unk0) {
-                Symbol cur = entries[i].unk4;
+            if (randInt < entries[i].mCumulativeWeight) {
+                Symbol cur = entries[i].mSymbol;
                 HandleContextUsed(cur);
                 return cur;
             }

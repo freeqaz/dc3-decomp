@@ -81,7 +81,7 @@ public:
     XVIDEO_MODE *VideoMode() { return &mVideoMode; }
     void AutoRelease(D3DResource *r) {
         if (r) {
-            if (unk1b4) {
+            if (mReleaseImmediate) {
                 MILO_ASSERT(CurrentThreadId() != TheSplasher->SplashThreadId(), 0xF4);
                 D3DResource_Release(r);
             } else {
@@ -91,7 +91,7 @@ public:
     }
     void AutoDelete(D3DBaseTexture *t) {
         if (t) {
-            if (unk1b4) {
+            if (mReleaseImmediate) {
                 MILO_ASSERT(CurrentThreadId() != TheSplasher->SplashThreadId(), 0x105);
                 UINT data;
                 XGGetTextureLayout(
@@ -115,7 +115,7 @@ public:
         }
     }
 
-    u8 Unk301() const { return unk_0x301; }
+    u8 ReverseZ() const { return mReverseZ; }
     D3DSurface *BackBuffer() const;
     void PreInit(HWND__ *);
     void Init(HWND__ *);
@@ -177,7 +177,7 @@ private:
     int unk2cc;
     Timer unk2d0;
     bool unk300;
-    u8 unk_0x301;
+    u8 mReverseZ;
     std::vector<D3DResource *> mPendingReleases; // 0x304
     std::vector<D3DBaseTexture *> mPendingDeletes; // 0x310
     XVIDEO_MODE mVideoMode; // 0x31c

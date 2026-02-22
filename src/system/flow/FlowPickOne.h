@@ -37,7 +37,7 @@ protected:
 
     void OnChoiceTypeChanged();
 
-    ObjPtrVec<FlowNode> unk5c; // 0x5c
+    ObjPtrVec<FlowNode> mChoiceHistory; // 0x5c
     /** "Style of choice made" */
     ChoiceType mChoiceType; // 0x78
     /** "The child to pick (0 is first child)" */

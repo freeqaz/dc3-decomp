@@ -120,7 +120,7 @@ void TexMovie::DrawPreClear() {
 void TexMovie::UpdatePreClearState() {
     if (!mEntered)
         return;
-    TheRnd.PreClearDrawAddOrRemove(this, true, TheRnd.GetUnk1b4());
+    TheRnd.PreClearDrawAddOrRemove(this, true, TheRnd.GetReleaseImmediate());
 }
 
 void TexMovie::Poll() {

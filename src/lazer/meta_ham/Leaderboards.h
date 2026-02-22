@@ -56,7 +56,7 @@ protected:
     int mType; // 0x84
     int mMode; // 0x88
     int unk8c;
-    int unk90; // 0x90 - song id?
+    int mCurrentSongID; // 0x90
     bool mFetchingScores; // 0x94
     GetLeaderboardByPlayerJob *mLeaderboardJob; // 0x98
     bool mDisconnected; // 0x9c

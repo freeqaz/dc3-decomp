@@ -52,7 +52,7 @@ bool CompareType(const Playlist *p1, const Playlist *p2) {
 }
 
 // TODO: Remove once HandleCmdGetPlaylistsFromRC is implemented
-// (unkd0 vector ops will trigger Playlist::operator= naturally)
+// (mCustomPlaylists vector ops will trigger Playlist::operator= naturally)
 void _force_playlist_assign(Playlist &a, const Playlist &b) { a = b; }
 
 PlaylistSortMgr *ThePlaylistSortMgr;
@@ -61,10 +61,10 @@ PlaylistSortMgr::PlaylistSortMgr(SongPreview &sp) : NavListSortMgr(sp) {
     SetName("playlist_sort_mgr", ObjectDir::Main());
     mSorts.push_back(new PlaylistSortByType());
     static Symbol never_use("never_use");
-    unk84.SetName(never_use);
-    unkb0 = gNullStr;
-    unkb8 = gNullStr;
-    unkc8 = false;
+    mCustomPlaylist.SetName(never_use);
+    mProfileName = gNullStr;
+    mOnlineID = gNullStr;
+    mProcessingCommand = false;
 }
 
 PlaylistSortMgr::~PlaylistSortMgr() {}
@@ -83,7 +83,7 @@ bool PlaylistSortMgr::IsProfileChanged() {
     } else {
         name = gNullStr;
     }
-    return unkb0 != name;
+    return mProfileName != name;
 }
 
 void PlaylistSortMgr::OnSmartGlassListen(int i) {
@@ -101,13 +101,13 @@ bool PlaylistSortMgr::HasValidProfile() {
         if (pProfile->IsSignedIn()) {
             int padNum = pProfile->GetPadNum();
             if (ThePlatformMgr.IsSignedIntoLive(padNum) && TheRockCentral.IsOnline()) {
-                unkb0 = pProfile->GetName();
+                mProfileName = pProfile->GetName();
                 QueueCmdChangeProfileOnlineID(pProfile->GetOnlineID()->ToString());
                 return true;
             }
         }
     }
-    unkb0 = gNullStr;
+    mProfileName = gNullStr;
     QueueCmdChangeProfileOnlineID(gNullStr);
     return false;
 }
@@ -117,12 +117,12 @@ void PlaylistSortMgr::StartCmdGetPlaylistsFromRC() {
     if (pProfile && pProfile->IsSignedIn()) {
         int padNum = pProfile->GetPadNum();
         if (ThePlatformMgr.IsSignedIntoLive(padNum) && TheRockCentral.IsOnline()) {
-            MILO_LOG("MY PORFILE ID: %s\n", unkb8.c_str());
+            MILO_LOG("MY PORFILE ID: %s\n", mOnlineID.c_str());
             MILO_LOG("ACTUAL PORFILE ID: %s\n", pProfile->GetOnlineID()->ToString());
         }
     }
-    unkcc = new GetPlaylistsJob(this, unkb8.c_str());
-    TheRockCentral.ManageJob(unkcc);
+    mCurrentJob = new GetPlaylistsJob(this, mOnlineID.c_str());
+    TheRockCentral.ManageJob(mCurrentJob);
 }
 
 void PlaylistSortMgr::FakeAddPlaylistsToRC() {
@@ -192,27 +192,27 @@ void PlaylistSortMgr::OnEnter() {
 }
 
 void PlaylistSortMgr::StartCmdGetPlaylistFromRC() {
-    QueueableCommand *cmd = unkc0.front();
-    unkcc = new GetPlaylistJob(this, unkb8.c_str(), cmd->unk4.i);
-    TheRockCentral.ManageJob(unkcc);
+    QueueableCommand *cmd = mCommandQueue.front();
+    mCurrentJob = new GetPlaylistJob(this, mOnlineID.c_str(), cmd->mData.i);
+    TheRockCentral.ManageJob(mCurrentJob);
 }
 
 void PlaylistSortMgr::StartCmdAddPlaylistToRC() {
-    QueueableCommand *cmd = unkc0.front();
-    unkcc = new AddPlaylistJob(this, unkb8.c_str(), cmd->unk4.playlist);
-    TheRockCentral.ManageJob(unkcc);
+    QueueableCommand *cmd = mCommandQueue.front();
+    mCurrentJob = new AddPlaylistJob(this, mOnlineID.c_str(), cmd->mData.playlist);
+    TheRockCentral.ManageJob(mCurrentJob);
 }
 
 void PlaylistSortMgr::StartCmdDeletePlaylistFromRC() {
-    QueueableCommand *cmd = unkc0.front();
-    unkcc = new DeletePlaylistJob(this, unkb8.c_str(), cmd->unk4.i);
-    TheRockCentral.ManageJob(unkcc);
+    QueueableCommand *cmd = mCommandQueue.front();
+    mCurrentJob = new DeletePlaylistJob(this, mOnlineID.c_str(), cmd->mData.i);
+    TheRockCentral.ManageJob(mCurrentJob);
 }
 
 void PlaylistSortMgr::StartCmdEditPlaylist() {
-    QueueableCommand *cmd = unkc0.front();
-    unkcc = new EditPlaylistJob(this, unkb8.c_str(), cmd->unk4.playlist);
-    TheRockCentral.ManageJob(unkcc);
+    QueueableCommand *cmd = mCommandQueue.front();
+    mCurrentJob = new EditPlaylistJob(this, mOnlineID.c_str(), cmd->mData.playlist);
+    TheRockCentral.ManageJob(mCurrentJob);
 }
 
 DataNode PlaylistSortMgr::OnMsg(SmartGlassMsg const &) {
@@ -224,34 +224,34 @@ DataNode PlaylistSortMgr::OnMsg(SmartGlassMsg const &) {
 
 void PlaylistSortMgr::QueueCmdAddPlaylistToRC(Playlist *pl) {
     CmdAddPlaylistToRC *cmd = new CmdAddPlaylistToRC(pl);
-    unkc0.push_back(cmd);
-    if (!unkc8) {
+    mCommandQueue.push_back(cmd);
+    if (!mProcessingCommand) {
         ProcessNextCommand();
     }
 }
 
 void PlaylistSortMgr::QueueCmdDeletePlaylistFromRC(int i) {
     CmdDeletePlaylistFromRC *cmd = new CmdDeletePlaylistFromRC(i);
-    unkc0.push_back(cmd);
-    if (!unkc8) {
+    mCommandQueue.push_back(cmd);
+    if (!mProcessingCommand) {
         ProcessNextCommand();
     }
 }
 
 void PlaylistSortMgr::QueueCmdEditPlaylist(Playlist *pl) {
     CmdEditPlaylist *cmd = new CmdEditPlaylist(pl);
-    unkc0.push_back(cmd);
-    if (!unkc8) {
+    mCommandQueue.push_back(cmd);
+    if (!mProcessingCommand) {
         ProcessNextCommand();
     }
 }
 
 void PlaylistSortMgr::ProcessNextCommand() {
-    if (unkc0.size() == 0) {
-        unkc8 = false;
+    if (mCommandQueue.size() == 0) {
+        mProcessingCommand = false;
     } else {
-        unkc8 = true;
-        QueueableCommand *cmd = unkc0.front();
+        mProcessingCommand = true;
+        QueueableCommand *cmd = mCommandQueue.front();
         switch (cmd->GetType()) {
         case 0:
             HandleCmdChangeProfileOnlineID();
@@ -282,13 +282,13 @@ void PlaylistSortMgr::ResolvePlaylists() {
     HamProfile *activeProfile = TheProfileMgr.GetActiveProfile(true);
     if (activeProfile) {
         const char *profileName = activeProfile->GetName();
-        bool flag = unkb0 != profileName;
+        bool flag = mProfileName != profileName;
         if (!flag) {
-            int count = (int)unkd0.size();
+            int count = (int)mCustomPlaylists.size();
             for (int i = 0; i < count; i++) {
                 Playlist *playlist = &activeProfile->GetPlaylist(i);
                 CustomPlaylist *cusPlaylist = dynamic_cast<CustomPlaylist *>(playlist);
-                cusPlaylist->Copy(&unkd0[i]);
+                cusPlaylist->Copy(&mCustomPlaylists[i]);
                 cusPlaylist->SetParentProfile(activeProfile);
             }
         }
@@ -304,7 +304,7 @@ void PlaylistSortMgr::ResolvePlaylists() {
             TheSaveLoadMgr->AutoSave();
         }
         BroadcastSyncMsg("playlists_synced");
-        if (unkd0.size() > 0) {
+        if (mCustomPlaylists.size() > 0) {
             SendPassiveMsg("playlist_syned_with_rc");
         }
         return;
@@ -314,33 +314,33 @@ void PlaylistSortMgr::ResolvePlaylists() {
 
 void PlaylistSortMgr::HandleCmdDeletePlaylistFromRC() {
     MILO_LOG("===== HandleCmdDeletePlaylistFromRC\n");
-    unkcc = nullptr;
-    RELEASE(unkc0.front());
-    unkc0.pop_front();
+    mCurrentJob = nullptr;
+    RELEASE(mCommandQueue.front());
+    mCommandQueue.pop_front();
     ProcessNextCommand();
 }
 
 void PlaylistSortMgr::HandleCmdAddPlaylistToRC() {
     MILO_LOG("===== HandleCmdAddPlaylistToRC\n");
-    ((AddPlaylistJob *)unkcc)->GetPlaylistID(unkc0.front()->unk4.customPlaylist);
-    unkcc = nullptr;
-    RELEASE(unkc0.front());
-    unkc0.pop_front();
+    ((AddPlaylistJob *)mCurrentJob)->GetPlaylistID(mCommandQueue.front()->mData.customPlaylist);
+    mCurrentJob = nullptr;
+    RELEASE(mCommandQueue.front());
+    mCommandQueue.pop_front();
     ProcessNextCommand();
 }
 
 void PlaylistSortMgr::HandleCmdResolvePlaylists() {
     MILO_LOG("===== HandleCmdResolvePlaylists\n");
     ResolvePlaylists();
-    RELEASE(unkc0.front());
-    unkc0.pop_front();
+    RELEASE(mCommandQueue.front());
+    mCommandQueue.pop_front();
     ProcessNextCommand();
 }
 
 void PlaylistSortMgr::HandleCmdEditPlaylist() {
-    unkcc = nullptr;
-    RELEASE(unkc0.front());
-    unkc0.pop_front();
+    mCurrentJob = nullptr;
+    RELEASE(mCommandQueue.front());
+    mCommandQueue.pop_front();
     ProcessNextCommand();
 }
 

@@ -59,13 +59,13 @@ public:
     void ResetCombo();
     void SetActive(bool);
     void AnimateOut();
-    bool Unk2a8Check() const { return unk2a5 && mFramesSinceLastTrigger > 12; }
+    bool ShouldAutoPass() const { return mAutoPass && mFramesSinceLastTrigger > 12; }
     int GetScore() const { return mScore; }
     int GetZoneLevel() const { return mZoneLevel; }
     int GetPrevInTheZone() const { return mPrevInTheZone; }
     float GetComboMeter() const { return mComboMeter; }
-    void SetUnk2a4(bool b) { unk2a4 = b; }
-    void SetUnk2a5(bool b) { unk2a5 = b; }
+    void SetSuppressRhythm(bool b) { mSuppressRhythm = b; }
+    void SetAutoPass(bool b) { mAutoPass = b; }
     int ZoneValue() const { return mInTheZone; }
 
 protected:
@@ -139,7 +139,7 @@ private:
     Symbol mSwagJackedState;
     int unk29c;
     float mPrevMaxFootY; // 0x2a0 - previous max foot Y for jump detection
-    bool unk2a4;
-    bool unk2a5;
+    bool mSuppressRhythm;
+    bool mAutoPass;
     int mFramesSinceLastTrigger; // 0x2a8 - incremented in UpdateScore
 };

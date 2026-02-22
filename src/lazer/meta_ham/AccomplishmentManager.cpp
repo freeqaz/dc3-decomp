@@ -52,7 +52,7 @@ AccomplishmentManager::AccomplishmentManager(DataArray *cfg) {
     ConfigureAccomplishmentGroupToCategoriesData();
     ConfigureAccomplishmentRewardData(cfg->FindArray("accomplishment_rewards"));
     for (int i = 0; i < 2; i++) {
-        unk30[i] = false;
+        mSigninChanged[i] = false;
     }
     TheContentMgr.RegisterCallback(this, false);
 }
@@ -138,9 +138,9 @@ void AccomplishmentManager::InitializeDiscSongs() {
 
 void AccomplishmentManager::AddGoalAcquisitionInfo(Symbol s1, const char *cc, Symbol s2) {
     GoalAcquisitionInfo info;
-    info.unk0 = s1;
-    info.unk4 = cc;
-    info.unkc = s2;
+    info.mAccomplishment = s1;
+    info.mPlayerName = cc;
+    info.mSong = s2;
     mGoalAcquisitionInfos.push_back(info);
 }
 
@@ -606,7 +606,7 @@ void AccomplishmentManager::EarnAccomplishmentForProfile(
             EarnAccomplishmentForAll(s2, false);
         } else if (profile) {
             int padnum = profile->GetPadNum();
-            if (!unk30[padnum]
+            if (!mSigninChanged[padnum]
                 && !profile->GetAccomplishmentProgress().IsAccomplished(s2)) {
                 profile->EarnAccomplishment(s2);
                 int ctxID = pAcc->GetContextID();
@@ -626,7 +626,7 @@ void AccomplishmentManager::EarnAccomplishmentForAll(Symbol s1, bool b2) {
             HamPlayerData *pPlayer = TheGameData->Player(i);
             MILO_ASSERT(pPlayer, 0x2F5);
             int padnum = pPlayer->PadNum();
-            if (!unk30[padnum]) {
+            if (!mSigninChanged[padnum]) {
                 HamProfile *profile = TheProfileMgr.GetProfileFromPad(padnum);
                 if (profile && profile->HasValidSaveData() && pPlayer->IsPlaying()) {
                     if (!profile->GetAccomplishmentProgress().IsAccomplished(s1)) {
@@ -740,7 +740,7 @@ void AccomplishmentManager::EarnAccomplishmentForPlayer(int i_iPlayerIndex, Symb
     MILO_ASSERT_RANGE(i_iPlayerIndex, 0, 2, 0x282);
     HamPlayerData *pPlayer = TheGameData->Player(i_iPlayerIndex);
     MILO_ASSERT(pPlayer, 0x285);
-    if (!unk30[pPlayer->PadNum()]) {
+    if (!mSigninChanged[pPlayer->PadNum()]) {
         HamProfile *profile = TheProfileMgr.GetProfileFromPad(pPlayer->PadNum());
         if (profile) {
             EarnAccomplishmentForProfile(profile, s, true);
@@ -937,7 +937,7 @@ DataNode AccomplishmentManager::OnMsg(const SigninChangedMsg &msg) {
             HamProfile *profile = TheProfileMgr.GetProfileFromPad(padnum);
             if (profile) {
                 if ((1 << profile->GetPadNum()) & msg.GetChangedMask()) {
-                    unk30[padnum] = true;
+                    mSigninChanged[padnum] = true;
                 }
             }
         }
@@ -988,14 +988,14 @@ void AccomplishmentManager::HandleSongCompleted(Symbol song) {
             HamProfile *pProfile = TheProfileMgr.GetProfileFromPad(padNum);
             if (pProfile && pProfile->HasValidSaveData() && pPlayer->IsPlaying()) {
                 static Symbol practice("practice");
-                if (!unk30[padNum]) {
+                if (!mSigninChanged[padNum]) {
                     HandleSongCompletedForProfile(song, pPlayer, pProfile);
                 }
                 if (TheGameMode->InMode(practice, true)) {
-                    pProfile->SetUnk388(song);
-                    pProfile->SetUnk334(true);
+                    pProfile->SetLastPracticeSong(song);
+                    pProfile->SetHasPracticedSong(true);
                 } else
-                    pProfile->SetUnk334(false);
+                    pProfile->SetHasPracticedSong(false);
             }
         }
     }
@@ -1072,8 +1072,8 @@ void AccomplishmentManager::CheckForSpecificModesAccomplishments(
 
     if (TheGameMode->IsGameplayModePerform()) {
         if (profile) {
-            if (profile->GetUnk334() && profile->GetUnk388() == s
-                && pScoreNode->Int() > profile->GetUnk330()) {
+            if (profile->GetHasPracticedSong() && profile->GetLastPracticeSong() == s
+                && pScoreNode->Int() > profile->GetPrePracticeBestScore()) {
                 static Symbol acc_broken_down("acc_broken_down");
                 TheAccomplishmentMgr->EarnAccomplishmentForProfile(
                     profile, acc_broken_down, false
@@ -1084,7 +1084,7 @@ void AccomplishmentManager::CheckForSpecificModesAccomplishments(
             int bestScore = profile->GetSongStatusMgr()->GetBestScore(
                 songID, check, kDifficultyBeginner
             );
-            profile->SetUnk330(bestScore);
+            profile->SetPrePracticeBestScore(bestScore);
         }
 
         const DataNode *pMasterQuestNode =
@@ -1159,17 +1159,17 @@ void AccomplishmentManager::UpdateConsecutiveDaysPlayed(HamProfile *profile) {
     AccomplishmentProgress &progress = profile->AccessAccomplishmentProgress();
     GetDateAndTime(dt);
     int toDayNumber = dt.ToDayNumber();
-    if (progress.GetUnk118() <= 0 || toDayNumber - progress.GetUnk118() == 1) {
+    if (progress.GetChallengeProgress() <= 0 || toDayNumber - progress.GetChallengeProgress() == 1) {
         i = progress.NumDays() + 1;
     } else {
-        if (toDayNumber - progress.GetUnk118() <= 1) {
-            progress.SetUnk118(toDayNumber);
+        if (toDayNumber - progress.GetChallengeProgress() <= 1) {
+            progress.SetChallengeProgress(toDayNumber);
             return;
         }
         i = 1;
     }
     progress.SetNumDays(i);
-    progress.SetUnk118(toDayNumber);
+    progress.SetChallengeProgress(toDayNumber);
 }
 
 void AccomplishmentManager::UpdateWeekendWarrior(HamProfile *profile) {
@@ -1182,15 +1182,15 @@ void AccomplishmentManager::UpdateWeekendWarrior(HamProfile *profile) {
         return;
     }
     unsigned int toDayNumber = dt.ToDayNumber();
-    if (progress.GetUnk120() < 0 || toDayNumber - progress.GetUnk120() > 9) {
+    if (progress.GetWeeklyPlayCount() < 0 || toDayNumber - progress.GetWeeklyPlayCount() > 9) {
         i = 1;
     } else {
-        if (toDayNumber - progress.GetUnk120() <= 2) {
-            progress.SetUnk120(toDayNumber);
+        if (toDayNumber - progress.GetWeeklyPlayCount() <= 2) {
+            progress.SetWeeklyPlayCount(toDayNumber);
             return;
         }
         i = progress.NumWeekends() + 1;
     }
     progress.SetWeekends(i);
-    progress.SetUnk120(toDayNumber);
+    progress.SetWeeklyPlayCount(toDayNumber);
 }

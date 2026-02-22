@@ -108,13 +108,13 @@ public:
 // size 0x2f0
 struct SkeletonData {
     SkeletonTrackingState mTracking; // 0x0
-    Vector3 unk4[kNumJoints]; // 0x4
-    Vector3 unk144[kNumJoints]; // 0x144
-    int unk284[kNumJoints]; // 0x284
+    Vector3 mRawPositions[kNumJoints]; // 0x4
+    Vector3 mJointPositions[kNumJoints]; // 0x144
+    int mJointTrackingState[kNumJoints]; // 0x284
     int mQualityFlags; // 0x2d4
     int mTrackingID; // 0x2d8
-    int unk2dc;
-    Vector3 unk2e0;
+    int mClippedFlags; // 0x2dc
+    Vector3 mHipCenter; // 0x2e0
 };
 
 struct SkeletonUpdateData {
@@ -133,9 +133,9 @@ struct SkeletonFrame {
 
     static Vector3DESmoother sUpVectorSmoother;
 
-    int unk0; // 0x0 - frame number?
+    int mFrameNumber; // 0x0
     int mElapsedMs; // 0x4
-    Vector3 unk8; // 0x8 - camera angle?
-    Vector4 unk18; // 0x18
+    Vector3 mFloorNormal; // 0x8
+    Vector4 mFloorClipPlane; // 0x18
     SkeletonData mSkeletonDatas[6]; // 0x28
 };

@@ -58,8 +58,8 @@ void FlowSequence::ChildFinished(FlowNode *node) {
     MILO_ASSERT(mRunningNodes.empty(), 0x74);
     if (mIsAdvancing)
         return;
-    if (unk58) {
-        unk58 = false;
+    if (mStopRequested) {
+        mStopRequested = false;
         FLOW_LOG("Releasing\n");
         mFlowParent->ChildFinished(this);
         return;
@@ -71,12 +71,12 @@ void FlowSequence::ChildFinished(FlowNode *node) {
     mIsAdvancing = true;
     while (mItr != mChildNodes.end()) {
         ActivateChild(mItr->Obj());
-        if (unk58 || !mRunningNodes.empty())
+        if (mStopRequested || !mRunningNodes.empty())
             break;
         ++mItr;
     }
     mIsAdvancing = false;
-    if (!unk58 || !mRunningNodes.empty()) {
+    if (!mStopRequested || !mRunningNodes.empty()) {
         if (mItr != mChildNodes.end())
             goto ret;
         if (!mLooping && mRepeatCount >= mRepeats - 1) {

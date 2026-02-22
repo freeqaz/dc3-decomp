@@ -29,7 +29,7 @@ namespace {
 }
 
 PhysicsManager::PhysicsManager(RndDir *dir)
-    : unk2c(dir), mPhysicsClampTime(30), unk34(0), unk35(0), unk38(30), unk3c(0) {
+    : mDir(dir), mPhysicsClampTime(30), mSynced(0), unk35(0), unk38(30), unk3c(0) {
     if (SystemConfig()) {
         DataArray *physicsCfg = SystemConfig()->FindArray("physics", false);
         if (physicsCfg) {
@@ -129,9 +129,9 @@ void PhysicsManager::SyncObjects(bool b1) {
     RemoveAll();
     Timer timer;
     timer.Start();
-    HarvestCollidables(unk2c);
+    HarvestCollidables(mDir);
     timer.SplitMs();
-    unk34 = true;
+    mSynced = true;
 }
 
 DataNode PhysicsManager::OnGetVelocity(const DataArray *a) {

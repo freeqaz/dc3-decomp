@@ -69,7 +69,7 @@ void PlaylistSort::BuildTree() {
     DeleteTree();
     Init();
     std::vector<NavListItemNode *> nodes;
-    FOREACH(it, ThePlaylistSortMgr->unk78) {
+    FOREACH(it, ThePlaylistSortMgr->mPlaylists) {
         auto newNode = NewItemNode(it);
         nodes.push_back(newNode);
     }

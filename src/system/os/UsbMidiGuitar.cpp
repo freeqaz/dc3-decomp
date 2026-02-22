@@ -136,9 +136,9 @@ void UsbMidiGuitar::Poll() {
                     RGSwingMsg swMsg(uVar9, i);
                     SendMessage(swMsg);
                 }
-                int axisVal11 = proData->unkachar;
-                int axisVal12 = proData->unkbchar;
-                int axisVal10 = proData->unkcchar;
+                int axisVal11 = proData->mAccelX;
+                int axisVal12 = proData->mAccelY;
+                int axisVal10 = proData->mAccelZ;
                 if (axisVal11 != TheGuitar->CurrentAccelAxisVal(i, 0)
                     || axisVal12 != TheGuitar->CurrentAccelAxisVal(i, 1)
                     || axisVal10 != TheGuitar->CurrentAccelAxisVal(i, 2)) {
@@ -146,13 +146,13 @@ void UsbMidiGuitar::Poll() {
                     RGAccelerometerMsg accelMsg(axisVal11, axisVal12, axisVal10, i);
                     SendMessage(accelMsg);
                 }
-                int connAcc = proData->unkdchar;
+                int connAcc = proData->mPitchBend;
                 if (connAcc != TheGuitar->GetConnectedAccessory(i)) {
                     TheGuitar->SetConnectedAccessories(i, connAcc);
                     RGConnectedAccessoriesMsg caMsg(connAcc, i);
                     SendMessage(caMsg);
                 }
-                int pitchBend = proData->unkdchar;
+                int pitchBend = proData->mPitchBend;
                 if (pitchBend != TheGuitar->GetPitchBend(i)) {
                     TheGuitar->SetPitchBend(i, pitchBend);
                     RGPitchBendMsg pbMsg(pitchBend, i);
@@ -170,8 +170,8 @@ void UsbMidiGuitar::Poll() {
                     RGStompBoxMsg sbMsg(stompBox, i);
                     SendMessage(sbMsg);
                 }
-                int programChange = proData->unkabool + (proData->unkcbool << 1)
-                    + (proData->unkbbool << 2);
+                int programChange = proData->mProgramChangeBit0 + (proData->mProgramChangeBit1 << 1)
+                    + (proData->mProgramChangeBit2 << 2);
                 if (programChange != TheGuitar->GetProgramChange(i)) {
                     TheGuitar->SetProgramChange(i, programChange);
                     RGProgramChangeMsg pcMsg(programChange, i);

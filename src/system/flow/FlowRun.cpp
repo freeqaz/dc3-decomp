@@ -76,13 +76,13 @@ void FlowRun::ChildFinished(FlowNode *node) {
 
 void FlowRun::RequestStop() {
     FLOW_LOG("RequestStop\n");
-    unk58 = true;
+    mStopRequested = true;
     mTarget->RequestStop();
 }
 
 void FlowRun::RequestStopCancel() {
     FLOW_LOG("RequestStopCancel\n");
-    unk58 = false;
+    mStopRequested = false;
     mTarget->RequestStopCancel();
 }
 
