@@ -354,6 +354,167 @@ Takeaway: even when match% does not move, reducing `diff_op` is still progress t
 
 ---
 
+## Multiple Early Returns to || Chain
+
+**Impact:** +15-40%
+**Success Rate:** HIGH
+**Time:** 5 minutes
+
+Combine multiple independent `if (cond) return false;` statements into a single `||` chain. This eliminates redundant bool materialization and branch target duplication.
+
+### Symptom
+
+objdiff shows many extra instructions with repeated patterns of `fneg`, `fmadds`, `fcmpu`, `blt`, `li r3, 0x0`, `blr` — the compiler is generating a full inline comparison + return sequence for each early return.
+
+### Fix
+
+```cpp
+// Before (48.0% match) — 6 separate early returns, each generates full comparison+branch sequence
+if (s < f.front)
+    return false;
+if (s < f.back)
+    return false;
+if (s < f.left)
+    return false;
+if (s < f.right)
+    return false;
+if (s < f.top)
+    return false;
+if (s < f.bottom)
+    return false;
+return true;
+
+// After (87.9% match) — single || chain, shared branch target
+if (s < f.front || s < f.back || s < f.left || s < f.right || s < f.top || s < f.bottom)
+    return false;
+return true;
+```
+
+### Real Examples
+
+| Function | Before | After | Delta | Notes |
+|----------|--------|-------|-------|-------|
+| operator>(Sphere, Frustum) | 48.0% | 87.9% | +39.9% | 6 inline `operator<` calls combined. Remaining 12% gap is register swaps from target hoisting `fneg` invariant |
+
+### When to Use
+
+- Multiple independent guard conditions that all return the same value
+- Each condition calls the same or similar inline functions
+- No computation between the conditions
+
+---
+
+## Bool Return Expression (if/return → return &&)
+
+**Impact:** +5-15%
+**Success Rate:** HIGH
+**Time:** 5 minutes
+
+Convert `if (cond) return false; return true;` to `return !cond;` using `&&` or `||` expressions. This changes how the compiler materializes the boolean return value.
+
+### Symptom
+
+objdiff shows register swap mismatches (r11 vs r3) around `li` + `clrlwi` instructions on the return path, or extra branches to separate `li r3, 0` / `li r3, 1` blocks.
+
+### Fix
+
+```cpp
+// Before (85.5% match) — separate branches for true/false
+if (ApiCall() != 0 || result == 0) {
+    return false;
+}
+return true;
+
+// After (100% match) — single return expression
+return ApiCall() == 0 && result != 0;
+```
+
+### Real Examples
+
+| Function | Before | After | Delta | Notes |
+|----------|--------|-------|-------|-------|
+| HasKinectSharePrvilege | 85.5% | 100% | +14.5% | `if/return false/return true` → `return A == 0 && B != 0` |
+
+### Note
+
+The `&&` form generates branchless bool materialization that matches the target's `neg/andc/srwi` pattern. The `if/else return` form generates separate `li r3, 0` / `li r3, 1` branches with different register assignment.
+
+---
+
+## Bitwise & for Bool Accumulator
+
+**Impact:** +10-15%
+**Success Rate:** HIGH
+**Time:** 5 minutes
+
+Use bitwise `&` instead of logical `&&` for accumulating boolean values in a loop. The compiler generates `and` (bitwise) vs short-circuit branches for `&&`.
+
+### Symptom
+
+objdiff shows `and` instruction in target but branches in our build for boolean accumulation across loop iterations.
+
+### Fix
+
+```cpp
+// Before (79.4% match) — logical &&, generates branches
+allRestricted = allRestricted && userIsRestricted;
+
+// After (94.0% match) — bitwise &, generates and instruction
+allRestricted = allRestricted & userIsRestricted;
+```
+
+### When to Use
+
+- Boolean accumulation across loop iterations (`allTrue &= check;`)
+- Both operands are already bool (0 or 1)
+- No short-circuit side effects needed
+
+---
+
+## Local Bool Extraction for Complex Conditions
+
+**Impact:** +5-8%
+**Success Rate:** HIGH
+**Time:** 5 minutes
+
+Extract a complex condition into a local `bool` variable before using it in an `if` statement. This forces bool materialization matching the target's `clrlwi` truncation pattern.
+
+### Symptom
+
+objdiff shows `delete` of `clrlwi` or different branch structure around complex `||`/`&&` conditions.
+
+### Fix
+
+```cpp
+// Before (86.2% match) — condition inline in if statement
+if ((mTargetShowing > mFirstShowing && i2 == 0)
+    || (mTargetShowing < mFirstShowing && i2 == -1)) {
+    // ...
+}
+
+// After (93.4% match) — extracted to local bool
+bool shouldCheck = (mTargetShowing > mFirstShowing && i2 == 0)
+    || (mTargetShowing < mFirstShowing && i2 == -1);
+if (shouldCheck) {
+    // ...
+}
+```
+
+### Real Examples
+
+| Function | Before | After | Delta | Notes |
+|----------|--------|-------|-------|-------|
+| ShouldHoldDisplayInPlace | 86.2% | 93.4% | +7.2% | Extracted `||` condition to local bool |
+| SetSongAndDefaults | 97.8% | 98.2% | +0.4% | Extracted `mode ==` check to local bool |
+
+### When to Use
+
+- Complex `||`/`&&` chains used as if-condition
+- Target shows `clrlwi 24` (bool truncation) that our build lacks
+- Result is used in one place (if extracting helps, inline `bool()` cast may also work)
+
+---
+
 ## See Also
 
 - [fixable-comparison.md](fixable-comparison.md) - Conditional expression patterns

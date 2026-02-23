@@ -432,13 +432,17 @@ void Multiply(const Box &box, float f, Box &out) {
 void Multiply(const Plane &p, const Transform &t, Plane &out) {
     Hmx::Matrix3 invM;
     FastInvert(t.m, invM);
-    Vector3 n(p.a, p.b, p.c);
-    Vector3 nOut;
-    Multiply(n, invM, nOut);
-    Vector3 on = p.On();
+    float b = p.b;
+    float a = p.a;
+    float c = p.c;
+    float nx = invM.x.y * b + invM.x.x * a + invM.x.z * c;
+    float ny = invM.y.y * b + invM.y.x * a + invM.y.z * c;
+    float nz = invM.z.y * b + invM.z.x * a + invM.z.z * c;
+    float scalar = -(p.d / (b * b + a * a + c * c));
+    Vector3 on(a * scalar, b * scalar, c * scalar);
     Vector3 pOut;
     Multiply(on, t, pOut);
-    out.Set(nOut.x, nOut.y, nOut.z, -Dot(nOut, pOut));
+    out.Set(nx, ny, nz, -(pOut.y * ny + (pOut.z * nz + pOut.x * nx)));
 }
 
 void Sphere::GrowToContain(const Sphere &s) {
@@ -472,74 +476,63 @@ void Sphere::GrowToContain(const Sphere &s) {
 }
 
 void Frustum::Set(float near, float far, float fovY, float ratio) {
-    front.Set(0, 0, 1, -near);
-    back.Set(0, 0, -1, far);
+    front.Set(0, 1, 0, -near);
+    back.Set(0, -1, 0, far);
     float halfY = fovY * 0.5f;
     float sy = std::sin(halfY);
     float cy = std::cos(halfY);
-    top.Set(0, -cy, sy, 0);
-    bottom.Set(0, cy, sy, 0);
     float sx = sy / ratio;
-    float len = std::sqrt(cy * cy + sx * sx);
+    top.Set(0, sy, -cy, 0);
+    bottom.Set(0, sy, cy, 0);
+    float len = std::sqrt(sx * sx + cy * cy);
     if (len != 0.0f) {
-        left.Set(cy / len, 0, sx / len, 0);
-        right.Set(-(cy / len), 0, sx / len, 0);
-    } else {
-        left.Set(1, 0, 0, 0);
-        right.Set(-1, 0, 0, 0);
+        len = 1.0f / len;
+    }
+    float la = len * cy;
+    float lb = len * sx;
+    left.Set(la, lb, 0, 0);
+    right.Set(-la, lb, 0, 0);
+    if (fovY == 0.0f) {
+        left.d = 1.0f;
+        right.d = 1.0f;
+        top.d = ratio;
+        bottom.d = ratio;
     }
 }
 
 bool operator>(const Sphere &s, const Frustum &f) {
-    if (s < f.front)
-        return false;
-    if (s < f.back)
-        return false;
-    if (s < f.left)
-        return false;
-    if (s < f.right)
-        return false;
-    if (s < f.top)
-        return false;
-    if (s < f.bottom)
+    if (s < f.front || s < f.back || s < f.left || s < f.right || s < f.top || s < f.bottom)
         return false;
     return true;
 }
 
 bool Intersect(const Segment &seg, const Sphere &sphere) {
-    float start_z = seg.start.z;
-    float end_z = seg.end.z;
-    float zero = 0.0f;
-    float dir_z = end_z - start_z;
-    float start_x = seg.start.x;
-    float end_x = seg.end.x;
-    float dir_x = end_x - start_x;
-    float start_y = seg.start.y;
+    float dir_z = seg.end.z - seg.start.z;
+    float dir_x = seg.end.x - seg.start.x;
+    float dir_y = seg.end.y - seg.start.y;
     float center_z = sphere.center.z;
-    float diff_z = center_z - start_z;
-    float end_y = seg.end.y;
-    float dir_y = end_y - start_y;
     float center_x = sphere.center.x;
-    float diff_x = center_x - start_x;
     float center_y = sphere.center.y;
-    float diff_y = center_y - start_y;
     float a = dir_z * dir_z + dir_x * dir_x + dir_y * dir_y;
     if (a == 0.0f)
         return false;
-    float t = (diff_z * dir_z + diff_x * dir_x + diff_y * dir_y) / a;
-    float one = 1.0f;
+    float t = ((center_y - seg.start.y) * dir_y
+        + (center_x - seg.start.x) * dir_x
+        + (center_z - seg.start.z) * dir_z) / a;
+    float zero = 0.0f;
     float neg_t = -t;
     t = (neg_t >= 0.0f) ? zero : t;
+    float one = 1.0f;
     float t_minus_one = t - one;
     t = (t_minus_one >= 0.0f) ? one : t;
     Vector3 closest;
     Interp(seg.start, seg.end, t, closest);
-    float dz = closest.z - center_z;
-    float dx = closest.x - center_x;
     float dy = closest.y - center_y;
+    float dx = closest.x - center_x;
+    float dz = closest.z - center_z;
     float r = sphere.radius;
     float r2 = r * r;
-    float dist2 = dz * dz + dx * dx + dy * dy;
+    float dist2 = dy * dy + dx * dx + dz * dz;
     if (dist2 > r2)
         return false;
     return true;

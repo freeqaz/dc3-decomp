@@ -297,8 +297,9 @@ bool UIListState::CanScrollNext(bool b) const {
 }
 
 bool UIListState::ShouldHoldDisplayInPlace(int i2) const {
-    if ((mTargetShowing > mFirstShowing && i2 == 0)
-        || (mTargetShowing < mFirstShowing && i2 == -1)) {
+    bool shouldCheck = (mTargetShowing > mFirstShowing && i2 == 0)
+        || (mTargetShowing < mFirstShowing && i2 == -1);
+    if (shouldCheck) {
         if (SnappedDataForDisplay(i2) >= 0) {
             int numdisp = NumDisplay();
             if (i2 + 1 != numdisp && Display2Data(numdisp) != -1) {
@@ -363,14 +364,25 @@ bool UIListState::BuildScroll(int direction, int firstShowing, int selectedDispl
             state.mSelectedDisplay = mMinDisplay;
         }
 
-        if (state.mSelectedDisplay <= scrollMax) {
-            scrollMax = Max(0, state.mSelectedDisplay);
+        int result;
+        if (state.mSelectedDisplay > scrollMax) {
+            result = scrollMax;
+        } else {
+            if (state.mSelectedDisplay < 0) {
+                result = 0;
+            } else {
+                result = state.mSelectedDisplay;
+            }
         }
-        state.mSelectedDisplay = scrollMax;
+        state.mSelectedDisplay = result;
 
         int maxFirst = MaxFirstShowing();
         if (state.mFirstShowing <= maxFirst) {
-            maxFirst = Max(0, state.mFirstShowing);
+            if (state.mFirstShowing < 0) {
+                maxFirst = 0;
+            } else {
+                maxFirst = state.mFirstShowing;
+            }
         }
         state.mFirstShowing = maxFirst;
     }

@@ -322,6 +322,69 @@ That is real progress and lowers the chance of regressions in future attempts.
 
 ---
 
+---
+
+## Hard But Not Truly Unfixable
+
+Some AT_LIMIT functions have patterns that are theoretically fixable but resist simple source-level changes. Future tooling (e.g., c2.dll patching, custom pragma support) may unlock these.
+
+### Large Offset Addressing (lis+ori+lwzx vs addis+subi)
+
+**Typical Gap:** ~30%
+**Status:** Hard — no known source fix, may yield to compiler binary patching
+
+When struct members are at offsets > 0x7FFF from the base pointer, the compiler must use multi-instruction addressing. The target compiler chose `lis+ori+lwzx` (build address in register, indexed load), while ours uses `addis+subi` (adjusted base, displacement load). Both reach the same memory, different instruction sequence.
+
+| Function | Match | Root Cause |
+|----------|-------|------------|
+| StreamReceiver360::Tag | 70.2% | mVoice at offset 0x803c uses lwzx vs addis+subi |
+
+### Scalar Deleting Destructor (??_G vs ~T + operator delete)
+
+**Typical Gap:** ~10%
+**Status:** Hard — compiler-generated function pattern
+
+The target generates a "scalar deleting destructor" (??_G) wrapper for `delete obj`, while our compiler emits separate `~T()` + `operator delete()` calls. This is a compiler code generation choice for polymorphic delete expressions.
+
+| Function | Match | Root Cause |
+|----------|-------|------------|
+| StreamReceiver360::Poll | 90.9% | `delete v` generates separate destructor + delete |
+
+### Branchless Bool Conversion (subi+cntlzw+extrwi vs branch)
+
+**Typical Gap:** ~12%
+**Status:** Hard — compiler heuristic for bool return from int comparison
+
+The target converts `(int)state == 2` to bool using branchless `subi+cntlzw+extrwi` sequence, while our compiler generates compare-and-branch. Both produce 0/1, but the instruction sequence differs entirely.
+
+| Function | Match | Root Cause |
+|----------|-------|------------|
+| NetLoaderRef::IsDownloading | 88.6% | `mState == 2` → branchless vs branch |
+
+### rlwimi vs rlwinm+or (Bit Manipulation Peephole)
+
+**Typical Gap:** ~18%
+**Status:** Hard — peephole optimizer choice
+
+The target compiler recognizes `(j << 16) | (j >> 16)` as a rotate-and-insert pattern and emits `rlwimi` (rotate left word immediate then mask insert). Our compiler emits `rlwinm` + `or` (shift + combine). Both produce the same result.
+
+| Function | Match | Root Cause |
+|----------|-------|------------|
+| Rand::Seed | 82.2% | Bit manipulation in seeding loop |
+
+### cmplwi vs cmpwi for Pointer Null Checks
+
+**Typical Gap:** ~1.5%
+**Status:** Hard — compiler type-sensitivity for pointer comparisons
+
+The target uses `cmplwi` (unsigned compare) for pointer null checks, while our compiler generates `cmpwi` (signed compare). Explicit casts to `(unsigned int)` do not affect the compare instruction selection. May require compiler-level changes.
+
+| Function | Match | Root Cause |
+|----------|-------|------------|
+| SfxInst::IsRunning | 98.5% | `if (ptr->GetStream())` — cmplwi vs cmpwi |
+
+---
+
 ## See Also
 
 - [verifiable-icf.md](verifiable-icf.md) - ICF/linker-side verifiable patterns

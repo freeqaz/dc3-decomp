@@ -93,34 +93,12 @@ bool PlatformMgr::HasCreatedContentPrivilege() const {
 
     do {
         int privilegeResult = 0;
-        bool hasContentCreation;
-        bool hasFriendsOnlyContent;
-        bool userIsRestricted;
-
-        // Check USER_CREATED_CONTENT privilege (general content creation)
-        if (XUserCheckPrivilege(userIndex, XPRIVILEGE_USER_CREATED_CONTENT, &privilegeResult) != 0 || privilegeResult != 0) {
-            hasContentCreation = true;
-        } else {
-            hasContentCreation = false;
-        }
-
-        // Check USER_CREATED_CONTENT_FRIENDS_ONLY privilege
-        if (XUserCheckPrivilege(userIndex, XPRIVILEGE_USER_CREATED_CONTENT_FRIENDS_ONLY, &privilegeResult) != 0 || privilegeResult != 0) {
-            hasFriendsOnlyContent = true;
-        } else {
-            hasFriendsOnlyContent = false;
-        }
-
-        // User is restricted if they DON'T have both privileges
-        // (having both means no restriction)
-        if (hasContentCreation && hasFriendsOnlyContent) {
-            userIsRestricted = false;
-        } else {
-            userIsRestricted = true;
-        }
+        bool hasContentCreation = XUserCheckPrivilege(userIndex, XPRIVILEGE_USER_CREATED_CONTENT, &privilegeResult) != 0 || privilegeResult != 0;
+        bool hasFriendsOnlyContent = XUserCheckPrivilege(userIndex, XPRIVILEGE_USER_CREATED_CONTENT_FRIENDS_ONLY, &privilegeResult) != 0 || privilegeResult != 0;
+        bool userIsRestricted = !(hasContentCreation && hasFriendsOnlyContent);
 
         userIndex++;
-        allUsersRestricted = allUsersRestricted && userIsRestricted;
+        allUsersRestricted = allUsersRestricted & userIsRestricted;
     } while (userIndex < 4);
 
     return allUsersRestricted;
@@ -128,10 +106,7 @@ bool PlatformMgr::HasCreatedContentPrivilege() const {
 
 bool PlatformMgr::HasKinectSharePrvilege() const {
     int bptr = 0;
-    if (XUserCheckPrivilege(0xFF, XPRIVILEGE_SHARE_CONTENT_OUTSIDE_LIVE, &bptr) != 0 || bptr == 0) {
-        return false;
-    }
-    return true;
+    return XUserCheckPrivilege(0xFF, XPRIVILEGE_SHARE_CONTENT_OUTSIDE_LIVE, &bptr) == 0 && bptr != 0;
 }
 
 bool PlatformMgr::IsSmartGlassConnected() { return gNumSmartGlassClients > 0; }

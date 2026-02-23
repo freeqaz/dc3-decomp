@@ -785,6 +785,10 @@ Offset  Type          Member
 30. **VMX128 XMVECTOR parameters** - Passed in v1 register, stored to stack via `stvx128`, then read as scalar floats at offsets +0x10 (x), +0x14 (y), +0x18 (z), +0x1c (w)
 31. **64-bit to 16-bit extraction patterns** - Target may use `lhz` to load 16-bit slice from stored `__int64`; our compiler uses `ld` + bit masking (unfixable ~5% gap)
 32. **`bool` type for extrwi encoding** - `bool b = (flags & MASK) != 0;` generates `extrwi.` (extract-to-LSB), while inline `flags & MASK` generates `rlwinm.` (mask-in-place)
+33. **Multiple early returns → `||` chain** - 6 separate `if (cond) return false;` blocks generate 6 full inline+branch sequences; combining into `if (a || b || c || d || e || f) return false;` shares the branch target (+40% on operator>(Sphere, Frustum))
+34. **Bool return expression** - `if (A || B) return false; return true;` → `return !(A || B);` or `return !A && !B;` changes bool materialization from branches to branchless `neg/andc/srwi` (+14.5% on HasKinectSharePrvilege, to 100%)
+35. **Bitwise `&` for bool accumulator** - `acc = acc & boolVal;` generates `and` instruction; `acc = acc && boolVal;` generates short-circuit branches. Use `&` when accumulating bools in a loop
+36. **Local bool for complex conditions** - Extracting `bool b = (complex || condition);` before `if (b)` forces `clrlwi 24` bool truncation matching target's materialization pattern (+7% on ShouldHoldDisplayInPlace)
 
 ---
 
