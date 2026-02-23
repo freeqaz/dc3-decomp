@@ -1,7 +1,7 @@
 ---
 name: permute
 description: Run the source permuter on a function to find signed/unsigned and variable extraction improvements. Use when working on a function that isn't matching 100% and you want to automatically try source variations.
-argument-hint: "[symbol-or-function] [--apply] [--batch]"
+argument-hint: "[symbol-or-function] [--batch]"
 allowed-tools: Bash(venv/bin/python *), Bash(ninja *), Read, Grep, Glob
 ---
 
@@ -18,63 +18,42 @@ patterns on a decomp function, scoring each variant with objdiff.
 
 ### Single Function Mode (default)
 
-When given a function name or symbol, run the permuter on that specific function.
+The permuter auto-resolves symbols from `decomp.db` and `objdiff.json`. Just pass
+the symbol — it handles source path and function name lookup automatically.
 
-**Steps:**
+**Run it directly:**
 
-1. **Resolve the function info.** The argument `$0` can be:
-   - A mangled symbol (e.g., `?Seek@AsyncFile@@UAAHHH@Z`)
-   - A qualified C++ name (e.g., `AsyncFile::Seek`)
-   - A partial name (e.g., `Seek`) — search decomp.db to find the best match
+```bash
+venv/bin/python -m scripts.permuter --symbol '$0'
+```
 
-2. **Look up source path and unit** from `decomp.db` and `objdiff.json`:
-   ```bash
-   venv/bin/python -c "
-   import sqlite3, json
-   conn = sqlite3.connect('decomp.db')
-   conn.row_factory = sqlite3.Row
-   # Try exact symbol match first, then demangled LIKE match
-   row = conn.execute('''
-       SELECT symbol, demangled, unit, current_percent, verdict
-       FROM functions WHERE symbol = ? OR demangled LIKE ?
-       LIMIT 1
-   ''', ('$0', '%$0%')).fetchone()
-   if row:
-       print(json.dumps(dict(row)))
-   "
-   ```
+The `--symbol` argument accepts:
+- A mangled symbol: `?Seek@AsyncFile@@UAAHHH@Z`
+- A qualified C++ name: `AsyncFile::Seek`
+- A partial name: `Seek` (matches via LIKE query)
 
-   Then get the source_path from objdiff.json:
-   ```bash
-   venv/bin/python -c "
-   import json
-   data = json.load(open('objdiff.json'))
-   for u in data['units']:
-       if u['name'] == 'UNIT_NAME':
-           print(u['metadata'].get('source_path', ''))
-           break
-   "
-   ```
+The permuter will:
+1. Look up the mangled symbol, source path, and qualified name from the DB
+2. Extract the function from source
+3. Run diagnosis (diff_ops, register swaps, clusters) to guide pattern selection
+4. Generate and score variants (comparison flips, variable extractions, declaration reorders, etc.)
+5. Auto-apply the best improvement (use `--no-apply` to skip)
 
-3. **Extract the qualified C++ name** from the demangled signature using regex:
-   Match pattern: `([\w~][\w:~]*(?:::[\w~]+)+)\s*\(`
+**Optional flags:**
+- `--no-apply` — don't auto-apply the best variant
+- `--no-guided` — try all patterns blindly (skip diagnosis-guided filtering)
+- `--no-compose` — disable two-step pattern composition
+- `--no-bsf-guided` — disable BSF-guided declaration reordering
+- `--patterns NAME,...` — only run specific patterns
+- `--max-variants N` — limit variant count (default: 100)
+- `--dry-run` — list variants without building/scoring
+- `--list-patterns` — show available pattern names
 
-4. **Run the permuter:**
-   ```bash
-   venv/bin/python -m scripts.permuter \
-       --symbol SYMBOL \
-       --source SOURCE_PATH \
-       --function QUALIFIED_NAME \
-       --stop-on-perfect
-   ```
-
-   If `--apply` is in the arguments, add the `--apply` flag to auto-apply the best improvement.
-
-5. **Report results** to the user:
-   - Baseline match percentage
-   - Number of variants tested
-   - Any improvements found (with diffs)
-   - Whether the improvement was applied
+**Report results** to the user:
+- Baseline match percentage
+- Number of variants tested
+- Any improvements found (with diffs)
+- Whether the improvement was applied
 
 ### Batch Mode (`--batch`)
 
