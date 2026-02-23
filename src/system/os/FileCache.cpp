@@ -199,7 +199,7 @@ void FileCache::StartSet(int iii) {
     for (int i = 0; i < mEntries.size(); i++) {
         FileCacheEntry *curEntry = mEntries[i];
         if ((!curEntry->CheckSize() || curEntry->Fail()) && !curEntry->Loader()
-            && curEntry->RefCount() == 0) {
+            && !curEntry->RefCount()) {
             delete curEntry;
             mEntries.erase(mEntries.begin() + i);
             i--;
@@ -213,7 +213,7 @@ void FileCache::Clear() {
     mTryClear = true;
     for (int i = 0; i < mEntries.size();) {
         FileCacheEntry *curEntry = mEntries[i];
-        if (!curEntry->Loader() && curEntry->RefCount() == 0) {
+        if (!curEntry->Loader() && !curEntry->RefCount()) {
             delete curEntry;
             mEntries.erase(mEntries.begin() + i);
         } else

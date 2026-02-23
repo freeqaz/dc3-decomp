@@ -32,7 +32,7 @@ void Splash::Suspend() {
     MILO_ASSERT(MainThread(), 0xcf);
     if (++mSuspendCount <= 1) {
         if (mThreaded) {
-            if (SetMutableState(s1)) {
+            if (SetMutableState(kSuspending)) {
                 WaitForState(s2);
                 TheNgRnd.Suspend();
                 if (mCurrentMovie != NULL) {
@@ -292,7 +292,7 @@ void Splash::WaitForState(Splash::SplashState state) {
 
 void Splash::CheckWorkerSuspend(bool b) {
     MILO_ASSERT(!MainThread(), 0x1f0);
-    while (mState == s1) {
+    while (mState == kSuspending) {
         TheNgRnd.Suspend();
         if (mCurrentMovie != NULL) {
             mCurrentMovie->SetShowing(false);
@@ -300,7 +300,7 @@ void Splash::CheckWorkerSuspend(bool b) {
         }
         {
             CritSecTracker cst(&mStateLock);
-            MILO_ASSERT(mState == s1, 0x1ff);
+            MILO_ASSERT(mState == kSuspending, 0x1ff);
             mState = s2;
             mWorkerEvent.Set();
         }
@@ -437,7 +437,7 @@ void Splash::UpdateThread() {
 
     if (!SetImmutableState(kWaitingForTerminating)) {
         do {
-            MILO_ASSERT(mState == s1, 0x246);
+            MILO_ASSERT(mState == kSuspending, 0x246);
             CheckWorkerSuspend(false);
         } while (!SetImmutableState(kWaitingForTerminating));
     }

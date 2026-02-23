@@ -1172,17 +1172,13 @@ float MoveDir::DetectRangeFrac(
 
 bool MoveDir::InGracePeriod(int player) {
     Hmx::Object *provider = TheGameData->Player(player)->Provider();
-    if (provider) {
-        static Symbol start_score_move_index("start_score_move_index");
-        const DataNode *prop = provider->Property(start_score_move_index, false);
-        if (prop) {
-            return TheTaskMgr.CurrentMeasure() < prop->Int();
-        } else {
-            return false;
-        }
-    } else {
+    if (!provider)
         return false;
-    }
+    static Symbol start_score_move_index("start_score_move_index");
+    const DataNode *prop = provider->Property(start_score_move_index, false);
+    if (!prop)
+        return false;
+    return TheTaskMgr.CurrentMeasure() < prop->Int();
 }
 
 MoveFrame *MoveDir::ClosestMoveFrame() {

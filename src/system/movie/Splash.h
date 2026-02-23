@@ -9,7 +9,7 @@ class Splash {
 public:
     enum SplashState {
         s0,
-        s1,
+        kSuspending,
         s2,
         s3,
         kResuming,
@@ -51,7 +51,7 @@ public:
     TexMovie *mCurrentMovie;
     EventTrigger *mCurrentTrigger;
     int unk58;
-    u32 mHasDrawn;
+    u8 mHasDrawn;
     int mSuspendCount;
     bool mThreaded;
     DWORD mThreadId;

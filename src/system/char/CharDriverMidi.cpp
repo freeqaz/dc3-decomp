@@ -92,23 +92,21 @@ void CharDriverMidi::Exit() {
 
 DataNode CharDriverMidi::OnMidiParser(DataArray *da) {
     CharClip *clip;
-    // Use default clip if available and not in special mode
     if (!unke0 && mDefaultClip)
         clip = dynamic_cast<CharClip *>(mDefaultClip.Ptr());
     else
         clip = FindClip(da->Node(2), false);
-    if (clip && clip != FirstClip()) {
-        float somefloat = da->Float(3);
-        // If clip uses beat-based timing (flag 0x200), convert beats to clip time
-        if (clip->PlayFlags() & 0x200) {
-            float secs = TheTaskMgr.Seconds(TaskMgr::kRealTime);
-            float beat = TheTaskMgr.Beat();
-            float bts = BeatToSeconds(somefloat + beat) - secs;
-            somefloat = bts * clip->AverageBeatsPerSecond();
-        }
-        MaxEq(somefloat, 0.0f);
-        Play(clip, 0, somefloat * mBlendOverridePct, -somefloat, 0.0f);
+    if (!clip)
+        return 0;
+    float somefloat = da->Float(3);
+    if (clip->PlayFlags() & 0x200) {
+        float secs = TheTaskMgr.Seconds(TaskMgr::kRealTime);
+        float beat = TheTaskMgr.Beat();
+        float bts = BeatToSeconds(somefloat + beat) - secs;
+        somefloat = bts * clip->AverageBeatsPerSecond();
     }
+    MaxEq(somefloat, 0.0f);
+    Play(clip, 0, somefloat * mBlendOverridePct, -somefloat, 0.0f);
     return 0;
 }
 

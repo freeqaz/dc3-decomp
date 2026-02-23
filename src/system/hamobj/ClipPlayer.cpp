@@ -84,24 +84,28 @@ bool ClipPlayer::CanUseRestStep() {
 }
 
 DataNode ClipPlayer::AnnotatePractice() {
-    if (mPracticeEnd == kHugeFloat) {
+    bool cont = mPracticeEnd != kHugeFloat;
+    if (!cont) {
         return 0;
     }
     DataArray *arr = new DataArray(0);
     float f30 = 1.0f;
     if (!TheLoadMgr.EditMode() || !TheHamDirector->NoTransitions()) {
-        if (mInClip) {
+        CharClip *inClip = mInClip;
+        if (inClip) {
+            const char *name = inClip->Name();
             float f31 = mPracticeStart + f30;
-            auto _tmp2 = ClipLength(mInClip);
-            Annotate(arr, f31 - _tmp2, mInClip->Name());
+            float clipLen = ClipLength(inClip);
+            Annotate(arr, f31 - clipLen, name);
             Annotate(arr, mPracticeStart + f30, "");
         }
     }
     float f31 = mPracticeEnd;
     if (!TheLoadMgr.EditMode() || !TheHamDirector->NoTransitions()) {
-        if (mOutClip) {
-            Annotate(arr, f31 - f30, mOutClip->Name());
-            f31 += ClipLength(mOutClip) - 2.0f;
+        CharClip *outClip = mOutClip;
+        if (outClip) {
+            Annotate(arr, f31 - f30, outClip->Name());
+            f31 += ClipLength(outClip) - 2.0f;
         }
     }
     if (CanUseRestStep()) {

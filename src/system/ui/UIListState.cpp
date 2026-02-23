@@ -203,20 +203,13 @@ int UIListState::Display2Data(int i) const {
 }
 
 int UIListState::SnappedDataForDisplay(int i2) const {
-    int iVar1 = mFirstShowing;
-    int iVar2 = mMaxDisplay;
-
-    bool bVar3 = ((iVar1 < iVar2 && i2 == 0) || (iVar2 == iVar1 && i2 == 0) ||
-                  (iVar2 < iVar1 && i2 == -1));
-
-    if (!bVar3)
+    bool b1 = (!IsScrolling() && i2 == 0) || (mTargetShowing > mFirstShowing && i2 == 0)
+        || (mTargetShowing < mFirstShowing && i2 == -1);
+    if (b1) {
+        int data = Display2Data(i2);
+        return Provider()->SnappableAtOrBeforeData(data);
+    } else
         return -1;
-
-    int uVar4 = Display2Showing(i2);
-    if ((int)uVar4 != -1) {
-        uVar4 = Showing2Data(uVar4);
-    }
-    return -1;
 }
 
 void UIListState::SetCircular(bool c, bool b) {
