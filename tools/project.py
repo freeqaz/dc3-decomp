@@ -699,10 +699,9 @@ def generate_build_ninja(
     # )
     # n.newline()
 
-    # X360 MSVC Link (requires wine, wibo doesn't support link.exe APIs)
+    # X360 MSVC Link
     msvc_link = compiler_path / "link.exe"
-    wine_cmd = "WINEDEBUG=-all wine " if not is_windows() else ""
-    msvc_link_cmd = f"{wine_cmd}{msvc_link} /NOLOGO @$out.rsp"
+    msvc_link_cmd = f"{wrapper_cmd}{msvc_link} /NOLOGO @$out.rsp"
     msvc_link_implicit: List[Optional[Path]] = [compilers_implicit or msvc_link]
 
     n.comment("X360 MSVC Link")

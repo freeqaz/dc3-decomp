@@ -160,8 +160,9 @@ version_num = VERSIONS.index(config.version)
 
 # Apply arguments
 config.build_dir = args.build_dir
-config.dtk_path = args.dtk
-config.objdiff_path = args.objdiff
+# Always use local tool builds (relative paths for stable ninja regeneration)
+config.dtk_path = args.dtk or Path("..") / "jeff" / "target" / "release" / "dtk"
+config.objdiff_path = args.objdiff or Path("..") / "objdiff" / "target" / "release" / "objdiff-cli"
 config.binutils_path = args.binutils
 config.compilers_path = args.compilers
 config.generate_map = args.map
@@ -170,7 +171,7 @@ config.sjiswrap_path = args.sjiswrap
 config.ninja_path = args.ninja
 config.progress = args.progress
 if not is_windows():
-    config.wrapper = args.wrapper
+    config.wrapper = args.wrapper if hasattr(args, 'wrapper') and args.wrapper else Path("..") / "wibo" / "build" / "release" / "wibo"
 # Don't build asm unless we're --non-matching
 if not config.non_matching:
     config.asm_dir = None

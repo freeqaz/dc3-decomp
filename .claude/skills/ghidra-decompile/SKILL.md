@@ -65,3 +65,4 @@ python3 tools/ghidra/pcode_inspect.py "FUNCTION" [--switches] [--casts]
 - Use `--address` flag to treat input as raw address (skip symbol search)
 - Use `--no-decompile` to only analyze raw bytes
 - Large functions (>3000 bytes) may take longer to analyze
+- Skip the sandbox for network operations if you notice Ghidra is unavailable. It's likely already running.

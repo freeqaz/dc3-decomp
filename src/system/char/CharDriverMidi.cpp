@@ -31,7 +31,7 @@ BEGIN_COPYS(CharDriverMidi)
     COPY_SUPERCLASS(CharDriver)
     CREATE_COPY_AS(CharDriverMidi, c)
     BEGIN_COPYING_MEMBERS_FROM(c)
-        COPY_MEMBER(unke0)
+        COPY_MEMBER(mActive)
         COPY_MEMBER(mParser)
         COPY_MEMBER(mFlagParser)
         COPY_MEMBER(mBlendOverridePct)
@@ -67,7 +67,7 @@ void CharDriverMidi::PollDeps(
 }
 
 void CharDriverMidi::Enter() {
-    unke0 = true;
+    mActive = true;
     CharDriver::Enter();
     Hmx::Object *msgParser =
         Dir()->FindObject(mParser.Str(), true, true);
@@ -92,7 +92,7 @@ void CharDriverMidi::Exit() {
 
 DataNode CharDriverMidi::OnMidiParser(DataArray *da) {
     CharClip *clip;
-    if (!unke0 && mDefaultClip)
+    if (!mActive && mDefaultClip)
         clip = dynamic_cast<CharClip *>(mDefaultClip.Ptr());
     else
         clip = FindClip(da->Node(2), false);
@@ -100,10 +100,11 @@ DataNode CharDriverMidi::OnMidiParser(DataArray *da) {
         return 0;
     float somefloat = da->Float(3);
     if (clip->PlayFlags() & 0x200) {
-        float secs = TheTaskMgr.Seconds(TaskMgr::kRealTime);
         float beat = TheTaskMgr.Beat();
-        float bts = BeatToSeconds(somefloat + beat) - secs;
-        somefloat = bts * clip->AverageBeatsPerSecond();
+        float bts = BeatToSeconds(beat + somefloat);
+        float secs = TheTaskMgr.Seconds(TaskMgr::kRealTime);
+        float diff = bts - secs;
+        somefloat = diff * clip->AverageBeatsPerSecond();
     }
     MaxEq(somefloat, 0.0f);
     Play(clip, 0, somefloat * mBlendOverridePct, -somefloat, 0.0f);
@@ -124,7 +125,7 @@ DataNode CharDriverMidi::OnMidiParserGroup(DataArray *da) {
         return 0;
     } else {
         CharClip *clip;
-        if (unke0 || !mDefaultClip) {
+        if (mActive || !mDefaultClip) {
             clip = grp->GetClip(mClipFlags);
         } else {
             clip = dynamic_cast<CharClip *>(mDefaultClip.Ptr());

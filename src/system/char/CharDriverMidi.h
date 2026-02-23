@@ -24,7 +24,7 @@ public:
     OBJ_MEM_OVERLOAD(0x14)
     NEW_OBJ(CharDriverMidi);
 
-    bool unke0; // unsure why this is here, its def size 0x1
+    bool mActive; // 0xe0 - set true in Enter(), controls clip lookup vs default clip
     Symbol mParser; // 0xe4
     Symbol mFlagParser; // 0xe8
     int mClipFlags; // 0xec

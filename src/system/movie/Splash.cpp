@@ -33,13 +33,13 @@ void Splash::Suspend() {
     if (++mSuspendCount <= 1) {
         if (mThreaded) {
             if (SetMutableState(kSuspending)) {
-                WaitForState(s2);
+                WaitForState(kSuspended);
                 TheNgRnd.Suspend();
                 if (mCurrentMovie != NULL) {
                     mCurrentMovie->SetShowing(true);
                     mCurrentMovie->GetMovie().LockThread();
                 }
-                *(u8 *)&mHasDrawn = 0;
+                mHasDrawn = 0;
                 Draw();
             } else {
                 MILO_ASSERT(mState == kWaitingForTerminating, 0xeb);
@@ -50,7 +50,7 @@ void Splash::Suspend() {
                 }
             }
         } else {
-            SetMutableState(s2);
+            SetMutableState(kSuspended);
         }
 
         mFrameTimer.Reset();
@@ -63,7 +63,7 @@ void Splash::Resume() {
         MILO_ASSERT(mSuspendCount == 0, 0x264);
         if (mThreaded != 0) {
             // Threaded mode: resume rendering and signal render thread
-            if (SetMutableState(s3)) {
+            if (SetMutableState(kResumeReady)) {
                 if (mCurrentMovie != NULL) {
                     mCurrentMovie->SetShowing(false);
                     mCurrentMovie->GetMovie().UnlockThread();
@@ -301,7 +301,7 @@ void Splash::CheckWorkerSuspend(bool b) {
         {
             CritSecTracker cst(&mStateLock);
             MILO_ASSERT(mState == kSuspending, 0x1ff);
-            mState = s2;
+            mState = kSuspended;
             mWorkerEvent.Set();
         }
         WaitForState(kResuming);

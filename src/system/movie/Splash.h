@@ -8,10 +8,10 @@
 class Splash {
 public:
     enum SplashState {
-        s0,
+        kNil,
         kSuspending,
-        s2,
-        s3,
+        kSuspended,
+        kResumeReady,
         kResuming,
         kResumed,
         kWaitingForTerminating,

@@ -36,6 +36,7 @@ public:
     FileLoader *Loader() const { return mLoader; }
     int RefCount() const { return mRefCount; }
     void SetPriority(int prio) { mPriority = prio; }
+    float LastRead() const { return mLastRead; }
 
     POOL_OVERLOAD(FileCacheEntry, 0x5F);
 

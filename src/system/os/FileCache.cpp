@@ -5,7 +5,10 @@
 #include "os/Debug.h"
 #include "os/File.h"
 #include "os/System.h"
+#include "rndobj/Utl.h"
 #include "stl/_algo.h"
+#include "synth/Utl.h"
+#include "utl/Cache.h"
 #include "utl/FilePath.h"
 #include "utl/Loader.h"
 #include "utl/MemMgr.h"
@@ -298,4 +301,92 @@ void FileCache::PollUntilLoaded() {
     mMaxSize = savedMaxSize;
     TheLoadMgr.Poll();
     Poll();
+}
+
+void FileCache::DumpOverSize(int iii) {
+    int i2 = CurSize();
+    while (i2 > iii) {
+        float f1 = 0;
+        unsigned int u9 = (unsigned int)-1;
+        int i8 = 0;
+        for (unsigned int i = 0; i < mEntries.size(); i++) {
+            FileCacheEntry *curEntry = mEntries[i];
+            if (curEntry->CheckSize() && !curEntry->Loader() && !curEntry->RefCount()
+                && (u9 == (unsigned int)-1 || curEntry->Priority() < i8
+                    || (curEntry->Priority() == i8 && curEntry->LastRead() < f1))) {
+                i8 = curEntry->Priority();
+                f1 = curEntry->LastRead();
+                u9 = i;
+            }
+        }
+        if (u9 == (unsigned int)-1)
+            break;
+        FileCacheEntry *delEntry = mEntries[u9];
+        if (unk19) {
+            TheDebug.Notify(MakeString("Forced to dump entry with size %i (max size %i)", delEntry->Size(), mMaxSize));
+        }
+        i2 -= delEntry->Size();
+        delete delEntry;
+        mEntries.erase(mEntries.begin() + u9);
+    }
+}
+
+void FileCache::Poll() {
+    int i8 = 1;
+    for (int i = 0; i < mEntries.size(); i++) {
+        FileCacheEntry *curEntry = mEntries[i];
+        curEntry->ReadDone(true);
+        if (curEntry->Loader() != NULL)
+            i8--;
+    }
+    DumpOverSize(mTryClear ? 0 : mMaxSize);
+    for (int i = 0; i < mEntries.size() && i8 > 0; i++) {
+        FileCacheEntry *curEntry = mEntries[i];
+        if (!curEntry->CheckSize() && curEntry->Loader() == NULL) {
+            curEntry->StartRead(mLoaderPos, unk18);
+            i8--;
+        }
+    }
+}
+
+void FileCache::Add(const FilePath &fp1, int iii, const FilePath &fp2) {
+    mTryClear = false;
+    FilePath file;
+    const char *ext = FileGetExt(fp1.c_str());
+    if (streq(ext, "milo")) {
+        file.SetRoot(DirLoader::CachedPath(fp1.c_str(), 0));
+    } else if (streq(ext, "png") || streq(ext, "bmp")) {
+        file.SetRoot(CacheResource(fp1.c_str(), nullptr));
+    } else if (streq(ext, "wav")) {
+        CacheResourceResult res;
+        file.SetRoot(CacheWav(fp1.c_str(), res));
+    } else
+        file = fp1;
+
+    for (int i = 0; i < mEntries.size(); i++) {
+        if (file == mEntries[i]->FileName()) {
+            if (iii > mEntries[i]->Priority())
+                mEntries[i]->SetPriority(iii);
+            return;
+        }
+    }
+    MILO_ASSERT(GetFileAll(file.c_str()) == NULL, 0x203);
+    FilePath fp30;
+    if (fp2.empty())
+        fp30 = file;
+    else
+        fp30.SetRoot(DirLoader::CachedPath(fp2.c_str(), 0));
+    mEntries.push_back(new FileCacheEntry(file, fp30, iii));
+}
+
+void FileCache::Add(const FilePath &fp, char *c, int iii) {
+    mTryClear = false;
+    FilePath file(DirLoader::CachedPath(fp.c_str(), 0));
+    for (int i = 0; i < mEntries.size(); i++) {
+        if (file == mEntries[i]->FileName()) {
+            return;
+        }
+    }
+    MILO_ASSERT(GetFileAll(file.c_str()) == NULL, 0x226);
+    mEntries.push_back(new FileCacheEntry(file, c, iii));
 }
