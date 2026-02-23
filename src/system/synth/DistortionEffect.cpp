@@ -9,11 +9,11 @@ DistortionEffect::DistortionEffect(IXAudioBatchAllocator *) : mDrive(0) {}
 void DistortionEffect::Process(float *f, int numSamples, int numChans) {
     MILO_ASSERT(numChans <= 2, 0x1b);
 
+    float drive = mDrive;
+    float headroomCopy = 1.0f - drive;
     float minHeadroom = 0.01f;
-    float drive = *f;
-    float *divisor = &minHeadroom;
-    float headroom = 1.0f - drive;
-    float headroomCopy = headroom;
+    float headroom = headroomCopy;
+    float *divisor;
 
     if (headroom < 0.01f) {
         divisor = &minHeadroom;
@@ -31,11 +31,11 @@ void DistortionEffect::Process(float *f, int numSamples, int numChans) {
 
         do {
             float sampleL = *left;
-            *left = (sampleL * gain) / ((fabs(sampleL) * amount) + 1.0f);
+            *left = (sampleL * gain) / ((fabsf(sampleL) * amount) + 1.0f);
 
             if (numChans == 2) {
                 float sampleR = *right;
-                *right = (sampleR * gain) / ((fabs(sampleR) * amount) + 1.0f);
+                *right = (sampleR * gain) / ((fabsf(sampleR) * amount) + 1.0f);
             }
 
             left += numChans;

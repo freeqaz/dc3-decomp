@@ -142,10 +142,10 @@ void ClosestPoint(const Vector3 &v1, const Vector3 &v2, const Vector3 &v3, Vecto
 }
 
 void Plane::Set(const Vector3 &v1, const Vector3 &v2, const Vector3 &v3) {
-    Vector3 diff31, diff21, cross;
-    Subtract(v3, v1, diff31);
+    Vector3 diff21, diff31, cross;
     Subtract(v2, v1, diff21);
-    Cross(diff21, diff31, cross);
+    Subtract(v3, v1, diff31);
+    Cross(diff31, diff21, cross);
     Normalize(cross, cross);
     a = cross.x;
     b = cross.y;

@@ -92,7 +92,7 @@ void DefaultPhysicsManager::Poll() {
             ++it;
             mActiveCollidables.erase(prev_it);
             MILO_ASSERT(std::find( mInactiveCollidables.begin(), mInactiveCollidables.end(), d) == mInactiveCollidables.end(), 0x41);
-            mInactiveCollidables.push_back(d);
+            mInactiveCollidables.push_front(d);
         } else {
             ++it;
         }
@@ -104,7 +104,7 @@ void DefaultPhysicsManager::Poll() {
             ++it;
             mInactiveCollidables.erase(prev_it);
             MILO_ASSERT(std::find( mActiveCollidables.begin(), mActiveCollidables.end(), d) == mActiveCollidables.end(), 0x55);
-            mActiveCollidables.push_back(d);
+            mActiveCollidables.push_front(d);
         } else {
             ++it;
         }

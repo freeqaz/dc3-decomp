@@ -223,13 +223,12 @@ void Splash::Draw() {
                     mCurrentCam->Select();
                     mCurrentDir->DrawShowing();
                     TheRnd.EndDrawing();
-                    if (mCurrentMovie != NULL) goto splashing_done;
+                    if (mCurrentMovie != NULL) break;
                 } while (mCurrentTrigger == NULL && ++i < 2);
-                if (mCurrentTrigger == NULL) {
+                if (mCurrentMovie == NULL && mCurrentTrigger == NULL) {
                     TheNgRnd.Suspend();
                 }
             }
-splashing_done:
             mHasDrawn = 1;
         }
         if (!MainThread()) {

@@ -116,7 +116,7 @@ done:;
 
 RndWind::RndWind()
     : mPrevailing(0.0f, 0.0f, 0.0f), mRandom(0.0f, 0.0f, 0.0f), mTimeLoop(100.0f),
-      mSpaceLoop(100.0f), mTrans(this), mAboutZ(false), mMaxSpeed(20.0f),
+      mSpaceLoop(gUnitsPerMeter * 10.0f), mTrans(this), mAboutZ(false), mMaxSpeed(1e30f),
       mMinSpeed(0.0f), mWindOwner(this, this) {
     SyncLoops();
 }

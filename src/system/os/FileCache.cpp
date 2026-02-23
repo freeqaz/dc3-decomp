@@ -154,7 +154,7 @@ FileCache::~FileCache() {
     for (int i = 0; i < mEntries.size(); i++) {
         delete mEntries[i];
     }
-    gCaches.remove(this);
+    gCaches.erase(std::remove(gCaches.begin(), gCaches.end(), this), gCaches.end());
 }
 
 void FileCache::Init() {}
@@ -357,11 +357,14 @@ void FileCache::Add(const FilePath &fp1, int iii, const FilePath &fp2) {
     if (streq(ext, "milo")) {
         file.SetRoot(DirLoader::CachedPath(fp1.c_str(), 0));
     } else if (streq(ext, "png") || streq(ext, "bmp")) {
-        file.SetRoot(sResourceCacheHelper->CacheFile(fp1.c_str()));
+        if (sResourceCacheHelper)
+            file.SetRoot(sResourceCacheHelper->CacheFile(fp1.c_str()));
     } else if (streq(ext, "wav")) {
-        file.SetRoot(sWavCacheHelper->CacheFile(fp1.c_str()));
-    } else
+        if (sWavCacheHelper)
+            file.SetRoot(sWavCacheHelper->CacheFile(fp1.c_str()));
+    } else {
         file = fp1;
+    }
 
     for (int i = 0; i < mEntries.size(); i++) {
         if (file == mEntries[i]->FileName()) {
@@ -372,10 +375,10 @@ void FileCache::Add(const FilePath &fp1, int iii, const FilePath &fp2) {
     }
     MILO_ASSERT(GetFileAll(file.c_str()) == NULL, 0x21A);
     FilePath fp30;
-    if (!fp2.empty())
-        fp30.SetRoot(DirLoader::CachedPath(fp2.c_str(), 0));
-    else
+    if (fp2.empty())
         fp30 = file;
+    else
+        fp30.SetRoot(DirLoader::CachedPath(fp2.c_str(), 0));
     mEntries.push_back(new FileCacheEntry(file, fp30, iii));
 }
 
