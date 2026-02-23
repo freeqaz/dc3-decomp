@@ -15,7 +15,7 @@ void Rand::Seed(int seed) {
     for (int i = 0; i < 0x100; i++) {
         int j = s * 0x41C64E6D + 0x3039;
         s = j * 0x41C64E6D + 0x3039;
-        mRandTable[i] = ((j >> 16) & 0xFFFF) | (s & 0x7FFF0000);
+        mRandTable[i] = (((unsigned int)j >> 16) & 0xFFFF) + (s & 0x7FFF0000);
     }
     mRandIndex1 = 0;
     mRandIndex2 = 0x67;

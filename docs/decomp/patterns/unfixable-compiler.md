@@ -352,25 +352,27 @@ The target generates a "scalar deleting destructor" (??_G) wrapper for `delete o
 
 ### Branchless Bool Conversion (subi+cntlzw+extrwi vs branch)
 
-**Typical Gap:** ~12%
-**Status:** Hard — compiler heuristic for bool return from int comparison
+**Typical Gap:** ~7-12% (partially fixable)
+**Status:** PARTIALLY FIXABLE — restructuring the return expression can steer away from branchless codegen
 
-The target converts `(int)state == 2` to bool using branchless `subi+cntlzw+extrwi` sequence, while our compiler generates compare-and-branch. Both produce 0/1, but the instruction sequence differs entirely.
+The target converts `(int)state == 2` to bool using branchless `subi+cntlzw+extrwi` sequence, while our compiler generates compare-and-branch. However, restructuring from `return state == 2` to `if (state != 2) return false; return true;` (or combining with other conditions) can force the compiler to use compare-and-branch matching the target.
 
-| Function | Match | Root Cause |
-|----------|-------|------------|
-| NetLoaderRef::IsDownloading | 88.6% | `mState == 2` → branchless vs branch |
+| Function | Start | Best | Root Cause |
+|----------|-------|------|------------|
+| NetLoaderRef::IsDownloading | 88.6% | **93.0%** | Restructured return to if/else; remaining 7% is LINKER_MERGED + BOOL_MASK + reloc noise |
 
 ### rlwimi vs rlwinm+or (Bit Manipulation Peephole)
 
-**Typical Gap:** ~18%
-**Status:** Hard — peephole optimizer choice
+**Typical Gap:** ~15%
+**Status:** Hard — partially mitigated using `+` instead of `|`
 
-The target compiler recognizes `(j << 16) | (j >> 16)` as a rotate-and-insert pattern and emits `rlwimi` (rotate left word immediate then mask insert). Our compiler emits `rlwinm` + `or` (shift + combine). Both produce the same result.
+The target compiler recognizes `(j >> 16) | (s & MASK)` as a rotate-and-insert pattern and emits `rlwimi` (1 instruction). Our compiler emits `rlwinm` + `or` (2 instructions). Using `+` instead of `|` prevents rlwimi recognition but generates `add` instead of `or` — a Catch-22 where `|` triggers rlwimi and `+` generates the wrong instruction. The `+` form is better overall (84.8% vs 82.2%) because it eliminates the rlwimi structural mismatch, leaving only `add` vs `or` + register swaps.
 
-| Function | Match | Root Cause |
-|----------|-------|------------|
-| Rand::Seed | 82.2% | Bit manipulation in seeding loop |
+Also pair with `(unsigned int)` cast on the shift operand to fix `srawi` (signed) vs `srwi` (unsigned) shift mismatch.
+
+| Function | Match | Best | Root Cause |
+|----------|-------|------|------------|
+| Rand::Seed | 82.2% | 84.8% | `\|` triggers rlwimi; `+` avoids it but generates `add` |
 
 ### cmplwi vs cmpwi for Pointer Null Checks
 
