@@ -54,6 +54,7 @@
 #include "utl/Option.h"
 #include "utl/MakeString.h"
 #include "world/World.h"
+#include <algorithm>
 #include <cstring>
 #include <cctype>
 #include <new>
@@ -354,25 +355,33 @@ bool EndsWith(const char *str, const char *suffix) {
 }
 
 Symbol RemoveDigitSuffix(const Symbol &symbol) {
-    const char *symbolText = symbol.Str();
-    int symbolLen = strlen(symbolText);
-    MILO_ASSERT(symbolLen > 0, 0x2AB);
-
     char trimmedText[64];
-    memset(trimmedText, 0, sizeof(trimmedText));
+    trimmedText[0] = '\0';
+    memset(trimmedText + 1, 0, 63);
 
-    int digitIdx = 0;
-    while (digitIdx < symbolLen && !isdigit((unsigned char)symbolText[digitIdx])) {
-        ++digitIdx;
+    const char *symbolText = *(const char **)&symbol;
+    const char *scanPtr = symbolText;
+    unsigned char scanCh;
+    do {
+        scanCh = (unsigned char)*scanPtr;
+        ++scanPtr;
+    } while (scanCh != '\0');
+
+    int symbolLen = scanPtr - symbolText;
+    symbolLen -= 1;
+    if (symbolLen <= 0) {
+        TheDebug.Fail(MakeString(kAssertStr, "App.cpp", 0x2AB, "len > 0"), nullptr);
     }
 
-    int copyLen = digitIdx;
-    if (digitIdx == symbolLen) {
-        copyLen = symbolLen;
-    }
-    if (copyLen > 0) {
+    stlpmtx_std::random_access_iterator_tag findTag;
+    int copyLen = stlpmtx_std::__find_if(
+                      symbolText,
+                      symbolText + symbolLen,
+                      static_cast<int (*)(int)>(isdigit),
+                      findTag
+    ) - symbolText;
+    if (copyLen != 0) {
         memmove(trimmedText, symbolText, copyLen);
-        trimmedText[copyLen] = '\0';
     }
 
     return Symbol(trimmedText);
