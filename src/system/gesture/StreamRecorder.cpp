@@ -9,6 +9,7 @@
 #include "rndobj/Mat.h"
 #include "rndobj/Overlay.h"
 #include "rndobj/Poll.h"
+#include "rndobj/Anim.h"
 #include "rndobj/Rnd.h"
 #include "rndobj/Tex.h"
 #include "rndobj/TexRenderer.h"
@@ -99,7 +100,7 @@ BEGIN_LOADS(StreamRecorder)
         d >> x;
     }
     d >> mUseAlpha;
-    d >> mPlaybackSpeed;
+    d >> (BinStreamEnum<RndAnimatable::Rate> &)mPlaybackSpeed;
     if (d.rev > 4) {
         d >> mOutputWidth;
         d >> mOutputHeight;
