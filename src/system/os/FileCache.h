@@ -40,6 +40,8 @@ public:
 
     POOL_OVERLOAD(FileCacheEntry, 0x5F);
 
+    friend class FileCache;
+
 private:
     FilePath mFileName; // 0x0
     FilePath mReadFileName; // 0x8

@@ -1,3 +1,5 @@
+#include "math/Color.h"
+#include "math/Mtx.h"
 #include "math/Rand.h"
 #include "obj/Data.h"
 #include "obj/DataFunc.h"
@@ -500,6 +502,36 @@ bool DataArray::FindData(Symbol s, bool &ret, bool b) const {
     DataArray *arr = FindArray(s, b);
     if (arr != nullptr) {
         ret = arr->Int(1);
+        return true;
+    } else {
+        return false;
+    }
+}
+
+bool DataArray::FindData(Symbol s, Plane &ret, bool b) const {
+    DataArray *arr = FindArray(s, b);
+    if (arr != nullptr) {
+        ret.a = arr->Float(1);
+        ret.b = arr->Float(2);
+        ret.c = arr->Float(3);
+        ret.d = arr->Float(4);
+        return true;
+    } else {
+        return false;
+    }
+}
+
+bool DataArray::FindData(Symbol s, Hmx::Color &ret, bool b) const {
+    DataArray *arr = FindArray(s, b);
+    if (arr != nullptr) {
+        ret.red = arr->Float(1);
+        ret.green = arr->Float(2);
+        ret.blue = arr->Float(3);
+        if (arr->Size() > 4) {
+            ret.alpha = arr->Float(4);
+        } else {
+            ret.alpha = 1;
+        }
         return true;
     } else {
         return false;

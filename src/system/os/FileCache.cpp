@@ -201,13 +201,13 @@ void FileCache::StartSet(int iii) {
     mTryClear = false;
     for (int i = 0; i < mEntries.size(); i++) {
         FileCacheEntry *curEntry = mEntries[i];
-        if ((!curEntry->CheckSize() || curEntry->Fail()) && !curEntry->Loader()
-            && !curEntry->RefCount()) {
+        if ((!curEntry->CheckSize() || curEntry->Fail()) && !curEntry->mLoader
+            && !curEntry->mRefCount) {
             delete curEntry;
             mEntries.erase(mEntries.begin() + i);
             i--;
         } else {
-            mEntries[i]->SetPriority(iii);
+            mEntries[i]->mPriority = iii;
         }
     }
 }
@@ -216,7 +216,7 @@ void FileCache::Clear() {
     mTryClear = true;
     for (int i = 0; i < mEntries.size();) {
         FileCacheEntry *curEntry = mEntries[i];
-        if (!curEntry->Loader() && !curEntry->RefCount()) {
+        if (!curEntry->mLoader && !curEntry->mRefCount) {
             delete curEntry;
             mEntries.erase(mEntries.begin() + i);
         } else
@@ -307,23 +307,24 @@ void FileCache::DumpOverSize(int iii) {
     int i2 = CurSize();
     while (i2 > iii) {
         float f1 = 0;
-        unsigned int u9 = (unsigned int)-1;
+        int u9 = -1;
         int i8 = 0;
-        for (unsigned int i = 0; i < mEntries.size(); i++) {
+        for (int i = 0; i < mEntries.size(); i++) {
             FileCacheEntry *curEntry = mEntries[i];
             if (curEntry->CheckSize() && !curEntry->Loader() && !curEntry->RefCount()
-                && (u9 == (unsigned int)-1 || curEntry->Priority() < i8
+                && (u9 == -1 || curEntry->Priority() < i8
                     || (curEntry->Priority() == i8 && curEntry->LastRead() < f1))) {
                 i8 = curEntry->Priority();
                 f1 = curEntry->LastRead();
                 u9 = i;
             }
         }
-        if (u9 == (unsigned int)-1)
+        if (u9 == -1)
             break;
         FileCacheEntry *delEntry = mEntries[u9];
         if (unk19) {
-            TheDebug.Notify(MakeString("Forced to dump entry with size %i (max size %i)", delEntry->Size(), mMaxSize));
+            auto _tmp0 = MakeString("Forced to dump entry with size %i (max size %i)", delEntry->Size(), mMaxSize);
+            TheDebug.Notify(_tmp0);
         }
         i2 -= delEntry->Size();
         delete delEntry;
@@ -336,13 +337,13 @@ void FileCache::Poll() {
     for (int i = 0; i < mEntries.size(); i++) {
         FileCacheEntry *curEntry = mEntries[i];
         curEntry->ReadDone(true);
-        if (curEntry->Loader() != NULL)
+        if (curEntry->mLoader != NULL)
             i8--;
     }
     DumpOverSize(mTryClear ? 0 : mMaxSize);
     for (int i = 0; i < mEntries.size() && i8 > 0; i++) {
         FileCacheEntry *curEntry = mEntries[i];
-        if (!curEntry->CheckSize() && curEntry->Loader() == NULL) {
+        if (!curEntry->CheckSize() && curEntry->mLoader == NULL) {
             curEntry->StartRead(mLoaderPos, unk18);
             i8--;
         }
@@ -356,10 +357,9 @@ void FileCache::Add(const FilePath &fp1, int iii, const FilePath &fp2) {
     if (streq(ext, "milo")) {
         file.SetRoot(DirLoader::CachedPath(fp1.c_str(), 0));
     } else if (streq(ext, "png") || streq(ext, "bmp")) {
-        file.SetRoot(CacheResource(fp1.c_str(), nullptr));
+        file.SetRoot(sResourceCacheHelper->CacheFile(fp1.c_str()));
     } else if (streq(ext, "wav")) {
-        CacheResourceResult res;
-        file.SetRoot(CacheWav(fp1.c_str(), res));
+        file.SetRoot(sWavCacheHelper->CacheFile(fp1.c_str()));
     } else
         file = fp1;
 
@@ -370,12 +370,12 @@ void FileCache::Add(const FilePath &fp1, int iii, const FilePath &fp2) {
             return;
         }
     }
-    MILO_ASSERT(GetFileAll(file.c_str()) == NULL, 0x203);
+    MILO_ASSERT(GetFileAll(file.c_str()) == NULL, 0x21A);
     FilePath fp30;
-    if (fp2.empty())
-        fp30 = file;
-    else
+    if (!fp2.empty())
         fp30.SetRoot(DirLoader::CachedPath(fp2.c_str(), 0));
+    else
+        fp30 = file;
     mEntries.push_back(new FileCacheEntry(file, fp30, iii));
 }
 
@@ -383,10 +383,10 @@ void FileCache::Add(const FilePath &fp, char *c, int iii) {
     mTryClear = false;
     FilePath file(DirLoader::CachedPath(fp.c_str(), 0));
     for (int i = 0; i < mEntries.size(); i++) {
-        if (file == mEntries[i]->FileName()) {
+        if (file == mEntries[i]->mFileName) {
             return;
         }
     }
-    MILO_ASSERT(GetFileAll(file.c_str()) == NULL, 0x226);
+    MILO_ASSERT(GetFileAll(file.c_str()) == NULL, 0x23D);
     mEntries.push_back(new FileCacheEntry(file, c, iii));
 }
