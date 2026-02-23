@@ -10,7 +10,10 @@
 #include "utl/MemMgr.h"
 
 static void *SampleAlloc(int size, const char *file, int line, const char *name, int) {
-    return MemAlloc(size, file, line, name, 0x20);
+    (void)file;
+    (void)line;
+    (void)name;
+    return MemAlloc(size, "SynthSample.cpp", 0x1c, "Sample Data", 0);
 }
 
 bool sDisabled;

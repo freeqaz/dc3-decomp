@@ -12,29 +12,26 @@ extern "C" void XMemCpy(void *, const void *, int);
 extern "C" int lbl_8316C864;
 extern "C" int lbl_8316C860;
 
-StreamReceiver360::StreamReceiver360(int numBuffers, int sampleRate, bool slip)
+StreamReceiver360::StreamReceiver360(int sampleRate, int numBuffers, bool slip)
     : StreamReceiver(numBuffers, slip), mStreamBuf(0), mSlipVoice(0), mVoice(0),
       mSampleRate(sampleRate), mNumBufs(numBuffers), mVolume(1.0f), mPan(0.0f), mSpeed(1.0f),
       mFxSend(0), mTagged(false) {
     mStreamBuf = (unsigned char *)_MemAllocTemp(
         numBuffers << 14, "StreamReceiver.cpp", 0x33, "StreamBuffer", 0);
 
-    Voice *v = (Voice *)PoolAlloc(0x7c, 0x7c, "e:\\lazer_build_gmc1\\system\\src\\synth360\\Voice.h", 0x28, "Voice");
-    if (v) {
-        v = new (v) Voice(false, 1, false);
-    }
-    mVoice = v;
+    Voice *mem = (Voice *)PoolAlloc(
+        0x7c, 0x7c, "e:\\lazer_build_gmc1\\system\\src\\synth360\\Voice.h", 0x28, "Voice"
+    );
+    mVoice = mem ? new (mem) Voice(false, 1, false) : 0;
 
-    if (mVoice) {
-        mVoice->SetData(mStreamBuf, numBuffers << 14, 0);
-        mVoice->SetLoopRegion(0, -1);
-        mVoice->SetSampleRate(sampleRate);
+    mVoice->SetData(mStreamBuf, numBuffers << 14, 0);
+    mVoice->SetLoopRegion(0, -1);
+    mVoice->SetSampleRate(mSampleRate);
 
-        if (!slip) {
-            mSlipVoice = mVoice;
-        } else {
-            mVoice->SetVolume(0.0f);
-        }
+    if (!mSlipEnabled) {
+        mSlipVoice = mVoice;
+    } else {
+        mVoice->SetVolume(0.0f);
     }
 }
 
@@ -42,10 +39,8 @@ StreamReceiver360::~StreamReceiver360() {
     if (mVoice != 0) {
         delete mVoice;
     }
-    if (mSlipEnabled) {
-        if (mSlipVoice != 0) {
-            delete mSlipVoice;
-        }
+    if (mSlipEnabled && mSlipVoice != 0) {
+        delete mSlipVoice;
     }
     DeleteAll(mPendingVoices);
     MemFree(mStreamBuf);
@@ -215,7 +210,7 @@ void StreamReceiver360::UpdateADSR() {
 }
 
 StreamReceiver *New360Receiver(int numBuffers, int sampleRate, bool slip, int) {
-    return new StreamReceiver360(numBuffers, sampleRate, slip);
+    return new StreamReceiver360(sampleRate, numBuffers, slip);
 }
 
 void StreamReceiver360::Init() {

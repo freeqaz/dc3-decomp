@@ -90,6 +90,12 @@ python -m tools.compiler_trace callgrind-diff test_a.cpp test_b.cpp
 |------|-------------|-----|
 | Register Swap Patcher | Patches .obj register fields using objdiff diff as oracle (manual, not run by default) | [REFERENCE.md](REFERENCE.md#register-swap-patcher) |
 
+## Database Management Tools
+
+| Tool | Description | Usage |
+|------|-------------|-------|
+| Reclassify AT_LIMIT | Scan AT_LIMIT functions, diagnose fixable vs unfixable, reopen fixable ones | `python -m scripts.analysis.reclassify_at_limit --apply --unit 'system/char/*'` |
+
 ## Code Transformation Tools
 
 | Tool | Description | Doc |

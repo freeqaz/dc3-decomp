@@ -310,16 +310,16 @@ void FileCache::PollUntilLoaded() {
 void FileCache::DumpOverSize(int iii) {
     int i2 = CurSize();
     while (i2 > iii) {
-        float f1 = 0;
         int u9 = -1;
         int i8 = 0;
+        float f1 = 0;
         for (int i = 0; i < mEntries.size(); i++) {
             FileCacheEntry *curEntry = mEntries[i];
-            if (curEntry->CheckSize() && !curEntry->Loader() && !curEntry->RefCount()
-                && (u9 == -1 || curEntry->Priority() < i8
-                    || (curEntry->Priority() == i8 && curEntry->LastRead() < f1))) {
-                i8 = curEntry->Priority();
-                f1 = curEntry->LastRead();
+            if (curEntry->CheckSize() && !curEntry->mLoader && !curEntry->mRefCount
+                && (u9 == -1 || curEntry->mPriority < i8
+                    || (curEntry->mPriority == i8 && curEntry->mLastRead < f1))) {
+                i8 = curEntry->mPriority;
+                f1 = curEntry->mLastRead;
                 u9 = i;
             }
         }
@@ -327,10 +327,10 @@ void FileCache::DumpOverSize(int iii) {
             break;
         FileCacheEntry *delEntry = mEntries[u9];
         if (unk19) {
-            auto _tmp0 = MakeString("Forced to dump entry with size %i (max size %i)", delEntry->Size(), mMaxSize);
-            TheDebug.Notify(_tmp0);
+            int sz = delEntry->mSize;
+            TheDebug.Notify(MakeString("Forced to dump entry with size %i (max size %i)", sz, mMaxSize));
         }
-        i2 -= delEntry->Size();
+        i2 -= delEntry->mSize;
         delete delEntry;
         mEntries.erase(mEntries.begin() + u9);
     }
@@ -363,17 +363,20 @@ void FileCache::Add(const FilePath &fp1, int iii, const FilePath &fp2) {
     } else if (streq(ext, "png") || streq(ext, "bmp")) {
         if (sResourceCacheHelper)
             file.SetRoot(sResourceCacheHelper->CacheFile(fp1.c_str()));
+        else
+            file = fp1;
     } else if (streq(ext, "wav")) {
         if (sWavCacheHelper)
             file.SetRoot(sWavCacheHelper->CacheFile(fp1.c_str()));
+        else
+            file = fp1;
     } else {
         file = fp1;
     }
 
     for (int i = 0; i < mEntries.size(); i++) {
-        if (file == mEntries[i]->FileName()) {
-            if (iii > mEntries[i]->Priority())
-                mEntries[i]->SetPriority(iii);
+        if (file == mEntries[i]->mFileName) {
+            MaxEq(mEntries[i]->mPriority, iii);
             return;
         }
     }

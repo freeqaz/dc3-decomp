@@ -53,7 +53,7 @@ Symbol GetSongTitlePronunciationLanguage();
 
 int SystemExec(const char *);
 int SystemMs();
-void SystemPoll();
+void SystemPoll(bool = false);
 
 bool HongKongExceptionMet();
 Symbol GetSystemLanguage(Symbol);

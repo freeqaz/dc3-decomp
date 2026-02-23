@@ -56,10 +56,12 @@ public:
     ~FlowPtr() {}
 
     void operator=(T *obj) {
-        Symbol sym = obj ? 0 : obj->Name();
+        int state = GetInitialState(obj);
+        Symbol sym(obj ? obj->Name() : 0);
+        Symbol name = sym;
         mObjPtr.SetObjConcrete(obj);
-        mObjName = sym;
-        mState = GetInitialState(obj);
+        mObjName = name;
+        mState = state;
     }
 
     FlowPtr &operator=(const FlowPtr &ptr) {

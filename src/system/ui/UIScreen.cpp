@@ -7,6 +7,7 @@
 #include "os/Debug.h"
 #include "os/JoypadMsgs.h"
 #include "os/Timer.h"
+#include "rndobj/Rnd.h"
 #include "ui/UI.h"
 #include "ui/UILabel.h"
 #include "ui/UIPanel.h"
@@ -135,16 +136,18 @@ void UIScreen::Draw() {
         return;
     }
 
-    FOREACH_POST (it, mPanelList) {
-        bool is_active = it->Active();
-        bool is_showing = false;
-
-        if (is_active) {
-            is_showing = it->mPanel->Showing();
-        }
-
-        if (is_active && is_showing) {
-            it->mPanel->Draw();
+    for (std::list<PanelRef>::iterator it = mPanelList.begin(); it != mPanelList.end();
+         it++) {
+        if (it->Active() && it->mPanel->Showing()) {
+            if (TheRnd.ShouldDrawPanel(it->mPanel)) {
+                static Symbol suppress_blacklight_text("suppress_blacklight_text");
+                const DataNode *prop = Property(suppress_blacklight_text, false);
+                if (prop) {
+                    int val = prop->Int();
+                    TheUI->SetScreenBlacklghtDisabled(val ? true : false);
+                }
+                it->mPanel->Draw();
+            }
         }
     }
 }

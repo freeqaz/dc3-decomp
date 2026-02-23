@@ -40,6 +40,60 @@ GlitchFinder::~GlitchFinder() {
 
 ---
 
+## Class-Specific Delete Lowering (`POOL_OVERLOAD`)
+
+**Impact:** +12-22% (often fixes multiple call sites)
+**Success Rate:** HIGH
+**Time:** 5 minutes + rebuild dependents
+
+If a class is allocated from `PoolAlloc`, missing class-specific `operator delete` causes `delete` sites to lower to the wrong sequence (`dtor + global delete`) instead of the target scalar-deleting-dtor path (`??_GClass` -> `PoolFree`).
+
+### Symptom
+
+Destructor call sites show inserts like:
+
+- `bl ??1Class@@...`
+- `bl ??3@YAXPAX@Z`
+
+Target instead shows a single call:
+
+- `bl ??_GClass@@QAAPAXI@Z`
+
+This often appears as several insert/delete clusters in unrelated destructors (all `delete Class*` sites), not just in `Class::~Class`.
+
+### Why It Works
+
+`POOL_OVERLOAD(Class, line)` provides class-specific `operator new/delete` using `PoolAlloc/PoolFree`. Once present, MWCC can emit the scalar deleting destructor path that matches the game binary.
+
+### Fix
+
+```cpp
+// In the class header
+#include "utl/PoolAlloc.h"
+
+class Voice {
+public:
+    POOL_OVERLOAD(Voice, 0x28);
+    Voice(bool, int, bool);
+    ~Voice();
+    ...
+};
+```
+
+### Real Examples
+
+| Function | Before | After | Delta | Notes |
+|----------|--------|-------|-------|-------|
+| StreamReceiver360::~StreamReceiver360 | 82.7% | 94.9% | +12.2% | `delete Voice*` sites switched to `??_GVoice` |
+| MicXbox::~MicXbox | 74.3% | 96.9% | +22.6% | Same root cause, one-line class fix |
+| Voice::`scalar deleting dtor` (`??_GVoice`) | missing/wrong lowering | 99.2% | n/a | Now emitted via class delete path |
+
+### Verification Note
+
+If only headers changed, generated build graphs may fail to rebuild all dependent wrapper units. Confirm object timestamps and force-rebuild affected `.obj` files before trusting objdiff.
+
+---
+
 ## Variable Extraction
 
 **Impact:** +1-35%

@@ -5,6 +5,25 @@
 #include "obj/PropSync.h"
 #include "obj/Task.h"
 #include "utl/BinStream.h"
+#include "utl/PoolAlloc.h"
+
+class FlowTimer;
+
+class EventTask : public Task {
+public:
+    EventTask(FlowTimer *, ObjPtrVec<FlowNode> *, TaskUnits, float);
+    virtual ~EventTask();
+    OBJ_CLASSNAME(EventTask)
+    virtual void Poll(float);
+
+    POOL_OVERLOAD(EventTask, 0x12)
+
+protected:
+    ObjPtr<FlowTimer> mOwner; // 0x2C
+    ObjPtrVec<FlowNode> *mChildNodes; // 0x40
+    float mDuration; // 0x44
+    float mElapsed; // 0x48
+};
 
 class FlowTimer : public FlowNode {
 public:

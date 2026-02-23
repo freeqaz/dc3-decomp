@@ -1490,11 +1490,11 @@ void HamDirector::UpdatePostProcOverlay(
     sHamDirID = (sHamDirID + 1) % 100;
     TextStream *reflect = TheDebug.SetReflect(ppOverlay);
     if (p1 != NULL) {
-        if (p2 != NULL) {
+        if (!(p2 != NULL)) {
+            MILO_LOG("%03d:HAMDIR Post Proc %s is not blended\n", sHamDirID, p1->Name());
+        } else {
             MILO_LOG("%03d:HAMDIR Post Proc A %s\n", sHamDirID, p1->Name());
             MILO_LOG("%03d:HAMDIR Post Proc B %s\n", sHamDirID, p2->Name());
-        } else {
-            MILO_LOG("%03d:HAMDIR Post Proc %s is not blended\n", sHamDirID, p1->Name());
         }
     }
     if (p1 == NULL && p2 != NULL) {

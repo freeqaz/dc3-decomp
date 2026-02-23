@@ -7,7 +7,9 @@
 #include "obj/Data.h"
 #include "obj/Dir.h"
 #include "obj/Object.h"
+#include "obj/Task.h"
 #include "utl/MakeString.h"
+#include <cstdlib>
 
 FlowSetProperty::~FlowSetProperty() { TheFlowMgr->CancelCommand(this); }
 
@@ -17,9 +19,48 @@ FlowSetProperty::FlowSetProperty()
       mEase(0), mEasePower(2), unk_0xE8(0), mStopMode(1) {}
 
 PropertyTask::PropertyTask(Hmx::Object *obj, DataNode &prop, DataNode &val, TaskUnits units, float dur, EaseType t, float power, bool flag, Hmx::Object *listener)
-    : mTarget(this, obj), mProperty(prop), mValue(val), mStartValue(0),
-      mDuration(dur), mElapsed(0), mEasePower(power), mEaseFunc(GetEaseFunction(t)),
-      mListener(this, listener), unk_0x7C(flag) {
+    : mTarget(this, nullptr), mProperty(prop), mValue(val), mStartValue(0),
+      mDuration(dur), mElapsed(0.0f), mEasePower(power), mEaseFunc(gEaseFuncs[t]),
+      mListener(this, nullptr), unk_0x7C(flag) {
+    MILO_ASSERT(obj, 0x4D);
+    MILO_ASSERT(t >= kEaseLinear && t <= kEaseQuarterHalfStairstep, 0x16B);
+
+    // Loop through target's refs to find existing PropertyTasks with same property
+    for (ObjRef::iterator it = obj->Refs().begin(); it != obj->Refs().end(); ++it) {
+        Hmx::Object *refOwner = it->RefOwner();
+        if (refOwner != nullptr && refOwner->ClassName() == PropertyTask::StaticClassName()) {
+            PropertyTask *task = static_cast<PropertyTask *>(refOwner);
+            DataArray *taskProp = task->mProperty.Array();
+            DataArray *myProp = mProperty.Array();
+            if (taskProp->Size() == myProp->Size()) {
+                bool match = true;
+                for (int i = 0; i < myProp->Size(); i++) {
+                    if (taskProp->Node(i) != myProp->Node(i)) {
+                        match = false;
+                        break;
+                    }
+                }
+                if (match) {
+                    delete task;
+                    break;
+                }
+            }
+        }
+    }
+
+    mListener = listener;
+    mTarget = obj;
+    mStartValue = *obj->Property(mProperty.Array(), true);
+
+    // Handle string-to-int conversion for kDataString type
+    if (mStartValue.Type() == kDataString) {
+        mStartValue = atoi(mStartValue.Str());
+    }
+    if (mValue.Type() == kDataString) {
+        mValue = atoi(mValue.Str());
+    }
+
+    TheTaskMgr.Start(this, units, 0.0f);
 }
 
 BEGIN_PROPSYNCS(FlowSetProperty)
@@ -194,62 +235,80 @@ void FlowSetProperty::ReActivate() {
 }
 
 void FlowSetProperty::Execute(QueueState qs) {
-    FLOW_LOG("Execute: state = %i\n");
+    FLOW_LOG("Execute: state = %i\n", qs);
 
-    if (IsRunning() && qs != kIgnore) {
-        float durationTime = mBlendTime;
-
-        if (mChangePerUnit != 0.0f && !unk_0xE8) {
-            const DataNode *node = mTarget->Property(unk_0x98.Array(), true);
-
-            if (node != nullptr && node->Type() == kDataFloat) {
-                float endVal = node->Float();
-                durationTime = (mValue.Node().Float() - endVal) / mChangePerUnit;
-                if (durationTime < 0.0f) {
-                    durationTime = -durationTime;
-                }
-            } else if (node != nullptr && node->Type() == kDataInt) {
-                int endVal = node->Int();
-                durationTime = (float)(mValue.Node().Int() - endVal) / mChangePerUnit;
-                if (durationTime < 0.0f) {
-                    durationTime = -durationTime;
-                }
+    if (IsRunning()) {
+        if (qs == kIgnore) {
+            FLOW_LOG("RequestStop: Stopping\n");
+            if (unk_0xE8) {
+                UnregisterEvents(this);
+            }
+            if (unk_0xCC != nullptr) {
+                unk_0xCC = nullptr;
             }
         }
+        if (qs == kQueue) {
+            float durationTime = mBlendTime;
 
-        if (durationTime > 0.0f) {
-            Hmx::Object *target = mTarget;
-            DataNode dataNode = unk_0x98;
-            DataNode valueNode = mValue.Node();
-            PropertyTask *task = new PropertyTask(
-                target,
-                dataNode,
-                valueNode,
-                (TaskUnits)mEase,
-                durationTime,
-                (EaseType)mEase,
-                mEasePower,
-                false,
-                nullptr
-            );
-            unk_0xCC = task;
-        } else {
-            mTarget->SetProperty(unk_0x98.Array(), mValue.Node());
+            if (mChangePerUnit != 0.0f && !unk_0xE8) {
+                const DataNode *node = mTarget->Property(unk_0x98.Array(), true);
+
+                if (node != nullptr && node->Type() == kDataFloat) {
+                    float endVal = node->Float();
+                    durationTime = (mValue.Node().Float() - endVal) / mChangePerUnit;
+                    if (durationTime < 0.0f) {
+                        durationTime = -durationTime;
+                    }
+                } else if (node != nullptr && node->Type() == kDataInt) {
+                    int endVal = node->Int();
+                    durationTime = (float)(mValue.Node().Int() - endVal) / mChangePerUnit;
+                    if (durationTime < 0.0f) {
+                        durationTime = -durationTime;
+                    }
+                }
+            }
+
+            if (durationTime > 0.0f) {
+                Hmx::Object *target = mTarget;
+                DataNode dataNode = unk_0x98;
+                DataNode valueNode = mValue.Node();
+                PropertyTask *task = new PropertyTask(
+                    target,
+                    dataNode,
+                    valueNode,
+                    (TaskUnits)mRate,
+                    durationTime,
+                    (EaseType)mEase,
+                    mEasePower,
+                    false,
+                    nullptr
+                );
+                unk_0xCC = task;
+            } else {
+                mTarget->SetProperty(unk_0x98.Array(), mValue.Node());
+            }
         }
     } else {
-        FLOW_LOG("RequestStop: Stopping\n");
-        if (unk_0xE8) {
-            UnregisterEvents(this);
+        if (!mEventsRegistered) {
+            if (qs == kIgnore) {
+                mFlowParent->ChildFinished(this);
+            }
         }
-        if (unk_0xCC != nullptr) {
-            unk_0xCC = nullptr;
-        }
-        TheFlowMgr->QueueCommand(this, qs);
     }
 }
 
 void FlowSetProperty::ChildFinished(FlowNode *child) {
-    FLOW_LOG("Child Finished of class: %s\n", child->ClassName());
+    FLOW_LOG("Child Finished of class:%s\n", child->ClassName());
+    mRunningNodes.remove(child);
+    if (mRunningNodes.empty() && unk_0xCC == nullptr && !mEventsRegistered) {
+        FLOW_LOG("Timed Release From Parent \n");
+        Timer timer;
+        timer.Reset();
+        timer.Start();
+        mFlowParent->ChildFinished(this);
+        timer.Stop();
+        TheFlowMgr->AddMs(timer.Ms());
+    }
 }
 
 bool FlowSetProperty::Replace(ObjRef *from, Hmx::Object *to) {

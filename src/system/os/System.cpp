@@ -89,7 +89,7 @@ Licenses sLicense("system/src/stlport", Licenses::kRequirementNotification);
 
 int Hx_snprintf(char *c, unsigned int ui, char const *cc, ...) {
     std::va_list args;
-    // va_start(args, cc);
+    va_start(args, cc);
     int ret = vsnprintf(c, ui, cc, args);
     if (ret < 0) {
         c[ui - 1] = '\0';

@@ -129,14 +129,14 @@ void CharServoBone::ReallocateInternal() {
     CharBonesMeshes::ReallocateInternal();
     mFacingRotDelta = 0;
     mFacingPosDelta = (Vector3 *)FindPtr("bone_facing_delta.pos");
-    if ((void *)mFacingPosDelta) {
+    if (mFacingPosDelta) {
         mFacingPos = (Vector3 *)FindPtr("bone_facing.pos");
         mPelvis = CharUtlFindBoneTrans("bone_pelvis", Dir());
         if (!mFacingPos) {
-            MILO_NOTIFY("CharServoBone: no Facing Pos in %s", PathName(this));
+            MILO_NOTIFY("CharServoBone: no Facing Pos in ReallocateInternal()");
         }
         if (!mPelvis) {
-            MILO_NOTIFY("CharServoBone: no pelvis bone in %s", PathName(this));
+            MILO_NOTIFY("CharServoBone: no pelvis bone in this dir.");
         }
         mFacingRot = (float *)FindPtr("bone_facing.rotz");
         mFacingRotDelta = (float *)FindPtr("bone_facing_delta.rotz");
@@ -191,12 +191,11 @@ void CharServoBone::DoRegulate(
     Transform &myxfm = me->DirtyLocalXfm();
     ClipPredict pred(driver->GetClip(), myxfm.v, GetZAngle(myxfm.m));
     pred.Predict(driver->mBeat, driver->mBeat + f3);
-    pred.mPos = pred.mLastPos;
-
-    float ang = pred.Angle();
+    Vector3 pos(pred.mLastPos);
+    float ang = pred.mAng;
     float deltaBeat = TheTaskMgr.DeltaBeat() / f4;
     Vector3 shapedDelta;
-    waypoint->ShapeDelta(pred.mPos, shapedDelta);
+    waypoint->ShapeDelta(pos, shapedDelta);
     ScaleAddEq(myxfm.v, shapedDelta, deltaBeat);
     float shapeDelta = waypoint->ShapeDelta(ang);
     RotateAboutZ(myxfm.m, shapeDelta * deltaBeat, myxfm.m);

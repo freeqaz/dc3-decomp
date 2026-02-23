@@ -143,18 +143,16 @@ void Debug::Notify(const char *msg) {
 void Debug::Fail(const char *msg, void *v) {
     if (!mNoDebug && !mFailing) {
         mFailing = true;
-        {
-            StackString<256> msgStr(msg);
-            StackString<4096> stackTrace;
-            DataAppendStackTrace(stackTrace);
-            MILO_LOG(stackTrace.c_str());
-        }
+        StackString<256> msgStr(msg);
+        StackString<4096> stackTrace;
+        DataAppendStackTrace(stackTrace);
+        MILO_LOG(stackTrace.c_str());
         static int heap = MemFindHeap("main");
         MemPushHeap(heap);
         if (!MainThread()) {
             CaptureStackTrace(0x32, (StackData *)mFailThreadStack, v);
             mFailThreadMsg = msg;
-            MILO_LOG("THREAD-FAIL: %s\n", msg);
+            MILO_LOG("THREAD-FAIL: %s\n", msgStr);
             while (true) {
                 Timer::Sleep(200);
                 PlatformDebugBreak();
@@ -169,7 +167,7 @@ void Debug::Fail(const char *msg, void *v) {
         }
         mFailCallbacks.clear();
         ModalType t = kModalFail;
-        Modal(t, msg, v);
+        Modal(t, msgStr.c_str(), v);
         if (t != kModalFail) {
             mFailing = false;
         }

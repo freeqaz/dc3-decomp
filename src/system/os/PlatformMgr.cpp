@@ -134,19 +134,19 @@ void PlatformMgr::SetRegion(PlatformRegion region) {
 }
 
 void PlatformMgr::SetDiskError(DiskError derr) {
-    if (mDiskError != kFailedChecksum && mDiskError != derr) {
-        mDiskError = derr;
-        if (mDiskError != kNoDiskError) {
-            static DiskErrorMsg msg;
-            Handle(msg, false);
-        }
-        DiscErrorCallbackFunc *func = GetDiskErrorCallback();
-        if (func)
-            func();
-        while (true) {
-            MILO_LOG("DISK ERROR\n");
-            Sleep(1);
-        }
+    if (mDiskError == kFailedChecksum || mDiskError == derr)
+        return;
+    mDiskError = derr;
+    if (mDiskError != kNoDiskError) {
+        static DiskErrorMsg msg;
+        Handle(msg, false);
+    }
+    DiscErrorCallbackFunc *func = GetDiskErrorCallback();
+    if (func)
+        func();
+    while (true) {
+        MILO_LOG("DISK ERROR\n");
+        Sleep(1);
     }
 }
 

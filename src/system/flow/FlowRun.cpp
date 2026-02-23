@@ -50,7 +50,7 @@ INIT_REVS(2, 0)
 
 BEGIN_LOADS(FlowRun)
     LOAD_REVS(bs)
-    ASSERT_REVS(0, 2)
+    ASSERT_REVS(2, 0)
     LOAD_SUPERCLASS(FlowNode)
     if (d.rev < 2) {
         Hmx::Object *obj = LoadObjectFromMainOrDir(bs, Dir());
@@ -61,7 +61,7 @@ BEGIN_LOADS(FlowRun)
     } else {
         mTargetDir.LoadFromMainOrDir(bs);
         bs >> mTargetName;
-        mTarget.Reset();
+        mTarget = (Flow *)0;
     }
     d >> mStop;
     d >> mImmediateRelease;
@@ -87,7 +87,7 @@ void FlowRun::RequestStopCancel() {
 }
 
 void FlowRun::OnTargetDirChange() {
-    mTargetDir.Reset();
+    mTarget = (Flow *)0;
     mTargetName = "";
 }
 

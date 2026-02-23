@@ -22,6 +22,7 @@ typedef __va_list va_list; */
 
 typedef char *va_list;
 
+void __va_start(va_list *ap, va_list v);
 void *__va_arg(va_list v_list, int type);
 
 /* clang-format off */

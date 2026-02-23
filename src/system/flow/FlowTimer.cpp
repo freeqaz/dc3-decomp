@@ -3,7 +3,9 @@
 #include "flow/FlowManager.h"
 #include "flow/FlowNode.h"
 #include "obj/Object.h"
+#include "obj/Task.h"
 #include "os/Debug.h"
+#include "rndobj/Anim.h"
 
 FlowTimer::FlowTimer() : mStopMode(0), mTask(this), mRate(0), mTotalTime(0.0f) {}
 
@@ -110,16 +112,29 @@ void FlowTimer::RequestStopCancel() {
 void FlowTimer::Execute(FlowNode::QueueState state) {
     FLOW_LOG("Execute: state = %i\n", state);
 
-    if (FlowNode::IsRunning()) {
-        // Running
+    if (IsRunning()) {
+        if (state == kIgnore) {
+            if (mTask) {
+                delete mTask;
+            }
+            FLOW_LOG("Timed Release From Parent \n");
+            Timer timer;
+            timer.Reset();
+            timer.Start();
+            mFlowParent->ChildFinished(this);
+            timer.Stop();
+            TheFlowMgr->AddMs(timer.Ms());
+        }
     } else {
-        // Not running
-        switch (state) {
-        case 1:
-            break;
-        case 0:
-            OnTimerEnd();
-            break;
+        if (state == kQueue) {
+            EventTask *task = new EventTask(
+                this, &mChildNodes,
+                RndAnimatable::RateToTaskUnits((RndAnimatable::Rate)mRate),
+                mTotalTime
+            );
+            mTask = task;
+        } else if (state == kIgnore) {
+            mFlowParent->ChildFinished(this);
         }
     }
 }

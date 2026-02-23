@@ -579,19 +579,20 @@ void GroupSeqInst::SetTranspose(float f) {
 #pragma region RandomGroupSeqInst
 
 RandomGroupSeqInst::RandomGroupSeqInst(RandomGroupSeq *seq)
-    : GroupSeqInst(seq, true), mIt(mSeqs.end()) {
+    : GroupSeqInst(seq, false), mIt(mSeqs.end()) {
     mNumSeqs = seq->GetNumSimul();
     int childrenSize = seq->Children().size();
     if (childrenSize < mNumSeqs)
         mNumSeqs = childrenSize;
     if (mNumSeqs == 1) {
         int next = seq->NextIndex();
+        int target = next % childrenSize;
         seq->PickNextIndex();
         int n = 0;
         for (ObjPtrList<Sequence>::iterator it = seq->Children().begin();
              it != seq->Children().end();
              ++it) {
-            if (n == next % childrenSize) {
+            if (n == target) {
                 SeqInst *si = (*it)->MakeInst();
                 if (si) {
                     mSeqs.push_back();
@@ -603,7 +604,23 @@ RandomGroupSeqInst::RandomGroupSeqInst(RandomGroupSeq *seq)
         }
         mIt = mSeqs.begin();
     } else {
-        if (mNumSeqs != 0) {
+        int seqsLeft = mNumSeqs;
+        int childrenLeft = childrenSize;
+        ObjPtrList<Sequence>::iterator it = seq->Children().begin();
+        while (it != seq->Children().end()) {
+            if (seqsLeft == childrenLeft || RandomFloat() <= (float)seqsLeft / (float)childrenLeft) {
+                SeqInst *si = (*it)->MakeInst();
+                if (si) {
+                    mSeqs.push_back();
+                    mSeqs.back() = si;
+                }
+                seqsLeft--;
+            }
+            ++it;
+            childrenLeft--;
+            if (seqsLeft != 0)
+                continue;
+            break;
         }
         mIt = mSeqs.begin();
     }

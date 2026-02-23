@@ -407,6 +407,38 @@ ORDER BY current_percent DESC
 LIMIT 30;
 ```
 
+### Recently Reclassified Functions
+
+```sql
+-- Functions reopened by reclassify_at_limit (verdict cleared, reason recorded)
+SELECT
+    symbol,
+    demangled,
+    unit,
+    current_percent,
+    verdict_reason
+FROM functions
+WHERE verdict IS NULL
+  AND verdict_reason LIKE 'has_fixable_%'
+ORDER BY current_percent DESC
+LIMIT 30;
+```
+
+### Fixable AT_LIMIT by Category
+
+```sql
+-- Breakdown of AT_LIMIT verdict_reason classifications
+SELECT
+    verdict_reason,
+    COUNT(*) as count,
+    ROUND(AVG(current_percent), 1) as avg_match
+FROM functions
+WHERE verdict_reason IS NOT NULL
+  AND excluded = 0
+GROUP BY verdict_reason
+ORDER BY count DESC;
+```
+
 ---
 
 ## Attempt History Queries

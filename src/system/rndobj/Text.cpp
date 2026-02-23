@@ -485,7 +485,7 @@ void RndText::FontMap::CleanupSyncMeshes() {
         Page &page = *(mPages[i]);
         RndMesh *mesh = page.mesh;
         if (mesh) {
-            while (mesh->Verts().begin() != page.mVertStart) {
+            while (page.mVertStart != mesh->Verts().end()) {
                 RndMesh::Vert *old = page.mVertStart++;
                 old->pos.x = 0.0f;
                 old->pos.y = 0.0f;

@@ -441,15 +441,13 @@ void ChallengeSortNode::Custom(UIListCustom *list, Hmx::Object *obj) const {
         HamStarsDisplay *pStarsDisplay = dynamic_cast<HamStarsDisplay *>(obj);
         MILO_ASSERT(pStarsDisplay, 0x294);
         pStarsDisplay->SetShowing(true);
-        int difficulty = mChallengeRecord->GetChallengeRow().mDiff;
-        // Check if difficulty is in range [0,2] (Easy/Medium/Expert)
-        bool valid = (difficulty >= 0 && difficulty <= 2);
+        int type = mChallengeRecord->GetChallengeRow().mType;
+        bool valid = (type >= 0 && type <= 2);
         if (!valid) {
-            // Check if difficulty is in range [3,5] for song challenge mode
-            valid = (difficulty >= 3 && difficulty <= 5);
-            if (valid) {
-                int type = mChallengeRecord->GetChallengeRow().mType;
-                pStarsDisplay->SetSongChallenge((Difficulty)type);
+            valid = (type >= 3 && type <= 5);
+            if (!valid) {
+                int diff = mChallengeRecord->GetChallengeRow().mDiff;
+                pStarsDisplay->SetSongChallenge((Difficulty)diff);
             }
         }
     }

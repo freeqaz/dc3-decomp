@@ -144,102 +144,208 @@ BEGIN_SAVES(UILabel)
     }
 END_SAVES
 
-INIT_REVS(0x18, 0)
+INIT_REVS(0x21, 1)
 
 void UILabel::PreLoad(BinStream &bs) {
     LOAD_REVS(bs)
-    ASSERT_REVS(0x18, 0)
+    ASSERT_REVS(0x21, 1)
     UIComponent::PreLoad(bs);
-    if (d.rev > 0 && d.rev < 0xE) {
-        bool deprecated;
-        d >> deprecated;
-    }
-    d >> mTextToken;
-    if (d.rev > 0xD) {
-        String str;
-        d >> str;
-    }
-    if (d.rev > 0xE)
+    if (d.rev > 0x1b) {
+        // New format: reads all members directly
+        d >> mTextToken;
         d >> mLabelText;
-    if (d.rev > 1) {
-        int alignment, capsMode;
-        d >> mIconChar >> alignment >> capsMode;
-        MILO_ASSERT(alignment < 255, 0xFF);
-        MILO_ASSERT(capsMode < 255, 0x100);
-        if (d.rev > 7) {
-            LOAD_BITFIELD(bool, mMarkup)
+        d.stream.Read(&mIconChar, 1);
+        d.stream.ReadEndian(&mAlignment, 4);
+        d >> mWidth;
+        d >> mLeading;
+        int fixedLength;
+        d >> fixedLength;
+        SetFixedLength(fixedLength);
+        d >> mMarkup;
+        d.stream.ReadEndian(&mCapsMode, 4);
+        d >> mHeight;
+        if (d.altRev > 0) {
+            d >> mCircle;
         }
-    }
-    if (d.rev > 4) {
-        // No-op in current revision
-    }
-    if (d.rev > 6 && d.rev < 0x1b) {
-        int styleVal;
-        d >> styleVal;
-    }
-    if (d.rev > 8 && d.rev < 0x10) {
-        int shadowVal;
-        d >> shadowVal;
-    }
-    if (d.rev > 9 && d.rev < 0x1a) {
-        String str;
-        d >> str;
-    }
-    if (d.rev > 10) {
-        int val;
-        d >> val;
-    }
-    if (d.rev > 0xc) {
-        int val;
-        d >> val;
-    }
-    if (d.rev > 0x10 && d.rev < 0x1d) {
-        int val;
-        d >> val;
-    }
-    if (d.rev > 0x11) {
-        int val;
-        d >> val;
-        String str;
-        d >> str;
-    }
-    if (d.rev < 0x13) {
-        int val;
-        d >> val;
+        d.stream.ReadEndian(&mFitType, 4);
+        unsigned int numStyles;
+        d >> numStyles;
+        mLabelStyles.resize(numStyles);
+        mStyles.resize(numStyles);
+        unsigned int i = 0;
+        if (mLabelStyles.size() > 0) {
+            int offset = 0;
+            do {
+                LabelStyle *ls = &mLabelStyles[0];
+                ls = (LabelStyle *)((unsigned char *)ls + offset);
+                ResourceDirPtr<UILabelDir> &resPtr =
+                    *(ResourceDirPtr<UILabelDir> *)((unsigned char *)ls + 0x14);
+                d.stream >> resPtr;
+                ls->mColorOverride.Load(d.stream, true, 0);
+                RndText::Style &style = Style(i);
+                d >> style.mSize;
+                d >> style.mKerning;
+                d >> style.mZOffset;
+                d >> style.mItalics;
+                d >> style.mFontColor.alpha;
+                if (d.rev >= 0x1e) {
+                    d >> style.mBlacklight;
+                }
+                i++;
+                offset += 0x2c;
+            } while (i < mLabelStyles.size());
+        }
+        if (d.rev >= 0x1f) {
+            d >> mScrollDelay;
+            d >> mScrollRate;
+            d >> mScrollPause;
+        }
+        if (d.rev >= 0x20) {
+            d >> mIndentation;
+        }
+        if (d.rev >= 0x21) {
+            d >> mBasicMarkup;
+        }
     } else {
-        int val;
-        d >> val;
-    }
-    if (d.rev > 0x13) {
-        int val;
-        d >> val;
-        if (d.rev < 0x19) {
-            int val2;
-            d >> val2;
+        // Old format: revision-guarded member reads
+        if (d.rev > 0 && d.rev < 0xE) {
+            bool deprecated;
+            d >> deprecated;
         }
-    }
-    if (d.rev > 0x14) {
-        String str;
-        d >> str;
-    }
-    if (d.rev > 0x15) {
-        int elemCount = (*(int *)(((unsigned char *)this) - 0x10) - *(int *)(((unsigned char *)this) - 0x14)) / 0x2c;
-        if (elemCount == 2) {
+        d >> mTextToken;
+        if (d.rev > 0xD) {
+            d >> mLabelText;
+        }
+        if (d.rev > 0xE) {
+            if (d.rev < 0x19) {
+                String str;
+                d >> str;
+                mIconChar = str.c_str()[0];
+            } else {
+                d.stream.Read(&mIconChar, 1);
+            }
+        }
+        if (d.rev > 1) {
+            d >> Style(0).mSize;
+            d.stream.ReadEndian(&mAlignment, 4);
+            d.stream.ReadEndian(&mCapsMode, 4);
+            if (d.rev > 7) {
+                d >> mMarkup;
+            }
+            d >> mLeading;
+            d >> Style(0).mKerning;
+        }
+        if (d.rev > 4) {
+            d >> Style(0).mItalics;
+        }
+        if (d.rev > 2) {
+            d.stream.ReadEndian(&mFitType, 4);
+            d >> mWidth;
+            d >> mHeight;
+        }
+        if (d.rev < 4) {
+            Transform &xfm = DirtyLocalXfm();
+            if (mAlignment & 1) {
+                xfm.v.x -= mWidth / 2.0f;
+            } else if (mAlignment & 4) {
+                xfm.v.x += mWidth / 2.0f;
+            }
+            if (mAlignment & 0x10) {
+                xfm.v.z += mHeight / 2.0f;
+            } else if (mAlignment & 0x40) {
+                xfm.v.z -= mHeight / 2.0f;
+            }
+        }
+        if (d.rev > 5) {
+            int fixedLength;
+            d >> fixedLength;
+            SetFixedLength(fixedLength);
+        }
+        if (d.rev > 6 && d.rev < 0x1b) {
+            int reserveLines;
+            d >> reserveLines;
+        }
+        if (d.rev > 8 && d.rev < 0x10) {
+            bool shadowEnabled;
+            d >> shadowEnabled;
+            float shadowR, shadowG, shadowB;
+            d >> shadowR >> shadowG >> shadowB;
+        }
+        if (d.rev > 9 && d.rev < 0x1a) {
             String str;
             d >> str;
+        }
+        if (d.rev > 10) {
+            d >> Style(0).mFontColor.alpha;
+        }
+        if (d.rev > 0xc) {
+            LStyle(0).mColorOverride.Load(d.stream, true, 0);
+        }
+        if (d.rev > 0x10 && d.rev < 0x1d) {
+            bool useHighlightMesh;
+            d >> useHighlightMesh;
+        }
+        if (d.rev > 0x11) {
+            float altTextSize;
+            d >> altTextSize;
+            ObjPtr<UIColor> altTextColor(this, 0);
+            altTextColor.Load(d.stream, true, 0);
+            bool altStyleEnabled;
+            d >> altStyleEnabled;
+            unsigned int numStyles = (altStyleEnabled ? 1 : 0) + 1;
+            if (altStyleEnabled) {
+                ObjDirPtr<UILabelDir> &dirPtr =
+                    *(ObjDirPtr<UILabelDir> *)((unsigned char *)&mLabelStyles[0] + 0x14);
+                FilePath path = dirPtr.GetFile();
+                mLabelStyles.resize(numStyles);
+                ResourceDirPtr<UILabelDir> &resPtr =
+                    *(ResourceDirPtr<UILabelDir> *)((unsigned char *)&mLabelStyles[0] + 0x2c + 0x14);
+                resPtr.LoadFile(path, true, true, kLoadFront, false);
+                mStyles.resize(numStyles);
+            }
+            Style(1).mSize = altTextSize;
+            LStyle(1).mColorOverride.CopyRef(altTextColor);
+        }
+        if (d.rev > 0x12) {
+            d >> Style(1).mKerning;
         } else {
-            String str;
-            d >> str;
+            Style(1).mKerning = Style(0).mKerning;
+        }
+        if (d.rev > 0x13) {
+            d >> Style(1).mZOffset;
+            if (d.rev < 0x19) {
+                Style(1).mZOffset = Style(1).mZOffset / Style(1).mSize;
+            }
+        }
+        if (d.rev > 0x14) {
+            Symbol fontMatVar;
+            d >> fontMatVar;
+            d.stream.PushRev((int)fontMatVar, this);
+        }
+        if (d.rev > 0x15) {
+            if (mLabelStyles.size() == 2) {
+                LabelStyle &ls = LStyle(1);
+                char buffer[0x100];
+                d.stream.ReadString(buffer, 0x100);
+                ResourceDirPtr<UILabelDir> &resPtr =
+                    *(ResourceDirPtr<UILabelDir> *)((unsigned char *)&ls + 0x14);
+                resPtr.SetName(buffer, true);
+            } else {
+                char buffer[0x100];
+                d.stream.ReadString(buffer, 0x100);
+            }
+        }
+        if (d.rev > 0x16) {
+            Symbol altMatVar;
+            d >> altMatVar;
+            d.stream.PushRev((int)altMatVar, this);
+        }
+        if (d.rev > 0x17) {
+            d >> Style(1).mItalics;
+            d >> Style(1).mFontColor.alpha;
         }
     }
-    if (d.rev > 0x16) {
-        String str;
-        d >> str;
-    }
-    if (d.rev > 0x17) {
-        int val1, val2;
-        d >> val1 >> val2;
-    }
+    d.PushRev(this);
 }
 
 void UILabel::PostLoad(BinStream &bs) {

@@ -146,13 +146,45 @@ ChunkStream::ChunkStream(
 ChunkStream::~ChunkStream() {
     if (mFail == false && mType == kWrite) {
         MaybeWriteChunk(true);
-        if (mChunkInfo.mNumChunks == 512) {
-            MILO_FAIL("%s is %d compressed bytes too large", mFilename, sizeof(mChunkInfo.mChunks));
+        if (mChunkInfo.mNumChunks == 0x200) {
+            MILO_NOTIFY(
+                "%s is %d compressed bytes too large",
+                mFilename,
+                mChunkInfo.mChunks[0x1ff]
+            );
         }
-        //memset()
-        for (int i = 0; i < sizeof(mChunkInfo.mChunks); i++) {
-            int maxChunk = mChunkInfo.mMaxChunkSize;
+        memset(
+            &mChunkInfo.mChunks[mChunkInfo.mNumChunks],
+            0,
+            (0x200 - mChunkInfo.mNumChunks) * 4
+        );
+        for (int i = 0; i < mChunkInfo.mNumChunks; i++) {
+            EndianSwapEq((unsigned int &)mChunkInfo.mChunks[i]);
         }
+        EndianSwapEq((unsigned int &)mChunkInfo.mID);
+        EndianSwapEq((unsigned int &)mChunkInfo.mChunkInfoSize);
+        EndianSwapEq((unsigned int &)mChunkInfo.mNumChunks);
+        EndianSwapEq((unsigned int &)mChunkInfo.mMaxChunkSize);
+        mFile->Seek(0, 0);
+        mFile->Write(&mChunkInfo, 0x810);
+    }
+    if (mFile) {
+        delete mFile;
+    }
+    for (;;) {
+        bool anyDecompressing = false;
+        for (int i = 2; i >= 0; i--) {
+            if (mBuffersState[i] == kDecompressing) {
+                anyDecompressing = true;
+                break;
+            }
+        }
+        if (!anyDecompressing) break;
+        gDataProcessedEvt.Wait(-1);
+    }
+    for (int i = 0; i < 3; i++) {
+        MILO_ASSERT(mBuffersState[i] != kDecompressing, 0x194);
+        MemFree(mBuffers[i]);
     }
 }
 

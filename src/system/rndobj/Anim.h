@@ -178,10 +178,10 @@ public:
     float mOffset; // 0x94
     /** Whether or not the animation should loop. */
     bool mLoop; // 0x98
-    float unk9c;
+    float mPrevFrame; // 0x9c
     EaseFunc *mEaseFunc; // 0xa0
-    float mEasePower;
-    bool mWait;
-    float mFrameSpan;
-    bool mActive;
+    float mEasePower; // 0xa4
+    bool mWait; // 0xa8
+    float mFrameSpan; // 0xac
+    bool mActive; // 0xb0
 };

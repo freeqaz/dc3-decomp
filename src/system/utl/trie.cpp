@@ -55,17 +55,19 @@ static inline unsigned int &FreeListHead(Trie *trie) {
 void Trie::inc_count(unsigned int index) {
     check_index(index);
     char *node = NodePtr(this, index);
+    unsigned int *cf = &CountField(node);
     unsigned char count = SiblingCount(node);
     check_index(index);
-    CountField(node) = (CountField(node) & 0xFFFFFF00) | (count + 1);
+    *cf = (*cf & 0xFFFFFF00) | (count + 1);
 }
 
 void Trie::dec_count(unsigned int index) {
     check_index(index);
     char *node = NodePtr(this, index);
+    unsigned int *cf = &CountField(node);
     unsigned char count = SiblingCount(node);
     check_index(index);
-    CountField(node) = (CountField(node) & 0xFFFFFF00) | (count - 1);
+    *cf = (*cf & 0xFFFFFF00) | (count - 1);
 }
 
 void Trie::inc_dup_count(unsigned int index) {
@@ -79,9 +81,10 @@ void Trie::inc_dup_count(unsigned int index) {
 void Trie::dec_dup_count(unsigned int index) {
     check_index(index);
     char *node = NodePtr(this, index);
+    unsigned int *cf = &CountField(node);
     unsigned int dupCount = GetDupCount(CountField(node));
     check_index(index);
-    CountField(node) = ((dupCount - 1) << 8) | SiblingCount(node);
+    *cf = ((dupCount - 1) << 8) | SiblingCount(node);
 }
 
 void Trie::check_index(unsigned int index) {
@@ -164,16 +167,20 @@ char *Trie::get(int index, char *buffer, int bufSize) {
 }
 
 int Trie::store(const char *str) {
+    if (str == 0) return 0;
+    if (*str == 0) return 0;
+
     unsigned int curIdx = 1;
     unsigned int prevSib = 0;
 
-    // Check string validity and get first char
+    // Compute string length by walking the string
     const char *p = str;
-    char c = *p++;
+    unsigned char c;
+    do {
+        c = *p++;
+    } while (c != 0);
     int strLen = (int)(p - str) - 1;
-    if (strLen < 0) {
-        return 0;
-    }
+    if (strLen < 0) goto do_terminator;
 
     // Process each character
     for (int i = 0; ; ) {
@@ -187,7 +194,6 @@ int Trie::store(const char *str) {
             check_index(newIdx);
             char *newNode = NodePtr(this, newIdx);
             Character(newNode) = c;
-            check_index(newIdx);
             Parent(newNode) = curIdx;
             check_index(curIdx);
             FirstChild(NodePtr(this, curIdx)) = newIdx;
@@ -211,19 +217,17 @@ int Trie::store(const char *str) {
                         curIdx = sibIdx;
                         goto next_iter;
                     }
-                    if (j == sibCount - 1) {
-                        prevSib = sibIdx;
-                        break;
-                    }
+                    j++;
+                    if (j >= sibCount) break;
                     check_index(sibIdx);
                     sibIdx = NextSibling(sibNode);
-                    j++;
                 }
+                prevSib = sibIdx;
             }
 
             // Not found - create new sibling
             unsigned int newIdx = get_free_node();
-            if (sibCount != 0 && prevSib != 0) {
+            if (prevSib != 0) {
                 check_index(prevSib);
                 NextSibling(NodePtr(this, prevSib)) = newIdx;
             }
@@ -245,58 +249,60 @@ int Trie::store(const char *str) {
 
     next_iter:
         i++;
-        if (str[i] == 0 || i > strLen) {
-            break;
-        }
+        if (str[i] == 0) break;
+        if (i > strLen) break;
     }
 
+do_terminator:
     // Add terminating node (char = 0)
     check_index(curIdx);
-    unsigned int childIdx = FirstChild(NodePtr(this, curIdx));
+    {
+        unsigned int childIdx = FirstChild(NodePtr(this, curIdx));
 
-    if (childIdx != 0) {
-        check_index(childIdx);
-        unsigned char sibCount = SiblingCount(NodePtr(this, childIdx));
-        if (sibCount != 0) {
-            unsigned int sibIdx = childIdx;
-            for (unsigned int k = 0; k < sibCount; k++) {
-                check_index(sibIdx);
-                char *sibNode = NodePtr(this, sibIdx);
-                if (Character(sibNode) == 0) {
-                    inc_dup_count(sibIdx);
-                    return sibIdx;
+        if (childIdx != 0) {
+            check_index(childIdx);
+            unsigned char sibCount = SiblingCount(NodePtr(this, childIdx));
+            if (sibCount != 0) {
+                unsigned int sibIdx = childIdx;
+                for (unsigned int k = 0; k < sibCount; k++) {
+                    check_index(sibIdx);
+                    char *sibNode = NodePtr(this, sibIdx);
+                    if (Character(sibNode) == 0) {
+                        inc_dup_count(sibIdx);
+                        return sibIdx;
+                    }
+                    sibIdx = NextSibling(sibNode);
                 }
-                sibIdx = NextSibling(sibNode);
             }
         }
-    }
 
-    // Create terminator node
-    unsigned int termIdx = get_free_node();
-    check_index(termIdx);
-    char *termNode = NodePtr(this, termIdx);
-    Character(termNode) = 0;
-    Parent(termNode) = curIdx;
+        // Create terminator node
+        unsigned int termIdx = get_free_node();
+        check_index(termIdx);
+        char *termNode = NodePtr(this, termIdx);
+        Character(termNode) = 0;
+        Parent(termNode) = curIdx;
 
-    if (childIdx == 0) {
-        check_index(curIdx);
-        FirstChild(NodePtr(this, curIdx)) = termIdx;
-        inc_count(termIdx);
-    } else {
-        unsigned int sibIdx = childIdx;
-        check_index(childIdx);
-        unsigned char sibCount = SiblingCount(NodePtr(this, childIdx));
-        for (unsigned int k = 0; k < sibCount - 1; k++) {
+        if (childIdx == 0) {
+            check_index(curIdx);
+            FirstChild(NodePtr(this, curIdx)) = termIdx;
+            inc_count(termIdx);
+        } else {
+            unsigned int sibIdx = childIdx;
+            check_index(childIdx);
+            unsigned char sibCount = SiblingCount(NodePtr(this, childIdx));
+            for (unsigned int k = 0; k < sibCount - 1; k++) {
+                check_index(sibIdx);
+                sibIdx = NextSibling(NodePtr(this, sibIdx));
+            }
             check_index(sibIdx);
-            sibIdx = NextSibling(NodePtr(this, sibIdx));
+            NextSibling(NodePtr(this, sibIdx)) = termIdx;
+            inc_count(childIdx);
         }
-        check_index(sibIdx);
-        NextSibling(NodePtr(this, sibIdx)) = termIdx;
-        inc_count(childIdx);
-    }
 
-    inc_dup_count(termIdx);
-    return termIdx;
+        inc_dup_count(termIdx);
+        return termIdx;
+    }
 }
 
 void Trie::remove(unsigned int index) {
@@ -414,7 +420,8 @@ loop_start:
 
         // Update parent pointers of children
         unsigned int updateCount = 0;
-        unsigned int updateIdx = FirstChild(NodePtr(this, 1));
+        auto _tmp2 = NodePtr(this, 1);
+        unsigned int updateIdx = FirstChild(_tmp2);
 
         while (true) {
             unsigned int childIdx = FirstChild(NodePtr(this, 1));

@@ -355,13 +355,19 @@ float AnimTask::TimeUntilEnd() {
 }
 
 void AnimTask::Poll(float time) {
-    float frame;
+    if (!mAnim)
+        return;
+    if (mActive) {
+        mAnim->StartAnim();
+        mPrevFrame = mAnim->GetFrame();
+        mActive = false;
+    }
     float blend = 1.0f;
     if (mBlendPeriod) {
         blend = time / mBlendPeriod;
         if (blend >= 1.0f) {
             blend = 1.0f;
-            delete mBlendTask;
+            TheTaskMgr.QueueTaskDelete(mBlendTask);
             mBlendPeriod = 0.0f;
         } else if (!mBlendTask) {
             float oldtime = mBlendTime;
@@ -370,20 +376,67 @@ void AnimTask::Poll(float time) {
         }
     } else {
         if (mBlendTask)
-            delete mBlendTask;
+            TheTaskMgr.QueueTaskDelete(mBlendTask);
     }
-    time = time * mScale + mOffset;
-    if (mLoop) {
-        frame = ModRange(mMin, mMax, time);
+
+    float frame;
+    if (!mLoop && time <= mFrameSpan && mFrameSpan != 0.0f) {
+        float normalized = time / mFrameSpan;
+        float eased = mEaseFunc(normalized, mEasePower, 1.0f);
+        frame = mScale * eased * mFrameSpan + mOffset;
     } else {
-        frame = Clamp<float>(mMin, mMax, time);
+        frame = mScale * time + mOffset;
     }
-    mAnim->SetFrame(frame, blend);
-    if (!mAnimTarget
-        || (!mLoop && !mBlending && !mBlendPeriod)
-            && ((time > mMax || time < mMin) || (mScale == 0))) {
-        delete this;
+
+    if (mLoop) {
+        frame = Mod(frame - mMin, mMax - mMin) + mMin;
+        mAnim->SetFrame(frame, blend);
+        if (!mAnimTarget)
+            goto done;
+        float range = mMax - mMin;
+        float prevNorm = mPrevFrame / range;
+        float frameNorm = frame / range;
+        if ((int)prevNorm != (int)frameNorm) {
+            static Message msg("on_anim_event", DataNode(Symbol("looped")));
+            mListener->Handle(msg, false);
+        }
+    } else {
+        if (mWait) {
+            float startFrame = mAnim->StartFrame();
+            float endFrame = mAnim->EndFrame();
+            if (time != 0.0f) {
+                if (mScale > 0.0f) {
+                    frame = mMax;
+                } else {
+                    frame = mMin;
+                }
+                if (time <= mFrameSpan && mFrameSpan != 0.0f) {
+                    float normalized = time / mFrameSpan;
+                    float eased = mEaseFunc(normalized, mEasePower, 1.0f);
+                    frame = mScale * eased * mFrameSpan + mOffset;
+                }
+                frame = fmod(frame - mMin, mMax - mMin) + mMin;
+            }
+        }
+        frame = Clamp<float>(mMin, mMax, frame);
+        mAnim->SetFrame(frame, blend);
     }
+
+    mPrevFrame = frame;
+
+    if (!mAnimTarget) {
+        if (!mLoop && !mBlending && !mBlendPeriod) {
+            if (time > mFrameSpan || mScale == 0.0f) {
+                if (mListener) {
+                    static Message msg("on_anim_event", DataNode(Symbol("ended")));
+                    mListener->Handle(msg, false);
+                }
+                mListener = nullptr;
+                TheTaskMgr.QueueTaskDelete(this);
+            }
+        }
+    }
+done:;
 }
 
 #pragma endregion

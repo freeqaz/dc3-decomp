@@ -143,6 +143,7 @@ public:
     void DisableAutosave(HamProfile *);
     void HandleEventResponse(HamProfile *, int);
     void Activate();
+    void Poll();
     void PrintoutSaveSizeInfo();
     Symbol GetDialogOpt1();
     Symbol GetDialogOpt2();

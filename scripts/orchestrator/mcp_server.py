@@ -634,7 +634,10 @@ class DecompMCPServer:
             pct = func.get("current_percent")
             pct_str = f"{pct:.1f}%" if pct is not None else "unimplemented"
             verdict = func.get("verdict")
+            verdict_reason = func.get("verdict_reason")
             verdict_str = f" | Verdict: {verdict}" if verdict else ""
+            if verdict_reason:
+                verdict_str += f" ({verdict_reason})"
             output += f"- `{func['symbol']}` ({func.get('demangled', 'N/A')})\n"
             output += f"  Unit: {func.get('unit', 'unknown')} | Match: {pct_str}{verdict_str}\n"
 

@@ -78,22 +78,17 @@ void RndWind::SelfGetWind(const Vector3 &pos, float time, Vector3 &result) {
                 zAxis.z * proj.x - zAxis.x * proj.z,
                 zAxis.x * proj.y - zAxis.y * proj.x);
             Normalize(cross, cross);
-            float rx = result.x;
             float ry = result.y;
             float rz = result.z;
+            float rx = result.x;
             result.y = rx * (cross.z * zAxis.x - zAxis.z * cross.x)
-                + ry * cross.y + rz * zAxis.y;
+                + rz * zAxis.y + ry * cross.y;
             result.z = rz * zAxis.z
                 + rx * (zAxis.y * cross.x - cross.y * zAxis.x) + ry * cross.z;
             result.x = rz * zAxis.x
                 + ry * cross.x + rx * (cross.y * zAxis.z - cross.z * zAxis.y);
         } else {
-            float rx = result.x;
-            float ry = result.y;
-            float rz = result.z;
-            result.z = xfm.m.y.z * ry + xfm.m.x.z * rx + xfm.m.z.z * rz;
-            result.y = xfm.m.y.y * ry + xfm.m.x.y * rx + xfm.m.z.y * rz;
-            result.x = xfm.m.x.x * rx + xfm.m.z.x * rz + xfm.m.y.x * ry;
+            Multiply(result, xfm.m, result);
         }
     }
 

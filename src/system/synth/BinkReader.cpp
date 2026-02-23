@@ -1,4 +1,5 @@
 #include "synth/BinkReader.h"
+#include "os/Block.h"
 #include "os/Debug.h"
 #include "os/Timer.h"
 #include "utl/Symbol.h"
@@ -13,25 +14,20 @@ void BinkSetVideoOnOff(BINK *, int);
 const char *BinkGetError(void);
 }
 
-extern Timer *GetTimer(Symbol);
 extern void BinkNextFrame(BINK *);
-extern unsigned char BinkGetTrackData(int, int);
+extern unsigned int BinkGetTrackData(BINKTRACK *, void *);
 extern BINKTRACK *BinkOpenTrack(BINK *, unsigned char);
 extern void BinkCloseTrack(BINKTRACK *);
 extern void BinkClose(BINK *);
 extern void *MemAlloc(int, const char *, int, const char *, int);
-extern Debug TheDebug;
+extern void MemFree(void *, const char *, int, const char *);
+extern "C" void BinkGoto(void *bink, unsigned int frame, int mode);
 
-// Static heap reference
-static int sHeap = 0;
-
-// Static variables for timer initialization
-static int sTimerInitialized = 0;
-static Timer *sTimer = nullptr;
+int BinkReader::sHeap = 0;
 
 BinkReader::BinkReader(File *file, StandardStream *stream)
-    : mFile(file), mStream(stream), mEnableReads(false),
-      unkD4(0), unkD8(0), unkDC(0), mState(0), mHeapPtr(&sHeap) {
+    : mFile(file), mStream(stream), mDecodeTrack(0), mSamplesReady(0),
+      mSampleCurrent(0), mSamplesJump(0), mState(0), mHeap(sHeap) {
     // Initialize Bink library
     BinkInit();
     BinkSetSoundTrack(0, 0);
@@ -52,8 +48,8 @@ BinkReader::BinkReader(File *file, StandardStream *stream)
 BinkReader::~BinkReader() {
     if (mState > 1 && mBink->NumTracks > 0) {
         for (unsigned char i = 0; i < mBink->NumTracks; i++) {
-            if (mTracks[i]) {
-                BinkCloseTrack(mTracks[i]);
+            if (mBinkTracks[i]) {
+                BinkCloseTrack(mBinkTracks[i]);
             }
             if (mPCMBuffers[i]) {
                 MemFree(mPCMBuffers[i], "unknown", 0, "unknown");
@@ -64,161 +60,146 @@ BinkReader::~BinkReader() {
 }
 
 void BinkReader::Poll(float) {
-    // Initialize timer if needed (static)
-    if ((sTimerInitialized & 1) == 0) {
-        sTimerInitialized |= 1;
-        sTimer = GetTimer(Symbol("bink_audio"));
-    }
+    START_AUTO_TIMER("bink_audio");
 
-    // Create AutoTimer (consumes CPU time tracking)
-    AutoTimer timer(sTimer, 48.0f, nullptr, nullptr);
-
-    // Get state from this object
     int state = mState;
 
     switch (state) {
     case kFail: {
-        // Error state - already failed
-        TheDebug.Fail("BinkReader::Poll() failed", nullptr);
+        MILO_FAIL("BinkReader::Poll() failed!");
         break;
     }
     case kPlaying: {
-        // Playing state - process audio data
-        // TheBlockMgr.Poll();  // Poll the block manager
+        TheBlockMgr.Poll();
 
-        if (mNumSamplesToConsume > 0) {
-            // Consume data from stream
-            // int samplesConsumed = mStream->ConsumeData(&mTracks[0], 0x90, mNumSamplesToConsume);
+        if (mSamplesReady > 0) {
+            int iSamplesConsumed = mStream->ConsumeData(
+                mPCMOffsets, mSamplesReady, mSampleCurrent
+            );
 
-            // Update counts
-            // mSamplesRead += samplesConsumed;
-            // mNumSamplesToConsume -= samplesConsumed;
-        }
+            MILO_ASSERT(iSamplesConsumed <= mSamplesReady, 0x9B);
 
-        // If we need more samples, get them from Bink
-        if (mNumSamplesToConsume <= 0) {
-            unsigned char localCurrentTrack = 0;
-            int remainingBuffer = 0xB400;
+            mSampleCurrent += iSamplesConsumed;
+            mSamplesReady -= iSamplesConsumed;
 
-            // Loop: get track data while buffer has space
-            while (localCurrentTrack != 0) {
-                // unsigned char trackBits = ...;
-                // int trackBuffer = ...;
-                // unsigned char samplesRead = BinkGetTrackData(trackBits, trackBuffer);
-                // remainingBuffer -= samplesRead;
-                // localCurrentTrack++;
-
-                if (remainingBuffer <= 0) {
-                    break;
-                }
+            if (mBink->NumTracks > 0) {
+                unsigned char i = 0;
+                do {
+                    mPCMOffsets[i] = (void *)((char *)mPCMOffsets[i] + iSamplesConsumed * 2);
+                    i++;
+                } while (i < mBink->NumTracks);
             }
 
-            // Update state when frame is complete
-            // if (localCurrentTrack == numTracks) {
-            //     mSamplesPerFrame = 0;
-            //     mNumSamplesToConsume = (samplesRead >> 1) - mSamplesPerFrame;
-            //     mSamplesRead += mSamplesPerFrame;
-            //
-            //     // Check if buffers are equal
-            //     int frameComplete = (mBink->readPos == mBink->writePos) ? 1 : 0;
-            //     mState = frameComplete + 3;
-            // }
+            if (mDecodeTrack == mBink->NumTracks) {
+                mState = (mBink->FrameNum == mBink->Frames) ? kDone : kPlaying;
+                if (mState == kPlaying) {
+                    BinkNextFrame(mBink);
+                }
+                mDecodeTrack = 0;
+            }
+        }
+
+        if (mSamplesReady <= 0) {
+            unsigned int trackData = 0;
+            int remainingBuffer = 0xB400;
+            do {
+                if (mDecodeTrack == mBink->NumTracks)
+                    break;
+
+                trackData = BinkGetTrackData(
+                    mBinkTracks[mDecodeTrack], mPCMBuffers[mDecodeTrack]
+                );
+                remainingBuffer -= trackData;
+
+                mPCMOffsets[mDecodeTrack] =
+                    (void *)((char *)mPCMBuffers[mDecodeTrack] + mSamplesJump * 2);
+                mDecodeTrack++;
+            } while (remainingBuffer > 0);
+
+            if (mDecodeTrack == mBink->NumTracks) {
+                unsigned int prevJump = mSamplesJump;
+                mSamplesJump = 0;
+                mSamplesReady = (trackData >> 1) - prevJump;
+                mSampleCurrent += prevJump;
+
+                int newState =
+                    (mBink->FrameNum == mBink->Frames) ? kDone : kPlaying;
+                mState = newState;
+
+                if (remainingBuffer > 0 && newState == kPlaying) {
+                    BinkNextFrame(mBink);
+                    mDecodeTrack = 0;
+                }
+            }
         }
         break;
     }
     case kSetup: {
-        // Setup complete, transition to playing
         mState = kPlaying;
-        // Call Init function from vtable
+        Init();
         break;
     }
     case kInit: {
-        // Initialization state - setup tracks
-        // int numTracks = mBink->GetNumTracks();
-        //
-        // if (numTracks >= 0x10) {
-        //     TheDebug.Fail("mBink->NumTracks() < BINK_AUDIO_CH", nullptr);
-        // }
-        //
-        // if (numTracks == 0) {
-        //     mState = 4;
-        // } else {
-        //     for (int i = 0; i < numTracks; i++) {
-        //         void *track = BinkOpenTrack(mBink, i);
-        //         mTracks[i] = track;
-        //
-        //         // Validate track properties
-        //         // ...
-        //     }
-        // }
+        MILO_ASSERT(mBink->NumTracks < BINK_AUDIO_CHANNEL_MAX, 0x5E);
+
+        if (mBink->NumTracks == 0) {
+            mState = kDone;
+        }
+
+        if (mBink->NumTracks > 0) {
+            unsigned char i = 0;
+            do {
+                BINKTRACK *hBinkTrack = BinkOpenTrack(mBink, i);
+                mBinkTracks[i] = hBinkTrack;
+                MILO_ASSERT(hBinkTrack->Bits == 16, 0x73);
+                MILO_ASSERT(hBinkTrack->Frequency == 44100, 0x74);
+                MILO_ASSERT(hBinkTrack->Channels == 1, 0x75);
+
+                void *buf =
+                    MemAlloc(hBinkTrack->MaxSize, "BinkReader.cpp", 0x78, "Bink Audio", 0x80);
+                mPCMBuffers[i] = buf;
+                mPCMOffsets[i] = buf;
+                i++;
+            } while (i < mBink->NumTracks);
+        }
         mState = kSetup;
         break;
     }
     }
 
-    // Check for error at end
-    // if (mBink && mBink->hasError) {
-    //     mState = kFail;
-    // }
+    if (mBink->BinkError != 0) {
+        mState = kFail;
+    }
 }
-
-extern void BinkGoto(void *bink, unsigned int frame, int mode);
 
 void BinkReader::Seek(int targetSample) {
     if (mBink != nullptr && mState != kFail) {
-        double sampleRate;
-        double samplesPerFrame;
-        unsigned int targetFrame;
-        unsigned int framesAfterSeek;
-        unsigned int samplesAfterSeek;
-        int deltaFrames;
+        float kfBinkFreq = (float)mBinkTracks[0]->Frequency;
+        float kfBinkRate =
+            (float)mBink->FrameRate / (float)mBink->FrameRateDiv;
 
-        // Get audio sample frequency from first track
-        // Note: mTracks[0] is a BINKTRACK*, but we're reading the first uint32 (Frequency field)
-        sampleRate = (double)*((unsigned int *)mTracks[0]);
+        unsigned int kiSampleFrame = (unsigned int)(
+            ((double)((float)targetSample / kfBinkFreq) - 0.75) *
+                (double)kfBinkRate +
+            1.0
+        );
+        MILO_ASSERT(kiSampleFrame < mBink->Frames, 0x102);
+        BinkGoto(mBink, kiSampleFrame, 1);
 
-        // Calculate Bink video frames per second
-        // The (double)(float)(double) casting pattern matches original compiler behavior for precision
-        samplesPerFrame = (double)(float)((double)mBink->TimeBasis / (double)mBink->SampleRate);
+        unsigned int samplesAfterSeek = (unsigned int)(
+            (double)(float)(
+                ((float)(mBink->FrameNum - 1) * (1.0f / kfBinkRate) + 0.75f) * kfBinkFreq
+            )
+        );
+        mSamplesJump = targetSample - samplesAfterSeek;
+        mSampleCurrent = samplesAfterSeek;
 
-        // Convert target audio sample number to Bink video frame index
-        // The 0.75 offset adjusts for Bink's frame timing alignment
-        targetFrame = (unsigned int)(((double)(float)((double)(long long)(int)targetSample / sampleRate) - 0.75) * samplesPerFrame + 1.0);
-
-        // Validate that target frame is within video bounds
-        if (mBink->FrameCount < targetFrame) {
-            MILO_ASSERT(false, 0x102);
-        }
-
-        // Perform the seek operation
-        BinkGoto(mBink, targetFrame, 1);
-
-        // Calculate actual audio sample position after the seek
-        // Work backwards: last frame -> time -> audio samples
-        framesAfterSeek = (mBink->FrameCount) - 1;
-        samplesAfterSeek = (unsigned int)(((double)(float)((double)framesAfterSeek * (double)(float)(1.0 / samplesPerFrame) + 0.75) * sampleRate));
-
-        // Store the delta and update reader state
-        deltaFrames = targetSample - samplesAfterSeek;
-        mNumSamplesToConsume = deltaFrames;
-        mSamplesRead = samplesAfterSeek;
-
-        // Verify that the delta is within one frame's worth of audio samples
-        if ((float)((double)(float)(1.0 / samplesPerFrame) * sampleRate) < (float)(deltaFrames & 0xFFFFFFFF)) {
-            MILO_ASSERT(false, 0x10B);
-        }
-
+        MILO_ASSERT(mSamplesJump < (kfBinkFreq / kfBinkRate), 0x10B);
         mState = kPlaying;
     }
 }
 
 void BinkReader::Init() {
     MILO_ASSERT(mStream, 0x114);
-    // Initialize stream with: num tracks, sample rate, float samples flag, channel count
-    mStream->InitInfo(
-        mBink->NumTracks,
-        mTracks[0]->Frequency,
-        false,
-        -1
-    );
+    mStream->InitInfo(mBink->NumTracks, mBinkTracks[0]->Frequency, false, -1);
 }

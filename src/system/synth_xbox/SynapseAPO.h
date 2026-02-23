@@ -1,5 +1,18 @@
 #pragma once
 
+class CXAPOBase {
+public:
+  virtual ~CXAPOBase();
+
+private:
+  char mCXAPOBasePad[0x1c]; // CXAPOBase is 0x20 bytes total (vtable + members)
+};
+
+class IXAPOParameters {
+public:
+  virtual ~IXAPOParameters() {}
+};
+
 namespace DSP {
 
 namespace Synapse {
@@ -8,16 +21,6 @@ class Synapse;
 
 struct SynapseAPOParams {
   SynapseAPOParams();
-};
-
-class CXAPOBase {
-public:
-  virtual ~CXAPOBase() {}
-};
-
-class IXAPOParameters {
-public:
-  virtual ~IXAPOParameters() {}
 };
 
 template <typename T, typename Params>
@@ -32,7 +35,8 @@ protected:
 
 private:
   // Base class padding - ensures derived class members start at offset 0x168
-  char pad[0x160];
+  // CXAPOBase = 0x20, IXAPOParameters vtable = 0x4, total base = 0x24
+  char pad[0x144];
 };
 
 class SynapseAPO : public CSampleXAPOBase<SynapseAPO, SynapseAPOParams> {

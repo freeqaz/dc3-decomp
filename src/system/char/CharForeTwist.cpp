@@ -2,13 +2,11 @@
 #include "math/Rot.h"
 #include "math/Trig.h"
 #include "obj/Object.h"
+#include <cmath>
 
 float LimitAng(float ang) {
-    if (ang > PI)
-        return ang - 2.0f * PI;
-    if (ang < -PI)
-        return ang + 2.0f * PI;
-    return ang;
+    float r = fmod(ang + PI, 2.0f * PI);
+    return r < 0 ? r + PI : r - PI;
 }
 
 CharForeTwist::CharForeTwist() : mHand(this), mTwist2(this), mOffset(0), mBias(0) {}

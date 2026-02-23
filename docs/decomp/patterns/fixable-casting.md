@@ -116,6 +116,45 @@ float vorbis_fromdBlook(float a) {
 
 ---
 
+## Cast Placement Controls `fmul` vs `fmuls`
+
+**Impact:** +10-15% when near-match, often final 0.5-5%
+**Success Rate:** HIGH (for float math hotspots)
+**Time:** 5-15 minutes
+
+Moving the `(double)(float)` cast boundary can change only one opcode (`fmul` vs `fmuls`) while preserving behavior. This is especially useful in mixed float/double expressions where objdiff is down to a single real replace.
+
+### Symptom
+
+objdiff shows a lone real mismatch like:
+
+- target: `fmuls`
+- base: `fmul`
+
+Everything else is already `diff_arg` noise.
+
+### Why It Works
+
+MWCC chooses single-precision vs double-precision FPU ops based on where the first promotion occurs. Wrapping the *entire* subexpression in `(double)(float)(...)` keeps the inner multiply/add chain in single precision.
+
+### Fix
+
+```cpp
+// Before - final multiply promoted too early, emits fmul
+double x = (double)(float)(a * b + c) * d;
+
+// After - keep product in float, then promote, emits fmuls in inner chain
+double x = (double)(float)((a * b + c) * d);
+```
+
+### Real Example
+
+| Function | Before | After | Delta | Notes |
+|----------|--------|-------|-------|-------|
+| BinkReader::Seek | 85.9% | 98.9% | +13.0% | Float locals + cast placement removed all real mismatches |
+
+---
+
 ## sizeof() Signedness
 
 **Impact:** Variable

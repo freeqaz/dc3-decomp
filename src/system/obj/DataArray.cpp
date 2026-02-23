@@ -230,11 +230,11 @@ void DataArray::Remove(int index) {
     int newCnt = mSize - 1;
     mNodes = NodesAlloc(newCnt * sizeof(DataNode));
     int cnt = 0;
-    for (cnt = 0; index > cnt; cnt++) {
+    for (cnt = 0; cnt < index; cnt++) {
         new (&mNodes[cnt]) DataNode(oldNodes[cnt]);
     }
-    for (; index < newCnt; index++) {
-        new (&mNodes[index]) DataNode(oldNodes[index + 1]);
+    for (cnt = index; cnt < newCnt; cnt++) {
+        new (&mNodes[cnt]) DataNode(oldNodes[cnt + 1]);
     }
     for (int j = 0; j < mSize; j++) {
         oldNodes[j].~DataNode();
@@ -604,8 +604,7 @@ DataNode DataArray::Execute(bool fail) {
         break;
     }
     Hmx::Object *handledObject = deferredObject;
-    int handledObjectInt = (int)handledObject;
-    if (handledObjectInt == 0) {
+    if ((int)handledObject == 0) {
         if (sDefaultHandler) {
             DataNode n = sDefaultHandler(this);
             if (n.Type() != kDataUnhandled) {
@@ -618,10 +617,10 @@ DataNode DataArray::Execute(bool fail) {
             String str2;
             node.Print(str2, true, 0);
             const char *msg;
-            if (str == str2) {
-                const char *commandText = str.c_str();
+            bool sameText = (str == str2);
+            if (sameText) {
                 msg = MakeString(
-                    "%s not function or object (file %s, line %d)", commandText, mFile, mLine
+                    "%s not function or object (file %s, line %d)", str.c_str(), mFile, mLine
                 );
             } else {
                 const char *evaluatedText = str2.c_str();
@@ -634,7 +633,7 @@ DataNode DataArray::Execute(bool fail) {
                     mLine
                 );
             }
-            TheDebugFailer << msg;
+            TheDebug.Fail(msg, 0);
         }
         return 0;
     }

@@ -74,7 +74,13 @@ unsigned long compressBound(unsigned long sourceLen) {
 // -- CRT --
 int vsnprintf(char *buf, unsigned int count, const char *fmt, char *args) { return 0; }
 int stricmp(const char *, const char *) { return 0; }
+int _strnicmp(const char *, const char *, unsigned int) { return 0; }
+int strnicmp(const char *, const char *, int) { return 0; }
 char *itoa(int, char *, int) { return 0; }
+long long _64time(long *) { return 0; }
+
+struct _stati64_s { char _pad[128]; };
+int _stati64(const char *, struct _stati64_s *) { return -1; }
 
 // -- Winsock --
 void *gethostbyname(const char *) { return 0; }
@@ -885,3 +891,373 @@ FixedString::FixedString() : mStr((char *)(sLinkGlueEmpty + 4)) {
     *(int *)(mStr - 4) = 0;
     mStr[0] = '\0';
 }
+
+// ============================================================================
+// ObjPtrList instantiations for Character, Sequence, Task, EventTrigger,
+// RndPartLauncher — needed by Reflection, UITrigger
+// ============================================================================
+
+#include "char/Character.h"
+#include "synth/Sequence.h"
+#include "obj/Task.h"
+#include "rndobj/EventTrigger.h"
+#include "rndobj/Part.h"
+
+// -- ObjPtrList<Character, ObjectDir> --
+
+template <>
+Hmx::Object *ObjPtrList<Character>::RefOwner() const {
+    return mOwner ? mOwner->RefOwner() : 0;
+}
+
+template <>
+bool ObjPtrList<Character>::Replace(ObjRef *ref, Hmx::Object *obj) {
+    for (iterator it = begin(); it != end(); ++it) {
+        if (it.mNode == ref) { ReplaceNode(it.mNode, obj); return true; }
+    }
+    return false;
+}
+
+template <>
+ObjPtrList<Character>::Node *ObjPtrList<Character>::Unlink(Node *node) {
+    Node *next = node->next;
+    Node *prev = node->prev;
+    if (prev) prev->next = next;
+    if (next) next->prev = prev;
+    if (mNodes == node) mNodes = next;
+    mSize--;
+    return next;
+}
+
+template <>
+ObjPtrList<Character>::iterator ObjPtrList<Character>::erase(iterator it) {
+    Node *node = it.mNode;
+    Node *next = Unlink(node);
+    delete node;
+    return iterator(next);
+}
+
+template <>
+void ObjPtrList<Character>::Link(iterator it, Node *node) {
+    node->mOwner = this;
+    Node *pos = it.mNode;
+    if (pos) {
+        node->next = pos;
+        node->prev = pos->prev;
+        if (pos->prev) pos->prev->next = node;
+        pos->prev = node;
+        if (mNodes == pos) mNodes = node;
+    } else {
+        if (mNodes) {
+            Node *tail = mNodes->prev;
+            node->prev = tail;
+            node->next = nullptr;
+            if (tail) tail->next = node;
+        } else {
+            node->prev = nullptr;
+            node->next = nullptr;
+            mNodes = node;
+        }
+    }
+    mSize++;
+}
+
+template <>
+Hmx::Object *ObjPtrList<Character>::Node::RefOwner() const {
+    ObjPtrList<Character> *list = static_cast<ObjPtrList<Character> *>(mOwner);
+    return list->Owner();
+}
+
+template <>
+BinStream &operator<<(BinStream &bs, const ObjPtrList<Character, ObjectDir> &list) {
+    bs << list.size();
+    for (ObjPtrList<Character>::iterator it = list.begin(); it != list.end(); ++it) {
+        Hmx::Object *obj = *it;
+        bs << (obj ? obj->Name() : "");
+    }
+    return bs;
+}
+
+// -- ObjPtrList<Sequence, ObjectDir> --
+
+template <>
+Hmx::Object *ObjPtrList<Sequence>::RefOwner() const {
+    return mOwner ? mOwner->RefOwner() : 0;
+}
+
+template <>
+bool ObjPtrList<Sequence>::Replace(ObjRef *ref, Hmx::Object *obj) {
+    for (iterator it = begin(); it != end(); ++it) {
+        if (it.mNode == ref) { ReplaceNode(it.mNode, obj); return true; }
+    }
+    return false;
+}
+
+template <>
+ObjPtrList<Sequence>::Node *ObjPtrList<Sequence>::Unlink(Node *node) {
+    Node *next = node->next;
+    Node *prev = node->prev;
+    if (prev) prev->next = next;
+    if (next) next->prev = prev;
+    if (mNodes == node) mNodes = next;
+    mSize--;
+    return next;
+}
+
+template <>
+ObjPtrList<Sequence>::iterator ObjPtrList<Sequence>::erase(iterator it) {
+    Node *node = it.mNode;
+    Node *next = Unlink(node);
+    delete node;
+    return iterator(next);
+}
+
+template <>
+Hmx::Object *ObjPtrList<Sequence>::Node::RefOwner() const {
+    ObjPtrList<Sequence> *list = static_cast<ObjPtrList<Sequence> *>(mOwner);
+    return list->Owner();
+}
+
+// -- ObjPtrList<Task, ObjectDir> --
+
+template <>
+Hmx::Object *ObjPtrList<Task>::RefOwner() const {
+    return mOwner ? mOwner->RefOwner() : 0;
+}
+
+template <>
+bool ObjPtrList<Task>::Replace(ObjRef *ref, Hmx::Object *obj) {
+    for (iterator it = begin(); it != end(); ++it) {
+        if (it.mNode == ref) { ReplaceNode(it.mNode, obj); return true; }
+    }
+    return false;
+}
+
+template <>
+ObjPtrList<Task>::Node *ObjPtrList<Task>::Unlink(Node *node) {
+    Node *next = node->next;
+    Node *prev = node->prev;
+    if (prev) prev->next = next;
+    if (next) next->prev = prev;
+    if (mNodes == node) mNodes = next;
+    mSize--;
+    return next;
+}
+
+template <>
+ObjPtrList<Task>::iterator ObjPtrList<Task>::erase(iterator it) {
+    Node *node = it.mNode;
+    Node *next = Unlink(node);
+    delete node;
+    return iterator(next);
+}
+
+template <>
+Hmx::Object *ObjPtrList<Task>::Node::RefOwner() const {
+    ObjPtrList<Task> *list = static_cast<ObjPtrList<Task> *>(mOwner);
+    return list->Owner();
+}
+
+// -- ObjPtrList<EventTrigger, ObjectDir> --
+
+template <>
+Hmx::Object *ObjPtrList<EventTrigger>::RefOwner() const {
+    return mOwner ? mOwner->RefOwner() : 0;
+}
+
+template <>
+bool ObjPtrList<EventTrigger>::Replace(ObjRef *ref, Hmx::Object *obj) {
+    for (iterator it = begin(); it != end(); ++it) {
+        if (it.mNode == ref) { ReplaceNode(it.mNode, obj); return true; }
+    }
+    return false;
+}
+
+template <>
+ObjPtrList<EventTrigger>::Node *ObjPtrList<EventTrigger>::Unlink(Node *node) {
+    Node *next = node->next;
+    Node *prev = node->prev;
+    if (prev) prev->next = next;
+    if (next) next->prev = prev;
+    if (mNodes == node) mNodes = next;
+    mSize--;
+    return next;
+}
+
+template <>
+ObjPtrList<EventTrigger>::iterator ObjPtrList<EventTrigger>::erase(iterator it) {
+    Node *node = it.mNode;
+    Node *next = Unlink(node);
+    delete node;
+    return iterator(next);
+}
+
+template <>
+Hmx::Object *ObjPtrList<EventTrigger>::Node::RefOwner() const {
+    ObjPtrList<EventTrigger> *list = static_cast<ObjPtrList<EventTrigger> *>(mOwner);
+    return list->Owner();
+}
+
+// -- ObjPtrList<RndPartLauncher, ObjectDir> --
+
+template <>
+Hmx::Object *ObjPtrList<RndPartLauncher>::RefOwner() const {
+    return mOwner ? mOwner->RefOwner() : 0;
+}
+
+template <>
+bool ObjPtrList<RndPartLauncher>::Replace(ObjRef *ref, Hmx::Object *obj) {
+    for (iterator it = begin(); it != end(); ++it) {
+        if (it.mNode == ref) { ReplaceNode(it.mNode, obj); return true; }
+    }
+    return false;
+}
+
+template <>
+ObjPtrList<RndPartLauncher>::Node *ObjPtrList<RndPartLauncher>::Unlink(Node *node) {
+    Node *next = node->next;
+    Node *prev = node->prev;
+    if (prev) prev->next = next;
+    if (next) next->prev = prev;
+    if (mNodes == node) mNodes = next;
+    mSize--;
+    return next;
+}
+
+template <>
+ObjPtrList<RndPartLauncher>::iterator ObjPtrList<RndPartLauncher>::erase(iterator it) {
+    Node *node = it.mNode;
+    Node *next = Unlink(node);
+    delete node;
+    return iterator(next);
+}
+
+template <>
+Hmx::Object *ObjPtrList<RndPartLauncher>::Node::RefOwner() const {
+    ObjPtrList<RndPartLauncher> *list = static_cast<ObjPtrList<RndPartLauncher> *>(mOwner);
+    return list->Owner();
+}
+
+// ============================================================================
+// Additional ObjRefConcrete::CopyRef instantiations
+// ============================================================================
+
+template <>
+void ObjRefConcrete<EventTrigger, ObjectDir>::CopyRef(const ObjRefConcrete<EventTrigger, ObjectDir> &o) {
+    SetObjConcrete(o.mObject);
+}
+
+template <>
+void ObjRefConcrete<UILabel, ObjectDir>::CopyRef(const ObjRefConcrete<UILabel, ObjectDir> &o) {
+    SetObjConcrete(o.mObject);
+}
+
+template <>
+void ObjRefConcrete<RndMesh, ObjectDir>::CopyRef(const ObjRefConcrete<RndMesh, ObjectDir> &o) {
+    SetObjConcrete(o.mObject);
+}
+
+// ============================================================================
+// BinStream operator<< for additional ObjOwnerPtr types
+// ============================================================================
+
+#include "char/CharWeightable.h"
+
+template <>
+BinStream &operator<<(BinStream &bs, const ObjOwnerPtr<CharWeightable> &ptr) {
+    Hmx::Object *obj = ptr;
+    bs << (obj ? obj->Name() : "");
+    return bs;
+}
+
+template <>
+BinStream &operator<<(BinStream &bs, const ObjOwnerPtr<RndTex> &ptr) {
+    Hmx::Object *obj = ptr;
+    bs << (obj ? obj->Name() : "");
+    return bs;
+}
+
+// ============================================================================
+// Missing accessor/method stubs for Matching unit resolution
+// ============================================================================
+
+#include "meta/Profile.h"
+#include "meta_ham/AccomplishmentProgress.h"
+#include "meta_ham/CampaignEra.h"
+#include "meta_ham/AccomplishmentGroup.h"
+#include "meta_ham/Award.h"
+#include "meta/MetaMusicManager.h"
+#include "meta/MetaMusicScene.h"
+#include "os/PlatformMgr.h"
+
+// -- Profile stubs --
+int Profile::GetPadNum() const { return mPadNum; }
+void Profile::MakeDirty() { mDirty = true; }
+
+// -- CampaignEra stubs --
+Symbol CampaignEra::GetName() const { return mEra; }
+
+// -- UIComponent stubs --
+void UIComponent::PostLoad(BinStream &) {}
+
+// -- PlatformMgr stubs --
+void PlatformMgr::RunNetStartUtility() {}
+void PlatformMgr::CheckMailbox() {}
+void PlatformMgr::DisableXMP() {}
+DataNode PlatformMgr::OnSignInUsers(DataArray *) { return DataNode(0); }
+
+// -- AccomplishmentProgress stubs --
+int AccomplishmentProgress::GetNumCompleted() const { return 0; }
+int AccomplishmentProgress::GetTotalSongsPlayed() const { return mTotalSongsPlayed; }
+int AccomplishmentProgress::GetTotalCampaignSongsPlayed() const { return mTotalCampaignSongsPlayed; }
+
+// -- AccomplishmentGroup stubs --
+Symbol AccomplishmentGroup::GetAward() const { return mAward; }
+
+// -- Award stubs --
+Symbol Award::GetName() const { return mName; }
+
+// -- MetaMusicScene stubs --
+Symbol MetaMusicScene::GetName() const { return m_symName; }
+const std::list<Symbol> &MetaMusicScene::GetScreenList() const { return m_lScreens; }
+
+// -- MetaMusicManager stubs --
+MetaMusicScene *MetaMusicManager::GetScene(Symbol s) const {
+    std::map<Symbol, MetaMusicScene *>::const_iterator it = m_mapScenes.find(s);
+    if (it != m_mapScenes.end())
+        return it->second;
+    return 0;
+}
+
+DataNode MetaMusicManager::Handle(DataArray *da, bool b) {
+    return Hmx::Object::Handle(da, b);
+}
+
+// -- ProfileMgr stubs --
+#include "meta_ham/ProfileMgr.h"
+std::vector<HamProfile *> ProfileMgr::GetSignedInProfiles() {
+    std::vector<HamProfile *> v;
+    return v;
+}
+
+// -- CharServoBone stubs --
+#include "char/CharServoBone.h"
+void CharServoBone::PollDeps(
+    std::list<Hmx::Object *> &changedBy, std::list<Hmx::Object *> &change
+) {
+    CharBonesMeshes::StuffMeshes(change);
+}
+
+// -- CharBonesMeshes stubs (vtordisp thunk needs this) --
+#include "char/CharBonesMeshes.h"
+bool CharBonesMeshes::Replace(ObjRef *ref, Hmx::Object *obj) {
+    return Hmx::Object::Replace(ref, obj);
+}
+
+// -- WorldReflection stubs --
+#include "world/Reflection.h"
+void WorldReflection::Highlight() {}
+
+// -- AppLabel stubs --
+#include "meta_ham/AppLabel.h"
+void AppLabel::SetFromGeneralSelectNode(const NavListNode *) {}

@@ -456,21 +456,23 @@ void Sphere::GrowToContain(const Sphere &s) {
         float dz = s.center.z - center.z;
         float dy = s.center.y - center.y;
         float dist = std::sqrt(dy * dy + dz * dz + dx * dx);
-        if (s.radius + dist <= radius)
-            return;
-        if (s.radius <= radius + dist) {
-            if (dist == 0.0f)
+        if (s.radius + dist > radius) {
+            if (!(radius + dist < s.radius)) {
+                if (dist == 0.0f)
+                    return;
+                float invDist = 1.0f / dist;
+                Vector3 a, b;
+                a.x = center.x - dx * invDist * radius;
+                a.z = center.z - dz * invDist * radius;
+                b.x = s.center.x + s.radius * (dx * invDist);
+                b.y = s.center.y + s.radius * (invDist * dy);
+                a.y = center.y - radius * (invDist * dy);
+                b.z = s.center.z + dz * invDist * s.radius;
+                Interp(a, b, 0.5f, center);
+                radius = (dist + s.radius + radius) * 0.5f;
                 return;
-            float invDist = 1.0f / dist;
-            Vector3 a, b;
-            a.x = center.x - dx * invDist * radius;
-            a.y = center.y - invDist * dy * radius;
-            a.z = center.z - dz * invDist * radius;
-            b.x = s.center.x + s.radius * (dx * invDist);
-            b.y = s.center.y + s.radius * (invDist * dy);
-            b.z = s.center.z + dz * invDist * s.radius;
-            Interp(a, b, 0.5f, center);
-            radius = (dist + s.radius + radius) * 0.5f;
+            }
+        } else {
             return;
         }
     }

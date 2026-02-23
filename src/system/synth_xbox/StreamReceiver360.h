@@ -9,7 +9,7 @@ class FxSend360;
 
 class StreamReceiver360 : public StreamReceiver {
 public:
-    StreamReceiver360(int, int, bool);
+    StreamReceiver360(int sampleRate, int numBuffers, bool slip);
     virtual ~StreamReceiver360();
     virtual void SetVolume(float);
     virtual void SetPan(float);

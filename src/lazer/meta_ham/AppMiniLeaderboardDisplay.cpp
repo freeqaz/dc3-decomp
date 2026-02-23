@@ -148,14 +148,17 @@ void AppMiniLeaderboardDisplay::UpdateLeaderboardOnline(int i1) {
             mState = 2;
             mResourceDir->Find<Flow>("pending.flow")->Activate();
         }
-    } else if (!ThePlatformMgr.IsConnected()) {
-        if (mState != 5) {
-            mState = 5;
-            mResourceDir->Find<Flow>("no_profile.flow")->Activate();
-        } else if (mState != 4) {
-            mState = 4;
-            mResourceDir->Find<Flow>("no_profile.flow")->Activate();
+    } else {
+        int newState;
+        if (!ThePlatformMgr.IsConnected()) {
+            if (mState == 5) return;
+            newState = 5;
+        } else {
+            if (mState == 4) return;
+            newState = 4;
         }
+        mState = newState;
+        mResourceDir->Find<Flow>("no_profile.flow")->Activate();
     }
 }
 

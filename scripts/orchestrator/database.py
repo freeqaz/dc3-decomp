@@ -713,7 +713,7 @@ def query_functions(
 
     query = f"""
         SELECT id, symbol, demangled, unit, size, current_percent, best_percent,
-               verdict, locked_by, attempt_count
+               verdict, verdict_reason, locked_by, attempt_count
         FROM functions
         WHERE {glob_clause}
           AND (current_percent IS NULL OR (current_percent >= ? AND current_percent <= ?))
@@ -934,6 +934,7 @@ def update_function_status(
     current_percent: float | None = None,
     verdict: str | None = None,
     source_patch: str | None = None,
+    verdict_reason: str | None = None,
     db_path: str | Path = DEFAULT_DB_PATH,
 ) -> None:
     """Update function status after an attempt."""
@@ -957,6 +958,10 @@ def update_function_status(
     if source_patch is not None:
         updates.append("source_patch = ?")
         params.append(source_patch)
+
+    if verdict_reason is not None:
+        updates.append("verdict_reason = ?")
+        params.append(verdict_reason)
 
     params.append(function_id)
 

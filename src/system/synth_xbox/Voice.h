@@ -3,11 +3,13 @@
 #include "xdk/win_types.h"
 #include "xdk/XAPILIB.h"
 #include "xdk/XAUDIO2.h"
+#include "utl/PoolAlloc.h"
 
 class FxSend360;
 
 class Voice {
 public:
+    POOL_OVERLOAD(Voice, 0x28);
     Voice(bool, int, bool);
     ~Voice();
     void InitSourceBuffer(XAUDIO2_BUFFER &);

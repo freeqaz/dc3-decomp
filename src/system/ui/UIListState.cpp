@@ -220,36 +220,23 @@ void UIListState::SetCircular(bool c, bool b) {
 }
 
 void UIListState::Poll(float fArg0) {
-    float dVar6;
-    int iVar1;
-    int iVar2;
-
-    dVar6 = -1.0f;
     if (mFirstShowing != mTargetShowing) {
-        if (mStepTime == dVar6) {
+        float negOne = -1.0f;
+        if (mStepTime == negOne) {
             mStepTime = fArg0;
-            iVar2 = 1;
-            if (ScrollToTarget(mTargetShowing) <= 0) {
-                iVar2 = -1;
-            }
-            mCallback->StartScroll(*this, iVar2, 1);
+            mCallback->StartScroll(*this, ScrollToTarget(mTargetShowing) > 0 ? 1 : -1, 1);
         }
         if (!(fArg0 < (mStepTime + mSpeed))) {
-            iVar2 = 1;
-            if (ScrollToTarget(mTargetShowing) <= 0) {
-                iVar2 = -1;
-            }
-            mFirstShowing = WrapShowing(mFirstShowing + iVar2);
+            int dir = ScrollToTarget(mTargetShowing) > 0 ? 1 : -1;
+            mFirstShowing = WrapShowing(mFirstShowing + dir);
             mCallback->CompleteScroll(*this);
             if (mFirstShowing != mTargetShowing) {
                 mStepTime = fArg0 - (fArg0 - (mStepTime + mSpeed));
-                iVar2 = 1;
-                if (ScrollToTarget(mTargetShowing) <= 0) {
-                    iVar2 = -1;
-                }
-                mCallback->StartScroll(*this, iVar2, 1);
+                mCallback->StartScroll(
+                    *this, ScrollToTarget(mTargetShowing) > 0 ? 1 : -1, 1
+                );
             } else {
-                mStepTime = dVar6;
+                mStepTime = negOne;
             }
         }
         if (mFirstShowing != mTargetShowing) {
@@ -265,7 +252,7 @@ void UIListState::Poll(float fArg0) {
             }
         }
     } else {
-        mStepTime = dVar6;
+        mStepTime = -1.0f;
         mStepPercent = 0.0f;
     }
 }
@@ -301,9 +288,9 @@ bool UIListState::ShouldHoldDisplayInPlace(int i2) const {
         || (mTargetShowing < mFirstShowing && i2 == -1);
     if (shouldCheck) {
         if (SnappedDataForDisplay(i2) >= 0) {
-            int numdisp = NumDisplay();
-            if (i2 + 1 != numdisp && Display2Data(numdisp) != -1) {
-                if (!Provider()->IsSnappableAtData(Display2Data(i2 + 1))) {
+            int nextDisp = i2 + 1;
+            if (nextDisp != mNumDisplay && Display2Data(nextDisp) != -1) {
+                if (!Provider()->IsSnappableAtData(Display2Data(nextDisp))) {
                     return true;
                 }
             }
@@ -312,8 +299,6 @@ bool UIListState::ShouldHoldDisplayInPlace(int i2) const {
     return false;
 }
 
-// TODO: BuildScroll 95.2%, Scroll 81.9% — remaining mismatches are register swaps and
-// comparison operand order. Could try more variable reordering but diminishing returns.
 bool UIListState::BuildScroll(int direction, int firstShowing, int selectedDisplay, ScrollState &state) const {
     state.mFirstShowing = firstShowing;
     state.mSelectedDisplay = selectedDisplay;
@@ -439,7 +424,7 @@ void UIListState::Scroll(int direction, bool skipActive) {
                     return;
 
                 int step = 1;
-                if (direction < 1)
+                if (direction <= 0)
                     step = -1;
                 changed = BuildScroll(step, curFirst, curSel, state);
 
@@ -476,7 +461,7 @@ void UIListState::Scroll(int direction, bool skipActive) {
         mSelectedDisplay = curSel;
         if (!skipActive && !changed) {
             int dir = 1;
-            if (direction < 1)
+            if (direction <= 0)
                 dir = -1;
             mCallback->StartScroll(*this, dir, false);
             mCallback->CompleteScroll(*this);
@@ -486,10 +471,10 @@ void UIListState::Scroll(int direction, bool skipActive) {
 
 void UIListState::PageScroll(int amount) {
     int direction;
-    if (amount <= 0) {
-        direction = -1;
-    } else {
+    if (amount > 0) {
         direction = 1;
+    } else {
+        direction = -1;
     }
 
     if (mCircular) {

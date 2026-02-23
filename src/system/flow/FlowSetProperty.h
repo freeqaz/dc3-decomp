@@ -8,7 +8,7 @@
 #include "obj/Task.h"
 #include "utl/PoolAlloc.h"
 
-class PropertyTask : public Hmx::Object {
+class PropertyTask : public Task {
 public:
     PropertyTask(
         Hmx::Object *,
