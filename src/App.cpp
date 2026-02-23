@@ -63,6 +63,21 @@ namespace {
     bool gListenForKinectGuide;
     FileCache *gPersistentCache;
     ModalCallbackFunc *gRealCallback;
+    unsigned int gIsUselessLoadSymbolInitBits;
+    Symbol gIsUselessLoadDanceBattleMode;
+    Symbol gIsUselessLoadPracticeMode;
+    Symbol gIsUselessLoadCampaignPracticeMode;
+    Symbol gIsUselessLoadInCampaignModeProp;
+    Symbol gIsUselessLoadInCampaignStingerProp;
+    Symbol gIsUselessLoadJustIntroMode;
+    Symbol gIsUselessLoadMindControlMode;
+    Symbol gIsUselessLoadBustAMoveMode;
+    Symbol gIsUselessLoadChallengeMode;
+    Symbol gIsUselessLoadStrikeAPoseMode;
+    Symbol gIsUselessLoadRhythmBattleMode;
+    Symbol gIsUselessLoadGameplayModeProp;
+    Symbol gIsUselessLoadCurrentCampaignEraProp;
+    Symbol gIsUselessLoadEraTanBattleMode;
 }
 
 Symbol RemoveDigitSuffix(const Symbol &);
@@ -392,21 +407,6 @@ static bool InLoaderModeSafe(Symbol modeSymbol) {
 }
 
 bool IsUselessLoad(const char *loadPath) {
-    static Symbol danceBattleMode("dance_battle");
-    static Symbol practiceMode("practice");
-    static Symbol campaignPracticeMode("campaign_practice");
-    static Symbol inCampaignModeProp("is_in_campaign_mode");
-    static Symbol inCampaignStingerProp("is_in_campaign_stinger");
-    static Symbol justIntroMode("just_intro");
-    static Symbol mindControlMode("mind_control");
-    static Symbol bustAMoveMode("bustamove");
-    static Symbol challengeMode("challenge");
-    static Symbol strikeAPoseMode("strike_a_pose");
-    static Symbol rhythmBattleMode("rhythm_battle");
-    static Symbol gameplayModeProp("gameplay_mode");
-    static Symbol currentCampaignEraProp("current_campaign_era");
-    static Symbol eraTanBattleMode("era_tan_battle");
-
     bool shouldSkipLoad = false;
 
     if (gMiloTool || loadPath == 0 || TheGameData == 0) {
@@ -419,36 +419,46 @@ bool IsUselessLoad(const char *loadPath) {
         return false;
     }
 
-    bool isLocalizedVoiceBankPath = false;
-    if (strstr(loadPath, "sfx/loc/") == loadPath) {
-        isLocalizedVoiceBankPath = strstr(loadPath, "/vo_bank_") != 0;
+    bool isLocalizedVoiceBankPath;
+    if (strstr(loadPath, "sfx/loc/") != loadPath
+        || (isLocalizedVoiceBankPath = true, strstr(loadPath, "/vo_bank_") == 0)) {
+        isLocalizedVoiceBankPath = false;
     }
 
     const char *baseName = FileGetBase(loadPath);
     Symbol baseNameSymbol(baseName);
 
-    bool isCharacterCamshotPath = false;
-    if (strstr(loadPath, "world/shared/camshots/") == loadPath) {
-        isCharacterCamshotPath = GetCharacterEntry(baseNameSymbol, false) != 0;
+    bool isCharacterCamshotPath;
+    if (strstr(loadPath, "world/shared/camshots/") != loadPath
+        || (isCharacterCamshotPath = true, GetCharacterEntry(baseNameSymbol, false) == 0)) {
+        isCharacterCamshotPath = false;
     }
 
-    bool isCrewCamshotPath = strstr(loadPath, "world/shared/camshots/crew_") != 0;
+    bool isCrewCamshotPath = strstr(loadPath, "world/shared/camshots/crew_") == loadPath;
+    if ((gIsUselessLoadSymbolInitBits & 0x1) == 0) {
+        gIsUselessLoadSymbolInitBits |= 0x1;
+        new (&gIsUselessLoadDanceBattleMode) Symbol("dance_battle");
+    }
     if ((isLocalizedVoiceBankPath || isCharacterCamshotPath)
         && strstr(loadPath, player0->Char().Str()) == 0
         && strstr(loadPath, player1->Char().Str()) == 0) {
-        if (InLoaderModeSafe(danceBattleMode)) {
+        if (g_LoaderModeCallback(gIsUselessLoadDanceBattleMode)) {
             Symbol player0Crew = GetCrewForCharacter(player0->Char(), true);
             Symbol player1Crew = GetCrewForCharacter(player1->Char(), true);
-            bool matchesCrewCharacter = false;
-
-            matchesCrewCharacter = matchesCrewCharacter
-                || strstr(baseNameSymbol.Str(), GetCrewCharacter(player0Crew, 0).Str()) != 0;
-            matchesCrewCharacter = matchesCrewCharacter
-                || strstr(baseNameSymbol.Str(), GetCrewCharacter(player0Crew, 1).Str()) != 0;
-            matchesCrewCharacter = matchesCrewCharacter
-                || strstr(baseNameSymbol.Str(), GetCrewCharacter(player1Crew, 0).Str()) != 0;
-            matchesCrewCharacter = matchesCrewCharacter
-                || strstr(baseNameSymbol.Str(), GetCrewCharacter(player1Crew, 1).Str()) != 0;
+            bool matchesCrewCharacter;
+            if (strstr(baseNameSymbol.Str(), GetCrewCharacter(player0Crew, 0).Str()) != 0) {
+                matchesCrewCharacter = true;
+            } else {
+                if (strstr(baseNameSymbol.Str(), GetCrewCharacter(player0Crew, 1).Str()) != 0) {
+                    matchesCrewCharacter = true;
+                } else if (strstr(baseNameSymbol.Str(), GetCrewCharacter(player1Crew, 0).Str()) != 0) {
+                    matchesCrewCharacter = true;
+                } else if (strstr(baseNameSymbol.Str(), GetCrewCharacter(player1Crew, 1).Str()) != 0) {
+                    matchesCrewCharacter = true;
+                } else {
+                    matchesCrewCharacter = false;
+                }
+            }
 
             if (!matchesCrewCharacter) {
                 shouldSkipLoad = true;
@@ -458,20 +468,48 @@ bool IsUselessLoad(const char *loadPath) {
         }
     }
 
-    if (!InLoaderModeSafe(danceBattleMode) && (!isCrewCamshotPath || EndsWith(loadPath, "/vo_bank.milo"))) {
+    if (!g_LoaderModeCallback(gIsUselessLoadDanceBattleMode)
+        && (isCrewCamshotPath || EndsWith(loadPath, "/vo_bank.milo"))) {
         shouldSkipLoad = true;
     }
 
-    if (!InLoaderModeSafe(practiceMode) && !InLoaderModeSafe(campaignPracticeMode)
+    if ((gIsUselessLoadSymbolInitBits & 0x2) == 0) {
+        gIsUselessLoadSymbolInitBits |= 0x2;
+        new (&gIsUselessLoadPracticeMode) Symbol("practice");
+    }
+    if ((gIsUselessLoadSymbolInitBits & 0x4) == 0) {
+        gIsUselessLoadSymbolInitBits |= 0x4;
+        new (&gIsUselessLoadCampaignPracticeMode) Symbol("campaign_practice");
+    }
+    if (!g_LoaderModeCallback(gIsUselessLoadPracticeMode)
+        && !g_LoaderModeCallback(gIsUselessLoadCampaignPracticeMode)
         && EndsWith(loadPath, "/barks.milo")) {
         shouldSkipLoad = true;
     }
 
+    if ((gIsUselessLoadSymbolInitBits & 0x8) == 0) {
+        gIsUselessLoadSymbolInitBits |= 0x8;
+        new (&gIsUselessLoadInCampaignModeProp) Symbol("is_in_campaign_mode");
+    }
+    if ((gIsUselessLoadSymbolInitBits & 0x10) == 0) {
+        gIsUselessLoadSymbolInitBits |= 0x10;
+        new (&gIsUselessLoadInCampaignStingerProp) Symbol("is_in_campaign_stinger");
+    }
     bool inCampaignMode = false;
     bool inCampaignStinger = false;
     if (TheHamProvider) {
-        inCampaignMode = TheHamProvider->Property(inCampaignModeProp, true)->Int() != 0;
-        inCampaignStinger = TheHamProvider->Property(inCampaignStingerProp, true)->Int() != 0;
+        int campaignModeValue = TheHamProvider->Property(gIsUselessLoadInCampaignModeProp, true)->Int();
+        inCampaignMode = true;
+        if (campaignModeValue == 0) {
+            inCampaignMode = false;
+        }
+    }
+    if (TheHamProvider) {
+        int campaignStingerValue = TheHamProvider->Property(gIsUselessLoadInCampaignStingerProp, true)->Int();
+        inCampaignStinger = true;
+        if (campaignStingerValue == 0) {
+            inCampaignStinger = false;
+        }
     }
 
     if (!inCampaignMode && !inCampaignStinger && strstr(loadPath, "/campaign/camp_scene_") != 0) {
@@ -482,8 +520,18 @@ bool IsUselessLoad(const char *loadPath) {
         shouldSkipLoad = !inCampaignMode;
     }
 
-    bool inMindControlOrIntro = InLoaderModeSafe(mindControlMode) || InLoaderModeSafe(justIntroMode);
-    if (TheHamWardrobe && (inMindControlOrIntro || InLoaderModeSafe(danceBattleMode))
+    if ((gIsUselessLoadSymbolInitBits & 0x20) == 0) {
+        gIsUselessLoadSymbolInitBits |= 0x20;
+        new (&gIsUselessLoadJustIntroMode) Symbol("just_intro");
+    }
+    if ((gIsUselessLoadSymbolInitBits & 0x40) == 0) {
+        gIsUselessLoadSymbolInitBits |= 0x40;
+        new (&gIsUselessLoadMindControlMode) Symbol("mind_control");
+    }
+    bool inMindControlOrIntro
+        = g_LoaderModeCallback(gIsUselessLoadMindControlMode)
+        || g_LoaderModeCallback(gIsUselessLoadJustIntroMode);
+    if (TheHamWardrobe && (inMindControlOrIntro || g_LoaderModeCallback(gIsUselessLoadDanceBattleMode))
         && (isLocalizedVoiceBankPath || isCharacterCamshotPath)) {
         Symbol override0;
         Symbol override1;
@@ -491,7 +539,7 @@ bool IsUselessLoad(const char *loadPath) {
         if (inMindControlOrIntro) {
             override0 = TheHamWardrobe->GetBackupOutfitOverride(0);
             override1 = TheHamWardrobe->GetBackupOutfitOverride(1);
-        } else if (InLoaderModeSafe(danceBattleMode)) {
+        } else if (g_LoaderModeCallback(gIsUselessLoadDanceBattleMode)) {
             override0 = GetAlternateCharacter(player0->Char());
             override1 = GetAlternateCharacter(player1->Char());
         }
@@ -509,20 +557,54 @@ bool IsUselessLoad(const char *loadPath) {
         shouldSkipLoad = false;
     }
 
-    if (InLoaderModeSafe(bustAMoveMode) && EndsWith(loadPath, "/vo_bank_bustamove.milo")) {
+    if ((gIsUselessLoadSymbolInitBits & 0x80) == 0) {
+        gIsUselessLoadSymbolInitBits |= 0x80;
+        new (&gIsUselessLoadBustAMoveMode) Symbol("bustamove");
+    }
+    if (g_LoaderModeCallback(gIsUselessLoadBustAMoveMode)
+        && EndsWith(loadPath, "/vo_bank_bustamove.milo")) {
         shouldSkipLoad = false;
     }
-    if (InLoaderModeSafe(challengeMode) && EndsWith(loadPath, "/vo_bank_challenge.milo")) {
+    if ((gIsUselessLoadSymbolInitBits & 0x100) == 0) {
+        gIsUselessLoadSymbolInitBits |= 0x100;
+        new (&gIsUselessLoadChallengeMode) Symbol("challenge");
+    }
+    if (g_LoaderModeCallback(gIsUselessLoadChallengeMode)
+        && EndsWith(loadPath, "/vo_bank_challenge.milo")) {
         shouldSkipLoad = false;
     }
-    if (InLoaderModeSafe(strikeAPoseMode) && EndsWith(loadPath, "/vo_bank_strikeapose.milo")) {
+    if ((gIsUselessLoadSymbolInitBits & 0x200) == 0) {
+        gIsUselessLoadSymbolInitBits |= 0x200;
+        new (&gIsUselessLoadStrikeAPoseMode) Symbol("strike_a_pose");
+    }
+    if (g_LoaderModeCallback(gIsUselessLoadStrikeAPoseMode)
+        && EndsWith(loadPath, "/vo_bank_strikeapose.milo")) {
         shouldSkipLoad = false;
     }
 
+    if ((gIsUselessLoadSymbolInitBits & 0x400) == 0) {
+        gIsUselessLoadSymbolInitBits |= 0x400;
+        new (&gIsUselessLoadRhythmBattleMode) Symbol("rhythm_battle");
+    }
+    if ((gIsUselessLoadSymbolInitBits & 0x800) == 0) {
+        gIsUselessLoadSymbolInitBits |= 0x800;
+        new (&gIsUselessLoadGameplayModeProp) Symbol("gameplay_mode");
+    }
+    if ((gIsUselessLoadSymbolInitBits & 0x1000) == 0) {
+        gIsUselessLoadSymbolInitBits |= 0x1000;
+        new (&gIsUselessLoadCurrentCampaignEraProp) Symbol("current_campaign_era");
+    }
+    if ((gIsUselessLoadSymbolInitBits & 0x2000) == 0) {
+        gIsUselessLoadSymbolInitBits |= 0x2000;
+        new (&gIsUselessLoadEraTanBattleMode) Symbol("era_tan_battle");
+    }
     bool isRhythmBattleContext = false;
     if (TheHamProvider) {
-        isRhythmBattleContext = TheHamProvider->Property(gameplayModeProp, true)->Sym() == rhythmBattleMode;
-        if (inCampaignMode && TheHamProvider->Property(currentCampaignEraProp, true)->Sym() == eraTanBattleMode) {
+        isRhythmBattleContext
+            = TheHamProvider->Property(gIsUselessLoadGameplayModeProp, true)->Sym() == gIsUselessLoadRhythmBattleMode;
+        if (inCampaignMode
+            && TheHamProvider->Property(gIsUselessLoadCurrentCampaignEraProp, true)->Sym()
+                == gIsUselessLoadEraTanBattleMode) {
             isRhythmBattleContext = true;
         }
     }
@@ -540,7 +622,8 @@ bool IsUselessLoad(const char *loadPath) {
         shouldSkipLoad = false;
     }
 
-    if ((InLoaderModeSafe(practiceMode) || InLoaderModeSafe(campaignPracticeMode))
+    if ((g_LoaderModeCallback(gIsUselessLoadPracticeMode)
+         || g_LoaderModeCallback(gIsUselessLoadCampaignPracticeMode))
         && EndsWith(loadPath, "/vo_bank_rehearse.milo")) {
         shouldSkipLoad = false;
     }
