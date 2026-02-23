@@ -86,6 +86,59 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def resolve_from_db(symbol: str) -> tuple[str, Path, str] | None:
+    """Resolve symbol -> (symbol, source_path, qualified_name) from decomp.db + objdiff.json."""
+    import re
+    import sqlite3
+
+    db_path = Path("decomp.db")
+    if not db_path.exists():
+        return None
+
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+
+    # Try exact symbol match, then demangled LIKE match
+    row = conn.execute(
+        "SELECT symbol, demangled, unit FROM functions WHERE symbol = ? LIMIT 1",
+        (symbol,),
+    ).fetchone()
+    if not row:
+        row = conn.execute(
+            "SELECT symbol, demangled, unit FROM functions WHERE demangled LIKE ? LIMIT 1",
+            (f"%{symbol}%",),
+        ).fetchone()
+    if not row:
+        return None
+
+    mangled = row["symbol"]
+    demangled = row["demangled"]
+    unit = row["unit"]
+
+    # Extract qualified C++ name from demangled signature
+    m = re.search(r"([\w~][\w:~]*(?:::[\w~]+)+)\s*\(", demangled)
+    if not m:
+        return None
+    qualified_name = m.group(1)
+
+    # Look up source_path from objdiff.json
+    objdiff_path = Path("objdiff.json")
+    if not objdiff_path.exists():
+        return None
+
+    data = json.load(open(objdiff_path))
+    source_path = None
+    for u in data["units"]:
+        if u["name"] == unit:
+            source_path = u.get("metadata", {}).get("source_path")
+            break
+
+    if not source_path:
+        return None
+
+    return mangled, Path(source_path), qualified_name
+
+
 def main():
     args = parse_args()
 
@@ -93,6 +146,20 @@ def main():
         for name in list_patterns():
             print(f"  {name}")
         return
+
+    # Auto-resolve from DB if only --symbol is provided
+    if args.symbol and (not args.source or not args.function):
+        resolved = resolve_from_db(args.symbol)
+        if resolved:
+            mangled, source_path, qualified_name = resolved
+            if not args.source:
+                args.source = source_path
+            if not args.function:
+                args.function = qualified_name
+            args.symbol = mangled
+            print(f"Resolved: {args.symbol} -> {args.function} in {args.source}", file=sys.stderr)
+        else:
+            print(f"Could not resolve '{args.symbol}' from decomp.db", file=sys.stderr)
 
     # Validate required args
     missing = []
