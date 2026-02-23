@@ -155,7 +155,7 @@ Symbol GetCrewForCharacter(Symbol theChar, bool fail) {
         for (int j = 0; j < num; j++) {
             Symbol crewChar = GetCrewCharacter(crew, j);
             if (crewChar == theChar) {
-                return crewChar;
+                return crew;
             }
         }
     }
