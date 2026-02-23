@@ -446,18 +446,25 @@ bool IsUselessLoad(const char *loadPath) {
             Symbol player0Crew = GetCrewForCharacter(player0->Char(), true);
             Symbol player1Crew = GetCrewForCharacter(player1->Char(), true);
             bool matchesCrewCharacter;
-            if (strstr(baseNameSymbol.Str(), GetCrewCharacter(player0Crew, 0).Str()) != 0) {
-                matchesCrewCharacter = true;
-            } else {
-                if (strstr(baseNameSymbol.Str(), GetCrewCharacter(player0Crew, 1).Str()) != 0) {
-                    matchesCrewCharacter = true;
-                } else if (strstr(baseNameSymbol.Str(), GetCrewCharacter(player1Crew, 0).Str()) != 0) {
-                    matchesCrewCharacter = true;
-                } else if (strstr(baseNameSymbol.Str(), GetCrewCharacter(player1Crew, 1).Str()) != 0) {
-                    matchesCrewCharacter = true;
-                } else {
-                    matchesCrewCharacter = false;
+            const char *crewCharacterMatch
+                = strstr(baseNameSymbol.Str(), GetCrewCharacter(player0Crew, 0).Str());
+            if (crewCharacterMatch == 0) {
+                crewCharacterMatch = strstr(baseNameSymbol.Str(), GetCrewCharacter(player0Crew, 1).Str());
+                if (crewCharacterMatch != 0) {
+                    goto crew_character_matched;
                 }
+                crewCharacterMatch = strstr(baseNameSymbol.Str(), GetCrewCharacter(player1Crew, 0).Str());
+                if (crewCharacterMatch != 0) {
+                    goto crew_character_matched;
+                }
+                crewCharacterMatch = strstr(baseNameSymbol.Str(), GetCrewCharacter(player1Crew, 1).Str());
+                matchesCrewCharacter = false;
+                if (crewCharacterMatch != 0) {
+                    goto crew_character_matched;
+                }
+            } else {
+crew_character_matched:
+                matchesCrewCharacter = true;
             }
 
             if (!matchesCrewCharacter) {
@@ -495,25 +502,35 @@ bool IsUselessLoad(const char *loadPath) {
         gIsUselessLoadSymbolInitBits |= 0x10;
         new (&gIsUselessLoadInCampaignStingerProp) Symbol("is_in_campaign_stinger");
     }
-    bool inCampaignMode = false;
-    bool inCampaignStinger = false;
-    if (TheHamProvider) {
+    bool inCampaignMode;
+    bool inCampaignStinger;
+    if (TheHamProvider == 0) {
+not_in_campaign_mode:
+        inCampaignMode = false;
+    } else {
         int campaignModeValue = TheHamProvider->Property(gIsUselessLoadInCampaignModeProp, true)->Int();
         inCampaignMode = true;
         if (campaignModeValue == 0) {
-            inCampaignMode = false;
+            goto not_in_campaign_mode;
         }
     }
-    if (TheHamProvider) {
+    if (TheHamProvider == 0) {
+not_in_campaign_stinger:
+        inCampaignStinger = false;
+    } else {
         int campaignStingerValue = TheHamProvider->Property(gIsUselessLoadInCampaignStingerProp, true)->Int();
         inCampaignStinger = true;
         if (campaignStingerValue == 0) {
-            inCampaignStinger = false;
+            goto not_in_campaign_stinger;
         }
     }
 
-    if (!inCampaignMode && !inCampaignStinger && strstr(loadPath, "/campaign/camp_scene_") != 0) {
-        shouldSkipLoad = true;
+    if (!inCampaignMode) {
+        if (!inCampaignStinger) {
+            if (strstr(loadPath, "/campaign/camp_scene_") != 0) {
+                shouldSkipLoad = true;
+            }
+        }
     }
 
     if (strstr(loadPath, "/vo_bank_camp_") != 0) {
@@ -613,8 +630,10 @@ bool IsUselessLoad(const char *loadPath) {
         if (EndsWith(loadPath, "/vo_bank_rhythmbattle.milo")) {
             shouldSkipLoad = false;
         }
-        if (EndsWith(loadPath, "/vo_bank_rhythmbattle_finale.milo") && inCampaignMode) {
-            shouldSkipLoad = false;
+        if (inCampaignMode) {
+            if (EndsWith(loadPath, "/vo_bank_rhythmbattle_finale.milo")) {
+                shouldSkipLoad = false;
+            }
         }
     }
 
@@ -629,7 +648,10 @@ bool IsUselessLoad(const char *loadPath) {
     }
 
     if (shouldSkipLoad) {
-        const char *loggedPath = loadPath ? loadPath : "NULL";
+        const char *loggedPath = loadPath;
+        if (loggedPath == 0) {
+            loggedPath = "NULL";
+        }
         TheDebug << MakeString("'%s' is a useless load\n", loggedPath);
     }
 
