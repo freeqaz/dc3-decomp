@@ -353,6 +353,52 @@ The threshold value can be determined from the float constant in objdiff. Common
 
 ---
 
+## rlwimi Peephole Avoidance (+ instead of |)
+
+**Impact:** +2-3%
+**Success Rate:** MEDIUM (mitigates but doesn't fully fix)
+**Time:** 5 minutes
+
+The compiler recognizes bit-field merge patterns like `(x >> 16) | (y & 0x7FFF0000)` and emits `rlwimi` (rotate left word immediate then mask insert, 1 instruction) instead of the target's `rlwinm` + `or` (2 instructions). Using `+` instead of `|` prevents the pattern recognition.
+
+### Symptom
+
+objdiff shows `rlwimi` in our build vs `rlwinm` + `or` in target. The `rlwimi` is a single instruction that combines a rotate/mask with an insert into an existing register — a peephole optimization for non-overlapping bit-field merges.
+
+### Why It Works (Partially)
+
+The compiler's peephole optimizer recognizes `|` between non-overlapping bit ranges as a rotate-and-insert. Using `+` (addition) is mathematically equivalent when bit ranges don't overlap, but the compiler doesn't recognize `+` as a merge pattern and emits separate `rlwinm` + `add` instead.
+
+**Trade-off:** `+` generates `add` instead of `or`. This is a Catch-22 — `|` triggers rlwimi, `+` avoids it but uses the wrong combine instruction. The `+` form is typically better overall because it eliminates the structural mismatch (1 vs 2 instructions), leaving only an opcode difference (`add` vs `or`).
+
+### Fix
+
+```cpp
+// Before (82.2% match) — compiler emits rlwimi (1 instr) instead of rlwinm+or (2 instr)
+mRandTable[i] = ((j >> 16) & 0xFFFF) | (s & 0x7FFF0000);
+
+// After (84.8% match) — + avoids rlwimi; pair with unsigned cast for shift direction
+mRandTable[i] = (((unsigned int)j >> 16) & 0xFFFF) + (s & 0x7FFF0000);
+```
+
+### Real Examples
+
+| Function | Before | After | Delta | Notes |
+|----------|--------|-------|-------|-------|
+| Rand::Seed | 82.2% | 84.8% | +2.6% | Also fixed `srawi` → `srwi` with `(unsigned int)` cast. Remaining gap: `add` vs `or` + register swaps |
+
+### When to Use
+
+- objdiff shows `rlwimi` in our build vs `rlwinm` + `or` in target
+- Bit-field merge with non-overlapping ranges (low bits OR'd with high bits)
+- Always pair with signedness fix if the shift direction also mismatches (`srawi` vs `srwi`)
+
+### Detection
+
+Look for `rlwimi` in a `replace` or structural mismatch where the target has two separate instructions (`rlwinm` for the mask + `or` for the combine).
+
+---
+
 ## See Also
 
 - [fixable-casting.md](fixable-casting.md) - Type casting patterns

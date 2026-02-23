@@ -350,30 +350,6 @@ The target generates a "scalar deleting destructor" (??_G) wrapper for `delete o
 |----------|-------|------------|
 | StreamReceiver360::Poll | 90.9% | `delete v` generates separate destructor + delete |
 
-### Branchless Bool Conversion (subi+cntlzw+extrwi vs branch)
-
-**Typical Gap:** ~7-12% (partially fixable)
-**Status:** PARTIALLY FIXABLE — restructuring the return expression can steer away from branchless codegen
-
-The target converts `(int)state == 2` to bool using branchless `subi+cntlzw+extrwi` sequence, while our compiler generates compare-and-branch. However, restructuring from `return state == 2` to `if (state != 2) return false; return true;` (or combining with other conditions) can force the compiler to use compare-and-branch matching the target.
-
-| Function | Start | Best | Root Cause |
-|----------|-------|------|------------|
-| NetLoaderRef::IsDownloading | 88.6% | **93.0%** | Restructured return to if/else; remaining 7% is LINKER_MERGED + BOOL_MASK + reloc noise |
-
-### rlwimi vs rlwinm+or (Bit Manipulation Peephole)
-
-**Typical Gap:** ~15%
-**Status:** Hard — partially mitigated using `+` instead of `|`
-
-The target compiler recognizes `(j >> 16) | (s & MASK)` as a rotate-and-insert pattern and emits `rlwimi` (1 instruction). Our compiler emits `rlwinm` + `or` (2 instructions). Using `+` instead of `|` prevents rlwimi recognition but generates `add` instead of `or` — a Catch-22 where `|` triggers rlwimi and `+` generates the wrong instruction. The `+` form is better overall (84.8% vs 82.2%) because it eliminates the rlwimi structural mismatch, leaving only `add` vs `or` + register swaps.
-
-Also pair with `(unsigned int)` cast on the shift operand to fix `srawi` (signed) vs `srwi` (unsigned) shift mismatch.
-
-| Function | Match | Best | Root Cause |
-|----------|-------|------|------------|
-| Rand::Seed | 82.2% | 84.8% | `\|` triggers rlwimi; `+` avoids it but generates `add` |
-
 ### cmplwi vs cmpwi for Pointer Null Checks
 
 **Typical Gap:** ~1.5%

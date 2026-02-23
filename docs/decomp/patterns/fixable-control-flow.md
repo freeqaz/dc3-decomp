@@ -515,6 +515,57 @@ if (shouldCheck) {
 
 ---
 
+## Branchless Bool Return to If/Else
+
+**Impact:** +4-5%
+**Success Rate:** MEDIUM
+**Time:** 5 minutes
+
+When the compiler generates branchless `subi+cntlzw+extrwi` for a direct comparison return (`return state == 2`), restructure into an explicit if/else to force compare-and-branch codegen.
+
+### Symptom
+
+objdiff shows `subi`, `cntlzw`, `extrwi` (or `rlwinm` with rotate) in the target where our code has `cmpwi` + `beq` + `li`. The branchless sequence converts an integer comparison to 0/1 arithmetically instead of via a branch.
+
+### Why It Works
+
+`return expr == value` generates a branchless idiom: subtract, count leading zeros, extract bit. Converting to `if (expr != value) return false; return true;` forces the compiler to use compare-and-branch, matching the target when the target also uses branching (or vice versa).
+
+### Fix
+
+```cpp
+// Before (88.6% match) — branchless subi+cntlzw+extrwi
+bool NetLoaderRef::IsDownloading() {
+    MILO_ASSERT(IsValid(), 0x321);
+    if (mCacheLoader) {
+        return (int)mCacheLoader->mState == 2;
+    }
+    return true;
+}
+
+// After (93.0% match) — compare-and-branch
+bool NetLoaderRef::IsDownloading() {
+    MILO_ASSERT(IsValid(), 0x321);
+    if (!mCacheLoader || (int)mCacheLoader->mState == 2)
+        return true;
+    return false;
+}
+```
+
+### Real Examples
+
+| Function | Before | After | Delta | Notes |
+|----------|--------|-------|-------|-------|
+| NetLoaderRef::IsDownloading | 88.6% | 93.0% | +4.4% | Remaining gap is LINKER_MERGED + BOOL_MASK + reloc noise |
+
+### When to Use
+
+- Direct comparison return (`return x == N`)
+- objdiff shows `subi`/`cntlzw`/`extrwi` sequence vs branches
+- Try both directions: if target is branchless but ours branches, try direct return; if target branches but ours is branchless, try if/else
+
+---
+
 ## See Also
 
 - [fixable-comparison.md](fixable-comparison.md) - Conditional expression patterns
