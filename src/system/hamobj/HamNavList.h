@@ -100,6 +100,7 @@ public:
     void DoSelectFor(int);
     void SendHighlightMsg(int);
     void SendHighlightSettledMsg(int);
+    float CalculateSwell(int) const;
     void ClearBigElements();
     void HideItem(int, bool);
     void SetProviderNavItemLabels(int, DataArray *);
@@ -114,6 +115,8 @@ public:
 
     static void Init();
     static bool sLastSelectInControllerMode;
+
+    friend class HamScrollBehavior;
 
 private:
     void SetRibbonMode(HamListRibbon::RibbonMode);
@@ -172,7 +175,7 @@ protected:
     float unk158; // 0x158
     DoubleExponentialSmoother mSlideSmoother; // 0x15c
     DoubleExponentialSmoother mDisengageSmoother; // 0x170
-    int unk184;
+    int mDirectionGestureFilter;
     int unk188;
     int mSkeletonTrackingID; // 0x18c
     HamScrollBehavior mScrollBehavior;

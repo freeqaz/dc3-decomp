@@ -64,7 +64,7 @@ protected:
     /** "Degrees to rotation physical camera around skeleton".
         Ranges from -360 to 360. */
     float mPhysicalCamRotation; // 0x10c
-    float unk110; // 0x110
+    float mCurrentCamRotation; // 0x110
     /** "Which coordinate system axes to draw" */
     SkeletonCoordSys mAxesCoordSys; // 0x114
     RndLine *mBoneLines[kNumBones]; // 0x118
@@ -78,7 +78,7 @@ protected:
     RndCam *mPhysicalCam; // 0x190
     Transform unk194; // 0x194
     Transform unk1d4; // 0x1d4
-    float unk214; // 0x214
+    float mLineWidthScale; // 0x214
     bool unk218; // 0x218
 };
 

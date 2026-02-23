@@ -70,7 +70,7 @@ struct ErrorFrameInput {
 
 // Ham1NodeWeight size: 0x14
 struct Ham1NodeWeight {
-    bool unk0;
+    bool mActive;
     float mPerfectDist;
     float mRate;
     float mPerfectDist2;
@@ -79,7 +79,7 @@ struct Ham1NodeWeight {
 
 // Ham2FrameWeight size: 0x24
 struct Ham2FrameWeight {
-    float unk0; // 0x0 - PSNR?
+    float mWeight; // 0x0 - PSNR?
     float unk4[4];
     float unk14[4];
 };

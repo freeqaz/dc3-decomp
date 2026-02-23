@@ -107,7 +107,7 @@ BinStream &operator<<(BinStream &bs, const Flow::DynamicPropertyEntry &entry) {
     bool exposed = entry.mExposed;
     BinStream &bs2 = bs1 << entry.mHelp;
     bs2 << exposed;
-    entry.unk24.Save(bs2);
+    entry.mSymbolList.Save(bs2);
     BinStream &bs3 = bs2 << entry.mObjectClass;
     bs3 << entry.mObjectType;
     return bs;
@@ -120,7 +120,7 @@ BinStream &operator>>(BinStream &bs, Flow::DynamicPropertyEntry &entry) {
     bs >> entry.mHelp;
     bs >> entry.mExposed;
     bs >> entry.mObjectClass;
-    entry.unk24.Load(bs);
+    entry.mSymbolList.Load(bs);
     bs >> entry.mObjectType;
     return bs;
 }
@@ -530,8 +530,8 @@ Symbol Flow::DynamicPropertyEntry::GetDefaultValueSymbol() {
 }
 
 DataNode Flow::DynamicPropertyEntry::GetSymbolList() {
-    if (unk24.Type() == kDataArray) {
-        return unk24.Array();
+    if (mSymbolList.Type() == kDataArray) {
+        return mSymbolList.Array();
     } else {
         DataArrayPtr ptr(new DataArray(1));
         ptr->Node(0) = Symbol();

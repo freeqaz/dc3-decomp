@@ -18,10 +18,10 @@ CharCameraInput::CharCameraInput(Character *c) : mChar(c), unk2430(0) {
             MILO_NOTIFY("Could not find %s", name);
         }
     }
-    memset(&unk11d8, 0, sizeof(SkeletonFrame));
-    unk11d8.mFloorNormal.Set(0, 1, 0);
-    unk11d8.mFloorClipPlane.Set(0, 0, 0, 0);
-    unk11d8.mElapsedMs = 33;
+    memset(&mCharFrame, 0, sizeof(SkeletonFrame));
+    mCharFrame.mFloorNormal.Set(0, 1, 0);
+    mCharFrame.mFloorClipPlane.Set(0, 0, 0, 0);
+    mCharFrame.mElapsedMs = 33;
     for (int i = 0; i < 6; i++) {
         // skeleton frame edits
     }

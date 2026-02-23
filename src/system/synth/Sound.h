@@ -103,7 +103,7 @@ protected:
     /** "Maximum number of times this sound can be playing simultaneously.
         Use 0 for no limit. (SynthSample only)" */
     int mMaxPolyphony; // 0xb0
-    bool unkb4;
+    bool mIsSynthSample;
     ObjPtr<Hmx::Object> mEventReceiver;
     std::list<DelayArgs *> mDelayArgs; // 0xcc
 };

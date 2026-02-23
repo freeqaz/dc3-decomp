@@ -19,9 +19,9 @@ std::list<HamCamShot::TargetCache> HamCamShot::sCache;
 
 HamCamShot::HamCamShot()
     : mTargets(this), mMinTime(0), mMaxTime(0), mZeroTime(0), mPlayerFlag(kHamPlayerOff),
-      mNextShots(this), mCurrentShot(this), unk2cc(0), unk2d0(0), mInSetFrame(0), mTotalDuration(0),
-      mListingShots(0), unk2dd(0), mMasterAnims(this), mOriginalSizeNextShots(0), unk2f8(this), unk30c(this),
-      unk320(this), unk340(this), unk354(this), unk368(this), unk388(false) {
+      mNextShots(this), mCurrentShot(this), mNextShotOffset(0), mNextShotDuration(0), mInSetFrame(0), mTotalDuration(0),
+      mListingShots(0), mTargetsFlipped(0), mMasterAnims(this), mOriginalSizeNextShots(0), mFlipHideList(this), mFlipShowList(this),
+      mFlipGenHideList(this), mFlipDrawOverrides(this), mFlipPostProcOverrides(this), mFlipEndHideList(this), mFlipActive(false) {
     mNearPlane = 10;
     mFarPlane = 10000;
     mNextShotIt = 0;
@@ -207,9 +207,9 @@ void HamCamShot::Target::UpdateTarget(Symbol s, HamCamShot *shot) {
 
 std::list<HamCamShot::TargetCache>::iterator HamCamShot::CreateTargetCache(Symbol s) {
     TargetCache cache;
-    sCache.push_back(cache);
-    cache.mTargetName = s;
-    cache.mTrans = FindTarget(s);
+    sCache.insert(sCache.begin(), cache);
+    sCache.begin()->mTargetName = s;
+    sCache.begin()->mTrans = FindTarget(s);
     return sCache.begin();
 }
 
@@ -278,8 +278,8 @@ void HamCamShot::TeleportTarget(RndTransformable *trans, const Transform &xfm, b
 void HamCamShot::ResetNextShot() {
     mNextShotIt = 0;
     mCurrentShot = this;
-    unk2cc = 0;
-    unk2d0 = 0;
+    mNextShotOffset = 0;
+    mNextShotDuration = 0;
 }
 
 bool HamCamShot::ListNextShots(std::list<HamCamShot *> &shots) {
@@ -338,6 +338,31 @@ void HamCamShot::CheckNextShots() {
 }
 
 float HamCamShot::EndFrame() { return GetTotalDuration(); }
+
+void HamCamShot::SetFrame(float frame, float blend) {
+    if (!mTargetsFlipped) {
+        SetPreFrame(frame, blend);
+    }
+    float origFrame = frame;
+    bool inRange = (frame < mDuration) || mNextShots.empty();
+    if (!inRange) {
+        frame -= mNextShotOffset + mDuration;
+    }
+    if (CheckShotOver(origFrame)) {
+        CamShot::SetShotOver();
+    }
+    if (this == mCurrentShot) {
+        CamShot::SetFrame(frame, blend);
+    } else {
+        for (ObjPtrList<RndAnimatable>::iterator it = mAnims.begin(); it != mAnims.end(); ++it) {
+            (*it)->SetFrame(frame, 1.0f);
+        }
+        mCurrentShot->SetFrameEx(frame, blend);
+        RndAnimatable::SetFrame(origFrame, blend);
+    }
+    CamShot::SetFrames(mMasterAnims, origFrame);
+    mTargetsFlipped = false;
+}
 
 void HamCamShot::SetFrameEx(float frame, float blend) {
     mInSetFrame = true;

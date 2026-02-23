@@ -39,28 +39,28 @@ FreestyleMoveRecorder::FreestyleMoveRecorder()
     mTrackedJoints.push_back(kJointHead); // 3
     mTrackedJoints.push_back(kJointHipCenter); // 0
     JointPos pos;
-    pos.unk0 = 11;
+    pos.mJoint = 11;
     pos.unk4 = 2;
     mPositions.push_back(pos);
-    pos.unk0 = 7;
+    pos.mJoint = 7;
     pos.unk4 = 1;
     mPositions.push_back(pos);
-    pos.unk0 = 9;
+    pos.mJoint = 9;
     pos.unk4 = 2;
     mPositions.push_back(pos);
-    pos.unk0 = 5;
+    pos.mJoint = 5;
     pos.unk4 = 1;
     mPositions.push_back(pos);
-    pos.unk0 = 17;
+    pos.mJoint = 17;
     pos.unk4 = 4;
     mPositions.push_back(pos);
-    pos.unk0 = 14;
+    pos.mJoint = 14;
     pos.unk4 = 3;
     mPositions.push_back(pos);
-    pos.unk0 = 16;
+    pos.mJoint = 16;
     pos.unk4 = 4;
     mPositions.push_back(pos);
-    pos.unk0 = 13;
+    pos.mJoint = 13;
     pos.unk4 = 3;
     mPositions.push_back(pos);
     mFrameBuffer = new FreestyleMoveFrame[mMaxFrames];

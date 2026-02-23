@@ -15,13 +15,13 @@ namespace {
 }
 
 ThreeDSound::ThreeDSound()
-    : mIsLooping(0), unk195(0), mDelayedVolume(0), mDelayedPan(0), mDelayedTranspose(0), unk1a4(0), mDelayMs(0),
+    : mIsLooping(0), unk195(0), mDelayedVolume(0), mDelayedPan(0), mDelayedTranspose(0), mDelayedOwner(0), mDelayMs(0),
       mFalloffType(kEaseLinear), mFalloffParameter(2), mMinFalloffDistance(10),
       mSilenceDistance(100), mDopplerEnabled(1), mPanEnabled(1), mShape(0), mRadius(10),
       unk20c(100), unk210(0), mDopplerPower(1), mStartedPlaying(0) {
     Fader *fader = static_cast<Fader *>(Fader::NewObject());
-    unk1c8 = fader;
-    mFaders.Add(unk1c8);
+    mDistanceFader = fader;
+    mFaders.Add(mDistanceFader);
     CalculateFaderVolume();
     Vector3 v(mMinFalloffDistance, mSilenceDistance, 1);
     SetLocalScale(this, v);
@@ -54,9 +54,9 @@ BEGIN_SAVES(ThreeDSound)
     SAVE_REVS(6, 0)
     SAVE_SUPERCLASS(Hmx::Object)
     SAVE_SUPERCLASS(RndTransformable)
-    mFaders.Remove(unk1c8);
+    mFaders.Remove(mDistanceFader);
     SAVE_SUPERCLASS(Sound)
-    mFaders.Add(unk1c8);
+    mFaders.Add(mDistanceFader);
     bs << mFalloffType;
     bs << mFalloffParameter;
     bs << mMinFalloffDistance;
@@ -72,9 +72,9 @@ END_SAVES
 BEGIN_COPYS(ThreeDSound)
     COPY_SUPERCLASS(Hmx::Object)
     COPY_SUPERCLASS(RndTransformable)
-    mFaders.Remove(unk1c8);
+    mFaders.Remove(mDistanceFader);
     COPY_SUPERCLASS(Sound)
-    mFaders.Add(unk1c8);
+    mFaders.Add(mDistanceFader);
     CREATE_COPY(ThreeDSound)
     BEGIN_COPYING_MEMBERS
         if (ty != kCopyFromMax) {
@@ -169,7 +169,7 @@ void ThreeDSound::Play(
     mStartedPlaying = true;
     if (mLoop && !unk195) {
         mDelayedVolume = volume;
-        unk1a4 = o4;
+        mDelayedOwner = o4;
         mDelayedPan = pan;
         mIsLooping = true;
         mDelayedTranspose = transpose;
@@ -193,7 +193,7 @@ void ThreeDSound::SaveWorldXfm() { mSavedWorldTransform = WorldXfm(); }
 bool ThreeDSound::HasMoved() { return WorldXfm() != mSavedWorldTransform; }
 
 void ThreeDSound::EnablePan(bool enable) {
-    unk1c8->SetPan(0);
+    mDistanceFader->SetPan(0);
     mPanEnabled = enable;
     BroadcastPropertyChange("fader_pan");
 }
@@ -203,7 +203,7 @@ void ThreeDSound::GetVelocity(Vector3 &vel) { Subtract(WorldXfm().v, mSavedWorld
 void ThreeDSound::SetAngle(float radians) {
     MILO_ASSERT(radians >= -PI && radians <= PI, 0x191);
     if (mPanEnabled && !Sound::DisablePan(nullptr)) {
-        unk1c8->SetPan(std::sin(radians));
+        mDistanceFader->SetPan(std::sin(radians));
         BroadcastPropertyChange("fader_pan");
     }
 }
@@ -213,5 +213,5 @@ void ThreeDSound::SetDoppler(float doppler) {
     if ((var1 > DOPPLER_MAX) || (var1 < DOPPLER_MIN)) {
         var1 = 1.0f;
     }
-    unk1c8->SetTranspose(CalcTransposeFromSpeed(var1));
+    mDistanceFader->SetTranspose(CalcTransposeFromSpeed(var1));
 }

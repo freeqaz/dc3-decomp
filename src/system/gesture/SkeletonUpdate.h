@@ -67,19 +67,19 @@ private:
     std::vector<SkeletonCallback *> mCallbacks; // 0x94
     SkeletonFrame mSkeletonFrame; // 0xa0
     Skeleton mSkeletons[6]; // 0x1268
-    Skeleton *unk5360[2]; // 0x5360
-    Skeleton *unk5368[2]; // 0x5368
+    Skeleton *mSkeletonsLeft[2]; // 0x5360
+    Skeleton *mSkeletonsRight[2]; // 0x5368
     int unk5370;
     int unk5374;
     int unk5378;
     int unk537c;
-    int unk5380[2]; // 0x5380
+    int mSkeletonTrackingIDs[2]; // 0x5380
     int unk5388; // 0x5388
     int unk538c; // 0x538c
     bool mSwapSides; // 0x5390 - sides swapped?
     int unk5394;
     float unk5398;
     bool mIsUpdateThreadActive; // 0x539c
-    HANDLE unk53a0;
+    HANDLE mUpdateThread;
     NUI_SKELETON_FRAME *mNUISkeletonFrame; // 0x53a4
 };

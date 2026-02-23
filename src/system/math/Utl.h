@@ -1,4 +1,5 @@
 #pragma once
+#include "os/Debug.h"
 #include <cmath>
 
 #define kSmallFloat 0.0001f
@@ -221,8 +222,7 @@ inline float Limit(float f1, float f2, float f3, int &i) {
 }
 
 inline float Sigmoid(float t) {
-    // MILO_ASSERT(t >= 0 && t <= 1, 0x1DB); FIXME: uncommenting this line results in a
-    // ton of circular dependencies surrounding Color.h and here, Utl.h
+    MILO_ASSERT(t >= 0 && t <= 1, 0x1DB);
     float tsq = t * t;
     return Clamp<float>(0, 1, tsq * 3.0f - tsq * 2.0f * t);
 }

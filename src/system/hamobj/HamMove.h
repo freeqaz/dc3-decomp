@@ -33,15 +33,15 @@ public:
     float QuantizedSeconds(float) const;
     float GetBeat() const { return mBeat; }
     FilterVersionType Version() const {
-        int filterMask = (unk4 & 0x300000) >> 5;
+        int filterMask = (mTypeMask & 0x300000) >> 5;
         return filterMask ? kFilterVersionHam1 : kFilterVersionHam2;
     }
     float Beat() const { return mBeat; }
-    int TypeMask() const { return unk4; }
+    int TypeMask() const { return mTypeMask; }
 
 private:
     float mBeat; // 0x0
-    int unk4; // 0x4 - flags?
+    int mTypeMask; // 0x4 - flags?
     Ham1NodeWeight mHam1NodeWeights[kNumMoveModes][kNumMoveMirrored][kNumHam1Nodes]; // 0x8
     Vector3 mNodeWeights[kNumMoveMirrored][kMaxNumErrorNodes]; // 0x508
     Vector3 mNodeScales[kNumMoveMirrored][kMaxNumErrorNodes]; // 0x928
@@ -152,7 +152,7 @@ protected:
     /** "Override threshold for super perfect /
         perfect/flawless / awesome/nice / ok/almost (0 means no override)" */
     float mOverrides[kNumMoveRatings]; // 0xc0
-    bool unkd0; // 0xd0 - dirty
+    bool mDirty; // 0xd0
     /** "id used when comparing to other moves" */
     Hmx::CRC mConfusabilityID; // 0xd4
     std::map<Hmx::CRC, float> mConfusabilities; // 0xd8

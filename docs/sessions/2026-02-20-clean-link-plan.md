@@ -1,7 +1,7 @@
 # Clean Link Plan for DC3 Xbox 360 Decomp
 
 **Date**: 2026-02-20
-**Status**: Tasks 1-2 complete. REL24 displacement fix applied. CRT stub COMDAT exclusion done. Remaining: 255 errors (240 unresolved, 15 REL14 overflow), 275 LNK4006 (unfixable). Bad bls: 99 (98 unresolved + 1 .bss).
+**Status**: In progress — COMDAT Phase 2 partially complete
 **Depends on**: [.pdata root cause analysis](2026-02-12-pdata-role-in-x360-linking.md), [Jeff link limitations](JEFF_LINK_LIMITATIONS.md)
 
 ## Problem
@@ -54,17 +54,13 @@ The CE spec requires **one `.pdata` entry per function** — every function with
 
 ## Impact Summary
 
-| Metric | Before | After All Fixes |
-|--------|--------|----------------|
-| Linker flag | `/FORCE` | `/FORCE` (blocked by 36 LNK2013) |
-| LNK4006 unique symbols | 981 | **16** |
-| LNK1223 | Required `fix_pdata.py` | **0** (fix_pdata.py removed) |
-| Unique unresolved | 238 | 239 (unchanged) |
-| LNK2013 fixup overflow | 168 | **36** |
-| Runtime C++ exceptions | Broken (221 units) | **Functional** |
-| Build pipeline | `split → fix_pdata → ninja → link` | `split → ninja → link` |
-| objdiff fuzzy match | 43.93% | **44.06%** |
-| Total code bytes | 11,326,112 | 11,343,996 |
+| Metric | Before | After Task 1 | After Task 2 |
+|--------|--------|-------------|-------------|
+| Linker flag | `/FORCE` (= `/FORCE:MULTIPLE` + `/FORCE:UNRESOLVED`) | `/FORCE:UNRESOLVED` only | `/FORCE:UNRESOLVED` only |
+| LNK4006 warnings | 3,562 | 0 | 0 |
+| LNK1223 workaround | `fix_pdata.py` renames .pdata→.pdat0 | `fix_pdata.py` still needed | Removed |
+| Runtime C++ exceptions | Broken (221 units invisible to kernel) | Broken (221 units) | Functional |
+| Build pipeline | `split → fix_pdata → ninja → link` | `split → fix_pdata → ninja → link` | `split → ninja → link` |
 
 Tasks are independent and can be done in either order. Task 1 is simpler (extending existing COMDAT infrastructure). Task 2 is more complex (new .pdata generation logic + PDATA_EH placement in Rust).
 
@@ -181,51 +177,43 @@ The 275 remaining warnings are NOT fixable in jeff. Breakdown by object type:
 
 **Changes made** (jeff `src/util/xex.rs`):
 
-1. **EH lookup tables**: Scan symbols to build `except_data_info` map (hex suffix → section/offset) and `pdata_info` map (symbol → prolog_len/func_len). These preserve original prolog lengths from the .pdata entries.
+1. **EH lookup tables**: Parse `except_data_*` / `except_record_*` symbols and original `.pdata` entries to extract prolog_len/func_len per function.
 
-2. **.pdata reconstruction**: Instead of copying original .pdata data, regenerate it:
-   - Collect all `ObjSymbolKind::Function` symbols in `.text` sections
-   - Filter out `__unwind$`, `except_data_*`, `except_record_*`, `lbl_*` symbols
-   - Build 8-byte `IMAGE_CE_RUNTIME_FUNCTION_ENTRY` per function (sorted by offset)
-   - `ExceptionFlag=1` for functions with matching `except_data_` symbols at offset-8
-   - One `IMAGE_REL_PPC_ADDR32` relocation per entry targeting the function symbol
+2. **.pdata reconstruction**: Replace original `.pdata` section data with correctly formatted `IMAGE_CE_RUNTIME_FUNCTION_ENTRY` entries:
+   - Word 0: 0 (placeholder — ADDR32 reloc fills BeginAddress)
+   - Word 1: PrologLen | FuncLen | ThirtyTwoBit | ExceptionFlag (big-endian packed)
+   - One ADDR32 reloc per entry targeting the function symbol
+   - Entries sorted by function offset (ascending) — required by LNK1223
+   - Section symbol added (`.pdata`, STATIC) — required by MSVC X360 linker
 
-3. **PDATA_EH ADDR32 relocations**: Zero baked-in VAs in `except_data_*` blobs, add ADDR32 relocs:
-   - offset+0 → `__CxxFrameHandler` (extern symbol created if needed)
-   - offset+4 → corresponding `except_record_*` symbol (if non-null)
+3. **COMDAT function exclusion**: Functions in `obj.comdat_symbols` excluded from `.pdata` entries — they move to `.text$dup` COMDAT sections with different VAs, breaking sorted order.
 
-4. **pdata@ relocation skip**: Skip relocations targeting omitted `pdata@` symbols.
+4. **except_data ADDR32 relocs**: Zero out baked-in VAs in PDATA_EH blobs, add ADDR32 relocations (offset+0 → `__CxxFrameHandler`, offset+4 → `except_record_*`).
 
 5. **fix_pdata.py removed** from build pipeline (`tools/project.py` split rule).
 
-**Result**: LNK1223 = 0, fix_pdata.py no longer needed. C++ exception handling restored for 221 compilation units.
+**Result**: LNK1223 = 0. Build pipeline simplified to `split → ninja → link`.
 
-### COMDAT Byte Deduplication Fix
+**Key debugging insight**: The linker reports only the FIRST invalid `.pdata` object, making it appear only one object was affected when all were. Root cause: COMDAT functions in `.text$dup` had `.pdata` entries sorted by `.text` offsets but resolved to completely different VAs.
 
-**Problem**: COMDAT Phase 2 copied function bytes to `.text$dup` but left them in the parent `.text` section too. This caused:
-- 743 KB of duplicated bytes inflating total code size
-- objdiff report dropped from ~44% to 41.35% (denominator inflation)
-
-**Fix** (jeff `src/util/xex.rs`):
-1. Zero out COMDAT regions in parent section data after extracting to COMDAT sections
-2. Skip relocations originating from within COMDAT regions in the parent section (dead code shouldn't have fixups)
-
-**Result**:
-- objdiff fuzzy match: **44.06%** (up from 41.35%, above pre-COMDAT baseline of 43.93%)
-- Total code: 11,343,996 bytes (down from 12,087,500)
-- Unique LNK4006 symbols: 16 (down from 981 — ICF symbols now properly resolved)
-- Unique unresolved symbols: 239 (unchanged from 238)
-- New test: `test_comdat_bytes_not_duplicated_in_parent_section`
+**PE .pdata size**: 14.5 KB (vs theoretical ~469 KB). COMDAT-marked functions excluded — partial exception handling coverage.
 
 ### Build/Test Workflow
 
 Use `scripts/build/rebuild_jeff_link.sh` to rebuild jeff, re-split, and link in one command. Pass `--dtk ~/code/milohax/jeff/target/release/dtk` to `configure.py` when using a custom jeff build.
 
+Use `scripts/build/inspect_pdata.py` to debug `.pdata` issues:
+```bash
+python3 scripts/build/inspect_pdata.py build/373307D9/obj/App.obj  # Single object
+python3 scripts/build/inspect_pdata.py --scan                       # All split objects
+```
+
 ## Verification Checklist
 
 - [x] Jeff tests pass (`cargo test` — pre-existing `test_disasm_basic` failure unrelated)
-- [x] LNK4006 unique symbols: 16 (down from 981, remaining are MSVC NODUPLICATES)
-- [x] LNK1223 = 0 (fix_pdata.py removed)
-- [x] objdiff match% restored: 44.06% (above pre-COMDAT baseline)
-- [ ] `/FORCE:UNRESOLVED` works (no LNK1169) — blocked by 36 LNK2013 fixup overflow
-- [x] Linked PE produces valid XEX via `build_xex.py` — boots in xenia-headless (2026-02-21)
+- [x] LNK4006 dropped to 275 (remaining are MSVC NODUPLICATES, not jeff-fixable)
+- [ ] `/FORCE:UNRESOLVED` works — **blocked by 168 LNK2013 fixup overflow errors**
+- [x] Link succeeds without `fix_pdata.py` (no LNK1223)
+- [ ] `.pdata` section ~469 KB — **14.5 KB** (COMDAT exclusion trade-off)
+- [ ] Linked PE produces valid XEX — **not yet tested**
+- [ ] objdiff match% unchanged — **not yet tested**

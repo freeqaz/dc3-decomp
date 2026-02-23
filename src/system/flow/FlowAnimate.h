@@ -43,8 +43,8 @@ protected:
     FlowPtr<RndAnimatable> mAnim; // 0x70
     /** "How should we handle stop requests?" */
     StopMode mStopMode; // 0x90
-    int unk94;
-    int unk98;
+    bool mBetweenStopMarkers; // 0x94
+    int mDeferredStopMode; // 0x98
     /** "Blend time, does not work on Property Animations!" */
     float mBlend; // 0x9c
     /** "wait until current animation finishes before starting" */
@@ -69,7 +69,7 @@ protected:
         (dest "Play from current frame to [end] frame")
     */
     Symbol mType; // 0xc0
-    bool unkc4;
+    bool mStopDeferred; // 0xc4
     /** "Easing to apply to animation" */
     EaseType mEase; // 0xc8
     /** "Modifier to easing equation" */

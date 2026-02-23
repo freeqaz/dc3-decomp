@@ -67,7 +67,7 @@ protected:
     bool mLoop; // 0x84
     CharLipSync::PlayBack *mMainPlayback; // 0x88
     bool mIsOverrideActive; // 0x8c
-    float unk90; // 0x90
+    float mMainBlendAlpha; // 0x90
     CharLipSync::PlayBack *mOverridePlayback; // 0x94
     /** "The CharBones object to add or blend into." */
     ObjPtr<CharBonesObject> mBones; // 0x98
@@ -92,11 +92,11 @@ protected:
     /** "is the override clip applied addtively on top of face mocap?
         If false, it will blend." */
     bool mApplyOverrideAdditively; // 0x104
-    ObjPtr<CharClip> unk108; // 0x108
-    float unk11c; // 0x11c
-    float unk120; // 0x120
+    ObjPtr<CharClip> mOverrideBlendClip; // 0x108
+    float mOverrideBlendWeight; // 0x11c
+    float mOverrideBlendDuration; // 0x120
     float unk124; // 0x124
-    bool unk128; // 0x128
+    bool mOverrideBlendActive; // 0x128
     /** "This will be used instead of the song, if set" */
     ObjPtr<CharDriver> mAlternateDriver; // 0x12c
 };

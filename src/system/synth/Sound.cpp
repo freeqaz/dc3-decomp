@@ -19,12 +19,12 @@ Sound::Sound()
     : mVolume(0), mSpeed(1), mPan(0), mSend(this), mReverbMixDb(kDbSilence),
       mReverbEnable(0), unk3d(1), mSynthSample(this), mMoggClip(this), mEnvelope(this),
       mFaders(this), mDuckers(this), mLoop(0), mLoopStart(0), mLoopEnd(-1),
-      mMaxPolyphony(0), unkb4(0), mEventReceiver(this) {
+      mMaxPolyphony(0), mIsSynthSample(0), mEventReceiver(this) {
     mFaders.Add(TheSynth->MasterFader());
 }
 
 Sound::~Sound() {
-    if (unkb4) {
+    if (mIsSynthSample) {
         FOREACH (it, mSamples) {
             (*it)->Stop(true);
             TheSynth->AddZombie(static_cast<SampleInst *>(*it));
@@ -102,7 +102,7 @@ BEGIN_COPYS(Sound)
             COPY_MEMBER(mPan)
             COPY_MEMBER(unk3d)
             COPY_MEMBER(mSynthSample)
-            unkb4 = mSynthSample;
+            mIsSynthSample = mSynthSample;
             COPY_MEMBER(mMoggClip)
             COPY_MEMBER(mReverbMixDb)
             COPY_MEMBER(mReverbEnable)
@@ -134,7 +134,7 @@ BEGIN_LOADS(Sound)
     bs >> mPan;
     d >> unk3d;
     bs >> mSynthSample;
-    unkb4 = mSynthSample;
+    mIsSynthSample = mSynthSample;
     if (d.rev >= 2) {
         bs >> mReverbMixDb;
         d >> mReverbEnable;
@@ -245,7 +245,7 @@ void Sound::Stop(Hmx::Object *obj, bool b2) {
         delete *it;
         mDelayArgs.erase(it++);
     }
-    if ((unkb4 || mMoggClip) && (unk3d || b2)) {
+    if ((mIsSynthSample || mMoggClip) && (unk3d || b2)) {
         if (!obj) {
             for (auto it = mSamples.begin(); it != mSamples.end(); it) {
                 PlayableSample *cur = *it++;
@@ -343,14 +343,14 @@ void Sound::SetSynthSample(SynthSample *sample) {
     Stop(nullptr, true);
     mMoggClip = nullptr;
     mSynthSample = sample;
-    unkb4 = true;
+    mIsSynthSample = true;
 }
 
 void Sound::SetMoggClip(MoggClip *clip) {
     Stop(nullptr, true);
     mSynthSample = nullptr;
     mMoggClip = clip;
-    unkb4 = false;
+    mIsSynthSample = false;
 }
 
 int Sound::NumMarkers() const {
@@ -427,7 +427,7 @@ void Sound::SynthPoll() {
     // Process samples
     for (auto it = mSamples.begin(); it != mSamples.end();) {
         PlayableSample *sample = *it;
-        if (!unkb4 && mMaxPolyphony != 0) {
+        if (!mIsSynthSample && mMaxPolyphony != 0) {
             if (sample->DonePlaying()) {
                 it = mSamples.erase(it);
             } else {

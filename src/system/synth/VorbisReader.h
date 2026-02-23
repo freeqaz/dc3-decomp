@@ -63,7 +63,7 @@ protected:
     long mMagicHashB; // 0x78
     int unk7c;
     ogg_packet mPendingPacket; // 0x80
-    bool unka0;
+    bool mHasPendingPacket;
     int mSeekTarget; // 0xa4
     int mSamplesToSkip; // 0xa8
     OggMap mOggMap; // 0xac
@@ -74,10 +74,10 @@ protected:
     unsigned char mKeyMask[16]; // 0xdc
     bool unkec;
     bool unked;
-    bool unkee;
+    bool mEof;
     bool mFail; // 0xef
     int mVersion; // 0xf0 - mogg version?
     std::vector<std::vector<short> > mPcmBuffers; // 0xf4 - per-channel PCM sample buffers
-    s64 unk100;
-    int unk108;
+    s64 mLastGranulePos;
+    int mPcmReadPos;
 };

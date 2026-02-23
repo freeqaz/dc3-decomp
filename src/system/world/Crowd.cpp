@@ -195,7 +195,7 @@ BEGIN_COPYS(WorldCrowd)
         Delete3DCrowdHandles();
         COPY_MEMBER(mPlacementMesh)
         COPY_MEMBER(mNum)
-        COPY_MEMBER(unk70)
+        COPY_MEMBER(mCenter)
         COPY_MEMBER(mCharFullness)
         COPY_MEMBER(mFlatFullness)
         COPY_MEMBER(mLod)

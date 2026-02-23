@@ -36,8 +36,8 @@ VorbisReader::VorbisReader(File *file, bool expectMap, StandardStream *stream, b
     : mNumChannels(-1), mSampleRate(-1), mFile(file), mHeadersRead(0), mReadBuffer(0),
       mEnableReads(true), unk40(0), unk44(0), mDone(0), mStream(stream), mOggSync(0),
       mOggStream(0), mVorbisInfo(0), mVorbisComment(0), mVorbisDsp(0), mVorbisBlock(0),
-      unka0(0), mSeekTarget(-1), mSamplesToSkip(0), mHdrSize(0), mHdrBuf(0), mCtrState(0),
-      unkec(b2), unked(0), unkee(0), mFail(0), unk100(-1), unk108(0) {
+      mHasPendingPacket(0), mSeekTarget(-1), mSamplesToSkip(0), mHdrSize(0), mHdrBuf(0), mCtrState(0),
+      unkec(b2), unked(0), mEof(0), mFail(0), mLastGranulePos(-1), mPcmReadPos(0) {
     MILO_ASSERT(mFile, 0xEC);
     if (expectMap) {
         mHdrBuf = new char[60000];
@@ -243,10 +243,10 @@ bool VorbisReader::TryDecode() {
         return false;
     if (QueuedOutputSamples() > 0)
         return false;
-    if (!unka0 && TryReadPacket(mPendingPacket)) {
-        unka0 = true;
+    if (!mHasPendingPacket && TryReadPacket(mPendingPacket)) {
+        mHasPendingPacket = true;
     }
-    if (unka0) {
+    if (mHasPendingPacket) {
         START_AUTO_TIMER("vorbis_synthesis_poll_cpu");
         if (mVorbisBlock->synthesis_state == vorbis_block::vss_init) {
             START_AUTO_TIMER("vorbis_synthesis_vssinit_cpu");
@@ -257,14 +257,14 @@ bool VorbisReader::TryDecode() {
         }
         int pollErr = vorbis_synthesis_poll(mVorbisBlock, &mPendingPacket);
         if (pollErr == OV_ENOTAUDIO) {
-            unka0 = false;
+            mHasPendingPacket = false;
         } else {
             if (pollErr == -0x32)
                 return true;
             if (pollErr < 0) {
                 VORBIS_FAIL("Synthesis", pollErr);
             }
-            unka0 = false;
+            mHasPendingPacket = false;
             if (pollErr == 0) {
                 START_AUTO_TIMER("vorbis_synthesis_blockin_cpu");
                 int blockErr = vorbis_synthesis_blockin(mVorbisDsp, mVorbisBlock);
@@ -274,7 +274,7 @@ bool VorbisReader::TryDecode() {
                 return true;
             }
         }
-    } else if (unkee && !mReadBuffer && QueuedOutputSamples() == 0 && !mDone) {
+    } else if (mEof && !mReadBuffer && QueuedOutputSamples() == 0 && !mDone) {
         EndData();
         mDone = true;
     }
@@ -297,8 +297,8 @@ void VorbisReader::DoRawSeek(int byte) {
     for (int i = 0; i < mNumChannels; i++) {
         mPcmBuffers[i].clear();
     }
-    unk108 = 0;
-    unk100 = -1;
+    mPcmReadPos = 0;
+    mLastGranulePos = -1;
     int streamErr = ogg_stream_reset(mOggStream);
     if (streamErr < 0)
         VORBIS_FAIL("StreamReset", streamErr);
@@ -310,7 +310,7 @@ void VorbisReader::DoRawSeek(int byte) {
     if (restartErr < 0)
         VORBIS_FAIL("DspReset", restartErr);
     vorbis_block_init(mVorbisDsp, mVorbisBlock);
-    unka0 = false;
+    mHasPendingPacket = false;
     mFile->Seek(byte + mHdrSize, 0);
     if (mCtrState) {
         MILO_ASSERT(byte%16 == 0, 0x3F4);
@@ -319,7 +319,7 @@ void VorbisReader::DoRawSeek(int byte) {
         MILO_ASSERT(ret == 0, 0x3F7);
     }
     mDone = false;
-    unkee = false;
+    mEof = false;
 }
 
 #define kMaxHeader 60000

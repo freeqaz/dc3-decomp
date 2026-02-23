@@ -133,15 +133,15 @@ Spotlight::Spotlight()
       mLensOffset(0), mLensMaterial(this), mBeam(this), mSlaves(this),
       mLightCanMesh(this), mLightCanOffset(0), mTarget(this), mTargetLoaded(true),
       mSpotTarget(this), mFloorSpotTargetZ(-1e33), mTargetShadow(false), mLightCanSort(false),
-      unk340(true), mDampingConstant(1), mAdditionalObjects(this),
-      mAnimateColorFromPreset(true), mAnimateOrientationFromPreset(true), unk36e(false) {
+      mSnapToTarget(true), mDampingConstant(1), mAdditionalObjects(this),
+      mAnimateColorFromPreset(true), mAnimateOrientationFromPreset(true), mUpdating(false) {
     mFlare->SetTransParent(this, false);
     mFloorSpotXfm.Reset();
     mLensXfm.Reset();
     mLightCanXfm.Reset();
-    unk310.Identity();
-    unk35c.Zero();
-    unk370.Reset();
+    mOrientMatrix.Identity();
+    mLastTargetPos.Zero();
+    mDampQuat.Reset();
     mOrder = -1000;
 }
 

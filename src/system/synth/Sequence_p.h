@@ -70,10 +70,10 @@ public:
     POOL_OVERLOAD(RandomIntervalGroupSeqInst, 0x90);
 
 protected:
-    int unk40;
-    float unk44;
-    float unk48;
-    std::vector<float> unk4c;
+    int mMaxSimultaneous;
+    float mAvgIntervalSecs;
+    float mIntervalSpread;
+    std::vector<float> mNextPlayTimes;
     bool unk54;
 };
 

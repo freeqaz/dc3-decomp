@@ -11,11 +11,11 @@
 
 CharLipSyncDriver::CharLipSyncDriver()
     : mLipSync(this), mClips(this), mBlinkClip(this), mSongOwner(this), mSongOffset(0),
-      mLoop(0), mMainPlayback(0), mIsOverrideActive(0), unk90(1), mOverridePlayback(0), mBones(this), mTestClip(this),
+      mLoop(0), mMainPlayback(0), mIsOverrideActive(0), mMainBlendAlpha(1), mOverridePlayback(0), mBones(this), mTestClip(this),
       mTestWeight(1), unkc4(0), mBlendingIn(0), mBlendingOut(0), mOverrideBlendTarget(0), unkd4(0),
       mOverrideClip(this), mOverrideWeight(0), mOverrideOptions(this),
-      mApplyOverrideAdditively(0), unk108(this), unk11c(0), unk120(0), unk124(0),
-      unk128(0), mAlternateDriver(this) {}
+      mApplyOverrideAdditively(0), mOverrideBlendClip(this), mOverrideBlendWeight(0), mOverrideBlendDuration(0), unk124(0),
+      mOverrideBlendActive(0), mAlternateDriver(this) {}
 
 CharLipSyncDriver::~CharLipSyncDriver() {
     RELEASE(mMainPlayback);
@@ -148,7 +148,7 @@ bool CharLipSyncDriver::SetLipSync(CharLipSync *sync) {
         RELEASE(mMainPlayback);
         mLipSync = nullptr;
         mIsOverrideActive = false;
-        unk90 = 1;
+        mMainBlendAlpha = 1;
     }
 
     if (sync) {
@@ -179,15 +179,15 @@ void CharLipSyncDriver::ApplyBlinks() {
 }
 
 void CharLipSyncDriver::ResetOverrideBlend() {
-    unk108 = nullptr;
-    unk11c = 0;
+    mOverrideBlendClip = nullptr;
+    mOverrideBlendWeight = 0;
 }
 
 void CharLipSyncDriver::BlendInOverrideClip(CharClip *clip, float f1, float f2) {
-    unk108 = clip;
-    unk11c = f1;
-    unk120 = f2;
-    unk128 = true;
+    mOverrideBlendClip = clip;
+    mOverrideBlendWeight = f1;
+    mOverrideBlendDuration = f2;
+    mOverrideBlendActive = true;
 }
 
 void CharLipSyncDriver::Sync() {
@@ -205,7 +205,7 @@ void CharLipSyncDriver::Sync() {
         mMainPlayback->Set(mLipSync, mClips);
         mMainPlayback->Reset();
         mIsOverrideActive = false;
-        unk90 = 1;
+        mMainBlendAlpha = 1;
     }
 }
 
@@ -214,7 +214,7 @@ void CharLipSyncDriver::ClearLipSync() {
     RELEASE(mMainPlayback);
     mLipSync = nullptr;
     mIsOverrideActive = false;
-    unk90 = 1;
+    mMainBlendAlpha = 1;
 }
 
 void CharLipSyncDriver::BlendInOverrides(float f) {

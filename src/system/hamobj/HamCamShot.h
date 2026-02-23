@@ -146,23 +146,23 @@ protected:
     ObjPtrList<HamCamShot> mNextShots; // 0x2a0
     ObjPtrList<HamCamShot>::iterator mNextShotIt; // 0x2b4
     ObjPtr<HamCamShot> mCurrentShot; // 0x2b8
-    float unk2cc; // 0x2cc
-    float unk2d0; // 0x2d0 - duration
+    float mNextShotOffset; // 0x2cc
+    float mNextShotDuration; // 0x2d0
     bool mInSetFrame; // 0x2d4
     float mTotalDuration; // 0x2d8
     bool mListingShots; // 0x2dc
-    bool unk2dd; // 0x2dd
+    bool mTargetsFlipped; // 0x2dd
     /** "Anims set throughout this shot and any next shots
         Not valid entries for a next shot." */
     ObjPtrList<RndAnimatable> mMasterAnims; // 0x2e0
     int mOriginalSizeNextShots; // 0x2f4
-    ObjPtrList<RndDrawable> unk2f8; // 0x2f8
-    ObjPtrList<RndDrawable> unk30c; // 0x30c
-    ObjPtrList<RndDrawable> unk320; // 0x320
-    std::vector<RndDrawable *> unk334; // 0x334
-    ObjPtrList<RndDrawable> unk340; // 0x340
-    ObjPtrList<RndDrawable> unk354; // 0x354
-    ObjPtrList<RndDrawable> unk368; // 0x368
-    std::vector<RndDrawable *> unk37c; // 0x37c
-    bool unk388; // 0x388
+    ObjPtrList<RndDrawable> mFlipHideList; // 0x2f8
+    ObjPtrList<RndDrawable> mFlipShowList; // 0x30c
+    ObjPtrList<RndDrawable> mFlipGenHideList; // 0x320
+    std::vector<RndDrawable *> mFlipGenHideVector; // 0x334
+    ObjPtrList<RndDrawable> mFlipDrawOverrides; // 0x340
+    ObjPtrList<RndDrawable> mFlipPostProcOverrides; // 0x354
+    ObjPtrList<RndDrawable> mFlipEndHideList; // 0x368
+    std::vector<RndDrawable *> mFlipEndShowVector; // 0x37c
+    bool mFlipActive; // 0x388
 };

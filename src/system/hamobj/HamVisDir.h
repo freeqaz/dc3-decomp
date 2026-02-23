@@ -69,7 +69,7 @@ protected:
     /** "Allow Milo anim bar to drive the gesture propanim frame,
         not the player's skeleton." */
     bool mMiloManualFrame; // 0x330
-    float unk334; // 0x334
+    float mGrooviness; // 0x334
     PoseOwner mSquatPoses[2]; // 0x338
     PoseOwner mYPoses[2]; // 0x358
 };

@@ -40,7 +40,7 @@ void ReserveFrames() {
 
 SkeletonClip::SkeletonClip()
     : mRecordedFrames(sFrames), mCamFrame(sCamFrame), mLoadedFile(sLoadedFile), unk11fc(-1),
-      mDifficulty(kNumDifficulties), mWeighted(0), unk1230(0), unk1231(0),
+      mDifficulty(kNumDifficulties), mWeighted(0), unk1230(0), mIsRecording(0),
       mFileStream(nullptr), mPlaybackFrame(0), mAutoplay(false) {
     SetRate(k30_fps);
 }
@@ -251,7 +251,7 @@ const char *SkeletonClip::Song() const {
     }
 }
 
-bool SkeletonClip::IsRecording() const { return unk1231 && !unk1230; }
+bool SkeletonClip::IsRecording() const { return mIsRecording && !unk1230; }
 const String &SkeletonClip::Path() const { return mFile; }
 
 String SkeletonClip::DateTimeStr() const {
@@ -360,7 +360,7 @@ const SkeletonClip::MoveRating &SkeletonClip::GetMoveRating(int bar) const {
 }
 
 void SkeletonClip::StopRecordingNoClear() {
-    unk1231 = false;
+    mIsRecording = false;
     mFileStream = new FileStream(mFile.c_str(), FileStream::kWrite, true);
     if (mFileStream->Fail()) {
         MILO_FAIL("Recording failed; could not open output file (%s).", mFile.c_str());
@@ -530,7 +530,7 @@ void SkeletonClip::SetAutoplay(bool b1) {
 void SkeletonClip::StartXboxRecording(const char *cc) {
     MILO_ASSERT(!IsRecording(), 0x2F2);
     mFile = cc;
-    unk1231 = true;
+    mIsRecording = true;
     if (TheLoadMgr.EditMode()) {
         SkeletonDir *dir = dynamic_cast<SkeletonDir *>(Dir());
         if (dir) {

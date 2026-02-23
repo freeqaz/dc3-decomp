@@ -120,13 +120,13 @@ public:
     };
     class Burst {
     public:
-        Burst() : unk0(0), unk4(0), unk8(0), unkc(0) {}
+        Burst() : mPeakRate(0), mHalfDuration(0), mInvHalfDuration(0), mRemainingDuration(0) {}
         bool Set(float, float);
         float Emit(float);
-        float unk0;
-        float unk4;
-        float unk8;
-        float unkc;
+        float mPeakRate;
+        float mHalfDuration;
+        float mInvHalfDuration;
+        float mRemainingDuration;
     };
     // Hmx::Object
     virtual ~RndParticleSys();
@@ -293,11 +293,11 @@ protected:
     int mNumActive; // 0x12c
     float mEmitCount; // 0x130
     bool mFrameDrive; // 0x134
-    float unk138;
-    int unk13c;
+    float mLastFrame;
+    int mDrawCount;
     /** "Freezes the particle motion when they are offscreen, CPU savings" */
     bool mPauseOffscreen; // 0x140
-    float unk144;
+    float mPausedTime;
     Vector2 mBubblePeriod; // 0x148
     Vector2 mBubbleSize; // 0x150
     /** "Frame range of particle life." */
@@ -337,7 +337,7 @@ protected:
     float mRelativeMotion; // 0x29c
     /** "Makes particles move relative to this Trans" */
     ObjOwnerPtr<RndTransformable> mMotionParent; // 0x2a0
-    Vector3 unk2b4;
+    Vector3 mMotionParentDelta;
     /** "Specify a collide plane to reflect particles.
         Used to bounce particles off surfaces." */
     ObjPtr<RndTransformable> mBounce; // 0x2c4
@@ -401,8 +401,8 @@ protected:
     int mNumTilesTotal; // 0x3d8
     /** "starting frame of animation" */
     int mStartingTile; // 0x3dc
-    float unk3e0; // 0x3e0
-    float unk3e4; // 0x3e4
+    float mTotalTileTime; // 0x3e0
+    float mInvTotalTileTime; // 0x3e4
     /** "Add point forces which attract or repel particles" */
     ObjVector<Attractor> mAttractors; // 0x3e8
 };

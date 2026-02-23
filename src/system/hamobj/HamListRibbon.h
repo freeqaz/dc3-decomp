@@ -13,10 +13,10 @@
 struct HamListRibbonDrawState {
     HamListRibbonDrawState();
 
-    DoubleExponentialSmoother unk0;
-    bool unk14;
+    DoubleExponentialSmoother mSwellSmoother;
+    bool mSelected;
     int unk18;
-    bool unk1c;
+    bool mHidden;
     float unk20;
     bool unk24;
 };
@@ -113,7 +113,7 @@ private:
     int mPaddedSize; // 0x264
     /** "Spacing between padded ribbons" */
     float mPaddedSpacing; // 0x268
-    bool unk26c; // 0x26c
+    bool mSelectToggle; // 0x26c
     ObjPtr<RndAnimatable> mSwellAnim; // 0x270
     ObjPtr<RndAnimatable> mSlideAnim; // 0x284
     ObjPtr<RndAnimatable> mSelectAnim; // 0x298

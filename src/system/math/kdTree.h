@@ -20,15 +20,15 @@ public:
     public:
         MEM_ARRAY_OVERLOAD(kdTriList, 0xC6);
 
-        kdTriList() : unk0(0) {}
+        kdTriList() : mIndex(0) {}
 
         static kdTriList *Allocate(unsigned int num) {
             kdTriList *list = new kdTriList[num + 1];
-            list[num].unk0 = -1;
+            list[num].mIndex = -1;
             return list;
         }
 
-        int unk0; // Triangle*?
+        int mIndex; // Triangle*?
     };
 
     class kdTreeNode {
@@ -37,12 +37,12 @@ public:
 
         kdTreeNode() {
             mData.triList = 0;
-            unk4 = 0x8000;
+            mFlags = 0x8000;
             mData.real = 0;
             mData.index = 0;
         }
         ~kdTreeNode() {
-            if (unk4 & 0x8000 && mData.triList) {
+            if (mFlags & 0x8000 && mData.triList) {
                 delete[] mData.triList;
                 mData.triList = nullptr;
             }
@@ -56,9 +56,9 @@ public:
                 unsigned int index : 2;
             };
         } mData; // 0x0
-        short unk4;
+        short mFlags;
 
-        bool GetIsLeaf() const { return unk4 & 0x8000; }
+        bool GetIsLeaf() const { return mFlags & 0x8000; }
 
         float EvaluateSplit(
             const Box &box,
@@ -166,23 +166,23 @@ public:
     };
 
     kdTree(const Box &box) {
-        unkc.Set(box.mMin, box.mMax);
+        mBounds.Set(box.mMin, box.mMax);
         mNodes = new kdTreeNode[0x8000];
         for (u16 i = 0; i < 0x8000; i++) {
-            mNodes[i].unk4 |= i;
+            mNodes[i].mFlags |= i;
         }
     }
     ~kdTree() { delete[] mNodes; }
 
-    void Add(T *item) { unk0.push_back(item); }
+    void Add(T *item) { mItems.push_back(item); }
     void PackNodes(SplitPlaneType s, unsigned char uc) {
-        mNodes->Pack(s, unkc, unk0, mNodes, uc);
+        mNodes->Pack(s, mBounds, mItems, mNodes, uc);
     }
 
     bool Intersect(const Vector3 &, const Vector3 &, float, float &) const;
 
 private:
-    std::list<T *> unk0; // 0x0 - objects?
+    std::list<T *> mItems; // 0x0 - objects?
     kdTreeNode *mNodes; // 0x8
-    Box unkc; // 0xc - bounding box of the tree?
+    Box mBounds; // 0xc - bounding box of the tree?
 };

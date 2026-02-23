@@ -145,6 +145,8 @@ public:
     void SetPickingDisabled(bool disable) { mDisablePicking = disable; }
     void SetPollEnabled(bool enable) { mPollEnabled = enable; }
     bool IsGameStartHold() const { return mGameStartHold; }
+    int StartLoopMargin() const { return mStartLoopMargin; }
+    int EndLoopMargin() const { return mEndLoopMargin; }
 
     DataNode OnGetDancerVisemes(DataArray *);
 

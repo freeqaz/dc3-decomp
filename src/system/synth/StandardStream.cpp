@@ -25,7 +25,7 @@ StandardStream::ChannelParams::ChannelParams()
 StandardStream::StandardStream(
     File *f, float f1, float f2, Symbol ext, bool b1, bool b2, bool b3
 )
-    : unk150(b2), unk158(b3) {
+    : mPollingEnabled(b2), unk158(b3) {
     MILO_ASSERT(f, 0x4A);
     mExt = ext;
     mFile = f;
@@ -350,7 +350,7 @@ void StandardStream::Init(float f1, float f2, Symbol s, bool b4) {
     mJumpToSamples = 0;
     mCurrentSamp = 0;
     mThrottle = SystemConfig("synth", "oggvorbis")->FindFloat("throttle");
-    if (unk150) {
+    if (mPollingEnabled) {
         StartPolling();
     }
     mRdr = TheSynth->NewStreamDecoder(mFile, this, s);

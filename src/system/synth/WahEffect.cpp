@@ -19,30 +19,30 @@ WahEffect::WahEffect(IXAudioBatchAllocator *) {
     mPhase = 0;
     mLastInput = 0;
     mLastOutput = 0;
-    unk40 = 0;
-    unk3c = 0;
-    unk38 = 0;
-    unk34 = 0;
+    mFilterState3 = 0;
+    mFilterState2 = 0;
+    mFilterState1 = 0;
+    mFilterState0 = 0;
 }
 
 void WahEffect::Reset() {
     mPhase = 0;
-    unk38 = 0;
-    unk34 = 0;
-    unk40 = 0;
-    unk3c = 0;
+    mFilterState1 = 0;
+    mFilterState0 = 0;
+    mFilterState3 = 0;
+    mFilterState2 = 0;
 }
 
 void WahEffect::SetParameters(WahEffect::Params const &params) {
-    mGain = params.unk4;
-    mFreqHi = params.unk8;
-    mFreqLo = params.unkc;
-    mResonance = params.unk10;
-    mBandwidth = params.unk14;
-    mSweepRate = params.unk18;
-    mSweepRange = params.unk1c;
-    mEnvAmount = params.unk20;
-    mStaticSweep = params.unk24;
+    mGain = params.mGain;
+    mFreqHi = params.mFreqHi;
+    mFreqLo = params.mFreqLo;
+    mResonance = params.mResonance;
+    mBandwidth = params.mBandwidth;
+    mSweepRate = params.mSweepRate;
+    mSweepRange = params.mSweepRange;
+    mEnvAmount = params.mEnvAmount;
+    mStaticSweep = params.mStaticSweep;
 }
 
 void WahEffect::Process(float *buf, int numSamples, int numChans) {
@@ -67,10 +67,10 @@ void WahEffect::Process(float *buf, int numSamples, int numChans) {
     float f23 = f8 * f12_twopi;       // resonance * 2*PI
 
     // Load state variables BEFORE the comparison
-    float f10_state = unk34;
-    float f0_state = unk38;
-    float f12_state = unk3c;
-    float f11_state = unk40;
+    float f10_state = mFilterState0;
+    float f0_state = mFilterState1;
+    float f12_state = mFilterState2;
+    float f11_state = mFilterState3;
     float f27 = mPhase;
     float f30 = 0.5f;
 
@@ -230,11 +230,11 @@ void WahEffect::Process(float *buf, int numSamples, int numChans) {
     }
 
     // Copy state back from stack
-    float *dest = &unk3c;
+    float *dest = &mFilterState2;
     for (int i = 0; i < 2; i++) {
         float s1 = stack50[i];
         float s2 = stack58[i];
-        dest[-1] = s1;  // Write to unk34/unk38
+        dest[-1] = s1;  // Write to mFilterState0/unk38
         *dest = s2;     // Write to unk3c/unk40
         dest++;
     }

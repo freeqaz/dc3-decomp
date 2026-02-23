@@ -150,15 +150,13 @@ NavListSortNode *NavListShortcutNode::GetFirstActive() {
 void NavListShortcutNode::Insert(NavListItemNode *node, NavListSort *sort) {
     auto range = std::equal_range<>(mChildren.begin(), mChildren.end(), node, CompareHeaders());
     NavListHeaderNode *newNode;
-    if (range.first == range.second) {
+    if (range.first != range.second) {
+        newNode = static_cast<NavListHeaderNode *>(*range.first);
+    } else {
         newNode = sort->NewHeaderNode(node);
         newNode->SetShortcut(this);
         newNode->SetParent(this);
         mChildren.insert(range.first, newNode);
-
-    } else {
-        // FIXME: uhhh does newNode + 8 or something not sure
-        //newNode = range.first++;
     }
     newNode->Insert(node, sort);
 }

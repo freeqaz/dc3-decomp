@@ -277,8 +277,8 @@ private:
     DateTime mRoundStartTime;
     DateTime mPartyStatsStartTime;
     DataArray *mPlaytestEventSequences; // 0x324 - intensity sequences
-    DataArray *unk328; // 0x328 - bucket sequences
-    DataArray *unk32c;
+    DataArray *mEventBucketSequences; // 0x328
+    DataArray *mPlayerSequences; // 0x32c
     std::vector<ConfigHistory> mCfgHistories; // 0x330
 };
 

@@ -2,18 +2,22 @@
 #include "HamListRibbon.h"
 #include "HamNavProvider.h"
 #include "hamobj/HamNavList.h"
+#include "gesture/GestureMgr.h"
 #include "obj/Data.h"
+#include "obj/Msg.h"
+#include "obj/Task.h"
 #include "os/System.h"
 #include "rndobj/Anim.h"
+#include "ui/UI.h"
 #include "ui/UIListProvider.h"
 #include "ui/UIListState.h"
 
 float HamScrollBehavior::sScrollSettleTime = 0.1;
 
 HamScrollBehavior::HamScrollBehavior(HamNavList *nav, UIListState *state)
-    : mSettleTimer(0), unk4(0), unk5(0), mScrollStep(1), unkc(0), mScrollSpeed(0.3), unk14(0), mScrollCooldown(0),
-      unk1c(0), unk1d(0), unk20(0), mPendingScrollDir(0), unk28(0), unk2c(0), mScrollDir(0),
-      mSmoother(0, 10, 0), unk48(2), mListState(state), mNavList(nav) {}
+    : mSettleTimer(0), mInputUp(0), mInputDown(0), mScrollStep(1), mScrollTimeAccum(0), mScrollSpeed(0.3), mTickDelay(0), mScrollCooldown(0),
+      mAutoScrollActive(0), mFirstTick(0), mScrollProgress(0), mPendingScrollDir(0), mContinuationDir(0), mLastScrollDir(0), mScrollDir(0),
+      mSmoother(0, 10, 0), mSpeedState(2), mListState(state), mNavList(nav) {}
 
 void HamScrollBehavior::Init() {
     static Symbol ui("ui");
@@ -101,23 +105,227 @@ void HamScrollBehavior::Enter() {
 
 void HamScrollBehavior::Reset() {
     mScrollDir = 0;
-    unk2c = 0;
-    unk28 = 0;
+    mLastScrollDir = 0;
+    mContinuationDir = 0;
     mSettleTimer = 0.0f;
     mPendingScrollDir = 0;
     mSmoother.Reset();
     mNavList->SetScrollSoundFrame(mSmoother.Level());
-    unkc = 0.0f;
-    unk4 = false;
-    unk20 = 0.0f;
-    unk5 = false;
+    mScrollTimeAccum = 0.0f;
+    mInputUp = false;
+    mScrollProgress = 0.0f;
+    mInputDown = false;
     mScrollCooldown = 0.0f;
-    unk48 = 2;
+    mSpeedState = 2;
 }
 
 void HamScrollBehavior::Exit() {
     Reset();
     mNavList->StopScrollSound();
+}
+
+void HamScrollBehavior::Update(float input) {
+    int scrollDir = mScrollDir;
+
+    // Settle timer - counts down when no pending scroll
+    if (mSettleTimer > 0.0f && mPendingScrollDir == 0) {
+        if (mInputDown || mInputUp) {
+            mSettleTimer = 0.0f;
+        }
+        float dt = TheTaskMgr.DeltaUISeconds();
+        mSettleTimer -= dt;
+        if (mSettleTimer <= 0.0f) {
+            static Message scrollingSettledMsg("scrolling_settled");
+            UIScreen *screen = TheUI->CurrentScreen();
+            if (screen) {
+                screen->Handle(scrollingSettledMsg, false);
+            }
+            if (mNavList) {
+                int data = mListState->SelectedData();
+                mNavList->SendHighlightSettledMsg(data);
+            }
+        }
+    }
+
+    // Direction handling
+    if (scrollDir == 0) {
+        mScrollTimeAccum = 0.0f;
+        mAutoScrollActive = false;
+        mFirstTick = false;
+    } else {
+        mLastScrollDir = scrollDir;
+        float delay = mNeutralToSlowDownDelay;
+        if (scrollDir == 1) {
+            delay = mNeutralToSlowUpDelay;
+        }
+        float dt = TheTaskMgr.DeltaUISeconds();
+        mScrollTimeAccum += dt;
+        if ((!mAutoScrollActive && mScrollTimeAccum >= delay) || (mAutoScrollActive && mTickDelay <= mScrollTimeAccum)) {
+            if (!mAutoScrollActive) {
+                mFirstTick = true;
+            } else {
+                mFirstTick = false;
+            }
+            mScrollTimeAccum = 0.0f;
+            mAutoScrollActive = true;
+            if (scrollDir == 1) {
+                ScrollUp(false);
+            } else if (scrollDir == 2) {
+                ScrollDown(false);
+            }
+        }
+    }
+
+    // Input normalization
+    float intensity;
+    if (!(input <= 0.5f)) {
+        float ratio = (input - 1.0f) / mScrollDownCap;
+        float clamped = (-ratio < 0.0f) ? ratio : 0.0f;
+        intensity = (clamped - 1.0f < 0.0f) ? clamped : 1.0f;
+    } else {
+        float ratio = input / mScrollUpCap;
+        float clamped = (-1.0f - ratio < 0.0f) ? ratio : -1.0f;
+        intensity = (clamped < 0.0f) ? clamped : 0.0f;
+    }
+
+    float absIntensity = fabsf(intensity);
+    float soundLevel = 0.0f;
+    float speed;
+
+    // Speed state machine
+    if (TheGestureMgr == NULL || TheGestureMgr->InControllerMode() || !mAutoScrollActive) {
+        speed = mNormalScrollSpeed;
+        mSpeedState = 2;
+        mTickDelay = 0.0f;
+    } else if (mScrollTimeAccum > 0.001f) {
+        int state = mSpeedState;
+        if (state == 0) {
+        fast_scroll:
+            speed = mFastScrollSpeedScalar * absIntensity + mFastScrollSpeedBase;
+            soundLevel = (absIntensity - mSlowFastThreshold) / (1.0f - mSlowFastThreshold);
+        } else if (state == 1 || state == 3) {
+            speed = mSlowScrollSpeed;
+        } else {
+            speed = 0.0f;
+            if (state == 4) goto fast_scroll;
+        }
+    } else if (absIntensity < mSlowFastThreshold || mSpeedState == 2) {
+        speed = mSlowScrollSpeed;
+        if (!mFirstTick) {
+            float delay = mSlowDownTickDelay;
+            if (scrollDir == 1) {
+                delay = mSlowUpTickDelay;
+            }
+            mTickDelay = delay;
+        } else {
+            float delay = mSlowDownFirstTickDelay;
+            if (scrollDir == 1) {
+                delay = mSlowUpFirstTickDelay;
+            }
+            mTickDelay = delay;
+        }
+        int state = 1;
+        if (scrollDir != 1) {
+            state = 3;
+        }
+        mSpeedState = state;
+    } else {
+        float delay = mFastDownTickDelay;
+        if (scrollDir == 1) {
+            delay = mFastUpTickDelay;
+        }
+        mTickDelay = delay;
+        float threshold = mSlowFastThreshold;
+        mSpeedState = -(unsigned int)(scrollDir != 1) & 4;
+        speed = mFastScrollSpeedScalar * absIntensity + mFastScrollSpeedBase;
+        soundLevel = (absIntensity - threshold) / (1.0f - threshold);
+    }
+
+    // Sound smoother
+    float dt3 = TheTaskMgr.DeltaUISeconds();
+    mSmoother.Smooth(soundLevel, dt3);
+    mNavList->SetScrollSoundFrame(mSmoother.Level());
+
+    // Scroll speed anim
+    RndAnimatable *scrollAnim = mNavList->mScrollSpeedAnim;
+    if (scrollAnim) {
+        float shift;
+        switch (mSpeedState) {
+        case 0:
+            shift = -1.0f - mSmoother.Level();
+            break;
+        case 1:
+            shift = -1.0f;
+            break;
+        case 2:
+            if (input <= 0.5f) {
+                shift = 0.0f;
+                if (mListState->FirstShowing() != 0) {
+                    shift = -mNavList->CalculateSwell(0);
+                }
+            } else {
+                shift = 0.0f;
+                if (!AtBottom() && mNavList->mRibbonMode != HamListRibbon::kRibbonDisengaged) {
+                    shift = mNavList->CalculateSwell(5);
+                }
+            }
+            break;
+        case 3:
+            shift = 1.0f;
+            break;
+        case 4:
+            shift = mSmoother.Level() + 1.0f;
+            break;
+        default:
+            goto skip_anim;
+        }
+        scrollAnim->SetFrame(shift, 1.0f);
+    }
+skip_anim:
+
+    // Scroll progress
+    if (mPendingScrollDir != 0) {
+        float dt4 = TheTaskMgr.DeltaUISeconds();
+        float progress = mScrollCooldown + dt4 * speed;
+        int dir = mPendingScrollDir;
+        mScrollCooldown = progress;
+
+        if (progress > 1.0f) {
+            mScrollProgress = 0.0f;
+            if (dir == 2) {
+                int first = mListState->FirstShowing();
+                mListState->SetSelected(first + HamListRibbon::sNumListSelectable - 1, first, true);
+                mListState->Scroll(1, false);
+                mListState->Poll(0.0f);
+            }
+
+            bool scrolled = false;
+            if (mContinuationDir == mPendingScrollDir) {
+                mScrollCooldown -= 1.0f;
+                if (mPendingScrollDir == 2) {
+                    scrolled = ScrollDown(true);
+                } else {
+                    scrolled = ScrollUp(true);
+                }
+            }
+
+            if (!scrolled) {
+                mScrollCooldown = 0.0f;
+                mPendingScrollDir = 0;
+                goto done;
+            }
+            dir = mPendingScrollDir;
+            progress = mScrollCooldown;
+        }
+
+        if (dir == 1) {
+            progress = 1.0f - progress;
+        }
+        mScrollProgress = progress;
+    }
+
+done:
+    mContinuationDir = 0;
 }
 
 void HamNavList::PlayScrollSound() {

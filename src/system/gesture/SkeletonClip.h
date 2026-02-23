@@ -122,7 +122,7 @@ protected:
     int mOverrideDiff; // 0x1220
     std::vector<MoveRating> mMoveRatings; // 0x1224
     bool unk1230;
-    bool unk1231;
+    bool mIsRecording;
     FileStream *mFileStream; // 0x1234
     String mFile; // 0x1238
     int mPlaybackFrame; // 0x1240

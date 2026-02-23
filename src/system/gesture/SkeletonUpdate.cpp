@@ -85,25 +85,25 @@ SkeletonUpdate::SkeletonUpdate()
     MILO_ASSERT(sInstance == NULL, 0x119);
     SetCameraInput(LiveCameraInput::sInstance);
     for (int i = 0; i < 2; i++) {
-        unk5360[i] = nullptr;
-        unk5368[i] = nullptr;
+        mSkeletonsLeft[i] = nullptr;
+        mSkeletonsRight[i] = nullptr;
     }
     mNUISkeletonFrame = (NUI_SKELETON_FRAME *)MemAlloc(
         sizeof(NUI_SKELETON_FRAME), __FILE__, 0x126, "NUI_SKELETON_FRAME", 0x10
     );
     memset(mNUISkeletonFrame, 0, sizeof(NUI_SKELETON_FRAME));
     memset(&mSkeletonFrame, 0, sizeof(SkeletonFrame));
-    unk53a0 = CreateThread(nullptr, 0, SkeletonUpdateThread, nullptr, 4, nullptr);
-    XSetThreadProcessor(unk53a0, 5);
-    ResumeThread(unk53a0);
+    mUpdateThread = CreateThread(nullptr, 0, SkeletonUpdateThread, nullptr, 4, nullptr);
+    XSetThreadProcessor(mUpdateThread, 5);
+    ResumeThread(mUpdateThread);
 }
 
 SkeletonUpdate::~SkeletonUpdate() {
     sBool878 = true;
     SetEvent(sNewSkeletonEvent);
-    WaitForSingleObject(unk53a0, -1);
-    CloseHandle(unk53a0);
-    unk53a0 = nullptr;
+    WaitForSingleObject(mUpdateThread, -1);
+    CloseHandle(mUpdateThread);
+    mUpdateThread = nullptr;
     MemFree(mNUISkeletonFrame);
 }
 
@@ -161,7 +161,7 @@ void SkeletonUpdate::PostUpdate() {
         for (int i = 0; i < 2; i++) {
             HamPlayerData *player_data = TheGameData->Player(i);
             MILO_ASSERT(player_data, 0x28B);
-            unk5380[i] = player_data->GetSkeletonTrackingID();
+            mSkeletonTrackingIDs[i] = player_data->GetSkeletonTrackingID();
         }
     }
     if (mIsUpdateThreadActive) {
@@ -174,8 +174,8 @@ void SkeletonUpdate::PostUpdate() {
         LiveCameraInput::sInstance->SetNewFrame(&mSkeletonFrame);
     }
     SkeletonUpdateData updateData;
-    updateData.mSkeletonsLeft = &unk5360[0];
-    updateData.mSkeletonsRight = &unk5368[0];
+    updateData.mSkeletonsLeft = &mSkeletonsLeft[0];
+    updateData.mSkeletonsRight = &mSkeletonsRight[0];
     updateData.mFrame = &mSkeletonFrame;
     updateData.mHistory = this;
     updateData.mCameraInput = mCameraInput;

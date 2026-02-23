@@ -24,7 +24,7 @@
 float HamMove::sMinFrameDistBeats = 0.2;
 
 BinStream &operator<<(BinStream &bs, const Ham1NodeWeight &wt) {
-    bs << wt.mPerfectDist << wt.mRate << wt.mPerfectDist2 << wt.mRate2 << wt.unk0;
+    bs << wt.mPerfectDist << wt.mRate << wt.mPerfectDist2 << wt.mRate2 << wt.mActive;
     return bs;
 }
 
@@ -34,15 +34,15 @@ BinStream &operator>>(BinStreamRev &d, Ham1NodeWeight &wt) {
     d >> wt.mPerfectDist2;
     d >> wt.mRate2;
     if (d.rev > 39) {
-        d >> wt.unk0;
+        d >> wt.mActive;
     } else if (d.rev > 32) {
         float f1;
         d >> f1;
-        wt.unk0 = f1 != 0;
+        wt.mActive = f1 != 0;
     } else if (d.rev > 24) {
-        d >> wt.unk0;
+        d >> wt.mActive;
     } else
-        wt.unk0 = 1;
+        wt.mActive = 1;
     return d.stream;
 }
 
@@ -69,7 +69,7 @@ BinStream &operator>>(BinStreamRev &d, OldNodeWeight &wt) {
 }
 
 BinStream &operator<<(BinStream &bs, const Ham2FrameWeight &wt) {
-    bs << wt.unk0;
+    bs << wt.mWeight;
     for (int i = 0; i < 4; i++) {
         bs << wt.unk4[i];
         bs << wt.unk14[i];
@@ -79,7 +79,7 @@ BinStream &operator<<(BinStream &bs, const Ham2FrameWeight &wt) {
 
 BinStream &operator>>(BinStreamRev &d, Ham2FrameWeight &wt) {
     if (d.rev > 34) {
-        d >> wt.unk0;
+        d >> wt.mWeight;
     }
     if (d.rev < 33) {
         if (d.rev > 31) {
@@ -118,7 +118,7 @@ BinStream &operator>>(BinStreamRev &d, Ham2FrameWeight &wt) {
 
 void MoveFrame::Save(BinStream &bs) const {
     bs << mBeat;
-    bs << unk4;
+    bs << mTypeMask;
     bs << kNumHam1Nodes;
     for (int i = 0; i < kNumMoveModes; i++) {
         for (int j = 0; j < kNumMoveMirrored; j++) {
@@ -146,9 +146,9 @@ void MoveFrame::Load(BinStreamRev &d) {
         MILO_FAIL("Versions less than 14 no longer supported");
     }
     if (d.rev > 0x2B) {
-        d >> unk4;
+        d >> mTypeMask;
     } else {
-        unk4 = -1;
+        mTypeMask = -1;
     }
     int num_ham2_nodes = FilterVersion::NumHam2Nodes();
     int num_ham1_nodes = kNumHam1Nodes;
@@ -326,7 +326,7 @@ HamMove::HamMove()
     : mMirror(this), mTex(this), mSmallTex(this), mTexState(kTexNormal), mScored(true),
       mParadiddle(false), mFinalPose(false), mSuppressGuide(false),
       mSuppressPracticeOptions(false), mOmitMinigame(false), mDisplayName(nullptr),
-      mDifficulty(kDifficultyExpert), mShoulderDisplacements(false), unkd0(0),
+      mDifficulty(kDifficultyExpert), mShoulderDisplacements(false), mDirty(0),
       mDancerSeq(this) {
     SetRate(k480_fpb);
     Symbol lang = SystemLanguage(); // unused lol
@@ -545,7 +545,7 @@ BEGIN_LOADS(HamMove)
         for (int i = 0; i < count; i++) {
             d >> language;
             d >> name;
-            if (!unkd0) {
+            if (!mDirty) {
                 SetName(language, name.c_str());
             }
         }
@@ -592,7 +592,7 @@ BEGIN_LOADS(HamMove)
     if (d.rev > 0x21) {
         bool omit;
         d >> omit;
-        if (!unkd0) {
+        if (!mDirty) {
             mOmitMinigame = omit;
         }
     }
@@ -618,14 +618,14 @@ BEGIN_LOADS(HamMove)
     if (d.rev > 0x2A) {
         std::map<Hmx::CRC, float> confusabilities;
         d >> confusabilities;
-        if (!unkd0) {
+        if (!mDirty) {
             mConfusabilities = confusabilities;
         }
     }
     if (d.rev > 0x2E) {
         int diff;
         d >> diff;
-        if (!unkd0) {
+        if (!mDirty) {
             mDifficulty = (Difficulty)diff;
         }
     }
@@ -635,11 +635,11 @@ BEGIN_LOADS(HamMove)
     if (d.rev > 0x30) {
         Hmx::CRC id;
         d >> id;
-        if (!unkd0) {
+        if (!mDirty) {
             mConfusabilityID = id;
         }
     }
-    unkd0 = false;
+    mDirty = false;
 END_LOADS
 
 void HamMove::SetFrame(float frame, float blend) {
@@ -732,7 +732,7 @@ void HamMove::Update(const HamMove *other) {
     mConfusabilities = other->mConfusabilities;
     mConfusabilityID = other->mConfusabilityID;
     mDifficulty = other->mDifficulty;
-    unkd0 = true;
+    mDirty = true;
 }
 
 void HamMove::SyncMirror() {

@@ -110,8 +110,8 @@ void Synth360::RemoveFxSend(FxSend360 *fx) {
 }
 
 IXAudio2SubmixVoice *Synth360::GetHeadsetSubmix(int i) {
-    if (!unkdc.empty() && i != -1) {
-        return unkdc[i];
+    if (!mHeadsetSubmixes.empty() && i != -1) {
+        return mHeadsetSubmixes[i];
     }
     return nullptr;
 }
@@ -129,7 +129,7 @@ void Synth360::SetDolby(bool b1, bool b2) {
         mDolbyEnabled = b1;
         UpdateDolby();
     } else if (mDolbyEnabled != b1) {
-        unk108.Restart();
+        mDolbyTimer.Restart();
         mDolbyEnabled = b1;
         mDolbyPending = true;
     }

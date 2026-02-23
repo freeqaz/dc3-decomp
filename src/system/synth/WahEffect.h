@@ -5,15 +5,15 @@ class WahEffect {
 public:
     struct Params {
         u32 unk0;
-        float unk4;
-        float unk8;
-        float unkc;
-        float unk10;
-        float unk14;
-        float unk18;
-        float unk1c;
-        bool unk20;
-        float unk24;
+        float mGain;
+        float mFreqHi;
+        float mFreqLo;
+        float mResonance;
+        float mBandwidth;
+        float mSweepRate;
+        float mSweepRange;
+        bool mEnvAmount;
+        float mStaticSweep;
     };
 
     WahEffect(IXAudioBatchAllocator *);
@@ -34,10 +34,10 @@ public:
     float mPrevEnv;
     int mSampleRate;
     float mPhase;
-    float unk34;
-    float unk38;
-    float unk3c;
-    float unk40;
+    float mFilterState0;
+    float mFilterState1;
+    float mFilterState2;
+    float mFilterState3;
     float mLastInput;
     float mLastOutput;
 };

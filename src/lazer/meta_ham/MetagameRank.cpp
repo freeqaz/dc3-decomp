@@ -68,13 +68,13 @@ bool MetagameRank::HasNewRank() const {
     if (!mAtMaxRank) {
         return mPctToNextRank == 1;
     } else {
-        return unkc9;
+        return mHasNewRank;
     }
 }
 
 void MetagameRank::SaveFixed(FixedSizeSaveableStream &fs) const {
     fs << mScore;
-    bool b1 = unk38;
+    bool b1 = mFirstTimePlayed;
     if (!b1) {
         static Symbol play_first_time_disp("play_first_time_disp");
         FOREACH (it, mDeferredPoints) {
@@ -86,7 +86,7 @@ void MetagameRank::SaveFixed(FixedSizeSaveableStream &fs) const {
     }
     fs << b1;
     fs << mAtMaxRank;
-    fs.Write(unk39, 0x40);
+    fs.Write(mOneTimeTaskFlags, 0x40);
     fs.Write(unk79, 0x40);
     static Symbol combined_xp_disp("combined_xp_disp");
     int sum;
@@ -107,20 +107,20 @@ void MetagameRank::LoadFixed(FixedSizeSaveableStream &fs, int saveVersion) {
     fs >> mScore;
     // Version 0x46+: Added first-time play tracking flag
     if (saveVersion > 0x45) {
-        fs >> unk38;
+        fs >> mFirstTimePlayed;
     }
     // Version 0x4F+: Added max rank flag
     if (saveVersion > 0x4E) {
         fs >> mAtMaxRank;
     }
-    fs.Read(unk39, 0x40);
+    fs.Read(mOneTimeTaskFlags, 0x40);
     // Clear play_first_time task if first-time flag was set
-    if (unk38) {
+    if (mFirstTimePlayed) {
         int idx = -1;
         static Symbol play_first_time("play_first_time");
         GetOneTimeTask(play_first_time, nullptr, &idx);
         if (idx >= 0) {
-            unk39[idx] = 0;
+            mOneTimeTaskFlags[idx] = 0;
         }
     }
     fs.Read(unk79, 0x40);
@@ -232,13 +232,13 @@ void MetagameRank::Init() {
 void MetagameRank::Clear() {
     mXpAwarded = false;
     mScore = 0;
-    unk38 = true;
-    memset(unk39, 0, 0x40);
+    mFirstTimePlayed = true;
+    memset(mOneTimeTaskFlags, 0, 0x40);
     memset(unk79, 0, 0x40);
     mDeferredPoints.clear();
     mRankNumber = 0;
     mAtMaxRank = false;
-    unkc9 = false;
+    mHasNewRank = false;
     mPctToNextRank = 0;
     ComputeRankNumber(true);
 }
@@ -402,8 +402,8 @@ void MetagameRank::UpdateScore(
     static Symbol five_star_a_characters_songlist("five_star_a_characters_songlist");
 
     // Handle first time play bonus
-    if (unk38) {
-        unk38 = false;
+    if (mFirstTimePlayed) {
+        mFirstTimePlayed = false;
         AwardPointsForTask(play_first_time);
     }
 
@@ -510,7 +510,7 @@ void MetagameRank::UpdateScore(
             int taskIdx = -1;
             if (GetOneTimeTask(task, nullptr, &taskIdx)) {
                 MILO_ASSERT(taskIdx >= 0 && taskIdx < 0x40, 0x36F);
-                if (unk39[taskIdx]) {
+                if (mOneTimeTaskFlags[taskIdx]) {
                     continue;
                 }
             }
@@ -557,10 +557,10 @@ void MetagameRank::AwardPointsForTask(Symbol task) {
         if (!oneTimeTask) {
             return;
         }
-        if (unk39[0] != 0) {
+        if (mOneTimeTaskFlags[0] != 0) {
             return;
         }
-        unk39[0] = 1;
+        mOneTimeTaskFlags[0] = 1;
     }
 
     int scoreNum = taskArray->FindArray(score)->Int(1);

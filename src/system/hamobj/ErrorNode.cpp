@@ -227,12 +227,11 @@ bool BaseDisplacementNode::Displacements(
 }
 
 void DistanceToErrors(const Vector3 &a, const Vector3 &b, const Vector3 &c, Vector3 &d) {
-    Vector3 v;
-    Subtract(a, b, v);
+    Subtract(a, b, d);
 
-    d.x = c.x * v.x;
-    d.y = c.y * v.y;
-    d.z = c.z * v.z;
+    d.x *= c.x;
+    d.y *= c.y;
+    d.z *= c.z;
 
     for (int j = 0; j < 3; ++j) {
         float x = fabs(d[j]);

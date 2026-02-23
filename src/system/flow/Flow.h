@@ -44,7 +44,7 @@ public:
         /** "Is this property exposed to the proxy using this flow?" */
         bool mExposed; // 0x1c
         Symbol mObjectClass; // 0x20
-        DataNode unk24; // 0x24
+        DataNode mSymbolList; // 0x24
         Symbol mObjectType; // 0x2c
     };
     // Hmx::Object

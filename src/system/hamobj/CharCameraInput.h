@@ -21,7 +21,7 @@ protected:
     virtual const SkeletonFrame *PollNewFrame();
 
     Character *mChar; // 0x11d4
-    SkeletonFrame unk11d8; // 0x11d8
+    SkeletonFrame mCharFrame; // 0x11d8
     RndTransformable *mBoneNames[kNumJoints]; // 0x23a0
     Transform mNatalXfm; // 0x23f0
     bool unk2430; // 0x2430

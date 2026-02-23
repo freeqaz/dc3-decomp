@@ -81,7 +81,7 @@ protected:
     FilePath mMoggFile; // 0x38
     /** "Volume in dB (0 is full volume, -96 is silence)." */
     float mVolume; // 0x40
-    float unk44;
+    float mControllerVolume;
     StandardStream *mStream; // 0x48
     float unk4c;
     void *mData; // 0x50

@@ -65,13 +65,13 @@ protected:
     std::map<Symbol, std::list<String> > mMotdMessagesByCategory; // 0x98
     bool mMotdProcessingActive; // 0xb0
     std::list<MotdData> mMotdData; // 0xb4
-    int unkbc;
-    int unkc0;
-    int unkc4;
-    int unkc8;
-    int unkcc;
-    int unkd0;
-    Symbol unkd4;
+    int mMotdPromoFreq; // 0xbc - how often to insert promo messages
+    int mMotdPickCount; // 0xc0 - text pick counter for promo frequency
+    int mMotdMaxStatsRun; // 0xc4 - max consecutive stats messages
+    int mMotdStatsRunCount; // 0xc8 - current stats run length
+    int mMotdMaxCommunityRun; // 0xcc - max consecutive community messages
+    int mMotdCommunityRunCount; // 0xd0 - current community run length
+    Symbol mMotdLastPromoType; // 0xd4 - alternates dlc/utility
     PropertyEventProvider *mPlayerEventProvider;
 
 private:

@@ -151,7 +151,7 @@ protected:
     std::vector<JumpInstance> mJumpInstances; // 0x124
     Marker mStartMarker; // 0x130
     Marker mEndMarker; // 0x140
-    bool unk150; // 0x150
+    bool mPollingEnabled; // 0x150
     int unk154; // 0x154
     bool unk158; // 0x158
 };

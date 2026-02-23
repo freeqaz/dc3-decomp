@@ -5,7 +5,7 @@
 
 FlowManager *TheFlowMgr;
 
-FlowManager::FlowManager() : unk2c(0), unk2d(0), mPollables(this) {
+FlowManager::FlowManager() : unk2c(0), mExecuting(0), mPollables(this) {
     mFlowQueue.clear();
     mFrameCounterModulo = 0;
     mFrameTimeAccumulator = 0;
@@ -27,7 +27,7 @@ void FlowManager::AddPollable(FlowNode *n) { mPollables.push_back(n); }
 void FlowManager::RemovePollable(FlowNode *n) { mPollables.remove(n); }
 
 void FlowManager::QueueCommand(FlowNode *n, FlowNode::QueueState q) {
-    if (unk2d && q != FlowNode::kQueueOne) {
+    if (mExecuting && q != FlowNode::kQueueOne) {
         n->Execute(q);
     } else
         mFlowQueue[n] = q;
@@ -37,8 +37,8 @@ void FlowManager::CancelCommand(FlowNode *n) { mFlowQueue[n] = FlowNode::kImmedi
 
 void FlowManager::AddEventTime(Symbol s, float f1) {
     float fsub = f1 - mElapsedTime;
-    if (unk64.find(s) != unk64.end()) {
-        DataNode &n = unk64[s];
+    if (mEventTimes.find(s) != mEventTimes.end()) {
+        DataNode &n = mEventTimes[s];
         float f7 = n.Array()->Float(0);
         int i5 = n.Array()->Int(1);
         float f8 = n.Array()->Float(2) + mElapsedTime;
@@ -48,7 +48,7 @@ void FlowManager::AddEventTime(Symbol s, float f1) {
         n.Array()->Node(2) = f8;
     } else {
         DataArrayPtr ptr(fsub, 1, mElapsedTime);
-        unk64[s] = ptr;
+        mEventTimes[s] = ptr;
     }
     mElapsedTime = 0;
 }
@@ -58,7 +58,7 @@ void FlowManager::Poll() {
     mLastFrameTime = 0;
     Timer timer;
     timer.Reset();
-    unk2d = true;
+    mExecuting = true;
 
     for (std::map<FlowNode *, FlowNode::QueueState>::iterator it = mFlowQueue.begin();
          it != mFlowQueue.end();
@@ -74,15 +74,15 @@ void FlowManager::Poll() {
         (*it)->Execute(FlowNode::kWhenAble);
     }
 
-    unk2d = false;
+    mExecuting = false;
     float f27 = timer.Ms() - mLastFrameTime;
     mElapsedTime = f27 + mFrameTimeAccumulator + f31;
 
     float f30 = -1.0f;
     float f29 = -1.0f;
 
-    for (std::map<Symbol, DataNode>::iterator it = unk64.begin();
-         it != unk64.end();
+    for (std::map<Symbol, DataNode>::iterator it = mEventTimes.begin();
+         it != mEventTimes.end();
          ++it) {
         DataNode &node = it->second;
         float fval = node.Array()->Float(0);
@@ -113,7 +113,7 @@ void FlowManager::Poll() {
         }
     }
 
-    unk64.clear();
+    mEventTimes.clear();
     mFrameTimeAccumulator = 0;
     mLastFrameTime = 0;
     unk2c = false;

@@ -49,7 +49,7 @@ HamNavList::HamNavList()
       mHeaderRibbonResource(this), mListDirResource(this),
       mScrollSpeedIndicatorResource(this), mNavProvider(this), mScrollSpeedAnim(this),
       mPendingEnterAnim(0), mSkipEnterAnim(0), mSuppressAutomaticEnter(0), mTestEnteringOverride(0), unk158(0),
-      mSlideSmoother(0, 10, 10), mDisengageSmoother(0, 10, 0), unk184(0), unk188(0), mSkeletonTrackingID(0),
+      mSlideSmoother(0, 10, 10), mDisengageSmoother(0, 10, 0), mDirectionGestureFilter(0), unk188(0), mSkeletonTrackingID(0),
       mScrollBehavior(this, &mListState), mDisableSlideSound(0), mDisableSelectSound(0),
       mEnabled(1), mSelectionEnabled(1), mAlwaysUseActiveSkeleton(1), mOnlyUseWhenFocused(1),
       mScrollSettleTime(0), mRefreshPending(0), mSelectDoneIndex(-1), mWasInDoubleUserMode(0), mHighButtonMode(0) {
@@ -64,7 +64,7 @@ HamNavList::~HamNavList() {
     if (handle.HasCallback(this)) {
         handle.RemoveCallback(this);
     }
-    // delete unk184;
+    // delete mDirectionGestureFilter;
     // delete unk188;
     if (mListRibbonResource) {
         Sound *slideSound = mListRibbonResource->SlideSound();
@@ -284,7 +284,7 @@ void HamNavList::Refresh() { mRefreshPending = true; }
 
 void HamNavList::SetHighButtonMode(bool b) {
     mHighButtonMode = b;
-    int **obj = (int **)unk184;
+    int **obj = (int **)mDirectionGestureFilter;
     if (!obj)
         return;
     typedef void (*VFunc)(void *);
@@ -330,7 +330,7 @@ void HamNavList::Poll() {
                 slideSoundAnim->SetFrame(0.0f, 1.0f);
             }
         }
-        // TODO(match): target calls unk184->vtable[0x28/4] here (5 instructions missing)
+        // TODO(match): target calls mDirectionGestureFilter->vtable[0x28/4] here (5 instructions missing)
         return;
     }
 
@@ -400,7 +400,7 @@ void HamNavList::Poll() {
     // Update swipe direction debug overlay
     if (mRibbonMode != HamListRibbon::kRibbonDisengaged) {
         RndOverlay *swipeOverlay = RndOverlay::Find("swipe_direction", true);
-        swipeOverlay->SetCallback((RndOverlay::Callback *)unk184);
+        swipeOverlay->SetCallback((RndOverlay::Callback *)mDirectionGestureFilter);
     }
 
     // Play enter anim if pending
@@ -480,7 +480,7 @@ void HamNavList::Poll() {
     for (unsigned int i = 0; i < mRibbonDrawStates.size(); i++) {
         float deltaUI = TheTaskMgr.DeltaUISeconds();
         float targetSwell = GetTargetSwellAmount(i);
-        mRibbonDrawStates[i].unk0.Smooth(targetSwell, deltaUI);
+        mRibbonDrawStates[i].mSwellSmoother.Smooth(targetSwell, deltaUI);
     }
 
     // Smooth the secondary smoother based on mode
@@ -498,7 +498,7 @@ void HamNavList::Poll() {
 
             // Reset all draw state smoothers
             for (unsigned int i = 0; i < mRibbonDrawStates.size(); i++) {
-                mRibbonDrawStates[i].unk0.SetParams(0.0f, 0.0f, 0.0f);
+                mRibbonDrawStates[i].mSwellSmoother.SetParams(0.0f, 0.0f, 0.0f);
             }
 
             // Send nav_select_done message
@@ -636,7 +636,7 @@ void HamNavList::HideItem(int index, bool b) {
     if (mRefreshPending)
         RealRefresh();
     MILO_ASSERT_RANGE(index, 0, mRibbonDrawStates.size(), 0x527);
-    mRibbonDrawStates[index].unk1c = b;
+    mRibbonDrawStates[index].mHidden = b;
     if (mNavProvider)
         mNavProvider->SetEnabled(index, b == false);
 }

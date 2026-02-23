@@ -19,9 +19,9 @@
 #include "utl/Loader.h"
 
 SkeletonViz::SkeletonViz()
-    : mUsePhysicalCam(0), mPhysicalCamRotation(0), unk110(0), mAxesCoordSys(kCoordCamera),
+    : mUsePhysicalCam(0), mPhysicalCamRotation(0), mCurrentCamRotation(0), mAxesCoordSys(kCoordCamera),
       mUtlLine(0), mSkeletonEnv(0), mCamMesh(0), mJointMesh(0), mJointMat(0),
-      mPhysicalCam(0), unk214(0), unk218(true) {
+      mPhysicalCam(0), mLineWidthScale(0), unk218(true) {
     unk194.Reset();
     Multiply(Hmx::Matrix3(1, 0, 0, 0, 0, 1, 0, 1, 0), unk194.m, unk194.m);
     unk1d4 = unk194;
@@ -109,7 +109,7 @@ void SkeletonViz::PreLoad(BinStream &bs) {
     if (d.altRev > 0) {
         d >> mPhysicalCamRotation;
     }
-    unk110 = mPhysicalCamRotation;
+    mCurrentCamRotation = mPhysicalCamRotation;
     if (d.rev > 4 && d.altRev < 1) {
         ObjPtr<HamCharacter> hChar(this);
         d >> hChar;
@@ -130,9 +130,9 @@ float SkeletonViz::PhysicalCamRotation() const { return mPhysicalCamRotation; }
 void SkeletonViz::SetUsePhysicalCam(bool use) { mUsePhysicalCam = use; }
 void SkeletonViz::SetPhysicalCamRotation(float rotation) {
     mPhysicalCamRotation = rotation;
-    unk110 = rotation;
+    mCurrentCamRotation = rotation;
 }
-void SkeletonViz::Rotate(float amt) { unk110 += amt; }
+void SkeletonViz::Rotate(float amt) { mCurrentCamRotation += amt; }
 void SkeletonViz::SetAxesCoordSys(SkeletonCoordSys cs) { mAxesCoordSys = cs; }
 
 void SkeletonViz::Init() {
@@ -212,7 +212,7 @@ void SkeletonViz::DrawLine3D(
         mUtlLine->SetPointColor(0, *color2, true);
         mUtlLine->SetPointColor(1, color1, true);
     }
-    mUtlLine->SetWidth(unk214 * f);
+    mUtlLine->SetWidth(mLineWidthScale * f);
     mUtlLine->DrawShowing();
     mUtlLine->SetMat(mat);
 }

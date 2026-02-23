@@ -1106,33 +1106,33 @@ void PackVector(
 
 void FillCompressedVertex(CompressedVertex_Xbox &compressed, const RndMesh::Vert &vert, bool normalize) {
     // Copy position
-    *(f32 *)(&compressed.unk0) = vert.pos.x;
-    *(f32 *)(&compressed.unk4) = vert.pos.y;
-    *(f32 *)(&compressed.unk8) = vert.pos.z;
+    *(f32 *)(&compressed.mPosX) = vert.pos.x;
+    *(f32 *)(&compressed.mPosY) = vert.pos.y;
+    *(f32 *)(&compressed.mPosZ) = vert.pos.z;
 
     // Pack color - RGBA format
     u32 col = (u32)(vert.color.alpha * 255.0f);
     col = (col << 8) | (u32)(vert.color.blue * 255.0f);
     col = (col << 8) | (u32)(vert.color.green * 255.0f);
     col = (col << 8) | (u32)(vert.color.red * 255.0f);
-    compressed.unkc = col;
+    compressed.mColor = col;
 
     // Pack normal
     Vector4 n4(vert.norm.x, vert.norm.y, vert.norm.z, 0.0f);
-    PackVector((unsigned int &)compressed.unk10, n4, 10, 10, 10, 2, normalize);
+    PackVector((unsigned int &)compressed.mNormal, n4, 10, 10, 10, 2, normalize);
 
     // Pack tangent space data
     Vector4 t4(vert.tex.x, vert.tex.y, 0.0f, 0.0f);
-    PackVector((unsigned int &)compressed.unk14, t4, 10, 10, 10, 2, 1);
+    PackVector((unsigned int &)compressed.mTangent, t4, 10, 10, 10, 2, 1);
 
     // Pack binormal
     Vector4 b4(vert.tex.x, vert.tex.y, 0.0f, 0.0f);
-    PackVector((unsigned int &)compressed.unk18, b4, 10, 10, 10, 2, 1);
+    PackVector((unsigned int &)compressed.mBinormal, b4, 10, 10, 10, 2, 1);
 
     // Pack bone indices
-    compressed.unk1c = (vert.boneIndices[3] << 24) | (vert.boneIndices[2] << 16) |
+    compressed.mBoneIndices = (vert.boneIndices[3] << 24) | (vert.boneIndices[2] << 16) |
                        (vert.boneIndices[1] << 8) | vert.boneIndices[0];
 
     // Pack bone weights
-    compressed.unk20 = *(s32 *)&vert.boneWeights;
+    compressed.mBoneWeights = *(s32 *)&vert.boneWeights;
 }

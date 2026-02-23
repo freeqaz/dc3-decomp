@@ -2,6 +2,7 @@
 #include "char/CharInterest.h"
 #include "char/CharWeightable.h"
 #include "math/Easing.h"
+#include "math/Rand.h"
 #include "math/Utl.h"
 #include "obj/Data.h"
 #include "obj/Object.h"
@@ -271,6 +272,39 @@ void CharEyes::ProceduralBlinkUpdate() {
         servo->SetProceduralBlinkWeight(0.0f);
         mBlinkEnabled = false;
         mTarget = mHeadForward;
+    }
+}
+
+void CharEyes::DartUpdate() {
+    static DataNode &disableCheat = DataVariable("cheat.disable_eye_darts");
+
+    if (sDisableEyeDart)
+        return;
+    if (disableCheat.Int(0))
+        return;
+
+    mDartInterval -= TheTaskMgr.DeltaSeconds();
+    if (mDartInterval < 0.0f) {
+        if (mDartEnabled) {
+            mEyeClampCount--;
+            if (mEyeClampCount < 0) {
+                mDartEnabled = false;
+                mDartInterval = RandomFloat(
+                    mData.mMinSecsBetweenSequences, mData.mMaxSecsBetweenSequences
+                );
+                return;
+            }
+            goto set_timer;
+        }
+        if (EyesOnTarget(mData.mOnTargetAngleThresh) && !mBlinkEnabled) {
+            mDartEnabled = true;
+            mEyeClampCount =
+                RandomInt(mData.mMinDartsPerSequence, mData.mMaxDartsPerSequence);
+        set_timer:
+            mDartInterval =
+                RandomFloat(mData.mMinSecsBetweenDarts, mData.mMaxSecsBetweenDarts);
+            mCurrentDartOffset = GenerateDartOffset();
+        }
     }
 }
 

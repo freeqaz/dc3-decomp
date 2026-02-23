@@ -19,10 +19,10 @@ public:
 
 protected:
     bool unk2c;
-    bool unk2d;
+    bool mExecuting;
     std::map<FlowNode *, FlowNode::QueueState> mFlowQueue; // 0x30
     ObjPtrVec<FlowNode> mPollables; // 0x48
-    std::map<Symbol, DataNode> unk64; // 0x64
+    std::map<Symbol, DataNode> mEventTimes; // 0x64
     float mFrameTimeAccumulator; // 0x7c
     float mPeakFrameTime; // 0x80
     RndOverlay *mFlowOverlay; // 0x84

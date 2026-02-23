@@ -83,15 +83,15 @@ public:
 protected:
     Hmx::Object *mObject;           // 0x8
     int mUnkc;                      // 0xc
-    u64 *unk10;
-    u64 *unk14;
+    u64 *mItemIDsBegin;
+    u64 *mItemIDsEnd;
     int mStatus;                    // 0x18
     bool mSuccess;                  // 0x1c
     int unk20;
     int unk24;
     XOVERLAPPED mOverlapped;        // 0x28
-    int unk30;
-    bool unk34;
+    int mEnumStatus;
+    bool mEnumSuccess;
     int unk38;
     int unk3c;
     int unk40;
@@ -101,8 +101,8 @@ protected:
     int unk50;
     int unk54;
     int unk58;
-    Symbol *unk5c;
-    int unk60;
+    Symbol *mOfferSymbol;
+    int mPurchaserID;
 };
 
 class MultipleItemsPostPurchaseEnumJob : public MultipleItemsEnumJob {

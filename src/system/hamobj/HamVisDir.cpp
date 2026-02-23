@@ -28,7 +28,7 @@ PoseOwner::~PoseOwner() {
 HamVisDir::HamVisDir()
     : mFilter(0), mRunning(0), unk2d8(0), unk2dc(0), mPlayer1Right(this),
       mPlayer1Left(this), mPlayer2Right(this), mPlayer2Left(this), mMiloManualFrame(1),
-      unk334(0) {
+      mGrooviness(0) {
     SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
     if (!handle.HasCallback(this)) {
         handle.AddCallback(this);
@@ -280,8 +280,8 @@ void HamVisDir::PostUpdate(const SkeletonUpdateData *data) {
 }
 
 void HamVisDir::SetGrooviness(float groove) {
-    unk334 = (groove - 0.5f) * (2.0f / 3.0f);
-    unk334 = Clamp<float>(0.0, 1.0, unk334);
+    mGrooviness = (groove - 0.5f) * (2.0f / 3.0f);
+    mGrooviness = Clamp<float>(0.0, 1.0, mGrooviness);
     for (ObjDirItr<DepthBuffer3D> it(this, true); it != nullptr; ++it) {
         it->SetGrooviness(groove);
     }

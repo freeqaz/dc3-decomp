@@ -7,8 +7,8 @@
 
 class CartRow {
 public:
-    int unk0;
-    String unk4;
+    int mSongID;
+    String mName;
     String unkc;
 };
 

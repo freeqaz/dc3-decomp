@@ -198,7 +198,7 @@ void XboxContentMgr::StartRefresh() {
                 if (mOverlappeds[i]) {
                     XCancelOverlapped(mOverlappeds[i]);
                     RELEASE(mOverlappeds[i]);
-                    CloseHandle(unk74[i]);
+                    CloseHandle(mEnumHandles[i]);
                 }
             }
         } else if (mState != 1 && mState != 0) {

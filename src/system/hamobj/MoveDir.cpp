@@ -1145,7 +1145,7 @@ float MoveDir::DetectRangePSNR(
     MoveMode moveMode = CurrentMoveMode();
     for (const DetectFrame *it = detectFrames.first; it != detectFrames.second; ++it) {
         const Ham2FrameWeight &wt = it->GetMoveFrame()->FrameWeight(it->Mirror());
-        float cmp = wt.unk0;
+        float cmp = wt.mWeight;
         if (cmp > 0 && it->HasScore()) {
             ret += it->Score(fv, moveMode) * cmp;
         }
@@ -1235,7 +1235,7 @@ float MoveDir::DetectFrac(
         int i7 = 0;
         for (DetectFrame *it = detectFrames.first; it != detectFrames.second; ++it) {
             const Ham2FrameWeight &wt = it->GetMoveFrame()->FrameWeight(it->Mirror());
-            if (wt.unk0 != 0) {
+            if (wt.mWeight != 0) {
                 i8++;
                 if (it->HasScore()) {
                     i7++;

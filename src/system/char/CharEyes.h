@@ -99,6 +99,9 @@ protected:
     bool IsHeadIKWeightIncreasing();
     void ProceduralBlinkUpdate();
     void EnforceMinimumTargetDistance(const Vector3 &, const Vector3 &, Vector3 &);
+    void DartUpdate();
+    bool EyesOnTarget(float);
+    Vector3 GenerateDartOffset();
 
     DataNode OnAddInterest(DataArray *);
     DataNode OnToggleForceFocus(DataArray *);
@@ -170,10 +173,7 @@ protected:
     bool mDartEnabled;
     float mDartInterval;
     int mEyeClampCount;
-    int unk17c;
-    int unk180;
-    int unk184;
-    int unk188;
+    Vector3 mCurrentDartOffset; // 0x17c - current dart offset from GenerateDartOffset
     bool mBlinkEnabled;
     float mBlinkTimer;
     int mBlinkState;

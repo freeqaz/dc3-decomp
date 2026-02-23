@@ -636,14 +636,14 @@ void RandomGroupSeqInst::Poll() {
 #pragma region RandomIntervalGroupSeqInst
 
 RandomIntervalGroupSeqInst::RandomIntervalGroupSeqInst(RandomIntervalGroupSeq *seq)
-    : GroupSeqInst(seq, false), unk4c(seq->MaxSimultaneous()) {
+    : GroupSeqInst(seq, false), mNextPlayTimes(seq->MaxSimultaneous()) {
     unk54 = false;
-    unk40 = seq->MaxSimultaneous();
-    unk44 = seq->AvgIntervalSecs();
-    unk48 = seq->IntervalSpread();
+    mMaxSimultaneous = seq->MaxSimultaneous();
+    mAvgIntervalSecs = seq->AvgIntervalSecs();
+    mIntervalSpread = seq->IntervalSpread();
     int i = 0;
     while (i < seq->MaxSimultaneous()) {
-        unk4c[i] = -1.0f;
+        mNextPlayTimes[i] = -1.0f;
         i++;
     }
 }

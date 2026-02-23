@@ -8,15 +8,15 @@ CompressionEffect::CompressionEffect(IXAudioBatchAllocator *) {
     params.unk0 = false;
     mDCBlock = 1.0f;
     Reset();
-    params.unk4 = -6.0f;
-    params.unk8 = 1.0f;
-    params.unkc = 1.0f;
-    params.unk10 = 0.005f;
-    params.unk14 = 0.2f;
-    params.unk18 = 1.0f;
-    params.unk1c = 0.99f;
-    params.unk20 = 1.01f;
-    params.unk24 = -40.0f;
+    params.mThresholdDb = -6.0f;
+    params.mRatio = 1.0f;
+    params.mOutputGainDb = 1.0f;
+    params.mAttackTime = 0.005f;
+    params.mReleaseTime = 0.2f;
+    params.mPostGain = 1.0f;
+    params.mPeakAttackTime = 0.99f;
+    params.mPeakReleaseTime = 1.01f;
+    params.mGateThreshDb = -40.0f;
     SetParameters(params);
 }
 
@@ -26,24 +26,24 @@ void CompressionEffect::Reset() {
 }
 
 void CompressionEffect::SetParameters(CompressionEffect::Params const &params) {
-    mThresholdDb = params.unk4;
+    mThresholdDb = params.mThresholdDb;
     mThresholdRatio = DbToRatio(mThresholdDb);
     mMakeupGainRatio = DbToRatio(mThresholdDb / mRatio - mThresholdDb);
-    mRatio = params.unk8;
+    mRatio = params.mRatio;
     mMakeupGainRatio = DbToRatio(mThresholdDb / mRatio - mThresholdDb);
-    mOutputGainRatio = DbToRatio(params.unkc);
+    mOutputGainRatio = DbToRatio(params.mOutputGainDb);
     mMakeupGainRatio = DbToRatio(mThresholdDb / mRatio - mThresholdDb);
-    mAttackCoeff = 1.0f - (float)exp(-1.0f / (params.unk10 * 48000.0f));
+    mAttackCoeff = 1.0f - (float)exp(-1.0f / (params.mAttackTime * 48000.0f));
     mMakeupGainRatio = DbToRatio(mThresholdDb / mRatio - mThresholdDb);
-    mReleaseCoeff = 1.0f - (float)exp(-1.0f / (params.unk14 * 48000.0f));
+    mReleaseCoeff = 1.0f - (float)exp(-1.0f / (params.mReleaseTime * 48000.0f));
     mMakeupGainRatio = DbToRatio(mThresholdDb / mRatio - mThresholdDb);
-    mPostGain = params.unk18;
+    mPostGain = params.mPostGain;
     mMakeupGainRatio = DbToRatio(mThresholdDb / mRatio - mThresholdDb);
-    mPeakAttackCoeff = 1.0f - (float)exp(-1.0f / (params.unk1c * 48000.0f));
+    mPeakAttackCoeff = 1.0f - (float)exp(-1.0f / (params.mPeakAttackTime * 48000.0f));
     mMakeupGainRatio = DbToRatio(mThresholdDb / mRatio - mThresholdDb);
-    mPeakReleaseCoeff = 1.0f - (float)exp(-1.0f / (params.unk20 * 48000.0f));
+    mPeakReleaseCoeff = 1.0f - (float)exp(-1.0f / (params.mPeakReleaseTime * 48000.0f));
     mMakeupGainRatio = DbToRatio(mThresholdDb / mRatio - mThresholdDb);
-    mGateThreshDb = params.unk24;
+    mGateThreshDb = params.mGateThreshDb;
     float ratio = DbToRatio(mGateThreshDb);
     mGateMax = ratio;
     mGateMin = ratio;

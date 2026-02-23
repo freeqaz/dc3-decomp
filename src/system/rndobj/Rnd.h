@@ -262,11 +262,11 @@ protected:
     RndEnviron *mDefaultEnv; // 0xe8
     RndLight *mDefaultLit; // 0xec
     RndTex *mDefaultTex[kDefaultTex_Max]; // 0xf0 - 0x10c, inclusive
-    RndCubeTex *unk110;
-    RndCubeTex *unk114;
-    float unk118;
+    RndCubeTex *mDefaultCubeTexBlack;
+    RndCubeTex *mDefaultCubeTexWhite;
+    float mRateTotal;
     int unk11c;
-    int unk120;
+    int mRateCount;
     unsigned int mFrameID; // 0x124
     const char *mRateGate; // 0x128
     DataArray *mFont; // 0x12c
@@ -286,13 +286,13 @@ protected:
     bool unk146;
     bool mWorldCamCopied; // 0x147 - set by CopyWorldCam, cleared by DoWorldEnd
     bool unk148;
-    void (*unk14c)(); // 0x14c - funcptr
+    void (*mWorldEndCallback)(); // 0x14c - funcptr
     void (*unk150)(); // 0x150 - another funcptr
     std::list<PointTest> mPointTests; // 0x154
     std::list<PostProcessor *> mPostProcessors; // 0x15c
     ObjPtr<RndPostProc> mPostProcOverride; // 0x164
     ObjPtr<RndPostProc> mPostProcBlackLightOverride; // 0x178
-    ObjPtrList<RndDrawable> unk18c; // 0x18c
+    ObjPtrList<RndDrawable> mPreClearDraws; // 0x18c
     ObjPtrList<RndDrawable> mDraws; // 0x1a0
 
 public:

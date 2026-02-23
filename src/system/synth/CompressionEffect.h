@@ -5,15 +5,15 @@ class CompressionEffect {
 public:
     struct Params {
         bool unk0;
-        float unk4;
-        float unk8;
-        float unkc;
-        float unk10;
-        float unk14;
-        float unk18;
-        float unk1c;
-        float unk20;
-        float unk24;
+        float mThresholdDb;
+        float mRatio;
+        float mOutputGainDb;
+        float mAttackTime;
+        float mReleaseTime;
+        float mPostGain;
+        float mPeakAttackTime;
+        float mPeakReleaseTime;
+        float mGateThreshDb;
     };
 
     CompressionEffect(IXAudioBatchAllocator *);

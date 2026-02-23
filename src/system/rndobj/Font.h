@@ -131,8 +131,8 @@ public:
     virtual float AspectRatio() const;
     virtual RndMat *Mat() const;
     virtual const RndFontBase *DataOwner() const;
-    virtual float FontUnit() const { return mTextureOwner->unk6c.x; }
-    virtual float FontUnitInverse() const { return mTextureOwner->unk7c.x; }
+    virtual float FontUnit() const { return mTextureOwner->mCellSize.x; }
+    virtual float FontUnitInverse() const { return mTextureOwner->mInvCellSize.x; }
 
     OBJ_MEM_OVERLOAD(0x10A)
     NEW_OBJ(RndFont3d)
@@ -147,8 +147,8 @@ protected:
 
     ObjPtr<RndMat> mMat; // 0x44
     ObjOwnerPtr<RndFont3d> mTextureOwner; // 0x58
-    Vector3 unk6c; // 0x6c
-    Vector3 unk7c; // 0x7c
+    Vector3 mCellSize; // 0x6c
+    Vector3 mInvCellSize; // 0x7c
     Vector3 unk8c; // 0x8c
     std::map<unsigned short, CharInfo *> mCharInfoMap; // 0x9c
 };
@@ -162,6 +162,6 @@ public:
 private:
     RndFont *mFont; // 0x0
     RndTex *mTex; // 0x4
-    RndBitmap *unk8; // 0x8
-    RndBitmap unkc; // 0xc
+    RndBitmap *mBitmapPtr; // 0x8
+    RndBitmap mBitmap; // 0xc
 };

@@ -121,7 +121,7 @@ void Attractor::Load(BinStreamRev &d) {
 RndParticleSys::RndParticleSys()
     : mType(kBasic), mMaxParticles(0), mPersistentParticles(nullptr),
       mFreeParticles(nullptr), mActiveParticles(nullptr), mNumActive(0), mEmitCount(0),
-      mFrameDrive(0), unk138(0), unk13c(0), mPauseOffscreen(0), unk144(0),
+      mFrameDrive(0), mLastFrame(0), mDrawCount(0), mPauseOffscreen(0), mPausedTime(0),
       mBubblePeriod(10, 10), mBubbleSize(1, 1), mLife(100, 100), mBoxExtent1(0, 0, 0),
       mBoxExtent2(0, 0, 0), mSpeed(1, 1), mPitch(0, 0), mYaw(0, 0), mEmitRate(1, 1),
       mStartSize(gUnitsPerMeter / 4, gUnitsPerMeter / 4), mDeltaSize(0, 0),
@@ -137,7 +137,7 @@ RndParticleSys::RndParticleSys()
       mBurstInterval(15, 35), mBurstPeak(4, 8), mBurstLength(20, 30), mExplicitParts(0),
       mElapsedTime(0), mAnimateUVs(0), mLoopUVAnim(1), mRandomAnimStart(0),
       mTileHoldTime(0), mNumTilesAcross(1), mNumTilesDown(1), mNumTilesTotal(1),
-      mStartingTile(0), unk3e0(1), unk3e4(1), mAttractors(this) {
+      mStartingTile(0), mTotalTileTime(1), mInvTotalTileTime(1), mAttractors(this) {
     SetRelativeMotion(0, this);
     SetSubSamples(0);
 }
@@ -409,7 +409,7 @@ BEGIN_COPYS(RndParticleSys)
             }
         }
         COPY_MEMBER(mNumActive)
-        unk138 = GetFrame();
+        mLastFrame = GetFrame();
         if (ty != kCopyFromMax) {
             COPY_MEMBER(mLife)
             COPY_MEMBER(mScreenAspect)
@@ -457,7 +457,7 @@ BEGIN_COPYS(RndParticleSys)
             COPY_MEMBER(mMeshEmitter)
             COPY_MEMBER(mFrameDrive)
             COPY_MEMBER(mPauseOffscreen)
-            mElapsedTime = unk144 = 0;
+            mElapsedTime = mPausedTime = 0;
             COPY_MEMBER(mAnimateUVs)
             COPY_MEMBER(mLoopUVAnim)
             COPY_MEMBER(mRandomAnimStart)
@@ -466,8 +466,8 @@ BEGIN_COPYS(RndParticleSys)
             COPY_MEMBER(mNumTilesDown)
             COPY_MEMBER(mNumTilesTotal)
             COPY_MEMBER(mStartingTile)
-            COPY_MEMBER(unk3e0)
-            COPY_MEMBER(unk3e4)
+            COPY_MEMBER(mTotalTileTime)
+            COPY_MEMBER(mInvTotalTileTime)
             COPY_MEMBER(mBirthMomentum)
             COPY_MEMBER(mBirthMomentumAmount)
             mAttractors.clear();
@@ -489,8 +489,8 @@ void RndParticleSys::SetFrame(float frame, float blend) {
     RndAnimatable::SetFrame(frame, blend);
     if (mFrameDrive) {
         UpdateParticles();
-        unk138 = frame;
-        unk144 = 0;
+        mLastFrame = frame;
+        mPausedTime = 0;
     }
 }
 
@@ -520,13 +520,13 @@ void RndParticleSys::DrawShowing() {
     if (mFrameDrive) {
         UpdateRelativeXfm();
     } else {
-        if (unk13c > 1) {
+        if (mDrawCount > 1) {
             UpdateRelativeXfm();
             UpdateParticles();
         } else if (mRelativeMotion == 1) {
             UpdateRelativeXfm();
         }
-        unk13c = 0;
+        mDrawCount = 0;
     }
 }
 
@@ -594,16 +594,16 @@ void RndParticleSys::SetPersistentPool(int max, Type ty) {
 
 void RndParticleSys::SetTileHoldTime(float f1) {
     mTileHoldTime = f1;
-    unk3e0 = mNumTilesTotal * mTileHoldTime;
-    unk3e0 = Max(unk3e0, 0.0001f);
-    unk3e4 = 1.0f / unk3e0;
+    mTotalTileTime = mNumTilesTotal * mTileHoldTime;
+    mTotalTileTime = Max(mTotalTileTime, 0.0001f);
+    mInvTotalTileTime = 1.0f / mTotalTileTime;
 }
 
 void RndParticleSys::SetNumTiles(int num) {
     mNumTilesTotal = Max(num, 1);
-    unk3e0 = mNumTilesTotal * mTileHoldTime;
-    unk3e0 = Max(unk3e0, 0.0001f);
-    unk3e4 = 1.0f / unk3e0;
+    mTotalTileTime = mNumTilesTotal * mTileHoldTime;
+    mTotalTileTime = Max(mTotalTileTime, 0.0001f);
+    mInvTotalTileTime = 1.0f / mTotalTileTime;
 }
 
 void RndParticleSys::SetGrowRatio(float f) {
@@ -619,15 +619,15 @@ void RndParticleSys::SetShrinkRatio(float f) {
 void RndParticleSys::SetFrameDrive(bool b) {
     mFrameDrive = b;
     if (mFrameDrive) {
-        unk138 = GetFrame();
+        mLastFrame = GetFrame();
     } else
-        unk13c = 0;
-    unk144 = 0;
+        mDrawCount = 0;
+    mPausedTime = 0;
 }
 
 void RndParticleSys::SetPauseOffscreen(bool b) {
     mPauseOffscreen = b;
-    unk144 = 0;
+    mPausedTime = 0;
 }
 
 void RndParticleSys::SetAnimatedUV(bool b) {
@@ -759,7 +759,7 @@ void RndParticleSys::UpdateRelativeXfm() {
         Interp(mLastWorldXfm.v, worldXfm.v, mRelativeMotion, mLastWorldXfm.v);
         Add(mRelativeXfm.v, mLastWorldXfm.v, mRelativeXfm.v);
     }
-    Subtract(mMotionParent->WorldXfm().v, mLastWorldXfm.v, unk2b4);
+    Subtract(mMotionParent->WorldXfm().v, mLastWorldXfm.v, mMotionParentDelta);
     mLastWorldXfm = mMotionParent->WorldXfm();
 }
 
@@ -1118,19 +1118,19 @@ void RndParticleSys::UpdateParticles() {
 
     f32 currentFrame = CalcFrame();
 
-    if (unk138 == 0.0f) {
-        unk138 = currentFrame;
+    if (mLastFrame == 0.0f) {
+        mLastFrame = currentFrame;
     }
 
     if (mNeedForward != 0) {
         RunFastForward();
         if (mFrameDrive == 0) {
-            unk138 = currentFrame;
+            mLastFrame = currentFrame;
         }
     } else {
-        f32 frameUpdate = currentFrame - unk138;
+        f32 frameUpdate = currentFrame - mLastFrame;
         if (mFrameDrive == 0) {
-            unk138 = currentFrame;
+            mLastFrame = currentFrame;
         }
 
         if (frameUpdate != 0.0f) {
@@ -1138,9 +1138,9 @@ void RndParticleSys::UpdateParticles() {
                 if (frameUpdate > 4.0f) {
                     float excess = frameUpdate - 4.0f;
                     frameUpdate = 4.0f;
-                    unk144 = unk144 + excess;
+                    mPausedTime = mPausedTime + excess;
                 }
-                currentFrame -= unk144;
+                currentFrame -= mPausedTime;
             }
 
             MoveParticles(currentFrame, frameUpdate);
@@ -1229,7 +1229,7 @@ void RndParticleSys::SetRelativeMotion(float motion, RndTransformable *parent) {
     } else {
         mRelativeXfm.Reset();
     }
-    unk2b4.Zero();
+    mMotionParentDelta.Zero();
 }
 
 DataNode RndParticleSys::OnSetStartColor(const DataArray *da) {
@@ -1369,25 +1369,25 @@ DataNode RndParticleSys::OnExplicitParts(const DataArray *da) {
 
 bool RndParticleSys::Burst::Set(float f1, float f2) {
     if (f2 > 0) {
-        unk0 = f1;
-        unk4 = f2 * 0.5f;
-        unkc = f2;
-        unk8 = 1.0f / unk4;
+        mPeakRate = f1;
+        mHalfDuration = f2 * 0.5f;
+        mRemainingDuration = f2;
+        mInvHalfDuration = 1.0f / mHalfDuration;
         return true;
     } else
         return false;
 }
 
 float RndParticleSys::Burst::Emit(float f1) {
-    unkc -= f1;
-    if (unkc < 0)
+    mRemainingDuration -= f1;
+    if (mRemainingDuration < 0)
         return -1;
-    float ret = unkc;
-    if (ret > unk4) {
-        ret = unk4 * 2.0f - ret;
+    float ret = mRemainingDuration;
+    if (ret > mHalfDuration) {
+        ret = mHalfDuration * 2.0f - ret;
     }
-    ret *= unk8;
-    return ret * ret * 3.0f - ret * ret * ret * 2.0f * unk0 * f1;
+    ret *= mInvHalfDuration;
+    return ret * ret * 3.0f - ret * ret * ret * 2.0f * mPeakRate * f1;
 }
 
 float RndParticleSys::CheckBursts(float f1) {

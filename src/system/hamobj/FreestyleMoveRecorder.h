@@ -18,7 +18,7 @@ public:
         SkeletonJoint mJoint;
     };
     struct JointPos {
-        int unk0; // SkeletonJoint?
+        int mJoint; // SkeletonJoint?
         int unk4;
     };
     FreestyleMoveRecorder();
@@ -59,8 +59,6 @@ public:
 
     MEM_OVERLOAD(FreestyleMoveRecorder, 0x2E);
     static FreestyleMoveRecorder *sInstance;
-
-    friend class BustAMovePanel;
 
 private:
     void UpdateRecordingAttempt(const BaseSkeleton *, float);

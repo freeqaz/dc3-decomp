@@ -118,7 +118,7 @@ void KerningTable::Load(BinStreamRev &d, RndFontBase *f) {
     }
 }
 
-BitmapLocker::BitmapLocker(RndFont *font, int pageIdx) : mFont(font), mTex(0), unk8(0) {
+BitmapLocker::BitmapLocker(RndFont *font, int pageIdx) : mFont(font), mTex(0), mBitmapPtr(0) {
     LoadPage(pageIdx);
 }
 
@@ -132,20 +132,20 @@ void BitmapLocker::LoadPage(int pageIdx) {
     if (mTex) {
         mTex->UnlockBitmap();
     }
-    unk8 = nullptr;
+    mBitmapPtr = nullptr;
     mTex = mFont->ValidTexture(pageIdx);
     if (mTex) {
         const char *filename = mTex->File().c_str();
         int len = strlen(filename);
         if (UsingCD() || len < 4 || stricmp(filename + len - 4, ".bmp")) {
-            mTex->LockBitmap(unkc, 3);
-            if (unkc.Pixels()) {
-                unk8 = &unkc;
+            mTex->LockBitmap(mBitmap, 3);
+            if (mBitmap.Pixels()) {
+                mBitmapPtr = &mBitmap;
             }
         } else {
-            unkc.LoadBmp(filename, false, true);
-            if (unkc.Pixels()) {
-                unk8 = &unkc;
+            mBitmap.LoadBmp(filename, false, true);
+            if (mBitmap.Pixels()) {
+                mBitmapPtr = &mBitmap;
             }
             mTex = nullptr;
         }

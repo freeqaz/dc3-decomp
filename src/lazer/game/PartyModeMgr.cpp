@@ -125,7 +125,7 @@ void PartyModePlayer::PushTitle(Symbol s) {
 
 PartyModeMgr::PartyModeMgr() : mFrameSmoothers() {
     unk40 = false;
-    unk328 = 0;
+    mEventBucketSequences = 0;
     static Symbol party_mode("party_mode");
     mPartyModeCfg = SystemConfig(party_mode);
     static Symbol ar_objects("ar_objects");
@@ -898,8 +898,8 @@ void PartyModeMgr::DetermineSubMode(Symbol *pMode, Symbol *pSubMode) {
         *pSubMode = ffa;
     } else {
         *pMode = mModePicker.GetNext();
-        if (unk328) {
-            Symbol sym = unk328->Sym(mRoundsPlayed + 1);
+        if (mEventBucketSequences) {
+            Symbol sym = mEventBucketSequences->Sym(mRoundsPlayed + 1);
             static Symbol event_buckets("event_buckets");
             DataArray *arr = mPartyModeCfg->FindArray(event_buckets);
             arr = arr->FindArray(sym);
@@ -1039,8 +1039,8 @@ int PartyModeMgr::PickNextPlayer() {
             ret = ret % mTeam1Players.size();
         }
         mCurrentTeamSelector = 1;
-        if (unk32c) {
-            DataArray *arr = unk32c->Array(mRoundsPlayed + 1);
+        if (mPlayerSequences) {
+            DataArray *arr = mPlayerSequences->Array(mRoundsPlayed + 1);
             int idx = 0;
             if (mTeam1Players.size() > mTeam2Players.size())
                 idx = 1;
@@ -1052,8 +1052,8 @@ int PartyModeMgr::PickNextPlayer() {
             ret = ret % mTeam2Players.size() + mTeam1Players.size();
         }
         mCurrentTeamSelector = 2;
-        if (unk32c) {
-            DataArray *arr = unk32c->Array(mRoundsPlayed + 1);
+        if (mPlayerSequences) {
+            DataArray *arr = mPlayerSequences->Array(mRoundsPlayed + 1);
             int idx = 1;
             if (mTeam2Players.size() < mTeam1Players.size())
                 idx = 0;

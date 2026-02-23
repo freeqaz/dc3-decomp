@@ -5,9 +5,9 @@ class DelayEffect {
 public:
     struct Params {
         u32 unk0;
-        float unk4;
-        float unk8;
-        float unkc;
+        float mDelaySamples;
+        float mDecayDb;
+        float mWetPercent;
     };
 
     ~DelayEffect();

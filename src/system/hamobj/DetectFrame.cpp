@@ -74,7 +74,7 @@ float DetectFrame::Score(const FilterVersion *fv, MoveMode mode) const {
         float f5 = 0;
         int numNodes = fv->NumNodes();
         for (int i = 0; i < numNodes; i++) {
-            if (mMoveFrame->NodeWeightHam1(i, mode, mMirror).unk0) {
+            if (mMoveFrame->NodeWeightHam1(i, mode, mMirror).mActive) {
                 f5 += mBestNodeErrors[i].x;
             }
         }

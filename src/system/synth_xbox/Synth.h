@@ -40,7 +40,7 @@ public:
 
     CriticalSection unkb0;
     std::vector<Mic *> mMics; // 0xd0
-    std::vector<IXAudio2SubmixVoice *> unkdc;
+    std::vector<IXAudio2SubmixVoice *> mHeadsetSubmixes;
     int unke8;
     int unkec;
     int unkf0;
@@ -50,7 +50,7 @@ public:
     u32 unk100;
     bool mDolbyEnabled;
     bool mDolbyPending;
-    Timer unk108;
+    Timer mDolbyTimer;
     bool unk138;
     int unk13c;
     std::vector<FxSend360 *> mFxSends;

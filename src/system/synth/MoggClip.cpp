@@ -34,7 +34,7 @@ bool IsUselessMogg(const char *mogg) {
 #pragma region Hmx::Object
 
 MoggClip::MoggClip()
-    : mVolume(0), unk44(0), mStream(nullptr), unk4c(0), mData(nullptr), mDataSize(0),
+    : mVolume(0), mControllerVolume(0), mStream(nullptr), unk4c(0), mData(nullptr), mDataSize(0),
       mLoader(nullptr), mFxSend(this), mFader(Hmx::Object::New<Fader>()),
       mUnloadWhenFinished(false), mPlaying(false), mLoop(false), mLoopStartSample(0), mLoopEndSample(-1),
       mBufSecs(0) {
@@ -198,7 +198,7 @@ bool MoggClip::DonePlaying() { return !mStream; }
 void MoggClip::SetVolume(float vol) {
     mVolume = vol;
     if (mStream) {
-        mStream->Stream::SetVolume(unk44 + mVolume);
+        mStream->Stream::SetVolume(mControllerVolume + mVolume);
     }
 }
 

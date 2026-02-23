@@ -79,8 +79,8 @@ void GetRows(JsonConverter &c, const JsonObject *o, std::vector<CartRow> *rows) 
     for (int i = 0; i < aSize; i++) {
         JsonArray *cur = static_cast<JsonArray *>(c.GetValue(a, i));
         CartRow row;
-        row.unk0 = c.GetValue(cur, 0)->Int();
-        row.unk4 = c.GetValue(cur, 1)->Str();
+        row.mSongID = c.GetValue(cur, 0)->Int();
+        row.mName = c.GetValue(cur, 1)->Str();
         row.unkc = c.GetValue(cur, 2)->Str();
         rows->push_back(row);
     }

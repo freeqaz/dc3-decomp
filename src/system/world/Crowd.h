@@ -128,7 +128,7 @@ protected:
     /** "Number of characters to place" */
     int mNum; // 0x68
     CrowdRotate mCrowdRotate; // 0x6c
-    Vector3 unk70; // 0x70
+    Vector3 mCenter; // 0x70
     /** "Makes crowd be 3D regardless of the CamShot" */
     bool mForce3DCrowd; // 0x80
     /** "Shows only the 3D crowd, but ONLY in Milo

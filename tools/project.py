@@ -717,21 +717,13 @@ def generate_build_ninja(
 
     # MSVC
     msvc = compiler_path / "cl.exe"
-    msvc_cmd = f"{wrapper_cmd}{msvc} $cflags /showIncludes /Fo$out $in"
-    if transform_dep is not None:
-        msvc_cmd = (
-            "bash -lc 'set -o pipefail; "
-            f"{msvc_cmd} | $python {transform_dep}'"
-        )
+    msvc_cmd = f"{wrapper_cmd}{msvc} $cflags /Fo$out $in"
 
     n.comment("MSVC build")
-    n.variable("msvc_deps_prefix", "Note: including file:")
     n.rule(
         name="msvc",
         command=msvc_cmd,
         description="MSVC $out",
-        # depfile="$basefile.d",
-        deps="msvc",
     )
     n.newline()
 
@@ -1116,6 +1108,11 @@ def generate_build_ninja(
             if link_built_obj and built_obj_path is not None:
                 # Use the source-built object
                 link_step.add(built_obj_path)
+                # Also include the split object for data/BSS symbols
+                # that other still-split units may reference (e.g., lbl_*).
+                # /FORCE:MULTIPLE handles the duplicate function definitions.
+                if obj_path is not None:
+                    link_step.add(Path(obj_path))
             elif obj_path is not None:
                 # Use the original (extracted) object
                 link_step.add(Path(obj_path))
@@ -1466,9 +1463,15 @@ def generate_build_ninja(
     ###
     build_config_path = build_path / "config.json"
     n.comment("Split XEX into relocatable objects")
+    n.comment("write_if_changed: only update config.json mtime when content changes,")
+    n.comment("preventing unnecessary generator re-runs that invalidate ninja deps.")
     n.rule(
         name="split",
-        command=f"{dtk} xex split $in $out_dir",
+        command=f"cp $out_dir/config.json $out_dir/config.json.prev 2>/dev/null; "
+                f"{dtk} xex split $in $out_dir && "
+                f"if cmp -s $out_dir/config.json $out_dir/config.json.prev; then "
+                f"touch -r $out_dir/config.json.prev $out_dir/config.json; fi; "
+                f"rm -f $out_dir/config.json.prev",
         description="SPLIT $in",
         depfile="$out_dir/dep",
         deps="gcc",
@@ -1537,9 +1540,12 @@ def generate_objdiff_config(
     # Load existing objdiff.json
     existing_units = {}
     if Path("objdiff.json").is_file():
-        with open("objdiff.json", "r", encoding="utf-8") as r:
-            existing_config = json.load(r)
-            existing_units = {unit["name"]: unit for unit in existing_config["units"]}
+        try:
+            with open("objdiff.json", "r", encoding="utf-8") as r:
+                existing_config = json.load(r)
+                existing_units = {unit["name"]: unit for unit in existing_config["units"]}
+        except json.JSONDecodeError:
+            pass
 
     if config.ninja_path:
         ninja = str(config.ninja_path.absolute())

@@ -1,18 +1,23 @@
 #include "flow/FlowAnimate.h"
+#include "flow/FlowManager.h"
 #include "flow/FlowNode.h"
 #include "obj/Object.h"
+#include "os/Debug.h"
 #include "rndobj/Anim.h"
+#include "utl/MakeString.h"
 
 FlowAnimate::FlowAnimate()
-    : mAnimTask(this), mAnim(this), mStopMode(kStopLastFrame), unk98(0), mBlend(0), mWait(0),
+    : mAnimTask(this), mAnim(this), mStopMode(kStopLastFrame), mDeferredStopMode(0), mBlend(0), mWait(0),
       mDelay(0), mEnable(0), mRate(RndAnimatable::k30_fps), mStart(0), mEnd(0),
-      mPeriod(0), mScale(1), unkc4(0), mEase(kEaseLinear), mEasePower(2), mWrap(0),
+      mPeriod(0), mScale(1), mStopDeferred(0), mEase(kEaseLinear), mEasePower(2), mWrap(0),
       mImmediateRelease(0) {
     static Symbol range("range");
     mType = range;
 }
 
-FlowAnimate::~FlowAnimate() {}
+FlowAnimate::~FlowAnimate() {
+    TheFlowMgr->CancelCommand(this);
+}
 
 BEGIN_HANDLERS(FlowAnimate)
     HANDLE_ACTION(on_anim_event, OnAnimEvent(_msg->Sym(2)))
@@ -130,4 +135,64 @@ void FlowAnimate::ResetAnim() {
         static Symbol loop("loop");
         mType = mAnim->Loop() ? loop : range;
     }
+}
+
+bool FlowAnimate::IsRunning() {
+    if (!FlowNode::IsRunning()) {
+        return mAnimTask != 0;
+    }
+    return true;
+}
+
+void FlowAnimate::RequestStopCancel() {
+    FLOW_LOG("RequestStopCancel\n");
+    TheFlowMgr->QueueCommand(this, kQueue);
+    if (mStopDeferred) {
+        mStopDeferred = false;
+    }
+    FlowNode::RequestStopCancel();
+}
+
+void FlowAnimate::RequestStop() {
+    if (mAnimTask) {
+        switch (mStopMode) {
+        case kStopImmediate:
+            TheFlowMgr->QueueCommand(this, kIgnore);
+            break;
+        case kStopLastFrame:
+            mStopDeferred = true;
+            break;
+        case kStopOnMarker:
+            mDeferredStopMode = kStopOnMarker;
+            mStopDeferred = true;
+            break;
+        case kStopBetweenMarkers:
+            if (!mBetweenStopMarkers) {
+                mDeferredStopMode = kStopBetweenMarkers;
+                mStopDeferred = true;
+                break;
+            }
+            TheFlowMgr->QueueCommand(this, kIgnore);
+            break;
+        case kReleaseAndContinue:
+            TheFlowMgr->QueueCommand(this, kIgnore);
+            break;
+        default:
+            MILO_NOTIFY_ONCE("Bad Stop Mode value in animate case!");
+            break;
+        }
+    }
+    FlowNode::RequestStop();
+}
+
+void FlowAnimate::Deactivate(bool b) {
+    FLOW_LOG("Deactivate\n");
+    if (mAnimTask) {
+        mAnimTask->mListener = NULL;
+        AnimTask *task = mAnimTask;
+        mAnimTask = NULL;
+        delete task;
+    }
+    TheFlowMgr->CancelCommand(this);
+    FlowNode::Deactivate(b);
 }

@@ -119,7 +119,7 @@ MultipleItemsPostPurchaseEnumJob::MultipleItemsPostPurchaseEnumJob(Hmx::Object *
 MultipleItemsPostPurchaseEnumJob::~MultipleItemsPostPurchaseEnumJob() {}
 
 void MultipleItemsPostPurchaseEnumJob::OnCompletion(Hmx::Object *obj) {
-    if ((unk30 == 2) && (unk34 != 0)) {
+    if ((mEnumStatus == 2) && (mEnumSuccess != 0)) {
         static int sInitFlags = 0;
         static Symbol sSourceSymbol;
         static Symbol sOfferSymbol;
@@ -138,11 +138,11 @@ void MultipleItemsPostPurchaseEnumJob::OnCompletion(Hmx::Object *obj) {
             sPurchaserSymbol = Symbol("purchaser");
         }
 
-        int count = ((int)((u64)unk14 - (u64)unk10)) >> 3;
+        int count = ((int)((u64)mItemIDsEnd - (u64)mItemIDsBegin)) >> 3;
         if (count != 0) {
             for (int i = 0; i < count; i++) {
-                String itemStr(MakeString("0x%016llX", (u64)unk10 + (i << 3)));
-                SendDataPoint("store/purchase", sSourceSymbol, *unk5c, sOfferSymbol, itemStr, sPurchaserSymbol, unk60);
+                String itemStr(MakeString("0x%016llX", (u64)mItemIDsBegin + (i << 3)));
+                SendDataPoint("store/purchase", sSourceSymbol, *mOfferSymbol, sOfferSymbol, itemStr, sPurchaserSymbol, mPurchaserID);
             }
         }
     }

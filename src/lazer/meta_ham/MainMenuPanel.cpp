@@ -43,8 +43,8 @@ MainMenuPanel::MotdData::MotdData(MotdData const &motdData)
 MainMenuPanel::MainMenuPanel()
     : mMsgLabel(), mIsEntering(false), mNetCacheActive(false), mDownloadedTexture1(),
       mDownloadedTexture2(), mDLCArtPending(false), mUtilityArtPending(false),
-      mMiscArtPending(false), mMotdProcessingActive(false), unkbc(), unkc0(), unkc4(),
-      unkc8(), unkcc(), unkd0(), mPlayerEventProvider() {}
+      mMiscArtPending(false), mMotdProcessingActive(false), mMotdPromoFreq(), mMotdPickCount(), mMotdMaxStatsRun(),
+      mMotdStatsRunCount(), mMotdMaxCommunityRun(), mMotdCommunityRunCount(), mPlayerEventProvider() {}
 
 MainMenuPanel::~MainMenuPanel() { DeleteDownloadedArts(); }
 
@@ -366,17 +366,17 @@ float MainMenuPanel::MotdPickNextText() {
     data.mType = community;
     int iVar8;
 
-    if (unkbc == 0) {
+    if (mMotdPromoFreq == 0) {
         goto normal_pick;
     }
-    if (unkc0 % unkbc != 0) {
+    if (mMotdPickCount % mMotdPromoFreq != 0) {
         goto normal_pick;
     }
 
     {
         // Promo path
         Symbol *pPromoType = &dlc;
-        if (unkd4 != utility) {
+        if (mMotdLastPromoType != utility) {
             pPromoType = &utility;
         }
         data.mType = *pPromoType;
@@ -388,29 +388,29 @@ float MainMenuPanel::MotdPickNextText() {
             + mMsgLabel->Indentation();
 
         iVar8 = 1;
-        unkd4 = data.mType;
+        mMotdLastPromoType = data.mType;
     }
     goto set_counter;
 
 normal_pick:
-    if (unkcc == 0 || unkcc <= unkd0) {
+    if (mMotdMaxCommunityRun == 0 || mMotdMaxCommunityRun <= mMotdCommunityRunCount) {
         iVar8 = 1;
     pick_stats:
         data.mType = stats;
-        unkd0 = 0;
-        unkc8 = iVar8;
-    } else if (unkc8 < unkc4) {
+        mMotdCommunityRunCount = 0;
+        mMotdStatsRunCount = iVar8;
+    } else if (mMotdStatsRunCount < mMotdMaxStatsRun) {
         iVar8 = RandomInt(0, 2);
         data.mType = community;
         if (iVar8 == 0) {
-            iVar8 = unkc8 + 1;
+            iVar8 = mMotdStatsRunCount + 1;
             goto pick_stats;
         }
-        unkc8 = 0;
-        unkd0 = unkd0 + 1;
+        mMotdStatsRunCount = 0;
+        mMotdCommunityRunCount = mMotdCommunityRunCount + 1;
     } else {
-        unkd0 = 1;
-        unkc8 = 0;
+        mMotdCommunityRunCount = 1;
+        mMotdStatsRunCount = 0;
     }
 
     {
@@ -431,13 +431,13 @@ normal_pick:
         mMotdMessagesByCategory[cat].push_back(*it);
         mMotdMessagesByCategory[cat].erase(it);
 
-        if (unkbc == 0)
+        if (mMotdPromoFreq == 0)
             goto end;
-        iVar8 = unkc0 + 1;
+        iVar8 = mMotdPickCount + 1;
     }
 
 set_counter:
-    unkc0 = iVar8;
+    mMotdPickCount = iVar8;
 
 end:
     mMotdData.push_back(data);
@@ -488,7 +488,7 @@ void MainMenuPanel::MotdInitializeTexts() {
     mMsgLabel->SetAltStyle(this);
     {
         float targetWidth = mMsgLabel->Width() * 2.0f;
-        unkbc = TheRockCentral.GetMotdFreq();
+        mMotdPromoFreq = TheRockCentral.GetMotdFreq();
 
         // Count community and stats
         int communityCount = mMotdMessagesByCategory[community].size();
@@ -497,22 +497,22 @@ void MainMenuPanel::MotdInitializeTexts() {
         // Adjust promo frequency
         if (mMotdMessagesByCategory[dlc].empty()
             && mMotdMessagesByCategory[utility].empty()) {
-            unkbc = 0;
-        } else if (unkbc < 1) {
-            unkbc = 1;
-        } else if (communityCount + statsCount < unkbc - 1) {
-            unkbc = communityCount + statsCount + 1;
+            mMotdPromoFreq = 0;
+        } else if (mMotdPromoFreq < 1) {
+            mMotdPromoFreq = 1;
+        } else if (communityCount + statsCount < mMotdPromoFreq - 1) {
+            mMotdPromoFreq = communityCount + statsCount + 1;
         }
 
         // Set community max rotation count
         {
             unsigned int commSize = mMotdMessagesByCategory[community].size();
             if (commSize == 0) {
-                unkcc = 0;
+                mMotdMaxCommunityRun = 0;
             } else {
                 unsigned int commSize2 = mMotdMessagesByCategory[community].size();
                 if (commSize2 > 1) {
-                    unkcc = 2;
+                    mMotdMaxCommunityRun = 2;
                 }
             }
         }
@@ -521,17 +521,17 @@ void MainMenuPanel::MotdInitializeTexts() {
         {
             unsigned int statsSize = mMotdMessagesByCategory[stats].size();
             if (statsSize > 1) {
-                unkc4 = 2;
+                mMotdMaxStatsRun = 2;
             } else {
-                unkc4 = 1;
+                mMotdMaxStatsRun = 1;
             }
         }
 
         // Initialize counters
-        unkc8 = 0;
-        unkd0 = 0;
-        unkc0 = 0;
-        unkd4 = utility;
+        mMotdStatsRunCount = 0;
+        mMotdCommunityRunCount = 0;
+        mMotdPickCount = 0;
+        mMotdLastPromoType = utility;
 
         // Pick first text
         MotdPickNextText();

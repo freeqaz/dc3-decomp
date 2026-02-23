@@ -23,7 +23,7 @@ public:
         FingerDesc()
             : mIsEngaged(0), mTargetWorldPos(0, 0, 0), mRefWorldPos(0, 0, 0), mFinger01(nullptr),
               mFinger02(nullptr), mFinger03(nullptr), mFingertip(nullptr), mBlendFrames(0),
-              unk8c(0), mNeedsUpdate(1) {}
+              mBlendOutFrames(0), mNeedsUpdate(1) {}
         bool mIsEngaged;
         float mBoneTotalLength;
         Vector3 mTargetWorldPos;
@@ -32,16 +32,16 @@ public:
         ObjPtr<RndTransformable> mFinger02; // 0x3c
         ObjPtr<RndTransformable> mFinger03; // 0x50
         ObjPtr<RndTransformable> mFingertip; // 0x64
-        float unk78;
-        float unk7c;
-        float unk80;
-        float unk84;
+        float mCurFinger02Angle;
+        float mCurFinger03Angle;
+        float mDestFinger02Angle;
+        float mDestFinger03Angle;
         int mBlendFrames;
-        int unk8c;
+        int mBlendOutFrames;
         bool mNeedsUpdate;
-        Vector3 unk94;
-        Vector3 unka4;
-        bool unkb4;
+        Vector3 mDestOrientVec;
+        Vector3 mCurOrientVec;
+        bool mNeedsIKSolve;
     };
     // Hmx::Object
     virtual ~CharIKFingers();

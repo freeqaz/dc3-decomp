@@ -199,17 +199,17 @@ protected:
     bool mTargetShadow; // 0x30c
     /** "Can't optimize render end of render batching of light can with others" */
     bool mLightCanSort; // 0x30d
-    Hmx::Matrix3 unk310;
-    bool unk340;
+    Hmx::Matrix3 mOrientMatrix;
+    bool mSnapToTarget;
     /** "0-1, controls how fast spotlight moves to reach target" */
     float mDampingConstant; // 0x344
     /** "Additional objects that should be drawn by the spotlight." */
     ObjPtrList<RndDrawable> mAdditionalObjects; // 0x348
-    Vector3 unk35c;
+    Vector3 mLastTargetPos;
     /** "Whether this spotlight coloring should be animated by light presets." */
     bool mAnimateColorFromPreset; // 0x36c
     /** "Whether this spotlight position/rotation should be animated by light presets." */
     bool mAnimateOrientationFromPreset; // 0x36d
-    bool unk36e; // 0x36e
-    Hmx::Quat unk370;
+    bool mUpdating; // 0x36e
+    Hmx::Quat mDampQuat;
 };

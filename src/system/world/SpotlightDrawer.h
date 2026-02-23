@@ -36,18 +36,18 @@ public:
     // size 0x40
     class SpotMeshEntry { // from RB3 decomp
     public:
-        SpotMeshEntry() : unk0(0), unk4(0), unk8(0) {}
-        RndMesh *unk0;
-        RndMesh *unk4;
-        Spotlight *unk8;
+        SpotMeshEntry() : mCanMesh(0), mEnvMesh(0), mSpotlight(0) {}
+        RndMesh *mCanMesh;
+        RndMesh *mEnvMesh;
+        Spotlight *mSpotlight;
         int unkc;
-        Transform unk10;
+        Transform mTransform;
     };
 
     class SpotlightEntry { // from RB3 decomp
     public:
-        SpotlightEntry() : unk0(0), mSpotlight(0) {}
-        unsigned int unk0; // 0x0 - id?
+        SpotlightEntry() : mColorKey(0), mSpotlight(0) {}
+        unsigned int mColorKey; // 0x0 - id?
         Spotlight *mSpotlight; // 0x4
     };
 
@@ -120,7 +120,7 @@ public:
         const SpotlightDrawer::SpotlightEntry &e1,
         const SpotlightDrawer::SpotlightEntry &e2
     ) const {
-        return e1.unk0 < e2.unk0;
+        return e1.mColorKey < e2.mColorKey;
     }
 };
 
@@ -129,11 +129,11 @@ public:
     bool operator()(
         const SpotlightDrawer::SpotMeshEntry &e1, const SpotlightDrawer::SpotMeshEntry &e2
     ) const {
-        if (e1.unk4 < e2.unk4)
+        if (e1.mEnvMesh < e2.mEnvMesh)
             return true;
-        else if (e1.unk4 > e2.unk4)
+        else if (e1.mEnvMesh > e2.mEnvMesh)
             return false;
         else
-            return e1.unk0 < e2.unk0;
+            return e1.mCanMesh < e2.mCanMesh;
     }
 };

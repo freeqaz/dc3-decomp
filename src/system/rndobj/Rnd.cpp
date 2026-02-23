@@ -123,13 +123,13 @@ Rnd::Rnd()
     : mClearColor(0.3f, 0.3f, 0.3f), mWidth(640), mHeight(480), mScreenBpp(16),
       mDrawCount(0), mDrawTimer(), mTimersOverlay(0), mRateOverlay(0), mHeapOverlay(0),
       mWatchOverlay(0), mStatsOverlay(0), mDefaultMat(0), mOverlayMat(0), mOverdrawMat(0),
-      mDefaultCam(0), mWorldCamCopy(0), mDefaultEnv(0), mDefaultLit(0), unk110(nullptr),
-      unk114(nullptr), unk118(0), unk120(5), mFrameID(0), mRateGate("    "),
+      mDefaultCam(0), mWorldCamCopy(0), mDefaultEnv(0), mDefaultLit(0), mDefaultCubeTexBlack(nullptr),
+      mDefaultCubeTexWhite(nullptr), mRateTotal(0), mRateCount(5), mFrameID(0), mRateGate("    "),
       mFont(nullptr), mSync(1), mGsTiming(0), mShowSafeArea(0), mDrawing(0),
       mWorldEnded(1), mAspect(kWidescreen), mDrawMode(kDrawNormal), mResourceCached(0), mShowShaderCost(0),
       mShrinkToSafe(1), mInGame(0), mVerboseTimers(0), mDisablePostProc(0), unk146(0),
-      mWorldCamCopied(0), unk148(0), unk14c(0), unk150(0), mPostProcOverride(this),
-      mPostProcBlackLightOverride(nullptr), unk18c(this), mDraws(this), mReleaseImmediate(0),
+      mWorldCamCopied(0), unk148(0), mWorldEndCallback(0), unk150(0), mPostProcOverride(this),
+      mPostProcBlackLightOverride(nullptr), mPreClearDraws(this), mDraws(this), mReleaseImmediate(0),
       mProcCmds(kProcessAll), mLastProcCmds(kProcessAll) {
     for (int i = 0; i < 8; i++)
         mDefaultTex[i] = nullptr;
@@ -511,8 +511,8 @@ bool Rnd::ConsoleShowing() { return mConsole->Showing(); }
 
 void Rnd::EndWorld() {
     if (!mWorldEnded) {
-        if (unk14c) {
-            unk14c();
+        if (mWorldEndCallback) {
+            mWorldEndCallback();
         }
         DoWorldEnd();
         DoPostProcess();
@@ -784,12 +784,12 @@ void Rnd::SetupFont() {
 }
 
 void Rnd::CreateCubeTextures() {
-    unk110 = Hmx::Object::New<RndCubeTex>();
-    unk114 = Hmx::Object::New<RndCubeTex>();
+    mDefaultCubeTexBlack = Hmx::Object::New<RndCubeTex>();
+    mDefaultCubeTexWhite = Hmx::Object::New<RndCubeTex>();
     for (unsigned int i = 0; i < RndCubeTex::kNumCubeFaces; i++) {
         RndCubeTex::CubeFace cf = (RndCubeTex::CubeFace)i;
-        RndBitmap &bm110 = unk110->GetBitmap(cf);
-        RndBitmap &bm114 = unk114->GetBitmap(cf);
+        RndBitmap &bm110 = mDefaultCubeTexBlack->GetBitmap(cf);
+        RndBitmap &bm114 = mDefaultCubeTexWhite->GetBitmap(cf);
         bm110.Create(32, 32, 0, 32, 0, nullptr, nullptr, nullptr);
         bm114.Create(32, 32, 0, 32, 0, nullptr, nullptr, nullptr);
         for (int j = 0; j < 32; j++) {
@@ -798,8 +798,8 @@ void Rnd::CreateCubeTextures() {
                 bm114.SetPixelColor(k, j, 255, 255, 255, 255);
             }
         }
-        unk110->UpdateFace(cf);
-        unk114->UpdateFace(cf);
+        mDefaultCubeTexBlack->UpdateFace(cf);
+        mDefaultCubeTexWhite->UpdateFace(cf);
     }
 }
 
@@ -882,8 +882,8 @@ void Rnd::CreateDefaults() {
         RELEASE(mDefaultTex[i]);
         mDefaultTex[i] = CreateDefaultTexture((DefaultTextureType)i);
     }
-    RELEASE(unk110);
-    RELEASE(unk114);
+    RELEASE(mDefaultCubeTexBlack);
+    RELEASE(mDefaultCubeTexWhite);
     CreateCubeTextures();
 }
 
@@ -902,7 +902,7 @@ int Rnd::CompressTexture(
 }
 
 void Rnd::PreClearDrawAddOrRemove(RndDrawable *d, bool b2, bool b3) {
-    ObjPtrList<RndDrawable> &list = b3 ? unk18c : mDraws;
+    ObjPtrList<RndDrawable> &list = b3 ? mPreClearDraws : mDraws;
     if (!b2) {
         list.remove(d);
     } else {

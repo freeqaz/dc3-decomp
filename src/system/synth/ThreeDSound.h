@@ -12,7 +12,7 @@
 class ThreeDSound : public RndTransformable, public Sound {
 public:
     // Hmx::Object
-    virtual ~ThreeDSound() { RELEASE(unk1c8); }
+    virtual ~ThreeDSound() { RELEASE(mDistanceFader); }
     OBJ_CLASSNAME(ThreeDSound)
     OBJ_SET_TYPE(ThreeDSound)
     virtual DataNode Handle(DataArray *, bool);
@@ -39,7 +39,7 @@ public:
     void SetDoppler(float);
 
     void EnableDoppler(bool enable) {
-        unk1c8->SetTranspose(0);
+        mDistanceFader->SetTranspose(0);
         mDopplerEnabled = enable;
     }
     void SetFalloffType(EaseType type) {
@@ -85,7 +85,7 @@ protected:
     float mDelayedVolume; // 0x198
     float mDelayedPan; // 0x19c
     float mDelayedTranspose; // 0x1a0
-    Hmx::Object *unk1a4; // 0x1a4
+    Hmx::Object *mDelayedOwner; // 0x1a4
     float mDelayMs; // 0x1a8
     /** "Equation used to determine falloff.
         See http://deki/Projects/Tool_Projects/Milo/Flow/Easing_equations" */
@@ -102,7 +102,7 @@ protected:
     bool mPanEnabled; // 0x1bd
     int mShape; // 0x1c0
     float mRadius; // 0x1c4
-    Fader *unk1c8; // 0x1c8
+    Fader *mDistanceFader; // 0x1c8
     Transform mSavedWorldTransform; // 0x1cc
     float unk20c; // 0x20c
     float unk210; // 0x210
