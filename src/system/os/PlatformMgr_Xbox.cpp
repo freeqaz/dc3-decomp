@@ -89,17 +89,16 @@ void PlatformMgr::UpdateSigninState() {
 
 bool PlatformMgr::HasCreatedContentPrivilege() const {
     bool allUsersRestricted = true;
-    int userIndex = 0;
-
-    do {
+    for (int userIndex = 0; userIndex < 4; ++userIndex) {
         int privilegeResult = 0;
-        bool hasContentCreation = XUserCheckPrivilege(userIndex, XPRIVILEGE_USER_CREATED_CONTENT, &privilegeResult) != 0 || privilegeResult != 0;
-        bool hasFriendsOnlyContent = XUserCheckPrivilege(userIndex, XPRIVILEGE_USER_CREATED_CONTENT_FRIENDS_ONLY, &privilegeResult) != 0 || privilegeResult != 0;
-        bool userIsRestricted = !(hasContentCreation && hasFriendsOnlyContent);
-
-        userIndex++;
+        bool createdContentBlocked = XUserCheckPrivilege(userIndex, XPRIVILEGE_USER_CREATED_CONTENT, &privilegeResult) != 0
+            || privilegeResult != 0;
+        bool friendsOnlyContentBlocked =
+            XUserCheckPrivilege(userIndex, XPRIVILEGE_USER_CREATED_CONTENT_FRIENDS_ONLY, &privilegeResult) != 0
+            || privilegeResult != 0;
+        bool userIsRestricted = !(createdContentBlocked && friendsOnlyContentBlocked);
         allUsersRestricted = allUsersRestricted & userIsRestricted;
-    } while (userIndex < 4);
+    }
 
     return allUsersRestricted;
 }
