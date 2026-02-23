@@ -594,7 +594,7 @@ bool DirLoader::SetupDir(Symbol sym) {
     }
     if (mDir) {
         if (mDir->ClassName() != sym) {
-            if (mDir->Dir() != mDir) {
+            if (mDir != mDir->Dir()) {
                 MILO_NOTIFY(
                     "%s: Proxy %s class %s not %s, converting",
                     PathName(mDir->Dir()),

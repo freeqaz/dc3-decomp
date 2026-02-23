@@ -12,7 +12,11 @@ SynapseAPO::SynapseAPO() : CSampleXAPOBase<SynapseAPO, SynapseAPOParams>() {
   SetSamplingRate(48000.0f);
 }
 
-SynapseAPO::~SynapseAPO() {}
+SynapseAPO::~SynapseAPO() {
+    if (mSynapse != 0) {
+        delete mSynapse;
+    }
+}
 
 void SynapseAPO::SetSamplingRate(float rate) {
   Synapse::Synapse* prevSynapse = mSynapse;

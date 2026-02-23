@@ -1,16 +1,45 @@
 #include "synth_xbox/FftIpp.h"
 #include "types.h"
 #include "utl/MemMgr.h"
-#include <cstdlib>
+#include <cstring>
+#include <stdarg.h>
 
 extern void merged_827BD118(void *, void *);
 extern void CalculateSinCosTable(int, void *);
+extern "C" int FFTRealForward(unsigned int *, unsigned int, float *, int, int);
+extern "C" int _vsprintf_s_l(void *, char *, unsigned int, const char *, void *, va_list);
 
-void FftIpp::FftRealCcs(unsigned int *, volatile float &, unsigned int *, float &) {}
+void FftIpp::FftRealCcs(
+    unsigned int *param1, volatile float &param2, unsigned int *param3, float &param4
+) {
+    unsigned int *inData = param1;
+    float *outData = (float *)&param2;
+    unsigned int n = *param3;
+
+    memcpy(&param4, (void *)param1, n * 4);
+
+    int result = FFTRealForward(inData, n, outData, 0, 0);
+    (void)result;
+}
 
 void FftIpp::FftReal(
-    unsigned int *param1, volatile float &param2, unsigned int *, float &, volatile float &
-) {}
+    unsigned int *param1, volatile float &param2, unsigned int *param3, float &param4,
+    volatile float &param5
+) {
+    unsigned int *inData = param1;
+    float *outData = (float *)&param2;
+    unsigned int *tmpBuf = param3;
+    unsigned int n = *param3;
+    float *outCcs = (float *)&param5;
+
+    memcpy((void *)inData, (void *)outData, n * 4);
+
+    int result = FFTRealForward(inData, n, outData, 0, 0);
+    (void)result;
+
+    result = FFTRealForward(inData, n, outCcs, 1, 0);
+    (void)result;
+}
 
 FftIpp::~FftIpp() {
 }

@@ -24,6 +24,7 @@ void SynthSample::Init() {
 
 void SynthSample::Disable() { sDisabled = true; }
 int SynthSample::GetNumChannels() const { return mSampleData.NumChannels(); }
+int SynthSample::GetSampleRate() const { return mSampleData.GetSampleRate(); }
 std::vector<SampleMarker> &SynthSample::AccessMarkers() {
     return mSampleData.AccessMarkers();
 }

@@ -16,6 +16,7 @@ Usage:
 """
 
 import argparse
+import subprocess
 import struct
 from pathlib import Path
 
@@ -1189,6 +1190,11 @@ def main():
                        help="Original XEX to copy headers from")
     parser.add_argument("--output", "-o", default=str(ROOT / "build" / "373307D9" / "default.xex"),
                        help="Output XEX path")
+    parser.add_argument("--no-xenia-manifest", action="store_true",
+                        help="Skip generation of xenia_dc3_patch_manifest.json")
+    parser.add_argument("--xenia-runtime-fnv1a64", default=None,
+                        help="Optional Xenia runtime .text FNV1a64 (hex) to embed in "
+                             "xenia_dc3_patch_manifest.json")
     args = parser.parse_args()
 
     # Read PE
@@ -1279,6 +1285,41 @@ def main():
     with open(out_path, 'wb') as f:
         f.write(xex_data)
     print(f"\nWrote: {out_path} ({len(xex_data):,} bytes)")
+
+    if not args.no_xenia_manifest:
+        manifest_script = ROOT / "scripts" / "build" / "generate_xenia_dc3_patch_manifest.py"
+        manifest_out = out_path.parent / "xenia_dc3_patch_manifest.json"
+        symbols_path = ROOT / "config" / "373307D9" / "symbols.txt"
+        if manifest_script.exists() and symbols_path.exists():
+            print("\nGenerating Xenia DC3 patch manifest...")
+            try:
+                manifest_cmd = [
+                    "python3",
+                    str(manifest_script),
+                    "--pe",
+                    str(pe_path),
+                    "--xex",
+                    str(out_path),
+                    "--symbols",
+                    str(symbols_path),
+                    "--output",
+                    str(manifest_out),
+                    "--build-label",
+                    "decomp",
+                ]
+                if args.xenia_runtime_fnv1a64:
+                    manifest_cmd.extend([
+                        "--xenia-runtime-fnv1a64",
+                        args.xenia_runtime_fnv1a64,
+                    ])
+                subprocess.run(
+                    manifest_cmd,
+                    check=True,
+                )
+            except subprocess.CalledProcessError as e:
+                print(f"  Warning: manifest generation failed (exit {e.returncode})")
+        else:
+            print("  Skipping Xenia patch manifest generation (missing script or symbols.txt)")
 
     return 0
 

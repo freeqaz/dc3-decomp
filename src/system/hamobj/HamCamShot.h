@@ -123,6 +123,10 @@ protected:
 
     void CheckNextShots();
     void ResetNextShot();
+    bool AreTargetsFlipped() const;
+    Symbol GetFlipTarget(Symbol) const;
+    Target *GetFlipTarget(Target *);
+    RndDrawable *GetFlipCharacter(RndDrawable *);
     void FlipTargetAnimGroups();
     void UpdateTargetsFlipped();
     bool IterateNextShot();
@@ -166,3 +170,6 @@ protected:
     std::vector<RndDrawable *> mFlipEndShowVector; // 0x37c
     bool mFlipActive; // 0x388
 };
+
+class HamCharacter;
+HamCharacter *CharacterNameToCharacter(Symbol s);

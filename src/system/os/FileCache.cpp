@@ -90,6 +90,10 @@ bool FileCacheFile::ReadDone(int &iref) {
     }
 }
 
+FileCacheFile::~FileCacheFile() {
+    mParent->Release();
+}
+
 int FileCacheFile::Read(void *iData, int iBytes) {
     MILO_ASSERT(!mData, 0xFE);
     mBytesRead = iBytes;

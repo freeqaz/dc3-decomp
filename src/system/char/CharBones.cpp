@@ -257,8 +257,8 @@ void CharBones::ScaleAdd(CharClip *clip, float f1, float f2, float f3) {
 
 void CharBones::AddBoneInternal(const Bone &bone) {
     Type type = TypeOf(bone.name);
-    int start = mCounts[type];
     int end = mCounts[type + 1];
+    int start = mCounts[type];
     int pos = start;
     if (start < end) {
         const char *name = bone.name.Str();

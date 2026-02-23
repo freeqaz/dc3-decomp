@@ -42,7 +42,7 @@ BinStream &RndBitmap::LoadHeader(BinStream &bs, u8 &numMips) {
     bs.Tell();
     bs >> rev;
     if (rev > 1)
-        bs >> mName;
+        bs.ReadEndian(&mName.mCRC, 4);
     bs >> mBpp;
     if (rev > 0)
         bs >> mOrder;

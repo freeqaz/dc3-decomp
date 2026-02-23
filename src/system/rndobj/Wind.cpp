@@ -11,6 +11,8 @@ Rand *sRand;
 float sWhiteField[0x400] = { 0 };
 float sWindField[0x401] = { 0 };
 Vector3 sOffset(0.0f, 0.3384f, 0.66843998f);
+int gRev = 0;
+int gAltRev = 0;
 
 void SetWind(int start, int end, float startVal, float endVal, float amplitude) {
     sWindField[start] = startVal;
@@ -63,10 +65,10 @@ void RndWind::SelfGetWind(const Vector3 &pos, float time, Vector3 &result) {
         + mPrevailing.z;
 
     RndTransformable *trans = mTrans.Ptr();
-    if (trans) {
+    if ((int)trans) {
         const Transform &xfm = trans->WorldXfm();
         if (mAboutZ) {
-            Vector3 zAxis(xfm.m.z.x, xfm.m.z.y, xfm.m.z.z);
+            Vector3 zAxis(xfm.m.z);
             Vector3 diff(pos.x - xfm.v.x, pos.y - xfm.v.y, pos.z - xfm.v.z);
             float dot = -(diff.x * zAxis.x + diff.y * zAxis.y + diff.z * zAxis.z);
             Vector3 proj(diff.x + zAxis.x * dot, diff.y + zAxis.y * dot,
@@ -135,6 +137,30 @@ void RndWind::SetDefaults() {
     mSpaceLoop = gUnitsPerMeter * 10.0f;
 }
 
+BEGIN_LOADS(RndWind)
+    LOAD_REVS(bs)
+    ASSERT_REVS(4, 0)
+    LOAD_SUPERCLASS(Hmx::Object)
+
+    d.stream >> mPrevailing;
+    d.stream >> mRandom;
+    d.stream >> mTimeLoop;
+    d.stream >> mSpaceLoop;
+
+    if (d.rev >= 1) {
+        mWindOwner.Load(bs, false, Dir());
+    }
+    if (d.rev >= 2) {
+        mTrans.Load(bs, false, Dir());
+    }
+    if (d.rev >= 3) {
+        d.stream >> mMinSpeed;
+        d.stream >> mMaxSpeed;
+    }
+
+    SyncLoops();
+END_LOADS
+
 BEGIN_HANDLERS(RndWind)
     HANDLE_SUPERCLASS(Hmx::Object)
     HANDLE_ACTION(set_defaults, SetDefaults())
@@ -173,10 +199,10 @@ BEGIN_COPYS(RndWind)
     CREATE_COPY(RndWind)
     BEGIN_COPYING_MEMBERS
         if (ty == kCopyShallow)
-            mWindOwner = c->mWindOwner;
+            mWindOwner = c->mWindOwner.Ptr();
         else {
             mWindOwner = this;
-            COPY_MEMBER(mWindOwner)
+            mWindOwner = c->mWindOwner.Ptr();
             COPY_MEMBER(mPrevailing)
             COPY_MEMBER(mRandom)
             COPY_MEMBER(mTimeLoop)
@@ -199,3 +225,12 @@ void RndWind::SyncLoops() {
 }
 
 void RndWind::SetWindOwner(RndWind *wind) { mWindOwner = wind ? wind : this; }
+
+bool RndWind::Replace(ObjRef *from, Hmx::Object *to) {
+    if (from == &mWindOwner) {
+        RndWind *wind = dynamic_cast<RndWind *>(to);
+        mWindOwner = wind ? wind : this;
+        return true;
+    }
+    return Hmx::Object::Replace(from, to);
+}

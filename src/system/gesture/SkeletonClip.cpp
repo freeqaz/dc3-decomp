@@ -129,7 +129,7 @@ BEGIN_LOADS(SkeletonClip)
         d.rev = 9;
     }
     static const unsigned short gRevs[4] = { 9, 0, 1, 0 };
-    if (d.rev > 9) {
+    if (9 < d.rev) {
         MILO_FAIL(
             "%s can't load new %s version %d > %d", pathName, className, d.rev, gRevs[0]
         );

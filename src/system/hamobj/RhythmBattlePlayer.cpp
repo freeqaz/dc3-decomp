@@ -155,7 +155,11 @@ void RhythmBattlePlayer::Poll() {
                     if (ShouldAutoPass() && 1 < recordData.unk14) {
                         mRhythmSuccessFraction = 1;
                     }
-                    mFreshnessScore = ShouldAutoPass() ? 1 : rd->Freshness();
+                                        if (ShouldAutoPass()) {
+                        mFreshnessScore = 1;
+                    } else {
+                        mFreshnessScore = rd->Freshness();
+                    }
                 }
                 Symbol autoplay = TheGameData->Player(mPlayer)->Autoplay();
                 if (!autoplay.Null()) {

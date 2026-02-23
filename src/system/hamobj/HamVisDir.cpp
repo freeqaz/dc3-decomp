@@ -237,12 +237,12 @@ void HamVisDir::Enter() {
     if (TheLoadMgr.EditMode() == 0 && TheGestureMgr != nullptr) {
         FreestyleMotionFilter *freestyle_filter =
             ObjectDir::Main()->Find<FreestyleMotionFilter>("freestyle_filter", false);
-        mFilter = freestyle_filter;  // Store the found filter (may be nullptr)
+        mFilter = freestyle_filter;
         if (freestyle_filter == nullptr) {
             freestyle_filter = new FreestyleMotionFilter();
-            mFilter = freestyle_filter;  // Update mFilter with the new instance
+            mFilter = freestyle_filter;
+            freestyle_filter->SetName("freestyle_filter", Main());
         }
-        freestyle_filter->SetName("freestyle_filter", Main());
         mFilter->Deactivate();
     }
 }

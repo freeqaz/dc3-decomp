@@ -1,9 +1,11 @@
 #include "hamobj/HamCamShot.h"
 #include "char/Character.h"
 #include "flow/PropertyEventProvider.h"
+#include "hamobj/HamDirector.h"
 #include "math/Mtx.h"
 #include "math/Vec.h"
 #include "obj/Data.h"
+#include "obj/Dir.h"
 #include "obj/Msg.h"
 #include "obj/Object.h"
 #include "obj/Utl.h"
@@ -176,8 +178,8 @@ bool HamCamShot::IterateNextShot() {
     if (it == 0) {
         it = mNextShots.begin();
     } else {
-        mNextShotIt.mNode = it.mNode->next;
-        if (mNextShotIt.mNode == 0) {
+        ++mNextShotIt;
+        if (mNextShotIt == 0) {
             ret = false;
         } else {
             return ret;
@@ -368,4 +370,133 @@ void HamCamShot::SetFrameEx(float frame, float blend) {
     mInSetFrame = true;
     SetFrame(frame, blend);
     mInSetFrame = false;
+}
+
+bool HamCamShot::AreTargetsFlipped() const {
+    static Symbol flip_camshot_targets("flip_camshot_targets");
+    const DataNode *prop = TheHamProvider->Property(flip_camshot_targets, true);
+    bool result;
+    if (prop) {
+        result = prop->Int(NULL) != 0;
+    } else {
+        result = false;
+    }
+    return result;
+}
+
+Symbol HamCamShot::GetFlipTarget(Symbol s) const {
+    static Symbol player0("player0");
+    static Symbol player1("player1");
+    static Symbol backup0("backup0");
+    static Symbol backup1("backup1");
+    if (s == player0) {
+        return player1;
+    } else if (s == player1) {
+        return player0;
+    } else if (s == backup0) {
+        return backup1;
+    } else if (s == backup1) {
+        return backup0;
+    }
+    return s;
+}
+
+HamCamShot::Target *HamCamShot::GetFlipTarget(Target *target) {
+    Symbol origTarget = target->mTarget;
+    Symbol flipped = GetFlipTarget(origTarget);
+    Target *result = target;
+    if (origTarget != flipped) {
+        for (ObjList<Target>::iterator it = mTargets.begin(); it != mTargets.end(); ++it) {
+            result = target;
+            if (it->mTarget == flipped) {
+                result = &*it;
+                break;
+            }
+        }
+    }
+    return result;
+}
+
+RndDrawable *HamCamShot::GetFlipCharacter(RndDrawable *draw) {
+    static Symbol player0("player0");
+    static Symbol player1("player1");
+    static Symbol backup0("backup0");
+    static Symbol backup1("backup1");
+    Symbol name(draw->Name());
+    if (!TheHamDirector) return draw;
+    HamCharacter *c;
+    if (name == player0) {
+        c = TheHamDirector->GetCharacter(1);
+    } else if (name == player1) {
+        c = TheHamDirector->GetCharacter(0);
+    } else if (name == backup0) {
+        c = TheHamDirector->GetBackup(1);
+    } else if (name == backup1) {
+        c = TheHamDirector->GetBackup(0);
+    } else {
+        return draw;
+    }
+    return c;
+}
+
+HamCharacter *CharacterNameToCharacter(Symbol s) {
+    static Symbol player0("player0");
+    static Symbol player1("player1");
+    static Symbol backup0("backup0");
+    static Symbol backup1("backup1");
+    if (s == player0) {
+        return TheHamDirector->GetCharacter(0);
+    } else if (s == player1) {
+        return TheHamDirector->GetCharacter(1);
+    } else if (s == backup0) {
+        return TheHamDirector->GetBackup(0);
+    } else if (s == backup1) {
+        return TheHamDirector->GetBackup(1);
+    }
+    return NULL;
+}
+
+void HamCamShot::FlipTargetAnimGroups() {
+    static Symbol player0("player0");
+    static Symbol player1("player1");
+
+    ObjList<Target>::iterator p0;
+    for (p0 = mTargets.begin(); p0 != mTargets.end(); ++p0) {
+        if (p0->mTarget == player0) break;
+    }
+
+    ObjList<Target>::iterator p1;
+    for (p1 = mTargets.begin(); p1 != mTargets.end(); ++p1) {
+        if (p1->mTarget == player1) break;
+    }
+
+    if (p0 != mTargets.end()) {
+        p0->mTarget = player1;
+    }
+    if (p1 != mTargets.end()) {
+        p1->mTarget = player0;
+    }
+}
+
+HamCamShot *HamCamShot::InitialShot() {
+    HamCamShot *initialShot = this;
+    ObjRef::iterator it = initialShot->Refs().begin();
+    while (it != initialShot->Refs().end()) {
+        HamCamShot *cur = dynamic_cast<HamCamShot *>((*it).RefOwner());
+        if (cur) {
+            for (ObjPtrList<HamCamShot>::iterator ni = cur->mNextShots.begin();
+                 ni != cur->mNextShots.end();
+                 ++ni) {
+                if (*ni == initialShot) {
+                    MILO_ASSERT(cur != this, 0x268);
+                    initialShot = cur;
+                    it = initialShot->Refs().begin();
+                    break;
+                }
+            }
+        } else {
+            ++it;
+        }
+    }
+    return initialShot;
 }

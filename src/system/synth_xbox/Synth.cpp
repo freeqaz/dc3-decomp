@@ -7,16 +7,22 @@
 #include "FxSendEQ.h"
 #include "FxSendFlanger.h"
 #include "FxSendMeterEffect.h"
+#include "synth_xbox/FxSendPitchShift360.h"
 #include "FxSendReverb.h"
+#include "synth_xbox/FxSendSynapse360.h"
 #include "FxSendWah.h"
 #include "Synth.h"
 #include "macros.h"
+#include "obj/Data.h"
 #include "obj/Object.h"
 #include "os/Debug.h"
+#include "os/System.h"
 #include "stl/_algobase.h"
 #include "synth/Synth.h"
 #include "synth_xbox/FxSend.h"
 #include "synth_xbox/Mic.h"
+#include "synth_xbox/StreamReceiver360.h"
+#include "synth_xbox/SynthSample.h"
 #include "utl/Std.h"
 #include "xdk/xapilibi/xbox.h"
 #include "xdk/xaudio2/xaudio2.h"
@@ -34,6 +40,8 @@ END_HANDLERS
 
 void Synth360::Init() {
     Synth::Init();
+    SynthSample360::Init();
+    StreamReceiver360::Init();
     REGISTER_OBJ_FACTORY(FxSendReverb360)
     REGISTER_OBJ_FACTORY(FxSendDelay360)
     REGISTER_OBJ_FACTORY(FxSendCompress360)
@@ -44,6 +52,30 @@ void Synth360::Init() {
     REGISTER_OBJ_FACTORY(FxSendBitCrush360)
     REGISTER_OBJ_FACTORY(FxSendDistortion360)
     REGISTER_OBJ_FACTORY(FxSendChorus360)
+    REGISTER_OBJ_FACTORY(FxSendPitchShift360)
+    REGISTER_OBJ_FACTORY(FxSendSynapse360)
+
+    DataArray *synthCfg = SystemConfig(Symbol("synth"));
+    bool enableHeadset = false;
+    synthCfg->FindData(Symbol("enable_headset_output"), enableHeadset, false);
+    if (enableHeadset) {
+        SetupHeadsetSubmixes();
+    }
+
+    float micVolume = 0.0f;
+    DataArray *micCfg = SystemConfig(Symbol("synth"), Symbol("mic"));
+    micCfg->FindData(Symbol("volume"), micVolume, false);
+
+    int numMics = GetNumMics();
+    if (numMics > 0) {
+        MicManagerXbox::GetInstance()->Init();
+        mMics.resize(numMics, nullptr);
+        for (int i = 0; i < numMics; i++) {
+            // TODO: MicXbox is abstract, needs full implementation
+            // MicXbox *mic = new MicXbox(-1, DbToRatio(micVolume));
+            // mMics[i] = mic;
+        }
+    }
 }
 
 Mic *Synth360::GetMic(int index) { return mMics[index]; }

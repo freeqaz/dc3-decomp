@@ -57,7 +57,7 @@ bool SfxInst::IsRunning() {
     FOREACH (it, mSfx->MoggClipMaps()) {
         MoggClip *clp = it->GetMoggClip();
         if (clp) {
-            if (clp->GetStream())
+            if (clp->GetStream() != nullptr)
                 return true;
         }
     }

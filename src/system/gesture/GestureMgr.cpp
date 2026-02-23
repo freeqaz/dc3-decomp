@@ -35,11 +35,19 @@ GestureMgr::GestureMgr()
     MILO_ASSERT(mLiveCamInput, 0x40);
     mPlayerSkeletonIDs[0] = -1;
     mPlayerSkeletonIDs[1] = -1;
-    for (int i = 0; i < 6; i++) {
-        mSkeletons[i].Init();
-        mFilters[i].Init(sConfidenceLossThreshold, sConfidenceRegainThreshold);
-        mIdentityInfos[i].Init();
-        unk30[i] = 0;
+    int skeletonIdx = 0;
+    Skeleton *skeleton = mSkeletons;
+    SkeletonQualityFilter *qualityFilter = mFilters;
+    int *perSkeletonState = unk30 - 1;
+    int *identitySkeletonIndexSlot = (int *)((char *)mIdentityInfos - 4);
+    while (skeletonIdx < 6) {
+        skeleton->Init();
+        qualityFilter->Init(sConfidenceLossThreshold, sConfidenceRegainThreshold);
+        *(identitySkeletonIndexSlot += 4) = skeletonIdx;
+        ++skeletonIdx;
+        *++perSkeletonState = 0;
+        ++skeleton;
+        ++qualityFilter;
     }
     mTrackingAllSkeletons = false;
     SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();

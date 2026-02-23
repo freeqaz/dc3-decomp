@@ -2,8 +2,17 @@
 #include "os/Debug.h"
 #include "os/Timer.h"
 #include "utl/Symbol.h"
+#include "utl/MakeString.h"
 
-// External declarations - C functions from assembly
+// External declarations - C functions from Bink SDK
+extern "C" {
+void BinkInit(void);
+void BinkSetSoundTrack(int, int);
+BINK *BinkOpen(File *, unsigned int);
+void BinkSetVideoOnOff(BINK *, int);
+const char *BinkGetError(void);
+}
+
 extern Timer *GetTimer(Symbol);
 extern void BinkNextFrame(BINK *);
 extern unsigned char BinkGetTrackData(int, int);
@@ -13,17 +22,30 @@ extern void BinkClose(BINK *);
 extern void *MemAlloc(int, const char *, int, const char *, int);
 extern Debug TheDebug;
 
+// Static heap reference
+static int sHeap = 0;
+
 // Static variables for timer initialization
 static int sTimerInitialized = 0;
 static Timer *sTimer = nullptr;
 
 BinkReader::BinkReader(File *file, StandardStream *stream)
-    : mFile(file), mStream(stream), mBink(nullptr), mCurrentTrack(0),
-      mNumSamplesToConsume(0), mSamplesRead(0), mSamplesPerFrame(0),
-      mState(kInit), mEnableReads(true) {
-    for (int i = 0; i < 16; i++) {
-        mTracks[i] = nullptr;
-        mPCMBuffers[i] = nullptr;
+    : mFile(file), mStream(stream), mEnableReads(false),
+      unkD4(0), unkD8(0), unkDC(0), mState(0), mHeapPtr(&sHeap) {
+    // Initialize Bink library
+    BinkInit();
+    BinkSetSoundTrack(0, 0);
+
+    // Open the Bink file
+    mBink = BinkOpen(file, 0x2804400);
+
+    if (mBink != nullptr) {
+        mState = kInit;
+        BinkSetVideoOnOff(mBink, 0);
+    } else {
+        const char *err = BinkGetError();
+        TheDebug.Notify(MakeString("Error opening Bink audio file: %s", err));
+        mState = kFail;
     }
 }
 

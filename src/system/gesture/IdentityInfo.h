@@ -8,6 +8,7 @@ public:
     bool ProfileMatched() const { return mProfileMatched; }
     int EnrollmentIndex() const { return mEnrollmentIdx; }
     void Init() { unkc = 0; }
+    void Init(int skeletonIdx) { unkc = skeletonIdx; }
     void SetIdentified(bool b1) { mIdentified = b1; }
 
 private:

@@ -39,16 +39,20 @@ private:
         kFail = 5     // Error occurred
     };
 
-    File *mFile;
-    StandardStream *mStream;
-    BINK *mBink;
-    BINKTRACK *mTracks[16];
-    void *mPCMBuffers[16];
-    char pad[0x40]; // Padding or unknown members (64 bytes)
-    unsigned char mCurrentTrack;
+    File *mFile; // 0x04
+    StandardStream *mStream; // 0x08
+    BINK *mBink; // 0x0C
+    BINKTRACK *mTracks[16]; // 0x10-0x4C
+    void *mPCMBuffers[16]; // 0x50-0x8C
+    char pad[0x40]; // 0x90-0xCF
+    bool mEnableReads; // 0xD0
+    int unkD4; // 0xD4
+    int unkD8; // 0xD8
+    int unkDC; // 0xDC
+    int mState; // 0xE0
+    int *mHeapPtr; // 0xE4 - pointer to static heap
+    // Additional members used by other functions
     int mNumSamplesToConsume;
     int mSamplesRead;
     int mSamplesPerFrame;
-    int mState; // Current state (see State enum)
-    bool mEnableReads;
 };

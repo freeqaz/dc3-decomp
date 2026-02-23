@@ -56,7 +56,10 @@ public:
     void Dealloc();
     int NumChannels() const { return mNumChannels; }
     int GetSampleRate() const { return mSampleRate; }
+    int GetNumSamples() const { return mNumSamples; }
     Format GetFormat() const { return mFormat; }
+    bool HasData() const { return mData != nullptr; }
+    unsigned int DataAddr() const { return (unsigned int)mData; }
     std::vector<SampleMarker> &AccessMarkers() { return mMarkers; }
 
     static void SetAllocator(SampleDataAllocFunc, SampleDataFreeFunc);

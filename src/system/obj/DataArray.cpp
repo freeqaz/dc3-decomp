@@ -566,25 +566,26 @@ void DataArray::RandomSortNodes() {
 
 DataNode DataArray::Execute(bool fail) {
     DataCallStackFrame frame(this);
-    START_AUTO_TIMER_CALLBACK("array_exec", DataArrayGlitchCB, this);
+    static Timer *_t = AutoTimer::GetTimer("array_exec");
+    AutoTimer _at(_t, 17.0f, DataArrayGlitchCB, this);
     DataNode &node = (DataNode &)Evaluate(0);
+    Hmx::Object *deferredObject = 0;
     switch (node.Type()) {
     case kDataFunc:
         return node.UncheckedFunc()(this);
     case kDataObject: {
-        Hmx::Object *obj = node.UncheckedObj();
-        if (obj) {
-            return obj->Handle(this, true);
-        }
+        deferredObject = node.UncheckedObj();
         break;
     }
     case kDataSymbol: {
-        const char *str = node.UncheckedStr();
-        Hmx::Object *obj = gDataDir->FindObject(str, true, true);
+        const char *rawSymbolText = node.UncheckedStr();
+        Symbol commandSymbol = STR_TO_SYM(rawSymbolText);
+        const char *symbolText = commandSymbol.Str();
+        Hmx::Object *obj = gDataDir->FindObject(symbolText, true, true);
         if (obj) {
             return obj->Handle(this, true);
         }
-        std::map<Symbol, DataFunc *>::iterator func = gDataFuncs.find(STR_TO_SYM(str));
+        std::map<Symbol, DataFunc *>::iterator func = gDataFuncs.find(commandSymbol);
         if (func != gDataFuncs.end()) {
             // Cache the function into the array to optimize repeat calls
             node = func->second;
@@ -602,34 +603,42 @@ DataNode DataArray::Execute(bool fail) {
     default:
         break;
     }
-    if (sDefaultHandler) {
-        DataNode n = sDefaultHandler(this);
-        if (n.Type() != kDataUnhandled) {
-            return n;
+    Hmx::Object *handledObject = deferredObject;
+    int handledObjectInt = (int)handledObject;
+    if (handledObjectInt == 0) {
+        if (sDefaultHandler) {
+            DataNode n = sDefaultHandler(this);
+            if (n.Type() != kDataUnhandled) {
+                return n;
+            }
         }
-    }
-    if (fail) {
-        String str;
-        Node(0).Print(str, true, 0);
-        String str2;
-        node.Print(str, true, 0);
-        const char *msg;
-        if (str == str2) {
-            msg = MakeString(
-                "%s not function or object (file %s, line %d)", str.c_str(), mFile, mLine
-            );
-        } else {
-            msg = MakeString(
-                "%s = %s not function or object (file %s, line %d)",
-                str2.c_str(),
-                str.c_str(),
-                mFile,
-                mLine
-            );
+        if (fail) {
+            String str;
+            Node(0).Print(str, true, 0);
+            String str2;
+            node.Print(str2, true, 0);
+            const char *msg;
+            if (str == str2) {
+                const char *commandText = str.c_str();
+                msg = MakeString(
+                    "%s not function or object (file %s, line %d)", commandText, mFile, mLine
+                );
+            } else {
+                const char *evaluatedText = str2.c_str();
+                const char *commandText = str.c_str();
+                msg = MakeString(
+                    "%s = %s not function or object (file %s, line %d)",
+                    evaluatedText,
+                    commandText,
+                    mFile,
+                    mLine
+                );
+            }
+            TheDebugFailer << msg;
         }
-        TheDebugFailer << msg;
+        return 0;
     }
-    return 0;
+    return handledObject->Handle(this, true);
 }
 
 DataNode DataArray::ExecuteBlock(int len) {

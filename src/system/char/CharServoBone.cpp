@@ -14,6 +14,12 @@
 #include "obj/Object.h"
 #include "utl/Symbol.h"
 
+static inline void ScaleAddEq(Vector3 &v1, const Vector3 &v2, float f) {
+    v1.x += v2.x * f;
+    v1.y += v2.y * f;
+    v1.z += v2.z * f;
+}
+
 void RotateAboutZ(const Vector3 &v, float f, Vector3 &res) {
     float c = Cosine(f);
     float s = Sine(f);
@@ -125,9 +131,13 @@ void CharServoBone::ReallocateInternal() {
     mFacingPosDelta = (Vector3 *)FindPtr("bone_facing_delta.pos");
     if ((void *)mFacingPosDelta) {
         mFacingPos = (Vector3 *)FindPtr("bone_facing.pos");
-        RndTransformable *pelvis = CharUtlFindBoneTrans("bone_pelvis", Dir());
-        MILO_ASSERT(mFacingPos && pelvis, 0xB3);
-        mPelvis = pelvis;
+        mPelvis = CharUtlFindBoneTrans("bone_pelvis", Dir());
+        if (!mFacingPos) {
+            MILO_NOTIFY("CharServoBone: no Facing Pos in %s", PathName(this));
+        }
+        if (!mPelvis) {
+            MILO_NOTIFY("CharServoBone: no pelvis bone in %s", PathName(this));
+        }
         mFacingRot = (float *)FindPtr("bone_facing.rotz");
         mFacingRotDelta = (float *)FindPtr("bone_facing_delta.rotz");
     }
@@ -173,6 +183,23 @@ void CharServoBone::RegulateInternal(Character *me) {
         }
         mRegulate->Constrain(me->DirtyLocalXfm());
     }
+}
+
+void CharServoBone::DoRegulate(
+    Character *me, Waypoint *waypoint, CharClipDriver *driver, float f3, float f4
+) {
+    Transform &myxfm = me->DirtyLocalXfm();
+    ClipPredict pred(driver->GetClip(), myxfm.v, GetZAngle(myxfm.m));
+    pred.Predict(driver->mBeat, driver->mBeat + f3);
+    pred.mPos = pred.mLastPos;
+
+    float ang = pred.Angle();
+    float deltaBeat = TheTaskMgr.DeltaBeat() / f4;
+    Vector3 shapedDelta;
+    waypoint->ShapeDelta(pred.mPos, shapedDelta);
+    ScaleAddEq(myxfm.v, shapedDelta, deltaBeat);
+    float shapeDelta = waypoint->ShapeDelta(ang);
+    RotateAboutZ(myxfm.m, shapeDelta * deltaBeat, myxfm.m);
 }
 
 void CharServoBone::MoveToDeltaFacing(Transform &tf) {

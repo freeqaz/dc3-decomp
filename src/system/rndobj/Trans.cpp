@@ -410,8 +410,10 @@ void RndTransformable::SetTransConstraint(
 }
 
 DataNode RndTransformable::OnCopyLocalTo(const DataArray *da) {
-    DataArray *arr = da->Array(2);
-    for (int i = arr->Size() - 1; i >= 0; i--) {
+    DataArray *arr;
+    int i;
+    arr = da->Array(2);
+    for (i = arr->Size() - 1; i >= 0; i--) {
         RndTransformable *t = arr->Obj<RndTransformable>(i);
         t->SetLocalXfm(LocalXfm());
     }

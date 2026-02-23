@@ -285,19 +285,17 @@ bool HelpBarPanel::UpdateBackButton(UIPanel *panel) {
     if (panel) {
         prop = panel->Property(back_token, false);
     }
+    RndGroup *backIcon = DataDir()->Find<RndGroup>("back_icon.grp", false);
     UILabel *leftHandLabel = DataDir()->Find<UILabel>("left_hand.lbl", false);
     bool b11 = false;
-    bool show;
-    RndGroup *backIcon = DataDir()->Find<RndGroup>("back_icon.grp", false);
     if (prop) {
-        auto _tmp4 = prop->Type();
         if (prop->Type() == kDataSymbol) {
             if (prop->Sym() != gNullStr) {
                 b11 = true;
-                auto _tmp1 = prop->Sym();
-                mLeftHandNavList->GetHelpbarProvider()->SetLabel(1, 0, _tmp1);
+                HamNavProvider *prov = mLeftHandNavList->GetHelpbarProvider();
+                prov->SetLabel(1, 0, prop->Sym());
             }
-        } else if (_tmp4 == kDataArray) {
+        } else if (prop->Type() == kDataArray) {
             if (prop->Array()->Size() > 0) {
                 b11 = true;
                 mLeftHandNavList->GetHelpbarProvider()->SetLabels(1, prop->Array());
@@ -309,10 +307,15 @@ bool HelpBarPanel::UpdateBackButton(UIPanel *panel) {
         mLeftHandNavList->GetHelpbarProvider()->SetLabel(1, prop->Sym());
         if (backIcon) {
             static Symbol show_back_controller_icon("show_back_controller_icon");
+            bool show;
             if (panel) {
                 prop = panel->Property(show_back_controller_icon, false);
                 if (prop) {
-                    show = prop->Int() != 0;
+                    if (prop->Int()) {
+                        show = true;
+                    } else {
+                        show = false;
+                    }
                 } else {
                     show = true;
                 }

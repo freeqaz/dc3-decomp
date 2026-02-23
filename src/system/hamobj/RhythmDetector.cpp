@@ -199,7 +199,30 @@ INIT_REVS(2, 0)
 
 BEGIN_LOADS(RhythmDetector)
     LOAD_REVS(bs)
-    ASSERT_REVS(2, 0)
+    if (d.rev > 2) {
+        TheDebug.Fail(
+            MakeString(
+                "%s can't load new %s version %d > %d",
+                PathName(this),
+                ClassName(),
+                d.rev,
+                *(&gAltRev - 2)
+            ),
+            0
+        );
+    }
+    if (d.altRev > 0) {
+        TheDebug.Fail(
+            MakeString(
+                "%s can't load new %s alt version %d > %d",
+                PathName(this),
+                ClassName(),
+                d.altRev,
+                gAltRev
+            ),
+            0
+        );
+    }
     LOAD_SUPERCLASS(RndPollable)
     if (d.rev >= 1) {
         d >> mBeats;

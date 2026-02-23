@@ -32,6 +32,7 @@ public:
     OBJ_MEM_OVERLOAD(0x18);
 
     int GetNumChannels() const;
+    int GetSampleRate() const;
     int NumMarkers() const;
     int GetPlatformSize(Platform);
     std::vector<SampleMarker> &AccessMarkers();

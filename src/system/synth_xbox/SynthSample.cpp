@@ -1,10 +1,11 @@
 #include "synth_xbox/SynthSample.h"
 #include "obj/Object.h"
 #include "synth/SampleData.h"
+#include "synth_xbox/SampleInst360.h"
 #include "utl/MemMgr.h"
 
-void *SampleAlloc(int size, const char *file, int line, const char *name, int) {
-    return MemAlloc(size, file, line, name, 0x20);
+void *SampleAlloc(int size, const char *, int, const char *, int) {
+    return MemAlloc(size, __FILE__, __LINE__, "Sample Data", 0);
 }
 
 void SampleFree(void *mem, const char *, int, const char *) {
@@ -24,16 +25,17 @@ bool SynthSample360::IsXMA() const {
 }
 
 float SynthSample360::LengthMs() const {
-    int rate = mSampleData.GetSampleRate();
-    if (rate == 0)
-        return 0;
-    int numChannels = mSampleData.NumChannels();
-    if (numChannels == 0)
-        return 0;
-    int size = mSampleData.SizeAs(SampleData::kPCM);
-    return (float)(size / (numChannels * 2)) / (float)rate * 1000.0f;
+    if (mSampleData.HasData()) {
+        int numSamples = mSampleData.GetNumSamples();
+        int sampleRate = GetSampleRate();
+        return (float)numSamples * 1000.0f / (float)sampleRate;
+    }
+    return 0.0f;
 }
 
 SampleInst *SynthSample360::NewInst(bool b, int i1, int i2) {
-    return nullptr; // TODO: needs SampleInst360 implementation
+    if (mSampleData.HasData()) {
+        return new SampleInst360(this, b, i1, i2);
+    }
+    return nullptr;
 }

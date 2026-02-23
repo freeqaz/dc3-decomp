@@ -170,6 +170,27 @@ else
             fi
         done
     fi
+
+    # --- Resolve tool paths from main repo's build.ninja to absolute ---
+    # configure.py defaults to relative paths (../jeff/..., ../wibo/..., etc.)
+    # which break in worktrees outside the source tree
+    resolve_tool() {
+        local rel_path="$1"
+        local abs_path
+        abs_path="$(cd "${MAIN_REPO}" && realpath -e "${rel_path}" 2>/dev/null)" || return 1
+        echo "${abs_path}"
+    }
+
+    # Extract tool paths used in the main build and pass them explicitly
+    for tool_flag_pair in \
+        "--dtk:../jeff/target/release/dtk" \
+        "--objdiff:../objdiff/target/release/objdiff-cli" \
+        "--wrapper:../wibo/build/release/wibo"; do
+        flag="${tool_flag_pair%%:*}"
+        rel="${tool_flag_pair#*:}"
+        abs="$(resolve_tool "${rel}")" && CONFIGURE_ARGS+=("${flag}" "${abs}")
+    done
+
     echo "Using configure args: ${CONFIGURE_ARGS[*]}"
 
     # --- Reconfigure for baseline's file set ---
