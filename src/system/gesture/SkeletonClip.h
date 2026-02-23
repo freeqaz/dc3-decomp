@@ -77,6 +77,7 @@ public:
     void SetAutoplay(bool);
     void SetPath(const char *);
     void EnableAlternateRecord(int);
+    void SetRecordClipIndexHint(int clipIndex) { unk11fc = clipIndex; }
     int NumMoveRatings() const;
     void WriteClip(FileStream &);
     const MoveRating &GetMoveRating(int) const;

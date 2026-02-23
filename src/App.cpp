@@ -1,20 +1,303 @@
 #include "App.h"
 #include "ChecksumData_xbox.h"
+#include "char/Char.h"
+#include "flow/FlowManager.h"
+#include "flow/Flow.h"
+#include "flow/PropertyEventProvider.h"
 #include "game/Game.h"
+#include "game/GameMode.h"
+#include "game/HamUserMgr.h"
+#include "game/PartyModeMgr.h"
+#include "game/PresenceMgr.h"
+#include "math/Utl.h"
 #include "gesture/GestureMgr.h"
+#include "gesture/LiveCameraInput.h"
 #include "gesture/SkeletonUpdate.h"
 #include "hamobj/HamNavList.h"
+#include "hamobj/Ham.h"
+#include "hamobj/HamGameData.h"
+#include "hamobj/MiniGameMgr.h"
+#include "hamobj/MoveMgr.h"
+#include "hamobj/HamWardrobe.h"
+#include "meta/Achievements.h"
+#include "meta/FixedSizeSaveable.h"
+#include "meta_ham/AccomplishmentManager.h"
+#include "meta_ham/Challenges.h"
+#include "meta_ham/ContextChecker.h"
+#include "meta_ham/HamSongMgr.h"
+#include "meta_ham/MetaPanel.h"
+#include "meta_ham/MetagameRank.h"
+#include "meta_ham/Leaderboards.h"
+#include "meta_ham/SaveLoadManager.h"
+#include "midi/MidiParser.h"
+#include "movie/Movie.h"
+#include "movie/Splash.h"
+#include "net_ham/RockCentral.h"
 #include "obj/Dir.h"
+#include "obj/DirLoader.h"
+#include "obj/Msg.h"
+#include "os/Archive.h"
 #include "os/Debug.h"
+#include "os/File.h"
+#include "os/FileCache.h"
+#include "os/PlatformMgr.h"
+#include "os/System.h"
 #include "os/Timer.h"
 #include "rndobj/HiResScreen.h"
 #include "rndobj/Rnd.h"
+#include "synth/Synth.h"
+#include "ui/PanelDir.h"
 #include "ui/UI.h"
+#include "utl/Cheats.h"
+#include "utl/Magnu.h"
+#include "utl/MemTracker.h"
+#include "utl/Option.h"
+#include "utl/MakeString.h"
+#include "world/World.h"
 #include <cstring>
+#include <cctype>
+#include <new>
 
-App::App(int, char **) {
-    ObjDirPtr<ObjectDir> dPtr;
-    AutoTimer timer(0, 0, 0, 0);
+namespace {
+    bool gListenForKinectGuide;
+    FileCache *gPersistentCache;
+    ModalCallbackFunc *gRealCallback;
+}
+
+Symbol RemoveDigitSuffix(const Symbol &);
+bool IsUselessLoad(const char *);
+void DebugModal(Debug::ModalType &, FixedString &, bool);
+bool XShowNuiCallback(u32 &);
+DWORD KinectGuideThread(void *);
+
+App::App(int argc, char **argv) {
+    Timer startupTimer;
+    startupTimer.Start();
+
+    EnableKeyCheats(false);
+    SetFileChecksumData();
+    SystemPreInit(argc, argv, "config/ham_preinit_keep.dta");
+
+    if (TheArchive) {
+        static const int kAppArchivePermissions[11] = {
+            0x000100CF,
+            0x000100C6,
+            0x000100EE,
+            0x000100C4,
+            0x000100BD,
+            0x000100C5,
+            0x000100BA,
+            0x00010059,
+            0x00010097,
+            0x00010081,
+            0x0001001B,
+        };
+        TheArchive->SetArchivePermission(11, kAppArchivePermissions);
+    }
+
+    TheRnd.PreInit();
+
+    static DataNode &notifyLevel = DataVariable("notify_level");
+    if (UsingCD()) {
+        DataNode notifyLevelValue(1);
+        notifyLevel = notifyLevelValue;
+    } else {
+        DataNode notifyLevelValue(1);
+        notifyLevel = notifyLevelValue;
+    }
+
+    gRealCallback = TheDebug.SetModalCallback(DebugModal);
+
+    SynthPreInit();
+    Movie::Init();
+    TheRnd.SetClearColor(Hmx::Color(0.0f, 0.0f, 0.0f, 1.0f));
+
+    Splash splash;
+    bool fastBoot = OptionBool("fast", false);
+    if (fastBoot || !UsingCD()) {
+        splash.SetWaitForSplash(false);
+    }
+    if (fastBoot) {
+        SynthSample::Disable();
+    }
+
+    PlatformRegion region = ThePlatformMgr.GetRegion();
+    unsigned long systemLocale = ULSystemLocale();
+    if (systemLocale == 0x14) {
+        splash.AddScreen("ui/splash/jpn/esrb_keep.milo", 0x12C0);
+    } else if (region == kRegionNA) {
+        splash.AddScreen("ui/splash/eng/esrb_keep.milo", 0x12C0);
+    }
+    splash.AddScreen("ui/splash/harmonix_keep.milo", 3000);
+    splash.PrepareNext();
+    splash.BeginSplasher();
+
+    float splashStartMs = startupTimer.SplitMs();
+    LiveCameraInput::PreInit();
+    LiveCameraInput::Init();
+
+    gListenForKinectGuide = true;
+    HANDLE kinectGuideThread = CreateThread(0, 0, KinectGuideThread, 0, 4, 0);
+    XSetThreadProcessor(kinectGuideThread, 1);
+    ResumeThread(kinectGuideThread);
+
+    splash.PrepareRemaining();
+    SystemInit("config/ham_keep.dta");
+    MagnuInit();
+    if (TheSplasher)
+        TheSplasher->Poll();
+
+    splash.Suspend();
+    TheRnd.Init();
+    TheServer.Init();
+    TheRockCentral.Init();
+    splash.Resume();
+    if (TheSplasher)
+        TheSplasher->Poll();
+
+    FormatString redBuildBanner("HMX Red Build!\n");
+    TheDebug << redBuildBanner.Str();
+
+    FixedSizeSaveable::Init(0x5C, 0x1662);
+    HamUserMgrInit(false);
+    if (TheSplasher)
+        TheSplasher->Poll();
+
+    SynthInit();
+    if (TheSplasher)
+        TheSplasher->Poll();
+
+    FlowInit();
+    if (TheSplasher)
+        TheSplasher->Poll();
+
+    {
+        ObjDirPtr<ObjectDir> audioMixerDir;
+        audioMixerDir.LoadFile("sfx/audio_mixer.milo", false, true, kLoadFront, false);
+
+        ObjDirPtr<ObjectDir> commonBankDir;
+        DataArray *soundBanksConfig = SystemConfig("sound", "banks", "common");
+        const char *soundBankPath = soundBanksConfig->Node(1).Str(soundBanksConfig);
+        commonBankDir.LoadFile(soundBankPath, false, true, kLoadFront, false);
+        TheSynth->SetDir(commonBankDir);
+
+        if (TheSplasher)
+            TheSplasher->Poll();
+    }
+
+    SaveLoadManager::Init();
+    if (TheSplasher)
+        TheSplasher->Poll();
+
+    CharInit();
+    if (TheSplasher)
+        TheSplasher->Poll();
+
+    MidiParser::Init();
+    if (TheSplasher)
+        TheSplasher->Poll();
+
+    WorldInit();
+    if (TheSplasher)
+        TheSplasher->Poll();
+
+    HamInit();
+    if (TheSplasher)
+        TheSplasher->Poll();
+
+    TheHamSongMgr.Init();
+    if (TheSplasher)
+        TheSplasher->Poll();
+
+    MetaPanel::Init();
+    if (TheSplasher)
+        TheSplasher->Poll();
+
+    GameInit();
+    DirLoader::SetPathEvalCallback(IsUselessLoad);
+    if (TheSplasher)
+        TheSplasher->Poll();
+
+    ContextCheckerInit();
+    if (TheSplasher)
+        TheSplasher->Poll();
+
+    PlatformMgr::sXShowCallback = XShowNuiCallback;
+    if (TheSplasher)
+        TheSplasher->Poll();
+
+    AccomplishmentManager::Init(SystemConfig("accomplishment_info"));
+    if (TheSplasher)
+        TheSplasher->Poll();
+
+    MetagameRank::Init();
+
+    DataArray *persistentCacheConfig = SystemConfig("persistent_filecache");
+    if (persistentCacheConfig) {
+        FileCache *allocatedFileCache = (FileCache *)MemAlloc(
+            0x1C,
+            "e:\\lazer_build_gmc1\\system\\src\\os/FileCache.h",
+            0x21,
+            "FileCache",
+            0
+        );
+        if (allocatedFileCache) {
+            allocatedFileCache = new (allocatedFileCache)
+                FileCache(persistentCacheConfig->Node(1).Int(persistentCacheConfig), kLoadFront, false, true);
+        }
+        gPersistentCache = allocatedFileCache;
+        gPersistentCache->StartSet(0);
+        for (int cachePathIdx = 2; cachePathIdx < persistentCacheConfig->Size(); ++cachePathIdx) {
+            FilePath emptyPath("");
+            FilePath cachePath(persistentCacheConfig->Node(cachePathIdx).Str(persistentCacheConfig));
+            gPersistentCache->Add(cachePath, 1, emptyPath);
+        }
+        gPersistentCache->EndSet();
+        gPersistentCache->PollUntilLoaded();
+    }
+
+    static DataNode &extraSongs = DataVariable("extra_songs");
+    if (UsingCD()) {
+        DataNode extraSongsValue(0);
+        extraSongs = extraSongsValue;
+    } else {
+        DataNode extraSongsValue(1);
+        extraSongs = extraSongsValue;
+    }
+
+    TheUI->Init();
+    if (TheSplasher)
+        TheSplasher->Poll();
+
+    GestureMgr::DebugInit();
+    ThePresenceMgr.Init();
+    if (TheSplasher)
+        TheSplasher->Poll();
+
+    MoveMgr::Init(0);
+    MiniGameMgr::Init();
+    if (TheSplasher)
+        TheSplasher->Poll();
+
+    PartyModeMgr::Init();
+    TheUI->GotoFirstScreen();
+
+    float startupEndMs = startupTimer.SplitMs();
+    if (TheArchive && Archive::DebugArkOrder()) {
+        float startupRemainderMs = startupEndMs - splashStartMs;
+        TheDebug << MakeString("Startup Time: %f %f\n", splashStartMs, startupRemainderMs);
+    }
+
+    splash.EndSplasher();
+    EnableKeyCheats(true);
+    AutoGlitchReport::EnableCallback();
+    ThePlatformMgr.SetBackgroundDownloadPriority(true);
+
+    gListenForKinectGuide = false;
+    WaitForSingleObject(kinectGuideThread, 0xFFFFFFFF);
+    CloseHandle(kinectGuideThread);
+
+    MemTrackEnable(true);
 }
 
 void App::CaptureHiRes() {
@@ -70,8 +353,304 @@ bool EndsWith(const char *str, const char *suffix) {
     return strstr(str, suffix) == str + strLen - suffixLen;
 }
 
-namespace {
-    bool gListenForKinectGuide;
+Symbol RemoveDigitSuffix(const Symbol &symbol) {
+    const char *symbolText = symbol.Str();
+    int symbolLen = strlen(symbolText);
+    MILO_ASSERT(symbolLen > 0, 0x2AB);
+
+    char trimmedText[64];
+    memset(trimmedText, 0, sizeof(trimmedText));
+
+    int digitIdx = 0;
+    while (digitIdx < symbolLen && !isdigit((unsigned char)symbolText[digitIdx])) {
+        ++digitIdx;
+    }
+
+    int copyLen = digitIdx;
+    if (digitIdx == symbolLen) {
+        copyLen = symbolLen;
+    }
+    if (copyLen > 0) {
+        memmove(trimmedText, symbolText, copyLen);
+        trimmedText[copyLen] = '\0';
+    }
+
+    return Symbol(trimmedText);
+}
+
+static bool InLoaderModeSafe(Symbol modeSymbol) {
+    return g_LoaderModeCallback ? g_LoaderModeCallback(modeSymbol) : false;
+}
+
+bool IsUselessLoad(const char *loadPath) {
+    static Symbol danceBattleMode("dance_battle");
+    static Symbol practiceMode("practice");
+    static Symbol campaignPracticeMode("campaign_practice");
+    static Symbol inCampaignModeProp("is_in_campaign_mode");
+    static Symbol inCampaignStingerProp("is_in_campaign_stinger");
+    static Symbol justIntroMode("just_intro");
+    static Symbol mindControlMode("mind_control");
+    static Symbol bustAMoveMode("bustamove");
+    static Symbol challengeMode("challenge");
+    static Symbol strikeAPoseMode("strike_a_pose");
+    static Symbol rhythmBattleMode("rhythm_battle");
+    static Symbol gameplayModeProp("gameplay_mode");
+    static Symbol currentCampaignEraProp("current_campaign_era");
+    static Symbol eraTanBattleMode("era_tan_battle");
+
+    bool shouldSkipLoad = false;
+
+    if (gMiloTool || loadPath == 0 || TheGameData == 0) {
+        return false;
+    }
+
+    HamPlayerData *player0 = TheGameData->Player(0);
+    HamPlayerData *player1 = TheGameData->Player(1);
+    if (player0 == 0 || player1 == 0) {
+        return false;
+    }
+
+    bool isLocalizedVoiceBankPath = false;
+    if (strstr(loadPath, "sfx/loc/") == loadPath) {
+        isLocalizedVoiceBankPath = strstr(loadPath, "/vo_bank_") != 0;
+    }
+
+    const char *baseName = FileGetBase(loadPath);
+    Symbol baseNameSymbol(baseName);
+
+    bool isCharacterCamshotPath = false;
+    if (strstr(loadPath, "world/shared/camshots/") == loadPath) {
+        isCharacterCamshotPath = GetCharacterEntry(baseNameSymbol, false) != 0;
+    }
+
+    bool isCrewCamshotPath = strstr(loadPath, "world/shared/camshots/crew_") != 0;
+    if ((isLocalizedVoiceBankPath || isCharacterCamshotPath)
+        && strstr(loadPath, player0->Char().Str()) == 0
+        && strstr(loadPath, player1->Char().Str()) == 0) {
+        if (InLoaderModeSafe(danceBattleMode)) {
+            Symbol player0Crew = GetCrewForCharacter(player0->Char(), true);
+            Symbol player1Crew = GetCrewForCharacter(player1->Char(), true);
+            bool matchesCrewCharacter = false;
+
+            matchesCrewCharacter = matchesCrewCharacter
+                || strstr(baseNameSymbol.Str(), GetCrewCharacter(player0Crew, 0).Str()) != 0;
+            matchesCrewCharacter = matchesCrewCharacter
+                || strstr(baseNameSymbol.Str(), GetCrewCharacter(player0Crew, 1).Str()) != 0;
+            matchesCrewCharacter = matchesCrewCharacter
+                || strstr(baseNameSymbol.Str(), GetCrewCharacter(player1Crew, 0).Str()) != 0;
+            matchesCrewCharacter = matchesCrewCharacter
+                || strstr(baseNameSymbol.Str(), GetCrewCharacter(player1Crew, 1).Str()) != 0;
+
+            if (!matchesCrewCharacter) {
+                shouldSkipLoad = true;
+            }
+        } else {
+            shouldSkipLoad = true;
+        }
+    }
+
+    if (!InLoaderModeSafe(danceBattleMode) && (!isCrewCamshotPath || EndsWith(loadPath, "/vo_bank.milo"))) {
+        shouldSkipLoad = true;
+    }
+
+    if (!InLoaderModeSafe(practiceMode) && !InLoaderModeSafe(campaignPracticeMode)
+        && EndsWith(loadPath, "/barks.milo")) {
+        shouldSkipLoad = true;
+    }
+
+    bool inCampaignMode = false;
+    bool inCampaignStinger = false;
+    if (TheHamProvider) {
+        inCampaignMode = TheHamProvider->Property(inCampaignModeProp, true)->Int() != 0;
+        inCampaignStinger = TheHamProvider->Property(inCampaignStingerProp, true)->Int() != 0;
+    }
+
+    if (!inCampaignMode && !inCampaignStinger && strstr(loadPath, "/campaign/camp_scene_") != 0) {
+        shouldSkipLoad = true;
+    }
+
+    if (strstr(loadPath, "/vo_bank_camp_") != 0) {
+        shouldSkipLoad = !inCampaignMode;
+    }
+
+    bool inMindControlOrIntro = InLoaderModeSafe(mindControlMode) || InLoaderModeSafe(justIntroMode);
+    if (TheHamWardrobe && (inMindControlOrIntro || InLoaderModeSafe(danceBattleMode))
+        && (isLocalizedVoiceBankPath || isCharacterCamshotPath)) {
+        Symbol override0;
+        Symbol override1;
+
+        if (inMindControlOrIntro) {
+            override0 = TheHamWardrobe->GetBackupOutfitOverride(0);
+            override1 = TheHamWardrobe->GetBackupOutfitOverride(1);
+        } else if (InLoaderModeSafe(danceBattleMode)) {
+            override0 = GetAlternateCharacter(player0->Char());
+            override1 = GetAlternateCharacter(player1->Char());
+        }
+
+        if (!override0.Null() && !override1.Null()) {
+            Symbol trimmedOverride0 = RemoveDigitSuffix(override0);
+            Symbol trimmedOverride1 = RemoveDigitSuffix(override1);
+            if (strstr(loadPath, trimmedOverride0.Str()) != 0 || strstr(loadPath, trimmedOverride1.Str()) != 0) {
+                shouldSkipLoad = false;
+            }
+        }
+    }
+
+    if (EndsWith(loadPath, "/vo_bank.milo")) {
+        shouldSkipLoad = false;
+    }
+
+    if (InLoaderModeSafe(bustAMoveMode) && EndsWith(loadPath, "/vo_bank_bustamove.milo")) {
+        shouldSkipLoad = false;
+    }
+    if (InLoaderModeSafe(challengeMode) && EndsWith(loadPath, "/vo_bank_challenge.milo")) {
+        shouldSkipLoad = false;
+    }
+    if (InLoaderModeSafe(strikeAPoseMode) && EndsWith(loadPath, "/vo_bank_strikeapose.milo")) {
+        shouldSkipLoad = false;
+    }
+
+    bool isRhythmBattleContext = false;
+    if (TheHamProvider) {
+        isRhythmBattleContext = TheHamProvider->Property(gameplayModeProp, true)->Sym() == rhythmBattleMode;
+        if (inCampaignMode && TheHamProvider->Property(currentCampaignEraProp, true)->Sym() == eraTanBattleMode) {
+            isRhythmBattleContext = true;
+        }
+    }
+
+    if (isRhythmBattleContext) {
+        if (EndsWith(loadPath, "/vo_bank_rhythmbattle.milo")) {
+            shouldSkipLoad = false;
+        }
+        if (EndsWith(loadPath, "/vo_bank_rhythmbattle_finale.milo") && inCampaignMode) {
+            shouldSkipLoad = false;
+        }
+    }
+
+    if (strstr(baseNameSymbol.Str(), "vo_bank_tutorial_") != 0) {
+        shouldSkipLoad = false;
+    }
+
+    if ((InLoaderModeSafe(practiceMode) || InLoaderModeSafe(campaignPracticeMode))
+        && EndsWith(loadPath, "/vo_bank_rehearse.milo")) {
+        shouldSkipLoad = false;
+    }
+
+    if (shouldSkipLoad) {
+        const char *loggedPath = loadPath ? loadPath : "NULL";
+        TheDebug << MakeString("'%s' is a useless load\n", loggedPath);
+    }
+
+    return shouldSkipLoad;
+}
+
+void App::Run() { RunWithoutDebugging(); }
+
+void App::RunWithoutDebugging() {
+    Timer loop_timer;
+    loop_timer.Restart();
+
+    while (true) {
+        SystemPoll(false);
+
+        TIMER_ACTION("misc_poll", {
+            TheAchievements->Poll();
+            TheAccomplishmentMgr->Poll();
+            if (TheLeaderboards)
+                TheLeaderboards->Poll();
+            if (TheChallenges)
+                TheChallenges->Poll();
+            TheSaveLoadMgr->Poll();
+        })
+
+        TIMER_ACTION("synth_poll", TheSynth->Poll())
+
+        TIMER_ACTION("rock_central_poll", TheRockCentral.Poll())
+
+        TIMER_ACTION("gesture_poll", TheGestureMgr->Poll())
+
+        TheUI->Poll();
+
+        {
+            DataNode &hud_panel = DataVariable("hud_panel");
+            if (hud_panel.CompatibleType(kDataObject)) {
+                PanelDir *panel = dynamic_cast<PanelDir *>(hud_panel.GetObj(0));
+                if (panel) {
+                    Message msg("update_all_flashcard_dance_pct");
+                    panel->Handle(msg, true);
+                }
+            }
+        }
+
+        TheTaskMgr.Poll();
+        TheFlowMgr->Poll();
+
+        TIMER_ACTION("skeleton_post_update", {
+            SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
+            handle.PostUpdate();
+        })
+
+        FileDiscSpinUp();
+
+        if (TheHiResScreen.IsActive()) {
+            CaptureHiRes();
+        } else {
+            DrawRegular();
+        }
+
+        float loopMs = loop_timer.SplitMs();
+        float waiverMs = Timer::SlowFrameWaiver();
+        float slowMs = Timer::SlowFrameTimer().SplitMs();
+        waiverMs = Min(slowMs, waiverMs);
+        float frameMs = loopMs - waiverMs;
+
+        if (frameMs > 83.3333f) {
+            const char *msg = 0;
+            UIScreen *currentScreen = TheUI->CurrentScreen();
+            const char *activeScreen;
+            if (currentScreen) {
+                activeScreen = currentScreen->Name();
+            } else {
+                activeScreen = "none";
+            }
+
+            UIScreen *transScreen = TheUI->TransitionScreen();
+            const char *transName;
+            if (transScreen) {
+                transName = transScreen->Name();
+            } else {
+                transName = "none";
+            }
+            UIManager::TransitionState state = TheUI->GetTransitionState();
+            switch (state) {
+            case UIManager::kTransitionNone:
+                msg = MakeString("GLITCH: %g ms, ACTIVE %s", frameMs, activeScreen);
+                break;
+            case UIManager::kTransitionTo:
+                msg = MakeString(
+                    "GLITCH: %g ms, %s TRANS TO %s", frameMs, activeScreen, transName
+                );
+                break;
+            case UIManager::kTransitionFrom:
+                msg = MakeString(
+                    "GLITCH: %g ms, %s TRANS FROM %s", frameMs, activeScreen, transName
+                );
+                break;
+            case UIManager::kTransitionPop:
+                msg = MakeString("GLITCH: %g ms, POPPING %s", frameMs, activeScreen);
+                break;
+            }
+
+            static DataNode &notify_level = DataVariable("notify_level");
+            if (notify_level.Int() != 0) {
+                static Hmx::Object *cheat_display =
+                    ObjectDir::Main()->Find<Hmx::Object>("cheat_display", true);
+                static Message show("show", DataNode(0));
+                show[0] = DataNode(msg);
+                cheat_display->Handle(show, false);
+            }
+        }
+    }
 }
 
 DWORD KinectGuideThread(void *) {

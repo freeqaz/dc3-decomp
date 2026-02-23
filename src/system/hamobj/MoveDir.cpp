@@ -911,6 +911,7 @@ void SetupRecordClip(
 ) {
     clip = Hmx::Object::New<SkeletonClip>();
     clip->EnableAlternateRecord(i1);
+    clip->SetRecordClipIndexHint(i2);
     String clipName = RecordClipName(cc, i1);
     clipName += ".clp";
     clip->SetName(clipName.c_str(), dir);

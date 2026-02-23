@@ -39,6 +39,7 @@ public:
     static bool sPrintTimes;
     static ObjectDir *sTopSaveDir;
     static void SetCacheMode(bool);
+    static void SetPathEvalCallback(bool (*cb)(const char *)) { sPathEval = cb; }
 
     static Symbol GetDirClass(const char *);
     static const char *CachedPath(const char *, bool);
