@@ -1261,3 +1261,117 @@ void WorldReflection::Highlight() {}
 // -- AppLabel stubs --
 #include "meta_ham/AppLabel.h"
 void AppLabel::SetFromGeneralSelectNode(const NavListNode *) {}
+
+// ============================================================================
+// Round 2: Additional stubs for 55 more Matching units
+// ============================================================================
+
+// -- FormatString stubs --
+#include "utl/MakeString.h"
+FormatString &FormatString::operator<<(void *) { return *this; }
+FormatString &FormatString::operator<<(unsigned long) { return *this; }
+
+// -- DebugNotifyOncePrinter global --
+DebugNotifyOncePrinter TheDebugNotifyOncePrinter;
+
+// -- NavListSortMgr stubs --
+#include "meta_ham/NavListSortMgr.h"
+bool NavListSortMgr::HeadersSelectable() { return false; }
+bool NavListSortMgr::SelectionIs(Symbol) { return false; }
+bool NavListSortMgr::DataIs(int, Symbol) { return false; }
+Symbol NavListSortMgr::MoveOn() { return gNullStr; }
+void NavListSortMgr::OnEnter() {}
+
+// -- ObjRefConcrete template stubs --
+template <>
+void ObjRefConcrete<CharWeightable, ObjectDir>::CopyRef(const ObjRefConcrete<CharWeightable, ObjectDir> &o) {
+    SetObjConcrete(o.mObject);
+}
+
+#include "rndobj/Wind.h"
+template <>
+void ObjRefConcrete<RndWind, ObjectDir>::CopyRef(const ObjRefConcrete<RndWind, ObjectDir> &o) {
+    SetObjConcrete(o.mObject);
+}
+
+// -- ObjPtrVec<RndTransformable> stubs --
+template <>
+Hmx::Object *ObjPtrVec<RndTransformable, ObjectDir>::Node::RefOwner() const {
+    return static_cast<Hmx::Object*>(mOwner);
+}
+
+template <>
+ObjPtrVec<RndTransformable, ObjectDir>::iterator
+ObjPtrVec<RndTransformable, ObjectDir>::erase(ObjPtrVec<RndTransformable, ObjectDir>::iterator it) {
+    return mNodes.erase(&*it);
+}
+
+// -- CharDriver stubs --
+#include "char/CharDriver.h"
+void CharDriver::PollDeps(std::list<Hmx::Object *> &, std::list<Hmx::Object *> &) {}
+void CharDriver::Exit() {}
+
+// -- SongMetadata stubs --
+#include "meta/SongMetadata.h"
+bool SongMetadata::IsOnDisc() const { return mIsOnDisc; }
+
+// -- CacheMgr stubs --
+#include "utl/CacheMgr.h"
+CacheResult CacheMgr::GetLastResult() { return mLastResult; }
+
+// -- MemStream stubs --
+#include "utl/MemStream.h"
+void MemStream::Flush() {}
+bool MemStream::Fail() { return mFail; }
+
+// -- XLSPConnection stubs --
+#include "net/XLSPConnection.h"
+unsigned int XLSPConnection::GetServiceIP() { return 0; }
+
+// -- PracticeSection stubs --
+#include "hamobj/PracticeSection.h"
+const std::vector<PracticeStep> &PracticeSection::Steps() const { return mSteps; }
+
+// -- ADSR stubs --
+#include "synth/ADSR.h"
+DataNode ADSR::Handle(DataArray *da, bool b) { return Hmx::Object::Handle(da, b); }
+
+// -- GestureMgr stubs --
+#include "gesture/GestureMgr.h"
+LiveCameraInput *GestureMgr::GetLiveCameraInput() const { return 0; }
+
+// -- CampaignProgress stubs --
+#include "meta_ham/CampaignProgress.h"
+bool CampaignProgress::IsCampaignIntroCompleted() const { return false; }
+bool CampaignProgress::IsCampaignMindControlCompleted() const { return false; }
+
+// -- CampaignEra stubs (round 2) --
+Symbol CampaignEra::GetIntroMovie() const { return mEraIntroMovie; }
+
+// -- UIListMesh stubs --
+#include "ui/UIListMesh.h"
+RndMat *UIListMesh::DefaultMat() const { return mDefaultMat; }
+
+// -- Hmx::Object stubs --
+void Hmx::Object::ClearAllTypeProps() {}
+
+// -- Award stubs (round 2) --
+bool Award::IsSilent() const { return mIsSilent; }
+
+// -- FaderGroup stubs --
+#include "synth/Faders.h"
+bool FaderGroup::Dirty() { return mDirty; }
+
+// -- UIList stubs --
+#include "ui/UIList.h"
+int UIList::SelectedPos() const { return mListState.Selected(); }
+
+// -- NetCacheMgr stubs --
+#include "utl/NetCacheMgr.h"
+unsigned int NetCacheMgr::GetServiceId() const { return 0; }
+const char *NetCacheMgr::GetXLSPFilter() const { return ""; }
+
+// -- NetCacheMgrXbox stubs --
+#include "utl/NetCacheMgr_Xbox.h"
+DataNode NetCacheMgrXbox::Handle(DataArray *da, bool b) { return NetCacheMgr::Handle(da, b); }
+
