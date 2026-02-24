@@ -463,25 +463,24 @@ void UILabel::Highlight() {
 }
 
 void UILabel::DrawShowing() {
-    if (!(Style(0).mFontColor.alpha > 0.0f))
-        return;
+    UILabel *const pThis = this;
+    if (((const UILabel *)pThis)->Style(0).mFontColor.alpha > 0.0f) {
+        if (pThis->mDirty && !sDeferUpdate) {
+            pThis->LabelUpdate(false);
+        }
 
-    if (mDirty && !sDeferUpdate) {
-        LabelUpdate(false);
-    }
+        MILO_ASSERT(pThis->mLabelStyles.size() == pThis->mStyles.size(), 0x1EF);
 
-    MILO_ASSERT(mLabelStyles.size() == mStyles.size(), 0x1EF);
-
-    UILabelDir *labelDir = LStyle(0).mLabelDir;
-    if (labelDir) {
-        UIColor *stateColor = labelDir->GetStateColor(mState);
-        unsigned int numStyles = mLabelStyles.size();
-        if (numStyles != 0) {
-            unsigned int i = 0;
-            do {
-                RndText::Style &style = Style(i);
+        LabelStyle *it = pThis->mLabelStyles.begin();
+        UILabelDir *labelDir = it->mLabelDir;
+        if (labelDir) {
+            UIComponent::State state = pThis->GetState();
+            UIColor *stateColor = labelDir->GetStateColor(state);
+            int i = 0;
+            while (i < pThis->mLabelStyles.size()) {
+                RndText::Style &style = pThis->Style(i);
                 style.mFontColorOverride = true;
-                UIColor *uiColor = LStyle(i).mColorOverride;
+                UIColor *uiColor = it->mColorOverride;
                 if (!uiColor) {
                     uiColor = stateColor;
                 }
@@ -490,16 +489,17 @@ void UILabel::DrawShowing() {
                 style.mFontColor.green = color.green;
                 style.mFontColor.blue = color.blue;
                 i++;
-            } while (i < numStyles);
+                it++;
+            }
         }
-    }
 
-    RndText::DrawShowing();
+        pThis->RndText::DrawShowing();
 
-    if (sDebugHighlight && !sInDebugHighlight) {
-        sInDebugHighlight = true;
-        Highlight();
-        sInDebugHighlight = false;
+        if (sDebugHighlight && !sInDebugHighlight) {
+            sInDebugHighlight = true;
+            pThis->Highlight();
+            sInDebugHighlight = false;
+        }
     }
 }
 
