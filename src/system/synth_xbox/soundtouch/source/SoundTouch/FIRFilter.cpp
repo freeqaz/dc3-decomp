@@ -48,6 +48,8 @@
 #include "FIRFilter.h"
 #include "cpu_detect.h"
 
+float pow(float, int);
+
 using namespace soundtouch;
 
 /*****************************************************************************
@@ -170,7 +172,7 @@ void FIRFilter::setCoefficients(
     MILO_ASSERT(length == newLength,0xb6);
 
     resultDivFactor = uResultDivFactor;
-    resultDivider = (SAMPLETYPE)::pow(2.0, (int)resultDivFactor);
+    resultDivider = (SAMPLETYPE)::pow(2.0f, (int)resultDivFactor);
 
     delete[] filterCoeffs;
     filterCoeffs = new SAMPLETYPE[length];

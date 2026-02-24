@@ -55,6 +55,14 @@ struct MemTemp {
     ~MemTemp() { MemPopTemp(); }
 };
 
+class MemDoTempAllocations {
+public:
+    MemDoTempAllocations(bool, bool);
+    ~MemDoTempAllocations();
+
+    int mOld;
+};
+
 struct MemHeapTracker {
     MemHeapTracker(int x) { MemPushHeap(x); }
     ~MemHeapTracker() { MemPopHeap(); }

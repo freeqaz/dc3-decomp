@@ -253,14 +253,14 @@ void RndLine::SetPointColor(int i, const Hmx::Color &color, bool sync) {
 }
 
 void RndLine::UpdatePointColor(int i, bool sync) {
-    Point &pt = mPoints[i];
+    Point *pt = &mPoints[i];
     VertsMap vmap;
     MapVerts(i, vmap);
-    vmap.v++->color = pt.color;
-    vmap.v++->color = pt.color;
-    if (vmap.t != 0) {
-        vmap.v++->color = pt.color;
-        vmap.v++->color = pt.color;
+    vmap.v++->color = pt->color;
+    vmap.v++->color = pt->color;
+    if (vmap.t) {
+        vmap.v++->color = pt->color;
+        vmap.v++->color = pt->color;
     }
     if (sync)
         mMesh->Sync(0x1F);

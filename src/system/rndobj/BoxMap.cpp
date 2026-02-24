@@ -1,4 +1,5 @@
 #include "rndobj/BoxMap.h"
+#include "os/Timer.h"
 #include "rndobj/Lit.h"
 
 // Accumulation buffers for light calculations
@@ -47,13 +48,20 @@ bool BoxMapLighting::QueueLight(RndLight *light, float colorScale) {
     return false;
 }
 
-void BoxMapLighting::ApplyQueuedLights(Hmx::Color *color, const Vector3 *v3) const {
+void BoxMapLighting::ApplyQueuedLights(Hmx::Color * __restrict color, const Vector3 *v3) const {
+    START_AUTO_TIMER("draw_light_approx");
+    gLightIndex = 0;
     ApplyLight(mQueued_Directional);
     if (v3) {
+        ApplyLight(mQueued_Spot, *v3);
         ApplyLight(mQueued_Point, *v3);
-        if (mQueued_Spot.NumElements() != 0) {
-            ApplyLight(mQueued_Spot, *v3);
-        }
+    }
+    // Accumulate light contributions into output colors
+    for (int i = 0; i < 6; i++) {
+        color[i].red = gLightBuffer1[i].x;
+        color[i].green = gLightBuffer1[i].y;
+        color[i].blue = gLightBuffer1[i].z;
+        color[i].alpha = 1.0f;
     }
 }
 

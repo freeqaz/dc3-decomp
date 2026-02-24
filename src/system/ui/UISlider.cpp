@@ -35,6 +35,7 @@ BEGIN_SAVES(UISlider)
     SAVE_REVS(3, 0)
     SAVE_SUPERCLASS(UIComponent)
     bs << mSliderResource;
+    bs << mSelectToScroll;
     bs << mVertical;
 END_SAVES
 
@@ -182,8 +183,8 @@ void UISlider::Update() {
     static Symbol mats("mats");
 
     // Clear material pointers for all states
-    mSliderMesh = 0;
     mStateMats[0] = 0;
+    mSliderMesh = 0;
     mStateMats[1] = 0;
     mStateMats[2] = 0;
     mStateMats[3] = 0;

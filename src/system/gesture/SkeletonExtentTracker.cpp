@@ -61,9 +61,25 @@ Hmx::Rect SkeletonExtentTracker::GetViewBox() const {
     return ret;
 }
 
-void SkeletonExtentTracker::ApplyToMeshVerts(RndMesh *mesh, bool b2) const {
+void SkeletonExtentTracker::ApplyToMeshVerts(RndMesh *mesh, bool mirrored) const {
     Hmx::Rect box = GetViewBox();
     MILO_ASSERT(mesh->Verts().size() == 16, 0x43);
-    for (int i = 0; i < 4; i++) {
+
+    float xFractions[4] = { 0.0f, 0.2f, 0.8f, 1.0f };
+    float yFractions[4] = { 0.0f, 0.2f, 0.8f, 1.0f };
+
+    int direction = mirrored ? -1 : 1;
+
+    for (int row = 0; row < 4; row++) {
+        for (int col = 0; col < 4; col++) {
+            int idx = row * 4 + col;
+            RndMesh::Vert &vert = mesh->Verts()[idx];
+
+            float xFrac = xFractions[col];
+            float yFrac = yFractions[row];
+
+            vert.pos.x = (box.x + xFrac * box.w) * (float)direction;
+            vert.pos.z = -(box.y - yFrac * box.h);
+        }
     }
 }

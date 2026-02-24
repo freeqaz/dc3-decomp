@@ -296,6 +296,8 @@ public:
     int NumStyles() const { return mStyles.size(); }
     float Width() const { return mWidth; }
 
+    friend class UIListLabelElement;
+
 protected:
     RndText();
 

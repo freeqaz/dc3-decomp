@@ -245,19 +245,20 @@ void HamStorePanel::ExitStore(StoreError err) const {
 }
 
 void HamStorePanel::CreateCartUIs() {
-    static Symbol store_filter_shopping_cart("store_filter_shopping_cart");
-    static Symbol store_checkout("store_checkout");
-    static Symbol type("type");
-    static Symbol fake("fake");
-    static Symbol name("name");
-    static Symbol artist("artist");
     static Symbol album_name("album_name");
-    static Symbol description("description");
     static Symbol art("art");
+    auto _tmp0 = mFilters.begin();
+    static Symbol artist("artist");
+    static Symbol name("name");
+    static Symbol store_filter_shopping_cart("store_filter_shopping_cart");
     static Symbol store_filter_song_import_offers("store_filter_song_import_offers");
-
+    static Symbol fake("fake");
+    static Symbol store_checkout("store_checkout");
     HamStoreFilter *filter1 = new HamStoreFilter(store_filter_shopping_cart);
-    mFilters.insert(mFilters.begin(), filter1);
+
+    static Symbol description("description");
+    static Symbol type("type");
+    mFilters.insert(_tmp0, filter1);
 
     HamStoreFilter *filter2 = new HamStoreFilter(store_filter_song_import_offers);
     mFilters.push_back(filter2);

@@ -131,7 +131,8 @@ const char *CachedDataFile(const char *file, bool &b) {
         b = true;
         const char *filebase = FileGetBase(file);
         const char *filepath = FileGetPath(file);
-        return MakeString("%s/gen/%s.dtb", filepath, filebase);
+        const char *result = MakeString("%s/gen/%s.dtb", filepath, filebase);
+        return result;
     }
     b = false;
     return file;

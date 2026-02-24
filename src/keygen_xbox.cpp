@@ -84,7 +84,7 @@ void KeyChain::getMasher(unsigned char *uc) {
     int needs_byteswap = NEEDS_BYTESWAP(&m, 1);
 
     for (int i = 0; i < 8; i++) {
-        *masher_p = random((i == 0) ? 0xEB : 0);
+        *masher_p = random((0 == i) ? 0xEB : 0);
 
         if (needs_byteswap) {
             BYTESWAP_32BIT(masher_p);

@@ -334,40 +334,40 @@ void MetagameRank::UpdateScore(
 
     // Static symbols for various awards - initialized with bit flags pattern
     // Group 1 - first 32 bits
-    static Symbol double_xp_weekend("double_xp_weekend");
-    static Symbol completed_song_with_1_star("completed_song_with_1_star");
-    static Symbol completed_song_with_2_stars("completed_song_with_2_stars");
-    static Symbol completed_song_with_3_stars("completed_song_with_3_stars");
-    static Symbol completed_song_with_4_stars("completed_song_with_4_stars");
-    static Symbol completed_song_with_5_stars("completed_song_with_5_stars");
-    static Symbol completed_song_on_beginner("completed_song_on_beginner");
-    static Symbol completed_song_on_easy("completed_song_on_easy");
-    static Symbol completed_song_on_medium("completed_song_on_medium");
-    static Symbol completed_song_on_hard("completed_song_on_hard");
-    static Symbol golden_performance("golden_performance");
-    static Symbol completed_song_warmup("completed_song_warmup");
-    static Symbol completed_song_simple("completed_song_simple");
-    static Symbol completed_song_moderate("completed_song_moderate");
     static Symbol completed_song_tough("completed_song_tough");
-    static Symbol completed_song_legit("completed_song_legit");
+    static Symbol completed_song_on_hard("completed_song_on_hard");
+    static Symbol challenge_met("challenge_met");
+    static Symbol completed_song_with_4_stars("completed_song_with_4_stars");
+    static Symbol completed_song_on_easy("completed_song_on_easy");
+    static Symbol completed_song_on_beginner("completed_song_on_beginner");
+    static Symbol new_song_completed_on_medium("new_song_completed_on_medium");
+    static Symbol nail_fatality("nail_fatality");
+    static Symbol playlist_bonus("playlist_bonus");
+    static Symbol new_song_completed_on_hard("new_song_completed_on_hard");
     static Symbol completed_song_hardcore("completed_song_hardcore");
-    static Symbol completed_song_off_the_hook("completed_song_off_the_hook");
+    static Symbol challenge_attempt("challenge_attempt");
+    static Symbol completed_song_with_5_stars("completed_song_with_5_stars");
+    static Symbol completed_song_warmup("completed_song_warmup");
+    static Symbol new_song_completed_on_easy("new_song_completed_on_easy");
+    static Symbol bodie_birthday("bodie_birthday");
+    static Symbol completed_song_with_2_stars("completed_song_with_2_stars");
+    static Symbol dlc_bonus("dlc_bonus");
+    static Symbol completed_song_simple("completed_song_simple");
+    static Symbol perfect_performance_no_misses("perfect_performance_no_misses");
+    static Symbol completed_song_moderate("completed_song_moderate");
     static Symbol random_bonus_occurs_1pct_of_the_time(
         "random_bonus_occurs_1pct_of_the_time"
     );
-    static Symbol new_song_completed_on_beginner("new_song_completed_on_beginner");
-    static Symbol new_song_completed_on_easy("new_song_completed_on_easy");
-    static Symbol new_song_completed_on_medium("new_song_completed_on_medium");
-    static Symbol new_song_completed_on_hard("new_song_completed_on_hard");
+    static Symbol completed_song_with_1_star("completed_song_with_1_star");
+    static Symbol completed_song_off_the_hook("completed_song_off_the_hook");
+    static Symbol completed_song_on_medium("completed_song_on_medium");
     static Symbol fitness_bonus("fitness_bonus");
-    static Symbol playlist_bonus("playlist_bonus");
-    static Symbol dlc_bonus("dlc_bonus");
-    static Symbol challenge_met("challenge_met");
-    static Symbol challenge_attempt("challenge_attempt");
-    static Symbol nail_fatality("nail_fatality");
-    static Symbol perfect_performance_no_misses("perfect_performance_no_misses");
+    static Symbol double_xp_weekend("double_xp_weekend");
     static Symbol emilia_birthday("emilia_birthday");
-    static Symbol bodie_birthday("bodie_birthday");
+    static Symbol completed_song_with_3_stars("completed_song_with_3_stars");
+    static Symbol golden_performance("golden_performance");
+    static Symbol new_song_completed_on_beginner("new_song_completed_on_beginner");
+    static Symbol completed_song_legit("completed_song_legit");
     // Group 2 - second 32 bits
     static Symbol taye_birthday("taye_birthday");
     static Symbol lilt_birthday("lilt_birthday");

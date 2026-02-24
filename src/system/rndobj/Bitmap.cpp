@@ -571,42 +571,40 @@ bool RndBitmap::IsTranslucent() const {
 }
 
 void RndBitmap::GenerateMips() {
-    int dim = Min(mWidth, mHeight);
-    if (dim > 16U) {
-        RELEASE(mMip);
-        mMip = new RndBitmap();
-        mMip->Create(mWidth >> 1, mHeight >> 1, 0, mBpp, mOrder, mPalette, 0, 0);
-        for (int i = 0; i < mMip->mHeight; i++) {
-            for (int j = 0; j < mMip->mWidth; j++) {
+    RndBitmap *cur = this;
+    while (true) {
+        unsigned short dim = Min(cur->mWidth, cur->mHeight);
+        if (dim <= 16) break;
+        RELEASE(cur->mMip);
+        cur->mMip = new RndBitmap();
+        cur->mMip->Create(cur->mWidth >> 1, cur->mHeight >> 1, 0, cur->mBpp, cur->mOrder, cur->mPalette, 0, 0);
+        for (int i = 0; i < cur->mMip->mHeight; i++) {
+            for (int j = 0; j < cur->mMip->mWidth; j++) {
                 unsigned char r, g, b, a;
-                PixelColor(j * 2, i * 2, r, g, b, a);
+                cur->PixelColor(j * 2, i * 2, r, g, b, a);
                 int rsum = r;
                 int gsum = g;
                 int bsum = b;
                 int asum = a;
-                PixelColor(j * 2 + 1, i * 2, r, g, b, a);
+                cur->PixelColor(j * 2 + 1, i * 2, r, g, b, a);
                 rsum += r;
                 gsum += g;
                 bsum += b;
                 asum += a;
-                PixelColor(j * 2, i * 2 + 1, r, g, b, a);
+                cur->PixelColor(j * 2, i * 2 + 1, r, g, b, a);
                 rsum += r;
                 gsum += g;
                 bsum += b;
                 asum += a;
-                PixelColor(j * 2 + 1, i * 2 + 1, r, g, b, a);
+                cur->PixelColor(j * 2 + 1, i * 2 + 1, r, g, b, a);
                 rsum += r;
                 gsum += g;
                 bsum += b;
                 asum += a;
-                int rval = rsum >> 2;
-                int gval = gsum >> 2;
-                int bval = bsum >> 2;
-                int aval = asum >> 2;
-                mMip->SetPixelColor(j, i, (unsigned char)rval, (unsigned char)gval, (unsigned char)bval, (unsigned char)aval);
+                cur->mMip->SetPixelColor(j, i, (unsigned char)(rsum >> 2), (unsigned char)(gsum >> 2), (unsigned char)(bsum >> 2), (unsigned char)(asum >> 2));
             }
         }
-        mMip->GenerateMips();
+        cur = cur->mMip;
     }
 }
 
@@ -689,7 +687,7 @@ bool RndBitmap::SamePixelFormat(const RndBitmap &bm) const {
 void RndBitmap::Blt(
     const RndBitmap &bm, int dX, int dY, int sX, int sY, int width, int height
 ) {
-    MILO_ASSERT((int)(int)mWidth >= dX + width, 1728);
+    MILO_ASSERT(dX + width <= mWidth, 1728);
     MILO_ASSERT(dY + height <= mHeight, 1729);
     MILO_ASSERT(sX + width <= bm.Width(), 1730);
     MILO_ASSERT(sY + height <= bm.Height(), 1731);
@@ -719,13 +717,13 @@ void RndBitmap::Blt(
                 bm.PaletteColor(i, r, g, b, a);
                 *idx = NearestColor(r, g, b, a);
             }
-            for (int h = height, dy = dY, sy = sY; h >= 1; h--, dy++, sy++) {
+            for (int h = height, dy = dY, sy = sY; h > 0; h--, dy++, sy++) {
                 for (int w = width, sx = sX, dx = dX; w > 0; w--, sx++, dx++) {
                     SetPixelIndex(dx, dy, colorBuffer[bm.PixelIndex(sx, sy)]);
                 }
             }
         } else {
-            for (int h = height, dy = dY, sy = sY; h >= 1; h--, dy++, sy++) {
+            for (int h = height, dy = dY, sy = sY; h > 0; h--, dy++, sy++) {
                 for (int w = width, sx = sX, dx = dX; w > 0; w--, sx++, dx++) {
                     unsigned char r, g, b, a;
                     bm.PixelColor(sx, sy, r, g, b, a);

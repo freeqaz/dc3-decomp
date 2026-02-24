@@ -572,7 +572,7 @@ void CameraTilt::Poll() {
         break;
     }
     mTimer.Stop();
-    mElapsedMs = mTimer.Ms();
+    mElapsedMs += mTimer.Ms();
     mTimer.Start();
 }
 

@@ -497,6 +497,19 @@ void MemPopTemp() {
     s.mSize--;
 }
 
+MemDoTempAllocations::MemDoTempAllocations(bool b1, bool b2) {
+    mOld = gNumHeaps;
+    if (b1 && gNumHeaps > 0) {
+        MemPushTemp();
+    }
+}
+
+MemDoTempAllocations::~MemDoTempAllocations() {
+    if (gNumHeaps > mOld) {
+        MemPopTemp();
+    }
+}
+
 void MemFreeBlockStats(
     int heapNum, int &i2, int &i3, int &numFreeBytes, int &i5, int &biggestFreeBlock
 ) {

@@ -20,6 +20,8 @@ protected:
     void RegisterEvents(FlowNode *);
     void UnregisterEvents(FlowNode *);
 
+    friend class FlowSwitchCase;
+
     ObjVector<AutoPropEntry> mAutoPropEntries; // 0x4
     bool mEventsRegistered; // 0x14
 };

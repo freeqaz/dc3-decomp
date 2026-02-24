@@ -703,8 +703,9 @@ float HamNavList::EndFrame() {
 void HamNavList::SendHighlightSettledMsg(int i) {
     UIListProvider *provider = mListState.Provider();
     MILO_ASSERT(provider, 0x327);
+    auto _tmp0 = provider->IsActive(i);
     bool canSel = provider->CanSelect(i);
-    if (provider->IsActive(i)) {
+    if (_tmp0) {
         Symbol dataSym = provider->DataSymbol(i);
         NavHighlightSettledMsg msg(dataSym, i, this, canSel);
         TheUI->Handle(msg, false);

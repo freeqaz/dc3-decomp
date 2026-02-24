@@ -175,19 +175,20 @@ void CampaignDiffSelectPanel::CheatWinDiff(int i) {
     if (i > 0) {
         pPerformer->ResetAllCampaignProgress();
         int count = 0;
-        FOREACH (it, TheCampaign->Eras()) {
+        const auto& eras = TheCampaign->Eras();
+        FOREACH (it, eras) {
             count++;
             if (i <= count) {
                 CampaignEra *pEra = *it;
                 MILO_ASSERT(pEra, 0xe6);
                 auto _tmp2 = pEra->GetNumSongs();
                 for (int j = 0; j < _tmp2; j++) {
-                    Symbol songName = pEra->GetSongName(i);
+                    Symbol songName = pEra->GetSongName(j);
                     pPerformer->UpdateEraSong(diff, pEra->GetName(), songName, 5);
                     int songID = TheSongMgr.GetSongIDFromShortName(songName);
                     pSongStatusMgr->UpdateSong(
-                        songID, 0x29a, 0x457, diff, 1, 5, 6, 0, 0, 0, 0, 1
-                    ); // idk the values
+                        songID, 0x29a, 0x457, diff, 1, 5, 6, 7, 0x42, 0, 0, 1
+                    );
                     pPerformer->UnlockAllMoves(pEra->GetName(), songName, 5);
                 }
             }

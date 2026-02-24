@@ -94,11 +94,9 @@ TDStretch::TDStretch() : FIFOProcessor(&outputBuffer) {
     bAutoSeqSetting = true;
     bAutoSeekSetting = true;
     skipFract = 0;
-    nominalSkip = 0;
-    sampleReq = 0;
     tempo = 1.0f;
 
-    setParameters(44100, 82, 28, 12);
+    setParameters(44100, 82, 14, 12);
     setTempo(1.0f);
 
     clear();

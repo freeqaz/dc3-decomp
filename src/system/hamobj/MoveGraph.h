@@ -134,6 +134,7 @@ struct MoveCandidate {
 
 class MoveVariant {
     friend class MoveCandidate;
+    friend class MoveGraph;
     friend class MoveParent;
 
 public:

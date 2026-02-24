@@ -1375,3 +1375,59 @@ const char *NetCacheMgr::GetXLSPFilter() const { return ""; }
 #include "utl/NetCacheMgr_Xbox.h"
 DataNode NetCacheMgrXbox::Handle(DataArray *da, bool b) { return NetCacheMgr::Handle(da, b); }
 
+// -- Round 3 stubs --
+
+// ObjRefConcrete::CopyRef for RndParticleSys (PartLauncher.obj)
+#include "rndobj/Part.h"
+template <>
+void ObjRefConcrete<RndParticleSys, ObjectDir>::CopyRef(const ObjRefConcrete<RndParticleSys, ObjectDir> &o) {
+    SetObjConcrete(o.mObject);
+}
+
+// ObjRefConcrete::CopyRef for CharBone (CharBone.obj)
+#include "char/CharBone.h"
+template <>
+void ObjRefConcrete<CharBone, ObjectDir>::CopyRef(const ObjRefConcrete<CharBone, ObjectDir> &o) {
+    SetObjConcrete(o.mObject);
+}
+
+// FileLoader::GetSize (FileCache.obj, NetLoader.obj)
+#include "utl/Loader.h"
+int FileLoader::GetSize() { return mBufLen; }
+
+// NavListHeaderNode::Handle (MQSongSortNode.obj)
+#include "meta_ham/NavListNode.h"
+DataNode NavListHeaderNode::Handle(DataArray *da, bool b) { return NavListSortNode::Handle(da, b); }
+
+// BinStream operator<< for ObjOwnerPtr<RndTransAnim> (TransAnim.obj)
+#include "rndobj/TransAnim.h"
+template <>
+BinStream &operator<<(BinStream &bs, const ObjOwnerPtr<RndTransAnim> &ptr) {
+    Hmx::Object *obj = ptr;
+    const char *name = obj ? obj->Name() : "";
+    bs << name;
+    return bs;
+}
+
+// BinStream operator<< for ObjDirPtr<RndDir> (UISlider.obj)
+#include "obj/Dir.h"
+#include "rndobj/Rnd.h"
+template <>
+BinStream &operator<<(BinStream &bs, const ObjDirPtr<RndDir> &ptr) {
+    RndDir *dir = ptr;
+    const char *name = dir ? dir->Name() : "";
+    bs << name;
+    return bs;
+}
+
+// BinStream operator<< for ObjPtrList<CharPollable> (CharPollGroup.obj - if needed later)
+// wmemcpy (SpeechMgr.obj - CRT function, needs library)
+
+// -- HolmesClientPrint stub (ArkFile.obj) --
+#include "os/HolmesClient.h"
+void HolmesClientPrint(const char *) {}
+
+// -- MemOrPoolFree stub (Str.obj) --
+#include "utl/MemMgr.h"
+void MemOrPoolFree(int, void *mem, const char *, int, const char *) {}
+

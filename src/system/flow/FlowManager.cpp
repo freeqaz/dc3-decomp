@@ -88,7 +88,7 @@ void FlowManager::Poll() {
         float fval = node.Array()->Float(0);
         float fval2 = node.Array()->Float(2);
 
-        if (!(fval < f30)) {
+        if (!(f30 > fval)) {
             f30 = fval;
             mFrameTimeAccumulator = fval;
         }

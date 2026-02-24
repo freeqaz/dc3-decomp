@@ -174,8 +174,8 @@ void FlowSwitchCase::RequestStopCancel() {
 void FlowSwitchCase::Execute(QueueState qs) {
     FLOW_LOG("Execute: state = %i\n", qs);
     if (qs == kQueue) {
-        // FlowWhile *propEventListener = static_cast<FlowWhile *>(mFlowParent);
-        // propEventListener->UnregisterEvents(propEventListener);
+        FlowWhile *propEventListener = static_cast<FlowWhile *>(mFlowParent);
+        propEventListener->UnregisterEvents(propEventListener);
         if (!mContinuous)
             return;
     } else if (qs == kIgnore) {

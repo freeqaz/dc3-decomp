@@ -32,6 +32,8 @@ public:
     void QueueJob(Job *);
     ~JobMgr();
 
+    MEM_OVERLOAD(JobMgr, 0x2A);
+
     Hmx::Object *mCallback; // 0x0
     std::list<Job *> mJobQueue; // 0x4
     bool mPreventStart; // 0xc

@@ -6,6 +6,8 @@
 #include "synth/Sound.h"
 #include "utl/Symbol.h"
 
+class HamLabel;
+
 class LockedContentPanel : public HamPanel {
 public:
     // Hmx::Object
@@ -34,10 +36,11 @@ protected:
 
     void TriggerTeaserText();
 
-    // Array of drawable pointers accessed via offsets 0x3c-0x7b
-    // Includes RndDrawable* and HamStarsDisplay* elements
+    // Array of object pointers accessed via offsets 0x3c-0x7b
+    // First 8 slots (0x3c-0x5b) and second 8 slots (0x5c-0x7b) are paired
     // Used by SetUpDifficultyLocked, SetUpNoFlashcards for showing/hiding UI elements
-    u32 filler[16];
+    // Slots contain AppLabel*, HamLabel*, HamStarsDisplay* etc. (all UIComponent-derived)
+    HamLabel *mLabels[16];
     Sound *mSound; // 0x7c
     Timer *mTimer; // 0x80
     bool mIsTeaserTextShowing;

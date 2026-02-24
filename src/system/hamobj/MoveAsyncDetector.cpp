@@ -143,13 +143,17 @@ void MoveAsyncDetector::EnableDetector(HamMove *move) {
     if (move == nullptr)
         return;
     MoveDetector *detector = FindDetector(move);
-    if (detector == nullptr) {
-        TheDebug.Notify(MakeString("Could not enable detector for %s", move->Name()));
-        return;
-    }
-    if (!detector->mActive) {
-        detector->mLastDetectFracs[0] = 0.0f;
-        detector->mLastDetectFracs[1] = 0.0f;
+    if (detector != nullptr)
+        goto activate;
+    TheDebug.Notify(MakeString("Could not enable detector for %s", move->Name()));
+    return;
+activate:
+    int active = detector->mActive;
+    if (active == 1) {
+        // skip
+    } else {
+        *(int *)&detector->mLastDetectFracs[0] = 0;
+        *(int *)&detector->mLastDetectFracs[1] = 0;
         detector->mLastDetectFrameIdx = -1;
         detector->mDetectFrameOffset = -1;
         detector->mActive = true;

@@ -13,6 +13,7 @@
 #include "utl/Str.h"
 #include "utl/Symbol.h"
 
+static UIColor *gUILabelDefaultColor;
 
 UILabelDir::UILabelDir()
     : mDefaultColor(this), mFocusAnim(this), mPulseAnim(this),
@@ -168,7 +169,7 @@ DataNode UILabelDir::GetMatVariations(UILabelDir *pThis) {
     pArray = new DataArray(numVariations + 1);
 
     // First element is always the null string (empty material variation)
-    pArray->Node(0) = DataNode(gNullStr);
+    pArray->Node(0) = DataNode(Symbol());
 
     // Add each material variation name
     for (s32 index = 1; index <= numVariations; index++) {
@@ -183,9 +184,9 @@ DataNode UILabelDir::GetMatVariations(UILabelDir *pThis) {
 
 void UILabelDir::Init() {
     REGISTER_OBJ_FACTORY(UILabelDir)
-    UIColor *c = Hmx::Object::New<UIColor>();
+    gUILabelDefaultColor = Hmx::Object::New<UIColor>();
     Hmx::Color color(1.0f, 1.0f, 1.0f, 1.0f);
-    c->SetColor(color);
+    gUILabelDefaultColor->SetColor(color);
 }
 
 BEGIN_HANDLERS(UILabelDir)

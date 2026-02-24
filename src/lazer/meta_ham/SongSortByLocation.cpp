@@ -1,6 +1,7 @@
 #include "SongSortByLocation.h"
 
 #include "CampaignEra.h"
+#include "HamSongMetadata.h"
 #include "SongRecord.h"
 #include "SongSortNode.h"
 #include "meta/Sorting.h"
@@ -64,10 +65,11 @@ SongSortByLocation::NewShortcutNode(NavListItemNode *itemNode) const {
 }
 
 NavListItemNode *SongSortByLocation::NewItemNode(void *v) const {
-    auto movie = static_cast<CampaignEra *>(v)->GetIntroMovie();
-    NavListItemSortCmp *cmp = 0;
-    SongSortNode *ssNode = 0;
-
-    NavListItemNode *ret;
-    return ret;
+    SongRecord *record = static_cast<SongRecord *>(v);
+    const char *title = record->Metadata()->Title();
+    Symbol location = record->Metadata()->GameOrigin();
+    LocationCmp *cmp = new LocationCmp();
+    cmp->mName = title;
+    cmp->mLocation = location;
+    return new SongSortNode(cmp, record);
 }

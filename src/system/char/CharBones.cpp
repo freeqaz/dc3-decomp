@@ -281,39 +281,9 @@ void CharBones::AddBoneInternal(const Bone &bone) {
 const char *CharBones::StringVal(Symbol s) {
     void *ptr = FindPtr(s);
     CharBones::Type t = TypeOf(s);
-    if ((unsigned int)t >= TYPE_QUAT) {
-        if (t != TYPE_QUAT) {
-            float floatVal;
-            if (mCompression != kCompressNone) {
-                floatVal = *((short *)ptr) * 0.00061035156f;
-            } else {
-                floatVal = *((float *)ptr);
-            }
-            floatVal *= RAD2DEG;
-            if (mCompression != kCompressNone) {
-                return MakeString("deg %g raw %d", floatVal, *((short *)ptr));
-            } else {
-                return MakeString("deg %g rad %g", floatVal, *((float *)ptr));
-            }
-        } else {
-            Hmx::Quat q;
-            Hmx::Quat *qPtr = (Hmx::Quat *)ptr;
-            if (mCompression >= kCompressQuats) {
-                ByteQuat *bqPtr = (ByteQuat *)qPtr;
-                bqPtr->ToQuat(q);
-            } else if (mCompression != kCompressNone) {
-                ShortQuat *sqPtr = (ShortQuat *)qPtr;
-                sqPtr->ToQuat(q);
-            } else
-                q = *qPtr;
-            Vector3 v40;
-            MakeEuler(q, v40);
-            v40 *= RAD2DEG;
-            return MakeString(
-                "quat(%g %g %g %g) euler(%g %g %g)", q.x, q.y, q.z, q.w, v40.x, v40.y, v40.z
-            );
-        }
-    } else {
+    switch (t) {
+    case TYPE_POS:
+    case TYPE_SCALE:
         if (mCompression >= kCompressVects) {
             Vector3 vshort((short *)ptr);
             return MakeString("%g %g %g", vshort.x, vshort.y, vshort.z);
@@ -321,6 +291,38 @@ const char *CharBones::StringVal(Symbol s) {
             Vector3 *vptr = (Vector3 *)ptr;
             return MakeString("%g %g %g", vptr->x, vptr->y, vptr->z);
         }
+    case TYPE_QUAT: {
+        Hmx::Quat q;
+        Hmx::Quat *qPtr = (Hmx::Quat *)ptr;
+        if (mCompression >= kCompressQuats) {
+            ByteQuat *bqPtr = (ByteQuat *)qPtr;
+            bqPtr->ToQuat(q);
+        } else if (mCompression != kCompressNone) {
+            ShortQuat *sqPtr = (ShortQuat *)qPtr;
+            sqPtr->ToQuat(q);
+        } else
+            q = *qPtr;
+        Vector3 v40;
+        MakeEuler(q, v40);
+        v40 *= RAD2DEG;
+        return MakeString(
+            "quat(%g %g %g %g) euler(%g %g %g)", q.x, q.y, q.z, q.w, v40.x, v40.y, v40.z
+        );
+    }
+    default: {
+        float floatVal;
+        if (mCompression != kCompressNone) {
+            floatVal = *((short *)ptr) * 0.00061035156f;
+        } else {
+            floatVal = *((float *)ptr);
+        }
+        floatVal *= RAD2DEG;
+        if (mCompression != kCompressNone) {
+            return MakeString("deg %g raw %d", floatVal, *((short *)ptr));
+        } else {
+            return MakeString("deg %g rad %g", floatVal, *((float *)ptr));
+        }
+    }
     }
 }
 

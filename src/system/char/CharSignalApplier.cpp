@@ -5,6 +5,13 @@
 #include "math/Utl.h"
 #include "obj/Object.h"
 
+CharSignalApplier::BoneOp::BoneOp(Hmx::Object *o) : mBone(o) {
+    mOp = 0;
+    mApplyPercent = 1.0f;
+    mMinAngle = -30.0f;
+    mMaxAngle = 30.0f;
+}
+
 CharSignalApplier::BoneOp &
 CharSignalApplier::BoneOp::operator=(const CharSignalApplier::BoneOp &op) {
     mBone = op.mBone;

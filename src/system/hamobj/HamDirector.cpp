@@ -1445,7 +1445,8 @@ Symbol HamDirector::ClosestMove() {
                         if (*str) {
                             char *p = (char *)str;
                             while (p[buf - str]) {
-                                if (tolower(p[buf - str]) != tolower(*p))
+                                auto _tmp5 = tolower(*p);
+                                if (tolower(p[buf - str]) != _tmp5)
                                     break;
                                 numlower++;
                             }
@@ -1725,14 +1726,14 @@ void HamDirector::SetPlayerSpotlightsEnabled(bool b1) {
             if (b1) {
                 constraints[i]->SetParent(players[i]);
                 constraints[i]->SnapToParent();
-                // constraints[i]->mEnabled = true;
+                constraints[i]->mEnabled = true;
                 constraints[i]->SnapToParent();
                 phraseMeters[i]->SetShowing(true);
                 moveFeedbacks[i]->SetShowing(true);
             } else {
                 constraints[i]->SetParent(nullptr);
                 constraints[i]->SnapToParent();
-                // constraints[i]->mEnabled = false;
+                constraints[i]->mEnabled = false;
                 Vector3 v(-1000000.0f, -1000000.0f, 0);
                 phraseMeters[i]->SetLocalPos(v);
                 phraseMeters[i]->SetShowing(false);

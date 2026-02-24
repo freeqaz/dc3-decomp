@@ -1,6 +1,7 @@
 #include "DebugGraph.h"
 #include "rndobj/Graph.h"
 #include "utl/MakeString.h"
+#include "xdk/LIBCMT/ppcintrinsics.h"
 
 void DebugGraph::AddData(float data, bool b)  {
     Sample sample;
@@ -15,7 +16,8 @@ void DebugGraph::AddData(float data, bool b)  {
 
 void DebugGraph::Draw() {
     RndGraph *graph = RndGraph::GetOneFrame();
-    graph->AddRectFilled2D(mRect, mColorB);
+    Hmx::Rect rect(mRect.x, mRect.y, mRect.w, mRect.h);
+    graph->AddRectFilled2D(rect, mColorB);
 
     if (mIsVisible) {
         Vector2 minPos(mRect.x, (mRect.y + mRect.h) - 0.02f);
@@ -27,38 +29,17 @@ void DebugGraph::Draw() {
     float range = mMaxValue - mMinValue;
     if (mThresholdValue != FLT_MAX) {
         float normThresh = (mThresholdValue - mMinValue) / range;
-        float clampedX = 0.0f;
-        if (-normThresh < 0.0f) {
-            clampedX = normThresh;
-        }
-        float cx = 1.0f;
-        if ((clampedX - 1.0f) < 0.0f) {
-            cx = clampedX;
-        }
-        float clampedY = 0.0f;
-        if (-normThresh < 0.0f) {
-            clampedY = normThresh;
-        }
-        float cy = 1.0f;
-        if ((clampedY - 1.0f) < 0.0f) {
-            cy = clampedY;
-        }
+        // Clamp to [0, 1] using __fsel to reduce register pressure
+        float clamped = (float)__fsel(-normThresh, normThresh, 0.0f);
+        float cx = (float)__fsel(clamped - 1.0f, 1.0f, clamped);
+        float cy = cx;
         Vector2 lineStart(mRect.x, (1.0f - cx) * mRect.h + mRect.y);
         Vector2 lineEnd(mRect.x + mRect.w, (1.0f - cy) * mRect.h + mRect.y);
         Hmx::Color white(1.0f, 1.0f, 1.0f, 1.0f);
         graph->AddScreenLine(lineStart, lineEnd, white, false);
 
         Vector2 labelPos(mRect.x, 0.0f);
-        float normThresh2 = (mThresholdValue - mMinValue) / range;
-        float clamped2 = 0.0f;
-        if (-normThresh2 < 0.0f) {
-            clamped2 = normThresh2;
-        }
-        float c2 = 1.0f;
-        if ((clamped2 - 1.0f) < 0.0f) {
-            c2 = clamped2;
-        }
-        labelPos.y = (1.0f - c2) * mRect.h + mRect.y;
+        labelPos.y = (1.0f - cx) * mRect.h + mRect.y;
         Hmx::Color white2(1.0f, 1.0f, 1.0f, 1.0f);
         graph->AddScreenString(MakeString("%.3f", mThresholdValue), labelPos, white2);
     }
@@ -71,44 +52,22 @@ void DebugGraph::Draw() {
     if (it != mSamples.end()) {
         int idx = 1;
         float normVal = (it->data - mMinValue) / range;
-        float normIdx = 0.0f / (float)(mMaxSamples - 1);
-        float clampedVal = 0.0f;
-        if (-normVal < 0.0f) {
-            clampedVal = normVal;
-        }
-        float clampedIdx = 0.0f;
-        if (-normIdx < 0.0f) {
-            clampedIdx = normIdx;
-        }
-        float cv = 1.0f;
-        if ((clampedVal - 1.0f) < 0.0f) {
-            cv = clampedVal;
-        }
-        float ci = 1.0f;
-        if ((clampedIdx - 1.0f) < 0.0f) {
-            ci = clampedIdx;
-        }
+        float normIdx = 0.0f;
+        // Clamp to [0, 1] using __fsel
+        float clampedVal = (float)__fsel(-normVal, normVal, 0.0f);
+        float clampedIdx = (float)__fsel(-normIdx, normIdx, 0.0f);
+        float cv = (float)__fsel(clampedVal - 1.0f, 1.0f, clampedVal);
+        float ci = (float)__fsel(clampedIdx - 1.0f, 1.0f, clampedIdx);
         Vector2 prevPt((1.0f - ci) * mRect.w + mRect.x, (1.0f - cv) * mRect.h + mRect.y);
         ++it;
         while (it != mSamples.end()) {
             float normVal2 = (it->data - mMinValue) / range;
             float normIdx2 = (float)idx / (float)(mMaxSamples - 1);
-            float clampedVal2 = 0.0f;
-            if (-normVal2 < 0.0f) {
-                clampedVal2 = normVal2;
-            }
-            float clampedIdx2 = 0.0f;
-            if (-normIdx2 < 0.0f) {
-                clampedIdx2 = normIdx2;
-            }
-            float cv2 = 1.0f;
-            if ((clampedVal2 - 1.0f) < 0.0f) {
-                cv2 = clampedVal2;
-            }
-            float ci2 = 1.0f;
-            if ((clampedIdx2 - 1.0f) < 0.0f) {
-                ci2 = clampedIdx2;
-            }
+            // Clamp to [0, 1] using __fsel
+            float clampedVal2 = (float)__fsel(-normVal2, normVal2, 0.0f);
+            float clampedIdx2 = (float)__fsel(-normIdx2, normIdx2, 0.0f);
+            float cv2 = (float)__fsel(clampedVal2 - 1.0f, 1.0f, clampedVal2);
+            float ci2 = (float)__fsel(clampedIdx2 - 1.0f, 1.0f, clampedIdx2);
             Vector2 curPt((1.0f - ci2) * mRect.w + mRect.x, (1.0f - cv2) * mRect.h + mRect.y);
             if (it->b) {
                 Vector2 topPt(curPt.x, mRect.y);

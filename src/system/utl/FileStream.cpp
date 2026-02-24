@@ -50,6 +50,8 @@ void FileStream::SeekImpl(int offset, SeekType t) {
         mFail = true;
 }
 
+bool FileStream::Fail() { return mFail; }
+
 int FileStream::Tell() {
     MILO_ASSERT(!mFail, 0x5D);
     return mFile->Tell();

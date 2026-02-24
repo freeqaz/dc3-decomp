@@ -4,6 +4,7 @@
 #include "rndobj/Shader.h"
 #include "rndobj/ShaderOptions.h"
 #include "rndobj/Mat.h"
+#include "rndobj/Mat_NG.h"
 #include "rndobj/Mesh.h"
 #include "math/Vec.h"
 
@@ -12,28 +13,93 @@ bool NgFur::Prep(RndMesh *, RndMat *) const {
     TheRenderState.SetTextureFilter(12, (RndRenderState::FilterMode)1, false);
     return true;
 }
-bool NgFur::Shell(int param1, RndMesh *param2, RndMat *param3) const {
-    double tmp1 = 0.0;
-    double tmp2 = 0.0;
-    double tmp3 = 0.0;
+bool NgFur::Shell(int layerIdx, RndMesh *mesh, RndMat *mat) const {
+    float zeroVal = 0.0f;
+    float fShell;
+    float curveVal;
+    if (layerIdx != 0) {
+        fShell = (float)layerIdx / (float)(mLayers - 1);
+    } else {
+        fShell = zeroVal;
+    }
+    if (layerIdx != 0) {
+        curveVal = (float)pow((double)fShell, (double)mCurvature);
+    } else {
+        curveVal = zeroVal;
+    }
 
-    Vector4 v1(0.0f, 0.0f, 0.0f, 0.0f);
-    Vector4 v2(0.0f, 0.0f, 0.0f, 0.0f);
-    Vector4 v3(0.0f, 0.0f, 0.0f, 0.0f);
-    Vector4 v4(0.0f, 0.0f, 0.0f, 0.0f);
+    // Constant 0x32: fur geometry params
+    float gravStretch = mGravity * mStretch;
+    float gravSlide = mGravity * mSlide;
+    Vector4 furGeom(
+        mStretch * fShell,
+        mSlide * curveVal,
+        gravStretch * fShell,
+        gravSlide * curveVal
+    );
+    TheShaderMgr.SetPConstant((PShaderConstant)0x32, furGeom);
 
-    TheShaderMgr.SetPConstant((PShaderConstant)0x32, v1);
-    TheShaderMgr.SetPConstant((PShaderConstant)0xc, v2);
-    TheShaderMgr.SetPConstant((PShaderConstant)0x33, v3);
-    TheShaderMgr.SetPConstant((PShaderConstant)0xb, v4);
+    // Constant 0xc: color interpolation between roots and ends tints
+    float diffRed = (mEndsTint.red - mRootsTint.red);
+    float diffGreen = (mEndsTint.green - mRootsTint.green);
+    float diffBlue = (mEndsTint.blue - mRootsTint.blue);
+    float diffAlpha = (mEndsTint.alpha - mRootsTint.alpha);
+    diffRed = diffRed * fShell;
+    diffGreen = diffGreen * fShell;
+    diffBlue = diffBlue * fShell;
+    diffAlpha = diffAlpha * fShell;
+    Vector4 furColor(
+        mRootsTint.red + diffRed,
+        mRootsTint.green + diffGreen,
+        mRootsTint.blue + diffBlue,
+        mRootsTint.alpha + diffAlpha
+    );
+    TheShaderMgr.SetPConstant((PShaderConstant)0xc, furColor);
 
-    RndShader::SelectConfig(param3, (ShaderType)8, false);
+    // Constant 0x33: shell thickness and vertex data
+    float oneVal = 1.0f;
+    float shellExponent = -(mShellOut * 0.7f - oneVal);
+    float shellThickness;
+    if (layerIdx != 0) {
+        shellThickness = mThickness * (float)pow((double)fShell, (double)shellExponent);
+    } else {
+        shellThickness = mThickness / (float)mLayers;
+    }
 
-    if (param1 == 0) {
+    int numBones = (int)mesh->NumBones();
+    float vertCount;
+    if (numBones > 1) {
+        vertCount = (float)numBones;
+    } else {
+        vertCount = oneVal;
+    }
+
+    Vector4 furShell(shellThickness, vertCount, zeroVal, zeroVal);
+    TheShaderMgr.SetPConstant((PShaderConstant)0x33, furShell);
+
+    // Constant 0xb: alpha processing params
+    float alphaExp = mAlphaFalloff * 2.0f + oneVal;
+    float alphaResult;
+    if (layerIdx != 0) {
+        float fShellFull = (float)layerIdx / (float)mLayers;
+        alphaResult = (float)pow((double)fShellFull, (double)alphaExp);
+    } else {
+        alphaResult = zeroVal;
+    }
+
+    float alphaScale = oneVal / (oneVal - alphaResult);
+    float alphaBias = -(alphaScale * alphaResult);
+    Vector4 furAlpha(alphaScale, alphaBias, mFurTiling, zeroVal);
+    TheShaderMgr.SetPConstant((PShaderConstant)0xb, furAlpha);
+
+    RndShader::SelectConfig(mat, (ShaderType)8, false);
+
+    if (layerIdx == 0) {
         TheRenderState.SetBlend((RndRenderState::Blend)1, (RndRenderState::Blend)0, (RndRenderState::Blend)1, (RndRenderState::Blend)1);
         TheRenderState.SetDepthTestEnable(true);
         TheRenderState.SetDepthWriteEnable(true);
         TheRenderState.SetDepthFunc((RndRenderState::TestFunc)1);
+        NgMat::SetCurrent(nullptr);
     }
     return true;
 }

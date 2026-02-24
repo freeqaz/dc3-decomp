@@ -18,8 +18,7 @@ enum UIListWidgetState {
     kNumUIListWidgetStates
 };
 
-class UIListElementDrawState {
-public:
+struct UIListElementDrawState {
     bool mActive; // 0x0
     Vector3 mPos; // 0x4
     float mAlpha; // 0x10
@@ -81,6 +80,7 @@ public:
 
     float DrawOrder() const;
     float DisabledAlphaScale() const { return mDisabledAlphaScale; }
+    UIListWidgetDrawType WidgetDrawType() const { return mWidgetDrawType; }
     UIList *ParentList() { return mParentList; }
     void SetParentList(UIList *);
     void SetColor(UIListWidgetState, UIComponent::State, UIColor *);

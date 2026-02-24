@@ -28,6 +28,8 @@ public:
     void SnapToParent();
     void SetParent(RndTransformable *parent) { mParent = parent; }
 
+    friend class HamDirector;
+
 private:
     void SetScaleVectorOnTransform(RndTransformable *, Vector3 &);
 

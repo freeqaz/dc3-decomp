@@ -11,8 +11,7 @@
 class CharSignalApplier : public CharPollable, public CharWeightable {
 public:
     struct BoneOp {
-        BoneOp(Hmx::Object *o)
-            : mBone(o), mOp(0), mApplyPercent(0), mMinAngle(0), mMaxAngle(0) {}
+        BoneOp(Hmx::Object *o);
         BoneOp &operator=(const BoneOp &);
 
         ObjPtr<RndTransformable> mBone; // 0x00

@@ -446,7 +446,11 @@ void UIFontImporter::GenerateBitmapFilename() {
     mBitMapSaveName.ReplaceAll(' ', '_');
 }
 
-String UIFontImporter::GetASCIIPlusChars() { return String(); }
+String UIFontImporter::GetASCIIPlusChars() {
+    static String plusChars;
+    plusChars = WideVectorToASCII(mPlus);
+    return plusChars;
+}
 
 String UIFontImporter::GetASCIIMinusChars() {
     static String minusChars;

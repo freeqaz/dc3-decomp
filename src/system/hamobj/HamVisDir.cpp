@@ -281,7 +281,7 @@ void HamVisDir::PostUpdate(const SkeletonUpdateData *data) {
 
 void HamVisDir::SetGrooviness(float groove) {
     mGrooviness = (groove - 0.5f) * (2.0f / 3.0f);
-    mGrooviness = Clamp<float>(0.0, 1.0, mGrooviness);
+    mGrooviness = Clamp<float>(0.0f, 1.0f, mGrooviness);
     for (ObjDirItr<DepthBuffer3D> it(this, true); it != nullptr; ++it) {
         it->SetGrooviness(groove);
     }

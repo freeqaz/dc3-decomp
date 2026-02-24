@@ -102,9 +102,10 @@ public:
 
     void Clear() { next = prev = this; }
     void ReplaceList(Hmx::Object *obj) {
-        while (next != this) {
-            next->Replace(obj);
-            if (this == next) {
+        while (this != next) {
+            ObjRef *n = next;
+            n->Replace(obj);
+            if (n == next) {
                 MILO_FAIL("ReplaceList stuck in infinite loop");
             }
         }

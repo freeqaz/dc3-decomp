@@ -295,21 +295,18 @@ void Intersect(const Hmx::Ray &ray1, const Hmx::Ray &ray2, Vector2 &vec) {
 }
 
 void Intersect(const Transform &trans, const Plane &plane, Hmx::Ray &ray) {
-    Vector3 planeVec(plane.a, plane.b, plane.c);
-    float planeVecSquared = planeVec.x * planeVec.x + planeVec.y * planeVec.y + planeVec.z * planeVec.z;
-    float scale = -(plane.d / planeVecSquared);
-    Vector3 scaledVec(planeVec.x * scale, planeVec.y * scale, planeVec.z * scale);
+    Vector3 on = plane.On();
     Vector3 point;
-    MultiplyTranspose(scaledVec, trans, point);
+    MultiplyTranspose(on, trans, point);
     float dotX = trans.m.x.x * plane.a + trans.m.x.y * plane.b + trans.m.x.z * plane.c;
     float dotY = trans.m.y.x * plane.a + trans.m.y.y * plane.b + trans.m.y.z * plane.c;
     float dotZ = trans.m.z.x * plane.a + trans.m.z.y * plane.b + trans.m.z.z * plane.c;
     ray.dir.Set(dotX, dotY);
-    if (fabsf(dotY) > fabsf(dotX)) {
-        ray.base.Set(point.x + (dotZ / dotX) * point.z, point.y);
+    if (fabsf(dotX) > fabsf(dotY)) {
+        ray.base.Set(point.y, point.x + (dotZ / dotX) * point.z);
     }
     else {
-        ray.base.Set(point.x, point.y + (dotZ / dotY) * point.z);
+        ray.base.Set(point.y + (dotZ / dotY) * point.z, point.x);
     }
 }
 

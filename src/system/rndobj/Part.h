@@ -33,25 +33,28 @@ public:
     float mTileTime;
 };
 
-// size 0xd0
+// size 0xcc (target 0xc8 - one field may be wrong)
 class RndFancyParticle : public RndParticle {
 public:
-    float growFrame; // 0x60
-    float growVel; // 0x64
-    float shrinkFrame; // 0x68
-    float shrinkVel; // 0x6c
-    Hmx::Color midcolVel; // 0x70
-    float midcolFrame; // 0x80
-    float beginGrow; // 0x84
-    float midGrow; // 0x88
-    float endGrow; // 0x8c
-    Vector4 bubbleDir; // 0x90
-    float bubbleFreq; // 0xa0
-    float bubblePhase; // 0xa4
-    float RPF; // 0xa8
-    float swingArmVel; // 0xac
-    float mRPMVelocity, mPitchAngularVel, mBirthVelocityX, mBirthVelocityY, mBirthVelocityZ, unkc4;
-    float unkc8, unkcc;
+    float growFrame; // 0x68
+    float growVel; // 0x6c
+    float shrinkFrame; // 0x70
+    float shrinkVel; // 0x74
+    Hmx::Color midcolVel; // 0x78
+    float midcolFrame; // 0x88
+    float beginGrow; // 0x8c
+    float midGrow; // 0x90
+    float endGrow; // 0x94
+    Vector4 bubbleDir; // 0x98
+    float bubbleFreq; // 0xa8
+    float bubblePhase; // 0xac
+    float RPF; // 0xb0
+    float swingArmVel; // 0xb4
+    float mRPMVelocity; // 0xb8
+    float mPitchAngularVel; // 0xbc
+    float mBirthVelocityX; // 0xc0
+    float mBirthVelocityY; // 0xc4
+    float mBirthVelocityZ; // 0xc8
 };
 
 class ParticleCommonPool {

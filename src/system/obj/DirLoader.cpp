@@ -955,9 +955,9 @@ void DirLoader::OpenFile() {
                 Cleanup(
                     MakeString("%s: could not load: %s", PathName(mProxyDir.Ptr()), path)
                 );
-                return;
+            } else {
+                Cleanup(MakeString("Could not load: %s", path));
             }
-            Cleanup(MakeString("Could not load: %s", path));
             return;
         }
     }

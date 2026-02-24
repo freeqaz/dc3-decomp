@@ -75,13 +75,12 @@ void GetTimeString(int seconds, char *buf) {
     static Symbol stats_format_time_double("stats_format_time_double");
     String primary;
     String secondary;
-    String result;
     Symbol empty(gNullStr);
     if (seconds < 60) {
         primary = GetSeconds(seconds);
     } else if (seconds < 3600) {
         int mins = seconds / 60;
-        int secs = seconds % 60;
+        int secs = seconds - mins * 60;
         if (secs > 0) {
             primary = GetMinutes(mins);
             secondary = GetSeconds(secs);
@@ -90,7 +89,7 @@ void GetTimeString(int seconds, char *buf) {
         }
     } else if (seconds < 86400) {
         int hours = seconds / 3600;
-        int mins = (seconds % 3600) / 60;
+        int mins = (seconds - hours * 3600) / 60;
         if (mins > 0) {
             primary = GetHours(hours);
             secondary = GetMinutes(mins);
@@ -99,7 +98,7 @@ void GetTimeString(int seconds, char *buf) {
         }
     } else {
         int days = seconds / 86400;
-        int hours = (seconds % 86400) / 3600;
+        int hours = (seconds - days * 86400) / 3600;
         if (hours > 0) {
             primary = GetDays(days);
             secondary = GetHours(hours);
@@ -107,6 +106,7 @@ void GetTimeString(int seconds, char *buf) {
             primary = GetDays(days);
         }
     }
+    String result;
     if (!secondary.empty()) {
         result = MakeString(Localize(stats_format_time_double, 0, TheLocale), primary, secondary);
     } else {

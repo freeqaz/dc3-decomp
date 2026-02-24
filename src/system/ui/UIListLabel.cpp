@@ -1,6 +1,7 @@
 #include "ui/UIListLabel.h"
 #include "obj/Object.h"
 #include "os/Debug.h"
+#include "rndobj/Utl.h"
 #include "ui/UILabel.h"
 #include "ui/UIListSlot.h"
 #include "utl/Symbol.h"
@@ -73,10 +74,29 @@ UIListLabelElement::~UIListLabelElement() { delete mLabel; }
 void UIListLabelElement::Draw(const Transform &tf, float f, UIColor *col, Box *box) {
     mLabel->SetWorldXfm(tf);
     if (box) {
-        // box processing
+        Box localbox = *box;
+        int numFontMaps = mLabel->mFontMaps.size();
+        for (int i = 0; i < numFontMaps; i++) {
+            RndText::FontMapBase *fm = mLabel->mFontMaps[i];
+            int numMeshes = fm->NumMeshes();
+            for (int j = 0; j < numMeshes; j++) {
+                Box meshbox;
+                CalcBox(fm->Mesh(j), meshbox);
+                localbox.GrowToContain(meshbox.mMin, false);
+                localbox.GrowToContain(meshbox.mMax, false);
+            }
+        }
+        box->GrowToContain(localbox.mMin, false);
+        box->GrowToContain(localbox.mMax, false);
     } else {
-        // drawing
+        float oldAlpha = mLabel->Style(0).GetAlpha();
+        UILabel::LabelStyle &ls0 = mLabel->LStyle(0);
+        UIColor *oldColorOverride = ls0.mColorOverride;
+        ls0.mColorOverride = col;
+        mLabel->Style(0).SetAlpha(f * oldAlpha);
         mLabel->DrawShowing();
+        mLabel->Style(0).SetAlpha(oldAlpha);
+        ls0.mColorOverride = oldColorOverride;
     }
 }
 

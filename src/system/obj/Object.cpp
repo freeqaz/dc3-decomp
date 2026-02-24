@@ -241,27 +241,24 @@ const char *Hmx::Object::FindPathName() {
 
     ObjectDir *dataDir = DataDir();
     if (dataDir) {
-        if (dataDir->Loader()) {
+        DirLoader *loader = dataDir->Loader();
+        if (loader) {
             return MakeString(
                 "%s (%s)",
                 name,
-                FileLocalize(dataDir->Loader()->LoaderFile().c_str(), nullptr)
+                FileLocalize(loader->LoaderFile().c_str(), nullptr)
             );
-        }
-        if (!dataDir->ProxyFile().empty()) {
+        } else if (!dataDir->ProxyFile().empty()) {
             return MakeString(
                 "%s (%s)", name, FileLocalize(dataDir->ProxyFile().c_str(), nullptr)
             );
-        }
-        if (*dataDir->GetPathName() != '\0') {
+        } else if (*dataDir->GetPathName() != '\0') {
             return MakeString(
                 "%s (%s)", name, FileLocalize(dataDir->GetPathName(), nullptr)
             );
-        }
-        if (dataDir != this && dataDir->Name() && *dataDir->Name()) {
+        } else if (dataDir != this && dataDir->Name() && *dataDir->Name()) {
             return MakeString("%s/%s", dataDir->Name(), name);
-        }
-        if (mDir && *mDir->GetPathName()) {
+        } else if (mDir && *mDir->GetPathName()) {
             return MakeString("%s (%s)", name, FileLocalize(mDir->GetPathName(), nullptr));
         }
     }

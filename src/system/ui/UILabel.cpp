@@ -43,19 +43,21 @@ BEGIN_PROPSYNCS(UILabel)
     SYNC_PROP_SET(text_token, mTextToken, SetTextToken(_val.ForceSym()))
     SYNC_PROP_SET(icon, mLabelText, SetIcon(_val.Str(0)[0]))
     SYNC_PROP_SET(edit_text, mLabelText, SetEditText(_val.Str(0)))
-    SYNC_PROP(width, *(float *)(((unsigned char *)this) - 0x128))
-    SYNC_PROP(height, *(float *)(((unsigned char *)this) - 0x124))
-    SYNC_PROP(circle, *(float *)(((unsigned char *)this) - 0x120))
-    SYNC_PROP(alignment, *(int *)(((unsigned char *)this) - 0x11C))
-    SYNC_PROP(fit_type, *(int *)(((unsigned char *)this) - 0x118))
-    SYNC_PROP(caps_mode, *(int *)(((unsigned char *)this) - 0x114))
-    SYNC_PROP(markup, *(bool *)(((unsigned char *)this) - 0x108))
-    SYNC_PROP(scroll_delay, *(float *)(((unsigned char *)this) - 0x104))
-    SYNC_PROP(scroll_rate, *(float *)(((unsigned char *)this) - 0x100))
-    SYNC_PROP(scroll_pause, *(float *)(((unsigned char *)this) - 0xFC))
-    SYNC_PROP(leading, *(float *)(((unsigned char *)this) - 0x110))
-    SYNC_PROP(indentation, *(float *)(((unsigned char *)this) - 0xD4))
-    SYNC_PROP(basic_markup, *(bool *)(((unsigned char *)this) - 0x107))
+#define LABEL_UPDATE_IF_NEEDED if (!sDeferUpdate) LabelUpdate(false)
+    SYNC_PROP_MODIFY(width, mWidth, LABEL_UPDATE_IF_NEEDED)
+    SYNC_PROP_MODIFY(height, mHeight, LABEL_UPDATE_IF_NEEDED)
+    SYNC_PROP_MODIFY(circle, mCircle, LABEL_UPDATE_IF_NEEDED)
+    SYNC_PROP_MODIFY(alignment, (int&)mAlignment, LABEL_UPDATE_IF_NEEDED)
+    SYNC_PROP_MODIFY(fit_type, (int&)mFitType, LABEL_UPDATE_IF_NEEDED)
+    SYNC_PROP_MODIFY(caps_mode, (int&)mCapsMode, LABEL_UPDATE_IF_NEEDED)
+    SYNC_PROP_MODIFY(markup, mMarkup, LABEL_UPDATE_IF_NEEDED)
+    SYNC_PROP_MODIFY(scroll_delay, mScrollDelay, LABEL_UPDATE_IF_NEEDED)
+    SYNC_PROP_MODIFY(scroll_rate, mScrollRate, LABEL_UPDATE_IF_NEEDED)
+    SYNC_PROP_MODIFY(scroll_pause, mScrollPause, LABEL_UPDATE_IF_NEEDED)
+    SYNC_PROP_MODIFY(leading, mLeading, LABEL_UPDATE_IF_NEEDED)
+    SYNC_PROP_MODIFY(indentation, mIndentation, LABEL_UPDATE_IF_NEEDED)
+    SYNC_PROP_MODIFY(basic_markup, mBasicMarkup, LABEL_UPDATE_IF_NEEDED)
+#undef LABEL_UPDATE_IF_NEEDED
     SYNC_PROP_SET(fixed_length, mFixedLength, SetFixedLength(_val.Int(0)))
     SYNC_PROP(draw_width, mBoundsRight)
     {
@@ -66,7 +68,6 @@ BEGIN_PROPSYNCS(UILabel)
         }
     }
     SYNC_SUPERCLASS(UIComponent)
-    SYNC_SUPERCLASS(RndText)
 END_PROPSYNCS
 
 BEGIN_COPYS(UILabel)
@@ -456,7 +457,7 @@ void UILabel::Highlight() {
             color.blue = 0.2f;
         }
     }
-    RndDrawable::Highlight();
+    RndText::Highlight();
     const Transform &xfm = WorldXfm();
     UtilDrawBox(xfm, box, color, false);
 }
@@ -592,13 +593,14 @@ void UILabel::SetTimeHMS(int seconds, bool showHours) {
 bool UILabel::CheckValid(bool warn) {
     if (mFixedLength != 0 && UTF8StrLen(mText.c_str()) > (unsigned int)mFixedLength) {
         if (warn) {
+            int len = UTF8StrLen(mText.c_str());
             MILO_WARN(
                 "%s: %s has fixed length of %i but text is %i long (%s)",
                 PathName(Dir()),
                 Name(),
                 mFixedLength,
-                UTF8StrLen(mText.c_str()),
-                mText.c_str()
+                len,
+                mText
             );
         }
         return false;
@@ -708,13 +710,17 @@ void UILabel::SetTokenFmtImp(
         if (found) {
             SuperFormatString str(localized, da1, b, TheLocale, gNullStr);
             if (da2) {
-                for (; i < da2->Size(); i++) {
-                    const DataNode &n = da2->Evaluate(i);
-                    if (n.Type() == kDataSymbol) {
-                        str << Localize(n.Sym(), 0, TheLocale);
-                    } else {
-                        str << n;
-                    }
+                int size = da2->Size();
+                if (i < size) {
+                    do {
+                        const DataNode &n = da2->Evaluate(i);
+                        if (n.Type() == kDataSymbol) {
+                            str << Localize(n.Sym(da2), 0, TheLocale);
+                        } else {
+                            str << n;
+                        }
+                        i++;
+                    } while (i < size);
                 }
             }
             SetDisplayText(str.FinalStr(), false);
@@ -753,11 +759,16 @@ DataNode UILabel::OnSetTokenFmt(const DataArray *da) {
 }
 
 DataNode UILabel::OnSetInt(DataArray const *da) {
-    int i = da->Int(2);
+    int val;
+    if (da->Node(2).Type() == kDataFloat) {
+        val = (int)da->Float(2);
+    } else {
+        val = da->Int(2);
+    }
     bool b = false;
     if (da->Size() > 3)
         b = da->Int(3) != 0;
-    SetInt(i, b);
+    SetInt(val, b);
     return DataNode(1);
 }
 
@@ -898,7 +909,7 @@ BEGIN_HANDLERS(UILabel)
     HANDLE_EXPR(get_font_mats, UILabelDir::GetMatVariations(LStyle(_msg->Int(2)).mLabelDir))
     HANDLE(set_height_from_text, OnSetHeightFromText)
     HANDLE_EXPR(draw_rect_width, mBoundsRight)
-    HANDLE_ACTION(reload_string, SetTextToken(mTextToken))
+    HANDLE_ACTION(reload_string, (SetTextToken(mTextToken), mDirty = true))
     HANDLE_SUPERCLASS(UIComponent)
 END_HANDLERS
 

@@ -53,9 +53,9 @@ void MemHeap::Print(TextStream &ts, bool verbose) {
         rFrags
     );
     ts << MakeString("\n");
+    unsigned int startPtr = (unsigned int)mStart;
     ts << MakeString("\n");
 
-    unsigned int startPtr = (unsigned int)mStart;
     unsigned int endPtr = startPtr + (mSizeWords * 4);
 
     int curAllocCount = 0;

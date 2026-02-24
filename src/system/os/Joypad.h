@@ -193,13 +193,13 @@ struct ProGuitarData {
         };
     };
 
-    bool mProgramChangeBit0 : 1;
+    unsigned char mProgramChangeBit0 : 1;
     unsigned char mAccelX : 7;
 
-    bool mProgramChangeBit2 : 1;
+    unsigned char mProgramChangeBit1 : 1;
     unsigned char mAccelY : 7;
 
-    bool mProgramChangeBit1 : 1;
+    unsigned char mProgramChangeBit2 : 1;
     unsigned char mAccelZ : 7;
 
     bool mStompBox : 1;

@@ -918,14 +918,14 @@ void CharClip::ApplyBlendedSkeletons(
 ) {
     float f60;
     int sample = BeatToSample(f1, &f60);
-    float f7 = 0.0f;
-    float f6 = 1.0f;
+    float zero = 0.0f;
     FOREACH (it, mBlendSamples[sample]) {
-        clips[it->first]->ScaleAdd(bones, (f6 - f60) * it->second * f2, f7, f7);
+        clips[it->first]->ScaleAdd(bones, (1.0f - f60) * it->second * f2, zero, zero);
     }
-    if (f7 < f60) {
-        FOREACH (it, mBlendSamples[sample + 1]) {
-            clips[it->first]->ScaleAdd(bones, f60 * it->second * f2, f7, f7);
+    if (zero < f60) {
+        int nextSample = sample + 1;
+        FOREACH (it, mBlendSamples[nextSample]) {
+            clips[it->first]->ScaleAdd(bones, f60 * it->second * f2, zero, zero);
         }
     }
 }

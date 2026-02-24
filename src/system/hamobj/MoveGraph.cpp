@@ -178,8 +178,48 @@ bool MoveGraph::FindVariantPair(
         }
     }
     if (p1 && p2) {
-        vref1 = 0;
-        vref2 = 0;
+        vref1 = nullptr;
+        vref2 = nullptr;
+        // Try to find a connected pair from p1 to p2
+        FOREACH (var1, p1->Variants()) {
+            if (v1 && *var1 != v1)
+                continue;
+            if (!s.Null() && (*var1)->Genre() != s)
+                continue;
+            FOREACH (cand, (*var1)->mNextCandidates) {
+                const MoveVariant *candVar = cand->mValue.mVariant;
+                if (candVar && candVar->Parent() == p2) {
+                    if (v2 && candVar != v2)
+                        continue;
+                    if (!s.Null() && candVar->Genre() != s)
+                        continue;
+                    vref1 = *var1;
+                    vref2 = candVar;
+                    return true;
+                }
+            }
+        }
+        if (b8) {
+            // Fallback: try prev candidates from p2 to p1
+            FOREACH (var2, p2->Variants()) {
+                if (v2 && *var2 != v2)
+                    continue;
+                if (!s.Null() && (*var2)->Genre() != s)
+                    continue;
+                FOREACH (cand, (*var2)->mPrevCandidates) {
+                    const MoveVariant *candVar = cand->mValue.mVariant;
+                    if (candVar && candVar->Parent() == p1) {
+                        if (v1 && candVar != v1)
+                            continue;
+                        if (!s.Null() && candVar->Genre() != s)
+                            continue;
+                        vref1 = candVar;
+                        vref2 = *var2;
+                        return true;
+                    }
+                }
+            }
+        }
     }
-    return 0;
+    return false;
 }

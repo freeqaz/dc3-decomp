@@ -17,9 +17,11 @@
 extern void* merged_DataArrayNode(void*, int);
 extern void* merged_82610090(const void*, unsigned int*);
 
+struct XSTORAGE_ENUMERATE_RESULTS;
+enum ServiceIdState {};
+
 namespace {
     int mSigninSameGuest;
-    XUID mXuidCache[4];
     int gNumSmartGlassClients;
     unsigned long gSmartGlassClientIDs[XBC_MAX_CLIENTS];
     int gNumSmartGlassSendsInProgress;
@@ -27,38 +29,53 @@ namespace {
     void *mFriendsBuffer;
     Hmx::Object *mFriendsCallback;
     void *mFriendsAsync;
+    std::vector<Friend *> *mFriendsList;
     void *mListener;
-    unsigned int mPathLen;
-    unsigned int mListSize;
-    unsigned int mUserID;
-    unsigned int mResult;
+    XOVERLAPPED *mServiceIDOverlapped;
+    XOVERLAPPED *mServiceIDOverlapped2;
+    XUID mXuidCache[4];
+    XSTORAGE_ENUMERATE_RESULTS *mStorageList;
+    unsigned long mPathLen;
+    ServiceIdState mServiceIdState;
+    unsigned long mListSize;
+    unsigned long mUserID;
+    unsigned long mResult;
 }
 
 PlatformMgr::PlatformMgr() {
-    mHasXSocialPhotoPost = false;
-    mHasXSocialLinkPost = false;
-    unk4c = 0;
     mSigninMask = 0;
+    mScreenSaver = true;
     mSigninChangeMask = 0;
-    mGuideShowing = true;
+    mGuideShowing = false;
     mConfirmCancelSwapped = false;
     mConnected = false;
-    mScreenSaver = false;
     mRegion = kRegionNone;
     mDiskError = kNoDiskError;
+    unk69 = false;
 
+    mSigninSameGuest = 0;
     mFriendsEnum = 0;
-    mListSize = 0;
     mFriendsBuffer = 0;
     mFriendsCallback = 0;
-    mPathLen = 0x200;
     mFriendsAsync = 0;
+    mFriendsList = 0;
     mListener = 0;
-    mUserID = -1;
-    mResult = 0;
-    mSigninSameGuest = 0;
 
     mJobMgr = new JobMgr(this);
+
+    mServiceIDOverlapped = 0;
+    mXuidCache[0] = 0;
+    mServiceIDOverlapped2 = 0;
+    mStorageList = 0;
+    mPathLen = 0x200;
+    mXuidCache[1] = 0;
+    mXuidCache[2] = 0;
+    mXuidCache[3] = 0;
+    mServiceIdState = (ServiceIdState)0;
+    mListSize = 0;
+    mUserID = -1;
+    mResult = 0;
+    mOverlapped.hEvent = 0;
 }
 
 bool PlatformMgr::IsEthernetCableConnected() { return XNetGetEthernetLinkStatus() != 0; }

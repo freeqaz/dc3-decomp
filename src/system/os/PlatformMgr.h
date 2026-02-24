@@ -63,6 +63,8 @@ private:
     PlatformRegion mRegion; // 0x5c
     DiskError mDiskError; // 0x60
     JobMgr *mJobMgr; // 0x64
+    bool unk68; // 0x68
+    bool unk69; // 0x69
 
     DataNode OnSignInUsers(DataArray *);
 

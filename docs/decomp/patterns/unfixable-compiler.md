@@ -1,8 +1,8 @@
-# Unfixable Patterns: Compiler
+# Hard Patterns: Compiler
 
-These patterns are caused by compiler optimizations or heuristics we cannot control at source level.
+These patterns are caused by compiler optimizations or heuristics that resist simple source-level changes. Each section documents what would be needed to fix them.
 
-**Action:** Confirm the pattern actually applies (and that no fixable issues are mixed in). If verified, accept the current match percentage.
+**Action:** Confirm the pattern actually applies (and that no fixable issues are mixed in). Try the documented fixes before moving on. For patterns requiring c2.dll patching, see [compiler-instrumentation.md](../../plans/compiler-instrumentation.md).
 
 ---
 
@@ -17,20 +17,21 @@ Instruction scheduling differs around ASSERT_REVS calls.
 
 Same instructions, different order around assert code.
 
-### Why Unfixable
+### Root Cause
 
 The compiler schedules instructions differently:
 - Target computes `gRevs[2]` address before stack variables
 - Our build computes stack variables before `gRevs[2]`
-- Same instructions, different order - compiler heuristic
+- Same instructions, different order — compiler scheduling heuristic
 
 ### Detection
 
 Instruction count matches but order differs around assert code in second MILO_FAIL call.
 
-### What To Do
+### What Would Fix It
 
-All Load functions with ASSERT_REVS will have ~0.8-0.9% gap. Accept as effectively matched.
+- c2.dll instruction scheduler patch to match the original compiler's scheduling priority
+- All Load functions with ASSERT_REVS will have ~0.8-0.9% gap from this alone
 
 ---
 
@@ -43,11 +44,7 @@ Compiler chooses fused vs separate floating-point operations.
 
 ### Symptom
 
-`fmadds` in target vs `fmuls` + `fadds` in our build.
-
-### Why Unfixable
-
-This is controlled by compiler optimization flags we don't have access to. Both are mathematically equivalent but have slightly different rounding behavior.
+`fmadds` in target vs `fmuls` + `fadds` in our build (or vice versa).
 
 ### Example
 
@@ -60,9 +57,53 @@ fmuls f11, f11, f11
 fadds f0, f0, f11
 ```
 
-### What To Do
+### Try These Fixes First
 
-Accept 1-3% gap on math-heavy functions.
+Before accepting this gap, try the source-level fixes documented in **[fixable-fsel-fma.md](fixable-fsel-fma.md#fma-control-via-pragma-fp_contract)**:
+
+1. **`#pragma fp_contract(off/on)`** — controls FMA fusion at file scope
+2. **Expression restructuring** — bring multiply and add adjacent for fusion
+3. **FMA expression order** — `(1.0f - x*y)` generates `fnmsubs`, `(x*y - 1.0f)` generates `fmsubs`
+
+### When Source-Level Fixes Don't Work
+
+**Mixed-direction FMA**: Same function needs both ON and OFF. Source-level options:
+- Split into helper functions with different pragma settings
+- Use `volatile float` intermediates to selectively block fusion
+- c2.dll binary patch to match per-expression fusion heuristic
+
+**Pragma ignored**: Compiler overrides `#pragma fp_contract(off)` under `/O1` for some expressions. Options:
+- `volatile` intermediate variable to force separation
+- c2.dll binary patch to respect the pragma unconditionally
+
+---
+
+## fsel Register Pressure
+
+**Prevalence:** Functions with float clamping/min/max
+**Typical Gap:** 5-20%
+
+Using `__fsel` intrinsic or `Clamp<float>` template generates correct `fsel` instructions but increases FPR register pressure.
+
+### Symptom
+
+After adding fsel-based code, the prologue changes from 2 callee-saved FPRs to 4, cascading stack offsets throughout the function.
+
+### Root Cause
+
+`fsel` keeps intermediate float values alive longer (no branch to break live ranges), so the register allocator spills more to callee-saved FPRs. The original compiler's allocator handles this with fewer registers.
+
+### What Would Fix It
+
+- Restructure surrounding code to reduce live float variables before/after the fsel
+- c2.dll register allocator binary patch (see [Register Allocation](#register-allocation) for mechanism)
+- Find an alternative expression form that achieves fsel with fewer simultaneously-live floats
+
+### Real Example
+
+| Function | fsel Match | Branch Match | Issue |
+|----------|-----------|--------------|-------|
+| DebugGraph::Draw | Worse (more FPRs) | 46.8% | Clamp used f28-f31 (4 FPRs) vs target's f30-f31 (2 FPRs) |
 
 ---
 
@@ -203,13 +244,14 @@ Same operation, operands in different order:
 | fmuls f11, f0, f13 | fmuls f11, f13, f0 |
 ```
 
-### Why Unfixable
+### Root Cause
 
-Same mathematical result, different register order. No source-level control.
+Same mathematical result, different register order. The compiler's expression evaluator picks a canonical operand order.
 
-### What To Do
+### What Would Fix It
 
-Accept as functionally identical.
+- c2.dll expression evaluator patch to reverse operand canonicalization for commutative FP ops
+- Sometimes swapping the source-level operand order helps (see [fixable-operators.md](fixable-operators.md#commutative-operand-order))
 
 ---
 
@@ -224,13 +266,13 @@ Different extraction methods for 64-bit to 16-bit conversions.
 
 Target uses `lhz` (load halfword) vs our `ld` + bit masking.
 
-### Why Unfixable
+### Root Cause
 
 Compiler optimization choice for how to extract 16-bit slices from 64-bit values.
 
-### What To Do
+### What Would Fix It
 
-Accept ~5% gap.
+- c2.dll codegen patch to prefer `lhz` (load halfword) over `ld` + bit masking for 16-bit extracts from 64-bit values
 
 ---
 
@@ -245,13 +287,13 @@ Branch target addresses differ due to code layout.
 
 Branch instructions have different immediate offset values.
 
-### Why Unfixable
+### Root Cause
 
 Branch offsets are calculated based on code layout. Different instruction placement = different offsets.
 
-### What To Do
+### Impact
 
-These don't affect match percentage in objdiff scoring. Ignore.
+These don't affect match percentage in objdiff scoring. No fix needed.
 
 ---
 
@@ -266,9 +308,9 @@ The target binary spills a local variable to the stack frame, but our code keeps
 
 objdiff shows 1-3 `delete` instructions that are all `stw rN, offset(rFP)` to the stack frame. The stored register contains a local variable that's used later in the function.
 
-### Why Unfixable
+### Root Cause
 
-Stack spill decisions are made by the register allocator based on register pressure, estimated spill/reload cost, and scheduling heuristics. These are internal compiler decisions with no source-level knob. Hoisting declarations, reordering code, or adding dummy uses generally doesn't change the spill pattern.
+Stack spill decisions are made by the register allocator based on register pressure, estimated spill/reload cost, and scheduling heuristics.
 
 ### Detection
 
@@ -276,9 +318,10 @@ Stack spill decisions are made by the register allocator based on register press
 - The function is otherwise very close (97%+)
 - Removing/adding code doesn't change the spill pattern
 
-### What To Do
+### What Would Fix It
 
-Accept the ~1-2% gap and mark at_limit.
+- Restructure code to reduce register pressure in the hot region (reduce live variables)
+- c2.dll spill heuristic patch to match the original compiler's spill/reload cost model
 
 ### Real Example
 
@@ -288,7 +331,7 @@ Accept the ~1-2% gap and mark at_limit.
 
 ---
 
-## When "Unfixable" May Still Move
+## When Hard Patterns May Still Move
 
 Large functions (especially 95%+ matches) often look dominated by compiler noise, but there is usually a small actionable subset.
 
@@ -324,9 +367,9 @@ That is real progress and lowers the chance of regressions in future attempts.
 
 ---
 
-## Hard But Not Truly Unfixable
+## Requires Tooling (c2.dll Patching or Custom Pragmas)
 
-Some AT_LIMIT functions have patterns that are theoretically fixable but resist simple source-level changes. Future tooling (e.g., c2.dll patching, custom pragma support) may unlock these.
+These patterns resist source-level changes but are fixable with compiler binary modifications or custom tooling.
 
 ### Large Offset Addressing (lis+ori+lwzx vs addis+subi)
 

@@ -181,17 +181,11 @@ void LockedContentPanel::SetUpNoFlashcards(Symbol song, Difficulty diff) {
     Flow *pFlowSingle = DataDir()->Find<Flow>("song_list_single.flow");
     pFlowSingle->Activate();
     int songID = TheHamSongMgr.GetSongIDFromShortName(song);
-    // Access drawables via pointer arithmetic (filler array in header)
-    RndDrawable *pDrawable1 = *(RndDrawable **)((u8 *)this + 0x3c);
-    pDrawable1->SetShowing(true);
-    RndDrawable *pDrawable2 = *(RndDrawable **)((u8 *)this + 0x5c);
-    pDrawable2->SetShowing(true);
+    mLabels[0]->SetShowing(true);
+    mLabels[8]->SetShowing(true);
     pContentName->SetSongName(song, -1, false);
-    // Configure stars display for the specified difficulty (no flashcards case)
-    HamStarsDisplay *pStarsDisplay = *(HamStarsDisplay **)((u8 *)this + 0x5c);
-    pStarsDisplay->SetSongWithDifficulty(songID, diff, true);
-    // Hide 7 drawable pairs via array traversal
-    RndDrawable **pPtr = (RndDrawable **)((u8 *)this + 0x5c);
+    ((HamStarsDisplay *)mLabels[8])->SetSongWithDifficulty(songID, diff, true);
+    HamLabel **pPtr = &mLabels[8];
     int loopCount = 7;
     do {
         pPtr[-7]->SetShowing(false);
@@ -229,8 +223,7 @@ void LockedContentPanel::SetUpDifficultyLocked(Symbol song, Symbol difficultySym
             diffInstruction = award_hard_playlist_instruction;
         }
         pInstructions->SetTokenFmt(diffInstruction, 3);
-        // Hide 8 drawable pairs in playlist mode via array traversal (filler region)
-        RndDrawable **pPtr = (RndDrawable **)((u8 *)this + 0x58);
+        HamLabel **pPtr = &mLabels[7];
         int loopCount = 8;
         do {
             pPtr[-7]->SetShowing(false);
@@ -248,19 +241,11 @@ void LockedContentPanel::SetUpDifficultyLocked(Symbol song, Symbol difficultySym
         Flow *pFlowPractice = DataDir()->Find<Flow>("song_list_perform_practice.flow");
         pFlowPractice->Activate();
         int songID = TheHamSongMgr.GetSongIDFromShortName(song, true);
-        // Access drawables via pointer arithmetic (filler array in header at 0x3c-0x7b)
-        // Show song display drawable at offset 0x3c
-        RndDrawable *pDrawable1 = *(RndDrawable **)((u8 *)this + 0x3c);
-        pDrawable1->SetShowing(true);
-        // Show stars display drawable at offset 0x5c (also used as HamStarsDisplay)
-        RndDrawable *pDrawable2 = *(RndDrawable **)((u8 *)this + 0x5c);
-        pDrawable2->SetShowing(true);
-        pContentName->SetSongName(song, -1, false);
-        // Access HamStarsDisplay at same offset and configure for previous difficulty tier
-        HamStarsDisplay *pStarsDisplay = *(HamStarsDisplay **)((u8 *)this + 0x5c);
-        pStarsDisplay->SetSongWithDifficulty(songID, (Difficulty)(diff - 1), true);
-        // Hide 7 drawable pairs via array traversal (offsets span filler[16] region)
-        RndDrawable **pPtr = (RndDrawable **)((u8 *)this + 0x5c);
+        mLabels[0]->SetShowing(true);
+        mLabels[8]->SetShowing(true);
+        ((AppLabel *)mLabels[0])->SetSongName(song, -1, false);
+        ((HamStarsDisplay *)mLabels[8])->SetSongWithDifficulty(songID, (Difficulty)(diff - 1), true);
+        HamLabel **pPtr = &mLabels[8];
         int loopCount = 7;
         do {
             pPtr[-7]->SetShowing(false);

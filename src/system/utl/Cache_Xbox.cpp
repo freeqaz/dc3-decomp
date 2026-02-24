@@ -341,24 +341,22 @@ int CacheXbox::ThreadGetFileSize() {
 int CacheXbox::ThreadWrite() {
     mThreadStr.ReplaceAll('/', '\\');
 
-    unsigned int pos = mThreadStr.find('\\');
-    unsigned int nextPos = mThreadStr.find('\\', pos + 1);
+    int success = 1;
+    unsigned int nextPos = mThreadStr.find('\\');
+    nextPos = mThreadStr.find('\\', nextPos + 1);
 
     while (nextPos != FixedString::npos) {
-        String dirPath = mThreadStr.substr(0, nextPos);
-
-        int attrs = GetFileAttributesA(dirPath.c_str());
-        if (attrs != -1) {
-            // Directory exists
-        } else {
-            int res = CreateDirectoryA(dirPath.c_str(), nullptr);
-            if (res == 0) {
-                break;
+        {
+            String dirPath = mThreadStr.substr(0, nextPos);
+            int attrs = GetFileAttributesA(dirPath.c_str());
+            if (attrs == -1) {
+                success = CreateDirectoryA(dirPath.c_str(), nullptr);
+                if (success == 0) {
+                    break;
+                }
             }
         }
-
-        pos = nextPos;
-        nextPos = mThreadStr.find('\\', pos + 1);
+        nextPos = mThreadStr.find('\\', nextPos + 1);
     }
 
     HANDLE hFile = CreateFileA(
@@ -378,7 +376,7 @@ int CacheXbox::ThreadWrite() {
                 return 8;
             } else if (err != 0x15) {
                 if (IsDeviceConnected(mCacheID.DeviceID())) {
-                    MILO_NOTIFY("CacheXbox::WriteAsync() - Unhandled error %u from CreateFile()\n", err);
+                    MILO_NOTIFY("CacheXbox::WriteAsync() - Unhandled error from CreateFile(): %d\n", err);
                     return -1;
                 }
             }
@@ -399,7 +397,7 @@ int CacheXbox::ThreadWrite() {
     XContentFlush(mCacheID.Name(), nullptr);
 
     if (IsDeviceConnected(mCacheID.DeviceID())) {
-        MILO_NOTIFY("CacheXbox::ThreadWrite() - Unhandled error %u from WriteFile()\n", err);
+        MILO_NOTIFY("CacheXbox::ThreadWrite() - Unhandled error %d from WriteFile()\n", err);
         return -1;
     }
 

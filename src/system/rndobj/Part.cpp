@@ -1138,7 +1138,7 @@ void RndParticleSys::UpdateParticles() {
                 if (frameUpdate > 4.0f) {
                     float excess = frameUpdate - 4.0f;
                     frameUpdate = 4.0f;
-                    mPausedTime = mPausedTime + excess;
+                    mPausedTime += excess;
                 }
                 currentFrame -= mPausedTime;
             }
@@ -1387,7 +1387,9 @@ float RndParticleSys::Burst::Emit(float f1) {
         ret = mHalfDuration * 2.0f - ret;
     }
     ret *= mInvHalfDuration;
-    return ret * ret * 3.0f - ret * ret * ret * 2.0f * mPeakRate * f1;
+    float ret2 = ret * ret;
+    float ret3 = ret2 * ret;
+    return (ret2 * 3.0f - ret3 * 2.0f) * mPeakRate * f1;
 }
 
 float RndParticleSys::CheckBursts(float f1) {

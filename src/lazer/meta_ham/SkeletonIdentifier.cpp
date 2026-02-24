@@ -148,8 +148,8 @@ IdentityStatus SkeletonIdentifier::GetIdentityStatus(int i) {
 }
 
 void SkeletonIdentifier::NotifyOfRecognition(int i) const {
-    Skeleton *skel = TheGestureMgr->GetSkeletonByEnrollmentIndex(i);
     bool check = true;
+    Skeleton *skel = TheGestureMgr->GetSkeletonByEnrollmentIndex(i);
     if (skel) {
         if (!IsAssociatedWithProfile(i)) {
             check = !skel->ProfileMatched() == 0;

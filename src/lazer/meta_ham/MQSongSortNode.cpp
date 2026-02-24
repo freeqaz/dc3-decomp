@@ -58,9 +58,11 @@ const char *MQSongHeaderNode::GetAlbumArtPath() {
 
     NavListSort *sort = TheMQSongSortMgr->GetCurrentSort();
     if (sort->GetSortName() == by_album)
-        if (GetToken() != singles)
-            if (!mChildren.empty())
-                return mChildren.front()->GetAlbumArtPath();
+        if (GetToken() != singles) {
+            auto it = mChildren.begin();
+            if (it != mChildren.end())
+                return (*it)->GetAlbumArtPath();
+        }
     return 0;
 }
 
@@ -106,11 +108,8 @@ NavListSortNode *MQSongHeaderNode::GetFirstActive() {
     FOREACH (it, Children()) {
         NavListSortNode *node = (*it)->GetFirstActive();
         if (node) {
-            return node;
+            return TheMQSongSortMgr->HeadersSelectable() ? this : node;
         }
-    }
-    if (!TheMQSongSortMgr->HeadersSelectable()) {
-        return this;
     }
     return nullptr;
 }

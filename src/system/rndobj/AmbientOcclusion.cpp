@@ -185,7 +185,8 @@ void RndAmbientOcclusion::BuildTrees(Quality quality) {
     MILO_ASSERT(quality < kQuality_Max, 0x1E3);
     mQuality = quality;
     if (!mObjectsCast.empty() && !mObjectsReceive.empty()) {
-        MILO_ASSERT(mTriList.empty(), 0x1E9);
+        auto _tmp2 = mTriList.empty();
+        MILO_ASSERT(_tmp2, 0x1E9);
         Timer timer;
         timer.Restart();
         MILO_LOG("RndAmbientOcclusion: Building kd-Tree...\n");

@@ -14,6 +14,9 @@ These patterns can often be fixed with source changes. Sorted by ROI (impact x s
 | Explicit Destructor | +37-70% | 100% | [fixable-declarations.md](fixable-declarations.md#explicit-destructor) |
 | noreturn Attribute | +38% | 100% | [fixable-casting.md](fixable-casting.md#noreturn-attribute) |
 | Float/Double Separation | +80% | 95% | [fixable-casting.md](fixable-casting.md#floatdouble-separation) |
+| fsel Clamp/Min/Max Templates | +5-44% | HIGH | [fixable-fsel-fma.md](fixable-fsel-fma.md#fsel-via-clampminmax-templates) |
+| __fsel Intrinsic | +1-10% | MEDIUM | [fixable-fsel-fma.md](fixable-fsel-fma.md#fsel-via-__fsel-intrinsic) |
+| #pragma fp_contract (FMA) | +1-12% | HIGH | [fixable-fsel-fma.md](fixable-fsel-fma.md#fma-control-via-pragma-fp_contract) |
 | FMA Expression Order | +1-75% | 98% | [fixable-operators.md](fixable-operators.md#fma-expression-order) |
 | Signed/Unsigned Cast | +1-50% | 100% | [fixable-comparison.md](fixable-comparison.md#signedunsigned-cast) |
 | MILO_NOTIFY vs MILO_NOTIFY_ONCE | +10-35% | HIGH | [fixable-declarations.md](fixable-declarations.md#milo_notify-vs-milo_notify_once) |
@@ -61,9 +64,9 @@ These patterns can often be fixed with source changes. Sorted by ROI (impact x s
 
 ---
 
-## Unfixable Patterns
+## Hard Patterns
 
-These patterns are usually not fixable at source level. Verify that the pattern truly applies (and isn’t mixed with fixable issues) before accepting the current match percentage.
+These patterns resist simple source-level fixes. Each documents what would be needed (c2.dll patch, volatile intermediates, etc.). Verify the pattern truly applies before moving on.
 
 | Pattern | Prevalence | Typical Gap | File |
 |---------|------------|-------------|------|
@@ -72,7 +75,8 @@ These patterns are usually not fixable at source level. Verify that the pattern 
 | Float Constant Pooling | common | 1-2 instr | [verifiable-icf.md](verifiable-icf.md#float-constant-pooling) |
 | Register Allocation | 607 functions | 1-3% | [unfixable-compiler.md](unfixable-compiler.md#register-allocation) (mechanism understood) |
 | ASSERT_REVS Scheduling | ~10% | ~0.8-0.9% | [unfixable-compiler.md](unfixable-compiler.md#assert_revs-scheduling) |
-| fmadds vs Separate Ops | float math | 1-3% | [unfixable-compiler.md](unfixable-compiler.md#fmadds-vs-separate-ops) |
+| fmadds vs Separate Ops (mixed) | float math | 1-3% | [unfixable-compiler.md](unfixable-compiler.md#fmadds-vs-separate-ops) — try [fixable-fsel-fma.md](fixable-fsel-fma.md) first |
+| fsel Register Pressure | float clamp | 5-20% | [unfixable-compiler.md](unfixable-compiler.md#fsel-register-pressure) — needs c2.dll patch |
 | Commutative Register Swap | float ops | <1% | [unfixable-compiler.md](unfixable-compiler.md#commutative-register-swap) |
 | 64-bit Extraction | rare | ~5% | [unfixable-compiler.md](unfixable-compiler.md#64-bit-extraction) |
 | Stack Spill Scheduling | high register pressure | ~1-2% | [unfixable-compiler.md](unfixable-compiler.md#stack-spill-scheduling) |
@@ -106,11 +110,11 @@ Match% 80-95%?
   → Prologue mismatch with _RtlCheckStack12? Try _alloca instead of alloca.
 
 Match% 95-99%?
-  → Check for unfixable patterns first.
-  → If no unfixable patterns: try variable reorder, inline assignment.
+  → Check for hard patterns first (register swap, merged symbols).
+  → If no hard patterns: try variable reorder, inline assignment.
 
 Match% 99%+ but not 100%?
-  → Often unfixable (linker-merged, register allocation), but verify first.
+  → Often hard patterns (linker-merged, register allocation), but verify first.
   → Check `objdiff-cli diff --analyze --verdict` and confirm any LINKER_MERGED calls.
   → Only mark "at limit" after verification; otherwise keep investigating.
 ```
@@ -120,7 +124,7 @@ Match% 99%+ but not 100%?
 When the prologue (function entry) differs significantly:
 - **`_RtlCheckStack12` in target:** Use `_alloca` (intrinsic) instead of `alloca` (CRT wrapper)
 - **Stack frame size differs:** Check for missing/extra local variables
-- **Different save/restore pattern:** May indicate unfixable compiler optimization
+- **Different save/restore pattern:** May indicate compiler optimization requiring c2.dll patch
 
 **Tip:** When running `objdiff-cli diff --verdict`, the output now shows:
 - 💡 Match guidance hints based on percentage
@@ -196,7 +200,7 @@ From `decomp.db` — 47,371 functions, 14,772 attempts, 2,149 generated patches:
 | Verdict | Count | Meaning |
 |---------|-------|---------|
 | COMPLETE | 22,893 | 100% match confirmed |
-| AT_LIMIT | 937 | Unfixable compiler/linker artifact |
+| AT_LIMIT | 937 | Needs compiler/linker tooling to fix |
 | NEAR_COMPLETE | 401 | 99%+ with minor residual mismatch |
 | LIKELY_FIXABLE | 130 | Known pattern, fix not yet applied |
 
@@ -236,8 +240,9 @@ From 143 successful fine-tuning attempts (90%+ start, 100% end):
 - [fixable-casting.md](fixable-casting.md) — Float cast, noreturn, float/double, sizeof
 - [fixable-control-flow.md](fixable-control-flow.md) — Max/Min explicit, ternary vs if/else, loop structure
 - [fixable-declarations.md](fixable-declarations.md) — Variable extraction, declaration order, destructor
+- [fixable-fsel-fma.md](fixable-fsel-fma.md) — fsel intrinsic, Clamp templates, #pragma fp_contract
 - [fixable-operators.md](fixable-operators.md) — FMA order, operator overload, inline assignment
 - [fixable-bool-mask.md](fixable-bool-mask.md) — Bool mask (`clrlwi`) fixes
-- [unfixable-compiler.md](unfixable-compiler.md) — Register swap, ASSERT_REVS, fmadds
+- [unfixable-compiler.md](unfixable-compiler.md) — Hard patterns: register swap, ASSERT_REVS, fmadds, fsel pressure
 - [verifiable-icf.md](verifiable-icf.md) — ICF, LTCG, float constant pooling
 - [harmful-avoid.md](harmful-avoid.md) — Member aliasing, child pointer in loop

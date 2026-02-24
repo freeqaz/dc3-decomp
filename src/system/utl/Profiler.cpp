@@ -18,8 +18,7 @@ void Profiler::Stop() {
         mMax = ms;
     }
     mCount++;
-    mSum += ms;
-    if (mCount == mCountMax) {
+        if (mCount == mCountMax) {
         if (mCountMax == 1U) {
             TheDebug << MakeString("%s: %s\n", mName, FormatTime(mMin));
         } else {
@@ -34,7 +33,7 @@ void Profiler::Stop() {
         mCount = 0;
         mMin = 3.4028235e+38;
         mMax = 0;
-        mSum = 0;
+        mSum = ms = 0;
     }
     mTimer.Reset();
 }

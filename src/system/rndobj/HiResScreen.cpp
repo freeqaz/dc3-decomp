@@ -239,9 +239,11 @@ void HiResScreen::Finish() {
     } while (existFile);
     mCache->FlushCache();
     fs = new FileStream(filename.c_str(), FileStream::kWrite, true);
+    void *tmpBuf = MemAlloc(0x40, "HiResScreen.cpp", 0x250, "TmpRndBitmap", 0);
     RndBitmap bm;
-    bm.Create(mAccumWidth, mAccumHeight, 32, 0, 0, 0, 0, 0);
+    bm.Create(mAccumWidth, mAccumHeight, 0, 0x20, 0, 0, tmpBuf, 0);
     bm.SaveBmpHeader(fs);
+    ::operator delete(tmpBuf);
     for (int i = mCache->mTotalNumCacheLines - 1; i >= 0; i--) {
         mCache->LoadCache(i * mCache->mRowsPerCacheLine);
         fs->Write(mCache->mBuffer, mCache->mByteSize);
@@ -257,7 +259,6 @@ void HiResScreen::Finish() {
         RndBitmap loResBm;
         DownSample(loResBm);
         loResBm.SaveBmp(filename.c_str());
-        loResBm.Reset();
     }
     mActive = false;
     TheRnd.SetEvenOddDisabled(mEvenOddDisabled);
@@ -266,7 +267,6 @@ void HiResScreen::Finish() {
     if (mCache) {
         delete mCache;
     }
-    bm.Reset();
 }
 
 void HiResScreen::Merge(
@@ -365,30 +365,26 @@ void HiResScreen::CurrentTileRect(
     float invTiling = 1.0f / (float)tiling;
     float tileXf = (float)tileX;
     float tileYf = (float)tileY;
-    float tileXEnd = tileXf + 1.0f;
-    float tileYEnd = tileYf + 1.0f;
-    float x = inRect.x + inRect.w;
-    float y = inRect.y + inRect.h;
-    float x0 = (inRect.x - tileXf * invTiling) / (tileXEnd * invTiling - tileXf * invTiling);
-    float x1 = (x - tileXf * invTiling) / (tileXEnd * invTiling - tileXf * invTiling);
-    float y0 = (inRect.y - tileYf * invTiling) / (tileYEnd * invTiling - tileYf * invTiling);
-    float y1 = (y - tileYf * invTiling) / (tileYEnd * invTiling - tileYf * invTiling);
-    if (x0 < 0.0f) x0 = 0.0f;
-    if (x0 > 1.0f) x0 = 1.0f;
-    if (x1 < 0.0f) x1 = 0.0f;
-    if (x1 > 1.0f) x1 = 1.0f;
-    if (y0 < 0.0f) y0 = 0.0f;
-    if (y0 > 1.0f) y0 = 1.0f;
-    if (y1 < 0.0f) y1 = 0.0f;
-    if (y1 > 1.0f) y1 = 1.0f;
+    float tileXStart = tileXf * invTiling;
+    float tileYStart = tileYf * invTiling;
+    float tileXWidth = (tileXf + 1.0f) * invTiling - tileXStart;
+    float tileYHeight = (tileYf + 1.0f) * invTiling - tileYStart;
+    float x0 = (inRect.x - tileXStart) / tileXWidth;
+    float x1 = ((inRect.w + inRect.x) - tileXStart) / tileXWidth;
+    float y0 = (inRect.y - tileYStart) / tileYHeight;
+    float y1 = ((inRect.h + inRect.y) - tileYStart) / tileYHeight;
+    x0 = Clamp(0.0f, 1.0f, x0);
+    x1 = Clamp(0.0f, 1.0f, x1);
+    y0 = Clamp(0.0f, 1.0f, y0);
+    y1 = Clamp(0.0f, 1.0f, y1);
     outTileRect.x = x0;
     outTileRect.w = x1;
     outTileRect.y = y0;
     outTileRect.h = y1;
-    outAccumRect.x = x0 * invTiling + tileXf * invTiling;
-    outAccumRect.y = y0 * invTiling + tileYf * invTiling;
-    outAccumRect.w = x1 - x0;
-    outAccumRect.h = y1 - y0;
+    outAccumRect.x = x0 * invTiling + tileXStart;
+    outAccumRect.y = y0 * invTiling + tileYStart;
+    outAccumRect.w = (x1 * invTiling + tileXStart) - outAccumRect.x;
+    outAccumRect.h = (y1 * invTiling + tileYStart) - outAccumRect.y;
 }
 
 Hmx::Rect HiResScreen::ScreenRect(const RndCam *cam, const Hmx::Rect &r) const {

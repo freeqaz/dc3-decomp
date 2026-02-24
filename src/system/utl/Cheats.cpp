@@ -1,10 +1,12 @@
 #include "Cheats.h"
 
-#include "os/UserMgr.h"
-#include "os/JoypadMsgs.h"
-#include "os/Joypad.h"
-#include "os/System.h"
 #include "obj/DataFunc.h"
+#include "obj/Dir.h"
+#include "obj/Msg.h"
+#include "os/Joypad.h"
+#include "os/JoypadMsgs.h"
+#include "os/System.h"
+#include "os/UserMgr.h"
 
 void InitQuickJoyCheats(const DataArray *a, CheatsManager::ShiftMode);
 void InitKeyCheats(const DataArray *);
@@ -128,16 +130,52 @@ void CheatsManager::Log(int padNum, bool quickCheat, DataArray *script) {
 }
 
 void CheatsManager::CallCheatScript(bool b1, DataArray *da, LocalUser *lu, bool b2) {
-    if (!lu) {
-        if (TheUserMgr) {
-            std::vector<LocalUser *> users;
-            TheUserMgr->GetLocalUsers(users);
-            for (int i = 0; i < (int)users.size(); i++) {
-                CallCheatScript(b1, da, users[i], b2);
+    if (!lu && TheUserMgr) {
+        std::vector<LocalUser *> users;
+        TheUserMgr->GetLocalUsers(users);
+        for (std::vector<LocalUser *>::iterator it = users.begin();
+             it != users.end();
+             ++it) {
+            if ((*it)->GetPadNum() == -1)
+                break;
+            JoypadData *padData = JoypadGetPadData((*it)->GetPadNum());
+            if (b1 && b2 && padData->mType - 1U > 2 && padData->mType - 0x13U > 2) {
+                lu = *it;
+                break;
             }
         }
-    } else {
-        Log(lu->GetPadNum(), b1, da);
+    }
+    if (lu) {
+        switch (JoypadGetPadData(lu->GetPadNum())->mType) {
+        case kJoypadDigital:
+        case kJoypadAnalog:
+        case kJoypadDualShock:
+        case kJoypadWiiCore:
+        case kJoypadWiiFS:
+        case kJoypadWiiClassic:
+            DataVariable("cheat_pad") = lu ? lu->GetPadNum() : 0;
+            LogCheat(lu ? lu->GetPadNum() : -1, b1, da);
+            if (b1) {
+                int i = 2;
+                for (; da->Node(i).Type() != kDataCommand && i < da->Size(); i++)
+                    ;
+                if (i < da->Size()) {
+                    da->ExecuteScript(i, nullptr, nullptr, 1);
+                }
+            } else {
+                da->Execute();
+            }
+            {
+                Hmx::Object *uiObj = ObjectDir::Main()->Find<Hmx::Object>("ui", true);
+                static Message msg("cheat_invoked", 0, 0);
+                msg[0] = b1;
+                msg[1] = DataNode(da, kDataArray);
+                uiObj->Handle(msg, false);
+            }
+            break;
+        default:
+            break;
+        }
     }
 }
 
