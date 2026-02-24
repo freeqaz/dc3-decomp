@@ -431,7 +431,7 @@ system/flow/FlowTrigger.cpp
 xdk/nuispeech/ltree_rc.cpp
 system/midi/DataEventList.cpp
 system/ui/UI.cpp
-system/synth_xbox/SampleInst.cpp
+system/synth_xbox/SampleInst360.cpp
 xdk/nuispeech/srrecomaster.cpp
 system/hamobj/SuperEasyRemixer.cpp
 system/moviebink/BinkMovieSys.cpp

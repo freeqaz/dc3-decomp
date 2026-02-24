@@ -463,22 +463,20 @@ void UILabel::Highlight() {
 }
 
 void UILabel::DrawShowing() {
-    UILabel *const pThis = this;
-    if (((const UILabel *)pThis)->Style(0).mFontColor.alpha > 0.0f) {
-        if (pThis->mDirty && !sDeferUpdate) {
-            pThis->LabelUpdate(false);
+    if (((const UILabel *)this)->Style(0).mFontColor.alpha > 0.0f) {
+        if (mDirty && !sDeferUpdate) {
+            LabelUpdate(false);
         }
 
-        MILO_ASSERT(pThis->mLabelStyles.size() == pThis->mStyles.size(), 0x1EF);
+        MILO_ASSERT(mLabelStyles.size() == mStyles.size(), 0x1EF);
 
-        LabelStyle *it = pThis->mLabelStyles.begin();
+        LabelStyle *it = mLabelStyles.begin();
         UILabelDir *labelDir = it->mLabelDir;
         if (labelDir) {
-            UIComponent::State state = pThis->GetState();
-            UIColor *stateColor = labelDir->GetStateColor(state);
+            UIColor *stateColor = labelDir->GetStateColor(mState);
             int i = 0;
-            while (i < pThis->mLabelStyles.size()) {
-                RndText::Style &style = pThis->Style(i);
+            while (i < mLabelStyles.size()) {
+                RndText::Style &style = Style(i);
                 style.mFontColorOverride = true;
                 UIColor *uiColor = it->mColorOverride;
                 if (!uiColor) {
@@ -493,11 +491,11 @@ void UILabel::DrawShowing() {
             }
         }
 
-        pThis->RndText::DrawShowing();
+        RndText::DrawShowing();
 
         if (sDebugHighlight && !sInDebugHighlight) {
             sInDebugHighlight = true;
-            pThis->Highlight();
+            Highlight();
             sInDebugHighlight = false;
         }
     }

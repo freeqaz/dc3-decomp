@@ -810,6 +810,7 @@ void DirLoader::LoadResources() {
 
 void DirLoader::CreateObjects() {
     while (mCounter-- != 0) {
+        Hmx::Object *obj = nullptr;
         Symbol classSym;
         *mStream >> classSym;
         classSym = FixClassName(classSym);
@@ -819,10 +820,9 @@ void DirLoader::CreateObjects() {
         if (mRev > 0 && mRev < 8) {
             *mStream >> b8;
         }
-        Hmx::Object *obj;
         if (!Hmx::Object::RegisteredFactory(classSym)) {
             MILO_NOTIFY("%s: Can't make %s", mFile.c_str(), classSym);
-            obj = nullptr;
+            goto release_obj;
         } else {
             MemPoint begin(MemPoint::kInitType0);
             if (sObjectMemDumpFile || sTypeMemDumpFile) {
@@ -832,6 +832,7 @@ void DirLoader::CreateObjects() {
             obj = Hmx::Object::NewObject(classSym);
             EndMemTrackObjectName();
             if (mRev == 0x16 && dynamic_cast<ObjectDir *>(obj)) {
+            release_obj:
                 RELEASE(obj);
             } else {
                 obj->SetName(buf, mDir);

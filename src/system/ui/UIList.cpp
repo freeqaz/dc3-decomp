@@ -793,8 +793,7 @@ void UIList::SetProvider(UIListProvider *prov) {
         LimitCircularDisplay(mLimitCircularDisplayNumToDataNum);
         SetSelected(0, -1);
     }
-    UIList *child = mListDir->SubList(mListState.SelectedDisplay(), mWidgets);
-    if (child)
+    if (UIList *child = mListDir->SubList(mListState.SelectedDisplay(), mWidgets))
         child->Poll();
 }
 

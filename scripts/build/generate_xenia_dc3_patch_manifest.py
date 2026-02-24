@@ -28,6 +28,7 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 DEFAULT_PE = ROOT / "build" / "373307D9" / "default.exe"
 DEFAULT_SYMBOLS = ROOT / "config" / "373307D9" / "symbols.txt"
 DEFAULT_MAP = ROOT / "build" / "373307D9" / "default.map"
+DEFAULT_PE_MAP = ROOT / "build" / "373307D9" / "default.exe.MAP"
 DEFAULT_OUT = ROOT / "build" / "373307D9" / "xenia_dc3_patch_manifest.json"
 
 FNV64_OFFSET = 0xCBF29CE484222325
@@ -42,9 +43,102 @@ TYPE_RE = re.compile(r"\btype:([A-Za-z_]+)\b")
 MAP_PUBLIC_RE = re.compile(
     r"^\s*(?P<seg>[0-9A-Fa-f]{4}):(?P<off>[0-9A-Fa-f]{8})\s+"
     r"(?P<name>\S+)\s+(?P<abs>[0-9A-Fa-f]{8})\b"
+    r"(?:\s+[fi ]+\s+(?P<obj>\S+\.obj))?"
 )
 
 CRT_SENTINELS = {"__xc_a", "__xc_z", "__xi_a", "__xi_z"}
+
+# Hack-pack stub targets: display_name -> MSVC mangled MAP symbol name
+# These are functions that dc3_hack_pack.cc needs to stub at runtime.
+# Addresses come from the MAP file instead of being hardcoded.
+HACK_PACK_STUBS = {
+    # Import/notification
+    "XapiCallThreadNotifyRoutines": "XapiCallThreadNotifyRoutines",
+    # CRT output
+    "_output_l": "_output_l",
+    "_woutput_l": "_woutput_l",
+    # XMP
+    "XMPOverrideBackgroundMusic": "XMPOverrideBackgroundMusic",
+    "XMPRestoreBackgroundMusic": "XMPRestoreBackgroundMusic",
+    # Debug
+    "Debug::Fail": "?Fail@Debug@@QAAXPBDPAX@Z",
+    "Rnd::SetupFont": "?SetupFont@Rnd@@IAAXXZ",
+    "Rnd::PreInit": "?PreInit@Rnd@@UAAXXZ",
+    "NgRnd::PreInit": "?PreInit@NgRnd@@UAAXXZ",
+    "DxRnd::PreInit": "?PreInit@DxRnd@@QAAXPAUHWND__@@@Z",
+    "FileIsLocal": "?FileIsLocal@@YA_NPBD@Z",
+    "CheckForArchive": "?CheckForArchive@?A0x8038bdc3@@YAXXZ",
+    "XGetLocale": "XGetLocale",
+    "XTLGetLanguage": "XTLGetLanguage",
+    "DebugBreak": "DebugBreak",
+    "GetSystemLanguage": "?GetSystemLanguage@@YA?AVSymbol@@V1@@Z",
+    "GetSystemLocale": "?GetSystemLocale@@YA?AVSymbol@@V1@@Z",
+    "DataNode::Print": "?Print@DataNode@@QBAXAAVTextStream@@_NH@Z",
+    "DataArray::AddRef": "?AddRef@DataArray@@QAAXXZ",
+    "DataArray::Release": "?Release@DataArray@@QAAXXZ",
+    "RndMat::CreateMetaMaterial": "?CreateMetaMaterial@RndMat@@QAAPAVMetaMaterial@@_N@Z",
+    # Memory management
+    "NtAllocateVirtualMemoryWrapper": "NtAllocateVirtualMemoryWrapper",
+    "RtlpInsertUnCommittedPages": "RtlpInsertUnCommittedPages",
+    # Holmes (debug network) - free functions, not HolmesClient:: members
+    "HolmesClientInit": "?HolmesClientInit@@YAXXZ",
+    "HolmesClientReInit": "?HolmesClientReInit@@YAXXZ",
+    "HolmesClientPoll": "?HolmesClientPoll@@YAXXZ",
+    "HolmesClientPollInternal": "?HolmesClientPollInternal@?A0x49b544a7@@YAX_N@Z",
+    "HolmesClientInitOpcode": "?HolmesClientInitOpcode@@YA_N_N@Z",
+    "HolmesClientTerminate": "?HolmesClientTerminate@@YAXXZ",
+    "CanUseHolmes": "?CanUseHolmes@@YA_NH@Z",
+    "UsingHolmes": "?UsingHolmes@@YA_NH@Z",
+    "ProtocolDebugString": "?ProtocolDebugString@Holmes@@YAPBDE@Z",
+    "HolmesSetFileShare": "?HolmesSetFileShare@@YAXPBD0@Z",
+    "HolmesFileHostName": "?HolmesFileHostName@@YAPBDXZ",
+    "HolmesFileShare": "?HolmesFileShare@@YAPBDXZ",
+    "HolmesResolveIP": "?HolmesResolveIP@@YA?AVNetAddress@@XZ",
+    "BeginCmd": "?BeginCmd@?A0x49b544a7@@YAXW4Protocol@Holmes@@_N@Z",
+    "CheckForResponse": "?CheckForResponse@?A0x49b544a7@@YA_NW4Protocol@Holmes@@_N@Z",
+    "WaitForAnyResponse": "?WaitForAnyResponse@?A0x49b544a7@@YAXW4Protocol@Holmes@@@Z",
+    "EndCmd": "?EndCmd@?A0x49b544a7@@YAXW4Protocol@Holmes@@@Z",
+    "CheckReads": "?CheckReads@?A0x49b544a7@@YA_N_N@Z",
+    "CheckInput": "?CheckInput@?A0x49b544a7@@YAX_N@Z",
+    "WaitForResponse": "?WaitForResponse@?A0x49b544a7@@YAXW4Protocol@Holmes@@@Z",
+    "WaitForReads": "?WaitForReads@?A0x49b544a7@@YAXXZ",
+    "HolmesClientPollKeyboard": "?HolmesClientPollKeyboard@@YAXXZ",
+    "HolmesClientPollJoypad": "?HolmesClientPollJoypad@@YAIXZ",
+    "HolmesClientOpen": "?HolmesClientOpen@@YA_NPBDHAAIAAH@Z",
+    "HolmesClientRead": "?HolmesClientRead@@YAXHHHPAXPAVFile@@@Z",
+    "HolmesClientReadDone": "?HolmesClientReadDone@@YA_NPAVFile@@@Z",
+    "HolmesClientWrite": "?HolmesClientWrite@@YAXHHHPBX@Z",
+    "HolmesClientTruncate": "?HolmesClientTruncate@@YAXHH@Z",
+    "HolmesClientClose": "?HolmesClientClose@@YAXPAVFile@@H@Z",
+    "HolmesClientGetStat": "?HolmesClientGetStat@@YAHPBDAAUFileStat@@@Z",
+    "HolmesClientSysExec": "?HolmesClientSysExec@@YAHPBD@Z",
+    "HolmesClientMkDir": "?HolmesClientMkDir@@YAHPBD@Z",
+    "HolmesClientDelete": "?HolmesClientDelete@@YAHPBD@Z",
+    "HolmesClientEnumerate": "?HolmesClientEnumerate@@YAXPBDP6AX00@Z_N02@Z",
+    "HolmesClientCacheFile": "?HolmesClientCacheFile@@YA_NPADPBD@Z",
+    "HolmesClientCacheResource": "?HolmesClientCacheResource@@YA?AW4CacheResourceResult@@PBD0@Z",
+    "HolmesToLocal": "?HolmesToLocal@@YAXPADPBD@Z",
+    "HolmesFlushStreamBuffer": "?HolmesFlushStreamBuffer@?A0x49b544a7@@YAXXZ",
+    "DumpHolmesLog": "?DumpHolmesLog@@YA?AVDataNode@@PAVDataArray@@@Z",
+    "HolmesClientStackTrace": "?HolmesClientStackTrace@@YAXPBDPAUStackData@@HAAVString@@@Z",
+    "HolmesClientSendMessage": "?HolmesClientSendMessage@@YAXABVMessage@@@Z",
+    # String operations
+    "String::operator+=": "??YString@@QAAAAV0@PBD@Z",
+    # CRT stopgaps
+    "_errno": "_errno",
+    "_invalid_parameter_noinfo": "_invalid_parameter_noinfo",
+    # CRT injection
+    "InitMakeString": "?InitMakeString@@YAXXZ",
+    # Skeleton injection targets
+    "NuiSkeletonGetNextFrame_addr": "NuiSkeletonGetNextFrame",
+    "SkeletonUpdateThread": "?SkeletonUpdateThread@@YAKPAX@Z",
+    "SkeletonUpdate::Update": "?Update@SkeletonUpdate@@AAAXXZ",
+    # XAUDIO2 deadlock breakers (nop APU has no render thread to release CS)
+    "CX2SourceVoice::Initialize": "?Initialize@CX2SourceVoice@XAUDIO2@@UAAJIMPBUtWAVEFORMATEX@@PBUXAUDIO2_VOICE_SENDS@@PBUXAUDIO2_EFFECT_CHAIN@@@Z",
+    "CX2SourceVoice::Start": "?Start@CX2SourceVoice@XAUDIO2@@UAAJII@Z",
+    "CX2SourceVoice::Stop": "?Stop@CX2SourceVoice@XAUDIO2@@UAAJII@Z",
+    "CX2Engine::StartEngine": "?StartEngine@CX2Engine@XAUDIO2@@UAAJXZ",
+}
 
 
 def fnv1a64(data: bytes) -> int:
@@ -199,17 +293,51 @@ def parse_symbols(symbols_path: Path) -> Tuple[Dict[str, dict], Dict[str, dict]]
     return targets, crt_sentinels
 
 
-def parse_map_public_symbols(map_path: Path) -> Dict[str, int]:
+def parse_pe_section_bases(pe_data: bytes) -> Dict[int, int]:
+    """Returns {1-based section index -> VA start} from a PE."""
+    pe_off = struct.unpack_from("<I", pe_data, 0x3C)[0]
+    image_base = struct.unpack_from("<I", pe_data, pe_off + 24 + 28)[0]
+    num_sections = struct.unpack_from("<H", pe_data, pe_off + 6)[0]
+    opt_size = struct.unpack_from("<H", pe_data, pe_off + 20)[0]
+    sec_off = pe_off + 24 + opt_size
+    bases = {}
+    for i in range(num_sections):
+        off = sec_off + i * 40
+        vaddr = struct.unpack_from("<I", pe_data, off + 12)[0]
+        bases[i + 1] = image_base + vaddr
+    return bases
+
+
+def parse_map_public_symbols(
+    map_path: Path,
+    section_remap: Optional[Dict[int, int]] = None,
+) -> Tuple[Dict[str, int], Dict[str, str]]:
+    """Returns (name->address, name->obj_file) dicts.
+
+    If section_remap is provided, recompute absolute addresses using the
+    XEX PE section bases instead of the linker PE addresses.  The remap
+    dict maps {1-based section index -> XEX VA base}.
+    """
     symbols: Dict[str, int] = {}
+    obj_files: Dict[str, str] = {}
     with map_path.open("r", encoding="utf-8", errors="replace") as f:
         for line in f:
             m = MAP_PUBLIC_RE.match(line.rstrip("\n"))
             if not m:
                 continue
             name = canonicalize_map_symbol_name(m.group("name"))
+            seg = int(m.group("seg"), 16)
+            seg_off = int(m.group("off"), 16)
             abs_addr = int(m.group("abs"), 16)
+
+            if section_remap and seg in section_remap:
+                abs_addr = section_remap[seg] + seg_off
+
             symbols[name] = abs_addr
-    return symbols
+            obj = m.group("obj")
+            if obj:
+                obj_files[name] = obj
+    return symbols, obj_files
 
 
 def infer_build_label(pe_path: Path) -> str:
@@ -228,6 +356,8 @@ def main() -> int:
     parser.add_argument("--symbols", default=str(DEFAULT_SYMBOLS), help="Path to symbols.txt")
     parser.add_argument("--map", dest="map_path", default=str(DEFAULT_MAP),
                         help="Optional linker .map file for decomp addresses (default: build/373307D9/default.map)")
+    parser.add_argument("--pe-map", dest="pe_map_path", default=str(DEFAULT_PE_MAP),
+                        help="Optional PE MAP file with internal symbols (default: build/373307D9/default.exe.MAP)")
     parser.add_argument("--output", "-o", default=str(DEFAULT_OUT), help="Output manifest JSON")
     parser.add_argument(
         "--xenia-runtime-fnv1a64",
@@ -248,6 +378,7 @@ def main() -> int:
     xex_path = Path(args.xex) if args.xex else None
     symbols_path = Path(args.symbols)
     map_path = Path(args.map_path) if args.map_path else None
+    pe_map_path = Path(args.pe_map_path) if args.pe_map_path else None
     out_path = Path(args.output)
 
     if not pe_path.exists():
@@ -260,21 +391,37 @@ def main() -> int:
     pe_data = pe_path.read_bytes()
     static_text_info = parse_pe_text_info(pe_data)
     text_info = dict(static_text_info)
+    xex_pe_data: Optional[bytes] = None
+    section_remap: Optional[Dict[int, int]] = None
     if xex_path is not None:
         if not xex_path.exists():
             print(f"error: XEX not found: {xex_path}")
             return 1
-        runtime_text_info = parse_pe_text_info(decompress_xex_to_pe_data(xex_path))
+        xex_pe_data = decompress_xex_to_pe_data(xex_path)
+        runtime_text_info = parse_pe_text_info(xex_pe_data)
         # Prefer the runtime-equivalent fingerprint/range if provided.
         text_info["address"] = runtime_text_info["address"]
         text_info["rva"] = runtime_text_info["rva"]
         text_info["size"] = runtime_text_info["size"]
         text_info["raw_size"] = runtime_text_info["raw_size"]
         text_info["fnv1a64"] = runtime_text_info["fnv1a64"]
+        # Compute section remap: MAP segment indices -> XEX PE section VAs.
+        # The XEX builder may change section virtual addresses vs the linker PE.
+        pe_bases = parse_pe_section_bases(pe_data)
+        xex_bases = parse_pe_section_bases(xex_pe_data)
+        if pe_bases != xex_bases:
+            section_remap = xex_bases
+            deltas = {i: xex_bases.get(i, 0) - pe_bases.get(i, 0)
+                      for i in pe_bases if i in xex_bases}
+            unique_deltas = set(deltas.values())
+            print(f"  section remap: {len(deltas)} sections, "
+                  f"deltas: {', '.join(f'+0x{d:X}' if d >= 0 else f'-0x{-d:X}' for d in sorted(unique_deltas))}")
     targets, crt_sentinels = parse_symbols(symbols_path)
     map_symbols: Dict[str, int] = {}
+    map_obj_files: Dict[str, str] = {}
     if map_path and map_path.exists():
-        map_symbols = parse_map_public_symbols(map_path)
+        map_symbols, map_obj_files = parse_map_public_symbols(
+            map_path, section_remap=section_remap)
         for name, address in map_symbols.items():
             if name in CRT_SENTINELS:
                 crt_sentinels.setdefault(name, {})["address"] = address
@@ -290,6 +437,130 @@ def main() -> int:
         for name, entry in list(crt_sentinels.items()):
             if name in map_symbols:
                 entry["address"] = map_symbols[name]
+
+    # Resolve hack-pack stub targets from MAP
+    hack_pack_stubs: Dict[str, dict] = {}
+    if map_symbols:
+        hack_pack_found = 0
+        hack_pack_missing = 0
+        for display_name, mangled_name in HACK_PACK_STUBS.items():
+            if mangled_name in map_symbols:
+                hack_pack_stubs[display_name] = {
+                    "address": map_symbols[mangled_name],
+                    "section": ".text",
+                    "map_symbol": mangled_name,
+                }
+                hack_pack_found += 1
+            else:
+                hack_pack_missing += 1
+        if hack_pack_missing > 0:
+            missing = [dn for dn, mn in HACK_PACK_STUBS.items()
+                       if mn not in map_symbols]
+            print(f"  hack_pack_stubs: {hack_pack_found} found, "
+                  f"{hack_pack_missing} missing: {missing[:5]}{'...' if hack_pack_missing > 5 else ''}")
+
+    # Auto-collect XDK SDK functions for blanket JIT override stubbing.
+    # TODO: Remove these blanket overrides once Xenia's APU/NUI backends
+    # properly handle these subsystems or the decomp provides its own.
+    #
+    # XAUDIO2: nop APU has no render thread -> CX2 methods deadlock on CS.
+    # NUI: headless mode has no Kinect -> NUI functions loop/crash.
+    XDK_OVERRIDE_OBJ_PATTERNS = {
+        # XAUDIO2 internal implementation objects
+        "x2voice", "x2engine",
+        # NUI (Kinect SDK) objects
+        "nui",
+        # Speech recognition
+        "speech",
+    }
+    xdk_overrides: Dict[str, dict] = {}
+    text_start = text_info["address"]
+    text_end = text_start + text_info["size"]
+    if map_symbols and map_obj_files:
+        for name, address in map_symbols.items():
+            # Skip vtable entries and string constants (data, not code)
+            if "@@6B" in name or name.startswith("??_C@"):
+                continue
+            # Only include symbols in the .text section
+            if not (text_start <= address < text_end):
+                continue
+            obj = map_obj_files.get(name, "")
+            obj_lower = obj.lower()
+            if any(obj_lower.startswith(pat) for pat in XDK_OVERRIDE_OBJ_PATTERNS):
+                xdk_overrides[name] = {
+                    "address": address,
+                    "section": ".text",
+                    "obj": obj,
+                }
+    # Also parse PE MAP (default.exe.MAP) for internal/static symbols not in
+    # the linker MAP. The PE MAP includes symbols from COFF objects that are
+    # internal (non-public) linkage, catching internal XDK functions that the
+    # linker MAP omits.
+    if pe_map_path and pe_map_path.exists():
+        pe_map_syms, pe_map_objs = parse_map_public_symbols(
+            pe_map_path, section_remap=section_remap)
+        pe_map_added = 0
+        for name, address in pe_map_syms.items():
+            if name in xdk_overrides:
+                continue  # already have it from linker MAP
+            if "@@6B" in name or name.startswith("??_C@"):
+                continue
+            if not (text_start <= address < text_end):
+                continue
+            obj = pe_map_objs.get(name, "")
+            obj_lower = obj.lower()
+            if any(obj_lower.startswith(pat) for pat in XDK_OVERRIDE_OBJ_PATTERNS):
+                xdk_overrides[name] = {
+                    "address": address,
+                    "section": ".text",
+                    "obj": obj,
+                }
+                pe_map_added += 1
+        if pe_map_added > 0:
+            print(f"  xdk_overrides: +{pe_map_added} internal symbols from PE MAP")
+    if xdk_overrides:
+        print(f"  xdk_overrides: {len(xdk_overrides)} total methods collected")
+
+    # Compute XDK code ranges: contiguous address blocks from XDK obj files.
+    # Used by Xenia to scan for unlisted internal function prologues.
+    xdk_code_ranges: list = []
+    if xdk_overrides:
+        # Get all XDK function addresses sorted
+        xdk_addrs = sorted(
+            d["address"] for d in xdk_overrides.values()
+            if isinstance(d, dict) and d.get("address", 0) >= 0x822C0000
+        )
+        if xdk_addrs:
+            # Also build a sorted list of ALL symbol addresses from both MAPs
+            # so we can find the boundary after the last XDK symbol in a block.
+            all_addrs = sorted(set(map_symbols.values()))
+            if pe_map_path and pe_map_path.exists():
+                all_addrs = sorted(set(all_addrs) | set(pe_map_syms.values()))
+            all_addrs = [a for a in all_addrs if a >= 0x822C0000]
+
+            # For each XDK symbol, find the next symbol address (XDK or not)
+            # to determine the extent of the XDK function.
+            xdk_addr_set = set(xdk_addrs)
+            ranges = []
+            for xdk_addr in xdk_addrs:
+                # Find next symbol after this one
+                import bisect
+                idx = bisect.bisect_right(all_addrs, xdk_addr)
+                next_addr = all_addrs[idx] if idx < len(all_addrs) else xdk_addr + 0x100
+                ranges.append((xdk_addr, next_addr))
+
+            # Merge overlapping/adjacent ranges (within 16 bytes gap)
+            merged = []
+            for start, end in sorted(ranges):
+                if merged and start <= merged[-1][1] + 16:
+                    merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+                else:
+                    merged.append((start, end))
+
+            xdk_code_ranges = [{"start": s, "end": e} for s, e in merged]
+            total_bytes = sum(e - s for s, e in merged)
+            print(f"  xdk_code_ranges: {len(xdk_code_ranges)} blocks, "
+                  f"{total_bytes} bytes total")
 
     build_label = args.build_label or infer_build_label(pe_path)
 
@@ -330,6 +601,9 @@ def main() -> int:
         },
         "targets": targets,
         "crt_sentinels": crt_sentinels,
+        "hack_pack_stubs": hack_pack_stubs,
+        "xdk_overrides": xdk_overrides,
+        "xdk_code_ranges": xdk_code_ranges,
         "sources": {
             "pe": str(pe_path),
             "xex": str(xex_path) if xex_path else None,
@@ -349,7 +623,9 @@ def main() -> int:
     print(f"  .text static_pe_fnv1a64=0x{static_text_info['fnv1a64']:016X}")
     if xenia_runtime_fingerprint is not None:
         print(f"  .text xenia_runtime_fnv1a64=0x{xenia_runtime_fingerprint:016X}")
-    print(f"  targets={len(targets)} crt_sentinels={len(crt_sentinels)}")
+    print(f"  targets={len(targets)} crt_sentinels={len(crt_sentinels)} "
+          f"hack_pack_stubs={len(hack_pack_stubs)} "
+          f"xdk_overrides={len(xdk_overrides)}")
     return 0
 
 

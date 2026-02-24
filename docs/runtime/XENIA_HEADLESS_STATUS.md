@@ -252,6 +252,48 @@ Comprehensive audit of xenia's Linux support identified several stubs and incomp
 
 Full audit details in xenia's `docs/DC3_HEADLESS_CHANGE_AUDIT_2026-02-20.md`.
 
+### Decomp XEX: Manifest-Driven Address Resolution (2026-02-24)
+
+The decomp XEX now uses a **manifest-driven pipeline** to resolve all runtime addresses from the current MAP file. This systematically fixes the stale-address problem where hardcoded addresses broke after every relink.
+
+**Pipeline**: `ninja` → `build_xex.py` → `generate_xenia_dc3_patch_manifest.py` → `xenia_dc3_patch_manifest.json` → Xenia reads at boot
+
+**Manifest sections**:
+| Section | Count | Purpose |
+|---------|-------|---------|
+| `targets` | 85 | NUI function patch addresses |
+| `crt_sentinels` | 4 | `__xc_a/__xc_z/__xi_a/__xi_z` CRT init table boundaries |
+| `hack_pack_stubs` | 69 | Runtime stopgap stubs (Holmes, CRT, debug, imports) |
+| `xdk_overrides` | 1129 | Blanket JIT overrides for XDK SDK functions |
+
+#### JIT Override Discovery (Critical Finding)
+
+`PatchStub8` (patching guest memory with `li r3,0; blr`) does NOT work for functions that the JIT has already compiled. **Xenia's JIT has no code cache invalidation mechanism** — once a function is translated to x86, the native code runs forever regardless of guest memory changes. The `icbi` (instruction cache block invalidate) PPC opcode is a no-op in Xenia's JIT.
+
+**Solution**: Use `Processor::RegisterGuestFunctionOverride()` to register a C++ handler BEFORE the function is first called. This intercepts at JIT resolution time, setting the function's behavior to `kExtern` before any native code is emitted. The handler simply sets `ppc_context->r[3] = 0` (return S_OK).
+
+**TODO**: This blanket XDK stubbing (1129 functions returning 0) is a nasty hack. It prevents all XAUDIO2, NUI/Kinect, and Speech SDK functions from executing, which means:
+- No audio will ever work (all XAUDIO2 calls return S_OK but do nothing)
+- No Kinect features work (all NUI calls return S_OK)
+- No speech recognition works
+- Functions that should return specific error codes (e.g. `NuiImageStreamGetNextFrame` → E_UNEXPECTED) all return 0 instead
+
+This needs to be replaced with either:
+1. Proper Xenia APU/NUI backend implementations
+2. Selective stubbing with correct return values per-function
+3. A decomp-side audio abstraction layer that doesn't use XDK XAUDIO2
+
+#### Current Blocker: Thread Stuck in NUI Function (Investigating)
+
+Thread 6 is stuck in a tight loop inside `NuipDetroitRememberFloor` (nuidetroit.obj) calling `_winput_s_l` (CRT) repeatedly. Despite 1129 JIT overrides being registered (including this function at 0x8361D5E4), the function still executes its original code.
+
+**Possible causes under investigation**:
+- The JIT may inline calls or compile callees before the caller's override is checked
+- The function may have been reached via a jump from within an already-compiled function (not through `ResolveFunction`)
+- `RegisterGuestFunctionOverride` may not intercept all call paths (direct `bl` vs indirect `bctrl`)
+
+**All function probes show NOT COMPILED** — mainCRTStartup, main(), App::App(), DxRnd::Present, etc. have never been JIT-compiled. The game hasn't progressed past CRT static constructor initialization.
+
 ### Other Limitations
 
 - **PE Override superseded** — decomp XEX now boots directly via `build_xex.py`; PE Override no longer needed.

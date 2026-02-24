@@ -48,13 +48,13 @@ FftIpp::FftIpp()
 void FftIpp::SetMode(int mode) {
     mSize = mode;
     mOrder = 1;
-    if (mode > 2) {
+    if (mSize > 2) {
         do {
             mOrder = mOrder + 1;
-        } while ((1 << mOrder) < mSize);
+        } while ((1 << *(volatile int *)&mOrder) < *(volatile int *)&mSize);
     }
 
-    mBuf1.resize(mode);
+    mBuf1.resize(mSize);
     mBuf2.resize(mSize);
     mBuf3.resize(mSize);
     mSinCos.resize(mSize);
