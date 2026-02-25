@@ -117,10 +117,10 @@ void NgMat::SetupAmbient() {
         auto _tmp0 = RndEnviron::Current()->AmbientColor();
         const Vector4 &v4 =
             reinterpret_cast<const Vector4 &>(_tmp0);
-        x = v4.x;
-        y = v4.y;
-        z = v4.z;
         w = v4.w;
+        z = v4.z;
+        y = v4.y;
+        x = v4.x;
     } else {
         x = 1.0f;
         y = 1.0f;

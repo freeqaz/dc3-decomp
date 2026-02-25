@@ -214,6 +214,116 @@ Refactoring from nested if to `&&` eliminated comparison instruction mismatches.
 
 ---
 
+## Split && into Nested If
+
+**Impact:** +5-18%
+**Success Rate:** HIGH
+**Time:** 5 minutes
+
+The inverse of the above pattern. Split a combined `&&` condition into nested `if` statements when the binary checks each condition as a separate branch point.
+
+### Symptom
+
+objdiff shows the target has two separate `beq`/`bne` branches for a null check and a size check, but our code combines them with `&&` into a single branch sequence. The combined form generates different branch targets and register allocation.
+
+### Why It Works
+
+`if (obj && arr->Size() != 0)` evaluates both conditions in sequence with short-circuit, but the compiler may generate a single combined branch block. Separating into `if (obj) { if (arr->Size() == 0) ... else ... }` gives the compiler two explicit branch points that match the target's control flow.
+
+### Fix
+
+```cpp
+// Before (77.9%) — combined &&, single branch sequence
+if (obj && arr3->Size() != 0) {
+    // loop body
+} else {
+    GetOrAddSinks()->AddSink(obj, gNullStr);
+}
+
+// After (96.3%) — nested ifs, separate branch points
+if (obj) {
+    if (arr3->Size() == 0) {
+        AddSink(obj, s1, s2, kHandle, true);
+    } else {
+        // loop body
+    }
+}
+```
+
+### Real Examples
+
+| Function | Before | After | Delta | Notes |
+|----------|--------|-------|-------|-------|
+| Object::OnAddSink | 77.9% | 96.3% | +18.4% | Split null+size check into nested ifs |
+
+### When to Use
+
+- Target shows two separate `cmpwi`/`beq` sequences for conditions that your code combines with `&&`
+- The `else` body differs between the two conditions (null case vs empty case)
+- Each condition leads to a different code path
+
+---
+
+## Goto-Based Loop for Deferred Assignment
+
+**Impact:** +2-3%
+**Success Rate:** MEDIUM
+**Time:** 10 minutes
+
+Use `goto` to exit an inner loop early, deferring a boolean assignment to after the loop, when the target compiler doesn't initialize the boolean before the loop.
+
+### Symptom
+
+objdiff shows an extra `li rN, 0x0` (boolean initialization) before an inner search loop that the target doesn't have. The target sets the "not found" value only after the loop completes normally.
+
+### Why It Works
+
+A `break`-based search loop requires initializing the result boolean before the loop (`bool found = false`), which generates an `li` instruction. The target may instead use a `goto` pattern where `found = true` is set only on the matching path, and `found = false` only on the fallthrough after the loop completes. This defers the initialization, saving one instruction.
+
+### Fix
+
+```cpp
+// Before (96.0%) — break-based, initializes before loop
+for (;;) {
+    bool anyDecompressing = false;  // generates li r9, 0x0
+    for (int i = 2; i >= 0; i--) {
+        if (mBuffersState[i] == kDecompressing) {
+            anyDecompressing = true;
+            break;
+        }
+    }
+    if (!anyDecompressing) break;
+    gDataProcessedEvt.Wait(-1);
+}
+
+// After (98.4%) — goto-based, defers false assignment
+for (;;) {
+    bool anyDecompressing;
+    int i = 2;
+    BufferState *statePtr = &mBuffersState[2];
+    do {
+        if (*statePtr == kDecompressing) {
+            anyDecompressing = true;
+            goto check_decomp;
+        }
+        i--;
+        statePtr--;
+    } while (i >= 0);
+    anyDecompressing = false;  // set AFTER loop
+check_decomp:
+    if (!anyDecompressing) break;
+    gDataProcessedEvt.Wait(-1);
+}
+```
+
+### Real Examples
+
+| Function | Before | After | Delta | Notes |
+|----------|--------|-------|-------|-------|
+| ChunkStream::~ChunkStream | 96.0% | 98.4% | +2.4% | Deferred bool init to after inner loop |
+
+---
+
 ## Control Flow Must Match Exactly
 
 **Impact:** Can break matches

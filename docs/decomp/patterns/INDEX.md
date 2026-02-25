@@ -30,6 +30,11 @@ These patterns can often be fixed with source changes. Sorted by ROI (impact x s
 | Inline Assignment | +1-2% | 95% | [fixable-operators.md](fixable-operators.md#inline-assignment) |
 | Ternary vs If-Else | +5-10% | 75% | [fixable-control-flow.md](fixable-control-flow.md#ternary-vs-if-else) |
 | IsNaN vs Threshold Check | +3-5% | HIGH | [fixable-comparison.md](fixable-comparison.md#isnan-vs-threshold-check) |
+| Split && into Nested If | +5-18% | HIGH | [fixable-control-flow.md](fixable-control-flow.md#split--into-nested-if) |
+| Avoid Unnecessary dynamic_cast | +6% | HIGH | [fixable-casting.md](fixable-casting.md#avoid-unnecessary-dynamic_cast-getobj-vs-objt) |
+| Function Definition Order ($S#) | +3-5% | 100% | [fixable-declarations.md](fixable-declarations.md#function-definition-order-tu-wide-static-guard-counters) |
+| Hoist Loop Variable for sret | +6% | HIGH | [fixable-declarations.md](fixable-declarations.md#hoist-loop-variable-for-sret-register-matching) |
+| Goto-Based Loop (Deferred Assignment) | +2-3% | MEDIUM | [fixable-control-flow.md](fixable-control-flow.md#goto-based-loop-for-deferred-assignment) |
 | Variable Declaration Order | +1-88% | 30% | [fixable-declarations.md](fixable-declarations.md#variable-declaration-order) |
 
 ### Additional Fixable Patterns
@@ -45,11 +50,17 @@ These patterns can often be fixed with source changes. Sorted by ROI (impact x s
 | Static Variable Scope | [fixable-declarations.md](fixable-declarations.md#static-variable-scope) |
 | Braced vs Braceless If (Scope Counter) | [fixable-declarations.md](fixable-declarations.md#braced-vs-braceless-if-scope-counter) |
 | Static Symbol Order | [fixable-declarations.md](fixable-declarations.md#static-symbol-order) |
+| Function Definition Order (TU-Wide $S#) | [fixable-declarations.md](fixable-declarations.md#function-definition-order-tu-wide-static-guard-counters) |
+| Hoist Loop Variable for sret | [fixable-declarations.md](fixable-declarations.md#hoist-loop-variable-for-sret-register-matching) |
 | Iterator Dereference Caching | [fixable-declarations.md](fixable-declarations.md#iterator-dereference-caching) |
 | Boolean Init from Existing Register | [fixable-declarations.md](fixable-declarations.md#boolean-init-from-existing-register) |
 | Offset Swap | [fixable-declarations.md](fixable-declarations.md#offset-swap) |
 | sret Return Value Tracing | [fixable-declarations.md](fixable-declarations.md#sret-return-value-tracing) |
+| Avoid Unnecessary dynamic_cast | [fixable-casting.md](fixable-casting.md#avoid-unnecessary-dynamic_cast-getobj-vs-objt) |
+| Signed Pointer Comparison Cast | [fixable-casting.md](fixable-casting.md#signed-pointer-comparison-cast) |
 | Loop Structure | [fixable-control-flow.md](fixable-control-flow.md#loop-structure) |
+| Split && into Nested If | [fixable-control-flow.md](fixable-control-flow.md#split--into-nested-if) |
+| Goto-Based Loop for Deferred Assignment | [fixable-control-flow.md](fixable-control-flow.md#goto-based-loop-for-deferred-assignment) |
 | Sequential If vs If-Else | [fixable-control-flow.md](fixable-control-flow.md#sequential-if-vs-if-else) |
 | Single Return for Branch Direction | [fixable-control-flow.md](fixable-control-flow.md#single-return-for-branch-direction) |
 | Branch Polarity Steering | [fixable-control-flow.md](fixable-control-flow.md#branch-polarity-steering-beqbne-blebge) |
@@ -74,6 +85,9 @@ These patterns resist simple source-level fixes. Each documents what would be ne
 | LTCG/Global Pooling | varies | 0.5-1% | [verifiable-icf.md](verifiable-icf.md#ltcg-global-pooling) |
 | Float Constant Pooling | common | 1-2 instr | [verifiable-icf.md](verifiable-icf.md#float-constant-pooling) |
 | Register Allocation | 607 functions | 1-3% | [unfixable-compiler.md](unfixable-compiler.md#register-allocation) (mechanism understood) |
+| Dead Store Elimination / Destructor Merging | RAII wrappers | 1-2% | [unfixable-compiler.md](unfixable-compiler.md#dead-store-elimination--destructor-merging) |
+| Anonymous Namespace Hash | common | 0.5-3% | [unfixable-compiler.md](unfixable-compiler.md#anonymous-namespace-hash-mismatch) |
+| Build Env Regression (Headers) | rare | 5-10% | [unfixable-compiler.md](unfixable-compiler.md#build-environment-regression-from-unrelated-headers) |
 | ASSERT_REVS Scheduling | ~10% | ~0.8-0.9% | [unfixable-compiler.md](unfixable-compiler.md#assert_revs-scheduling) |
 | fmadds vs Separate Ops (mixed) | float math | 1-3% | [unfixable-compiler.md](unfixable-compiler.md#fmadds-vs-separate-ops) — try [fixable-fsel-fma.md](fixable-fsel-fma.md) first |
 | fsel Register Pressure | float clamp | 5-20% | [unfixable-compiler.md](unfixable-compiler.md#fsel-register-pressure) — needs c2.dll patch |

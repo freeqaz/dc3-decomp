@@ -178,11 +178,10 @@ void FlowSwitchCase::Execute(QueueState qs) {
         propEventListener->UnregisterEvents(propEventListener);
         if (!mContinuous)
             return;
-    } else if (qs == kIgnore) {
-        mContinuous = false;
-        if (!FlowNode::IsRunning() && mFlowParent->HasRunningNode(this)) {
-            mFlowParent->ChildFinished(this);
-        }
+    }
+    mContinuous = false;
+    if (!FlowNode::IsRunning() && mFlowParent->HasRunningNode(this)) {
+        mFlowParent->ChildFinished(this);
     }
 }
 

@@ -168,17 +168,22 @@ ChunkStream::~ChunkStream() {
         mFile->Seek(0, 0);
         mFile->Write(&mChunkInfo, 0x810);
     }
-    if (mFile) {
+    if (mFile)
         delete mFile;
-    }
     for (;;) {
-        bool anyDecompressing = false;
-        for (int i = 2; i >= 0; i--) {
-            if (mBuffersState[i] == kDecompressing) {
+        bool anyDecompressing;
+        int i = 2;
+        BufferState *statePtr = &mBuffersState[2];
+        do {
+            if (*statePtr == kDecompressing) {
                 anyDecompressing = true;
-                break;
+                goto check_decomp;
             }
-        }
+            i--;
+            statePtr--;
+        } while (i >= 0);
+        anyDecompressing = false;
+check_decomp:
         if (!anyDecompressing) break;
         gDataProcessedEvt.Wait(-1);
     }
@@ -190,6 +195,8 @@ ChunkStream::~ChunkStream() {
 
 bool ChunkStream::Cached() const { return mIsCached; }
 Platform ChunkStream::GetPlatform() const { return mPlatform; }
+bool ChunkStream::Fail() { return mFail; }
+const char *ChunkStream::Name() const { return mFilename.c_str(); }
 
 void ChunkStream::ReadImpl(void *data, int bytes) {
     MILO_ASSERT(mCurBufferIdx != -1, 0x1D3);
@@ -209,6 +216,90 @@ int ChunkStream::Tell() {
     } else {
         MILO_FAIL("Can't tell on chunkstream");
         return 0;
+    }
+}
+
+EofType ChunkStream::Eof() {
+    MILO_ASSERT(!mFail && mType == kRead, 0x22c);
+    if (mChunkInfoPending) {
+        int x;
+        if (mFile->ReadDone(x) == 0)
+            return TempEof;
+        mChunkInfoPending = false;
+        EndianSwapEq((unsigned int &)mChunkInfo.mID);
+        EndianSwapEq((unsigned int &)mChunkInfo.mChunkInfoSize);
+        EndianSwapEq((unsigned int &)mChunkInfo.mNumChunks);
+        EndianSwapEq((unsigned int &)mChunkInfo.mMaxChunkSize);
+        for (int i = 0; i < mChunkInfo.mNumChunks; i++) {
+            EndianSwapEq((unsigned int &)mChunkInfo.mChunks[i]);
+        }
+        if ((mChunkInfo.mID & 0xf0ffffff) != kChunkIDMask) {
+            mChunkInfo.mID = 0xCABEDEAF;
+            mChunkInfo.mChunkInfoSize = 0;
+            mChunkInfo.mNumChunks = 1;
+            mChunkInfo.mMaxChunkSize = mFile->Size();
+            MILO_ASSERT((mChunkInfo.mMaxChunkSize & ~kChunkSizeMask) == 0, 0x24b);
+            mChunkInfo.mChunks[0] = mChunkInfo.mMaxChunkSize;
+        }
+
+        if (strstr(mFilename.c_str(), ".milo_")) {
+            mIsCached = true;
+            if (strstr(mFilename.c_str(), ".milo_xbox"))
+                SetPlatform(kPlatformXBox);
+            else if (strstr(mFilename.c_str(), ".milo_ps3"))
+                SetPlatform(kPlatformPS3);
+            else if (strstr(mFilename.c_str(), ".milo_wii"))
+                SetPlatform(kPlatformWii);
+            else
+                SetPlatform(kPlatformPC);
+        } else {
+            mIsCached = false;
+            SetPlatform(kPlatformPC);
+        }
+
+        mBufSize = mChunkInfo.mMaxChunkSize;
+        if (mChunkInfo.mID != 0xCABEDEAF)
+            mBufSize += 0x800;
+        int cap = Min(2, mChunkInfo.mNumChunks);
+        for (int i = 0; i < cap; i++) {
+            mBuffers[i] = (char *)_MemAllocTemp(mBufSize, __FILE__, 0x104, "ChunkStreamBuf", 0);
+        }
+        int *chunks = mChunkInfo.mChunks;
+        mChunkEnd = chunks + mChunkInfo.mNumChunks;
+        mCurChunk = chunks - 1;
+        mCurBufOffset = mChunkInfo.mMaxChunkSize & kChunkSizeMask;
+        mCurBufferIdx = 1;
+        mFile->Seek(mChunkInfo.mChunkInfoSize, 0);
+        ReadChunkAsync();
+    }
+
+    if (mCurBufOffset < (*mCurChunk & kChunkSizeMask)) {
+        return NotEof;
+    } else {
+        MILO_ASSERT(mCurBufOffset == (*mCurChunk & kChunkSizeMask), 0x28B);
+        if (mBuffersOffset[mCurBufferIdx] == mCurChunk) {
+            mBuffersState[mCurBufferIdx] = kInvalid;
+        }
+        if (mCurChunk + 1 == mChunkEnd)
+            return RealEof;
+        else {
+            int x;
+            if (mFile->ReadDone(x)) {
+                DecompressChunkAsync();
+                ReadChunkAsync();
+                PollDecompressionWorker();
+            }
+            int idx = (mCurBufferIdx + 1) % 2;
+            if (mBuffersState[idx] != kReady)
+                return TempEof;
+            else {
+                mCurBufferIdx = idx;
+                mCurChunk++;
+                mCurBufOffset = 0;
+                mCurReadBuffer = mBuffers[idx];
+                return NotEof;
+            }
+        }
     }
 }
 
@@ -278,7 +369,7 @@ void ChunkStream::DecompressChunk(DecompressTask &task) {
 void ChunkStream::DecompressChunkAsync() {
     int bufIdx = 1;
     int idx;
-    for (; bufIdx <= 2; bufIdx++) {
+    for (; bufIdx < 4; bufIdx++) {
         idx = (mCurBufferIdx + bufIdx) % 3;
         if (mBuffersState[idx] == kReading)
             break;
@@ -295,7 +386,10 @@ void ChunkStream::DecompressChunkAsync() {
             dtask.mDecompressedSize = mBufSize;
             dtask.mID = mChunkInfo.mID;
             dtask.mTempBuf = (char *)mFilename.c_str();
+            gDecompressionCritSec.Enter();
             gDecompressionQueue.push_back(dtask);
+            gDecompressionCritSec.Exit();
+            StartDecompressionThread();
         } else {
             mBuffersState[idx] = kReady;
         }
@@ -303,7 +397,7 @@ void ChunkStream::DecompressChunkAsync() {
 }
 
 bool ChunkStream::PollDecompressionWorker() {
-    gDecompressionCritSec.Enter();
+    CritSecTracker tracker(&gDecompressionCritSec);
     unsigned int counter = 0;
     for (std::list<DecompressTask>::iterator it = gDecompressionQueue.begin(); it != gDecompressionQueue.end(); it++) {
         counter++;
@@ -311,14 +405,13 @@ bool ChunkStream::PollDecompressionWorker() {
     if (counter != 0) {
         DecompressTask task;
         memcpy(&task, &gDecompressionQueue.front(), sizeof(DecompressTask));
-        gDecompressionQueue.pop_front();
+        gDecompressionQueue.erase(gDecompressionQueue.begin());
+        tracker.mCritSec = 0;
         gDecompressionCritSec.Exit();
         DecompressChunk(task);
         return true;
-    } else {
-        gDecompressionCritSec.Exit();
-        return false;
     }
+    return false;
 }
 
 BinStream &WriteChunks(BinStream &bs, const void *v, int i1, int i2) {

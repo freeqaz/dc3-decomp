@@ -51,7 +51,11 @@ void FftIpp::SetMode(int mode) {
     if (mSize > 2) {
         do {
             mOrder = mOrder + 1;
-        } while ((1 << *(volatile int *)&mOrder) < *(volatile int *)&mSize);
+            int o = *(volatile int *)&mOrder;
+            int s = *(volatile int *)&mSize;
+            if ((1 << o) < s) continue;
+            break;
+        } while (true);
     }
 
     mBuf1.resize(mSize);

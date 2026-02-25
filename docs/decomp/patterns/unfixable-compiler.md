@@ -367,6 +367,126 @@ That is real progress and lowers the chance of regressions in future attempts.
 
 ---
 
+## Dead Store Elimination / Destructor Merging
+
+**Prevalence:** Functions using RAII wrappers (CritSecTracker, etc.)
+**Typical Gap:** ~1-2% (2-3 instructions)
+
+The target compiler merges explicit cleanup calls with destructor code, eliminating the need to null-out RAII wrapper members.
+
+### Symptom
+
+objdiff shows 1-2 extra instructions (`li rN, 0x0` + `stw rN, offset(rFP)`) that null a member of an RAII wrapper to suppress its destructor. The target doesn't have these because the compiler merged the explicit cleanup with the destructor.
+
+### Root Cause
+
+When code explicitly calls a cleanup method (e.g., `critSec.Exit()`) and then nulls the wrapper's pointer to suppress the destructor's redundant cleanup, the target compiler recognizes the redundancy:
+
+1. Places the destructor's inlined `Exit()` call **only on the false path**
+2. On the true path, the explicit `Exit()` stands in for the destructor
+3. Never needs the null write since the destructor is structurally bypassed
+
+Our compiler always emits the null store.
+
+### Detection
+
+```cpp
+// This generates 2 extra instructions our compiler can't eliminate:
+tracker.mCritSec = 0;       // li r11, 0x0 + stw r11, offset(r31)
+gDecompressionCritSec.Exit();
+```
+
+### What Would Fix It
+
+- c2.dll dead store elimination patch
+- No source-level workaround — removing the null causes the destructor to double-Exit
+
+### Real Example
+
+| Function | Match | Gap | Notes |
+|----------|-------|-----|-------|
+| ChunkStream::PollDecompressionWorker | 88.7% | ~11% | 2 genuine diffs from dead-store elimination; rest is symbol noise |
+
+---
+
+## Anonymous Namespace Hash Mismatch
+
+**Prevalence:** Common (any function referencing anonymous namespace symbols)
+**Typical Gap:** 0.5-3% (all symbol relocation noise)
+
+Anonymous namespace symbols have different hash values between target and our build.
+
+### Symptom
+
+objdiff shows `diff_arg` on `lis`/`addi`/`bl` instructions where both sides reference the same-named function but with different anonymous namespace hashes:
+
+```
+Target: ?A0x7ea4e606@@...
+Base:   ?A0x00000000@@...
+```
+
+### Root Cause
+
+The Xbox 360 MSVC compiler uses a hash of the source file path for anonymous namespace mangling (`?A0x<hash>@@`). Our build environment produces a different (or null) hash because the file path differs.
+
+### Impact
+
+These mismatches are **purely cosmetic** — the machine bytes are identical, only the linker relocation symbol names differ. They inflate the `diff_arg` count but don't represent real code differences.
+
+### What Would Fix It
+
+- Compiling from the exact same file path as the original build
+- c2.dll patch to use a fixed hash value
+
+### Real Examples
+
+| Function | Match | Noise Instructions | Notes |
+|----------|-------|-------------------|-------|
+| ChunkStream::PollDecompressionWorker | 88.7% | 11 of 13 mismatches | All `?A0x7ea4e606` vs `?A0x00000000` |
+| RndMat::UpdatePropertiesFromMetaMat | 96.6% | Most mismatches | `?A0x53432a53` vs `?A0x00000000` |
+
+---
+
+## Build Environment Regression from Unrelated Headers
+
+**Prevalence:** Rare but impactful
+**Typical Gap:** 5-10% regression from a previously higher match
+
+Changes to unrelated headers can regress a function's match% even when the function's own source is unchanged.
+
+### Symptom
+
+A function that was previously at 98%+ drops to 90% without any changes to its source code. The regression correlates with header changes in the same translation unit.
+
+### Root Cause
+
+The compiler's register allocation is sensitive to the total compilation context — inlined function sizes, vtable layouts, template instantiation counts, etc. Changes to headers included by the TU alter this context, which can flip register allocation heuristics for unrelated functions.
+
+### Detection
+
+1. `git log` shows no changes to the function's source
+2. `git log` shows header changes in the same commit/timeframe
+3. Object file size differs significantly between good and bad builds
+4. Register swap (e.g., r30/r31) is the dominant mismatch pattern
+
+### What Would Fix It
+
+- Reverting the header changes (may not be desirable)
+- c2.dll register allocator patch
+- Sometimes: find the specific header change that triggered the flip and find an alternative formulation
+
+### Real Example
+
+| Function | Before | After | Cause |
+|----------|--------|-------|-------|
+| NgRnd::UpdateOverlay | 98.6% | 90.0% | ShaderMgr.h vtable reorder, Draw.h deinline, Str.h base class change |
+
+### Note
+
+This pattern is insidious because the regression appears to have no cause. Always check `git log` for header changes when a function regresses without source changes.
+
+---
+
 ## Requires Tooling (c2.dll Patching or Custom Pragmas)
 
 These patterns resist source-level changes but are fixable with compiler binary modifications or custom tooling.

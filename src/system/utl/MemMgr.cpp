@@ -273,6 +273,14 @@ void AddHeap(int i1, int i2, DataArray *arr) {
     );
 }
 
+// Stub: MemHeap::Alloc and ThreadMemStack are not yet decompiled, so route
+// through malloc() which uses the CRT heap (NtAllocateVirtualMemory in Xenia).
+void *MemAlloc(int size, const char *file, int line, const char *name, int align) {
+    if (size <= 0)
+        return nullptr;
+    return malloc(size);
+}
+
 void *_MemAllocTemp(int size, const char *file, int line, const char *name, int align) {
     MemTemp tmp;
     return MemAlloc(size, file, line, name, align);

@@ -52,7 +52,9 @@ private:
     bool mCacheMode; // 0xD
     std::list<std::pair<class String, LoaderFactoryFunc *> > mFactories; // 0x10
     float mPeriod; // 0x18
-    float mCurrentPeriod;
+public:
+    float mCurrentPeriod; // 0x1c
+private:
     std::list<Loader *> mLoading; // 0x20
     Timer mTimer; // 0x28
     int mAsyncUnload; // 0x58

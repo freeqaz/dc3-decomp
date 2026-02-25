@@ -211,15 +211,15 @@ void MemHeap::FirstFit(int size, int align, FreeBlockInfo &blockinfo) {
 
 void MemHeap::LastFit(int size, int align, FreeBlockInfo &blockinfo) {
     FreeBlock *block = mFreeBlockChain;
+    FreeBlock *prev = nullptr;
     if (block == nullptr) {
         return;
     }
     int alignShift = align + 2;
-    FreeBlock *prev = nullptr;
     do {
         int blockAddr = (int)block;
         int blockSize = block->mSizeWords;
-        int allocEnd = blockAddr + (blockSize - size);
+        int allocEnd = blockAddr + (blockSize - size) * 4;
         int alignedEnd = (allocEnd >> alignShift) << alignShift;
         int pad = ((alignedEnd - blockAddr) - 4) >> 2;
 

@@ -197,6 +197,35 @@ else
     echo "Reconfiguring baseline..."
     (cd "${WORKTREE}" && python3 configure.py "${CONFIGURE_ARGS[@]}") >/dev/null
 
+    # Ninja can loop on "manifest 'build.ninja' still dirty" when the reused
+    # worktree/build artifacts have coarse or future mtimes (common with cached
+    # build dirs in /tmp worktrees). Normalize generator deps, then bump the
+    # generated manifest outputs to a strictly newer timestamp.
+    normalize_manifest_timestamps() {
+        local deps=(
+            "${WORKTREE}/build/373307D9/config.json"
+            "${WORKTREE}/configure.py"
+            "${WORKTREE}/tools/project.py"
+            "${WORKTREE}/tools/ninja_syntax.py"
+            "${WORKTREE}/config/373307D9/config.json"
+            "${WORKTREE}/config/373307D9/objects.json"
+            "${WORKTREE}/config/373307D9/link_order.txt"
+        )
+        local touched_any=0
+        for dep in "${deps[@]}"; do
+            if [[ -e "${dep}" ]]; then
+                touch "${dep}" 2>/dev/null || true
+                touched_any=1
+            fi
+        done
+        if [[ "${touched_any}" -eq 1 ]]; then
+            # Ensure build.ninja/objdiff.json are newer than all configure deps.
+            sleep 1
+        fi
+        touch "${WORKTREE}/build.ninja" "${WORKTREE}/objdiff.json" 2>/dev/null || true
+    }
+    normalize_manifest_timestamps
+
     # --- Build baseline report ---
     echo "Building baseline report (this may take a moment)..."
     ninja -C "${WORKTREE}" "${REPORT_REL}" -j"$(nproc)" 2>&1 | tail -1

@@ -270,7 +270,9 @@ const char *Hmx::Object::FindPathName() {
 void Hmx::Object::ReplaceRefs(Hmx::Object *obj) {
     if (mRefs.begin() != mRefs.end()) {
         ObjRef other(mRefs);
-        other.AddRef(&other);
+        other.prev->next = &other;
+        other.next->prev = &other;
+        mRefs.Clear();
         other.ReplaceList(obj);
     }
 }
@@ -514,12 +516,16 @@ void Hmx::Object::SetProperty(DataArray *prop, const DataNode &val) {
             MILO_ASSERT(prop->Size() == 2, 0x1C4);
             mTypeProps->SetArrayValue(key, prop->Int(1), val);
         }
+        if (prop_n && val.Equal(n, nullptr, false)) {
+            handler = Symbol();
+        }
     } else {
-        // val = Property(prop, true); // ???
-    }
-
-    if (prop_n && val.Equal(n, nullptr, false)) {
-        handler = Symbol();
+        if (prop_n) {
+            const DataNode *synced = Property(prop, true);
+            if (synced->Equal(n, nullptr, false)) {
+                handler = Symbol();
+            }
+        }
     }
     ExportPropertyChange(prop, handler);
 }
@@ -645,40 +651,46 @@ DataNode Hmx::Object::OnAddSink(DataArray *a) {
         SinkMode mode = (a->Size() > 4) ? (SinkMode)a->Int(4) : kHandle;
         bool chain = (a->Size() > 5) ? a->Int(5) : true;
         DataArray *arr3 = a->Array(3);
-        Hmx::Object *obj = a->Obj<Hmx::Object>(2);
-        if (obj && arr3->Size() != 0) {
-            for (int i = 0; i < arr3->Size(); i++) {
-                DataNode eval = arr3->Evaluate(i);
-                Symbol s6, s7;
-                if (eval.Type() == kDataArray) {
-                    s6 = eval.LiteralArray()->LiteralSym(1);
-                    s7 = eval.LiteralArray()->LiteralSym(0);
-                } else {
-                    s7 = eval.LiteralSym();
+        Hmx::Object *obj = a->GetObj(2);
+        if (obj) {
+            if (arr3->Size() == 0) {
+                GetOrAddSinks()->AddSink(obj, Symbol(), Symbol(), mode, chain);
+            } else {
+                for (int i = 0; i < arr3->Size(); i++) {
+                    DataNode eval = arr3->Evaluate(i);
+                    Symbol s7;
+                    Symbol s6;
+                    if (eval.Type() == kDataArray) {
+                        s6 = eval.LiteralArray()->LiteralSym(1);
+                        s7 = eval.LiteralArray()->LiteralSym(0);
+                    } else {
+                        s6 = Symbol();
+                        s7 = eval.LiteralSym();
+                    }
+                    AddSink(obj, s7, s6, mode, chain);
                 }
-                GetOrAddSinks()->AddSink(obj, s7, s6, mode, chain);
             }
-        } else {
-            GetOrAddSinks()->AddSink(obj, Symbol(), Symbol(), mode, chain);
         }
     } else {
-        Hmx::Object *obj = a->Obj<Hmx::Object>(2);
-        GetOrAddSinks()->AddSink(obj, gNullStr);
+        Symbol s1, s2;
+        Hmx::Object *obj = a->GetObj(2);
+        AddSink(obj, s1, s2, kHandle, true);
     }
     return 0;
 }
 
 DataNode Hmx::Object::OnRemoveSink(DataArray *a) {
     if (a->Size() > 3) {
-        Hmx::Object *obj = a->Obj<Hmx::Object>(2);
+        Hmx::Object *obj = a->GetObj(2);
+        Symbol s;
         for (int i = 3; i < a->Size(); i++) {
-            Symbol s = a->Sym(i);
+            s = a->Sym(i);
             if (mSinks)
                 mSinks->RemoveSink(obj, s);
         }
     } else {
         Symbol s = Symbol();
-        Hmx::Object *obj = a->Obj<Hmx::Object>(2);
+        Hmx::Object *obj = a->GetObj(2);
         if (mSinks)
             mSinks->RemoveSink(obj, s);
     }

@@ -158,8 +158,8 @@ void BinStream::Read(void *data, int bytes) {
         if (mCrypto) {
             end = ptr + bytes;
             while (ptr < end) {
-                auto _tmp2 = mCrypto->Int();
-                *ptr++ ^= _tmp2;
+                u8 bastard = mCrypto->Int();
+                *ptr++ ^= bastard;
             }
         }
     }

@@ -61,8 +61,55 @@ template <> inline float Clamp(float min, float max, float value) {
 
 | Function | Before | After | Delta | Fix |
 |----------|--------|-------|-------|-----|
+| **DebugGraph::Draw** | 46.8% | **100%** | +53.2% | `__fsel` intrinsic for branchless clamp (see below) |
 | HiResScreen::CurrentTileRect | 40.0% | 83.6% | +43.6% | `Clamp(0.0f, 1.0f, val)` for 8 float clamps |
 | Fader::SynthPoll | — | 89.1% | — | Uses `__fsel` directly (see below) |
+
+### Case Study: DebugGraph::Draw (46.8% → 100%)
+
+This function demonstrated that `__fsel` intrinsic can achieve 100% match when replacing branched float clamps.
+
+**Original code (branched):**
+```cpp
+float x = someValue;
+if (x < 0.0f) x = 0.0f;
+if (x > 1.0f) x = 1.0f;
+```
+
+This generates:
+```asm
+fcmpu   cr0, f1, f12      ; compare with 0.0f
+blt     .Lclamp_low
+fmr     f1, f12           ; x = 0.0f
+.Lclamp_low:
+fcmpu   cr0, f1, f13      ; compare with 1.0f
+bgt     .Lclamp_high
+fmr     f1, f13           ; x = 1.0f
+.Lclamp_high:
+```
+
+**Fixed code (branchless using `__fsel`):**
+```cpp
+#include "xdk/LIBCMT/ppcintrinsics.h"
+
+// Clamp x to [0, 1] using fsel
+float clamped = (float)__fsel(-x, x, 0.0f);        // max(x, 0): if -x >= 0 (x <= 0), return 0, else x
+float result = (float)__fsel(clamped - 1.0f, 1.0f, clamped);  // min(result, 1): if clamped-1 >= 0, return 1, else clamped
+```
+
+This generates:
+```asm
+fneg    f0, f1            ; -x
+fsel    f1, f0, f1, f12   ; if -x >= 0: f1, else: 0.0f (max)
+fsubs   f0, f1, f13       ; clamped - 1.0f
+fsel    f1, f0, f13, f1   ; if (clamped-1) >= 0: 1.0f, else: clamped (min)
+```
+
+**Why `Clamp<float>` template didn't work here:** In this specific case, the `Clamp` template generated slightly different register allocation. The direct `__fsel` intrinsic matched the target's exact instruction sequence.
+
+**Key insight:** When `Clamp<float>` doesn't match exactly, try the raw `__fsel` pattern:
+1. `max(x, min_val)` → `__fsel(-(x - min_val), x, min_val)` or `__fsel(-x, x, 0.0f)` for min=0
+2. `min(x, max_val)` → `__fsel(x - max_val, max_val, x)`
 
 ### When Register Pressure Blocks This
 

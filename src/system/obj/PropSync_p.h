@@ -158,7 +158,7 @@ bool PropSync(std::list<T> &pList, DataNode &node, DataArray *prop, int i, PropO
     }
 }
 
-bool PropSync(Key<Hmx::Color> &key, DataNode &node, DataArray *prop, int i, PropOp op) {
+inline bool PropSync(Key<Hmx::Color> &key, DataNode &node, DataArray *prop, int i, PropOp op) {
     if (i == prop->Size()) {
         return true;
     } else {

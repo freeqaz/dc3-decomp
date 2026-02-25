@@ -450,11 +450,6 @@ void RndBitmap::ConvertColor(
             g = swapped >> 2 & 0xF8;
             b = swapped << 3;
         }
-    } else if ((mOrder & 0x80) && (mOrder & 0x40)) {
-        r = 255;
-        g = 255;
-        b = 255;
-        a = *uc;
     } else {
         a = 255;
         if (mOrder & 1) {

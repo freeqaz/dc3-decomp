@@ -495,6 +495,108 @@ Reorder static Symbol declarations to match the bit flag order shown in objdiff.
 
 ---
 
+## Function Definition Order (TU-Wide Static Guard Counters)
+
+**Impact:** +3-5%
+**Success Rate:** 100%
+**Time:** 15 minutes
+
+The order of **function definitions** in a translation unit determines the `$S#` static guard counter numbering across all functions in that TU.
+
+### Symptom
+
+objdiff shows `rlwinm.` / `ori` bit mismatches on static local initialization guards — e.g., the function checks bit 2 (`0x4`) but should check bit 9 (`0x200`). The `$S#` variable in mangled names has the wrong number.
+
+### Why It Works
+
+MSVC assigns a sequential counter (`$S1`, `$S2`, ...) to each runtime-initialized static local across the **entire translation unit**, in the order it encounters them during compilation. Each function containing `static Symbol _s(...)` or similar gets its guards numbered based on where it appears relative to other functions with statics.
+
+### Detection
+
+1. Check symbol table for `$S#` guard variables and their addresses
+2. Map which function each `$S#` belongs to
+3. Compare the expected order vs actual function definition order in source
+
+### Fix
+
+Reorder function definitions to match the original binary's `$S#` numbering:
+
+```cpp
+// Object.cpp — correct order based on $S counter analysis:
+// $S1 = InitObject, $S2 = OnGetTypeList, ...
+// $S9 = SyncProperty, ... $S12 = Handle
+
+void Object::InitObject() { ... }        // $S1
+DataNode Object::OnGetTypeList() { ... }  // $S2
+// ...
+bool Object::SyncProperty() { ... }      // $S9 — MUST come before Handle
+// ...
+DataNode Object::Handle() { ... }        // $S12 — MUST come last
+```
+
+### Real Examples
+
+| Function | Before | After | Delta | Notes |
+|----------|--------|-------|-------|-------|
+| Object::SyncProperty | 96.4% | 99.8% | +3.4% | Moved Handle/BEGIN_HANDLERS after SyncProperty |
+
+### Note: Header Functions Can Steal Guard Slots
+
+Non-inline functions defined in headers that get compiled into the TU will claim `$S#` slots, shifting all subsequent guards. Adding `inline` prevents this:
+
+```cpp
+// Before — PropSync_p.h function claims $S1 in Object.obj
+bool PropSync(Key<Hmx::Color>& key, DataNode& val, DataArray* prop, int i, PropOp op) { ... }
+
+// After — inline prevents guard slot allocation
+inline bool PropSync(Key<Hmx::Color>& key, DataNode& val, DataArray* prop, int i, PropOp op) { ... }
+```
+
+---
+
+## Hoist Loop Variable for sret Register Matching
+
+**Impact:** +6%
+**Success Rate:** HIGH
+**Time:** 5 minutes
+
+Pre-declare a variable before a loop body instead of declaration-initialization inside the loop when the variable receives an sret (struct return) value.
+
+### Symptom
+
+Insert/delete cluster inside a loop body, typically 1-2 extra `lwz`/`stw` instructions. Target uses a register dereference (`lwz r5, 0x0, r3`) while base uses a stack slot (`lwz r5, 0x50, r1`).
+
+### Why It Works
+
+With `Symbol s = a->Sym(i)` (declaration+init inside loop), the compiler copies the sret result to a named stack slot and frees r3, then uses r3 for the next member load. With `s = a->Sym(i)` (assignment to pre-declared variable), the compiler keeps r3 live as a pointer to the Symbol, using r11 as scratch for the next load — matching the target's instruction pattern.
+
+### Fix
+
+```cpp
+// Before (93.6%) — declaration inside loop, compiler uses stack slot
+for (int i = 3; i < a->Size(); i++) {
+    Symbol s = a->Sym(i);  // sret → stack copy → free r3
+    if (mSinks)
+        mSinks->RemoveSink(obj, s);
+}
+
+// After (99.6%) — pre-declared, compiler keeps r3 as pointer
+Symbol s;
+for (int i = 3; i < a->Size(); i++) {
+    s = a->Sym(i);          // sret → r3 stays live
+    if (mSinks)
+        mSinks->RemoveSink(obj, s);
+}
+```
+
+### Real Examples
+
+| Function | Before | After | Delta | Notes |
+|----------|--------|-------|-------|-------|
+| Object::OnRemoveSink | 93.6% | 99.6% | +6.0% | Hoisted `Symbol s` before for loop |
+
+---
+
 ## Offset Swap
 
 **Impact:** +1-5%

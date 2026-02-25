@@ -9,19 +9,15 @@ void RndColorXfm::AdjustLevels() {
         mLevelInHi.green - mLevelInLo.green,
         mLevelInHi.blue - mLevelInLo.blue
     );
-    float f1 = 0;
-    if (v50.z != 0) {
-        f1 = (mLevelOutHi.blue - mLevelOutLo.blue) / (mLevelInHi.blue - mLevelInLo.blue);
-    }
-    float f2 = 0;
-    if (v50.y != 0) {
-        f2 = (mLevelOutHi.green - mLevelOutLo.green)
-            / (mLevelInHi.green - mLevelInLo.green);
-    }
-    float f3 = 0;
-    if (v50.x != 0) {
-        f3 = (mLevelOutHi.red - mLevelOutLo.red) / (mLevelInHi.red - mLevelInLo.red);
-    }
+    float f1 = v50.z != 0
+        ? (mLevelOutHi.blue - mLevelOutLo.blue) / (mLevelInHi.blue - mLevelInLo.blue)
+        : 0;
+    float f2 = v50.y != 0
+        ? (mLevelOutHi.green - mLevelOutLo.green) / (mLevelInHi.green - mLevelInLo.green)
+        : 0;
+    float f3 = v50.x != 0
+        ? (mLevelOutHi.red - mLevelOutLo.red) / (mLevelInHi.red - mLevelInLo.red)
+        : 0;
     Vector3 v5c(f3, f2, f1);
     float v68x = -(mLevelInLo.red * f3 - mLevelOutLo.red);
     float v68y = -(mLevelInLo.green * f2 - mLevelOutLo.green);

@@ -227,6 +227,7 @@ void DataLoader::ThreadDone(DataArray *arr) {
 void DataLoader::LoadFile() {
     if (mThreadObj) {
         Timer::Sleep(0);
+        TheLoadMgr.mCurrentPeriod = 0.0f;
     } else {
         int x;
         if (mFile->ReadDone(x)) {

@@ -126,10 +126,12 @@ void FlowNode::Load(BinStream &bs) {
     if (d.rev > 0) {
         bool unk;
         d >> unk;
-        mStopRequested = unk;
+        mDebugOutput = unk;
     }
     if (d.rev > 1) {
-        d >> mDebugComment;
+        String debugComment;
+        d.stream >> debugComment;
+        mDebugComment = debugComment;
     }
 }
 

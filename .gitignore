@@ -40,7 +40,6 @@ compile_commands.json
 
 # Local binaries
 bin/objdiff-cli
-scripts/bin/objdiff-cli
 
 # Python
 .venv/

@@ -83,8 +83,13 @@ bool gNotifyKeepGoing;
 bool gFailKeepGoing;
 bool gFailRestartConsole;
 
-HANDLE gRndThread;
-HANDLE gRndTextureEvent;
+struct {
+    HANDLE mThread;
+    HANDLE mTextureEvent;
+} gRndHandles;
+
+#define gRndThread gRndHandles.mThread
+#define gRndTextureEvent gRndHandles.mTextureEvent
 
 extern int lbl_82F14008;
 void MemPrintOverview(int, char *const);

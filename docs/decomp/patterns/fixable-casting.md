@@ -264,6 +264,83 @@ If a struct has wrong size affecting templates/arrays, check if any member types
 
 ---
 
+---
+
+## Avoid Unnecessary dynamic_cast (GetObj vs Obj<T>)
+
+**Impact:** +6%
+**Success Rate:** HIGH
+**Time:** 2 minutes
+
+Use direct accessor methods instead of template wrappers that add `dynamic_cast` when the target binary doesn't use one.
+
+### Symptom
+
+objdiff shows extra instructions for a `dynamic_cast` call that doesn't appear in the target. The target uses a simple load (`lwz` + null check) while our code generates a full RTTI-based dynamic cast sequence.
+
+### Why It Works
+
+`DataArray::Obj<Hmx::Object>(i)` calls `dynamic_cast<Hmx::Object*>(GetObj(i))` internally. If the target just calls `GetObj(i)` directly (no cast), the dynamic_cast generates ~10-15 extra instructions for the RTTI lookup.
+
+### Fix
+
+```cpp
+// Before — Obj<T>() adds dynamic_cast the target doesn't have
+Hmx::Object *obj = a->Obj<Hmx::Object>(2);
+
+// After — direct accessor, no cast
+Hmx::Object *obj = a->GetObj(2);
+```
+
+### Detection
+
+- Ghidra decompilation shows a simple function call, not a cast sequence
+- RB3 reference uses direct accessor
+- objdiff shows `bl __dynamic_cast` in base but not target
+
+### Real Examples
+
+| Function | Before | After | Delta | Notes |
+|----------|--------|-------|-------|-------|
+| Object::OnRemoveSink | 93.6% | 99.6% | +6.0% | Changed both `Obj<Hmx::Object>(2)` to `GetObj(2)` |
+| Object::OnAddSink | 77.9% | ~85% | +7% | Part of larger fix, removed unnecessary cast |
+
+---
+
+## Signed Pointer Comparison Cast
+
+**Impact:** +0.5-1%
+**Success Rate:** HIGH
+**Time:** 1 minute
+
+Cast a pointer to `(int)` when the target uses `cmpwi` (signed) instead of `cmplwi` (unsigned) for a null check.
+
+### Symptom
+
+objdiff shows `cmpwi` in target vs `cmplwi` in base for a pointer null check. Both compare against zero, but use different comparison instructions.
+
+### Fix
+
+```cpp
+// Before — generates cmplwi (unsigned pointer comparison)
+if (loader) { ... }
+
+// After — generates cmpwi (signed comparison)
+if ((int)loader) { ... }
+```
+
+### Real Examples
+
+| Function | Before | After | Delta | Notes |
+|----------|--------|-------|-------|-------|
+| Object::FindPathName | 86.4% | 87.1% | +0.7% | Cast `mLoader` to `(int)` for null check |
+
+### Note
+
+This is the opposite of the pattern documented in [unfixable-compiler.md](unfixable-compiler.md#requires-tooling-c2dll-patching-or-custom-pragmas) (cmplwi vs cmpwi). In some cases the `(int)` cast does work to force signed comparison.
+
+---
+
 ## See Also
 
 - [fixable-comparison.md](fixable-comparison.md) - Signedness comparison patterns

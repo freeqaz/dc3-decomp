@@ -582,7 +582,7 @@ class DecompMCPServer:
             verdict_filter = "AT_LIMIT"
         else:  # "workable" (default)
             exclude_complete = True
-            exclude_at_limit = False
+            exclude_at_limit = True
             verdict_filter = None
 
         results = db_query_functions(

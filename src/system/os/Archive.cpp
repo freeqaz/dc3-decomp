@@ -26,18 +26,18 @@ ArkHash::~ArkHash() {
 
 int ArkHash::AddString(const char *str) {
     int hashIdx = HashString(str, mTableSize);
-    int idx = hashIdx;
+    int startIdx = hashIdx;
     MILO_ASSERT(hashIdx < mTableSize, 0xB4);
-    for (char *p = mTable[hashIdx]; p != nullptr;) {
-        if (streq(p, str))
+    while (mTable[hashIdx] != nullptr) {
+        if (streq(mTable[hashIdx], str))
             return hashIdx;
-        idx = (idx + 1) % mTableSize;
-        if (hashIdx == idx) {
+        hashIdx++;
+        if (hashIdx == mTableSize)
+            hashIdx = 0;
+        if (startIdx == hashIdx) {
             MILO_FAIL("ERROR: Hash table full!!!");
         }
-        p = mTable[idx];
     }
-    hashIdx = idx;
     int len = strlen(str);
     MILO_ASSERT(mFree + len + 1 < mHeapEnd, 200);
     memcpy(mFree, str, len);
