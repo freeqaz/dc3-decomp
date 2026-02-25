@@ -174,11 +174,12 @@ def find_and_convert_thunk_iat(pe_data, image_base):
 
 def find_and_convert_variable_iat(pe_data, image_base):
     """
-    Find import variable entries in .rdata by scanning for LE 0x80XXXXXX
+    Find import variable entries in .idata by scanning for LE 0x80XXXXXX
     ordinal markers that are NOT thunk IAT entries (not referenced by thunk code).
 
-    The Xbox 360 linker places import variable ordinals in .rdata at the same
-    addresses the game code references via lis/lwz pairs.
+    The Xbox 360 linker places import ordinals in .idata sections. The thunk
+    scanner already converts entries referenced by code thunks; this function
+    picks up remaining variable-only imports.
 
     Returns: (patched pe_data, ordinal_to_extra_var_vas: {ordinal: [va, ...]})
 
@@ -190,58 +191,55 @@ def find_and_convert_variable_iat(pe_data, image_base):
     num_sections = struct.unpack_from('<H', pe_data, pe_off + 6)[0]
     opt_hdr_size = struct.unpack_from('<H', pe_data, pe_off + 20)[0]
 
-    # Find .rdata section
-    rdata_vaddr = rdata_vsize = rdata_raw_off = 0
+    # Find all .idata sections
+    idata_sections = []
     section_off = pe_off + 24 + opt_hdr_size
     for i in range(num_sections):
         name = pe_data[section_off:section_off+8].rstrip(b'\x00')
         vsize = struct.unpack_from('<I', pe_data, section_off + 8)[0]
         vaddr = struct.unpack_from('<I', pe_data, section_off + 12)[0]
         raw_off = struct.unpack_from('<I', pe_data, section_off + 20)[0]
-        if name == b'.rdata':
-            rdata_vaddr = vaddr
-            rdata_vsize = vsize
-            rdata_raw_off = raw_off
-            break
+        if name == b'.idata':
+            idata_sections.append((vaddr, vsize, raw_off))
         section_off += 40
 
-    if rdata_vsize == 0:
+    if not idata_sections:
         return bytes(pe_data), {}
 
-    # Scan .rdata for remaining LE 0x80XXXXXX markers (not yet converted)
+    # Scan .idata sections for remaining LE 0x80XXXXXX markers (not yet converted)
     from collections import defaultdict
     ordinal_to_extra_var_vas = defaultdict(list)
     converted = 0
 
-    for off in range(0, rdata_vsize - 3, 4):
-        foff = rdata_raw_off + off
-        if foff + 4 > len(pe_data):
-            break
+    for idata_vaddr, idata_vsize, idata_raw_off in idata_sections:
+        for off in range(0, idata_vsize - 3, 4):
+            foff = idata_raw_off + off
+            if foff + 4 > len(pe_data):
+                break
 
-        val_le = struct.unpack_from('<I', pe_data, foff)[0]
-        if (val_le & 0xFF000000) != 0x80000000:
-            continue
+            val_le = struct.unpack_from('<I', pe_data, foff)[0]
+            if (val_le & 0xFF000000) != 0x80000000:
+                continue
 
-        ordinal = val_le & 0xFFFFFF
-        if ordinal < 1 or ordinal > 0x40000:
-            continue
+            ordinal = val_le & 0xFFFFFF
+            if ordinal < 1 or ordinal > 0x40000:
+                continue
 
-        # Check if this was already converted (BE 0x00XXXXXX by thunk scan)
-        val_be = struct.unpack_from('>I', pe_data, foff)[0]
-        if (val_be >> 24) in (0x00, 0x01):
-            # Check if it's a valid converted marker (not just coincidence)
-            be_ord = val_be & 0xFFFFFF
-            if 1 <= be_ord <= 0x10000:
-                continue  # Already converted by thunk scan
+            # Check if this was already converted (BE 0x00XXXXXX by thunk scan)
+            val_be = struct.unpack_from('>I', pe_data, foff)[0]
+            if (val_be >> 24) in (0x00, 0x01):
+                be_ord = val_be & 0xFFFFFF
+                if 1 <= be_ord <= 0x10000:
+                    continue  # Already converted by thunk scan
 
-        # Convert from LE 0x80XXXXXX to BE 0x00XXXXXX (variable marker)
-        xex_marker = 0x00000000 | ordinal
-        struct.pack_into('>I', pe_data, foff, xex_marker)
-        va = image_base + rdata_vaddr + off
-        ordinal_to_extra_var_vas[ordinal].append(va)
-        converted += 1
+            # Convert from LE 0x80XXXXXX to BE 0x00XXXXXX (variable marker)
+            xex_marker = 0x00000000 | ordinal
+            struct.pack_into('>I', pe_data, foff, xex_marker)
+            va = image_base + idata_vaddr + off
+            ordinal_to_extra_var_vas[ordinal].append(va)
+            converted += 1
 
-    print(f"  Found {converted} additional import variable entries")
+    print(f"  Found {converted} additional import variable entries (from .idata)")
     return bytes(pe_data), dict(ordinal_to_extra_var_vas)
 
 

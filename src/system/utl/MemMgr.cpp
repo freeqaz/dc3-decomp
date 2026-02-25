@@ -15,6 +15,7 @@
 #include <cstdlib>
 
 extern MemTracker *gMemTracker;
+CriticalSection *gMemLock;
 
 #define MAX_HEAPS 16
 #define MAX_BUF_THREADS 32
@@ -349,10 +350,12 @@ void MemInit() {
             gNumHeaps = 1;
         }
         Symbol size("size");
-        AddHeap(
-            heapArr->Size() - 1, 0x2500000, "tiny", false, 0, MemHeap::kFirstFit, 0, 0
-        );
-        // more...
+        for (int i = 1; i < heapArr->Size(); i++) {
+            DataArray *heapDef = heapArr->Array(i);
+            int bytes = 0;
+            heapDef->FindData(size, bytes, false);
+            AddHeap(i - 1, bytes, heapDef);
+        }
     }
     disableMgr = false;
     if (enableTracking) {
