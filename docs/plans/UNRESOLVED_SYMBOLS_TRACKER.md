@@ -6,6 +6,8 @@
 
 **After data stubs (2026-02-26):** 85 unique unresolved symbols across 310 errors. **88% reduction.**
 
+**COMPLETE (2026-02-26):** 0 unresolved symbols, 0 errors. `/FORCE:UNRESOLVED` dropped from linker flags. **100% resolution.**
+
 ## What We Did: Data Stub Approach
 
 The root cause: Config B replaces split .obj with decomp .obj for Matching units. Split .objs export data with `lbl_*` names, decomp .objs export the same data with C++ COMDAT names. Cross-references from non-Matching split .objs use `lbl_*` names → unresolved.
@@ -74,11 +76,10 @@ Individual globals and methods. Stub or decomp.
 
 Current linker flags in `config/373307D9/config.json`:
 ```json
-"/FORCE:MULTIPLE",
-"/FORCE:UNRESOLVED"
+"/FORCE:MULTIPLE"
 ```
 
-Target: Remove `/FORCE:UNRESOLVED`. Keep `/FORCE:MULTIPLE` (handles LNK4006 COMDAT duplicates).
+`/FORCE:UNRESOLVED` has been removed. `/FORCE:MULTIPLE` retained for LNK4006 COMDAT duplicates (809 warnings, all harmless duplicate COMDATs).
 
 ## Build Integration
 
