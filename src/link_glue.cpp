@@ -1622,3 +1622,101 @@ extern "C" const char __link_glue_empty_str[] = "";
 #pragma comment(linker, "/ALTERNATENAME:??_C@_0DC@LLBBAHMM@e?3?2lazer_build_gmc1?2system?2src?2h@=__link_glue_empty_str")
 #pragma comment(linker, "/ALTERNATENAME:??$for_each@U?$_List_iterator@PAVWebSvcRequest@@U?$_Nonconst_traits@PAVWebSvcRequest@@@stlpmtx_std@@@stlpmtx_std@@UDelete@@@stlpmtx_std@@YA?AUDelete@@U?$_List_iterator@PAVWebSvcRequest@@U?$_Nonconst_traits@PAVWebSvcRequest@@@stlpmtx_std@@@0@0U1@@Z=__link_glue_noop")
 #pragma comment(linker, "/ALTERNATENAME:??$random_shuffle@PAPBUUnlockable@?A0xf8e4b4b5@@@stlpmtx_std@@YAXPAPBUUnlockable@?A0xf8e4b4b5@@0@Z=__link_glue_noop")
+
+// Remaining unresolved symbols from Matching unit decomp-only linking (Config B).
+// These come from audio SDK (Synth360, XAPO, LEAPFX), UIPanel vtordisp thunks,
+// STL template instantiations, and exception handler records.
+
+// -- Audio subsystem: Synth360 virtual methods --
+#pragma comment(linker, "/ALTERNATENAME:?PreInit@Synth360@@UAAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?Poll@Synth360@@UAAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?Terminate@Synth360@@UAAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?EnableLevels@Synth360@@UAAX_N@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?GetNumConnectedMics@Synth360@@UAAHXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?IsUsingDolby@Synth360@@UBA_NXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?NewBufStream@Synth360@@UAAPAVStream@@PBXHVSymbol@@M_N@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?NewBufStream@Synth@@UAAPAVStream@@PBXHVSymbol@@M_N@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?NewStream@Synth360@@UAAPAVStream@@PBDMM_N@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?NewStreamDecoder@Synth360@@UAAPAVStreamReader@@PAVFile@@PAVStandardStream@@VSymbol@@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?NewStreamFile@Synth360@@UAAXPBDAAPAVFile@@AAVSymbol@@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?SetupHeadsetSubmixes@Synth360@@AAAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?UpdateDolby@Synth360@@AAAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?New@Synth@@CAPAV1@XZ=__link_glue_noop")
+
+// -- Audio subsystem: FxSend360 methods --
+#pragma comment(linker, "/ALTERNATENAME:??0FxSendPitchShift360@@QAA@XZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??0FxSendSynapse360@@QAA@XZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?OnParametersChanged@FxSendSynapse360@@UAAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?Recreate@FxSendCompress360@@UAAXAAV?$vector@PAVFxSend@@V?$StlNodeAlloc@PAVFxSend@@@stlpmtx_std@@@stlpmtx_std@@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?UpdateMix@FxSendCompress360@@UAAXXZ=__link_glue_noop")
+
+// -- Audio subsystem: XAPO SDK (CXAPOBase, CXAPOParametersBase, ATG) --
+#pragma comment(linker, "/ALTERNATENAME:?QueryInterface@CXAPOBase@@UAAJABU_GUID@@PAPAX@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?QueryInterface@CXAPOParametersBase@@UAAJABU_GUID@@PAPAX@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?QueryInterface@CXAPOParametersBase@@WCA@AAJABU_GUID@@PAPAX@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?Release@CXAPOBase@@UAAKXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?Release@CXAPOParametersBase@@UAAKXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?Release@CXAPOParametersBase@@WCA@AAKXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?AddRef@CXAPOParametersBase@@WCA@AAKXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?LockForProcess@?$CSampleXAPOBase@VCompressionEffect@@UParams@1@@ATG@@UAAJIPBUXAPO_LOCKFORPROCESS_BUFFER_PARAMETERS@@I0@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?Process@?$CSampleXAPOBase@VWahEffect@@UParams@1@@ATG@@UAAXIPBUXAPO_PROCESS_BUFFER_PARAMETERS@@IPAU3@H@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??0?$StandardEffect@VCompressionEffect@@@@QAA@XZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__E?m_regProps@?$CSampleXAPOBase@VCompressionEffect@@UParams@1@@ATG@@0UXAPO_REGISTRATION_PROPERTIES@@A@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?ReverbConvertI3DL2ToNative@@YAXPBUXAUDIO2FX_REVERB_I3DL2_PARAMETERS@@PAUXAUDIO2FX_REVERB_PARAMETERS@@@Z=__link_glue_noop")
+
+// -- Audio subsystem: LEAPFX/NUISPEECH --
+#pragma comment(linker, "/ALTERNATENAME:?AddRef@CAudioSRC@LEAPFX@@UAAKXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?HashKey@?$CSPHash@KPAVCRule@NUISPEECH@@@NUISPEECH@@MBAIK@Z=__link_glue_noop")
+
+// -- Audio subsystem: DSP::Synapse::PitchDetector --
+#pragma comment(linker, "/ALTERNATENAME:??0PitchDetector@Synapse@DSP@@QAA@ABV?$vector@MV?$StlNodeAlloc@M@stlpmtx_std@@@stlpmtx_std@@II@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??1PitchDetector@Synapse@DSP@@QAA@XZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?Detect@PitchDetector@Synapse@DSP@@QAAXI@Z=__link_glue_noop")
+
+// -- Audio subsystem: misc --
+#pragma comment(linker, "/ALTERNATENAME:??0LevelData@@QAA@PBD@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??1?$aligned_vector@M@@QAA@XZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??1CriticalSection@@QAA@XZ=__link_glue_noop")
+
+// -- UIPanel vtordisp thunks --
+#pragma comment(linker, "/ALTERNATENAME:?SetPaused@UIPanel@@UAAX_N@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?DataDir@UIPanel@@$4PPPPPPPM@BA@AAPAVObjectDir@@XZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?Load@UIPanel@@$4PPPPPPPM@BA@AAXAAVBinStream@@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?SetTypeDef@UIPanel@@$4PPPPPPPM@BA@AAXPAVDataArray@@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?Terminate@UILabel@@SAXXZ=__link_glue_noop")
+
+// -- STL template instantiations (XAUDIO2_SEND_DESCRIPTOR, LevelData, LocalePanel::Entry) --
+#pragma comment(linker, "/ALTERNATENAME:??1?$vector@UXAUDIO2_SEND_DESCRIPTOR@@V?$StlNodeAlloc@UXAUDIO2_SEND_DESCRIPTOR@@@stlpmtx_std@@@stlpmtx_std@@QAA@XZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?push_back@?$vector@UXAUDIO2_SEND_DESCRIPTOR@@V?$StlNodeAlloc@UXAUDIO2_SEND_DESCRIPTOR@@@stlpmtx_std@@@stlpmtx_std@@QAAXABUXAUDIO2_SEND_DESCRIPTOR@@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?deallocate@?$StlNodeAlloc@UXAUDIO2_SEND_DESCRIPTOR@@@stlpmtx_std@@QBAXPAUXAUDIO2_SEND_DESCRIPTOR@@I@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?_M_fill_insert@?$vector@PAUIXAudio2SubmixVoice@@V?$StlNodeAlloc@PAUIXAudio2SubmixVoice@@@stlpmtx_std@@@stlpmtx_std@@AAAXPAPAUIXAudio2SubmixVoice@@IABQAU3@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?push_back@?$vector@ULevelData@@V?$StlNodeAlloc@ULevelData@@@stlpmtx_std@@@stlpmtx_std@@QAAXABULevelData@@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??1Entry@LocalePanel@@QAA@XZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?deallocate@?$StlNodeAlloc@UEntry@LocalePanel@@@stlpmtx_std@@QBAXPAUEntry@LocalePanel@@I@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??$__destroy_range_aux@V?$reverse_iterator@PAUEntry@LocalePanel@@@stlpmtx_std@@@stlpmtx_std@@YAXV?$reverse_iterator@PAUEntry@LocalePanel@@@0@0ABU__false_type@0@@Z=__link_glue_noop")
+
+// -- ObjRefConcrete<MoveDir> --
+#pragma comment(linker, "/ALTERNATENAME:?GetObj@?$ObjRefConcrete@VMoveDir@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ=__link_glue_noop")
+
+// -- Misc --
+#pragma comment(linker, "/ALTERNATENAME:?gCheatsManager@@3PAVCheatsManager@@A=__link_glue_zero")
+#pragma comment(linker, "/ALTERNATENAME:?EndExternal@AutoGlitchReport@@SAXMMPBDP6AXMPAX@Z1@Z=__link_glue_noop")
+
+// -- Exception handler records (__unwind$) --
+#pragma comment(linker, "/ALTERNATENAME:__unwind$135080=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$135100=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$135168=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$135192=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$135252=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$135330=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$135350=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$135406=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$135426=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$135482=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$135502=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$135558=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$135654=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$135786=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$135845=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$135904=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$135924=__link_glue_noop")
