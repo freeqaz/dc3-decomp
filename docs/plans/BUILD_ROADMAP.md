@@ -50,9 +50,10 @@ import thunks + 360 variables. Status as of 2026-02-19:
   function at a shifted address due to the 18.8KB .text size delta
 
 **Remaining .text size delta:** Our .text is 18,880 bytes larger than the original
-(0xBBB4D4 vs 0xBB6B14). Root cause: VS2013 compiler generates different COMDAT
-subsections (.text$x, .text$yc, .text$yd) than the original compiler. This is a
-systemic compiler artifact (0.15% of .text), not fixable from source.
+(0xBBB4D4 vs 0xBB6B14). Root cause: COMDAT subsection layout differs between
+decomp-compiled objects and jeff-split objects (same compiler — MSVC 16.00.11886 —
+but different COFF section structure from the splitting process). This is a build
+artifact (0.15% of .text), not fixable from source.
 
 See [sessions/2026-02-19-xex-workstreams.md](../sessions/2026-02-19-xex-workstreams.md)
 for the three remaining workstreams (COMDAT marking, .pdata fix, section layout).

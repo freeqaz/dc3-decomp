@@ -899,6 +899,7 @@ Known merged patterns:
 - `/fp:fast` is the **default** on Xbox 360 (per XDK docs `xenon_compiler_technology.htm`)
 - `#pragma fp_contract` is **ON by default** — controls fmadds generation
 - Xbox 360-specific flags tested and rejected: `/Ou` (prescheduling — breaks matches), `/Oc` (disable traps — no effect)
+- **`??_C@` string literal hashes**: The `??_C@` mangled name includes a CRC-32 hash (reflected polynomial `0xEDB88320`, init `0xFFFFFFFF`, no final XOR) computed over the **string content bytes including null terminator**. `cl.exe` calls `SigForPbCb` from `mspdbXX.dll` for this. The hash is encoded using A-P nibbles (A=0, B=1, ..., P=15). All `??_C@` hashes now match between decomp and original (0 mismatches out of 121 compared). Fixed via: (1) proper `SigForPbCb` in wibo's `mspdb_dll.cpp`, (2) `WIBO_PATH_MAP` with two source roots (`system/src/` and `lazer/src/`), (3) absolute mapped include paths, (4) 5 source string bug fixes.
 
 ---
 

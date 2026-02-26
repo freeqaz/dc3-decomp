@@ -780,10 +780,11 @@ def run_objdiff_for_symbol(symbol, project_dir=None):
     json_path = f"/tmp/claude/diff_{slug}_{h}.json"
 
     # Find project root (where objdiff.json lives)
-    # objdiff binary is always resolved from script's own repo root
+    # objdiff binary is always resolved from the project root
     # (bin/ doesn't exist in worktrees)
+    # Script is at scripts/analysis/diff_inspect.py, so go up 2 levels
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    script_repo_root = os.path.dirname(script_dir)
+    script_repo_root = os.path.dirname(os.path.dirname(script_dir))
     objdiff_bin = os.path.join(script_repo_root, "bin", "objdiff-cli")
 
     if not os.path.exists(objdiff_bin):

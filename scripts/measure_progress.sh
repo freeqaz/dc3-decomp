@@ -193,6 +193,34 @@ else
 
     echo "Using configure args: ${CONFIGURE_ARGS[*]}"
 
+    # Extract dtk path from configure args so we can run the split step directly.
+    # This avoids a misleading ninja "manifest still dirty" loop when the split
+    # fails and build/373307D9/config.json is never produced.
+    DTK_BIN=""
+    for ((i = 0; i < ${#CONFIGURE_ARGS[@]}; i++)); do
+        if [[ "${CONFIGURE_ARGS[$i]}" == "--dtk" && $((i + 1)) -lt ${#CONFIGURE_ARGS[@]} ]]; then
+            DTK_BIN="${CONFIGURE_ARGS[$((i + 1))]}"
+            break
+        fi
+    done
+
+    # --- Generate split config explicitly (clear error path if dtk fails) ---
+    if [[ -n "${DTK_BIN}" && -x "${DTK_BIN}" ]]; then
+        echo "Generating baseline split config (dtk xex split)..."
+        SPLIT_LOG="$(mktemp -t measure_progress_split.XXXXXX.log)"
+        if ! (cd "${WORKTREE}" && "${DTK_BIN}" xex split config/373307D9/config.yml build/373307D9) \
+            >"${SPLIT_LOG}" 2>&1; then
+            echo "Error: Failed to generate baseline split config with dtk:"
+            echo "  ${DTK_BIN} xex split config/373307D9/config.yml build/373307D9"
+            echo ""
+            tail -100 "${SPLIT_LOG}" || true
+            echo ""
+            echo "Hint: the selected baseline may require a different dtk version or a cached baseline report."
+            exit 1
+        fi
+        rm -f "${SPLIT_LOG}" 2>/dev/null || true
+    fi
+
     # --- Reconfigure for baseline's file set ---
     echo "Reconfiguring baseline..."
     (cd "${WORKTREE}" && python3 configure.py "${CONFIGURE_ARGS[@]}") >/dev/null
@@ -228,7 +256,20 @@ else
 
     # --- Build baseline report ---
     echo "Building baseline report (this may take a moment)..."
-    ninja -C "${WORKTREE}" "${REPORT_REL}" -j"$(nproc)" 2>&1 | tail -1
+    BUILD_LOG="$(mktemp -t measure_progress_ninja.XXXXXX.log)"
+    if ninja -C "${WORKTREE}" "${REPORT_REL}" -j"$(nproc)" >"${BUILD_LOG}" 2>&1; then
+        tail -1 "${BUILD_LOG}" || true
+    else
+        tail -100 "${BUILD_LOG}" || true
+        if grep -q "manifest 'build.ninja' still dirty" "${BUILD_LOG}" && \
+           grep -q "output build/373307D9/config.json doesn't exist" "${BUILD_LOG}"; then
+            echo ""
+            echo "Hint: ninja's manifest-dirty loop is usually a secondary symptom."
+            echo "      The baseline split step failed, so build/373307D9/config.json was never created."
+        fi
+        exit 1
+    fi
+    rm -f "${BUILD_LOG}" 2>/dev/null || true
 
     if [[ ! -f "${WORKTREE}/${REPORT_REL}" ]]; then
         echo "Error: Baseline report was not generated."

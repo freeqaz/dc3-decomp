@@ -30,6 +30,7 @@ Use the `mcp__orchestrator__` tools for all decomp analysis. Do not call `objdif
 ## Known Patterns
 - **Unsigned zero comparisons**: Use `x > 0` instead of `x != 0` for unsigned types (generates `ble` vs `beq`)
 - **Merged symbols**: `merged_<addr>` names indicate Identical COMDAT Folding (ICF) where the linker merged functions with identical machine code to a single address
+- **Stale object files**: Ninja doesn't track header deps — after changing a header, `touch src/path/file.cpp && ninja build/373307D9/src/path/file.obj` to force rebuild
 
 ## Git Commits
 

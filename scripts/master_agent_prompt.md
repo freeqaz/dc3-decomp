@@ -342,6 +342,10 @@ When you see these patterns and have verified them, report with `at_limit` and y
 
 ## Troubleshooting
 
+### "Match% unchanged after editing a header file"
+**Probable cause:** Ninja doesn't track header file dependencies — the `.obj` is stale
+**Fix:** `touch src/path/to/file.cpp && ninja build/373307D9/src/path/to/file.obj` to force a rebuild
+
 ### "My edits aren't reflected in objdiff - match% unchanged"
 **Probable cause:** You didn't pass `project_dir` to the MCP tool
 **Fix:** Make sure your `mcp__orchestrator__run_objdiff` call includes:

@@ -18,7 +18,7 @@ Bad bl instructions: 10,951 → 99 (REL24 displacement fix, 2026-02-20).
 ### Fixed 2026-02-21 (REFHI/REFLO, linker flags, string COMDATs)
 - **REFHI/REFLO immediate zeroing**: COFF additive relocations read existing instruction immediates as addends. Baked-in XEX values (e.g., `lis r11, 0x8200`) caused overflow (`0x8200 + 0x823A = 0x043A`). Fix: zero bits [15:0] in REFHI/REFLO relocation sites (`insn & 0xFFFF0000`).
 - **Granular linker flags**: `/FORCE` → `/FORCE:MULTIPLE` + `/FORCE:UNRESOLVED`. 275 LNK4006 are warnings (MULTIPLE), 666 LNK2001/2019 are errors (UNRESOLVED).
-- **??_C@_ string COMDATs identified**: 384 unresolved string symbols due to different hash manglings between decomp and split compilers. Inherent to hybrid linking — zero overlap in mangled names for same string content.
+- **??_C@_ string COMDATs identified**: 384 unresolved string symbols due to different hash manglings between decomp and split objects. Both use the same compiler (MSVC 16.00.11886). The `??_C@` hash is JamCRC over string **content bytes only** (confirmed via LLVM's `MicrosoftMangle.cpp`). Under wibo, all hashes are 0 because `RtlComputeCrc32` is unimplemented. Fixing wibo's CRC32 will fix all non-path string hashes. See `docs/plans/CLEAN_LINK_PROJECT.md`.
 - **Configure script**: `scripts/build/configure.sh` wraps `configure.py` with custom `--dtk`, `--objdiff`, `--wibo` paths.
 - **Xenia headless fixes**: `ShowSimpleMessageBox` stderr fallback when no DISPLAY; correct flag `--headless_timeout_ms`.
 

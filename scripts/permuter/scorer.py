@@ -79,7 +79,7 @@ class Scorer:
         When include_instructions is True, passes --include-instructions for
         diagnosis. The JSON dict is only returned when include_instructions=True.
         """
-        cmd = ["./bin/objdiff-cli", "diff", "-p", ".", self.symbol, "-f", "json"]
+        cmd = ["bin/objdiff-cli", "diff", "-p", ".", self.symbol, "-f", "json"]
         if include_instructions:
             cmd.append("--include-instructions")
         result = subprocess.run(cmd, capture_output=True, text=True)

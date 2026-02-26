@@ -124,7 +124,7 @@ Main .text:             0xBAAB90        0xBB7160        +0xC5D0 (+50,640)
 TOTAL:                  0xBB6B14        0xBBB4D4        +0x49BC (+18,876)
 ```
 
-**Verdict:** This is a **systemic compiler artifact**, not a source code issue. The VS2013 compiler generates different COMDAT subsections (.text$x, .text$yc, .text$yd) than the original compiler (~2010 era). These contain exception handling metadata, RTTI, and inline function instantiations.
+**Verdict:** This is a **systemic build artifact**, not a source code issue. The decomp and original use the **same compiler** (MSVC 16.00.11886 / Xbox 360 XDK), but the COMDAT subsection layout differs between decomp-compiled objects and jeff-split objects due to how jeff extracts and restructures sections from the original binary. The `.text$x/.text$yc/.text$yd` subsections contain exception handling metadata, RTTI, and inline function instantiations.
 
 **Actionable items:**
 

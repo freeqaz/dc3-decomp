@@ -48,6 +48,133 @@ MAP_PUBLIC_RE = re.compile(
 
 CRT_SENTINELS = {"__xc_a", "__xc_z", "__xi_a", "__xi_z"}
 
+# Address catalog: kAddr field name -> MAP symbol name.
+# These populate the Dc3Addresses struct at runtime so that decomp XEX
+# rebuilds don't require manual address updates in dc3_hack_pack.cc.
+ADDRESS_CATALOG = {
+    # CRT functions
+    "ioinit":                    "_ioinit",
+    "cinit":                     "_cinit",
+    "errno_fn":                  "_errno",
+    "invalid_parameter_noinfo":  "_invalid_parameter_noinfo",
+    "call_reportfault":          "_call_reportfault",
+    "amsg_exit":                 "_amsg_exit",
+    "report_gsfailure":          "__report_gsfailure",
+    # CRT formatter
+    "output_l":                  "_output_l",
+    "woutput_l":                 "_woutput_l",
+    # Debug subsystem
+    "debug_print":               "?Print@Debug@@UAAXPBD@Z",
+    "debug_fail":                "?Fail@Debug@@QAAXPBDPAX@Z",
+    "debug_do_crucible":         "?DoCrucible@Debug@@QAAXW4ModalType@1@PBDPAX@Z",
+    "datanode_print":            "?Print@DataNode@@QBAXAAVTextStream@@_NH@Z",
+    # Import/thunk
+    "xapi_call_thread_notify":   "XapiCallThreadNotifyRoutines",
+    "xregister_thread_notify":   "XRegisterThreadNotifyRoutine",
+    "mtinit":                    "_mtinit",
+    # Locale
+    "get_system_language":       "?GetSystemLanguage@@YA?AVSymbol@@V1@@Z",
+    "get_system_locale":         "?GetSystemLocale@@YA?AVSymbol@@V1@@Z",
+    "xget_locale":               "XGetLocale",
+    "xtl_get_language":          "XTLGetLanguage",
+    "debug_break":               "DebugBreak",
+    # ReadCacheStream probes
+    "rcs_read_cache_stream":     "?ReadCacheStream@@YAPAVDataArray@@AAVBinStream@@PBD@Z",
+    "rcs_bufstream_read_impl":   "?ReadImpl@BufStream@@EAAXPAXH@Z",
+    "rcs_bufstream_seek_impl":   "?SeekImpl@BufStream@@EAAXHW4SeekType@BinStream@@@Z",
+    # SystemConfig / FindArray
+    "system_config_2":           "?SystemConfig@@YAPAVDataArray@@VSymbol@@0@Z",
+    "find_array":                "?FindArray@DataArray@@QBAPAV1@VSymbol@@_N@Z",
+    # Object / factory globals
+    "object_factories_map":      "?sFactories@Object@Hmx@@0V?$map@VSymbol@@P6APAVObject@Hmx@@XZU?$less@VSymbol@@@stlpmtx_std@@V?$StlNodeAlloc@U?$pair@$$CBVSymbol@@P6APAVObject@Hmx@@XZ@stlpmtx_std@@@5@@stlpmtx_std@@A",
+    "register_factory":          "?RegisterFactory@Object@Hmx@@SAXVSymbol@@P6APAV12@XZ@Z",
+    "new_object":                "?NewObject@Object@Hmx@@SAPAV12@VSymbol@@@Z",
+    "rndmat_static_name_sym":    "?name@?1??StaticClassName@RndMat@@SA?AVSymbol@@XZ@4V3@A",
+    "metamaterial_static_name_sym": "?name@?1??StaticClassName@MetaMaterial@@SA?AVSymbol@@XZ@4V3@A",
+    "g_system_config":           "?gSystemConfig@@3PAVDataArray@@A",
+    "g_string_table_global":     "?gStringTable@@3PAVStringTable@@A",
+    "g_chunk_alloc":             "?gChunkAlloc@@3PAVChunkAllocator@@A",
+    # Memory / allocator
+    "mem_or_pool_alloc":         "?MemOrPoolAlloc@@YAPAXHPBDH0@Z",
+    "mem_alloc":                 "?MemAlloc@@YAPAXHPBDH0H@Z",
+    "pool_alloc":                "?PoolAlloc@@YAPAXHHPBDH0@Z",
+    "mem_free":                  "?MemFree@@YAXPAXPBDH1@Z",
+    "pool_free":                 "?PoolFree@@YAXHPAXPBDH1@Z",
+    "mem_or_pool_free":          "?MemOrPoolFree@@YAXHPAXPBDH1@Z",
+    "operator_new":              "??2@YAPAXI@Z",
+    "operator_delete":           "??3@YAXPAX@Z",
+    "g_num_heaps":               "?gNumHeaps@@3HA",
+    "string_reserve":            "?reserve@String@@QAAXI@Z",
+    # BinStream / Rand2
+    "binstream_read":            "?Read@BinStream@@QAAXPAXH@Z",
+    "binstream_read_endian":     "?ReadEndian@BinStream@@QAAXPAXH@Z",
+    "rand2_ctor":                "??0Rand2@@QAA@H@Z",
+    "rand2_int":                 "?Int@Rand2@@QAAHXZ",
+    "bs_op_dataarray":           "??5@YAAAVBinStream@@AAV0@AAPAVDataArray@@@Z",
+    # DataArray / DataNode / Symbol
+    "string_table_add":          "?Add@StringTable@@QAAPBDPBD@Z",
+    "symbol_preinit":            "?PreInit@Symbol@@SAXHH@Z",
+    # TextStream / String ops
+    "textstream_op_const_char":  "??6TextStream@@QAAAAV0@PBD@Z",
+    "string_op_plus_eq":         "??YString@@QAAAAV0@PBD@Z",
+    # XMP
+    "xmp_override_bg_music":     "XMPOverrideBackgroundMusic",
+    "xmp_restore_bg_music":      "XMPRestoreBackgroundMusic",
+    # Write bridges
+    "write_nolock":              "_write_nolock",
+    "write_fn":                  "_write",
+    # Holmes
+    "protocol_debug_string":     "?ProtocolDebugString@Holmes@@YAPBDE@Z",
+    # Wind
+    "set_wind":                  "?SetWind@@YAXHHMMM@Z",
+    # gConditional sentinel
+    "g_conditional_ctor":        "??__EgConditional@@YAXXZ",
+    # FileIsLocal
+    "file_is_local":             "?FileIsLocal@@YA_NPBD@Z",
+    # File system globals
+    "g_using_cd":                "?gUsingCD@@3HA",
+    "check_for_archive":         "?CheckForArchive@?A0x8038bdc3@@YAXXZ",
+    "file_init":                 "FileInit",
+    "archive_init":              "?ArchiveInit@@YAXXZ",
+    "the_archive":               "?TheArchive@@3PAVArchive@@A",
+    "system_pre_init_1":         "?SystemPreInit@@YAXPBD@Z",
+    "system_pre_init_2":         "?SystemPreInit@@YAXPBD0@Z",
+    # RndTransformable
+    "set_dirty_force":           "?SetDirty_Force@RndTransformable@@AAAXXZ",
+    # Memory_Xbox
+    "alloc_type":                "?AllocType@?A0x2be09a71@@YAPBDK@Z",
+    # Rnd
+    "rnd_create_defaults":       "?CreateDefaults@Rnd@@IAAXXZ",
+    # MetaMaterial
+    "create_and_set_meta_mat":   "?CreateAndSetMetaMat@@YAXPAVRndMat@@@Z",
+    "s_meta_materials":          "?sMetaMaterials@RndMat@@1PAVObjectDir@@A",
+    # Post-processing / GPU init
+    "ng_postproc_rebuild_tex":   "?RebuildTex@NgPostProc@@SAXXZ",
+    "ng_dofproc_init":           "?Init@NgDOFProc@@SAXXZ",
+    "rnd_shadowmap_init":        "?Init@RndShadowMap@@SAXXZ",
+    "dxrnd_suspend":             "?Suspend@DxRnd@@UAAXXZ",
+    "occlusion_query_mgr_ctor":  "??0DxRndOcclusionQueryMgr@@QAA@XZ",
+    "d3d_device_suspend":        "D3DDevice_Suspend",
+    "d3d_device_resume":         "D3DDevice_Resume",
+    "dxrnd_init_buffers":        "?InitBuffers@DxRnd@@AAAXXZ",
+    "dxrnd_create_post_textures": "?CreatePostTextures@DxRnd@@AAAXXZ",
+    # Audio / Synth
+    "synth360_preinit":          "?PreInit@Synth360@@UAAXXZ",
+    "synth_init":                "?SynthInit@@YAXXZ",
+    # Bink video
+    "bink_start_async_thread":   "BinkStartAsyncThread",
+    "bink_platform_init":        "?PlatformInit@BinkMovieSys@@QAAXXZ",
+    # CRT RTTI
+    "rt_dynamic_cast":           "__RTDynamicCast",
+    # String constants
+    "g_null_str":                "?gNullStr@@3PBDB",
+    # SkeletonIdentifier (Kinect player identification)
+    "skeleton_identifier_init":  "?Init@SkeletonIdentifier@@QAAXXZ",
+    "skeleton_identifier_poll":  "?Poll@SkeletonIdentifier@@QAAXXZ",
+    # OSCMessenger (Holmes debug networking)
+    "osc_messenger_poll":        "?Poll@OSCMessenger@@QAAXXZ",
+}
+
 # Hack-pack stub targets: display_name -> MSVC mangled MAP symbol name
 # These are functions that dc3_hack_pack.cc needs to stub at runtime.
 # Addresses come from the MAP file instead of being hardcoded.
@@ -122,8 +249,51 @@ HACK_PACK_STUBS = {
     "DumpHolmesLog": "?DumpHolmesLog@@YA?AVDataNode@@PAVDataArray@@@Z",
     "HolmesClientStackTrace": "?HolmesClientStackTrace@@YAXPBDPAUStackData@@HAAVString@@@Z",
     "HolmesClientSendMessage": "?HolmesClientSendMessage@@YAXABVMessage@@@Z",
+    # Splash screen / boot stubs
+    "Splash::PrepareNext": "?PrepareNext@Splash@@QAA_NXZ",
+    "Splash::BeginSplasher": "?BeginSplasher@Splash@@QAAXXZ",
+    "Splash::Suspend": "?Suspend@Splash@@QAAXXZ",
+    "Splash::Resume": "?Resume@Splash@@QAAXXZ",
+    # Kinect / camera
+    "LiveCameraInput::PreInit": "?PreInit@LiveCameraInput@@SAXXZ",
+    "LiveCameraInput::Init": "?Init@LiveCameraInput@@SAXXZ",
+    # Checksum
+    "HasFileChecksumData": "?HasFileChecksumData@@YA_NXZ",
+    # Voice / gesture / input
+    "VoiceInputPanel::LoadVoiceContexts": "?LoadVoiceContexts@VoiceInputPanel@@AAAXXZ",
+    "ShellInput::Init": "?Init@ShellInput@@QAAXXZ",
+    # Audio / fader
+    "Fader::UpdateValue": "?UpdateValue@Fader@@AAAXMMM@Z",
+    # UI
+    "UIScreen::HasPanel": "?HasPanel@UIScreen@@QAA_NPAVUIPanel@@@Z",
+    # Move / choreography
+    "MoveMgr::Init": "?Init@MoveMgr@@SAXPBD@Z",
+    # Object system
+    "ObjRef::ReplaceList": "?ReplaceList@ObjRef@@QAAXPAVObject@Hmx@@@Z",
+    "list<ObjectDir*>::clear": "?clear@?$_List_base@PAVObjectDir@@V?$StlNodeAlloc@PAVObjectDir@@@stlpmtx_std@@@stlpmtx_std@@QAAXXZ",
     # String operations
     "String::operator+=": "??YString@@QAAAAV0@PBD@Z",
+    # UI
+    "UIManager::GotoFirstScreen": "?GotoFirstScreen@UIManager@@QAAXXZ",
+    # DirLoader
+    "ClassAndNameSort::ClassIndex": "?ClassIndex@ClassAndNameSort@DirLoader@@IAAHPAVObject@Hmx@@@Z",
+    "ClassAndNameSort::operator()": "??RClassAndNameSort@DirLoader@@QAA_NPAVObject@Hmx@@0@Z",
+    "DirLoader::SaveObjects": "?SaveObjects@DirLoader@@SAXAAVBinStream@@PAVObjectDir@@@Z",
+    # Skeleton / Kinect per-frame
+    "SkeletonUpdate::InstanceHandle": "?InstanceHandle@SkeletonUpdate@@SA?AVSkeletonUpdateHandle@@XZ",
+    "SkeletonUpdate::PostUpdate": "?PostUpdate@SkeletonUpdate@@AAAXXZ",
+    "SkeletonHistoryArchive::AddToHistory": "?AddToHistory@SkeletonHistoryArchive@@QAAXHABVSkeleton@@@Z",
+    # Holmes debug networking
+    "OSCMessenger::Poll": "?Poll@OSCMessenger@@QAAXXZ",
+    # Skeleton identifier (Kinect)
+    "SkeletonIdentifier::Init": "?Init@SkeletonIdentifier@@QAAXXZ",
+    "SkeletonIdentifier::Poll": "?Poll@SkeletonIdentifier@@QAAXXZ",
+    # Gesture manager (Kinect)
+    "GestureMgr::Poll": "?Poll@GestureMgr@@QAAXXZ",
+    "GestureMgr::GetSkeleton": "?GetSkeleton@GestureMgr@@QAAAAVSkeleton@@H@Z",
+    "GestureMgr::UpdateTrackedSkeletons": "?UpdateTrackedSkeletons@GestureMgr@@QAAXXZ",
+    # App rendering
+    "App::DrawRegular": "?DrawRegular@App@@IAAXXZ",
     # CRT stopgaps
     "_errno": "_errno",
     "_invalid_parameter_noinfo": "_invalid_parameter_noinfo",
@@ -186,6 +356,32 @@ def parse_pe_text_info(pe_data: bytes) -> Dict[str, int]:
         }
 
     raise ValueError(".text section not found")
+
+
+def parse_pe_section_info(pe_data: bytes) -> Dict[str, Dict[str, int]]:
+    """Parse all PE section headers, returning {name: {address, size}} dicts."""
+    if pe_data[:2] != b"MZ":
+        raise ValueError("not a PE (missing MZ)")
+    pe_off = struct.unpack_from("<I", pe_data, 0x3C)[0]
+    if pe_data[pe_off:pe_off + 4] != b"PE\x00\x00":
+        raise ValueError("not a PE (missing PE signature)")
+    num_sections = struct.unpack_from("<H", pe_data, pe_off + 6)[0]
+    opt_size = struct.unpack_from("<H", pe_data, pe_off + 20)[0]
+    opt_off = pe_off + 24
+    image_base = struct.unpack_from("<I", pe_data, opt_off + 28)[0]
+    sec_off = opt_off + opt_size
+    sections = {}
+    for i in range(num_sections):
+        off = sec_off + i * 40
+        name = pe_data[off:off + 8].split(b"\x00", 1)[0].decode("ascii", errors="replace")
+        vsize, vaddr = struct.unpack_from("<II", pe_data, off + 8)
+        # Keep first occurrence (PE can have duplicate section names)
+        if name not in sections:
+            sections[name] = {
+                "address": image_base + vaddr,
+                "size": vsize,
+            }
+    return sections
 
 
 def decompress_xex_to_pe_data(xex_path: Path) -> bytes:
@@ -562,6 +758,42 @@ def main() -> int:
             print(f"  xdk_code_ranges: {len(xdk_code_ranges)} blocks, "
                   f"{total_bytes} bytes total")
 
+    # Resolve address catalog from MAP + PE for Dc3Addresses runtime population.
+    address_catalog: Dict[str, dict] = {}
+    if map_symbols:
+        catalog_found = 0
+        catalog_missing = []
+        for field_name, map_sym in ADDRESS_CATALOG.items():
+            if map_sym in map_symbols:
+                address_catalog[field_name] = {
+                    "address": map_symbols[map_sym],
+                }
+                catalog_found += 1
+            else:
+                catalog_missing.append(field_name)
+        if catalog_missing:
+            print(f"  address_catalog: {catalog_found} found, "
+                  f"{len(catalog_missing)} missing: {catalog_missing[:10]}"
+                  f"{'...' if len(catalog_missing) > 10 else ''}")
+
+    # PE-derived fields: .text and .idata section info
+    pe_sections = parse_pe_section_info(xex_pe_data if xex_pe_data else pe_data)
+    address_catalog["text_start"] = {"address": text_info["address"]}
+    address_catalog["text_size"] = {"address": text_info["size"]}
+    if ".idata" in pe_sections:
+        idata = pe_sections[".idata"]
+        address_catalog["idata_start"] = {"address": idata["address"]}
+        address_catalog["idata_end"] = {"address": idata["address"] + idata["size"]}
+
+    # Computed: g_hash_table = gStringTable + 4 (/FORCE linker artifact)
+    if "g_string_table_global" in address_catalog:
+        address_catalog["g_hash_table"] = {
+            "address": address_catalog["g_string_table_global"]["address"] + 4,
+        }
+
+    if address_catalog:
+        print(f"  address_catalog: {len(address_catalog)} entries total")
+
     build_label = args.build_label or infer_build_label(pe_path)
 
     xenia_runtime_fingerprint: Optional[int] = None
@@ -604,6 +836,7 @@ def main() -> int:
         "hack_pack_stubs": hack_pack_stubs,
         "xdk_overrides": xdk_overrides,
         "xdk_code_ranges": xdk_code_ranges,
+        "address_catalog": address_catalog,
         "sources": {
             "pe": str(pe_path),
             "xex": str(xex_path) if xex_path else None,
@@ -625,7 +858,8 @@ def main() -> int:
         print(f"  .text xenia_runtime_fnv1a64=0x{xenia_runtime_fingerprint:016X}")
     print(f"  targets={len(targets)} crt_sentinels={len(crt_sentinels)} "
           f"hack_pack_stubs={len(hack_pack_stubs)} "
-          f"xdk_overrides={len(xdk_overrides)}")
+          f"xdk_overrides={len(xdk_overrides)} "
+          f"address_catalog={len(address_catalog)}")
     return 0
 
 

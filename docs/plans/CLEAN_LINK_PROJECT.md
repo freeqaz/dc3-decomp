@@ -6,6 +6,8 @@ Spans three repos: **jeff** (dtk fork — splitting + COFF generation), **wibo**
 
 ## Current State (2026-02-26)
 
+### Config A: Both decomp + split objects linked (historical default)
+
 The hybrid link uses `/FORCE:MULTIPLE` + `/FORCE:UNRESOLVED`. Link succeeds with **0 errors** and the XEX boots in Xenia.
 
 | Metric | Value |
@@ -17,7 +19,40 @@ The hybrid link uses `/FORCE:MULTIPLE` + `/FORCE:UNRESOLVED`. Link succeeds with
 | **LNK4210 (.CRT warnings)** | 28 |
 | **Link flags** | `/FORCE:MULTIPLE` + `/FORCE:UNRESOLVED` |
 
-### LNK4006 Breakdown
+**CRITICAL ISSUE:** Linking both objects for Matching units causes the linker to place split function bodies adjacent to decomp function bodies. The /FORCE linker picks the decomp definition, but the **split object's code still occupies address space**, creating overlapping functions. Runtime guest-memory patches at MAP addresses (decomp) can corrupt the overlapping split code that other functions call. This was the root cause of the SkeletonIdentifier boot hang (Session 40).
+
+### Config B: Decomp-only for Matching units (new default)
+
+Changed `project.py` to skip split objects for Matching units. This eliminates all 3,183 same-object duplicates but introduces 188 unique unresolved symbols (571 total references).
+
+| Metric | Value |
+|--------|-------|
+| **LNK2001/LNK2019 (unresolved)** | **571** (188 unique — see breakdown) |
+| **LNK2005 (hard duplicates)** | **0** |
+| **LNK4006 (duplicate warnings)** | **548** (cross-object only) |
+| **LNK4210 (.CRT warnings)** | 28 |
+| **Link flags** | `/FORCE:MULTIPLE` + `/FORCE:UNRESOLVED` |
+
+With both `/FORCE` flags, the XEX still boots in Xenia — no SkeletonIdentifier overlap hang.
+
+### Unresolved symbols breakdown (Config B)
+
+188 unique unresolved symbols referenced by non-Matching split objects:
+
+| Category | Unique | Refs | Root cause | Fix |
+|----------|--------|------|------------|-----|
+| `merged_*` (ICF aliases) | 46 | 435 | Split objects reference ICF-merged addresses from Matching units | Jeff: resolve to actual symbol name |
+| `??__E` (static init) | 49 | 49 | CRT initializers for Matching units' globals | Decomp source or link_glue.cpp |
+| `__unwind$` (EH records) | 53 | 53 | Exception handler records | Jeff: extract into COMDAT sections |
+| `lbl_*` (data labels) | 23 | 24 | Cross-unit data references to stripped labels | Jeff: emit named symbols |
+| `??_C@` (string literals) | 7 | 7 | String COMDATs from Matching units | Decomp source |
+| `floor0_*` (vorbis) | 6 | 6 | Vorbis library internal functions | link_glue.cpp |
+| `__catch$` (EH) | 2 | 2 | Catch handler records | Jeff or link_glue.cpp |
+| Static data members | 6 | 6 | Globals defined in Matching decomp headers | Decomp source |
+
+The `merged_*` category (46 symbols, 435 references) is the largest blocker. These need jeff to resolve ICF addresses back to actual symbol names.
+
+### LNK4006 Breakdown (Config A, for reference)
 
 The 3,735 LNK4006 warnings break down into two categories:
 
@@ -40,48 +75,19 @@ Testing confirms: rebuilding with the same objects.json (252 units) and the same
 
 The `cf01a80` COMDAT regression (which inflated LNK4006 to ~9,987) has been **fixed** — reverted to `if sect.kind == ObjSectionKind::Bss { continue; }` in jeff.
 
-### The String Hash Problem
+### The String Hash Problem — RESOLVED
 
-Decomp objects consistently produce `??_C@` string literals with hash `A` (= CRC value 0), while original objects have full 8-character hashes:
+`??_C@` string literal hashes now match 100% between decomp and original objects.
 
-```
-Decomp (wibo):   ??_C@_09A@CharBones?$AA@            hash=A   (CRC=0)
-Original:        ??_C@_09CBPAIBIE@CharBones?$AA@      hash=CBPAIBIE
-```
+**Root cause:** `cl.exe` calls `SigForPbCb` from `mspdbXX.dll` (not `RtlComputeCrc32`) for CRC-32 hashing. Wibo's dummy `SigForPbCb` returned 0.
 
-**Every** decomp string has hash=0. This is not a per-string issue — the hash function itself is broken under wibo.
+**Fixes applied:**
+1. Implemented CRC-32 in `SigForPbCb` (`wibo/dll/mspdb/mspdb_dll.cpp`)
+2. Fixed `WIBO_PATH_MAP` to use two source roots: `system/src/` → `src/system/`, `lazer/src/` → `src/lazer/`
+3. Changed include paths from relative to absolute mapped Windows paths (`/I E:/lazer_build_gmc1/system/src`)
+4. Fixed 5 source string bugs found via hash comparison
 
-**Root cause (confirmed):** The `??_C@` hash is a **JamCRC** (CRC-32 with `XorOut=0` instead of `0xFFFFFFFF`) computed over the **string content bytes only** — no file path, no build context, no compilation unit. This is confirmed by:
-
-1. **LLVM's `MicrosoftMangle.cpp:mangleStringLiteral`** — the CRC input is exclusively `GetLittleEndianByte(I)` for each byte of the string literal plus null terminator bytes. No other data is fed into the hash.
-2. **MSVC's `/GF` (string pooling)** — relies on identical strings across different translation units getting the same `??_C@` symbol for COMDAT deduplication. This would be impossible if the hash included build context.
-3. **Arthur O'Dwyer's collision demonstration** — two strings in different files with identical first 32 bytes, same length, and same JamCRC collide, proving the hash is deterministic over content alone.
-
-Under wibo, `cl.exe` calls `RtlComputeCrc32` (ntdll) which wibo doesn't implement, causing a silent fallback to CRC=0 for all strings. Fixing this single function will fix **all** string hashes for strings with identical content. The only residual mismatches will be `__FILE__` path strings (see below).
-
-Currently this doesn't cause link errors (symbols resolve via content suffix matching), but it prevents 1:1 symbol matching.
-
-#### JamCRC Algorithm Reference
-
-| Parameter | Value |
-|-----------|-------|
-| Width | 32 |
-| Poly | `0x04C11DB7` |
-| Init | `0xFFFFFFFF` |
-| RefIn | True |
-| RefOut | True |
-| XorOut | `0x00000000` (standard CRC-32 uses `0xFFFFFFFF`) |
-| Check | `0x340BC6D9` (result for ASCII "123456789") |
-
-Relationship: `JamCRC(data) = CRC32(data) ^ 0xFFFFFFFF` (bitwise complement of standard CRC-32).
-
-The CRC value is encoded in the mangled name using MSVC's number encoding: nibbles mapped to `A`-`P` (`A`=0, `B`=1, ..., `P`=15), terminated by `@`. Value 0 encodes as `A@`, which is exactly what wibo produces.
-
-### File Path Difference
-
-Original: `e:\lazer_build_gmc1\system\src\...` | Decomp: `z:\home\free\code\milohax\dc3-de...`
-
-Since the hash is over string **content** bytes, `__FILE__` and assert strings will produce different hashes because their content genuinely differs (different path bytes → different CRC). These are the **only** strings that will mismatch after fixing wibo CRC32. Fix requires matching build paths (Work Item 4).
+**Result:** 121 shared `??_C@` symbols, 0 mismatches. See `docs/plans/clean-link/WIBO_CRC_INVESTIGATION.md`.
 
 ## Compiler Facts
 
@@ -125,64 +131,34 @@ There is **no compiler version mismatch**. Linking issues stem from: (a) structu
 
 ---
 
-### 3. Fix Wibo CRC32 for String Hashes (hash=0 → real hashes)
+### 3. Fix Wibo CRC32 for String Hashes (hash=0 → real hashes) — DONE
 
-**The problem.** MSVC cl.exe computes a JamCRC hash over string literal content bytes for the `??_C@` mangled name. Under wibo, the CRC always returns 0 (producing hash `A`). The original build produces proper 8-character hashes like `CBPAIBIE`.
+**The problem.** MSVC cl.exe computes a CRC-32 hash over string literal content bytes for the `??_C@` mangled name. Under wibo, the CRC always returned 0 (producing hash `A`).
 
-**Root cause (confirmed):** cl.exe calls `RtlComputeCrc32` (ntdll.dll) to compute the hash. Wibo's `ntdll.cpp` doesn't implement this function, causing a silent fallback to 0. Since the hash is over string content only (not build context), implementing this single function will fix all string hashes.
+**Root cause:** cl.exe calls `SigForPbCb` from `mspdbXX.dll` (NOT `RtlComputeCrc32`). Wibo's dummy `mspdb_dll.cpp` had `SigForPbCb` hardcoded to `return 0;`.
 
-**Note on JamCRC vs standard CRC-32:** MSVC uses JamCRC (`XorOut=0`), but `RtlComputeCrc32` implements standard CRC-32 (`XorOut=0xFFFFFFFF`). The compiler likely applies the `^0xFFFFFFFF` itself after calling `RtlComputeCrc32`, or uses a different internal path. The wibo implementation should match `RtlComputeCrc32`'s standard CRC-32 behavior — the compiler handles the JamCRC conversion.
+**Fix:** Implemented CRC-32 with reflected polynomial `0xEDB88320` in `SigForPbCb`. Called with `dwInitial=0xFFFFFFFF`, no final XOR.
 
-**Fix:**
-
-```cpp
-// wibo/dll/ntdll.cpp
-DWORD WINAPI RtlComputeCrc32(DWORD dwInitial, const BYTE *pData, INT iLen) {
-    // Standard CRC32 (ISO 3309 / ITU-T V.42)
-    DWORD crc = dwInitial ^ 0xFFFFFFFF;
-    for (INT i = 0; i < iLen; i++) {
-        crc ^= pData[i];
-        for (int j = 0; j < 8; j++) {
-            crc = (crc >> 1) ^ (0xEDB88320 & -(crc & 1));
-        }
-    }
-    return crc ^ 0xFFFFFFFF;
-}
-```
-
-**Validation**: After implementing, recompile one `.cpp` file and check that the `??_C@` symbols have real hashes (not `A`).
-
-**Status:** [ ] Not started. Required for 1:1 symbol matching.
-
-**Files:**
-- `wibo/dll/ntdll.cpp` — add `RtlComputeCrc32`
-- `wibo/dll/ntdll.h` — add declaration
+**Status:** [x] Complete. Committed on wibo `x360-linker-support` branch.
 
 ---
 
-### 4. Match Original Build Paths (path strings → identical content)
+### 4. Match Original Build Paths (path strings → identical content) — DONE
 
-**The problem.** `__FILE__` macro and assert strings embed the build path. Original uses `e:\lazer_build_gmc1\system\src\...`, decomp uses `z:\home\free\code\milohax\dc3-de...`. Even with correct CRC32, these strings will have different hashes because their content differs.
+**The problem.** `__FILE__` macro and assert strings embed the build path. Original uses `e:\lazer_build_gmc1\system\src\...`, decomp used `z:\home\free\code\milohax\dc3-de...`.
 
-**Fix options:**
+**Fix applied:** `WIBO_PATH_MAP` with two source root mappings + absolute mapped include paths.
 
-| Option | Complexity | Effect |
-|--------|-----------|--------|
-| A. Map wibo working dir to `e:\lazer_build_gmc1\` | Small | `__FILE__` paths match original |
-| B. Use `/FC` flag with mapped drive | Small | Full canonical path matching |
-| C. Normalize path strings in jeff | Medium | Rewrite split object strings to match decomp |
+The original build had two source trees:
+- `e:\lazer_build_gmc1\system\src\` — Milo engine (our `src/system/`)
+- `e:\lazer_build_gmc1\lazer\src\` — DC3 game (our `src/lazer/`)
 
-Option A: Configure wibo to use `e:` drive mapping and set the working directory to match the original build tree layout. This requires:
-1. Setting up wibo's drive letter mapping (`z:` → Linux root, but we need `e:` → project root)
-2. Adjusting include paths to match: `/I e:\lazer_build_gmc1\system\src` etc.
-3. Or symlinking the project at the expected path
+**Changes:**
+- `configure.py`: Two-entry `WIBO_PATH_MAP` pointing `system/src/` → `src/system/` and `lazer/src/` → `src/lazer/`
+- `tools/defines_common.py`: Include paths changed to absolute mapped Windows paths (`/I E:/lazer_build_gmc1/system/src`)
+- `tools/project.py`: Shell quoting for semicolon-separated path map value
 
-**Status:** [ ] Not started. Required for 1:1 string symbol matching.
-
-**Files:**
-- `wibo/src/files.cpp` — drive letter handling (line 95)
-- `dc3-decomp/configure.py` — include path configuration
-- `dc3-decomp/scripts/build/configure.sh` — build wrapper
+**Status:** [x] Complete. All `__FILE__` paths now match the original build tree layout.
 
 ---
 
@@ -258,13 +234,13 @@ This is cosmetic — the linker resolves all relocations correctly. It causes ad
 | Priority | Work | Impact | Repo | Effort |
 |----------|------|--------|------|--------|
 | **1** | ~~Fix COMDAT regression (`cf01a80`)~~ | ~~LNK4006: ~9,987 → 3,735~~ | jeff | **DONE** |
-| **2** | Fix wibo CRC32 (`RtlComputeCrc32`) | Correct string hashes | wibo | Small (one function) |
-| **3** | Match original build paths | `__FILE__` strings match | wibo + dc3-decomp | Medium (drive mapping) |
+| **2** | ~~Fix wibo CRC32 (`SigForPbCb`)~~ | ~~Correct string hashes~~ | wibo | **DONE** |
+| **3** | ~~Match original build paths~~ | ~~`__FILE__` strings match~~ | wibo + dc3-decomp | **DONE** |
 | **4** | Investigate wine vs wibo LNK4006 | Understand 3,183 same-obj warnings | wibo | Research |
 | **5** | Jeff hash normalization (fallback) | Safety net for residual mismatches | jeff | Small (string transform) |
 | **6** | NODUPLICATES acceptance | ~3,183 same-obj LNK4006 (permanent) | — | Accepted |
 
-After priority 1, the link dropped from ~10K warnings to ~3,735 (done). After priority 2, all non-path string symbols hash correctly. After priority 3, path strings also match — achieving 1:1 `??_C@` symbol matching. After all, the link needs only `/FORCE:MULTIPLE` for NODUPLICATES conflicts and cross-object template duplicates.
+After priority 1, the link dropped from ~10K warnings to ~3,735 (done). Priorities 2 and 3 are done — all `??_C@` string symbols now hash correctly with 0 mismatches. The link now needs only `/FORCE:MULTIPLE` for NODUPLICATES conflicts and cross-object template duplicates.
 
 ---
 
@@ -280,10 +256,11 @@ After priority 1, the link dropped from ~10K warnings to ~3,735 (done). After pr
 - Remove flag from config, verify link succeeds with only `/FORCE:MULTIPLE`
 - Free win — just needs testing
 
-**M3: 1:1 String Symbol Matching**
-- Wibo CRC32 implemented (#3)
-- Build paths matched (#4)
-- Decomp `??_C@` hashes match original `??_C@` hashes
+**M3: 1:1 String Symbol Matching** — DONE (2026-02-26)
+- Wibo CRC32 implemented (#3) via `SigForPbCb` in `mspdb_dll.cpp`
+- Build paths matched (#4) via `WIBO_PATH_MAP` with two source roots
+- 121 shared `??_C@` symbols, 0 hash mismatches
+- 5 source string bugs found and fixed via hash comparison
 
 **M4: Minimal `/FORCE`**
 - Only `/FORCE:MULTIPLE` remains for NODUPLICATES conflicts
@@ -304,7 +281,7 @@ After priority 1, the link dropped from ~10K warnings to ~3,735 (done). After pr
 - Useful as a second-pass verification at milestones — "what's the real match% after link-time effects?"
 - See [LINKED_BINARY_VERIFICATION.md](LINKED_BINARY_VERIFICATION.md) for full design
 
-M1 is done. M2 is a config change (free win). M3 requires wibo work. M4 follows from M1+M2+M3. M5 requires completing the decomp. M6 can be built any time after M2 (once the linked binary is meaningful).
+M1 is done. M2 is a config change (free win). M3 is done. M4 follows from M1+M2+M3. M5 requires completing the decomp. M6 can be built any time after M2 (once the linked binary is meaningful).
 
 ---
 
@@ -334,9 +311,9 @@ M1 is done. M2 is a config change (free win). M3 requires wibo work. M4 follows 
 
 | File | Lines | What |
 |------|-------|------|
-| `wibo/dll/ntdll.cpp` | — | Missing `RtlComputeCrc32` (cause of hash=0) |
-| `wibo/dll/ntdll.h` | — | ntdll function declarations |
-| `wibo/src/files.cpp` | 84-97 | Path conversion and drive letter handling |
+| `wibo/dll/mspdb/mspdb_dll.cpp` | 559-576 | `SigForPbCb` CRC-32 implementation (the CRC fix) |
+| `wibo/src/files.cpp` | — | `WIBO_PATH_MAP` support, `pathToWindows`/`pathFromWindows` |
+| `wibo/dll/ntdll.cpp` | — | `RtlComputeCrc32` (for completeness, not used by cl.exe) |
 | `wibo/src/modules.cpp` | 774-777 | Stub mechanism (crashes on unimplemented calls) |
 
 ## Resolved Issues
