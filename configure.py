@@ -301,6 +301,14 @@ config.custom_build_steps = {
                 "desc": "PATCH anonymous namespace hashes",
             },
         },
+        {
+            "outputs": str(stamp_dir / "data_stubs.stamp"),
+            "rule": "run_script",
+            "variables": {
+                "cmd": "python3 scripts/create_data_stubs.py",
+                "desc": "GEN data-stub .obj files for lbl_* resolution",
+            },
+        },
     ],
 }
 
