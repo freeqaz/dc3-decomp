@@ -194,7 +194,8 @@ class GhidraTools:
         # Strategy 2: Exact name match (O(n) - only if map lookup fails)
         functions = fm.getFunctions(True)
         for func in functions:
-            if name == func.name:
+            func_full_name = func.getSymbol().getName(True) if hasattr(func, "getSymbol") else func.name
+            if name == func.name or name == func_full_name:
                 logger.debug(f"Found function by exact match: {name}")
                 return func
 
