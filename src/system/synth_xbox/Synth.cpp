@@ -13,12 +13,14 @@
 #include "FxSendWah.h"
 #include "Synth.h"
 #include "macros.h"
+#include "math/Decibels.h"
 #include "obj/Data.h"
 #include "obj/Object.h"
 #include "os/Debug.h"
 #include "os/System.h"
 #include "stl/_algobase.h"
 #include "synth/Synth.h"
+#include "synth_xbox/ExternalMic.h"
 #include "synth_xbox/FxSend.h"
 #include "synth_xbox/Mic.h"
 #include "synth_xbox/StreamReceiver360.h"
@@ -26,6 +28,11 @@
 #include "utl/Std.h"
 #include "xdk/xapilibi/xbox.h"
 #include "xdk/xaudio2/xaudio2.h"
+
+class ExternalMicClientMgr {
+public:
+    static void Associate(int, MicXbox *);
+};
 
 Synth360 *TheXboxSynth;
 
@@ -55,25 +62,24 @@ void Synth360::Init() {
     REGISTER_OBJ_FACTORY(FxSendPitchShift360)
     REGISTER_OBJ_FACTORY(FxSendSynapse360)
 
+    Symbol enableHeadsetSym("enable_headset_output");
     DataArray *synthCfg = SystemConfig(Symbol("synth"));
-    bool enableHeadset = false;
-    synthCfg->FindData(Symbol("enable_headset_output"), enableHeadset, false);
-    if (enableHeadset) {
+    if (synthCfg->FindArray(enableHeadsetSym, true)->Int(1)) {
         SetupHeadsetSubmixes();
     }
 
     float micVolume = 0.0f;
+    Symbol volumeSym("volume");
     DataArray *micCfg = SystemConfig(Symbol("synth"), Symbol("mic"));
-    micCfg->FindData(Symbol("volume"), micVolume, false);
+    micCfg->FindData(volumeSym, micVolume, false);
 
-    int numMics = GetNumMics();
-    if (numMics > 0) {
+    if (GetNumMics() > 0) {
         MicManagerXbox::GetInstance()->Init();
-        mMics.resize(numMics, nullptr);
-        for (int i = 0; i < numMics; i++) {
-            // TODO: MicXbox is abstract, needs full implementation
-            // MicXbox *mic = new MicXbox(-1, DbToRatio(micVolume));
-            // mMics[i] = mic;
+        mMics.resize(GetNumMics(), nullptr);
+        ExternalMic::Init();
+        for (unsigned int i = 0; i < mMics.size(); i++) {
+            mMics[i] = new MicXbox(-1, DbToRatio(micVolume));
+            ExternalMicClientMgr::Associate(i, dynamic_cast<MicXbox *>(mMics[i]));
         }
     }
 }

@@ -20,7 +20,7 @@ public:
     };
 
     struct ScreenParams {
-        const char *fname;
+        char *fname;
         int msecs;
     };
 

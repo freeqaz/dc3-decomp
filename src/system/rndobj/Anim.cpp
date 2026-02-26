@@ -163,21 +163,20 @@ void RndAnimatable::StopAnimation() {
 }
 
 void RndAnimatable::FireFlowLabel(Symbol s) {
-    if (!s.Null()) {
-        FOREACH (it, Refs()) {
-            Hmx::Object *owner = it->RefOwner();
-            if (owner && owner->ClassName() == "AnimTask") {
-                AnimTask *task = static_cast<AnimTask *>(owner);
-                if (task->AnimTarget()) {
-                    owner->Handle(Message("on_anim_event", s), false);
-                    break;
-                }
+    if (s.Null()) return;
+    FOREACH (it, Refs()) {
+        Hmx::Object *owner = it->RefOwner();
+        if (owner && owner->ClassName() == "AnimTask") {
+            AnimTask *task = static_cast<AnimTask *>(owner);
+            if (task->AnimTarget()) {
+                owner->Handle(Message("on_anim_event", s), false);
+                break;
             }
         }
-        static Symbol flow_label_fired("flow_label_fired");
-        Message msg(flow_label_fired, s.Str());
-        Export(msg, true);
     }
+    static Symbol flow_label_fired("flow_label_fired");
+    Message msg(flow_label_fired, s.Str());
+    Export(msg, true);
 }
 
 Task *RndAnimatable::Animate(

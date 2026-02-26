@@ -70,12 +70,11 @@ void ArkHash::Read(BinStream &bs, int len) {
 
     int heapSize;
     bs >> heapSize;
-    char *heapBase = (char *)MemAlloc(heapSize + len, __FILE__, 0x112, "ArkHash");
-    mHeap = heapBase;
-    mFree = heapBase + heapSize;
-    mHeapEnd = heapBase + (heapSize + len);
+    mHeap = (char *)MemAlloc(heapSize + len, __FILE__, 0x112, "ArkHash");
+    mFree = mHeap + heapSize;
+    mHeapEnd = mHeap + (heapSize + len);
 
-    bs.Read(heapBase, heapSize);
+    bs.Read(mHeap, heapSize);
     memset(mFree, 0, mHeapEnd - mFree);
 
     bs >> mTableSize;
@@ -304,13 +303,14 @@ void Archive::Read(int heap_headroom) {
 void Archive::Merge(Archive &shadow) {
     std::vector<FileEntry> extraFileEntries;
     MILO_ASSERT(shadow.mNumArkfiles == 1, 0x3C0);
+    const ArkHash &shadowHash = shadow.mHashTable;
     unsigned long long totalSize = 0;
     for (size_t i = 0; i < mArkfileSizes.size(); i++) {
         totalSize += mArkfileSizes[i];
     }
     FOREACH (it, shadow.mFileEntries) {
-        const char *name = shadow.mHashTable[it->mHashedName];
-        const char *path = shadow.mHashTable[it->mHashedPath];
+        const char *name = shadowHash[it->mHashedName];
+        const char *path = shadowHash[it->mHashedPath];
         FileEntry entry;
         entry.mHashedName = mHashTable.AddString(name);
         entry.mHashedPath = mHashTable.AddString(path);
@@ -318,8 +318,8 @@ void Archive::Merge(Archive &shadow) {
         if (fileIt != mFileEntries.end() && fileIt->mHashedName == entry.HashedName()
             && fileIt->mHashedPath == entry.HashedPath()) {
             fileIt->mOffset = it->mOffset + totalSize;
-            fileIt->mSize = it->mSize;
             fileIt->mUCSize = it->mUCSize;
+            fileIt->mSize = it->mSize;
         } else {
             FileEntry toAdd;
             toAdd.mOffset = it->mOffset + totalSize;
@@ -344,17 +344,16 @@ void Archive::Merge(Archive &shadow) {
 void ArchiveInit() {
     if (UsingCD() || OptionBool("force_ark", false)) {
         Symbol plat = PlatformSymbol(TheLoadMgr.GetPlatform());
-        bool hardDrive = false;
-        bool b4;
         const char *hdrName;
+        bool hardDrive = false;
+        bool b4 = false;
         if (UsingCD()) {
             String titlePath(TheContentMgr.TitleContentPath());
             if (!titlePath.empty()) {
-                hdrName = MakeString("%s/gen/patch_%s", titlePath.c_str(), plat);
                 b4 = true;
-            } else
-                b4 = false;
-            hardDrive = b4;
+                hardDrive = b4;
+                hdrName = MakeString("%s/gen/patch_%s", titlePath.c_str(), plat);
+            }
         } else {
             hdrName = MakeString("gen/patch_%s", plat);
             b4 = true;
@@ -364,7 +363,7 @@ void ArchiveInit() {
             if (hardDrive) {
                 archive.SetLocationHardDrive();
             }
-            TheArchive = new Archive(MakeString("gen/main_%s", plat), 0);
+            TheArchive = new Archive(MakeString("gen/main_%s", plat), archive.HashFill());
             TheArchive->Merge(archive);
         } else {
             TheArchive = new Archive(MakeString("gen/main_%s", plat), 0);

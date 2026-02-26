@@ -361,7 +361,7 @@ void UIManager::GotoScreenImpl(UIScreen *scr, bool b1, bool b2) {
 #ifdef MILO_DEBUG
         // Start tracking load time for the new screen
         if (mTransitionScreen) {
-            mOverlay->CurrentLine() = gNullStr;
+            if (mOverlay) mOverlay->CurrentLine() = gNullStr;
             mLoadTimer.Restart();
         }
 #endif
@@ -604,7 +604,7 @@ void UIManager::Init() {
         _tmp9 * DEG2RAD,
         1.0f
     );
-    // mCam->SetLocalPos(0, camCfg->FindFloat("y"), 0);
+    mCam->SetLocalPos(Vector3(0, camCfg->FindFloat("y"), 0));
     DataArray *zArr = camCfg->FindArray("z-range");
     mCam->SetZRange(zArr->Float(1), zArr->Float(2));
     mEnv = Hmx::Object::New<RndEnviron>();
@@ -616,7 +616,7 @@ void UIManager::Init() {
     cfg->FindData("default_allow_edit_text", mDefaultAllowEditText, false);
     bool notify = false;
     cfg->FindData("verbose_locale_notifies", notify, false);
-    Locale::SetLocaleVerboseNotify(false);
+    Locale::SetLocaleVerboseNotify(notify);
     REGISTER_OBJ_FACTORY(UIScreen)
     REGISTER_OBJ_FACTORY(UIPanel)
     REGISTER_OBJ_FACTORY(PanelDir)
@@ -652,12 +652,12 @@ void UIManager::Init() {
     mOverlay = RndOverlay::Find("ui", true);
     mOverlay->SetShowing(false);
     TheOSCMessenger.Connect();
+    TheDebug.AddFailAppendCallback(FailAppendCallback);
     PreloadSharedSubdirs("ui");
-    // FailAppendCallback(FixedString &str); unsure
     UILabel::sRequireFixedLength = true;
     static Message init("init");
     Hmx::Object::Handle(init, false);
-    mTimer.Restart();
+    UILabel::sRequireFixedLength = false;
     cfg->FindData("overload_horizontal_nav", mOverloadHorizontalNav, false);
     TheKnownIssues.Init();
 }

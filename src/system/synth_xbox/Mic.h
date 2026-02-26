@@ -46,6 +46,16 @@ public:
     virtual short *GetRecentBuf(int &);
     virtual short *GetContinuousBuf(int &);
     virtual void SetFxSend(FxSend *);
+    virtual bool IsRunning() const;
+    virtual void SetDMA(bool);
+    virtual bool GetDMA() const;
+    virtual void SetEarpieceVolume(float);
+    virtual float GetEarpieceVolume() const;
+    virtual void SetCompressor(bool);
+    virtual bool GetCompressor() const;
+    virtual void SetCompressorParam(float);
+    virtual float GetCompressorParam() const;
+    virtual int GetSampleRate() const;
 
     MicXbox(int, float);
     void Poll();

@@ -58,9 +58,9 @@ void Splash::Suspend() {
 }
 
 void Splash::Resume() {
-    MILO_ASSERT(MainThread(), 0x257);
+    MILO_ASSERT(MainThread(), 0x106);
     if (--mSuspendCount <= 0) {
-        MILO_ASSERT(mSuspendCount == 0, 0x264);
+        MILO_ASSERT(mSuspendCount == 0, 0x10d);
         if (mThreaded != 0) {
             // Threaded mode: resume rendering and signal render thread
             if (SetMutableState(kResumeReady)) {
@@ -68,14 +68,16 @@ void Splash::Resume() {
                     mCurrentMovie->SetShowing(false);
                     mCurrentMovie->GetMovie().UnlockThread();
                 }
-                MILO_ASSERT(SetMutableState(kResuming), 0x279);
+                TheNgRnd.Resume();
+                MILO_ASSERT(SetMutableState(kResuming), 0x11c);
                 WaitForState(kResumed);
             } else {
-                MILO_ASSERT(mState == kWaitingForTerminating, 0x285);
+                MILO_ASSERT(mState == kWaitingForTerminating, 0x122);
                 if (mCurrentMovie != NULL) {
                     mCurrentMovie->SetShowing(false);
                     mCurrentMovie->GetMovie().UnlockThread();
                 }
+                TheNgRnd.Resume();
             }
         } else {
             // Non-threaded mode: resume drawing immediately
@@ -90,38 +92,41 @@ void Splash::Resume() {
 void Splash::AddScreen(char const *c, int i) {
     MILO_ASSERT(!gSplashing, 0x175);
     ScreenParams sp;
-    sp.fname = c;
+    sp.fname = (char *)c;
     sp.msecs = i;
     CritSecTracker tracker(&mScreenLock);
     mScreens.push_back(sp);
 }
 
 bool Splash::PrepareNext() {
-    CritSecTracker tracker(&mScreenLock);
-    if (mScreens.empty()) {
-        return false;
+    ScreenParams sp;
+    {
+        CritSecTracker tracker(&mScreenLock);
+        if (mScreens.empty()) {
+            return false;
+        }
+        sp = mScreens.front();
     }
 
-    // Load and prepare the next screen from the queue
-    auto fname = mScreens.back().fname;
-    FilePath fp = fname;
-    auto loadedObj = DirLoader::LoadObjects(fp, 0, 0);
-    RndDir *rndDir = dynamic_cast<RndDir *>(loadedObj);
+    FilePath fp = sp.fname;
+    RndDir *rndDir = dynamic_cast<RndDir *>(DirLoader::LoadObjects(fp, 0, 0));
     if (!rndDir) {
-        MILO_FAIL("Missing file %s", fname);
+        MILO_FAIL("Missing file %s", sp.fname);
     }
 
-    // Pre-check if movie exists
     auto splashMovie = rndDir->Find<TexMovie>(kSplashMovie, false);
     if (splashMovie) {
         splashMovie->GetMovie().CheckOpen(false);
     }
 
-    // Queue the prepared screen
-    CritSecTracker tracker2(&mScreenLock);
-    PreparedScreenParams psp = {rndDir};
-    mPreparedScreens.push_back(psp);
-    mScreens.clear();
+    PreparedScreenParams psp;
+    psp.dir = rndDir;
+    psp.durationMs = sp.msecs;
+    {
+        CritSecTracker tracker(&mScreenLock);
+        mPreparedScreens.push_back(psp);
+        mScreens.pop_front();
+    }
     return true;
 }
 
@@ -284,7 +289,11 @@ void Splash::WaitForState(Splash::SplashState state) {
         MILO_FAIL("Can\'t WaitForState");
     }
     // Wait for state change, allowing intermediate states for kResumed
-    while (mState != state && (state != kResumed || mState <= kResumed)) {
+    while (mState != state) {
+        if (state == kResumed) {
+            if (mState > kResumed)
+                break;
+        }
         MainThread() ? mWorkerEvent.Wait(-1) : mMainEvent.Wait(-1);
     }
 }
@@ -364,27 +373,29 @@ bool Splash::ShowNext() {
 }
 
 bool Splash::Show() {
-    if (&mScreenLock) {
-        mScreenLock.Enter();
+    RndDir *dir;
+    int durationMs;
+    {
+        CritSecTracker tracker(&mScreenLock);
+        MILO_ASSERT(!mPreparedScreens.empty(), 0x283);
+        dir = mPreparedScreens.begin()->dir;
+        durationMs = mPreparedScreens.begin()->durationMs;
     }
-    MILO_ASSERT(!mPreparedScreens.empty(), 0x283);
-    if (&mScreenLock) {
-        mScreenLock.Exit();
-    }
-    mCurrentDir = mPreparedScreens.begin()->dir;
+    mCurrentDir = dir;
     mCurrentDir->Enter();
     mCurrentCam = mCurrentDir->Find<RndCam>(kSplashCam, true);
-    mCurrentMovie = mCurrentDir->Find<TexMovie>(kSplashMovie, true);
+    mCurrentMovie = mCurrentDir->Find<TexMovie>(kSplashMovie, false);
     if (mCurrentMovie) {
         if (mThreaded) {
             mCurrentMovie->SetShowing(true);
             mCurrentMovie->GetMovie().SetPaused(false);
-            mSplashDurationMs = ceil(mCurrentMovie->GetMovie().MsPerFrame() * mCurrentMovie->GetMovie().NumFrames());
+            double duration = (double)mCurrentMovie->GetMovie().MsPerFrame() * mCurrentMovie->GetMovie().NumFrames();
+            mSplashDurationMs = (int)ceilf(duration);
         } else {
             return ShowNext();
         }
     } else {
-        mSplashDurationMs = mPreparedScreens.begin()->durationMs;
+        mSplashDurationMs = durationMs;
     }
     mCurrentTrigger = mCurrentDir->Find<EventTrigger>("splash.trig", false);
     if (mCurrentTrigger) {

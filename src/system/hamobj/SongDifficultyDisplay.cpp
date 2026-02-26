@@ -24,11 +24,11 @@ BEGIN_SAVES(SongDifficultyDisplay)
     bs << mResourceDir;
 END_SAVES
 
-void SongDifficultyDisplay::Copy(const Hmx::Object *o, Hmx::Object::CopyType ty) {
-    UIComponent::Copy(o, ty);
-    const SongDifficultyDisplay *c = dynamic_cast<const SongDifficultyDisplay *>(o);
-    if (c) {
-        mResourceDir = c->mResourceDir;
+void SongDifficultyDisplay::Copy(const Hmx::Object *obj, Hmx::Object::CopyType type) {
+    UIComponent::Copy(obj, type);
+    const SongDifficultyDisplay *src = dynamic_cast<const SongDifficultyDisplay *>(obj);
+    if (src) {
+        mResourceDir = src->mResourceDir;
     }
     Update();
 }

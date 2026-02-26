@@ -152,6 +152,11 @@ void FileRecursePattern(const char *, void (*)(char const *, char const *), bool
 class BinStream &operator>>(class BinStream &, FileStat &);
 }
 
+inline int FileGetStat(const char *iFilename) {
+    FileStat buffer;
+    return FileGetStat(iFilename, &buffer);
+}
+
 File *NewFile(const char *iFilename, int iMode);
 
 const char *FileRoot();

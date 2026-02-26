@@ -116,34 +116,34 @@ void CharCuff::Highlight() {
     Hmx::Color white(1, 1, 1, 1);
     const float kTwoPi = 6.2831855f;
     const float kInv32 = 1.0f / 32.0f;
-    for (int i = 0; i < 2; i++) {
-        for (int j = 0; j < 32; j++) {
-            float toSine = (kInv32 * (kTwoPi * j));
-            Vector3 va8(Sine(toSine), Cosine(toSine), mShape[i].offset);
-            Vector3 vb4(Sine(toSine), Cosine(toSine), mShape[i + 1].offset);
-            (Vector2 &)va8 *= mShape[i].radius * Eccentricity((Vector2 &)va8);
-            (Vector2 &)vb4 *= mShape[i + 1].radius * Eccentricity((Vector2 &)vb4);
-            Vector3 vc0;
-            Multiply(va8, WorldXfm(), vc0);
-            Vector3 vcc;
-            Multiply(vb4, WorldXfm(), vcc);
-            TheRnd.DrawLine(vc0, vcc, white, false);
-            if (i < 2) {
-                float toSinePlus1 = (kInv32 * (kTwoPi * (j + 1)));
-                va8.Set(Sine(toSinePlus1), Cosine(toSinePlus1), mShape[i].offset);
-                (Vector2 &)va8 *= mShape[i].radius * Eccentricity((Vector2 &)va8);
-                Multiply(va8, WorldXfm(), vcc);
-                TheRnd.DrawLine(vc0, vcc, white, false);
+    for (int shapeIdx = 0; shapeIdx < 2; shapeIdx++) {
+        for (int pointIdx = 0; pointIdx < 32; pointIdx++) {
+            float angle = kTwoPi * pointIdx * kInv32;
+            Vector3 innerPt(Sine(angle), Cosine(angle), mShape[shapeIdx].offset);
+            Vector3 outerPt(Sine(angle), Cosine(angle), mShape[shapeIdx + 1].offset);
+            (Vector2 &)innerPt *= mShape[shapeIdx].radius * Eccentricity((Vector2 &)innerPt);
+            (Vector2 &)outerPt *= mShape[shapeIdx + 1].radius * Eccentricity((Vector2 &)outerPt);
+            Vector3 worldInner;
+            Multiply(innerPt, WorldXfm(), worldInner);
+            Vector3 worldOuter;
+            Multiply(outerPt, WorldXfm(), worldOuter);
+            TheRnd.DrawLine(worldInner, worldOuter, white, false);
+            if (shapeIdx < 2) {
+                float nextAngle = (kInv32 * (kTwoPi * (pointIdx + 1)));
+                innerPt.Set(Sine(nextAngle), Cosine(nextAngle), mShape[shapeIdx].offset);
+                (Vector2 &)innerPt *= mShape[shapeIdx].radius * Eccentricity((Vector2 &)innerPt);
+                Multiply(innerPt, WorldXfm(), worldOuter);
+                TheRnd.DrawLine(worldInner, worldOuter, white, false);
             }
-            if (i == 1) {
-                Vector3 vd8(Sine(toSine), Cosine(toSine), mShape[i].offset);
-                (Vector2 &)vd8 *= mOuterRadius;
-                Multiply(vd8, WorldXfm(), vc0);
-                float toSinePlus1 = (j + 1) * kTwoPi * kInv32;
-                vb4.Set(Sine(toSinePlus1), Cosine(toSinePlus1), mShape[i].offset);
-                (Vector2 &)vb4 *= mOuterRadius;
-                Multiply(vb4, WorldXfm(), vcc);
-                TheRnd.DrawLine(vc0, vcc, white, false);
+            if (shapeIdx == 1) {
+                Vector3 boundaryPt(Sine(angle), Cosine(angle), mShape[shapeIdx].offset);
+                (Vector2 &)boundaryPt *= mOuterRadius;
+                Multiply(boundaryPt, WorldXfm(), worldInner);
+                float nextAngle = (pointIdx + 1) * kTwoPi * kInv32;
+                outerPt.Set(Sine(nextAngle), Cosine(nextAngle), mShape[shapeIdx].offset);
+                (Vector2 &)outerPt *= mOuterRadius;
+                Multiply(outerPt, WorldXfm(), worldOuter);
+                TheRnd.DrawLine(worldInner, worldOuter, white, false);
             }
         }
     }

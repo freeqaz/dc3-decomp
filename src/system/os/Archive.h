@@ -43,8 +43,6 @@ private:
     int mUCSize;
 };
 
-const int preinitArk = 1;
-
 class Archive {
 public:
     enum Mode {
@@ -76,6 +74,7 @@ public:
     void Merge(Archive &shadow);
     bool Patched() const { return mIsPatched; }
     int NumArkFiles() const { return mNumArkfiles; }
+    int HashFill() const { return mHashTable.mFree - mHashTable.mHeap; }
 
     static bool DebugArkOrder();
 

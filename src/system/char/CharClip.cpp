@@ -92,7 +92,12 @@ void CharClip::Transitions::RemoveNodes(NodeVector *n) {
     memmove(n, next, (int)mNodeEnd - (int)next);
     Resize(BytesInMemory() - ((int)next - (int)n), nullptr);
     for (NodeVector *it = mNodeStart; it < mNodeEnd; it = it->Next()) {
-        it->clip->Release(nullptr);
+        // Fix up linked list pointers after memmove
+        ObjRef *clipRef = (ObjRef*)&it->clip;
+        ObjRef *clipNext = *(ObjRef**)((char*)clipRef + 4);
+        ObjRef *clipPrev = *(ObjRef**)((char*)clipRef + 8);
+        *(ObjRef**)((char*)clipPrev + 4) = clipRef;
+        *(ObjRef**)((char*)clipNext + 8) = clipRef;
     }
 }
 

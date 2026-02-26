@@ -48,9 +48,8 @@ DistEntry::DistEntry(const DistEntry &entry) : beat(entry.beat), bones(entry.bon
 ClipDistMap::ClipDistMap(
     CharClip *clip1, CharClip *clip2, float f1, float f2, int i, const DataArray *a
 )
-    : mClipA(clip1), mClipB(clip2), mWeightData(a), mSamplesPerBeat(8),
-      mLastMinErr(kHugeFloat), mBeatAlign(f1), mBeatAlignOffset(0), mBlendWidth(f2),
-      mNumSamples(i) {
+    : mBeatAlign(f1), mBlendWidth(f2), mClipA(clip1), mClipB(clip2), mWeightData(a),
+      mSamplesPerBeat(8), mLastMinErr(kHugeFloat), mBeatAlignOffset(0), mNumSamples(i) {
     mDists.Resize(CalcWidth(), CalcHeight());
 
     mBeatAlignPeriod = (int)((double)(mBeatAlign * mSamplesPerBeat) + 0.5);
@@ -196,56 +195,47 @@ void ClipDistMap::FindNodes(float maxError, float maxDist, float endDist) {
 }
 
 int ClipDistMap::CalcWidth() {
-    float clipAStartBeat = mClipA->StartBeat();
-    float samplesDiv = (1.0 / mSamplesPerBeat);
-    float clipASamplesMod = Mod(clipAStartBeat, 1.0 / mSamplesPerBeat);
-    float f1 = clipAStartBeat - clipASamplesMod;
+    float start = mClipA->StartBeat();
+    float inv = 1.0f / (float)mSamplesPerBeat;
+    float mod = Mod(start, inv);
+    float f1 = start - mod;
     mAStart = f1;
-
-    if (f1 < mClipA->StartBeat()) {
-        mAStart = f1 + samplesDiv;
+    if (mAStart < mClipA->StartBeat()) {
+        mAStart += inv;
     }
 
-    f1 = mClipA->EndBeat();
-    clipASamplesMod = Mod(f1, samplesDiv);
-    mAEnd = f1 - clipASamplesMod;
-    clipASamplesMod = (f1 - clipASamplesMod) + samplesDiv;
-
-    if (clipASamplesMod <= mClipA->EndBeat()) {
-        mAEnd = clipASamplesMod;
+    float end = mClipA->EndBeat();
+    float mod2 = Mod(end, inv);
+    mAEnd = end - mod2;
+    float next = mAEnd + inv;
+    if (next <= mClipA->EndBeat()) {
+        mAEnd = next;
     }
 
-    f1 = floor(mAEnd - mAStart * mSamplesPerBeat + 0.5);
-
-    uint val = f1;
-
-    return (((val != 0) - (val >> 0x1f) & val)) + 1;
+    int res = (int)floor(((mAEnd - mAStart) * (float)mSamplesPerBeat) + 0.5f);
+    return Max(0, res) + 1;
 }
 
 int ClipDistMap::CalcHeight() {
-    float clipBStartBeat = mClipB->StartBeat();
-    float samplesDiv = 1.0f / mSamplesPerBeat;
-    float clipBSamplesMod = Mod(clipBStartBeat, samplesDiv);
-    float f1 = clipBStartBeat - clipBSamplesMod;
+    float start = mClipB->StartBeat();
+    float inv = 1.0f / (float)mSamplesPerBeat;
+    float mod = Mod(start, inv);
+    float f1 = start - mod;
     mBStart = f1;
-
     if (mBStart < mClipB->StartBeat()) {
-        mBStart += samplesDiv;
-    }
-    // fVar5 = mClipB->EndBeat();
-    f1 = mClipB->EndBeat();
-    clipBSamplesMod = Mod(mClipB->EndBeat(), samplesDiv);
-    clipBStartBeat = (f1 - clipBSamplesMod) + samplesDiv;
-    f1 -= clipBSamplesMod;
-
-    if (clipBStartBeat <= mClipB->EndBeat()) {
-        f1 = clipBStartBeat;
+        mBStart += inv;
     }
 
-    f1 = floor(((f1 - mBStart) * (float)mSamplesPerBeat) + 0.5f);
-    uint val = f1;
+    float end = mClipB->EndBeat();
+    float mod2 = Mod(end, inv);
+    float fVar = end - mod2;
+    float next = fVar + inv;
+    if (next <= mClipB->EndBeat()) {
+        fVar = next;
+    }
 
-    return (((val != 0) - (val >> 0x1f) & val)) + 1;
+    int res = (int)floor(((fVar - mBStart) * (float)mSamplesPerBeat) + 0.5f);
+    return Max(0, res) + 1;
 }
 
 void ClipDistMap::Array2d::Resize(int w, int h) {
@@ -302,10 +292,12 @@ void ClipDistMap::SetNodes(ClipDistMap::Node *node1, ClipDistMap::Node *node2) {
 
 void ClipDistMap::DrawDot(float x, float y, float f3, float f4, Hmx::Color const &color) {
     Hmx::Rect rect;
-    rect.w = 2.0;
-    rect.h = 2.0;
     float scale = (float)mSamplesPerBeat;
+    rect.w = 2.0f;
+    rect.h = 2.0f;
     rect.x = (f3 - mAStart) * scale * 2.0f + (x - 1.0f);
-    rect.y = ((f4 - mBStart) * scale - (float)(mDists.mHeight - 1)) * 2.0f + y + 1.0f;
+    float heightOffset = (float)(mDists.mHeight - 1);
+    float inner = heightOffset - (f4 - mBStart) * scale;
+    rect.y = inner * 2.0f + y + 1.0f;
     TheRnd.DrawRect(rect, color, nullptr, nullptr, nullptr);
 }

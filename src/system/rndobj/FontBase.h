@@ -5,6 +5,7 @@
 #include "utl/MemMgr.h"
 
 class RndFontBase : public Hmx::Object {
+    friend class UIFontImporter;
 public:
     class KernInfo {
     public:

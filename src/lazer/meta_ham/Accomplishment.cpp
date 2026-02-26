@@ -113,7 +113,7 @@ void Accomplishment::Configure(DataArray *i_pConfig) {
             mPassiveMsgPriority = 1;
         } else if (1000 < mPassiveMsgPriority) {
             MILO_NOTIFY(
-                "Passive Message Priority for goal %s is more than the minimum: %i!",
+                "Passive Message Priority for goal %s is more than the maximum: %i!",
                 mName.Str(),
                 sPriorities[1]
             );

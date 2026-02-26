@@ -101,6 +101,21 @@ void MicXbox::Stop() {
     }
 }
 
+void MicXbox::SetFxSend(FxSend *fx) {
+    // TODO
+}
+
+bool MicXbox::IsRunning() const { return mRunning; }
+void MicXbox::SetDMA(bool b) {}
+bool MicXbox::GetDMA() const { return false; }
+void MicXbox::SetEarpieceVolume(float f) {}
+float MicXbox::GetEarpieceVolume() const { return 0.0f; }
+void MicXbox::SetCompressor(bool b) {}
+bool MicXbox::GetCompressor() const { return false; }
+void MicXbox::SetCompressorParam(float f) {}
+float MicXbox::GetCompressorParam() const { return 0.0f; }
+int MicXbox::GetSampleRate() const { return 16000; }
+
 void MicXbox::OnMicConnected(unsigned long ul, bool b, Symbol const &s) {
     unkc = b;
     mDeviceName = s;

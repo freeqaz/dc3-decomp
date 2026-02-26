@@ -863,7 +863,7 @@ void DirLoader::LoadHeader() {
     while (t = mStream->Eof(), t != NotEof) {
         if (t != TempEof) {
             Cleanup(MakeString(
-                "%s: Unexpected end of file. Processing could not be completed",
+                "%s: Unexpected end of file. Proceeding as if file were empty.",
                 mStream->Name()
             ));
             return;

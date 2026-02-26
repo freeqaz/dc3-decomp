@@ -89,63 +89,70 @@ BEGIN_SAVES(UILabel)
     bs << version;
     SAVE_SUPERCLASS(UIComponent)
     bs << mTextToken;
-    if ((version != 0) && !AllowEditText()) {
+    if (bs.Cached() && !AllowEditText()) {
         bs << gNullStr;
     } else {
         bs << mLabelText;
     }
     bs << mIconChar;
-    bs << *(float *)(((unsigned char *)this) - 0x11c);
-    bs << *(float *)(((unsigned char *)this) - 0x128);
-    bs << *(float *)(((unsigned char *)this) - 0x110);
-    bs << *(float *)(((unsigned char *)this) - 0x10c);
-    bs << *(unsigned char *)(((unsigned char *)this) - 0x108);
-    bs << *(float *)(((unsigned char *)this) - 0x114);
-    bs << *(float *)(((unsigned char *)this) - 0x124);
-    bs << *(float *)(((unsigned char *)this) - 0x120);
-    bs << *(float *)(((unsigned char *)this) - 0x118);
+    bs << (int&)mAlignment;
+    bs << mWidth;
+    bs << mLeading;
+    bs << mFixedLength;
+    bs << mMarkup;
+    bs << (int&)mCapsMode;
+    bs << mHeight;
+    bs << mCircle;
+    bs << (int&)mFitType;
 
-    int *begin = (int *)(((unsigned char *)this) - 0x14);
-    int *end = (int *)(((unsigned char *)this) - 0x10);
-    int numStyles = ((*end - *begin) / 0x2c);
-    int numAsInt = numStyles;
-    bs << numAsInt;
+    int numStyles = mLabelStyles.size();
+    bs << numStyles;
 
     if (numStyles != 0) {
         unsigned int styleIdx = 0;
         int offset = 0;
+        LabelStyle *basePtr = &mLabelStyles[0];
         do {
-            bs << *(int *)(((unsigned char *)this) + offset - 0x14 + 0x14);
-            bs << *(int *)(((unsigned char *)this) + offset - 0x14);
-            RndText::Style *stylePtr = &Style(styleIdx);
-            bs << stylePtr->mSize;
-            bs << *(float *)(((unsigned char *)stylePtr) + 0x2c);
-            bs << *(float *)(((unsigned char *)stylePtr) + 0x30);
-            bs << *(float *)(((unsigned char *)stylePtr) + 0x28);
-            bs << *(float *)(((unsigned char *)stylePtr) + 0x24);
-            bs << *(unsigned char *)(((unsigned char *)stylePtr) + 0x48);
+            LabelStyle *ls = (LabelStyle *)((unsigned char *)basePtr + offset);
+            bs << ls->mLabelDir;
+            bs << ls->mColorOverride;
+            RndText::Style &style = Style(styleIdx);
+            bs << style.mSize;
+            bs << style.mKerning;
+            bs << style.mZOffset;
+            bs << style.mItalics;
+            bs << style.mFontColor.alpha;
+            bs << style.mBlacklight;
             styleIdx++;
             offset += 0x2c;
         } while (styleIdx < (unsigned int)numStyles);
     }
 
-    bs << *(float *)(((unsigned char *)this) - 0x104);
-    bs << *(float *)(((unsigned char *)this) - 0x100);
-    bs << *(float *)(((unsigned char *)this) - 0xfc);
-    bs << *(float *)(((unsigned char *)this) - 0xd4);
-    bs << *(unsigned char *)(((unsigned char *)this) - 0x107);
+    bs << mScrollDelay;
+    bs << mScrollRate;
+    bs << mScrollPause;
+    bs << mIndentation;
+    bs << mBasicMarkup;
 
-    int numFonts = ((*end - *begin) / 0x2c);
-    if (numFonts != 0) {
+    if (numStyles != 0) {
         unsigned int fontIdx = 0;
         do {
             bs << GetFontMat(fontIdx);
             fontIdx++;
-        } while (fontIdx < (unsigned int)numFonts);
+        } while (fontIdx < (unsigned int)numStyles);
     }
 END_SAVES
 
-INIT_REVS(0x21, 1)
+// Custom revision limits structure to match target binary layout
+static const struct {
+    int gRev;
+    int gAltRev;
+} sUILabelRevLimits = { 0x21, 1 };
+
+#undef gRev
+#undef gAltRev
+#define gRev sUILabelRevLimits.gRev
+#define gAltRev sUILabelRevLimits.gAltRev
 
 void UILabel::PreLoad(BinStream &bs) {
     LOAD_REVS(bs)

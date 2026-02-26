@@ -521,8 +521,15 @@ void UIFontImporter::HandmadeFontChanged() {
         mNumbers0through9 = false;
         mLowerCaseAthroughZ = false;
         mUpperCaseAthroughZ = false;
-        mMinus.clear();
-        mPlus.clear();
+        mIncludeLocale = false;
+        mPolish = false;
+        mRussian = false;
+        mIncludeFile = "";
+        mMinus.erase(mMinus.begin(), mMinus.end());
+        mPlus = mHandmadeFont->mChars;
+    }
+    if (mHandmadeFont) {
+        mHandmadeFont->SetType(RndFont3d::StaticClassName());
     }
 }
 
@@ -609,49 +616,52 @@ void UIFontImporter::OnSetCharsetUTF8(String const &s) {
 }
 
 DataNode UIFontImporter::OnSyncWithResourceFile(DataArray *) {
-    if (!mSyncResource.empty()) {
+    const char *syncResource = mSyncResource.c_str();
+    UIFontImporter *self = this;
+    if (!self->mSyncResource.empty()) {
         FilePath path;
-        static Symbol uilabeldirSym("UILabelDir");
+        Symbol uilabeldirSym("UILabelDir");
+        Symbol uilabelSym("UILabel");
         if (ResourceDirBase::MakeResourcePath(
-                path, ClassName(), uilabeldirSym, mSyncResource.c_str()
+                path, uilabelSym, uilabeldirSym, syncResource
             )) {
             ObjDirPtr<UILabelDir> labelDir;
             labelDir.LoadFile(path, false, true, kLoadFront, false);
             labelDir.PostLoad(0);
             if (labelDir.IsLoaded()) {
-                mLowerCaseAthroughZ = labelDir->mLowerCaseAthroughZ;
-                mUpperCaseAthroughZ = labelDir->mUpperCaseAthroughZ;
-                mNumbers0through9 = labelDir->mNumbers0through9;
-                mPunctuation = labelDir->mPunctuation;
-                mUpperEuro = labelDir->mUpperEuro;
-                mLowerEuro = labelDir->mLowerEuro;
-                mPlus = labelDir->mPlus;
-                mMinus = labelDir->mMinus;
-                mFontName = labelDir->mFontName;
-                mFontPctSize = labelDir->mFontPctSize;
-                mFontWeight = labelDir->mFontWeight;
-                mFontQuality = labelDir->mFontQuality;
-                mPitchAndFamily = labelDir->mPitchAndFamily;
-                mFontQuality = labelDir->mFontQuality;
-                mFontCharset = labelDir->mFontCharset;
-                mBitmapSavePath = labelDir->mBitmapSavePath;
-                mBitMapSaveName = labelDir->mBitMapSaveName;
-                mFontSupersample = labelDir->mFontSupersample;
-                mItalics = labelDir->mItalics;
-                mLeft = labelDir->mLeft;
-                mRight = labelDir->mRight;
-                mTop = labelDir->mTop;
-                mBottom = labelDir->mBottom;
-                mFillWithSafeWhite = labelDir->mFillWithSafeWhite;
-                if (mReferenceKerning) {
+                self->mLowerCaseAthroughZ = labelDir->mLowerCaseAthroughZ;
+                self->mUpperCaseAthroughZ = labelDir->mUpperCaseAthroughZ;
+                self->mNumbers0through9 = labelDir->mNumbers0through9;
+                self->mPunctuation = labelDir->mPunctuation;
+                self->mUpperEuro = labelDir->mUpperEuro;
+                self->mLowerEuro = labelDir->mLowerEuro;
+                self->mPlus = labelDir->mPlus;
+                self->mMinus = labelDir->mMinus;
+                self->mFontName = labelDir->mFontName;
+                self->mFontPctSize = labelDir->mFontPctSize;
+                self->mFontWeight = labelDir->mFontWeight;
+                self->mFontQuality = labelDir->mFontQuality;
+                self->mPitchAndFamily = labelDir->mPitchAndFamily;
+                self->mFontQuality = labelDir->mFontQuality;
+                self->mFontCharset = labelDir->mFontCharset;
+                self->mBitmapSavePath = labelDir->mBitmapSavePath;
+                self->mBitMapSaveName = labelDir->mBitMapSaveName;
+                self->mFontSupersample = labelDir->mFontSupersample;
+                self->mItalics = labelDir->mItalics;
+                self->mLeft = labelDir->mLeft;
+                self->mRight = labelDir->mRight;
+                self->mTop = labelDir->mTop;
+                self->mBottom = labelDir->mBottom;
+                self->mFillWithSafeWhite = labelDir->mFillWithSafeWhite;
+                if (self->mReferenceKerning) {
                     if (labelDir->mReferenceKerning) {
                         std::vector<RndFontBase::KernInfo> kerninfo;
                         labelDir->mReferenceKerning->GetKerning(kerninfo);
-                        mReferenceKerning->SetKerning(kerninfo);
+                        self->mReferenceKerning->SetKerning(kerninfo);
                         // Cast to access protected mBaseKerning member
                         RndFontBase *pKern = labelDir->mReferenceKerning;
                         float baseKerning = *(float *)((char *)pKern + 0x3c);
-                        mReferenceKerning->SetBaseKerning(baseKerning);
+                        self->mReferenceKerning->SetBaseKerning(baseKerning);
                     }
                 }
             }

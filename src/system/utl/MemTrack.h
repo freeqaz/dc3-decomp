@@ -1,5 +1,7 @@
 #pragma once
 
+class AllocInfo;
+
 void MemTrackReportMemoryAlloc(const char *);
 void MemTrackReportMemoryUsage(const char *);
 void MemTrackReportClose(const char *);
@@ -14,3 +16,4 @@ void BeginMemTrackObjectName(const char *);
 void EndMemTrackObjectName();
 
 void MemTrackInit(int, int, bool);
+const AllocInfo *MemTrackGetInfo(void *);

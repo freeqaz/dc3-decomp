@@ -1,9 +1,12 @@
 #include "utl/AllocInfo.h"
+#include "utl/MemTracker.h"
 #include "utl/Pool.h"
 #include "os/Debug.h"
 #include "trie.h"
 #include "utl/TextStream.h"
 #include "xdk/XBDM.h"
+
+extern MemTracker *gMemTracker;
 
 Trie *s_pTrie;
 bool AllocInfo::bPrintCsv;
@@ -30,6 +33,7 @@ AllocInfo::AllocInfo(
     : mReqSize(requestedSize), mActSize(actualSize), mType(type), mMem(mem), mHeap(heap),
       mPooled(pooled), mStrat(strat), mFile(file), mLine(line),
       unk1d(s_pTrie->store(str1.c_str())), unk21(s_pTrie->store(str2.c_str())) {
+    mTimeSlice = *(short *)((char *)gMemTracker + 0x8);
     FillStackTrace();
 }
 

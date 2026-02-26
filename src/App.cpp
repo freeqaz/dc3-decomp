@@ -661,109 +661,104 @@ not_in_campaign_stinger:
 void App::Run() { RunWithoutDebugging(); }
 
 void App::RunWithoutDebugging() {
-    Timer loop_timer;
-    loop_timer.Restart();
-
     while (true) {
-        SystemPoll(false);
+            Timer loop_timer;
+            loop_timer.Restart();
+            SystemPoll(false);
 
-        TIMER_ACTION("misc_poll", {
-            TheAchievements->Poll();
-            TheAccomplishmentMgr->Poll();
-            if (TheLeaderboards)
-                TheLeaderboards->Poll();
-            if (TheChallenges)
-                TheChallenges->Poll();
-            TheSaveLoadMgr->Poll();
-        })
+            TIMER_ACTION("misc_poll", {
+                TheAchievements->Poll();
+                TheAccomplishmentMgr->Poll();
+                if (TheLeaderboards)
+                    TheLeaderboards->Poll();
+                if (TheChallenges)
+                    TheChallenges->Poll();
+                TheSaveLoadMgr->Poll();
+            })
 
-        TIMER_ACTION("synth_poll", TheSynth->Poll())
+            TIMER_ACTION("synth_poll", TheSynth->Poll())
 
-        TIMER_ACTION("rock_central_poll", TheRockCentral.Poll())
+            TIMER_ACTION("rock_central_poll", TheRockCentral.Poll())
 
-        TIMER_ACTION("gesture_poll", TheGestureMgr->Poll())
+            TIMER_ACTION("gesture_poll", TheGestureMgr->Poll())
 
-        TheUI->Poll();
+            TheUI->Poll();
 
-        {
-            DataNode &hud_panel = DataVariable("hud_panel");
-            if (hud_panel.CompatibleType(kDataObject)) {
-                PanelDir *panel = dynamic_cast<PanelDir *>(hud_panel.GetObj(0));
-                if (panel) {
-                    Message msg("update_all_flashcard_dance_pct");
-                    panel->Handle(msg, true);
+            {
+                DataNode &hud_panel = DataVariable("hud_panel");
+                if (hud_panel.CompatibleType(kDataObject)) {
+                    PanelDir *panel = dynamic_cast<PanelDir *>(hud_panel.GetObj(0));
+                    if (panel) {
+                        Message msg("update_all_flashcard_dance_pct");
+                        panel->Handle(msg, true);
+                    }
                 }
             }
-        }
 
-        TheTaskMgr.Poll();
-        TheFlowMgr->Poll();
+            TheTaskMgr.Poll();
+            TheFlowMgr->Poll();
 
-        TIMER_ACTION("skeleton_post_update", {
-            SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
-            handle.PostUpdate();
-        })
+            TIMER_ACTION("skeleton_post_update", {
+                SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
+                handle.PostUpdate();
+            })
 
-        FileDiscSpinUp();
+            FileDiscSpinUp();
 
-        if (TheHiResScreen.IsActive()) {
-            CaptureHiRes();
-        } else {
-            DrawRegular();
-        }
-
-        float loopMs = loop_timer.SplitMs();
-        float waiverMs = Timer::SlowFrameWaiver();
-        float slowMs = Timer::SlowFrameTimer().SplitMs();
-        waiverMs = Min(slowMs, waiverMs);
-        float frameMs = loopMs - waiverMs;
-
-        if (frameMs > 83.3333f) {
-            const char *msg = 0;
-            UIScreen *currentScreen = TheUI->CurrentScreen();
-            const char *activeScreen;
-            if (currentScreen) {
-                activeScreen = currentScreen->Name();
+            if (TheHiResScreen.IsActive()) {
+                CaptureHiRes();
             } else {
-                activeScreen = "none";
+                DrawRegular();
             }
 
-            UIScreen *transScreen = TheUI->TransitionScreen();
-            const char *transName;
-            if (transScreen) {
-                transName = transScreen->Name();
-            } else {
-                transName = "none";
-            }
-            UIManager::TransitionState state = TheUI->GetTransitionState();
-            switch (state) {
-            case UIManager::kTransitionNone:
-                msg = MakeString("GLITCH: %g ms, ACTIVE %s", frameMs, activeScreen);
-                break;
-            case UIManager::kTransitionTo:
-                msg = MakeString(
-                    "GLITCH: %g ms, %s TRANS TO %s", frameMs, activeScreen, transName
-                );
-                break;
-            case UIManager::kTransitionFrom:
-                msg = MakeString(
-                    "GLITCH: %g ms, %s TRANS FROM %s", frameMs, activeScreen, transName
-                );
-                break;
-            case UIManager::kTransitionPop:
-                msg = MakeString("GLITCH: %g ms, POPPING %s", frameMs, activeScreen);
-                break;
-            }
+            float loopMs = loop_timer.SplitMs();
+            float waiverMs = Timer::SlowFrameWaiver();
+            float slowMs = Timer::SlowFrameTimer().SplitMs();
+            waiverMs = Min(slowMs, waiverMs);
+            float frameMs = loopMs - waiverMs;
 
-            static DataNode &notify_level = DataVariable("notify_level");
-            if (notify_level.Int() != 0) {
-                static Hmx::Object *cheat_display =
-                    ObjectDir::Main()->Find<Hmx::Object>("cheat_display", true);
-                static Message show("show", DataNode(0));
-                show[0] = DataNode(msg);
-                cheat_display->Handle(show, false);
+            if (frameMs > 83.3333f) {
+                const char *msg = 0;
+                const char *activeScreen = "none";
+                UIScreen *currentScreen = TheUI->CurrentScreen();
+                if (currentScreen) {
+                    activeScreen = currentScreen->Name();
+                }
+
+                const char *transName = "none";
+                UIScreen *transScreen = TheUI->TransitionScreen();
+                if (transScreen) {
+                    transName = transScreen->Name();
+                }
+                UIManager::TransitionState state = TheUI->GetTransitionState();
+                switch (state) {
+                case UIManager::kTransitionNone:
+                    msg = MakeString("GLITCH: %g ms, ACTIVE %s", frameMs, activeScreen);
+                    break;
+                case UIManager::kTransitionTo:
+                    msg = MakeString(
+                        "GLITCH: %g ms, %s TRANS TO %s", frameMs, activeScreen, transName
+                    );
+                    break;
+                case UIManager::kTransitionFrom:
+                    msg = MakeString(
+                        "GLITCH: %g ms, %s TRANS FROM %s", frameMs, activeScreen, transName
+                    );
+                    break;
+                case UIManager::kTransitionPop:
+                    msg = MakeString("GLITCH: %g ms, POPPING %s", frameMs, transName);
+                    break;
+                }
+
+                static DataNode &notify_level = DataVariable("notify_level");
+                if (notify_level.Int() != 0) {
+                    static Hmx::Object *cheat_display =
+                        ObjectDir::Main()->Find<Hmx::Object>("cheat_display", true);
+                    static Message show("show", DataNode(0));
+                    show[0] = DataNode(msg);
+                    cheat_display->Handle(show, false);
+                }
             }
-        }
     }
 }
 

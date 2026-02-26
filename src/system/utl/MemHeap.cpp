@@ -8,6 +8,24 @@
 
 namespace {
     int gTimeStamp;
+
+    void PrintAlloc(TextStream &ts, int *ptr, int size, int count, const AllocInfo *info) {
+        if (count > 0) {
+            const char *str;
+            if (count == 1) {
+                str = MakeString("(%p ALLOC (size %6i)", ptr, size);
+            } else {
+                str = MakeString("(%p ALLOC (size %6i %i)", ptr, size, count);
+            }
+            ts << str;
+            if (info != nullptr) {
+                for (int i = 0; i < 0x10 && info->mStackTrace[i] != 0; i++) {
+                    ts << *info;
+                }
+            }
+            ts << MakeString(")\n");
+        }
+    }
 }
 
 int MemHeap::GetSizeWords(int size) {
@@ -40,91 +58,79 @@ void MemHeap::FreeBlockStats(int &lFrags, int &rFrags, int &freeBytes, int &i4, 
 
 void MemHeap::Print(TextStream &ts, bool verbose) {
     ts << MakeString(";---------------------------------------\n");
-    int sizeBytes = mSizeWords * 4;
-    ts << MakeString(
-        "; HEAP: %i (%s), starts %p, %d bytes\n", mNum, mName, mStart, sizeBytes
-    );
-    int lFrags, rFrags, freeBytes, largestFree;
-    FreeBlockStats(lFrags, rFrags, freeBytes, largestFree, largestFree);
+    ts << MakeString("; HEAP: %i (%s), starts %p, %d bytes\n", mNum, mName, mStart, mSizeWords * 4);
+    int rFrags, lFrags, freeBytes, maxFreeIdx, minFreeBytes;
+    FreeBlockStats(lFrags, rFrags, freeBytes, maxFreeIdx, minFreeBytes);
     ts << MakeString("\n");
     ts << MakeString(
-        ";   lFrags =  %8d\n;   rFrags =  %8d\n",
+        ";   lFrags =  %8d\n;   rFrags =  %8d\n;   Total Free Bytes=  %8d\n",
         lFrags,
-        rFrags
+        rFrags,
+        freeBytes
     );
     ts << MakeString("\n");
-    unsigned int startPtr = (unsigned int)mStart;
-    ts << MakeString("\n");
 
-    unsigned int endPtr = startPtr + (mSizeWords * 4);
-
+    unsigned int *curPtr = (unsigned int *)mStart;
+    unsigned int *endPtr = curPtr + mSizeWords;
+    unsigned int *curFreeBlock = (unsigned int *)mFreeBlockChain;
     int curAllocCount = 0;
     int curAllocSize = 0;
-    int curAllocPtr = 0;
-    const AllocInfo *curAllocInfo = 0;
-    FreeBlock *curFreeBlock = mFreeBlockChain;
-    unsigned int curPtr = startPtr;
+    int *curAllocPtr = nullptr;
+    const AllocInfo *curAllocInfo = nullptr;
 
-    while (curPtr < endPtr) {
-        if (curFreeBlock != 0 && curPtr == (unsigned int)curFreeBlock) {
-            // Process and flush current allocation
-            if (curAllocCount > 0) {
-                ts << *curAllocInfo;
+    unsigned int blockSizeWords = 0;
+    for (; curPtr < endPtr; curPtr += blockSizeWords) {
+        unsigned int *savedCurPtr = curPtr;
+
+        if (curFreeBlock == nullptr || curPtr != curFreeBlock) {
+            // Alloc block
+            unsigned int hdr = *curPtr;
+            unsigned int *headerPtr = curPtr;
+            while (hdr == 0) {
+                headerPtr++;
+                hdr = *headerPtr;
             }
+            blockSizeWords = hdr >> 8;
 
-            // Process free block
-            unsigned int blockSize = curFreeBlock->mSizeWords * 4;
-            int blockTime = curFreeBlock->mTimeStamp;
-            const char *freeStr = "";
-
-            if (blockSize >= 0x186A0) {
-                freeStr = " >>> BIG FREE BLOCK <<<";
-            }
-
-            ts << MakeString(
-                "(%p FREE   (size %6d) (time %5d)) %s\n",
-                curFreeBlock, blockSize, blockTime, freeStr
-            );
-
-            // Reset allocation tracking
-            curAllocPtr = 0;
-            curAllocSize = 0;
-            curAllocCount = 0;
-            curAllocInfo = 0;
-
-            // Move to next free block
-            curFreeBlock = curFreeBlock->mNextBlock;
-            curPtr = (unsigned int)curFreeBlock;
-        } else {
-            // Process allocated block
-            unsigned int blockHeader = *(unsigned int *)curPtr;
-            unsigned int blockSize = (blockHeader >> 8);
-
-            if (verbose == 0) {
-                int allocSizeWords = blockSize * 4;
-
-                if (allocSizeWords == curAllocSize) {
+            if (!verbose) {
+                int *newPtr = (int *)(headerPtr + 1);
+                const AllocInfo *newInfo = MemTrackGetInfo(newPtr);
+                int newSize = blockSizeWords << 2;
+                if (newSize == curAllocSize) {
                     curAllocCount++;
                 } else {
-                    if (curAllocCount > 0) {
-                        ts << *curAllocInfo;
-                    }
-                    curAllocPtr = curPtr + 4;
-                    curAllocSize = allocSizeWords;
+                    PrintAlloc(ts, curAllocPtr, curAllocSize, curAllocCount, curAllocInfo);
                     curAllocCount = 1;
-                    curAllocInfo = 0;
+                    curAllocPtr = newPtr;
+                    curAllocInfo = newInfo;
+                    curAllocSize = newSize;
                 }
             }
-
-            curPtr += blockSize * 4;
+        } else {
+            // Free block
+            PrintAlloc(ts, curAllocPtr, curAllocSize, curAllocCount, curAllocInfo);
+            const char *freeStr = " ; **** big free block!";
+            curAllocCount = 0;
+            unsigned int sizeWords = *curFreeBlock;
+            int blockSize = sizeWords << 2;
+            if (blockSize < 100000) {
+                freeStr = "";
+            }
+            unsigned int timeStamp = curFreeBlock[1];
+            ts << MakeString(
+                "(%p FREE  (size %6d) (time %5d))%s\n",
+                (int *)savedCurPtr,
+                blockSize,
+                timeStamp,
+                freeStr
+            );
+            curFreeBlock = (unsigned int *)curFreeBlock[2];
+            curAllocSize = 0;
+            blockSizeWords = sizeWords;
         }
     }
 
-    // Print final allocation
-    if (curAllocCount > 0) {
-        ts << *curAllocInfo;
-    }
-
+    PrintAlloc(ts, curAllocPtr, curAllocSize, curAllocCount, curAllocInfo);
     ts << MakeString("\n\n");
 }
 
@@ -156,20 +162,21 @@ void MemHeap::Init(
     mStart = start;
     mName = name;
     mNum = num;
-    int *i7 = (start - 1) + 0x10;
+    int *i7 = (int *)(((unsigned int)start - 4 & ~0xFU) + 0x10);
     mIsHandleHeap = handle;
     mStrategy = strat;
     mStart = i7;
     mAllowTemp = allowTemp;
     mMinFreeBytes = -1;
     mDebugLevel = debugLevel;
-    mSizeWords = size - (i7 - start >> 2);
+    mSizeWords = size - (i7 - start);
+    int time = gTimeStamp;
     gTimeStamp++;
-    InsertFreeBlock((FreeBlock *)mStart, mSizeWords, nullptr, nullptr, gTimeStamp);
+    InsertFreeBlock((FreeBlock *)mStart, mSizeWords, nullptr, nullptr, time);
     if (mDebugLevel >= 1) {
         FreeBlock *blockStart = mFreeBlockChain;
         int *blockStartInt = (int *)blockStart;
-        int *blockEnd = blockStartInt + (blockStart->mSizeWords << 2);
+        int *blockEnd = blockStartInt + blockStart->mSizeWords;
         if (blockStartInt + 3 < blockEnd) {
             int *ptr = blockStartInt + 2;
             for (int count = (((blockEnd - (blockStartInt + 3)) - 1) >> 2) + 1; count != 0; count--) {

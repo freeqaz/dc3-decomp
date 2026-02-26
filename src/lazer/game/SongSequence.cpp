@@ -231,8 +231,8 @@ bool SongSequence::DoNext(bool b1, bool b2) {
         }
         static Symbol hud_panel("hud_panel");
         static Symbol clear_flash_cards("clear_flash_cards");
-        static Symbol clear_all_flashcard_campaign_states(
-            "clear_all_flashcard_campaign_states"
+        static Symbol clear_all_flashcard_campaign_status(
+            "clear_all_flashcard_campaign_status"
         );
         TheMidiParserMgr->GetParser(midi_player)->SetProperty(nextEntry.mModeConfig, active);
         TheHamProvider->SetProperty(holla_back_config, nextEntry.mModeConfig);
@@ -241,7 +241,7 @@ bool SongSequence::DoNext(bool b1, bool b2) {
             if (hudPanel) {
                 hudPanel->Handle(Message(clear_flash_cards, 0), true);
                 hudPanel->Handle(Message(clear_flash_cards, 1), true);
-                hudPanel->Handle(Message(clear_all_flashcard_campaign_states), true);
+                hudPanel->Handle(Message(clear_all_flashcard_campaign_status), true);
             }
         }
         if (nextEntry.mGameplayMode == "holla_back") {

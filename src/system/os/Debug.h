@@ -33,7 +33,7 @@ private:
     ModalCallbackFunc *mModalCallback; // 0x1c
     std::list<ExitCallbackFunc *> mFailCallbacks; // 0x20
     std::list<ExitCallbackFunc *> mExitCallbacks; // 0x28
-    std::list<FixedStringFunc *> unk30; // 0x30
+    std::list<FixedStringFunc *> mFailAppendCallbacks; // 0x30
     int unk38; // 0x38
     // 0x3c is a struct, StackData
     unsigned int mFailThreadStack[50]; // starts at 0x3c
@@ -55,6 +55,7 @@ public:
     void SetDisabled(bool);
     void SetTry(bool);
     void AddExitCallback(ExitCallbackFunc *func) { mExitCallbacks.push_front(func); }
+    void AddFailAppendCallback(FixedStringFunc *func) { mFailAppendCallbacks.push_back(func); }
     void RemoveExitCallback(ExitCallbackFunc *);
     bool CheckModalCallback(ModalCallbackFunc *func) { return mModalCallback == func; }
     ModalCallbackFunc *ModalCallback() const { return mModalCallback; }

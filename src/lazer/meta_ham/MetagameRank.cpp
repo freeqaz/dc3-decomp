@@ -219,7 +219,7 @@ void MetagameRank::Init() {
                     }
                 }
                 if (!found) {
-                    TheDebug.Fail(MakeString("Unlock named %s not found in unlockables", unlockSym), 0);
+                    TheDebug.Fail(MakeString("Unlock named %s not found in unlock list", unlockSym), 0);
                 }
             }
         }

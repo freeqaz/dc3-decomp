@@ -49,26 +49,29 @@
 
 const char *gNullStr = "";
 
-Symbol gSystemLanguage;
-Symbol gSystemLocale;
+GfxMode gGfxMode;
+bool gHostConfig;
+bool gHostLogging;
+bool gHostCached;
+
 DataArray *gSystemConfig;
 DataArray *gSystemTitles;
 
 int gUsingCD;
-GfxMode gGfxMode;
-
 int gSystemMs;
 float gSystemFrac;
+const char *gHostFile;
+
+Symbol gSystemLanguage;
+Symbol gSystemLocale;
+
 Timer gSystemTimer;
 bool gNetUseTimedSleep;
-bool gHostConfig;
-bool gHostLogging;
 bool(__cdecl *ParseStack)(char const *, struct StackData *, int, class FixedString &) =
     XboxMapFile::ParseStack;
 
 std::vector<char *> TheSystemArgs;
 std::vector<char *> gPristineSystemArgs;
-const char *gHostFile;
 
 namespace {
     bool gPreconfigOverride;
@@ -76,12 +79,11 @@ namespace {
 
     void CheckForArchive() {
         gUsingCD = true;
-        FileStat buffer;
-        int ret = FileGetStat(
-            MakeString("gen/main_%s.hdr", PlatformSymbol(TheLoadMgr.GetPlatform())),
-            &buffer
-        );
-        gUsingCD &= ret;
+        if (FileGetStat(
+                MakeString("gen/main_%s.hdr", PlatformSymbol(TheLoadMgr.GetPlatform()))
+            ) < 0) {
+            gUsingCD = false;
+        }
     }
 }
 
@@ -409,8 +411,8 @@ void InitSystem(const char *config) {
 }
 
 void PreInitSystem(const char *config) {
-    Archive *oldArchive = TheArchive;
     bool oldCD = UsingCD();
+    Archive *oldArchive = TheArchive;
     if (gHostConfig) {
         gUsingCD = false;
         TheArchive = nullptr;
@@ -430,8 +432,7 @@ void PreInitSystem(const char *config) {
         config = cfgStr;
     }
     BeginDataRead();
-    gSystemConfig = ReadSystemConfig(config);
-    MILO_ASSERT(gSystemConfig, 0x1FF);
+        MILO_ASSERT(gSystemConfig = ReadSystemConfig(config), 0x1FF);
     DataVariable("syscfg") = gSystemConfig;
     gUsingCD = oldCD;
     TheArchive = oldArchive;
@@ -465,12 +466,11 @@ void SystemInit(const char *config) {
     SpewInit();
     TheLocale.Terminate();
     TheLocale.Init();
-    //   CheatsInit();
-    //   this_00 = &TheMC;
-    //   MemcardXbox::Init(&TheMC);
-    FileCache::Init();
+    CheatsInit();
+    TheMC.Init();
     CacheMgrInit();
     NetCacheMgrInit();
+    FileCache::Init();
     TheDataPointMgr.Init();
     TheWebSvcMgr.Init();
     ThePlatformMgr.Init();
@@ -495,30 +495,33 @@ void SetSystemArgs(const char *commandLine) {
     if (sCommandLineBuffer[0] != 0) {
         int inQuotes = 0;
         char *ptr = sCommandLineBuffer;
+        int newToken = 1;
 
         for (;;) {
-            if (*ptr == ' ' && inQuotes == 0) {
+            if (!inQuotes && *ptr == ' ') {
                 *ptr = 0;
-                inQuotes = 1;
+                newToken = 1;
                 ptr++;
             } else if (*ptr == '"') {
                 *ptr = 0;
                 ptr++;
-                inQuotes = (inQuotes == 0) ? 1 : 0;
-                if (inQuotes == 0) {
+                inQuotes ^= 1;
+                if (inQuotes) {
                     TheSystemArgs.push_back(ptr);
+                    newToken = 0;
                 } else {
-                    inQuotes = 1;
+                    newToken = 1;
                 }
             } else {
-                if (inQuotes != 0) {
+                if (newToken) {
                     TheSystemArgs.push_back(ptr);
-                    inQuotes = 0;
+                    newToken = 0;
                 }
                 ptr++;
             }
 
-            if (*ptr == 0) break;
+            if (*ptr == 0)
+                break;
         }
     }
 
@@ -588,7 +591,7 @@ void SystemTerminate() {
     NetCacheMgrTerminate();
     FileCache::Terminate();
     TheLocale.Terminate();
-    TheMC.Terminate();
+    TheMC.Memcard::Terminate();
     CheatsTerminate();
     KeyboardTerminate();
     JoypadTerminate();
@@ -602,6 +605,6 @@ void SystemTerminate() {
     DataTerminate();
     Symbol::Terminate();
     AppChild::Terminate();
-    TheSystemArgs.clear();
+    TheSystemArgs.erase(TheSystemArgs.begin(), TheSystemArgs.end());
     TerminateMakeString();
 }

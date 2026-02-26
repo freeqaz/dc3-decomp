@@ -84,7 +84,7 @@ BEGIN_HANDLERS(CampaignPerformer)
     HANDLE_ACTION(award_craze_accomplishments, AwardCrazeAccomplishments())
     HANDLE_EXPR(get_completion_accomplishment, GetCompletionAccomplishment(_msg->Sym(2)))
     HANDLE_ACTION(award_boss_accomplishment, AwardBossAccomplishment())
-    HANDLE_ACTION(award_master_quest_accomplishment, AwardMasterQuestAccomplishments())
+    HANDLE_ACTION(award_master_quest_accomplishemnts, AwardMasterQuestAccomplishments())
     HANDLE_EXPR(
         is_dance_craze_move,
         IsDanceCrazeMove(_msg->Sym(2), _msg->Sym(3), _msg->Obj<HamMove>(4))
