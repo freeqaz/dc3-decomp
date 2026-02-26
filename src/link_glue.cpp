@@ -1553,30 +1553,7 @@ extern "C" void floor0_inverse2(void) {}
 extern "C" void floor0_look(void) {}
 extern "C" void floor0_unpack(void) {}
 
-// lbl_ data stubs (data labels from original binary)
-extern "C" int lbl_82002100 = 0;
-extern "C" int lbl_82002500 = 0;
-extern "C" int lbl_82018202 = 0;
-extern "C" int lbl_82018408 = 0;
-extern "C" int lbl_82038004 = 0;
-extern "C" int lbl_82038204 = 0;
-extern "C" int lbl_8203820E = 0;
-extern "C" int lbl_82038304 = 0;
-extern "C" int lbl_8204A205 = 0;
-extern "C" int lbl_8204A400 = 0;
-extern "C" int lbl_8205A41C = 0;
-extern "C" int lbl_82068300 = 0;
-extern "C" int lbl_82068414 = 0;
-extern "C" int lbl_8206920B = 0;
-extern "C" int lbl_82070C04 = 0;
-extern "C" int lbl_820F2230 = 0;
-extern "C" int lbl_820F22B8 = 0;
-extern "C" int lbl_820F2330 = 0;
-extern "C" int lbl_820F2380 = 0;
-extern "C" int lbl_820F2800 = 0;
-extern "C" int lbl_8210FCFA = 0;
-extern "C" int lbl_82212C24 = 0;
-extern "C" int lbl_82212C30 = 0;
+// lbl_ data stubs: now resolved by create_data_stubs.py, removed from here
 
 // Data stubs for vtable/static data ALTERNATENAME redirects
 extern "C" int __link_glue_zero[64] = {0};
