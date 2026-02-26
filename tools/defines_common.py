@@ -8,31 +8,17 @@ VERSIONS = [
 cflags_includes = [
     # C/C++ stdlib
     # STLport requires that it comes first in the include path list
-    "/I src/system/stlport",
+    "/I e:/lazer_build_gmc1/system/src/stlport",
     "/I src/xdk/LIBCMT",
-    # "-i src/sdk/PowerPC_EABI_Support/MSL/MSL_C",
 
-    # Not included since it's all wrapped by stlport
-    # "-i src/sdk/PowerPC_EABI_Support/MSL/MSL_C++",
-
-    # To allow referring directly to the MSL SDK instead of going through STLport
-    # "-i src/sdk/PowerPC_EABI_Support/MSL",
-
-    # SDK
-    # "-i src/sdk",
-    # "-i src/sdk/RVL_SDK",
-
-    # Project source
-    # "-i src",
-    # "-i src/network",
-    # "-i src/system",
-    # "-i src/band3",
+    # Project source - use absolute mapped paths to match original __FILE__ values
+    # Original build had /I e:\lazer_build_gmc1\system\src and /I e:\lazer_build_gmc1\lazer\src
     "/I src",
-    "/I src/system",
-    "/I src/lazer",
+    "/I e:/lazer_build_gmc1/system/src",
+    "/I e:/lazer_build_gmc1/lazer/src",
 
     # Libraries
-    "/I src/system/oggvorbis",
-    "/I src/system/synth/tomcrypt",
-    "/I src/system/net/curl/include"
+    "/I e:/lazer_build_gmc1/system/src/oggvorbis",
+    "/I e:/lazer_build_gmc1/system/src/synth/tomcrypt",
+    "/I e:/lazer_build_gmc1/system/src/net/curl/include"
 ]

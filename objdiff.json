@@ -48,7 +48,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/App.cpp",
         "progress_categories": [
@@ -2892,7 +2892,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/synth_xbox/Synth.cpp",
         "progress_categories": [
@@ -8548,7 +8548,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/ui/UI.cpp",
         "progress_categories": [
@@ -11525,7 +11525,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/movie/Splash.cpp",
         "progress_categories": [
