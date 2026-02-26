@@ -272,8 +272,37 @@ config.ldflags = ldflags
 
 config.linker_version = "X360/16.00.11886.00"
 
+config.wibo_path_map = (
+    f"e:/lazer_build_gmc1/system/src/={Path('src/system').absolute()};"
+    f"e:/lazer_build_gmc1/lazer/src/={Path('src/lazer').absolute()}"
+)
+
 config.shift_jis = False
 config.progress_all = False
+
+# Post-compile patchers: run after all .obj files are compiled, before linking.
+# These patch decomp .obj files to match original binary patterns.
+stamp_dir = config.build_dir / config.version
+config.custom_build_rules = [
+    {
+        "name": "run_script",
+        "command": "$cmd && touch $out",
+        "description": "$desc",
+    },
+]
+config.custom_build_steps = {
+    "post-compile": [
+        {
+            "outputs": str(stamp_dir / "anon_ns_patched.stamp"),
+            "rule": "run_script",
+            "order_only": "all_source",
+            "variables": {
+                "cmd": "python3 scripts/obj_anon_ns_patcher.py --batch --apply",
+                "desc": "PATCH anonymous namespace hashes",
+            },
+        },
+    ],
+}
 
 # Object files
 Matching = True
