@@ -32,7 +32,7 @@ source_base_path: src
 add_relocations:
 - source: .rdata:0x82089114
   type: abs
-  target: merged_BufLockIdxSDVD
+  target: ??_G?$BufLock@UD3DIndexBuffer@@@@UAAPAXI@Z
 
 # These are Windows error codes, not relocations!
 block_relocations:

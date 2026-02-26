@@ -459,6 +459,8 @@ def generate_build_ninja(
     #     sys.exit("ProjectConfig.linker_version missing")
     n.variable("mw_version", Path(config.linker_version))
     n.variable("objdiff_report_args", make_flags_str(config.progress_report_args))
+    if config.wibo_path_map:
+        n.variable("wibo_path_map", config.wibo_path_map)
     n.newline()
 
     ###
@@ -716,7 +718,9 @@ def generate_build_ninja(
 
     # MSVC
     msvc = compiler_path / "cl.exe"
-    msvc_cmd = f"{wrapper_cmd}{msvc} $cflags /Fo$out $in"
+    msvc_cmd = f"{wrapper_cmd}{msvc} $cflags /Fo$out $in_win"
+    if config.wibo_path_map:
+        msvc_cmd = f"{wrapper_cmd}WIBO_PATH_MAP='$wibo_path_map' {msvc} $cflags /Fo$out $in_win"
 
     n.comment("MSVC build")
     n.rule(
@@ -975,6 +979,20 @@ def generate_build_ninja(
             cflags_str = make_flags_str(all_cflags)
             used_compiler_versions.add(obj.options["mw_version"])
 
+            def get_win_path(path: Path) -> str:
+                if not config.wibo_path_map:
+                    return str(path)
+                abs_path = str(path.absolute())
+                for mapping in config.wibo_path_map.split(";"):
+                    if "=" not in mapping:
+                        continue
+                    win_part, host_part = mapping.split("=", 1)
+                    host_abs = str(Path(host_part).absolute())
+                    if abs_path.startswith(host_abs):
+                        rel = abs_path[len(host_abs) :].lstrip("/")
+                        return (win_part.rstrip("\\/") + "/" + rel).replace("\\", "/")
+                return str(path)
+
             # Add MSVC build rule
             lib_name = obj.options["lib"]
             build_rule = "msvc"
@@ -984,6 +1002,7 @@ def generate_build_ninja(
                 "cflags": cflags_str,
                 "basedir": os.path.dirname(obj.src_obj_path),
                 "basefile": obj.src_obj_path.with_suffix(""),
+                "in_win": get_win_path(src_path),
             }
 
             if obj.options["shift_jis"] and obj.options["extab_padding"] is not None:
@@ -1052,11 +1071,26 @@ def generate_build_ninja(
             # Add assembler build rule
             lib_name = obj.options["lib"]
             n.comment(f"{obj.name}: {lib_name} (linked {obj.completed})")
+
+            def get_win_path(path: Path) -> str:
+                if not config.wibo_path_map:
+                    return str(path)
+                abs_path = str(path.absolute())
+                for mapping in config.wibo_path_map.split(";"):
+                    if "=" not in mapping:
+                        continue
+                    win_part, host_part = mapping.split("=", 1)
+                    host_abs = str(Path(host_part).absolute())
+                    if abs_path.startswith(host_abs):
+                        rel = abs_path[len(host_abs) :].lstrip("/")
+                        return (win_part.rstrip("\\/") + "/" + rel).replace("\\", "/")
+                return str(path)
+
             n.build(
                 outputs=obj_path,
                 rule="as",
                 inputs=src_path,
-                variables={"asflags": asflags_str},
+                variables={"asflags": asflags_str, "in_win": get_win_path(src_path)},
                 implicit=gnu_as_implicit,
                 order_only="pre-compile",
             )
@@ -1105,13 +1139,11 @@ def generate_build_ninja(
                 built_obj_path = asm_build(obj, obj.asm_path, obj.asm_obj_path)
 
             if link_built_obj and built_obj_path is not None:
-                # Use the source-built object
+                # Use the source-built object only — do not also link the
+                # split object.  Linking both causes /FORCE:MULTIPLE overlap
+                # where split function bodies occupy the same address range as
+                # decomp functions, corrupting guest-memory patches at runtime.
                 link_step.add(built_obj_path)
-                # Also include the split object for data/BSS symbols
-                # that other still-split units may reference (e.g., lbl_*).
-                # /FORCE:MULTIPLE handles the duplicate function definitions.
-                if obj_path is not None:
-                    link_step.add(Path(obj_path))
             elif obj_path is not None:
                 # Use the original (extracted) object
                 link_step.add(Path(obj_path))
