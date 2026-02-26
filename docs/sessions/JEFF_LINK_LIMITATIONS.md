@@ -1,95 +1,103 @@
 # Jeff (dtk) Linking Limitations
 
-Date: 2026-02-20
+Date: 2026-02-20 (updated 2026-02-26)
 
 ## Context
 
 Jeff (`../jeff`, our custom dtk fork) splits the original XEX into relocatable COFF objects for hybrid linking with decomp objects. This document tracks known issues preventing a clean link (without `/FORCE`).
 
-## Current Link Status
+## Current Link Status (2026-02-26)
 
-**666 errors + 275 LNK4006 duplicate warnings** (384 string COMDATs, 98 lbl_*, 24 CRT init, 15 __unwind, 15 REL14, 10 merged, ~120 other).
-LNK4006 reduced: 5,545 → 3,562 (COMDAT Phase 1, 2026-02-19) → 275 (COMDAT Phase 2, 2026-02-20).
-Remaining 275 LNK4006 are MSVC `NODUPLICATES` selection type — not fixable in jeff.
-Bad bl instructions: 10,951 → 99 (REL24 displacement fix, 2026-02-20).
-**Linker flags**: `/FORCE:MULTIPLE` + `/FORCE:UNRESOLVED` (was blanket `/FORCE`).
-**DECOMP XEX BOOTS** in xenia-headless (2026-02-21). Crashes in xenia JIT after entering main loop.
+**0 errors, 756 LNK4006 warnings.** `/FORCE:UNRESOLVED` has been dropped.
+
+| Metric | Before (2026-02-20) | After (2026-02-26) |
+|--------|---------------------|--------------------|
+| Link errors | 666 | **0** |
+| LNK4006 warnings | 275 | 756 (more Matching units = more COMDAT overlap) |
+| Linker flags | `/FORCE:MULTIPLE` + `/FORCE:UNRESOLVED` | `/FORCE:MULTIPLE` only |
+| Bad bl instructions | 99 | 99 |
+
+### How We Got to 0 Errors
+
+Three approaches combined to resolve all 666+ unresolved symbols:
+
+1. **Data stubs** (`scripts/create_data_stubs.py`): Creates data-only .obj files from split .objs for Matching units. When Config B replaces split .obj with decomp .obj, cross-references from other split .objs that use `lbl_*` names break. Data stubs provide those `lbl_*` data symbols alongside the decomp code. Resolved 577 `lbl_*`, 3 `jumptable_*`, 28 `__real@*` symbols. (commit 01666139)
+
+2. **ALTERNATENAME stubs** (`src/link_glue.cpp`): 72 remaining symbols (audio SDK, UIPanel vtordisp thunks, STL templates, __unwind$ records) resolved via `/ALTERNATENAME:mangled=__link_glue_noop` linker directives. (commit 6158ec49)
+
+3. **Wibo CRC fix + path mapping**: Fixed `??_C@` string literal hashes. Wibo's `RtlComputeCrc32` now returns real CRC-32 values. `WIBO_PATH_MAP` environment variable maps `src/system` → `e:/lazer_build_gmc1/system/src` so `__FILE__` paths match the original build.
+
+4. **Anonymous namespace patcher** (`scripts/obj_anon_ns_patcher.py`): Patches MSVC anonymous namespace hashes in compiled .obj files to match the original binary's hashes. Integrated into ninja build pipeline.
+
+### LNK4006 Warning Breakdown (756 total)
+
+| Category | Count | Notes |
+|----------|-------|-------|
+| Template instantiations / inline functions | ~654 | Inherent to hybrid linking |
+| SafeName ICF copies | 54 | Same function in many TUs |
+| link_glue.cpp obsolete stubs | 45 | Can be cleaned up |
+| Anonymous namespace | 3 | Expected |
+
+These are all handled by `/FORCE:MULTIPLE`. The warnings are cosmetic — the linker picks one definition and discards duplicates.
+
+---
+
+## Historical Fixes
+
+### Fixed 2026-02-26 (Data stubs, ALTERNATENAME, /FORCE:UNRESOLVED dropped)
+- **Data stub .obj generation**: `create_data_stubs.py` strips code from split .objs, keeps only data sections with `lbl_*` symbols. Auto-linked by `project.py` alongside decomp .objs.
+- **ALTERNATENAME stubs for remaining 72 symbols**: Audio SDK (Synth360, XAPO, LEAPFX), UIPanel vtordisp thunks, STL templates, __unwind$ EH records.
+- **`/FORCE:UNRESOLVED` dropped**: All symbols now resolve. Only `/FORCE:MULTIPLE` remains.
+- **Anon namespace patcher in build pipeline**: Post-compile step patches `?A0x*` hashes.
 
 ### Fixed 2026-02-21 (REFHI/REFLO, linker flags, string COMDATs)
 - **REFHI/REFLO immediate zeroing**: COFF additive relocations read existing instruction immediates as addends. Baked-in XEX values (e.g., `lis r11, 0x8200`) caused overflow (`0x8200 + 0x823A = 0x043A`). Fix: zero bits [15:0] in REFHI/REFLO relocation sites (`insn & 0xFFFF0000`).
-- **Granular linker flags**: `/FORCE` → `/FORCE:MULTIPLE` + `/FORCE:UNRESOLVED`. 275 LNK4006 are warnings (MULTIPLE), 666 LNK2001/2019 are errors (UNRESOLVED).
-- **??_C@_ string COMDATs identified**: 384 unresolved string symbols due to different hash manglings between decomp and split objects. Both use the same compiler (MSVC 16.00.11886). The `??_C@` hash is JamCRC over string **content bytes only** (confirmed via LLVM's `MicrosoftMangle.cpp`). Under wibo, all hashes are 0 because `RtlComputeCrc32` is unimplemented. Fixing wibo's CRC32 will fix all non-path string hashes. See `docs/plans/CLEAN_LINK_PROJECT.md`.
+- **Granular linker flags**: `/FORCE` → `/FORCE:MULTIPLE` + `/FORCE:UNRESOLVED`.
+- **??_C@_ string COMDATs identified**: Hash=0 under wibo because `RtlComputeCrc32` was unimplemented. Fixed in wibo fork.
 - **Configure script**: `scripts/build/configure.sh` wraps `configure.py` with custom `--dtk`, `--objdiff`, `--wibo` paths.
-- **Xenia headless fixes**: `ShowSimpleMessageBox` stderr fallback when no DISPLAY; correct flag `--headless_timeout_ms`.
 
 ### Fixed 2026-02-20 (REL24, CRT stubs, COMDAT Phase 2)
-- **REL24 displacement convention**: MSVC PPC linker uses `disp = (S + A) - section_VA`, not `(S + A) - instruction_VA`. Jeff now sets A = `-(offset_in_section)` for all REL24 relocation sites, matching the compiler convention. Separate handling for parent sections vs COMDAT sections. Reduced bad bls from 10,951 to 99 (98 unresolved + 1 .bss).
-- **CRT save/restore stub exclusion**: `__savegprlr`/`__restgprlr`/`__savefpr`/`__restfpr` excluded from COMDAT extraction in `split.rs` to preserve fall-through chains. Entry point `bl` now correctly targets `__savegprlr_28`.
-- **All global symbols in split objects now COMDAT**: marks every global defined symbol (not just inter-split duplicates) as `IMAGE_COMDAT_SELECT_ANY`
-- **Zero-size symbol support**: infers size for `__real@*` (4/8 bytes), RTTI, string literals, vftables via distance-to-next-symbol
-- **Single COMDAT symbol emission**: removed dual LOCAL+EXTERNAL pattern; now only EXTERNAL in COMDAT section
-- **.pdata reconstruction**: jeff generates correct `.pdata` entries with ADDR32 relocs, filters `__unwind$`. `fix_pdata.py` removed from pipeline.
-- **Rebuild script**: `scripts/build/rebuild_jeff_link.sh` — builds jeff, re-splits, links, shows error summary
+- **REL24 displacement convention**: MSVC PPC linker uses `disp = (S + A) - section_VA`, not `(S + A) - instruction_VA`. Jeff now sets A = `-(offset_in_section)` for all REL24 relocation sites.
+- **CRT save/restore stub exclusion**: `__savegprlr`/`__restgprlr`/`__savefpr`/`__restfpr` excluded from COMDAT extraction to preserve fall-through chains.
+- **All global symbols now COMDAT**: `IMAGE_COMDAT_SELECT_ANY` for all globals in split objects.
+- **.pdata reconstruction**: jeff generates correct `.pdata` entries with ADDR32 relocs.
 
 ### Fixed 2026-02-19 (COMDAT Phase 1, ICF, etc.)
-- **ICF symbols resolved**: `link_glue.cpp` provides definitions for `operator delete`, `DataArray::Node`, `MemOrPoolFreeSTL` (eliminated 292 errors)
+- **ICF symbols resolved**: `link_glue.cpp` provides definitions for `operator delete`, `DataArray::Node`, `MemOrPoolFreeSTL`
 - **VA shift fixed**: `/MERGE:.xidata=.text` puts `.text` at correct VA `0x82330000`
-- **COMDAT Phase 1**: marked global symbols with `size > 0` duplicated across split objects
 
-## Remaining Issues
+---
 
-### 1. Duplicate Symbols — 275 LNK4006 warnings (down from 5,545)
+## Remaining Issues (Potential Jeff Improvements)
 
-**Status (2026-02-20)**: COMDAT Phase 2 complete. All jeff-fixable duplicates resolved.
+### 1. Duplicate Symbols — 756 LNK4006 warnings
 
-Remaining 275 warnings caused by MSVC X360 compiler using `IMAGE_COMDAT_SELECT_NODUPLICATES` (selection=1) for some template specializations. Breakdown:
-- 182 decomp-decomp (MSVC behavior, can't fix in jeff)
-- 77 decomp-split (NODUPLICATES in decomp conflicts with ANY in split)
-- 9 split-decomp/split-split (ambiguous basenames, actually decomp-involved)
-- 7 unknown (SDK/lib objects)
+Most are inherent to hybrid linking (template instantiations in multiple TUs). Not fixable in jeff. Handled by `/FORCE:MULTIPLE`.
 
-**Impact**: `/FORCE:UNRESOLVED` should work (LNK4006 is a warning, not an error). Testing pending.
+**Reducible subset**: 45 link_glue.cpp stubs that duplicate Matching unit symbols (cleanup task, not jeff).
 
-**Files**: `jeff/src/util/xex.rs` (write_coff, COMDAT extraction), `jeff/src/util/split.rs` (COMDAT marking in split_obj)
+### 2. EH Metadata Colocation (nice-to-have)
 
-### 2. Cross-Unit Label References — 96 unresolved `lbl_*`
+17 `__unwind$` + 2 `__catch$` symbols currently resolved via ALTERNATENAME stubs. Jeff could keep EH metadata colocated with parent functions during splitting to eliminate the need for stubs.
 
-Jeff commit `e48b587` globalized `lbl_*` symbols within their own object, but labels referencing addresses in OTHER compilation units remain unresolved. These are intra-binary branches that span unit boundaries.
+**Priority**: Low — stubs work fine.
 
-**Example**: `unit_A.obj` references `lbl_82XXXXXX` which lives in `unit_B.obj`.
+### 3. SafeName ICF Deduplication (nice-to-have)
 
-**Fix options**:
-1. Jeff could create extern declarations for cross-unit label references
-2. Jeff could detect and merge units that share cross-unit label references
-3. A post-split glue step could create forwarding stubs
+54 LNK4006 from `SafeName(Hmx::Object*)` emitted into many split .objs. Jeff could detect and deduplicate these.
 
-### 3. CRT Dynamic Initializers — 24 unresolved `??__E*`
+**Priority**: Low — cosmetic warning reduction only.
 
-C++ static initializers (e.g., `??__EgOverride@@YAXXZ`) referenced from `auto_08_82F05C00_data.obj`. These are initializer functions split into separate objects from the data they initialize.
+### 4. Jeff CFA Infrastructure
 
-**Fix**: Jeff could either keep initializer functions with their data objects, or emit them in a CRT init section.
+Recent jeff commits (2026-02-24+) redesigned the Control Flow Analysis system:
+- `AnalyzerState` → `CfaConfig` + `CfaResult`
+- VM2 architecture with register state tracking and provenance
+- Hardened against out-of-bounds symbol addresses
 
-### 4. EH Metadata — 15 `__unwind$` + 2 `__catch$`
+These are infrastructure improvements for future work, not directly related to current link issues.
 
-Exception handling unwind/catch symbols split across objects. The original linker resolves these from the same compilation unit.
-
-**Fix**: Jeff could keep EH metadata colocated with its parent function during splitting.
-
-### 5. ICF Merged Symbols — 10 remaining `merged_*`
-
-Additional Identical COMDAT Folding cases beyond what `link_glue.cpp` covers. These are functions merged to a single address by the original linker.
-
-**Fix**: Identify which canonical functions these map to and add stubs to `link_glue.cpp`, or fix in jeff's COMDAT output.
-
-### 6. Library Cross-References — ~10 symbols
-
-Missing vorbis (`floor0_*`, `vorbis_lpc_*`), zlib (`zcfree`, `_tr_stored_block`, `compressBound`), jpeg (`jpeg_mem_*`, `jpeg_get_*`), and other library functions.
-
-**Root cause**: Library objects split into multiple units, with cross-references between them unresolved.
-
-### 7. Jump Tables — 3 remaining
-
-`jumptable_820050E8`, `jumptable_82005128`, `jumptable_8206E238` — known dtk limitation for switch statement dispatch tables.
+---
 
 ## Workarounds In Place
 
@@ -97,18 +105,26 @@ Missing vorbis (`floor0_*`, `vorbis_lpc_*`), zlib (`zcfree`, `_tr_stored_block`,
 |-------|-----------|------------|
 | VA shift +0x1600 | `/MERGE:.xidata=.text` in ldflags | Yes (config.json) |
 | ICF op delete/Node/MemPool | `link_glue.cpp` provides definitions | Yes (injected in configure.py) |
-| Multiply-defined symbols (275) | `/FORCE:MULTIPLE` linker flag | Yes (config.json) |
-| Unresolved symbols (666) | `/FORCE:UNRESOLVED` linker flag | Yes (config.json) |
+| Multiply-defined symbols | `/FORCE:MULTIPLE` linker flag | Yes (config.json) |
+| lbl_* data symbols | `create_data_stubs.py` (post-compile) | Yes (ninja pipeline) |
+| Audio SDK / EH / template symbols | ALTERNATENAME stubs in link_glue.cpp | Yes (compiled) |
+| Anon namespace hashes | `obj_anon_ns_patcher.py` (post-compile) | Yes (ninja pipeline) |
+| String literal hashes | Wibo CRC fix + WIBO_PATH_MAP | Yes (build env) |
 
 ## Build Pipeline
 
 ```
-dtk xex split → configure.py (injects link_glue unit) → ninja → link with /FORCE
+dtk xex split → configure.py (injects link_glue unit)
+  → ninja compile
+  → anon_ns_patcher (post-compile)
+  → create_data_stubs (post-compile)
+  → ninja link with /FORCE:MULTIPLE
 ```
 
 ## Priority for Remaining Jeff Fixes
 
-1. **Cross-unit label resolution** (eliminates 96 lbl_* errors)
-2. **EH colocation** (eliminates 17 __unwind/__catch errors)
-3. **CRT init colocation** (eliminates 24 ??__E errors)
-4. **REL14 overflow mitigation** (15 conditional branches can't reach lbl_* targets >32KB away)
+1. **EH colocation** — eliminates 17 ALTERNATENAME __unwind stubs (medium effort)
+2. **SafeName deduplication** — eliminates 54 LNK4006 warnings (low effort)
+3. **CFA improvements** — general infrastructure for future analysis
+
+All critical link errors are resolved. Remaining work is polish.

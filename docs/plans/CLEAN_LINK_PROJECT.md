@@ -6,74 +6,60 @@ Spans three repos: **jeff** (dtk fork — splitting + COFF generation), **wibo**
 
 ## Current State (2026-02-26)
 
-### Config A: Both decomp + split objects linked (historical default)
+### Config A: Both decomp + split objects linked (historical, replaced by Config B)
 
-The hybrid link uses `/FORCE:MULTIPLE` + `/FORCE:UNRESOLVED`. Link succeeds with **0 errors** and the XEX boots in Xenia.
+Config A linked both decomp and split objects for Matching units. **Abandoned** due to a critical issue: the linker placed split function bodies adjacent to decomp function bodies, creating overlapping address space. Runtime guest-memory patches at MAP addresses could corrupt overlapping split code. This was the root cause of the SkeletonIdentifier boot hang (Session 40).
+
+Config A produced 3,735 LNK4006 warnings (3,183 same-object duplicates + 552 cross-object). Replaced by Config B.
+
+### Config B: Decomp-only for Matching units (current default)
+
+Changed `project.py` to skip split objects for Matching units. Data stubs provide `lbl_*` data symbols. ALTERNATENAME stubs handle remaining gaps.
 
 | Metric | Value |
 |--------|-------|
 | **LNK2001/LNK2019 (unresolved)** | **0** |
 | **LNK2005 (hard duplicates)** | **0** |
-| **LNK2013 (fixup overflow)** | **0** |
-| **LNK4006 (duplicate warnings)** | **3,735** (see breakdown below) |
-| **LNK4210 (.CRT warnings)** | 28 |
-| **Link flags** | `/FORCE:MULTIPLE` + `/FORCE:UNRESOLVED` |
+| **LNK4006 (duplicate warnings)** | **756** (see breakdown) |
+| **LNK4210 (.CRT warnings)** | 29 |
+| **Link flags** | `/FORCE:MULTIPLE` only |
 
-**CRITICAL ISSUE:** Linking both objects for Matching units causes the linker to place split function bodies adjacent to decomp function bodies. The /FORCE linker picks the decomp definition, but the **split object's code still occupies address space**, creating overlapping functions. Runtime guest-memory patches at MAP addresses (decomp) can corrupt the overlapping split code that other functions call. This was the root cause of the SkeletonIdentifier boot hang (Session 40).
+All unresolved symbols resolved via three approaches (see below). XEX boots in Xenia with no hangs.
 
-### Config B: Decomp-only for Matching units (new default)
+### How Unresolved Symbols Were Resolved (Config B)
 
-Changed `project.py` to skip split objects for Matching units. This eliminates all 3,183 same-object duplicates but introduces 188 unique unresolved symbols (571 total references).
+Originally 726 unique unresolved symbols across 1017 errors. Resolved in three steps:
 
-| Metric | Value |
-|--------|-------|
-| **LNK2001/LNK2019 (unresolved)** | **571** (188 unique — see breakdown) |
-| **LNK2005 (hard duplicates)** | **0** |
-| **LNK4006 (duplicate warnings)** | **548** (cross-object only) |
-| **LNK4210 (.CRT warnings)** | 28 |
-| **Link flags** | `/FORCE:MULTIPLE` + `/FORCE:UNRESOLVED` |
+| Step | Approach | Symbols Resolved | Implementation |
+|------|----------|-----------------|----------------|
+| 1 | **Data stubs** | 577 `lbl_*`, 3 `jumptable_*`, 28 `__real@*` | `scripts/create_data_stubs.py` — strips code from split .objs, keeps data sections |
+| 2 | **ALTERNATENAME stubs** | 72 remaining (audio SDK, EH records, STL templates, vtordisp thunks) | `src/link_glue.cpp` — `/ALTERNATENAME:mangled=__link_glue_noop` directives |
+| 3 | **Wibo CRC + path mapping** | `??_C@` string hash mismatches | `SigForPbCb` CRC-32 in wibo + `WIBO_PATH_MAP` for `__FILE__` paths |
 
-With both `/FORCE` flags, the XEX still boots in Xenia — no SkeletonIdentifier overlap hang.
+**Data stubs**: When Config B replaces a split .obj with a decomp .obj, cross-references from other split .objs using `lbl_*` data names break. `create_data_stubs.py` creates minimal COFF .objs with only data sections, preserving `lbl_*` symbols. 299 data-stub .obj files, 19,925 data symbols. Auto-linked by `project.py`.
 
-### Unresolved symbols breakdown (Config B)
+**ALTERNATENAME stubs**: 72 symbols stubbed via MSVC `/ALTERNATENAME` linker directive. Categories: Synth360/FxSend360 audio (14), XAPO/CXAPOBase SDK (8), LEAPFX/NUISPEECH Kinect (3), DSP::Synapse (3), UIPanel vtordisp thunks (5), STL templates (8), `__unwind$` EH records (17), `__catch$` EH (2), misc globals (12).
 
-188 unique unresolved symbols referenced by non-Matching split objects:
+### LNK4006 Breakdown (Config B, 756 total)
 
-| Category | Unique | Refs | Root cause | Fix |
-|----------|--------|------|------------|-----|
-| `merged_*` (ICF aliases) | 46 | 435 | Split objects reference ICF-merged addresses from Matching units | Jeff: resolve to actual symbol name |
-| `??__E` (static init) | 49 | 49 | CRT initializers for Matching units' globals | Decomp source or link_glue.cpp |
-| `__unwind$` (EH records) | 53 | 53 | Exception handler records | Jeff: extract into COMDAT sections |
-| `lbl_*` (data labels) | 23 | 24 | Cross-unit data references to stripped labels | Jeff: emit named symbols |
-| `??_C@` (string literals) | 7 | 7 | String COMDATs from Matching units | Decomp source |
-| `floor0_*` (vorbis) | 6 | 6 | Vorbis library internal functions | link_glue.cpp |
-| `__catch$` (EH) | 2 | 2 | Catch handler records | Jeff or link_glue.cpp |
-| Static data members | 6 | 6 | Globals defined in Matching decomp headers | Decomp source |
-
-The `merged_*` category (46 symbols, 435 references) is the largest blocker. These need jeff to resolve ICF addresses back to actual symbol names.
-
-### LNK4006 Breakdown (Config A, for reference)
-
-The 3,735 LNK4006 warnings break down into two categories:
-
-| Category | Count | Cause |
+| Category | Count | Notes |
 |----------|-------|-------|
-| **Same-object** (X.obj defined in X.obj) | 3,183 | Decomp uses `NODUPLICATES`, split uses `ANY` |
-| **Cross-object** (X.obj defined in Y.obj) | 552 | Templates/inlines/globals in multiple TUs |
+| Template instantiations / inline functions | ~654 | Inherent to hybrid linking — emitted into multiple TUs |
+| SafeName ICF copies | 54 | Same function in many split .objs |
+| link_glue.cpp obsolete stubs | 45 | Can be cleaned up (stubs now duplicate Matching unit symbols) |
+| Anonymous namespace | 3 | Expected |
 
-**Same-object warnings (3,183):** These occur for the 364 Matching units where both decomp and split objects are linked. The MSVC X360 compiler emits `IMAGE_COMDAT_SELECT_NODUPLICATES` for function-level COMDATs. Jeff's split objects use `IMAGE_COMDAT_SELECT_ANY`. The NODUPLICATES-vs-ANY mismatch triggers LNK4006.
+All handled by `/FORCE:MULTIPLE`. The linker picks one definition and discards duplicates. These are cosmetic warnings.
 
-**Cross-object warnings (552):** Template instantiations (e.g., `PropSync<Key<Color>>`), inline functions (e.g., `KeylessHash::Remove`), and global data (e.g., `gEaseFuncs`) appearing in multiple split objects. These are expected COMDAT dedup situations.
+### History: LNK4006 Warning Count Evolution
 
-### History: The "275" Number
+| Date | Count | Context |
+|------|-------|---------|
+| 2026-02-20 | 275 | Wine-based linking, 252 Matching units (wine suppressed some warnings) |
+| 2026-02-23 | 3,735 | Wibo-based linking (true count), Config A (both decomp + split linked) |
+| 2026-02-26 | 756 | Config B (decomp-only for Matching), data stubs resolve cross-refs |
 
-The 275 LNK4006 count from 2026-02-20 was measured when:
-1. **Wine** was used for linking (not wibo — switched to wibo on 2026-02-23 in `bb632dc6`)
-2. Only **252** Matching units existed (now 364)
-
-Testing confirms: rebuilding with the same objects.json (252 units) and the same jeff produces **1,635** LNK4006 under wibo vs 275 under wine. The wine-based link.exe was silently suppressing NODUPLICATES-vs-ANY warnings. The current wibo-based count is the **true** warning count.
-
-The `cf01a80` COMDAT regression (which inflated LNK4006 to ~9,987) has been **fixed** — reverted to `if sect.kind == ObjSectionKind::Bss { continue; }` in jeff.
+Config B eliminates same-object duplicates (3,183 warnings) by not linking split .objs for Matching units. The remaining 756 are cross-object template/inline duplicates — inherent to hybrid linking.
 
 ### The String Hash Problem — RESOLVED
 
@@ -236,11 +222,11 @@ This is cosmetic — the linker resolves all relocations correctly. It causes ad
 | **1** | ~~Fix COMDAT regression (`cf01a80`)~~ | ~~LNK4006: ~9,987 → 3,735~~ | jeff | **DONE** |
 | **2** | ~~Fix wibo CRC32 (`SigForPbCb`)~~ | ~~Correct string hashes~~ | wibo | **DONE** |
 | **3** | ~~Match original build paths~~ | ~~`__FILE__` strings match~~ | wibo + dc3-decomp | **DONE** |
-| **4** | Investigate wine vs wibo LNK4006 | Understand 3,183 same-obj warnings | wibo | Research |
-| **5** | Jeff hash normalization (fallback) | Safety net for residual mismatches | jeff | Small (string transform) |
-| **6** | NODUPLICATES acceptance | ~3,183 same-obj LNK4006 (permanent) | — | Accepted |
+| **4** | ~~Investigate wine vs wibo LNK4006~~ | ~~Understand same-obj warnings~~ | — | **Moot** (Config B eliminates same-obj) |
+| **5** | ~~Jeff hash normalization (fallback)~~ | ~~Safety net for mismatches~~ | — | **Unnecessary** (wibo CRC fix works) |
+| **6** | ~~NODUPLICATES acceptance~~ | ~~Same-obj LNK4006~~ | — | **Moot** (Config B) |
 
-After priority 1, the link dropped from ~10K warnings to ~3,735 (done). Priorities 2 and 3 are done — all `??_C@` string symbols now hash correctly with 0 mismatches. The link now needs only `/FORCE:MULTIPLE` for NODUPLICATES conflicts and cross-object template duplicates.
+All critical priorities are complete. The link has 0 errors and only `/FORCE:MULTIPLE` remains for 756 cosmetic COMDAT duplicate warnings. Remaining work is polish: cleaning up obsolete link_glue.cpp stubs (45 warnings) and potentially suppressing template instantiation warnings (~654).
 
 ---
 
@@ -251,10 +237,10 @@ After priority 1, the link dropped from ~10K warnings to ~3,735 (done). Prioriti
 - LNK4006: ~9,987 → 3,735
 - 0 errors, 0 unresolved, 0 fixup overflow
 
-**M2: Drop `/FORCE:UNRESOLVED`**
-- Already achievable today (0 unresolved errors)
-- Remove flag from config, verify link succeeds with only `/FORCE:MULTIPLE`
-- Free win — just needs testing
+**M2: Drop `/FORCE:UNRESOLVED`** — DONE (2026-02-26)
+- All 726 unique unresolved symbols resolved via data stubs (608) + ALTERNATENAME (72) + wibo CRC fix
+- `/FORCE:UNRESOLVED` removed from config.json ldflags
+- Link succeeds with only `/FORCE:MULTIPLE` — 0 errors, 756 LNK4006 warnings
 
 **M3: 1:1 String Symbol Matching** — DONE (2026-02-26)
 - Wibo CRC32 implemented (#3) via `SigForPbCb` in `mspdb_dll.cpp`
@@ -262,11 +248,11 @@ After priority 1, the link dropped from ~10K warnings to ~3,735 (done). Prioriti
 - 121 shared `??_C@` symbols, 0 hash mismatches
 - 5 source string bugs found and fixed via hash comparison
 
-**M4: Minimal `/FORCE`**
-- Only `/FORCE:MULTIPLE` remains for NODUPLICATES conflicts
-- All unresolved stay at 0
+**M4: Minimal `/FORCE`** — DONE (2026-02-26)
+- Only `/FORCE:MULTIPLE` remains for COMDAT duplicate warnings
+- 0 unresolved symbols, 0 errors
 - All `??_C@` string symbols hash correctly
-- Clean link state — `/FORCE:MULTIPLE` is cosmetic suppression of harmless warnings
+- `/FORCE:MULTIPLE` is cosmetic suppression of 756 harmless COMDAT duplicate warnings
 
 **M5: 1:1 XEX**
 - `.text` size delta eliminated (all functions matching, no extra subsections)
@@ -281,7 +267,7 @@ After priority 1, the link dropped from ~10K warnings to ~3,735 (done). Prioriti
 - Useful as a second-pass verification at milestones — "what's the real match% after link-time effects?"
 - See [LINKED_BINARY_VERIFICATION.md](LINKED_BINARY_VERIFICATION.md) for full design
 
-M1 is done. M2 is a config change (free win). M3 is done. M4 follows from M1+M2+M3. M5 requires completing the decomp. M6 can be built any time after M2 (once the linked binary is meaningful).
+M1 is done. M2 is done. M3 is done. M4 is done. M5 requires completing the decomp. M6 can be built any time (the linked binary is now meaningful).
 
 ---
 
@@ -321,9 +307,13 @@ M1 is done. M2 is a config change (free win). M3 is done. M4 follows from M1+M2+
 | Issue | Was | Resolution |
 |-------|-----|------------|
 | COMDAT regression (`cf01a80`) | LNK4006: ~9,987 | Fixed — reverted to BSS-only filter |
-| `??_C@` unresolved (533) | LNK2001 errors | Resolved — 0 unresolved |
-| `lbl_*` cross-unit labels (195) | LNK2001 errors | Resolved — 0 unresolved |
-| Library/CRT gaps (120) | LNK2001 errors | Resolved — `link_glue.cpp` |
-| `??__E*` CRT initializers (26) | LNK2001 errors | Resolved — 0 unresolved |
-| `__unwind$`/`__catch$` EH (17) | LNK2001 errors | Resolved — 0 unresolved |
-| `merged_*` ICF aliases (10) | LNK2001 errors | Resolved — `link_glue.cpp` |
+| `lbl_*` / `jumptable_*` / `__real@*` (608) | LNK2001 errors | Data stubs (`create_data_stubs.py`) |
+| `??_C@` string hash=0 | LNK2001 errors | Wibo CRC fix (`SigForPbCb`) + `WIBO_PATH_MAP` |
+| Audio SDK (Synth360, XAPO, LEAPFX) | LNK2001 errors | ALTERNATENAME stubs in `link_glue.cpp` |
+| `__unwind$`/`__catch$` EH (19) | LNK2001 errors | ALTERNATENAME stubs |
+| UIPanel vtordisp thunks (5) | LNK2001 errors | ALTERNATENAME stubs |
+| STL template instantiations (8) | LNK2001 errors | ALTERNATENAME stubs |
+| `merged_*` ICF aliases | LNK2001 errors | `link_glue.cpp` definitions |
+| Library/CRT gaps | LNK2001 errors | `link_glue.cpp` definitions |
+| Anonymous namespace hashes | Symbol mismatches | `obj_anon_ns_patcher.py` (post-compile) |
+| `/FORCE:UNRESOLVED` | Required for link | **Dropped** — all symbols resolve |

@@ -62,11 +62,11 @@ for the three remaining workstreams (COMDAT marking, .pdata fix, section layout)
 
 ## Where We Are Now
 
-### Progress Snapshot (2026-02-19)
+### Progress Snapshot (2026-02-26)
 
 ```
-Fuzzy match: 43.91% (source of truth for decomp progress)
-Complete units: 164 / 2,223
+Fuzzy match: ~44% (source of truth for decomp progress)
+Matching units: 364+ in objects.json
 ```
 
 After register swap patcher: +0.32% code match, 114 functions promoted to 100%.
@@ -92,22 +92,28 @@ noise or unfixable compiler artifacts like bool_mask and FMA patterns).
   the report counts code bytes (not function count), includes third-party/XDK
   code, and many of the remaining large functions are in the 36% denominator
 
-### Linking Status (Updated 2026-02-19)
+### Linking Status (Updated 2026-02-26)
 
-**Hybrid linking works today.** `ninja link` produces a 19.6MB PE:
+**Hybrid linking works with 0 errors.** `ninja link` produces a 19.6MB PE:
 
 ```bash
-ninja link    # Build + link (fix_pdata.py chained into split rule automatically)
+ninja link    # Build + link
               # configure.py injects link_glue.cpp as extra unit
-              # Uses wine + X360 link.exe → build/373307D9/default.exe
+              # Uses wibo + X360 link.exe → build/373307D9/default.exe
 ```
 
-Build pipeline: `dtk xex split → fix_pdata.py (auto) → configure.py (injects link_glue) → ninja → link /FORCE`
+Build pipeline:
+```
+dtk xex split → configure.py (injects link_glue)
+  → ninja compile
+  → anon_ns_patcher (post-compile)
+  → create_data_stubs (post-compile)
+  → ninja link with /FORCE:MULTIPLE
+```
 
-Still uses `/FORCE` due to 5,545 LNK4006 duplicate symbol warnings + 242 unresolved.
+**0 errors, 756 LNK4006 warnings.** Only `/FORCE:MULTIPLE` needed (cosmetic COMDAT duplicates).
 
-**Link order is correct** (2026-02-19): Objects are linked in the same order
-as the original binary. `generate_link_order.py` extracts order from original MAP.
+**Link order is correct** (2026-02-19): Objects linked in original binary order.
 **VA shift fixed**: `/MERGE:.xidata=.text` puts `.text` at VA `0x82330000`.
 
 ---
@@ -122,75 +128,39 @@ the title screen. Here's what that requires and where we stand:
 | Requirement | Status | Blocking? |
 |-------------|--------|-----------|
 | Code compiles | Yes (all decomp source builds) | No |
-| Linker runs | Yes (with /FORCE) | No |
+| Linker runs | Yes (with `/FORCE:MULTIPLE` only) | No |
 | PE produced | Yes (19.6MB) | No |
 | XEX packaging | **Done** — `scripts/build/build_xex.py` | No |
-| PE Override boots | **Yes** — enters main loop, crashes in EH | Partial |
-| Clean link (no /FORCE) | No — 178 unique unresolved, 5,545 duplicate warnings | Desired |
-| Code matches original | 43.91% fuzzy match | Partial |
-| Data sections present | Yes (from split objects) | No |
-| .pdata (exception tables) | Partial — split objects in .pdat0 (invisible to kernel) | **Yes for EH** |
+| Clean link | **Near-clean** — 0 errors, 756 cosmetic LNK4006 warnings | No |
+| Code matches original | ~44% fuzzy match | Partial |
+| Data sections present | Yes (from split objects + data stubs) | No |
+| .pdata (exception tables) | **Done** — jeff generates correct entries | No |
 | Xenia built | **Yes** — headless mode for testing | No |
-| Boot on Xenia | **Partial** — boots, 6 threads, crashes in exception handler | **Yes** |
+| Boot on Xenia | **Yes** — decomp XEX boots, enters main loop | No |
 
-### The Three Real Blockers
+### Previously Blocking Issues (All Resolved)
 
-#### 1. Unresolved Symbols (178 unique, 242 total errors)
+#### 1. Unresolved Symbols — RESOLVED (2026-02-26)
 
-*Updated 2026-02-19 — down from 437/81 after ICF fix*
+All 726 unique unresolved symbols resolved. `/FORCE:UNRESOLVED` dropped.
 
-| Category | Errors | Unique Symbols | Fix |
-|----------|--------|----------------|-----|
-| Cross-unit labels (`lbl_*`) | 96 | 96 | Jeff cross-unit label resolution |
-| .CRT dynamic initializers (`??__E`) | 24 | 24 | Jeff CRT init colocation |
-| Exception handling (`__unwind`/`__catch`) | 17 | 17 | Jeff EH colocation |
-| Merged symbols (`merged_*`) | 10 | 10 | ICF aliasing (link_glue.cpp or jeff) |
-| Library cross-refs (vorbis, zlib, jpeg) | ~10 | ~10 | Jeff library object handling |
-| Jump tables | 3 | 3 | Known dtk limitation |
-| Other (gethostbyname, itoa, kCRLF, etc.) | ~18 | ~18 | Mixed |
+| Approach | Symbols | Implementation |
+|----------|---------|----------------|
+| Data stubs | 608 (`lbl_*`, `jumptable_*`, `__real@*`) | `scripts/create_data_stubs.py` |
+| ALTERNATENAME stubs | 72 (audio SDK, EH, templates, thunks) | `src/link_glue.cpp` |
+| Wibo CRC + path mapping | `??_C@` string hashes | `SigForPbCb` CRC-32 + `WIBO_PATH_MAP` |
+| Anonymous namespace patcher | `?A0x*` hash mismatches | `scripts/obj_anon_ns_patcher.py` |
 
-**Fixed this session (2026-02-19):** `link_glue.cpp` provides definitions for
-the 3 highest-impact ICF symbols (DataArray::Node, operator delete, MemOrPoolFreeSTL),
-eliminating 292 errors. Injected via configure.py.
+#### 2. .pdata Exception Handling — RESOLVED (2026-02-23)
 
-Additionally, 5,545 LNK4006 duplicate symbol warnings remain from split objects
-lacking COMDAT marking. This forces `/FORCE` instead of `/FORCE:UNRESOLVED`.
-See [sessions/2026-02-19-xex-workstreams.md](../sessions/2026-02-19-xex-workstreams.md).
+Jeff now generates correct `.pdata` entries with proper ADDR32 relocations.
+LNK1223 = 0. The `fix_pdata.py` workaround has been removed from the build pipeline.
 
-#### 2. .pdata Exception Handling
+#### 3. XEX Packaging — RESOLVED (2026-02-20)
 
-Split objects have their .pdata in renamed `.pdat0` sections (workaround for
-LNK1223 validation errors). The Xbox 360 kernel's `RtlLookupFunctionEntry`
-only searches `.pdata` — so exception unwinding won't work for functions from
-split objects.
-
-**Impact:** C++ exceptions and stack unwinding in non-decomp code will crash.
-DC3 rarely uses exceptions (mainly MIDI parsing), so this might not block
-basic testing, but it's a correctness issue.
-
-**Root cause investigated (2026-02-19):** Jeff v1.9.0 already has the
-multi-.pdata section merge fix (commit 3a19d33). No objects have duplicate
-`.pdata` sections (verified: 0 occurrences). The LNK1223 error is about
-`.pdata` **content validation** — the linker rejects the RUNTIME_FUNCTION
-entries as malformed, not because there are multiple sections. This needs
-further investigation in jeff's pdata content generation.
-
-**Current workaround:** `scripts/build/fix_pdata.py` renames `.pdata` → `.pdat0`
-in all 1924 split objects before linking. This bypasses the linker validation
-but makes exception tables invisible to the kernel.
-
-**Fix:** Investigate why jeff generates .pdata entries that fail MSVC linker
-validation. The content format may differ from what the X360 linker expects
-(e.g., wrong sorting, overlapping ranges, invalid unwind info references).
-
-#### 3. XEX Packaging — DONE
-
-The linker produces a PE, but Xbox 360 (and Xenia) expects an XEX container.
-
-**Status:** `scripts/build/build_xex.py` creates a minimal XEX2 container around the PE.
-Copies optional headers from the original XEX (entry point, execution ID, imports,
-game ratings, TLS info, etc.). Unencrypted, raw compression — suitable for devkit
-and Xenia testing.
+`scripts/build/build_xex.py` creates a valid XEX2 container. Copies optional
+headers from the original XEX. Unencrypted, raw compression — suitable for
+devkit and Xenia testing. The decomp XEX boots in Xenia.
 
 ---
 
@@ -200,53 +170,42 @@ and Xenia testing.
 
 ```bash
 ninja                                    # Build all decomp .obj files
-python3 scripts/build/fix_pdata.py       # Rename .pdata→.pdat0 (workaround for LNK1223)
-ninja link                               # Link hybrid PE (with /FORCE, correct object order)
+                                         # (anon_ns_patcher + data stubs run as post-compile steps)
+ninja link                               # Link hybrid PE (0 errors, /FORCE:MULTIPLE only)
 python3 scripts/build/build_xex.py       # Package PE → XEX2 container
 scripts/build/compare_pe.py              # Compare against original (anchor-based)
 ```
 
 The hybrid PE links decomp code alongside split objects from the original
-binary. Link order now matches the original map file (2045 objects ordered).
-The XEX packer wraps it in a valid XEX2 container suitable for Xenia testing.
-Output: `build/373307D9/default.xex` (~19.6MB).
+binary. Link order matches the original map file (2045 objects ordered).
+Post-compile steps (anon namespace patcher, data stub generation) run
+automatically via ninja. Output: `build/373307D9/default.xex` (~19.6MB).
 
-**New tools (2026-02-19):**
-- `scripts/build/generate_link_order.py` — Parses `orig/373307D9/ham_xbox_r.map`
-  to extract .text object ordering, maps to dtk unit names
-- `config/373307D9/link_order.txt` — 2045 unit names in original link order
-- `configure.py` `link_order_callback` — Reorders objects at configure time
-
-### Phase 1: Fix VA Shift + .pdata (Unblock PE Override) — MOSTLY DONE
+### Phase 1: Fix VA Shift + .pdata (Unblock PE Override) — DONE
 
 **Goal:** `.text` at VA `0x82330000` (matching original), valid exception tables.
 
-| Task | Effort | Impact |
-|------|--------|--------|
-| ~~Match link object order~~ | ~~Medium~~ | ✅ Done (2026-02-19) |
-| ~~Fix VA shift~~ | ~~Medium~~ | ✅ Done — `/MERGE:.xidata=.text` |
-| ~~ICF symbol resolution~~ | ~~Medium~~ | ✅ Done — `link_glue.cpp` (292 errors eliminated) |
-| ~~XEX packaging + PE Override~~ | ~~Medium~~ | ✅ Done — boots into main loop |
-| Fix jeff .pdata content generation | Medium (upstream fix) | Eliminates fix_pdata.py workaround |
+All tasks complete:
+- ✅ Link object order matching (2026-02-19)
+- ✅ VA shift fixed via `/MERGE:.xidata=.text`
+- ✅ ICF symbol resolution via `link_glue.cpp`
+- ✅ XEX packaging + PE Override boots
+- ✅ Jeff .pdata content generation fixed (2026-02-23) — `fix_pdata.py` removed
 
-**Remaining:** .pdata content validation (LNK1223). See Workstream 2 in
-[sessions/2026-02-19-xex-workstreams.md](../sessions/2026-02-19-xex-workstreams.md).
+### Phase 2: Clean Link (eliminate /FORCE:UNRESOLVED) — DONE
 
-### Phase 2: Clean Link (eliminate /FORCE)
+**Goal:** Link without `/FORCE:UNRESOLVED` — all symbols resolved.
 
-**Goal:** Link without `/FORCE` — all symbols resolved, no duplicates.
+All tasks complete:
+- ✅ ICF symbol aliases — `link_glue.cpp` definitions
+- ✅ COMDAT marking in jeff — Phase 2 complete, LNK4006 from 5,545 to 756
+- ✅ Cross-unit `lbl_*` refs — resolved by data stubs (`create_data_stubs.py`)
+- ✅ EH metadata — ALTERNATENAME stubs in `link_glue.cpp`
+- ✅ Audio SDK / template / misc — ALTERNATENAME stubs
+- ✅ String literal hashes — wibo CRC fix + `WIBO_PATH_MAP`
+- ✅ Anonymous namespace hashes — `obj_anon_ns_patcher.py`
 
-| Task | Effort | Impact |
-|------|--------|--------|
-| ~~ICF symbol aliases~~ | ~~Medium~~ | ✅ Done — link_glue.cpp (3 symbols, 292 errors) |
-| Mark all duplicates as COMDAT in jeff | Medium (upstream) | Eliminates 5,545 LNK4006, enables /FORCE:UNRESOLVED |
-| Resolve cross-unit `lbl_*` refs in jeff | Medium (upstream) | Fixes 96 unresolved |
-| CRT init colocation in jeff | Small (upstream) | Fixes 24 unresolved |
-| EH metadata colocation in jeff | Small (upstream) | Fixes 17 unresolved |
-| Accept remaining decomp cross-refs | None | ~18 expected, resolve over time |
-
-**Dependency:** All require jeff (dtk fork at `~/code/milohax/jeff`) changes.
-See Workstream 1 in [sessions/2026-02-19-xex-workstreams.md](../sessions/2026-02-19-xex-workstreams.md).
+**Result:** 0 errors, `/FORCE:MULTIPLE` only (for 756 cosmetic COMDAT warnings).
 
 ### Phase 3: XEX Packaging + Boot Test
 
@@ -455,73 +414,56 @@ doesn't care about register allocation differences.
 
 ## Realistic Assessment
 
-| Phase | Blocking On | Feasibility |
-|-------|-------------|-------------|
-| Phase 1 (VA shift + .pdata) | Linker flags + jeff investigation | Achievable — well-understood |
-| Phase 2 (clean link) | jeff changes (symbol globalization) | Achievable — well-understood fixes |
-| Phase 3 (XEX + boot) | XEX packaging done, needs clean PE | Medium — tooling exists |
-| Phase 4 (debug loop) | Xenia debug capabilities | Good — extensive debug infra available |
+| Phase | Status | Notes |
+|-------|--------|-------|
+| Phase 1 (VA shift + .pdata) | **DONE** | All tasks complete |
+| Phase 2 (clean link) | **DONE** | 0 errors, `/FORCE:MULTIPLE` only |
+| Phase 3 (XEX + boot) | **DONE** | Decomp XEX boots in Xenia |
+| Phase 4 (debug loop) | In progress | Xenia headless testing active |
 
 **The hybrid approach is our biggest advantage.** We don't need to decomp
-everything to boot — the original code fills the gaps. The question is
-whether the seams between decomp and original code are clean enough to
-survive runtime.
-
-**The fastest path to a first test** is to skip Phases 1-2 entirely:
-take the current `/FORCE`-linked PE, wrap it in an XEX, and try to boot.
-The crashes will tell us exactly what matters and what doesn't.
+everything to boot — the original code fills the gaps. The decomp XEX already
+boots and enters the main loop in Xenia.
 
 ---
 
 ## Next Steps (Immediate)
 
-### Priority 1: Jeff COMDAT Marking (Workstream 1)
+All critical link issues are resolved. Remaining work is polish:
 
-Extend jeff's existing `__unwind$` COMDAT infrastructure to all globally-duplicated
-symbols (templates, RTTI, inline functions, float constants, string literals).
-Eliminates 5,545 LNK4006 warnings and enables `/FORCE:UNRESOLVED` instead of `/FORCE`.
+### Priority 1: Clean up link_glue.cpp stubs
+45 obsolete stubs duplicate symbols from Matching unit decomp .objs. Remove to reduce LNK4006.
 
-### Priority 2: .pdata Content Validation (Workstream 2)
+### Priority 2: Jeff EH metadata colocation (nice-to-have)
+17 `__unwind$` + 2 `__catch$` symbols currently ALTERNATENAME-stubbed. Jeff could keep EH metadata colocated.
 
-Investigate why jeff generates `.pdata` entries that fail MSVC linker validation
-(LNK1223). Write diagnostic tool, compare against original binary's entries,
-fix in jeff. Eliminates `fix_pdata.py` workaround and restores exception handling.
+### Priority 3: Jeff SafeName deduplication (nice-to-have)
+54 LNK4006 from `SafeName(Hmx::Object*)` in many split .objs. Jeff could deduplicate.
 
-### Priority 3: Remaining Unresolved Symbols
-
-178 unique unresolved symbols (242 total errors). Highest-impact: cross-unit
-`lbl_*` refs (96 errors), CRT init colocation (24), EH metadata (17).
-All require jeff changes.
-
-See [sessions/2026-02-19-xex-workstreams.md](../sessions/2026-02-19-xex-workstreams.md)
-for detailed plans on all three workstreams.
+See [NEXT_STEPS.md](NEXT_STEPS.md) for the detailed execution plan.
 
 ### Completed
 
+- ~~**All unresolved symbols**~~ — 0 errors (data stubs + ALTERNATENAME + wibo CRC)
+- ~~**`/FORCE:UNRESOLVED` dropped**~~ — only `/FORCE:MULTIPLE` remains
+- ~~**`.pdata` generation**~~ — jeff generates correct entries, LNK1223 = 0
 - ~~**XEX packaging**~~ — `scripts/build/build_xex.py` wraps PE -> XEX2
 - ~~**Xenia headless mode**~~ — Built and running at `~/code/milohax/xenia/`
 - ~~**Import resolution**~~ — 707 imports resolved (347 thunks + 360 variables)
 - ~~**XAudio2/Async I/O/XAM stubs**~~ — Game enters main render loop
-- ~~**Vulkan backend**~~ — Frame capture pipeline working (610 PPM frames/20s)
-- ~~**PE override**~~ — VA shift fixed, boots into main loop (crashes in exception handler)
-- ~~**Link order matching**~~ — `generate_link_order.py` + `link_order_callback`
-  in configure.py. 2045/2061 objects mapped from original map file.
 - ~~**VA shift fix**~~ — `/MERGE:.xidata=.text` puts `.text` at VA `0x82330000`
 - ~~**ICF symbol resolution**~~ — `link_glue.cpp` provides operator delete,
-  DataArray::Node, MemOrPoolFreeSTL (eliminated 292 link errors)
-- ~~**Build pipeline automation**~~ — fix_pdata.py chained into split rule,
-  link_glue injected via configure.py, no manual steps needed
+  DataArray::Node, MemOrPoolFreeSTL
+- ~~**Build pipeline automation**~~ — anon_ns_patcher + data stubs in ninja pipeline
+- ~~**String literal hashes**~~ — wibo CRC fix + WIBO_PATH_MAP
+- ~~**Anonymous namespace hashes**~~ — obj_anon_ns_patcher.py post-compile step
 
 ### Backlog
 
-1. **dtk PR for symbol globalization** — The 96 `lbl_*` unresolved symbols
-   are the biggest link-time blocker for a clean link. See also:
-   [LBL_SYMBOL_MATCHING.md](LBL_SYMBOL_MATCHING.md).
-
-2. **XEXP patch tool** — For iterative debugging, patch individual functions
+1. **XEXP patch tool** — For iterative debugging, patch individual functions
    into the original XEX.
 
-3. **Screenshots from original XEX** — Non-copy draws must be skipped due to
+2. **Screenshots from original XEX** — Non-copy draws must be skipped due to
    CP timing sensitivity. See [runtime/XENIA_HEADLESS_STATUS.md](../runtime/XENIA_HEADLESS_STATUS.md).
 
 ## Import Resolution: Thunk Markers Plan
