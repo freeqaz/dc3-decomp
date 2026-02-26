@@ -483,7 +483,9 @@ void SynthPreInit() {
     if (useNullSynth) {
         TheSynth = new Synth();
     } else {
-        // TheSynth = Synth::New();
+        // TODO: Synth::New() creates Synth360 on Xbox; stubbed for now
+        // because XAudio2 isn't available in headless mode.
+        TheSynth = new Synth();
     }
     if (TheSynth->Fail()) {
         // RELEASE(TheSynth);
