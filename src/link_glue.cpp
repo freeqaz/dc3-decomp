@@ -1431,3 +1431,194 @@ void HolmesClientPrint(const char *) {}
 #include "utl/MemMgr.h"
 void MemOrPoolFree(int, void *mem, const char *, int, const char *) {}
 
+
+// ============================================================================
+// Linker stubs for compiler-generated symbols missing from split objects
+// These are unresolved because we skip split objects for Matching units,
+// and these compiler-generated symbols have no decomp-source equivalent.
+// ============================================================================
+
+// Noop function target for ALTERNATENAME redirects
+extern "C" void __link_glue_noop(void) {}
+
+#pragma comment(linker, "/ALTERNATENAME:??__ETheHamSongMgr@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__ETheMemcardMgr@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EThePlatformMgr@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EThePresenceMgr@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__ETheRockCentral@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__ETheVirtualKeyboard@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EgChecksumData@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EgDataPointMgr@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EgDataVars@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EgDingoSvrXbox@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EgEntries@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EgEvalNode@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EgHashTable@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EgMacroTable@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EgOverride@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EgPropPaths@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EgSinks@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EgTransListAlloc@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EgVarStack@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EgWavMgr@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EkListChunkID@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EkMidiChunkID@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EkMidiHeaderChunkID@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EkMidiTrackChunkID@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EkRiffChunkID@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EkWaveAdditionalChunkID@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EkWaveChunkID@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EkWaveCueChunkID@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EkWaveDataChunkID@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EkWaveFactChunkID@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EkWaveFormatChunkID@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EkWaveInstChunkID@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EkWaveLabelChunkID@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EkWaveSampleChunkID@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EkWaveTextChunkID@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__E?sNull@FilePath@@0V1@A@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__E?sRoot@FilePath@@0V1@A@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__E?kServerVer@RockCentral@@0VString@@B@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__E?sSlowFrameTimer@Timer@@0V1@A@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__E?sParsers@MidiParser@@0V?$list@PAVMidiParser@@V?$StlNodeAlloc@PAVMidiParser@@@stlpmtx_std@@@stlpmtx_std@@A@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__E?sOverlays@RndOverlay@@0V?$list@PAVRndOverlay@@V?$StlNodeAlloc@PAVRndOverlay@@@stlpmtx_std@@@stlpmtx_std@@A@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__E?sPollables@SynthPollable@@0V?$list@PAVSynthPollable@@V?$StlNodeAlloc@PAVSynthPollable@@@stlpmtx_std@@@stlpmtx_std@@A@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__E?sTimers@AutoTimer@@0V?$list@U?$pair@VTimer@@VTimerStats@@@stlpmtx_std@@V?$StlNodeAlloc@U?$pair@VTimer@@VTimerStats@@@stlpmtx_std@@@2@@stlpmtx_std@@A@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__E?sFactories@Object@Hmx@@0V?$map@VSymbol@@P6APAVObject@Hmx@@XZU?$less@VSymbol@@@stlpmtx_std@@V?$StlNodeAlloc@U?$pair@$$CBVSymbol@@P6APAVObject@Hmx@@XZ@stlpmtx_std@@@5@@stlpmtx_std@@A@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__E?gThreadAchievements@Achievements@@0V?$vector@UXUSER_ACHIEVEMENT@@V?$StlNodeAlloc@UXUSER_ACHIEVEMENT@@@stlpmtx_std@@@stlpmtx_std@@A@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__E?sProxyPool@RndMultiMesh@@1V?$list@U?$pair@PAVRndMultiMeshProxy@@H@stlpmtx_std@@V?$StlNodeAlloc@U?$pair@PAVRndMultiMeshProxy@@H@stlpmtx_std@@@2@@stlpmtx_std@@A@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__E?sRand@Rand@@2V1@A@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EsConditionalTimersEnabled@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EsShaderTypes@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__catch$100372=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__catch$101089=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$100841=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$100842=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$100843=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$100846=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$100973=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$101768=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$101769=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$102604=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$102605=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$102606=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$102958=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$102998=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$102999=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$103169=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$103170=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$103171=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$103174=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$103175=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$103237=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$103238=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$103773=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$103774=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$106130=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$106131=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$106132=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$106133=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$106134=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$106135=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$119611=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$134220=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$134221=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$134222=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$134225=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$134226=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$138317=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$138318=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$196078=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$196079=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$227774=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$227793=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$229218=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$98547=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$98548=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$99301=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$99302=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$99303=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$99304=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$99305=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$99316=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$99317=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$99318=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:__unwind$99321=__link_glue_noop")
+
+// floor0_ stubs (Ogg Vorbis, not in decomp scope)
+extern "C" void floor0_free_info(void) {}
+extern "C" void floor0_free_look(void) {}
+extern "C" void floor0_inverse1(void) {}
+extern "C" void floor0_inverse2(void) {}
+extern "C" void floor0_look(void) {}
+extern "C" void floor0_unpack(void) {}
+
+// lbl_ data stubs (data labels from original binary)
+extern "C" int lbl_82002100 = 0;
+extern "C" int lbl_82002500 = 0;
+extern "C" int lbl_82018202 = 0;
+extern "C" int lbl_82018408 = 0;
+extern "C" int lbl_82038004 = 0;
+extern "C" int lbl_82038204 = 0;
+extern "C" int lbl_8203820E = 0;
+extern "C" int lbl_82038304 = 0;
+extern "C" int lbl_8204A205 = 0;
+extern "C" int lbl_8204A400 = 0;
+extern "C" int lbl_8205A41C = 0;
+extern "C" int lbl_82068300 = 0;
+extern "C" int lbl_82068414 = 0;
+extern "C" int lbl_8206920B = 0;
+extern "C" int lbl_82070C04 = 0;
+extern "C" int lbl_820F2230 = 0;
+extern "C" int lbl_820F22B8 = 0;
+extern "C" int lbl_820F2330 = 0;
+extern "C" int lbl_820F2380 = 0;
+extern "C" int lbl_820F2800 = 0;
+extern "C" int lbl_8210FCFA = 0;
+extern "C" int lbl_82212C24 = 0;
+extern "C" int lbl_82212C30 = 0;
+
+// Data stubs for vtable/static data ALTERNATENAME redirects
+extern "C" int __link_glue_zero[64] = {0};
+extern "C" const char __link_glue_empty_str[] = "";
+
+
+// Remaining unresolved symbol stubs
+
+#pragma comment(linker, "/ALTERNATENAME:?TheGameMode@@3PAVGameMode@@A=__link_glue_zero")
+#pragma comment(linker, "/ALTERNATENAME:??$__uninitialized_copy@PAVBlacklightPacket@RndText@@PAV12@@stlpmtx_std@@YAPAVBlacklightPacket@RndText@@PAV12@00ABU__false_type@0@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??_8CharTransDraw@@7BRndDrawable@@@=__link_glue_zero")
+#pragma comment(linker, "/ALTERNATENAME:??_8ContentLoadingPanel@@7B@=__link_glue_zero")
+#pragma comment(linker, "/ALTERNATENAME:??_8CursorPanel@@7B@=__link_glue_zero")
+#pragma comment(linker, "/ALTERNATENAME:??_8HamIKEffector@@7BCharPollable@@@=__link_glue_zero")
+#pragma comment(linker, "/ALTERNATENAME:??_8HamIKEffector@@7BCharWeightable@@@=__link_glue_zero")
+#pragma comment(linker, "/ALTERNATENAME:??_8MainMenuPanel@@7B@=__link_glue_zero")
+#pragma comment(linker, "/ALTERNATENAME:??_8StreamRecorder@@7B@=__link_glue_zero")
+#pragma comment(linker, "/ALTERNATENAME:??_8TexMovie@@7B@=__link_glue_zero")
+#pragma comment(linker, "/ALTERNATENAME:?sDeleting@Object@Hmx@@1PAV12@A=__link_glue_zero")
+#pragma comment(linker, "/ALTERNATENAME:?sNumHam2Nodes@FilterVersion@@1HA=__link_glue_zero")
+#pragma comment(linker, "/ALTERNATENAME:??1WaveFileMarker@@QAA@XZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?GetDetectedRect@FaceDetector@TrueColor@@QBAABVFaceDetectionData@2@XZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?Speed@UIListState@@QBAMXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?sCache@PreloadPanel@@2PAVFileCache@@A=__link_glue_zero")
+#pragma comment(linker, "/ALTERNATENAME:?sInstance@HamSongData@@2PAV1@A=__link_glue_zero")
+#pragma comment(linker, "/ALTERNATENAME:?npos@FixedString@@2IB=__link_glue_zero")
+#pragma comment(linker, "/ALTERNATENAME:?LocalizeToken@NavListShortcutNode@@UBA_NXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?GetCacheName@CacheXbox@@UAAPBDXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?OnCancel@SongSortMgr@@UAA?AVDataNode@@XZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?CharAdvance@RndFontBase@@UBAMG@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?GetType@CmdDeletePlaylistFromRC@@UAAHXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?GetClient@CCfgEngineBase@NUISPEECH@@UAAPAU_ISpRecoMaster@2@XZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?Load@CampaignMasterQuestSongSelectPanel@@UAAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?Load@RndTex@@UAAXAAVBinStream@@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?Enter@SongSelectPlaylistPanel@@UAAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?SetGlobalGain@ExposureRecipe@TrueColor@@QAAXM@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??_C@_06ENIPCAGE@colors?$AA@=__link_glue_empty_str")
+#pragma comment(linker, "/ALTERNATENAME:??_C@_0BC@MDEDGBKK@map?5is?5not?5empty?$CB?$AA@=__link_glue_empty_str")
+#pragma comment(linker, "/ALTERNATENAME:??_C@_0CM@PCKICEAD@e?3?2lazer_build_gmc1?2system?2src?2u@=__link_glue_empty_str")
+#pragma comment(linker, "/ALTERNATENAME:??_C@_0CP@HHCELKIK@e?3?2lazer_build_gmc1?2system?2src?2u@=__link_glue_empty_str")
+#pragma comment(linker, "/ALTERNATENAME:??_C@_0DA@KDMBHFGF@e?3?2lazer_build_gmc1?2system?2src?2u@=__link_glue_empty_str")
+#pragma comment(linker, "/ALTERNATENAME:??_C@_0DC@FMACKGHB@?4?1songs?1teachmehowtodougie?1teach@=__link_glue_empty_str")
+#pragma comment(linker, "/ALTERNATENAME:??_C@_0DC@LLBBAHMM@e?3?2lazer_build_gmc1?2system?2src?2h@=__link_glue_empty_str")
+#pragma comment(linker, "/ALTERNATENAME:??$for_each@U?$_List_iterator@PAVWebSvcRequest@@U?$_Nonconst_traits@PAVWebSvcRequest@@@stlpmtx_std@@@stlpmtx_std@@UDelete@@@stlpmtx_std@@YA?AUDelete@@U?$_List_iterator@PAVWebSvcRequest@@U?$_Nonconst_traits@PAVWebSvcRequest@@@stlpmtx_std@@@0@0U1@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??$random_shuffle@PAPBUUnlockable@?A0xf8e4b4b5@@@stlpmtx_std@@YAXPAPBUUnlockable@?A0xf8e4b4b5@@0@Z=__link_glue_noop")
