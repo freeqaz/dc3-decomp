@@ -129,19 +129,7 @@ int WSACreateEvent() { return 0; }
 // translation units are not yet decomped or are NonMatching split objects.
 // ============================================================================
 
-// -- String --
-#include "utl/Str.h"
-
-String::String(const char *s) : FixedString(), TextStream() {
-    // minimal stub - real implementation allocates and copies
-    mStr = (char *)"";
-    if (s) *this += s;
-}
-
-String::String(Symbol s) : FixedString(), TextStream() {
-    mStr = (char *)"";
-    if (s.Str()) *this += s.Str();
-}
+// (String constructors removed — utl/Str is Matching)
 
 // -- FormatString --
 #include "utl/MakeString.h"
@@ -173,6 +161,7 @@ void UIComponent::Exit() {}
 int UIList::NumData() const { return mNumData; }
 
 // -- BufStream --
+// Still needed: virtual method not exported from decomp .obj, referenced by other split .objs
 #include "utl/BufStream.h"
 
 int BufStream::Size() { return mSize; }
@@ -413,31 +402,20 @@ void DeJitter::Reset() {
     for (int i = 0; i < 0x20; i++) mHistoryBuffer[i] = 0;
 }
 
-// -- DancerSkeleton --
-#include "hamobj/DancerSkeleton.h"
-
-void DancerSkeleton::CameraToPlayerXfm(SkeletonCoordSys, Transform &) const {}
+// (DancerSkeleton removed — hamobj/DancerSkeleton is Matching)
 
 // -- VenueProvider --
+// Still needed: virtual NumData referenced by CharacterProvider, HamUI, LocalePanel split .objs
 #include "meta_ham/VenueProvider.h"
 
 int VenueProvider::NumData() const { return mVenues.size(); }
 
-// -- Accomplishment --
-#include "meta_ham/Accomplishment.h"
-#include "hamobj/Difficulty.h"
+// (Accomplishment removed — meta_ham/Accomplishment is Matching)
 
-Difficulty Accomplishment::GetRequiredDifficulty() const { return mDifficulty; }
-Symbol Accomplishment::GetName() const { return mName; }
-
-// -- FxSendBitCrush --
-#include "synth/FxSendBitCrush.h"
-
-DataNode FxSendBitCrush::Handle(DataArray *msg, bool warn) {
-    return FxSend::Handle(msg, warn);
-}
+// (FxSendBitCrush removed — synth/FxSendBitCrush is Matching)
 
 // -- CharSignalApplier --
+// Still needed: vtordisp thunk in split .obj references this
 #include "char/CharSignalApplier.h"
 
 DataNode CharSignalApplier::Handle(DataArray *msg, bool warn) {
@@ -445,6 +423,7 @@ DataNode CharSignalApplier::Handle(DataArray *msg, bool warn) {
 }
 
 // -- WorldCrowd3DCharHandle --
+// Still needed: vtordisp thunk in split .obj references this
 #include "world/Crowd3DCharHandle.h"
 
 bool WorldCrowd3DCharHandle::SyncProperty(DataNode &, DataArray *, int, PropOp) {
@@ -452,19 +431,18 @@ bool WorldCrowd3DCharHandle::SyncProperty(DataNode &, DataArray *, int, PropOp) 
 }
 
 // -- WavMgr --
+// Still needed: SyncProperty referenced from WavMgr.obj split
 #include "synth/WavMgr.h"
 
 bool WavMgr::SyncProperty(DataNode &, DataArray *, int, PropOp) { return false; }
 
 // -- Achievements --
+// Still needed: PlatformInit referenced from Achievements.obj itself
 #include "meta/Achievements.h"
 
 void Achievements::PlatformInit() {}
 
-// -- UIManager --
-#include "ui/UI.h"
-
-int UIManager::PushDepth() const { return mPushedScreens.size(); }
+// (UIManager removed — ui/UI is Matching)
 
 // -- Synth --
 #include "synth/Synth.h"
@@ -472,27 +450,21 @@ int UIManager::PushDepth() const { return mPushedScreens.size(); }
 int Synth::GetNumMics() const { return mNumMics; }
 
 // -- SongMetadata --
+// Still needed: inline in header, not exported from decomp .obj, referenced by SongMgr/SongRecord
 #include "meta/SongMetadata.h"
 
 int SongMetadata::ID() const { return mID; }
 Symbol SongMetadata::GameOrigin() const { return mGameOrigin; }
 
-// -- HamProfile --
-#include "meta_ham/HamProfile.h"
-
-SongStatusMgr *HamProfile::GetSongStatusMgr() const { return mSongStatusMgr; }
+// (HamProfile removed — meta_ham/HamProfile is Matching)
 
 // -- HamSongMetadata --
+// Still needed: not exported from decomp .obj, referenced by MetagameStats/HamSongMgr/PresenceMgr
 #include "meta_ham/HamSongMetadata.h"
 
 const char *HamSongMetadata::Title() const { return mName.c_str(); }
 
-// -- FixedSizeSaveableStream --
-#include "meta/FixedSizeSaveableStream.h"
-
-std::map<Symbol, int> &FixedSizeSaveableStream::GetSymbolToIDMap() {
-    return m_mapSymbolToID;
-}
+// (FixedSizeSaveableStream removed — meta/FixedSizeSaveableStream is Matching)
 
 // -- soundtouch::FIRFilter --
 // The soundtouch library is compiled separately but getLength() may be missing
@@ -881,16 +853,7 @@ BeatMap::BeatMap() {}
 
 const char *MidiReader::GetFilename() const { return mStreamName.c_str(); }
 
-// ============================================================================
-// FixedString default constructor stub
-// ============================================================================
-
-static char sLinkGlueEmpty[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
-
-FixedString::FixedString() : mStr((char *)(sLinkGlueEmpty + 4)) {
-    *(int *)(mStr - 4) = 0;
-    mStr[0] = '\0';
-}
+// (FixedString::FixedString removed — utl/Str is Matching)
 
 // ============================================================================
 // ObjPtrList instantiations for Character, Sequence, Task, EventTrigger,
