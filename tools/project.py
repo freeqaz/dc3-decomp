@@ -716,11 +716,18 @@ def generate_build_ninja(
     )
     n.newline()
 
-    # MSVC
+    # MSVC - use absolute paths since command cds into source dir for __FILE__
     msvc = compiler_path / "cl.exe"
-    msvc_cmd = f"{wrapper_cmd}{msvc} $cflags /Fo$out $in_win"
+    msvc_abs = compilers.resolve() / "$mw_version" / "cl.exe"
+    # Prefer config.wrapper (custom wibo with env var support) over
+    # compiler_wrapper() which may return the stock downloaded wibo
+    wrapper_for_msvc = config.wrapper if config.wrapper else wrapper
+    wrapper_abs = str(wrapper_for_msvc.resolve()) if wrapper_for_msvc else ""
+    wrapper_cmd_msvc = f"{wrapper_abs} " if wrapper_abs else ""
+    wibo_env = "WIBO_COMPUTER_NAME='9QVZU3' "
+    msvc_cmd = f"cd $in_dir && {wrapper_cmd_msvc}{wibo_env}{msvc_abs} $cflags /Fo$abs_out $in_win"
     if config.wibo_path_map:
-        msvc_cmd = f"{wrapper_cmd}WIBO_PATH_MAP='$wibo_path_map' {msvc} $cflags /Fo$out $in_win"
+        msvc_cmd = f"cd $in_dir && {wrapper_cmd_msvc}{wibo_env}WIBO_PATH_MAP='$wibo_path_map' {msvc_abs} $cflags /Fo$abs_out $in_win"
 
     n.comment("MSVC build")
     n.rule(
@@ -976,6 +983,22 @@ def generate_build_ninja(
                     extra_cflags.insert(0, "/TC")
 
             all_cflags = cflags + extra_cflags
+
+            # Absolutize relative /I paths so they resolve correctly
+            # after cd $in_dir (needed for __FILE__ basename fix)
+            project_root = str(Path.cwd())
+            def absolutize_include(flag):
+                if flag.startswith("/I "):
+                    inc = flag[3:]
+                    if ":" not in inc and not inc.startswith("/"):
+                        return f"/I {project_root}/{inc}"
+                elif flag.startswith("/I"):
+                    inc = flag[2:]
+                    if ":" not in inc and not inc.startswith("/"):
+                        return f"/I{project_root}/{inc}"
+                return flag
+            all_cflags = [absolutize_include(f) for f in all_cflags]
+
             cflags_str = make_flags_str(all_cflags)
             used_compiler_versions.add(obj.options["mw_version"])
 
@@ -997,12 +1020,15 @@ def generate_build_ninja(
             lib_name = obj.options["lib"]
             build_rule = "msvc"
             build_implcit = mwcc_implicit
+            src_abs = src_path.resolve()
             variables = {
                 "mw_version": Path(obj.options["mw_version"]),
                 "cflags": cflags_str,
                 "basedir": os.path.dirname(obj.src_obj_path),
                 "basefile": obj.src_obj_path.with_suffix(""),
-                "in_win": get_win_path(src_path),
+                "in_win": src_path.name,
+                "in_dir": str(src_abs.parent),
+                "abs_out": str(Path(obj.src_obj_path).resolve()),
             }
 
             if obj.options["shift_jis"] and obj.options["extab_padding"] is not None:
@@ -1144,6 +1170,14 @@ def generate_build_ninja(
                 # where split function bodies occupy the same address range as
                 # decomp functions, corrupting guest-memory patches at runtime.
                 link_step.add(built_obj_path)
+                # Also link the data-stub .obj if it exists.  This provides
+                # lbl_* data symbol exports that other split .objs reference.
+                # Data stubs contain only data sections (no code) from the
+                # split .obj, so they don't conflict with decomp code.
+                if obj_path is not None:
+                    data_stub = Path(str(obj_path).replace("/obj/", "/data/", 1))
+                    if data_stub.exists():
+                        link_step.add(data_stub)
             elif obj_path is not None:
                 # Use the original (extracted) object
                 link_step.add(Path(obj_path))
