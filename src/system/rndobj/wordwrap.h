@@ -3,7 +3,7 @@
 void WordWrap_SetOption(unsigned int);
 
 extern unsigned int g_uOption;
-extern unsigned char IsEastAsianChar(unsigned short);
+extern bool IsEastAsianChar(wchar_t);
 extern unsigned short g_LineBreakTable[];
 
 inline bool WordWrap_CanBreakLineAt(const wchar_t *arg0, const wchar_t *arg1)

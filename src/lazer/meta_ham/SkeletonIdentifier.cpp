@@ -281,8 +281,6 @@ void SkeletonIdentifier::Poll() {
     UpdateIdentityStatus();
 }
 
-SkeletonIdentifiedMsg::SkeletonIdentifiedMsg(int arg1, int arg2) : Message(Type(), arg1, arg2) {}
-
 DataNode SkeletonIdentifier::OnMsg(SkeletonEnrollmentChangedMsg const &msg) {
     UpdateEnrolledPlayers();
     return DATA_UNHANDLED;

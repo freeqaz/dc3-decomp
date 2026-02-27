@@ -13,6 +13,7 @@
         "/NODEFAULTLIB",
         "/XEX:NO",
         "/FORCE:MULTIPLE",
+        "/FORCE:UNRESOLVED",
         "/MERGE:.xidata=.text",
         "/MAP"
     ],

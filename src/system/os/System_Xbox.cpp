@@ -88,8 +88,8 @@ Symbol GetSystemLanguage(Symbol s) {
     case XC_LANGUAGE_ENGLISH:
         if (locale == XC_LOCALE_BELGIUM && IsSupportedLanguage(dut, false)) {
             s = dut;
+            break;
         }
-        break;
     case XC_LANGUAGE_SCHINESE:
         s = eng;
         break;

@@ -19,9 +19,10 @@ public:
 
     PlaylistSortNode(NavListItemSortCmp *, Playlist *);
 
+    Playlist *GetPlaylist() const { return mPlaylist; }
+
 protected:
-    int unk48; // Force Playlist* to 0x4c
-    Playlist *mPlaylist;
+    Playlist *mPlaylist; // 0x48
 };
 
 class PlaylistHeaderNode : public NavListHeaderNode {

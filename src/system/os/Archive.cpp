@@ -14,6 +14,7 @@
 #include "utl/Option.h"
 #include <cstdio>
 
+Archive *TheArchive;
 bool gDebugArkOrder;
 int kArkBlockSize = 0x10000;
 

@@ -94,7 +94,3 @@ MovieImpl* BinkMovieSys::CreateMovieImpl() {
     void* ptr = MemAlloc(0xE8, __FILE__, __LINE__, "MovieImpl", 0);
     return ptr ? new (ptr) BinkMovieImpl() : nullptr;
 }
-
-void BinkMovieSys::PlatformInit() {
-    // Implemented in BinkMovieSys_Xbox.cpp
-}

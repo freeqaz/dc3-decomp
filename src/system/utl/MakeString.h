@@ -11,7 +11,10 @@ private:
         kNone = 3,
     };
 
+protected:
     char *mFmt; // 0x0
+
+private:
     char *mBuf; // 0x4
     int mBufSize; // 0x8
     char mFmtBuf[0x1000]; // 0xc

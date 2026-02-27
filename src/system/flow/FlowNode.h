@@ -106,6 +106,6 @@ protected:
     if (mDebugOutput) {                                                                  \
         MILO_LOG("%s: %s", ClassName(), MakeString(__VA_ARGS__));                        \
         if (!mDebugComment.empty()) {                                                    \
-            MILO_LOG("Debug comment: %s\n", mDebugComment.c_str());                      \
+            MILO_LOG("Debug comment: %s\n", (char *)mDebugComment.c_str());              \
         }                                                                                \
     }

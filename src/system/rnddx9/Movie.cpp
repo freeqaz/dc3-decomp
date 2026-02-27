@@ -40,7 +40,7 @@ void DxMovie::SetFile(const FilePath &file, bool stream) {
         if (stream) {
             mStream = NewFile(CacheResource(mFile.c_str(), this), 2);
             if (!mStream) {
-                MILO_NOTIFY("%s: %s not found", PathName(this), mFile);
+                MILO_NOTIFY("%s: %s not found", PathName(this), (const String &)mFile);
                 return;
             }
             FileStream fStream(mStream, true);

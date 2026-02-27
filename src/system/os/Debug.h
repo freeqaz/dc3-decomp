@@ -184,7 +184,8 @@ namespace {
             if (strcmp(it->c_str(), name) == 0)
                 return false;
         }
-        strings.push_back(String(name));
+        String s(name);
+        strings.push_back(s);
         return true;
     }
 }

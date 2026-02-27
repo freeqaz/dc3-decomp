@@ -106,6 +106,9 @@ ADDRESS_CATALOG = {
     "mem_or_pool_free":          "?MemOrPoolFree@@YAXHPAXPBDH1@Z",
     "operator_new":              "??2@YAPAXI@Z",
     "operator_delete":           "??3@YAXPAX@Z",
+    "critsec_ctor":              "??0CriticalSection@@QAA@XZ",
+    "critsec_enter":             "?Enter@CriticalSection@@QAAXXZ",
+    "critsec_exit":              "?Exit@CriticalSection@@QAAXXZ",
     "g_num_heaps":               "?gNumHeaps@@3HA",
     "string_reserve":            "?reserve@String@@QAAXI@Z",
     # BinStream / Rand2
@@ -322,6 +325,18 @@ HACK_PACK_STUBS = {
     "CX2SourceVoice::Start": "?Start@CX2SourceVoice@XAUDIO2@@UAAJII@Z",
     "CX2SourceVoice::Stop": "?Stop@CX2SourceVoice@XAUDIO2@@UAAJII@Z",
     "CX2Engine::StartEngine": "?StartEngine@CX2Engine@XAUDIO2@@UAAJXZ",
+    # I/O / archive stubs
+    "CDReadDone": "?CDReadDone@@YA_NXZ",
+    "ReadError": "?ReadError@@YAXPBD@Z",
+    # Checksum data
+    "SetFileChecksumData": "?SetFileChecksumData@@YAXPAUFileChecksum@@H@Z",
+    # File cache
+    "FileCache::GetFileAll": "?GetFileAll@FileCache@@SAPAVFile@@PBD@Z",
+    # Memory
+    "MemInit": "?MemInit@@YAXXZ",
+    "CriticalSection::CriticalSection": "??0CriticalSection@@QAA@XZ",
+    "CriticalSection::Enter": "?Enter@CriticalSection@@QAAXXZ",
+    "CriticalSection::Exit": "?Exit@CriticalSection@@QAAXXZ",
 }
 
 
@@ -627,6 +642,30 @@ def main() -> int:
             print(f"  section remap: {len(deltas)} sections, "
                   f"deltas: {', '.join(f'+0x{d:X}' if d >= 0 else f'-0x{-d:X}' for d in sorted(unique_deltas))}")
     targets, crt_sentinels = parse_symbols(symbols_path)
+
+    # Apply section remap to symbols.txt addresses (targets & crt_sentinels).
+    # symbols.txt has PE addresses; when the XEX builder changes section bases,
+    # these must be translated to XEX addresses — same as MAP symbols.
+    if xex_pe_data is not None:
+        pe_sections = parse_pe_section_info(pe_data)
+        xex_sections = parse_pe_section_info(xex_pe_data)
+        # Build {section_name: delta} mapping.
+        section_name_deltas: Dict[str, int] = {}
+        for sec_name in pe_sections:
+            if sec_name in xex_sections:
+                d = xex_sections[sec_name]["address"] - pe_sections[sec_name]["address"]
+                if d != 0:
+                    section_name_deltas[sec_name] = d
+        if section_name_deltas:
+            remapped = 0
+            for entries in (targets, crt_sentinels):
+                for entry in entries.values():
+                    sec = entry.get("section", "")
+                    if sec in section_name_deltas:
+                        entry["address"] += section_name_deltas[sec]
+                        remapped += 1
+            print(f"  symbols.txt remap: applied delta to {remapped} entries "
+                  f"({', '.join(f'{k}:{d:+#X}' for k, d in section_name_deltas.items())})")
     map_symbols: Dict[str, int] = {}
     map_obj_files: Dict[str, str] = {}
     if map_path and map_path.exists():
@@ -648,26 +687,38 @@ def main() -> int:
             if name in map_symbols:
                 entry["address"] = map_symbols[name]
 
-    # Resolve hack-pack stub targets from MAP
+    # Resolve hack-pack stub targets from MAP, falling back to symbols.txt
     hack_pack_stubs: Dict[str, dict] = {}
-    if map_symbols:
-        hack_pack_found = 0
-        hack_pack_missing = 0
-        for display_name, mangled_name in HACK_PACK_STUBS.items():
-            if mangled_name in map_symbols:
-                hack_pack_stubs[display_name] = {
-                    "address": map_symbols[mangled_name],
-                    "section": ".text",
-                    "map_symbol": mangled_name,
-                }
-                hack_pack_found += 1
-            else:
-                hack_pack_missing += 1
-        if hack_pack_missing > 0:
-            missing = [dn for dn, mn in HACK_PACK_STUBS.items()
-                       if mn not in map_symbols]
-            print(f"  hack_pack_stubs: {hack_pack_found} found, "
-                  f"{hack_pack_missing} missing: {missing[:5]}{'...' if hack_pack_missing > 5 else ''}")
+    hack_pack_found = 0
+    hack_pack_missing = 0
+    hack_pack_from_symbols = 0
+    for display_name, mangled_name in HACK_PACK_STUBS.items():
+        if map_symbols and mangled_name in map_symbols:
+            hack_pack_stubs[display_name] = {
+                "address": map_symbols[mangled_name],
+                "section": ".text",
+                "map_symbol": mangled_name,
+            }
+            hack_pack_found += 1
+        elif mangled_name in targets:
+            hack_pack_stubs[display_name] = {
+                "address": targets[mangled_name]["address"],
+                "section": targets[mangled_name].get("section", ".text"),
+                "map_symbol": mangled_name,
+            }
+            hack_pack_found += 1
+            hack_pack_from_symbols += 1
+        else:
+            hack_pack_missing += 1
+    if hack_pack_from_symbols > 0:
+        print(f"  hack_pack_stubs: {hack_pack_found} found "
+              f"({hack_pack_from_symbols} from symbols.txt fallback), "
+              f"{hack_pack_missing} missing")
+    if hack_pack_missing > 0:
+        missing = [dn for dn, mn in HACK_PACK_STUBS.items()
+                   if mn not in map_symbols and mn not in targets]
+        if missing:
+            print(f"  hack_pack_stubs missing: {missing[:5]}{'...' if len(missing) > 5 else ''}")
 
     # Auto-collect XDK SDK functions for blanket JIT override stubbing.
     # TODO: Remove these blanket overrides once Xenia's APU/NUI backends
@@ -773,22 +824,32 @@ def main() -> int:
                   f"{total_bytes} bytes total")
 
     # Resolve address catalog from MAP + PE for Dc3Addresses runtime population.
+    # Falls back to symbols.txt when MAP file is empty/missing.
     address_catalog: Dict[str, dict] = {}
-    if map_symbols:
-        catalog_found = 0
-        catalog_missing = []
-        for field_name, map_sym in ADDRESS_CATALOG.items():
-            if map_sym in map_symbols:
-                address_catalog[field_name] = {
-                    "address": map_symbols[map_sym],
-                }
-                catalog_found += 1
-            else:
-                catalog_missing.append(field_name)
-        if catalog_missing:
-            print(f"  address_catalog: {catalog_found} found, "
-                  f"{len(catalog_missing)} missing: {catalog_missing[:10]}"
-                  f"{'...' if len(catalog_missing) > 10 else ''}")
+    catalog_found = 0
+    catalog_from_symbols = 0
+    catalog_missing = []
+    for field_name, map_sym in ADDRESS_CATALOG.items():
+        if map_symbols and map_sym in map_symbols:
+            address_catalog[field_name] = {
+                "address": map_symbols[map_sym],
+            }
+            catalog_found += 1
+        elif map_sym in targets:
+            address_catalog[field_name] = {
+                "address": targets[map_sym]["address"],
+            }
+            catalog_found += 1
+            catalog_from_symbols += 1
+        else:
+            catalog_missing.append(field_name)
+    if catalog_from_symbols > 0:
+        print(f"  address_catalog: {catalog_found} found "
+              f"({catalog_from_symbols} from symbols.txt fallback), "
+              f"{len(catalog_missing)} missing")
+    if catalog_missing:
+        print(f"  address_catalog missing: {catalog_missing[:10]}"
+              f"{'...' if len(catalog_missing) > 10 else ''}")
 
     # PE-derived fields: .text and .idata section info
     pe_sections = parse_pe_section_info(xex_pe_data if xex_pe_data else pe_data)

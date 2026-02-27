@@ -14,6 +14,7 @@
 #include "os/System.h"
 #include "os/ThreadCall.h"
 #include "utl/BufStream.h"
+#include "utl/FileStream.h"
 #include "utl/FilePath.h"
 #include "utl/Loader.h"
 #include "utl/MemMgr.h"
@@ -70,7 +71,7 @@ DataArray *DataReadString(const char *c) {
 }
 
 DataArray *ReadCacheStream(BinStream &bs, const char *cc) {
-    CritSecTracker cst(&gDataReadCrit);
+    CritSecTracker cst(&gDataReadCrit); // TODO: may cause IAT thunk issues at runtime
     bs.EnableReadEncryption();
     DataArray::SetFile(cc);
     DataArray *arr;
@@ -79,8 +80,54 @@ DataArray *ReadCacheStream(BinStream &bs, const char *cc) {
     return arr;
 }
 
+DataArray *DataReadFile(const char *file, bool warn) {
+    char buf[256];
+    strcpy(buf, file);
+    bool b;
+    const char *cached = CachedDataFile(buf, b);
+    DataNode *node;
+    if (gReadingFile) {
+        node = &gReadFiles[cached];
+        if (node->Type() == kDataArray) {
+            DataArray *arr = node->LiteralArray();
+            arr->AddRef();
+            return arr;
+        }
+    } else {
+        node = nullptr;
+        BeginDataRead();
+    }
+
+    FileStream fs(cached, FileStream::kRead, true);
+    if (fs.Fail()) {
+        if (warn)
+            MILO_WARN("DataReadFile: Can't open %s", buf);
+        return nullptr;
+    } else {
+        DataArray *ret;
+        if (b) {
+            if (HasFileChecksumData()) {
+                fs.StartChecksum();
+            }
+            ret = ReadCacheStream(fs, buf);
+            if (HasFileChecksumData()) {
+                fs.ValidateChecksum();
+            }
+        } else {
+            ret = DataReadStream(&fs);
+        }
+
+        if (node) {
+            *node = DataNode(ret, kDataArray);
+        } else {
+            FinishDataRead();
+        }
+        return ret;
+    }
+}
+
 DataArray *DataReadStream(BinStream *bs) {
-    gDataReadCrit.Enter();
+    gDataReadCrit.Enter(); // TODO: may cause IAT thunk issues at runtime
     Symbol stream(bs->Name());
     gNode = 0;
     unsigned int conds1 = 0;
@@ -96,7 +143,7 @@ DataArray *DataReadStream(BinStream *bs) {
     if (conds2 != conds1) {
         MILO_FAIL("DataReadFile: conditional block not closed (file %s)", gFile);
     }
-    gDataReadCrit.Exit();
+    gDataReadCrit.Exit(); // TODO: may cause IAT thunk issues at runtime
     return parse;
 }
 
@@ -143,7 +190,7 @@ void DataFail(const char *msg) {
 }
 
 DataArray *ReadEmbeddedFile(const char *file, bool b) {
-    gDataReadCrit.Enter();
+    gDataReadCrit.Enter(); // TODO: may cause IAT thunk issues at runtime
     const char *filepath = FileGetPath(gFile.Str());
     const char *madePath = FileMakePath(filepath, file);
     Symbol localfile = gFile;
@@ -164,7 +211,7 @@ DataArray *ReadEmbeddedFile(const char *file, bool b) {
     gDataLine = dataline;
     gFile = localfile;
     yyrestart(nullptr);
-    gDataReadCrit.Exit();
+    gDataReadCrit.Exit(); // TODO: may cause IAT thunk issues at runtime
     return da;
 }
 

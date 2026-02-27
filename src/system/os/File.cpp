@@ -15,6 +15,7 @@
 #include "utl/Option.h"
 #include <cctype>
 #include <cstdio>
+#include <cstring>
 
 static char gSystemRoot[256]; // 0x0
 static char gExecRoot[256]; // 0x100
@@ -57,6 +58,54 @@ void FileNormalizePath(const char *cc) {
         else
             *ptr = tolower(*ptr);
     }
+}
+
+const char *FileGetDrive(const char *file) {
+    static char drive[256];
+    const char *p = strchr(file, ':');
+    if (p != 0) {
+        strncpy(drive, file, p - file);
+        drive[p - file] = '\0';
+    } else {
+        drive[0] = '\0';
+    }
+    return drive;
+}
+
+const char *FileGetPath(const char *file) {
+    static char static_path[256];
+    if (file != 0) {
+        strcpy(static_path, file);
+        char *p2 = static_path + strlen(static_path) - 1;
+        while (p2 >= static_path && *p2 != '/' && *p2 != '\\') {
+            p2--;
+        }
+        if (p2 >= static_path) {
+            if ((p2 == static_path) || (p2[-1] == ':'))
+                p2[1] = '\0';
+            else
+                *p2 = '\0';
+            return static_path;
+        }
+    }
+    static_path[0] = '.';
+    static_path[1] = '\0';
+    return static_path;
+}
+
+const char *FileGetBase(const char *file) {
+    static char my_path[256];
+    const char *dir;
+    char *ext;
+    dir = strrchr(file, '/');
+    if ((dir != 0) || (dir = strrchr(file, '\\'), (dir != 0)))
+        strcpy(my_path, dir + 1);
+    else
+        strcpy(my_path, file);
+    ext = strrchr(my_path, '.');
+    if (ext != 0)
+        *ext = 0;
+    return my_path;
 }
 
 const char *FileGetExt(const char *root) {
@@ -192,13 +241,20 @@ String UniqueFilename(const char *c1, const char *c2) {
     return ret;
 }
 
-DataNode OnFileGetDrive(DataArray *);
-DataNode OnFileGetPath(DataArray *);
-DataNode OnFileGetBase(DataArray *);
-DataNode OnFileAbsolutePath(DataArray *);
-DataNode OnFileRelativePath(DataArray *);
-DataNode OnToggleFakeFileErrors(DataArray *);
-DataNode OnEnumerateFrameRateResults(DataArray *);
+DataNode OnFileGetDrive(DataArray *da) { return FileGetDrive(da->Str(1)); }
+DataNode OnFileGetPath(DataArray *da) { return FileGetPath(da->Str(1)); }
+DataNode OnFileGetBase(DataArray *da) { return FileGetBase(da->Str(1)); }
+DataNode OnFileAbsolutePath(DataArray *da) {
+    return FileMakePath(da->Str(1), da->Str(2));
+}
+DataNode OnFileRelativePath(DataArray *da) {
+    return FileRelativePath(da->Str(1), da->Str(2));
+}
+DataNode OnToggleFakeFileErrors(DataArray *) { return 0; }
+DataNode OnEnumerateFrameRateResults(DataArray *) {
+    // TODO: implement when FileRecursePattern is available
+    return 0;
+}
 
 void FileInit() {
     strcpy(gRoot, ".");
@@ -227,11 +283,147 @@ void FileInit() {
     TheDebug.AddExitCallback(FileTerminate);
 }
 
+const char *FileRelativePathBuf(
+    const char *root, const char *filepath, char *relative
+) {
+    if (*filepath == '\0')
+        return filepath;
+    char rootBuf[256];
+    char fpBuf[256];
+    strcpy(rootBuf, root);
+    strcpy(fpBuf, filepath);
+
+    const char *rootToks[64];
+    const char *fpToks[64];
+    int rootCount = 0;
+    int fpCount = 0;
+
+    for (char *tok = strtok(rootBuf, "/"); tok != nullptr;
+         tok = strtok(nullptr, "/"))
+        rootToks[rootCount++] = tok;
+    for (char *tok = strtok(fpBuf, "/"); tok != nullptr;
+         tok = strtok(nullptr, "/"))
+        fpToks[fpCount++] = tok;
+
+    if (fpCount > 0 && rootCount > 0) {
+        if (strcmp(fpToks[fpCount - 1], rootToks[rootCount - 1]) != 0)
+            return filepath;
+        while (rootCount > 0 && fpCount > 0
+               && strcmp(fpToks[fpCount - 1], rootToks[rootCount - 1]) == 0) {
+            rootCount--;
+            fpCount--;
+        }
+        char *p = relative;
+        for (int i = 0; i < rootCount; i++) {
+            if (p != relative)
+                *p++ = '/';
+            *p++ = '.';
+            *p++ = '.';
+        }
+        for (int i = fpCount - 1; i >= 0; i--) {
+            if (p != relative)
+                *p++ = '/';
+            for (const char *pp = fpToks[i]; *pp != '\0'; pp++)
+                *p++ = *pp;
+        }
+        if (p == relative)
+            *p++ = '.';
+        *p = '\0';
+    } else {
+        strcpy(relative, filepath);
+    }
+    return relative;
+}
+
 const char *FileRelativePath(const char *root, const char *filepath) {
     MainThread();
     static char relative[256];
     return FileRelativePathBuf(root, filepath, relative);
 }
+
+const char *FileMakePathBuf(const char *root, const char *file, char *buffer) {
+    MILO_ASSERT(root && file, 0x320);
+    if (!buffer) {
+        static char static_buffer[256];
+        buffer = static_buffer;
+    }
+    char buf[256];
+    if (file >= buffer && file < buffer + 4) {
+        strcpy(buf, file);
+        file = buf;
+    } else if (root >= buffer && root < buffer + 4) {
+        strcpy(buf, root);
+        root = buf;
+    }
+    const char *fileDrive = FileGetDrive(file);
+    if (*fileDrive != '\0') {
+        file += strlen(fileDrive) + 1;
+    }
+    char *c = buffer;
+    if (*file == '/' || *file == '\\' || *file == '\0') {
+        if (*fileDrive != '\0') {
+            sprintf(buffer, "%s:%s", fileDrive, file);
+            c = buffer + strlen(fileDrive) + 1;
+        } else {
+            const char *rootDrive = FileGetDrive(root);
+            if (*rootDrive != '\0') {
+                sprintf(buffer, "%s:%s", rootDrive, file);
+                c = buffer + strlen(rootDrive) + 1;
+            } else {
+                strcpy(buffer, file);
+            }
+        }
+    } else {
+        sprintf(buffer, "%s/%s", root, file);
+        const char *rootDrive = FileGetDrive(root);
+        if (*rootDrive != '\0') {
+            c = buffer + strlen(rootDrive) + 1;
+        }
+    }
+    FileNormalizePath(buffer);
+    char curC = *c;
+    char *dirs[32];
+    const char **endDir = (const char **)&dirs[0];
+    for (char *p = strtok(c, "/"); p != nullptr; p = strtok(nullptr, "/")) {
+        if (*p != '.')
+            *endDir++ = p;
+        else if (p[1] == '.' && p[2] == '\0') {
+            if (endDir != dirs && *endDir[-1] != '.')
+                endDir--;
+            else
+                *endDir++ = p;
+        }
+    }
+    if (endDir == dirs) {
+        if (curC == '/') {
+            *c++ = '/';
+        } else {
+            *c++ = '.';
+        }
+    } else {
+        for (const char **dir = (const char **)&dirs[0]; dir != endDir; dir++) {
+            if (dir != dirs || curC == '/') {
+                *c++ = '/';
+            }
+            for (char *p = (char *)*dir; *p != '\0'; p++) {
+                *c++ = *p;
+            }
+        }
+    }
+    *c = '\0';
+    return buffer;
+}
+
+const char *FileMakePath(const char *root, const char *file) {
+    return FileMakePathBuf(root, file, NULL);
+}
+
+const char *FileLocalize(const char *iFilename, char *buffer) {
+    // Simplified: no localization needed during boot
+    return iFilename;
+}
+
+bool FileDiscSpinUp() { return true; }
 
 bool FileReadOnly(const char *filepath) { return true; }
 

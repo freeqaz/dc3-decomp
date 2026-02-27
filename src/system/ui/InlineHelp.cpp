@@ -33,9 +33,10 @@ BEGIN_SAVES(InlineHelp)
     SAVE_REVS(5, 0)
     bs << mHorizontal;
     bs << mSpacing;
-    // bs << mConfig;
-    bs << mResourceDir;
+    bs << mConfig;
+    bs << mTextColor;
     bs << mUseConnectedControllers;
+    bs << mResourceDir;
     SAVE_SUPERCLASS(UIComponent)
 END_SAVES
 
@@ -310,6 +311,15 @@ Symbol InlineHelp::ActionElement::GetToken(bool b) const {
     if (b)
         return mSecondaryToken;
     return mPrimaryToken;
+}
+
+BinStream &operator<<(BinStream &bs, const InlineHelp::ActionElement &ae) {
+    bs << (int)ae.mAction;
+    Symbol primary = ae.mPrimaryToken;
+    bs << primary;
+    Symbol secondary = ae.mSecondaryToken;
+    bs << secondary;
+    return bs;
 }
 
 BinStream &operator>>(BinStream &bs, InlineHelp::ActionElement &ae) {

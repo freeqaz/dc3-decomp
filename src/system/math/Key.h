@@ -54,7 +54,7 @@ BinStream &operator>>(BinStream &bs, Key<T> &key) {
 
 template <class T>
 BinStreamRev &operator>>(BinStreamRev &bs, Key<T> &key) {
-    bs.stream >> key.value >> key.frame;
+    bs >> key.value >> key.frame;
     return bs;
 }
 

@@ -58,6 +58,7 @@ public:
 private:
     void SetRect();
     void BeginFrame();
+    bool PlatformCacheFile(const char *);
 
     void* mLoader;        // 0x04 - async loader, checked in IsLoading/Ready
     void* mLoader2;       // 0x08 - fallback loader, checked in IsLoading/Ready

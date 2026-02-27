@@ -12,11 +12,11 @@ const char *LocalizeOrdinal(
     Locale &locale
 ) {
     char buf[255];
-    buf[0] = *gNullStr;
-    if (!lang) {
+    if (lang.Null()) {
         lang = SystemLanguage();
     }
     strncpy(buf, LocalizeSeparatedInt(num, locale), 255);
+    buf[254] = '\0';
     int len = strlen(buf);
     char code1, code2;
     if (len > 0)
@@ -52,7 +52,7 @@ const char *LocalizeOrdinal(
         } else if (lang == fre) {
             if (superscriptMarkup)
                 strcat(buf, "<sup>");
-            if (code1 == '1') {
+            if (strcmp(buf, "1") == 0) {
                 if (gender == LocaleGenderMasculine) {
                     strcat(buf, "er");
                 } else {

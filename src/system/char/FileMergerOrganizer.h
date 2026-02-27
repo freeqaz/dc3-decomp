@@ -7,7 +7,7 @@
 class FileMergerOrganizerLoader : public Loader {
 public:
     FileMergerOrganizerLoader() : Loader("", kLoadFront) {}
-    virtual ~FileMergerOrganizerLoader();
+    virtual ~FileMergerOrganizerLoader() {}
     virtual const char *DebugText() { return "FileMergerOrganizerLoader"; }
     virtual bool IsLoaded() const { return false; }
     virtual const char *StateName() const { return "FileMergerOrganizerLoader"; }

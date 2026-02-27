@@ -94,4 +94,5 @@ private:
     static float const sRotateDelay;
 };
 
+BinStream &operator<<(BinStream &, const InlineHelp::ActionElement &);
 BinStream &operator>>(BinStream &, InlineHelp::ActionElement &);
