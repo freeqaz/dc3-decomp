@@ -38,12 +38,7 @@ Use the `mcp__orchestrator__` tools for all decomp analysis. Do not call `objdif
 
 ## Git Worktrees
 
-When creating worktrees for PR branches, symlink clangd config to avoid false diagnostics:
-```bash
-git worktree add /tmp/claude/my-branch my-branch
-ln -s /home/free/code/milohax/dc3-decomp/compile_commands.json /tmp/claude/my-branch/
-ln -s /home/free/code/milohax/dc3-decomp/.clangd /tmp/claude/my-branch/
-```
+Use `scripts/setup_worktree.sh <path> <branch>` to create worktrees with a working build system (configures ninja, symlinks tools/compilers/target objects).
 
 ## Project Structure
 

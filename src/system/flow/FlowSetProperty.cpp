@@ -119,6 +119,9 @@ BEGIN_COPYS(FlowSetProperty)
     COPY_SUPERCLASS(FlowNode)
     CREATE_COPY(FlowSetProperty)
     BEGIN_COPYING_MEMBERS
+        if (IsRunning()) {
+            Deactivate(false);
+        }
         UnregisterEvents(this);
         mTarget = c->mTarget;
         unk_0x98 = c->unk_0x98;

@@ -64,9 +64,12 @@ public:
         mState = state;
     }
 
-    FlowPtr &operator=(const FlowPtr &ptr) {
-        mObjPtr = ptr.mObjPtr;
-        FlowPtrBase::operator=(ptr);
+    __forceinline FlowPtr &operator=(const FlowPtr &ptr) {
+        int state = ptr.mState;
+        Symbol name = ptr.mObjName;
+        mObjPtr = (T *)ptr.mObjPtr;
+        mObjName = name;
+        mState = state;
         return *this;
     }
 

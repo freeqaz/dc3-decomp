@@ -35,12 +35,11 @@ END_SAVES
 
 void FlowRun::Copy(const Hmx::Object *o, Hmx::Object::CopyType ty) {
     FlowNode::Copy(o, ty);
-    const FlowRun *c;
-    if ((c = dynamic_cast<const FlowRun *>(o))) {
-        // Pointer cast required for codegen match
-        ((FlowPtr<ObjectDir> *)this)[0] = ((FlowPtr<ObjectDir> *)c)[0];
+    const FlowRun *c = dynamic_cast<const FlowRun *>(o);
+    if (c) {
+        mTargetDir = c->mTargetDir;
         mTargetName = c->mTargetName;
-        ((FlowPtr<Flow> *)this)[0] = ((FlowPtr<Flow> *)c)[0];
+        mTarget = c->mTarget;
         mStop = c->mStop;
         mImmediateRelease = c->mImmediateRelease;
     }
