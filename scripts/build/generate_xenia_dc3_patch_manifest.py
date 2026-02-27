@@ -190,6 +190,12 @@ ADDRESS_CATALOG = {
     "skeleton_identifier_poll":  "?Poll@SkeletonIdentifier@@QAAXXZ",
     # OSCMessenger (Holmes debug networking)
     "osc_messenger_poll":        "?Poll@OSCMessenger@@QAAXXZ",
+    # LoadMgr (async file I/O)
+    "poll_front_loader":         "?PollFrontLoader@LoadMgr@@AAAXXZ",
+    "poll_until_loaded":         "?PollUntilLoaded@LoadMgr@@QAAXPAVLoader@@0@Z",
+    # File cache / decompression globals
+    "g_caches":                  "?gCaches@@3V?$list@PAVFileCache@@V?$StlNodeAlloc@PAVFileCache@@@stlpmtx_std@@@stlpmtx_std@@A",
+    "g_decompression_queue":     "?gDecompressionQueue@?A0x7ea4e606@@3V?$list@UDecompressTask@@V?$StlNodeAlloc@UDecompressTask@@@stlpmtx_std@@@stlpmtx_std@@A",
 }
 
 # Hack-pack stub targets: display_name -> MSVC mangled MAP symbol name
@@ -332,6 +338,18 @@ HACK_PACK_STUBS = {
     "SetFileChecksumData": "?SetFileChecksumData@@YAXPAUFileChecksum@@H@Z",
     # File cache
     "FileCache::GetFileAll": "?GetFileAll@FileCache@@SAPAVFile@@PBD@Z",
+    # Character / animation
+    "CharClip::Init": "?Init@CharClip@@SAXXZ",
+    # Audio / security
+    "Synth::InitSecurity": "?InitSecurity@Synth@@UAAXXZ",
+    # Song manager
+    "HamSongMgr::Init": "?Init@HamSongMgr@@UAAXXZ",
+    # Locale
+    "Locale::Init": "?Init@Locale@@QAAXXZ",
+    # STL container stubs
+    "list<RndTransformable*>::remove": "?remove@?$list@PAVRndTransformable@@V?$StlNodeAlloc@PAVRndTransformable@@@stlpmtx_std@@@stlpmtx_std@@QAAXABQAVRndTransformable@@@Z",
+    # Flow / game state
+    "FlowManager::Poll": "?Poll@FlowManager@@QAAXXZ",
     # Memory
     "MemInit": "?MemInit@@YAXXZ",
     "CriticalSection::CriticalSection": "??0CriticalSection@@QAA@XZ",
@@ -859,6 +877,21 @@ def main() -> int:
         idata = pe_sections[".idata"]
         address_catalog["idata_start"] = {"address": idata["address"]}
         address_catalog["idata_end"] = {"address": idata["address"] + idata["size"]}
+
+    # Thunk area: in the decomp PE, import thunks are scattered across .text
+    # (build_xex.py converts them to XEX markers in-place), so the thunk area
+    # spans the entire .text section.
+    address_catalog["thunk_area_start"] = {"address": text_info["address"]}
+    address_catalog["thunk_area_end"] = {
+        "address": text_info["address"] + text_info["size"],
+    }
+
+    # CRT$XCU section: decomp's static initializer function pointers.
+    # The linker merges .CRT$XC* subsections into a single .CRT section.
+    if ".CRT" in pe_sections:
+        crt = pe_sections[".CRT"]
+        address_catalog["crt_xcu_start"] = {"address": crt["address"]}
+        address_catalog["crt_xcu_end"] = {"address": crt["address"] + crt["size"]}
 
     # Computed: g_hash_table = gStringTable + 4 (/FORCE linker artifact)
     if "g_string_table_global" in address_catalog:
