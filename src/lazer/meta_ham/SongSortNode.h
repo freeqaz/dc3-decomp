@@ -56,6 +56,7 @@ class SongFunctionNode : public NavListFunctionNode {
 public:
     SongFunctionNode(NavListItemSortCmp *cmp, Symbol sym, const char *path)
         : NavListFunctionNode(cmp, sym, path) {}
+    virtual ~SongFunctionNode() {}
     virtual Symbol OnSelect();
     virtual void OnHighlight();
     virtual void Text(UIListLabel *, UILabel *) const;

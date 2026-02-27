@@ -14,7 +14,7 @@ from typing import Any
 DEFAULT_DB_PATH = "decomp.db"
 
 # Schema version for migrations
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 11
 
 # Default maximum attempts before deprioritizing a function
 # Functions with >= this many attempts are excluded from normal queries
@@ -372,6 +372,37 @@ def _run_migrations(conn: sqlite3.Connection, from_version: int, to_version: int
             if "duplicate column" not in str(e).lower():
                 raise
 
+    if from_version < 10 <= to_version:
+        # Migration v9 -> v10: Add columns for new Rust pattern detectors
+        print("  Migration v10: Adding pattern detector columns...")
+        new_columns = [
+            ("has_makestring_mismatch", "BOOLEAN DEFAULT 0"),
+            ("has_address_relocation", "BOOLEAN DEFAULT 0"),
+            ("has_boolean_negation", "BOOLEAN DEFAULT 0"),
+            ("has_float_precision", "BOOLEAN DEFAULT 0"),
+            ("detected_patterns", "TEXT"),  # JSON array of all detected pattern type strings
+        ]
+        for col_name, col_def in new_columns:
+            try:
+                conn.execute(f"ALTER TABLE functions ADD COLUMN {col_name} {col_def}")
+            except sqlite3.OperationalError as e:
+                if "duplicate column" not in str(e).lower():
+                    raise
+
+    if from_version < 11 <= to_version:
+        # Migration v10 -> v11: Add columns for fsel_ternary and float_to_int_to_float detectors
+        print("  Migration v11: Adding fsel_ternary and float_to_int_to_float columns...")
+        new_columns = [
+            ("has_fsel_ternary", "BOOLEAN DEFAULT 0"),
+            ("has_float_to_int_to_float", "BOOLEAN DEFAULT 0"),
+        ]
+        for col_name, col_def in new_columns:
+            try:
+                conn.execute(f"ALTER TABLE functions ADD COLUMN {col_name} {col_def}")
+            except sqlite3.OperationalError as e:
+                if "duplicate column" not in str(e).lower():
+                    raise
+
     # Update schema version
     conn.execute("UPDATE schema_version SET version = ?", (to_version,))
     conn.commit()
@@ -614,6 +645,9 @@ def normalize_unit_pattern(pattern: str) -> str:
     # If pattern starts with "src/", replace with "default/"
     if pattern.startswith("src/"):
         return "default/" + pattern[4:]
+    # If pattern starts with "system/" or "lazer/", add "default/" prefix
+    if pattern.startswith("system/") or pattern.startswith("lazer/"):
+        return "default/" + pattern
     return pattern
 
 
@@ -1174,6 +1208,32 @@ def get_stats(db_path: str | Path = DEFAULT_DB_PATH) -> dict[str, Any]:
         "SELECT AVG(current_percent) FROM functions WHERE current_percent IS NOT NULL"
     ).fetchone()[0]
 
+    # Pattern counts
+    merged = conn.execute(
+        "SELECT COUNT(*) FROM functions WHERE has_linker_merged = 1"
+    ).fetchone()[0]
+    bool_mask = conn.execute(
+        "SELECT COUNT(*) FROM functions WHERE has_bool_mask = 1"
+    ).fetchone()[0]
+    makestring_mismatch = conn.execute(
+        "SELECT COUNT(*) FROM functions WHERE has_makestring_mismatch = 1"
+    ).fetchone()[0]
+    address_relocation = conn.execute(
+        "SELECT COUNT(*) FROM functions WHERE has_address_relocation = 1"
+    ).fetchone()[0]
+    boolean_negation = conn.execute(
+        "SELECT COUNT(*) FROM functions WHERE has_boolean_negation = 1"
+    ).fetchone()[0]
+    float_precision = conn.execute(
+        "SELECT COUNT(*) FROM functions WHERE has_float_precision = 1"
+    ).fetchone()[0]
+    fsel_ternary = conn.execute(
+        "SELECT COUNT(*) FROM functions WHERE has_fsel_ternary = 1"
+    ).fetchone()[0]
+    float_to_int_to_float = conn.execute(
+        "SELECT COUNT(*) FROM functions WHERE has_float_to_int_to_float = 1"
+    ).fetchone()[0]
+
     return {
         "total_functions": total,
         "complete": complete,
@@ -1182,6 +1242,14 @@ def get_stats(db_path: str | Path = DEFAULT_DB_PATH) -> dict[str, Any]:
         "with_percent": with_percent,
         "total_attempts": total_attempts,
         "avg_percent": round(avg_percent, 2) if avg_percent else None,
+        "pattern_merged": merged,
+        "pattern_bool_mask": bool_mask,
+        "pattern_makestring_mismatch": makestring_mismatch,
+        "pattern_address_relocation": address_relocation,
+        "pattern_boolean_negation": boolean_negation,
+        "pattern_float_precision": float_precision,
+        "pattern_fsel_ternary": fsel_ternary,
+        "pattern_float_to_int_to_float": float_to_int_to_float,
     }
 
 

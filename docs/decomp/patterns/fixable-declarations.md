@@ -218,6 +218,74 @@ for (ObjDirItr<RndDrawable> it(dir, true); it != nullptr; ++it) {
 
 ---
 
+## Pre-Compute References Before Clobbering Calls
+
+**Impact:** +5-18%
+**Success Rate:** HIGH
+**Time:** 5 minutes
+
+Compute a derived pointer/reference before a function call that could clobber the base pointer's register, rather than reloading the base pointer from memory after the call.
+
+### Symptom
+
+After a virtual call or method call on an object, the compiler must reload `this` or a member pointer from memory (the stack or a member field) because the call could have modified it. Target code instead keeps a derived reference in a callee-saved register across the call.
+
+In objdiff this appears as insert/delete clusters around paired function calls:
+
+```
+insert:  bl   SetShowing            ; base calls SetShowing first
+insert:  lwz  r11, 0x50, r30       ; base reloads mCurrentMovie from member
+insert:  li   r4, 0x0              ; base sets up arg
+diff:    addi r29, r3, 0x68        ; target computed Movie* BEFORE SetShowing
+diff:    bl   SetShowing vs SetPaused  ; calls in different positions
+```
+
+### Why It Works
+
+When you compute a derived reference (like `obj->GetSubObject()`) BEFORE calling a method that doesn't modify the derived object (like `obj->SetShowing(true)`), the compiler can keep the derived pointer in a callee-saved register across the call. If you compute it AFTER, the compiler must reload the base pointer from memory since the call could have changed it.
+
+### Fix
+
+```cpp
+// Before (75.6%) - reloads mCurrentMovie from memory after SetShowing
+mCurrentMovie->SetShowing(true);
+mCurrentMovie->GetMovie().SetPaused(false);
+float duration = mCurrentMovie->GetMovie().MsPerFrame()
+    * (float)mCurrentMovie->GetMovie().NumFrames();
+
+// After (93.5%) - pre-computes Movie& before SetShowing
+Movie &movie = mCurrentMovie->GetMovie();
+mCurrentMovie->SetShowing(true);
+movie.SetPaused(false);
+float duration = movie.MsPerFrame() * (float)movie.NumFrames();
+```
+
+### Detection
+
+Look for this pattern in the mismatch table:
+1. Target has `addi rN, rX, <offset>` (compute derived pointer) BEFORE a `bl` call
+2. Base has `bl` call FIRST, then `lwz` (reload base), then `addi` (compute derived pointer)
+3. The insert/delete cluster size matches the number of extra reload instructions
+
+### Real Examples
+
+| Function | Before | After | Delta | Notes |
+|----------|--------|-------|-------|-------|
+| Splash::Show | 75.6% | 93.5% | +17.9% | Pre-computed `Movie&` before `SetShowing` call. Also combined with struct copy-by-value and float precision fixes. |
+
+### When It Helps
+
+This pattern is most effective when:
+- Multiple method calls are chained on the same object (`obj->A(); obj->B(); obj->C()`)
+- A derived reference (e.g., `obj->GetChild()`) is used multiple times after an intervening call
+- The intervening call doesn't actually modify the derived object (but the compiler can't prove that)
+
+### Warning
+
+The derived reference MUST remain valid across the intervening call. If `SetShowing()` could invalidate the Movie reference (e.g., by destroying/recreating the movie), pre-computing would introduce a use-after-free bug. In practice, simple setters don't invalidate sibling objects, so this is safe for most cases.
+
+---
+
 ## Boolean Init from Existing Register
 
 **Impact:** +0.5-1%
@@ -457,6 +525,57 @@ Empirically test by removing code blocks and observing the scope number change:
 - Template function bodies inlined at the call site also count as scopes (e.g., `Find<T>` inlines ~4 scopes from its body, MILO_FAIL expansion, etc.)
 - Function call arguments that involve copy constructors do NOT create scopes (they're function calls, not inline blocks)
 - The `vector::clear()` -> `erase()` inline expansion's `if (__first == __last)` check does NOT count as a scope in practice
+
+---
+
+## Static Variable Naming
+
+**Impact:** Fixes atexit destructor symbol mismatch
+**Success Rate:** 100%
+**Time:** 2 minutes
+
+The name of a `static` local variable is embedded in its mangled atexit destructor symbol (`??__F<name>@...`). If the variable name doesn't match the original, objdiff shows a `diff_arg` on the `bl` to the atexit destructor.
+
+### Symptom
+
+objdiff shows `diff_arg` on a `bl` instruction where both sides call an atexit destructor but with different mangled names:
+
+```
+Target: bl ??__Fmsg@?1??MoveOn@SongSortMgr@@...
+Base:   bl ??__Fmove_on_quickplay_msg@?1??MoveOn@SongSortMgr@@...
+```
+
+### Why It Matters
+
+MSVC mangles the variable name into the atexit destructor symbol. The atexit destructor is registered at first initialization (the `if (!(guard & bit))` check), so its `bl` target in the init code will be a `diff_arg` if the name differs.
+
+### Fix
+
+Rename the static variable to match the target's mangled name:
+
+```cpp
+// Before — generates ??__Fmove_on_quickplay_msg@...
+static Message move_on_quickplay_msg("move_on_quickplay");
+
+// After — generates ??__Fmsg@... (matches target)
+static Message msg("move_on_quickplay");
+```
+
+### Detection
+
+1. Look for `diff_arg` on `bl ??__F<name>@...` instructions
+2. Compare the `<name>` portion between target and base
+3. Rename the variable to match
+
+### Real Examples
+
+| Function | Before | After | Fix |
+|----------|--------|-------|-----|
+| SongSortMgr::MoveOn | `move_on_quickplay_msg` | `msg` | Renamed static Message variable |
+
+### Note
+
+This pattern is distinct from [Static Symbol Order](#static-symbol-order) (which affects guard bit numbering) and [Braced vs Braceless If](#braced-vs-braceless-if-scope-counter) (which affects scope numbering). All three can appear independently in the same function.
 
 ---
 
@@ -711,6 +830,69 @@ The target assembly shows r26 (holding `it.it` from entry) stored to the sret po
 | Function | Before | After | Delta | Notes |
 |----------|--------|-------|-------|-------|
 | ObjPtrVec::insert | 88.6% | 96.2% | +7.6% | Eliminated computed return, used parameter directly |
+
+---
+
+## ObjPtr Constructor: Deferred Owner Initialization
+
+**Impact:** +16%
+**Success Rate:** HIGH (for ObjPtr-derived classes)
+**Time:** 10 minutes
+
+When a class derives from `ObjPtr<T>` and needs to set `mOwner` from a static variable (like `sOwner`), passing the owner as a constructor parameter loads it too early. Use a tag-type constructor that skips `mOwner` initialization, then set it in the derived constructor body.
+
+### Symptom
+
+objdiff shows the target loading `sOwner` LATE (at the end of the constructor) while our code loads it EARLY (as a parameter to the base class constructor). The instruction sequence differs at the beginning of the constructor:
+
+```asm
+# Target — sOwner loaded after ObjRefConcrete setup
+bl  ObjRefConcrete<RndTex>::ObjRefConcrete
+...                              ; vtable, mPtr, ref chain setup
+lwz r11, sOwner                  ; sOwner loaded LATE
+stw r11, 0x10(r31)               ; mOwner = sOwner
+...                              ; TexPtr vtable
+
+# Our build — sOwner loaded first as parameter
+lwz r4, sOwner                   ; sOwner loaded EARLY
+bl  ObjPtr<RndTex>::ObjPtr       ; passed as ctor arg
+```
+
+### Why It Works
+
+When `sOwner` is passed as a constructor parameter to `ObjPtr(Hmx::Object *owner, T *ptr)`, the compiler loads it before the base constructor call (it's a parameter). The target instead constructs the `ObjRefConcrete` part first, then writes `mOwner` directly in the derived class body — loading `sOwner` much later in the instruction stream.
+
+A tag-type constructor (`DeferOwner`) that skips `mOwner` initialization lets the derived class set `mOwner` in its own constructor body, matching the target's late-load pattern.
+
+### Fix
+
+```cpp
+// In ObjPtr header — add protected tag constructor
+template <class T>
+class ObjPtr : public ObjRefConcrete<T> {
+protected:
+    Hmx::Object *mOwner;
+    struct DeferOwner {};
+    ObjPtr(DeferOwner, T *ptr) : ObjRefConcrete<T>(ptr) {}
+    // ... rest unchanged
+};
+
+// In derived class — use DeferOwner, set mOwner in body
+RndMatAnim::TexPtr::TexPtr(RndTex *tex) : ObjPtr<RndTex>(DeferOwner(), tex) {
+    mOwner = sOwner;
+}
+```
+
+### Warning
+
+- Do NOT try passing `nullptr` then assigning `mOwner = sOwner` — MSVC may not eliminate the dead store (`mOwner = nullptr`), generating both stores.
+- The `DeferOwner` pattern only works when `mOwner` is `protected` or accessible to the derived class.
+
+### Real Examples
+
+| Function | Before | After | Delta | Notes |
+|----------|--------|-------|-------|-------|
+| RndMatAnim::TexPtr ctor | 71.7% | 87.8% | +16.1% | DeferOwner skips mOwner init, sets from sOwner in body |
 
 ---
 

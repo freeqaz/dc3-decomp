@@ -264,8 +264,6 @@ If a struct has wrong size affecting templates/arrays, check if any member types
 
 ---
 
----
-
 ## Avoid Unnecessary dynamic_cast (GetObj vs Obj<T>)
 
 **Impact:** +6%
@@ -338,6 +336,110 @@ if ((int)loader) { ... }
 ### Note
 
 This is the opposite of the pattern documented in [unfixable-compiler.md](unfixable-compiler.md#requires-tooling-c2dll-patching-or-custom-pragmas) (cmplwi vs cmpwi). In some cases the `(int)` cast does work to force signed comparison.
+
+---
+
+## MakeString Template Type Mismatch (MILO Macro Arguments)
+
+**Impact:** +5-21%
+**Success Rate:** HIGH
+**Time:** 5 minutes
+
+When `MILO_LOG`, `MILO_NOTIFY`, `MILO_WARN`, or `MILO_FAIL` receive `Symbol` objects but the target passes `const char*`, the `MakeString<>` template instantiation changes, producing a different `bl` target.
+
+### Symptom
+
+objdiff shows a `diff_arg` on a `bl` instruction to `MakeString` where the template parameters differ in argument types:
+
+```
+Target: bl MakeString<const char*, const char*, const char*, unsigned char>
+Base:   bl MakeString<Symbol, Symbol, Symbol, bool>
+```
+
+The `char[N]` size in the mangled name may also differ (this is the `__FILE__` string length — a separate issue).
+
+### Why It Works
+
+`MakeString` is a variadic template. Each argument type is encoded in the mangled symbol name. Passing `Symbol` produces a different template instantiation than passing `const char*`. The target binary was compiled with explicit `.Str()` conversions, so it instantiates the `const char*` version.
+
+### Detection
+
+1. Look for `diff_arg` on `bl ??$MakeString@...` instructions
+2. Decode the template parameters in both target and base mangled names
+3. If target has `PBD` (pointer to `const char`) where base has `VSymbol@@`, the arguments need `.Str()` conversion
+
+### Fix
+
+```cpp
+// Before — Symbol objects passed directly, generates MakeString<Symbol, Symbol, Symbol, bool>
+Symbol symSong = TheGameData->GetSong();
+Symbol symDefault = TheHamSongMgr.GetCharacter(symSong);
+Symbol symPrimary = TheGameData->Player(0)->Char();
+bool ret = symPrimary == symDefault;
+MILO_LOG("... '%s' ... '%s' ... '%s' ret = %d\n",
+    symSong, symDefault, symPrimary, ret);
+
+// After — explicit .Str() on each, generates MakeString<const char*, const char*, const char*, unsigned char>
+const char *songStr = symSong.Str();
+const char *defaultStr = symDefault.Str();
+const char *primaryStr = symPrimary.Str();
+MILO_LOG("... '%s' ... '%s' ... '%s' ret = %d\n",
+    songStr, defaultStr, primaryStr, ret);
+```
+
+### Important
+
+- Keep the `Symbol` variables for any non-MILO uses (method calls, comparisons). Only convert to `const char*` for the MILO macro arguments.
+- The `bool` → `unsigned char` change in the template is a side effect of the same conversion — `ret` as `bool` maps to `_N` (bool) in mangling, while `ret` as expression result maps to `unsigned char`.
+
+### Real Examples
+
+| Function | Before | After | Delta | Notes |
+|----------|--------|-------|-------|-------|
+| Game::IsSongDefaultPlayerPlaying | 78.1% | 98.6% | +20.5% | 3 Symbol args → `const char*` via `.Str()` |
+
+---
+
+## Float-to-Int-to-Float Reconversion
+
+**Impact:** +2-5%
+**Success Rate:** HIGH
+**Time:** 2 minutes
+
+When passing a float value into a function or storing it, if the target binary uses `fctiwz` (float to int with zero round) followed immediately by `stfd` (store float double) or `fmr` (float move) to the same register, it's casting to `int` and then implicitly or explicitly casting back to `float`.
+
+### Symptom
+
+objdiff shows a sequence like:
+```
+Target: fctiwz f0, f1
+        stfd f0, 0x58(r31)
+Base:   stfs f1, 0x58(r31)
+```
+
+The target converts a float to an integer in the FPU register before saving it, while your code just saves the float directly. 
+
+### Why It Works
+
+The original code probably read a float from a data node, casted it to an integer (perhaps originally expecting an int), but then stored it in a float variable or passed it to a function expecting a float. 
+
+### Fix
+
+```cpp
+// Before - direct float use
+float num_stars_val = pNode->Float();
+dataP.AddPair(perf_current_stars, num_stars_val); // Function expects float
+
+// After - cast to int and back to match target's truncation
+float num_stars_val = (float)(int)pNode->Float();
+dataP.AddPair(perf_current_stars, (int)num_stars_val); 
+```
+
+### Real Examples
+
+| Function | Before | After | Delta | Notes |
+|----------|--------|-------|-------|-------|
+| GameEndedDataPointJob ctor | ~77% | 85.8% | ~8% | Added `(float)(int)` round-trip cast to `pNode->Float()` result |
 
 ---
 

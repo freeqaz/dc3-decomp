@@ -448,7 +448,7 @@ void UILabel::PostLoad(BinStream &bs) {
 
 Symbol UILabel::TextToken() { return mTextToken; }
 
-void UILabel::Poll() {}
+void UILabel::Poll() { UIComponent::Poll(); }
 
 void UILabel::Highlight() {
     RndTransformable::Highlight();

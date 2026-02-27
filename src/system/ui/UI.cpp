@@ -388,7 +388,7 @@ DataNode UIManager::OnIsResource(DataArray *arr) {
     DataArray *cfg = SystemConfig(objects, sym);
     DataArray *rsrcArr = cfg->FindArray(resources_path, false);
     if (rsrcArr) {
-        FilePath rsrcPath(FileMakePath(FileGetPath(rsrcArr->File()), rsrcArr->Str(1)));
+        FilePath rsrcPath(FileMakePath(rsrcArr->Str(1), FileGetPath(rsrcArr->File())));
         FilePath inputPath(FileRoot(), arr->Str(2));
         if (rsrcPath == FileGetPath(inputPath.c_str()))
             return 1;

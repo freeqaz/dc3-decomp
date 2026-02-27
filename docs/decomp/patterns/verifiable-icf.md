@@ -10,7 +10,7 @@ These patterns are caused by linker ICF merging identical function bodies after 
 
 ## Linker Merged (ICF)
 
-**Prevalence:** 400 functions tagged LINKER_MERGED (avg 96.3%, 174 near-perfect)
+**Prevalence:** ~350 AT_LIMIT functions with LINKER_MERGED as dominant blocker (avg ~96%)
 **Typical Gap:** 0.5-3%
 
 The linker merges identical function bodies at link time (Identical COMDAT Folding).

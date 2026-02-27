@@ -198,20 +198,27 @@ def compare(decomp_result, orig_result, decomp_relocs, orig_relocs):
     return ComparisonResult("EQUIVALENT", details, warnings)
 
 
-def classify_divergence(result, decomp_result, orig_result, decomp_relocs, orig_relocs):
+def classify_divergence(result, decomp_result, orig_result, decomp_relocs, orig_relocs, enrichment=None):
     """Classify a DIVERGENT result into a root-cause category.
+
+    Args:
+        enrichment: optional dict with objdiff enrichment data:
+            - has_linker_merged: bool — whether objdiff detected merged symbols
+            (This supplements the warnings-based detection which only works
+            for EQUIVALENT results.)
 
     Returns one of:
         'build_env'     — __FILE__ string differences or merged symbol calls
         'regalloc'      — same call structure, only register value differences
 
         Fine-grained sub-classes (replacing broad 'logic'):
-        'merged_call'   — call_count_mismatch with merged warnings (unfixable)
+        'merged_call'   — call_count_mismatch with merged symbols (unfixable)
         'merged_arg'    — call_arg_mismatch at a merged symbol call (unfixable)
         'stack_layout'  — call_arg_mismatch with stack-region values (hard to fix)
         'fpr_precision' — float return value differs (FMA/precision, unfixable)
         'object_memory' — memory_mismatch with object region diffs (maybe fixable)
-        'error'         — execution error differences (real bug)
+        'error'         — execution error on decomp side (real bug)
+        'orig_error'    — execution error on original side only (test infra, unfixable)
         'call_count'    — call count mismatch without merged indicators (real bug)
         'call_arg'      — call arg mismatch not matched by other rules (real bug)
         'return_value'  — integer return value mismatch (real bug)
@@ -224,11 +231,21 @@ def classify_divergence(result, decomp_result, orig_result, decomp_relocs, orig_
     reason = details.get("reason", "")
     warnings = result.warnings or []
 
-    # Check for merged symbol warnings
+    # Check for merged symbols: warnings (EQUIVALENT path) OR objdiff enrichment
     has_merged = any("merged_" in w for w in warnings)
+    if not has_merged and enrichment:
+        has_merged = bool(enrichment.get("has_linker_merged"))
+    # Also check relocations directly for merged_ symbol targets
+    if not has_merged:
+        for r in (orig_relocs or []):
+            if r.get("symbol_name", "").startswith("merged_"):
+                has_merged = True
+                break
 
-    # Error-based divergences
-    if reason in ("error_mismatch", "decomp_error", "orig_error"):
+    # Error-based divergences — distinguish orig-only (unfixable) from decomp (real bug)
+    if reason == "orig_error":
+        return "orig_error"
+    if reason in ("error_mismatch", "decomp_error"):
         return "error"
 
     # call_arg_mismatch: check if mismatching values are in globals region

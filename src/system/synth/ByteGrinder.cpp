@@ -490,11 +490,9 @@ DataNode op39(DataArray *msg) {
 
 DataNode op40(DataArray *msg) {
     u32 operand = msg->Int(1);
-    u8 w = msg->Int(2);
+    u32 w = (u8)msg->Int(2);
 
-    u32 working2 = (w ^ 0x5Cu);
-    u32 working3 = (w << 8);
-    u32 tmp = ((working2 | working3) >> 6);
+    u32 tmp = (((w << 8) | (w ^ 0x5Cu)) >> 6);
     return u8(tmp ^ operand);
 }
 

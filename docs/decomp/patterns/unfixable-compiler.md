@@ -6,32 +6,44 @@ These patterns are caused by compiler optimizations or heuristics that resist si
 
 ---
 
-## ASSERT_REVS Scheduling
+## ASSERT_REVS / INIT_REVS Scheduling
 
-**Prevalence:** Functions with ASSERT_REVS macro (~10%)
+**Prevalence:** Functions with ASSERT_REVS or INIT_REVS macro (~10%)
 **Typical Gap:** ~0.8-0.9%
 
-Instruction scheduling differs around ASSERT_REVS calls.
+Instruction scheduling differs around revision assertion macros.
 
 ### Symptom
 
-Same instructions, different order around assert code.
+Same instructions, different order around assert code. Also manifests as `subi 4` vs `addi 4` for the `gRevs` pair base pointer.
 
 ### Root Cause
 
-The compiler schedules instructions differently:
-- Target computes `gRevs[2]` address before stack variables
-- Our build computes stack variables before `gRevs[2]`
-- Same instructions, different order — compiler scheduling heuristic
+Two related issues:
+
+1. **Instruction scheduling**: The compiler schedules instructions differently:
+   - Target computes `gRevs[2]` address before stack variables
+   - Our build computes stack variables before `gRevs[2]`
+   - Same instructions, different order — compiler scheduling heuristic
+
+2. **Base pointer choice**: For the `gRevs` pair (two consecutive globals), the target compiler sometimes uses `base = &gRevs[1]; access gRevs[0] via base-4` (`subi 4`) while our compiler uses `base = &gRevs[0]; access gRevs[1] via base+4` (`addi 4`). Both access the same memory, but the instruction encoding differs.
 
 ### Detection
 
-Instruction count matches but order differs around assert code in second MILO_FAIL call.
+- Instruction count matches but order differs around assert code in second MILO_FAIL call
+- `subi r11, r11, 0x4` vs `addi r11, r11, 0x4` near `gRevs` references
 
 ### What Would Fix It
 
 - c2.dll instruction scheduler patch to match the original compiler's scheduling priority
-- All Load functions with ASSERT_REVS will have ~0.8-0.9% gap from this alone
+- All Load functions with ASSERT_REVS/INIT_REVS will have ~0.8-0.9% gap from this alone
+
+### Real Examples
+
+| Function | Match | Gap | Notes |
+|----------|-------|-----|-------|
+| RndShockwave::Load | 97.7% | ~2.3% | `subi 4` vs `addi 4` for gRevs pair |
+| Most ::Load functions | 99-99.2% | 0.8-0.9% | Scheduling noise only |
 
 ---
 
@@ -109,8 +121,8 @@ After adding fsel-based code, the prologue changes from 2 callee-saved FPRs to 4
 
 ## Register Allocation
 
-**Prevalence:** 607 functions tagged REGISTER_SWAP (most common pattern)
-**Typical Gap:** 1-3% (avg 92.3%)
+**Prevalence:** ~250 AT_LIMIT functions with REGISTER_SWAP as dominant blocker
+**Typical Gap:** 1-3%
 **Status:** Mechanism fully understood (Experiments 1-9). Source-level fixes work ~30% of the time. Binary patching of c2.dll coloring loop is a viable path to fix the remaining 70%.
 
 ### Symptom
@@ -229,6 +241,57 @@ Try [Variable Declaration Order](fixable-declarations.md#variable-declaration-or
 
 ---
 
+## Boolean Negation: subfic vs subic
+
+**Prevalence:** Functions that negate a pointer-to-bool conversion
+**Typical Gap:** ~3-8%
+
+Different code generation for `!x` depending on whether `x` is a `bool` or a pointer type.
+
+### Symptom
+
+objdiff shows `subfic r11, r3, 0x0` in the target vs `subic r11, r3, 0x1` in our build, followed by different `subfe` patterns:
+
+```asm
+# Target — pointer negation (3 instructions)
+subfic  r11, r3, 0x0         ; r11 = 0 - r3, CA = (r3 == 0)
+subfe   r11, r11, r11        ; r11 = (r3 != 0) ? -1 : 0
+and     r28, r11, r28        ; mask previous value
+
+# Our build — bool negation (2 instructions)
+subic   r11, r3, 0x1         ; r11 = r3 - 1, CA = (r3 >= 1)
+subfe   r28, r11, r3         ; r28 = normalized bool
+```
+
+### Root Cause
+
+When a function stores a pointer return value into a `bool` before negating it, MSVC generates the `subic` (bool-specific) pattern. When the value is kept as a pointer and negated, it generates the `subfic` (general integer/pointer) pattern. Both compute `!x` correctly but produce different instruction sequences.
+
+The target code likely kept the pointer type:
+```cpp
+// Target pattern — pointer negation generates subfic
+Skeleton *skel0 = (Skeleton *)1;  // non-null sentinel
+if (id > 0) skel0 = GetSkeletonByTrackingID(id);
+if (!skel0) ...  // subfic: 0 - ptr
+
+// Our pattern — bool negation generates subic
+bool skel0 = true;
+if (id > 0) skel0 = GetSkeletonByTrackingID(id);  // implicit ptr->bool
+if (!skel0) ...  // subic: bool - 1
+```
+
+### Why It's Unfixable
+
+Changing the variable type from `bool` to pointer changes the entire code generation pattern — not just the negation. The compiler makes different choices for initialization, conditional branches, and register allocation with pointer types vs bools. In practice, switching to pointer type often makes things worse overall even though it fixes the specific `subfic`/`subic` mismatch.
+
+### Real Examples
+
+| Function | Match | Pattern | Notes |
+|----------|-------|---------|-------|
+| SkeletonChooser::ShouldWaitForRecovery | 92.2% | 2x subfic/subic + regswap | Changed bool→Skeleton* but dropped to 81.2% |
+
+---
+
 ## Commutative Register Swap
 
 **Prevalence:** Float operations
@@ -328,6 +391,93 @@ Stack spill decisions are made by the register allocator based on register press
 | Function | Match | Gap | Notes |
 |----------|-------|-----|-------|
 | PhysicsManager::HarvestCollidables | 97.4% | ~2.6% | Target spills `owner` to stack 0x54 twice |
+
+---
+
+## Store-then-Reload Scheduling
+
+**Prevalence:** Functions that store to a global and immediately use the value
+**Typical Gap:** 0.5-1%
+
+The target binary stores a value to a global variable, then reloads it from memory for a subsequent call. Our compiler keeps the value in a register.
+
+### Symptom
+
+objdiff shows 1-2 extra `stw` + `lwz` instructions in the target that store a register to a global address and immediately reload it. Our build skips the store-then-reload and passes the register directly.
+
+### Root Cause
+
+The target compiler's instruction scheduler inserts a store-then-reload sequence as a scheduling fence or to satisfy aliasing constraints. Our compiler optimizes this away, keeping the value in a register. This is a fundamental scheduling heuristic difference.
+
+### Detection
+
+Look for patterns like:
+```asm
+# Target (has store-then-reload)
+stw  r3, sDefault@l(r11)    ; store to global
+lwz  r3, sDefault@l(r11)    ; reload immediately
+bl   Select                   ; call with reloaded value
+
+# Our build (optimized away)
+stw  r3, sDefault@l(r11)    ; store to global
+bl   Select                   ; call with original register
+```
+
+### What Would Fix It
+
+- c2.dll instruction scheduler patch
+- Source-level reordering does NOT fix this — tested moving the global store before/after the call, using the global directly (`sDefault->Select()` instead of `ptr->Select()`) — all attempts either don't change the pattern or make things worse
+
+### Real Examples
+
+| Function | Match | Gap | Notes |
+|----------|-------|-----|-------|
+| SpotlightDrawer::Init | 94.1% | ~6% | `sDefault = ptr; ptr->Select()` — target reloads sDefault for Select call |
+
+---
+
+## Address Relocation Noise
+
+**Prevalence:** ~150 AT_LIMIT functions (dominant pattern in final triage)
+**Typical Gap:** 0.5-2%
+
+Functions that reference many globals show `diff_arg` on `lis`/`addi`/`lwz` instruction pairs due to different global variable addresses between builds.
+
+### Symptom
+
+objdiff shows many `diff_arg` mismatches where both sides have identical instructions but with different immediate operand values for `lis` (load immediate shifted) and `addi`/`lwz`/`stw` with address low-half operands. These appear in pairs:
+
+```asm
+# Both instructions identical in structure, different addresses
+| lis  r11, 0x82A4   | lis  r11, 0x82B1   |  ← diff_arg (high half differs)
+| lwz  r3, 0x1234(r11) | lwz  r3, 0x5678(r11) | ← diff_arg (low half differs)
+```
+
+### Root Cause
+
+Our `.text` section is ~18KB larger than the original (0xBBB4D4 vs 0xBB6B14), so all global variables end up at slightly different addresses. Each global reference generates a `lis`+`offset` pair, and both halves show as `diff_arg`. Functions with many global references (10+ pairs) accumulate 20-40 diff_arg mismatches that dominate the match percentage.
+
+### Impact
+
+These mismatches are **cosmetic** — the machine code is functionally identical, just referencing the same globals at different addresses. They inflate the mismatch count but don't represent real code differences.
+
+### Detection
+
+- High `diff_arg` count (20+) with low `diff_op` count (0-2)
+- All mismatches are `lis`/`addi`/`lwz`/`stw` with different immediates
+- No structural differences (same instruction count, same opcodes)
+
+### What Would Fix It
+
+- Getting our `.text` section to match the original size exactly (eliminating the ~18KB delta)
+- objdiff scoring that ignores relocation-only differences (not currently implemented)
+
+### Real Examples
+
+| Function | Match | diff_arg | diff_op | Notes |
+|----------|-------|----------|---------|-------|
+| SongSortMgr::MoveOn | 94.4% | 28 | 3 | 28 lis/addi pairs + 3 register swaps |
+| HamPhotoDisplay::SyncProperty | 94.0% | 18 | 2 | Mostly address noise + float-to-int codegen |
 
 ---
 

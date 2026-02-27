@@ -147,6 +147,7 @@ public:
     bool IsGameStartHold() const { return mGameStartHold; }
     int StartLoopMargin() const { return mStartLoopMargin; }
     int EndLoopMargin() const { return mEndLoopMargin; }
+    PoseFatalities *GetPoseFatalities() const { return mPoseFatalities; }
 
     DataNode OnGetDancerVisemes(DataArray *);
 

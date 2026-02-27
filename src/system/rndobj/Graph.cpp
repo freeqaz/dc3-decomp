@@ -19,7 +19,9 @@ void ScreenLine::DrawFixedZ(float) { Draw(); }
 void RectFilled2D::Draw() {
     TheRnd.DrawRectScreen(mRect, mCol, nullptr, nullptr, nullptr);
 }
-void RectFilled2D::DrawFixedZ(float) { Draw(); }
+void RectFilled2D::DrawFixedZ(float) {
+    TheRnd.DrawRectScreen(mRect, mCol, nullptr, nullptr, nullptr);
+}
 void DrawSphere::Draw() { UtilDrawSphere(mCenter, mRadius, mCol, nullptr); }
 void DrawString::Draw() { TheRnd.DrawString(mText.c_str(), mPos, mCol, true); }
 void DrawString3D::Draw() { UtilDrawString(mText.c_str(), mPos, mCol); }

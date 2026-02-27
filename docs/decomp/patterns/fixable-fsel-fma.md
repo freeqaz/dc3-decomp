@@ -316,3 +316,36 @@ FMA mismatch (fmadds vs fmuls+fadds)?
 - [unfixable-compiler.md](unfixable-compiler.md#register-allocation) — Register allocator mechanism and c2.dll patching
 - `docs/decomp/XBOX360_FLOATING_POINT_CODEGEN.md` — Full Xbox 360 FP reference
 - `docs/decomp/XBOX360_PRAGMA_REFERENCE.md` — Pragma syntax and scope rules
+
+## fsel via Explicit Ternary Subtraction/Negation
+
+**Impact:** +5-15%
+**Success Rate:** HIGH
+**Time:** 5 minutes
+
+When `Clamp<float>` or `__fsel` intrinsics don't yield the right register allocation, you can coax the MSVC compiler into emitting an `fsel` by writing a ternary expression that mirrors the `fsel` logic: `condition >= 0.0f ? val_if_ge : val_if_lt`. 
+
+### Symptom
+Target assembly contains an `fsel` following an `fsub` or `fneg` instruction, but using the `math/Utl.h` templates or `__fsel` intrinsic results in register allocation mismatches or extra FPR saves.
+
+### Why It Works
+The compiler recognizes a specific ternary pattern `(expr) >= 0.0f ? a : b` (where `expr` is a negation or subtraction) and maps it directly to an `fsel` instruction without needing explicit intrinsics.
+
+### Fix
+```cpp
+// Target generates:
+// fneg f0, f1
+// fsel f1, f0, f12, f1   (if -x >= 0.0f then 0.0f else x)
+float val = -x >= 0.0f ? 0.0f : x; 
+
+// Target generates:
+// fsubs f0, f1, f13
+// fsel f1, f0, f13, f1   (if x - 1.0f >= 0.0f then 1.0f else x)
+float val2 = val - 1.0f >= 0.0f ? 1.0f : val;
+```
+
+### Real Examples
+
+| Function | Before | After | Delta | Fix |
+|----------|--------|-------|-------|-----|
+| GameEndedDataPointJob ctor | ~77% | 85.8% | ~8% | Used `-streamMs >= 0.0f ? 0.0f : streamMs` instead of if-statements for float clamping |

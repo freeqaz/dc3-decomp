@@ -18,7 +18,7 @@ public:
 class SongSortByLocation : public SongSort {
 public:
     SongSortByLocation();
-    virtual ~SongSortByLocation();
+    virtual ~SongSortByLocation() {}
 
     virtual NavListItemNode *NewItemNode(void *) const;
     virtual NavListHeaderNode *NewHeaderNode(NavListItemNode *) const;

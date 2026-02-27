@@ -5,11 +5,19 @@
 #include "obj/Object.h"
 #include "utl/DataPointMgr.h"
 #include "utl/Symbol.h"
+#include "hamobj/HamGameData.h"
+#include "hamobj/PracticeSection.h"
+#include "game/GamePanel.h"
+#include "meta_ham/ProfileMgr.h"
+#include "os/PlatformMgr.h"
+#include "meta_ham/HamProfile.h"
+#include "hamobj/HamDirector.h"
+#include "obj/Dir.h"
 
 GameEndedDataPointJob::GameEndedDataPointJob(
     Hmx::Object *callback, EndGameResult const &result
 )
-    : RCJob("dataminer/game_ended", callback) {
+    : RCJob("dataminer/game_ended/", callback) {
     static Symbol mode("mode");
     static Symbol song("song");
     static Symbol reason("reason");
@@ -31,30 +39,166 @@ GameEndedDataPointJob::GameEndedDataPointJob(
     static Symbol custom_session("custom_session");
     static Symbol challenge("challenge");
 
-    DataPoint dataP;
+    Symbol lastMode = MetaPerformer::Current()->LastPlayedMode();
+    float song_pos = 0.0f;
+    Symbol songSym = TheGameData->GetSong();
 
     if (TheMaster != nullptr && TheMaster->IsLoaded()) {
-        dataP.AddPair(mode, 0);
-        dataP.AddPair(song, 0);
-        dataP.AddPair(reason, 0);
-        dataP.AddPair(song_position, 0.0f);
-        dataP.AddPair(playlist_perform, 0);
-        dataP.AddPair(perform, 0);
-        dataP.AddPair(dance_battle, 0);
-        dataP.AddPair(perform_legacy, 0);
-        dataP.AddPair(practice, 0);
-        dataP.AddPair(showdown, 0);
-        dataP.AddPair(score, 0);
-        dataP.AddPair(num_stars, 0);
-        dataP.AddPair(perf_no_flashcard, 0);
-        dataP.AddPair(perf_current_stars, 0);
-        dataP.AddPair(photos_disabled, 0);
-        dataP.AddPair(freestyle_disabled, 0);
-        dataP.AddPair(num_bid_vcmds, 0);
-        dataP.AddPair(num_shell_vcmds, 0);
-        dataP.AddPair(custom_session, 0);
-        dataP.AddPair(challenge, 0);
+        float dur = TheMaster->SongDurationMs();
+        float streamMs = TheMaster->StreamMs() / dur;
+        song_pos = -streamMs >= 0.0f ? 0.0f : streamMs;
+        song_pos = song_pos - 1.0f >= 0.0f ? 1.0f : song_pos;
     }
+
+    DataPoint dataP;
+
+    dataP.AddPair(mode, DataNode(lastMode));
+    dataP.AddPair(song, DataNode(songSym));
+    dataP.AddPair(reason, (int)result);
+    dataP.AddPair(song_position, song_pos);
+
+    if (lastMode != showdown && lastMode != playlist_perform && lastMode != perform &&
+        lastMode != dance_battle && lastMode != perform_legacy && lastMode != challenge) {
+        MetaPerformer *perf = MetaPerformer::Current();
+        if (perf->GetMoveScores().size() != 0) {
+            MoveDir *moves = TheHamDirector->GetWorld()->Find<MoveDir>("moves", true);
+            MILO_ASSERT(moves, 0x5a);
+            PracticeSection *sec = nullptr;
+            for (ObjDirItr<PracticeSection> itr(moves, true); itr != nullptr; ++itr) {
+                if (itr->GetDifficulty() == TheGameData->Player(0)->GetDifficulty()) {
+                    sec = itr;
+                    break;
+                }
+            }
+            MILO_ASSERT(sec, 0x64);
+            int num_steps = sec->Steps().size();
+            int num_scores = perf->GetMoveScores().size();
+            if (num_scores > num_steps) {
+                String str(MakeString("(%d/%d)", num_scores, num_steps));
+                dataP.AddPair(custom_session, DataNode(str));
+            }
+        }
+    } else {
+        float num_stars_val = 0.0f;
+        const DataNode *pNode = TheGamePanel->Property(num_stars, false);
+        if (pNode != nullptr) {
+            num_stars_val = (float)(int)pNode->Float();
+        }
+        dataP.AddPair(perf_current_stars, (int)num_stars_val);
+        dataP.AddPair(perf_no_flashcard, (int)MetaPerformer::Current()->CompletedSongWithNoFlashcards());
+    }
+
+    Symbol crew(gNullStr);
+    Symbol character(gNullStr);
+    const char *perf_move_ratings_str = "perf_move_ratings";
+    const char *perf_calories_str = "perf_calories";
+    const char *new_rank_str_base = "new_rank";
+    const char *new_content_str_base = "new_content";
+    const char *comma_str = ",";
+    const char *pract_move_ratings_str = "pract_move_ratings";
+
+    for (int i = 0; i < 2; i++) {
+        HamPlayerData *pData = TheGameData->Player(i);
+        crew = pData->Crew();
+        character = pData->Char();
+        
+        char buf[32];
+        itoa(i, buf, 10);
+
+        String crew_str("crew"); crew_str += buf;
+        String char_str("character"); char_str += buf;
+        String diff_str("diff"); diff_str += buf;
+        String score_str("perf_current_score"); score_str += buf;
+        String ratings_str;
+        String move_ratings_str("move_ratings="); move_ratings_str += buf;
+
+        bool hasRatings = true;
+        const char *ratings_base = perf_move_ratings_str;
+        if (lastMode == perform || lastMode == dance_battle || lastMode == perform_legacy ||
+            (ratings_base = pract_move_ratings_str, lastMode == practice)) {
+            ratings_str = ratings_base;
+            ratings_str += buf;
+        } else {
+            hasRatings = false;
+        }
+
+        if (hasRatings && CompileMoveRatings(move_ratings_str, i, lastMode == practice)) {
+            dataP.AddPair(ratings_str.c_str(), DataNode(move_ratings_str));
+        }
+
+        static Symbol score("score");
+
+        dataP.AddPair(crew_str.c_str(), DataNode(crew));
+        dataP.AddPair(char_str.c_str(), DataNode(character));
+        dataP.AddPair(diff_str.c_str(), (int)TheGameData->Player(i)->GetDifficulty());
+        
+        const DataNode *scoreNode = pData->Provider()->Property(score, true);
+        dataP.AddPair(score_str.c_str(), scoreNode->Int());
+
+        HamProfile *prof = TheProfileMgr.GetProfileFromPad(pData->PadNum());
+        if (prof != nullptr && prof->HasValidSaveData()) {
+            if (prof->IsSignedIn()) {
+                String xuid_str("xuid"); xuid_str += buf;
+                dataP.AddPair(xuid_str.c_str(), DataNode(GetXUIDStrFromProfile(prof)));
+                
+                String name_str("player_name"); name_str += buf;
+                dataP.AddPair(name_str.c_str(), DataNode(ThePlatformMgr.GetName(pData->PadNum())));
+            }
+
+            String acc_str;
+            const AccomplishmentProgress &accProg = prof->GetAccomplishmentProgress();
+            const std::list<std::pair<Symbol, Symbol> > &newAwards = accProg.GetNewAwards();
+            for (std::list<std::pair<Symbol, Symbol> >::const_iterator it = newAwards.begin(); it != newAwards.end(); ++it) {
+                if (it != newAwards.begin()) {
+                    acc_str += comma_str;
+                }
+                acc_str += it->first.Str();
+            }
+
+            if (!acc_str.empty()) {
+                String new_content_str(new_content_str_base); new_content_str += buf;
+                dataP.AddPair(new_content_str.c_str(), DataNode(acc_str));
+            }
+
+            const char *rank_title = gNullStr;
+            if (prof->GetMetagameRank()->HasNewRank()) {
+                rank_title = prof->GetMetagameRank()->GetRankTitle().Str();
+            }
+            if (rank_title != gNullStr) {
+                String new_rank_str(new_rank_str_base); new_rank_str += buf;
+                dataP.AddPair(new_rank_str.c_str(), DataNode(rank_title));
+            }
+
+            if (lastMode == perform || lastMode == dance_battle || lastMode == perform_legacy) {
+                bool inFit = prof->InFitnessMode();
+                float tmp1, tmp2, cals;
+                prof->GetFitnessStats(tmp1, tmp2, cals);
+                if (inFit) {
+                    String cals_str(perf_calories_str); cals_str += buf;
+                    dataP.AddPair(cals_str.c_str(), cals);
+                }
+
+                String fitness_mode_str("perf_fitness_mode"); fitness_mode_str += buf;
+                dataP.AddPair(fitness_mode_str.c_str(), (int)inFit);
+            }
+
+            for (int p_idx = 0; p_idx < 5; p_idx++) {
+                Playlist p(prof->GetPlaylist(p_idx));
+                p.GetNumSongs();
+            }
+
+            String num_playlists_str("num_playlists"); num_playlists_str += buf;
+            dataP.AddPair(num_playlists_str.c_str(), 0);
+        }
+    }
+
+    if (TheMaster != nullptr) {
+        static Symbol song_duration_ms("song_duration_ms");
+        dataP.AddPair(song_duration_ms, (int)TheMaster->SongDurationMs());
+    }
+
+    dataP.AddPair(photos_disabled, (int)TheProfileMgr.DisablePhotos());
+    dataP.AddPair(freestyle_disabled, (int)TheProfileMgr.DisableFreestyle());
 
     SetDataPoint(dataP);
 }

@@ -150,8 +150,10 @@ BinStream &operator<<(BinStream &bs, const ObjRefConcrete<T1, class ObjectDir> &
 // ObjPtr size: 0x14
 template <class T>
 class ObjPtr : public ObjRefConcrete<T> {
-private:
+protected:
     Hmx::Object *mOwner; // 0x10
+    struct DeferOwner {};
+    ObjPtr(DeferOwner, T *ptr) : ObjRefConcrete<T>(ptr) {}
 public:
     ObjPtr(Hmx::Object *owner, T *ptr = nullptr);
     ObjPtr(const ObjPtr &p);

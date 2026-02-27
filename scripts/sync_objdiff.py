@@ -2,31 +2,34 @@
 """Run objdiff on every function and sync results to decomp.db.
 
 Unlike sync_match_percent.py (which reads report.json for just match%),
-this script runs `objdiff-cli diff` per-function to get instruction-level
-diffs, then detects patterns and updates enrichment columns:
+this script runs `objdiff-cli diff --batch` to get analysis results for
+all functions efficiently (grouping by unit to avoid redundant object
+file loading), then updates enrichment columns:
 
   - current_percent, best_percent, size, demangled
   - has_linker_merged, has_bool_mask, primary_pattern, reachable_100
+  - pattern detection columns from Rust analysis engine
   - verdict (COMPLETE for 100%, optionally AT_LIMIT for flagged patterns)
 
 Usage:
-    python3 scripts/sync_objdiff.py                         # full scan
+    python3 scripts/sync_objdiff.py                         # divergent only (default)
+    python3 scripts/sync_objdiff.py --all                   # full scan
     python3 scripts/sync_objdiff.py --unit 'system/char/*'  # filter by unit
     python3 scripts/sync_objdiff.py --dry-run               # preview
-    python3 scripts/sync_objdiff.py -j8                     # parallel workers
     python3 scripts/sync_objdiff.py --skip-100              # skip already-COMPLETE
 """
 from __future__ import annotations
 
 import argparse
 import json
+import math
 import re
 import sqlite3
 import subprocess
 import sys
 import time
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -70,145 +73,198 @@ class FunctionResult:
     demangled: str | None = None
     has_merged: bool = False
     has_bool_mask: bool = False
+    has_makestring_mismatch: bool = False
+    has_address_relocation: bool = False
+    has_boolean_negation: bool = False
+    has_float_precision: bool = False
+    has_fsel_ternary: bool = False
+    has_float_to_int_to_float: bool = False
+    detected_patterns: list[str] | None = None
     primary_pattern: str | None = None
     error: str | None = None
 
 
-def run_objdiff_for_function(db_id: int, symbol: str, project_dir: str) -> FunctionResult:
-    """Run objdiff-cli diff on a single function and extract results."""
-    result = FunctionResult(db_id=db_id, symbol=symbol)
+def _extract_patterns_from_analysis(result: FunctionResult, data: dict) -> None:
+    """Extract detected patterns from Rust analysis output."""
+    analysis = data.get("analysis")
+    if not analysis:
+        return
 
-    lookup = symbol
-    demangled = demangle_itanium(symbol)
-    if demangled is not None:
-        lookup = demangled
+    pattern_types = {p["pattern"] for p in analysis.get("patterns", [])}
+    if not pattern_types:
+        return
+
+    # Set boolean flags from pattern types
+    result.has_merged = "LINKER_MERGED" in pattern_types
+    result.has_bool_mask = "BOOL_MASK" in pattern_types
+    result.has_makestring_mismatch = "MAKE_STRING_TEMPLATE_MISMATCH" in pattern_types
+    result.has_address_relocation = "ADDRESS_RELOCATION_NOISE" in pattern_types
+    result.has_boolean_negation = "BOOLEAN_NEGATION" in pattern_types
+    result.has_float_precision = "FLOAT_PRECISION_MISMATCH" in pattern_types
+    result.has_fsel_ternary = "FSEL_TERNARY" in pattern_types
+    result.has_float_to_int_to_float = "FLOAT_TO_INT_TO_FLOAT" in pattern_types
+
+    # Store all detected patterns as sorted list
+    result.detected_patterns = sorted(pattern_types)
+
+    # Primary pattern: first match in priority order (most impactful first)
+    priority = [
+        "LINKER_MERGED",
+        "ANONYMOUS_NAMESPACE_HASH",
+        "ADDRESS_RELOCATION_NOISE",
+        "BOOLEAN_NEGATION",
+        "BOOL_MASK",
+        "MAKE_STRING_TEMPLATE_MISMATCH",
+        "FLOAT_PRECISION_MISMATCH",
+        "FSEL_TERNARY",
+        "FLOAT_TO_INT_TO_FLOAT",
+        "DYNAMIC_CAST_MISMATCH",
+        "DEAD_STORE_ELIMINATION",
+        "ALLOCA_MISMATCH",
+        "PROLOGUE_MISMATCH",
+        "SCOPE_COUNTER_MISMATCH",
+        "STATIC_GUARD_COUNTER",
+        "COMPARISON_STYLE",
+        "CONTROL_FLOW",
+        "COMMUTATIVE_OP_ORDER",
+        "OFFSET_SWAP",
+        "REGISTER_SWAP",
+    ]
+    for p in priority:
+        if p in pattern_types:
+            result.primary_pattern = p
+            break
+
+
+def _run_single_batch(functions: list[tuple[int, str]], project_dir: str) -> list[FunctionResult]:
+    """Run a single objdiff-cli --batch process for a chunk of functions.
+
+    Top-level function for ProcessPoolExecutor pickling.
+    """
+    # Build lookup map: lookup_name -> (db_id, original_symbol)
+    lookup_to_info: dict[str, tuple[int, str]] = {}
+    lookup_names: list[str] = []
+    for db_id, symbol in functions:
+        lookup = demangle_itanium(symbol) or symbol
+        lookup_to_info[lookup] = (db_id, symbol)
+        lookup_names.append(lookup)
+
+    stdin_data = "\n".join(lookup_names) + "\n"
 
     try:
         proc = subprocess.run(
-            [str(OBJDIFF_CLI), "diff", "-p", project_dir,
-             lookup, "--include-instructions", "-f", "json"],
-            capture_output=True, text=True, timeout=60,
+            [str(OBJDIFF_CLI), "diff", "-p", project_dir, "--batch"],
+            input=stdin_data, capture_output=True, text=True,
+            timeout=600,
         )
-
-        if proc.returncode != 0 or "Symbol not found" in proc.stdout:
-            result.error = "not_found"
-            return result
-
-        data = json.loads(proc.stdout)
     except subprocess.TimeoutExpired:
-        result.error = "timeout"
-        return result
-    except json.JSONDecodeError:
-        result.error = "bad_json"
-        return result
+        return [FunctionResult(db_id=db_id, symbol=sym, error="timeout")
+                for db_id, sym in functions]
     except Exception as e:
-        result.error = str(e)
-        return result
+        return [FunctionResult(db_id=db_id, symbol=sym, error=str(e))
+                for db_id, sym in functions]
 
-    result.match_percent = data.get("fuzzy_match_percent")
-    result.size = data.get("target_size") or data.get("base_size")
-    result.demangled = data.get("demangled")
+    # Parse JSONL output
+    results: list[FunctionResult] = []
+    seen_lookups: set[str] = set()
 
-    # Skip unimplemented (no base object)
-    if data.get("base_size", 0) == 0:
-        result.error = "unimplemented"
-        return result
-
-    # Analyze instructions for patterns
-    instructions = data.get("instructions", [])
-    if instructions:
-        _analyze_instructions(result, instructions)
-
-    return result
-
-
-def _analyze_instructions(result: FunctionResult, instructions: list[dict]) -> None:
-    """Detect patterns from instruction diff."""
-    has_merged = False
-    has_bool_mask = False
-    has_regswap = False
-    has_fma = False
-    has_offset_mismatch = False
-
-    mismatches = [i for i in instructions if i.get("match_type") != "equal"]
-    if not mismatches:
-        return
-
-    for ins in instructions:
-        match_type = ins.get("match_type", "equal")
-        if match_type == "equal":
+    for line in proc.stdout.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            data = json.loads(line)
+        except json.JSONDecodeError:
             continue
 
-        tgt = ins.get("target", {}) or {}
-        base = ins.get("base", {}) or {}
-        tgt_op = (tgt.get("opcode") or "").strip()
-        base_op = (base.get("opcode") or "").strip()
-        tgt_args = (tgt.get("args") or "").strip()
-        base_args = (base.get("args") or "").strip()
+        symbol_name = data.get("symbol", "")
+        seen_lookups.add(symbol_name)
 
-        # Merged symbol detection
-        if "merged_" in tgt_args or "merged_" in base_args:
-            has_merged = True
+        info = lookup_to_info.get(symbol_name)
+        if not info:
+            continue
+        db_id, original_symbol = info
 
-        # Bool mask detection (clrlwi r, r, 24)
-        if match_type in ("insert", "delete"):
-            side = base if match_type == "insert" else tgt
-            op = (side.get("opcode") or "").strip() if side else ""
-            args = (side.get("args") or "").strip() if side else ""
-            if op in ("clrlwi", "clrlwi."):
-                parts = [p.strip() for p in args.split(",")]
-                if len(parts) >= 3:
-                    try:
-                        if int(parts[2], 0) in (24, 31):
-                            has_bool_mask = True
-                    except ValueError:
-                        pass
-            # rlwinm form of bool mask
-            if op in ("rlwinm", "rlwinm."):
-                parts = [p.strip() for p in args.split(",")]
-                if len(parts) >= 5:
-                    try:
-                        sh, mb, me = int(parts[2], 0), int(parts[3], 0), int(parts[4], 0)
-                        if sh == 0 and ((mb == 24 and me == 31) or (mb == 31 and me == 31)):
-                            has_bool_mask = True
-                    except ValueError:
-                        pass
+        result = FunctionResult(db_id=db_id, symbol=original_symbol)
 
-        # Register swap detection (same opcode, different registers)
-        if match_type == "diff_arg" and tgt_op == base_op:
-            has_regswap = True
+        if "error" in data:
+            result.error = data["error"]
+            results.append(result)
+            continue
 
-        # FMA mismatch
-        fma_ops = {"fmadds", "fmsubs", "fnmadds", "fnmsubs", "fmadd", "fmsub", "fnmadd", "fnmsub"}
-        fmul_ops = {"fmuls", "fmul"}
-        fadd_ops = {"fadds", "fsubs", "fadd", "fsub"}
-        if match_type == "replace":
-            if (tgt_op in fma_ops and base_op in (fmul_ops | fadd_ops)) or \
-               (base_op in fma_ops and tgt_op in (fmul_ops | fadd_ops)):
-                has_fma = True
+        result.match_percent = data.get("fuzzy_match_percent")
+        result.size = data.get("target_size") or data.get("base_size")
+        result.demangled = data.get("demangled")
 
-        # Offset mismatch (same opcode, different offsets in memory operands)
-        if match_type == "diff_arg":
-            if tgt_op == base_op and tgt_op in ("lwz", "stw", "lbz", "stb", "lhz", "sth",
-                                                  "lfs", "stfs", "lfd", "stfd", "lwzx", "stwx",
-                                                  "addi", "subi"):
-                has_offset_mismatch = True
+        if data.get("base_size", 0) == 0:
+            result.error = "unimplemented"
+            results.append(result)
+            continue
 
-    # Set flags
-    result.has_merged = has_merged
-    result.has_bool_mask = has_bool_mask
+        _extract_patterns_from_analysis(result, data)
+        results.append(result)
 
-    # Determine primary pattern (most impactful)
-    if has_merged:
-        result.primary_pattern = "LINKER_MERGED"
-    elif has_fma:
-        result.primary_pattern = "FMA_MISMATCH"
-    elif has_bool_mask:
-        result.primary_pattern = "BOOL_MASK"
-    elif has_offset_mismatch:
-        result.primary_pattern = "OFFSET_SWAP"
-    elif has_regswap:
-        result.primary_pattern = "REGISTER_SWAP"
+    # Mark missing symbols as not_found
+    for lookup, (db_id, original_symbol) in lookup_to_info.items():
+        if lookup not in seen_lookups:
+            results.append(FunctionResult(
+                db_id=db_id, symbol=original_symbol, error="not_found"))
+
+    return results
+
+
+def run_batch(functions: list[tuple[int, str]], project_dir: str,
+              jobs: int = 4, verbose: bool = False) -> list[FunctionResult]:
+    """Run objdiff-cli in batch mode, splitting across parallel workers.
+
+    Each worker gets a chunk of symbols and runs its own --batch process.
+    Within each process, objdiff groups symbols by unit for efficient loading.
+    """
+    if not functions:
+        return []
+
+    # Split into chunks for parallel processing
+    chunk_size = max(1, math.ceil(len(functions) / jobs))
+    chunks = [functions[i:i + chunk_size] for i in range(0, len(functions), chunk_size)]
+    actual_workers = len(chunks)
+
+    all_results: list[FunctionResult] = []
+
+    if actual_workers == 1:
+        # Single chunk — run directly, print verbose inline
+        results = _run_single_batch(chunks[0], project_dir)
+        if verbose:
+            for r in results:
+                if r.error:
+                    print(f"  SKIP {r.symbol}: {r.error}")
+                else:
+                    pats = ",".join(r.detected_patterns) if r.detected_patterns else "-"
+                    print(f"  {r.match_percent:6.2f}% {r.symbol} [{pats}]")
+        return results
+
+    with ProcessPoolExecutor(max_workers=actual_workers) as pool:
+        futures = {
+            pool.submit(_run_single_batch, chunk, project_dir): i
+            for i, chunk in enumerate(chunks)
+        }
+
+        for future in as_completed(futures):
+            chunk_idx = futures[future]
+            chunk_results = future.result()
+            all_results.extend(chunk_results)
+
+            if verbose:
+                for r in chunk_results:
+                    if r.error:
+                        print(f"  SKIP {r.symbol}: {r.error}")
+                    else:
+                        pats = ",".join(r.detected_patterns) if r.detected_patterns else "-"
+                        print(f"  {r.match_percent:6.2f}% {r.symbol} [{pats}]")
+
+            print(f"  Worker {chunk_idx + 1}/{actual_workers} done "
+                  f"({len(chunk_results)} functions)")
+
+    return all_results
 
 
 def parse_args() -> argparse.Namespace:
@@ -229,7 +285,11 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--no-promote", action="store_false", dest="promote",
                    help="Don't promote 100%% matches")
     p.add_argument("-j", "--jobs", type=int, default=4,
-                   help="Number of parallel workers (default: 4)")
+                   help="Number of parallel batch workers (default: 4)")
+    p.add_argument("--divergent", action="store_true", default=True,
+                   help="Only scan functions with unicorn_verdict = DIVERGENT (default)")
+    p.add_argument("--all", action="store_false", dest="divergent",
+                   help="Scan all functions, not just divergent")
     p.add_argument("-v", "--verbose", action="store_true")
     return p.parse_args()
 
@@ -284,44 +344,37 @@ def main():
     if args.skip_100:
         query += " AND (verdict IS NULL OR verdict != 'COMPLETE')"
 
+    if args.divergent:
+        query += " AND unicorn_verdict = 'DIVERGENT'"
+
     rows = conn.execute(query, params).fetchall()
     functions = [(row["id"], row["symbol"]) for row in rows]
     conn.close()
 
     print(f"Functions to scan: {len(functions)}")
     print(f"Workers: {args.jobs}")
+    filters = []
     if args.dry_run:
-        print("Mode: DRY RUN")
+        filters.append("DRY RUN")
+    if args.divergent:
+        filters.append("DIVERGENT only")
+    filters.append("BATCH mode")
+    print(f"Mode: {', '.join(filters)}")
     print()
 
-    # Run objdiff on each function
+    if not functions:
+        print("Nothing to scan.")
+        return
+
+    # Run batch objdiff
     project_dir = str(REPO_ROOT)
-    results: list[FunctionResult] = []
     start_time = time.time()
-    completed = 0
 
-    with ProcessPoolExecutor(max_workers=args.jobs) as pool:
-        futures = {
-            pool.submit(run_objdiff_for_function, db_id, symbol, project_dir): symbol
-            for db_id, symbol in functions
-        }
-
-        for future in as_completed(futures):
-            completed += 1
-            result = future.result()
-            results.append(result)
-
-            if completed % 500 == 0:
-                elapsed = time.time() - start_time
-                rate = completed / elapsed
-                eta = (len(functions) - completed) / rate if rate > 0 else 0
-                print(f"  [{completed}/{len(functions)}] {rate:.0f}/s, ETA {eta:.0f}s")
-
-            if args.verbose and result.error:
-                print(f"  SKIP {result.symbol}: {result.error}")
+    results = run_batch(functions, project_dir, jobs=args.jobs, verbose=args.verbose)
 
     elapsed = time.time() - start_time
-    print(f"\nScan complete: {len(results)} functions in {elapsed:.1f}s ({len(results)/elapsed:.0f}/s)")
+    rate = len(results) / elapsed if elapsed > 0 else 0
+    print(f"\nScan complete: {len(results)} functions in {elapsed:.1f}s ({rate:.0f}/s)")
 
     # Compute stats
     stats = {
@@ -334,7 +387,19 @@ def main():
         "promoted": 0,
         "merged_flagged": 0,
         "bool_mask_flagged": 0,
+        "makestring_mismatch_flagged": 0,
+        "address_relocation_flagged": 0,
+        "boolean_negation_flagged": 0,
+        "float_precision_flagged": 0,
+        "fsel_ternary_flagged": 0,
+        "float_to_int_to_float_flagged": 0,
         "patterns_set": 0,
+    }
+
+    # Unfixable patterns that prevent reaching 100%
+    UNFIXABLE_PATTERNS = {
+        "LINKER_MERGED", "BOOL_MASK", "ADDRESS_RELOCATION_NOISE",
+        "BOOLEAN_NEGATION", "ANONYMOUS_NAMESPACE_HASH",
     }
 
     pct_updates: list[tuple] = []
@@ -356,11 +421,13 @@ def main():
 
         if r.match_percent is not None:
             reachable = 1
-            if r.has_merged or r.has_bool_mask:
+            if r.detected_patterns and UNFIXABLE_PATTERNS & set(r.detected_patterns):
                 # Functions with unfixable patterns are not reachable to 100%
                 # unless they're already at 100%
                 if r.match_percent < 100.0:
                     reachable = 0
+
+            detected_json = json.dumps(r.detected_patterns) if r.detected_patterns else None
 
             pct_updates.append((
                 r.match_percent,
@@ -372,6 +439,13 @@ def main():
             enrich_updates.append((
                 1 if r.has_merged else 0,
                 1 if r.has_bool_mask else 0,
+                1 if r.has_makestring_mismatch else 0,
+                1 if r.has_address_relocation else 0,
+                1 if r.has_boolean_negation else 0,
+                1 if r.has_float_precision else 0,
+                1 if r.has_fsel_ternary else 0,
+                1 if r.has_float_to_int_to_float else 0,
+                detected_json,
                 r.primary_pattern,
                 reachable,
                 r.db_id,
@@ -382,6 +456,18 @@ def main():
                 stats["merged_flagged"] += 1
             if r.has_bool_mask:
                 stats["bool_mask_flagged"] += 1
+            if r.has_makestring_mismatch:
+                stats["makestring_mismatch_flagged"] += 1
+            if r.has_address_relocation:
+                stats["address_relocation_flagged"] += 1
+            if r.has_boolean_negation:
+                stats["boolean_negation_flagged"] += 1
+            if r.has_float_precision:
+                stats["float_precision_flagged"] += 1
+            if r.has_fsel_ternary:
+                stats["fsel_ternary_flagged"] += 1
+            if r.has_float_to_int_to_float:
+                stats["float_to_int_to_float_flagged"] += 1
             if r.primary_pattern:
                 stats["patterns_set"] += 1
 
@@ -411,6 +497,13 @@ def main():
                 """UPDATE functions
                    SET has_linker_merged = ?,
                        has_bool_mask = ?,
+                       has_makestring_mismatch = ?,
+                       has_address_relocation = ?,
+                       has_boolean_negation = ?,
+                       has_float_precision = ?,
+                       has_fsel_ternary = ?,
+                       has_float_to_int_to_float = ?,
+                       detected_patterns = ?,
                        primary_pattern = ?,
                        reachable_100 = ?,
                        updated_at = CURRENT_TIMESTAMP
@@ -433,16 +526,23 @@ def main():
     # Print summary
     mode = " (DRY RUN)" if args.dry_run else ""
     print(f"\n--- Sync Results{mode} ---")
-    print(f"  Scanned:         {stats['scanned']}")
-    print(f"  Matched:         {stats['matched']}")
-    print(f"  Not found:       {stats['not_found']}")
-    print(f"  Unimplemented:   {stats['unimplemented']}")
-    print(f"  Errors:          {stats['errors']}")
-    print(f"  Percent updated: {stats['pct_updated']}")
-    print(f"  Promoted:        {stats['promoted']} (-> COMPLETE)")
-    print(f"  Merged flagged:  {stats['merged_flagged']}")
-    print(f"  Bool mask:       {stats['bool_mask_flagged']}")
-    print(f"  Patterns set:    {stats['patterns_set']}")
+    print(f"  Scanned:            {stats['scanned']}")
+    print(f"  Matched:            {stats['matched']}")
+    print(f"  Not found:          {stats['not_found']}")
+    print(f"  Unimplemented:      {stats['unimplemented']}")
+    print(f"  Errors:             {stats['errors']}")
+    print(f"  Percent updated:    {stats['pct_updated']}")
+    print(f"  Promoted:           {stats['promoted']} (-> COMPLETE)")
+    print(f"  Patterns set:       {stats['patterns_set']}")
+    print(f"  --- Patterns ---")
+    print(f"  Merged:             {stats['merged_flagged']}")
+    print(f"  Bool mask:          {stats['bool_mask_flagged']}")
+    print(f"  MakeString:         {stats['makestring_mismatch_flagged']}")
+    print(f"  Address relocation: {stats['address_relocation_flagged']}")
+    print(f"  Boolean negation:   {stats['boolean_negation_flagged']}")
+    print(f"  Float precision:    {stats['float_precision_flagged']}")
+    print(f"  fsel ternary:       {stats['fsel_ternary_flagged']}")
+    print(f"  float->int->float:  {stats['float_to_int_to_float_flagged']}")
 
 
 if __name__ == "__main__":

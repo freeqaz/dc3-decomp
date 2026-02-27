@@ -173,7 +173,7 @@ extern DebugNotifyOncePrinter TheDebugNotifyOncePrinter;
 
 namespace {
     inline bool AddToStrings(const char *name, std::list<String> &strings) {
-        int count = 0;
+        unsigned int count = 0;
         std::list<String>::iterator it = strings.begin();
         for (; it != strings.end(); ++it)
             count++;

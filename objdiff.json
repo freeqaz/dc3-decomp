@@ -27,7 +27,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/keygen_xbox.cpp",
         "progress_categories": [
@@ -69,7 +69,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/obj/DirLoader.cpp",
         "progress_categories": [
@@ -90,7 +90,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/char/CharLipSync.cpp",
         "progress_categories": [
@@ -111,7 +111,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/game/Game.cpp",
         "progress_categories": [
@@ -132,7 +132,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/world/Dir.cpp",
         "progress_categories": [
@@ -153,7 +153,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/ui/UIList.cpp",
         "progress_categories": [
@@ -174,7 +174,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/char/CharClipSet.cpp",
         "progress_categories": [
@@ -195,7 +195,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/hamobj/HamCharacter.cpp",
         "progress_categories": [
@@ -216,7 +216,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/ui/UIComponent.cpp",
         "progress_categories": [
@@ -237,7 +237,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/char/CharTransDraw.cpp",
         "progress_categories": [
@@ -258,7 +258,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/flow/FlowRun.cpp",
         "progress_categories": [
@@ -279,7 +279,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/char/CharClip.cpp",
         "progress_categories": [
@@ -300,7 +300,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/hamobj/HamDirector.cpp",
         "progress_categories": [
@@ -321,7 +321,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/char/CharEyes.cpp",
         "progress_categories": [
@@ -342,7 +342,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/PartLauncher.cpp",
         "progress_categories": [
@@ -363,7 +363,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/char/CharWeightSetter.cpp",
         "progress_categories": [
@@ -384,7 +384,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/hamobj/MoveDir.cpp",
         "progress_categories": [
@@ -405,7 +405,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/hamobj/HamVisDir.cpp",
         "progress_categories": [
@@ -426,7 +426,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/hamobj/HamNavList.cpp",
         "progress_categories": [
@@ -447,7 +447,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/CamAnim.cpp",
         "progress_categories": [
@@ -468,7 +468,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/flow/Flow.cpp",
         "progress_categories": [
@@ -489,7 +489,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/char/CharHair.cpp",
         "progress_categories": [
@@ -510,7 +510,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/hamobj/RhythmBattlePlayer.cpp",
         "progress_categories": [
@@ -531,7 +531,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/PartAnim.cpp",
         "progress_categories": [
@@ -552,7 +552,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/hamobj/HamMove.cpp",
         "progress_categories": [
@@ -573,7 +573,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/hamobj/HamIKEffector.cpp",
         "progress_categories": [
@@ -615,7 +615,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/MatAnim.cpp",
         "progress_categories": [
@@ -636,7 +636,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/meta/SongPreview.cpp",
         "progress_categories": [
@@ -657,7 +657,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/char/Character.cpp",
         "progress_categories": [
@@ -678,7 +678,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/hamobj/HamListRibbon.cpp",
         "progress_categories": [
@@ -699,7 +699,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/char/CharIKHand.cpp",
         "progress_categories": [
@@ -720,7 +720,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/gesture/SkeletonViz.cpp",
         "progress_categories": [
@@ -741,7 +741,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/char/CharLipSyncDriver.cpp",
         "progress_categories": [
@@ -762,7 +762,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/hamobj/HamCamTransform.cpp",
         "progress_categories": [
@@ -783,7 +783,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/MeshAnim.cpp",
         "progress_categories": [
@@ -804,7 +804,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/hamobj/CharFeedback.cpp",
         "progress_categories": [
@@ -825,7 +825,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/hamobj/RhythmDetectorGroup.cpp",
         "progress_categories": [
@@ -846,7 +846,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/world/CameraShot.cpp",
         "progress_categories": [
@@ -867,7 +867,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/char/CharBonesMeshes.cpp",
         "progress_categories": [
@@ -888,7 +888,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/char/CharPollGroup.cpp",
         "progress_categories": [
@@ -909,7 +909,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/Env.cpp",
         "progress_categories": [
@@ -930,7 +930,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/char/CharMirror.cpp",
         "progress_categories": [
@@ -972,7 +972,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/world/LightPreset.cpp",
         "progress_categories": [
@@ -993,7 +993,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/gesture/SkeletonUpdate.cpp",
         "progress_categories": [
@@ -1014,7 +1014,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/hamobj/HamRegulate.cpp",
         "progress_categories": [
@@ -1035,7 +1035,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/world/ThreeDSoundManager.cpp",
         "progress_categories": [
@@ -1056,7 +1056,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/TransAnim.cpp",
         "progress_categories": [
@@ -1077,7 +1077,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/ui/UIListSubList.cpp",
         "progress_categories": [
@@ -1098,7 +1098,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/hamobj/RhythmBattle.cpp",
         "progress_categories": [
@@ -1119,7 +1119,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/EventTrigger.cpp",
         "progress_categories": [
@@ -1140,7 +1140,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/flow/FlowManager.cpp",
         "progress_categories": [
@@ -1161,7 +1161,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/world/Instance.cpp",
         "progress_categories": [
@@ -1182,7 +1182,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/LitAnim.cpp",
         "progress_categories": [
@@ -1203,7 +1203,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/flow/FlowTimer.cpp",
         "progress_categories": [
@@ -1224,7 +1224,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/char/CharCollide.cpp",
         "progress_categories": [
@@ -1245,7 +1245,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/obj/DataFile.cpp",
         "progress_categories": [
@@ -1308,7 +1308,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/Memory_Xbox.cpp",
         "progress_categories": [
@@ -1889,7 +1889,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/char/Char.cpp",
         "progress_categories": [
@@ -1931,7 +1931,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/game/GamePanel.cpp",
         "progress_categories": [
@@ -1952,7 +1952,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/obj/Msg.cpp",
         "progress_categories": [
@@ -1973,7 +1973,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/PropAnim.cpp",
         "progress_categories": [
@@ -1994,7 +1994,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/flow/FlowSetProperty.cpp",
         "progress_categories": [
@@ -2015,7 +2015,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/flow/FlowMultiSetProperty.cpp",
         "progress_categories": [
@@ -2036,7 +2036,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/char/CharDriver.cpp",
         "progress_categories": [
@@ -2078,7 +2078,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/Mesh.cpp",
         "progress_categories": [
@@ -2099,7 +2099,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/obj/Dir.cpp",
         "progress_categories": [
@@ -2120,7 +2120,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/ui/PanelDir.cpp",
         "progress_categories": [
@@ -2141,7 +2141,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/char/CharClipGroup.cpp",
         "progress_categories": [
@@ -2162,7 +2162,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/utl/SongInfoCopy.cpp",
         "progress_categories": [
@@ -2204,7 +2204,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/hamobj/MoveMgr.cpp",
         "progress_categories": [
@@ -2225,7 +2225,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/char/CharBoneDir.cpp",
         "progress_categories": [
@@ -2246,7 +2246,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/math/Geo.cpp",
         "progress_categories": [
@@ -2267,7 +2267,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/world/Crowd.cpp",
         "progress_categories": [
@@ -2288,7 +2288,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/char/FileMerger.cpp",
         "progress_categories": [
@@ -2309,7 +2309,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/Rnd.cpp",
         "progress_categories": [
@@ -2330,7 +2330,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/MetagameRank.cpp",
         "progress_categories": [
@@ -2351,7 +2351,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/char/ClipCollide.cpp",
         "progress_categories": [
@@ -2372,7 +2372,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/Utl.cpp",
         "progress_categories": [
@@ -2393,7 +2393,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/char/CharMeshHide.cpp",
         "progress_categories": [
@@ -2414,7 +2414,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/char/CharBlendBone.cpp",
         "progress_categories": [
@@ -2435,7 +2435,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/char/CharIKHead.cpp",
         "progress_categories": [
@@ -2456,7 +2456,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/Part.cpp",
         "progress_categories": [
@@ -2498,7 +2498,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/MeshDeform.cpp",
         "progress_categories": [
@@ -2519,7 +2519,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/Draw.cpp",
         "progress_categories": [
@@ -2540,7 +2540,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/flow/FlowNode.cpp",
         "progress_categories": [
@@ -2561,7 +2561,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/char/Waypoint.cpp",
         "progress_categories": [
@@ -2582,7 +2582,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/Dir.cpp",
         "progress_categories": [
@@ -2603,7 +2603,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/char/CharBoneOffset.cpp",
         "progress_categories": [
@@ -2624,7 +2624,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/hamobj/PhotoSpotlightPositioner.cpp",
         "progress_categories": [
@@ -2682,7 +2682,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/Font.cpp",
         "progress_categories": [
@@ -2703,7 +2703,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/hamobj/HamPlayerData.cpp",
         "progress_categories": [
@@ -2724,7 +2724,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/hamobj/HamCamShot.cpp",
         "progress_categories": [
@@ -2745,7 +2745,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/char/CharacterTest.cpp",
         "progress_categories": [
@@ -2766,7 +2766,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/Lit.cpp",
         "progress_categories": [
@@ -2787,7 +2787,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/char/CharCuff.cpp",
         "progress_categories": [
@@ -2808,7 +2808,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/char/CharLookAt.cpp",
         "progress_categories": [
@@ -2829,7 +2829,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/char/CharFaceServo.cpp",
         "progress_categories": [
@@ -2913,7 +2913,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/char/CharInterest.cpp",
         "progress_categories": [
@@ -2934,7 +2934,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/char/CharBones.cpp",
         "progress_categories": [
@@ -2955,7 +2955,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/flow/FlowSequence.cpp",
         "progress_categories": [
@@ -2976,7 +2976,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/TexProc.cpp",
         "progress_categories": [
@@ -2997,7 +2997,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/gesture/DepthBuffer3D.cpp",
         "progress_categories": [
@@ -3039,7 +3039,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/Env_NG.cpp",
         "progress_categories": [
@@ -3060,7 +3060,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/TexRenderer.cpp",
         "progress_categories": [
@@ -3081,7 +3081,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/char/CharBonesSamples.cpp",
         "progress_categories": [
@@ -3102,7 +3102,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/os/HolmesClient.cpp",
         "progress_categories": [
@@ -3123,7 +3123,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/flow/FlowQueueable.cpp",
         "progress_categories": [
@@ -3144,7 +3144,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/world/SpotlightDrawer.cpp",
         "progress_categories": [
@@ -3165,7 +3165,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/flow/FlowPickOne.cpp",
         "progress_categories": [
@@ -3186,7 +3186,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/obj/DataFunc.cpp",
         "progress_categories": [
@@ -3207,7 +3207,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/AmbientOcclusion.cpp",
         "progress_categories": [
@@ -3228,7 +3228,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/ScreenMask.cpp",
         "progress_categories": [
@@ -3249,7 +3249,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rnddx9/Mesh.cpp",
         "progress_categories": [
@@ -3270,7 +3270,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/hamobj/MoveAsyncDetector.cpp",
         "progress_categories": [
@@ -3291,7 +3291,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/Cam.cpp",
         "progress_categories": [
@@ -3312,7 +3312,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/hamobj/ClipPlayer.cpp",
         "progress_categories": [
@@ -3333,7 +3333,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/flow/DrivenPropertyMathOps.cpp",
         "progress_categories": [
@@ -3375,7 +3375,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/ShadowMap.cpp",
         "progress_categories": [
@@ -3396,7 +3396,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/synth/VorbisReader.cpp",
         "progress_categories": [
@@ -3417,7 +3417,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/utl/MemTracker.cpp",
         "progress_categories": [
@@ -3438,7 +3438,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/TexBlender.cpp",
         "progress_categories": [
@@ -3459,7 +3459,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/flow/FlowAnimate.cpp",
         "progress_categories": [
@@ -3480,7 +3480,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/hamobj/MiniLeaderboardDisplay.cpp",
         "progress_categories": [
@@ -3501,7 +3501,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/Mat.cpp",
         "progress_categories": [
@@ -3522,7 +3522,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/VelocityBuffer.cpp",
         "progress_categories": [
@@ -3543,7 +3543,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/ShaderMgr.cpp",
         "progress_categories": [
@@ -3564,7 +3564,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/math/Rot.cpp",
         "progress_categories": [
@@ -3585,7 +3585,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/synth_xbox/Voice.cpp",
         "progress_categories": [
@@ -3606,7 +3606,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/gesture/StreamRenderer.cpp",
         "progress_categories": [
@@ -3627,7 +3627,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rnddx9/Tex.cpp",
         "progress_categories": [
@@ -3669,7 +3669,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/ui/UIFontImporter.cpp",
         "progress_categories": [
@@ -3690,7 +3690,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/char/CharBone.cpp",
         "progress_categories": [
@@ -3711,7 +3711,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/synth/Sound.cpp",
         "progress_categories": [
@@ -3764,7 +3764,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/synth/Sfx.cpp",
         "progress_categories": [
@@ -3785,7 +3785,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/os/FileCache.cpp",
         "progress_categories": [
@@ -3822,7 +3822,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/hamobj/HamWardrobe.cpp",
         "progress_categories": [
@@ -3843,7 +3843,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/flow/FlowSound.cpp",
         "progress_categories": [
@@ -3885,7 +3885,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/synth_xbox/soundtouch/source/SoundTouch/FIFOSampleBuffer.cpp",
         "progress_categories": [
@@ -3906,7 +3906,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/ui/LabelShrinkWrapper.cpp",
         "progress_categories": [
@@ -3927,7 +3927,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/synth/Emitter.cpp",
         "progress_categories": [
@@ -4006,7 +4006,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/BaseMaterial.cpp",
         "progress_categories": [
@@ -4027,7 +4027,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/char/FileMergerOrganizer.cpp",
         "progress_categories": [
@@ -4048,7 +4048,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/synth/MidiInstrument.cpp",
         "progress_categories": [
@@ -4069,7 +4069,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/Gen.cpp",
         "progress_categories": [
@@ -4090,7 +4090,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/synth/Faders.cpp",
         "progress_categories": [
@@ -4127,7 +4127,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/Anim.cpp",
         "progress_categories": [
@@ -4148,7 +4148,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/world/CameraManager.cpp",
         "progress_categories": [
@@ -4185,7 +4185,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/synth/Sequence.cpp",
         "progress_categories": [
@@ -4206,7 +4206,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/gesture/StreamRecorder.cpp",
         "progress_categories": [
@@ -4227,7 +4227,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/utl/CacheMgr.cpp",
         "progress_categories": [
@@ -4248,7 +4248,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/world/PhysicsVolume.cpp",
         "progress_categories": [
@@ -4306,7 +4306,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/synth/MeterEffectMonitor.cpp",
         "progress_categories": [
@@ -4327,7 +4327,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/ui/UIListState.cpp",
         "progress_categories": [
@@ -4348,7 +4348,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/Text.cpp",
         "progress_categories": [
@@ -4385,7 +4385,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/char/CharIKFingers.cpp",
         "progress_categories": [
@@ -4406,7 +4406,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/char/CharIKFoot.cpp",
         "progress_categories": [
@@ -4448,7 +4448,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/Wind.cpp",
         "progress_categories": [
@@ -4490,7 +4490,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/char/CharIKScale.cpp",
         "progress_categories": [
@@ -4511,7 +4511,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/char/CharForeTwist.cpp",
         "progress_categories": [
@@ -4637,7 +4637,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/hamobj/BustAMoveData.cpp",
         "progress_categories": [
@@ -4658,7 +4658,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/world/SpotlightDrawer_NG.cpp",
         "progress_categories": [
@@ -4679,7 +4679,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/char/CharNeckTwist.cpp",
         "progress_categories": [
@@ -4700,7 +4700,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/char/CharSleeve.cpp",
         "progress_categories": [
@@ -4721,7 +4721,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/gesture/CameraTilt.cpp",
         "progress_categories": [
@@ -4742,7 +4742,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/gesture/LiveCameraInput.cpp",
         "progress_categories": [
@@ -4763,7 +4763,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/utl/CacheMgr_Xbox.cpp",
         "progress_categories": [
@@ -4805,7 +4805,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/hamobj/MeterDisplay.cpp",
         "progress_categories": [
@@ -4868,7 +4868,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/hamobj/SongCollision.cpp",
         "progress_categories": [
@@ -4889,7 +4889,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/hamobj/PoseFatalities.cpp",
         "progress_categories": [
@@ -4910,7 +4910,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/FontBase.cpp",
         "progress_categories": [
@@ -4931,7 +4931,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/hamobj/DanceRemixer.cpp",
         "progress_categories": [
@@ -4952,7 +4952,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/gesture/HighFiveGestureFilter.cpp",
         "progress_categories": [
@@ -4973,7 +4973,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/SigninScreen.cpp",
         "progress_categories": [
@@ -4994,7 +4994,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/hamobj/HamMaster.cpp",
         "progress_categories": [
@@ -5015,7 +5015,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/os/User.cpp",
         "progress_categories": [
@@ -5036,7 +5036,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/utl/Cache_Xbox.cpp",
         "progress_categories": [
@@ -5126,7 +5126,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/Font3d.cpp",
         "progress_categories": [
@@ -5184,7 +5184,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/midi/MidiReader.cpp",
         "progress_categories": [
@@ -5221,7 +5221,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/utl/NetCacheLoader.cpp",
         "progress_categories": [
@@ -5242,7 +5242,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/Lit_NG.cpp",
         "progress_categories": [
@@ -5316,7 +5316,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/hamobj/OriginalChoreoRemixer.cpp",
         "progress_categories": [
@@ -5337,7 +5337,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/char/CharClipDisplay.cpp",
         "progress_categories": [
@@ -5358,7 +5358,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/char/CharClipDriver.cpp",
         "progress_categories": [
@@ -5400,7 +5400,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/meta/DataArraySongInfo.cpp",
         "progress_categories": [
@@ -5442,7 +5442,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/char/ClipDistMap.cpp",
         "progress_categories": [
@@ -5463,7 +5463,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/hamobj/HamScrollSpeedIndicator.cpp",
         "progress_categories": [
@@ -5484,7 +5484,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/net/HttpGet.cpp",
         "progress_categories": [
@@ -5558,7 +5558,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rnddx9/Lit.cpp",
         "progress_categories": [
@@ -5616,7 +5616,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/synth/Synth.cpp",
         "progress_categories": [
@@ -5637,7 +5637,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/SongSort.cpp",
         "progress_categories": [
@@ -5716,7 +5716,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/PropKeys.cpp",
         "progress_categories": [
@@ -5737,7 +5737,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/SongSortByDiff.cpp",
         "progress_categories": [
@@ -5774,7 +5774,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/synth/MicNull.cpp",
         "progress_categories": [
@@ -5795,7 +5795,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/SongSortByLocation.cpp",
         "progress_categories": [
@@ -5816,7 +5816,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/world/DefaultPhysicsManager.cpp",
         "progress_categories": [
@@ -5911,7 +5911,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/synth_xbox/MeterEffect.cpp",
         "progress_categories": [
@@ -5932,7 +5932,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/os/PlatformMgr_Xbox.cpp",
         "progress_categories": [
@@ -5953,7 +5953,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/os/NetStream.cpp",
         "progress_categories": [
@@ -5974,7 +5974,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/hamobj/FreestyleMoveRecorder.cpp",
         "progress_categories": [
@@ -5995,7 +5995,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/ChallengeSortByScore.cpp",
         "progress_categories": [
@@ -6016,7 +6016,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/synth/MoggClip.cpp",
         "progress_categories": [
@@ -6074,7 +6074,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/ui/UIListWidget.cpp",
         "progress_categories": [
@@ -6095,7 +6095,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/Rnd_NG.cpp",
         "progress_categories": [
@@ -6132,7 +6132,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/os/ContentMgr_Xbox.cpp",
         "progress_categories": [
@@ -6174,7 +6174,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/Tex.cpp",
         "progress_categories": [
@@ -6211,7 +6211,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/net/HttpReqCurl.cpp",
         "progress_categories": [
@@ -6253,7 +6253,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/PostProc.cpp",
         "progress_categories": [
@@ -6274,7 +6274,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/synth/MidiSynth.cpp",
         "progress_categories": [
@@ -6364,7 +6364,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/utl/Song.cpp",
         "progress_categories": [
@@ -6385,7 +6385,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/Spline.cpp",
         "progress_categories": [
@@ -6406,7 +6406,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/synth/StreamReceiverFile.cpp",
         "progress_categories": [
@@ -6427,7 +6427,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/hamobj/StarsDisplay.cpp",
         "progress_categories": [
@@ -6464,7 +6464,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/os/VirtualKeyboard_Xbox.cpp",
         "progress_categories": [
@@ -6485,7 +6485,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/hamobj/SongLayout.cpp",
         "progress_categories": [
@@ -6527,7 +6527,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/os/Memcard_Xbox.cpp",
         "progress_categories": [
@@ -6548,7 +6548,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/utl/Cheats.cpp",
         "progress_categories": [
@@ -6749,7 +6749,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/MQSongSortByCharacter.cpp",
         "progress_categories": [
@@ -6770,7 +6770,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/hamobj/RhythmDetector.cpp",
         "progress_categories": [
@@ -6791,7 +6791,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/utl/NetCacheMgr.cpp",
         "progress_categories": [
@@ -6854,7 +6854,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/utl/TempoMap.cpp",
         "progress_categories": [
@@ -6875,7 +6875,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/NavListNode.cpp",
         "progress_categories": [
@@ -7018,7 +7018,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/Morph.cpp",
         "progress_categories": [
@@ -7039,7 +7039,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/meta/StorePurchaser.cpp",
         "progress_categories": [
@@ -7060,7 +7060,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/SongSortBySong.cpp",
         "progress_categories": [
@@ -7129,7 +7129,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/ShellInput.cpp",
         "progress_categories": [
@@ -7150,7 +7150,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rnddx9/Rnd_Xbox.cpp",
         "progress_categories": [
@@ -7171,7 +7171,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rnddx9/MultiMesh.cpp",
         "progress_categories": [
@@ -7229,7 +7229,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/hamobj/ErrorNode.cpp",
         "progress_categories": [
@@ -7250,7 +7250,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/synth/Utl.cpp",
         "progress_categories": [
@@ -7287,7 +7287,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/gesture/GestureMgr.cpp",
         "progress_categories": [
@@ -7308,7 +7308,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/meta/ButtonHolder.cpp",
         "progress_categories": [
@@ -7393,7 +7393,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/ui/UIListMesh.cpp",
         "progress_categories": [
@@ -7414,7 +7414,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/synth_xbox/Mic.cpp",
         "progress_categories": [
@@ -7451,7 +7451,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/hamobj/HamAudio.cpp",
         "progress_categories": [
@@ -7546,7 +7546,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/net_ham/ChallengeSystemJobs.cpp",
         "progress_categories": [
@@ -7567,7 +7567,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/hamobj/HamSkeletonConverter.cpp",
         "progress_categories": [
@@ -7625,7 +7625,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/os/DateTime.cpp",
         "progress_categories": [
@@ -7646,7 +7646,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/synth_xbox/FxSendChorus.cpp",
         "progress_categories": [
@@ -7683,7 +7683,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/MetaPanel.cpp",
         "progress_categories": [
@@ -7704,7 +7704,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/utl/WaveFile.cpp",
         "progress_categories": [
@@ -7741,7 +7741,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/ui/UIListSlot.cpp",
         "progress_categories": [
@@ -7762,7 +7762,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/synth_xbox/FxSendBitCrush.cpp",
         "progress_categories": [
@@ -7783,7 +7783,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/ChallengeSortMgr.cpp",
         "progress_categories": [
@@ -7804,7 +7804,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/net/curl/lib/warnless.c",
         "progress_categories": [
@@ -7825,7 +7825,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/os/Joypad_Xbox.cpp",
         "progress_categories": [
@@ -7862,7 +7862,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/DOFProc_NG.cpp",
         "progress_categories": [
@@ -7904,7 +7904,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/MetaPerformer.cpp",
         "progress_categories": [
@@ -7978,7 +7978,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/synth/WavReader.cpp",
         "progress_categories": [
@@ -8052,7 +8052,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/os/System_Xbox.cpp",
         "progress_categories": [
@@ -8089,7 +8089,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/synth/StreamReceiver.cpp",
         "progress_categories": [
@@ -8131,7 +8131,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/synth_xbox/FxSendEQ.cpp",
         "progress_categories": [
@@ -8173,7 +8173,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/synth/DistortionEffect.cpp",
         "progress_categories": [
@@ -8247,7 +8247,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/ChallengeSort.cpp",
         "progress_categories": [
@@ -8268,7 +8268,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/utl/MakeString.cpp",
         "progress_categories": [
@@ -8289,7 +8289,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/net/HttpReq.cpp",
         "progress_categories": [
@@ -8310,7 +8310,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/os/File.cpp",
         "progress_categories": [
@@ -8379,7 +8379,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/synth/StandardStream.cpp",
         "progress_categories": [
@@ -8416,7 +8416,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/midi/MidiParserMgr.cpp",
         "progress_categories": [
@@ -8453,7 +8453,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/synth/SampleInst.cpp",
         "progress_categories": [
@@ -8490,7 +8490,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/flow/FlowTrigger.cpp",
         "progress_categories": [
@@ -8527,7 +8527,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/midi/DataEventList.cpp",
         "progress_categories": [
@@ -8606,7 +8606,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/hamobj/SuperEasyRemixer.cpp",
         "progress_categories": [
@@ -8717,7 +8717,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/utl/Loader.cpp",
         "progress_categories": [
@@ -8770,7 +8770,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/Leaderboards.cpp",
         "progress_categories": [
@@ -8812,7 +8812,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/SongStatusMgr.cpp",
         "progress_categories": [
@@ -8833,7 +8833,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/synth_xbox/FxSendWah.cpp",
         "progress_categories": [
@@ -8854,7 +8854,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/synth/BitCrushEffect.cpp",
         "progress_categories": [
@@ -8875,7 +8875,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/meta/HeldButtonPanel.cpp",
         "progress_categories": [
@@ -8896,7 +8896,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/utl/MemMgr.cpp",
         "progress_categories": [
@@ -8917,7 +8917,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/synth_xbox/FxSendDistortion.cpp",
         "progress_categories": [
@@ -8938,7 +8938,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/ui/UILabel.cpp",
         "progress_categories": [
@@ -8975,7 +8975,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/FitnessCalorieSortByCalorie.cpp",
         "progress_categories": [
@@ -8996,7 +8996,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/synth_xbox/FxSend.cpp",
         "progress_categories": [
@@ -9017,7 +9017,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/hamobj/SongDifficultyDisplay.cpp",
         "progress_categories": [
@@ -9038,7 +9038,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/net/SessionJobs_Xbox.cpp",
         "progress_categories": [
@@ -9144,7 +9144,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/gesture/ArcDetector.cpp",
         "progress_categories": [
@@ -9186,7 +9186,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/Challenges.cpp",
         "progress_categories": [
@@ -9207,7 +9207,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/hamobj/HamDriver.cpp",
         "progress_categories": [
@@ -9228,7 +9228,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/meta/StorePanel.cpp",
         "progress_categories": [
@@ -9286,7 +9286,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/world/LightPresetManager.cpp",
         "progress_categories": [
@@ -9307,7 +9307,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/math/mtx.cpp",
         "progress_categories": [
@@ -9376,7 +9376,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/utl/MultiTempoTempoMap.cpp",
         "progress_categories": [
@@ -9413,7 +9413,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/synth_xbox/FxSendDelay.cpp",
         "progress_categories": [
@@ -9466,7 +9466,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/gesture/Skeleton.cpp",
         "progress_categories": [
@@ -9503,7 +9503,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/utl/ChunkStream.cpp",
         "progress_categories": [
@@ -9561,7 +9561,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/hamobj/HamNavProvider.cpp",
         "progress_categories": [
@@ -9624,7 +9624,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/jpeg/jmemnobs.c",
         "progress_categories": [
@@ -9666,7 +9666,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/char/ClipGraphGen.cpp",
         "progress_categories": [
@@ -9687,7 +9687,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/obj/Task.cpp",
         "progress_categories": [
@@ -9750,7 +9750,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/flow/FlowDistance.cpp",
         "progress_categories": [
@@ -9771,7 +9771,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/flow/FlowSwitch.cpp",
         "progress_categories": [
@@ -9792,7 +9792,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/flow/FlowSwitchCase.cpp",
         "progress_categories": [
@@ -9834,7 +9834,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/world/Spotlight.cpp",
         "progress_categories": [
@@ -9897,7 +9897,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/flow/FlowWhile.cpp",
         "progress_categories": [
@@ -9918,7 +9918,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/flow/FlowEventListener.cpp",
         "progress_categories": [
@@ -9939,7 +9939,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/flow/FlowCommand.cpp",
         "progress_categories": [
@@ -9960,7 +9960,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/flow/FlowIf.cpp",
         "progress_categories": [
@@ -10002,7 +10002,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/flow/FlowSlider.cpp",
         "progress_categories": [
@@ -10023,7 +10023,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/Trans.cpp",
         "progress_categories": [
@@ -10044,7 +10044,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/PlaylistSortMgr.cpp",
         "progress_categories": [
@@ -10086,7 +10086,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/flow/DrivenPropertyEntry.cpp",
         "progress_categories": [
@@ -10128,7 +10128,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/flow/PropertyEventListener.cpp",
         "progress_categories": [
@@ -10149,7 +10149,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/MetaMaterial.cpp",
         "progress_categories": [
@@ -10191,7 +10191,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/gesture/BaseSkeleton.cpp",
         "progress_categories": [
@@ -10212,7 +10212,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/gesture/DrawUtl.cpp",
         "progress_categories": [
@@ -10233,7 +10233,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/gesture/WaveToTurnOnLight.cpp",
         "progress_categories": [
@@ -10254,7 +10254,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rnddx9/ShaderMgr.cpp",
         "progress_categories": [
@@ -10275,7 +10275,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/gesture/SpeechMgr.cpp",
         "progress_categories": [
@@ -10296,7 +10296,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/gesture/SkeletonQualityFilter.cpp",
         "progress_categories": [
@@ -10317,7 +10317,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/gesture/SkeletonRecoverer.cpp",
         "progress_categories": [
@@ -10354,7 +10354,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/gesture/SkeletonHistory.cpp",
         "progress_categories": [
@@ -10375,7 +10375,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/gesture/StubCameraInput.cpp",
         "progress_categories": [
@@ -10396,7 +10396,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/gesture/JointUtl.cpp",
         "progress_categories": [
@@ -10417,7 +10417,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/gesture/ArchiveSkeleton.cpp",
         "progress_categories": [
@@ -10501,7 +10501,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/CharacterProvider.cpp",
         "progress_categories": [
@@ -10522,7 +10522,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/hamobj/HamPartyJumpData.cpp",
         "progress_categories": [
@@ -10585,7 +10585,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/game/PartyModeMgr.cpp",
         "progress_categories": [
@@ -10606,7 +10606,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/obj/Utl.cpp",
         "progress_categories": [
@@ -10627,7 +10627,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/ContextChecker.cpp",
         "progress_categories": [
@@ -10648,7 +10648,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/Group.cpp",
         "progress_categories": [
@@ -10753,7 +10753,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/os/Joypad.cpp",
         "progress_categories": [
@@ -10774,7 +10774,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/synth/MicClientMapper.cpp",
         "progress_categories": [
@@ -10816,7 +10816,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/hamobj/HamScrollBehavior.cpp",
         "progress_categories": [
@@ -10858,7 +10858,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/hamobj/DancerSequence.cpp",
         "progress_categories": [
@@ -10900,7 +10900,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/world/ColorPalette.cpp",
         "progress_categories": [
@@ -10921,7 +10921,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/meta/StoreEnumeration.cpp",
         "progress_categories": [
@@ -10942,7 +10942,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rnddx9/Movie.cpp",
         "progress_categories": [
@@ -11026,7 +11026,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/hamobj/HamRibbon.cpp",
         "progress_categories": [
@@ -11047,7 +11047,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/hamobj/PracticeSection.cpp",
         "progress_categories": [
@@ -11084,7 +11084,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/synth/MetaMusic.cpp",
         "progress_categories": [
@@ -11105,7 +11105,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/hamobj/TransConstraint.cpp",
         "progress_categories": [
@@ -11126,7 +11126,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/hamobj/HollaBackMinigame.cpp",
         "progress_categories": [
@@ -11147,7 +11147,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/obj/PropSync.cpp",
         "progress_categories": [
@@ -11231,7 +11231,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/synth_xbox/soundtouch/source/SoundTouch/FIRFilter.cpp",
         "progress_categories": [
@@ -11273,7 +11273,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/SongSelectPlaylistCustomizePanel.cpp",
         "progress_categories": [
@@ -11315,7 +11315,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/SingleUserCrewSelectPanel.cpp",
         "progress_categories": [
@@ -11357,7 +11357,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/CampaignEra.cpp",
         "progress_categories": [
@@ -11378,7 +11378,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/AccomplishmentCharacterListConditional.cpp",
         "progress_categories": [
@@ -11399,7 +11399,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/hamobj/Pose.cpp",
         "progress_categories": [
@@ -11420,7 +11420,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/os/HDCache.cpp",
         "progress_categories": [
@@ -11546,7 +11546,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/os/Archive.cpp",
         "progress_categories": [
@@ -11567,7 +11567,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/utl/OSCMessenger.cpp",
         "progress_categories": [
@@ -11588,7 +11588,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/SkeletonIdentifier.cpp",
         "progress_categories": [
@@ -11609,7 +11609,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/ui/UIPanel.cpp",
         "progress_categories": [
@@ -11630,7 +11630,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/ui/UILabelDir.cpp",
         "progress_categories": [
@@ -11651,7 +11651,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/meta/MemcardMgr_Xbox.cpp",
         "progress_categories": [
@@ -11693,7 +11693,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/MultiUserGesturePanel.cpp",
         "progress_categories": [
@@ -11735,7 +11735,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/PostProc_NG.cpp",
         "progress_categories": [
@@ -11756,7 +11756,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/ShaderProgram.cpp",
         "progress_categories": [
@@ -11777,7 +11777,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/synth/DelayEffect.cpp",
         "progress_categories": [
@@ -11819,7 +11819,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/PlaylistSongProvider.cpp",
         "progress_categories": [
@@ -11856,7 +11856,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/synth/SampleData.cpp",
         "progress_categories": [
@@ -11877,7 +11877,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/SaveLoadManager.cpp",
         "progress_categories": [
@@ -11898,7 +11898,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/utl/UTF8.cpp",
         "progress_categories": [
@@ -11940,7 +11940,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/Shader.cpp",
         "progress_categories": [
@@ -11982,7 +11982,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/gesture/SkeletonClip.cpp",
         "progress_categories": [
@@ -12003,7 +12003,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/synth_xbox/soundtouch/source/SoundTouch/RateTransposer.cpp",
         "progress_categories": [
@@ -12045,7 +12045,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/ui/UIListLabel.cpp",
         "progress_categories": [
@@ -12087,7 +12087,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/game/BustAMovePanel.cpp",
         "progress_categories": [
@@ -12108,7 +12108,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/hamobj/HamLabel.cpp",
         "progress_categories": [
@@ -12171,7 +12171,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/Line.cpp",
         "progress_categories": [
@@ -12213,7 +12213,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/os/System.cpp",
         "progress_categories": [
@@ -12234,7 +12234,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/LockedContentPanel.cpp",
         "progress_categories": [
@@ -12276,7 +12276,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/ChooseModeProvider.cpp",
         "progress_categories": [
@@ -12318,7 +12318,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/utl/MemTrack.cpp",
         "progress_categories": [
@@ -12339,7 +12339,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/AppMiniLeaderboardDisplay.cpp",
         "progress_categories": [
@@ -12360,7 +12360,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/os/AsyncFile_Win.cpp",
         "progress_categories": [
@@ -12381,7 +12381,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/SkeletonChooser.cpp",
         "progress_categories": [
@@ -12402,7 +12402,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/HiResScreen.cpp",
         "progress_categories": [
@@ -12549,7 +12549,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/meta/StorePreviewMgr.cpp",
         "progress_categories": [
@@ -12570,7 +12570,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/SoftParticleBuffer.cpp",
         "progress_categories": [
@@ -12591,7 +12591,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/Bitmap.cpp",
         "progress_categories": [
@@ -12612,7 +12612,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/VoiceControlPanel.cpp",
         "progress_categories": [
@@ -12654,7 +12654,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/ProfileMgr.cpp",
         "progress_categories": [
@@ -12675,7 +12675,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/HamStoreProvider.cpp",
         "progress_categories": [
@@ -12696,7 +12696,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/LoadingPanel.cpp",
         "progress_categories": [
@@ -12717,7 +12717,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/HamUI.cpp",
         "progress_categories": [
@@ -12780,7 +12780,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/CampaignSongSelectPanel.cpp",
         "progress_categories": [
@@ -12801,7 +12801,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/net_ham/HamStoreCartJobs.cpp",
         "progress_categories": [
@@ -12822,7 +12822,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rnddx9/Cam.cpp",
         "progress_categories": [
@@ -12843,7 +12843,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/CampaignProgress.cpp",
         "progress_categories": [
@@ -12864,7 +12864,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/obj/DataArray.cpp",
         "progress_categories": [
@@ -12885,7 +12885,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/SongSelectPlaylistPanel.cpp",
         "progress_categories": [
@@ -12927,7 +12927,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/synth_xbox/soundtouch/source/SoundTouch/SoundTouch.cpp",
         "progress_categories": [
@@ -12948,7 +12948,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/ChallengeResultPanel.cpp",
         "progress_categories": [
@@ -12969,7 +12969,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/HamStarsDisplay.cpp",
         "progress_categories": [
@@ -13006,7 +13006,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rnddx9/Utl.cpp",
         "progress_categories": [
@@ -13027,7 +13027,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/os/Debug.cpp",
         "progress_categories": [
@@ -13069,7 +13069,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/ui/UIListHighlight.cpp",
         "progress_categories": [
@@ -13090,7 +13090,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/VoiceInputPanel.cpp",
         "progress_categories": [
@@ -13132,7 +13132,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/hamobj/ScoreUtl.cpp",
         "progress_categories": [
@@ -13174,7 +13174,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/Mat_NG.cpp",
         "progress_categories": [
@@ -13216,7 +13216,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/utl/AllocInfo.cpp",
         "progress_categories": [
@@ -13321,7 +13321,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/os/BlockMgr.cpp",
         "progress_categories": [
@@ -13342,7 +13342,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/ContentLoadingPanel.cpp",
         "progress_categories": [
@@ -13384,7 +13384,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rnddx9/TexMgr.cpp",
         "progress_categories": [
@@ -13426,7 +13426,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/hamobj/FilterQueue.cpp",
         "progress_categories": [
@@ -13447,7 +13447,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/MainMenuPanel.cpp",
         "progress_categories": [
@@ -13510,7 +13510,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/Playlist.cpp",
         "progress_categories": [
@@ -13552,7 +13552,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/synth/FlangerEffect.cpp",
         "progress_categories": [
@@ -13657,7 +13657,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/os/AsyncFile.cpp",
         "progress_categories": [
@@ -13720,7 +13720,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/SongSortMgr.cpp",
         "progress_categories": [
@@ -13741,7 +13741,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/CampaignMasterQuestSongSelectPanel.cpp",
         "progress_categories": [
@@ -13762,7 +13762,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/obj/DirUnloader.cpp",
         "progress_categories": [
@@ -13804,7 +13804,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/hamobj/MoveGraph.cpp",
         "progress_categories": [
@@ -13846,7 +13846,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/hamobj/MoveVariant.cpp",
         "progress_categories": [
@@ -13867,7 +13867,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/hamobj/CamShotCatVO.cpp",
         "progress_categories": [
@@ -13909,7 +13909,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/hamobj/CharCameraInput.cpp",
         "progress_categories": [
@@ -13951,7 +13951,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/hamobj/FreestyleMove.cpp",
         "progress_categories": [
@@ -13972,7 +13972,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/math/SHA1.cpp",
         "progress_categories": [
@@ -13993,7 +13993,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/math/DoubleExponentialSmoother.cpp",
         "progress_categories": [
@@ -14051,7 +14051,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/utl/FileStream.cpp",
         "progress_categories": [
@@ -14183,7 +14183,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/midi/DisplayEvents.cpp",
         "progress_categories": [
@@ -14220,7 +14220,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/net/DingoSvr.cpp",
         "progress_categories": [
@@ -14241,7 +14241,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/net/XLSPConnection.cpp",
         "progress_categories": [
@@ -14262,7 +14262,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/net/WebSvcMgr.cpp",
         "progress_categories": [
@@ -14283,7 +14283,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/net/WebSvcReq.cpp",
         "progress_categories": [
@@ -14304,7 +14304,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/net/WebSvcMgrCurl.cpp",
         "progress_categories": [
@@ -14346,7 +14346,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/net/DingoJob.cpp",
         "progress_categories": [
@@ -14399,7 +14399,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/net/curl/lib/multi.c",
         "progress_categories": [
@@ -14420,7 +14420,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/net/curl/lib/easy.c",
         "progress_categories": [
@@ -14441,7 +14441,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/net/JsonUtils.cpp",
         "progress_categories": [
@@ -14630,7 +14630,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/net/curl/lib/connect.c",
         "progress_categories": [
@@ -14798,7 +14798,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/net/json-c/json_object.c",
         "progress_categories": [
@@ -14872,7 +14872,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/net/json-c/json_tokener.c",
         "progress_categories": [
@@ -14956,7 +14956,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/net/curl/lib/pop3.c",
         "progress_categories": [
@@ -14977,7 +14977,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/net/curl/lib/ftp.c",
         "progress_categories": [
@@ -15019,7 +15019,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/net/curl/lib/select.c",
         "progress_categories": [
@@ -15082,7 +15082,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/net/curl/lib/mprintf.c",
         "progress_categories": [
@@ -15250,7 +15250,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/net/curl/lib/curl_addrinfo.c",
         "progress_categories": [
@@ -15628,7 +15628,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/net/curl/lib/hmac.c",
         "progress_categories": [
@@ -15754,7 +15754,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/obj/TypeProps.cpp",
         "progress_categories": [
@@ -15775,7 +15775,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/obj/DataFlex.c",
         "progress_categories": [
@@ -15796,7 +15796,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/obj/TextFile.cpp",
         "progress_categories": [
@@ -15817,7 +15817,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/os/ThreadCall_Win.cpp",
         "progress_categories": [
@@ -15859,7 +15859,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/OptionsPanel.cpp",
         "progress_categories": [
@@ -15880,7 +15880,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/HamStorePanel.cpp",
         "progress_categories": [
@@ -15943,7 +15943,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/FitnessGoalMgr.cpp",
         "progress_categories": [
@@ -16022,7 +16022,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/utl/Cache.cpp",
         "progress_categories": [
@@ -16043,7 +16043,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/gesture/DirectionGestureFilter.cpp",
         "progress_categories": [
@@ -16212,7 +16212,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/os/Keyboard_Xbox.cpp",
         "progress_categories": [
@@ -16233,7 +16233,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/os/JoypadClient.cpp",
         "progress_categories": [
@@ -16296,7 +16296,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/UIEventMgr.cpp",
         "progress_categories": [
@@ -16402,7 +16402,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/os/MapFile_Xbox.cpp",
         "progress_categories": [
@@ -16444,7 +16444,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/os/Joypad_Xinput.cpp",
         "progress_categories": [
@@ -16465,7 +16465,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/os/UsbMidiGuitar.cpp",
         "progress_categories": [
@@ -16549,7 +16549,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/os/HolmesUtl.cpp",
         "progress_categories": [
@@ -16649,7 +16649,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/os/CDReader.cpp",
         "progress_categories": [
@@ -16739,7 +16739,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/os/UsbMidiKeyboardMsgs.cpp",
         "progress_categories": [
@@ -16988,7 +16988,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rnddx9/Rnd.cpp",
         "progress_categories": [
@@ -17009,7 +17009,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/synth/ThreeDSound.cpp",
         "progress_categories": [
@@ -17051,7 +17051,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rnddx9/CubeTex.cpp",
         "progress_categories": [
@@ -17183,7 +17183,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rnddx9/Part.cpp",
         "progress_categories": [
@@ -17225,7 +17225,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rnddx9/RenderState.cpp",
         "progress_categories": [
@@ -17288,7 +17288,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/ui/InlineHelp.cpp",
         "progress_categories": [
@@ -17351,7 +17351,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/gesture/SkeletonExtentTracker.cpp",
         "progress_categories": [
@@ -17393,7 +17393,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/Graph.cpp",
         "progress_categories": [
@@ -17414,7 +17414,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/game/SongDB.cpp",
         "progress_categories": [
@@ -17435,7 +17435,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/FitnessCalorieSortNode.cpp",
         "progress_categories": [
@@ -17456,7 +17456,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/MQSongSortNode.cpp",
         "progress_categories": [
@@ -17498,7 +17498,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/synth/SynthSample.cpp",
         "progress_categories": [
@@ -17561,7 +17561,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/ColorXfm.cpp",
         "progress_categories": [
@@ -17582,7 +17582,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/BoxMap.cpp",
         "progress_categories": [
@@ -17624,7 +17624,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/Console.cpp",
         "progress_categories": [
@@ -17645,7 +17645,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/Watcher.cpp",
         "progress_categories": [
@@ -17708,7 +17708,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/Overshell.cpp",
         "progress_categories": [
@@ -17729,7 +17729,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/ui/UIListDir.cpp",
         "progress_categories": [
@@ -17750,7 +17750,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/Flare.cpp",
         "progress_categories": [
@@ -17792,7 +17792,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/MultiMeshProxy.cpp",
         "progress_categories": [
@@ -17876,7 +17876,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/Ribbon.cpp",
         "progress_categories": [
@@ -17897,7 +17897,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/TexBlendController.cpp",
         "progress_categories": [
@@ -17981,7 +17981,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/AnimFilter.cpp",
         "progress_categories": [
@@ -18018,7 +18018,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/rndobj/Fur_NG.cpp",
         "progress_categories": [
@@ -18060,7 +18060,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/synth/AudioDucker.cpp",
         "progress_categories": [
@@ -18144,7 +18144,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/synth/FxSendDistortion.cpp",
         "progress_categories": [
@@ -18207,7 +18207,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/synth/FxSendFlanger.cpp",
         "progress_categories": [
@@ -18228,7 +18228,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/synth/FxSendSynapse.cpp",
         "progress_categories": [
@@ -18249,7 +18249,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/synth/FxSendWah.cpp",
         "progress_categories": [
@@ -18312,7 +18312,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/synth/Mic.cpp",
         "progress_categories": [
@@ -18333,7 +18333,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/synth/ByteGrinder.cpp",
         "progress_categories": [
@@ -18522,7 +18522,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/ui/ResourceDirPtr.cpp",
         "progress_categories": [
@@ -18543,7 +18543,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/ui/UIListProvider.cpp",
         "progress_categories": [
@@ -18564,7 +18564,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/game/SongSequence.cpp",
         "progress_categories": [
@@ -18585,7 +18585,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/ui/Utl.cpp",
         "progress_categories": [
@@ -18606,7 +18606,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/ui/UIButton.cpp",
         "progress_categories": [
@@ -18627,7 +18627,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/ui/UIScreen.cpp",
         "progress_categories": [
@@ -18669,7 +18669,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/ui/LocalePanel.cpp",
         "progress_categories": [
@@ -18732,7 +18732,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/ui/CheatProvider.cpp",
         "progress_categories": [
@@ -18774,7 +18774,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/NavListSort.cpp",
         "progress_categories": [
@@ -18795,7 +18795,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/synth_xbox/ExternalMic.cpp",
         "progress_categories": [
@@ -18816,7 +18816,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/utl/GlitchFinder.cpp",
         "progress_categories": [
@@ -18837,7 +18837,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/ui/UISlider.cpp",
         "progress_categories": [
@@ -18858,7 +18858,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/ui/UIListArrow.cpp",
         "progress_categories": [
@@ -18879,7 +18879,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/ui/UIListCustom.cpp",
         "progress_categories": [
@@ -18921,7 +18921,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/utl/PoolAlloc.cpp",
         "progress_categories": [
@@ -19026,7 +19026,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/utl/BeatMap.cpp",
         "progress_categories": [
@@ -19068,7 +19068,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/utl/DebugGraph.cpp",
         "progress_categories": [
@@ -19089,7 +19089,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/utl/Locale.cpp",
         "progress_categories": [
@@ -19194,7 +19194,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/utl/UrlEncode.cpp",
         "progress_categories": [
@@ -19257,7 +19257,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/utl/LocaleOrdinal.cpp",
         "progress_categories": [
@@ -19320,7 +19320,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/utl/KnownIssues.cpp",
         "progress_categories": [
@@ -19362,7 +19362,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/utl/MemHeap.cpp",
         "progress_categories": [
@@ -19446,7 +19446,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/utl/trie.cpp",
         "progress_categories": [
@@ -19467,7 +19467,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/utl/NetLoader_Xbox.cpp",
         "progress_categories": [
@@ -19525,7 +19525,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/world/BeatClock.cpp",
         "progress_categories": [
@@ -19546,7 +19546,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/world/PostProcer.cpp",
         "progress_categories": [
@@ -19567,7 +19567,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/world/SpotlightEnder.cpp",
         "progress_categories": [
@@ -19588,7 +19588,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/world/FreeCamera.cpp",
         "progress_categories": [
@@ -19630,7 +19630,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/zlib/zutil.c",
         "progress_categories": [
@@ -19735,7 +19735,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/zlib/crc32.c",
         "progress_categories": [
@@ -19756,7 +19756,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/zlib/trees.c",
         "progress_categories": [
@@ -19819,7 +19819,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/Instarank.cpp",
         "progress_categories": [
@@ -19840,7 +19840,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/game/HamUser.cpp",
         "progress_categories": [
@@ -19861,7 +19861,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/net_ham/KinectShare.cpp",
         "progress_categories": [
@@ -19924,7 +19924,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/LetterboxPanel.cpp",
         "progress_categories": [
@@ -19961,7 +19961,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/MQSongSortMgr.cpp",
         "progress_categories": [
@@ -19982,7 +19982,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/FitnessCalorieSortMgr.cpp",
         "progress_categories": [
@@ -20003,7 +20003,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/AccomplishmentOneShot.cpp",
         "progress_categories": [
@@ -20108,7 +20108,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/CursorPanel.cpp",
         "progress_categories": [
@@ -20171,7 +20171,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/BlacklightPanel.cpp",
         "progress_categories": [
@@ -20192,7 +20192,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/SongSelectPanel.cpp",
         "progress_categories": [
@@ -20234,7 +20234,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/WeightInput.cpp",
         "progress_categories": [
@@ -20360,7 +20360,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/AppLabel.cpp",
         "progress_categories": [
@@ -20381,7 +20381,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/SkillsAwardList.cpp",
         "progress_categories": [
@@ -20402,7 +20402,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/MoveRatingHistory.cpp",
         "progress_categories": [
@@ -20444,7 +20444,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/ChallengeSortNode.cpp",
         "progress_categories": [
@@ -20465,7 +20465,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/SongSortNode.cpp",
         "progress_categories": [
@@ -20486,7 +20486,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/PlaylistSortNode.cpp",
         "progress_categories": [
@@ -20507,7 +20507,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/MQSongSort.cpp",
         "progress_categories": [
@@ -20528,7 +20528,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/PlaylistSort.cpp",
         "progress_categories": [
@@ -20591,7 +20591,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/meta_ham/HamStoreOffer.cpp",
         "progress_categories": [
@@ -20654,7 +20654,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/net_ham/LeaderboardJobs.cpp",
         "progress_categories": [
@@ -20675,7 +20675,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/net_ham/PlaylistJobs.cpp",
         "progress_categories": [
@@ -20696,7 +20696,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/net_ham/DataMinerJobs.cpp",
         "progress_categories": [
@@ -20717,7 +20717,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/lazer/net_ham/FriendsListJobs.cpp",
         "progress_categories": [
@@ -27571,7 +27571,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/synth_xbox/FxSendReverb.cpp",
         "progress_categories": [
@@ -29330,7 +29330,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/jpeg/Jpeg.cpp",
         "progress_categories": [
@@ -33792,7 +33792,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/gesture/HandHeightGestureFilter.cpp",
         "progress_categories": [
@@ -33855,7 +33855,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/movie/TexMovie.cpp",
         "progress_categories": [
@@ -33876,7 +33876,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/gesture/HandsUpGestureFilter.cpp",
         "progress_categories": [
@@ -33897,7 +33897,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/gesture/HandRaisedGestureFilter.cpp",
         "progress_categories": [
@@ -33918,7 +33918,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/gesture/StandingStillGestureFilter.cpp",
         "progress_categories": [
@@ -33939,7 +33939,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/gesture/HandInvokeGestureFilter.cpp",
         "progress_categories": [
@@ -34002,7 +34002,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/math/Key.cpp",
         "progress_categories": [
@@ -34233,7 +34233,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/oggvorbis/VorbisMem.cpp",
         "progress_categories": [
@@ -34360,7 +34360,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/synth_xbox/FxSendCompress.cpp",
         "progress_categories": [
@@ -34381,7 +34381,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/synth_xbox/FxSendFlanger.cpp",
         "progress_categories": [
@@ -34402,7 +34402,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/synth_xbox/FxSendMeterEffect.cpp",
         "progress_categories": [
@@ -34507,7 +34507,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/synth_xbox/IPP_basicmath_xbox.cpp",
         "progress_categories": [
@@ -34570,7 +34570,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/synth_xbox/FftIpp.cpp",
         "progress_categories": [
@@ -34612,7 +34612,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/synth/CompressionEffect.cpp",
         "progress_categories": [
@@ -34633,7 +34633,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/synth/EQEffect.cpp",
         "progress_categories": [
@@ -34654,7 +34654,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/synth/WahEffect.cpp",
         "progress_categories": [
@@ -34696,7 +34696,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/synth/tomcrypt/ctr.c",
         "progress_categories": [
@@ -34759,7 +34759,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/synth/complex.cpp",
         "progress_categories": [
@@ -34780,7 +34780,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/utl/Profiler.cpp",
         "progress_categories": [
@@ -34801,7 +34801,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/utl/DeJitter.cpp",
         "progress_categories": [
@@ -34822,7 +34822,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/utl/EncryptXTEA.cpp",
         "progress_categories": [
@@ -36869,7 +36869,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/oggvorbis/info.c",
         "progress_categories": [
@@ -36890,7 +36890,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/oggvorbis/synthesis.c",
         "progress_categories": [
@@ -36932,7 +36932,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/oggvorbis/sharedbook.c",
         "progress_categories": [
@@ -36953,7 +36953,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/oggvorbis/psy.c",
         "progress_categories": [
@@ -36995,7 +36995,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/oggvorbis/mdct.c",
         "progress_categories": [
@@ -37079,7 +37079,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/oggvorbis/codebook.c",
         "progress_categories": [
@@ -37100,7 +37100,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/oggvorbis/res0.c",
         "progress_categories": [
@@ -37142,7 +37142,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/oggvorbis/lsp.c",
         "progress_categories": [
@@ -37370,7 +37370,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/net/curl/lib/file.c",
         "progress_categories": [
@@ -37428,7 +37428,7 @@
         "build_ctx": true
       },
       "metadata": {
-        "complete": false,
+        "complete": true,
         "reverse_fn_order": false,
         "source_path": "src/system/oggvorbis/mapping0.c",
         "progress_categories": [

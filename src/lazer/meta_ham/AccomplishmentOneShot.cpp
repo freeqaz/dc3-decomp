@@ -21,15 +21,15 @@ AccomplishmentOneShot::~AccomplishmentOneShot() {}
 bool AccomplishmentOneShot::AreOneShotConditionsMet(
     HamPlayerData *hpd, HamProfile *profile, Symbol s, Difficulty d
 ) {
-    static Symbol nices_a("nices_a");
+    static Symbol stars("stars");
+    static Symbol flawless_a("flawless_a");
     static Symbol flawless_b("flawless_b");
+    static Symbol nices_a("nices_a");
+    static Symbol nices_b("nices_b");
+    static Symbol days("days");
+    static Symbol weekends("weekends");
     static Symbol hardest_stars("hardest_stars");
     const AccomplishmentProgress &progress = profile->GetAccomplishmentProgress();
-    static Symbol nices_b("nices_b");
-    static Symbol stars("stars");
-    static Symbol weekends("weekends");
-    static Symbol flawless_a("flawless_a");
-    static Symbol days("days");
     FOREACH (it, m_lConditions) {
         Symbol sbc = it->mConditionType;
         Difficulty d2 = it->mDifficulty;
@@ -55,8 +55,7 @@ bool AccomplishmentOneShot::AreOneShotConditionsMet(
             } else if (sbc == nices_a || sbc == nices_b) {
                 i5 = progress.GetNiceMoveCount();
             } else if (sbc == days) {
-                auto _tmp3 = progress.NumDays();
-                i5 = _tmp3;
+                i5 = progress.NumDays();
             } else if (sbc == weekends) {
                 i5 = progress.NumWeekends();
             } else if (sbc == hardest_stars) {

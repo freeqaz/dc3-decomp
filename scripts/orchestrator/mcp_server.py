@@ -2354,8 +2354,8 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
             try:
                 result = subprocess.run(
                     [str(objdiff_cli), "diff", "-p", str(self.project_root),
-                     lookup_symbol, "-f", "json"],
-                    capture_output=True, text=True, timeout=30,
+                     lookup_symbol, "--build", "--verdict", "-f", "json"],
+                    capture_output=True, text=True, timeout=90,
                     cwd=str(self.project_root),
                 )
 
@@ -2363,17 +2363,31 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
                     failed.append(symbol)
                     continue
 
-                data = json.loads(result.stdout)
-                match_pct = data.get("fuzzy_match_percent") or 0
-                base_size = data.get("base_size") or 0
+                # Strip ninja build preamble (e.g. "ninja: no work to do.\n")
+                stdout = result.stdout
+                json_start = stdout.find("{")
+                if json_start > 0:
+                    stdout = stdout[json_start:]
+
+                data = json.loads(stdout)
                 checked += 1
 
-                # Skip unimplemented functions (no decomp object)
-                if base_size == 0:
-                    unimplemented += 1
-                    continue
+                # Extract match% from instruction_summary (more reliable
+                # than fuzzy_match_percent for cross-unit symbols)
+                instr_summary = data.get("instruction_summary", {})
+                equal_pct = instr_summary.get("equal_percent")
+                match_pct = data.get("fuzzy_match_percent")
+                # Use instruction equal% if available, fall back to fuzzy
+                if equal_pct is not None:
+                    match_pct = equal_pct
+                elif match_pct is None:
+                    match_pct = 0
 
-                if match_pct == 100.0:
+                # Check verdict classification directly
+                verdict_data = data.get("verdict", {})
+                classification = verdict_data.get("classification", "")
+
+                if match_pct == 100.0 or classification == "COMPLETE":
                     newly_complete += 1
                     if not dry_run:
                         update_function_status(
@@ -2459,6 +2473,27 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
         output += f"| AT_LIMIT | {at_limit:,} | {at_limit / non_excluded * 100:.1f}% |\n"
         output += f"| Remaining | {remaining:,} | {remaining / non_excluded * 100:.1f}% |\n"
         output += f"| **Done (COMPLETE + AT_LIMIT)** | **{complete + at_limit:,}** | **{done_pct:.1f}%** |\n"
+
+        # Pattern counts
+        pattern_keys = [
+            ("pattern_merged", "Linker merged"),
+            ("pattern_bool_mask", "Bool mask"),
+            ("pattern_makestring_mismatch", "MakeString mismatch"),
+            ("pattern_address_relocation", "Address relocation"),
+            ("pattern_boolean_negation", "Boolean negation"),
+            ("pattern_float_precision", "Float precision"),
+            ("pattern_fsel_ternary", "fsel ternary"),
+            ("pattern_float_to_int_to_float", "Float-int-float"),
+        ]
+        has_patterns = any(stats.get(k, 0) > 0 for k, _ in pattern_keys)
+        if has_patterns:
+            output += f"\n### Detected Patterns\n\n"
+            output += f"| Pattern | Count |\n"
+            output += f"|---------|------:|\n"
+            for key, label in pattern_keys:
+                count = stats.get(key, 0)
+                if count > 0:
+                    output += f"| {label} | {count:,} |\n"
 
         # Top units with remaining work (NULL verdict, non-excluded)
         rows = conn.execute("""

@@ -84,6 +84,7 @@ public:
     int GetWeeklyPlayCount() const { return mWeeklyPlayCount; }
     void SetWeekends(int i) { mWeekendCount = i; }
     void SetWeeklyPlayCount(int i) { mWeeklyPlayCount = i; }
+    const std::list<std::pair<Symbol, Symbol> >& GetNewAwards() const { return mNewAwards; }
 
 private:
     void GiveGamerpic(Accomplishment *);

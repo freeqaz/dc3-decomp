@@ -448,11 +448,14 @@ bool Game::IsSongDefaultPlayerPlaying() {
     Symbol symDefaultCharacter = TheHamSongMgr.GetCharacter(symSong);
     Symbol symPrimaryCharacter = TheGameData->Player(0)->Char();
     bool ret = symPrimaryCharacter == symDefaultCharacter;
+    const char *songStr = symSong.Str();
+    const char *defaultStr = symDefaultCharacter.Str();
+    const char *primaryStr = symPrimaryCharacter.Str();
     MILO_LOG(
         "Game::IsSongDefaultPlayerPlaying() : symSong = '%s' symDefaultCharacter = '%s' symPrimaryCharacter = '%s' ret = %d\n",
-        symSong,
-        symDefaultCharacter,
-        symPrimaryCharacter,
+        songStr,
+        defaultStr,
+        primaryStr,
         ret
     );
     return ret;

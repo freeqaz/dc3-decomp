@@ -557,15 +557,24 @@ DataNode UIFontImporter::OnShowFontPicker(DataArray *) {
     return DataNode(0);
 }
 
-DataNode UIFontImporter::OnGenerate(DataArray *) {
+DataNode UIFontImporter::OnGenerate(DataArray *msg) {
+    if (msg->Size() >= 3) {
+        msg->Int(2);
+    }
     return DataNode(0);
 }
 
-DataNode UIFontImporter::OnGenerateOG(DataArray *) {
+DataNode UIFontImporter::OnGenerateOG(DataArray *msg) {
+    if (msg->Size() >= 3) {
+        msg->Int(2);
+    }
     return DataNode(0);
 }
 
-DataNode UIFontImporter::OnGenerate3D(DataArray *) {
+DataNode UIFontImporter::OnGenerate3D(DataArray *msg) {
+    if (msg->Size() >= 3) {
+        msg->Int(2);
+    }
     return DataNode(0);
 }
 

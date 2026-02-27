@@ -742,7 +742,7 @@ StoreEnumJob::~StoreEnumJob() {
     delete mEnumeration;
 }
 
-void StoreEnumJob::Start() {}
+void StoreEnumJob::Start() { mEnumeration->Start(); }
 void StoreEnumJob::Cancel(Hmx::Object *) {}
 
 bool StoreEnumJob::IsFinished() {

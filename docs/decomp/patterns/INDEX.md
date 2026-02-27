@@ -2,8 +2,8 @@
 
 Quick reference for all documented decompilation patterns in DC3 (Dance Central 3), targeting Xbox 360 / MSVC (PowerPC).
 
-> **Data source:** `decomp.db` — 14,772 attempts across 47,371 functions, 2,149 generated patches.
-> **Last updated:** 2026-01-29
+> **Data source:** `decomp.db` — 48,349 functions (32,328 non-excluded). 97.3% COMPLETE, 2.8% AT_LIMIT, ~0 remaining.
+> **Last updated:** 2026-02-27
 
 ## Fixable Patterns
 
@@ -21,10 +21,13 @@ These patterns can often be fixed with source changes. Sorted by ROI (impact x s
 | Signed/Unsigned Cast | +1-50% | 100% | [fixable-comparison.md](fixable-comparison.md#signedunsigned-cast) |
 | MILO_NOTIFY vs MILO_NOTIFY_ONCE | +10-35% | HIGH | [fixable-declarations.md](fixable-declarations.md#milo_notify-vs-milo_notify_once) |
 | alloca vs _alloca | +10-15% | 100% | [fixable-declarations.md](fixable-declarations.md#alloca-vs-_alloca-intrinsic-stack-allocation) |
+| Pre-Compute References Before Calls | +5-18% | HIGH | [fixable-declarations.md](fixable-declarations.md#pre-compute-references-before-clobbering-calls) |
 | Iterator Dereference Caching | +5-10% | LOW (~20%) | [fixable-declarations.md](fixable-declarations.md#iterator-dereference-caching) |
 | Variable Extraction | +1-35% | 95% | [fixable-declarations.md](fixable-declarations.md#variable-extraction) |
 | Explicit Conditional vs Max() | +35% | HIGH | [fixable-control-flow.md](fixable-control-flow.md#explicit-conditional-vs-max) |
 | Explicit Float Cast | +35% | HIGH | [fixable-casting.md](fixable-casting.md#explicit-float-cast) |
+| MakeString Template Type Mismatch | +5-21% | HIGH | [fixable-casting.md](fixable-casting.md#makestring-template-type-mismatch-milo-macro-arguments) |
+| ObjPtr DeferOwner Constructor | +16% | HIGH | [fixable-declarations.md](fixable-declarations.md#objptr-constructor-deferred-owner-initialization) |
 | Unsigned Zero Comparison | +0.4-1.3% | 95% | [fixable-comparison.md](fixable-comparison.md#unsigned-zero-comparison) |
 | Operator Overload Selection | +1-2% | 100% | [fixable-operators.md](fixable-operators.md#operator-overload-selection) |
 | Inline Assignment | +1-2% | 95% | [fixable-operators.md](fixable-operators.md#inline-assignment) |
@@ -49,6 +52,7 @@ These patterns can often be fixed with source changes. Sorted by ROI (impact x s
 | Initializer Literals | [fixable-declarations.md](fixable-declarations.md#initializer-literals) |
 | Static Variable Scope | [fixable-declarations.md](fixable-declarations.md#static-variable-scope) |
 | Braced vs Braceless If (Scope Counter) | [fixable-declarations.md](fixable-declarations.md#braced-vs-braceless-if-scope-counter) |
+| Static Variable Naming | [fixable-declarations.md](fixable-declarations.md#static-variable-naming) |
 | Static Symbol Order | [fixable-declarations.md](fixable-declarations.md#static-symbol-order) |
 | Function Definition Order (TU-Wide $S#) | [fixable-declarations.md](fixable-declarations.md#function-definition-order-tu-wide-static-guard-counters) |
 | Hoist Loop Variable for sret | [fixable-declarations.md](fixable-declarations.md#hoist-loop-variable-for-sret-register-matching) |
@@ -71,6 +75,8 @@ These patterns can often be fixed with source changes. Sorted by ROI (impact x s
 | Bool Mask (`clrlwi`) | [fixable-bool-mask.md](fixable-bool-mask.md#step-1-detect) |
 | extrwi vs rlwinm Encoding | [fixable-bool-mask.md](fixable-bool-mask.md#extrwi-vs-rlwinm-bit-test-encoding) |
 | MILO_NOTIFY vs MILO_NOTIFY_ONCE | [fixable-declarations.md](fixable-declarations.md#milo_notify-vs-milo_notify_once) |
+| MakeString Template Type Mismatch | [fixable-casting.md](fixable-casting.md#makestring-template-type-mismatch-milo-macro-arguments) |
+| ObjPtr DeferOwner Constructor | [fixable-declarations.md](fixable-declarations.md#objptr-constructor-deferred-owner-initialization) |
 | IsNaN vs Threshold Check | [fixable-comparison.md](fixable-comparison.md#isnan-vs-threshold-check) |
 
 ---
@@ -81,19 +87,22 @@ These patterns resist simple source-level fixes. Each documents what would be ne
 
 | Pattern | Prevalence | Typical Gap | File |
 |---------|------------|-------------|------|
-| Linker Merged (ICF) | 400 functions | 0.5-3% | [verifiable-icf.md](verifiable-icf.md#linker-merged-icf) (verify first) |
+| Linker Merged (ICF) | ~350 functions | 0.5-3% | [verifiable-icf.md](verifiable-icf.md#linker-merged-icf) (verify first) |
 | LTCG/Global Pooling | varies | 0.5-1% | [verifiable-icf.md](verifiable-icf.md#ltcg-global-pooling) |
 | Float Constant Pooling | common | 1-2 instr | [verifiable-icf.md](verifiable-icf.md#float-constant-pooling) |
-| Register Allocation | 607 functions | 1-3% | [unfixable-compiler.md](unfixable-compiler.md#register-allocation) (mechanism understood) |
+| Register Allocation | ~250 functions | 1-3% | [unfixable-compiler.md](unfixable-compiler.md#register-allocation) (mechanism understood) |
 | Dead Store Elimination / Destructor Merging | RAII wrappers | 1-2% | [unfixable-compiler.md](unfixable-compiler.md#dead-store-elimination--destructor-merging) |
 | Anonymous Namespace Hash | common | 0.5-3% | [unfixable-compiler.md](unfixable-compiler.md#anonymous-namespace-hash-mismatch) |
 | Build Env Regression (Headers) | rare | 5-10% | [unfixable-compiler.md](unfixable-compiler.md#build-environment-regression-from-unrelated-headers) |
 | ASSERT_REVS Scheduling | ~10% | ~0.8-0.9% | [unfixable-compiler.md](unfixable-compiler.md#assert_revs-scheduling) |
 | fmadds vs Separate Ops (mixed) | float math | 1-3% | [unfixable-compiler.md](unfixable-compiler.md#fmadds-vs-separate-ops) — try [fixable-fsel-fma.md](fixable-fsel-fma.md) first |
 | fsel Register Pressure | float clamp | 5-20% | [unfixable-compiler.md](unfixable-compiler.md#fsel-register-pressure) — needs c2.dll patch |
+| Boolean Negation (subfic/subic) | ptr→bool sites | 3-8% | [unfixable-compiler.md](unfixable-compiler.md#boolean-negation-subfic-vs-subic) |
 | Commutative Register Swap | float ops | <1% | [unfixable-compiler.md](unfixable-compiler.md#commutative-register-swap) |
 | 64-bit Extraction | rare | ~5% | [unfixable-compiler.md](unfixable-compiler.md#64-bit-extraction) |
 | Stack Spill Scheduling | high register pressure | ~1-2% | [unfixable-compiler.md](unfixable-compiler.md#stack-spill-scheduling) |
+| Store-then-Reload Scheduling | global store sites | 0.5-1% | [unfixable-compiler.md](unfixable-compiler.md#store-then-reload-scheduling) |
+| Address Relocation Noise | ~150 AT_LIMIT functions | 0.5-2% | [unfixable-compiler.md](unfixable-compiler.md#address-relocation-noise) |
 
 ---
 
@@ -112,6 +121,8 @@ These patterns make matches **worse**. Avoid them.
 
 ## Quick Decision Tree
 
+> **Note (2026-02-27):** All 32,328 non-excluded functions have been triaged. 97.1% are COMPLETE, 3.0% are AT_LIMIT. This decision tree remains useful for future work if new functions are added or compiler tooling changes.
+
 ```
 Match% < 50%?
   → Likely missing implementation. Check RB3 reference, Ghidra decompilation.
@@ -122,14 +133,16 @@ Match% 50-80%?
 Match% 80-95%?
   → Fine-tuning. Check comparison patterns, casting, operator selection.
   → Prologue mismatch with _RtlCheckStack12? Try _alloca instead of alloca.
+  → High diff_arg with low diff_op? Likely address relocation noise — may be AT_LIMIT.
 
 Match% 95-99%?
-  → Check for hard patterns first (register swap, merged symbols).
+  → Check for hard patterns first (register swap, merged symbols, address noise).
   → If no hard patterns: try variable reorder, inline assignment.
+  → run_diff_inspect mode=diagnose to separate fixable from unfixable diffs.
 
 Match% 99%+ but not 100%?
   → Often hard patterns (linker-merged, register allocation), but verify first.
-  → Check `objdiff-cli diff --analyze --verdict` and confirm any LINKER_MERGED calls.
+  → Use run_recon to check for LINKER_MERGED calls.
   → Only mark "at limit" after verification; otherwise keep investigating.
 ```
 
@@ -194,39 +207,30 @@ See [DATABASE_SCHEMA.md](../../reference/DATABASE_SCHEMA.md) for full schema doc
 
 ---
 
-## Statistics (2026-01-29)
+## Statistics (2026-02-27)
 
-From `decomp.db` — 47,371 functions, 14,772 attempts, 2,149 generated patches:
+From `decomp.db` — 48,349 total functions (16,021 excluded SDK/library):
 
 | Metric | Value |
 |--------|-------|
-| Total functions | 47,371 |
-| Perfect match (100%) | 23,631 (49.9%) |
-| Near-perfect (99-99.9%) | 669 (1.4%) |
-| High match (95-98.9%) | 436 (0.9%) |
-| Medium match (90-94.9%) | 295 (0.6%) |
-| Partial (50-89.9%) | 936 (2.0%) |
-| Low match (<50%) | 21,404 (45.2%) |
-| Average match | 98.2% |
+| Non-excluded functions | 32,328 |
+| COMPLETE (100% match) | 31,453 (97.3%) |
+| AT_LIMIT (unfixable) | 894 (2.8%) |
+| Remaining workable | ~0 (all triaged) |
 
-### Verdict Distribution
+### AT_LIMIT Breakdown
 
-| Verdict | Count | Meaning |
-|---------|-------|---------|
-| COMPLETE | 22,893 | 100% match confirmed |
-| AT_LIMIT | 937 | Needs compiler/linker tooling to fix |
-| NEAR_COMPLETE | 401 | 99%+ with minor residual mismatch |
-| LIKELY_FIXABLE | 130 | Known pattern, fix not yet applied |
+The 894 AT_LIMIT functions break down by dominant blocking pattern:
 
-### Known Pattern Distribution
-
-| Pattern | Count | Avg % | Near-perfect | Perfect | Fixable? |
-|---------|-------|-------|-------------|---------|----------|
-| REGISTER_SWAP | 607 | 92.3% | 92 | 11 | Rarely — compiler artifact |
-| LINKER_MERGED | 400 | 96.3% | 174 | 4 | No — ICF/LTCG |
-| CONTROL_FLOW | 134 | 92.4% | 21 | 8 | Sometimes |
-| BOOL_MASK | 33 | 92.8% | 1 | 0 | Often |
-| COMPARISON_STYLE | 7 | 93.2% | 3 | 0 | Often |
+| Pattern | Est. Count | Typical Gap | Notes |
+|---------|-----------|-------------|-------|
+| LINKER_MERGED (ICF) | ~350 | 0.5-3% | Merged `bl` targets from Identical COMDAT Folding |
+| REGISTER_SWAP | ~250 | 1-3% | Compiler register allocation artifact |
+| Address relocation noise | ~150 | 0.5-2% | `lis`/`addi` pairs at different global addresses |
+| ASSERT_REVS / INIT_REVS scheduling | ~80 | 0.8-0.9% | Instruction scheduling around rev macros |
+| BOOL_MASK (insert direction) | ~30 | 1-2% | Compiler `clrlwi` insertion we can't remove |
+| Store-then-reload scheduling | ~20 | 0.5-1% | Target stores to global then reloads; our compiler keeps register |
+| Mixed / multiple patterns | ~80 | varies | Combination of above patterns |
 
 ### Fine-Tuning Success Rates (90%+ to 100%)
 

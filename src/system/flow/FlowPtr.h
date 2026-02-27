@@ -104,7 +104,11 @@ private:
 
 template <typename T>
 BinStream &operator<<(BinStream &bs, const FlowPtr<T> &ptr) {
-    bs << ptr.mObjName;
+    if (ptr.mObjPtr.Ptr() != nullptr && ptr.mState == -2) {
+        bs << ptr.mObjPtr;
+    } else {
+        bs << ptr.mObjName;
+    }
     return bs;
 }
 

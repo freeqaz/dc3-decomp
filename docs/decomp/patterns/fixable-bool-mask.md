@@ -80,6 +80,25 @@ _msg->Size() > 3 ? (bool)(_msg->Int(3) != 0) : false
 2. Check headers for existing inline bool helpers (`streq()`, `IsAsciiNum()`, `PowerOf2()`, etc.)
 3. Check if peer functions in the same translation unit use a common bool helper
 
+**3e. Use `&&` chain instead of `||` with if/else.** When a bool function checks multiple conditions and returns true/false, the expression form matters critically:
+
+```cpp
+// BEFORE — generates bnelr (conditional return), no clrlwi, r3 used directly:
+if (mState == val0 || mState == val2 || mState == val3) {
+    return false;
+}
+return true;
+
+// AFTER — generates intermediate r11 + clrlwi mask, matching target:
+return mState != val0 && mState != val2 && mState != val3;
+```
+
+The `&&` chain as a single `return` expression forces the compiler to materialize the boolean result in an intermediate register (r11) and copy it to r3 via `clrlwi`. The `if/return false/return true` pattern allows the compiler to use `bnelr` (merging conditional branch with return), putting the result directly in r3 and skipping the mask.
+
+*Real fix: `XboxMultipleItemsPurchaser::IsPurchasing` — 84.5% → 100%, BOOL_MASK eliminated.*
+
+**Key principle:** De Morgan's law (`!(a || b) == !a && !b`) is semantically equivalent but produces different codegen. If the target has `clrlwi` with `bne` (forward branch), try the `&&` chain form. If the target has `beq` with early returns, try the `||` form.
+
 ## Step 4: When It's Actually Unfixable
 
 If our build generates `clrlwi` that the target doesn't have (`insert` direction), or if all Step 3 approaches fail, accept the gap. These source-level changes have been tried and do not remove an unwanted `clrlwi`:

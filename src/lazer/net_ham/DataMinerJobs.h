@@ -6,6 +6,10 @@
 class GameEndedDataPointJob : public RCJob {
 public:
     GameEndedDataPointJob(Hmx::Object *, EndGameResult const &);
+
+private:
+    const char *GetXUIDStrFromProfile(class HamProfile *);
+    bool CompileMoveRatings(class String &, int, bool) const;
 };
 
 class OmgScoresJob : public RCJob {

@@ -903,8 +903,8 @@ void HamDirector::SetCharSpot(Symbol charType, Symbol spotState) {
 DataNode HamDirector::OnToggleCamshotFlag() { return mCamshotFlag = !mCamshotFlag; }
 
 DataNode HamDirector::OnLoadSong(DataArray *a) {
-    MILO_ASSERT(TheGameData, 0xC1D);
     FilePathTracker tracker(FileRoot());
+    MILO_ASSERT(TheGameData, 0xC1D);
     for (int i = 0; i < 2; i++) {
         HamPlayerData *hpd = TheGameData->Player(i);
         MILO_ASSERT(hpd, 0xC21);
@@ -919,8 +919,7 @@ DataNode HamDirector::OnLoadSong(DataArray *a) {
     MILO_ASSERT(dancers >= 0 && dancers < kBackupDancersNumTypes, 0xC2E);
     mBackupDancers = (HamBackupDancers)dancers;
     mLoadedNewSong = true;
-    FileMerger *merger = mMerger;
-    if (merger && !str.empty()) {
+    if (mMerger && !str.empty()) {
         const char *speed;
         if (i3 < 113)
             speed = "slow";
@@ -929,12 +928,11 @@ DataNode HamDirector::OnLoadSong(DataArray *a) {
         else
             speed = "fast";
         mSongSpeed = speed;
-        auto _tmp1 = str.c_str();
-        auto _tmp_base = FileGetBase(_tmp1);
-        TheGameData->SetSong(_tmp_base);
-        merger->Select("song", str.c_str(), true);
+        auto _tmp1 = FileGetBase(str.c_str());
+        TheGameData->SetSong(_tmp1);
+        mMerger->Select("song", str.c_str(), true);
         if (i4) {
-            merger->StartLoad(b5);
+            mMerger->StartLoad(b5);
             if (mVenue) {
                 FileMerger *extras = mVenue->Find<FileMerger>("extras.fm", false);
                 if (extras) {

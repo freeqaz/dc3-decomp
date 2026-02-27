@@ -43,6 +43,7 @@ public:
     int GetSkeletonTrackingID() const { return mSkeletonTrackingID; }
     void AssignSkeleton(int id) { SetSkeletonTrackingID(id); }
     int PadNum() const { return mPadNum; }
+    int PlayerIndex() const { return mPlayerIndex; }
     bool IsAutoplaying() const { return !mAutoplay.Null(); }
     void SetMiniGameCharacter(Symbol s) { mMiniGameCharacter = s; }
     Symbol MiniGameCharacter() const { return mMiniGameCharacter; }

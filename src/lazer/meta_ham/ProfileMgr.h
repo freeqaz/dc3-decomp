@@ -120,6 +120,8 @@ public:
     bool GetAllUnlocked() { return mAllUnlocked; }
     HamProfile *CriticalProfile() const { return mCriticalProfile; }
     bool DisableVoice() const { return mDisableVoice; }
+    bool DisablePhotos() const { return mDisablePhotos; }
+    bool DisableFreestyle() const { return mDisableFreestyle; }
 
     int GetWeightUnits() const { return mWeightUnits; }
     void SetWeightUnits(int i) { mWeightUnits = i; }

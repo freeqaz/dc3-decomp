@@ -81,7 +81,7 @@ bool XboxMultipleItemsPurchaser::PurchaseMade() const {
 }
 
 bool XboxMultipleItemsPurchaser::IsPurchasing() const {
-    return mState == purchasestate1;
+    return mState != purchasestate0 && mState != kSuccess && mState != purchasestate3;
 }
 
 void XboxMultipleItemsPurchaser::Initiate() {

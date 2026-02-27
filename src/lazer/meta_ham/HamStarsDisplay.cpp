@@ -48,9 +48,9 @@ void HamStarsDisplay::SetSongWithDifficulty(int i, Difficulty d, bool b) {
 }
 
 void HamStarsDisplay::SetSongImpl(int songID, Difficulty diff, StarDisplayMode mode) {
-    bool u11 = false;
-    bool c10 = 0;
     HamProfile *profile = TheProfileMgr.GetActiveProfile(true);
+    bool c10 = 0;
+    bool u11 = false;
     if (profile) {
         if (profile->GetSongStatusMgr()->HasSongStatus(songID)) {
             const SongStatus &status = profile->GetSongStatusMgr()->GetSongStatus(songID);
@@ -118,7 +118,8 @@ void HamStarsDisplay::SetSongImpl(int songID, Difficulty diff, StarDisplayMode m
                 mDiffLabel->SetShowing(false);
             }
             mStarsLabel->SetShowing(true);
-            mStarsLabel->SetTextToken(GetStarsToken(0));
+            auto _tmp6 = GetStarsToken(0);
+            mStarsLabel->SetTextToken(_tmp6);
         } else {
             mDiffLabel->SetShowing(false);
             mStarsLabel->SetShowing(false);

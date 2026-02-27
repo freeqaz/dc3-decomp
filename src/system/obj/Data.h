@@ -331,16 +331,13 @@ public:
      * @returns The resulting Symbol.
      */
     Symbol Sym(int i) const { return Node(i).Sym(this); }
-    Symbol Sym(int i) { return Node(i).Sym(this); }
 
     /** Get the literal Symbol at the given node index.
      * @param [in] i The node index.
      * @returns The resulting Symbol.
      */
     Symbol LiteralSym(int i) const { return Node(i).LiteralSym(this); }
-    Symbol LiteralSym(int i) { return Node(i).LiteralSym(this); }
     Symbol ForceSym(int i) const { return Node(i).ForceSym(this); }
-    Symbol ForceSym(int i) { return Node(i).ForceSym(this); }
 
     /** Get the string at the given node index.
      * @param [in] i The node index.
@@ -399,11 +396,6 @@ public:
     T *Obj(int i) const {
         return Node(i).Obj<T>(this);
     }
-    template <class T>
-    T *Obj(int i) {
-        return Node(i).Obj<T>(this);
-    }
-
     /** Increment this DataArray's reference count. */
     void AddRef() {
         mRefs++;

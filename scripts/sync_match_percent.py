@@ -12,6 +12,7 @@ Options:
     python3 scripts/sync_match_percent.py --build          # run ninja first
     python3 scripts/sync_match_percent.py --dry-run        # preview only
     python3 scripts/sync_match_percent.py --promote        # promote 100% -> COMPLETE
+    python3 scripts/sync_match_percent.py --promote-units  # promote 100% units to Matching
     python3 scripts/sync_match_percent.py --unit 'system/char/*'
     python3 scripts/sync_match_percent.py -v               # show every change
 """
@@ -27,6 +28,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_REPORT = REPO_ROOT / "build" / "373307D9" / "report.json"
 DEFAULT_DB = REPO_ROOT / "decomp.db"
+DEFAULT_OBJECTS = REPO_ROOT / "config" / "373307D9" / "objects.json"
 
 SDK_UNIT_PREFIXES = [
     "default/xdk/",
@@ -49,17 +51,21 @@ def parse_args() -> argparse.Namespace:
                    help="Promote newly 100%% functions to COMPLETE verdict")
     p.add_argument("--unit", type=str, default=None,
                    help="Only sync functions in units matching this glob")
+    p.add_argument("--promote-units", action="store_true",
+                   help="Promote done units (100%% in report OR all COMPLETE/AT_LIMIT in DB) to Matching in objects.json")
     p.add_argument("--verbose", "-v", action="store_true",
                    help="Show every update")
     return p.parse_args()
 
 
-def load_report(report_path: Path) -> dict[str, dict]:
-    """Load report.json and return {symbol: info} for all functions with match data."""
+def load_report(report_path: Path) -> tuple[dict[str, dict], set[str]]:
+    """Load report.json and return ({symbol: info}, {units_at_100%})."""
     with open(report_path) as f:
         data = json.load(f)
 
     functions: dict[str, dict] = {}
+    units_at_100: set[str] = set()
+
     for unit in data.get("units", []):
         unit_name = unit["name"]
 
@@ -67,7 +73,14 @@ def load_report(report_path: Path) -> dict[str, dict]:
         if any(unit_name.startswith(prefix) for prefix in SDK_UNIT_PREFIXES):
             continue
 
-        for fn in unit.get("functions", []):
+        fns = unit.get("functions", [])
+        unit_all_100 = bool(fns) and all(
+            f.get("fuzzy_match_percent", 0) == 100.0 for f in fns
+        )
+        if unit_all_100:
+            units_at_100.add(unit_name)
+
+        for fn in fns:
             pct = fn.get("fuzzy_match_percent")
             if pct is None:
                 continue
@@ -81,7 +94,90 @@ def load_report(report_path: Path) -> dict[str, dict]:
                 "demangled": demangled,
             }
 
-    return functions
+    return functions, units_at_100
+
+
+def find_complete_units(conn: sqlite3.Connection) -> set[str]:
+    """Find units where ALL functions are COMPLETE or AT_LIMIT in the DB."""
+    # Get all units that have at least one function
+    rows = conn.execute("""
+        SELECT unit,
+               COUNT(*) as total,
+               SUM(CASE WHEN verdict IN ('COMPLETE', 'AT_LIMIT') THEN 1 ELSE 0 END) as done
+        FROM functions
+        WHERE unit NOT LIKE 'default/xdk/%'
+        GROUP BY unit
+    """).fetchall()
+    return {r["unit"] for r in rows if r["total"] > 0 and r["total"] == r["done"]}
+
+
+def promote_units(
+    units_at_100: set[str],
+    db_complete_units: set[str],
+    dry_run: bool,
+    verbose: bool,
+) -> int:
+    """Promote NonMatching units to Matching in objects.json.
+
+    A unit is eligible if:
+    - All functions are 100% in report.json, OR
+    - All functions have COMPLETE/AT_LIMIT verdict in the DB
+    """
+    objects_path = DEFAULT_OBJECTS
+    if not objects_path.exists():
+        print(f"Warning: objects.json not found at {objects_path}", file=sys.stderr)
+        return 0
+
+    with open(objects_path) as f:
+        objects = json.load(f)
+
+    eligible = units_at_100 | db_complete_units
+
+    promoted = []
+    for section_name, section in objects.items():
+        for obj_name, status_val in section.get("objects", {}).items():
+            # Get current status
+            if isinstance(status_val, dict):
+                cur_status = status_val.get("status", "NonMatching")
+            else:
+                cur_status = status_val
+
+            if cur_status != "NonMatching":
+                continue
+
+            # Map object name to report unit name: strip extension, prepend default/
+            base = obj_name.rsplit(".", 1)[0]
+            report_unit = "default/" + base
+
+            if report_unit not in eligible:
+                continue
+
+            # Determine reason for promotion
+            in_report = report_unit in units_at_100
+            in_db = report_unit in db_complete_units
+            if in_report and in_db:
+                reason = "100% + all done in DB"
+            elif in_report:
+                reason = "100% in report"
+            else:
+                reason = "all COMPLETE/AT_LIMIT in DB"
+
+            # Promote
+            if isinstance(status_val, dict):
+                section["objects"][obj_name]["status"] = "Matching"
+            else:
+                section["objects"][obj_name] = "Matching"
+
+            promoted.append(f"{section_name}/{obj_name}")
+            if verbose:
+                print(f"  PROMOTE {section_name}/{obj_name} -> Matching ({reason})")
+
+    if promoted and not dry_run:
+        with open(objects_path, "w") as f:
+            json.dump(objects, f, indent=4)
+            f.write("\n")
+
+    return len(promoted)
 
 
 def sync(args: argparse.Namespace) -> None:
@@ -109,8 +205,9 @@ def sync(args: argparse.Namespace) -> None:
 
     # Load report
     print(f"Loading report: {args.report}")
-    report_funcs = load_report(args.report)
+    report_funcs, units_at_100 = load_report(args.report)
     print(f"  {len(report_funcs)} functions with match data (excluding SDK)")
+    print(f"  {len(units_at_100)} units at 100%")
 
     # Connect to DB
     conn = sqlite3.connect(str(args.db))
@@ -249,6 +346,18 @@ def sync(args: argparse.Namespace) -> None:
         print(f"  Promoted:         {stats['promoted']} (-> COMPLETE)")
     print(f"  Not in DB:        {stats['not_in_db']}")
     print(f"  Not in report:    {stats['not_in_report']}")
+
+    # Promote units in objects.json
+    if args.promote_units:
+        db_complete_units = find_complete_units(conn)
+        print(f"\n--- Unit Promotion ---")
+        print(f"  Units at 100%% in report:       {len(units_at_100)}")
+        print(f"  Units all done in DB:           {len(db_complete_units)}")
+        print(f"  Combined eligible:              {len(units_at_100 | db_complete_units)}")
+        num_promoted = promote_units(
+            units_at_100, db_complete_units, args.dry_run, args.verbose,
+        )
+        print(f"  Units promoted:                 {num_promoted} (-> Matching in objects.json)")
 
 
 if __name__ == "__main__":
