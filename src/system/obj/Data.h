@@ -300,78 +300,96 @@ public:
     int RefCount() const { return mRefs; }
 
     int UncheckedInt(int i) const { return Node(i).UncheckedInt(); }
+    int UncheckedInt(int i) { return Node(i).UncheckedInt(); }
     Hmx::Object *UncheckedObj(int i) const { return Node(i).UncheckedObj(); }
+    Hmx::Object *UncheckedObj(int i) { return Node(i).UncheckedObj(); }
     DataNode *UncheckedVar(int i) const { return Node(i).UncheckedVar(); }
+    DataNode *UncheckedVar(int i) { return Node(i).UncheckedVar(); }
     DataArray *UncheckedArray(int i) const { return Node(i).UncheckedArray(); }
+    DataArray *UncheckedArray(int i) { return Node(i).UncheckedArray(); }
     DataFunc *UncheckedFunc(int i) const { return Node(i).UncheckedFunc(); }
+    DataFunc *UncheckedFunc(int i) { return Node(i).UncheckedFunc(); }
     const char *UncheckedStr(int i) const { return Node(i).UncheckedStr(); }
+    const char *UncheckedStr(int i) { return Node(i).UncheckedStr(); }
 
     /** Get the DataType at the given node index.
      * @param [in] i The node index.
      * @returns The resulting DataType.
      */
     DataType Type(int i) const { return Node(i).Type(); }
+    DataType Type(int i) { return Node(i).Type(); }
 
     /** Get the int at the given node index.
      * @param [in] i The node index.
      * @returns The resulting int.
      */
     int Int(int i) const { return Node(i).Int(this); }
+    int Int(int i) { return Node(i).Int(this); }
 
     /** Get the Symbol at the given node index.
      * @param [in] i The node index.
      * @returns The resulting Symbol.
      */
     Symbol Sym(int i) const { return Node(i).Sym(this); }
+    Symbol Sym(int i) { return Node(i).Sym(this); }
 
     /** Get the literal Symbol at the given node index.
      * @param [in] i The node index.
      * @returns The resulting Symbol.
      */
     Symbol LiteralSym(int i) const { return Node(i).LiteralSym(this); }
+    Symbol LiteralSym(int i) { return Node(i).LiteralSym(this); }
     Symbol ForceSym(int i) const { return Node(i).ForceSym(this); }
+    Symbol ForceSym(int i) { return Node(i).ForceSym(this); }
 
     /** Get the string at the given node index.
      * @param [in] i The node index.
      * @returns The resulting string.
      */
     const char *Str(int i) const { return Node(i).Str(this); }
+    const char *Str(int i) { return Node(i).Str(this); }
 
     /** Get the literal string at the given node index.
      * @param [in] i The node index.
      * @returns The resulting string.
      */
     const char *LiteralStr(int i) const { return Node(i).LiteralStr(this); }
+    const char *LiteralStr(int i) { return Node(i).LiteralStr(this); }
 
     /** Get the float at the given node index.
      * @param [in] i The node index.
      * @returns The resulting float.
      */
     float Float(int i) const { return Node(i).Float(this); }
+    float Float(int i) { return Node(i).Float(this); }
 
     /** Get the Hmx::Object at the given node index.
      * @param [in] i The node index.
      * @returns The resulting Hmx::Object.
      */
     Hmx::Object *GetObj(int i) const { return Node(i).GetObj(this); }
+    Hmx::Object *GetObj(int i) { return Node(i).GetObj(this); }
 
     /** Get the DataArray at the given node index.
      * @param [in] i The node index.
      * @returns The resulting DataArray.
      */
     DataArray *Array(int i) const { return Node(i).Array(this); }
+    DataArray *Array(int i) { return Node(i).Array(this); }
 
     /** Get the command DataArray at the given node index.
      * @param [in] i The node index.
      * @returns The resulting command DataArray.
      */
     DataArray *Command(int i) const { return Node(i).Command(this); }
+    DataArray *Command(int i) { return Node(i).Command(this); }
 
     /** Get the var DataNode at the given node index.
      * @param [in] i The node index.
      * @returns The resulting var DataNode.
      */
     DataNode *Var(int i) const { return Node(i).Var(this); }
+    DataNode *Var(int i) { return Node(i).Var(this); }
 
     /** Get the Hmx::Object derivative at the given node index.
      * @param [in] i The node index.
@@ -379,6 +397,10 @@ public:
      */
     template <class T>
     T *Obj(int i) const {
+        return Node(i).Obj<T>(this);
+    }
+    template <class T>
+    T *Obj(int i) {
         return Node(i).Obj<T>(this);
     }
 
@@ -529,6 +551,7 @@ public:
     DataNode
     ExecuteScript(int firstCmd, Hmx::Object *_this, const DataArray *_args, int firstArg);
     const DataNode &Evaluate(int i) const { return Node(i).Evaluate(); }
+    const DataNode &Evaluate(int i) { return Node(i).Evaluate(); }
 
     POOL_OVERLOAD(DataArray, 0xd2);
 };

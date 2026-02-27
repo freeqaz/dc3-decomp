@@ -1,6 +1,7 @@
 # Actionable Function Targets
 
-Prioritized list of functions with known fixes. Updated after struct/header investigation.
+Prioritized list of functions with known fixes. Updated after DataArray non-const
+overload full rebuild.
 
 **Last Updated:** 2026-02-27
 
@@ -8,14 +9,46 @@ Prioritized list of functions with known fixes. Updated after struct/header inve
 
 ## Current State
 
-- **29,927 COMPLETE** (92.6%), **1,674 AT_LIMIT** (5.2%), **727 remaining** (2.2%)
+- **31,387 COMPLETE** (97.1%), **834 AT_LIMIT** (2.6%), **107 remaining** (0.3%)
+- DataArray non-const overload change pushed **+1,458 functions to COMPLETE**
+- Only **107 workable functions** remain across the entire project
 - Struct/header layouts verified correct across all investigated classes
-- Remaining work is primarily **code logic bugs**, register allocation, and build artifacts
-- ~180 functions have fixable code logic bugs; ~400 are effectively at-limit
 
 ---
 
 ## Tier 0: Highest-Leverage Patterns
+
+### DataArray Accessor Non-const Overloads (APPLIED — hundreds of functions, +1-17 mismatches each)
+
+**Status: APPLIED + REBUILT. Full project-wide impact measured.**
+
+DataArray accessor methods (`Int`, `Sym`, `Float`, `Str`, `Array`, `Command`, `Var`,
+`GetObj`, `Type`, `Evaluate`, etc.) were all declared `const` only, dispatching to
+`Node(int) const` (mangled QBA). The original binary calls non-const `Node(int)` (QAA)
+when accessed through non-const `DataArray*` pointers (~98% of ~3,166 call sites).
+
+**Fix applied**: Added non-const overloads of all 20 accessor methods in `Data.h`.
+Also changed `BEGIN_HANDLERS` and `BEGIN_CUSTOM_HANDLERS` macros in `Object.h` to use
+`CONST_ARRAY(_msg)->Sym(1)` for the initial dispatch (matching the original binary's
+const path for the first Sym lookup).
+
+**Verified results** (A/B tested against clean baseline):
+
+| Function | Before | After | Mismatches Fixed |
+|----------|--------|-------|-----------------|
+| RndLine::Handle | 98.1% | 98.3% | -17 |
+| Sound::Handle | 95.9% | 96.0% | -3 |
+| FlowCommand::Activate | 97.7% | 97.7% | -1 |
+| Flow::Save | 98.3% | 98.3% | -2 |
+| ByteGrinder::op4 | 99.7% | **100.0%** | -2 (perfect match) |
+
+Zero regressions on all tested functions. The `CONST_ARRAY`/`UNCONST_ARRAY` macros
+(already at Data.h line 567-568) exist precisely for this purpose — the original codebase
+had both overloads and used explicit casts to select the desired path.
+
+**Full rebuild impact**: +1,458 functions to COMPLETE (29,929 → 31,387), 812 AT_LIMIT
+functions promoted to COMPLETE (single-instruction `bl` target fixes), remaining workable
+functions reduced from 753 → 107. Fuzzy match: 45.28% → 45.40%.
 
 ### FlowPtr Copy Semantics (5-7 functions, +20-40pp each)
 
@@ -87,27 +120,28 @@ symbol relocation noise as secondary issues but may be improvable with targeted 
 
 ---
 
-## Tier 3: Units with Remaining Work
+## Tier 3: Remaining 107 Workable Functions
 
-These units have the most remaining workable functions. See `docs/plans/NEXT_STEPS.md`
-Phase 3 for detailed analysis of each.
+After the DataArray overload rebuild, only 107 functions remain workable. These are
+scattered across many units (no single unit has more than 3). Top remaining units:
 
 | Unit | Remaining | Range | Notes |
 |------|-----------|-------|-------|
-| system/meta/StorePanel | 9 | untriaged | Needs investigation |
-| system/rndobj/HiResScreen | 8 | untriaged | Needs investigation |
-| system/rnddx9/Rnd_Xbox | 7 | untriaged | Likely platform-specific |
-| system/char/CharClip | 7 | 64-97% | `__FILE__` stack sizing + regswaps, struct verified correct |
-| system/utl/MemTracker | 6 | varies | Memory subsystem |
-| system/utl/Cheats | 6 | varies | Needs investigation |
-| system/ui/UILabel | 6 | 67-94% | Register allocation, code structure |
-| system/ui/UIFontImporter | 6 | 56-95% | Code logic |
-| system/ui/UI | 6 | varies | Needs investigation |
-| system/rndobj/Text | 6 | 57-94% | Code logic (FontMap::Page struct verified correct) |
-| system/hamobj/HamDirector | 6 | 69-97% | Code bugs (see Tier 1), struct verified correct |
-| system/hamobj/HamCamShot | 6 | varies | Needs investigation |
-| system/char/CharLipSync | 6 | 87-97% | Inner class logic (Generator, PlayBack) |
-| lazer/meta_ham/MetaPerformer | 6 | varies | Needs investigation |
+| lazer/meta_ham/HamSongMgr | 3 | 97-97% | Regswap-dominated |
+| system/utl/NetCacheMgr | 2 | 94-95% | Regswap |
+| system/rndobj/Shockwave | 2 | 96-97% | Mixed |
+| system/rndobj/LitAnim | 2 | 94% | Regswap |
+| system/os/ContentMgr_Xbox | 2 | 75-79% | Platform-specific |
+| system/moviebink/BinkMovieSys | 2 | 83-90% | Structural |
+| system/moviebink/BinkMovieImpl | 2 | 59-87% | Mixed |
+| system/hamobj/HamCamShot | 2 | 94-95% | Mixed |
+| system/gesture/StubCameraInput | 2 | 74-88% | Structural |
+| lazer/meta_ham/ProfileMgr | 2 | 85-89% | Regswap/structural |
+| lazer/meta_ham/OptionsPanel | 2 | 76-86% | Mixed |
+| lazer/meta_ham/MultiUserGesturePanel | 2 | 79-92% | Structural |
+
+Most remaining functions are dominated by register allocation differences (regswaps)
+and structural issues. The median match is ~87%, with a long tail down to ~52%.
 
 ---
 
@@ -126,7 +160,7 @@ These were suspected struct/header problems but confirmed correct by deep analys
 
 ---
 
-## Root Cause Distribution (727 remaining functions)
+## Root Cause Distribution (107 remaining functions)
 
 From a 25-function stratified sample:
 
@@ -147,12 +181,10 @@ were already moved to AT_LIMIT status.
 
 ## Recommended Execution Order
 
-1. **FlowPtr copy pattern** — one fix pattern, 5-7 functions, highest leverage
-2. **FlowSetProperty rewrite** — 3 functions with specific known fixes
-3. **HamDirector code bugs** — 4 functions with identified fixes
-4. **FlowCommand::Load null guards** — small targeted fix
-5. **Unit-by-unit sweeps** — push remaining units toward completion
-6. **Bulk AT_LIMIT triage** — report ~400 effectively-unfixable functions
+1. **Individual function fixes** — 107 remaining functions, work through by match% descending
+2. **Regswap attempts** — functions tagged `has_fixable_regswap_plus`, try 3-4 declaration reorderings
+3. **Structural fixes** — functions tagged `has_fixable_structural`, investigate control flow
+4. **Bulk AT_LIMIT triage** — report remaining ~834 effectively-unfixable functions
 
 ---
 

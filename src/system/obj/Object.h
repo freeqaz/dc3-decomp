@@ -576,7 +576,7 @@ extern DataArray *SystemConfig(Symbol, Symbol, Symbol);
 // BEGIN HANDLE MACROS -------------------------------------------------------------------
 #define BEGIN_HANDLERS(objType)                                                          \
     DataNode objType::Handle(DataArray *_msg, bool _warn) {                              \
-        Symbol sym = _msg->Sym(1);                                                       \
+        Symbol sym = CONST_ARRAY(_msg)->Sym(1);                                          \
         MessageTimer timer(                                                              \
             (MessageTimer::Active()) ? static_cast<Hmx::Object *>(this) : 0, sym         \
         );
@@ -584,7 +584,7 @@ extern DataArray *SystemConfig(Symbol, Symbol, Symbol);
 // for handlers of objects that aren't directly Hmx::Objects (i.e. UIListProvider)
 #define BEGIN_CUSTOM_HANDLERS(objType)                                                   \
     DataNode objType::Handle(DataArray *_msg, bool _warn) {                              \
-        Symbol sym = _msg->Sym(1);                                                       \
+        Symbol sym = CONST_ARRAY(_msg)->Sym(1);                                          \
         MessageTimer timer(                                                              \
             (MessageTimer::Active()) ? dynamic_cast<Hmx::Object *>(this) : 0, sym        \
         );
