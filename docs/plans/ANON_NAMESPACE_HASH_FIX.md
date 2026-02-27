@@ -147,6 +147,24 @@ Or integrate into the ninja build as a post-link step (if the linker consumes th
 
 The patcher eliminates these link errors for anonymous namespace symbols.
 
+### Build-Breaking Risk Assessment
+
+This fix is **build-critical for clean linking** and **not a decomp shortcut**:
+
+- Without hash alignment, link quality regresses (`LNK2001`/`LNK4006` churn from symbol identity drift).
+- With hash alignment, symbol names match original ownership so link resolution is stable.
+- The patcher performs equal-length string substitution on `?A0x<HASH>@@` names; it does not rewrite instructions or alter `.text` bytes.
+
+Conclusion: safe to keep enabled by default in the build pipeline. It improves symbol identity correctness rather than hiding codegen differences.
+
+### Validation Policy (Required for future edits)
+
+Any change to hash logic, wibo env plumbing, or patcher heuristics must include:
+
+1. `python3 scripts/obj_anon_ns_patcher.py --batch --verbose` before/after evidence
+2. link pass confirmation (0 unresolved errors, only expected duplicate warnings)
+3. at least one objdiff sample showing remaining diffs are still code/reloc reality, not hidden by tooling
+
 ### Current Numbers
 
 | Category | Count |

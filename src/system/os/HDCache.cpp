@@ -87,8 +87,7 @@ bool HDCache::WriteDone() {
                 if (++mDirtyCache == 1) {
                     mLastHdrWriteMs = SystemMs();
                 }
-                int idx = (mWriteBlock / 32) * 4;
-                mBlockState[mWriteFileIdx][idx] |= 1 << mWriteBlock;
+                mBlockState[mWriteFileIdx][mWriteBlock / 32] |= 1 << mWriteBlock;
             }
             mWriteBlock = -1;
         }
@@ -167,7 +166,8 @@ void HDCache::WriteHdr() {
         for (int i = 0; i < numArkfiles; i++) {
             int blockSize = 0;
             if (mBlockState[i]) {
-                int numBlocks = TheArchive->GetArkfileNumBlocks(i) + 0x1F;
+                int arkBlocks = TheArchive->GetArkfileNumBlocks(i);
+                int numBlocks = arkBlocks + 0x1F;
                 blockSize = (numBlocks / 32) * 4;
             }
             *mHdrBuf << blockSize;

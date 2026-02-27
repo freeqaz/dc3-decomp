@@ -37,7 +37,8 @@ char const *LoadingPanel::GetLoadingScreen(Symbol s) {
     DataArray *screenArray = SystemConfig("loading_screens");
     for (int i = 1; i < screenArray->Size(); i++) {
         DataArray *entry = screenArray->Array(i);
-        if (entry->Sym(0) == s) {
+        Symbol entrySym = entry->Sym(0);
+        if (entrySym == s) {
             return entry->Str(1);
         }
     }

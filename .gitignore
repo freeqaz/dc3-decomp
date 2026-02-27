@@ -10,6 +10,7 @@ venv/
 .claude/*
 !.claude/skills/
 function_analysis/
+scripts/bin/
 
 # Original files
 orig/*

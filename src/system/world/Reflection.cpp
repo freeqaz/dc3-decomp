@@ -121,33 +121,32 @@ void WorldReflection::DoLOD(int i) {
 
 void WorldReflection::DrawShowing() {
     START_AUTO_TIMER("world_reflect");
-    if (!mInDrawShowing) {
-        mInDrawShowing = true;
-        RndCam *cur2 = RndCam::Current();
-        mReflectionCamera->Copy(cur2, kCopyDeep);
-        Transform tf48(WorldXfm());
-        Transform tf78;
-        Invert(tf48, tf78);
-        Transform tfa8;
-        tfa8.Reset();
-        tfa8.m.z.z = -mVerticalStretch;
-        Multiply(tf78, tfa8, tfa8);
-        Multiply(tfa8, tf48, tfa8);
-        Multiply(cur2->WorldXfm(), tfa8, mReflectionCamera->DirtyLocalXfm());
-        mReflectionCamera->Select();
-        Rnd::DrawMode oldMode = TheRnd.GetDrawMode();
-        TheRnd.SetDrawMode((Rnd::DrawMode)8);
-        DoHide();
-        DoLOD(1);
-        FOREACH (it, mDraws) {
-            RndDrawable *cur = *it;
-            if (cur)
-                cur->Draw();
-        }
-        DoLOD(-1);
-        UnHide();
-        TheRnd.SetDrawMode(oldMode);
-        cur2->Select();
-        mInDrawShowing = false;
+    if (mInDrawShowing) return;
+    mInDrawShowing = true;
+    RndCam *cur2 = RndCam::Current();
+    mReflectionCamera->Copy(cur2, kCopyDeep);
+    Transform tf48(WorldXfm());
+    Transform tf78;
+    Invert(tf48, tf78);
+    Transform tfa8;
+    tfa8.Reset();
+    tfa8.m.z.z = -mVerticalStretch;
+    Multiply(tf78, tfa8, tfa8);
+    Multiply(tfa8, tf48, tfa8);
+    Multiply(cur2->WorldXfm(), tfa8, mReflectionCamera->DirtyLocalXfm());
+    mReflectionCamera->Select();
+    Rnd::DrawMode oldMode = TheRnd.GetDrawMode();
+    TheRnd.SetDrawMode((Rnd::DrawMode)8);
+    DoHide();
+    DoLOD(1);
+    FOREACH (it, mDraws) {
+        RndDrawable *cur = *it;
+        if (cur)
+            cur->Draw();
     }
+    DoLOD(-1);
+    UnHide();
+    TheRnd.SetDrawMode(oldMode);
+    cur2->Select();
+    mInDrawShowing = false;
 }

@@ -383,10 +383,12 @@ int UIFontImporter::GetMatVariationIdx(Symbol s) const {
 
 RndFontBase *UIFontImporter::GetGennedFont(Symbol s) const {
     if (s.Null()) {
-        void *p = reinterpret_cast<void *>(
+        void *node = *reinterpret_cast<void * const *>(
             reinterpret_cast<char *>(const_cast<UIFontImporter *>(this)) + 0x9c
         );
-        return *reinterpret_cast<RndFontBase * const *>(p);
+        return *reinterpret_cast<RndFontBase * const *>(
+            reinterpret_cast<char *>(node) + 0xc
+        );
     }
     int idx = GetMatVariationIdx(s);
     if (idx == -1) {
@@ -402,7 +404,7 @@ RndFontBase *UIFontImporter::GetGennedFont(Symbol s) const {
         reinterpret_cast<char *>(const_cast<UIFontImporter *>(this)) + 0xc4
     );
     void *ptr = *reinterpret_cast<void * const *>(pPtr);
-    for (; idx; idx--) {
+    for (; (unsigned)idx; idx--) {
         ptr = *reinterpret_cast<void * const *>(
             reinterpret_cast<char *>(ptr) + 0x14
         );

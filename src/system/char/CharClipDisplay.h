@@ -33,22 +33,7 @@ public:
     float mDrawPosY;
     float unk1c;
     float unk20;
-    char *mClipNameBuffer;
-    int unk28;
-    int unk2c;
-    int unk30;
-    int unk34;
-    int unk38;
-    int unk3c;
-    int unk40;
-    int unk44;
-    int unk48;
-    int unk4c;
-    int unk50;
-    int unk54;
-    int unk58;
-    int unk5c;
-    int unk60;
+    char mClipNameBuffer[64];
     float mPadding;
 
 protected:

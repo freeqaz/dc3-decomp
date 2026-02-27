@@ -928,8 +928,9 @@ DataNode HamDirector::OnLoadSong(DataArray *a) {
         else
             speed = "fast";
         mSongSpeed = speed;
-        auto _tmp1 = FileGetBase(str.c_str());
-        TheGameData->SetSong(_tmp1);
+        auto _tmp1 = str.c_str();
+        auto _tmp_base = FileGetBase(_tmp1);
+        TheGameData->SetSong(_tmp_base);
         mMerger->Select("song", str.c_str(), true);
         if (i4) {
             mMerger->StartLoad(b5);
@@ -1421,35 +1422,57 @@ void HamDirector::EnableFacialAnimation() {
 }
 
 Symbol HamDirector::ClosestMove() {
-    Symbol out = mPrevMove;
     char buf[256];
     Difficulty playerDiff = TheGameData->Player(0)->GetDifficulty();
+    Symbol out = mPrevMove;
     if (playerDiff != kDifficultyExpert) {
-        if (mSongAnims[playerDiff]) {
+        RndPropAnim *anim = mSongAnims[playerDiff];
+        if (anim) {
             SymbolKeys *keys =
                 dynamic_cast<SymbolKeys *>(GetPropKeys(playerDiff, "move"));
             if (keys) {
-                Key<Symbol> *nearest =
-                    keys->KeyNearest(mSongAnims[playerDiff]->GetFrame());
+                Key<Symbol> *nearest = keys->KeyNearest(anim->GetFrame());
                 if (nearest) {
                     strcpy(buf, nearest->value.Str());
-                    char *chr = strchr(buf, 0x2E);
-                    if (chr)
-                        *chr = '\0';
+                    char *dot = strchr(buf, '.');
+                    if (dot)
+                        *dot = '\0';
                     DataNode list = PracticeList(kDifficultyExpert);
                     DataArray *listArr = list.Array();
-                    int i17 = -1;
+                    int maxScore = -1;
                     for (int i = 0; i < listArr->Size(); i++) {
-                        const char *str = listArr->Str(i);
-                        int numlower = 0;
-                        if (*str) {
-                            char *p = (char *)str;
-                            while (p[buf - str]) {
-                                auto _tmp5 = tolower(*p);
-                                if (tolower(p[buf - str]) != _tmp5)
+                        const char *candidate = listArr->Str(i);
+                        int matchCount = 0;
+                        if (*candidate != '\0') {
+                            const char *p = candidate;
+                            while (buf[p - candidate] != '\0') {
+                                if (tolower(*p) != tolower(buf[p - candidate]))
                                     break;
-                                numlower++;
+                                p++;
+                                matchCount++;
+                                if (*p == '\0')
+                                    break;
                             }
+                        }
+
+                        const char *q = &buf[matchCount];
+                        while (*q != '\0')
+                            q++;
+                        int bufRem = q - &buf[matchCount];
+
+                        const char *r = &candidate[matchCount];
+                        while (*r != '\0')
+                            r++;
+                        int candRem = r - &candidate[matchCount];
+
+                        int penalty = candRem;
+                        if (penalty < bufRem)
+                            penalty = bufRem;
+
+                        int score = matchCount - penalty;
+                        if (score > maxScore) {
+                            maxScore = score;
+                            out = candidate;
                         }
                     }
                 }
@@ -1758,10 +1781,10 @@ void HamDirector::PoseIconMan(
         clip1->StuffBones(meshes);
         meshes.Zero();
         if (clip2) {
-            clip1->ScaleAdd(meshes, 1 - f6, f2, 0);
+            clip1->ScaleAdd(meshes, 1.0f - f6, f2, 0);
             clip2->ScaleAdd(meshes, f6, f5, 0);
         } else {
-            clip1->ScaleAdd(meshes, 1, f2, 0);
+            clip1->ScaleAdd(meshes, 1.0f, f2, 0);
         }
         meshes.PoseMeshes();
         if (b4) {

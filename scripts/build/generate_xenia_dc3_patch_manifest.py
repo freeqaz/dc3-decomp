@@ -89,9 +89,12 @@ ADDRESS_CATALOG = {
     "object_factories_map":      "?sFactories@Object@Hmx@@0V?$map@VSymbol@@P6APAVObject@Hmx@@XZU?$less@VSymbol@@@stlpmtx_std@@V?$StlNodeAlloc@U?$pair@$$CBVSymbol@@P6APAVObject@Hmx@@XZ@stlpmtx_std@@@5@@stlpmtx_std@@A",
     "register_factory":          "?RegisterFactory@Object@Hmx@@SAXVSymbol@@P6APAV12@XZ@Z",
     "new_object":                "?NewObject@Object@Hmx@@SAPAV12@VSymbol@@@Z",
+    "object_set_name":           "?SetName@Object@Hmx@@UAAXPBDPAVObjectDir@@@Z",
+    "load_meta_materials":       "?LoadMetaMaterials@RndMat@@KAPAVObjectDir@@XZ",
     "rndmat_static_name_sym":    "?name@?1??StaticClassName@RndMat@@SA?AVSymbol@@XZ@4V3@A",
     "metamaterial_static_name_sym": "?name@?1??StaticClassName@MetaMaterial@@SA?AVSymbol@@XZ@4V3@A",
     "g_system_config":           "?gSystemConfig@@3PAVDataArray@@A",
+    "read_system_config":        "?ReadSystemConfig@@YAPAVDataArray@@PBD@Z",
     "g_string_table_global":     "?gStringTable@@3PAVStringTable@@A",
     "g_chunk_alloc":             "?gChunkAlloc@@3PAVChunkAllocator@@A",
     # Memory / allocator
@@ -127,8 +130,9 @@ ADDRESS_CATALOG = {
     "protocol_debug_string":     "?ProtocolDebugString@Holmes@@YAPBDE@Z",
     # Wind
     "set_wind":                  "?SetWind@@YAXHHMMM@Z",
-    # gConditional sentinel
-    "g_conditional_ctor":        "??__EgConditional@@YAXXZ",
+    # gConditional / gDataArrayConditional ctor (BSS addr extracted from PPC)
+    "g_conditional_ctor":                "??__EgConditional@@YAXXZ",
+    "g_data_array_conditional_ctor":     "??__EgDataArrayConditional@@YAXXZ",
     # FileIsLocal
     "file_is_local":             "?FileIsLocal@@YA_NPBD@Z",
     # File system globals
@@ -137,6 +141,16 @@ ADDRESS_CATALOG = {
     "file_init":                 "FileInit",
     "archive_init":              "?ArchiveInit@@YAXXZ",
     "the_archive":               "?TheArchive@@3PAVArchive@@A",
+    # Data section globals
+    "g_null_str":                "?gNullStr@@3PBDB",
+    "g_num_heaps":               "?gNumHeaps@@3HA",
+    # STL container globals (BSS, sentinels init'd from host)
+    "the_load_mgr":              "?TheLoadMgr@@3VLoadMgr@@A",
+    "auto_timer_stmrs":          "?sTimers@AutoTimer@@0V?$list@U?$pair@VTimer@@VTimerStats@@@stlpmtx_std@@V?$StlNodeAlloc@U?$pair@VTimer@@VTimerStats@@@stlpmtx_std@@@2@@stlpmtx_std@@A",
+    "rnd_overlay_soverlays":     "?sOverlays@RndOverlay@@0V?$list@PAVRndOverlay@@V?$StlNodeAlloc@PAVRndOverlay@@@stlpmtx_std@@@stlpmtx_std@@A",
+    "synth_pollable_spollables": "?sPollables@SynthPollable@@0V?$list@PAVSynthPollable@@V?$StlNodeAlloc@PAVSynthPollable@@@stlpmtx_std@@@stlpmtx_std@@A",
+    "midi_parser_sparsers":      "?sParsers@MidiParser@@0V?$list@PAVMidiParser@@V?$StlNodeAlloc@PAVMidiParser@@@stlpmtx_std@@@stlpmtx_std@@A",
+    "rnd_multi_mesh_sproxy":     "?sProxyPool@RndMultiMesh@@1V?$list@U?$pair@PAVRndMultiMeshProxy@@H@stlpmtx_std@@V?$StlNodeAlloc@U?$pair@PAVRndMultiMeshProxy@@H@stlpmtx_std@@@2@@stlpmtx_std@@A",
     "system_pre_init_1":         "?SystemPreInit@@YAXPBD@Z",
     "system_pre_init_2":         "?SystemPreInit@@YAXPBD0@Z",
     # RndTransformable

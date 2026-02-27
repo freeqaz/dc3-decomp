@@ -470,6 +470,7 @@ def generate_build_ninja(
 
     build_path = config.out_path()
     report_path = build_path / "report.json"
+    raw_report_path = build_path / "report_raw.json"
     build_tools_path = config.build_dir / "tools"
     download_tool = config.tools_dir / "download_tool.py"
     n.rule(
@@ -1371,6 +1372,7 @@ def generate_build_ninja(
                 configure_script,
                 python_lib,
                 report_path,
+                raw_report_path,
             ],
             order_only="post-build",
         )
@@ -1384,9 +1386,20 @@ def generate_build_ninja(
             command=f"{objdiff} report generate $objdiff_report_args -o $out",
             description="REPORT",
         )
+        n.rule(
+            name="report_raw",
+            command=f"{objdiff} report generate $objdiff_report_args -c functionRelocDiffs=name_address -o $out",
+            description="REPORT RAW",
+        )
         n.build(
             outputs=report_path,
             rule="report",
+            implicit=[objdiff, "objdiff.json", "all_source"],
+            order_only="post-build",
+        )
+        n.build(
+            outputs=raw_report_path,
+            rule="report_raw",
             implicit=[objdiff, "objdiff.json", "all_source"],
             order_only="post-build",
         )
@@ -2049,12 +2062,18 @@ def calculate_progress(config: ProjectConfig) -> None:
     config.validate()
     out_path = config.out_path()
     report_path = out_path / "report.json"
+    raw_report_path = out_path / "report_raw.json"
     if not report_path.is_file():
         sys.exit(f"Report file {report_path} does not exist")
+    if not raw_report_path.is_file():
+        sys.exit(f"Raw report file {raw_report_path} does not exist")
 
     report_data: Dict[str, Any] = {}
     with open(report_path, "r", encoding="utf-8") as f:
         report_data = json.load(f)
+    raw_report_data: Dict[str, Any] = {}
+    with open(raw_report_path, "r", encoding="utf-8") as f:
+        raw_report_data = json.load(f)
 
     # Convert string numbers (u64) to int
     def convert_numbers(data: Dict[str, Any]) -> None:
@@ -2063,8 +2082,13 @@ def calculate_progress(config: ProjectConfig) -> None:
                 data[key] = int(value)
 
     convert_numbers(report_data["measures"])
+    convert_numbers(raw_report_data["measures"])
     for category in report_data.get("categories", []):
         convert_numbers(category["measures"])
+    for category in raw_report_data.get("categories", []):
+        convert_numbers(category["measures"])
+
+    raw_category_by_id = {c["id"]: c for c in raw_report_data.get("categories", [])}
 
     # Output to GitHub Actions job summary, if available
     summary_path = os.getenv("GITHUB_STEP_SUMMARY")
@@ -2081,7 +2105,7 @@ def calculate_progress(config: ProjectConfig) -> None:
     # Print human-readable progress
     progress_print("Progress:")
 
-    def print_category(name: str, measures: Dict[str, Any]) -> None:
+    def print_category(name: str, measures: Dict[str, Any], raw_measures: Dict[str, Any]) -> None:
         total_code = measures.get("total_code", 0)
         matched_code = measures.get("matched_code", 0)
         matched_code_percent = measures.get("matched_code_percent", 0)
@@ -2093,9 +2117,14 @@ def calculate_progress(config: ProjectConfig) -> None:
         complete_code_percent = measures.get("complete_code_percent", 0)
         total_units = measures.get("total_units", 0)
         complete_units = measures.get("complete_units", 0)
+        fuzzy_match_percent = measures.get("fuzzy_match_percent", 0)
+        raw_fuzzy_match_percent = raw_measures.get("fuzzy_match_percent", 0)
 
         progress_print(
             f"  {name}: {matched_code_percent:.2f}% matched, {complete_code_percent:.2f}% linked ({complete_units} / {total_units} files)"
+        )
+        progress_print(
+            f"    Fuzzy: {fuzzy_match_percent:.2f}% normalized (default), {raw_fuzzy_match_percent:.2f}% raw"
         )
         progress_print(
             f"    Code: {matched_code} / {total_code} bytes ({matched_functions} / {total_functions} functions)"
@@ -2104,13 +2133,14 @@ def calculate_progress(config: ProjectConfig) -> None:
             f"    Data: {matched_data} / {total_data} bytes ({matched_data_percent:.2f}%)"
         )
 
-    print_category("All", report_data["measures"])
+    print_category("All", report_data["measures"], raw_report_data["measures"])
     for category in report_data.get("categories", []):
         if config.print_progress_categories is True or (
             isinstance(config.print_progress_categories, list)
             and category["id"] in config.print_progress_categories
         ):
-            print_category(category["name"], category["measures"])
+            raw_category = raw_category_by_id.get(category["id"], {})
+            print_category(category["name"], category["measures"], raw_category.get("measures", {}))
 
     if config.progress_use_fancy:
         measures = report_data["measures"]

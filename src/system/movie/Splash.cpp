@@ -142,6 +142,7 @@ void Splash::EndSplasher() {
             MILO_ASSERT(gSplashing, 0xa7);
             MILO_ASSERT(SetImmutableState(kTerminating), 0xa9);
             WaitForState(kTerminated);
+            TheNgRnd.Suspend();
             gSplashing = false;
         } else {
             // Non-threaded mode: manually process remaining screens
@@ -158,7 +159,6 @@ void Splash::EndSplasher() {
             delete *it;
         }
         Movie::Validate();
-        MemFree(mThreadStack, __FILE__, __LINE__, "");
     }
 }
 

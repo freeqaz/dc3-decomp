@@ -191,7 +191,7 @@ void BustAMovePanel::SetFlashcardText(int side, int index, Symbol s3) {
     HamLabel *label =
         mBAMColumns[side]->Find<HamLabel>(MakeString("flashcard_%d.lbl", index));
     label->SetTextToken(s3);
-    label = mBAMColumns[side == 0]->Find<HamLabel>(MakeString("flashcard_%d.lbl", index));
+    label = mBAMColumns[!side]->Find<HamLabel>(MakeString("flashcard_%d.lbl", index));
     if (mState == kBAMState_ShowMoveSequence
         || mState == kBAMState_ShowMoveSequenceSetup) {
         label->SetTextToken(s3);
@@ -232,20 +232,19 @@ void BustAMovePanel::ResetScores() {
 }
 
 void BustAMovePanel::SetFlashcardName(int side, int index, int i3) {
-    Symbol s(gNullStr);
+    Symbol nameSym(gNullStr);
     if (i3 >= 0) {
-        auto _tmp0 = GetMoveNameData(i3)->Sym(1);
-        s = _tmp0;
+        nameSym = GetMoveNameData(i3)->Sym(1);
     }
     HamLabel *label =
         mBAMColumns[side]->Find<HamLabel>(MakeString("flashcard_name_%d.lbl", index));
-    label->SetTextToken(s);
-    label = mBAMColumns[side == 0]->Find<HamLabel>(
+    label->SetTextToken(nameSym);
+    label = mBAMColumns[!side]->Find<HamLabel>(
         MakeString("flashcard_name_%d.lbl", index)
     );
     if (mState == kBAMState_ShowMoveSequence
         || mState == kBAMState_ShowMoveSequenceSetup) {
-        label->SetTextToken(s);
+        label->SetTextToken(nameSym);
     } else {
         label->SetTextToken(gNullStr);
     }
@@ -461,8 +460,8 @@ void BustAMovePanel::AnimateFlashcard(int index) {
 
     // Set flashcard_capture.lbl text
     HamLabel *capLabel = DataDir()->Find<HamLabel>("flashcard_capture.lbl", true);
-    auto _tmp3 = GetMoveNameData(index)->Sym(1);
-    capLabel->SetTextToken(_tmp3);
+    auto moveSym = GetMoveNameData(index)->Sym(1);
+    capLabel->SetTextToken(moveSym);
 
     // Set flashcard_slot mat and texture
     String slotMatName(MakeString("flashcard_slot%i.mat", index));
@@ -471,21 +470,22 @@ void BustAMovePanel::AnimateFlashcard(int index) {
     slotMat->SetDiffuseTex(slotTex);
 
     // Set flashcard_slot_background mat color
-    String slotBgName(MakeString("flashcard_slot_background%i.mat", index));
+    auto slotBg_str = MakeString("flashcard_slot_background%i.mat", index);
+    String slotBgName(slotBg_str);
     RndMat *slotBgMat = DataDir()->Find<RndMat>(slotBgName.c_str(), true);
     slotBgMat->SetColor(color.red, color.green, color.blue);
 
     // Set flashcard_slot label text
-    auto _tmp4 = MakeString("flashcard_slot%i.lbl", index);
-    String slotLblName(_tmp4);
+    auto slotLbl_str = MakeString("flashcard_slot%i.lbl", index);
+    String slotLblName(slotLbl_str);
     HamLabel *slotLabel = DataDir()->Find<HamLabel>(slotLblName.c_str(), true);
-    auto _tmp0 = GetMoveNameData(index)->Sym(1);
-    slotLabel->SetTextToken(_tmp0);
+    auto slotMoveSym = GetMoveNameData(index)->Sym(1);
+    slotLabel->SetTextToken(slotMoveSym);
 
     // Play capture animation
     RndPropAnim *captureAnim =
         DataDir()->Find<RndPropAnim>("capture_flashcard.anim", true);
-    captureAnim->Animate(0, false, 0, nullptr, kEaseLinear, 0, false);
+    captureAnim->Animate(0.0f, false, 0.0f, nullptr, kEaseLinear, 0.0f, false);
 }
 
 void BustAMovePanel::AdvanceFlashcards() {
@@ -500,14 +500,15 @@ void BustAMovePanel::AdvanceFlashcards() {
     int side = mCreatorSide;
 
     // Pop front of mFlashcardLabels (Symbol list)
-    if (mFlashcardLabels.begin() != mFlashcardLabels.end()) {
-        mFlashcardLabels.erase(mFlashcardLabels.begin());
+    if (!mFlashcardLabels.empty()) {
+        mFlashcardLabels.pop_front();
     }
 
     // Set flashcard text for 4 slots
+    std::list<Symbol>::iterator symEnd = mFlashcardLabels.end();
     std::list<Symbol>::iterator symIt = mFlashcardLabels.begin();
     for (int i = 0; i < 4; i++) {
-        if (symIt != mFlashcardLabels.end()) {
+        if (symIt != symEnd) {
             SetFlashcardText(side, i, *symIt);
             ++symIt;
         } else {
@@ -516,15 +517,16 @@ void BustAMovePanel::AdvanceFlashcards() {
     }
 
     // Pop front of mFlashcardSlots (int list)
-    if (mFlashcardSlots.begin() != mFlashcardSlots.end()) {
-        mFlashcardSlots.erase(mFlashcardSlots.begin());
+    if (!mFlashcardSlots.empty()) {
+        mFlashcardSlots.pop_front();
     }
 
     // Set flashcard image and name for 4 slots
+    std::list<int>::iterator intEnd = mFlashcardSlots.end();
     std::list<int>::iterator intIt = mFlashcardSlots.begin();
     for (int i = 0; i < 4; i++) {
         int val = -1;
-        if (mFlashcardSlots.end() != intIt) {
+        if (intIt != intEnd) {
             val = *intIt;
             ++intIt;
         }
@@ -1116,8 +1118,8 @@ void BustAMovePanel::OnBeat() {
         }
         if (mRepsRemaining != 2)
             break;
-        auto _tmp46 = Symbol("get_ready");
-        ShowGetReadyCard(_tmp46, (SkeletonSide)mCreatorSide);
+        Symbol readySym("get_ready");
+        ShowGetReadyCard(readySym, (SkeletonSide)mCreatorSide);
         break;
     }
     case kBAMState_FailureToBust:
@@ -1134,8 +1136,8 @@ void BustAMovePanel::OnBeat() {
                 PlayVO(Symbol(MakeString("nar_bam_gen_second_fail_%s", sideStr)));
             }
             // Round current beat to nearest integer, set 8-beat retry loop
-            auto _tmp49 = TheMaster->StreamMs();
-            float beat = MsToBeat(_tmp49);
+            float streamMs = TheMaster->StreamMs();
+            float beat = MsToBeat(streamMs);
             int beatInt;
             if (beat > 0.0f) {
                 beatInt = (int)(beat + 0.5f);
@@ -1407,8 +1409,8 @@ void BustAMovePanel::OnBeat() {
             float *scores = (float *)&mPlayerScoreLeft;
             do {
                 MoveRating rating = GetMoveRating(*scores);
-                auto _tmp0 = TheGameData->Player(player)->Side();
-                ShowMoveRating(rating, _tmp0);
+                int side = TheGameData->Player(player)->Side();
+                ShowMoveRating(rating, side);
                 if (rating != kMoveRatingSuperPerfect) {
                     if (player != mMoveCreators[mFlashcardSlots.front()]) {
                         ((bool *)&mFlawlessFlags)[player] = false;

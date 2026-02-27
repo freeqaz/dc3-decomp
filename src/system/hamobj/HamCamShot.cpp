@@ -418,11 +418,11 @@ HamCamShot::Target *HamCamShot::GetFlipTarget(Target *target) {
 }
 
 RndDrawable *HamCamShot::GetFlipCharacter(RndDrawable *draw) {
+    static Symbol backup1("backup1");
     static Symbol player0("player0");
     static Symbol player1("player1");
-    static Symbol backup0("backup0");
-    static Symbol backup1("backup1");
     Symbol name(draw->Name());
+    static Symbol backup0("backup0");
     if (!TheHamDirector) return draw;
     HamCharacter *c;
     if (name == player0) {
@@ -432,7 +432,8 @@ RndDrawable *HamCamShot::GetFlipCharacter(RndDrawable *draw) {
     } else if (name == backup0) {
         c = TheHamDirector->GetBackup(1);
     } else if (name == backup1) {
-        c = TheHamDirector->GetBackup(0);
+        auto _tmp4 = TheHamDirector->GetBackup(0);
+        c = _tmp4;
     } else {
         return draw;
     }

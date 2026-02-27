@@ -158,9 +158,9 @@ void Game::PostUpdate(const SkeletonUpdateData *data) {
                 static Symbol practice("practice");
                 static Symbol gameplay_mode("gameplay_mode");
                 if (TheGameMode->Property(gameplay_mode)->Sym() != practice) {
-                    mOvershell->Poll((const Skeleton *(&)[6])data->mSkeletonsRight);
+                    mOvershell->Poll(*(const Skeleton *const(*)[6])(data->mSkeletonsRight));
                 }
-                CheckForSkeletonLoss((const Skeleton *(&)[6])data->mSkeletonsRight);
+                CheckForSkeletonLoss(*(const Skeleton *const(*)[6])(data->mSkeletonsRight));
             }
         }
     }

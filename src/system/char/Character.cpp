@@ -519,7 +519,7 @@ void Character::CalcBoundingSphere() {
             Vector3 vClavicle = transLClavicle->WorldXfm().v;
             float fDist = Distance(vClavicle, transLHand->WorldXfm().v);
             vClavicle.z += fDist;
-            mBounding.GrowToContain(Sphere(vClavicle, 7.0f));
+            mBounding.GrowToContain(Sphere(vClavicle, fDist * 0.5f));
         }
     }
     RndTransformable *transRClavicle = CharUtlFindBoneTrans("bone_R-clavicle", this);
@@ -529,7 +529,7 @@ void Character::CalcBoundingSphere() {
             Vector3 vClavicle = transRClavicle->WorldXfm().v;
             float fDist = Distance(vClavicle, transRHand->WorldXfm().v);
             vClavicle.z += fDist;
-            mBounding.GrowToContain(Sphere(vClavicle, 7.0f));
+            mBounding.GrowToContain(Sphere(vClavicle, fDist * 0.5f));
         }
     }
     if (mBounding.GetRadius() == 0) {
