@@ -1,13 +1,19 @@
 #!/usr/bin/env python3
-"""Create data-stub .obj files from split .objs for Matching units.
+"""Create supplement-stub .obj files from split .objs for Matching units.
 
-When Config B links decomp .obj instead of split .obj for Matching units,
-cross-references from non-Matching split .objs to lbl_* data symbols break
-because the decomp .obj exports C++ names, not lbl_* names.
+When the build links decomp .obj instead of split .obj for Matching units,
+several categories of symbols are lost:
 
-This script creates "data-stub" .obj files that contain ONLY the data
-sections (.data, .rdata, .bss) from split .objs with their lbl_* symbols.
-These are linked alongside the decomp .obj to provide lbl_* exports.
+1. lbl_* data symbols (other split .objs reference these by address)
+2. C++ named globals (decomp .obj has `extern`, split .obj had the definition)
+3. COMDAT template instantiations (split .obj had them, decomp .obj may not)
+
+This script creates "supplement-stub" .obj files containing:
+- Data sections (.data, .rdata, .bss) with all their symbols
+- COMDAT code sections (.text$dup) with relocations and referenced symbols
+
+The main .text section (non-COMDAT code) is excluded to avoid address
+overlap with the decomp .obj's functions.
 
 Usage:
     python3 scripts/create_data_stubs.py [--dry-run] [--verbose] [--unit UNIT]
@@ -40,6 +46,9 @@ IMAGE_SYM_DEBUG = -2
 IMAGE_SYM_CLASS_EXTERNAL = 2
 IMAGE_SYM_CLASS_STATIC = 3
 
+# COFF relocation entry size
+RELOC_SIZE = 10
+
 
 def get_matching_units():
     """Get set of unit paths that are Matching."""
@@ -67,9 +76,9 @@ def find_split_obj(unit_name):
 
 
 def create_data_stub(split_obj_path, output_path, verbose=False):
-    """Read a COFF .obj and write a new one with only data sections.
+    """Read a COFF .obj and write a supplement stub with data + COMDAT code.
 
-    Returns: (num_data_sections, num_data_symbols) or None on error.
+    Returns: (num_kept_sections, num_kept_symbols) or None on error.
     """
     with open(split_obj_path, 'rb') as f:
         data = f.read()
@@ -95,6 +104,7 @@ def create_data_stub(split_obj_path, output_path, verbose=False):
         is_code = bool(chars & IMAGE_SCN_CNT_CODE)
         is_data = bool(chars & IMAGE_SCN_CNT_INITIALIZED_DATA)
         is_bss = bool(chars & IMAGE_SCN_CNT_UNINITIALIZED_DATA)
+        is_comdat = bool(chars & IMAGE_SCN_LNK_COMDAT)
 
         sections.append({
             'index': i,
@@ -109,8 +119,23 @@ def create_data_stub(split_obj_path, output_path, verbose=False):
             'is_code': is_code,
             'is_data': is_data,
             'is_bss': is_bss,
-            'keep': (is_data or is_bss) and not is_code,
+            'is_comdat': is_comdat,
+            # Keep: data/bss sections, AND COMDAT code sections
+            # Skip: main .text (non-COMDAT code), .pdata, .debug, .XBLD
+            'keep': False,  # set below
         })
+
+    # Determine which sections to keep
+    for s in sections:
+        name = s['name_bytes'].rstrip(b'\x00').decode('ascii', errors='replace')
+        if '.pdata' in name or '.debug' in name or '.XBLD' in name:
+            continue
+        if s['is_data'] or s['is_bss']:
+            s['keep'] = True
+        elif s['is_code'] and s['is_comdat']:
+            # COMDAT code section — keep it (SELECT_ANY, won't conflict with decomp)
+            s['keep'] = True
+        # Non-COMDAT code (.text main) is NOT kept
 
     # Read string table
     str_table_offset = sym_offset + num_symbols * 18
@@ -130,7 +155,7 @@ def create_data_stub(split_obj_path, output_path, verbose=False):
         strings[pos] = str_table_data[pos:end].decode('ascii', errors='replace')
         pos = end + 1
 
-    # Read symbols
+    # Read ALL symbols (need full table for relocation remapping)
     all_symbols = []
     i = 0
     while i < num_symbols:
@@ -173,33 +198,68 @@ def create_data_stub(split_obj_path, output_path, verbose=False):
 
         i += 1 + num_aux
 
-    # Determine which sections to keep (data only, non-COMDAT)
-    # Also skip .pdata, .debug sections
+    # Build section mapping
     kept_sections = []
     old_to_new_section = {}  # old 1-based index -> new 1-based index
     for s in sections:
-        name = s['name_bytes'].rstrip(b'\x00').decode('ascii', errors='replace')
-        if s['keep'] and '.pdata' not in name and '.debug' not in name and '.XBLD' not in name:
+        if s['keep']:
             old_to_new_section[s['index'] + 1] = len(kept_sections) + 1
             kept_sections.append(s)
 
     if not kept_sections:
         return None
 
-    # Filter symbols to only those in kept sections or section 0 (UNDEFINED)
-    kept_symbols = []
+    # Collect symbol indices referenced by relocations in kept COMDAT sections.
+    # These UNDEFINED symbols must be included so the linker can resolve them.
+    reloc_referenced_sym_indices = set()
+    for s in kept_sections:
+        if s['is_code'] and s['is_comdat'] and s['num_relocs'] > 0:
+            for r in range(s['num_relocs']):
+                rpos = s['reloc_offset'] + r * RELOC_SIZE
+                if rpos + RELOC_SIZE <= len(data):
+                    _va, sym_idx, _rtype = struct.unpack_from('<IIH', data, rpos)
+                    reloc_referenced_sym_indices.add(sym_idx)
+
+    # Build old_sym_index -> symbol lookup for relocation targets
+    sym_by_old_index = {}
     for sym in all_symbols:
+        sym_by_old_index[sym['original_index']] = sym
+        # Also map aux symbol indices (they occupy sequential slots)
+        for a in range(sym['num_aux']):
+            sym_by_old_index[sym['original_index'] + 1 + a] = None  # aux entries
+
+    # Determine which symbols to keep:
+    # 1. Symbols defined in kept sections
+    # 2. UNDEFINED symbols referenced by relocations in kept COMDAT code sections
+    kept_symbols = []
+    old_to_new_sym = {}  # old symbol index -> new symbol index
+    new_sym_idx = 0
+
+    for sym in all_symbols:
+        keep = False
         sec_num = sym['section_number']
+
         if sec_num in old_to_new_section:
-            kept_symbols.append(sym)
+            # Symbol defined in a kept section
+            keep = True
         elif sec_num == IMAGE_SYM_UNDEFINED and sym['value'] == 0:
-            # UNDEFINED symbol (external reference) - keep if it's a data reference
-            # Actually, skip UNDEFINED symbols - we only need definitions
-            pass
+            # UNDEFINED symbol — keep if referenced by a relocation
+            if sym['original_index'] in reloc_referenced_sym_indices:
+                keep = True
+
+        if keep:
+            old_to_new_sym[sym['original_index']] = new_sym_idx
+            kept_symbols.append(sym)
+            new_sym_idx += 1 + sym['num_aux']
+            # Map aux entries too
+            for a in range(sym['num_aux']):
+                old_to_new_sym[sym['original_index'] + 1 + a] = old_to_new_sym[sym['original_index']] + 1 + a
 
     if verbose:
-        print(f"  Sections: {num_sections} -> {len(kept_sections)} data sections")
-        print(f"  Symbols: {len(all_symbols)} -> {len(kept_symbols)} data symbols")
+        code_secs = sum(1 for s in kept_sections if s['is_code'])
+        data_secs = len(kept_sections) - code_secs
+        print(f"  Sections: {num_sections} -> {len(kept_sections)} ({data_secs} data, {code_secs} COMDAT code)")
+        print(f"  Symbols: {len(all_symbols)} -> {len(kept_symbols)}")
 
     # Build output COFF
     out = bytearray()
@@ -209,15 +269,26 @@ def create_data_stub(split_obj_path, output_path, verbose=False):
     section_headers_size = len(kept_sections) * 40
     total_header = header_size + section_headers_size
 
-    # Calculate section data offsets
+    # Calculate section data offsets (all data first, then all relocations)
     current_offset = total_header
-    section_offsets = []
+    section_data_offsets = []
+    section_reloc_offsets = []
+
+    # Pass 1: section data
     for s in kept_sections:
         if s['raw_size'] > 0 and not s['is_bss']:
-            section_offsets.append(current_offset)
+            section_data_offsets.append(current_offset)
             current_offset += s['raw_size']
         else:
-            section_offsets.append(0)
+            section_data_offsets.append(0)
+
+    # Pass 2: relocation data (after all section data)
+    for s in kept_sections:
+        if s['is_code'] and s['is_comdat'] and s['num_relocs'] > 0:
+            section_reloc_offsets.append(current_offset)
+            current_offset += s['num_relocs'] * RELOC_SIZE
+        else:
+            section_reloc_offsets.append(0)
 
     # Symbol table offset
     sym_table_offset = current_offset
@@ -243,7 +314,14 @@ def create_data_stub(split_obj_path, output_path, verbose=False):
     sym_entries = bytearray()
     num_out_symbols = 0
     for sym in kept_symbols:
-        new_sec_num = old_to_new_section[sym['section_number']]
+        sec_num = sym['section_number']
+        if sec_num in old_to_new_section:
+            new_sec_num = old_to_new_section[sec_num]
+        elif sec_num == IMAGE_SYM_UNDEFINED:
+            new_sec_num = IMAGE_SYM_UNDEFINED
+        else:
+            new_sec_num = sec_num  # absolute, debug, etc.
+
         name_field = get_name_bytes(sym['name'])
 
         sym_entries += name_field
@@ -257,7 +335,21 @@ def create_data_stub(split_obj_path, output_path, verbose=False):
         num_out_symbols += 1
 
         for aux in sym['aux_data']:
-            sym_entries += aux
+            # COMDAT aux records reference a section number — remap it
+            if sym['storage_class'] == IMAGE_SYM_CLASS_STATIC and sym['num_aux'] > 0:
+                # Section definition aux: bytes 0-3=length, 4-5=num_relocs,
+                # 6-7=num_linenums, 8-11=checksum, 12-13=number (COMDAT assoc section),
+                # 14=selection
+                aux_mut = bytearray(aux)
+                assoc_sec = struct.unpack_from('<H', aux_mut, 12)[0]
+                if assoc_sec in old_to_new_section:
+                    struct.pack_into('<H', aux_mut, 12, old_to_new_section[assoc_sec])
+                elif assoc_sec != 0:
+                    # Associated section was removed — zero it out
+                    struct.pack_into('<H', aux_mut, 12, 0)
+                sym_entries += bytes(aux_mut)
+            else:
+                sym_entries += aux
             num_out_symbols += 1
 
     # Update string table size
@@ -277,16 +369,21 @@ def create_data_stub(split_obj_path, output_path, verbose=False):
     # Write section headers
     for i, s in enumerate(kept_sections):
         out += s['name_bytes']
-        raw_off = section_offsets[i] if not s['is_bss'] else 0
+        raw_off = section_data_offsets[i] if not s['is_bss'] else 0
         raw_sz = s['raw_size'] if not s['is_bss'] else 0
+
+        # Relocations: include for COMDAT code sections
+        reloc_off = section_reloc_offsets[i]
+        num_relocs = s['num_relocs'] if reloc_off > 0 else 0
+
         out += struct.pack('<IIIIIIHHI',
             s['virtual_size'],
             s['virtual_addr'],
             raw_sz,
             raw_off,
-            0,  # reloc offset (no relocations in data stubs)
+            reloc_off,
             0,  # line number offset
-            0,  # num relocations
+            num_relocs,
             0,  # num line numbers
             s['chars'],
         )
@@ -296,6 +393,18 @@ def create_data_stub(split_obj_path, output_path, verbose=False):
         if s['raw_size'] > 0 and not s['is_bss']:
             section_data = data[s['raw_offset']:s['raw_offset'] + s['raw_size']]
             out += section_data
+
+    # Write relocations for COMDAT code sections (with remapped symbol indices)
+    for i, s in enumerate(kept_sections):
+        if section_reloc_offsets[i] > 0 and s['num_relocs'] > 0:
+            for r in range(s['num_relocs']):
+                rpos = s['reloc_offset'] + r * RELOC_SIZE
+                if rpos + RELOC_SIZE <= len(data):
+                    va, old_sym_idx, rtype = struct.unpack_from('<IIH', data, rpos)
+                    new_sym_idx_val = old_to_new_sym.get(old_sym_idx, 0)
+                    out += struct.pack('<IIH', va, new_sym_idx_val, rtype)
+                else:
+                    out += b'\x00' * RELOC_SIZE
 
     # Write symbol table
     out += sym_entries
@@ -312,7 +421,7 @@ def create_data_stub(split_obj_path, output_path, verbose=False):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Create data-stub .obj files from split .objs')
+    parser = argparse.ArgumentParser(description='Create supplement-stub .obj files from split .objs')
     parser.add_argument('--dry-run', action='store_true', help='Show what would be done')
     parser.add_argument('--verbose', action='store_true', help='Show detailed output')
     parser.add_argument('--unit', type=str, help='Process single unit')
@@ -356,10 +465,10 @@ def main():
                 print(f"  Created: {output_path}")
         else:
             if args.verbose:
-                print(f"  SKIP {unit}: no data sections in split .obj")
+                print(f"  SKIP {unit}: no sections to keep")
 
-    print(f"\nCreated {total_stubs} data-stub .obj files")
-    print(f"Total: {total_sections} data sections, {total_symbols} data symbols")
+    print(f"\nCreated {total_stubs} supplement-stub .obj files")
+    print(f"Total: {total_sections} sections, {total_symbols} symbols")
 
 
 if __name__ == '__main__':

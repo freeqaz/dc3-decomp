@@ -13,6 +13,15 @@
 #include "utl/MemMgr.h"
 #include "utl/PoolAlloc.h"
 #include "system/synth_xbox/soundtouch/source/SoundTouch/FIRFilter.h"
+#include "system/synth/Faders.h"
+#include "system/rndobj/Lit.h"
+#include "system/world/Spotlight.h"
+#include "system/char/Waypoint.h"
+#include "system/rndobj/Wind.h"
+#include "system/char/CharPollable.h"
+#include "system/char/CharWeightSetter.h"
+#include "system/flow/FlowNode.h"
+#include "system/rndobj/CamAnim.h"
 
 // ============================================================================
 // ICF-merged function definitions
@@ -374,6 +383,148 @@ BinStream &operator<<(BinStream &bs, const ObjPtrList<RndMesh, ObjectDir> &list)
         const char *name = obj ? obj->Name() : "";
         bs << name;
     }
+    return bs;
+}
+
+// -- BinStream operator<< for ObjPtrList (additional from Matching promotion) --
+
+template <>
+BinStream &operator<<(BinStream &bs, const ObjPtrList<Fader, ObjectDir> &list) {
+    bs << list.size();
+    for (ObjPtrList<Fader>::iterator it = list.begin(); it != list.end(); ++it) {
+        Hmx::Object *obj = *it;
+        const char *name = obj ? obj->Name() : "";
+        bs << name;
+    }
+    return bs;
+}
+
+template <>
+BinStream &operator<<(BinStream &bs, const ObjPtrList<RndLight, ObjectDir> &list) {
+    bs << list.size();
+    for (ObjPtrList<RndLight>::iterator it = list.begin(); it != list.end(); ++it) {
+        Hmx::Object *obj = *it;
+        const char *name = obj ? obj->Name() : "";
+        bs << name;
+    }
+    return bs;
+}
+
+template <>
+BinStream &operator<<(BinStream &bs, const ObjPtrList<Waypoint, ObjectDir> &list) {
+    bs << list.size();
+    for (ObjPtrList<Waypoint>::iterator it = list.begin(); it != list.end(); ++it) {
+        Hmx::Object *obj = *it;
+        const char *name = obj ? obj->Name() : "";
+        bs << name;
+    }
+    return bs;
+}
+
+template <>
+BinStream &operator<<(BinStream &bs, const ObjPtrList<CharPollable, ObjectDir> &list) {
+    bs << list.size();
+    for (ObjPtrList<CharPollable>::iterator it = list.begin(); it != list.end(); ++it) {
+        Hmx::Object *obj = *it;
+        const char *name = obj ? obj->Name() : "";
+        bs << name;
+    }
+    return bs;
+}
+
+template <>
+BinStream &operator<<(BinStream &bs, const ObjPtrList<CharWeightSetter, ObjectDir> &list) {
+    bs << list.size();
+    for (ObjPtrList<CharWeightSetter>::iterator it = list.begin(); it != list.end(); ++it) {
+        Hmx::Object *obj = *it;
+        const char *name = obj ? obj->Name() : "";
+        bs << name;
+    }
+    return bs;
+}
+
+// -- BinStream operator<< for ObjPtrVec (additional from Matching promotion) --
+
+template <>
+BinStream &operator<<(BinStream &bs, const ObjPtrVec<Waypoint, ObjectDir> &vec) {
+    bs << (int)vec.size();
+    for (int i = 0; i < (int)vec.size(); i++) {
+        const Hmx::Object *obj = vec[i];
+        const char *name = obj ? obj->Name() : "";
+        bs << name;
+    }
+    return bs;
+}
+
+template <>
+BinStream &operator<<(BinStream &bs, const ObjPtrVec<FlowNode, ObjectDir> &vec) {
+    bs << (int)vec.size();
+    for (int i = 0; i < (int)vec.size(); i++) {
+        const Hmx::Object *obj = vec[i];
+        const char *name = obj ? obj->Name() : "";
+        bs << name;
+    }
+    return bs;
+}
+
+template <>
+BinStream &operator<<(BinStream &bs, const ObjPtrVec<RndTransformable, ObjectDir> &vec) {
+    bs << (int)vec.size();
+    for (int i = 0; i < (int)vec.size(); i++) {
+        const Hmx::Object *obj = vec[i];
+        const char *name = obj ? obj->Name() : "";
+        bs << name;
+    }
+    return bs;
+}
+
+// -- BinStream operator<< for ObjOwnerPtr (additional from Matching promotion) --
+
+template <>
+BinStream &operator<<(BinStream &bs, const ObjOwnerPtr<RndLight> &ptr) {
+    Hmx::Object *obj = ptr;
+    const char *name = obj ? obj->Name() : "";
+    bs << name;
+    return bs;
+}
+
+template <>
+BinStream &operator<<(BinStream &bs, const ObjOwnerPtr<RndWind> &ptr) {
+    Hmx::Object *obj = ptr;
+    const char *name = obj ? obj->Name() : "";
+    bs << name;
+    return bs;
+}
+
+template <>
+BinStream &operator<<(BinStream &bs, const ObjOwnerPtr<Spotlight> &ptr) {
+    Hmx::Object *obj = ptr;
+    const char *name = obj ? obj->Name() : "";
+    bs << name;
+    return bs;
+}
+
+template <>
+BinStream &operator<<(BinStream &bs, const ObjOwnerPtr<RndCamAnim> &ptr) {
+    Hmx::Object *obj = ptr;
+    const char *name = obj ? obj->Name() : "";
+    bs << name;
+    return bs;
+}
+
+template <>
+BinStream &operator<<(BinStream &bs, const ObjOwnerPtr<RndMesh> &ptr) {
+    Hmx::Object *obj = ptr;
+    const char *name = obj ? obj->Name() : "";
+    bs << name;
+    return bs;
+}
+
+template <>
+BinStream &operator<<(BinStream &bs, const ObjOwnerPtr<RndTransformable> &ptr) {
+    Hmx::Object *obj = ptr;
+    const char *name = obj ? obj->Name() : "";
+    bs << name;
     return bs;
 }
 
@@ -1660,3 +1811,288 @@ extern "C" const char __link_glue_empty_str[] = "";
 #pragma comment(linker, "/ALTERNATENAME:__unwind$135845=__link_glue_noop")
 #pragma comment(linker, "/ALTERNATENAME:__unwind$135904=__link_glue_noop")
 #pragma comment(linker, "/ALTERNATENAME:__unwind$135924=__link_glue_noop")
+// Summary: 72 ??__E, 87 templates, 3 BinStream, 8 data, 76 other = 246 total
+
+// ============================================================================
+// Auto-generated stubs for symbols lost when units promoted to Matching
+// Generated from link errors after 339 units promoted via sync_match_percent.py
+// ============================================================================
+
+// -- Dynamic initializers (??__E) from CRT __xc table in auto_08 --
+#pragma comment(linker, "/ALTERNATENAME:??__E?mAssocMicXbox@ExternalMicClientMgr@@0V?$vector@PAVMicXbox@@V?$StlNodeAlloc@PAVMicXbox@@@stlpmtx_std@@@stlpmtx_std@@A@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__E?mDevToMicMaster@ExternalMicClientMgr@@0V?$vector@KV?$StlNodeAlloc@K@stlpmtx_std@@@stlpmtx_std@@A@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__E?mMicMasterToDev@ExternalMicClientMgr@@0V?$vector@KV?$StlNodeAlloc@K@stlpmtx_std@@@stlpmtx_std@@A@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__E?mMicMasters@ExternalMicClientMgr@@0V?$vector@PAVExternalMicClientProxy@@V?$StlNodeAlloc@PAVExternalMicClientProxy@@@stlpmtx_std@@@stlpmtx_std@@A@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__E?sBloom@NgPostProc@@1V?$BloomTextures@$02@1@A@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__E?sCritSec@SkeletonUpdateHandle@@0VCriticalSection@@A@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__E?sCurrentExportEvent@MsgSinks@@0VSymbol@@A@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__E?sID@Matrix2@Hmx@@0V12@A@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__E?sID@Matrix3@Hmx@@0V12@A@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__E?sID@Matrix4@Hmx@@0V12@A@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__E?sID@Transform@@0V1@A@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__E?sSingleton@RndVelocityBuffer@@0V1@A@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__E?sUpVectorSmoother@SkeletonFrame@@2VVector3DESmoother@@A@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__E?smNestedStartTimes@GlitchPoker@@0V?$vector@MV?$StlNodeAlloc@M@stlpmtx_std@@@stlpmtx_std@@A@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__ETheDebug@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__ETheGlitchFinder@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__ETheHDCache@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__ETheHamUI@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__ETheLocale@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__ETheOSCMessenger@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__ETheProfileMgr@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__ETheSystemArgs@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EgArkFiles@?A0x7f36a62b@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EgCaches@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EgContextRand@?A0x24773155@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EgCrit@?A0x49b544a7@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EgCritSection@?A0xf503845b@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EgDataFuncs@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EgDataProcessedEvt@?A0x7ea4e606@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EgDataReadyEvt@?A0x7ea4e606@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EgDataThisPtr@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EgDecompressionCritSec@?A0x7ea4e606@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EgDecompressionQueue@?A0x7ea4e606@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EgDefaultBeatMap@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EgDefaultTempoMap@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EgDeferredAwardQueue@?A0xf8e4b4b5@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EgExternalArkFiles@?A0x7f36a62b@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EgGamePanelCallback@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EgHiResScreen@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EgHolmesTarget@?A0x49b544a7@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EgInput@?A0x49b544a7@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EgJoypadData@?A0xca10770b@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EgLastCachedResource@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EgLoopVizCallback@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EgMics@?A0x0c39da7f@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EgNotifies@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EgNotifyThreadSec@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EgNotifyThreadSync@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EgPatchVerts@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EgPhysicalType@?A0x2be09a71@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EgPristineSystemArgs@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EgProfile@?A0x49b544a7@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EgRequests@?A0x49b544a7@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EgServerName@?A0x49b544a7@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EgSystemLanguage@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EgSystemLocale@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EgSystemTimer@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EgTiers@?A0xf8e4b4b5@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EgUnlockables@?A0xf8e4b4b5@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EgUseLowestMipExceptions@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EgUsedContexts@?A0x24773155@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EgWebSvcMgr@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EjobQueueMutex@JobQueue@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EmCampaignVO@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EsCam@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EsCollisionUsefulBoneNames@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EsDefaultRatingThresholds@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EsFakes@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EsFlipYZ@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EsIdentityXfm@?A0x8e417309@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EsRatingStates@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??__EtCritSection@?A0x439b694a@@YAXXZ=__link_glue_noop")
+
+// -- ObjPtr/ObjRef template instantiations --
+#pragma comment(linker, "/ALTERNATENAME:?CopyRef@?$ObjRefConcrete@VBaseMaterial@@VObjectDir@@@@QAAXABV1@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?CopyRef@?$ObjRefConcrete@VCharDriver@@VObjectDir@@@@QAAXABV1@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?CopyRef@?$ObjRefConcrete@VCharEyeDartRuleset@@VObjectDir@@@@QAAXABV1@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?CopyRef@?$ObjRefConcrete@VCharIKFoot@@VObjectDir@@@@QAAXABV1@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?CopyRef@?$ObjRefConcrete@VCharPollable@@VObjectDir@@@@QAAXABV1@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?CopyRef@?$ObjRefConcrete@VCharacter@@VObjectDir@@@@QAAXABV1@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?CopyRef@?$ObjRefConcrete@VFader@@VObjectDir@@@@QAAXABV1@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?CopyRef@?$ObjRefConcrete@VHamLabel@@VObjectDir@@@@QAAXABV1@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?CopyRef@?$ObjRefConcrete@VHamPhraseMeter@@VObjectDir@@@@QAAXABV1@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?CopyRef@?$ObjRefConcrete@VObject@Hmx@@VObjectDir@@@@QAAXABV1@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?CopyRef@?$ObjRefConcrete@VRhythmBattlePlayer@@VObjectDir@@@@QAAXABV1@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?CopyRef@?$ObjRefConcrete@VRndCam@@VObjectDir@@@@QAAXABV1@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?CopyRef@?$ObjRefConcrete@VRndCubeTex@@VObjectDir@@@@QAAXABV1@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?CopyRef@?$ObjRefConcrete@VRndEnviron@@VObjectDir@@@@QAAXABV1@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?CopyRef@?$ObjRefConcrete@VRndFur@@VObjectDir@@@@QAAXABV1@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?CopyRef@?$ObjRefConcrete@VRndGroup@@VObjectDir@@@@QAAXABV1@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?CopyRef@?$ObjRefConcrete@VRndMat@@VObjectDir@@@@QAAXABV1@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?CopyRef@?$ObjRefConcrete@VRndTransAnim@@VObjectDir@@@@QAAXABV1@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?CopyRef@?$ObjRefConcrete@VSound@@VObjectDir@@@@QAAXABV1@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?CopyRef@?$ObjRefConcrete@VSpotlight@@VObjectDir@@@@QAAXABV1@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?CopyRef@?$ObjRefConcrete@VUIColor@@VObjectDir@@@@QAAXABV1@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?CopyRef@?$ObjRefConcrete@VUIComponent@@VObjectDir@@@@QAAXABV1@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?CopyRef@?$ObjRefConcrete@VUIList@@VObjectDir@@@@QAAXABV1@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?CopyRef@?$ObjRefConcrete@VWorldCrowd@@VObjectDir@@@@QAAXABV1@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?Link@?$ObjPtrList@VCharPollable@@VObjectDir@@@@AAAXViterator@1@PAUNode@1@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?Link@?$ObjPtrList@VCharWeightSetter@@VObjectDir@@@@AAAXViterator@1@PAUNode@1@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?Link@?$ObjPtrList@VCharWeightable@@VObjectDir@@@@AAAXViterator@1@PAUNode@1@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?Link@?$ObjPtrList@VFader@@VObjectDir@@@@AAAXViterator@1@PAUNode@1@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?Link@?$ObjPtrList@VRndLight@@VObjectDir@@@@AAAXViterator@1@PAUNode@1@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?Link@?$ObjPtrList@VThreeDSound@@VObjectDir@@@@AAAXViterator@1@PAUNode@1@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?Link@?$ObjPtrList@VWaypoint@@VObjectDir@@@@AAAXViterator@1@PAUNode@1@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?RefOwner@?$ObjPtrList@VCharPollable@@VObjectDir@@@@EBAPAVObject@Hmx@@XZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?RefOwner@?$ObjPtrList@VCharWeightSetter@@VObjectDir@@@@EBAPAVObject@Hmx@@XZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?RefOwner@?$ObjPtrList@VCharWeightable@@VObjectDir@@@@EBAPAVObject@Hmx@@XZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?RefOwner@?$ObjPtrList@VFader@@VObjectDir@@@@EBAPAVObject@Hmx@@XZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?RefOwner@?$ObjPtrList@VFlowNode@@VObjectDir@@@@EBAPAVObject@Hmx@@XZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?RefOwner@?$ObjPtrList@VRndFontBase@@VObjectDir@@@@EBAPAVObject@Hmx@@XZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?RefOwner@?$ObjPtrList@VRndLight@@VObjectDir@@@@EBAPAVObject@Hmx@@XZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?RefOwner@?$ObjPtrList@VRndMat@@VObjectDir@@@@EBAPAVObject@Hmx@@XZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?RefOwner@?$ObjPtrList@VThreeDSound@@VObjectDir@@@@EBAPAVObject@Hmx@@XZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?RefOwner@?$ObjPtrList@VWaypoint@@VObjectDir@@@@EBAPAVObject@Hmx@@XZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?RefOwner@Node@?$ObjPtrList@VCharPollable@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?RefOwner@Node@?$ObjPtrList@VCharWeightSetter@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?RefOwner@Node@?$ObjPtrList@VCharWeightable@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?RefOwner@Node@?$ObjPtrList@VFader@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?RefOwner@Node@?$ObjPtrList@VRndLight@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?RefOwner@Node@?$ObjPtrList@VThreeDSound@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?RefOwner@Node@?$ObjPtrList@VWaypoint@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?RefOwner@Node@?$ObjPtrVec@VFlowNode@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?RefOwner@Node@?$ObjPtrVec@VRndTex@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?RefOwner@Node@?$ObjPtrVec@VWaypoint@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?Replace@?$ObjPtrList@VCharPollable@@VObjectDir@@@@EAA_NPAVObjRef@@PAVObject@Hmx@@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?Replace@?$ObjPtrList@VCharWeightSetter@@VObjectDir@@@@EAA_NPAVObjRef@@PAVObject@Hmx@@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?Replace@?$ObjPtrList@VCharWeightable@@VObjectDir@@@@EAA_NPAVObjRef@@PAVObject@Hmx@@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?Replace@?$ObjPtrList@VFader@@VObjectDir@@@@EAA_NPAVObjRef@@PAVObject@Hmx@@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?Replace@?$ObjPtrList@VFlowNode@@VObjectDir@@@@EAA_NPAVObjRef@@PAVObject@Hmx@@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?Replace@?$ObjPtrList@VRndFontBase@@VObjectDir@@@@EAA_NPAVObjRef@@PAVObject@Hmx@@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?Replace@?$ObjPtrList@VRndLight@@VObjectDir@@@@EAA_NPAVObjRef@@PAVObject@Hmx@@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?Replace@?$ObjPtrList@VRndMat@@VObjectDir@@@@EAA_NPAVObjRef@@PAVObject@Hmx@@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?Replace@?$ObjPtrList@VThreeDSound@@VObjectDir@@@@EAA_NPAVObjRef@@PAVObject@Hmx@@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?Replace@?$ObjPtrList@VWaypoint@@VObjectDir@@@@EAA_NPAVObjRef@@PAVObject@Hmx@@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?erase@?$ObjPtrList@VCharPollable@@VObjectDir@@@@QAA?AViterator@1@V21@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?erase@?$ObjPtrList@VCharWeightSetter@@VObjectDir@@@@QAA?AViterator@1@V21@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?erase@?$ObjPtrList@VCharWeightable@@VObjectDir@@@@QAA?AViterator@1@V21@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?erase@?$ObjPtrList@VFader@@VObjectDir@@@@QAA?AViterator@1@V21@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?erase@?$ObjPtrList@VRndFontBase@@VObjectDir@@@@QAA?AViterator@1@V21@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?erase@?$ObjPtrList@VRndLight@@VObjectDir@@@@QAA?AViterator@1@V21@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?erase@?$ObjPtrList@VRndMat@@VObjectDir@@@@QAA?AViterator@1@V21@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?erase@?$ObjPtrList@VThreeDSound@@VObjectDir@@@@QAA?AViterator@1@V21@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?erase@?$ObjPtrList@VWaypoint@@VObjectDir@@@@QAA?AViterator@1@V21@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?erase@?$ObjPtrVec@VWaypoint@@VObjectDir@@@@QAA?AViterator@1@V21@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?front@?$ObjPtrList@VFader@@VObjectDir@@@@QBAPAVFader@@XZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?merged_ObjPtrListPopBack@@YAXPAX@Z=__link_glue_noop")
+
+// -- BinStream operators --
+#pragma comment(linker, "/ALTERNATENAME:??5@YAAAVBinStream@@AAV0@AAUPropTriggerDefn@FlowTrigger@@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?Load@UILabel@@UAAXAAVBinStream@@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?PostLoad@HamDriver@@UAAXAAVBinStream@@@Z=__link_glue_noop")
+
+// -- Data symbols --
+#pragma comment(linker, "/ALTERNATENAME:?kArkBlockSize@@3HA=__link_glue_zero")
+#pragma comment(linker, "/ALTERNATENAME:?lbl_82F1AB98@@3IA=__link_glue_zero")
+#pragma comment(linker, "/ALTERNATENAME:?lbl_82F1AB9C@@3IA=__link_glue_zero")
+#pragma comment(linker, "/ALTERNATENAME:?lbl_82F1ABA0@@3IA=__link_glue_zero")
+#pragma comment(linker, "/ALTERNATENAME:?lbl_82F5E180@@3JC=__link_glue_zero")
+#pragma comment(linker, "/ALTERNATENAME:?sLoadingMaster@LoadingPanel@@2PAVHamMaster@@A=__link_glue_zero")
+#pragma comment(linker, "/ALTERNATENAME:?sSongDB@LoadingPanel@@2PAVSongDB@@A=__link_glue_zero")
+#pragma comment(linker, "/ALTERNATENAME:?tf2cf@RndRenderState@@2PAW4_D3DCMPFUNC@@A=__link_glue_zero")
+
+// -- Other functions --
+#pragma comment(linker, "/ALTERNATENAME:??0IKTarget@CharIKHand@@QAA@PAVObject@Hmx@@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??0LocationCmp@@QAA@XZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??1DifficultyCmp@@UAA@XZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??1MQSongSortNode@@UAA@XZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??1SongCmp@@UAA@XZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??RSortCmp@@QBA_NPBVStoreOffer@@0@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?ClipStart@?A0xf8c6d506@@YAMPAVCharClip@@MAAM1@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?DrawFixedZ@DrawString@@UAAXM@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?DrawShowing@SpotlightDrawer@@UAAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?Fail@FileStream@@UAA_NXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?FileReadOnly@@YA_NPBD@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?Flush@HDCache@@AAAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?GetAlbumCmp@NavListItemSortCmp@@UBAPBVAlbumCmp@@XZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?GetArtistCmp@NavListItemSortCmp@@UBAPBVArtistCmp@@XZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?GetBaseFileName@SongInfoCopy@@UBAPBDXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?GetBufferSize@HttpGet@@QAAIXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?GetChallengeScoreCmp@NavListItemSortCmp@@UBAPBVChallengeScoreCmp@@XZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?GetColor@UIColor@@QBAABVColor@Hmx@@XZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?GetCookies@WebSvcRequest@@QBAABV?$map@VString@@V1@U?$less@VString@@@stlpmtx_std@@V?$StlNodeAlloc@U?$pair@$$CBVString@@V1@@stlpmtx_std@@@3@@stlpmtx_std@@XZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?GetCores@SongInfoCopy@@UBAABV?$vector@HV?$StlNodeAlloc@H@stlpmtx_std@@@stlpmtx_std@@XZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?GetDateCmp@NavListItemSortCmp@@UBAPBVDateCmp@@XZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?GetDecadeCmp@NavListItemSortCmp@@UBAPBVDecadeCmp@@XZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?GetDifficultyCmp@NavListItemSortCmp@@UBAPBVDifficultyCmp@@XZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?GetFitnessCalorieSortCmp@NavListItemSortCmp@@UBAPBVFitnessCalorieSortCmp@@XZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?GetLocalUser@LocalUser@@UBAPBV1@XZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?GetLocationCmp@NavListItemSortCmp@@UBAPBVLocationCmp@@XZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?GetMQSongCharCmp@NavListItemSortCmp@@UBAPBVMQSongCharCmp@@XZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?GetName@SongInfoCopy@@UBA?AVSymbol@@XZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?GetNumRestarts@Game@@QBAHXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?GetOp@CacheMgr@@IAA?AW4OpType@1@XZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?GetPans@SongInfoCopy@@UBAABV?$vector@MV?$StlNodeAlloc@M@stlpmtx_std@@@stlpmtx_std@@XZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?GetPlaylistTypeCmp@NavListItemSortCmp@@UBAPBVPlaylistTypeCmp@@XZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?GetRemoteUser@LocalUser@@UAAPAVRemoteUser@@XZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?GetSlipOffset@StreamReceiverFile@@UAAMXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?GetUIListDir@UIList@@QBAPAVUIListDir@@XZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?GetVenueCmp@NavListItemSortCmp@@UBAPBVVenueCmp@@XZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?GetVocalPartsCmp@NavListItemSortCmp@@UBAPBVVocalPartsCmp@@XZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?Handle@BustAMoveData@@UAA?AVDataNode@@PAVDataArray@@_N@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?Handle@CharMeshHide@@UAA?AVDataNode@@PAVDataArray@@_N@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?Handle@NavListItemNode@@UAA?AVDataNode@@PAVDataArray@@_N@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?Handle@OvershellSlot@@UAA?AVDataNode@@PAVDataArray@@_N@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?Handle@UIListArrow@@UAA?AVDataNode@@PAVDataArray@@_N@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?Handle@UIListSlot@@UAA?AVDataNode@@PAVDataArray@@_N@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?Handle@UIListSubList@@UAA?AVDataNode@@PAVDataArray@@_N@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?Highlight@Waypoint@@UAAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?InsertBreak@RndConsole@@QAAXPAVDataArray@@H@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?IsDifficultyUnlockedForProfile@HamProfile@@QAA_NVSymbol@@0@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?IsLoaded@?$ObjDirPtr@VObjectDir@@@@QBA_NXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?IsLocal@LocalUser@@UBA_NXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?JointToVertexData@?A0x790ae044@@YAXAAVVector3@@ABVSkeleton@@W4SkeletonJoint@@ABVVector4@@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?OnMsg@HamUI@@IAA?AVDataNode@@ABVConnectionStatusChangedMsg@@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?OnSelect@NgPostProc@@UAAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?OnSync@RndMesh@@UAAXH@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?OnUnselect@NgPostProc@@UAAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?PresyncBitmap@RndTex@@UAAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?Provider@UIListState@@QBAPAVUIListProvider@@XZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?RemoveFromLists@Spotlight@@SAXPAV1@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?Renumber@NavListItemNode@@UAAXAAV?$vector@PAVNavListSortNode@@V?$StlNodeAlloc@PAVNavListSortNode@@@stlpmtx_std@@@stlpmtx_std@@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?RootTrans@UIListSubList@@UAAPAVRndTransformable@@XZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?SelectMove@DanceRemixer@@MAAXHH@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?SetBackgroundVolume@Game@@QAAXM@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?SetPanelDir@CharacterProvider@@QAAXPAVPanelDir@@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?SetTimeout@HttpGet@@QAAXM@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?SpewInit@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?SpewTerminate@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?StartIntro@Game@@QAAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?SyncBitmap@RndTex@@UAAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?SyncProperty@DanceRemixer@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?SyncProperty@User@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?TerminateMakeString@@YAXXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?Text@NavListItemNode@@UBAXPAVUIListLabel@@PAVUILabel@@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?ValidateCRC@CRC@Hmx@@SA_NHPBD@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?VertFVF@DxMesh@@QBAKXZ=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?VertexToWorld@?A0x790ae044@@YAXAAVVector3@@ABVTransform@@MABVVector4@@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?altCfg@@YA?AVDataArrayPtr@@VDataNode@@0@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:?merged_82610090@@YAPBDPBDPCH@Z=__link_glue_noop")
+
+// -- BinStream operator<< template instantiations --
+
+// -- C runtime / third-party library symbols --
+#pragma comment(linker, "/ALTERNATENAME:Curl_if2ip=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:FD_SET=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:FFTRealForward=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:HIBYTE=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:JoypadSetActuatorsImp=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:LOBYTE=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:MAKEWORD=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:_close=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:_fstati64=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:except_data_82918780=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:htons=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:hypot=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:ntohs=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:read=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:strncasecmp=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:wmemcpy=__link_glue_noop")
+
+// -- BinStream operator<< non-template targets (decomp compiler ALTERNATENAME chains) --
+#pragma comment(linker, "/ALTERNATENAME:??6@YAAAVBinStream@@AAV0@ABV?$ObjOwnerPtr@VRndCamAnim@@@@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??6@YAAAVBinStream@@AAV0@ABV?$ObjOwnerPtr@VRndLight@@@@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??6@YAAAVBinStream@@AAV0@ABV?$ObjOwnerPtr@VRndMesh@@@@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??6@YAAAVBinStream@@AAV0@ABV?$ObjOwnerPtr@VRndTransformable@@@@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??6@YAAAVBinStream@@AAV0@ABV?$ObjOwnerPtr@VRndWind@@@@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??6@YAAAVBinStream@@AAV0@ABV?$ObjOwnerPtr@VSpotlight@@@@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??6@YAAAVBinStream@@AAV0@ABV?$ObjPtrList@VCharPollable@@VObjectDir@@@@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??6@YAAAVBinStream@@AAV0@ABV?$ObjPtrList@VCharWeightSetter@@VObjectDir@@@@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??6@YAAAVBinStream@@AAV0@ABV?$ObjPtrList@VFader@@VObjectDir@@@@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??6@YAAAVBinStream@@AAV0@ABV?$ObjPtrList@VRndDrawable@@VObjectDir@@@@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??6@YAAAVBinStream@@AAV0@ABV?$ObjPtrList@VRndLight@@VObjectDir@@@@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??6@YAAAVBinStream@@AAV0@ABV?$ObjPtrList@VWaypoint@@VObjectDir@@@@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??6@YAAAVBinStream@@AAV0@ABV?$ObjPtrVec@VFlowNode@@VObjectDir@@@@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??6@YAAAVBinStream@@AAV0@ABV?$ObjPtrVec@VRndTransformable@@VObjectDir@@@@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??6@YAAAVBinStream@@AAV0@ABV?$ObjPtrVec@VWaypoint@@VObjectDir@@@@@Z=__link_glue_noop")
