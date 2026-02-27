@@ -318,15 +318,15 @@ void Archive::Merge(Archive &shadow) {
         if (fileIt != mFileEntries.end() && fileIt->mHashedName == entry.HashedName()
             && fileIt->mHashedPath == entry.HashedPath()) {
             fileIt->mOffset = it->mOffset + totalSize;
-            fileIt->mUCSize = it->mUCSize;
             fileIt->mSize = it->mSize;
+            fileIt->mUCSize = it->mUCSize;
         } else {
             FileEntry toAdd;
             toAdd.mOffset = it->mOffset + totalSize;
             toAdd.mHashedName = entry.HashedName();
             toAdd.mHashedPath = entry.HashedPath();
-            toAdd.mSize = it->mSize;
             toAdd.mUCSize = it->mUCSize;
+            toAdd.mSize = it->mSize;
             extraFileEntries.push_back(toAdd);
         }
     }

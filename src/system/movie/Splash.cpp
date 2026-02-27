@@ -373,29 +373,28 @@ bool Splash::ShowNext() {
 }
 
 bool Splash::Show() {
-    RndDir *dir;
-    int durationMs;
+    PreparedScreenParams params;
     {
         CritSecTracker tracker(&mScreenLock);
         MILO_ASSERT(!mPreparedScreens.empty(), 0x283);
-        dir = mPreparedScreens.begin()->dir;
-        durationMs = mPreparedScreens.begin()->durationMs;
+        params = *mPreparedScreens.begin();
     }
-    mCurrentDir = dir;
+    mCurrentDir = params.dir;
     mCurrentDir->Enter();
     mCurrentCam = mCurrentDir->Find<RndCam>(kSplashCam, true);
     mCurrentMovie = mCurrentDir->Find<TexMovie>(kSplashMovie, false);
     if (mCurrentMovie) {
         if (mThreaded) {
+            Movie &movie = mCurrentMovie->GetMovie();
             mCurrentMovie->SetShowing(true);
-            mCurrentMovie->GetMovie().SetPaused(false);
-            double duration = (double)mCurrentMovie->GetMovie().MsPerFrame() * mCurrentMovie->GetMovie().NumFrames();
+            movie.SetPaused(false);
+            float duration = movie.MsPerFrame() * (float)movie.NumFrames();
             mSplashDurationMs = (int)ceilf(duration);
         } else {
             return ShowNext();
         }
     } else {
-        mSplashDurationMs = durationMs;
+        mSplashDurationMs = params.durationMs;
     }
     mCurrentTrigger = mCurrentDir->Find<EventTrigger>("splash.trig", false);
     if (mCurrentTrigger) {

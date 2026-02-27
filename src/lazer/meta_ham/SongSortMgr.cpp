@@ -255,8 +255,8 @@ Symbol SongSortMgr::MoveOn() {
         static Symbol move_on_quickplay("move_on_quickplay");
         UIPanel *songSelectPanel =
             ObjectDir::Main()->Find<UIPanel>("song_select_panel", true);
-        static Message move_on_quickplay_msg("move_on_quickplay");
-        songSelectPanel->HandleType(move_on_quickplay_msg);
+        static Message msg("move_on_quickplay");
+        songSelectPanel->HandleType(msg);
         return gNullStr;
     } else if (song_select_story != mode && song_select_practice != mode
                && mode != song_select_jukebox) {
