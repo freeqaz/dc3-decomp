@@ -10,7 +10,11 @@ public:
 
     static bool mUsbMidiGuitarExists;
     static Timer mTimer;
+
+private:
     static int mMinVelocity;
+
+public:
 
     static void Init();
     static void Terminate();

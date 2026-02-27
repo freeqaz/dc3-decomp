@@ -90,10 +90,11 @@ void BinkReader::Poll(float) {
                 } while (i < mBink->NumTracks);
             }
 
-            if (mDecodeTrack == mBink->NumTracks) {
-                mState = (mBink->FrameNum == mBink->Frames) ? kDone : kPlaying;
+            BINK *bink = mBink;
+            if (mDecodeTrack == bink->NumTracks) {
+                mState = (bink->FrameNum == bink->Frames) ? kDone : kPlaying;
                 if (mState == kPlaying) {
-                    BinkNextFrame(mBink);
+                    BinkNextFrame(bink);
                 }
                 mDecodeTrack = 0;
             }
@@ -116,18 +117,19 @@ void BinkReader::Poll(float) {
                 mDecodeTrack++;
             } while (remainingBuffer > 0);
 
-            if (mDecodeTrack == mBink->NumTracks) {
+            BINK *bink2 = mBink;
+            if (mDecodeTrack == bink2->NumTracks) {
                 unsigned int prevJump = mSamplesJump;
                 mSamplesJump = 0;
                 mSamplesReady = (trackData >> 1) - prevJump;
                 mSampleCurrent += prevJump;
 
                 int newState =
-                    (mBink->FrameNum == mBink->Frames) ? kDone : kPlaying;
+                    (bink2->FrameNum == bink2->Frames) ? kDone : kPlaying;
                 mState = newState;
 
                 if (remainingBuffer > 0 && newState == kPlaying) {
-                    BinkNextFrame(mBink);
+                    BinkNextFrame(bink2);
                     mDecodeTrack = 0;
                 }
             }

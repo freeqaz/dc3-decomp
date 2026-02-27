@@ -170,9 +170,9 @@ void UsbMidiGuitar::Poll() {
                     RGStompBoxMsg sbMsg(stompBox, i);
                     SendMessage(sbMsg);
                 }
-                int programChange = proData->mProgramChangeBit1 << 1;
-                programChange += proData->mProgramChangeBit2 << 2;
-                programChange += proData->mProgramChangeBit0;
+                int programChange = (proData->mProgramChangeBit1 << 1)
+                    + (proData->mProgramChangeBit2 << 2)
+                    + proData->mProgramChangeBit0;
                 if (programChange != TheGuitar->GetProgramChange(i)) {
                     TheGuitar->SetProgramChange(i, programChange);
                     RGProgramChangeMsg pcMsg(programChange, i);

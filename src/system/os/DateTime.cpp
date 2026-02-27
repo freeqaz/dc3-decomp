@@ -121,14 +121,14 @@ void DateTime::Format(class String &str) const {
     static Symbol esl("esl");
     Symbol lang = SystemLanguage();
     if (lang == fre || lang == ita || lang == esl) {
-        if (SearchReplace(str.c_str(), "%e", MakeString("%02d", mDay), buf)) {
+        if (SearchReplace(str.c_str(), "%e", MakeString("%d", mDay), buf)) {
             str = buf;
         }
     } else {
         if (SearchReplace(
                 str.c_str(),
                 "%e",
-                LocalizeOrdinal(mDay, LocaleGenderMasculine, LocaleSingular, false, Symbol(), TheLocale),
+                LocalizeOrdinal(mDay, LocaleGenderMasculine, LocaleSingular, false, Symbol(gNullStr), TheLocale),
                 buf
             )) {
             str = buf;
