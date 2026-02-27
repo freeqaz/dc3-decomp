@@ -81,7 +81,7 @@ void CharMirror::Poll() {
             } else if (curMirrorOp->op == mirror_x) {
                 it->Set(it->z, it->w, it->x, it->y);
             } else
-                MILO_WARN("Unknown operation %s", curMirrorOp->op);
+                MILO_NOTIFY("Unknown operation %s", curMirrorOp->op);
         }
     }
     for (float *it = (float *)(mBones.mStart + mBones.mOffsets[CharBones::TYPE_ROTX]);

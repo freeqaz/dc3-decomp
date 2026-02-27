@@ -23,7 +23,13 @@ CharCameraInput::CharCameraInput(Character *c) : mChar(c), unk2430(0) {
     mCharFrame.mFloorClipPlane.Set(0, 0, 0, 0);
     mCharFrame.mElapsedMs = 33;
     for (int i = 0; i < 6; i++) {
-        // skeleton frame edits
+        if (i == 0) {
+            mCharFrame.mSkeletonDatas[i].mTracking = kSkeletonTracked;
+            mCharFrame.mSkeletonDatas[i].mQualityFlags = 0;
+            for (int j = 0; j < kNumJoints; j++) {
+                mCharFrame.mSkeletonDatas[i].mJointTrackingState[j] = kSkeletonTracked;
+            }
+        }
     }
     ResetSkeletonCharOrigin();
 }

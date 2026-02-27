@@ -45,9 +45,9 @@ int TypeProps::Size() const {
 
 void TypeProps::ClearKeyValue(Symbol key) {
     if (mMap) {
-        for (int i = mMap->Size() - 2; i >= 0; i -= 2) {
-            const char *cur_str = mMap->UncheckedStr(i);
-            if (STR_TO_SYM(cur_str) == key) {
+        int i = mMap->Size() - 2;
+        while (i >= 0) {
+            if ((int)mMap->Node(i).UncheckedStr() == (int)key.Str()) {
                 DataNode &val = mMap->Node(i + 1);
                 if (val.Type() == kDataObject) {
                     Hmx::Object *obj = val.UncheckedObj();
@@ -62,6 +62,7 @@ void TypeProps::ClearKeyValue(Symbol key) {
                     mMap = nullptr;
                 }
             }
+            i -= 2;
         }
     }
 }
