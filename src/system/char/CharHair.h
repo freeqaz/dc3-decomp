@@ -98,7 +98,9 @@ protected:
     CharHair();
 
     struct SortCollides {
-        bool operator()(const CharCollide *, const CharCollide *) const;
+        bool operator()(const CharCollide *a, const CharCollide *b) const {
+            return a->GetCurRadius() > b->GetCurRadius();
+        }
     };
 
     void Hookup();

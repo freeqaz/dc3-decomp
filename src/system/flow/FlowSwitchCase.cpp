@@ -8,6 +8,7 @@
 #include "obj/Dir.h"
 #include "obj/DirLoader.h"
 #include "obj/Object.h"
+#include "world/CameraShot.h"
 
 FlowSwitchCase::FlowSwitchCase()
     : mToValue(0), mFromValue(0), mOperator(kEqual), mUseLastValue(0),
@@ -91,9 +92,7 @@ BEGIN_LOADS(FlowSwitchCase)
         }
     }
 
-    int opValue;
-    d >> opValue;
-    mOperator = (OperatorType)opValue;
+    d >> (int &)mOperator;
 
     if (d.rev < 2) {
         DataNode n;
@@ -172,12 +171,14 @@ void FlowSwitchCase::RequestStopCancel() {
 }
 
 void FlowSwitchCase::Execute(QueueState qs) {
-    FLOW_LOG("Execute: state = %i\n", qs);
+    FLOW_LOG("Execute: state = %i\n", (CamShotFrame::BlendEaseMode)qs);
     if (qs == kQueue) {
         FlowWhile *propEventListener = static_cast<FlowWhile *>(mFlowParent);
         propEventListener->UnregisterEvents(propEventListener);
         if (!mContinuous)
             return;
+    } else if (qs != kIgnore) {
+        return;
     }
     mContinuous = false;
     if (!FlowNode::IsRunning() && mFlowParent->HasRunningNode(this)) {

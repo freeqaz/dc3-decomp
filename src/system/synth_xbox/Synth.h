@@ -35,7 +35,6 @@ public:
     virtual void Terminate();
     virtual Mic *GetMic(int);
     virtual void ReleaseMic(int);
-    virtual void PreInit();
     virtual void Init();
 
     CriticalSection unkb0;

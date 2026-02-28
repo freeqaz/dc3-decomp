@@ -177,15 +177,14 @@ bool HamCamShot::IterateNextShot() {
     ObjPtrList<HamCamShot>::iterator it = mNextShotIt;
     if (it == 0) {
         it = mNextShots.begin();
+        mNextShotIt = it;
     } else {
         ++mNextShotIt;
         if (mNextShotIt == 0) {
             ret = false;
-        } else {
-            return ret;
+            mNextShotIt = it;
         }
     }
-    mNextShotIt = it;
     return ret;
 }
 

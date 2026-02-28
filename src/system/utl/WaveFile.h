@@ -17,6 +17,7 @@ public:
 
 class WaveFile {
     friend class WaveFileData;
+    friend class WavReader;
 
 private:
     void ReadFormat();

@@ -55,15 +55,16 @@ void BlockMgr::Init() {
 
 void BlockMgr::ReadBlock() {
     MILO_ASSERT(mReadingBlock, 0x174);
-    bool err = false;
+    bool err;
     char *buf = (char *)mReadingBlock->Buffer();
     int arkNum = mReadingBlock->ArkFileNum();
     int blockNum = mReadingBlock->BlockNum();
     if (TheHDCache.ReadAsync(arkNum, blockNum, buf)) {
         gReadHD = true;
+        err = false;
     } else {
         gReadHD = false;
-        err = CDRead(arkNum, blockNum << 5, 32, buf);
+        err = CDRead(arkNum, blockNum * 32, 32, buf);
     }
     if (!err) {
         mReadingBlock->UpdateTimestamp();

@@ -52,7 +52,7 @@ float MoveDetector::ActiveDetectFrac(int player, MoveDir *dir) {
     return dir->DetectFrac(
         player,
         mMove,
-        std::make_pair(&frames.front(), &frames.back())
+        std::make_pair(frames.begin(), frames.end())
     );
 }
 

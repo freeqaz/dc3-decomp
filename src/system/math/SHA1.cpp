@@ -187,20 +187,20 @@ void CSHA1::Digest::Copy(unsigned char *c) const { memcpy(c, this, 20); }
 
 void CSHA1::Digest::ReportHash(char *c1, unsigned char uc) const {
     char buf[24];
-    unsigned int ui;
+    unsigned char ui;
     if (c1) {
         if (uc == 0) {
             sprintf(buf, "%02X", digits[0]);
             strcpy(c1, buf);
             for (ui = 1; ui < 0x14; ui++) {
-                sprintf(buf, "%02X", digits[ui & 0xFF]);
+                sprintf(buf, "%02X", digits[ui]);
                 strcat(c1, buf);
             }
         } else if (uc == 1) {
             sprintf(buf, "%u", digits[0]);
             strcpy(c1, buf);
             for (ui = 1; ui < 0x14; ui++) {
-                sprintf(buf, " %u", digits[ui & 0xFF]);
+                sprintf(buf, " %u", digits[ui]);
                 strcat(c1, buf);
             }
         } else

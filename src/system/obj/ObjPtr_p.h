@@ -5,6 +5,7 @@
 #include "utl/BinStream.h" /* IWYU pragma: keep */
 #include "os/Debug.h" /* IWYU pragma: keep */
 #include "utl/PoolAlloc.h"
+#include <algorithm> /* IWYU pragma: keep */
 #include <cstddef> /* IWYU pragma: keep */
 
 // DO NOT try to include this header directly!
@@ -272,6 +273,30 @@ ObjPtrVec<T1, T2>::find(const Hmx::Object *target) const {
     return end();
 }
 
+template <class T1, class T2>
+void ObjPtrVec<T1, T2>::swap(int a, int b) {
+    T1 *tmp = (begin() + a)->Obj();
+    Set(begin() + a, (begin() + b)->Obj());
+    Set(begin() + b, tmp);
+}
+
+template <class T1, class T2>
+template <class S>
+void ObjPtrVec<T1, T2>::sort(const S &cmp) {
+    MemPushTemp();
+    int n = size();
+    std::vector<T1 *> ptrs;
+    ptrs.insert(ptrs.begin(), n, (T1 *)0);
+    for (int i = 0; i < n; i++) {
+        ptrs[i] = mNodes[i].Obj();
+    }
+    std::sort(ptrs.begin(), ptrs.end(), cmp);
+    for (int i = 0; i < n; i++) {
+        mNodes[i].SetObjConcrete(ptrs[i]);
+    }
+    MemPopTemp();
+}
+
 #pragma endregion
 #pragma region ObjPtrList
 // ------------------------------------------------
@@ -434,4 +459,24 @@ template <class T1>
 BinStream &operator>>(BinStream &bs, ObjPtrList<T1, ObjectDir> &list) {
     list.Load(bs, true, nullptr, true);
     return bs;
+}
+
+template <class T1, class T2>
+template <class S>
+void ObjPtrList<T1, T2>::sort(const S &cmp) {
+    if (mNodes && mNodes->next) {
+        Node *sentinel = mNodes;
+        for (Node *outer = sentinel->next; outer != sentinel; outer = outer->next) {
+            for (Node *inner = outer; inner != sentinel; inner = inner->prev) {
+                Node *prev = inner->prev;
+                if (cmp(inner->Obj(), prev->Obj())) {
+                    T1 *tmp = inner->Obj();
+                    inner->SetObjConcrete(prev->Obj());
+                    prev->SetObjConcrete(tmp);
+                } else {
+                    break;
+                }
+            }
+        }
+    }
 }

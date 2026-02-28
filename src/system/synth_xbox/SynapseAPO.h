@@ -1,17 +1,44 @@
 #pragma once
+#include "synth_xbox/FxSendSynapse.h"
 
-class CXAPOBase {
+// Global XAPO base classes (no namespace)
+class CXAPOParametersBase {
 public:
-  virtual ~CXAPOBase();
+    virtual ~CXAPOParametersBase();
 
 private:
-  char mCXAPOBasePad[0x1c]; // CXAPOBase is 0x20 bytes total (vtable + members)
+    char mCXAPOParametersBasePad[0x1c]; // CXAPOParametersBase is 0x20 bytes total
 };
 
 class IXAPOParameters {
 public:
-  virtual ~IXAPOParameters() {}
+    virtual ~IXAPOParameters() {}
 };
+
+class CXAPOBase : public CXAPOParametersBase, public IXAPOParameters {
+public:
+    virtual ~CXAPOBase() {}
+};
+
+namespace ATG {
+
+template <typename T, typename Params>
+class CSampleXAPOBase : public CXAPOBase {
+public:
+    CSampleXAPOBase();
+    virtual ~CSampleXAPOBase() {}
+
+protected:
+    virtual void OnSetParameters(const Params& params) = 0;
+    virtual void DoProcess(const Params& params, int* arg1, float arg2, int arg3, int arg4) = 0;
+
+private:
+    // Internal state - CXAPOBase = 0x24 bytes (0x20 CXAPOParametersBase + 0x4 IXAPOParameters)
+    // CSampleXAPOBase adds 0x144 bytes of state, so total CSampleXAPOBase = 0x168 bytes
+    char pad[0x144];
+};
+
+} // namespace ATG
 
 namespace DSP {
 
@@ -19,37 +46,17 @@ namespace Synapse {
 class Synapse;
 }
 
-struct SynapseAPOParams {
-  SynapseAPOParams();
-};
-
-template <typename T, typename Params>
-class CSampleXAPOBase : public CXAPOBase, public IXAPOParameters {
+class SynapseAPO : public ATG::CSampleXAPOBase<SynapseAPO, SynapseAPOParams> {
 public:
-  CSampleXAPOBase();
-  virtual ~CSampleXAPOBase() {}
-
-protected:
-  virtual void OnSetParameters(const Params& params) = 0;
-  virtual void DoProcess(const Params& params, int* arg1, float arg2, int arg3, int arg4) = 0;
+    SynapseAPO();
+    virtual ~SynapseAPO();
+    void SetSamplingRate(float rate);
+    void OnSetParameters(const SynapseAPOParams& params);
+    void DoProcess(const SynapseAPOParams& params, int* arg1, float arg2, int arg3, int arg4);
 
 private:
-  // Base class padding - ensures derived class members start at offset 0x168
-  // CXAPOBase = 0x20, IXAPOParameters vtable = 0x4, total base = 0x24
-  char pad[0x144];
-};
-
-class SynapseAPO : public CSampleXAPOBase<SynapseAPO, SynapseAPOParams> {
-public:
-  SynapseAPO();
-  virtual ~SynapseAPO();
-  void SetSamplingRate(float rate);
-  void OnSetParameters(const SynapseAPOParams& params);
-  void DoProcess(const SynapseAPOParams& params, int* arg1, float arg2, int arg3, int arg4);
-
-private:
-  Synapse::Synapse* mSynapse;
-  SynapseAPOParams mParams;
+    Synapse::Synapse* mSynapse;   // at offset 0x168
+    SynapseAPOParams mParams;     // at offset 0x16c
 };
 
 }  // namespace DSP

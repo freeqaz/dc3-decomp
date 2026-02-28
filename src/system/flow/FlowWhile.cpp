@@ -1,6 +1,7 @@
 #include "flow/FlowWhile.h"
 #include "flow/FlowNode.h"
 #include "flow/FlowSwitch.h"
+#include "flow/FlowSwitchCase.h"
 #include "flow/PropertyEventListener.h"
 #include "obj/Data.h"
 #include "obj/Object.h"
@@ -93,7 +94,7 @@ void FlowWhile::ChildFinished(FlowNode *n) {
     } else {
         PushDrivenProperties();
         mRunningNodes.remove(n);
-        if (n) {
+        if (n && static_cast<FlowSwitchCase *>(n)->Op() == kTransition) {
             if (mValue != mPreviousValue) {
                 DataNode dupe(mPreviousValue);
                 mPreviousValue = mValue;
@@ -104,7 +105,7 @@ void FlowWhile::ChildFinished(FlowNode *n) {
                 ActivateValueCases(mValue, mPreviousValue);
             }
         } else {
-            if (mPreviousValue != mValue) {
+            if (mValue != mPreviousValue) {
                 DataNode dupe(mPreviousValue);
                 mPreviousValue = mValue;
                 if (!ActivateTransitionCases(mValue, dupe)) {

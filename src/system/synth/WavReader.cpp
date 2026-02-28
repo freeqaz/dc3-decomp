@@ -2,7 +2,9 @@
 
 #include "os/Memcard.h"
 
-WavReader::WavReader(File *file, StandardStream *stream) : mInFile(file), mOutStream(stream){
+WavReader::WavReader(File *file, StandardStream *stream) {
+    mInFile = file;
+    mOutStream = stream;
     MILO_ASSERT(mInFile, 0x1a);
     mInFileStream = new FileStream(file, true);
     mInWaveFile = new WaveFile(*mInFileStream);
@@ -13,7 +15,13 @@ WavReader::WavReader(File *file, StandardStream *stream) : mInFile(file), mOutSt
     mSampleRate = mInWaveFile->SamplesPerSec();
     mSamplesLeft = mInWaveFile->NumSamples();
     for (int i = 0; i < mInWaveFile->NumMarkers(); i++) {
-        stream->AddMarker(mInWaveFile->Markers()[i].mName);
+        WaveFileMarker &wfm = mInWaveFile->Markers()[i];
+        int frame = wfm.mFrame;
+        float posMS = (float)frame * 1000.0f / (float)mInWaveFile->mSamplesPerSec;
+        Marker marker(wfm.mName);
+        marker.position = frame;
+        marker.posMS = posMS;
+        stream->AddMarker(marker);
     }
     mInWaveFileData = new WaveFileData(*mInWaveFile);
     mInputBuffers[0] = new unsigned short[0x1000];
@@ -23,7 +31,7 @@ WavReader::WavReader(File *file, StandardStream *stream) : mInFile(file), mOutSt
     mBufNumSamples = 0;
     mBufOffset = 0;
     mEnableReads = true;
-    mInitted = true;
+    mInitted = false;
 }
 
 WavReader::~WavReader() {

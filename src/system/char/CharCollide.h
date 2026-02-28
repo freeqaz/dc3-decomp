@@ -39,6 +39,7 @@ public:
 
     void SyncShape();
     void CopyOriginalToCur();
+    float GetCurRadius() const { return mCurRadius[0]; }
 
 protected:
     CharCollide();

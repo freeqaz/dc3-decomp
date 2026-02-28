@@ -219,7 +219,8 @@ void CharHair::Load(BinStream &bs) {
         bs >> mMinSlack >> mMaxSlack;
     d >> mStrands;
     d >> mSimulate;
-    bs >> mWindObj;
+    if (d.rev > 10)
+        bs >> mWindObj;
     if (d.rev > 11)
         bs >> mWind;
     if (d.rev > 12)
@@ -264,13 +265,51 @@ BinStream &operator>>(BinStream &bs, CharHair::Point &pt) {
 }
 
 void operator>>(BinStreamRev &d, CharHair::Point &pt) {
+    char buf[0x100];
+    char buf2[0x100];
     d >> pt.pos;
     d >> pt.bone;
     d >> pt.length;
+    if (d.rev < 3) {
+        int i;
+        d.stream >> i;
+        d.stream.ReadString(buf, 0xFF);
+    } else if (d.rev == 3) {
+        int i;
+        d.stream >> i;
+    }
     d >> pt.radius;
-    d >> pt.outerRadius;
-    d >> pt.sideLength;
-    d >> pt.unk78;
+    if (d.rev > 1)
+        d >> pt.outerRadius;
+    else
+        pt.outerRadius = 0;
+    if (d.rev < 9 && d.rev > 5) {
+        float f;
+        d >> f;
+        pt.radius += f;
+        pt.outerRadius += f;
+    }
+    if (d.rev == 6) {
+        d.stream.ReadString(buf2, 0xFF);
+    }
+    if (d.rev < 8) {
+        pt.sideLength = -1.0f;
+        if (d.rev > 5) {
+            int i;
+            d.stream >> i >> i;
+        }
+    } else {
+        bool b = false;
+        if (d.rev < 9)
+            d >> b;
+        d >> pt.sideLength;
+        if (d.rev < 9 && !b) {
+            pt.sideLength = -1.0f;
+        }
+    }
+    if (d.rev > 9) {
+        d >> pt.unk78;
+    }
     pt.collides.clear();
     pt.force.Zero();
     pt.lastFriction.Zero();

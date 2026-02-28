@@ -2164,6 +2164,8 @@ extern "C" const char __link_glue_empty_str[] = "";
 
 // -- Float constants (6 symbols) --
 #pragma comment(linker, "/ALTERNATENAME:__real@3b000000=__link_glue_zero")
+#pragma comment(linker, "/ALTERNATENAME:__real@3d800000=__link_glue_zero")
+#pragma comment(linker, "/ALTERNATENAME:__real@3db851ec=__link_glue_zero")
 #pragma comment(linker, "/ALTERNATENAME:__real@3e0f5c29=__link_glue_zero")
 #pragma comment(linker, "/ALTERNATENAME:__real@3e400000=__link_glue_zero")
 #pragma comment(linker, "/ALTERNATENAME:__real@3fa00000=__link_glue_zero")
@@ -2752,9 +2754,7 @@ extern "C" const char __link_glue_empty_str[] = "";
 #pragma comment(linker, "/ALTERNATENAME:??$__uninitialized_copy@PAVTriangle@@PAV1@@stlpmtx_std@@YAPAVTriangle@@PAV1@00ABU__false_type@0@@Z=__link_glue_noop")
 #pragma comment(linker, "/ALTERNATENAME:??$__uninitialized_copy@PBVSampleMarker@@PAV1@@stlpmtx_std@@YAPAVSampleMarker@@PBV1@0PAV1@ABU__false_type@0@@Z=__link_glue_noop")
 #pragma comment(linker, "/ALTERNATENAME:??$sort@PAH@stlpmtx_std@@YAXPAH0@Z=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:??$sort@UAlphabetically@@@?$ObjPtrVec@VCharClip@@VObjectDir@@@@QAAXABUAlphabetically@@@Z=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:??$sort@UObjNameSort@@@?$ObjPtrVec@VObject@Hmx@@VObjectDir@@@@QAAXABUObjNameSort@@@Z=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:??$sort@USortCollides@CharHair@@@?$ObjPtrList@VCharCollide@@VObjectDir@@@@QAAXABUSortCollides@CharHair@@@Z=__link_glue_noop")
+#pragma comment(linker, "/ALTERNATENAME:??$_Destroy_Range@PAULabel@?A0x81ddebd1@@@stlpmtx_std@@YAXPAULabel@?A0x81ddebd1@@0@Z=__link_glue_noop")
 
 // -- Game/engine data (810 symbols) --
 #pragma comment(linker, "/ALTERNATENAME:??_C@_02EAOCEIGI@?$DP?$CK?$AA@=__link_glue_zero")
@@ -4104,3 +4104,171 @@ extern "C" const char __link_glue_empty_str[] = "";
 #pragma comment(linker, "/ALTERNATENAME:jumptable_82070810=__link_glue_noop")
 #pragma comment(linker, "/ALTERNATENAME:jumptable_8209C900=__link_glue_noop")
 #pragma comment(linker, "/ALTERNATENAME:jumptable_8209C910=__link_glue_noop")
+
+// ============================================================================
+// Template instantiation stubs
+// ALTERNATENAME doesn't work for ??$ template symbols. These need actual
+// compiled code to satisfy the linker.
+// ============================================================================
+
+// -- Additional includes for template instantiations --
+#include "world/CameraShot.h"
+#include "char/CharClip.h"
+#include "char/CharInterest.h"
+#include "char/CharLookAt.h"
+#include "flow/Flow.h"
+#include "hamobj/HamCamShot.h"
+#include "hamobj/HamListRibbon.h"
+#include "hamobj/HamScrollSpeedIndicator.h"
+#include "hamobj/RhythmDetector.h"
+#include "rndobj/Env.h"
+#include "rndobj/FontBase.h"
+#include "rndobj/Font.h"
+#include "rndobj/LitAnim.h"
+#include "rndobj/Mat.h"
+#include "rndobj/MatAnim.h"
+#include "rndobj/MeshAnim.h"
+#include "rndobj/PartAnim.h"
+#include "rndobj/PartLauncher.h"
+#include "rndobj/TexBlendController.h"
+#include "rndobj/Group.h"
+#include "world/SpotlightDrawer.h"
+#include "world/Instance.h"
+#include "ui/UIListDir.h"
+#include "char/CharCollide.h"
+#include "char/CharHair.h"
+#include "char/CharClipSet.h"
+
+// -- BinStream operator<< for ObjPtrList<T> --
+
+#define BINSTREAM_OP_OBJPTRLIST(T) \
+template <> \
+BinStream &operator<<(BinStream &bs, const ObjPtrList<T, ObjectDir> &list) { \
+    bs << list.size(); \
+    for (ObjPtrList<T>::iterator it = list.begin(); it != list.end(); ++it) { \
+        Hmx::Object *obj = *it; \
+        const char *name = obj ? obj->Name() : ""; \
+        bs << name; \
+    } \
+    return bs; \
+}
+
+BINSTREAM_OP_OBJPTRLIST(CamShot)
+BINSTREAM_OP_OBJPTRLIST(CharBone)
+BINSTREAM_OP_OBJPTRLIST(EventTrigger)
+BINSTREAM_OP_OBJPTRLIST(HamCamShot)
+BINSTREAM_OP_OBJPTRLIST(RndFontBase)
+BINSTREAM_OP_OBJPTRLIST(RndMat)
+BINSTREAM_OP_OBJPTRLIST(RndPartLauncher)
+BINSTREAM_OP_OBJPTRLIST(RndTexBlendController)
+BINSTREAM_OP_OBJPTRLIST(Sequence)
+
+#undef BINSTREAM_OP_OBJPTRLIST
+
+// -- BinStream operator<< for ObjPtrVec<T> --
+
+#define BINSTREAM_OP_OBJPTRVEC(T) \
+template <> \
+BinStream &operator<<(BinStream &bs, const ObjPtrVec<T, ObjectDir> &vec) { \
+    bs << (int)vec.size(); \
+    for (int i = 0; i < (int)vec.size(); i++) { \
+        const Hmx::Object *obj = vec[i]; \
+        const char *name = obj ? obj->Name() : ""; \
+        bs << name; \
+    } \
+    return bs; \
+}
+
+BINSTREAM_OP_OBJPTRVEC(CharClip)
+BINSTREAM_OP_OBJPTRVEC(Flow)
+BINSTREAM_OP_OBJPTRVEC(Hmx::Object)
+BINSTREAM_OP_OBJPTRVEC(RhythmDetector)
+BINSTREAM_OP_OBJPTRVEC(RndDrawable)
+BINSTREAM_OP_OBJPTRVEC(RndEnviron)
+BINSTREAM_OP_OBJPTRVEC(RndLight)
+BINSTREAM_OP_OBJPTRVEC(RndMat)
+BINSTREAM_OP_OBJPTRVEC(Spotlight)
+BINSTREAM_OP_OBJPTRVEC(SpotlightDrawer)
+
+#undef BINSTREAM_OP_OBJPTRVEC
+
+// -- BinStream operator<< for ObjOwnerPtr<T> --
+
+#define BINSTREAM_OP_OBJOWNERPTR(T) \
+template <> \
+BinStream &operator<<(BinStream &bs, const ObjOwnerPtr<T> &ptr) { \
+    Hmx::Object *obj = ptr; \
+    const char *name = obj ? obj->Name() : ""; \
+    bs << name; \
+    return bs; \
+}
+
+BINSTREAM_OP_OBJOWNERPTR(CharInterest)
+BINSTREAM_OP_OBJOWNERPTR(CharLookAt)
+BINSTREAM_OP_OBJOWNERPTR(EventTrigger)
+BINSTREAM_OP_OBJOWNERPTR(ObjectDir)
+BINSTREAM_OP_OBJOWNERPTR(RndAnimatable)
+BINSTREAM_OP_OBJOWNERPTR(RndDrawable)
+BINSTREAM_OP_OBJOWNERPTR(RndEnviron)
+BINSTREAM_OP_OBJOWNERPTR(RndFont)
+BINSTREAM_OP_OBJOWNERPTR(RndLightAnim)
+BINSTREAM_OP_OBJOWNERPTR(RndMatAnim)
+BINSTREAM_OP_OBJOWNERPTR(RndMeshAnim)
+BINSTREAM_OP_OBJOWNERPTR(RndParticleSysAnim)
+
+#undef BINSTREAM_OP_OBJOWNERPTR
+
+// -- BinStream operator<< for ObjDirPtr<T> --
+
+#define BINSTREAM_OP_OBJDIRPTR(T) \
+template <> \
+BinStream &operator<<(BinStream &bs, const ObjDirPtr<T> &ptr) { \
+    T *dir = ptr; \
+    const char *name = dir ? dir->Name() : ""; \
+    bs << name; \
+    return bs; \
+}
+
+BINSTREAM_OP_OBJDIRPTR(HamListRibbon)
+BINSTREAM_OP_OBJDIRPTR(HamScrollSpeedIndicator)
+BINSTREAM_OP_OBJDIRPTR(ObjectDir)
+BINSTREAM_OP_OBJDIRPTR(UIListDir)
+
+#undef BINSTREAM_OP_OBJDIRPTR
+
+// -- PropSync<T> for ObjPtrVec<T> --
+// These are stub implementations that just return false.
+
+#define PROPSYNC_OBJPTRVEC(T) \
+template <> \
+bool PropSync(ObjPtrVec<T, ObjectDir> &, DataNode &, DataArray *, int, PropOp) { \
+    return false; \
+}
+
+PROPSYNC_OBJPTRVEC(CharClip)
+PROPSYNC_OBJPTRVEC(Flow)
+PROPSYNC_OBJPTRVEC(Hmx::Object)
+PROPSYNC_OBJPTRVEC(RhythmDetector)
+PROPSYNC_OBJPTRVEC(RndDrawable)
+PROPSYNC_OBJPTRVEC(RndMat)
+PROPSYNC_OBJPTRVEC(RndTransformable)
+
+#undef PROPSYNC_OBJPTRVEC
+
+// -- PropSync<T> for ObjDirPtr<T> --
+
+template <>
+bool PropSync(ObjDirPtr<WorldInstance> &, DataNode &, DataArray *, int, PropOp) {
+    return false;
+}
+
+
+// -- GatherObjectsFromGroup<RndMesh> --
+
+template <class T>
+unsigned int GatherObjectsFromGroup(RndGroup *, std::vector<T *> &);
+
+template <>
+unsigned int GatherObjectsFromGroup<RndMesh>(RndGroup *, std::vector<RndMesh *> &) {
+    return 0;
+}

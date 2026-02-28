@@ -201,8 +201,9 @@ BEGIN_LOADS(StreamRenderer)
     d >> mForceMips;
     d >> (int &)mDisplay;
     if (d.rev > 1) {
-        d >> mPlayer1DepthColor >> mPlayer2DepthColor >> mPlayer3DepthColor
-            >> mPlayerDepthNobody >> mPlayer1DepthPalette >> mPlayer1DepthPaletteOffset;
+        d.stream >> mPlayer1DepthColor >> mPlayer2DepthColor >> mPlayer3DepthColor
+            >> mPlayerDepthNobody;
+        d >> mPlayer1DepthPalette >> mPlayer1DepthPaletteOffset;
     }
     if (d.rev > 2) {
         d >> mBackgroundDepthPalette >> mBackgroundDepthPaletteOffset;
@@ -224,8 +225,8 @@ BEGIN_LOADS(StreamRenderer)
         d >> mPlayerOtherDepthPalette;
         d >> mPlayerOtherDepthPaletteOffset;
     } else {
-        mPlayerOtherDepthPalette = mPlayer1DepthPalette;
-        mPlayerOtherDepthPaletteOffset = mPlayer1DepthPaletteOffset;
+        mPlayerOtherDepthPalette = mPlayer2DepthPalette;
+        mPlayerOtherDepthPaletteOffset = mPlayer2DepthPaletteOffset;
     }
     if (d.rev > 7) {
         d >> mDrawPreClear;
@@ -237,7 +238,7 @@ BEGIN_LOADS(StreamRenderer)
         d >> mLagPrimaryTexture;
     }
     if (d.rev > 9) {
-        d >> mPlayer4DepthColor >> mPlayer5DepthColor >> mPlayer6DepthColor;
+        d.stream >> mPlayer4DepthColor >> mPlayer5DepthColor >> mPlayer6DepthColor;
     } else {
         mPlayer4DepthColor = mPlayer3DepthColor;
         mPlayer5DepthColor = mPlayer3DepthColor;

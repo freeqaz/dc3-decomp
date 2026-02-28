@@ -103,9 +103,9 @@ BEGIN_PROPSYNCS(UIFontImporter)
 END_PROPSYNCS
 
 BEGIN_SAVES(UIFontImporter)
-    bs.WriteEndian(&mUpperCaseAthroughZ, 4);
-    bs << mUpperCaseAthroughZ;
+    SAVE_REVS(10, 4)
     bs << mLowerCaseAthroughZ;
+    bs << mUpperCaseAthroughZ;
     bs << mNumbers0through9;
     bs << mPunctuation;
     bs << mUpperEuro;
@@ -114,20 +114,19 @@ BEGIN_SAVES(UIFontImporter)
     bs << mPolish;
     bs << mIncludeLocale;
     bs << mIncludeFile;
-    String plusStr;
-    WideVectorToUTF8(mPlus, plusStr);
-    String minusStr;
-    bs << plusStr;
-    WideVectorToUTF8(mMinus, minusStr);
-    bs << minusStr;
+    String str;
+    WideVectorToUTF8(mPlus, str);
+    bs << str;
+    WideVectorToUTF8(mMinus, str);
+    bs << str;
     bs << mFontName;
     bs << mFontPctSize;
     bs << mFontWeight;
     bs << mItalics;
     bs << mDropShadow;
     bs << mDropShadowOpacity;
-    bs << mFontQuality;
     bs << mPitchAndFamily;
+    bs << mFontQuality;
     bs << mFontCharset;
     bs << mFontSupersample;
     bs << mBitmapSavePath;

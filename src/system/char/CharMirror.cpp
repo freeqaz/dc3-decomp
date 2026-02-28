@@ -47,10 +47,10 @@ BEGIN_LOADS(CharMirror)
 END_LOADS
 
 void CharMirror::Poll() {
+    static Symbol mirror_x("mirror_x");
     static Symbol x("x");
     static Symbol xy("xy");
     static Symbol zw("zw");
-    static Symbol mirror_x("mirror_x");
 
     float w = Weight();
     if (w == 0.0f || mBones.TotalSize() == 0)
@@ -58,17 +58,19 @@ void CharMirror::Poll() {
 
     mBones.ScaleDown(*mServo, 1.0f - w);
     MirrorOp *curMirrorOp = &mOps[0];
-    for (Vector3 *it = (Vector3 *)(mBones.mStart + mBones.mOffsets[CharBones::TYPE_POS]);
-         it < (Vector3 *)(mBones.mStart + mBones.mOffsets[CharBones::TYPE_SCALE]);
+    char *boneStart = mBones.mStart;
+    for (Vector3 *it = (Vector3 *)(boneStart + mBones.mOffsets[CharBones::TYPE_POS]);
+         it < (Vector3 *)(boneStart + mBones.mOffsets[CharBones::TYPE_SCALE]);
          curMirrorOp++, it++) {
         *it = *(Vector3 *)curMirrorOp->ptr;
         if (!curMirrorOp->op.Null() && curMirrorOp->op == x) {
             it->x = -it->x;
         }
+        boneStart = mBones.mStart;
     }
     for (Hmx::Quat *it =
-             (Hmx::Quat *)(mBones.mStart + mBones.mOffsets[CharBones::TYPE_QUAT]);
-         it < (Hmx::Quat *)(mBones.mStart + mBones.mOffsets[CharBones::TYPE_ROTX]);
+             (Hmx::Quat *)(boneStart + mBones.mOffsets[CharBones::TYPE_QUAT]);
+         it < (Hmx::Quat *)(boneStart + mBones.mOffsets[CharBones::TYPE_ROTX]);
          curMirrorOp++, it++) {
         *it = *(Hmx::Quat *)curMirrorOp->ptr;
         if (!curMirrorOp->op.Null()) {
@@ -83,9 +85,11 @@ void CharMirror::Poll() {
             } else
                 MILO_NOTIFY("Unknown operation %s", curMirrorOp->op);
         }
+        boneStart = mBones.mStart;
     }
-    for (float *it = (float *)(mBones.mStart + mBones.mOffsets[CharBones::TYPE_ROTX]);
-         it < (float *)(mBones.mStart + mBones.mOffsets[CharBones::TYPE_END]);
+    int endOffset = mBones.mOffsets[CharBones::TYPE_END];
+    for (float *it = (float *)(boneStart + mBones.mOffsets[CharBones::TYPE_ROTX]);
+         it < (float *)(boneStart + endOffset);
          curMirrorOp++, it++) {
         *it = *(float *)curMirrorOp->ptr;
     }

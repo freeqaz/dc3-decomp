@@ -61,10 +61,10 @@ void WahEffect::Process(float *buf, int numSamples, int numChans) {
     float f7 = f0_unk18 * f26;        // sweepRange * 2
     float f6 = f31 - f0_unk18;        // 1 - sweepRange
     float f0_norm = 4.1666666e-5f;    // 1/24000
-    float f12_twopi = 6.2831853f;     // 2*PI
+    float f12_twopi = 6.2831853f;     // 2*PI (kept alive for end-of-function phase comparison)
     float f25 = f10 * f0_norm;        // freqLo normalized
     float f24 = f9 * f0_norm;         // freqHi normalized
-    float f23 = f8 * f12_twopi;       // resonance * 2*PI
+    float f23 = f8 * 0.1f;            // bandwidth scaled by 0.1
 
     // Load state variables BEFORE the comparison
     float f10_state = mFilterState0;
@@ -123,7 +123,9 @@ void WahEffect::Process(float *buf, int numSamples, int numChans) {
         float f20 = -4.2704245e-9f;   // 0xb192bb0d (negative)
         float f22 = 0.99958f;         // 0x3f7fe47a
 
-        int sampleOffset = 0;
+        // Byte stride per sample frame (numChans * sizeof(float))
+        int chanByteStride = numChans << 2;
+        float *frame = buf;
 
         do {
             // Compute sin of phase
@@ -172,10 +174,10 @@ void WahEffect::Process(float *buf, int numSamples, int numChans) {
             float filterDiv = filterFreq / f13_unk0;
             float f17 = f31 - filterDiv;
 
-            // Compute cos/sin for filter
+            // Compute cos/sin for filter (f29 computed before cos for scheduling)
+            float f29 = f17 * f17;
             float cosVal = cos(f28);
             cosVal = (float)cosVal;
-            float f29 = f17 * f17;
             float cosMod = cosVal * f17;
             float f28_scaled = cosMod * f26;
 
@@ -187,13 +189,11 @@ void WahEffect::Process(float *buf, int numSamples, int numChans) {
             // Process channels
             if (numChans > 0) {
                 float f13_gain = f21 + f31;
-                float *bufPtr = buf + sampleOffset;
 
                 for (int ch = 0; ch < numChans; ch++) {
-                    float sample = bufPtr[ch];
-
-                    float state1 = stack50[ch];
+                    float sample = frame[ch];
                     mLastInput = sample;
+                    float state1 = stack50[ch];
                     float state2 = stack58[ch];
 
                     stack58[ch] = state1;
@@ -212,14 +212,14 @@ void WahEffect::Process(float *buf, int numSamples, int numChans) {
                     out = out / absOut;
 
                     mLastOutput = out;
-                    bufPtr[ch] = out;
+                    frame[ch] = out;
                 }
             }
 
             // Update phase
             numSamples--;
             f27 = f18 + f27;
-            sampleOffset += numChans;
+            frame = (float *)((char *)frame + chanByteStride);
         } while (numSamples != 0);
     }
 

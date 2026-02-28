@@ -61,6 +61,7 @@ void TypeProps::ClearKeyValue(Symbol key) {
                     mMap->Release();
                     mMap = nullptr;
                 }
+                return;
             }
             i -= 2;
         }

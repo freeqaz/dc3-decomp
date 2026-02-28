@@ -82,19 +82,14 @@ void BinkReader::Poll(float) {
             mSampleCurrent += iSamplesConsumed;
             mSamplesReady -= iSamplesConsumed;
 
-            if (mBink->NumTracks > 0) {
-                unsigned char i = 0;
-                do {
-                    mPCMOffsets[i] = (void *)((char *)mPCMOffsets[i] + iSamplesConsumed * 2);
-                    i++;
-                } while (i < mBink->NumTracks);
+            for (unsigned char i = 0; i < mBink->NumTracks; i++) {
+                mPCMOffsets[i] = (void *)((char *)mPCMOffsets[i] + iSamplesConsumed * 2);
             }
 
-            BINK *bink = mBink;
-            if (mDecodeTrack == bink->NumTracks) {
-                mState = (bink->FrameNum == bink->Frames) ? kDone : kPlaying;
+            if (mDecodeTrack == mBink->NumTracks) {
+                mState = (mBink->FrameNum == mBink->Frames) ? kDone : kPlaying;
                 if (mState == kPlaying) {
-                    BinkNextFrame(bink);
+                    BinkNextFrame(mBink);
                 }
                 mDecodeTrack = 0;
             }
@@ -117,19 +112,18 @@ void BinkReader::Poll(float) {
                 mDecodeTrack++;
             } while (remainingBuffer > 0);
 
-            BINK *bink2 = mBink;
-            if (mDecodeTrack == bink2->NumTracks) {
+            if (mDecodeTrack == mBink->NumTracks) {
                 unsigned int prevJump = mSamplesJump;
                 mSamplesJump = 0;
                 mSamplesReady = (trackData >> 1) - prevJump;
                 mSampleCurrent += prevJump;
 
                 int newState =
-                    (bink2->FrameNum == bink2->Frames) ? kDone : kPlaying;
+                    (mBink->FrameNum == mBink->Frames) ? kDone : kPlaying;
                 mState = newState;
 
                 if (remainingBuffer > 0 && newState == kPlaying) {
-                    BinkNextFrame(bink2);
+                    BinkNextFrame(mBink);
                     mDecodeTrack = 0;
                 }
             }
@@ -148,21 +142,17 @@ void BinkReader::Poll(float) {
             mState = kDone;
         }
 
-        if (mBink->NumTracks > 0) {
-            unsigned char i = 0;
-            do {
-                BINKTRACK *hBinkTrack = BinkOpenTrack(mBink, i);
-                mBinkTracks[i] = hBinkTrack;
-                MILO_ASSERT(hBinkTrack->Bits == 16, 0x73);
-                MILO_ASSERT(hBinkTrack->Frequency == 44100, 0x74);
-                MILO_ASSERT(hBinkTrack->Channels == 1, 0x75);
+        for (unsigned char i = 0; i < mBink->NumTracks; i++) {
+            BINKTRACK *hBinkTrack = BinkOpenTrack(mBink, i);
+            mBinkTracks[i] = hBinkTrack;
+            MILO_ASSERT(hBinkTrack->Bits == 16, 0x73);
+            MILO_ASSERT(hBinkTrack->Frequency == 44100, 0x74);
+            MILO_ASSERT(hBinkTrack->Channels == 1, 0x75);
 
-                void *buf =
-                    MemAlloc(hBinkTrack->MaxSize, "BinkReader.cpp", 0x78, "Bink Audio", 0x80);
-                mPCMBuffers[i] = buf;
-                mPCMOffsets[i] = buf;
-                i++;
-            } while (i < mBink->NumTracks);
+            void *buf =
+                MemAlloc(hBinkTrack->MaxSize, "BinkReader.cpp", 0x78, "Bink Audio", 0x80);
+            mPCMOffsets[i] = buf;
+            mPCMBuffers[i] = buf;
         }
         mState = kSetup;
         break;
