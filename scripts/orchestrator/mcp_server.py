@@ -2484,6 +2484,18 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
             ("pattern_float_precision", "Float precision"),
             ("pattern_fsel_ternary", "fsel ternary"),
             ("pattern_float_to_int_to_float", "Float-int-float"),
+            ("pattern_register_swap", "Register swap"),
+            ("pattern_comparison_style", "Comparison style"),
+            ("pattern_control_flow", "Control flow"),
+            ("pattern_commutative_op_order", "Commutative op order"),
+            ("pattern_offset_swap", "Offset swap"),
+            ("pattern_anonymous_namespace_hash", "Anon namespace hash"),
+            ("pattern_static_guard_counter", "Static guard counter"),
+            ("pattern_dynamic_cast_mismatch", "dynamic_cast mismatch"),
+            ("pattern_dead_store_elimination", "Dead store elimination"),
+            ("pattern_prologue_mismatch", "Prologue mismatch"),
+            ("pattern_alloca_mismatch", "alloca mismatch"),
+            ("pattern_scope_counter_mismatch", "Scope counter mismatch"),
         ]
         has_patterns = any(stats.get(k, 0) > 0 for k, _ in pattern_keys)
         if has_patterns:

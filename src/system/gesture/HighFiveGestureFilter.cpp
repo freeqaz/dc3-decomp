@@ -55,7 +55,7 @@ void HighFiveGestureFilter::Update(Skeleton const *skeleton1, Skeleton const *sk
             JointScreenPos(joint1, screenPos1);
             JointScreenPos(joint2, screenPos2);
 
-            if ((screenPos1.x < 0.0f) && (screenPos2.x < 0.0f)) {
+            if ((screenPos1.y < 0.0f) && (screenPos2.y < 0.0f)) {
                 float dy = pos1.y - pos2.y;
                 float dz = pos1.z - pos2.z;
                 float dx = pos1.x - pos2.x;

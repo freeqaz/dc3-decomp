@@ -275,9 +275,11 @@ ObjPtrVec<T1, T2>::find(const Hmx::Object *target) const {
 
 template <class T1, class T2>
 void ObjPtrVec<T1, T2>::swap(int a, int b) {
-    T1 *tmp = (begin() + a)->Obj();
-    Set(begin() + a, (begin() + b)->Obj());
-    Set(begin() + b, tmp);
+    iterator begin_a = begin() + a;
+    iterator begin_b = begin() + b;
+    T1 *tmp = begin_a->Obj();
+    Set(begin_a, begin_b->Obj());
+    Set(begin_b, tmp);
 }
 
 template <class T1, class T2>

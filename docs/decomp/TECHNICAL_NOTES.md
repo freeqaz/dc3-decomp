@@ -643,6 +643,52 @@ if (parent_mode == campaign)  // Compares two different static Symbols
 
 ## Debugging Techniques
 
+### Offset Mismatch Diagnosis (`[off:-N]`)
+
+When `run_diff_inspect` shows offset mismatches like `lfs f0, 0x54, r31` (target) vs `lfs f0, 0x50, r31` (base), you need to determine whether the base register (`r31`) is `this` (class member access) or a stack pointer (local variable access).
+
+**Step 1: Determine if it's class layout vs stack layout**
+
+Check other functions in the same unit. This is the key diagnostic:
+
+- If OTHER functions accessing the same class also show `[off:-N]` → **class layout bug** (fixable by adding/reordering members in the header)
+- If OTHER functions have NO offset mismatches → **stack frame layout** (usually unfixable — compiler allocates stack differently)
+
+```
+Example: StorePreviewMgr::PlayCurrentPreview had [off:-8] on 10 instructions.
+But SetCurrentPreviewFile (same class) had ZERO offset mismatches.
+→ Stack frame issue, not class layout. Unfixable.
+```
+
+**Step 2: For class layout bugs**
+
+If the offset is consistent across functions (same `[off:-N]`):
+
+1. Calculate the missing bytes: `N` bytes are missing before the accessed members
+2. Use `mcp__orchestrator__lookup_struct_offset` or `ghidra-struct` to find what should be at the gap
+3. Add the missing member(s) to the header
+
+**Step 3: For stack layout bugs (small offsets like ±4)**
+
+A `[off:-4]` on a struct field access via stack might indicate accessing the **wrong field** of a struct:
+
+```
+Example: HighFiveGestureFilter::Update had [off:-4] on two lfs instructions.
+The function compared screenPos.x but Ghidra showed the target accessed screenPos.y.
+Vector2.x is at offset 0, Vector2.y is at offset 4 — exactly the 4-byte difference.
+Fix: Change .x to .y → 99.6% → 99.7%
+```
+
+**Quick Reference:**
+
+| Offset | Likely Cause | Fixable? |
+|--------|-------------|----------|
+| ±4 | Wrong struct field (x vs y, etc.) | Often yes |
+| ±8 | Missing member OR stack frame | Check other functions |
+| ±0x10+ | Wrong base class size or missing inheritance | Usually yes |
+| Consistent across unit | Class layout bug | Yes |
+| Only in one function | Stack frame / compiler | Usually no |
+
 ### Using objdiff
 
 ```bash
@@ -900,6 +946,36 @@ Known merged patterns:
 - `#pragma fp_contract` is **ON by default** — controls fmadds generation
 - Xbox 360-specific flags tested and rejected: `/Ou` (prescheduling — breaks matches), `/Oc` (disable traps — no effect)
 - **`??_C@` string literal hashes**: The `??_C@` mangled name includes a CRC-32 hash (reflected polynomial `0xEDB88320`, init `0xFFFFFFFF`, no final XOR) computed over the **string content bytes including null terminator**. `cl.exe` calls `SigForPbCb` from `mspdbXX.dll` for this. The hash is encoded using A-P nibbles (A=0, B=1, ..., P=15). All `??_C@` hashes now match between decomp and original (0 mismatches out of 121 compared). Fixed via: (1) proper `SigForPbCb` in wibo's `mspdb_dll.cpp`, (2) `WIBO_PATH_MAP` with two source roots (`system/src/` and `lazer/src/`), (3) absolute mapped include paths, (4) 5 source string bug fixes.
+
+---
+
+## MSVC Mangled Number Encoding
+
+MSVC encodes array sizes in mangled names (e.g., `MakeString<char[N], int, char[M]>`) using two schemes:
+
+**Single digit (values 1-10):** Character `'0'`-`'9'` where `'0'`=1, `'1'`=2, ..., `'9'`=10.
+
+**Multi-digit (values > 10):** Hexadecimal digits using letters A-P, terminated by `@`:
+- A=0, B=1, C=2, D=3, E=4, F=5, G=6, H=7, I=8, J=9, K=0xA, L=0xB, M=0xC, N=0xD, O=0xE, P=0xF
+
+Each letter represents one hex digit, read left-to-right: `BE@` → 0x14 → 20 decimal.
+
+### Examples
+
+| Mangled | Decoded | String |
+|---------|---------|--------|
+| `$$BY07$$CBD` | char const[8] | 7-char string + null |
+| `$$BY0BE@$$CBD` | char const[20] | "StorePreviewMgr.cpp" (19+1) |
+| `$$BY0CD@$$CBD` | char const[35] | 34-char condition string |
+| `$$BY0O@$$CBD` | char const[14] | "mStreamPlayer" (13+1) |
+
+### Application to MILO_ASSERT
+
+`MILO_ASSERT(cond, line)` expands to `MakeString(kAssertStr, __FILE__, line, #cond)` which instantiates `MakeString<char[N], int, char[M]>` where:
+- N = `strlen(__FILE__) + 1`
+- M = `strlen(#cond) + 1`
+
+Decoding both target and base mangled names reveals whether the mismatch is due to `__FILE__` length (unfixable build path difference) or `#cond` length (wrong assert expression — fixable).
 
 ---
 

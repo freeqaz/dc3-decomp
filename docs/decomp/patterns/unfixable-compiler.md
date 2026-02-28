@@ -481,6 +481,61 @@ These mismatches are **cosmetic** — the machine code is functionally identical
 
 ---
 
+## Static Guard Naming Convention (`??_B` vs `$S`)
+
+**Prevalence:** TUs with few-static functions (e.g., MoveVariant, ClipCollide)
+**Typical Gap:** 1-3%
+
+The original MSVC compiler uses a different guard variable naming convention than our MSVC under wibo, causing systematic `$S#` counter offsets that resist reordering fixes.
+
+### Symptom
+
+`run_diff_inspect` shows STATIC_GUARD_COUNTER mismatches where the `$S#` number is consistently off by a fixed amount (e.g., target `$S4` vs base `$S3`) across ALL static-bearing functions in the TU. The pattern detector reports "LikelyFixable: reorder TU definitions" — but reordering does NOT fix it.
+
+### Root Cause
+
+The original MSVC uses two different guard variable types:
+- **`??_B` guards** (char-type, `@51` suffix): Used for functions with few static locals (≤8 typically)
+- **`$S` guards** (unsigned int, `@4IA` suffix): Used for functions with many statics
+
+These two guard types use **separate counter series**. Under wibo, our MSVC always uses `$S` (uint-type) guards regardless of static count. This means:
+
+```
+Target:                         Our build:
+  Adjacency → ??_B (not $S)      Adjacency → $S1
+  (something) → $S1              MoveVariant ctor → $S2
+  (something) → $S2              IsRest → $S3
+  MoveVariant ctor → $S3
+  IsRest → $S4
+```
+
+The `??_B` guards don't consume `$S` slots in the target, so our `$S` numbering is shifted by however many functions use `??_B` instead of `$S`.
+
+### Detection
+
+1. Run `run_diff_inspect mode=mismatches` and check the guard variable names
+2. If target uses `??_B?1??FuncName...@51` while base uses `?$S1@?1??FuncName...@4IA` for the SAME function → this pattern
+3. If ALL subsequent functions in the TU have the same fixed offset in `$S#` numbering → confirmed unfixable
+
+### Why Reordering Doesn't Help
+
+The shift is caused by a compiler behavior difference (guard type selection), not by function ordering. No amount of function reordering can change which guard type the compiler chooses. Adding dummy statics would shift numbers but create other mismatches.
+
+### What Would Fix It
+
+- Patching wibo's MSVC to use `??_B` (char-type) guards for functions with few statics, matching the original compiler's behavior
+- Or patching `c2.dll` to always use `$S` guards (would need to rebuild original)
+
+### Real Examples
+
+| Function | Match | Guard Target | Guard Base | Notes |
+|----------|-------|-------------|-----------|-------|
+| MoveVariant::IsRest | 98.0% | `$S4` | `$S3` | Adjacency uses ??_B in target |
+| MoveCandidate::Adjacency | 92.0% | `??_B...@51` | `$S1` | Different guard TYPE, not just number |
+| ClipCollide::SyncWaypoint | 98.8% | `lbl_82F5ED14` | `$S2` | Same pattern, different TU |
+
+---
+
 ## When Hard Patterns May Still Move
 
 Large functions (especially 95%+ matches) often look dominated by compiler noise, but there is usually a small actionable subset.

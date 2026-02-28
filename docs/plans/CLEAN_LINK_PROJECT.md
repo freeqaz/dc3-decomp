@@ -20,8 +20,9 @@ Changed `project.py` to skip split objects for Matching units. Data stubs provid
 |--------|-------|
 | **LNK2001/LNK2019 (unresolved)** | **0** |
 | **LNK2005 (hard duplicates)** | **0** |
-| **LNK4006 (duplicate warnings)** | **756** (see breakdown) |
-| **LNK4210 (.CRT warnings)** | 29 |
+| **LNK4006 (duplicate warnings)** | **13,400** (see breakdown and [FORCE_MULTIPLE_ELIMINATION.md](FORCE_MULTIPLE_ELIMINATION.md)) |
+| **LNK4210 (.CRT warnings)** | 113 |
+| **ALTERNATENAME stubs** | 397 (was 1,451) |
 | **Link flags** | `/FORCE:MULTIPLE` only |
 
 All unresolved symbols resolved via three approaches (see below). XEX boots in Xenia with no hangs.
@@ -57,9 +58,10 @@ All handled by `/FORCE:MULTIPLE`. The linker picks one definition and discards d
 |------|-------|---------|
 | 2026-02-20 | 275 | Wine-based linking, 252 Matching units (wine suppressed some warnings) |
 | 2026-02-23 | 3,735 | Wibo-based linking (true count), Config A (both decomp + split linked) |
-| 2026-02-26 | 756 | Config B (decomp-only for Matching), data stubs resolve cross-refs |
+| 2026-02-26 | 756 | Config B (decomp-only for Matching), 707 data stubs |
+| 2026-02-28 | 13,400 | 968 data stubs (261 new for promoted Matching units), 397 ALTERNATENAME stubs (was 1,451) |
 
-Config B eliminates same-object duplicates (3,183 warnings) by not linking split .objs for Matching units. The remaining 756 are cross-object template/inline duplicates — inherent to hybrid linking.
+Config B eliminates same-object duplicates (3,183 warnings) by not linking split .objs for Matching units. The 2026-02-28 increase to 13,400 is because 261 additional data stubs were generated for newly-promoted Matching units, each providing more COMDAT code sections that duplicate templates/RTTI/vtables across TUs. See [FORCE_MULTIPLE_ELIMINATION.md](FORCE_MULTIPLE_ELIMINATION.md).
 
 ### The String Hash Problem — RESOLVED
 
@@ -226,7 +228,9 @@ This is cosmetic — the linker resolves all relocations correctly. It causes ad
 | **5** | ~~Jeff hash normalization (fallback)~~ | ~~Safety net for mismatches~~ | — | **Unnecessary** (wibo CRC fix works) |
 | **6** | ~~NODUPLICATES acceptance~~ | ~~Same-obj LNK4006~~ | — | **Moot** (Config B) |
 
-All critical priorities are complete. The link has 0 errors and only `/FORCE:MULTIPLE` remains for 756 cosmetic COMDAT duplicate warnings. Remaining work is polish: cleaning up obsolete link_glue.cpp stubs (45 warnings) and potentially suppressing template instantiation warnings (~654).
+All critical priorities are complete. The link has 0 errors and only `/FORCE:MULTIPLE` remains for cosmetic COMDAT duplicate warnings.
+
+**Updated 2026-02-28:** After regenerating 968 data stubs (was 707) to cover newly-promoted Matching units, LNK4006 rose to **13,400** (from 756) — more data stubs means more cross-unit COMDAT duplicates. ALTERNATENAME stubs reduced from 1,451 to **397** (data stubs now provide COMDAT code that was previously stubbed). See [FORCE_MULTIPLE_ELIMINATION.md](FORCE_MULTIPLE_ELIMINATION.md) for the plan to eliminate `/FORCE:MULTIPLE` entirely.
 
 ---
 

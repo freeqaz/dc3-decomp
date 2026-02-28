@@ -91,6 +91,7 @@ Tool-specific deep docs live in subdirectories:
 | [plans/unicorn-structural-probing.md](plans/unicorn-structural-probing.md) | Structural probing beyond yes/no equivalence |
 | [plans/BUILD_ROADMAP.md](plans/BUILD_ROADMAP.md) | Path to a bootable build — phases, blockers, what's needed |
 | [plans/CLEAN_LINK_PROJECT.md](plans/CLEAN_LINK_PROJECT.md) | Clean link project — eliminate `/FORCE` flags, get 1:1 XEX (spans jeff + wibo + dc3-decomp) |
+| [plans/FORCE_MULTIPLE_ELIMINATION.md](plans/FORCE_MULTIPLE_ELIMINATION.md) | Eliminating `/FORCE:MULTIPLE` — link architecture, 13,400 LNK4006 duplicates, strategies |
 | [plans/LINKED_BINARY_VERIFICATION.md](plans/LINKED_BINARY_VERIFICATION.md) | Re-split linked XEX for ground-truth objdiff comparison (accounts for ICF, COMDAT) |
 | [plans/XENIA_HEADLESS_STATUS.md](plans/XENIA_HEADLESS_STATUS.md) | Early plan — see `runtime/XENIA_HEADLESS_STATUS.md` for current |
 | [plans/THUNK_SECTION_IMPLEMENTATION.md](plans/THUNK_SECTION_IMPLEMENTATION.md) | Import resolution implementation (COMPLETED) |

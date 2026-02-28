@@ -12,6 +12,46 @@ int gNextCatPriority = 1;
 bool gOrganizing;
 bool gGenderChirality;
 
+bool FileMergerSort::operator()(const FileMerger::Merger *m1, const FileMerger::Merger *m2) {
+    CatData &m1data = gCatPriority[m1->mName];
+    CatData &m2data = gCatPriority[m2->mName];
+    if (m2data.priority == 0) {
+        if (gOrganizing) {
+            TheDebug.Notify(MakeString("unknown file merger organizer category %s", m2->mName));
+        }
+        m2data.priority = gNextCatPriority++;
+        m2data.mInGenderOrder = false;
+    }
+    if (m1data.priority == 0) {
+        if (gOrganizing) {
+            TheDebug.Notify(MakeString("unknown file merger organizer category %s", m1->mName));
+        }
+        m1data.priority = gNextCatPriority++;
+        m1data.mInGenderOrder = false;
+    }
+    CatData aData = m1data;
+    CatData bData = m2data;
+    if (m1->loading.empty()) {
+        aData.priority -= gNextCatPriority;
+        MILO_ASSERT(aData.priority < 0, 0x5f);
+    }
+    if (m2->loading.empty()) {
+        bData.priority -= gNextCatPriority;
+        MILO_ASSERT(bData.priority < 0, 0x64);
+    }
+    if (aData.mInGenderOrder && bData.mInGenderOrder) {
+        bool female1 = strstr(m1->loading.c_str(), "female") != 0;
+        bool female2 = strstr(m2->loading.c_str(), "female") != 0;
+        if (female1 != female2) {
+            return gGenderChirality ^ (female1 > female2);
+        }
+    }
+    if (aData.priority == bData.priority) {
+        return strcmp(m1->loading.c_str(), m2->loading.c_str()) < 0;
+    }
+    return aData.priority < bData.priority;
+}
+
 void FileMergerOrganizerLoader::PollLoading() { TheFileMergerOrganizer->StartLoad(); }
 
 FileMergerOrganizer::FileMergerOrganizer() : mActiveOrg(nullptr), mStartOrg(nullptr) {

@@ -189,7 +189,7 @@ bool PlatformMgr::ShowFitnessBodyProfileUI(int padNum) {
     return ret == 0;
 }
 
-void PlatformMgr::PreInit() {}
+void PlatformMgr::PreInit() { XMPOverrideBackgroundMusic(); }
 void PlatformMgr::EnableXMP() { XMPRestoreBackgroundMusic(); }
 void PlatformMgr::DisableXMP() { XMPOverrideBackgroundMusic(); }
 

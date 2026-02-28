@@ -174,7 +174,22 @@ void MidiReader::ReadMidiEvent(
         QueueChannelMsg(tick, status, data1, data2);
 }
 
-float pow(float, int);
+float pow(float base, int exponent) {
+    int exp = exponent;
+    if (exponent < 0)
+        exp = -exponent;
+    float result = 1.0f;
+    for (;;) {
+        if (exp & 1)
+            result *= base;
+        exp = (unsigned)exp >> 1;
+        if (!exp) break;
+        base *= base;
+    }
+    if (exponent < 0)
+        result = 1.0f / result;
+    return result;
+}
 
 void MidiReader::ReadMetaEvent(int tick, unsigned char type, BinStream &bs) {
     MidiVarLenNumber num(bs);

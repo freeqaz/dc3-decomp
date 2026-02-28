@@ -8,7 +8,7 @@
 ### Progress Snapshot
 - **29,927 COMPLETE** (92.6%), **1,674 AT_LIMIT** (5.2%), **727 remaining** (2.2%)
 - **368 Matching units** linked into hybrid binary
-- **0 link errors**, `/FORCE:MULTIPLE` only (746 LNK4006 cosmetic warnings)
+- **0 link errors**, `/FORCE:MULTIPLE` only (13,400 LNK4006 cosmetic warnings — see [FORCE_MULTIPLE_ELIMINATION.md](FORCE_MULTIPLE_ELIMINATION.md))
 - **Decomp XEX boots** in Xenia headless (main loop, all imports resolved)
 - **Normalized match%** available in objdiff fork (relocation-filtered alongside raw)
 

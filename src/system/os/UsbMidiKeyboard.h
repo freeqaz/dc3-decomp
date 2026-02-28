@@ -89,7 +89,7 @@ public:
         mKeyVelocity[pad][key] = vel;
     }
 
-    bool GetSustain(int i) const { return mSustain[i]; }
+    bool GetSustain(int);
     bool GetStompPedal(int i) const { return mStompPedal[i]; }
     int GetModVal(int i) const { return mModVal[i]; }
     int GetExpressionPedal(int i) const { return mExpressionPedal[i]; }

@@ -12,6 +12,10 @@ namespace {
     bool gForceDetectKeytar = false;
 }
 
+bool UsbMidiKeyboard::GetSustain(int pad) {
+    return mSustain[pad];
+}
+
 int UsbMidiKeyboard::GetSlottedKeyVelocityFromExtended(int i, unsigned char *uc) {
     if (gUseMidiPort)
         return 0;

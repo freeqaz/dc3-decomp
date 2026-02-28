@@ -31,6 +31,7 @@ These patterns can often be fixed with source changes. Sorted by ROI (impact x s
 | Unsigned Zero Comparison | +0.4-1.3% | 95% | [fixable-comparison.md](fixable-comparison.md#unsigned-zero-comparison) |
 | Operator Overload Selection | +1-2% | 100% | [fixable-operators.md](fixable-operators.md#operator-overload-selection) |
 | Inline Assignment | +1-2% | 95% | [fixable-operators.md](fixable-operators.md#inline-assignment) |
+| Early Return Destructor Path Separation | +10-16% | HIGH | [fixable-control-flow.md](fixable-control-flow.md#early-return-for-destructor-path-separation) |
 | Ternary vs If-Else | +5-10% | 75% | [fixable-control-flow.md](fixable-control-flow.md#ternary-vs-if-else) |
 | IsNaN vs Threshold Check | +3-5% | HIGH | [fixable-comparison.md](fixable-comparison.md#isnan-vs-threshold-check) |
 | Split && into Nested If | +5-18% | HIGH | [fixable-control-flow.md](fixable-control-flow.md#split--into-nested-if) |
@@ -68,6 +69,7 @@ These patterns can often be fixed with source changes. Sorted by ROI (impact x s
 | Sequential If vs If-Else | [fixable-control-flow.md](fixable-control-flow.md#sequential-if-vs-if-else) |
 | Single Return for Branch Direction | [fixable-control-flow.md](fixable-control-flow.md#single-return-for-branch-direction) |
 | Branch Polarity Steering | [fixable-control-flow.md](fixable-control-flow.md#branch-polarity-steering-beqbne-blebge) |
+| Early Return Destructor Path Separation | [fixable-control-flow.md](fixable-control-flow.md#early-return-for-destructor-path-separation) |
 | Boolean Index | [fixable-operators.md](fixable-operators.md#boolean-index) |
 | Bitwise Alignment | [fixable-operators.md](fixable-operators.md#bitwise-alignment) |
 | Commutative Operand Order | [fixable-operators.md](fixable-operators.md#commutative-operand-order) |
@@ -103,6 +105,7 @@ These patterns resist simple source-level fixes. Each documents what would be ne
 | Stack Spill Scheduling | high register pressure | ~1-2% | [unfixable-compiler.md](unfixable-compiler.md#stack-spill-scheduling) |
 | Store-then-Reload Scheduling | global store sites | 0.5-1% | [unfixable-compiler.md](unfixable-compiler.md#store-then-reload-scheduling) |
 | Address Relocation Noise | ~150 AT_LIMIT functions | 0.5-2% | [unfixable-compiler.md](unfixable-compiler.md#address-relocation-noise) |
+| Static Guard Naming (`??_B` vs `$S`) | TUs with few-static funcs | 1-3% | [unfixable-compiler.md](unfixable-compiler.md#static-guard-naming-convention-_b-vs-s) |
 
 ---
 
@@ -261,6 +264,8 @@ From 143 successful fine-tuning attempts (90%+ start, 100% end):
 - [fixable-fsel-fma.md](fixable-fsel-fma.md) — fsel intrinsic, Clamp templates, #pragma fp_contract
 - [fixable-operators.md](fixable-operators.md) — FMA order, operator overload, inline assignment
 - [fixable-bool-mask.md](fixable-bool-mask.md) — Bool mask (`clrlwi`) fixes
-- [unfixable-compiler.md](unfixable-compiler.md) — Hard patterns: register swap, ASSERT_REVS, fmadds, fsel pressure
+- [unfixable-compiler.md](unfixable-compiler.md) — Hard patterns: register swap, ASSERT_REVS, fmadds, fsel pressure, guard naming
+- [TECHNICAL_NOTES.md: Offset Diagnosis](../TECHNICAL_NOTES.md#offset-mismatch-diagnosis-off--n) — How to diagnose `[off:-N]` mismatches (class vs stack)
+- [TECHNICAL_NOTES.md: MSVC Encoding](../TECHNICAL_NOTES.md#msvc-mangled-number-encoding) — Decode MakeString template sizes
 - [verifiable-icf.md](verifiable-icf.md) — ICF, LTCG, float constant pooling
 - [harmful-avoid.md](harmful-avoid.md) — Member aliasing, child pointer in loop

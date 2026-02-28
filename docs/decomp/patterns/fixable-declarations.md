@@ -659,6 +659,10 @@ DataNode Object::Handle() { ... }        // $S12 — MUST come last
 |----------|--------|-------|-------|-------|
 | Object::SyncProperty | 96.4% | 99.8% | +3.4% | Moved Handle/BEGIN_HANDLERS after SyncProperty |
 
+### Caveat: `??_B` vs `$S` Guard Naming (Unfixable)
+
+If the target uses `??_B` (char-type) guards while our build uses `$S` (uint-type) guards for the SAME function, reordering will NOT help — the counter series are separate. See [unfixable-compiler.md](unfixable-compiler.md#static-guard-naming-convention-_b-vs-s) for details. Detect this by checking if the guard variable in the target mangled name starts with `??_B` instead of `$S`.
+
 ### Note: Header Functions Can Steal Guard Slots
 
 Non-inline functions defined in headers that get compiled into the TU will claim `$S#` slots, shifting all subsequent guards. Adding `inline` prevents this:

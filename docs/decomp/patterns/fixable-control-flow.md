@@ -676,6 +676,157 @@ bool NetLoaderRef::IsDownloading() {
 
 ---
 
+## Early Return for Destructor Path Separation
+
+**Impact:** +10-16%
+**Success Rate:** HIGH (when destructor merging is the root cause)
+**Time:** 10-15 minutes
+
+When local objects with destructors (String, Marker, etc.) exist in if/else blocks, restructure to early-return so the compiler generates separate destructor calls per exit path instead of merging them into a common epilogue.
+
+### Symptom
+
+objdiff shows fewer destructor calls (`bl String::~String` or similar) in our build than the target. The target has N destructor calls but our build has N-1 or N-2, because the compiler merged destructor calls from the if-body and else-body into a single shared epilogue path.
+
+Typically appears as:
+- Insert/delete clusters around function epilogue
+- `delete` entries for destructor `bl` calls that exist in the target but not in our build
+- Different branch targets near the return paths
+
+### Why It Works
+
+With if/else, the compiler can merge destructor calls from both branches into a single common epilogue:
+
+```
+if (cond) {
+    // uses locals with dtors
+    return true;     // compiler sees: "both paths need same dtors, merge them"
+} else {
+    return false;    // shares destructor epilogue with if-body
+}
+```
+
+With early-return, each return point generates its own destructor sequence:
+
+```
+if (!cond) {
+    return false;    // generates destructors for locals in scope HERE
+}
+// ...
+return true;         // generates destructors for locals in scope HERE (separate)
+```
+
+The early-return pattern forces the compiler to emit separate destructor calls at each return site because it can't prove they share the same cleanup requirements.
+
+### Fix
+
+```cpp
+// Before (83.7%) — if/else merges destructor calls into common epilogue
+bool GetCurrLoopMarkers(float &f1, float &f2) const {
+    Marker m2, m1;           // Marker contains String (has dtor)
+    Stream *s = mSongStream;
+    if (s && s->CurrentJumpPoints(m1, m2)) {
+        f1 = m2.posMS;
+        f2 = m1.posMS;
+        return true;
+    } else {
+        return false;        // compiler merges dtors with if-body
+    }
+}
+
+// After (99.8%) — early-return forces separate destructor paths
+bool GetCurrLoopMarkers(float &f1, float &f2) const {
+    Marker m2, m1;
+    Stream *s = mSongStream;
+    if (!s || !s->CurrentJumpPoints(m1, m2)) {
+        return false;        // dtors for m1, m2 generated HERE
+    }
+    f1 = m2.posMS;
+    f2 = m1.posMS;
+    return true;             // dtors for m1, m2 generated HERE (separate)
+}
+```
+
+### Detection
+
+1. Count destructor calls in target vs base using `run_diff_inspect mode=mismatches`
+2. If target has more `bl` calls to destructors than our build, the compiler is merging
+3. Look for `delete` entries at destructor `bl` instructions near the epilogue
+4. Check if locals in scope have non-trivial destructors (String, Marker, ObjPtr, etc.)
+
+### Diagnostic Workflow
+
+This pattern often requires **Ghidra decompilation** to confirm the target's behavior, since the fix may require counterintuitive changes:
+
+1. Run `run_diff_inspect mode=mismatches` to see structural differences
+2. Use `ghidra-decompile` to see the target's actual control flow and assignment order
+3. Compare Ghidra output with your source — assignments may be reversed
+4. Apply all needed changes together (declaration order + assignments + control flow)
+
+### Important: Often Requires Combined Fixes
+
+This pattern rarely appears in isolation. The HamAudio fix required **three simultaneous changes**:
+
+1. **Declaration order swap** (`Marker m2, m1` instead of `m1, m2`) — fixes stack offsets
+2. **Assignment order swap** (`f1 = m2.posMS; f2 = m1.posMS`) — matches target's actual behavior (confirmed via Ghidra)
+3. **Early-return restructure** — forces separate destructor paths
+
+Applying only one or two of these changes did NOT improve the match. All three were needed together.
+
+### Real Examples
+
+| Function | Before | After | Delta | Notes |
+|----------|--------|-------|-------|-------|
+| HamAudio::GetCurrLoopMarkers | 83.7% | 99.8% | +16.1% | Combined: decl swap + assignment swap + early-return |
+
+### When to Use
+
+- Functions with `if/else return` where locals have non-trivial destructors
+- Target shows more destructor `bl` calls than our build
+- Typically 80-90% match range with structural clusters near epilogue
+- Most effective with RAII types: String, Marker, ObjPtr, Message, DataArrayPtr
+
+### Related Patterns
+
+- [Dead Store Elimination / Destructor Merging](unfixable-compiler.md#dead-store-elimination--destructor-merging) — similar root cause but for RAII wrapper null-out patterns (unfixable)
+- [Sequential If vs If-Else](#sequential-if-vs-if-else) — simpler version without destructor implications
+
+---
+
+## AT_LIMIT Triage Methodology
+
+**Impact:** Finding remaining fixable functions
+**Time:** Varies
+
+When the project reaches high completion (97%+), systematic triage methodology for AT_LIMIT functions.
+
+### Effective Approach
+
+1. **Query by match range and verdict**: Start with 80-99% `has_fixable_structural` functions
+2. **Run `diagnose` mode**: Separate fixable patterns (diff_op, clusters) from noise (register swaps, address relocation)
+3. **Run `mismatches` mode on promising candidates**: Look for specific instruction-level differences
+4. **Use Ghidra decompile for ground truth**: When objdiff alone isn't sufficient to understand what the target does
+5. **Run the permuter**: Automated exploration of signed/unsigned casts and variable extraction
+6. **Move to the next candidate quickly**: At saturation, most functions are genuinely unfixable — don't spend more than 15-20 minutes per function
+
+### Quick Disqualifiers
+
+Stop investigating if you see:
+- **31+ register swap pairs** → Fundamental allocation difference, unfixable
+- **All diff_arg explained by address relocation + register swaps** → Pure noise
+- **`__savegprlr_N` prologue mismatch** → Different callee-saved register count, usually unfixable
+- **ICF symbol at `bl` call** → Linker merged different template instantiation, unfixable
+- **MakeString template type mismatch** → `__FILE__` string length difference, unfixable
+
+### Saturation Indicators
+
+At project saturation (97%+ COMPLETE):
+- Finding one fixable function requires analyzing ~50 candidates
+- The permuter finds zero improvements across 10+ consecutive runs
+- Most remaining functions are blocked by systemic patterns (address relocation: 4,741, MakeString: 2,928, ICF: 264)
+
+---
+
 ## See Also
 
 - [fixable-comparison.md](fixable-comparison.md) - Conditional expression patterns

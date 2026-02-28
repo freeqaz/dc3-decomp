@@ -14,7 +14,7 @@ from typing import Any
 DEFAULT_DB_PATH = "decomp.db"
 
 # Schema version for migrations
-SCHEMA_VERSION = 11
+SCHEMA_VERSION = 12
 
 # Default maximum attempts before deprioritizing a function
 # Functions with >= this many attempts are excluded from normal queries
@@ -395,6 +395,30 @@ def _run_migrations(conn: sqlite3.Connection, from_version: int, to_version: int
         new_columns = [
             ("has_fsel_ternary", "BOOLEAN DEFAULT 0"),
             ("has_float_to_int_to_float", "BOOLEAN DEFAULT 0"),
+        ]
+        for col_name, col_def in new_columns:
+            try:
+                conn.execute(f"ALTER TABLE functions ADD COLUMN {col_name} {col_def}")
+            except sqlite3.OperationalError as e:
+                if "duplicate column" not in str(e).lower():
+                    raise
+
+    if from_version < 12 <= to_version:
+        # Migration v11 -> v12: Add columns for remaining Rust pattern detectors
+        print("  Migration v12: Adding remaining pattern detector columns...")
+        new_columns = [
+            ("has_register_swap", "BOOLEAN DEFAULT 0"),
+            ("has_comparison_style", "BOOLEAN DEFAULT 0"),
+            ("has_control_flow", "BOOLEAN DEFAULT 0"),
+            ("has_commutative_op_order", "BOOLEAN DEFAULT 0"),
+            ("has_offset_swap", "BOOLEAN DEFAULT 0"),
+            ("has_anonymous_namespace_hash", "BOOLEAN DEFAULT 0"),
+            ("has_static_guard_counter", "BOOLEAN DEFAULT 0"),
+            ("has_dynamic_cast_mismatch", "BOOLEAN DEFAULT 0"),
+            ("has_dead_store_elimination", "BOOLEAN DEFAULT 0"),
+            ("has_prologue_mismatch", "BOOLEAN DEFAULT 0"),
+            ("has_alloca_mismatch", "BOOLEAN DEFAULT 0"),
+            ("has_scope_counter_mismatch", "BOOLEAN DEFAULT 0"),
         ]
         for col_name, col_def in new_columns:
             try:
@@ -1208,33 +1232,24 @@ def get_stats(db_path: str | Path = DEFAULT_DB_PATH) -> dict[str, Any]:
         "SELECT AVG(current_percent) FROM functions WHERE current_percent IS NOT NULL"
     ).fetchone()[0]
 
-    # Pattern counts
-    merged = conn.execute(
-        "SELECT COUNT(*) FROM functions WHERE has_linker_merged = 1"
-    ).fetchone()[0]
-    bool_mask = conn.execute(
-        "SELECT COUNT(*) FROM functions WHERE has_bool_mask = 1"
-    ).fetchone()[0]
-    makestring_mismatch = conn.execute(
-        "SELECT COUNT(*) FROM functions WHERE has_makestring_mismatch = 1"
-    ).fetchone()[0]
-    address_relocation = conn.execute(
-        "SELECT COUNT(*) FROM functions WHERE has_address_relocation = 1"
-    ).fetchone()[0]
-    boolean_negation = conn.execute(
-        "SELECT COUNT(*) FROM functions WHERE has_boolean_negation = 1"
-    ).fetchone()[0]
-    float_precision = conn.execute(
-        "SELECT COUNT(*) FROM functions WHERE has_float_precision = 1"
-    ).fetchone()[0]
-    fsel_ternary = conn.execute(
-        "SELECT COUNT(*) FROM functions WHERE has_fsel_ternary = 1"
-    ).fetchone()[0]
-    float_to_int_to_float = conn.execute(
-        "SELECT COUNT(*) FROM functions WHERE has_float_to_int_to_float = 1"
-    ).fetchone()[0]
+    # Pattern counts — query all 20 pattern columns in one go
+    pattern_columns = [
+        "has_linker_merged", "has_bool_mask", "has_makestring_mismatch",
+        "has_address_relocation", "has_boolean_negation", "has_float_precision",
+        "has_fsel_ternary", "has_float_to_int_to_float",
+        "has_register_swap", "has_comparison_style", "has_control_flow",
+        "has_commutative_op_order", "has_offset_swap",
+        "has_anonymous_namespace_hash", "has_static_guard_counter",
+        "has_dynamic_cast_mismatch", "has_dead_store_elimination",
+        "has_prologue_mismatch", "has_alloca_mismatch",
+        "has_scope_counter_mismatch",
+    ]
+    sums = ", ".join(f"COALESCE(SUM({col}), 0)" for col in pattern_columns)
+    row = conn.execute(f"SELECT {sums} FROM functions").fetchone()
+    pattern_counts = {col: row[i] for i, col in enumerate(pattern_columns)}
 
-    return {
+    # Map column names to stats keys
+    result = {
         "total_functions": total,
         "complete": complete,
         "at_limit": at_limit,
@@ -1242,15 +1257,13 @@ def get_stats(db_path: str | Path = DEFAULT_DB_PATH) -> dict[str, Any]:
         "with_percent": with_percent,
         "total_attempts": total_attempts,
         "avg_percent": round(avg_percent, 2) if avg_percent else None,
-        "pattern_merged": merged,
-        "pattern_bool_mask": bool_mask,
-        "pattern_makestring_mismatch": makestring_mismatch,
-        "pattern_address_relocation": address_relocation,
-        "pattern_boolean_negation": boolean_negation,
-        "pattern_float_precision": float_precision,
-        "pattern_fsel_ternary": fsel_ternary,
-        "pattern_float_to_int_to_float": float_to_int_to_float,
     }
+    for col, count in pattern_counts.items():
+        # has_linker_merged -> pattern_merged, has_bool_mask -> pattern_bool_mask, etc.
+        key = "pattern_" + col.removeprefix("has_").removeprefix("linker_")
+        result[key] = count
+
+    return result
 
 
 # ============================================================================

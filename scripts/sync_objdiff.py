@@ -79,6 +79,18 @@ class FunctionResult:
     has_float_precision: bool = False
     has_fsel_ternary: bool = False
     has_float_to_int_to_float: bool = False
+    has_register_swap: bool = False
+    has_comparison_style: bool = False
+    has_control_flow: bool = False
+    has_commutative_op_order: bool = False
+    has_offset_swap: bool = False
+    has_anonymous_namespace_hash: bool = False
+    has_static_guard_counter: bool = False
+    has_dynamic_cast_mismatch: bool = False
+    has_dead_store_elimination: bool = False
+    has_prologue_mismatch: bool = False
+    has_alloca_mismatch: bool = False
+    has_scope_counter_mismatch: bool = False
     detected_patterns: list[str] | None = None
     primary_pattern: str | None = None
     error: str | None = None
@@ -97,12 +109,24 @@ def _extract_patterns_from_analysis(result: FunctionResult, data: dict) -> None:
     # Set boolean flags from pattern types
     result.has_merged = "LINKER_MERGED" in pattern_types
     result.has_bool_mask = "BOOL_MASK" in pattern_types
-    result.has_makestring_mismatch = "MAKE_STRING_TEMPLATE_MISMATCH" in pattern_types
+    result.has_makestring_mismatch = "MAKESTRING_TEMPLATE_MISMATCH" in pattern_types
     result.has_address_relocation = "ADDRESS_RELOCATION_NOISE" in pattern_types
     result.has_boolean_negation = "BOOLEAN_NEGATION" in pattern_types
     result.has_float_precision = "FLOAT_PRECISION_MISMATCH" in pattern_types
     result.has_fsel_ternary = "FSEL_TERNARY" in pattern_types
     result.has_float_to_int_to_float = "FLOAT_TO_INT_TO_FLOAT" in pattern_types
+    result.has_register_swap = "REGISTER_SWAP" in pattern_types
+    result.has_comparison_style = "COMPARISON_STYLE" in pattern_types
+    result.has_control_flow = "CONTROL_FLOW" in pattern_types
+    result.has_commutative_op_order = "COMMUTATIVE_OP_ORDER" in pattern_types
+    result.has_offset_swap = "OFFSET_SWAP" in pattern_types
+    result.has_anonymous_namespace_hash = "ANONYMOUS_NAMESPACE_HASH" in pattern_types
+    result.has_static_guard_counter = "STATIC_GUARD_COUNTER" in pattern_types
+    result.has_dynamic_cast_mismatch = "DYNAMIC_CAST_MISMATCH" in pattern_types
+    result.has_dead_store_elimination = "DEAD_STORE_ELIMINATION" in pattern_types
+    result.has_prologue_mismatch = "PROLOGUE_MISMATCH" in pattern_types
+    result.has_alloca_mismatch = "ALLOCA_MISMATCH" in pattern_types
+    result.has_scope_counter_mismatch = "SCOPE_COUNTER_MISMATCH" in pattern_types
 
     # Store all detected patterns as sorted list
     result.detected_patterns = sorted(pattern_types)
@@ -114,7 +138,7 @@ def _extract_patterns_from_analysis(result: FunctionResult, data: dict) -> None:
         "ADDRESS_RELOCATION_NOISE",
         "BOOLEAN_NEGATION",
         "BOOL_MASK",
-        "MAKE_STRING_TEMPLATE_MISMATCH",
+        "MAKESTRING_TEMPLATE_MISMATCH",
         "FLOAT_PRECISION_MISMATCH",
         "FSEL_TERNARY",
         "FLOAT_TO_INT_TO_FLOAT",
@@ -377,7 +401,7 @@ def main():
     print(f"\nScan complete: {len(results)} functions in {elapsed:.1f}s ({rate:.0f}/s)")
 
     # Compute stats
-    stats = {
+    stats: dict[str, int] = {
         "scanned": len(results),
         "matched": 0,
         "not_found": 0,
@@ -385,14 +409,6 @@ def main():
         "errors": 0,
         "pct_updated": 0,
         "promoted": 0,
-        "merged_flagged": 0,
-        "bool_mask_flagged": 0,
-        "makestring_mismatch_flagged": 0,
-        "address_relocation_flagged": 0,
-        "boolean_negation_flagged": 0,
-        "float_precision_flagged": 0,
-        "fsel_ternary_flagged": 0,
-        "float_to_int_to_float_flagged": 0,
         "patterns_set": 0,
     }
 
@@ -400,6 +416,7 @@ def main():
     UNFIXABLE_PATTERNS = {
         "LINKER_MERGED", "BOOL_MASK", "ADDRESS_RELOCATION_NOISE",
         "BOOLEAN_NEGATION", "ANONYMOUS_NAMESPACE_HASH",
+        "DEAD_STORE_ELIMINATION",
     }
 
     pct_updates: list[tuple] = []
@@ -445,6 +462,18 @@ def main():
                 1 if r.has_float_precision else 0,
                 1 if r.has_fsel_ternary else 0,
                 1 if r.has_float_to_int_to_float else 0,
+                1 if r.has_register_swap else 0,
+                1 if r.has_comparison_style else 0,
+                1 if r.has_control_flow else 0,
+                1 if r.has_commutative_op_order else 0,
+                1 if r.has_offset_swap else 0,
+                1 if r.has_anonymous_namespace_hash else 0,
+                1 if r.has_static_guard_counter else 0,
+                1 if r.has_dynamic_cast_mismatch else 0,
+                1 if r.has_dead_store_elimination else 0,
+                1 if r.has_prologue_mismatch else 0,
+                1 if r.has_alloca_mismatch else 0,
+                1 if r.has_scope_counter_mismatch else 0,
                 detected_json,
                 r.primary_pattern,
                 reachable,
@@ -452,22 +481,17 @@ def main():
             ))
             stats["pct_updated"] += 1
 
-            if r.has_merged:
-                stats["merged_flagged"] += 1
-            if r.has_bool_mask:
-                stats["bool_mask_flagged"] += 1
-            if r.has_makestring_mismatch:
-                stats["makestring_mismatch_flagged"] += 1
-            if r.has_address_relocation:
-                stats["address_relocation_flagged"] += 1
-            if r.has_boolean_negation:
-                stats["boolean_negation_flagged"] += 1
-            if r.has_float_precision:
-                stats["float_precision_flagged"] += 1
-            if r.has_fsel_ternary:
-                stats["fsel_ternary_flagged"] += 1
-            if r.has_float_to_int_to_float:
-                stats["float_to_int_to_float_flagged"] += 1
+            for flag_name in [
+                "merged", "bool_mask", "makestring_mismatch", "address_relocation",
+                "boolean_negation", "float_precision", "fsel_ternary",
+                "float_to_int_to_float", "register_swap", "comparison_style",
+                "control_flow", "commutative_op_order", "offset_swap",
+                "anonymous_namespace_hash", "static_guard_counter",
+                "dynamic_cast_mismatch", "dead_store_elimination",
+                "prologue_mismatch", "alloca_mismatch", "scope_counter_mismatch",
+            ]:
+                if getattr(r, f"has_{flag_name}", False):
+                    stats[f"{flag_name}_flagged"] = stats.get(f"{flag_name}_flagged", 0) + 1
             if r.primary_pattern:
                 stats["patterns_set"] += 1
 
@@ -503,6 +527,18 @@ def main():
                        has_float_precision = ?,
                        has_fsel_ternary = ?,
                        has_float_to_int_to_float = ?,
+                       has_register_swap = ?,
+                       has_comparison_style = ?,
+                       has_control_flow = ?,
+                       has_commutative_op_order = ?,
+                       has_offset_swap = ?,
+                       has_anonymous_namespace_hash = ?,
+                       has_static_guard_counter = ?,
+                       has_dynamic_cast_mismatch = ?,
+                       has_dead_store_elimination = ?,
+                       has_prologue_mismatch = ?,
+                       has_alloca_mismatch = ?,
+                       has_scope_counter_mismatch = ?,
                        detected_patterns = ?,
                        primary_pattern = ?,
                        reachable_100 = ?,
@@ -534,15 +570,33 @@ def main():
     print(f"  Percent updated:    {stats['pct_updated']}")
     print(f"  Promoted:           {stats['promoted']} (-> COMPLETE)")
     print(f"  Patterns set:       {stats['patterns_set']}")
+    pattern_labels = [
+        ("merged", "Merged"),
+        ("bool_mask", "Bool mask"),
+        ("makestring_mismatch", "MakeString"),
+        ("address_relocation", "Address relocation"),
+        ("boolean_negation", "Boolean negation"),
+        ("float_precision", "Float precision"),
+        ("fsel_ternary", "fsel ternary"),
+        ("float_to_int_to_float", "float->int->float"),
+        ("register_swap", "Register swap"),
+        ("comparison_style", "Comparison style"),
+        ("control_flow", "Control flow"),
+        ("commutative_op_order", "Commutative op order"),
+        ("offset_swap", "Offset swap"),
+        ("anonymous_namespace_hash", "Anon namespace hash"),
+        ("static_guard_counter", "Static guard counter"),
+        ("dynamic_cast_mismatch", "dynamic_cast mismatch"),
+        ("dead_store_elimination", "Dead store elimination"),
+        ("prologue_mismatch", "Prologue mismatch"),
+        ("alloca_mismatch", "alloca mismatch"),
+        ("scope_counter_mismatch", "Scope counter mismatch"),
+    ]
     print(f"  --- Patterns ---")
-    print(f"  Merged:             {stats['merged_flagged']}")
-    print(f"  Bool mask:          {stats['bool_mask_flagged']}")
-    print(f"  MakeString:         {stats['makestring_mismatch_flagged']}")
-    print(f"  Address relocation: {stats['address_relocation_flagged']}")
-    print(f"  Boolean negation:   {stats['boolean_negation_flagged']}")
-    print(f"  Float precision:    {stats['float_precision_flagged']}")
-    print(f"  fsel ternary:       {stats['fsel_ternary_flagged']}")
-    print(f"  float->int->float:  {stats['float_to_int_to_float_flagged']}")
+    for key, label in pattern_labels:
+        count = stats.get(f"{key}_flagged", 0)
+        if count > 0:
+            print(f"  {label + ':':24s}{count}")
 
 
 if __name__ == "__main__":

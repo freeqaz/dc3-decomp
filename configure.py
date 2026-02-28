@@ -302,6 +302,15 @@ config.custom_build_steps = {
             },
         },
         {
+            "outputs": str(stamp_dir / "dynamic_init_patched.stamp"),
+            "rule": "run_script",
+            "order_only": "all_source",
+            "variables": {
+                "cmd": "python3 scripts/obj_dynamic_init_patcher.py --batch --apply",
+                "desc": "PATCH ??__E dynamic initializers STATIC->EXTERNAL",
+            },
+        },
+        {
             "outputs": str(stamp_dir / "data_stubs.stamp"),
             "rule": "run_script",
             "variables": {

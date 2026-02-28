@@ -539,6 +539,7 @@ class COFFPatcher:
         # Parse symbol table
         self.symbols = []
         self.symbol_map = {}
+        self.name_to_sym_idx = {}  # name -> raw COFF symbol index
         sym_off = self.symtab_offset
         i = 0
         while i < self.num_symbols:
@@ -565,6 +566,7 @@ class COFFPatcher:
             }
             self.symbols.append(sym)
             self.symbol_map[name] = sym
+            self.name_to_sym_idx[name] = i
 
             sym_off += 18 * (1 + aux_count)
             i += 1 + aux_count
@@ -604,6 +606,157 @@ class COFFPatcher:
         """Save the patched COFF file."""
         with open(output_path, "wb") as f:
             f.write(self.data)
+
+    def get_section_header_offset(self, sec_idx: int) -> int:
+        """Get file offset of a section header."""
+        return 20 + self.opthdr_size + sec_idx * 40
+
+    def get_num_relocs(self, sec_idx: int) -> int:
+        """Get number of relocations for a section."""
+        off = self.get_section_header_offset(sec_idx)
+        return struct.unpack_from("<H", self.data, off + 32)[0]
+
+    def get_reloc_offset(self, sec_idx: int) -> int:
+        """Get file offset of relocation table for a section."""
+        off = self.get_section_header_offset(sec_idx)
+        return struct.unpack_from("<I", self.data, off + 24)[0]
+
+    def get_relocation(self, sec_idx: int, reloc_idx: int):
+        """Read a relocation entry: (va, sym_idx, rtype)."""
+        reloc_off = self.get_reloc_offset(sec_idx)
+        entry_off = reloc_off + reloc_idx * 10
+        va = struct.unpack_from("<I", self.data, entry_off)[0]
+        sym_idx = struct.unpack_from("<I", self.data, entry_off + 4)[0]
+        rtype = struct.unpack_from("<H", self.data, entry_off + 8)[0]
+        return va, sym_idx, rtype
+
+    def set_relocation(self, sec_idx: int, reloc_idx: int, va: int, sym_idx: int, rtype: int):
+        """Write a relocation entry."""
+        reloc_off = self.get_reloc_offset(sec_idx)
+        entry_off = reloc_off + reloc_idx * 10
+        struct.pack_into("<I", self.data, entry_off, va)
+        struct.pack_into("<I", self.data, entry_off + 4, sym_idx)
+        struct.pack_into("<H", self.data, entry_off + 8, rtype)
+
+    def get_symbol_name_by_index(self, sym_idx: int) -> str:
+        """Get symbol name by raw COFF symbol index."""
+        sym_off = self.symtab_offset + sym_idx * 18
+        name_bytes = self.data[sym_off:sym_off + 8]
+        if name_bytes[:4] == b'\x00\x00\x00\x00':
+            str_offset = struct.unpack_from("<I", name_bytes, 4)[0]
+            strtab_start = self.symtab_offset + self.num_symbols * 18
+            end = self.data.index(b'\x00', strtab_start + str_offset)
+            return self.data[strtab_start + str_offset:end].decode()
+        else:
+            return name_bytes.rstrip(b'\x00').decode()
+
+    def resize_section(self, sec_idx: int, new_size: int):
+        """Resize a section's raw data, shifting all subsequent file offsets."""
+        sec = self.sections[sec_idx]
+        old_size = sec["raw_size"]
+        size_diff = new_size - old_size
+
+        if size_diff == 0:
+            return
+
+        # Insertion/removal point: end of current section data
+        point = sec["raw_offset"] + old_size
+
+        if size_diff > 0:
+            self.data[point:point] = b'\x00' * size_diff
+        else:
+            self.data[point + size_diff:point] = b''
+
+        # Update section raw_size
+        hdr_off = self.get_section_header_offset(sec_idx)
+        struct.pack_into("<I", self.data, hdr_off + 16, new_size)
+        # Update virtual_size if it matched raw_size
+        old_vsize = struct.unpack_from("<I", self.data, hdr_off + 8)[0]
+        if old_vsize == old_size:
+            struct.pack_into("<I", self.data, hdr_off + 8, new_size)
+        sec["raw_size"] = new_size
+
+        # Fix all file offsets at or after insertion point
+        for i in range(self.num_sections):
+            s_hdr = self.get_section_header_offset(i)
+
+            # raw_offset (skip the section being resized — its start doesn't move)
+            if i != sec_idx:
+                raw_off = struct.unpack_from("<I", self.data, s_hdr + 20)[0]
+                if raw_off >= point and raw_off > 0:
+                    raw_off += size_diff
+                    struct.pack_into("<I", self.data, s_hdr + 20, raw_off)
+                    self.sections[i]["raw_offset"] = raw_off
+
+            # reloc_offset (fix for ALL sections including the one being resized)
+            reloc_off = struct.unpack_from("<I", self.data, s_hdr + 24)[0]
+            if reloc_off >= point and reloc_off > 0:
+                reloc_off += size_diff
+                struct.pack_into("<I", self.data, s_hdr + 24, reloc_off)
+
+            # lineno_offset
+            lineno_off = struct.unpack_from("<I", self.data, s_hdr + 28)[0]
+            if lineno_off >= point and lineno_off > 0:
+                lineno_off += size_diff
+                struct.pack_into("<I", self.data, s_hdr + 28, lineno_off)
+
+        # Fix symbol table offset
+        if self.symtab_offset >= point:
+            self.symtab_offset += size_diff
+            struct.pack_into("<I", self.data, 8, self.symtab_offset)
+
+    def add_external_symbol(self, name: str) -> int:
+        """Add an EXTERNAL UNDEFINED symbol. Returns the new raw COFF index."""
+        # New symbol goes at end of symbol table (before string table)
+        new_sym_offset = self.symtab_offset + self.num_symbols * 18
+
+        # Build 18-byte symbol entry
+        entry = bytearray(18)
+
+        if len(name) <= 8:
+            name_bytes = name.encode('ascii')
+            entry[0:len(name_bytes)] = name_bytes
+        else:
+            # Read current string table size BEFORE inserting the entry
+            strtab_size = struct.unpack_from("<I", self.data, new_sym_offset)[0]
+            struct.pack_into("<I", entry, 0, 0)            # zeros (long name indicator)
+            struct.pack_into("<I", entry, 4, strtab_size)  # offset into string table
+
+        # value=0, section=0 (undefined), type=0, storage_class=2 (EXTERNAL)
+        struct.pack_into("<I", entry, 8, 0)    # value
+        struct.pack_into("<h", entry, 12, 0)   # section (0 = undefined)
+        struct.pack_into("<H", entry, 14, 0)   # type
+        entry[16] = 2   # IMAGE_SYM_CLASS_EXTERNAL
+        entry[17] = 0   # aux_count
+
+        # Insert entry at end of symbol table
+        self.data[new_sym_offset:new_sym_offset] = entry
+
+        new_idx = self.num_symbols
+        self.num_symbols += 1
+        struct.pack_into("<I", self.data, 12, self.num_symbols)
+
+        # Update name→index map
+        self.name_to_sym_idx[name] = new_idx
+
+        if len(name) > 8:
+            # Append name to string table (now shifted by 18 bytes)
+            new_strtab_start = new_sym_offset + 18
+            strtab_size = struct.unpack_from("<I", self.data, new_strtab_start)[0]
+            name_bytes = name.encode('ascii') + b'\x00'
+            insert_pos = new_strtab_start + strtab_size
+            self.data[insert_pos:insert_pos] = name_bytes
+            new_strtab_size = strtab_size + len(name_bytes)
+            struct.pack_into("<I", self.data, new_strtab_start, new_strtab_size)
+
+        return new_idx
+
+    def find_or_add_symbol(self, name: str) -> int:
+        """Find an existing symbol by name, or add as external undefined."""
+        idx = self.name_to_sym_idx.get(name)
+        if idx is not None:
+            return idx
+        return self.add_external_symbol(name)
 
 
 def get_obj_path_for_unit(unit: str) -> Path:

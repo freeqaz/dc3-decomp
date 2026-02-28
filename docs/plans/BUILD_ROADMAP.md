@@ -111,7 +111,7 @@ dtk xex split → configure.py (injects link_glue)
   → ninja link with /FORCE:MULTIPLE
 ```
 
-**0 errors, 756 LNK4006 warnings.** Only `/FORCE:MULTIPLE` needed (cosmetic COMDAT duplicates).
+**0 errors, 13,400 LNK4006 warnings.** Only `/FORCE:MULTIPLE` needed (cosmetic COMDAT duplicates). See [FORCE_MULTIPLE_ELIMINATION.md](FORCE_MULTIPLE_ELIMINATION.md) for the plan to eliminate this flag.
 
 **Link order is correct** (2026-02-19): Objects linked in original binary order.
 **VA shift fixed**: `/MERGE:.xidata=.text` puts `.text` at VA `0x82330000`.
@@ -431,16 +431,13 @@ boots and enters the main loop in Xenia.
 
 All critical link issues are resolved. Remaining work is polish:
 
-### Priority 1: Clean up link_glue.cpp stubs
-45 obsolete stubs duplicate symbols from Matching unit decomp .objs. Remove to reduce LNK4006.
+### Priority 1: Eliminate `/FORCE:MULTIPLE`
+13,400 LNK4006 cosmetic COMDAT warnings. See [FORCE_MULTIPLE_ELIMINATION.md](FORCE_MULTIPLE_ELIMINATION.md) for strategies (smart data stubs, `/IGNORE:4006`, incremental source completion).
 
-### Priority 2: Jeff EH metadata colocation (nice-to-have)
-17 `__unwind$` + 2 `__catch$` symbols currently ALTERNATENAME-stubbed. Jeff could keep EH metadata colocated.
+### Priority 2: Stub burndown
+733 workable stubs remain in `link_glue.cpp` (reset from falsely-COMPLETE is_stub state). Tiered by difficulty: 33 single-stub units (quick wins), ~90 in small Milo engine units with RB3 refs, ~145 in medium units, ~109 in platform-heavy units (defer).
 
-### Priority 3: Jeff SafeName deduplication (nice-to-have)
-54 LNK4006 from `SafeName(Hmx::Object*)` in many split .objs. Jeff could deduplicate.
-
-See [NEXT_STEPS.md](NEXT_STEPS.md) for the detailed execution plan.
+See [stub-burndown/PLAN.md](stub-burndown/PLAN.md) for the full plan with per-unit breakdown, priority tiers, and workflow.
 
 ### Completed
 
