@@ -68,28 +68,31 @@ void ChallengeResultPanel::Text(int, int data, UIListLabel *slot, UILabel *label
             label->SetPrelocalizedString(gamertag);
             goto done;
         }
-    } else if (slot->Matches("white_small_score")) {
-        if (mPlayerScore <= mItems[data].mScore && data != mRivalIndex && data != mPlayerIndex) {
-            app_label->SetTokenFmt(best_score, LocalizeSeparatedInt(mItems[data].mScore, TheLocale));
-            goto done;
+    } else {
+        bool showScore = false;
+        if (slot->Matches("white_small_score")) {
+            if (mPlayerScore <= mItems[data].mScore && data != mRivalIndex && data != mPlayerIndex) {
+                showScore = true;
+            }
+        } else if (slot->Matches("grey_small_score")) {
+            if (mItems[data].mScore < mPlayerScore && data != mRivalIndex) {
+                showScore = true;
+            }
+        } else if (slot->Matches("white_large_score")) {
+            if (mPlayerScore <= mItems[data].mScore && data == mRivalIndex) {
+                showScore = true;
+            }
+        } else if (slot->Matches("grey_large_score")) {
+            if (mItems[data].mScore < mPlayerScore && data == mRivalIndex) {
+                showScore = true;
+            }
+        } else if (slot->Matches("gold_large_score")) {
+            if (mPlayerScore == mItems[data].mScore && data == mPlayerIndex) {
+                showScore = true;
+            }
         }
-    } else if (slot->Matches("grey_small_score")) {
-        if (mItems[data].mScore < mPlayerScore && data != mRivalIndex) {
-            app_label->SetTokenFmt(best_score, LocalizeSeparatedInt(mItems[data].mScore, TheLocale));
-            goto done;
-        }
-    } else if (slot->Matches("white_large_score")) {
-        if (mPlayerScore <= mItems[data].mScore && data == mRivalIndex) {
-            app_label->SetTokenFmt(best_score, LocalizeSeparatedInt(mItems[data].mScore, TheLocale));
-            goto done;
-        }
-    } else if (slot->Matches("grey_large_score")) {
-        if (mItems[data].mScore < mPlayerScore && data == mRivalIndex) {
-            app_label->SetTokenFmt(best_score, LocalizeSeparatedInt(mItems[data].mScore, TheLocale));
-            goto done;
-        }
-    } else if (slot->Matches("gold_large_score")) {
-        if (mPlayerScore == mItems[data].mScore && data == mPlayerIndex) {
+
+        if (showScore) {
             app_label->SetTokenFmt(best_score, LocalizeSeparatedInt(mItems[data].mScore, TheLocale));
             goto done;
         }
