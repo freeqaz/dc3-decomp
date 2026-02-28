@@ -1,4 +1,7 @@
 #include "App.h"
+#ifdef HX_NATIVE
+#include <algorithm>
+#endif
 #include "ChecksumData_xbox.h"
 #include "char/Char.h"
 #include "flow/FlowManager.h"
@@ -111,6 +114,59 @@ App::App(int argc, char **argv) {
         TheArchive->SetArchivePermission(11, kAppArchivePermissions);
     }
 
+#ifdef HX_NATIVE
+    // Native boot: init renderer, subsystems, but skip Kinect/splash/threading
+    printf("DC3 Native: calling TheRnd.PreInit()...\n");
+    TheRnd.PreInit();
+    printf("DC3 Native: TheRnd.PreInit() complete\n");
+
+    static DataNode &notifyLevel = DataVariable("notify_level");
+    {
+        DataNode notifyLevelValue(1);
+        notifyLevel = notifyLevelValue;
+    }
+    gRealCallback = TheDebug.SetModalCallback(DebugModal);
+    printf("DC3 Native: calling SystemInit...\n");
+    SystemInit("config/ham_keep.dta");
+    printf("DC3 Native: SystemInit complete\n");
+
+    printf("DC3 Native: SystemInit complete, initializing subsystems...\n");
+
+    // Initialize renderer
+    TheRnd.Init();
+
+    // Register script functions
+    MagnuInit();
+
+    // Flow system - manages game state machine
+    FlowInit();
+    printf("DC3 Native: FlowInit complete\n");
+
+    // Character system
+    CharInit();
+    printf("DC3 Native: CharInit complete\n");
+
+    // World system
+    WorldInit();
+    printf("DC3 Native: WorldInit complete\n");
+
+    // Ham (game-specific) system
+    HamInit();
+    printf("DC3 Native: HamInit complete\n");
+
+    // Song manager
+    TheHamSongMgr.Init();
+    printf("DC3 Native: HamSongMgr::Init complete\n");
+
+    // UI system
+    TheUI = new UIManager();
+    TheUI->Init();
+    printf("DC3 Native: UI Init complete\n");
+
+    // Go to first screen (title screen)
+    TheUI->GotoFirstScreen();
+    printf("DC3 Native: GotoFirstScreen complete - entering main loop\n");
+#else
     TheRnd.PreInit();
 
     static DataNode &notifyLevel = DataVariable("notify_level");
@@ -159,6 +215,9 @@ App::App(int argc, char **argv) {
 
     splash.PrepareRemaining();
     SystemInit("config/ham_keep.dta");
+#endif
+
+#ifndef HX_NATIVE
     MagnuInit();
     if (TheSplasher)
         TheSplasher->Poll();
@@ -314,6 +373,7 @@ App::App(int argc, char **argv) {
     CloseHandle(kinectGuideThread);
 
     MemTrackEnable(true);
+#endif // !HX_NATIVE
 }
 
 void App::CaptureHiRes() {
@@ -388,6 +448,13 @@ Symbol RemoveDigitSuffix(const Symbol &symbol) {
         TheDebug.Fail(MakeString(kAssertStr, "App.cpp", 0x2AB, "len > 0"), nullptr);
     }
 
+#ifdef HX_NATIVE
+    int copyLen = std::find_if(
+                      symbolText,
+                      symbolText + symbolLen,
+                      static_cast<int (*)(int)>(isdigit)
+    ) - symbolText;
+#else
     stlpmtx_std::random_access_iterator_tag findTag;
     int copyLen = stlpmtx_std::__find_if(
                       symbolText,
@@ -395,6 +462,7 @@ Symbol RemoveDigitSuffix(const Symbol &symbol) {
                       static_cast<int (*)(int)>(isdigit),
                       findTag
     ) - symbolText;
+#endif
     if (copyLen != 0) {
         memmove(trimmedText, symbolText, copyLen);
     }
@@ -661,6 +729,37 @@ not_in_campaign_stinger:
 void App::Run() { RunWithoutDebugging(); }
 
 void App::RunWithoutDebugging() {
+#ifdef HX_NATIVE
+    printf("DC3 Native: Entering main loop\n");
+    int frameCount = 0;
+    while (true) {
+        SystemPoll(false);
+
+        if (TheUI)
+            TheUI->Poll();
+
+        TheTaskMgr.Poll();
+
+        if (TheFlowMgr)
+            TheFlowMgr->Poll();
+
+        // Headless drawing (NativeRnd just increments frame counter)
+        TheRnd.BeginDrawing();
+        if (TheUI)
+            TheUI->Draw();
+        TheRnd.EndDrawing();
+
+        frameCount++;
+        if (frameCount % 60 == 0) {
+            printf("DC3 Native: Frame %d\n", frameCount);
+        }
+        if (frameCount > 300) {
+            printf("DC3 Native: 300 frames completed, engine running!\n");
+            break;
+        }
+    }
+    return;
+#endif
     while (true) {
             Timer loop_timer;
             loop_timer.Restart();

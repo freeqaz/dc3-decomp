@@ -54,6 +54,7 @@ AsyncFile::AsyncFile(const char *c, int i)
 
 AsyncFile::~AsyncFile() {}
 
+#ifndef HX_NATIVE
 extern bool HolmesClientCacheFile(char *, const char *);
 
 AsyncFile *AsyncFile::New(const char *cc, int i) {
@@ -81,6 +82,7 @@ AsyncFile *AsyncFile::New(const char *cc, int i) {
     result->Init();
     return result;
 }
+#endif
 
 int AsyncFile::Read(void *iBuf, int iBytes) {
     ReadAsync(iBuf, iBytes);
@@ -139,7 +141,7 @@ bool AsyncFile::WriteAsync(const void *v, int i) {
             memcpy(mBuffer + mOffset, v, size);
             mOffset = gBufferSize;
             remaining -= size;
-            v = (void *)((int)v + size);
+            v = (void *)((intptr_t)v + size);
             mTell += size;
             Flush();
             if (mFail)
@@ -289,7 +291,10 @@ void AsyncFile::Init() {
                 ;
             mTell = 0;
             _SeekToTell();
+#ifndef HX_NATIVE
+            // On Xbox (BE host), swap LE stored size to BE. On native LE, already correct.
             EndianSwapEq(mUCSize);
+#endif
             mSize -= 4;
             goto next;
         }

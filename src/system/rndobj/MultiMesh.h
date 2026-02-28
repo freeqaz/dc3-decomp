@@ -22,6 +22,9 @@ extern ReclaimableAlloc gTransListAlloc;
 #ifdef STLPORT
 // TransformListAlloc exists in the STLport namespace
 namespace STLPORT {
+#elif defined(HX_NATIVE)
+// On native, put it in std:: namespace to match std::TransformListAlloc usage
+namespace std {
 #endif
 
     template <class T>
@@ -52,6 +55,9 @@ namespace STLPORT {
         // ...but still has the destructor
         ~TransformListAlloc() {}
 
+        bool operator==(const TransformListAlloc&) const { return true; }
+        bool operator!=(const TransformListAlloc&) const { return false; }
+
         pointer allocate(const size_type count, const void *hint = nullptr) const {
             return reinterpret_cast<pointer>(gTransListAlloc.CustAlloc(count * sizeof(T))
             );
@@ -62,7 +68,7 @@ namespace STLPORT {
         }
     };
 
-#ifdef STLPORT
+#if defined(STLPORT) || defined(HX_NATIVE)
 }
 #endif
 

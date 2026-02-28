@@ -355,6 +355,7 @@ void CharEyes::Enter() {
     RndPollable::Enter();
 }
 
+#ifndef HX_NATIVE
 namespace stlpmtx_std {
     template<>
     _List_iterator<RndPollable*, _Nonconst_traits<RndPollable*>>
@@ -372,3 +373,4 @@ namespace stlpmtx_std {
         return __tmp;
     }
 }
+#endif

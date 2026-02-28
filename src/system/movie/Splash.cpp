@@ -189,11 +189,18 @@ void Splash::BeginSplasher() {
         MILO_ASSERT(!mPreparedScreens.empty(), 0x6D);
 
         MILO_ASSERT(SetMutableState(kResuming), 0x6F);
+#ifdef HX_NATIVE
+        // Skip threaded splash on native — just run directly
+        SetMutableState(kResumed);
+        Show();
+        Draw();
+#else
         HANDLE thread = CreateThread(0, 0, ThreadStart, this, 4, 0);
         XSetThreadProcessor(thread, 5);
         SetThreadPriority(thread, 1);
         ResumeThread(thread);
         WaitForState(kResumed);
+#endif
     } else {
         SetMutableState(kResumed);
         Show();

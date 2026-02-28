@@ -558,9 +558,13 @@ StoreError StorePanel::UpdateOffers(std::list<EnumProduct> const &enumList, bool
 
             if (match) {
                 result = kStoreErrorSuccess;
-                // Call virtual function at offset 0x70
+                // Call virtual function at offset 0x70 (ILP32)
+#ifdef HX_NATIVE
+                // On LP64, vtable offsets shift — skip this call, offer handling is stubbed
+#else
                 void (*func)(void *, void *, void *) = (void (*)(void *, void *, void *))*(void **)((u32)this + 0x70);
                 func(this, offer, (void *)((u32)offer + 0x38));
+#endif
             } else {
                 if (offer->IsTest()) {
                     offer->isAvailable = false;

@@ -727,8 +727,8 @@ BOILERPLATE_SYMBOL_PREFIXES = [
     "??__E",   # dynamic initializers
     "??$MakeString",  # MakeString template instantiations
     "??_9",    # vcall thunks
-    "??_E",    # vector constructor iterators
-    "??_G",    # vector destructor iterators
+    "??_E",    # vector deleting destructors
+    "??_G",    # scalar deleting destructors
 ]
 
 
@@ -747,6 +747,7 @@ def query_functions(
     skip_boilerplate: bool = False,
     unicorn_verdict: str | None = None,
     unicorn_class: str | None = None,
+    is_stub: bool | None = None,
 ) -> list[dict[str, Any]]:
     """
     Query multiple functions matching criteria.
@@ -800,7 +801,12 @@ def query_functions(
 
     if skip_boilerplate:
         for prefix in BOILERPLATE_SYMBOL_PREFIXES:
-            query += f" AND symbol NOT LIKE '{prefix}%'"
+            escaped = prefix.replace("_", r"\_")
+            query += f" AND symbol NOT LIKE '{escaped}%' ESCAPE '\\'"
+
+    # Stub filter
+    if is_stub is not None:
+        query += f" AND is_stub = {1 if is_stub else 0}"
 
     # Unicorn verdict filter
     if unicorn_verdict:

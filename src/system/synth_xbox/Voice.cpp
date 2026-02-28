@@ -1,6 +1,8 @@
 #include "synth_xbox/Voice.h"
 #include "math/Utl.h"
+#include "os/CritSec.h"
 #include "os/Debug.h"
+#include <list>
 #include "xdk/win_types.h"
 #include "xdk/xapilibi/processthreadsapi.h"
 #include "xdk/xapilibi/synchapi.h"
@@ -10,6 +12,12 @@
 HANDLE gEvent;
 HANDLE gVoiceThread;
 int Voice::sHeadsetTarget;
+CriticalSection gLockPendingLists;
+CriticalSection gVoiceGC;
+std::list<Voice *> gPendingVoices;
+std::list<Voice *> gPendingSyncVoices;
+std::list<Voice *> gInProgressVoices;
+std::list<Voice *> gInProgressSyncVoices;
 
 extern void StartSynchronizedVoices();
 

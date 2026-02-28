@@ -16,8 +16,8 @@
 #include "utl/TextFileStream.h"
 #include "utl/TextStream.h"
 
-bool gMemTrackerTracking;
-String gMemLogType;
+extern bool gMemTrackerTracking;
+extern String gMemLogType;
 
 struct MemDiffEntry {
     char data[72];
@@ -60,7 +60,11 @@ MemTracker::MemTracker(int x, int y)
     DataRegisterFunc("sai", SpitAllocInfo);
 }
 
+#ifdef HX_NATIVE
+void *MemTracker::operator new(size_t size) { return DebugHeapAlloc(size); }
+#else
 void *MemTracker::operator new(unsigned int size) { return DebugHeapAlloc(size); }
+#endif
 void MemTracker::operator delete(void *mem) { DebugHeapFree(mem); }
 
 const AllocInfo *MemTracker::GetInfo(void *info) const {
@@ -363,7 +367,7 @@ void MemTracker::DiffDump(TextStream &ts) {
                 count++;
             }
         }
-        AllocInfo **allocVec = (AllocInfo **)DebugHeapAlloc(count * 4);
+        AllocInfo **allocVec = (AllocInfo **)DebugHeapAlloc(count * sizeof(AllocInfo *));
         AllocInfo **allocEnd = allocVec + count;
         AllocInfo **allocBegin = allocVec;
         for (AllocInfo **it = mHashTable->Begin(); it; it = mHashTable->Next(it)) {
@@ -406,6 +410,7 @@ void MemTracker::DiffDump(TextStream &ts) {
     mTimeSlice++;
 }
 
+#ifndef HX_NATIVE
 // Forward declaration for __pop_heap_aux template specialization
 namespace stlpmtx_std {
     extern void __pop_heap_aux(MemDiffEntry*, MemDiffEntry*, int, less<MemDiffEntry>);
@@ -421,3 +426,4 @@ namespace stlpmtx_std {
         }
     }
 }
+#endif

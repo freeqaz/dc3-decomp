@@ -25,7 +25,7 @@ bool gStlAllocNameLookup = false;
 
 bool gbUseLowestMip = false;
 bool gInsideMemFunc = false;
-bool gMemoryUsageTest;
+extern bool gMemoryUsageTest;
 int gCheckConsistency;
 int gNewOperatorAlign;
 int gSingleHeap;
@@ -40,6 +40,12 @@ bool gInitted;
 MemHeap gHeaps[MAX_HEAPS];
 int gNumHeaps;
 
+#ifdef HX_NATIVE
+// On native, do NOT override global operator new/delete.
+// The CRT's default new/delete use malloc/free which is what we want.
+// Overriding them here caused heap corruption during static initialization
+// because some code paths still went through custom MemHeap logic.
+#else
 void *operator new(unsigned int size) {
     return MemAlloc(size, __FILE__, 0x5CF, "new", gNewOperatorAlign);
 }
@@ -50,6 +56,7 @@ void *operator new[](unsigned int size) {
 
 void operator delete(void *v) { MemFree(v, "unknown", 0, "unknown"); }
 void operator delete[](void *v) { MemFree(v, "unknown", 0, "unknown"); }
+#endif
 
 void PhysDelta(const char *name) {
     static int gPhysicalUsage = -1;
@@ -114,6 +121,9 @@ int MemNumHeaps() { return gNumHeaps; }
 
 void MemFree(void *mem, const char *file, int line, const char *name) {
     if (mem) {
+#ifdef HX_NATIVE
+        free(mem);
+#else
         CritSecTracker tracker(gMemLock);
         int i;
         int freed = 0;
@@ -132,10 +142,16 @@ void MemFree(void *mem, const char *file, int line, const char *name) {
         }
         if (gMemTracker) {
             MemTrackFree(mem);
+#ifdef HX_NATIVE
+            // On LP64, mHeapOnly is at a different offset and mHeapStats shifts
+            // Skip heap stats tracking on native — not critical for functionality
+#else
             if (((char *)gMemTracker)[0x18195]) {
                 ((HeapStats *)((char *)gMemTracker + 0xC))[(signed char)i].Free(freed, freed);
             }
+#endif
         }
+#endif
     }
 }
 
@@ -289,12 +305,16 @@ void *_MemAllocTemp(int size, const char *file, int line, const char *name, int 
 void *MemOrPoolAllocSTL(int size, const char *file, int line, const char *name) {
     if (size == 0)
         return nullptr;
+#ifdef HX_NATIVE
+    return malloc(size);
+#else
     else if (size > 0x80) {
         MemTemp tmp;
         return MemAlloc(size, file, line, name, 0);
     } else {
         return PoolAlloc(size, size, file, line, name);
     }
+#endif
 }
 
 void MemInit() {

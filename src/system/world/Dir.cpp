@@ -70,7 +70,7 @@ BEGIN_HANDLERS(WorldDir)
         set_anim_driven, GetPhysicsManager()->MakeAnimDriven(_msg->Obj<Hmx::Object>(2))
     )
     HANDLE_ACTION(reset_trans, GetPhysicsManager()->ResetTrans(_msg->Obj<Hmx::Object>(2)))
-    HANDLE_EXPR(get_camera_mgr, mCameraMgr)
+    HANDLE_EXPR(get_camera_mgr, DataNode(mCameraMgr.Ptr()))
     HANDLE_MEMBER_PTR((&mLightPresetMgr))
     HANDLE_SUPERCLASS(PanelDir)
 END_HANDLERS

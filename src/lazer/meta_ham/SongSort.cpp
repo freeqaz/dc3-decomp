@@ -32,15 +32,15 @@ void SongSort::BuildTree() {
     // to avoid too many tiny header sections.
     bool deferring = false;
     int cumulativeCount = 0;
-    NavListItemNode **shortcutStart = sortedNodes.begin();
-    NavListItemNode **groupStart = sortedNodes.begin();
+    auto shortcutStart = sortedNodes.begin();
+    auto groupStart = sortedNodes.begin();
 
     if (groupStart != sortedNodes.end()) {
         do {
             auto range = std::equal_range(
                 sortedNodes.begin(), sortedNodes.end(), *groupStart, CompareHeaders()
             );
-            NavListItemNode **rangeEnd = range.second;
+            auto rangeEnd = range.second;
             int groupSize = range.second - range.first;
             int remaining = sortedNodes.end() - groupStart;
             cumulativeCount += groupSize;
@@ -53,14 +53,14 @@ void SongSort::BuildTree() {
                     && (mSortName != by_artist || TheSongSortMgr->IsInHeaderMode())))
             {
                 // Flush: determine the end of this shortcut's range
-                NavListItemNode **endPtr = groupStart;
+                auto endPtr = groupStart;
                 if ((deferring && cumulativeCount <= 12) || !deferring) {
                     endPtr = rangeEnd;
                 }
 
                 NavListShortcutNode *shortcut = NewShortcutNode(*shortcutStart);
                 mShortcutNodes.push_back(shortcut);
-                shortcut->InsertHeaderRange(shortcutStart, endPtr, this);
+                shortcut->InsertHeaderRange(&*shortcutStart, &*endPtr, this);
 
                 cumulativeCount = 0;
                 deferring = false;
@@ -192,7 +192,7 @@ Symbol SongSort::DetermineHeaderSymbolFromSong(Symbol sym) {
     std::map<Symbol, SongRecord>::iterator it = TheSongSortMgr->mSongRecordMap.find(sym);
     if (it != TheSongSortMgr->mSongRecordMap.end()) {
         NavListItemNode *node = NewItemNode(&it->second);
-        for (NavListShortcutNode **shortcutIt = mShortcutNodes.begin(); shortcutIt != mShortcutNodes.end();
+        for (auto shortcutIt = mShortcutNodes.begin(); shortcutIt != mShortcutNodes.end();
              shortcutIt++) {
             NavListShortcutNode *shortcut = *shortcutIt;
             const std::list<NavListSortNode *> &children = shortcut->Children();

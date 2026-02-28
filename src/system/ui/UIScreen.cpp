@@ -422,6 +422,16 @@ BEGIN_HANDLERS(UIScreen)
     HANDLE_MESSAGE(ButtonDownMsg)
 END_HANDLERS
 
+#ifdef HX_NATIVE
+void EnterGlitchCB(float fElapsed, void *data) {
+    // Glitch detection callbacks use hardcoded ILP32 struct offsets — stub on native
+    TheDebug << MakeString("Enter took %.2f ms\n", fElapsed);
+}
+
+void UnloadGlitchCB(float f, void *data) {
+    TheDebug << MakeString("CheckUnload took %.2f ms\n", f);
+}
+#else
 void EnterGlitchCB(float fElapsed, void *data) {
     int sp54;
     const char *sp50;
@@ -439,3 +449,4 @@ void UnloadGlitchCB(float f, void *data) {
     int result = (*(int (**)(char *, char *, int))((char *)obj + 0xC))((char *)obj + 4, obj, 0);
     TheDebug << MakeString("CheckUnload took %2.f ms\n", result, &checkTime, &f);
 }
+#endif

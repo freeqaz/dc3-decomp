@@ -561,6 +561,9 @@ void Spotlight::Init() {
 }
 
 void Spotlight::BuildBoard() {
+#ifdef HX_NATIVE
+    return; // Skip mesh setup on native — no renderer
+#endif
     MILO_ASSERT(!sDiskMesh, 0x42E);
     sDiskMesh = Hmx::Object::New<RndMesh>();
     RndMesh::VertVector &verts = sDiskMesh->Verts();

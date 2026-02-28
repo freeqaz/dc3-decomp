@@ -4,18 +4,24 @@
 #include "os/ThreadCall.h"
 #include "utl/MakeString.h"
 #include <cstring>
+#ifndef HX_NATIVE
 #include <stl/_vector.h>
 #include <stl/_algobase.h>
+#endif
 #include <algorithm>
+
+std::vector<BinkMovieImpl *> BinkMovieImpl::sActiveMovies;
 
 extern void *kNoHandle;
 
+#ifndef HX_NATIVE
 // Explicit template instantiation for vector<BINK*, StlNodeAlloc<BINK*>>
 namespace stlpmtx_std {
 
 template class vector<BINK*, StlNodeAlloc<BINK*>>;
 
 } // namespace stlpmtx_std
+#endif
 
 MovieInternalBuffers::MovieInternalBuffers() {
     // Zero out padding region (0x44-0xBC)

@@ -102,15 +102,13 @@ float DataProvider::GapSize(int, int i, int, int) const {
 }
 
 void DataProvider::Enable(Symbol sym) {
-    stlpmtx_std::list<Symbol>::iterator it =
-        std::find(mDisabled.begin(), mDisabled.end(), sym);
+    auto it = std::find(mDisabled.begin(), mDisabled.end(), sym);
     if (it != mDisabled.end())
         mDisabled.erase(it);
 }
 
 void DataProvider::UnDim(Symbol sym) {
-    stlpmtx_std::list<Symbol>::iterator it =
-        std::find(mDimmed.begin(), mDimmed.end(), sym);
+    auto it = std::find(mDimmed.begin(), mDimmed.end(), sym);
     if (it != mDimmed.end())
         mDimmed.erase(it);
 }
@@ -134,15 +132,13 @@ RndMat *DataProvider::Mat(int i, int j, UIListMesh *mesh) const {
 }
 
 void DataProvider::Disable(Symbol sym) {
-    stlpmtx_std::list<Symbol>::iterator it =
-        std::find(mDisabled.begin(), mDisabled.end(), sym);
+    auto it = std::find(mDisabled.begin(), mDisabled.end(), sym);
     if (it == mDisabled.end())
         mDisabled.push_back(sym);
 }
 
 void DataProvider::Dim(Symbol sym) {
-    stlpmtx_std::list<Symbol>::iterator it =
-        std::find(mDimmed.begin(), mDimmed.end(), sym);
+    auto it = std::find(mDimmed.begin(), mDimmed.end(), sym);
     if (it == mDimmed.end())
         mDimmed.push_back(sym);
 }

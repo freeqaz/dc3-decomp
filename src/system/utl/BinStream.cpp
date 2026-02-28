@@ -75,7 +75,13 @@ void BinStream::Seek(int offset, SeekType type) {
 }
 
 void BinStream::WriteEndian(const void *in, int size) {
+#ifdef HX_NATIVE
+    // On LE host: swap when file is BE (mLittleEndian=false)
+    if (!mLittleEndian) {
+#else
+    // On BE host: swap when file is LE (mLittleEndian=true)
     if (mLittleEndian) {
+#endif
         u64 output[2]; // 128 bits of buffer to swap
         SwapData(in, output, size);
         Write(output, size);
@@ -172,16 +178,38 @@ int BinStream::ReadAsync(void *v, int i) {
 
 void BinStream::ReadEndian(void *out, int size) {
     Read(out, size);
+#ifdef HX_NATIVE
+    // On x86_64 (LE host), mLittleEndian=true means file is LE — no swap needed.
+    // On Xbox 360 (BE host), mLittleEndian=true means swap LE file data to BE host.
+    if (!mLittleEndian) {
+        SwapData(out, out, size);
+    }
+#else
     if (mLittleEndian) {
         SwapData(out, out, size);
     }
+#endif
 }
 
 void BinStream::ReadString(char *c, int i) {
     unsigned int a;
+#ifdef HX_NATIVE
+    int preTell = Tell();
+#endif
     *this >> a;
-    if (a >= i)
+#ifdef HX_NATIVE
+    if (a > 256) {
+        printf("BinStream::ReadString: SUSPICIOUS length=%u (0x%x) preTell=%d tell=%d\n", a, a, preTell, Tell());
+        fflush(stdout);
+    }
+#endif
+    if (a >= i) {
         MILO_FAIL("String chars %d > %d", a + 1, i);
+#ifdef HX_NATIVE
+        // On native, MILO_FAIL doesn't halt — prevent buffer overflow
+        a = i - 1;
+#endif
+    }
     Read(c, a);
     c[a] = 0;
 }
@@ -195,6 +223,13 @@ BinStream &BinStream::operator>>(Symbol &sym) {
 BinStream &BinStream::operator>>(String &str) {
     int siz;
     *this >> siz;
+#ifdef HX_NATIVE
+    if (siz > 10000 || siz < 0) {
+        printf("BinStream::operator>>(String): SUSPICIOUS size=%d (0x%x) tell=%d\n", siz, (unsigned)siz, Tell());
+        fflush(stdout);
+        MILO_FAIL("BinStream: suspicious string size %d at tell=%d", siz, Tell());
+    }
+#endif
     str.resize(siz);
     Read((void *)str.c_str(), siz);
     return *this;
@@ -204,6 +239,9 @@ void BinStream::EnableReadEncryption() {
     MILO_ASSERT(!mCrypto, 0xC0);
     int i;
     *this >> i;
+#ifdef HX_NATIVE
+    printf("DC3 Native: Encryption seed=0x%08x (%d)\n", (unsigned)i, i);
+#endif
     mCrypto = new Rand2(i);
 }
 

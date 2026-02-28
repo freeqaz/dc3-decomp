@@ -161,8 +161,13 @@ DWORD XShowDeviceSelectorUI(
     XOVERLAPPED *pOverlapped
 );
 DWORD XGetGameRegion();
+#ifdef HX_NATIVE
+[[noreturn]] DWORD XShowNuiDirtyDiscErrorUI(DWORD dwTrackingID, DWORD dwUserIndex);
+[[noreturn]] DWORD XShowDirtyDiscErrorUI(DWORD dwUserIndex);
+#else
 __declspec(noreturn) DWORD XShowNuiDirtyDiscErrorUI(DWORD dwTrackingID, DWORD dwUserIndex);
 __declspec(noreturn) DWORD XShowDirtyDiscErrorUI(DWORD dwUserIndex);
+#endif
 DWORD XMarketplaceCreateOfferEnumerator(
     DWORD dwUserIndex,
     DWORD dwOfferType,

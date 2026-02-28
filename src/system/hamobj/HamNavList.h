@@ -135,6 +135,7 @@ private:
     void UpdateGestures(const Skeleton *);
     float GetTargetSwellAmount(int);
 
+    static const int sListStateMaxDisplay;
     static float sSlideSmoothAmount;
     static float sSlideTrendAmount;
     static bool sForceDisengage;

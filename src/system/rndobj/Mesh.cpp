@@ -429,7 +429,7 @@ BEGIN_LOADS(RndMesh)
                 bs >> mBones[0].mOffset >> mBones[1].mOffset >> mBones[2].mOffset
                     >> mBones[3].mOffset;
                 if (d.rev < 0x19) {
-                    for (Vert *it = mVerts.begin(); it != mVerts.end(); ++it) {
+                    for (auto it = mVerts.begin(); it != mVerts.end(); ++it) {
                         it->boneWeights.Set(
                             ((1.0f - it->boneWeights.x) - it->boneWeights.y)
                                 - it->boneWeights.z,
@@ -492,7 +492,7 @@ next:
         d >> mKeepMeshData;
     }
     if (d.rev < MESH_REV_SEP_COLOR && IsSkinned()) {
-        for (Vert *it = mVerts.begin(); it != mVerts.end(); ++it) {
+        for (auto it = mVerts.begin(); it != mVerts.end(); ++it) {
             it->boneWeights.Set(
                 it->color.red, it->color.green, it->color.blue, it->color.alpha
             );
@@ -547,7 +547,7 @@ float RndMesh::GetDistanceToPlane(const Plane &p, Vector3 &v) {
         Multiply(Verts()[0].pos, world, v58);
         v = v58;
         float dot = p.Dot(v);
-        for (Vert *it = Verts().begin(); it != Verts().end(); ++it) {
+        for (auto it = Verts().begin(); it != Verts().end(); ++it) {
             Multiply(it->pos, world, v58);
             float dotted = p.Dot(v58);
             if (std::fabs(dotted) < std::fabs(dot)) {
@@ -568,7 +568,7 @@ bool RndMesh::MakeWorldSphere(Sphere &s, bool b) {
             CalcBoxCenter(v68, box);
             s.Set(v68, 0);
             const Transform &worldXfm = WorldXfm();
-            for (Vert *it = Verts().begin(); it != Verts().end(); ++it) {
+            for (auto it = Verts().begin(); it != Verts().end(); ++it) {
                 Vector3 v50;
                 Multiply(it->pos, worldXfm, v50);
                 Vector3 v5c;
@@ -1024,7 +1024,7 @@ DataNode RndMesh::OnSetFace(const DataArray *da) {
 }
 
 DataNode RndMesh::OnUnitizeNormals(const DataArray *da) {
-    for (Vert *it = Verts().begin(); it != Verts().end(); ++it) {
+    for (auto it = Verts().begin(); it != Verts().end(); ++it) {
         Normalize(it->norm, it->norm);
     }
     return 0;

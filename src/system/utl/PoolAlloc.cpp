@@ -2,6 +2,7 @@
 #include "MemMgr.h"
 #include "math/Utl.h"
 #include <cstdio>
+#include <cstdlib>
 #include "os/CritSec.h"
 #include "os/Debug.h"
 #include "obj/Data.h"
@@ -24,6 +25,11 @@ void PoolAllocInit(DataArray *a) {
 void *
 PoolAlloc(int classSize, int reqSize, const char *file, int line, const char *name) {
     MILO_ASSERT_FMT(classSize >= 0, "PoolAlloc class size is < 0: %d", classSize);
+#ifdef HX_NATIVE
+    // On 64-bit native, the pool allocator's free list uses int-sized slots
+    // which can't hold 64-bit pointers. Just use malloc instead.
+    return malloc(reqSize);
+#else
     CritSecTracker tracker(gMemLock);
     if (!gChunkAlloc) {
         gChunkAlloc = new ChunkAllocator();
@@ -32,13 +38,18 @@ PoolAlloc(int classSize, int reqSize, const char *file, int line, const char *na
     void *alloced = gChunkAlloc->Alloc(classSize);
     MemTrackAlloc(classSize, classSize, name, alloced, true, 0, file, line);
     return alloced;
+#endif
 }
 
 void PoolFree(int idx, void *mem, const char *file, int line, const char *name) {
+#ifdef HX_NATIVE
+    free(mem);
+#else
     CritSecTracker tracker(gMemLock);
     MemTrackFree(mem);
     MILO_ASSERT(gChunkAlloc, 0x16F);
     gChunkAlloc->Free(mem, idx);
+#endif
 }
 
 void PoolReport(TextStream &ts) {

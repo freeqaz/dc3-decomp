@@ -9,5 +9,9 @@ public:
 
 protected:
     const SkeletonFrame *PollNewFrame();
+#ifdef HX_NATIVE
+    SkeletonFrame unk11d4; // 0x11d4
+#else
     const SkeletonFrame unk11d4; // 0x11d4
+#endif
 };

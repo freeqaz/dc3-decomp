@@ -24,7 +24,11 @@ StorePurchaseable::StorePurchaseable()
 bool StorePurchaseable::Exists() const { return (songID != 0) ? true : false; }
 
 unsigned long long StorePurchaseable::OfferStringToID(char const *s) {
+#ifdef HX_NATIVE
+    return strtoull(s, nullptr, 16);
+#else
     return _strtoui64(s, nullptr, 16);
+#endif
 }
 
 char const *StorePurchaseable::CostStr() const { return MakeString("%i -", cost); }
@@ -34,7 +38,11 @@ StoreOffer::StoreOffer(DataArray *a, SongMgr *mgr) : mStoreOfferData(a), mSongMg
     static Symbol release_date("release_date");
 
     if (mStoreOfferData->FindData(id, id, false)) {
+#ifdef HX_NATIVE
+        songID = strtoull(id.Str(), nullptr, 16);
+#else
         songID = _strtoui64(id.Str(), nullptr, 16);
+#endif
     }
 
     DataArray *dateArray = mStoreOfferData->FindArray(release_date, false);

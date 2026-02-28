@@ -80,6 +80,14 @@ public:
         mType = kDataInt;
     }
 
+#ifdef HX_NATIVE
+    // On native LP64, unsigned int (u32) is distinct from unsigned long
+    DataNode(unsigned int u) {
+        mValue.integer = u;
+        mType = kDataInt;
+    }
+#endif
+
     DataNode(Symbol s) {
         mType = kDataSymbol;
         mValue.symbol = s.Str();

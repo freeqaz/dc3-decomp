@@ -162,7 +162,7 @@ void MemHeap::Init(
     mStart = start;
     mName = name;
     mNum = num;
-    int *i7 = (int *)(((unsigned int)start - 4 & ~0xFU) + 0x10);
+    int *i7 = (int *)(((uintptr_t)start - 4 & ~(uintptr_t)0xFU) + 0x10);
     mIsHandleHeap = handle;
     mStrategy = strat;
     mStart = i7;
@@ -201,9 +201,9 @@ void MemHeap::FirstFit(int size, int align, FreeBlockInfo &blockinfo) {
     FreeBlock *prev = nullptr;
     for (FreeBlock *block = mFreeBlockChain; block != nullptr; block = block->mNextBlock) {
         // Calculate the data start position (after FreeBlock header)
-        int start = ((int)block >> 2) + 1;
+        intptr_t start = ((intptr_t)block >> 2) + 1;
         // Calculate padding needed to align data to (1 << align) bytes
-        int pad = ((((unsigned int)(1 << align) + start) - 1) >> align) << align;
+        intptr_t pad = ((((uintptr_t)(1 << align) + start) - 1) >> align) << align;
         pad = pad - start;
         if ((int)block->mSizeWords >= pad + size) {
             blockinfo.mSizeWords = block->mSizeWords;
@@ -224,11 +224,11 @@ void MemHeap::LastFit(int size, int align, FreeBlockInfo &blockinfo) {
     }
     int alignShift = align + 2;
     do {
-        int blockAddr = (int)block;
+        intptr_t blockAddr = (intptr_t)block;
         int blockSize = block->mSizeWords;
-        int allocEnd = blockAddr + (blockSize - size) * 4;
-        int alignedEnd = (allocEnd >> alignShift) << alignShift;
-        int pad = ((alignedEnd - blockAddr) - 4) >> 2;
+        intptr_t allocEnd = blockAddr + (blockSize - size) * 4;
+        intptr_t alignedEnd = (allocEnd >> alignShift) << alignShift;
+        int pad = (int)(((alignedEnd - blockAddr) - 4) >> 2);
 
         if (pad >= 0) {
             blockinfo.mSizeWords = blockSize;
@@ -250,9 +250,9 @@ void MemHeap::BestFit(int size, int align, FreeBlockInfo &blockinfo) {
     do {
         int blockSize = (int)block->mSizeWords;
         // Calculate the data start position (after FreeBlock header)
-        int start = ((int)block >> 2) + 1;
+        intptr_t start = ((intptr_t)block >> 2) + 1;
         // Calculate padding needed to align data to (1 << align) bytes
-        int pad = ((((unsigned int)(1 << align) + start) - 1) >> align) << align;
+        intptr_t pad = ((((uintptr_t)(1 << align) + start) - 1) >> align) << align;
         pad = pad - start;
         // Track the best fit: smallest block that satisfies size requirement
         if ((blockSize >= pad + size) && (blockSize < blockinfo.mSizeWords)) {

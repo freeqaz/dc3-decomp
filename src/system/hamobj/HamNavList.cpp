@@ -30,6 +30,7 @@
 #include "utl/Std.h"
 #include "utl/Symbol.h"
 
+const int HamNavList::sListStateMaxDisplay = HamListRibbon::sNumListSelectable + 6;
 bool HamNavList::sForceDisengage;
 
 NavSelectMsg::NavSelectMsg(Symbol sym, int index, HamNavList *list, bool selecting)

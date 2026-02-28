@@ -55,6 +55,23 @@ void RndFontBase::SetASCIIChars(String str) {
     }
 }
 
+#ifdef HX_NATIVE
+BEGIN_LOADS(RndFontBase)
+    LOAD_REVS(bs)
+    LOAD_SUPERCLASS(Hmx::Object)
+    d >> mChars;
+    d >> mMonospace;
+    d >> mBaseKerning;
+    bool hasKerning;
+    d >> hasKerning;
+    RELEASE(mKerningTable);
+    if (hasKerning) {
+        mKerningTable = new KerningTable();
+        mKerningTable->Load(d, this);
+    }
+END_LOADS
+#endif
+
 void RndFontBase::Save(BinStream &bs) {
     bs << 0;
     SAVE_SUPERCLASS(Hmx::Object)

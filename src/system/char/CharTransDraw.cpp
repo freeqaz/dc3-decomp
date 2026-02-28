@@ -9,7 +9,11 @@ CharTransDraw::~CharTransDraw() {
     for (ObjPtrList<Character>::iterator it = mChars.begin(); it != NULL; ++it) {
         if (it != NULL) {
             Character *c = *it;
+#ifdef HX_NATIVE
+            c->SetDrawMode((Character::DrawMode)3);
+#else
             *(u32 *)((u32)c + 0x294) = 3;
+#endif
         }
     }
 }

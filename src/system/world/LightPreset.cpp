@@ -12,10 +12,12 @@
 #include "utl/Loader.h"
 #include <algorithm>
 
+#ifndef HX_NATIVE
 // Explicit template instantiation
 namespace stlpmtx_std {
     template class vector<ObjPtrVec<Spotlight, ObjectDir>::Node, StlNodeAlloc<ObjPtrVec<Spotlight, ObjectDir>::Node>>;
 }
+#endif
 
 LightPreset *gEditPreset;
 std::deque<std::pair<LightPreset::KeyframeCmd, float> > LightPreset::sManualEvents;

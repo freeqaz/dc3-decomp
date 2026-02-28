@@ -1,7 +1,11 @@
 #include "world/Crowd3DCharHandle.h"
 #include "obj/Object.h"
 
+#ifdef HX_NATIVE
+WorldCrowd3DCharHandle::WorldCrowd3DCharHandle() : mCrowd(0), mCharItr(), mCharIdx(-1) {}
+#else
 WorldCrowd3DCharHandle::WorldCrowd3DCharHandle() : mCrowd(0), mCharItr(0), mCharIdx(-1) {}
+#endif
 
 BEGIN_HANDLERS(WorldCrowd3DCharHandle)
 END_HANDLERS

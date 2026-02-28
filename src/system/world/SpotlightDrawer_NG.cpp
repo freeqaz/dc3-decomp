@@ -145,6 +145,7 @@ bool NgSpotlightDrawer::CheckSharedResources() {
     return true;
 }
 
+#ifndef HX_NATIVE
 // Manual vector implementations to match target code generation
 typedef std::vector<SpotlightDrawer::SpotMeshEntry> SpotMeshEntryVector;
 typedef SpotlightDrawer::SpotMeshEntry SpotMeshEntry;
@@ -225,3 +226,4 @@ SpotMeshEntry* vector<SpotMeshEntry, StlNodeAlloc<SpotMeshEntry>>::_M_erase(
     return __first;
 }
 }  // namespace stlpmtx_std
+#endif // HX_NATIVE

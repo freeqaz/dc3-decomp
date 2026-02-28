@@ -1,6 +1,7 @@
 #include "meta/FixedSizeSaveable.h"
 #include "meta/FixedSizeSaveableStream.h"
 #include "os/Debug.h"
+#include <typeinfo>
 
 int FixedSizeSaveable::sCurrentMemcardLoadVer = -1;
 int FixedSizeSaveable::sSaveVersion = -1;

@@ -198,7 +198,7 @@ void FlowSwitchCase::UseLastValueChanged() {
         DrivenPropertyEntry *entry = GetDrivenEntry("to_value");
         if (entry) {
             auto it = mDrivenPropEntries.begin();
-            for (; it != mDrivenPropEntries.end() && entry != it; ++it)
+            for (; it != mDrivenPropEntries.end() && entry != &(*it); ++it)
                 ;
             if (it != mDrivenPropEntries.end()) {
                 mDrivenPropEntries.erase(it);

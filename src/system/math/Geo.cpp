@@ -359,6 +359,7 @@ bool Intersect(const Segment &seg, const Triangle &tri, bool b, float &out) {
     return true;
 }
 
+#ifndef HX_NATIVE
 // Comparator and list operations for BSPFace
 namespace stlpmtx_std {
     // Compare BSPFace by area field - used for sorting in descending order
@@ -418,6 +419,7 @@ namespace stlpmtx_std {
         return iterator(__tmp);
     }
 }
+#endif // HX_NATIVE
 
 void Multiply(const Box &box, float f, Box &out) {
     Vector3 center;

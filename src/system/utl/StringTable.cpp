@@ -66,7 +66,7 @@ const char *StringTable::Add(const char *str) {
     if (mCurBuf == -1) {
         AddBuf(Max(len, 0x100));
     } else {
-        if (len + ((int)mCurChar - (int)mBuffers[mCurBuf].chars)
+        if (len + (mCurChar - mBuffers[mCurBuf].chars)
             > mBuffers[mCurBuf].size) {
             bool b4 = false;
             for (; mCurBuf < mBuffers.size() - 1;) {

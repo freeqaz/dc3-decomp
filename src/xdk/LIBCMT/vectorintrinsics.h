@@ -1,7 +1,11 @@
 #pragma once
 
 // A C representation of a VMX register.
+#ifdef HX_NATIVE
+typedef struct __attribute__((aligned(16))) __vector4 { /* Size=0x10 */
+#else
 typedef struct __declspec(intrin_type) __declspec(align(16)) __vector4 { /* Size=0x10 */
+#endif
     union {
         /* 0x0000 */ float vector4_f32[4];
         /* 0x0000 */ unsigned int vector4_u32[4];

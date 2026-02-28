@@ -1,7 +1,7 @@
 #include "synth/MicNull.h"
 #include "math/Rand.h"
 
-Rand sRand(0x1bca7);
+static Rand sRand(0x1bca7);
 
 short *MicNull::GetRecentBuf(int &size) {
     int sz = 0x600;

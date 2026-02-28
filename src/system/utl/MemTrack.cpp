@@ -1,6 +1,7 @@
 #include "utl/MemTrack.h"
 
 #include "obj/DataFunc.h"
+#include "utl/Str.h"
 #include "obj/Data.h"
 #include "os/CritSec.h"
 #include "os/Debug.h"
@@ -15,10 +16,12 @@
 AllocInfo *gAllocInfoHeap;
 MemTracker *gMemTracker;
 bool gMemTrackerTracking;
-bool gMemoryUsageTest;
+extern bool gMemoryUsageTest;
 // HeapTracker* gHeapTracker;
 int gNumDiffs;
 TextFileStream *gLog;
+String gMemTrackSourceFile;
+String gMemTrackSourceObject;
 char CharArrayArray[256]; // CHAR_ARRAY_ARRAY_830e58f8
 char MemTrackObjectName[256];
 

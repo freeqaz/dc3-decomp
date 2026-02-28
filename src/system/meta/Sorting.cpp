@@ -2,6 +2,9 @@
 #include "utl/MakeString.h"
 #include <string.h>
 #include <ctype.h>
+#ifdef HX_NATIVE
+#include <strings.h>
+#endif
 
 const char *AlphaKeySkip(const char *str, bool b) {
     const char *ptr = str;
@@ -36,7 +39,11 @@ int AlphaKeyStrCmp(const char *c1, const char *c2, bool b) {
             return -1;
     } else if (!NotASCII(*c2))
         return 1;
+#ifdef HX_NATIVE
+    return strcasecmp(c1, c2);
+#else
     return stricmp(c1, c2);
+#endif
 }
 
 Symbol FirstSortChar(const char *cc, bool b) {

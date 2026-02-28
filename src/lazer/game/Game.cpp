@@ -136,7 +136,7 @@ BEGIN_HANDLERS(Game)
     HANDLE_ACTION(reload_song, ReloadSong())
     HANDLE_EXPR(is_ready, IsReady())
     HANDLE_ACTION(
-        load_new_song, LoadNewSong(_msg->Sym(2), _msg->Size() > 2 ? _msg->Sym(3) : 0)
+        load_new_song, LoadNewSong(_msg->Sym(2), _msg->Size() > 2 ? _msg->Sym(3) : (Symbol)0)
     )
     HANDLE_ACTION(load_new_song_audio, LoadNewSongAudio(_msg->Sym(2)))
     HANDLE_ACTION(load_new_song_moves, LoadNewSongMoves(_msg->Sym(2), true))

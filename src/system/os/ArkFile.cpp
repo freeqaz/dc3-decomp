@@ -9,6 +9,25 @@
 #include "utl/Loader.h"
 #include "utl/Str.h"
 
+#ifdef HX_NATIVE
+// Native port: direct read from ark files, bypassing BlockMgr
+// Needs CDReader_Native's file handles
+extern bool NativeArkRead(int arkFile, long long byteOffset, void *buffer, int bytes);
+
+int ArkFile::Read(void *c, int a) {
+    if (mFail || mTell >= mSize) return 0;
+    if (a <= 0) return 0;
+    if (mTell + a > mSize)
+        a = mSize - mTell;
+    long long offset = (long long)mByteStart + mTell;
+    if (!NativeArkRead(mArkfileNum, offset, c, a)) {
+        mFail = true;
+        return 0;
+    }
+    mTell += a;
+    return a;
+}
+#else
 int ArkFile::Read(void *c, int a) {
     if (ReadAsync(c, a) == 0)
         return 0;
@@ -17,6 +36,7 @@ int ArkFile::Read(void *c, int a) {
         ;
     return ret;
 }
+#endif
 
 int ArkFile::Seek(int offset, int mode) {
     switch (mode) {
@@ -59,6 +79,10 @@ ArkFile::ArkFile(const char *iFilename, int iMode)
         || (iMode & 1)) {
         mFail = true;
     }
+#ifdef HX_NATIVE
+    printf("DC3 Native: ArkFile('%s') ark=%d byteStart=%llu size=%d ucSize=%d fail=%d\n",
+           iFilename, mArkfileNum, mByteStart, mSize, mUCSize, mFail);
+#endif
 }
 
 ArkFile::~ArkFile() {
@@ -72,6 +96,16 @@ int ArkFile::Write(const void *, int) {
     return 0;
 }
 
+#ifdef HX_NATIVE
+bool ArkFile::ReadAsync(void *iData, int iBytes) {
+    // On native, just perform the read synchronously via Read()
+    // and track it as if it completed immediately
+    MILO_ASSERT(iBytes >= 0, 0x5D);
+    if (mTell == mSize) return false;
+    mBytesRead = Read(iData, iBytes);
+    return !mFail;
+}
+#else
 bool ArkFile::ReadAsync(void *iData, int iBytes) {
     MILO_ASSERT(iBytes >= 0, 0x5D);
     if (mTell == mSize || mNumOutstandingTasks != 0)
@@ -122,7 +156,7 @@ bool ArkFile::ReadAsync(void *iData, int iBytes) {
                 }
             }
             AsyncTask task(this, iData, mArkfileNum, i, ivar8, ivar12, mFilename.c_str());
-            iData = (void *)((int)iData - ivar8 + ivar12);
+            iData = (void *)((intptr_t)iData - ivar8 + ivar12);
             mNumOutstandingTasks++;
             if (!first || !task.FillData()) {
                 first = false;
@@ -133,3 +167,4 @@ bool ArkFile::ReadAsync(void *iData, int iBytes) {
     TheBlockMgr.Poll();
     return true;
 }
+#endif

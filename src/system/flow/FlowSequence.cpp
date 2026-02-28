@@ -4,7 +4,7 @@
 #include "os/Debug.h"
 
 FlowSequence::FlowSequence()
-    : mItr(nullptr), mLooping(0), mRepeats(0), mRepeatCount(0), mStopMode(kStopImmediate),
+    : mItr(), mLooping(0), mRepeats(0), mRepeatCount(0), mStopMode(kStopImmediate),
       mIsAdvancing(0) {}
 
 FlowSequence::~FlowSequence() {}

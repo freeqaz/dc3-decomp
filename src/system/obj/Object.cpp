@@ -173,6 +173,9 @@ void Hmx::Object::LoadType(BinStream &bs) {
 
 void Hmx::Object::LoadRest(BinStream &bs) {
     BinStreamRev d(bs, bs.PopRev(this));
+#ifdef HX_NATIVE
+    printf("Object::LoadRest '%s' (%s): rev=%d altRev=%d tell=%d\n", Name(), ClassName().Str(), d.rev, d.altRev, bs.Tell());
+#endif
     if (!mTypeProps) {
         mTypeProps = new TypeProps(this);
     }
@@ -180,9 +183,15 @@ void Hmx::Object::LoadRest(BinStream &bs) {
     if (!mTypeProps->HasProps()) {
         RELEASE(mTypeProps);
     }
+#ifdef HX_NATIVE
+    printf("Object::LoadRest: after TypeProps tell=%d\n", bs.Tell());
+#endif
     if (d.rev > 0) {
         d >> mNote;
     }
+#ifdef HX_NATIVE
+    printf("Object::LoadRest: done, mNote='%s' tell=%d\n", mNote.c_str(), bs.Tell());
+#endif
 }
 
 void Hmx::Object::Export(DataArray *a, bool b) {
@@ -334,7 +343,12 @@ void Hmx::Object::AddPropertySink(Hmx::Object *o, DataArray *a, Symbol s) {
 }
 
 void Hmx::Object::MergeSinks(Hmx::Object *o) {
+    // (int) cast produces signed cmpwi; direct pointer produces unsigned cmplwi
+#ifdef HX_NATIVE
+    if (o && o->mSinks) {
+#else
     if (o && (int)o->mSinks) {
+#endif
         GetOrAddSinks()->MergeSinks(o);
     }
 }

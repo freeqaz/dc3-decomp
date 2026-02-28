@@ -81,7 +81,11 @@ void XLSPConnection::StartEnumeration() {
 
 bool XLSPConnection::SecureDisconnect(in_addr a) {
     bool ret = true;
+#ifdef HX_NATIVE
+    auto it = mXLSPRefCountMap.find(a.s_addr);
+#else
     auto it = mXLSPRefCountMap.find(a.s_un.s_addr);
+#endif
     if (it != mXLSPRefCountMap.end()) {
         it->second--;
         if (it->second == 0) {
@@ -99,15 +103,34 @@ bool XLSPConnection::SecureDisconnect(in_addr a) {
 
 int XLSPConnection::StartGatewayConnection(in_addr a) {
     int ret;
+#ifdef HX_NATIVE
+    auto it = mXLSPRefCountMap.find(a.s_addr);
+#else
     auto it = mXLSPRefCountMap.find(a.s_un.s_addr);
+#endif
     if (it != mXLSPRefCountMap.end()) {
         ret = 0;
         it->second++;
     } else {
         ret = XNetConnect(a);
         if (ret == 0) {
+#ifdef HX_NATIVE
+            mXLSPRefCountMap.insert(std::make_pair(a.s_addr, 1));
+#else
             mXLSPRefCountMap.insert(std::make_pair(a.s_un.s_addr, 1));
+#endif
         } else {
+#ifdef HX_NATIVE
+            unsigned char *bytes = (unsigned char *)&a.s_addr;
+            MILO_NOTIFY(
+                "XNetConnect(%d.%d.%d.%d) failed with %d",
+                bytes[0],
+                bytes[1],
+                bytes[2],
+                bytes[3],
+                ret
+            );
+#else
             MILO_NOTIFY(
                 "XNetConnect(%d.%d.%d.%d) failed with %d",
                 a.s_un.s_un_b.s_b1,
@@ -116,6 +139,7 @@ int XLSPConnection::StartGatewayConnection(in_addr a) {
                 a.s_un.s_un_b.s_b4,
                 ret
             );
+#endif
         }
     }
     return ret;

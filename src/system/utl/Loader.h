@@ -32,6 +32,9 @@ public:
 
     MEM_OVERLOAD(Loader, 0xA8);
 
+#ifdef HX_NATIVE
+    friend class LoadMgr;
+#endif
 protected:
     virtual void PollLoading() = 0;
 

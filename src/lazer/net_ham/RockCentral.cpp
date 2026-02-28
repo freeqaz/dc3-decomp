@@ -152,10 +152,12 @@ void RockCentral::Poll() {
         }
         if (!sSentScreenRes) {
             sSentScreenRes = true;
+#ifndef HX_NATIVE
             ScreenResJob *job = new ScreenResJob(nullptr, TheDxRnd.VideoMode());
             if (!TheRockCentral.IsLoginBlocked()) {
                 TheServer.ManageJob(job);
             }
+#endif
         }
         TheChallenges->DownloadOfficialChallenges();
         mJustConnected = false;

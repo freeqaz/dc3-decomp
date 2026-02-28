@@ -25,7 +25,7 @@ public:
         void Load(BinStream &);
         int NumVerts() {
             u8 *buf = (u8 *)mData;
-            void *end = (void *)((int)mData + mSize);
+            void *end = (void *)((intptr_t)mData + mSize);
             int i = 0;
             for (; buf < end;) {
                 i++;
@@ -65,7 +65,7 @@ public:
         };
 
         iterator begin() const { return iterator(mData); }
-        iterator end() const { return iterator((void *)((int)mData + mSize)); }
+        iterator end() const { return iterator((void *)((intptr_t)mData + mSize)); }
 
     protected:
         void SetSize(int);

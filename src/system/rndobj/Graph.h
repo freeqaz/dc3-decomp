@@ -14,7 +14,11 @@ public:
     virtual void Draw() = 0;
     virtual void DrawFixedZ(float) = 0;
 
+#ifdef HX_NATIVE
+    static void *operator new(size_t);
+#else
     static void *operator new(unsigned int);
+#endif
     static void operator delete(void *);
 };
 

@@ -21,6 +21,10 @@ void CharBonesSamples::Load(BinStream &bs) {
     int rev = getHmxRev(revs);
     int altRev = getAltRev(revs);
     BinStreamRev d(bs, revs);
+#ifdef HX_NATIVE
+    printf("CharBonesSamples::Load: rev=%d altRev=%d tell=%d\n", rev, altRev, bs.Tell());
+    fflush(stdout);
+#endif
     if (0x10 < rev) {
         MILO_FAIL(
             "%s can\'t load new %s version %d > %d", "", "CharBonesSample", d.rev, gRev
@@ -41,6 +45,118 @@ void CharBonesSamples::Load(BinStream &bs) {
     LoadHeader(d);
     LoadData(d);
 }
+
+#ifdef HX_NATIVE
+void CharBonesSamples::LoadHeader(BinStreamRev &d) {
+    MemFree(mRawData);
+    mRawData = nullptr;
+    int numBones;
+    d >> numBones;
+#ifdef HX_NATIVE
+    printf("CharBonesSamples::LoadHeader: rev=%d numBones=%d tell=%d sizeof(Vector3)=%zu sizeof(Hmx::Quat)=%zu\n",
+        d.rev, numBones, d.stream.Tell(), sizeof(Vector3), sizeof(Hmx::Quat));
+    fflush(stdout);
+#endif
+    mBones.resize(numBones);
+    if (d.rev > 0xA) {
+        for (int i = 0; i < numBones; i++) {
+            d >> mBones[i];
+        }
+    } else {
+        for (int i = 0; i < numBones; i++) {
+            d >> mBones[i].name;
+        }
+    }
+
+    if (d.rev > 9) {
+        ReadCounts(d.stream, d.rev > 0xF ? 7 : 10);
+        d >> (int &)mCompression;
+        int numSamples;
+        d >> numSamples;
+        MILO_ASSERT(numSamples < 32767, 0x2D7);
+        mNumSamples = numSamples;
+    } else {
+        int i;
+        if (d.rev > 5) {
+            int count;
+            if (d.rev > 7) {
+                count = 9;
+            } else {
+                count = 10;
+                if (d.rev > 6)
+                    count = 6;
+            }
+            for (i = 0; i < count; i++) {
+                int tmp;
+                d >> tmp;
+            }
+            d >> (int &)mCompression;
+            int numSamples;
+            d >> numSamples;
+            MILO_ASSERT(numSamples < 32767, 0x2F1);
+            mNumSamples = numSamples;
+        } else {
+            int numSamples;
+            d >> numSamples;
+            MILO_ASSERT(numSamples < 32767, 0x2FC);
+            mNumSamples = numSamples;
+            if (d.rev > 3) {
+                d >> (int &)mCompression;
+            }
+        }
+        for (i = 0; i < 7; i++) {
+            mCounts[i] = 0;
+        }
+        for (i = 0; i < (int)mBones.size(); i++) {
+            mCounts[CharBones::TypeOf(mBones[i].name) + 1]++;
+        }
+        for (i = 1; i < 7; i++) {
+            mCounts[i] += mCounts[i - 1];
+        }
+    }
+
+    if (d.rev > 0xB) {
+        d >> mFrames;
+    } else {
+        mFrames.clear();
+    }
+    RecomputeSizes();
+#ifdef HX_NATIVE
+    printf("CharBonesSamples::LoadHeader: numBones=%d numSamples=%d compression=%d totalSize=%d allocSize=%d frames=%d tell=%d\n",
+        (int)mBones.size(), mNumSamples, (int)mCompression, mTotalSize, AllocateSize(), (int)mFrames.size(), d.stream.Tell());
+    printf("  mCounts=[%d,%d,%d,%d,%d,%d,%d] mOffsets=[%d,%d,%d,%d,%d,%d,%d]\n",
+        mCounts[0], mCounts[1], mCounts[2], mCounts[3], mCounts[4], mCounts[5], mCounts[6],
+        mOffsets[0], mOffsets[1], mOffsets[2], mOffsets[3], mOffsets[4], mOffsets[5], mOffsets[6]);
+    for (int b = 0; b < (int)mBones.size(); b++) {
+        printf("  bone[%d]: name='%s' weight=%.2f\n", b, mBones[b].name.Str(), mBones[b].weight);
+    }
+    fflush(stdout);
+#endif
+    mRawData = (char *)MemAlloc(
+        AllocateSize(), __FILE__, __LINE__, "CharBonesSamples", 0
+    );
+}
+
+void CharBonesSamples::LoadData(BinStreamRev &d) {
+    if (d.rev == 0xE) {
+        bool x;
+        d >> x;
+    }
+    // Read raw bone sample data - on native we just need to advance the stream
+    int totalBytes = AllocateSize();
+#ifdef HX_NATIVE
+    printf("CharBonesSamples::LoadData: totalBytes=%d tell=%d\n", totalBytes, d.stream.Tell());
+    fflush(stdout);
+#endif
+    if (totalBytes > 0 && mRawData) {
+        d.stream.Read(mRawData, totalBytes);
+    }
+#ifdef HX_NATIVE
+    printf("CharBonesSamples::LoadData: done tell=%d\n", d.stream.Tell());
+    fflush(stdout);
+#endif
+}
+#endif
 
 int CharBonesSamples::AllocateSize() { return mTotalSize * mNumSamples; }
 

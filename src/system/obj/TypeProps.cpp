@@ -10,7 +10,12 @@
 DataNode *TypeProps::KeyValue(Symbol key, bool fail) const {
     if (mMap) {
         for (int i = mMap->Size() - 2; i >= 0; i -= 2) {
+            // (int) casts produce signed cmpw; direct pointer compare produces unsigned cmplw
+#ifdef HX_NATIVE
+            if (mMap->Node(i).UncheckedStr() == key.Str()) {
+#else
             if ((int)mMap->Node(i).UncheckedStr() == (int)key.Str()) {
+#endif
                 return &mMap->Node(i + 1);
             }
         }
@@ -47,7 +52,11 @@ void TypeProps::ClearKeyValue(Symbol key) {
     if (mMap) {
         int i = mMap->Size() - 2;
         while (i >= 0) {
+#ifdef HX_NATIVE
+            if (mMap->Node(i).UncheckedStr() == key.Str()) {
+#else
             if ((int)mMap->Node(i).UncheckedStr() == (int)key.Str()) {
+#endif
                 DataNode &val = mMap->Node(i + 1);
                 if (val.Type() == kDataObject) {
                     Hmx::Object *obj = val.UncheckedObj();
@@ -81,8 +90,13 @@ void TypeProps::SetKeyValue(Symbol key, const DataNode &value, bool b) {
     } else {
         int nodeCnt = mMap->Size();
         for (int cnt = nodeCnt - 2; cnt >= 0; cnt -= 2) {
+#ifdef HX_NATIVE
+            const char *symstr = mMap->Node(cnt).UncheckedStr();
+            const char *keystr = key.Str();
+#else
             int symstr = (int)mMap->Node(cnt).UncheckedStr();
             int keystr = (int)key.Str();
+#endif
             if (symstr == keystr) {
                 DataNode &valNode = mMap->Node(cnt + 1);
                 if (valNode.Type() == kDataObject) {

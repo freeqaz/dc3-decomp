@@ -190,9 +190,9 @@ namespace {
     }
 
     bool InternalCheckContext(const DataArray *a) {
-        static Symbol and ("and");
-        static Symbol or ("or");
-        static Symbol not("not");
+        static Symbol sym_and("and");
+        static Symbol sym_or("or");
+        static Symbol sym_not("not");
         static Symbol mode_property("mode_property");
         static Symbol mode("mode");
         static Symbol diff("diff");
@@ -211,11 +211,11 @@ namespace {
         static Symbol voice_pause_enabled("voice_pause_enabled");
         static Symbol voice_practice_enabled("voice_practice_enabled");
         Symbol ctxSym = a->Sym(0);
-        if (ctxSym == and) {
+        if (ctxSym == sym_and) {
             return CheckContextAnd(a);
-        } else if (ctxSym == or) {
+        } else if (ctxSym == sym_or) {
             return CheckContextOr(a);
-        } else if (ctxSym == not) {
+        } else if (ctxSym == sym_not) {
             return CheckContextNot(a);
         } else if (ctxSym == mode_property) {
             return CheckContextModeProperty(a);

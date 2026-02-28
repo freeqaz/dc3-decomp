@@ -3,6 +3,7 @@
 #include "movie/MovieImpl.h"
 #include "os/Timer.h"
 #include "utl/Str.h"
+#include <vector>
 
 struct BINK {
     virtual ~BINK();
@@ -25,7 +26,9 @@ private:
     void* mUnknown;  // 0xBC
 };
 
+#ifndef HX_NATIVE
 static_assert(sizeof(MovieInternalBuffers) == 0xC0, "MovieInternalBuffers size mismatch");
+#endif
 
 class BinkMovieImpl : public MovieImpl {
 public:
@@ -56,6 +59,7 @@ public:
     void Terminate();
 
 private:
+    static std::vector<BinkMovieImpl *> sActiveMovies;
     void SetRect();
     void BeginFrame();
     bool PlatformCacheFile(const char *);

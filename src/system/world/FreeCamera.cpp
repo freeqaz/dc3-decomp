@@ -4,7 +4,7 @@
 #include "rndobj/Cam.h"
 #include "rndobj/DOFProc.h"
 
-float gUnitsPerMeter = 39.370079;
+extern float gUnitsPerMeter;
 
 FreeCamera::FreeCamera(WorldDir *dir, float f1, float f2, int i)
     : mParent(0), mFrozen(0), mPadNum(i), mRotateRate(f1), mSlewRate(gUnitsPerMeter * f2),

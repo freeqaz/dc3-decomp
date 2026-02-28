@@ -21,8 +21,8 @@ class MidiChunkID : public ChunkID {
 public:
     MidiChunkID(BinStream &bs) : ChunkID(bs) {}
     MidiChunkID(const char *str) : ChunkID(str) {}
-    static MidiChunkID kMThd;
-    static MidiChunkID kMTrk;
+    static const MidiChunkID kMThd;
+    static const MidiChunkID kMTrk;
 };
 
 class MidiChunkHeader {

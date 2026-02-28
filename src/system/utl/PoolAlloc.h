@@ -67,6 +67,16 @@ void *PoolAlloc(int classSize, int reqSize, const char *file, int line, const ch
 void PoolFree(int, void *mem, const char *file, int line, const char *name);
 void PoolReport(TextStream &);
 
+#ifdef HX_NATIVE
+#define POOL_OVERLOAD(class_name, line_num)                                              \
+    static void *operator new(size_t s) {                                                \
+        return PoolAlloc(s, s, __FILE__, line_num, #class_name);                         \
+    }                                                                                    \
+    static void *operator new(size_t s, void *place) { return place; }                   \
+    static void operator delete(void *v) {                                               \
+        PoolFree(sizeof(class_name), v, __FILE__, line_num, #class_name);                \
+    }
+#else
 #define POOL_OVERLOAD(class_name, line_num)                                              \
     static void *operator new(unsigned int s) {                                          \
         return PoolAlloc(s, s, __FILE__, line_num, #class_name);                         \
@@ -75,3 +85,4 @@ void PoolReport(TextStream &);
     static void operator delete(void *v) {                                               \
         PoolFree(sizeof(class_name), v, __FILE__, line_num, #class_name);                \
     }
+#endif

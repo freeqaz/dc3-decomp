@@ -9,6 +9,10 @@
 
 UIListMesh::UIListMesh() : mMesh(this), mDefaultMat(this) {}
 
+BEGIN_HANDLERS(UIListMesh)
+    HANDLE_SUPERCLASS(UIListSlot)
+END_HANDLERS
+
 BEGIN_PROPSYNCS(UIListMesh)
     SYNC_PROP(mesh, mMesh)
     SYNC_PROP(default_mat, mDefaultMat)

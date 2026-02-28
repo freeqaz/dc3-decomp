@@ -5,9 +5,12 @@
 #include "math/Rand.h"
 #include "math/Utl.h"
 #include "math/Mtx.h"
+#ifdef HX_NATIVE
+#include <cstdio>
+#endif
 
-float gUnitsPerMeter = 39.370079f;
-Rand *sRand;
+extern float gUnitsPerMeter;
+static Rand *sRand;
 float sWhiteField[0x400] = { 0 };
 float sWindField[0x401] = { 0 };
 Vector3 sOffset(0.0f, 0.3384f, 0.66843998f);
@@ -33,15 +36,36 @@ void SetWind(int start, int end, float startVal, float endVal, float amplitude) 
 }
 
 void RndWind::Init() {
+#ifdef HX_NATIVE
+    printf("DC3 Native:     RndWind::Init() - RegisterFactory...\n");
+#endif
     REGISTER_OBJ_FACTORY(RndWind)
+#ifdef HX_NATIVE
+    printf("DC3 Native:     RndWind::Init() - new Rand...\n");
+#endif
     sRand = new Rand(0x7FEF8A);
+#ifdef HX_NATIVE
+    printf("DC3 Native:     RndWind::Init() - SetWind...\n");
+#endif
     SetWind(0, 0x400, 0.0f, 0.0f, 0.5f);
+#ifdef HX_NATIVE
+    printf("DC3 Native:     RndWind::Init() - sWindField copy...\n");
+#endif
     sWindField[0x400] = sWindField[0];
+#ifdef HX_NATIVE
+    printf("DC3 Native:     RndWind::Init() - RandomFloat loop...\n");
+#endif
     for (int i = 0; i < 0x400; i++) {
         sWhiteField[i] = RandomFloat(0.0f, 1.0f);
     }
+#ifdef HX_NATIVE
+    printf("DC3 Native:     RndWind::Init() - cleanup...\n");
+#endif
     delete sRand;
     sRand = 0;
+#ifdef HX_NATIVE
+    printf("DC3 Native:     RndWind::Init() done\n");
+#endif
 }
 
 float RndWind::GetWind(float x) {

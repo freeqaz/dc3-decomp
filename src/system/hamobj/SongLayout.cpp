@@ -139,7 +139,7 @@ BEGIN_LOADS(SongLayout)
     FOREACH (it, mSongSections) {
         FOREACH (pit, mSongPatterns) {
             if (pit->mName == it->mPattern) {
-                it->mSongPattern = pit;
+                it->mSongPattern = &(*pit);
                 break;
             }
         }

@@ -43,11 +43,13 @@ void TerminateDrawUtl() {
     TheSkeletonViz = nullptr;
 }
 
+#ifndef HX_NATIVE
 bool ToggleDrawSkeletons() {
     MILO_ASSERT(TheSkeletonViz, 0xe2);
     TheSkeletonViz->SetShowing(!TheSkeletonViz->Showing());
     return TheSkeletonViz->Showing();
 }
+#endif
 
 RndMat *CreateCameraBufferMat(int width, int height, RndTex::Type type) {
     auto tex = Hmx::Object::New<RndTex>();

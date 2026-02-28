@@ -14,7 +14,11 @@ namespace Synapse {
 // Minimal class definitions for destructor visibility
 class PitchDetector {
 public:
+#ifdef HX_NATIVE
+    PitchDetector(const std::vector<float> &, unsigned int, unsigned int);
+#else
     PitchDetector(const stlpmtx_std::vector<float, stlpmtx_std::StlNodeAlloc<float> > &, unsigned int, unsigned int);
+#endif
     ~PitchDetector();
     void Detect(unsigned int);
     float mField_0x00;
@@ -28,7 +32,11 @@ public:
 
 class PeakDetector {
 public:
+#ifdef HX_NATIVE
+    PeakDetector(const std::vector<float> &, unsigned int, unsigned int);
+#else
     PeakDetector(const stlpmtx_std::vector<float, stlpmtx_std::StlNodeAlloc<float> > &, unsigned int, unsigned int);
+#endif
     ~PeakDetector();
     void Detect(unsigned int);
     float mField_0x00;
@@ -49,7 +57,11 @@ struct GranularVoice {
 
 class GranularSynth {
 public:
+#ifdef HX_NATIVE
+    GranularSynth(const std::vector<float> &, unsigned int, unsigned int, unsigned int);
+#else
     GranularSynth(const stlpmtx_std::vector<float, stlpmtx_std::StlNodeAlloc<float> > &, unsigned int, unsigned int, unsigned int);
+#endif
     ~GranularSynth();
     void SetVoiceEnabled(unsigned int idx, bool enabled);
     void Flush();
@@ -182,7 +194,11 @@ Synapse::Synapse(float sampleRate) : mTargetPitch(sampleRate) {
     mVoices.resize(3, pcv);
 
     // Channel buffers
+#ifdef HX_NATIVE
+    std::vector<float> emptyVec;
+#else
     stlpmtx_std::vector<float, stlpmtx_std::StlNodeAlloc<float> > emptyVec;
+#endif
     mChannelBuffers.resize((int)mVoices.size(), emptyVec);
 
     // Output buffers

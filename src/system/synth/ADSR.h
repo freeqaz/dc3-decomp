@@ -3,6 +3,8 @@
 #include "utl/BinStream.h"
 #include "utl/MemMgr.h"
 
+class ADSR; // forward declaration for ADSRImpl::Load
+
 /** Implementation of ADSR envelope */
 class ADSRImpl {
     friend class ADSR;

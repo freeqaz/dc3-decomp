@@ -347,7 +347,7 @@ int FloatKeys::FloatAt(float frame, float &fl) {
             float points[4];
             points[1] = prev->value;
             points[2] = next->value;
-            int idx = (prev - begin());
+            int idx = (prev - data());
             if (idx != 0) {
                 points[0] = this->at(idx - 1).value;
             } else {

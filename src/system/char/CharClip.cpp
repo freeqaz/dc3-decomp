@@ -46,7 +46,11 @@ int CharClip::Transitions::Size() const {
 CharClip::NodeVector *CharClip::Transitions::Resize(int size, const NodeVector *old) {
     static int _x = MemFindHeap("char");
     MemHeapTracker temp(_x);
+#ifdef HX_NATIVE
+    intptr_t n = (intptr_t)old - (intptr_t)mNodeStart;
+#else
     int n = (int)old - (int)mNodeStart;
+#endif
     MILO_ASSERT((old == NULL) || (n >= 0), 0x9B);
     if (size != BytesInMemory()) {
         if (size == 0) {
@@ -61,8 +65,9 @@ CharClip::NodeVector *CharClip::Transitions::Resize(int size, const NodeVector *
             );
         }
     }
-    mNodeEnd = mNodeStart + size;
-    return mNodeStart + n;
+    // size is in bytes, not element count — use byte arithmetic
+    mNodeEnd = (NodeVector *)((char *)mNodeStart + size);
+    return (NodeVector *)((char *)mNodeStart + n);
 }
 
 CharClip::NodeVector *CharClip::Transitions::GetNodes(int idx) const {
@@ -89,15 +94,16 @@ void CharClip::Transitions::RemoveClip(CharClip *clip) {
 void CharClip::Transitions::RemoveNodes(NodeVector *n) {
     MILO_ASSERT(n, 0xEC);
     NodeVector *next = n->Next();
-    memmove(n, next, (int)mNodeEnd - (int)next);
-    Resize(BytesInMemory() - ((int)next - (int)n), nullptr);
+    memmove(n, next, (intptr_t)mNodeEnd - (intptr_t)next);
+    Resize(BytesInMemory() - ((intptr_t)next - (intptr_t)n), nullptr);
     for (NodeVector *it = mNodeStart; it < mNodeEnd; it = it->Next()) {
         // Fix up linked list pointers after memmove
+        // ObjRef layout: vtable(sizeof(void*)) + next(sizeof(void*)) + prev(sizeof(void*))
         ObjRef *clipRef = (ObjRef*)&it->clip;
-        ObjRef *clipNext = *(ObjRef**)((char*)clipRef + 4);
-        ObjRef *clipPrev = *(ObjRef**)((char*)clipRef + 8);
-        *(ObjRef**)((char*)clipPrev + 4) = clipRef;
-        *(ObjRef**)((char*)clipNext + 8) = clipRef;
+        ObjRef *clipNext = *(ObjRef**)((char*)clipRef + sizeof(void*));
+        ObjRef *clipPrev = *(ObjRef**)((char*)clipRef + sizeof(void*) * 2);
+        *(ObjRef**)((char*)clipPrev + sizeof(void*)) = clipRef;
+        *(ObjRef**)((char*)clipNext + sizeof(void*) * 2) = clipRef;
     }
 }
 
@@ -154,8 +160,18 @@ void CharClip::Transitions::Load(BinStreamRev &d, int oldRev) {
         if (d.rev < 0x14) {
             temp /= 8;
         }
+#ifdef HX_NATIVE
+        // On LP64, NodeVector is ~2x larger (8-byte pointers), need more space
+        // temp from file is Xbox byte count; scale up generously
+        int allocSize = temp < 256 ? 4096 : temp * 4;
+        printf("Transitions::Load: temp=%d numNodes=%d allocSize=%d rev=%d\n", temp, numNodes, allocSize, d.rev);
+        fflush(stdout);
+        NodeVector *start = (NodeVector *)_MemAllocTemp(allocSize, __FILE__, 0x4CB, "CharGraphNode", 0);
+        memset(start, 0, allocSize);
+#else
         NodeVector *start =
             (NodeVector *)_MemAllocTemp(temp, __FILE__, 0x4CB, "CharGraphNode", 0);
+#endif
         NodeVector *it = start;
 
         for (int i = 0; i < numNodes; i++) {
@@ -180,11 +196,32 @@ void CharClip::Transitions::Load(BinStreamRev &d, int oldRev) {
                 }
             }
         }
-        Resize((int)it - (int)start, nullptr);
+#ifdef HX_NATIVE
+        // On native, ObjOwnerPtr registers as ObjRef in the clip's ref chain.
+        // memcpy creates bitwise copies with stale prev/next pointers.
+        // Fix: after memcpy, swap temp ObjRefs out and permanent ObjRefs in.
+        {
+            int dataSize = (intptr_t)it - (intptr_t)start;
+            Resize(dataSize, nullptr);
+            memcpy(mNodeStart, start, BytesInMemory());
+            NodeVector *tempEnd = (NodeVector *)((char *)start + dataSize);
+            NodeVector *permIt = mNodeStart;
+            for (NodeVector *tempIt = start; tempIt < tempEnd;
+                 tempIt = tempIt->Next(), permIt = permIt->Next()) {
+                CharClip *clip = (CharClip *)tempIt->clip;
+                if (clip) {
+                    clip->Release(&tempIt->clip); // deregister temp from chain
+                    clip->AddRef(&permIt->clip);  // register permanent in chain
+                }
+            }
+        }
+#else
+        Resize((intptr_t)it - (intptr_t)start, nullptr);
         memcpy(mNodeStart, start, BytesInMemory());
         for (NodeVector *it = mNodeStart; it < mNodeEnd; it = it->Next()) {
             it->clip->Release(nullptr);
         }
+#endif
         MemFree(start);
     }
 }
@@ -433,6 +470,10 @@ BEGIN_LOADS(CharClip)
     static int _x = MemFindHeap("char");
     MemHeapTracker temp(_x);
     int oldRev, x, y, oldVer, tv;
+#ifdef HX_NATIVE
+    printf("CharClip::Load '%s': entry tell=%d\n", Name(), bs.Tell());
+    fflush(stdout);
+#endif
     LOAD_REVS(bs)
     ASSERT_REVS(0x16, 0)
     oldRev = 0;
@@ -440,8 +481,16 @@ BEGIN_LOADS(CharClip)
         d >> oldRev;
     else
         oldRev = 0xD;
+#ifdef HX_NATIVE
+    printf("CharClip::Load '%s': rev=%d altRev=%d oldRev=%d tell=%d\n", Name(), d.rev, d.altRev, oldRev, d.stream.Tell());
+    fflush(stdout);
+#endif
     MILO_ASSERT(oldRev > 1, 0x531);
     LOAD_SUPERCLASS(Hmx::Object)
+#ifdef HX_NATIVE
+    printf("CharClip::Load '%s': after LOAD_SUPERCLASS tell=%d\n", Name(), d.stream.Tell());
+    fflush(stdout);
+#endif
     if (d.rev < 0x12) {
         d >> x;
         d >> y;
@@ -456,6 +505,10 @@ BEGIN_LOADS(CharClip)
     if (oldRev > 3) {
         d >> mRange;
     }
+#ifdef HX_NATIVE
+    printf("CharClip::Load '%s': fps=%.1f flags=%d playFlags=%d range=%.1f tell=%d\n", Name(), mFramesPerSec, mFlags, mPlayFlags, mRange, d.stream.Tell());
+    fflush(stdout);
+#endif
     if (oldRev > 5) {
         mRelative.Load(d.stream, false, nullptr);
     } else if (oldRev > 4) {
@@ -465,6 +518,10 @@ BEGIN_LOADS(CharClip)
     } else {
         mRelative = nullptr;
     }
+#ifdef HX_NATIVE
+    printf("CharClip::Load '%s': after mRelative tell=%d\n", Name(), d.stream.Tell());
+    fflush(stdout);
+#endif
     if (oldRev > 8 && oldRev < 0xB) {
         bool unused;
         d >> unused;
@@ -475,7 +532,15 @@ BEGIN_LOADS(CharClip)
     if (oldRev > 0xB) {
         d >> mDoNotCompress;
     }
+#ifdef HX_NATIVE
+    printf("CharClip::Load '%s': oldVer=%d doNotCompress=%d tell=%d\n", Name(), mOldVer, mDoNotCompress, d.stream.Tell());
+    fflush(stdout);
+#endif
     mTransitions.Load(d, oldRev);
+#ifdef HX_NATIVE
+    printf("CharClip::Load '%s': after transitions tell=%d\n", Name(), d.stream.Tell());
+    fflush(stdout);
+#endif
     if (oldRev < 3) {
         int count;
         d >> count;
@@ -487,10 +552,18 @@ BEGIN_LOADS(CharClip)
     if (oldRev > 6) {
         int count;
         d >> count;
+#ifdef HX_NATIVE
+        printf("CharClip::Load '%s': beatEvents count=%d tell=%d\n", Name(), count, d.stream.Tell());
+        fflush(stdout);
+#endif
         mBeatEvents.resize(count);
         for (int i = 0; i < mBeatEvents.size(); i++) {
             mBeatEvents[i].Load(d.stream);
         }
+#ifdef HX_NATIVE
+        printf("CharClip::Load '%s': after beatEvents tell=%d\n", Name(), d.stream.Tell());
+        fflush(stdout);
+#endif
     } else {
         String eventName;
         d >> eventName;
@@ -528,8 +601,20 @@ BEGIN_LOADS(CharClip)
         mDirty = true;
     }
     if (d.rev > 0xC) {
+#ifdef HX_NATIVE
+        printf("CharClip::Load '%s': before mFull.Load tell=%d\n", Name(), d.stream.Tell());
+        fflush(stdout);
+#endif
         mFull.Load(d.stream);
+#ifdef HX_NATIVE
+        printf("CharClip::Load '%s': after mFull.Load tell=%d\n", Name(), d.stream.Tell());
+        fflush(stdout);
+#endif
         mOne.Load(d.stream);
+#ifdef HX_NATIVE
+        printf("CharClip::Load '%s': after mOne.Load tell=%d\n", Name(), d.stream.Tell());
+        fflush(stdout);
+#endif
     } else {
         mFull.LoadHeader(d);
         mOne.LoadHeader(d);
@@ -713,7 +798,7 @@ void CharClip::EvaluateChannel(void *v1, const void *v2, int iii, float f) {
     if (!v2) {
         MILO_FAIL("%s passed in NULL for evaluate channel", PathName(this));
     }
-    int offset = (int)v2 - 1;
+    int offset = (intptr_t)v2 - 1;
     if (offset < mFull.TotalSize()) {
         mFull.EvaluateChannel(v1, offset, iii, f);
     } else {

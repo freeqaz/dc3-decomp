@@ -1,5 +1,8 @@
 #pragma once
 #include "MemHeap.h"
+#ifdef HX_NATIVE
+#include <cstddef> // for size_t
+#endif
 
 extern const char *gStlAllocName;
 extern bool gStlAllocNameLookup;
@@ -93,12 +96,43 @@ void MemOrPoolFree(
 );
 void MemOrPoolFreeSTL(int, void *mem, const char *file, int line, const char *name);
 
+#ifdef HX_NATIVE
+// On 64-bit native, operator new takes size_t (unsigned long), not unsigned int
+void *operator new(size_t size);
+void *operator new[](size_t size);
+void operator delete(void *mem) noexcept;
+void operator delete[](void *mem) noexcept;
+
+#define OBJ_MEM_OVERLOAD(line_num)                                                       \
+    static void *operator new(size_t s) {                                                \
+        return MemAlloc(s, __FILE__, line_num, StaticClassName().Str(), 0);              \
+    }                                                                                    \
+    static void *operator new(size_t s, void *place) { return place; }                   \
+    static void operator delete(void *v) {                                               \
+        MemFree(v, __FILE__, line_num, StaticClassName().Str());                         \
+    }
+
+#define MEM_OVERLOAD(class_name, line_num)                                               \
+    static void *operator new(size_t s) {                                                \
+        return MemAlloc(s, __FILE__, line_num, #class_name, 0);                          \
+    }                                                                                    \
+    static void *operator new(size_t s, void *place) { return place; }                   \
+    static void operator delete(void *v) { MemFree(v, __FILE__, line_num, #class_name); }
+
+#define MEM_ARRAY_OVERLOAD(class_name, line_num)                                         \
+    static void *operator new[](size_t s) {                                              \
+        return MemAlloc(s, __FILE__, line_num, #class_name, 0);                          \
+    }                                                                                    \
+    static void *operator new[](size_t s, void *place) { return place; }                 \
+    static void operator delete[](void *v) {                                             \
+        MemFree(v, __FILE__, line_num, #class_name);                                     \
+    }
+#else
 void *operator new(unsigned int size);
 void *operator new[](unsigned int size);
 void operator delete(void *mem);
 void operator delete[](void *mem);
 
-// for Hmx::Objects and their derivatives
 #define OBJ_MEM_OVERLOAD(line_num)                                                       \
     static void *operator new(unsigned int s) {                                          \
         return MemAlloc(s, __FILE__, line_num, StaticClassName().Str(), 0);              \
@@ -108,7 +142,6 @@ void operator delete[](void *mem);
         MemFree(v, __FILE__, line_num, StaticClassName().Str());                         \
     }
 
-// for everything else
 #define MEM_OVERLOAD(class_name, line_num)                                               \
     static void *operator new(unsigned int s) {                                          \
         return MemAlloc(s, __FILE__, line_num, #class_name, 0);                          \
@@ -124,6 +157,7 @@ void operator delete[](void *mem);
     static void operator delete[](void *v) {                                             \
         MemFree(v, __FILE__, line_num, #class_name);                                     \
     }
+#endif
 
 // #define NEW_ARRAY_OVERLOAD \
 //     void *operator new[](size_t t) { return _MemAlloc(t, 0); } \ void *operator

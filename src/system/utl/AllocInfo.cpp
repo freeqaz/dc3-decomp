@@ -33,7 +33,12 @@ AllocInfo::AllocInfo(
     : mReqSize(requestedSize), mActSize(actualSize), mType(type), mMem(mem), mHeap(heap),
       mPooled(pooled), mStrat(strat), mFile(file), mLine(line),
       unk1d(s_pTrie->store(str1.c_str())), unk21(s_pTrie->store(str2.c_str())) {
+#ifdef HX_NATIVE
+    // On LP64, mHashMem(8) + mHashTable(8) = mTimeSlice at 0x10
+    mTimeSlice = *(short *)((char *)gMemTracker + 0x10);
+#else
     mTimeSlice = *(short *)((char *)gMemTracker + 0x8);
+#endif
     FillStackTrace();
 }
 
@@ -43,7 +48,11 @@ AllocInfo::~AllocInfo() {
     s_pTrie->remove(unk21);
 }
 
+#ifdef HX_NATIVE
+void *AllocInfo::operator new(size_t size) {
+#else
 void *AllocInfo::operator new(unsigned int size) {
+#endif
     MILO_ASSERT(size == sizeof(AllocInfo), 0x32);
     void *mem = GetPool().Alloc();
     MILO_ASSERT(mem, 0x36);

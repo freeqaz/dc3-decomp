@@ -1141,12 +1141,20 @@ void MetaPerformer::OnReviewMovePassed(
     int i90, i80;
     GetCurrentRecapMove(i90, i80);
     if (i90 >= 0 && i80 >= 0) {
+#ifdef HX_NATIVE
+        if (!(ratingIndex <= awesomeIdx)) {
+            mReviewMoveMaskBySection[i90][i80] = true;
+        } else {
+            mReviewMoveMaskBySection[i90][i80] = false;
+        }
+#else
         auto &set = mReviewMoveMaskBySection[i90][i80];
         if (!(ratingIndex <= awesomeIdx)) {
             set = true;
         } else {
             set = false;
         }
+#endif
     }
 }
 

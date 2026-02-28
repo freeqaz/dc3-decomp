@@ -8,6 +8,10 @@
 
 UIListSlot::UIListSlot() : mSlotDrawType(kUIListSlotDrawAlways), mNextElement(0) {}
 
+BEGIN_HANDLERS(UIListSlot)
+    HANDLE_SUPERCLASS(UIListWidget)
+END_HANDLERS
+
 BEGIN_PROPSYNCS(UIListSlot)
     SYNC_PROP_SET(
         slot_draw_type, (int)mSlotDrawType, mSlotDrawType = (UIListSlotDrawType)_val.Int()

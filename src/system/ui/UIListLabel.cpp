@@ -10,6 +10,12 @@
 
 UIListLabel::UIListLabel() : mLabel(this), mHighlightAltStyles(0) {}
 
+RndTransformable *UIListLabel::RootTrans() { return mLabel; }
+
+BEGIN_HANDLERS(UIListLabel)
+    HANDLE_SUPERCLASS(UIListSlot)
+END_HANDLERS
+
 BEGIN_PROPSYNCS(UIListLabel)
     SYNC_PROP(label, mLabel)
     SYNC_PROP(highlight_alt_styles, mHighlightAltStyles)

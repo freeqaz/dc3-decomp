@@ -230,7 +230,9 @@ void Debug::Init() {
     if (log) {
         StartLog(log, true);
     }
+#ifndef HX_NATIVE
     SetUnhandledExceptionFilter(&HmxGlobalHandler);
+#endif
     mFailing = false;
     DM_SYSTEM_INFO sysInfo;
     unsigned char pad[12];
@@ -304,9 +306,9 @@ const char *GetExpCode(int code) {
             extern const char *merged_82610090(const char *, volatile int *);
             return merged_82610090("Unhandled Exception", &arg);
         }
-        case 0xC00000FD:
+        case (int)0xC00000FD:
             return "EXCEPTION_STACK_OVERFLOW";
-        case 0xC000013A:
+        case (int)0xC000013A:
             return "CONTROL_C_EXIT";
         }
     }

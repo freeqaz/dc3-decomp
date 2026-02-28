@@ -1,7 +1,11 @@
 #include "DebugGraph.h"
 #include "rndobj/Graph.h"
 #include "utl/MakeString.h"
+#ifdef HX_NATIVE
+inline double __fsel(double a, double b, double c) { return a >= 0.0 ? b : c; }
+#else
 #include "xdk/LIBCMT/ppcintrinsics.h"
+#endif
 
 void DebugGraph::AddData(float data, bool b)  {
     Sample sample;

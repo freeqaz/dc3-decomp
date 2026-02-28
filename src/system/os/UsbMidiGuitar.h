@@ -9,9 +9,9 @@ public:
     ~UsbMidiGuitar();
 
     static bool mUsbMidiGuitarExists;
-    static Timer mTimer;
 
 private:
+    static Timer mTimer;
     static int mMinVelocity;
 
 public:

@@ -5,8 +5,8 @@
 #include "obj/Data.h"
 #include "os/User.h"
 
-bool gDisable;
-bool gKeyCheatsEnabled;
+__declspec(selectany) bool gDisable;
+__declspec(selectany) bool gKeyCheatsEnabled;
 
 struct CheatLog {
     ~CheatLog();
@@ -100,4 +100,4 @@ void CheatsTerminate();
 DataNode OnGetCheatMode(DataArray *da);
 DataNode SetKeyCheatsEnabled(DataArray *da);
 DataNode OnSetCheatMode(DataArray *da);
-Symbol GetCheatMode() { return gCheatsManager->CheatMode(); };
+inline Symbol GetCheatMode() { return gCheatsManager->CheatMode(); };

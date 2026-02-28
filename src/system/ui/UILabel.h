@@ -60,6 +60,9 @@ public:
     const RndText::Style &Style(int) const;
     RndText::Style &Style(int);
     void SetPrelocalizedString(String &);
+#ifdef HX_NATIVE
+    void SetPrelocalizedString(const String &s) { SetPrelocalizedString(const_cast<String &>(s)); }
+#endif
     void SetSubtitle(const DataArray *);
     void SetTimeHMS(int, bool);
     bool CheckValid(bool);

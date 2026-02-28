@@ -1,7 +1,18 @@
 #include "utl/SongInfoCopy.h"
 #include "utl/Symbol.h"
+#include <algorithm>
+
+Symbol SongInfoCopy::GetName() const { return mName; }
+
+const char *SongInfoCopy::GetBaseFileName() const { return mBaseFileName.c_str(); }
+
+const std::vector<float> &SongInfoCopy::GetPans() const { return mPans; }
 
 const std::vector<float> &SongInfoCopy::GetVols() const { return mVols; }
+
+const std::vector<int> &SongInfoCopy::GetCores() const { return mCores; }
+
+const std::vector<TrackChannels> &SongInfoCopy::GetTracks() const { return mTrackChannels; }
 
 const char *SongInfoCopy::GetPackageName() const {
     if (!mPackageName.empty())

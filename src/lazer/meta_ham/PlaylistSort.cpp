@@ -70,14 +70,14 @@ void PlaylistSort::BuildTree() {
     Init();
     std::vector<NavListItemNode *> nodes;
     FOREACH(it, ThePlaylistSortMgr->mPlaylists) {
-        auto newNode = NewItemNode(it);
+        auto newNode = NewItemNode(&(*it));
         nodes.push_back(newNode);
     }
     FOREACH(it, nodes) {
         auto headerRange = std::equal_range(nodes.begin(), nodes.end(), *it,  CompareHeaders());
         NavListShortcutNode *node = NewShortcutNode(*it);
         mShortcutNodes.push_back(node);
-        node->InsertHeaderRange(headerRange.first, headerRange.second, this);
+        node->InsertHeaderRange(&*headerRange.first, &*headerRange.second, this);
     }
     FOREACH(it, mShortcutNodes) {
         (*it)->FinishSort(this);

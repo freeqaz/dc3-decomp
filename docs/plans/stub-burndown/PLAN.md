@@ -1,108 +1,151 @@
 # Stub Burndown Plan
 
-Resolve the ~733 ALTERNATENAME stubs in `link_glue.cpp` by implementing the
-actual functions in their correct source files.
+Implement ~2,429 unimplemented game/engine functions flagged as `is_stub=1` in the
+orchestrator database.
 
 ## Background
 
-Each stub is a `#pragma comment(linker, "/ALTERNATENAME:...")` line that
-redirects an unresolved symbol to a no-op function. These exist so the linker
-succeeds without real implementations. The functions were previously marked
-COMPLETE in the orchestrator DB (since the *linker* symbol resolved), but have
-been reset because they have no source-level implementation.
+A full `sync_objdiff.py --all` scan found **3,885 functions** where the decomp
+.obj has no code (`base_size=0`). Of these, **~2,435 are game/engine methods**
+flagged `is_stub=1`. The rest (STL templates, destructors, etc.) auto-resolve as
+game methods get implemented.
 
-**Impact**: Resolving all 733 stubs would push COMPLETE from ~94.4% to ~96.6%.
+These functions previously had false COMPLETE verdicts (the linker resolved them
+via ALTERNATENAME stubs) and have been reset so they appear as workable.
+
+**Note:** Many of these are likely **false negatives** — they already have
+matching source code but were flagged because `sync_objdiff.py` couldn't detect
+the existing implementation. Running `batch_check` on a unit will auto-resolve
+these. Early testing found 29 of 33 "reset" stubs in Tier 1 were already
+matching.
+
+### ALTERNATENAME Stubs (separate concern)
+
+There are ~246 ALTERNATENAME stubs in `link_glue.cpp` — a separate, non-overlapping
+set that prevents link errors. These include 72 `??__E` dynamic initializers,
+31 SDK/C stubs, 28 templates, and 115 C++ functions. These are a linking concern,
+not an objdiff concern, and are handled separately.
 
 ## What NOT to Work On
 
-1. **`link_glue` unit (43 functions)** — Template instantiations (`PropSync<T>`,
-   `operator<<(BinStream, ObjPtrVec<T>)`, etc.) that get emitted when the TU
-   that *uses* them is compiled. These auto-resolve as parent units are
-   implemented. Work them last if any remain.
+1. **`link_glue` unit (34 functions)** — Template instantiations that get emitted
+   when the TU that *uses* them is compiled. Auto-resolve as parent units are
+   implemented.
 
-2. **SDK/external stubs (~21)** — `BinkClose`, `D3DTexture_*`, `wmemcpy`, etc.
-   These reference external Xbox SDK libraries. Leave as stubs permanently.
+2. **SDK/external stubs** — `BinkClose`, `D3DTexture_*`, `wmemcpy`, etc. Leave
+   as stubs permanently.
 
 3. **`??__E` dynamic initializers** — Auto-resolve when the parent TU's static
-   variables are correctly defined. Not regular functions you implement.
+   variables are correctly defined.
+
+4. **`lib/binkxenon/*`** — Third-party Bink video library (62+ stubs in
+   `binkread` alone). Not worth decompiling.
+
+5. **`system/os/PlatformMgr_Xbox` (88 stubs)** — Xbox platform APIs with no RB3
+   reference. Defer indefinitely.
+
+## Querying Stubs
+
+```python
+# Find all workable stubs
+query_functions(is_stub=True, status="workable")
+
+# Find stubs in a specific unit
+query_functions(is_stub=True, unit_pattern="system/rndobj/*")
+
+# Batch-check a unit (auto-resolves false negatives)
+batch_check(unit_pattern="system/rndobj/Shader")
+```
 
 ## Priority Tiers
 
-### Tier 1: Quick Wins — Single-Stub Units (~33 units)
+### Summary
+
+| Tier | Description | Units | Functions |
+|------|-------------|-------|-----------|
+| 1 | Single-stub units | 147 | 147 |
+| 2 | Small units (2-5 stubs) | 186 | 573 |
+| 3 | Medium units (6-15 stubs) | 101 | 897 |
+| 4 | Large units (16-30 stubs) | 18 | 353 |
+| 5 | Very large (31+ stubs) | 10 | 459 |
+| **Total** | | **462** | **2,429** |
+
+### Tier 1: Quick Wins — Single-Stub Units (147 units)
 
 Units that become 100% complete with a single function. Highest ROI.
+Split by category: 116 Milo engine, 28 DC3 game, 3 library.
+
+Sample (run `query_functions(is_stub=True)` with unit pattern for full list):
 
 | Unit | Function |
 |------|----------|
-| system/char/CharLipSyncDriver | `CharLipSyncDriver::Poll` |
+| system/char/CharClip | `CharClip::Transitions::AddNode` |
+| system/char/CharCollide | `CharCollide::Highlight` |
+| system/char/CharForeTwist | `CharForeTwist::Poll` |
 | system/char/ClipCollide | `Transform::LookAt` |
 | system/char/FileMerger | `ObjDirPtr<ObjectDir>::ObjDirPtr` |
-| system/char/FileMergerOrganizer | `FileMergerSort::operator()` |
-| system/char/CharClip | `CharClip::Transitions::AddNode` |
 | system/flow/FlowSound | `FlowSound::OnMarkerEvent` |
-| system/flow/FlowMultiSetProperty | `ObjPtrVec<Hmx::Object>::unique` |
-| system/flow/FlowSlider | `FlowSlider::UpdateActivations` |
-| system/flow/DrivenPropertyEntry | `DrivenPropertyEntry::Load` |
-| system/hamobj/HamListRibbon | `HamListRibbon::EndFrame` |
-| system/hamobj/HamScrollSpeedIndicator | `HamScrollSpeedIndicator::Update` |
-| system/hamobj/HamMove | `HamMove::PSNRToDetectFrac` |
-| system/hamobj/HamRibbon | `HamRibbon::UpdateChase` |
-| system/hamobj/HollaBackMinigame | `HollaBackMinigame::OnBeat` |
-| system/hamobj/FilterQueue | `FilterQueue::Poll` |
-| system/midi/MidiReader | `pow(float, int)` |
-| system/obj/Dir | `DirLoader::New` |
-| system/os/File | `FileRecursePattern` |
-| system/os/UsbMidiKeyboard | `UsbMidiKeyboard::GetSustain` |
-| system/os/HolmesKeyboard | `HolmesInput::SendJoypadMessages` |
+| system/flow/FlowSequence | `FlowSequence::Activate` |
+| system/flow/FlowSwitchCase | `FlowSwitchCase::IsValidCase` |
 | system/rndobj/PropAnim | `RndPropAnim::ForeachKeyframe` |
-| system/rndobj/DOFProc_NG | `NgDOFProc::DoPost` |
-| system/rndobj/MetaMaterial | `MetaMaterial::IsEquivalent` |
-| system/rndobj/TexBlender | `RndTexBlender::DrawShowing` |
-| system/synth/MidiInstrument | `MidiInstrument::SynthPoll` |
-| system/synth/Emitter | `SynthEmitter::Poll` |
-| system/synth/Utl | `CacheWav` |
-| system/ui/UILabel | `UILabel::LabelStyle::~LabelStyle` |
-| system/ui/LabelShrinkWrapper | `LabelShrinkWrapper::UpdateAndDrawWrapper` |
 | system/utl/Loader | `LoadMgr::PollFrontLoader` |
-| system/utl/Song | `Song::SyncState` |
 | system/world/CameraManager | `CameraManager::Poll` |
 | lazer/meta_ham/MetaPerformer | `MetaPerformer::CheckRecommendedPracticeMove` |
 
-### Tier 2: Small Units (2-5 stubs, Milo engine with RB3 refs)
+### Tier 2: Small Units (2-5 stubs, 186 units)
 
 Good batch targets — complete a unit in one session.
 
 | Unit | Stubs | Notes |
 |------|-------|-------|
-| system/char/CharBonesMeshes | 2 | Shared Milo |
-| system/char/CharLipSync | 2 | Shared Milo |
-| system/char/CharClipGroup | 5 | Shared Milo |
-| system/char/CharDriver | 8 | Shared Milo |
-| system/char/Character | 6 | Core class, RB3 refs |
-| system/rndobj/Font3d | 9 | Rendering |
-| system/rndobj/Rnd | 9 | Core renderer |
-| system/world/SpotlightDrawer | 9 | Rendering |
-| system/world/LightPreset | 11 | Rendering |
-| system/world/Crowd | 7 | Scene |
-| system/synth/Sfx | 9 | Audio |
-| system/synth/StandardStream | 7 | Audio |
-| system/hamobj/HamDirector | 7 | Game logic |
-| system/hamobj/HamCamShot | 7 | Game logic |
-| system/hamobj/DanceRemixer | 7 | Game logic |
+| system/char/CharBoneOffset | 2 | Shared Milo |
+| system/char/CharLipSyncDriver | 2 | Shared Milo |
+| system/char/CharSignalApplier | 2 | Shared Milo |
+| system/flow/DrivenPropertyEntry | 2 | Flow system |
+| system/flow/FlowManager | 2 | Flow system |
+| system/flow/FlowSwitch | 2 | Flow system |
+| system/hamobj/FilterQueue | 2 | Game logic |
+| system/hamobj/HamAudio | 2 | Audio |
+| system/obj/Task | 2 | Core |
+| system/rndobj/AnimFilter | 2 | Rendering |
+| system/rndobj/Mat | 2 | Rendering |
+| system/rndobj/PropAnim | 2 | Rendering |
+| system/rndobj/PropKeys | 2 | Rendering |
+| system/rndobj/Wind | 2 | Rendering |
+| system/synth/MidiInstrument | 2 | Audio |
+| system/ui/UILabel | 2 | UI |
+| system/utl/Loader | 2 | Core |
+| system/world/Dir | 2 | World |
+| system/world/FreeCamera | 2 | World |
+| system/char/CharClipGroup | 3 | Shared Milo |
+| system/hamobj/HamMove | 3 | Game logic |
+| system/hamobj/MoveAsyncDetector | 3 | Game logic |
+| system/rndobj/Env | 4 | Rendering |
+| system/rndobj/MultiMesh | 4 | Rendering |
+| system/char/CharBones | 5 | Shared Milo |
+| system/char/CharHair | 5 | Shared Milo |
 
-### Tier 3: Medium Units (10-30 stubs, bulk work)
+### Tier 3: Medium Units (6-15 stubs, 101 units)
+
+Bulk work, best with parallel subagents.
 
 | Unit | Stubs | Notes |
 |------|-------|-------|
-| system/rndobj/Utl | 28 | Rendering utilities |
-| system/rndobj/Shader | 24 | Shader system |
-| system/rndobj/Text | 16 | Text rendering |
-| system/rnddx9/Tex | 13 | DX9 textures |
-| system/rnddx9/ShaderMgr | 13 | DX9 shader management |
-| system/rnddx9/Mesh | 9 | DX9 mesh |
-| system/hamobj/HamNavList | 24 | Navigation UI |
-| lazer/meta_ham/PlaylistSortMgr | 10 | Meta/UI |
-| lazer/meta_ham/HamStorePanel | 9 | Store UI |
+| system/rndobj/Font3d | 14 | Rendering |
+| system/rndobj/Rnd | 11 | Core renderer |
+| system/rnddx9/ShaderMgr | 14 | DX9 shaders |
+| system/rnddx9/Tex | 16 | DX9 textures |
+| system/world/SpotlightDrawer | 13 | Rendering |
+| system/world/SpotlightDrawer_NG | 15 | NG rendering |
+| system/world/Crowd | 14 | Scene |
+| system/world/LightPreset | 20 | Rendering |
+| system/char/CharDriver | 15 | Shared Milo |
+| system/char/Character | 17 | Core class, RB3 refs |
+| system/char/CharEyes | 20 | Character |
+| system/hamobj/HamDirector | 15 | Game logic |
+| system/hamobj/HamCamShot | 13 | Game logic |
+| system/hamobj/MoveDir | 15 | Game logic |
+| system/synth_xbox/FxSend* | 10 ea | Audio FX (multiple) |
 
 ### Tier 4: Platform-Heavy / Hard (defer)
 
@@ -110,25 +153,28 @@ Xbox-specific with no RB3 reference. Lower priority.
 
 | Unit | Stubs | Notes |
 |------|-------|-------|
-| system/os/PlatformMgr_Xbox | 25 | Xbox platform APIs |
-| system/moviebink/BinkMovieImpl | 19 | Bink video SDK |
-| system/synth_xbox/Mic | 18 | Xbox audio capture |
-| system/gesture/LiveCameraInput | 17 | Kinect input |
-| system/synth_xbox/Voice | 14 | Xbox voice |
-| system/synth_xbox/PitchCorrectedVoice | 8 | Voice processing |
-| system/gesture/SkeletonClip | 8 | Kinect skeleton |
+| system/os/PlatformMgr_Xbox | 88 | Xbox platform APIs |
+| system/moviebink/BinkMovieImpl | 43 | Bink video SDK |
+| system/synth_xbox/Synth | 44 | Xbox audio |
+| system/synth_xbox/Mic | 31 | Xbox audio capture |
+| system/synth_xbox/Voice | 21 | Xbox voice |
+| system/os/NetworkSocket_Win | 25 | Networking |
+| system/gesture/LiveCameraInput | 25 | Kinect input |
+| lib/binkxenon/binkread | 62 | Bink library |
+| system/rndobj/Utl | 53 | Rendering utilities |
+| system/rndobj/Shader | 34 | Shader system |
+| system/flow/FlowSetProperty | 39 | Flow system (large) |
 
 ## Workflow Per Function
 
 ```
-1. Decompile (Ghidra)           → /ghidra-decompile <symbol>
-2. Check RB3 reference          → lookup_rb3(symbol)
-3. Write implementation         → in src/<unit>.cpp
-4. Build + diff                 → run_objdiff(symbol, project_dir=".")
-5. Iterate until matched        → (or mark AT_LIMIT if unfixable)
-6. Remove stub from link_glue   → delete the ALTERNATENAME line
-7. Verify link                  → ninja link (optional, batch at end)
-8. Report result                → report_result(symbol, ...)
+1. Batch-check the unit first   → batch_check(unit_pattern="...")
+2. Decompile (Ghidra)           → /ghidra-decompile <symbol>
+3. Check RB3 reference          → lookup_rb3(symbol)
+4. Write implementation         → in src/<unit>.cpp
+5. Build + diff                 → run_objdiff(symbol, project_dir=".")
+6. Iterate until matched        → (or mark AT_LIMIT if unfixable)
+7. Report result                → report_result(symbol, ...)
 ```
 
 ## Batch Strategy
@@ -139,32 +185,10 @@ Xbox-specific with no RB3 reference. Lower priority.
 - **Use parallel subagents** for independent units (see
   `docs/decomp/SUBAGENT_STRATEGY.md`)
 - A focused session can do **20-30 trivial stubs** or **5-10 medium functions**
-
-## Finding Functions
-
-```python
-# By unit (best approach)
-query_functions(unit_pattern="system/rndobj/Shader", status="workable")
-
-# Batch-check a unit (auto-reports 100% matches)
-batch_check(unit_pattern="system/rndobj/Utl")
-```
-
-All workable functions currently have `verdict_reason='reset: was
-COMPLETE+is_stub (no source impl)'`.
+- **Expect high false-negative rate**: Early testing found ~88% of "reset" stubs
+  already had matching code. `batch_check` resolves these automatically.
 
 ## Reference
 
-- [2026-02-28 stub burndown session](../../sessions/2026-02-28-stub-burndown-data-stubs.md) — original investigation that identified the reset stubs and produced the data behind this plan
-
-## Numbers
-
-| Category | Count |
-|----------|-------|
-| Total workable stubs | 733 |
-| Tier 1 (single-stub units) | ~33 |
-| Tier 2 (2-5 stubs) | ~15 units, ~90 functions |
-| Tier 3 (10-30 stubs) | ~9 units, ~145 functions |
-| Tier 4 (platform-heavy) | ~7 units, ~109 functions |
-| link_glue templates (skip) | 43 |
-| Spread across other units | ~313 |
+- [2026-02-28 stub burndown session](../../sessions/2026-02-28-stub-burndown-data-stubs.md) — original investigation
+- [2026-02-28 unimplemented functions analysis](../../sessions/2026-02-28-unimplemented-functions-analysis.md) — full scope analysis

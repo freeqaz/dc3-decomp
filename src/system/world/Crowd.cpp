@@ -543,6 +543,7 @@ void WorldCrowd::Force3DCrowd(bool force) {
     }
 }
 
+#ifndef HX_NATIVE
 void SetMatColorFlags(ObjPtrList<RndMat, ObjectDir> &matList, int flags,
                       stlpmtx_std::vector<Hmx::Color> *colors) {
     RndMat **head = (RndMat **)((char *)&matList + 0x8);
@@ -579,4 +580,5 @@ void SetMatColorFlags(ObjPtrList<RndMat, ObjectDir> &matList, int flags,
         current = *(RndMat **)((char *)current + 0x14);
     } while (current != NULL);
 }
+#endif // HX_NATIVE
 

@@ -3,7 +3,7 @@
 #include "utl/Licenses.h"
 #include <cmath>
 
-Licenses sLicense("system/src/math/Easing.h", Licenses::kRequirementNotification);
+static Licenses sLicense("system/src/math/Easing.h", Licenses::kRequirementNotification);
 
 EaseFunc *gEaseFuncs[35] = {
     EaseLinear,

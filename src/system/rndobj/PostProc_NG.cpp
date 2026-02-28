@@ -66,6 +66,12 @@ void NgPostProc::RebuildTex() {
     sBloom.AllocateTextures(w * 4, h * 4);
 }
 
+#ifdef HX_NATIVE
+void NgPostProc::DoVelocity() {
+    // Post-processing uses hardcoded ILP32 struct offsets throughout — stub on native
+    // Will be reimplemented when the WebGPU renderer is built
+}
+#else
 void NgPostProc::DoVelocity() {
     typedef void (*ShaderFunc)(void*, int, float*);
     *(s8*)((u8*)&TheShaderMgr + 0x39) = 0;
@@ -86,6 +92,7 @@ void NgPostProc::DoVelocity() {
         } while (head != 0);
     }
 }
+#endif
 
 void NgPostProc::SetBloomColor() {
     float diff = 1.0f - mBloomThreshold;

@@ -217,7 +217,7 @@ void Sound::Play(
                 4.0f,
                 CalcSpeedFromTranspose(faderTranspose + transpose) * mSpeed
             ));
-            sample->SetEventReceiver(obj ? obj : mEventReceiver);
+            sample->SetEventReceiver(obj ? obj : mEventReceiver.Ptr());
             if (mEnvelope) {
                 sample->SetADSR(mEnvelope->Impl());
             } else {

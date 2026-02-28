@@ -232,6 +232,7 @@ void Interp(
     tex = texPtr;
 }
 
+#ifndef HX_NATIVE
 BinStreamRev &operator>>(
     BinStreamRev &bs, std::vector<Key<RndMatAnim::TexPtr>, stlpmtx_std::StlNodeAlloc<Key<RndMatAnim::TexPtr>>>
         &keys
@@ -244,3 +245,4 @@ BinStreamRev &operator>>(
     }
     return bs;
 }
+#endif

@@ -153,6 +153,18 @@ void CharLipSync::Parse(DataArray *data) {
     Print(TheDebug);
 }
 
+void CharLipSync::Generator::AddWeight(int visemeIdx, float weight) {
+    float clamped = Clamp(0.0f, 255.0f, weight * 255.0f + 0.5f);
+    unsigned char val = clamped;
+    if (mWeights[visemeIdx].mPrev != val || mWeights[visemeIdx].mCur != val) {
+        unsigned char idx = (unsigned char)visemeIdx;
+        mLipSync->mData.push_back(idx);
+        mLipSync->mData.push_back(val);
+        mWeights[visemeIdx].mPrev = mWeights[visemeIdx].mCur;
+        mWeights[visemeIdx].mCur = val;
+    }
+}
+
 void CharLipSync::Generator::Init(CharLipSync *sync) {
     mLipSync = sync;
     mLipSync->mData.resize(0);
@@ -356,6 +368,28 @@ void CharLipSync::PlayBack::Poll(float time) {
                 idx += 2;
                 Weight &w = mWeights[wIdx];
                 w.mCurWeight = Interp(w.mPrevWeight, w.mNextWeight, frac);
+            }
+        }
+    }
+}
+
+void CharLipSync::PlayBack::SetClips(ObjPtr<ObjectDir> clips) {
+    if (!mLipSync)
+        return;
+    mClips = clips;
+
+    static Message viseme_list("viseme_list");
+    DataNode result = mLipSync->Handle(viseme_list, false);
+
+    if (result.Type() == kDataArray) {
+        DataArray *arr = result.Array(0);
+        int arrSize = arr->Size();
+        if (mWeights.size() == arrSize) {
+            mWeights.resize(arrSize);
+            for (int i = 0; i < arrSize; i++) {
+                Symbol visemeSym = result.Array(0)->Sym(i);
+                ObjPtr<CharClip> &clip = mWeights[i].mClip;
+                clip = mClips->Find<CharClip>(visemeSym.Str(), false);
             }
         }
     }

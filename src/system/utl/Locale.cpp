@@ -9,6 +9,11 @@
 #include "xdk/xbdm/xbdm.h"
 #include <vector>
 
+#ifdef HX_NATIVE
+Locale TheLocale;
+
+Locale::~Locale() {}
+#endif
 bool gShowTokensCheat = false;
 
 DataNode DataSetLocaleVerboseNotify(DataArray *arr) {

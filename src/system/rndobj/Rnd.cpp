@@ -256,15 +256,24 @@ BEGIN_HANDLERS(Rnd)
     HANDLE_SUPERCLASS(Hmx::Object)
 END_HANDLERS
 
-void TerminateCallback() {
+static void TerminateCallback() {
     RndUtlTerminate();
     TheRnd.Terminate();
 }
 
 void Rnd::PreInit() {
+#ifdef HX_NATIVE
+    printf("DC3 Native: Rnd::PreInit() starting\n");
+#endif
     SetName("rnd", ObjectDir::Main());
+#ifdef HX_NATIVE
+    printf("DC3 Native: Rnd::PreInit() SetName done\n");
+#endif
     TheDebug.AddExitCallback(TerminateCallback);
     DataArray *rndcfg = SystemConfig("rnd");
+#ifdef HX_NATIVE
+    printf("DC3 Native: Rnd::PreInit() SystemConfig(rnd) done: %p\n", (void*)rndcfg);
+#endif
     rndcfg->FindData("bpp", mScreenBpp, true);
     rndcfg->FindData("height", mHeight, true);
     rndcfg->FindData("clear_color", mClearColor, true);
@@ -274,9 +283,24 @@ void Rnd::PreInit() {
         mAspect = kWidescreen;
     mWidth = ((float)mHeight / Rnd::YRatio()) + 0.5f;
     MILO_ASSERT((mScreenBpp == 16) || (mScreenBpp == 32), 0x209);
+#ifdef HX_NATIVE
+    printf("DC3 Native: Rnd::PreInit() config read done, width=%d height=%d\n", mWidth, mHeight);
+#endif
     SetupFont();
+#ifdef HX_NATIVE
+    printf("DC3 Native: Rnd::PreInit() SetupFont done\n");
+#endif
+#ifdef HX_NATIVE
+    printf("DC3 Native: Rnd::PreInit() calling Init()s...\n");
+#endif
     RndGraph::Init();
+#ifdef HX_NATIVE
+    printf("DC3 Native:   RndGraph::Init done\n");
+#endif
     RndUtlPreInit();
+#ifdef HX_NATIVE
+    printf("DC3 Native:   RndUtlPreInit done\n");
+#endif
     RndDrawable::Init();
     RndFur::Init();
     RndTransformable::Init();
@@ -285,6 +309,9 @@ void Rnd::PreInit() {
     RndFlare::Init();
     RndCam::Init();
     RndMesh::Init();
+#ifdef HX_NATIVE
+    printf("DC3 Native:   through RndMesh::Init\n");
+#endif
     RndMeshDeform::Init();
     RndText::Init();
     RndFontBase::Init();
@@ -299,6 +326,9 @@ void Rnd::PreInit() {
     RndLightAnim::Init();
     RndMeshAnim::Init();
     RndMatAnim::Init();
+#ifdef HX_NATIVE
+    printf("DC3 Native:   through RndMatAnim::Init\n");
+#endif
     RndTransProxy::Init();
     RndPartLauncher::Init();
     RndLine::Init();
@@ -313,6 +343,9 @@ void Rnd::PreInit() {
     REGISTER_OBJ_FACTORY(RndTransformable)
     RndGroup::Init();
     RndDir::Init();
+#ifdef HX_NATIVE
+    printf("DC3 Native:   through RndDir::Init\n");
+#endif
     RndMotionBlur::Init();
     RndTexBlendController::Init();
     RndTexBlender::Init();
@@ -322,21 +355,63 @@ void Rnd::PreInit() {
     REGISTER_OBJ_FACTORY(RndPostProc)
     RndPostProcMgr::Init();
     RndAmbientOcclusion::Init();
+#ifdef HX_NATIVE
+    printf("DC3 Native:   through RndAmbientOcclusion::Init\n");
+#endif
     RndOverlay::Init();
+#ifdef HX_NATIVE
+    printf("DC3 Native:   through RndOverlay::Init\n");
+#endif
     RndPropAnim::Init();
+#ifdef HX_NATIVE
+    printf("DC3 Native:   RndPropAnim::Init done\n");
+#endif
     EventTrigger::Init();
+#ifdef HX_NATIVE
+    printf("DC3 Native:   EventTrigger::Init done\n");
+#endif
     RndWind::Init();
+#ifdef HX_NATIVE
+    printf("DC3 Native:   RndWind::Init done\n");
+#endif
     RndPollAnim::Init();
+#ifdef HX_NATIVE
+    printf("DC3 Native:   RndPollAnim::Init done\n");
+#endif
     BaseMaterial::Init();
+#ifdef HX_NATIVE
+    printf("DC3 Native:   BaseMaterial::Init done\n");
+#endif
     REGISTER_OBJ_FACTORY(MetaMaterial)
     RndEnterable::Init();
+#ifdef HX_NATIVE
+    printf("DC3 Native:   RndEnterable::Init done\n");
+#endif
     RndMat::Init();
+#ifdef HX_NATIVE
+    printf("DC3 Native:   RndMat::Init done\n");
+#endif
     RndSpline::Init();
+#ifdef HX_NATIVE
+    printf("DC3 Native:   RndSpline::Init done\n");
+#endif
     RndShockwave::Init();
+#ifdef HX_NATIVE
+    printf("DC3 Native:   RndShockwave::Init done\n");
+#endif
     DOFProc::Init();
+#ifdef HX_NATIVE
+    printf("DC3 Native:   DOFProc::Init done\n");
+#endif
     TexProc::Init();
+#ifdef HX_NATIVE
+    printf("DC3 Native:   TexProc::Init done\n");
+#endif
     // this is likely some other rndobj without a NewObject overload
     REGISTER_OBJ_FACTORY(Hmx::Object)
+#ifdef HX_NATIVE
+    printf("DC3 Native: Rnd::PreInit() all subsystem Init() done\n");
+#endif
     InitShaderOptions();
     mRateOverlay = RndOverlay::Find("rate", true);
     mHeapOverlay = RndOverlay::Find("heap", true);
@@ -354,7 +429,13 @@ void Rnd::PreInit() {
     mWorldEnded = true;
     mDrawing = false;
     mGsTiming = mTimersOverlay->Showing();
+#ifdef HX_NATIVE
+    printf("DC3 Native: Rnd::PreInit() overlays done, calling CreateDefaults\n");
+#endif
     CreateDefaults();
+#ifdef HX_NATIVE
+    printf("DC3 Native: Rnd::PreInit() CreateDefaults done\n");
+#endif
     InitParticleSystem();
     DataRegisterFunc("keep_going", FailKeepGoing);
     DataRegisterFunc("restart_console", FailRestartConsole);

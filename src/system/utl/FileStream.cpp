@@ -24,7 +24,14 @@ FileStream::FileStream(File *f, bool b)
 }
 
 void FileStream::ReadImpl(void *data, int bytes) {
-    if (mFile->Read(data, bytes) != bytes)
+    int got = mFile->Read(data, bytes);
+#ifdef HX_NATIVE
+    if (got != bytes) {
+        printf("DC3 Native: FileStream::ReadImpl FAIL: wanted %d, got %d, file='%s', tell=%d, size=%d, fileFail=%d\n",
+               bytes, got, mFilename.c_str(), mFile->Tell(), mFile->Size(), mFile->Fail());
+    }
+#endif
+    if (got != bytes)
         mFail = true;
     else if (mChecksumValidator) {
         mChecksumValidator->Update((const unsigned char *)data, bytes);

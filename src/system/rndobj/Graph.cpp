@@ -10,7 +10,11 @@ std::list<RndGraph *> *sGraphs;
 std::list<FakeGraph> sFakes;
 ObjPtr<RndCam> sCam(nullptr);
 
+#ifdef HX_NATIVE
+void *Drawable::operator new(size_t s) {
+#else
 void *Drawable::operator new(unsigned int s) {
+#endif
     return MemAlloc(s, __FILE__, 0xA9, "Drawable");
 }
 void Drawable::operator delete(void *v) { MemFree(v, __FILE__, 0xA9, "Drawable"); }

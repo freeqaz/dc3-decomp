@@ -1,7 +1,7 @@
 # Session: Static Guard Variable Fix (`??_B` vs `$S`)
 
 **Date:** 2026-02-28
-**Status:** In progress
+**Status:** /Zi crash FIXED, guard naming requires COFF patcher
 
 ## Problem
 
@@ -13,9 +13,7 @@ Our MSVC build under wibo always uses `$S` (unsigned int, STATIC) guard variable
 
 ## Root Cause
 
-The original build used `/Zi` (PDB debug info). With `/Zi`, the compiler communicates with `mspdbsrv.exe` and makes guard variables EXTERNAL with `??_B` naming. Without `/Zi`, guards default to STATIC with `$S` naming.
-
-Our build can't use `/Zi` because it **crashes** under wibo (SIGSEGV, exit code 139) — `mspdbsrv.exe` requires Windows IPC that wibo doesn't fully implement.
+The `??_B` naming is NOT caused by `/Zi` alone. It requires the **MREngine** (Minimal Rebuild Engine) to be functional, which needs a real `mspdbsrv.exe` process and PDB file. Even with `/Zi` working under wibo, the compiler still produces `$S` STATIC guards because our MREngine stub returns failure.
 
 ## Key Discovery: Machine Code is Identical
 
@@ -29,75 +27,49 @@ The ONLY differences are in the COFF symbol table:
 1. **Symbol name**: `??_B?1??FuncName...@51` vs `?$S1@?1??FuncName...@4IA`
 2. **Storage class**: EXTERNAL (2) vs STATIC (3)
 
-## Evidence
+## Wibo Fixes Applied (All RESOLVED)
 
-### MoveVariant.obj comparison:
-
-**Original:**
-```
-EXTERNAL  ??_B?1??Adjacency@MoveCandidate@@SAIVSymbol@@@Z@51   (char guard)
-EXTERNAL  ?$S3@?1???0MoveVariant@@...@4IA                       ($S3, uint)
-EXTERNAL  ?$S4@?1??IsRest@MoveVariant@@QBA_NXZ@4IA              ($S4, uint)
-```
-
-**Our build:**
-```
-STATIC    ?$S1@?1??Adjacency@MoveCandidate@@SAIVSymbol@@@Z@4IA  ($S1, uint)
-STATIC    ?$S2@?1???0MoveVariant@@...@4IA                       ($S2, uint)
-STATIC    ?$S3@?1??IsRest@MoveVariant@@QBA_NXZ@4IA              ($S3, uint)
-```
-
-### `/Zi` test results:
-- Without `/Zi`: compiles OK, produces `$S` STATIC guards
-- With `/Z7`: compiles OK, produces `$S` STATIC guards (same)
-- With `/Zi`: **SIGSEGV** (exit code 139) — mspdb interaction crashes
-
-## Wibo Fixes Applied
-
-### 1. PDBOpenEx2W signature fix (CRITICAL)
-**Root cause**: c1xx.dll calls `PDBOpenEx2W` with **7 arguments** (includes `long cbPage` as 3rd param), but our stub only had **6**. This shifted all subsequent args by one position, making `pec` read the page size value (0x1000) instead of the actual pointer.
-
-**Fix**: Added `long cbPage` as 3rd parameter to `PDBOpenEx2W`.
-
-**Evidence**: Decoded the caller's 32-bit x86 push sequence:
-```
-push [ebp-0x820]     ; arg7: ppPDB
-push 0x400           ; arg6: cchErrMax = 1024
-push &[ebp-0x818]    ; arg5: error buffer
-push &[ebp-0x81c]    ; arg4: pec
-push [ebp+0x14]      ; arg3: cbPage = 0x1000 (NEW)
-push &[ebp-0x18]     ; arg2: mode = "iw"
-push eax             ; arg1: PDB path
-call [IAT]           ; call PDBOpenEx2W
-add esp, 0x1c        ; clean 28 bytes = 7 args
-```
+### 1. PDBOpenEx2W signature fix
+c1xx.dll calls `PDBOpenEx2W` with **7 arguments** (includes `long cbPage` as 3rd param), but our stub only had **6**.
 
 ### 2. TypesQueryTiForCVRecordEx + Types* C wrappers
-c1xx.dll calls C-style wrapper functions (not vtable methods) for TPI operations. Added 13 Types* exports with auto-incrementing fake type indices.
+Added 13 Types* exports with auto-incrementing fake type indices.
 
 ### 3. MREngine stubs
-Added `MREngine::FOpenW` and `MREngine::FOpen` stubs (Minimal Rebuild Engine) to the DEF file. These are required by c1xx.dll when `/Zi` is used but return failure to skip minimal rebuild.
+Added `MREngine::FOpenW` and `MREngine::FOpen` stubs. Return failure to skip minimal rebuild.
 
-### 4. Remaining crash (UNSOLVED)
-After all PDB setup completes (QueryAge, OpenTpi, TypesQueryTiForCVRecordEx x15, TPI::Close, OpenIpi, Commit), c1xx.dll crashes at **PC=0x1068c890** (data section, all zeros). This is likely:
-- A callback pointer that mspdb should populate but didn't
-- An initialization that requires real PDB file operations
-- Something in c1xx.dll's /Zi code path that depends on internal mspdb state
+### 4. OpenIpi 0-argument placeholder (THE /Zi CRASH FIX)
+**Root cause**: The FakePDB vtable had `OpenIpi` at slot 9 with **2 stack arguments** (matching the VS2015 signature). But in the VS2008/VS2010 PDB interface used by the X360 compiler, `OpenIpi` at slot 9 is a **0-argument placeholder** (returns success as a no-op). The 2-arg version's `ret 8` over-cleaned the stack by 8 bytes, corrupting saved registers and the return address.
 
-Investigation ongoing with GDB hardware breakpoints.
+**Evidence chain:**
+1. GDB single-step from PDB::Commit: only ~12 instructions to crash
+2. Stack math: OpenIpi's `ret 8` shifts ESP +8, causing `pop esi` to get the return address and `ret` to jump to 0x1068c890 (data section)
+3. After removing OpenIpi entirely (first attempt): crashed at a different point because `QueryLastErrorExW` at vtable offset 0x4C was now at the wrong slot — proving the VS2015 vtable layout (WITH OpenIpi) is correct for higher slots
+4. The error function at 0x10599d6a calls `PDB vtable[0x4C]` = slot 19 expecting `QueryLastErrorExW` — matching VS2015 layout
+5. The cleanup function calls slot 9 with 0 args and slot 10 with 0 args — expecting OpenIpi(0 args) and Commit(0 args)
 
-## Fix Strategy
+**Fix**: Change `OpenIpi` from `int __thiscall OpenIpi(const char *, void **)` (2 stack args) to `int __thiscall OpenIpi()` (0 stack args). This keeps the VS2015 vtable slot layout intact (all higher slots unchanged) while matching the VS2008 calling convention for slot 9.
 
-### Primary: Fix wibo's mspdb stub for `/Zi` (IN PROGRESS)
-Three of four issues fixed. Remaining crash after PDB::Commit needs deeper investigation.
+**Result**: `/Zi` compilation succeeds (exit code 0). Full PDB trace:
+```
+PDBOpenEx2W → QueryAge → OpenTpi → TypesQueryTiForCVRecordEx x15 → TPI::Close → OpenIpi → Commit
+```
 
-### Fallback: Post-build COFF patcher
-If the wibo fix requires too much additional work, a patcher (like `obj_anon_ns_patcher.py`) could:
-1. Read COFF symbol table from .obj files
-2. Find `$S` (STATIC) guard symbols
-3. Rename to `??_B` format (EXTERNAL) with correct mangling
-4. Renumber remaining `$S` guards to match original numbering
-5. Change storage class STATIC → EXTERNAL
+### `/Zi` test results (updated):
+- Without `/Zi`: compiles OK, produces `$S` STATIC guards
+- With `/Z7`: compiles OK, produces `$S` STATIC guards
+- With `/Zi`: **compiles OK** (exit 0), still produces `$S` STATIC guards
+- With `/Zi /Gm`: crashes (missing kernel32 functions for file I/O)
+
+## Fix Strategy: Post-build COFF Patcher
+
+Since `/Zi` doesn't change guard naming (MREngine would be needed), the fix is a COFF symbol table patcher similar to `obj_anon_ns_patcher.py`:
+
+1. Read COFF symbol table from each .obj file
+2. Compare with original .obj to identify which `$S` guards should be `??_B`
+3. Rename `$S` → `??_B` with correct mangling (function scope → `@51` char type)
+4. Change storage class STATIC (3) → EXTERNAL (2)
+5. Renumber remaining `$S` guards to match original numbering
 
 This works because the machine code bytes are proven identical.
 
@@ -107,7 +79,6 @@ This works because the machine code bytes are proven identical.
 - **mspdb stub**: `/home/free/code/milohax/wibo/dll/mspdb/mspdb_dll.cpp`
 - **mspdb DEF**: `/home/free/code/milohax/wibo/dll/mspdb/mspdb.def`
 - **Compiler**: `build/compilers/X360/16.00.11886.00/cl.exe`
-- **Test file**: `/tmp/claude-1000/guard_test.cpp`
 
 ## Impact
 

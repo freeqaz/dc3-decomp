@@ -22,9 +22,9 @@ static int gNumThreads = 0;
 void InitMakeString() {
     if (!gLock) {
         gLock = new CriticalSection();
-        gBuf = (char ***)MemAlloc(0x18, __FILE__, 0x93, "MakeString Buffer", 0);
+        gBuf = (char ***)MemAlloc(6 * sizeof(char **), __FILE__, 0x93, "MakeString Buffer", 0);
         for (int i = 0; i < 6; i++) {
-            gBuf[i] = (char **)MemAlloc(0x40, __FILE__, 0x97, "MakeString Buffer", 0);
+            gBuf[i] = (char **)MemAlloc(16 * sizeof(char *), __FILE__, 0x97, "MakeString Buffer", 0);
             for (int j = 0; j < 16; j++) {
                 gBuf[i][j] =
                     (char *)MemAlloc(0x1000, __FILE__, 0x9B, "MakeString Buffer", 0);

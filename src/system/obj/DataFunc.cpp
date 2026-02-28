@@ -16,6 +16,7 @@
 #include "utl/Str.h"
 #include "utl/TextFileStream.h"
 
+DataThisPtr gDataThisPtr;
 static DataArray *sFileMsg;
 ModalCallbackFunc *sOldModalCallback;
 DataArray *sNotifyMsg;

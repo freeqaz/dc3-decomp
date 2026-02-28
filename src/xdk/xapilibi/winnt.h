@@ -232,7 +232,12 @@ typedef struct _EXCEPTION_POINTERS {
     PCONTEXT ContextRecord;
 } EXCEPTION_POINTERS, *PEXCEPTION_POINTERS;
 
+#ifdef HX_NATIVE
+// On LP64, 'long' is 8 bytes — match the actual callback signatures
+typedef long TOP_LEVEL_EXCEPTION_FILTER(EXCEPTION_POINTERS *);
+#else
 typedef LONG TOP_LEVEL_EXCEPTION_FILTER(EXCEPTION_POINTERS *);
+#endif
 typedef TOP_LEVEL_EXCEPTION_FILTER *LPTOP_LEVEL_EXCEPTION_FILTER;
 
 #ifdef __cplusplus

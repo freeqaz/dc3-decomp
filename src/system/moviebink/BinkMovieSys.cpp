@@ -9,6 +9,8 @@
 #include "utl/MemMgr.h"
 #include "utl/Symbol.h"
 
+BinkMovieSys gBinkMovieSys;
+
 extern void BinkSetMemory(void *(*)(int), void (*)(void *));
 extern int BinkStartAsyncThread(int, int);
 extern void *RadAlloc(int);

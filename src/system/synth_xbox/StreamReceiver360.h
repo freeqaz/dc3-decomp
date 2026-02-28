@@ -36,7 +36,11 @@ private:
     void UpdateADSR();
 
     // Pending voice list at 0x802C (8 bytes)
+#ifdef HX_NATIVE
+    std::list<Voice *> mPendingVoices; // 0x802C
+#else
     stlpmtx_std::list<Voice *, stlpmtx_std::StlNodeAlloc<Voice *>> mPendingVoices; // 0x802C
+#endif
 
     unsigned char *mStreamBuf; // 0x8034
     Voice *mSlipVoice;          // 0x8038

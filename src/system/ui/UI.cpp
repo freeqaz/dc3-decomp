@@ -70,7 +70,7 @@ const char *TransitionStateString(UIManager::TransitionState s) {
     }
 }
 
-void TerminateCallback() {
+static void TerminateCallback() {
     MILO_ASSERT(TheUI, 0x1CE);
     TheUI->Terminate();
 }
@@ -570,7 +570,7 @@ DataNode UIManager::OnForeachCurrentScreen(DataArray const *arr) {
     if (mCurrentScreen) {
         screens.push_back(mCurrentScreen);
     }
-    for (UIScreen **it = screens.begin(); it != screens.end(); it++) {
+    for (auto it = screens.begin(); it != screens.end(); it++) {
         *var = DataNode(*it);
         for (int i = 3; i < arr->Size(); i++) {
             arr->Node(i).Command(arr)->Execute();

@@ -8,6 +8,16 @@
 #include "os/Timer.h"
 #include "rndobj/Overlay.h"
 #include "stdlib.h"
+
+#ifdef HX_NATIVE
+#include <cwchar>
+// MSVC mbstowcs_s shim for POSIX
+inline int mbstowcs_s(size_t *ret, wchar_t *dst, size_t dstSize, const char *src, size_t count) {
+    size_t result = mbstowcs(dst, src, count);
+    if (ret) *ret = result;
+    return (result == (size_t)-1) ? -1 : 0;
+}
+#endif
 #include "utl/MemMgr.h"
 #include "utl/Symbol.h"
 #include "utl/UTF8.h"

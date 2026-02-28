@@ -311,6 +311,15 @@ config.custom_build_steps = {
             },
         },
         {
+            "outputs": str(stamp_dir / "guard_patched.stamp"),
+            "rule": "run_script",
+            "order_only": "all_source",
+            "variables": {
+                "cmd": "python3 scripts/obj_guard_patcher.py --batch --apply",
+                "desc": "PATCH $S guard variables to match ??_B naming",
+            },
+        },
+        {
             "outputs": str(stamp_dir / "data_stubs.stamp"),
             "rule": "run_script",
             "variables": {

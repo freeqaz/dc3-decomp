@@ -66,7 +66,7 @@ its build system is too painful, sokol is the fallback.
 
 ## Phased Roadmap
 
-### Phase 0: Compile on x86_64 (Foundation)
+### Phase 0: Compile on x86_64 (Foundation) — COMPLETE
 
 **Goal**: Get the entire codebase compiling with Clang/GCC on x86_64-linux. No
 runtime functionality needed — just a linking binary.
@@ -74,52 +74,69 @@ runtime functionality needed — just a linking binary.
 **Milestone**: WebGPU rendering proven — headless triangle rendered via Dawn on
 RTX 3090 (Vulkan backend). See `native/` directory and [IMPLEMENTATION_GUIDE.md](IMPLEMENTATION_GUIDE.md).
 
+**Status**: All items complete. Binary compiles, links, and boots. Completed
+across Sessions 1-2 (Feb 2026).
+
 **Work items**:
 - [x] Dawn builds and installs (`../dawn/install/Release/`)
 - [x] `native/CMakeLists.txt` finds Dawn, builds `dc3-native`
 - [x] Headless offscreen rendering to PNG (800x600 green triangle)
-- [ ] Create `CMakeLists.txt` (or Meson) build system for x86_64
-- [ ] Write Win32 compatibility shim headers:
-  - `DWORD`, `HANDLE`, `HRESULT`, `BOOL`, `LONG`, `LPCSTR`, etc.
-  - `RTL_CRITICAL_SECTION` → `std::recursive_mutex`
-  - `CreateThread` → `std::thread`
-  - `CreateEventA` / `SetEvent` / `WaitForSingleObject` → condition variables
-  - `VirtualAlloc` / `VirtualFree` → `mmap` / `munmap`
-  - `LARGE_INTEGER` / `QueryPerformanceCounter` → `std::chrono`
-- [ ] Create stub implementations for all `*_Xbox.cpp` files:
-  - `Rnd_Stub.cpp` (no-op renderer)
-  - `Synth_Stub.cpp` (no-op audio)
-  - `Joypad_Stub.cpp` (no-op input)
-  - `PlatformMgr_Stub.cpp`
-  - `Memcard_Stub.cpp`, `ContentMgr_Stub.cpp`
-  - `GestureMgr_Stub.cpp` (no-op Kinect)
-- [ ] Handle MSVC-specific C++ extensions:
-  - `__declspec(selectany)` → `__attribute__((weak))`
-  - `__forceinline` → `__attribute__((always_inline))`
-  - SEH (`__try`/`__except`) → POSIX signals or remove
-  - MSVC pragmas → GCC/Clang equivalents
-- [ ] Handle endianness: Xbox 360 is big-endian PPC, x86 is little-endian.
-  File formats and network protocols may assume BE byte order.
+- [x] Create `CMakeLists.txt` build system for x86_64 — `native/CMakeLists.txt`
+  compiles all ~874 .cpp files from `src/` with Clang, `HX_NATIVE` define
+- [x] Write Win32 compatibility shim headers:
+  - [x] `DWORD`, `HANDLE`, etc. — already in `xdk/win_types.h`
+  - [x] `RTL_CRITICAL_SECTION` → pthread_mutex_t wrapper in `xdk/XBOXKRNL.h`
+  - [x] `CreateThread` — guarded with `#ifdef HX_NATIVE` (skip threading, run sync)
+  - [x] `CreateEventA` / `SetEvent` / `WaitForSingleObject` — POSIX impls in stubs
+  - [x] `VirtualAlloc` / `VirtualFree` → mmap/munmap in `native/src/platform/`
+  - [x] Timer → `std::chrono` in `native/src/platform/`
+- [x] Create stub implementations for all `*_Xbox.cpp` files:
+  - [x] `Rnd_Stub.cpp` (no-op renderer)
+  - [x] `Synth_Stub.cpp` (no-op audio)
+  - [x] `Joypad_Stub.cpp` (no-op input)
+  - [x] `PlatformMgr_Stub.cpp`
+  - [x] `Memcard_Stub.cpp`, `ContentMgr_Stub.cpp`
+  - [x] `GestureMgr_Stub.cpp` (no-op Kinect)
+- [x] Handle MSVC-specific C++ extensions:
+  - [x] `__declspec(selectany)` → `__attribute__((weak))` in `macros.h`
+  - [x] `__forceinline` → `__attribute__((always_inline))` in `macros.h`
+  - [x] SEH — already mapped to try/catch in `macros.h`
+  - [x] MSVC pragmas → GCC/Clang equivalents in `macros.h`
+- [x] Handle endianness: Already abstracted in `Endian.h` — byte swaps
+  happen on load, works as-is for LE x86_64
+- [x] Fix LP64 type model issues (see [PORTING_ANALYSIS.md](PORTING_ANALYSIS.md#lp64-issues))
+- [x] Non-virtual thunk stubs for Itanium ABI (`native/src/thunk_stubs.cpp`)
 
-**Deliverable**: `cmake --build build/ && ./dc3-native` produces a binary that
-exits cleanly.
+**Deliverable**: `cd native/build && cmake --build . -j$(nproc)` produces a
+binary that boots through archive loading, config parsing, and .milo object loading.
 
 ### Phase 1: Headless Engine + Standalone Viewer (Parallel Tracks)
 
 Two workstreams run simultaneously:
 
-#### Track A: Headless Engine (MVP)
+#### Track A: Headless Engine (MVP) — IN PROGRESS (Sessions 3-4)
 
 **Goal**: Engine main loop runs, loads game data from `.ark` archives, processes
 DataArray scripts, instantiates game objects.
 
+**Status**: Engine boots through archive loading, config parsing, SystemInit,
+.milo object loading (Tex, Font, Text, etc.), and exits cleanly. Major blockers
+resolved: ChunkStream infinite loop, RndTex/Font stream desync, iterator/pointer
+compatibility (605 call sites). Binary compiles, links, runs with exit code 0.
+
 **Work items**:
-- [ ] Implement native `File` / `AsyncFile` using POSIX I/O
-- [ ] Implement native `CritSec` / `ThreadCall` / `SynchronizationEvent`
-- [ ] Implement native `Timer` using `std::chrono`
-- [ ] Implement native `MemMgr` (can simplify — use standard allocator)
-- [ ] Load `.ark` archives and decompress files
-- [ ] Boot `SystemInit()` → `AppInit()` → main loop
+- [x] Implement native `File` / `AsyncFile` using POSIX I/O
+- [x] Implement native `CritSec` / `ThreadCall` / `SynchronizationEvent`
+- [x] Implement native `Timer` using `std::chrono`
+- [x] Implement native `MemMgr` (redirects to malloc/free)
+- [x] Load `.ark` archives and decompress files — 6,377 files, 10 ark files load
+- [x] Boot `SystemPreInit()` — archive loading, DTA config parsing
+- [x] Boot `SystemInit()` — subsystem initialization
+- [x] Fix ChunkStream infinite loop (RndTex::PreLoad/PostLoad consuming stream data)
+- [x] Fix Font loading (real RndFontBase::Load implementation)
+- [x] Fix iterator/pointer compat (patched `__normal_iterator` in shadow stl_iterator.h)
+- [ ] Implement remaining stubbed ::Load functions for full object parsing
+- [ ] Boot through remaining subsystem inits to main loop
 - [ ] Add a test harness that feeds scripted commands
 
 **Deliverable**: Engine boots, loads a song, game state machine advances through
@@ -311,25 +328,23 @@ Xbox 360 textures use a proprietary tiled memory layout (32x32 pixel tiles). Opt
 
 ### Q4: Do we keep the decomp matching while building the port?
 
-Options:
-- **Separate build targets**: CMake for native, existing Ninja for decomp matching.
-  Two builds coexist. Native build may diverge from matching source.
-- **`#ifdef HX_NATIVE`**: Same source files compile for both targets. Keeps decomp
-  matching but pollutes source with ifdefs.
-- **Fork**: Branch the codebase. Native port evolves independently. Decomp matching
-  is no longer a concern.
+**Decision**: Hybrid — `#ifdef HX_NATIVE` in shared source, plus separate build targets.
 
-**Current leaning**: Separate build targets in the same repo. Platform-specific code
-lives in new files (e.g., `Rnd_Vulkan.cpp`), CMake selects them. Decomp Ninja build
-is unaffected.
+- CMake (`native/CMakeLists.txt`) for native, Ninja for decomp matching — coexist
+- Shared source uses `#ifdef HX_NATIVE` for LP64 fixes and platform guards
+- Platform-specific code lives in `native/src/platform/` (CMake only)
+- Decomp Ninja build is unaffected (HX_NATIVE not defined)
+
+This works well in practice. The ifdefs are concentrated in a handful of files
+(types.h, BinStream.h, Object.h, CharClip.cpp) and are necessary for LP64 safety.
 
 ### Q5: What about endianness?
 
-Xbox 360 is big-endian. All file formats (.milo, .ark, DataArray) store data in BE.
-Options:
-- Byte-swap on load (add endian-aware read functions)
-- Convert assets offline to LE
-- Both: convert what you can offline, swap the rest at runtime
+**Decision**: Byte-swap on load — already works.
+
+The decomp's existing `BinStream` and `Endian.h` infrastructure handles endian
+conversion via `ReadEndian`. All file formats (.milo, .ark, DataArray) store BE.
+The swap layer works transparently on LE x86_64 — no offline conversion needed.
 
 ### Q6: What's the minimum viable "playable" state?
 
@@ -344,19 +359,22 @@ rendering + audio + input (no motion capture).
 
 ### Q7: Build system for the native port?
 
-Options:
-- **CMake**: Industry standard, well-supported by IDEs, handles cross-platform well
-- **Meson**: Simpler syntax, good cross-compilation, what DXVK uses
-- **Premake**: Generates IDE projects (VS, Xcode, Make)
-- **Keep Ninja**: Modify `configure.py` to support a native target alongside Xbox
+**Decision**: CMake.
+
+`native/CMakeLists.txt` compiles all ~874 source files with Clang, links against
+Dawn (WebGPU), pthreads, zlib, dl. Uses `-Wno-*` flags liberally to suppress
+MSVC-ism warnings. Coexists with the decomp Ninja build.
 
 ### Q8: What about the DataArray scripting system?
 
-DataArray (.dta files) is Milo's scripting language. It's embedded in `.ark` archives.
-The interpreter is part of the engine code and should work as-is on x86_64, but:
-- Does it assume big-endian serialization?
-- Are there pointer-size assumptions (32-bit Xbox vs 64-bit host)?
-- Some scripts reference platform-specific resources
+**Answered**: Works as-is with minor LP64 fixes.
+
+- BE serialization: handled by BinStream endian layer (transparent)
+- Pointer-size: needed `DataNode(unsigned int)` constructor for LP64 (u32 ≠ int)
+- Platform-specific scripts: not hit yet (config DTA files parse and execute fine)
+
+The DTA parser/interpreter boots cleanly on x86_64, loads ham_preinit_keep.dta,
+macros.dta, sfx_macros.dta, and all other config files without issues.
 
 ---
 
@@ -391,3 +409,4 @@ The interpreter is part of the engine code and should work as-is on x86_64, but:
 | [APPROACH_YARG_COMMUNITY.md](APPROACH_YARG_COMMUNITY.md) | YARG and community project survey |
 | [IMPLEMENTATION_GUIDE.md](IMPLEMENTATION_GUIDE.md) | Build instructions + step-by-step walkthrough |
 | [MOTION_CAPTURE.md](MOTION_CAPTURE.md) | Kinect replacement / motion capture |
+| [PORTING_ANALYSIS.md](PORTING_ANALYSIS.md) | Codebase analysis for x86_64 port |

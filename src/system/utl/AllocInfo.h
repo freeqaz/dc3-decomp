@@ -35,7 +35,11 @@ public:
 
     static bool bPrintCsv;
     static void SetPoolMemory(void *, int);
+#ifdef HX_NATIVE
+    static void *operator new(size_t);
+#else
     static void *operator new(unsigned int);
+#endif
     static void operator delete(void *);
 
     int mReqSize; // 0x0
@@ -60,7 +64,7 @@ class AllocInfoVec {
 public:
     AllocInfoVec() : mStart(0), mEnd(0), mEndOfStorage(0) {}
     __forceinline AllocInfoVec(int size)
-        : mStart((AllocInfo **)DebugHeapAlloc(size * 4)), mEnd(mStart),
+        : mStart((AllocInfo **)DebugHeapAlloc(size * sizeof(AllocInfo *))), mEnd(mStart),
           mEndOfStorage(mStart + size) {}
     ~AllocInfoVec() { DebugHeapFree(mStart); }
 

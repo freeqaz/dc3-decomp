@@ -7,6 +7,10 @@ UIListArrow::UIListArrow()
     : mMesh(this), mScrollAnim(this), mPosition(kUIListArrowBack), mShowOnlyScroll(0),
       mOnHighlight(0) {}
 
+BEGIN_HANDLERS(UIListArrow)
+    HANDLE_SUPERCLASS(UIListWidget)
+END_HANDLERS
+
 BEGIN_PROPSYNCS(UIListArrow)
     SYNC_PROP(mesh, mMesh)
     SYNC_PROP(scroll_anim, mScrollAnim)

@@ -3,6 +3,7 @@
 #include "obj/DataFunc.h"
 
 GlitchFinder TheGlitchFinder;
+std::vector<float> GlitchPoker::smNestedStartTimes;
 
 GlitchPoker::GlitchPoker() {}
 

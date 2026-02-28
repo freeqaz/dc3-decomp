@@ -1,5 +1,8 @@
 #pragma once
 #include <cstring>
+#ifdef HX_NATIVE
+#include <cstdint>
+#endif
 
 extern const char *gNullStr;
 
@@ -30,7 +33,11 @@ public:
         else
             return Null();
     }
+#ifdef HX_NATIVE
+    operator int() { return (int)(intptr_t)mStr; }
+#else
     operator int() { return (int)mStr; }
+#endif
 
     static void PreInit(int, int);
     static void Init(void);

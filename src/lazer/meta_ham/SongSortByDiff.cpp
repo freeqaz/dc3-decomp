@@ -34,10 +34,6 @@ int DifficultyCmp::Compare(const NavListItemSortCmp *cmp, NavListNodeType type) 
     return 0;
 }
 
-SongSortByDiff::SongSortByDiff() {
-    static Symbol by_difficulty = "by_difficulty";
-}
-
 NavListShortcutNode *SongSortByDiff::NewShortcutNode(NavListItemNode *node) const {
     auto cmp = node->GetCmp()->GetDifficultyCmp();
     auto newCmp = new DifficultyCmp(cmp->mTier, 0, "");

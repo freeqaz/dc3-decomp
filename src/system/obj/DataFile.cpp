@@ -99,6 +99,9 @@ DataArray *DataReadFile(const char *file, bool warn) {
     }
 
     FileStream fs(cached, FileStream::kRead, true);
+#ifdef HX_NATIVE
+    printf("DC3 Native: DataReadFile('%s') -> cached='%s' fail=%d\n", file, cached, fs.Fail());
+#endif
     if (fs.Fail()) {
         if (warn)
             MILO_WARN("DataReadFile: Can't open %s", buf);

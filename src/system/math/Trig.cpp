@@ -19,6 +19,11 @@ void TrigTableInit() {
         i++;
     } while (i < 256);
     float sineValue = std::sin(0.024543693f * i);
+#ifdef HX_NATIVE
+    // Original code writes past array end (i=256, index=513 in 512-element array)
+    // Benign on Xbox (overwrites adjacent global), but ASan catches it on native
+    if (i * 2 + 1 < 0x200) // guard against OOB write
+#endif
     gBigSinTable[i * 2 + 1] = sineValue - gBigSinTable[i * 2 - 1];
 }
 

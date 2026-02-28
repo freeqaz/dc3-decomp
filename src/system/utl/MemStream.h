@@ -16,7 +16,11 @@ public:
     int Size() const { return mBuffer.size(); }
     void Resize(int size) { mBuffer.resize(size); }
     void Reserve(int size) { mBuffer.reserve(size); }
+#ifdef HX_NATIVE
+    const char *Buffer() const { return mBuffer.data(); }
+#else
     const char *Buffer() const { return mBuffer.begin(); }
+#endif
 
 private:
     virtual void ReadImpl(void *, int);

@@ -87,7 +87,7 @@ namespace {
     }
 }
 
-Licenses sLicense("system/src/stlport", Licenses::kRequirementNotification);
+static Licenses sLicense("system/src/stlport", Licenses::kRequirementNotification);
 
 int Hx_snprintf(char *c, unsigned int ui, char const *cc, ...) {
     std::va_list args;
@@ -339,6 +339,7 @@ void LanguageInit() {
     SetSystemLanguage(lang, false);
 }
 
+#ifndef HX_NATIVE
 void AppendStackTrace(FixedString &str, void *v) {
     StackData data;
     memset(&data, 0, sizeof(StackData));
@@ -387,6 +388,7 @@ bool GenericMapFile::ParseStack(
     }
     return true;
 }
+#endif
 
 void InitSystem(const char *config) {
     Archive *oldArchive = TheArchive;
@@ -457,6 +459,15 @@ void SystemInit(const char *config) {
     gSystemTimer.Start();
     Symbol::Init();
     InitSystem(config);
+#ifdef HX_NATIVE
+    // Skip subsystem singletons that have no vtable on native
+    gSystemTitles = SystemConfig("system", "titles");
+    ObjectDir::Init();
+    TrigTableInit();
+    GeoInit();
+    TrigInit();
+    MILO_LOG("DC3 Native: SystemInit done\n");
+#else
     gSystemTitles = SystemConfig("system", "titles");
     ObjectDir::Init();
     TrigTableInit();
@@ -482,6 +493,7 @@ void SystemInit(const char *config) {
         Licenses::PrintAll();
         TheDebug.Exit(0, true);
     }
+#endif
 }
 
 static char sCommandLineBuffer[kCommandLineSz];
@@ -532,6 +544,31 @@ void SetSystemArgs(const char *commandLine) {
 void SystemPreInit(const char *config) {
     InitMakeString();
     Symbol::PreInit(640000, 80000);
+#ifdef HX_NATIVE
+    // Skip PlatformMgr/ContentMgr - they're stubbed globals without vtables
+    // Init core systems needed for data loading + archive
+    OptionInit();
+    TimeConversionInit();
+    Timer::Init();
+    FileInit();
+    MILO_LOG("DC3 Native: FileInit complete\n");
+    SetUsingCD(true);
+    {
+        extern void NativeArchiveInit();
+        NativeArchiveInit();
+    }
+    MILO_LOG("DC3 Native: ArchiveInit complete\n");
+    TheDebug.Init();
+    MILO_LOG("DC3 Native: Debug.Init complete\n");
+    DataInit();
+    MILO_LOG("DC3 Native: DataInit complete\n");
+    PreInitSystem(config);
+    MILO_LOG("DC3 Native: PreInitSystem complete\n");
+    // Skip MemInit on native — heap manager uses 32-bit pointer arithmetic.
+    // All allocations go through malloc/free on native anyway.
+    MILO_LOG("DC3 Native: MemInit SKIPPED (using malloc/free)\n");
+    MILO_LOG("DC3 Native: SystemPreInit done\n");
+#else
     ThePlatformMgr.RegionInit();
     ThePlatformMgr.PreInit();
     if (!OptionBool("no_cd", false)) {
@@ -577,6 +614,7 @@ void SystemPreInit(const char *config) {
     AutoTimer::Init();
     ThreadCallPreInit();
     TheTaskMgr.Init();
+#endif
 }
 
 void SystemPreInit(const char *cmdLine, const char *cfg) {

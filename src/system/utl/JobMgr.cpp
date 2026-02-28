@@ -150,5 +150,9 @@ void MultipleItemsPostPurchaseEnumJob::OnCompletion(Hmx::Object *obj) {
 }
 
 unsigned long long SingleItemEnumCompleteMsg::OfferID() const {
+#ifdef HX_NATIVE
+    return strtoull(mData->Str(4), 0, 16);
+#else
     return _strtoui64(mData->Str(4), 0, 16);
+#endif
 }

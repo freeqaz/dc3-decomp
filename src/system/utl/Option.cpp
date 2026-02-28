@@ -3,7 +3,7 @@
 #include "os/System.h"
 #include <vector>
 
-char **FindOption(const char *option) {
+std::vector<char *>::iterator FindOption(const char *option) {
     std::vector<char *>::iterator it;
     for (it = TheSystemArgs.begin(); it != TheSystemArgs.end(); it++) {
         if (**it == '-' && (streq(*it + 1, option)))
@@ -13,7 +13,7 @@ char **FindOption(const char *option) {
 }
 
 bool OptionBool(const char *option, bool def) {
-    char **opt = FindOption(option);
+    std::vector<char *>::iterator opt = FindOption(option);
     if (opt == TheSystemArgs.end())
         return def;
     else {
@@ -23,11 +23,11 @@ bool OptionBool(const char *option, bool def) {
 }
 
 const char *OptionStr(const char *option, const char *def) {
-    char **i = FindOption(option);
+    std::vector<char *>::iterator i = FindOption(option);
     if (i == TheSystemArgs.end())
         return def;
     else {
-        char **erased = TheSystemArgs.erase(i);
+        std::vector<char *>::iterator erased = TheSystemArgs.erase(i);
         MILO_ASSERT(i != TheSystemArgs.end(), 0x5C);
         def = *erased;
         TheSystemArgs.erase(erased);

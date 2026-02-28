@@ -49,7 +49,7 @@ bool SearchReplace(
     changed = false;
 
     while (true) {
-        matchPtr = strstr(src, substr_old);
+        matchPtr = (char *)strstr(src, substr_old);
         if (matchPtr == 0)
             break;
         matchOffset = matchPtr - src;
@@ -300,6 +300,9 @@ String &String::operator+=(char c) {
 
 String &String::operator=(const FixedString &str) {
     reserve(str.capacity());
+#ifdef HX_NATIVE
+    if (mStr != str.c_str()) // avoid ASan strcpy-param-overlap on self-assignment
+#endif
     strcpy(mStr, str.c_str());
     return *this;
 }

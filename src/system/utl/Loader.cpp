@@ -287,6 +287,14 @@ Loader *LoadMgr::ForceGetLoader(const FilePath &fp) {
     }
 }
 
+#ifdef HX_NATIVE
+void LoadMgr::PollFrontLoader() {
+    if (!mLoading.empty()) {
+        mLoading.front()->PollLoading();
+    }
+}
+#endif
+
 void LoadMgr::Poll() {
     if (mPeriod > 0) {
         mTimer.Restart();

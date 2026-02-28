@@ -198,6 +198,10 @@ class DecompMCPServer:
                                 "description": "Filter by divergence class (only when unicorn_verdict='DIVERGENT'): 'logic' (real bug), 'build_env' (unfixable artifact), 'regalloc' (register quirk)",
                                 "enum": ["logic", "build_env", "regalloc"],
                             },
+                            "is_stub": {
+                                "type": "boolean",
+                                "description": "Filter by stub status: true = only unimplemented stubs, false = only non-stubs. Omit to return all.",
+                            },
                         },
                     },
                 ),
@@ -566,6 +570,7 @@ class DecompMCPServer:
         skip_boilerplate = args.get("skip_boilerplate", True)
         unicorn_verdict = args.get("unicorn_verdict")
         unicorn_class = args.get("unicorn_class")
+        is_stub = args.get("is_stub")
 
         # Map status filter to database query params
         if status == "all":
@@ -597,6 +602,7 @@ class DecompMCPServer:
             skip_boilerplate=skip_boilerplate,
             unicorn_verdict=unicorn_verdict,
             unicorn_class=unicorn_class,
+            is_stub=is_stub,
         )
 
         # When filtering by unit, check if there are hidden functions
@@ -2387,7 +2393,13 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
                 verdict_data = data.get("verdict", {})
                 classification = verdict_data.get("classification", "")
 
-                if match_pct == 100.0 or classification == "COMPLETE":
+                # Detect unimplemented stubs (base has no code)
+                base_size = data.get("base_size", 0)
+                target_size = data.get("target_size", 0)
+
+                if classification == "STUB" or (base_size == 0 and target_size > 0):
+                    unimplemented += 1
+                elif match_pct == 100.0 or classification == "COMPLETE":
                     newly_complete += 1
                     if not dry_run:
                         update_function_status(

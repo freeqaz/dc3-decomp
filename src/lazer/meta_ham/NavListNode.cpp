@@ -16,6 +16,22 @@
 
 #pragma region NavListNode
 
+#ifdef HX_NATIVE
+const DifficultyCmp *NavListItemSortCmp::GetDifficultyCmp() const { return nullptr; }
+const SongCmp *NavListItemSortCmp::GetSongCmp() const { return nullptr; }
+const ArtistCmp *NavListItemSortCmp::GetArtistCmp() const { return nullptr; }
+const DecadeCmp *NavListItemSortCmp::GetDecadeCmp() const { return nullptr; }
+const VenueCmp *NavListItemSortCmp::GetVenueCmp() const { return nullptr; }
+const DateCmp *NavListItemSortCmp::GetDateCmp() const { return nullptr; }
+const LocationCmp *NavListItemSortCmp::GetLocationCmp() const { return nullptr; }
+const AlbumCmp *NavListItemSortCmp::GetAlbumCmp() const { return nullptr; }
+const VocalPartsCmp *NavListItemSortCmp::GetVocalPartsCmp() const { return nullptr; }
+const PlaylistTypeCmp *NavListItemSortCmp::GetPlaylistTypeCmp() const { return nullptr; }
+const ChallengeScoreCmp *NavListItemSortCmp::GetChallengeScoreCmp() const { return nullptr; }
+const MQSongCharCmp *NavListItemSortCmp::GetMQSongCharCmp() const { return nullptr; }
+const FitnessCalorieSortCmp *NavListItemSortCmp::GetFitnessCalorieSortCmp() const { return nullptr; }
+#endif
+
 NavListNode::NavListNode(NavListItemSortCmp *cmp) : mCmp(cmp), mParent(0) {}
 NavListNode::~NavListNode() { RELEASE(mCmp); }
 

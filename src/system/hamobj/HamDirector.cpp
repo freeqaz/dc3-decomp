@@ -73,6 +73,7 @@
 
 HamDirector *TheHamDirector;
 OfflineCallback gOfflineCallback;
+std::map<Symbol, int> gMoveMergeMap;
 
 float FrameToBeat(float frame) { return SecondsToBeat(frame * 0.033333335f); }
 float BeatToFrame(float beat) { return BeatToSeconds(beat) * 30.0f; }

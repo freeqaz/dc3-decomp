@@ -4,7 +4,7 @@
 #include <cstdio>
 #include <cstring>
 
-Licenses sLicense("system/src/math/SHA1.h", Licenses::kRequirementNotification);
+static Licenses sLicense("system/src/math/SHA1.h", Licenses::kRequirementNotification);
 
 // shoutouts to clibs' implementation of sha1: https://github.com/clibs/sha1
 

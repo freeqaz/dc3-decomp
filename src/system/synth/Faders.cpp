@@ -1,4 +1,8 @@
 #include "synth/Faders.h"
+
+#ifdef HX_NATIVE
+inline double __fsel(double a, double b, double c) { return a >= 0.0 ? b : c; }
+#endif
 #include "math/Easing.h"
 #include "obj/Object.h"
 #include "os/Debug.h"

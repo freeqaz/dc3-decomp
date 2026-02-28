@@ -918,9 +918,15 @@ INIT_REVS(0x1C, 0)
 void ObjectDir::PreLoad(BinStream &bs) {
     LOAD_REVS(bs)
     ASSERT_REVS(0x1C, 0)
+#ifdef HX_NATIVE
+    printf("ObjectDir::PreLoad '%s': rev=%d altRev=%d tell=%d\n", Name(), d.rev, d.altRev, bs.Tell());
+#endif
 
     if (d.rev > 0x15) {
         LoadType(bs);
+#ifdef HX_NATIVE
+        printf("ObjectDir::PreLoad: after LoadType tell=%d\n", bs.Tell());
+#endif
     } else if (d.rev >= 2 && d.rev <= 0x10) {
         Hmx::Object::Load(bs);
     }
@@ -941,6 +947,9 @@ void ObjectDir::PreLoad(BinStream &bs) {
         }
         int hashLen;
         bs >> hashLen;
+#ifdef HX_NATIVE
+        printf("ObjectDir::PreLoad: mAlwaysInlined=%d hashLen=%d tell=%d\n", mAlwaysInlined, hashLen, bs.Tell());
+#endif
         if (hashLen) {
             char *hash = (char *)MemOrPoolAlloc(hashLen + 1, __FILE__, 0x9B0, nullptr);
             mAlwaysInlineHash = hash;
@@ -952,6 +961,9 @@ void ObjectDir::PreLoad(BinStream &bs) {
     if (d.rev > 1) {
         bs >> mViewports;
         bs >> (int &)mCurViewportID;
+#ifdef HX_NATIVE
+        printf("ObjectDir::PreLoad: mViewports.size=%d mCurViewportID=%d tell=%d\n", (int)mViewports.size(), (int)mCurViewportID, bs.Tell());
+#endif
     }
 
     if (d.rev > 0xC) {
@@ -1005,6 +1017,9 @@ void ObjectDir::PreLoad(BinStream &bs) {
     static std::vector<FilePath> inlinedSubDirs;
     static std::vector<FilePath> notInlinedSubDirs;
 
+#ifdef HX_NATIVE
+    printf("ObjectDir::PreLoad: before subdirs, proxyFile='%s' tell=%d\n", mProxyFile.c_str(), bs.Tell());
+#endif
     if (d.rev > 2) {
         bs >> notInlinedSubDirs;
         std::vector<int> intVec;
@@ -1017,6 +1032,10 @@ void ObjectDir::PreLoad(BinStream &bs) {
         } else {
             inlinedSubDirs.clear();
         }
+#ifdef HX_NATIVE
+        printf("ObjectDir::PreLoad: notInlinedSubDirs=%d inlinedSubDirs=%d inlineSubDirType=%d tell=%d\n",
+               (int)notInlinedSubDirs.size(), (int)inlinedSubDirs.size(), mInlineSubDirType, bs.Tell());
+#endif
 
         int i20 = 0;
         if (SaveSubdirs() || inlinedSubDirs.size() != 0 || notInlinedSubDirs.size() != 0) {
@@ -1122,11 +1141,18 @@ void ObjectDir::PreLoad(BinStream &bs) {
     }
 
     mIsSubDir = false;
+#ifdef HX_NATIVE
+    printf("ObjectDir::PreLoad: done, tell=%d\n", bs.Tell());
+#endif
     bs.PushRev(packRevs(d.altRev, d.rev), this);
 }
 
 void ObjectDir::PostLoad(BinStream &bs) {
     BinStreamRev d(bs, bs.PopRev(this));
+#ifdef HX_NATIVE
+    printf("ObjectDir::PostLoad '%s': rev=%d altRev=%d tell=%d inlinedDirs=%d\n",
+           Name(), d.rev, d.altRev, bs.Tell(), (int)mInlinedDirs.size());
+#endif
 
     for (int i = mInlinedDirs.size() - 1; i >= 0; i--) {
         InlinedDir &iDir = mInlinedDirs[i];
@@ -1154,9 +1180,16 @@ void ObjectDir::PostLoad(BinStream &bs) {
         }
     }
 
+#ifdef HX_NATIVE
+    printf("ObjectDir::PostLoad: after inlinedDirs, tell=%d\n", bs.Tell());
+#endif
     if (d.rev > 0x17) {
         int revs2 = bs.Cached() ? 0 : bs.PopRev(this);
         int offset = bs.PopRev(this);
+#ifdef HX_NATIVE
+        printf("ObjectDir::PostLoad: revs2=%d offset=%d mSubDirs.size=%d tell=%d\n",
+               revs2, offset, (int)mSubDirs.size(), bs.Tell());
+#endif
         MILO_ASSERT_RANGE_EQ(offset, 0, mSubDirs.size(), 0x466);
         if (revs2 != 2) {
             for (int i = mSubDirs.size() - offset - 1; i >= 0; i--) {
@@ -1194,13 +1227,25 @@ void ObjectDir::PostLoad(BinStream &bs) {
     if (d.rev > 10) {
         char buf[0x80];
         bs.ReadString(buf, 0x80);
+#ifdef HX_NATIVE
+        printf("ObjectDir::PostLoad: unk8c='%s' tell=%d\n", buf, bs.Tell());
+#endif
         unk8c = FindObject(buf, false, true);
         bs.ReadString(buf, 0x80);
+#ifdef HX_NATIVE
+        printf("ObjectDir::PostLoad: mCurCam='%s' tell=%d\n", buf, bs.Tell());
+#endif
         mCurCam = FindObject(buf, false, true);
     }
 
     if (d.rev > 0x15) {
+#ifdef HX_NATIVE
+        printf("ObjectDir::PostLoad: calling LoadRest tell=%d\n", bs.Tell());
+#endif
         LoadRest(bs);
+#ifdef HX_NATIVE
+        printf("ObjectDir::PostLoad: LoadRest done tell=%d\n", bs.Tell());
+#endif
     } else if (d.rev > 0x10) {
         Hmx::Object::Load(bs);
     }

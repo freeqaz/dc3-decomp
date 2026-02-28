@@ -93,9 +93,11 @@ SkeletonUpdate::SkeletonUpdate()
     );
     memset(mNUISkeletonFrame, 0, sizeof(NUI_SKELETON_FRAME));
     memset(&mSkeletonFrame, 0, sizeof(SkeletonFrame));
+#ifndef HX_NATIVE
     mUpdateThread = CreateThread(nullptr, 0, SkeletonUpdateThread, nullptr, 4, nullptr);
     XSetThreadProcessor(mUpdateThread, 5);
     ResumeThread(mUpdateThread);
+#endif
 }
 
 SkeletonUpdate::~SkeletonUpdate() {

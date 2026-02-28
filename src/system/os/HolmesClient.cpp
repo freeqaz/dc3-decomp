@@ -267,6 +267,9 @@ bool HolmesClientInitOpcode(bool quiet) {
 }
 
 void HolmesClientInit() {
+#ifdef HX_NATIVE
+    return; // Holmes remote debug not needed on native
+#endif
     if (!UsingCD() || gHostConfig || gHostLogging) {
         MILO_LOG("Trying to connect to Holmes...\n");
         bool conf, log;

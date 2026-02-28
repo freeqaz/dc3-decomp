@@ -162,7 +162,11 @@ bool AccomplishmentCharacterListConditional::AreUnlockableOutfitListConditionsMe
         for (int i = 0; i < mUnlockableOutfits.size(); i++) {
             if (hpd->Outfit() == mUnlockableOutfits[i] && hpd->IsPlaying()) {
                 if (mOutfitEquipped[i + 1] & mOutfitEquipped[i] == 0) {
+#ifdef HX_NATIVE
+                    mOutfitEquipped[i] = mOutfitEquipped[i] | mOutfitEquipped[i + 1];
+#else
                     mOutfitEquipped[i] |= mOutfitEquipped[i + 1];
+#endif
                 }
                 break;
             }

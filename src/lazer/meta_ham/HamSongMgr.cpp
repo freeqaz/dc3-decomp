@@ -456,7 +456,7 @@ void HamSongMgr::InitializePlaylists() {
     char nameBuffer[32];
     std::map<Symbol, Playlist *> dynamicPlaylists;
 
-    for (int *it = mRankedSongs.begin(); it != mRankedSongs.end(); ++it) {
+    for (auto it = mRankedSongs.begin(); it != mRankedSongs.end(); ++it) {
         const HamSongMetadata *metadata = Data(*it);
         if (metadata->IsComplete() && !metadata->IsFake() &&
             TheProfileMgr.IsContentUnlocked(metadata->ShortName())) {

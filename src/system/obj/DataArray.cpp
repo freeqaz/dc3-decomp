@@ -278,7 +278,7 @@ bool DataArray::Contains(const DataNode &dn) const {
 
 DataArray::DataArray(int size)
     : mFile(), mSize(size), mRefs(1), mLine(0), mDeprecated(0) {
-    mNodes = NodesAlloc(size * 8);
+    mNodes = NodesAlloc(size * sizeof(DataNode));
     for (int n = 0; n < size; n++) {
         new (&mNodes[n]) DataNode();
     }
@@ -343,6 +343,11 @@ void DataArray::Load(BinStream &bs) {
     mFile = gFile;
     short size;
     bs >> size;
+#ifdef HX_NATIVE
+    if (size > 200 || size < 0) {
+        printf("DataArray::Load: SUSPICIOUS size=%d tell=%d\n", size, bs.Tell());
+    }
+#endif
     MemPushTemp();
     Resize(size);
     MemPopTemp();
@@ -398,7 +403,15 @@ void DataArray::Load(BinStream &bs) {
             gDataArrayConditional.back() = !gDataArrayConditional.back();
             size -= 1;
         } else if (node.Type() == kDataEndif) {
+#ifdef HX_NATIVE
+            if (gDataArrayConditional.empty()) {
+                printf("WARNING: DataArray::Load: kDataEndif with empty conditional stack, skipping\n");
+            } else {
+                gDataArrayConditional.pop_back();
+            }
+#else
             gDataArrayConditional.pop_back();
+#endif
             size -= 1;
         } else if (node.Type() == kDataInclude || node.Type() == kDataMerge) {
             const char *path = nodeSym;
@@ -729,7 +742,12 @@ DataNode DataArray::Execute(bool fail) {
         break;
     }
     Hmx::Object *handledObject = deferredObject;
+    // (int) cast produces signed cmpwi; direct comparison produces unsigned cmplwi
+#ifdef HX_NATIVE
+    if (handledObject == 0) {
+#else
     if ((int)handledObject == 0) {
+#endif
         if (sDefaultHandler) {
             DataNode n = sDefaultHandler(this);
             if (n.Type() != kDataUnhandled) {

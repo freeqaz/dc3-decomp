@@ -228,11 +228,16 @@ void RndMat::Init() {
     REGISTER_OBJ_FACTORY(RndMat);
     RndMat *mat = Hmx::Object::New<RndMat>();
     BaseMaterial::SetDefaultMat(mat);
+#ifdef HX_NATIVE
+    // Skip metamaterial loading on native — not needed for basic rendering
+    sMetaMaterials = nullptr;
+#else
     RELEASE(sMetaMaterials);
     sMetaMaterials = LoadMetaMaterials();
     int hashsize = (sMetaMaterials->HashTableUsedSize() + 200) * 2;
     sMetaMaterials->Reserve(hashsize, sMetaMaterials->StrTableUsedSize() + 4400);
     CreateAndSetMetaMat(mat);
+#endif
 }
 
 void RndMat::Terminate() { RELEASE(sMetaMaterials); }
@@ -382,6 +387,9 @@ DataNode RndMat::OnGetMetaMaterials(const DataArray *a) {
 }
 
 MetaMaterial *RndMat::CreateMetaMaterial(bool notify) {
+#ifdef HX_NATIVE
+    if (!sMetaMaterials) return nullptr;
+#endif
     bool isAnonymous = false;
     String str(Name());
     if (str.empty()) {

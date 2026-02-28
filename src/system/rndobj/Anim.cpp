@@ -550,5 +550,5 @@ DataNode RndAnimatable::OnAnimate(DataArray *arr) {
         TheTaskMgr.Start(taskPtr, local_units, local_delay);
     }
 
-    return taskPtr;
+    return DataNode(taskPtr.Ptr());
 }

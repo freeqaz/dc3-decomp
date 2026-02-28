@@ -46,6 +46,8 @@
 #include "utl/Symbol.h"
 #include "xdk/xapilibi/xbox.h"
 
+HamUI TheHamUI;
+
 namespace {
     UIPanel *FindPanel(const char *name) {
         UIPanel *p = ObjectDir::Main()->Find<UIPanel>(name);

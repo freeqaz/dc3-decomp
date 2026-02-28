@@ -15,7 +15,11 @@ inline bool strneq(const char *s1, const char *s2, int n) {
     return strncmp(s1, s2, n) == 0;
 }
 
+#ifdef HX_NATIVE
+inline bool strieq(const char *s1, const char *s2) { return strcasecmp(s1, s2) == 0; }
+#else
 inline bool strieq(const char *s1, const char *s2) { return stricmp(s1, s2) == 0; }
+#endif
 
 class FixedString {
 protected:

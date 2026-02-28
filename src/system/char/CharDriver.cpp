@@ -361,6 +361,7 @@ BEGIN_LOADS(CharDriver)
         d >> mDefaultPlayStarved;
 END_LOADS
 
+#ifndef HX_NATIVE
 // Template instantiation for std::map<CharClip*, float>
 namespace stlpmtx_std {
 
@@ -370,3 +371,4 @@ template class _Rb_tree<CharClip*, less<CharClip*>, pair<CharClip* const, float>
     StlNodeAlloc<_Rb_tree_node<pair<CharClip* const, float> > > >;
 
 } // namespace stlpmtx_std
+#endif

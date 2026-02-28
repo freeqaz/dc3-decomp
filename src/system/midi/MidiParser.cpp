@@ -13,6 +13,7 @@
 #include "rndobj/Rnd.h"
 #include "utl/MemMgr.h"
 #include "utl/TimeConversion.h"
+#include <climits>
 
 std::list<MidiParser *> MidiParser::sParsers;
 DataNode *MidiParser::mpStart;

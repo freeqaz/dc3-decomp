@@ -182,7 +182,12 @@ void ObjPtrVec<T1, T2>::ReplaceNode(Node *n, Hmx::Object *obj) {
     } else {
         Hmx::Object *oldObj = n->SetObj(obj);
         if (!oldObj && mListMode == kObjListNoNull) {
+#ifdef HX_NATIVE
+            // Standard STL iterators aren't raw pointers; convert via offset
+            erase(iterator(mNodes.begin() + (n - mNodes.data())));
+#else
             erase(n);
+#endif
         }
     }
 }
@@ -216,12 +221,20 @@ template <class T1, class T2>
 typename ObjPtrVec<T1, T2>::iterator
 ObjPtrVec<T1, T2>::insert(typename ObjPtrVec<T1, T2>::const_iterator it, T1 *obj) {
     if (obj != 0 || mListMode != kObjListNoNull) {
+#ifdef HX_NATIVE
+        int idx = it.it - mNodes.begin();
+#else
         int idx = it.it ? (it.it - mNodes.begin()) : 0;
+#endif
         Node newNode(this);
         mNodes.insert(mNodes.begin() + idx, 1, newNode);
         Set(begin() + idx, obj);
     }
+#ifdef HX_NATIVE
+    return iterator(mNodes.begin() + (it.it - mNodes.cbegin()));
+#else
     return iterator(const_cast<typename std::vector<Node>::iterator>(it.it));
+#endif
 }
 
 template <class T1, class T2>
@@ -322,7 +335,11 @@ ObjPtrList<T1, T2>::ObjPtrList(const ObjPtrList &other)
 }
 
 template <class T1, class T2>
+#ifdef HX_NATIVE
+void *ObjPtrList<T1, T2>::Node::operator new(size_t s) {
+#else
 void *ObjPtrList<T1, T2>::Node::operator new(unsigned int s) {
+#endif
     return PoolAlloc(s, s, __FILE__, 0x122, "ObjPtrList_node");
 }
 
@@ -334,9 +351,9 @@ void ObjPtrList<T1, T2>::Node::operator delete(void *v) {
 template <class T1, class T2>
 void ObjPtrList<T1, T2>::ReplaceNode(struct ObjPtrList::Node *node, Hmx::Object *obj) {
     if (mListMode == kObjListOwnerControl) {
-        mOwner->Replace(node, obj);
+        mOwner->Replace(static_cast<ObjRef *>(static_cast<ObjRefConcrete<T1, T2> *>(node)), obj);
     } else {
-        Hmx::Object *old = node->SetObj(obj);
+        Hmx::Object *old = static_cast<ObjRefConcrete<T1, T2> *>(node)->SetObj(obj);
         if (!old && mListMode == kObjListNoNull) {
             erase(node);
         }
@@ -354,7 +371,7 @@ void ObjPtrList<T1, T2>::operator=(const ObjPtrList &other) {
         *n = *otherNodes;
     }
     for (; otherNodes != nullptr; otherNodes = otherNodes->next) {
-        push_back(*otherNodes);
+        push_back(otherNodes->Obj());
     }
 }
 
@@ -482,3 +499,165 @@ void ObjPtrList<T1, T2>::sort(const S &cmp) {
         }
     }
 }
+
+#ifdef HX_NATIVE
+// Generic template implementations for native port.
+// On Xbox, these were explicit specializations in link_glue.cpp for each type.
+// On native, we provide generic versions so all ObjPtrList types work.
+
+template <class T1, class T2>
+void ObjPtrList<T1, T2>::Link(iterator it, Node *node) {
+    node->mOwner = this;
+    Node *pos = it.mNode;
+    if (pos) {
+        node->next = pos;
+        node->prev = pos->prev;
+        if (pos->prev) pos->prev->next = node;
+        pos->prev = node;
+        if (mNodes == pos) mNodes = node;
+    } else {
+        if (mNodes) {
+            Node *tail = mNodes;
+            while (tail->next) tail = tail->next;
+            node->prev = tail;
+            node->next = nullptr;
+            tail->next = node;
+        } else {
+            node->prev = nullptr;
+            node->next = nullptr;
+            mNodes = node;
+        }
+    }
+    mSize++;
+}
+
+template <class T1, class T2>
+typename ObjPtrList<T1, T2>::Node *ObjPtrList<T1, T2>::Unlink(Node *node) {
+    Node *next = node->next;
+    Node *prev = node->prev;
+    if (prev) prev->next = next;
+    if (next) next->prev = prev;
+    if (mNodes == node) mNodes = next;
+    mSize--;
+    return next;
+}
+
+template <class T1, class T2>
+typename ObjPtrList<T1, T2>::iterator ObjPtrList<T1, T2>::erase(iterator it) {
+    Node *node = it.mNode;
+    Node *next = Unlink(node);
+    delete node;
+    return iterator(next);
+}
+
+template <class T1, class T2>
+Hmx::Object *ObjPtrList<T1, T2>::RefOwner() const {
+    return mOwner ? mOwner->RefOwner() : 0;
+}
+
+template <class T1, class T2>
+bool ObjPtrList<T1, T2>::Replace(ObjRef *ref, Hmx::Object *obj) {
+    for (iterator it = begin(); it != end(); ++it) {
+        if (it.mNode == ref) {
+            ReplaceNode(it.mNode, obj);
+            return true;
+        }
+    }
+    return false;
+}
+
+template <class T1, class T2>
+Hmx::Object *ObjPtrList<T1, T2>::Node::RefOwner() const {
+    ObjPtrList<T1, T2> *list = static_cast<ObjPtrList<T1, T2> *>(mOwner);
+    return list->Owner();
+}
+
+template <class T1, class T2>
+T1 *ObjPtrList<T1, T2>::front() const {
+    return mNodes ? mNodes->Obj() : 0;
+}
+
+template <class T1, class T2>
+void ObjPtrList<T1, T2>::sort(SortFunc *) {}
+
+// -- ObjPtrVec generic template implementations --
+
+template <class T1, class T2>
+Hmx::Object *ObjPtrVec<T1, T2>::Node::RefOwner() const {
+    return static_cast<Hmx::Object*>(mOwner);
+}
+
+template <class T1, class T2>
+typename ObjPtrVec<T1, T2>::iterator
+ObjPtrVec<T1, T2>::erase(ObjPtrVec<T1, T2>::iterator it) {
+    return mNodes.erase(it.it);
+}
+
+template <class T1, class T2>
+typename ObjPtrVec<T1, T2>::iterator ObjPtrVec<T1, T2>::FindRef(ObjRef *ref) {
+    for (iterator it = begin(); it != end(); ++it) {
+        if (&(*it) == ref) return it;
+    }
+    return end();
+}
+
+template <class T1, class T2>
+void ObjPtrVec<T1, T2>::merge(const ObjPtrVec<T1, T2> &other) {
+    for (const_iterator it = other.begin(); it != other.end(); ++it) {
+        T1 *obj = it->Obj();
+        if (obj && find(obj) == end()) {
+            push_back(obj);
+        }
+    }
+}
+
+template <class T1, class T2>
+void ObjPtrVec<T1, T2>::unique() {
+    for (int i = 0; i < (int)mNodes.size(); i++) {
+        for (int j = i + 1; j < (int)mNodes.size(); j++) {
+            if (mNodes[i].Obj() == mNodes[j].Obj()) {
+                erase(iterator(mNodes.begin() + j));
+                j--;
+            }
+        }
+    }
+}
+
+template <class T1, class T2>
+bool ObjPtrVec<T1, T2>::remove(T1 *obj) {
+    for (iterator it = begin(); it != end(); ++it) {
+        if (it->Obj() == obj) {
+            erase(it);
+            return true;
+        }
+    }
+    return false;
+}
+
+// -- BinStream operator<< for ObjPtrList --
+
+template <class T1>
+BinStream &operator<<(BinStream &bs, const ObjPtrList<T1, ObjectDir> &list) {
+    bs << list.size();
+    for (typename ObjPtrList<T1, ObjectDir>::iterator it = list.begin(); it != list.end(); ++it) {
+        Hmx::Object *obj = *it;
+        const char *name = obj ? obj->Name() : "";
+        bs << name;
+    }
+    return bs;
+}
+
+// -- BinStream operator<< for ObjPtrVec --
+
+template <class T1>
+BinStream &operator<<(BinStream &bs, const ObjPtrVec<T1, ObjectDir> &vec) {
+    bs << (int)vec.size();
+    for (int i = 0; i < (int)vec.size(); i++) {
+        const Hmx::Object *obj = vec[i];
+        const char *name = obj ? obj->Name() : "";
+        bs << name;
+    }
+    return bs;
+}
+
+#endif

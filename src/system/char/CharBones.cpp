@@ -192,7 +192,7 @@ void *CharBones::FindPtr(Symbol s) const {
 }
 
 void CharBones::Print() {
-    for (std::vector<Bone>::iterator it = mBones.begin(); it != mBones.end(); ++it) {
+    for (auto it = mBones.begin(); it != mBones.end(); ++it) {
         MILO_LOG("%s %.2f: %s\n", it->name, it->weight, StringVal(it->name));
     }
 }

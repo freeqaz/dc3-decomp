@@ -260,6 +260,7 @@ public:
         Base it;
 
     public:
+        iterator() : it() {}
         iterator(Base base) : it(base) {}
 
         Node &operator*() const { return *it; }
@@ -320,6 +321,12 @@ public:
     ObjPtrVec(const ObjPtrVec &);
     virtual ~ObjPtrVec();
 
+#ifdef HX_NATIVE
+    iterator begin() { return mNodes.begin(); }
+    iterator end() { return mNodes.end(); }
+    const_iterator begin() const { return mNodes.begin(); }
+    const_iterator end() const { return mNodes.end(); }
+#else
     iterator begin() { return empty() ? nullptr : mNodes.begin(); }
     // Register swap pattern: declaring size() before begin() affects PPC register allocation
     // Variable declaration order is critical for matching FlowNode::MiloPreRun codegen
@@ -331,6 +338,7 @@ public:
     }
     const_iterator begin() const { return empty() ? nullptr : mNodes.begin(); }
     const_iterator end() const { return begin() + size(); }
+#endif
     iterator FindRef(ObjRef *);
 
     iterator erase(iterator);
@@ -386,7 +394,13 @@ public:
 private:
     // Node size: 0x14
     struct Node : public ObjRefConcrete<T1, T2> {
-        Node() : ObjRefConcrete(nullptr) {}
+#ifdef HX_NATIVE
+        // Clang needs explicit using-declarations for dependent base class members
+        using ObjRefConcrete<T1, T2>::mObject;
+        using ObjRefConcrete<T1, T2>::SetObj;
+        using ObjRefConcrete<T1, T2>::SetObjConcrete;
+#endif
+        Node() : ObjRefConcrete<T1, T2>(nullptr) {}
         virtual ~Node() {}
         virtual Hmx::Object *RefOwner() const;
         virtual void Replace(Hmx::Object *obj) {
@@ -395,7 +409,11 @@ private:
         }
         virtual ObjRefOwner *Parent() const { return mOwner; }
 
+#ifdef HX_NATIVE
+        static void *operator new(size_t);
+#else
         static void *operator new(unsigned int);
+#endif
         static void operator delete(void *);
 
         T1 *Obj() const { return mObject; }
@@ -1154,7 +1172,12 @@ namespace Hmx {
         const String &Note() const { return mNote; }
         const char *AllocHeapName() { return MemHeapName(MemFindAddrHeap(this)); }
         void AddRef(ObjRef *ref) { ref->AddRef(&mRefs); }
-        void Release(ObjRef *ref) { ref->Release(0); }
+        void Release(ObjRef *ref) {
+#ifdef HX_NATIVE
+            if (!ref) return;
+#endif
+            ref->Release(0);
+        }
         MsgSinks *Sinks() const { return mSinks; }
 
         void ReplaceRefs(Hmx::Object *);
@@ -1303,6 +1326,13 @@ template <class T>
 BinStream &operator>>(BinStreamRev &bs, ObjVector<T> &vec) {
     unsigned int length;
     bs >> length;
+#ifdef HX_NATIVE
+    if (length > 0x10000) {
+        printf("ObjVector<T>::operator>>: SUSPICIOUS length=%u (0x%x), capping to 0\n", length, length);
+        fflush(stdout);
+        length = 0;
+    }
+#endif
     vec.resize(length);
 
     for (ObjVector<T>::iterator it = vec.begin(); it != vec.end(); it++) {

@@ -68,7 +68,12 @@ inline void TrimExcess(std::vector<T> &vec) {
 
 template <class T>
 inline void ClearAndShrink(std::vector<T> &vec) {
+#ifdef HX_NATIVE
+    std::vector<T> empty;
+    vec.swap(empty);
+#else
     vec.swap(std::vector<T>());
+#endif
 }
 
 template <class T>

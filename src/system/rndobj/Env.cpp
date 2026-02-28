@@ -258,7 +258,7 @@ END_HANDLERS
 RndEnviron::~RndEnviron() {
     if (sCurrent == this) {
         sCurrent = nullptr;
-        sCurrentPosSet = nullptr;
+        sCurrentPosSet = false;
         sCurrentPos.Zero();
     }
 }

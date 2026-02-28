@@ -719,8 +719,10 @@ DataNode RndPropAnim::OnGetIndexFromFrame(const DataArray *da) {
     PropKeys *keys = GetKeys(obj, prop);
     if (!keys)
         return -1;
-    else
-        return ValueFromFrame(keys, f, &DataNode(0));
+    else {
+        DataNode tmpNode(0);
+        return ValueFromFrame(keys, f, &tmpNode);
+    }
 }
 
 DataNode RndPropAnim::OnGetFrameFromIndex(const DataArray *da) {

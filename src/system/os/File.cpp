@@ -458,7 +458,7 @@ File *NewFile(const char *iFilename, int iMode) {
         if ((mode_check == 0) || (mode & 0x20000) ||
             ((result = FileCache::GetFileAll(filename)) == nullptr)) {
             if ((UsingCD() != 0) && (mode_check != 0) && !(mode & 0x10000)) {
-                void *mem = _MemAllocTemp(0x38, __FILE__, 0x19, "ArkFile", 0);
+                void *mem = _MemAllocTemp(sizeof(ArkFile), __FILE__, 0x19, "ArkFile", 0);
                 if (mem != nullptr) {
                     result = new (mem) ArkFile(filename, mode);
                 } else {

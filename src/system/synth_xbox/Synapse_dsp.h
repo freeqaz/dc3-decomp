@@ -1,6 +1,10 @@
 #pragma once
 
+#ifndef HX_NATIVE
 #include "system/stlport/stl/_vector.h"
+#else
+#include <vector>
+#endif
 #include "PitchCorrectedVoice.h"
 #include "scoped_ptr.h"
 
@@ -31,8 +35,13 @@ public:
     void SetAttackSmoothing(float val);
     void SetReleaseSmoothing(float val);
 
+#ifdef HX_NATIVE
+    std::vector<float> mInputBuffer;                     // 0x00
+    std::vector<float> mDownsampledBuffer;               // 0x0C
+#else
     stlpmtx_std::vector<float, stlpmtx_std::StlNodeAlloc<float> > mInputBuffer;           // 0x00
     stlpmtx_std::vector<float, stlpmtx_std::StlNodeAlloc<float> > mDownsampledBuffer;      // 0x0C
+#endif
     unsigned int mBufferIndex;                                                               // 0x18
     unsigned int mDefaultPitch;                                                                // 0x1C
     unsigned int mField_0x20;                                                                  // 0x20
@@ -44,9 +53,15 @@ public:
     float mPitchThreshold;                                                                   // 0x38
     float mGain;                                                                             // 0x3C
     scoped_ptr<PeakDetector> mPeakDetector;                                                  // 0x40
+#ifdef HX_NATIVE
+    std::vector<std::vector<float>> mChannelBuffers;     // 0x44
+    std::vector<float *> mOutputBuffers;                 // 0x50
+    std::vector<PitchCorrectedVoice> mVoices;            // 0x5C
+#else
     stlpmtx_std::vector<stlpmtx_std::vector<float, stlpmtx_std::StlNodeAlloc<float> >, stlpmtx_std::StlNodeAlloc<stlpmtx_std::vector<float, stlpmtx_std::StlNodeAlloc<float> > > > mChannelBuffers; // 0x44
     stlpmtx_std::vector<float *, stlpmtx_std::StlNodeAlloc<float *> > mOutputBuffers;       // 0x50
     stlpmtx_std::vector<PitchCorrectedVoice, stlpmtx_std::StlNodeAlloc<PitchCorrectedVoice> > mVoices; // 0x5C
+#endif
     scoped_ptr<GranularSynth> mGranularSynth;                                                // 0x68
     float mTargetPitch;                                                                      // 0x6C
     scoped_ptr<Biquad> mScratchBuffer1;                                                      // 0x70

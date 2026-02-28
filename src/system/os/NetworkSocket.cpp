@@ -1,5 +1,6 @@
 #include "os/NetworkSocket.h"
 #include "utl/Str.h"
+#include <cstdlib>
 
 // External declarations from Win32 API and other modules
 extern int WSACreateEvent();

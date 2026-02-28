@@ -1,5 +1,6 @@
 #include "types.h"
 #include "GranularSynth.h"
+#ifndef HX_NATIVE
 #include "../stlport/stl/_uninitialized.h"
 
 namespace DSP {
@@ -57,3 +58,4 @@ vector<DSP::Synapse::GranularSynth::Granule, StlNodeAlloc<DSP::Synapse::Granular
 }
 
 } // namespace stlpmtx_std
+#endif // HX_NATIVE

@@ -1,3 +1,3 @@
 #include "utl/Licenses.h"
 
-Licenses sLicense("system/src/zlib", Licenses::kRequirementNotification);
+static Licenses sLicense("system/src/zlib", Licenses::kRequirementNotification);

@@ -15,7 +15,11 @@ public:
     virtual bool IsActive() const;
     virtual const char *GetAlbumArtPath();
     virtual void SetCollapseStateIcon(bool) const;
+#ifdef HX_NATIVE
+    virtual void Renumber(std::vector<NavListSortNode *> &);
+#else
     virtual void Renumber(stlpmtx_std::vector<NavListSortNode *> &);
+#endif
 
     int GetChallengeExp();
     int GetPotentialChallengeExp(NavListSortNode *);

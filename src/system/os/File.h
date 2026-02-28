@@ -80,6 +80,13 @@ public:
     virtual bool GetFileHandle(void *&) { return false; }
 };
 
+#ifdef HX_NATIVE
+// glibc defines st_ctime/st_atime/st_mtime as macros expanding to st_ctim.tv_sec etc.
+// Undefine them so they can be used as struct member names.
+#undef st_ctime
+#undef st_atime
+#undef st_mtime
+#endif
 struct FileStat {
     unsigned int st_mode;
     unsigned int st_size;

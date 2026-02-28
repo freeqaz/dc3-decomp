@@ -94,7 +94,13 @@ public:
     BS_READ_OP(long)
     BS_READ_OP(s16)
     BS_READ_OP(u16)
+#ifndef HX_NATIVE
+    // On native, u32=unsigned int=uint, so this would be a redeclaration
     BS_READ_OP(u32)
+#else
+    // On native LP64, unsigned long (size_t) is 8 bytes, distinct from unsigned int and unsigned long long
+    BS_READ_OP(unsigned long)
+#endif
     BS_READ_OP(s64)
     BS_READ_OP(u64)
     BS_READ_OP(f32)
@@ -122,7 +128,13 @@ public:
     BS_WRITE_OP(long)
     BS_WRITE_OP(s16)
     BS_WRITE_OP(u16)
+#ifndef HX_NATIVE
+    // On native, u32=unsigned int=uint, so this would be a redeclaration
     BS_WRITE_OP(u32)
+#else
+    // On native LP64, unsigned long (size_t) is 8 bytes, distinct from unsigned int and unsigned long long
+    BS_WRITE_OP(unsigned long)
+#endif
     BS_WRITE_OP(s64)
     BS_WRITE_OP(u64)
     BS_WRITE_OP(f32)

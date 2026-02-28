@@ -16,6 +16,9 @@ int SpotlightDrawer::sNeedBoxMap = -1;
 bool SpotlightDrawer::sHaveAdditionals;
 bool SpotlightDrawer::sHaveLenses;
 bool SpotlightDrawer::sHaveFlares;
+std::vector<SpotlightDrawer::SpotlightEntry> SpotlightDrawer::sLights;
+std::vector<SpotlightDrawer::SpotMeshEntry> SpotlightDrawer::sCans;
+std::vector<Spotlight *> SpotlightDrawer::sShadowSpots;
 
 SpotlightDrawer::SpotlightDrawer() : mParams(this) { mOrder = -100000; }
 

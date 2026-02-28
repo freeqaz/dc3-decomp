@@ -23,7 +23,7 @@ int Jukebox::Pick(const std::vector<int> &valid_names) {
             std::find(mJukeboxItems.begin(), mJukeboxItems.end(), *it);
         if (jit == mJukeboxItems.end()) {
             AddItem(*it, -1);
-            jit = &mJukeboxItems.back();
+            jit = mJukeboxItems.end() - 1;
         }
         items.push_back(*jit);
     }

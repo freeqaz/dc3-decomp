@@ -8,8 +8,8 @@
 #include "utl/MBT.h"
 #include <algorithm>
 
-MidiChunkID MidiChunkID::kMThd("MThd");
-MidiChunkID MidiChunkID::kMTrk("MTrk");
+const MidiChunkID MidiChunkID::kMThd("MThd");
+const MidiChunkID MidiChunkID::kMTrk("MTrk");
 bool MidiReader::sVerify = false;
 
 namespace {

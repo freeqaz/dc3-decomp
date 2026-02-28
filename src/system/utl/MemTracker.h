@@ -41,7 +41,11 @@ public:
     bool GetHeapOnly() const { return mHeapOnly; }
     void SetHeapOnly(bool heapOnly) { mHeapOnly = heapOnly; }
 
+#ifdef HX_NATIVE
+    static void *operator new(size_t);
+#else
     static void *operator new(unsigned int);
+#endif
     static void operator delete(void *);
     static int SpitAllocInfo(TextStream *);
 

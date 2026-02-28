@@ -98,7 +98,11 @@ public:
             while (bound < size() && (*this)[bound].frame == frame) {
                 bound++;
             }
+#ifdef HX_NATIVE
+            insert(this->begin() + bound, Key<T1>(val, frame));
+#else
             insert(&(*this)[bound], Key<T1>(val, frame));
+#endif
         }
         return bound;
     }

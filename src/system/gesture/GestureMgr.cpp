@@ -119,6 +119,9 @@ BEGIN_HANDLERS(GestureMgr)
 END_HANDLERS
 
 void GestureMgr::Init() {
+#ifdef HX_NATIVE
+    return; // Skip Kinect initialization on native
+#endif
     LiveCameraInput::PreInit();
     TheGestureMgr = new GestureMgr();
     TheGestureMgr->SetName("gesture_mgr", ObjectDir::Main());

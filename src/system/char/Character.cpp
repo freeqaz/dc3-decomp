@@ -814,6 +814,7 @@ void CharPollableSorter::AddDeps(
     }
 }
 
+#ifndef HX_NATIVE
 // Template instantiation for std::list<CharPollableSorter::Dep*>::erase
 namespace stlpmtx_std {
     template <>
@@ -831,5 +832,6 @@ namespace stlpmtx_std {
         return iterator(__next_node);
     }
 }
+#endif
 
 #pragma endregion

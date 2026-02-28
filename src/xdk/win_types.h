@@ -128,3 +128,17 @@ typedef struct _GUID { /* Size=0x10 */
 #ifdef __cplusplus
 }
 #endif
+
+#ifdef HX_NATIVE
+#include <cstdio>
+inline char *itoa(int value, char *str, int base) {
+    if (base == 10) {
+        sprintf(str, "%d", value);
+    } else if (base == 16) {
+        sprintf(str, "%x", value);
+    } else {
+        str[0] = '\0';
+    }
+    return str;
+}
+#endif

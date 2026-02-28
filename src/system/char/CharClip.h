@@ -43,7 +43,7 @@ public:
         NodeVector *GetNodes(int) const;
         NodeVector *Resize(int, const NodeVector *);
         NodeVector *FindNodes(CharClip *) const;
-        int BytesInMemory() const { return (int)mNodeEnd - (int)mNodeStart; }
+        int BytesInMemory() const { return (intptr_t)mNodeEnd - (intptr_t)mNodeStart; }
         void RemoveNodes(NodeVector *);
         void Save(BinStream &);
         void Load(BinStreamRev &, int);
@@ -152,12 +152,20 @@ public:
 
     NEW_OBJ(CharClip)
     static void Init();
+#ifdef HX_NATIVE
+    static void *operator new(size_t s) {
+#else
     static void *operator new(unsigned int s) {
+#endif
         static int _x = MemFindHeap("char");
         MemHeapTracker tmp(_x);
         return MemAlloc(s, __FILE__, 0x51, StaticClassName().Str(), 0);
     }
+#ifdef HX_NATIVE
+    static void *operator new(size_t s, void *place) { return place; }
+#else
     static void *operator new(unsigned int s, void *place) { return place; }
+#endif
     static void operator delete(void *v) {
         MemFree(v, __FILE__, 0x51, StaticClassName().Str());
     }

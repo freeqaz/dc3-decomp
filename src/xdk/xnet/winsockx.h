@@ -1,4 +1,68 @@
 #pragma once
+#ifdef HX_NATIVE
+// On native Linux, use system socket headers instead of Xbox definitions
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <sys/time.h>
+#include <sys/select.h>
+#include <netinet/in.h>
+#include <netdb.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+#include <cerrno>
+#include "xdk/win_types.h"
+typedef int SOCKET;
+#define INVALID_SOCKET (-1)
+#define SOCKET_ERROR (-1)
+#define closesocket close
+#define WSAEWOULDBLOCK EWOULDBLOCK
+#define WSAEINPROGRESS EINPROGRESS
+#define WSABASEERR 10000
+#define SD_SEND SHUT_WR
+#define SD_BOTH SHUT_RDWR
+inline int WSAGetLastError() { return errno; }
+inline void WSASetLastError(int e) { errno = e; }
+
+// Stub Xbox networking types for native builds
+typedef struct in_addr IN_ADDR;
+
+struct XNKEY { BYTE ab[16]; };
+struct XNADDR {
+    IN_ADDR ina;
+    IN_ADDR inaOnline;
+    WORD wPortOnline;
+    BYTE abEnet[6];
+    BYTE abOnline[20];
+};
+struct XNKID { BYTE ab[8]; };
+typedef struct _XSESSION_INFO {
+    struct XNKID sessionID;
+    struct XNADDR hostAddress;
+    struct XNKEY keyExchangeKey;
+} XSESSION_INFO;
+
+struct sockaddr_in_xbox {
+    short sin_family;
+    unsigned short sin_port;
+    struct in_addr sin_addr;
+    char sin_zero[0];
+};
+
+struct WSADATA {
+    WORD wVersion;
+    WORD wHighVersion;
+    char szDescription[257];
+    char szSystemStatus[1];
+    unsigned short iMaxSockets;
+    unsigned short iMaxUdpDg;
+    char *lpVendorInfo;
+};
+typedef WSADATA *LPWSADATA;
+
+inline int WSAStartup(WORD, LPWSADATA) { return 0; }
+inline int WSACleanup() { return 0; }
+
+#else
 #include "xdk/win_types.h"
 
 #ifdef __cplusplus
@@ -215,3 +279,4 @@ int WSACleanup(void);
 #ifdef __cplusplus
 }
 #endif
+#endif // !HX_NATIVE

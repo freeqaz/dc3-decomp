@@ -8,6 +8,12 @@
 
 UIListSubList::UIListSubList() : mList(this) {}
 
+RndTransformable *UIListSubList::RootTrans() { return mList; }
+
+BEGIN_HANDLERS(UIListSubList)
+    HANDLE_SUPERCLASS(UIListSlot)
+END_HANDLERS
+
 BEGIN_PROPSYNCS(UIListSubList)
     SYNC_PROP(list, mList)
     SYNC_SUPERCLASS(UIListSlot)

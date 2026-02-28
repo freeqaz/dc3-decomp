@@ -1,4 +1,5 @@
 #pragma once
+#ifndef HX_NATIVE
 
 #include "../stlport/stl/_vector.h"
 
@@ -31,3 +32,5 @@ vector<DSP::Synapse::GranularSynth::Granule, StlNodeAlloc<DSP::Synapse::Granular
 );
 
 } // namespace stlpmtx_std
+
+#endif // HX_NATIVE

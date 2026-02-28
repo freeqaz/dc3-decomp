@@ -198,6 +198,9 @@ public:
   reference at(size_type __n) { _M_range_check(__n); return (*this)[__n]; }
   const_reference at(size_type __n) const { _M_range_check(__n); return (*this)[__n]; }
 
+  pointer data()             { return this->_M_start; }
+  const_pointer data() const { return this->_M_start; }
+
   explicit _VECTOR_IMPL(const allocator_type& __a = allocator_type()) : 
     _Vector_base<_Tp, _Alloc>(__a) {}
 

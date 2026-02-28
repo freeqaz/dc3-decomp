@@ -3,7 +3,36 @@
 #include "utl/Symbol.h"
 #include "obj/Data.h"
 #include "os/OSFuncs.h"
+#ifdef HX_NATIVE
+#include <chrono>
+// Emulate PPC __mftb() with high-resolution clock (returns microseconds)
+inline unsigned int __mftb() {
+    using namespace std::chrono;
+    return (unsigned int)(duration_cast<microseconds>(
+        steady_clock::now().time_since_epoch()).count());
+}
+// PPC byte swap intrinsics - no-ops on little-endian (data already in native order)
+inline unsigned int __loadwordbytereverse(int offset, const void *base) {
+    unsigned int val;
+    memcpy(&val, (const char *)base + offset, 4);
+    return __builtin_bswap32(val);
+}
+inline unsigned short __loadshortbytereverse(int offset, const void *base) {
+    unsigned short val;
+    memcpy(&val, (const char *)base + offset, 2);
+    return __builtin_bswap16(val);
+}
+inline void __storewordbytereverse(unsigned int val, int offset, void *base) {
+    val = __builtin_bswap32(val);
+    memcpy((char *)base + offset, &val, 4);
+}
+inline void __storeshortbytereverse(unsigned short val, int offset, void *base) {
+    val = __builtin_bswap16(val);
+    memcpy((char *)base + offset, &val, 2);
+}
+#else
 #include "ppcintrinsics.h"
+#endif
 
 class Timer {
 private:

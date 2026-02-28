@@ -543,7 +543,7 @@ void RndText::SetFixedLength(int len) {
                 unsigned short us;
                 p += DecodeUTF8(us, p);
             }
-            mText.resize((int)p + mFixedLength - newLen - (int)mText.c_str());
+            mText.resize((intptr_t)p + mFixedLength - newLen - (intptr_t)mText.c_str());
         }
     }
 }
@@ -649,6 +649,11 @@ void RndText::QueueBlacklightPacket(RndMesh *mesh, float f2, int i3) {
         BlacklightPacket packet;
         sBlacklightPacketPool.resize(newsize, packet);
     }
+#ifdef HX_NATIVE
+    // BlacklightPacket stores pointers in fields — on LP64, the struct layout
+    // changes. Blacklight rendering is not implemented on native, so skip.
+    sBlacklightPacketCount++;
+#else
     int idx = sBlacklightPacketCount++;
     int *pkt_ptr = (int *)&sBlacklightPacketPool[0] + (idx << 3);
     pkt_ptr[0] = (int)mesh;
@@ -660,10 +665,12 @@ void RndText::QueueBlacklightPacket(RndMesh *mesh, float f2, int i3) {
     *(float *)(pkt_ptr + 5) = f2;
     pkt_ptr[6] = i3;
     pkt_ptr[7] = (int)RndCam::Current();
+#endif
 }
 
 void RndText::ClearBlacklight() { sBlacklightPacketCount = 0; }
 
+#ifndef HX_NATIVE
 // Template instantiation for map<RndFontBase*, set<unsigned short>>
 #include <map>
 #include <set>
@@ -678,3 +685,4 @@ template class _Rb_tree<RndFontBase*,
     priv::_MapTraitsT<_FontMapValue>,
     StlNodeAlloc<_FontMapValue> >;
 }
+#endif

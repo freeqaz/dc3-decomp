@@ -54,17 +54,17 @@ enum {
     CRYPT_INVALID_PRIME_SIZE
 };
 
-#include <mycrypt_cfg.h>
-#include <mycrypt_macros.h>
-#include <mycrypt_cipher.h>
-#include <mycrypt_hash.h>
-#include <mycrypt_prng.h>
-#include <mycrypt_pk.h>
-#include <mycrypt_gf.h>
-#include <mycrypt_misc.h>
-#include <mycrypt_kr.h>
+#include "mycrypt_cfg.h"
+#include "mycrypt_macros.h"
+#include "mycrypt_cipher.h"
+#include "mycrypt_hash.h"
+#include "mycrypt_prng.h"
+#include "mycrypt_pk.h"
+#include "mycrypt_gf.h"
+#include "mycrypt_misc.h"
+#include "mycrypt_kr.h"
 
-#include <mycrypt_argchk.h>
+#include "mycrypt_argchk.h"
 
 extern char *crypt_error;
 

@@ -22,7 +22,7 @@
 extern "C" {
 #endif /* __cplusplus */
 
-#include <ogg.h>
+#include "ogg.h"
 #include <stdlib.h>
 
 /* inline compiler intrinsics go here */

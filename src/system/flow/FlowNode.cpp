@@ -271,7 +271,7 @@ DrivenPropertyEntry *FlowNode::GetDrivenEntry(DataArray *a) {
                     }
                 }
                 if (b1) {
-                    return it;
+                    return &(*it);
                 }
             }
         }

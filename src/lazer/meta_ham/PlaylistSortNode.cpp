@@ -168,7 +168,11 @@ char const *PlaylistHeaderNode::GetAlbumArtPath() {
     return 0;
 }
 
+#ifdef HX_NATIVE
+void PlaylistHeaderNode::Renumber(std::vector<NavListSortNode *> &vec) {
+#else
 void PlaylistHeaderNode::Renumber(stlpmtx_std::vector<NavListSortNode *> &vec) {
+#endif
     mStartIx = vec.size();
     if (ThePlaylistSortMgr->GetHeadersSelectable()) {
         vec.push_back(this);

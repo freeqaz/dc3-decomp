@@ -134,7 +134,7 @@ void CheatProvider::ApplyFilter() {
         if (curFilt != all) {
             if (!it->mScript) {
                 if (!it->mDesc.empty()) {
-                    curCheat = it;
+                    curCheat = &*it;
                 }
             } else {
                 DataArray *filterArr = it->mScript->FindArray(filters, false);

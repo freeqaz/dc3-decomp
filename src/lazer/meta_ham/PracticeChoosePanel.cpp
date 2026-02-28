@@ -336,7 +336,7 @@ int PracticeChoosePanel::GetStepNumber(const StepMoves &moves) const {
     bool b1 = false;
     FOREACH (it, mStepMoves) {
         if (it->GetDisplayName(true) == moves.GetDisplayName(true)) {
-            if (it == &moves) {
+            if (&(*it) == &moves) {
                 b1 = true;
             }
             if (!b1) {

@@ -16,8 +16,6 @@ MQSongSortMgr::MQSongSortMgr(SongPreview &sp) : NavListSortMgr(sp) {
 
 MQSongSortMgr::~MQSongSortMgr() {};
 
-MQSongSort::MQSongSort() {};
-
 void MQSongSortMgr::Init(SongPreview &preview) {
     MILO_ASSERT(!TheMQSongSortMgr, 0x18);
     TheMQSongSortMgr = new MQSongSortMgr(preview);

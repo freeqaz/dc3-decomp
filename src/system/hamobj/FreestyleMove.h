@@ -7,7 +7,11 @@ struct FreestyleMoveFrame {
     DancerSkeleton skeleton; // 0x0
     float mBeat; // 0x2d8
 
+#ifdef HX_NATIVE
+    static void *operator new[](size_t s) {
+#else
     static void *operator new[](unsigned int s) {
+#endif
         return _MemAllocTemp(s, __FILE__, 0x10, "FreestyleMoveFrame", 0);
     }
     static void operator delete(void *v) {
@@ -22,7 +26,11 @@ struct FreestyleMoveFrame {
 struct DepthFrame {
     char filler[0x12c0];
 
+#ifdef HX_NATIVE
+    static void *operator new[](size_t s) {
+#else
     static void *operator new[](unsigned int s) {
+#endif
         return _MemAllocTemp(s, __FILE__, 0x26, "DepthFrame", 0);
     }
     static void operator delete[](void *v) { MemFree(v, __FILE__, 0x26, "DepthFrame"); }

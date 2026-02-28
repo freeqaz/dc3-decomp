@@ -210,7 +210,8 @@ void RndMultiMesh::InvalidateProxies() {
              it != sProxyPool.end();
              ++it) {
             if (it->first->MultiMesh() == this) {
-                it->first->SetMultiMesh(nullptr, nullptr);
+                std::list<RndMultiMesh::Instance>::iterator dummy;
+                it->first->SetMultiMesh(nullptr, dummy);
             }
         }
     } else {
@@ -272,7 +273,7 @@ DataNode RndMultiMesh::OnSetScale(const DataArray *da) {
     return 0;
 }
 
-DataNode RndMultiMesh::OnMesh(const DataArray *) { return mMesh; }
+DataNode RndMultiMesh::OnMesh(const DataArray *) { return DataNode(mMesh.Ptr()); }
 
 DataNode RndMultiMesh::OnMoveXfms(const DataArray *da) {
     MoveXfms(this, Vector3(da->Float(2), da->Float(3), da->Float(4)));
