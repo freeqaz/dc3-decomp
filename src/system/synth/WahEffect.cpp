@@ -123,9 +123,7 @@ void WahEffect::Process(float *buf, int numSamples, int numChans) {
         float f20 = -4.2704245e-9f;   // 0xb192bb0d (negative)
         float f22 = 0.99958f;         // 0x3f7fe47a
 
-        // Byte stride per sample frame (numChans * sizeof(float))
-        int chanByteStride = numChans << 2;
-        float *frame = buf;
+        int sampleIdx = 0;
 
         do {
             // Compute sin of phase
@@ -161,7 +159,6 @@ void WahEffect::Process(float *buf, int numSamples, int numChans) {
             float f11_unk24 = mCurrentSweep;
             float f11_diff = f11_unk24 - f0_sweep;
             mPrevEnv = f13_unk1c;
-            float f13_unk0 = mGain;
             float newFreq = f11_diff * f12_coef + f0_sweep;
             mCurrentSweep = newFreq;
 
@@ -171,7 +168,7 @@ void WahEffect::Process(float *buf, int numSamples, int numChans) {
             blend = f12_inv * f24 + blend;
             float filterFreq = blend * f30 + f23;
             float f28 = blend;
-            float filterDiv = filterFreq / f13_unk0;
+            float filterDiv = filterFreq / mGain;
             float f17 = f31 - filterDiv;
 
             // Compute cos/sin for filter (f29 computed before cos for scheduling)
@@ -182,7 +179,7 @@ void WahEffect::Process(float *buf, int numSamples, int numChans) {
             float f28_scaled = cosMod * f26;
 
             float sinVal2 = sin(f28);
-            float feedback = (f31 - f17) * f13_unk0;
+            float feedback = (f31 - f17) * mGain;
             sinVal2 = (float)sinVal2;
             feedback = feedback * sinVal2;
 
@@ -191,18 +188,20 @@ void WahEffect::Process(float *buf, int numSamples, int numChans) {
                 float f13_gain = f21 + f31;
 
                 for (int ch = 0; ch < numChans; ch++) {
-                    float sample = frame[ch];
+                    float sample = buf[sampleIdx + ch];
+                    float *pA = (float *)((char *)stack50 + ch * 4);
+                    float *pB = (float *)((char *)stack58 + ch * 4);
                     mLastInput = sample;
-                    float state1 = stack50[ch];
-                    float state2 = stack58[ch];
+                    float state1 = *pA;
+                    float state2 = *pB;
 
-                    stack58[ch] = state1;
+                    *pB = state1;
 
                     // Biquad filter
                     float tmp1 = sample * feedback;
                     tmp1 = state1 * f28_scaled + tmp1;
                     tmp1 = tmp1 - state2 * f29;
-                    stack50[ch] = tmp1;
+                    *pA = tmp1;
 
                     // Soft clip
                     float out = sample * f30 + tmp1;
@@ -212,14 +211,14 @@ void WahEffect::Process(float *buf, int numSamples, int numChans) {
                     out = out / absOut;
 
                     mLastOutput = out;
-                    frame[ch] = out;
+                    buf[sampleIdx + ch] = out;
                 }
             }
 
             // Update phase
             numSamples--;
             f27 = f18 + f27;
-            frame = (float *)((char *)frame + chanByteStride);
+            sampleIdx += numChans;
         } while (numSamples != 0);
     }
 

@@ -171,21 +171,17 @@ void RndTex::SaveBitmap(const char *bmp) {
 }
 
 void RndTex::PlatformBppOrder(const char *path, int &bpp, int &order, bool hasAlpha) {
-    Platform plat = TheLoadMgr.GetPlatform();
     bool bbb;
 
     switch (TheLoadMgr.GetPlatform()) {
     case kPlatformWii:
         order = 8;
         if (hasAlpha) {
-            order |= 0x100;
+            order = 0x148;
             bpp = 8;
         } else
             bpp = 4;
         order |= 0x40;
-        break;
-
-    case kPlatformPS2:
         break;
 
     case kPlatformXBox:
@@ -194,9 +190,9 @@ void RndTex::PlatformBppOrder(const char *path, int &bpp, int &order, bool hasAl
         bbb = path && strstr(path, "_norm");
 
         if (bbb) {
-            if (plat == kPlatformXBox)
+            if (TheLoadMgr.GetPlatform() == kPlatformXBox)
                 order = 0x20;
-            else if (plat == kPlatformPS3)
+            else if (TheLoadMgr.GetPlatform() == kPlatformPS3)
                 order = 8;
             else
                 order = 0;
@@ -213,12 +209,18 @@ void RndTex::PlatformBppOrder(const char *path, int &bpp, int &order, bool hasAl
             bpp = 0x10;
         break;
 
+    case kPlatform3DS:
+        order = 0x600;
+        bpp = hasAlpha ? 8 : 4;
+        break;
+
     case kPlatformNone:
         order = 0;
         break;
-        // default:
-        //     MILO_FAIL("bad input platform value!");
-        //     break;
+
+    default:
+        MILO_FAIL("bad input platform value!");
+        break;
     }
 }
 

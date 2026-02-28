@@ -7,6 +7,8 @@
 #include "obj/Object.h"
 #include "os/Debug.h"
 
+bool SliderChildSort(FlowNode *a, FlowNode *b);
+
 FlowSlider::FlowSlider()
     : PropertyEventListener(this), mPersistent(1), mAlwaysRun(0), mValue(0),
       mEaseType(kEasePolyOut), mEasePower(2) {
@@ -62,7 +64,8 @@ BEGIN_LOADS(FlowSlider)
     bs >> mValue;
     bs >> (int &)mEaseType;
     bs >> mEasePower;
-    bs >> (int &)mEaseFunc;
+    d >> mEventsRegistered;
+    mChildNodes.sort(SliderChildSort);
     UpdateEase();
 END_LOADS
 

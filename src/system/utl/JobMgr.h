@@ -117,6 +117,6 @@ public:
 DECLARE_MESSAGE(SingleItemEnumCompleteMsg, "single_item_enum_complete")
 bool Success() const { return mData->Int(2); }
 bool HasOfferID() const { return mData->Int(3); }
-unsigned long long OfferID() const { return _strtoui64(mData->Str(4), 0, 16); }
+unsigned long long OfferID() const;
 END_MESSAGE
 

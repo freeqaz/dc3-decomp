@@ -248,18 +248,17 @@ void ClipDistMap::Array2d::Resize(int w, int h) {
 // Populate mClipB's transition graph and optionally find best nodes for given constraints.
 // node1/node2 are output parameters updated with the minimum-error node from mNodes.
 void ClipDistMap::SetNodes(ClipDistMap::Node *node1, ClipDistMap::Node *node2) {
-    mClipB->GetTransitions().RemoveClip(mClipB);
+    mClipA->GetTransitions().RemoveClip(mClipB);
 
     for (int i = 0; i < mNodes.size(); i++) {
-        // Update node1 if this candidate has lower error
-        // NOTE: Verbose pattern preserved for codegen - modern Min() would break PPC match
+        // Update node1 if this candidate has lower error (MIN)
         if (node1) {
             float candidateErr = mNodes[i].err;
             float currentBest = node1->err;
-            bool changed = 1;
+            u8 changed = 1;
             float newBest = (currentBest - candidateErr >= 0.0f) ? candidateErr : currentBest;
             node1->err = newBest;
-            if (currentBest == newBest) {
+            if (newBest == currentBest) {
                 changed = 0;
             }
             if (changed) {
@@ -267,14 +266,14 @@ void ClipDistMap::SetNodes(ClipDistMap::Node *node1, ClipDistMap::Node *node2) {
             }
         }
 
-        // Update node2 if this candidate has lower error (same logic as node1)
+        // Update node2 if this candidate has higher error (MAX)
         if (node2) {
             float candidateErr = mNodes[i].err;
             float currentBest = node2->err;
-            bool changed = 1;
-            float newBest = (currentBest - candidateErr >= 0.0f) ? candidateErr : currentBest;
+            u8 changed = 1;
+            float newBest = (currentBest - candidateErr >= 0.0f) ? currentBest : candidateErr;
             node2->err = newBest;
-            if (currentBest == newBest) {
+            if (newBest == currentBest) {
                 changed = 0;
             }
             if (changed) {
@@ -282,11 +281,11 @@ void ClipDistMap::SetNodes(ClipDistMap::Node *node1, ClipDistMap::Node *node2) {
             }
         }
 
-        // Add transition node to graph regardless of node1/node2
+        // Add transition node to graph
         CharGraphNode graphNode;
-        graphNode.nextBeat = mNodes[i].nextBeat;
         graphNode.curBeat = mNodes[i].curBeat;
-        mClipB->GetTransitions().AddNode(mClipB, graphNode);
+        graphNode.nextBeat = mNodes[i].nextBeat;
+        mClipA->GetTransitions().AddNode(mClipB, graphNode);
     }
 }
 

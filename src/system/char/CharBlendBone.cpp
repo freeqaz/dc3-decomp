@@ -73,30 +73,37 @@ END_LOADS
 void CharBlendBone::Poll() {
     for (ObjVector<ConstraintSystem>::iterator it = mTargets.begin(); it != mTargets.end();
          ++it) {
-        RndTransformable *target = (*it).mTarget;
+        RndTransformable *target = it->mTarget;
         if (target && mSrc1 && mSrc2) {
             const Transform &xfm1 = mSrc1->WorldXfm();
             const Transform &xfm2 = mSrc2->WorldXfm();
             Transform tf48(target->WorldXfm());
             if (mTransX || mTransY || mTransZ) {
                 if (mTransX) {
-                    Interp(xfm1.v.x, xfm2.v.x, (*it).mWeight, tf48.v.x);
+                    Interp(xfm1.v.x, xfm2.v.x, it->mWeight, tf48.v.x);
                 }
                 if (mTransY) {
-                    Interp(xfm1.v.y, xfm2.v.y, (*it).mWeight, tf48.v.y);
+                    Interp(xfm1.v.y, xfm2.v.y, it->mWeight, tf48.v.y);
                 }
                 if (mTransZ) {
-                    Interp(xfm1.v.z, xfm2.v.z, (*it).mWeight, tf48.v.z);
+                    Interp(xfm1.v.z, xfm2.v.z, it->mWeight, tf48.v.z);
                 }
             }
             if (mRotation) {
-                Hmx::Matrix3 m;
-                const Hmx::Matrix3 &m1 = xfm1.m;
-                const Hmx::Matrix3 &m2 = xfm2.m;
-                Interp(m1, m2, (*it).mWeight, m);
-                tf48.m = m;
+                Interp(xfm1.m, xfm2.m, it->mWeight, tf48.m);
             }
-            target->SetWorldXfm(tf48);
+            if (mSetLocal) {
+                RndTransformable *parent = target->TransParent();
+                if (parent) {
+                    Transform inverted;
+                    Invert(parent->WorldXfm(), inverted);
+                    Multiply(tf48, inverted, target->DirtyLocalXfm());
+                } else {
+                    target->SetLocalXfm(tf48);
+                }
+            } else {
+                target->SetWorldXfm(tf48);
+            }
         }
     }
 }

@@ -51,16 +51,10 @@ int LocationCmp::Compare(const NavListItemSortCmp *cmp, NavListNodeType type) co
 
 NavListShortcutNode *
 SongSortByLocation::NewShortcutNode(NavListItemNode *itemNode) const {
-    SongSortNode *ssNode;
-    Symbol location;
-    LocationCmp *newCmp;
-    ssNode = dynamic_cast<SongSortNode *>(itemNode);
-    location = ssNode->Record()->Metadata()->GameOrigin();
-    newCmp = new LocationCmp();
-    if (newCmp != 0) {
-        newCmp->mName = "";
-        newCmp->mLocation = location;
-    }
+    SongSortNode *ssNode = dynamic_cast<SongSortNode *>(itemNode);
+    Symbol location = ssNode->Record()->Metadata()->GameOrigin();
+    const char *name = ssNode->Record()->Metadata()->Title();
+    LocationCmp *newCmp = new LocationCmp(name, location);
     return new NavListShortcutNode(newCmp, location, true);
 }
 

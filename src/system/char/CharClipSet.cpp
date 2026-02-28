@@ -35,6 +35,8 @@ END_PROPSYNCS
 BEGIN_SAVES(CharClipSet)
     SAVE_REVS(24, 0)
     SAVE_SUPERCLASS(ObjectDir)
+    if (IsProxy())
+        return;
     bs << mCharFilePath;
     bs << mPreviewClip;
     bs << mFilterFlags;

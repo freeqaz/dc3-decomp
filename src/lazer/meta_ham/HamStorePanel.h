@@ -20,12 +20,10 @@
 #include <list>
 
 struct HamSpecialOffer {
-    Symbol unk0;
-    int unk4;
-    int unk8;
-    int unkc;
-    int unk10;
-    int unk14;
+    Symbol mName;
+    unsigned long long mOfferID;
+    Symbol mCategory;
+    bool mOwned;
 };
 
 class HamStorePanel : public StorePanel, public ContentMgr::Callback {

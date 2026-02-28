@@ -8,6 +8,7 @@
 /** "A waypoint for character movement. Characters walk to
  *  these, start themselves out from these, etc." */
 class Waypoint : public RndTransformable {
+    friend class ClipCollide;
 public:
     virtual ~Waypoint();
     OBJ_CLASSNAME(Waypoint)

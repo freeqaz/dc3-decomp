@@ -148,3 +148,7 @@ void MultipleItemsPostPurchaseEnumJob::OnCompletion(Hmx::Object *obj) {
     }
     MultipleItemsEnumJob::OnCompletion(obj);
 }
+
+unsigned long long SingleItemEnumCompleteMsg::OfferID() const {
+    return _strtoui64(mData->Str(4), 0, 16);
+}

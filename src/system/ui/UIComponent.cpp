@@ -114,7 +114,7 @@ void UIComponent::PreLoad(BinStream &bs) {
         bs >> mNavDown;
     }
     if (1 < d.rev && d.rev < 3) {
-        // call somethin related to bs
+        OldResourcePreload(bs);
     }
 }
 

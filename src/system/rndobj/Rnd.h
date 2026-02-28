@@ -24,8 +24,7 @@ class UIPanel;
 
 class ModalKeyListener : public Hmx::Object {
 public:
-    // ModalKeyListener() {}
-    // virtual ~ModalKeyListener() {}
+    virtual ~ModalKeyListener() {}
     virtual DataNode Handle(DataArray *, bool);
 
     DataNode OnMsg(const KeyboardKeyMsg &);

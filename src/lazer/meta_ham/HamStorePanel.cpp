@@ -28,22 +28,37 @@
 
 HamStorePanel::HamStorePanel()
     : unka0(), unka4(), mOfferProvider(), mMotd(), mAllowCancel(false), mLockData(), unk154(false),
-      mCartEnabled(true), mCartLocked(false), mCartDataLoaded(false), mRemovingFromCart(false), mAddingToCart(false), unk184(),
+      mCartEnabled(true), mCartLocked(false), mCartDataLoaded(false), mRemovingFromCart(false), mAddingToCart(false), unk184(-1),
       mXboxPurchaser() {
     for (int i = 0; i < 7; i++) {
         mJobs[i] = 0;
     }
-    DataArray *sysConfig = SystemConfig("store");
     Symbol specialOffersSym("special_offers");
-    DataArray *specialOfferArray = sysConfig->FindArray(specialOffersSym, false);
+    DataArray *specialOfferArray = SystemConfig("store")->FindArray(specialOffersSym, false);
     if (specialOfferArray) {
-        int numOffers = (specialOfferArray->Size() + 23) / 24;
-        numOffers = (numOffers >= 7) ? 6 : numOffers;
-
-        for (int i = 0; i < numOffers; i++) {
-            DataNode offerNode = specialOfferArray->Node(i);
-            if (offerNode.Type() == kDataArray) {
-            }
+        int numOffers = specialOfferArray->Size() - 1;
+        HamSpecialOffer defaultOffer;
+        mSpecialOffers.resize(numOffers, defaultOffer);
+        unsigned long long zero = 0;
+        mSpecialOfferIDs.resize(numOffers, zero);
+        int idx = 0;
+        if (numOffers > 0) {
+            int offerOffset = 0;
+            int idOffset = 0;
+            do {
+                idx++;
+                DataArray *entry = specialOfferArray->Node(idx).Array(specialOfferArray);
+                HamSpecialOffer *offer = &mSpecialOffers[0];
+                offer = (HamSpecialOffer *)((char *)offer + offerOffset);
+                offer->mName = entry->Sym(0);
+                offer->mOwned = false;
+                unsigned long long offerID = StorePurchaseable::OfferStringToID(entry->Node(1).Str(entry));
+                offer->mOfferID = offerID;
+                *(unsigned long long *)((char *)&mSpecialOfferIDs[0] + idOffset) = offerID;
+                offer->mCategory = entry->ForceSym(2);
+                offerOffset += 0x18;
+                idOffset += 0x8;
+            } while (idx < numOffers);
         }
     }
     TheContentMgr.RegisterCallback(this, false);
