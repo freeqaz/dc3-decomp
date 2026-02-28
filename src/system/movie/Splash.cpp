@@ -16,6 +16,9 @@
 bool gSplashing = false;
 Splash *TheSplasher;
 
+const char *kSplashMovie = "s_splash.tmov";
+const char *kSplashCam = "s_splash.cam";
+
 Splash::Splash()
     : mSplashDurationMs(SystemConfig("ui")->FindArray("splash_time")->Float(1) * 1000),
       mWaitForSplash(SystemConfig("ui")->FindArray("wait_for_splash")->Int(1)), mCurrentDir(0), mCurrentCam(0),

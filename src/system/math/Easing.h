@@ -332,42 +332,7 @@ inline float EaseQuarterHalfStairstep(float t, float power, float) {
 
 typedef float EaseFunc(float, float, float);
 
-EaseFunc *gEaseFuncs[35] = {
-    EaseLinear,
-    EasePolyIn,
-    EasePolyOut,
-    EasePolyInOut,
-    EasePolyOutIn,
-    EaseBounceIn,
-    EaseBounceOut,
-    EaseBounceInOut,
-    EaseBounceOutIn,
-    EaseElasticIn,
-    EaseElasticOut,
-    EaseElasticInOut,
-    EaseElasticOutIn,
-    EaseBackIn,
-    EaseBackOut,
-    EaseBackInOut,
-    EaseBackOutIn,
-    EaseSineIn,
-    EaseSineOut,
-    EaseSineInOut,
-    EaseSineOutIn,
-    EaseExpoIn,
-    EaseExpoOut,
-    EaseExpoInOut,
-    EaseExpoOutIn,
-    EaseCircIn,
-    EaseCircOut,
-    EaseCircInOut,
-    EaseCircOutIn,
-    EaseStairstep,
-    EaseThirdStairstep,
-    EaseQuarterStairstep,
-    EaseHalfQuarterStairstep,
-    EaseQuarterHalfStairstep,
-};
+extern EaseFunc *gEaseFuncs[35];
 
 inline EaseFunc *GetEaseFunction(EaseType e) {
     MILO_ASSERT(e >= kEaseLinear && e <= kEaseQuarterHalfStairstep, 0x16B);

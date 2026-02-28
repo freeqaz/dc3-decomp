@@ -20,6 +20,6 @@ void DifficultyInit();
 Difficulty DefaultDifficulty();
 Difficulty EasiestDifficulty();
 
-Difficulty LegacyDifficulty(Difficulty d) {
+inline Difficulty LegacyDifficulty(Difficulty d) {
     return d == kDifficultyBeginner ? kDifficultyEasy : d;
 }

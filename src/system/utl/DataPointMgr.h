@@ -44,7 +44,7 @@ public:
 
 extern DataPointMgr &TheDataPointMgr;
 
-void SendDataPoint(const char *type) {
+inline void SendDataPoint(const char *type) {
     DataPoint point(type);
     TheDataPointMgr.RecordDataPoint(point);
 }
