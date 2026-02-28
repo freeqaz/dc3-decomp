@@ -37,7 +37,8 @@ void ChallengeResultPanel::Text(int, int data, UIListLabel *slot, UILabel *label
     MILO_ASSERT(app_label, 0x11E);
 
     if (mItems[data].mGamertag == gNullStr) {
-        label->SetTextToken(Symbol(gNullStr));
+        Symbol nullSym(gNullStr);
+        label->SetTextToken(nullSym);
         return;
     }
 
@@ -49,7 +50,7 @@ void ChallengeResultPanel::Text(int, int data, UIListLabel *slot, UILabel *label
             goto done;
         }
     } else if (slot->Matches("grey_small_gamertag")) {
-        if (mItems[data].mScore < mPlayerScore && data != mRivalIndex) {
+        if (mPlayerScore > mItems[data].mScore && data != mRivalIndex) {
             label->SetPrelocalizedString(gamertag);
             goto done;
         }
@@ -59,7 +60,7 @@ void ChallengeResultPanel::Text(int, int data, UIListLabel *slot, UILabel *label
             goto done;
         }
     } else if (slot->Matches("grey_large_gamertag")) {
-        if (mItems[data].mScore < mPlayerScore && data == mRivalIndex) {
+        if (mPlayerScore > mItems[data].mScore && data == mRivalIndex) {
             label->SetPrelocalizedString(gamertag);
             goto done;
         }
@@ -75,7 +76,7 @@ void ChallengeResultPanel::Text(int, int data, UIListLabel *slot, UILabel *label
                 showScore = true;
             }
         } else if (slot->Matches("grey_small_score")) {
-            if (mItems[data].mScore < mPlayerScore && data != mRivalIndex) {
+            if (mPlayerScore > mItems[data].mScore && data != mRivalIndex) {
                 showScore = true;
             }
         } else if (slot->Matches("white_large_score")) {
@@ -83,7 +84,7 @@ void ChallengeResultPanel::Text(int, int data, UIListLabel *slot, UILabel *label
                 showScore = true;
             }
         } else if (slot->Matches("grey_large_score")) {
-            if (mItems[data].mScore < mPlayerScore && data == mRivalIndex) {
+            if (mPlayerScore > mItems[data].mScore && data == mRivalIndex) {
                 showScore = true;
             }
         } else if (slot->Matches("gold_large_score")) {
@@ -93,12 +94,15 @@ void ChallengeResultPanel::Text(int, int data, UIListLabel *slot, UILabel *label
         }
 
         if (showScore) {
-            app_label->SetTokenFmt(best_score, LocalizeSeparatedInt(mItems[data].mScore, TheLocale));
+            app_label->SetTokenFmt(best_score, (char *)LocalizeSeparatedInt(mItems[data].mScore, TheLocale));
             goto done;
         }
     }
 
-    label->SetTextToken(Symbol(gNullStr));
+    {
+        Symbol nullSym(gNullStr);
+        label->SetTextToken(nullSym);
+    }
 done:;
 }
 

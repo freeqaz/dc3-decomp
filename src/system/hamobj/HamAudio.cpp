@@ -226,15 +226,14 @@ void HamAudio::SetForegroundVolume(float) {}
 void HamAudio::SetStereo(bool) {}
 
 bool HamAudio::GetCurrLoopMarkers(float &f1, float &f2) const {
-    Marker m1, m2;
+    Marker m2, m1;
     Stream *s = mSongStream;
-    if (s && s->CurrentJumpPoints(m1, m2)) {
-        f1 = m1.posMS;
-        f2 = m2.posMS;
-        return true;
-    } else {
+    if (!s || !s->CurrentJumpPoints(m1, m2)) {
         return false;
     }
+    f1 = m2.posMS;
+    f2 = m1.posMS;
+    return true;
 }
 
 bool HamAudio::GetCurrLoopBeats(int &i1, int &i2) const {

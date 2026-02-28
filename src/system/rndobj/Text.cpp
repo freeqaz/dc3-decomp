@@ -510,25 +510,10 @@ void RndText::FontMap::UpdateScrolling(float f1) {
     for (int i = 0; i < NumMeshes(); i++) {
         RndMesh *mesh = Mesh(i);
         if (mesh) {
-            float *pf = (float *)((char *)mesh + 0x78);
-            int *pi = (int *)((char *)mesh + 0x7c);
-
-            float f0 = pf[0];
-            double d0 = (double)pi[0];
-            double d1 = (double)pi[1];
-            double d2 = (double)pi[2];
-
-            d0 = d0;
-            d1 = d1;
-            d2 = d2;
-            f0 = f1;
-
-            pi[0] = (int)d0;
-            pi[1] = (int)d1;
-            pi[2] = (int)d2;
-            pf[0] = f0;
-
-            if (*(unsigned char *)((char *)mesh + 0xfd) == 0) {
+            Hmx::Quat q = *(Hmx::Quat *)((char *)mesh + 0x78);
+            q.x = f1;
+            *(Hmx::Quat *)((char *)mesh + 0x78) = q;
+            if (!*(bool *)((char *)mesh + 0xfd)) {
                 mesh->SetDirty_Force();
             }
         }

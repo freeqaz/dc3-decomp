@@ -420,7 +420,8 @@ void MidiParser::FixGap(float *fp) {
 
 float MidiParser::ConvertToBeats(float f1, float f2) {
     float secs = BeatToSeconds(f2);
-    return SecondsToBeat(secs + f1) - f2;
+    float beats = SecondsToBeat(secs + f1);
+    return beats - f2;
 }
 
 bool MidiParser::InsertIdle(float f, int i) {

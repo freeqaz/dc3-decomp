@@ -253,38 +253,23 @@ void ClipDistMap::SetNodes(ClipDistMap::Node *node1, ClipDistMap::Node *node2) {
     for (int i = 0; i < mNodes.size(); i++) {
         // Update node1 if this candidate has lower error (MIN)
         if (node1) {
-            float candidateErr = mNodes[i].err;
-            float currentBest = node1->err;
-            u8 changed = 1;
-            float newBest = (currentBest - candidateErr >= 0.0f) ? candidateErr : currentBest;
-            node1->err = newBest;
-            if (newBest == currentBest) {
-                changed = 0;
-            }
-            if (changed) {
+            if (MinEq(node1->err, mNodes[i].err)) {
                 *node1 = mNodes[i];
             }
         }
 
         // Update node2 if this candidate has higher error (MAX)
         if (node2) {
-            float candidateErr = mNodes[i].err;
-            float currentBest = node2->err;
-            u8 changed = 1;
-            float newBest = (currentBest - candidateErr >= 0.0f) ? currentBest : candidateErr;
-            node2->err = newBest;
-            if (newBest == currentBest) {
-                changed = 0;
-            }
-            if (changed) {
+            if (MaxEq(node2->err, mNodes[i].err)) {
                 *node2 = mNodes[i];
             }
         }
 
         // Add transition node to graph
         CharGraphNode graphNode;
+        float nb = mNodes[i].nextBeat;
         graphNode.curBeat = mNodes[i].curBeat;
-        graphNode.nextBeat = mNodes[i].nextBeat;
+        graphNode.nextBeat = nb;
         mClipA->GetTransitions().AddNode(mClipB, graphNode);
     }
 }

@@ -28,11 +28,12 @@ void VirtualKeyboard::PlatformPoll() {
             RemoveSpaces(buf, 0x200, utf8buf);
             mCallbackMsg = buf;
             mMsgOk = true;
+            mCallbackReady = true;
         } else {
             mCallbackMsg = gNullStr;
             mMsgOk = false;
+            mCallbackReady = true;
         }
-        mCallbackReady = true;
         gCheckOverlappedIoComplete = false;
     }
 }

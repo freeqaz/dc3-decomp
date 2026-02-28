@@ -55,7 +55,7 @@ SongSortByLocation::NewShortcutNode(NavListItemNode *itemNode) const {
     Symbol location = ssNode->Record()->Metadata()->GameOrigin();
     const char *name = ssNode->Record()->Metadata()->Title();
     LocationCmp *newCmp = new LocationCmp();
-    if (newCmp) {
+    if (newCmp != 0) {
         newCmp->mName = name;
         newCmp->mLocation = location;
     }

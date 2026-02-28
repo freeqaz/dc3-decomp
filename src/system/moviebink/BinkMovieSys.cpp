@@ -91,6 +91,5 @@ void BinkMovieSys::Terminate() {
 }
 
 MovieImpl* BinkMovieSys::CreateMovieImpl() {
-    void* ptr = MemAlloc(0xE8, __FILE__, __LINE__, "MovieImpl", 0);
-    return ptr ? new (ptr) BinkMovieImpl() : nullptr;
+    return new BinkMovieImpl();
 }

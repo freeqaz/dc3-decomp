@@ -220,7 +220,9 @@ bool MoveVariant::IsRest() const {
     if (mHamMoveName == Rest || mHamMoveName == rest || mHamMoveName == groove)
         return true;
     String move = mHamMoveName.Str();
-    return move.contains("finish");
+    if (move.contains("finish"))
+        return true;
+    return false;
 }
 
 void MoveVariant::CacheLinks(MoveGraph *graph) {

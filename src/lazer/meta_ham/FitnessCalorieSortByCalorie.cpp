@@ -26,11 +26,11 @@ FitnessCalorieSortByCalorie::NewShortcutNode(NavListItemNode *node) const {
     return new NavListShortcutNode(cmp, s, true);
 }
 
-// Note: Both NewHeaderNode and NewShortcutNode use the same symbol format
-// ("calorie_shortcut_%i"). This appears intentional in the original code.
 NavListHeaderNode *
 FitnessCalorieSortByCalorie::NewHeaderNode(NavListItemNode *node) const {
-    Symbol s = MakeString("calorie_shortcut_%i", node->Header());
+    Symbol s = MakeString(
+        "calorie_header_%i", static_cast<FitnessCalorieSortNode *>(node)->GetCalories()
+    );
     FitnessCalorieSortCmp *cmp = new FitnessCalorieSortCmp();
     return new FitnessCalorieHeaderNode(cmp, s, true);
 }

@@ -15,8 +15,11 @@ const char *ResourceDirBase::GetResourcesPath(Symbol s1, Symbol s2) {
     static Symbol resources_path("resources_path");
     static DataArray *cfg = SystemConfig(objects);
     const char *path = nullptr;
-    int numSuperClasses = superClasses.size();
-    for (int i = 0; i < numSuperClasses; i++) {
+    unsigned int i = 0;
+    int offset = 0;
+    do {
+        if (i >= superClasses.size())
+            break;
         DataArray *curClassCfg = cfg->FindArray(superClasses[i], true);
         if (curClassCfg) {
             pathArr = curClassCfg->FindArray(resources_path, false);
@@ -26,8 +29,7 @@ const char *ResourceDirBase::GetResourcesPath(Symbol s1, Symbol s2) {
                     if (n.Type() == kDataArray) {
                         if (n.Array()->Sym(0) == s2) {
                             path = n.Array()->Str(1);
-                            if (path && *path)
-                                return FileMakePath(FileGetPath(pathArr->File()), path);
+                            break;
                         }
                     } else {
                         path = n.Str();
@@ -35,8 +37,12 @@ const char *ResourceDirBase::GetResourcesPath(Symbol s1, Symbol s2) {
                 }
             }
         }
-    }
-    return nullptr;
+        i++;
+        offset += 4;
+    } while (path == nullptr);
+    if (!path || !*path)
+        return nullptr;
+    return FileMakePath(FileGetPath(pathArr->File()), path);
 }
 
 bool ResourceDirBase::MakeResourcePath(

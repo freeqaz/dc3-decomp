@@ -174,11 +174,11 @@ bool CacheXbox::GetFreeSpaceSync(u64 *u) {
         mLastResult = kCache_ErrorBadParam;
         return false;
     } else {
+        ULARGE_INTEGER freeBytes = {0};
         const char *path = mCacheID.GetCachePath(nullptr);
-        ULARGE_INTEGER freeBytes;
         if (GetDiskFreeSpaceExA(path, &freeBytes, nullptr, nullptr) == 0U) {
-            DWORD err = GetLastError();
-            if (err != 0x15 && err != 0x456 && err != 0x48F && err != 0x651
+            void *err = (void *)GetLastError();
+            if ((DWORD)err != 0x15 && (DWORD)err != 0x456 && (DWORD)err != 0x48F && (DWORD)err != 0x651
                 && IsDeviceConnected(mCacheID.DeviceID())) {
                 MILO_NOTIFY(
                     "CacheXbox::GetFreeSpaceSync(): Unhandled error %u returned from GetDiskFreeSpaceEx().\n",
@@ -194,9 +194,8 @@ bool CacheXbox::GetFreeSpaceSync(u64 *u) {
             XDEVICE_DATA deviceData;
             DWORD err = XContentGetDeviceData(mCacheID.DeviceID(), &deviceData);
             if (err != ERROR_SUCCESS) {
-                auto _tmp3 = IsDeviceConnected(mCacheID.DeviceID());
-                if ((int)err != 5 && err != 0x15 && err != 0x456 && err != 0x48F
-                    && err != 0x651 && _tmp3) {
+                if (err != 5 && err != 0x15 && err != 0x456 && err != 0x48F
+                    && err != 0x651 && IsDeviceConnected(mCacheID.DeviceID())) {
                     MILO_NOTIFY(
                         "CacheXbox::GetFreeSpaceSync(): Unhandled error returned from GetDiskFreeSpaceEx().\n"
                     );
@@ -207,7 +206,7 @@ bool CacheXbox::GetFreeSpaceSync(u64 *u) {
                     return false;
                 }
             } else {
-                *u = deviceData.ulDeviceFreeBytes;
+                *u = freeBytes.QuadPart + deviceData.ulDeviceFreeBytes;
                 mLastResult = kCache_NoError;
                 return true;
             }

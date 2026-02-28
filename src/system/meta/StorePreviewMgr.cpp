@@ -93,17 +93,14 @@ void StorePreviewMgr::PlayCurrentPreview() {
         if (mTexMovie) {
             mStreamPlayer->StopPlaying();
             {
-                FilePath fp(str.c_str());
+                FilePath fp(mCurrentPreviewFile.c_str());
                 mTexMovie->SetFile(fp);
             }
-            mStreamPlayer->SetVolume(-mAttenuation);
+            mTexMovie->SetVolume(-mAttenuation);
         } else {
             int len = str.length();
-            auto _tmp5 = str.find(".bik", len - 4);
             if (str.find(".mogg", len - 5) != String::npos) {
                 str.erase(len - 5);
-            } else if (_tmp5 != String::npos) {
-                str.erase(len - 4);
             }
             mStreamPlayer->PlayFile(str.c_str(), -mAttenuation, 0.0f, mLoopForever);
         }
