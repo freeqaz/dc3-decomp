@@ -1,0 +1,176 @@
+# Implementation Guide: Native Port
+
+Step-by-step guide to building the DC3 native port. The goal is to get
+Dance Central 3 running on modern platforms — this guide covers the rendering
+foundation.
+
+## Current Status
+
+**Phase 0 complete**: Headless WebGPU rendering via Dawn works. Triangle rendered
+offscreen on RTX 3090 (Vulkan backend), saved to PNG. No display server needed.
+
+Next: windowed rendering (GLFW), then Milo scene loading.
+
+## Prerequisites
+
+### Dawn Source
+
+Dawn should be cloned at `../dawn` (sibling to `dc3-decomp`):
+
+```
+/home/free/code/milohax/
+  ├── dc3-decomp/    # this project
+  └── dawn/          # git@github.com:google/dawn.git
+```
+
+### System Dependencies (Linux)
+
+For headless only: just a Vulkan-capable GPU + driver.
+
+For windowed mode (future): X11 or Wayland dev libraries.
+
+```bash
+# Arch Linux
+sudo pacman -S libxrandr libxinerama libxcursor mesa libx11
+
+# Ubuntu/Debian
+sudo apt install libxrandr-dev libxinerama-dev libxcursor-dev mesa-common-dev libx11-xcb-dev
+```
+
+## Step 1: Build Dawn
+
+```bash
+cd /home/free/code/milohax/dawn
+
+# Configure (fetches dependencies automatically)
+cmake -S . -B out/Release -GNinja \
+  -DDAWN_FETCH_DEPENDENCIES=ON \
+  -DDAWN_ENABLE_INSTALL=ON \
+  -DCMAKE_BUILD_TYPE=Release
+
+# Build (~10-20 minutes first time, 2393 targets)
+cmake --build out/Release
+
+# Install headers + libs for external consumption
+cmake --install out/Release --prefix install/Release
+```
+
+This produces `dawn/install/Release/` with:
+- `include/` — WebGPU headers (`webgpu_cpp.h`, etc.)
+- `lib/libwebgpu_dawn.a` — Main static library
+- `lib/cmake/Dawn/` — CMake package config for `find_package(Dawn)`
+
+**Note**: Dawn's install only exports `dawn::webgpu_dawn`. The GLFW integration
+(`dawn_glfw`) is NOT part of the install — for windowed mode, either create
+surfaces manually or use system GLFW with `FetchContent`.
+
+## Step 2: Build dc3-native
+
+```bash
+cd /home/free/code/milohax/dc3-decomp/native
+
+# Point CMake at Dawn's install tree
+export CMAKE_PREFIX_PATH=/home/free/code/milohax/dawn/install/Release
+
+# Configure
+cmake -S . -B build -GNinja -DCMAKE_BUILD_TYPE=Release
+
+# Build
+cmake --build build
+```
+
+**Required**: `find_package(Threads)` must come before `find_package(Dawn)`
+because Dawn's installed target depends on `Threads::Threads`.
+
+## Step 3: Run
+
+```bash
+# Headless (current) — renders to file
+./build/dc3-native output.ppm
+
+# Convert to PNG (optional)
+magick output.ppm output.png
+```
+
+## Project Structure
+
+```
+native/
+├── CMakeLists.txt      # Build system — finds Dawn, builds dc3-native
+└── src/
+    └── main.cpp        # WebGPU headless triangle renderer
+```
+
+## Architecture Notes
+
+### Why not use Dawn's SampleUtils?
+
+Dawn's `SampleUtils.h` depends on Chromium internals (`partition_alloc/raw_ptr.h`)
+that aren't available outside the Chromium build. We use the public API directly:
+- `dawn/webgpu_cpp.h` — C++ WebGPU wrapper
+- `dawn/webgpu_cpp_print.h` — `operator<<` for WebGPU types
+
+### Dawn API Gotchas
+
+**Include path**: Installed headers are under `dawn/` prefix, not `webgpu/`.
+Use `#include <webgpu/webgpu_cpp.h>` which maps to `dawn/webgpu_cpp.h`.
+
+**Shader source**: Use `wgpu::ShaderSourceWGSL` (not `ShaderModuleWGSLDescriptor`).
+
+**Callbacks**: Modern Dawn uses `wgpu::StringView` in callbacks, not `const char*`.
+The lambda-only overload (no userdata) is cleanest:
+```cpp
+instance.WaitAny(
+    instance.RequestAdapter(&opts, wgpu::CallbackMode::WaitAnyOnly,
+        [&](wgpu::RequestAdapterStatus status, wgpu::Adapter result, wgpu::StringView msg) {
+            adapter = std::move(result);
+        }),
+    UINT64_MAX);
+```
+
+**X11 conflicts**: If using GLFW native headers, `#undef Success` after
+`#include <GLFW/glfw3native.h>` — X11 defines `Success` as 0, which breaks
+`wgpu::RequestAdapterStatus::Success`.
+
+**Texture readback alignment**: Row pitch must be 256-byte aligned for
+`CopyTextureToBuffer`. Use `(width * 4 + 255) & ~255u`.
+
+### Rendering Flow (Headless)
+
+1. Create `wgpu::Instance` with `TimedWaitAny` feature
+2. Request `wgpu::Adapter` (synchronous via `WaitAny`)
+3. Create `wgpu::Device` + `wgpu::Queue`
+4. Create offscreen `wgpu::Texture` as render target
+5. Create WGSL shader module + render pipeline
+6. Render to texture via command encoder
+7. `CopyTextureToBuffer` → map buffer → read pixels → save image
+
+### Rendering Flow (Windowed, future)
+
+Same as above, but:
+4. Create GLFW window + `wgpu::Surface` (X11: `SurfaceSourceXlibWindow`)
+5. Configure surface with preferred format from `surface.GetCapabilities()`
+8. Main loop: get surface texture → render → `surface.Present()`
+
+## Troubleshooting
+
+### "VulkanHeaders version not compatible"
+
+Warning during Dawn configure — usually harmless, Dawn bundles its own headers.
+
+### "No adapter found"
+
+Ensure you have a Vulkan-capable GPU and driver. Check with `vulkaninfo`.
+
+### "Device lost: Device was destroyed"
+
+Normal on exit — just cleanup messaging when the device goes out of scope.
+
+## File Index
+
+| File | Contents |
+|------|----------|
+| [PLAN.md](PLAN.md) | Master plan — phased roadmap to get the game running |
+| [APPROACH_WEBGPU.md](APPROACH_WEBGPU.md) | Why Dawn, API mapping, shader strategy |
+| [INITIAL_IDEAS.md](INITIAL_IDEAS.md) | Architecture analysis and brainstorming |
+| **IMPLEMENTATION_GUIDE.md** | **This file** — build instructions and API notes |

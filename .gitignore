@@ -29,6 +29,7 @@ orig-assets/
 # Build files
 build/*
 !build/.gitkeep
+native/build/
 .ninja_*
 build.ninja
 
