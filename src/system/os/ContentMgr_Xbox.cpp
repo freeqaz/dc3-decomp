@@ -66,12 +66,14 @@ ContentLocT XboxContent::Location() {
 
 void XboxContent::Poll() {
     if (mState == 1) {
-        MILO_LOG("Mounting content '%s'\n", FileName());
+        Symbol name = FileName();
+        MILO_LOG("Mounting content '%s'\n", name);
         int pad = mPadNum;
         if (pad == 4 || pad == 5) {
             pad = 0xFF;
         }
-        mOverlapped = new XOVERLAPPED();
+        mOverlapped = new XOVERLAPPED;
+        memset(mOverlapped, 0, sizeof(XOVERLAPPED));
         ULARGE_INTEGER contentSize;
         contentSize.QuadPart = 0;
         if (XContentCrossTitleCreate(
@@ -113,7 +115,7 @@ void XboxContent::Poll() {
         DWORD res = XGetOverlappedResult(mOverlapped, nullptr, false);
         if (res != 0x3E4) {
             RELEASE(mOverlapped);
-            mState = (State)(res == 7);
+            mState = (State)(res == 0);
         }
     }
 }
@@ -133,7 +135,8 @@ void XboxContent::Unmount() {
     XOVERLAPPED **overlappedPtr = &mOverlapped;
 
     if (state == kMounted) {
-        *overlappedPtr = new XOVERLAPPED();
+        *overlappedPtr = new XOVERLAPPED;
+        memset(*overlappedPtr, 0, sizeof(XOVERLAPPED));
         // 0x3E5 = ERROR_IO_PENDING - async operation started
         if (XContentClose(mRoot.c_str(), *overlappedPtr) != 0x3E5) {
             RELEASE(*overlappedPtr);
@@ -151,7 +154,8 @@ void XboxContent::Delete() {
     if (mState == 4 || mState == 1) {
         Unmount();
     } else if (mState == 0) {
-        mOverlapped = new XOVERLAPPED();
+        mOverlapped = new XOVERLAPPED;
+        memset(mOverlapped, 0, sizeof(XOVERLAPPED));
         if (XContentCrossTitleDelete(0xFF, &mXData, mOverlapped) != 0x3E5) {
             RELEASE(mOverlapped);
             mState = kContentDeleting;

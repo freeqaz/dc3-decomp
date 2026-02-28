@@ -48,8 +48,8 @@ MovieInternalBuffers::~MovieInternalBuffers() {
 
 BinkMovieImpl::BinkMovieImpl()
     : mLoader(0), mLoader2(0), mFilename(), mBink(0), mLoop(false),
-      mWidth(0), mHeight(0), mPaused(false),
-      mFrame(0), mNumFrames(0), mMsPerFrame(0), mReady(false),
+      mWidth(0), mHeight(0), mReady(false),
+      mFrame(0), mNumFrames(0), mMsPerFrame(0), mPaused(false),
       mPlayTimer(), mLoadTimer(),
       mVolume(0), mVolumeTarget(0), mHandle(kNoHandle),
       mOpen(false)
@@ -80,6 +80,8 @@ BinkMovieImpl::BinkMovieImpl()
         );
     }
 }
+
+bool BinkMovieImpl::Paused() const { return mPaused; }
 
 BinkMovieImpl::~BinkMovieImpl() {
     if (mThreadId != (unsigned int)GetCurrentThreadId()) {

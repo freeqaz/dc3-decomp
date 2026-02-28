@@ -79,6 +79,8 @@ public:
     void SetSelected(int, int);
     bool SetSelected(Symbol, bool, int);
     int SelectedPos() const;
+    int Selected() const { return mListState.Selected(); }
+    const std::vector<UIListWidget *> &GetWidgets() const { return mWidgets; }
     void Scroll(int);
     void CalcBoundingBox(Box &);
     Symbol SelectedSym(bool) const;

@@ -12,6 +12,8 @@ short *MicNull::GetRecentBuf(int &size) {
     return dst;
 }
 
+int MicNull::GetSampleRate() const { return 48000; }
+
 MicNull::MicNull() {
     for (int i = 0; i < 10000U; i++) {
         mBuf[i] = sRand.Int(-32000, 32000);

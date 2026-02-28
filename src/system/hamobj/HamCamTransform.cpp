@@ -8,6 +8,8 @@ HamCamTransform::HamCamTransform() : mAreas(this) {}
 
 HamCamTransform::~HamCamTransform() { ClearOldCrowds(); }
 
+void HamCamTransform::Enter() { Setup(false); }
+
 BEGIN_HANDLERS(HamCamTransform)
     HANDLE_ACTION(update_camshots, Setup(true))
     HANDLE_SUPERCLASS(RndPollable)

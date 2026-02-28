@@ -16,6 +16,7 @@
 #include "wordwrap.h"
 
 std::vector<RndText::BlacklightPacket> RndText::sBlacklightPacketPool;
+int RndText::sBlacklightPacketCount;
 std::list<RndText::FontMapBase *> RndText::sFontMapCache;
 int TEXT_REV = 0;
 float gSuperscriptScale = 0.7f;
@@ -675,6 +676,8 @@ void RndText::QueueBlacklightPacket(RndMesh *mesh, float f2, int i3) {
     pkt_ptr[6] = i3;
     pkt_ptr[7] = (int)RndCam::Current();
 }
+
+void RndText::ClearBlacklight() { sBlacklightPacketCount = 0; }
 
 // Template instantiation for map<RndFontBase*, set<unsigned short>>
 #include <map>

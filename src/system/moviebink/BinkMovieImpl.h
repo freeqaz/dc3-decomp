@@ -67,12 +67,12 @@ private:
     bool mLoop;           // 0x18
     int mWidth;           // 0x1C
     int mHeight;          // 0x20
-    bool mPaused;         // 0x24
+    bool mReady;          // 0x24
     char mRect[0x18];     // 0x28 - uninitialized region (SetRect)
     int mFrame;           // 0x40
     int mNumFrames;       // 0x44
     int mMsPerFrame;      // 0x48
-    bool mReady;          // 0x4C
+    bool mPaused;         // 0x4C
     Timer mPlayTimer;     // 0x50
     Timer mLoadTimer;     // 0x80
     int mVolume;          // 0xB0

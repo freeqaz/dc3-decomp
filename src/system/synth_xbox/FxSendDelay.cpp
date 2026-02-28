@@ -62,3 +62,9 @@ static struct StaticInit {
 FxSendDelay360::FxSendDelay360() : FxSend360(this) {}
 
 FxSendDelay360::~FxSendDelay360() {}
+
+void FxSendDelay360::OnParametersChanged() { FxSend360::SyncEffectParams(); }
+
+void FxSendDelay360::Recreate(std::vector<FxSend *> &sends) { FxSend360::Refresh(sends); }
+
+void FxSendDelay360::UpdateMix() { FxSend360::UpdateVolumes(); }

@@ -42,6 +42,8 @@ DataNode VirtualKeyboard::OnShowKeyboardUI(const DataArray *array) {
     return ShowKeyboardUI(i2, i3, s4, s5, s6, i8);
 }
 
+void VirtualKeyboard::Terminate() {}
+
 void VirtualKeyboard::ClearKeyboardCallback() { mPobjKeyboardCallback = nullptr; }
 
 BEGIN_HANDLERS(VirtualKeyboard)

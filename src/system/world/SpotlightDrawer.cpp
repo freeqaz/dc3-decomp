@@ -4,6 +4,7 @@
 #include "os/System.h"
 #include "rndobj/Draw.h"
 #include "rndobj/Env.h"
+#include "rndobj/MultiMesh.h"
 #include "rndobj/Rnd.h"
 #include "utl/BinStream.h"
 #include "utl/Loader.h"
@@ -98,6 +99,39 @@ void SpotlightDrawer::Select() {
         TheRnd.RegisterPostProcessor(this);
     }
     sNeedBoxMap = -1;
+}
+
+void SpotlightDrawer::ListDrawChildren(std::list<RndDrawable *> &draws) {
+    draws.push_back(mParams.mProxy);
+}
+
+void SpotlightDrawer::DrawMeshVec(std::vector<SpotMeshEntry> &entries) {
+    if (entries.size() != 0) {
+        std::vector<SpotMeshEntry>::iterator it = entries.begin();
+        RndMesh *canMesh = it->mCanMesh;
+        RndMultiMesh *multiMesh = canMesh->CreateMultiMesh();
+        multiMesh->Instances().push_back(RndMultiMesh::Instance(it->mTransform));
+        RndMesh *envMesh = it->mEnvMesh;
+        envMesh->Highlight();
+        std::vector<SpotMeshEntry>::iterator itEnd = entries.end();
+        for (++it; it != itEnd; ++it) {
+            bool envChanged = it->mEnvMesh != envMesh;
+            bool canChanged = it->mCanMesh != canMesh;
+            if (envChanged || canChanged) {
+                multiMesh->DrawShowing();
+                if (envChanged && envMesh) {
+                    envMesh = it->mEnvMesh;
+                    envMesh->Highlight();
+                }
+                if (canChanged) {
+                    canMesh = it->mCanMesh;
+                    multiMesh = canMesh->CreateMultiMesh();
+                }
+            }
+            multiMesh->Instances().push_back(RndMultiMesh::Instance(it->mTransform));
+        }
+        multiMesh->DrawShowing();
+    }
 }
 
 void SpotlightDrawer::DrawBeams(
