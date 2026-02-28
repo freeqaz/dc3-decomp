@@ -140,10 +140,11 @@ ADDRESS_CATALOG = {
     "file_is_local":             "?FileIsLocal@@YA_NPBD@Z",
     # File system globals
     "g_using_cd":                "?gUsingCD@@3HA",
-    "check_for_archive":         "?CheckForArchive@?A0x8038bdc3@@YAXXZ",
+    "check_for_archive":         "?CheckForArchive@?A0x4af72ae9@@YAXXZ",
     "file_init":                 "FileInit",
     "archive_init":              "?ArchiveInit@@YAXXZ",
     "the_archive":               "?TheArchive@@3PAVArchive@@A",
+    "arkfile_read":              "?Read@ArkFile@@UAAHPAXH@Z",
     # Data section globals
     "g_null_str":                "?gNullStr@@3PBDB",
     "g_num_heaps":               "?gNumHeaps@@3HA",
@@ -179,7 +180,7 @@ ADDRESS_CATALOG = {
     "synth360_preinit":          "?PreInit@Synth360@@UAAXXZ",
     "synth_init":                "?SynthInit@@YAXXZ",
     # Bink video
-    "bink_start_async_thread":   "BinkStartAsyncThread",
+    "bink_start_async_thread":   "?BinkStartAsyncThread@@YAHHH@Z",
     "bink_platform_init":        "?PlatformInit@BinkMovieSys@@QAAXXZ",
     # CRT RTTI
     "rt_dynamic_cast":           "__RTDynamicCast",
