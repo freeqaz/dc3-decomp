@@ -155,6 +155,9 @@ public:
     /** "Number of verts in the mesh" */
     virtual int NumVerts() const { return mVerts.size(); }
     virtual void OnSync(int);
+#ifdef HX_NATIVE
+    virtual void DrawShowing();
+#endif
 
     OBJ_MEM_OVERLOAD(0x2E);
     NEW_OBJ(RndMesh)

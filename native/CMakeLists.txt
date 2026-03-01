@@ -17,6 +17,11 @@ set(DC3_MSVC_COMPAT_FLAGS
     -fms-compatibility       # Full MSVC compat (dependent base class lookup)
     -fms-compatibility-version=19.29  # VS2019+ — char16_t/char32_t as builtins
     -fdelayed-template-parsing  # MSVC-style template parsing
+    # GCC 15 headers: clang in MSVC mode drops __GNUC__ macros, breaking
+    # glibc's sys/cdefs.h and libstdc++'s atomic_base.h. These defines restore
+    # the compiler builtins that GCC 15 headers expect.
+    -D__GNUC_STDC_INLINE__
+    -D__GCC_ATOMIC_TEST_AND_SET_TRUEVAL=1
 )
 set(DC3_DECOMP_FLAGS
     -ferror-limit=0
@@ -822,7 +827,9 @@ set(DC3_NATIVE_SOURCES
     src/platform/Joypad_Stub.cpp
     src/platform/Keyboard_Stub.cpp
     src/platform/Synth_Stub.cpp
-    src/platform/Rnd_Stub.cpp
+    src/platform/Rnd_Wgpu.cpp
+    src/platform/Mesh_Wgpu.cpp
+    src/platform/Tex_Wgpu.cpp
     src/platform/Net_Stub.cpp
     src/platform/Memcard_Stub.cpp
     src/platform/ContentMgr_Stub.cpp
@@ -847,8 +854,17 @@ set(DC3_NATIVE_SOURCES
 # Graphics subsystem sources (WebGPU/Dawn)
 # ============================================================================
 
-set(DC3_GFX_SOURCES
+# Core GPU utilities (no decomp dependencies — standalone tools can use these)
+set(DC3_GFX_CORE_SOURCES
     src/gfx/GpuDevice.cpp
+)
+
+# Full graphics sources (depend on decomp types like RndBitmap, RndMesh)
+set(DC3_GFX_SOURCES
+    ${DC3_GFX_CORE_SOURCES}
+    src/gfx/TextureConvert.cpp
+    src/gfx/VertexFormats.cpp
+    src/gfx/PipelineManager.cpp
 )
 
 # ============================================================================
@@ -904,6 +920,10 @@ target_link_libraries(dc3-native PRIVATE
     z
 )
 
+# NOTE: GFX sources include BOTH Dawn/WebGPU headers AND decomp engine headers.
+# The -D__GNUC_STDC_INLINE__ flag (in DC3_MSVC_COMPAT_FLAGS) resolves the GCC 15
+# glibc header conflict, allowing -fms-compatibility to coexist with Dawn headers.
+
 # C files need special handling (some are .c but included in C++ project)
 set_source_files_properties(
     ${CMAKE_SOURCE_DIR}/../src/system/obj/DataFlex.c
@@ -915,7 +935,7 @@ set_source_files_properties(
 # ============================================================================
 add_executable(wgpu-window-test
     src/main.cpp
-    ${DC3_GFX_SOURCES}
+    ${DC3_GFX_CORE_SOURCES}
 )
 target_include_directories(wgpu-window-test PRIVATE
     ${CMAKE_SOURCE_DIR}/src

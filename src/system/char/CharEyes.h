@@ -164,7 +164,7 @@ protected:
     float mLastCang; // 0xe8
     float mLastLook; // 0xec
     float mMaxEyeCang; // 0xf0
-    int mAvDelta; // 0xf4
+    float mAvDelta; // 0xf4
     float mLastBlinkWeight; // 0xf8
     bool mBlinkDetect; // 0xfc
     bool mBlinkActive; // 0xfd

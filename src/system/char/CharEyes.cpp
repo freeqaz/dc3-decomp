@@ -1,22 +1,35 @@
 #include "char/CharEyes.h"
 #include "char/CharInterest.h"
+#include "char/CharLookAt.h"
 #include "char/CharWeightable.h"
 #include "decomp.h"
 #include "math/Easing.h"
 #include "math/Rand.h"
+#include "math/Rot.h"
 #include "math/Utl.h"
 #include "math/Vec.h"
 #include "obj/Data.h"
 #include "obj/Object.h"
 #include "obj/Task.h"
+#include "rndobj/Cam.h"
 #include "rndobj/Graph.h"
+#include "rndobj/Rnd.h"
 #include "rndobj/Trans.h"
+#include "ui/PanelDir.h"
 #include "utl/BinStream.h"
 #include "utl/Std.h"
 #include "utl/Symbol.h"
+#include "world/Dir.h"
 #include <cmath>
 
 void NormalizeScale(const Vector3 &, float, Vector3 &);
+
+bool CharEyes::sDisableEyeDart;
+bool CharEyes::sDisableEyeJitter;
+bool CharEyes::sDisableInterestObjects;
+bool CharEyes::sDisableProceduralBlink;
+bool CharEyes::sDisableEyeClamping;
+bool CharLookAt::sDisableJitter;
 
 INIT_REVS(18, 0)
 
@@ -609,7 +622,11 @@ Vector3 CharEyes::GenerateDartOffset() {
 bool CharEyes::Replace(ObjRef *ref, Hmx::Object *obj) {
     int eyeSize = sizeof(EyeDesc);
     int eyeCount = mEyes.size();
+#ifdef HX_NATIVE
+    int eyeOffset = (char *)ref - (char *)mEyes.data();
+#else
     int eyeOffset = (char *)ref - (char *)mEyes.begin();
+#endif
     if ((unsigned)eyeOffset < (unsigned)(eyeSize * eyeCount)) {
         int eyeIdx = eyeOffset / eyeSize;
         if (eyeOffset == eyeIdx * eyeSize) {
@@ -621,7 +638,11 @@ bool CharEyes::Replace(ObjRef *ref, Hmx::Object *obj) {
     }
     int stateSize = sizeof(CharInterestState);
     int stateCount = mInterests.size();
+#ifdef HX_NATIVE
+    int stateOffset = (char *)ref - (char *)mInterests.data();
+#else
     int stateOffset = (char *)ref - (char *)mInterests.begin();
+#endif
     if ((unsigned)stateOffset < (unsigned)(stateSize * stateCount)) {
         int stateIdx = stateOffset / stateSize;
         if (stateOffset == stateIdx * stateSize) {
@@ -633,6 +654,10 @@ bool CharEyes::Replace(ObjRef *ref, Hmx::Object *obj) {
     }
     return CharWeightable::Replace(ref, obj);
 }
+
+void CharEyes::NextLook() {}
+
+void CharEyes::LidTrackAndClampingUpdate(EyeDesc &desc, float blinkWeight) {}
 
 void CharEyes::ProceduralBlinkUpdate() {
     static DataNode &disableCheat = DataVariable("cheat.disable_procedural_blinks");
@@ -671,6 +696,176 @@ void CharEyes::ProceduralBlinkUpdate() {
         mBlinkEnabled = false;
         mTarget = mHeadForward;
     }
+}
+
+void CharEyes::Poll() {
+    if (mEyes.empty())
+        return;
+
+    RndTransformable *head = GetHead();
+    if (!head)
+        return;
+
+    float dt = TheTaskMgr.DeltaSeconds();
+    if (dt < 0.0f) {
+        Exit();
+        return;
+    }
+
+    float camWeight = 0.0f;
+    if (mCamWeight) {
+        camWeight = mCamWeight->Weight();
+    }
+
+    mLastLook += TheTaskMgr.DeltaSeconds();
+
+    float blinkWeight;
+    if (mFaceServo) {
+        blinkWeight = mFaceServo->BlinkWeightLeft();
+    } else {
+        blinkWeight = 0.0f;
+    }
+
+    bool blinkDetected = false;
+    if (blinkWeight < 0.3f) {
+        mBlinkDetect = true;
+    } else {
+        if (mBlinkDetect && mLastBlinkWeight > 0.8f && blinkWeight < mLastBlinkWeight) {
+            mBlinkDetect = false;
+            mBlinkCount++;
+            blinkDetected = true;
+            mLowerBlinkAngle = TheTaskMgr.Seconds(TaskMgr::kRealTime);
+        }
+    }
+    mLastBlinkWeight = blinkWeight;
+
+    const Transform &headXfm = head->WorldXfm();
+    const Vector3 &headPos = headXfm.v;
+
+    Vector3 targetDir;
+    Subtract(mTarget, headPos, targetDir);
+    Normalize(targetDir, targetDir);
+
+    Vector3 facingDir(headXfm.m.y);
+    Normalize(facingDir, facingDir);
+
+    float cang = Dot(facingDir, targetDir);
+    cang = Clamp(-1.0f, 1.0f, cang);
+
+    if (mLastCang != 1e+30f) {
+        TheTaskMgr.Seconds(TaskMgr::kRealTime);
+        CharInterest *interest = mCurrentInterest;
+        mAvDelta = (cang - mLastCang - mAvDelta) * 0.1f + mAvDelta;
+
+        float minLookTime = interest ? interest->mMinLookTime : 1.0f;
+        float maxLookTime = interest ? interest->mMaxLookTime : 3.0f;
+        float viewAngleCos = interest ? interest->mMaxViewAngleCos : mMaxEyeCang;
+
+        bool canSeeTarget = viewAngleCos <= cang;
+
+        if (mLastLook <= maxLookTime && !mNeedRecalc
+            && (mFocusInterest == 0 || interest == (CharInterest *)mFocusInterest
+                || ((mLastLook <= 0.4f
+                     || !mFocusInterest->IsWithinViewCone(headPos, facingDir))
+                    && !IsHeadIKWeightIncreasing()))
+            && (!mEnabled || mLastLook <= 0.25f)) {
+            if (mLastLook <= minLookTime)
+                goto storeState;
+            if (!blinkDetected) {
+                if (canSeeTarget) {
+                    bool anyEyeClamped = false;
+                    for (ObjVector<EyeDesc>::iterator it = mEyes.begin(); it != mEyes.end();
+                         ++it) {
+                        if (it->mEye && it->mEye->mDisableRoll) {
+                            anyEyeClamped = true;
+                            break;
+                        }
+                    }
+                    if (!anyEyeClamped)
+                        goto storeState;
+                }
+                if (mAvDelta <= 0.0f)
+                    goto storeState;
+            }
+        }
+
+        if (camWeight == 0.0f) {
+            NextLook();
+        }
+    }
+
+storeState:
+    mLastCang = cang;
+    mLastFacing = facingDir;
+
+    float headLookWeight = 0.0f;
+    if (mHeadLookAt) {
+        headLookWeight = mHeadLookAt->Weight();
+    }
+    mDartTimer = headLookWeight;
+
+    DartUpdate();
+
+    if (mCurrentInterest) {
+        if (!mBlinkEnabled) {
+            mTarget = mCurrentInterest->WorldXfm().v;
+        } else {
+            mHeadForward = mCurrentInterest->WorldXfm().v;
+        }
+        EnforceMinimumTargetDistance(headPos, mTarget, mTarget);
+    }
+
+    RndTransformable *eyeTarget = 0;
+    if (!mEyes.empty() && mEyes[0].mEye) {
+        eyeTarget = mEyes[0].mEye->mTarget;
+    }
+
+    if (eyeTarget) {
+        float weight = Weight();
+        const Vector3 *interpTarget;
+        Transform xfm;
+        Vector3 localTarget;
+        float interpWeight;
+        if (camWeight > 0.0f) {
+            RndCam *cam = 0;
+            if (TheWorld)
+                cam = TheWorld->Cam();
+            if (!cam)
+                cam = RndCam::Current();
+            if (!cam)
+                cam = TheRnd.GetDefaultCam();
+            if (!cam)
+                goto skipInterp;
+            xfm = eyeTarget->WorldXfm();
+            interpTarget = &cam->WorldXfm().v;
+            interpWeight = camWeight;
+        } else {
+            localTarget = mTarget;
+            if (mDartEnabled) {
+                localTarget.x += mCurrentDartOffsetX;
+                localTarget.y += mCurrentDartOffsetY;
+                localTarget.z += mCurrentDartOffsetZ;
+                EnforceMinimumTargetDistance(headPos, localTarget, localTarget);
+            }
+            xfm = eyeTarget->WorldXfm();
+            interpTarget = &localTarget;
+            interpWeight = weight;
+        }
+        Interp(xfm.v, *interpTarget, interpWeight, xfm.v);
+        eyeTarget->SetWorldXfm(xfm);
+    }
+skipInterp:
+
+    ProceduralBlinkUpdate();
+
+    CharLookAt::sDisableJitter = sDisableEyeJitter;
+    for (ObjVector<EyeDesc>::iterator it = mEyes.begin(); it != mEyes.end(); ++it) {
+        it->mEye->Poll();
+        LidTrackAndClampingUpdate(*it, blinkWeight);
+    }
+    CharLookAt::sDisableJitter = false;
+
+    UpdateOverlay();
 }
 
 DataNode CharEyes::OnToggleForceFocus(DataArray *da) {

@@ -1,6 +1,6 @@
 ---
 name: ghidra-decompile
-description: Decompile and analyze a function from Ghidra. Shows decompiled C code, switch statements, and cast operations. Use when investigating function structure or debugging type issues. Automatically resolves symbol names to correct functions.
+description: Decompile and analyze a function from Ghidra. Shows decompiled C code, switch statements, and cast operations. Use when investigating function structure or debugging type issues. Automatically resolves symbol names to correct functions. Need to skip sandbox to access Ghidra over network.
 argument-hint: "[function-name-or-address]"
 allowed-tools: Bash(python3 tools/ghidra/pcode_inspect.py *)
 ---
@@ -8,6 +8,8 @@ allowed-tools: Bash(python3 tools/ghidra/pcode_inspect.py *)
 # Ghidra Decompile
 
 Decompile a function and analyze its structure for switch statements, casts, and type operations.
+
+NOTE: You must skip the sandbox to talk to localhost. Ghidra is likely already running but you will see a failure if you use the sandbox's proxy!
 
 ## Arguments
 

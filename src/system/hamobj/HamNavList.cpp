@@ -28,6 +28,13 @@
 #include "utl/Loader.h"
 #include "utl/Std.h"
 #include "utl/Symbol.h"
+#include "meta/MetaMusicManager.h"
+#include "rndobj/Rnd.h"
+#include "world/Instance.h"
+
+DECLARE_MESSAGE(LeftHandListEngagementMsg, "left_hand_list_engagement")
+LeftHandListEngagementMsg(bool b);
+END_MESSAGE
 
 const int HamNavList::sListStateMaxDisplay = HamListRibbon::sNumListSelectable + 6;
 bool HamNavList::sForceDisengage;
@@ -49,7 +56,7 @@ HamNavList::HamNavList()
       mHeaderRibbonResource(this), mListDirResource(this),
       mScrollSpeedIndicatorResource(this), mNavProvider(this), mScrollSpeedAnim(this),
       mPendingEnterAnim(0), mSkipEnterAnim(0), mSuppressAutomaticEnter(0), mTestEnteringOverride(0), mHandHeight(0),
-      mSlideSmoother(0, 10, 10), mDisengageSmoother(0, 10, 0), mDirectionGestureFilter(NULL), mHandsUpGestureFilter(NULL), mSkeletonTrackingID(0),
+      mSlideSmoother(0, 10, 10), mDisengageSmoother(0, 10, 0), mDirectionGestureFilter(NULL), mHandHeightFilter(NULL), mSkeletonTrackingID(0),
       mScrollBehavior(this, &mListState), mDisableSlideSound(0), mDisableSelectSound(0),
       mEnabled(1), mSelectionEnabled(1), mAlwaysUseActiveSkeleton(1), mOnlyUseWhenFocused(1),
       mScrollSettleTime(0), mRefreshPending(0), mSelectDoneIndex(-1), mWasInDoubleUserMode(0), mHighButtonMode(0) {
@@ -65,7 +72,7 @@ HamNavList::~HamNavList() {
         handle.RemoveCallback(this);
     }
     delete mDirectionGestureFilter;
-    delete mHandsUpGestureFilter;
+    delete mHandHeightFilter;
     if (mListRibbonResource) {
         Sound *slideSound = mListRibbonResource->SlideSound();
         if (slideSound)
@@ -811,4 +818,445 @@ void HamNavList::SetHighlight(int i) {
         mListState.SetSelected(i, mListState.FirstShowing(), true);
         HandleHighlightChanged(i);
     }
+}
+
+HamListRibbonDrawState::HamListRibbonDrawState()
+    : mSwellSmoother(0.0f, 10.0f, 1.0f), mSelected(false), unk18(0), mHidden(false),
+      unk20(0.0f), unk24(false) {}
+
+LeftHandListEngagementMsg::LeftHandListEngagementMsg(bool b) : Message(Type(), b) {}
+
+UIListWidgetDrawState::~UIListWidgetDrawState() {}
+
+void HamNavListGlitchCB(float elapsed, void *context) {
+    HamNavList *list = (HamNavList *)context;
+    const char *name = PathName(list);
+    TheDebug << MakeString(
+        "HamNavList::Refresh %s took %f ms on frame %d\n",
+        name, elapsed, TheRnd.GetFrameID()
+    );
+}
+
+void HamNavList::CompleteScroll(const UIListState &state) {
+    if (mListDirResource) {
+        mListDirResource->CompleteScroll(state, mListWidgets);
+    }
+}
+
+void HamNavList::ClearBigElements() {
+    mBigElements.clear();
+    mBigElementIndices.clear();
+}
+
+void HamNavList::SetRibbonMode(HamListRibbon::RibbonMode mode) {
+    if (mRibbonMode == mode)
+        return;
+
+    if ((mNavInputType != kNavInput_RightHand || !TheMetaMusicManager)
+        && mNavInputType == kNavInput_LeftHand) {
+        bool inControllerMode = TheGestureMgr && TheGestureMgr->InControllerMode();
+        if (!inControllerMode) {
+            if (mode == HamListRibbon::kRibbonDisengaged) {
+                static LeftHandListEngagementMsg leftHandListDisengaged(false);
+                TheUI->Handle(leftHandListDisengaged, false);
+            }
+            if (mRibbonMode == HamListRibbon::kRibbonDisengaged) {
+                static LeftHandListEngagementMsg leftHandListEngaged(true);
+                TheUI->Handle(leftHandListEngaged, false);
+            }
+        }
+    }
+    mRibbonMode = mode;
+    if (mListRibbonResource) {
+        mListRibbonResource->SetMode(mode);
+    }
+    if (mHeaderRibbonResource) {
+        mHeaderRibbonResource->SetMode(mode);
+    }
+}
+
+void HamNavList::SetNavProvider(HamNavProvider *provider) {
+    mNavProvider = provider;
+    UIListProvider *listProvider;
+    if (provider) {
+        provider->SetNavList(this);
+        listProvider = static_cast<UIListProvider *>(provider);
+    } else {
+        listProvider = static_cast<UIListProvider *>(this);
+    }
+    SetProvider(listProvider);
+}
+
+void HamNavList::ScrollToIndex(int idx, int firstShowing) {
+    bool gesturingWithVoice = TheGestureMgr && TheGestureMgr->GesturingWithVoice();
+    if (gesturingWithVoice && mListState.IsScrolling()) {
+        mScrollBehavior.Exit();
+    }
+    mListState.SetSelected(idx, firstShowing, true);
+    mRefreshPending = true;
+    SetHighlight(idx);
+}
+
+void HamNavList::Disengage() {
+    mDirectionGestureFilter->ClearSwipe();
+    bool inControllerMode = TheGestureMgr && TheGestureMgr->InControllerMode();
+    if ((!inControllerMode || !CanHaveFocus()) && mRibbonMode != HamListRibbon::kRibbonSelect) {
+        SetRibbonMode(HamListRibbon::kRibbonDisengaged);
+    }
+}
+
+int HamNavList::GetDisabledCount(int count) const {
+    int disabled = 0;
+    for (int i = 0; i < count; i++) {
+        UIListProvider *provider = mListState.Provider();
+        if (!provider->IsActive(i))
+            disabled++;
+    }
+    while (count < mListState.NumShowing()) {
+        UIListProvider *provider = mListState.Provider();
+        if (provider->IsActive(count))
+            break;
+        disabled++;
+        count++;
+    }
+    bool scrollable = mListState.IsScrolling();
+    MILO_ASSERT(!scrollable || disabled == 0, 0x313);
+    return disabled;
+}
+
+bool HamNavList::IsElementBig(int display) const {
+    int numShowing = mListState.NumShowing();
+    bool scrollable =
+        mListRibbonResource ? mListRibbonResource->IsScrollable(numShowing) : false;
+    if (scrollable) {
+        display = (mListState.FirstShowing() + display) - mListState.MinDisplay();
+    }
+    int idx = display;
+    if (idx >= 0 && idx < numShowing) {
+        UIListProvider *provider = mListState.Provider();
+        if (provider) {
+            Symbol sym = provider->DataSymbol(idx);
+            for (int i = 0; i < (int)mBigElements.size(); i++) {
+                if (mBigElements[i] == sym)
+                    return true;
+            }
+        }
+        for (int i = 0; i < (int)mBigElementIndices.size(); i++) {
+            if (mBigElementIndices[i] == idx)
+                return true;
+        }
+    }
+    return false;
+}
+
+float HamNavList::CalculateSwell(int pos) const {
+    int numItems = NumItems();
+    float slideVal = mHandHeight < 0.0f ? 0.0f : mHandHeight;
+    float clamped = slideVal > 1.0f ? 1.0f : slideVal;
+    float diff = clamped - (float)pos / (float)(numItems - 1);
+    float swell = sqrtf(fabsf(diff)) * sqrtf((float)numItems) * 0.15f;
+    swell = swell < 0.0f ? 0.0f : swell;
+    swell = swell > 1.0f ? 1.0f : swell;
+    return 1.0f - swell;
+}
+
+float HamNavList::GetTargetSwellAmount(int display) {
+    if (TheLoadMgr.EditMode()) {
+        int selDisplay = mListState.SelectedDisplay();
+        if (display == selDisplay) {
+            if (mRibbonMode != HamListRibbon::kRibbonSwell) {
+                return 1.0f;
+            }
+            return GetFrame();
+        }
+        return 0.0f;
+    }
+    if (mListRibbonResource->TestEntering()) {
+        return 0.0f;
+    }
+    bool isScrolling = mScrollBehavior.IsScrolling();
+    if (!isScrolling) {
+        bool inControllerMode = TheGestureMgr && TheGestureMgr->InControllerMode();
+        if (inControllerMode) {
+            int selDisplay = mListState.SelectedDisplay();
+            if (display == selDisplay) {
+                UIComponent *focus = TheUI->FocusComponent();
+                if (focus == this) {
+                    return 1.0f;
+                }
+            }
+        } else {
+            if (mRibbonMode != HamListRibbon::kRibbonDisengaged) {
+                int selDisplay = mListState.SelectedDisplay();
+                if (display == selDisplay && mScrollBehavior.mScrollDir == 0) {
+                    return 1.0f;
+                }
+                if (mRibbonMode == HamListRibbon::kRibbonSwell
+                    && display < mListState.NumShowing()) {
+                    UIListProvider *provider = mListState.Provider();
+                    auto _tmp2 = provider->IsActive(display);
+                    if (provider && _tmp2
+                        && mSkeletonTrackingID != -1) {
+                        int disabledCount = GetDisabledCount(display);
+                        int effectivePos = display - disabledCount;
+                        if (mListState.IsScrolling()) {
+                            effectivePos -= (int)mListState.MinDisplay();
+                            bool atTop = mScrollBehavior.AtTop();
+                            if (!atTop) {
+                                effectivePos += 1;
+                            }
+                        }
+                        return CalculateSwell(effectivePos);
+                    }
+                }
+            }
+        }
+    }
+    return 0.0f;
+}
+
+void HamNavList::RealRefresh() {
+    AutoGlitchReport glitchReport(15.0f, HamNavListGlitchCB, this);
+    mRefreshPending = false;
+    if (mListRibbonResource) {
+        UIListProvider *provider = mListState.Provider();
+        if (provider) {
+            int numShowing = mListState.NumShowing();
+            bool scrollable = mListRibbonResource->IsScrollable(numShowing);
+            if (scrollable) {
+                int maxDisplay = sListStateMaxDisplay - 4;
+                int minDisplayVal = 3;
+                if (numShowing <= maxDisplay) {
+                    minDisplayVal = (numShowing - maxDisplay) + 2;
+                }
+                mListState.SetMinDisplay(minDisplayVal);
+                mListState.SetScrollPastMinDisplay(true);
+                mListState.SetMaxDisplay(maxDisplay);
+                mListState.SetCircular(numShowing <= maxDisplay, false);
+            } else {
+                mListState.SetScrollPastMinDisplay(false);
+                int sel = mListState.Selected();
+                mListState.SetSelected(sel, -1, true);
+            }
+        }
+    }
+    if (mListDirResource) {
+        UIListProvider *provider = mListState.Provider();
+        if (provider) {
+            provider->NumData();
+            provider->IsHeader(0);
+            mListDirResource->FillElements(mListState, mListWidgets);
+        }
+    }
+    if (mNavInputType == kNavInput_RightHand) {
+        UIListProvider *provider = mListState.Provider();
+        if (provider) {
+            int numShowing = mListState.NumShowing();
+            bool isEven = (numShowing % 2 == 0) || mListState.ScrollPastMinDisplay();
+            if (isEven) {
+                static Message eqShiftEvenMsg(Symbol("eq_shift_even"));
+                TheHamProvider->Handle(eqShiftEvenMsg, false);
+            } else {
+                static Message eqShiftOddMsg(Symbol("eq_shift_odd"));
+                TheHamProvider->Handle(eqShiftOddMsg, false);
+            }
+        }
+    }
+}
+
+void HamNavList::Enter() {
+    UIComponent::Enter();
+    SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
+    SkeletonCallback *cb = static_cast<SkeletonCallback *>(this);
+    if (!handle.HasCallback(cb)) {
+        handle.AddCallback(cb);
+    }
+
+    if (!mDisableSlideSound && mListRibbonResource) {
+        Sound *slideSound = mListRibbonResource->SlideSound();
+        if (slideSound) {
+            slideSound->Play(0, 0, 0, nullptr, 0);
+        }
+    }
+    mPendingEnterAnim = false;
+    if (!mSuppressAutomaticEnter) {
+        mPendingEnterAnim = true;
+    } else {
+        mTestEnteringOverride = true;
+    }
+    if (mListRibbonResource) {
+        mListRibbonResource->HandleEnter();
+    }
+    if (mHeaderRibbonResource) {
+        mHeaderRibbonResource->HandleEnter();
+    }
+    if (mScrollSpeedIndicatorResource) {
+        mScrollSpeedIndicatorResource->HandleEnter();
+    }
+    mScrollSettleTime = (float)TheTaskMgr.UISeconds();
+    RealRefresh();
+}
+
+void HamNavList::Exit() {
+    UIComponent::Exit();
+    SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
+    if (handle.HasCallback(static_cast<SkeletonCallback *>(this))) {
+        handle.RemoveCallback(static_cast<SkeletonCallback *>(this));
+    }
+    if (mListRibbonResource) {
+        Sound *slideSound = mListRibbonResource->SlideSound();
+        if (slideSound) {
+            slideSound->Stop(nullptr, false);
+        }
+    }
+    if (mScrollSpeedIndicatorResource) {
+        mScrollSpeedIndicatorResource->HandleExit();
+    }
+    mScrollBehavior.Exit();
+    mSelectDoneSymbol = gNullStr;
+    mSelectDoneIndex = -1;
+}
+
+void HamNavList::PostUpdate(const SkeletonUpdateData *data) {
+    if (!data)
+        return;
+    if (SkipPoll())
+        return;
+
+    Skeleton *skel = nullptr;
+    if (data->mSkeletonsLeft && data->mSkeletonsLeft[0]) {
+        Skeleton *candidate = data->mSkeletonsLeft[0];
+        if (candidate->IsValid()) {
+            if (mSkeletonTrackingID == -1
+                || candidate->TrackingID() == mSkeletonTrackingID) {
+                skel = candidate;
+            }
+        }
+    }
+    if (!skel && data->mSkeletonsRight && data->mSkeletonsRight[0]) {
+        Skeleton *candidate = data->mSkeletonsRight[0];
+        if (candidate->IsValid()) {
+            if (mSkeletonTrackingID == -1
+                || candidate->TrackingID() == mSkeletonTrackingID) {
+                skel = candidate;
+            }
+        }
+    }
+    if (skel) {
+        if (mDirectionGestureFilter) {
+            int userIdx = mListState.FirstShowing();
+            mDirectionGestureFilter->Update(*skel, userIdx);
+        }
+        if (mHandHeightFilter) {
+            int userIdx = mListState.FirstShowing();
+            mHandHeightFilter->Update(*skel, userIdx);
+        }
+    }
+}
+
+void HamNavList::Update() {
+    delete mDirectionGestureFilter;
+    mDirectionGestureFilter = NULL;
+    delete mHandHeightFilter;
+    mHandHeightFilter = NULL;
+
+    SkeletonSide handSide;
+    SkeletonSide swipeSide;
+    float threshold;
+
+    if (mNavInputType == kNavInput_RightHand) {
+        handSide = kSkeletonLeft;
+        swipeSide = kSkeletonRight;
+        threshold = -0.2f;
+    } else {
+        handSide = kSkeletonRight;
+        swipeSide = kSkeletonLeft;
+        threshold = -0.1f;
+    }
+
+    if (TheGestureMgr && TheGestureMgr->InDoubleUserMode()) {
+        mDirectionGestureFilter =
+            new DirectionGestureFilterDoubleUser(handSide, swipeSide, 0.5f, threshold);
+    } else {
+        mDirectionGestureFilter =
+            new DirectionGestureFilterSingleUser(handSide, swipeSide, 0.5f, threshold);
+    }
+
+    mHandHeightFilter = new HandHeightGestureFilter(
+        mNavInputType == kNavInput_RightHand ? kSkeletonLeft : kSkeletonRight
+    );
+
+    mWasInDoubleUserMode =
+        TheGestureMgr ? TheGestureMgr->InDoubleUserMode() : false;
+
+    if (mDirectionGestureFilter) {
+        mDirectionGestureFilter->SetHighButtonMode(mHighButtonMode);
+    }
+
+    int numDisplay = (mNavInputType == kNavInput_LeftHand) ? 2 : 10;
+    mListState.SetNumDisplay(numDisplay, true);
+
+    int numShowing = mListState.NumShowing();
+    HamListRibbonDrawState defaultState;
+    mRibbonDrawStates.resize(numShowing, defaultState);
+
+    if (mListDirResource) {
+        int numSh = mListState.NumShowing();
+        mListDirResource->CreateElements(nullptr, mListWidgets, numSh);
+    }
+    mRefreshPending = true;
+}
+
+void HamNavList::PlayEnterAnim() {
+    mPendingEnterAnim = false;
+    if (mListRibbonResource) {
+        HamListRibbon *inst = mListRibbonResource;
+        if (inst->EnterAnim()) {
+            inst->SetTestEntering(true);
+            if (!mSkipEnterAnim) {
+                RndAnimatable *enterAnim = inst->EnterAnim();
+                if (enterAnim) {
+                    enterAnim->Animate(
+                        enterAnim->EndFrame(), false, 0.0f, nullptr,
+                        kEaseLinear, 0.0f, false
+                    );
+                }
+                inst->SetTestEntering(false);
+            }
+        }
+    }
+    if (mHeaderRibbonResource) {
+        HamListRibbon *inst = mHeaderRibbonResource;
+        if (inst->EnterAnim()) {
+            inst->SetTestEntering(true);
+            if (!mSkipEnterAnim) {
+                RndAnimatable *enterAnim = inst->EnterAnim();
+                if (enterAnim) {
+                    enterAnim->Animate(
+                        enterAnim->EndFrame(), false, 0.0f, nullptr,
+                        kEaseLinear, 0.0f, false
+                    );
+                }
+                inst->SetTestEntering(false);
+            }
+        }
+    }
+    bool listEntering =
+        mListRibbonResource && mListRibbonResource->TestEntering();
+    bool headerEntering =
+        mHeaderRibbonResource && mHeaderRibbonResource->TestEntering();
+    if (listEntering || headerEntering) {
+        RndAnimatable::Animate(0.0f, false, 0.0f, nullptr, kEaseLinear, 0.0f, false);
+    }
+}
+
+void HamNavList::Clear() {
+    if (mDirectionGestureFilter) {
+        mDirectionGestureFilter->Clear();
+    }
+}
+
+void WorldInstance::Load(BinStream &bs) {
+    PreLoad(bs);
+    PostLoad(bs);
 }

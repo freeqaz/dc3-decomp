@@ -152,6 +152,14 @@ public:
     bool FadeOut() const { return mFadeout; }
     bool Prelit() const { return mPrelit; }
     Blend GetBlend() const { return mBlend; }
+#ifdef HX_NATIVE
+    Cull GetCull() const { return mCull; }
+    StencilMode GetStencil() const { return mStencilMode; }
+    bool GetAlphaCut() const { return mAlphaCut; }
+    bool GetAlphaWrite() const { return mAlphaWrite; }
+    int GetAlphaThreshold() const { return mAlphaThreshold; }
+    TexWrap GetTexWrap() const { return mTexWrap; }
+#endif
 
 protected:
     BaseMaterial();

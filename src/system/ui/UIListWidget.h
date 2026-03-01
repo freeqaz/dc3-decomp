@@ -30,6 +30,7 @@ struct UIListElementDrawState {
 };
 
 struct UIListWidgetDrawState {
+    ~UIListWidgetDrawState();
     Vector3 mFirstPos; // 0x0
     Vector3 mLastPos; // 0xc
     Vector3 mHighlightPos; // 0x18

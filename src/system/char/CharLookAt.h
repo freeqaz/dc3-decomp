@@ -35,6 +35,8 @@ public:
     void SetMinPitch(float);
     void SetMaxPitch(float);
 
+    static bool sDisableJitter;
+
     friend class CharEyes;
 
     RndTransformable *GetSource() const {

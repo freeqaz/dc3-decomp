@@ -1,0 +1,264 @@
+#include "gfx/PipelineManager.h"
+#include "gfx/GpuDevice.h"
+#include "gfx/VertexFormats.h"
+
+#include <cstdio>
+
+// Embedded shader source — standard.wgsl is compiled into the binary
+static const char* kStandardShaderSource =
+#include "gfx/standard_wgsl.inc"
+;
+
+void PipelineManager::Init(GpuDevice* device) {
+    mDevice = device;
+    auto& dev = device->Device();
+
+    // === Create bind group layouts ===
+
+    // Group 0: Scene uniforms (per-frame)
+    wgpu::BindGroupLayoutEntry sceneEntries[1] = {};
+    sceneEntries[0].binding = 0;
+    sceneEntries[0].visibility = wgpu::ShaderStage::Vertex | wgpu::ShaderStage::Fragment;
+    sceneEntries[0].buffer.type = wgpu::BufferBindingType::Uniform;
+    sceneEntries[0].buffer.minBindingSize = 0;
+
+    wgpu::BindGroupLayoutDescriptor sceneLayoutDesc{};
+    sceneLayoutDesc.entryCount = 1;
+    sceneLayoutDesc.entries = sceneEntries;
+    mLayouts[0] = dev.CreateBindGroupLayout(&sceneLayoutDesc);
+
+    // Group 1: Material uniforms + texture + sampler
+    wgpu::BindGroupLayoutEntry matEntries[3] = {};
+    matEntries[0].binding = 0;
+    matEntries[0].visibility = wgpu::ShaderStage::Fragment;
+    matEntries[0].buffer.type = wgpu::BufferBindingType::Uniform;
+    matEntries[0].buffer.minBindingSize = 0;
+
+    matEntries[1].binding = 1;
+    matEntries[1].visibility = wgpu::ShaderStage::Fragment;
+    matEntries[1].texture.sampleType = wgpu::TextureSampleType::Float;
+    matEntries[1].texture.viewDimension = wgpu::TextureViewDimension::e2D;
+
+    matEntries[2].binding = 2;
+    matEntries[2].visibility = wgpu::ShaderStage::Fragment;
+    matEntries[2].sampler.type = wgpu::SamplerBindingType::Filtering;
+
+    wgpu::BindGroupLayoutDescriptor matLayoutDesc{};
+    matLayoutDesc.entryCount = 3;
+    matLayoutDesc.entries = matEntries;
+    mLayouts[1] = dev.CreateBindGroupLayout(&matLayoutDesc);
+
+    // Group 2: Object uniforms (world transform)
+    wgpu::BindGroupLayoutEntry objEntries[1] = {};
+    objEntries[0].binding = 0;
+    objEntries[0].visibility = wgpu::ShaderStage::Vertex;
+    objEntries[0].buffer.type = wgpu::BufferBindingType::Uniform;
+    objEntries[0].buffer.minBindingSize = 0;
+
+    wgpu::BindGroupLayoutDescriptor objLayoutDesc{};
+    objLayoutDesc.entryCount = 1;
+    objLayoutDesc.entries = objEntries;
+    mLayouts[2] = dev.CreateBindGroupLayout(&objLayoutDesc);
+
+    // === Create pipeline layout ===
+    wgpu::PipelineLayoutDescriptor plDesc{};
+    plDesc.bindGroupLayoutCount = 3;
+    plDesc.bindGroupLayouts = mLayouts;
+    mPipelineLayout = dev.CreatePipelineLayout(&plDesc);
+
+    printf("PipelineManager: initialized with 3 bind group layouts\n");
+}
+
+wgpu::ShaderModule PipelineManager::GetOrCreateShader(uint32_t shaderType) {
+    auto it = mShaderCache.find(shaderType);
+    if (it != mShaderCache.end()) return it->second;
+
+    // For Tier 1, all shader types use the standard shader
+    const char* src = kStandardShaderSource;
+
+    wgpu::ShaderSourceWGSL wgslSource;
+    wgslSource.code = src;
+
+    wgpu::ShaderModuleDescriptor desc{};
+    desc.nextInChain = &wgslSource;
+    wgpu::ShaderModule module = mDevice->Device().CreateShaderModule(&desc);
+
+    mShaderCache[shaderType] = module;
+    return module;
+}
+
+wgpu::BlendState PipelineManager::MapBlend(WgpuBlend blend) {
+    wgpu::BlendState bs{};
+    auto& color = bs.color;
+    auto& alpha = bs.alpha;
+
+    // Default alpha blend: same as color
+    alpha.operation = wgpu::BlendOperation::Add;
+
+    switch (blend) {
+    case WgpuBlend::Dest:
+        color.srcFactor = wgpu::BlendFactor::Zero;
+        color.dstFactor = wgpu::BlendFactor::One;
+        color.operation = wgpu::BlendOperation::Add;
+        break;
+    case WgpuBlend::Src:
+        color.srcFactor = wgpu::BlendFactor::One;
+        color.dstFactor = wgpu::BlendFactor::Zero;
+        color.operation = wgpu::BlendOperation::Add;
+        break;
+    case WgpuBlend::Add:
+        color.srcFactor = wgpu::BlendFactor::One;
+        color.dstFactor = wgpu::BlendFactor::One;
+        color.operation = wgpu::BlendOperation::Add;
+        break;
+    case WgpuBlend::SrcAlpha:
+        color.srcFactor = wgpu::BlendFactor::SrcAlpha;
+        color.dstFactor = wgpu::BlendFactor::OneMinusSrcAlpha;
+        color.operation = wgpu::BlendOperation::Add;
+        break;
+    case WgpuBlend::SrcAlphaAdd:
+        color.srcFactor = wgpu::BlendFactor::SrcAlpha;
+        color.dstFactor = wgpu::BlendFactor::One;
+        color.operation = wgpu::BlendOperation::Add;
+        break;
+    case WgpuBlend::Subtract:
+        color.srcFactor = wgpu::BlendFactor::One;
+        color.dstFactor = wgpu::BlendFactor::One;
+        color.operation = wgpu::BlendOperation::ReverseSubtract;
+        break;
+    case WgpuBlend::Multiply:
+        color.srcFactor = wgpu::BlendFactor::Dst;
+        color.dstFactor = wgpu::BlendFactor::Zero;
+        color.operation = wgpu::BlendOperation::Add;
+        break;
+    case WgpuBlend::PreMultAlpha:
+        color.srcFactor = wgpu::BlendFactor::One;
+        color.dstFactor = wgpu::BlendFactor::OneMinusSrcAlpha;
+        color.operation = wgpu::BlendOperation::Add;
+        break;
+    case WgpuBlend::Screen:
+        color.srcFactor = wgpu::BlendFactor::OneMinusDst;
+        color.dstFactor = wgpu::BlendFactor::One;
+        color.operation = wgpu::BlendOperation::Add;
+        break;
+    case WgpuBlend::Lighten:
+        color.srcFactor = wgpu::BlendFactor::One;
+        color.dstFactor = wgpu::BlendFactor::One;
+        color.operation = wgpu::BlendOperation::Max;
+        break;
+    case WgpuBlend::Darken:
+        color.srcFactor = wgpu::BlendFactor::One;
+        color.dstFactor = wgpu::BlendFactor::One;
+        color.operation = wgpu::BlendOperation::Min;
+        break;
+    }
+
+    alpha.srcFactor = color.srcFactor;
+    alpha.dstFactor = color.dstFactor;
+    alpha.operation = color.operation;
+
+    return bs;
+}
+
+wgpu::DepthStencilState PipelineManager::MapDepthStencil(WgpuZMode z, WgpuStencil s) {
+    wgpu::DepthStencilState ds{};
+    ds.format = wgpu::TextureFormat::Depth24PlusStencil8;
+
+    switch (z) {
+    case WgpuZMode::Disable:
+        ds.depthWriteEnabled = wgpu::OptionalBool::False;
+        ds.depthCompare = wgpu::CompareFunction::Always;
+        break;
+    case WgpuZMode::Normal:
+        ds.depthWriteEnabled = wgpu::OptionalBool::True;
+        ds.depthCompare = wgpu::CompareFunction::Less;
+        break;
+    case WgpuZMode::Transparent:
+        ds.depthWriteEnabled = wgpu::OptionalBool::False;
+        ds.depthCompare = wgpu::CompareFunction::LessEqual;
+        break;
+    case WgpuZMode::Force:
+        ds.depthWriteEnabled = wgpu::OptionalBool::True;
+        ds.depthCompare = wgpu::CompareFunction::Always;
+        break;
+    case WgpuZMode::Decal:
+        ds.depthWriteEnabled = wgpu::OptionalBool::True;
+        ds.depthCompare = wgpu::CompareFunction::LessEqual;
+        break;
+    }
+
+    // Stencil (Tier 1: basic support)
+    if (s == WgpuStencil::Write) {
+        ds.stencilFront.compare = wgpu::CompareFunction::Always;
+        ds.stencilFront.passOp = wgpu::StencilOperation::Replace;
+        ds.stencilBack = ds.stencilFront;
+    } else if (s == WgpuStencil::Test) {
+        ds.stencilFront.compare = wgpu::CompareFunction::Equal;
+        ds.stencilBack = ds.stencilFront;
+    }
+
+    return ds;
+}
+
+wgpu::CullMode PipelineManager::MapCull(WgpuCull cull) {
+    switch (cull) {
+    case WgpuCull::None:      return wgpu::CullMode::None;
+    case WgpuCull::Regular:   return wgpu::CullMode::Back;
+    case WgpuCull::Backwards: return wgpu::CullMode::Front;
+    default:                  return wgpu::CullMode::None;
+    }
+}
+
+wgpu::RenderPipeline PipelineManager::CreatePipeline(const PipelineKey& key) {
+    wgpu::ShaderModule shader = GetOrCreateShader(key.shaderType);
+
+    // Vertex layout
+    const wgpu::VertexBufferLayout* vtxLayout;
+    if (key.layout == VertexLayoutType::Skinned) {
+        vtxLayout = &VertexFormats::SkinnedLayout();
+    } else {
+        vtxLayout = &VertexFormats::StaticLayout();
+    }
+
+    // Blend state
+    wgpu::BlendState blendState = MapBlend(key.blend);
+
+    wgpu::ColorTargetState colorTarget{};
+    colorTarget.format = key.targetFormat;
+    colorTarget.blend = &blendState;
+    colorTarget.writeMask = key.alphaWrite
+        ? wgpu::ColorWriteMask::All
+        : (wgpu::ColorWriteMask::Red | wgpu::ColorWriteMask::Green | wgpu::ColorWriteMask::Blue);
+
+    wgpu::FragmentState fragment{};
+    fragment.module = shader;
+    fragment.entryPoint = "fs_main";
+    fragment.targetCount = 1;
+    fragment.targets = &colorTarget;
+
+    // Depth/stencil
+    wgpu::DepthStencilState ds = MapDepthStencil(key.zMode, key.stencil);
+
+    wgpu::RenderPipelineDescriptor pipeDesc{};
+    pipeDesc.layout = mPipelineLayout;
+    pipeDesc.vertex.module = shader;
+    pipeDesc.vertex.entryPoint = "vs_main";
+    pipeDesc.vertex.bufferCount = 1;
+    pipeDesc.vertex.buffers = vtxLayout;
+    pipeDesc.fragment = &fragment;
+    pipeDesc.depthStencil = &ds;
+    pipeDesc.primitive.topology = wgpu::PrimitiveTopology::TriangleList;
+    pipeDesc.primitive.frontFace = wgpu::FrontFace::CW; // Milo uses CW winding
+    pipeDesc.primitive.cullMode = MapCull(key.cull);
+
+    return mDevice->Device().CreateRenderPipeline(&pipeDesc);
+}
+
+wgpu::RenderPipeline PipelineManager::GetPipeline(const PipelineKey& key) {
+    auto it = mPipelineCache.find(key);
+    if (it != mPipelineCache.end()) return it->second;
+
+    wgpu::RenderPipeline pipeline = CreatePipeline(key);
+    mPipelineCache[key] = pipeline;
+    return pipeline;
+}

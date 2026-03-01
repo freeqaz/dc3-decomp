@@ -79,8 +79,7 @@ void SynthEmitter::Poll() {}
 // WorldCrowd3DCharHandle
 bool WorldCrowd3DCharHandle::SyncProperty(DataNode &, DataArray *, int, PropOp) { return false; }
 
-// WorldInstance
-void WorldInstance::Load(BinStream &) {}
+// WorldInstance — real impl in HamNavList.cpp
 
 // WorldReflection
 void WorldReflection::Highlight() {}

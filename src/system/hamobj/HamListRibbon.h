@@ -87,6 +87,7 @@ public:
     RndAnimatable *EnterAnim() const { return mEnterAnim; }
     bool TestEntering() const { return mTestEntering; }
     void SetTestEntering(bool b) { mTestEntering = b; }
+    void SetMode(RibbonMode m) { mMode = m; }
 
 private:
     void ResetAnims(bool);

@@ -1,0 +1,96 @@
+#pragma once
+
+#include <webgpu/webgpu_cpp.h>
+#include <unordered_map>
+#include <cstdint>
+
+class GpuDevice;
+
+// Blend/ZMode/Cull enums match decomp's BaseMaterial.h values
+enum class WgpuBlend {
+    Dest = 0, Src = 1, Add = 2, SrcAlpha = 3, SrcAlphaAdd = 4,
+    Subtract = 5, Multiply = 6, PreMultAlpha = 7, Screen = 8,
+    Lighten = 9, Darken = 10,
+};
+
+enum class WgpuZMode {
+    Disable = 0, Normal = 1, Transparent = 2, Force = 3, Decal = 4,
+};
+
+enum class WgpuCull {
+    None = 0, Regular = 1, Backwards = 2,
+};
+
+enum class WgpuStencil {
+    Ignore = 0, Write = 1, Test = 2,
+};
+
+enum class VertexLayoutType {
+    Static = 0,
+    Skinned = 1,
+};
+
+struct PipelineKey {
+    uint32_t shaderType;        // ShaderType enum
+    WgpuBlend blend;
+    WgpuZMode zMode;
+    WgpuCull cull;
+    WgpuStencil stencil;
+    VertexLayoutType layout;
+    wgpu::TextureFormat targetFormat;
+    bool alphaCut;
+    bool alphaWrite;
+
+    bool operator==(const PipelineKey& o) const {
+        return shaderType == o.shaderType && blend == o.blend && zMode == o.zMode &&
+               cull == o.cull && stencil == o.stencil && layout == o.layout &&
+               targetFormat == o.targetFormat && alphaCut == o.alphaCut &&
+               alphaWrite == o.alphaWrite;
+    }
+};
+
+struct PipelineKeyHash {
+    size_t operator()(const PipelineKey& k) const {
+        size_t h = 0;
+        h ^= std::hash<uint32_t>{}(k.shaderType) + 0x9e3779b9 + (h << 6) + (h >> 2);
+        h ^= std::hash<int>{}((int)k.blend) + 0x9e3779b9 + (h << 6) + (h >> 2);
+        h ^= std::hash<int>{}((int)k.zMode) + 0x9e3779b9 + (h << 6) + (h >> 2);
+        h ^= std::hash<int>{}((int)k.cull) + 0x9e3779b9 + (h << 6) + (h >> 2);
+        h ^= std::hash<int>{}((int)k.layout) + 0x9e3779b9 + (h << 6) + (h >> 2);
+        h ^= std::hash<int>{}((int)k.targetFormat) + 0x9e3779b9 + (h << 6) + (h >> 2);
+        h ^= std::hash<bool>{}(k.alphaCut) + 0x9e3779b9 + (h << 6) + (h >> 2);
+        return h;
+    }
+};
+
+class PipelineManager {
+public:
+    void Init(GpuDevice* device);
+
+    // Get or create pipeline for the given state combination
+    wgpu::RenderPipeline GetPipeline(const PipelineKey& key);
+
+    // Bind group layouts (shared across all pipelines)
+    wgpu::BindGroupLayout& SceneLayout() { return mLayouts[0]; }    // Group 0
+    wgpu::BindGroupLayout& MaterialLayout() { return mLayouts[1]; } // Group 1
+    wgpu::BindGroupLayout& ObjectLayout() { return mLayouts[2]; }   // Group 2
+
+    wgpu::PipelineLayout& GetPipelineLayout() { return mPipelineLayout; }
+
+    int CachedPipelineCount() const { return (int)mPipelineCache.size(); }
+
+private:
+    wgpu::RenderPipeline CreatePipeline(const PipelineKey& key);
+    wgpu::ShaderModule GetOrCreateShader(uint32_t shaderType);
+
+    // State mapping helpers
+    wgpu::BlendState MapBlend(WgpuBlend blend);
+    wgpu::DepthStencilState MapDepthStencil(WgpuZMode z, WgpuStencil s);
+    wgpu::CullMode MapCull(WgpuCull cull);
+
+    GpuDevice* mDevice = nullptr;
+    wgpu::BindGroupLayout mLayouts[3];
+    wgpu::PipelineLayout mPipelineLayout;
+    std::unordered_map<uint32_t, wgpu::ShaderModule> mShaderCache;
+    std::unordered_map<PipelineKey, wgpu::RenderPipeline, PipelineKeyHash> mPipelineCache;
+};

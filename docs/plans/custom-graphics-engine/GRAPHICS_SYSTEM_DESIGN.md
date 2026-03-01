@@ -1,6 +1,6 @@
 # Graphics Subsystem: System Design
 
-**Status**: Draft v3 — staff review
+**Status**: Draft v3 — Tier 1 MVP complete (Steps 1-4 done, Step 5: Milo Viewer pending)
 **Target**: ~90% complete design; open items reduced from 8 to 4 after code analysis
 **Renderer**: WebGPU via Dawn (`../dawn`)
 
@@ -61,9 +61,10 @@
 ## Shared Utilities (`native/src/gfx/`)
 
 These are plain source files compiled into both the viewer and engine targets.
-No library target, no handle pools. wgpu:: objects are stored directly on the
-Milo objects that own them (WgpuTex owns its `wgpu::Texture`, WgpuMesh owns its
-`wgpu::Buffer`).
+No library target, no handle pools. GPU resources are stored in side tables
+(`unordered_map<RndTex*, GpuTexData>` and `unordered_map<RndMesh*, GpuMeshData>`)
+rather than on the Milo objects themselves — this avoids modifying decomp class
+layouts or needing factory registration for subclasses.
 
 ### 1. GpuDevice (`gfx/GpuDevice.h`)
 
@@ -217,8 +218,9 @@ filter, mipLodBias) tuple.
 
 ### 3. Vertex Formats (`gfx/VertexFormats.h`)
 
-No MeshManager module — GPU vertex/index buffers are owned directly by `WgpuMesh`.
-This header defines the shared vertex layout descriptors and CPU-side unpack functions.
+No MeshManager module — GPU vertex/index buffers are stored in a side table keyed
+by `RndMesh*`. This header defines the shared vertex layout descriptors and CPU-side
+unpack functions.
 
 ```cpp
 namespace VertexFormats {
@@ -403,16 +405,63 @@ NUM_POINT(2-bit), NUM_PROJ(2-bit), FADE_OUT(2-bit)).
 Uniform management is inline in WgpuRnd (not a separate module). The bind group
 layout is defined by `PipelineManager` and shared across all pipelines.
 
+**Ring buffer pattern**: Per-draw uniforms (material and object) use a
+`UniformRingBuffer` — a fixed-size GPU buffer (64KB each) with a write offset that
+advances per draw call. Each `Write()` returns the offset used for the bind group's
+`buffer.offset`. The buffer wraps to 0 when full (safe for single-frame use since
+submissions complete before the next frame). This avoids WebGPU's restriction that
+`WriteBuffer` + `SetBindGroup` ordering within a frame can produce stale reads if
+using a single offset.
+
 **Dynamic offset alignment**: `minUniformBufferOffsetAlignment` is 256 bytes on
-most hardware. Per-draw uniform updates must pad allocations to 256-byte boundaries.
-Query `device.limits.minUniformBufferOffsetAlignment` at runtime; do not hardcode.
+most hardware. The ring buffer pads all allocations to 256-byte boundaries.
 
 ```cpp
 // Bind group layout:
 //   Group 0: Per-frame (scene) — camera, environment, fog, lights
-//   Group 1: Per-material — color, textures, samplers
-//   Group 2: Per-object — world transform, bone matrices
+//   Group 1: Per-material — color, texture, sampler
+//   Group 2: Per-object — world transform
+```
 
+#### Tier 1 (Current Implementation — `Rnd_Wgpu.h`)
+
+```cpp
+struct SceneUniforms {        // Group 0, 224 bytes — updated once per frame
+    float viewProj[16];       // camera view-projection matrix (row-major → col-major via memcpy)
+    float view[16];           // camera view matrix (inverse world transform)
+    float cameraPos[3];       // world-space camera position
+    float _pad0;
+    float fogColor[3];        // from RndEnviron::FogColor()
+    float fogStart;           // from RndEnviron::FogStart()
+    float fogEnd;             // from RndEnviron::FogEnd()
+    float fogEnabled;         // from RndEnviron::FogEnable()
+    float _pad1[2];
+    float lightDir[3];        // single directional light direction (Tier 1: hardcoded overhead)
+    float _padL0;
+    float lightColor[3];      // single light color
+    float _padL1;
+    float ambientColor[4];    // from RndEnviron::AmbientColor()
+};
+
+struct MaterialUniforms {     // Group 1, 32 bytes — written per material via ring buffer
+    float color[4];           // mColor (RGBA) from RndMat::GetColor()
+    float alphaThreshold;     // mAlphaThreshold / 255.0 (0 if !alphaCut)
+    float useTexture;         // 1.0 if diffuse texture bound, 0.0 otherwise
+    float _pad[2];
+};
+
+struct ObjectUniforms {       // Group 2, 128 bytes — written per draw via ring buffer
+    float world[16];          // world transform (row-major)
+    float worldInvTranspose[16]; // Tier 1: = world (correct for orthogonal rotation + translation)
+};
+```
+
+#### Full Design (Tier 2/3 — planned expansion)
+
+<details>
+<summary>Full uniform structs for later tiers</summary>
+
+```cpp
 // Light types from RndLight::Type (Lit.h):
 //   kPoint=0, kDirectional=1, kFakeSpot=2, kFloorSpot=3, kShadowRef=4
 struct LightData {           // 64 bytes
@@ -432,67 +481,60 @@ struct SceneUniforms {       // Group 0, ~832 bytes (well under 64 KiB limit)
     Hmx::Matrix4 view;       // 64 bytes
     Vector3 cameraPos;       // 12 bytes
     float _pad0;
-    // Fog (from RndEnviron: mFogEnable, mFogStart, mFogEnd, mFogColor)
     float fogColor[3];
     float fogStart;
     float fogEnd;
     float fogEnabled;
     float _pad1[2];
-    // Lights (from RndEnviron: mLightsReal + mLightsApprox)
     LightData lights[8];     // 8 × 64 bytes = 512 bytes
     int numRealLights;       // mLightsReal count
     int numApproxLights;     // mLightsApprox count
     float _padL[2];
     float ambientColor[4];   // mAmbientColor (RGBA)
-    // Color adjust (from RndEnviron: mColorXfm, mExposure, mWhitePoint)
-    // RndColorXfm is a 3x3 affine RGB transform + vec3 translation:
-    //   outRGB = mColorXfm.m * inRGB + mColorXfm.v
-    // Built by chaining: hue → saturation → lightness → contrast → brightness → levels
     float colorXfmM[12];    // 3x3 matrix (3 rows of vec4 for alignment)
     float colorXfmT[4];     // vec3 translation + pad
     float exposure;          // mExposure (HDR)
     float whitePoint;        // mWhitePoint (tone mapping)
     float useColorAdjust;    // mUseColorAdjust
     float useToneMapping;    // mUseToneMapping
-    // Fade (from RndEnviron: mFadeOut, mFadeStart, mFadeEnd, mLRFade)
-    float fadeStart;         // mFadeStart — distance fade near
-    float fadeEnd;           // mFadeEnd — distance fade far
-    float fadeEnabled;       // mFadeOut
+    float fadeStart;
+    float fadeEnd;
+    float fadeEnabled;
     float _pad2;
-    float lrFade[4];         // mLRFade (left_out, left_opaque, right_opaque, right_out)
-    // AO (from RndEnviron: mAOEnabled, mAOStrength)
+    float lrFade[4];
     float aoEnabled;
-    float aoStrength;        // mAOStrength
+    float aoStrength;
     float _pad3[2];
 };
 
 struct MaterialUniforms {    // Group 1, ~256 bytes
-    float color[4];           // mColor (RGBA)
-    float specularRGB[4];     // mSpecularRGB (RGB + power in A)
-    float specular2RGB[4];    // mSpecular2RGB
-    float rimRGB[4];          // mRimRGB
-    float colorMod[3][4];     // mColorMod (up to 3 modulation colors)
+    float color[4];
+    float specularRGB[4];
+    float specular2RGB[4];
+    float rimRGB[4];
+    float colorMod[3][4];
     float emissiveMultiplier;
-    float deNormal;           // normal map intensity
-    float anisotropy;         // mAnisotropy (0-100)
+    float deNormal;
+    float anisotropy;
     float bloomMultiplier;
-    int texGen;               // mTexGen: 0=none,1=xfm,2=sphere,3=proj,4=xfmOrigin,5=environ
+    int texGen;
     float _pad0[3];
-    float texXfm[16];        // mTexXfm — texture coordinate transform matrix
-    float refractStrength;    // mRefractStrength
-    int alphaThreshold;       // mAlphaThreshold (0-255)
-    int shaderVariation;      // mShaderVariation: 0=none, 1=skin, 2=hair, 3=worldProjection
-    float environMapFalloff;  // mEnvironMapFalloff (fresnel effect, bool → 0/1)
-    int flags;                // packed: prelit|perPixelLit|pointLights|fog|fadeout|colorAdjust
-                              //         rimLightUnder|environSpecMask|refractEnabled|alphaWrite
+    float texXfm[16];
+    float refractStrength;
+    int alphaThreshold;
+    int shaderVariation;
+    float environMapFalloff;
+    int flags;
     float _pad1[3];
 };
 
 struct ObjectUniforms {      // Group 2, 128 bytes
     Hmx::Matrix4 world;
-    Hmx::Matrix4 worldInvT;  // For normal transform
+    Hmx::Matrix4 worldInvT;  // Proper inverse transpose for non-uniform scale
 };
 ```
+
+</details>
 
 ### Render Pass Structure
 
@@ -528,157 +570,142 @@ Intermediate render targets (`mSceneColor`, `mSceneDepth`, `mShadowMap`,
 `WgpuRnd` inherits from `NgRnd` and implements the Rnd virtual interface. Uniform
 buffer management and render pass management are inline here (not separate modules).
 
+### Tier 1 Implementation (`Rnd_Wgpu.h` / `Rnd_Wgpu.cpp`)
+
+The Tier 1 WgpuRnd implements only the methods needed for basic mesh rendering.
+All other Rnd/NgRnd virtuals remain as inherited stubs.
+
 ```cpp
 class WgpuRnd : public NgRnd {
 public:
-    // === Lifecycle (Rnd + NgRnd virtuals) ===
-    void PreInit() override;
-    void Init() override;
-    void ReInit() override;
-    void Terminate() override;
+    // === Lifecycle ===
+    void Init() override;              // GpuDevice + PipelineManager + ring buffers + depth + defaults
+    void Terminate() override;         // Release all GPU resources
 
     // === Frame lifecycle ===
-    void BeginDrawing() override;       // create encoder, begin world pass
-    void EndDrawing() override;         // end pass, submit, present, overlays
-    void Clear(unsigned int flags, const Hmx::Color& color) override;
-    void ForceColorClear() override;
+    void BeginDrawing() override;      // GLFW poll, acquire frame, write scene uniforms, begin render pass
+    void EndDrawing() override;        // End pass, submit, present
+    void Clear(unsigned int flags, const Hmx::Color& color) override;  // Store clear color
 
-    // === Primitive drawing ===
-    void DrawRect(const Hmx::Rect& rect, const Hmx::Color& color) override;
-    void DrawRect(const Hmx::Rect&, const Hmx::Color&, ShaderType) override;
-    void DrawRectDepth(const Hmx::Rect&, const Hmx::Color&, ShaderType) override;
-    void DrawString(const char* text, const Vector3& pos, ...) override;
-    void DrawLine(const Vector3& a, const Vector3& b, ...) override;
+    // === Accessors (used by Mesh_Wgpu.cpp, Tex_Wgpu.cpp) ===
+    GpuDevice& Gpu() { return mGpu; }
+    PipelineManager& Pipelines() { return mPipelines; }
+    UniformRingBuffer& MaterialRing() { return mMaterialRing; }
+    UniformRingBuffer& ObjectRing() { return mObjectRing; }
+    wgpu::RenderPassEncoder& CurrentPass() { return mPass; }
+    bool IsInPass() const { return mInPass; }
+    wgpu::TextureView WhiteTexView() { return mWhiteTexView; }
 
-    // === Draw targets / multi-pass ===
-    RndTex* MakeDrawTarget(int w, int h, bool hasZ, ...) override;
-    void BeginDrawPass(RndTex* target) override;
-    void EndDrawPass() override;
-    int NumDrawPasses() override;
-
-    // === Display state ===
-    void SetClearColor(const Hmx::Color& color) override;
-    void SetSync(int sync) override;
-    void SetAspect(Aspect a) override;
-    void SetShrinkToSafeArea(bool) override;
-    void SetInGame(bool) override;
-    float YRatio() override;
-
-    // === Viewport ===
-    void SetViewport(const Viewport& vp) override;
-    void GetViewport(Viewport& vp) override;
-
-    // === Shadows ===
-    void SetShadowMap(RndTex* tex) override;
-    RndTex* GetShadowMap() override;
-    RndCam* GetShadowCam() override;
-
-    // === Post-processing textures ===
-    RndTex* PreProcessTexture() override;
-    RndTex* PostProcessTexture() override;
-    RndTex* PreDepthTexture() override;
-    RndTex* GetCurrentFrameTex(bool) override;
-
-    // === Particles ===
-    RndSoftParticleBuffer* ParticleBuffer() override;
-
-    // === Occlusion queries (Tier 3) ===
-    void BeginQuery(RndDrawable*) override;
-    void EndQuery(int) override;
-    int VisibleSets() override;
-    void RemovePointTest(RndFlare*) override;
-
-    // === Screenshots ===
-    void ScreenDump(const char* path) override;
-
-    // === Misc ===
-    DataNode Handle(DataArray*, bool) override;
-    bool HasDeviceReset() override { return false; }  // no device loss on WebGPU
-    void Suspend() override;
-    void Resume() override;
-
-protected:
-    // === Critical callbacks (called by Rnd base class) ===
-    void DoWorldBegin() override;     // called at start of world rendering
-    void DoWorldEnd() override;       // finalize world pass, resolve targets
-    void DoPostProcess() override;    // bloom, blur, tone mapping chain
-    void DrawPreClear() override;     // pre-clear rendering (rare)
+    // Bind group creation helpers (called per-draw from Mesh_Wgpu.cpp)
+    wgpu::BindGroup CreateMaterialBindGroup(uint32_t bufOff, uint32_t bufSize,
+                                             wgpu::TextureView& tex, wgpu::Sampler& samp);
+    wgpu::BindGroup CreateObjectBindGroup(uint32_t bufOff, uint32_t bufSize);
 
 private:
+    void WriteSceneUniforms();         // Populate SceneUniforms from RndCam/RndEnviron
+    void CreateDepthTexture(int w, int h);
+    void CreateDefaultTextures();      // 1x1 white texture + default sampler
+
     // Shared utilities
     GpuDevice mGpu;
     PipelineManager mPipelines;
 
-    // WebGPU state (owned directly, no handles)
+    // WebGPU state
     wgpu::CommandEncoder mEncoder;
-    wgpu::RenderPassEncoder mCurrentPass;
+    wgpu::RenderPassEncoder mPass;
+    wgpu::TextureView mFrameView;      // Current frame's surface texture view
+    bool mInPass = false;
 
-    // Uniform buffers (simple per-group buffers, optimize to ring buffer later)
-    wgpu::Buffer mSceneBuf;       // Group 0
-    wgpu::Buffer mMaterialBuf;    // Group 1
-    wgpu::Buffer mObjectBuf;      // Group 2
-    wgpu::Buffer mBoneBuf;        // Group 2 storage
-    wgpu::BindGroup mSceneGroup;
+    // Uniform buffers
+    wgpu::Buffer mSceneBuffer;         // Group 0 — updated once per frame
+    wgpu::BindGroup mSceneBindGroup;
+    UniformRingBuffer mMaterialRing;   // Group 1 — 64KB, 256-byte aligned per-draw writes
+    UniformRingBuffer mObjectRing;     // Group 2 — 64KB, 256-byte aligned per-draw writes
 
-    // Intermediate render targets
-    wgpu::Texture mSceneColor;
-    wgpu::Texture mSceneDepth;
-    wgpu::Texture mShadowMap;
-    wgpu::Texture mPostProcTemp;
+    // Depth buffer
+    wgpu::Texture mDepthTex;
+    wgpu::TextureView mDepthView;
+    int mDepthWidth = 0, mDepthHeight = 0;
 
-    Hmx::Color mClearColor;
-    bool mDrawing;
+    // Default resources
+    wgpu::Texture mWhiteTex;           // 1x1 white for untextured materials
+    wgpu::TextureView mWhiteTexView;
+    wgpu::Sampler mDefaultSampler;
+
+    Hmx::Color mWgpuClearColor;
 };
 ```
 
+**Global instances** (in `Rnd_Wgpu.cpp`):
+```cpp
+static WgpuRnd gWgpuRndInstance;
+Rnd& TheRnd = gWgpuRndInstance;
+NgRnd& TheNgRnd = gWgpuRndInstance;
+WgpuRnd* gWgpuRnd = &gWgpuRndInstance;  // used by Mesh_Wgpu.cpp, Tex_Wgpu.cpp
+```
+
+### Full Virtual Interface (Tier 2/3 — planned)
+
+<details>
+<summary>Complete WgpuRnd virtual method list for later tiers</summary>
+
+```cpp
+// Additional overrides to implement in Tier 2/3:
+void ForceColorClear() override;
+void DrawRect(...) override;
+void DrawString(...) override;
+void DrawLine(...) override;
+RndTex* MakeDrawTarget(...) override;
+void BeginDrawPass(RndTex* target) override;
+void EndDrawPass() override;
+void SetViewport(const Viewport& vp) override;
+void SetShadowMap(RndTex* tex) override;
+RndTex* PreProcessTexture() override;
+RndTex* PostProcessTexture() override;
+void ScreenDump(const char* path) override;
+// Protected callbacks:
+void DoWorldBegin() override;
+void DoWorldEnd() override;
+void DoPostProcess() override;
+```
+
+</details>
+
 ### WgpuShaderMgr
 
-Replaces `DxShaderMgr`. Implements the `RndShaderMgr` virtual interface — maps the
-engine's `SetVConstant`/`SetPConstant` calls to uniform buffer writes.
+Replaces `DxShaderMgr`. Implements the `RndShaderMgr` virtual interface.
 
-The decomp's VShaderConstant/PShaderConstant enums are now populated with ~25 named
-constants (e.g., `kVS_ViewProjMatrix = 4`, `kPS_BloomParams = 7`). These map D3D9
-constant register slots to semantic meanings. WgpuShaderMgr uses a dispatch table
-to map these register indices to uniform buffer offsets — a switch/case, not a
-complex system.
+**Tier 1**: All 14 `SetVConstant`/`SetPConstant` methods are **no-ops**. The engine
+calls these during material setup (via `Mat_NG.cpp`, `Env_NG.cpp`), but Tier 1
+bypasses this path entirely — `Mesh_Wgpu.cpp::DrawShowing()` writes uniforms
+directly from material/transform data, not through the shader constant dispatch.
+
+**Tier 2** will implement a dispatch table mapping VShaderConstant/PShaderConstant
+register indices to uniform buffer offsets. The decomp's enums have ~25 named
+constants (e.g., `kVS_ViewProjMatrix = 4`, `kPS_BloomParams = 7`).
 
 ```cpp
 class WgpuShaderMgr : public RndShaderMgr {
 public:
-    void PreInit() override;
-    void Terminate() override;
+    // All 14 SetVConstant/SetPConstant overrides — Tier 1: no-ops
+    void SetVConstant(VShaderConstant c, const Hmx::Matrix4& m) override {}
+    void SetVConstant(VShaderConstant c, const Vector4& v) override {}
+    // ... (all other overloads are empty bodies)
 
-    // Vertex shader constants → uniform buffer writes
-    void SetVConstant(VShaderConstant c, const Hmx::Matrix4& m) override;
-    void SetVConstant(VShaderConstant c, const Vector4& v) override;
-    void SetVConstant(VShaderConstant c, RndTex* tex) override;
-    void SetVConstant(VShaderConstant c, const float* data, unsigned int count) override;
-    void SetVConstant(VShaderConstant c, int val) override;
-    void SetVConstant(VShaderConstant c, bool val) override;
-    void SetVConstant4x3(VShaderConstant c, const Hmx::Matrix4& m) override;
-
-    // Pixel shader constants → uniform buffer writes
-    void SetPConstant(PShaderConstant c, const Hmx::Matrix4& m) override;
-    void SetPConstant(PShaderConstant c, const Vector4& v) override;
-    void SetPConstant(PShaderConstant c, RndTex* tex) override;
-    void SetPConstant(PShaderConstant c, int val) override;
-    void SetPConstant(PShaderConstant c, bool val) override;
-    void SetPConstant4x3(PShaderConstant c, const Hmx::Matrix4& m) override;
-
-    // Shader selection
-    void* FindShader(ShaderType type, const ShaderOptions& opts) override;
-    void* NewShaderProgram() override;
-
-    // Work materials (used for rendering primitives like DrawRect/DrawLine)
-    RndMat* GetWork() override;
-    RndMat* GetPostProcMat() override;
-    RndMat* DrawHighlightMat() override;
-    RndMat* DrawRectMat() override;
-
-private:
-    PipelineManager* mPipelines;
-    WgpuRnd* mRnd;
+    // Shader/material accessors — Tier 1: return nullptr
+    void* FindShader(ShaderType, const ShaderOptions&) override { return nullptr; }
+    void* NewShaderProgram() override { return nullptr; }
+    RndMat* GetWork() override { return nullptr; }
+    RndMat* GetPostProcMat() override { return nullptr; }
+    RndMat* DrawHighlightMat() override { return nullptr; }
+    RndMat* DrawRectMat() override { return nullptr; }
 };
+```
+
+**Global instance** (in `Rnd_Wgpu.cpp`):
+```cpp
+static WgpuShaderMgr gWgpuShaderMgr;
+RndShaderMgr& TheShaderMgr = gWgpuShaderMgr;
 ```
 
 ### WgpuTex, WgpuMesh
@@ -795,18 +822,23 @@ private:
 
 **Goal**: See meshes with textures and basic lighting. Enough to validate the pipeline.
 
-| Component | What gets implemented |
-|-----------|---------------------|
-| GpuDevice | Init, surface creation, present, BC feature detection |
-| TextureConvert | RGBA8, BC1, BC3 + Xbox byte-swap + untile |
-| VertexFormats | Static mesh unpack + layout descriptors |
-| PipelineManager | `standard.wgsl` (diffuse + ambient), 3 blend modes, Normal ZMode |
-| WgpuRnd | BeginDrawing, EndDrawing, Clear, world pass |
-| WgpuTex | PresyncBitmap (GPU upload) |
-| WgpuMesh | DrawShowing (basic draw path) |
+| Component | What gets implemented | Status |
+|-----------|---------------------|--------|
+| GpuDevice | Init, surface creation, present, BC feature detection | **DONE** |
+| TextureConvert | RGBA8, BC1, BC3 + Xbox byte-swap + untile | **DONE** |
+| VertexFormats | Static mesh unpack + layout descriptors | **DONE** |
+| PipelineManager | `standard.wgsl` (diffuse + ambient), 3 blend modes, Normal ZMode | **DONE** |
+| WgpuRnd | BeginDrawing, EndDrawing, Clear, scene uniforms, ring buffers | **DONE** |
+| WgpuShaderMgr | SetVConstant/SetPConstant stubs (Tier 1: direct uniform writes) | **DONE** |
+| WgpuTex | PresyncBitmap (GPU upload via TextureConvert side table) | **DONE** |
+| WgpuMesh | DrawShowing (pipeline selection, bind groups, indexed draw) | **DONE** |
 
-**Shaders implemented**: standard (minimal), line, drawrect, error
+**Shaders implemented**: standard (minimal diffuse+ambient+fog+alphatest)
 **Visual result**: Textured meshes with flat ambient lighting, basic transparency
+
+**Build notes**: GFX shared utilities compile with `-fms-compatibility` (engine headers) and
+Dawn/WebGPU headers simultaneously via `-D__GNUC_STDC_INLINE__` and
+`-D__GCC_ATOMIC_TEST_AND_SET_TRUEVAL=1` workarounds for GCC 15 + clang MSVC compat mode.
 
 ### Tier 2: Full Lighting + Normal/Specular Maps + Post-Processing
 

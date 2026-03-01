@@ -66,6 +66,11 @@ public:
     bool UseColorAdjust() const { return mUseColorAdjust; }
     float FadeStart() const { return mFadeStart; }
     float FadeEnd() const { return mFadeEnd; }
+#ifdef HX_NATIVE
+    float FogStart() const { return mAmbientFogOwner->mFogStart; }
+    float FogEnd() const { return mAmbientFogOwner->mFogEnd; }
+    const Hmx::Color& FogColor() const { return mAmbientFogOwner->mFogColor; }
+#endif
 
 protected:
     RndEnviron();

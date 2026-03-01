@@ -58,6 +58,7 @@ public:
     void SetInVoiceMode(bool);
     bool InVoiceMode() const { return mInVoiceMode; }
     void SetGesturingWithVoice(bool);
+    bool GesturingWithVoice() const { return mGesturingWithVoice; }
     void SetInDoubleUserMode(bool);
     bool InDoubleUserMode() const { return mInDoubleUserMode; }
     void StartTrackAllSkeletons();

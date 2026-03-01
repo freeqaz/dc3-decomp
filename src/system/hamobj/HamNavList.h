@@ -3,7 +3,7 @@
 #include "HamNavProvider.h"
 #include "HamScrollBehavior.h"
 #include "gesture/DirectionGestureFilter.h"
-#include "gesture/HandsUpGestureFilter.h"
+#include "gesture/HandHeightGestureFilter.h"
 #include "gesture/Skeleton.h"
 #include "hamobj/HamScrollSpeedIndicator.h"
 #include "math/DoubleExponentialSmoother.h"
@@ -133,6 +133,7 @@ private:
     int NumItems() const;
     int GetDisabledCount(int) const;
     int GetHighlightItem(void) const;
+    bool IsElementBig(int) const;
     void DetermineHighlightedItem();
     void UpdateGestures(const Skeleton *);
     float GetTargetSwellAmount(int);
@@ -179,7 +180,7 @@ protected:
     DoubleExponentialSmoother mSlideSmoother; // 0x15c
     DoubleExponentialSmoother mDisengageSmoother; // 0x170
     DirectionGestureFilter *mDirectionGestureFilter; // 0x184
-    HandsUpGestureFilter *mHandsUpGestureFilter; // 0x188
+    HandHeightGestureFilter *mHandHeightFilter; // 0x188
     int mSkeletonTrackingID; // 0x18c
     HamScrollBehavior mScrollBehavior;
     bool mDisableSlideSound; // 0x1e4
@@ -199,5 +200,5 @@ protected:
     bool mHighButtonMode;
     /** "Elements that match these will be bigger than the other elements" */
     std::vector<Symbol> mBigElements; // 0x200
-    std::vector<int> mBigElementIndices; // 0x20c
+    std::vector<unsigned int> mBigElementIndices; // 0x20c
 };

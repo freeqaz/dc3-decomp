@@ -10,6 +10,8 @@
 #include "rndobj/Mesh.h"
 #include "rndobj/Trans.h"
 #include "rndobj/Cam.h"
+#include "rndobj/Rnd.h"
+#include "math/Trig.h"
 #include "utl/BinStream.h"
 #include "utl/MemMgr.h"
 #include "utl/UTF8.h"
@@ -22,6 +24,71 @@ int TEXT_REV = 0;
 float gSuperscriptScale = 0.7f;
 float gGuitarScale = 0.7f;
 float gGuitarZOffset = 0.2f;
+
+float SegmentLength(
+    int start, int end, const float *widths, const unsigned short *chars, float scale
+) {
+    while (chars[start] == ' ' && start < end)
+        start++;
+    while (chars[end - 1] == ' ' && start < end)
+        end--;
+    return (widths[end] - widths[start]) * scale;
+}
+
+Transform XfmOnCircleEdge(float circumference, float pos) {
+    Transform xfm;
+    float sign = circumference >= 0.0f ? 1.0f : -1.0f;
+
+    xfm.m.z.Set(0.0f, 0.0f, 1.0f);
+
+    float offset = sign * -1.5707964f;
+    float angle = (pos / circumference) * 6.2831855f + offset;
+
+    float cosA = Cosine(angle);
+    float sinA = Sine(angle);
+
+    xfm.v.Set(cosA, sinA, 0.0f);
+
+    float negSign = -sign;
+    xfm.m.y.y = sinA * negSign;
+    xfm.m.y.x = cosA * negSign;
+    xfm.m.y.z = 0.0f * negSign;
+
+    xfm.m.x.z = -(xfm.m.y.x * xfm.m.z.y - xfm.m.z.x * xfm.m.y.y);
+    xfm.m.x.x = xfm.m.z.z * xfm.m.y.y - xfm.m.y.z * xfm.m.z.y;
+    xfm.m.x.y = xfm.m.y.z * xfm.m.z.x - xfm.m.z.z * xfm.m.y.x;
+
+    float radius = (sign * (circumference * 0.15915494f));
+    xfm.v.y *= radius;
+    xfm.v.x *= radius;
+    xfm.v.z *= radius;
+
+    return xfm;
+}
+
+bool CalcScreenHeight(float size, RndMesh *mesh, float &heightOut) {
+    if (!mesh->Showing())
+        return false;
+
+    const Transform &worldXfm = mesh->WorldXfm();
+    RndCam *cam = RndCam::Current();
+
+    Vector3 pts[2];
+    pts[0].Set(0.0f, 0.0f, size * -0.5f);
+    pts[1].Set(0.0f, 0.0f, size * 0.5f);
+
+    Vector2 screens[2];
+    for (int i = 0; i < 2; i++) {
+        Vector3 world;
+        Multiply(pts[i], worldXfm, world);
+        cam->WorldToScreen(world, screens[i]);
+    }
+
+    float dx = (float)TheRnd.Width() * (screens[0].x - screens[1].x);
+    float dy = (float)TheRnd.Height() * (screens[0].y - screens[1].y);
+    heightOut = std::sqrt(dx * dx + dy * dy);
+    return true;
+}
 
 RndText::RndText()
     : mWidth(0), mHeight(0), mCircle(0), mAlignment(kMiddleCenter), mFitType(kFitWrap),
@@ -88,9 +155,8 @@ RndText::Style::Style(Hmx::Object *owner)
     : mSize(30), mTextColor(1, 1, 1), mFontColorOverride(false), mFontColor(1, 1, 1),
       mItalics(0), mKerning(0), mZOffset(0), mFont(owner), mBlacklight(false) {}
 
-RndText::Style::Style(const Style &s) {
-    memcpy(this, &s, 0x34);
-    new (&mFont) ObjPtr<RndFontBase>(s.mFont);
+RndText::Style::Style(const Style &s)
+    : mFont((memcpy(this, &s, 0x34), s.mFont)) {
     mBlacklight = s.mBlacklight;
 }
 
@@ -399,6 +465,49 @@ int RndText::CollidePlane(const Plane &p) {
     return ret;
 }
 
+float RndText::GetDistanceToPlane(const Plane &p, Vector3 &v) {
+    if (mFontMaps.empty())
+        return 0;
+    float ret = 0;
+    bool first = true;
+    FOREACH (it, mFontMaps) {
+        for (int i = 0; i < (*it)->NumMeshes(); i++) {
+            RndMesh *mesh = (*it)->Mesh(i);
+            if (mesh) {
+                Vector3 vec;
+                float dist = mesh->GetDistanceToPlane(p, vec);
+                if (first || std::fabs(dist) < std::fabs(ret)) {
+                    first = false;
+                    v = vec;
+                    ret = dist;
+                }
+            }
+        }
+    }
+    return ret;
+}
+
+bool RndText::MakeWorldSphere(Sphere &s, bool b) {
+    s.Zero();
+    FOREACH (it, mFontMaps) {
+        for (int i = 0; i < (*it)->NumMeshes(); i++) {
+            RndMesh *mesh = (*it)->Mesh(i);
+            if (mesh) {
+                Sphere localSphere;
+                if (!b) {
+                    if (mesh->GetSphere().GetRadius() != 0.0f) {
+                        Multiply(mesh->GetSphere(), mesh->WorldXfm(), localSphere);
+                    }
+                } else {
+                    mesh->MakeWorldSphere(localSphere, true);
+                }
+                s.GrowToContain(localSphere);
+            }
+        }
+    }
+    return s.GetRadius() != 0.0f;
+}
+
 void RndText::Init() {
     REGISTER_OBJ_FACTORY(RndText)
     SystemConfig("rnd")->FindData("text_superscript_scale", gSuperscriptScale, false);
@@ -444,7 +553,17 @@ void RndText::FontMap::IncrementDisplayableChars(unsigned short num) {
     }
 }
 
-void ResetFontMapPageMeshFaces(RndMesh *, int);
+void ResetFontMapPageMeshFaces(RndMesh *mesh, int numFaces) {
+    MILO_ASSERT(mesh, 0x96);
+    mesh->Faces().resize(numFaces);
+    std::vector<RndMesh::Face>::iterator it = mesh->Faces().begin();
+    std::vector<RndMesh::Face>::iterator itEnd = mesh->Faces().end();
+    int num = 0;
+    for (; it != itEnd; it += 2, num += 4) {
+        it[0].Set(num, num + 1, num + 2);
+        it[1].Set(num, num + 2, num + 3);
+    }
+}
 
 void RndText::FontMap::AllocateMeshes(RndText *text, int fixedLength) {
     for (int i = 0; i < mPages.size(); i++) {
