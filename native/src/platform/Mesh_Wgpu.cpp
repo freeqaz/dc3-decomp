@@ -115,17 +115,30 @@ static bool EnsureMeshUploaded(RndMesh* mesh) {
 // ============================================================================
 
 void RndMesh::DrawShowing() {
+    printf("Mesh_Wgpu: DrawShowing '%s' gWgpuRnd=%p inPass=%d\n",
+           Name(), (void*)gWgpuRnd, gWgpuRnd ? gWgpuRnd->IsInPass() : -1);
     if (!gWgpuRnd || !gWgpuRnd->IsInPass()) return;
 
     // Get material
     RndMat* mat = Mat();
-    if (!mat) return;
+    if (!mat) {
+        printf("Mesh_Wgpu: '%s' skipped — no material\n", Name());
+        return;
+    }
 
     // Ensure mesh data is on GPU
-    if (!EnsureMeshUploaded(this)) return;
+    if (!EnsureMeshUploaded(this)) {
+        printf("Mesh_Wgpu: '%s' skipped — upload failed (verts=%d faces=%d)\n",
+               Name(), NumVerts(), NumFaces());
+        return;
+    }
 
     auto& meshData = sMeshGpuData[this];
     auto& pass = gWgpuRnd->CurrentPass();
+
+    printf("Mesh_Wgpu: drawing '%s' (%d verts, %d idx, mat='%s', pos=%.1f,%.1f,%.1f)\n",
+           Name(), meshData.numVertices, meshData.numIndices, mat->Name(),
+           WorldXfm().v.x, WorldXfm().v.y, WorldXfm().v.z);
 
     // --- Pipeline selection ---
     PipelineKey key{};

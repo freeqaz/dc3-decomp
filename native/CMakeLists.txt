@@ -814,8 +814,8 @@ set(DC3_ENGINE_SOURCES
 # Native platform implementations (replace Xbox-specific files)
 # ============================================================================
 
-set(DC3_NATIVE_SOURCES
-    src/main_native.cpp
+# Native platform sources (no entry point — shared by dc3-native and milo-viewer)
+set(DC3_NATIVE_CORE_SOURCES
     src/xdk_shims.cpp
     src/platform/Memory_Native.cpp
     src/platform/PlatformMgr_Native.cpp
@@ -830,6 +830,7 @@ set(DC3_NATIVE_SOURCES
     src/platform/Rnd_Wgpu.cpp
     src/platform/Mesh_Wgpu.cpp
     src/platform/Tex_Wgpu.cpp
+    src/platform/Cam_Native.cpp
     src/platform/Net_Stub.cpp
     src/platform/Memcard_Stub.cpp
     src/platform/ContentMgr_Stub.cpp
@@ -848,6 +849,12 @@ set(DC3_NATIVE_SOURCES
     src/platform/RndTex_Native.cpp
     src/engine_stubs_generated.cpp
     src/thunk_stubs.cpp
+)
+
+# Full native sources (core + entry point)
+set(DC3_NATIVE_SOURCES
+    src/main_native.cpp
+    ${DC3_NATIVE_CORE_SOURCES}
 )
 
 # ============================================================================
@@ -944,4 +951,54 @@ target_link_libraries(wgpu-window-test PRIVATE
     Threads::Threads
     dawn::webgpu_dawn
     glfw
+)
+
+# ============================================================================
+# Milo Viewer — loads .milo_xbox files with orbit camera
+# ============================================================================
+add_executable(milo-viewer
+    src/viewer/milo_viewer.cpp
+    ${DC3_ENGINE_SOURCES}
+    ${DC3_NATIVE_CORE_SOURCES}
+    ${DC3_GFX_SOURCES}
+)
+
+target_compile_options(milo-viewer PRIVATE
+    ${DC3_MSVC_COMPAT_FLAGS}
+    ${DC3_DECOMP_FLAGS}
+    -fsanitize=address
+)
+
+target_compile_definitions(milo-viewer PRIVATE
+    HX_NATIVE=1
+    MILO_DEBUG=1
+    _DEBUG=1
+)
+
+target_include_directories(milo-viewer PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/../src
+    ${CMAKE_SOURCE_DIR}/../src/system
+    ${CMAKE_SOURCE_DIR}/../src/lazer
+    ${CMAKE_SOURCE_DIR}/../include
+)
+
+target_link_options(milo-viewer PRIVATE
+    -rdynamic
+    -fsanitize=address
+    -Wl,--unresolved-symbols=ignore-all
+    -Wl,--warn-unresolved-symbols
+)
+
+target_link_libraries(milo-viewer PRIVATE
+    Threads::Threads
+    dawn::webgpu_dawn
+    glfw
+    dl
+    curl
+    jpeg
+    vorbis
+    vorbisfile
+    ogg
+    z
 )

@@ -859,24 +859,31 @@ void CharEyes::LidTrackAndClampingUpdate(EyeDesc &desc, float blinkWeight) {
     }
 
     float eyeRot = (1.0f - blinkWeight) * source->LocalXfm().m.y.x;
+    float negEyeRot = -eyeRot;
 
     if (upperLid) {
         float angle =
-            (eyeRot >= 0.0f ? mUpperLidTrackUp : mUpperLidTrackDown) * -eyeRot;
-        Transform &xfm = upperLid->DirtyLocalXfm();
-        RotateAboutZ(xfm.m, angle, xfm.m);
+            (eyeRot >= 0.0f ? mUpperLidTrackUp : mUpperLidTrackDown) * negEyeRot;
+        bool isNaN = (angle != angle);
+        if (!isNaN) {
+            Transform &xfm = upperLid->DirtyLocalXfm();
+            RotateAboutZ(xfm.m, angle, xfm.m);
+        }
     }
 
     if (lowerLid) {
-        if (!mLowerLidTrackRotate) {
+        if (mLowerLidTrackRotate) {
+            float angle =
+                (eyeRot >= 0.0f ? mLowerLidTrackUp : mLowerLidTrackDown) * negEyeRot;
+            bool isNaN = (angle != angle);
+            if (!isNaN) {
+                Transform &xfm = lowerLid->DirtyLocalXfm();
+                RotateAboutZ(xfm.m, angle, xfm.m);
+            }
+        } else {
             float offset =
                 (eyeRot >= 0.0f ? mLowerLidTrackUp : mLowerLidTrackDown) * eyeRot;
             lowerLid->DirtyLocalXfm().v.x += offset;
-        } else {
-            float angle =
-                (eyeRot >= 0.0f ? mLowerLidTrackUp : mLowerLidTrackDown) * -eyeRot;
-            Transform &xfm = lowerLid->DirtyLocalXfm();
-            RotateAboutZ(xfm.m, angle, xfm.m);
         }
     }
 
@@ -910,26 +917,23 @@ void CharEyes::LidTrackAndClampingUpdate(EyeDesc &desc, float blinkWeight) {
             <= 0.0f;
 
         if (!sDisableEyeClamping) {
-            DataNode &clampCheat = DataVariable("no_lid_clamping");
+            DataNode &clampCheat = DataVariable("disable_clamping");
             if (!clampCheat.Int(0) && !lidsOK) {
-                Vector3 midpoint(
-                    (upperBlinkPos.x - lowerBlinkPos.x) * 0.5f + lowerBlinkPos.x,
-                    (upperBlinkPos.y - lowerBlinkPos.y) * 0.5f + lowerBlinkPos.y,
-                    (upperBlinkPos.z - lowerBlinkPos.z) * 0.5f + lowerBlinkPos.z
-                );
+                float midX =
+                    (upperBlinkPos.x - lowerBlinkPos.x) * 0.5f + lowerBlinkPos.x;
+                float midY =
+                    (upperBlinkPos.y - lowerBlinkPos.y) * 0.5f + lowerBlinkPos.y;
+                float midZ =
+                    (upperBlinkPos.z - lowerBlinkPos.z) * 0.5f + lowerBlinkPos.z;
 
-                Vector3 clampOff(
-                    midpoint.x - lowerBlinkPos.x,
-                    midpoint.y - lowerBlinkPos.y,
-                    midpoint.z - lowerBlinkPos.z
-                );
+                float clampOffX = midX - lowerBlinkPos.x;
+                float clampOffY = midY - lowerBlinkPos.y;
+                float clampOffZ = midZ - lowerBlinkPos.z;
 
-                const Transform &llidXfm = lowerLid->WorldXfm();
-                Vector3 newLowerPos(
-                    llidXfm.v.x + clampOff.x,
-                    llidXfm.v.y + clampOff.y,
-                    llidXfm.v.z + clampOff.z
-                );
+                Vector3 newLowerPos = lowerLid->WorldXfm().v;
+                newLowerPos.x += clampOffX;
+                newLowerPos.y += clampOffY;
+                newLowerPos.z += clampOffZ;
                 lowerLid->SetWorldPos(newLowerPos);
 
                 const Vector3 &ulidPos = upperLid->WorldXfm().v;
@@ -942,24 +946,26 @@ void CharEyes::LidTrackAndClampingUpdate(EyeDesc &desc, float blinkWeight) {
 
                 const Vector3 &ulidPos2 = upperLid->WorldXfm().v;
                 Vector3 newDir(
-                    midpoint.x - ulidPos2.x,
-                    midpoint.y - ulidPos2.y,
-                    midpoint.z - ulidPos2.z
+                    midX - ulidPos2.x,
+                    midY - ulidPos2.y,
+                    midZ - ulidPos2.z
                 );
                 Normalize(newDir, newDir);
 
                 float dot = Dot(newDir, origDir);
-                if (dot > maxDot)
-                    maxDot = dot;
-                float clamped = (maxDot < 1.0f) ? maxDot : 1.0f;
+                maxDot = maxDot - dot >= 0.0f ? maxDot : dot;
+                float clamped = maxDot - 1.0f >= 0.0f ? 1.0f : maxDot;
                 float angle = std::acos(clamped);
 
-                Transform &xfm = upperLid->DirtyLocalXfm();
-                RotateAboutZ(xfm.m, -angle, xfm.m);
+                bool isNaN = (angle != angle);
+                if (!isNaN) {
+                    Transform &xfm = upperLid->DirtyLocalXfm();
+                    RotateAboutZ(xfm.m, -angle, xfm.m);
+                }
             }
         }
 
-        DataNode &drawCheat = DataVariable("draw_lid_clamping");
+        DataNode &drawCheat = DataVariable("debug_clamping");
         if (drawCheat.Int(0)) {
             RndGraph *graph = RndGraph::GetOneFrame();
 
@@ -973,8 +979,9 @@ void CharEyes::LidTrackAndClampingUpdate(EyeDesc &desc, float blinkWeight) {
                 );
             }
             if (lidsOK) {
+                auto _tmp2 = Hmx::Color(0.0f, 0.0f, 1.0f, 1.0f);
                 graph->AddSphere(
-                    lowerBlinkPos, 0.05f, Hmx::Color(0.0f, 0.0f, 1.0f, 1.0f)
+                    lowerBlinkPos, 0.05f, _tmp2
                 );
             } else {
                 graph->AddSphere(
@@ -1024,7 +1031,7 @@ void CharEyes::LidTrackAndClampingUpdate(EyeDesc &desc, float blinkWeight) {
         }
     }
 
-    DataNode &distCheat = DataVariable("no_lid_dist_clamp");
+    DataNode &distCheat = DataVariable("disable_llidnorm");
     if (!distCheat.Int(0) && !mLowerLidTrackRotate && 0.0f < dist) {
         Vector3 srcPos = source->WorldXfm().v;
         Vector3 lidPos = lowerLid->WorldXfm().v;

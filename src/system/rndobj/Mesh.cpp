@@ -267,6 +267,54 @@ BinStream &operator>>(BinStream &bs, RndBone &bone) {
 template <class T1, class T2>
 BinStream &CachedRead(BinStream &, std::vector<T1, T2> &);
 
+#ifdef HX_NATIVE
+// Native implementation of CachedRead — reads raw binary data from the stream.
+// On Xbox 360, CachedRead reads the raw big-endian data directly into the vector
+// via ReadChunks (for chunked streams). On native x86_64, we need to byte-swap
+// each element after reading.
+#include "utl/ChunkStream.h"
+
+template <class T1, class T2>
+BinStream &CachedRead(BinStream &bs, std::vector<T1, T2> &vec) {
+    int count;
+    bs >> count;
+    vec.resize(count);
+    if (count > 0) {
+        int totalSize = count * sizeof(T1);
+        ReadChunks(bs, vec.data(), totalSize, 4096);
+        // Byte-swap from big-endian (Xbox 360) to little-endian (native x86_64)
+        // We need to swap each element based on its size
+        if (sizeof(T1) == 2) {
+            unsigned short *p = (unsigned short *)vec.data();
+            for (int i = 0; i < count * (int)(sizeof(T1) / 2); i++) {
+                p[i] = (p[i] >> 8) | (p[i] << 8);
+            }
+        } else if (sizeof(T1) == 4) {
+            unsigned int *p = (unsigned int *)vec.data();
+            for (int i = 0; i < count * (int)(sizeof(T1) / 4); i++) {
+                p[i] = __builtin_bswap32(p[i]);
+            }
+        }
+        // For Face (6 bytes = 3 * u16), each u16 needs swapping
+        // The sizeof(T1)==2 case doesn't cover Face which is 6 bytes.
+        // Handle Face specifically: it contains 3 unsigned shorts.
+        if (sizeof(T1) == 6) {
+            unsigned short *p = (unsigned short *)vec.data();
+            for (int i = 0; i < count * 3; i++) {
+                p[i] = (p[i] >> 8) | (p[i] << 8);
+            }
+        }
+    }
+    return bs;
+}
+
+// Explicit instantiations needed by Mesh.cpp
+template BinStream &CachedRead<RndMesh::Face, std::allocator<RndMesh::Face>>(
+    BinStream &, std::vector<RndMesh::Face, std::allocator<RndMesh::Face>> &);
+template BinStream &CachedRead<unsigned char, std::allocator<unsigned char>>(
+    BinStream &, std::vector<unsigned char, std::allocator<unsigned char>> &);
+#endif
+
 INIT_REVS(0x26, 0)
 
 BEGIN_LOADS(RndMesh)
@@ -1144,6 +1192,10 @@ void FillCompressedVertex(CompressedVertex_Xbox &compressed, const RndMesh::Vert
 void RndMesh::LoadVertices(BinStreamRev &d) {
     int count;
     d.stream.ReadEndian(&count, 4);
+#ifdef HX_NATIVE
+    printf("RndMesh::LoadVertices '%s': count=%d rev=0x%x platform=%d\n",
+           Name(), count, d.rev, TheLoadMgr.GetPlatform());
+#endif
     bool b58;
     if (d.rev > 0x22) {
         d >> b58;
@@ -1179,22 +1231,38 @@ void RndMesh::LoadVertices(BinStreamRev &d) {
         }
     }
     if (b58) {
+#ifdef HX_NATIVE
+        printf("  LoadVertices: compressed path, b4=%d loadedCompressedSize=%d compressedSize=%d\n",
+               b4, loadedCompressedSize, compressedSize);
+#endif
         if (b4) {
             mNumCompressedVerts = count;
             if (mNumCompressedVerts != 0) {
                 unsigned int totalSize = compressedSize * count;
                 MILO_ASSERT(totalSize > 0, 0x2D4);
+#ifdef HX_NATIVE
+                printf("  LoadVertices: ReadChunks totalSize=%d chunkSize=%d\n", totalSize, compressedSize << 9);
+#endif
                 MemPushTemp();
                 mCompressedVerts = new unsigned char[totalSize];
                 MemPopTemp();
                 ReadChunks(d.stream, mCompressedVerts, totalSize, compressedSize << 9);
+#ifdef HX_NATIVE
+                printf("  LoadVertices: ReadChunks done\n");
+#endif
             }
         } else {
             unsigned int skipSize = loadedCompressedSize * count;
             MILO_ASSERT(skipSize > 0, 0x2E7);
+#ifdef HX_NATIVE
+            printf("  LoadVertices: seeking past stale compressed data, skipSize=%u\n", skipSize);
+#endif
             d.stream.Seek(skipSize, BinStream::kSeekCur);
         }
     } else {
+#ifdef HX_NATIVE
+        printf("  LoadVertices: uncompressed path, %d verts\n", count);
+#endif
         mVerts.resize(count);
         int i = 0;
         for (Vert *it = mVerts.begin(); it != mVerts.end(); ++it) {
@@ -1205,6 +1273,9 @@ void RndMesh::LoadVertices(BinStreamRev &d) {
                     Timer::Sleep(0);
             }
         }
+#ifdef HX_NATIVE
+        printf("  LoadVertices: done reading %d verts\n", i);
+#endif
     }
 }
 

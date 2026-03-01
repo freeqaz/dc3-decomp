@@ -1,6 +1,6 @@
 # Graphics Subsystem: System Design
 
-**Status**: Draft v3 — Tier 1 MVP complete (Steps 1-4 done, Step 5: Milo Viewer pending)
+**Status**: Draft v3 — Tier 1 MVP complete (Steps 1-5 done, Milo Viewer operational)
 **Target**: ~90% complete design; open items reduced from 8 to 4 after code analysis
 **Renderer**: WebGPU via Dawn (`../dawn`)
 

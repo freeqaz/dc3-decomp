@@ -236,15 +236,20 @@ void Character::PostLoad(BinStream &bs) {
             } else {
                 bs >> mShadow;
             }
-            if (d.rev < 3) {
-                mSelfShadow = false;
-            } else {
+            if (d.rev > 2) {
                 d >> mSelfShadow;
+            } else {
+                mSelfShadow = false;
             }
             if (d.rev > 4) {
-                ObjPtr<RndTransformable> t(this);
-                bs >> t;
-                mSphereBase = t.Ptr();
+                ObjPtr<RndTransformable> tPtr(this, 0);
+                bs >> tPtr;
+                RndTransformable *loadedPtr = tPtr.Ptr();
+                if (loadedPtr) {
+                    mSphereBase = loadedPtr;
+                } else {
+                    mSphereBase = this;
+                }
             } else {
                 mSphereBase = this;
             }
@@ -294,7 +299,7 @@ void Character::PostLoad(BinStream &bs) {
             bs >> mEnv;
         }
         if (otherRev > 3) {
-            gCharMe = d.rev < 6 ? this : nullptr;
+            gCharMe = otherRev < 6 ? this : nullptr;
             ObjVector<ObjVector<Character::Lod> > lods(this);
             d >> lods;
             if (lods.size() != 0)
@@ -334,17 +339,32 @@ void Character::UpdateSphere() {
     SetSphere(s78);
 }
 
-void Character::DrawShadow(const Transform &xfm, float f2) {
+void Character::DrawShadow(const Transform &xfm, float planeD) {
     if (mShowing && !mShadow.empty()) {
-        Vector3 myWorldVec = WorldXfm().v;
-        Plane pl140;
-        pl140.Set(0, 0, 1, 0);
         MILO_ASSERT(GetGfxMode() == kOldGfx, 0x2E7);
+
+        Transform tf40;
+        Transpose(xfm, tf40);
+
+        Plane pl70;
+        pl70.Set(0, 0, 1, planeD);
+        Plane plb0;
+        Multiply(pl70, tf40, plb0);
+
         Transform tf90;
-        Transpose(xfm, tf90);
-        Plane pl130;
-        Multiply(pl140, tf90, pl130);
-        // more...
+        float scale = -1.0f / plb0.b;
+        tf90.m.Set(1, plb0.a * scale, 0, 0, 0, 0, 0, plb0.c * scale, 1);
+        tf90.v.Set(0, plb0.d * scale, 0);
+
+        Transform tfa0;
+        Multiply(tf40, tf90, tfa0);
+        Multiply(tfa0, xfm, tfa0);
+
+        for (int i = 0; i < mShadowBones.size(); i++) {
+            ShadowBone *cur = mShadowBones[i];
+            Multiply(cur->Parent()->WorldXfm(), tfa0, cur->DirtyLocalXfm());
+        }
+
         mShadow.Draw();
     }
 }
@@ -759,23 +779,31 @@ void Character::DrawLod(int lod) {
 }
 
 void Character::DrawLodOrShadow(int lod, DrawMode drawMode) {
+    mPollState = (PollState)5;
     mLastLod = Clamp<int>(0, mLods.size() - 1, lod);
     if (drawMode == 4) {
-        if (!mShadow.empty()) {
+        if (mShadow.size() != 0) {
             mShadow.Draw();
             return;
         }
-        DrawShowing();
     } else {
         if (drawMode & 1) {
             RndEnvironTracker tracker(mEnv, &WorldXfm().v);
             DrawShowing();
+            if (drawMode == 1) {
+                unk2a0 = RndEnviron::Current();
+                unk2b4 = RndEnviron::CurrentPos();
+            }
         }
-        if (!(drawMode & 2))
-            return;
-        if (drawMode == 2) {
-            RndEnvironTracker tracker(unk2a0, unk2b4);
+        if (drawMode & 2) {
+            if (drawMode == 2) {
+                RndEnvironTracker tracker(unk2a0, unk2b4);
+                DrawShowing();
+                return;
+            }
+            DrawShowing();
             return;
         }
     }
+    DrawShowing();
 }

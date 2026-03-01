@@ -77,7 +77,7 @@ void WgpuRnd::Init() {
 
     // Create GPU device and window
     GpuDeviceDesc desc{};
-    desc.headless = false;
+    desc.headless = (getenv("MILO_HEADLESS") != nullptr);
     desc.width = 1280;
     desc.height = 720;
     desc.title = "DC3 Native — WebGPU";
