@@ -60,7 +60,6 @@ void RndTex::PresyncBitmap() {
         gWgpuRnd->Gpu(), mBitmap, numMips);
 
     if (!gpuTex) {
-        // Texture creation failed — skip
         return;
     }
 

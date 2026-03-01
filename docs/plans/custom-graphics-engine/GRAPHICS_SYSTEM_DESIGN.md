@@ -883,8 +883,12 @@ private:
 | WgpuTex | PresyncBitmap (GPU upload via TextureConvert side table) | **DONE** |
 | WgpuMesh | DrawShowing (pipeline selection, bind groups, indexed draw) | **DONE** |
 
-**Shaders implemented**: standard (minimal diffuse+ambient+fog+alphatest)
-**Visual result**: Textured meshes with flat ambient lighting, basic transparency
+**Shaders implemented**: standard (diffuse+ambient with half-Lambert wrap, fog, alpha test)
+**Visual result**: Textured meshes with half-Lambert directional lighting, 17/17 test props rendered
+
+**Milo Viewer** (Step 5): Standalone app (`milo-viewer`) loads `.milo_xbox` files from CLI,
+renders with auto-framing orbit camera, supports `--screenshot` headless mode and
+`--azimuth`/`--elevation` camera overrides. Batch script: `native/scripts/render_screenshots.sh`
 
 **Build notes**: GFX shared utilities compile with `-fms-compatibility` (engine headers) and
 Dawn/WebGPU headers simultaneously via `-D__GNUC_STDC_INLINE__` and
@@ -947,11 +951,8 @@ native/
 ├── CMakeLists.txt                    ✓ Builds dc3-native target
 ├── src/
 │   ├── main.cpp                      ✓ Engine entry point
-│   ├── viewer/                       (Step 5 — pending)
-│   │   ├── main.cpp                  Milo Viewer entry point
-│   │   ├── MiloViewer.cpp
-│   │   ├── OrbitCamera.cpp
-│   │   └── MiloScene.cpp            .milo file loading for viewer
+│   ├── viewer/                       ✓ Step 5 — operational
+│   │   └── milo_viewer.cpp          ✓ Standalone viewer: orbit camera, auto-frame, --screenshot
 │   ├── gfx/                          ✓ Shared utilities
 │   │   ├── GpuDevice.h / .cpp        ✓ WebGPU device lifecycle, GLFW window, sampler cache
 │   │   ├── TextureConvert.h / .cpp   ✓ Format conversion, byte-swap, untile, DXT decompress

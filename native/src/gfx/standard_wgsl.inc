@@ -94,12 +94,13 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
         discard;
     }
 
-    // Simple directional + ambient lighting
+    // Directional + ambient lighting with half-Lambert wrap
     let N = normalize(in.worldNormal);
     let L = normalize(-scene.lightDir);
-    let NdotL = max(dot(N, L), 0.0);
+    let NdotL = dot(N, L) * 0.5 + 0.5; // half-Lambert: wraps light to dark side
+    let NdotL2 = NdotL * NdotL;         // squared for softer falloff
 
-    let diffuse = scene.lightColor * NdotL;
+    let diffuse = scene.lightColor * NdotL2;
     let ambient = scene.ambientColor.rgb;
     let lit = baseColor.rgb * (ambient + diffuse);
 

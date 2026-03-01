@@ -238,7 +238,7 @@ App::RunWithoutDebugging() (main loop):
 | Threading | ~5 | LOW | **DONE** | Skipped (sync fallback) |
 | File I/O | ~5 | LOW | **DONE** | POSIX file ops |
 | Memory | ~3 | LOW | **DONE** | malloc/free redirect |
-| Rendering | ~36 | VERY HIGH | TODO | Full D3D9 → WebGPU port |
+| Rendering | ~36 | VERY HIGH | **Tier 1 DONE** | WebGPU/Dawn — meshes, textures, lighting working |
 | Audio | ~205 | HIGH | Stubbed | XAudio2 → miniaudio (stub first) |
 | Kinect/Gesture | ~72 | LOW | **DONE** | Stubbed, no-op |
 | Xbox Live/Social | ~20 | LOW | **DONE** | Stubbed, no-op |
@@ -265,7 +265,7 @@ a system header (shadow copy with one-line addition).
 8. Stub renderer that shows title screen texture
 9. Screenshot → `we-did-it-wtf.png`
 
-## Boot Progress (Sessions 3-4)
+## Boot Progress (Sessions 3-6)
 
 Engine successfully boots through:
 
@@ -274,7 +274,29 @@ Engine successfully boots through:
 3. **SystemInit** — subsystem initialization begins
 4. **CharClip/skeleton loading** — skeleton_clips.milo loads 14 clips successfully
 5. **DirLoader::LoadObjs** — .milo object loading (Tex, Font, Text, etc.)
-6. **Exit code 0** — clean shutdown after loading
+6. **Subsystem inits** — FlowInit, CharInit, WorldInit, HamInit all complete
+7. **TheUI->Init()** — starts loading shared subdirs
+
+**Current blocker**: Stream desync in `UIManager::Init()` → `PreloadSharedSubdirs()`
+loading a .milo file. Object `boxyman` (RndDir type) reads revision 32 (max 10) →
+garbage viewport count → ASan OOM (230GB allocation attempt).
+
+### Session 5-6 Breakthroughs
+
+**Font3d vtable corruption**: `RndFont3d` had all-zero vtable (384 bytes). Root cause:
+Itanium ABI key function (`Handle()`) was declared but never defined in `Font3d.cpp`.
+Linker fell back to weak zero-filled stub in `engine_stubs_generated.cpp`. Fix: added
+`BEGIN_HANDLERS(RndFont3d)` and all other virtual function stubs to `Font3d.cpp`.
+
+**Milo Viewer operational**: Standalone viewer (`native/build/milo-viewer`) loads and
+renders .milo_xbox files via WebGPU. 15/17 props render correctly (2 blank — likely
+transparency-dependent). Proves core milo loading + rendering pipeline works.
+
+**Systemic vtable issue identified**: 44 classes have zero-filled vtable stubs and
+18 have zero-filled typeinfo stubs in `engine_stubs_generated.cpp`. Any class that
+gets instantiated during a .milo load without its key function defined will have broken
+virtual dispatch. This is the same root cause as Font3d and likely contributes to the
+stream desync (broken Load/PreLoad/PostLoad → wrong byte count consumed → stream drift).
 
 The engine gets surprisingly far. Most game logic is platform-independent and
 "just works" once the LP64 type issues are fixed.

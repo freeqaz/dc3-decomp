@@ -87,6 +87,19 @@ static bool EnsureMeshUploaded(RndMesh* mesh) {
         return false;
     }
 
+    // Fix: if vertex alpha is zero, force white vertex colors (common for texture-only meshes)
+    {
+        bool allAlphaZero = true;
+        for (int i = 0; i < unpacked && i < 10; i++) {
+            if (verts[i].color[3] > 0.001f) { allAlphaZero = false; break; }
+        }
+        if (allAlphaZero) {
+            for (int i = 0; i < unpacked; i++) {
+                verts[i].color[0] = verts[i].color[1] = verts[i].color[2] = verts[i].color[3] = 1.0f;
+            }
+        }
+    }
+
     // Create vertex buffer
     wgpu::BufferDescriptor vbDesc{};
     vbDesc.size = unpacked * sizeof(GpuVertex);
@@ -97,7 +110,9 @@ static bool EnsureMeshUploaded(RndMesh* mesh) {
 
     // Create index buffer from faces
     int numIndices = numFaces * 3;
-    uint16_t* indices = new uint16_t[numIndices];
+    // Allocate with padding for 4-byte alignment (WebGPU requirement)
+    int allocIndices = (numIndices + 1) & ~1; // round up to even for 4-byte alignment
+    uint16_t* indices = new uint16_t[allocIndices]();  // zero-init for padding
     auto& faces = geomOwner->Faces();
     for (int i = 0; i < numFaces; i++) {
         indices[i * 3 + 0] = faces[i].v1;
@@ -105,11 +120,14 @@ static bool EnsureMeshUploaded(RndMesh* mesh) {
         indices[i * 3 + 2] = faces[i].v3;
     }
 
+    // WebGPU requires buffer sizes to be a multiple of 4 bytes
+    size_t ibAlignedSize = (numIndices * sizeof(uint16_t) + 3) & ~3u;
+
     wgpu::BufferDescriptor ibDesc{};
-    ibDesc.size = numIndices * sizeof(uint16_t);
+    ibDesc.size = ibAlignedSize;
     ibDesc.usage = wgpu::BufferUsage::Index | wgpu::BufferUsage::CopyDst;
     wgpu::Buffer indexBuf = gWgpuRnd->Gpu().Device().CreateBuffer(&ibDesc);
-    gWgpuRnd->Gpu().Queue().WriteBuffer(indexBuf, 0, indices, numIndices * sizeof(uint16_t));
+    gWgpuRnd->Gpu().Queue().WriteBuffer(indexBuf, 0, indices, ibAlignedSize);
     delete[] indices;
 
     GpuMeshData data;
@@ -128,30 +146,17 @@ static bool EnsureMeshUploaded(RndMesh* mesh) {
 // ============================================================================
 
 void RndMesh::DrawShowing() {
-    printf("Mesh_Wgpu: DrawShowing '%s' gWgpuRnd=%p inPass=%d\n",
-           Name(), (void*)gWgpuRnd, gWgpuRnd ? gWgpuRnd->IsInPass() : -1);
     if (!gWgpuRnd || !gWgpuRnd->IsInPass()) return;
 
     // Get material
     RndMat* mat = Mat();
-    if (!mat) {
-        printf("Mesh_Wgpu: '%s' skipped — no material\n", Name());
-        return;
-    }
+    if (!mat) return;
 
     // Ensure mesh data is on GPU
-    if (!EnsureMeshUploaded(this)) {
-        printf("Mesh_Wgpu: '%s' skipped — upload failed (verts=%d faces=%d)\n",
-               Name(), NumVerts(), NumFaces());
-        return;
-    }
+    if (!EnsureMeshUploaded(this)) return;
 
     auto& meshData = sMeshGpuData[this];
     auto& pass = gWgpuRnd->CurrentPass();
-
-    printf("Mesh_Wgpu: drawing '%s' (%d verts, %d idx, mat='%s', pos=%.1f,%.1f,%.1f)\n",
-           Name(), meshData.numVertices, meshData.numIndices, mat->Name(),
-           WorldXfm().v.x, WorldXfm().v.y, WorldXfm().v.z);
 
     // --- Pipeline selection ---
     PipelineKey key{};

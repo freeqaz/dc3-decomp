@@ -22,8 +22,14 @@
 #include "rndobj/Mesh.h"
 #include "rndobj/MetaMaterial.h"
 #include "rndobj/Part.h"
+#include "rndobj/Tex.h"
+#include "utl/Cache.h"
 #include "utl/Std.h"
 #include "rndobj/Utl.h"
+#include "math/Key.h"
+#include "os/File.h"
+#include "obj/Data.h"
+#include "obj/Utl.h"
 
 #include "math/Rand.h"
 
@@ -122,7 +128,7 @@ void RndSplasherResume() {
         gSplashResume();
 }
 
-const char *CacheResource(const char *, const Hmx::Object *);
+const char *CacheResource(const char *, CacheResourceResult &);
 
 Loader *ResourceFactory(const FilePath &f, LoaderPos p) {
     return new FileLoader(
@@ -778,3 +784,404 @@ bool XfmSort(RndMultiMesh::Instance &mesh1, RndMultiMesh::Instance &mesh2) {
         + (mesh2.mXfm.v.y - gUtlXfms.y) * (mesh2.mXfm.v.y - gUtlXfms.y)
         + (mesh2.mXfm.v.x - gUtlXfms.x) * (mesh2.mXfm.v.x - gUtlXfms.x);
 }
+
+void DistributeXfms(RndMultiMesh *mm, int i, float f) {
+    int idx = 0;
+    FOREACH (it, mm->Instances()) {
+        Vector3 v5c((float)(idx % i) * f, (float)(idx / i) * f, 0);
+        Add(it->mXfm.v, v5c, it->mXfm.v);
+        ++idx;
+    }
+}
+
+void MoveXfms(RndMultiMesh *mm, const Vector3 &v) {
+    FOREACH (it, mm->Instances()) {
+        Add(it->mXfm.v, v, it->mXfm.v);
+    }
+}
+
+void ScaleXfms(RndMultiMesh *mm, const Vector3 &v) {
+    FOREACH (it, mm->Instances()) {
+        Scale(v, it->mXfm.m, it->mXfm.m);
+    }
+}
+
+void RandomXfms(RndMultiMesh *) { MILO_ASSERT(0, 3173); }
+
+void UtilDrawSphere(const Vector3 &v, float f, const Hmx::Color &col, RndMat *) {
+    if (!sSphereMesh) {
+        MILO_NOTIFY_ONCE("Sphere mesh is not loaded");
+    } else {
+        Transform tf58;
+        tf58.Reset();
+        tf58.v = v;
+        Scale(Vector3(f, f, f), tf58.m, tf58.m);
+        sSphereMesh->Mat()->SetColor(col.red, col.green, col.blue);
+        sSphereMesh->Mat()->SetAlpha(0.2f);
+        sSphereMesh->Mat()->SetCull(kCullNone);
+        sSphereMesh->SetLocalXfm(tf58);
+        sSphereMesh->SetSphere(Sphere(Vector3(0, 0, 0), f));
+        sSphereMesh->Draw();
+    }
+}
+
+void UtilDrawCylinder(
+    const Transform &tf, float radius, float height, const Hmx::Color &col, int
+) {
+    if (!sCylinderMesh) {
+        MILO_NOTIFY_ONCE("Cylinder mesh is not loaded");
+    } else {
+        Transform tf58;
+        tf58 = tf;
+        Scale(Vector3(radius, height, radius), tf58.m, tf58.m);
+        sCylinderMesh->Mat()->SetColor(col.red, col.green, col.blue);
+        sCylinderMesh->Mat()->SetAlpha(0.2f);
+        sCylinderMesh->Mat()->SetCull(kCullNone);
+        sCylinderMesh->SetLocalXfm(tf58);
+        sCylinderMesh->Draw();
+    }
+}
+
+void UtilDrawPlane(
+    const Plane &p, const Vector3 &v, const Hmx::Color &c, int i4, float f, bool
+) {
+    Transform tf88;
+    ScaleAdd(v, *(const Vector3 *)&p, -p.Dot(v), tf88.v);
+    tf88.m.y = *(const Vector3 *)&p;
+    Hmx::Matrix3 mb0;
+    mb0.Identity();
+    int idx = 0;
+    int minIdx = 0;
+    float ref = 10000.0f;
+    for (; idx < 3; idx++) {
+        if (MinEq(ref, Dot(mb0[idx], tf88.m.y))) {
+            minIdx = idx;
+        }
+    }
+    Cross(tf88.m.y, mb0[minIdx], tf88.m.z);
+    Normalize(tf88.m.z, tf88.m.z);
+    Cross(tf88.m.y, tf88.m.z, tf88.m.x);
+    for (int i = 0; i < i4; i++) {
+        Vector3 vecbc, vecc8, vecd4, vece0;
+        float scalar = (float)(i + 1) * f;
+        ScaleAdd(tf88.v, tf88.m.x, scalar, vece0);
+        ScaleAdd(tf88.v, tf88.m.z, scalar, vecd4);
+        float negscalar = -scalar;
+        ScaleAdd(tf88.v, tf88.m.x, negscalar, vecc8);
+        ScaleAdd(tf88.v, tf88.m.z, negscalar, vecbc);
+        TheRnd.DrawLine(vece0, vecd4, c, false);
+        TheRnd.DrawLine(vecd4, vecc8, c, false);
+        TheRnd.DrawLine(vecc8, vecbc, c, false);
+        TheRnd.DrawLine(vecbc, vece0, c, false);
+    }
+}
+
+void AttachMesh(RndMesh *main, RndMesh *attach) {
+    MILO_ASSERT(main && attach, 0x536);
+    int nummainfaces = main->Faces().size();
+    int numattachfaces = attach->Faces().size();
+    main->Faces().resize(nummainfaces + numattachfaces);
+    int numverts = main->Verts().size();
+    for (int i = 0; i < numattachfaces; i++) {
+        RndMesh::Face &curattachface = attach->Faces(i);
+        RndMesh::Face &mainface = main->Faces(i + nummainfaces);
+        mainface.Set(
+            curattachface.v1 + numverts,
+            curattachface.v2 + numverts,
+            curattachface.v3 + numverts
+        );
+    }
+    Transform tf50;
+    FastInvert(main->WorldXfm(), tf50);
+    Multiply(attach->WorldXfm(), tf50, tf50);
+    int numattachverts = attach->Verts().size();
+    main->Verts().resize(numverts + numattachverts);
+    for (int i = 0; i < numattachverts; i++) {
+        RndMesh::Vert &mainvert = main->Verts(i + numverts);
+        RndMesh::Vert &attachvert = attach->Verts(i);
+        Multiply(attachvert.pos, tf50, mainvert.pos);
+        mainvert.color = attachvert.color;
+        mainvert.boneWeights = attachvert.boneWeights;
+        mainvert.norm = attachvert.norm;
+        mainvert.tex = attachvert.tex;
+    }
+    main->Sync(0x3F);
+}
+
+const char *CacheResource(const char *cc, const Hmx::Object *o) {
+    if (!cc || (*cc == '\0'))
+        return 0;
+    else {
+        CacheResourceResult res;
+        const char *ret = CacheResource(cc, res);
+        if (res > kCacheUnnecessary) {
+            switch (res) {
+            case kCacheUnknownExtension:
+                if (o)
+                    MILO_WARN(
+                        "%s: \"%s\" has unrecognized extension \"%s\"",
+                        PathName(o),
+                        cc,
+                        FileGetExt(cc)
+                    );
+                else
+                    MILO_WARN(
+                        "Unrecognized extension \"%s\" to \"%s\"", FileGetExt(cc), cc
+                    );
+                break;
+            case kCacheMissingFile:
+                if (o)
+                    MILO_WARN("%s: couldn't find %s", PathName(o), cc);
+                else
+                    MILO_WARN("Couldn't find %s", cc);
+                break;
+            default:
+                if (o)
+                    MILO_WARN("%s: unknown CacheResource error %s", PathName(o), cc);
+                else
+                    MILO_WARN("Unknown CacheResource error %s", cc);
+                break;
+            }
+        }
+        return ret;
+    }
+}
+
+const char *CacheResource(const char *cc, CacheResourceResult &res) {
+    Platform thisPlatform = TheLoadMgr.GetPlatform();
+    res = kCacheUnnecessary;
+    char buf[256];
+    const char *localized = FileLocalize(cc, buf);
+    const char *ext = FileGetExt(localized);
+    if (stricmp(ext, "bmp") != 0 && stricmp(ext, "png") != 0) {
+        const char *movieExt = MovieExtension(ext, thisPlatform);
+        if (movieExt) {
+            return MakeString(
+                "%s/%s.%s", FileGetPath(localized), FileGetBase(localized), movieExt
+            );
+        } else {
+            res = kCacheUnknownExtension;
+            return nullptr;
+        }
+    } else {
+        if (TheLoadMgr.GetPlatform() == kPlatformPS3) {
+            const char *xboxStr = strstr(localized, "_xbox");
+            if (xboxStr) {
+                static char *ps3File;
+                strcpy(ps3File, localized);
+                int ps3Idx = xboxStr - localized;
+                strcpy(ps3File + ps3Idx, "_ps3");
+                strcpy(ps3File + ps3Idx + 4, xboxStr + 5);
+            }
+        }
+        static char *cacheFile;
+        strcpy(
+            cacheFile,
+            MakeString(
+                "%s/gen/%s.%s_%s",
+                FileGetPath(localized),
+                FileGetBase(localized),
+                FileGetExt(localized),
+                PlatformSymbol(thisPlatform)
+            )
+        );
+        return cacheFile;
+    }
+}
+
+DataNode GetNormalMapTextures(ObjectDir *dir) {
+    DataArrayPtr ptr(new DataArray(0x100));
+    int idx = 0;
+    ptr->Node(idx++) = NULL_OBJ;
+    for (ObjDirItr<RndTex> it(dir, true); it; ++it) {
+        bool b1 = false;
+        FilePath fp(it->File());
+        if (strstr(FileGetBase(fp.c_str()), "_norm")) {
+            b1 = true;
+        } else {
+            if (fp.empty()) {
+                if (it->IsRenderTarget())
+                    b1 = true;
+            }
+        }
+        if (b1) {
+            ptr->Node(idx++) = DataNode(it);
+        }
+    }
+    ptr->Resize(idx);
+    return ptr;
+}
+
+DataNode GetTexturesOfType(ObjectDir *dir, RndTex::Type texType) {
+    int num = 0;
+    for (ObjDirItr<RndTex> it(dir, true); it != 0; ++it) {
+        if (texType == (texType & it->GetType())) {
+            num++;
+        }
+    }
+    DataArrayPtr ptr(new DataArray(num + 1));
+    num = 0;
+    for (ObjDirItr<RndTex> it(dir, true); it != 0; ++it) {
+        if (texType == (texType & it->GetType())) {
+            ptr->Node(num++) = DataNode(it);
+        }
+    }
+    ptr->Node(num) = NULL_OBJ;
+    return ptr;
+}
+
+DataNode GetRenderTextures(ObjectDir *dir) {
+    return GetTexturesOfType(dir, RndTex::kRendered);
+}
+
+DataNode GetRenderTexturesNoZ(ObjectDir *dir) {
+    return GetTexturesOfType(dir, RndTex::kRenderedNoZ);
+}
+
+DataNode OnTestDrawGroups(DataArray *da) {
+    DataArray *arr = 0;
+    ObjectDir *dir = da->Obj<ObjectDir>(2);
+    if (da->Size() > 3)
+        arr = da->Array(3);
+    for (ObjDirItr<RndDrawable> it(dir, true); it; ++it) {
+        std::list<RndGroup *> gList;
+        ListDrawGroups(it, dir, gList);
+        if (arr) {
+            for (std::list<RndGroup *>::iterator gListIt = gList.begin();
+                 gListIt != gList.end();) {
+                bool canerase = false;
+                for (int i = 0; i < arr->Size(); i++) {
+                    if (streq((*gListIt)->Name(), arr->Str(i))) {
+                        canerase = true;
+                        break;
+                    }
+                }
+                if (canerase)
+                    gListIt = gList.erase(gListIt);
+                else
+                    ++gListIt;
+            }
+        }
+        if (gList.size() > 1) {
+            String str(MakeString("%s is in %d groups:", PathName(it), gList.size()));
+            for (std::list<RndGroup *>::iterator gListIt = gList.begin();
+                 gListIt != gList.end();
+                 ++gListIt) {
+                str << " " << PathName(*gListIt);
+            }
+            MILO_WARN(str.c_str());
+        }
+    }
+    return 0;
+}
+
+void TestTextureSize(ObjectDir *dir, int iType, int i3, int i4, int i5, int maxBpp) {
+    bool rendered = false;
+    if (iType == RndTex::kRendered || iType == RndTex::kRenderedNoZ)
+        rendered = true;
+    bool b2 = false;
+    if (GetGfxMode() == 0 || rendered)
+        b2 = true;
+    int ivar4 = 1;
+    if (b2)
+        ivar4 = i5;
+    for (ObjDirItr<RndTex> it(dir, true); it != 0; ++it) {
+        if (iType == it->GetType()) {
+            int local_bpp = b2 ? it->Bpp() : 1;
+            if (rendered && GetGfxMode() == 1 && local_bpp == 0x10)
+                local_bpp = 0x20;
+            int product = it->Width() * it->Height() * local_bpp;
+            if (product > i3 * i4 * ivar4) {
+                MILO_WARN(
+                    "%s is too big w:%d h:%d bpp:%d",
+                    PathName(it),
+                    it->Width(),
+                    it->Height(),
+                    local_bpp
+                );
+            }
+            if (product != 0 && b2 && local_bpp > maxBpp) {
+                MILO_WARN("%s is %d bpp > %d, too big", PathName(it), local_bpp, maxBpp);
+            }
+        }
+    }
+}
+
+void TestTexturePaths(ObjectDir *dir) {
+    String str(FileRoot());
+    FileNormalizePath(str.c_str());
+    for (ObjDirItr<RndTex> it(dir, true); it != 0; ++it) {
+        FilePath fp(it->File());
+        if (fp.empty())
+            continue;
+        String relative(FileRelativePath(FileRoot(), fp.c_str()));
+        FileNormalizePath(str.c_str());
+        const char *normalized = relative.c_str();
+        if (strstr(relative.c_str(), "..") == relative.c_str()) {
+            if (strstr(relative.c_str(), "../../system/run") != normalized) {
+                MILO_WARN("%s: %s is outside project path", PathName(it), relative);
+            }
+        }
+        const char *normalized2 = relative.c_str();
+        if (strlen(normalized2) > 2 && normalized2[1] == ':') {
+            MILO_WARN("%s: %s is outside project path", PathName(it), relative);
+        }
+    }
+    if (dir->Loader()) {
+        const char *fpstr = dir->Loader()->LoaderFile().c_str();
+        const char *ng = strstr(fpstr, "/ng/");
+        for (ObjDirItr<RndTex> it(dir, true); it != 0; ++it) {
+            const char *texStr = it->File().c_str();
+            if (ng == 0 && strstr(texStr, "/ng/") != 0) {
+                MILO_WARN("og %s has ng texture %s", fpstr, texStr);
+            } else if (ng && strstr(texStr, "/og/") != 0) {
+                MILO_WARN("ng %s has og texture %s", fpstr, texStr);
+            }
+        }
+    }
+}
+
+void TestMaterialTextures(ObjectDir *) {}
+
+void ConvertBonesToTranses(ObjectDir *dir, bool b) {
+    std::list<RndMesh *> meshes;
+    for (ObjDirItr<RndMesh> it(dir, true); it != 0; ++it) {
+        RndTransformable *itTrans = it;
+        if (ShouldStrip(itTrans)) {
+            meshes.push_back(it);
+        } else {
+            if (b) {
+                bool b1 = false;
+                FOREACH (rit, it->Refs()) {
+                    RndMesh *curRefOwner = dynamic_cast<RndMesh *>(rit->RefOwner());
+                    if (curRefOwner) {
+                        for (int i = 0; i < curRefOwner->NumBones(); i++) {
+                            if (curRefOwner->BoneTransAt(i) == itTrans) {
+                                meshes.push_back(it);
+                                b1 = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (b1)
+                        break;
+                }
+            }
+        }
+    }
+    while (!meshes.empty()) {
+        ReplaceObject(
+            meshes.front(), Hmx::Object::New<RndTransformable>(), true, true, true
+        );
+        meshes.pop_front();
+    }
+    for (ObjDirItr<RndTransformable> it(dir, true); it != 0; ++it) {
+        if (strncmp("spot_", it->Name(), 5) == 0) {
+            Normalize(it->LocalXfm().m, it->DirtyLocalXfm().m);
+        }
+    }
+}
+
+void SetBloomBlurWeights(bool, float, float) {}
+
+void SetBloomBlurWeightsStreak(bool, float, float, float, int, float) {}

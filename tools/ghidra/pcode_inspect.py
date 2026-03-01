@@ -489,7 +489,17 @@ def main():
     if not args.no_decompile:
         try:
             print(f"Decompiling {func_to_decompile}...", file=sys.stderr)
-            result = client.decompile_function(func_to_decompile)
+            try:
+                result = client.decompile_function(func_to_decompile)
+            except MCPError as e:
+                if "not found" in str(e).lower() and func_address is not None:
+                    # Function object doesn't exist in Ghidra - create it first
+                    addr_hex = f"{func_address:08x}"
+                    print(f"Creating function at 0x{addr_hex}...", file=sys.stderr)
+                    client.bulk_create_functions([addr_hex])
+                    result = client.decompile_function(func_to_decompile)
+                else:
+                    raise
 
             if isinstance(result, dict):
                 decompiled_code = result.get("code", result.get("decompiled_code", ""))

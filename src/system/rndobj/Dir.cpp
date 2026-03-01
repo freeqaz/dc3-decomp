@@ -84,19 +84,66 @@ void RndDir::Export(DataArray *a, bool b2) {
 INIT_REVS(10, 0)
 
 void RndDir::PreLoad(BinStream &bs) {
+#ifdef HX_NATIVE
+    int tell0 = bs.Tell();
+    printf("RndDir::PreLoad '%s': tell=%d (before LOAD_REVS)\n", Name(), tell0);
+    fflush(stdout);
+#endif
     LOAD_REVS(bs)
     ASSERT_REVS(10, 0)
+#ifdef HX_NATIVE
+    printf("RndDir::PreLoad '%s': rev=%d altRev=%d tell=%d\n", Name(), d.rev, d.altRev, bs.Tell());
+    if (d.rev > 10) {
+        // Dump the next 64 bytes as hex for debugging
+        unsigned char peek[64];
+        bs.Read(peek, 64);
+        printf("  WRONG REV! Next 64 bytes after LOAD_REVS:\n  hex: ");
+        for (int i = 0; i < 64; i++) {
+            printf("%02x ", peek[i]);
+            if (i % 16 == 15) printf("\n  hex: ");
+        }
+        printf("\n  ascii: ");
+        for (int i = 0; i < 64; i++)
+            printf("%c", (peek[i] >= 32 && peek[i] < 127) ? peek[i] : '.');
+        printf("\n");
+        fflush(stdout);
+        printf("  ABORTING - fix the stream desync first!\n");
+        fflush(stdout);
+        exit(1);
+    }
+#endif
     ObjectDir::PreLoad(bs);
     bs.PushRev(packRevs(d.altRev, d.rev), this);
 }
 
 void RndDir::PostLoad(BinStream &bs) {
     BinStreamRev d(bs, bs.PopRev(this));
+#ifdef HX_NATIVE
+    printf("RndDir::PostLoad '%s': rev=%d altRev=%d tell=%d\n",
+           Name(), d.rev, d.altRev, bs.Tell());
+    fflush(stdout);
+#endif
     ObjectDir::PostLoad(bs);
+#ifdef HX_NATIVE
+    printf("RndDir::PostLoad '%s': after ObjectDir::PostLoad tell=%d\n", Name(), bs.Tell());
+    fflush(stdout);
+#endif
     RndAnimatable::Load(d.stream);
+#ifdef HX_NATIVE
+    printf("RndDir::PostLoad '%s': after RndAnimatable::Load tell=%d\n", Name(), bs.Tell());
+    fflush(stdout);
+#endif
     RndDrawable::Load(d.stream);
+#ifdef HX_NATIVE
+    printf("RndDir::PostLoad '%s': after RndDrawable::Load tell=%d\n", Name(), bs.Tell());
+    fflush(stdout);
+#endif
     if (d.rev > 0) {
         RndTransformable::Load(d.stream);
+#ifdef HX_NATIVE
+        printf("RndDir::PostLoad '%s': after RndTransformable::Load tell=%d\n", Name(), bs.Tell());
+        fflush(stdout);
+#endif
     }
     if (d.rev > 1) {
         if (gLoadingProxyFromDisk) {
@@ -105,9 +152,17 @@ void RndDir::PostLoad(BinStream &bs) {
         } else {
             d.stream >> mEnv;
         }
+#ifdef HX_NATIVE
+        printf("RndDir::PostLoad '%s': after mEnv tell=%d\n", Name(), bs.Tell());
+        fflush(stdout);
+#endif
     }
     if (d.rev > 2 && d.rev != 9) {
         d.stream >> mTestEvent;
+#ifdef HX_NATIVE
+        printf("RndDir::PostLoad '%s': after mTestEvent tell=%d\n", Name(), bs.Tell());
+        fflush(stdout);
+#endif
     }
     if (d.rev > 3 && d.rev < 9) {
         Symbol s;
@@ -119,6 +174,10 @@ void RndDir::PostLoad(BinStream &bs) {
         pp->LoadRev(d);
         delete pp;
     }
+#ifdef HX_NATIVE
+    printf("RndDir::PostLoad '%s': done tell=%d\n", Name(), bs.Tell());
+    fflush(stdout);
+#endif
 }
 
 void RndDir::SetSubDir(bool b1) {

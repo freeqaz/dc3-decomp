@@ -215,10 +215,23 @@ void Flow::PreLoad(BinStream &bs) {
 
 void Flow::PostLoad(BinStream &bs) {
     BinStreamRev d(bs, bs.PopRev(this));
+#ifdef HX_NATIVE
+    printf("Flow::PostLoad '%s': rev=%d altRev=%d tell=%d isProxy=%d\n",
+           Name(), d.rev, d.altRev, bs.Tell(), (int)IsProxy());
+    fflush(stdout);
+#endif
     ObjectDir::PostLoad(bs);
+#ifdef HX_NATIVE
+    printf("Flow::PostLoad '%s': after ObjectDir::PostLoad tell=%d\n", Name(), bs.Tell());
+    fflush(stdout);
+#endif
     if (IsProxy()) {
         int numDynProps = 0;
         bs.ReadEndian(&numDynProps, 4);
+#ifdef HX_NATIVE
+        printf("Flow::PostLoad '%s': isProxy, numDynProps=%d tell=%d\n", Name(), numDynProps, bs.Tell());
+        fflush(stdout);
+#endif
         if (d.rev < 5) {
             for (int i = 0; i < numDynProps; i++) {
                 Symbol propName;

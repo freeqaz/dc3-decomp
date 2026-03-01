@@ -6,16 +6,18 @@ foundation.
 
 ## Current Status
 
-**Phase 0 complete, Phase 1 mostly complete, Phase 2 Tier 1 in progress.**
+**Phase 0 complete, Phase 1 complete, Phase 2 Tier 1 complete.**
 
-Rendering pipeline operational: `.milo_xbox` files load and render with material
-colors, directional lighting, and Xbox 360 compressed vertex support. Both windowed
-(GLFW + orbit camera) and headless (screenshot) modes work. Verified on RTX 3090
-(Vulkan backend via Dawn). Gallery of 17 rendered props in `archive/screenshots/`.
+Rendering pipeline fully operational: `.milo_xbox` files load and render with
+textured materials, half-Lambert directional lighting, and Xbox 360 compressed
+vertex support (including UV unpacking from FLOAT16_2 and DEC4N normals). Both
+windowed (GLFW + orbit camera) and headless (screenshot) modes work. Verified on
+RTX 3090 (Vulkan backend via Dawn). Gallery of 17 rendered props in
+`archive/screenshots/` — all rendering correctly.
 
 **Batch screenshot script**: `native/scripts/render_screenshots.sh`
 
-**Next**: Texture mapping (UV support for compressed vertices), multi-light, skinning.
+**Next**: Skinned mesh rendering, multi-light support, additional shader types.
 
 ## Prerequisites
 
@@ -136,8 +138,10 @@ cmake --build build --target dc3-native
 cmake --build build --target milo-viewer
 
 # Usage
-./build/milo-viewer path/to/file.milo_xbox                          # Windowed mode
-./build/milo-viewer path/to/file.milo_xbox --screenshot output.ppm  # Headless screenshot
+./build/milo-viewer --help                                              # Show options
+./build/milo-viewer path/to/file.milo_xbox                              # Windowed mode
+./build/milo-viewer path/to/file.milo_xbox --screenshot output.ppm      # Headless screenshot
+./build/milo-viewer path/to/file.milo_xbox --azimuth 30 --elevation 15  # Custom camera angle
 ```
 
 ## Architecture Notes

@@ -1,13 +1,16 @@
 #include "StubCameraInput.h"
 
 StubCameraInput::StubCameraInput() {
-    mCachedFrame.mFloorNormal.Set(0.0, 1.0, 0.0);
-    mCachedFrame.mFloorClipPlane.Set(0.04584, 0.991929, 0.118222, 0.786);
-    mCachedFrame.mFrameNumber = 0;
-    mCachedFrame.mElapsedMs = 33;
+    SkeletonFrame *frame = &unk11d4;
+    frame->mFloorNormal.Set(0.0, 1.0, 0.0);
+    frame->mFloorClipPlane.Set(0.04584, 0.991929, 0.118222, 0.786);
+    frame->mFrameNumber = 0;
+    frame->mElapsedMs = 33;
     for (int i = 0; i < 6; i++) {
-        mCachedFrame.mSkeletonDatas[i].mTracking = (SkeletonTrackingState)0;
-        mCachedFrame.mSkeletonDatas[i].mQualityFlags = 0;
+        unk239c[i].unk0 = 0;
+        unk239c[i].unkC = 0.0f;
+        unk239c[i].unk8 = 0.0f;
+        unk239c[i].unk4 = 0.0f;
     }
 }
 
@@ -46,9 +49,9 @@ void StubCameraInput::StubSkeletonData(SkeletonData &data, const Vector3 &vec) {
     data.mJointPositions[18].Set(-0.043792f, -0.917228f, 2.308891f);
     data.mJointPositions[19].Set(0.216633f, -0.932548f, 2.347959f);
     for (int i = 0; i < kNumJoints; i++) {
-        data.mJointPositions[i].Set(
-            data.mJointPositions[i].x + vec.x, data.mJointPositions[i].y + vec.y, data.mJointPositions[i].z + vec.z
-        );
+        data.mJointPositions[i].x += vec.x;
+        data.mJointPositions[i].y += vec.y;
+        data.mJointPositions[i].z += vec.z;
         data.mJointTrackingState[i] = 2;
         data.mRawPositions[i] = data.mJointPositions[i];
     }

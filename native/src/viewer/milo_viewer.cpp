@@ -265,32 +265,55 @@ int main(int argc, char** argv) {
     signal(SIGSEGV, SignalHandler);
     signal(SIGABRT, SignalHandler);
 
+    // Show help
+    auto showHelp = [](FILE* f) {
+        fprintf(f, "milo-viewer — Dance Central 3 .milo scene viewer\n\n");
+        fprintf(f, "Usage: milo-viewer <path.milo_xbox> [options]\n\n");
+        fprintf(f, "Options:\n");
+        fprintf(f, "  --help                     Show this help message\n");
+        fprintf(f, "  --screenshot <file.ppm>    Render headlessly and save screenshot\n");
+        fprintf(f, "  --azimuth <degrees>        Camera azimuth angle (default: ~23)\n");
+        fprintf(f, "  --elevation <degrees>      Camera elevation angle (default: ~17)\n\n");
+        fprintf(f, "Controls (windowed mode):\n");
+        fprintf(f, "  Left drag     orbit\n");
+        fprintf(f, "  Scroll        zoom\n");
+        fprintf(f, "  Middle drag   pan\n");
+        fprintf(f, "  R             reset camera\n");
+        fprintf(f, "  Escape        quit\n\n");
+        fprintf(f, "Examples:\n");
+        fprintf(f, "  milo-viewer world/shared/props/gen/discoball.milo_xbox\n");
+        fprintf(f, "  milo-viewer scene.milo_xbox --screenshot out.ppm\n");
+        fprintf(f, "  milo-viewer scene.milo_xbox --screenshot out.ppm --azimuth 45 --elevation 30\n");
+    };
+
     if (argc < 2) {
-        fprintf(stderr, "Usage: milo-viewer <path-to-file.milo_xbox> [--screenshot <output.ppm>]\n");
-        fprintf(stderr, "  Options:\n");
-        fprintf(stderr, "    --screenshot <file.ppm>  Render one frame headlessly and save\n");
-        fprintf(stderr, "  Controls (windowed mode):\n");
-        fprintf(stderr, "    Left drag  — orbit\n");
-        fprintf(stderr, "    Scroll     — zoom\n");
-        fprintf(stderr, "    Middle drag — pan\n");
-        fprintf(stderr, "    R          — reset camera\n");
-        fprintf(stderr, "    Escape     — quit\n");
+        showHelp(stderr);
         return 1;
     }
 
     // Parse arguments
     const char* miloPath = nullptr;
     const char* screenshotPath = nullptr;
+    float camAzimuthDeg = -999.0f;  // sentinel: use default
+    float camElevationDeg = -999.0f;
     for (int i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "--screenshot") == 0 && i + 1 < argc) {
+        if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
+            showHelp(stdout);
+            return 0;
+        } else if (strcmp(argv[i], "--screenshot") == 0 && i + 1 < argc) {
             screenshotPath = argv[++i];
+        } else if (strcmp(argv[i], "--azimuth") == 0 && i + 1 < argc) {
+            camAzimuthDeg = (float)atof(argv[++i]);
+        } else if (strcmp(argv[i], "--elevation") == 0 && i + 1 < argc) {
+            camElevationDeg = (float)atof(argv[++i]);
         } else if (!miloPath) {
             miloPath = argv[i];
         }
     }
 
     if (!miloPath) {
-        fprintf(stderr, "Error: no .milo file specified\n");
+        fprintf(stderr, "Error: no .milo file specified\n\n");
+        showHelp(stderr);
         return 1;
     }
 
@@ -551,6 +574,23 @@ int main(int argc, char** argv) {
             printf("Milo Viewer: auto-frame bbox (%.2f,%.2f,%.2f)-(%.2f,%.2f,%.2f) center=(%.2f,%.2f,%.2f) dist=%.2f\n",
                    minX, minY, minZ, maxX, maxY, maxZ, cx, cy, cz, gOrbitCam.distance);
         }
+    }
+
+    // Update frustum far plane to accommodate large scenes
+    {
+        float farDist = gOrbitCam.distance * 5.0f;
+        if (farDist < 1000.0f) farDist = 1000.0f;
+        float nearDist = farDist * 0.001f;
+        if (nearDist < 0.1f) nearDist = 0.1f;
+        cam->SetFrustum(nearDist, farDist, 0.6024f, 1.0f);
+    }
+
+    // Apply camera overrides from CLI args (after auto-framing)
+    if (camAzimuthDeg > -900.0f) {
+        gOrbitCam.azimuth = camAzimuthDeg * (3.14159265f / 180.0f);
+    }
+    if (camElevationDeg > -900.0f) {
+        gOrbitCam.elevation = camElevationDeg * (3.14159265f / 180.0f);
     }
 
     // ---- Screenshot mode: render a few frames then save and exit ----

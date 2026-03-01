@@ -150,7 +150,9 @@ DataNode TexProc::OnSetParams(DataArray *a) {
 
 bool TexProc::CheckParams(DataArray *a, bool b) {
     int aSize = a->Size();
-    bool b7 = b || (aSize >= 1 && aSize <= 4);
+    bool b7 = true;
+    if (!b && (aSize < 1 || aSize > 4))
+        b7 = false;
     for (int i = b ? 2 : 0; i < aSize && b7; i++) {
         switch (a->Type(i)) {
         case kDataFloat:
@@ -161,7 +163,7 @@ bool TexProc::CheckParams(DataArray *a, bool b) {
         case kDataProperty: {
             DataNode eval = a->Evaluate(i);
             if (eval.Type() != kDataFloat) {
-                if (!(eval.Type() == kDataArray)) {
+                if (eval.Type() != kDataArray) {
                     b7 = false;
                 } else {
                     b7 &= CheckParams(eval.Array(), false);

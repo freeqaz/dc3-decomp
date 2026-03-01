@@ -49,15 +49,13 @@ namespace {
         if (!buf || !remaining) return 0;
 
         int len = *remaining;
-        if (len > 0) {
-            do {
-                if (*buf == '\r' || *buf == '\n') break;
-                len--;
-                buf++;
-            } while (len > 0);
-            if (len > 0 && *buf == '\r') { buf++; len--; }
-            if (len > 0 && *buf == '\n') { buf++; len--; }
+        while (len > 0) {
+            if (*buf == '\r' || *buf == '\n') break;
+            len--;
+            buf++;
         }
+        if (len > 0 && *buf == '\r') { buf++; len--; }
+        if (len > 0 && *buf == '\n') { buf++; len--; }
         *remaining = len;
         return len > 0 ? buf : 0;
     }

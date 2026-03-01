@@ -69,11 +69,11 @@ void UIListArrow::Draw(
     bool onhighlight = mOnHighlight;
 
     if (onhighlight) {
-        vec = (const Vector3 *)((const char *)&drawstate + 0x20);
+        vec = &drawstate.mHighlightPos;
     } else if (mPosition == kUIListArrowBack) {
-        vec = (const Vector3 *)((const char *)&drawstate);
+        vec = &drawstate.mFirstPos;
     } else {
-        vec = (const Vector3 *)((const char *)&drawstate + 0x10);
+        vec = &drawstate.mLastPos;
     }
 
     if (box || !mShowOnlyScroll
@@ -84,7 +84,7 @@ void UIListArrow::Draw(
         Transform xfm2 = xfm1;
 
         CalcXfm(tf, *vec, xfm2);
-        DrawMesh(mMesh, (UIListWidgetState)0, compstate, xfm2, box);
+        DrawMesh(mMesh, drawstate.mHighlightElementState, compstate, xfm2, box);
         mMesh->SetWorldXfm(xfm1);
     }
 }

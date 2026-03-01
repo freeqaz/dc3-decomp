@@ -248,7 +248,7 @@ wgpu::RenderPipeline PipelineManager::CreatePipeline(const PipelineKey& key) {
     pipeDesc.fragment = &fragment;
     pipeDesc.depthStencil = &ds;
     pipeDesc.primitive.topology = wgpu::PrimitiveTopology::TriangleList;
-    pipeDesc.primitive.frontFace = wgpu::FrontFace::CW; // Milo uses CW winding
+    pipeDesc.primitive.frontFace = wgpu::FrontFace::CCW; // D3D LH CW front → WebGPU RH CCW front
     pipeDesc.primitive.cullMode = MapCull(key.cull);
 
     return mDevice->Device().CreateRenderPipeline(&pipeDesc);

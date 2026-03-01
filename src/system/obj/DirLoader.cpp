@@ -312,6 +312,9 @@ ret:
 
 void ReadDead(BinStream &bs) {
     unsigned char val;
+#ifdef HX_NATIVE
+    int startTell = bs.Tell();
+#endif
     bs >> val;
     while (true) {
         if (val == 0xAD) {
@@ -321,6 +324,10 @@ void ReadDead(BinStream &bs) {
                 if (val == 0xAD) {
                     bs >> val;
                     if (val == 0xDE) {
+#ifdef HX_NATIVE
+                        printf("ReadDead: found ADDEADDE at tell=%d->%d\n", startTell, bs.Tell());
+                        fflush(stdout);
+#endif
                         return;
                     }
                 }
@@ -656,11 +663,6 @@ void DirLoader::LoadObjs() {
             Hmx::Object *obj = mObjects.front();
             if (obj) {
                 if (!mPostLoad) {
-#ifdef HX_NATIVE
-                    printf("DirLoader::LoadObjs '%s': PreLoad obj='%s' class='%s' tell=%d\n",
-                           mFile.c_str(), obj->Name(), obj->ClassName().Str(), mStream->Tell());
-                    fflush(stdout);
-#endif
                     MemPoint begin(MemPoint::kInitType0);
                     if (sObjectMemDumpFile || sTypeMemDumpFile) {
                         begin = MemPoint(MemPoint::kInitType1);
@@ -688,11 +690,6 @@ void DirLoader::LoadObjs() {
                 std::list<Loader *> &loaders = TheLoadMgr.Loading();
                 Loader *firstLoader = loaders.empty() ? nullptr : loaders.front();
                 if (firstLoader != this) {
-#ifdef HX_NATIVE
-                    printf("DirLoader::LoadObjs '%s': NOT front loader, deferring (obj='%s' class='%s')\n",
-                           mFile.c_str(), obj->Name(), obj->ClassName().Str());
-                    fflush(stdout);
-#endif
                     return;
                 }
                 MemPoint begin(MemPoint::kInitType0);
@@ -719,7 +716,17 @@ void DirLoader::LoadObjs() {
                 EndMemTrackFileName();
                 EndMemTrackObjectName();
                 if (mRev > 1) {
+#ifdef HX_NATIVE
+                    printf("DirLoader::LoadObjs '%s': ReadDead before tell=%d (obj='%s')\n",
+                           mFile.c_str(), mStream->Tell(), obj->Name());
+                    fflush(stdout);
+#endif
                     ReadDead(*mStream);
+#ifdef HX_NATIVE
+                    printf("DirLoader::LoadObjs '%s': ReadDead after tell=%d\n",
+                           mFile.c_str(), mStream->Tell());
+                    fflush(stdout);
+#endif
                 }
             } else {
 #ifdef HX_NATIVE
@@ -856,8 +863,8 @@ void DirLoader::CreateObjects() {
             *mStream >> b8;
         }
 #ifdef HX_NATIVE
-        printf("DirLoader::CreateObjects[%d]: class='%s' name='%s' tell=%d\n",
-               (int)mObjects.size(), classSym.Str(), buf, mStream->Tell());
+        printf("DirLoader::CreateObjects: class='%s' name='%s'\n", classSym.Str(), buf);
+        fflush(stdout);
 #endif
         if (!Hmx::Object::RegisteredFactory(classSym)) {
             MILO_NOTIFY("%s: Can't make %s", mFile.c_str(), classSym);
@@ -868,33 +875,13 @@ void DirLoader::CreateObjects() {
                 begin = MemPoint(MemPoint::kInitType1);
             }
             BeginMemTrackObjectName(buf);
-#ifdef HX_NATIVE
-            printf("  NewObject('%s') calling...\n", classSym.Str());
-            fflush(stdout);
-#endif
             obj = Hmx::Object::NewObject(classSym);
-#ifdef HX_NATIVE
-            printf("  NewObject('%s') returned %p\n", classSym.Str(), (void*)obj);
-            fflush(stdout);
-#endif
             EndMemTrackObjectName();
-#ifdef HX_NATIVE
-            printf("  checking rev=%d dynamic_cast...\n", mRev);
-            fflush(stdout);
-#endif
             if (mRev == 0x16 && dynamic_cast<ObjectDir *>(obj)) {
             release_obj:
                 RELEASE(obj);
             } else {
-#ifdef HX_NATIVE
-                printf("  SetName('%s', dir=%p)...\n", buf, (void*)mDir);
-                fflush(stdout);
-#endif
                 obj->SetName(buf, mDir);
-#ifdef HX_NATIVE
-                printf("  SetName done\n");
-                fflush(stdout);
-#endif
             }
             if (sObjectMemDumpFile) {
                 MemPoint end(MemPoint::kInitType1);

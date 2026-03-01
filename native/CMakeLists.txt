@@ -617,7 +617,7 @@ set(DC3_ENGINE_SOURCES
     ${CMAKE_SOURCE_DIR}/../src/system/rndobj/Trans.cpp
     ${CMAKE_SOURCE_DIR}/../src/system/rndobj/TransAnim.cpp
     ${CMAKE_SOURCE_DIR}/../src/system/rndobj/TransProxy.cpp
-    ${CMAKE_SOURCE_DIR}/../src/system/rndobj/Utl.cpp
+    # ${CMAKE_SOURCE_DIR}/../src/system/rndobj/Utl.cpp  # Debug draw utils — API mismatches, not needed for viewer
     ${CMAKE_SOURCE_DIR}/../src/system/rndobj/VelocityBuffer.cpp
     ${CMAKE_SOURCE_DIR}/../src/system/rndobj/Watcher.cpp
     ${CMAKE_SOURCE_DIR}/../src/system/rndobj/Wind.cpp

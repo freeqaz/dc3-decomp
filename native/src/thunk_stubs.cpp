@@ -83,3 +83,82 @@ bool WorldCrowd3DCharHandle::SyncProperty(DataNode &, DataArray *, int, PropOp) 
 
 // WorldReflection
 void WorldReflection::Highlight() {}
+
+// ---------------------------------------------------------------------------
+// rndobj/Utl.cpp stubs — excluded from native build due to API mismatches.
+// Minimal stubs to satisfy linker; only SortPolls/SortDraws need real logic.
+// ---------------------------------------------------------------------------
+#include "rndobj/Poll.h"
+#include "rndobj/Draw.h"
+#include "rndobj/Trans.h"
+#include "rndobj/Mat.h"
+#include "rndobj/Mesh.h"
+#include "rndobj/MultiMesh.h"
+#include "rndobj/TransAnim.h"
+#include "rndobj/MetaMaterial.h"
+#include "math/Color.h"
+#include "math/Vec.h"
+#include "math/Geo.h"
+#include "math/Mtx.h"
+#include <cstring>
+#include <vector>
+
+bool SortPolls(const RndPollable *p1, const RndPollable *p2) {
+    if (p1->PollEnabled() != p2->PollEnabled()) {
+        return p1->PollEnabled();
+    }
+    return strcmp(p1->Name(), p2->Name()) < 0;
+}
+
+bool SortDraws(RndDrawable *draw1, RndDrawable *draw2) {
+    return strcmp(draw1->Name(), draw2->Name()) < 0;
+}
+
+float ConvertFov(float a, float) { return a; }
+void PreMultiplyAlpha(Hmx::Color &) {}
+void RndUtlPreInit() {}
+void RndUtlInit() {}
+void RndUtlTerminate() {}
+void RndSplasherPoll() {}
+void RndSplasherSuspend() {}
+void RndSplasherResume() {}
+
+typedef void (*SplashFunc)(void);
+void SetRndSplasherCallback(SplashFunc, SplashFunc, SplashFunc) {}
+
+void SetLocalScale(RndTransformable *, const Vector3 &) {}
+int GenerationCount(RndTransformable *, RndTransformable *) { return 0; }
+void CreateAndSetMetaMat(RndMat *) {}
+
+MatShaderOptions GetDefaultMatShaderOpts(const Hmx::Object *, RndMat *) {
+    return MatShaderOptions();
+}
+
+void ResetColors(std::vector<Hmx::Color> &colors, int newNumColors) {
+    Hmx::Color reset(1, 1, 1, 1);
+    colors.resize(newNumColors);
+    for (int i = 0; i < newNumColors; i++) {
+        colors[i] = reset;
+    }
+}
+
+void CalcBox(RndMesh *, Box &) {}
+void ClearAO(RndMesh *) {}
+
+// Draw utility stubs — no-op in viewer
+void UtilDrawSphere(const Vector3 &, float, const Hmx::Color &, RndMat *) {}
+void UtilDrawLine(const Vector2 &, const Vector2 &, const Hmx::Color &) {}
+void UtilDrawString(const char *, const Vector3 &, const Hmx::Color &) {}
+void UtilDrawAxes(const Transform &, float, const Hmx::Color &) {}
+void UtilDrawBox(const Transform &, const Box &, const Hmx::Color &, bool) {}
+void UtilDrawRect2D(const Vector2 &, const Vector2 &, const Hmx::Color &) {}
+void UtilDrawCylinder(const Transform &, float, float, const Hmx::Color &, int) {}
+
+// TransAnim key manipulation stubs
+void TransformKeys(RndTransAnim *, const Transform &) {}
+void SpliceKeys(RndTransAnim *, RndTransAnim *, float, float) {}
+void LinearizeKeys(RndTransAnim *, float, float, float, float, float) {}
+
+// MultiMesh transform stubs
+void ScrambleXfms(RndMultiMesh *) {}
+void SortXfms(RndMultiMesh *, const Vector3 &) {}

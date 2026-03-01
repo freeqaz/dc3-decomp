@@ -150,6 +150,16 @@ int UnpackSkinnedVertices(const RndMesh& mesh, GpuVertexSkinned* out, int maxVer
 // ============================================================================
 // Unpack Xbox 360 compressed vertices to GpuVertex
 // CompressedVertex_Xbox: 36 bytes each, big-endian on disc
+//
+// IMPORTANT: The struct field names are MISLEADING. The actual D3D vertex
+// declaration layout (from rnddx9/Mesh.cpp) is:
+//   mPosX/Y/Z  = FLOAT3     POSITION      (3 floats, 12 bytes)
+//   mColor     = D3DCOLOR   COLOR          (packed ARGB, 4 bytes)
+//   mNormal    = FLOAT16_2  TEXCOORD       (UV as two half-floats!)
+//   mTangent   = DEC4N      NORMAL         (normal as 10-10-10-2)
+//   mBinormal  = DEC4N      TANGENT        (tangent as 10-10-10-2)
+//   mBoneIndices = UDEC4N   BLENDWEIGHT    (bone weights)
+//   mBoneWeights = UBYTE4   BLENDINDICES   (bone indices)
 // ============================================================================
 
 static float UnpackFloat_BE(int bits) {
@@ -170,16 +180,59 @@ static void UnpackColor_BE(int packed, float out[4]) {
     out[3] = (float)((val >> 24) & 0xFF) / 255.0f; // A
 }
 
-static void UnpackNormal_BE(int packed, float out[3]) {
-    // 10-10-10-2 packed normal, big-endian
+static void UnpackDEC4N_BE(int packed, float out[3]) {
+    // DEC4N: 10-10-10-2 signed normalized, big-endian
     unsigned int val = __builtin_bswap32((unsigned int)packed);
-    // DEC3N: x=bits[0:9], y=bits[10:19], z=bits[20:29], w=bits[30:31]
+    // x=bits[0:9], y=bits[10:19], z=bits[20:29], w=bits[30:31]
     int ix = (int)(val << 22) >> 22;  // sign-extend 10 bits
     int iy = (int)(val << 12) >> 22;
     int iz = (int)(val << 2) >> 22;
     out[0] = ix / 511.0f;
     out[1] = iy / 511.0f;
     out[2] = iz / 511.0f;
+}
+
+static float HalfToFloat(unsigned short h) {
+    // IEEE 754 half-precision: 1 sign, 5 exponent, 10 mantissa
+    unsigned int sign = (h >> 15) & 1;
+    unsigned int exp  = (h >> 10) & 0x1F;
+    unsigned int mant = h & 0x3FF;
+
+    if (exp == 0) {
+        if (mant == 0) {
+            // Zero
+            unsigned int f = sign << 31;
+            float result;
+            memcpy(&result, &f, 4);
+            return result;
+        }
+        // Denormalized: convert to normalized float
+        float val = (float)mant / 1024.0f;
+        val *= (1.0f / 16384.0f); // 2^-14
+        return sign ? -val : val;
+    } else if (exp == 0x1F) {
+        // Inf/NaN
+        unsigned int f = (sign << 31) | 0x7F800000 | (mant << 13);
+        float result;
+        memcpy(&result, &f, 4);
+        return result;
+    }
+
+    // Normalized: rebias exponent from half (bias=15) to float (bias=127)
+    unsigned int f = (sign << 31) | ((exp - 15 + 127) << 23) | (mant << 13);
+    float result;
+    memcpy(&result, &f, 4);
+    return result;
+}
+
+static void UnpackFloat16x2_BE(int packed, float out[2]) {
+    // Byte-swap first, then extract two 16-bit half-floats
+    // Packing: (halfU << 16) | halfV (before endian swap)
+    unsigned int val = __builtin_bswap32((unsigned int)packed);
+    unsigned short halfU = (val >> 16) & 0xFFFF;  // tex.x in upper 16 bits
+    unsigned short halfV = val & 0xFFFF;           // tex.y in lower 16 bits
+    out[0] = HalfToFloat(halfU);
+    out[1] = HalfToFloat(halfV);
 }
 
 int UnpackCompressedVertices(const unsigned char* compressedData, int numVerts,
@@ -196,23 +249,14 @@ int UnpackCompressedVertices(const unsigned char* compressedData, int numVerts,
         gv.pos[1] = UnpackFloat_BE(cv.mPosY);
         gv.pos[2] = UnpackFloat_BE(cv.mPosZ);
 
-        // Normal: 10-10-10-2 packed
-        UnpackNormal_BE(cv.mNormal, gv.norm);
-
-        // Color: packed RGBA
+        // Color: packed RGBA (D3DCOLOR at offset 12)
         UnpackColor_BE(cv.mColor, gv.color);
 
-        // UV: packed into mTangent as 10-10-10-2 format
-        // PackVector(tangent, (tex.x, tex.y, 0, 0), 10,10,10,2, normalize=true)
-        // normalize=true → multiply by 511.0, mask to 10 bits
-        // To unpack: extract 10-bit unsigned values, divide by 511.0
-        {
-            unsigned int tval = __builtin_bswap32((unsigned int)cv.mTangent);
-            unsigned int ux = tval & 0x3FF;         // bits 0-9: tex.x
-            unsigned int uy = (tval >> 10) & 0x3FF; // bits 10-19: tex.y
-            gv.uv[0] = (float)ux / 511.0f;
-            gv.uv[1] = (float)uy / 511.0f;
-        }
+        // UV: FLOAT16_2 stored in mNormal field (D3D TEXCOORD at offset 16)
+        UnpackFloat16x2_BE(cv.mNormal, gv.uv);
+
+        // Normal: DEC4N stored in mTangent field (D3D NORMAL at offset 20)
+        UnpackDEC4N_BE(cv.mTangent, gv.norm);
     }
     return count;
 }

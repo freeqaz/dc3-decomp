@@ -81,7 +81,20 @@ Examples:
         client = MCPClient(binary=args.binary)
         client.initialize(force=args.reinit)
 
-        result = client.decompile_function(args.function)
+        try:
+            result = client.decompile_function(args.function)
+        except MCPError as e:
+            if "not found" in str(e).lower():
+                # Function object doesn't exist in Ghidra - create it first
+                addr_str = args.function.strip().lower().replace("0x", "")
+                if all(c in "0123456789abcdef" for c in addr_str) and len(addr_str) >= 6:
+                    print(f"Creating function at 0x{addr_str}...", file=sys.stderr)
+                    client.bulk_create_functions([addr_str])
+                    result = client.decompile_function(args.function)
+                else:
+                    raise
+            else:
+                raise
 
         if args.json:
             print(json.dumps(result, indent=2))

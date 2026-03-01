@@ -107,12 +107,13 @@ protected:
 class RndFont3d : public RndFontBase {
 public:
     struct CharInfo {
+        CharInfo() : mMesh(nullptr) {}
         ~CharInfo() {}
 
-        Box unk0;
-        int unk20;
-        ObjRefConcrete<RndMesh, ObjectDir> mMesh;
-        bool unk38;
+        Box unk0; // 0x0
+        float advance; // 0x18
+        ObjRefConcrete<RndMesh, ObjectDir> mMesh; // 0x1c
+        bool visible; // 0x2c
 
         MEM_OVERLOAD(CharInfo, 0x12A);
     };

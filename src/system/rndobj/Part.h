@@ -221,14 +221,17 @@ public:
         mBoxExtent2 = v2;
     }
 
+    const Vector2 &BubbleSize() const { return mBubbleSize; }
     void SetBubbleSize(float x, float y) {
         mBubbleSize.x = x;
         mBubbleSize.y = y;
     }
+    const Vector2 &BubblePeriod() const { return mBubblePeriod; }
     void SetBubblePeriod(float x, float y) {
         mBubblePeriod.x = x;
         mBubblePeriod.y = y;
     }
+    const Vector3 &ForceDir() const { return mForceDir; }
     void SetForceDir(const Vector3 &v) { mForceDir = v; }
     void SetDeltaSize(float x, float y) {
         mDeltaSize.x = x;

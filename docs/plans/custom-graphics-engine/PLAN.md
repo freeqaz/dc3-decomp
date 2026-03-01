@@ -120,10 +120,13 @@ Two workstreams run simultaneously:
 DataArray scripts, instantiates game objects.
 
 **Status**: Engine boots through archive loading, config parsing, SystemInit,
-.milo object loading (Tex, Font, Text, etc.), and exits cleanly. Major blockers
-resolved: ChunkStream infinite loop, RndTex/Font stream desync, iterator/pointer
-compatibility (605 call sites), ObjOwnerPtr null deref. Binary compiles, links,
-runs with exit code 0. Full subsystem init (Flow/Char/World/Ham) works.
+.milo object loading (Tex, Font, Text, etc.), subsystem inits (Flow/Char/World/Ham),
+and enters `TheUI->Init()`. Major blockers resolved: ChunkStream infinite loop,
+RndTex/Font stream desync, iterator/pointer compatibility (605 call sites),
+ObjOwnerPtr null deref, Font3d vtable corruption (Itanium ABI key function).
+Current blocker: stream desync during `PreloadSharedSubdirs()` — object reads
+garbage revision from .milo stream (likely caused by broken vtable stubs for
+44 classes in engine_stubs_generated.cpp).
 
 **Work items**:
 - [x] Implement native `File` / `AsyncFile` using POSIX I/O
@@ -163,7 +166,7 @@ generates gallery of 17 props. See `archive/screenshots/` for rendered output.
 - [x] Auto-frame camera from mesh bounding box
 - [x] Headless screenshot mode (`--screenshot output.ppm`)
 - [x] Batch screenshot script (`native/scripts/render_screenshots.sh`)
-- [ ] Extract and display `RndTex` (textures — GPU upload works but UVs missing for compressed verts)
+- [x] Extract and display `RndTex` (textures — GPU upload + UV coords working for all vertex formats)
 - [ ] Display `RndTransformable` hierarchy (bone/transform tree)
 - [ ] Scrub animations (`RndTransAnim`, `RndMeshAnim`)
 - [ ] Inspect materials and shader properties
@@ -234,7 +237,7 @@ rendered to `archive/screenshots/` as visual proof.
 - [x] Camera (`RndCam` → view/projection matrices, orbit camera in viewer)
 - [x] Basic lighting (`RndEnviron` ambient color + single directional light)
 - [x] Write standard.wgsl shader (diffuse + ambient + fog + alpha test)
-- [ ] Texture loading (`RndTex` → GPU textures — upload works but UV coords missing for compressed verts)
+- [x] Texture loading (`RndTex` → GPU textures, DXT1/3/5 byte-swap + untile + decompress)
 - [ ] Skinned mesh rendering (bone transforms, vertex skinning shader)
 - [ ] Multi-light support (read lights from `RndEnviron`)
 - [ ] Additional shader types (emissive, environment map, etc.)
