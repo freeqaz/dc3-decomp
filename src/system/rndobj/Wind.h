@@ -19,6 +19,7 @@ public:
     virtual void Highlight() {}
 
     OBJ_MEM_OVERLOAD(0x1A);
+    NEW_OBJ(RndWind)
     static void Init();
 
     void SetWindOwner(RndWind *wind);

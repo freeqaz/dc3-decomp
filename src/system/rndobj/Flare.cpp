@@ -2,11 +2,17 @@
 #include "Rnd.h"
 #include "math/Geo.h"
 #include "math/Rot.h"
+#include "math/Utl.h"
 #include "obj/Object.h"
 #include "os/Debug.h"
+#include "rndobj/Cam.h"
 #include "rndobj/Draw.h"
+#include "rndobj/Env.h"
+#include "rndobj/HiResScreen.h"
 #include "rndobj/Mat.h"
 #include "rndobj/Trans.h"
+#include "rndobj/Utl.h"
+#include <string.h>
 
 RndFlare::RndFlare()
     : mPointTest(true), mAreaTest(true), mVisible(false), mSizes(0.1, 0.1), mMat(this),
@@ -104,6 +110,119 @@ void RndFlare::Print() {
     TheDebug << "   offset:" << mOffset << "\n";
     TheDebug << "   steps: " << mSteps << "\n";
     TheDebug << "   point test: " << mPointTest << "\n";
+}
+
+void RndFlare::DrawShowing() {
+    RndCam *cam = RndCam::Current();
+    if (TheRnd.GetDrawMode() != 0)
+        return;
+
+    const Transform &worldXfm = WorldXfm();
+    Vector2 screenPos;
+    float depth = cam->WorldToScreen(worldXfm.v, screenPos);
+
+    float scale;
+    Hmx::Rect &rect = CalcRect(screenPos, scale);
+    Hmx::Rect localRect = rect;
+
+    float visibility = 0.0f;
+    if (RectOffscreen(localRect) || depth <= 0.0f) {
+        mOcclusionResult = 0;
+        mStep = 0;
+        mOcclusionReady = false;
+        mOcclusionPending = false;
+    } else {
+        bool useOccResult = false;
+        if (!mPointTest || TheHiResScreen.IsActive()) {
+            mOcclusionResult = scale;
+            mVisible = true;
+        } else {
+            if (mOcclusionPending || (useOccResult = true, !mOcclusionReady)) {
+                useOccResult = false;
+            }
+            bool oldReady = mOcclusionReady;
+            mOcclusionReady = false;
+            mOcclusionPending = oldReady;
+
+            const Transform &flareXfm = WorldXfm();
+            const Transform &camXfm = cam->WorldXfm();
+            Vector3 dir;
+            dir.z = camXfm.v.z - flareXfm.v.z;
+            dir.y = camXfm.v.y - flareXfm.v.y;
+            dir.x = camXfm.v.x - flareXfm.v.x;
+            Normalize(dir, dir);
+
+            const Transform &flareXfm2 = WorldXfm();
+            float offset = mOffset;
+            dir.x = offset * dir.x + flareXfm2.v.x;
+            dir.y = dir.y * offset + flareXfm2.v.y;
+            dir.z = dir.z * offset + flareXfm2.v.z;
+            TheRnd.TestPoint(dir, this);
+        }
+
+        if (useOccResult) {
+            mStep = mVisible ? mSteps : 0;
+        } else {
+            int steps = mSteps;
+            int newStep = ((int)(unsigned char)mVisible * 2 + mStep) - 1;
+            if (newStep <= steps) {
+                steps = ((unsigned int)newStep >> 31) - 1 & newStep;
+            }
+            mStep = steps;
+        }
+
+        float ratio = (float)mStep / (float)mSteps;
+        if (mAreaTest) {
+            ratio = (mOcclusionResult / (localRect.w * localRect.h)) * ratio;
+        }
+
+        if (visibility < ratio) {
+            float alpha = 1.0f;
+            if (mMat) {
+                float rangeX = mRange.x;
+                float t = 1.0f;
+                if (rangeX != mRange.y) {
+                    t = (depth - mRange.y) / (rangeX - mRange.y);
+                }
+                alpha = Clamp(0.0f, 1.0f, t * ratio);
+
+                float r = alpha, g = alpha, b = alpha;
+                if (mMat->UseEnviron() && RndEnviron::Current()) {
+                    const Hmx::Color &ambColor = RndEnviron::Current()->AmbientColor();
+                    r = ambColor.red * alpha;
+                    g = ambColor.green * alpha;
+                    b = ambColor.blue * alpha;
+                }
+                mMat->SetColor(r, g, b);
+            }
+
+            if (mMat && mMat->GetTexGen() == kTexGenXfm) {
+                Hmx::Matrix3 texMat;
+                memcpy(&texMat, &mMat->TexXfm(), 0x40);
+                MakeRotMatrixZ(screenPos.x - 0.5f, texMat);
+                memcpy(&mMat->TexXfm(), &texMat, 0x40);
+                mMat->MarkDirty(2);
+            }
+
+            Hmx::Rect *drawRect;
+            if (mAreaTest) {
+                drawRect = &mArea;
+            } else {
+                drawRect = &CalcRect(screenPos, scale);
+            }
+            localRect = *drawRect;
+
+            Hmx::Color white(1.0f, 1.0f, 1.0f, 1.0f);
+            TheRnd.DrawRect(localRect, white, mMat, nullptr, nullptr);
+        }
+    }
+}
+
+void RndFlare::Mats(std::list<RndMat *> &list, bool) {
+    if (mMat) {
+        mMat->SetShaderOpts(GetDefaultMatShaderOpts(this, mMat));
+        list.push_back(mMat);
+    }
 }
 
 void RndFlare::SetMat(RndMat *mat) { mMat = mat; }

@@ -41,8 +41,15 @@ void RndTex::PresyncBitmap() {
     if (!gWgpuRnd) return;
 
     // Only process regular textures with bitmap data
-    if (mBitmap.Width() <= 0 || mBitmap.Height() <= 0) return;
-    if (mBitmap.Bpp() <= 0) return;
+    if (mBitmap.Width() <= 0 || mBitmap.Height() <= 0) {
+        fprintf(stderr, "Tex_Wgpu: skipping '%s' — invalid dimensions %dx%d\n",
+                Name(), mBitmap.Width(), mBitmap.Height());
+        return;
+    }
+    if (mBitmap.Bpp() <= 0) {
+        fprintf(stderr, "Tex_Wgpu: skipping '%s' — invalid bpp %d\n", Name(), mBitmap.Bpp());
+        return;
+    }
 
     // Check if already uploaded
     auto it = sTexGpuData.find(this);
@@ -60,6 +67,8 @@ void RndTex::PresyncBitmap() {
         gWgpuRnd->Gpu(), mBitmap, numMips);
 
     if (!gpuTex) {
+        fprintf(stderr, "Tex_Wgpu: failed to create GPU texture for '%s' (%dx%d, %d bpp, %d mips)\n",
+                Name(), mBitmap.Width(), mBitmap.Height(), mBitmap.Bpp(), numMips);
         return;
     }
 

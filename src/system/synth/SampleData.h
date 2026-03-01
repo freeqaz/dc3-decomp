@@ -59,7 +59,10 @@ public:
     int GetNumSamples() const { return mNumSamples; }
     Format GetFormat() const { return mFormat; }
     bool HasData() const { return mData != nullptr; }
-    unsigned int DataAddr() const { return (unsigned int)mData; }
+    unsigned int DataAddr() const { return (unsigned int)(uintptr_t)mData; }
+#ifdef HX_NATIVE
+    void *DataPtr() const { return mData; }
+#endif
     std::vector<SampleMarker> &AccessMarkers() { return mMarkers; }
 
     static void SetAllocator(SampleDataAllocFunc, SampleDataFreeFunc);

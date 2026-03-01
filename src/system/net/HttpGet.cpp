@@ -77,7 +77,7 @@ namespace {
         const char *s = str.c_str();
         unsigned int prefixLen = strlen(prefix);
         unsigned int strLen = strlen(s);
-        if (strLen < prefixLen) return false;
+        if (prefixLen > strLen) return false;
         if (prefixLen != 0) {
             int offset = s - prefix;
             do {

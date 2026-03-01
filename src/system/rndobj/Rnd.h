@@ -174,6 +174,7 @@ public:
     DrawStringScreen(const char *c, const Vector2 &v, const Hmx::Color &color, bool b4);
     RndPostProc *GetPostProcOverride();
     RndPostProc *GetSelectedPostProc();
+    void TestPoint(const Vector3 &, RndFlare *);
     void CopyWorldCam(RndCam *);
     void RegisterPostProcessor(PostProcessor *);
     void UnregisterPostProcessor(PostProcessor *);

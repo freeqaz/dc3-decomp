@@ -43,6 +43,13 @@ find_package(Threads REQUIRED)
 find_package(Dawn REQUIRED)
 find_package(glfw3 REQUIRED)
 
+# FFmpeg — used for Bink video/audio decoding (replaces RAD Bink SDK)
+option(ENABLE_FFMPEG "Enable FFmpeg for Bink video/audio decoding" ON)
+if(ENABLE_FFMPEG)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(FFMPEG REQUIRED libavformat libavcodec libswscale libavutil)
+endif()
+
 # ============================================================================
 # Source files from decomp (generated from config/373307D9/objects.json)
 # Excludes: xdk/, lib/binkxenon, synth_xbox/, rnddx9/, *_Xbox.cpp, *_Win.cpp
@@ -617,7 +624,7 @@ set(DC3_ENGINE_SOURCES
     ${CMAKE_SOURCE_DIR}/../src/system/rndobj/Trans.cpp
     ${CMAKE_SOURCE_DIR}/../src/system/rndobj/TransAnim.cpp
     ${CMAKE_SOURCE_DIR}/../src/system/rndobj/TransProxy.cpp
-    # ${CMAKE_SOURCE_DIR}/../src/system/rndobj/Utl.cpp  # Debug draw utils — API mismatches, not needed for viewer
+    ${CMAKE_SOURCE_DIR}/../src/system/rndobj/Utl.cpp
     ${CMAKE_SOURCE_DIR}/../src/system/rndobj/VelocityBuffer.cpp
     ${CMAKE_SOURCE_DIR}/../src/system/rndobj/Watcher.cpp
     ${CMAKE_SOURCE_DIR}/../src/system/rndobj/Wind.cpp
@@ -824,9 +831,12 @@ set(DC3_NATIVE_CORE_SOURCES
     src/platform/AsyncFile_Native.cpp
     src/platform/CDReader_Native.cpp
     src/platform/ThreadCall_Native.cpp
-    src/platform/Joypad_Stub.cpp
-    src/platform/Keyboard_Stub.cpp
+    src/platform/Joypad_Native.cpp
+    src/platform/Keyboard_Native.cpp
     src/platform/Synth_Stub.cpp
+    src/audio/AudioDevice.cpp
+    src/platform/StreamReceiver_Native.cpp
+    src/platform/SampleInst_Native.cpp
     src/platform/Rnd_Wgpu.cpp
     src/platform/Mesh_Wgpu.cpp
     src/platform/Tex_Wgpu.cpp
@@ -839,6 +849,8 @@ set(DC3_NATIVE_CORE_SOURCES
     src/platform/Achievements_Stub.cpp
     src/platform/MemcardMgr_Stub.cpp
     src/platform/BinkMovie_Stub.cpp
+    $<$<BOOL:${ENABLE_FFMPEG}>:src/platform/FFmpegAudioReader.cpp>
+    $<$<BOOL:${ENABLE_FFMPEG}>:src/platform/FFmpegMovieImpl.cpp>
     src/platform/NetXbox_Stub.cpp
     src/platform/KinectShare_Stub.cpp
     src/platform/Cache_Stub.cpp
@@ -848,6 +860,7 @@ set(DC3_NATIVE_CORE_SOURCES
     src/platform/SynthCommon_Stub.cpp
     src/platform/RndTex_Native.cpp
     src/engine_stubs_generated.cpp
+    src/native_link_glue.cpp
     src/thunk_stubs.cpp
 )
 
@@ -894,6 +907,7 @@ target_compile_definitions(dc3-native PRIVATE
     HX_NATIVE=1
     MILO_DEBUG=1
     _DEBUG=1
+    $<$<BOOL:${ENABLE_FFMPEG}>:HX_FFMPEG=1>
 )
 
 # Include paths matching Xbox build structure
@@ -905,6 +919,7 @@ target_include_directories(dc3-native PRIVATE
     # NOTE: src/xdk/LIBCMT is NOT included - it shadows system headers with Xbox-specific
     # types (size_t=unsigned int, etc.) that break 64-bit compilation
     ${CMAKE_SOURCE_DIR}/../include      # Additional headers
+    ${FFMPEG_INCLUDE_DIRS}
 )
 
 target_link_options(dc3-native PRIVATE
@@ -925,6 +940,7 @@ target_link_libraries(dc3-native PRIVATE
     vorbisfile
     ogg
     z
+    ${FFMPEG_LIBRARIES}
 )
 
 # NOTE: GFX sources include BOTH Dawn/WebGPU headers AND decomp engine headers.
@@ -1002,3 +1018,79 @@ target_link_libraries(milo-viewer PRIVATE
     ogg
     z
 )
+
+# ============================================================================
+# Test suite — GTest-based tests for .milo loading pipeline
+# ============================================================================
+option(BUILD_TESTS "Build milo loading test suite" ON)
+if(BUILD_TESTS)
+    find_package(GTest REQUIRED)
+    enable_testing()
+
+    # GCC 15 <atomic> needs all __GCC_ATOMIC_*_LOCK_FREE builtins, which clang
+    # drops in -fms-compatibility mode. Define them all (all =2 on x86_64).
+    set(DC3_ATOMIC_COMPAT_FLAGS
+        -D__GCC_ATOMIC_BOOL_LOCK_FREE=2
+        -D__GCC_ATOMIC_CHAR_LOCK_FREE=2
+        -D__GCC_ATOMIC_WCHAR_T_LOCK_FREE=2
+        -D__GCC_ATOMIC_CHAR16_T_LOCK_FREE=2
+        -D__GCC_ATOMIC_CHAR32_T_LOCK_FREE=2
+        -D__GCC_ATOMIC_SHORT_LOCK_FREE=2
+        -D__GCC_ATOMIC_INT_LOCK_FREE=2
+        -D__GCC_ATOMIC_LONG_LOCK_FREE=2
+        -D__GCC_ATOMIC_LLONG_LOCK_FREE=2
+        -D__GCC_ATOMIC_POINTER_LOCK_FREE=2
+    )
+
+    add_executable(milo-tests
+        tests/test_helpers.cpp
+        tests/test_binstream.cpp
+        tests/test_chunkstream.cpp
+        tests/test_dirloader.cpp
+        tests/test_milo_diagnostic.cpp
+        tests/test_flow_desync.cpp
+        tests/test_bink_ffmpeg.cpp
+        tests/test_bink_integration.cpp
+        tests/test_extract_bik.cpp
+        tests/test_input.cpp
+        tests/test_audio.cpp
+        ${DC3_ENGINE_SOURCES}
+        ${DC3_NATIVE_CORE_SOURCES}
+        ${DC3_GFX_SOURCES}
+    )
+    target_compile_options(milo-tests PRIVATE
+        ${DC3_MSVC_COMPAT_FLAGS}
+        ${DC3_DECOMP_FLAGS}
+        ${DC3_ATOMIC_COMPAT_FLAGS}
+        -fsanitize=address
+    )
+    target_compile_definitions(milo-tests PRIVATE
+        HX_NATIVE=1
+        MILO_DEBUG=1
+        _DEBUG=1
+        $<$<BOOL:${ENABLE_FFMPEG}>:HX_FFMPEG=1>
+    )
+    target_include_directories(milo-tests PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+        ${CMAKE_SOURCE_DIR}/../src
+        ${CMAKE_SOURCE_DIR}/../src/system
+        ${CMAKE_SOURCE_DIR}/../src/lazer
+        ${CMAKE_SOURCE_DIR}/../include
+        ${CMAKE_SOURCE_DIR}/tests
+        ${FFMPEG_INCLUDE_DIRS}
+    )
+    target_link_options(milo-tests PRIVATE
+        -rdynamic
+        -fsanitize=address
+        -Wl,--unresolved-symbols=ignore-all
+        -Wl,--warn-unresolved-symbols
+        -Wl,--allow-multiple-definition
+    )
+    target_link_libraries(milo-tests PRIVATE
+        GTest::gtest GTest::gtest_main Threads::Threads
+        dawn::webgpu_dawn glfw dl curl jpeg vorbis vorbisfile ogg z
+        ${FFMPEG_LIBRARIES}
+    )
+    include(GoogleTest)
+    gtest_discover_tests(milo-tests)
+endif()

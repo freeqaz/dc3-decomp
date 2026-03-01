@@ -62,6 +62,13 @@ bool MsgSinks::HasSink(Hmx::Object *o) const {
     return false;
 }
 
+MsgSinks::EventSinkElem &
+MsgSinks::EventSinkElem::operator=(const EventSinkElem &other) {
+    Sink::operator=(other);
+    handler = other.handler;
+    return *this;
+}
+
 void MsgSinks::ChainEventSinks(Hmx::Object *from, Hmx::Object *to) {
     for (ObjList<EventSink>::const_iterator it = mEventSinks.begin();
          it != mEventSinks.end();

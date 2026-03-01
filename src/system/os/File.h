@@ -112,6 +112,9 @@ const char *FileGetBase(const char *file);
 /** Given a file, get the name. (i.e. the file name, plus the extension.) */
 const char *FileGetName(const char *file);
 
+const char *FileGetPathBuf(const char *file, char *path);
+const char *FileGetDriveBuf(const char *file, char *drive);
+const char *FileGetBaseBuf(const char *file, char *base);
 const char *FileMakePathBuf(const char *iRoot, const char *iFilepath, char *oBuf);
 const char *FileRelativePathBuf(const char *, const char *, char *);
 
@@ -155,6 +158,7 @@ void FileEnumerate(
     bool
 );
 void FileRecursePattern(const char *, void (*)(char const *, char const *), bool);
+void RecursePatternInternal(const char *, void (*)(char const *, char const *), bool, bool);
 
 class BinStream &operator>>(class BinStream &, FileStat &);
 }

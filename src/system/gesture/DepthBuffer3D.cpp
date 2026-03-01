@@ -145,3 +145,10 @@ void DepthBuffer3D::ForceDrawSkeletonIndex(int i1, bool b2) {
     mForceDrawSkeletonIdx = i1;
     mForceDrawEnabled = b2;
 }
+
+#ifdef HX_NATIVE
+// TODO: implement Save/Copy/Load — DepthBuffer3D has complex rendering state
+void DepthBuffer3D::Save(BinStream &) {}
+void DepthBuffer3D::Copy(const Hmx::Object *, Hmx::Object::CopyType) {}
+void DepthBuffer3D::Load(BinStream &) {}
+#endif

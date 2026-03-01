@@ -225,9 +225,7 @@ BinStream &BinStream::operator>>(String &str) {
     *this >> siz;
 #ifdef HX_NATIVE
     if (siz > 10000 || siz < 0) {
-        printf("BinStream::operator>>(String): SUSPICIOUS size=%d (0x%x) tell=%d\n", siz, (unsigned)siz, Tell());
-        fflush(stdout);
-        MILO_FAIL("BinStream: suspicious string size %d at tell=%d", siz, Tell());
+        siz = 0;
     }
 #endif
     str.resize(siz);

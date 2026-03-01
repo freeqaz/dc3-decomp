@@ -31,7 +31,13 @@ RndTex::RndTex()
     : mMipMapK(-8.0f), mType(kRegular), mWidth(0), mHeight(0), mBpp(32), mFilepath(),
       mNumMips(0), mOptimizeForPS3(0), mLoader(0) {}
 
-RndTex::~RndTex() { delete mLoader; }
+RndTex::~RndTex() {
+#ifdef HX_NATIVE
+    extern void CleanupGpuTex(RndTex*);
+    CleanupGpuTex(this);
+#endif
+    delete mLoader;
+}
 
 BEGIN_HANDLERS(RndTex)
     HANDLE(set_bitmap, OnSetBitmap)

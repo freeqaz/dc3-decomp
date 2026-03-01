@@ -36,6 +36,51 @@ void RndLight::Save(BinStream &bs) {
     bs << mAnimateRangeFromPreset;
 }
 
+BEGIN_COPYS(RndLight)
+    CREATE_COPY_AS(RndLight, l)
+    MILO_ASSERT(l, 0xC4);
+    COPY_SUPERCLASS(Hmx::Object)
+    COPY_SUPERCLASS(RndTransformable)
+    COPY_MEMBER_FROM(l, mColor)
+    COPY_MEMBER_FROM(l, mType)
+    COPY_MEMBER_FROM(l, mAnimateColorFromPreset)
+    COPY_MEMBER_FROM(l, mAnimatePositionFromPreset)
+    COPY_MEMBER_FROM(l, mAnimateRangeFromPreset)
+    if (ty != kCopyFromMax)
+        COPY_MEMBER_FROM(l, mRange)
+    COPY_MEMBER_FROM(l, mFalloffStart)
+    COPY_MEMBER_FROM(l, mTopRadius)
+    COPY_MEMBER_FROM(l, mBotRadius)
+    COPY_MEMBER_FROM(l, mTexture)
+    COPY_MEMBER_FROM(l, mCubeTexture)
+    COPY_MEMBER_FROM(l, mShadowOverride)
+    COPY_MEMBER_FROM(l, mShadowObjects)
+    COPY_MEMBER_FROM(l, mTextureXfm)
+    COPY_MEMBER_FROM(l, mProjectedBlend)
+    if (ty == kCopyShallow || (ty == kCopyFromMax && l->mColorOwner != l)) {
+        COPY_MEMBER_FROM(l, mColorOwner)
+    } else {
+        mColorOwner = this;
+        COPY_MEMBER_FROM(l, mColor)
+    }
+END_COPYS
+
+bool RndLight::Replace(ObjRef *ref, Hmx::Object *obj) {
+    if (&mColorOwner == ref) {
+        RndLight *lit = NULL;
+        if (mColorOwner != this) {
+            lit = dynamic_cast<RndLight *>(obj);
+        }
+        if (lit) {
+            mColorOwner = lit->mColorOwner;
+        } else {
+            mColorOwner = this;
+        }
+        return true;
+    }
+    return RndTransformable::Replace(ref, obj);
+}
+
 BEGIN_HANDLERS(RndLight)
     HANDLE_ACTION(set_showing, SetShowing(_msg->Int(2)))
     HANDLE_SUPERCLASS(RndTransformable)

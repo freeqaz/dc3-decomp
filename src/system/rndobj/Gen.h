@@ -14,7 +14,14 @@
 /** "A Generator object flies out object instances along a path." */
 class RndGenerator : public RndAnimatable, public RndTransformable, public RndDrawable {
 public:
-    class Instance {};
+    class Instance {
+    public:
+        Instance() {}
+        Instance(const Transform &t) : xfm(t) {}
+        float startFrame; // 0x0
+        Transform xfm; // 0x4
+        Vector3 scale; // 0x34
+    };
     // Hmx::Object
     virtual ~RndGenerator();
     OBJ_CLASSNAME(Generator);
@@ -92,5 +99,5 @@ protected:
     float mPathVarMaxY; // 0x188
     float mPathVarMaxZ; // 0x18c
     RndParticle *mCurParticle; // 0x190
-    std::list<RndMultiMesh::Instance>::iterator mCurMultiMesh; // 0x194
+    RndMultiMesh::InstanceList::iterator mCurMultiMesh; // 0x194
 };

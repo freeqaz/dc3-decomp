@@ -384,3 +384,8 @@ float HamListRibbon::GetLabelTotalAlpha() const {
     }
     return ret;
 }
+
+#ifdef HX_NATIVE
+// TODO: complex implementation with multiple anim paths
+float HamListRibbon::EndFrame() { return 0; }
+#endif

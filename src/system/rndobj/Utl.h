@@ -75,6 +75,7 @@ void SetRndSplasherCallback(SplashFunc func1, SplashFunc func2, SplashFunc func3
 
 void MakeTangentsLate(RndMesh *);
 void CalcBox(RndMesh *, Box &);
+void CalcSphere(RndTransAnim *, Sphere &);
 MatShaderOptions GetDefaultMatShaderOpts(const Hmx::Object *, RndMat *);
 void ResetNormals(RndMesh *);
 void TessellateMesh(RndMesh *);

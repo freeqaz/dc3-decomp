@@ -50,3 +50,10 @@ void WorldCrowd3DCharHandle::Set3DChar(
     mCharItr = iter;
     mCharIdx = i3;
 }
+
+#ifdef HX_NATIVE
+// TODO: property synchronization
+bool WorldCrowd3DCharHandle::SyncProperty(DataNode &, DataArray *, int, PropOp) {
+    return false;
+}
+#endif

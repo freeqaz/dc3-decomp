@@ -26,6 +26,9 @@ NgRnd& TheNgRnd = gWgpuRndInstance;
 RndShaderMgr& TheShaderMgr = gWgpuShaderMgr;
 WgpuRnd* gWgpuRnd = &gWgpuRndInstance;
 
+// Exposed for input subsystem (Joypad_Native, Keyboard_Native)
+GLFWwindow *gNativeWindow = nullptr;
+
 UIManager* TheUI = nullptr;
 
 // ============================================================================
@@ -33,6 +36,7 @@ UIManager* TheUI = nullptr;
 // ============================================================================
 
 void UniformRingBuffer::Init(wgpu::Device& device, uint32_t capacity) {
+    mDevice = device;
     wgpu::BufferDescriptor desc{};
     desc.size = capacity;
     desc.usage = wgpu::BufferUsage::Uniform | wgpu::BufferUsage::CopyDst;
@@ -41,11 +45,23 @@ void UniformRingBuffer::Init(wgpu::Device& device, uint32_t capacity) {
     mOffset = 0;
 }
 
+void UniformRingBuffer::Grow(wgpu::Device& device) {
+    uint32_t newCapacity = mCapacity * 2;
+    fprintf(stderr, "UniformRingBuffer: growing %u -> %u bytes\n", mCapacity, newCapacity);
+
+    wgpu::BufferDescriptor desc{};
+    desc.size = newCapacity;
+    desc.usage = wgpu::BufferUsage::Uniform | wgpu::BufferUsage::CopyDst;
+    // Old buffer stays alive until GPU is done with current frame (ref-counted by Dawn)
+    mBuffer = device.CreateBuffer(&desc);
+    mCapacity = newCapacity;
+    mOffset = 0;
+}
+
 uint32_t UniformRingBuffer::Write(wgpu::Queue& queue, const void* data, uint32_t size) {
     uint32_t alignedSize = (size + kAlignment - 1) & ~(kAlignment - 1);
     if (mOffset + alignedSize > mCapacity) {
-        // Ring buffer full — wrap around (safe for single-frame use)
-        mOffset = 0;
+        Grow(mDevice);
     }
     uint32_t offset = mOffset;
     queue.WriteBuffer(mBuffer, offset, data, size);
@@ -93,6 +109,7 @@ void WgpuRnd::Init() {
 
     mWidth = mGpu.WindowWidth();
     mHeight = mGpu.WindowHeight();
+    gNativeWindow = mGpu.Window();
 
     // Initialize pipeline manager
     mPipelines.Init(&mGpu);
@@ -108,6 +125,8 @@ void WgpuRnd::Init() {
     // Create per-draw ring buffers (64KB each — enough for ~250 draws/frame at 256-byte alignment)
     mMaterialRing.Init(mGpu.Device(), 64 * 1024);
     mObjectRing.Init(mGpu.Device(), 64 * 1024);
+    // Bone ring needs more space: 2560 bytes per skinned draw (rounded to 2816 at 256 alignment)
+    mBoneRing.Init(mGpu.Device(), 256 * 1024);
 
     // Create depth texture
     CreateDepthTexture(mWidth, mHeight);
@@ -120,6 +139,7 @@ void WgpuRnd::Init() {
 }
 
 void WgpuRnd::Terminate() {
+    gNativeWindow = nullptr;
     mDepthTex = nullptr;
     mDepthView = nullptr;
     mWhiteTex = nullptr;
@@ -157,6 +177,7 @@ void WgpuRnd::BeginDrawing() {
     // Reset ring buffers for this frame
     mMaterialRing.Reset();
     mObjectRing.Reset();
+    mBoneRing.Reset();
 
     // Acquire next frame
     if (mGpu.IsHeadless()) {
@@ -333,20 +354,52 @@ void WgpuRnd::WriteSceneUniforms() {
             scene.fogColor[2] = fc.blue;
         }
 
-        // First directional light — try to get from the environment's light list
-        // For Tier 1, use a default three-quarter light for good visibility
-        scene.lightDir[0] = -0.4f;
-        scene.lightDir[1] = -0.7f;
-        scene.lightDir[2] = 0.5f;
-        scene.lightColor[0] = scene.lightColor[1] = scene.lightColor[2] = 1.0f;
+        // Read directional lights from the environment's real light list
+        int lightIdx = 0;
+        ObjPtrList<RndLight>& lights = env->LightsReal();
+        for (ObjPtrList<RndLight>::iterator it = lights.begin();
+             it != lights.end() && lightIdx < 4; ++it) {
+            RndLight* light = *it;
+            if (!light || !light->Showing()) continue;
+            if (light->GetType() != RndLight::kDirectional) continue;
+
+            // Light direction = Y-axis of the light's world transform
+            const Transform& lxfm = light->WorldXfm();
+            scene.lightDirs[lightIdx][0] = lxfm.m.y.x;
+            scene.lightDirs[lightIdx][1] = lxfm.m.y.y;
+            scene.lightDirs[lightIdx][2] = lxfm.m.y.z;
+            scene.lightDirs[lightIdx][3] = 0.0f;
+
+            const Hmx::Color& lc = light->GetColor();
+            scene.lightColors[lightIdx][0] = lc.red;
+            scene.lightColors[lightIdx][1] = lc.green;
+            scene.lightColors[lightIdx][2] = lc.blue;
+            scene.lightColors[lightIdx][3] = 1.0f;
+            lightIdx++;
+        }
+
+        // Fallback: if no lights found, use a default three-quarter light
+        if (lightIdx == 0) {
+            scene.lightDirs[0][0] = -0.4f;
+            scene.lightDirs[0][1] = -0.7f;
+            scene.lightDirs[0][2] = 0.5f;
+            scene.lightDirs[0][3] = 0.0f;
+            scene.lightColors[0][0] = scene.lightColors[0][1] = scene.lightColors[0][2] = 1.0f;
+            scene.lightColors[0][3] = 1.0f;
+            lightIdx = 1;
+        }
+        scene.numLights = (float)lightIdx;
     } else {
-        // Default lighting
+        // Default lighting — single directional light
         scene.ambientColor[0] = scene.ambientColor[1] = scene.ambientColor[2] = 0.35f;
         scene.ambientColor[3] = 1.0f;
-        scene.lightDir[0] = -0.4f;
-        scene.lightDir[1] = -0.7f;
-        scene.lightDir[2] = 0.5f;
-        scene.lightColor[0] = scene.lightColor[1] = scene.lightColor[2] = 0.9f;
+        scene.lightDirs[0][0] = -0.4f;
+        scene.lightDirs[0][1] = -0.7f;
+        scene.lightDirs[0][2] = 0.5f;
+        scene.lightDirs[0][3] = 0.0f;
+        scene.lightColors[0][0] = scene.lightColors[0][1] = scene.lightColors[0][2] = 0.9f;
+        scene.lightColors[0][3] = 1.0f;
+        scene.numLights = 1.0f;
     }
 
     // Upload scene uniforms
@@ -400,6 +453,21 @@ wgpu::BindGroup WgpuRnd::CreateObjectBindGroup(uint32_t bufferOffset, uint32_t b
 
     wgpu::BindGroupDescriptor desc{};
     desc.layout = mPipelines.ObjectLayout();
+    desc.entryCount = 1;
+    desc.entries = &entry;
+
+    return mGpu.Device().CreateBindGroup(&desc);
+}
+
+wgpu::BindGroup WgpuRnd::CreateBoneBindGroup(uint32_t bufferOffset, uint32_t bufferSize) {
+    wgpu::BindGroupEntry entry{};
+    entry.binding = 0;
+    entry.buffer = mBoneRing.Buffer();
+    entry.offset = bufferOffset;
+    entry.size = bufferSize;
+
+    wgpu::BindGroupDescriptor desc{};
+    desc.layout = mPipelines.BoneLayout();
     desc.entryCount = 1;
     desc.entries = &entry;
 

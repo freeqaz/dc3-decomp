@@ -216,3 +216,8 @@ void SkeletonViz::DrawLine3D(
     mUtlLine->DrawShowing();
     mUtlLine->SetMat(mat);
 }
+
+#ifdef HX_NATIVE
+// TODO: animation stepping with DeltaUISeconds
+void SkeletonViz::Poll() {}
+#endif

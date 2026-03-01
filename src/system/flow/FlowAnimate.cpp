@@ -84,6 +84,10 @@ void FlowAnimate::Load(BinStream &bs) {
     int revs;
     bs >> revs;
     BinStreamRev d(bs, revs);
+#ifdef HX_NATIVE
+    printf("  FlowAnimate::Load '%s': rev=%d altRev=%d tell=%d\n",
+           Name(), d.rev, d.altRev, bs.Tell());
+#endif
 
     static const unsigned short gRevs[4] = { 3, 0, 0, 0 };
     if (d.rev > 3) {
@@ -105,20 +109,55 @@ void FlowAnimate::Load(BinStream &bs) {
         );
     }
 
+#ifdef HX_NATIVE
+    printf("  FlowAnimate::Load '%s': before FlowNode::Load tell=%d\n", Name(), bs.Tell());
+#endif
     FlowNode::Load(bs);
+#ifdef HX_NATIVE
+    printf("  FlowAnimate::Load '%s': after FlowNode::Load tell=%d\n", Name(), bs.Tell());
+#endif
 
     if (d.rev < 3) {
+        RndAnimatable *anim = mAnim.LoadFromMainOrDir(d.stream);
+        mAnim = anim;
+    } else {
         mAnim.LoadFromMainOrDir(d.stream);
     }
+#ifdef HX_NATIVE
+    printf("  FlowAnimate::Load '%s': after mAnim (rev=%d) tell=%d\n", Name(), d.rev, bs.Tell());
+#endif
 
     d >> mBlend >> mWait >> mDelay;
+#ifdef HX_NATIVE
+    printf("  FlowAnimate::Load '%s': after blend/wait/delay tell=%d blend=%f wait=%d delay=%f\n",
+           Name(), bs.Tell(), mBlend, (int)mWait, mDelay);
+#endif
     d >> (int&)mStopMode >> mEnable;
+#ifdef HX_NATIVE
+    printf("  FlowAnimate::Load '%s': after stopMode/enable tell=%d stopMode=%d enable=%d\n",
+           Name(), bs.Tell(), (int)mStopMode, (int)mEnable);
+#endif
     d >> (int&)mRate >> mStart;
     d >> mEnd >> mPeriod;
+#ifdef HX_NATIVE
+    printf("  FlowAnimate::Load '%s': after rate..period tell=%d rate=%d start=%f end=%f period=%f\n",
+           Name(), bs.Tell(), (int)mRate, mStart, mEnd, mPeriod);
+#endif
     d >> mType;
-    d >> mScale >> (int&)mEase >> mEasePower;
-    d >> mWrap;
-    d >> mImmediateRelease;
+#ifdef HX_NATIVE
+    printf("  FlowAnimate::Load '%s': after mType tell=%d type='%s'\n", Name(), bs.Tell(), mType.Str());
+#endif
+    d >> mScale;
+    if (d.rev > 0) {
+        d >> (int &)mEase >> mEasePower;
+        d >> mWrap;
+    }
+    if (d.rev > 1) {
+        d >> mImmediateRelease;
+    }
+#ifdef HX_NATIVE
+    printf("  FlowAnimate::Load '%s': done tell=%d\n", Name(), bs.Tell());
+#endif
 }
 
 void FlowAnimate::ResetAnim() {

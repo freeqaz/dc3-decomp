@@ -1,9 +1,13 @@
 #include "rndobj/Gen.h"
+#include "math/Geo.h"
 #include "obj/Object.h"
 #include "rndobj/Anim.h"
 #include "rndobj/Cam.h"
 #include "rndobj/Draw.h"
+#include "rndobj/MultiMesh.h"
+#include "rndobj/Part.h"
 #include "rndobj/Trans.h"
+#include "rndobj/Utl.h"
 
 RndGenerator::RndGenerator()
     : mPath(this), mPathStartFrame(0), mPathEndFrame(0), mMesh(this), mMultiMesh(this),
@@ -247,4 +251,80 @@ DataNode RndGenerator::OnSetPathVar(const DataArray *da) {
 DataNode RndGenerator::OnGenerate(const DataArray *da) {
     Generate(GetFrame());
     return 0;
+}
+
+void RndGenerator::DrawParticleSys(Transform &t, float) {
+    if (mCurParticle) {
+        mCurParticle->pos.Set(t.v.x, t.v.y, t.v.z, mCurParticle->pos.w);
+        mCurParticle = mCurParticle->next;
+    }
+}
+
+typedef void (RndGenerator::*DrawFunc)(Transform &, float);
+
+void RndGenerator::DrawShowing() {
+    if (mPath && (mMesh || mMultiMesh || mParticleSys)) {
+        DrawFunc func = nullptr;
+        if (mMesh)
+            func = &RndGenerator::DrawMesh;
+        else if (mMultiMesh) {
+            RndMultiMesh::InstanceList &meshInsts = mMultiMesh->Instances();
+            if (meshInsts.size() != mInstances.size()) {
+                meshInsts.resize(mInstances.size());
+            }
+            mCurMultiMesh = meshInsts.begin();
+            func = &RndGenerator::DrawMultiMesh;
+        } else if (mParticleSys) {
+            mCurParticle = mParticleSys->ActiveParticles();
+            func = &RndGenerator::DrawParticleSys;
+        }
+
+        if (func) {
+            int dir = mPathEndFrame - mPathStartFrame > 0 ? 1 : -1;
+            FOREACH (it, mInstances) {
+                float elapsed = GetFrame() - it->startFrame;
+                Transform xfm;
+                mPath->MakeTransform(elapsed * dir + mPathStartFrame, xfm, true, 1);
+                Scale(it->scale, xfm.m, xfm.m);
+                Multiply(xfm, it->xfm, xfm);
+                (this->*func)(xfm, elapsed);
+            }
+        }
+
+        if (mMultiMesh) {
+            mMultiMesh->Draw();
+        } else if (mParticleSys) {
+            mParticleSys->Draw();
+        }
+    }
+}
+
+bool RndGenerator::MakeWorldSphere(Sphere &sphere, bool b) {
+    if (b) {
+        sphere.Zero();
+        if (mPath) {
+            CalcSphere(mPath, sphere);
+            if (sphere.GetRadius()) {
+                RndMesh *mesh = mMesh;
+                if (!mesh && mMultiMesh) {
+                    mesh = mMultiMesh->Mesh();
+                }
+                if (mesh) {
+                    float sum =
+                        mMesh->GetSphere().GetRadius() + Length(mMesh->GetSphere().center);
+                    sphere.radius += mScaleGenHigh * sum;
+                } else if (mParticleSys) {
+                    const Vector2 &startSize = mParticleSys->StartSize();
+                    sphere.radius += mScaleGenHigh * Max(startSize.x, startSize.y);
+                }
+            }
+        }
+        return true;
+    } else {
+        if (mSphere.GetRadius() != 0.0f) {
+            Multiply(mSphere, WorldXfm(), sphere);
+            return true;
+        }
+        return false;
+    }
 }

@@ -2396,8 +2396,13 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
                 # Detect unimplemented stubs (base has no code)
                 base_size = data.get("base_size", 0)
                 target_size = data.get("target_size", 0)
+                # Safeguard: diff_score.max_score > 0 means instructions exist
+                # on both sides (rules out false stubs from name mismatch)
+                diff_score = data.get("diff_score", {})
+                max_score = diff_score.get("max_score", 0) if diff_score else 0
+                is_stub = (classification == "STUB" or (base_size == 0 and target_size > 0)) and max_score == 0
 
-                if classification == "STUB" or (base_size == 0 and target_size > 0):
+                if is_stub:
                     unimplemented += 1
                 elif match_pct == 100.0 or classification == "COMPLETE":
                     newly_complete += 1

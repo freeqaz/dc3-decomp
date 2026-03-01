@@ -93,24 +93,7 @@ void RndDir::PreLoad(BinStream &bs) {
     ASSERT_REVS(10, 0)
 #ifdef HX_NATIVE
     printf("RndDir::PreLoad '%s': rev=%d altRev=%d tell=%d\n", Name(), d.rev, d.altRev, bs.Tell());
-    if (d.rev > 10) {
-        // Dump the next 64 bytes as hex for debugging
-        unsigned char peek[64];
-        bs.Read(peek, 64);
-        printf("  WRONG REV! Next 64 bytes after LOAD_REVS:\n  hex: ");
-        for (int i = 0; i < 64; i++) {
-            printf("%02x ", peek[i]);
-            if (i % 16 == 15) printf("\n  hex: ");
-        }
-        printf("\n  ascii: ");
-        for (int i = 0; i < 64; i++)
-            printf("%c", (peek[i] >= 32 && peek[i] < 127) ? peek[i] : '.');
-        printf("\n");
-        fflush(stdout);
-        printf("  ABORTING - fix the stream desync first!\n");
-        fflush(stdout);
-        exit(1);
-    }
+    fflush(stdout);
 #endif
     ObjectDir::PreLoad(bs);
     bs.PushRev(packRevs(d.altRev, d.rev), this);

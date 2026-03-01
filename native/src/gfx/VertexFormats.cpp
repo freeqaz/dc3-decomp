@@ -261,4 +261,67 @@ int UnpackCompressedVertices(const unsigned char* compressedData, int numVerts,
     return count;
 }
 
+// ============================================================================
+// Unpack Xbox 360 compressed vertices with bone weights/indices
+// Note: CompressedVertex_Xbox field names are SWAPPED for bone data:
+//   mBoneIndices = UDEC4N  BLENDWEIGHT  (bone weights as 10-10-10-2 unsigned normalized)
+//   mBoneWeights = UBYTE4  BLENDINDICES (bone indices as 4 bytes)
+// ============================================================================
+
+static void UnpackUDEC4N_BE(int packed, float out[4]) {
+    // UDEC4N: 10-10-10-2 unsigned normalized, big-endian
+    unsigned int val = __builtin_bswap32((unsigned int)packed);
+    unsigned int ix = val & 0x3FF;
+    unsigned int iy = (val >> 10) & 0x3FF;
+    unsigned int iz = (val >> 20) & 0x3FF;
+    unsigned int iw = (val >> 30) & 0x3;
+    out[0] = ix / 1023.0f;
+    out[1] = iy / 1023.0f;
+    out[2] = iz / 1023.0f;
+    out[3] = iw / 3.0f;
+}
+
+static void UnpackUBYTE4_BE(int packed, uint8_t out[4]) {
+    // UBYTE4: 4 bytes, big-endian
+    unsigned int val = __builtin_bswap32((unsigned int)packed);
+    out[0] = (uint8_t)(val & 0xFF);
+    out[1] = (uint8_t)((val >> 8) & 0xFF);
+    out[2] = (uint8_t)((val >> 16) & 0xFF);
+    out[3] = (uint8_t)((val >> 24) & 0xFF);
+}
+
+int UnpackCompressedSkinnedVertices(const unsigned char* compressedData, int numVerts,
+                                     GpuVertexSkinned* out, int maxVerts) {
+    int count = std::min(numVerts, maxVerts);
+    const CompressedVertex_Xbox* cverts = (const CompressedVertex_Xbox*)compressedData;
+
+    for (int i = 0; i < count; i++) {
+        const CompressedVertex_Xbox& cv = cverts[i];
+        GpuVertexSkinned& gv = out[i];
+
+        // Position
+        gv.pos[0] = UnpackFloat_BE(cv.mPosX);
+        gv.pos[1] = UnpackFloat_BE(cv.mPosY);
+        gv.pos[2] = UnpackFloat_BE(cv.mPosZ);
+
+        // Color
+        UnpackColor_BE(cv.mColor, gv.color);
+
+        // UV: FLOAT16_2 stored in mNormal field
+        UnpackFloat16x2_BE(cv.mNormal, gv.uv);
+
+        // Normal: DEC4N stored in mTangent field
+        UnpackDEC4N_BE(cv.mTangent, gv.norm);
+
+        // Bone weights: UDEC4N stored in mBoneIndices field (names swapped!)
+        UnpackUDEC4N_BE(cv.mBoneIndices, gv.boneWeights);
+
+        // Bone indices: UBYTE4 stored in mBoneWeights field (names swapped!)
+        UnpackUBYTE4_BE(cv.mBoneWeights, gv.boneIndices);
+
+        gv.pad = 0.0f;
+    }
+    return count;
+}
+
 } // namespace VertexFormats

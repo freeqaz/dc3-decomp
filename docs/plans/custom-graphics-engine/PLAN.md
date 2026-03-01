@@ -123,10 +123,12 @@ DataArray scripts, instantiates game objects.
 .milo object loading (Tex, Font, Text, etc.), subsystem inits (Flow/Char/World/Ham),
 and enters `TheUI->Init()`. Major blockers resolved: ChunkStream infinite loop,
 RndTex/Font stream desync, iterator/pointer compatibility (605 call sites),
-ObjOwnerPtr null deref, Font3d vtable corruption (Itanium ABI key function).
-Current blocker: stream desync during `PreloadSharedSubdirs()` — object reads
-garbage revision from .milo stream (likely caused by broken vtable stubs for
-44 classes in engine_stubs_generated.cpp).
+ObjOwnerPtr null deref, Font3d vtable corruption (Itanium ABI key function),
+nested ObjectDir detection (DirLoader-format data at mRev=32).
+See [STREAM_DESYNC.md](STREAM_DESYNC.md) for the nested dir detection hack and
+defensive guards added to survive residual stream desync.
+Current work: implementing stubbed `::Load` functions as they surface during boot,
+adding defensive guards to prevent crashes from remaining desync.
 
 **Work items**:
 - [x] Implement native `File` / `AsyncFile` using POSIX I/O
@@ -142,7 +144,11 @@ garbage revision from .milo stream (likely caused by broken vtable stubs for
 - [x] Fix ObjOwnerPtr null deref (RefOwner null check)
 - [x] Implement CachedRead for RndMesh face/vertex loading
 - [x] Boot through subsystem inits (FlowInit, CharInit, WorldInit, HamInit)
+- [x] Detect nested ObjectDir DirLoader-format data (peek-and-unreread hack)
+- [x] Implement `DrivenPropertyEntry::Load` and `FlowMathOp::Load` (from symmetric Save)
+- [x] Add defensive guards for stream desync (rev caps, string size caps, count caps)
 - [ ] Implement remaining stubbed ::Load functions for full object parsing
+- [ ] Wire nested sub-DirLoader results into parent object graph (currently deleted)
 - [ ] Boot through to main loop
 - [ ] Add a test harness that feeds scripted commands
 
@@ -154,9 +160,11 @@ states. Logged output shows object creation and state transitions.
 **Goal**: A lightweight standalone app that loads `.milo` scene files and renders
 them — without the full game runtime. Faster iteration on the rendering pipeline.
 
-**Status**: Fully operational. Loads `.milo_xbox` files from CLI, renders meshes
-with materials and lighting, supports headless screenshot mode. Batch script
-generates gallery of 17 props. See `archive/screenshots/` for rendered output.
+**Status**: Fully operational with full material pipeline. Loads `.milo_xbox` files
+from CLI, renders meshes with specular, emissive, rim lighting, intensify, and
+multi-directional lighting from environment data. Supports headless screenshot mode
+and `--verbose` debug output. Batch script generates gallery of 17 props. Window
+title shows loaded filename. See `archive/screenshots/` for rendered output.
 
 **Work items**:
 - [x] Load `.milo` archive, parse `ObjectDir` hierarchy
@@ -223,11 +231,10 @@ Structure the implementation so a command recording layer could be inserted late
 (keep draw calls going through a small number of methods that could become recording
 points).
 
-**Status (Tier 1 MVP)**: Mesh rendering operational. Props from `.milo_xbox` files
-render with material colors, directional lighting, and proper geometry. Both
-uncompressed and Xbox 360 compressed vertex formats supported. Pipeline cache,
-ring buffer uniforms, sampler cache, bind group management all working. 17 props
-rendered to `archive/screenshots/` as visual proof.
+**Status (Tier 1.5)**: Full material pipeline operational. Props render with Blinn-Phong
+specular highlights, emissive glow, rim lighting, intensify, and multi-directional
+lighting read from RndEnviron. Ring buffer auto-grows on overflow, GPU resources
+cleaned up via destructor hooks, pipeline cache bounded with warnings.
 
 **Work items**:
 - [x] Implement `WgpuRnd` subclass using `webgpu.h` / `webgpu_cpp.h`
@@ -235,42 +242,62 @@ rendered to `archive/screenshots/` as visual proof.
 - [x] Mesh rendering (`RndMesh` → GPU vertex/index buffers, compressed vertex unpack)
 - [x] Material system (`RndMat` → shader uniforms, blend states, pipeline cache)
 - [x] Camera (`RndCam` → view/projection matrices, orbit camera in viewer)
-- [x] Basic lighting (`RndEnviron` ambient color + single directional light)
-- [x] Write standard.wgsl shader (diffuse + ambient + fog + alpha test)
+- [x] Multi-light support (up to 4 directional lights from `RndEnviron::LightsReal()`)
+- [x] Write standard.wgsl shader (half-Lambert diffuse + Blinn-Phong specular + emissive + rim + intensify + fog + alpha test)
 - [x] Texture loading (`RndTex` → GPU textures, DXT1/3/5 byte-swap + untile + decompress)
+- [x] Specular highlights (Blinn-Phong from `BaseMaterial::GetSpecularRGB()`)
+- [x] Emissive support (`BaseMaterial::GetEmissiveMultiplier()`)
+- [x] Rim lighting (`BaseMaterial::GetRimRGB()`)
+- [x] Intensify flag (`BaseMaterial::GetIntensify()` → 2x texture brightness)
+- [x] Ring buffer overflow protection (auto-grow)
+- [x] GPU resource cleanup (destructor hooks in RndMesh/RndTex)
+- [x] Pipeline cache bounds warning (512 entries)
 - [ ] Skinned mesh rendering (bone transforms, vertex skinning shader)
-- [ ] Multi-light support (read lights from `RndEnviron`)
-- [ ] Additional shader types (emissive, environment map, etc.)
 - [ ] Post-processing (bloom, etc.)
 - [ ] UI rendering (2D overlays, text)
 
 **Deliverable**: Game renders a venue with characters. Visual fidelity may be rough
 but geometry, textures, and animation are correct.
 
-### Phase 3: Audio
+### Phase 3: Audio — PARTIALLY COMPLETE
 
 **Goal**: Music playback synchronized with gameplay. SFX and voice.
 
+**Status**: Decode side complete (FFmpegAudioReader for .bik, VorbisReader for .ogg/.mogg).
+Output side not started (no audio device integration yet). See [AUDIO_SYSTEM.md](AUDIO_SYSTEM.md)
+for the detailed sub-phase plan.
+
 **Work items**:
-- [ ] Choose audio library (miniaudio, FMOD, SDL2, OpenAL)
-- [ ] Implement `Synth` backend for chosen library
-- [ ] Implement `Voice` (sample playback with pitch/volume control)
-- [ ] Implement audio streaming from `.ark` (songs are typically Vorbis or custom format)
-- [ ] DSP effects chain (reverb, EQ) — may stub initially
+- [x] Choose audio library → **miniaudio** (header-only, callback-based, cross-platform)
+- [x] Bink audio decode → **FFmpegAudioReader** replaces BinkReader (see [VIDEO_PLAYBACK.md](VIDEO_PLAYBACK.md))
+- [x] Wire `NativeSynth::NewStreamDecoder()` → FFmpegAudioReader for "bink" type
+- [x] Implement `AudioDevice` wrapper around miniaudio (sub-phase 3.1)
+- [x] Implement `StreamReceiverNative` — ring buffer → PCM output (sub-phase 3.2)
+- [x] Wire `StreamReceiver::sFactory` in Synth init (sub-phase 3.3)
+- [x] `SampleInstNative` implemented and wired to `SynthSample::NewInst()` (sub-phase 3.4)
+- [x] Audio mixing + volume/pan in AudioDevice callback (sub-phase 3.6)
+- [ ] OGG/Vorbis streaming for song audio (sub-phase 3.5)
+- [ ] DSP effects chain (reverb, EQ) — stub initially
 - [ ] Audio-visual sync (critical for a rhythm game — need sub-frame accuracy)
-- [ ] Bink audio decode (for cutscenes)
 
 **Deliverable**: Songs play in sync with gameplay. Hit/miss feedback sounds work.
 
-### Phase 4: Input
+### Phase 4: Input — COMPLETE
 
 **Goal**: Playable with a game controller.
 
+**Status**: Implemented via GLFW (already linked for windowing). Gamepad polling via
+`glfwGetGamepadState` + keyboard-as-joypad fallback for testing without a controller.
+Keyboard events via GLFW key callback → ring buffer → `KeyboardSendMsg`.
+
 **Work items**:
-- [ ] Implement `Joypad` backend using SDL2 GameController API
-- [ ] Map SDL2 buttons to Milo's joypad enum (`kPad_X`, `kPad_Circle`, etc.)
-- [ ] USB MIDI support for Rock Band instruments (ALSA on Linux, CoreMIDI on Mac)
-- [ ] Keyboard input for menu navigation
+- [x] Implement `Joypad` backend using GLFW GameController API (`Joypad_Native.cpp`)
+- [x] Map GLFW gamepad buttons to Milo's joypad enum (`kPad_X`, `kPad_Circle`, etc.)
+- [x] Keyboard-as-joypad fallback (arrows→D-pad, Enter→A, Esc→B, Space→Start, etc.)
+- [x] Keyboard input via GLFW callbacks (`Keyboard_Native.cpp`)
+- [x] `gNativeWindow` global for input subsystem access to GLFW window
+- [x] 19 unit tests covering button mapping, delta logic, stick translation, triggers
+- [ ] USB MIDI support for Rock Band instruments (future)
 
 **Deliverable**: Navigate menus and play controller-compatible game modes.
 
@@ -298,7 +325,7 @@ but geometry, textures, and animation are correct.
 - [ ] Save/load game progress
 - [ ] DLC content loading
 - [ ] Network play (if desired — could stub or remove)
-- [ ] Video playback (Bink → FFmpeg, or re-encode to modern codec)
+- [x] Video playback (Bink → FFmpeg) — see [VIDEO_PLAYBACK.md](VIDEO_PLAYBACK.md)
 - [ ] Performance optimization
 - [ ] Optional: Add command recording IR for frame capture/regression testing
 
@@ -438,3 +465,4 @@ macros.dta, sfx_macros.dta, and all other config files without issues.
 | [IMPLEMENTATION_GUIDE.md](IMPLEMENTATION_GUIDE.md) | Build instructions + step-by-step walkthrough |
 | [MOTION_CAPTURE.md](MOTION_CAPTURE.md) | Kinect replacement / motion capture |
 | [PORTING_ANALYSIS.md](PORTING_ANALYSIS.md) | Codebase analysis for x86_64 port |
+| [STREAM_DESYNC.md](STREAM_DESYNC.md) | Stream desync: nested ObjectDir detection, defensive guards |

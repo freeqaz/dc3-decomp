@@ -73,6 +73,15 @@ public:
 #endif
     static void operator delete(void *v) { MemFree(v, __FILE__, 0x31, "ChunkStream"); }
 
+#ifdef HX_NATIVE
+    // Rewind the read position by `bytes` within the current chunk.
+    // Only safe when the bytes were just read and no chunk boundary was crossed.
+    void Unreread(int bytes) {
+        mCurBufOffset -= bytes;
+        mTell -= bytes;
+    }
+#endif
+
     void PotentiallyWriteChunk(bool b) { MaybeWriteChunk(b); } // so dumb
     static bool PollDecompressionWorker();
 

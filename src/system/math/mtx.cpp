@@ -88,6 +88,14 @@ void FastInvert(const Hmx::Matrix3 &min, Hmx::Matrix3 &mout) {
     );
 }
 
+QuatXfm::QuatXfm(const Transform &tf) : v(tf.v), q(tf.m) {}
+
+void Transform::LookAt(const Vector3 &target, const Vector3 &up) {
+    m.z.Set(target.x - v.x, target.y - v.y, target.z - v.z);
+    m.y = up;
+    Normalize(m, m);
+}
+
 void Transpose(const Hmx::Matrix4 &in, Hmx::Matrix4 &out) {
     out.x.Set(in.x.x, in.y.x, in.z.x, in.w.x);
     out.y.Set(in.x.y, in.y.y, in.z.y, in.w.y);

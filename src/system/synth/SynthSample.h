@@ -26,13 +26,18 @@ public:
     virtual void PreLoad(BinStream &);
     virtual void PostLoad(BinStream &);
     // SynthSample
+#ifdef HX_NATIVE
+    virtual SampleInst *NewInst(bool loop, int startSample, int endSample);
+#else
     virtual SampleInst *NewInst(bool, int, int) { return nullptr; }
+#endif
     virtual float LengthMs() const { return 0; }
 
     OBJ_MEM_OVERLOAD(0x18);
 
     int GetNumChannels() const;
     int GetSampleRate() const;
+    const SampleData &GetSampleData() const { return mSampleData; }
     int NumMarkers() const;
     int GetPlatformSize(Platform);
     std::vector<SampleMarker> &AccessMarkers();

@@ -3,11 +3,23 @@
 #include "obj/Data.h"
 #include "obj/Object.h"
 #include "rndobj/Anim.h"
+#include "rndobj/Cam.h"
 #include "rndobj/Draw.h"
 #include "rndobj/Env.h"
 #include "rndobj/Trans.h"
 #include "rndobj/Utl.h"
 #include "utl/Std.h"
+
+namespace {
+struct GroupDrawDist {
+    RndDrawable *draw;
+    float dist;
+};
+
+bool SortInWorld(const GroupDrawDist &a, const GroupDrawDist &b) {
+    return a.dist < b.dist;
+}
+} // namespace
 
 bool gInReplace;
 
@@ -197,6 +209,41 @@ bool RndGroup::MakeWorldSphere(Sphere &s, bool b) {
         return true;
     } else {
         return false;
+    }
+}
+
+void RndGroup::DrawShowing() {
+    RndEnvironTracker tracker(nullptr, nullptr);
+    if (!mSortInWorld) {
+        for (std::vector<RndDrawable *>::iterator it = mDraws.begin(); it != mDraws.end();
+             ++it) {
+            (*it)->Draw();
+        }
+    } else if (mDrawOnly) {
+        mDrawOnly->Draw();
+    } else {
+        std::vector<GroupDrawDist> sorted;
+        sorted.reserve(mDraws.size());
+        const Transform &camXfm = RndCam::Current()->WorldXfm();
+        for (std::vector<RndDrawable *>::iterator it = mDraws.begin(); it != mDraws.end();
+             ++it) {
+            RndTransformable *trans = dynamic_cast<RndTransformable *>(*it);
+            GroupDrawDist gdd;
+            gdd.draw = *it;
+            if (trans) {
+                Vector3 delta;
+                Subtract(camXfm.v, trans->WorldXfm().v, delta);
+                gdd.dist = LengthSquared(delta);
+            } else {
+                gdd.dist = 0.0f;
+            }
+            sorted.push_back(gdd);
+        }
+        std::sort(sorted.begin(), sorted.end(), SortInWorld);
+        for (std::vector<GroupDrawDist>::iterator it = sorted.begin(); it != sorted.end();
+             ++it) {
+            it->draw->Draw();
+        }
     }
 }
 

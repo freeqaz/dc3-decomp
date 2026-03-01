@@ -1,0 +1,50 @@
+// DC3 Native Port - StreamReceiverNative
+// Concrete StreamReceiver that feeds decoded PCM to AudioDevice for playback.
+// Each instance represents one audio channel of a StandardStream.
+
+#pragma once
+
+#include "synth/StreamReceiver.h"
+#include "audio/AudioDevice.h"
+
+class StreamReceiverNative : public StreamReceiver, public AudioSource {
+public:
+    StreamReceiverNative(int numBuffers, bool slip);
+    virtual ~StreamReceiverNative();
+
+    // StreamReceiver interface
+    virtual void SetVolume(float vol) override { mVolume = vol; }
+    virtual void SetPan(float pan) override { mPan = pan; }
+    virtual void SetSpeed(float speed) override { mSpeed = speed; }
+    virtual void SetSlipOffset(float) override {}
+    virtual void SlipStop() override {}
+    virtual void SetSlipSpeed(float) override {}
+    virtual float GetSlipOffset() override { return 0.0f; }
+    virtual int GetPlayCursor() override;
+    virtual void PauseImpl(bool pause) override;
+    virtual void PlayImpl() override;
+    virtual void StartSendImpl(unsigned char *data, int size, int targetIdx) override;
+    virtual bool SendDoneImpl() override;
+
+    // AudioSource interface (called from audio thread)
+    virtual int RenderAudio(float *output, int frameCount) override;
+    virtual bool IsFinished() const override { return mEndData && mPlayCursor >= mWriteCursor; }
+
+    // Factory function — register with StreamReceiver::sFactory
+    static StreamReceiver *Create(int numBuffers, int sampleRate, bool slip, int channel);
+
+private:
+    // PCM ring buffer (16-bit mono samples from the engine, converted to float on output)
+    static const int kPCMBufSize = 0x10000; // 64KB
+    int16_t mPCMBuf[kPCMBufSize / 2];
+
+    volatile int mWriteCursor; // bytes written by engine
+    volatile int mPlayCursor;  // bytes consumed by audio thread
+    float mVolume;
+    float mPan;    // -1 (left) to 1 (right)
+    float mSpeed;
+    bool mPlaying;
+    bool mPaused;
+    int mSampleRate;
+    u64 mTotalBytesPlayed;
+};

@@ -9,6 +9,19 @@
 #include "utl/BinStream.h"
 #include <cmath>
 
+void Triangle::Set(const Vector3 &v0, const Vector3 &v1, const Vector3 &v2) {
+    origin = v0;
+    // edge vectors
+    frame.x.Set(v1.x - v0.x, v1.y - v0.y, v1.z - v0.z);
+    frame.z.Set(v2.x - v0.x, v2.y - v0.y, v2.z - v0.z);
+    // normal = cross(edge1, edge2)
+    frame.y.Set(
+        frame.x.y * frame.z.z - frame.x.z * frame.z.y,
+        frame.x.z * frame.z.x - frame.x.x * frame.z.z,
+        frame.x.x * frame.z.y - frame.x.y * frame.z.x
+    );
+}
+
 float gUnitsPerMeter = 39.370079f;
 float gBSPPosTol = 0.01f;
 float gBSPDirTol = 0.985f;

@@ -15,36 +15,49 @@
 // ============================================================================
 
 struct SceneUniforms {
-    float viewProj[16];     // mat4x4f
-    float view[16];         // mat4x4f
-    float cameraPos[3];     // vec3f
+    float viewProj[16];       // mat4x4f
+    float view[16];           // mat4x4f
+    float cameraPos[3];       // vec3f
     float _pad0;
-    float fogColor[3];      // vec3f
+    float fogColor[3];        // vec3f
     float fogStart;
     float fogEnd;
     float fogEnabled;
     float _pad1[2];
-    float lightDir[3];      // vec3f
-    float _padL0;
-    float lightColor[3];    // vec3f
-    float _padL1;
-    float ambientColor[4];  // vec4f
+    float lightDirs[4][4];    // array<vec4f, 4> — direction per light
+    float lightColors[4][4];  // array<vec4f, 4> — color per light
+    float ambientColor[4];    // vec4f
+    float numLights;          // f32
+    float _padN[3];
 };
-static_assert(sizeof(SceneUniforms) == 224, "SceneUniforms must match WGSL layout");
+static_assert(sizeof(SceneUniforms) == 336, "SceneUniforms must match WGSL layout");
 
 struct MaterialUniforms {
-    float color[4];         // vec4f
-    float alphaThreshold;   // f32
-    float useTexture;       // f32
-    float _pad[2];          // vec2f
+    float color[4];             // vec4f
+    float alphaThreshold;       // f32
+    float useTexture;           // f32
+    float specularPower;        // f32
+    float emissiveMultiplier;   // f32
+    float specularColor[4];     // vec4f
+    float rimColor[4];          // vec4f — .rgb = color, .a = power
+    float intensify;            // f32
+    float _pad[3];
 };
-static_assert(sizeof(MaterialUniforms) == 32, "MaterialUniforms must match WGSL layout");
+static_assert(sizeof(MaterialUniforms) == 80, "MaterialUniforms must match WGSL layout");
 
 struct ObjectUniforms {
     float world[16];            // mat4x4f
     float worldInvTranspose[16]; // mat4x4f
 };
 static_assert(sizeof(ObjectUniforms) == 128, "ObjectUniforms must match WGSL layout");
+
+// Max bones per mesh (from Mesh.h MaxBones())
+static constexpr int kMaxBones = 40;
+
+struct BoneUniforms {
+    float bones[kMaxBones][16]; // array<mat4x4f, 40>
+};
+static_assert(sizeof(BoneUniforms) == 2560, "BoneUniforms must match WGSL layout");
 
 // ============================================================================
 // Uniform ring buffer — writes to different offsets per draw call
@@ -62,7 +75,10 @@ public:
     uint32_t Capacity() const { return mCapacity; }
 
 private:
+    void Grow(wgpu::Device& device);
+
     static constexpr uint32_t kAlignment = 256; // minUniformBufferOffsetAlignment
+    wgpu::Device mDevice;
     wgpu::Buffer mBuffer;
     uint32_t mCapacity = 0;
     uint32_t mOffset = 0;
@@ -137,9 +153,13 @@ public:
     // Create object bind group (group 2)
     wgpu::BindGroup CreateObjectBindGroup(uint32_t bufferOffset, uint32_t bufferSize);
 
+    // Create bone bind group (group 3) — for skinned meshes
+    wgpu::BindGroup CreateBoneBindGroup(uint32_t bufferOffset, uint32_t bufferSize);
+
     // Ring buffers for per-draw uniforms
     UniformRingBuffer& MaterialRing() { return mMaterialRing; }
     UniformRingBuffer& ObjectRing() { return mObjectRing; }
+    UniformRingBuffer& BoneRing() { return mBoneRing; }
 
 private:
     void CreateDepthTexture(int w, int h);
@@ -159,6 +179,7 @@ private:
     wgpu::Buffer mSceneBuffer;
     UniformRingBuffer mMaterialRing;
     UniformRingBuffer mObjectRing;
+    UniformRingBuffer mBoneRing;
 
     // Bind groups
     wgpu::BindGroup mSceneBindGroup;

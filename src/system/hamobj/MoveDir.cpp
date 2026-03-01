@@ -1257,3 +1257,8 @@ void MoveDir::DetectRange(
     range.second =
         std::upper_bound(frames.begin(), frames.end(), high, DetectFrameMoveIdxCmp());
 }
+
+#ifdef HX_NATIVE
+// TODO: complex overlay rendering
+float MoveDir::UpdateOverlay(RndOverlay *, float) { return 0; }
+#endif

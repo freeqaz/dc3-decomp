@@ -13,6 +13,8 @@
 #include "rndobj/Mesh.h"
 #include "rndobj/Poll.h"
 #include "rndobj/Trans.h"
+#include "rndobj/Utl.h"
+#include "rndobj/Mat.h"
 #include "utl/BinStream.h"
 #include <cmath>
 
@@ -529,6 +531,18 @@ void RndParticleSys::DrawShowing() {
         mDrawCount = 0;
     }
 }
+
+void RndParticleSys::Mats(std::list<RndMat *> &mats, bool) {
+    if (mMat) {
+        mMat->SetShaderOpts(GetDefaultMatShaderOpts(this, mMat));
+        mats.push_back(mMat);
+    }
+}
+
+#ifdef HX_NATIVE
+// TODO: complex deserialization with many particle fields
+void RndParticleSys::Load(BinStream &) {}
+#endif
 
 void RndParticleSys::SetPool(int max, Type ty) {
     if (mPreserveParticles) {

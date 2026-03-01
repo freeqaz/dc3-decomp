@@ -172,3 +172,8 @@ void CharFeedback::Sync() {
         }
     }
 }
+
+#ifdef HX_NATIVE
+// TODO: real implementation uses TaskMgr::Seconds/DeltaSeconds with timer loops
+void CharFeedback::Poll() {}
+#endif

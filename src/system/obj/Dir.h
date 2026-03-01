@@ -129,6 +129,21 @@ protected:
 };
 
 template <class C>
+ObjDirPtr<C>::ObjDirPtr(C *dir) : ObjRefConcrete<C>(dir), mLoader(nullptr) {
+    if (dir)
+        dir->AddRef(this);
+}
+
+template <class C>
+bool ObjDirPtr<C>::IsLoaded() const {
+    if (mObject)
+        return true;
+    if (mLoader && mLoader->IsLoaded())
+        return true;
+    return false;
+}
+
+template <class C>
 BinStream &operator<<(BinStream &bs, const ObjDirPtr<C> &ptr);
 
 template <class T>

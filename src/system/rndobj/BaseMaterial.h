@@ -144,6 +144,8 @@ public:
     ZMode GetZMode() const { return mZMode; }
     bool IsNextPass(BaseMaterial *m);
     const Transform &TexXfm() const { return mTexXfm; }
+    Transform &TexXfm() { return mTexXfm; }
+    TexGen GetTexGen() const { return mTexGen; }
     const Hmx::Color &GetColor() const { return mColor; }
     float Alpha() const { return mColor.alpha; }
     bool UseEnviron() const { return mUseEnviron; }
@@ -159,6 +161,11 @@ public:
     bool GetAlphaWrite() const { return mAlphaWrite; }
     int GetAlphaThreshold() const { return mAlphaThreshold; }
     TexWrap GetTexWrap() const { return mTexWrap; }
+    const Hmx::Color& GetSpecularRGB() const { return mSpecularRGB; }
+    const Hmx::Color& GetRimRGB() const { return mRimRGB; }
+    float GetEmissiveMultiplier() const { return mEmissiveMultiplier; }
+    bool GetIntensify() const { return mIntensify; }
+    RndTex* GetEmissiveMap() const { return mEmissiveMap; }
 #endif
 
 protected:

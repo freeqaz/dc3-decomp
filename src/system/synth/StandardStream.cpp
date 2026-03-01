@@ -317,6 +317,111 @@ const char *StandardStream::GetSoundDisplayName() {
 
 void StandardStream::SynthPoll() { PollStream(); }
 
+void StandardStream::PollStream() {
+    mFrameTimer.Restart();
+
+    // Throttle the reader: poll with (throttle * bufSecs) seconds budget
+    float pollTime = mThrottle * mBufSecs;
+    if (mState == kBuffering) {
+        pollTime = 8.0f;
+    }
+    if (pollTime < 1.0f) pollTime = 1.0f;
+    if (mRdr) mRdr->Poll(pollTime);
+
+    // Poll all channels (advance hardware cursors)
+    for (int i = 0; i < mChannels.size(); i++) {
+        mChannels[i]->Poll();
+    }
+
+    // State machine
+    if (mState != kInit) {
+        if (mState == kBuffering) {
+            if (StuffChannels()) {
+                mState = kReady;
+            }
+        } else if (mState > kReady && mState < kFinished) {
+            StuffChannels();
+            // Check if all channels have finished playing
+            if (!mChannels.empty()) {
+                StreamReceiver *ch0 = mChannels[0];
+                if (ch0->GetBuffersSent() + 2 < ch0->GetBuffersPlayed()) {
+                    mState = kFinished;
+                }
+            }
+        } else if (mState != kFinished) {
+            MILO_FAIL(MakeString("Bad stream state: %d", mState));
+        }
+    }
+
+    // Jump handling omitted for now — requires DoJump() implementation
+
+    UpdateVolumes();
+    UpdateTime();
+}
+
+void StandardStream::UpdateTime() {
+    if (mChannels.empty() || mSampleRate == 0) {
+        mLastStreamTime = mStartMs;
+        return;
+    }
+
+    float rawTime = GetRawTime();
+
+    // Quantize raw time to sample boundaries
+    // 0.1875 = 1000.0 / (sampleRate=44100) * (something) ... actually these are
+    // magic constants from the original binary for 44100Hz sample-aligned timing
+    float quantized = floorf(rawTime * 0.1875f + 0.5f) * 5.3333335f;
+
+    float timerMs = mTimer.Ms();
+    // Adjust timerMs by the residual (rawTime - quantized)
+    float adjusted = timerMs - (rawTime - quantized);
+    float adjustedQuantized = floorf(adjusted * 0.1875f);
+
+    if (quantized == adjustedQuantized * 5.3333335f) {
+        // Already aligned, just update mLastStreamTime
+        mLastStreamTime = mTimer.Ms();
+        return;
+    }
+
+    float drift = quantized - adjusted;
+    if (drift < 0.0f) {
+        drift += 5.3333335f;
+    }
+
+    if (fabsf(drift) < 5.3333335f) {
+        drift *= 0.1f;
+    }
+
+    mTimer.Reset(mTimer.Ms() + drift);
+
+    if (fabsf(drift) > 50.0f && sReportLargeTimerErrors) {
+        MILO_NOTIFY(MakeString("Large timer error: %f", drift));
+    }
+
+    mLastStreamTime = mTimer.Ms();
+}
+
+void StandardStream::UpdateTimeByFiltering() {
+    if (mChannels.empty() || mSampleRate == 0) {
+        mLastStreamTime = mStartMs;
+        return;
+    }
+
+    float rawTime = GetRawTime();
+    float timerMs = mTimer.Ms();
+    float drift = rawTime - timerMs;
+
+    if (fabsf(drift) <= 50.0f) {
+        drift *= 0.1f;
+    } else if (sReportLargeTimerErrors) {
+        MILO_NOTIFY(MakeString("Large timer error: %f", drift));
+    }
+
+    mTimer.Reset(mTimer.Ms() + drift);
+    mLastStreamTime = mTimer.Ms();
+}
+
+
 void StandardStream::Init(float f1, float f2, Symbol s, bool b4) {
     ClearJumpMarkers();
     mBufSecs = f2;

@@ -52,7 +52,11 @@ public:
     FlowPtr(Hmx::Object *owner, T *ptr = nullptr)
         : FlowPtrBase(ptr ? ptr->Name() : 0, dynamic_cast<FlowNode *>(owner)),
           mObjPtr(owner, ptr) {}
-    FlowPtr(const FlowPtr &);
+    FlowPtr(const FlowPtr &other)
+        : FlowPtrBase(other.mObjName, other.mOwnerNode),
+          mObjPtr(other.mObjPtr) {
+        mState = other.mState;
+    }
     ~FlowPtr() {}
 
     void operator=(T *obj) {

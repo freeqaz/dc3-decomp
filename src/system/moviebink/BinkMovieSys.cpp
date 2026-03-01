@@ -9,6 +9,10 @@
 #include "utl/MemMgr.h"
 #include "utl/Symbol.h"
 
+#ifdef HX_FFMPEG
+#include "platform/FFmpegMovieImpl.h"
+#endif
+
 BinkMovieSys gBinkMovieSys;
 
 extern void BinkSetMemory(void *(*)(int), void (*)(void *));
@@ -55,12 +59,14 @@ void BinkMovieSys::Init() {
     cfg->FindData(Symbol("bink_core1"), mBinkCore1, true);
 
     if (!wasInit) {
+#ifndef HX_FFMPEG
         BinkSetMemory(RadAlloc, operator delete);
         PlatformInit();
 
         if (mHasAsyncThread && (BinkStartAsyncThread(mBinkCore0, 0) == 0 || BinkStartAsyncThread(mBinkCore1, 0) == 0)) {
             TheDebug.Fail("Error starting bink async thread", nullptr);
         }
+#endif
     }
 
     DataRegisterFunc(Symbol("set_bink_track"), OnMovieSetTrack);
@@ -93,5 +99,9 @@ void BinkMovieSys::Terminate() {
 }
 
 MovieImpl* BinkMovieSys::CreateMovieImpl() {
+#ifdef HX_FFMPEG
+    return new FFmpegMovieImpl();
+#else
     return new BinkMovieImpl();
+#endif
 }

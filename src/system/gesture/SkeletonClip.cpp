@@ -556,3 +556,12 @@ float SkeletonClip::SongEndSeconds() const {
     }
     return 0.0f;
 }
+
+#ifdef HX_NATIVE
+// TODO: skeleton interpolation logic
+bool SkeletonClip::PrevSkeleton(
+    const Skeleton &, int, ArchiveSkeleton &, int &
+) const {
+    return false;
+}
+#endif

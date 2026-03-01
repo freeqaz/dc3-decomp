@@ -603,3 +603,8 @@ DataNode HamCharacter::OnCamTeleport(DataArray *a) {
     }
     return 0;
 }
+
+#ifdef HX_NATIVE
+// TODO: real implementation clears a list
+void HamCharacter::Poll() {}
+#endif

@@ -85,6 +85,102 @@ void RndEnviron::OnRemoveAllLights() {
     mLightsOld.clear();
 }
 
+bool RndEnviron::Replace(ObjRef *from, Hmx::Object *to) {
+    if (from == &mAmbientFogOwner) {
+        if (mAmbientFogOwner == this) {
+            mAmbientFogOwner = this;
+        } else {
+            RndEnviron *env = dynamic_cast<RndEnviron *>(to);
+            if (env) {
+                mAmbientFogOwner.SetObjConcrete(env->mAmbientFogOwner.Ptr());
+            } else {
+                mAmbientFogOwner = this;
+            }
+        }
+        return true;
+    }
+    return RndTransformable::Replace(from, to);
+}
+
+INIT_REVS(0x10, 0)
+
+BEGIN_LOADS(RndEnviron)
+    LOAD_REVS(bs)
+    ASSERT_REVS(0x10, 0)
+    if (d.rev > 1)
+        LOAD_SUPERCLASS(Hmx::Object)
+    if (d.rev < 3) {
+        RndDrawable::DumpLoad(bs);
+    } else {
+        LOAD_SUPERCLASS(RndDrawable)
+        LOAD_SUPERCLASS(RndTransformable)
+    }
+    if (d.rev < 0xF) {
+        d >> mLightsOld;
+    } else {
+        d >> mLightsReal;
+        d >> mLightsApprox;
+    }
+    d >> mAmbientColor;
+    d >> mFogStart;
+    d >> mFogEnd;
+    if (d.rev < 1) {
+        int dummy;
+        d >> dummy;
+    }
+    d >> mFogColor;
+    if (d.rev < 1) {
+        int enabled;
+        d >> enabled;
+        mFogEnable = enabled;
+    } else {
+        d >> mFogEnable;
+    }
+    if (d.rev > 3)
+        d >> mAnimateFromPreset;
+    if (d.rev > 4) {
+        d >> mFadeOut;
+        d >> mFadeStart;
+        d >> mFadeEnd;
+        if (d.rev > 5)
+            d >> mFadeMax;
+    }
+    if (d.rev > 8) {
+        d >> mFadeRef;
+        d >> mLRFade;
+    }
+    if (d.rev > 6) {
+        d >> mAmbientFogOwner;
+        if (!mAmbientFogOwner) {
+            mAmbientFogOwner = this;
+        }
+    }
+    if (d.rev > 7) {
+        d >> mUseColorAdjust;
+        mColorXfm.Load(d.stream);
+    }
+    if (d.rev > 9) {
+        if (d.rev < 0xD) {
+            int dummy;
+            d >> dummy;
+        }
+        d >> mAOStrength;
+    }
+    if (d.rev > 0xA) {
+        d >> mIntensityRate;
+        d >> mExposure;
+        d >> mWhitePoint;
+        d >> mUseToneMapping;
+    }
+    if (d.rev == 0xB) {
+        int dummy;
+        d >> dummy;
+    } else if (d.rev - 0xC <= 1U) {
+        int dummy;
+        d >> dummy;
+    }
+END_LOADS
+
 BEGIN_PROPSYNCS(RndEnviron)
     SYNC_PROP(lights_real, mLightsReal)
     SYNC_PROP(lights_approx, mLightsApprox)

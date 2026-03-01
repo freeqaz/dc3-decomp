@@ -105,8 +105,14 @@ void FlowNode::Load(BinStream &bs) {
     if (!dynamic_cast<Flow *>(this)) {
         Hmx::Object::Load(d.stream);
     }
+#ifdef HX_NATIVE
+    printf("    FlowNode::Load '%s': after Object::Load tell=%d\n", Name(), bs.Tell());
+#endif
 
     mChildNodes.Load(d.stream, true, nullptr);
+#ifdef HX_NATIVE
+    printf("    FlowNode::Load '%s': after mChildNodes tell=%d\n", Name(), bs.Tell());
+#endif
 
     // Call SetParent on each loaded child node
     FOREACH (it, mChildNodes) {
@@ -115,6 +121,13 @@ void FlowNode::Load(BinStream &bs) {
 
     int numEntries;
     d >> numEntries;
+#ifdef HX_NATIVE
+    printf("    FlowNode::Load '%s': numEntries=%d tell=%d\n", Name(), numEntries, bs.Tell());
+    if (numEntries < 0 || numEntries > 256) {
+        printf("    FlowNode::Load '%s': CLAMPING numEntries from %d to 0\n", Name(), numEntries);
+        numEntries = 0;
+    }
+#endif
     mDrivenPropEntries.clear();
     mDrivenPropEntries.reserve(numEntries);
     for (int i = 0; i < numEntries; i++) {
@@ -130,7 +143,13 @@ void FlowNode::Load(BinStream &bs) {
     }
     if (d.rev > 1) {
         String debugComment;
+#ifdef HX_NATIVE
+        printf("    FlowNode::Load '%s': before debugComment tell=%d\n", Name(), bs.Tell());
+#endif
         d.stream >> debugComment;
+#ifdef HX_NATIVE
+        printf("    FlowNode::Load '%s': after debugComment='%s' tell=%d\n", Name(), debugComment.c_str(), bs.Tell());
+#endif
         mDebugComment = debugComment;
     }
 }

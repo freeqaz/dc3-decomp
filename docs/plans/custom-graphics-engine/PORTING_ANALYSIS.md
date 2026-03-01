@@ -277,9 +277,34 @@ Engine successfully boots through:
 6. **Subsystem inits** — FlowInit, CharInit, WorldInit, HamInit all complete
 7. **TheUI->Init()** — starts loading shared subdirs
 
-**Current blocker**: Stream desync in `UIManager::Init()` → `PreloadSharedSubdirs()`
-loading a .milo file. Object `boxyman` (RndDir type) reads revision 32 (max 10) →
-garbage viewport count → ASan OOM (230GB allocation attempt).
+**Current work**: Stream desync in `UIManager::Init()` → `PreloadSharedSubdirs()`.
+Root cause identified: nested ObjectDir objects (like `boxyman` in
+`timey_wimey_elements.milo`) use DirLoader-format data instead of PreLoad/PostLoad
+format. Added peek-and-unreread detection to spawn sub-DirLoaders for these. Also
+implemented `DrivenPropertyEntry::Load` and `FlowMathOp::Load` (were stubbed, causing
+desync in FlowAnimate objects). Multiple defensive guards prevent crashes from
+residual desync. See [STREAM_DESYNC.md](docs/plans/custom-graphics-engine/STREAM_DESYNC.md).
+
+### Session 7-8: Stream Desync
+
+**Nested ObjectDir detection**: Objects like `boxyman` (RndDir) inside
+`timey_wimey_elements.milo` have DirLoader-format data (starts with mRev=32)
+instead of PreLoad/PostLoad format (starts with packed class revision). Added
+peek-and-unreread mechanism: read 4 bytes, unreread via `ChunkStream::Unreread()`,
+check if it's a DirLoader mRev (upper 16 bits zero, value > 28). If so, create
+a sub-DirLoader to consume the nested container data.
+
+**Stubbed Load functions found**: `DrivenPropertyEntry::Load` and `FlowMathOp::Load`
+were no-op stubs in `engine_stubs_generated.cpp`. FlowAnimate objects contain
+DrivenPropertyEntry arrays — the stubs consumed zero bytes, causing all subsequent
+objects in the stream to read garbage. Implemented both from their symmetric
+`::Save` methods.
+
+**Defensive guards**: Added `#ifdef HX_NATIVE` revision/size caps in Object::LoadType,
+Object::LoadRest, FlowMathOp::Load, DrivenPropertyEntry::Load, FlowNode::Load, and
+BinStream string operators. These prevent crashes but don't fix underlying desync.
+
+See [STREAM_DESYNC.md](STREAM_DESYNC.md) for full details.
 
 ### Session 5-6 Breakthroughs
 

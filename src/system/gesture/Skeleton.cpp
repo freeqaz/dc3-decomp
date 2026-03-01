@@ -194,6 +194,21 @@ bool Skeleton::Velocity(
     }
 }
 
+Skeleton &Skeleton::operator=(const Skeleton &other) {
+    memcpy(mTrackedJoints, other.mTrackedJoints, sizeof(mTrackedJoints));
+    memcpy(mCamBoneLengths, other.mCamBoneLengths, sizeof(mCamBoneLengths));
+    memcpy(mPlayerXfms, other.mPlayerXfms, sizeof(mPlayerXfms));
+    mTracking = other.mTracking;
+    mQualityFlags = other.mQualityFlags;
+    mElapsedMs = other.mElapsedMs;
+    mTrackingID = other.mTrackingID;
+    unkab0 = other.unkab0;
+    mSkeletonIdx = other.mSkeletonIdx;
+    unkac4 = other.unkac4;
+    mCamDisplacements = other.mCamDisplacements;
+    return *this;
+}
+
 void Skeleton::Init() {
     mTracking = kSkeletonNotTracked;
     mSkeletonIdx = -1;

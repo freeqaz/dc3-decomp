@@ -357,8 +357,9 @@ EofType ChunkStream::Eof() {
     } else {
         MILO_ASSERT(mCurBufOffset == (*mCurChunk & kChunkSizeMask), 0x28B);
 #ifdef HX_NATIVE
-        printf("ChunkStream advance: curBufIdx=%d states=[%d,%d,%d] offset=%d\n",
-               mCurBufferIdx, mBuffersState[0], mBuffersState[1], mBuffersState[2], mCurBufOffset);
+        printf("ChunkStream advance: curBufIdx=%d states=[%d,%d,%d] offset=%d curChunk=%p chunkEnd=%p diff=%ld\n",
+               mCurBufferIdx, mBuffersState[0], mBuffersState[1], mBuffersState[2], mCurBufOffset,
+               (void*)mCurChunk, (void*)mChunkEnd, (long)(mChunkEnd - mCurChunk));
 #endif
         if (mBuffersOffset[mCurBufferIdx] == mCurChunk) {
             mBuffersState[mCurBufferIdx] = kInvalid;
@@ -398,12 +399,10 @@ EofType ChunkStream::Eof() {
                 mCurReadBuffer = mBuffers[idx];
 #ifdef HX_NATIVE
                 int chunkSz = *mCurChunk & kChunkSizeMask;
-                printf("ChunkStream: advanced to chunk, buf=%p size=%d first8=[%02x %02x %02x %02x %02x %02x %02x %02x]\n",
-                       mCurReadBuffer, chunkSz,
-                       (unsigned char)mCurReadBuffer[0], (unsigned char)mCurReadBuffer[1],
-                       (unsigned char)mCurReadBuffer[2], (unsigned char)mCurReadBuffer[3],
-                       (unsigned char)mCurReadBuffer[4], (unsigned char)mCurReadBuffer[5],
-                       (unsigned char)mCurReadBuffer[6], (unsigned char)mCurReadBuffer[7]);
+                printf("ChunkStream: advanced to chunk, buf=%p size=%d first bytes=[", mCurReadBuffer, chunkSz);
+                for (int dbg = 0; dbg < chunkSz && dbg < 8; dbg++)
+                    printf("%s%02x", dbg ? " " : "", (unsigned char)mCurReadBuffer[dbg]);
+                printf("]\n");
 #endif
                 return NotEof;
             }

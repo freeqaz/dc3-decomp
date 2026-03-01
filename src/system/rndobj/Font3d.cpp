@@ -75,7 +75,30 @@ END_COPYS
 BEGIN_LOADS(RndFont3d)
     LOAD_REVS(bs)
     LOAD_SUPERCLASS(RndFontBase)
-    // TODO: load Font3d-specific data
+    bs >> mMat;
+    bs >> mTextureOwner;
+    bs >> mCellSize;
+    bs >> mInvCellSize;
+    bs >> unk8c;
+    int size;
+    bs >> size;
+    // Clear existing map
+    FOREACH (it, mCharInfoMap) {
+        delete it->second;
+    }
+    mCharInfoMap.clear();
+    for (int i = 0; i < size; i++) {
+        unsigned short key;
+        bs >> key;
+        CharInfo *info = new CharInfo();
+        bs >> info->unk0;
+        bs >> info->advance;
+        // TODO: mMesh is ObjRefConcrete — serialized as name string, need to resolve via Dir
+        String meshName;
+        bs >> meshName;
+        bs >> info->visible;
+        mCharInfoMap[key] = info;
+    }
 END_LOADS
 #endif
 

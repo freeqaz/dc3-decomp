@@ -1,6 +1,6 @@
 # Graphics Subsystem: System Design
 
-**Status**: Draft v4 — Tier 1 rendering verified (17 props rendered from .milo_xbox, gallery in `archive/screenshots/`)
+**Status**: Draft v5 — Tier 1.5 rendering with full material pipeline (specular, emissive, rim, intensify, multi-light)
 **Target**: ~90% complete design; open items reduced from 8 to 4 after code analysis
 **Renderer**: WebGPU via Dawn (`../dawn`)
 
@@ -423,36 +423,43 @@ most hardware. The ring buffer pads all allocations to 256-byte boundaries.
 //   Group 2: Per-object — world transform
 ```
 
-#### Tier 1 (Current Implementation — `Rnd_Wgpu.h`)
+#### Tier 1.5 (Current Implementation — `Rnd_Wgpu.h`)
 
 ```cpp
-struct SceneUniforms {        // Group 0, 224 bytes — updated once per frame
-    float viewProj[16];       // camera view-projection matrix (row-major → col-major via memcpy)
-    float view[16];           // camera view matrix (inverse world transform)
-    float cameraPos[3];       // world-space camera position
+struct SceneUniforms {           // Group 0, 336 bytes — updated once per frame
+    float viewProj[16];          // camera view-projection matrix
+    float view[16];              // camera view matrix (inverse world transform)
+    float cameraPos[3];          // world-space camera position (for specular + rim)
     float _pad0;
-    float fogColor[3];        // from RndEnviron::FogColor()
-    float fogStart;           // from RndEnviron::FogStart()
-    float fogEnd;             // from RndEnviron::FogEnd()
-    float fogEnabled;         // from RndEnviron::FogEnable()
+    float fogColor[3];           // from RndEnviron::FogColor()
+    float fogStart;
+    float fogEnd;
+    float fogEnabled;
     float _pad1[2];
-    float lightDir[3];        // single directional light direction (Tier 1: hardcoded overhead)
-    float _padL0;
-    float lightColor[3];      // single light color
-    float _padL1;
-    float ambientColor[4];    // from RndEnviron::AmbientColor()
+    float lightDirs[4][4];       // up to 4 directional light directions (from RndEnviron lights)
+    float lightColors[4][4];     // up to 4 directional light colors
+    float ambientColor[4];       // from RndEnviron::AmbientColor()
+    float numLights;             // active light count
+    float _padN[3];
 };
+static_assert(sizeof(SceneUniforms) == 336);
 
-struct MaterialUniforms {     // Group 1, 32 bytes — written per material via ring buffer
-    float color[4];           // mColor (RGBA) from RndMat::GetColor()
-    float alphaThreshold;     // mAlphaThreshold / 255.0 (0 if !alphaCut)
-    float useTexture;         // 1.0 if diffuse texture bound, 0.0 otherwise
-    float _pad[2];
+struct MaterialUniforms {        // Group 1, 80 bytes — written per material via ring buffer
+    float color[4];              // mColor (RGBA) from RndMat::GetColor()
+    float alphaThreshold;        // mAlphaThreshold / 255.0 (0 if !alphaCut)
+    float useTexture;            // 1.0 if diffuse texture bound, 0.0 otherwise
+    float specularPower;         // from mSpecularRGB.alpha
+    float emissiveMultiplier;    // from BaseMaterial::GetEmissiveMultiplier()
+    float specularColor[4];      // from BaseMaterial::GetSpecularRGB()
+    float rimColor[4];           // .rgb = color, .a = power from BaseMaterial::GetRimRGB()
+    float intensify;             // 2.0 if mIntensify, 1.0 otherwise
+    float _pad[3];
 };
+static_assert(sizeof(MaterialUniforms) == 80);
 
-struct ObjectUniforms {       // Group 2, 128 bytes — written per draw via ring buffer
-    float world[16];          // world transform (row-major)
-    float worldInvTranspose[16]; // Tier 1: = world (correct for orthogonal rotation + translation)
+struct ObjectUniforms {          // Group 2, 128 bytes — written per draw via ring buffer
+    float world[16];             // world transform (row-major)
+    float worldInvTranspose[16]; // = world (correct for orthogonal rotation + translation)
 };
 ```
 
@@ -868,23 +875,32 @@ private:
 
 ## Implementation Tiers
 
-### Tier 1: Geometry + Textures + Basic Lighting (MVP)
+### Tier 1.5: Geometry + Textures + Full Material Pipeline (Current)
 
-**Goal**: See meshes with textures and basic lighting. Enough to validate the pipeline.
+**Goal**: See meshes with textures and proper material-driven lighting. Validate the
+full per-material property pipeline before moving to skinned meshes and post-processing.
 
 | Component | What gets implemented | Status |
 |-----------|---------------------|--------|
-| GpuDevice | Init, surface creation, present, BC feature detection | **DONE** |
+| GpuDevice | Init, surface creation, present, BC feature detection, sampler cache | **DONE** |
 | TextureConvert | RGBA8, BC1, BC3 + Xbox byte-swap + untile | **DONE** |
 | VertexFormats | Static mesh unpack + layout descriptors | **DONE** |
-| PipelineManager | `standard.wgsl` (diffuse + ambient), 3 blend modes, Normal ZMode | **DONE** |
-| WgpuRnd | BeginDrawing, EndDrawing, Clear, scene uniforms, ring buffers | **DONE** |
-| WgpuShaderMgr | SetVConstant/SetPConstant stubs (Tier 1: direct uniform writes) | **DONE** |
-| WgpuTex | PresyncBitmap (GPU upload via TextureConvert side table) | **DONE** |
-| WgpuMesh | DrawShowing (pipeline selection, bind groups, indexed draw) | **DONE** |
+| PipelineManager | `standard.wgsl` (full material), all blend modes, all ZModes, stencil, pipeline cache (512 warning) | **DONE** |
+| WgpuRnd | BeginDrawing, EndDrawing, Clear, scene uniforms, ring buffers (auto-grow), multi-light from RndEnviron | **DONE** |
+| WgpuShaderMgr | SetVConstant/SetPConstant stubs (direct uniform writes) | **DONE** |
+| WgpuTex | PresyncBitmap (GPU upload via TextureConvert side table), destructor cleanup | **DONE** |
+| WgpuMesh | DrawShowing (pipeline selection, bind groups, indexed draw), destructor cleanup | **DONE** |
 
-**Shaders implemented**: standard (diffuse+ambient with half-Lambert wrap, fog, alpha test)
-**Visual result**: Textured meshes with half-Lambert directional lighting, 17/17 test props rendered
+**Shaders implemented**: standard (half-Lambert diffuse, Blinn-Phong specular, emissive,
+rim lighting, intensify, multi-light (up to 4 directional), fog, alpha test)
+
+**Visual result**: Textured meshes with full material properties — specular highlights,
+emissive glow, rim edge lighting, intensified textures, environment-driven multi-light.
+17/17 test props rendered to `archive/screenshots/`.
+
+**Reliability**: Ring buffer auto-grows on overflow (was silent wrap). GPU resource
+cleanup via destructor hooks. Error logging in upload failure paths. Pipeline cache
+size warning at 512 entries.
 
 **Milo Viewer** (Step 5): Standalone app (`milo-viewer`) loads `.milo_xbox` files from CLI,
 renders with auto-framing orbit camera, supports `--screenshot` headless mode and
@@ -968,7 +984,7 @@ native/
 │       ├── Rnd_Stub.cpp             (replaced by Rnd_Wgpu.cpp, kept for reference)
 │       └── ...                       Other platform stubs
 ├── shaders/                          WGSL shader files
-│   ├── standard.wgsl                ✓ Tier 1: diffuse + ambient + fog + alpha test
+│   ├── standard.wgsl                ✓ Tier 1.5: half-Lambert + Blinn-Phong specular + emissive + rim + intensify + multi-light + fog + alpha test
 │   ├── bloom.wgsl                   Tier 2: bloom extraction + composite
 │   ├── blur.wgsl                    Tier 2: gaussian blur (separable)
 │   ├── downsample.wgsl              Tier 2: mip-chain downsampling

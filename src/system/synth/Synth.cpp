@@ -38,6 +38,7 @@
 #include "synth/Pollable.h"
 #include "synth/Sequence.h"
 #include "synth/Sfx.h"
+#include "synth/StreamNull.h"
 #include "synth/SynthSample.h"
 #include "synth/WavMgr.h"
 #include "utl/Cache.h"
@@ -225,13 +226,13 @@ void Synth::Poll() {
     }
 }
 
-// Stream *Synth::NewStream(const char *, float f1, float, bool) {
-//     return new StreamNull(f1);
-// }
+Stream *Synth::NewStream(const char *, float f1, float, bool) {
+    return new StreamNull(f1);
+}
 
-// Stream *Synth::NewBufStream(const void *, int, Symbol, float f1, bool) {
-//     return new StreamNull(f1);
-// }
+Stream *Synth::NewBufStream(const void *, int, Symbol, float f1, bool) {
+    return new StreamNull(f1);
+}
 
 bool BufFile::Eof() { return (mPos - mBuf) >= mSize; }
 
@@ -476,6 +477,11 @@ DataNode Synth::OnSetFXVol(const DataArray *a) {
     return 0;
 }
 
+
+#ifdef HX_NATIVE
+extern Synth *CreateNativeSynth();
+#endif
+
 void SynthPreInit() {
     MILO_ASSERT(!TheSynth, 0x283);
     DataArray *cfg = SystemConfig("synth");
@@ -483,9 +489,13 @@ void SynthPreInit() {
     if (useNullSynth) {
         TheSynth = new Synth();
     } else {
+#ifdef HX_NATIVE
+        TheSynth = CreateNativeSynth();
+#else
         // TODO: Synth::New() creates Synth360 on Xbox; stubbed for now
         // because XAudio2 isn't available in headless mode.
         TheSynth = new Synth();
+#endif
     }
     if (TheSynth->Fail()) {
         // RELEASE(TheSynth);

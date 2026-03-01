@@ -150,3 +150,7 @@ void WorldReflection::DrawShowing() {
     cur2->Select();
     mInDrawShowing = false;
 }
+
+#ifdef HX_NATIVE
+void WorldReflection::Highlight() { RndDrawable::Highlight(); }
+#endif

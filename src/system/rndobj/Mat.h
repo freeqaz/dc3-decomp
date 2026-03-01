@@ -141,6 +141,7 @@ public:
         mDirty |= 2;
     }
     bool Dirty() const { return mDirty; }
+    void MarkDirty(int flags) { mDirty |= flags; }
 
     void SetColorMod(const Hmx::Color &, int);
     void SetSpecularMap(RndTex *);

@@ -41,4 +41,8 @@ int UnpackSkinnedVertices(const RndMesh& mesh, GpuVertexSkinned* out, int maxVer
 int UnpackCompressedVertices(const unsigned char* compressedData, int numVerts,
                              GpuVertex* out, int maxVerts);
 
+// Unpack Xbox 360 compressed vertices with bone data into skinned GPU format
+int UnpackCompressedSkinnedVertices(const unsigned char* compressedData, int numVerts,
+                                     GpuVertexSkinned* out, int maxVerts);
+
 } // namespace VertexFormats

@@ -248,3 +248,8 @@ DataNode StreamRecorder::OnStartRecording(DataArray *) {
     }
     return 1;
 }
+
+#ifdef HX_NATIVE
+// TODO: texture compression and recording logic
+void StreamRecorder::Poll() {}
+#endif

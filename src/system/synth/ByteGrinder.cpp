@@ -438,9 +438,9 @@ DataNode op34(DataArray *msg) {
     u32 operand = msg->Int(1);
     u8 w = msg->Int(2);
 
-    u32 tmp = (w ^ 0x3F);
-    tmp |= (w & 3) << 6;
-    return u8(tmp ^ operand);
+    u32 tmp = w;
+    u32 val = ((tmp >> 2) ^ 0x3F) | ((tmp & 3) << 6);
+    return u8(val ^ operand);
 }
 
 DataNode op35(DataArray *msg) {

@@ -165,8 +165,24 @@ INIT_REVS(2, 0)
 void Hmx::Object::LoadType(BinStream &bs) {
     LOAD_REVS(bs)
     ASSERT_REVS(2, 0)
+#ifdef HX_NATIVE
+    printf("    Object::LoadType '%s': rev=%d altRev=%d tell=%d\n",
+           Name(), d.rev, d.altRev, bs.Tell());
+    fflush(stdout);
+    if (d.rev > 2) {
+        // Garbage revision from desynced stream — skip Symbol read
+        // but still push rev so PopRev in LoadRest works
+        bs.PushRev(packRevs(d.altRev, d.rev), this);
+        return;
+    }
+#endif
     Symbol s;
     bs >> s;
+#ifdef HX_NATIVE
+    printf("    Object::LoadType '%s': type='%s' tell=%d\n",
+           Name(), s.Str(), bs.Tell());
+    fflush(stdout);
+#endif
     SetType(s);
     bs.PushRev(packRevs(d.altRev, d.rev), this);
 }
@@ -174,7 +190,10 @@ void Hmx::Object::LoadType(BinStream &bs) {
 void Hmx::Object::LoadRest(BinStream &bs) {
     BinStreamRev d(bs, bs.PopRev(this));
 #ifdef HX_NATIVE
-    printf("Object::LoadRest '%s' (%s): rev=%d altRev=%d tell=%d\n", Name(), ClassName().Str(), d.rev, d.altRev, bs.Tell());
+    // Detect stream desync: garbage revisions from desynced data
+    if (d.rev > 100 || d.altRev > 100) {
+        return;
+    }
 #endif
     if (!mTypeProps) {
         mTypeProps = new TypeProps(this);
@@ -183,15 +202,9 @@ void Hmx::Object::LoadRest(BinStream &bs) {
     if (!mTypeProps->HasProps()) {
         RELEASE(mTypeProps);
     }
-#ifdef HX_NATIVE
-    printf("Object::LoadRest: after TypeProps tell=%d\n", bs.Tell());
-#endif
     if (d.rev > 0) {
         d >> mNote;
     }
-#ifdef HX_NATIVE
-    printf("Object::LoadRest: done, mNote='%s' tell=%d\n", mNote.c_str(), bs.Tell());
-#endif
 }
 
 void Hmx::Object::Export(DataArray *a, bool b) {

@@ -45,8 +45,13 @@ public:
 
     static StreamReceiver *New(int, int, bool, int);
 
-protected:
+#ifdef HX_NATIVE
+public:
+#endif
     static StreamReceiverFactoryFunc *sFactory;
+#ifdef HX_NATIVE
+protected:
+#endif
 
     bool mSlipEnabled; // 0x4
     int mNumBuffers; // 0x8

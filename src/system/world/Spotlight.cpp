@@ -740,3 +740,8 @@ void Spotlight::BuildNGShaft(Spotlight::BeamDef &def) {
         break;
     }
 }
+
+#ifdef HX_NATIVE
+// TODO: complex poll with conditionals and math
+void Spotlight::Poll() {}
+#endif

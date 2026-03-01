@@ -70,6 +70,8 @@ public:
     float FogStart() const { return mAmbientFogOwner->mFogStart; }
     float FogEnd() const { return mAmbientFogOwner->mFogEnd; }
     const Hmx::Color& FogColor() const { return mAmbientFogOwner->mFogColor; }
+    ObjPtrList<RndLight>& LightsReal() { return mLightsReal; }
+    ObjPtrList<RndLight>& LightsApprox() { return mLightsApprox; }
 #endif
 
 protected:

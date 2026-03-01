@@ -233,3 +233,8 @@ DataNode PhysicsVolume::OnIterateOverlaps(const DataArray *args) {
         }
     }
 }
+
+#ifdef HX_NATIVE
+// TODO: complex deserialization with revision checks
+void PhysicsVolume::Load(BinStream &) {}
+#endif

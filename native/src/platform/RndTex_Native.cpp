@@ -53,9 +53,32 @@ void RndTex::Load(BinStream &bs) {
 // Based on DC3 Save: SAVE_REVS(11, 0), SAVE_SUPERCLASS(Object),
 //   bs << mWidth << mHeight << mBpp << mFilepath
 void RndTex::PreLoad(BinStream &bs) {
+#ifdef HX_NATIVE
+    printf("  RndTex::PreLoad '%s': start tell=%d\n", Name(), bs.Tell());
+    fflush(stdout);
+#endif
     LOAD_REVS(bs);
+#ifdef HX_NATIVE
+    printf("  RndTex::PreLoad '%s': rev=%d altRev=%d tell=%d\n",
+           Name(), d.rev, d.altRev, bs.Tell());
+    fflush(stdout);
+    if (d.rev > 20) {
+        printf("  RndTex::PreLoad '%s': BAD REVISION, stream desync!\n", Name());
+        fflush(stdout);
+        return;
+    }
+#endif
     LOAD_SUPERCLASS(Hmx::Object)
+#ifdef HX_NATIVE
+    printf("  RndTex::PreLoad '%s': after Object::Load tell=%d\n", Name(), bs.Tell());
+    fflush(stdout);
+#endif
     d.stream >> mWidth >> mHeight >> mBpp >> mFilepath;
+#ifdef HX_NATIVE
+    printf("  RndTex::PreLoad '%s': w=%d h=%d bpp=%d filepath='%s' tell=%d\n",
+           Name(), mWidth, mHeight, mBpp, mFilepath.c_str(), bs.Tell());
+    fflush(stdout);
+#endif
     bs.PushRev(packRevs(d.altRev, d.rev), this);
 }
 

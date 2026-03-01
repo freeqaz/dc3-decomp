@@ -273,7 +273,8 @@ int main(int argc, char** argv) {
         fprintf(f, "  --help                     Show this help message\n");
         fprintf(f, "  --screenshot <file.ppm>    Render headlessly and save screenshot\n");
         fprintf(f, "  --azimuth <degrees>        Camera azimuth angle (default: ~23)\n");
-        fprintf(f, "  --elevation <degrees>      Camera elevation angle (default: ~17)\n\n");
+        fprintf(f, "  --elevation <degrees>      Camera elevation angle (default: ~17)\n");
+        fprintf(f, "  --verbose, -v              Print detailed object/drawable info\n\n");
         fprintf(f, "Controls (windowed mode):\n");
         fprintf(f, "  Left drag     orbit\n");
         fprintf(f, "  Scroll        zoom\n");
@@ -296,6 +297,7 @@ int main(int argc, char** argv) {
     const char* screenshotPath = nullptr;
     float camAzimuthDeg = -999.0f;  // sentinel: use default
     float camElevationDeg = -999.0f;
+    bool verbose = false;
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
             showHelp(stdout);
@@ -306,6 +308,8 @@ int main(int argc, char** argv) {
             camAzimuthDeg = (float)atof(argv[++i]);
         } else if (strcmp(argv[i], "--elevation") == 0 && i + 1 < argc) {
             camElevationDeg = (float)atof(argv[++i]);
+        } else if (strcmp(argv[i], "--verbose") == 0 || strcmp(argv[i], "-v") == 0) {
+            verbose = true;
         } else if (!miloPath) {
             miloPath = argv[i];
         }
@@ -370,26 +374,6 @@ int main(int argc, char** argv) {
     cam->SetFrustum(1.0f, 1000.0f, 0.6024f, 1.0f);
     cam->Select();
 
-    // ---- Verify factory type system ----
-    {
-        printf("Milo Viewer: verifying RndMesh factory...\n");
-        Hmx::Object* testObj = Hmx::Object::NewObject(Symbol("Mesh"));
-        printf("  NewObject('Mesh') = %p\n", (void*)testObj);
-        printf("  ClassName() = '%s'\n", testObj->ClassName().Str());
-        printf("  typeid = '%s'\n", typeid(*testObj).name());
-        RndMesh* testMesh = dynamic_cast<RndMesh*>(testObj);
-        printf("  dynamic_cast<RndMesh*> = %p\n", (void*)testMesh);
-        RndDrawable* testDraw = dynamic_cast<RndDrawable*>(testObj);
-        printf("  dynamic_cast<RndDrawable*> = %p\n", (void*)testDraw);
-        if (testMesh) {
-            printf("  FACTORY OK — RndMesh dynamic_cast works\n");
-        } else {
-            printf("  FACTORY BROKEN — ClassName='Mesh' but dynamic_cast<RndMesh*> fails!\n");
-            printf("  This is an RTTI issue (virtual inheritance + ODR violation?)\n");
-        }
-        delete testObj;
-    }
-
     // ---- Load the .milo file ----
     printf("Milo Viewer: loading milo file...\n");
 
@@ -442,8 +426,8 @@ int main(int argc, char** argv) {
                meshCount, matCount, texCount, other);
     }
 
-    // Debug: print drawable and mesh state
-    {
+    // Debug: print drawable and mesh state (verbose only)
+    if (verbose) {
         int drawableCount = 0;
         ObjDirItr<RndDrawable> drawIt(baseScene, true);
         while (drawIt) {
@@ -457,13 +441,20 @@ int main(int argc, char** argv) {
         printf("Milo Viewer: %d total drawables\n", drawableCount);
 
         ObjDirItr<RndMesh> meshIt(baseScene, true);
+        int skinnedCount = 0;
         while (meshIt) {
-            printf("  mesh '%s': showing=%d verts=%d faces=%d mat=%s pos=%.1f,%.1f,%.1f\n",
+            bool skinned = meshIt->IsSkinned();
+            if (skinned) skinnedCount++;
+            printf("  mesh '%s': showing=%d verts=%d faces=%d compressed=%d bones=%d mat=%s pos=%.1f,%.1f,%.1f\n",
                    meshIt->Name(), meshIt->Showing(),
                    meshIt->NumVerts(), meshIt->NumFaces(),
+                   meshIt->NumCompressedVerts(), meshIt->NumBones(),
                    meshIt->Mat() ? meshIt->Mat()->Name() : "(none)",
                    meshIt->WorldXfm().v.x, meshIt->WorldXfm().v.y, meshIt->WorldXfm().v.z);
             ++meshIt;
+        }
+        if (skinnedCount > 0) {
+            printf("Milo Viewer: %d skinned meshes detected\n", skinnedCount);
         }
     }
 
@@ -474,6 +465,16 @@ int main(int argc, char** argv) {
             printf("Milo Viewer: found scene camera '%s', using orbit cam anyway\n",
                    camItr->Name());
         }
+    }
+
+    // Set window title to loaded filename
+    if (window) {
+        // Extract just the filename from the path
+        const char* basename = strrchr(absPath, '/');
+        basename = basename ? basename + 1 : absPath;
+        char title[256];
+        snprintf(title, sizeof(title), "DC3 Viewer — %s", basename);
+        glfwSetWindowTitle(window, title);
     }
 
     // If the scene has an environment, activate it
@@ -604,25 +605,12 @@ int main(int argc, char** argv) {
             if (scene) {
                 scene->DrawShowing();
             }
-            // Also try drawing all objects directly
-            {
-                ObjDirItr<Hmx::Object> allIt(baseScene, true);
-                while (allIt) {
-                    const char* cn = allIt->ClassName().Str();
-                    if (strcmp(cn, "Mesh") == 0) {
-                        RndMesh* mesh = dynamic_cast<RndMesh*>((Hmx::Object*)allIt);
-                        printf("  obj '%s' class='%s' dynamic_cast<RndMesh*>=%p\n",
-                               allIt->Name(), cn, (void*)mesh);
-                        if (!mesh) {
-                            // Try reinterpret_cast as a test
-                            RndDrawable* draw = dynamic_cast<RndDrawable*>((Hmx::Object*)allIt);
-                            printf("    dynamic_cast<RndDrawable*>=%p\n", (void*)draw);
-                            if (draw) draw->DrawShowing();
-                        } else {
-                            mesh->DrawShowing();
-                        }
-                    }
-                    ++allIt;
+            // Also draw all mesh objects directly (fallback for non-RndDir scenes)
+            if (!scene) {
+                ObjDirItr<RndMesh> meshIt(baseScene, true);
+                while (meshIt) {
+                    meshIt->DrawShowing();
+                    ++meshIt;
                 }
             }
             TheRnd.EndDrawing();

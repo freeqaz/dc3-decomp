@@ -49,6 +49,10 @@ PROPS=(
     "duffelbag|world/shared/props/gen/duffelbag.milo_xbox"
     "big_gulp|world/shared/props/gen/big_gulp.milo_xbox|25|15"
 
+    # --- Characters (skinned meshes) ---
+    "crowd_female|char/crowd/anim/gen/female_base.milo_xbox|20|10"
+    "crowd_male|char/crowd/anim/gen/male_base.milo_xbox|20|10"
+
     # --- Venue Scenes ---
     "glitterati_set|world/glitterati/gen/glitterati_set.milo_xbox"
     "glitterati_chairs|world/glitterati/gen/glitterati_chairs.milo_xbox"

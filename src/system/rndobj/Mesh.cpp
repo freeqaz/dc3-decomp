@@ -49,6 +49,10 @@ RndMesh::RndMesh()
 }
 
 RndMesh::~RndMesh() {
+#ifdef HX_NATIVE
+    extern void CleanupGpuMesh(RndMesh*);
+    CleanupGpuMesh(this);
+#endif
     RELEASE(mBSPTree);
     RELEASE(mMultiMesh);
     ClearCompressedVerts();
@@ -790,6 +794,20 @@ int RndMesh::EstimatedSizeKb() const {
 void RndMesh::ClearCompressedVerts() {
     RELEASE(mCompressedVerts);
     mNumCompressedVerts = 0;
+}
+
+bool RndMesh::Replace(ObjRef *ref, Hmx::Object *obj) {
+    if (ref == &mGeomOwner) {
+        RndMesh *meshObj;
+        if (mGeomOwner == this
+            || (meshObj = dynamic_cast<RndMesh *>(obj)) == nullptr) {
+            mGeomOwner = this;
+        } else {
+            mGeomOwner = meshObj->mGeomOwner;
+        }
+        return true;
+    }
+    return RndTransformable::Replace(ref, obj);
 }
 
 void RndMesh::SetMat(RndMat *mat) { mMat = mat; }

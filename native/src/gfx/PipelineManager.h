@@ -74,6 +74,7 @@ public:
     wgpu::BindGroupLayout& SceneLayout() { return mLayouts[0]; }    // Group 0
     wgpu::BindGroupLayout& MaterialLayout() { return mLayouts[1]; } // Group 1
     wgpu::BindGroupLayout& ObjectLayout() { return mLayouts[2]; }   // Group 2
+    wgpu::BindGroupLayout& BoneLayout() { return mLayouts[3]; }     // Group 3
 
     wgpu::PipelineLayout& GetPipelineLayout() { return mPipelineLayout; }
 
@@ -89,7 +90,7 @@ private:
     wgpu::CullMode MapCull(WgpuCull cull);
 
     GpuDevice* mDevice = nullptr;
-    wgpu::BindGroupLayout mLayouts[3];
+    wgpu::BindGroupLayout mLayouts[4];
     wgpu::PipelineLayout mPipelineLayout;
     std::unordered_map<uint32_t, wgpu::ShaderModule> mShaderCache;
     std::unordered_map<PipelineKey, wgpu::RenderPipeline, PipelineKeyHash> mPipelineCache;

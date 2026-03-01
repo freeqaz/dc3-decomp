@@ -60,13 +60,25 @@ void PipelineManager::Init(GpuDevice* device) {
     objLayoutDesc.entries = objEntries;
     mLayouts[2] = dev.CreateBindGroupLayout(&objLayoutDesc);
 
+    // Group 3: Bone uniforms (skinned mesh — per-draw)
+    wgpu::BindGroupLayoutEntry boneEntries[1] = {};
+    boneEntries[0].binding = 0;
+    boneEntries[0].visibility = wgpu::ShaderStage::Vertex;
+    boneEntries[0].buffer.type = wgpu::BufferBindingType::Uniform;
+    boneEntries[0].buffer.minBindingSize = 0;
+
+    wgpu::BindGroupLayoutDescriptor boneLayoutDesc{};
+    boneLayoutDesc.entryCount = 1;
+    boneLayoutDesc.entries = boneEntries;
+    mLayouts[3] = dev.CreateBindGroupLayout(&boneLayoutDesc);
+
     // === Create pipeline layout ===
     wgpu::PipelineLayoutDescriptor plDesc{};
-    plDesc.bindGroupLayoutCount = 3;
+    plDesc.bindGroupLayoutCount = 4;
     plDesc.bindGroupLayouts = mLayouts;
     mPipelineLayout = dev.CreatePipelineLayout(&plDesc);
 
-    printf("PipelineManager: initialized with 3 bind group layouts\n");
+    printf("PipelineManager: initialized with 4 bind group layouts\n");
 }
 
 wgpu::ShaderModule PipelineManager::GetOrCreateShader(uint32_t shaderType) {
@@ -242,7 +254,7 @@ wgpu::RenderPipeline PipelineManager::CreatePipeline(const PipelineKey& key) {
     wgpu::RenderPipelineDescriptor pipeDesc{};
     pipeDesc.layout = mPipelineLayout;
     pipeDesc.vertex.module = shader;
-    pipeDesc.vertex.entryPoint = "vs_main";
+    pipeDesc.vertex.entryPoint = (key.layout == VertexLayoutType::Skinned) ? "vs_skinned" : "vs_main";
     pipeDesc.vertex.bufferCount = 1;
     pipeDesc.vertex.buffers = vtxLayout;
     pipeDesc.fragment = &fragment;
@@ -260,5 +272,9 @@ wgpu::RenderPipeline PipelineManager::GetPipeline(const PipelineKey& key) {
 
     wgpu::RenderPipeline pipeline = CreatePipeline(key);
     mPipelineCache[key] = pipeline;
+
+    if (mPipelineCache.size() == 512) {
+        fprintf(stderr, "PipelineManager: warning — cache reached 512 entries, possible leak\n");
+    }
     return pipeline;
 }

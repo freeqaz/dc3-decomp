@@ -1,10 +1,13 @@
 #include "os/File.h"
 #include "os/AsyncFile.h"
+#include "os/Block.h"
 #include "os/FileCache.h"
 #include "os/ArkFile_p.h"
 #include "HolmesClient.h"
 #include "obj/Data.h"
 #include "obj/DataFunc.h"
+#include "obj/Dir.h"
+#include "obj/Msg.h"
 #include "os/Debug.h"
 #include "os/OSFuncs.h"
 #include "os/System.h"
@@ -60,52 +63,70 @@ void FileNormalizePath(const char *cc) {
     }
 }
 
-const char *FileGetDrive(const char *file) {
-    static char drive[256];
+const char *FileGetDriveBuf(const char *file, char *drive) {
+    MILO_ASSERT(file, 0x437);
+    MILO_ASSERT(drive, 0x438);
     const char *p = strchr(file, ':');
-    if (p != 0) {
+    if (p == 0) {
+        drive[0] = '\0';
+    } else {
         strncpy(drive, file, p - file);
         drive[p - file] = '\0';
-    } else {
-        drive[0] = '\0';
     }
     return drive;
 }
 
-const char *FileGetPath(const char *file) {
-    static char static_path[256];
+const char *FileGetDrive(const char *file) {
+    static char drive[256];
+    MILO_ASSERT(MainThread(), 0x443);
+    return FileGetDriveBuf(file, drive);
+}
+
+const char *FileGetPathBuf(const char *file, char *path) {
+    MILO_ASSERT(path, 0x3F6);
     if (file != 0) {
-        strcpy(static_path, file);
-        char *p2 = static_path + strlen(static_path) - 1;
-        while (p2 >= static_path && *p2 != '/' && *p2 != '\\') {
+        strcpy(path, file);
+        char *p2 = path + strlen(path) - 1;
+        while (p2 >= path && *p2 != '/' && *p2 != '\\') {
             p2--;
         }
-        if (p2 >= static_path) {
-            if ((p2 == static_path) || (p2[-1] == ':'))
+        if (p2 >= path) {
+            if ((p2 == path) || (p2[-1] == ':'))
                 p2[1] = '\0';
             else
                 *p2 = '\0';
-            return static_path;
+            return path;
         }
     }
-    static_path[0] = '.';
-    static_path[1] = '\0';
-    return static_path;
+    path[0] = '.';
+    path[1] = '\0';
+    return path;
+}
+
+const char *FileGetPath(const char *file) {
+    static char static_path[256];
+    MILO_ASSERT(MainThread(), 0x413);
+    return FileGetPathBuf(file, static_path);
+}
+
+const char *FileGetBaseBuf(const char *file, char *base) {
+    MILO_ASSERT(file, 0x458);
+    MILO_ASSERT(base, 0x459);
+    const char *dir = strrchr(file, '/');
+    if ((dir == 0) && (dir = strrchr(file, '\\'), dir == 0))
+        strcpy(base, file);
+    else
+        strcpy(base, dir + 1);
+    char *ext = strrchr(base, '.');
+    if (ext != 0)
+        *ext = 0;
+    return base;
 }
 
 const char *FileGetBase(const char *file) {
     static char my_path[256];
-    const char *dir;
-    char *ext;
-    dir = strrchr(file, '/');
-    if ((dir != 0) || (dir = strrchr(file, '\\'), (dir != 0)))
-        strcpy(my_path, dir + 1);
-    else
-        strcpy(my_path, file);
-    ext = strrchr(my_path, '.');
-    if (ext != 0)
-        *ext = 0;
-    return my_path;
+    MILO_ASSERT(MainThread(), 0x465);
+    return FileGetBaseBuf(file, my_path);
 }
 
 const char *FileGetExt(const char *root) {
@@ -250,10 +271,29 @@ DataNode OnFileAbsolutePath(DataArray *da) {
 DataNode OnFileRelativePath(DataArray *da) {
     return FileRelativePath(da->Str(1), da->Str(2));
 }
-DataNode OnToggleFakeFileErrors(DataArray *) { return 0; }
-DataNode OnEnumerateFrameRateResults(DataArray *) {
-    // TODO: implement when FileRecursePattern is available
+DataNode OnToggleFakeFileErrors(DataArray *da) {
+    gFakeFileErrors = !gFakeFileErrors;
+    Hmx::Object *obj = ObjectDir::Main()->Find<Hmx::Object>("cheat_display", true);
+    if (obj) {
+        static Message msg("cheat_display", DataNode("Fake File errors"), DataNode("show_bool"));
+        msg[2] = gFakeFileErrors;
+        obj->Handle(msg, true);
+    }
     return 0;
+}
+
+DataNode OnEnumerateFrameRateResults(DataArray *da) {
+    DataNode ret(new DataArray(0), kDataArray);
+    gFrameRateArray = ret.Array();
+    char *suffix = (char *)FrameRateSuffix();
+    RecursePatternInternal(
+        MakeString("ui/framerate/venue_test/*%s", suffix),
+        OnFrameRateRecurseCB,
+        false,
+        false
+    );
+    gFrameRateArray = 0;
+    return ret;
 }
 
 void FileInit() {
@@ -355,7 +395,8 @@ const char *FileMakePathBuf(const char *root, const char *file, char *buffer) {
         strcpy(buf, root);
         root = buf;
     }
-    const char *fileDrive = FileGetDrive(file);
+    char driveBuf[256];
+    const char *fileDrive = FileGetDriveBuf(file, driveBuf);
     if (*fileDrive != '\0') {
         file += strlen(fileDrive) + 1;
     }
@@ -365,7 +406,7 @@ const char *FileMakePathBuf(const char *root, const char *file, char *buffer) {
             sprintf(buffer, "%s:%s", fileDrive, file);
             c = buffer + strlen(fileDrive) + 1;
         } else {
-            const char *rootDrive = FileGetDrive(root);
+            const char *rootDrive = FileGetDriveBuf(root, driveBuf);
             if (*rootDrive != '\0') {
                 sprintf(buffer, "%s:%s", rootDrive, file);
                 c = buffer + strlen(rootDrive) + 1;
@@ -375,7 +416,7 @@ const char *FileMakePathBuf(const char *root, const char *file, char *buffer) {
         }
     } else {
         sprintf(buffer, "%s/%s", root, file);
-        const char *rootDrive = FileGetDrive(root);
+        const char *rootDrive = FileGetDriveBuf(root, driveBuf);
         if (*rootDrive != '\0') {
             c = buffer + strlen(rootDrive) + 1;
         }
@@ -415,15 +456,62 @@ const char *FileMakePathBuf(const char *root, const char *file, char *buffer) {
 }
 
 const char *FileMakePath(const char *root, const char *file) {
+    MILO_ASSERT(MainThread(), 0x341);
     return FileMakePathBuf(root, file, NULL);
 }
 
 const char *FileLocalize(const char *iFilename, char *buffer) {
-    // Simplified: no localization needed during boot
+    GfxMode mode = GetGfxMode();
+    bool isOg = (mode == kNewGfx);
+    Symbol lang = SystemLanguage();
+    if (!lang.Null() || isOg) {
+        Symbol lang2 = SystemLanguage();
+        if (!lang2.Null()) {
+            for (const char *p = iFilename; *p != '\0'; p++) {
+                if (*p == '/' && p[1] == 'e' && p[2] == 'n' && p[3] == 'g' && p[4] == '/') {
+                    static char mybuffer[256];
+                    if (!buffer)
+                        buffer = mybuffer;
+                    strcpy(buffer, iFilename);
+                    if (!HongKongExceptionMet()
+                        || (strstr(iFilename, "locale") == 0
+                            && strstr(iFilename, "ui/eng") == 0)) {
+                        Symbol lang3 = SystemLanguage();
+                        const char *langStr = lang3.Str();
+                        buffer[p + 1 - iFilename] = langStr[0];
+                        buffer[p + 2 - iFilename] = langStr[1];
+                        buffer[p + 3 - iFilename] = langStr[2];
+                    } else {
+                        buffer[p + 1 - iFilename] = 'e';
+                        buffer[p + 2 - iFilename] = 'n';
+                        buffer[p + 3 - iFilename] = 'g';
+                    }
+                    return buffer;
+                }
+            }
+        }
+        if (isOg) {
+            for (const char *p = iFilename; *p != '\0'; p++) {
+                if (*p == '/' && p[1] == 'o' && p[2] == 'g' && p[3] == '/') {
+                    if (buffer == iFilename) {
+                        ((char *)p)[1] = 'n';
+                        return iFilename;
+                    }
+                    if (!buffer) {
+                        static char mybuffer[256];
+                        buffer = mybuffer;
+                    }
+                    strcpy(buffer, iFilename);
+                    buffer[p + 1 - iFilename] = 'n';
+                    return buffer;
+                }
+            }
+        }
+    }
     return iFilename;
 }
 
-bool FileDiscSpinUp() { return true; }
+bool FileDiscSpinUp() { return TheBlockMgr.SpinUp(); }
 
 bool FileReadOnly(const char *filepath) { return true; }
 
