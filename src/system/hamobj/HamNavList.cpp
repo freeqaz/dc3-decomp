@@ -8,6 +8,7 @@
 #include "gesture/SkeletonUpdate.h"
 #include "gesture/SkeletonViz.h"
 #include "hamobj/HamNavProvider.h"
+#include "math/Utl.h"
 #include "hamobj/HamScrollSpeedIndicator.h"
 #include "obj/Data.h"
 #include "obj/Object.h"
@@ -829,11 +830,12 @@ LeftHandListEngagementMsg::LeftHandListEngagementMsg(bool b) : Message(Type(), b
 UIListWidgetDrawState::~UIListWidgetDrawState() {}
 
 void HamNavListGlitchCB(float elapsed, void *context) {
+    unsigned int frameId = TheRnd.GetFrameID();
     HamNavList *list = (HamNavList *)context;
     const char *name = PathName(list);
     TheDebug << MakeString(
         "HamNavList::Refresh %s took %f ms on frame %d\n",
-        name, elapsed, TheRnd.GetFrameID()
+        name, elapsed, frameId
     );
 }
 
@@ -926,23 +928,17 @@ int HamNavList::GetDisabledCount(int count) const {
 
 bool HamNavList::IsElementBig(int display) const {
     int numShowing = mListState.NumShowing();
-    bool scrollable =
-        mListRibbonResource ? mListRibbonResource->IsScrollable(numShowing) : false;
-    if (scrollable) {
+    if (mListRibbonResource->IsScrollable(numShowing)) {
         display = (mListState.FirstShowing() + display) - mListState.MinDisplay();
     }
-    int idx = display;
-    if (idx >= 0 && idx < numShowing) {
-        UIListProvider *provider = mListState.Provider();
-        if (provider) {
-            Symbol sym = provider->DataSymbol(idx);
-            for (int i = 0; i < (int)mBigElements.size(); i++) {
-                if (mBigElements[i] == sym)
-                    return true;
-            }
+    if (display >= 0 && display < mListState.NumShowing()) {
+        for (unsigned int i = 0; i < mBigElements.size(); i++) {
+            Symbol sym = mListState.Provider()->DataSymbol(display);
+            if (sym == mBigElements[i])
+                return true;
         }
-        for (int i = 0; i < (int)mBigElementIndices.size(); i++) {
-            if (mBigElementIndices[i] == idx)
+        for (unsigned int i = 0; i < mBigElementIndices.size(); i++) {
+            if (display == (int)mBigElementIndices[i])
                 return true;
         }
     }
@@ -951,12 +947,11 @@ bool HamNavList::IsElementBig(int display) const {
 
 float HamNavList::CalculateSwell(int pos) const {
     int numItems = NumItems();
-    float slideVal = mHandHeight < 0.0f ? 0.0f : mHandHeight;
-    float clamped = slideVal > 1.0f ? 1.0f : slideVal;
+    float slideVal = Max(0.0f, mHandHeight);
+    float clamped = Min(1.0f, slideVal);
     float diff = clamped - (float)pos / (float)(numItems - 1);
     float swell = sqrtf(fabsf(diff)) * sqrtf((float)numItems) * 0.15f;
-    swell = swell < 0.0f ? 0.0f : swell;
-    swell = swell > 1.0f ? 1.0f : swell;
+    swell = Clamp(0.0f, 1.0f, swell);
     return 1.0f - swell;
 }
 
@@ -1032,7 +1027,7 @@ void HamNavList::RealRefresh() {
                 mListState.SetMinDisplay(minDisplayVal);
                 mListState.SetScrollPastMinDisplay(true);
                 mListState.SetMaxDisplay(maxDisplay);
-                mListState.SetCircular(numShowing <= maxDisplay, false);
+                mListState.SetCircular(numShowing <= maxDisplay);
             } else {
                 mListState.SetScrollPastMinDisplay(false);
                 int sel = mListState.Selected();
@@ -1041,23 +1036,19 @@ void HamNavList::RealRefresh() {
         }
     }
     if (mListDirResource) {
-        UIListProvider *provider = mListState.Provider();
-        if (provider) {
-            provider->NumData();
-            provider->IsHeader(0);
-            mListDirResource->FillElements(mListState, mListWidgets);
-        }
+        mListState.Provider()->UnHighlightCurrent();
+        mListState.Provider()->ClearIconLabels();
+        mListDirResource->FillElements(mListState, mListWidgets);
     }
     if (mNavInputType == kNavInput_RightHand) {
         UIListProvider *provider = mListState.Provider();
         if (provider) {
+            static Message eqShiftEvenMsg(Symbol("eq_shift_even"));
+            static Message eqShiftOddMsg(Symbol("eq_shift_odd"));
             int numShowing = mListState.NumShowing();
-            bool isEven = (numShowing % 2 == 0) || mListState.ScrollPastMinDisplay();
-            if (isEven) {
-                static Message eqShiftEvenMsg(Symbol("eq_shift_even"));
+            if ((numShowing % 2 == 0) || mListState.ScrollPastMinDisplay()) {
                 TheHamProvider->Handle(eqShiftEvenMsg, false);
             } else {
-                static Message eqShiftOddMsg(Symbol("eq_shift_odd"));
                 TheHamProvider->Handle(eqShiftOddMsg, false);
             }
         }
@@ -1067,9 +1058,8 @@ void HamNavList::RealRefresh() {
 void HamNavList::Enter() {
     UIComponent::Enter();
     SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
-    SkeletonCallback *cb = static_cast<SkeletonCallback *>(this);
-    if (!handle.HasCallback(cb)) {
-        handle.AddCallback(cb);
+    if (!handle.HasCallback(static_cast<SkeletonCallback *>(this))) {
+        handle.AddCallback(static_cast<SkeletonCallback *>(this));
     }
 
     if (!mDisableSlideSound && mListRibbonResource) {
@@ -1078,11 +1068,11 @@ void HamNavList::Enter() {
             slideSound->Play(0, 0, 0, nullptr, 0);
         }
     }
-    mPendingEnterAnim = false;
-    if (!mSuppressAutomaticEnter) {
-        mPendingEnterAnim = true;
-    } else {
+    unkc8 = false;
+    if (mSuppressAutomaticEnter) {
         mTestEnteringOverride = true;
+    } else {
+        mPendingEnterAnim = true;
     }
     if (mListRibbonResource) {
         mListRibbonResource->HandleEnter();
@@ -1095,6 +1085,19 @@ void HamNavList::Enter() {
     }
     mScrollSettleTime = (float)TheTaskMgr.UISeconds();
     RealRefresh();
+
+    static Symbol cheatFocusRestart("cheat_focus_restart");
+    static Symbol pausecommandRestart("pausecommand_restart");
+#ifdef HX_NATIVE
+    if (mNavProvider && DataVariable(cheatFocusRestart).Int() != 0) {
+#else
+    if (mNavProvider && *(int *)&DataVariable(cheatFocusRestart) != 0) {
+#endif
+        int idx = mNavProvider->DataIndex(pausecommandRestart);
+        if (idx != -1) {
+            SetHighlight(idx);
+        }
+    }
 }
 
 void HamNavList::Exit() {
@@ -1118,86 +1121,60 @@ void HamNavList::Exit() {
 }
 
 void HamNavList::PostUpdate(const SkeletonUpdateData *data) {
-    if (!data)
-        return;
-    if (SkipPoll())
-        return;
-
-    Skeleton *skel = nullptr;
-    if (data->mSkeletonsLeft && data->mSkeletonsLeft[0]) {
-        Skeleton *candidate = data->mSkeletonsLeft[0];
-        if (candidate->IsValid()) {
-            if (mSkeletonTrackingID == -1
-                || candidate->TrackingID() == mSkeletonTrackingID) {
-                skel = candidate;
+    if (data && !SkipPoll()) {
+        unkc8 = true;
+        int i = 0;
+        do {
+            Skeleton *skel = data->mSkeletonsRight[i];
+            if (skel->TrackingID() == mSkeletonTrackingID) {
+                int elapsed = skel->ElapsedMs();
+                int ms = 0 < elapsed ? elapsed : 0;
+                mDirectionGestureFilter->Update(*skel, ms);
+                elapsed = skel->ElapsedMs();
+                ms = 0 < elapsed ? elapsed : 0;
+                mHandHeightFilter->Update(*skel, ms);
+                return;
             }
-        }
-    }
-    if (!skel && data->mSkeletonsRight && data->mSkeletonsRight[0]) {
-        Skeleton *candidate = data->mSkeletonsRight[0];
-        if (candidate->IsValid()) {
-            if (mSkeletonTrackingID == -1
-                || candidate->TrackingID() == mSkeletonTrackingID) {
-                skel = candidate;
-            }
-        }
-    }
-    if (skel) {
-        if (mDirectionGestureFilter) {
-            int userIdx = mListState.FirstShowing();
-            mDirectionGestureFilter->Update(*skel, userIdx);
-        }
-        if (mHandHeightFilter) {
-            int userIdx = mListState.FirstShowing();
-            mHandHeightFilter->Update(*skel, userIdx);
-        }
+            i++;
+        } while (i < 6);
     }
 }
 
 void HamNavList::Update() {
     delete mDirectionGestureFilter;
-    mDirectionGestureFilter = NULL;
     delete mHandHeightFilter;
-    mHandHeightFilter = NULL;
-
-    SkeletonSide handSide;
-    SkeletonSide swipeSide;
-    float threshold;
 
     if (mNavInputType == kNavInput_RightHand) {
-        handSide = kSkeletonLeft;
-        swipeSide = kSkeletonRight;
-        threshold = -0.2f;
+        if (!TheGestureMgr->InDoubleUserMode()) {
+            mDirectionGestureFilter =
+                new DirectionGestureFilterSingleUser(kSkeletonRight, kSkeletonLeft, 0.5f, -0.2f);
+        } else {
+            mDirectionGestureFilter =
+                new DirectionGestureFilterDoubleUser(kSkeletonRight, kSkeletonLeft, 0.5f, -0.2f);
+        }
+        mHandHeightFilter = new HandHeightGestureFilter(kSkeletonRight);
     } else {
-        handSide = kSkeletonRight;
-        swipeSide = kSkeletonLeft;
-        threshold = -0.1f;
+        if (!TheGestureMgr->InDoubleUserMode()) {
+            mDirectionGestureFilter =
+                new DirectionGestureFilterSingleUser(kSkeletonLeft, kSkeletonRight, 0.5f, -0.1f);
+        } else {
+            mDirectionGestureFilter =
+                new DirectionGestureFilterDoubleUser(kSkeletonLeft, kSkeletonRight, 0.5f, -0.1f);
+        }
+        mHandHeightFilter = new HandHeightGestureFilter(kSkeletonLeft);
     }
 
-    if (TheGestureMgr && TheGestureMgr->InDoubleUserMode()) {
-        mDirectionGestureFilter =
-            new DirectionGestureFilterDoubleUser(handSide, swipeSide, 0.5f, threshold);
-    } else {
-        mDirectionGestureFilter =
-            new DirectionGestureFilterSingleUser(handSide, swipeSide, 0.5f, threshold);
-    }
-
-    mHandHeightFilter = new HandHeightGestureFilter(
-        mNavInputType == kNavInput_RightHand ? kSkeletonLeft : kSkeletonRight
-    );
-
-    mWasInDoubleUserMode =
-        TheGestureMgr ? TheGestureMgr->InDoubleUserMode() : false;
+    mWasInDoubleUserMode = TheGestureMgr->InDoubleUserMode();
 
     if (mDirectionGestureFilter) {
         mDirectionGestureFilter->SetHighButtonMode(mHighButtonMode);
     }
 
-    int numDisplay = (mNavInputType == kNavInput_LeftHand) ? 2 : 10;
+    int numDisplay = (mNavInputType != kNavInput_RightHand) ? 2 : 10;
     mListState.SetNumDisplay(numDisplay, true);
 
-    int numShowing = mListState.NumShowing();
     HamListRibbonDrawState defaultState;
+    int numShowing = mListState.NumShowing();
     mRibbonDrawStates.resize(numShowing, defaultState);
 
     if (mListDirResource) {
@@ -1208,52 +1185,34 @@ void HamNavList::Update() {
 }
 
 void HamNavList::PlayEnterAnim() {
-    mPendingEnterAnim = false;
+    mTestEnteringOverride = false;
     if (mListRibbonResource) {
-        HamListRibbon *inst = mListRibbonResource;
-        if (inst->EnterAnim()) {
-            inst->SetTestEntering(true);
-            if (!mSkipEnterAnim) {
-                RndAnimatable *enterAnim = inst->EnterAnim();
-                if (enterAnim) {
-                    enterAnim->Animate(
-                        enterAnim->EndFrame(), false, 0.0f, nullptr,
-                        kEaseLinear, 0.0f, false
-                    );
-                }
-                inst->SetTestEntering(false);
+        if (mListRibbonResource->EnterAnim()) {
+            mListRibbonResource->SetTestEntering(true);
+            if (mSkipEnterAnim) {
+                mListRibbonResource->SetFrame(mListRibbonResource->EndFrame(), 1.0f);
+                mListRibbonResource->SetTestEntering(false);
             }
         }
     }
     if (mHeaderRibbonResource) {
-        HamListRibbon *inst = mHeaderRibbonResource;
-        if (inst->EnterAnim()) {
-            inst->SetTestEntering(true);
-            if (!mSkipEnterAnim) {
-                RndAnimatable *enterAnim = inst->EnterAnim();
-                if (enterAnim) {
-                    enterAnim->Animate(
-                        enterAnim->EndFrame(), false, 0.0f, nullptr,
-                        kEaseLinear, 0.0f, false
-                    );
-                }
-                inst->SetTestEntering(false);
+        if (mHeaderRibbonResource->EnterAnim()) {
+            mHeaderRibbonResource->SetTestEntering(true);
+            if (mSkipEnterAnim) {
+                mHeaderRibbonResource->SetFrame(mHeaderRibbonResource->EndFrame(), 1.0f);
+                mHeaderRibbonResource->SetTestEntering(false);
             }
         }
     }
-    bool listEntering =
-        mListRibbonResource && mListRibbonResource->TestEntering();
-    bool headerEntering =
-        mHeaderRibbonResource && mHeaderRibbonResource->TestEntering();
-    if (listEntering || headerEntering) {
+    if ((mListRibbonResource && mListRibbonResource->TestEntering()) ||
+        (mHeaderRibbonResource && mHeaderRibbonResource->TestEntering())) {
         RndAnimatable::Animate(0.0f, false, 0.0f, nullptr, kEaseLinear, 0.0f, false);
     }
 }
 
 void HamNavList::Clear() {
-    if (mDirectionGestureFilter) {
-        mDirectionGestureFilter->Clear();
-    }
+    mDirectionGestureFilter->Clear();
+    mHandHeightFilter->Clear();
 }
 
 void WorldInstance::Load(BinStream &bs) {

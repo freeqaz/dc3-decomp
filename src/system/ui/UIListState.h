@@ -36,6 +36,7 @@ public:
     int SelectedNoWrap() const;
     int Display2Data(int) const;
     int SnappedDataForDisplay(int) const;
+    void SetCircular(bool);
     void SetCircular(bool, bool);
     void Poll(float);
     bool CanScrollBack(bool) const;

@@ -655,9 +655,389 @@ bool CharEyes::Replace(ObjRef *ref, Hmx::Object *obj) {
     return CharWeightable::Replace(ref, obj);
 }
 
-void CharEyes::NextLook() {}
+void CharEyes::NextLook() {
+    Vector3 oldTarget = mTarget;
 
-void CharEyes::LidTrackAndClampingUpdate(EyeDesc &desc, float blinkWeight) {}
+    RndTransformable *head = GetHead();
+    const Transform &headXfm = head->WorldXfm();
+
+    Vector3 facingDir(headXfm.m.y);
+    Normalize(facingDir, facingDir);
+
+    if (mFocusInterest) {
+        mTarget = mFocusInterest->WorldXfm().v;
+        mCurrentInterest = mFocusInterest;
+        const CharEyeDartRuleset *dartOverride = mCurrentInterest->GetDartRulesetOverride();
+        if (dartOverride) {
+            memcpy(&mData, &dartOverride->mData, sizeof(mData));
+        } else {
+            mData.ClearToDefaults();
+        }
+    } else {
+        float dz = (facingDir.z - mLastFacing.z) * 45.0f;
+        float dx = (facingDir.x - mLastFacing.x) * 45.0f;
+        float dy = (facingDir.y - mLastFacing.y) * 45.0f;
+
+        float extrapMag = std::sqrt(dx * dx + dz * dz + dy * dy);
+        float maxExtrap = std::tan(mMaxExtrapolation * 0.017453292f);
+
+        if (extrapMag > maxExtrap) {
+            float scale = maxExtrap / extrapMag;
+            dx = scale * dx;
+            dy *= scale;
+            dz *= scale;
+        }
+
+        float newFacingX = facingDir.x + dx;
+        float newFacingY = dy + facingDir.y;
+        float newFacingZ = dz + facingDir.z;
+
+        float dist = RandomFloat(20.0f, 100.0f);
+        dist *= 12.0f;
+
+        float projX = dist * newFacingX;
+        float projY = newFacingY * dist;
+        float projZ = newFacingZ * dist;
+
+        mTarget.x = headXfm.v.x + projX;
+        mTarget.y = projY + headXfm.v.y;
+        mTarget.z = headXfm.v.z + projZ;
+
+        RndTransformable *dirTrans = dynamic_cast<RndTransformable *>(Dir());
+        if (dirTrans) {
+            const Vector3 &dirPos = dirTrans->WorldXfm().v;
+            if (mTarget.z < dirPos.z) {
+                float scale = (dirPos.z - headXfm.v.z) / (mTarget.z - headXfm.v.z);
+                float sx = projX * scale;
+                float sy = projY * scale;
+                float sz = projZ * scale;
+                mTarget.x = headXfm.v.x + sx;
+                mTarget.y = sy + headXfm.v.y;
+                mTarget.z = headXfm.v.z + sz;
+            }
+        }
+
+        static DataNode &interestCheat = DataVariable("cheat.disable_interest_objects");
+
+        if (mInterests.size() > 0 && !sDisableInterestObjects) {
+            if (interestCheat.Int(0) == 0) {
+                float maxDistSq = -1.0f;
+                float bestScore = maxDistSq;
+                for (ObjVector<CharInterestState>::iterator it = mInterests.begin();
+                     it != mInterests.end();
+                     ++it) {
+                    const Vector3 &intPos = it->mInterest->WorldXfm().v;
+                    float fy = intPos.y - headXfm.v.y;
+                    float fx = intPos.x - headXfm.v.x;
+                    float fz = intPos.z - headXfm.v.z;
+                    float distSq = fz * fz + fx * fx + fy * fy;
+                    if (distSq > maxDistSq)
+                        maxDistSq = distSq;
+                }
+
+                if (maxDistSq > 0.0f) {
+                    CharInterestState *bestState = 0;
+                    Vector3 targetDir;
+                    Subtract(mTarget, headXfm.v, targetDir);
+                    Normalize(targetDir, targetDir);
+
+                    float inverseDist = 1.0f / maxDistSq;
+
+                    for (ObjVector<CharInterestState>::iterator it = mInterests.begin();
+                         it != mInterests.end();
+                         ++it) {
+                        if (it->mInterest != mCurrentInterest) {
+                            if (!it->IsInRefractoryPeriod()) {
+                                float score = it->mInterest->ComputeScore(
+                                    headXfm.m.y,
+                                    headXfm.v,
+                                    targetDir,
+                                    inverseDist,
+                                    mInterestFilterFlags,
+                                    mDefaultFilterFlags == mInterestFilterFlags
+                                );
+                                if (score >= 0.0f && score > bestScore) {
+                                    bestScore = score;
+                                    bestState = &*it;
+                                }
+                            }
+                        }
+                    }
+
+                    if (bestState) {
+                        mTarget = bestState->mInterest->WorldXfm().v;
+                        mCurrentInterest = bestState->mInterest;
+                        const CharEyeDartRuleset *dartOverride =
+                            mCurrentInterest->GetDartRulesetOverride();
+                        if (dartOverride) {
+                            memcpy(&mData, &dartOverride->mData, sizeof(mData));
+                        } else {
+                            mData.ClearToDefaults();
+                        }
+                        bestState->mRefractoryTime =
+                            TheTaskMgr.Seconds(TaskMgr::kRealTime);
+                    } else {
+                        mCurrentInterest = 0;
+                        mData.ClearToDefaults();
+                    }
+
+                    mDartOffset = targetDir;
+                    goto stateReset;
+                }
+            }
+        }
+
+        mCurrentInterest = 0;
+        mData.ClearToDefaults();
+    }
+
+stateReset:
+    mLastLook = 0.0f;
+    mAvDelta = 0.0f;
+    mEnabled = false;
+    mNeedRecalc = false;
+    mLastCang = 1e30f;
+    mDartEnabled = false;
+    mDartInterval = 0.2f;
+    mEyeClampCount = -1;
+
+    static DataNode &blinkCheat = DataVariable("cheat.disable_procedural_blinks");
+
+    if (!sDisableProceduralBlink && !blinkCheat.NotNull() && !mBlinkEnabled && mFaceServo
+        && mBlinkCount < 25
+        && TheTaskMgr.Seconds(TaskMgr::kRealTime) - mLowerBlinkAngle > 0.6f
+        && mLastBlinkWeight < 0.5f) {
+        Vector3 oldDir(
+            oldTarget.x - headXfm.v.x,
+            oldTarget.y - headXfm.v.y,
+            oldTarget.z - headXfm.v.z
+        );
+        Normalize(oldDir, oldDir);
+
+        Vector3 newDir(
+            mTarget.x - headXfm.v.x,
+            mTarget.y - headXfm.v.y,
+            mTarget.z - headXfm.v.z
+        );
+        Normalize(newDir, newDir);
+
+        if (Dot(newDir, oldDir) < 0.984808f) {
+            ForceBlink();
+            mHeadForward = mTarget;
+            mTarget = oldTarget;
+        }
+    }
+}
+
+void CharEyes::LidTrackAndClampingUpdate(EyeDesc &desc, float blinkWeight) {
+    DataNode &lidTrackCheat = DataVariable("no_lids");
+    if (lidTrackCheat.Int(0))
+        return;
+    if (!mFaceServo)
+        return;
+    if (!mFaceServo->mClips)
+        return;
+    if (!mFaceServo->mBaseClip)
+        return;
+
+    RndTransformable *source = desc.mEye->GetSource();
+    if (!source)
+        return;
+
+    RndTransformable *lowerLid = desc.mLowerLid;
+    RndTransformable *upperLid = desc.mUpperLid;
+
+    float dist = -1.0f;
+    float maxDot = dist;
+    if (lowerLid) {
+        Vector3 srcPos = source->WorldXfm().v;
+        Vector3 lidPos = lowerLid->WorldXfm().v;
+        float dx = lidPos.x - srcPos.x;
+        float dy = lidPos.y - srcPos.y;
+        float dz = lidPos.z - srcPos.z;
+        dist = std::sqrt(dx * dx + dy * dy + dz * dz);
+    }
+
+    float eyeRot = (1.0f - blinkWeight) * source->LocalXfm().m.y.x;
+
+    if (upperLid) {
+        float angle =
+            (eyeRot >= 0.0f ? mUpperLidTrackUp : mUpperLidTrackDown) * -eyeRot;
+        Transform &xfm = upperLid->DirtyLocalXfm();
+        RotateAboutZ(xfm.m, angle, xfm.m);
+    }
+
+    if (lowerLid) {
+        if (!mLowerLidTrackRotate) {
+            float offset =
+                (eyeRot >= 0.0f ? mLowerLidTrackUp : mLowerLidTrackDown) * eyeRot;
+            lowerLid->DirtyLocalXfm().v.x += offset;
+        } else {
+            float angle =
+                (eyeRot >= 0.0f ? mLowerLidTrackUp : mLowerLidTrackDown) * -eyeRot;
+            Transform &xfm = lowerLid->DirtyLocalXfm();
+            RotateAboutZ(xfm.m, angle, xfm.m);
+        }
+    }
+
+    RndTransformable *lowerBlink = desc.mLowerLidBlink;
+    RndTransformable *upperBlink = desc.mUpperLidBlink;
+    if (lowerBlink && upperBlink) {
+        Vector3 sourcePos = source->WorldXfm().v;
+        Vector3 upperBlinkPos = upperBlink->WorldXfm().v;
+        Vector3 lowerBlinkPos = lowerBlink->WorldXfm().v;
+
+        Vector3 upperDir(
+            upperBlinkPos.x - sourcePos.x,
+            upperBlinkPos.y - sourcePos.y,
+            upperBlinkPos.z - sourcePos.z
+        );
+        Normalize(upperDir, upperDir);
+
+        Vector3 lowerDir(
+            lowerBlinkPos.x - sourcePos.x,
+            lowerBlinkPos.y - sourcePos.y,
+            lowerBlinkPos.z - sourcePos.z
+        );
+        Normalize(lowerDir, lowerDir);
+
+        Vector3 cross;
+        Cross(lowerDir, upperDir, cross);
+
+        const Transform &srcXfm = source->WorldXfm();
+        bool lidsOK =
+            cross.x * srcXfm.m.x.x + cross.y * srcXfm.m.x.y + cross.z * srcXfm.m.x.z
+            <= 0.0f;
+
+        if (!sDisableEyeClamping) {
+            DataNode &clampCheat = DataVariable("no_lid_clamping");
+            if (!clampCheat.Int(0) && !lidsOK) {
+                Vector3 midpoint(
+                    (upperBlinkPos.x - lowerBlinkPos.x) * 0.5f + lowerBlinkPos.x,
+                    (upperBlinkPos.y - lowerBlinkPos.y) * 0.5f + lowerBlinkPos.y,
+                    (upperBlinkPos.z - lowerBlinkPos.z) * 0.5f + lowerBlinkPos.z
+                );
+
+                Vector3 clampOff(
+                    midpoint.x - lowerBlinkPos.x,
+                    midpoint.y - lowerBlinkPos.y,
+                    midpoint.z - lowerBlinkPos.z
+                );
+
+                const Transform &llidXfm = lowerLid->WorldXfm();
+                Vector3 newLowerPos(
+                    llidXfm.v.x + clampOff.x,
+                    llidXfm.v.y + clampOff.y,
+                    llidXfm.v.z + clampOff.z
+                );
+                lowerLid->SetWorldPos(newLowerPos);
+
+                const Vector3 &ulidPos = upperLid->WorldXfm().v;
+                Vector3 origDir(
+                    upperBlinkPos.x - ulidPos.x,
+                    upperBlinkPos.y - ulidPos.y,
+                    upperBlinkPos.z - ulidPos.z
+                );
+                Normalize(origDir, origDir);
+
+                const Vector3 &ulidPos2 = upperLid->WorldXfm().v;
+                Vector3 newDir(
+                    midpoint.x - ulidPos2.x,
+                    midpoint.y - ulidPos2.y,
+                    midpoint.z - ulidPos2.z
+                );
+                Normalize(newDir, newDir);
+
+                float dot = Dot(newDir, origDir);
+                if (dot > maxDot)
+                    maxDot = dot;
+                float clamped = (maxDot < 1.0f) ? maxDot : 1.0f;
+                float angle = std::acos(clamped);
+
+                Transform &xfm = upperLid->DirtyLocalXfm();
+                RotateAboutZ(xfm.m, -angle, xfm.m);
+            }
+        }
+
+        DataNode &drawCheat = DataVariable("draw_lid_clamping");
+        if (drawCheat.Int(0)) {
+            RndGraph *graph = RndGraph::GetOneFrame();
+
+            if (lidsOK) {
+                graph->AddSphere(
+                    upperBlinkPos, 0.05f, Hmx::Color(0.0f, 0.0f, 1.0f, 1.0f)
+                );
+            } else {
+                graph->AddSphere(
+                    upperBlinkPos, 0.05f, Hmx::Color(1.0f, 0.0f, 0.0f, 1.0f)
+                );
+            }
+            if (lidsOK) {
+                graph->AddSphere(
+                    lowerBlinkPos, 0.05f, Hmx::Color(0.0f, 0.0f, 1.0f, 1.0f)
+                );
+            } else {
+                graph->AddSphere(
+                    lowerBlinkPos, 0.05f, Hmx::Color(1.0f, 0.0f, 0.0f, 1.0f)
+                );
+            }
+            graph->AddSphere(sourcePos, 0.05f, Hmx::Color(0.0f, 0.0f, 1.0f, 1.0f));
+
+            Hmx::Color cyanColor(0.0f, 1.0f, 1.0f, 1.0f);
+            graph->AddLine(sourcePos, upperBlinkPos, cyanColor, false);
+            graph->AddLine(sourcePos, lowerBlinkPos, cyanColor, false);
+
+            Normalize(cross, cross);
+            Vector3 normalEnd(
+                cross.x + sourcePos.x, cross.y + sourcePos.y, cross.z + sourcePos.z
+            );
+            if (lidsOK) {
+                graph->AddLine(
+                    sourcePos, normalEnd, Hmx::Color(0.0f, 1.0f, 0.0f, 1.0f), false
+                );
+            } else {
+                graph->AddLine(
+                    sourcePos, normalEnd, Hmx::Color(1.0f, 0.0f, 0.0f, 1.0f), false
+                );
+            }
+
+            const Transform &srcXfm2 = source->WorldXfm();
+            Vector3 facingEnd(
+                srcXfm2.m.x.x + sourcePos.x,
+                srcXfm2.m.x.y + sourcePos.y,
+                srcXfm2.m.x.z + sourcePos.z
+            );
+            graph->AddLine(
+                sourcePos, facingEnd, Hmx::Color(1.0f, 1.0f, 0.0f, 1.0f), false
+            );
+
+            if (!lidsOK) {
+                Vector3 mid2(
+                    (upperBlinkPos.x - lowerBlinkPos.x) * 0.5f + lowerBlinkPos.x,
+                    (upperBlinkPos.y - lowerBlinkPos.y) * 0.5f + lowerBlinkPos.y,
+                    (upperBlinkPos.z - lowerBlinkPos.z) * 0.5f + lowerBlinkPos.z
+                );
+                graph->AddSphere(
+                    mid2, 0.03125f, Hmx::Color(1.0f, 0.0f, 1.0f, 1.0f)
+                );
+            }
+        }
+    }
+
+    DataNode &distCheat = DataVariable("no_lid_dist_clamp");
+    if (!distCheat.Int(0) && !mLowerLidTrackRotate && 0.0f < dist) {
+        Vector3 srcPos = source->WorldXfm().v;
+        Vector3 lidPos = lowerLid->WorldXfm().v;
+        Vector3 dir(
+            lidPos.x - srcPos.x, lidPos.y - srcPos.y, lidPos.z - srcPos.z
+        );
+        Normalize(dir, dir);
+        Vector3 clampedPos(
+            dir.x * dist + srcPos.x, dir.y * dist + srcPos.y, dir.z * dist + srcPos.z
+        );
+        lowerLid->SetWorldPos(clampedPos);
+    }
+}
 
 void CharEyes::ProceduralBlinkUpdate() {
     static DataNode &disableCheat = DataVariable("cheat.disable_procedural_blinks");
@@ -761,7 +1141,7 @@ void CharEyes::Poll() {
         float maxLookTime = interest ? interest->mMaxLookTime : 3.0f;
         float viewAngleCos = interest ? interest->mMaxViewAngleCos : mMaxEyeCang;
 
-        bool canSeeTarget = viewAngleCos <= cang;
+        bool canSeeTarget = cang >= viewAngleCos;
 
         if (mLastLook <= maxLookTime && !mNeedRecalc
             && (mFocusInterest == 0 || interest == (CharInterest *)mFocusInterest

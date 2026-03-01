@@ -17,8 +17,8 @@ public:
     class Instance {};
     // Hmx::Object
     virtual ~RndGenerator();
-    OBJ_CLASSNAME(Mesh);
-    OBJ_SET_TYPE(Mesh);
+    OBJ_CLASSNAME(Generator);
+    OBJ_SET_TYPE(Generator);
     virtual DataNode Handle(DataArray *, bool);
     virtual bool SyncProperty(DataNode &, DataArray *, int, PropOp);
     virtual void Save(BinStream &);

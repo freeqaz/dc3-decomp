@@ -212,6 +212,8 @@ int UIListState::SnappedDataForDisplay(int i2) const {
         return -1;
 }
 
+void UIListState::SetCircular(bool c) { mCircular = c; }
+
 void UIListState::SetCircular(bool c, bool b) {
     mCircular = c;
     if (b) {

@@ -136,7 +136,7 @@ ObjOwnerPtr<T>::~ObjOwnerPtr() {}
 
 template <class T>
 Hmx::Object *ObjOwnerPtr<T>::RefOwner() const {
-    return mObject->RefOwner();
+    return mObject ? mObject->RefOwner() : nullptr;
 }
 
 // template <class T1>

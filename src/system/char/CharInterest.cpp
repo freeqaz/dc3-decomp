@@ -144,6 +144,10 @@ bool CharInterest::IsMatchingFilterFlags(int mask) {
     return (mCategoryFlags & mask) == mCategoryFlags && mCategoryFlags != 0;
 }
 
+const CharEyeDartRuleset *CharInterest::GetDartRulesetOverride() const {
+    return mDartRulesetOverride;
+}
+
 float CharInterest::ComputeScore(
     const Vector3 &v1,
     const Vector3 &v2,

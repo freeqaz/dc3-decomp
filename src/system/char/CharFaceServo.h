@@ -31,6 +31,8 @@ public:
     OBJ_MEM_OVERLOAD(0x16)
     NEW_OBJ(CharFaceServo)
 
+    friend class CharEyes;
+
     void SetClips(ObjectDir *);
     void SetClipType(Symbol);
     void SetBlinkClipLeft(Symbol);

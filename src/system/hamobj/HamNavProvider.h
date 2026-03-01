@@ -84,6 +84,8 @@ public:
 
     DataNode OnSetHidden(const DataArray *);
 
+    friend class HamNavList;
+
 protected:
     HamNavProvider();
 

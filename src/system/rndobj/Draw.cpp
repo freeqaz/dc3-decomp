@@ -101,9 +101,17 @@ END_LOADS
 void RndDrawable::Draw() {
     if (mShowing) {
         Sphere s;
-        if (MakeWorldSphere(s, false) && s > RndCam::Current()->WorldFrustum()) {
+        bool hasSphere = MakeWorldSphere(s, false);
+        if (hasSphere && s > RndCam::Current()->WorldFrustum()) {
+#ifdef HX_NATIVE
+            printf("RndDrawable::Draw: '%s' CULLED by frustum (sphere r=%.1f pos=%.1f,%.1f,%.1f)\n",
+                   Name(), s.GetRadius(), s.center.x, s.center.y, s.center.z);
+#endif
             return;
         }
+#ifdef HX_NATIVE
+        printf("RndDrawable::Draw: '%s' class='%s' DRAWING (hasSphere=%d)\n", Name(), ClassName().Str(), hasSphere);
+#endif
         TheRnd.PushClipPlanes(mClipPlanes);
         DrawShowing();
         TheRnd.PopClipPlanes(mClipPlanes);

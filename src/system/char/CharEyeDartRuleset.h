@@ -57,6 +57,8 @@ public:
     OBJ_MEM_OVERLOAD(0x16)
     NEW_OBJ(CharEyeDartRuleset)
 
+    friend class CharEyes;
+
 protected:
     CharEyeDartRuleset();
 
