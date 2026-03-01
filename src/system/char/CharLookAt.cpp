@@ -1,8 +1,11 @@
 #include "char/CharLookAt.h"
 #include "char/CharWeightable.h"
+#include "math/Mtx.h"
+#include "math/Rand.h"
 #include "math/Rot.h"
 #include "math/Utl.h"
 #include "obj/Object.h"
+#include "obj/Task.h"
 #include "rndobj/Poll.h"
 
 const float sMaxThreshold = 80;
@@ -169,6 +172,160 @@ void CharLookAt::SetMaxPitch(float pitch) {
     mMaxPitch = pitch;
     SyncLimits();
 }
+
+void CharLookAt::Poll() {
+    RndTransformable *source = GetSource();
+    float deltasecs = TheTaskMgr.DeltaSeconds();
+    if (mTarget && mPivot) {
+        if (!mPivot->TransParent() || !source || deltasecs < 0)
+            return;
+        else {
+            Vector3 lookDir;
+            Subtract(mTarget->WorldXfm().v, source->WorldXfm().v, lookDir);
+            float charWeight = Weight();
+            if (mMinWeightYaw >= 0.0f) {
+                Vector3 srcFwd(source->WorldXfm().m.y);
+                Normalize(srcFwd, srcFwd);
+                Vector3 lookDir2d(lookDir);
+                lookDir2d.z = 0;
+                srcFwd.z = 0;
+                float dot = Dot(srcFwd, lookDir2d);
+                float clamped = Clamp<float>(-1.0f, 1.0f, dot / (Length(srcFwd) * Length(lookDir2d)));
+                float autoWeight = Clamp<float>(
+                    0.0f,
+                    1.0f,
+                    mMaxWeightYaw - (std::acos(clamped) / (mMaxWeightYaw - mMinWeightYaw))
+                );
+                float autoWeightDelta = (autoWeight - mPivotLookWeight) / deltasecs;
+                if (MinEq(autoWeightDelta, mWeightYawSpeed)) {
+                    autoWeight = autoWeightDelta * deltasecs + mPivotLookWeight;
+                }
+                charWeight *= autoWeight;
+                mPivotLookWeight = autoWeight;
+            }
+            if (charWeight != 0.0f) {
+                Vector3 sourceFilter(0.0f, 0.0f, 0.0f);
+                if (mSourceRadius > 0.0f) {
+                    if (TheTaskMgr.DeltaSeconds() > 0.0f) {
+                        Interp(unka4, source->WorldXfm().m.y, 0.1f, unka4);
+                    }
+                    Subtract(source->WorldXfm().m.y, unka4, sourceFilter);
+                    float filterSq = LengthSquared(sourceFilter);
+                    float srcRad = mSourceRadius * DEG2RAD;
+                    if (srcRad * srcRad < filterSq) {
+                        sourceFilter *= srcRad / std::sqrt(filterSq);
+                    }
+                }
+                if (source != mPivot) {
+                    Transform pivotXfm(mPivot->WorldXfm());
+                    Hmx::Quat rotQuat;
+                    MakeRotQuat(source->WorldXfm().m.y, lookDir, rotQuat);
+                    Hmx::Matrix3 rotMat;
+                    MakeRotMatrix(rotQuat, rotMat);
+                    Multiply(pivotXfm.m, rotMat, pivotXfm.m);
+                    mPivot->SetWorldXfm(pivotXfm);
+                    Subtract(mTarget->WorldXfm().v, source->WorldXfm().v, lookDir);
+                    MakeRotQuat(source->WorldXfm().m.y, lookDir, rotQuat);
+                    MakeRotMatrix(rotQuat, rotMat);
+                    Multiply(pivotXfm.m.y, rotMat, lookDir);
+                } else
+                    Normalize(lookDir, lookDir);
+                Multiply(lookDir, mPivot->TransParent()->WorldXfm().m, lookDir);
+                Normalize(lookDir, lookDir);
+                mDisableRoll = mLookLimits.Clamp(lookDir);
+                Normalize(lookDir, lookDir);
+                if (mPivotLookTarget.x != kHugeFloat && mHalfTime != 0.0f) {
+                    Interp(mPivotLookTarget, lookDir, deltasecs / (deltasecs + mHalfTime), lookDir);
+                }
+                mPivotLookTarget = lookDir;
+                if (mTestRange) {
+                    float interpYaw, interpPitch;
+                    Interp(mLookLimits.mMin.z, mLookLimits.mMax.z, mTestRangeYaw, interpYaw);
+                    Interp(mLookLimits.mMin.x, mLookLimits.mMax.x, mTestRangePitch, interpPitch);
+                    lookDir.Set(interpPitch, mLookLimits.mMin.y, interpYaw);
+                } else if (mShowRange) {
+                    charWeight = 1.0f;
+                    switch (((int)TheTaskMgr.Seconds(TaskMgr::kRealTime)) & 7) {
+                    case 0:
+                        lookDir.Set(mLookLimits.mMin.x, mLookLimits.mMin.y, mLookLimits.mMin.z);
+                        break;
+                    case 1:
+                        lookDir.Set(0.0f, mLookLimits.mMin.z, mLookLimits.mMax.x);
+                        break;
+                    case 2:
+                        lookDir.Set(mLookLimits.mMax.x, mLookLimits.mMin.y, mLookLimits.mMin.z);
+                        break;
+                    case 3:
+                        lookDir.Set(mLookLimits.mMax.x, mLookLimits.mMin.y, 0.0f);
+                        break;
+                    case 4:
+                        lookDir.Set(mLookLimits.mMax.x, mLookLimits.mMin.y, mLookLimits.mMax.z);
+                        break;
+                    case 5:
+                        lookDir.Set(0.0f, mLookLimits.mMin.y, mLookLimits.mMax.z);
+                        break;
+                    case 6:
+                        lookDir.Set(mLookLimits.mMin.x, mLookLimits.mMin.y, mLookLimits.mMax.z);
+                        break;
+                    case 7:
+                        lookDir.Set(mLookLimits.mMin.x, mLookLimits.mMin.y, 0.0f);
+                        break;
+                    default:
+                        break;
+                    }
+                }
+                static DataNode &disable = DataVariable("cheat.disable_eye_jitter");
+                if (mEnableJitter && !sDisableJitter && !disable && deltasecs > 0.0f) {
+                    lookDir.Set(
+                        lookDir[0]
+                            + RandomFloat(-mPitchJitterLimit, mPitchJitterLimit)
+                                * DEG2RAD,
+                        lookDir[1],
+                        lookDir[2] + RandomFloat(-mYawJitterLimit, mYawJitterLimit) * DEG2RAD
+                    );
+                }
+                if (mSourceRadius > 0.0f) {
+                    Multiply(sourceFilter, mPivot->TransParent()->WorldXfm().m, sourceFilter);
+                    lookDir -= sourceFilter;
+                }
+                if (mAllowRoll) {
+                    Hmx::Quat rotQuat;
+                    MakeRotQuat(mPivot->LocalXfm().m.y, lookDir, rotQuat);
+                    FastInterp(Hmx::Quat(0, 0, 0, 1.0f), rotQuat, charWeight, rotQuat);
+                    Hmx::Matrix3 rotMat;
+                    MakeRotMatrix(rotQuat, rotMat);
+                    if (rotMat.x.x < -2.0f || rotMat.x.x > 2.0f) {
+                        MILO_NOTIFY_ONCE(
+                            "%s has m.x.x %g, character or target scaled or NAN",
+                            PathName(this),
+                            rotMat.x.x
+                        );
+                        rotMat.Identity();
+                    }
+                    Multiply(mPivot->LocalXfm().m, rotMat, mPivot->DirtyLocalXfm().m);
+                } else {
+                    Hmx::Matrix3 &dirtyMat = mPivot->DirtyLocalXfm().m;
+                    Interp(dirtyMat.y, lookDir, charWeight, dirtyMat.y);
+                    dirtyMat.z.Set(-1.0f, 0.0f, 0.0f);
+                    Normalize(dirtyMat.y, dirtyMat.y);
+                    Cross(dirtyMat.y, dirtyMat.z, dirtyMat.x);
+                    Normalize(dirtyMat.x, dirtyMat.x);
+                    Cross(dirtyMat.x, dirtyMat.y, dirtyMat.z);
+                    if (dirtyMat.x.x < -2.0f || dirtyMat.x.x > 2.0f) {
+                        MILO_NOTIFY_ONCE(
+                            "%s has m.x.x %g, character or target scaled or NAN",
+                            PathName(this),
+                            dirtyMat.x.x
+                        );
+                        dirtyMat.Identity();
+                    }
+                }
+            }
+        }
+    }
+}
+
+void CharLookAt::Highlight() {}
 
 void CharLookAt::SyncLimits() {
     ClampEq(mMinYaw, -sMaxThreshold, sMaxThreshold);

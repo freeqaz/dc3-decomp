@@ -260,6 +260,78 @@ void CharLipSyncDriver::Highlight() {
     }
 }
 
+void CharLipSyncDriver::Poll() {
+    if (!mBones)
+        return;
+
+    float deltaSeconds = TheTaskMgr.DeltaSeconds();
+    float weight = Weight();
+
+    // Apply test clip if set
+    if (mTestClip && weight != 0.0f) {
+        ScaleAddViseme(mTestClip, mTestWeight * weight);
+    }
+
+    // Blend in/out override handling
+    if (mIsBlending) {
+        if (mBlendingIn) {
+            unkd4 += deltaSeconds * mOverrideBlendTarget;
+            if (unkd4 >= 1.0f) {
+                unkd4 = 1.0f;
+                mBlendingIn = false;
+                mIsBlending = false;
+            }
+        } else if (mBlendingOut) {
+            unkd4 -= deltaSeconds * mOverrideBlendTarget;
+            if (unkd4 <= 0.0f) {
+                unkd4 = 0.0f;
+                mBlendingOut = false;
+                mIsBlending = false;
+            }
+        }
+    }
+
+    // Play override blend clip if active
+    if (mOverrideBlendActive && mOverrideBlendClip) {
+        ScaleAddViseme(mOverrideBlendClip, mOverrideBlendWeight * weight);
+    }
+
+    // Override clip
+    if (mOverrideWeight > 0.0f && mOverrideClip && weight != 0.0f) {
+        ScaleAddViseme(mOverrideClip, mOverrideWeight * weight);
+    }
+
+    // Override playback (VO lipsync)
+    if (mOverridePlayback) {
+        float overrideTime = TheTaskMgr.Seconds(TaskMgr::kRealTime) + mSongOffset;
+        mOverridePlayback->Poll(overrideTime);
+        for (int i = 0; i < (int)mOverridePlayback->mWeights.size(); i++) {
+            CharLipSync::PlayBack::Weight &w = mOverridePlayback->mWeights[i];
+            CharClip *clip = w.mClip;
+            if (clip && w.mCurWeight > 0.0f) {
+                ScaleAddViseme(clip, w.mCurWeight * weight);
+            }
+        }
+    }
+
+    // Main playback (song lipsync)
+    if (mMainPlayback && weight != 0.0f) {
+        CharLipSyncDriver *songOwner = mSongOwner ? mSongOwner.Ptr() : this;
+        float songTime = TheTaskMgr.Seconds(TaskMgr::kRealTime) + songOwner->mSongOffset;
+        float blendAlpha = mMainBlendAlpha;
+        mMainPlayback->Poll(songTime);
+        for (int i = 0; i < (int)mMainPlayback->mWeights.size(); i++) {
+            CharLipSync::PlayBack::Weight &w = mMainPlayback->mWeights[i];
+            CharClip *clip = w.mClip;
+            if (clip && w.mCurWeight > 0.0f) {
+                ScaleAddViseme(clip, w.mCurWeight * weight * blendAlpha);
+            }
+        }
+    }
+
+    ApplyBlinks();
+}
+
 void CharLipSyncDriver::ScaleAddViseme(CharClip *clip, float f1) {
     float dVar2 = 0.0f;
     float length = 0.0f;

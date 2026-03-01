@@ -409,6 +409,8 @@ void Synth::StopAllSounds() {
     }
 }
 
+int Synth::GetNumMics() const { return mNumMics; }
+
 int Synth::GetSampleMem(ObjectDir *dir, Platform p) {
     int num = 0;
     for (ObjDirItr<SynthSample> it(dir, true); it != nullptr; ++it) {

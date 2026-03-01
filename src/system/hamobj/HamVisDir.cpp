@@ -29,9 +29,11 @@ HamVisDir::HamVisDir()
     : mFilter(0), mRunning(0), unk2d8(0), unk2dc(0), mPlayer1Right(this),
       mPlayer1Left(this), mPlayer2Right(this), mPlayer2Left(this), mMiloManualFrame(1),
       mGrooviness(0) {
-    SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
-    if (!handle.HasCallback(this)) {
-        handle.AddCallback(this);
+    if (SkeletonUpdate::HasInstance()) {
+        SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
+        if (!handle.HasCallback(this)) {
+            handle.AddCallback(this);
+        }
     }
     for (int i = 0; i < 2; i++) {
         mSquatPoses[i].name = MakeString("pose_squat_%i", i);
@@ -110,9 +112,11 @@ HamVisDir::HamVisDir()
 
 HamVisDir::~HamVisDir() {
     RELEASE(mFilter);
-    SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
-    if (handle.HasCallback(this)) {
-        handle.RemoveCallback(this);
+    if (SkeletonUpdate::HasInstance()) {
+        SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
+        if (handle.HasCallback(this)) {
+            handle.RemoveCallback(this);
+        }
     }
 }
 
@@ -276,6 +280,25 @@ void HamVisDir::PostUpdate(const SkeletonUpdateData *data) {
                 }
             }
         }
+    }
+}
+
+void HamVisDir::UpdateGestureFilter(const Skeleton &skel, int playerIdx) {
+    if (mMiloManualFrame) return;
+    // Get left and right hand heights from the skeleton joint positions
+    Vector3 rightHandPos, leftHandPos;
+    skel.JointPos(kCoordCamera, kJointHandRight, rightHandPos);
+    skel.JointPos(kCoordCamera, kJointHandLeft, leftHandPos);
+    // Animate from 0-100 based on hand height (y coordinate normalized)
+    ObjPtr<RndAnimatable> *rightAnim = (playerIdx == 0) ? &mPlayer1Right : &mPlayer2Right;
+    ObjPtr<RndAnimatable> *leftAnim = (playerIdx == 0) ? &mPlayer1Left : &mPlayer2Left;
+    if (*rightAnim) {
+        float frame = Clamp(0.0f, (rightHandPos.y + 1.0f) * 50.0f, 100.0f);
+        (*rightAnim)->SetFrame(frame, 1.0f);
+    }
+    if (*leftAnim) {
+        float frame = Clamp(0.0f, (leftHandPos.y + 1.0f) * 50.0f, 100.0f);
+        (*leftAnim)->SetFrame(frame, 1.0f);
     }
 }
 

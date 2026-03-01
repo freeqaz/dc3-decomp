@@ -365,14 +365,12 @@ void RndMesh::DrawShowing() {
         for (int i = 0; i < numBones; i++) {
             RndTransformable* boneTrans = BoneTransAt(i);
             if (boneTrans) {
-                // Bone matrix = bone's world transform * bind-pose offset
-                // The mOffset stores the inverse bind pose (mesh-space to bone-space)
-                // Final: skinned_pos = boneWorldXfm * mOffset * vertex_pos
+                // skinMatrix = worldXfm * mOffset (world-space bone * inverse bind pose)
                 Transform skinMatrix;
-                Multiply(mBones[i].mOffset, boneTrans->WorldXfm(), skinMatrix);
+                Multiply(boneTrans->WorldXfm(), mBones[i].mOffset, skinMatrix);
                 TransformToMat4(skinMatrix, boneUni.bones[i]);
             } else {
-                // Identity fallback
+                // Null bone — use identity
                 boneUni.bones[i][0]  = 1.0f;
                 boneUni.bones[i][5]  = 1.0f;
                 boneUni.bones[i][10] = 1.0f;

@@ -1,4 +1,4 @@
-#include "lazer/game/SongDB.h"
+#include "game/SongDB.h"
 #include "SongDB.h"
 #include "beatmatch/HxMaster.h"
 #include "hamobj/HamSongData.h"

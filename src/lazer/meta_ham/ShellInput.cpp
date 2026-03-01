@@ -15,6 +15,7 @@
 #include "meta_ham/HamUI.h"
 #include "meta_ham/HelpBarPanel.h"
 #include "meta_ham/LetterboxPanel.h"
+#include "meta_ham/OverlayPanel.h"
 #include "meta_ham/ProfileMgr.h"
 #include "meta_ham/UIEventMgr.h"
 #include "net_ham/RockCentral.h"
@@ -120,89 +121,141 @@ void ShellInput::Poll() {
     static Symbol is_in_shell_pause("is_in_shell_pause");
     static Symbol is_in_party_mode("is_in_party_mode");
     static Symbol is_in_infinite_party_mode("is_in_infinite_party_mode");
-    static Symbol practice("practice");
-    static Symbol gameplay_mode("gameplay_mode");
-    static Symbol suppress_practice_options("suppress_practice_options");
     static bool unk_practice_flag = false;
     static bool unk_party_flag = false;
 
     if (TheUI->FocusPanel() == TheGamePanel) {
-        if (mInputPanel && mInputPanel->GetState() == UIPanel::kUp) {
-            SetCursorAlpha(0.0f);
+        if (mWrongHandPosAnim->GetFrame() > 0.0f) {
+            mWrongHandPosAnim->SetFrame(0.0f, 1.0f);
             unk_0xA4 = false;
         }
-    }
 
-    if (TheGestureMgr->InControllerMode()) {
-        if (TheUIEventMgr->HasActiveDialogEvent()) {
+        if (TheGestureMgr->InControllerMode()
+            && !TheUIEventMgr->HasActiveDialogEvent()) {
             ExitControllerMode(true);
         }
-        if (!TheHamUI.GetOverlayPanel()) {
+
+        if (!TheHamUI.InTransition()) {
             TheGestureMgr->SetIdentificationEnabled(false);
         }
 
-        static int init_state = 0;
-        if ((init_state & 8) == 0) {
-            init_state |= 8;
-        }
+        static Symbol practice("practice");
+        static Symbol gameplay_mode("gameplay_mode");
+        static Symbol suppress_practice_options("suppress_practice_options");
 
         Symbol gameplayModeValue =
             TheGameMode->Property(gameplay_mode, true)->Sym(nullptr);
         if (gameplayModeValue == practice) {
-            HandInvokeGestureFilter *filter = mHandInvokeGestureFilter;
-            if (filter && filter->GetInvokeDetected()) {
-                if (!unk_practice_flag) {
-                    int suppress =
-                        TheHamProvider->Property(suppress_practice_options, true)->Int();
-                    if (!suppress) {
-                        static Symbol invoke_practice_options("invoke_practice_options");
-                        static Message invoke_msg(invoke_practice_options);
-                        TheHamProvider->Handle(invoke_msg, true);
-                        unk_practice_flag = true;
-                    }
+            if (mHandInvokeGestureFilter->GetInvokeDetected() && !unk_practice_flag) {
+                int suppress =
+                    TheHamProvider->Property(suppress_practice_options, true)->Int();
+                if (!suppress) {
+                    Message invoke_msg(Symbol("invoke_practice_options"));
+                    TheHamProvider->Handle(invoke_msg, true);
+                    unk_practice_flag = true;
                 }
-            } else {
-                if (unk_practice_flag) {
-                    static Symbol deinvoke_practice_options("deinvoke_practice_options");
-                    static Message deinvoke_msg(deinvoke_practice_options);
-                    TheHamProvider->Handle(deinvoke_msg, true);
-                    unk_practice_flag = false;
+            }
+            if (mHandInvokeGestureFilter->GetInvokeDetected()) {
+                int suppress =
+                    TheHamProvider->Property(suppress_practice_options, true)->Int();
+                if (!suppress) {
+                    goto after_main;
                 }
+            }
+            if (unk_practice_flag) {
+                Message deinvoke_msg(Symbol("deinvoke_practice_options"));
+                TheHamProvider->Handle(deinvoke_msg, true);
+                unk_practice_flag = false;
             }
         }
     } else {
         int partyMode =
             TheHamProvider->Property(is_in_infinite_party_mode, true)->Int();
+        if (!partyMode) {
+            partyMode = TheHamProvider->Property(is_in_party_mode, true)->Int();
+        }
         if (partyMode) {
-            int shellPause = TheHamProvider->Property(is_in_shell_pause, true)->Int();
-            if (shellPause) {
-                TheGestureMgr->SetIdentificationEnabled(false);
-                int noPartyOptions =
-                    TheHamProvider->Property(suppress_practice_options, true)->Int();
-                if (!noPartyOptions) {
-                    HandInvokeGestureFilter *filter = mHandInvokeGestureFilter;
-                    if (filter && filter->GetInvokeDetected()) {
-                        if (!unk_party_flag) {
-                            static Symbol invoke_practice_options("invoke_practice_options"
-                            );
-                            static Message invoke_msg(invoke_practice_options);
-                            TheHamProvider->Handle(invoke_msg, true);
-                            unk_party_flag = true;
-                        }
-                    } else {
-                        if (unk_party_flag) {
-                            static Symbol deinvoke_practice_options(
-                                "deinvoke_practice_options"
-                            );
-                            static Message deinvoke_msg(deinvoke_practice_options);
-                            TheHamProvider->Handle(deinvoke_msg, true);
-                            unk_party_flag = false;
-                        }
-                    }
+            TheGestureMgr->SetIdentificationEnabled(false);
+
+            int shellPause =
+                TheHamProvider->Property(is_in_shell_pause, true)->Int();
+            if (!shellPause) {
+                if (mHandInvokeGestureFilter->GetInvokeDetected() && !unk_party_flag) {
+                    Message invoke_msg(Symbol("invoke_practice_options"));
+                    TheHamProvider->Handle(invoke_msg, true);
+                    unk_party_flag = true;
+                }
+                if (!mHandInvokeGestureFilter->GetInvokeDetected() && unk_party_flag) {
+                    Message deinvoke_msg(Symbol("deinvoke_practice_options"));
+                    TheHamProvider->Handle(deinvoke_msg, true);
+                    unk_party_flag = false;
                 }
             }
         }
     }
+
+after_main:
+    if (TheGestureMgr->InControllerMode()) {
+        if (unk_0x68.SplitMs() >= unk_0x98) {
+            ExitControllerMode(true);
+        }
+    }
+
+    if (mHandsUpGestureFilter->GetHandsUp()) {
+        if (TheHamUI.EventDialogPanel()
+            && TheHamUI.EventDialogPanel()->GetState() != UIPanel::kUp
+            && !TheHamUI.InTransition()) {
+            static Symbol ui_nav_mode("ui_nav_mode");
+            static Symbol movie("movie");
+
+            const DataNode *pNavModeNode =
+                TheHamProvider->Property(ui_nav_mode, true);
+            MILO_ASSERT(pNavModeNode, 0xd2);
+
+            Symbol navMode = pNavModeNode->Sym(nullptr);
+
+            if (TheGestureMgr->IDEnabled() && navMode != movie) {
+                mHandsUpGestureFilter->Clear();
+                OverlayPanel *overlayPanel = TheHamUI.GetOverlayPanel();
+                if (overlayPanel) {
+                    overlayPanel->Dismiss();
+                }
+                OverlayPanel *pCorrectPanel =
+                    ObjectDir::Main()->Find<OverlayPanel>(
+                        "correct_identity_panel", true
+                    );
+                MILO_ASSERT(pCorrectPanel->CheckIsLoaded(), 0xdc);
+                MILO_ASSERT(pCorrectPanel->LoadedDir(), 0xdd);
+                TheHamUI.SetOverlayPanel(pCorrectPanel);
+            }
+        }
+    } else {
+        OverlayPanel *overlayPanel = TheHamUI.GetOverlayPanel();
+        if (overlayPanel) {
+            mHandsUpGestureFilter->Clear();
+            if (TheHamUI.InTransition()) {
+                overlayPanel->Dismiss();
+            }
+        }
+    }
+
+    HamNavList::sForceDisengage = (mHandsUpGestureFilter->GetRaisedMs() > 0.0f);
+
+    mCursorPanel->Poll();
+    mDepthBuffer->Poll();
+    mSkelIdentifier->Poll();
+    mSkelChooser->Poll();
+    mSkelExtTracker->Poll();
+
+    static bool lastHasSkeleton = false;
+    bool hasSkel = HasSkeleton();
+    if (hasSkel != lastHasSkeleton) {
+        static Symbol has_skeleton_sym("has_skeleton");
+        static Message updateSkeletonStatus("update_skeleton_status");
+        Handle(updateSkeletonStatus, false);
+        TheHamProvider->SetProperty(has_skeleton_sym, hasSkel);
+    }
+    lastHasSkeleton = hasSkel;
 
     if (TheUI->InTransition()) {
         SetCursorAlpha(0);

@@ -108,14 +108,10 @@ BEGIN_SAVES(UILabel)
     int numStyles = mLabelStyles.size();
     bs << numStyles;
 
-    if (numStyles != 0) {
-        unsigned int styleIdx = 0;
-        int offset = 0;
-        LabelStyle *basePtr = &mLabelStyles[0];
-        do {
-            LabelStyle *ls = (LabelStyle *)((unsigned char *)basePtr + offset);
-            bs << ls->mLabelDir;
-            bs << ls->mColorOverride;
+    for (int styleIdx = 0; styleIdx < numStyles; styleIdx++) {
+            LabelStyle &ls = mLabelStyles[styleIdx];
+            bs << ls.mLabelDir;
+            bs << ls.mColorOverride;
             RndText::Style &style = Style(styleIdx);
             bs << style.mSize;
             bs << style.mKerning;
@@ -123,9 +119,6 @@ BEGIN_SAVES(UILabel)
             bs << style.mItalics;
             bs << style.mFontColor.alpha;
             bs << style.mBlacklight;
-            styleIdx++;
-            offset += 0x2c;
-        } while (styleIdx < (unsigned int)numStyles);
     }
 
     bs << mScrollDelay;
@@ -181,15 +174,21 @@ void UILabel::PreLoad(BinStream &bs) {
         mLabelStyles.resize(numStyles);
         mStyles.resize(numStyles);
         unsigned int i = 0;
-        if (mLabelStyles.size() > 0) {
-            int offset = 0;
-            do {
-                LabelStyle *ls = &mLabelStyles[0];
-                ls = (LabelStyle *)((unsigned char *)ls + offset);
+        for (i = 0; i < mLabelStyles.size(); i++) {
+                LabelStyle &ls = mLabelStyles[i];
+#ifdef HX_NATIVE
+                // ObjPtr→ResourceDirPtr reinterpret-cast is UB (mOwner vs mLoader)
+                // Just consume the FilePath from stream without loading
+                {
+                    FilePath labelDirPath;
+                    d.stream >> labelDirPath;
+                }
+#else
                 ResourceDirPtr<UILabelDir> &resPtr =
-                    *(ResourceDirPtr<UILabelDir> *)((unsigned char *)ls + 0x14);
+                    *(ResourceDirPtr<UILabelDir> *)&ls.mLabelDir;
                 d.stream >> resPtr;
-                ls->mColorOverride.Load(d.stream, true, 0);
+#endif
+                ls.mColorOverride.Load(d.stream, true, 0);
                 RndText::Style &style = Style(i);
                 d >> style.mSize;
                 d >> style.mKerning;
@@ -199,9 +198,6 @@ void UILabel::PreLoad(BinStream &bs) {
                 if (d.rev >= 0x1e) {
                     d >> style.mBlacklight;
                 }
-                i++;
-                offset += 0x2c;
-            } while (i < mLabelStyles.size());
         }
         if (d.rev >= 0x1f) {
             d >> mScrollDelay;
@@ -302,14 +298,20 @@ void UILabel::PreLoad(BinStream &bs) {
             d >> altStyleEnabled;
             unsigned int numStyles = (altStyleEnabled ? 1 : 0) + 1;
             if (altStyleEnabled) {
+#ifdef HX_NATIVE
+                // Skip reinterpret-cast loading on native (ObjPtr→ObjDirPtr UB)
+                mLabelStyles.resize(numStyles);
+                mStyles.resize(numStyles);
+#else
                 ObjDirPtr<UILabelDir> &dirPtr =
-                    *(ObjDirPtr<UILabelDir> *)((unsigned char *)&mLabelStyles[0] + 0x14);
+                    *(ObjDirPtr<UILabelDir> *)&mLabelStyles[0].mLabelDir;
                 FilePath path = dirPtr.GetFile();
                 mLabelStyles.resize(numStyles);
                 ResourceDirPtr<UILabelDir> &resPtr =
-                    *(ResourceDirPtr<UILabelDir> *)((unsigned char *)&mLabelStyles[0] + 0x2c + 0x14);
+                    *(ResourceDirPtr<UILabelDir> *)&mLabelStyles[1].mLabelDir;
                 resPtr.LoadFile(path, true, true, kLoadFront, false);
                 mStyles.resize(numStyles);
+#endif
             }
             Style(1).mSize = altTextSize;
             LStyle(1).mColorOverride.CopyRef(altTextColor);
@@ -357,78 +359,60 @@ void UILabel::PreLoad(BinStream &bs) {
 }
 
 void UILabel::PostLoad(BinStream &bs) {
-    int *end = (int *)(((unsigned char *)this) - 0x10);
-    int *begin = (int *)(((unsigned char *)this) - 0x14);
-    int rev = bs.PopRev(Dir());
-
-    // Calculate number of styles from vector begin/end pointers
-    int numStyles = (*end - *begin) / 0x2c;
+    int rev = (unsigned short)bs.PopRev(this);
 
     // PostLoad each style's UILabelDir resource pointer
-    if (numStyles != 0) {
-        int offset = 0;
-        unsigned int i = 0;
-        do {
-            ResourceDirPtr<UILabelDir> *ptr = (ResourceDirPtr<UILabelDir> *)((unsigned char *)*begin + offset + 0x14);
-            ptr->PostLoad(0);
-            i++;
-            offset += 0x2c;
-        } while (i < (unsigned int)numStyles);
+#ifndef HX_NATIVE
+    for (unsigned int i = 0; i < mLabelStyles.size(); i++) {
+        ResourceDirPtr<UILabelDir> *ptr =
+            (ResourceDirPtr<UILabelDir> *)&mLabelStyles[i].mLabelDir;
+        ptr->PostLoad(0);
     }
+#endif
 
     // Handle font mat loading based on file revision
     if (rev >= 0x1c) {
-        // Rev 28+: Read font mat strings for each style from stream
-        if (numStyles != 0) {
-            unsigned int i = 0;
+        unsigned int i = 0;
+        if (mLabelStyles.size() != 0) {
             do {
                 char buffer[0x100];
                 bs.ReadString(buffer, 0x100);
                 SetFontMat(buffer, i);
                 i++;
-            } while (i < (unsigned int)numStyles);
+            } while (i < mLabelStyles.size());
         }
     } else if (rev > 0x14) {
-        // Rev 21-27: Legacy revision handling with PopRev for old string fields
         if (rev > 0x16) {
-            // Rev 23-27: Skip old string field at rev 0x17
-            bs.PopRev(Dir());
+            bs.PopRev(this);
             SetFontMat("", 1);
         }
         if (rev > 0x15) {
-            // Rev 22-27: Skip old string field at rev 0x16
-            bs.PopRev(Dir());
+            bs.PopRev(this);
         }
         SetFontMat("", 0);
     } else {
-        // Rev <= 20: Initialize all styles with empty font mat strings
-        if (numStyles != 0) {
-            unsigned int i = 0;
+        unsigned int i = 0;
+        if (mLabelStyles.size() != 0) {
             do {
                 SetFontMat("", i);
                 i++;
-            } while (i < (unsigned int)numStyles);
+            } while (i < mLabelStyles.size());
         }
     }
 
     UIComponent::PostLoad(bs);
 
-    // Initialize label text - defer actual UI updates until end
     sDeferUpdate = true;
-    if (!mLabelText.empty()) {
-        // If edit text is set, use first character as icon
-        mIconChar = mLabelText[0];
-    } else if (mTextToken.Null() || (!TheLoadMgr.EditMode() && !AllowEditText())) {
-        // Set text from token (will localize)
+    if (mIconChar != '\0') {
+        RndText::SetText(&mIconChar);
+    } else if (mLabelText.empty() || (!TheLoadMgr.EditMode() && !AllowEditText())) {
         SetTextToken(mTextToken);
     } else {
-        // In edit mode with allowed edit text, use token string directly
-        RndText::SetText(mTextToken.Str());
+        RndText::SetText(mLabelText.c_str());
     }
 
-    // Validate fixed length requirement for preloaded labels
     if (sRequireFixedLength) {
-        if (mIconChar == 0) {
+        if (mFixedLength == 0) {
             MILO_NOTIFY(
                 "%s: %s is preloaded, but doesn't have fixed length",
                 PathName(Dir()),
@@ -437,9 +421,8 @@ void UILabel::PostLoad(BinStream &bs) {
         }
     }
 
-    // Re-enable updates and refresh label display if needed
     sDeferUpdate = false;
-    if (!mTextToken.Null() || !mLabelText.empty() || mIconChar != 0) {
+    if (!mTextToken.Null() || !mLabelText.empty() || mFixedLength != 0) {
         LabelUpdate(false);
     } else {
         mTextEmpty = true;
@@ -789,7 +772,11 @@ DataNode UILabel::OnSetTimeHMS(DataArray const *arr) {
 }
 
 bool UILabel::AllowEditText() const {
+#ifdef HX_NATIVE
+    if (TheUI && TheUI->DefaultAllowEditText()) {
+#else
     if (TheUI->DefaultAllowEditText()) {
+#endif
         return true;
     }
     if (LStyle(0).mLabelDir == 0) {

@@ -746,7 +746,13 @@ DataNode Hmx::Object::OnGet(const DataArray *a) {
         if (prop)
             return *prop;
     }
+#ifdef HX_NATIVE
+    if (a->Size() > 3)
+        return a->Node(3);
+    return DataNode(0);
+#else
     return a->Node(3);
+#endif
 }
 
 DataNode Hmx::Object::OnSet(const DataArray *a) {

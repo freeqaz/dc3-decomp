@@ -316,6 +316,23 @@ void HamNavProvider::SetHidden(int index, bool b2) {
     }
 }
 
+DataNode HamNavProvider::OnSetFormatArgs(const DataArray *a) {
+    int index = a->Int(2);
+    MILO_ASSERT(index >= 0 && index < (int)mNavItems.size(), 0x0);
+    NavItem &item = mNavItems[index];
+    if (item.mFormatArgs) {
+        item.mFormatArgs->Release();
+    }
+    item.mFormatArgs = a->Array(3);
+    if (item.mFormatArgs) {
+        item.mFormatArgs->AddRef();
+    }
+    if (mNavList) {
+        mNavList->Refresh();
+    }
+    return 0;
+}
+
 DataNode HamNavProvider::OnSetEnabled(const DataArray *a) {
     const DataNode &node = a->Evaluate(2);
     if (node.Type() == kDataInt) {

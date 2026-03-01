@@ -60,6 +60,29 @@ BEGIN_LOADS(CharForeTwist)
         d >> mBias;
 END_LOADS
 
+void CharForeTwist::Poll() {
+    if (!mHand || !mTwist2)
+        return;
+    // Get the X-axis rotation angle of the hand (roll/twist around forearm axis)
+    float handAngle = GetXAngle(mHand->LocalXfm().m);
+    // Apply offset and bias, divide by 3 to distribute twist across twist bones
+    float twist = LimitAng(handAngle + mOffset * DEG2RAD + mBias * DEG2RAD) / 3.0f;
+    // Build rotation matrix for twist2 about the X axis
+    Hmx::Matrix3 rotMat;
+    rotMat.x.Set(1, 0, 0);
+    rotMat.y.Set(0, Cosine(twist), Sine(twist));
+    rotMat.z.Set(0, -Sine(twist), Cosine(twist));
+    Multiply(mTwist2->LocalXfm().m, rotMat, mTwist2->DirtyLocalXfm().m);
+    // Also rotate twist2's parent (foretwist1) by 2/3 of the twist
+    RndTransformable *twist1 = mTwist2->TransParent();
+    if (twist1) {
+        float twist1Ang = 2.0f * twist;
+        rotMat.y.Set(0, Cosine(twist1Ang), Sine(twist1Ang));
+        rotMat.z.Set(0, -Sine(twist1Ang), Cosine(twist1Ang));
+        Multiply(twist1->LocalXfm().m, rotMat, twist1->DirtyLocalXfm().m);
+    }
+}
+
 void CharForeTwist::PollDeps(
     std::list<Hmx::Object *> &changedBy, std::list<Hmx::Object *> &change
 ) {

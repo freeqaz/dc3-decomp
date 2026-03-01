@@ -2,6 +2,7 @@
 // One-shot and looping sound effects via AudioDevice.
 
 #include "platform/SampleInst_Native.h"
+#include "platform/FxSendNative.h"
 #include "synth/SampleData.h"
 #include "synth/SynthSample.h"
 
@@ -99,6 +100,11 @@ int SampleInstNative::RenderAudio(float *output, int frameCount) {
         }
 
         mPlayPos++;
+    }
+
+    // Apply FxSend effect chain if one is assigned
+    if (mFxSend) {
+        FxSendNative_ProcessChain(mFxSend, output, frameCount, 2);
     }
 
     return frameCount;

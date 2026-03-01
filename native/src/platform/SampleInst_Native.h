@@ -26,7 +26,11 @@ public:
     virtual int RenderAudio(float *output, int frameCount) override;
     virtual bool IsFinished() const override { return !mPlaying; }
 
+protected:
+    virtual void SetSendImpl(FxSend *send) override { mFxSend = send; }
+
 private:
+    FxSend *mFxSend = nullptr;
     const int16_t *mPCMData;    // pointer into SampleData's buffer
     int mPCMSamples;            // total samples available
     int mPlayPos;               // current sample position

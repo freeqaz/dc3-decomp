@@ -1,8 +1,10 @@
 #include "hamobj/HamRegulate.h"
 #include "char/Character.h"
 #include "char/Waypoint.h"
+#include "math/Vec.h"
 #include "obj/Dir.h"
 #include "obj/Object.h"
+#include "os/System.h"
 #include "rndobj/Poll.h"
 
 const float kConstFloats[2] = { 4, 4 };
@@ -75,4 +77,27 @@ void HamRegulate::RegulateWay(Waypoint *w, float f) {
     mArriveRadius = f;
     mPosDelta.Zero();
     mRegulateMode = 0;
+}
+
+void HamRegulate::Regulate(Vector3 &pos, float dt) {
+    // No regulation if no waypoint
+    if (!mWaypoint) return;
+    // Move character towards waypoint
+    Vector3 target = mWaypoint->WorldXfm().v;
+    Vector3 diff;
+    Subtract(target, pos, diff);
+    float dist = Length(diff);
+    if (dist > mArriveRadius) {
+        float speed = Min(mMaxSpeed * dt, dist);
+        Scale(diff, speed / dist, diff);
+        Add(pos, diff, pos);
+    }
+}
+
+void HamRegulate::Poll() {
+    if (!mCharacter || !mWaypoint) return;
+    // Regulate character position
+    Transform &xfm = mCharacter->DirtyLocalXfm();
+    float dt = TheTaskMgr.DeltaSeconds();
+    Regulate(xfm.v, dt);
 }

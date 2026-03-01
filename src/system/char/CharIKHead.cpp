@@ -1,7 +1,11 @@
 #include "char/CharIKHead.h"
 #include "char/CharWeightable.h"
+#include "math/Vec.h"
+#include "math/Rot.h"
 #include "obj/Object.h"
+#include "obj/Task.h"
 #include "rndobj/Rnd.h"
+#include "rndobj/Trans.h"
 #include "rndobj/Utl.h"
 
 #pragma region CharIKHead
@@ -12,6 +16,86 @@ CharIKHead::CharIKHead()
       mOffsetScale(1, 1, 1), mUpdatePoints(1) {}
 
 CharIKHead::~CharIKHead() {}
+
+void CharIKHead::Poll() {
+    if (!mHead || !mTarget || !mSpine)
+        return;
+    UpdatePoints(false);
+    if (TheTaskMgr.DeltaSeconds() > 0) {
+        Interp(mHeadFilter, mHead->WorldXfm().v, 0.5f, mHeadFilter);
+    }
+    float weight = Weight();
+    if (weight != 0) {
+        Hmx::Matrix3 origHeadMat(mHead->WorldXfm().m);
+        Vector3 headOffset;
+        Subtract(mHead->WorldXfm().v, mHeadFilter, headOffset);
+        Vector3 targetPos = mTarget->WorldXfm().v;
+        float headOffsetLen = Length(headOffset);
+        if (headOffsetLen > 0) {
+            float blendDist = Min(headOffsetLen, mTargetRadius * weight);
+            ScaleAdd(targetPos, headOffset, blendDist / headOffsetLen, targetPos);
+        }
+        Interp(mPoints[0].mBone->WorldXfm().v, targetPos, weight, targetPos);
+        Vector3 spineToTarget;
+        Subtract(targetPos, mSpine->TransParent()->WorldXfm().v, spineToTarget);
+        float distSq = LengthSquared(spineToTarget);
+        if (distSq > mSpineLength * mSpineLength) {
+            ScaleAdd(
+                mSpine->TransParent()->WorldXfm().v,
+                spineToTarget,
+                mSpineLength / std::sqrt(distSq),
+                targetPos
+            );
+        }
+        Subtract(targetPos, mPoints[0].mBone->WorldXfm().v, spineToTarget);
+        for (int i = 0; i < mPoints.size(); i++) {
+            Point &pt = mPoints[i];
+            ScaleAdd(pt.mBone->WorldXfm().v, spineToTarget, pt.mLenRatio, pt.mPos);
+        }
+        Vector3 correction(0, 0, 0);
+        for (int i = 1; i < mPoints.size(); i++) {
+            mPoints[i].mPos += correction;
+            Vector3 diff;
+            Subtract(mPoints[i].mPos, mPoints[i - 1].mPos, diff);
+            correction -= diff;
+            // ScaleToMagnitude: scale diff to have magnitude mPoints[i-1].mLen
+            float diffLen = Length(diff);
+            if (diffLen > 0)
+                Scale(diff, mPoints[i - 1].mLen / diffLen, diff);
+            correction += diff;
+            Add(mPoints[i - 1].mPos, diff, mPoints[i].mPos);
+        }
+        for (int i = 1; i < mPoints.size(); i++) {
+            ScaleAdd(mPoints[i].mPos, correction, mPoints[i].mLenRatio - 1.0f, mPoints[i].mPos);
+        }
+        for (int i = mPoints.size() - 1; i >= 0; i--) {
+            Transform boneXfm(mPoints[i].mBone->WorldXfm().m, mPoints[i].mPos);
+            if (i > 0) {
+                Vector3 localVec;
+                Hmx::Quat rotQuat;
+                // Multiply(v, matrix, out)
+                Multiply(mPoints[i - 1].mBone->LocalXfm().v, boneXfm.m, localVec);
+                Vector3 targetVec;
+                Subtract(mPoints[i - 1].mPos, mPoints[i].mPos, targetVec);
+                MakeRotQuat(localVec, targetVec, rotQuat);
+                Hmx::Matrix3 rotMat;
+                MakeRotMatrix(rotQuat, rotMat);
+                Multiply(boneXfm.m, rotMat, boneXfm.m);
+            } else {
+                Interp(boneXfm.m, origHeadMat, mHeadMat, boneXfm.m);
+            }
+            mPoints[i].mWorldPos = mPoints[i].mPos;
+            mPoints[i].mBone->SetWorldXfm(boneXfm);
+        }
+        if (mOffset) {
+            Transform offsetXfm(mOffset->WorldXfm());
+            spineToTarget *= mOffsetScale;
+            offsetXfm.v += spineToTarget;
+            mOffset->SetWorldXfm(offsetXfm);
+        }
+        mDebugTarget = targetPos;
+    }
+}
 
 BEGIN_HANDLERS(CharIKHead)
     HANDLE_SUPERCLASS(CharWeightable)

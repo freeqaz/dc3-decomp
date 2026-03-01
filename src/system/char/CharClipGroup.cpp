@@ -4,6 +4,7 @@
 #include "math/Rand.h"
 #include "math/Utl.h"
 #include "obj/Object.h"
+#include "utl/Str.h"
 #include <cstring>
 
 #ifndef HX_NATIVE
@@ -172,3 +173,30 @@ struct Alphabetically {
 };
 
 void CharClipGroup::Sort() { mClips.sort(Alphabetically()); }
+
+void CharClipGroup::DeleteRemaining(int count) {
+    while ((int)mClips.size() > count) {
+        mClips.erase(mClips.begin() + (mClips.size() - 1));
+    }
+    if (mWhich >= (int)mClips.size())
+        mWhich = 0;
+    if (mLRUBoundary >= (int)mClips.size())
+        mLRUBoundary = 0;
+}
+
+CharClip *CharClipGroup::FindClip(const char *name) const {
+    for (int i = 0; i < (int)mClips.size(); i++) {
+        CharClip *clip = (CharClip *)mClips[i];
+        if (clip && streq(clip->Name(), name))
+            return clip;
+    }
+    return nullptr;
+}
+
+void CharClipGroup::SetClipFlags(int flags) {
+    for (int i = 0; i < (int)mClips.size(); i++) {
+        CharClip *clip = (CharClip *)mClips[i];
+        if (clip)
+            clip->SetFlags(flags);
+    }
+}

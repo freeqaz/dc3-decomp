@@ -828,6 +828,10 @@ float HamMove::AdjustNormalizedPercentToConfusability(float f1, float f2) {
     }
 }
 
+float HamMove::PSNRToDetectFrac(float psnr) const {
+    return psnr / 100.0f;
+}
+
 const std::vector<float> *HamMove::RatingOverride() const {
     if (mRatingStates.front() > 0) {
         return &mRatingStates;

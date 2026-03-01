@@ -600,20 +600,29 @@ int main(int argc, char** argv) {
 
         // Render a few frames to let GPU resources settle
         for (int frame = 0; frame < 3; frame++) {
+            fprintf(stderr, "  frame %d: Update...\n", frame);
             gOrbitCam.Update(cam);
+            fprintf(stderr, "  frame %d: BeginDrawing...\n", frame);
             TheRnd.BeginDrawing();
-            if (scene) {
-                scene->DrawShowing();
-            }
-            // Also draw all mesh objects directly (fallback for non-RndDir scenes)
-            if (!scene) {
+            fprintf(stderr, "  frame %d: Drawing...\n", frame);
+            // Draw all mesh objects directly (bypass Character/RndDir draw logic
+            // which depends on LOD, shadow maps, and other uninitialized systems)
+            {
+                // Set up environment from the scene's RndDir (provides lighting)
+                RndEnviron* env = nullptr;
+                if (scene) env = scene->GetEnv();
+                Vector3 origin(0,0,0);
+                RndEnvironTracker tracker(env, &origin);
+
                 ObjDirItr<RndMesh> meshIt(baseScene, true);
                 while (meshIt) {
                     meshIt->DrawShowing();
                     ++meshIt;
                 }
             }
+            fprintf(stderr, "  frame %d: EndDrawing...\n", frame);
             TheRnd.EndDrawing();
+            fprintf(stderr, "  frame %d: done\n", frame);
         }
 
         // Readback the framebuffer
@@ -647,10 +656,19 @@ int main(int argc, char** argv) {
         // Update orbit camera
         gOrbitCam.Update(cam);
 
-        // Draw
+        // Draw — iterate meshes directly (bypass Character/RndDir complex draw logic)
         TheRnd.BeginDrawing();
-        if (scene) {
-            scene->DrawShowing();
+        {
+            RndEnviron* env = nullptr;
+            if (scene) env = scene->GetEnv();
+            Vector3 origin(0,0,0);
+            RndEnvironTracker tracker(env, &origin);
+
+            ObjDirItr<RndMesh> meshIt(baseScene, true);
+            while (meshIt) {
+                meshIt->DrawShowing();
+                ++meshIt;
+            }
         }
         TheRnd.EndDrawing();
     }

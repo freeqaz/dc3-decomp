@@ -1,6 +1,8 @@
 #include "flow/FlowSwitch.h"
 #include "FlowSwitch.h"
 #include "FlowSwitchCase.h"
+#include "flow/DrivenPropertyEntry.h"
+#include "flow/DrivenPropertyMathOps.h"
 #include "flow/FlowNode.h"
 #include "obj/Data.h"
 #include "obj/Object.h"
@@ -94,6 +96,61 @@ void FlowSwitch::ChildFinished(FlowNode *n) {
         }
     } else {
         FlowNode::ChildFinished(n);
+    }
+}
+
+void FlowSwitch::VerifyTypes() {
+    static Symbol valueStr("value");
+    DrivenPropertyEntry *entry = GetDrivenEntry(valueStr);
+    if (!entry)
+        return;
+    // Get the property path for the "value" property
+    DataArray *propPath = entry->Node().Array();
+    // Get the current value of our "value" property
+    const DataNode *currentValue = Property(propPath, true);
+    DataNode currentCopy(*currentValue);
+
+    // Find the expected value type by looking at the first math op's driven object
+    // FlowMathOp layout: float(0), u32(4), lhs DataNode(8), rhs DataNode(16), FlowPtr<Object>(24)
+    // We need to get the driven object and read its property to determine the expected type
+    DataNode targetValue(kDataUndef, 0);
+    const ObjVector<FlowMathOp> &mathOps = entry->MathOps();
+    if (!mathOps.empty()) {
+        const FlowMathOp *firstOp = mathOps.begin();
+        // FlowPtr<Object> is at offset 0x18 (24) in FlowMathOp
+        // FlowPtr layout: mObjName(0), mOwnerNode(4), mState(8), mObjPtr.ObjRef(12+)
+        // ObjRefConcrete<T> has vtable(0) and ptr(4), so object is at FlowPtr+0xc+4 = 0x20
+        Hmx::Object *drivenObj = *(Hmx::Object **)((const char *)firstOp + 0x20);
+        if (drivenObj) {
+            // rhs DataNode is at offset 0x10, it contains the property path on the driven obj
+            const DataNode *rhsNode = (const DataNode *)((const char *)firstOp + 0x10);
+            if (rhsNode->Type() == kDataArray) {
+                const DataNode *drivenVal = drivenObj->Property(rhsNode->Array(), false);
+                if (drivenVal)
+                    targetValue = *drivenVal;
+            }
+        }
+    }
+
+    if (!currentCopy.CompatibleType(targetValue.Type())) {
+        SetProperty(propPath, targetValue);
+    }
+}
+
+void FlowSwitch::ActivateValueCases(DataNode &value, DataNode &previousValue) {
+    FLOW_LOG("ActivateValueCases\n");
+    FOREACH (it, mChildNodes) {
+        FlowSwitchCase *cur = static_cast<FlowSwitchCase *>(it->Obj());
+        if (!cur->IsRunning() && cur->Op() != kTransition) {
+            bool valid = cur->IsValidCase(this, &value, &previousValue, false);
+            if (valid) {
+                ActivateChild(cur);
+                if (mFirstValidCaseOnly)
+                    return;
+            }
+            if (mStopRequested)
+                return;
+        }
     }
 }
 

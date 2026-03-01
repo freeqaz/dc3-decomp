@@ -19,6 +19,167 @@
 HamCamShot *gHamCamShot;
 std::list<HamCamShot::TargetCache> HamCamShot::sCache;
 
+INIT_REVS(3, 0)
+
+BinStream &operator>>(BinStreamRev &d, HamCamShot::Target &t);
+
+BEGIN_LOADS(HamCamShot)
+    LOAD_REVS(bs)
+    ASSERT_REVS(3, 0)
+    LOAD_SUPERCLASS(CamShot)
+    d >> mTargets;
+    d >> mZeroTime;
+    d >> mMinTime;
+    d >> mMaxTime;
+    mNextShots.Load(bs, 1, nullptr, true);
+    mOriginalSizeNextShots = mNextShots.size();
+    if (d.rev > 1) {
+        d >> (BinStreamEnum<HamPlayerFlags> &)mPlayerFlag;
+    }
+    if (d.rev > 2) {
+        mMasterAnims.Load(bs, 1, nullptr, true);
+    }
+    ResetNextShot();
+END_LOADS
+
+void HamCamShot::EndAnim() {
+    if (mNextShotIt == (ObjPtrList<HamCamShot>::iterator)0 ||
+        mNextShotIt == mNextShots.end()) {
+        for (ObjList<Target>::iterator it = mTargets.begin(); it != mTargets.end(); ++it) {
+            Target &target = *it;
+            if (!target.mTarget.Null()) {
+                std::list<TargetCache>::iterator cacheIt = CreateTargetCache(target.mTarget);
+                if (target.unk68p3 && target.unk68p4 && cacheIt->mTrans) {
+                    TeleportTarget(cacheIt->mTrans, cacheIt->mTransform, true);
+                }
+                Character *theChar = dynamic_cast<Character *>(cacheIt->mTrans);
+                if (theChar && target.mEnvOverride) {
+                    theChar->SetEnv(nullptr);
+                }
+                sCache.erase(cacheIt);
+            }
+        }
+        EndAnims(mMasterAnims);
+        CamShot::EndAnim();
+    } else {
+        (*mNextShotIt)->EndAnim();
+        ResetNextShot();
+    }
+}
+
+void HamCamShot::SetPreFrame(float frame, float blend) {
+    mTargetsFlipped = true;
+    if (frame >= mZeroTime && mNextShotIt != 0) {
+        float nextOffset = frame - mZeroTime;
+        while (nextOffset < mNextShotDuration) {
+            if (mNextShotIt == mNextShots.end()) break;
+            HamCamShot *nextCurrent = *mNextShotIt;
+            if (mCurrentShot && mCurrentShot != this) {
+                mCurrentShot->EndAnim();
+            }
+            mCurrentShot = nextCurrent;
+            if (mCurrentShot) {
+                mCurrentShot->StartAnim();
+                mNextShotDuration = mCurrentShot->GetTotalDuration();
+                mNextShotOffset += mNextShotDuration;
+            }
+            ++mNextShotIt;
+        }
+        frame = nextOffset - mNextShotDuration;
+        if (mNextShotOffset <= frame) {
+            float maxDuration = kHugeFloat;
+            do {
+                bool iterated = IterateNextShot();
+                if (!iterated) {
+                    mNextShotDuration = maxDuration;
+                } else {
+                    frame -= mNextShotDuration;
+                    mNextShotOffset += mNextShotDuration;
+                    HamCamShot *nextShot = *mNextShotIt;
+                    if (mCurrentShot && mCurrentShot != this) {
+                        mCurrentShot->EndAnim();
+                    }
+                    mCurrentShot = nextShot;
+                    if (mCurrentShot) {
+                        mCurrentShot->StartAnim();
+                        mNextShotDuration = mCurrentShot->GetTotalDuration();
+                    }
+                }
+            } while (mNextShotDuration <= frame);
+        }
+    }
+    if (mCurrentShot && mCurrentShot != this) {
+        mCurrentShot->SetFrame(frame, 1.0f);
+    }
+}
+
+DataNode HamCamShot::OnAllowableNextShots(const DataArray *a) {
+    DataArrayPtr result;
+    ObjDirItr<HamCamShot> dirIt(Dir(), true);
+    while (dirIt) {
+        HamCamShot *shot = &*dirIt;
+        bool inNextShots = false;
+        for (ObjPtrList<HamCamShot>::iterator it = mNextShots.begin();
+             it != mNextShots.end(); ++it) {
+            if (*it == shot) {
+                inNextShots = true;
+                break;
+            }
+        }
+        if (!inNextShots) {
+            result->Insert(result->Size(), DataNode(shot));
+        }
+        ++dirIt;
+    }
+    return DataNode(result);
+}
+
+void HamCamShot::UpdateTargetsFlipped() {
+    bool flipped = AreTargetsFlipped();
+    if ((flipped ? 1 : 0) != (mFlipActive ? 1 : 0)) {
+        mFlipActive = flipped;
+        if (flipped) {
+            mFlipEndHideList = mFlipPostProcOverrides;
+            mFlipDrawOverrides = mFlipGenHideList;
+            mFlipShowList = mFlipEndHideList;
+        } else {
+            mFlipEndHideList = mFlipHideList;
+            mFlipDrawOverrides = mFlipShowList;
+            mFlipShowList = mFlipGenHideList;
+        }
+    }
+}
+
+void HamCamShot::Reteleport(const Vector3 &offset, bool teleport, Symbol sym) {
+    for (ObjList<Target>::iterator it = mTargets.begin(); it != mTargets.end(); ++it) {
+        Target &target = *it;
+        if (target.mTarget.Null()) continue;
+        if (!teleport && !target.mTeleport) continue;
+        if (!sym.Null() && sym != target.mTarget) continue;
+        std::list<TargetCache>::iterator cacheIt = CreateTargetCache(target.mTarget);
+        if (cacheIt->mTrans) {
+            Transform xfm = target.mTo;
+            xfm.v += offset;
+            if (mTargetsFlipped) {
+                Target *flipTarget = GetFlipTarget(&target);
+                if (flipTarget != &target) {
+                    // Get the flipped target's transform
+                    Transform flipXfm;
+                    if (TargetTeleportTransform(flipTarget->mTarget, flipXfm)) {
+                        Multiply(flipXfm, WorldXfm(), xfm);
+                        TeleportTarget(cacheIt->mTrans, xfm, false);
+                        sCache.erase(cacheIt);
+                        continue;
+                    }
+                }
+            }
+            TeleportTarget(cacheIt->mTrans, xfm, false);
+        }
+        sCache.erase(cacheIt);
+    }
+    sCache.clear();
+}
+
 HamCamShot::HamCamShot()
     : mTargets(this), mMinTime(0), mMaxTime(0), mZeroTime(0), mPlayerFlag(kHamPlayerOff),
       mNextShots(this), mCurrentShot(this), mNextShotOffset(0), mNextShotDuration(0), mInSetFrame(0), mTotalDuration(0),
@@ -87,7 +248,36 @@ BEGIN_PROPSYNCS(HamCamShot)
     SYNC_SUPERCLASS(CamShot)
 END_PROPSYNCS
 
-BinStream &operator<<(BinStream &, const HamCamShot::Target &);
+BinStream &operator<<(BinStream &bs, const HamCamShot::Target &t) {
+    bs << t.mTarget;
+    bs << t.mTo;
+    bs << t.mAnimGroup;
+    bs << t.mFastForward;
+    bs << t.mForwardEvent;
+    unsigned int bits = (t.mForceLOD & 7) | (t.mTeleport ? 8 : 0) | (t.mReturn ? 16 : 0) |
+                        (t.mSelfShadow ? 32 : 0) | (t.unk68p4 ? 64 : 0) | (t.unk68p3 ? 128 : 0);
+    bs << bits;
+    bs << t.mEnvOverride;
+    return bs;
+}
+
+BinStream &operator>>(BinStreamRev &d, HamCamShot::Target &t) {
+    d >> t.mTarget;
+    d >> t.mTo;
+    d >> t.mAnimGroup;
+    d >> t.mFastForward;
+    d >> t.mForwardEvent;
+    unsigned int bits;
+    d >> bits;
+    t.mForceLOD = bits & 7;
+    t.mTeleport = (bits >> 3) & 1;
+    t.mReturn = (bits >> 4) & 1;
+    t.mSelfShadow = (bits >> 5) & 1;
+    t.unk68p4 = (bits >> 6) & 1;
+    t.unk68p3 = (bits >> 7) & 1;
+    d >> t.mEnvOverride;
+    return d.stream;
+}
 
 BEGIN_SAVES(HamCamShot)
     SAVE_REVS(3, 0)

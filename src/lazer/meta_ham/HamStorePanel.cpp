@@ -279,6 +279,64 @@ void HamStorePanel::CreateCartUIs() {
     mFilters.push_back(filter2);
 }
 
+#ifdef HX_NATIVE
+
+void HamStorePanel::Poll() { StorePanel::Poll(); }
+
+void HamStorePanel::Unload() {
+    RELEASE(mOfferProvider);
+    for (int i = 0; i < 7; i++) {
+        mJobs[i] = nullptr;
+    }
+    StorePanel::Unload();
+}
+
+StoreError HamStorePanel::UpdateOffers(std::list<EnumProduct> const &products, bool b) {
+    return StorePanel::UpdateOffers(products, b);
+}
+
+bool HamStorePanel::BuySpecialOffer(Symbol offerName) {
+    for (int i = 0; i < (int)mSpecialOffers.size(); i++) {
+        if (mSpecialOffers[i].mName == offerName) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool HamStorePanel::ContentDiscovered(Symbol s) { return false; }
+
+void HamStorePanel::ContentMounted(char const *name, char const *path) {}
+
+bool HamStorePanel::ContentTitleDiscovered(unsigned int id, Symbol s) { return false; }
+
+void HamStorePanel::GetOfferIDsToEnumerate(std::vector<u64> &ids, bool b) const {
+    StorePanel::GetOfferIDsToEnumerate(ids, b);
+}
+
+bool HamStorePanel::IsSpecialOfferOwned(Symbol offerName) const {
+    for (int i = 0; i < (int)mSpecialOffers.size(); i++) {
+        if (mSpecialOffers[i].mName == offerName) {
+            return mSpecialOffers[i].mOwned;
+        }
+    }
+    return false;
+}
+
+DataNode HamStorePanel::OnMsg(RCJobCompleteMsg const &msg) {
+    return DataNode(0);
+}
+
+void HamStorePanel::RefreshSpecialOfferStatus() {}
+
+void HamStorePanel::FinishSpecialOfferEnum(std::vector<bool> const &results, bool success) {
+    for (int i = 0; i < (int)mSpecialOffers.size() && i < (int)results.size(); i++) {
+        mSpecialOffers[i].mOwned = results[i];
+    }
+}
+
+#endif // HX_NATIVE
+
 BEGIN_HANDLERS(HamStorePanel)
     HANDLE_EXPR(get_motd, mMotd)
     HANDLE_ACTION(set_filter, mOfferProvider->SetFilter(mFilters[_msg->Int(2)]))

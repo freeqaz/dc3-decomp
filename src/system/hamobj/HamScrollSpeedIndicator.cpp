@@ -84,6 +84,18 @@ void HamScrollSpeedIndicator::Draw(const Transform &xfm) {
     }
 }
 
+void HamScrollSpeedIndicator::Update(float scrollSpeed, float minSpeed, float maxSpeed) {
+    if (!mIndicatorAnim) return;
+    float t;
+    if (maxSpeed <= minSpeed) {
+        t = 0.0f;
+    } else {
+        t = Clamp(0.0f, (scrollSpeed - minSpeed) / (maxSpeed - minSpeed), 1.0f);
+    }
+    float frame = mSlowScrollThresholdFrame + t * (mFastScrollThresholdFrame - mSlowScrollThresholdFrame);
+    mIndicatorAnim->SetFrame(frame, 1.0f);
+}
+
 INIT_REVS(2, 0)
 
 void HamScrollSpeedIndicator::PreLoad(BinStream &bs) {

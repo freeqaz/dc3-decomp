@@ -17,7 +17,11 @@ public:
     OBJ_MEM_OVERLOAD(0x10);
     NEW_OBJ(FxSendChorus)
 
+#ifdef HX_NATIVE
+public:
+#else
 protected:
+#endif
     FxSendChorus();
 
     /** "Maximum delay time in milliseconds". Ranges from 0 to 100. */

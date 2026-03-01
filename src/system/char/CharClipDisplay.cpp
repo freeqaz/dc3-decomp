@@ -2,6 +2,7 @@
 #include "obj/Object.h"
 #include "rndobj/Rnd.h"
 
+float CharClipDisplay::sZoom;
 float CharClipDisplay::sEm;
 ObjectDir *CharClipDisplay::sDir;
 
@@ -41,6 +42,15 @@ Hmx::Object *CharClipDisplay::FindSource(Hmx::Object *obj) {
         }
     }
     return nullptr;
+}
+
+void CharClipDisplay::SetStartEnd(float start, float end, bool resetZoom) {
+    mStartBeat = start;
+    mEndBeat = end;
+    if (resetZoom) {
+        unk4 = start;
+        unk8 = end;
+    }
 }
 
 void CharClipDisplay::DrawBeatString(char const *c, float f1, Hmx::Color const &color) {

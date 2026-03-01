@@ -29,7 +29,9 @@ extern "C" {
 
 // this is an msvc compiler intrinsic but idk how to invoke it
 // i've declared the intrinsic in stdlib.h but it's not working
+#ifndef HX_NATIVE
 static void *alloca(size_t size) { return (void *)_alloca(size); }
+#endif
 
 typedef struct vorbis_info {
     int version;

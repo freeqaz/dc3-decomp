@@ -1,5 +1,6 @@
 #include "rndobj/Trans.h"
 #include "Trans.h"
+#include "rndobj/Cam.h"
 #include "math/Color.h"
 #include "math/Mtx.h"
 #include "obj/Object.h"
@@ -650,4 +651,72 @@ const Transform &RndTransformable::WorldXfm_Force() {
     else
         UpdatedWorldXfm();
     return mWorldXfm;
+}
+
+void RndTransformable::ApplyDynamicConstraint() {
+    if (mConstraint == kConstraintTargetWorld) {
+        mWorldXfm = mTarget->WorldXfm();
+    } else if (mConstraint == kConstraintShadowTarget) {
+        Transform tf;
+        Transpose(mTarget->WorldXfm(), tf);
+        Multiply(mWorldXfm, tf, mWorldXfm);
+        Plane pl;
+        Multiply(sShadowPlane, tf, pl);
+        float planeB = pl.b;
+        tf.m.Set(1, -pl.a / planeB, 0, 0, 0, 0, 0, -pl.c / planeB, 1);
+        tf.v.Set(0, -pl.d / pl.b, 0);
+        Multiply(mWorldXfm, tf, mWorldXfm);
+        Multiply(mWorldXfm, mTarget->WorldXfm(), mWorldXfm);
+    } else if (RndCam::Current()) {
+        Vector3 scaleVec;
+        const Transform &camWorld = RndCam::Current()->WorldXfm();
+        if (mPreserveScale) {
+            MakeScale(mWorldXfm.m, scaleVec);
+        }
+        switch (mConstraint) {
+        case kConstraintFastBillboardXYZ:
+            mWorldXfm.m = camWorld.m;
+            break;
+        case kConstraintBillboardXYZ:
+            Subtract(mWorldXfm.v, camWorld.v, mWorldXfm.m.y);
+            mWorldXfm.m.z = camWorld.m.z;
+            Normalize(mWorldXfm.m, mWorldXfm.m);
+            break;
+        case kConstraintBillboardZ:
+            Subtract(mWorldXfm.v, camWorld.v, mWorldXfm.m.y);
+            if (mPreserveScale)
+                Normalize(mWorldXfm.m.z, mWorldXfm.m.z);
+            Cross(mWorldXfm.m.y, mWorldXfm.m.z, mWorldXfm.m.x);
+            Normalize(mWorldXfm.m.x, mWorldXfm.m.x);
+            Cross(mWorldXfm.m.z, mWorldXfm.m.x, mWorldXfm.m.y);
+            break;
+        case kConstraintBillboardXZ:
+            Subtract(mWorldXfm.v, camWorld.v, mWorldXfm.m.y);
+            Normalize(mWorldXfm.m.y, mWorldXfm.m.y);
+            Cross(mWorldXfm.m.y, mWorldXfm.m.z, mWorldXfm.m.x);
+            Normalize(mWorldXfm.m.x, mWorldXfm.m.x);
+            Cross(mWorldXfm.m.x, mWorldXfm.m.y, mWorldXfm.m.z);
+            break;
+        case kConstraintLookAtTarget:
+            Subtract(mTarget->WorldXfm().v, mWorldXfm.v, mWorldXfm.m.y);
+            Normalize(mWorldXfm.m, mWorldXfm.m);
+            break;
+        case kConstraintSkyBox: {
+            Vector3 offset;
+            Add(mLocalXfm.v, camWorld.v, offset);
+            mWorldXfm.v.Set(offset.x, offset.y, mWorldXfm.v.z);
+            mWorldXfm.m = mLocalXfm.m;
+            break;
+        }
+        case kConstraintSkyBoxXY:
+            Add(mLocalXfm.v, camWorld.v, mWorldXfm.v);
+            mWorldXfm.m = mLocalXfm.m;
+            break;
+        default:
+            break;
+        }
+        if (mPreserveScale)
+            Scale(scaleVec, mWorldXfm.m, mWorldXfm.m);
+    }
+    SetDirty_Force();
 }

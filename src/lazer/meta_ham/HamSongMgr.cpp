@@ -1,4 +1,4 @@
-#include "lazer/meta_ham/HamSongMgr.h"
+#include "meta_ham/HamSongMgr.h"
 #include "HamProfile.h"
 #include "HamSongMetadata.h"
 #include <cstdio>
@@ -6,7 +6,7 @@
 #include "hamobj/Difficulty.h"
 #include "hamobj/HamGameData.h"
 #include "hamobj/HamPlayerData.h"
-#include "lazer/meta_ham/Playlist.h"
+#include "meta_ham/Playlist.h"
 #include "macros.h"
 #include "math/Utl.h"
 #include "meta/DataArraySongInfo.h"

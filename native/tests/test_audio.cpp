@@ -220,6 +220,32 @@ TEST(StreamReceiverNative, PanLeftRight) {
 }
 
 // ============================================================================
+// FxSend effect chain tests (no device needed)
+// ============================================================================
+
+#include "platform/FxSendNative.h"
+
+TEST(FxSendNative, ProcessChainNullSafe) {
+    // Should not crash with null head or buffer
+    FxSendNative_ProcessChain(nullptr, nullptr, 0, 2);
+
+    float buf[20] = {};
+    FxSendNative_ProcessChain(nullptr, buf, 10, 2);
+    // Buffer should be unchanged (all zeros)
+    for (int i = 0; i < 20; i++) {
+        EXPECT_FLOAT_EQ(buf[i], 0.0f);
+    }
+}
+
+TEST(FxSendNative, EffectSlotInitDestroy) {
+    // NativeEffectSlot should handle init/destroy without crashing
+    NativeEffectSlot slot;
+    EXPECT_EQ(slot.type, NativeEffectSlot::kNone);
+    EXPECT_EQ(slot.processor, nullptr);
+    slot.Destroy(); // should be safe on empty slot
+}
+
+// ============================================================================
 // Bink audio decode test (uses MILO_TEST_BIK fixture)
 // ============================================================================
 

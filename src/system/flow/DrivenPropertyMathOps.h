@@ -21,4 +21,7 @@ public:
     ~FlowMathOp();
     void Save(BinStream &);
     void Load(BinStream &, ObjectDir *);
+
+    const DataNode &Rhs() const { return rhs; }
+    Hmx::Object *DrivenObj() { return unk_0x18; }
 };

@@ -220,6 +220,12 @@ void CharServoBone::MoveToFacing(Transform &tf) {
     tf.v += *mFacingPos;
 }
 
+void CharServoBone::PollDeps(
+    std::list<Hmx::Object *> &changedBy, std::list<Hmx::Object *> &change
+) {
+    change.push_back(this);
+}
+
 BEGIN_HANDLERS(CharServoBone)
     HANDLE_SUPERCLASS(CharPollable)
     HANDLE_SUPERCLASS(Hmx::Object)

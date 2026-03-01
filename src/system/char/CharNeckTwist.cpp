@@ -1,5 +1,6 @@
 #include "char/CharNeckTwist.h"
 #include "math/Rot.h"
+#include "math/Trig.h"
 #include "obj/Object.h"
 
 CharNeckTwist::CharNeckTwist() : mTwist(this), mHead(this) {}
@@ -39,6 +40,21 @@ BEGIN_LOADS(CharNeckTwist)
     d >> mHead;
     d >> mTwist;
 END_LOADS
+
+void CharNeckTwist::Poll() {
+    if (!mHead || !mTwist)
+        return;
+    // Get the Z-axis rotation angle of the head (yaw/twist around neck axis)
+    float headAngle = GetZAngle(mHead->LocalXfm().m);
+    // Apply half of the head's yaw to the neck twist bone
+    float twist = headAngle * 0.5f;
+    // Build rotation matrix for twist around Z axis
+    Hmx::Matrix3 rotMat;
+    rotMat.x.Set(Cosine(twist), Sine(twist), 0);
+    rotMat.y.Set(-Sine(twist), Cosine(twist), 0);
+    rotMat.z.Set(0, 0, 1);
+    Multiply(mTwist->LocalXfm().m, rotMat, mTwist->DirtyLocalXfm().m);
+}
 
 void CharNeckTwist::PollDeps(
     std::list<Hmx::Object *> &changedBy, std::list<Hmx::Object *> &change

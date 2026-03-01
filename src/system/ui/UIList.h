@@ -97,6 +97,7 @@ public:
     bool IsScrolling() const;
     UIList *ChildList() { return mListDir->SubList(mListState.SelectedDisplay(), mWidgets); }
     UIList *ParentList() { return mParent; }
+    UIListState &GetListState() { return mListState; }
 
     NEW_OBJ(UIList)
     OBJ_MEM_OVERLOAD(0x21)

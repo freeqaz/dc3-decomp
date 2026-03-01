@@ -521,6 +521,72 @@ RndTransformable *CharEyes::GetTarget() {
 
 void CharEyes::ClearAllInterestObjects() { mInterests.clear(); }
 
+void CharEyes::ListPollChildren(std::list<RndPollable *> &plist) const {
+    for (ObjVector<EyeDesc>::const_iterator it = mEyes.begin(); it != mEyes.end(); ++it) {
+        plist.push_back((*it).mEye);
+    }
+}
+
+void CharEyes::PollDeps(
+    std::list<Hmx::Object *> &changedBy, std::list<Hmx::Object *> &change
+) {
+    for (ObjVector<CharInterestState>::iterator it = mInterests.begin();
+         it != mInterests.end();
+         ++it) {
+        if (it->mInterest && it->mInterest->Dir() == Dir()) {
+            changedBy.push_back(it->mInterest);
+        }
+    }
+    if (!mEyes.empty()) {
+        changedBy.push_back(GetHead());
+        change.push_back(GetTarget());
+    }
+    if (mHeadLookAt)
+        changedBy.push_back(mHeadLookAt);
+    if (mFaceServo)
+        changedBy.push_back(mFaceServo);
+}
+
+void CharEyes::DartUpdate() {
+    mDartTimer -= TheTaskMgr.DeltaSeconds();
+    if (mDartEnabled) {
+        if (mDartTimer < 0) {
+            mEyeClampCount--;
+            if (mEyeClampCount < 0) {
+                mDartEnabled = false;
+                mDartTimer = RandomFloat(
+                    mData.mMinSecsBetweenSequences,
+                    mData.mMaxSecsBetweenSequences
+                );
+            } else {
+                mDartTimer = RandomFloat(
+                    mData.mMinSecsBetweenDarts,
+                    mData.mMaxSecsBetweenDarts
+                );
+                Vector3 dartOffset = GenerateDartOffset();
+                mCurrentDartOffsetX = dartOffset.x;
+                mCurrentDartOffsetY = dartOffset.y;
+                mCurrentDartOffsetZ = dartOffset.z;
+            }
+        }
+    } else if (mDartTimer < 0 && EyesOnTarget(mData.mOnTargetAngleThresh)
+               && !mBlinkActive) {
+        mDartEnabled = true;
+        mEyeClampCount = RandomInt(
+            mData.mMinDartsPerSequence,
+            mData.mMaxDartsPerSequence
+        );
+        mDartTimer = RandomFloat(
+            mData.mMinSecsBetweenDarts,
+            mData.mMaxSecsBetweenDarts
+        );
+        Vector3 dartOffset = GenerateDartOffset();
+        mCurrentDartOffsetX = dartOffset.x;
+        mCurrentDartOffsetY = dartOffset.y;
+        mCurrentDartOffsetZ = dartOffset.z;
+    }
+}
+
 bool CharEyes::CharInterestState::IsInRefractoryPeriod() {
     if (!mInterest || mRefractoryTime < 0)
         return false;

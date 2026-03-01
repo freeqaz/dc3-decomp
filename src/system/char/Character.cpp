@@ -14,9 +14,11 @@
 #include "obj/Object.h"
 #include "os/Debug.h"
 #include "os/System.h"
+#include "os/Timer.h"
 #include "rndobj/Anim.h"
 #include "rndobj/Cam.h"
 #include "rndobj/Rnd.h"
+#include "rndobj/ShadowMap.h"
 #include "rndobj/Dir.h"
 #include "rndobj/Draw.h"
 #include "rndobj/Env.h"
@@ -662,6 +664,9 @@ DataNode Character::OnCopyBoundingSphere(DataArray *da) {
 
 void Character::MergeDraws(const Character *c) {
     MILO_ASSERT(c, 0x57D);
+#ifdef HX_NATIVE
+    if (!c) return;
+#endif
     int numLods = Max<int>(c->mLods.size(), mLods.size());
     mLods.resize(numLods);
     for (int i = 0; i < c->mLods.size(); i++) {
@@ -749,6 +754,93 @@ DataNode Character::OnGetCurrentInterests(DataArray *da) {
         ptr->Node(i + 1) = Symbol(eyes->GetInterest(i)->Name());
     }
     return ptr;
+}
+
+void Character::DrawShowing() {
+    START_AUTO_TIMER("char_draw");
+    float screenSize = ComputeScreenSize(RndCam::Current());
+    int lod;
+    if (mForceLod < 0) {
+        for (lod = 0; lod < (int)mLods.size() - 1; lod++) {
+            float hysteresis;
+            if (lod < mLastLod)
+                hysteresis = 0.09f;
+            else
+                hysteresis = -0.09f;
+            if (screenSize >= (hysteresis + 1.0f) * mLods[lod].mScreenSize)
+                break;
+        }
+    } else {
+        lod = Clamp<int>(0, mLods.size() - 1, mForceLod);
+    }
+    bool doSelfShadow = false;
+    if (mSelfShadow && TheRnd.GetDrawMode() == 0 && lod <= 1 && (mDrawMode & 1)) {
+        doSelfShadow = true;
+    }
+    if (doSelfShadow) {
+        int savedForceLod = mForceLod;
+        mForceLod = (LODType)lod;
+        RndShadowMap::PrepShadow(this, mEnv);
+        mForceLod = (LODType)savedForceLod;
+    }
+    DrawLod(lod);
+    if (doSelfShadow)
+        RndShadowMap::EndShadow();
+}
+
+void Character::FindInterestObjects(ObjectDir *dir) {
+    if (dir) {
+        Timer timer;
+        timer.Restart();
+        CharEyes *eyes = GetEyes();
+        if (eyes) {
+            eyes->ClearAllInterestObjects();
+            for (ObjDirItr<CharInterest> it(dir, true); it != nullptr; ++it) {
+                if (ValidateInterest(it, dir)) {
+                    eyes->AddInterestObject(it);
+                }
+            }
+            for (ObjDirItr<Character> it(dir, true); it != nullptr; ++it) {
+                if (!streq(it->Name(), Name())) {
+                    for (ObjDirItr<CharInterest> it2(it, true); it2 != nullptr; ++it2) {
+                        if (ValidateInterest(it2, it)) {
+                            eyes->AddInterestObject(it2);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+void Character::UnhookShadow() {
+    for (int i = 0; i < mShadowBones.size(); i++) {
+        ShadowBone *cur = mShadowBones[i];
+        cur->ReplaceRefs(cur->Parent());
+    }
+    DeleteAll(mShadowBones);
+}
+
+void Character::SyncShadow() {
+    UnhookShadow();
+    if (!mShadow.empty()) {
+        if (GetGfxMode() == kOldGfx) {
+            FOREACH (it, mShadow) {
+                RndDrawable *drawable = *it;
+                RndMesh *mesh = dynamic_cast<RndMesh *>(drawable);
+                if (mesh) {
+                    if (mesh->NumBones() != 0) {
+                        for (int i = 0; i < mesh->NumBones(); i++) {
+                            mesh->SetBone(i, AddShadowBone(mesh->BoneTransAt(i)), false);
+                        }
+                    } else {
+                        mesh->SetTransParent(AddShadowBone(mesh->TransParent()), false);
+                    }
+                }
+            }
+        }
+        RemoveFromDraws(mShadow);
+    }
 }
 
 void Character::DrawLod(int lod) {

@@ -1070,6 +1070,11 @@ void HamProfile::UpdateScore(
     }
 }
 
+bool HamProfile::IsDifficultyUnlockedForProfile(Symbol songSym, Symbol diffSym) {
+    // For native port: always return true (all difficulties unlocked)
+    return true;
+}
+
 char const *HamProfile::NextOutfitSample(Symbol s) {
     auto it = std::find(mCharPrefs.begin(), mCharPrefs.end(), s);
     if (it == mCharPrefs.end()) {

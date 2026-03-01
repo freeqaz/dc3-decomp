@@ -1185,3 +1185,32 @@ void ConvertBonesToTranses(ObjectDir *dir, bool b) {
 void SetBloomBlurWeights(bool, float, float) {}
 
 void SetBloomBlurWeightsStreak(bool, float, float, float, int, float) {}
+#include "rndobj/CamAnim.h"
+
+void RndScaleObject(Hmx::Object *obj, float scale, float fovScale) {
+    RndDrawable *draw = dynamic_cast<RndDrawable *>(obj);
+    if (draw) {
+        Sphere s = draw->GetSphere();
+        s.center *= scale;
+        s.radius *= scale;
+        draw->SetSphere(s);
+    }
+    RndTransformable *trans = dynamic_cast<RndTransformable *>(obj);
+    if (trans) {
+        Vector3 pos;
+        Scale(trans->LocalXfm().v, scale, pos);
+        trans->SetLocalPos(pos);
+    }
+    RndCam *cam = dynamic_cast<RndCam *>(obj);
+    if (cam) {
+        cam->SetFrustum(cam->NearPlane() * scale, cam->FarPlane() * scale, cam->YFov(), 1.0f);
+        return;
+    }
+    RndCamAnim *camanim = dynamic_cast<RndCamAnim *>(obj);
+    if (camanim) {
+        if (camanim->KeysOwner() == camanim) {
+            ScaleFrame(camanim->FovKeys(), fovScale);
+        }
+        return;
+    }
+}

@@ -1260,11 +1260,12 @@ void ObjectDir::PostLoad(BinStream &bs) {
                 || (mInlineProxyType == kInlineCached || mInlineProxyType == kInlineAlways))) {
             MILO_FAIL("You cannot override an inlined proxy!");
         }
-    } else if (IsProxy() && !mProxyFile.empty()) {
+    } else if (IsProxy() && (!mProxyFile.empty() || InlineProxy(bs))) {
         DeleteObjects();
         DeleteSubDirs();
+        FilePath proxyPath = mProxyFile.empty() ? FilePath("") : mProxyFile;
         DirLoader *dl = new DirLoader(
-            mProxyFile,
+            proxyPath,
             kLoadFront,
             nullptr,
             InlineProxy(bs) ? &bs : nullptr,

@@ -76,6 +76,10 @@ void HamTerminate() {
 
 void HamInit() {
     GestureInit();
+#ifdef HX_NATIVE
+    printf("DC3 Native: HamInit: INIT_HAM macro = %p\n", (void*)DataGetMacro("INIT_HAM"));
+    fflush(stdout);
+#endif
     if (DataGetMacro("INIT_HAM")) {
         REGISTER_OBJ_FACTORY(CharFeedback);
         CamShotCatVOInit();

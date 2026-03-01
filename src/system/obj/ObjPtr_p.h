@@ -505,28 +505,40 @@ void ObjPtrList<T1, T2>::sort(const S &cmp) {
 // On Xbox, these were explicit specializations in link_glue.cpp for each type.
 // On native, we provide generic versions so all ObjPtrList types work.
 
+// ObjPtrList uses a semi-circular doubly-linked list:
+//   - mNodes->prev always points to the TAIL node (O(1) pop_back)
+//   - Forward links (next) are NULL-terminated (last->next = nullptr)
+//   - Non-head nodes have regular prev links to their predecessor
+//   - Single node: prev = self (it IS the tail)
+
 template <class T1, class T2>
 void ObjPtrList<T1, T2>::Link(iterator it, Node *node) {
     node->mOwner = this;
     Node *pos = it.mNode;
-    if (pos) {
+    if (mNodes == nullptr) {
+        // First node: self-referencing prev (head->prev = tail = self)
+        node->next = nullptr;
+        node->prev = node;
+        mNodes = node;
+    } else if (pos == nullptr) {
+        // Insert at end (push_back): append after current tail
+        Node *tail = mNodes->prev;
+        tail->next = node;
+        node->prev = tail;
+        node->next = nullptr;
+        mNodes->prev = node; // update head's tail pointer
+    } else if (pos == mNodes) {
+        // Insert before head: new node becomes head
+        node->next = mNodes;
+        node->prev = mNodes->prev; // inherit tail pointer
+        mNodes->prev = node; // old head's prev = new predecessor
+        mNodes = node;
+    } else {
+        // Insert before a middle/tail node
         node->next = pos;
         node->prev = pos->prev;
-        if (pos->prev) pos->prev->next = node;
+        pos->prev->next = node;
         pos->prev = node;
-        if (mNodes == pos) mNodes = node;
-    } else {
-        if (mNodes) {
-            Node *tail = mNodes;
-            while (tail->next) tail = tail->next;
-            node->prev = tail;
-            node->next = nullptr;
-            tail->next = node;
-        } else {
-            node->prev = nullptr;
-            node->next = nullptr;
-            mNodes = node;
-        }
     }
     mSize++;
 }
@@ -535,9 +547,25 @@ template <class T1, class T2>
 typename ObjPtrList<T1, T2>::Node *ObjPtrList<T1, T2>::Unlink(Node *node) {
     Node *next = node->next;
     Node *prev = node->prev;
-    if (prev) prev->next = next;
-    if (next) next->prev = prev;
-    if (mNodes == node) mNodes = next;
+    if (mNodes == node) {
+        // Removing head
+        mNodes = next;
+        if (mNodes) {
+            // New head inherits the tail pointer
+            // (prev = old head's prev = tail, which is still valid)
+            mNodes->prev = prev;
+        }
+    } else {
+        // Removing non-head node
+        prev->next = next;
+        if (next) {
+            next->prev = prev;
+        }
+        // If removing the tail, update head's tail pointer
+        if (mNodes->prev == node) {
+            mNodes->prev = prev;
+        }
+    }
     mSize--;
     return next;
 }

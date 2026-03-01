@@ -1,4 +1,4 @@
-#include "lazer/meta_ham/HamSongMetadata.h"
+#include "meta_ham/HamSongMetadata.h"
 #include "HamSongMetadata.h"
 #include "hamobj/HamCharacter.h"
 #include "hamobj/HamGameData.h"
@@ -259,6 +259,8 @@ Symbol HamSongMetadata::DrumEvent(int index) {
 }
 
 char const *HamSongMetadata::Artist() const { return mArtist.c_str(); }
+const char *HamSongMetadata::Album() const { return mAlbumName.c_str(); }
+const char *HamSongMetadata::Title() const { return mName.c_str(); }
 
 int HamSongMetadata::LengthMs() const { return mLength; }
 

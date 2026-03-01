@@ -1,6 +1,6 @@
 #pragma once
 
-#include "lazer/meta_ham/HamSongMetadata.h"
+#include "meta_ham/HamSongMetadata.h"
 
 class SongRecord {
 public:

@@ -29,12 +29,12 @@ protected:
     RndOverlay *mFlowPeakOverlay; // 0x88
     RndOverlay *mFlowTaskOverlay; // 0x8c
     RndOverlay *mFlowEventOverlay; // 0x90
-    int mFrameCounterModulo;
-    int mFrameTimeSamples[60];
-    int unk188;
-    float mLastFrameTime;
+    int mFrameCounterModulo; // 0x94
+    float mFrameTimeSamples[60]; // 0x98
+    float mAvgFrameTime; // 0x188
+    float mLastFrameTime; // 0x18c
     float mElapsedTime; // 0x190
-    DataNode unk194;
+    DataNode mPeakFrameInfo; // 0x194
 };
 
 extern FlowManager *TheFlowMgr;

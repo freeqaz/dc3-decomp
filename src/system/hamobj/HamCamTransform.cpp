@@ -1,7 +1,13 @@
 #include "hamobj/HamCamTransform.h"
+#include "flow/Flow.h"
+#include "obj/Data.h"
+#include "obj/DataFile.h"
 #include "obj/Object.h"
+#include "rndobj/Anim.h"
 #include "rndobj/Poll.h"
+#include "rndobj/Trans.h"
 #include "utl/BinStream.h"
+#include "utl/Loader.h"
 #include "world/CameraShot.h"
 
 HamCamTransform::HamCamTransform() : mAreas(this) {}
@@ -9,6 +15,99 @@ HamCamTransform::HamCamTransform() : mAreas(this) {}
 HamCamTransform::~HamCamTransform() { ClearOldCrowds(); }
 
 void HamCamTransform::Enter() { Setup(false); }
+
+void HamCamTransform::ClearOldCrowds() {
+    for (ObjVector<TransformArea>::iterator it = mAreas.begin(); it != mAreas.end(); ++it) {
+        TransformArea &area = *it;
+        if (area.mArea) {
+            for (ObjPtrList<HamCamShot>::iterator sit = area.mCamshots.begin();
+                 sit != area.mCamshots.end();
+                 ++sit) {
+                if (*sit) {
+                    (*sit)->ClearCrowds();
+                }
+            }
+        }
+    }
+}
+
+INIT_REVS(3, 0)
+
+BEGIN_COPYS(HamCamTransform)
+    COPY_SUPERCLASS(Hmx::Object)
+    CREATE_COPY(HamCamTransform)
+    BEGIN_COPYING_MEMBERS
+        COPY_MEMBER(mAreas)
+    END_COPYING_MEMBERS
+END_COPYS
+
+BinStream &operator>>(BinStreamRev &d, ObjVector<TransformArea> &areas) {
+    int count;
+    d.stream >> count;
+    areas.resize(count);
+    for (int i = 0; i < count; i++) {
+        areas[i].Load(d);
+    }
+    return d.stream;
+}
+
+BEGIN_LOADS(HamCamTransform)
+    LOAD_REVS(bs)
+    ASSERT_REVS(3, 0)
+    LOAD_SUPERCLASS(Hmx::Object)
+    d >> mAreas;
+END_LOADS
+
+void HamCamTransform::Setup(bool update) {
+    ClearOldCrowds();
+    for (ObjVector<TransformArea>::iterator it = mAreas.begin(); it != mAreas.end(); ++it) {
+        TransformArea &area = *it;
+        if (area.mArea) {
+            for (ObjPtrList<HamCamShot>::iterator sit = area.mCamshots.begin();
+                 sit != area.mCamshots.end();
+                 ++sit) {
+                HamCamShot *shot = *sit;
+                if (shot) {
+                    shot->SetTransParent(area.mArea, false);
+                    for (ObjPtrList<RndAnimatable>::iterator ait = area.mAnims.begin();
+                         ait != area.mAnims.end();
+                         ++ait) {
+                        if (*ait) {
+                            shot->AddAnim(*ait);
+                        }
+                    }
+                    if (area.mFlow) {
+                        area.mFlow->Enter();
+                    }
+                    bool hasCrowd = false;
+                    for (ObjVector<TransformCrowd>::iterator cit = area.mCrowds.begin();
+                         cit != area.mCrowds.end();
+                         ++cit) {
+                        CamShotCrowd crowd(shot);
+                        crowd.mCrowd = cit->mCrowd;
+                        shot->AddCrowd(crowd);
+                        if (!hasCrowd && cit->mCrowd) {
+                            hasCrowd = true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if (update && TheLoadMgr.EditMode()) {
+        DataArray *script = DataReadString("cam_transform_update_script");
+        DataArrayPtr node(script);
+        DataArray *arr = node->Array(0);
+        DataNode result = arr->Execute(true);
+        if (result.Type() == kDataObject) {
+            RndAnimatable *anim = result.Obj<RndAnimatable>();
+            if (anim) {
+                anim->StartAnim();
+                anim->SetFrame(anim->EndFrame(), 1.0f);
+            }
+        }
+    }
+}
 
 BEGIN_HANDLERS(HamCamTransform)
     HANDLE_ACTION(update_camshots, Setup(true))
@@ -76,6 +175,11 @@ void TransformArea::Save(BinStream &bs) const {
     bs << mAnims;
     bs << mCrowds;
     bs << mFlow;
+}
+
+BinStream &operator>>(BinStreamRev &d, TransformArea &a) {
+    a.Load(d);
+    return d.stream;
 }
 
 void TransformArea::Load(BinStreamRev &d) {

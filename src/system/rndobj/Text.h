@@ -11,6 +11,11 @@
 #include "rndobj/Trans.h"
 #include "utl/MemMgr.h"
 #include "utl/Symbol.h"
+#include "utl/StlAlloc.h"
+
+#ifndef HX_NATIVE
+using stlpmtx_std::StlNodeAlloc;
+#endif
 
 class TextHolder {
 public:
@@ -108,6 +113,11 @@ public:
 
     class StyleState {
     public:
+        StyleState(RndText *text, float size) : mText(text), mSize(size), mStyleIdx(0) {}
+
+        RndText *mText;
+        float mSize;
+        int mStyleIdx;
     };
 
     class BlacklightPacket {
@@ -303,6 +313,16 @@ protected:
 
     void DoBasicMarkup();
     void BuildFontMaps(bool);
+    void FitTextScroll();
+    void SizeCheck();
+    void UpdateScrollOffsets();
+    static void DrawMesh(RndMesh *, float, int);
+#ifndef HX_NATIVE
+    int ConvertTextToWide(const char *, stlpmtx_std::vector<unsigned short, stlpmtx_std::StlNodeAlloc<unsigned short> > &);
+#else
+    int ConvertTextToWide(const char *, std::vector<unsigned short> &);
+#endif
+    int OnComputeCharWidths(const unsigned short *, float *, bool);
 
     static void QueueBlacklightPacket(RndMesh *, float, int);
     static FontMapBase *AcquireFontMap(RndFontBase *);

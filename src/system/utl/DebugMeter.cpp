@@ -1,6 +1,6 @@
 #include "DebugMeter.h"
 #include "math/Geo.h"
-#include <system/rndobj/Rnd.h>
+#include <rndobj/Rnd.h>
 
 void DebugMeter::Draw() { DrawBar(0.0f, 1.0f, color, 1.0f, 0.0f); }
 

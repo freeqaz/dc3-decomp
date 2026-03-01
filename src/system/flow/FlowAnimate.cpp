@@ -1,4 +1,5 @@
 #include "flow/FlowAnimate.h"
+#include "flow/FlowLabel.h"
 #include "flow/FlowManager.h"
 #include "flow/FlowNode.h"
 #include "obj/Object.h"
@@ -158,6 +159,174 @@ void FlowAnimate::Load(BinStream &bs) {
 #ifdef HX_NATIVE
     printf("  FlowAnimate::Load '%s': done tell=%d\n", Name(), bs.Tell());
 #endif
+}
+
+bool FlowAnimate::Activate() {
+    FLOW_LOG("Activate\n");
+    mStopRequested = false;
+    PushDrivenProperties();
+    RndAnimatable *anim = (RndAnimatable *)mAnim;
+    if (!anim) return false;
+    if (!mImmediateRelease) {
+        // Wait mode: queue the command to execute later
+        if (mRunningNodes.empty()) {
+            TheFlowMgr->QueueCommand(this, kQueue);
+            return true;
+        }
+    } else {
+        // ImmediateRelease: start and forget
+        if (mAnimTask) {
+            mAnimTask->mListener = NULL;
+        }
+        mAnimTask = nullptr;
+        if (!mEnable) {
+            Task *task = anim->Animate(mBlend, false, mDelay, nullptr, kEaseLinear, 2.0f, false);
+            mAnimTask = static_cast<AnimTask *>(task);
+        } else if (mPeriod == 0.0f) {
+            Task *task = anim->Animate(
+                mBlend, false, mDelay, mRate, mStart, mEnd,
+                0.0f, mScale, mType, nullptr, mEase, mEasePower, mWrap
+            );
+            mAnimTask = static_cast<AnimTask *>(task);
+        } else {
+            Task *task = anim->Animate(
+                mBlend, false, mDelay, mRate, mStart, mEnd,
+                mPeriod, 1.0f, mType, nullptr, mEase, mEasePower, mWrap
+            );
+            mAnimTask = static_cast<AnimTask *>(task);
+        }
+    }
+    return false;
+}
+
+void FlowAnimate::Execute(QueueState state) {
+    FLOW_LOG("Execute\n");
+    if (!IsRunning()) {
+        if (state == kQueue) {
+            // Start the animation
+            mStopDeferred = false;
+            mDeferredStopMode = 0;
+            RndAnimatable *anim = (RndAnimatable *)mAnim;
+            Task *task = nullptr;
+            if (anim) {
+                if (!mEnable) {
+                    task = anim->Animate(mBlend, false, mDelay, this, kEaseLinear, 2.0f, false);
+                } else if (mPeriod == 0.0f) {
+                    task = anim->Animate(
+                        mBlend, false, mDelay, mRate, mStart, mEnd,
+                        0.0f, mScale, mType, this, mEase, mEasePower, mWrap
+                    );
+                } else {
+                    task = anim->Animate(
+                        mBlend, false, mDelay, mRate, mStart, mEnd,
+                        mPeriod, 1.0f, mType, this, mEase, mEasePower, mWrap
+                    );
+                }
+                mAnimTask = static_cast<AnimTask *>(task);
+            }
+        } else {
+            // kIgnore when not running: notify parent
+            if (mFlowParent)
+                mFlowParent->ChildFinished(this);
+        }
+    } else {
+        // Already running (an animtask is active)
+        if (mAnimTask && state == kIgnore) {
+            mAnimTask->mListener = NULL;
+            AnimTask *task = mAnimTask;
+            mAnimTask = nullptr;
+            if (mStopMode != kReleaseAndContinue) {
+                delete task;
+            }
+            if (mFlowParent)
+                mFlowParent->ChildFinished(this);
+        }
+    }
+}
+
+void FlowAnimate::ChildFinished(FlowNode *node) {
+    FLOW_LOG("Child Finished\n");
+    mRunningNodes.remove(node);
+    if (mRunningNodes.empty() && !mAnimTask && !mImmediateRelease) {
+        if (mFlowParent)
+            mFlowParent->ChildFinished(this);
+    }
+}
+
+void FlowAnimate::OnAnimEvent(Symbol sym) {
+    FLOW_LOG("OnAnimEvent: %s\n", sym.Str());
+    static Symbol sStop("stop");
+    static Symbol sMarker("marker");
+    static Symbol sBetweenMarkers("between_markers");
+    static Symbol sStartMarker("start_marker");
+    static Symbol sLoopMarker("loop_marker");
+
+    // First, scan child nodes for FlowLabels matching this symbol and activate them
+    FOREACH (it, mChildNodes) {
+        FlowNode *child = it->Obj();
+        FlowLabel *label = dynamic_cast<FlowLabel *>(child);
+        if (label && label->Label() == sym) {
+            ActivateLabel(label);
+            break;
+        }
+    }
+
+    if (sym == sStop) {
+        // Animation finished: clear animtask and notify parent if nothing else running
+        if (mAnimTask) {
+            mAnimTask->mListener = NULL;
+        }
+        mAnimTask = nullptr;
+        if (mRunningNodes.empty() && !mImmediateRelease) {
+            FLOW_LOG("Releasing\n");
+            if (mFlowParent)
+                mFlowParent->ChildFinished(this);
+        }
+    } else if (sym == sBetweenMarkers) {
+        if ((mDeferredStopMode == kStopBetweenMarkers || mDeferredStopMode == kStopOnMarker) &&
+            mAnimTask) {
+            TheFlowMgr->QueueCommand(this, kIgnore);
+        }
+        mDeferredStopMode = 0;
+        mBetweenStopMarkers = true;
+    } else if (sym == sMarker) {
+        mDeferredStopMode = 0;
+    } else if (sym == sLoopMarker) {
+        if (mStopDeferred && mAnimTask) {
+            // Defer stop was requested; stop at this loop point
+            if (mAnimTask) {
+                mAnimTask->mListener = NULL;
+            }
+            mAnimTask = nullptr;
+            FLOW_LOG("Releasing\n");
+            if (mFlowParent)
+                mFlowParent->ChildFinished(this);
+            return;
+        }
+        mBetweenStopMarkers = false;
+    } else if (sym == sStartMarker) {
+        mBetweenStopMarkers = false;
+    }
+}
+
+bool FlowAnimate::Replace(ObjRef *ref, Hmx::Object *obj) {
+    // Check if the ObjRef is our mAnimTask
+    if (ref == &mAnimTask) {
+        // If mAnimTask is being cleared (new obj is null) and the current task's listener is us
+        if (mAnimTask) {
+            AnimTask *task = mAnimTask;
+            if (task->mListener == (Hmx::Object *)this) {
+                static Symbol sStop("stop");
+                OnAnimEvent(sStop);
+            }
+        }
+        if (mAnimTask) {
+            mAnimTask->mListener = NULL;
+        }
+        mAnimTask = nullptr;
+        return true;
+    }
+    return Hmx::Object::Replace(ref, obj);
 }
 
 void FlowAnimate::ResetAnim() {

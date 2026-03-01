@@ -291,6 +291,62 @@ float HamIKEffector::GetGroundHeight(RndTransformable *t) {
     return t->WorldXfm().v.z;
 }
 
+void HamIKEffector::Poll() {
+    if (!mEffector || !mSkeleton) return;
+    float weight = WeightOwner()->Weight();
+    if (weight <= 0) return;
+    EffectorType t = GetType();
+    if (t == kEffectorTypeHand) {
+        // Apply hand IK
+        Vector3 targetPos;
+        QuatXfm q;
+        if (!mConstraints.empty()) {
+            q.v.Zero();
+            q.q.Reset();
+            Transform xfm = mEffector->WorldXfm();
+            float totalWeight = ApplyConstraints(q, xfm, this);
+            if (totalWeight > 0.0001f) {
+                Normalize(q.q, q.q);
+                Scale(q.v, 1.0f / totalWeight, q.v);
+                Transform newXfm;
+                MakeRotMatrix(q.q, newXfm.m);
+                newXfm.v = q.v;
+                Interp(xfm, newXfm, Min(weight, 1.0f), newXfm);
+                mEffector->SetWorldXfm(newXfm);
+            }
+        }
+    }
+}
+
+void HamIKEffector::ComputeHandPullAndQuat(
+    QuatXfm &quatOut, Transform &xfmOut, const Transform &parentXfm, const Vector3 &targetPos
+) {
+    // Get local transform from parent to effector
+    RndTransformable *effectorParent = mEffector->TransParent();
+    if (!effectorParent) {
+        quatOut.v.Zero();
+        quatOut.q.Reset();
+        xfmOut = mEffector->LocalXfm();
+        return;
+    }
+    // Compute the direction from parent to target in world space
+    Vector3 dir;
+    Subtract(targetPos, parentXfm.v, dir);
+    float len = Length(dir);
+    if (len > 0.0001f) {
+        Normalize(dir, dir);
+    }
+    // Get current direction of the effector chain
+    Vector3 curDir = parentXfm.m.z;
+    // Build rotation from curDir to dir
+    Hmx::Quat rot;
+    rot.Reset();
+    MakeRotQuat(curDir, dir, rot);
+    quatOut.q = rot;
+    quatOut.v.Zero();
+    xfmOut = effectorParent->LocalXfm();
+}
+
 void HamIKEffector::ComputeElbowPullAndQuat(
     QuatXfm &q, const Transform &xfm, const Vector3 &v
 ) {

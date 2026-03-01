@@ -1,5 +1,5 @@
-#include "system/synth_xbox/PitchDetector.h"
-#include "system/utl/MemMgr.h"
+#include "PitchDetector.h"
+#include "utl/MemMgr.h"
 
 namespace DSP {
 

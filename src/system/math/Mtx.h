@@ -235,6 +235,14 @@ public:
     static const Transform &IDXfm() { return sID; }
 };
 
+inline void Interp(const Transform &a, const Transform &b, float t, Transform &dst) {
+    Interp(a.v, b.v, t, dst.v);
+    // Linear interpolation of rotation matrix rows (approximate but sufficient)
+    Interp(a.m.x, b.m.x, t, dst.m.x);
+    Interp(a.m.y, b.m.y, t, dst.m.y);
+    Interp(a.m.z, b.m.z, t, dst.m.z);
+}
+
 inline BinStream &operator<<(BinStream &bs, const Transform &tf) {
     bs << tf.m << tf.v;
     return bs;

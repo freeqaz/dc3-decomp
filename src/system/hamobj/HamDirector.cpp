@@ -2295,3 +2295,202 @@ void HamDirector::UnloadAll() {
     TheMoveMgr->Clear();
     UnloadMergers();
 }
+
+void HamDirector::PlayNextShot() {
+    if (mSuppressNextShot > 0) {
+        mPickNewShot = false;
+        if (!mNextShot) {
+            return;
+        }
+        mSuppressNextShot--;
+        return;
+    }
+    HamCamShot *nextShot = mNextShot;
+    mPickNewShot = false;
+    if (!nextShot) {
+        return;
+    }
+    mNextShot = nullptr;
+    float lastShotTime;
+    if (!nextShot || !strstr(nextShot->Name(), "dircut")) {
+        if (!mCurShot || strncmp(mCurShot->Name(), "Dir", 3) != 0) {
+            lastShotTime = -kHugeFloat;
+        } else {
+            lastShotTime = TheTaskMgr.Seconds(TaskMgr::kRealTime) + 1.0f;
+        }
+    } else {
+        float totalFrames = (float)nextShot->mMinTime + nextShot->mZeroTime;
+        nextShot->ConvertFrames(totalFrames);
+        lastShotTime = TheTaskMgr.Seconds(TaskMgr::kRealTime) + totalFrames;
+    }
+    mLastShotTime = lastShotTime;
+    mCurShot = nextShot;
+    WorldDir *world = dynamic_cast<WorldDir *>(mMerger ? mMerger->Dir() : nullptr);
+    if (world) {
+        world->GetCameraManager()->ForceCameraShot(mCurShot, false);
+    }
+}
+
+DataNode HamDirector::OnSelectCamera(DataArray *a) {
+    Symbol shotName = a->Sym(2);
+    SetShot(shotName);
+    return 0;
+}
+
+void HamDirector::OnPopulateMoves() {}
+
+void HamDirector::OnPopulateFromMoveMgr() {}
+
+void HamDirector::DrawIconMan(Symbol sym1, Symbol sym2, Symbol sym3, float f1, float f2, RndTex *tex) {
+    if (!mIconManChar) return;
+    CharClip *clip1 = mClipDir ? mClipDir->Find<CharClip>(sym1.Str(), false) : nullptr;
+    CharClip *clip2 = mClipDir ? mClipDir->Find<CharClip>(sym2.Str(), false) : nullptr;
+    PoseIconMan(clip1, f1, tex, false, clip2, f2, 0.0f);
+}
+
+void HamDirector::DrawIconMan(Difficulty diff, float f1, float f2, float f3, float f4, RndTex *tex) {}
+
+CharClip *HamDirector::GetClipStartAndEndBeats(
+    Symbol clipName, float &startBeat, float &endBeat, std::pair<float, float> *range
+) {
+    CharClip *clip = mClipDir ? mClipDir->Find<CharClip>(clipName.Str(), false) : nullptr;
+    if (!clip) return nullptr;
+    startBeat = clip->StartBeat();
+    endBeat = startBeat + clip->NumFrames() / 30.0f * SecondsToBeat(1.0f);
+    if (range) {
+        range->first = startBeat;
+        range->second = endBeat;
+    }
+    return clip;
+}
+
+void HamDirector::Poll() {
+    if (TheHamWardrobe) {
+        TheHamWardrobe->UpdateOverlay();
+    }
+    if (!mPollEnabled) return;
+    HamCharacter *player0 = TheHamWardrobe ? TheHamWardrobe->GetCharacter(0) : nullptr;
+    HamCharacter *player1 = TheHamWardrobe ? TheHamWardrobe->GetCharacter(1) : nullptr;
+    RndPropAnim *songAnim = SongAnim(0);
+    if (songAnim) {
+        if (player0 && player1) {
+            int p0anim = player0->SongAnimation();
+            int p1anim = player1->SongAnimation();
+            bool doSongAnim = SongAnimation();
+            if (doSongAnim) {
+                ClipPlayer player0Clip, player1Clip;
+                Key<Symbol> *practiceEnd = nullptr;
+                Key<Symbol> *practiceStart = nullptr;
+                if (p0anim != -1) {
+                    bool clipInited = player0Clip.Init(0);
+                    if (clipInited) {
+                        player0Clip.PlayAnims(player0, songAnim->GetFrame(), unk2e4, mBlendDebug);
+                    }
+                }
+                if (p1anim != -1) {
+                    bool hasPractice = GetPracticeFrames(practiceStart, practiceEnd);
+                    if (!hasPractice) {
+                        bool clipInited = player1Clip.Init(1);
+                        if (clipInited) {
+                            player1Clip.PlayAnims(player1, songAnim->GetFrame(), unk2e4, mBlendDebug);
+                        }
+                    }
+                }
+                HamPlayerData *p0data = TheGameData->Player(0);
+                HamPlayerData *p1data = TheGameData->Player(1);
+                ClipPlayer *backupClipPlayer = IsEasierDifficulty(p0data->GetDifficulty(), p1data->GetDifficulty()) ? &player0Clip : &player1Clip;
+                bool hasPractice2 = GetPracticeFrames(practiceStart, practiceEnd);
+                if (!hasPractice2) {
+                    const float sBackupDriftScale = 0.14f;
+                    const float sBackupDriftOffset = 0.5f;
+                    const float sBackupDriftFreq = 534.46f;
+                    const float sBackupDriftDt = 1.0f / 300.0f;
+                    const float sBackupDriftMax = 30.0f;
+                    const float sBackupDriftNeg = -1.0f;
+                    int backupIdx = 0;
+                    while (true) {
+                        HamCharacter *backup = TheHamWardrobe ? TheHamWardrobe->GetBackup(backupIdx) : nullptr;
+                        backupIdx++;
+                        if (!backup) break;
+                        float noise = RndWind::GetWhiteNoise(
+                            (float)backupIdx * sBackupDriftFreq + songAnim->GetFrame() * sBackupDriftDt
+                        );
+                        float drift = sBackupDriftScale * mBackupDrift * (noise - sBackupDriftOffset);
+                        if (0.0f < drift) {
+                            drift = drift * sBackupDriftNeg;
+                        }
+                        backupClipPlayer->PlayAnims(
+                            backup, songAnim->GetFrame() - drift * sBackupDriftMax, unk2e4 - drift * sBackupDriftMax, mBlendDebug
+                        );
+                        HamDriver *driver = backup->SongDriver();
+                        driver->OffsetSec(drift);
+                    }
+                }
+            }
+        }
+        unk2e4 = songAnim->GetFrame();
+        float currentSeconds = TheTaskMgr.Seconds(TaskMgr::kRealTime);
+        if (0.0f <= currentSeconds) {
+            float currentSec = TheTaskMgr.Seconds(TaskMgr::kRealTime);
+            float deltaSec = TheTaskMgr.DeltaSeconds();
+            if (currentSec - deltaSec < 0.0f) {
+                songAnim->StartAnim();
+            }
+        }
+        mPoseFatalities->Poll();
+        if (mVenue) {
+            mVenue->Poll();
+        }
+        if (mWorldPostProc) {
+            float blend = 1.0f;
+            const char *overlayName;
+            RndPostProc *overlayA = nullptr;
+            RndPostProc *overlayB = nullptr;
+            if (mCamPostProc) {
+                mWorldPostProc->Copy(mCamPostProc, Hmx::Object::kCopyDeep);
+                unk18c.CopyRef(mCamPostProc);
+                overlayA = mCamPostProc;
+                overlayName = "camera";
+            } else if (mForcePostProc && !(mForcePostProcBlend < 1.0f)) {
+                mWorldPostProc->Copy(mForcePostProc, Hmx::Object::kCopyDeep);
+                unk18c.CopyRef(mForcePostProc);
+                overlayA = mForcePostProc;
+                overlayName = "force";
+            } else if (mPostProcInterpA == mPostProcInterpB) {
+                mWorldPostProc->Copy(mPostProcInterpA, Hmx::Object::kCopyDeep);
+                unk18c.CopyRef(mPostProcInterpA);
+                overlayName = "song authoring - 2 equiv";
+            } else {
+                mWorldPostProc->Interp(mPostProcInterpA, mPostProcInterpB, mPostProcInterpBlend);
+                unk18c.CopyRef(mPostProcInterpB);
+                overlayName = "song authoring";
+                blend = mPostProcInterpBlend;
+            }
+            if (mForcePostProc && !mCamPostProc) {
+                float forceBlend = mForcePostProcBlend;
+                if (0.0f < forceBlend && forceBlend < blend) {
+                    mWorldPostProc->Interp(mWorldPostProc, mForcePostProc, forceBlend);
+                    overlayB = mForcePostProc;
+                    overlayName = "force";
+                    blend = forceBlend;
+                }
+                if ((0.0f < mForcePostProcBlendRate && forceBlend < blend) ||
+                    (mForcePostProcBlendRate < 0.0f && 0.0f < forceBlend)) {
+                    float newBlend = TheTaskMgr.DeltaSeconds() * mForcePostProcBlendRate + mForcePostProcBlend;
+                    mForcePostProcBlend = newBlend;
+                    newBlend = -newBlend >= 0.0f ? 0.0f : newBlend;
+                    blend = newBlend - blend >= 0.0f ? blend : newBlend;
+                    mForcePostProcBlend = blend;
+                }
+            }
+            UpdatePostProcOverlay(overlayName, overlayA, overlayB, blend);
+        }
+        if (mFreestyleEnabled && mVisualizer && !mVisualizer->Showing()) {
+            float deltaSeconds = TheTaskMgr.DeltaSeconds();
+            unk1d4 += deltaSeconds;
+            if (unk1d4 > 1.6f) {
+                StartStopVisualizer();
+            }
+        }
+    }
+}

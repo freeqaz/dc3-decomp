@@ -15,6 +15,8 @@ public:
     void Update(int, int);
     void Clear();
     void SetRequiredMs(int ms) { mRequiredMs = ms; }
+    bool GetHandsUp() const { return mHandsUp; }
+    int GetRaisedMs() const { return mRaisedMs; }
 
     NEW_OBJ(HandsUpGestureFilter)
 

@@ -1,6 +1,6 @@
-#include "lazer/meta_ham/AccomplishmentCategory.h"
+#include "meta_ham/AccomplishmentCategory.h"
 #include "AccomplishmentCategory.h"
-#include "lazer/meta_ham/Award.h"
+#include "meta_ham/Award.h"
 #include "obj/Data.h"
 #include "os/Debug.h"
 #include "utl/Symbol.h"

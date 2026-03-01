@@ -1,5 +1,8 @@
 #include "char/CharIKHand.h"
 #include "char/CharWeightable.h"
+#include "math/Color.h"
+#include "math/Rot.h"
+#include "math/Vec.h"
 #include "obj/Object.h"
 #include "rndobj/Rnd.h"
 #include "rndobj/Trans.h"
@@ -222,6 +225,344 @@ void CharIKHand::PollDeps(
                 changedBy.push_back(handParent);
             }
         }
+    }
+}
+
+void CharIKHand::Poll() {
+    float charWeight = Weight();
+    RndTransformable *hand = mHand;
+    if (!hand || mTargets.empty())
+        return;
+    Vector3 destPos(0.0f, 0.0f, 0.0f);
+    Hmx::Quat destQuat(0.0f, 0.0f, 0.0f, 0.0f);
+    if (mScalable || mHandChanged) {
+        MeasureLengths();
+        mHandChanged = false;
+    }
+    if (mTargets.size() == 1) {
+        RndTransformable *frontTarget = mTargets.front().mTarget;
+        if (frontTarget) {
+            destPos = frontTarget->WorldXfm().v;
+            if (mOrientation) {
+                Hmx::Matrix3 normMat;
+                Normalize(frontTarget->WorldXfm().m, normMat);
+                destQuat.Set(normMat);
+            }
+        }
+    } else {
+        float totalWeight = 0.0f;
+        float localWeights[16];
+        float *weightPtr = localWeights;
+        for (ObjVector<IKTarget>::iterator it = mTargets.begin(); it != mTargets.end();
+             ++it) {
+            RndTransformable *targetTrans = it->mTarget;
+            float extent = it->mExtent;
+            if (targetTrans) {
+                Vector3 targetVec(targetTrans->WorldXfm().v);
+                if (extent <= 0.0f) {
+                    *weightPtr = 144.0f / Max(0.001f, LengthSquared(targetVec));
+                } else if (extent < -targetVec.z) {
+                    *weightPtr = 0.001f;
+                } else {
+                    targetVec.z = 0.0f;
+                    *weightPtr = 144.0f / Max(0.001f, LengthSquared(targetVec));
+                }
+                totalWeight += *weightPtr++;
+            }
+        }
+        if (totalWeight < 1.0f) {
+            charWeight = charWeight - (charWeight * (1.0f - totalWeight));
+        }
+        weightPtr = localWeights;
+        for (ObjVector<IKTarget>::iterator it = mTargets.begin(); it != mTargets.end();
+             ++it) {
+            RndTransformable *targetTrans = it->mTarget;
+            if (targetTrans) {
+                float curWeight = *weightPtr;
+                const Transform &worldXfm = targetTrans->WorldXfm();
+                ScaleAdd(destPos, worldXfm.v, curWeight / totalWeight, destPos);
+                if (mOrientation) {
+                    Hmx::Matrix3 normMat;
+                    Normalize(worldXfm.m, normMat);
+                    Hmx::Quat q(normMat);
+                    ScaleAddEq(destQuat, q, curWeight / totalWeight);
+                }
+            }
+            weightPtr++;
+        }
+        if (mOrientation)
+            Normalize(destQuat, destQuat);
+    }
+    if (mFinger) {
+        Transform tf;
+        tf.v = destPos;
+        MakeRotMatrix(destQuat, tf.m);
+        Transform invFingerXfm;
+        Invert(mFinger->WorldXfm(), invFingerXfm);
+        Multiply(mHand->WorldXfm(), invFingerXfm, invFingerXfm);
+        Multiply(invFingerXfm, tf, tf);
+        destPos = tf.v;
+        destQuat.Set(tf.m);
+    }
+    Vector3 worldDst;
+    Interp(mHand->WorldXfm().v, destPos, charWeight, worldDst);
+    mWorldDstX = worldDst.x;
+    mWorldDstY = worldDst.y;
+    mWorldDstZ = worldDst.z;
+    RndTransformable *elbowParent = 0;
+    RndTransformable *shoulderParent = mHand->TransParent();
+    if (!mMoveElbow)
+        shoulderParent = 0;
+    if (charWeight != 0 || mAlwaysIKElbow) {
+        if (shoulderParent) {
+            elbowParent = shoulderParent->TransParent();
+            if (!elbowParent)
+                shoulderParent = 0;
+        }
+        IKElbow(shoulderParent, elbowParent);
+    }
+    if (charWeight != 0 && (!shoulderParent || mOrientation || mStretch)) {
+        Transform handXfm(mHand->WorldXfm());
+        if (!shoulderParent || mStretch) {
+            handXfm.v.x = mWorldDstX;
+            handXfm.v.y = mWorldDstY;
+            handXfm.v.z = mWorldDstZ;
+        }
+        if (mOrientation) {
+            if (charWeight < 1.0f) {
+                Hmx::Quat curQuat(mHand->WorldXfm().m);
+                Interp(curQuat, destQuat, charWeight, destQuat);
+            }
+            MakeRotMatrix(destQuat, handXfm.m);
+        }
+        mHand->SetWorldXfm(handXfm);
+    }
+
+    if (mConstraintWrist && charWeight > 0.0f && shoulderParent) {
+        Vector3 fingerSavedPos(mFinger->WorldXfm().v);
+        Hmx::Matrix3 elbowMat(shoulderParent->WorldXfm().m);
+        Hmx::Matrix3 handMat(mHand->WorldXfm().m);
+        Vector3 handX(handMat.x);
+        Vector3 handY(handMat.y);
+        Vector3 handZ(handMat.z);
+        Vector3 wristDst(mWorldDstX, mWorldDstY, mWorldDstZ);
+        float acosDot = std::acos(Dot(elbowMat.x, handZ)) - 1.570796370506287f;
+        float maxRads = mWristRadians;
+        if (Abs(acosDot) > maxRads) {
+            if (acosDot > 0.0f)
+                acosDot -= maxRads;
+            else
+                acosDot += maxRads;
+            Hmx::Quat wristQuat;
+            Transform wristXfm;
+            Hmx::Matrix3 wristMat;
+            wristQuat.Set(handY, acosDot);
+            MakeRotMatrix(wristQuat, wristMat);
+            Multiply(handX, wristMat, handX);
+            Cross(handX, handY, handZ);
+            wristXfm.m.Set(handX, handY, handZ);
+            wristXfm.v = mHand->WorldXfm().v;
+            mHand->SetWorldXfm(wristXfm);
+            Vector3 newFingerPos(mFinger->WorldXfm().v);
+            Subtract(newFingerPos, fingerSavedPos, newFingerPos);
+            Subtract(wristXfm.v, newFingerPos, wristXfm.v);
+            mHand->SetWorldXfm(wristXfm);
+            mWorldDstX = wristXfm.v.x;
+            mWorldDstY = wristXfm.v.y;
+            mWorldDstZ = wristXfm.v.z;
+            IKElbow(shoulderParent, elbowParent);
+            mHand->SetWorldXfm(wristXfm);
+        }
+    }
+}
+
+void CharIKHand::IKElbow(RndTransformable *elbow, RndTransformable *shoulder) {
+    if (!elbow || !shoulder)
+        return;
+    Vector3 shoulderAdj;
+    Vector3 wristDst(mWorldDstX, mWorldDstY, mWorldDstZ);
+    PullShoulder(shoulderAdj, shoulder->WorldXfm(), wristDst, mAAPlusBB);
+    Transform shoulderXfm(shoulder->WorldXfm());
+    shoulderXfm.v += shoulderAdj;
+    shoulder->SetWorldXfm(shoulderXfm);
+    Vector3 shoulderToWrist;
+    Subtract(shoulder->WorldXfm().v, wristDst, shoulderToWrist);
+    float cosAngle = mInv2ab * (LengthSquared(shoulderToWrist) - mAABB);
+    ClampEq(cosAngle, -1.0f, 1.0f);
+    float sinAngle = -std::sqrt(-(cosAngle * cosAngle - 1.0f));
+    elbow->DirtyLocalXfm().m.Set(cosAngle, sinAngle, 0, -sinAngle, cosAngle, 0, 0, 0, 1);
+    Vector3 handPos, targetPos;
+    Multiply(mHand->WorldXfm().v, shoulder->WorldXfm(), handPos);
+    Multiply(wristDst, shoulder->WorldXfm(), targetPos);
+    if (mElbowSwing > 0) {
+        Vector2 handYZ(handPos.y, handPos.z);
+        Vector2 targetYZ(targetPos.y, targetPos.z);
+        float handYZSq = handYZ.x * handYZ.x + handYZ.y * handYZ.y;
+        float targetYZSq = targetYZ.x * targetYZ.x + targetYZ.y * targetYZ.y;
+        float maxTargetYZ = Max<float>(targetYZSq, 16.0f);
+        float maxHandYZ = Max<float>(handYZSq, 16.0f);
+        float crossDenom = std::sqrt(maxHandYZ * maxTargetYZ);
+        float crossVal = Cross(targetYZ, handYZ);
+        float swingAngle = Clamp(-mElbowSwing, mElbowSwing, crossVal / crossDenom);
+        Transform &dirtyElbow = elbow->DirtyLocalXfm();
+        RotateAboutX(dirtyElbow.m, -swingAngle, dirtyElbow.m);
+        Multiply(mHand->WorldXfm().v, shoulder->WorldXfm(), handPos);
+    }
+    Hmx::Quat rotQuat;
+    MakeRotQuat(handPos, targetPos, rotQuat);
+    Hmx::Matrix3 rotMat;
+    MakeRotMatrix(rotQuat, rotMat);
+    Multiply(rotMat, shoulder->LocalXfm().m, shoulder->DirtyLocalXfm().m);
+    if (mElbowCollide) {
+        PullShoulder(shoulderAdj, shoulder->WorldXfm(), wristDst, mAAPlusBB);
+        Transform shoulderXfm2(shoulder->WorldXfm());
+        shoulderXfm2.v += shoulderAdj;
+        shoulder->SetWorldXfm(shoulderXfm2);
+        if (mElbowCollide->GetShape() != CharCollide::kCollideSphere)
+            MILO_WARN("%s: elbow collision object not sphere.\n", Name());
+        else {
+            Vector3 sphereCenter(mElbowCollide->WorldXfm().v);
+            float sphereRadius = mElbowCollide->GetCurRadius();
+            if (Distance(sphereCenter, elbow->WorldXfm().v) < sphereRadius) {
+                Vector3 shoulderPos(shoulder->WorldXfm().v);
+                shoulderPos -= wristDst;
+                Vector3 unitAxis;
+                Normalize(shoulderPos, unitAxis);
+                Vector3 elbowToTarget;
+                Subtract(elbow->WorldXfm().v, wristDst, elbowToTarget);
+                Vector3 axisProj;
+                Scale(unitAxis, Dot(elbowToTarget, unitAxis), axisProj);
+                Add(axisProj, wristDst, axisProj);
+                Vector3 elbowDir(shoulder->WorldXfm().v);
+                elbowDir -= axisProj;
+                float elbowLen = Length(elbowDir);
+                Vector3 axisDir(shoulder->WorldXfm().v);
+                axisDir -= axisProj;
+                Normalize(axisDir, axisDir);
+                Vector3 midPt;
+                Add(axisProj, axisDir, midPt);
+                Vector3 sphereToMid;
+                Subtract(axisProj, sphereCenter, sphereToMid);
+                Scale(axisDir, Dot(axisDir, sphereToMid), sphereToMid);
+                Add(sphereCenter, sphereToMid, sphereToMid);
+                float sDistToAxis = Distance(sphereToMid, sphereCenter);
+                MILO_ASSERT(sDistToAxis <= sphereRadius, 0x1A1);
+                float sPerpDist = std::sqrt(sphereRadius * sphereRadius - sDistToAxis * sDistToAxis);
+                sphereCenter.Set(sphereToMid.x, sphereToMid.y, sphereToMid.z);
+                float sphereToAxisDist = Distance(sphereCenter, axisProj);
+                float d = (sphereToAxisDist * sphereToAxisDist + -(sDistToAxis * sDistToAxis - sPerpDist * sPerpDist))
+                    / (sphereToAxisDist * 2.0f);
+                float sqrtTerm = std::sqrt(-(d * d - sPerpDist * sPerpDist));
+                float tiltAngle = std::asin(sqrtTerm / elbowLen);
+                if (IsNaN(tiltAngle))
+                    return;
+                Vector3 tiltDir(sphereCenter);
+                tiltDir -= axisProj;
+                Normalize(tiltDir, tiltDir);
+                Scale(tiltDir, elbowLen, tiltDir);
+                double halfAngle = tiltAngle / 2.0;
+                float sinHalf = sin(halfAngle);
+                float cosHalf = cos(halfAngle);
+                Hmx::Quat quatDir(tiltDir.x, tiltDir.y, tiltDir.z, 0.0f);
+                Hmx::Quat quatRot(axisDir.x * sinHalf, axisDir.y * sinHalf, axisDir.z * sinHalf, cosHalf);
+                Hmx::Quat quatResult;
+                Multiply(quatDir, quatRot, quatResult);
+                Multiply(quatResult, quatRot, quatResult);
+                Vector3 v1(quatResult.x, quatResult.y, quatResult.z);
+                Add(v1, axisProj, v1);
+                Multiply(quatRot, quatDir, quatResult);
+                Multiply(quatRot, quatResult, quatResult);
+                Vector3 v2(quatResult.x, quatResult.y, quatResult.z);
+                Add(v2, axisProj, v2);
+                Vector3 elbowLocal, targetLocal;
+                Multiply(elbow->WorldXfm().v, shoulder->WorldXfm(), elbowLocal);
+                if (mClockwise)
+                    Multiply(v2, shoulder->WorldXfm(), targetLocal);
+                else
+                    Multiply(v1, shoulder->WorldXfm(), targetLocal);
+                Hmx::Quat finalQuat;
+                MakeRotQuat(elbowLocal, targetLocal, finalQuat);
+                Hmx::Matrix3 finalMat;
+                MakeRotMatrix(finalQuat, finalMat);
+                Multiply(finalMat, shoulder->LocalXfm().m, shoulder->DirtyLocalXfm().m);
+                Multiply(mHand->WorldXfm().v, elbow->WorldXfm(), elbowLocal);
+                Multiply(wristDst, elbow->WorldXfm(), targetLocal);
+                MakeRotQuat(elbowLocal, targetLocal, finalQuat);
+                MakeRotMatrix(finalQuat, finalMat);
+                Multiply(finalMat, elbow->LocalXfm().m, elbow->DirtyLocalXfm().m);
+            }
+        }
+    }
+    PullShoulder(shoulderAdj, shoulder->WorldXfm(), wristDst, mAAPlusBB);
+    shoulderXfm = shoulder->WorldXfm();
+    shoulderXfm.v += shoulderAdj;
+    shoulder->SetWorldXfm(shoulderXfm);
+}
+
+void CharIKHand::Highlight() {
+    float charWeight = Weight();
+    float leftover = 0;
+    float localWeights[16];
+    if (charWeight == 0 || !mHand || mTargets.empty())
+        return;
+    else {
+        if (mTargets.size() != 1) {
+            float *fp = &localWeights[0];
+            for (ObjVector<IKTarget>::iterator it = mTargets.begin();
+                 it != mTargets.end();
+                 ++it, fp++) {
+                RndTransformable *curTarget = it->mTarget;
+                if (curTarget) {
+                    float w = 144.0f / LengthSquared(curTarget->LocalXfm().v);
+                    *fp = w;
+                    leftover += w;
+                }
+            }
+            float unusedWeight = 0;
+            if (leftover < 1.0f) {
+                unusedWeight = charWeight * (1.0f - leftover);
+                charWeight -= unusedWeight;
+            }
+            TheRnd.DrawString(
+                MakeString("weight %g", charWeight),
+                Vector2(100.0f, 100.0f),
+                Hmx::Color(1, 1, 1),
+                true
+            );
+            TheRnd.DrawString(
+                MakeString("leftover %g", unusedWeight),
+                Vector2(100.0f, 114.0f),
+                Hmx::Color(1, 1, 1),
+                true
+            );
+            fp = &localWeights[0];
+            int idx = 0;
+            for (ObjVector<IKTarget>::iterator it = mTargets.begin();
+                 it != mTargets.end();
+                 ++it, fp++, idx++) {
+                float w = *fp;
+                float normalized = w / leftover;
+                if (it->mTarget) {
+                    const Transform &curWorld = it->mTarget->WorldXfm();
+                    TheRnd.DrawString(
+                        MakeString("%s %g", it->mTarget->Name(), charWeight * normalized),
+                        Vector2(100.0f, (idx + 2) * 14.0f + 100.0f),
+                        Hmx::Color(1, 1, 1),
+                        true
+                    );
+                    UtilDrawAxes(curWorld, 1.0f, Hmx::Color(1, 1, 1));
+                    UtilDrawSphere(curWorld.v, normalized, Hmx::Color(1, 0, 0), nullptr);
+                    TheRnd.DrawLine(
+                        curWorld.v,
+                        it->mTarget->TransParent()->WorldXfm().v,
+                        Hmx::Color(1, 0, 0),
+                        false
+                    );
+                }
+            }
+        }
+        UtilDrawAxes(mHand->WorldXfm(), 1.0f, Hmx::Color(1, 1, 1));
+        UtilDrawSphere(mHand->WorldXfm().v, 1.0f, Hmx::Color(0, 1, 0), nullptr);
     }
 }
 

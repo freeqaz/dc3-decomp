@@ -17,7 +17,11 @@ public:
     OBJ_MEM_OVERLOAD(0xF);
     NEW_OBJ(FxSendEQ)
 
+#ifdef HX_NATIVE
+public:
+#else
 protected:
+#endif
     FxSendEQ();
 
     /** "High frequency cutoff, in Hz". Ranges from 0 to 24000. */

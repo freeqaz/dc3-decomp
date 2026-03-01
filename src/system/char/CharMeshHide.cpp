@@ -76,6 +76,10 @@ BEGIN_LOADS(CharMeshHide)
     d >> mFlags >> mHides;
 END_LOADS
 
+BEGIN_HANDLERS(CharMeshHide)
+    HANDLE_SUPERCLASS(Hmx::Object)
+END_HANDLERS
+
 void CharMeshHide::Init() { REGISTER_OBJ_FACTORY(CharMeshHide) }
 
 #pragma endregion CharMeshHide

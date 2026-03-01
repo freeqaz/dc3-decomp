@@ -308,34 +308,34 @@ void MemTracker::Report(int threshold, TextStream &ts) {
     UpdateStats();
 
     mMemTable[mCurStatTable].SortBySize();
-    ts << MakeString("\n  %30s %2s %5s %10s %10s\n", "SzActual", "SzRequest", "Hp", "TYPE");
-
     numMemBlocks = mMemTable[mCurStatTable].GetNumStats();
+    ts << MakeString("\n  %-30s %2s %5s %10s %10s\n", "TYPE", "Hp", "Num", "SzRequest", "SzActual");
+
     for (int i = 0; i < numMemBlocks; i++) {
         BlockStat &stat = mMemTable[mCurStatTable].GetBlockStat(i);
-        if (stat.mNumAllocs >= threshold) {
+        if (stat.mSizeAct >= threshold) {
             ts << MakeString(
-                "  %30s %2d %5d %10d %10d\n",
-                stat.mName, stat.mNumAllocs, stat.mSizeReq, stat.mSizeAct
+                "  %-30s %2d %5d %10d %10d\n",
+                stat.mName, stat.mHeap, stat.mNumAllocs, stat.mSizeReq, stat.mSizeAct
             );
         }
     }
 
     mPoolTable[mCurStatTable].SortBySize();
-    ts << MakeString("\n  %30s %5s %10s %10s\n", "POOL TYPE", "SzRequest", "SzActual", "Num");
-
     numPoolBlocks = mPoolTable[mCurStatTable].GetNumStats();
+    ts << MakeString("\n  %-30s %5s %10s %10s\n", "POOL TYPE", "Num", "SzRequest", "SzActual");
+
     for (int i = 0; i < numPoolBlocks; i++) {
         BlockStat &stat = mPoolTable[mCurStatTable].GetBlockStat(i);
-        ts << MakeString("  %30s %5d %10d %10d\n", stat.mName, stat.mSizeReq, stat.mSizeAct, stat.mNumAllocs);
+        if (stat.mSizeAct >= threshold) {
+            ts << MakeString("  %-30s %5d %10d %10d\n", stat.mName, stat.mNumAllocs, stat.mSizeReq, stat.mSizeAct);
+        }
     }
 
     ts << "Diff from last report:\n";
-    ts << "MALLOC DIFF TYPES\n";
-    DiffTblReport("malloc", mMemTable[mCurStatTable], mMemTable[1 - mCurStatTable], ts);
+    DiffTblReport("MALLOC DIFF TYPES", mMemTable[mCurStatTable], mMemTable[1 - mCurStatTable], ts);
 
-    ts << "POOL DIFF TYPES\n";
-    DiffTblReport("pool", mPoolTable[mCurStatTable], mPoolTable[1 - mCurStatTable], ts);
+    DiffTblReport("POOL DIFF TYPES", mPoolTable[mCurStatTable], mPoolTable[1 - mCurStatTable], ts);
 
     mCurStatTable = 1 - mCurStatTable;
 }

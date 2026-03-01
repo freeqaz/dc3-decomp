@@ -792,7 +792,13 @@ int RndMesh::EstimatedSizeKb() const {
 }
 
 void RndMesh::ClearCompressedVerts() {
+#ifdef HX_NATIVE
+    // mCompressedVerts allocated with new[], RELEASE uses scalar delete
+    delete[] mCompressedVerts;
+    mCompressedVerts = nullptr;
+#else
     RELEASE(mCompressedVerts);
+#endif
     mNumCompressedVerts = 0;
 }
 

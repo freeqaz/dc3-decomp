@@ -48,7 +48,11 @@ public:
     void TestWithMic();
     void SetStage(int);
 
+#ifdef HX_NATIVE
+public:
+#else
 protected:
+#endif
     FxSend();
 
     virtual void UpdateMix() {}

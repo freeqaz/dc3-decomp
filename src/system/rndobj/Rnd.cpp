@@ -996,6 +996,120 @@ void Rnd::PreClearDrawAddOrRemove(RndDrawable *d, bool b2, bool b3) {
     }
 }
 
+void Rnd::UpdateRate() {
+    mRateTotal += mDrawTimer.GetLastMs();
+    static Timer *cpuTimer = AutoTimer::GetTimer("cpu");
+    static Timer *gsTimer = AutoTimer::GetTimer("gs");
+    if (gsTimer && cpuTimer) {
+        if (gsTimer->GetLastMs() > 16.7f) {
+            if (gsTimer->GetLastMs() <= cpuTimer->GetLastMs() + 0.1f) {
+                mRateGate = "cpu";
+            } else {
+                mRateGate = "gs";
+            }
+        }
+    }
+    mRateCount--;
+    if (mRateCount == 0) {
+        int rate = mRateTotal ? (int)(5000.0f / mRateTotal + 0.5f) : 0;
+        *mRateOverlay << "rate:" << rate << mRateGate;
+        *mRateOverlay << "\n";
+        mRateCount = 5;
+        mRateTotal = 0.0f;
+        mRateGate = "";
+    }
+}
+
+float Rnd::DrawTimers(float f) {
+    // TODO: implement full timer drawing (complex function involving AutoTimer stats)
+    return f;
+}
+
+void Rnd::DrawPreClear() {
+    if (unk150) {
+        unk150();
+    }
+    // TODO: handle texture compression queue
+    for (ObjPtrList<RndDrawable>::iterator it = mPreClearDraws.begin();
+         it != mPreClearDraws.end();
+         ++it) {
+        (*it)->DrawPreClear();
+    }
+}
+
+DataNode Rnd::OnToggleHeap(const DataArray *) {
+    int numHeaps = MemNumHeaps();
+    RndOverlay *overlay = mHeapOverlay;
+    if (overlay->Showing()) {
+        lbl_82F14008++;
+        if (lbl_82F14008 >= numHeaps + 1) {
+            overlay->SetShowing(false);
+            lbl_82F14008 = -1;
+        }
+    } else {
+        overlay->SetShowing(true);
+    }
+    overlay->TimerRef().Restart();
+    return 0;
+}
+
+RndTex *Rnd::CreateDefaultTexture(DefaultTextureType textureType) {
+    MILO_ASSERT(textureType < kDefaultTex_Max, 0x5F5);
+    static const int sDefSize[kDefaultTex_Max][2] = {
+        { 8, 8 }, { 8, 8 }, { 8, 8 }, { 8, 8 },
+        { 8, 8 }, { 8, 8 }, { 8, 8 }, { 8, 8 }
+    };
+    static const unsigned char sDefColor[kDefaultTex_Max][4] = {
+        { 0,    0,    0,    0xFF },  // kDefaultTex_Black
+        { 0xFF, 0xFF, 0xFF, 0xFF },  // kDefaultTex_White
+        { 0xFF, 0xFF, 0xFF, 0 },     // kDefaultTex_WhiteTransparent
+        { 0x7f, 0x7f, 0xFF, 0xFF },  // kDefaultTex_FlatNormal
+        { 0xFF, 0xFF, 0xFF, 0xFF },  // kDefaultTex_Gradient
+        { 0xFF, 0xFF, 0xFF, 0xFF },  // kDefaultTex_Hue
+        { 0xFF, 0xFF, 0xFF, 0xFF },  // kDefaultTex_Error (checkerboard)
+        { 0,    0,    0,    0xFF }   // kUnk7 (null/black)
+    };
+    int width = sDefSize[textureType][0];
+    int height = sDefSize[textureType][1];
+    unsigned char red = sDefColor[textureType][0];
+    unsigned char green = sDefColor[textureType][1];
+    unsigned char blue = sDefColor[textureType][2];
+    unsigned char alpha = sDefColor[textureType][3];
+    RndBitmap bmap;
+    bmap.Create(width, height, 0, 32, 0, nullptr, nullptr, nullptr);
+    for (int i = 0; i < height; i++) {
+        for (int j = 0; j < width; j++) {
+            bmap.SetPixelColor(j, i, red, green, blue, alpha);
+        }
+    }
+    switch (textureType) {
+    case kDefaultTex_Gradient:
+        for (int i = 0; i < width; i++) {
+            unsigned char val = 0xFF - (i * 255) / (width - 1);
+            for (int j = 0; j < height; j++) {
+                bmap.SetPixelColor(i, j, val, val, val, alpha);
+            }
+        }
+        break;
+    case kDefaultTex_Error:
+        for (int i = 0; i < height; i++) {
+            for (int j = 0; j < width; j++) {
+                if (((i ^ j) >> 2) & 1) {
+                    bmap.SetPixelColor(j, i, 0xFF, 0x80, 0x40, alpha);
+                } else {
+                    bmap.SetPixelColor(j, i, 0, 0, 0, alpha);
+                }
+            }
+        }
+        break;
+    default:
+        break;
+    }
+    RndTex *tex = Hmx::Object::New<RndTex>();
+    tex->SetBitmap(bmap, nullptr, true);
+    return tex;
+}
+
 void Rnd::UpdateHeap() {
     mHeapOverlay->SetLines((lbl_82F14008 == -1) ? MemNumHeaps() + 1 : 1);
 

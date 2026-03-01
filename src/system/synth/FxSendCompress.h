@@ -17,7 +17,11 @@ public:
     OBJ_MEM_OVERLOAD(0xF);
     NEW_OBJ(FxSendCompress)
 
+#ifdef HX_NATIVE
+public:
+#else
 protected:
+#endif
     FxSendCompress();
 
     /** "threshold (in dB) at which compression is applied". Ranges from -96 to 0 */

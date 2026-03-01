@@ -1,9 +1,14 @@
 #include "char/CharDriver.h"
 #include "char/Char.h"
+#include "char/CharBoneDir.h"
 #include "char/CharClip.h"
+#include "char/CharClipDisplay.h"
 #include "char/CharWeightable.h"
 #include "macros.h"
+#include "math/Utl.h"
+#include "obj/Msg.h"
 #include "obj/Object.h"
+#include "obj/Task.h"
 #include "utl/FilePath.h"
 #include "utl/Symbol.h"
 #include "obj/Utl.h"
@@ -360,6 +365,213 @@ BEGIN_LOADS(CharDriver)
     if (d.rev > 0xD)
         d >> mDefaultPlayStarved;
 END_LOADS
+
+static CharClip *MyFindClip(const DataNode &n, ObjectDir *dir) {
+    const DataNode &node = n.Evaluate();
+    Hmx::Object *obj;
+    if (node.Type() == kDataObject) {
+        obj = node.UncheckedObj();
+    } else {
+        MILO_ASSERT(node.Type() == kDataSymbol || node.Type() == kDataString, 0x12A);
+        obj = dir->FindObject(node.LiteralStr(), false, true);
+    }
+    if (!obj)
+        return nullptr;
+    else {
+        CharClip *clip = dynamic_cast<CharClip *>(obj);
+        if (clip)
+            return clip;
+        else {
+            CharClipGroup *group = dynamic_cast<CharClipGroup *>(obj);
+            if (!group) {
+                MILO_NOTIFY_ONCE(
+                    "%s: MyFindClip %s bad object type, not CharClip or CharClipGroup",
+                    PathName(dir),
+                    PathName(obj)
+                );
+                clip = nullptr;
+            } else
+                clip = group->GetClip(0);
+        }
+        return clip;
+    }
+}
+
+CharClip *CharDriver::FindClip(const DataNode &node, bool warn) {
+    if (!mClips) {
+        MILO_FAIL("%s: trying to FindClip with no mClips", PathName(this));
+    }
+    CharClip *clip = MyFindClip(node, mClips);
+    if (!clip && warn) {
+        String str;
+        str << node;
+        MILO_NOTIFY_ONCE("%s: missing \"%s\" in %s", PathName(this), str, mClips->Name());
+    }
+    return clip;
+}
+
+float CharDriver::Display(float f) {
+    CharClipDisplay::Init(Dir());
+    std::vector<CharClipDisplay> displays;
+    for (CharClipDriver *it = mFirst; it != nullptr; it = it->Next()) {
+        displays.push_back(CharClipDisplay());
+        displays.back().unk1c = it->mBeat;
+        displays.back().SetClip(it->mClip, false);
+        displays.back().unk20 = it->mBlendFrac;
+    }
+    return f;
+}
+
+void CharDriver::PollDeps(
+    std::list<Hmx::Object *> &changedBy, std::list<Hmx::Object *> &change
+) {
+    change.push_back(mBones);
+}
+
+static bool CharDriverStarved(CharClipDriver *first) {
+    bool ret;
+    if (first) {
+        ret = false;
+        if (!first->Next() && (first->mPlayFlags & 0xF0) != 0x10)
+            ret = true;
+    } else {
+        ret = true;
+    }
+    return ret;
+}
+
+void CharDriver::Poll() {
+    float beat = mBeatScale * TheTaskMgr.Beat();
+    float deltaBeat = mBeatScale * TheTaskMgr.DeltaBeat();
+    if (mRealign && beat > 0) {
+        beat = mBeatScale * ((float)(TheTaskMgr.CurrentBeat()) + (float)(TheTaskMgr.CurrentTick()) / 480.0f);
+        if (mOldBeat == kHugeFloat)
+            mOldBeat = beat;
+        if (std::floor(mOldBeat) != std::floor(beat)) {
+            CharClipDriver *playing = FirstPlaying();
+            if (playing) {
+                int firstFlags = (playing->mPlayFlags >> 0xC) & 0xF;
+                int flags = firstFlags;
+                for (CharClipDriver *it = playing->Next(); it != nullptr; it = it->Next()) {
+                    int iFlags = (it->mPlayFlags >> 0xC) & 0xF;
+                    if (iFlags > flags)
+                        flags = iFlags;
+                }
+                flags--;
+                if (flags > 0) {
+                    int i12 = (int)std::floor(beat) ^ (int)std::floor(mOldBeat) + 1;
+                    CharClipDriver *d = playing;
+                    if (i12 & flags) {
+                        while (d) {
+                            d->mPlayFlags &= 0xffff0fff;
+                            d = d->Next();
+                        }
+                        if (firstFlags - 1 > 0 && (i12 & firstFlags - 1)) {
+                            Play(playing->GetClip(), 0x38, -1, kHugeFloat, 0);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    mOldBeat = beat;
+    bool starved = CharDriverStarved(mFirst);
+    if (starved && !mStarvedHandler.Null()) {
+        Dir()->Handle(Message(mStarvedHandler), true);
+    }
+    if (starved && mFirst) {
+        if ((mFirst->mPlayFlags & 0xF0) == 0x30) {
+            int flags = mFirst->mPlayFlags;
+            CharClip::SetDefaultBlendFlag(flags, 4);
+            Play(mFirst->GetClip(), flags, -1, kHugeFloat, 0);
+        }
+    }
+    if (CharDriverStarved(mFirst) && mFirst && (mFirst->mPlayFlags & 0xF0) == 0x40) {
+        Play(mLastNode, 0x44, -1, kHugeFloat, 0);
+    }
+    if (CharDriverStarved(mFirst) && mDefaultClip && mDefaultPlayStarved) {
+        Play(DataNode(mDefaultClip), 0x44, -1, kHugeFloat, 0);
+    }
+    if (mFirst) {
+        mFirst = mFirst->PreEvaluate(beat, deltaBeat, TheTaskMgr.DeltaSeconds());
+    }
+    if (mFirst) {
+        float weight = Weight();
+        deltaBeat = mFirst->Evaluate(beat, deltaBeat, TheTaskMgr.DeltaSeconds());
+        deltaBeat = -(weight * deltaBeat - 1.0f);
+        if (mPlayMultipleClips)
+            deltaBeat = weight;
+        if (mBones) {
+            if (mApply == kApplyBlend || mApply == kApplyBlendWeights) {
+                if (mInternalBones) {
+                    mInternalBones->Enter();
+                    mFirst->ScaleAdd(*mInternalBones, weight);
+                    mInternalBones->Blend(*mBones);
+                } else {
+                    mFirst->GetClip()->ScaleDown(*mBones, deltaBeat);
+                    mFirst->ScaleAdd(*mBones, weight);
+                }
+            } else if (mApply == kApplyAdd) {
+                mFirst->ScaleAdd(*mBones, weight);
+            } else {
+                MILO_ASSERT(mApply == kApplyRotateTo, 0x22F);
+                mFirst->RotateTo(*mBones, weight);
+            }
+        }
+    }
+}
+
+BEGIN_HANDLERS(CharDriver)
+    HANDLE(play, OnPlay)
+    HANDLE(play_group, OnPlayGroup)
+    HANDLE(play_group_flags, OnPlayGroupFlags)
+    HANDLE_ACTION(set_beat_scale, SetBeatScale(_msg->Float(2), true))
+    HANDLE_ACTION(transfer, Transfer(*_msg->Obj<CharDriver>(2)))
+    HANDLE(print, OnPrint)
+    HANDLE(set_default_clip, OnSetDefaultClip)
+    HANDLE(set_first_beat_offset, OnSetFirstBeatOffset)
+    HANDLE_ACTION(clear, Clear())
+    HANDLE(get_clip_or_group_list, OnGetClipOrGroupList)
+    HANDLE_SUPERCLASS(RndPollable)
+    HANDLE_SUPERCLASS(Hmx::Object)
+END_HANDLERS
+
+BEGIN_COPYS(CharDriver)
+    COPY_SUPERCLASS(Hmx::Object)
+    COPY_SUPERCLASS(CharWeightable)
+    CREATE_COPY(CharDriver)
+    BEGIN_COPYING_MEMBERS
+        mBones = c->GetBones();
+        COPY_MEMBER(mClips)
+        COPY_MEMBER(mRealign)
+        COPY_MEMBER(mBeatScale)
+        COPY_MEMBER(mBlendWidth)
+        COPY_MEMBER(mTestClip)
+        COPY_MEMBER(mClipType)
+        COPY_MEMBER(mApply)
+        COPY_MEMBER(mDefaultClip)
+        COPY_MEMBER(mDefaultPlayStarved)
+        COPY_MEMBER(mPlayMultipleClips)
+        SyncInternalBones();
+    END_COPYING_MEMBERS
+END_COPYS
+
+BEGIN_PROPSYNCS(CharDriver)
+    SYNC_PROP(bones, mBones)
+    SYNC_PROP_SET(clips, mClips.Ptr(), SetClips(_val.Obj<ObjectDir>()))
+    SYNC_PROP_SET(clip_type, mClipType, (mClipType = _val.Sym(), SyncInternalBones()))
+    SYNC_PROP(realign, mRealign)
+    SYNC_PROP_SET(apply, mApply, (mApply = (ApplyMode)_val.Int(), SyncInternalBones()))
+    SYNC_PROP_SET(first_playing_clip, FirstPlayingClip(), )
+    SYNC_PROP(beat_scale, mBeatScale)
+    SYNC_PROP(blend_width, mBlendWidth)
+    SYNC_PROP(default_clip_or_group, mDefaultClip)
+    SYNC_PROP(default_play_starved, mDefaultPlayStarved)
+    SYNC_PROP(test_clip, mTestClip)
+    SYNC_PROP(play_multiple_clips, mPlayMultipleClips)
+    SYNC_PROP(display_zoom, CharClipDisplay::sZoom)
+    SYNC_SUPERCLASS(CharWeightable)
+END_PROPSYNCS
 
 #ifndef HX_NATIVE
 // Template instantiation for std::map<CharClip*, float>

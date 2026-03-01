@@ -1,4 +1,4 @@
-#include "lazer/game/Shuttle.h"
+#include "game/Shuttle.h"
 #include "math/Utl.h"
 #include "os/Joypad.h"
 #include "types.h"

@@ -1,7 +1,7 @@
 #pragma once
 #include "HamSongMetadata.h"
 #include "hamobj/Difficulty.h"
-#include "lazer/meta_ham/Playlist.h"
+#include "meta_ham/Playlist.h"
 #include "meta/DataArraySongInfo.h"
 #include "meta/Jukebox.h"
 #include "meta/SongMetadata.h"

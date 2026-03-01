@@ -9,6 +9,7 @@
 
 #include "synth/Synth.h"
 #include "synth/StandardStream.h"
+#include "os/System.h"
 #include "synth/StreamReceiver.h"
 #include "synth/StreamNull.h"
 #include "synth/VorbisReader.h"
@@ -33,6 +34,13 @@ public:
 
         // Initialize audio output device
         AudioDevice::GetInstance().Init(44100);
+
+        // Read audio latency offset from config (synth { audio_offset_ms <float> })
+        DataArray *synthCfg = SystemConfig("synth");
+        float offsetMs = 0.0f;
+        if (synthCfg->FindData("audio_offset_ms", offsetMs, false)) {
+            StandardStream::sAudioOffsetMs = offsetMs;
+        }
     }
 
     virtual void Terminate() override {

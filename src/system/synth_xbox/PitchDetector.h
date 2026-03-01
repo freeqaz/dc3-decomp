@@ -1,6 +1,6 @@
 #pragma once
 
-#include "system/synth_xbox/FftIpp.h"
+#include "FftIpp.h"
 #include <vector>
 
 namespace DSP {

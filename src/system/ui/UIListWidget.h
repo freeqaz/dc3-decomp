@@ -27,7 +27,12 @@ struct UIListElementDrawState {
     int mDisplay; // 0x1c
     int mShowing; // 0x20
     int mData; // 0x24
-};
+    int unk28; // 0x28
+    int unk2c; // 0x2c
+    int unk30; // 0x30
+    int unk34; // 0x34
+    int unk38; // 0x38
+}; // size: 0x3c
 
 struct UIListWidgetDrawState {
     ~UIListWidgetDrawState();

@@ -1,8 +1,11 @@
 #include "char/CharIKFingers.h"
 #include "char/CharWeightable.h"
 #include "math/Mtx.h"
+#include "math/Rot.h"
+#include "math/Vec.h"
 #include "obj/Object.h"
 #include "rndobj/Rnd.h"
+#include "rndobj/Trans.h"
 #include "rndobj/Utl.h"
 
 CharIKFingers::CharIKFingers()
@@ -220,6 +223,238 @@ void CharIKFingers::SetName(const char *name, ObjectDir *dir) {
         }
     }
     MeasureLengths();
+}
+
+void CharIKFingers::CalculateHandDest(int engagedCount, int firstEngaged) {
+    Transform curHandXfm(mHand->WorldXfm());
+    if (mMoveHand) {
+        if (engagedCount > 0) {
+            Vector3 destOffset(0, 0, 0);
+            FingerDesc &firstDesc = mFingers[firstEngaged];
+            Vector3 avgPos;
+            avgPos.Zero();
+            bool hasSpecialRotation = false;
+            Vector3 sideOffsetBase(mHandDestOffset, 0, 0);
+            if (!mIsRightHand) {
+                Scale(sideOffsetBase, -1.0f, sideOffsetBase);
+            }
+            Multiply(sideOffsetBase, mKeyboardRefBone->WorldXfm().m, sideOffsetBase);
+            Hmx::Matrix3 refRotMat;
+            Multiply(mtx, mKeyboardRefBone->WorldXfm().m, refRotMat);
+            Normalize(refRotMat, mDestHandTrans.m);
+            for (int i = 0; i < 5; i++) {
+                FingerDesc &finger = mFingers[i];
+                if (finger.mIsEngaged) {
+                    Add(finger.mTargetWorldPos, avgPos, avgPos);
+                    Vector3 sideScaled;
+                    Scale(sideOffsetBase, i - 2.0f, sideScaled);
+                    Add(sideScaled, avgPos, avgPos);
+                    if (i == 0) {
+                        Hmx::Matrix3 thumbRotMat;
+                        float thumbRot = mHandThumbRotation;
+                        if (!mIsRightHand)
+                            thumbRot *= -1.0f;
+                        thumbRotMat.RotateAboutY(thumbRot);
+                        Multiply(thumbRotMat, refRotMat, mDestHandTrans.m);
+                        hasSpecialRotation = true;
+                    } else if (i == 4) {
+                        Hmx::Matrix3 pinkyRotMat;
+                        float pinkyRot = mHandPinkyRotation;
+                        if (!mIsRightHand)
+                            pinkyRot *= -1.0f;
+                        pinkyRotMat.RotateAboutY(pinkyRot);
+                        Multiply(pinkyRotMat, refRotMat, mDestHandTrans.m);
+                        hasSpecialRotation = true;
+                    }
+                }
+            }
+            Scale(avgPos, 1.0f / engagedCount, avgPos);
+            if (hasSpecialRotation)
+                destOffset.y += mHandMoveForward;
+            Add(mHandKeyboardOffset, destOffset, destOffset);
+            Multiply(destOffset, mKeyboardRefBone->WorldXfm().m, destOffset);
+            Vector3 finalPos;
+            Add(avgPos, destOffset, finalPos);
+            mDestHandTrans.v.Set(finalPos.x, finalPos.y, finalPos.z);
+        }
+        mMoveHand = false;
+    }
+}
+
+void CharIKFingers::CalculateFingerDest(FingerNum num) {
+    if (mOutputTrans) {
+        FingerDesc &finger = mFingers[num];
+        if (finger.mNeedsUpdate) {
+            Transform finger01Xfm;
+            Multiply(finger.mFinger01->LocalXfm(), mOutputTrans->WorldXfm(), finger01Xfm);
+            finger.mCurOrientVec = finger01Xfm.m.x;
+            Vector3 eulerFinger02, eulerFinger03;
+            MakeEuler(finger.mFinger02->LocalXfm().m, eulerFinger02);
+            MakeEuler(finger.mFinger03->LocalXfm().m, eulerFinger03);
+            finger.mCurFinger02Angle = eulerFinger02.z;
+            finger.mCurFinger03Angle = eulerFinger03.z;
+            finger.mNeedsUpdate = false;
+        }
+        if (finger.mNeedsIKSolve) {
+            if (finger.mIsEngaged) {
+                Transform f1Xfm, f2Xfm, f3Xfm, tipXfm;
+                if (finger.mFinger01->TransParent() != mHand) {
+                    Transform parentXfm;
+                    Multiply(
+                        finger.mFinger01->TransParent()->LocalXfm(), mDestHandTrans, parentXfm
+                    );
+                    Multiply(finger.mFinger01->LocalXfm(), parentXfm, f1Xfm);
+                } else {
+                    Multiply(finger.mFinger01->LocalXfm(), mDestHandTrans, f1Xfm);
+                }
+
+                Multiply(finger.mFinger02->LocalXfm(), f1Xfm, f2Xfm);
+                Multiply(finger.mFinger03->LocalXfm(), f2Xfm, f3Xfm);
+                Multiply(finger.mFingertip->LocalXfm(), f3Xfm, tipXfm);
+                Vector3 targetPos;
+                if (Distance(tipXfm.v, finger.mRefWorldPos) < Distance(tipXfm.v, finger.mTargetWorldPos)) {
+                    targetPos = finger.mTargetWorldPos;
+                } else
+                    targetPos = finger.mRefWorldPos;
+
+                Vector3 f1x(f1Xfm.m.x);
+                Vector3 f1y(f1Xfm.m.y);
+                Vector3 f1z(f1Xfm.m.z);
+                Vector3 f1pos(f1Xfm.v);
+                Vector3 toTarget;
+                Subtract(targetPos, f1pos, toTarget);
+
+                float len02 = Length(finger.mFinger02->LocalXfm().v);
+                float lenTip = Length(finger.mFingertip->LocalXfm().v);
+                float len03 = Length(finger.mFinger03->LocalXfm().v);
+                float toTargetLen = Length(toTarget);
+                float angle03 = std::acos(
+                    -((toTargetLen - len03) * (toTargetLen - len03) - (len02 * len02 + lenTip * lenTip))
+                    / (len02 * 2.0f * lenTip)
+                );
+                if (angle03 < 0.87f)
+                    angle03 = 0.87f;
+                float angle02 = angle03 * 0.5f + 1.5707964f;
+                if (IsNaN(angle02)) {
+                    angle02 = 2.96f;
+                }
+                finger.mDestFinger02Angle = PI - angle02;
+                finger.mDestFinger03Angle = PI - angle02;
+                Hmx::Quat curl03(f1z, -(angle02 * 2.0f - 2 * PI));
+                Multiply(f1x, curl03, f1x);
+                Hmx::Quat alignQuat;
+                MakeRotQuat(f1x, toTarget, alignQuat);
+                Multiply(f1Xfm.m.x, alignQuat, finger.mDestOrientVec);
+                finger.mNeedsIKSolve = false;
+            } else {
+                Transform f1Xfm;
+                Multiply(finger.mFinger01->LocalXfm(), mOutputTrans->WorldXfm(), f1Xfm);
+                finger.mDestOrientVec = f1Xfm.m.x;
+                Vector3 eulerF2, eulerF3;
+                MakeEuler(finger.mFinger02->LocalXfm().m, eulerF2);
+                MakeEuler(finger.mFinger03->LocalXfm().m, eulerF3);
+                finger.mDestFinger02Angle = eulerF2.z;
+                finger.mDestFinger03Angle = eulerF3.z;
+                finger.mNeedsIKSolve = false;
+            }
+        }
+    }
+}
+
+void CharIKFingers::MoveFinger(FingerNum num) {
+    FingerDesc &finger = mFingers[num];
+    if (finger.mIsEngaged || finger.mBlendFrames > 0 || finger.mBlendOutFrames > 0) {
+        Transform baseXfm;
+        Transform parentXfm(mDestHandTrans);
+        if (finger.mFinger01->TransParent() != mHand) {
+            Multiply(finger.mFinger01->TransParent()->LocalXfm(), mDestHandTrans, parentXfm);
+        }
+        Multiply(finger.mFinger01->LocalXfm(), parentXfm, baseXfm);
+
+        float blendFactor = 1.0f;
+        if (finger.mBlendFrames > 0 || finger.mBlendOutFrames > 0) {
+            if (finger.mBlendFrames > 0) {
+                blendFactor = 1.0f - finger.mBlendFrames / 5.0f;
+            } else if (finger.mBlendOutFrames > 0) {
+                blendFactor = 1.0f - finger.mBlendOutFrames / 5.0f;
+            }
+        }
+
+        Interp(finger.mCurFinger02Angle, finger.mDestFinger02Angle, blendFactor, finger.mCurFinger02Angle);
+        Interp(finger.mCurFinger03Angle, finger.mDestFinger03Angle, blendFactor, finger.mCurFinger03Angle);
+        Hmx::Matrix3 rotMat;
+        Vector3 euler02(0, 0, finger.mCurFinger02Angle);
+        MakeRotMatrix(euler02, rotMat, true);
+        finger.mFinger02->SetLocalRot(rotMat);
+        euler02.Set(0, 0, finger.mCurFinger03Angle);
+        MakeRotMatrix(euler02, rotMat, true);
+        finger.mFinger03->SetLocalRot(rotMat);
+        Interp(finger.mCurOrientVec, finger.mDestOrientVec, blendFactor, finger.mCurOrientVec);
+        Hmx::Quat orientQuat;
+        MakeRotQuat(baseXfm.m.x, finger.mCurOrientVec, orientQuat);
+        Transform orientedXfm;
+        Multiply(baseXfm.m.x, orientQuat, orientedXfm.m.x);
+        Multiply(baseXfm.m.y, orientQuat, orientedXfm.m.y);
+        Multiply(baseXfm.m.z, orientQuat, orientedXfm.m.z);
+        Normalize(orientedXfm.m, orientedXfm.m);
+        orientedXfm.v = baseXfm.v;
+        Transform invParent;
+        Invert(parentXfm, invParent);
+        Multiply(orientedXfm, invParent, finger.mFinger01->DirtyLocalXfm());
+        if (finger.mBlendOutFrames > 0)
+            finger.mBlendOutFrames--;
+        if (finger.mBlendFrames > 0)
+            finger.mBlendFrames--;
+    }
+}
+
+void CharIKFingers::FixSingleFinger(
+    RndTransformable *t1, RndTransformable *t2, RndTransformable *t3
+) {
+    Vector3 avgX;
+    if (t3) {
+        Add(t1->WorldXfm().m.x, t3->WorldXfm().m.x, avgX);
+        Scale(avgX, 0.5f, avgX);
+    } else {
+        avgX = t1->WorldXfm().m.x;
+    }
+
+    Hmx::Quat alignQuat;
+    MakeRotQuat(t2->WorldXfm().m.x, avgX, alignQuat);
+
+    Transform alignedXfm;
+    Multiply(t2->WorldXfm().m.x, alignQuat, alignedXfm.m.x);
+    Multiply(t2->WorldXfm().m.y, alignQuat, alignedXfm.m.y);
+    Multiply(t2->WorldXfm().m.z, alignQuat, alignedXfm.m.z);
+    alignedXfm.v = t2->WorldXfm().v;
+
+    Transform invParent;
+    Invert(t2->TransParent()->WorldXfm(), invParent);
+    Multiply(alignedXfm, invParent, t2->DirtyLocalXfm());
+}
+
+void CharIKFingers::MeasureLengths() {
+    for (int i = 0; i < 5; i++) {
+        RndTransformable *f2 = mFingers[i].mFinger02;
+        RndTransformable *f3 = mFingers[i].mFinger03;
+        RndTransformable *tip = mFingers[i].mFingertip;
+        if (f2 && f3 && tip) {
+            float &totalLen = mFingers[i].mBoneTotalLength;
+            totalLen = Length(f2->LocalXfm().v) + Length(f3->LocalXfm().v)
+                + Length(tip->LocalXfm().v);
+        }
+    }
+
+    if (mHand && mHand->TransParent() && mHand->TransParent()->TransParent()) {
+        mInv2ab = 2.0f;
+        mAAPlusBB = 0;
+        float handLen = Length(mHand->LocalXfm().v);
+        mAAPlusBB += handLen * handLen;
+        mInv2ab *= handLen;
+        float foreArmLen = Length(mHand->TransParent()->LocalXfm().v);
+        mAAPlusBB += foreArmLen * foreArmLen;
+        mInv2ab = 1.0f / (mInv2ab * foreArmLen);
+    }
 }
 
 void CharIKFingers::PollDeps(

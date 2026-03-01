@@ -4,7 +4,7 @@
 #include <cstring>
 #include <cwchar>
 #include "os/OnlineID.h"
-#include "system/utl/GlitchFinder.h"
+#include "utl/GlitchFinder.h"
 #include "xdk/XAPILIB.h"
 #include "xdk/XBC.h"
 #include "xdk/XMP.h"

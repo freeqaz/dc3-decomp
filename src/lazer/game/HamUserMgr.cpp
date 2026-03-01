@@ -1,4 +1,4 @@
-#include "lazer/game/HamUserMgr.h"
+#include "game/HamUserMgr.h"
 #include "game/HamUser.h"
 #include "macros.h"
 #include "meta_ham/HamProfile.h"

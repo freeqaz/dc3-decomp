@@ -61,6 +61,75 @@ void SynthSample::Sync(SyncType ty) {
     }
 }
 
+void SynthSample::Load(BinStream &bs) {
+    PreLoad(bs);
+    PostLoad(bs);
+}
+
+void SynthSample::PreLoad(BinStream &bs) {
+    int revData;
+    bs.ReadEndian(&revData, 4);
+    int rev = revData & 0xffff;
+    int altRev = (unsigned int)revData >> 0x10;
+    if (rev > 6) {
+        MILO_FAIL(
+            "%s can't load new %s version %d > %d",
+            PathName(this),
+            ClassName(),
+            rev,
+            (unsigned short)6
+        );
+    }
+    if (altRev > 0) {
+        MILO_FAIL(
+            "%s can't load new %s alt version %d > %d",
+            PathName(this),
+            ClassName(),
+            altRev,
+            (unsigned short)0
+        );
+    }
+    if (rev > 1) {
+        Hmx::Object::Load(bs);
+    }
+    bs >> mFile;
+    // Rev <= 5 had loop fields (isLooped bool, loopStartSamp int if rev >= 3)
+    if (rev <= 5) {
+        bool isLooped;
+        bs >> isLooped;
+        if (rev >= 3) {
+            int loopStartSamp;
+            bs >> loopStartSamp;
+        }
+    }
+    if (!bs.Cached() || rev < 5) {
+        if (rev > 3 && !sDisabled) {
+            Loader *loader = TheLoadMgr.AddLoader(mFile, kLoadFront);
+            sLoader = dynamic_cast<FileLoader *>(loader);
+            sLoading = this;
+        }
+    } else {
+        mSampleData.Load(bs, mFile);
+    }
+}
+
+void SynthSample::PostLoad(BinStream &bs) {
+    sLoader = nullptr;
+    sLoading = nullptr;
+    Sync(bs.Cached() ? sync1 : sync0);
+}
+
+BEGIN_COPYS(SynthSample)
+    COPY_SUPERCLASS(Hmx::Object)
+    CREATE_COPY(SynthSample)
+    BEGIN_COPYING_MEMBERS
+        if (ty != kCopyFromMax) {
+            COPY_MEMBER(mFile)
+        }
+    END_COPYING_MEMBERS
+    Sync(sync0);
+END_COPYS
+
 BEGIN_SAVES(SynthSample)
     SAVE_REVS(6, 0)
     SAVE_SUPERCLASS(Hmx::Object)

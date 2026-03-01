@@ -1,5 +1,5 @@
 #pragma once
-#include <system/math/Color.h>
+#include <math/Color.h>
 #include <rndobj/Rnd.h>
 
 class DebugMeter {

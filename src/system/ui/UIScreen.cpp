@@ -12,9 +12,14 @@
 #include "ui/UILabel.h"
 #include "ui/UIPanel.h"
 #include "ui/PanelDir.h"
+#include "utl/MakeString.h"
 #include "utl/Std.h"
 #include "utl/Symbol.h"
 #include "utl/TextStream.h"
+#include <vector>
+
+void EnterGlitchCB(float, void *);
+void UnloadGlitchCB(float, void *);
 
 UIScreen *UIScreen::sUnloadingScreen;
 
@@ -167,10 +172,41 @@ void UIScreen::Enter(UIScreen *from) {
         from->UnloadPanels();
     }
 
-    FOREACH_POST (it, mPanelList) {
+    int lastCount = 0;
+    Rnd::sPostProcPanelCount = 0;
+    std::vector<char *> panelNames;
+
+    FOREACH (it, mPanelList) {
         if (it->Active() && it->mPanel->GetState() == UIPanel::kDown) {
+            AutoGlitchReport hang(17.0f, EnterGlitchCB, it->mPanel);
             it->mPanel->Enter();
+            if (Rnd::sPostProcPanelCount != lastCount) {
+                panelNames.push_back((char *)it->mPanel->Name());
+                lastCount = Rnd::sPostProcPanelCount;
+            }
         }
+    }
+
+    if (Rnd::sPostProcPanelCount != 1) {
+        if (Rnd::sPostProcPanelCount == 0) {
+            TheDebug << MakeString(
+                "[POSTPROC WARNING] UIScreen '%s' doesn't have any panels that set the PostProc\n",
+                (char *)Name()
+            );
+        } else {
+            TheDebug << MakeString(
+                "[POSTPROC WARNING] UIScreen '%s' has %d panels that attempt to set the PostProc\n",
+                Name(),
+                Rnd::sPostProcPanelCount
+            );
+            for (int i = 0; i < Rnd::sPostProcPanelCount; i++) {
+                TheDebug << MakeString(
+                    "[POSTPROC WARNING]    panel = '%s'\n",
+                    panelNames[i]
+                );
+            }
+        }
+        Rnd::sPostProcPanelCount = 0;
     }
 
     static Message msg("enter", 0);

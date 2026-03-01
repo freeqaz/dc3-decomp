@@ -1,6 +1,6 @@
 #pragma once
 #include "hamobj/HamNavList.h"
-#include "lazer/meta_ham/HamPanel.h"
+#include "meta_ham/HamPanel.h"
 #include "meta_ham/SaveLoadManager.h"
 #include "obj/Data.h"
 #include "obj/Object.h"

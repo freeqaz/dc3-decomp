@@ -46,7 +46,6 @@ void CharBonesSamples::Load(BinStream &bs) {
     LoadData(d);
 }
 
-#ifdef HX_NATIVE
 void CharBonesSamples::LoadHeader(BinStreamRev &d) {
     MemFree(mRawData);
     mRawData = nullptr;
@@ -133,7 +132,7 @@ void CharBonesSamples::LoadHeader(BinStreamRev &d) {
     fflush(stdout);
 #endif
     mRawData = (char *)MemAlloc(
-        AllocateSize(), __FILE__, __LINE__, "CharBonesSamples", 0
+        AllocateSize(), "CharBonesSamples.cpp", 0x2d1, "CharBonesSamples", 0
     );
 }
 
@@ -142,21 +141,62 @@ void CharBonesSamples::LoadData(BinStreamRev &d) {
         bool x;
         d >> x;
     }
-    // Read raw bone sample data - on native we just need to advance the stream
     int totalBytes = AllocateSize();
 #ifdef HX_NATIVE
     printf("CharBonesSamples::LoadData: totalBytes=%d tell=%d\n", totalBytes, d.stream.Tell());
     fflush(stdout);
-#endif
     if (totalBytes > 0 && mRawData) {
         d.stream.Read(mRawData, totalBytes);
     }
-#ifdef HX_NATIVE
     printf("CharBonesSamples::LoadData: done tell=%d\n", d.stream.Tell());
     fflush(stdout);
+#else
+    for (int i = 0; i < mNumSamples; i++) {
+        mStart = mRawData + mTotalSize * Min(i, mNumSamples - 1);
+
+        if (mCompression >= kCompressVects) {
+            short *quatOffset = (short *)(mStart + mOffsets[TYPE_QUAT]);
+            for (short *p = (short *)mStart; p < quatOffset; p += 3) {
+                d >> p[0] >> p[1] >> p[2];
+            }
+        } else {
+            Vector3 *quatOffset = (Vector3 *)(mStart + mOffsets[TYPE_QUAT]);
+            for (Vector3 *p = (Vector3 *)mStart; p < quatOffset; p++) {
+                d >> *p;
+            }
+        }
+
+        if (mCompression >= kCompressQuats) {
+            char *rotXOffset = mStart + mOffsets[TYPE_ROTX];
+            for (char *p = mStart + mOffsets[TYPE_QUAT]; p < rotXOffset; p += 4) {
+                d >> p[0] >> p[1] >> p[2] >> p[3];
+            }
+        } else if (mCompression != kCompressNone) {
+            short *rotXOffset = (short *)(mStart + mOffsets[TYPE_ROTX]);
+            for (short *p = (short *)(mStart + mOffsets[TYPE_QUAT]); p < rotXOffset; p += 4) {
+                d >> p[0] >> p[1] >> p[2] >> p[3];
+            }
+        } else {
+            Hmx::Quat *rotXOffset = (Hmx::Quat *)(mStart + mOffsets[TYPE_ROTX]);
+            for (Hmx::Quat *p = (Hmx::Quat *)(mStart + mOffsets[TYPE_QUAT]); p < rotXOffset; p++) {
+                d >> *p;
+            }
+        }
+
+        if (mCompression != kCompressNone) {
+            short *endOffset = (short *)(mStart + mOffsets[TYPE_END]);
+            for (short *p = (short *)(mStart + mOffsets[TYPE_ROTX]); p < endOffset; p++) {
+                d >> *p;
+            }
+        } else {
+            float *endOffset = (float *)(mStart + mOffsets[TYPE_END]);
+            for (float *p = (float *)(mStart + mOffsets[TYPE_ROTX]); p < endOffset; p++) {
+                d >> *p;
+            }
+        }
+    }
 #endif
 }
-#endif
 
 int CharBonesSamples::AllocateSize() { return mTotalSize * mNumSamples; }
 
@@ -409,3 +449,140 @@ int CharBonesSamples::FracToSample(float *frac) const {
     }
     return ret;
 }
+
+void CharBonesSamples::EvaluateChannel(void *dest, int byteOffset, int sample, float frac) {
+    int clampedSample = Clamp(0, mNumSamples - 1, sample);
+    const char *sampleData = mRawData + mTotalSize * clampedSample;
+    const char *nextData = mRawData + mTotalSize * Min(clampedSample + 1, mNumSamples - 1);
+    const char *src = sampleData + byteOffset;
+    const char *srcNext = nextData + byteOffset;
+
+    if (byteOffset < mOffsets[TYPE_QUAT]) {
+        // Position or scale channel
+        if (mCompression >= kCompressVects) {
+            const ShortVector3 *sv = (const ShortVector3 *)src;
+            const ShortVector3 *svNext = (const ShortVector3 *)srcNext;
+            Vector3 *out = (Vector3 *)dest;
+            float scale = 1300.0f / 32767.0f;
+            float invFrac = 1.0f - frac;
+            out->x = ((float)sv->x * invFrac + (float)svNext->x * frac) * scale;
+            out->y = ((float)sv->y * invFrac + (float)svNext->y * frac) * scale;
+            out->z = ((float)sv->z * invFrac + (float)svNext->z * frac) * scale;
+        } else {
+            const Vector3 *v = (const Vector3 *)src;
+            const Vector3 *vNext = (const Vector3 *)srcNext;
+            Vector3 *out = (Vector3 *)dest;
+            float invFrac = 1.0f - frac;
+            out->x = v->x * invFrac + vNext->x * frac;
+            out->y = v->y * invFrac + vNext->y * frac;
+            out->z = v->z * invFrac + vNext->z * frac;
+        }
+    } else if (byteOffset < mOffsets[TYPE_ROTX]) {
+        // Quaternion channel
+        Hmx::Quat q0, q1;
+        if (mCompression >= kCompressQuats) {
+            ((const ByteQuat *)src)->ToQuat(q0);
+            ((const ByteQuat *)srcNext)->ToQuat(q1);
+        } else if (mCompression != kCompressNone) {
+            ((const ShortQuat *)src)->ToQuat(q0);
+            ((const ShortQuat *)srcNext)->ToQuat(q1);
+        } else {
+            q0 = *(const Hmx::Quat *)src;
+            q1 = *(const Hmx::Quat *)srcNext;
+        }
+        // Slerp
+        float dot = q0.x * q1.x + q0.y * q1.y + q0.z * q1.z + q0.w * q1.w;
+        if (dot < 0.0f) {
+            q1.x = -q1.x; q1.y = -q1.y; q1.z = -q1.z; q1.w = -q1.w;
+            dot = -dot;
+        }
+        Hmx::Quat *out = (Hmx::Quat *)dest;
+        float invFrac = 1.0f - frac;
+        out->x = q0.x * invFrac + q1.x * frac;
+        out->y = q0.y * invFrac + q1.y * frac;
+        out->z = q0.z * invFrac + q1.z * frac;
+        out->w = q0.w * invFrac + q1.w * frac;
+    } else {
+        // Rotation (float or short) channel
+        if (mCompression != kCompressNone) {
+            float v0 = (float)*(const short *)src * (1.0f / 1638.4f);
+            float v1 = (float)*(const short *)srcNext * (1.0f / 1638.4f);
+            *(float *)dest = v0 * (1.0f - frac) + v1 * frac;
+        } else {
+            float v0 = *(const float *)src;
+            float v1 = *(const float *)srcNext;
+            *(float *)dest = v0 * (1.0f - frac) + v1 * frac;
+        }
+    }
+}
+
+void CharBonesSamples::Save(BinStream &bs) {
+    SAVE_REVS(0x10, 0)
+    int numBones = mBones.size();
+    bs << numBones;
+    for (int i = 0; i < numBones; i++) {
+        bs << mBones[i];
+    }
+    // Write 7 counts (since rev 0x10 > 0xF)
+    for (int i = 0; i < 7; i++) {
+        bs << mCounts[i];
+    }
+    bs << (int)mCompression;
+    bs << mNumSamples;
+    bs << mFrames;
+    // LoadData section (no rev==0xE bool since rev is 0x10)
+    for (int i = 0; i < mNumSamples; i++) {
+        mStart = mRawData + mTotalSize * i;
+
+        if (mCompression >= kCompressVects) {
+            short *quatOffset = (short *)(mStart + mOffsets[TYPE_QUAT]);
+            for (short *p = (short *)mStart; p < quatOffset; p += 3) {
+                bs << p[0] << p[1] << p[2];
+            }
+        } else {
+            Vector3 *quatOffset = (Vector3 *)(mStart + mOffsets[TYPE_QUAT]);
+            for (Vector3 *p = (Vector3 *)mStart; p < quatOffset; p++) {
+                bs << *p;
+            }
+        }
+
+        if (mCompression >= kCompressQuats) {
+            char *rotXOffset = mStart + mOffsets[TYPE_ROTX];
+            for (char *p = mStart + mOffsets[TYPE_QUAT]; p < rotXOffset; p += 4) {
+                bs << p[0] << p[1] << p[2] << p[3];
+            }
+        } else if (mCompression != kCompressNone) {
+            short *rotXOffset = (short *)(mStart + mOffsets[TYPE_ROTX]);
+            for (short *p = (short *)(mStart + mOffsets[TYPE_QUAT]); p < rotXOffset; p += 4) {
+                bs << p[0] << p[1] << p[2] << p[3];
+            }
+        } else {
+            Hmx::Quat *rotXOffset = (Hmx::Quat *)(mStart + mOffsets[TYPE_ROTX]);
+            for (Hmx::Quat *p = (Hmx::Quat *)(mStart + mOffsets[TYPE_QUAT]); p < rotXOffset; p++) {
+                bs << *p;
+            }
+        }
+
+        if (mCompression != kCompressNone) {
+            short *endOffset = (short *)(mStart + mOffsets[TYPE_END]);
+            for (short *p = (short *)(mStart + mOffsets[TYPE_ROTX]); p < endOffset; p++) {
+                bs << *p;
+            }
+        } else {
+            float *endOffset = (float *)(mStart + mOffsets[TYPE_END]);
+            for (float *p = (float *)(mStart + mOffsets[TYPE_ROTX]); p < endOffset; p++) {
+                bs << *p;
+            }
+        }
+    }
+}
+
+extern CharBones *gPropBones;
+
+BEGIN_PROPSYNCS(CharBonesSamples)
+    SYNC_PROP(num_samples, mNumSamples)
+    SYNC_PROP(frames, mFrames)
+    SYNC_PROP_SET(compression, mCompression, )
+    gPropBones = this;
+    SYNC_PROP(bones, mBones)
+END_PROPSYNCS

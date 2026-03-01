@@ -1,7 +1,9 @@
 #include "hamobj/HamRibbon.h"
 #include "math/Mtx.h"
 #include "obj/Object.h"
+#include "obj/Task.h"
 #include "os/File.h"
+#include "os/System.h"
 #include "rndobj/Draw.h"
 #include "rndobj/Mesh.h"
 #include "rndobj/Poll.h"
@@ -130,6 +132,53 @@ void HamRibbon::SetActive(bool active) {
         mLastTime = -1;
     }
     mActive = active;
+}
+
+void HamRibbon::UpdateChase() {
+#ifdef HX_NATIVE
+    // TODO: needs Interp(Transform,...) and ObjPtrList subscript - not needed for boot
+#else
+    if (!mActive || mSegTrans.empty()) return;
+    float now = TheTaskMgr.Seconds(TaskMgr::kDelayedTime);
+    if (mLastTime < 0) {
+        mLastTime = now;
+        mChaseKeys.clear();
+    }
+    // Get current followed transform (blend of A and B)
+    Transform followed = Transform::IDXfm();
+    if (mFollowA) {
+        followed = mFollowA->WorldXfm();
+        if (mFollowB && mFollowWeight > 0) {
+            Transform bXfm = mFollowB->WorldXfm();
+            Interp(followed, bXfm, mFollowWeight, followed);
+        }
+    } else if (mFollowB) {
+        followed = mFollowB->WorldXfm();
+    }
+    // Add key at current time
+    mChaseKeys.Add(followed, now, true);
+    // Remove old keys beyond decay window
+    float oldestKeepTime = now - mDecay;
+    while (mChaseKeys.NumKeys() > 1 && mChaseKeys.front().frame < oldestKeepTime) {
+        mChaseKeys.Remove(0);
+    }
+    // Distribute keys to segment transforms
+    int numSegs = mSegTrans.size();
+    if (numSegs > 0 && mChaseKeys.NumKeys() > 0) {
+        float oldest = mChaseKeys.front().frame;
+        float newest = mChaseKeys.back().frame;
+        float timeRange = newest - oldest;
+        int i = 0;
+        for (ObjPtrList<RndTransformable>::iterator it = mSegTrans.begin(); it != mSegTrans.end(); ++it, i++) {
+            float t = (numSegs > 1) ? (float)i / (numSegs - 1) : 0.0f;
+            float sampleTime = oldest + t * timeRange;
+            Transform segXfm;
+            mChaseKeys.AtFrame(sampleTime, segXfm);
+            (*it)->SetWorldXfm(segXfm);
+        }
+    }
+    mLastTime = now;
+#endif
 }
 
 void HamRibbon::ConstructMesh() {

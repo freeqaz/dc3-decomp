@@ -16,7 +16,11 @@ public:
     OBJ_MEM_OVERLOAD(0x10);
     NEW_OBJ(FxSendFlanger)
 
+#ifdef HX_NATIVE
+public:
+#else
 protected:
+#endif
     FxSendFlanger();
 
     /** "Maximum delay time in milliseconds". Ranges from 0 to 10. */

@@ -1,5 +1,6 @@
 #include "flow/FlowRun.h"
 #include "FlowRun.h"
+#include "flow/Flow.h"
 #include "flow/FlowNode.h"
 #include "obj/Dir.h"
 #include "obj/Object.h"
@@ -65,6 +66,54 @@ BEGIN_LOADS(FlowRun)
     d >> mStop;
     d >> mImmediateRelease;
 END_LOADS
+
+bool FlowRun::Activate() {
+    FLOW_LOG("Activate\n");
+    mStopRequested = false;
+    ResolveTarget();
+    Flow *target = mTarget;
+    if (!target)
+        return false;
+    if (mStop) {
+        target->RequestStop();
+        return false;
+    }
+    if (mImmediateRelease) {
+        target->Activate(nullptr);
+        return false;
+    } else {
+        mRunningNodes.push_back(target);
+        bool running = target->Activate(this);
+        if (!running) {
+            FLOW_LOG("Target ran in full immediately.\n");
+            mRunningNodes.remove(target);
+        }
+        return running;
+    }
+}
+
+void FlowRun::ResolveTarget() {
+    Flow *target = mTarget;
+    if (!target && mTargetName.length() > 0) {
+        ObjectDir *dir = mTargetDir;
+        if (!dir) {
+            // Find the containing flow's dir
+            Flow *ownerFlow = GetOwnerFlow();
+            if (ownerFlow) {
+                dir = ownerFlow->Dir();
+                if (!dir) {
+                    MILO_ASSERT(false, 0x72);
+                }
+            }
+        }
+        if (dir) {
+            Hmx::Object *found = dir->Find<Hmx::Object>(mTargetName.c_str(), false);
+            if (found) {
+                mTarget = dynamic_cast<Flow *>(found);
+            }
+        }
+    }
+}
 
 void FlowRun::ChildFinished(FlowNode *node) {
     FLOW_LOG("Child Finished of class:%s\n", node->ClassName());

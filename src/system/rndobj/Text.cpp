@@ -16,6 +16,7 @@
 #include "utl/MemMgr.h"
 #include "utl/UTF8.h"
 #include "wordwrap.h"
+#include "ui/UI.h"
 
 std::vector<RndText::BlacklightPacket> RndText::sBlacklightPacketPool;
 int RndText::sBlacklightPacketCount;
@@ -789,6 +790,326 @@ void RndText::QueueBlacklightPacket(RndMesh *mesh, float f2, int i3) {
 }
 
 void RndText::ClearBlacklight() { sBlacklightPacketCount = 0; }
+
+void RndText::DrawBlacklight() {
+    // Blacklight rendering not implemented on native port
+}
+
+void RndText::SizeCheck() {
+    // Check if screen size changed and rebuild if necessary
+    // For the native port this is a no-op
+}
+
+void RndText::UpdateScrollOffsets() {
+    // Update scroll position for scrolling text types
+    // For the native port this is a minimal implementation
+}
+
+void RndText::FitTextScroll() {
+    // Stub - full implementation in FitTextScroll object
+}
+
+void RndText::DrawMesh(RndMesh *mesh, float size, int syncFlags) {
+    if (mesh && mesh->Showing()) {
+        mesh->DrawShowing();
+    }
+}
+
+RndText::FontMapBase *RndText::AcquireFontMap(RndFontBase *font) {
+    // Check cache first
+    for (auto it = sFontMapCache.begin(); it != sFontMapCache.end(); ++it) {
+        FontMapBase *map = *it;
+        if (map->Font() == font) {
+            sFontMapCache.erase(it);
+            return map;
+        }
+    }
+    // Create new FontMap based on font type
+    if (font->ClassName() == RndFont3d::StaticClassName()) {
+        FontMap3d *map3d = new FontMap3d();
+        map3d->SetFont(font);
+        return map3d;
+    } else {
+        FontMap *map = new FontMap();
+        map->SetFont(font);
+        return map;
+    }
+}
+
+void RndText::UpdateText() {
+    // Rebuild font maps and text display
+    BuildFontMaps(false);
+
+    // Reset displayable chars on all font maps
+    FOREACH (it, mFontMaps) {
+        (*it)->ResetDisplayableChars();
+    }
+
+    // Count displayable characters in the text
+    const char *p = mText.c_str();
+    int charCount = 0;
+    while (*p) {
+        unsigned short us;
+        int consumed = DecodeUTF8(us, p);
+        if (consumed <= 0) break;
+        p += consumed;
+        // Count this char in the appropriate font map
+        for (auto it = mFontMaps.begin(); it != mFontMaps.end(); ++it) {
+            (*it)->IncrementDisplayableChars(us);
+        }
+        charCount++;
+    }
+
+    // Allocate meshes for the displayable characters
+    FOREACH (it, mFontMaps) {
+        (*it)->AllocateMeshes(this, mFixedLength);
+    }
+
+    // Cleanup and sync the meshes
+    FOREACH (it, mFontMaps) {
+        (*it)->CleanupSyncMeshes();
+    }
+
+    UpdateSphere();
+}
+
+void RndText::DrawShowing() {
+    SizeCheck();
+
+    // Count total materials across all font maps for VLA allocation
+    int totalMats = 0;
+    for (auto it = mFontMaps.begin(); it != mFontMaps.end(); ++it) {
+        totalMats += (*it)->NumMaterials();
+    }
+
+    // Allocate VLA on stack to save material colors (one Hmx::Color per material)
+    Hmx::Color *savedColors = (Hmx::Color *)_alloca(totalMats * sizeof(Hmx::Color));
+
+    // Save material colors
+    int vlaIdx = 0;
+    for (auto it = mFontMaps.begin(); it != mFontMaps.end(); ++it) {
+        FontMapBase *fontMap = *it;
+        for (int i = 0; i < fontMap->NumMaterials(); i++) {
+            RndMat *mat = fontMap->Material(i);
+            int *src = (int *)((char *)mat + 0x2c);
+            int *dst = (int *)&savedColors[vlaIdx];
+            dst[0] = src[0];
+            dst[1] = src[1];
+            dst[2] = src[2];
+            dst[3] = src[3];
+            vlaIdx++;
+        }
+    }
+
+    // Apply font color overrides from styles
+    bool hasOverride = false;
+    for (auto it = mStyles.begin(); it != mStyles.end(); ++it) {
+        Style &style = *it;
+        if (style.mFont && style.mFontColorOverride) {
+            int fmIdx = FontMapIndex(style.mFont, style.mBlacklight);
+            if (fmIdx != -1) {
+                hasOverride = true;
+                FontMapBase *fontMap = mFontMaps[fmIdx];
+                int numMats = fontMap->NumMaterials();
+                for (int i = 0; i < numMats; i++) {
+                    RndMat *mat = fontMap->Material(i);
+                    int *dst = (int *)((char *)mat + 0x2c);
+                    int *src = (int *)&style.mFontColor;
+                    dst[0] = src[0];
+                    dst[1] = src[1];
+                    dst[2] = src[2];
+                    dst[3] = src[3];
+                    *(int *)((char *)mat + 0x228) |= 1;
+                }
+            }
+        }
+    }
+
+    // Update scroll offsets if wrapping is enabled
+    if (mWrapEnabled) {
+        UpdateScrollOffsets();
+    }
+
+    // Draw each mesh
+    for (auto it = mFontMaps.begin(); it != mFontMaps.end(); ++it) {
+        FontMapBase *fontMap = *it;
+        int numMeshes = fontMap->NumMeshes();
+        for (int i = 0; i < numMeshes; i++) {
+            RndMesh *mesh = fontMap->Mesh(i);
+            if (mesh) {
+                if (!sBlacklightModeEnabled || !fontMap->mBlacklight ||
+                    *(bool *)((char *)TheUI + 0x93)) {
+                    DrawMesh(mesh, mStyles[0].mSize, 0);
+                } else {
+                    QueueBlacklightPacket(mesh, mStyles[0].mSize, 0);
+                }
+            }
+        }
+    }
+
+    // Restore material colors (r, g, b only — not alpha)
+    if (hasOverride) {
+        vlaIdx = 0;
+        auto _tmp4 = mFontMaps.end();
+        for (auto it = mFontMaps.begin(); it != _tmp4; ++it) {
+            FontMapBase *fontMap = *it;
+            auto _tmp5 = fontMap->NumMaterials();
+            for (int i = 0; i < _tmp5; i++) {
+                RndMat *mat = fontMap->Material(i);
+                int *src = (int *)&savedColors[vlaIdx];
+                int *dst = (int *)((char *)mat + 0x2c);
+                dst[0] = src[0];
+                dst[1] = src[1];
+                dst[2] = src[2];
+                *(int *)((char *)mat + 0x228) |= 1;
+                vlaIdx++;
+            }
+        }
+    }
+}
+
+void RndText::GetWidthHeightBox(Box &box) const {
+    box.mMin.x = mBoundsLeft;
+    box.mMin.y = mBoundsTop;
+    box.mMin.z = 0.0f;
+    box.mMax.x = mBoundsRight;
+    box.mMax.y = mBoundsBottom;
+    box.mMax.z = 0.0f;
+}
+
+void RndText::ReFitTextScroll(String str) {
+    if (mFitType != kFitScrollMarqueeWrapAlways) {
+    } else {
+        SetText(str.c_str());
+        FitTextScroll();
+        *(float *)&mScrollPos = 0.0f;
+        mZeroAlphaTime = 0.0f;
+        float width = mWidth;
+        while (*mLineWidths.begin() <= width) {
+            mDirtyFlags++;
+            if (mDirtyFlags >= mTotalWidth) {
+                mDirtyFlags = 0;
+            }
+            if (*mLineWidths.begin() == *(float *)&mNumLines) {
+                mZeroAlphaTime += mWidth;
+            }
+            unsigned int count = 0;
+            for (auto it = mLineWidths.begin(); it != mLineWidths.end(); ++it) {
+                count++;
+            }
+            if ((unsigned int)mTotalWidth == count) {
+                mLineWidths.insert(mLineWidths.end(), *mLineWidths.begin());
+            }
+            mLineWidths.erase(mLineWidths.begin());
+            width = mWidth - mZeroAlphaTime;
+        }
+        *(float *)&mScrollState = *(float *)&mScrollOffset;
+    }
+}
+
+float RndText::ComputeCharWidthsForText(String str) {
+    BuildFontMaps(false);
+#ifdef HX_NATIVE
+    std::vector<unsigned short> wideChars;
+#else
+    std::vector<unsigned short, std::StlNodeAlloc<unsigned short> > wideChars;
+#endif
+    int numChars = ConvertTextToWide(str.c_str(), wideChars);
+    float *widths = (float *)_alloca((numChars + 2) * sizeof(float));
+    OnComputeCharWidths(wideChars.data(), widths, true);
+    return widths[numChars];
+}
+
+void RndText::FontMap3d::IncrementDisplayableChars(unsigned short us) {
+    if (mFont && mFont->CharDefined(us)) {
+        mDisplayableChars++;
+    }
+}
+
+void RndText::FontMap3d::AllocateMeshes(RndText *text, int fixedLength) {
+    // Resize the mesh array to match displayable chars
+    // Each char gets one mesh from the 3d font
+    // For now just ensure we don't have more meshes than chars
+    while ((int)mMeshes.size() > mDisplayableChars) {
+        if (mMeshes.back()) {
+            delete mMeshes.back();
+        }
+        mMeshes.pop_back();
+    }
+    // Save previous count for cleanup
+    mPrevDisplayableChars = mDisplayableChars;
+}
+
+void RndText::FontMap3d::CleanupSyncMeshes() {
+    // Nothing to sync for 3d font maps in native port
+}
+
+void RndText::FontMap::SetupCharacter(
+    unsigned short charCode,
+    float &xPos,
+    float yPos,
+    const StyleState &state,
+    unsigned short prevChar,
+    float size,
+    FitType fitType,
+    float leading
+) {
+    // Setup a character quad in the mesh
+    if (!mFont) return;
+    int page = mFont->CharPage(charCode);
+    if (page < 0 || page >= (int)mPages.size()) {
+        return;
+    }
+    Page &pg = *(mPages[page]);
+    if (!pg.mesh || !pg.mVertStart || pg.mVertStart == pg.mesh->Verts().end()) {
+        return;
+    }
+
+    float charW, advW;
+    Vector2 uvMin, uvMax;
+    if (!mFont->CharWidthAdvanceCoords(charCode, charW, advW, uvMin, uvMax)) {
+        xPos += mFont->CharAdvance(charCode) * size;
+        return;
+    }
+
+    float cellH = mFont->AspectRatio() * size;
+    float x0 = xPos;
+    float x1 = x0 + charW * size;
+    float z0 = yPos;
+    float z1 = z0 - cellH;
+
+    RndMesh::Vert *v = pg.mVertStart;
+    v[0].pos.Set(x0, 0.0f, z0);
+    v[0].tex.Set(uvMin.x, uvMin.y);
+    v[1].pos.Set(x1, 0.0f, z0);
+    v[1].tex.Set(uvMax.x, uvMin.y);
+    v[2].pos.Set(x1, 0.0f, z1);
+    v[2].tex.Set(uvMax.x, uvMax.y);
+    v[3].pos.Set(x0, 0.0f, z1);
+    v[3].tex.Set(uvMin.x, uvMax.y);
+    pg.mVertStart += 4;
+
+    // Advance x position
+    xPos += advW * size;
+    if (prevChar) {
+        xPos += mFont->Kerning(prevChar, charCode) * size;
+    }
+}
+
+void RndText::FontMap3d::SetupCharacter(
+    unsigned short charCode,
+    float &xPos,
+    float yPos,
+    const StyleState &state,
+    unsigned short prevChar,
+    float size,
+    FitType fitType,
+    float leading
+) {
+    // Not implemented for native port - 3d font rendering is complex
+    if (!mFont) return;
+    xPos += mFont->CharAdvance(charCode) * size;
+}
 
 #ifndef HX_NATIVE
 // Template instantiation for map<RndFontBase*, set<unsigned short>>

@@ -9,9 +9,14 @@
 #include "synth/StreamReceiver.h"
 #include "synth/StreamReceiverFile.h"
 #include "utl/Symbol.h"
+#include <cmath>
 #include <functional>
+#include "math/Decibels.h"
 
 bool StandardStream::sReportLargeTimerErrors = true;
+#ifdef HX_NATIVE
+float StandardStream::sAudioOffsetMs = 0.0f;
+#endif
 
 StandardStream::ChannelParams::ChannelParams()
     : mPan(0.0f), mSlipSpeed(1.0f), mSlipEnabled(0), mADSR(), mFaders(nullptr),
@@ -102,7 +107,11 @@ void StandardStream::EnableReads(bool b) {
 
 float StandardStream::GetTime() {
     if (!mChannels.empty() && mSampleRate != 0) {
+#ifdef HX_NATIVE
+        return mLastStreamTime + sAudioOffsetMs;
+#else
         return mLastStreamTime;
+#endif
     } else
         return mStartMs;
 }
@@ -341,12 +350,9 @@ void StandardStream::PollStream() {
             }
         } else if (mState > kReady && mState < kFinished) {
             StuffChannels();
-            // Check if all channels have finished playing
-            if (!mChannels.empty()) {
-                StreamReceiver *ch0 = mChannels[0];
-                if (ch0->GetBuffersSent() + 2 < ch0->GetBuffersPlayed()) {
-                    mState = kFinished;
-                }
+            // Check if reader is done and all data consumed
+            if (mRdr && mRdr->Done() && mJumpFromSamples == 0) {
+                mState = kFinished;
             }
         } else if (mState != kFinished) {
             MILO_FAIL(MakeString("Bad stream state: %d", mState));
@@ -543,6 +549,33 @@ float StandardStream::SampToMs(int samples) const {
     MILO_ASSERT(mSampleRate, 0x460);
     float ms = (float)samples / (float)mSampleRate;
     return ms * 1000.0f;
+}
+
+void StandardStream::UpdateVolumes() {
+    static Symbol _parent("_parent");
+    static Symbol _default("_default");
+
+    // If the master faders are dirty, propagate to each channel's _parent local fader
+    if (mFaders->Dirty()) {
+        float masterVol = mFaders->GetVolume();
+        for (int i = 0; i < mChanParams.size(); i++) {
+            mChanParams[i]->mFaders.FindLocal(_parent, true)->SetVolume(masterVol);
+        }
+        mFaders->ClearDirty();
+    }
+
+    // Apply per-channel volume to StreamReceiver
+    for (int i = 0; i < mChannels.size(); i++) {
+        if (mChanParams[i]->mFaders.Dirty()) {
+            float vol = mChanParams[i]->mFaders.GetVolume();
+            float ratio = DbToRatio(vol);
+            // Clamp to [0, 1]
+            if (ratio < 0.0f) ratio = 0.0f;
+            if (ratio > 1.0f) ratio = 1.0f;
+            mChannels[i]->SetVolume(ratio);
+            mChanParams[i]->mFaders.ClearDirty();
+        }
+    }
 }
 
 void StandardStream::UpdateFXSends() {

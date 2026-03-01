@@ -2,9 +2,9 @@
 
 #include "HamPanel.h"
 #include "obj/Object.h"
-#include "system/world/Instance.h"
+#include "world/Instance.h"
 #include "ProfileMgr.h"
-#include "system/ui/UIListProvider.h"
+#include "ui/UIListProvider.h"
 
 class WeightInputProvider : public UIListProvider, public Hmx::Object {
 public:

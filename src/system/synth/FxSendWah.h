@@ -16,7 +16,11 @@ public:
     OBJ_MEM_OVERLOAD(0x10);
     NEW_OBJ(FxSendWah)
 
+#ifdef HX_NATIVE
+public:
+#else
 protected:
+#endif
     FxSendWah();
 
     /** "amount of resonance (1-10)" */

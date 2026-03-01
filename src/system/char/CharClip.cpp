@@ -85,6 +85,47 @@ CharClip::NodeVector *CharClip::Transitions::FindNodes(CharClip *clip) const {
     return nullptr;
 }
 
+void CharClip::Transitions::AddNode(CharClip *clip, const CharGraphNode &node) {
+    NodeVector *existing = FindNodes(clip);
+    if (existing) {
+        // Append a CharGraphNode to the existing NodeVector for this clip.
+        // We need to shift all data after this NodeVector to make room.
+        int insertOffset = (intptr_t)existing->nodes - (intptr_t)mNodeStart + existing->size * (int)sizeof(CharGraphNode);
+        int oldSize = existing->size;
+        int newByteSize = BytesInMemory() + (int)sizeof(CharGraphNode);
+        existing = Resize(newByteSize, existing);
+        // existing now points within potentially-reallocated mNodeStart
+        // Shift everything after the insertion point
+        char *insertAt = (char *)mNodeStart + insertOffset;
+        int bytesAfter = (intptr_t)mNodeEnd - (intptr_t)insertAt - (int)sizeof(CharGraphNode);
+        if (bytesAfter > 0) {
+            memmove(insertAt + sizeof(CharGraphNode), insertAt, bytesAfter);
+        }
+        // Write node and update count
+        NodeVector *vec = FindNodes(clip);
+        if (vec) {
+            vec->nodes[oldSize] = node;
+            vec->size = oldSize + 1;
+        }
+    } else {
+        // Create a new NodeVector at the end of the buffer.
+        // NodeVector layout (PPC): ObjOwnerPtr<CharClip>(0x14) + int(0x4) + CharGraphNode[size](size*8)
+        // For a single node: 0x14 + 0x4 + 0x8 = 0x20 bytes
+        // We use Next() to compute the size: Next() = nodes + size, for size=1 that's &nodes[1]
+        // sizeof single-node entry = offsetof(nodes) + 1*sizeof(CharGraphNode)
+        int existingBytes = BytesInMemory();
+        // offset of 'nodes' within NodeVector on PPC: ObjOwnerPtr is 0x14, int is 0x4
+        // But we can compute it portably: since Next() is defined as nodes+size, for empty: nodes+0 = Next's base
+        // For adding the clip ptr + size + 1 node:
+        int nodeVecHeaderSize = (int)sizeof(NodeVector) - (int)sizeof(CharGraphNode); // clip + size fields
+        Resize(existingBytes + nodeVecHeaderSize + (int)sizeof(CharGraphNode), nullptr);
+        NodeVector *newVec = (NodeVector *)((char *)mNodeStart + existingBytes);
+        new (&newVec->clip) ObjOwnerPtr<CharClip>(mOwner, clip);
+        newVec->size = 1;
+        newVec->nodes[0] = node;
+    }
+}
+
 void CharClip::Transitions::RemoveClip(CharClip *clip) {
     NodeVector *node = FindNodes(clip);
     if (node)

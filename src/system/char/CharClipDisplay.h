@@ -36,8 +36,9 @@ public:
     char mClipNameBuffer[64];
     float mPadding;
 
-protected:
     static float sZoom;
+
+protected:
     static float sEm;
     static ObjectDir *sDir;
 };

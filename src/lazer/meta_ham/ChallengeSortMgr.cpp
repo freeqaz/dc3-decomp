@@ -4,7 +4,7 @@
 #include "ChallengeSortNode.h"
 #include "NavListSortMgr.h"
 #include "hamobj/HamGameData.h"
-#include "lazer/game/GameMode.h"
+#include "game/GameMode.h"
 #include "macros.h"
 #include "meta_ham/NavListNode.h"
 #include "obj/Data.h"

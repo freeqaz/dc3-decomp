@@ -1,6 +1,10 @@
 #include "flow/FlowPickOne.h"
 #include "flow/FlowNode.h"
+#include "flow/DrivenPropertyEntry.h"
+#include "math/Rand.h"
+#include "obj/Data.h"
 #include "obj/Object.h"
+#include "os/Debug.h"
 
 FlowPickOne::FlowPickOne()
     : mChoiceHistory(this), mChoiceType(kChoiceRandom), mIndex(0), mChance(1) {}
@@ -32,6 +36,127 @@ BEGIN_COPYS(FlowPickOne)
         COPY_MEMBER(mChance)
     END_COPYING_MEMBERS
 END_COPYS
+
+// Helper: get Nth element from ObjPtrVec by index
+static FlowNode *GetNthChild(ObjPtrVec<FlowNode> &vec, int n) {
+    auto it = vec.begin();
+    for (int i = 0; i < n && it != vec.end(); i++)
+        ++it;
+    return (it != vec.end()) ? it->Obj() : nullptr;
+}
+
+bool FlowPickOne::Activate() {
+    FLOW_LOG("Activate\n");
+    mStopRequested = false;
+    PushDrivenProperties();
+
+    // Chance check
+    if (mChance != 1.0f) {
+        if (mChance * 100.0f < (float)(rand() % 100)) {
+            return false;
+        }
+    }
+
+    int numChildren = mChildNodes.size();
+    if (numChildren == 0)
+        return false;
+
+    FlowNode *chosen = nullptr;
+
+    switch (mChoiceType) {
+    case kChoiceOrdered:
+        if (mIndex < 0 || mIndex >= numChildren)
+            mIndex = 0;
+        chosen = GetNthChild(mChildNodes, mIndex);
+        mIndex++;
+        break;
+    case kChoiceRandom:
+        mIndex = RandomInt(0, numChildren);
+        chosen = GetNthChild(mChildNodes, mIndex);
+        break;
+    case kChoiceRandomNoRepeat:
+        if (numChildren < 2) {
+            mIndex = 0;
+        } else {
+            int newIndex;
+            do {
+                newIndex = RandomInt(0, numChildren);
+            } while (newIndex == mIndex);
+            mIndex = newIndex;
+        }
+        chosen = GetNthChild(mChildNodes, mIndex);
+        break;
+    case kChoiceRandomJukeBox:
+        if (numChildren <= 1) {
+            if (numChildren == 1)
+                chosen = mChildNodes.begin()->Obj();
+            break;
+        }
+        {
+            int historySize = mChoiceHistory.size();
+            if (mIndex < 0 || mIndex >= historySize) {
+                // Save last chosen before clearing
+                FlowNode *lastChosen =
+                    (historySize > 0) ? GetNthChild(mChoiceHistory, historySize - 1)
+                                      : nullptr;
+                mChoiceHistory.clear();
+                // Add all children to history
+                FOREACH (it, mChildNodes) {
+                    mChoiceHistory.push_back(it->Obj());
+                }
+                // Shuffle via swap
+                int newSize = mChoiceHistory.size();
+                for (int i = newSize - 1; i > 0; i--) {
+                    int j = RandomInt(0, i + 1);
+                    mChoiceHistory.swap(i, j);
+                }
+                mIndex = 0;
+                // If first element is same as lastChosen, start at 1
+                if (lastChosen && newSize > 0 &&
+                    mChoiceHistory.begin()->Obj() == lastChosen) {
+                    mIndex = 1;
+                }
+                historySize = newSize;
+            }
+            if (mIndex < historySize) {
+                chosen = GetNthChild(mChoiceHistory, mIndex);
+                mIndex++;
+            }
+        }
+        break;
+    case kChoiceUseIndex:
+        {
+            int adjustedIndex = mIndex % numChildren;
+            mIndex = adjustedIndex;
+            chosen = GetNthChild(mChildNodes, adjustedIndex);
+        }
+        mIndex++;
+        break;
+    default:
+        MILO_NOTIFY_ONCE("Bad ChoiceType in FlowPickOne!");
+        break;
+    }
+
+    if (chosen) {
+        ActivateChild(chosen);
+    }
+    return !mRunningNodes.empty();
+}
+
+void FlowPickOne::OnChoiceTypeChanged() {
+    if (mChoiceType != kChoiceUseIndex) {
+        // Remove "index" driven property entry if present
+        FOREACH (it, mDrivenPropEntries) {
+            if (it->Node().Type() == kDataArray) {
+                DataArray *arr = it->Node().Array();
+                if (arr && arr->Size() > 0 && arr->Node(0).Sym() == "index") {
+                    mDrivenPropEntries.erase(it);
+                    return;
+                }
+            }
+        }
+    }
+}
 
 INIT_REVS(1, 0)
 

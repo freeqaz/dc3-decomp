@@ -139,7 +139,7 @@
 
 #ifdef HAVE_ZLIB_H
 // #include <zlib.h> /* for content-encoding */
-#include "system/zlib/zlib.h"
+#include "zlib/zlib.h"
 #ifdef __SYMBIAN32__
 /* zlib pollutes the namespace with this definition */
 #undef WIN32

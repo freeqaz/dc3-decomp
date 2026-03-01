@@ -9,6 +9,7 @@ public:
 
     void Update(const Skeleton &, int);
     void Clear();
+    float GetHandHeight() const { return mHandHeight; }
 
 protected:
     SkeletonSide mSide; // 0x4

@@ -1,7 +1,9 @@
 #include "flow/FlowManager.h"
 #include "flow/FlowNode.h"
 #include "obj/Data.h"
+#include "os/Timer.h"
 #include "rndobj/Overlay.h"
+#include "utl/MakeString.h"
 
 FlowManager *TheFlowMgr;
 
@@ -13,7 +15,7 @@ FlowManager::FlowManager() : unk2c(0), mExecuting(0), mPollables(this) {
     mLastFrameTime = 0;
     mElapsedTime = 0;
     for (int i = 0; i < 60; i++) {
-        mFrameTimeSamples[i] = 0;
+        mFrameTimeSamples[i] = 0.0f;
     }
     mFlowOverlay = RndOverlay::Find("flow", false);
     mFlowPeakOverlay = RndOverlay::Find("flow_peak", false);
@@ -54,10 +56,11 @@ void FlowManager::AddEventTime(Symbol s, float f1) {
 }
 
 void FlowManager::Poll() {
-    float f31 = mLastFrameTime;
     mLastFrameTime = 0;
     Timer timer;
     timer.Reset();
+    timer.Start();
+
     mExecuting = true;
 
     for (std::map<FlowNode *, FlowNode::QueueState>::iterator it = mFlowQueue.begin();
@@ -75,46 +78,121 @@ void FlowManager::Poll() {
     }
 
     mExecuting = false;
-    float f27 = timer.Ms() - mLastFrameTime;
-    mElapsedTime = f27 + mFrameTimeAccumulator + f31;
+    timer.Stop();
+    unk2c = false;
+    float timerMs = timer.Ms() - mLastFrameTime;
 
-    float f30 = -1.0f;
-    float f29 = -1.0f;
+    float eventTimeSum = 0.0f;
+    Symbol peakSym(NULL);
+    Symbol peakElapsedSym(NULL);
+    float maxElapsedTime = -1.0f;
+    float maxEventTime = -1.0f;
 
-    for (std::map<Symbol, DataNode>::iterator it = mEventTimes.begin();
-         it != mEventTimes.end();
-         ++it) {
-        DataNode &node = it->second;
-        float fval = node.Array()->Float(0);
-        float fval2 = node.Array()->Float(2);
-
-        if (!(f30 > fval)) {
-            f30 = fval;
-            mFrameTimeAccumulator = fval;
+    if (!mEventTimes.empty()) {
+        maxEventTime = maxElapsedTime;
+        if (mFlowEventOverlay->Showing()) {
+            *mFlowEventOverlay << "\n\n\n\n\n\n\n\n\n\n";
         }
-        if (!(fval2 < f29)) {
-            f29 = fval2;
+
+        for (std::map<Symbol, DataNode>::iterator it = mEventTimes.begin();
+             it != mEventTimes.end();
+             ++it) {
+            DataNode node(it->second);
+            float eventTime = node.Array()->Float(0);
+            float elapsedTime = node.Array()->Float(2);
+
+            eventTimeSum += eventTime;
+
+            if (eventTime >= maxEventTime) {
+                maxEventTime = eventTime;
+                peakSym = it->first;
+            }
+            if (elapsedTime >= maxElapsedTime) {
+                maxElapsedTime = elapsedTime;
+                peakElapsedSym = it->first;
+            }
+
+            if (mFlowEventOverlay->Showing()) {
+                float f2 = node.Array()->Float(2);
+                float f0 = node.Array()->Float(0);
+                int count = node.Array()->Int(1);
+                *mFlowEventOverlay
+                    << MakeString("%s    count: %i   time: %.3f ms   task: %.3f ms\n", it->first.Str(), count, f0, f2);
+            }
+        }
+
+        if (mFlowOverlay->Showing()) {
+            *mFlowOverlay << MakeString(
+                "Worst:   FlowTime: %s  %.3f    TaskTime: %s  %.3f\n",
+                peakSym.Str(),
+                maxEventTime,
+                peakElapsedSym.Str(),
+                maxElapsedTime
+            );
         }
     }
 
-    float total = f27 + f31 + mFrameTimeAccumulator;
+    float total = timerMs + eventTimeSum + mFrameTimeAccumulator;
+
+    if (mFlowOverlay->Showing()) {
+        *mFlowOverlay << MakeString(
+            "Events: %.3f ms  %i Commands in %.3f ms  Release: %.3f ms  Tasks: %.3f ms\n",
+            total,
+            (int)mEventTimes.size(),
+            maxEventTime,
+            maxElapsedTime,
+            timerMs
+        );
+    }
+
+    mFrameTimeSamples[mFrameCounterModulo] = total;
+    mFrameCounterModulo++;
 
     if (total > mPeakFrameTime) {
         mPeakFrameTime = total;
-        mFrameCounterModulo++;
-        if (mFrameCounterModulo >= 0x3C) {
-            mPeakFrameTime = 0;
-            float avg = 0;
-            for (int i = 0; i < 60; i++) {
-                avg += mFrameTimeSamples[i];
-            }
-            mFrameCounterModulo = 0;
-            mElapsedTime = avg * 0.01666667f;
+        DataArrayPtr ptr(peakSym, maxEventTime, peakElapsedSym, maxElapsedTime, total);
+        DataNode dn(ptr);
+        mPeakFrameInfo = dn;
+    }
+
+    if (mFrameCounterModulo >= 60) {
+        mAvgFrameTime = 0;
+        for (int i = 0; i < 60; i++) {
+            mAvgFrameTime += mFrameTimeSamples[i];
         }
+        mPeakFrameTime = 0;
+        mFrameCounterModulo = 0;
+        mAvgFrameTime *= (1.0f / 60.0f);
+
+        if (mPeakFrameInfo.Type() == kDataArray) {
+            DataArray *arr = mPeakFrameInfo.Array();
+            float peakTime = arr->Float(1);
+            if (peakTime > 0 && mFlowPeakOverlay->Showing()) {
+                float pt = arr->Float(1);
+                Symbol s = arr->Sym(0);
+                *mFlowPeakOverlay << MakeString("%s %.1f", s, pt);
+            }
+            float peakElapsed = arr->Float(3);
+            if (peakElapsed > 0 && mFlowTaskOverlay->Showing()) {
+                float pe = arr->Float(3);
+                Symbol s2 = arr->Sym(2);
+                *mFlowTaskOverlay << MakeString("%s %.1f", s2, pe);
+            }
+        }
+    }
+
+    if (mFlowOverlay->Showing()) {
+        *mFlowOverlay
+            << MakeString("Average: %.3f ms   Peak: %.3f ms    Frame: %.3f ms\n", mAvgFrameTime, mPeakFrameTime, total);
+    }
+
+    Symbol flowSym("flow");
+    Timer *autoTimer = AutoTimer::GetTimer(flowSym);
+    if (autoTimer) {
+        autoTimer->SetLastMs(total);
     }
 
     mEventTimes.clear();
     mFrameTimeAccumulator = 0;
     mLastFrameTime = 0;
-    unk2c = false;
 }

@@ -17,7 +17,7 @@
 #include "os/Debug.h"
 #include "stl/_vector.h"
 #include "ui/UI.h"
-#include "lazer/net_ham/RockCentral.h"
+#include "net_ham/RockCentral.h"
 #include "ui/UILabel.h"
 #include "ui/UIListCustom.h"
 #include "ui/UIListLabel.h"

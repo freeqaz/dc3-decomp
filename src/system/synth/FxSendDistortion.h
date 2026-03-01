@@ -17,7 +17,11 @@ public:
     OBJ_MEM_OVERLOAD(0xF);
     NEW_OBJ(FxSendDistortion)
 
+#ifdef HX_NATIVE
+public:
+#else
 protected:
+#endif
     FxSendDistortion();
 
     /** "amount of drive". Ranges from 0 to 100. */

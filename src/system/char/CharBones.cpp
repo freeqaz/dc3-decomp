@@ -130,7 +130,7 @@ CharBones::Type CharBones::TypeOf(Symbol s) {
                 return TYPE_QUAT;
             case 'r': {
                 // check if rot is x, y, or z
-                char next = p[2];
+                char next = p[3];
                 if (next >= 'x' && next <= 'z')
                     return (Type)(next - 'u');
             }
@@ -221,6 +221,20 @@ void CharBones::ListBones(std::list<Bone> &bones) const {
     for (int i = 0; i < mBones.size(); i++) {
         bones.push_back(mBones[i]);
     }
+}
+
+void CharBones::AddBones(const std::vector<Bone> &vec) {
+    for (std::vector<Bone>::const_iterator it = vec.begin(); it != vec.end(); ++it) {
+        AddBoneInternal(*it);
+    }
+    ReallocateInternal();
+}
+
+void CharBones::AddBones(const std::list<Bone> &bones) {
+    for (std::list<Bone>::const_iterator it = bones.begin(); it != bones.end(); ++it) {
+        AddBoneInternal(*it);
+    }
+    ReallocateInternal();
 }
 
 void CharBones::ClearBones() {

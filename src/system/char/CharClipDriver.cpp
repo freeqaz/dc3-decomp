@@ -5,6 +5,7 @@
 #include "math/Rand.h"
 #include "obj/Msg.h"
 #include "obj/Object.h"
+#include "obj/Task.h"
 #include "rndobj/Anim.h"
 #include "utl/Symbol.h"
 
@@ -136,6 +137,36 @@ CharClipDriver *CharClipDriver::Exit(bool b) {
         syncAnim->EndAnim();
     delete this;
     return ret;
+}
+
+void CharClipDriver::ExecuteEvent(Symbol sym) {
+    if (!mClip || !mClip->RefOwner())
+        return;
+    Hmx::Object *owner = mClip->RefOwner();
+    static Symbol clip_event("clip_event");
+    Message msg(clip_event, sym, mClip.Ptr());
+    owner->Handle(msg, false);
+}
+
+void CharClipDriver::SetBeatOffset(float offset, TaskUnits units, Symbol sym) {
+    if (!mClip)
+        return;
+    float beat;
+    if (units == kTaskSeconds) {
+        // Convert time offset to beats via clip's beat track
+        beat = mClip->FrameToBeat(mClip->FramesPerSec() * offset);
+    } else {
+        beat = offset;
+    }
+    // Find matching beat event and set mBeat offset relative to it
+    std::vector<CharClip::BeatEvent> events = mClip->BeatEvents();
+    for (int i = 0; i < (int)events.size(); i++) {
+        if (events[i].event == sym) {
+            mBeat = events[i].beat + beat;
+            return;
+        }
+    }
+    mBeat += beat;
 }
 
 CharClipDriver *CharClipDriver::DeleteRef(ObjRef *ref, bool &b) {

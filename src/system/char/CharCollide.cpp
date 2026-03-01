@@ -123,6 +123,8 @@ BEGIN_COPYS(CharCollide)
     END_COPYING_MEMBERS
 END_COPYS
 
+void CharCollide::Highlight() {}
+
 void CharCollide::SyncShape() {
     if (mCurLength[0] > mCurLength[1]) {
         mCurLength[0] = mCurLength[1];

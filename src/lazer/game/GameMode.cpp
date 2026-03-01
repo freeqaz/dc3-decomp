@@ -1,4 +1,4 @@
-#include "lazer/game/GameMode.h"
+#include "game/GameMode.h"
 
 bool (*g_LoaderModeCallback)(const Symbol &);
 

@@ -259,7 +259,7 @@ cleaned up via destructor hooks, pipeline cache bounded with warnings.
 **Deliverable**: Game renders a venue with characters. Visual fidelity may be rough
 but geometry, textures, and animation are correct.
 
-### Phase 3: Audio — PARTIALLY COMPLETE
+### Phase 3: Audio — COMPLETE
 
 **Goal**: Music playback synchronized with gameplay. SFX and voice.
 
@@ -276,9 +276,11 @@ for the detailed sub-phase plan.
 - [x] Wire `StreamReceiver::sFactory` in Synth init (sub-phase 3.3)
 - [x] `SampleInstNative` implemented and wired to `SynthSample::NewInst()` (sub-phase 3.4)
 - [x] Audio mixing + volume/pan in AudioDevice callback (sub-phase 3.6)
-- [ ] OGG/Vorbis streaming for song audio (sub-phase 3.5)
-- [ ] DSP effects chain (reverb, EQ) — stub initially
-- [ ] Audio-visual sync (critical for a rhythm game — need sub-frame accuracy)
+- [x] OGG/Vorbis streaming wired — `NativeSynth::NewStreamDecoder` creates `VorbisReader` (sub-phase 3.5)
+- [x] `NativeSynth::NewStreamFile` opens real files + detects codec from extension
+- [x] `NativeSynth::NewStream` creates real `StandardStream` instead of `StreamNull`
+- [x] DSP effects chain — `FxSendNative` processes EQ, compressor, delay, distortion, flanger, chorus, bitcrush, wah, reverb via portable DSP classes
+- [x] Audio-visual sync — `sAudioOffsetMs` configurable via `synth { audio_offset_ms }`, applied in `StandardStream::GetTime()`
 
 **Deliverable**: Songs play in sync with gameplay. Hit/miss feedback sounds work.
 

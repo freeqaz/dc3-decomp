@@ -226,6 +226,40 @@ bool BaseDisplacementNode::Displacements(
     return false;
 }
 
+bool BaseDisplacementNode::Displacements(
+    const ErrorFrameInput &frame_input,
+    DisplacementData &dispData,
+    Ham1DisplacementData &ham1Data
+) const {
+    bool ok = Displacements(frame_input, dispData);
+    // Ham1-style: compute angle-based displacement data
+    if (ok) {
+        Vector3 &jd = dispData.mJointDisplacement;
+        Vector3 &bjd = dispData.mBaseJointDisplacement;
+        float jdLen = Length(jd);
+        float bjdLen = Length(bjd);
+        ham1Data.unk0 = bjdLen > 0 ? (jdLen / bjdLen) : 1.0f;
+        if (jdLen > 0.0001f && bjdLen > 0.0001f) {
+            Normalize(jd, ham1Data.unk4);
+            ham1Data.unk14 = true;
+            ham1Data.unk18 = Dot(jd, bjd) / (jdLen * bjdLen);
+            ham1Data.unk1c = acosf(Clamp(-1.0f, ham1Data.unk18, 1.0f));
+        } else {
+            ham1Data.unk4.Zero();
+            ham1Data.unk14 = false;
+            ham1Data.unk18 = 1.0f;
+            ham1Data.unk1c = 0.0f;
+        }
+    } else {
+        ham1Data.unk0 = 1.0f;
+        ham1Data.unk4.Zero();
+        ham1Data.unk14 = false;
+        ham1Data.unk18 = 1.0f;
+        ham1Data.unk1c = 0.0f;
+    }
+    return ok;
+}
+
 void DistanceToErrors(const Vector3 &a, const Vector3 &b, const Vector3 &c, Vector3 &d) {
     Subtract(a, b, d);
 
@@ -274,6 +308,44 @@ void Ham1DisplacementNode::CalcError(
     Ham1DisplacementData ham1DispData;
     Errors(frame_input, node_input, errData, dispData, ham1DispData);
     vout.x = errData.unk4 * errData.unk8 + errData.unk0;
+}
+
+void Ham1DisplacementNode::Errors(
+    const ErrorFrameInput &frame_input,
+    const ErrorNodeInput &node_input,
+    ErrorData &errData,
+    DisplacementData &dispData,
+    Ham1DisplacementData &ham1Data
+) const {
+    MILO_ASSERT(node_input.mNodeWeight, 0x190);
+    bool ok = Displacements(frame_input, dispData, ham1Data);
+    if (!ok) {
+        errData.unk0 = 0;
+        errData.unk4 = 0;
+        errData.unk8 = 0;
+        return;
+    }
+    // Compute scale based on potential angle
+    float angleDist = ScaleDistToError(mPotentialAngleOp, ham1Data.unk1c);
+    // Compute magnitude error using Ham1NodeWeight
+    const Ham1NodeWeight *nw = node_input.mNodeWeight;
+    float jdLen = Length(dispData.mJointDisplacement);
+    float bjdLen = Length(dispData.mBaseJointDisplacement);
+    // Scale base by bone length ratio
+    float lenRatio = ham1Data.unk0;
+    ScaleOp op1;
+    op1.mType = kErrorScaleDistSq;
+    op1.mPerfectDist = nw->mPerfectDist;
+    op1.mRate = nw->mRate;
+    float err1 = ScaleDistToError(op1, fabs(jdLen - bjdLen * lenRatio));
+    ScaleOp op2;
+    op2.mType = kErrorScaleDistSq;
+    op2.mPerfectDist = nw->mPerfectDist2;
+    op2.mRate = nw->mRate2;
+    float err2 = ScaleDistToError(op2, fabs(ham1Data.unk1c));
+    errData.unk0 = angleDist;
+    errData.unk4 = err1;
+    errData.unk8 = err2;
 }
 
 PositionNode::PositionNode(ErrorNodeType e, const DataArray *cfg) : ErrorNode(e, cfg) {

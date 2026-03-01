@@ -88,6 +88,7 @@ public:
     bool TestEntering() const { return mTestEntering; }
     void SetTestEntering(bool b) { mTestEntering = b; }
     void SetMode(RibbonMode m) { mMode = m; }
+    void SetSelectToggle(bool b) { mSelectToggle = b; }
 
 private:
     void ResetAnims(bool);

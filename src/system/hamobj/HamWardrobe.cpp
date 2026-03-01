@@ -328,3 +328,88 @@ void HamWardrobe::SetDir(ObjectDir *dir) {
     }
     SyncInterestObjects(dir);
 }
+
+void HamWardrobe::PlayCrowdAnimation(Symbol animName, int flags, bool override) {
+    if (override) {
+        mCrowdOverrideActive = true;
+    }
+    static Symbol none("none");
+    if (animName != gNullStr && animName != none) {
+        if (!override) {
+            mPreviousCrowdAnimation = animName;
+            mCrowdAnimationFlags = flags;
+        }
+        static Message crowdMsg("set_state", animName, flags);
+        crowdMsg[0] = animName;
+        crowdMsg[1] = flags;
+        for (ObjPtrList<Character>::iterator it = mCrowdMembers.begin();
+             it != mCrowdMembers.end(); ++it) {
+            Character *c = *it;
+            if (c) {
+                c->Handle(crowdMsg, false);
+            }
+        }
+    }
+}
+
+void HamWardrobe::LoadCharacters(
+    Symbol outfit1,
+    Symbol outfit2,
+    Symbol crew1,
+    Symbol crew2,
+    HamBackupDancers backupType,
+    Symbol speed,
+    Symbol venue,
+    bool asyncLoad
+) {
+    unk34 = speed;
+    LoadCrowdClips(outfit1, speed, asyncLoad);
+
+    // Load main characters
+    if (!outfit1.Null()) {
+        LoadMainCharacter(0, outfit1, asyncLoad);
+    }
+    if (!outfit2.Null()) {
+        LoadMainCharacter(1, outfit2, asyncLoad);
+    }
+
+    // Setup crew/backup dancers
+    HamCharacter *backup = GetBackup(0);
+    int i = 1;
+    for (; backup != nullptr; backup = GetBackup(i++)) {
+        backup->SetOutfitDir(crew1);
+        backup->StartLoad(asyncLoad);
+    }
+}
+
+DataNode HamWardrobe::OnSetVenue(DataArray *a) {
+    Symbol venue = a->Sym(2);
+    ObjectDir *dir = Dir()->Find<ObjectDir>(venue.Str(), false);
+    if (dir) {
+        SetDir(dir);
+    }
+    return 0;
+}
+
+DataNode HamWardrobe::OnAddCrowd(DataArray *a) {
+    for (int i = 2; i < a->Size(); i++) {
+        Character *c = a->Obj<Character>(i);
+        if (c) {
+            mCrowdMembers.push_back(c);
+        }
+    }
+    return 0;
+}
+
+DataNode HamWardrobe::OnLoadCharacters(DataArray *a) {
+    Symbol outfit1 = a->ForceSym(2);
+    Symbol outfit2 = a->ForceSym(3);
+    Symbol crew1 = a->ForceSym(4);
+    Symbol crew2 = a->ForceSym(5);
+    int backupType = a->Int(6);
+    Symbol speed = a->ForceSym(7);
+    Symbol venue = a->ForceSym(8);
+    bool asyncLoad = a->Int(9);
+    LoadCharacters(outfit1, outfit2, crew1, crew2, (HamBackupDancers)backupType, speed, venue, asyncLoad);
+    return 0;
+}

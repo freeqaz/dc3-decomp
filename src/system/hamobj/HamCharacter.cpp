@@ -604,6 +604,60 @@ DataNode HamCharacter::OnCamTeleport(DataArray *a) {
     return 0;
 }
 
+ObjectDir *HamCharacter::GetNeutralSkeleton() { return mNeutralSkelDir; }
+
+void HamCharacter::SetFaceOverrideClip(Symbol clipName, bool blend) {
+    CharLipSyncDriver *driver = Find<CharLipSyncDriver>("face.lipdrv", false);
+    if (!driver) {
+        MILO_LOG(
+            "BandCharacter::SetFaceOverrideClip couldnt find  lip sync driver for %s\n",
+            Name()
+        );
+        return;
+    }
+    ObjectDir *overrideDir = Find<ObjectDir>("viseme", false);
+    if (!overrideDir) return;
+    CharClip *clip = overrideDir->Find<CharClip>(clipName.Str(), false);
+    if (!clip) {
+        MILO_LOG(
+            "BandCharacter::SetFaceOverrideClip couldn't find clip named %s for %s\n",
+            clipName.Str(),
+            Name()
+        );
+        return;
+    }
+    if (blend) {
+        driver->BlendInOverrideClip(clip, 0.2f, 1.0f);
+    } else {
+        driver->SetOverrideWeight(1.0f);
+    }
+}
+
+void HamCharacter::BlendInFaceOverrideClip(Symbol clipName, float blendIn, float blendOut) {
+    CharLipSyncDriver *driver = Find<CharLipSyncDriver>("face.lipdrv", false);
+    if (driver) {
+        ObjectDir *overrideDir = Find<ObjectDir>("viseme", false);
+        if (overrideDir) {
+            CharClip *clip = overrideDir->Find<CharClip>(clipName.Str(), false);
+            if (clip) {
+                driver->BlendInOverrideClip(clip, blendIn, blendOut);
+            }
+        }
+    }
+}
+
+DataNode HamCharacter::OnSoundPlay(const DataArray *a) {
+    if (TheSynth) {
+        Symbol bank = a->Sym(2);
+        if (mCampaignVOBank) {
+            static Symbol play("play");
+            Message msg(play, bank);
+            mCampaignVOBank->Handle(msg, false);
+        }
+    }
+    return 0;
+}
+
 #ifdef HX_NATIVE
 // TODO: real implementation clears a list
 void HamCharacter::Poll() {}

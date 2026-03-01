@@ -1,6 +1,6 @@
 #pragma once
 #include "hamobj/Difficulty.h"
-#include "lazer/meta_ham/Accomplishment.h"
+#include "meta_ham/Accomplishment.h"
 #include "obj/Data.h"
 #include "utl/Symbol.h"
 #include <vector>

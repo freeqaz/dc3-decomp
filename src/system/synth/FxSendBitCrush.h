@@ -16,7 +16,11 @@ public:
     OBJ_MEM_OVERLOAD(0xF);
     NEW_OBJ(FxSendBitCrush)
 
+#ifdef HX_NATIVE
+public:
+#else
 protected:
+#endif
     FxSendBitCrush();
 
     float mAmount; // 0x60

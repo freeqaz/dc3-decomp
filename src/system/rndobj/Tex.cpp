@@ -6,6 +6,8 @@
 #include "os/System.h"
 #include "os/Debug.h"
 #include "rndobj/Bitmap.h"
+#include "rndobj/Rnd.h"
+#include "rndobj/Utl.h"
 #include "utl/BinStream.h"
 #include "utl/CRC.h"
 #include "utl/FilePath.h"
@@ -320,6 +322,286 @@ void RndTex::SetBitmap(FileLoader *fl) {
 void RndTex::SetBitmap(const FilePath &path) {
     Loader *ldr = TheLoadMgr.ForceGetLoader(path);
     SetBitmap(dynamic_cast<FileLoader *>(ldr));
+}
+
+void RndTex::SetBitmap(int w, int h, int bpp, Type ty, bool useMips, const char *path) {
+    PresyncBitmap();
+    mWidth = w;
+    mHeight = h;
+    mBpp = bpp;
+    mType = ty;
+    mFilepath.Set(FilePath::Root().c_str(), "");
+    mNumMips = 0;
+    mBitmap.Reset();
+    if (mType & kBackBuffer) {
+        mWidth = TheRnd.Width();
+        mHeight = TheRnd.Height();
+        mBpp = TheRnd.Bpp();
+    } else if (mType & kRendered) {
+        if (useMips) {
+            for (int i = mWidth, j = mHeight; i > 0x10 && j > 0x10; i >>= 1, j >>= 1) {
+                mNumMips++;
+            }
+        }
+    } else {
+        const char *err = CheckSize(mWidth, mHeight, mBpp, mNumMips, mType, false);
+        if (err)
+            MILO_WARN(err, Name());
+        else {
+            if (!(mType & 0x204U)) {
+                int bppOut = mBpp;
+                int orderOut;
+                PlatformBppOrder(path, bppOut, orderOut, true);
+                mBitmap.Create(mWidth, mHeight, 0, bppOut, orderOut, 0, 0, 0);
+                if (useMips) {
+                    MILO_ASSERT(!useMips, 0xF8);
+                    mBitmap.GenerateMips();
+                    mNumMips = mBitmap.NumMips();
+                }
+            }
+        }
+    }
+    SyncBitmap();
+}
+
+void RndTex::SetBitmap(const RndBitmap &bmap, const char *path, bool keepFormat) {
+    PresyncBitmap();
+    mWidth = bmap.Width();
+    mHeight = bmap.Height();
+    mBpp = bmap.Bpp();
+    mType = kRegular;
+    mFilepath.Set(FilePath::Root().c_str(), "");
+    mNumMips = bmap.NumMips();
+    MILO_ASSERT(!mNumMips, 0x111);
+    const char *err = CheckSize(mWidth, mHeight, mBpp, mNumMips, mType, false);
+    if (err) {
+        MILO_WARN(err, Name());
+        mBitmap.Reset();
+    } else {
+        int bppOut = bmap.Bpp();
+        int orderOut = bmap.Order();
+        if (!keepFormat) {
+            PlatformBppOrder(path, bppOut, orderOut, bmap.IsTranslucent());
+        }
+        mBitmap.Create(bmap, bppOut, orderOut, 0);
+    }
+    SyncBitmap();
+}
+
+void RndTex::SetBitmap(const RndBitmap &bmap, const char *path, bool keepFormat, Type ty) {
+    SetBitmap(bmap, path, keepFormat);
+    mType = ty;
+}
+
+#ifndef HX_NATIVE
+void RndTex::PresyncBitmap() {}
+
+void RndTex::SyncBitmap() {}
+#endif
+
+void RndTex::SetPowerOf2() {
+    // mIsPowerOf2 field was removed in DC3 - no-op
+}
+
+bool RndTex::PowerOf2() {
+    bool wPow2 = mWidth <= 0 || (((mWidth - 1) & mWidth) == 0);
+    bool hPow2 = mHeight <= 0 || (((mHeight - 1) & mHeight) == 0);
+    return wPow2 && hPow2;
+}
+
+#ifndef HX_NATIVE
+void RndTex::Load(BinStream &bs) {
+    PreLoad(bs);
+    PostLoad(bs);
+}
+
+void RndTex::PreLoad(BinStream &bs) {
+    int revData;
+    bs.ReadEndian(&revData, 4);
+    int rev = revData & 0xffff;
+    int altRev = (unsigned int)revData >> 0x10;
+    if (rev > 11) {
+        MILO_FAIL(
+            "%s can't load new %s version %d > %d",
+            PathName(this),
+            ClassName(),
+            rev,
+            11
+        );
+    }
+    if (altRev > 0) {
+        MILO_FAIL(
+            "%s can't load new %s alt version %d > %d",
+            PathName(this),
+            ClassName(),
+            altRev,
+            0
+        );
+    }
+    if (rev > 8) {
+        Hmx::Object::Load(bs);
+    }
+    if (rev == 1) {
+        short w, h;
+        bs.ReadEndian(&w, 2);
+        bs.ReadEndian(&h, 2);
+        mWidth = w;
+        mHeight = h;
+    } else {
+        bs >> mWidth >> mHeight;
+    }
+    bs >> mBpp;
+    bs >> mFilepath;
+    if (rev > 9 && !bs.Cached()) {
+        mLoader = new FileLoader(
+            mFilepath,
+            CacheResource(mFilepath.c_str(), this),
+            kLoadFront,
+            0,
+            false,
+            true,
+            nullptr,
+            nullptr
+        );
+    }
+    bs.PushRev(packRevs(altRev, rev), this);
+}
+
+void RndTex::PostLoad(BinStream &bs) {
+    BinStreamRev d(bs, bs.PopRev(this));
+    int rev = d.rev;
+
+    // Old cubemap mask handling (pre-rev 5)
+    if (rev < 5) {
+        int cubemapMask;
+        d >> cubemapMask;
+        if (cubemapMask != 0 && !mFilepath.empty()) {
+            if (cubemapMask & 1)
+                MILO_WARN("%s: kTransparentWhite no longer supported", Name());
+            else if (cubemapMask & 2) {
+                mFilepath.insert(mFilepath.find('.'), "_tb");
+            } else if (cubemapMask & 0x10) {
+                mFilepath.insert(mFilepath.find('.'), "_ga");
+            } else if (cubemapMask & 0x20) {
+                mFilepath.insert(mFilepath.find('.'), "_gw");
+            } else if (cubemapMask & 0x40) {
+                MILO_WARN("%s: kCubeMap no longer supported", Name());
+            }
+        }
+    }
+    // Legacy bool (rev 1-2)
+    if (rev != 0 && rev < 3) {
+        bool b;
+        d >> b;
+    }
+    // MipMapK
+    if (rev > 7) {
+        d >> mMipMapK;
+    } else if (rev > 3) {
+        int mipK;
+        d >> mipK;
+        mMipMapK = mipK / 16.0f;
+    }
+    // Type
+    if (rev > 6) {
+        d >> (int &)mType;
+    } else if (rev > 5) {
+        Type types[5] = { kRegular, kRendered, kMovie, kBackBuffer, kFrontBuffer };
+        int idx;
+        d >> idx;
+        mType = types[idx];
+    } else if (rev > 4) {
+        bool wasRendered;
+        d >> wasRendered;
+        mType = wasRendered ? kRendered : kRegular;
+    }
+    // Skip extra bool (rev 7 era)
+    if (rev > 7) {
+        bool b;
+        d >> b;
+    }
+    // OptimizeForPS3 (rev 10+)
+    if (rev > 10) {
+        bool b;
+        d >> b;
+        mOptimizeForPS3 = b;
+    }
+
+    if (bs.Cached()) {
+        PresyncBitmap();
+        if (UseBottomMip()) {
+            RndBitmap tempBitmap;
+            mBitmap.Load(bs);
+            CopyBottomMip(tempBitmap, mBitmap);
+            mBitmap = tempBitmap;
+        } else {
+            mBitmap.Load(bs);
+        }
+        if (mBitmap.Width() == 0 && mType == kRegular) {
+            MILO_LOG(
+                "Bitmap %s, does not have name set, it will not be cached!\n",
+                mFilepath.c_str()
+            );
+        }
+        mNumMips = mBitmap.NumMips();
+        SyncBitmap();
+    } else if (mFilepath.empty() || mType != kRegular) {
+        MILO_ASSERT(!mNumMips, 0x3BE);
+        SetBitmap(mWidth, mHeight, mBpp, mType, false, nullptr);
+    } else if (TheLoadMgr.GetPlatform() != kPlatformNone) {
+        MILO_ASSERT(!mNumMips, 0x3C7);
+        SetBitmap(mLoader);
+        mLoader = nullptr;
+    } else {
+        RELEASE(mLoader);
+    }
+}
+#endif // !HX_NATIVE
+
+const char *
+RndTex::CheckSize(int width, int height, int bpp, int numMips, Type ty, bool file) {
+    const char *ret = nullptr;
+    if (ty == kDepthVolumeMap || ty == kDensityMap || (ty & kDeviceTexture))
+        return nullptr;
+    ret = CheckDim(width, ty, file);
+    if (!ret)
+        ret = CheckDim(height, ty, file);
+    if (!ret && bpp != 4 && bpp != 8 && bpp != 16 && bpp != 24 && bpp != 32) {
+        ret = "%s: invalid bpp";
+    }
+    int sizeBytes = (width * height * bpp) >> 3;
+    if (GetGfxMode() == 0) {
+        if (!ret && sizeBytes > 0x7FFF0) {
+            ret = "%s: size over 524,272 bytes";
+        }
+        if (!ret && (sizeBytes & 0xf)) {
+            ret = "%s: size not multiple of 16 bytes";
+        }
+        if (!ret && numMips > 0) {
+            ret = "%s: more than 0 mip levels";
+        }
+    }
+    return ret;
+}
+
+DataNode RndTex::OnSetBitmap(const DataArray *arr) {
+    // Two forms:
+    // {$this set_bitmap "path/to/texture.tex"}
+    // {$this set_bitmap width height bpp type useMips}
+    if (arr->Size() > 3) {
+        SetBitmap(
+            arr->Int(2),
+            arr->Int(3),
+            arr->Int(4),
+            (Type)arr->Int(5),
+            arr->Int(6),
+            nullptr
+        );
+    } else {
+        FilePath path(FilePath::Root().c_str(), arr->Str(2));
+        SetBitmap(path);
+    }
+    return 0;
 }
 
 DataNode RndTex::OnSetRendered(const DataArray *a) {

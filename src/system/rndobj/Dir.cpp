@@ -347,8 +347,15 @@ bool RndDir::MakeWorldSphere(Sphere &s, bool b) {
 void RndDir::DrawShowing() {
     if (!mDraws.empty()) {
         RndEnvironTracker tracker(mEnv, &WorldXfm().v);
+#ifdef HX_NATIVE
+        int idx = 0;
+#endif
         for (std::vector<RndDrawable *>::iterator it = mDraws.begin(); it != mDraws.end();
              ++it) {
+#ifdef HX_NATIVE
+            fprintf(stderr, "  RndDir::DrawShowing '%s' draw[%d]: '%s' class='%s'\n",
+                    Name(), idx++, (*it)->Name(), (*it)->ClassName());
+#endif
             (*it)->Draw();
         }
     }

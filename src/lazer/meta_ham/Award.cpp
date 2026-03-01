@@ -1,4 +1,4 @@
-#include "lazer/meta_ham/Award.h"
+#include "meta_ham/Award.h"
 #include "meta_ham/AccomplishmentManager.h"
 #include "obj/Data.h"
 #include "os/Debug.h"

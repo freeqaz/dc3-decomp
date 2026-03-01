@@ -192,6 +192,15 @@ void HamSkeletonConverter::SetPosBoneValue(String s, Vector3 v) {
     vPtr->z = v.z;
 }
 
+void HamSkeletonConverter::Set(const BaseSkeleton *skel) {
+    mIsActive = (skel != nullptr);
+    if (!skel) return;
+    // Get world joint positions in camera coordinate system
+    for (int i = 0; i < kNumJoints; i++) {
+        skel->JointPos(kCoordCamera, (SkeletonJoint)i, mJointPositions[i]);
+    }
+}
+
 void HamSkeletonConverter::RotateTowards(
     const Vector3 &v1, const Vector3 &v2, float f, Vector3 &vout
 ) {

@@ -1,4 +1,4 @@
-#include "lazer/meta_ham/PlaylistSongProvider.h"
+#include "meta_ham/PlaylistSongProvider.h"
 #include "Playlist.h"
 #include "HamSongMgr.h"
 #include "macros.h"

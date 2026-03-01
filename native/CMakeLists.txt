@@ -837,6 +837,7 @@ set(DC3_NATIVE_CORE_SOURCES
     src/audio/AudioDevice.cpp
     src/platform/StreamReceiver_Native.cpp
     src/platform/SampleInst_Native.cpp
+    src/platform/FxSendNative.cpp
     src/platform/Rnd_Wgpu.cpp
     src/platform/Mesh_Wgpu.cpp
     src/platform/Tex_Wgpu.cpp

@@ -99,6 +99,9 @@ public:
     int ConsumeData(void **, int, int);
 
     static const float kStreamEndMs;
+#ifdef HX_NATIVE
+    static float sAudioOffsetMs;
+#endif
 
 private:
     virtual void SynthPoll();

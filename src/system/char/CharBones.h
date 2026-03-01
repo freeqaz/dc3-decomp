@@ -142,4 +142,6 @@ protected:
 BinStream &operator<<(BinStream &, const CharBones::Bone &);
 BinStream &operator>>(BinStream &, CharBones::Bone &);
 
+bool PropSync(CharBones::Bone &, DataNode &, DataArray *, int, PropOp);
+
 short MakeShortAng(float);

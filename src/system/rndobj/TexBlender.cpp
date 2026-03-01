@@ -117,12 +117,7 @@ void RndTexBlender::DrawBlendList(
     const std::vector<std::pair<RndTexBlendController *, float> > &list,
     TexState state
 ) {
-    RndTex *texmap;
-    if (state != 2) {
-        texmap = mNearMap;
-    } else {
-        texmap = mFarMap;
-    }
+    RndTex *texmap = (state != 2) ? mNearMap : mFarMap;
 
     // Offset 0xC in Hmx::Object is within mRefs (ObjRef prev pointer).
     // This check verifies texture validity - non-null indicates the texture
@@ -141,6 +136,7 @@ void RndTexBlender::DrawBlendList(
 
         Transform xfm;
         xfm.Reset();
+        TheShaderMgr.SetVConstant(kVS_ViewProjMatrix, Hmx::Matrix4(xfm));
         TheShaderMgr.SetTransform(xfm);
         SetupMaterial(mat, texmap);
 
@@ -180,8 +176,7 @@ void RndTexBlender::DrawBlendList(
 
         RndCam *cam = RndCam::Current();
         if (cam) {
-            // Reinterpret mViewProjMatrix (Matrix4) as Transform - first 48 bytes match Transform layout
-            TheShaderMgr.SetTransform(*(const Transform *)&cam->GetViewProjMatrix());
+            TheShaderMgr.SetVConstant(kVS_ViewProjMatrix, cam->GetViewProjMatrix());
         }
     }
 }

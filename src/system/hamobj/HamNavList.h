@@ -117,10 +117,12 @@ public:
 
     static void Init();
     static bool sLastSelectInControllerMode;
+    static bool sForceDisengage;
 
     friend class HamScrollBehavior;
 
 private:
+    void LinkRibbonDrawState(UIListWidgetDrawState &, std::vector<HamListRibbonDrawState> &);
     void SetRibbonMode(HamListRibbon::RibbonMode);
     void SetHighlight(int);
     void SetSliding(float);
@@ -141,7 +143,6 @@ private:
     static const int sListStateMaxDisplay;
     static float sSlideSmoothAmount;
     static float sSlideTrendAmount;
-    static bool sForceDisengage;
 
     DataNode OnMsg(const ButtonDownMsg &);
 

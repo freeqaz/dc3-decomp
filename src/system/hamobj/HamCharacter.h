@@ -36,8 +36,8 @@ public:
     HamCharacter();
     // Hmx::Object
     virtual ~HamCharacter();
-    OBJ_CLASSNAME(Character);
-    OBJ_SET_TYPE(Character);
+    OBJ_CLASSNAME(HamCharacter);
+    OBJ_SET_TYPE(HamCharacter);
     virtual DataNode Handle(DataArray *, bool);
     virtual bool SyncProperty(DataNode &, DataArray *, int, PropOp);
     virtual void Save(BinStream &);

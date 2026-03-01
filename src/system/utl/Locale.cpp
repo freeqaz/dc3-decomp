@@ -273,3 +273,18 @@ const char *LocalizeFloat(const char *fmt, float num) {
     return str;
 }
 
+const char *Localize(Symbol token, bool *success, Locale &locale) {
+    if (gShowTokensCheat && !token.Null()) {
+        if (success)
+            *success = true;
+        return token.Str();
+    }
+    const char *result = locale.Localize(token, false);
+    if (success) {
+        *success = (result != nullptr);
+    }
+    if (result == nullptr) {
+        result = token.Str();
+    }
+    return result;
+}

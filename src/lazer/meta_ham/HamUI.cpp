@@ -1,4 +1,4 @@
-#include "lazer/meta_ham/HamUI.h"
+#include "meta_ham/HamUI.h"
 #include "gesture/LiveCameraInput.h"
 #include "SkeletonIdentifier.h"
 #include "game/Game.h"
@@ -656,6 +656,12 @@ DataNode HamUI::OnMsg(const UITransitionCompleteMsg &msg) {
     CurrentScreenChangedMsg screenChangeMsg(s60);
     Export(screenChangeMsg, true);
     return DATA_UNHANDLED;
+}
+
+DataNode HamUI::OnMsg(const ConnectionStatusChangedMsg &msg) {
+    static Symbol connection_status_changed("connection_status_changed");
+    TheUIEventMgr->TriggerEvent(connection_status_changed, 0);
+    return 1;
 }
 
 DataNode HamUI::OnMsg(const DiskErrorMsg &) {

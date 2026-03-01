@@ -18,7 +18,11 @@ public:
     OBJ_MEM_OVERLOAD(0xF);
     NEW_OBJ(FxSendDelay)
 
+#ifdef HX_NATIVE
+public:
+#else
 protected:
+#endif
     FxSendDelay();
 
     float mDelayTime; // 0x60

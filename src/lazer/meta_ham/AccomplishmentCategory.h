@@ -1,6 +1,6 @@
 #pragma once
 
-#include "lazer/meta_ham/Award.h"
+#include "meta_ham/Award.h"
 #include "obj/Data.h"
 #include "utl/Symbol.h"
 class AccomplishmentCategory {

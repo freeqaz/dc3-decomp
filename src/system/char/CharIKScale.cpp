@@ -1,6 +1,9 @@
 #include "char/CharIKScale.h"
 #include "char/CharWeightable.h"
+#include "math/Utl.h"
+#include "math/Vec.h"
 #include "obj/Object.h"
+#include "rndobj/Trans.h"
 
 CharIKScale::CharIKScale()
     : mDest(this), mScale(1), mSecondaryTargets(this), mBottomHeight(0), mTopHeight(0),
@@ -68,6 +71,51 @@ BEGIN_LOADS(CharIKScale)
         d >> mBottomHeight >> mTopHeight;
     }
 END_LOADS
+
+void CharIKScale::Poll() {
+    float weight = Weight();
+    if (mDest && weight != 0) {
+        if (mAutoWeight) {
+            float localZ = mDest->LocalXfm().v.z;
+            float bottom = mBottomHeight;
+            if (localZ < bottom)
+                weight = 0;
+            else if (localZ > mTopHeight)
+                weight = 1.0f;
+            else
+                weight = (localZ - bottom) / (mTopHeight - bottom);
+        }
+        if (weight != 0) {
+            Transform destXfm(mDest->WorldXfm());
+            destXfm.v = mDest->LocalXfm().v;
+            destXfm.v.z *= Interp(1.0f, mScale, weight);
+            Vector3 scaledWorldPos;
+            if (mDest->TransParent()) {
+                Multiply(destXfm.v, mDest->TransParent()->WorldXfm(), scaledWorldPos);
+            } else {
+                scaledWorldPos = destXfm.v;
+            }
+            mDest->SetWorldXfm(destXfm);
+            if (mSecondaryTargets.size() > 0) {
+                Vector3 fullScaledPos;
+                fullScaledPos = mDest->LocalXfm().v;
+                fullScaledPos.z *= mScale;
+                Vector3 fullScaledWorldPos;
+                Multiply(fullScaledPos, mDest->TransParent()->WorldXfm(), fullScaledWorldPos);
+                Vector3 offset = scaledWorldPos;
+                offset -= fullScaledWorldPos;
+                for (ObjPtrList<RndTransformable>::iterator it = mSecondaryTargets.begin();
+                     it != mSecondaryTargets.end();
+                     ++it) {
+                    RndTransformable *target = *it;
+                    Transform targetXfm(target->WorldXfm());
+                    targetXfm.v -= offset;
+                    target->SetWorldXfm(targetXfm);
+                }
+            }
+        }
+    }
+}
 
 void CharIKScale::PollDeps(
     std::list<Hmx::Object *> &changedBy, std::list<Hmx::Object *> &change

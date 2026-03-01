@@ -4,6 +4,7 @@
 #include "obj/Data.h"
 #include "obj/Dir.h"
 #include "obj/Object.h"
+#include "obj/Utl.h"
 #include "os/Debug.h"
 #include "flow/Flow.h"
 
@@ -246,7 +247,12 @@ void FlowNode::MiloPreRun() {
     }
 }
 
-// void FlowNode::MoveIntoDir(ObjectDir *, ObjectDir *) {}
+void FlowNode::MoveIntoDir(ObjectDir *from, ObjectDir *to) {
+    // Move all child nodes into the new directory
+    FOREACH (it, mChildNodes) {
+        (*it)->MoveIntoDir(from, to);
+    }
+}
 
 void FlowNode::UpdateIntensity() {
     FOREACH (it, mRunningNodes) {
@@ -254,9 +260,65 @@ void FlowNode::UpdateIntensity() {
     }
 }
 
-// FlowNode *FlowNode::DuplicateChild(FlowNode *) { return nullptr; }
+FlowNode *FlowNode::DuplicateChild(FlowNode *child) {
+    // If child is a Flow (directory), create a duplicate Flow in the same dir
+    Flow *childFlow = dynamic_cast<Flow *>(child);
+    if (!childFlow) {
+        // Duplicate non-flow child: create same type and copy
+        Symbol sym = child->ClassName();
+        Hmx::Object *newObj = Hmx::Object::NewObject(sym);
+        FlowNode *newNode = dynamic_cast<FlowNode *>(newObj);
+        if (newNode) {
+            newNode->Copy(child, kCopyDeep);
+            // Generate unique name
+            ObjectDir *dir = child->Dir();
+            if (dir) {
+                const char *uniqueName = NextName(child->Name(), dir);
+                newNode->SetName(uniqueName, dir);
+            }
+        }
+        return newNode;
+    } else {
+        // Duplicate Flow child
+        Symbol flowClass = Flow::StaticClassName();
+        Hmx::Object *newObj = Hmx::Object::NewObject(flowClass);
+        FlowNode *newNode = dynamic_cast<FlowNode *>(newObj);
+        if (newNode) {
+            newNode->Copy(child, kCopyDeep);
+        }
+        return newNode;
+    }
+}
 
-// void FlowNode::PushDrivenProperties() { sPushDrivenProperties = true; }
+void FlowNode::PushDrivenProperties() {
+    sPushDrivenProperties = true;
+    FOREACH (it, mDrivenPropEntries) {
+        DrivenPropertyEntry &entry = *it;
+        ObjVector<FlowMathOp> &mathOps =
+            const_cast<ObjVector<FlowMathOp> &>(entry.MathOps());
+        DataNode targetValue(kDataUndef, 0);
+
+        if (!mathOps.empty()) {
+            FlowMathOp &firstOp = mathOps[0];
+            Hmx::Object *drivenObj = firstOp.DrivenObj();
+
+            if (drivenObj) {
+                const DataNode &rhsNode = firstOp.Rhs();
+                if (rhsNode.Type() == kDataArray) {
+                    const DataNode *drivenVal =
+                        drivenObj->Property(rhsNode.Array(), false);
+                    if (drivenVal)
+                        targetValue = *drivenVal;
+                }
+            }
+        }
+
+        DataArray *propPath = entry.Node().Array();
+        if (propPath) {
+            SetProperty(propPath, targetValue);
+        }
+    }
+}
 
 void FlowNode::ActivateChild(FlowNode *child) {
     mRunningNodes.push_back(child);

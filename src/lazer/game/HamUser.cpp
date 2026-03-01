@@ -1,4 +1,4 @@
-#include "lazer/game/HamUser.h"
+#include "game/HamUser.h"
 #include "meta_ham/SkeletonIdentifier.h"
 #include "obj/Object.h"
 #include "os/OnlineID.h"

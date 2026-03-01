@@ -101,6 +101,8 @@ public:
     void Reteleport(const Vector3 &, bool, Symbol);
     bool TargetTeleportTransform(Symbol, Transform &);
     void TeleportTarget(RndTransformable *, const Transform &, bool);
+    int GetMinTime() const { return mMinTime; }
+    float GetZeroTime() const { return mZeroTime; }
 
     OBJ_MEM_OVERLOAD(0x16)
     NEW_OBJ(HamCamShot)
@@ -111,6 +113,8 @@ private:
     DataNode OnAllowableNextShots(const DataArray *);
     DataNode OnListAllNextShots(const DataArray *);
     DataNode OnListTargets(const DataArray *);
+
+    friend class HamDirector;
 
 protected:
     HamCamShot();

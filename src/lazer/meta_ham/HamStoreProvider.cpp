@@ -272,4 +272,84 @@ BEGIN_HANDLERS(HamStoreProvider)
     HANDLE_SUPERCLASS(Hmx::Object)
 END_HANDLERS
 
+void HamStoreProvider::OnNextSort() {
+    if (mSorts.size() > 1) {
+        mSortIndex = (mSortIndex + 1) % (int)mSorts.size();
+        Refresh();
+    }
+}
+
+void HamStoreProvider::Refresh() {
+    if (mFilteredOffers) {
+        ApplySort();
+    }
+}
+
+void HamStoreProvider::RefreshFilteredCartOffers() {
+    // Repopulate cart offers section in filtered list
+    PopulateOffersInCart();
+}
+
+void HamStoreProvider::PopulateOffersInCart() {
+    // Nothing to do here without access to the cart row data
+}
+
+void HamStoreProvider::SetFilter(HamStoreFilter const *filter) {
+    if (!filter) {
+        mFilteredOffers = mAllOffers;
+        mSorts.clear();
+        mSortIndex = 0;
+        Refresh();
+        return;
+    }
+    // Find a new vector for the filtered offers
+    auto it = unk38.find(filter->mFilterSym);
+    if (it == unk38.end()) {
+        std::vector<StoreOffer *> *offers = new std::vector<StoreOffer *>();
+        unk38[filter->mFilterSym] = offers;
+        mFilteredOffers = offers;
+    } else {
+        mFilteredOffers = it->second;
+    }
+    mFilteredOffers->clear();
+    // Copy all offers that match the filter (for now, copy all)
+    if (mAllOffers) {
+        *mFilteredOffers = *mAllOffers;
+    }
+    // Apply sort types from filter
+    mSorts = filter->mSortTypes;
+    mSortIndex = 0;
+    Refresh();
+}
+
+void HamStoreProvider::SetFilter(StoreOffer const *packOffer) {
+    // Filter to show songs in a specific pack
+    static Symbol songs("songs");
+    Symbol packSym = packOffer ? packOffer->StoreOfferData()->Sym(0) : gNullStr;
+    auto it = unk38.find(packSym);
+    if (it == unk38.end()) {
+        std::vector<StoreOffer *> *offers = new std::vector<StoreOffer *>();
+        unk38[packSym] = offers;
+        mFilteredOffers = offers;
+    } else {
+        mFilteredOffers = it->second;
+    }
+    mFilteredOffers->clear();
+    if (packOffer && mAllOffers) {
+        for (int i = 0; i < (int)mAllOffers->size(); i++) {
+            StoreOffer *offer = (*mAllOffers)[i];
+            if (packOffer->HasSong(offer)) {
+                mFilteredOffers->push_back(offer);
+            }
+        }
+    }
+    mSorts.clear();
+    mSortIndex = 0;
+}
+
+bool HamStoreProvider::ShowBrowserPurchased(StoreOffer const *offer) const {
+    if (!offer) return false;
+    return const_cast<StoreOffer *>(offer)->IsPurchased();
+}
+
 #pragma endregion HamStoreProvider

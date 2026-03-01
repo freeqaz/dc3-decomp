@@ -6,6 +6,8 @@
 #include "rndobj/Text.h"
 #include "utl/BinStream.h"
 
+// HamListRibbonDrawState ctor is defined in HamNavList.cpp
+
 #pragma region ScrollAnims
 
 void HamListRibbon::ScrollAnims::SetScrollFrame(float frame) {
@@ -383,6 +385,27 @@ float HamListRibbon::GetLabelTotalAlpha() const {
         ret *= mLabelPlaceholder->Style(i).GetAlpha();
     }
     return ret;
+}
+
+void HamListRibbon::Draw(
+    const Transform &xfm,
+    const std::vector<HamListRibbonDrawState> &drawStates,
+    bool entering,
+    bool disengaged
+) {
+    // Set our world transform
+    SetWorldXfm(xfm);
+    int numItems = (int)drawStates.size();
+    for (int i = 0; i < numItems; i++) {
+        const HamListRibbonDrawState &state = drawStates[i];
+        if (state.mHidden) continue;
+        // Set animations based on state
+        bool selected = state.mSelected;
+        float swellFrame = state.mSwellSmoother.Level();
+        SetAnims(selected, swellFrame);
+    }
+    // Draw all children
+    RndDir::DrawShowing();
 }
 
 #ifdef HX_NATIVE

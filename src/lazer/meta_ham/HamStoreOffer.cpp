@@ -24,6 +24,27 @@ HamStoreOffer::HamStoreOffer(DataArray *d, SongMgr *s) : StoreOffer(d, s) {
 
 HamStoreOffer::~HamStoreOffer() {}
 
+bool HamStoreOffer::Cmp(StoreOffer const &other, Symbol sortBy) const {
+    static Symbol title("title");
+    static Symbol artist("artist");
+    static Symbol difficulty("difficulty");
+    static Symbol release_date("release_date");
+    if (sortBy == title) {
+        return strcmp(OfferName(), other.OfferName()) < 0;
+    } else if (sortBy == artist) {
+        return strcmp(ArtistName(), other.ArtistName()) < 0;
+    } else if (sortBy == difficulty) {
+        const HamStoreOffer *hamOther = dynamic_cast<const HamStoreOffer *>(&other);
+        if (hamOther) {
+            return Difficulty() < hamOther->Difficulty();
+        }
+        return false;
+    } else if (sortBy == release_date) {
+        return false; // DateTime has no comparison operator
+    }
+    return false;
+}
+
 int HamStoreOffer::Difficulty() const {
     static Symbol difficulty("difficulty");
     Symbol s = difficulty;

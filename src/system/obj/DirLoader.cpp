@@ -692,6 +692,22 @@ void DirLoader::LoadObjs() {
                     printf("DirLoader::LoadObjs '%s': PreLoad obj='%s' class='%s' tell=%d\n",
                            mFile.c_str(), name, obj->ClassName().Str(), mStream->Tell());
                     fflush(stdout);
+                    // Hex dump first 16 bytes at current stream position
+                    {
+                        int tellBefore = mStream->Tell();
+                        unsigned char peekBuf[16];
+                        mStream->Read(peekBuf, 16);
+                        ChunkStream *cs = dynamic_cast<ChunkStream *>(mStream);
+                        if (cs) cs->Unreread(16);
+                        printf("  HEX @ tell=%d: %02x %02x %02x %02x  %02x %02x %02x %02x  "
+                               "%02x %02x %02x %02x  %02x %02x %02x %02x\n",
+                               tellBefore,
+                               peekBuf[0], peekBuf[1], peekBuf[2], peekBuf[3],
+                               peekBuf[4], peekBuf[5], peekBuf[6], peekBuf[7],
+                               peekBuf[8], peekBuf[9], peekBuf[10], peekBuf[11],
+                               peekBuf[12], peekBuf[13], peekBuf[14], peekBuf[15]);
+                        fflush(stdout);
+                    }
 #endif
                     BeginMemTrackObjectName(name);
                     if (mDir) {
@@ -760,38 +776,6 @@ void DirLoader::LoadObjs() {
                 EndMemTrackObjectName();
                 if (mRev > 1) {
                     ReadDead(*mStream);
-#ifdef HX_NATIVE
-                    printf("DirLoader::LoadObjs '%s': ReadDead done obj='%s' tell=%d\n",
-                           mFile.c_str(), obj->Name(), mStream->Tell());
-                    fflush(stdout);
-                    // SaveProxy: after ReadDead, proxy ObjectDirs may have inline
-                    // DirLoader-format content written by SaveProxy().
-                    // Detect by peeking: DirLoader mRev is a plain int > 28 with
-                    // upper 16 bits = 0 (no class has rev > 28 or altRev in that range).
-                    if (dynamic_cast<ObjectDir *>(obj)) {
-                        ChunkStream *cs = dynamic_cast<ChunkStream *>(mStream);
-                        if (cs && mStream->Eof() == NotEof) {
-                            int peekVal;
-                            *mStream >> peekVal;
-                            cs->Unreread(4);
-                            bool isDirLoaderFormat = (peekVal & 0xFFFF0000) == 0
-                                                  && (peekVal & 0xFFFF) > 28;
-                            if (isDirLoaderFormat) {
-                                printf("DirLoader::LoadObjs '%s': consuming SaveProxy data "
-                                       "for '%s' (peek=0x%x) tell=%d\n",
-                                       mFile.c_str(), obj->Name(), peekVal, mStream->Tell());
-                                fflush(stdout);
-                                ObjectDir *proxySubDir = DirLoader::LoadObjects(mFile, nullptr, mStream);
-                                if (proxySubDir) {
-                                    printf("DirLoader::LoadObjs '%s': SaveProxy consumed '%s' tell=%d\n",
-                                           mFile.c_str(), proxySubDir->Name(), mStream->Tell());
-                                    fflush(stdout);
-                                    delete proxySubDir;
-                                }
-                            }
-                        }
-                    }
-#endif
                 }
             } else {
                 MILO_ASSERT(mRev > 1, 0x507);

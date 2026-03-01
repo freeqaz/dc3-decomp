@@ -58,6 +58,51 @@ void HamDriver::PreLoad(BinStream &bs) {
     d >> mBones;
 }
 
+void HamDriver::PostLoad(BinStream &) {}
+
+void HamDriver::Poll() {
+    if (mBones && mLayers.mWeight > 0.0f) {
+        mLayers.Eval(mLayers.mWeight);
+        mBones->ScaleDown(*mBones, 1.0f - mLayers.mWeight);
+        mLayers.Play(*mBones);
+        mDisplayBeat = TheTaskMgr.Beat();
+    }
+}
+
+float HamDriver::DisplayRecurse(Layer *layer, int indent, float y) {
+    LayerClip *clip = dynamic_cast<LayerClip *>(layer);
+    if (clip) {
+        Hmx::Color color(1.0f, 1.0f, 1.0f, 1.0f);
+        Vector2 screenPos(
+            CharClipDisplay::GetSEm() + CharClipDisplay::LineSpacing() * (float)indent, y
+        );
+        const char *clipName = clip->mClip ? clip->mClip->Name() : "null";
+        const char *stringDisplay =
+            MakeString("  %s w:%.2f b:%.2f cb:%.2f", clipName, clip->mEaseWeight, layer->mBeat, clip->mClipBeat);
+        TheRnd.DrawString(stringDisplay, screenPos, color, true);
+        return y + CharClipDisplay::LineSpacing();
+    } else {
+        LayerArray *arr = dynamic_cast<LayerArray *>(layer);
+        if (arr) {
+            Hmx::Color color(1.0f, 1.0f, 1.0f, 1.0f);
+            Vector2 screenPos(
+                CharClipDisplay::GetSEm() + CharClipDisplay::LineSpacing() * (float)indent, y
+            );
+            const char *stringDisplay =
+                MakeString("%s w:%.2f b:%.2f", arr->mName, arr->mWeight, layer->mBeat);
+            TheRnd.DrawString(stringDisplay, screenPos, color, true);
+            float nextY = y + CharClipDisplay::LineSpacing();
+            if (!arr->mLayers.empty() && arr->mWeight != 0.0f) {
+                FOREACH (it, arr->mLayers) {
+                    nextY = DisplayRecurse(*it, indent + 1, nextY);
+                }
+            }
+            return nextY;
+        }
+    }
+    return y;
+}
+
 void HamDriver::Enter() { Clear(); }
 
 void HamDriver::Highlight() {
@@ -164,6 +209,12 @@ bool HamDriver::LayerClip::Replace(ObjRef *ref, Hmx::Object *obj) {
 #pragma endregion
 
 #pragma region HamDriver::LayerArray
+
+void HamDriver::LayerArray::Eval(float beat) {
+    FOREACH (it, mLayers) {
+        (*it)->Eval(beat);
+    }
+}
 
 void HamDriver::LayerArray::Clear() {
     FOREACH (it, mLayers) {
