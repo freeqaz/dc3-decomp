@@ -314,11 +314,12 @@ void WgpuRnd::WriteSceneUniforms() {
     // Environment (fog, ambient, lights)
     RndEnviron* env = RndEnviron::Current();
     if (env) {
-        // Ambient color
+        // Ambient color (with minimum floor for visibility)
         const Hmx::Color& amb = env->AmbientColor();
-        scene.ambientColor[0] = amb.red;
-        scene.ambientColor[1] = amb.green;
-        scene.ambientColor[2] = amb.blue;
+        float minAmbient = 0.35f;
+        scene.ambientColor[0] = amb.red > minAmbient ? amb.red : minAmbient;
+        scene.ambientColor[1] = amb.green > minAmbient ? amb.green : minAmbient;
+        scene.ambientColor[2] = amb.blue > minAmbient ? amb.blue : minAmbient;
         scene.ambientColor[3] = 1.0f;
 
         // Fog
@@ -333,19 +334,19 @@ void WgpuRnd::WriteSceneUniforms() {
         }
 
         // First directional light — try to get from the environment's light list
-        // For Tier 1, use a default overhead light
-        scene.lightDir[0] = 0.0f;
-        scene.lightDir[1] = -1.0f;
-        scene.lightDir[2] = 0.3f;
+        // For Tier 1, use a default three-quarter light for good visibility
+        scene.lightDir[0] = -0.4f;
+        scene.lightDir[1] = -0.7f;
+        scene.lightDir[2] = 0.5f;
         scene.lightColor[0] = scene.lightColor[1] = scene.lightColor[2] = 1.0f;
     } else {
         // Default lighting
-        scene.ambientColor[0] = scene.ambientColor[1] = scene.ambientColor[2] = 0.3f;
+        scene.ambientColor[0] = scene.ambientColor[1] = scene.ambientColor[2] = 0.35f;
         scene.ambientColor[3] = 1.0f;
-        scene.lightDir[0] = 0.0f;
-        scene.lightDir[1] = -1.0f;
-        scene.lightDir[2] = 0.3f;
-        scene.lightColor[0] = scene.lightColor[1] = scene.lightColor[2] = 0.8f;
+        scene.lightDir[0] = -0.4f;
+        scene.lightDir[1] = -0.7f;
+        scene.lightDir[2] = 0.5f;
+        scene.lightColor[0] = scene.lightColor[1] = scene.lightColor[2] = 0.9f;
     }
 
     // Upload scene uniforms

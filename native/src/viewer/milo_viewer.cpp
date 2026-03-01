@@ -54,9 +54,9 @@ static void Mat4Multiply(const float* a, const float* b, float* out) {
 // Orbit Camera
 // ============================================================================
 struct OrbitCamera {
-    float azimuth = 0.0f;       // radians around Y axis
+    float azimuth = 0.4f;       // radians around Y axis
     float elevation = 0.3f;     // radians above horizon
-    float distance = 10.0f;     // distance from target
+    float distance = 3.0f;      // distance from target
     float targetX = 0.0f;
     float targetY = 1.0f;       // Y=1 centers on typical character height
     float targetZ = 0.0f;
@@ -459,6 +459,98 @@ int main(int argc, char** argv) {
         origin.Set(0, 0, 0);
         scene->GetEnv()->Select(&origin);
         printf("Milo Viewer: using scene environment '%s'\n", scene->GetEnv()->Name());
+    }
+
+    // ---- Auto-frame: compute bounding box from mesh positions and set orbit camera ----
+    {
+        float minX = 1e10f, minY = 1e10f, minZ = 1e10f;
+        float maxX = -1e10f, maxY = -1e10f, maxZ = -1e10f;
+        int meshCount = 0;
+
+        ObjDirItr<RndMesh> bboxIt(baseScene, true);
+        while (bboxIt) {
+            RndMesh* m = bboxIt;
+            const Transform& xfm = m->WorldXfm();
+
+            // Use mesh world position as approximate center
+            float px = xfm.v.x, py = xfm.v.y, pz = xfm.v.z;
+
+            // Try to compute actual vertex bounding box
+            RndMesh* owner = m->GetGeomOwner();
+            if (!owner) owner = m;
+
+            int nv = owner->NumVerts();
+            int ncv = owner->NumCompressedVerts();
+
+            if (nv > 0) {
+                for (int i = 0; i < nv; i++) {
+                    const RndMesh::Vert& v = owner->Verts(i);
+                    // Transform vertex by world matrix
+                    float wx = xfm.m.x.x * v.pos.x + xfm.m.y.x * v.pos.y + xfm.m.z.x * v.pos.z + xfm.v.x;
+                    float wy = xfm.m.x.y * v.pos.x + xfm.m.y.y * v.pos.y + xfm.m.z.y * v.pos.z + xfm.v.y;
+                    float wz = xfm.m.x.z * v.pos.x + xfm.m.y.z * v.pos.y + xfm.m.z.z * v.pos.z + xfm.v.z;
+                    if (wx < minX) minX = wx; if (wx > maxX) maxX = wx;
+                    if (wy < minY) minY = wy; if (wy > maxY) maxY = wy;
+                    if (wz < minZ) minZ = wz; if (wz > maxZ) maxZ = wz;
+                }
+            } else if (ncv > 0 && owner->CompressedVerts()) {
+                // Compressed verts: unpack a few to get bounds
+                const unsigned char* data = owner->CompressedVerts();
+                struct CVert { int px, py, pz, n, c, t1, t2, b1, b2; }; // 36 bytes
+                const CVert* cverts = (const CVert*)data;
+                for (int i = 0; i < ncv; i++) {
+                    // Big-endian floats stored as ints
+                    unsigned int bx = __builtin_bswap32((unsigned int)cverts[i].px);
+                    unsigned int by = __builtin_bswap32((unsigned int)cverts[i].py);
+                    unsigned int bz = __builtin_bswap32((unsigned int)cverts[i].pz);
+                    float fx, fy, fz;
+                    memcpy(&fx, &bx, 4);
+                    memcpy(&fy, &by, 4);
+                    memcpy(&fz, &bz, 4);
+                    // Transform by world
+                    float wx = xfm.m.x.x * fx + xfm.m.y.x * fy + xfm.m.z.x * fz + xfm.v.x;
+                    float wy = xfm.m.x.y * fx + xfm.m.y.y * fy + xfm.m.z.y * fz + xfm.v.y;
+                    float wz = xfm.m.x.z * fx + xfm.m.y.z * fy + xfm.m.z.z * fz + xfm.v.z;
+                    if (wx < minX) minX = wx; if (wx > maxX) maxX = wx;
+                    if (wy < minY) minY = wy; if (wy > maxY) maxY = wy;
+                    if (wz < minZ) minZ = wz; if (wz > maxZ) maxZ = wz;
+                }
+            } else {
+                // No vertex data — use the transform position as a point
+                if (px < minX) minX = px; if (px > maxX) maxX = px;
+                if (py < minY) minY = py; if (py > maxY) maxY = py;
+                if (pz < minZ) minZ = pz; if (pz > maxZ) maxZ = pz;
+            }
+            meshCount++;
+            ++bboxIt;
+        }
+
+        if (meshCount > 0 && maxX > minX - 1e6f) {
+            float cx = (minX + maxX) * 0.5f;
+            float cy = (minY + maxY) * 0.5f;
+            float cz = (minZ + maxZ) * 0.5f;
+            float sx = maxX - minX;
+            float sy = maxY - minY;
+            float sz = maxZ - minZ;
+            float extent = sqrtf(sx * sx + sy * sy + sz * sz) * 0.5f;
+            if (extent < 0.01f) extent = 1.0f;
+
+            gOrbitCam.targetX = cx;
+            gOrbitCam.targetY = cy;
+            gOrbitCam.targetZ = cz;
+            // Use max single-axis extent for better framing of elongated objects
+            float maxAxis = sx;
+            if (sy > maxAxis) maxAxis = sy;
+            if (sz > maxAxis) maxAxis = sz;
+            gOrbitCam.distance = maxAxis * 2.0f;
+            if (gOrbitCam.distance < extent * 1.5f) gOrbitCam.distance = extent * 1.5f;
+            if (gOrbitCam.distance < 3.0f) gOrbitCam.distance = 3.0f;
+            gOrbitCam.elevation = 0.3f;
+            gOrbitCam.azimuth = 0.4f;
+
+            printf("Milo Viewer: auto-frame bbox (%.2f,%.2f,%.2f)-(%.2f,%.2f,%.2f) center=(%.2f,%.2f,%.2f) dist=%.2f\n",
+                   minX, minY, minZ, maxX, maxY, maxZ, cx, cy, cz, gOrbitCam.distance);
+        }
     }
 
     // ---- Screenshot mode: render a few frames then save and exit ----

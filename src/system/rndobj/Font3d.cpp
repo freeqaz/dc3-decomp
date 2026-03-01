@@ -6,7 +6,12 @@ bool RndFont3d::HasChar(unsigned short us) const {
 
 RndFont3d::RndFont3d()
     : mMat(this), mTextureOwner(this, this), mCellSize(0, 0, 0), mInvCellSize(0, 0, 0),
-      unk8c(0, 0, 0) {}
+      unk8c(0, 0, 0) {
+#ifdef HX_NATIVE
+    printf("RndFont3d::RndFont3d() this=%p done\n", (void*)this);
+    fflush(stdout);
+#endif
+}
 
 void RndFont3d::Clear() {
     FOREACH (it, mCharInfoMap) {

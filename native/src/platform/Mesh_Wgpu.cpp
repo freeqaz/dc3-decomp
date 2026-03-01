@@ -64,11 +64,24 @@ static bool EnsureMeshUploaded(RndMesh* mesh) {
 
     int numVerts = geomOwner->NumVerts();
     int numFaces = geomOwner->NumFaces();
-    if (numVerts <= 0 || numFaces <= 0) return false;
+    int numCompressedVerts = geomOwner->NumCompressedVerts();
+
+    // Check if we have vertices (either uncompressed or compressed)
+    if (numVerts <= 0 && numCompressedVerts <= 0) return false;
+    if (numFaces <= 0) return false;
 
     // Unpack vertices to GPU format
-    GpuVertex* verts = new GpuVertex[numVerts];
-    int unpacked = VertexFormats::UnpackStaticVertices(*geomOwner, verts, numVerts);
+    int vertCount = (numVerts > 0) ? numVerts : numCompressedVerts;
+    GpuVertex* verts = new GpuVertex[vertCount];
+    int unpacked;
+    if (numCompressedVerts > 0 && geomOwner->CompressedVerts()) {
+        // Xbox 360 compressed vertex path
+        unpacked = VertexFormats::UnpackCompressedVertices(
+            geomOwner->CompressedVerts(), numCompressedVerts, verts, vertCount);
+    } else {
+        // Standard uncompressed vertex path
+        unpacked = VertexFormats::UnpackStaticVertices(*geomOwner, verts, vertCount);
+    }
     if (unpacked <= 0) {
         delete[] verts;
         return false;

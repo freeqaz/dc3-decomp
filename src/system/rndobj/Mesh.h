@@ -186,6 +186,8 @@ public:
     bool HasAOCalc() const { return mGeomOwner->mHasAOCalc; }
     void SetHasAOCalc(bool calc) { mGeomOwner->mHasAOCalc = calc; }
     RndMesh *GetGeomOwner() const { return mGeomOwner; }
+    unsigned int NumCompressedVerts() const { return mGeomOwner->mNumCompressedVerts; }
+    unsigned char *CompressedVerts() const { return mGeomOwner->mCompressedVerts; }
     void InstanceGeomOwnerBones();
     void DeleteBones(bool);
     void BurnXfm();

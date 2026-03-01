@@ -1,7 +1,9 @@
 #include "gfx/VertexFormats.h"
 #include "rndobj/Mesh.h"
+#include "rndobj/MeshVertCompress.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 
 namespace VertexFormats {
@@ -143,6 +145,76 @@ int UnpackSkinnedVertices(const RndMesh& mesh, GpuVertexSkinned* out, int maxVer
         gv.pad = 0.0f;
     }
     return numVerts;
+}
+
+// ============================================================================
+// Unpack Xbox 360 compressed vertices to GpuVertex
+// CompressedVertex_Xbox: 36 bytes each, big-endian on disc
+// ============================================================================
+
+static float UnpackFloat_BE(int bits) {
+    // Byte-swap int from big-endian to little-endian, then reinterpret as float
+    unsigned int val = __builtin_bswap32((unsigned int)bits);
+    float f;
+    memcpy(&f, &val, 4);
+    return f;
+}
+
+static void UnpackColor_BE(int packed, float out[4]) {
+    // Byte-swap first
+    unsigned int val = __builtin_bswap32((unsigned int)packed);
+    // ABGR packed: R=low byte, A=high byte
+    out[0] = (float)((val >> 0) & 0xFF) / 255.0f;  // R
+    out[1] = (float)((val >> 8) & 0xFF) / 255.0f;  // G
+    out[2] = (float)((val >> 16) & 0xFF) / 255.0f; // B
+    out[3] = (float)((val >> 24) & 0xFF) / 255.0f; // A
+}
+
+static void UnpackNormal_BE(int packed, float out[3]) {
+    // 10-10-10-2 packed normal, big-endian
+    unsigned int val = __builtin_bswap32((unsigned int)packed);
+    // DEC3N: x=bits[0:9], y=bits[10:19], z=bits[20:29], w=bits[30:31]
+    int ix = (int)(val << 22) >> 22;  // sign-extend 10 bits
+    int iy = (int)(val << 12) >> 22;
+    int iz = (int)(val << 2) >> 22;
+    out[0] = ix / 511.0f;
+    out[1] = iy / 511.0f;
+    out[2] = iz / 511.0f;
+}
+
+int UnpackCompressedVertices(const unsigned char* compressedData, int numVerts,
+                             GpuVertex* out, int maxVerts) {
+    int count = std::min(numVerts, maxVerts);
+    const CompressedVertex_Xbox* cverts = (const CompressedVertex_Xbox*)compressedData;
+
+    for (int i = 0; i < count; i++) {
+        const CompressedVertex_Xbox& cv = cverts[i];
+        GpuVertex& gv = out[i];
+
+        // Position: float stored as int bits (big-endian)
+        gv.pos[0] = UnpackFloat_BE(cv.mPosX);
+        gv.pos[1] = UnpackFloat_BE(cv.mPosY);
+        gv.pos[2] = UnpackFloat_BE(cv.mPosZ);
+
+        // Normal: 10-10-10-2 packed
+        UnpackNormal_BE(cv.mNormal, gv.norm);
+
+        // Color: packed RGBA
+        UnpackColor_BE(cv.mColor, gv.color);
+
+        // UV: packed into mTangent as 10-10-10-2 format
+        // PackVector(tangent, (tex.x, tex.y, 0, 0), 10,10,10,2, normalize=true)
+        // normalize=true → multiply by 511.0, mask to 10 bits
+        // To unpack: extract 10-bit unsigned values, divide by 511.0
+        {
+            unsigned int tval = __builtin_bswap32((unsigned int)cv.mTangent);
+            unsigned int ux = tval & 0x3FF;         // bits 0-9: tex.x
+            unsigned int uy = (tval >> 10) & 0x3FF; // bits 10-19: tex.y
+            gv.uv[0] = (float)ux / 511.0f;
+            gv.uv[1] = (float)uy / 511.0f;
+        }
+    }
+    return count;
 }
 
 } // namespace VertexFormats

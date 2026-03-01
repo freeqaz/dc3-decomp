@@ -37,4 +37,8 @@ const wgpu::VertexBufferLayout& SkinnedLayout();
 int UnpackStaticVertices(const RndMesh& mesh, GpuVertex* out, int maxVerts);
 int UnpackSkinnedVertices(const RndMesh& mesh, GpuVertexSkinned* out, int maxVerts);
 
+// Unpack Xbox 360 compressed vertices into GPU format
+int UnpackCompressedVertices(const unsigned char* compressedData, int numVerts,
+                             GpuVertex* out, int maxVerts);
+
 } // namespace VertexFormats

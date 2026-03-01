@@ -969,23 +969,22 @@ void CharEyes::LidTrackAndClampingUpdate(EyeDesc &desc, float blinkWeight) {
         if (drawCheat.Int(0)) {
             RndGraph *graph = RndGraph::GetOneFrame();
 
-            if (lidsOK) {
-                graph->AddSphere(
-                    upperBlinkPos, 0.05f, Hmx::Color(0.0f, 0.0f, 1.0f, 1.0f)
-                );
-            } else {
+            if (!(lidsOK)) {
                 graph->AddSphere(
                     upperBlinkPos, 0.05f, Hmx::Color(1.0f, 0.0f, 0.0f, 1.0f)
                 );
-            }
-            if (lidsOK) {
-                auto _tmp2 = Hmx::Color(0.0f, 0.0f, 1.0f, 1.0f);
+            } else {
                 graph->AddSphere(
-                    lowerBlinkPos, 0.05f, _tmp2
+                    upperBlinkPos, 0.05f, Hmx::Color(0.0f, 0.0f, 1.0f, 1.0f)
+                );
+            }
+            if (!(lidsOK)) {
+                graph->AddSphere(
+                    lowerBlinkPos, 0.05f, Hmx::Color(1.0f, 0.0f, 0.0f, 1.0f)
                 );
             } else {
                 graph->AddSphere(
-                    lowerBlinkPos, 0.05f, Hmx::Color(1.0f, 0.0f, 0.0f, 1.0f)
+                    lowerBlinkPos, 0.05f, Hmx::Color(0.0f, 0.0f, 1.0f, 1.0f)
                 );
             }
             graph->AddSphere(sourcePos, 0.05f, Hmx::Color(0.0f, 0.0f, 1.0f, 1.0f));
@@ -998,13 +997,13 @@ void CharEyes::LidTrackAndClampingUpdate(EyeDesc &desc, float blinkWeight) {
             Vector3 normalEnd(
                 cross.x + sourcePos.x, cross.y + sourcePos.y, cross.z + sourcePos.z
             );
-            if (lidsOK) {
+            if (!(lidsOK)) {
                 graph->AddLine(
-                    sourcePos, normalEnd, Hmx::Color(0.0f, 1.0f, 0.0f, 1.0f), false
+                    sourcePos, normalEnd, Hmx::Color(1.0f, 0.0f, 0.0f, 1.0f), false
                 );
             } else {
                 graph->AddLine(
-                    sourcePos, normalEnd, Hmx::Color(1.0f, 0.0f, 0.0f, 1.0f), false
+                    sourcePos, normalEnd, Hmx::Color(0.0f, 1.0f, 0.0f, 1.0f), false
                 );
             }
 

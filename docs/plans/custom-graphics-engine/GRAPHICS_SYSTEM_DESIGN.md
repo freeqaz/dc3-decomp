@@ -1,6 +1,6 @@
 # Graphics Subsystem: System Design
 
-**Status**: Draft v3 — Tier 1 MVP complete (Steps 1-5 done, Milo Viewer operational)
+**Status**: Draft v4 — Tier 1 rendering verified (17 props rendered from .milo_xbox, gallery in `archive/screenshots/`)
 **Target**: ~90% complete design; open items reduced from 8 to 4 after code analysis
 **Renderer**: WebGPU via Dawn (`../dawn`)
 

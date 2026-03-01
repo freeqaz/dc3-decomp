@@ -6,10 +6,16 @@ foundation.
 
 ## Current Status
 
-**Phase 0 complete**: Headless WebGPU rendering via Dawn works. Triangle rendered
-offscreen on RTX 3090 (Vulkan backend), saved to PNG. No display server needed.
+**Phase 0 complete, Phase 1 mostly complete, Phase 2 Tier 1 in progress.**
 
-Next: windowed rendering (GLFW), then Milo scene loading.
+Rendering pipeline operational: `.milo_xbox` files load and render with material
+colors, directional lighting, and Xbox 360 compressed vertex support. Both windowed
+(GLFW + orbit camera) and headless (screenshot) modes work. Verified on RTX 3090
+(Vulkan backend via Dawn). Gallery of 17 rendered props in `archive/screenshots/`.
+
+**Batch screenshot script**: `native/scripts/render_screenshots.sh`
+
+**Next**: Texture mapping (UV support for compressed vertices), multi-light, skinning.
 
 ## Prerequisites
 
@@ -96,9 +102,42 @@ magick output.ppm output.png
 
 ```
 native/
-├── CMakeLists.txt      # Build system — finds Dawn, builds dc3-native
+├── CMakeLists.txt              # Build system — finds Dawn, builds dc3-native + milo-viewer
+├── scripts/
+│   └── render_screenshots.sh   # Batch screenshot renderer
+├── shaders/
+│   └── standard.wgsl           # WGSL shader (diffuse+ambient+fog+alphatest)
 └── src/
-    └── main.cpp        # WebGPU headless triangle renderer
+    ├── main_native.cpp         # Engine entry point (full game boot)
+    ├── viewer/
+    │   └── milo_viewer.cpp     # Milo Viewer — loads .milo_xbox, orbit camera, screenshots
+    ├── gfx/
+    │   ├── GpuDevice.h/.cpp    # WebGPU device, GLFW window, surface, headless readback
+    │   ├── TextureConvert.h/.cpp  # Xbox 360 texture pipeline (byte-swap, untile, DXT decompress)
+    │   ├── VertexFormats.h/.cpp   # GPU vertex layouts, unpack from RndMesh + compressed verts
+    │   ├── PipelineManager.h/.cpp # Bind group layouts, pipeline cache, shader cache
+    │   └── standard_wgsl.inc   # Embedded WGSL shader source
+    ├── platform/
+    │   ├── Rnd_Wgpu.h/.cpp     # WgpuRnd renderer (scene uniforms, ring buffers, draw orchestration)
+    │   ├── Mesh_Wgpu.cpp       # RndMesh::DrawShowing (GPU upload, material bind groups)
+    │   ├── Tex_Wgpu.cpp        # RndTex::PresyncBitmap (GPU texture upload)
+    │   ├── Cam_Native.cpp      # RndCam::UpdateLocal (viewProj computation)
+    │   └── ...                 # Other platform stubs
+    └── ...
+```
+
+### Build Targets
+
+```bash
+# Full engine binary
+cmake --build build --target dc3-native
+
+# Milo viewer (loads .milo_xbox files, renders with orbit camera)
+cmake --build build --target milo-viewer
+
+# Usage
+./build/milo-viewer path/to/file.milo_xbox                          # Windowed mode
+./build/milo-viewer path/to/file.milo_xbox --screenshot output.ppm  # Headless screenshot
 ```
 
 ## Architecture Notes

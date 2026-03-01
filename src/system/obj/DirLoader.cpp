@@ -868,13 +868,33 @@ void DirLoader::CreateObjects() {
                 begin = MemPoint(MemPoint::kInitType1);
             }
             BeginMemTrackObjectName(buf);
+#ifdef HX_NATIVE
+            printf("  NewObject('%s') calling...\n", classSym.Str());
+            fflush(stdout);
+#endif
             obj = Hmx::Object::NewObject(classSym);
+#ifdef HX_NATIVE
+            printf("  NewObject('%s') returned %p\n", classSym.Str(), (void*)obj);
+            fflush(stdout);
+#endif
             EndMemTrackObjectName();
+#ifdef HX_NATIVE
+            printf("  checking rev=%d dynamic_cast...\n", mRev);
+            fflush(stdout);
+#endif
             if (mRev == 0x16 && dynamic_cast<ObjectDir *>(obj)) {
             release_obj:
                 RELEASE(obj);
             } else {
+#ifdef HX_NATIVE
+                printf("  SetName('%s', dir=%p)...\n", buf, (void*)mDir);
+                fflush(stdout);
+#endif
                 obj->SetName(buf, mDir);
+#ifdef HX_NATIVE
+                printf("  SetName done\n");
+                fflush(stdout);
+#endif
             }
             if (sObjectMemDumpFile) {
                 MemPoint end(MemPoint::kInitType1);
