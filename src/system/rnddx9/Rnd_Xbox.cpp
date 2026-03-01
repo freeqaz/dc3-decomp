@@ -784,7 +784,7 @@ void DxRnd::DoPointTests() {
 
     // Setup view matrix
     Hmx::Matrix4 viewMtx(xfm);
-    TheShaderMgr.SetVConstant((VShaderConstant)4, viewMtx);
+    TheShaderMgr.SetVConstant(kVS_ViewProjMatrix, viewMtx);
 
     // Setup shader state
     RndShader::SelectConfig(nullptr, kStandardShader, false);
@@ -893,6 +893,6 @@ void DxRnd::DoPointTests() {
 
     // Restore camera if set
     if (RndCam::Current()) {
-        TheShaderMgr.SetVConstant((VShaderConstant)4, RndCam::Current()->GetViewProjMatrix());
+        TheShaderMgr.SetVConstant(kVS_ViewProjMatrix, RndCam::Current()->GetViewProjMatrix());
     }
 }

@@ -2,6 +2,8 @@
 #include "HamListRibbon.h"
 #include "HamNavProvider.h"
 #include "HamScrollBehavior.h"
+#include "gesture/DirectionGestureFilter.h"
+#include "gesture/HandsUpGestureFilter.h"
 #include "gesture/Skeleton.h"
 #include "hamobj/HamScrollSpeedIndicator.h"
 #include "math/DoubleExponentialSmoother.h"
@@ -173,11 +175,11 @@ protected:
     /** "Don't automatically play the enter anim when this component enters" */
     bool mSuppressAutomaticEnter; // 0x156
     bool mTestEnteringOverride; // 0x157
-    float unk158; // 0x158
+    float mHandHeight; // 0x158
     DoubleExponentialSmoother mSlideSmoother; // 0x15c
     DoubleExponentialSmoother mDisengageSmoother; // 0x170
-    int mDirectionGestureFilter;
-    int unk188;
+    DirectionGestureFilter *mDirectionGestureFilter; // 0x184
+    HandsUpGestureFilter *mHandsUpGestureFilter; // 0x188
     int mSkeletonTrackingID; // 0x18c
     HamScrollBehavior mScrollBehavior;
     bool mDisableSlideSound; // 0x1e4

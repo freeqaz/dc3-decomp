@@ -10,28 +10,23 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 # Usage: cmake -DLP64_AUDIT=ON .. && make 2>&1 | grep -E 'pointer-to-int|int-to-pointer'
 option(LP64_AUDIT "Enable LP64 pointer truncation warnings for auditing" OFF)
 
-# Suppress warnings for decomp code (not written for modern compilers)
-# MSVC compatibility flags are critical - this code was written for MSVC
-if(LP64_AUDIT)
-    add_compile_options(
-        -Wno-everything
-        -Wpointer-to-int-cast
-        -Wint-to-pointer-cast
-    )
-else()
-    add_compile_options(
-        -w  # Suppress all warnings - this is decomp code, not our code to fix
-    )
-endif()
-add_compile_options(
-    -fms-extensions  # Enable __declspec support (used in xdk headers)
-    -fms-compatibility  # Full MSVC compat (dependent base class lookup, etc.)
-    -fms-compatibility-version=19.29  # VS2019+ - keeps char16_t/char32_t as builtins
+# MSVC compatibility flags — applied per-target (dc3-native only), not globally.
+# Standalone tools (wgpu-window-test, milo-viewer) use standard C++ compilation.
+set(DC3_MSVC_COMPAT_FLAGS
+    -fms-extensions          # __declspec support (xdk headers)
+    -fms-compatibility       # Full MSVC compat (dependent base class lookup)
+    -fms-compatibility-version=19.29  # VS2019+ — char16_t/char32_t as builtins
     -fdelayed-template-parsing  # MSVC-style template parsing
-    -ferror-limit=0  # Don't stop on first N errors
-    -fsanitize=address  # AddressSanitizer (enable for debugging)
+)
+set(DC3_DECOMP_FLAGS
+    -ferror-limit=0
     -fno-omit-frame-pointer
 )
+if(LP64_AUDIT)
+    list(APPEND DC3_DECOMP_FLAGS -Wno-everything -Wpointer-to-int-cast -Wint-to-pointer-cast)
+else()
+    list(APPEND DC3_DECOMP_FLAGS -w)
+endif()
 
 # MSVC STL compat: shadow libc++'s __wrap_iter with a patched version that
 # adds implicit conversion to the underlying pointer type. This makes
@@ -40,6 +35,8 @@ add_compile_options(
 include_directories(BEFORE SYSTEM ${CMAKE_SOURCE_DIR}/include)
 
 find_package(Threads REQUIRED)
+find_package(Dawn REQUIRED)
+find_package(glfw3 REQUIRED)
 
 # ============================================================================
 # Source files from decomp (generated from config/373307D9/objects.json)
@@ -847,12 +844,27 @@ set(DC3_NATIVE_SOURCES
 )
 
 # ============================================================================
+# Graphics subsystem sources (WebGPU/Dawn)
+# ============================================================================
+
+set(DC3_GFX_SOURCES
+    src/gfx/GpuDevice.cpp
+)
+
+# ============================================================================
 # Build target
 # ============================================================================
 
 add_executable(dc3-native
     ${DC3_ENGINE_SOURCES}
     ${DC3_NATIVE_SOURCES}
+    ${DC3_GFX_SOURCES}
+)
+
+target_compile_options(dc3-native PRIVATE
+    ${DC3_MSVC_COMPAT_FLAGS}
+    ${DC3_DECOMP_FLAGS}
+    -fsanitize=address
 )
 
 target_compile_definitions(dc3-native PRIVATE
@@ -881,6 +893,8 @@ target_link_options(dc3-native PRIVATE
 
 target_link_libraries(dc3-native PRIVATE
     Threads::Threads
+    dawn::webgpu_dawn
+    glfw
     dl
     curl
     jpeg
@@ -894,4 +908,20 @@ target_link_libraries(dc3-native PRIVATE
 set_source_files_properties(
     ${CMAKE_SOURCE_DIR}/../src/system/obj/DataFlex.c
     PROPERTIES LANGUAGE C
+)
+
+# ============================================================================
+# Standalone WebGPU window test (does not link engine — just GLFW + Dawn)
+# ============================================================================
+add_executable(wgpu-window-test
+    src/main.cpp
+    ${DC3_GFX_SOURCES}
+)
+target_include_directories(wgpu-window-test PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+)
+target_link_libraries(wgpu-window-test PRIVATE
+    Threads::Threads
+    dawn::webgpu_dawn
+    glfw
 )

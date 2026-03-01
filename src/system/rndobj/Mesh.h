@@ -177,6 +177,7 @@ public:
     bool IsSkinned() const { return !mBones.empty(); }
     int MaxBones() const { return GetGfxMode() != kOldGfx ? 40 : 4; }
     int NumBones() const { return mBones.size(); }
+    RndTransformable *BoneTransAt(int idx) { return mBones[idx].mBone; }
     void SetMutable(int m) { mGeomOwner->mMutable = m; }
     int Mutable() const { return mGeomOwner->mMutable; }
     bool HasAOCalc() const { return mGeomOwner->mHasAOCalc; }

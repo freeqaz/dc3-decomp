@@ -19,7 +19,7 @@ int gLoadCount;
 
 struct LoaderGlitchContext {
     const char *name;       // 0x0
-    int unk4;               // 0x4
+    int depth;              // 0x4
     String file;            // 0x8
     const char *fromState;  // 0xC
     LoaderPos toPos;        // 0x10
@@ -46,7 +46,7 @@ const char *WhiteSpace(int count) {
 #pragma region Loader
 
 Loader::Loader(const FilePath &fp, LoaderPos pos)
-    : unk4(0), mPos(pos), mFile(fp), unk14(-1), mHeap(GetCurrentHeapNum()) {
+    : unk4(0), mPos(pos), mFile(fp), mLoadStartMs(-1), mHeap(GetCurrentHeapNum()) {
     MILO_ASSERT(MemNumHeaps() == 0 || (mHeap != kNoHeap && mHeap != kSystemHeap), 0x1F0);
     TheLoadMgr.Loaders().push_front(this);
     if (mPos == kLoadFront) {
@@ -68,7 +68,7 @@ Loader::Loader(const FilePath &fp, LoaderPos pos)
 Loader::~Loader() {
     TheLoadMgr.Loading().remove(this);
     TheLoadMgr.Loaders().remove(this);
-    if (unk14 != -1) {
+    if (mLoadStartMs != -1) {
         gLoadCount--;
     }
 }

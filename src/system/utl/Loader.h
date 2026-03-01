@@ -32,16 +32,15 @@ public:
 
     MEM_OVERLOAD(Loader, 0xA8);
 
-#ifdef HX_NATIVE
     friend class LoadMgr;
-#endif
+
 protected:
     virtual void PollLoading() = 0;
 
-    int unk4; // 0x4
+    int unk4; // 0x4 - DC3 addition, purpose unknown
     LoaderPos mPos; // 0x8
     FilePath mFile; // 0xc
-    int unk14; // 0x14
+    int mLoadStartMs; // 0x14 - debug load timing: SystemMs() when tracking starts, -1 when inactive
     int mHeap; // 0x18
 };
 
@@ -55,9 +54,7 @@ private:
     bool mCacheMode; // 0xD
     std::list<std::pair<class String, LoaderFactoryFunc *> > mFactories; // 0x10
     float mPeriod; // 0x18
-public:
     float mCurrentPeriod; // 0x1c
-private:
     std::list<Loader *> mLoading; // 0x20
     Timer mTimer; // 0x28
     int mAsyncUnload; // 0x58
@@ -86,6 +83,7 @@ public:
         return ret;
     }
     bool CheckSplit() { return mTimer.SplitMs() > mCurrentPeriod; }
+    void SetCurrentPeriod(float p) { mCurrentPeriod = p; }
 
     void SetEditMode(bool);
     void SetCacheMode(bool mode) { mCacheMode = mode; }

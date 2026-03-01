@@ -46,6 +46,7 @@ public:
     struct CharInterestState {
         CharInterestState(Hmx::Object *owner) : mInterest(owner), mRefractoryTime(-1) {}
 
+        bool IsInRefractoryPeriod();
         float RefractoryTimeRemaining();
 
         ObjOwnerPtr<CharInterest> mInterest; // 0x0
@@ -76,7 +77,7 @@ public:
 
     void SetInterestFilterFlags(int i) { mInterestFilterFlags = i; }
     void ClearInterestFilterFlags() { mInterestFilterFlags = mDefaultFilterFlags; }
-    void SetEnabled(bool b) { mEnabled = b; } // change once context found
+    void SetEnabled(bool b) { mEnabled = b; }
 
     void ForceBlink();
     CharInterest *GetCurrentInterest();
@@ -96,12 +97,16 @@ public:
 protected:
     CharEyes();
     RndTransformable *GetHead();
+    RndTransformable *GetTarget();
     bool IsHeadIKWeightIncreasing();
     void ProceduralBlinkUpdate();
+    void UpdateOverlay();
     void EnforceMinimumTargetDistance(const Vector3 &, const Vector3 &, Vector3 &);
+    void LidTrackAndClampingUpdate(EyeDesc &, float);
     void DartUpdate();
     bool EyesOnTarget(float);
     Vector3 GenerateDartOffset();
+    void NextLook();
 
     DataNode OnAddInterest(DataArray *);
     DataNode OnToggleForceFocus(DataArray *);
@@ -156,32 +161,34 @@ protected:
     RndOverlay *mEyeStatusOverlay; // 0xd0
     int mInterestFilterFlags; // 0xd4
     Vector3 mLastFacing; // 0xd8
-    float mLastCang;
-    float mLastLook;
-    float mMaxEyeCang;
-    int mAvDelta;
-    float mLastBlinkWeight;
-    bool mBlinkDetect;
-    bool mBlinkActive;
-    ObjPtr<CharInterest> mForceFocusInterest; // 0x100
-    ObjPtr<CharInterest> mCurrentInterest; // 0x114
-    int mFocusTimer;
-    bool mNeedRecalc;
-    Vector3 mDartOffset;
-    float mDartTimer;
+    float mLastCang; // 0xe8
+    float mLastLook; // 0xec
+    float mMaxEyeCang; // 0xf0
+    int mAvDelta; // 0xf4
+    float mLastBlinkWeight; // 0xf8
+    bool mBlinkDetect; // 0xfc
+    bool mBlinkActive; // 0xfd
+    ObjPtr<CharInterest> mCurrentInterest; // 0x100
+    ObjPtr<CharInterest> mFocusInterest; // 0x114
+    int mFocusTimer; // 0x128
+    bool mNeedRecalc; // 0x12c
+    Vector3 mDartOffset; // 0x130
+    float mDartTimer; // 0x140
     CharEyeDartRuleset::EyeDartRulesetData mData; // 0x144
-    bool mDartEnabled;
-    float mDartInterval;
-    int mEyeClampCount;
-    Vector3 mCurrentDartOffset; // 0x17c - current dart offset from GenerateDartOffset
-    bool mBlinkEnabled;
-    float mBlinkTimer;
-    int mBlinkState;
-    float mUpperBlinkAngle;
-    float mLowerBlinkAngle;
-    Vector3 mHeadForward;
-    bool mEnabled;
-    bool mHeadIKActive;
-    bool mInterestsEnabled;
-    bool mProceduralBlinkEnabled;
+    bool mDartEnabled; // 0x170
+    float mDartInterval; // 0x174
+    int mEyeClampCount; // 0x178
+    float mCurrentDartOffsetX; // 0x17c
+    float mCurrentDartOffsetY; // 0x180
+    float mCurrentDartOffsetZ; // 0x184
+    int unk188; // 0x188
+    bool mBlinkEnabled; // 0x18c
+    float mBlinkTimer; // 0x190
+    int mBlinkCount; // 0x194
+    float mUpperBlinkAngle; // 0x198
+    float mLowerBlinkAngle; // 0x19c
+    Vector3 mHeadForward; // 0x1a0
+    int unk1ac; // 0x1ac
+    bool mEnabled; // 0x1b0
+    bool mHeadIKActive; // 0x1b1
 };

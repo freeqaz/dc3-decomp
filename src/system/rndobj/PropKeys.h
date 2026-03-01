@@ -557,9 +557,9 @@ public:
         : PropKeys(targetOwner, target) {
         mKeysType = kSymbol;
         mInterpolation = kStep;
-        unk28 = -1;
-        unk2c = -1;
-        unk30 = 0;
+        mPrevRangeFirst = -1;
+        mPrevRangeLast = -1;
+        mClampToPrevRange = 0;
     }
     virtual ~SymbolKeys() {}
     virtual float StartFrame() { return FirstFrame(); }
@@ -600,7 +600,7 @@ public:
     virtual Keys<Symbol, Symbol> *AsSymbolKeys() { return this ? this : nullptr; }
     virtual int SymbolAt(float, Symbol &);
 
-    int unk28; // 0x28
-    int unk2c; // 0x2c
-    bool unk30; // 0x30
+    int mPrevRangeFirst; // 0x28
+    int mPrevRangeLast; // 0x2c
+    bool mClampToPrevRange; // 0x30
 };

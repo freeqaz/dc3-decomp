@@ -46,6 +46,10 @@ Symbol PlatformSymbol(Platform);
 bool PlatformLittleEndian(Platform);
 Platform ConsolePlatform();
 
+inline bool IsVertexCompressionSupported(Platform p) {
+    return p == kPlatformXBox || p == kPlatformPS3;
+}
+
 Symbol SystemLanguage();
 Symbol SystemLocale();
 DataArray *SystemTitles();

@@ -106,7 +106,7 @@ void RndShockwave::PrepareShader(float amplitude_scale) {
     pos.y = world_pos.y;
     pos.z = world_pos.z;
     pos.w = 0.0f;
-    TheShaderMgr.SetVConstant((VShaderConstant)0x1E, pos);
+    TheShaderMgr.SetVConstant(kVS_ShockwavePos, pos);
 
     // Set shader constant 0x1F: shockwave normal (z-axis of transform)
     const Vector3 &world_normal = WorldXfm().m.z;
@@ -115,10 +115,10 @@ void RndShockwave::PrepareShader(float amplitude_scale) {
     normal.y = world_normal.y;
     normal.z = world_normal.z;
     normal.w = 0.0f;
-    TheShaderMgr.SetVConstant((VShaderConstant)0x1F, normal);
+    TheShaderMgr.SetVConstant(kVS_ShockwaveNormal, normal);
 
     // Set shader constant 0x20: shockwave parameters (radius, amplitude, frequency)
     TheShaderMgr.SetVConstant(
-        (VShaderConstant)0x20, Vector4(mRadius, mAmplitude * amplitude_scale, 1.0f / mWavelength, 0.0f)
+        kVS_ShockwaveParams, Vector4(mRadius, mAmplitude * amplitude_scale, 1.0f / mWavelength, 0.0f)
     );
 }

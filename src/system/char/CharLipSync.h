@@ -36,7 +36,7 @@ public:
     class PlayBack {
     public:
         struct Weight {
-            Weight() : mClip(nullptr), mPrevWeight(0), mNextWeight(0), mCurWeight(0) {}
+            Weight() : mClip(nullptr) {}
 
             ObjPtr<CharClip> mClip;
             float mPrevWeight;

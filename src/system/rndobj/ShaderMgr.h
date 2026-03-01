@@ -12,12 +12,37 @@ class RndShaderProgram;
 #define XBOX_SHADERS_TYPE 'XBOX'
 #define XBOX_SHADERS_VERSION 1
 
-// vertex shader constant
+// vertex shader constant register indices
 enum VShaderConstant {
+    kVS_AmbientColor = 1,
+    kVS_ViewProjMatrix = 4,
+    kVS_SplineData1 = 0x19,
+    kVS_SplineData2 = 0x1A,
+    kVS_ShockwavePos = 0x1E,
+    kVS_ShockwaveNormal = 0x1F,
+    kVS_ShockwaveParams = 0x20,
+    kVS_BoxMapLight0 = 0x50,
+    kVS_WorldTransform = 0x5c,
 };
 
-// pixel shader constant
+// pixel shader constant register indices
 enum PShaderConstant {
+    kPS_AmbientColor = 1,
+    kPS_ShaderCost = 4,
+    kPS_Texture = 5,
+    kPS_BloomParams = 7,
+    kPS_SpotlightTex = 0xB,
+    kPS_FurAlpha = 0xB,
+    kPS_FurDetail = 0xC,
+    kPS_FurColor = 0xC,
+    kPS_FurGeometry = 0x32,
+    kPS_FurShell = 0x33,
+    kPS_TexProcFrequency = 0x40,
+    kPS_TexProcAmplitude = 0x41,
+    kPS_TexProcPhase = 0x42,
+    kPS_BoxMapLight0 = 0x50,
+    kPS_ShadowColor = 0x6B,
+    kPS_ShadowCamDir = 0x6C,
 };
 
 class RndShaderMgr {

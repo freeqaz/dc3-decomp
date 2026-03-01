@@ -14,8 +14,12 @@
 #include "rndobj/MultiMesh.h"
 #include "rndobj/Trans.h"
 #include "utl/BinStream.h"
+#include "utl/ChunkStream.h"
+#include "utl/Loader.h"
+#include "utl/MakeString.h"
 #include "utl/MemMgr.h"
 #include "utl/Std.h"
+#include "os/Timer.h"
 
 PatchVerts gPatchVerts;
 int MESH_REV_SEP_COLOR = 0x25;
@@ -1135,4 +1139,128 @@ void FillCompressedVertex(CompressedVertex_Xbox &compressed, const RndMesh::Vert
 
     // Pack bone weights
     compressed.mBoneWeights = *(s32 *)&vert.boneWeights;
+}
+
+void RndMesh::LoadVertices(BinStreamRev &d) {
+    int count;
+    d.stream.ReadEndian(&count, 4);
+    bool b58;
+    if (d.rev > 0x22) {
+        d >> b58;
+    } else {
+        b58 = false;
+    }
+    unsigned int loadedCompressedSize = 0;
+    unsigned int loadedVersion = 0;
+    unsigned int compressedSize = 0;
+    bool b4 = false;
+    if (b58) {
+        d.stream.ReadEndian(&loadedCompressedSize, 4);
+        d.stream.ReadEndian(&loadedVersion, 4);
+        MILO_ASSERT(IsVertexCompressionSupported(TheLoadMgr.GetPlatform()), 0x2D3);
+        if (TheLoadMgr.GetPlatform() != kPlatformXBox) {
+            TheDebug.Fail(FormatString("Unsupported platform for vertex compression").Str(), 0);
+            b4 = false;
+        } else {
+            compressedSize = 0x24;
+            b4 = true;
+        }
+        unsigned int versionCheck = (TheLoadMgr.GetPlatform() == kPlatformXBox) ? 1U : 0U;
+        if (compressedSize != loadedCompressedSize || versionCheck != loadedVersion) {
+            b4 = false;
+        }
+        if (!b4) {
+            TheDebug.Notify(MakeString(
+                "Loaded stale compressed vertex data, resave mesh file \"%s\""
+                "(loaded size = %d, current = %d; loaded ver = %d, current = %d",
+                d.stream.Name(), loadedCompressedSize, compressedSize,
+                loadedVersion, (unsigned int)b4
+            ));
+        }
+    }
+    if (b58) {
+        if (b4) {
+            mNumCompressedVerts = count;
+            if (mNumCompressedVerts != 0) {
+                unsigned int totalSize = compressedSize * count;
+                MILO_ASSERT(totalSize > 0, 0x2D4);
+                MemPushTemp();
+                mCompressedVerts = new unsigned char[totalSize];
+                MemPopTemp();
+                ReadChunks(d.stream, mCompressedVerts, totalSize, compressedSize << 9);
+            }
+        } else {
+            unsigned int skipSize = loadedCompressedSize * count;
+            MILO_ASSERT(skipSize > 0, 0x2E7);
+            d.stream.Seek(skipSize, BinStream::kSeekCur);
+        }
+    } else {
+        mVerts.resize(count);
+        int i = 0;
+        for (Vert *it = mVerts.begin(); it != mVerts.end(); ++it) {
+            d >> *it;
+            i++;
+            if (!(i & 0x1FF)) {
+                while (d.stream.Eof() == TempEof)
+                    Timer::Sleep(0);
+            }
+        }
+    }
+}
+
+void RndMesh::SaveVertices(BinStream &bs) {
+    bool useCached;
+    if (bs.Cached() && (bs.GetPlatform() == kPlatformPS3 || bs.GetPlatform() == kPlatformXBox)) {
+        useCached = true;
+    } else {
+        useCached = false;
+    }
+    bool hasMeshData = (mMutable & 0x1F) > 0 || mKeepMeshData == true;
+    bool isXBox;
+    if (TheLoadMgr.GetPlatform() == kPlatformXBox || TheLoadMgr.GetPlatform() == kPlatformPS3) {
+        isXBox = true;
+    } else {
+        isXBox = false;
+    }
+    bool doCompress;
+    if (isXBox && useCached && !hasMeshData) {
+        doCompress = true;
+    } else {
+        doCompress = false;
+    }
+    int count = mVerts.size();
+    bs.WriteEndian(&count, 4);
+    bs.Write(&doCompress, 1);
+    if (doCompress) {
+        unsigned int vertSize = 0;
+        unsigned int version = 0;
+        if (TheLoadMgr.GetPlatform() != kPlatformXBox) {
+            TheDebug.Fail(FormatString("Unsupported platform for vertex compression").Str(), 0);
+            MILO_ASSERT(vertSize > 0, 0x339);
+            MILO_ASSERT(version > 0, 0x33A);
+        } else {
+            vertSize = 0x24;
+            version = 1;
+        }
+        bs.WriteEndian(&vertSize, 4);
+        bs.WriteEndian(&version, 4);
+    }
+    int i = 0;
+    for (Vert *it = mVerts.begin(); it != mVerts.end(); ++it) {
+        if (useCached && doCompress) {
+            if (TheLoadMgr.GetPlatform() != kPlatformXBox) {
+                TheDebug.Fail(FormatString("Unsupported platform for vertex compression").Str(), 0);
+            } else {
+                static CompressedVertex_Xbox compressed;
+                FillCompressedVertex(compressed, *it, doCompress);
+                SaveCompressedVertex(compressed, bs);
+            }
+        } else {
+            bs << *it;
+        }
+        i++;
+        if (bs.GetPlatform() == kPlatformWii && !(i & 0x1FF)) {
+            MarkChunk(bs);
+        }
+    }
 }

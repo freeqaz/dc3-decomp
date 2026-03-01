@@ -55,8 +55,8 @@ void NgSpotlightDrawer::SetAmbientColor(const Hmx::Color &color) {
     float g = c.green;
     float b = c.blue;
     float a = c.alpha;
-    TheShaderMgr.SetVConstant((VShaderConstant)1, Vector4(r, g, b, a));
-    TheShaderMgr.SetPConstant((PShaderConstant)1, Vector4(r, g, b, a));
+    TheShaderMgr.SetVConstant(kVS_AmbientColor, Vector4(r, g, b, a));
+    TheShaderMgr.SetPConstant(kPS_AmbientColor, Vector4(r, g, b, a));
 }
 
 void NgSpotlightDrawer::ClearPostDraw() { sNeedDraw = false; }
@@ -107,7 +107,7 @@ void NgSpotlightDrawer::SetXSectionTexture(const Spotlight::BeamDef &def) {
     if (!tex) {
         tex = SR().unk14;
     }
-    TheShaderMgr.SetPConstant((PShaderConstant)0xB, tex);
+    TheShaderMgr.SetPConstant(kPS_SpotlightTex, tex);
     TheRenderState.SetTextureClamp(0xB, (RndRenderState::ClampMode)2);
     TheRenderState.SetTextureFilter(0xB, (RndRenderState::FilterMode)1, false);
 }

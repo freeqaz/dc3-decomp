@@ -119,7 +119,7 @@ RndMat *TexProc::SetUpWorkingMat() {
 
 void TexProc::SetRegisters() {
     TheShaderMgr.SetPConstant(
-        (PShaderConstant)0x40,
+        kPS_TexProcFrequency,
         Vector4(
             mFrequency * gFreqTemp,
             mFrequency * gFreqTemp,
@@ -128,11 +128,11 @@ void TexProc::SetRegisters() {
         )
     );
     TheShaderMgr.SetPConstant(
-        (PShaderConstant)0x41,
+        kPS_TexProcAmplitude,
         Vector4(unk78 * gAmpTemp, unk78 * gAmpTemp, unk78 * gAmpTemp, unk78 * gAmpTemp)
     );
     TheShaderMgr.SetPConstant(
-        (PShaderConstant)0x42, Vector4(mPhase, mPhase, mPhase, mPhase)
+        kPS_TexProcPhase, Vector4(mPhase, mPhase, mPhase, mPhase)
     );
 }
 

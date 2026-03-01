@@ -165,7 +165,7 @@ void RndShaderMgr::LoadShaders(const char *cc) {
 
 void RndShaderMgr::SetTransform(const Transform &xfm) {
     mBoneCount = 0;
-    SetVConstant4x3((VShaderConstant)0x5c, Hmx::Matrix4(xfm));
+    SetVConstant4x3(kVS_WorldTransform, Hmx::Matrix4(xfm));
 }
 
 void RndShaderMgr::Invalidate(ShaderType t) {

@@ -132,7 +132,7 @@ void DxRnd::DrawLargeQuad(
         D3DDevice_SetIndices(mD3DDevice, data.mIndexBuffer);
         D3DDevice_SetStreamSource(mD3DDevice, 0, data.mVertexBuffer, 0, 20, 1);
         D3DDevice_SetFVF(mD3DDevice, 0x102);
-        TheShaderMgr.SetVConstant((VShaderConstant)0x5c, Hmx::Matrix4(tf));
+        TheShaderMgr.SetVConstant(kVS_WorldTransform, Hmx::Matrix4(tf));
         DxTex *tex = static_cast<DxTex *>(mat->GetDiffuseTex());
         D3DDevice_SetTexture(mD3DDevice, 0x10, tex->Tex(), 0x8000);
         D3DDevice_SetTexture(mD3DDevice, 0, tex->Tex(), 0x80000000);

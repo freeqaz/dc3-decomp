@@ -4,7 +4,6 @@
 #include "flow/PropertyEventProvider.h"
 #include "gesture/BaseSkeleton.h"
 #include "gesture/GestureMgr.h"
-#include "gesture/HandsUpGestureFilter.h"
 #include "gesture/Skeleton.h"
 #include "gesture/SkeletonUpdate.h"
 #include "gesture/SkeletonViz.h"
@@ -49,8 +48,8 @@ HamNavList::HamNavList()
       mRibbonMode(HamListRibbon::kRibbonSlide), unkc8(0), mListRibbonResource(this),
       mHeaderRibbonResource(this), mListDirResource(this),
       mScrollSpeedIndicatorResource(this), mNavProvider(this), mScrollSpeedAnim(this),
-      mPendingEnterAnim(0), mSkipEnterAnim(0), mSuppressAutomaticEnter(0), mTestEnteringOverride(0), unk158(0),
-      mSlideSmoother(0, 10, 10), mDisengageSmoother(0, 10, 0), mDirectionGestureFilter(0), unk188(0), mSkeletonTrackingID(0),
+      mPendingEnterAnim(0), mSkipEnterAnim(0), mSuppressAutomaticEnter(0), mTestEnteringOverride(0), mHandHeight(0),
+      mSlideSmoother(0, 10, 10), mDisengageSmoother(0, 10, 0), mDirectionGestureFilter(NULL), mHandsUpGestureFilter(NULL), mSkeletonTrackingID(0),
       mScrollBehavior(this, &mListState), mDisableSlideSound(0), mDisableSelectSound(0),
       mEnabled(1), mSelectionEnabled(1), mAlwaysUseActiveSkeleton(1), mOnlyUseWhenFocused(1),
       mScrollSettleTime(0), mRefreshPending(0), mSelectDoneIndex(-1), mWasInDoubleUserMode(0), mHighButtonMode(0) {
@@ -65,8 +64,8 @@ HamNavList::~HamNavList() {
     if (handle.HasCallback(this)) {
         handle.RemoveCallback(this);
     }
-    // delete mDirectionGestureFilter;
-    // delete unk188;
+    delete mDirectionGestureFilter;
+    delete mHandsUpGestureFilter;
     if (mListRibbonResource) {
         Sound *slideSound = mListRibbonResource->SlideSound();
         if (slideSound)
@@ -285,12 +284,9 @@ void HamNavList::Refresh() { mRefreshPending = true; }
 
 void HamNavList::SetHighButtonMode(bool b) {
     mHighButtonMode = b;
-    int **obj = (int **)mDirectionGestureFilter;
-    if (!obj)
-        return;
-    typedef void (*VFunc)(void *);
-    VFunc vfunc = (VFunc)(obj[0][0xf]);
-    vfunc((void *)obj);
+    if (mDirectionGestureFilter) {
+        mDirectionGestureFilter->SetHighButtonMode(b);
+    }
 }
 
 int HamNavList::NumData() const { return 18; }
@@ -331,7 +327,7 @@ void HamNavList::Poll() {
                 slideSoundAnim->SetFrame(0.0f, 1.0f);
             }
         }
-        // TODO(match): target calls mDirectionGestureFilter->vtable[0x28/4] here (5 instructions missing)
+        // TODO(stub): mDirectionGestureFilter->ClearSwipe() called here in target
         return;
     }
 
@@ -401,7 +397,7 @@ void HamNavList::Poll() {
     // Update swipe direction debug overlay
     if (mRibbonMode != HamListRibbon::kRibbonDisengaged) {
         RndOverlay *swipeOverlay = RndOverlay::Find("swipe_direction", true);
-        swipeOverlay->SetCallback((RndOverlay::Callback *)mDirectionGestureFilter);
+        swipeOverlay->SetCallback(mDirectionGestureFilter);
     }
 
     // Play enter anim if pending
@@ -428,7 +424,7 @@ void HamNavList::Poll() {
     }
 
     // Check if we should clear scroll tracking
-    if ((unsigned long)mRibbonMode == HamListRibbon::kRibbonDisengaged) {
+    if (mRibbonMode == HamListRibbon::kRibbonDisengaged) {
         bool inControllerMode = false;
         if (TheGestureMgr) {
             inControllerMode = TheGestureMgr->InControllerMode();
@@ -803,13 +799,7 @@ void HamNavList::SetSliding(float f) {
 void HamNavList::Draw(const BaseSkeleton &baseSkeleton, SkeletonViz &skeletonViz) {
     const Skeleton *skeleton = dynamic_cast<const Skeleton *>(&baseSkeleton);
     MILO_ASSERT(skeleton, 0x5a3);
-
-    // Call virtual function at vtable[5] on member at offset 0x128
-    void **obj = *(void ***)((char *)this + 0x128);
-    typedef void (*VFunc)(void **, const Skeleton *, SkeletonViz *);
-    void **vtable = (void **)obj[0];
-    VFunc func = (VFunc)vtable[5];
-    func(obj, skeleton, &skeletonViz);
+    mDirectionGestureFilter->Draw(*skeleton, skeletonViz);
 }
 
 void HamNavList::SetHighlight(int i) {
@@ -817,7 +807,7 @@ void HamNavList::SetHighlight(int i) {
         RealRefresh();
     UIListProvider *provider = mListState.Provider();
     if (provider && (0 <= i) && (i < mListState.NumShowing())) {
-        // object at 0x184 calls vfunc here
+        // TODO(match): mDirectionGestureFilter calls ResetHoverTimer() here
         mListState.SetSelected(i, mListState.FirstShowing(), true);
         HandleHighlightChanged(i);
     }

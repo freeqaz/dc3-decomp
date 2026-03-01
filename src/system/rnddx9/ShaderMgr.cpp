@@ -57,7 +57,7 @@ void DxShader::Select(bool b1) {
         float f2 = Max(0.0f, 1.0f - div1);
         v.x = Min(f3, 1.0f);
         v.y = Min(f2, 1.0f);
-        TheShaderMgr.SetPConstant((PShaderConstant)4, v);
+        TheShaderMgr.SetPConstant(kPS_ShaderCost, v);
     }
 }
 

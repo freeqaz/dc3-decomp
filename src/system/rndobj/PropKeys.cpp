@@ -841,19 +841,19 @@ void SymbolKeys::SetFrame(float frame, float blend, float) {
                 KeysLessEq(frame, loc8c, loc90);
                 if (loc8c != -1) {
                     int i = loc8c;
-                    if (unk30) {
-                        MinEq(loc8c, unk2c + 1);
+                    if (mClampToPrevRange) {
+                        MinEq(loc8c, mPrevRangeLast + 1);
                         i = loc8c;
                     }
                     for (; i <= loc90; i++) {
                         Key<Symbol> &cur = (*this)[i];
-                        if (i < unk28 || i > unk2c) {
+                        if (i < mPrevRangeFirst || i > mPrevRangeLast) {
                             mTarget->SetProperty(mProp, cur.value);
                         }
                     }
                 }
-                unk28 = loc8c;
-                unk2c = loc90;
+                mPrevRangeFirst = loc8c;
+                mPrevRangeLast = loc90;
                 break;
             }
             case kLinear: {

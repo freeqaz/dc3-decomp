@@ -16,6 +16,7 @@
 #include "os/System.h"
 #include "rndobj/Anim.h"
 #include "rndobj/Cam.h"
+#include "rndobj/Rnd.h"
 #include "rndobj/Dir.h"
 #include "rndobj/Draw.h"
 #include "rndobj/Env.h"
@@ -49,10 +50,10 @@ private:
 
 Character::Character()
     : mLods(this), mLastLod(0), mForceLod(kLOD0), mShadow(this), mTranslucent(this),
-      mDriver(0), mSelfShadow(0), mSpotCutout(0), mFloorShadow(1), mSphereBase(this, this),
+      mDriver(0), mSelfShadow(0), unk251(0), unk252(1), mSphereBase(this, this),
       mBounding(Vector3(0, 0, 0), 0), mPollState(kCharCreated),
       mTest(new CharacterTest(this)), mFrozen(0), mDrawMode(kCharDrawAll), mTeleported(1),
-      mSavedEnviron(this), mShowableProps(this), mDebugDrawInterestObjects(false) {}
+      unk2a0(this), mShowableProps(this), mDebugDrawInterestObjects(false) {}
 
 Character::~Character() {
     UnhookShadow();
@@ -235,20 +236,15 @@ void Character::PostLoad(BinStream &bs) {
             } else {
                 bs >> mShadow;
             }
-            if (d.rev > 2) {
-                d >> mSelfShadow;
-            } else {
+            if (d.rev < 3) {
                 mSelfShadow = false;
+            } else {
+                d >> mSelfShadow;
             }
             if (d.rev > 4) {
-                ObjPtr<RndTransformable> tPtr(this, 0);
-                bs >> tPtr;
-                RndTransformable *loadedPtr = tPtr.Ptr();
-                if (loadedPtr) {
-                    mSphereBase = loadedPtr;
-                } else {
-                    mSphereBase = this;
-                }
+                ObjPtr<RndTransformable> t(this);
+                bs >> t;
+                mSphereBase = t.Ptr();
             } else {
                 mSphereBase = this;
             }
@@ -298,7 +294,7 @@ void Character::PostLoad(BinStream &bs) {
             bs >> mEnv;
         }
         if (otherRev > 3) {
-            gCharMe = otherRev < 6 ? this : nullptr;
+            gCharMe = d.rev < 6 ? this : nullptr;
             ObjVector<ObjVector<Character::Lod> > lods(this);
             d >> lods;
             if (lods.size() != 0)
@@ -319,7 +315,7 @@ void Character::PostLoad(BinStream &bs) {
     if (d.rev < 8) {
         float rad = GetSphere().GetRadius();
         for (int i = 0; i < mLods.size(); i++) {
-            mLods[i].mScreenSize *= (1.0f / rad);
+            mLods[i].mScreenSize /= rad;
         }
     }
 }
@@ -338,32 +334,17 @@ void Character::UpdateSphere() {
     SetSphere(s78);
 }
 
-void Character::DrawShadow(const Transform &xfm, float planeD) {
+void Character::DrawShadow(const Transform &xfm, float f2) {
     if (mShowing && !mShadow.empty()) {
+        Vector3 myWorldVec = WorldXfm().v;
+        Plane pl140;
+        pl140.Set(0, 0, 1, 0);
         MILO_ASSERT(GetGfxMode() == kOldGfx, 0x2E7);
-
-        Transform tf40;
-        Transpose(xfm, tf40);
-
-        Plane pl70;
-        pl70.Set(0, 0, 1, planeD);
-        Plane plb0;
-        Multiply(pl70, tf40, plb0);
-
         Transform tf90;
-        float scale = -1.0f / plb0.b;
-        tf90.m.Set(1, plb0.a * scale, 0, 0, 0, 0, 0, plb0.c * scale, 1);
-        tf90.v.Set(0, plb0.d * scale, 0);
-
-        Transform tfa0;
-        Multiply(tf40, tf90, tfa0);
-        Multiply(tfa0, xfm, tfa0);
-
-        for (int i = 0; i < mShadowBones.size(); i++) {
-            ShadowBone *cur = mShadowBones[i];
-            Multiply(cur->Parent()->WorldXfm(), tfa0, cur->DirtyLocalXfm());
-        }
-
+        Transpose(xfm, tf90);
+        Plane pl130;
+        Multiply(pl140, tf90, pl130);
+        // more...
         mShadow.Draw();
     }
 }
@@ -497,7 +478,7 @@ void Character::Teleport(Waypoint *wp) {
 }
 
 void Character::CalcBoundingSphere() {
-    Transform tf(mLocalXfm);
+    Transform tf50(mLocalXfm);
     DirtyLocalXfm().Reset();
     mBounding.Zero();
     static const char *boneNames[5] = { "bone_head.mesh",
@@ -517,9 +498,8 @@ void Character::CalcBoundingSphere() {
         RndTransformable *transLHand = CharUtlFindBoneTrans("bone_L-hand", this);
         if (transLHand) {
             Vector3 vClavicle = transLClavicle->WorldXfm().v;
-            float fDist = Distance(vClavicle, transLHand->WorldXfm().v);
-            vClavicle.z += fDist;
-            mBounding.GrowToContain(Sphere(vClavicle, fDist * 0.5f));
+            vClavicle.z += Distance(vClavicle, transLHand->WorldXfm().v);
+            mBounding.GrowToContain(Sphere(vClavicle, 7.0f));
         }
     }
     RndTransformable *transRClavicle = CharUtlFindBoneTrans("bone_R-clavicle", this);
@@ -527,28 +507,27 @@ void Character::CalcBoundingSphere() {
         RndTransformable *transRHand = CharUtlFindBoneTrans("bone_R-hand", this);
         if (transRHand) {
             Vector3 vClavicle = transRClavicle->WorldXfm().v;
-            float fDist = Distance(vClavicle, transRHand->WorldXfm().v);
-            vClavicle.z += fDist;
-            mBounding.GrowToContain(Sphere(vClavicle, fDist * 0.5f));
+            vClavicle.z += Distance(vClavicle, transRHand->WorldXfm().v);
+            mBounding.GrowToContain(Sphere(vClavicle, 7.0f));
         }
     }
     if (mBounding.GetRadius() == 0) {
         for (ObjDirItr<RndTransformable> it(this, true); it != nullptr; ++it) {
-            if ((strncmp(it->Name(), "bone_", 5) == 0)
-                || (strncmp(it->Name(), "spot_", 5) == 0)) {
+            if (strneq(it->Name(), "bone_", 5) || strneq(it->Name(), "spot_", 5)) {
                 mBounding.GrowToContain(Sphere(it->WorldXfm().v, 0.1f));
             }
             RndMesh *mesh = dynamic_cast<RndMesh *>(&*it);
             if (mesh && mesh->Showing()) {
                 for (int i = 0; i < mesh->Verts().size(); i++) {
-                    Vector3 vert = mesh->SkinVertex(mesh->Verts(i), nullptr);
-                    mBounding.GrowToContain(Sphere(vert, 0.001f));
+                    mBounding.GrowToContain(
+                        Sphere(mesh->SkinVertex(mesh->Verts(i), nullptr), 0.001f)
+                    );
                 }
             }
         }
     }
     UpdateSphere();
-    DirtyLocalXfm() = tf;
+    DirtyLocalXfm() = tf50;
 }
 
 bool Character::MakeWorldSphere(Sphere &s, bool b) {
@@ -687,22 +666,22 @@ void Character::SetInterestObjects(
     }
 }
 
-bool Character::SetFocusInterest(Symbol s, int priority) {
+bool Character::SetFocusInterest(Symbol s, int iii) {
     CharEyes *eyes = GetEyes();
     if (eyes) {
-        CharInterest *interest = 0;
+        CharInterest *interest = nullptr;
         for (int i = 0; i < eyes->NumInterests(); i++) {
-            if (s == eyes->GetInterestUnchecked(i)->Name()) {
-                interest = eyes->GetInterestUnchecked(i);
+            if (s == eyes->GetInterest(i)->Name()) {
+                interest = eyes->GetInterest(i);
                 break;
             }
         }
         if (!s.Null() && !interest) {
             MILO_NOTIFY("Couldn't find interest named %s to force on %s", s.Str(), Name());
         }
-        return SetFocusInterest(interest, priority);
-    }
-    return false;
+        return SetFocusInterest(interest, iii);
+    } else
+        return false;
 }
 
 void Character::SetSphereBase(RndTransformable *trans) {
@@ -752,86 +731,51 @@ DataNode Character::OnGetCurrentInterests(DataArray *da) {
     return ptr;
 }
 
-void Character::DrawLodOrShadow(int lod, DrawMode drawMode) {
-    // Set poll state to 5 (undocumented draw state)
-    mPollState = (PollState)5;
-    mLastLod = Clamp<int>(0, mLods.size() - 1, lod);
+void Character::DrawLod(int lod) {
+    int rndDrawMode = TheRnd.GetDrawMode();
+    unsigned char opaqueBit = mDrawMode & 1;
+    if (rndDrawMode == 5)
+        return;
+    if (rndDrawMode == 3) {
+        if (!unk251)
+            return;
+        if (!opaqueBit)
+            return;
+    }
+    if (rndDrawMode == 4) {
+        if (!unk252)
+            return;
+        if (!opaqueBit)
+            return;
+    }
+    DrawMode charDrawMode;
+    if (rndDrawMode == 3 || rndDrawMode == 4) {
+        charDrawMode = (DrawMode)4;
+    } else {
+        bool isExtrude = (rndDrawMode == 2);
+        charDrawMode = isExtrude ? kCharDrawTranslucent : mDrawMode;
+    }
+    DrawLodOrShadow(lod, charDrawMode);
+}
 
-    // Draw mode 4 is shadow-only mode (not in enum)
+void Character::DrawLodOrShadow(int lod, DrawMode drawMode) {
+    mLastLod = Clamp<int>(0, mLods.size() - 1, lod);
     if (drawMode == 4) {
-        if (mShadow.size() != 0) {
+        if (!mShadow.empty()) {
             mShadow.Draw();
             return;
         }
+        DrawShowing();
     } else {
-        // Draw opaque geometry (bit 0)
         if (drawMode & 1) {
             RndEnvironTracker tracker(mEnv, &WorldXfm().v);
             DrawShowing();
-            // If opaque-only, save environment state
-            if (drawMode == 1) {
-                mSavedEnviron = RndEnviron::Current();
-                mSavedEnvironPos = RndEnviron::CurrentPos();
-            }
         }
-        // Draw translucent geometry (bit 1)
-        if (drawMode & 2) {
-            // If translucent-only, restore saved environment
-            if (drawMode == 2) {
-                RndEnvironTracker tracker(mSavedEnviron, mSavedEnvironPos);
-                DrawShowing();
-                return;
-            }
-            DrawShowing();
+        if (!(drawMode & 2))
+            return;
+        if (drawMode == 2) {
+            RndEnvironTracker tracker(unk2a0, unk2b4);
             return;
         }
     }
-    // Fall-through for modes that don't explicitly return
-    DrawShowing();
 }
-
-#pragma endregion
-#pragma region CharPollableSorter
-
-void CharPollableSorter::AddDeps(
-    Dep *me, const std::list<Hmx::Object *> &odeps, std::list<Dep *> &toDo, bool changedBy
-) {
-    for (std::list<Hmx::Object *>::const_iterator it = odeps.begin(); it != odeps.end();
-         ++it) {
-        Hmx::Object *cur = *it;
-        if (cur) {
-            Dep *mapDep = &mDeps[cur];
-            if (!mapDep->obj) {
-                mapDep->obj = cur;
-                toDo.push_back(mapDep);
-            }
-            if (changedBy) {
-                me->changedBy.push_back(mapDep);
-            } else {
-                mapDep->changedBy.push_back(me);
-            }
-        }
-    }
-}
-
-#ifndef HX_NATIVE
-// Template instantiation for std::list<CharPollableSorter::Dep*>::erase
-namespace stlpmtx_std {
-    template <>
-    _List_iterator<CharPollableSorter::Dep *, _Nonconst_traits<CharPollableSorter::Dep *>>
-    list<CharPollableSorter::Dep *, StlNodeAlloc<CharPollableSorter::Dep *>>::erase(
-        _List_iterator<CharPollableSorter::Dep *, _Nonconst_traits<CharPollableSorter::Dep *>> __position
-    ) {
-        _Node_base *__next_node = __position._M_node->_M_next;
-        _Node_base *__prev_node = __position._M_node->_M_prev;
-        _Node *__n = __STATIC_CAST(_Node *, __position._M_node);
-        __prev_node->_M_next = __next_node;
-        __next_node->_M_prev = __prev_node;
-        _STLP_STD::_Destroy(&__n->_M_data);
-        this->_M_node.deallocate(__n, 1);
-        return iterator(__next_node);
-    }
-}
-#endif
-
-#pragma endregion

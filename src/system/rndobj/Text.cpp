@@ -88,8 +88,9 @@ RndText::Style::Style(Hmx::Object *owner)
     : mSize(30), mTextColor(1, 1, 1), mFontColorOverride(false), mFontColor(1, 1, 1),
       mItalics(0), mKerning(0), mZOffset(0), mFont(owner), mBlacklight(false) {}
 
-RndText::Style::Style(const Style &s) : mFont(s.mFont) {
+RndText::Style::Style(const Style &s) {
     memcpy(this, &s, 0x34);
+    new (&mFont) ObjPtr<RndFontBase>(s.mFont);
     mBlacklight = s.mBlacklight;
 }
 

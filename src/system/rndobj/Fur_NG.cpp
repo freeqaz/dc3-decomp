@@ -9,7 +9,7 @@
 #include "math/Vec.h"
 
 bool NgFur::Prep(RndMesh *, RndMat *) const {
-    TheShaderMgr.SetPConstant((PShaderConstant)12, mFurDetail);
+    TheShaderMgr.SetPConstant(kPS_FurDetail, mFurDetail);
     TheRenderState.SetTextureFilter(12, (RndRenderState::FilterMode)1, false);
     return true;
 }
@@ -37,7 +37,7 @@ bool NgFur::Shell(int layerIdx, RndMesh *mesh, RndMat *mat) const {
         gravStretch * fShell,
         gravSlide * curveVal
     );
-    TheShaderMgr.SetPConstant((PShaderConstant)0x32, furGeom);
+    TheShaderMgr.SetPConstant(kPS_FurGeometry, furGeom);
 
     // Constant 0xc: color interpolation between roots and ends tints
     float diffRed = (mEndsTint.red - mRootsTint.red);
@@ -54,7 +54,7 @@ bool NgFur::Shell(int layerIdx, RndMesh *mesh, RndMat *mat) const {
         mRootsTint.blue + diffBlue,
         mRootsTint.alpha + diffAlpha
     );
-    TheShaderMgr.SetPConstant((PShaderConstant)0xc, furColor);
+    TheShaderMgr.SetPConstant(kPS_FurColor, furColor);
 
     // Constant 0x33: shell thickness and vertex data
     float oneVal = 1.0f;
@@ -75,7 +75,7 @@ bool NgFur::Shell(int layerIdx, RndMesh *mesh, RndMat *mat) const {
     }
 
     Vector4 furShell(shellThickness, vertCount, zeroVal, zeroVal);
-    TheShaderMgr.SetPConstant((PShaderConstant)0x33, furShell);
+    TheShaderMgr.SetPConstant(kPS_FurShell, furShell);
 
     // Constant 0xb: alpha processing params
     float alphaExp = mAlphaFalloff * 2.0f + oneVal;
@@ -90,7 +90,7 @@ bool NgFur::Shell(int layerIdx, RndMesh *mesh, RndMat *mat) const {
     float alphaScale = oneVal / (oneVal - alphaResult);
     float alphaBias = -(alphaScale * alphaResult);
     Vector4 furAlpha(alphaScale, alphaBias, mFurTiling, zeroVal);
-    TheShaderMgr.SetPConstant((PShaderConstant)0xb, furAlpha);
+    TheShaderMgr.SetPConstant(kPS_FurAlpha, furAlpha);
 
     RndShader::SelectConfig(mat, (ShaderType)8, false);
 

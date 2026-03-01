@@ -36,17 +36,17 @@ void NgEnviron::UpdateApproxLighting(const Vector3 *pos) {
         }
         for (int i = 0; i < 6; i++) {
             Vector4 v(sBoxResults[i].red, sBoxResults[i].green, sBoxResults[i].blue, sBoxResults[i].alpha);
-            TheShaderMgr.SetVConstant((VShaderConstant)(0x50 + i), v);
+            TheShaderMgr.SetVConstant((VShaderConstant)(kVS_BoxMapLight0 + i), v);
             Vector4 v2(sBoxResults[i].red, sBoxResults[i].green, sBoxResults[i].blue, sBoxResults[i].alpha);
-            TheShaderMgr.SetPConstant((PShaderConstant)(0x50 + i), v2);
+            TheShaderMgr.SetPConstant((PShaderConstant)(kPS_BoxMapLight0 + i), v2);
         }
     } else {
         static Hmx::Color sDefaultColor(0, 0, 0, 0);
         for (int i = 0; i < 6; i++) {
             Vector4 v(sDefaultColor.red, sDefaultColor.green, sDefaultColor.blue, sDefaultColor.alpha);
-            TheShaderMgr.SetVConstant((VShaderConstant)(0x50 + i), v);
+            TheShaderMgr.SetVConstant((VShaderConstant)(kVS_BoxMapLight0 + i), v);
             Vector4 v2(sDefaultColor.red, sDefaultColor.green, sDefaultColor.blue, sDefaultColor.alpha);
-            TheShaderMgr.SetPConstant((PShaderConstant)(0x50 + i), v2);
+            TheShaderMgr.SetPConstant((PShaderConstant)(kPS_BoxMapLight0 + i), v2);
         }
     }
     if (mNumLightsReal > 0) {

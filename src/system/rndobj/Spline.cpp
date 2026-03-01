@@ -197,14 +197,14 @@ void RndSpline::PrepareShader(float farg0, float farg1) const {
         float invFarg1 = 1.0f / farg1;
         float countAsFloat = (float)(double)count;
         Vector4 shader1(countAsFloat, invFarg1, 0.0f, zero);
-        TheShaderMgr.SetVConstant((VShaderConstant)0x19, shader1);
+        TheShaderMgr.SetVConstant(kVS_SplineData1, shader1);
         if ((unsigned char)mPulseDrawing != 0) {
             float startAsFloat = (float)(double)actualStart;
             float amp = mPulseAmplitude;
             float offset = mPulseOffset - startAsFloat;
             float perPt = (mYPerCtrlPoint / mPulseLength) * 2.0f;
             Vector4 shader2(offset, amp, perPt, zero);
-            TheShaderMgr.SetVConstant((VShaderConstant)0x1A, shader2);
+            TheShaderMgr.SetVConstant(kVS_SplineData2, shader2);
         }
     }
 }

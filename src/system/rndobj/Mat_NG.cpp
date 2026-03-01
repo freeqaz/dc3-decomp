@@ -128,7 +128,7 @@ void NgMat::SetupAmbient() {
         w = 1.0f;
     }
     Vector4 v4_1(x, y, z, w);
-    TheShaderMgr.SetVConstant((VShaderConstant)1, v4_1);
+    TheShaderMgr.SetVConstant(kVS_AmbientColor, v4_1);
     Vector4 v4_2(x, y, z, w);
-    TheShaderMgr.SetPConstant((PShaderConstant)1, v4_2);
+    TheShaderMgr.SetPConstant(kPS_AmbientColor, v4_2);
 }

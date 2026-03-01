@@ -75,14 +75,14 @@ void NgRnd::SetShadowMap(RndTex *tex, RndCam *cam, const Hmx::Color *color) {
     if (cam) {
         const Vector3 &v3 = cam->WorldXfm().m.y;
         Vector4 v4(v3.x, v3.y, v3.z, 1);
-        TheShaderMgr.SetPConstant((PShaderConstant)0x6c, v4);
+        TheShaderMgr.SetPConstant(kPS_ShadowCamDir, v4);
     }
     if (color) {
         Vector4 v4 = Vector4(color->red, color->green, color->blue, color->alpha);
-        TheShaderMgr.SetPConstant((PShaderConstant)0x6B, v4);
+        TheShaderMgr.SetPConstant(kPS_ShadowColor, v4);
     }
     if (tex) {
-        TheShaderMgr.SetPConstant((PShaderConstant)5, tex);
+        TheShaderMgr.SetPConstant(kPS_Texture, tex);
     }
 }
 

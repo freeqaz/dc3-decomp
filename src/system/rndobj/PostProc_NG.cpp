@@ -101,5 +101,5 @@ void NgPostProc::SetBloomColor() {
     float invScale = 1.0f / scale;
 
     Vector4 bloomParams(scale * 0.3f, scale * 0.59f, scale * 0.11f, invScale);
-    TheShaderMgr.SetPConstant((PShaderConstant)7, bloomParams);
+    TheShaderMgr.SetPConstant(kPS_BloomParams, bloomParams);
 }
