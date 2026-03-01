@@ -494,12 +494,12 @@ bool RndText::MakeWorldSphere(Sphere &s, bool b) {
             RndMesh *mesh = (*it)->Mesh(i);
             if (mesh) {
                 Sphere localSphere;
-                if (!b) {
+                if (b) {
+                    mesh->MakeWorldSphere(localSphere, true);
+                } else {
                     if (mesh->GetSphere().GetRadius() != 0.0f) {
                         Multiply(mesh->GetSphere(), mesh->WorldXfm(), localSphere);
                     }
-                } else {
-                    mesh->MakeWorldSphere(localSphere, true);
                 }
                 s.GrowToContain(localSphere);
             }

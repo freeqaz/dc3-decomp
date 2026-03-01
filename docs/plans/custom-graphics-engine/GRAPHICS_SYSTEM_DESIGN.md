@@ -538,30 +538,35 @@ struct ObjectUniforms {      // Group 2, 128 bytes
 
 ### Render Pass Structure
 
-No FrameGraph module — the engine's pass order is fixed and linear. Pass management
-is ~30 lines inline in `WgpuRnd::BeginDrawing()` / `DoWorldEnd()` / `DoPostProcess()`
-/ `EndDrawing()`.
+No FrameGraph module — the engine's pass order is fixed and linear.
+
+**Tier 1 (current)**: Single render pass in `BeginDrawing()` → `EndDrawing()`.
+Renders directly to the surface texture (no intermediate targets).
 
 ```
-1. Shadow Pass (optional, Tier 2)
-   - Render shadow casters to depth-only target
+BeginDrawing():
+  1. GLFW PollEvents, check window close
+  2. Reset ring buffers for new frame
+  3. Acquire surface texture view (windowed) or headless framebuffer
+  4. Resize depth texture if window resized
+  5. WriteSceneUniforms() from RndCam::Current() + RndEnviron::Current()
+  6. CreateCommandEncoder, BeginRenderPass (color clear + depth clear)
+  7. SetBindGroup(0, sceneBindGroup)
 
-2. World Pass (main)
-   - Clear color + depth
-   - Set camera + environment uniforms (SceneUniforms)
-   - Render all drawables (already sorted by RndDir::SyncDrawables)
-   - Output: scene color + depth
+[Engine draws all drawables — each calls RndMesh::DrawShowing()]
 
-3. Post-Process Pass (optional, Tier 2, chained)
-   - Bloom: downsample → blur → composite
-   - Color adjust, tone mapping
-
-4. Present
-   - Final blit to surface (or readback for headless)
+EndDrawing():
+  8. EndRenderPass, Finish → Submit
+  9. PresentFrame (if windowed)
 ```
 
-Intermediate render targets (`mSceneColor`, `mSceneDepth`, `mShadowMap`,
-`mPostProcTemp`) are plain `wgpu::Texture` members on WgpuRnd. No abstraction needed.
+**Tier 2/3 (planned)**:
+```
+1. Shadow Pass — depth-only render target
+2. World Pass — intermediate color+depth targets
+3. Post-Process — bloom/blur/tone mapping chain
+4. Present — final blit to surface
+```
 
 ---
 
@@ -708,66 +713,104 @@ static WgpuShaderMgr gWgpuShaderMgr;
 RndShaderMgr& TheShaderMgr = gWgpuShaderMgr;
 ```
 
-### WgpuTex, WgpuMesh
+### GPU Resource Management: Side Tables (Not Subclasses)
 
-Thin wrappers that store wgpu objects directly (no handle indirection).
+The original design proposed `WgpuTex` and `WgpuMesh` subclasses storing GPU resources
+as member variables. The actual implementation uses **side tables** — `unordered_map`
+keyed by the decomp object pointer. This approach was chosen because:
+
+1. **No factory registration needed** — `RndTex` and `RndMesh` objects are created by
+   the engine's existing object system (DirLoader, ObjectDir). Injecting subclasses
+   would require hooking the factory, which is complex and fragile.
+2. **No decomp class layout changes** — Adding `wgpu::Texture` to `RndTex` would change
+   its size, breaking compatibility with the PPC build and serialized data.
+3. **`#ifdef HX_NATIVE` overrides** — We override virtual methods directly on the
+   existing decomp classes, guarded by `#ifdef HX_NATIVE`.
+
+#### Tex_Wgpu.cpp — GPU Texture Side Table
 
 ```cpp
-class WgpuTex : public RndTex {
-public:
-    // Texture lifecycle — called by engine during object loading
-    void PresyncBitmap() override;   // convert bitmap → GPU texture via TextureConvert
-    void SyncBitmap() override;      // no-op after PresyncBitmap
-    void LockBitmap() override;      // GPU→CPU readback (screenshot, etc.)
-    void UnlockBitmap() override;
-    void MakeDrawTarget() override;  // create as render target
-    void FinishDrawTarget() override;
-
-private:
-    wgpu::Texture mTexture;          // owned directly
-    wgpu::TextureView mView;
+struct GpuTexData {
+    wgpu::Texture texture;
+    wgpu::TextureView view;
+    bool uploaded = false;
 };
+static std::unordered_map<RndTex*, GpuTexData> sTexGpuData;
 
-class WgpuMesh : public RndMesh {
-public:
-    void PreLoad(BinStream& bs) override;
-    void PostLoad(BinStream& bs) override;
-    void DrawShowing() override;     // THE draw call — see pipeline below
+// Public accessor (used by Mesh_Wgpu.cpp)
+wgpu::TextureView GetGpuTexView(RndTex* tex);
 
-private:
-    wgpu::Buffer mVertexBuf;         // owned directly
-    wgpu::Buffer mIndexBuf;
-    wgpu::BindGroup mMaterialGroup;  // cached per-material bind group
-    bool mGpuDirty;
-};
+// Overrides weak stubs in engine_stubs_generated.cpp
+void RndTex::PresyncBitmap();    // creates GPU texture via TextureConvert::CreateFromBitmap
+void RndTex::SyncBitmap();       // no-op (work done in PresyncBitmap)
 ```
+
+#### Mesh_Wgpu.cpp — GPU Mesh Side Table
+
+```cpp
+struct GpuMeshData {
+    wgpu::Buffer vertexBuffer;
+    wgpu::Buffer indexBuffer;
+    int numIndices = 0;
+    int numVertices = 0;
+    bool uploaded = false;
+};
+static std::unordered_map<RndMesh*, GpuMeshData> sMeshGpuData;
+
+// DrawShowing override added to RndMesh in Mesh.h via #ifdef HX_NATIVE
+void RndMesh::DrawShowing();     // THE draw call — see pipeline below
+```
+
+#### Decomp Header Modifications
+
+Minimal `#ifdef HX_NATIVE` additions to decomp headers (no PPC build impact):
+
+- **`Mesh.h`**: `virtual void DrawShowing();` override
+- **`BaseMaterial.h`**: 6 public getters (GetCull, GetStencil, GetAlphaCut, GetAlphaWrite, GetAlphaThreshold, GetTexWrap)
+- **`Env.h`**: FogStart(), FogEnd(), FogColor() accessors
 
 ### Mesh Draw Submission Pipeline
 
 `RndMesh::DrawShowing()` is THE hot path — where material state becomes a draw call.
+Implemented in `Mesh_Wgpu.cpp`.
 
 ```
-WgpuMesh::DrawShowing()
-  1. Get material → RndMat* mat = mMat
-  2. Build PipelineKey from material state:
-     - shaderOptions from mat->mShaderOptions + ShaderOptions from shader selection
-     - blend from mat->mBlend
-     - zMode from mat->mZMode
-     - cull from mat->mCull
-     - alphaCut from mat->mAlphaCut
-     - stencil from mat->mStencilMode
-     - vertex layout from mesh type (static/skinned/mutable)
-  3. pipeline = mPipelines->GetPipeline(key)     // cached lookup
-  4. pass.SetPipeline(pipeline)
-  5. Update material uniform buffer (color, specular, etc.)
-  6. Create/cache material bind group (textures + material uniforms)
-  7. pass.SetBindGroup(1, materialGroup)
-  8. Update object uniform buffer (world transform)
-  9. pass.SetBindGroup(2, objectGroup, dynamicOffset)
-  10. pass.SetVertexBuffer(0, mVertexBuf)
-  11. pass.SetIndexBuffer(mIndexBuf, IndexFormat::Uint16)
-  12. pass.DrawIndexed(mNumFaces * 3)
+RndMesh::DrawShowing()  (Mesh_Wgpu.cpp)
+  1. Guard: gWgpuRnd && gWgpuRnd->IsInPass(), has material
+  2. EnsureMeshUploaded(this):
+     - Check side table, return if already uploaded
+     - Get geom owner (shared geometry support)
+     - UnpackStaticVertices() → GpuVertex[] (from RndMesh::Vert)
+     - Create vertex buffer + index buffer, upload via WriteBuffer
+     - Store in sMeshGpuData side table
+  3. Build PipelineKey from material state:
+     - shaderType = 18 (kStandardShader)
+     - blend, zMode, cull, stencil via getters (GetBlend, GetZMode, etc.)
+     - alphaCut, alphaWrite from material
+     - layout = VertexLayoutType::Static
+     - targetFormat from GpuDevice surface format
+  4. pipeline = gWgpuRnd->Pipelines().GetPipeline(key)  // cached lookup
+  5. pass.SetPipeline(pipeline)
+  6. Write MaterialUniforms (color, alphaThreshold, useTexture) to ring buffer
+  7. Get diffuse texture: mat->GetDiffuseTex() → PresyncBitmap() → GetGpuTexView()
+     - Falls back to gWgpuRnd->WhiteTexView() if no texture
+  8. Get sampler from material's GetTexWrap() → gWgpuRnd->Gpu().GetSampler()
+  9. Create material bind group (ring buffer offset + texture view + sampler)
+  10. pass.SetBindGroup(1, materialGroup)
+  11. Write ObjectUniforms (world transform) to ring buffer
+  12. Create object bind group (ring buffer offset)
+  13. pass.SetBindGroup(2, objectGroup)
+  14. pass.SetVertexBuffer(0, vertexBuffer)
+  15. pass.SetIndexBuffer(indexBuffer, Uint16)
+  16. pass.DrawIndexed(numIndices)
 ```
+
+**Key design decisions**:
+- **Bind groups created per draw**: Fresh bind groups each draw call, referencing
+  ring buffer at different offsets. Dawn caches these internally — acceptable for
+  Tier 1. Tier 2 can add bind group caching keyed by material+texture.
+- **Texture upload on demand**: `PresyncBitmap()` called lazily during first draw,
+  not at load time. Side table caches the result.
 
 ### Texture Lifecycle
 
@@ -776,12 +819,19 @@ WgpuMesh::DrawShowing()
   → RndTex::PreLoad(BinStream)     // reads bitmap header + pixel data into mBitmap
   → RndTex::PostLoad(BinStream)    // finalize
 
-WgpuTex::PresyncBitmap()           // called when texture data ready for GPU
-  → TextureConvert::ByteSwapDXT()  // swap 16-bit words if DXT from Xbox
-  → TextureConvert::UntileMilo()   // untile if mOrder & 4
-  → TextureConvert::CreateFromBitmap()  // → wgpu::Texture
-  → Store in mTexture, create mView
+First draw referencing this texture (in Mesh_Wgpu.cpp):
+  → mat->GetDiffuseTex()
+  → diffTex->PresyncBitmap()        // Tex_Wgpu.cpp override of weak stub
+    → Check sTexGpuData side table — skip if already uploaded
+    → TextureConvert::CreateFromBitmap(gpu, mBitmap, numMips)
+      → Internally: ByteSwapDXT + UntileMilo + CreateTexture + WriteTexture
+    → Store {texture, view, uploaded=true} in sTexGpuData[this]
+  → GetGpuTexView(diffTex)          // returns wgpu::TextureView from side table
 ```
+
+**Cleanup**: GPU texture resources are currently leaked at shutdown (cleaned up by
+process exit). Tier 2 should hook `RndTex` destructor or add reference counting
+via `CleanupGpuTex()`.
 
 ---
 
@@ -840,6 +890,22 @@ private:
 Dawn/WebGPU headers simultaneously via `-D__GNUC_STDC_INLINE__` and
 `-D__GCC_ATOMIC_TEST_AND_SET_TRUEVAL=1` workarounds for GCC 15 + clang MSVC compat mode.
 
+**Key implementation discoveries**:
+
+- **Matrix convention**: Milo uses row-major matrices (D3D convention). The Transform
+  struct stores rotation as 3×3 `Hmx::Matrix3` + `Vector3` translation. `memcpy`-ing
+  the row-major `float[16]` into WGSL's `mat4x4<f32>` (column-major storage) gives the
+  correct transpose for `M * v` in WGSL matching D3D's `v * M` convention.
+- **View matrix computation**: Not stored directly — computed as inverse of camera's
+  `WorldXfm()`. For orthogonal rotation: transpose the 3×3 rotation, negate the
+  translated position (`tx = -(R^T * t)`).
+- **Dawn API naming (2025+)**: `TexelCopyTextureInfo` (not `ImageCopyTexture`),
+  `TexelCopyBufferLayout` (not `TextureDataLayout`), `BlendFactor::Dst` (not `DstColor`),
+  `depthWriteEnabled` is `wgpu::OptionalBool` (not `bool`).
+- **Weak stub override pattern**: `engine_stubs_generated.cpp` defines `PresyncBitmap()`,
+  `SyncBitmap()`, `DrawShowing()` as weak symbols. `Tex_Wgpu.cpp` and `Mesh_Wgpu.cpp`
+  provide strong definitions that the linker prefers — no registration needed.
+
 ### Tier 2: Full Lighting + Normal/Specular Maps + Post-Processing
 
 **Goal**: Visually representative rendering. Characters look recognizable.
@@ -874,47 +940,55 @@ sync_track, player depth/greenscreen, twirl, crew_photo
 
 ## File Structure
 
+Files marked with ✓ exist; others are planned for Tier 2/3.
+
 ```
 native/
-├── CMakeLists.txt                    # Builds dc3-native + milo-viewer targets
+├── CMakeLists.txt                    ✓ Builds dc3-native target
 ├── src/
-│   ├── main.cpp                      # Engine entry point
-│   ├── viewer/
-│   │   ├── main.cpp                  # Milo Viewer entry point
+│   ├── main.cpp                      ✓ Engine entry point
+│   ├── viewer/                       (Step 5 — pending)
+│   │   ├── main.cpp                  Milo Viewer entry point
 │   │   ├── MiloViewer.cpp
 │   │   ├── OrbitCamera.cpp
-│   │   └── MiloScene.cpp            # .milo file loading for viewer
-│   ├── gfx/                          # Shared utilities (compiled into both targets)
-│   │   ├── GpuDevice.h / .cpp        # WebGPU device lifecycle + sampler cache
-│   │   ├── TextureConvert.h / .cpp   # Format conversion, byte-swap, untile
-│   │   ├── VertexFormats.h / .cpp    # Layout descriptors + CPU unpack
-│   │   ├── PipelineManager.h / .cpp  # Shader compilation + pipeline cache
-│   │   └── standard_snippets.h      # C++ raw string literals for WGSL snippets
+│   │   └── MiloScene.cpp            .milo file loading for viewer
+│   ├── gfx/                          ✓ Shared utilities
+│   │   ├── GpuDevice.h / .cpp        ✓ WebGPU device lifecycle, GLFW window, sampler cache
+│   │   ├── TextureConvert.h / .cpp   ✓ Format conversion, byte-swap, untile, DXT decompress
+│   │   ├── VertexFormats.h / .cpp    ✓ Layout descriptors + CPU unpack from RndMesh::Vert
+│   │   ├── PipelineManager.h / .cpp  ✓ Pipeline cache, bind group layouts, shader compilation
+│   │   └── standard_wgsl.inc         ✓ Embedded WGSL shader source (C++ raw string literal)
 │   └── platform/
-│       ├── Rnd_Wgpu.cpp             # WgpuRnd implementation
-│       ├── ShaderMgr_Wgpu.cpp       # WgpuShaderMgr implementation
-│       ├── Tex_Wgpu.cpp             # WgpuTex implementation
-│       ├── Mesh_Wgpu.cpp            # WgpuMesh implementation
-│       └── ...
-├── shaders/                          # Static WGSL shader files (non-variant shaders)
-│   ├── bloom.wgsl
-│   ├── blur.wgsl
-│   ├── downsample.wgsl
-│   ├── drawrect.wgsl
-│   ├── line.wgsl
-│   ├── particles.wgsl
-│   ├── multimesh.wgsl
-│   ├── fur.wgsl
-│   ├── postprocess.wgsl
-│   ├── shadowmap.wgsl
-│   ├── depthvolume.wgsl
-│   ├── synctrack.wgsl
-│   ├── unwrapuv.wgsl
-│   ├── velocity.wgsl
-│   ├── velocity_cam.wgsl
-│   └── movie.wgsl
+│       ├── Rnd_Wgpu.h               ✓ WgpuRnd + WgpuShaderMgr + uniform structs
+│       ├── Rnd_Wgpu.cpp             ✓ WgpuRnd implementation (replaces Rnd_Stub.cpp)
+│       ├── Tex_Wgpu.cpp             ✓ RndTex::PresyncBitmap override + GPU texture side table
+│       ├── Mesh_Wgpu.cpp            ✓ RndMesh::DrawShowing override + GPU mesh side table
+│       ├── RndTex_Native.cpp         ✓ RndTex::PreLoad/PostLoad stream consumption
+│       ├── Rnd_Stub.cpp             (replaced by Rnd_Wgpu.cpp, kept for reference)
+│       └── ...                       Other platform stubs
+├── shaders/                          WGSL shader files
+│   ├── standard.wgsl                ✓ Tier 1: diffuse + ambient + fog + alpha test
+│   ├── bloom.wgsl                   Tier 2: bloom extraction + composite
+│   ├── blur.wgsl                    Tier 2: gaussian blur (separable)
+│   ├── downsample.wgsl              Tier 2: mip-chain downsampling
+│   ├── drawrect.wgsl                Tier 2: UI rectangle rendering
+│   ├── line.wgsl                    Tier 2: debug line rendering
+│   ├── particles.wgsl               Tier 2: particle system (billboard/skinned)
+│   ├── multimesh.wgsl               Tier 2: instanced mesh (billboard flag)
+│   ├── postprocess.wgsl             Tier 2: bloom/blur/vignette/tone mapping
+│   ├── shadowmap.wgsl               Tier 2: shadow depth pass
+│   ├── fur.wgsl                     Tier 3: shell-based fur rendering
+│   ├── depthvolume.wgsl             Tier 3: depth volume effects
+│   ├── synctrack.wgsl               Tier 3: sync track + charge effect
+│   ├── unwrapuv.wgsl                Tier 3: UV unwrap visualization
+│   ├── velocity.wgsl                Tier 3: per-object motion vectors
+│   ├── velocity_cam.wgsl            Tier 3: camera motion vectors
+│   └── movie.wgsl                   Tier 3: YUV video texture decoding
+├── include/
+│   └── bits/
+│       └── stl_iterator.h            ✓ Shadow copy with iterator→pointer implicit conversion
 └── tools/
-    └── milo_tex_convert/             # Offline texture converter (Tier 2)
+    └── milo_tex_convert/             Tier 2: offline texture converter
         ├── main.cpp
         └── Xbox360Detile.cpp
 ```
@@ -928,15 +1002,17 @@ native/
 ```
 .ark archive
   → RndTex::PreLoad (reads bitmap header + pixel data into mBitmap)
-  → WgpuTex::PresyncBitmap()
-    → Detect format from RndBitmap::Order()
-    → If DXT: ByteSwapDXT() — 16-bit byte-swap for Xbox BE data (CRITICAL)
-    → If Milo-tiled (mOrder & 4): UntileMilo() — custom lookup-table untile
-    → If uncompressed: ConvertChannelOrder() based on mOrder & 1
-    → If BC feature unavailable: DecompressDXT() → RGBA8 fallback
-    → TextureConvert::CreateFromBitmap() → wgpu::Texture
-    → Upload via wgpu::Queue::WriteTexture()
-    → Generate mipmaps if mNumMips > 0 (GPU mipmap generation pass)
+  → [lazy, on first draw] RndTex::PresyncBitmap()  (Tex_Wgpu.cpp)
+    → Check sTexGpuData side table — skip if already uploaded
+    → TextureConvert::CreateFromBitmap(gpu, bitmap, numMips)
+      → Detect format from RndBitmap::Order()
+      → If DXT: ByteSwapDXT() — 16-bit byte-swap for Xbox BE data (CRITICAL)
+      → If Milo-tiled (mOrder & 4): UntileMilo() — custom lookup-table untile
+      → If uncompressed: ConvertChannelOrder() based on mOrder & 1
+      → If BC feature unavailable: DecompressDXT() → RGBA8 fallback
+      → wgpu::Device::CreateTexture() + wgpu::Queue::WriteTexture()
+      → Upload mip chain if present
+    → Store {texture, view} in sTexGpuData[this]
 ```
 
 ### Offline Path (Shipping)
@@ -1031,13 +1107,15 @@ immutable pipeline objects. Mitigation:
 ### Uniform Buffer Updates
 
 WebGPU has no equivalent to D3D9's `SetVertexShaderConstant()` immediate updates.
-Instead:
+Tier 1 uses `UniformRingBuffer` — a 64KB GPU buffer per group with advancing write
+offset (256-byte aligned). Each draw call writes at a new offset and creates a fresh
+bind group referencing that offset.
 
-1. **Ring buffer allocation** — per-frame dynamic uniform buffer with offset tracking
-2. **Dynamic offsets** in bind groups — set per-draw without creating new bind groups
-3. **Group 0 (scene)**: updated once per frame
-4. **Group 1 (material)**: updated per-material change
-5. **Group 2 (object)**: updated per-draw
+1. **Group 0 (scene)**: Single `wgpu::Buffer`, written once per frame via `WriteBuffer`
+2. **Group 1 (material)**: Ring buffer, `Write()` returns offset, new bind group per draw
+3. **Group 2 (object)**: Ring buffer, `Write()` returns offset, new bind group per draw
+4. **Bind groups created per draw**: Dawn caches these internally. Tier 2 can optimize
+   by reusing bind groups for repeated material+texture combinations
 
 ### Texture Binding
 
