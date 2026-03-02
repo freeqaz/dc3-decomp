@@ -1,5 +1,6 @@
 #include "hamobj/HamCharacter.h"
 #include "HamCharacter.h"
+#include "utl/Str.h"
 #include "HamRegulate.h"
 #include "char/CharClip.h"
 #include "char/CharEyes.h"
@@ -694,3 +695,5 @@ QuatXfm::QuatXfm(const Transform &t) : v(t.v) { q.Set(t.m); }
 // TODO: real implementation clears a list
 void HamCharacter::Poll() {}
 #endif
+
+template class StackString<128>;

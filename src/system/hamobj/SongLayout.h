@@ -44,6 +44,8 @@ public:
 };
 
 struct MoveReplacer {
+    MoveReplacer() : mFrom(gNullStr), mTo(gNullStr), mMoveParent(nullptr) {}
+    MoveReplacer(const MoveReplacer &o);
     Symbol mFrom; // 0x0
     Symbol mTo; // 0x4
     const MoveParent *mMoveParent; // 0x8

@@ -54,6 +54,8 @@ void UtilDrawAxes(const Transform &, float, const Hmx::Color &);
 void UtilDrawBox(const Transform &tf, const Box &box, const Hmx::Color &col, bool b4);
 void UtilDrawRect2D(const Vector2 &v1, const Vector2 &v2, const Hmx::Color &color);
 void UtilDrawCylinder(const Transform &, float, float, const Hmx::Color &, int);
+void UtilDrawPlane(const Plane &, const Vector3 &, const Hmx::Color &, int, float, bool);
+void UtilDrawCigar(const Transform &, const float *const, const float *const, const Hmx::Color &, int);
 
 void TransformKeys(RndTransAnim *, const Transform &);
 void SpliceKeys(RndTransAnim *, RndTransAnim *, float, float);
@@ -82,6 +84,7 @@ void TessellateMesh(RndMesh *);
 void ClearAO(RndMesh *);
 void BurnXfm(RndMesh *, bool);
 void AttachMesh(RndMesh *, RndMesh *);
+void RandomPointOnMesh(RndMesh *, Vector3 &, Vector3 &);
 void BuildFromBSP(RndMesh *);
 void ConvertBonesToTranses(ObjectDir *, bool);
 

@@ -236,6 +236,7 @@ protected:
     DataNode OnConfigureMesh(const DataArray *);
 
     static bool sRawCollide;
+    static int sLastCollide;
 
     /** This mesh's vertices. */
     VertVector mVerts; // 0x100

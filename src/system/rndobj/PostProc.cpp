@@ -2,6 +2,7 @@
 #include "PostProc.h"
 #include "Rnd.h"
 #include "Utl.h"
+#include "math/Rand.h"
 #include "math/Utl.h"
 #include "obj/Data.h"
 #include "obj/Msg.h"
@@ -452,6 +453,22 @@ bool RndPostProc::ColorXfmEnabled() const {
         || mColorXfm.mLevelInLo.Pack() != 0 || mColorXfm.mLevelOutLo.Pack() != 0
         || mColorXfm.mLevelInHi.Pack() != 0xffffff
         || mColorXfm.mLevelOutHi.Pack() != 0xffffff;
+}
+
+void RndPostProc::UpdateColorModulation() {
+    if (mFlickerTimeBounds.x > 0 && mFlickerTimeBounds.y > 0 && mFlickerModBounds.y > 0) {
+        if (mFlickerSeconds.x >= mFlickerSeconds.y) {
+            float diff = mFlickerSeconds.x - mFlickerSeconds.y;
+            mFlickerSeconds.x = Max(diff, 0.0f);
+            mColorModulation =
+                1.0f - RandomFloat(mFlickerModBounds.x, mFlickerModBounds.y);
+            mFlickerSeconds.y = RandomFloat(mFlickerTimeBounds.x, mFlickerTimeBounds.y);
+            mFlickerSeconds.y = Max(mFlickerSeconds.x, mFlickerSeconds.y);
+        }
+        mFlickerSeconds.x += mDeltaSecs;
+    } else {
+        mColorModulation = 1.0f;
+    }
 }
 
 void RndPostProc::UpdateTimeDelta() {

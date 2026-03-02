@@ -7,6 +7,9 @@
 #include "utl/Std.h"
 #include <cstring>
 
+MoveReplacer::MoveReplacer(const MoveReplacer &o)
+    : mFrom(o.mFrom), mTo(o.mTo), mMoveParent(o.mMoveParent), mMeasures(o.mMeasures) {}
+
 SongLayout::SongLayout() {
     if (TheMoveMgr) {
         TheMoveMgr->RegisterSongLayout(this);

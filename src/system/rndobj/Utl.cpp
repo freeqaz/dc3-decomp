@@ -813,6 +813,51 @@ void ScaleXfms(RndMultiMesh *mm, const Vector3 &v) {
 
 void RandomXfms(RndMultiMesh *) { MILO_ASSERT(0, 3173); }
 
+void RandomPointOnMesh(RndMesh *m, Vector3 &v1, Vector3 &v2) {
+    RndMesh::Face &face = m->Faces()[RandomInt(0, m->Faces().size())];
+    int numverts = m->Verts().size();
+    if (face.v1 >= numverts || face.v2 >= numverts || face.v3 >= numverts) {
+        MILO_NOTIFY_ONCE(
+            "%s: %s random face contains unknown vert indices!", PathName(m), m->Name()
+        );
+        v1.Zero();
+        v2.Zero();
+    } else {
+        Vector3 v58, v64, v70;
+        Vector3 v7c, v88, v94;
+        if (m->NumBones() > 0) {
+            v58 = m->SkinVertex(m->Verts()[face.v1], &v7c);
+            v64 = m->SkinVertex(m->Verts()[face.v2], &v88);
+            v70 = m->SkinVertex(m->Verts()[face.v3], &v94);
+        } else {
+            v58 = m->Verts()[face.v1].pos;
+            v64 = m->Verts()[face.v2].pos;
+            v70 = m->Verts()[face.v3].pos;
+            v7c = m->Verts()[face.v1].norm;
+            v88 = m->Verts()[face.v2].norm;
+            v94 = m->Verts()[face.v3].norm;
+        }
+        float f8 = RandomFloat();
+        float f9 = RandomFloat();
+        if (f8 + f9 > 1.0f) {
+            f8 = 1.0f - f8;
+            f9 = 1.0f - f9;
+        }
+        float f1 = (1.0f - f8) - f9;
+        v58 *= f8;
+        v64 *= f9;
+        v70 *= f1;
+        Add(v58, v64, v1);
+        Add(v1, v70, v1);
+        v7c *= f8;
+        v88 *= f9;
+        v94 *= f1;
+        Add(v7c, v88, v2);
+        Add(v2, v94, v2);
+        Normalize(v2, v2);
+    }
+}
+
 void UtilDrawSphere(const Vector3 &v, float f, const Hmx::Color &col, RndMat *) {
     if (!sSphereMesh) {
         MILO_NOTIFY_ONCE("Sphere mesh is not loaded");

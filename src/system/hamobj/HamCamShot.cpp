@@ -21,7 +21,7 @@ std::list<HamCamShot::TargetCache> HamCamShot::sCache;
 
 INIT_REVS(3, 0)
 
-BinStream &operator>>(BinStreamRev &d, HamCamShot::Target &t);
+BinStream &operator>>(BinStream &bs, HamCamShot::Target &t);
 
 BEGIN_LOADS(HamCamShot)
     LOAD_REVS(bs)
@@ -272,58 +272,40 @@ BinStream &operator<<(BinStream &bs, const HamCamShot::Target &t) {
     return bs;
 }
 
-BinStream &operator>>(BinStreamRev &d, HamCamShot::Target &t) {
-#ifdef HX_NATIVE
-    // Ghidra confirms bools are serialized individually interleaved with data,
-    // not packed into a single uint as the Save operator<< suggests.
-    d >> t.mTarget;
+BinStream &operator>>(BinStream &bs, HamCamShot::Target &t) {
+    bs >> t.mTarget;
 
-    unsigned char teleport;
-    d.stream.Read(&teleport, 1);
+    char teleport;
+    bs.Read(&teleport, 1);
     t.mTeleport = (teleport != 0);
 
-    d >> t.mTo;
-    d >> t.mAnimGroup;
+    bs >> t.mTo;
+    bs >> t.mAnimGroup;
 
-    unsigned char ret;
-    d.stream.Read(&ret, 1);
+    char ret;
+    bs.Read(&ret, 1);
     t.mReturn = (ret != 0);
 
-    d >> t.mFastForward;
-    d >> t.mForwardEvent;
+    bs.ReadEndian(&t.mFastForward, 4);
+    bs >> t.mForwardEvent;
 
-    unsigned char selfShadow, p4, p3;
-    d.stream.Read(&selfShadow, 1);
+    char selfShadow;
+    bs.Read(&selfShadow, 1);
     t.mSelfShadow = (selfShadow != 0);
-    d.stream.Read(&p4, 1);
+    char p4;
+    bs.Read(&p4, 1);
     t.unk68p4 = (p4 != 0);
-    d.stream.Read(&p3, 1);
+    char p3;
+    bs.Read(&p3, 1);
     t.unk68p3 = (p3 != 0);
 
-    d >> t.mEnvOverride;
+    t.mEnvOverride.Load(bs, true, nullptr);
 
-    unsigned char forceLOD;
-    d.stream.Read(&forceLOD, 1);
+    char forceLOD;
+    bs.Read(&forceLOD, 1);
     t.mForceLOD = forceLOD;
 
-    return d.stream;
-#else
-    d >> t.mTarget;
-    d >> t.mTo;
-    d >> t.mAnimGroup;
-    d >> t.mFastForward;
-    d >> t.mForwardEvent;
-    unsigned int bits;
-    d >> bits;
-    t.mForceLOD = bits & 7;
-    t.mTeleport = (bits >> 3) & 1;
-    t.mReturn = (bits >> 4) & 1;
-    t.mSelfShadow = (bits >> 5) & 1;
-    t.unk68p4 = (bits >> 6) & 1;
-    t.unk68p3 = (bits >> 7) & 1;
-    d >> t.mEnvOverride;
-    return d.stream;
-#endif
+    return bs;
 }
 
 BEGIN_SAVES(HamCamShot)
