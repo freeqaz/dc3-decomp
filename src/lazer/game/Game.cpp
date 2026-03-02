@@ -753,15 +753,20 @@ DataNode OnCycleTestDancer(DataArray *);
 DataNode OnDumpMoves(DataArray *);
 
 void GameInit() {
+#ifndef HX_NATIVE
     GameModeInit();
+#endif
     REGISTER_OBJ_FACTORY(GamePanel)
     REGISTER_OBJ_FACTORY(BustAMovePanel)
     TheDebug.AddExitCallback(GameTerminate);
     TheSongSequence.Init();
+#ifndef HX_NATIVE
+    // RatingState depends on ScoreUtlInit having populated sRatingStates
     sAutoplayStates.push_back("maximum");
     for (int i = 0; i < 4; i++) {
         sAutoplayStates.push_back(RatingState(i));
     }
+#endif
     DataRegisterFunc("toggle_move_overlay", OnToggleMoveOverlay);
     DataRegisterFunc("toggle_autoplay", OnToggleAutoplay);
     DataRegisterFunc("cycle_autoplay", OnCycleAutoplay);

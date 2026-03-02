@@ -24,7 +24,7 @@ static wgpu::VertexAttribute MakeAttr(wgpu::VertexFormat fmt, uint64_t offset, u
 // Static vertex layout: pos(3f) + norm(3f) + color(4f) + uv(2f) = 48 bytes
 // ============================================================================
 
-static wgpu::VertexAttribute sStaticAttrs[4];
+static wgpu::VertexAttribute sStaticAttrs[5];
 static wgpu::VertexBufferLayout sStaticLayout;
 static bool sStaticInited = false;
 
@@ -34,10 +34,11 @@ static void InitStaticLayout() {
     sStaticAttrs[1] = MakeAttr(wgpu::VertexFormat::Float32x3, 12, 1); // normal
     sStaticAttrs[2] = MakeAttr(wgpu::VertexFormat::Float32x4, 24, 2); // color
     sStaticAttrs[3] = MakeAttr(wgpu::VertexFormat::Float32x2, 40, 3); // uv
+    sStaticAttrs[4] = MakeAttr(wgpu::VertexFormat::Float32x4, 48, 4); // tangent
 
     sStaticLayout.arrayStride = sizeof(GpuVertex);
     sStaticLayout.stepMode = wgpu::VertexStepMode::Vertex;
-    sStaticLayout.attributeCount = 4;
+    sStaticLayout.attributeCount = 5;
     sStaticLayout.attributes = sStaticAttrs;
     sStaticInited = true;
 }
@@ -51,7 +52,7 @@ const wgpu::VertexBufferLayout& StaticLayout() {
 // Skinned vertex layout: static + boneWeights(4f) + boneIndices(4u8) = 72 bytes
 // ============================================================================
 
-static wgpu::VertexAttribute sSkinnedAttrs[6];
+static wgpu::VertexAttribute sSkinnedAttrs[7];
 static wgpu::VertexBufferLayout sSkinnedLayout;
 static bool sSkinnedInited = false;
 
@@ -63,10 +64,11 @@ static void InitSkinnedLayout() {
     sSkinnedAttrs[3] = MakeAttr(wgpu::VertexFormat::Float32x2, 40, 3); // uv
     sSkinnedAttrs[4] = MakeAttr(wgpu::VertexFormat::Float32x4, 48, 4); // boneWeights
     sSkinnedAttrs[5] = MakeAttr(wgpu::VertexFormat::Uint8x4,   64, 5); // boneIndices
+    sSkinnedAttrs[6] = MakeAttr(wgpu::VertexFormat::Float32x4, 72, 6); // tangent
 
     sSkinnedLayout.arrayStride = sizeof(GpuVertexSkinned);
     sSkinnedLayout.stepMode = wgpu::VertexStepMode::Vertex;
-    sSkinnedLayout.attributeCount = 6;
+    sSkinnedLayout.attributeCount = 7;
     sSkinnedLayout.attributes = sSkinnedAttrs;
     sSkinnedInited = true;
 }
@@ -104,6 +106,10 @@ int UnpackStaticVertices(const RndMesh& mesh, GpuVertex* out, int maxVerts) {
 
         gv.uv[0] = v.tex.x;
         gv.uv[1] = v.tex.y;
+
+        // Tangent will be computed by MikkTSpace after unpacking
+        gv.tangent[0] = 1.0f; gv.tangent[1] = 0.0f;
+        gv.tangent[2] = 0.0f; gv.tangent[3] = 1.0f;
     }
     return numVerts;
 }
@@ -143,6 +149,10 @@ int UnpackSkinnedVertices(const RndMesh& mesh, GpuVertexSkinned* out, int maxVer
         gv.boneIndices[3] = (uint8_t)v.boneIndices[3];
 
         gv.pad = 0.0f;
+
+        // Tangent will be computed by MikkTSpace after unpacking
+        gv.tangent[0] = 1.0f; gv.tangent[1] = 0.0f;
+        gv.tangent[2] = 0.0f; gv.tangent[3] = 1.0f;
     }
     return numVerts;
 }
@@ -257,6 +267,14 @@ int UnpackCompressedVertices(const unsigned char* compressedData, int numVerts,
 
         // Normal: DEC4N stored in mTangent field (D3D NORMAL at offset 20)
         UnpackDEC4N_BE(cv.mTangent, gv.norm);
+
+        // Tangent: DEC4N stored in mBinormal field (D3D TANGENT at offset 24)
+        float tangent3[3];
+        UnpackDEC4N_BE(cv.mBinormal, tangent3);
+        gv.tangent[0] = tangent3[0];
+        gv.tangent[1] = tangent3[1];
+        gv.tangent[2] = tangent3[2];
+        gv.tangent[3] = 1.0f; // bitangent sign — will be refined by MikkTSpace if needed
     }
     return count;
 }
@@ -282,12 +300,14 @@ static void UnpackUDEC4N_BE(int packed, float out[4]) {
 }
 
 static void UnpackUBYTE4_BE(int packed, uint8_t out[4]) {
-    // UBYTE4: 4 bytes, big-endian
-    unsigned int val = __builtin_bswap32((unsigned int)packed);
-    out[0] = (uint8_t)(val & 0xFF);
-    out[1] = (uint8_t)((val >> 8) & 0xFF);
-    out[2] = (uint8_t)((val >> 16) & 0xFF);
-    out[3] = (uint8_t)((val >> 24) & 0xFF);
+    // UBYTE4: 4 individual bytes — NO endian swap needed.
+    // Each byte is independent (not a multi-byte integer like UDEC4N).
+    // bswap would reverse the byte order, mapping vertices to wrong bones.
+    const unsigned char* bytes = (const unsigned char*)&packed;
+    out[0] = bytes[0];
+    out[1] = bytes[1];
+    out[2] = bytes[2];
+    out[3] = bytes[3];
 }
 
 int UnpackCompressedSkinnedVertices(const unsigned char* compressedData, int numVerts,
@@ -320,6 +340,14 @@ int UnpackCompressedSkinnedVertices(const unsigned char* compressedData, int num
         UnpackUBYTE4_BE(cv.mBoneWeights, gv.boneIndices);
 
         gv.pad = 0.0f;
+
+        // Tangent: DEC4N stored in mBinormal field (D3D TANGENT at offset 24)
+        float tangent3[3];
+        UnpackDEC4N_BE(cv.mBinormal, tangent3);
+        gv.tangent[0] = tangent3[0];
+        gv.tangent[1] = tangent3[1];
+        gv.tangent[2] = tangent3[2];
+        gv.tangent[3] = 1.0f;
     }
     return count;
 }

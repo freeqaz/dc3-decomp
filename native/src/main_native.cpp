@@ -4,26 +4,50 @@
 #include "App.h"
 #include "os/Debug.h"
 #include <cstdio>
+#include <cstdlib>
 #include <csignal>
 #include <execinfo.h>
 #include <unistd.h>
 
-static void SignalHandler(int sig) {
-    fprintf(stderr, "\nDC3 Native: Caught signal %d\n", sig);
-    void *bt[32];
-    int n = backtrace(bt, 32);
-    char **syms = backtrace_symbols(bt, n);
-    for (int i = 0; i < n; i++) {
-        fprintf(stderr, "  [%d] %s\n", i, syms ? syms[i] : "??");
+static void SignalHandler(int sig, siginfo_t *info, void *) {
+    // Use write() and backtrace_symbols_fd — async-signal-safe
+    const char *signame = (sig == SIGSEGV) ? "SIGSEGV" :
+                          (sig == SIGABRT) ? "SIGABRT" :
+                          (sig == SIGBUS)  ? "SIGBUS"  : "SIGNAL";
+    char buf[256];
+    int len = snprintf(buf, sizeof(buf),
+        "\nDC3 Native: Caught %s (signal %d) at address %p\n",
+        signame, sig, info ? info->si_addr : nullptr);
+    write(STDERR_FILENO, buf, len);
+
+    extern const char* g_lastDyncastEntry;
+    extern void* g_lastDyncastObj;
+    if (g_lastDyncastEntry) {
+        len = snprintf(buf, sizeof(buf),
+            "  Last dynamic_cast attempt: entry='%s' obj=%p\n",
+            g_lastDyncastEntry, g_lastDyncastObj);
+        write(STDERR_FILENO, buf, len);
     }
-    fflush(stderr);
-    _exit(1);
+
+    void *bt[64];
+    int n = backtrace(bt, 64);
+    backtrace_symbols_fd(bt, n, STDERR_FILENO);
+
+    _exit(128 + sig);
 }
 
 int main(int argc, char **argv) {
     setbuf(stdout, NULL); // Disable buffering so we see output before crashes
-    signal(SIGSEGV, SignalHandler);
-    signal(SIGABRT, SignalHandler);
+    setbuf(stderr, NULL);
+
+    // Use sigaction for reliable signal handling
+    struct sigaction sa;
+    sa.sa_sigaction = SignalHandler;
+    sa.sa_flags = SA_SIGINFO | SA_RESETHAND;
+    sigemptyset(&sa.sa_mask);
+    sigaction(SIGSEGV, &sa, nullptr);
+    sigaction(SIGABRT, &sa, nullptr);
+    sigaction(SIGBUS, &sa, nullptr);
 
     printf("DC3 Native Port - Starting...\n");
 
@@ -33,5 +57,7 @@ int main(int argc, char **argv) {
     app.Run();
 
     printf("DC3 Native Port - Run() returned, exiting cleanly.\n");
-    return 0;
+    // Use _exit() to skip global destructors — static destruction order issues
+    // cause crashes when ObjDirPtr destructors run after Loader list is destroyed
+    _exit(0);
 }

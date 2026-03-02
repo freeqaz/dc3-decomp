@@ -57,7 +57,16 @@ void MoviePanel::SetTypeDef(DataArray *d) {
 void MoviePanel::Load() {
     UIPanel::Load();
     mMovies.clear();
+#ifdef HX_NATIVE
+    const DataNode *videosProp = Property("videos", false);
+    if (!videosProp) {
+        printf("MoviePanel::Load: no 'videos' property, skipping\n");
+        return;
+    }
+    DataArray *config = SystemConfig("videos", videosProp->Str());
+#else
     DataArray *config = SystemConfig("videos", Property("videos", true)->Str());
+#endif
     DataArray *files = config->FindArray("files");
     for (int i = 1; i < files->Size(); i++) {
         mMovies.push_back(files->Str(i));
@@ -90,6 +99,9 @@ void MoviePanel::Load() {
             mSubtitlesLoader = new DataLoader(pathBuffer, kLoadFront, true);
         }
     }
+#ifdef HX_NATIVE
+    if (!mMovies.empty())
+#endif
     ChooseMovie();
 }
 
@@ -113,6 +125,14 @@ void MoviePanel::Poll() {
     UIPanel::Poll();
     if (GetState() == kUnloaded)
         return;
+#ifdef HX_NATIVE
+    // If no movies were loaded, skip movie polling entirely
+    if (mMovies.empty())
+        return;
+    // Stub MovieImpl never opens successfully — avoid infinite movie_done loop
+    if (!mMovie.IsOpen())
+        return;
+#endif
     if (!mMovie.Poll() && !TheUI->InTransition()) {
         static Message movie_done("movie_done");
         DataNode handled = HandleType(movie_done);
@@ -162,6 +182,12 @@ lol:
 }
 
 bool MoviePanel::IsLoaded() const {
+#ifdef HX_NATIVE
+    // If no movies were loaded (e.g. missing 'videos' property), skip readiness check
+    if (mMovies.empty()) {
+        return UIPanel::IsLoaded();
+    }
+#endif
     if (!mMovie.Ready()) {
         return false;
     }

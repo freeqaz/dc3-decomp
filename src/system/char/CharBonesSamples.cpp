@@ -6,6 +6,7 @@
 #include "math/Trig.h"
 #include "obj/Object.h"
 #include "os/Debug.h"
+#include "utl/ChunkStream.h"
 #include "utl/MemMgr.h"
 #line 8 "CharBonesSamples.cpp"
 CharBonesSamples::CharBonesSamples()
@@ -21,10 +22,6 @@ void CharBonesSamples::Load(BinStream &bs) {
     int rev = getHmxRev(revs);
     int altRev = getAltRev(revs);
     BinStreamRev d(bs, revs);
-#ifdef HX_NATIVE
-    printf("CharBonesSamples::Load: rev=%d altRev=%d tell=%d\n", rev, altRev, bs.Tell());
-    fflush(stdout);
-#endif
     if (0x10 < rev) {
         MILO_FAIL(
             "%s can\'t load new %s version %d > %d", "", "CharBonesSample", d.rev, gRev
@@ -51,11 +48,6 @@ void CharBonesSamples::LoadHeader(BinStreamRev &d) {
     mRawData = nullptr;
     int numBones;
     d >> numBones;
-#ifdef HX_NATIVE
-    printf("CharBonesSamples::LoadHeader: rev=%d numBones=%d tell=%d sizeof(Vector3)=%zu sizeof(Hmx::Quat)=%zu\n",
-        d.rev, numBones, d.stream.Tell(), sizeof(Vector3), sizeof(Hmx::Quat));
-    fflush(stdout);
-#endif
     mBones.resize(numBones);
     if (d.rev > 0xA) {
         for (int i = 0; i < numBones; i++) {
@@ -120,17 +112,6 @@ void CharBonesSamples::LoadHeader(BinStreamRev &d) {
         mFrames.clear();
     }
     RecomputeSizes();
-#ifdef HX_NATIVE
-    printf("CharBonesSamples::LoadHeader: numBones=%d numSamples=%d compression=%d totalSize=%d allocSize=%d frames=%d tell=%d\n",
-        (int)mBones.size(), mNumSamples, (int)mCompression, mTotalSize, AllocateSize(), (int)mFrames.size(), d.stream.Tell());
-    printf("  mCounts=[%d,%d,%d,%d,%d,%d,%d] mOffsets=[%d,%d,%d,%d,%d,%d,%d]\n",
-        mCounts[0], mCounts[1], mCounts[2], mCounts[3], mCounts[4], mCounts[5], mCounts[6],
-        mOffsets[0], mOffsets[1], mOffsets[2], mOffsets[3], mOffsets[4], mOffsets[5], mOffsets[6]);
-    for (int b = 0; b < (int)mBones.size(); b++) {
-        printf("  bone[%d]: name='%s' weight=%.2f\n", b, mBones[b].name.Str(), mBones[b].weight);
-    }
-    fflush(stdout);
-#endif
     mRawData = (char *)MemAlloc(
         AllocateSize(), "CharBonesSamples.cpp", 0x2d1, "CharBonesSamples", 0
     );
@@ -141,15 +122,62 @@ void CharBonesSamples::LoadData(BinStreamRev &d) {
         bool x;
         d >> x;
     }
-    int totalBytes = AllocateSize();
 #ifdef HX_NATIVE
-    printf("CharBonesSamples::LoadData: totalBytes=%d tell=%d\n", totalBytes, d.stream.Tell());
-    fflush(stdout);
+    // Cached .milo_xbox files store exactly mTotalSize bytes per sample:
+    // uncompressed Vector3 = 12 data + 4 zero pad = 16 bytes = sizeof(Vector3).
+    // The element-by-element path reads only 12 bytes per Vector3 via BinStream >> Vector3,
+    // causing stream desync. Bulk-read matches the cached format layout exactly.
+    int totalBytes = AllocateSize();
     if (totalBytes > 0 && mRawData) {
         d.stream.Read(mRawData, totalBytes);
+        // Byte-swap big-endian (Xbox 360) data to native little-endian
+        for (int i = 0; i < mNumSamples; i++) {
+            unsigned char *base = (unsigned char *)(mRawData + mTotalSize * i);
+
+            // Positions + Scales [0, mOffsets[TYPE_QUAT])
+            if (mCompression >= kCompressVects) {
+                for (int j = 0; j < mOffsets[TYPE_QUAT]; j += 2) {
+                    unsigned char t = base[j]; base[j] = base[j+1]; base[j+1] = t;
+                }
+            } else {
+                for (int j = 0; j < mOffsets[TYPE_QUAT]; j += 4) {
+                    unsigned char t;
+                    t = base[j]; base[j] = base[j+3]; base[j+3] = t;
+                    t = base[j+1]; base[j+1] = base[j+2]; base[j+2] = t;
+                }
+            }
+
+            // Quaternions [mOffsets[TYPE_QUAT], mOffsets[TYPE_ROTX])
+            if (mCompression >= kCompressQuats) {
+                // ByteQuat: 1-byte elements, no swap needed
+            } else if (mCompression != kCompressNone) {
+                // ShortQuat: 2-byte shorts
+                for (int j = mOffsets[TYPE_QUAT]; j < mOffsets[TYPE_ROTX]; j += 2) {
+                    unsigned char t = base[j]; base[j] = base[j+1]; base[j+1] = t;
+                }
+            } else {
+                // Hmx::Quat: 4-byte floats
+                for (int j = mOffsets[TYPE_QUAT]; j < mOffsets[TYPE_ROTX]; j += 4) {
+                    unsigned char t;
+                    t = base[j]; base[j] = base[j+3]; base[j+3] = t;
+                    t = base[j+1]; base[j+1] = base[j+2]; base[j+2] = t;
+                }
+            }
+
+            // Rotations [mOffsets[TYPE_ROTX], mOffsets[TYPE_END])
+            if (mCompression != kCompressNone) {
+                for (int j = mOffsets[TYPE_ROTX]; j < mOffsets[TYPE_END]; j += 2) {
+                    unsigned char t = base[j]; base[j] = base[j+1]; base[j+1] = t;
+                }
+            } else {
+                for (int j = mOffsets[TYPE_ROTX]; j < mOffsets[TYPE_END]; j += 4) {
+                    unsigned char t;
+                    t = base[j]; base[j] = base[j+3]; base[j+3] = t;
+                    t = base[j+1]; base[j+1] = base[j+2]; base[j+2] = t;
+                }
+            }
+        }
     }
-    printf("CharBonesSamples::LoadData: done tell=%d\n", d.stream.Tell());
-    fflush(stdout);
 #else
     for (int i = 0; i < mNumSamples; i++) {
         mStart = mRawData + mTotalSize * Min(i, mNumSamples - 1);
@@ -169,7 +197,7 @@ void CharBonesSamples::LoadData(BinStreamRev &d) {
         if (mCompression >= kCompressQuats) {
             char *rotXOffset = mStart + mOffsets[TYPE_ROTX];
             for (char *p = mStart + mOffsets[TYPE_QUAT]; p < rotXOffset; p += 4) {
-                d >> p[0] >> p[1] >> p[2] >> p[3];
+                d.stream.Read(p, 4);
             }
         } else if (mCompression != kCompressNone) {
             short *rotXOffset = (short *)(mStart + mOffsets[TYPE_ROTX]);
@@ -178,7 +206,8 @@ void CharBonesSamples::LoadData(BinStreamRev &d) {
             }
         } else {
             Hmx::Quat *rotXOffset = (Hmx::Quat *)(mStart + mOffsets[TYPE_ROTX]);
-            for (Hmx::Quat *p = (Hmx::Quat *)(mStart + mOffsets[TYPE_QUAT]); p < rotXOffset; p++) {
+            for (Hmx::Quat *p = (Hmx::Quat *)(mStart + mOffsets[TYPE_QUAT]); p < rotXOffset;
+                 p++) {
                 d >> *p;
             }
         }
@@ -451,87 +480,120 @@ int CharBonesSamples::FracToSample(float *frac) const {
 }
 
 void CharBonesSamples::EvaluateChannel(void *dest, int byteOffset, int sample, float frac) {
-    int clampedSample = Clamp(0, mNumSamples - 1, sample);
-    const char *sampleData = mRawData + mTotalSize * clampedSample;
-    const char *nextData = mRawData + mTotalSize * Min(clampedSample + 1, mNumSamples - 1);
-    const char *src = sampleData + byteOffset;
-    const char *srcNext = nextData + byteOffset;
-
-    if (byteOffset < mOffsets[TYPE_QUAT]) {
-        // Position or scale channel
-        if (mCompression >= kCompressVects) {
-            const ShortVector3 *sv = (const ShortVector3 *)src;
-            const ShortVector3 *svNext = (const ShortVector3 *)srcNext;
-            Vector3 *out = (Vector3 *)dest;
+    char *src = mRawData + mTotalSize * sample + byteOffset;
+    if (frac == 0.0f) {
+        if (byteOffset >= mOffsets[TYPE_ROTX]) {
+            float val;
+            if (mCompression != kCompressNone) {
+                val = (float)*(short *)src * (1.0f / 1638.4f);
+            } else {
+                val = *(float *)src;
+            }
+            *(float *)dest = val;
+            return;
+        }
+        int comp = mCompression;
+        if (byteOffset >= mOffsets[TYPE_QUAT]) {
+            if (comp >= kCompressQuats) {
+                ((const ByteQuat *)src)->ToQuat(*(Hmx::Quat *)dest);
+                return;
+            }
+            if (comp != kCompressNone) {
+                ((const ShortQuat *)src)->ToQuat(*(Hmx::Quat *)dest);
+                return;
+            }
+        } else if (comp >= kCompressVects) {
+            short *sv = (short *)src;
+            float *out = (float *)dest;
             float scale = 1300.0f / 32767.0f;
-            float invFrac = 1.0f - frac;
-            out->x = ((float)sv->x * invFrac + (float)svNext->x * frac) * scale;
-            out->y = ((float)sv->y * invFrac + (float)svNext->y * frac) * scale;
-            out->z = ((float)sv->z * invFrac + (float)svNext->z * frac) * scale;
-        } else {
-            const Vector3 *v = (const Vector3 *)src;
-            const Vector3 *vNext = (const Vector3 *)srcNext;
-            Vector3 *out = (Vector3 *)dest;
-            float invFrac = 1.0f - frac;
-            out->x = v->x * invFrac + vNext->x * frac;
-            out->y = v->y * invFrac + vNext->y * frac;
-            out->z = v->z * invFrac + vNext->z * frac;
+            out[2] = (float)sv[2] * scale;
+            out[0] = (float)sv[0] * scale;
+            out[1] = (float)sv[1] * scale;
+            return;
         }
-    } else if (byteOffset < mOffsets[TYPE_ROTX]) {
-        // Quaternion channel
-        Hmx::Quat q0, q1;
-        if (mCompression >= kCompressQuats) {
-            ((const ByteQuat *)src)->ToQuat(q0);
-            ((const ByteQuat *)srcNext)->ToQuat(q1);
-        } else if (mCompression != kCompressNone) {
-            ((const ShortQuat *)src)->ToQuat(q0);
-            ((const ShortQuat *)srcNext)->ToQuat(q1);
-        } else {
-            q0 = *(const Hmx::Quat *)src;
-            q1 = *(const Hmx::Quat *)srcNext;
-        }
-        // Slerp
-        float dot = q0.x * q1.x + q0.y * q1.y + q0.z * q1.z + q0.w * q1.w;
-        if (dot < 0.0f) {
-            q1.x = -q1.x; q1.y = -q1.y; q1.z = -q1.z; q1.w = -q1.w;
-            dot = -dot;
-        }
-        Hmx::Quat *out = (Hmx::Quat *)dest;
-        float invFrac = 1.0f - frac;
-        out->x = q0.x * invFrac + q1.x * frac;
-        out->y = q0.y * invFrac + q1.y * frac;
-        out->z = q0.z * invFrac + q1.z * frac;
-        out->w = q0.w * invFrac + q1.w * frac;
+        int *out = (int *)dest;
+        int *v = (int *)src;
+        out[0] = v[0];
+        out[1] = v[1];
+        out[2] = v[2];
+        out[3] = v[3];
     } else {
-        // Rotation (float or short) channel
-        if (mCompression != kCompressNone) {
-            float v0 = (float)*(const short *)src * (1.0f / 1638.4f);
-            float v1 = (float)*(const short *)srcNext * (1.0f / 1638.4f);
-            *(float *)dest = v0 * (1.0f - frac) + v1 * frac;
+        char *srcNext = src + mTotalSize;
+        if (byteOffset >= mOffsets[TYPE_ROTX]) {
+            float v0, v1;
+            if (mCompression != kCompressNone) {
+                v0 = (float)*(short *)src;
+                v1 = (float)*(short *)srcNext;
+                *(float *)dest = (v0 + (v1 - v0) * frac) * (1.0f / 1638.4f);
+            } else {
+                v0 = *(float *)src;
+                v1 = *(float *)srcNext;
+                *(float *)dest = v0 + (v1 - v0) * frac;
+            }
+            return;
+        }
+        int comp = mCompression;
+        if (byteOffset >= mOffsets[TYPE_QUAT]) {
+            float *out = (float *)dest;
+            if (comp >= kCompressQuats) {
+                Hmx::Quat q0, q1;
+                ((const ByteQuat *)src)->ToQuat(q0);
+                ((const ByteQuat *)srcNext)->ToQuat(q1);
+                out[0] = q0.x + (q1.x - q0.x) * frac;
+                out[1] = q0.y + (q1.y - q0.y) * frac;
+                out[2] = q0.z + (q1.z - q0.z) * frac;
+                out[3] = q0.w + (q1.w - q0.w) * frac;
+            } else if (comp != kCompressNone) {
+                Hmx::Quat q0, q1;
+                ((const ShortQuat *)src)->ToQuat(q0);
+                ((const ShortQuat *)srcNext)->ToQuat(q1);
+                out[0] = q0.x + (q1.x - q0.x) * frac;
+                out[1] = q0.y + (q1.y - q0.y) * frac;
+                out[2] = q0.z + (q1.z - q0.z) * frac;
+                out[3] = q0.w + (q1.w - q0.w) * frac;
+            } else {
+                float *s0 = (float *)src;
+                float *s1 = (float *)srcNext;
+                out[0] = s0[0] + (s1[0] - s0[0]) * frac;
+                out[1] = s0[1] + (s1[1] - s0[1]) * frac;
+                out[2] = s0[2] + (s1[2] - s0[2]) * frac;
+                out[3] = s0[3] + (s1[3] - s0[3]) * frac;
+            }
         } else {
-            float v0 = *(const float *)src;
-            float v1 = *(const float *)srcNext;
-            *(float *)dest = v0 * (1.0f - frac) + v1 * frac;
+            if (comp >= kCompressVects) {
+                float scale = 1300.0f / 32767.0f;
+                short *s0 = (short *)src;
+                short *s1 = (short *)srcNext;
+                Vector3 sv0, sv1;
+                sv0.Set((float)s0[0] * scale, (float)s0[1] * scale, (float)s0[2] * scale);
+                sv1.Set((float)s1[0] * scale, (float)s1[1] * scale, (float)s1[2] * scale);
+                Interp(sv0, sv1, frac, *(Vector3 *)dest);
+            } else {
+                Interp(*(const Vector3 *)src, *(const Vector3 *)srcNext, frac, *(Vector3 *)dest);
+            }
         }
     }
 }
 
 void CharBonesSamples::Save(BinStream &bs) {
     SAVE_REVS(0x10, 0)
-    int numBones = mBones.size();
-    bs << numBones;
-    for (int i = 0; i < numBones; i++) {
-        bs << mBones[i];
-    }
-    // Write 7 counts (since rev 0x10 > 0xF)
-    for (int i = 0; i < 7; i++) {
+    bs << mBones;
+    for (int i = 0; i < NUM_TYPES; i++) {
         bs << mCounts[i];
     }
     bs << (int)mCompression;
     bs << mNumSamples;
     bs << mFrames;
-    // LoadData section (no rev==0xE bool since rev is 0x10)
-    for (int i = 0; i < mNumSamples; i++) {
+
+    bool cached = bs.Cached() && (bs.GetPlatform() == kPlatformPS3 || bs.GetPlatform() == kPlatformXBox);
+    int delta = 0;
+    if (cached) {
+        int dataSize = mOffsets[TYPE_END] - mOffsets[TYPE_POS];
+        delta = ((dataSize + 0xF) & ~0xF) - dataSize;
+        MILO_ASSERT(delta >= 0 && delta < 16, 0x24c);
+    }
+
+    for (unsigned int i = 0; i < (unsigned int)mNumSamples; i++) {
         mStart = mRawData + mTotalSize * i;
 
         if (mCompression >= kCompressVects) {
@@ -543,13 +605,21 @@ void CharBonesSamples::Save(BinStream &bs) {
             Vector3 *quatOffset = (Vector3 *)(mStart + mOffsets[TYPE_QUAT]);
             for (Vector3 *p = (Vector3 *)mStart; p < quatOffset; p++) {
                 bs << *p;
+                if (cached) {
+                    float zero = 0.0f;
+                    bs << zero;
+                }
             }
         }
 
         if (mCompression >= kCompressQuats) {
             char *rotXOffset = mStart + mOffsets[TYPE_ROTX];
             for (char *p = mStart + mOffsets[TYPE_QUAT]; p < rotXOffset; p += 4) {
-                bs << p[0] << p[1] << p[2] << p[3];
+                char b;
+                b = p[0]; bs.Write(&b, 1);
+                b = p[1]; bs.Write(&b, 1);
+                b = p[2]; bs.Write(&b, 1);
+                b = p[3]; bs.Write(&b, 1);
             }
         } else if (mCompression != kCompressNone) {
             short *rotXOffset = (short *)(mStart + mOffsets[TYPE_ROTX]);
@@ -557,8 +627,8 @@ void CharBonesSamples::Save(BinStream &bs) {
                 bs << p[0] << p[1] << p[2] << p[3];
             }
         } else {
-            Hmx::Quat *rotXOffset = (Hmx::Quat *)(mStart + mOffsets[TYPE_ROTX]);
-            for (Hmx::Quat *p = (Hmx::Quat *)(mStart + mOffsets[TYPE_QUAT]); p < rotXOffset; p++) {
+            Vector4 *rotXOffset = (Vector4 *)(mStart + mOffsets[TYPE_ROTX]);
+            for (Vector4 *p = (Vector4 *)(mStart + mOffsets[TYPE_QUAT]); p < rotXOffset; p++) {
                 bs << *p;
             }
         }
@@ -574,6 +644,15 @@ void CharBonesSamples::Save(BinStream &bs) {
                 bs << *p;
             }
         }
+
+        if (cached) {
+            long long pad = 0;
+            bs.Write(&pad, delta);
+        }
+
+        if (bs.GetPlatform() == kPlatformWii && (i & 0x7F) == 0x7F) {
+            MarkChunk(bs);
+        }
     }
 }
 
@@ -581,6 +660,25 @@ extern CharBones *gPropBones;
 
 BEGIN_PROPSYNCS(CharBonesSamples)
     SYNC_PROP(num_samples, mNumSamples)
+    {
+        static Symbol _s("preview_sample");
+        if (sym == _s) {
+            if (_op == kPropSet) {
+                int val = _val.Int(0);
+                int clamped = mNumSamples - 1;
+                if (val <= clamped) {
+                    clamped = Clamp(0, mNumSamples - 1, val);
+                }
+                mPreviewSample = clamped;
+                mStart = mRawData + mTotalSize * clamped;
+            } else if (_op == kPropSize) {
+                return false;
+            } else {
+                _val = DataNode(mPreviewSample);
+            }
+            return true;
+        }
+    }
     SYNC_PROP(frames, mFrames)
     SYNC_PROP_SET(compression, mCompression, )
     gPropBones = this;

@@ -49,6 +49,9 @@ void StorePanel::Load() {
         ExitError(kStoreErrorCacheNoSpace);
     }
     TheContentMgr.StartRefresh();
+#ifdef HX_NATIVE
+    if (TheNetCacheMgr)
+#endif
     TheNetCacheMgr->Load((NetCacheMgr::CacheSize)1);
     MILO_ASSERT(!mStorePreviewMgr, 0x84);
     mStorePreviewMgr = new StorePreviewMgr();

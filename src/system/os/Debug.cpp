@@ -141,6 +141,19 @@ void Debug::Notify(const char *msg) {
 }
 
 void Debug::Fail(const char *msg, void *v) {
+#ifdef HX_NATIVE
+    fprintf(stderr, "FAIL: %s\n", msg);
+    // MILO_FATAL_FAILS=0 to continue past MILO_FAIL (like Xbox 360's "Continue" dialog)
+    // Default: fatal, to catch real bugs early
+    static int sFatalFails = -1;
+    if (sFatalFails == -1) {
+        const char *env = getenv("MILO_FATAL_FAILS");
+        sFatalFails = (!env || atoi(env) != 0) ? 1 : 0;
+    }
+    if (sFatalFails)
+        abort();
+    return;
+#endif
     if (!mNoDebug && !mFailing) {
         mFailing = true;
         StackString<256> msgStr(msg);

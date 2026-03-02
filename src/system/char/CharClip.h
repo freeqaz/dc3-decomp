@@ -190,7 +190,7 @@ public:
     int PlayFlags() { return mPlayFlags; }
     CharClip *Relative() const { return mRelative; }
     float Range() const { return mRange; }
-    std::vector<BeatEvent> BeatEvents() { return mBeatEvents; }
+    const std::vector<BeatEvent> &BeatEvents() { return mBeatEvents; }
     int NumBeatEvents() { return mBeatEvents.size(); }
     RndAnimatable *SyncAnim() const { return mSyncAnim; }
     void SetPlayFlags(int);
@@ -237,6 +237,8 @@ public:
     static void SetDefaultBeatAlignModeFlag(int &mask, int alignFlag) {
         mask = mask & 0xffff09ff | alignFlag;
     }
+
+    friend class CharClipDriver;
 
 protected:
     CharClip();

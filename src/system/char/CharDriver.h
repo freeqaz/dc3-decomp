@@ -73,6 +73,18 @@ protected:
     DataNode OnPlayGroupFlags(const DataArray *);
     DataNode OnGetClipOrGroupList(DataArray *);
     void SyncInternalBones();
+    void SetClipType(Symbol s) {
+        if (mClipType != s) {
+            mClipType = s;
+            SyncInternalBones();
+        }
+    }
+    void SetApply(ApplyMode m) {
+        if (mApply != m) {
+            mApply = m;
+            SyncInternalBones();
+        }
+    }
     DataNode OnPlay(const DataArray *);
     DataNode OnSetDefaultClip(DataArray *);
     float Display(float);

@@ -1,6 +1,12 @@
 #include "App.h"
 #ifdef HX_NATIVE
 #include <algorithm>
+#define GLFW_INCLUDE_NONE
+#include <GLFW/glfw3.h>
+#include "ui/UIPanel.h"
+#include "ui/PanelDir.h"
+#include "rndobj/Dir.h"
+extern GLFWwindow *gNativeWindow;
 #endif
 #include "ChecksumData_xbox.h"
 #include "char/Char.h"
@@ -29,6 +35,7 @@
 #include "meta_ham/ContextChecker.h"
 #include "meta_ham/HamSongMgr.h"
 #include "meta_ham/MetaPanel.h"
+#include "meta_ham/UIEventMgr.h"
 #include "meta_ham/MetagameRank.h"
 #include "meta_ham/Leaderboards.h"
 #include "meta_ham/SaveLoadManager.h"
@@ -116,9 +123,7 @@ App::App(int argc, char **argv) {
 
 #ifdef HX_NATIVE
     // Native boot: init renderer, subsystems, but skip Kinect/splash/threading
-    printf("DC3 Native: calling TheRnd.PreInit()...\n");
     TheRnd.PreInit();
-    printf("DC3 Native: TheRnd.PreInit() complete\n");
 
     static DataNode &notifyLevel = DataVariable("notify_level");
     {
@@ -126,11 +131,13 @@ App::App(int argc, char **argv) {
         notifyLevel = notifyLevelValue;
     }
     gRealCallback = TheDebug.SetModalCallback(DebugModal);
-    printf("DC3 Native: calling SystemInit...\n");
     SystemInit("config/ham_keep.dta");
-    printf("DC3 Native: SystemInit complete\n");
 
-    printf("DC3 Native: SystemInit complete, initializing subsystems...\n");
+    // Audio system (Fader/MoggClip factories need to be registered)
+    SynthInit();
+
+    // Movie system (needs to be initialized before DTA scripts create MoviePanel)
+    Movie::Init();
 
     // Initialize renderer
     TheRnd.Init();
@@ -140,32 +147,30 @@ App::App(int argc, char **argv) {
 
     // Flow system - manages game state machine
     FlowInit();
-    printf("DC3 Native: FlowInit complete\n");
 
     // Character system
     CharInit();
-    printf("DC3 Native: CharInit complete\n");
 
     // World system
     WorldInit();
-    printf("DC3 Native: WorldInit complete\n");
 
     // Ham (game-specific) system
     HamInit();
-    printf("DC3 Native: HamInit complete\n");
 
     // Song manager
     TheHamSongMgr.Init();
-    printf("DC3 Native: HamSongMgr::Init complete\n");
+
+    // Game subsystem inits (from original init sequence)
+    UIEventMgr::Init();
+    MetaPanel::Init();
+    GameInit();
 
     // UI system
     TheUI = new UIManager();
     TheUI->Init();
-    printf("DC3 Native: UI Init complete\n");
 
     // Go to first screen (title screen)
     TheUI->GotoFirstScreen();
-    printf("DC3 Native: GotoFirstScreen complete - entering main loop\n");
 #else
     TheRnd.PreInit();
 
@@ -732,6 +737,18 @@ void App::RunWithoutDebugging() {
 #ifdef HX_NATIVE
     printf("DC3 Native: Entering main loop\n");
     int frameCount = 0;
+    bool windowed = (gNativeWindow != nullptr);
+
+    int maxFrames = 10000;
+    const char *maxFramesEnv = getenv("MILO_MAX_FRAMES");
+    if (maxFramesEnv) maxFrames = atoi(maxFramesEnv);
+    if (maxFrames <= 0) maxFrames = 10000;
+
+    if (windowed)
+        printf("DC3 Native: Windowed mode — close window or press ESC to exit\n");
+    else
+        printf("DC3 Native: Headless mode — running %d frames\n", maxFrames);
+
     while (true) {
         SystemPoll(false);
 
@@ -743,19 +760,56 @@ void App::RunWithoutDebugging() {
         if (TheFlowMgr)
             TheFlowMgr->Poll();
 
-        // Headless drawing (NativeRnd just increments frame counter)
         TheRnd.BeginDrawing();
         if (TheUI)
             TheUI->Draw();
+
+        // Optional: force-draw a specific panel (for render debugging)
+        // Set MILO_FORCE_DRAW_PANEL=cursor_panel to enable
+        {
+            static bool sForceDrawChecked = false;
+            static PanelDir *sForceDrawDir = nullptr;
+            if (!sForceDrawChecked && frameCount >= 50) {
+                sForceDrawChecked = true;
+                const char *forcePanelName = getenv("MILO_FORCE_DRAW_PANEL");
+                if (forcePanelName && forcePanelName[0]) {
+                    UIPanel *p = ObjectDir::Main()->Find<UIPanel>(forcePanelName, false);
+                    if (p && p->LoadedDir()) {
+                        sForceDrawDir = p->LoadedDir();
+                        printf("DC3 Render: Force-drawing panel '%s'\n", forcePanelName);
+                    } else {
+                        printf("DC3 Render: Panel '%s' not found or not loaded\n", forcePanelName);
+                    }
+                }
+            }
+            if (sForceDrawDir) {
+                sForceDrawDir->DrawShowing();
+            }
+        }
+
         TheRnd.EndDrawing();
 
         frameCount++;
-        if (frameCount % 60 == 0) {
+        if (frameCount % 1000 == 0) {
             printf("DC3 Native: Frame %d\n", frameCount);
         }
-        if (frameCount > 300) {
-            printf("DC3 Native: 300 frames completed, engine running!\n");
-            break;
+
+        // Periodic UI state dump
+        if (frameCount % 500 == 0 && TheUI) {
+            const char *curScreen = TheUI->CurrentScreen() ? TheUI->CurrentScreen()->Name() : "<none>";
+            const char *transScreen = TheUI->TransitionScreen() ? TheUI->TransitionScreen()->Name() : "<none>";
+            printf("DC3 UI State [frame %d]: current='%s' transition='%s' inTransition=%d\n",
+                   frameCount, curScreen, transScreen, (int)TheUI->InTransition());
+        }
+
+        if (windowed) {
+            if (glfwWindowShouldClose(gNativeWindow))
+                break;
+        } else {
+            if (frameCount >= maxFrames) {
+                printf("DC3 Native: %d frames completed, engine stable!\n", frameCount);
+                break;
+            }
         }
     }
     return;

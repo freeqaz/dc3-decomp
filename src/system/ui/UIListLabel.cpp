@@ -37,13 +37,16 @@ BEGIN_COPYS(UIListLabel)
     COPY_MEMBER_FROM(l, mHighlightAltStyles)
 END_COPYS
 
-INIT_REVS(1, 0)
+INIT_REVS(1, 1)
 
 BEGIN_LOADS(UIListLabel)
     LOAD_REVS(bs)
-    ASSERT_REVS(1, 0)
+    ASSERT_REVS(1, 1)
     LOAD_SUPERCLASS(UIListSlot)
     bs >> mLabel;
+    if (d.altRev > 0) {
+        bs >> mHighlightAltStyles;
+    }
 END_LOADS
 
 const char *UIListLabel::GetDefaultText() const {

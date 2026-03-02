@@ -6,6 +6,11 @@
 #include "os/Debug.h"
 #include "utl/MemMgr.h"
 
+#ifdef HX_NATIVE
+static MovieSys sMovieSys;
+MovieSys &TheMovieSys = sMovieSys;
+#endif
+
 MovieSys::MovieSys() : isInitalized(false) {}
 
 MovieSys::~MovieSys() {}

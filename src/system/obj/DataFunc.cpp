@@ -575,6 +575,9 @@ DEF_DATA_FUNC(DataDelete) {
 
 DEF_DATA_FUNC(DataNew) {
     Hmx::Object *obj = Hmx::Object::NewObject(array->Sym(1));
+#ifdef HX_NATIVE
+    if (!obj) return DataNode(0);
+#endif
     if (array->Size() > 2) {
         if (array->Type(2) == kDataArray) {
             obj->SetTypeDef(array);

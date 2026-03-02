@@ -39,9 +39,35 @@ bool UIPanel::CheckIsLoaded() {
         PollForLoading();
         if (IsLoaded()) {
             FinishLoad();
+#ifdef HX_NATIVE
+            static int sLoadDiag = 0;
+            if (sLoadDiag++ < 20) {
+                printf("DC3 UI: Panel '%s' finished loading (state=%d)\n", Name(), (int)mState);
+            }
+#endif
             return true;
-        } else
+        } else {
+#ifdef HX_NATIVE
+            static int sCheckDiag = 0;
+            if (sCheckDiag++ < 10) {
+                printf("DC3 UI: Panel '%s' still loading: mLoader=%p loaded=%d loadRefs=%d\n",
+                       Name(), (void *)mLoader, mLoader ? mLoader->IsLoaded() : -1, mLoadRefs);
+            }
+            // On native, if the loader is done (or doesn't exist) but the panel
+            // has a custom is_loaded handler blocking, force-finish after detection.
+            // Panels like "wait_for_content" check DLC/network state that doesn't
+            // exist on native.
+            if (!mLoader) {
+                static int sForceLoadDiag = 0;
+                if (sForceLoadDiag++ < 5) {
+                    printf("DC3 UI: Panel '%s' has no loader but is_loaded=false, force-finishing\n", Name());
+                }
+                FinishLoad();
+                return true;
+            }
+#endif
             return false;
+        }
     }
 }
 
@@ -173,9 +199,19 @@ void UIPanel::Load() {
         }
         if (!fp.empty()) {
             MemPushHeap(heapNum);
+#ifdef HX_NATIVE
+            // Load panels synchronously on native — the LoadMgr queue can get
+            // backed up when we skip UnloadPanels, leaving loaders that block
+            // new panel loaders from being polled.
+            mLoader = new DirLoader(fp, kLoadFront, nullptr, nullptr, nullptr, false, nullptr);
+            MILO_ASSERT(mLoader, 0xA9);
+            mLoaded = false;
+            TheLoadMgr.PollUntilLoaded(mLoader, nullptr);
+#else
             mLoader = new DirLoader(fp, pos, nullptr, nullptr, nullptr, false, nullptr);
             MILO_ASSERT(mLoader, 0xA9);
             mLoaded = false;
+#endif
             MemPopHeap();
         }
     }

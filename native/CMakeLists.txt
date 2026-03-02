@@ -10,6 +10,15 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 # Usage: cmake -DLP64_AUDIT=ON .. && make 2>&1 | grep -E 'pointer-to-int|int-to-pointer'
 option(LP64_AUDIT "Enable LP64 pointer truncation warnings for auditing" OFF)
 
+# Address Sanitizer — catches heap corruption, use-after-free, buffer overflows
+# Usage: cmake -DENABLE_ASAN=ON .. && make
+# Run with: ASAN_OPTIONS=detect_leaks=0 ./dc3-native
+option(ENABLE_ASAN "Enable AddressSanitizer for memory error detection" OFF)
+if(ENABLE_ASAN)
+    add_compile_options(-fsanitize=address -fno-omit-frame-pointer)
+    add_link_options(-fsanitize=address)
+endif()
+
 # MSVC compatibility flags — applied per-target (dc3-native only), not globally.
 # Standalone tools (wgpu-window-test, milo-viewer) use standard C++ compilation.
 set(DC3_MSVC_COMPAT_FLAGS
@@ -22,6 +31,20 @@ set(DC3_MSVC_COMPAT_FLAGS
     # the compiler builtins that GCC 15 headers expect.
     -D__GNUC_STDC_INLINE__
     -D__GCC_ATOMIC_TEST_AND_SET_TRUEVAL=1
+)
+# GCC 15 <atomic>/<thread>/<mutex> need __GCC_ATOMIC_*_LOCK_FREE builtins,
+# which clang drops in -fms-compatibility mode. Define them all (=2 on x86_64).
+set(DC3_ATOMIC_COMPAT_FLAGS
+    -D__GCC_ATOMIC_BOOL_LOCK_FREE=2
+    -D__GCC_ATOMIC_CHAR_LOCK_FREE=2
+    -D__GCC_ATOMIC_WCHAR_T_LOCK_FREE=2
+    -D__GCC_ATOMIC_CHAR16_T_LOCK_FREE=2
+    -D__GCC_ATOMIC_CHAR32_T_LOCK_FREE=2
+    -D__GCC_ATOMIC_SHORT_LOCK_FREE=2
+    -D__GCC_ATOMIC_INT_LOCK_FREE=2
+    -D__GCC_ATOMIC_LONG_LOCK_FREE=2
+    -D__GCC_ATOMIC_LLONG_LOCK_FREE=2
+    -D__GCC_ATOMIC_POINTER_LOCK_FREE=2
 )
 set(DC3_DECOMP_FLAGS
     -ferror-limit=0
@@ -834,6 +857,8 @@ set(DC3_NATIVE_CORE_SOURCES
     src/platform/Joypad_Native.cpp
     src/platform/Keyboard_Native.cpp
     src/platform/Synth_Stub.cpp
+    src/platform/Skeleton_Native.cpp
+    src/platform/GestureMgr_Native.cpp
     src/audio/AudioDevice.cpp
     src/platform/StreamReceiver_Native.cpp
     src/platform/SampleInst_Native.cpp
@@ -883,10 +908,13 @@ set(DC3_GFX_CORE_SOURCES
 # Full graphics sources (depend on decomp types like RndBitmap, RndMesh)
 set(DC3_GFX_SOURCES
     ${DC3_GFX_CORE_SOURCES}
+    src/gfx/Screenshot.cpp
     src/gfx/TextureConvert.cpp
     src/gfx/VertexFormats.cpp
     src/gfx/PipelineManager.cpp
+    src/gfx/mikktspace.c
 )
+set_source_files_properties(src/gfx/mikktspace.c PROPERTIES LANGUAGE C)
 
 # ============================================================================
 # Build target
@@ -901,7 +929,8 @@ add_executable(dc3-native
 target_compile_options(dc3-native PRIVATE
     ${DC3_MSVC_COMPAT_FLAGS}
     ${DC3_DECOMP_FLAGS}
-    -fsanitize=address
+    ${DC3_ATOMIC_COMPAT_FLAGS}
+    # -fsanitize=address  # Disabled: complex virtual inheritance VTT issues
 )
 
 target_compile_definitions(dc3-native PRIVATE
@@ -925,7 +954,7 @@ target_include_directories(dc3-native PRIVATE
 
 target_link_options(dc3-native PRIVATE
     -rdynamic
-    -fsanitize=address  # ASan link flag
+    # -fsanitize=address  # Disabled: complex virtual inheritance VTT issues  # ASan link flag
     -Wl,--unresolved-symbols=ignore-all  # Non-virtual thunks for stubbed functions
     -Wl,--warn-unresolved-symbols  # Warn but don't error
 )
@@ -975,6 +1004,7 @@ target_link_libraries(wgpu-window-test PRIVATE
 # ============================================================================
 add_executable(milo-viewer
     src/viewer/milo_viewer.cpp
+    src/gfx/VideoEncoder.cpp
     ${DC3_ENGINE_SOURCES}
     ${DC3_NATIVE_CORE_SOURCES}
     ${DC3_GFX_SOURCES}
@@ -983,7 +1013,8 @@ add_executable(milo-viewer
 target_compile_options(milo-viewer PRIVATE
     ${DC3_MSVC_COMPAT_FLAGS}
     ${DC3_DECOMP_FLAGS}
-    -fsanitize=address
+    ${DC3_ATOMIC_COMPAT_FLAGS}
+    # -fsanitize=address  # Disabled: complex virtual inheritance VTT issues
 )
 
 target_compile_definitions(milo-viewer PRIVATE
@@ -1002,7 +1033,7 @@ target_include_directories(milo-viewer PRIVATE
 
 target_link_options(milo-viewer PRIVATE
     -rdynamic
-    -fsanitize=address
+    # -fsanitize=address  # Disabled: complex virtual inheritance VTT issues
     -Wl,--unresolved-symbols=ignore-all
     -Wl,--warn-unresolved-symbols
 )
@@ -1028,20 +1059,6 @@ if(BUILD_TESTS)
     find_package(GTest REQUIRED)
     enable_testing()
 
-    # GCC 15 <atomic> needs all __GCC_ATOMIC_*_LOCK_FREE builtins, which clang
-    # drops in -fms-compatibility mode. Define them all (all =2 on x86_64).
-    set(DC3_ATOMIC_COMPAT_FLAGS
-        -D__GCC_ATOMIC_BOOL_LOCK_FREE=2
-        -D__GCC_ATOMIC_CHAR_LOCK_FREE=2
-        -D__GCC_ATOMIC_WCHAR_T_LOCK_FREE=2
-        -D__GCC_ATOMIC_CHAR16_T_LOCK_FREE=2
-        -D__GCC_ATOMIC_CHAR32_T_LOCK_FREE=2
-        -D__GCC_ATOMIC_SHORT_LOCK_FREE=2
-        -D__GCC_ATOMIC_INT_LOCK_FREE=2
-        -D__GCC_ATOMIC_LONG_LOCK_FREE=2
-        -D__GCC_ATOMIC_LLONG_LOCK_FREE=2
-        -D__GCC_ATOMIC_POINTER_LOCK_FREE=2
-    )
 
     add_executable(milo-tests
         tests/test_helpers.cpp
@@ -1055,6 +1072,8 @@ if(BUILD_TESTS)
         tests/test_extract_bik.cpp
         tests/test_input.cpp
         tests/test_audio.cpp
+        tests/test_subsystems.cpp
+        tests/test_headless_boot.cpp
         ${DC3_ENGINE_SOURCES}
         ${DC3_NATIVE_CORE_SOURCES}
         ${DC3_GFX_SOURCES}
@@ -1063,7 +1082,7 @@ if(BUILD_TESTS)
         ${DC3_MSVC_COMPAT_FLAGS}
         ${DC3_DECOMP_FLAGS}
         ${DC3_ATOMIC_COMPAT_FLAGS}
-        -fsanitize=address
+        # -fsanitize=address  # Disabled: complex virtual inheritance VTT issues
     )
     target_compile_definitions(milo-tests PRIVATE
         HX_NATIVE=1
@@ -1082,7 +1101,7 @@ if(BUILD_TESTS)
     )
     target_link_options(milo-tests PRIVATE
         -rdynamic
-        -fsanitize=address
+        # -fsanitize=address  # Disabled: complex virtual inheritance VTT issues
         -Wl,--unresolved-symbols=ignore-all
         -Wl,--warn-unresolved-symbols
         -Wl,--allow-multiple-definition

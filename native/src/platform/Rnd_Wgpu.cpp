@@ -5,6 +5,7 @@
 
 #include "gfx/GpuDevice.h"
 #include "gfx/PipelineManager.h"
+#include "gfx/Screenshot.h"
 #include "rndobj/Cam.h"
 #include "rndobj/Env.h"
 #include "rndobj/Lit.h"
@@ -12,7 +13,10 @@
 #include "ui/UI.h"
 
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
+#include <sstream>
+#include <string>
 
 // ============================================================================
 // Global instances
@@ -93,49 +97,76 @@ void WgpuRnd::Init() {
 
     // Create GPU device and window
     GpuDeviceDesc desc{};
-    desc.headless = (getenv("MILO_HEADLESS") != nullptr);
-    desc.width = 1280;
-    desc.height = 720;
-    desc.title = "DC3 Native — WebGPU";
+    // Skip GPU initialization unless MILO_RENDER is set (Phase 1A: just reach main loop)
+    if (getenv("MILO_RENDER")) {
+        desc.headless = (getenv("MILO_HEADLESS") != nullptr);
+        desc.width = getenv("MILO_WIDTH") ? atoi(getenv("MILO_WIDTH")) : 1280;
+        desc.height = getenv("MILO_HEIGHT") ? atoi(getenv("MILO_HEIGHT")) : 720;
+        desc.title = "DC3 Native — WebGPU";
 
-    if (!mGpu.Init(desc)) {
-        printf("DC3 Native: GPU init failed, falling back to headless\n");
-        desc.headless = true;
         if (!mGpu.Init(desc)) {
-            printf("DC3 Native: headless GPU init also failed!\n");
-            return;
+            printf("DC3 Native: GPU init failed, falling back to headless\n");
+            desc.headless = true;
+            if (!mGpu.Init(desc)) {
+                printf("DC3 Native: headless GPU init also failed!\n");
+                return;
+            }
         }
+
+        mWidth = mGpu.WindowWidth();
+        mHeight = mGpu.WindowHeight();
+        gNativeWindow = mGpu.Window();
+
+        // Initialize pipeline manager
+        mPipelines.Init(&mGpu);
+        // Create scene uniform buffer (224 bytes, updated once per frame)
+        {
+            wgpu::BufferDescriptor bd{};
+            bd.size = sizeof(SceneUniforms);
+            bd.usage = wgpu::BufferUsage::Uniform | wgpu::BufferUsage::CopyDst;
+            mSceneBuffer = mGpu.Device().CreateBuffer(&bd);
+        }
+
+        // Create per-draw ring buffers (64KB each — enough for ~250 draws/frame at 256-byte alignment)
+        mMaterialRing.Init(mGpu.Device(), 64 * 1024);
+        mObjectRing.Init(mGpu.Device(), 64 * 1024);
+        // Bone ring needs more space: 2560 bytes per skinned draw (rounded to 2816 at 256 alignment)
+        mBoneRing.Init(mGpu.Device(), 256 * 1024);
+
+        // Create depth texture
+        CreateDepthTexture(mWidth, mHeight);
+
+        // Create default textures (1x1 white for untextured materials)
+        CreateDefaultTextures();
+
+        printf("DC3 Native: WgpuRnd initialized (%dx%d, %s)\n",
+               mWidth, mHeight, mGpu.HasBCCompression() ? "BC supported" : "software DXT");
+
+        // Auto-screenshot setup (env-var controlled)
+        const char* ssDir = getenv("MILO_SCREENSHOT_DIR");
+        if (ssDir && ssDir[0]) {
+            mScreenshotDir = ssDir;
+            const char* ssFrames = getenv("MILO_SCREENSHOT_FRAMES");
+            if (!ssFrames || !ssFrames[0]) ssFrames = "100,600,900,1500";
+            std::istringstream iss(ssFrames);
+            std::string token;
+            while (std::getline(iss, token, ',')) {
+                int frame = atoi(token.c_str());
+                if (frame > 0) mCaptureFrames.push_back(frame);
+            }
+            mCaptureIndex = 0;
+            printf("DC3 Native: auto-screenshot enabled — dir=%s frames=", mScreenshotDir.c_str());
+            for (size_t i = 0; i < mCaptureFrames.size(); i++) {
+                if (i > 0) printf(",");
+                printf("%d", mCaptureFrames[i]);
+            }
+            printf("\n");
+        }
+    } else {
+        printf("DC3 Native: GPU init skipped (set MILO_RENDER=1 to enable)\n");
+        mWidth = 1280;
+        mHeight = 720;
     }
-
-    mWidth = mGpu.WindowWidth();
-    mHeight = mGpu.WindowHeight();
-    gNativeWindow = mGpu.Window();
-
-    // Initialize pipeline manager
-    mPipelines.Init(&mGpu);
-
-    // Create scene uniform buffer (224 bytes, updated once per frame)
-    {
-        wgpu::BufferDescriptor bd{};
-        bd.size = sizeof(SceneUniforms);
-        bd.usage = wgpu::BufferUsage::Uniform | wgpu::BufferUsage::CopyDst;
-        mSceneBuffer = mGpu.Device().CreateBuffer(&bd);
-    }
-
-    // Create per-draw ring buffers (64KB each — enough for ~250 draws/frame at 256-byte alignment)
-    mMaterialRing.Init(mGpu.Device(), 64 * 1024);
-    mObjectRing.Init(mGpu.Device(), 64 * 1024);
-    // Bone ring needs more space: 2560 bytes per skinned draw (rounded to 2816 at 256 alignment)
-    mBoneRing.Init(mGpu.Device(), 256 * 1024);
-
-    // Create depth texture
-    CreateDepthTexture(mWidth, mHeight);
-
-    // Create default textures (1x1 white for untextured materials)
-    CreateDefaultTextures();
-
-    printf("DC3 Native: WgpuRnd initialized (%dx%d, %s)\n",
-           mWidth, mHeight, mGpu.HasBCCompression() ? "BC supported" : "software DXT");
 }
 
 void WgpuRnd::Terminate() {
@@ -144,6 +175,12 @@ void WgpuRnd::Terminate() {
     mDepthView = nullptr;
     mWhiteTex = nullptr;
     mWhiteTexView = nullptr;
+    mFlatNormalTex = nullptr;
+    mFlatNormalTexView = nullptr;
+    mBlackTex = nullptr;
+    mBlackTexView = nullptr;
+    mBlackCubeTex = nullptr;
+    mBlackCubeTexView = nullptr;
     mDefaultSampler = nullptr;
     mSceneBuffer = nullptr;
     mSceneBindGroup = nullptr;
@@ -154,7 +191,20 @@ void WgpuRnd::Clear(unsigned int flags, const Hmx::Color& color) {
     mWgpuClearColor = color;
 }
 
+// Defined in Mesh_Wgpu.cpp
+extern void RndMesh_ResetFrameStats();
+
 void WgpuRnd::BeginDrawing() {
+    RndMesh_ResetFrameStats();
+
+    // Skip if GPU not initialized (Phase 1A headless mode)
+    if (!mGpu.Device()) {
+        mDrawing = true;
+        mWorldEnded = false;
+        mDrawCount++;
+        mFrameID++;
+        return;
+    }
     // Poll GLFW events
     if (!mGpu.IsHeadless()) {
         mGpu.PollEvents();
@@ -174,6 +224,13 @@ void WgpuRnd::BeginDrawing() {
     mDrawCount++;
     mFrameID++;
 
+    // Select default camera and environment (base Rnd::BeginDrawing does this)
+    // Only if no camera is already current (viewer sets its own orbit camera)
+    if (mDefaultCam && !RndCam::Current())
+        mDefaultCam->Select();
+    if (mDefaultEnv && !RndEnviron::Current())
+        mDefaultEnv->Select(nullptr);
+
     // Reset ring buffers for this frame
     mMaterialRing.Reset();
     mObjectRing.Reset();
@@ -185,15 +242,38 @@ void WgpuRnd::BeginDrawing() {
     } else {
         mFrameView = mGpu.AcquireNextFrame();
     }
-    if (!mFrameView) return;
+    if (!mFrameView) {
+        static int sFailCount = 0;
+        if (sFailCount < 3) {
+            printf("DC3 Native: BeginDrawing — frame acquisition failed (headless=%d, frame=%d)\n",
+                   mGpu.IsHeadless(), mFrameID);
+            sFailCount++;
+        }
+        return;
+    }
 
-    // Resize depth texture if window size changed
+    // Resize depth/MSAA textures if window size changed
     int curW = mGpu.WindowWidth();
     int curH = mGpu.WindowHeight();
     if (curW != mDepthWidth || curH != mDepthHeight) {
         CreateDepthTexture(curW, curH);
         mWidth = curW;
         mHeight = curH;
+    }
+    // Ensure MSAA color target exists (format may not be known until first frame)
+    if (mMsaaWidth != curW || mMsaaHeight != curH || !mMsaaTex) {
+        wgpu::TextureDescriptor desc{};
+        desc.size.width = curW;
+        desc.size.height = curH;
+        desc.size.depthOrArrayLayers = 1;
+        desc.format = mGpu.SurfaceFormat();
+        desc.usage = wgpu::TextureUsage::RenderAttachment;
+        desc.mipLevelCount = 1;
+        desc.sampleCount = kMSAASamples;
+        mMsaaTex = mGpu.Device().CreateTexture(&desc);
+        mMsaaView = mMsaaTex.CreateView();
+        mMsaaWidth = curW;
+        mMsaaHeight = curH;
     }
 
     // Write scene uniforms from current camera and environment
@@ -204,14 +284,15 @@ void WgpuRnd::BeginDrawing() {
 
     // Begin render pass
     wgpu::RenderPassColorAttachment colorAtt{};
-    colorAtt.view = mFrameView;
+    colorAtt.view = mMsaaView;            // Render to MSAA target
+    colorAtt.resolveTarget = mFrameView;   // Resolve to surface/readback
     colorAtt.loadOp = wgpu::LoadOp::Clear;
-    colorAtt.storeOp = wgpu::StoreOp::Store;
+    colorAtt.storeOp = wgpu::StoreOp::Discard;  // MSAA data discarded after resolve
     colorAtt.clearValue = {
         mWgpuClearColor.red,
         mWgpuClearColor.green,
         mWgpuClearColor.blue,
-        mWgpuClearColor.alpha
+        1.0  // Always clear with opaque alpha (PNG/readback needs alpha=1)
     };
 
     wgpu::RenderPassDepthStencilAttachment depthAtt{};
@@ -236,12 +317,18 @@ void WgpuRnd::BeginDrawing() {
 }
 
 void WgpuRnd::EndDrawing() {
+    if (!mGpu.Device()) {
+        mDrawing = false;
+        return;
+    }
     if (mInPass) {
         mPass.End();
         mInPass = false;
 
         wgpu::CommandBuffer cmd = mEncoder.Finish();
         mGpu.Queue().Submit(1, &cmd);
+
+        MaybeCaptureFrame();
 
         if (!mGpu.IsHeadless()) {
             mGpu.PresentFrame();
@@ -255,19 +342,23 @@ void WgpuRnd::EndDrawing() {
 void WgpuRnd::CreateDepthTexture(int w, int h) {
     if (w <= 0 || h <= 0) return;
 
-    wgpu::TextureDescriptor desc{};
-    desc.size.width = w;
-    desc.size.height = h;
-    desc.size.depthOrArrayLayers = 1;
-    desc.format = wgpu::TextureFormat::Depth24PlusStencil8;
-    desc.usage = wgpu::TextureUsage::RenderAttachment;
-    desc.mipLevelCount = 1;
-    desc.sampleCount = 1;
+    // Depth texture (MSAA)
+    {
+        wgpu::TextureDescriptor desc{};
+        desc.size.width = w;
+        desc.size.height = h;
+        desc.size.depthOrArrayLayers = 1;
+        desc.format = wgpu::TextureFormat::Depth24PlusStencil8;
+        desc.usage = wgpu::TextureUsage::RenderAttachment;
+        desc.mipLevelCount = 1;
+        desc.sampleCount = kMSAASamples;
 
-    mDepthTex = mGpu.Device().CreateTexture(&desc);
-    mDepthView = mDepthTex.CreateView();
-    mDepthWidth = w;
-    mDepthHeight = h;
+        mDepthTex = mGpu.Device().CreateTexture(&desc);
+        mDepthView = mDepthTex.CreateView();
+        mDepthWidth = w;
+        mDepthHeight = h;
+    }
+
 }
 
 void WgpuRnd::CreateDefaultTextures() {
@@ -275,7 +366,7 @@ void WgpuRnd::CreateDefaultTextures() {
     {
         wgpu::TextureDescriptor desc{};
         desc.size = {1, 1, 1};
-        desc.format = wgpu::TextureFormat::RGBA8Unorm;
+        desc.format = wgpu::TextureFormat::RGBA8UnormSrgb;
         desc.usage = wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopyDst;
         desc.mipLevelCount = 1;
         mWhiteTex = mGpu.Device().CreateTexture(&desc);
@@ -289,6 +380,74 @@ void WgpuRnd::CreateDefaultTextures() {
         layout.rowsPerImage = 1;
         wgpu::Extent3D extent = {1, 1, 1};
         mGpu.Queue().WriteTexture(&dst, white, 4, &layout, &extent);
+    }
+
+    // 1x1 flat normal texture (tangent-space up: 128,128,255)
+    {
+        wgpu::TextureDescriptor desc{};
+        desc.size = {1, 1, 1};
+        desc.format = wgpu::TextureFormat::RGBA8Unorm; // linear, not sRGB
+        desc.usage = wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopyDst;
+        desc.mipLevelCount = 1;
+        mFlatNormalTex = mGpu.Device().CreateTexture(&desc);
+        mFlatNormalTexView = mFlatNormalTex.CreateView();
+
+        uint8_t flatNormal[4] = {128, 128, 255, 255};
+        wgpu::TexelCopyTextureInfo dst{};
+        dst.texture = mFlatNormalTex;
+        wgpu::TexelCopyBufferLayout layout{};
+        layout.bytesPerRow = 4;
+        layout.rowsPerImage = 1;
+        wgpu::Extent3D extent = {1, 1, 1};
+        mGpu.Queue().WriteTexture(&dst, flatNormal, 4, &layout, &extent);
+    }
+
+    // 1x1 black texture (no emission)
+    {
+        wgpu::TextureDescriptor desc{};
+        desc.size = {1, 1, 1};
+        desc.format = wgpu::TextureFormat::RGBA8Unorm;
+        desc.usage = wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopyDst;
+        desc.mipLevelCount = 1;
+        mBlackTex = mGpu.Device().CreateTexture(&desc);
+        mBlackTexView = mBlackTex.CreateView();
+
+        uint8_t black[4] = {0, 0, 0, 255};
+        wgpu::TexelCopyTextureInfo dst{};
+        dst.texture = mBlackTex;
+        wgpu::TexelCopyBufferLayout layout{};
+        layout.bytesPerRow = 4;
+        layout.rowsPerImage = 1;
+        wgpu::Extent3D extent = {1, 1, 1};
+        mGpu.Queue().WriteTexture(&dst, black, 4, &layout, &extent);
+    }
+
+    // 1x1x6 black cube texture (no environment reflection)
+    {
+        wgpu::TextureDescriptor desc{};
+        desc.size = {1, 1, 6};
+        desc.dimension = wgpu::TextureDimension::e2D;
+        desc.format = wgpu::TextureFormat::RGBA8Unorm;
+        desc.usage = wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopyDst;
+        desc.mipLevelCount = 1;
+        mBlackCubeTex = mGpu.Device().CreateTexture(&desc);
+
+        uint8_t black[4] = {0, 0, 0, 255};
+        for (uint32_t face = 0; face < 6; face++) {
+            wgpu::TexelCopyTextureInfo dst{};
+            dst.texture = mBlackCubeTex;
+            dst.origin = {0, 0, face};
+            wgpu::TexelCopyBufferLayout layout{};
+            layout.bytesPerRow = 4;
+            layout.rowsPerImage = 1;
+            wgpu::Extent3D extent = {1, 1, 1};
+            mGpu.Queue().WriteTexture(&dst, black, 4, &layout, &extent);
+        }
+
+        wgpu::TextureViewDescriptor viewDesc{};
+        viewDesc.dimension = wgpu::TextureViewDimension::Cube;
+        viewDesc.arrayLayerCount = 6;
+        mBlackCubeTexView = mBlackCubeTex.CreateView(&viewDesc);
     }
 
     // Default sampler (linear filtering, repeat)
@@ -305,14 +464,66 @@ void WgpuRnd::WriteSceneUniforms() {
     // Camera
     RndCam* cam = RndCam::Current();
     if (cam) {
-        // ViewProj matrix — memcpy row-major data, WGSL reads as column-major (correct transpose)
-        memcpy(scene.viewProj, &cam->GetViewProjMatrix(), 64);
+        // Check if mViewProjMatrix was externally set (milo-viewer does this).
+        // If it's still identity, compute viewProj from camera's view + projection transforms.
+        const Hmx::Matrix4& vp = cam->GetViewProjMatrix();
+        bool isIdentity = (vp.x.x == 1 && vp.x.y == 0 && vp.x.z == 0 && vp.x.w == 0 &&
+                           vp.y.x == 0 && vp.y.y == 1 && vp.y.z == 0 && vp.y.w == 0 &&
+                           vp.z.x == 0 && vp.z.y == 0 && vp.z.z == 1 && vp.z.w == 0 &&
+                           vp.w.x == 0 && vp.w.y == 0 && vp.w.z == 0 && vp.w.w == 1);
+
+        if (!isIdentity) {
+            // Use externally-set viewProj (milo-viewer orbit cam path)
+            memcpy(scene.viewProj, &vp, 64);
+        } else {
+            // Build WebGPU-compatible viewProj from Milo camera state.
+            // Milo convention: Y = forward/depth, Z = up, X = right.
+            // WebGPU clip space: Z in [0,1], perspective divide by w.
+
+            // View matrix from inverse world transform (row-major, right-multiply)
+            const Transform& w = cam->WorldXfm();
+            float view[16] = {
+                w.m.x.x, w.m.y.x, w.m.z.x, 0,
+                w.m.x.y, w.m.y.y, w.m.z.y, 0,
+                w.m.x.z, w.m.y.z, w.m.z.z, 0,
+                -(w.m.x.x*w.v.x + w.m.x.y*w.v.y + w.m.x.z*w.v.z),
+                -(w.m.y.x*w.v.x + w.m.y.y*w.v.y + w.m.y.z*w.v.z),
+                -(w.m.z.x*w.v.x + w.m.z.y*w.v.y + w.m.z.z*w.v.z),
+                1
+            };
+
+            // Perspective projection with Milo axis convention and WebGPU depth [0,1]
+            float near = cam->NearPlane();
+            float far = cam->FarPlane();
+            float yfov = cam->YFov();
+            float aspect = (float)mWidth / (float)mHeight;
+            float cot = 1.0f / tanf(yfov * 0.5f);
+            float zRange = far - near;
+
+            // Row-major: v_clip = v_view * Proj
+            // Milo: X=right, Y=forward(depth), Z=up
+            // Clip: X=right, Z=depth[0,1], Y=up (w from view-Y)
+            float proj[16] = {
+                cot / aspect, 0,   0,                     0,
+                0,            0,   far / zRange,           1,
+                0,            cot, 0,                     0,
+                0,            0,   -near * far / zRange,  0
+            };
+
+            // ViewProj = View * Proj (row-major multiply)
+            for (int i = 0; i < 4; i++) {
+                for (int j = 0; j < 4; j++) {
+                    float sum = 0;
+                    for (int k = 0; k < 4; k++) {
+                        sum += view[i * 4 + k] * proj[k * 4 + j];
+                    }
+                    scene.viewProj[i * 4 + j] = sum;
+                }
+            }
+        }
 
         // View matrix from camera's inverse world transform
-        Transform invWorld;
-        // Use the camera's world transform inverse
         const Transform& worldXfm = cam->WorldXfm();
-        // For view matrix: invert the camera's world transform
         // Rotation transpose + negated translation
         scene.view[0]  = worldXfm.m.x.x; scene.view[1]  = worldXfm.m.y.x; scene.view[2]  = worldXfm.m.z.x; scene.view[3]  = 0;
         scene.view[4]  = worldXfm.m.x.y; scene.view[5]  = worldXfm.m.y.y; scene.view[6]  = worldXfm.m.z.y; scene.view[7]  = 0;
@@ -337,7 +548,7 @@ void WgpuRnd::WriteSceneUniforms() {
     if (env) {
         // Ambient color (with minimum floor for visibility)
         const Hmx::Color& amb = env->AmbientColor();
-        float minAmbient = 0.35f;
+        float minAmbient = 0.15f;
         scene.ambientColor[0] = amb.red > minAmbient ? amb.red : minAmbient;
         scene.ambientColor[1] = amb.green > minAmbient ? amb.green : minAmbient;
         scene.ambientColor[2] = amb.blue > minAmbient ? amb.blue : minAmbient;
@@ -384,14 +595,14 @@ void WgpuRnd::WriteSceneUniforms() {
             scene.lightDirs[0][1] = -0.7f;
             scene.lightDirs[0][2] = 0.5f;
             scene.lightDirs[0][3] = 0.0f;
-            scene.lightColors[0][0] = scene.lightColors[0][1] = scene.lightColors[0][2] = 1.0f;
+            scene.lightColors[0][0] = scene.lightColors[0][1] = scene.lightColors[0][2] = 0.9f;
             scene.lightColors[0][3] = 1.0f;
             lightIdx = 1;
         }
         scene.numLights = (float)lightIdx;
     } else {
         // Default lighting — single directional light
-        scene.ambientColor[0] = scene.ambientColor[1] = scene.ambientColor[2] = 0.35f;
+        scene.ambientColor[0] = scene.ambientColor[1] = scene.ambientColor[2] = 0.15f;
         scene.ambientColor[3] = 1.0f;
         scene.lightDirs[0][0] = -0.4f;
         scene.lightDirs[0][1] = -0.7f;
@@ -421,9 +632,10 @@ void WgpuRnd::WriteSceneUniforms() {
 
 wgpu::BindGroup WgpuRnd::CreateMaterialBindGroup(
     uint32_t bufferOffset, uint32_t bufferSize,
-    wgpu::TextureView& texView, wgpu::Sampler& sampler)
+    const MaterialTexViews& texViews,
+    wgpu::Sampler& diffuseSampler, wgpu::Sampler& mapSampler)
 {
-    wgpu::BindGroupEntry entries[3] = {};
+    wgpu::BindGroupEntry entries[10] = {};
 
     entries[0].binding = 0;
     entries[0].buffer = mMaterialRing.Buffer();
@@ -431,14 +643,35 @@ wgpu::BindGroup WgpuRnd::CreateMaterialBindGroup(
     entries[0].size = bufferSize;
 
     entries[1].binding = 1;
-    entries[1].textureView = texView;
+    entries[1].textureView = texViews.diffuse;
 
     entries[2].binding = 2;
-    entries[2].sampler = sampler;
+    entries[2].sampler = diffuseSampler;
+
+    entries[3].binding = 3;
+    entries[3].textureView = texViews.normal;
+
+    entries[4].binding = 4;
+    entries[4].textureView = texViews.specular;
+
+    entries[5].binding = 5;
+    entries[5].textureView = texViews.emissive;
+
+    entries[6].binding = 6;
+    entries[6].textureView = texViews.rim;
+
+    entries[7].binding = 7;
+    entries[7].sampler = mapSampler;
+
+    entries[8].binding = 8;
+    entries[8].textureView = texViews.environCube;
+
+    entries[9].binding = 9;
+    entries[9].sampler = mapSampler;  // reuse map sampler for cube
 
     wgpu::BindGroupDescriptor desc{};
     desc.layout = mPipelines.MaterialLayout();
-    desc.entryCount = 3;
+    desc.entryCount = 10;
     desc.entries = entries;
 
     return mGpu.Device().CreateBindGroup(&desc);
@@ -472,4 +705,36 @@ wgpu::BindGroup WgpuRnd::CreateBoneBindGroup(uint32_t bufferOffset, uint32_t buf
     desc.entries = &entry;
 
     return mGpu.Device().CreateBindGroup(&desc);
+}
+
+void WgpuRnd::MaybeCaptureFrame() {
+    if (mCaptureIndex >= (int)mCaptureFrames.size()) return;
+    static int sLogCount = 0;
+    if (sLogCount < 5) {
+        printf("DC3 Native: MaybeCaptureFrame mFrameID=%d, next target=%d\n",
+               mFrameID, mCaptureFrames[mCaptureIndex]);
+        sLogCount++;
+    }
+    if (mFrameID != mCaptureFrames[mCaptureIndex]) return;
+
+    int w = mGpu.WindowWidth();
+    int h = mGpu.WindowHeight();
+    size_t pixelSize = (size_t)w * h * 4;
+    uint8_t* pixels = (uint8_t*)malloc(pixelSize);
+    if (!pixels) return;
+
+    if (mGpu.ReadbackHeadlessFrame(pixels, pixelSize)) {
+        char path[512];
+        snprintf(path, sizeof(path), "%s/frame_%05d.png", mScreenshotDir.c_str(), mFrameID);
+        if (WriteScreenshot(path, pixels, w, h)) {
+            printf("DC3 Native: captured frame %d -> %s\n", mFrameID, path);
+        } else {
+            fprintf(stderr, "DC3 Native: failed to write screenshot %s\n", path);
+        }
+    } else {
+        fprintf(stderr, "DC3 Native: failed to readback frame %d (headless mode required)\n", mFrameID);
+    }
+
+    free(pixels);
+    mCaptureIndex++;
 }

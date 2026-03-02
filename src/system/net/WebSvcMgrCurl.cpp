@@ -24,6 +24,9 @@ void WebSvcMgrCurl::Init() {
 
 void WebSvcMgrCurl::Poll() {
     WebSvcMgr::Poll();
+#ifdef HX_NATIVE
+    if (!mCurlMultiHandle) return;
+#endif
     MILO_ASSERT(mCurlMultiHandle, 0xFE);
     int running_handles;
     if (curl_multi_perform(mCurlMultiHandle, &running_handles) == CURLM_OK) {

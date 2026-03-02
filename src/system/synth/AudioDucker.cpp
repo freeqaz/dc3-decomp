@@ -56,6 +56,7 @@ AudioDuckerGroup::AudioDuckerGroup(Hmx::Object *owner) : mDuckers(owner) {}
 AudioDuckerGroup::~AudioDuckerGroup() {}
 
 AudioDuckerTrigger::AudioDuckerTrigger() : mDuckerGroup(this) {}
+AudioDuckerTrigger::~AudioDuckerTrigger() {}
 
 bool PropSync(AudioDuckerGroup &o, DataNode &_val, DataArray *_prop, int _i, PropOp _op) {
     return PropSync(o.mDuckers, _val, _prop, _i, _op);

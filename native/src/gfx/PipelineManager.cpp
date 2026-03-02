@@ -27,10 +27,10 @@ void PipelineManager::Init(GpuDevice* device) {
     sceneLayoutDesc.entries = sceneEntries;
     mLayouts[0] = dev.CreateBindGroupLayout(&sceneLayoutDesc);
 
-    // Group 1: Material uniforms + texture + sampler
-    wgpu::BindGroupLayoutEntry matEntries[3] = {};
+    // Group 1: Material uniforms + textures + samplers
+    wgpu::BindGroupLayoutEntry matEntries[10] = {};
     matEntries[0].binding = 0;
-    matEntries[0].visibility = wgpu::ShaderStage::Fragment;
+    matEntries[0].visibility = wgpu::ShaderStage::Vertex | wgpu::ShaderStage::Fragment;
     matEntries[0].buffer.type = wgpu::BufferBindingType::Uniform;
     matEntries[0].buffer.minBindingSize = 0;
 
@@ -43,8 +43,48 @@ void PipelineManager::Init(GpuDevice* device) {
     matEntries[2].visibility = wgpu::ShaderStage::Fragment;
     matEntries[2].sampler.type = wgpu::SamplerBindingType::Filtering;
 
+    // Binding 3: normal map
+    matEntries[3].binding = 3;
+    matEntries[3].visibility = wgpu::ShaderStage::Fragment;
+    matEntries[3].texture.sampleType = wgpu::TextureSampleType::Float;
+    matEntries[3].texture.viewDimension = wgpu::TextureViewDimension::e2D;
+
+    // Binding 4: specular map
+    matEntries[4].binding = 4;
+    matEntries[4].visibility = wgpu::ShaderStage::Fragment;
+    matEntries[4].texture.sampleType = wgpu::TextureSampleType::Float;
+    matEntries[4].texture.viewDimension = wgpu::TextureViewDimension::e2D;
+
+    // Binding 5: emissive map
+    matEntries[5].binding = 5;
+    matEntries[5].visibility = wgpu::ShaderStage::Fragment;
+    matEntries[5].texture.sampleType = wgpu::TextureSampleType::Float;
+    matEntries[5].texture.viewDimension = wgpu::TextureViewDimension::e2D;
+
+    // Binding 6: rim map
+    matEntries[6].binding = 6;
+    matEntries[6].visibility = wgpu::ShaderStage::Fragment;
+    matEntries[6].texture.sampleType = wgpu::TextureSampleType::Float;
+    matEntries[6].texture.viewDimension = wgpu::TextureViewDimension::e2D;
+
+    // Binding 7: shared sampler for maps 3-6
+    matEntries[7].binding = 7;
+    matEntries[7].visibility = wgpu::ShaderStage::Fragment;
+    matEntries[7].sampler.type = wgpu::SamplerBindingType::Filtering;
+
+    // Binding 8: environment cube map
+    matEntries[8].binding = 8;
+    matEntries[8].visibility = wgpu::ShaderStage::Fragment;
+    matEntries[8].texture.sampleType = wgpu::TextureSampleType::Float;
+    matEntries[8].texture.viewDimension = wgpu::TextureViewDimension::Cube;
+
+    // Binding 9: cube map sampler
+    matEntries[9].binding = 9;
+    matEntries[9].visibility = wgpu::ShaderStage::Fragment;
+    matEntries[9].sampler.type = wgpu::SamplerBindingType::Filtering;
+
     wgpu::BindGroupLayoutDescriptor matLayoutDesc{};
-    matLayoutDesc.entryCount = 3;
+    matLayoutDesc.entryCount = 10;
     matLayoutDesc.entries = matEntries;
     mLayouts[1] = dev.CreateBindGroupLayout(&matLayoutDesc);
 
@@ -250,6 +290,11 @@ wgpu::RenderPipeline PipelineManager::CreatePipeline(const PipelineKey& key) {
 
     // Depth/stencil
     wgpu::DepthStencilState ds = MapDepthStencil(key.zMode, key.stencil);
+    if (key.depthBias != 0) {
+        ds.depthBias = key.depthBias;
+        ds.depthBiasSlopeScale = 0.0f;
+        ds.depthBiasClamp = 0.0f;
+    }
 
     wgpu::RenderPipelineDescriptor pipeDesc{};
     pipeDesc.layout = mPipelineLayout;
@@ -262,6 +307,8 @@ wgpu::RenderPipeline PipelineManager::CreatePipeline(const PipelineKey& key) {
     pipeDesc.primitive.topology = wgpu::PrimitiveTopology::TriangleList;
     pipeDesc.primitive.frontFace = wgpu::FrontFace::CCW; // D3D LH CW front → WebGPU RH CCW front
     pipeDesc.primitive.cullMode = MapCull(key.cull);
+    pipeDesc.multisample.count = 4;  // 4x MSAA
+    pipeDesc.multisample.alphaToCoverageEnabled = key.alphaToCoverage;
 
     return mDevice->Device().CreateRenderPipeline(&pipeDesc);
 }

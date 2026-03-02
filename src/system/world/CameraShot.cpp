@@ -948,14 +948,14 @@ BEGIN_LOADS(CamShot)
             mCrowds.push_back(crowdData);
     } else
         d >> mCrowds;
-    if (d.rev > 0x2A)
-        d >> mAnims;
     if (d.rev > 0x33) {
         d >> mCrowdStateOverride;
     } else {
         static Symbol none("none");
         mCrowdStateOverride = none;
     }
+    if (d.rev > 0x2A)
+        d >> mAnims;
 
     if (!oldAnimSym.Null()) {
         mAnims.push_back(Dir()->Find<RndAnimatable>(oldAnimSym.Str(), false));

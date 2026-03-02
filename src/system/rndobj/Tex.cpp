@@ -34,10 +34,6 @@ RndTex::RndTex()
       mNumMips(0), mOptimizeForPS3(0), mLoader(0) {}
 
 RndTex::~RndTex() {
-#ifdef HX_NATIVE
-    extern void CleanupGpuTex(RndTex*);
-    CleanupGpuTex(this);
-#endif
     delete mLoader;
 }
 
@@ -338,15 +334,18 @@ void RndTex::SetBitmap(int w, int h, int bpp, Type ty, bool useMips, const char 
         mHeight = TheRnd.Height();
         mBpp = TheRnd.Bpp();
     } else if (mType & kRendered) {
+        if (mBpp & 0xF) {
+            mBpp = (mBpp < 0x20) ? 0x10 : 0x20;
+        }
         if (useMips) {
             for (int i = mWidth, j = mHeight; i > 0x10 && j > 0x10; i >>= 1, j >>= 1) {
                 mNumMips++;
             }
         }
     } else {
-        const char *err = CheckSize(mWidth, mHeight, mBpp, mNumMips, mType, false);
+        char *err = (char *)CheckSize(mWidth, mHeight, mBpp, mNumMips, mType, false);
         if (err)
-            MILO_WARN(err, Name());
+            TheDebug.Notify(MakeString(err, Name()));
         else {
             if (!(mType & 0x204U)) {
                 int bppOut = mBpp;
@@ -354,7 +353,6 @@ void RndTex::SetBitmap(int w, int h, int bpp, Type ty, bool useMips, const char 
                 PlatformBppOrder(path, bppOut, orderOut, true);
                 mBitmap.Create(mWidth, mHeight, 0, bppOut, orderOut, 0, 0, 0);
                 if (useMips) {
-                    MILO_ASSERT(!useMips, 0xF8);
                     mBitmap.GenerateMips();
                     mNumMips = mBitmap.NumMips();
                 }
@@ -426,7 +424,7 @@ void RndTex::PreLoad(BinStream &bs) {
             PathName(this),
             ClassName(),
             rev,
-            11
+            (unsigned short)11
         );
     }
     if (altRev > 0) {
@@ -435,7 +433,7 @@ void RndTex::PreLoad(BinStream &bs) {
             PathName(this),
             ClassName(),
             altRev,
-            0
+            (unsigned short)0
         );
     }
     if (rev > 8) {
@@ -531,9 +529,8 @@ void RndTex::PostLoad(BinStream &bs) {
         PresyncBitmap();
         if (UseBottomMip()) {
             RndBitmap tempBitmap;
-            mBitmap.Load(bs);
-            CopyBottomMip(tempBitmap, mBitmap);
-            mBitmap = tempBitmap;
+            tempBitmap.Load(bs);
+            CopyBottomMip(mBitmap, tempBitmap);
         } else {
             mBitmap.Load(bs);
         }
@@ -546,10 +543,8 @@ void RndTex::PostLoad(BinStream &bs) {
         mNumMips = mBitmap.NumMips();
         SyncBitmap();
     } else if (mFilepath.empty() || mType != kRegular) {
-        MILO_ASSERT(!mNumMips, 0x3BE);
         SetBitmap(mWidth, mHeight, mBpp, mType, false, nullptr);
     } else if (TheLoadMgr.GetPlatform() != kPlatformNone) {
-        MILO_ASSERT(!mNumMips, 0x3C7);
         SetBitmap(mLoader);
         mLoader = nullptr;
     } else {
@@ -561,7 +556,8 @@ void RndTex::PostLoad(BinStream &bs) {
 const char *
 RndTex::CheckSize(int width, int height, int bpp, int numMips, Type ty, bool file) {
     const char *ret = nullptr;
-    if (ty == kDepthVolumeMap || ty == kDensityMap || (ty & kDeviceTexture))
+    if (ty == kDepthVolumeMap || ty == kDensityMap || (ty & kDeviceTexture)
+        || (ty & kRegularLinear))
         return nullptr;
     ret = CheckDim(width, ty, file);
     if (!ret)
@@ -577,18 +573,18 @@ RndTex::CheckSize(int width, int height, int bpp, int numMips, Type ty, bool fil
         if (!ret && (sizeBytes & 0xf)) {
             ret = "%s: size not multiple of 16 bytes";
         }
-        if (!ret && numMips > 0) {
-            ret = "%s: more than 0 mip levels";
+        if (!ret && numMips > 6) {
+            ret = "%s: more than 6 mip levels";
         }
     }
     return ret;
 }
 
 DataNode RndTex::OnSetBitmap(const DataArray *arr) {
-    // Two forms:
-    // {$this set_bitmap "path/to/texture.tex"}
-    // {$this set_bitmap width height bpp type useMips}
-    if (arr->Size() > 3) {
+    if (arr->Size() == 3) {
+        FilePath path(FilePath::Root().c_str(), arr->Str(2));
+        SetBitmap(path);
+    } else {
         SetBitmap(
             arr->Int(2),
             arr->Int(3),
@@ -597,9 +593,6 @@ DataNode RndTex::OnSetBitmap(const DataArray *arr) {
             arr->Int(6),
             nullptr
         );
-    } else {
-        FilePath path(FilePath::Root().c_str(), arr->Str(2));
-        SetBitmap(path);
     }
     return 0;
 }

@@ -3303,7 +3303,6 @@ extern "C" const char __link_glue_empty_str[] = "";
 #pragma comment(linker, "/ALTERNATENAME:?GetNumRestarts@Game@@QBAHXZ=__link_glue_noop")
 #pragma comment(linker, "/ALTERNATENAME:?GetSlipOffset@StreamReceiverFile@@UAAMXZ=__link_glue_noop")
 #pragma comment(linker, "/ALTERNATENAME:?Handle@BustAMoveData@@UAA?AVDataNode@@PAVDataArray@@_N@Z=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?Handle@CharMeshHide@@UAA?AVDataNode@@PAVDataArray@@_N@Z=__link_glue_noop")
 #pragma comment(linker, "/ALTERNATENAME:?Handle@OvershellSlot@@UAA?AVDataNode@@PAVDataArray@@_N@Z=__link_glue_noop")
 #pragma comment(linker, "/ALTERNATENAME:?Highlight@Waypoint@@UAAXXZ=__link_glue_noop")
 #pragma comment(linker, "/ALTERNATENAME:?InsertBreak@RndConsole@@QAAXPAVDataArray@@H@Z=__link_glue_noop")

@@ -14,6 +14,20 @@ RndMatAnim::TexPtr::TexPtr(RndTex *tex) : ObjPtr<RndTex>(DeferOwner(), tex) {
 #pragma region Hmx::Object
 
 RndMatAnim::RndMatAnim() : mMat(this), mKeysOwner(this, this), mTexKeys(this) {}
+RndMatAnim::~RndMatAnim() {}
+
+bool RndMatAnim::Replace(ObjRef *ref, Hmx::Object *obj) {
+    if (&mKeysOwner == ref) {
+        RndMatAnim *ma;
+        if (mKeysOwner == this || !(ma = dynamic_cast<RndMatAnim *>(obj))) {
+            mKeysOwner.SetObjConcrete(this);
+        } else {
+            mKeysOwner.SetObjConcrete(ma->mKeysOwner.Ptr());
+        }
+        return true;
+    }
+    return Hmx::Object::Replace(ref, obj);
+}
 
 BEGIN_HANDLERS(RndMatAnim)
     HANDLE_SUPERCLASS(RndAnimatable)

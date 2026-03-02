@@ -242,11 +242,6 @@ void TypeProps::InsertArrayValue(Symbol key, int i, const DataNode &value) {
 
 void TypeProps::Load(BinStreamRev &bs) {
     bool rev = bs.rev < 2;
-#ifdef HX_NATIVE
-    printf("    TypeProps::Load: owner='%s' mMap=%p mObjects.size=%d rev=%d tell=%d\n",
-           mOwner ? mOwner->Name() : "null", (void*)mMap, mObjects.size(), bs.rev, bs.stream.Tell());
-    fflush(stdout);
-#endif
     ReleaseObjects();
     DataArray *def = RefOwner()->TypeDef();
     Hmx::Object *theThis = nullptr;

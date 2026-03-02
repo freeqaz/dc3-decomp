@@ -65,6 +65,10 @@ void UIListWidget::SetColor(UIListWidgetState ws, UIComponent::State cs, UIColor
     theColor = color;
 }
 
+BEGIN_HANDLERS(UIListWidget)
+    HANDLE_SUPERCLASS(Hmx::Object)
+END_HANDLERS
+
 BEGIN_PROPSYNCS(UIListWidget)
     SYNC_PROP(draw_order, mDrawOrder)
     SYNC_PROP(disabled_alpha_scale, mDisabledAlphaScale)

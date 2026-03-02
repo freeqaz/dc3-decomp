@@ -103,6 +103,12 @@ extern const char *kAssertStr;
 
 #define MILO_FAIL(...) TheDebugFailer << MakeString(__VA_ARGS__)
 #define MILO_WARN(...) TheDebugWarner << MakeString(__VA_ARGS__)
+// DTA runtime errors: FAIL on Xbox (shows dialog + Continue), WARN on native
+#ifdef HX_NATIVE
+#define MILO_FAIL_DTA(...) TheDebugWarner << MakeString(__VA_ARGS__)
+#else
+#define MILO_FAIL_DTA(...) TheDebugFailer << MakeString(__VA_ARGS__)
+#endif
 #define MILO_NOTIFY(...) TheDebugNotifier << MakeString(__VA_ARGS__)
 #define MILO_NOTIFY_BETA(...) DebugBeta() << MakeString(__VA_ARGS__)
 #define MILO_LOG(...) TheDebug << MakeString(__VA_ARGS__)

@@ -60,6 +60,27 @@ void Invert(const Hmx::Matrix3 &min, Hmx::Matrix3 &mout) {
     );
 }
 
+void Multiply(const Hmx::Matrix3 &a, const Hmx::Matrix3 &b, Hmx::Matrix3 &out) {
+    out.Set(
+        a.x.x * b.x.x + a.x.y * b.y.x + a.x.z * b.z.x,
+        a.x.x * b.x.y + a.x.y * b.y.y + a.x.z * b.z.y,
+        a.x.x * b.x.z + a.x.y * b.y.z + a.x.z * b.z.z,
+        a.y.x * b.x.x + a.y.y * b.y.x + a.y.z * b.z.x,
+        a.y.x * b.x.y + a.y.y * b.y.y + a.y.z * b.z.y,
+        a.y.x * b.x.z + a.y.y * b.y.z + a.y.z * b.z.z,
+        a.z.x * b.x.x + a.z.y * b.y.x + a.z.z * b.z.x,
+        a.z.x * b.x.y + a.z.y * b.y.y + a.z.z * b.z.y,
+        a.z.x * b.x.z + a.z.y * b.y.z + a.z.z * b.z.z
+    );
+}
+
+void Multiply(const Transform &a, const Transform &b, Transform &out) {
+    Multiply(a.m, b.m, out.m);
+    // Row-vector convention: v * A then v * B => out.v = a.v * b.m + b.v
+    Multiply(a.v, b.m, out.v);
+    Add(out.v, b.v, out.v);
+}
+
 void Multiply(const Transform &t, const Hmx::Matrix3 &m, Transform &out) {
     Multiply(t.m, m, out.m);
     Multiply(t.v, m, out.v);

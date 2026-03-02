@@ -11,14 +11,21 @@
 #include "rndobj/Trans.h"
 #include "rndobj/Cam.h"
 #include "rndobj/BaseMaterial.h"
+#include "rndobj/CubeTex.h"
 #include "math/Mtx.h"
 
 #include <unordered_map>
 #include <cstdio>
 #include <cstring>
+#include <cmath>
+
+extern "C" {
+#include "gfx/mikktspace.h"
+}
 
 // External: get GPU texture view for a RndTex (defined in Tex_Wgpu.cpp)
 extern wgpu::TextureView GetGpuTexView(RndTex* tex);
+extern wgpu::TextureView GetGpuCubeTexView(RndCubeTex* cubeTex);
 
 // ============================================================================
 // GPU mesh data side table
@@ -31,6 +38,7 @@ struct GpuMeshData {
     int numVertices = 0;
     bool skinned = false;
     bool uploaded = false;
+    int32_t depthBias = 0;  // set by viewer for combined meshes
 };
 
 static std::unordered_map<RndMesh*, GpuMeshData> sMeshGpuData;
@@ -77,6 +85,11 @@ void CleanupGpuMesh(RndMesh* mesh) {
     sMeshGpuData.erase(mesh);
 }
 
+// Set depth bias for a mesh (used by viewer to push combined meshes behind splits)
+void SetMeshDepthBias(RndMesh* mesh, int32_t bias) {
+    sMeshGpuData[mesh].depthBias = bias;
+}
+
 // ============================================================================
 // Helper: Convert Transform to ObjectUniforms
 // ============================================================================
@@ -88,8 +101,35 @@ static void FillObjectUniforms(const Transform& worldXfm, ObjectUniforms& obj) {
     obj.world[8]  = worldXfm.m.z.x; obj.world[9]  = worldXfm.m.z.y; obj.world[10] = worldXfm.m.z.z; obj.world[11] = 0;
     obj.world[12] = worldXfm.v.x;   obj.world[13] = worldXfm.v.y;   obj.world[14] = worldXfm.v.z;   obj.world[15] = 1;
 
-    // For Tier 1: worldInvTranspose = world (correct for orthogonal rotation + translation)
-    memcpy(obj.worldInvTranspose, obj.world, 64);
+    // Compute inverse-transpose of the upper 3x3 for correct normal transformation
+    // under non-uniform scale. For pure rotation this equals the rotation matrix.
+    const Hmx::Matrix3& m = worldXfm.m;
+    float det = m.x.x * (m.y.y * m.z.z - m.y.z * m.z.y)
+              - m.x.y * (m.y.x * m.z.z - m.y.z * m.z.x)
+              + m.x.z * (m.y.x * m.z.y - m.y.y * m.z.x);
+    if (fabsf(det) > 1e-12f) {
+        float invDet = 1.0f / det;
+        // Inverse of 3x3, then transposed — stored row-major
+        obj.worldInvTranspose[0]  = (m.y.y * m.z.z - m.y.z * m.z.y) * invDet;
+        obj.worldInvTranspose[1]  = (m.y.z * m.z.x - m.y.x * m.z.z) * invDet;
+        obj.worldInvTranspose[2]  = (m.y.x * m.z.y - m.y.y * m.z.x) * invDet;
+        obj.worldInvTranspose[3]  = 0;
+        obj.worldInvTranspose[4]  = (m.x.z * m.z.y - m.x.y * m.z.z) * invDet;
+        obj.worldInvTranspose[5]  = (m.x.x * m.z.z - m.x.z * m.z.x) * invDet;
+        obj.worldInvTranspose[6]  = (m.x.y * m.z.x - m.x.x * m.z.y) * invDet;
+        obj.worldInvTranspose[7]  = 0;
+        obj.worldInvTranspose[8]  = (m.x.y * m.y.z - m.x.z * m.y.y) * invDet;
+        obj.worldInvTranspose[9]  = (m.x.z * m.y.x - m.x.x * m.y.z) * invDet;
+        obj.worldInvTranspose[10] = (m.x.x * m.y.y - m.x.y * m.y.x) * invDet;
+        obj.worldInvTranspose[11] = 0;
+        obj.worldInvTranspose[12] = 0;
+        obj.worldInvTranspose[13] = 0;
+        obj.worldInvTranspose[14] = 0;
+        obj.worldInvTranspose[15] = 1;
+    } else {
+        // Degenerate — fall back to world matrix
+        memcpy(obj.worldInvTranspose, obj.world, 64);
+    }
 }
 
 // ============================================================================
@@ -110,15 +150,115 @@ static void TransformToMat4(const Transform& xfm, float* out) {
 template<typename VertType>
 static void FixZeroAlpha(VertType* verts, int count) {
     bool allAlphaZero = true;
+    bool allRGBZero = true;
     int checkCount = count < 10 ? count : 10;
     for (int i = 0; i < checkCount; i++) {
-        if (verts[i].color[3] > 0.001f) { allAlphaZero = false; break; }
+        if (verts[i].color[3] > 0.001f) { allAlphaZero = false; }
+        if (verts[i].color[0] > 0.001f || verts[i].color[1] > 0.001f || verts[i].color[2] > 0.001f) {
+            allRGBZero = false;
+        }
     }
     if (allAlphaZero) {
         for (int i = 0; i < count; i++) {
-            verts[i].color[0] = verts[i].color[1] = verts[i].color[2] = verts[i].color[3] = 1.0f;
+            verts[i].color[3] = 1.0f;
+            // Only force RGB to white if it's also all zero (truly unused vertex colors).
+            // Preserve meaningful RGB (e.g. baked AO) when only alpha is missing.
+            if (allRGBZero) {
+                verts[i].color[0] = verts[i].color[1] = verts[i].color[2] = 1.0f;
+            }
         }
     }
+}
+
+// ============================================================================
+// MikkTSpace tangent generation callbacks
+// ============================================================================
+
+struct MikkUserData {
+    void* verts;         // GpuVertex* or GpuVertexSkinned*
+    const uint16_t* indices;
+    int numFaces;
+    int numVerts;
+    bool skinned;
+};
+
+template<typename V>
+static V& GetMikkVert(MikkUserData* ud, int face, int vert) {
+    int idx = ((const uint16_t*)ud->indices)[face * 3 + vert];
+    return ((V*)ud->verts)[idx];
+}
+
+static int mikkGetNumFaces(const SMikkTSpaceContext* ctx) {
+    return ((MikkUserData*)ctx->m_pUserData)->numFaces;
+}
+static int mikkGetNumVerticesOfFace(const SMikkTSpaceContext*, int) { return 3; }
+
+static void mikkGetPosition(const SMikkTSpaceContext* ctx, float pos[], int face, int vert) {
+    auto* ud = (MikkUserData*)ctx->m_pUserData;
+    if (ud->skinned) {
+        auto& v = GetMikkVert<GpuVertexSkinned>(ud, face, vert);
+        pos[0] = v.pos[0]; pos[1] = v.pos[1]; pos[2] = v.pos[2];
+    } else {
+        auto& v = GetMikkVert<GpuVertex>(ud, face, vert);
+        pos[0] = v.pos[0]; pos[1] = v.pos[1]; pos[2] = v.pos[2];
+    }
+}
+static void mikkGetNormal(const SMikkTSpaceContext* ctx, float norm[], int face, int vert) {
+    auto* ud = (MikkUserData*)ctx->m_pUserData;
+    if (ud->skinned) {
+        auto& v = GetMikkVert<GpuVertexSkinned>(ud, face, vert);
+        norm[0] = v.norm[0]; norm[1] = v.norm[1]; norm[2] = v.norm[2];
+    } else {
+        auto& v = GetMikkVert<GpuVertex>(ud, face, vert);
+        norm[0] = v.norm[0]; norm[1] = v.norm[1]; norm[2] = v.norm[2];
+    }
+}
+static void mikkGetTexCoord(const SMikkTSpaceContext* ctx, float uv[], int face, int vert) {
+    auto* ud = (MikkUserData*)ctx->m_pUserData;
+    if (ud->skinned) {
+        auto& v = GetMikkVert<GpuVertexSkinned>(ud, face, vert);
+        uv[0] = v.uv[0]; uv[1] = v.uv[1];
+    } else {
+        auto& v = GetMikkVert<GpuVertex>(ud, face, vert);
+        uv[0] = v.uv[0]; uv[1] = v.uv[1];
+    }
+}
+static void mikkSetTSpaceBasic(const SMikkTSpaceContext* ctx,
+    const float tangent[], float sign, int face, int vert) {
+    auto* ud = (MikkUserData*)ctx->m_pUserData;
+    if (ud->skinned) {
+        auto& v = GetMikkVert<GpuVertexSkinned>(ud, face, vert);
+        v.tangent[0] = tangent[0]; v.tangent[1] = tangent[1];
+        v.tangent[2] = tangent[2]; v.tangent[3] = sign;
+    } else {
+        auto& v = GetMikkVert<GpuVertex>(ud, face, vert);
+        v.tangent[0] = tangent[0]; v.tangent[1] = tangent[1];
+        v.tangent[2] = tangent[2]; v.tangent[3] = sign;
+    }
+}
+
+static void ComputeMikkTangents(void* verts, const uint16_t* indices,
+    int numFaces, int numVerts, bool skinned) {
+    MikkUserData ud;
+    ud.verts = verts;
+    ud.indices = indices;
+    ud.numFaces = numFaces;
+    ud.numVerts = numVerts;
+    ud.skinned = skinned;
+
+    SMikkTSpaceInterface iface{};
+    iface.m_getNumFaces = mikkGetNumFaces;
+    iface.m_getNumVerticesOfFace = mikkGetNumVerticesOfFace;
+    iface.m_getPosition = mikkGetPosition;
+    iface.m_getNormal = mikkGetNormal;
+    iface.m_getTexCoord = mikkGetTexCoord;
+    iface.m_setTSpaceBasic = mikkSetTSpaceBasic;
+
+    SMikkTSpaceContext ctx{};
+    ctx.m_pInterface = &iface;
+    ctx.m_pUserData = &ud;
+
+    genTangSpaceDefault(&ctx);
 }
 
 // ============================================================================
@@ -152,21 +292,40 @@ static bool EnsureMeshUploaded(RndMesh* mesh) {
     }
 
     int vertCount = (numVerts > 0) ? numVerts : numCompressedVerts;
+    bool isCompressed = (numCompressedVerts > 0 && geomOwner->CompressedVerts());
+
+    // Build index buffer first (needed for MikkTSpace tangent generation)
+    int numIndices = numFaces * 3;
+    int allocIndices = (numIndices + 1) & ~1; // round up to even for 4-byte alignment
+    uint16_t* indices = new uint16_t[allocIndices]();
+    auto& faces = geomOwner->Faces();
+    for (int i = 0; i < numFaces; i++) {
+        indices[i * 3 + 0] = faces[i].v1;
+        indices[i * 3 + 1] = faces[i].v2;
+        indices[i * 3 + 2] = faces[i].v3;
+    }
+
     wgpu::Buffer vertexBuf;
     int unpacked = 0;
 
     if (skinned) {
         // Skinned vertex path
         GpuVertexSkinned* verts = new GpuVertexSkinned[vertCount];
-        if (numCompressedVerts > 0 && geomOwner->CompressedVerts()) {
+        if (isCompressed) {
             unpacked = VertexFormats::UnpackCompressedSkinnedVertices(
                 geomOwner->CompressedVerts(), numCompressedVerts, verts, vertCount);
         } else {
             unpacked = VertexFormats::UnpackSkinnedVertices(*geomOwner, verts, vertCount);
+            // Compute tangents via MikkTSpace for uncompressed meshes
+            // (compressed meshes already have tangent data from the original Xbox vertex stream)
+            if (unpacked > 0) {
+                ComputeMikkTangents(verts, indices, numFaces, unpacked, true);
+            }
         }
         if (unpacked <= 0) {
             fprintf(stderr, "Mesh_Wgpu: failed to unpack skinned vertices for '%s'\n", mesh->Name());
             delete[] verts;
+            delete[] indices;
             return false;
         }
         FixZeroAlpha(verts, unpacked);
@@ -180,16 +339,21 @@ static bool EnsureMeshUploaded(RndMesh* mesh) {
     } else {
         // Static vertex path
         GpuVertex* verts = new GpuVertex[vertCount];
-        if (numCompressedVerts > 0 && geomOwner->CompressedVerts()) {
+        if (isCompressed) {
             unpacked = VertexFormats::UnpackCompressedVertices(
                 geomOwner->CompressedVerts(), numCompressedVerts, verts, vertCount);
         } else {
             unpacked = VertexFormats::UnpackStaticVertices(*geomOwner, verts, vertCount);
+            // Compute tangents via MikkTSpace for uncompressed meshes
+            if (unpacked > 0) {
+                ComputeMikkTangents(verts, indices, numFaces, unpacked, false);
+            }
         }
         if (unpacked <= 0) {
             fprintf(stderr, "Mesh_Wgpu: failed to unpack vertices for '%s' (verts=%d, compressed=%d)\n",
                     mesh->Name(), numVerts, numCompressedVerts);
             delete[] verts;
+            delete[] indices;
             return false;
         }
         FixZeroAlpha(verts, unpacked);
@@ -200,17 +364,6 @@ static bool EnsureMeshUploaded(RndMesh* mesh) {
         vertexBuf = gWgpuRnd->Gpu().Device().CreateBuffer(&vbDesc);
         gWgpuRnd->Gpu().Queue().WriteBuffer(vertexBuf, 0, verts, unpacked * sizeof(GpuVertex));
         delete[] verts;
-    }
-
-    // Create index buffer from faces
-    int numIndices = numFaces * 3;
-    int allocIndices = (numIndices + 1) & ~1; // round up to even for 4-byte alignment
-    uint16_t* indices = new uint16_t[allocIndices]();
-    auto& faces = geomOwner->Faces();
-    for (int i = 0; i < numFaces; i++) {
-        indices[i * 3 + 0] = faces[i].v1;
-        indices[i * 3 + 1] = faces[i].v2;
-        indices[i * 3 + 2] = faces[i].v3;
     }
 
     size_t ibAlignedSize = (numIndices * sizeof(uint16_t) + 3) & ~3u;
@@ -238,8 +391,26 @@ static bool EnsureMeshUploaded(RndMesh* mesh) {
 // RndMesh::DrawShowing — the hot path
 // ============================================================================
 
+static int sDrawCallsThisFrame = 0;
+static int sFrameCounter = 0;
+
+void RndMesh_ResetFrameStats() {
+    if (sFrameCounter > 0 && sFrameCounter % 300 == 0) {
+        printf("DC3 Render: Frame %d — %d mesh draw calls\n", sFrameCounter, sDrawCallsThisFrame);
+    }
+    sDrawCallsThisFrame = 0;
+    sFrameCounter++;
+}
+
 void RndMesh::DrawShowing() {
     if (!gWgpuRnd || !gWgpuRnd->IsInPass()) return;
+    if (!Showing()) return;
+
+    // Skip LOD meshes (drawn by Character::DrawLod in the full engine,
+    // but we iterate all meshes directly in the viewer)
+    if (strstr(Name(), "_lod")) return;
+
+    sDrawCallsThisFrame++;
 
     // Get material
     RndMat* mat = Mat();
@@ -263,6 +434,8 @@ void RndMesh::DrawShowing() {
     key.targetFormat = gWgpuRnd->Gpu().SurfaceFormat();
     key.alphaCut = mat->GetAlphaCut();
     key.alphaWrite = mat->GetAlphaWrite();
+    key.alphaToCoverage = mat->GetAlphaCut();
+    key.depthBias = meshData.depthBias;
 
     wgpu::RenderPipeline pipeline = gWgpuRnd->Pipelines().GetPipeline(key);
     if (!pipeline) return;
@@ -276,18 +449,33 @@ void RndMesh::DrawShowing() {
     matUni.color[1] = matColor.green;
     matUni.color[2] = matColor.blue;
     matUni.color[3] = matColor.alpha;
-    matUni.alphaThreshold = mat->GetAlphaCut() ? (mat->GetAlphaThreshold() / 255.0f) : 0.0f;
+    if (mat->GetAlphaCut()) {
+        matUni.alphaThreshold = mat->GetAlphaThreshold() / 255.0f;
+    } else {
+        matUni.alphaThreshold = 0.0f;
+    }
 
     // Specular
     const Hmx::Color& spec = mat->GetSpecularRGB();
-    matUni.specularColor[0] = spec.red;
-    matUni.specularColor[1] = spec.green;
-    matUni.specularColor[2] = spec.blue;
+    float specPower = spec.alpha > 0.0f ? spec.alpha : 0.0f;
+    float specScale = 1.0f;
+    // Per-pixel-lit materials without normal map: the Xbox shader uses normal map
+    // alpha as specular mask. Without it, attenuate specular and raise min power
+    // to avoid unrealistically broad sheen across entire surfaces.
+    if (specPower > 0.0f && specPower < 32.0f) {
+        specPower = 32.0f;  // tighten the specular lobe
+        specScale = 0.4f;   // reduce intensity
+    }
+    matUni.specularColor[0] = spec.red * specScale;
+    matUni.specularColor[1] = spec.green * specScale;
+    matUni.specularColor[2] = spec.blue * specScale;
     matUni.specularColor[3] = 1.0f;
-    matUni.specularPower = spec.alpha > 0.0f ? spec.alpha : 0.0f;
+    matUni.specularPower = specPower;
 
-    // Emissive
-    matUni.emissiveMultiplier = mat->GetEmissiveMultiplier();
+    // Emissive — only applies when an emissive map texture exists
+    // Without a map, emissiveMultiplier defaults to 1.0 which would add
+    // the full diffuse color as self-illumination (completely wrong)
+    matUni.emissiveMultiplier = mat->GetEmissiveMap() ? mat->GetEmissiveMultiplier() : 0.0f;
 
     // Rim lighting
     const Hmx::Color& rim = mat->GetRimRGB();
@@ -295,23 +483,97 @@ void RndMesh::DrawShowing() {
     matUni.rimColor[1] = rim.green;
     matUni.rimColor[2] = rim.blue;
     matUni.rimColor[3] = rim.alpha > 0.0f ? rim.alpha : 0.0f;
+    matUni.rimLightUnder = mat->GetRimLightUnder() ? 1.0f : 0.0f;
 
     // Intensify
     matUni.intensify = mat->GetIntensify() ? 2.0f : 1.0f;
 
+    // Shader variation (skin, hair, etc.)
+    // DC3 skin materials often have shader_variation=0 but use "_skin" in the name.
+    // Detect skin by either the explicit flag or name convention.
+    ShaderVariation variation = mat->GetShaderVariation();
+    if (variation == kShaderVariationNone) {
+        const char* matName = mat->Name();
+        if (strstr(matName, "_skin") || strstr(matName, "_head")) {
+            variation = kShaderVariationSkin;
+        }
+    }
+    matUni.shaderVariation = (float)variation;
+
+    // Second specular lobe (used by skin shader)
+    const Hmx::Color& spec2 = mat->GetSpecular2RGB();
+    matUni.specular2Color[0] = spec2.red;
+    matUni.specular2Color[1] = spec2.green;
+    matUni.specular2Color[2] = spec2.blue;
+    matUni.specular2Color[3] = spec2.alpha > 0.0f ? spec2.alpha : 0.0f;
+
     // Texture
     RndTex* diffTex = mat->GetDiffuseTex();
-    wgpu::TextureView texView;
+    wgpu::TextureView diffuseTexView;
     if (diffTex) {
         diffTex->PresyncBitmap();
-        texView = GetGpuTexView(diffTex);
+        diffuseTexView = GetGpuTexView(diffTex);
     }
 
-    if (texView) {
+    if (diffuseTexView) {
         matUni.useTexture = 1.0f;
     } else {
         matUni.useTexture = 0.0f;
-        texView = gWgpuRnd->WhiteTexView();
+        diffuseTexView = gWgpuRnd->WhiteTexView();
+    }
+
+    // Normal map and additional material properties
+    matUni.deNormal = mat->GetDeNormal();
+    matUni.hasNormalMap = mat->NormalMap() ? 1.0f : 0.0f;
+    matUni.anisotropy = mat->GetAnisotropy();
+
+    // Per-material fog: mFog AND blend mode allows fog
+    BaseMaterial::Blend blend = mat->GetBlend();
+    bool allowFog = mat->GetFog() &&
+        blend != BaseMaterial::kBlendDest && blend != BaseMaterial::kBlendAdd &&
+        blend != BaseMaterial::kBlendSubtract && blend != BaseMaterial::kBlendSrcAlphaAdd;
+    matUni.materialFogEnabled = allowFog ? 1.0f : 0.0f;
+
+    // Prelit: vertex color is pre-lit, skip lighting
+    matUni.prelit = mat->Prelit() ? 1.0f : 0.0f;
+
+    // TexGen mode and transform
+    matUni.texGenMode = (float)mat->GetTexGen();
+    if (mat->GetTexGen() == kTexGenXfm || mat->GetTexGen() == kTexGenXfmOrigin ||
+        mat->GetTexGen() == kTexGenProjected) {
+        const Transform& xfm = mat->TexXfm();
+        matUni.texXfmRow0[0] = xfm.m.x.x; matUni.texXfmRow0[1] = xfm.m.x.y;
+        matUni.texXfmRow0[2] = xfm.v.x;   matUni.texXfmRow0[3] = xfm.v.z;
+        matUni.texXfmRow1[0] = xfm.m.y.x; matUni.texXfmRow1[1] = xfm.m.y.y;
+        matUni.texXfmRow1[2] = xfm.v.y;   matUni.texXfmRow1[3] = 0.0f;
+    }
+
+    // Resolve all material texture views
+    WgpuRnd::MaterialTexViews texViews;
+    texViews.diffuse = diffuseTexView;
+
+    auto resolveMap = [](RndTex* tex, wgpu::TextureView& fallback) -> wgpu::TextureView {
+        if (!tex) return fallback;
+        tex->PresyncBitmap();
+        wgpu::TextureView v = GetGpuTexView(tex);
+        return v ? v : fallback;
+    };
+    texViews.normal   = resolveMap(mat->NormalMap(),      gWgpuRnd->FlatNormalTexView());
+    texViews.specular = resolveMap(mat->GetSpecularMap(), gWgpuRnd->WhiteTexView());
+    texViews.emissive = resolveMap(mat->GetEmissiveMap(), gWgpuRnd->BlackTexView());
+    texViews.rim      = resolveMap(mat->GetRimMap(),      gWgpuRnd->WhiteTexView());
+
+    // Environment cube map
+    RndCubeTex* environMap = mat->GetEnvironMap();
+    if (environMap && mat->GetUseEnviron()) {
+        wgpu::TextureView cubeView = GetGpuCubeTexView(environMap);
+        texViews.environCube = cubeView ? cubeView : gWgpuRnd->BlackCubeTexView();
+        matUni.environMapStrength = 1.0f;
+        matUni.environMapFalloff = mat->GetEnvironMapFalloff() ? 1.0f : 0.0f;
+        matUni.environMapSpecMask = mat->GetEnvironMapSpecMask() ? 1.0f : 0.0f;
+    } else {
+        texViews.environCube = gWgpuRnd->BlackCubeTexView();
+        matUni.environMapStrength = 0.0f;
     }
 
     uint32_t matOffset = gWgpuRnd->MaterialRing().Write(
@@ -339,13 +601,27 @@ void RndMesh::DrawShowing() {
     }
     wgpu::Sampler sampler = gWgpuRnd->Gpu().GetSampler(sampDesc);
 
+    // Map sampler — always repeat for tiled texture maps
+    SamplerDesc mapSampDesc{};
+    mapSampDesc.addressU = wgpu::AddressMode::Repeat;
+    mapSampDesc.addressV = wgpu::AddressMode::Repeat;
+    wgpu::Sampler mapSampler = gWgpuRnd->Gpu().GetSampler(mapSampDesc);
+
     wgpu::BindGroup matBG = gWgpuRnd->CreateMaterialBindGroup(
-        matOffset, sizeof(MaterialUniforms), texView, sampler);
+        matOffset, sizeof(MaterialUniforms), texViews, sampler, mapSampler);
     pass.SetBindGroup(1, matBG);
 
     // --- Object uniforms (group 2) ---
     ObjectUniforms objUni{};
-    FillObjectUniforms(WorldXfm(), objUni);
+    if (skinned) {
+        // Skinned: bone matrices already produce world-space positions,
+        // so object transform must be identity to avoid double-transform
+        Transform identity;
+        identity.Reset();
+        FillObjectUniforms(identity, objUni);
+    } else {
+        FillObjectUniforms(WorldXfm(), objUni);
+    }
 
     uint32_t objOffset = gWgpuRnd->ObjectRing().Write(
         gWgpuRnd->Gpu().Queue(), &objUni, sizeof(objUni));
@@ -365,9 +641,11 @@ void RndMesh::DrawShowing() {
         for (int i = 0; i < numBones; i++) {
             RndTransformable* boneTrans = BoneTransAt(i);
             if (boneTrans) {
-                // skinMatrix = worldXfm * mOffset (world-space bone * inverse bind pose)
+                // mOffset takes vertex: mesh local → world → bone local (at bind time)
+                // boneCurrentWorld takes: bone local → current world
+                // Combined: v * mOffset * boneCurrentWorld
                 Transform skinMatrix;
-                Multiply(boneTrans->WorldXfm(), mBones[i].mOffset, skinMatrix);
+                Multiply(mBones[i].mOffset, boneTrans->WorldXfm(), skinMatrix);
                 TransformToMat4(skinMatrix, boneUni.bones[i]);
             } else {
                 // Null bone — use identity

@@ -99,6 +99,8 @@ Tool-specific deep docs live in subdirectories:
 | [plans/LBL_SYMBOL_MATCHING.md](plans/LBL_SYMBOL_MATCHING.md) | Fix `lbl_` symbol matching for function-local statics (match% accuracy) |
 | [plans/compiler-instrumentation.md](plans/compiler-instrumentation.md) | Compiler introspection: register allocator, encoding patterns (DONE) |
 | [plans/XENIA_BOOT_VALIDATION.md](plans/XENIA_BOOT_VALIDATION.md) | Xenia emulator build, hybrid XEX boot validation, headless mode plan |
+| [plans/custom-graphics-engine/PLAN.md](plans/custom-graphics-engine/PLAN.md) | **Native port master plan** — phased roadmap, rendering/audio/input/motion |
+| [plans/dc3-native/STATUS.md](plans/dc3-native/STATUS.md) | **Native port status** — boot flow, error handling, env vars, test commands |
 
 ## Runtime & Testing
 
@@ -106,7 +108,9 @@ Tool-specific deep docs live in subdirectories:
 |-----|-------------|
 | [runtime/XENIA_HEADLESS_STATUS.md](runtime/XENIA_HEADLESS_STATUS.md) | **Main status doc** — all xenia changes, rendering investigation, debug flags, roadmap |
 | [runtime/BOOT_ANALYSIS.md](runtime/BOOT_ANALYSIS.md) | Boot progress (~70-80%), thread architecture, how to run |
-| [runtime/SCRIPTED_INPUT_TESTING.md](runtime/SCRIPTED_INPUT_TESTING.md) | Scripted input (implemented) — `--scripted_input` usage and DC3 navigation strategy |
+| [runtime/SCRIPTED_INPUT_TESTING.md](runtime/SCRIPTED_INPUT_TESTING.md) | Xenia scripted input — `--scripted_input` usage and DC3 navigation strategy |
+| [native/HEADLESS_TESTING.md](native/HEADLESS_TESTING.md) | dc3-native headless testing — scripted input + screenshots via env vars |
+| [native/TESTING.md](native/TESTING.md) | Native build testing guide — GTest fixtures, ASan, debugging workflow |
 | [sessions/2026-02-18-xenia-screenshot-breakthrough.md](sessions/2026-02-18-xenia-screenshot-breakthrough.md) | **Screenshot breakthrough** — full journey from black frames to rendered DC3 boot animation |
 | [sessions/2026-02-18-xenia-frame-capture-attempts.md](sessions/2026-02-18-xenia-frame-capture-attempts.md) | Frame capture approaches tried — trace, deferred draws, async worker (resolved) |
 | [sessions/2026-02-18-vulkan-headless-rendering.md](sessions/2026-02-18-vulkan-headless-rendering.md) | Vulkan headless rendering — async pipelines, GPU readback (resolved) |

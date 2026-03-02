@@ -32,7 +32,9 @@ GestureMgr::GestureMgr()
     : mLiveCamInput(LiveCameraInput::sInstance), mPauseOnSkeletonLossMode(2), mIDEnabled(1),
       mInControllerMode(0), mInVoiceMode(0), mGesturingWithVoice(0), mInDoubleUserMode(0),
       mInShellMode(0), mDebugDir(0) {
+#ifndef HX_NATIVE
     MILO_ASSERT(mLiveCamInput, 0x40);
+#endif
     mPlayerSkeletonIDs[0] = -1;
     mPlayerSkeletonIDs[1] = -1;
     int skeletonIdx = 0;
@@ -118,9 +120,17 @@ BEGIN_HANDLERS(GestureMgr)
     HANDLE_SUPERCLASS(Hmx::Object)
 END_HANDLERS
 
+void GestureMgr_NativeInit();
+void GestureMgr_NativeTerminate();
+void GestureMgr_NativePoll(GestureMgr *);
+
 void GestureMgr::Init() {
 #ifdef HX_NATIVE
-    return; // Skip Kinect initialization on native
+    TheGestureMgr = new GestureMgr();
+    TheGestureMgr->SetName("gesture_mgr", ObjectDir::Main());
+    TheDebug.AddExitCallback(GestureMgr::Terminate);
+    GestureMgr_NativeInit();
+    return;
 #endif
     LiveCameraInput::PreInit();
     TheGestureMgr = new GestureMgr();
@@ -143,16 +153,24 @@ void GestureMgr::DebugInit() {
 }
 
 void GestureMgr::Terminate() {
+#ifdef HX_NATIVE
+    GestureMgr_NativeTerminate();
+#else
     TerminateDrawUtl();
     ThePlatformMgr.RemoveSink(TheGestureMgr);
+#endif
     RELEASE(TheGestureMgr);
 }
 
 void GestureMgr::Poll() {
+#ifdef HX_NATIVE
+    GestureMgr_NativePoll(this);
+#else
     if (TheSpeechMgr)
         TheSpeechMgr->Poll();
     TheCameraTilt->Poll();
     TheWaveToTurnOnLight->Poll();
+#endif
 }
 
 IdentityInfo *GestureMgr::GetIdentityInfo(int idx) {
@@ -312,8 +330,9 @@ int GestureMgr::GetPlayerFilteredSkeletonID(int playerIndex, bool b2) {
 
 DataNode GestureMgr::OnMsg(const KinectHardwareStatusMsg &msg) {
     if (msg->Int(2) == 1) {
-        MILO_ASSERT(mLiveCamInput, 0x21B);
-        mLiveCamInput->SetAutoexposure(true);
+        if (mLiveCamInput) {
+            mLiveCamInput->SetAutoexposure(true);
+        }
     }
     return 1;
 }

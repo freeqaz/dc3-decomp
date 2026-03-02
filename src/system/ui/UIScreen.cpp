@@ -53,7 +53,9 @@ void UIScreen::SetTypeDef(DataArray *data) {
                 pr.mPanel = panelsArr->Obj<class UIPanel>(i);
                 MILO_ASSERT(pr.mPanel, 0x41);
             }
-
+#ifdef HX_NATIVE
+            if (!pr.mPanel) continue; // Skip panels that failed to construct
+#endif
             mPanelList.push_back(pr);
         }
     }
@@ -78,12 +80,20 @@ void UIScreen::LoadPanels() {
         MILO_LOG("ArkFile: ;%s\n", Name());
 
     FOREACH (it, mPanelList) {
+#ifdef HX_NATIVE
+        // On native, always load all panels. We skip UnloadPanels (ObjRef crash
+        // workaround), so mLoadRefs stays >0 for previously loaded panels but new
+        // panels with mAlwaysLoad=false and mLoadRefs=0 would never load.
+        it->mPanel->CheckLoad();
+        it->mLoaded = true;
+#else
         if (it->mAlwaysLoad || it->mPanel->IsReferenced()) {
             it->mPanel->CheckLoad();
             it->mLoaded = true;
         } else {
             it->mLoaded = false;
         }
+#endif
     }
     static Message load_panels("load_panels");
     HandleType(load_panels);
@@ -101,6 +111,13 @@ void UIScreen::UnloadPanels() {
 bool UIScreen::CheckIsLoaded() {
     FOREACH (it, mPanelList) {
         if (it->Active() && !it->mPanel->CheckIsLoaded()) {
+#ifdef HX_NATIVE
+            static int sLoadDiag = 0;
+            if (sLoadDiag++ < 5) {
+                printf("DC3 UI: Screen '%s' not loaded — panel '%s' (state=%d) blocking\n",
+                       Name(), it->mPanel->Name(), (int)it->mPanel->GetState());
+            }
+#endif
             return false;
         }
     }
@@ -167,9 +184,19 @@ bool UIScreen::InComponentSelect() const {
 }
 
 void UIScreen::Enter(UIScreen *from) {
+#ifdef HX_NATIVE
+    printf("DC3 UI: Screen '%s' Enter (from '%s')\n", Name(), from ? from->Name() : "<null>");
+#endif
     if (from != NULL) {
         sUnloadingScreen = from;
+#ifdef HX_NATIVE
+        // Skip panel unload on native — ObjRef lifecycle issues cause SIGSEGV
+        // during bulk object deletion (ObjPtrList::Unlink on freed nodes).
+        // This leaks memory but avoids the crash.
+        printf("DC3 UI: Skipping UnloadPanels for '%s' (native workaround)\n", from->Name());
+#else
         from->UnloadPanels();
+#endif
     }
 
     int lastCount = 0;
@@ -231,6 +258,9 @@ bool UIScreen::Entering() const {
 }
 
 void UIScreen::Exit(UIScreen *to) {
+#ifdef HX_NATIVE
+    printf("DC3 UI: Screen '%s' Exit (to '%s')\n", Name(), to ? to->Name() : "<null>");
+#endif
     TheGestureMgr->SetInVoiceMode(false);
     static Message msg("exit", 0);
     msg[0] = to;
@@ -255,6 +285,13 @@ void UIScreen::Exit(UIScreen *to) {
 bool UIScreen::Exiting() const {
     FOREACH (it, mPanelList) {
         if (it->Active() && it->mPanel->Exiting()) {
+#ifdef HX_NATIVE
+            static int sExitDiag = 0;
+            if (sExitDiag++ < 5) {
+                printf("DC3 UI: Screen '%s' still exiting — panel '%s' (state=%d) blocking\n",
+                       Name(), it->mPanel->Name(), (int)it->mPanel->GetState());
+            }
+#endif
             return true;
         }
     }
@@ -391,6 +428,10 @@ bool UIScreen::SharesPanels(UIScreen *screen) {
 }
 
 DataNode UIScreen::OnMsg(ButtonDownMsg const &msg) {
+#ifdef HX_NATIVE
+    printf("DC3 UI: Screen '%s' ButtonDown button=%d action=%d\n",
+           Name(), (int)msg.GetButton(), (int)msg.GetAction());
+#endif
     if (mBack != nullptr && msg.GetAction() == kAction_Cancel) {
         DataNode n = mBack->Evaluate(1);
         if (n.Type() != kDataUnhandled) {

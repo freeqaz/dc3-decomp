@@ -51,11 +51,11 @@ void FxSendEQ::Save(BinStream &bs) {
     bs << mTransitionTime;
 }
 
-INIT_REVS(2, 0)
+INIT_REVS(3, 0)
 
 BEGIN_LOADS(FxSendEQ)
     LOAD_REVS(bs)
-    ASSERT_REVS(2, 0)
+    ASSERT_REVS(3, 0)
     LOAD_SUPERCLASS(FxSend)
     bs >> mHighFreqCutoff >> mHighFreqGain >> mMidFreqCutoff >> mMidFreqBandwidth
         >> mMidFreqGain >> mLowFreqCutoff >> mLowFreqGain;

@@ -42,6 +42,10 @@ BEGIN_LOADS(UIListSubList)
 END_LOADS
 
 UIList *UIListSubList::SubList(int index) {
+#ifdef HX_NATIVE
+    if ((size_t)index >= mElements.size())
+        return nullptr;
+#endif
     UIListSubListElement *sle = dynamic_cast<UIListSubListElement *>(mElements[index]);
     MILO_ASSERT(sle, 0x62);
     return sle->List();
@@ -59,6 +63,9 @@ void UIListSubList::Draw(
         int size = drawstate.mElements.size();
         for (int i = 0; i < size; i++) {
             UIList *uilist = SubList(i);
+#ifdef HX_NATIVE
+            if (!uilist) continue;
+#endif
             UIComponent::State state = drawstate.mElements[i].mComponentState;
             switch (state) {
             case UIComponent::kNormal:

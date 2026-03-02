@@ -22,7 +22,9 @@ CriticalSection SkeletonUpdateHandle::sCritSec;
 #pragma region SkeletonUpdateHandle
 
 SkeletonUpdateHandle::SkeletonUpdateHandle(SkeletonUpdate *update) : mInst(update) {
+#ifndef HX_NATIVE
     MILO_ASSERT(mInst, 0x45);
+#endif
     sCritSec.Enter();
 }
 
@@ -31,28 +33,50 @@ SkeletonUpdateHandle::~SkeletonUpdateHandle() { sCritSec.Exit(); }
 std::vector<SkeletonCallback *> &SkeletonUpdateHandle::Callbacks() {
     return mInst->mCallbacks;
 }
-CameraInput *SkeletonUpdateHandle::GetCameraInput() const { return mInst->mCameraInput; }
+CameraInput *SkeletonUpdateHandle::GetCameraInput() const {
+#ifdef HX_NATIVE
+    if (!mInst) return nullptr;
+#endif
+    return mInst->mCameraInput;
+}
 void SkeletonUpdateHandle::SetCameraInput(CameraInput *input) {
+#ifdef HX_NATIVE
+    if (!mInst) return;
+#endif
     mInst->SetCameraInput(input);
 }
 
 bool SkeletonUpdateHandle::HasCallback(SkeletonCallback *cb) {
+#ifdef HX_NATIVE
+    if (!mInst) return false;
+#endif
     return VectorFind(mInst->mCallbacks, cb);
 }
 
 void SkeletonUpdateHandle::AddCallback(SkeletonCallback *cb) {
+#ifdef HX_NATIVE
+    if (!mInst) return;
+#endif
     MILO_ASSERT(!HasCallback(cb), 0xA2);
     mInst->mCallbacks.push_back(cb);
 }
 
 void SkeletonUpdateHandle::RemoveCallback(SkeletonCallback *cb) {
+#ifdef HX_NATIVE
+    if (!mInst) return;
+#endif
     MILO_ASSERT(HasCallback(cb), 0xA8);
     mInst->mCallbacks.erase(
         std::find(mInst->mCallbacks.begin(), mInst->mCallbacks.end(), cb)
     );
 }
 
-void SkeletonUpdateHandle::PostUpdate() { mInst->PostUpdate(); }
+void SkeletonUpdateHandle::PostUpdate() {
+#ifdef HX_NATIVE
+    if (!mInst) return;
+#endif
+    mInst->PostUpdate();
+}
 
 #pragma endregion
 #pragma region SkeletonUpdate
@@ -116,7 +140,9 @@ bool SkeletonUpdate::PrevSkeleton(
 }
 
 SkeletonUpdateHandle SkeletonUpdate::InstanceHandle() {
+#ifndef HX_NATIVE
     MILO_ASSERT(sInstance, 0x146);
+#endif
     return sInstance;
 }
 

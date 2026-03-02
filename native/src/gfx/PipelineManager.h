@@ -40,12 +40,15 @@ struct PipelineKey {
     wgpu::TextureFormat targetFormat;
     bool alphaCut;
     bool alphaWrite;
+    bool alphaToCoverage = false;
+    int32_t depthBias = 0;  // positive = push away from camera (loses z-test vs unbiased)
 
     bool operator==(const PipelineKey& o) const {
         return shaderType == o.shaderType && blend == o.blend && zMode == o.zMode &&
                cull == o.cull && stencil == o.stencil && layout == o.layout &&
                targetFormat == o.targetFormat && alphaCut == o.alphaCut &&
-               alphaWrite == o.alphaWrite;
+               alphaWrite == o.alphaWrite && alphaToCoverage == o.alphaToCoverage &&
+               depthBias == o.depthBias;
     }
 };
 
@@ -59,6 +62,8 @@ struct PipelineKeyHash {
         h ^= std::hash<int>{}((int)k.layout) + 0x9e3779b9 + (h << 6) + (h >> 2);
         h ^= std::hash<int>{}((int)k.targetFormat) + 0x9e3779b9 + (h << 6) + (h >> 2);
         h ^= std::hash<bool>{}(k.alphaCut) + 0x9e3779b9 + (h << 6) + (h >> 2);
+        h ^= std::hash<bool>{}(k.alphaToCoverage) + 0x9e3779b9 + (h << 6) + (h >> 2);
+        h ^= std::hash<int32_t>{}(k.depthBias) + 0x9e3779b9 + (h << 6) + (h >> 2);
         return h;
     }
 };

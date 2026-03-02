@@ -13,6 +13,24 @@
 #include "utl/BinStream.h"
 #include "utl/Symbol.h"
 
+#ifdef HX_NATIVE
+#include <signal.h>
+#include <setjmp.h>
+#include <set>
+static sigjmp_buf sNewObjectJmpBuf;
+static volatile sig_atomic_t sNewObjectGuardActive = 0;
+static std::set<Symbol> sBrokenClasses;
+static void NewObjectSigHandler(int sig) {
+    if (sNewObjectGuardActive) {
+        sNewObjectGuardActive = 0;
+        siglongjmp(sNewObjectJmpBuf, 1);
+    }
+    // Not our guard — re-raise with default handler
+    signal(SIGSEGV, SIG_DFL);
+    raise(SIGSEGV);
+}
+#endif
+
 bool gLoadingProxyFromDisk = false;
 bool gMiloTool = false;
 std::map<Symbol, ObjectFunc *> Hmx::Object::sFactories;
@@ -165,36 +183,14 @@ INIT_REVS(2, 0)
 void Hmx::Object::LoadType(BinStream &bs) {
     LOAD_REVS(bs)
     ASSERT_REVS(2, 0)
-#ifdef HX_NATIVE
-    printf("    Object::LoadType '%s': rev=%d altRev=%d tell=%d\n",
-           Name(), d.rev, d.altRev, bs.Tell());
-    fflush(stdout);
-    if (d.rev > 2) {
-        // Garbage revision from desynced stream — skip Symbol read
-        // but still push rev so PopRev in LoadRest works
-        bs.PushRev(packRevs(d.altRev, d.rev), this);
-        return;
-    }
-#endif
     Symbol s;
     bs >> s;
-#ifdef HX_NATIVE
-    printf("    Object::LoadType '%s': type='%s' tell=%d\n",
-           Name(), s.Str(), bs.Tell());
-    fflush(stdout);
-#endif
     SetType(s);
     bs.PushRev(packRevs(d.altRev, d.rev), this);
 }
 
 void Hmx::Object::LoadRest(BinStream &bs) {
     BinStreamRev d(bs, bs.PopRev(this));
-#ifdef HX_NATIVE
-    // Detect stream desync: garbage revisions from desynced data
-    if (d.rev > 100 || d.altRev > 100) {
-        return;
-    }
-#endif
     if (!mTypeProps) {
         mTypeProps = new TypeProps(this);
     }
@@ -336,11 +332,17 @@ bool Hmx::Object::HasPropertySink(Hmx::Object *o, DataArray *a) {
 }
 
 void Hmx::Object::RemoveSink(Hmx::Object *o, Symbol s) {
+#ifdef HX_NATIVE
+    if (!this) return;
+#endif
     if (mSinks)
         mSinks->RemoveSink(o, s);
 }
 
 MsgSinks *Hmx::Object::GetOrAddSinks() {
+#ifdef HX_NATIVE
+    if (!this) return nullptr;
+#endif
     if (!mSinks) {
         mSinks = new MsgSinks(this);
     }
@@ -348,10 +350,16 @@ MsgSinks *Hmx::Object::GetOrAddSinks() {
 }
 
 void Hmx::Object::AddSink(Hmx::Object *o, Symbol s1, Symbol s2, SinkMode sm, bool b) {
+#ifdef HX_NATIVE
+    if (!this) return;
+#endif
     GetOrAddSinks()->AddSink(o, s1, s2, sm, b);
 }
 
 void Hmx::Object::AddPropertySink(Hmx::Object *o, DataArray *a, Symbol s) {
+#ifdef HX_NATIVE
+    if (!this) return;
+#endif
     GetOrAddSinks()->AddPropertySink(o, a, s);
 }
 
@@ -432,7 +440,12 @@ const DataNode *Hmx::Object::Property(DataArray *prop, bool fail) const {
         }
     }
     if (fail) {
+#ifdef HX_NATIVE
+        // Property not found is expected on debug builds — Xbox 360 shows dialog + Continue
+        MILO_WARN("%s: property %s not found", PathName(this), PrintPropertyPath(prop));
+#else
         MILO_FAIL("%s: property %s not found", PathName(this), PrintPropertyPath(prop));
+#endif
     }
     return nullptr;
 }
@@ -449,9 +462,15 @@ DataNode Hmx::Object::HandleProperty(DataArray *prop, DataArray *a2, bool fail) 
         return n;
     }
     if (fail) {
+#ifdef HX_NATIVE
+        MILO_WARN(
+            "%s: property %s not found", PathName(this), prop ? prop->Sym(0) : "<none>"
+        );
+#else
         MILO_FAIL(
             "%s: property %s not found", PathName(this), prop ? prop->Sym(0) : "<none>"
         );
+#endif
     }
     return 0;
 }
@@ -487,7 +506,12 @@ int Hmx::Object::PropertySize(DataArray *prop) {
         if (mTypeDef) {
             a = &mTypeDef->FindArray(name)->Evaluate(1);
         } else {
+#ifdef HX_NATIVE
+            MILO_WARN("%s: property %s not found", PathName(this), name);
+            return 0;
+#else
             MILO_FAIL("%s: property %s not found", PathName(this), name);
+#endif
         }
     }
     MILO_ASSERT(a->Type() == kDataArray, 0x21B);
@@ -581,7 +605,42 @@ void Hmx::Object::InsertProperty(DataArray *prop, const DataNode &val) {
 Hmx::Object *Hmx::Object::NewObject(Symbol name) {
     std::map<Symbol, ObjectFunc *>::iterator it = sFactories.find(name);
     MILO_ASSERT_FMT(it != sFactories.end(), "Unknown class %s", name);
+#ifdef HX_NATIVE
+    if (it == sFactories.end()) {
+        printf("NewObject: unknown class '%s', returning nullptr\n", name.Str());
+        return nullptr;
+    }
+    // Skip types known to have broken vtables (from previous construction crash)
+    if (sBrokenClasses.count(name)) {
+        return nullptr;
+    }
+    // Guard against SIGSEGV from broken vtables/VTTs (weak zero-filled symbols)
+    struct sigaction sa, old_sa;
+    sa.sa_handler = NewObjectSigHandler;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = SA_NODEFER;
+    sigaction(SIGSEGV, &sa, &old_sa);
+    sNewObjectGuardActive = 1;
+    Hmx::Object *obj = nullptr;
+    if (sigsetjmp(sNewObjectJmpBuf, 1) == 0) {
+        obj = (it->second)();
+        if (obj) {
+            // Verify vtable is valid by calling a virtual method.
+            // Weak stub constructors don't set up the vtable, so this
+            // will SIGSEGV if the constructor was a no-op stub.
+            (void)obj->ClassName();
+        }
+    } else {
+        printf("NewObject: '%s' crashed (broken vtable from weak stub), blacklisting\n", name.Str());
+        sBrokenClasses.insert(name);
+        obj = nullptr;
+    }
+    sNewObjectGuardActive = 0;
+    sigaction(SIGSEGV, &old_sa, nullptr);
+    return obj;
+#else
     return (it->second)();
+#endif
 }
 
 bool Hmx::Object::RegisteredFactory(Symbol name) {

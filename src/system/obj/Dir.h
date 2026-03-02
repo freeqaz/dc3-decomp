@@ -414,6 +414,21 @@ class ObjDirItr {
 private:
     void Advance() {
         for (; mEntry != nullptr; mEntry = mSubDirs.front()->HashTable().Next(mEntry)) {
+#ifdef HX_NATIVE
+            if (!mEntry->obj) {
+                continue;
+            }
+            extern const char* g_lastDyncastEntry;
+            extern void* g_lastDyncastObj;
+            g_lastDyncastEntry = mEntry->name;
+            g_lastDyncastObj = (void*)mEntry->obj;
+            // Guard against objects with null/corrupt vtables (e.g. stub objects
+            // that haven't been fully loaded yet). dynamic_cast on these segfaults.
+            void **vptr = *(void ***)mEntry->obj;
+            if (!vptr) {
+                continue;
+            }
+#endif
             mObj = dynamic_cast<T *>(mEntry->obj);
             if (mObj)
                 return;

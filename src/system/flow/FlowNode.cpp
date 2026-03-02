@@ -3,6 +3,7 @@
 #include "flow/FlowLabel.h"
 #include "obj/Data.h"
 #include "obj/Dir.h"
+#include "obj/DirLoader.h"
 #include "obj/Object.h"
 #include "obj/Utl.h"
 #include "os/Debug.h"
@@ -106,14 +107,8 @@ void FlowNode::Load(BinStream &bs) {
     if (!dynamic_cast<Flow *>(this)) {
         Hmx::Object::Load(d.stream);
     }
-#ifdef HX_NATIVE
-    printf("    FlowNode::Load '%s': after Object::Load tell=%d\n", Name(), bs.Tell());
-#endif
 
     mChildNodes.Load(d.stream, true, nullptr);
-#ifdef HX_NATIVE
-    printf("    FlowNode::Load '%s': after mChildNodes tell=%d\n", Name(), bs.Tell());
-#endif
 
     // Call SetParent on each loaded child node
     FOREACH (it, mChildNodes) {
@@ -123,10 +118,9 @@ void FlowNode::Load(BinStream &bs) {
     int numEntries;
     d >> numEntries;
 #ifdef HX_NATIVE
-    printf("    FlowNode::Load '%s': numEntries=%d tell=%d\n", Name(), numEntries, bs.Tell());
     if (numEntries < 0 || numEntries > 256) {
-        printf("    FlowNode::Load '%s': CLAMPING numEntries from %d to 0\n", Name(), numEntries);
-        numEntries = 0;
+        fprintf(stderr, "FlowNode::Load ABORT: bad numEntries=%d for %s '%s'\n", numEntries, ClassName(), Name());
+        abort();
     }
 #endif
     mDrivenPropEntries.clear();
@@ -144,13 +138,7 @@ void FlowNode::Load(BinStream &bs) {
     }
     if (d.rev > 1) {
         String debugComment;
-#ifdef HX_NATIVE
-        printf("    FlowNode::Load '%s': before debugComment tell=%d\n", Name(), bs.Tell());
-#endif
         d.stream >> debugComment;
-#ifdef HX_NATIVE
-        printf("    FlowNode::Load '%s': after debugComment='%s' tell=%d\n", Name(), debugComment.c_str(), bs.Tell());
-#endif
         mDebugComment = debugComment;
     }
 }
@@ -377,4 +365,53 @@ void FlowNode::ActivateLabel(FlowLabel *label) {
     if (!label->Activate(this)) {
         mRunningNodes.remove(label);
     }
+}
+
+Hmx::Object *FlowNode::LoadObjectFromMainOrDir(BinStream &bs, ObjectDir *dir) {
+    Symbol sym;
+    bs >> sym;
+    if (sym == "")
+        return nullptr;
+
+    // Try main dir first
+    Hmx::Object *obj = ObjectDir::Main()->FindObject(sym.Str(), false, true);
+    if (obj)
+        return obj;
+
+    // Try the passed dir
+    if (dir) {
+        obj = dir->FindObject(sym.Str(), false, true);
+        if (obj)
+            return obj;
+
+        // Walk up the dir hierarchy via Loader chain
+        DirLoader *loader = dir->Loader();
+        ObjectDir *parentDir = nullptr;
+        if (loader) {
+            parentDir = loader->GetDir();
+        } else {
+            parentDir = dir->Dir();
+        }
+        if (parentDir && parentDir != dir) {
+            obj = parentDir->FindObject(sym.Str(), false, true);
+            if (obj)
+                return obj;
+
+            // One more level up
+            DirLoader *parentLoader = parentDir->Loader();
+            ObjectDir *grandparentDir = nullptr;
+            if (parentLoader) {
+                grandparentDir = parentLoader->GetDir();
+            } else {
+                grandparentDir = parentDir->Dir();
+            }
+            if (grandparentDir && grandparentDir != parentDir) {
+                obj = grandparentDir->FindObject(sym.Str(), false, true);
+                if (obj)
+                    return obj;
+            }
+        }
+    }
+
+    return nullptr;
 }

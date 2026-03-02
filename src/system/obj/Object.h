@@ -106,7 +106,12 @@ public:
             ObjRef *n = next;
             n->Replace(obj);
             if (n == next) {
+#ifdef HX_NATIVE
+                // Broken vtable can't advance the list — force unlink to prevent infinite loop
+                next = n->next;
+#else
                 MILO_FAIL("ReplaceList stuck in infinite loop");
+#endif
             }
         }
     }
@@ -895,6 +900,22 @@ extern DataArray *SystemConfig(Symbol, Symbol, Symbol);
     bs >> revs;                                                                          \
     BinStreamRev d(bs, revs);
 
+#ifdef HX_NATIVE
+#define ASSERT_REVS(rev1, rev2)                                                          \
+    if (d.rev > rev1 || d.altRev > rev2) {                                               \
+        fprintf(                                                                         \
+            stderr,                                                                      \
+            "ASSERT_REVS FAILED: %s '%s' version %d > %d (or alt %d > %d)\n",            \
+            ClassName(),                                                                 \
+            Name(),                                                                      \
+            d.rev,                                                                       \
+            rev1,                                                                        \
+            d.altRev,                                                                    \
+            rev2                                                                         \
+        );                                                                               \
+        abort();                                                                         \
+    }
+#else
 #define ASSERT_REVS(rev1, rev2)                                                          \
     if (d.rev > rev1) {                                                                  \
         MILO_FAIL(                                                                       \
@@ -914,6 +935,7 @@ extern DataArray *SystemConfig(Symbol, Symbol, Symbol);
             gAltRev                                                                      \
         );                                                                               \
     }
+#endif
 
 #define LOAD_SUPERCLASS(parent) parent::Load(d.stream);
 
@@ -1328,9 +1350,8 @@ BinStream &operator>>(BinStreamRev &bs, ObjVector<T> &vec) {
     bs >> length;
 #ifdef HX_NATIVE
     if (length > 0x10000) {
-        printf("ObjVector<T>::operator>>: SUSPICIOUS length=%u (0x%x), capping to 0\n", length, length);
-        fflush(stdout);
-        length = 0;
+        fprintf(stderr, "ObjVector: CORRUPT length=%u (0x%x) at stream pos=%d\n", length, length, bs.stream.Tell());
+        abort();
     }
 #endif
     vec.resize(length);

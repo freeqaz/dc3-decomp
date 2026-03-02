@@ -71,23 +71,14 @@ void ArkHash::Read(BinStream &bs, int len) {
 
     int heapSize;
     bs >> heapSize;
-#ifdef HX_NATIVE
-    printf("DC3 Native: ArkHash::Read heapSize=%d len=%d tell=%d fail=%d\n", heapSize, len, bs.Tell(), bs.Fail());
-#endif
     mHeap = (char *)MemAlloc(heapSize + len, __FILE__, 0x112, "ArkHash");
     mFree = mHeap + heapSize;
     mHeapEnd = mHeap + (heapSize + len);
 
     bs.Read(mHeap, heapSize);
     memset(mFree, 0, mHeapEnd - mFree);
-#ifdef HX_NATIVE
-    printf("DC3 Native: ArkHash::Read after heap read, tell=%d fail=%d\n", bs.Tell(), bs.Fail());
-#endif
 
     bs >> mTableSize;
-#ifdef HX_NATIVE
-    printf("DC3 Native: ArkHash::Read mTableSize=%d tell=%d fail=%d\n", mTableSize, bs.Tell(), bs.Fail());
-#endif
     mTable = (char **)MemAlloc(mTableSize * sizeof(char *), __FILE__, 0x11A, "ArkHash");
     char **pEnd = mTable + mTableSize;
     char **p = mTable;
@@ -100,9 +91,6 @@ void ArkHash::Read(BinStream &bs, int len) {
             *p++ = nullptr;
         }
     }
-#ifdef HX_NATIVE
-    printf("DC3 Native: ArkHash::Read done, tell=%d fail=%d\n", bs.Tell(), bs.Fail());
-#endif
 }
 
 #pragma endregion
@@ -246,14 +234,8 @@ bool Archive::GetFileInfo(
     if (file && *file) {
         String name(FileGetName(file));
         String path(FileGetPath(file));
-#ifdef HX_NATIVE
-        printf("DC3 Native: GetFileInfo('%s') name='%s' path='%s'\n", file, name.c_str(), path.c_str());
-#endif
         int nameValue = mHashTable.GetHashValue(name.c_str());
         int pathValue = mHashTable.GetHashValue(path.c_str());
-#ifdef HX_NATIVE
-        printf("DC3 Native: GetFileInfo hash: nameValue=%d pathValue=%d\n", nameValue, pathValue);
-#endif
         if (nameValue != -1 && pathValue != -1) {
             FileEntry entry;
             entry.mHashedName = nameValue;
@@ -289,40 +271,21 @@ void Archive::Read(int heap_headroom) {
     MILO_LOG("Reading the archive\n");
     FileStream arkhdr(MakeString("%s.hdr", mBasename), FileStream::kReadNoArk, true);
     MILO_ASSERT(!arkhdr.Fail(), 0x265);
-#ifdef HX_NATIVE
-    printf("DC3 Native: Archive hdr opened, fail=%d, size=%d\n", arkhdr.Fail(), arkhdr.Size());
-#endif
     arkhdr.EnableReadEncryption();
     int version;
     arkhdr >> version;
-#ifdef HX_NATIVE
-    printf("DC3 Native: Archive version=%d (0x%08x)\n", version, version);
-#endif
     if (version != 6) {
         MILO_FAIL(" ERROR: %s  unsupported archive version %d", mBasename, version);
     } else {
         arkhdr >> mGuid;
         arkhdr >> mNumArkfiles;
-#ifdef HX_NATIVE
-        printf("DC3 Native: Archive numArkfiles=%d tell=%d\n", mNumArkfiles, arkhdr.Tell());
-#endif
         arkhdr >> mArkfileSizes;
-#ifdef HX_NATIVE
-        printf("DC3 Native: Archive arkfileSizes count=%d tell=%d\n", (int)mArkfileSizes.size(), arkhdr.Tell());
-        for (int i = 0; i < (int)mArkfileSizes.size(); i++)
-            printf("  ark[%d] size=%llu\n", i, mArkfileSizes[i]);
-#endif
         if (version == 3) {
             for (int i = 0; i < mArkfileSizes.size(); i++) {
                 mArkfileNames.push_back(MakeString("%s_%d.ark", mBasename, i));
             }
         } else
             arkhdr >> mArkfileNames;
-#ifdef HX_NATIVE
-        printf("DC3 Native: Archive arkfileNames count=%d tell=%d\n", (int)mArkfileNames.size(), arkhdr.Tell());
-        for (int i = 0; i < (int)mArkfileNames.size(); i++)
-            printf("  ark[%d] name='%s'\n", i, mArkfileNames[i].c_str());
-#endif
 
         if (version > 5)
             arkhdr >> mArkfileCachePriority;
@@ -331,39 +294,10 @@ void Archive::Read(int heap_headroom) {
                 mArkfileCachePriority.push_back(-1);
             }
         }
-#ifdef HX_NATIVE
-        printf("DC3 Native: Archive cachePriority count=%d tell=%d\n", (int)mArkfileCachePriority.size(), arkhdr.Tell());
-#endif
 
         mHashTable.Read(arkhdr, heap_headroom);
-#ifdef HX_NATIVE
-        printf("DC3 Native: Archive hashTable read, tableSize=%d tell=%d\n", mHashTable.mTableSize, arkhdr.Tell());
-        // Dump some hash table entries to verify they're valid strings
-        int showHash = 0;
-        for (int i = 0; i < mHashTable.mTableSize && showHash < 15; i++) {
-            if (mHashTable.mTable[i]) {
-                printf("DC3 Native:   hash[%d] = '%s'\n", i, mHashTable.mTable[i]);
-                showHash++;
-            }
-        }
-        // Try reading the file entries count directly to debug
-        printf("DC3 Native: About to read mFileEntries, tell=%d, stream fail=%d\n", arkhdr.Tell(), arkhdr.Fail());
-#endif
         arkhdr >> mFileEntries;
-#ifdef HX_NATIVE
-        printf("DC3 Native: After mFileEntries read, count=%d, tell=%d\n", (int)mFileEntries.size(), arkhdr.Tell());
-#endif
         arkhdr.DisableEncryption();
-#ifdef HX_NATIVE
-        printf("DC3 Native: Archive has %d file entries\n", (int)mFileEntries.size());
-        int show = mFileEntries.size() < 10 ? mFileEntries.size() : 10;
-        for (int i = 0; i < show; i++) {
-            const char *n = mHashTable[mFileEntries[i].HashedName()];
-            const char *p = mHashTable[mFileEntries[i].HashedPath()];
-            printf("DC3 Native:   [%d] name='%s' path='%s' size=%d\n",
-                   i, n ? n : "(null)", p ? p : "(null)", mFileEntries[i].mSize);
-        }
-#endif
     }
 }
 

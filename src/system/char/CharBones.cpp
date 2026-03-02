@@ -93,6 +93,17 @@ int CharBones::TypeSize(int i) const {
 }
 
 void CharBones::RecomputeSizes() {
+#ifdef HX_NATIVE
+    // The original code uses offset[-7] to reach mCounts from mOffsets via
+    // pointer arithmetic. On LP64, padding between mCounts and mOffsets may
+    // break this assumption. Use direct member access instead.
+    mOffsets[0] = 0;
+    for (int i = 0; i < TYPE_END; i++) {
+        int count_diff = mCounts[i + 1] - mCounts[i];
+        mOffsets[i + 1] = mOffsets[i] + TypeSize(i) * count_diff;
+    }
+    mTotalSize = (mOffsets[TYPE_END] + 0xFU) & 0xFFFFFFF0;
+#else
     int i = 0;
     int *offset = &mOffsets[0];
     *offset = 0;
@@ -106,6 +117,7 @@ void CharBones::RecomputeSizes() {
     } while (i < NUM_TYPES);
     // Round up to nearest 0x10 for alignment
     mTotalSize = mOffsets[TYPE_END] + 0xFU & 0xFFFFFFF0;
+#endif
 }
 
 void CharBones::SetCompression(CompressionType ty) {
@@ -342,7 +354,7 @@ const char *CharBones::StringVal(Symbol s) {
 
 void CharBones::ScaleAddIdentity() {
     Hmx::Quat *qend = (Hmx::Quat *)(mStart + mOffsets[TYPE_ROTX]);
-    Bone *bone = &mBones[mCounts[TYPE_QUAT]];
+    Bone *bone = mBones.data() + mCounts[TYPE_QUAT];
     Hmx::Quat *qstart = (Hmx::Quat *)(mStart + mOffsets[TYPE_QUAT]);
     if (qstart == qend) return;
     do {
@@ -395,7 +407,7 @@ void CharBones::ScaleDown(CharBones &dst, float f) const {
             Hmx::Quat *qdata = (Hmx::Quat *)(dst.mStart + dst.mOffsets[TYPE_QUAT]);
             Bone *db = db_begin + dst.mCounts[TYPE_QUAT];
             Bone *db_end = db_begin + dst.mCounts[TYPE_ROTX];
-            const Bone *src_end = &mBones[mCounts[TYPE_ROTX]];
+            const Bone *src_end = mBones.data() + mCounts[TYPE_ROTX];
             while (true) {
                 while (db->name != src->name) {
                     db++;
@@ -420,7 +432,7 @@ void CharBones::ScaleDown(CharBones &dst, float f) const {
             float *fdata = (float *)(dst.mStart + dst.mOffsets[TYPE_ROTX]);
             Bone *db = db_begin + dst.mCounts[TYPE_ROTX];
             Bone *db_end = db_begin + dst.mCounts[TYPE_END];
-            const Bone *src_end = &mBones[mCounts[TYPE_END]];
+            const Bone *src_end = mBones.data() + mCounts[TYPE_END];
             while (true) {
                 while (db->name != src->name) {
                     db++;
@@ -465,7 +477,7 @@ void CharBones::ScaleDown(CharBones &dst, float f) const {
             Hmx::Quat *qdata = (Hmx::Quat *)(dst.mStart + dst.mOffsets[TYPE_QUAT]);
             Bone *db = db_begin + dst.mCounts[TYPE_QUAT];
             Bone *db_end = db_begin + dst.mCounts[TYPE_ROTX];
-            const Bone *src_end = &mBones[mCounts[TYPE_ROTX]];
+            const Bone *src_end = mBones.data() + mCounts[TYPE_ROTX];
             while (true) {
                 while (db->name != src->name) {
                     db++;
@@ -489,7 +501,7 @@ void CharBones::ScaleDown(CharBones &dst, float f) const {
             float *fdata = (float *)(dst.mStart + dst.mOffsets[TYPE_ROTX]);
             Bone *db = db_begin + dst.mCounts[TYPE_ROTX];
             Bone *db_end = db_begin + dst.mCounts[TYPE_END];
-            const Bone *src_end = &mBones[mCounts[TYPE_END]];
+            const Bone *src_end = mBones.data() + mCounts[TYPE_END];
             while (true) {
                 while (db->name != src->name) {
                     db++;
@@ -550,7 +562,7 @@ blend_quat:
         Bone *db_end = dst.mBones.begin() + dst.mCounts[TYPE_ROTX];
         Hmx::Quat *dquat = (Hmx::Quat *)(dst.mStart + dst.mOffsets[TYPE_QUAT]);
         Hmx::Quat *squat = (Hmx::Quat *)(mStart + mOffsets[TYPE_QUAT]);
-        const Bone *src_end = &mBones[mCounts[TYPE_ROTX]];
+        const Bone *src_end = mBones.data() + mCounts[TYPE_ROTX];
         while (true) {
             while (db->name != src->name) {
                 db++;
@@ -592,7 +604,7 @@ blend_rot:
         Bone *db_end = dst.mBones.begin() + dst.mCounts[TYPE_END];
         float *dfdata = (float *)(dst.mStart + dst.mOffsets[TYPE_ROTX]);
         float *sfdata = (float *)(mStart + mOffsets[TYPE_ROTX]);
-        const Bone *src_end = &mBones[mCounts[TYPE_END]];
+        const Bone *src_end = mBones.data() + mCounts[TYPE_END];
         while (true) {
             while (db->name != src->name) {
                 db++;
@@ -672,7 +684,7 @@ void CharBones::ScaleAdd(CharBones &dst, float f) const {
 add_quat:
     if (mCounts[TYPE_ROTX] > mCounts[TYPE_QUAT]) {
         Bone *db_end = dst.mBones.begin() + dst.mCounts[TYPE_ROTX];
-        const Bone *src_end = &mBones[mCounts[TYPE_ROTX]];
+        const Bone *src_end = mBones.data() + mCounts[TYPE_ROTX];
         Bone *db = dst.mBones.begin() + dst.mCounts[TYPE_QUAT];
         Hmx::Quat *dquat = (Hmx::Quat *)(dst.mStart + dst.mOffsets[TYPE_QUAT]);
         float abs_f = fabs(f);
@@ -790,7 +802,7 @@ add_rot:
         Bone *db_end = dst.mBones.begin() + dst.mCounts[TYPE_END];
         float *dfdata = (float *)(dst.mStart + dst.mOffsets[TYPE_ROTX]);
         Bone *db = dst.mBones.begin() + dst.mCounts[TYPE_ROTX];
-        const Bone *src_end = &mBones[mCounts[TYPE_END]];
+        const Bone *src_end = mBones.data() + mCounts[TYPE_END];
         float *sfdata = (float *)(mStart + mOffsets[TYPE_ROTX]);
         if (mCompression != kCompressNone) {
             while (true) {
@@ -889,7 +901,7 @@ rotate_quat:
         Bone *db = dst.mBones.begin() + dst.mCounts[TYPE_QUAT];
         Hmx::Quat *dquat = (Hmx::Quat *)(dst.mStart + dst.mOffsets[TYPE_QUAT]);
         int src_quat_off = mOffsets[TYPE_QUAT];
-        const Bone *src_end = &mBones[mCounts[TYPE_ROTX]];
+        const Bone *src_end = mBones.data() + mCounts[TYPE_ROTX];
         if (mCompression >= kCompressQuats) {
             char *sqdata = (char *)(src_quat_off + mStart);
             while (true) {
@@ -973,7 +985,7 @@ rotate_quat:
 rotate_rot:
     if (mCounts[TYPE_END] > mCounts[TYPE_ROTX]) {
         Bone *db_end = dst.mBones.begin() + dst.mCounts[TYPE_END];
-        const Bone *src_end = &mBones[mCounts[TYPE_END]];
+        const Bone *src_end = mBones.data() + mCounts[TYPE_END];
         Bone *db = dst.mBones.begin() + dst.mCounts[TYPE_ROTX];
         float *dfdata = (float *)(dst.mStart + dst.mOffsets[TYPE_ROTX]);
         float *sfdata = (float *)(mStart + mOffsets[TYPE_ROTX]);
@@ -1073,7 +1085,7 @@ rotateto_quat:
         Bone *db = dst.mBones.begin() + dst.mCounts[TYPE_QUAT];
         Hmx::Quat *dquat = (Hmx::Quat *)(dst.mStart + dst.mOffsets[TYPE_QUAT]);
         int src_quat_off = mOffsets[TYPE_QUAT];
-        const Bone *src_end = &mBones[mCounts[TYPE_ROTX]];
+        const Bone *src_end = mBones.data() + mCounts[TYPE_ROTX];
         if (mCompression >= kCompressQuats) {
             char *sqdata = (char *)(src_quat_off + mStart);
             while (true) {
@@ -1177,7 +1189,7 @@ rotateto_quat:
 rotateto_rot:
     if (mCounts[TYPE_END] > mCounts[TYPE_ROTX]) {
         Bone *db_end = dst.mBones.begin() + dst.mCounts[TYPE_END];
-        const Bone *src_end = &mBones[mCounts[TYPE_END]];
+        const Bone *src_end = mBones.data() + mCounts[TYPE_END];
         Bone *db = dst.mBones.begin() + dst.mCounts[TYPE_ROTX];
         float *dfdata = (float *)(dst.mStart + dst.mOffsets[TYPE_ROTX]);
         float *sfdata = (float *)(mStart + mOffsets[TYPE_ROTX]);

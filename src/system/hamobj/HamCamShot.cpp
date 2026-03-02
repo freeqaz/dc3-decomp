@@ -34,7 +34,9 @@ BEGIN_LOADS(HamCamShot)
     mNextShots.Load(bs, 1, nullptr, true);
     mOriginalSizeNextShots = mNextShots.size();
     if (d.rev > 1) {
-        d >> (BinStreamEnum<HamPlayerFlags> &)mPlayerFlag;
+        int temp;
+        bs.ReadEndian(&temp, 4);
+        mPlayerFlag = (HamPlayerFlags)temp;
     }
     if (d.rev > 2) {
         mMasterAnims.Load(bs, 1, nullptr, true);
@@ -262,6 +264,41 @@ BinStream &operator<<(BinStream &bs, const HamCamShot::Target &t) {
 }
 
 BinStream &operator>>(BinStreamRev &d, HamCamShot::Target &t) {
+#ifdef HX_NATIVE
+    // Ghidra confirms bools are serialized individually interleaved with data,
+    // not packed into a single uint as the Save operator<< suggests.
+    d >> t.mTarget;
+
+    unsigned char teleport;
+    d.stream.Read(&teleport, 1);
+    t.mTeleport = (teleport != 0);
+
+    d >> t.mTo;
+    d >> t.mAnimGroup;
+
+    unsigned char ret;
+    d.stream.Read(&ret, 1);
+    t.mReturn = (ret != 0);
+
+    d >> t.mFastForward;
+    d >> t.mForwardEvent;
+
+    unsigned char selfShadow, p4, p3;
+    d.stream.Read(&selfShadow, 1);
+    t.mSelfShadow = (selfShadow != 0);
+    d.stream.Read(&p4, 1);
+    t.unk68p4 = (p4 != 0);
+    d.stream.Read(&p3, 1);
+    t.unk68p3 = (p3 != 0);
+
+    d >> t.mEnvOverride;
+
+    unsigned char forceLOD;
+    d.stream.Read(&forceLOD, 1);
+    t.mForceLOD = forceLOD;
+
+    return d.stream;
+#else
     d >> t.mTarget;
     d >> t.mTo;
     d >> t.mAnimGroup;
@@ -277,6 +314,7 @@ BinStream &operator>>(BinStreamRev &d, HamCamShot::Target &t) {
     t.unk68p3 = (bits >> 7) & 1;
     d >> t.mEnvOverride;
     return d.stream;
+#endif
 }
 
 BEGIN_SAVES(HamCamShot)

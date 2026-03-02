@@ -127,6 +127,12 @@ void BinStream::EnableWriteEncryption() {
 
 int BinStream::PopRev(Hmx::Object *o) {
     MILO_ASSERT(mRevStack, 0x34);
+#ifdef HX_NATIVE
+    if (mRevStack->empty()) {
+        fprintf(stderr, "PopRev ABORT: empty stack for %s '%s' (stream=%p)\n", o->ClassName(), o->Name(), (void*)this);
+        abort();
+    }
+#endif
     ObjVersion *back = &mRevStack->back();
     while (back->obj == nullptr) {
         MILO_NOTIFY("hey object got deleted!");
@@ -193,21 +199,12 @@ void BinStream::ReadEndian(void *out, int size) {
 
 void BinStream::ReadString(char *c, int i) {
     unsigned int a;
-#ifdef HX_NATIVE
-    int preTell = Tell();
-#endif
     *this >> a;
-#ifdef HX_NATIVE
-    if (a > 256) {
-        printf("BinStream::ReadString: SUSPICIOUS length=%u (0x%x) preTell=%d tell=%d\n", a, a, preTell, Tell());
-        fflush(stdout);
-    }
-#endif
     if (a >= i) {
         MILO_FAIL("String chars %d > %d", a + 1, i);
 #ifdef HX_NATIVE
-        // On native, MILO_FAIL doesn't halt — prevent buffer overflow
-        a = i - 1;
+        fprintf(stderr, "BinStream::ReadString ABORT: len=%u > buf=%d at stream pos=%d\n", a, i, Tell());
+        abort();
 #endif
     }
     Read(c, a);
@@ -225,7 +222,8 @@ BinStream &BinStream::operator>>(String &str) {
     *this >> siz;
 #ifdef HX_NATIVE
     if (siz > 10000 || siz < 0) {
-        siz = 0;
+        fprintf(stderr, "BinStream::operator>>(String) ABORT: bad size=%d at stream pos=%d\n", siz, Tell());
+        abort();
     }
 #endif
     str.resize(siz);
@@ -237,9 +235,6 @@ void BinStream::EnableReadEncryption() {
     MILO_ASSERT(!mCrypto, 0xC0);
     int i;
     *this >> i;
-#ifdef HX_NATIVE
-    printf("DC3 Native: Encryption seed=0x%08x (%d)\n", (unsigned)i, i);
-#endif
     mCrypto = new Rand2(i);
 }
 

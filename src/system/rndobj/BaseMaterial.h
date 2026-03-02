@@ -147,6 +147,7 @@ public:
     Transform &TexXfm() { return mTexXfm; }
     TexGen GetTexGen() const { return mTexGen; }
     const Hmx::Color &GetColor() const { return mColor; }
+    Hmx::Color &GetColor() { return mColor; }
     float Alpha() const { return mColor.alpha; }
     bool UseEnviron() const { return mUseEnviron; }
     bool PointLights() const { return mPointLights; }
@@ -163,9 +164,21 @@ public:
     TexWrap GetTexWrap() const { return mTexWrap; }
     const Hmx::Color& GetSpecularRGB() const { return mSpecularRGB; }
     const Hmx::Color& GetRimRGB() const { return mRimRGB; }
+    bool GetRimLightUnder() const { return mRimLightUnder; }
     float GetEmissiveMultiplier() const { return mEmissiveMultiplier; }
     bool GetIntensify() const { return mIntensify; }
     RndTex* GetEmissiveMap() const { return mEmissiveMap; }
+    ShaderVariation GetShaderVariation() const { return mShaderVariation; }
+    const Hmx::Color& GetSpecular2RGB() const { return mSpecular2RGB; }
+    RndTex* GetSpecularMap() const { return mSpecularMap; }
+    RndTex* GetRimMap() const { return mRimMap; }
+    float GetDeNormal() const { return mDeNormal; }
+    float GetAnisotropy() const { return mAnisotropy; }
+    bool GetFog() const { return mFog; }
+    bool GetUseEnviron() const { return mUseEnviron; }
+    RndCubeTex* GetEnvironMap() const { return mEnvironMap; }
+    bool GetEnvironMapFalloff() const { return mEnvironMapFalloff; }
+    bool GetEnvironMapSpecMask() const { return mEnvironMapSpecMask; }
 #endif
 
 protected:

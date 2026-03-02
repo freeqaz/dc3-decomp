@@ -128,6 +128,23 @@ UIComponent *UIManager::FocusComponent() {
 
 void UIManager::GotoFirstScreen() {
     UIScreen *screen = DataVariable("first_screen").Obj<UIScreen>();
+#ifdef HX_NATIVE
+    // MILO_FIRST_SCREEN overrides first_screen to skip attract/tutorial flow
+    const char *overrideScreen = getenv("MILO_FIRST_SCREEN");
+    if (overrideScreen && overrideScreen[0]) {
+        UIScreen *override = ObjectDir::Main()->Find<UIScreen>(overrideScreen, false);
+        if (override) {
+            printf("DC3 UI: GotoFirstScreen -> '%s' (MILO_FIRST_SCREEN override, was '%s')\n",
+                   overrideScreen, screen ? screen->Name() : "<null>");
+            screen = override;
+        } else {
+            printf("DC3 UI: MILO_FIRST_SCREEN='%s' not found, using default '%s'\n",
+                   overrideScreen, screen ? screen->Name() : "<null>");
+        }
+    } else {
+        printf("DC3 UI: GotoFirstScreen -> '%s'\n", screen ? screen->Name() : "<null>");
+    }
+#endif
     GotoScreen(screen, false, false);
     mTimer.Restart();
 }
@@ -341,6 +358,9 @@ void UIManager::GotoScreenImpl(UIScreen *scr, bool b1, bool b2) {
         const char *curName = mCurrentScreen ? mCurrentScreen->Name() : "<none>";
         const char *newName = scr ? scr->Name() : "<none>";
         TheDebug << MakeString("transition from %s to %s\n", curName, newName);
+#ifdef HX_NATIVE
+        printf("DC3 UI: Transition '%s' -> '%s' (wentBack=%d)\n", curName, newName, (int)b2);
+#endif
 
         // Store transition state and notify listeners
         mWentBack = b2;
@@ -399,10 +419,37 @@ DataNode UIManager::OnIsResource(DataArray *arr) {
 }
 
 DataNode UIManager::OnGotoScreen(DataArray const *arr) {
+#ifdef HX_NATIVE
+    // Log the goto_screen DTA call for debugging screen flow
+    {
+        const DataNode &node = arr->Evaluate(2);
+        const char *curScr = mCurrentScreen ? mCurrentScreen->Name() : "<none>";
+        if (node.Type() == kDataObject) {
+            Hmx::Object *o = node.GetObj(nullptr);
+            printf("DC3 UI: goto_screen from '%s' -> obj='%s'\n", curScr, o ? o->Name() : "<null>");
+        } else if (node.Type() == kDataSymbol || node.Type() == kDataString) {
+            printf("DC3 UI: goto_screen from '%s' -> sym='%s'\n", curScr, node.Sym().Str());
+        } else {
+            printf("DC3 UI: goto_screen from '%s' -> type=%d\n", curScr, (int)node.Type());
+        }
+    }
+#endif
     Hmx::Object *obj = arr->GetObj(2);
     UIScreen *screen = dynamic_cast<UIScreen *>(obj);
     if (screen == nullptr && obj)
         MILO_FAIL("%s is not a screen", obj->Name());
+
+#ifdef HX_NATIVE
+    // If DTA resolves to null screen (e.g., tutorial exit with missing state),
+    // try falling back to main_screen to avoid dead-end
+    if (screen == nullptr && !obj) {
+        UIScreen *fallback = ObjectDir::Main()->Find<UIScreen>("main_screen", false);
+        if (fallback) {
+            printf("DC3 UI: goto_screen resolved to null, falling back to 'main_screen'\n");
+            screen = fallback;
+        }
+    }
+#endif
 
     if (arr->Size() > 4) {
         GotoScreen(screen, arr->Int(3), arr->Int(4));
@@ -458,8 +505,35 @@ void UIManager::Poll() {
     if (mCurrentScreen)
         mCurrentScreen->Poll();
     if (mTransitionState == kTransitionTo) {
+#ifdef HX_NATIVE
+        {
+            static const char *sLastTrans = nullptr;
+            static int sTransCount = 0;
+            const char *curTrans = mTransitionScreen ? mTransitionScreen->Name() : "<null>";
+            if (curTrans != sLastTrans) {
+                sLastTrans = curTrans;
+                sTransCount = 0;
+            }
+            if (sTransCount < 3 || sTransCount % 500 == 0) {
+                bool loaded = !mTransitionScreen || mTransitionScreen->CheckIsLoaded();
+                bool exited = !mCurrentScreen || !mCurrentScreen->Exiting();
+                bool blocked = IsBlockingTransition();
+                printf("DC3 UI: TransitionTo check: loaded=%d exited=%d blocked=%d "
+                       "trans='%s' cur='%s'\n",
+                       loaded, exited, (int)blocked,
+                       curTrans,
+                       mCurrentScreen ? mCurrentScreen->Name() : "<null>");
+            }
+            sTransCount++;
+        }
+#endif
         if ((!mTransitionScreen || mTransitionScreen->CheckIsLoaded())
+#ifdef HX_NATIVE
+            // Skip exit-wait on native — animations don't complete without full
+            // animation system, so transitions would block forever
+#else
             && (!mCurrentScreen || !mCurrentScreen->Exiting())
+#endif
             && !IsBlockingTransition()) {
             UIScreen *trans = mTransitionScreen;
             UIScreen *oldCur = mCurrentScreen;
@@ -495,7 +569,11 @@ void UIManager::Poll() {
         }
     }
     if (mTransitionState == kTransitionFrom) {
-        if (!mCurrentScreen || !mCurrentScreen->Entering()) {
+        if (!mCurrentScreen
+#ifndef HX_NATIVE
+            || !mCurrentScreen->Entering()
+#endif
+            ) {
             if (mOverlay && mOverlay->Showing() && mLoadTimer.Running()
                 && mCurrentScreen) {
                 mLoadTimer.Stop();
@@ -510,6 +588,11 @@ void UIManager::Poll() {
             UITransitionCompleteMsg completeMsg2(mCurrentScreen, oldTrans);
             mTransitionState = kTransitionNone;
             mTransitionScreen = nullptr;
+#ifdef HX_NATIVE
+            printf("DC3 UI: Transition complete -> '%s' (from '%s')\n",
+                   mCurrentScreen ? mCurrentScreen->Name() : "<null>",
+                   oldTrans ? oldTrans->Name() : "<null>");
+#endif
             Handle(completeMsg2, false);
         }
     }
@@ -667,7 +750,10 @@ void UIManager::Init() {
 // pop_screen=PopScreen(Obj<UIScreen>(2)), reset_screen=ResetScreen(Obj<UIScreen>(2)),
 // focus_panel=HANDLE_EXPR(FocusPanel()). Implementing them individually doesn't improve Handle's
 // match due to cascading register allocation changes. Need to fix all stubs at once to see improvement.
-DataNode UIManager::OnSetSink(DataArray *arr) { return 0; }
+DataNode UIManager::OnSetSink(DataArray *arr) {
+    mSink = arr->GetObj(2);
+    return 0;
+}
 DataNode UIManager::OnUseJoypad(DataArray *arr) {
     int val = arr->Int(2);
     UseJoypad(val != 0, true);
@@ -678,8 +764,17 @@ DataNode UIManager::OnSetVirtualDpad(DataArray *arr) {
     mJoyClient->SetVirtualDpad(val != 0);
     return 0;
 }
-DataNode UIManager::OnPushScreen(DataArray *arr) { return 0; }
-DataNode UIManager::OnPopScreen(DataArray *arr) { return 0; }
+DataNode UIManager::OnPushScreen(DataArray *arr) {
+    PushScreen(arr->Obj<UIScreen>(2));
+    return 0;
+}
+DataNode UIManager::OnPopScreen(DataArray *arr) {
+    if (arr->Size() > 2)
+        PopScreen(arr->Obj<UIScreen>(2));
+    else
+        PopScreen(nullptr);
+    return 0;
+}
 DataNode UIManager::OnCurrentScreen(DataArray *arr) {
     return DataNode(mCurrentScreen);
 }
@@ -722,7 +817,10 @@ DataNode UIManager::OnShowDevMenu(DataArray *arr) {
     u8 result = 0;
     return DataNode(result);
 }
-DataNode UIManager::OnResetScreen(DataArray *arr) { return 0; }
+DataNode UIManager::OnResetScreen(DataArray *arr) {
+    ResetScreen(arr->Obj<UIScreen>(2));
+    return 0;
+}
 DataNode UIManager::OnFakeKeyboardAction(DataArray *arr) {
     int button = arr->Int(3);
     int action = arr->Int(2);
@@ -753,6 +851,8 @@ BEGIN_HANDLERS(UIManager)
     HANDLE(toggle_dev_menu, OnToggleDevMenu)
     HANDLE(show_dev_menu, OnShowDevMenu)
     HANDLE(fake_keyboard_action, OnFakeKeyboardAction)
+    HANDLE_SUPERCLASS(Hmx::Object)
+    HANDLE_MEMBER_PTR(mCurrentScreen)
 END_HANDLERS
 
 #pragma endregion UIManager

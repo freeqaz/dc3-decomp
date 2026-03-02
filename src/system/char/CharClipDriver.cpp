@@ -1,6 +1,7 @@
 #include "char/CharClipDriver.h"
 #include "char/CharBones.h"
 #include "char/CharClip.h"
+#include "macros.h"
 #include "math/Easing.h"
 #include "math/Rand.h"
 #include "obj/Msg.h"
@@ -8,6 +9,7 @@
 #include "obj/Task.h"
 #include "rndobj/Anim.h"
 #include "utl/Symbol.h"
+#include <cmath>
 
 CharClipDriver::CharClipDriver(
     Hmx::Object *owner,
@@ -140,35 +142,39 @@ CharClipDriver *CharClipDriver::Exit(bool b) {
 }
 
 void CharClipDriver::ExecuteEvent(Symbol sym) {
-    if (!mClip || !mClip->RefOwner())
+    if (sym.Null())
         return;
-    Hmx::Object *owner = mClip->RefOwner();
     static Symbol clip_event("clip_event");
-    Message msg(clip_event, sym, mClip.Ptr());
-    owner->Handle(msg, false);
+    Hmx::Object *owner = mClip.RefOwner();
+    if (!owner)
+        return;
+    static Message msg(clip_event, DataNode(sym), DataNode(mClip.Ptr()), DataNode(0));
+    msg[0] = DataNode(sym);
+    msg[1] = DataNode(mClip.Ptr());
+    owner->Export(msg, false);
 }
 
 void CharClipDriver::SetBeatOffset(float offset, TaskUnits units, Symbol sym) {
-    if (!mClip)
+    if (offset == 0.0f || !mClip)
         return;
-    float beat;
-    if (units == kTaskSeconds) {
-        // Convert time offset to beats via clip's beat track
-        beat = mClip->FrameToBeat(mClip->FramesPerSec() * offset);
-    } else {
-        beat = offset;
-    }
-    // Find matching beat event and set mBeat offset relative to it
-    std::vector<CharClip::BeatEvent> events = mClip->BeatEvents();
-    for (int i = 0; i < (int)events.size(); i++) {
-        if (events[i].event == sym) {
-            mBeat = events[i].beat + beat;
-            return;
+    mBeat = mClip->StartBeat();
+    if (!sym.Null()) {
+        unsigned int i = 0;
+        for (; i < mClip->mBeatEvents.size(); i++) {
+            if (mClip->mBeatEvents[i].event == sym) {
+                mBeat = mClip->mBeatEvents[i].beat;
+                break;
+            }
+        }
+        if (i == mClip->mBeatEvents.size()) {
+            MILO_NOTIFY("%s could not find event %s", PathName(mClip), sym);
         }
     }
-    mBeat += beat;
+    if (units != kTaskBeats) {
+        offset = mClip->DeltaSecondsToDeltaBeat(offset, mBeat);
+    }
+    mBeat += offset;
 }
-
 CharClipDriver *CharClipDriver::DeleteRef(ObjRef *ref, bool &b) {
     if (&mClip == ref) {
         b = true;
@@ -177,4 +183,158 @@ CharClipDriver *CharClipDriver::DeleteRef(ObjRef *ref, bool &b) {
         mNext = mNext->DeleteRef(ref, b);
     }
     return this;
+}
+
+float CharClipDriver::AlignToBeat(float oldBeat) {
+    float align = (float)((mPlayFlags >> 12) & 0xF);
+    if (align != 0.0f && mTimeScale == 1.0f && (mPlayFlags & 0xF0) != 0x20) {
+        float delta = Mod(oldBeat - mBeat, align);
+        if (delta > align * 0.5f) {
+            delta -= align;
+            if (delta + mBeat < mClip->EndBeat()) {
+                delta += align;
+            }
+        }
+        return delta;
+    }
+    return 0.0f;
+}
+
+void CharClipDriver::PlayEvents(float oldBeat) {
+    if (mNextEvent == -1) {
+        RndAnimatable *syncAnim = mClip->SyncAnim();
+        if (syncAnim) {
+            syncAnim->StartAnim();
+        }
+        static Symbol enter("enter");
+        ExecuteEvent(enter);
+        mNextEvent = 0;
+    }
+    while ((unsigned int)mNextEvent < mClip->mBeatEvents.size()) {
+        CharClip::BeatEvent &ev = mClip->mBeatEvents[mNextEvent];
+        if (ev.beat > mBeat)
+            return;
+        ExecuteEvent(ev.event);
+        mNextEvent++;
+    }
+}
+
+CharClipDriver *CharClipDriver::PreEvaluate(float beat, float deltaBeat, float deltaSeconds) {
+    MILO_ASSERT(mBlendFrac >= 0, 0xab);
+    if (mBlendWidth < 0.0f) {
+        MILO_NOTIFY("CharClipDriver: blend width < 0 with clip %s", (char *)mClip->Name());
+        mBlendWidth = 0.0f;
+    }
+    if (mNext) {
+        mNext = mNext->PreEvaluate(beat, deltaBeat, deltaSeconds);
+    }
+    int flags = mPlayFlags;
+    bool useRealTime = flags & CharClip::kPlayRealTime;
+    bool useUserTime = flags & CharClip::kPlayUserTime;
+
+    float advance;
+    if (!mPlayMultipleClips && mNext) {
+        advance = mNext->mAdvanceBeat;
+    } else {
+        advance = deltaBeat;
+        if (useRealTime) {
+            advance = deltaSeconds;
+        }
+    }
+
+    if (0.0f < mRampIn || 0.0f < advance) {
+        mRampIn -= advance;
+    }
+
+    if (!(mRampIn < 0.0f)) {
+        mDBeat = 0.0f;
+        mAdvanceBeat = 0.0f;
+    } else {
+        float oldBeat = mBeat;
+        if (flags & 0x80) { // reset flag, cleared after first eval
+            mDBeat = 0.0f;
+            mPlayFlags = flags & ~0x80;
+        } else {
+            if (!useUserTime) {
+                if (useRealTime) {
+                    deltaBeat = mClip->DeltaSecondsToDeltaBeat(deltaSeconds, oldBeat);
+                }
+                mDBeat = mTimeScale * deltaBeat;
+            }
+        }
+        mBeat = mDBeat + mBeat;
+        float align = AlignToBeat(oldBeat);
+        mBeat += align;
+        mAdvanceBeat = mDBeat + align;
+        PlayEvents(oldBeat);
+        RndAnimatable *syncAnim = mClip->SyncAnim();
+        if (syncAnim) {
+            float frame = mClip->BeatToFrame(mBeat);
+            syncAnim->SetFrame(frame, 1.0f);
+        }
+        if (mBlendFrac < 1.0f) {
+            if (!(mBlendWidth <= 0.0f)) {
+                float inc;
+                if (!(!useUserTime)) {
+                    inc = deltaBeat;
+                } else {
+                    inc = mDBeat;
+                }
+                inc = inc / mBlendWidth;
+                if (0.0f < inc) {
+                    mBlendFrac += inc;
+                }
+            } else {
+                mBlendFrac = 1.0f;
+            }
+            float clamped = (mBlendFrac - 1.0f >= 0.0f) ? 1.0f : mBlendFrac;
+            mBlendFrac = clamped;
+        }
+    }
+
+    if (!mPlayMultipleClips) {
+        if (mNext && mBlendFrac == 1.0f) {
+            mNext = mNext->Exit(true);
+        }
+    } else {
+        if (mClip->EndBeat() < mBeat) {
+            return Exit(false);
+        }
+    }
+    return this;
+}
+
+float CharClipDriver::Evaluate(float beat, float deltaBeat, float deltaSeconds) {
+    float nextResult = 0.0f;
+    if (mNext) {
+        nextResult = mNext->Evaluate(beat, deltaBeat, deltaSeconds);
+    }
+    if ((mPlayFlags & 0xF0) == CharClip::kPlayLoop) {
+        CharClip *clip = mClip;
+        float curBeat = mBeat;
+        float endBeat = clip->EndBeat();
+        if (curBeat > endBeat) {
+            float startBeat = clip->StartBeat();
+            if (!(clip->LengthBeats() <= 0.0f)) {
+                float dist = std::fmod(curBeat - endBeat, clip->LengthBeats());
+                mBeat = dist + startBeat;
+            } else {
+                mBeat = startBeat;
+            }
+            float align = AlignToBeat(curBeat);
+            mBeat += align;
+            mNextEvent = 0;
+        } else if (clip->StartBeat() > curBeat) {
+            if (0.0f < clip->LengthBeats()) {
+                auto _tmp6 = clip->StartBeat();
+                float dist = std::fmod(_tmp6 - curBeat, clip->LengthBeats());
+                mBeat = endBeat - dist;
+            }
+            float align = AlignToBeat(curBeat);
+            mBeat += align;
+            mNextEvent = clip->NumBeatEvents();
+        }
+    }
+    float sigmoid = EaseSigmoid(mBlendFrac, 0.0f, 0.0f);
+    return (1.0f - sigmoid) * nextResult + sigmoid;
 }

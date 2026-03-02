@@ -14,7 +14,7 @@ from typing import Any
 DEFAULT_DB_PATH = "decomp.db"
 
 # Schema version for migrations
-SCHEMA_VERSION = 12
+SCHEMA_VERSION = 13
 
 # Default maximum attempts before deprioritizing a function
 # Functions with >= this many attempts are excluded from normal queries
@@ -426,6 +426,19 @@ def _run_migrations(conn: sqlite3.Connection, from_version: int, to_version: int
             except sqlite3.OperationalError as e:
                 if "duplicate column" not in str(e).lower():
                     raise
+
+    if from_version < 13 <= to_version:
+        # Migration v12 -> v13: Add is_stub column for unimplemented stub tracking
+        print("  Migration v13: Adding is_stub column...")
+        try:
+            conn.execute("ALTER TABLE functions ADD COLUMN is_stub INTEGER DEFAULT 0")
+        except sqlite3.OperationalError as e:
+            if "duplicate column" not in str(e).lower():
+                raise
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_functions_is_stub "
+            "ON functions(is_stub) WHERE is_stub = 1"
+        )
 
     # Update schema version
     conn.execute("UPDATE schema_version SET version = ?", (to_version,))

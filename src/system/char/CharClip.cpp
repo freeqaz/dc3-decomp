@@ -86,43 +86,45 @@ CharClip::NodeVector *CharClip::Transitions::FindNodes(CharClip *clip) const {
 }
 
 void CharClip::Transitions::AddNode(CharClip *clip, const CharGraphNode &node) {
-    NodeVector *existing = FindNodes(clip);
-    if (existing) {
-        // Append a CharGraphNode to the existing NodeVector for this clip.
-        // We need to shift all data after this NodeVector to make room.
-        int insertOffset = (intptr_t)existing->nodes - (intptr_t)mNodeStart + existing->size * (int)sizeof(CharGraphNode);
-        int oldSize = existing->size;
-        int newByteSize = BytesInMemory() + (int)sizeof(CharGraphNode);
-        existing = Resize(newByteSize, existing);
-        // existing now points within potentially-reallocated mNodeStart
-        // Shift everything after the insertion point
-        char *insertAt = (char *)mNodeStart + insertOffset;
-        int bytesAfter = (intptr_t)mNodeEnd - (intptr_t)insertAt - (int)sizeof(CharGraphNode);
-        if (bytesAfter > 0) {
-            memmove(insertAt + sizeof(CharGraphNode), insertAt, bytesAfter);
-        }
-        // Write node and update count
-        NodeVector *vec = FindNodes(clip);
-        if (vec) {
-            vec->nodes[oldSize] = node;
-            vec->size = oldSize + 1;
-        }
+    NodeVector *nodes = FindNodes(clip);
+    NodeVector *resized;
+    if (nodes) {
+        int bytes = BytesInMemory();
+        NodeVector *next = nodes->Next();
+        NodeVector *end = mNodeEnd;
+        resized = Resize(bytes + 8, nodes);
+        memmove(
+            (char *)resized->Next() + 8,
+            resized->Next(),
+            (intptr_t)end - (intptr_t)next
+        );
     } else {
-        // Create a new NodeVector at the end of the buffer.
-        // NodeVector layout (PPC): ObjOwnerPtr<CharClip>(0x14) + int(0x4) + CharGraphNode[size](size*8)
-        // For a single node: 0x14 + 0x4 + 0x8 = 0x20 bytes
-        // We use Next() to compute the size: Next() = nodes + size, for size=1 that's &nodes[1]
-        // sizeof single-node entry = offsetof(nodes) + 1*sizeof(CharGraphNode)
-        int existingBytes = BytesInMemory();
-        // offset of 'nodes' within NodeVector on PPC: ObjOwnerPtr is 0x14, int is 0x4
-        // But we can compute it portably: since Next() is defined as nodes+size, for empty: nodes+0 = Next's base
-        // For adding the clip ptr + size + 1 node:
-        int nodeVecHeaderSize = (int)sizeof(NodeVector) - (int)sizeof(CharGraphNode); // clip + size fields
-        Resize(existingBytes + nodeVecHeaderSize + (int)sizeof(CharGraphNode), nullptr);
-        NodeVector *newVec = (NodeVector *)((char *)mNodeStart + existingBytes);
-        new (&newVec->clip) ObjOwnerPtr<CharClip>(mOwner, clip);
-        newVec->size = 1;
-        newVec->nodes[0] = node;
+        resized = Resize(BytesInMemory() + 0x20, mNodeEnd);
+        new (&resized->clip) ObjOwnerPtr<CharClip>(mOwner, (CharClip *)NULL);
+        resized->clip = clip;
+        resized->size = 0;
+    }
+    int size = resized->size;
+    int i = 0;
+    if (size > 0) {
+        for (; i < size; i++) {
+            if (resized->nodes[i].curBeat > node.curBeat)
+                break;
+        }
+    }
+    if (i < size) {
+        for (int j = size; j > i; j--) {
+            resized->nodes[j] = resized->nodes[j - 1];
+        }
+    }
+    resized->nodes[i] = node;
+    resized->size++;
+    // Fix up ObjRef linked list pointers after potential reallocation
+    for (NodeVector *it = mNodeStart; it < mNodeEnd; it = it->Next()) {
+        ObjRef **prev = (ObjRef **)((char *)it + 4);
+        ObjRef **next = (ObjRef **)((char *)it + 8);
+        *(ObjRef **)((char *)*next + 4) = (ObjRef *)it;
+        *(ObjRef **)((char *)*prev + 8) = (ObjRef *)it;
     }
 }
 
@@ -205,8 +207,6 @@ void CharClip::Transitions::Load(BinStreamRev &d, int oldRev) {
         // On LP64, NodeVector is ~2x larger (8-byte pointers), need more space
         // temp from file is Xbox byte count; scale up generously
         int allocSize = temp < 256 ? 4096 : temp * 4;
-        printf("Transitions::Load: temp=%d numNodes=%d allocSize=%d rev=%d\n", temp, numNodes, allocSize, d.rev);
-        fflush(stdout);
         NodeVector *start = (NodeVector *)_MemAllocTemp(allocSize, __FILE__, 0x4CB, "CharGraphNode", 0);
         memset(start, 0, allocSize);
 #else
@@ -511,27 +511,19 @@ BEGIN_LOADS(CharClip)
     static int _x = MemFindHeap("char");
     MemHeapTracker temp(_x);
     int oldRev, x, y, oldVer, tv;
-#ifdef HX_NATIVE
-    printf("CharClip::Load '%s': entry tell=%d\n", Name(), bs.Tell());
-    fflush(stdout);
-#endif
     LOAD_REVS(bs)
     ASSERT_REVS(0x16, 0)
+#ifdef HX_NATIVE
+    fprintf(stderr, "CharClip::Load '%s' rev=%d altRev=%d streamPos=%d\n",
+            Name(), d.rev, d.altRev, bs.Tell());
+#endif
     oldRev = 0;
     if (d.rev < 0x10)
         d >> oldRev;
     else
         oldRev = 0xD;
-#ifdef HX_NATIVE
-    printf("CharClip::Load '%s': rev=%d altRev=%d oldRev=%d tell=%d\n", Name(), d.rev, d.altRev, oldRev, d.stream.Tell());
-    fflush(stdout);
-#endif
     MILO_ASSERT(oldRev > 1, 0x531);
     LOAD_SUPERCLASS(Hmx::Object)
-#ifdef HX_NATIVE
-    printf("CharClip::Load '%s': after LOAD_SUPERCLASS tell=%d\n", Name(), d.stream.Tell());
-    fflush(stdout);
-#endif
     if (d.rev < 0x12) {
         d >> x;
         d >> y;
@@ -546,10 +538,6 @@ BEGIN_LOADS(CharClip)
     if (oldRev > 3) {
         d >> mRange;
     }
-#ifdef HX_NATIVE
-    printf("CharClip::Load '%s': fps=%.1f flags=%d playFlags=%d range=%.1f tell=%d\n", Name(), mFramesPerSec, mFlags, mPlayFlags, mRange, d.stream.Tell());
-    fflush(stdout);
-#endif
     if (oldRev > 5) {
         mRelative.Load(d.stream, false, nullptr);
     } else if (oldRev > 4) {
@@ -559,10 +547,6 @@ BEGIN_LOADS(CharClip)
     } else {
         mRelative = nullptr;
     }
-#ifdef HX_NATIVE
-    printf("CharClip::Load '%s': after mRelative tell=%d\n", Name(), d.stream.Tell());
-    fflush(stdout);
-#endif
     if (oldRev > 8 && oldRev < 0xB) {
         bool unused;
         d >> unused;
@@ -573,15 +557,7 @@ BEGIN_LOADS(CharClip)
     if (oldRev > 0xB) {
         d >> mDoNotCompress;
     }
-#ifdef HX_NATIVE
-    printf("CharClip::Load '%s': oldVer=%d doNotCompress=%d tell=%d\n", Name(), mOldVer, mDoNotCompress, d.stream.Tell());
-    fflush(stdout);
-#endif
     mTransitions.Load(d, oldRev);
-#ifdef HX_NATIVE
-    printf("CharClip::Load '%s': after transitions tell=%d\n", Name(), d.stream.Tell());
-    fflush(stdout);
-#endif
     if (oldRev < 3) {
         int count;
         d >> count;
@@ -593,18 +569,10 @@ BEGIN_LOADS(CharClip)
     if (oldRev > 6) {
         int count;
         d >> count;
-#ifdef HX_NATIVE
-        printf("CharClip::Load '%s': beatEvents count=%d tell=%d\n", Name(), count, d.stream.Tell());
-        fflush(stdout);
-#endif
         mBeatEvents.resize(count);
         for (int i = 0; i < mBeatEvents.size(); i++) {
             mBeatEvents[i].Load(d.stream);
         }
-#ifdef HX_NATIVE
-        printf("CharClip::Load '%s': after beatEvents tell=%d\n", Name(), d.stream.Tell());
-        fflush(stdout);
-#endif
     } else {
         String eventName;
         d >> eventName;
@@ -643,18 +611,15 @@ BEGIN_LOADS(CharClip)
     }
     if (d.rev > 0xC) {
 #ifdef HX_NATIVE
-        printf("CharClip::Load '%s': before mFull.Load tell=%d\n", Name(), d.stream.Tell());
-        fflush(stdout);
+        fprintf(stderr, "CharClip::Load '%s' before mFull.Load streamPos=%d\n", Name(), d.stream.Tell());
 #endif
         mFull.Load(d.stream);
 #ifdef HX_NATIVE
-        printf("CharClip::Load '%s': after mFull.Load tell=%d\n", Name(), d.stream.Tell());
-        fflush(stdout);
+        fprintf(stderr, "CharClip::Load '%s' after mFull.Load streamPos=%d LE=%d\n", Name(), d.stream.Tell(), d.stream.LittleEndian());
 #endif
         mOne.Load(d.stream);
 #ifdef HX_NATIVE
-        printf("CharClip::Load '%s': after mOne.Load tell=%d\n", Name(), d.stream.Tell());
-        fflush(stdout);
+        fprintf(stderr, "CharClip::Load '%s' after mOne.Load streamPos=%d\n", Name(), d.stream.Tell());
 #endif
     } else {
         mFull.LoadHeader(d);

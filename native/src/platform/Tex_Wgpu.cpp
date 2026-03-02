@@ -6,6 +6,7 @@
 #include "platform/Rnd_Wgpu.h"
 #include "gfx/TextureConvert.h"
 #include "rndobj/Tex.h"
+#include "rndobj/CubeTex.h"
 #include "rndobj/Bitmap.h"
 
 #include <unordered_map>
@@ -41,13 +42,7 @@ void RndTex::PresyncBitmap() {
     if (!gWgpuRnd) return;
 
     // Only process regular textures with bitmap data
-    if (mBitmap.Width() <= 0 || mBitmap.Height() <= 0) {
-        fprintf(stderr, "Tex_Wgpu: skipping '%s' — invalid dimensions %dx%d\n",
-                Name(), mBitmap.Width(), mBitmap.Height());
-        return;
-    }
-    if (mBitmap.Bpp() <= 0) {
-        fprintf(stderr, "Tex_Wgpu: skipping '%s' — invalid bpp %d\n", Name(), mBitmap.Bpp());
+    if (mBitmap.Width() <= 0 || mBitmap.Height() <= 0 || mBitmap.Bpp() <= 0) {
         return;
     }
 
@@ -97,4 +92,56 @@ void RndTex::SyncBitmap() {
 
 void CleanupGpuTex(RndTex* tex) {
     sTexGpuData.erase(tex);
+}
+
+// ============================================================================
+// Cube texture GPU side table — maps RndCubeTex* to GPU resources
+// ============================================================================
+
+struct GpuCubeTexData {
+    wgpu::Texture texture;
+    wgpu::TextureView view;
+    bool uploaded = false;
+};
+
+static std::unordered_map<RndCubeTex*, GpuCubeTexData> sCubeTexGpuData;
+
+wgpu::TextureView GetGpuCubeTexView(RndCubeTex* cubeTex) {
+    if (!cubeTex || !gWgpuRnd) return wgpu::TextureView();
+
+    auto it = sCubeTexGpuData.find(cubeTex);
+    if (it != sCubeTexGpuData.end() && it->second.uploaded) {
+        return it->second.view;
+    }
+
+    // Lazy upload: gather 6 face bitmaps and create cube texture
+    RndBitmap* faces[6];
+    bool allValid = true;
+    for (int i = 0; i < 6; i++) {
+        faces[i] = &cubeTex->GetBitmap((RndCubeTex::CubeFace)i);
+        if (!faces[i] || faces[i]->Width() <= 0 || faces[i]->Height() <= 0 || !faces[i]->Pixels()) {
+            allValid = false;
+        }
+    }
+    if (!allValid) return wgpu::TextureView();
+
+    wgpu::Texture gpuTex = TextureConvert::CreateCubeFromBitmaps(
+        gWgpuRnd->Gpu(), faces[0], 6);
+    if (!gpuTex) return wgpu::TextureView();
+
+    // Create cube texture view
+    wgpu::TextureViewDescriptor viewDesc{};
+    viewDesc.dimension = wgpu::TextureViewDimension::Cube;
+    viewDesc.arrayLayerCount = 6;
+    viewDesc.baseArrayLayer = 0;
+    viewDesc.mipLevelCount = 1;
+    viewDesc.baseMipLevel = 0;
+
+    GpuCubeTexData data;
+    data.texture = gpuTex;
+    data.view = gpuTex.CreateView(&viewDesc);
+    data.uploaded = true;
+    sCubeTexGpuData[cubeTex] = data;
+
+    return data.view;
 }

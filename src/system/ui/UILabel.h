@@ -7,6 +7,7 @@
 #include "ui/UIColor.h"
 #include "ui/UIComponent.h"
 #include "ui/UILabelDir.h"
+#include "ui/ResourceDirPtr.h"
 #include "utl/BinStream.h"
 #include "utl/MemMgr.h"
 #include "utl/Symbol.h"
@@ -14,11 +15,19 @@
 class UILabel : public RndText, public UIComponent, public TextHolder {
 public:
     struct LabelStyle {
+#ifdef HX_NATIVE
+        LabelStyle(Hmx::Object *o) : mColorOverride(o, 0), mLabelDir(o), unk28(0) {}
+#else
         LabelStyle(Hmx::Object *o) : mColorOverride(o, 0), mLabelDir(o, 0), unk28(0) {}
+#endif
         ~LabelStyle();
 
         ObjPtr<UIColor> mColorOverride; // 0x0
+#ifdef HX_NATIVE
+        ResourceDirPtr<UILabelDir> mLabelDir; // 0x14
+#else
         ObjPtr<UILabelDir> mLabelDir; // 0x14
+#endif
         int unk28;
     };
     // Hmx::Object

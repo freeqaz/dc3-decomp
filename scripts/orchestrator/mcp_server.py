@@ -510,6 +510,33 @@ class DecompMCPServer:
             if func:
                 start_percent = func.get("current_percent") or 0
 
+                # Guard: validate base_size > 0 before accepting COMPLETE
+                if status == "complete":
+                    try:
+                        check_result = subprocess.run(
+                            [str(self.project_root / "bin" / "objdiff-cli"), "diff", "-p", str(self.project_root), symbol],
+                            capture_output=True, text=True, timeout=60,
+                        )
+                        stdout = check_result.stdout
+                        json_start = stdout.find("{")
+                        if json_start >= 0:
+                            check_data = json.loads(stdout[json_start:])
+                            if check_data.get("base_size", 0) == 0:
+                                # Mark as stub and reject COMPLETE
+                                conn = get_connection(self.db_path)
+                                conn.execute(
+                                    "UPDATE functions SET is_stub = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                                    (func["id"],),
+                                )
+                                conn.commit()
+                                return [TextContent(
+                                    type="text",
+                                    text=f"Cannot mark as COMPLETE — base_size=0 (unimplemented stub). "
+                                         f"Function `{symbol}` has no original code to compare against.",
+                                )]
+                    except Exception:
+                        pass  # If check fails, allow the report through
+
                 # Determine verdict from status
                 verdict = None
                 if status == "at_limit":
@@ -2404,6 +2431,13 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
 
                 if is_stub:
                     unimplemented += 1
+                    if not dry_run:
+                        # Mark as stub in DB
+                        conn.execute(
+                            "UPDATE functions SET is_stub = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                            (func["id"],),
+                        )
+                        conn.commit()
                 elif match_pct == 100.0 or classification == "COMPLETE":
                     newly_complete += 1
                     if not dry_run:

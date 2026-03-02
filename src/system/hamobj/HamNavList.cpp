@@ -644,6 +644,13 @@ void HamNavList::OldResourcePreload(BinStream &bs) {
 void HamNavList::HideItem(int index, bool b) {
     if (mRefreshPending)
         RealRefresh();
+#ifdef HX_NATIVE
+    if (index < 0 || index >= (int)mRibbonDrawStates.size()) {
+        printf("DC3 WARN: HamNavList::HideItem index %d out of range (size=%d), skipping\n",
+               index, (int)mRibbonDrawStates.size());
+        return;
+    }
+#endif
     MILO_ASSERT_RANGE(index, 0, mRibbonDrawStates.size(), 0x527);
     mRibbonDrawStates[index].mHidden = b;
     if (mNavProvider)
@@ -1493,7 +1500,56 @@ void HamNavList::LinkRibbonDrawState(
     UIListWidgetDrawState &widgetState,
     std::vector<HamListRibbonDrawState> &ribbonStates
 ) {
-    // elements vector begin/end at offsets 0x38 and 0x3c in UIListWidgetDrawState
+#ifdef HX_NATIVE
+    // LP64-safe version: use proper struct access instead of raw pointer arithmetic
+    int widgetElemCount = (int)widgetState.mElements.size();
+    if (widgetElemCount != (int)ribbonStates.size()) {
+        HamListRibbonDrawState defaultState;
+        ribbonStates.resize(widgetElemCount, defaultState);
+    }
+    for (int i = 0; i < widgetElemCount; i++) {
+        UIListElementDrawState &elem = widgetState.mElements[i];
+        HamListRibbonDrawState &state = ribbonStates[i];
+
+        int selectedDisplay = mListState.SelectedDisplay();
+        state.mSelected = (selectedDisplay == i);
+
+        int numShowing = mListState.NumShowing();
+        bool scrollable = mListRibbonResource && mListRibbonResource->IsScrollable(numShowing);
+
+        bool isActive;
+        if (!scrollable) {
+            isActive = mListState.Provider()->IsActive(i);
+        } else {
+            int firstShowing = mListState.FirstShowing();
+            isActive = mListState.Provider()->IsActive(firstShowing + i);
+        }
+        state.unk24 = isActive;
+
+        state.unk20 = (float)IsElementBig(i);
+        state.unk18 = (intptr_t)&elem;
+
+        // Conditionally clear elem.unk28
+        if (elem.mShowing == 1) {
+            bool shouldClear = false;
+            if (mListRibbonResource && !mListRibbonResource->TestEntering()
+                && mRibbonMode != HamListRibbon::kRibbonDisengaged) {
+                if (TheUI->FocusComponent() == this) {
+                    shouldClear = true;
+                } else {
+                    bool controllerMode = TheGestureMgr && TheGestureMgr->InControllerMode();
+                    if (!controllerMode) {
+                        shouldClear = true;
+                    }
+                }
+            }
+            if (shouldClear) {
+                elem.unk28 = 0;
+            }
+        }
+    }
+#else
+    // ILP32 (Xbox 360) version: raw pointer arithmetic matches original binary
     int *elemBeginPtr = *(int **)((char *)&widgetState + 0x38);
     int *elemEndPtr = *(int **)((char *)&widgetState + 0x3c);
     int widgetElemCount = (int)((elemEndPtr - elemBeginPtr) / (sizeof(UIListElementDrawState) / sizeof(int)));
@@ -1517,9 +1573,6 @@ void HamNavList::LinkRibbonDrawState(
             isActive = mListState.Provider()->IsActive(i);
         } else {
             int firstShowing = mListState.FirstShowing();
-            // Compute parent node count from UIListState via Parent_Node relationship
-            // In Ghidra: lVar6 = Parent_Node(iVar16) which is Provider()->parent reference count
-            // Simplified: use 0 (no parent offset adjustment in scrollable case)
             isActive = mListState.Provider()->IsActive(firstShowing + i);
         }
         state.unk24 = isActive;
@@ -1528,7 +1581,6 @@ void HamNavList::LinkRibbonDrawState(
         state.unk18 = (int)&elem;
 
         // Set the AdjustTrans vtable pointer in elem.unk2c
-        // This is the UIListProvider vtable's AdjustTrans at offset +4 from this
         elem.unk2c = *(int *)((char *)this + 4);
 
         // Conditionally clear elem.unk28
@@ -1550,11 +1602,16 @@ void HamNavList::LinkRibbonDrawState(
             }
         }
     }
+#endif
 }
 
 void HamNavList::DrawShowing() {
     if (!mListRibbonResource || !mListDirResource)
         return;
+#ifdef HX_NATIVE
+    if (!mListState.Provider())
+        return;
+#endif
 
     mScrollSettleTime = TheTaskMgr.UISeconds();
 

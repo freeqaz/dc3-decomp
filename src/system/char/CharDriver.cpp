@@ -440,6 +440,21 @@ static bool CharDriverStarved(CharClipDriver *first) {
     return ret;
 }
 
+void CharDriver::SetBeatScale(float beatscale, bool) {
+    CharClipDriver *playing = FirstPlaying();
+    if (playing) {
+        float oldBeatScale = mBeatScale;
+        float ratio = oldBeatScale / beatscale;
+        for (CharClipDriver *d = playing; d != nullptr; d = d->Next()) {
+            if ((playing->mPlayFlags & 0xF600) != CharClip::kPlayRealTime) {
+                d->mTimeScale *= ratio;
+                CharClip::SetDefaultBeatAlignModeFlag(d->mPlayFlags, CharClip::kPlayBeatTime);
+            }
+        }
+    }
+    mBeatScale = beatscale;
+}
+
 void CharDriver::Poll() {
     float beat = mBeatScale * TheTaskMgr.Beat();
     float deltaBeat = mBeatScale * TheTaskMgr.DeltaBeat();
@@ -559,9 +574,9 @@ END_COPYS
 BEGIN_PROPSYNCS(CharDriver)
     SYNC_PROP(bones, mBones)
     SYNC_PROP_SET(clips, mClips.Ptr(), SetClips(_val.Obj<ObjectDir>()))
-    SYNC_PROP_SET(clip_type, mClipType, (mClipType = _val.Sym(), SyncInternalBones()))
+    SYNC_PROP_SET(clip_type, mClipType, SetClipType(_val.Sym()))
     SYNC_PROP(realign, mRealign)
-    SYNC_PROP_SET(apply, mApply, (mApply = (ApplyMode)_val.Int(), SyncInternalBones()))
+    SYNC_PROP_SET(apply, mApply, SetApply((ApplyMode)_val.Int()))
     SYNC_PROP_SET(first_playing_clip, FirstPlayingClip(), )
     SYNC_PROP(beat_scale, mBeatScale)
     SYNC_PROP(blend_width, mBlendWidth)
@@ -571,6 +586,7 @@ BEGIN_PROPSYNCS(CharDriver)
     SYNC_PROP(play_multiple_clips, mPlayMultipleClips)
     SYNC_PROP(display_zoom, CharClipDisplay::sZoom)
     SYNC_SUPERCLASS(CharWeightable)
+    SYNC_SUPERCLASS(Hmx::Object)
 END_PROPSYNCS
 
 #ifndef HX_NATIVE

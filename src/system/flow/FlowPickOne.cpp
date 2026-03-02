@@ -145,14 +145,11 @@ bool FlowPickOne::Activate() {
 
 void FlowPickOne::OnChoiceTypeChanged() {
     if (mChoiceType != kChoiceUseIndex) {
-        // Remove "index" driven property entry if present
         FOREACH (it, mDrivenPropEntries) {
-            if (it->Node().Type() == kDataArray) {
-                DataArray *arr = it->Node().Array();
-                if (arr && arr->Size() > 0 && arr->Node(0).Sym() == "index") {
-                    mDrivenPropEntries.erase(it);
-                    return;
-                }
+            DataArray *arr = it->Node().Array();
+            if (arr->Sym(0) == "index") {
+                mDrivenPropEntries.erase(it);
+                return;
             }
         }
     }

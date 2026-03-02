@@ -2307,21 +2307,21 @@ void HamDirector::PlayNextShot() {
     }
     HamCamShot *nextShot = mNextShot;
     mPickNewShot = false;
-    if (!nextShot) {
+    if (nextShot == 0) {
         return;
     }
     mNextShot = nullptr;
     float lastShotTime;
-    if (!nextShot || !strstr(nextShot->Name(), "dircut")) {
-        if (!mCurShot || strncmp(mCurShot->Name(), "Dir", 3) != 0) {
+    if (nextShot && strstr(nextShot->Category().Str(), "dc")) {
+        float totalFrames = (float)nextShot->mMinTime + nextShot->mZeroTime;
+        nextShot->ConvertFrames(totalFrames);
+        lastShotTime = TheTaskMgr.Seconds(TaskMgr::kRealTime) + totalFrames;
+    } else {
+        if (!mCurShot || strncmp(mCurShot->Category().Str(), "dc_", 3) != 0) {
             lastShotTime = -kHugeFloat;
         } else {
             lastShotTime = TheTaskMgr.Seconds(TaskMgr::kRealTime) + 1.0f;
         }
-    } else {
-        float totalFrames = (float)nextShot->mMinTime + nextShot->mZeroTime;
-        nextShot->ConvertFrames(totalFrames);
-        lastShotTime = TheTaskMgr.Seconds(TaskMgr::kRealTime) + totalFrames;
     }
     mLastShotTime = lastShotTime;
     mCurShot = nextShot;
@@ -2388,7 +2388,7 @@ void HamDirector::Poll() {
                     }
                 }
                 if (p1anim != -1) {
-                    bool hasPractice = GetPracticeFrames(practiceStart, practiceEnd);
+                    bool hasPractice = GetPracticeFrames(practiceEnd, practiceStart);
                     if (!hasPractice) {
                         bool clipInited = player1Clip.Init(1);
                         if (clipInited) {
@@ -2399,7 +2399,7 @@ void HamDirector::Poll() {
                 HamPlayerData *p0data = TheGameData->Player(0);
                 HamPlayerData *p1data = TheGameData->Player(1);
                 ClipPlayer *backupClipPlayer = IsEasierDifficulty(p0data->GetDifficulty(), p1data->GetDifficulty()) ? &player0Clip : &player1Clip;
-                bool hasPractice2 = GetPracticeFrames(practiceStart, practiceEnd);
+                bool hasPractice2 = GetPracticeFrames(practiceEnd, practiceStart);
                 if (!hasPractice2) {
                     const float sBackupDriftScale = 0.14f;
                     const float sBackupDriftOffset = 0.5f;
@@ -2415,7 +2415,7 @@ void HamDirector::Poll() {
                         float noise = RndWind::GetWhiteNoise(
                             (float)backupIdx * sBackupDriftFreq + songAnim->GetFrame() * sBackupDriftDt
                         );
-                        float drift = sBackupDriftScale * mBackupDrift * (noise - sBackupDriftOffset);
+                        float drift = (noise - sBackupDriftOffset) * mBackupDrift * sBackupDriftScale;
                         if (0.0f < drift) {
                             drift = drift * sBackupDriftNeg;
                         }
@@ -2468,7 +2468,7 @@ void HamDirector::Poll() {
             }
             if (mForcePostProc && !mCamPostProc) {
                 float forceBlend = mForcePostProcBlend;
-                if (0.0f < forceBlend && forceBlend < blend) {
+                if (forceBlend > 0.0f && forceBlend < blend) {
                     mWorldPostProc->Interp(mWorldPostProc, mForcePostProc, forceBlend);
                     overlayB = mForcePostProc;
                     overlayName = "force";

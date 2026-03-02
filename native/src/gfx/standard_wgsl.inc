@@ -1,8 +1,8 @@
 R"WGSL(
 // DC3 Native — Standard Material Shader
-// Supports: diffuse texture, multi-light directional lighting, vertex color,
-//           alpha test discard, fog, specular (Blinn-Phong), emissive, rim lighting,
-//           intensify
+// Supports: diffuse texture, normal mapping, specular/emissive/rim maps,
+//           multi-light directional lighting, vertex color, alpha test,
+//           fog, specular (Blinn-Phong), emissive, rim lighting, intensify
 
 // === Bind Group 0: Per-scene (camera, environment) ===
 struct SceneUniforms {
@@ -39,14 +39,32 @@ struct MaterialUniforms {
     specularColor: vec4f,
     rimColor: vec4f,        // .rgb = color, .a = power
     intensify: f32,
-    _pad1: f32,
-    _pad2: f32,
-    _pad3: f32,
+    shaderVariation: f32,   // 0=none, 1=skin, 2=hair
+    rimLightUnder: f32,     // 1.0 = rim only on backlit edges
+    deNormal: f32,          // normal map diminish (0=neutral, 1=no bumps, -1=exaggerate)
+    specular2Color: vec4f,  // .rgb = color, .a = power (2nd specular lobe)
+    anisotropy: f32,
+    hasNormalMap: f32,       // 1.0 when normal map is bound
+    materialFogEnabled: f32, // 1.0 if fog applies to this material
+    prelit: f32,             // 1.0 if vertex color is pre-lit (skip lighting)
+    environMapStrength: f32, // 1.0 when environ map is bound
+    environMapFalloff: f32,  // 1.0 for Fresnel falloff at grazing angles
+    environMapSpecMask: f32, // 1.0 to mask reflection by specular map alpha
+    texGenMode: f32,         // 0=none, 1=xfm, 2=sphere, 3=projected, 4=xfmOrigin, 5=environ
+    texXfmRow0: vec4f,       // UV transform row 0
+    texXfmRow1: vec4f,       // UV transform row 1
 };
 
 @group(1) @binding(0) var<uniform> material: MaterialUniforms;
 @group(1) @binding(1) var diffuseTex: texture_2d<f32>;
 @group(1) @binding(2) var diffuseSampler: sampler;
+@group(1) @binding(3) var normalMapTex: texture_2d<f32>;
+@group(1) @binding(4) var specularMapTex: texture_2d<f32>;
+@group(1) @binding(5) var emissiveMapTex: texture_2d<f32>;
+@group(1) @binding(6) var rimMapTex: texture_2d<f32>;
+@group(1) @binding(7) var mapSampler: sampler;
+@group(1) @binding(8) var environMapTex: texture_cube<f32>;
+@group(1) @binding(9) var environSampler: sampler;
 
 // === Bind Group 2: Per-object ===
 struct ObjectUniforms {
@@ -65,6 +83,7 @@ struct VertexInput {
     @location(1) normal: vec3f,
     @location(2) color: vec4f,
     @location(3) uv: vec2f,
+    @location(4) tangent: vec4f,
 };
 
 struct SkinnedVertexInput {
@@ -74,6 +93,7 @@ struct SkinnedVertexInput {
     @location(3) uv: vec2f,
     @location(4) boneWeights: vec4f,
     @location(5) boneIndices: vec4u,
+    @location(6) tangent: vec4f,
 };
 
 struct VertexOutput {
@@ -82,7 +102,48 @@ struct VertexOutput {
     @location(1) worldNormal: vec3f,
     @location(2) color: vec4f,
     @location(3) uv: vec2f,
+    @location(4) worldTangent: vec3f,
+    @location(5) worldBitangent: vec3f,
 };
+
+// === TexGen UV computation ===
+fn computeTexGenUV(baseUV: vec2f, worldPos: vec3f, N: vec3f, V: vec3f) -> vec2f {
+    let mode = material.texGenMode;
+    if (mode < 0.5) {
+        return baseUV; // kTexGenNone
+    }
+    if (mode < 1.5) {
+        // kTexGenXfm: transform UV about (0.5, 0.5) center
+        let centered = baseUV - vec2f(0.5);
+        return vec2f(
+            dot(centered, material.texXfmRow0.xy) + material.texXfmRow0.z + 0.5,
+            dot(centered, material.texXfmRow1.xy) + material.texXfmRow1.z + 0.5
+        );
+    }
+    if (mode < 2.5) {
+        // kTexGenSphere: sphere map from view-space normal
+        let viewNormal = (scene.view * vec4f(N, 0.0)).xyz;
+        return viewNormal.xy * 0.5 + 0.5;
+    }
+    if (mode < 3.5) {
+        // kTexGenProjected: project from xfm direction in world coords
+        return vec2f(
+            dot(worldPos, material.texXfmRow0.xyz) + material.texXfmRow0.w,
+            dot(worldPos, material.texXfmRow1.xyz) + material.texXfmRow1.w
+        );
+    }
+    if (mode < 4.5) {
+        // kTexGenXfmOrigin: transform UV about origin (not center)
+        return vec2f(
+            dot(baseUV, material.texXfmRow0.xy) + material.texXfmRow0.z,
+            dot(baseUV, material.texXfmRow1.xy) + material.texXfmRow1.z
+        );
+    }
+    // kTexGenEnviron: reflection-based UV (perspective-correct sphere map)
+    let R = reflect(-V, N);
+    let viewR = (scene.view * vec4f(R, 0.0)).xyz;
+    return viewR.xy * 0.5 + 0.5;
+}
 
 // === Vertex Shader (static meshes) ===
 @vertex
@@ -92,9 +153,18 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     let worldPos = (object.world * vec4f(in.position, 1.0)).xyz;
     out.clipPos = scene.viewProj * vec4f(worldPos, 1.0);
     out.worldPos = worldPos;
-    out.worldNormal = normalize((object.worldInvTranspose * vec4f(in.normal, 0.0)).xyz);
+    let N = normalize((object.worldInvTranspose * vec4f(in.normal, 0.0)).xyz);
+    out.worldNormal = N;
     out.color = in.color;
-    out.uv = in.uv;
+
+    // TexGen UV computation
+    let V_vs = normalize(scene.cameraPos - worldPos);
+    out.uv = computeTexGenUV(in.uv, worldPos, N, V_vs);
+
+    // Transform tangent to world space, compute bitangent
+    let T = normalize((object.world * vec4f(in.tangent.xyz, 0.0)).xyz);
+    out.worldTangent = T;
+    out.worldBitangent = cross(N, T) * in.tangent.w;
 
     return out;
 }
@@ -104,11 +174,21 @@ fn vs_main(in: VertexInput) -> VertexOutput {
 fn vs_skinned(in: SkinnedVertexInput) -> VertexOutput {
     var out: VertexOutput;
 
-    // Blend position and normal across up to 4 bones
+    // Blend position, normal, and tangent across up to 4 bones
     var skinnedPos = vec4f(0.0);
     var skinnedNorm = vec4f(0.0);
-    let weights = in.boneWeights;
+    var skinnedTan = vec4f(0.0);
     let indices = in.boneIndices;
+
+    // Normalize weights — UDEC4N (10-10-10-2) may not sum to 1.0
+    let rawWeights = in.boneWeights;
+    let totalWeight = rawWeights.x + rawWeights.y + rawWeights.z + rawWeights.w;
+    var weights: vec4f;
+    if (totalWeight > 0.0) {
+        weights = rawWeights / totalWeight;
+    } else {
+        weights = vec4f(1.0, 0.0, 0.0, 0.0); // fallback: 100% to first bone
+    }
 
     for (var i = 0u; i < 4u; i++) {
         var w: f32;
@@ -123,6 +203,7 @@ fn vs_skinned(in: SkinnedVertexInput) -> VertexOutput {
             let m = bones[idx];
             skinnedPos += w * (m * vec4f(in.position, 1.0));
             skinnedNorm += w * (m * vec4f(in.normal, 0.0));
+            skinnedTan += w * (m * vec4f(in.tangent.xyz, 0.0));
         }
     }
 
@@ -130,9 +211,17 @@ fn vs_skinned(in: SkinnedVertexInput) -> VertexOutput {
     let worldPos = (object.world * vec4f(skinnedPos.xyz, 1.0)).xyz;
     out.clipPos = scene.viewProj * vec4f(worldPos, 1.0);
     out.worldPos = worldPos;
-    out.worldNormal = normalize((object.worldInvTranspose * vec4f(skinnedNorm.xyz, 0.0)).xyz);
+    let N = normalize((object.worldInvTranspose * vec4f(skinnedNorm.xyz, 0.0)).xyz);
+    out.worldNormal = N;
     out.color = in.color;
-    out.uv = in.uv;
+
+    // TexGen UV computation
+    let V_sk = normalize(scene.cameraPos - worldPos);
+    out.uv = computeTexGenUV(in.uv, worldPos, N, V_sk);
+
+    let T = normalize((object.world * vec4f(skinnedTan.xyz, 0.0)).xyz);
+    out.worldTangent = T;
+    out.worldBitangent = cross(N, T) * in.tangent.w;
 
     return out;
 }
@@ -157,9 +246,34 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
         discard;
     }
 
-    // Lighting
-    let N = normalize(in.worldNormal);
+    // Compute normal — apply normal map if present
+    var N = normalize(in.worldNormal);
+    if (material.hasNormalMap > 0.5) {
+        let normalSample = textureSample(normalMapTex, mapSampler, in.uv);
+        // Decode tangent-space normal from [0,1] to [-1,1]
+        var tsNormal = normalSample.xyz * 2.0 - 1.0;
+        // Apply deNormal: lerp toward (0,0,1) — 0=neutral, 1=flat, -1=exaggerate
+        let diminish = clamp(material.deNormal, -3.0, 1.0);
+        tsNormal = vec3f(
+            tsNormal.x * (1.0 - diminish),
+            tsNormal.y * (1.0 - diminish),
+            mix(tsNormal.z, 1.0, max(diminish, 0.0))
+        );
+        tsNormal = normalize(tsNormal);
+        // Build TBN matrix and transform to world space
+        let T = normalize(in.worldTangent);
+        let B = normalize(in.worldBitangent);
+        N = normalize(T * tsNormal.x + B * tsNormal.y + N * tsNormal.z);
+    }
+
     let V = normalize(scene.cameraPos - in.worldPos);
+
+    // Sample specular map (RGB = specular color mask, A = gloss/power mask)
+    let specMapSample = textureSample(specularMapTex, mapSampler, in.uv);
+
+    // Detect shader variation
+    let isSkin = material.shaderVariation > 0.5 && material.shaderVariation < 1.5;
+    let isHair = material.shaderVariation > 1.5 && material.shaderVariation < 2.5;
 
     // Accumulate diffuse and specular from all active lights
     var totalDiffuse = vec3f(0.0);
@@ -171,39 +285,134 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
 
         let L = normalize(-scene.lightDirs[i].xyz);
         let lightColor = scene.lightColors[i].rgb;
+        let rawNdotL = dot(N, L);
 
-        // Half-Lambert diffuse
-        let NdotL = dot(N, L) * 0.5 + 0.5;
-        let NdotL2 = NdotL * NdotL;
-        totalDiffuse += lightColor * NdotL2;
+        if (isHair) {
+            // --- Hair shader: Kajiya-Kay anisotropic specular ---
+            // Wrap diffuse (same as skin — hair benefits from soft shadows)
+            let wrapNdotL = rawNdotL * 0.5 + 0.5;
+            totalDiffuse += lightColor * wrapNdotL;
 
-        // Blinn-Phong specular
-        if (material.specularPower > 0.0) {
+            // Kajiya-Kay: specular highlight shifts along strand tangent
+            let T = normalize(in.worldTangent);
             let H = normalize(L + V);
-            let spec = pow(max(dot(N, H), 0.0), material.specularPower);
-            totalSpecular += material.specularColor.rgb * lightColor * spec;
+            let TdotH = dot(T, H);
+            let sinTH = sqrt(max(1.0 - TdotH * TdotH, 0.0));
+            let anisoExp = max(material.anisotropy, 1.0);
+            let anisoSpec = pow(sinTH, anisoExp);
+            totalSpecular += material.specularColor.rgb * specMapSample.rgb * lightColor * anisoSpec;
+        } else if (isSkin) {
+            // --- Skin shader: Half-Lambert + warm shadow tint + dual specular ---
+
+            // Half-Lambert (wrap) diffuse — softens shadow falloff
+            let wrapNdotL = rawNdotL * 0.5 + 0.5;
+            let skinDiffuse = wrapNdotL * wrapNdotL;
+
+            // Warm shadow tint at the terminator (cheap SSS approximation)
+            let shadowZone = smoothstep(0.0, 0.5, rawNdotL);
+            let warmTint = mix(vec3f(0.85, 0.45, 0.25), vec3f(1.0), shadowZone);
+            totalDiffuse += lightColor * skinDiffuse * warmTint;
+
+            // Dual specular lobes
+            let H = normalize(L + V);
+            let NdotH = max(dot(N, H), 0.0);
+
+            // Lobe 1: primary specular from material, masked by specular map
+            if (material.specularPower > 0.0) {
+                let specPower = material.specularPower * specMapSample.a;
+                let spec1 = pow(NdotH, max(specPower, 1.0));
+                totalSpecular += material.specularColor.rgb * specMapSample.rgb * lightColor * spec1;
+            }
+
+            // Lobe 2: secondary (broad "oily skin" sheen)
+            let spec2Power = material.specular2Color.a;
+            if (spec2Power > 0.0) {
+                let spec2 = pow(NdotH, spec2Power);
+                totalSpecular += material.specular2Color.rgb * lightColor * spec2;
+            }
+        } else {
+            // --- Standard Lambert + Blinn-Phong ---
+            let NdotL = max(rawNdotL, 0.0);
+            totalDiffuse += lightColor * NdotL;
+
+            if (material.specularPower > 0.0) {
+                let H = normalize(L + V);
+                let specPower = material.specularPower * specMapSample.a;
+                let spec = pow(max(dot(N, H), 0.0), max(specPower, 1.0));
+                totalSpecular += material.specularColor.rgb * specMapSample.rgb * lightColor * spec;
+            }
         }
     }
 
     let ambient = scene.ambientColor.rgb;
-    var finalColor = baseColor.rgb * (ambient + totalDiffuse) + totalSpecular;
+    var finalColor: vec3f;
+    if (material.prelit > 0.5) {
+        // Pre-lit: vertex color already contains lighting, skip diffuse/specular
+        finalColor = baseColor.rgb;
+    } else {
+        finalColor = baseColor.rgb * (ambient + totalDiffuse) + totalSpecular;
+    }
 
-    // Emissive (self-illumination)
-    finalColor += baseColor.rgb * material.emissiveMultiplier;
+    // Emissive (self-illumination) — modulated by emissive map
+    let emissiveSample = textureSample(emissiveMapTex, mapSampler, in.uv);
+    finalColor += baseColor.rgb * material.emissiveMultiplier * emissiveSample.rgb;
 
-    // Rim lighting
-    let rimPower = material.rimColor.a;
-    if (rimPower > 0.0) {
+    // Rim lighting — fresnel edge glow, modulated by rim map
+    let rimPower = max(material.rimColor.a, 0.5);
+    if (rimPower > 0.0 && length(material.rimColor.rgb) > 0.0) {
+        let rimMapSample = textureSample(rimMapTex, mapSampler, in.uv);
         let rimDot = 1.0 - max(dot(N, V), 0.0);
-        let rim = pow(rimDot, rimPower) * material.rimColor.rgb;
+        let rimPowerMod = rimPower * rimMapSample.a;
+        var rim = pow(rimDot, max(rimPowerMod, 0.5)) * material.rimColor.rgb * rimMapSample.rgb;
+
+        // Rim-under: only apply rim on edges facing away from the primary light
+        if (material.rimLightUnder > 0.5 && scene.numLights > 0.0) {
+            let L = normalize(-scene.lightDirs[0].xyz);
+            let backlit = saturate(1.0 - dot(N, L));
+            rim *= backlit;
+        }
+
         finalColor += rim;
     }
 
-    // Fog
-    if (scene.fogEnabled > 0.5) {
+    // Environment map reflection
+    if (material.environMapStrength > 0.5) {
+        let R = reflect(-V, N);
+        let envSample = textureSample(environMapTex, environSampler, R).rgb;
+
+        // Fresnel falloff: stronger at grazing angles
+        var envFactor = 1.0;
+        if (material.environMapFalloff > 0.5) {
+            let NdotV = max(dot(N, V), 0.0);
+            envFactor = 1.0 - NdotV;  // Schlick-like: strong at edges, weak head-on
+            envFactor = envFactor * envFactor;  // square for sharper falloff
+        }
+
+        // Optionally mask by specular map alpha (gloss)
+        var envMask = 1.0;
+        if (material.environMapSpecMask > 0.5) {
+            envMask = specMapSample.a;
+        }
+
+        finalColor += envSample * envFactor * envMask;
+    }
+
+    // Fog (gated by per-material flag + blend mode)
+    if (scene.fogEnabled > 0.5 && material.materialFogEnabled > 0.5) {
         let dist = length(in.worldPos - scene.cameraPos);
         let fogFactor = clamp((scene.fogEnd - dist) / (scene.fogEnd - scene.fogStart), 0.0, 1.0);
         finalColor = mix(scene.fogColor, finalColor, fogFactor);
+    }
+
+    // Soft highlight compression — only affects values approaching 1.0+
+    let knee = vec3f(0.9);
+    finalColor = select(finalColor,
+                        knee + (vec3f(1.0) - knee) * tanh((finalColor - knee) / (vec3f(1.0) - knee)),
+                        finalColor > knee);
+
+    // Attenuate RGB for near-transparent pixels to prevent alpha fringe
+    if (baseColor.a < 0.1) {
+        finalColor *= baseColor.a / 0.1;
     }
 
     return vec4f(finalColor, baseColor.a);

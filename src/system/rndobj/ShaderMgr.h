@@ -14,20 +14,29 @@ class RndShaderProgram;
 
 // vertex shader constant register indices
 enum VShaderConstant {
+    kVS_Color = 0,
     kVS_AmbientColor = 1,
+    kVS_Specular = 2,
     kVS_ViewProjMatrix = 4,
+    kVS_Specular2 = 0x13,
+    kVS_TexTransform = 0x14,
     kVS_SplineData1 = 0x19,
     kVS_SplineData2 = 0x1A,
     kVS_ShockwavePos = 0x1E,
     kVS_ShockwaveNormal = 0x1F,
     kVS_ShockwaveParams = 0x20,
+    kVS_RimColor = 0x3d,
     kVS_BoxMapLight0 = 0x50,
     kVS_WorldTransform = 0x5c,
 };
 
 // pixel shader constant register indices
 enum PShaderConstant {
+    kPS_Color = 0,
     kPS_AmbientColor = 1,
+    kPS_Specular = 2,
+    kPS_EmissiveTex = 3,
+    kPS_EnvironMap = 4,
     kPS_ShaderCost = 4,
     kPS_Texture = 5,
     kPS_BloomParams = 7,
@@ -35,14 +44,23 @@ enum PShaderConstant {
     kPS_FurAlpha = 0xB,
     kPS_FurDetail = 0xC,
     kPS_FurColor = 0xC,
+    kPS_Anisotropy = 0xd,
+    kPS_DeNormal = 0xe,
+    kPS_NgMatCustom = 0xf,
+    kPS_Specular2 = 0x13,
     kPS_FurGeometry = 0x32,
     kPS_FurShell = 0x33,
+    kPS_RimColor = 0x3d,
     kPS_TexProcFrequency = 0x40,
     kPS_TexProcAmplitude = 0x41,
     kPS_TexProcPhase = 0x42,
     kPS_BoxMapLight0 = 0x50,
+    kPS_DetailNormal = 0x6a,
     kPS_ShadowColor = 0x6B,
     kPS_ShadowCamDir = 0x6C,
+    kPS_RefractStrength = 0x77,
+    kPS_ColorMod0 = 0x83,
+    kPS_WorldProjection = 0xdc,
 };
 
 class RndShaderMgr {

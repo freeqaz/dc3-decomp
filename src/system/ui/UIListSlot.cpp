@@ -70,7 +70,11 @@ void UIListSlot::Draw(
     if (root) {
         int thesize = drawstate.mElements.size();
         if (thesize > mElements.size()) {
+#ifdef HX_NATIVE
+            return;
+#else
             MILO_FAIL("%i isn't enough elements (need %i)", mElements.size(), thesize);
+#endif
         }
         Transform tf78(root->WorldXfm());
         Transform tfa8;
@@ -122,6 +126,10 @@ void UIListSlot::Draw(
 
 void UIListSlot::Fill(const UIListProvider &prov, int display, int j, int k) {
     if (RootTrans()) {
+#ifdef HX_NATIVE
+        if ((size_t)display >= mElements.size())
+            return;
+#endif
         MILO_ASSERT(display < mElements.size(), 0x98);
         mElements[display]->Fill(prov, j, k);
     }

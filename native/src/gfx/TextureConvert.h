@@ -20,6 +20,9 @@ namespace TextureConvert {
 // Create GPU texture from Milo bitmap data (handles byte-swap, untile, format conversion)
 wgpu::Texture CreateFromBitmap(GpuDevice& gpu, const RndBitmap& bmp, int numMips = 0);
 
+// Create cube texture from 6 face bitmaps (for environment maps)
+wgpu::Texture CreateCubeFromBitmaps(GpuDevice& gpu, const RndBitmap* faces, int numFaces = 6);
+
 // Create render target texture
 wgpu::Texture CreateRenderTarget(GpuDevice& gpu, int w, int h, wgpu::TextureFormat fmt);
 

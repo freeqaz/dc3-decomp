@@ -175,7 +175,9 @@ void Synth::Init() {
     }
     mHud = RndOverlay::Find("synth_hud", true);
     mHud->SetCallback(this);
+#ifndef HX_NATIVE
     InitSecurity();
+#endif
 }
 
 void Synth::InitSecurity() {

@@ -84,49 +84,19 @@ void RndDir::Export(DataArray *a, bool b2) {
 INIT_REVS(10, 0)
 
 void RndDir::PreLoad(BinStream &bs) {
-#ifdef HX_NATIVE
-    int tell0 = bs.Tell();
-    printf("RndDir::PreLoad '%s': tell=%d (before LOAD_REVS)\n", Name(), tell0);
-    fflush(stdout);
-#endif
     LOAD_REVS(bs)
     ASSERT_REVS(10, 0)
-#ifdef HX_NATIVE
-    printf("RndDir::PreLoad '%s': rev=%d altRev=%d tell=%d\n", Name(), d.rev, d.altRev, bs.Tell());
-    fflush(stdout);
-#endif
     ObjectDir::PreLoad(bs);
     bs.PushRev(packRevs(d.altRev, d.rev), this);
 }
 
 void RndDir::PostLoad(BinStream &bs) {
     BinStreamRev d(bs, bs.PopRev(this));
-#ifdef HX_NATIVE
-    printf("RndDir::PostLoad '%s': rev=%d altRev=%d tell=%d\n",
-           Name(), d.rev, d.altRev, bs.Tell());
-    fflush(stdout);
-#endif
     ObjectDir::PostLoad(bs);
-#ifdef HX_NATIVE
-    printf("RndDir::PostLoad '%s': after ObjectDir::PostLoad tell=%d\n", Name(), bs.Tell());
-    fflush(stdout);
-#endif
     RndAnimatable::Load(d.stream);
-#ifdef HX_NATIVE
-    printf("RndDir::PostLoad '%s': after RndAnimatable::Load tell=%d\n", Name(), bs.Tell());
-    fflush(stdout);
-#endif
     RndDrawable::Load(d.stream);
-#ifdef HX_NATIVE
-    printf("RndDir::PostLoad '%s': after RndDrawable::Load tell=%d\n", Name(), bs.Tell());
-    fflush(stdout);
-#endif
     if (d.rev > 0) {
         RndTransformable::Load(d.stream);
-#ifdef HX_NATIVE
-        printf("RndDir::PostLoad '%s': after RndTransformable::Load tell=%d\n", Name(), bs.Tell());
-        fflush(stdout);
-#endif
     }
     if (d.rev > 1) {
         if (gLoadingProxyFromDisk) {
@@ -135,17 +105,9 @@ void RndDir::PostLoad(BinStream &bs) {
         } else {
             d.stream >> mEnv;
         }
-#ifdef HX_NATIVE
-        printf("RndDir::PostLoad '%s': after mEnv tell=%d\n", Name(), bs.Tell());
-        fflush(stdout);
-#endif
     }
     if (d.rev > 2 && d.rev != 9) {
         d.stream >> mTestEvent;
-#ifdef HX_NATIVE
-        printf("RndDir::PostLoad '%s': after mTestEvent tell=%d\n", Name(), bs.Tell());
-        fflush(stdout);
-#endif
     }
     if (d.rev > 3 && d.rev < 9) {
         Symbol s;
@@ -157,10 +119,6 @@ void RndDir::PostLoad(BinStream &bs) {
         pp->LoadRev(d);
         delete pp;
     }
-#ifdef HX_NATIVE
-    printf("RndDir::PostLoad '%s': done tell=%d\n", Name(), bs.Tell());
-    fflush(stdout);
-#endif
 }
 
 void RndDir::SetSubDir(bool b1) {
@@ -347,15 +305,8 @@ bool RndDir::MakeWorldSphere(Sphere &s, bool b) {
 void RndDir::DrawShowing() {
     if (!mDraws.empty()) {
         RndEnvironTracker tracker(mEnv, &WorldXfm().v);
-#ifdef HX_NATIVE
-        int idx = 0;
-#endif
         for (std::vector<RndDrawable *>::iterator it = mDraws.begin(); it != mDraws.end();
              ++it) {
-#ifdef HX_NATIVE
-            fprintf(stderr, "  RndDir::DrawShowing '%s' draw[%d]: '%s' class='%s'\n",
-                    Name(), idx++, (*it)->Name(), (*it)->ClassName());
-#endif
             (*it)->Draw();
         }
     }

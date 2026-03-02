@@ -381,6 +381,20 @@ int UIFontImporter::GetMatVariationIdx(Symbol s) const {
 }
 
 RndFontBase *UIFontImporter::GetGennedFont(Symbol s) const {
+#ifdef HX_NATIVE
+    if (s.Null()) {
+        return *mGennedFonts.begin();
+    }
+    int idx = GetMatVariationIdx(s);
+    if (idx == -1)
+        return nullptr;
+    if ((unsigned int)idx >= mMatVariations.size())
+        return FindFontForMat(nullptr);
+    auto it = mMatVariations.begin();
+    for (; (unsigned)idx; idx--)
+        ++it;
+    return FindFontForMat(*it);
+#else
     if (s.Null()) {
         void *node = *reinterpret_cast<void * const *>(
             reinterpret_cast<char *>(const_cast<UIFontImporter *>(this)) + 0x9c
@@ -412,6 +426,7 @@ RndFontBase *UIFontImporter::GetGennedFont(Symbol s) const {
         reinterpret_cast<char *>(ptr) + 0xc
     );
     return FindFontForMat(mat);
+#endif
 }
 
 void UIFontImporter::AttachImporterToFont(RndFontBase *font) {
@@ -668,9 +683,12 @@ DataNode UIFontImporter::OnSyncWithResourceFile(DataArray *) {
                         std::vector<RndFontBase::KernInfo> kerninfo;
                         labelDir->mReferenceKerning->GetKerning(kerninfo);
                         self->mReferenceKerning->SetKerning(kerninfo);
-                        // Cast to access protected mBaseKerning member
                         RndFontBase *pKern = labelDir->mReferenceKerning;
+#ifdef HX_NATIVE
+                        float baseKerning = pKern->mBaseKerning;
+#else
                         float baseKerning = *(float *)((char *)pKern + 0x3c);
+#endif
                         self->mReferenceKerning->SetBaseKerning(baseKerning);
                     }
                 }

@@ -89,22 +89,35 @@
 #include <cstring>
 
 MetaPanel::MetaPanel() : mLoopHistoryCursor(0), mSongPreview(TheHamSongMgr), mXMPPlaying(false) {
+#ifdef HX_NATIVE
+    mMetaMusicManager = nullptr;
+    mCampaign = nullptr;
+    mHAQManager = nullptr;
+#else
     mMetaMusicManager = new MetaMusicManager(SystemConfig("synth", "metamusic"));
     mCampaign = new Campaign(SystemConfig("campaign"));
     mHAQManager = new HAQManager();
+#endif
     mSongPreview.SetName("song_preview", ObjectDir::Main());
+#ifndef HX_NATIVE
     SongSortMgr::Init(mSongPreview);
     ChallengeSortMgr::Init(mSongPreview);
     PlaylistSortMgr::Init(mSongPreview);
     MQSongSortMgr::Init(mSongPreview);
     FitnessCalorieSortMgr::Init(mSongPreview);
+#endif
     mLoopHistory.reserve(3);
     for (int i = 3; i != 0; i--) {
         mLoopHistory.push_back(-1);
     }
     ThePlatformMgr.AddSink(this, "xmp_state_changed");
+#ifdef HX_NATIVE
+    sSongDB = nullptr;
+    sHamMaster = nullptr;
+#else
     sSongDB = new SongDB();
     sHamMaster = new HamMaster(sSongDB->SongData(), nullptr);
+#endif
 }
 
 MetaPanel::~MetaPanel() {
@@ -156,15 +169,19 @@ void MetaPanel::Init() {
     REGISTER_OBJ_FACTORY(SongSelectPanel)
     REGISTER_OBJ_FACTORY(SongSelectPlaylistCustomizePanel)
     REGISTER_OBJ_FACTORY(SongSelectPlaylistPanel)
+#ifndef HX_NATIVE
     SongStatusMgr::Init();
+#endif
     REGISTER_OBJ_FACTORY(TexLoadPanel)
     REGISTER_OBJ_FACTORY(Hmx::Object)
+#ifndef HX_NATIVE
     TheMemcardMgr.Init();
     MetagameRank::Preinit();
     TheProfileMgr.Init();
     Leaderboards::Init();
     Challenges::Init();
     FitnessGoalMgr::Init();
+#endif
     REGISTER_OBJ_FACTORY(HamStarsDisplay)
     REGISTER_OBJ_FACTORY(WeightInputPanel)
     REGISTER_OBJ_FACTORY(AppNavProvider)
@@ -212,7 +229,7 @@ void MetaPanel::Load() {
     DataArray *sysConfig = SystemConfig("synth", "metamusic", "music");
     int loopIndex = PickLoopIndex(sysConfig->Size());
     DataArray *loopArray = sysConfig->Array(loopIndex);
-    if (!TheMetaMusic) {
+    if (!TheMetaMusic && sHamMaster) {
         TheMetaMusic = new MetaMusic(sHamMaster, "sfx/shell_fx.milo");
         TheMetaMusic->Load(0.0f, true, true);
         sHamMaster->Load(
@@ -247,7 +264,8 @@ void MetaPanel::FinishLoad() {
         }
     }
     UIPanel::FinishLoad();
-    TheMetaMusic->AddFader(TheSynth->Find<Fader>("background_music_level.fade", true));
+    if (TheMetaMusic)
+        TheMetaMusic->AddFader(TheSynth->Find<Fader>("background_music_level.fade", true));
 }
 
 bool MetaPanel::IsLoaded() const {
@@ -256,7 +274,7 @@ bool MetaPanel::IsLoaded() const {
             return true;
         }
     }
-    return UIPanel::IsLoaded() && TheMetaMusic->Loaded();
+    return UIPanel::IsLoaded() && (!TheMetaMusic || TheMetaMusic->Loaded());
 }
 
 void MetaPanel::Poll() {
@@ -267,6 +285,9 @@ void MetaPanel::Poll() {
     }
     UIPanel::Poll();
     mSongPreview.Poll();
+#ifdef HX_NATIVE
+    if (!TheMetaMusic || !sHamMaster) return;
+#endif
     MILO_ASSERT(TheMetaMusic, 0x176);
     TheMetaMusic->Poll();
     float beat = MsToBeat(sHamMaster->StreamMs());
@@ -282,6 +303,9 @@ void MetaPanel::Enter() {
         }
     }
     UIPanel::Enter();
+#ifdef HX_NATIVE
+    if (!sHamMaster) return;
+#endif
     sHamMaster->SetMaps();
     TheTaskMgr.SetAutoSecondsBeats(true);
 }
@@ -294,7 +318,8 @@ void MetaPanel::Exit() {
     }
     UIPanel::Exit();
     mSongPreview.Start(gNullStr, nullptr);
-    TheMetaMusic->Stop();
+    if (TheMetaMusic)
+        TheMetaMusic->Stop();
     ThePlatformMgr.DisableXMP();
 }
 
@@ -307,7 +332,7 @@ bool MetaPanel::Exiting() const {
     if (mState != 2) {
         return UIPanel::Exiting();
     }
-    bool ret = mSongPreview.IsWaitingToDelete() || mSongPreview.IsFadingOut() || TheMetaMusic->IsActive() || UIPanel::Exiting();
+    bool ret = mSongPreview.IsWaitingToDelete() || mSongPreview.IsFadingOut() || (TheMetaMusic && TheMetaMusic->IsActive()) || UIPanel::Exiting();
     if (!ret) {
         TheTaskMgr.SetAutoSecondsBeats(true);
     }

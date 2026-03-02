@@ -1216,10 +1216,6 @@ void FillCompressedVertex(CompressedVertex_Xbox &compressed, const RndMesh::Vert
 void RndMesh::LoadVertices(BinStreamRev &d) {
     int count;
     d.stream.ReadEndian(&count, 4);
-#ifdef HX_NATIVE
-    printf("RndMesh::LoadVertices '%s': count=%d rev=0x%x platform=%d\n",
-           Name(), count, d.rev, TheLoadMgr.GetPlatform());
-#endif
     bool b58;
     if (d.rev > 0x22) {
         d >> b58;
@@ -1255,38 +1251,22 @@ void RndMesh::LoadVertices(BinStreamRev &d) {
         }
     }
     if (b58) {
-#ifdef HX_NATIVE
-        printf("  LoadVertices: compressed path, b4=%d loadedCompressedSize=%d compressedSize=%d\n",
-               b4, loadedCompressedSize, compressedSize);
-#endif
         if (b4) {
             mNumCompressedVerts = count;
             if (mNumCompressedVerts != 0) {
                 unsigned int totalSize = compressedSize * count;
                 MILO_ASSERT(totalSize > 0, 0x2D4);
-#ifdef HX_NATIVE
-                printf("  LoadVertices: ReadChunks totalSize=%d chunkSize=%d\n", totalSize, compressedSize << 9);
-#endif
                 MemPushTemp();
                 mCompressedVerts = new unsigned char[totalSize];
                 MemPopTemp();
                 ReadChunks(d.stream, mCompressedVerts, totalSize, compressedSize << 9);
-#ifdef HX_NATIVE
-                printf("  LoadVertices: ReadChunks done\n");
-#endif
             }
         } else {
             unsigned int skipSize = loadedCompressedSize * count;
             MILO_ASSERT(skipSize > 0, 0x2E7);
-#ifdef HX_NATIVE
-            printf("  LoadVertices: seeking past stale compressed data, skipSize=%u\n", skipSize);
-#endif
             d.stream.Seek(skipSize, BinStream::kSeekCur);
         }
     } else {
-#ifdef HX_NATIVE
-        printf("  LoadVertices: uncompressed path, %d verts\n", count);
-#endif
         mVerts.resize(count);
         int i = 0;
         for (Vert *it = mVerts.begin(); it != mVerts.end(); ++it) {
@@ -1297,9 +1277,6 @@ void RndMesh::LoadVertices(BinStreamRev &d) {
                     Timer::Sleep(0);
             }
         }
-#ifdef HX_NATIVE
-        printf("  LoadVertices: done reading %d verts\n", i);
-#endif
     }
 }
 

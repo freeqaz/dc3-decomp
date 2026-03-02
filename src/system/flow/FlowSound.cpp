@@ -59,6 +59,7 @@ BEGIN_LOADS(FlowSound)
         mSound.LoadFromMainOrDir(bs);
     }
     bs >> mVolume >> mPan >> mTranspose;
+    bs >> (int &)mStopMode;
     if (d.rev > 0)
         d >> mForceStop;
     if (2 < d.rev)

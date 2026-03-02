@@ -422,6 +422,7 @@ def main():
     pct_updates: list[tuple] = []
     enrich_updates: list[tuple] = []
     promotions: list[int] = []
+    stub_updates: list[int] = []
 
     for r in results:
         if r.error == "not_found":
@@ -429,6 +430,8 @@ def main():
             continue
         if r.error == "unimplemented":
             stats["unimplemented"] += 1
+            if not args.dry_run:
+                stub_updates.append(r.db_id)
             continue
         if r.error:
             stats["errors"] += 1
@@ -500,7 +503,7 @@ def main():
                 stats["promoted"] += 1
 
     # Apply to DB
-    if not args.dry_run and (pct_updates or enrich_updates or promotions):
+    if not args.dry_run and (pct_updates or enrich_updates or promotions or stub_updates):
         conn = sqlite3.connect(str(args.db))
         conn.execute("PRAGMA journal_mode = WAL")
 
@@ -554,6 +557,15 @@ def main():
                        updated_at = CURRENT_TIMESTAMP
                    WHERE id = ?""",
                 [(fid,) for fid in promotions],
+            )
+
+        if stub_updates:
+            conn.executemany(
+                """UPDATE functions
+                   SET is_stub = 1,
+                       updated_at = CURRENT_TIMESTAMP
+                   WHERE id = ?""",
+                [(fid,) for fid in stub_updates],
             )
 
         conn.commit()

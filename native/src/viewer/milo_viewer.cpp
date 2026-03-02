@@ -1,34 +1,48 @@
 // DC3 Native Port — Milo Viewer
 // Standalone tool: loads a .milo_xbox file and renders it with an orbit camera.
-// Usage: milo-viewer <path-to-file.milo_xbox> [--screenshot <output.ppm>]
+// Supports character animation (CharClip), subdirectory loading, and video recording.
 
 #include "os/Debug.h"
 #include "os/System.h"
 #include "obj/Dir.h"
 #include "obj/DirLoader.h"
+#include "obj/Task.h"
+#include "rndobj/Anim.h"
 #include "rndobj/Cam.h"
 #include "rndobj/Dir.h"
 #include "rndobj/Env.h"
 #include "rndobj/Rnd.h"
 #include "rndobj/Trans.h"
+#include "rndobj/TransAnim.h"
 #include "rndobj/Mesh.h"
+#include "rndobj/PropAnim.h"
+#include "char/Char.h"
+#include "char/Character.h"
+#include "char/CharDriver.h"
+#include "char/CharClip.h"
+#include "char/CharServoBone.h"
+#include "char/CharBoneDir.h"
 #include "math/Mtx.h"
 #include "math/Vec.h"
 #include "utl/FilePath.h"
 
 #include "world/World.h"
-#include "char/Char.h"
 #include "hamobj/Ham.h"
 #include "flow/Flow.h"
 #include "platform/Rnd_Wgpu.h"
 #include "gfx/GpuDevice.h"
+#include "gfx/Screenshot.h"
+#include "gfx/VideoEncoder.h"
 
 #include <GLFW/glfw3.h>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <cstdlib>
 #include <cstring>
 #include <climits>
+#include <vector>
+#include <string>
 
 // Forward declarations from engine
 extern Rnd& TheRnd;
@@ -82,11 +96,11 @@ struct OrbitCamera {
         if (elevation < -1.5f) elevation = -1.5f;
         if (distance < 0.1f) distance = 0.1f;
 
-        // Camera position from spherical coordinates
+        // Camera position from spherical coordinates (Milo convention: Z-up)
         float cosElev = cosf(elevation);
         float eyeX = targetX + distance * cosElev * sinf(azimuth);
-        float eyeY = targetY + distance * sinf(elevation);
-        float eyeZ = targetZ + distance * cosElev * cosf(azimuth);
+        float eyeY = targetY + distance * cosElev * cosf(azimuth);
+        float eyeZ = targetZ + distance * sinf(elevation);
 
         // Build look-at vectors
         Vector3 eye, tgt, fwd, right, up;
@@ -95,13 +109,13 @@ struct OrbitCamera {
         Subtract(tgt, eye, fwd);
         Normalize(fwd, fwd);
 
-        // Handle near-vertical case
+        // Milo world: Z is up
         Vector3 worldUp;
-        worldUp.Set(0, 1, 0);
+        worldUp.Set(0, 0, 1);
         Cross(fwd, worldUp, right);
         float rightLen = Length(right);
         if (rightLen < 0.001f) {
-            worldUp.Set(0, 0, 1);
+            worldUp.Set(0, 1, 0);
             Cross(fwd, worldUp, right);
         }
         Normalize(right, right);
@@ -159,9 +173,27 @@ struct OrbitCamera {
 };
 
 // ============================================================================
+// Animation State
+// ============================================================================
+struct AnimState {
+    bool paused = false;
+    float speed = 1.0f;         // playback speed multiplier
+    float currentFrame = 0.0f;  // current animation frame
+    float startFrame = 0.0f;
+    float endFrame = 0.0f;
+    bool hasAnimation = false;
+    double lastTime = 0.0;      // last glfwGetTime() for delta
+    int animCount = 0;          // number of animatable objects found
+
+    // Collected animatables (non-RndDir scene fallback)
+    std::vector<RndAnimatable*> animatables;
+};
+
+// ============================================================================
 // GLFW Callbacks
 // ============================================================================
 static OrbitCamera gOrbitCam;
+static AnimState gAnim;
 
 static void CursorPosCallback(GLFWwindow* window, double xpos, double ypos) {
     double dx = xpos - gOrbitCam.lastX;
@@ -219,6 +251,45 @@ static void KeyCallback(GLFWwindow* window, int key, int scancode, int action, i
         if (key == GLFW_KEY_ESCAPE) {
             glfwSetWindowShouldClose(window, GLFW_TRUE);
         }
+        // Animation controls
+        if (key == GLFW_KEY_SPACE && gAnim.hasAnimation) {
+            gAnim.paused = !gAnim.paused;
+            printf("Animation %s (frame %.1f / %.1f)\n",
+                   gAnim.paused ? "paused" : "playing",
+                   gAnim.currentFrame, gAnim.endFrame);
+        }
+        if (key == GLFW_KEY_PERIOD && gAnim.hasAnimation) {
+            // Step forward one frame (30fps = 1 frame)
+            gAnim.currentFrame += 1.0f;
+            if (gAnim.endFrame > gAnim.startFrame) {
+                float range = gAnim.endFrame - gAnim.startFrame;
+                gAnim.currentFrame = fmodf(gAnim.currentFrame - gAnim.startFrame, range) + gAnim.startFrame;
+            }
+            printf("Frame: %.1f\n", gAnim.currentFrame);
+        }
+        if (key == GLFW_KEY_COMMA && gAnim.hasAnimation) {
+            // Step backward one frame
+            gAnim.currentFrame -= 1.0f;
+            if (gAnim.currentFrame < gAnim.startFrame) {
+                float range = gAnim.endFrame - gAnim.startFrame;
+                gAnim.currentFrame = gAnim.endFrame - fmodf(gAnim.startFrame - gAnim.currentFrame, range);
+            }
+            printf("Frame: %.1f\n", gAnim.currentFrame);
+        }
+        if (key == GLFW_KEY_UP && gAnim.hasAnimation) {
+            gAnim.speed *= 2.0f;
+            if (gAnim.speed > 16.0f) gAnim.speed = 16.0f;
+            printf("Animation speed: %.1fx\n", gAnim.speed);
+        }
+        if (key == GLFW_KEY_DOWN && gAnim.hasAnimation) {
+            gAnim.speed *= 0.5f;
+            if (gAnim.speed < 0.0625f) gAnim.speed = 0.0625f;
+            printf("Animation speed: %.1fx\n", gAnim.speed);
+        }
+        if (key == GLFW_KEY_HOME && gAnim.hasAnimation) {
+            gAnim.currentFrame = gAnim.startFrame;
+            printf("Animation reset to start (frame %.1f)\n", gAnim.currentFrame);
+        }
     }
 }
 
@@ -242,22 +313,6 @@ static void SignalHandler(int sig) {
 }
 
 // ============================================================================
-// Write PPM image file (simple, no dependencies)
-// ============================================================================
-static bool WritePPM(const char* path, const uint8_t* rgba, int w, int h) {
-    FILE* f = fopen(path, "wb");
-    if (!f) return false;
-    fprintf(f, "P6\n%d %d\n255\n", w, h);
-    for (int i = 0; i < w * h; i++) {
-        fputc(rgba[i * 4 + 0], f);  // R
-        fputc(rgba[i * 4 + 1], f);  // G
-        fputc(rgba[i * 4 + 2], f);  // B
-    }
-    fclose(f);
-    return true;
-}
-
-// ============================================================================
 // Main
 // ============================================================================
 int main(int argc, char** argv) {
@@ -271,20 +326,40 @@ int main(int argc, char** argv) {
         fprintf(f, "Usage: milo-viewer <path.milo_xbox> [options]\n\n");
         fprintf(f, "Options:\n");
         fprintf(f, "  --help                     Show this help message\n");
-        fprintf(f, "  --screenshot <file.ppm>    Render headlessly and save screenshot\n");
+        fprintf(f, "  --screenshot <file.png>    Render headlessly and save screenshot (PNG)\n");
+        fprintf(f, "  --subdir <path.milo_xbox>  Load additional .milo as subdirectory (repeatable)\n");
+        fprintf(f, "  --clips <path.milo_xbox>   Load CharClip animation directory\n");
+        fprintf(f, "  --clip <name>              Play a specific clip by name\n");
+        fprintf(f, "  --bpm <number>             Beats per minute for clip playback (default: 120)\n");
+        fprintf(f, "  --video <output.mp4>       Record video via ffmpeg (headless)\n");
+        fprintf(f, "  --duration <seconds>       Video duration in seconds (default: 10)\n");
+        fprintf(f, "  --fps <number>             Video frame rate (default: 30)\n");
+        fprintf(f, "  --camera <mode>            Camera mode: orbit, auto-orbit (default: orbit)\n");
         fprintf(f, "  --azimuth <degrees>        Camera azimuth angle (default: ~23)\n");
         fprintf(f, "  --elevation <degrees>      Camera elevation angle (default: ~17)\n");
+        fprintf(f, "  --frame <number>           Start at specific animation frame\n");
+        fprintf(f, "  --speed <multiplier>       Animation speed (default: 1.0)\n");
+        fprintf(f, "  --paused                   Start with animation paused\n");
+        fprintf(f, "  --width <pixels>           Render width (default: 1280)\n");
+        fprintf(f, "  --height <pixels>          Render height (default: 720)\n");
         fprintf(f, "  --verbose, -v              Print detailed object/drawable info\n\n");
         fprintf(f, "Controls (windowed mode):\n");
         fprintf(f, "  Left drag     orbit\n");
         fprintf(f, "  Scroll        zoom\n");
         fprintf(f, "  Middle drag   pan\n");
         fprintf(f, "  R             reset camera\n");
+        fprintf(f, "  Space         pause/resume animation\n");
+        fprintf(f, "  .             step forward one frame\n");
+        fprintf(f, "  ,             step backward one frame\n");
+        fprintf(f, "  Up/Down       double/halve animation speed\n");
+        fprintf(f, "  Home          reset animation to start\n");
         fprintf(f, "  Escape        quit\n\n");
         fprintf(f, "Examples:\n");
         fprintf(f, "  milo-viewer world/shared/props/gen/discoball.milo_xbox\n");
-        fprintf(f, "  milo-viewer scene.milo_xbox --screenshot out.ppm\n");
-        fprintf(f, "  milo-viewer scene.milo_xbox --screenshot out.ppm --azimuth 45 --elevation 30\n");
+        fprintf(f, "  milo-viewer scene.milo_xbox --screenshot out.png\n");
+        fprintf(f, "  milo-viewer aubrey01.milo_xbox --clips clips.milo_xbox --bpm 120\n");
+        fprintf(f, "  milo-viewer aubrey01.milo_xbox --clips clips.milo_xbox --video dance.mp4 --duration 10\n");
+        fprintf(f, "  milo-viewer parent.milo_xbox --subdir child.milo_xbox\n");
     };
 
     if (argc < 2) {
@@ -295,8 +370,20 @@ int main(int argc, char** argv) {
     // Parse arguments
     const char* miloPath = nullptr;
     const char* screenshotPath = nullptr;
+    const char* clipsPath = nullptr;
+    const char* clipName = nullptr;
+    const char* videoPath = nullptr;
+    const char* cameraMode = "orbit";
+    std::vector<std::string> subdirPaths;
     float camAzimuthDeg = -999.0f;  // sentinel: use default
     float camElevationDeg = -999.0f;
+    float camDistanceOverride = -1.0f;  // sentinel: use auto
+    float startFrame = -1.0f;       // sentinel: use default
+    float animSpeed = 1.0f;
+    float bpm = 120.0f;
+    float videoDuration = 10.0f;
+    int videoFps = 30;
+    bool startPaused = false;
     bool verbose = false;
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
@@ -304,10 +391,38 @@ int main(int argc, char** argv) {
             return 0;
         } else if (strcmp(argv[i], "--screenshot") == 0 && i + 1 < argc) {
             screenshotPath = argv[++i];
+        } else if (strcmp(argv[i], "--subdir") == 0 && i + 1 < argc) {
+            subdirPaths.push_back(argv[++i]);
+        } else if (strcmp(argv[i], "--clips") == 0 && i + 1 < argc) {
+            clipsPath = argv[++i];
+        } else if (strcmp(argv[i], "--clip") == 0 && i + 1 < argc) {
+            clipName = argv[++i];
+        } else if (strcmp(argv[i], "--bpm") == 0 && i + 1 < argc) {
+            bpm = (float)atof(argv[++i]);
+        } else if (strcmp(argv[i], "--video") == 0 && i + 1 < argc) {
+            videoPath = argv[++i];
+        } else if (strcmp(argv[i], "--duration") == 0 && i + 1 < argc) {
+            videoDuration = (float)atof(argv[++i]);
+        } else if (strcmp(argv[i], "--fps") == 0 && i + 1 < argc) {
+            videoFps = atoi(argv[++i]);
+        } else if (strcmp(argv[i], "--camera") == 0 && i + 1 < argc) {
+            cameraMode = argv[++i];
         } else if (strcmp(argv[i], "--azimuth") == 0 && i + 1 < argc) {
             camAzimuthDeg = (float)atof(argv[++i]);
         } else if (strcmp(argv[i], "--elevation") == 0 && i + 1 < argc) {
             camElevationDeg = (float)atof(argv[++i]);
+        } else if (strcmp(argv[i], "--distance") == 0 && i + 1 < argc) {
+            camDistanceOverride = (float)atof(argv[++i]);
+        } else if (strcmp(argv[i], "--frame") == 0 && i + 1 < argc) {
+            startFrame = (float)atof(argv[++i]);
+        } else if (strcmp(argv[i], "--speed") == 0 && i + 1 < argc) {
+            animSpeed = (float)atof(argv[++i]);
+        } else if (strcmp(argv[i], "--paused") == 0) {
+            startPaused = true;
+        } else if (strcmp(argv[i], "--width") == 0 && i + 1 < argc) {
+            setenv("MILO_WIDTH", argv[++i], 1);
+        } else if (strcmp(argv[i], "--height") == 0 && i + 1 < argc) {
+            setenv("MILO_HEIGHT", argv[++i], 1);
         } else if (strcmp(argv[i], "--verbose") == 0 || strcmp(argv[i], "-v") == 0) {
             verbose = true;
         } else if (!miloPath) {
@@ -334,8 +449,10 @@ int main(int argc, char** argv) {
 
     // ---- Engine init (minimal subset of App::App) ----
 
-    // Force headless if screenshot mode or no display available
-    if (screenshotPath) {
+    // Always enable GPU rendering for the viewer
+    setenv("MILO_RENDER", "1", 1);
+    // Force headless if screenshot/video mode or no display available
+    if (screenshotPath || videoPath) {
         setenv("MILO_HEADLESS", "1", 1);
     }
 
@@ -410,6 +527,211 @@ int main(int argc, char** argv) {
         printf("Milo Viewer: SyncObjects complete\n");
     }
 
+    // ---- Load subdirectories (--subdir) ----
+    std::vector<ObjDirPtr<ObjectDir>> subdirs;
+    for (const auto& sdPathStr : subdirPaths) {
+        char sdAbsPath[PATH_MAX];
+        if (!realpath(sdPathStr.c_str(), sdAbsPath)) {
+            fprintf(stderr, "Warning: cannot resolve subdir path '%s', skipping\n", sdPathStr.c_str());
+            continue;
+        }
+        printf("Milo Viewer: loading subdir '%s'...\n", sdAbsPath);
+
+        ObjDirPtr<ObjectDir> sd;
+        FilePath sdFp(sdAbsPath);
+        sd.LoadFile(sdFp, false, false, kLoadFront, false);
+
+        ObjectDir* sdDir = sd;
+        if (!sdDir) {
+            fprintf(stderr, "Warning: failed to load subdir '%s'\n", sdAbsPath);
+            continue;
+        }
+
+        baseScene->AppendSubDir(sd);
+        subdirs.push_back(sd);
+        printf("Milo Viewer: loaded subdir '%s' (class '%s')\n",
+               sdDir->Name(), sdDir->ClassName().Str());
+    }
+    if (!subdirs.empty()) {
+        // Re-sync after adding subdirs so cross-dir references resolve
+        if (scene) scene->SyncObjects();
+        printf("Milo Viewer: %d subdirectories loaded\n", (int)subdirs.size());
+    }
+
+    // ---- Load animation clips (--clips) ----
+    ObjDirPtr<ObjectDir> clipsDir;
+    Character* charObj = nullptr;
+    bool charAnimActive = false;
+    CharClip* activeClip = nullptr;
+    CharServoBone* activeServo = nullptr;
+
+    // Find the Character in the base scene
+    {
+        ObjDirItr<Character> charIt(baseScene, true);
+        if (charIt) {
+            charObj = charIt;
+            printf("Milo Viewer: found Character '%s'\n", charObj->Name());
+        }
+    }
+
+    if (clipsPath && charObj) {
+        char clipsAbsPath[PATH_MAX];
+        if (realpath(clipsPath, clipsAbsPath)) {
+            printf("Milo Viewer: loading clips from '%s'...\n", clipsAbsPath);
+            FilePath clipsFp(clipsAbsPath);
+            clipsDir.LoadFile(clipsFp, false, false, kLoadFront, false);
+
+            ObjectDir* clipsDirPtr = clipsDir;
+            if (clipsDirPtr) {
+                printf("Milo Viewer: clips dir loaded (class '%s')\n",
+                       clipsDirPtr->ClassName().Str());
+
+                // Create a CharDriver if the Character doesn't have one
+                // (outfit .milo files don't serialize CharDriver — it's created at runtime)
+                CharDriver* driver = charObj->Driver();
+                if (!driver) {
+                    printf("Milo Viewer: creating CharDriver 'main.drv'...\n");
+                    charObj->New<CharDriver>("main.drv");
+                    driver = charObj->Driver();
+
+                    // Set up bones target — find CharServoBone or create one
+                    if (driver) {
+                        CharServoBone* servo = charObj->Find<CharServoBone>("bone.servo", false);
+                        if (!servo) {
+                            servo = charObj->New<CharServoBone>("bone.servo");
+                            printf("Milo Viewer: created CharServoBone 'bone.servo'\n");
+                        }
+                        driver->SetBones(servo);
+                        // Bones will be stuffed from the clip after we find one
+                        printf("Milo Viewer: CharDriver created and wired to bones\n");
+                    }
+                }
+
+                if (driver) {
+                    driver->SetClips(clipsDirPtr);
+
+                    // Find a clip to play (need it before stuffing bones)
+                    CharClip* clipToPlay = nullptr;
+                    if (clipName) {
+                        // Find specific clip by name
+                        clipToPlay = clipsDirPtr->Find<CharClip>(clipName, false);
+                        if (!clipToPlay) {
+                            fprintf(stderr, "Warning: clip '%s' not found, listing available:\n", clipName);
+                        }
+                    }
+
+                    // If no specific clip requested or not found, pick the first one
+                    if (!clipToPlay) {
+                        ObjDirItr<CharClip> clipIt(clipsDirPtr, true);
+                        int count = 0;
+                        while (clipIt) {
+                            if (!clipToPlay) clipToPlay = clipIt;
+                            if (verbose || (clipName && count < 20)) {
+                                printf("  clip: '%s' (%.1f - %.1f beats)\n",
+                                       clipIt->Name(), clipIt->StartBeat(), clipIt->EndBeat());
+                            }
+                            count++;
+                            ++clipIt;
+                        }
+                        printf("Milo Viewer: %d clips available\n", count);
+                    }
+
+                    if (clipToPlay) {
+                        printf("Milo Viewer: playing clip '%s' (beats %.1f-%.1f)\n",
+                               clipToPlay->Name(),
+                               clipToPlay->StartBeat(), clipToPlay->EndBeat());
+
+                        // Stuff ALL clips' bones into the servo so ScaleDown
+                        // can find every bone name referenced by any clip
+                        CharServoBone* servo = activeServo = charObj->Find<CharServoBone>("bone.servo", false);
+                        if (servo) {
+                            ObjDirItr<CharClip> allClips(clipsDirPtr, true);
+                            while (allClips) {
+                                allClips->StuffBones(*servo);
+                                ++allClips;
+                            }
+                            printf("Milo Viewer: bones stuffed from clips (%d bones)\n",
+                                   (int)servo->GetBones().size());
+                        }
+
+                        // Enter just the CharDriver (not the full Character, which triggers
+                        // CharHair/CharCollide initialization that crashes without full scene setup)
+                        driver->Enter();
+
+                        // Play with loop + now flags, beat-based timing
+                        int flags = CharClip::kPlayNow | CharClip::kPlayLoop;
+                        driver->Play(clipToPlay, flags, -1.0f, 1e30f, 0.0f);
+                        activeClip = clipToPlay;
+                        charAnimActive = true;
+
+                        printf("Milo Viewer: character animation active (bpm=%.0f)\n", bpm);
+                    }
+                } else {
+                    fprintf(stderr, "Warning: failed to create CharDriver\n");
+                }
+            } else {
+                fprintf(stderr, "Warning: failed to load clips dir\n");
+            }
+        } else {
+            fprintf(stderr, "Warning: cannot resolve clips path '%s'\n", clipsPath);
+        }
+    } else if (clipsPath && !charObj) {
+        fprintf(stderr, "Warning: --clips specified but no Character found in scene\n");
+    }
+
+    // ---- Resolve combined/split mesh overlap ----
+    // DC3 does NOT use CharMeshHide at runtime — the class is registered but zero .milo
+    // files in the entire game (5,399 checked) contain CharMeshHide objects. Unlike RB3
+    // which evaluates CharMeshHide flags from BandCharacter::SyncObjects(), DC3 relies
+    // on pre-baked mShowing values in the serialized .milo data. However, the gen/
+    // outfit .milo files have both combined and split meshes showing=true, so this
+    // heuristic resolves the overlap by naming convention:
+    // Hide LOD meshes (low-detail doubles of full-res geometry) and wrinkle overlays.
+    // Leave all other mesh visibility at its default state from the .milo file.
+    // TODO(native): Implement proper CharMeshHide evaluation for outfit-aware visibility.
+    {
+        int hidCount = 0;
+        ObjDirItr<RndMesh> meshIt(baseScene, true);
+        while (meshIt) {
+            const char* name = meshIt->Name();
+            size_t len = strlen(name);
+
+            // Hide LOD and wrinkle meshes
+            if (strstr(name, "_lod") || strstr(name, "_wrinkle")) {
+                meshIt->SetShowing(false);
+                hidCount++;
+                if (verbose) printf("  hide LOD/wrinkle mesh '%s'\n", name);
+            }
+            // Push combined meshes behind splits via depth bias to prevent z-fighting.
+            // Combined mesh has arm geometry the splits lack, so we can't hide it.
+            else if (len > 5 && strcmp(name + len - 5, ".mesh") == 0) {
+                bool isSplit = false;
+                for (size_t i = 0; i < len - 5; i++) {
+                    if (name[i] == '.' && name[i+1] >= '1' && name[i+1] <= '9'
+                        && (i + 2 >= len - 5 || name[i+2] == '.')) {
+                        isSplit = true;
+                        break;
+                    }
+                }
+                if (!isSplit) {
+                    char splitName[256];
+                    snprintf(splitName, sizeof(splitName), "%.*s.1.mesh", (int)(len - 5), name);
+                    RndMesh* split = baseScene->Find<RndMesh>(splitName, false);
+                    if (split) {
+                        extern void SetMeshDepthBias(RndMesh*, int32_t);
+                        SetMeshDepthBias(&(*meshIt), 100);
+                        if (verbose)
+                            printf("  depth-bias combined mesh '%s'\n", name);
+                    }
+                }
+            }
+            ++meshIt;
+        }
+        if (hidCount > 0) {
+            printf("Milo Viewer: hid %d meshes (LOD/wrinkle/combined)\n", hidCount);
+        }
+    }
+
     // ---- Print loaded object summary ----
     {
         int meshCount = 0, matCount = 0, texCount = 0, other = 0;
@@ -467,6 +789,60 @@ int main(int argc, char** argv) {
         }
     }
 
+    // ---- Scan for animation data ----
+    {
+        int transAnimCount = 0, propAnimCount = 0, otherAnimCount = 0;
+        float globalStart = 1e10f, globalEnd = -1e10f;
+
+        ObjDirItr<RndAnimatable> animIt(baseScene, true);
+        while (animIt) {
+            RndAnimatable* anim = animIt;
+            float sf = anim->StartFrame();
+            float ef = anim->EndFrame();
+
+            // Skip animatables with no keyframes (StartFrame == EndFrame == 0)
+            if (ef > sf) {
+                if (sf < globalStart) globalStart = sf;
+                if (ef > globalEnd) globalEnd = ef;
+                gAnim.animatables.push_back(anim);
+
+                if (verbose) {
+                    const char* cn = anim->ClassName().Str();
+                    printf("  anim '%s' class='%s' frames=[%.1f, %.1f]\n",
+                           anim->Name(), cn, sf, ef);
+                }
+            }
+
+            // Count by type
+            if (dynamic_cast<RndTransAnim*>(anim)) transAnimCount++;
+            else if (dynamic_cast<RndPropAnim*>(anim)) propAnimCount++;
+            else otherAnimCount++;
+
+            ++animIt;
+        }
+
+        gAnim.animCount = (int)gAnim.animatables.size();
+        if (globalEnd > globalStart) {
+            gAnim.hasAnimation = true;
+            gAnim.startFrame = globalStart;
+            gAnim.endFrame = globalEnd;
+            gAnim.currentFrame = (startFrame >= 0.0f) ? startFrame : globalStart;
+            gAnim.speed = animSpeed;
+            gAnim.paused = startPaused;
+
+            printf("Milo Viewer: %d animatables with keyframes (range [%.1f, %.1f] = %.1f frames)\n",
+                   gAnim.animCount, gAnim.startFrame, gAnim.endFrame,
+                   gAnim.endFrame - gAnim.startFrame);
+            printf("  TransAnim: %d, PropAnim: %d, other: %d\n",
+                   transAnimCount, propAnimCount, otherAnimCount);
+            if (gAnim.paused) printf("  Starting paused\n");
+            if (gAnim.speed != 1.0f) printf("  Speed: %.2fx\n", gAnim.speed);
+        } else {
+            printf("Milo Viewer: no animation data found (%d TransAnim, %d PropAnim, %d other — all empty)\n",
+                   transAnimCount, propAnimCount, otherAnimCount);
+        }
+    }
+
     // Set window title to loaded filename
     if (window) {
         // Extract just the filename from the path
@@ -494,6 +870,7 @@ int main(int argc, char** argv) {
         ObjDirItr<RndMesh> bboxIt(baseScene, true);
         while (bboxIt) {
             RndMesh* m = bboxIt;
+            if (!m->Showing()) { ++bboxIt; continue; }
             const Transform& xfm = m->WorldXfm();
 
             // Use mesh world position as approximate center
@@ -593,36 +970,114 @@ int main(int argc, char** argv) {
     if (camElevationDeg > -900.0f) {
         gOrbitCam.elevation = camElevationDeg * (3.14159265f / 180.0f);
     }
+    if (camDistanceOverride > 0.0f) {
+        gOrbitCam.distance = camDistanceOverride;
+    }
+
+    // Helper lambda: render one frame (draw all meshes from all loaded dirs)
+    auto drawFrame = [&]() {
+        // Find best environment from any loaded dir
+        RndEnviron* env = nullptr;
+        if (scene) env = scene->GetEnv();
+        // Also check subdirs for environments
+        if (!env) {
+            for (auto& sd : subdirs) {
+                RndDir* sdScene = dynamic_cast<RndDir*>((ObjectDir*)sd);
+                if (sdScene && sdScene->GetEnv()) {
+                    env = sdScene->GetEnv();
+                    break;
+                }
+            }
+        }
+
+        Vector3 origin(0,0,0);
+        RndEnvironTracker tracker(env, &origin);
+
+        // Draw meshes from base scene
+        ObjDirItr<RndMesh> meshIt(baseScene, true);
+        while (meshIt) {
+            meshIt->DrawShowing();
+            ++meshIt;
+        }
+
+        // Draw meshes from subdirs
+        for (auto& sd : subdirs) {
+            ObjDirItr<RndMesh> sdMeshIt((ObjectDir*)sd, true);
+            while (sdMeshIt) {
+                sdMeshIt->DrawShowing();
+                ++sdMeshIt;
+            }
+        }
+    };
+
+    // Helper lambda: advance character animation by beat
+    // Advances incrementally in small steps to avoid huge delta issues
+    float lastAnimSeconds = 0.0f;
+    float lastAnimBeat = 0.0f;
+    auto advanceCharAnim = [&](float targetSeconds, float targetBeat) {
+        if (!charAnimActive || !charObj || !charObj->Driver()) return;
+        // Advance in small steps (0.1 beat increments) to avoid huge delta
+        float stepBeats = 0.1f;
+        float stepSeconds = stepBeats * 60.0f / bpm;
+        while (lastAnimBeat + stepBeats < targetBeat) {
+            lastAnimBeat += stepBeats;
+            lastAnimSeconds += stepSeconds;
+            TheTaskMgr.SetSecondsAndBeat(lastAnimSeconds, lastAnimBeat, false);
+            charObj->Driver()->Poll();
+        }
+        // Final step to exact target
+        lastAnimBeat = targetBeat;
+        lastAnimSeconds = targetSeconds;
+        TheTaskMgr.SetSecondsAndBeat(targetSeconds, targetBeat, false);
+        charObj->Driver()->Poll();
+        // Apply bone transforms to mesh nodes
+        if (activeServo) {
+            activeServo->Poll();
+        }
+    };
 
     // ---- Screenshot mode: render a few frames then save and exit ----
     if (screenshotPath) {
         printf("Milo Viewer: rendering frames for screenshot...\n");
 
+        // Apply animation frame if specified
+        if (gAnim.hasAnimation && startFrame >= 0.0f) {
+            printf("Milo Viewer: setting animation to frame %.1f\n", startFrame);
+
+            for (auto* anim : gAnim.animatables) {
+                anim->SetFrame(startFrame, 1.0f);
+            }
+        }
+
+        // If character animation active, advance to a reasonable pose
+        if (charAnimActive) {
+            float beat = (startFrame >= 0.0f) ? startFrame : 4.0f;
+            printf("Milo Viewer: advancing animation to beat %.1f (seconds=%.2f)\n", beat, beat * 60.0f / bpm);
+            advanceCharAnim(beat * 60.0f / bpm, beat);
+
+            // Re-center camera on animated character's pelvis bone
+            RndTransformable* pelvis = charObj->Find<RndTransformable>("bone_pelvis.mesh", false);
+            if (pelvis) {
+                const Transform& bxfm = pelvis->WorldXfm();
+                gOrbitCam.targetX = bxfm.v.x;
+                gOrbitCam.targetY = bxfm.v.y;
+                gOrbitCam.targetZ = bxfm.v.z;
+                // Set sensible defaults for character viewing if no distance override
+                // Character is ~72 units tall, so distance ~100 frames full body
+                if (camDistanceOverride <= 0.0f) {
+                    gOrbitCam.distance = 100.0f;
+                }
+                printf("Milo Viewer: centered on pelvis (%.2f, %.2f, %.2f) dist=%.1f\n",
+                       bxfm.v.x, bxfm.v.y, bxfm.v.z, gOrbitCam.distance);
+            }
+        }
+
         // Render a few frames to let GPU resources settle
         for (int frame = 0; frame < 3; frame++) {
-            fprintf(stderr, "  frame %d: Update...\n", frame);
             gOrbitCam.Update(cam);
-            fprintf(stderr, "  frame %d: BeginDrawing...\n", frame);
             TheRnd.BeginDrawing();
-            fprintf(stderr, "  frame %d: Drawing...\n", frame);
-            // Draw all mesh objects directly (bypass Character/RndDir draw logic
-            // which depends on LOD, shadow maps, and other uninitialized systems)
-            {
-                // Set up environment from the scene's RndDir (provides lighting)
-                RndEnviron* env = nullptr;
-                if (scene) env = scene->GetEnv();
-                Vector3 origin(0,0,0);
-                RndEnvironTracker tracker(env, &origin);
-
-                ObjDirItr<RndMesh> meshIt(baseScene, true);
-                while (meshIt) {
-                    meshIt->DrawShowing();
-                    ++meshIt;
-                }
-            }
-            fprintf(stderr, "  frame %d: EndDrawing...\n", frame);
+            drawFrame();
             TheRnd.EndDrawing();
-            fprintf(stderr, "  frame %d: done\n", frame);
         }
 
         // Readback the framebuffer
@@ -632,8 +1087,8 @@ int main(int argc, char** argv) {
         uint8_t* pixels = (uint8_t*)malloc(pixelSize);
 
         if (pixels && gWgpuRnd->Gpu().ReadbackHeadlessFrame(pixels, pixelSize)) {
-            if (WritePPM(screenshotPath, pixels, w, h)) {
-                printf("Milo Viewer: screenshot saved to %s (%dx%d)\n", screenshotPath, w, h);
+            if (WriteScreenshot(screenshotPath, pixels, w, h)) {
+                printf("Milo Viewer: screenshot saved to %s (%dx%d, PNG)\n", screenshotPath, w, h);
             } else {
                 fprintf(stderr, "Error: failed to write screenshot to '%s'\n", screenshotPath);
             }
@@ -643,38 +1098,163 @@ int main(int argc, char** argv) {
 
         free(pixels);
         baseDir = nullptr;
+        for (auto& sd : subdirs) sd = nullptr;
+        clipsDir = nullptr;
+        gWgpuRnd->Terminate();
+        return 0;
+    }
+
+    // ---- Video recording mode: headless deterministic frame capture ----
+    if (videoPath) {
+        int w = gWgpuRnd->Gpu().WindowWidth();
+        int h = gWgpuRnd->Gpu().WindowHeight();
+        size_t pixelSize = (size_t)w * h * 4;
+        uint8_t* pixels = (uint8_t*)malloc(pixelSize);
+
+        if (!pixels) {
+            fprintf(stderr, "Error: failed to allocate framebuffer (%d x %d)\n", w, h);
+            return 1;
+        }
+
+        VideoEncoder encoder;
+        if (!encoder.Start(videoPath, w, h, videoFps)) {
+            free(pixels);
+            return 1;
+        }
+
+        int totalFrames = (int)(videoDuration * videoFps);
+        float dt = 1.0f / (float)videoFps;
+        bool autoOrbit = (strcmp(cameraMode, "auto-orbit") == 0);
+
+        printf("Milo Viewer: recording %d frames (%.1fs @ %d fps)...\n",
+               totalFrames, videoDuration, videoFps);
+
+        for (int frame = 0; frame < totalFrames; frame++) {
+            float seconds = (float)frame * dt;
+            float beat = seconds * (bpm / 60.0f) * gAnim.speed;
+
+            // Advance character animation
+            advanceCharAnim(seconds, beat);
+
+            // Advance prop/TransAnim animations
+            if (gAnim.hasAnimation) {
+                float animFrame = gAnim.startFrame + fmodf(seconds * 30.0f * gAnim.speed,
+                    gAnim.endFrame - gAnim.startFrame);
+                for (auto* anim : gAnim.animatables) {
+                    float sf = anim->StartFrame();
+                    float ef = anim->EndFrame();
+                    if (ef > sf) {
+                        float r = ef - sf;
+                        float f = fmodf(animFrame - sf, r);
+                        if (f < 0.0f) f += r;
+                        anim->SetFrame(f + sf, 1.0f);
+                    }
+                }
+            }
+
+            // Auto-orbit camera
+            if (autoOrbit) {
+                gOrbitCam.azimuth += 0.005f;
+            }
+
+            gOrbitCam.Update(cam);
+
+            TheRnd.BeginDrawing();
+            drawFrame();
+            TheRnd.EndDrawing();
+
+            // Readback and encode
+            if (gWgpuRnd->Gpu().ReadbackHeadlessFrame(pixels, pixelSize)) {
+                encoder.WriteFrame(pixels, pixelSize);
+            } else {
+                fprintf(stderr, "Error: framebuffer readback failed at frame %d\n", frame);
+                break;
+            }
+
+            // Progress indicator
+            if (frame > 0 && frame % (videoFps * 5) == 0) {
+                printf("  encoded %d / %d frames (%.0f%%)\n",
+                       frame, totalFrames, 100.0f * frame / totalFrames);
+            }
+        }
+
+        encoder.Finish();
+        free(pixels);
+        printf("Milo Viewer: video saved to %s\n", videoPath);
+
+        baseDir = nullptr;
+        for (auto& sd : subdirs) sd = nullptr;
+        clipsDir = nullptr;
         gWgpuRnd->Terminate();
         return 0;
     }
 
     // ---- Render loop (windowed mode) ----
-    printf("Milo Viewer: entering render loop (press ESC to quit, R to reset camera)\n");
+    if (gAnim.hasAnimation) {
+        printf("Milo Viewer: entering render loop — animation [%.0f..%.0f] at %.1fx "
+               "(Space=pause, ./,=step, Up/Down=speed, Home=reset, ESC=quit)\n",
+               gAnim.startFrame, gAnim.endFrame, gAnim.speed);
+    } else {
+        printf("Milo Viewer: entering render loop (press ESC to quit, R to reset camera)\n");
+    }
+
+    gAnim.lastTime = glfwGetTime();
 
     while (!gWgpuRnd->Gpu().ShouldClose()) {
         gWgpuRnd->Gpu().PollEvents();
+
+        double now = glfwGetTime();
+        double dt = now - gAnim.lastTime;
+        gAnim.lastTime = now;
+
+        // ---- Advance character animation (beat-based) ----
+        if (charAnimActive && !gAnim.paused && dt > 0.0 && dt < 0.5) {
+            float seconds = (float)now;
+            float beat = seconds * (bpm / 60.0f) * gAnim.speed;
+            advanceCharAnim(seconds, beat);
+        }
+
+        // ---- Advance prop/TransAnim animations (frame-based) ----
+        if (gAnim.hasAnimation) {
+            if (!gAnim.paused && dt > 0.0 && dt < 0.5) {
+                float frameDelta = (float)dt * 30.0f * gAnim.speed;
+                gAnim.currentFrame += frameDelta;
+
+                // Loop within animation range
+                float range = gAnim.endFrame - gAnim.startFrame;
+                if (range > 0.0f && gAnim.currentFrame > gAnim.endFrame) {
+                    gAnim.currentFrame = fmodf(gAnim.currentFrame - gAnim.startFrame, range) + gAnim.startFrame;
+                }
+            }
+
+            // Apply current frame to all animatables
+            for (auto* anim : gAnim.animatables) {
+                float sf = anim->StartFrame();
+                float ef = anim->EndFrame();
+                float frame = gAnim.currentFrame;
+                if (ef > sf) {
+                    float r = ef - sf;
+                    frame = fmodf(frame - sf, r);
+                    if (frame < 0.0f) frame += r;
+                    frame += sf;
+                }
+                anim->SetFrame(frame, 1.0f);
+            }
+        }
 
         // Update orbit camera
         gOrbitCam.Update(cam);
 
         // Draw — iterate meshes directly (bypass Character/RndDir complex draw logic)
         TheRnd.BeginDrawing();
-        {
-            RndEnviron* env = nullptr;
-            if (scene) env = scene->GetEnv();
-            Vector3 origin(0,0,0);
-            RndEnvironTracker tracker(env, &origin);
-
-            ObjDirItr<RndMesh> meshIt(baseScene, true);
-            while (meshIt) {
-                meshIt->DrawShowing();
-                ++meshIt;
-            }
-        }
+        drawFrame();
         TheRnd.EndDrawing();
     }
 
     // ---- Cleanup ----
     printf("Milo Viewer: shutting down\n");
+    clipsDir = nullptr;
+    for (auto& sd : subdirs) sd = nullptr;
     baseDir = nullptr;  // release the loaded dir
     gWgpuRnd->Terminate();
 

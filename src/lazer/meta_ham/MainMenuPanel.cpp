@@ -68,6 +68,9 @@ void MainMenuPanel::Load() {
 void MainMenuPanel::Enter() {
     HamPanel::Enter();
     if (mIsEntering) {
+#ifdef HX_NATIVE
+        if (TheNetCacheMgr)
+#endif
         TheNetCacheMgr->Load((NetCacheMgr::CacheSize)1);
         mIsEntering = false;
         mNetCacheActive = true;
@@ -85,7 +88,11 @@ void MainMenuPanel::Exit() {
 }
 
 bool MainMenuPanel::Unloading() const {
+#ifdef HX_NATIVE
+    if (mState != 1 && TheNetCacheMgr && !TheNetCacheMgr->IsUnloaded())
+#else
     if (mState != 1 && !TheNetCacheMgr->IsUnloaded())
+#endif
         return true;
     else
         return UIPanel::Unloading();
@@ -135,10 +142,18 @@ void MainMenuPanel::UpdateIconState(Symbol s) {
 }
 
 void MainMenuPanel::CleanupNetCacheRelated() {
+#ifdef HX_NATIVE
+    if (TheNetCacheMgr) {
+#endif
     FOREACH (it, mNetCacheLoaders)
         TheNetCacheMgr->DeleteNetCacheLoader(*it);
     mNetCacheLoaders.clear();
     TheNetCacheMgr->Unload();
+#ifdef HX_NATIVE
+    } else {
+        mNetCacheLoaders.clear();
+    }
+#endif
     mNetCacheActive = false;
 }
 
@@ -146,6 +161,9 @@ void MainMenuPanel::ContentDone() { HandleType(Message("content_refresh_Done"));
 
 void MainMenuPanel::DownloadMotdArt() {
     if (mIsEntering) {
+#ifdef HX_NATIVE
+        if (TheNetCacheMgr)
+#endif
         TheNetCacheMgr->Load((NetCacheMgr::CacheSize)1);
         mNetCacheActive = true;
         mIsEntering = false;
@@ -566,6 +584,9 @@ show_single:
 }
 
 void MainMenuPanel::UpdateArtLoaders() {
+#ifdef HX_NATIVE
+    if (!TheNetCacheMgr) return;
+#endif
     if (TheNetCacheMgr->GetHasFailed()) {
         HandleNetCacheMgrFailure();
         if (mNetCacheActive) {

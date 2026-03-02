@@ -256,12 +256,18 @@ void UIList::AutoScroll() {
 
 void UIList::Enter() {
     UIComponent::Enter();
+#ifdef HX_NATIVE
+    if (!mListDir) return;
+#endif
     Reset();
     mListDir->ListEntered();
 }
 
 void UIList::Poll() {
     UIComponent::Poll();
+#ifdef HX_NATIVE
+    if (!mListDir) return;
+#endif
     if (mAutoScrolling) {
         if (mAutoScrollTimer >= 0.0f && TheTaskMgr.UISeconds() >= mAutoScrollTimer) {
             Scroll(mAutoScrollDir);
@@ -369,6 +375,11 @@ void UIList::PreLoadWithRev(BinStreamRev &bs) {
     UIComponent::PreLoad(bs.stream);
     if (bs.rev >= 0x14) {
         bs.stream >> mListDir;
+#ifdef HX_NATIVE
+        printf("UIList::PreLoad '%s' rev=%d mListDir=%p (%s)\n",
+               Name(), bs.rev, (void*)(Hmx::Object*)mListDir,
+               mListDir ? mListDir->Name() : "<null>");
+#endif
     }
     bs.PushRev(this);
 }
@@ -575,6 +586,7 @@ void UIList::PostLoad(BinStream &bs) {
     }
     if (rev >= 17)
         UITransitionHandler::LoadHandlerData(bs);
+    mListDir.PostLoad(0);
     gLoading = false;
     Update();
 }
@@ -604,6 +616,9 @@ bool UIList::SetSelectedSimulateScroll(Symbol sym, bool b) {
 
 void UIList::Update() {
     if (!gLoading) {
+#ifdef HX_NATIVE
+        if (!mListDir) return;
+#endif
         MILO_ASSERT(mListDir, 0x238);
         mListDir->CreateElements(this, mWidgets, mListState.NumDisplay());
 

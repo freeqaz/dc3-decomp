@@ -35,7 +35,12 @@
 
 typedef void (*SplashFunc)(void);
 
-FileCacheHelper gResourceFileCacheHelper;
+class ResourceFileCacheHelper : public FileCacheHelper {
+public:
+    virtual const char *CacheFile(const char *);
+};
+
+ResourceFileCacheHelper gResourceFileCacheHelper;
 float gLimitUVRange;
 int gDxtCacher;
 static ObjectDir *sSphereDir;
@@ -1063,13 +1068,13 @@ DataNode OnTestDrawGroups(DataArray *da) {
             }
         }
         if (gList.size() > 1) {
-            String str(MakeString("%s is in %d groups:", PathName(it), gList.size()));
+            String str(MakeString("%s is in %d groups:", PathName(it), (long)gList.size()));
             for (std::list<RndGroup *>::iterator gListIt = gList.begin();
                  gListIt != gList.end();
                  ++gListIt) {
                 str << " " << PathName(*gListIt);
             }
-            MILO_WARN(str.c_str());
+            MILO_NOTIFY(str.c_str());
         }
     }
     return 0;
@@ -1185,6 +1190,29 @@ void ConvertBonesToTranses(ObjectDir *dir, bool b) {
 void SetBloomBlurWeights(bool, float, float) {}
 
 void SetBloomBlurWeightsStreak(bool, float, float, float, int, float) {}
+
+const char *ResourceFileCacheHelper::CacheFile(const char *cc) {
+    return CacheResource(cc, (const Hmx::Object *)0);
+}
+
+bool RndAmbientOcclusion::Edge::operator<(const Edge &e) const {
+    unsigned short a1 = v1, a0 = v0;
+    unsigned int a;
+    if (a0 < a1) {
+        a = ((unsigned int)a0 << 16) | a1;
+    } else {
+        a = ((unsigned int)a1 << 16) | a0;
+    }
+    unsigned short b1 = e.v1, b0 = e.v0;
+    unsigned int b;
+    if (b0 < b1) {
+        b = ((unsigned int)b0 << 16) | b1;
+    } else {
+        b = ((unsigned int)b1 << 16) | b0;
+    }
+    return a < b;
+}
+
 #include "rndobj/CamAnim.h"
 
 void RndScaleObject(Hmx::Object *obj, float scale, float fovScale) {

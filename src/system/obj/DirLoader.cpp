@@ -316,9 +316,6 @@ ret:
 
 void ReadDead(BinStream &bs) {
     unsigned char val;
-#ifdef HX_NATIVE
-    int startTell = bs.Tell();
-#endif
     bs >> val;
     while (true) {
         if (val == 0xAD) {
@@ -328,10 +325,6 @@ void ReadDead(BinStream &bs) {
                 if (val == 0xAD) {
                     bs >> val;
                     if (val == 0xDE) {
-#ifdef HX_NATIVE
-                        printf("ReadDead: found ADDEADDE at tell=%d->%d\n", startTell, bs.Tell());
-                        fflush(stdout);
-#endif
                         return;
                     }
                 }
@@ -654,31 +647,30 @@ bool DirLoader::SetupDir(Symbol sym) {
 void DirLoader::LoadObjs() {
     FilePathTracker tracker(mRoot.c_str());
     EofType t;
-#ifdef HX_NATIVE
-    static int sLoadObjsCallCount = 0;
-    sLoadObjsCallCount++;
-    // Only print every 50th call to reduce noise
-    if (sLoadObjsCallCount % 50 == 1) {
-        printf("DirLoader::LoadObjs '%s': mObjects.size()=%d tell=%d\n",
-               mFile.c_str(), (int)mObjects.size(), mStream->Tell());
-        fflush(stdout);
-    }
-#endif
     while (!mObjects.empty()) {
         t = mStream->Eof();
         if (t != NotEof) {
             MILO_ASSERT(t == TempEof, 0x4C0);
 #ifdef HX_NATIVE
             if (t == RealEof) {
-                printf("DirLoader::LoadObjs '%s': RealEof with %d objects remaining, bailing\n",
-                       mFile.c_str(), (int)mObjects.size());
-                fflush(stdout);
                 mObjects.clear();
                 return;
             }
 #endif
         } else {
             Hmx::Object *obj = mObjects.front();
+#ifdef HX_NATIVE
+            if (obj) {
+                void **vptr = *(void ***)obj;
+                if (!vptr || !vptr[0]) {
+                    fprintf(stderr, "DirLoader: SKIP object '%s' — broken vtable (vptr=%p)\n",
+                            obj->Name(), (void*)vptr);
+                    if (mRev > 1) ReadDead(*mStream);
+                    mObjects.pop_front();
+                    continue;
+                }
+            }
+#endif
             if (obj) {
                 if (!mPostLoad) {
                     MemPoint begin(MemPoint::kInitType0);
@@ -688,37 +680,15 @@ void DirLoader::LoadObjs() {
                     const char *name = obj->Name();
                     if (!strcmp(name, ""))
                         name = mProxyName;
-#ifdef HX_NATIVE
-                    printf("DirLoader::LoadObjs '%s': PreLoad obj='%s' class='%s' tell=%d\n",
-                           mFile.c_str(), name, obj->ClassName().Str(), mStream->Tell());
-                    fflush(stdout);
-                    // Hex dump first 16 bytes at current stream position
-                    {
-                        int tellBefore = mStream->Tell();
-                        unsigned char peekBuf[16];
-                        mStream->Read(peekBuf, 16);
-                        ChunkStream *cs = dynamic_cast<ChunkStream *>(mStream);
-                        if (cs) cs->Unreread(16);
-                        printf("  HEX @ tell=%d: %02x %02x %02x %02x  %02x %02x %02x %02x  "
-                               "%02x %02x %02x %02x  %02x %02x %02x %02x\n",
-                               tellBefore,
-                               peekBuf[0], peekBuf[1], peekBuf[2], peekBuf[3],
-                               peekBuf[4], peekBuf[5], peekBuf[6], peekBuf[7],
-                               peekBuf[8], peekBuf[9], peekBuf[10], peekBuf[11],
-                               peekBuf[12], peekBuf[13], peekBuf[14], peekBuf[15]);
-                        fflush(stdout);
-                    }
-#endif
                     BeginMemTrackObjectName(name);
                     if (mDir) {
                         BeginMemTrackFileName(mDir->GetPathName());
                     }
-                    obj->PreLoad(*mStream);
 #ifdef HX_NATIVE
-                    printf("DirLoader::LoadObjs '%s': PreLoad done, tell=%d\n",
-                           mFile.c_str(), mStream->Tell());
-                    fflush(stdout);
+                    fprintf(stderr, "DirLoader: PreLoad %s '%s' (stream pos=%d, loader=%p, mPostLoad=%d)\n",
+                            obj->ClassName(), obj->Name(), mStream->Tell(), (void*)this, mPostLoad);
 #endif
+                    obj->PreLoad(*mStream);
                     mPostLoad = true;
                     if (sObjectMemDumpFile) {
                         MemPoint end(MemPoint::kInitType1);
@@ -734,16 +704,6 @@ void DirLoader::LoadObjs() {
                 std::list<Loader *> &loaders = TheLoadMgr.Loading();
                 Loader *firstLoader = loaders.empty() ? nullptr : loaders.front();
                 if (firstLoader != this) {
-#ifdef HX_NATIVE
-                    static int sYieldCount = 0;
-                    if (++sYieldCount <= 5) {
-                        printf("DirLoader::LoadObjs '%s': yielding after PreLoad, obj='%s' "
-                               "front=%p this=%p queueSize=%d mPostLoad=%d\n",
-                               mFile.c_str(), obj->Name(), (void*)firstLoader, (void*)this,
-                               (int)loaders.size(), mPostLoad);
-                        fflush(stdout);
-                    }
-#endif
                     return;
                 }
                 MemPoint begin(MemPoint::kInitType0);
@@ -757,11 +717,19 @@ void DirLoader::LoadObjs() {
                 if (mDir) {
                     BeginMemTrackFileName(mDir->GetPathName());
                 }
+#ifdef HX_NATIVE
+                    fprintf(stderr, "DirLoader: PostLoad %s '%s' (stream pos=%d, loader=%p, mPostLoad=%d)\n",
+                            obj->ClassName(), obj->Name(), mStream->Tell(), (void*)this, mPostLoad);
+                    int objCountBefore = mObjects.size();
+#endif
                 obj->PostLoad(*mStream);
 #ifdef HX_NATIVE
-                printf("DirLoader::LoadObjs '%s': PostLoad done obj='%s' tell=%d\n",
-                       mFile.c_str(), obj->Name(), mStream->Tell());
-                fflush(stdout);
+                    {
+                        int objCountAfter = mObjects.size();
+                        if (objCountAfter != objCountBefore)
+                            fprintf(stderr, "DirLoader: mObjects changed during PostLoad! %d → %d\n",
+                                    objCountBefore, objCountAfter);
+                    }
 #endif
                 mPostLoad = false;
                 if (sObjectMemDumpFile) {
@@ -791,11 +759,6 @@ void DirLoader::LoadObjs() {
         if (firstLoader != this)
             return;
     }
-#ifdef HX_NATIVE
-    printf("DirLoader::LoadObjs '%s': all objects done, transitioning to DoneLoading tell=%d\n",
-           mFile.c_str(), mStream->Tell());
-    fflush(stdout);
-#endif
     mState = &DirLoader::DoneLoading;
     if (mRev > 0x1d) {
         if (mRev == 0x1e) {
@@ -826,9 +789,6 @@ void DirLoader::LoadDir() {
         bool oldproxy = gLoadingProxyFromDisk;
         gLoadingProxyFromDisk = (bool)mProxyName;
         if (!mPostLoad) {
-#ifdef HX_NATIVE
-            printf("DirLoader::LoadDir: calling PreLoad tell=%d\n", mStream->Tell());
-#endif
             MemPoint begin(MemPoint::kInitType0);
             if (sObjectMemDumpFile || sTypeMemDumpFile) {
                 begin = MemPoint(MemPoint::kInitType1);
@@ -856,13 +816,7 @@ void DirLoader::LoadDir() {
         if (sObjectMemDumpFile || sTypeMemDumpFile) {
             begin = MemPoint(MemPoint::kInitType1);
         }
-#ifdef HX_NATIVE
-        printf("DirLoader::LoadDir: calling PostLoad tell=%d\n", mStream->Tell());
-#endif
         mDir->PostLoad(*mStream);
-#ifdef HX_NATIVE
-        printf("DirLoader::LoadDir: PostLoad done tell=%d\n", mStream->Tell());
-#endif
         gLoadingProxyFromDisk = oldproxy;
         mPostLoad = false;
         if (sObjectMemDumpFile) {
@@ -906,11 +860,6 @@ void DirLoader::CreateObjects() {
         if (mRev > 0 && mRev < 8) {
             *mStream >> b8;
         }
-#ifdef HX_NATIVE
-        printf("DirLoader::CreateObjects: class='%s' name='%s' registered=%d\n",
-               classSym.Str(), buf, Hmx::Object::RegisteredFactory(classSym));
-        fflush(stdout);
-#endif
         if (!Hmx::Object::RegisteredFactory(classSym)) {
             MILO_NOTIFY("%s: Can't make %s", mFile.c_str(), classSym);
             goto release_obj;
@@ -923,10 +872,23 @@ void DirLoader::CreateObjects() {
             obj = Hmx::Object::NewObject(classSym);
             EndMemTrackObjectName();
 #ifdef HX_NATIVE
-            if (obj) {
-                printf("DirLoader::CreateObjects: created obj=%p class='%s'\n",
-                       (void*)obj, obj->ClassName().Str());
+            if (!obj) {
+                printf("DirLoader::CreateObjects: FAILED to create '%s' '%s', skipping\n",
+                       classSym.Str(), buf);
                 fflush(stdout);
+                goto release_obj;
+            }
+            // Validate vtable: check if the vptr is non-null (zero-filled weak vtable = broken)
+            {
+                void **vptr = *(void ***)obj;
+                if (!vptr || !vptr[0]) {
+                    printf("DirLoader::CreateObjects: '%s' '%s' has broken vtable, skipping\n",
+                           classSym.Str(), buf);
+                    fflush(stdout);
+                    // Don't call RELEASE (virtual dtor also broken), just leak
+                    obj = nullptr;
+                    goto release_obj;
+                }
             }
 #endif
             if (mRev == 0x16 && dynamic_cast<ObjectDir *>(obj)) {
@@ -970,9 +932,6 @@ void DirLoader::LoadHeader() {
             return;
     }
     *mStream >> mRev;
-#ifdef HX_NATIVE
-    printf("DirLoader::LoadHeader '%s': mRev=%d (0x%x) tell=%d\n", mFile.c_str(), mRev, mRev, mStream->Tell());
-#endif
     if (mRev < 7) {
         Cleanup(MakeString("Can't load old ObjectDir %s", mFile));
         return;
@@ -987,9 +946,6 @@ void DirLoader::LoadHeader() {
         symRead = FixClassName(symRead);
         char buf[0x80];
         mStream->ReadString(buf, 0x80);
-#ifdef HX_NATIVE
-        printf("DirLoader::LoadHeader: dirClass='%s' dirName='%s' tell=%d\n", symRead.Str(), buf, mStream->Tell());
-#endif
         if (!Hmx::Object::RegisteredFactory(symRead)) {
             MILO_NOTIFY(
                 "%s: %s not registered, defaulting to %s",
@@ -1004,9 +960,6 @@ void DirLoader::LoadHeader() {
             return;
         int size1, size2;
         *mStream >> size1 >> size2;
-#ifdef HX_NATIVE
-        printf("DirLoader::LoadHeader: size1=%d size2=%d tell=%d\n", size1, size2, mStream->Tell());
-#endif
         size1 += mDir->HashTableUsedSize() + 0x10;
         size2 += mDir->StrTableUsedSize() + 0x98;
         mDir->Reserve(size1, size2);
@@ -1030,9 +983,6 @@ void DirLoader::LoadHeader() {
     }
     mDir->SetLoader(this);
     *mStream >> mCounter;
-#ifdef HX_NATIVE
-    printf("DirLoader::LoadHeader: counter=%d tell=%d\n", mCounter, mStream->Tell());
-#endif
     if (mRev < 0xE) {
         mDir->Reserve(mCounter * 2, mCounter * 25);
     }

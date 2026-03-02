@@ -143,18 +143,43 @@ INIT_REVS(4, 0)
 BEGIN_LOADS(FlowSetProperty)
     LOAD_REVS(bs)
     ASSERT_REVS(4, 0)
+#ifdef HX_NATIVE
+    fprintf(stderr, "FlowSetProperty::Load '%s' rev=%d altRev=%d\n", Name(), d.rev, d.altRev);
+#endif
     LOAD_SUPERCLASS(FlowNode)
     bs >> mTarget;
     bs >> unk_0x98;
 
-    if (d.rev < 2) {
-        if (!mValue.Node()) {
-        }
-    } else if (d.rev == 2) {
-        if (!mValue.Node()) {
-        }
+    if (d.rev < 3) {
+        DataNode node;
+        node.Load(bs);
+        mValue = node;
     } else {
-        if (!mValue.Node()) {
+        // Rev 3+ format: Save conditionally writes a type prefix.
+        // kDataObject: DataNode::Save writes [type=kDataObject, name_string]
+        // non-kDataObject: explicit [type_prefix], then DataNode::Save [type, data]
+        int type;
+        bs >> type;
+#ifdef HX_NATIVE
+        fprintf(stderr, "  mValue type discriminator: %d (kDataObject=%d)\n", type, kDataObject);
+#endif
+        if (type == kDataObject) {
+            // We consumed the type from DataNode::Save. Read name string.
+            char buf[128];
+            bs.ReadString(buf, 128);
+#ifdef HX_NATIVE
+            fprintf(stderr, "  mValue kDataObject name='%s'\n", buf);
+#endif
+            Hmx::Object *obj = Dir() ? Dir()->FindObject(buf, false, true) : nullptr;
+            mValue = DataNode(obj);
+        } else {
+            // We consumed the explicit prefix. DataNode::Load reads [type, data].
+            DataNode node;
+            node.Load(bs);
+#ifdef HX_NATIVE
+            fprintf(stderr, "  mValue loaded as type=%d\n", node.Type());
+#endif
+            mValue = node;
         }
     }
 
@@ -166,6 +191,9 @@ BEGIN_LOADS(FlowSetProperty)
     bs >> unk_0xE8;
     bs >> mPersistent;
     bs >> mStopMode;
+#ifdef HX_NATIVE
+    fprintf(stderr, "  FlowSetProperty::Load done OK\n");
+#endif
 END_LOADS
 
 void FlowSetProperty::MoveIntoDir(ObjectDir *r4, ObjectDir *r5) {

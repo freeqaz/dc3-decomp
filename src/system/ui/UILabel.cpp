@@ -177,12 +177,7 @@ void UILabel::PreLoad(BinStream &bs) {
         for (i = 0; i < mLabelStyles.size(); i++) {
                 LabelStyle &ls = mLabelStyles[i];
 #ifdef HX_NATIVE
-                // ObjPtr→ResourceDirPtr reinterpret-cast is UB (mOwner vs mLoader)
-                // Just consume the FilePath from stream without loading
-                {
-                    FilePath labelDirPath;
-                    d.stream >> labelDirPath;
-                }
+                d.stream >> ls.mLabelDir;
 #else
                 ResourceDirPtr<UILabelDir> &resPtr =
                     *(ResourceDirPtr<UILabelDir> *)&ls.mLabelDir;
@@ -299,9 +294,12 @@ void UILabel::PreLoad(BinStream &bs) {
             unsigned int numStyles = (altStyleEnabled ? 1 : 0) + 1;
             if (altStyleEnabled) {
 #ifdef HX_NATIVE
-                // Skip reinterpret-cast loading on native (ObjPtr→ObjDirPtr UB)
-                mLabelStyles.resize(numStyles);
-                mStyles.resize(numStyles);
+                {
+                    FilePath path = mLabelStyles[0].mLabelDir.GetFile();
+                    mLabelStyles.resize(numStyles);
+                    mLabelStyles[1].mLabelDir.LoadFile(path, true, true, kLoadFront, false);
+                    mStyles.resize(numStyles);
+                }
 #else
                 ObjDirPtr<UILabelDir> &dirPtr =
                     *(ObjDirPtr<UILabelDir> *)&mLabelStyles[0].mLabelDir;
@@ -337,9 +335,13 @@ void UILabel::PreLoad(BinStream &bs) {
                 LabelStyle &ls = LStyle(1);
                 char buffer[0x100];
                 d.stream.ReadString(buffer, 0x100);
+#ifdef HX_NATIVE
+                ls.mLabelDir.SetName(buffer, true);
+#else
                 ResourceDirPtr<UILabelDir> &resPtr =
                     *(ResourceDirPtr<UILabelDir> *)((unsigned char *)&ls + 0x14);
                 resPtr.SetName(buffer, true);
+#endif
             } else {
                 char buffer[0x100];
                 d.stream.ReadString(buffer, 0x100);
@@ -361,14 +363,15 @@ void UILabel::PreLoad(BinStream &bs) {
 void UILabel::PostLoad(BinStream &bs) {
     int rev = (unsigned short)bs.PopRev(this);
 
-    // PostLoad each style's UILabelDir resource pointer
-#ifndef HX_NATIVE
     for (unsigned int i = 0; i < mLabelStyles.size(); i++) {
+#ifdef HX_NATIVE
+        mLabelStyles[i].mLabelDir.PostLoad(0);
+#else
         ResourceDirPtr<UILabelDir> *ptr =
             (ResourceDirPtr<UILabelDir> *)&mLabelStyles[i].mLabelDir;
         ptr->PostLoad(0);
-    }
 #endif
+    }
 
     // Handle font mat loading based on file revision
     if (rev >= 0x1c) {
@@ -472,10 +475,12 @@ void UILabel::DrawShowing() {
                 if (!uiColor) {
                     uiColor = stateColor;
                 }
-                const Hmx::Color &color = uiColor->GetColor();
-                style.mFontColor.red = color.red;
-                style.mFontColor.green = color.green;
-                style.mFontColor.blue = color.blue;
+                if (uiColor) {
+                    const Hmx::Color &color = uiColor->GetColor();
+                    style.mFontColor.red = color.red;
+                    style.mFontColor.green = color.green;
+                    style.mFontColor.blue = color.blue;
+                }
                 i++;
                 it++;
             }
@@ -663,9 +668,13 @@ const UILabel::LabelStyle &UILabel::LStyle(int i) const {
 void UILabel::OldResourcePreload(BinStream &bs) {
     char buffer[0x100];
     LabelStyle &style = LStyle(0);
-    ResourceDirPtr<UILabelDir> &ptr = *(ResourceDirPtr<UILabelDir> *)&style.mLabelDir;
     bs.ReadString(buffer, 0x100);
+#ifdef HX_NATIVE
+    style.mLabelDir.SetName(buffer, true);
+#else
+    ResourceDirPtr<UILabelDir> &ptr = *(ResourceDirPtr<UILabelDir> *)&style.mLabelDir;
     ptr.SetName(buffer, true);
+#endif
 }
 
 void UILabel::SetDisplayText(const char *cc, bool b) {
@@ -809,10 +818,24 @@ void UILabel::LabelUpdate(bool b) {
             LabelStyle &lstyle = LStyle(i);
 
             // If colorOverride AND font AND font differs from reference
+#ifdef HX_NATIVE
+            UIColor *colorOvr = lstyle.mColorOverride;
+            RndFontBase *styleFont = style.mFont;
+            if (colorOvr && styleFont && styleFont != refFont) {
+                void **cvptr = *(void ***)colorOvr;
+                if (!cvptr) {
+                    fprintf(stderr, "LabelUpdate: colorOverride '%s' has null vtable, skipping\n",
+                            colorOvr->Name());
+                } else {
+                    const Hmx::Color &c = colorOvr->GetColor();
+                    memcpy(&style.mTextColor, &c, sizeof(Hmx::Color));
+                }
+#else
             if (lstyle.mColorOverride && style.mFont && style.mFont != refFont) {
                 const Hmx::Color &c = lstyle.mColorOverride->GetColor();
                 // Copy as words to match target codegen
                 memcpy(&style.mTextColor, &c, sizeof(Hmx::Color));
+#endif
             } else {
                 style.mTextColor.red = 1.0f;
                 style.mTextColor.green = 1.0f;

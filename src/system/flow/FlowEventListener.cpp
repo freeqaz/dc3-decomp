@@ -4,7 +4,10 @@
 #include "flow/FlowManager.h"
 #include "flow/FlowNode.h"
 #include "flow/FlowQueueable.h"
+#include "obj/Data.h"
+#include "obj/Dir.h"
 #include "obj/Object.h"
+#include "utl/Std.h"
 
 FlowEventListener::FlowEventListener()
     : mListening(0), mStartOnActivate(0), mEventCount(0), mEventsFired(0) {
@@ -29,6 +32,44 @@ BEGIN_SAVES(FlowEventListener)
     bs << mEventCount;
     bs << mStartOnActivate;
 END_SAVES
+
+INIT_REVS(3, 0)
+
+BEGIN_LOADS(FlowEventListener)
+    LOAD_REVS(bs)
+    ASSERT_REVS(3, 0)
+    LOAD_SUPERCLASS(FlowTrigger)
+    if (d.rev == 1) {
+        bool tmp;
+        d >> tmp;
+        if (tmp) {
+            mEventCount = 1;
+        }
+    } else {
+        if (d.rev > 1) {
+            bs >> mEventCount;
+        }
+        if (2 < d.rev) {
+            d >> mStartOnActivate;
+        }
+    }
+    // Apply default property values from event editor definitions
+    FOREACH (it, mTriggerEvents) {
+        DataArray *def = GetEventEditorDef(*it);
+        if (def && def->Size() > 2) {
+            for (int i = 2; i < def->Size(); i++) {
+                DataArray *node = def->Node(i).Array(def);
+                Symbol propSym = node->Sym(0);
+                if (!Property(propSym, false)) {
+                    Hmx::Object *dir = Dir();
+                    if (dir) {
+                        dir->SetProperty(propSym, def->Node(i).Array(def)->Node(1));
+                    }
+                }
+            }
+        }
+    }
+END_LOADS
 
 BEGIN_COPYS(FlowEventListener)
     COPY_SUPERCLASS(FlowTrigger)

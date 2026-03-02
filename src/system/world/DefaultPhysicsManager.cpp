@@ -118,7 +118,11 @@ DetectionVolume *DefaultPhysicsManager::MakeDetectionVolume(
     return new DefaultDetectionVolume(dvl);
 }
 
-void DefaultPhysicsManager::CastRays(RayCast *, int) { MILO_FAIL("not implemented"); }
+void DefaultPhysicsManager::CastRays(RayCast *, int) {
+#ifndef HX_NATIVE
+    MILO_FAIL("not implemented");
+#endif
+}
 
 void DefaultPhysicsManager::CastRays(
     const Segment *s, RayCastListener *rcl, int i3, unsigned int ui4

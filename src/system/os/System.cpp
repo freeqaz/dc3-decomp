@@ -222,8 +222,13 @@ void SystemPoll(bool b1) {
     ThreadCallPoll();
     FileCache::PollAll();
     TheLoadMgr.Poll();
+#ifdef HX_NATIVE
+    if (TheCacheMgr) TheCacheMgr->Poll();
+    if (TheNetCacheMgr) TheNetCacheMgr->Poll();
+#else
     TheCacheMgr->Poll();
     TheNetCacheMgr->Poll();
+#endif
     TheWebSvcMgr.Poll();
     if (TheAppChild != nullptr) {
         TheAppChild->Poll();
@@ -460,13 +465,18 @@ void SystemInit(const char *config) {
     Symbol::Init();
     InitSystem(config);
 #ifdef HX_NATIVE
-    // Skip subsystem singletons that have no vtable on native
     gSystemTitles = SystemConfig("system", "titles");
     ObjectDir::Init();
     TrigTableInit();
+    ThreadCallInit();
     GeoInit();
     TrigInit();
-    MILO_LOG("DC3 Native: SystemInit done\n");
+    SpewInit();
+    TheLocale.Terminate();
+    TheLocale.Init();
+    CheatsInit();
+    FileCache::Init();
+    TheDebug.AddExitCallback(SystemTerminate);
 #else
     gSystemTitles = SystemConfig("system", "titles");
     ObjectDir::Init();
@@ -480,7 +490,9 @@ void SystemInit(const char *config) {
     CheatsInit();
     TheMC.Init();
     CacheMgrInit();
+#ifndef HX_NATIVE
     NetCacheMgrInit();
+#endif
     FileCache::Init();
     TheDataPointMgr.Init();
     TheWebSvcMgr.Init();
@@ -545,29 +557,32 @@ void SystemPreInit(const char *config) {
     InitMakeString();
     Symbol::PreInit(640000, 80000);
 #ifdef HX_NATIVE
-    // Skip PlatformMgr/ContentMgr - they're stubbed globals without vtables
-    // Init core systems needed for data loading + archive
     OptionInit();
     TimeConversionInit();
     Timer::Init();
     FileInit();
-    MILO_LOG("DC3 Native: FileInit complete\n");
+    AppChild::Init();
+    DateTimeInit();
+    SYSTEMTIME time;
+    GetLocalTime(&time);
+    SeedRand(time.wMilliseconds);
     SetUsingCD(true);
     {
         extern void NativeArchiveInit();
         NativeArchiveInit();
     }
-    MILO_LOG("DC3 Native: ArchiveInit complete\n");
     TheDebug.Init();
-    MILO_LOG("DC3 Native: Debug.Init complete\n");
     DataInit();
-    MILO_LOG("DC3 Native: DataInit complete\n");
     PreInitSystem(config);
-    MILO_LOG("DC3 Native: PreInitSystem complete\n");
+    LanguageInit();
+    gSystemLocale = GetSystemLocale("usa");
     // Skip MemInit on native — heap manager uses 32-bit pointer arithmetic.
-    // All allocations go through malloc/free on native anyway.
-    MILO_LOG("DC3 Native: MemInit SKIPPED (using malloc/free)\n");
-    MILO_LOG("DC3 Native: SystemPreInit done\n");
+    TheLoadMgr.Init();
+    JoypadInit();
+    KeyboardInit();
+    AutoTimer::Init();
+    ThreadCallPreInit();
+    TheTaskMgr.Init();
 #else
     ThePlatformMgr.RegionInit();
     ThePlatformMgr.PreInit();

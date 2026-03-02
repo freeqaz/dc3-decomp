@@ -54,6 +54,8 @@ public:
     Keys<Hmx::Color, Hmx::Color> &ColorKeys() { return mKeysOwner->mColorKeys; }
     RndMatAnim *KeysOwner() const { return mKeysOwner; }
 
+    virtual ~RndMatAnim();
+
 protected:
     RndMatAnim();
 

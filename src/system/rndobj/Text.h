@@ -17,6 +17,8 @@
 using stlpmtx_std::StlNodeAlloc;
 #endif
 
+class RndCam;
+
 class TextHolder {
 public:
     TextHolder() {}
@@ -122,7 +124,15 @@ public:
 
     class BlacklightPacket {
     public:
+#ifdef HX_NATIVE
+        RndMesh *mMesh;
+        Hmx::Color mSavedColor;
+        float mSize;
+        int mSyncFlags;
+        RndCam *mCam;
+#else
         int unk[8];
+#endif
     };
 
     class FontMapBase {

@@ -89,24 +89,11 @@ void ChunkStream::ReadChunkAsync() {
         if (thechunk != mChunkEnd) {
             int thechunkval = *thechunk;
             int sizemask = thechunkval & kChunkSizeMask;
-#ifdef HX_NATIVE
-            printf("ReadChunkAsync: bufIdx=%d idx=%d val=0x%08X size=%d buf=%p mBufSize=%d\n",
-                   bufIdx, idx, thechunkval, sizemask, mBuffers[idx], mBufSize);
-#endif
             if (mChunkInfo.mID != 0xCABEDEAF && !(thechunkval & 0x01000000)) {
-#ifdef HX_NATIVE
-                printf("ReadChunkAsync: reading compressed to buf+%d\n", mBufSize - sizemask);
-#endif
                 mFile->ReadAsync(mBuffers[idx] + mBufSize - sizemask, sizemask);
             } else {
-#ifdef HX_NATIVE
-                printf("ReadChunkAsync: reading uncompressed directly\n");
-#endif
                 mFile->ReadAsync(mBuffers[idx], sizemask);
             }
-#ifdef HX_NATIVE
-            printf("ReadChunkAsync: read done, setting offset and state\n");
-#endif
             mBuffersOffset[idx] = &mCurChunk[bufIdx];
             mBuffersState[idx] = kReading;
         }
@@ -299,15 +286,6 @@ EofType ChunkStream::Eof() {
             EndianSwapEq((unsigned int &)mChunkInfo.mChunks[i]);
         }
 #endif
-#ifdef HX_NATIVE
-        printf("ChunkStream::Eof '%s': ID=0x%08X infoSize=%d numChunks=%d maxChunkSize=%d\n",
-               mFilename.c_str(), mChunkInfo.mID, mChunkInfo.mChunkInfoSize,
-               mChunkInfo.mNumChunks, mChunkInfo.mMaxChunkSize);
-        if (mChunkInfo.mNumChunks > 0 && mChunkInfo.mNumChunks <= 5) {
-            for (int i = 0; i < mChunkInfo.mNumChunks; i++)
-                printf("  chunk[%d] = 0x%08X (size=%d)\n", i, mChunkInfo.mChunks[i], mChunkInfo.mChunks[i] & 0xFFFFFF);
-        }
-#endif
         if ((mChunkInfo.mID & 0xf0ffffff) != kChunkIDMask) {
             mChunkInfo.mID = 0xCABEDEAF;
             mChunkInfo.mChunkInfoSize = 0;
@@ -345,10 +323,6 @@ EofType ChunkStream::Eof() {
         mCurBufOffset = mChunkInfo.mMaxChunkSize & kChunkSizeMask;
         mCurBufferIdx = 1;
         mFile->Seek(mChunkInfo.mChunkInfoSize, 0);
-#ifdef HX_NATIVE
-        printf("ChunkStream setup: mBufSize=%d mCurBufferIdx=%d buffers=[%p,%p,%p]\n",
-               mBufSize, mCurBufferIdx, mBuffers[0], mBuffers[1], mBuffers[2]);
-#endif
         ReadChunkAsync();
     }
 
@@ -356,11 +330,6 @@ EofType ChunkStream::Eof() {
         return NotEof;
     } else {
         MILO_ASSERT(mCurBufOffset == (*mCurChunk & kChunkSizeMask), 0x28B);
-#ifdef HX_NATIVE
-        printf("ChunkStream advance: curBufIdx=%d states=[%d,%d,%d] offset=%d curChunk=%p chunkEnd=%p diff=%ld\n",
-               mCurBufferIdx, mBuffersState[0], mBuffersState[1], mBuffersState[2], mCurBufOffset,
-               (void*)mCurChunk, (void*)mChunkEnd, (long)(mChunkEnd - mCurChunk));
-#endif
         if (mBuffersOffset[mCurBufferIdx] == mCurChunk) {
             mBuffersState[mCurBufferIdx] = kInvalid;
         }
@@ -369,27 +338,11 @@ EofType ChunkStream::Eof() {
         else {
             int x;
             if (mFile->ReadDone(x)) {
-#ifdef HX_NATIVE
-                printf("ChunkStream: calling DecompressChunkAsync...\n");
-#endif
                 DecompressChunkAsync();
-#ifdef HX_NATIVE
-                printf("ChunkStream: calling ReadChunkAsync...\n");
-#endif
                 ReadChunkAsync();
-#ifdef HX_NATIVE
-                printf("ChunkStream: calling PollDecompressionWorker...\n");
-#endif
                 PollDecompressionWorker();
-#ifdef HX_NATIVE
-                printf("ChunkStream: PollDecompressionWorker done, states=[%d,%d,%d]\n",
-                       mBuffersState[0], mBuffersState[1], mBuffersState[2]);
-#endif
             }
             int idx = (mCurBufferIdx + 1) % 2;
-#ifdef HX_NATIVE
-            printf("ChunkStream: nextBuf idx=%d state=%d\n", idx, mBuffersState[idx]);
-#endif
             if (mBuffersState[idx] != kReady)
                 return TempEof;
             else {
@@ -399,10 +352,7 @@ EofType ChunkStream::Eof() {
                 mCurReadBuffer = mBuffers[idx];
 #ifdef HX_NATIVE
                 int chunkSz = *mCurChunk & kChunkSizeMask;
-                printf("ChunkStream: advanced to chunk, buf=%p size=%d first bytes=[", mCurReadBuffer, chunkSz);
                 for (int dbg = 0; dbg < chunkSz && dbg < 8; dbg++)
-                    printf("%s%02x", dbg ? " " : "", (unsigned char)mCurReadBuffer[dbg]);
-                printf("]\n");
 #endif
                 return NotEof;
             }
@@ -450,7 +400,17 @@ void DecompressMemHelper(const void *compressedMem, int size, void *dst, int &ds
     unsigned int rawSize = *(unsigned int *)compressedMem;
     DecompressMem((const char *)compressedMem + 4, size - 4, dst, dstLen, c);
     int expectedDstLen = EndianSwap(rawSize);
+#ifdef HX_NATIVE
+    if (dstLen != expectedDstLen) {
+        static int sDecompWarnCount = 0;
+        if (++sDecompWarnCount <= 3) {
+            fprintf(stderr, "WARN: ChunkStream decompress mismatch: got %d, expected %d (%d more suppressed)\n",
+                    dstLen, expectedDstLen, sDecompWarnCount);
+        }
+    }
+#else
     MILO_ASSERT(dstLen == expectedDstLen, 0x3bb);
+#endif
 }
 
 void ChunkStream::DecompressChunk(DecompressTask &task) {

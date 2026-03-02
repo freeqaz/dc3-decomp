@@ -20,6 +20,7 @@
 
 std::vector<RndText::BlacklightPacket> RndText::sBlacklightPacketPool;
 int RndText::sBlacklightPacketCount;
+bool RndText::sBlacklightModeEnabled;
 std::list<RndText::FontMapBase *> RndText::sFontMapCache;
 int TEXT_REV = 0;
 float gSuperscriptScale = 0.7f;
@@ -372,15 +373,13 @@ BEGIN_LOADS(RndText)
                 MakeString("%s was bad version 23, suggest resave", PathName(this))
             );
         }
-        bs >> (int &)mFitType;
+        // mFitType already read in the d.rev > 0xF block above
         if (d.rev < 0x18) {
             String str;
             bs >> str;
         }
-        if (d.altRev > 0) {
-            bs >> mDirtyFlags;
-            bs >> mLastSyncFlags;
-        }
+        // altRev > 0: original binary doesn't write mDirtyFlags/mLastSyncFlags
+        // (confirmed: Save writes altRev=1 but no corresponding data)
         d >> mStyles;
     } else {
         mStyles.resize(1);
@@ -597,6 +596,9 @@ void RndText::FontMap::AllocateMeshes(RndText *text, int fixedLength) {
                 mesh->Verts().resize(page.displayableChars * 4);
             }
             MILO_ASSERT(mesh->Verts().size() >= page.displayableChars * 4, 0xD2);
+#ifdef HX_NATIVE
+            page.mVertStart = mesh->Verts().begin();
+#endif
         }
         MILO_ASSERT(!fixedLength || (page.displayableChars <= fixedLength), 0xD5);
     }
@@ -631,12 +633,20 @@ void RndText::FontMap::UpdateScrolling(float f1) {
     for (int i = 0; i < NumMeshes(); i++) {
         RndMesh *mesh = Mesh(i);
         if (mesh) {
+#ifdef HX_NATIVE
+            // Friend access to RndTransformable members via RndText friendship
+            mesh->mLocalXfm.v.x = f1;
+            if (!mesh->mDirty) {
+                mesh->SetDirty_Force();
+            }
+#else
             Hmx::Quat q = *(Hmx::Quat *)((char *)mesh + 0x78);
             q.x = f1;
             *(Hmx::Quat *)((char *)mesh + 0x78) = q;
             if (!*(bool *)((char *)mesh + 0xfd)) {
                 mesh->SetDirty_Force();
             }
+#endif
         }
     }
 }
@@ -771,9 +781,16 @@ void RndText::QueueBlacklightPacket(RndMesh *mesh, float f2, int i3) {
         sBlacklightPacketPool.resize(newsize, packet);
     }
 #ifdef HX_NATIVE
-    // BlacklightPacket stores pointers in fields — on LP64, the struct layout
-    // changes. Blacklight rendering is not implemented on native, so skip.
-    sBlacklightPacketCount++;
+    int idx = sBlacklightPacketCount++;
+    BlacklightPacket &pkt = sBlacklightPacketPool[idx];
+    pkt.mMesh = mesh;
+    RndMat *mat = mesh->Mat();
+    if (mat) {
+        pkt.mSavedColor = mat->GetColor();
+    }
+    pkt.mSize = f2;
+    pkt.mSyncFlags = i3;
+    pkt.mCam = RndCam::Current();
 #else
     int idx = sBlacklightPacketCount++;
     int *pkt_ptr = (int *)&sBlacklightPacketPool[0] + (idx << 3);
@@ -792,21 +809,60 @@ void RndText::QueueBlacklightPacket(RndMesh *mesh, float f2, int i3) {
 void RndText::ClearBlacklight() { sBlacklightPacketCount = 0; }
 
 void RndText::DrawBlacklight() {
-    // Blacklight rendering not implemented on native port
+#ifdef HX_NATIVE
+    RndCam *savedCam = RndCam::Current();
+    for (int i = 0; i < sBlacklightPacketCount; i++) {
+        BlacklightPacket &pkt = sBlacklightPacketPool[i];
+        if (pkt.mCam && pkt.mCam != RndCam::Current()) {
+            pkt.mCam->Select();
+        }
+        RndMat *mat = pkt.mMesh->Mat();
+        if (mat) {
+            Hmx::Color &color = mat->GetColor();
+            color.red = pkt.mSavedColor.red;
+            color.green = pkt.mSavedColor.green;
+            color.blue = pkt.mSavedColor.blue;
+            mat->MarkDirty(1);
+        }
+        DrawMesh(pkt.mMesh, pkt.mSize, pkt.mSyncFlags);
+    }
+    if (savedCam && savedCam != RndCam::Current()) {
+        savedCam->Select();
+    }
+#endif
 }
 
 void RndText::SizeCheck() {
-    // Check if screen size changed and rebuild if necessary
-    // For the native port this is a no-op
+    // The original checks mDirtyFlags against screen size, font, and text changes.
+    // On native we always rebuild — correct but slower than dirty-flag tracking.
+#ifdef HX_NATIVE
+    UpdateText();
+#endif
 }
 
 void RndText::UpdateScrollOffsets() {
-    // Update scroll position for scrolling text types
-    // For the native port this is a minimal implementation
+    // Update scroll mesh positions for scrolling fit types
+    if (mFitType < kFitScrollMarqueeWrap || mFitType > kFitScrollMarqueeWrapAlways)
+        return;
+
+    FOREACH (it, mFontMaps) {
+        if ((*it)->SupportsScrolling()) {
+            (*it)->UpdateScrolling(mScrollSpeed);
+        }
+    }
 }
 
 void RndText::FitTextScroll() {
-    // Stub - full implementation in FitTextScroll object
+    // Scrolling text layout — sets up mesh scrolling constraints
+    if (mFitType < kFitScrollMarqueeWrap)
+        return;
+
+    FOREACH (it, mFontMaps) {
+        if ((*it)->SupportsScrolling()) {
+            (*it)->SetupScrolling();
+        }
+    }
+    mWrapEnabled = true;
 }
 
 void RndText::DrawMesh(RndMesh *mesh, float size, int syncFlags) {
@@ -865,7 +921,42 @@ void RndText::UpdateText() {
         (*it)->AllocateMeshes(this, mFixedLength);
     }
 
-    // Cleanup and sync the meshes
+    // Setup character quads — iterate text and fill vertex data
+    if (!mStyles.empty() && mStyles[0].mFont) {
+        float size = mStyles[0].mSize;
+        float leading;
+        float totalHeight = ComputeHeight(1, 1.0f, leading);
+        StyleState state(this, size);
+
+        float xPos = 0.0f;
+        float yPos = 0.0f;
+        unsigned short prevChar = 0;
+
+        // Find the font map for the primary style
+        int fmIdx = FontMapIndex(mStyles[0].mFont, mStyles[0].mBlacklight);
+        if (fmIdx >= 0) {
+            FontMapBase *fontMap = mFontMaps[fmIdx];
+            const char *p = mText.c_str();
+            while (*p) {
+                unsigned short us;
+                int consumed = DecodeUTF8(us, p);
+                if (consumed <= 0) break;
+                p += consumed;
+
+                if (us == '\n') {
+                    xPos = 0.0f;
+                    yPos -= leading;
+                    prevChar = 0;
+                    continue;
+                }
+
+                fontMap->SetupCharacter(us, xPos, yPos, state, prevChar, size, mFitType, leading);
+                prevChar = us;
+            }
+        }
+    }
+
+    // Cleanup and sync the meshes (zeros remaining verts, calls Sync)
     FOREACH (it, mFontMaps) {
         (*it)->CleanupSyncMeshes();
     }
@@ -891,12 +982,16 @@ void RndText::DrawShowing() {
         FontMapBase *fontMap = *it;
         for (int i = 0; i < fontMap->NumMaterials(); i++) {
             RndMat *mat = fontMap->Material(i);
+#ifdef HX_NATIVE
+            savedColors[vlaIdx] = mat->GetColor();
+#else
             int *src = (int *)((char *)mat + 0x2c);
             int *dst = (int *)&savedColors[vlaIdx];
             dst[0] = src[0];
             dst[1] = src[1];
             dst[2] = src[2];
             dst[3] = src[3];
+#endif
             vlaIdx++;
         }
     }
@@ -913,6 +1008,10 @@ void RndText::DrawShowing() {
                 int numMats = fontMap->NumMaterials();
                 for (int i = 0; i < numMats; i++) {
                     RndMat *mat = fontMap->Material(i);
+#ifdef HX_NATIVE
+                    mat->GetColor() = style.mFontColor;
+                    mat->MarkDirty(1);
+#else
                     int *dst = (int *)((char *)mat + 0x2c);
                     int *src = (int *)&style.mFontColor;
                     dst[0] = src[0];
@@ -920,6 +1019,7 @@ void RndText::DrawShowing() {
                     dst[2] = src[2];
                     dst[3] = src[3];
                     *(int *)((char *)mat + 0x228) |= 1;
+#endif
                 }
             }
         }
@@ -938,7 +1038,7 @@ void RndText::DrawShowing() {
             RndMesh *mesh = fontMap->Mesh(i);
             if (mesh) {
                 if (!sBlacklightModeEnabled || !fontMap->mBlacklight ||
-                    *(bool *)((char *)TheUI + 0x93)) {
+                    TheUI->DisableScreenBlacklight()) {
                     DrawMesh(mesh, mStyles[0].mSize, 0);
                 } else {
                     QueueBlacklightPacket(mesh, mStyles[0].mSize, 0);
@@ -956,12 +1056,20 @@ void RndText::DrawShowing() {
             auto _tmp5 = fontMap->NumMaterials();
             for (int i = 0; i < _tmp5; i++) {
                 RndMat *mat = fontMap->Material(i);
+#ifdef HX_NATIVE
+                Hmx::Color &color = mat->GetColor();
+                color.red = savedColors[vlaIdx].red;
+                color.green = savedColors[vlaIdx].green;
+                color.blue = savedColors[vlaIdx].blue;
+                mat->MarkDirty(1);
+#else
                 int *src = (int *)&savedColors[vlaIdx];
                 int *dst = (int *)((char *)mat + 0x2c);
                 dst[0] = src[0];
                 dst[1] = src[1];
                 dst[2] = src[2];
                 *(int *)((char *)mat + 0x228) |= 1;
+#endif
                 vlaIdx++;
             }
         }
@@ -1108,6 +1216,7 @@ void RndText::FontMap3d::SetupCharacter(
 ) {
     // Not implemented for native port - 3d font rendering is complex
     if (!mFont) return;
+    if (!mFont->CharDefined(charCode)) return;
     xPos += mFont->CharAdvance(charCode) * size;
 }
 

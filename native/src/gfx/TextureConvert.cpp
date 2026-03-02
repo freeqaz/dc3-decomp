@@ -344,15 +344,15 @@ wgpu::TextureFormat MapBitmapFormat(const RndBitmap& bmp, bool hasBCSupport) {
 
     if (dxt && hasBCSupport) {
         switch (dxt) {
-        case kDXT1: return wgpu::TextureFormat::BC1RGBAUnorm;
-        case kDXT3: return wgpu::TextureFormat::BC2RGBAUnorm;
-        case kDXT5: return wgpu::TextureFormat::BC3RGBAUnorm;
-        default:    return wgpu::TextureFormat::RGBA8Unorm; // fallback
+        case kDXT1: return wgpu::TextureFormat::BC1RGBAUnormSrgb;
+        case kDXT3: return wgpu::TextureFormat::BC2RGBAUnormSrgb;
+        case kDXT5: return wgpu::TextureFormat::BC3RGBAUnormSrgb;
+        default:    return wgpu::TextureFormat::RGBA8UnormSrgb; // fallback
         }
     }
 
     // Non-DXT or BC not supported: decompress to RGBA8
-    return wgpu::TextureFormat::RGBA8Unorm;
+    return wgpu::TextureFormat::RGBA8UnormSrgb;
 }
 
 // ============================================================================
@@ -499,6 +499,100 @@ wgpu::Texture CreateFromBitmap(GpuDevice& gpu, const RndBitmap& bmp, int numMips
 
         delete[] untiled;
         curMip = curMip->nextMip();
+    }
+
+    return tex;
+}
+
+wgpu::Texture CreateCubeFromBitmaps(GpuDevice& gpu, const RndBitmap* faces, int numFaces) {
+    // All 6 faces must have the same dimensions
+    int w = faces[0].Width();
+    int h = faces[0].Height();
+    if (w == 0 || h == 0) return nullptr;
+
+    bool hasBCSupport = gpu.HasBCCompression();
+    wgpu::TextureFormat fmt = MapBitmapFormat(faces[0], hasBCSupport);
+
+    wgpu::TextureDescriptor texDesc{};
+    texDesc.size = {(uint32_t)w, (uint32_t)h, 6};
+    texDesc.dimension = wgpu::TextureDimension::e2D;
+    texDesc.format = fmt;
+    texDesc.usage = wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopyDst;
+    texDesc.mipLevelCount = 1;
+    texDesc.viewFormatCount = 0;
+    wgpu::Texture tex = gpu.Device().CreateTexture(&texDesc);
+    if (!tex) return nullptr;
+
+    for (int face = 0; face < numFaces && face < 6; face++) {
+        const RndBitmap& bmp = faces[face];
+        int fw = bmp.Width();
+        int fh = bmp.Height();
+        if (fw == 0 || fh == 0 || !bmp.Pixels()) continue;
+
+        unsigned int order = bmp.Order();
+        unsigned int dxt = order & 0x38;
+        int bpp = bmp.Bpp();
+        int pixelBytes = bmp.PixelBytes();
+        const uint8_t* srcPixels = bmp.Pixels();
+
+        // Make working copy
+        std::vector<uint8_t> workBuf(srcPixels, srcPixels + pixelBytes);
+        uint8_t* workData = workBuf.data();
+
+        // Untile if needed
+        uint8_t* untiled = nullptr;
+        if (order & 4) {
+            untiled = UntileMilo(bmp);
+            workData = untiled;
+        }
+
+        // Byte-swap DXT
+        if (dxt) {
+            ByteSwapDXT(workData, pixelBytes);
+        }
+
+        // Determine upload data
+        const uint8_t* uploadData = workData;
+        size_t uploadSize = pixelBytes;
+        std::vector<uint8_t> decompBuf;
+
+        if (dxt && !hasBCSupport) {
+            decompBuf.resize(fw * fh * 4);
+            switch (dxt) {
+            case kDXT1: DecompressDXT1(workData, decompBuf.data(), fw, fh); break;
+            case kDXT3: DecompressDXT3(workData, decompBuf.data(), fw, fh); break;
+            case kDXT5: DecompressDXT5(workData, decompBuf.data(), fw, fh); break;
+            }
+            uploadData = decompBuf.data();
+            uploadSize = decompBuf.size();
+        } else if (!dxt && bpp == 32) {
+            if (!(order & 1)) {
+                SwapBGRAtoRGBA(workData, fw, fh);
+            }
+            uploadSize = fw * fh * 4;
+        }
+
+        // Upload to correct array layer
+        wgpu::TexelCopyTextureInfo dstInfo{};
+        dstInfo.texture = tex;
+        dstInfo.mipLevel = 0;
+        dstInfo.origin = {0, 0, (uint32_t)face};
+
+        wgpu::TexelCopyBufferLayout srcLayout{};
+        if (dxt && hasBCSupport) {
+            int blockW = (fw + 3) / 4;
+            int blockBytes = (dxt == kDXT1) ? 8 : 16;
+            srcLayout.bytesPerRow = blockW * blockBytes;
+            srcLayout.rowsPerImage = (fh + 3) / 4;
+        } else {
+            srcLayout.bytesPerRow = fw * 4;
+            srcLayout.rowsPerImage = fh;
+        }
+
+        wgpu::Extent3D extent = {(uint32_t)fw, (uint32_t)fh, 1};
+        gpu.Queue().WriteTexture(&dstInfo, uploadData, uploadSize, &srcLayout, &extent);
+
+        delete[] untiled;
     }
 
     return tex;

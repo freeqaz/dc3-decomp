@@ -33,7 +33,11 @@ VoiceInputPanel::VoiceInputPanel() {
     unk3c = false; // i really gotta declare these here huh
     mActiveVoiceContext = nullptr;
     mDisabledVoiceContext = nullptr;
+#ifdef HX_NATIVE
+    // Skip LoadVoiceContexts on native — no Kinect/speech config available
+#else
     LoadVoiceContexts();
+#endif
     TheVoiceInputPanel = this;
 }
 

@@ -101,17 +101,23 @@ void NgRnd::RemovePointTest(RndFlare *flare) {
 void NgRnd::DoPostProcess() { Rnd::DoPostProcess(); }
 
 void NgRnd::CreateLargeQuad(int, int, LargeQuadRenderData &) {
+#ifndef HX_NATIVE
     MILO_FAIL("NgRnd::CreateLargeQuad not implemented!");
+#endif
 }
 
 void NgRnd::DrawLargeQuad(
     const LargeQuadRenderData &, const Transform &, RndMat *, ShaderType
 ) {
+#ifndef HX_NATIVE
     MILO_FAIL("NgRnd::DrawLargeQuad not implemented!");
+#endif
 }
 
 void NgRnd::SetVertShaderTex(RndTex *, int) {
+#ifndef HX_NATIVE
     MILO_FAIL("NgRnd::SetVertShaderTex not implemented!");
+#endif
 }
 
 void NgRnd::ResetStats() {

@@ -1157,7 +1157,6 @@ May be from headers, SDK, or small utility classes not split by jeff.
 - [ ] `?GetVenueCmp@NavListItemSortCmp@@UBAPBVVenueCmp@@XZ`
 - [ ] `?GetVocalPartsCmp@NavListItemSortCmp@@UBAPBVVocalPartsCmp@@XZ`
 - [ ] `?Handle@BustAMoveData@@UAA?AVDataNode@@PAVDataArray@@_N@Z`
-- [ ] `?Handle@CharMeshHide@@UAA?AVDataNode@@PAVDataArray@@_N@Z`
 - [ ] `?Handle@FitnessCalorieSortMgr@@UAA?AVDataNode@@PAVDataArray@@_N@Z`
 - [ ] `?Handle@OvershellSlot@@UAA?AVDataNode@@PAVDataArray@@_N@Z`
 - [ ] `?Handle@RndFont3d@@UAA?AVDataNode@@PAVDataArray@@_N@Z`

@@ -139,6 +139,12 @@ const DataNode &DataNode::Evaluate() const {
     } else if (mType == kDataProperty) {
         MILO_ASSERT(gDataThis, 0x7A);
         const DataNode *n = gDataThis->Property(mValue.array, true);
+#ifdef HX_NATIVE
+        if (!n) {
+            static DataNode sNullNode(0);
+            return sNullNode;
+        }
+#endif
         return UseQueue(*n);
     } else
         return *this;
@@ -318,14 +324,14 @@ int DataNode::Int(const DataArray *source) const {
         String s;
         n.Print(s, true, 0);
         if (source)
-            MILO_FAIL(
+            MILO_FAIL_DTA(
                 "Data %s is not Int (file %s, line %d)",
                 s.c_str(),
                 source->File(),
                 source->Line()
             );
         else
-            MILO_FAIL("Data %s is not Int", s);
+            MILO_FAIL_DTA("Data %s is not Int", s);
     }
     return n.mValue.integer;
 }
@@ -335,14 +341,14 @@ int DataNode::LiteralInt(const DataArray *source) const {
         String s;
         Print(s, true, 0);
         if (source)
-            MILO_FAIL(
+            MILO_FAIL_DTA(
                 "Data %s is not Int (file %s, line %d)",
                 s.c_str(),
                 source->File(),
                 source->Line()
             );
         else
-            MILO_FAIL("Data %s is not Int", s);
+            MILO_FAIL_DTA("Data %s is not Int", s);
     }
     return mValue.integer;
 }
@@ -353,14 +359,17 @@ Symbol DataNode::Sym(const DataArray *source) const {
         String s;
         n.Print(s, true, 0);
         if (source)
-            MILO_FAIL(
+            MILO_FAIL_DTA(
                 "Data %s is not Symbol (file %s, line %d)",
                 s.c_str(),
                 source->File(),
                 source->Line()
             );
         else
-            MILO_FAIL("Data %s is not Symbol", s);
+            MILO_FAIL_DTA("Data %s is not Symbol", s);
+#ifdef HX_NATIVE
+        return Symbol("");
+#endif
     }
     return STR_TO_SYM(n.mValue.symbol);
 }
@@ -370,14 +379,17 @@ Symbol DataNode::LiteralSym(const DataArray *source) const {
         String s;
         Print(s, true, 0);
         if (source)
-            MILO_FAIL(
+            MILO_FAIL_DTA(
                 "Data %s is not Symbol (file %s, line %d)",
                 s.c_str(),
                 source->File(),
                 source->Line()
             );
         else
-            MILO_FAIL("Data %s is not Symbol", s);
+            MILO_FAIL_DTA("Data %s is not Symbol", s);
+#ifdef HX_NATIVE
+        return Symbol("");
+#endif
     }
     return STR_TO_SYM(mValue.symbol);
 }
@@ -391,14 +403,17 @@ Symbol DataNode::ForceSym(const DataArray *source) const {
             String s;
             n.Print(s, true, 0);
             if (source)
-                MILO_FAIL(
+                MILO_FAIL_DTA(
                     "Data %s is not String (file %s, line %d)",
                     s.c_str(),
                     source->File(),
                     source->Line()
                 );
             else
-                MILO_FAIL("Data %s is not String", s);
+                MILO_FAIL_DTA("Data %s is not String", s);
+#ifdef HX_NATIVE
+            return Symbol("");
+#endif
         }
         return Symbol(n.mValue.var->mValue.symbol);
     }
@@ -413,14 +428,17 @@ const char *DataNode::Str(const DataArray *source) const {
             String s;
             n.Print(s, true, 0);
             if (source)
-                MILO_FAIL(
+                MILO_FAIL_DTA(
                     "Data %s is not String (file %s, line %d)",
                     s.c_str(),
                     source->File(),
                     source->Line()
                 );
             else
-                MILO_FAIL("Data %s is not String", s);
+                MILO_FAIL_DTA("Data %s is not String", s);
+#ifdef HX_NATIVE
+            return "";
+#endif
         }
         return n.mValue.var->mValue.symbol;
     }
@@ -434,14 +452,17 @@ const char *DataNode::LiteralStr(const DataArray *source) const {
             String s;
             Print(s, true, 0);
             if (source)
-                MILO_FAIL(
+                MILO_FAIL_DTA(
                     "Data %s is not String (file %s, line %d)",
                     s.c_str(),
                     source->File(),
                     source->Line()
                 );
             else
-                MILO_FAIL("Data %s is not String", s);
+                MILO_FAIL_DTA("Data %s is not String", s);
+#ifdef HX_NATIVE
+            return "";
+#endif
         }
         return mValue.var->mValue.symbol;
     }
@@ -456,14 +477,14 @@ float DataNode::Float(const DataArray *source) const {
             String s;
             n.Print(s, true, 0);
             if (source)
-                MILO_FAIL(
+                MILO_FAIL_DTA(
                     "Data %s is not Float (file %s, line %d)",
                     s.c_str(),
                     source->File(),
                     source->Line()
                 );
             else
-                MILO_FAIL("Data %s is not Float", s);
+                MILO_FAIL_DTA("Data %s is not Float", s);
         }
         return n.mValue.real;
     }
@@ -477,14 +498,14 @@ float DataNode::LiteralFloat(const DataArray *source) const {
             String s;
             Print(s, true, 0);
             if (source)
-                MILO_FAIL(
+                MILO_FAIL_DTA(
                     "Data %s is not Float (file %s, line %d)",
                     s.c_str(),
                     source->File(),
                     source->Line()
                 );
             else
-                MILO_FAIL("Data %s is not Float", s);
+                MILO_FAIL_DTA("Data %s is not Float", s);
         }
         return mValue.real;
     }
@@ -495,14 +516,17 @@ DataFunc *DataNode::Func(const DataArray *source) const {
         String s;
         Print(s, true, 0);
         if (source)
-            MILO_FAIL(
+            MILO_FAIL_DTA(
                 "Data %s is not Func (file %s, line %d)",
                 s.c_str(),
                 source->File(),
                 source->Line()
             );
         else
-            MILO_FAIL("Data %s is not Func", s);
+            MILO_FAIL_DTA("Data %s is not Func", s);
+#ifdef HX_NATIVE
+        return nullptr;
+#endif
     }
     return mValue.func;
 }
@@ -519,7 +543,7 @@ Hmx::Object *DataNode::GetObj(const DataArray *source) const {
             if (!ret) {
                 const char *msg =
                     PathName(gDataDir) != nullptr ? PathName(gDataDir) : "**no file**";
-                MILO_FAIL(kNotObjectMsg, str, msg);
+                MILO_FAIL_DTA(kNotObjectMsg, str, msg);
             }
         }
         return ret;
@@ -532,14 +556,17 @@ DataArray *DataNode::Array(const DataArray *source) const {
         String s;
         n.Print(s, true, 0);
         if (source)
-            MILO_FAIL(
+            MILO_FAIL_DTA(
                 "Data %s is not Array (file %s, line %d)",
                 s.c_str(),
                 source->File(),
                 source->Line()
             );
         else
-            MILO_FAIL("Data %s is not Array", s);
+            MILO_FAIL_DTA("Data %s is not Array", s);
+#ifdef HX_NATIVE
+        return nullptr;
+#endif
     }
     return n.mValue.array;
 }
@@ -549,14 +576,17 @@ DataArray *DataNode::LiteralArray(const DataArray *source) const {
         String s;
         Print(s, true, 0);
         if (source)
-            MILO_FAIL(
+            MILO_FAIL_DTA(
                 "Data %s is not Array (file %s, line %d)",
                 s.c_str(),
                 source->File(),
                 source->Line()
             );
         else
-            MILO_FAIL("Data %s is not Array", s);
+            MILO_FAIL_DTA("Data %s is not Array", s);
+#ifdef HX_NATIVE
+        return nullptr;
+#endif
     }
     return mValue.array;
 }
@@ -566,14 +596,17 @@ DataArray *DataNode::Command(const DataArray *source) const {
         String s;
         Print(s, true, 0);
         if (source)
-            MILO_FAIL(
+            MILO_FAIL_DTA(
                 "Data %s is not Command (file %s, line %d)",
                 s.c_str(),
                 source->File(),
                 source->Line()
             );
         else
-            MILO_FAIL("Data %s is not Command", s);
+            MILO_FAIL_DTA("Data %s is not Command", s);
+#ifdef HX_NATIVE
+        return nullptr;
+#endif
     }
     return mValue.array;
 }
@@ -583,14 +616,17 @@ DataNode *DataNode::Var(const DataArray *source) const {
         String s;
         Print(s, true, 0);
         if (source)
-            MILO_FAIL(
+            MILO_FAIL_DTA(
                 "Data %s is not Var (file %s, line %d)",
                 s.c_str(),
                 source->File(),
                 source->Line()
             );
         else
-            MILO_FAIL("Data %s is not Var", s);
+            MILO_FAIL_DTA("Data %s is not Var", s);
+#ifdef HX_NATIVE
+        return nullptr;
+#endif
     }
     return mValue.var;
 }
@@ -730,6 +766,10 @@ void DataNode::Load(BinStream &d) {
         break;
     default:
         MILO_FAIL("Unrecognized node type: %x", mType);
+#ifdef HX_NATIVE
+        fprintf(stderr, "DataNode::Load ABORT: bad type 0x%x at stream pos=%d\n", mType, d.Tell());
+        abort();
+#endif
         break;
     }
 }

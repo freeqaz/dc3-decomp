@@ -663,10 +663,10 @@ DataNode Character::OnCopyBoundingSphere(DataArray *da) {
 }
 
 void Character::MergeDraws(const Character *c) {
-    MILO_ASSERT(c, 0x57D);
 #ifdef HX_NATIVE
     if (!c) return;
 #endif
+    MILO_ASSERT(c, 0x57D);
     int numLods = Max<int>(c->mLods.size(), mLods.size());
     mLods.resize(numLods);
     for (int i = 0; i < c->mLods.size(); i++) {
@@ -839,7 +839,6 @@ void Character::SyncShadow() {
                 }
             }
         }
-        RemoveFromDraws(mShadow);
     }
 }
 

@@ -5,14 +5,15 @@
 
 class RndMesh;
 
-// GPU vertex layout after unpacking from RndMesh::Vert (96 bytes -> 48 bytes GPU)
+// GPU vertex layout after unpacking from RndMesh::Vert
 struct GpuVertex {
     float pos[3];       // 0  - position
     float norm[3];      // 12 - normal
     float color[4];     // 24 - vertex color (RGBA float)
     float uv[2];        // 40 - texture coordinates
+    float tangent[4];   // 48 - tangent (xyz) + bitangent sign (w)
 };
-static_assert(sizeof(GpuVertex) == 48, "GpuVertex must be 48 bytes");
+static_assert(sizeof(GpuVertex) == 64, "GpuVertex must be 64 bytes");
 
 // Skinned vertex adds bone data
 struct GpuVertexSkinned {
@@ -23,8 +24,9 @@ struct GpuVertexSkinned {
     float boneWeights[4]; // 48
     uint8_t boneIndices[4]; // 64
     float pad;          // 68 - alignment padding
+    float tangent[4];   // 72 - tangent (xyz) + bitangent sign (w)
 };
-static_assert(sizeof(GpuVertexSkinned) == 72, "GpuVertexSkinned must be 72 bytes");
+static_assert(sizeof(GpuVertexSkinned) == 88, "GpuVertexSkinned must be 88 bytes");
 
 namespace VertexFormats {
 

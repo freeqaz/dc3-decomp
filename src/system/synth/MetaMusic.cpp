@@ -90,7 +90,7 @@ void MetaMusic::UnMute() {
 }
 
 bool MetaMusic::Loaded() {
-    if (mMaster->IsLoaded() && !mShellFxPath.empty()) {
+    if (mMaster && mMaster->IsLoaded() && !mShellFxPath.empty()) {
         if (mShellFx.IsLoaded()) {
             if (!mShellFx) {
                 mShellFx.PostLoad(nullptr);

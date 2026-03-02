@@ -11,6 +11,8 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
+#include <unistd.h>
+#include <fcntl.h>
 
 static void MaDataCallback(ma_device *device, void *output, const void * /*input*/, ma_uint32 frameCount) {
     AudioDevice *ad = (AudioDevice *)device->pUserData;
@@ -42,7 +44,22 @@ bool AudioDevice::Init(int sampleRate) {
     config.pUserData = this;
     config.periodSizeInFrames = 512; // ~10ms at 48kHz — low latency for rhythm game
 
+    // Suppress ALSA error spam during device enumeration (no sound card = ~30 lines of noise)
+    int savedStderr = dup(STDERR_FILENO);
+    int devNull = open("/dev/null", O_WRONLY);
+    if (devNull >= 0) {
+        dup2(devNull, STDERR_FILENO);
+        close(devNull);
+    }
+
     ma_result result = ma_device_init(nullptr, &config, mDevice);
+
+    // Restore stderr
+    if (savedStderr >= 0) {
+        dup2(savedStderr, STDERR_FILENO);
+        close(savedStderr);
+    }
+
     if (result != MA_SUCCESS) {
         fprintf(stderr, "AudioDevice: ma_device_init failed: %d\n", result);
         delete mDevice;

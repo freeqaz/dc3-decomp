@@ -101,28 +101,33 @@ END_PROPSYNCS
 
 BinStream &operator<<(BinStream &bs, const Flow::DynamicPropertyEntry &entry) {
     int type = entry.mType;
-    BinStream &bs1 = bs << entry.mName;
-    bs1 << type;
-    entry.mDefaultVal.Save(bs1);
     bool exposed = entry.mExposed;
-    BinStream &bs2 = bs1 << entry.mHelp;
-    bs2 << exposed;
-    entry.mSymbolList.Save(bs2);
-    BinStream &bs3 = bs2 << entry.mObjectClass;
-    bs3 << entry.mObjectType;
+    bs << entry.mName;
+    bs << type;
+    entry.mDefaultVal.Save(bs);
+    bs << entry.mHelp;
+    bs << entry.mObjectClass;
+    bs << exposed;
+    entry.mSymbolList.Save(bs);
+    bs << entry.mObjectType;
     return bs;
 }
 
-BinStream &operator>>(BinStream &bs, Flow::DynamicPropertyEntry &entry) {
+BinStreamRev &operator>>(BinStreamRev &d, Flow::DynamicPropertyEntry &entry) {
+    BinStream &bs = d.stream;
     bs >> entry.mName;
     bs >> (int &)entry.mType;
     entry.mDefaultVal.Load(bs);
     bs >> entry.mHelp;
-    bs >> entry.mExposed;
     bs >> entry.mObjectClass;
-    entry.mSymbolList.Load(bs);
-    bs >> entry.mObjectType;
-    return bs;
+    if (d.rev > 1) {
+        d >> entry.mExposed;
+        entry.mSymbolList.Load(bs);
+    }
+    if (d.rev > 5) {
+        bs >> entry.mObjectType;
+    }
+    return d;
 }
 
 BEGIN_SAVES(Flow)
@@ -216,21 +221,19 @@ void Flow::PreLoad(BinStream &bs) {
 void Flow::PostLoad(BinStream &bs) {
     BinStreamRev d(bs, bs.PopRev(this));
 #ifdef HX_NATIVE
-    printf("Flow::PostLoad '%s': rev=%d altRev=%d tell=%d isProxy=%d\n",
-           Name(), d.rev, d.altRev, bs.Tell(), (int)IsProxy());
-    fflush(stdout);
+    fprintf(stderr, "Flow::PostLoad '%s' rev=%d proxy=%d (stream pos=%d)\n",
+            Name(), d.rev, IsProxy(), bs.Tell());
 #endif
     ObjectDir::PostLoad(bs);
 #ifdef HX_NATIVE
-    printf("Flow::PostLoad '%s': after ObjectDir::PostLoad tell=%d\n", Name(), bs.Tell());
-    fflush(stdout);
+    fprintf(stderr, "  Flow::PostLoad after ObjectDir::PostLoad (stream pos=%d)\n", bs.Tell());
 #endif
     if (IsProxy()) {
         int numDynProps = 0;
         bs.ReadEndian(&numDynProps, 4);
 #ifdef HX_NATIVE
-        printf("Flow::PostLoad '%s': isProxy, numDynProps=%d tell=%d\n", Name(), numDynProps, bs.Tell());
-        fflush(stdout);
+        fprintf(stderr, "  Flow::PostLoad proxy numDynProps=%d rev=%d (stream pos=%d)\n",
+                numDynProps, d.rev, bs.Tell());
 #endif
         if (d.rev < 5) {
             for (int i = 0; i < numDynProps; i++) {
@@ -289,9 +292,22 @@ void Flow::PostLoad(BinStream &bs) {
             }
         }
     } else {
+#ifdef HX_NATIVE
+        fprintf(stderr, "  Flow::PostLoad non-proxy path rev=%d (stream pos=%d)\n",
+                d.rev, bs.Tell());
+#endif
         if (d.rev >= 3) {
+#ifdef HX_NATIVE
+            fprintf(stderr, "  Flow::PostLoad before FlowQueueable::Load (stream pos=%d)\n", bs.Tell());
+#endif
             FlowQueueable::Load(bs);
+#ifdef HX_NATIVE
+            fprintf(stderr, "  Flow::PostLoad after FlowQueueable::Load (stream pos=%d)\n", bs.Tell());
+#endif
             d >> mHardStop;
+#ifdef HX_NATIVE
+            fprintf(stderr, "  Flow::PostLoad after mHardStop (stream pos=%d)\n", bs.Tell());
+#endif
         } else {
             int oldRev = 0;
             bs.ReadEndian(&oldRev, 4);
@@ -353,7 +369,14 @@ void Flow::PostLoad(BinStream &bs) {
             stopEvents.clear();
             triggerEvents.clear();
         }
+#ifdef HX_NATIVE
+        fprintf(stderr, "  Flow::PostLoad before mDynamicProperties (stream pos=%d)\n", bs.Tell());
+#endif
         d >> mDynamicProperties;
+#ifdef HX_NATIVE
+        fprintf(stderr, "  Flow::PostLoad after mDynamicProperties size=%d (stream pos=%d)\n",
+                (int)mDynamicProperties.size(), bs.Tell());
+#endif
         if (d.rev < 7) {
             bool startOnEnter;
             d >> startOnEnter;

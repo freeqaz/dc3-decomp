@@ -187,7 +187,8 @@ void CharClipGroup::DeleteRemaining(int count) {
 CharClip *CharClipGroup::FindClip(const char *name) const {
     for (int i = 0; i < (int)mClips.size(); i++) {
         CharClip *clip = (CharClip *)mClips[i];
-        if (clip && streq(clip->Name(), name))
+        auto _tmp0 = streq(name, clip->Name());
+        if (clip && _tmp0)
             return clip;
     }
     return nullptr;

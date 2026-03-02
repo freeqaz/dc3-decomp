@@ -46,6 +46,15 @@ void ObjRefConcrete<T1, T2>::SetObjConcrete(T1 *obj) {
 
 template <class T1, class T2>
 Hmx::Object *ObjRefConcrete<T1, T2>::SetObj(Hmx::Object *root_obj) {
+#ifdef HX_NATIVE
+    if (root_obj) {
+        void **vptr = *(void ***)root_obj;
+        if (!vptr) {
+            SetObjConcrete(nullptr);
+            return nullptr;
+        }
+    }
+#endif
     T1 *obj = root_obj ? dynamic_cast<T1 *>(root_obj) : nullptr;
     SetObjConcrete(obj);
     return mObject ? mObject : nullptr;

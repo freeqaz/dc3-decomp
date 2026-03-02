@@ -6,18 +6,19 @@ foundation.
 
 ## Current Status
 
-**Phase 0 complete, Phase 1 complete, Phase 2 Tier 1 complete.**
+**Phase 0 complete, Phase 1 Track A & B complete, Phase 2 Tier 1.5 complete, Phase 3 complete, Phase 4 complete.**
 
-Rendering pipeline fully operational: `.milo_xbox` files load and render with
-textured materials, half-Lambert directional lighting, and Xbox 360 compressed
-vertex support (including UV unpacking from FLOAT16_2 and DEC4N normals). Both
-windowed (GLFW + orbit camera) and headless (screenshot) modes work. Verified on
-RTX 3090 (Vulkan backend via Dawn). Gallery of 17 rendered props in
-`archive/screenshots/` — all rendering correctly.
+The full engine boots on x86_64 Linux, loads game data from `.ark` archives,
+initializes all subsystems, navigates UI screens automatically via DTA scripts,
+and runs 5000+ frames stably. Rendering pipeline operational with full material
+pipeline (Blinn-Phong specular, emissive, rim lighting, intensify, multi-light).
+Audio decoding complete (FFmpeg for Bink, Vorbis for OGG/MOGG). Input working
+via GLFW (gamepad + keyboard-as-joypad). GTest integration test suite verifies
+headless boot stability.
 
 **Batch screenshot script**: `native/scripts/render_screenshots.sh`
 
-**Next**: Skinned mesh rendering, multi-light support, additional shader types.
+**Next**: Skinned mesh rendering, UI text rendering, getting past tutorial screens.
 
 ## Prerequisites
 

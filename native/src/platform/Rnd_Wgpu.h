@@ -8,6 +8,8 @@
 #include "rndobj/Rnd_NG.h"
 #include "rndobj/ShaderMgr.h"
 
+#include <string>
+#include <vector>
 #include <webgpu/webgpu_cpp.h>
 
 // ============================================================================
@@ -41,9 +43,22 @@ struct MaterialUniforms {
     float specularColor[4];     // vec4f
     float rimColor[4];          // vec4f — .rgb = color, .a = power
     float intensify;            // f32
-    float _pad[3];
+    float shaderVariation;      // f32 — 0=none, 1=skin, 2=hair
+    float rimLightUnder;        // f32 — 1.0 if rim only lights backfaces
+    float deNormal;             // f32 — normal map diminish, 0=neutral
+    float specular2Color[4];    // vec4f — .rgb = color, .a = power (2nd specular lobe)
+    float anisotropy;           // f32
+    float hasNormalMap;          // f32 — 1.0 when normal map bound
+    float materialFogEnabled;   // f32 — 1.0 if fog applies to this material
+    float prelit;               // f32 — 1.0 if vertex color is pre-lit
+    float environMapStrength;   // f32 — 1.0 when environ map bound
+    float environMapFalloff;    // f32 — 1.0 for Fresnel falloff
+    float environMapSpecMask;   // f32 — 1.0 to mask by specular map alpha
+    float texGenMode;           // f32 — 0=none, 1=xfm, 2=sphere, 3=projected, 4=xfmOrigin, 5=environ
+    float texXfmRow0[4];        // vec4f — UV transform row 0 (u)
+    float texXfmRow1[4];        // vec4f — UV transform row 1 (v)
 };
-static_assert(sizeof(MaterialUniforms) == 80, "MaterialUniforms must match WGSL layout");
+static_assert(sizeof(MaterialUniforms) == 160, "MaterialUniforms must match WGSL layout");
 
 struct ObjectUniforms {
     float world[16];            // mat4x4f
@@ -141,14 +156,28 @@ public:
     // Scene bind group (group 0) — set once per frame
     wgpu::BindGroup& SceneBindGroup() { return mSceneBindGroup; }
 
-    // Default 1x1 white texture for untextured materials
+    // Default textures
     wgpu::TextureView& WhiteTexView() { return mWhiteTexView; }
+    wgpu::TextureView& FlatNormalTexView() { return mFlatNormalTexView; }
+    wgpu::TextureView& BlackTexView() { return mBlackTexView; }
+    wgpu::TextureView& BlackCubeTexView() { return mBlackCubeTexView; }
     wgpu::Sampler& DefaultSampler() { return mDefaultSampler; }
+
+    // Material texture views for bind group creation
+    struct MaterialTexViews {
+        wgpu::TextureView diffuse;
+        wgpu::TextureView normal;
+        wgpu::TextureView specular;
+        wgpu::TextureView emissive;
+        wgpu::TextureView rim;
+        wgpu::TextureView environCube;
+    };
 
     // Create material bind group (group 1)
     wgpu::BindGroup CreateMaterialBindGroup(
         uint32_t bufferOffset, uint32_t bufferSize,
-        wgpu::TextureView& texView, wgpu::Sampler& sampler);
+        const MaterialTexViews& texViews,
+        wgpu::Sampler& diffuseSampler, wgpu::Sampler& mapSampler);
 
     // Create object bind group (group 2)
     wgpu::BindGroup CreateObjectBindGroup(uint32_t bufferOffset, uint32_t bufferSize);
@@ -165,6 +194,7 @@ private:
     void CreateDepthTexture(int w, int h);
     void CreateDefaultTextures();
     void WriteSceneUniforms();
+    void MaybeCaptureFrame();
 
     GpuDevice mGpu;
     PipelineManager mPipelines;
@@ -190,13 +220,31 @@ private:
     int mDepthWidth = 0;
     int mDepthHeight = 0;
 
+    // MSAA render target (4x) — resolves to surface texture
+    static constexpr uint32_t kMSAASamples = 4;
+    wgpu::Texture mMsaaTex;
+    wgpu::TextureView mMsaaView;
+    int mMsaaWidth = 0;
+    int mMsaaHeight = 0;
+
     // Default textures
     wgpu::Texture mWhiteTex;
     wgpu::TextureView mWhiteTexView;
+    wgpu::Texture mFlatNormalTex;
+    wgpu::TextureView mFlatNormalTexView;
+    wgpu::Texture mBlackTex;
+    wgpu::TextureView mBlackTexView;
+    wgpu::Texture mBlackCubeTex;
+    wgpu::TextureView mBlackCubeTexView;
     wgpu::Sampler mDefaultSampler;
 
     // Clear color
     Hmx::Color mWgpuClearColor;
+
+    // Auto-screenshot capture (env-var controlled)
+    std::string mScreenshotDir;
+    std::vector<int> mCaptureFrames;
+    int mCaptureIndex = 0;
 };
 
 // Global accessor — set during Init

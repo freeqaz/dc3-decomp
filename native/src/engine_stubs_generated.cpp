@@ -101,40 +101,44 @@ int OutputDebugStringA() { return 0; }
 int printbuf_free() { return 0; }
 int printbuf_memappend() { return 0; }
 int printbuf_new() { return 0; }
-int __real_0000000000000000() { return 0; }
-int __real_3f50624dd2f1a9fc() { return 0; }
-int __real_3fe0000000000000() { return 0; }
-int __real_4000000000000000() { return 0; }
-int __real_400921fb60000000() { return 0; }
-int __real_401921fb60000000() { return 0; }
+// Floating-point constants referenced by symbol name (loaded via address)
+double __real_0000000000000000 = 0.0;
+double __real_3f50624dd2f1a9fc = 0.001;
+double __real_3fe0000000000000 = 0.5;
+double __real_4000000000000000 = 2.0;
+double __real_400921fb60000000 = 3.14159274101257324;   // pi (float precision)
+double __real_401921fb60000000 = 6.28318548202514648;   // 2*pi (float precision)
 int register_cipher() { return 0; }
 int rijndael_desc() { return 0; }
 int rijndael_ecb_decrypt() { return 0; }
 int rijndael_setup() { return 0; }
 int SetUnhandledExceptionFilter() { return 0; }
-int TheChallengeSortMgr() { return 0; }
+// The* global pointer stubs - must be void* (not functions!) since C++ code
+// declares them as extern ClassName* and dereferences them as pointers.
+// Function stubs at these symbols would be read as non-null garbage pointers.
+void* TheChallengeSortMgr = 0;
 // TheContentMgr: provided by ContentMgr_Stub.cpp
-int TheDebugNotifyOncePrinter() { return 0; }
+void* TheDebugNotifyOncePrinter = 0;
 // TheDxRnd: removed - provided by Rnd_Stub.cpp (not needed, rnddx9 excluded)
-int TheFitnessGoalMgr() { return 0; }
-int TheGameMode() { return 0; }
-// int TheHamUI() { return 0; } // now defined in HamUI.cpp
-int TheHAQMgr() { return 0; }
-int TheLeaderboards() { return 0; }
-// int TheLocale() { return 0; } // now defined in Locale.cpp
-int TheMaster() { return 0; }
-int TheMC() { return 0; }
-int TheMoveMgr() { return 0; }
-int TheMovieSys() { return 0; }
-int TheMQSongSortMgr() { return 0; }
+void* TheFitnessGoalMgr = 0;
+// TheGameMode: now defined properly in GameMode.cpp
+// TheHamUI: now defined in HamUI.cpp
+void* TheHAQMgr = 0;
+void* TheLeaderboards = 0;
+// TheLocale: now defined in Locale.cpp
+void* TheMaster = 0;
+void* TheMC = 0;
+void* TheMoveMgr = 0;
+// TheMovieSys: removed - provided by MovieSys.cpp
+void* TheMQSongSortMgr = 0;
 // TheNgRnd: removed - provided by Rnd_Stub.cpp
-int TheRenderState() { return 0; }
+void* TheRenderState = 0;
 // TheRnd: removed - provided by Rnd_Stub.cpp
-int TheServer() { return 0; }
+void* TheServer = 0;
 // TheShaderMgr: removed - provided by Rnd_Stub.cpp
-int TheSkeletonIdentifier() { return 0; }
-int TheSkeletonViz() { return 0; }
-int TheSongSortMgr() { return 0; }
+void* TheSkeletonIdentifier = 0;
+void* TheSkeletonViz = 0;
+void* TheSongSortMgr = 0;
 // TheUI: removed - provided as proper UIManager* in Rnd_Stub.cpp
 int vorbis_synthesis_poll() { return 0; }
 int WideCharToMultiByte() { return 0; }
@@ -4084,39 +4088,30 @@ extern "C" long _stub_fn_1534() { return 0; }
 extern "C" __attribute__((weak, used)) long _stub_fn_1535() __asm__("_ZTv0_n96_N8RndLight4CopyEPKN3Hmx6ObjectENS1_8CopyTypeE");
 extern "C" long _stub_fn_1535() { return 0; }
 
-// vtable and typeinfo
+// vtable and typeinfo stubs for classes without key functions.
+// WARNING: These are zero-initialized. If dynamic_cast hits one of these,
+// it will crash. Fix: add BEGIN_HANDLERS to the class's .cpp file so the
+// compiler emits real typeinfo/vtable (which override these weak stubs).
+// Classes already fixed: UIListWidget, UIListMesh, UIListSlot, UIListArrow,
+// UIListLabel, UIListSubList, NavListItemSortCmp, RndFont3d.
 __attribute__((weak, used)) char _stub_vt_0[1024] __asm__("_ZTI10RndMatAnim") = {};
-__attribute__((weak, used)) char _stub_vt_1[1024] __asm__("_ZTI10UIListMesh") = {};
-__attribute__((weak, used)) char _stub_vt_2[1024] __asm__("_ZTI10UIListSlot") = {};
 __attribute__((weak, used)) char _stub_vt_3[1024] __asm__("_ZTI11RndMeshAnim") = {};
-__attribute__((weak, used)) char _stub_vt_4[1024] __asm__("_ZTI11UIListArrow") = {};
-__attribute__((weak, used)) char _stub_vt_5[1024] __asm__("_ZTI11UIListLabel") = {};
-__attribute__((weak, used)) char _stub_vt_6[1024] __asm__("_ZTI12UIListWidget") = {};
 __attribute__((weak, used)) char _stub_vt_7[1024] __asm__("_ZTI13NetworkSocket") = {};
-__attribute__((weak, used)) char _stub_vt_8[1024] __asm__("_ZTI13UIListSubList") = {};
 __attribute__((weak, used)) char _stub_vt_9[1024] __asm__("_ZTI14MQSongSortNode") = {};
 __attribute__((weak, used)) char _stub_vt_10[1024] __asm__("_ZTI17CharSignalApplier") = {};
 __attribute__((weak, used)) char _stub_vt_11[1024] __asm__("_ZTI17SingleItemEnumJob") = {};
 __attribute__((weak, used)) char _stub_vt_12[1024] __asm__("_ZTI18AudioDuckerTrigger") = {};
-__attribute__((weak, used)) char _stub_vt_13[1024] __asm__("_ZTI18NavListItemSortCmp") = {};
 __attribute__((weak, used)) char _stub_vt_14[1024] __asm__("_ZTI4ADSR") = {};
 __attribute__((weak, used)) char _stub_vt_15[1024] __asm__("_ZTI5DxTex") = {};
 __attribute__((weak, used)) char _stub_vt_16[1024] __asm__("_ZTI8AppLabel") = {};
-__attribute__((weak, used)) char _stub_vt_17[1024] __asm__("_ZTI9RndFont3d") = {};
 __attribute__((weak, used)) char _stub_vt_18[1024] __asm__("_ZTV10RndMatAnim") = {};
-__attribute__((weak, used)) char _stub_vt_19[1024] __asm__("_ZTV10UIListMesh") = {};
-__attribute__((weak, used)) char _stub_vt_20[1024] __asm__("_ZTV10UIListSlot") = {};
 __attribute__((weak, used)) char _stub_vt_21[1024] __asm__("_ZTV11LocalePanel") = {};
 __attribute__((weak, used)) char _stub_vt_22[1024] __asm__("_ZTV11RndMeshAnim") = {};
-__attribute__((weak, used)) char _stub_vt_23[1024] __asm__("_ZTV11UIListArrow") = {};
-__attribute__((weak, used)) char _stub_vt_24[1024] __asm__("_ZTV11UIListLabel") = {};
 __attribute__((weak, used)) char _stub_vt_25[1024] __asm__("_ZTV12PropertyTask") = {};
 __attribute__((weak, used)) char _stub_vt_26[1024] __asm__("_ZTV12RndShaderFur") = {};
-__attribute__((weak, used)) char _stub_vt_27[1024] __asm__("_ZTV12UIListWidget") = {};
 __attribute__((weak, used)) char _stub_vt_28[1024] __asm__("_ZTV13DifficultyCmp") = {};
 __attribute__((weak, used)) char _stub_vt_29[1024] __asm__("_ZTV13NetworkSocket") = {};
 __attribute__((weak, used)) char _stub_vt_30[1024] __asm__("_ZTV13OvershellSlot") = {};
-__attribute__((weak, used)) char _stub_vt_31[1024] __asm__("_ZTV13UIListSubList") = {};
 __attribute__((weak, used)) char _stub_vt_32[1024] __asm__("_ZTV14MQSongSortNode") = {};
 __attribute__((weak, used)) char _stub_vt_33[1024] __asm__("_ZTV14SongSortByDiff") = {};
 __attribute__((weak, used)) char _stub_vt_34[1024] __asm__("_ZTV15StubCameraInput") = {};
@@ -4127,7 +4122,6 @@ __attribute__((weak, used)) char _stub_vt_38[1024] __asm__("_ZTV17RndShaderStand
 __attribute__((weak, used)) char _stub_vt_39[1024] __asm__("_ZTV17RndShaderUnwrapUV") = {};
 __attribute__((weak, used)) char _stub_vt_40[1024] __asm__("_ZTV17RndShaderVelocity") = {};
 __attribute__((weak, used)) char _stub_vt_41[1024] __asm__("_ZTV18AudioDuckerTrigger") = {};
-__attribute__((weak, used)) char _stub_vt_42[1024] __asm__("_ZTV18NavListItemSortCmp") = {};
 __attribute__((weak, used)) char _stub_vt_43[1024] __asm__("_ZTV18RndShaderMultimesh") = {};
 __attribute__((weak, used)) char _stub_vt_44[1024] __asm__("_ZTV18RndShaderParticles") = {};
 __attribute__((weak, used)) char _stub_vt_45[1024] __asm__("_ZTV18RndShaderSyncTrack") = {};
@@ -4145,7 +4139,6 @@ __attribute__((weak, used)) char _stub_vt_56[1024] __asm__("_ZTV4ADSR") = {};
 __attribute__((weak, used)) char _stub_vt_57[1024] __asm__("_ZTV7SongCmp") = {};
 __attribute__((weak, used)) char _stub_vt_58[1024] __asm__("_ZTV8AppLabel") = {};
 __attribute__((weak, used)) char _stub_vt_59[1024] __asm__("_ZTV9MemStream") = {};
-__attribute__((weak, used)) char _stub_vt_60[1024] __asm__("_ZTV9RndFont3d") = {};
 __attribute__((weak, used)) char _stub_vt_61[1024] __asm__("_ZTVN9HamDriver10LayerArrayE") = {};
 
 // =============================================================================

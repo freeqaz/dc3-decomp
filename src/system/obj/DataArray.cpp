@@ -343,11 +343,6 @@ void DataArray::Load(BinStream &bs) {
     mFile = gFile;
     short size;
     bs >> size;
-#ifdef HX_NATIVE
-    if (size > 200 || size < 0) {
-        printf("DataArray::Load: SUSPICIOUS size=%d tell=%d\n", size, bs.Tell());
-    }
-#endif
     MemPushTemp();
     Resize(size);
     MemPopTemp();
@@ -400,7 +395,15 @@ void DataArray::Load(BinStream &bs) {
             );
             size -= 1;
         } else if (node.Type() == kDataElse) {
+#ifdef HX_NATIVE
+            if (gDataArrayConditional.empty()) {
+                printf("WARNING: DataArray::Load: kDataElse with empty conditional stack, skipping\n");
+            } else {
+                gDataArrayConditional.back() = !gDataArrayConditional.back();
+            }
+#else
             gDataArrayConditional.back() = !gDataArrayConditional.back();
+#endif
             size -= 1;
         } else if (node.Type() == kDataEndif) {
 #ifdef HX_NATIVE
@@ -776,7 +779,7 @@ DataNode DataArray::Execute(bool fail) {
                     mLine
                 );
             }
-            TheDebug.Fail(msg, 0);
+            MILO_FAIL_DTA("%s", msg);
         }
         return 0;
     }

@@ -79,10 +79,6 @@ ArkFile::ArkFile(const char *iFilename, int iMode)
         || (iMode & 1)) {
         mFail = true;
     }
-#ifdef HX_NATIVE
-    printf("DC3 Native: ArkFile('%s') ark=%d byteStart=%llu size=%d ucSize=%d fail=%d\n",
-           iFilename, mArkfileNum, mByteStart, mSize, mUCSize, mFail);
-#endif
 }
 
 ArkFile::~ArkFile() {
