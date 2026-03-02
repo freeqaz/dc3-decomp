@@ -11,6 +11,7 @@
 #include "rndobj/BaseMaterial.h"
 #include "rndobj/Cam.h"
 #include "rndobj/Dir.h"
+#include "rndobj/Env.h"
 #include "rndobj/Mat.h"
 #include "rndobj/PostProc.h"
 #include "rndobj/Rnd.h"
@@ -18,8 +19,10 @@
 #include "rndobj/Utl.h"
 #include "synth/FxSend.h"
 #include "ui/PanelDir.h"
+#include "ui/UI.h"
 #include "utl/BinStream.h"
 #include "world/CameraManager.h"
+#include "world/Spotlight.h"
 
 WorldDir *TheWorld;
 std::vector<FilePath> gOldChars;
@@ -430,6 +433,93 @@ void WorldDir::SyncObjects() {
     mPhysicsMgr->SyncObjects(false);
     if (mHUD) {
         VectorRemove(mDraws, mHUD);
+    }
+}
+
+void WorldDir::DrawShowing() {
+    START_AUTO_TIMER("world_draw");
+    if (TheWorld) {
+        // Nested WorldDir — just draw through parent class
+        if (Showing())
+            PanelDir::DrawShowing();
+    } else {
+        SetTheWorld(this);
+
+        // Resolve camera shot
+        CamShot *shot = nullptr;
+        if (mCameraMgr) {
+            shot = mCameraMgr->MiloCamera();
+            if (!shot)
+                shot = mCameraMgr->CurrentShot();
+        }
+        if (shot)
+            shot = shot->CurrentShot();
+
+        // Camera override selection
+        RndCam *camOverride = CamOverride();
+        RndCam *savedCam = RndCam::Current();
+        if (camOverride) {
+            camOverride->Select();
+            savedCam = camOverride;
+        }
+
+        // Environment selection
+        RndEnviron *env = GetEnv();
+        if (!env)
+            env = TheUI->GetEnv();
+        if (env)
+            env->Select(nullptr);
+
+        // Draw overrides from shot
+        if ((TheRnd.ProcCmds() & kProcessWorld) && shot && !shot->mDrawOverrides.empty()) {
+            FOREACH (it, shot->mDrawOverrides) {
+                (*it)->DrawShowing();
+            }
+        }
+
+        // Normal draw path
+        if (!shot || shot->mDrawOverrides.empty()) {
+            RndDir::DrawShowing();
+        }
+
+        // Glow spot rendering
+        if ((TheRnd.ProcCmds() & kProcessWorld) && shot) {
+            Spotlight *spot = shot->mGlowSpot;
+            if (spot && spot->Showing() && spot->Intensity() > 0) {
+                Hmx::Rect rect(0, 0, TheRnd.Width(), TheRnd.Height());
+                Hmx::Color color(spot->Color());
+                color.alpha = 0.25f;
+                TheRnd.DrawRect(rect, color, sGlowMat, nullptr, nullptr);
+            }
+        }
+
+        // Copy world cam and end world pass
+        TheRnd.CopyWorldCam(Cam());
+        TheRnd.EndWorld();
+
+        // Post-proc overrides
+        if (shot) {
+            savedCam->Select();
+            if (env)
+                env->Select(nullptr);
+            FOREACH (it, shot->mPostProcOverrides) {
+                (*it)->DrawShowing();
+            }
+        }
+
+        // HUD
+        if (mHUDDir)
+            mHUDDir->DrawShowing();
+        if (mHUD && mHUD->Showing()) {
+            mHUD->DrawShowing();
+        }
+
+        // Spotlight cleanup
+        if ((TheRnd.ProcCmds() & kProcessPost) && SpotlightDrawer::Current()) {
+            SpotlightDrawer::Current()->DeSelect();
+        }
+
+        SetTheWorld(nullptr);
     }
 }
 

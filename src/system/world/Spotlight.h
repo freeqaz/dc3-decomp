@@ -125,6 +125,9 @@ public:
     bool IsFlareEnabled() const { return mFlareEnabled; }
     RndTransformable *GetTarget() const { return mTarget; }
     void SetFlareEnabled(bool);
+    bool GetAnimateFromPreset() const { return mAnimateColorFromPreset || mAnimateOrientationFromPreset; }
+    bool AnimateColorFromPreset() const { return mAnimateColorFromPreset; }
+    bool AnimateOrientationFromPreset() const { return mAnimateOrientationFromPreset; }
 
     static void RemoveFromLists(Spotlight *);
 

@@ -110,6 +110,9 @@ public:
     const FilePath &File() const { return mFilepath; }
     int NumMips() const { return mNumMips; }
     int Bpp() const { return mBpp; }
+#ifdef HX_NATIVE
+    const RndBitmap& Bitmap() const { return mBitmap; }
+#endif
     bool PowerOf2();
 
 protected:

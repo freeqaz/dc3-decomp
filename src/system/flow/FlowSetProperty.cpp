@@ -63,6 +63,28 @@ PropertyTask::PropertyTask(Hmx::Object *obj, DataNode &prop, DataNode &val, Task
     TheTaskMgr.Start(this, units, 0.0f);
 }
 
+PropertyTask::~PropertyTask() {}
+
+bool PropertyTask::Replace(ObjRef *from, Hmx::Object *to) {
+    if (from == static_cast<ObjRef *>(&mTarget)) {
+        mTarget = to;
+        if (mTarget == nullptr) {
+            delete this;
+        }
+        return true;
+    }
+    return Hmx::Object::Replace(from, to);
+}
+
+void PropertyTask::SetProperty(DataNode &val) {
+    if (val.Type() == kDataString) {
+        DataNode strNode(MakeString("%s", val));
+        mTarget->SetProperty(mProperty.Array(), strNode);
+    } else {
+        mTarget->SetProperty(mProperty.Array(), val);
+    }
+}
+
 BEGIN_PROPSYNCS(FlowSetProperty)
     SYNC_PROP_MODIFY(target, mTarget, OnTargetChanged())
     SYNC_PROP(value, mValue)

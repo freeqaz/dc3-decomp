@@ -103,3 +103,120 @@ void NgPostProc::SetBloomColor() {
     Vector4 bloomParams(scale * 0.3f, scale * 0.59f, scale * 0.11f, invScale);
     TheShaderMgr.SetPConstant(kPS_BloomParams, bloomParams);
 }
+
+void NgPostProc::QueueMotionBlurObject(RndDrawable *draw) {
+    if (!mMotionBlurDrawList.find(draw)) {
+        mMotionBlurDrawList.insert(mMotionBlurDrawList.end(), draw);
+    }
+}
+
+void NgPostProc::CheckBlendPrevious() {
+    Vector4 blendParams(mBlendVec.x, mBlendVec.y, mBlendVec.z, 0.0f);
+    TheShaderMgr.SetPConstant(kPS_BlendPrevious, blendParams);
+}
+
+void NgPostProc::CheckVignette() {
+    if (DoVignette()) {
+        Vector4 vignetteParams(mVignetteColor.red, mVignetteColor.green, mVignetteColor.blue, mVignetteIntensity);
+        TheShaderMgr.SetPConstant(kPS_Vignette, vignetteParams);
+        TheShaderMgr.unk3e = true;
+    }
+}
+
+void NgPostProc::CheckMotionBlur() {
+    if (DoMotionBlur()) {
+        float blend = mMotionBlurBlend;
+        Vector4 motionParams(
+            mMotionBlurWeight.red * blend,
+            mMotionBlurWeight.green * blend,
+            mMotionBlurWeight.blue * blend,
+            mMotionBlurWeight.alpha
+        );
+        TheShaderMgr.SetPConstant(kPS_MotionBlur, motionParams);
+        TheShaderMgr.unk38 = true;
+    }
+}
+
+void NgPostProc::CheckChromaticAberration() {
+    if (DoChromaticAberration()) {
+        Vector4 chromaParams(
+            mChromaticAberrationOffset / (float)TheRnd.Width(),
+            mChromaticAberrationOffset / (float)TheRnd.Height(),
+            0.0f,
+            0.0f
+        );
+        TheShaderMgr.SetPConstant(kPS_ChromaticAberration, chromaParams);
+        if (mChromaticSharpen) {
+            TheShaderMgr.unk3d = true;
+        } else {
+            TheShaderMgr.unk3c = true;
+        }
+    }
+}
+
+void NgPostProc::CheckHallOfTime() {
+    if (HallOfTime() && !mMotionBlurEnabled) {
+        Vector4 hallParams(mHallOfTimeRate, mHallOfTimeMix, 0.0f, 0.0f);
+        TheShaderMgr.SetPConstant(kPS_HallOfTimeParams, hallParams);
+        Vector4 hallColor(mHallOfTimeColor.red, mHallOfTimeColor.green, mHallOfTimeColor.blue, 1.0f);
+        TheShaderMgr.SetPConstant(kPS_HallOfTimeColor, hallColor);
+        TheShaderMgr.unk34 = mHallOfTimeType + 1;
+    }
+}
+
+void NgPostProc::CheckPosterizeAndKaleidoscope() {
+    Vector4 posterParams(0.0f, 0.0f, 0.0f, 0.0f);
+    Vector4 kaleidoParams(0.0f, 0.0f, 0.0f, 0.0f);
+    if (0.0f < mPosterLevels * mPosterMin) {
+        TheShaderMgr.unk2b = true;
+        posterParams.x = mPosterLevels;
+        posterParams.y = mPosterLevels * mPosterMin;
+    }
+    if (0.0f < mKaleidoscopeComplexity) {
+        TheShaderMgr.unk2c = true;
+        kaleidoParams.w = mKaleidoscopeRadius;
+        kaleidoParams.y = mKaleidoscopeSize;
+        float angle = mKaleidoscopeAngle * 0.017453292f;
+        kaleidoParams.x = 6.2831855f / mKaleidoscopeComplexity;
+        kaleidoParams.z = angle;
+        if (mKaleidoscopeFlipUVs) {
+            posterParams.z = 2.0f;
+        } else {
+            posterParams.z = 1.0f;
+        }
+    }
+    TheShaderMgr.SetPConstant(kPS_Posterize, posterParams);
+    TheShaderMgr.SetPConstant(kPS_Kaleidoscope, kaleidoParams);
+}
+
+void NgPostProc::CheckGradientMap() {
+    if (DoGradientMap()) {
+        Vector4 gradParams(mGradientMapStart, mGradientMapEnd, mGradientMapIndex, mGradientMapOpacity);
+        TheShaderMgr.SetPConstant(kPS_EmissiveTex, mGradientMap.Ptr());
+        TheShaderMgr.SetPConstant(kPS_GradientMap, gradParams);
+        TheShaderMgr.unk3a = (mGradientMap.Ptr() != NULL);
+    }
+}
+
+void NgPostProc::ReleaseTex() {
+    for (int i = 0; i < 3; i++) {
+        sBloom.mTextures[i].FreeTextures();
+    }
+    RndVelocityBuffer::Singleton().FreeData();
+}
+
+void NgPostProc::Terminate() { ReleaseTex(); }
+
+void NgPostProc::EndWorld() {
+    RndVelocityBuffer::Singleton().CacheCameraSettings(TheRnd.mWorldCamCopy);
+}
+
+void NgPostProc::OnSelect() {
+    RndPostProc::OnSelect();
+    mMotionBlurDrawList.clear();
+}
+
+void NgPostProc::OnUnselect() {
+    RndPostProc::OnUnselect();
+    mMotionBlurDrawList.clear();
+}

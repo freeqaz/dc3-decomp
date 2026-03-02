@@ -108,6 +108,10 @@ void FreestyleMoveRecorder::StartRecordingDancerTake() {
     mRecording = true;
 }
 
+void FreestyleMoveRecorder::StopRecording() {
+    mPlaybackIndex = mTakes[mCurrentTakeIndex].mNumFrames + 2;
+}
+
 void FreestyleMoveRecorder::StartPlayback(bool param_1) {
     mPlaybackActive = param_1;
     mPlaybackPos = 0;

@@ -4,6 +4,8 @@
 #include "os/Debug.h"
 #include "math/Mtx.h"
 
+ArchiveSkeleton::~ArchiveSkeleton() {}
+
 ArchiveSkeleton::ArchiveSkeleton() {
     memset(mJointPoses, 0, sizeof(mJointPoses));
     memset(mJointConfs, 0, sizeof(mJointConfs));

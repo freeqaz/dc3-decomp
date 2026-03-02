@@ -33,9 +33,17 @@ struct SceneUniforms {
     _padPL1: f32,
     _padPL2: f32,
     _padPL3: f32,
+    // Shadow mapping
+    lightViewProj: mat4x4f,
+    shadowEnabled: f32,
+    shadowBias: f32,
+    shadowMapSize: f32,
+    shadowStrength: f32,
 };
 
 @group(0) @binding(0) var<uniform> scene: SceneUniforms;
+@group(0) @binding(1) var shadowMap: texture_depth_2d;
+@group(0) @binding(2) var shadowSampler: sampler_comparison;
 
 // === Bind Group 1: Per-material ===
 struct MaterialUniforms {
@@ -64,7 +72,7 @@ struct MaterialUniforms {
     normDetailTiling: f32,   // UV tiling for detail normal map
     normDetailStrength: f32, // blend strength (0 = disabled)
     hasNormDetailMap: f32,   // 1.0 when detail map bound
-    _pad4: f32,
+    useAlphaAsRGB: f32,      // 1.0 to use texture alpha as grayscale RGB (font textures)
 };
 
 @group(1) @binding(0) var<uniform> material: MaterialUniforms;
@@ -242,13 +250,22 @@ fn vs_skinned(in: SkinnedVertexInput) -> VertexOutput {
 // === Fragment Shader ===
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4f {
-    // Base color from material * vertex color
-    var baseColor = material.color * in.color;
+    // Base color: material RGB tints vertex color.
+    // Material color alpha=0 is common on UI overlays (driven by DTA scripts at runtime);
+    // treat near-zero material alpha as 1.0 to avoid invisible geometry.
+    var matAlpha = select(material.color.a, 1.0, material.color.a < 0.004);
+    var baseColor = vec4f(material.color.rgb * in.color.rgb, matAlpha * in.color.a);
 
     // Sample diffuse texture if available
     if (material.useTexture > 0.5) {
         let texColor = textureSample(diffuseTex, diffuseSampler, in.uv);
-        baseColor = baseColor * texColor;
+        // Font textures (DXT5): glyph shape is in alpha, RGB is garbage
+        // Use alpha as grayscale RGB when useAlphaAsRGB is set
+        if (material.useAlphaAsRGB > 0.5) {
+            baseColor = vec4f(baseColor.rgb * texColor.a, baseColor.a * texColor.a);
+        } else {
+            baseColor = vec4f(baseColor.rgb * texColor.rgb, baseColor.a * texColor.a);
+        }
     }
 
     // Apply intensify (doubles texture brightness)
@@ -315,6 +332,37 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     // Detect shader variation
     let isSkin = material.shaderVariation > 0.5 && material.shaderVariation < 1.5;
     let isHair = material.shaderVariation > 1.5 && material.shaderVariation < 2.5;
+
+    // Shadow sampling — compute once for the primary directional light
+    // Note: textureSampleCompare must be in uniform control flow (WGSL rule),
+    // so we always sample and use the UV bounds check only to mask the result.
+    var shadowFactor = 1.0;
+    let shadowClipPos = scene.lightViewProj * vec4f(in.worldPos, 1.0);
+    let shadowNdc = shadowClipPos.xyz / shadowClipPos.w;
+    let shadowUV = clamp(shadowNdc.xy * vec2f(0.5, -0.5) + 0.5, vec2f(0.0), vec2f(1.0));
+    let shadowDepth = clamp(shadowNdc.z - scene.shadowBias, 0.0, 1.0);
+    let texel = 1.0 / max(scene.shadowMapSize, 1.0);
+    // 3x3 PCF — unrolled because textureSampleCompare requires uniform control flow
+    var shadowSum = 0.0;
+    shadowSum += textureSampleCompare(shadowMap, shadowSampler, shadowUV + vec2f(-texel, -texel), shadowDepth);
+    shadowSum += textureSampleCompare(shadowMap, shadowSampler, shadowUV + vec2f(0.0, -texel), shadowDepth);
+    shadowSum += textureSampleCompare(shadowMap, shadowSampler, shadowUV + vec2f(texel, -texel), shadowDepth);
+    shadowSum += textureSampleCompare(shadowMap, shadowSampler, shadowUV + vec2f(-texel, 0.0), shadowDepth);
+    shadowSum += textureSampleCompare(shadowMap, shadowSampler, shadowUV, shadowDepth);
+    shadowSum += textureSampleCompare(shadowMap, shadowSampler, shadowUV + vec2f(texel, 0.0), shadowDepth);
+    shadowSum += textureSampleCompare(shadowMap, shadowSampler, shadowUV + vec2f(-texel, texel), shadowDepth);
+    shadowSum += textureSampleCompare(shadowMap, shadowSampler, shadowUV + vec2f(0.0, texel), shadowDepth);
+    shadowSum += textureSampleCompare(shadowMap, shadowSampler, shadowUV + vec2f(texel, texel), shadowDepth);
+    shadowSum /= 9.0;
+    // Only apply shadow when enabled and within shadow map bounds
+    let rawUV = shadowNdc.xy * vec2f(0.5, -0.5) + 0.5;
+    let inShadowBounds = scene.shadowEnabled > 0.5
+        && rawUV.x >= 0.0 && rawUV.x <= 1.0
+        && rawUV.y >= 0.0 && rawUV.y <= 1.0
+        && shadowNdc.z >= 0.0 && shadowNdc.z <= 1.0;
+    if (inShadowBounds) {
+        shadowFactor = mix(scene.shadowStrength, 1.0, shadowSum);
+    }
 
     // Accumulate diffuse and specular from all active lights
     var totalDiffuse = vec3f(0.0);
@@ -424,7 +472,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
         // Pre-lit: vertex color already contains lighting, skip diffuse/specular
         finalColor = baseColor.rgb;
     } else {
-        finalColor = baseColor.rgb * (ambient + totalDiffuse) + totalSpecular;
+        finalColor = baseColor.rgb * (ambient + totalDiffuse * shadowFactor) + totalSpecular * shadowFactor;
     }
 
     // Emissive (self-illumination) — modulated by emissive map
@@ -432,12 +480,14 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     finalColor += baseColor.rgb * material.emissiveMultiplier * emissiveSample.rgb;
 
     // Rim lighting — fresnel edge glow, modulated by rim map
+    // Use original power but scale intensity — without full stage lighting the
+    // pink rim color (designed for colored spot lights) overwhelms base colors
     let rimPower = max(material.rimColor.a, 0.5);
     if (rimPower > 0.0 && length(material.rimColor.rgb) > 0.0) {
         let rimMapSample = textureSample(rimMapTex, mapSampler, in.uv);
         let rimDot = 1.0 - max(dot(N, V), 0.0);
         let rimPowerMod = rimPower * rimMapSample.a;
-        var rim = pow(rimDot, max(rimPowerMod, 0.5)) * material.rimColor.rgb * rimMapSample.rgb;
+        var rim = pow(rimDot, max(rimPowerMod, 0.5)) * material.rimColor.rgb * rimMapSample.rgb * 0.15;
 
         // Rim-under: only apply rim on edges facing away from the primary light
         if (material.rimLightUnder > 0.5 && scene.numLights > 0.0) {

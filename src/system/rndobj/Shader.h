@@ -57,12 +57,16 @@ protected:
 };
 
 class RndShaderParticles : public RndShader {
+public:
+    virtual bool CheckError(MatFlagErrorType);
 protected:
     virtual void Select(RndMat *, ShaderType, bool);
     virtual u64 CalcShaderOpts(NgMat *, ShaderType, bool);
 };
 
 class RndShaderMultimesh : public RndShader {
+public:
+    virtual bool CheckError(MatFlagErrorType);
 protected:
     virtual void Select(RndMat *, ShaderType, bool);
     virtual u64 CalcShaderOpts(NgMat *, ShaderType, bool);

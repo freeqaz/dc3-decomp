@@ -1,6 +1,7 @@
 #include "hamobj/DanceRemixer.h"
 #include "MoveMgr.h"
 #include "hamobj/HamDirector.h"
+#include "hamobj/HamMaster.h"
 #include "hamobj/HamGameData.h"
 #include "hamobj/HamMove.h"
 #include "hamobj/MoveDetector.h"
@@ -57,6 +58,15 @@ BEGIN_HANDLERS(DanceRemixer)
     HANDLE_EXPR(measures_total, mTotalMeasures)
     HANDLE_SUPERCLASS(Hmx::Object)
 END_HANDLERS
+
+void DanceRemixer::ClearJump() {
+    mFromMeasure = -1;
+    mToMeasure = -1;
+    mJumpMap.clear();
+    if (TheMaster && TheMaster->GetAudio()) {
+        TheMaster->GetAudio()->ClearLoop();
+    }
+}
 
 void DanceRemixer::SetUnscoredMeasure(int x, int y) { mUnscoredMeasures[x].insert(y); }
 void DanceRemixer::ClearUnscoredMeasure(int x, int y) { mUnscoredMeasures[x].erase(y); }
@@ -183,6 +193,10 @@ void DanceRemixer::UpdateHamDirector() {
         TheHamDirector->LoadRoutineBuilderData(mPendingVariants, true);
         mNeedsUpdate = false;
     }
+}
+
+int DanceRemixer::JumpedMoveIdxAdd(int idx, int add) const {
+    return JumpedMeasureAdd(idx + 1, add) - 1;
 }
 
 void DanceRemixer::SelectMove(int, int) {}

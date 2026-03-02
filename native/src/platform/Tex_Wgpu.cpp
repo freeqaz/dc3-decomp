@@ -126,7 +126,7 @@ wgpu::TextureView GetGpuCubeTexView(RndCubeTex* cubeTex) {
     if (!allValid) return wgpu::TextureView();
 
     wgpu::Texture gpuTex = TextureConvert::CreateCubeFromBitmaps(
-        gWgpuRnd->Gpu(), faces[0], 6);
+        gWgpuRnd->Gpu(), faces, 6);
     if (!gpuTex) return wgpu::TextureView();
 
     // Create cube texture view

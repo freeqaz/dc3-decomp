@@ -10,7 +10,6 @@
 #include "rndobj/Utl.h"
 #include "utl/Std.h"
 
-namespace {
 struct GroupDrawDist {
     RndDrawable *draw;
     float dist;
@@ -19,7 +18,6 @@ struct GroupDrawDist {
 bool SortInWorld(const GroupDrawDist &a, const GroupDrawDist &b) {
     return a.dist < b.dist;
 }
-} // namespace
 
 bool gInReplace;
 

@@ -313,3 +313,37 @@ BINSTREAM_OP_OBJDIRPTR(RndDir)
 BINSTREAM_OP_OBJDIRPTR(UIListDir)
 
 #undef BINSTREAM_OP_OBJDIRPTR
+
+// ============================================================================
+// RndShader stubs — Xbox 360 shader implementations not needed for native port
+// ============================================================================
+#include "rndobj/Shader.h"
+
+void RndShaderParticles::Select(RndMat*, ShaderType, bool) {}
+u64 RndShaderParticles::CalcShaderOpts(NgMat*, ShaderType, bool) { return 0; }
+// RndShaderSimple::Select is defined in Shader.cpp
+u64 RndShaderSimple::CalcShaderOpts(NgMat*, ShaderType, bool) { return 0; }
+void RndShaderDepthVolume::Select(RndMat*, ShaderType, bool) {}
+u64 RndShaderDepthVolume::CalcShaderOpts(NgMat*, ShaderType, bool) { return 0; }
+void RndShaderDrawRect::Select(RndMat*, ShaderType, bool) {}
+u64 RndShaderDrawRect::CalcShaderOpts(NgMat*, ShaderType, bool) { return 0; }
+void RndShaderMultimesh::Select(RndMat*, ShaderType, bool) {}
+u64 RndShaderMultimesh::CalcShaderOpts(NgMat*, ShaderType, bool) { return 0; }
+void RndShaderStandard::Select(RndMat*, ShaderType, bool) {}
+u64 RndShaderStandard::CalcShaderOpts(NgMat*, ShaderType, bool) { return 0; }
+void RndShaderPostProc::Select(RndMat*, ShaderType, bool) {}
+u64 RndShaderPostProc::CalcShaderOpts(NgMat*, ShaderType, bool) { return 0; }
+void RndShaderUnwrapUV::Select(RndMat*, ShaderType, bool) {}
+u64 RndShaderUnwrapUV::CalcShaderOpts(NgMat*, ShaderType, bool) { return 0; }
+void RndShaderVelocity::Select(RndMat*, ShaderType, bool) {}
+u64 RndShaderVelocity::CalcShaderOpts(NgMat*, ShaderType, bool) { return 0; }
+void RndShaderVelocityCamera::Select(RndMat*, ShaderType, bool) {}
+u64 RndShaderVelocityCamera::CalcShaderOpts(NgMat*, ShaderType, bool) { return 0; }
+void RndShaderFur::Select(RndMat*, ShaderType, bool) {}
+u64 RndShaderFur::CalcShaderOpts(NgMat*, ShaderType, bool) { return 0; }
+void RndShaderSyncTrack::Select(RndMat*, ShaderType, bool) {}
+u64 RndShaderSyncTrack::CalcShaderOpts(NgMat*, ShaderType, bool) { return 0; }
+
+// FlowSetProperty stubs
+#include "flow/FlowSetProperty.h"
+void PropertyTask::Poll(float) {}

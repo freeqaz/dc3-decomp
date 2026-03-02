@@ -8,7 +8,9 @@
 #include "obj/Object.h"
 #include "os/Debug.h"
 
-bool SliderChildSort(FlowNode *a, FlowNode *b);
+bool SliderChildSort(FlowNode *a, FlowNode *b) {
+    return static_cast<FlowValueCase *>(a)->Value() < static_cast<FlowValueCase *>(b)->Value();
+}
 
 FlowSlider::FlowSlider()
     : PropertyEventListener(this), mPersistent(1), mAlwaysRun(0), mValue(0),

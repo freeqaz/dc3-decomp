@@ -2,6 +2,7 @@
 #include "flow/Flow.h"
 #include "flow/FlowManager.h"
 #include "flow/FlowNode.h"
+#include "math/Utl.h"
 #include "math/Vec.h"
 #include "obj/Object.h"
 #include "utl/BinStream.h"
@@ -116,6 +117,46 @@ void FlowDistance::RequestStop() {
 void FlowDistance::RequestStopCancel() {
     FLOW_LOG("RequestStopCancel\n");
     FlowNode::RequestStopCancel();
+}
+
+void FlowDistance::Execute(QueueState qs) {
+    bool shouldStop = false;
+    bool shouldActivate = false;
+    Vector3 diff;
+    Subtract(mObj1->WorldXfm().v, mObj2->WorldXfm().v, diff);
+    float dist = Length(diff);
+    if (mDriveIntensity && mRunInRange) {
+        float oldScale = mIntensityScale;
+        float intensity = Clamp<float>(0.0f, 1.0f, 1.0f - dist / mDistance);
+        mIntensityScale = intensity;
+        if (intensity != oldScale) {
+            UpdateIntensity();
+        }
+    }
+    if (mOutOfRange) {
+        if ((double)dist <= (double)mDistance) {
+            mOutOfRange = false;
+            if (mRunInRange) {
+                shouldActivate = true;
+            } else {
+                shouldStop = true;
+            }
+        }
+    } else {
+        if ((double)dist > (double)mDistance) {
+            mOutOfRange = true;
+            if (mRunInRange) {
+                shouldStop = true;
+            } else {
+                shouldActivate = true;
+            }
+        }
+    }
+    if (shouldStop) {
+        FlowNode::RequestStop();
+    } else if (shouldActivate) {
+        FlowNode::Activate();
+    }
 }
 
 bool FlowDistance::IsRunning() {

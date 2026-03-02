@@ -240,6 +240,64 @@ void UIScreen::Enter(UIScreen *from) {
     msg[0] = from;
     HandleType(msg);
     Poll();
+
+#ifdef HX_NATIVE
+    // Dump screen typeDef handlers for debugging
+    {
+        DataArray *td = TypeDef();
+        if (td) {
+            printf("DC3 Native: Screen '%s' typeDef:", Name());
+            DataArray *nsArr = td->FindArray("next_screen", false);
+            if (nsArr && nsArr->Size() > 1) {
+                printf(" next_screen='%s'", nsArr->ForceSym(1).Str());
+            }
+            printf(" handlers:");
+            for (int _i = 0; _i < td->Size(); _i++) {
+                if (td->Type(_i) == kDataArray) {
+                    DataArray *sub = td->Array(_i);
+                    if (sub->Size() > 0 && sub->Type(0) == kDataSymbol) {
+                        printf(" %s", sub->Sym(0).Str());
+                    }
+                }
+            }
+            printf("\n");
+        }
+    }
+    // Auto-skip screens that wait for movie playback or Kinect input.
+    // Without these subsystems, the screen would be stuck forever.
+    {
+        DataArray *td = TypeDef();
+        if (td) {
+            // We're called during the current transition, so save and check for NEW transitions
+            bool wasInTransition = TheUI->InTransition();
+            bool didNavigate = false;
+
+            // Try skip_selected first (attract screen uses this)
+            if (!didNavigate) {
+                DataArray *skipHandler = td->FindArray("skip_selected", false);
+                if (skipHandler) {
+                    static Message skipMsg("skip_selected");
+                    HandleType(skipMsg);
+                    didNavigate = TheUI->TransitionScreen() != this;
+                    printf("DC3 Native: Auto-skip '%s' via skip_selected (navigated=%d)\n",
+                           Name(), didNavigate);
+                }
+            }
+
+            // If screen has next_screen property, use it directly (more reliable than exit_screen)
+            if (!didNavigate) {
+                DataArray *nextArr = td->FindArray("next_screen", false);
+                if (nextArr && nextArr->Size() > 1) {
+                    Symbol nextName = nextArr->ForceSym(1);
+                    printf("DC3 Native: Auto-skip '%s' -> '%s' via next_screen\n",
+                           Name(), nextName.Str());
+                    TheUI->GotoScreen(nextName.Str(), false, false);
+                    didNavigate = true;
+                }
+            }
+        }
+    }
+#endif
 }
 
 bool UIScreen::Entering() const {
@@ -428,10 +486,6 @@ bool UIScreen::SharesPanels(UIScreen *screen) {
 }
 
 DataNode UIScreen::OnMsg(ButtonDownMsg const &msg) {
-#ifdef HX_NATIVE
-    printf("DC3 UI: Screen '%s' ButtonDown button=%d action=%d\n",
-           Name(), (int)msg.GetButton(), (int)msg.GetAction());
-#endif
     if (mBack != nullptr && msg.GetAction() == kAction_Cancel) {
         DataNode n = mBack->Evaluate(1);
         if (n.Type() != kDataUnhandled) {

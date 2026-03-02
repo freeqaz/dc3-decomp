@@ -37,8 +37,14 @@ struct SceneUniforms {
     float pointLightRanges[4];    // vec4f — falloff range per light
     float numPointLights;         // f32
     float _padPL[3];
+    // Shadow mapping
+    float lightViewProj[16];      // mat4x4f — light's VP for shadow lookup
+    float shadowEnabled;           // f32 — 1.0 when shadow map valid
+    float shadowBias;              // f32 — depth bias (0.002 typical)
+    float shadowMapSize;           // f32 — texture dimension (1024)
+    float shadowStrength;          // f32 — min brightness in shadow (0.3 typical)
 };
-static_assert(sizeof(SceneUniforms) == 496, "SceneUniforms must match WGSL layout");
+static_assert(sizeof(SceneUniforms) == 576, "SceneUniforms must match WGSL layout");
 
 struct MaterialUniforms {
     float color[4];             // vec4f
@@ -66,7 +72,7 @@ struct MaterialUniforms {
     float normDetailTiling;     // f32 — UV tiling for detail normal map
     float normDetailStrength;   // f32 — blend strength (0 = disabled)
     float hasNormDetailMap;     // f32 — 1.0 when detail map bound
-    float _pad4;                // align to 176
+    float useAlphaAsRGB;        // f32 — 1.0 to use texture alpha as grayscale RGB (font textures)
 };
 static_assert(sizeof(MaterialUniforms) == 176, "MaterialUniforms must match WGSL layout");
 
@@ -212,6 +218,17 @@ public:
     UniformRingBuffer& ObjectRing() { return mObjectRing; }
     UniformRingBuffer& BoneRing() { return mBoneRing; }
 
+    // Shadow mapping — accessed by Mesh_Wgpu.cpp
+    bool InShadowPass() const { return mInShadowPass; }
+    wgpu::RenderPassEncoder& ShadowPass() { return mShadowPass; }
+    wgpu::RenderPipeline& ShadowStaticPipeline() { return mShadowStaticPipeline; }
+    wgpu::RenderPipeline& ShadowSkinnedPipeline() { return mShadowSkinnedPipeline; }
+    wgpu::BindGroupLayout& ShadowObjectBGL() { return mShadowObjectBGL; }
+    wgpu::BindGroupLayout& ShadowBoneBGL() { return mShadowBoneBGL; }
+    wgpu::TextureView& ShadowDepthView() { return mShadowDepthView; }
+    wgpu::Sampler& ShadowSampler() { return mShadowSampler; }
+    bool ShadowAvailable() const { return mShadowAvailable; }
+
 private:
     void CreateDepthTexture(int w, int h);
     void CreateDefaultTextures();
@@ -282,8 +299,72 @@ private:
     void EnsurePostProcPipeline();
     void RunPostProcessing();
 
-    // Camera tracking — re-upload scene uniforms when camera changes
+    // Bloom
+    static constexpr int kBloomMips = 4;
+    wgpu::Texture mBloomTex[kBloomMips];
+    wgpu::TextureView mBloomView[kBloomMips];
+    wgpu::Texture mBloomTempTex[kBloomMips];
+    wgpu::TextureView mBloomTempView[kBloomMips];
+    int mBloomWidth[kBloomMips] = {};
+    int mBloomHeight[kBloomMips] = {};
+    wgpu::ShaderModule mBloomShader;
+    wgpu::BindGroupLayout mBloomBGL;
+    wgpu::PipelineLayout mBloomPipelineLayout;
+    wgpu::RenderPipeline mBloomThresholdPipeline;
+    wgpu::RenderPipeline mBloomBlurHPipeline;
+    wgpu::RenderPipeline mBloomBlurVPipeline;
+    wgpu::RenderPipeline mBloomUpsamplePipeline;
+    wgpu::Buffer mBloomUniformBuffer;
+    bool mBloomReady = false;
+    void EnsureBloomPipelines();
+    void EnsureBloomTextures(int sceneW, int sceneH);
+    void RunBloom(float intensity, float threshold, const Hmx::Color& tint);
+
+    // Shadow mapping
+    static constexpr int kShadowMapSize = 1024;
+    wgpu::Texture mShadowDepthTex;
+    wgpu::TextureView mShadowDepthView;
+    wgpu::Sampler mShadowSampler;
+    wgpu::ShaderModule mShadowShader;
+    wgpu::BindGroupLayout mShadowSceneBGL;   // group 0: lightVP
+    wgpu::BindGroupLayout mShadowObjectBGL;  // group 1: object world
+    wgpu::BindGroupLayout mShadowBoneBGL;    // group 2: bones
+    wgpu::PipelineLayout mShadowPipelineLayout;
+    wgpu::PipelineLayout mShadowSkinnedPipelineLayout;
+    wgpu::RenderPipeline mShadowStaticPipeline;
+    wgpu::RenderPipeline mShadowSkinnedPipeline;
+    wgpu::Buffer mShadowLightVPBuffer;
+    wgpu::BindGroup mShadowSceneBindGroup;
+    bool mShadowReady = false;
+    float mLightViewProj[16] = {};
+    bool mShadowAvailable = false;
+    bool mInShadowPass = false;
+    wgpu::RenderPassEncoder mShadowPass;
+    void EnsureShadowPipelines();
+    void RenderShadowPass();
+
+    // Depth of Field
+    wgpu::Texture mDofIntermediateTex;
+    wgpu::TextureView mDofIntermediateView;
+    wgpu::Texture mDepthResolveTex;
+    wgpu::TextureView mDepthResolveView;
+    int mDofWidth = 0;
+    int mDofHeight = 0;
+    wgpu::ShaderModule mDofShader;
+    wgpu::BindGroupLayout mDofBGL;
+    wgpu::PipelineLayout mDofPipelineLayout;
+    wgpu::RenderPipeline mDofPipeline;
+    wgpu::RenderPipeline mDepthResolvePipeline;
+    wgpu::BindGroupLayout mDepthResolveBGL;
+    wgpu::PipelineLayout mDepthResolvePipelineLayout;
+    wgpu::Buffer mDofUniformBuffer;
+    bool mDofReady = false;
+    void EnsureDofPipeline();
+    void RunDepthOfField();
+
+    // Scene uniform tracking — re-upload when camera or environment changes
     RndCam* mLastSceneCam = nullptr;
+    RndEnviron* mLastSceneEnv = nullptr;
 
     // Clear color
     Hmx::Color mWgpuClearColor;

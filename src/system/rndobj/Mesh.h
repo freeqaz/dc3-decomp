@@ -213,7 +213,7 @@ protected:
     RndMesh();
 
     void ClearCompressedVerts();
-    bool PatchOkay(int i, int j) { return i * 4.31 + j * 0.25 < 329.0; }
+    bool PatchOkay(int, int);
     bool HasInstancedBones();
     bool HasValidBones(unsigned int *) const;
     void SetNumVerts(int verts);
@@ -271,41 +271,10 @@ public:
 
     void Add(int, RndMesh::VertVector &, Vector3 &);
 
-    void Clear() {
-        mPatchVerts.clear();
-        mCentroid.Set(0, 0, 0);
-    }
+    void Clear();
+    bool HasVert(int) const;
 
-    bool HasVert(int vert) const {
-        int idx = GreaterEq(vert);
-        if (idx < mPatchVerts.size()) {
-            return mPatchVerts[idx] == vert;
-        } else
-            return false;
-    }
-
-    int GreaterEq(int iii) const {
-        if (!mPatchVerts.empty() && mPatchVerts.front() < iii) {
-            if (mPatchVerts.back() < iii) {
-                return mPatchVerts.size();
-            } else {
-                int u5 = 0;
-                int u2 = mPatchVerts.size() - 1;
-                if (u5 + 1 < u2) {
-                    int u4 = (u5 + u2) >> 1;
-                    int curVert = mPatchVerts[u4];
-                    if (curVert < iii) {
-                        u5 = u4;
-                    }
-                    if (iii <= curVert) {
-                        u2 = u4;
-                    }
-                }
-                return u2;
-            }
-        } else
-            return 0;
-    }
+    int GreaterEq(int) const;
 
 protected:
     Vector3 mCentroid; // 0x0

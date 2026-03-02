@@ -918,6 +918,17 @@ set(DC3_GFX_SOURCES
 set_source_files_properties(src/gfx/mikktspace.c PROPERTIES LANGUAGE C)
 
 # ============================================================================
+# Export pipeline sources (CPU-only, no GPU dependency for decode)
+# ============================================================================
+
+set(DC3_EXPORT_SOURCES
+    src/export/BitmapExport.cpp
+    src/export/TextureExporter.cpp
+    src/export/MaterialExporter.cpp
+    src/export/GltfExporter.cpp
+)
+
+# ============================================================================
 # Build target
 # ============================================================================
 
@@ -1009,6 +1020,7 @@ add_executable(milo-viewer
     ${DC3_ENGINE_SOURCES}
     ${DC3_NATIVE_CORE_SOURCES}
     ${DC3_GFX_SOURCES}
+    ${DC3_EXPORT_SOURCES}
 )
 
 target_compile_options(milo-viewer PRIVATE
@@ -1030,6 +1042,7 @@ target_include_directories(milo-viewer PRIVATE
     ${CMAKE_SOURCE_DIR}/../src/system
     ${CMAKE_SOURCE_DIR}/../src/lazer
     ${CMAKE_SOURCE_DIR}/../include
+    ${CMAKE_SOURCE_DIR}/include  # cgltf headers
 )
 
 target_link_options(milo-viewer PRIVATE
@@ -1052,6 +1065,91 @@ target_link_libraries(milo-viewer PRIVATE
     ogg
     z
 )
+
+# ============================================================================
+# Export CLI tools — headless .milo asset converters
+# ============================================================================
+
+# Common sources/options for export tools (same as milo-viewer minus VideoEncoder and GLFW rendering)
+set(DC3_EXPORT_TOOL_SOURCES
+    ${DC3_ENGINE_SOURCES}
+    ${DC3_NATIVE_CORE_SOURCES}
+    ${DC3_GFX_SOURCES}
+    ${DC3_EXPORT_SOURCES}
+)
+
+set(DC3_EXPORT_TOOL_INCLUDES
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/../src
+    ${CMAKE_SOURCE_DIR}/../src/system
+    ${CMAKE_SOURCE_DIR}/../src/lazer
+    ${CMAKE_SOURCE_DIR}/../include
+    ${CMAKE_SOURCE_DIR}/include
+)
+
+set(DC3_EXPORT_TOOL_LIBS
+    Threads::Threads
+    dawn::webgpu_dawn
+    glfw
+    dl
+    curl
+    jpeg
+    vorbis
+    vorbisfile
+    ogg
+    z
+)
+
+# --- milo-tex-export ---
+add_executable(milo-tex-export
+    src/tools/milo_tex_export.cpp
+    ${DC3_EXPORT_TOOL_SOURCES}
+)
+target_compile_options(milo-tex-export PRIVATE
+    ${DC3_MSVC_COMPAT_FLAGS}
+    ${DC3_DECOMP_FLAGS}
+    ${DC3_ATOMIC_COMPAT_FLAGS}
+)
+target_compile_definitions(milo-tex-export PRIVATE HX_NATIVE=1 MILO_DEBUG=1 _DEBUG=1)
+target_include_directories(milo-tex-export PRIVATE ${DC3_EXPORT_TOOL_INCLUDES})
+target_link_options(milo-tex-export PRIVATE
+    -rdynamic -Wl,--unresolved-symbols=ignore-all -Wl,--warn-unresolved-symbols -Wl,--allow-multiple-definition
+)
+target_link_libraries(milo-tex-export PRIVATE ${DC3_EXPORT_TOOL_LIBS})
+
+# --- milo-mat-export ---
+add_executable(milo-mat-export
+    src/tools/milo_mat_export.cpp
+    ${DC3_EXPORT_TOOL_SOURCES}
+)
+target_compile_options(milo-mat-export PRIVATE
+    ${DC3_MSVC_COMPAT_FLAGS}
+    ${DC3_DECOMP_FLAGS}
+    ${DC3_ATOMIC_COMPAT_FLAGS}
+)
+target_compile_definitions(milo-mat-export PRIVATE HX_NATIVE=1 MILO_DEBUG=1 _DEBUG=1)
+target_include_directories(milo-mat-export PRIVATE ${DC3_EXPORT_TOOL_INCLUDES})
+target_link_options(milo-mat-export PRIVATE
+    -rdynamic -Wl,--unresolved-symbols=ignore-all -Wl,--warn-unresolved-symbols -Wl,--allow-multiple-definition
+)
+target_link_libraries(milo-mat-export PRIVATE ${DC3_EXPORT_TOOL_LIBS})
+
+# --- milo2gltf ---
+add_executable(milo2gltf
+    src/tools/milo2gltf.cpp
+    ${DC3_EXPORT_TOOL_SOURCES}
+)
+target_compile_options(milo2gltf PRIVATE
+    ${DC3_MSVC_COMPAT_FLAGS}
+    ${DC3_DECOMP_FLAGS}
+    ${DC3_ATOMIC_COMPAT_FLAGS}
+)
+target_compile_definitions(milo2gltf PRIVATE HX_NATIVE=1 MILO_DEBUG=1 _DEBUG=1)
+target_include_directories(milo2gltf PRIVATE ${DC3_EXPORT_TOOL_INCLUDES})
+target_link_options(milo2gltf PRIVATE
+    -rdynamic -Wl,--unresolved-symbols=ignore-all -Wl,--warn-unresolved-symbols -Wl,--allow-multiple-definition
+)
+target_link_libraries(milo2gltf PRIVATE ${DC3_EXPORT_TOOL_LIBS})
 
 # ============================================================================
 # Test suite — GTest-based tests for .milo loading pipeline

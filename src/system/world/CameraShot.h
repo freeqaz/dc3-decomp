@@ -140,6 +140,7 @@ class AutoPrepTarget;
 class CamShot : public RndAnimatable, public RndTransformable {
 public:
     friend class AutoPrepTarget;
+    friend class WorldDir;
     // Hmx::Object
     virtual ~CamShot();
     OBJ_CLASSNAME(CamShot);

@@ -167,6 +167,7 @@ public:
     void SetHue(LightHue *hue) { mHue = hue; }
     Symbol Category() const { return mCategory; }
     bool Manual() const { return mManual; }
+    void TranslateColor(const Hmx::Color &col, Hmx::Color &res);
 
     int GetCurrentKeyframe(void) const;
     bool PlatformOk(void) const;
@@ -199,6 +200,7 @@ protected:
     void AddSpotlight(Spotlight *, bool);
     void FillSpotPresetData(Spotlight *, SpotlightEntry &, int);
     void Animate(float);
+    void AnimateState(const Keyframe &prev, const Keyframe &cur, float t);
     void SyncNewSpotlights();
     void SyncKeyframeTargets();
 

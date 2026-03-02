@@ -21,6 +21,17 @@ void StubCameraInput::StubSkeletonFrame(SkeletonFrame &frame) {
     frame.mElapsedMs = 33;
 }
 
+const SkeletonFrame *StubCameraInput::PollNewFrame() {
+    for (int i = 0; i < 6; i++) {
+        if (unk239c[i].unk0) {
+            StubSkeletonData(unk11d4.mSkeletonDatas[i], *(Vector3 *)&unk239c[i].unk4);
+        } else {
+            unk11d4.mSkeletonDatas[i].mTracking = kSkeletonNotTracked;
+        }
+    }
+    return &unk11d4;
+}
+
 void StubCameraInput::StubSkeletonData(SkeletonData &data, const Vector3 &vec) {
     data.mQualityFlags = 0;
     data.mTrackingID = 0;

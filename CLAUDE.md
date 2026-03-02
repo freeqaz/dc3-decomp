@@ -45,7 +45,16 @@ Use `scripts/setup_worktree.sh <path> <branch>` to create worktrees with a worki
 - `src/` - Decompiled C++ source (mirrors original structure)
 - `build/` - Build outputs, object files, `373307D9/report.json`
 - `include/` - Headers
+- `native/` - Native port (x86_64 Linux, WebGPU renderer)
 - `objdiff.json` - Project config for objdiff
+
+## Test Assets
+
+Pre-extracted .milo_xbox files for the native port viewer/tests:
+- `~/code/milohax/milo-engine-libs/harmonix-repos/milo-rnd-library/dc3/` — DC3 assets (worlds, characters, UI)
+  - `world/glitterati/gen/glitterati.milo_xbox` — venue with meshes/lights
+  - `world/dclive/gen/dclive.milo_xbox` — outdoor venue
+  - `char/main/gen/main.milo_xbox` — main character
 
 ## Ghidra MCP Integration
 

@@ -310,29 +310,33 @@ float CharClipDriver::Evaluate(float beat, float deltaBeat, float deltaSeconds) 
         nextResult = mNext->Evaluate(beat, deltaBeat, deltaSeconds);
     }
     if ((mPlayFlags & 0xF0) == CharClip::kPlayLoop) {
-        CharClip *clip = mClip;
         float curBeat = mBeat;
-        float endBeat = clip->EndBeat();
+        float endBeat = mClip->EndBeat();
         if (curBeat > endBeat) {
-            float startBeat = clip->StartBeat();
-            if (!(clip->LengthBeats() <= 0.0f)) {
-                float dist = std::fmod(curBeat - endBeat, clip->LengthBeats());
+            float lengthBeats = mClip->LengthBeats();
+            if (!(lengthBeats <= 0.0f)) {
+                float fmodArg = endBeat - curBeat;
+                float startBeat = mClip->StartBeat();
+                float dist = std::fmod(fmodArg, lengthBeats);
                 mBeat = dist + startBeat;
+            } else {
+                mBeat = mClip->StartBeat();
+            }
+            float align = AlignToBeat(beat);
+            mBeat += align;
+            mNextEvent = 0;
+        } else if (curBeat < mClip->StartBeat()) {
+            float startBeat = mClip->StartBeat();
+            float lengthBeats = mClip->LengthBeats();
+            if (!(lengthBeats <= 0.0f)) {
+                float dist = std::fmod(startBeat - curBeat, lengthBeats);
+                mBeat = endBeat - dist;
             } else {
                 mBeat = startBeat;
             }
-            float align = AlignToBeat(curBeat);
+            float align = AlignToBeat(beat);
             mBeat += align;
-            mNextEvent = 0;
-        } else if (clip->StartBeat() > curBeat) {
-            if (0.0f < clip->LengthBeats()) {
-                auto _tmp6 = clip->StartBeat();
-                float dist = std::fmod(_tmp6 - curBeat, clip->LengthBeats());
-                mBeat = endBeat - dist;
-            }
-            float align = AlignToBeat(curBeat);
-            mBeat += align;
-            mNextEvent = clip->NumBeatEvents();
+            mNextEvent = mClip->NumBeatEvents();
         }
     }
     float sigmoid = EaseSigmoid(mBlendFrac, 0.0f, 0.0f);

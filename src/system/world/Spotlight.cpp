@@ -16,6 +16,7 @@
 #include "rndobj/Mat.h"
 #include "rndobj/Poll.h"
 #include "rndobj/Trans.h"
+#include "obj/Task.h"
 #include "utl/BinStream.h"
 #include "utl/Loader.h"
 #include "world/LightPreset.h"
@@ -742,6 +743,39 @@ void Spotlight::BuildNGShaft(Spotlight::BeamDef &def) {
 }
 
 #ifdef HX_NATIVE
-// TODO: complex poll with conditionals and math
-void Spotlight::Poll() {}
+void Spotlight::Poll() {
+    if (!TheLoadMgr.EditMode()) {
+        if (!Showing())
+            return;
+        if (mColorOwner->mIntensity == 0)
+            return;
+    }
+    Hmx::Matrix3 m;
+    if (!mUpdating) {
+        RndTransformable *target = mTargetLoaded ? (RndTransformable *)mTarget : nullptr;
+        if (!target || (!mSnapToTarget && target->WorldXfm().v == mLastTargetPos)) {
+            if (!target && !mAnimateOrientationFromPreset && !DoFloorSpot()) {
+                UpdateTransforms();
+                return;
+            }
+            CheckFloorSpotTransform();
+            mOrientMatrix = WorldXfm().m;
+            UpdateSlaves();
+            return;
+        }
+        mLastTargetPos = target->WorldXfm().v;
+        CalculateDirection(target, m);
+        if (!mSnapToTarget && mDampingConstant != 1) {
+            Interp(mOrientMatrix, m, mDampingConstant * TheTaskMgr.DeltaSeconds(), m);
+        } else {
+            mSnapToTarget = false;
+        }
+    } else {
+        MakeRotMatrix(mDampQuat, m);
+    }
+    SetLocalRot(m);
+    mOrientMatrix = m;
+    UpdateTransforms();
+    mUpdating = false;
+}
 #endif

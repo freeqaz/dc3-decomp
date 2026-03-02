@@ -13,6 +13,7 @@
 #include "rndobj/BaseMaterial.h"
 #include "rndobj/CubeTex.h"
 #include "math/Mtx.h"
+#include <unordered_set>
 
 #include <algorithm>
 #include <unordered_map>
@@ -85,6 +86,14 @@ static void EnsureDummyBoneBindGroup() {
 // Cleanup — called from RndMesh destructor to release GPU resources
 void CleanupGpuMesh(RndMesh* mesh) {
     sMeshGpuData.erase(mesh);
+}
+
+// Invalidate GPU cache when mesh data changes (called from RndMesh::Sync)
+void RndMesh::OnSync(int flags) {
+    auto it = sMeshGpuData.find(this);
+    if (it != sMeshGpuData.end()) {
+        it->second.uploaded = false;
+    }
 }
 
 // Transparent draw queue — meshes with alpha blend are deferred and sorted
@@ -480,29 +489,6 @@ static void DrawMeshImmediate(RndMesh* mesh) {
     // Re-upload scene uniforms if camera changed (e.g., UI camera vs world camera)
     gWgpuRnd->EnsureSceneUniformsCurrent();
 
-    // Debug: log draw details at frame 3000
-    {
-        extern int gDebugFrameID;
-        static int sDbg3k = 0;
-        if (gDebugFrameID == 3000 && sDbg3k < 20) {
-            RndCam* cam = RndCam::Current();
-            RndMat* dbgMat = mesh->Mat();
-            RndMesh* geom = mesh->GetGeomOwner();
-            if (!geom) geom = mesh;
-            const Transform& mw = mesh->WorldXfm();
-            auto& meshData = sMeshGpuData[mesh];
-            printf("DC3 MeshDraw@3000[%d]: mesh='%s' geomVerts=%d compVerts=%d indices=%d pos=(%.1f,%.1f,%.1f) mat='%s' color=(%.2f,%.2f,%.2f,%.2f) blend=%d\n",
-                   sDbg3k, mesh->Name(),
-                   geom->NumVerts(), geom->NumCompressedVerts(), meshData.numIndices,
-                   mw.v.x, mw.v.y, mw.v.z,
-                   dbgMat ? dbgMat->Name() : "NULL",
-                   dbgMat ? dbgMat->GetColor().red : 0.0f, dbgMat ? dbgMat->GetColor().green : 0.0f,
-                   dbgMat ? dbgMat->GetColor().blue : 0.0f, dbgMat ? dbgMat->GetColor().alpha : 0.0f,
-                   dbgMat ? (int)dbgMat->GetBlend() : -1);
-            sDbg3k++;
-        }
-    }
-
     RndMat* mat = mesh->Mat();
     if (!mat) return;
 
@@ -517,8 +503,8 @@ static void DrawMeshImmediate(RndMesh* mesh) {
     PipelineKey key{};
     key.shaderType = 18; // kStandardShader
     key.blend = (WgpuBlend)mat->GetBlend();
-    key.zMode = (WgpuZMode)mat->GetZMode();
-    key.cull = (WgpuCull)mat->GetCull();
+    key.zMode = !mesh->Name()[0] ? (WgpuZMode)0 : (WgpuZMode)mat->GetZMode(); // No depth for text
+    key.cull = !mesh->Name()[0] ? (WgpuCull)0 : (WgpuCull)mat->GetCull(); // No cull for text
     key.stencil = (WgpuStencil)mat->GetStencil();
     key.layout = skinned ? VertexLayoutType::Skinned : VertexLayoutType::Static;
     key.targetFormat = gWgpuRnd->Gpu().SurfaceFormat();
@@ -625,7 +611,11 @@ static void DrawMeshImmediate(RndMesh* mesh) {
     matUni.materialFogEnabled = allowFog ? 1.0f : 0.0f;
 
     // Prelit: vertex color is pre-lit, skip lighting
-    matUni.prelit = mat->Prelit() ? 1.0f : 0.0f;
+    // Text meshes (created by RndText::FontMap) have no name and need prelit
+    // since the UI environment may have no lights/ambient
+    bool isTextMesh = !mesh->Name()[0];
+    matUni.prelit = (mat->Prelit() || isTextMesh) ? 1.0f : 0.0f;
+    matUni.useAlphaAsRGB = isTextMesh ? 1.0f : 0.0f;
 
     // Detail normal map
     matUni.normDetailTiling = mat->GetNormDetailTiling();
@@ -850,4 +840,107 @@ static void DrawMeshImmediate(RndMesh* mesh) {
         }
         nextPass = nextPass->NextPass();
     }
+}
+
+// ============================================================================
+// Shadow depth drawing — simplified path for shadow map generation
+// ============================================================================
+
+void DrawMeshShadow(RndMesh* mesh) {
+    if (!gWgpuRnd || !gWgpuRnd->InShadowPass()) return;
+
+    // Ensure mesh data is on GPU
+    if (!EnsureMeshUploaded(mesh)) return;
+
+    auto& meshData = sMeshGpuData[mesh];
+    auto& pass = gWgpuRnd->ShadowPass();
+    bool skinned = meshData.skinned;
+
+    // Select shadow pipeline
+    if (skinned) {
+        pass.SetPipeline(gWgpuRnd->ShadowSkinnedPipeline());
+    } else {
+        pass.SetPipeline(gWgpuRnd->ShadowStaticPipeline());
+    }
+
+    // Object uniforms (group 1) — world matrix
+    ObjectUniforms objUni{};
+    if (skinned) {
+        Transform identity;
+        identity.Reset();
+        FillObjectUniforms(identity, objUni);
+    } else {
+        FillObjectUniforms(mesh->WorldXfm(), objUni);
+    }
+
+    uint32_t objOffset = gWgpuRnd->ObjectRing().Write(
+        gWgpuRnd->Gpu().Queue(), &objUni, sizeof(objUni));
+
+    // Create object bind group using shadow-specific layout
+    {
+        wgpu::BindGroupEntry entry{};
+        entry.binding = 0;
+        entry.buffer = gWgpuRnd->ObjectRing().Buffer();
+        entry.offset = objOffset;
+        entry.size = sizeof(ObjectUniforms);
+
+        wgpu::BindGroupDescriptor bgDesc{};
+        bgDesc.layout = gWgpuRnd->ShadowObjectBGL();
+        bgDesc.entryCount = 1;
+        bgDesc.entries = &entry;
+        wgpu::BindGroup objBG = gWgpuRnd->Gpu().Device().CreateBindGroup(&bgDesc);
+        pass.SetBindGroup(1, objBG);
+    }
+
+    // Bone uniforms (group 2) — only for skinned
+    if (skinned) {
+        BoneUniforms boneUni{};
+        memset(&boneUni, 0, sizeof(boneUni));
+
+        int numBones = mesh->NumBones();
+        if (numBones > kMaxBones) numBones = kMaxBones;
+
+        for (int i = 0; i < numBones; i++) {
+            RndTransformable* boneTrans = mesh->BoneTransAt(i);
+            if (boneTrans) {
+                Transform skinMatrix;
+                Multiply(mesh->BoneOffsetAt(i), boneTrans->WorldXfm(), skinMatrix);
+                TransformToMat4(skinMatrix, boneUni.bones[i]);
+            } else {
+                boneUni.bones[i][0]  = 1.0f;
+                boneUni.bones[i][5]  = 1.0f;
+                boneUni.bones[i][10] = 1.0f;
+                boneUni.bones[i][15] = 1.0f;
+            }
+        }
+        for (int i = numBones; i < kMaxBones; i++) {
+            boneUni.bones[i][0]  = 1.0f;
+            boneUni.bones[i][5]  = 1.0f;
+            boneUni.bones[i][10] = 1.0f;
+            boneUni.bones[i][15] = 1.0f;
+        }
+
+        uint32_t boneOffset = gWgpuRnd->BoneRing().Write(
+            gWgpuRnd->Gpu().Queue(), &boneUni, sizeof(boneUni));
+
+        wgpu::BindGroupEntry entry{};
+        entry.binding = 0;
+        entry.buffer = gWgpuRnd->BoneRing().Buffer();
+        entry.offset = boneOffset;
+        entry.size = sizeof(BoneUniforms);
+
+        wgpu::BindGroupDescriptor bgDesc{};
+        bgDesc.layout = gWgpuRnd->ShadowBoneBGL();
+        bgDesc.entryCount = 1;
+        bgDesc.entries = &entry;
+        wgpu::BindGroup boneBG = gWgpuRnd->Gpu().Device().CreateBindGroup(&bgDesc);
+        pass.SetBindGroup(2, boneBG);
+    }
+
+    // Draw
+    size_t vertexSize = skinned ? sizeof(GpuVertexSkinned) : sizeof(GpuVertex);
+    pass.SetVertexBuffer(0, meshData.vertexBuffer, 0, meshData.numVertices * vertexSize);
+    pass.SetIndexBuffer(meshData.indexBuffer, wgpu::IndexFormat::Uint16, 0,
+                        meshData.numIndices * sizeof(uint16_t));
+    pass.DrawIndexed(meshData.numIndices);
 }

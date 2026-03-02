@@ -46,15 +46,11 @@ void FlowQueueable::ReleaseListener(Hmx::Object *obj) {
 }
 
 void FlowQueueable::Deactivate(bool b) {
-    FLOW_LOG("Deactivated\n");
-    // Copy listeners and clear the member list
-    std::list<Hmx::Object *> temp = mListeners;
+    std::list<Hmx::Object *> temp(mListeners);
     mListeners.clear();
-    // Release all queued listeners
-    while (!temp.empty()) {
-        Hmx::Object *listener = temp.front();
-        temp.pop_front();
-        ReleaseListener(listener);
+    while (temp.size() > 0) {
+        ReleaseListener(temp.back());
+        temp.erase(--temp.end());
     }
     FlowNode::Deactivate(b);
 }
@@ -70,35 +66,38 @@ void FlowQueueable::ChildFinished(FlowNode *node) {
         return;
 
     if (mStopRequested) {
-        // Stopped: release listeners and notify parent
-        while (!mListeners.empty()) {
-            Hmx::Object *listener = mListeners.front();
-            mListeners.pop_front();
-            ReleaseListener(listener);
+        std::list<Hmx::Object *> temp(mListeners);
+        mListeners.clear();
+        while (temp.size() > 0) {
+            ReleaseListener(temp.back());
+            temp.erase(--temp.end());
         }
-        if (mFlowParent)
+        if (mFlowParent && mRunningNodes.empty()
+            && mFlowParent->HasRunningNode(this)) {
+            FLOW_LOG("Stopped\n");
             mFlowParent->ChildFinished(this);
-        return;
-    }
-
-    // Not stopped: process next listener in queue
-    if (mListeners.size() > 1) {
-        // Multiple listeners queued - release the first, re-activate with next
-        Hmx::Object *firstListener = mListeners.front();
-        mListeners.pop_front();
-        ReleaseListener(firstListener);
-        ActivateTrigger();
-    } else if (!mListeners.empty()) {
-        // Single listener - release and notify parent
-        Hmx::Object *listener = mListeners.front();
-        mListeners.pop_front();
-        ReleaseListener(listener);
-        if (mFlowParent)
-            mFlowParent->ChildFinished(this);
+        }
     } else {
-        // No listeners queued
-        if (mFlowParent)
-            mFlowParent->ChildFinished(this);
+        if (mListeners.size() > 1) {
+            Hmx::Object *front = mListeners.front();
+            bool found = false;
+            std::list<Hmx::Object *>::iterator it = mListeners.begin();
+            ++it;
+            for (; it != mListeners.end(); ++it) {
+                if (*it == front) {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                ReleaseListener(front);
+            }
+            mListeners.erase(mListeners.begin());
+            ActivateTrigger();
+        } else if (!mListeners.empty()) {
+            ReleaseListener(mListeners.front());
+            mListeners.erase(mListeners.begin());
+        }
     }
 }
 

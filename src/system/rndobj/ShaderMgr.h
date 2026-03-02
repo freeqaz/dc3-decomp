@@ -40,6 +40,7 @@ enum PShaderConstant {
     kPS_ShaderCost = 4,
     kPS_Texture = 5,
     kPS_BloomParams = 7,
+    kPS_Posterize = 8,
     kPS_SpotlightTex = 0xB,
     kPS_FurAlpha = 0xB,
     kPS_FurDetail = 0xC,
@@ -58,8 +59,17 @@ enum PShaderConstant {
     kPS_DetailNormal = 0x6a,
     kPS_ShadowColor = 0x6B,
     kPS_ShadowCamDir = 0x6C,
+    kPS_MotionBlur = 0x69,
+    kPS_Kaleidoscope = 0x75,
+    kPS_GradientMap = 0x76,
+    kPS_HallOfTimeParams = 0x73,
+    kPS_HallOfTimeColor = 0x74,
     kPS_RefractStrength = 0x77,
+    kPS_ChromaticAberration = 0x79,
+    kPS_Vignette = 0x7b,
+    kPS_BlendPrevious = 0x7d,
     kPS_ColorMod0 = 0x83,
+    kPS_HueConverge = 0xde,
     kPS_WorldProjection = 0xdc,
 };
 
@@ -113,6 +123,8 @@ public:
     int BoneCount() const { return mBoneCount; }
     bool UseAO() const { return mUseAO; }
     bool AllowPerPixel() const { return mAllowPerPixel; }
+
+    friend class NgPostProc;
 
 protected:
     virtual void LoadShaders(const char *);

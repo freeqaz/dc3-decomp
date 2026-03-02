@@ -28,6 +28,15 @@ BinStream &operator>>(BinStream &bs, CharMeshHide::Hide &hide) {
     return bs;
 }
 
+BinStreamRev &operator>>(BinStreamRev &d, CharMeshHide::Hide &hide) {
+    d >> hide.mDraw;
+    d >> hide.mFlags;
+    if (d.rev > 1) {
+        d >> hide.mShow;
+    }
+    return d;
+}
+
 BinStream &operator<<(BinStream &bs, const CharMeshHide::Hide &hide) {
     bs << hide.mDraw;
     bs << hide.mFlags;

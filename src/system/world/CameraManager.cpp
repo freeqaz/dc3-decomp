@@ -200,6 +200,16 @@ void CameraManager::PrePoll() {
     }
 }
 
+void CameraManager::Poll() {
+    if (!MiloCamera()) {
+        if (mCurrentShot) {
+            mCurrentShot->SetFrame(CalcFrame(), 1.0f);
+        }
+        if (mFreeCam)
+            mFreeCam->Poll();
+    }
+}
+
 CamShot *CameraManager::ShotAfter(CamShot *cshot) {
     ObjDirItr<CamShot> it((ObjectDir *)mParent, true);
     CamShot *ret = it;

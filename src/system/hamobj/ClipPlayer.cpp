@@ -23,6 +23,10 @@ void Annotate(DataArray *a, float f, const char *cc) {
     a->Insert(a->Size(), DataArrayPtr(BeatToFrame(f), cc));
 }
 
+float ClipPlayer::ClipLength(CharClip *clip) {
+    return floorf(clip->EndBeat()) - ceilf(clip->StartBeat());
+}
+
 bool ClipPlayer::Init(RndPropAnim *anim) {
     mClipDir = TheHamDirector->ClipDir();
     if (anim) {

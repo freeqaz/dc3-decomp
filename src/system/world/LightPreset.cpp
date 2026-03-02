@@ -2,15 +2,19 @@
 #include "LightPreset.h"
 #include "SpotlightDrawer.h"
 #include "math/Mtx.h"
+#include "math/Rot.h"
+#include "math/Color.h"
 #include "obj/Msg.h"
 #include "obj/Object.h"
 #include "os/Debug.h"
 #include "rndobj/Anim.h"
+#include "rndobj/Cam.h"
 #include "rndobj/Env.h"
 #include "rndobj/PostProc.h"
 #include "utl/BinStream.h"
 #include "utl/Loader.h"
 #include <algorithm>
+#include <cfloat>
 
 #ifndef HX_NATIVE
 // Explicit template instantiation
@@ -758,3 +762,544 @@ void LightPreset::SyncKeyframeTargets() {
     }
     CacheFrames();
 }
+
+#pragma region Entry Animate Methods
+
+void LightPreset::EnvironmentEntry::Animate(const EnvironmentEntry &other, float t) {
+    Interp(mAmbientColor, other.mAmbientColor, t, mAmbientColor);
+    Interp(mFogStart, other.mFogStart, t, mFogStart);
+    Interp(mFogEnd, other.mFogEnd, t, mFogEnd);
+    Interp(mFogColor, other.mFogColor, t, mFogColor);
+    Interp(mFogEnable, other.mFogEnable, t, mFogEnable);
+}
+
+void LightPreset::EnvLightEntry::Animate(const EnvLightEntry &other, float t) {
+    Interp(mColor, other.mColor, t, mColor);
+    Interp(mPosition, other.mPosition, t, mPosition);
+    Interp(mRange, other.mRange, t, mRange);
+    Interp(mOrientation, other.mOrientation, t, mOrientation);
+}
+
+void LightPreset::SpotlightEntry::Animate(
+    Spotlight *spot, const SpotlightEntry &other, float t
+) {
+    Interp(mIntensity, other.mIntensity, t, mIntensity);
+    Hmx::Color c1, c2, result;
+    c1.Unpack(mColor);
+    c2.Unpack(other.mColor);
+    Interp(c1, c2, t, result);
+    mColor = result.Pack();
+    if (mRotation != Hmx::Quat(0, 0, 0, 0) && other.mRotation != Hmx::Quat(0, 0, 0, 0)) {
+        Interp(mRotation, other.mRotation, t, mRotation);
+    }
+}
+
+void LightPreset::SpotlightEntry::CalculateDirection(
+    Spotlight *spot, Hmx::Quat &q
+) const {
+    if (mTarget) {
+        Hmx::Matrix3 m;
+        spot->CalculateDirection(mTarget, m);
+        q = Hmx::Quat(m);
+    } else {
+        q.Reset();
+    }
+}
+
+#pragma endregion
+
+#pragma region Stubbed LightPreset Methods
+
+void LightPreset::CacheFrames() {
+    float f = 0;
+    for (uint i = 0; i != mKeyframes.size(); i++) {
+        Keyframe &kf = mKeyframes[i];
+        kf.unka8 = f;
+        f += kf.mDuration + kf.mFadeOutTime;
+        kf.mSpotlightChanges.clear();
+        kf.mSpotlightChanges.resize(kf.mSpotlightEntries.size());
+        kf.mEnvironmentChanges.clear();
+        kf.mEnvironmentChanges.resize(kf.mEnvironmentEntries.size());
+        kf.mLightChanges.clear();
+        kf.mLightChanges.resize(kf.mLightEntries.size());
+        kf.mSpotlightDrawerChanges.clear();
+        kf.mSpotlightDrawerChanges.resize(kf.mSpotlightDrawerEntries.size());
+        if (mLooping || i != 0) {
+            Keyframe &prev = mKeyframes[i == 0 ? mKeyframes.size() - 1 : i - 1];
+            for (uint j = 0; j != kf.mSpotlightEntries.size(); j++) {
+                if (kf.mSpotlightEntries[j] != prev.mSpotlightEntries[j]) {
+                    kf.mSpotlightChanges[j] = true;
+                }
+            }
+            for (uint j = 0; j != kf.mEnvironmentEntries.size(); j++) {
+                if (kf.mEnvironmentEntries[j] != prev.mEnvironmentEntries[j]) {
+                    kf.mEnvironmentChanges[j] = true;
+                }
+            }
+            for (uint j = 0; j != kf.mLightEntries.size(); j++) {
+                if (kf.mLightEntries[j] != prev.mLightEntries[j]) {
+                    kf.mLightChanges[j] = true;
+                }
+            }
+            for (uint j = 0; j != kf.mSpotlightDrawerEntries.size(); j++) {
+                if (kf.mSpotlightDrawerEntries[j] != prev.mSpotlightDrawerEntries[j]) {
+                    kf.mSpotlightDrawerChanges[j] = true;
+                }
+            }
+        }
+    }
+    mEndFrame = f;
+}
+
+void LightPreset::GetKey(float frame, int &prevIdx, int &curIdx, float &blend) const {
+    if (frame <= 0.0f || mEndFrame <= 0.0f) {
+        prevIdx = -1;
+        curIdx = 0;
+        blend = 1.0f;
+        return;
+    }
+    float theframe = frame;
+    if (mLooping) {
+        theframe = std::fmod(frame, mEndFrame);
+        if (frame >= mKeyframes.back().unka8) {
+            if (mKeyframes.back().mFadeOutTime <= 0.0f) {
+                prevIdx = -1;
+                curIdx = mKeyframes.size() - 1;
+                blend = 1.0f;
+                return;
+            }
+            float framedur = mKeyframes.back().unka8 + mKeyframes.back().mDuration;
+            if (theframe > framedur) {
+                prevIdx = mKeyframes.size() - 1;
+                curIdx = 0;
+                blend = (theframe - framedur) / mKeyframes.back().mFadeOutTime;
+                return;
+            }
+            prevIdx = -1;
+            curIdx = mKeyframes.size() - 1;
+            blend = 1.0f;
+            return;
+        }
+    } else if (frame >= mKeyframes.back().unka8) {
+        prevIdx = -1;
+        curIdx = mKeyframes.size() - 1;
+        blend = 1.0f;
+        return;
+    }
+
+    // Binary search for the keyframe
+    int lo = 0;
+    int hi = mKeyframes.size() - 1;
+    while (lo + 1 < hi) {
+        int mid = (lo + hi) >> 1;
+        if (theframe < mKeyframes[mid].unka8)
+            hi = mid;
+        else
+            lo = mid;
+    }
+
+    float dur = mKeyframes[lo].unka8 + mKeyframes[lo].mDuration;
+    if (theframe > dur) {
+        prevIdx = lo;
+        curIdx = hi;
+        blend = (theframe - dur) / mKeyframes[lo].mFadeOutTime;
+    } else {
+        prevIdx = -1;
+        curIdx = lo;
+        blend = 1.0f;
+    }
+}
+
+void LightPreset::AnimateState(
+    const LightPreset::Keyframe &kPrev,
+    const LightPreset::Keyframe &kCur,
+    float t
+) {
+    if (t < 1.1920929E-7f)
+        return;
+    for (uint i = 0; i != mSpotlightState.size(); i++) {
+        if (kCur.mSpotlightChanges[i]) {
+            mSpotlightState[i].Animate(mSpotlights[i], kPrev.mSpotlightEntries[i], t);
+        }
+    }
+    for (uint i = 0; i != mEnvironmentState.size(); i++) {
+        if (kCur.mEnvironmentChanges[i]) {
+            mEnvironmentState[i].Animate(kPrev.mEnvironmentEntries[i], t);
+        }
+    }
+    for (uint i = 0; i != mLightState.size(); i++) {
+        if (kCur.mLightChanges[i]) {
+            mLightState[i].Animate(kPrev.mLightEntries[i], t);
+        }
+    }
+    for (uint i = 0; i != mSpotlightDrawerState.size(); i++) {
+        if (kCur.mSpotlightDrawerChanges[i]) {
+            SpotlightDrawerEntry &state = mSpotlightDrawerState[i];
+            const SpotlightDrawerEntry &prev = kPrev.mSpotlightDrawerEntries[i];
+            Interp(state.mTotalIntensity, prev.mTotalIntensity, t, state.mTotalIntensity);
+            Interp(state.mBaseIntensity, prev.mBaseIntensity, t, state.mBaseIntensity);
+            Interp(state.mSmokeIntensity, prev.mSmokeIntensity, t, state.mSmokeIntensity);
+            Interp(state.mLightInfluence, prev.mLightInfluence, t, state.mLightInfluence);
+        }
+    }
+}
+
+void LightPreset::SetFrameEx(float frame, float blend, bool b) {
+    RndAnimatable::SetFrame(frame, blend);
+    if (frame == 0 && TheLoadMgr.EditMode()) {
+        SyncNewSpotlights();
+    }
+    if (!mKeyframes.empty()) {
+        Keyframe *kfPrev = nullptr;
+        float f = 1.0f;
+        Keyframe *kfCur;
+        if (mManual) {
+            kfCur = &mKeyframes[mManualFrame];
+            while (!sManualEvents.empty() && sManualEvents.front().second <= mStartBeat) {
+                sManualEvents.pop_front();
+            }
+            if (!sManualEvents.empty()) {
+                float fadeTime = kfCur->mFadeOutTime;
+                float eventBeat = sManualEvents.front().second;
+                float beat = TheTaskMgr.Beat();
+                if (eventBeat - fadeTime / 480.0f <= beat) {
+                    AdvanceManual(sManualEvents.front().first);
+                    beat = TheTaskMgr.Beat();
+                    if (eventBeat > beat) {
+                        beat = TheTaskMgr.Beat();
+                        mManualFadeTime = (eventBeat - beat) * 480.0f;
+                    } else {
+                        mManualFadeTime = 0;
+                    }
+                    sManualEvents.pop_front();
+                    kfCur = &mKeyframes[mManualFrame];
+                }
+            }
+            if (mLastManualFrame != -1) {
+                kfPrev = &mKeyframes[mLastManualFrame];
+                if (mManualFadeTime > 0) {
+                    f = Min((frame - mManualFrameStart) / mManualFadeTime, 1.0f);
+                    f = Max(0.0f, f);
+                } else {
+                    f = 0;
+                }
+            }
+        } else {
+            int iPrev, iCur;
+            GetKey(frame, iPrev, iCur, f);
+            kfCur = &mKeyframes[iCur];
+            if (iPrev != -1)
+                kfPrev = &mKeyframes[iPrev];
+        }
+
+        bool same = false;
+        Keyframe *last = mLastKeyframe;
+        if (kfCur == last && mLastBlend == f)
+            same = true;
+        if (!same) {
+            ApplyState(*kfCur);
+            if (kfPrev) {
+                AnimateState(*kfPrev, *kfCur, 1.0f - f);
+            }
+            mLastKeyframe = kfCur;
+            mLastBlend = f;
+        }
+        if (!same || !b) {
+            Animate(blend);
+        }
+        if (kfCur != last) {
+            FOREACH (it, mLastKeyframe->mTriggers) {
+                (*it)->Trigger();
+            }
+        }
+    }
+}
+
+void LightPreset::SetKeyframe(Keyframe &k) {
+    for (uint i = 0; i != k.mSpotlightEntries.size(); i++) {
+        FillSpotPresetData(mSpotlights[i], k.mSpotlightEntries[i], -1);
+    }
+    for (uint i = 0; i != k.mEnvironmentEntries.size(); i++) {
+        FillEnvPresetData(mEnvironments[i], k.mEnvironmentEntries[i]);
+    }
+    for (uint i = 0; i != k.mLightEntries.size(); i++) {
+        FillLightPresetData(mLights[i], k.mLightEntries[i]);
+    }
+    for (uint i = 0; i != k.mSpotlightDrawerEntries.size(); i++) {
+        FillSpotlightDrawerPresetData(mSpotlightDrawers[i], k.mSpotlightDrawerEntries[i]);
+    }
+}
+
+DataNode LightPreset::OnSetKeyframe(DataArray *da) {
+    int idx = da->Int(2);
+    SetKeyframe(mKeyframes[idx]);
+    CacheFrames();
+    return 0;
+}
+
+void LightPreset::FillEnvPresetData(RndEnviron *env, EnvironmentEntry &e) {
+    e.mAmbientColor = env->AmbientColor();
+    e.mFogColor = env->FogColor();
+    e.mFogEnable = env->FogEnable();
+#ifdef HX_NATIVE
+    e.mFogStart = env->FogStart();
+    e.mFogEnd = env->FogEnd();
+#endif
+}
+
+void LightPreset::TranslateColor(const Hmx::Color &col, Hmx::Color &res) {
+    if (mHue)
+        mHue->TranslateColor(col, res);
+    else
+        res = col;
+}
+
+void LightPreset::AnimateLightFromPreset(
+    RndLight *light, const EnvLightEntry &entry, float f
+) {
+    if (light->Showing()) {
+        Hmx::Color c;
+        TranslateColor(entry.mColor, c);
+        Interp(light->GetColor(), c, f, c);
+        light->SetColor(c);
+    }
+    if (light->AnimateRangeFromPreset()) {
+        float range;
+        Interp(light->Range(), entry.mRange, f, range);
+        light->SetRange(range);
+    }
+    if (light->AnimatePosFromPreset()) {
+        Hmx::Matrix3 m;
+        MakeRotMatrix(entry.mOrientation, m);
+        Transform tf;
+        Interp(light->WorldXfm().v, entry.mPosition, f, tf.v);
+        Interp(light->WorldXfm().m, m, f, tf.m);
+        light->SetWorldXfm(tf);
+    }
+}
+
+static void AnimateEnvFromPreset(
+    LightPreset *preset, RndEnviron *env, const LightPreset::EnvironmentEntry &entry, float f
+) {
+    Hmx::Color c;
+    preset->TranslateColor(entry.mAmbientColor, c);
+    Interp(env->AmbientColor(), c, f, c);
+    env->SetAmbientColor(c);
+#ifdef HX_NATIVE
+    float fogStart, fogEnd;
+    if (entry.mFogEnable) {
+        Hmx::Color fc;
+        preset->TranslateColor(entry.mFogColor, fc);
+        Interp(env->FogColor(), fc, f, fc);
+        env->SetFogColor(fc);
+        Interp(env->FogStart(), entry.mFogStart, f, fogStart);
+        Interp(env->FogEnd(), entry.mFogEnd, f, fogEnd);
+    } else {
+        float far = RndCam::Current() ? RndCam::Current()->FarPlane() : FLT_MAX;
+        Interp(env->FogStart(), far, f, fogStart);
+        Interp(env->FogEnd(), far, f, fogEnd);
+    }
+    env->SetFogRange(fogStart, fogEnd);
+    if (f == 1.0f)
+        env->SetFogEnable(entry.mFogEnable);
+#endif
+}
+
+static void AnimateSpotFromPreset(
+    LightPreset *preset, Spotlight *spot, const LightPreset::SpotlightEntry &entry, float f
+) {
+    if (spot->AnimateColorFromPreset()) {
+        Hmx::Color spotColor = spot->Color();
+        float intensity = spot->Intensity();
+        Hmx::Color col;
+        col.Unpack(entry.mColor);
+        preset->TranslateColor(col, col);
+        Interp(spotColor, col, f, spotColor);
+        Interp(intensity, entry.mIntensity, f, intensity);
+        spot->SetColorIntensity(spotColor, intensity);
+        if (spot->GetFlare() && f == 1.0f) {
+            spot->SetFlareEnabled(entry.mFlags & LightPreset::SpotlightEntry::kEnabled);
+        }
+    }
+}
+
+static void AnimateSpotlightDrawerFromPreset(
+    SpotlightDrawer *sd, const LightPreset::SpotlightDrawerEntry &e, float f
+) {
+    SpotDrawParams &p = const_cast<SpotDrawParams &>(sd->Params());
+    float val;
+    Interp(p.mBaseIntensity, e.mBaseIntensity, f, val);
+    p.mBaseIntensity = val;
+    Interp(p.mSmokeIntensity, e.mSmokeIntensity, f, val);
+    p.mSmokeIntensity = val;
+    Interp(p.mLightingInfluence, e.mLightInfluence, f, val);
+    p.mLightingInfluence = val;
+    Interp(p.mIntensity, e.mTotalIntensity, f, val);
+    p.mIntensity = val;
+}
+
+static float ComputeSpotBlend(int i, float f) {
+    int min = Min<int>((int)(f * 5.0f), 4);
+    if (i % 5 < min)
+        return 1.0f;
+    else if (i % 5 > min)
+        return 0.0f;
+    else
+        return Min(Max((f - i / 5.0f) * 5.0f, 0.0f), 1.0f);
+}
+
+void LightPreset::Animate(float f) {
+    if (f < 1.1920929E-7f)
+        return;
+    for (uint i = 0; i != mSpotlights.size(); i++) {
+        if (mSpotlights[i] && mSpotlights[i]->GetAnimateFromPreset()) {
+            float blend = ComputeSpotBlend(i, f);
+            if (blend >= 1.1920929E-7f) {
+                AnimateSpotFromPreset(this, mSpotlights[i], mSpotlightState[i], blend);
+            }
+        }
+    }
+    for (uint i = 0; i != mEnvironments.size(); i++) {
+        if (mEnvironments[i] && mEnvironments[i]->GetAnimateFromPreset()) {
+            AnimateEnvFromPreset(this, mEnvironments[i], mEnvironmentState[i], f);
+        }
+    }
+    for (uint i = 0; i != mLights.size(); i++) {
+        if (mLights[i] && mLights[i]->GetAnimateFromPreset()) {
+            AnimateLightFromPreset(mLights[i], mLightState[i], f);
+        }
+    }
+    for (uint i = 0; i != mSpotlightDrawers.size(); i++) {
+        if (mSpotlightDrawers[i]) {
+            AnimateSpotlightDrawerFromPreset(mSpotlightDrawers[i], mSpotlightDrawerState[i], f);
+        }
+    }
+}
+
+void LightPreset::SyncNewSpotlights() {
+    for (ObjDirItr<Spotlight> it(Dir(), true); it; ++it) {
+        Spotlight *key = it;
+        ObjPtrVec<Spotlight, ObjectDir>::const_iterator found = mSpotlights.find(key);
+        if (found == mSpotlights.end()) {
+            AddSpotlight(key, true);
+        }
+    }
+}
+
+BEGIN_LOADS(LightPreset)
+    AutoLoading al;
+    Clear();
+    LOAD_REVS(bs)
+    ASSERT_REVS(0x16, 0)
+    LOAD_SUPERCLASS(Hmx::Object)
+    if (d.rev != 0xE) {
+        LOAD_SUPERCLASS(RndAnimatable)
+        // Load keyframes manually since there's no BinStream >> Keyframe operator
+        {
+            unsigned int count;
+            bs >> count;
+            mKeyframes.resize(count);
+            BinStreamRev rev(bs, d.rev);
+            for (uint i = 0; i < count; i++) {
+                mKeyframes[i].Load(rev);
+            }
+        }
+    } else {
+        mKeyframes.resize(1);
+        BinStreamRev rev(bs, 0xE);
+        mKeyframes[0].LegacyLoadP9(rev);
+    }
+    bs >> mSpotlights;
+    bs >> mEnvironments;
+    bs >> mLights;
+    if (d.rev != 0xE)
+        bs >> mLooping;
+    bs >> mCategory;
+    String str(mCategory.Str());
+    str.ToLower();
+    mCategory = Symbol(str.c_str());
+    if (d.rev < 0x15) {
+        ObjPtr<EventTrigger> trigPtr(this, 0);
+        bs >> trigPtr;
+        if (trigPtr)
+            mSelectTriggers.push_back(trigPtr);
+    } else {
+        bs >> mSelectTriggers;
+    }
+    if (d.rev != 0xE) {
+        bs >> mManual;
+    }
+    bs >> mLocked;
+    if (d.rev > 0xC)
+        bs >> (int &)mPlatformOnly;
+    if (d.rev > 9) {
+        bs >> mSpotlightDrawers;
+    }
+    mSpotlightState.resize(mSpotlights.size());
+    mEnvironmentState.resize(mEnvironments.size());
+    mLightState.resize(mLights.size());
+    mSpotlightDrawerState.resize(mSpotlightDrawers.size());
+    for (int i = 0; i != (int)mSpotlights.size(); i++) {
+        if (!mSpotlights[i] || !mSpotlights[i]->GetAnimateFromPreset()) {
+            RemoveSpotlight(i);
+            i--;
+        }
+    }
+    for (int i = 0; i != (int)mEnvironments.size(); i++) {
+        if (!mEnvironments[i] || !mEnvironments[i]->GetAnimateFromPreset()) {
+            RemoveEnvironment(i);
+            i--;
+        }
+    }
+    for (int i = 0; i != (int)mLights.size(); i++) {
+        if (!mLights[i] || !mLights[i]->GetAnimateFromPreset()) {
+            RemoveLight(i);
+            i--;
+        }
+    }
+    for (int i = 0; i != (int)mSpotlightDrawers.size(); i++) {
+        if (!mSpotlightDrawers[i]) {
+            RemoveSpotlightDrawer(i);
+            i--;
+        }
+    }
+    SyncNewSpotlights();
+    CacheFrames();
+END_LOADS
+
+bool LightPreset::Replace(ObjRef *from, Hmx::Object *to) {
+    if (!to) {
+        Hmx::Object *old = from->GetObj();
+        for (int i = 0; i < (int)mSpotlights.size(); i++) {
+            if (mSpotlights[i] == old) {
+                RemoveSpotlight(i);
+                CacheFrames();
+                return true;
+            }
+        }
+        for (int i = 0; i < (int)mEnvironments.size(); i++) {
+            if (mEnvironments[i] == old) {
+                RemoveEnvironment(i);
+                CacheFrames();
+                return true;
+            }
+        }
+        for (int i = 0; i < (int)mLights.size(); i++) {
+            if (mLights[i] == old) {
+                RemoveLight(i);
+                CacheFrames();
+                return true;
+            }
+        }
+        for (int i = 0; i < (int)mSpotlightDrawers.size(); i++) {
+            if (mSpotlightDrawers[i] == old) {
+                RemoveSpotlightDrawer(i);
+                CacheFrames();
+                return true;
+            }
+        }
+    }
+    return RndAnimatable::Replace(from, to);
+}
+
+#pragma endregion

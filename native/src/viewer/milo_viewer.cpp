@@ -14,6 +14,7 @@
 #include "rndobj/Rnd.h"
 #include "rndobj/Trans.h"
 #include "rndobj/TransAnim.h"
+#include "rndobj/Mat.h"
 #include "rndobj/Mesh.h"
 #include "rndobj/PropAnim.h"
 #include "char/Char.h"
@@ -22,6 +23,8 @@
 #include "char/CharClip.h"
 #include "char/CharServoBone.h"
 #include "char/CharBoneDir.h"
+#include "char/CharUtl.h"
+#include "char/CharBone.h"
 #include "math/Mtx.h"
 #include "math/Vec.h"
 #include "utl/FilePath.h"
@@ -34,6 +37,9 @@
 #include "gfx/GpuDevice.h"
 #include "gfx/Screenshot.h"
 #include "gfx/VideoEncoder.h"
+#include "export/TextureExporter.h"
+#include "export/MaterialExporter.h"
+#include "export/GltfExporter.h"
 
 #include <GLFW/glfw3.h>
 #include <cmath>
@@ -336,6 +342,7 @@ int main(int argc, char** argv) {
         fprintf(f, "  --duration <seconds>       Video duration in seconds (default: 10)\n");
         fprintf(f, "  --fps <number>             Video frame rate (default: 30)\n");
         fprintf(f, "  --camera <mode>            Camera mode: orbit, auto-orbit (default: orbit)\n");
+        fprintf(f, "  --hide <pattern>           Hide meshes matching substring (repeatable)\n");
         fprintf(f, "  --azimuth <degrees>        Camera azimuth angle (default: ~23)\n");
         fprintf(f, "  --elevation <degrees>      Camera elevation angle (default: ~17)\n");
         fprintf(f, "  --frame <number>           Start at specific animation frame\n");
@@ -343,7 +350,10 @@ int main(int argc, char** argv) {
         fprintf(f, "  --paused                   Start with animation paused\n");
         fprintf(f, "  --width <pixels>           Render width (default: 1280)\n");
         fprintf(f, "  --height <pixels>          Render height (default: 720)\n");
-        fprintf(f, "  --verbose, -v              Print detailed object/drawable info\n\n");
+        fprintf(f, "  --verbose, -v              Print detailed object/drawable info\n");
+        fprintf(f, "  --export-textures <dir>    Export all textures as PNG and exit\n");
+        fprintf(f, "  --export-materials <dir>   Export all materials as JSON and exit\n");
+        fprintf(f, "  --export-gltf <path>       Export scene as glTF 2.0 and exit\n\n");
         fprintf(f, "Controls (windowed mode):\n");
         fprintf(f, "  Left drag     orbit\n");
         fprintf(f, "  Scroll        zoom\n");
@@ -394,6 +404,10 @@ int main(int argc, char** argv) {
     int videoFps = 30;
     bool startPaused = false;
     bool verbose = false;
+    const char* exportTexturesDir = nullptr;
+    const char* exportMaterialsDir = nullptr;
+    const char* exportGltfPath = nullptr;
+    std::vector<std::string> hidePatterns;  // mesh name substrings to hide
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
             showHelp(stdout);
@@ -461,6 +475,14 @@ int main(int argc, char** argv) {
             setenv("MILO_HEIGHT", argv[++i], 1);
         } else if (strcmp(argv[i], "--verbose") == 0 || strcmp(argv[i], "-v") == 0) {
             verbose = true;
+        } else if (strcmp(argv[i], "--export-textures") == 0 && i + 1 < argc) {
+            exportTexturesDir = argv[++i];
+        } else if (strcmp(argv[i], "--export-materials") == 0 && i + 1 < argc) {
+            exportMaterialsDir = argv[++i];
+        } else if (strcmp(argv[i], "--export-gltf") == 0 && i + 1 < argc) {
+            exportGltfPath = argv[++i];
+        } else if (strcmp(argv[i], "--hide") == 0 && i + 1 < argc) {
+            hidePatterns.push_back(argv[++i]);
         } else if (!miloPath) {
             miloPath = argv[i];
         }
@@ -485,8 +507,13 @@ int main(int argc, char** argv) {
 
     // ---- Engine init (minimal subset of App::App) ----
 
-    // Always enable GPU rendering for the viewer
-    setenv("MILO_RENDER", "1", 1);
+    // Enable GPU rendering unless doing export-only
+    bool exportOnly = exportTexturesDir || exportMaterialsDir || exportGltfPath;
+    if (exportOnly) {
+        setenv("MILO_RENDER", "0", 1);
+    } else {
+        setenv("MILO_RENDER", "1", 1);
+    }
     // Force headless if screenshot/video mode or no display available
     if (screenshotPath || videoPath) {
         setenv("MILO_HEADLESS", "1", 1);
@@ -631,6 +658,30 @@ int main(int argc, char** argv) {
         printf("Milo Viewer: %d subdirectories loaded\n", (int)subdirs.size());
     }
 
+    // ---- Export-and-exit modes ----
+    if (exportOnly) {
+        if (exportTexturesDir) {
+            TextureExporter::Options texOpts;
+            texOpts.verbose = verbose;
+            int count = TextureExporter::ExportAll(baseScene, exportTexturesDir, texOpts);
+            printf("Exported %d textures to %s\n", count, exportTexturesDir);
+        }
+        if (exportMaterialsDir) {
+            MaterialExporter::Options matOpts;
+            matOpts.verbose = verbose;
+            int count = MaterialExporter::ExportAll(baseScene, exportMaterialsDir, matOpts);
+            printf("Exported %d materials to %s\n", count, exportMaterialsDir);
+        }
+        if (exportGltfPath) {
+            GltfExporter::Options gltfOpts;
+            gltfOpts.verbose = verbose;
+            bool ok = GltfExporter::Export(baseScene, exportGltfPath, gltfOpts);
+            if (ok) printf("Exported glTF to %s\n", exportGltfPath);
+            else fprintf(stderr, "Error: glTF export failed\n");
+        }
+        return 0;
+    }
+
     // ---- Load animation clips (--clips) ----
     ObjDirPtr<ObjectDir> clipsDir;
     Character* charObj = nullptr;
@@ -725,6 +776,8 @@ int main(int argc, char** argv) {
                             }
                             printf("Milo Viewer: bones stuffed from clips (%d bones)\n",
                                    (int)servo->GetBones().size());
+
+                            // Diagnostic removed — all skeleton bones resolve correctly
                         }
 
                         // Enter just the CharDriver (not the full Character, which triggers
@@ -935,12 +988,15 @@ int main(int argc, char** argv) {
     }
 
     // ---- Auto-frame: compute bounding box from mesh positions and set orbit camera ----
+    // When a Character exists with subdirs loaded, frame on character only
     {
         float minX = 1e10f, minY = 1e10f, minZ = 1e10f;
         float maxX = -1e10f, maxY = -1e10f, maxZ = -1e10f;
         int meshCount = 0;
 
-        ObjDirItr<RndMesh> bboxIt(baseScene, true);
+        // When character + venue: frame on character (skip venue meshes)
+        bool charFraming = charObj && !subdirEntries.empty();
+        ObjDirItr<RndMesh> bboxIt(baseScene, !charFraming);
         while (bboxIt) {
             RndMesh* m = bboxIt;
             if (!m->Showing()) { ++bboxIt; continue; }
@@ -1068,6 +1124,28 @@ int main(int argc, char** argv) {
                gOrbitCam.distance, gOrbitCam.azimuth * 57.2958f, gOrbitCam.elevation * 57.2958f);
     }
 
+    // Helper: check if a mesh should be hidden (name pattern match)
+    auto shouldHideMesh = [&](RndMesh* mesh) -> bool {
+        for (auto& pat : hidePatterns) {
+            if (strstr(mesh->Name(), pat.c_str())) return true;
+        }
+        return false;
+    };
+
+    // Helper: check if a venue/subdir mesh has unresolved render-target texture
+    // (shows as giant white block). Only use for subdir meshes, not base character.
+    extern wgpu::TextureView GetGpuTexView(RndTex* tex);
+    auto hasUnresolvedTexture = [&](RndMesh* mesh) -> bool {
+        RndMat* mat = mesh->Mat();
+        if (mat) {
+            RndTex* diffTex = mat->GetDiffuseTex();
+            if (diffTex && !GetGpuTexView(diffTex)) {
+                return true;
+            }
+        }
+        return false;
+    };
+
     // Helper lambda: render one frame (draw all meshes from all loaded dirs)
     auto drawFrame = [&]() {
         // Find best environment from any loaded dir
@@ -1088,38 +1166,21 @@ int main(int argc, char** argv) {
         RndEnvironTracker tracker(env, &origin);
 
         // Draw meshes from base scene
-        static bool dumpedMeshInfo = false;
         ObjDirItr<RndMesh> meshIt(baseScene, true);
         while (meshIt) {
-            if (!dumpedMeshInfo && meshIt->Showing() && meshIt->IsSkinned()) {
-                const char* mname = meshIt->Name();
-                printf("  SKINNED '%s' bones=%d\n", mname, meshIt->NumBones());
-                for (int bi = 0; bi < meshIt->NumBones(); bi++) {
-                    RndTransformable* bone = meshIt->BoneTransAt(bi);
-                    if (bone) {
-                        const Transform& bw = bone->WorldXfm();
-                        const Transform& off = meshIt->BoneOffsetAt(bi);
-                        Transform skin;
-                        Multiply(off, bw, skin);
-                        float dist = sqrtf(bw.v.x*bw.v.x + bw.v.y*bw.v.y + bw.v.z*bw.v.z);
-                        // Flag bones near origin (likely not driven)
-                        const char* flag = (dist < 1.0f) ? " *** NEAR ORIGIN ***" : "";
-                        printf("    [%d] '%s' world=(%.2f,%.2f,%.2f) skin=(%.2f,%.2f,%.2f)%s\n",
-                               bi, bone->Name(), bw.v.x, bw.v.y, bw.v.z,
-                               skin.v.x, skin.v.y, skin.v.z, flag);
-                    }
-                }
+            if (!shouldHideMesh(meshIt)) {
+                meshIt->DrawShowing();
             }
-            meshIt->DrawShowing();
             ++meshIt;
         }
-        dumpedMeshInfo = true;
 
-        // Draw meshes from subdirs
+        // Draw meshes from subdirs (also filter unresolved render-target textures)
         for (auto& sd : subdirs) {
             ObjDirItr<RndMesh> sdMeshIt((ObjectDir*)sd, true);
             while (sdMeshIt) {
-                sdMeshIt->DrawShowing();
+                if (!shouldHideMesh(sdMeshIt) && !hasUnresolvedTexture(sdMeshIt)) {
+                    sdMeshIt->DrawShowing();
+                }
                 ++sdMeshIt;
             }
         }
@@ -1170,18 +1231,16 @@ int main(int argc, char** argv) {
             printf("Milo Viewer: advancing animation to beat %.1f (seconds=%.2f)\n", beat, beat * 60.0f / bpm);
             advanceCharAnim(beat * 60.0f / bpm, beat);
 
+
+
             // Re-center camera on animated character's pelvis bone
+            // Skip if user specified --eye (manual camera placement)
             RndTransformable* pelvis = charObj->Find<RndTransformable>("bone_pelvis.mesh", false);
-            if (pelvis) {
+            if (pelvis && !hasEye) {
                 const Transform& bxfm = pelvis->WorldXfm();
                 gOrbitCam.targetX = bxfm.v.x;
                 gOrbitCam.targetY = bxfm.v.y;
                 gOrbitCam.targetZ = bxfm.v.z;
-                // Set sensible defaults for character viewing if no distance override
-                // Character is ~72 units tall, so distance ~100 frames full body
-                if (camDistanceOverride <= 0.0f) {
-                    gOrbitCam.distance = 100.0f;
-                }
                 printf("Milo Viewer: centered on pelvis (%.2f, %.2f, %.2f) dist=%.1f\n",
                        bxfm.v.x, bxfm.v.y, bxfm.v.z, gOrbitCam.distance);
             }
@@ -1241,6 +1300,31 @@ int main(int argc, char** argv) {
         float dt = 1.0f / (float)videoFps;
         bool autoOrbit = (strcmp(cameraMode, "auto-orbit") == 0);
 
+        // Track pelvis bone for camera centering during video
+        RndTransformable* pelvisBone = nullptr;
+        if (charObj && charAnimActive) {
+            pelvisBone = charObj->Find<RndTransformable>("bone_pelvis.mesh", false);
+        }
+
+        // Pre-advance character to a reasonable pose (beat 4) for initial camera setup
+        if (charAnimActive) {
+            float initBeat = 4.0f;
+            advanceCharAnim(initBeat * 60.0f / bpm, initBeat);
+            // Reset anim time so video starts from beat 0
+            lastAnimSeconds = 0.0f;
+            lastAnimBeat = 0.0f;
+
+            // Center camera on pelvis for initial framing
+            if (pelvisBone && !hasEye) {
+                const Transform& bxfm = pelvisBone->WorldXfm();
+                gOrbitCam.targetX = bxfm.v.x;
+                gOrbitCam.targetY = bxfm.v.y;
+                gOrbitCam.targetZ = bxfm.v.z;
+                printf("Milo Viewer: video centered on pelvis (%.2f, %.2f, %.2f)\n",
+                       bxfm.v.x, bxfm.v.y, bxfm.v.z);
+            }
+        }
+
         printf("Milo Viewer: recording %d frames (%.1fs @ %d fps)...\n",
                totalFrames, videoDuration, videoFps);
 
@@ -1265,6 +1349,14 @@ int main(int argc, char** argv) {
                         anim->SetFrame(f + sf, 1.0f);
                     }
                 }
+            }
+
+            // Track pelvis bone — snap to keep character centered
+            if (pelvisBone && !hasEye) {
+                const Transform& bxfm = pelvisBone->WorldXfm();
+                gOrbitCam.targetX = bxfm.v.x;
+                gOrbitCam.targetY = bxfm.v.y;
+                gOrbitCam.targetZ = bxfm.v.z;
             }
 
             // Auto-orbit camera
@@ -1314,6 +1406,13 @@ int main(int argc, char** argv) {
     }
 
     gAnim.lastTime = glfwGetTime();
+    bool interactiveAutoOrbit = (strcmp(cameraMode, "auto-orbit") == 0);
+
+    // Track pelvis for interactive camera follow
+    RndTransformable* interactivePelvis = nullptr;
+    if (charObj && charAnimActive) {
+        interactivePelvis = charObj->Find<RndTransformable>("bone_pelvis.mesh", false);
+    }
 
     while (!gWgpuRnd->Gpu().ShouldClose()) {
         gWgpuRnd->Gpu().PollEvents();
@@ -1355,6 +1454,19 @@ int main(int argc, char** argv) {
                 }
                 anim->SetFrame(frame, 1.0f);
             }
+        }
+
+        // Snap camera to pelvis in interactive mode (unless user is dragging)
+        if (interactivePelvis && !hasEye && !gOrbitCam.leftDrag && !gOrbitCam.middleDrag) {
+            const Transform& bxfm = interactivePelvis->WorldXfm();
+            gOrbitCam.targetX = bxfm.v.x;
+            gOrbitCam.targetY = bxfm.v.y;
+            gOrbitCam.targetZ = bxfm.v.z;
+        }
+
+        // Auto-orbit in interactive mode
+        if (interactiveAutoOrbit && !gAnim.paused) {
+            gOrbitCam.azimuth += 0.002f * (float)dt * 60.0f; // ~0.12 rad/s, frame-rate independent
         }
 
         // Update orbit camera

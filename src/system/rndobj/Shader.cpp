@@ -248,3 +248,13 @@ void RndShaderSimple::Select(RndMat *mat, ShaderType s, bool b) {
         Cache(s, ShaderOptions(optsVal), mat);
     }
 }
+
+bool RndShaderMultimesh::CheckError(MatFlagErrorType type) {
+    return type == (MatFlagErrorType)0 || type == (MatFlagErrorType)1 || type == (MatFlagErrorType)2;
+}
+
+bool RndShaderParticles::CheckError(MatFlagErrorType type) {
+    if (type != (MatFlagErrorType)0 && type != (MatFlagErrorType)2)
+        return false;
+    return TheRnd.GetDrawMode() != 4;
+}

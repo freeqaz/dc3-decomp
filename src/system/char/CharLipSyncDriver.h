@@ -53,6 +53,7 @@ protected:
     CharLipSyncDriver();
 
     void ApplyBlinks();
+    void UpdatePlayback(CharLipSync::PlayBack *, float, float);
 
     /** "The lipsync file to use" */
     ObjPtr<CharLipSync> mLipSync; // 0x30

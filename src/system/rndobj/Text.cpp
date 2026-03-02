@@ -967,6 +967,7 @@ void RndText::UpdateText() {
 void RndText::DrawShowing() {
     SizeCheck();
 
+
     // Count total materials across all font maps for VLA allocation
     int totalMats = 0;
     for (auto it = mFontMaps.begin(); it != mFontMaps.end(); ++it) {

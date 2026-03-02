@@ -15,15 +15,24 @@ void PipelineManager::Init(GpuDevice* device) {
 
     // === Create bind group layouts ===
 
-    // Group 0: Scene uniforms (per-frame)
-    wgpu::BindGroupLayoutEntry sceneEntries[1] = {};
+    // Group 0: Scene uniforms (per-frame) + shadow map texture + comparison sampler
+    wgpu::BindGroupLayoutEntry sceneEntries[3] = {};
     sceneEntries[0].binding = 0;
     sceneEntries[0].visibility = wgpu::ShaderStage::Vertex | wgpu::ShaderStage::Fragment;
     sceneEntries[0].buffer.type = wgpu::BufferBindingType::Uniform;
     sceneEntries[0].buffer.minBindingSize = 0;
 
+    sceneEntries[1].binding = 1;
+    sceneEntries[1].visibility = wgpu::ShaderStage::Fragment;
+    sceneEntries[1].texture.sampleType = wgpu::TextureSampleType::Depth;
+    sceneEntries[1].texture.viewDimension = wgpu::TextureViewDimension::e2D;
+
+    sceneEntries[2].binding = 2;
+    sceneEntries[2].visibility = wgpu::ShaderStage::Fragment;
+    sceneEntries[2].sampler.type = wgpu::SamplerBindingType::Comparison;
+
     wgpu::BindGroupLayoutDescriptor sceneLayoutDesc{};
-    sceneLayoutDesc.entryCount = 1;
+    sceneLayoutDesc.entryCount = 3;
     sceneLayoutDesc.entries = sceneEntries;
     mLayouts[0] = dev.CreateBindGroupLayout(&sceneLayoutDesc);
 

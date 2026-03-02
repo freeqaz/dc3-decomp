@@ -13,6 +13,7 @@ enum DXTFormat {
     kDXT1    = 0x08,  // BC1 — 8 bytes per 4x4 block
     kDXT3    = 0x10,  // BC2 — 16 bytes per 4x4 block
     kDXT5    = 0x18,  // BC3 — 16 bytes per 4x4 block
+    kDXN     = 0x20,  // BC5 — 16 bytes per 4x4 block (normal maps, RG only)
 };
 
 namespace TextureConvert {
@@ -21,7 +22,7 @@ namespace TextureConvert {
 wgpu::Texture CreateFromBitmap(GpuDevice& gpu, const RndBitmap& bmp, int numMips = 0);
 
 // Create cube texture from 6 face bitmaps (for environment maps)
-wgpu::Texture CreateCubeFromBitmaps(GpuDevice& gpu, const RndBitmap* faces, int numFaces = 6);
+wgpu::Texture CreateCubeFromBitmaps(GpuDevice& gpu, const RndBitmap* const* faces, int numFaces = 6);
 
 // Create render target texture
 wgpu::Texture CreateRenderTarget(GpuDevice& gpu, int w, int h, wgpu::TextureFormat fmt);

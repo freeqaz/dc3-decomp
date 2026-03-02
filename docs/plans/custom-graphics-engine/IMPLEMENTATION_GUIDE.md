@@ -16,9 +16,16 @@ Audio decoding complete (FFmpeg for Bink, Vorbis for OGG/MOGG). Input working
 via GLFW (gamepad + keyboard-as-joypad). GTest integration test suite verifies
 headless boot stability.
 
+### Post-Processing Pipeline (Phase 5)
+
+- **Bloom**: Complete. 4-level mip chain with 9-tap Gaussian blur, threshold extract, upsample chain with additive blending, composited in final post-proc pass. Driven by `RndPostProc::mBloomIntensity/mBloomThreshold/mBloomColor`.
+- **Depth of Field**: Complete (shader + pipeline). Resolves MSAA depth to R32Float, 8-tap Poisson disc gather blur with circle-of-confusion from `DOFProc` focal plane/blur depth params. Runs before bloom in the post-proc chain.
+- **Shadow Mapping**: Scaffolding in place (depth texture, comparison sampler, light VP matrix computation, shadow WGSL shader). **Not yet wired up** — needs shadow depth pipeline creation, caster geometry drawing, scene bind group expansion, and shadow sampling in the standard fragment shader. See [SHADOW_MAPPING.md](SHADOW_MAPPING.md) for detailed plan.
+- **Existing post-proc effects**: Color grading (contrast/brightness/saturation/levels), chromatic aberration/sharpen, posterization, vignette.
+
 **Batch screenshot script**: `native/scripts/render_screenshots.sh`
 
-**Next**: Verify text renders end-to-end in engine screenshots, get past tutorial screens (DTA override for Kinect gesture), motion capture integration (Phase 5).
+**Next**: Wire up shadow mapping (shadow caster draw pass, bind group 0 expansion, PCF sampling in standard shader). See [SHADOW_MAPPING.md](SHADOW_MAPPING.md).
 
 ## Prerequisites
 

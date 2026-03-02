@@ -36,6 +36,8 @@ public:
 
     private:
         BloomTextureSet mTextures[N];
+
+        friend class NgPostProc;
     };
 
     NgPostProc();
@@ -45,10 +47,14 @@ public:
     virtual void Select();
     virtual void QueueMotionBlurObject(class RndDrawable *);
     virtual void SetBloomColor();
-    virtual void OnSelect();
-    virtual void OnUnselect();
     virtual void EndWorld();
     virtual void DoPost();
+
+protected:
+    virtual void OnSelect();
+    virtual void OnUnselect();
+
+public:
 
     static void Init();
     NEW_OBJ(NgPostProc);
@@ -57,6 +63,16 @@ public:
 
 protected:
     void DoVelocity();
+    void CheckBlendPrevious();
+    void CheckVignette();
+    void CheckMotionBlur();
+    void CheckChromaticAberration();
+    void CheckHallOfTime();
+    void CheckHueConverge();
+    void CheckGradientMap();
+    void CheckPosterizeAndKaleidoscope();
+    void CheckRefract();
+    void ModulateColorXfm();
 
     static Hmx::Color s_prevBloomColor;
     static float s_prevBloomIntensity;

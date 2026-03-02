@@ -42,6 +42,13 @@ NgLight::~NgLight() {
 
 NgLight::NgLight() : mShadowRT(0), mShadowMap(0), unk188(0), unk18c(-1) {}
 
+RndTex *NgLight::CreateShadowTex() {
+    PhysMemTypeTracker tracker("D3D(phys):ShadowTex");
+    RndTex *tex = Hmx::Object::New<RndTex>();
+    tex->SetBitmap(0x100, 0x100, 16, RndTex::kRenderedNoZ, false, nullptr);
+    return tex;
+}
+
 void NgLight::Init() {
     REGISTER_OBJ_FACTORY(NgLight);
     PhysMemTypeTracker tracker("D3D(phys):NgLight");

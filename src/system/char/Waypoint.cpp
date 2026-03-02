@@ -136,6 +136,54 @@ DataNode Waypoint::OnWaypointNearest(DataArray *da) {
     return FindNearest(da->Obj<RndTransformable>(1)->WorldXfm().v, da->Int(2));
 }
 
+Waypoint *Waypoint::FindNearest(const Vector3 &pos, int flags) {
+    Waypoint *best = nullptr;
+    float bestDist = 1e30f;
+    for (std::list<Waypoint *>::iterator it = sWaypoints->begin(); it != sWaypoints->end();
+         ++it) {
+        Waypoint *wp = *it;
+        if (wp->mFlags & flags) {
+            const Vector3 &wpPos = wp->WorldXfm().v;
+            float dx = pos.x - wpPos.x;
+            float dy = pos.y - wpPos.y;
+            float dz = pos.z - wpPos.z;
+            float dist = dy * dy + dx * dx + dz * dz;
+            if (bestDist > dist) {
+                bestDist = dist;
+                best = wp;
+            }
+        }
+    }
+    return best;
+}
+
+DataNode Waypoint::OnWaypointLast(DataArray *da) {
+    Waypoint *wp = da->Obj<Waypoint>(1);
+    for (std::list<Waypoint *>::iterator it = sWaypoints->begin(); it != sWaypoints->end();
+         ++it) {
+        if (*it == wp) {
+            sWaypoints->splice(sWaypoints->end(), *sWaypoints, it);
+            break;
+        }
+    }
+    return DataNode(0);
+}
+
+void Waypoint::Constrain(Transform &xfm) {
+    float strictRadius = mStrictRadiusDelta;
+    if (0.0f < strictRadius) {
+        float yR = (0.0f < mYRadius) ? mYRadius + strictRadius : 0.0f;
+        Vector3 delta;
+        ShapeDeltaBox(xfm.v, mRadius + strictRadius, yR, delta);
+        xfm.v += delta;
+    }
+    if (mStrictAngDelta > 0.0f) {
+        float ang = GetZAngle(xfm.m);
+        float deltaAng = ShapeDeltaAng(mAngRadius + mStrictAngDelta, ang);
+        RotateAboutZ(xfm.m, deltaAng, xfm.m);
+    }
+}
+
 float Waypoint::ShapeDeltaAng(float f1, float f2) {
     float limited = LimitAng(GetZAngle(WorldXfm().m) - f2);
     float clamped = Clamp(-f1, f1, limited);

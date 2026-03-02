@@ -360,11 +360,12 @@ bool UIManager::BlockHandlerDuringTransition(Symbol s, DataArray *da) {
 void UIManager::GotoScreenImpl(UIScreen *scr, bool b1, bool b2) {
 #ifdef HX_NATIVE
     // Skip screens that require campaign/performer session state.
-    // On Xbox 360, a signed-in player provides this context via MetaPerformer.
     if (scr && strstr(scr->Name(), "campaign")) {
         MILO_WARN("Skipping screen '%s' on native (campaign not supported)", scr->Name());
         return;
     }
+    printf("DC3 UI: GotoScreenImpl -> '%s' (force=%d, b2=%d)\n",
+           scr ? scr->Name() : "<null>", b1, b2);
 #endif
     // Only proceed if:
     // - Force transition (b1), OR
@@ -540,6 +541,61 @@ void UIManager::Poll() {
     }
     if (mCurrentScreen)
         mCurrentScreen->Poll();
+#ifdef HX_NATIVE
+    // Auto-advance stuck screens: if we've been on the same screen for too long
+    // with no transition in progress, force-advance through the boot flow.
+    // Complements UIScreen::Enter auto-skip (handles screens that stall in poll).
+    {
+        static const char *sStuckScreen = nullptr;
+        static int sStuckFrames = 0;
+        const int kAutoAdvanceFrames = 120; // ~4 seconds at 30fps
+
+        const char *curName = mCurrentScreen ? mCurrentScreen->Name() : nullptr;
+        if (curName && mTransitionState == kTransitionNone) {
+            if (curName == sStuckScreen) {
+                sStuckFrames++;
+            } else {
+                sStuckScreen = curName;
+                sStuckFrames = 0;
+            }
+
+            if (sStuckFrames == kAutoAdvanceFrames) {
+                // Map of known boot flow screens → next screen
+                struct ScreenAdvance { const char *from; const char *to; };
+                static const ScreenAdvance sFlow[] = {
+                    {"autosave_warning_screen", "title_screen"},
+                    {"title_screen", "wait_main_after_saveload_screen"},
+                    {"wait_main_after_saveload_screen", "title_screen_to_voice_control_tutorial_screen"},
+                    {"title_screen_to_voice_control_tutorial_screen", "tutorial_voice_control_screen_0"},
+                    {"tutorial_voice_control_screen_0", "tutorial_voice_control_screen_1"},
+                    {"tutorial_voice_control_screen_1", "tutorial_party_mode_screen_0"},
+                    {"tutorial_party_mode_screen_0", "tutorial_party_mode_screen_1"},
+                    {nullptr, nullptr}
+                };
+
+                for (int i = 0; sFlow[i].from; i++) {
+                    if (!strcmp(curName, sFlow[i].from)) {
+                        UIScreen *next = ObjectDir::Main()->Find<UIScreen>(sFlow[i].to, false);
+                        if (next) {
+                            printf("DC3 UI: Auto-advancing stuck screen '%s' -> '%s'\n",
+                                   curName, sFlow[i].to);
+                            sStuckScreen = nullptr;
+                            sStuckFrames = 0;
+                            GotoScreen(next, false, false);
+                        } else {
+                            printf("DC3 UI: Auto-advance target '%s' not found\n", sFlow[i].to);
+                            sStuckScreen = nullptr;
+                            sStuckFrames = 0;
+                        }
+                        break;
+                    }
+                }
+            }
+        } else {
+            sStuckFrames = 0;
+        }
+    }
+#endif
     if (mTransitionState == kTransitionTo) {
 #ifdef HX_NATIVE
         {

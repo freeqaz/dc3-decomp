@@ -71,6 +71,7 @@ public:
     // Headless rendering (offscreen)
     wgpu::TextureView AcquireHeadlessFrame();
     bool ReadbackHeadlessFrame(uint8_t* outPixels, size_t outSize);
+    wgpu::Texture& HeadlessTex() { return mHeadlessTex; }
 
     // Window queries
     bool ShouldClose() const;

@@ -24,6 +24,7 @@ public:
     virtual void Copy(const Hmx::Object *, Hmx::Object::CopyType);
     virtual void Load(BinStream &);
 
+    OBJ_MEM_OVERLOAD(0x15)
     static void Init();
     NEW_OBJ(CharMeshHide)
 

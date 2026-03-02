@@ -443,15 +443,10 @@ void CharDriver::PollDeps(
 }
 
 static bool CharDriverStarved(CharClipDriver *first) {
-    bool ret;
-    if (first) {
-        ret = false;
-        if (!first->Next() && (first->mPlayFlags & 0xF0) != 0x10)
-            ret = true;
-    } else {
-        ret = true;
-    }
-    return ret;
+    if (!first) return true;
+    if (first->Next() || (first->mPlayFlags & 0xF0) == 0x10)
+        return false;
+    return true;
 }
 
 void CharDriver::SetBeatScale(float beatscale, bool) {
@@ -476,19 +471,21 @@ void CharDriver::Poll() {
         beat = mBeatScale * ((float)(TheTaskMgr.CurrentBeat()) + (float)(TheTaskMgr.CurrentTick()) / 480.0f);
         if (mOldBeat == kHugeFloat)
             mOldBeat = beat;
-        if (std::floor(mOldBeat) != std::floor(beat)) {
+        if ((float)std::floor(mOldBeat) != (float)std::floor(beat)) {
             CharClipDriver *playing = FirstPlaying();
             if (playing) {
                 int firstFlags = (playing->mPlayFlags >> 0xC) & 0xF;
                 int flags = firstFlags;
                 for (CharClipDriver *it = playing->Next(); it != nullptr; it = it->Next()) {
                     int iFlags = (it->mPlayFlags >> 0xC) & 0xF;
-                    if (iFlags > flags)
+                    if (flags < iFlags)
                         flags = iFlags;
                 }
                 flags--;
                 if (flags > 0) {
-                    int i12 = (int)std::floor(beat) ^ (int)std::floor(mOldBeat) + 1;
+                    float fb = (float)std::floor(beat);
+                    float fo = (float)std::floor(mOldBeat);
+                    int i12 = (int)fb ^ ((int)fo + 1);
                     CharClipDriver *d = playing;
                     if (i12 & flags) {
                         while (d) {
@@ -504,11 +501,10 @@ void CharDriver::Poll() {
         }
     }
     mOldBeat = beat;
-    bool starved = CharDriverStarved(mFirst);
-    if (starved && !mStarvedHandler.Null()) {
+    if (CharDriverStarved(mFirst) && !mStarvedHandler.Null()) {
         Dir()->Handle(Message(mStarvedHandler), true);
     }
-    if (starved && mFirst) {
+    if (CharDriverStarved(mFirst) && mFirst) {
         if ((mFirst->mPlayFlags & 0xF0) == 0x30) {
             int flags = mFirst->mPlayFlags;
             CharClip::SetDefaultBlendFlag(flags, 4);
@@ -536,16 +532,16 @@ void CharDriver::Poll() {
                     mInternalBones->Enter();
                     mFirst->ScaleAdd(*mInternalBones, weight);
                     mInternalBones->Blend(*mBones);
-                } else {
-                    mFirst->GetClip()->ScaleDown(*mBones, deltaBeat);
-                    mFirst->ScaleAdd(*mBones, weight);
+                    goto apply_end;
                 }
-            } else if (mApply == kApplyAdd) {
-                mFirst->ScaleAdd(*mBones, weight);
-            } else {
+                mFirst->GetClip()->ScaleDown(*mBones, deltaBeat);
+            } else if (mApply != kApplyAdd) {
                 MILO_ASSERT(mApply == kApplyRotateTo, 0x22F);
                 mFirst->RotateTo(*mBones, weight);
+                goto apply_end;
             }
+            mFirst->ScaleAdd(*mBones, weight);
+        apply_end:;
         }
     }
 }

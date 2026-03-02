@@ -321,6 +321,32 @@ void DecompressDXT5(const uint8_t* src, uint8_t* dst, int w, int h) {
     }
 }
 
+void DecompressDXN(const uint8_t* src, uint8_t* dst, int w, int h) {
+    // DXN/BC5: two DXT5-alpha blocks per 4x4 tile → R and G channels
+    int bw = (w + 3) / 4;
+    int bh = (h + 3) / 4;
+
+    for (int by = 0; by < bh; by++) {
+        for (int bx = 0; bx < bw; bx++) {
+            uint8_t redValues[4][4];
+            uint8_t greenValues[4][4];
+            DecompressDXT5AlphaBlock(src, redValues);
+            DecompressDXT5AlphaBlock(src + 8, greenValues);
+            src += 16;
+
+            for (int py = 0; py < 4 && (by * 4 + py) < h; py++) {
+                for (int px = 0; px < 4 && (bx * 4 + px) < w; px++) {
+                    int idx = ((by * 4 + py) * w + (bx * 4 + px)) * 4;
+                    dst[idx + 0] = redValues[py][px];
+                    dst[idx + 1] = greenValues[py][px];
+                    dst[idx + 2] = 0xFF; // B channel (unused for normal maps)
+                    dst[idx + 3] = 0xFF; // A
+                }
+            }
+        }
+    }
+}
+
 // ============================================================================
 // Channel order conversion
 // ============================================================================
@@ -347,11 +373,12 @@ wgpu::TextureFormat MapBitmapFormat(const RndBitmap& bmp, bool hasBCSupport) {
         case kDXT1: return wgpu::TextureFormat::BC1RGBAUnorm;
         case kDXT3: return wgpu::TextureFormat::BC2RGBAUnorm;
         case kDXT5: return wgpu::TextureFormat::BC3RGBAUnorm;
-        default:    return wgpu::TextureFormat::RGBA8Unorm; // fallback
+        case kDXN:  return wgpu::TextureFormat::BC5RGUnorm;
+        default:    break; // fall through to RGBA8
         }
     }
 
-    // Non-DXT or BC not supported: decompress to RGBA8
+    // Non-DXT, BC not supported, or unrecognized DXT variant: decompress to RGBA8
     return wgpu::TextureFormat::RGBA8Unorm;
 }
 
@@ -399,17 +426,6 @@ wgpu::Texture CreateFromBitmap(GpuDevice& gpu, const RndBitmap& bmp, int numMips
         int pixelBytes = curMip->PixelBytes();
         const uint8_t* srcPixels = curMip->Pixels();
 
-        if (dxt && hasBCSupport && mipLevel == 0) {
-            int blockW = (mw + 3) / 4;
-            int blockH = (mh + 3) / 4;
-            int blockBytes = (dxt == kDXT1) ? 8 : 16;
-            int required = blockW * blockH * blockBytes;
-            if (pixelBytes != required) {
-                fprintf(stderr, "TEX_DEBUG: mip%d %dx%d dxt=%d bpp=%d rowBytes=%d order=0x%x pixelBytes=%d required=%d ratio=%.1f\n",
-                    mipLevel, mw, mh, dxt, bpp, curMip->RowBytes(), order, pixelBytes, required, (float)required/pixelBytes);
-            }
-        }
-
         if (!srcPixels || pixelBytes == 0) break;
 
         // Make a working copy for in-place transforms
@@ -440,6 +456,7 @@ wgpu::Texture CreateFromBitmap(GpuDevice& gpu, const RndBitmap& bmp, int numMips
             case kDXT1: DecompressDXT1(workData, decompBuf.data(), mw, mh); break;
             case kDXT3: DecompressDXT3(workData, decompBuf.data(), mw, mh); break;
             case kDXT5: DecompressDXT5(workData, decompBuf.data(), mw, mh); break;
+            case kDXN:  DecompressDXN(workData, decompBuf.data(), mw, mh); break;
             }
             uploadData = decompBuf.data();
             uploadSize = decompBuf.size();
@@ -513,14 +530,14 @@ wgpu::Texture CreateFromBitmap(GpuDevice& gpu, const RndBitmap& bmp, int numMips
     return tex;
 }
 
-wgpu::Texture CreateCubeFromBitmaps(GpuDevice& gpu, const RndBitmap* faces, int numFaces) {
+wgpu::Texture CreateCubeFromBitmaps(GpuDevice& gpu, const RndBitmap* const* faces, int numFaces) {
     // All 6 faces must have the same dimensions
-    int w = faces[0].Width();
-    int h = faces[0].Height();
+    int w = faces[0]->Width();
+    int h = faces[0]->Height();
     if (w == 0 || h == 0) return nullptr;
 
     bool hasBCSupport = gpu.HasBCCompression();
-    wgpu::TextureFormat fmt = MapBitmapFormat(faces[0], hasBCSupport);
+    wgpu::TextureFormat fmt = MapBitmapFormat(*faces[0], hasBCSupport);
 
     wgpu::TextureDescriptor texDesc{};
     texDesc.size = {(uint32_t)w, (uint32_t)h, 6};
@@ -533,7 +550,7 @@ wgpu::Texture CreateCubeFromBitmaps(GpuDevice& gpu, const RndBitmap* faces, int 
     if (!tex) return nullptr;
 
     for (int face = 0; face < numFaces && face < 6; face++) {
-        const RndBitmap& bmp = faces[face];
+        const RndBitmap& bmp = *faces[face];
         int fw = bmp.Width();
         int fh = bmp.Height();
         if (fw == 0 || fh == 0 || !bmp.Pixels()) continue;
@@ -571,6 +588,7 @@ wgpu::Texture CreateCubeFromBitmaps(GpuDevice& gpu, const RndBitmap* faces, int 
             case kDXT1: DecompressDXT1(workData, decompBuf.data(), fw, fh); break;
             case kDXT3: DecompressDXT3(workData, decompBuf.data(), fw, fh); break;
             case kDXT5: DecompressDXT5(workData, decompBuf.data(), fw, fh); break;
+            case kDXN:  DecompressDXN(workData, decompBuf.data(), fw, fh); break;
             }
             uploadData = decompBuf.data();
             uploadSize = decompBuf.size();

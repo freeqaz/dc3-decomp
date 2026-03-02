@@ -25,6 +25,13 @@ void GestureMgr_NativeInit() {
     } else {
         printf("Native skeleton tracking failed to start (gameplay will have no body input)\n");
     }
+
+    // Force controller mode so gesture-gated screens (tutorial, skeleton chooser)
+    // don't block waiting for Kinect hand-raise gestures.
+    if (TheGestureMgr) {
+        TheGestureMgr->SetInControllerMode(true);
+        printf("Native: forced controller mode (bypasses Kinect gesture gates)\n");
+    }
 }
 
 void GestureMgr_NativeTerminate() {

@@ -741,7 +741,7 @@ add_quat:
                 float sz = (float)(long long)sdata[2] * scale;
                 float sy = (float)(long long)sdata[1] * scale;
                 float sw = (float)(long long)sdata[3] * (f * 3.051851e-05f);
-                if (dx * sx + sw * dw + sy * dz + sz * dy < 0.0f) {
+                if (dx * sx + dy * sy + dz * sz + dw * sw < 0.0f) {
                     dquat->z = dz - sz;
                     dquat->x = dx - sx;
                     dquat->y = dy - sy;

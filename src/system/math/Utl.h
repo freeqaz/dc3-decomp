@@ -177,14 +177,7 @@ inline bool NearlyOne(float f) { return fabs(f - 1.0f) < 0.0001f; }
 inline bool NearlyZero(float f) { return fabs(f) < 0.0001f; }
 inline bool NearlyEqual(float f1, float f2) { return fabs(f1 - f2) < 0.0001f; }
 
-inline float Mod(float f1, float f2) {
-    if (f2 == 0.0f)
-        return 0.0f;
-    float tmp = fmod(f1, f2);
-    if (tmp < 0.0f)
-        tmp += f2;
-    return tmp;
-}
+float Mod(float, float);
 
 inline float ModRange(float f1, float f2, float f3) { return Mod(f3 - f1, f2 - f1) + f1; }
 

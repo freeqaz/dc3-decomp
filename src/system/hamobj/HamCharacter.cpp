@@ -658,6 +658,10 @@ DataNode HamCharacter::OnSoundPlay(const DataArray *a) {
     return 0;
 }
 
+#ifndef HX_NATIVE
+QuatXfm::QuatXfm(const Transform &t) : v(t.v) { q.Set(t.m); }
+#endif
+
 #ifdef HX_NATIVE
 // TODO: real implementation clears a list
 void HamCharacter::Poll() {}

@@ -32,6 +32,7 @@ namespace Hmx {
             w = ww;
             h = hh;
         }
+        bool operator==(const Rect &) const;
         float x, y, w, h;
     };
 

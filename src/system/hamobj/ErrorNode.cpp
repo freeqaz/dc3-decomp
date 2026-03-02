@@ -386,6 +386,18 @@ void PositionNode::CalcError(
     }
 }
 
+float ScaleFullErrorDist(const ScaleOp &op) {
+    if (op.mPerfectDist == -1.0f)
+        return 1.0f;
+    float invRate;
+    if (op.mType == kErrorScaleDist) {
+        invRate = 1.0f / op.mRate;
+    } else {
+        invRate = sqrtf(1.0f / op.mRate);
+    }
+    return invRate + op.mPerfectDist;
+}
+
 void ScaleOp::Set(const DataArray *cfg) {
     static Symbol type("type");
     static Symbol rate("rate");

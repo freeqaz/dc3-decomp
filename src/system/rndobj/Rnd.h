@@ -201,6 +201,8 @@ public:
     static int sPostProcPanelCount;
 
 protected:
+    friend class NgPostProc;
+
     virtual void PushClipPlanesInternal(ObjPtrVec<RndTransformable> &) {}
     virtual void PopClipPlanesInternal(ObjPtrVec<RndTransformable> &) {}
     virtual void DoWorldBegin();

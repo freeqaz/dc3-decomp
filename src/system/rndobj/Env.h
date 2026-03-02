@@ -70,6 +70,14 @@ public:
     float FogStart() const { return mAmbientFogOwner->mFogStart; }
     float FogEnd() const { return mAmbientFogOwner->mFogEnd; }
     const Hmx::Color& FogColor() const { return mAmbientFogOwner->mFogColor; }
+    void SetFogColor(const Hmx::Color &col) {
+        mAmbientFogOwner->mFogColor.Set(col.red, col.green, col.blue);
+    }
+    void SetFogRange(float start, float end) {
+        mAmbientFogOwner->mFogStart = start;
+        mAmbientFogOwner->mFogEnd = end;
+    }
+    void SetFogEnable(bool b) { mAmbientFogOwner->mFogEnable = b; }
     ObjPtrList<RndLight>& LightsReal() { return mLightsReal; }
     ObjPtrList<RndLight>& LightsApprox() { return mLightsApprox; }
 #endif
@@ -106,6 +114,10 @@ protected:
     RndColorXfm mColorXfm; // 0x1b0
     bool mUseColorAdjust; // 0x244
     bool mAnimateFromPreset; // 0x245
+    friend class LightPreset;
+public:
+    bool GetAnimateFromPreset() const { return mAnimateFromPreset; }
+protected:
     bool mAOEnabled; // 0x246
     float mAOStrength; // 0x248
     Timer mUpdateTimer; // 0x250

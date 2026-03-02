@@ -9,6 +9,15 @@
 #include "rndobj/Poll.h"
 #include "rndobj/Rnd.h"
 
+float Mod(float a, float b) {
+    if (b == 0.0f)
+        return 0.0f;
+    float result = fmod(a, b);
+    if (result < 0.0f)
+        result += b;
+    return result;
+}
+
 CharLipSyncDriver::CharLipSyncDriver()
     : mLipSync(this), mClips(this), mBlinkClip(this), mSongOwner(this), mSongOffset(0),
       mLoop(0), mMainPlayback(0), mIsOverrideActive(0), mMainBlendAlpha(1), mOverridePlayback(0), mBones(this), mTestClip(this),
@@ -257,6 +266,42 @@ void CharLipSyncDriver::Highlight() {
             }
         }
         gCharHighlightY = v2.y + y;
+    }
+}
+
+void CharLipSyncDriver::UpdatePlayback(CharLipSync::PlayBack *pb, float songTime, float weight) {
+    if (!pb)
+        return;
+    songTime += TheTaskMgr.Seconds(TaskMgr::kRealTime);
+    if (mLoop) {
+        songTime = Mod(songTime, pb->mLipSync->Duration() - 0.001f);
+    }
+    if (mAlternateDriver) {
+        songTime = mAlternateDriver->TopClipFrame();
+    }
+    pb->Poll(songTime);
+    for (unsigned int i = 0; i < pb->mWeights.size(); i++) {
+        CharLipSync::PlayBack::Weight &w = pb->mWeights[i];
+        float curWeight = w.mCurWeight;
+        if (curWeight != 0.0f) {
+            CharClip *clip = w.mClip;
+            if (clip != mBlinkClip) {
+                if (mSongOwner) {
+                    curWeight = 0.0f;
+                } else {
+                    curWeight = curWeight * weight;
+                }
+            }
+            if (clip && curWeight != 0.0f) {
+                if (curWeight < 0.0f) {
+                    MILO_FAIL("weight = %f", curWeight);
+                }
+                if (curWeight < 0.0f) {
+                    curWeight = 0.0f;
+                }
+                ScaleAddViseme(clip, curWeight);
+            }
+        }
     }
 }
 

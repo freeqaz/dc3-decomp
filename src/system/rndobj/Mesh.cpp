@@ -24,6 +24,82 @@
 PatchVerts gPatchVerts;
 int MESH_REV_SEP_COLOR = 0x25;
 
+Vector3 TransformNormal(const Vector3 &normal, const Hmx::Matrix3 &mat) {
+    Hmx::Matrix3 inv;
+    FastInvert(mat, inv);
+    float ny = normal.y;
+    float nz = normal.z;
+    float nx = normal.x;
+    Vector3 result;
+    result.y = ny * inv.y.y + nz * inv.z.y + nx * inv.x.y;
+    result.x = ny * inv.y.x + nz * inv.z.x + nx * inv.x.x;
+    result.z = ny * inv.y.z + nz * inv.z.z + nx * inv.x.z;
+    return result;
+}
+
+void PatchVerts::Clear() {
+    mPatchVerts.clear();
+    mCentroid.Set(0, 0, 0);
+}
+
+void PatchVerts::Add(int vertIdx, RndMesh::VertVector &verts, Vector3 &centroid) {
+    int idx = GreaterEq(vertIdx);
+    mPatchVerts.insert(mPatchVerts.begin() + idx, vertIdx);
+    mCentroid += verts[vertIdx].pos;
+    centroid = mCentroid;
+    float invCount = 1.0f / (float)(unsigned int)mPatchVerts.size();
+    centroid *= invCount;
+}
+
+int PatchVerts::GreaterEq(int iii) const {
+    if (!mPatchVerts.empty() && mPatchVerts.front() < iii) {
+        if (mPatchVerts.back() < iii) {
+            return mPatchVerts.size();
+        } else {
+            int u5 = 0;
+            int u2 = mPatchVerts.size() - 1;
+            while (u5 + 1 < u2) {
+                int u4 = (u5 + u2) >> 1;
+                int curVert = mPatchVerts[u4];
+                if (curVert < iii) {
+                    u5 = u4;
+                }
+                if (iii <= curVert) {
+                    u2 = u4;
+                }
+            }
+            return u2;
+        }
+    } else {
+        return 0;
+    }
+}
+
+bool PatchVerts::HasVert(int vert) const {
+    int idx = GreaterEq(vert);
+    if (idx < mPatchVerts.size()) {
+        return mPatchVerts[idx] == vert;
+    } else {
+        return false;
+    }
+}
+
+bool RndMesh::PatchOkay(int numVerts, int numFaces) {
+    return (double)numVerts * 4.31 + (double)numFaces * 0.25 < 329.0;
+}
+
+void SaveCompressedVertex(const CompressedVertex_Xbox &cv, BinStream &bs) {
+    bs << cv.mPosX;
+    bs << cv.mPosY;
+    bs << cv.mPosZ;
+    bs << cv.mColor;
+    bs << cv.mNormal;
+    bs << cv.mTangent;
+    bs << cv.mBinormal;
+    bs << cv.mBoneIndices;
+    bs << cv.mBoneWeights;
+}
+
 /** Calculate the centroid of a triangle face by averaging its three vertex positions. */
 void FaceCenter(RndMesh *mesh, RndMesh::Face *face, Vector3 &center) {
     center.x = 0.0f;
