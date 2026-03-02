@@ -1789,12 +1789,7 @@ extern "C" long _stub_fn_647() { return 0; }
 // RndMeshDeform::VertArray::AppendWeights(int, int*, float*)
 extern "C" __attribute__((weak, used)) long _stub_fn_648() __asm__("_ZN13RndMeshDeform9VertArray13AppendWeightsEiPiPf");
 extern "C" long _stub_fn_648() { return 0; }
-// RndScreenMask::DrawShowing()
-extern "C" __attribute__((weak, used)) long _stub_fn_649() __asm__("_ZN13RndScreenMask11DrawShowingEv");
-extern "C" long _stub_fn_649() { return 0; }
-// RndScreenMask::Load(BinStream&)
-extern "C" __attribute__((weak, used)) long _stub_fn_650() __asm__("_ZN13RndScreenMask4LoadER9BinStream");
-extern "C" long _stub_fn_650() { return 0; }
+
 // RndTexBlender::DrawShowing()
 extern "C" __attribute__((weak, used)) long _stub_fn_651() __asm__("_ZN13RndTexBlender11DrawShowingEv");
 extern "C" long _stub_fn_651() { return 0; }
@@ -3985,9 +3980,7 @@ extern "C" long _stub_fn_1500() { return 0; }
 // virtual thunk to PhysicsVolume::Load(BinStream&)
 extern "C" __attribute__((weak, used)) long _stub_fn_1501() __asm__("_ZTv0_n104_N13PhysicsVolume4LoadER9BinStream");
 extern "C" long _stub_fn_1501() { return 0; }
-// virtual thunk to RndScreenMask::Load(BinStream&)
-extern "C" __attribute__((weak, used)) long _stub_fn_1502() __asm__("_ZTv0_n104_N13RndScreenMask4LoadER9BinStream");
-extern "C" long _stub_fn_1502() { return 0; }
+
 // virtual thunk to WorldInstance::Load(BinStream&)
 extern "C" __attribute__((weak, used)) long _stub_fn_1503() __asm__("_ZTv0_n104_N13WorldInstance4LoadER9BinStream");
 extern "C" long _stub_fn_1503() { return 0; }

@@ -39,7 +39,14 @@ private:
     bool mInitialized; // 0x1c - checked in Init
     DataArray *mMagnuStrings; // 0x20
 public:
-    Locale() {}
+    Locale() {
+#ifdef HX_NATIVE
+        // mInitialized is UB in original binary (never written, only read in Init).
+        // On Xbox debug build, BSS memory was nonzero so it happened to be true.
+        // On native (zero-init globals), it's false, skipping all locale file loading.
+        mInitialized = true;
+#endif
+    }
     // : mSize(0), mSymTable(0), mStrTable(0), mStringData(0), mUploadedFlags(0),
     //   mFile(), mNumFilesLoaded(0), mMagnuStrings(0) {}
     ~Locale();

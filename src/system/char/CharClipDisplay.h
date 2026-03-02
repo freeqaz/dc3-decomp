@@ -4,11 +4,12 @@
 #include "obj/Dir.h"
 #include "obj/Object.h"
 
-class CharClipDisplay {
-public:
+struct CharClipDisplay {
     CharClipDisplay()
         : mClip(0), unk4(0), unk8(0), mStartBeat(0), mEndBeat(0), mTextWidth(0), mDrawPosY(0), unk1c(0),
-          unk20(0), mPadding(0) {}
+          unk20(0), mPadding(0) {
+        mClipNameBuffer[0] = '\0';
+    }
 
     static float LineSpacing();
     static void Init(ObjectDir *);

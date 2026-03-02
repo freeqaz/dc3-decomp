@@ -36,11 +36,11 @@ protected:
     DataNode mValue; // 0x48
     DataNode mStartValue; // 0x50
     float mDuration; // 0x58
-    float mElapsed; // 0x5C
-    float mEasePower; // 0x60
-    EaseFunc *mEaseFunc; // 0x64
-    ObjPtr<Hmx::Object> mListener; // 0x68
-    bool unk_0x7C; // 0x7C
+    float mEasePower; // 0x5C
+    bool mIsColorInterp; // 0x60
+    ObjPtr<Hmx::Object> mListener; // 0x64
+    float mElapsed; // 0x78
+    EaseFunc *mEaseFunc; // 0x7C
 };
 
 class FlowSetProperty : public FlowNode, public PropertyEventListener {

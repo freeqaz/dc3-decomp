@@ -1186,6 +1186,8 @@ void LightPreset::SyncNewSpotlights() {
     }
 }
 
+INIT_REVS(0x16, 0)
+
 BEGIN_LOADS(LightPreset)
     AutoLoading al;
     Clear();

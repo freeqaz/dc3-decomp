@@ -399,6 +399,9 @@ int main(int argc, char** argv) {
     bool hasEye = false, hasLookat = false;
     float startFrame = -1.0f;       // sentinel: use default
     float animSpeed = 1.0f;
+    const char* testBoneName = nullptr;  // --test-bone: manually rotate a bone
+    float testBoneAngle = 45.0f;         // degrees around X axis
+    const char* testBoneAxis = "x";      // x, y, or z
     float bpm = 120.0f;
     float videoDuration = 10.0f;
     int videoFps = 30;
@@ -463,6 +466,12 @@ int main(int argc, char** argv) {
             lookY = (float)atof(argv[++i]);
             lookZ = (float)atof(argv[++i]);
             hasLookat = true;
+        } else if (strcmp(argv[i], "--test-bone") == 0 && i + 2 < argc) {
+            testBoneName = argv[++i];
+            testBoneAngle = (float)atof(argv[++i]);
+            if (i + 1 < argc && (strcmp(argv[i+1], "x") == 0 || strcmp(argv[i+1], "y") == 0 || strcmp(argv[i+1], "z") == 0)) {
+                testBoneAxis = argv[++i];
+            }
         } else if (strcmp(argv[i], "--frame") == 0 && i + 1 < argc) {
             startFrame = (float)atof(argv[++i]);
         } else if (strcmp(argv[i], "--speed") == 0 && i + 1 < argc) {
@@ -1222,6 +1231,32 @@ int main(int argc, char** argv) {
 
             for (auto* anim : gAnim.animatables) {
                 anim->SetFrame(startFrame, 1.0f);
+            }
+        }
+
+        // Test bone: manually rotate a specific bone from T-pose
+        if (testBoneName && baseScene) {
+            RndTransformable* bone = baseScene->Find<RndTransformable>(testBoneName, true);
+            if (bone) {
+                float rad = testBoneAngle * (3.14159265f / 180.0f);
+                float c = cosf(rad), s = sinf(rad);
+                Transform& tf = bone->DirtyLocalXfm();
+                Hmx::Matrix3 rot;
+                rot.Zero();
+                if (strcmp(testBoneAxis, "x") == 0) {
+                    rot.x.x = 1; rot.y.y = c; rot.y.z = s; rot.z.y = -s; rot.z.z = c;
+                } else if (strcmp(testBoneAxis, "y") == 0) {
+                    rot.x.x = c; rot.x.z = -s; rot.y.y = 1; rot.z.x = s; rot.z.z = c;
+                } else {
+                    rot.x.x = c; rot.x.y = s; rot.y.x = -s; rot.y.y = c; rot.z.z = 1;
+                }
+                // Apply rotation: new_m = rot * old_m
+                Hmx::Matrix3 oldm = tf.m;
+                Multiply(rot, oldm, tf.m);
+                printf("Milo Viewer: test-bone '%s' rotated %.1f deg around %s\n",
+                       testBoneName, testBoneAngle, testBoneAxis);
+            } else {
+                printf("Milo Viewer: WARNING: bone '%s' not found\n", testBoneName);
             }
         }
 

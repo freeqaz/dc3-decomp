@@ -335,51 +335,54 @@ DataNode RndLine::OnSetMat(const DataArray *array) {
     return 0;
 }
 
-#ifdef HX_NATIVE
-
 void RndLine::MapVerts(int idx, VertsMap &vmap) {
-    if (!mHasCaps || mLinePairs) {
-        // No caps or line pairs mode: simple 2 verts per point
-        vmap.t = 0;
-        if (mLinePairs && mHasCaps) {
-            // Pairs with caps: 4 verts per pair (cap+main for each)
-            int pairIdx = idx / 2;
-            int withinPair = idx % 2;
-            vmap.v = &mMesh->Verts()[(pairIdx * 4 + withinPair * 2)];
+    if (mHasCaps) {
+        if (mLinePairs) {
+            vmap.t = (idx & 1) + 1;
+            vmap.v = &mMesh->Verts()[idx * 4];
         } else {
-            vmap.v = &mMesh->Verts()[idx * 2];
+            if (idx == 0) {
+                vmap.t = 1;
+                vmap.v = &mMesh->Verts()[0];
+            } else {
+                int lastIdx = (int)mPoints.size() - 1;
+                if (idx == lastIdx) {
+                    vmap.t = 2;
+                    vmap.v = &mMesh->Verts()[(int)mMesh->Verts().size() - 4];
+                } else {
+                    vmap.t = 0;
+                    vmap.v = &mMesh->Verts()[(idx + 1) * 2];
+                }
+            }
         }
     } else {
-        // Has caps, not pairs
-        int numPts = (int)mPoints.size();
-        if (idx == 0) {
-            // First point: cap at start (4 verts: cap pair + main pair)
-            vmap.t = 1;
-            vmap.v = &mMesh->Verts()[0];
-        } else if (idx == numPts - 1) {
-            // Last point: cap at end (4 verts: main pair + cap pair)
-            vmap.t = 2;
-            // 4 verts for first point + 2 verts per middle point
-            int vertIdx = 4 + (idx - 1) * 2;
-            vmap.v = &mMesh->Verts()[vertIdx];
-        } else {
-            // Middle point: 2 verts
-            vmap.t = 0;
-            int vertIdx = 4 + (idx - 1) * 2;
-            vmap.v = &mMesh->Verts()[vertIdx];
-        }
+        vmap.t = 0;
+        vmap.v = &mMesh->Verts()[idx * 2];
     }
 }
 
-void RndLine::SetPointsColor(int start, int count, const Hmx::Color &color) {
-    int end = start + count;
-    if (end > (int)mPoints.size()) end = (int)mPoints.size();
-    for (int i = start; i < end; i++) {
+void RndLine::SetPointsColor(int start, int end, const Hmx::Color &color) {
+    MILO_ASSERT((start >= 0) && (start < mPoints.size()) && (end >= 0) && (end < mPoints.size()), 0x1F2);
+    if (end < start) {
+        int tmp = start;
+        start = end;
+        end = tmp;
+    }
+    for (int i = start; i <= end; i++) {
         mPoints[i].color = color;
-        UpdatePointColor(i, false);
+        VertsMap vmap;
+        MapVerts(i, vmap);
+        vmap.v++->color = color;
+        vmap.v++->color = color;
+        if (vmap.t != 0) {
+            vmap.v++->color = color;
+            vmap.v++->color = color;
+        }
     }
     mMesh->Sync(0x1F);
 }
+
+#ifdef HX_NATIVE
 
 void RndLine::UpdateLine(const Transform &camXfm, float nearPlane) {
     int numPts = (int)mPoints.size();

@@ -1,6 +1,8 @@
 #include "rndobj/ScreenMask.h"
 #include "math/Geo.h"
+#include "os/Debug.h"
 #include "rndobj/Draw.h"
+#include "rndobj/Rnd.h"
 #include "utl/BinStream.h"
 
 bool Hmx::Rect::operator==(const Hmx::Rect &other) const {
@@ -43,3 +45,24 @@ END_PROPSYNCS
 
 RndScreenMask::RndScreenMask()
     : mMat(this), mColor(1, 1, 1, 1), mRect(0, 0, 1, 1), mUseCamRect(false) {}
+
+INIT_REVS(2, 0)
+
+BEGIN_LOADS(RndScreenMask)
+    LOAD_REVS(bs)
+    ASSERT_REVS(2, 0)
+    LOAD_SUPERCLASS(Hmx::Object)
+    LOAD_SUPERCLASS(RndDrawable)
+    d >> mMat;
+    d >> mColor;
+    if (d.rev > 0) {
+        d >> mRect;
+    }
+    if (d.rev > 1) {
+        d >> mUseCamRect;
+    }
+END_LOADS
+
+void RndScreenMask::DrawShowing() {
+    TheRnd.DrawRectScreen(mRect, mColor, mMat, nullptr, nullptr);
+}

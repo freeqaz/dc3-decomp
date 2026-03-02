@@ -85,12 +85,14 @@ public:
     void OffsetSec(float);
     CharClip *FirstClip();
     LayerArray &Layers() { return mLayers; }
+    void SetClipWeightMap();
 
 protected:
     HamDriver();
 
     float Display(float);
     float DisplayRecurse(Layer *, int, float);
+    void SetClipMapRecurse(Layer *);
 
     /** "The CharBones object to add into." */
     ObjPtr<CharBonesObject> mBones; // 0x30

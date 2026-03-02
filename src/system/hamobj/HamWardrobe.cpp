@@ -3,6 +3,7 @@
 #include "char/CharInterest.h"
 #include "char/Character.h"
 #include "char/FileMerger.h"
+#include "world/Crowd.h"
 #include "hamobj/HamCharacter.h"
 #include "hamobj/HamGameData.h"
 #include "obj/Data.h"
@@ -392,24 +393,47 @@ DataNode HamWardrobe::OnSetVenue(DataArray *a) {
 }
 
 DataNode HamWardrobe::OnAddCrowd(DataArray *a) {
-    for (int i = 2; i < a->Size(); i++) {
-        Character *c = a->Obj<Character>(i);
+    WorldCrowd *crowd = a->Obj<WorldCrowd>(2);
+    auto _tmp0 = crowd->mCharacters.end();
+    for (std::list<WorldCrowd::CharData>::iterator it = crowd->mCharacters.begin();
+         it != _tmp0; ++it) {
+        Character *c = it->mDef.mChar;
         if (c) {
-            mCrowdMembers.push_back(c);
+            ObjPtrList<Character>::iterator mit = mCrowdMembers.begin();
+            for (; mit != mCrowdMembers.end(); ++mit) {
+                Character *existing = *mit;
+                if (existing && (ObjectDir *)existing == (ObjectDir *)c) {
+                    break;
+                }
+            }
+            if (mit == mCrowdMembers.end()) {
+                mCrowdMembers.push_back(c);
+            }
         }
     }
     return 0;
 }
 
 DataNode HamWardrobe::OnLoadCharacters(DataArray *a) {
-    Symbol outfit1 = a->ForceSym(2);
-    Symbol outfit2 = a->ForceSym(3);
-    Symbol crew1 = a->ForceSym(4);
-    Symbol crew2 = a->ForceSym(5);
-    int backupType = a->Int(6);
-    Symbol speed = a->ForceSym(7);
-    Symbol venue = a->ForceSym(8);
-    bool asyncLoad = a->Int(9);
+    short size = a->Size();
+    Symbol crew1 = size > 4 ? a->Sym(4) : Symbol(gNullStr);
+    Symbol crew2 = size > 5 ? a->Sym(5) : Symbol(gNullStr);
+    int backupType;
+    Symbol speed;
+    if (size > 6) {
+        backupType = a->Int(6);
+        speed = a->Sym(7);
+    } else {
+        backupType = 0;
+        speed = gNullStr;
+    }
+    bool asyncLoad = false;
+    if (size > 7) {
+        asyncLoad = a->Int(8);
+    }
+    Symbol venue = TheGameData->Venue();
+    Symbol outfit2 = a->Sym(3);
+    Symbol outfit1 = a->Sym(2);
     LoadCharacters(outfit1, outfit2, crew1, crew2, (HamBackupDancers)backupType, speed, venue, asyncLoad);
     return 0;
 }

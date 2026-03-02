@@ -606,44 +606,72 @@ DataNode HamCharacter::OnCamTeleport(DataArray *a) {
 
 ObjectDir *HamCharacter::GetNeutralSkeleton() { return mNeutralSkelDir; }
 
-void HamCharacter::SetFaceOverrideClip(Symbol clipName, bool blend) {
+void HamCharacter::SetFaceOverrideClip(Symbol clipName, bool notify) {
     CharLipSyncDriver *driver = Find<CharLipSyncDriver>("face.lipdrv", false);
-    if (!driver) {
-        MILO_LOG(
-            "BandCharacter::SetFaceOverrideClip couldnt find  lip sync driver for %s\n",
-            Name()
-        );
+    bool found = false;
+    if (driver) {
+        if (clipName.Null()) {
+            found = true;
+            driver->mOverrideClip = nullptr;
+        } else {
+            ObjectDir *clipDir = driver->mOverrideOptions;
+            if (!clipDir) {
+                clipDir = driver->mClips;
+            }
+            for (ObjDirItr<CharClip> it(clipDir, false); it != nullptr; ++it) {
+                if (clipName == it->Name()) {
+                    found = true;
+                    driver->mOverrideClip = it;
+                }
+            }
+            if (!found && notify) {
+                MILO_NOTIFY(MakeString(
+                    "HamCharacter::SetFaceOverrideClip couldn't find clip named %s for %s",
+                    clipName.Str(),
+                    Name()
+                ));
+                return;
+            }
+        }
+    }
+    if (found)
         return;
-    }
-    ObjectDir *overrideDir = Find<ObjectDir>("viseme", false);
-    if (!overrideDir) return;
-    CharClip *clip = overrideDir->Find<CharClip>(clipName.Str(), false);
-    if (!clip) {
-        MILO_LOG(
-            "BandCharacter::SetFaceOverrideClip couldn't find clip named %s for %s\n",
-            clipName.Str(),
-            Name()
-        );
+    if (!notify)
         return;
-    }
-    if (blend) {
-        driver->BlendInOverrideClip(clip, 0.2f, 1.0f);
-    } else {
-        driver->SetOverrideWeight(1.0f);
-    }
+    MILO_NOTIFY(MakeString("HamCharacter::SetFaceOverrideClip couldnt find lip sync driver for %s", Name()));
 }
 
 void HamCharacter::BlendInFaceOverrideClip(Symbol clipName, float blendIn, float blendOut) {
     CharLipSyncDriver *driver = Find<CharLipSyncDriver>("face.lipdrv", false);
+    bool found = false;
     if (driver) {
-        ObjectDir *overrideDir = Find<ObjectDir>("viseme", false);
-        if (overrideDir) {
-            CharClip *clip = overrideDir->Find<CharClip>(clipName.Str(), false);
-            if (clip) {
-                driver->BlendInOverrideClip(clip, blendIn, blendOut);
+        if (clipName.Null()) {
+            found = true;
+            driver->mOverrideClip = nullptr;
+        } else {
+            ObjectDir *clipDir = driver->mOverrideOptions;
+            if (!clipDir) {
+                clipDir = driver->mClips;
+            }
+            for (ObjDirItr<CharClip> it(clipDir, false); it != nullptr; ++it) {
+                if (Symbol(clipName) == Symbol(it->Name())) {
+                    found = true;
+                    driver->BlendInOverrideClip(it, blendIn, blendOut);
+                }
+            }
+            if (!found) {
+                TheDebug.Notify(MakeString(
+                    "HamCharacter::SetFaceOverrideClip couldn't find clip named %s for %s",
+                    clipName.Str(),
+                    Name()
+                ));
+                return;
             }
         }
     }
+    if (found)
+        return;
+    TheDebug.Notify(MakeString("HamCharacter::SetFaceOverrideClip couldnt find lip sync driver for %s", (char*)Name()));
 }
 
 DataNode HamCharacter::OnSoundPlay(const DataArray *a) {

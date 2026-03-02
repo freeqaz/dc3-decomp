@@ -956,6 +956,61 @@ void RndText::UpdateText() {
         }
     }
 
+#ifdef HX_NATIVE
+    // Apply alignment offset to vertex positions.
+    // The character layout above always starts at (0,0) and extends right/down.
+    // Alignment adjusts the anchor point:
+    //   horizontal: left=no shift, center=-width/2, right=-width
+    //   vertical: top=no shift, middle=+height/2, bottom=+height
+    {
+        int hAlign = mAlignment & 0x0F; // 1=left, 2=center, 4=right
+        int vAlign = mAlignment & 0xF0; // 0x10=top, 0x20=middle, 0x40=bottom
+
+        // Compute text extents from mesh vertex bounds
+        float minX = 1e30f, maxX = -1e30f;
+        float minZ = 1e30f, maxZ = -1e30f;
+        FOREACH (it, mFontMaps) {
+            FontMapBase *fontMap = *it;
+            for (int i = 0; i < fontMap->NumMeshes(); i++) {
+                RndMesh *mesh = fontMap->Mesh(i);
+                if (!mesh) continue;
+                for (int v = 0; v < mesh->NumVerts(); v++) {
+                    const Vector3 &pos = mesh->Verts(v).pos;
+                    if (pos.x == 0.0f && pos.z == 0.0f) continue; // skip zeroed verts
+                    if (pos.x < minX) minX = pos.x;
+                    if (pos.x > maxX) maxX = pos.x;
+                    if (pos.z < minZ) minZ = pos.z;
+                    if (pos.z > maxZ) maxZ = pos.z;
+                }
+            }
+        }
+        float totalWidth = (maxX > minX) ? (maxX - minX) : 0.0f;
+        float totalHeight = (maxZ > minZ) ? (maxZ - minZ) : 0.0f;
+
+        float xOffset = 0.0f;
+        if (hAlign == 2) xOffset = -totalWidth * 0.5f; // center
+        else if (hAlign == 4) xOffset = -totalWidth;     // right
+
+        float zOffset = 0.0f;
+        if (vAlign == 0x20) zOffset = totalHeight * 0.5f; // middle
+        else if (vAlign == 0x40) zOffset = totalHeight;    // bottom
+
+        if (xOffset != 0.0f || zOffset != 0.0f) {
+            FOREACH (it, mFontMaps) {
+                FontMapBase *fontMap = *it;
+                for (int i = 0; i < fontMap->NumMeshes(); i++) {
+                    RndMesh *mesh = fontMap->Mesh(i);
+                    if (!mesh) continue;
+                    for (int v = 0; v < mesh->NumVerts(); v++) {
+                        mesh->Verts(v).pos.x += xOffset;
+                        mesh->Verts(v).pos.z += zOffset;
+                    }
+                }
+            }
+        }
+    }
+#endif
+
     // Cleanup and sync the meshes (zeros remaining verts, calls Sync)
     FOREACH (it, mFontMaps) {
         (*it)->CleanupSyncMeshes();

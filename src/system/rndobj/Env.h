@@ -66,18 +66,18 @@ public:
     bool UseColorAdjust() const { return mUseColorAdjust; }
     float FadeStart() const { return mFadeStart; }
     float FadeEnd() const { return mFadeEnd; }
-#ifdef HX_NATIVE
-    float FogStart() const { return mAmbientFogOwner->mFogStart; }
-    float FogEnd() const { return mAmbientFogOwner->mFogEnd; }
     const Hmx::Color& FogColor() const { return mAmbientFogOwner->mFogColor; }
     void SetFogColor(const Hmx::Color &col) {
         mAmbientFogOwner->mFogColor.Set(col.red, col.green, col.blue);
     }
+    void SetFogEnable(bool b) { mAmbientFogOwner->mFogEnable = b; }
+#ifdef HX_NATIVE
+    float FogStart() const { return mAmbientFogOwner->mFogStart; }
+    float FogEnd() const { return mAmbientFogOwner->mFogEnd; }
     void SetFogRange(float start, float end) {
         mAmbientFogOwner->mFogStart = start;
         mAmbientFogOwner->mFogEnd = end;
     }
-    void SetFogEnable(bool b) { mAmbientFogOwner->mFogEnable = b; }
     ObjPtrList<RndLight>& LightsReal() { return mLightsReal; }
     ObjPtrList<RndLight>& LightsApprox() { return mLightsApprox; }
 #endif

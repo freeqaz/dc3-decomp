@@ -1,6 +1,7 @@
 #include "hamobj/HamDriver.h"
 
 #include "char/CharClipDisplay.h"
+#include "math/Easing.h"
 #include "utl/TimeConversion.h"
 #include "char/Char.h"
 #include "char/CharBones.h"
@@ -70,34 +71,40 @@ void HamDriver::Poll() {
 }
 
 float HamDriver::DisplayRecurse(Layer *layer, int indent, float y) {
-    LayerClip *clip = dynamic_cast<LayerClip *>(layer);
-    if (clip) {
-        Hmx::Color color(1.0f, 1.0f, 1.0f, 1.0f);
-        Vector2 screenPos(
-            CharClipDisplay::GetSEm() + CharClipDisplay::LineSpacing() * (float)indent, y
-        );
-        const char *clipName = clip->mClip ? clip->mClip->Name() : "null";
-        const char *stringDisplay =
-            MakeString("  %s w:%.2f b:%.2f cb:%.2f", clipName, clip->mEaseWeight, layer->mBeat, clip->mClipBeat);
-        TheRnd.DrawString(stringDisplay, screenPos, color, true);
-        return y + CharClipDisplay::LineSpacing();
-    } else {
-        LayerArray *arr = dynamic_cast<LayerArray *>(layer);
-        if (arr) {
-            Hmx::Color color(1.0f, 1.0f, 1.0f, 1.0f);
-            Vector2 screenPos(
-                CharClipDisplay::GetSEm() + CharClipDisplay::LineSpacing() * (float)indent, y
-            );
-            const char *stringDisplay =
-                MakeString("%s w:%.2f b:%.2f", arr->mName, arr->mWeight, layer->mBeat);
-            TheRnd.DrawString(stringDisplay, screenPos, color, true);
-            float nextY = y + CharClipDisplay::LineSpacing();
-            if (!arr->mLayers.empty() && arr->mWeight != 0.0f) {
-                FOREACH (it, arr->mLayers) {
-                    nextY = DisplayRecurse(*it, indent + 1, nextY);
-                }
+    LayerArray *arr = dynamic_cast<LayerArray *>(layer);
+    if (arr) {
+        if (arr->mWeight != 0.0f) {
+            float padding = (float)(int)indent * CharClipDisplay::LineSpacing();
+            CharClipDisplay display;
+            display.unk1c = mDisplayBeat;
+            display.mDrawPosY = y;
+            display.mPadding = padding;
+            display.SetText(MakeString("(%s)", arr->mName));
+            display.SetStartEnd(mDisplayBeat - 4.0f, mDisplayBeat + 4.0f, false);
+            display.unk8 = arr->mWeight;
+            display.DrawTrack();
+            display.DrawBlend(arr->mBeat, 1.0f);
+            display.DrawCursor();
+            y += CharClipDisplay::LineSpacing();
+            for (std::list<Layer *>::iterator it = arr->mLayers.begin(); it != arr->mLayers.end(); ++it) {
+                y = DisplayRecurse(*it, indent + 1, y);
             }
-            return nextY;
+        }
+    } else {
+        LayerClip *clip = dynamic_cast<LayerClip *>(layer);
+        if (clip && clip->mEaseWeight != 0.0f) {
+            float padding = (float)(int)indent * CharClipDisplay::LineSpacing();
+            CharClipDisplay display;
+            display.mPadding = padding;
+            display.unk4 = (mDisplayBeat - clip->mClipBeat) + clip->mClip->StartBeat();
+            display.unk8 = clip->mEaseWeight;
+            display.SetClip(clip->mClip, true);
+            display.mDrawPosY = y;
+            display.DrawTrack();
+            float blendBeat = (clip->mClip->StartBeat() + clip->mBeat) - clip->mClipBeat;
+            display.DrawBlend(blendBeat, 1.0f);
+            display.DrawCursor();
+            y += CharClipDisplay::LineSpacing();
         }
     }
     return y;
@@ -149,6 +156,44 @@ float HamDriver::Display(float f1) {
 
     // Return normalized line position
     return lineSpacing / TheRnd.Height();
+}
+
+void HamDriver::SetClipMapRecurse(Layer *layer) {
+    LayerArray *arr = dynamic_cast<LayerArray *>(layer);
+    if (arr) {
+        if (arr->mWeight != 0.0f) {
+            FOREACH (it, arr->mLayers) {
+                SetClipMapRecurse(*it);
+            }
+        }
+    } else {
+        LayerClip *clip = dynamic_cast<LayerClip *>(layer);
+        if (clip && clip->mEaseWeight != 0.0f) {
+            CharClip *c = clip->mClip;
+            std::map<CharClip *, float>::iterator it = mClipTimingMap.find(c);
+            if (it != mClipTimingMap.end()) {
+                it->second += clip->mEaseWeight;
+            } else {
+                mClipTimingMap.insert(std::pair<CharClip *const, float>(c, clip->mEaseWeight));
+            }
+        }
+    }
+}
+
+void HamDriver::SetClipWeightMap() {
+    mClipTimingMap.clear();
+    SetClipMapRecurse(&mLayers);
+    float total = 0.0f;
+    for (std::map<CharClip *, float>::iterator it = mClipTimingMap.begin();
+         it != mClipTimingMap.end(); ++it) {
+        total += it->second;
+    }
+    if (total > 0.0f) {
+        for (std::map<CharClip *, float>::iterator it = mClipTimingMap.begin();
+             it != mClipTimingMap.end(); ++it) {
+            it->second = it->second * (1.0f / total);
+        }
+    }
 }
 
 void HamDriver::Clear() { mLayers.Clear(); }
@@ -210,9 +255,21 @@ bool HamDriver::LayerClip::Replace(ObjRef *ref, Hmx::Object *obj) {
 
 #pragma region HamDriver::LayerArray
 
-void HamDriver::LayerArray::Eval(float beat) {
-    FOREACH (it, mLayers) {
-        (*it)->Eval(beat);
+void HamDriver::LayerArray::Eval(float weight) {
+    mWeight = 0;
+    if (weight > 0.0f) {
+        float elapsed = TheTaskMgr.Beat() - mBeat;
+        if (elapsed > 0.0f) {
+            float t = (elapsed - 1.0f < 0.0f) ? elapsed : 1.0f;
+            float blend = EaseSigmoid(t, 0, 0) * weight;
+            for (std::list<Layer *>::iterator it = mLayers.begin(); it != mLayers.end(); ++it) {
+                (*it)->Eval(blend);
+                float layerWeight = *(float *)((char *)(*it) + 8);
+                float consumed = (layerWeight - blend < 0.0f) ? layerWeight : blend;
+                mWeight += consumed;
+                blend -= consumed;
+            }
+        }
     }
 }
 

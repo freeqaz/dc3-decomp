@@ -10,7 +10,9 @@
 #include "obj/Msg.h"
 #include "obj/Object.h"
 #include "obj/Task.h"
+#include "rndobj/Rnd.h"
 #include "utl/FilePath.h"
+#include "utl/MakeString.h"
 #include "utl/Symbol.h"
 #include "obj/Utl.h"
 
@@ -426,6 +428,7 @@ CharClip *CharDriver::FindClip(const DataNode &node, bool warn) {
 
 float CharDriver::Display(float f) {
     CharClipDisplay::Init(Dir());
+    float lineSpacing = CharClipDisplay::LineSpacing();
     std::vector<CharClipDisplay> displays;
     for (CharClipDriver *it = mFirst; it != nullptr; it = it->Next()) {
         displays.push_back(CharClipDisplay());
@@ -433,6 +436,115 @@ float CharDriver::Display(float f) {
         displays.back().SetClip(it->mClip, false);
         displays.back().unk20 = it->mBlendFrac;
     }
+    unsigned int displayCount = displays.size();
+    float y = f * (float)TheRnd.Height() + (float)displayCount * lineSpacing;
+
+    if (displayCount > 0) {
+        int i = 0;
+        do {
+            displays[i].mDrawPosY = y - (float)i * lineSpacing;
+            i++;
+        } while ((unsigned int)i < displayCount);
+    }
+
+    Hmx::Object *source = CharClipDisplay::FindSource(this);
+    int headerLines = 1 + (source != nullptr);
+    float origF = f;
+        Hmx::Rect rect(0, origF, 1.0f, f = (y + (float)headerLines * lineSpacing) / (float)TheRnd.Height() - origF);
+    Hmx::Color bgColor(0, 0, 0, 0.5f);
+    TheRnd.DrawRectScreen(rect, bgColor, nullptr, nullptr, nullptr);
+
+    float oldBeat = mOldBeat;
+    const char *pathName = PathName(this);
+    float textOfs = lineSpacing * 0.1f;
+    const char *dirName = Dir()->Name();
+    Hmx::Color textColor(1, 1, 1, 1);
+    TheRnd.DrawString(
+        MakeString("%s %s, beat: %.2f", dirName, pathName, oldBeat),
+        Vector2(CharClipDisplay::GetSEm() + textOfs, y + lineSpacing),
+        textColor,
+        true
+    );
+
+    if (displayCount > 0) {
+        unsigned int i = 0;
+        do {
+            displays[i].DrawTrack();
+            i++;
+        } while (i < displayCount);
+    }
+
+    CharClipDisplay *nextDisplay = &displays[0] + 1;
+    for (CharClipDriver *it = mFirst; it != nullptr; it = it->Next()) {
+        CharClipDriver *next = it->Next();
+        if (!next) break;
+
+        CharClipDisplay *prevDisplay = nextDisplay - 1;
+        CharClip::NodeVector *nodes =
+            next->GetClip()->GetTransitions().FindNodes(it->GetClip());
+        if (nodes != nullptr && nodes->size > 0) {
+            int curOfs = 0;
+            int nextOfs = 0;
+            int i = 0;
+            do {
+                float xCur = nextDisplay->GetX(nodes->nodes[i].curBeat);
+                for (int j = 0; j < i; j++) {
+                    float xj = nextDisplay->GetX(nodes->nodes[j].curBeat);
+                    if (std::fabs(xCur - xj) < 8.0f) {
+                        curOfs += 11;
+                    }
+                }
+                Hmx::Color redColor(1, 0, 0);
+                TheRnd.DrawString(
+                    MakeString("%d", i),
+                    Vector2(xCur, nextDisplay->mDrawPosY + (float)curOfs + 1.0f),
+                    redColor,
+                    true
+                );
+
+                float xNext = prevDisplay->GetX(nodes->nodes[i].nextBeat);
+                for (int j = 0; j < i; j++) {
+                    float xj = prevDisplay->GetX(nodes->nodes[j].nextBeat);
+                    if (std::fabs(xNext - xj) < 8.0f) {
+                        nextOfs += 11;
+                    }
+                }
+                Hmx::Color greenColor(0, 1, 0);
+                TheRnd.DrawString(
+                    MakeString("%d", i),
+                    Vector2(xNext, prevDisplay->mDrawPosY - 14.0f - (float)nextOfs),
+                    greenColor,
+                    true
+                );
+
+                i++;
+            } while (i < nodes->size);
+        }
+
+        nextDisplay->DrawBlend(next->mBeat + it->mRampIn, it->mBlendWidth);
+        float rampIn = it->mRampIn;
+        float negRampIn = -rampIn;
+        rampIn = negRampIn >= 0.0f ? rampIn : 0.0f;
+        prevDisplay->DrawBlend(rampIn + it->mBeat, it->mBlendWidth);
+
+        nextDisplay = nextDisplay + 1;
+    }
+
+    if (displayCount > 0) {
+        unsigned int i = 0;
+        do {
+            displays[i].DrawCursor();
+            i++;
+        } while (i < displayCount);
+    }
+
+    if (source) {
+        static Message msg("debug_draw", DataNode(2.0f), DataNode(2.0f));
+        msg[0] = displays[0].mDrawPosY + lineSpacing;
+        msg[1] = TheTaskMgr.Beat();
+        source->Handle(msg, false);
+    }
+
     return f;
 }
 

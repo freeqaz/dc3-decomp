@@ -1,4 +1,5 @@
 #include "FlowSetProperty.h"
+#include "obj/Msg.h"
 #include "flow/DrivenPropertyEntry.h"
 #include "flow/FlowManager.h"
 #include "flow/FlowNode.h"
@@ -20,8 +21,8 @@ FlowSetProperty::FlowSetProperty()
 
 PropertyTask::PropertyTask(Hmx::Object *obj, DataNode &prop, DataNode &val, TaskUnits units, float dur, EaseType t, float power, bool flag, Hmx::Object *listener)
     : mTarget(this, nullptr), mProperty(prop), mValue(val), mStartValue(0),
-      mDuration(dur), mElapsed(0.0f), mEasePower(power), mEaseFunc(gEaseFuncs[t]),
-      mListener(this, nullptr), unk_0x7C(flag) {
+      mDuration(dur), mEasePower(power), mIsColorInterp(flag),
+      mListener(this, nullptr), mElapsed(0.0f), mEaseFunc(gEaseFuncs[t]) {
     MILO_ASSERT(obj, 0x4D);
     MILO_ASSERT(t >= kEaseLinear && t <= kEaseQuarterHalfStairstep, 0x16B);
 
@@ -64,6 +65,61 @@ PropertyTask::PropertyTask(Hmx::Object *obj, DataNode &prop, DataNode &val, Task
 }
 
 PropertyTask::~PropertyTask() {}
+
+void PropertyTask::Poll(float ms) {
+    float ratio = ms / mDuration;
+    if (1.0f < ratio) {
+        ObjPtr<PropertyTask> guard(this, nullptr);
+        guard.SetObjConcrete(this);
+        SetProperty(mValue);
+        if (guard) {
+            if (mListener) {
+                static Message msg("on_anim_event", DataNode(Symbol("ended")));
+                Hmx::Object *listener = mListener;
+                mListener = nullptr;
+                listener->Handle(msg, false);
+            }
+            delete this;
+        }
+    } else {
+        float easedRatio = mEaseFunc(ratio, mEasePower, 0.0f);
+        if (mIsColorInterp) {
+            int startColor = mStartValue.Int(nullptr);
+
+            float inv255 = 1.0f / 255.0f;
+            float startG = (float)(unsigned char)(startColor >> 8) * inv255;
+            float startB = (float)(unsigned char)(startColor) * inv255;
+            float startR = (float)(unsigned char)(startColor >> 16) * inv255;
+
+            int endColor = mValue.Int(nullptr);
+
+            float endG = (float)(unsigned char)(endColor >> 8) * inv255;
+            float endR = (float)(unsigned char)(endColor >> 16) * inv255;
+            float endB = (float)(unsigned char)(endColor) * inv255;
+
+            int interpG = (int)(((endG - startG) * easedRatio + startG) * 255.0f);
+            int interpR = (int)(((endR - startR) * easedRatio + startR) * 255.0f);
+            int interpB = (int)(((endB - startB) * easedRatio + startB) * 255.0f);
+
+            int result = (interpB & 0xFF) | ((interpG & 0xFF) << 8) | ((interpR & 0xFF) << 16);
+            DataNode colorNode(result);
+            mTarget->SetProperty(mProperty.Array(), colorNode);
+        } else {
+            DataNode temp(mValue);
+            float endVal = mValue.LiteralFloat(nullptr);
+            float startVal = mStartValue.LiteralFloat(nullptr);
+            float interpolated = (endVal - startVal) * easedRatio + startVal;
+            if (temp.Type() != kDataInt && temp.Type() != kDataString) {
+                DataNode floatNode(interpolated);
+                temp = floatNode;
+            } else {
+                DataNode intNode((int)interpolated);
+                temp = intNode;
+            }
+            SetProperty(temp);
+        }
+    }
+}
 
 bool PropertyTask::Replace(ObjRef *from, Hmx::Object *to) {
     if (from == static_cast<ObjRef *>(&mTarget)) {

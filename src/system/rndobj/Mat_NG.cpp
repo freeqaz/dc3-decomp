@@ -516,17 +516,14 @@ void NgMat::RefreshState() {
 
         {
             const float *cam = (const float *)&RndCam::Current()->WorldXfm();
-            mtxTmp.x.x = cam[0];
-            mtxTmp.x.y = cam[4];
-            mtxTmp.x.z = cam[8];
-            mtxTmp.y.x = cam[1];
-            mtxTmp.y.y = cam[5];
-            mtxTmp.y.z = cam[9];
-            mtxTmp.z.x = cam[2];
-            mtxTmp.z.y = cam[6];
-            mtxTmp.z.z = cam[10];
+            float c0 = cam[0], c4 = cam[4], c8 = cam[8];
+            float c1 = cam[1], c5 = cam[5], c9 = cam[9];
+            float c2 = cam[2], c6 = cam[6], c10 = cam[10];
+            mtxTmp.x.x = c0; mtxTmp.x.y = c4; mtxTmp.x.z = c8;
+            mtxTmp.y.x = c1; mtxTmp.y.y = c5; mtxTmp.y.z = c9;
+            mtxTmp.z.x = c2; mtxTmp.z.y = c6; mtxTmp.z.z = c10;
         }
-        Multiply(xfmTmp.m, mtxTmp, xfmTmp.m);
+        Multiply(mtxTmp, xfmTmp.m, xfmTmp.m);
 
         mtxTmp.x.x = 0.5f;
         mtxTmp.x.y = 0.0f;

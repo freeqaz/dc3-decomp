@@ -85,15 +85,32 @@ void HamScrollSpeedIndicator::Draw(const Transform &xfm) {
 }
 
 void HamScrollSpeedIndicator::Update(float scrollSpeed, float minSpeed, float maxSpeed) {
-    if (!mIndicatorAnim) return;
-    float t;
-    if (maxSpeed <= minSpeed) {
-        t = 0.0f;
+    RndAnimatable *anim = mIndicatorAnim;
+    float endFrame = anim->EndFrame();
+    float startFrame = anim->StartFrame();
+    float halfRange = (endFrame - startFrame) * 0.5f;
+    float frame;
+    if (scrollSpeed < 0.1f || scrollSpeed > 0.9f) {
+        float threshold = mSlowScrollThresholdFrame;
+        float range = halfRange - threshold;
+        if (scrollSpeed > 0.5f) {
+            frame = -((scrollSpeed - 0.9f) / (maxSpeed + 1.0f - 0.9f)) * range - threshold;
+        } else {
+            frame = -((scrollSpeed - 0.1f) / (minSpeed + 0.1f)) * range + threshold;
+        }
     } else {
-        t = Clamp(0.0f, (scrollSpeed - minSpeed) / (maxSpeed - minSpeed), 1.0f);
+        float t = (scrollSpeed - 0.1f) * 1.25f;
+        float scaled = t * mSlowScrollThresholdFrame;
+        frame = -(scaled * 2.0f - mSlowScrollThresholdFrame);
     }
-    float frame = mSlowScrollThresholdFrame + t * (mFastScrollThresholdFrame - mSlowScrollThresholdFrame);
-    mIndicatorAnim->SetFrame(frame, 1.0f);
+    if (mIsShowing) {
+        anim = mIndicatorAnim;
+        endFrame = anim->EndFrame();
+        startFrame = anim->StartFrame();
+        float clamped = (startFrame - frame < 0.0f) ? frame : startFrame;
+        float result = (clamped - endFrame < 0.0f) ? clamped : endFrame;
+        mIndicatorAnim->SetFrame(result, 1.0f);
+    }
 }
 
 INIT_REVS(2, 0)

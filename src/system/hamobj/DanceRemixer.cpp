@@ -201,7 +201,51 @@ int DanceRemixer::JumpedMoveIdxAdd(int idx, int add) const {
 
 void DanceRemixer::SelectMove(int, int) {}
 
+float DanceRemixer::JumpedBeat(float beat) const {
+    int fromBeat = mFromMeasure * 4;
+    int toBeat = mToMeasure * 4;
+    if ((int)beat < fromBeat) {
+        return beat;
+    }
+    if ((int)beat < toBeat) {
+        int jumpSize = toBeat - mFromMeasure * 4;
+        if ((int)beat < toBeat - (jumpSize >> 1)) {
+            return (float)jumpSize + beat;
+        }
+        return beat - (float)jumpSize;
+    }
+    if (toBeat >= fromBeat) {
+        return beat;
+    }
+    return (beat - (float)fromBeat) + (float)toBeat;
+}
+
 int DanceRemixer::JumpedMoveIdx(int idx) const { return Round(JumpedBeat(idx * 4)) / 4; }
+
+int DanceRemixer::JumpedMeasureAdd(int measure, int count) const {
+    int step = 1;
+    if (!(count > 0)) {
+        step = -1;
+    }
+    int absCount = (count ^ (count >> 31)) - (count >> 31);
+    for (int i = 0; i < absCount; i++) {
+        measure = JumpedMoveIdx(measure + step - 1) + 1;
+    }
+    return measure;
+}
+
+int DanceRemixer::JumpedMeasureStepsBetween(int from, int to, int step) const {
+    MILO_ASSERT(step == 1 || step == -1, 0x1bd);
+    int count = 0;
+    while (from != to) {
+        count += step;
+        if (mTotalMeasures * 2 < ((count ^ ((unsigned int)count >> 31)) - ((unsigned int)count >> 31))) {
+            TheDebug.Fail(MakeString("JumpedMeasureStepsBetween from %d to %d", from, to), nullptr);
+        }
+        from = JumpedMeasureAdd(from, step);
+    }
+    return count;
+}
 
 const MoveParent *DanceRemixer::GetMoveParent(int x, int y) {
     return TheMoveMgr->CurParents(x)[y];

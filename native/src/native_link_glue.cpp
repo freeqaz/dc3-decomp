@@ -344,6 +344,4 @@ u64 RndShaderFur::CalcShaderOpts(NgMat*, ShaderType, bool) { return 0; }
 void RndShaderSyncTrack::Select(RndMat*, ShaderType, bool) {}
 u64 RndShaderSyncTrack::CalcShaderOpts(NgMat*, ShaderType, bool) { return 0; }
 
-// FlowSetProperty stubs
-#include "flow/FlowSetProperty.h"
-void PropertyTask::Poll(float) {}
+// FlowSetProperty — PropertyTask::Poll now defined in FlowSetProperty.cpp

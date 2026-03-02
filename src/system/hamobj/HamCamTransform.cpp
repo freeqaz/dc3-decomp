@@ -37,7 +37,10 @@ BEGIN_COPYS(HamCamTransform)
     COPY_SUPERCLASS(Hmx::Object)
     CREATE_COPY(HamCamTransform)
     BEGIN_COPYING_MEMBERS
-        COPY_MEMBER(mAreas)
+        mAreas.clear();
+        for (int i = 0; i != c->mAreas.size(); i++) {
+            mAreas.push_back(TransformArea(this, c->mAreas[i]));
+        }
     END_COPYING_MEMBERS
 END_COPYS
 
