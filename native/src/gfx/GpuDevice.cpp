@@ -218,20 +218,21 @@ bool GpuDevice::InitSurface() {
     return true;
 }
 
-static bool IsSrgbFormat(wgpu::TextureFormat f) {
-    return f == wgpu::TextureFormat::BGRA8UnormSrgb ||
-           f == wgpu::TextureFormat::RGBA8UnormSrgb;
+static bool IsLinearFormat(wgpu::TextureFormat f) {
+    return f == wgpu::TextureFormat::BGRA8Unorm ||
+           f == wgpu::TextureFormat::RGBA8Unorm;
 }
 
 void GpuDevice::ConfigureSurface() {
-    // Query preferred format — prefer sRGB for correct gamma
+    // Query preferred format — prefer linear (non-sRGB) for gamma-space rendering
+    // Xbox 360 does all lighting in gamma space, so we match that behavior
     wgpu::SurfaceCapabilities caps;
     mSurface.GetCapabilities(mAdapter, &caps);
     if (caps.formatCount > 0) {
         mSurfaceFormat = caps.formats[0];
-        // Prefer an sRGB format if available
+        // Prefer a linear (non-sRGB) format to match Xbox 360 gamma-space rendering
         for (size_t i = 0; i < caps.formatCount; i++) {
-            if (IsSrgbFormat(caps.formats[i])) {
+            if (IsLinearFormat(caps.formats[i])) {
                 mSurfaceFormat = caps.formats[i];
                 break;
             }
@@ -277,11 +278,11 @@ wgpu::TextureView GpuDevice::AcquireHeadlessFrame() {
     if (!mHeadlessTex) {
         wgpu::TextureDescriptor texDesc{};
         texDesc.size = {(uint32_t)mWidth, (uint32_t)mHeight, 1};
-        texDesc.format = wgpu::TextureFormat::RGBA8UnormSrgb;
+        texDesc.format = wgpu::TextureFormat::RGBA8Unorm;
         texDesc.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::CopySrc;
         mHeadlessTex = mDevice.CreateTexture(&texDesc);
         mHeadlessView = mHeadlessTex.CreateView();
-        mSurfaceFormat = wgpu::TextureFormat::RGBA8UnormSrgb;
+        mSurfaceFormat = wgpu::TextureFormat::RGBA8Unorm;
     }
     return mHeadlessView;
 }

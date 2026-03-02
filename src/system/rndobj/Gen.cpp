@@ -255,7 +255,7 @@ DataNode RndGenerator::OnGenerate(const DataArray *da) {
 
 void RndGenerator::DrawParticleSys(Transform &t, float) {
     if (mCurParticle) {
-        mCurParticle->pos.Set(t.v.x, t.v.y, t.v.z, mCurParticle->pos.w);
+        *(Vector3 *)&mCurParticle->pos = t.v;
         mCurParticle = mCurParticle->next;
     }
 }

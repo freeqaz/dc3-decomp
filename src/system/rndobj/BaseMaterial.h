@@ -174,6 +174,9 @@ public:
     RndTex* GetRimMap() const { return mRimMap; }
     float GetDeNormal() const { return mDeNormal; }
     float GetAnisotropy() const { return mAnisotropy; }
+    RndTex* GetNormDetailMap() const { return mNormDetailMap; }
+    float GetNormDetailTiling() const { return mNormDetailTiling; }
+    float GetNormDetailStrength() const { return mNormDetailStrength; }
     bool GetFog() const { return mFog; }
     bool GetUseEnviron() const { return mUseEnviron; }
     RndCubeTex* GetEnvironMap() const { return mEnvironMap; }

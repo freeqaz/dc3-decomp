@@ -663,8 +663,6 @@ void DirLoader::LoadObjs() {
             if (obj) {
                 void **vptr = *(void ***)obj;
                 if (!vptr || !vptr[0]) {
-                    fprintf(stderr, "DirLoader: SKIP object '%s' — broken vtable (vptr=%p)\n",
-                            obj->Name(), (void*)vptr);
                     if (mRev > 1) ReadDead(*mStream);
                     mObjects.pop_front();
                     continue;
@@ -684,10 +682,6 @@ void DirLoader::LoadObjs() {
                     if (mDir) {
                         BeginMemTrackFileName(mDir->GetPathName());
                     }
-#ifdef HX_NATIVE
-                    fprintf(stderr, "DirLoader: PreLoad %s '%s' (stream pos=%d, loader=%p, mPostLoad=%d)\n",
-                            obj->ClassName(), obj->Name(), mStream->Tell(), (void*)this, mPostLoad);
-#endif
                     obj->PreLoad(*mStream);
                     mPostLoad = true;
                     if (sObjectMemDumpFile) {
@@ -717,20 +711,7 @@ void DirLoader::LoadObjs() {
                 if (mDir) {
                     BeginMemTrackFileName(mDir->GetPathName());
                 }
-#ifdef HX_NATIVE
-                    fprintf(stderr, "DirLoader: PostLoad %s '%s' (stream pos=%d, loader=%p, mPostLoad=%d)\n",
-                            obj->ClassName(), obj->Name(), mStream->Tell(), (void*)this, mPostLoad);
-                    int objCountBefore = mObjects.size();
-#endif
                 obj->PostLoad(*mStream);
-#ifdef HX_NATIVE
-                    {
-                        int objCountAfter = mObjects.size();
-                        if (objCountAfter != objCountBefore)
-                            fprintf(stderr, "DirLoader: mObjects changed during PostLoad! %d → %d\n",
-                                    objCountBefore, objCountAfter);
-                    }
-#endif
                 mPostLoad = false;
                 if (sObjectMemDumpFile) {
                     MemPoint end(MemPoint::kInitType1);
@@ -873,19 +854,11 @@ void DirLoader::CreateObjects() {
             EndMemTrackObjectName();
 #ifdef HX_NATIVE
             if (!obj) {
-                printf("DirLoader::CreateObjects: FAILED to create '%s' '%s', skipping\n",
-                       classSym.Str(), buf);
-                fflush(stdout);
                 goto release_obj;
             }
-            // Validate vtable: check if the vptr is non-null (zero-filled weak vtable = broken)
             {
                 void **vptr = *(void ***)obj;
                 if (!vptr || !vptr[0]) {
-                    printf("DirLoader::CreateObjects: '%s' '%s' has broken vtable, skipping\n",
-                           classSym.Str(), buf);
-                    fflush(stdout);
-                    // Don't call RELEASE (virtual dtor also broken), just leak
                     obj = nullptr;
                     goto release_obj;
                 }

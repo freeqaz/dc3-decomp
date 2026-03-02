@@ -28,7 +28,7 @@ void PipelineManager::Init(GpuDevice* device) {
     mLayouts[0] = dev.CreateBindGroupLayout(&sceneLayoutDesc);
 
     // Group 1: Material uniforms + textures + samplers
-    wgpu::BindGroupLayoutEntry matEntries[10] = {};
+    wgpu::BindGroupLayoutEntry matEntries[11] = {};
     matEntries[0].binding = 0;
     matEntries[0].visibility = wgpu::ShaderStage::Vertex | wgpu::ShaderStage::Fragment;
     matEntries[0].buffer.type = wgpu::BufferBindingType::Uniform;
@@ -83,8 +83,14 @@ void PipelineManager::Init(GpuDevice* device) {
     matEntries[9].visibility = wgpu::ShaderStage::Fragment;
     matEntries[9].sampler.type = wgpu::SamplerBindingType::Filtering;
 
+    // Binding 10: detail normal map
+    matEntries[10].binding = 10;
+    matEntries[10].visibility = wgpu::ShaderStage::Fragment;
+    matEntries[10].texture.sampleType = wgpu::TextureSampleType::Float;
+    matEntries[10].texture.viewDimension = wgpu::TextureViewDimension::e2D;
+
     wgpu::BindGroupLayoutDescriptor matLayoutDesc{};
-    matLayoutDesc.entryCount = 10;
+    matLayoutDesc.entryCount = 11;
     matLayoutDesc.entries = matEntries;
     mLayouts[1] = dev.CreateBindGroupLayout(&matLayoutDesc);
 

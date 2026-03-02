@@ -10,6 +10,8 @@
 #include "rndobj/Env.h"
 #include "rndobj/Lit.h"
 #include "rndobj/Mat.h"
+#include "rndobj/PostProc.h"
+#include "rndobj/ColorXfm.h"
 #include "ui/UI.h"
 
 #include <cstdio>
@@ -34,6 +36,7 @@ WgpuRnd* gWgpuRnd = &gWgpuRndInstance;
 GLFWwindow *gNativeWindow = nullptr;
 
 UIManager* TheUI = nullptr;
+int gDebugFrameID = 0;
 
 // ============================================================================
 // UniformRingBuffer
@@ -223,6 +226,8 @@ void WgpuRnd::BeginDrawing() {
     mWorldEnded = false;
     mDrawCount++;
     mFrameID++;
+    extern int gDebugFrameID;
+    gDebugFrameID = mFrameID;
 
     // Select default camera and environment (base Rnd::BeginDrawing does this)
     // Only if no camera is already current (viewer sets its own orbit camera)
@@ -278,6 +283,17 @@ void WgpuRnd::BeginDrawing() {
 
     // Write scene uniforms from current camera and environment
     WriteSceneUniforms();
+    mLastSceneCam = RndCam::Current();
+    // Debug: log camera state every 500 frames
+    if (mFrameID % 500 == 0) {
+        RndCam* dbgCam = RndCam::Current();
+        if (dbgCam) {
+            printf("DC3 Debug [frame %d]: cam='%s' near=%.2f far=%.2f yfov=%.4f pos=(%.2f,%.2f,%.2f)\n",
+                   mFrameID, dbgCam->Name(),
+                   dbgCam->NearPlane(), dbgCam->FarPlane(), dbgCam->YFov(),
+                   dbgCam->WorldXfm().v.x, dbgCam->WorldXfm().v.y, dbgCam->WorldXfm().v.z);
+        }
+    }
 
     // Create command encoder
     mEncoder = mGpu.Device().CreateCommandEncoder();
@@ -285,7 +301,25 @@ void WgpuRnd::BeginDrawing() {
     // Begin render pass
     wgpu::RenderPassColorAttachment colorAtt{};
     colorAtt.view = mMsaaView;            // Render to MSAA target
-    colorAtt.resolveTarget = mFrameView;   // Resolve to surface/readback
+    // If post-processing available, resolve to intermediate; otherwise direct to swapchain
+    bool hasPostProc = RndPostProc::Current() != nullptr;
+    if (hasPostProc) {
+        // Ensure intermediate texture exists
+        if (mIntermediateWidth != curW || mIntermediateHeight != curH || !mIntermediateTex) {
+            wgpu::TextureDescriptor iDesc{};
+            iDesc.size = {(uint32_t)curW, (uint32_t)curH, 1};
+            iDesc.format = mGpu.SurfaceFormat();
+            iDesc.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::TextureBinding;
+            iDesc.mipLevelCount = 1;
+            mIntermediateTex = mGpu.Device().CreateTexture(&iDesc);
+            mIntermediateView = mIntermediateTex.CreateView();
+            mIntermediateWidth = curW;
+            mIntermediateHeight = curH;
+        }
+        colorAtt.resolveTarget = mIntermediateView;
+    } else {
+        colorAtt.resolveTarget = mFrameView;
+    }
     colorAtt.loadOp = wgpu::LoadOp::Clear;
     colorAtt.storeOp = wgpu::StoreOp::Discard;  // MSAA data discarded after resolve
     colorAtt.clearValue = {
@@ -316,14 +350,38 @@ void WgpuRnd::BeginDrawing() {
     mPass.SetBindGroup(0, mSceneBindGroup);
 }
 
+extern void FlushTransparentDraws();
+
+wgpu::Buffer& GetSceneBuffer() { return gWgpuRnd->SceneBuffer(); }
+
+void WgpuRnd::EnsureSceneUniformsCurrent() {
+    RndCam* cam = RndCam::Current();
+    if (cam != mLastSceneCam) {
+        WriteSceneUniforms();
+        // Re-bind the new scene bind group on the active render pass
+        if (mInPass) {
+            mPass.SetBindGroup(0, mSceneBindGroup);
+        }
+        mLastSceneCam = cam;
+    }
+}
+
 void WgpuRnd::EndDrawing() {
     if (!mGpu.Device()) {
         mDrawing = false;
         return;
     }
     if (mInPass) {
+        // Flush deferred transparent draws (sorted back-to-front)
+        FlushTransparentDraws();
+
         mPass.End();
         mInPass = false;
+
+        // Post-processing: if active, read from intermediate and draw to swapchain
+        if (mIntermediateView && RndPostProc::Current()) {
+            RunPostProcessing();
+        }
 
         wgpu::CommandBuffer cmd = mEncoder.Finish();
         mGpu.Queue().Submit(1, &cmd);
@@ -465,7 +523,6 @@ void WgpuRnd::WriteSceneUniforms() {
     RndCam* cam = RndCam::Current();
     if (cam) {
         // Check if mViewProjMatrix was externally set (milo-viewer does this).
-        // If it's still identity, compute viewProj from camera's view + projection transforms.
         const Hmx::Matrix4& vp = cam->GetViewProjMatrix();
         bool isIdentity = (vp.x.x == 1 && vp.x.y == 0 && vp.x.z == 0 && vp.x.w == 0 &&
                            vp.y.x == 0 && vp.y.y == 1 && vp.y.z == 0 && vp.y.w == 0 &&
@@ -477,10 +534,11 @@ void WgpuRnd::WriteSceneUniforms() {
             memcpy(scene.viewProj, &vp, 64);
         } else {
             // Build WebGPU-compatible viewProj from Milo camera state.
-            // Milo convention: Y = forward/depth, Z = up, X = right.
-            // WebGPU clip space: Z in [0,1], perspective divide by w.
+            // Milo convention: X=right, Y=forward/depth, Z=up.
+            // WebGPU clip space: X=right, Y=up, Z=depth [0,1].
 
-            // View matrix from inverse world transform (row-major, right-multiply)
+            // View matrix: inverse of camera world transform (row-major)
+            // Transpose rotation (orthonormal), negate translated position
             const Transform& w = cam->WorldXfm();
             float view[16] = {
                 w.m.x.x, w.m.y.x, w.m.z.x, 0,
@@ -492,22 +550,21 @@ void WgpuRnd::WriteSceneUniforms() {
                 1
             };
 
-            // Perspective projection with Milo axis convention and WebGPU depth [0,1]
-            float near = cam->NearPlane();
-            float far = cam->FarPlane();
+            // Perspective projection with Milo axis convention
+            // Milo: X=right, Y=forward(depth), Z=up
+            // Map to clip: X→X, Z→Y(up), Y→Z(depth [0,1])
+            float n = cam->NearPlane();
+            float f = cam->FarPlane();
             float yfov = cam->YFov();
             float aspect = (float)mWidth / (float)mHeight;
             float cot = 1.0f / tanf(yfov * 0.5f);
-            float zRange = far - near;
+            float zRange = f - n;
 
-            // Row-major: v_clip = v_view * Proj
-            // Milo: X=right, Y=forward(depth), Z=up
-            // Clip: X=right, Z=depth[0,1], Y=up (w from view-Y)
             float proj[16] = {
-                cot / aspect, 0,   0,                     0,
-                0,            0,   far / zRange,           1,
-                0,            cot, 0,                     0,
-                0,            0,   -near * far / zRange,  0
+                cot / aspect, 0,   0,                0,
+                0,            0,   f / zRange,       1,
+                0,            cot, 0,                0,
+                0,            0,   -n * f / zRange,  0
             };
 
             // ViewProj = View * Proj (row-major multiply)
@@ -520,23 +577,28 @@ void WgpuRnd::WriteSceneUniforms() {
                     scene.viewProj[i * 4 + j] = sum;
                 }
             }
+            memcpy(scene.view, view, sizeof(view));
         }
 
-        // View matrix from camera's inverse world transform
+        // Camera position (in world space, before axis flip)
         const Transform& worldXfm = cam->WorldXfm();
-        // Rotation transpose + negated translation
-        scene.view[0]  = worldXfm.m.x.x; scene.view[1]  = worldXfm.m.y.x; scene.view[2]  = worldXfm.m.z.x; scene.view[3]  = 0;
-        scene.view[4]  = worldXfm.m.x.y; scene.view[5]  = worldXfm.m.y.y; scene.view[6]  = worldXfm.m.z.y; scene.view[7]  = 0;
-        scene.view[8]  = worldXfm.m.x.z; scene.view[9]  = worldXfm.m.y.z; scene.view[10] = worldXfm.m.z.z; scene.view[11] = 0;
-        float tx = -(worldXfm.m.x.x * worldXfm.v.x + worldXfm.m.x.y * worldXfm.v.y + worldXfm.m.x.z * worldXfm.v.z);
-        float ty = -(worldXfm.m.y.x * worldXfm.v.x + worldXfm.m.y.y * worldXfm.v.y + worldXfm.m.y.z * worldXfm.v.z);
-        float tz = -(worldXfm.m.z.x * worldXfm.v.x + worldXfm.m.z.y * worldXfm.v.y + worldXfm.m.z.z * worldXfm.v.z);
-        scene.view[12] = tx; scene.view[13] = ty; scene.view[14] = tz; scene.view[15] = 1;
-
-        // Camera position
         scene.cameraPos[0] = worldXfm.v.x;
         scene.cameraPos[1] = worldXfm.v.y;
         scene.cameraPos[2] = worldXfm.v.z;
+
+        // Debug: dump viewProj matrix once
+        {
+            static int sVPLog = 0;
+            if (sVPLog < 3) {
+                printf("DC3 ViewProj cam='%s': [%.3f %.3f %.3f %.3f] [%.3f %.3f %.3f %.3f] [%.3f %.3f %.3f %.3f] [%.3f %.3f %.3f %.3f]\n",
+                       cam->Name(),
+                       scene.viewProj[0], scene.viewProj[1], scene.viewProj[2], scene.viewProj[3],
+                       scene.viewProj[4], scene.viewProj[5], scene.viewProj[6], scene.viewProj[7],
+                       scene.viewProj[8], scene.viewProj[9], scene.viewProj[10], scene.viewProj[11],
+                       scene.viewProj[12], scene.viewProj[13], scene.viewProj[14], scene.viewProj[15]);
+                sVPLog++;
+            }
+        }
     } else {
         // Identity viewProj if no camera
         scene.viewProj[0] = scene.viewProj[5] = scene.viewProj[10] = scene.viewProj[15] = 1;
@@ -600,6 +662,31 @@ void WgpuRnd::WriteSceneUniforms() {
             lightIdx = 1;
         }
         scene.numLights = (float)lightIdx;
+
+        // Point lights
+        int pointIdx = 0;
+        for (ObjPtrList<RndLight>::iterator it = lights.begin();
+             it != lights.end() && pointIdx < 4; ++it) {
+            RndLight* light = *it;
+            if (!light || !light->Showing()) continue;
+            if (light->GetType() != RndLight::kPoint) continue;
+
+            const Transform& lxfm = light->WorldXfm();
+            scene.pointLightPos[pointIdx][0] = lxfm.v.x;
+            scene.pointLightPos[pointIdx][1] = lxfm.v.y;
+            scene.pointLightPos[pointIdx][2] = lxfm.v.z;
+            scene.pointLightPos[pointIdx][3] = 0.0f;
+
+            const Hmx::Color& lc = light->GetColor();
+            scene.pointLightColors[pointIdx][0] = lc.red;
+            scene.pointLightColors[pointIdx][1] = lc.green;
+            scene.pointLightColors[pointIdx][2] = lc.blue;
+            scene.pointLightColors[pointIdx][3] = 1.0f;
+
+            scene.pointLightRanges[pointIdx] = light->Range();
+            pointIdx++;
+        }
+        scene.numPointLights = (float)pointIdx;
     } else {
         // Default lighting — single directional light
         scene.ambientColor[0] = scene.ambientColor[1] = scene.ambientColor[2] = 0.15f;
@@ -611,6 +698,17 @@ void WgpuRnd::WriteSceneUniforms() {
         scene.lightColors[0][0] = scene.lightColors[0][1] = scene.lightColors[0][2] = 0.9f;
         scene.lightColors[0][3] = 1.0f;
         scene.numLights = 1.0f;
+    }
+
+    // Debug: dump viewProj at frame 3000
+    if (mFrameID == 3000) {
+        printf("DC3 ViewProj@3000: cam='%s'\n", cam ? cam->Name() : "NULL");
+        printf("  [%.4f %.4f %.4f %.4f]\n", scene.viewProj[0], scene.viewProj[1], scene.viewProj[2], scene.viewProj[3]);
+        printf("  [%.4f %.4f %.4f %.4f]\n", scene.viewProj[4], scene.viewProj[5], scene.viewProj[6], scene.viewProj[7]);
+        printf("  [%.4f %.4f %.4f %.4f]\n", scene.viewProj[8], scene.viewProj[9], scene.viewProj[10], scene.viewProj[11]);
+        printf("  [%.4f %.4f %.4f %.4f]\n", scene.viewProj[12], scene.viewProj[13], scene.viewProj[14], scene.viewProj[15]);
+        printf("  ambient=(%.2f,%.2f,%.2f) numLights=%.0f\n",
+               scene.ambientColor[0], scene.ambientColor[1], scene.ambientColor[2], scene.numLights);
     }
 
     // Upload scene uniforms
@@ -635,7 +733,7 @@ wgpu::BindGroup WgpuRnd::CreateMaterialBindGroup(
     const MaterialTexViews& texViews,
     wgpu::Sampler& diffuseSampler, wgpu::Sampler& mapSampler)
 {
-    wgpu::BindGroupEntry entries[10] = {};
+    wgpu::BindGroupEntry entries[11] = {};
 
     entries[0].binding = 0;
     entries[0].buffer = mMaterialRing.Buffer();
@@ -669,9 +767,12 @@ wgpu::BindGroup WgpuRnd::CreateMaterialBindGroup(
     entries[9].binding = 9;
     entries[9].sampler = mapSampler;  // reuse map sampler for cube
 
+    entries[10].binding = 10;
+    entries[10].textureView = texViews.normDetail;
+
     wgpu::BindGroupDescriptor desc{};
     desc.layout = mPipelines.MaterialLayout();
-    desc.entryCount = 10;
+    desc.entryCount = 11;
     desc.entries = entries;
 
     return mGpu.Device().CreateBindGroup(&desc);
@@ -724,6 +825,13 @@ void WgpuRnd::MaybeCaptureFrame() {
     if (!pixels) return;
 
     if (mGpu.ReadbackHeadlessFrame(pixels, pixelSize)) {
+        // Debug: count non-black pixels (check RGB, not alpha)
+        int nonBlack = 0;
+        for (int i = 0; i < w * h; i++) {
+            if (pixels[i*4] || pixels[i*4+1] || pixels[i*4+2]) nonBlack++;
+        }
+        printf("DC3 Native: frame %d readback — %d/%d non-black pixels, alpha[0]=%d\n",
+               mFrameID, nonBlack, w*h, pixels[3]);
         char path[512];
         snprintf(path, sizeof(path), "%s/frame_%05d.png", mScreenshotDir.c_str(), mFrameID);
         if (WriteScreenshot(path, pixels, w, h)) {
@@ -737,4 +845,468 @@ void WgpuRnd::MaybeCaptureFrame() {
 
     free(pixels);
     mCaptureIndex++;
+}
+
+// ============================================================================
+// DrawRect — screen-space 2D textured/colored quad
+// ============================================================================
+
+static const char* k2DShaderSource = R"WGSL(
+struct Vertex2D {
+    @location(0) pos: vec2f,
+    @location(1) uv: vec2f,
+    @location(2) color: vec4f,
+};
+
+struct VSOut {
+    @builtin(position) pos: vec4f,
+    @location(0) uv: vec2f,
+    @location(1) color: vec4f,
+};
+
+@vertex fn vs_2d(in: Vertex2D) -> VSOut {
+    var out: VSOut;
+    out.pos = vec4f(in.pos, 0.0, 1.0);
+    out.uv = in.uv;
+    out.color = in.color;
+    return out;
+}
+
+@group(0) @binding(0) var rectTex: texture_2d<f32>;
+@group(0) @binding(1) var rectSampler: sampler;
+
+@fragment fn fs_2d(in: VSOut) -> @location(0) vec4f {
+    let texColor = textureSample(rectTex, rectSampler, in.uv);
+    return texColor * in.color;
+}
+
+@fragment fn fs_2d_notex(in: VSOut) -> @location(0) vec4f {
+    return in.color;
+}
+)WGSL";
+
+struct Vertex2D {
+    float pos[2];
+    float uv[2];
+    float color[4];
+};
+
+void WgpuRnd::EnsureDrawRect2DPipeline() {
+    if (m2dPipelineReady) return;
+
+    auto& dev = mGpu.Device();
+
+    // Shader
+    wgpu::ShaderSourceWGSL wgslSource;
+    wgslSource.code = k2DShaderSource;
+    wgpu::ShaderModuleDescriptor smDesc{};
+    smDesc.nextInChain = &wgslSource;
+    m2dShader = dev.CreateShaderModule(&smDesc);
+
+    // Bind group layout: texture + sampler
+    wgpu::BindGroupLayoutEntry entries[2] = {};
+    entries[0].binding = 0;
+    entries[0].visibility = wgpu::ShaderStage::Fragment;
+    entries[0].texture.sampleType = wgpu::TextureSampleType::Float;
+    entries[0].texture.viewDimension = wgpu::TextureViewDimension::e2D;
+    entries[1].binding = 1;
+    entries[1].visibility = wgpu::ShaderStage::Fragment;
+    entries[1].sampler.type = wgpu::SamplerBindingType::Filtering;
+
+    wgpu::BindGroupLayoutDescriptor bglDesc{};
+    bglDesc.entryCount = 2;
+    bglDesc.entries = entries;
+    m2dBindGroupLayout = dev.CreateBindGroupLayout(&bglDesc);
+
+    wgpu::PipelineLayoutDescriptor plDesc{};
+    plDesc.bindGroupLayoutCount = 1;
+    plDesc.bindGroupLayouts = &m2dBindGroupLayout;
+    m2dPipelineLayout = dev.CreatePipelineLayout(&plDesc);
+
+    // Vertex buffer (6 vertices for a quad, rewritten each DrawRect)
+    wgpu::BufferDescriptor vbDesc{};
+    vbDesc.size = 6 * sizeof(Vertex2D);
+    vbDesc.usage = wgpu::BufferUsage::Vertex | wgpu::BufferUsage::CopyDst;
+    m2dVertexBuffer = dev.CreateBuffer(&vbDesc);
+
+    m2dPipelineReady = true;
+}
+
+void WgpuRnd::DrawRect(const Hmx::Rect& rect, RndMat* mat, ShaderType,
+                        const Hmx::Color& color, const Hmx::Color* topRight,
+                        const Hmx::Color* botLeft) {
+    if (!mInPass) return;
+    EnsureDrawRect2DPipeline();
+
+    auto& dev = mGpu.Device();
+
+    // Convert rect from screen coords [0..width, 0..height] to NDC [-1..1]
+    float w = (float)mGpu.WindowWidth();
+    float h = (float)mGpu.WindowHeight();
+    if (w <= 0 || h <= 0) return;
+
+    float x0 = rect.x / w * 2.0f - 1.0f;
+    float y0 = 1.0f - rect.y / h * 2.0f;  // flip Y
+    float x1 = (rect.x + rect.w) / w * 2.0f - 1.0f;
+    float y1 = 1.0f - (rect.y + rect.h) / h * 2.0f;  // flip Y
+
+    // Colors for four corners (support gradient)
+    float cTL[4] = { color.red, color.green, color.blue, color.alpha };
+    float cTR[4], cBL[4], cBR[4];
+    if (topRight) {
+        cTR[0] = topRight->red; cTR[1] = topRight->green;
+        cTR[2] = topRight->blue; cTR[3] = topRight->alpha;
+    } else {
+        memcpy(cTR, cTL, sizeof(cTL));
+    }
+    if (botLeft) {
+        cBL[0] = botLeft->red; cBL[1] = botLeft->green;
+        cBL[2] = botLeft->blue; cBL[3] = botLeft->alpha;
+    } else {
+        memcpy(cBL, cTL, sizeof(cTL));
+    }
+    // Bottom-right = average of topRight and botLeft
+    cBR[0] = (cTR[0] + cBL[0]) * 0.5f;
+    cBR[1] = (cTR[1] + cBL[1]) * 0.5f;
+    cBR[2] = (cTR[2] + cBL[2]) * 0.5f;
+    cBR[3] = (cTR[3] + cBL[3]) * 0.5f;
+
+    // Two triangles: TL, BL, TR, TR, BL, BR
+    Vertex2D verts[6] = {
+        {{x0, y0}, {0, 0}, {cTL[0], cTL[1], cTL[2], cTL[3]}},
+        {{x0, y1}, {0, 1}, {cBL[0], cBL[1], cBL[2], cBL[3]}},
+        {{x1, y0}, {1, 0}, {cTR[0], cTR[1], cTR[2], cTR[3]}},
+        {{x1, y0}, {1, 0}, {cTR[0], cTR[1], cTR[2], cTR[3]}},
+        {{x0, y1}, {0, 1}, {cBL[0], cBL[1], cBL[2], cBL[3]}},
+        {{x1, y1}, {1, 1}, {cBR[0], cBR[1], cBR[2], cBR[3]}},
+    };
+
+    mGpu.Queue().WriteBuffer(m2dVertexBuffer, 0, verts, sizeof(verts));
+
+    // Determine if textured
+    bool hasTex = false;
+    wgpu::TextureView texView;
+    if (mat && mat->GetDiffuseTex()) {
+        extern wgpu::TextureView GetGpuTexView(RndTex*);
+        texView = GetGpuTexView(mat->GetDiffuseTex());
+        if (texView) hasTex = true;
+    }
+    if (!hasTex) texView = mWhiteTexView;
+
+    // Create pipeline (cached by blend mode)
+    WgpuBlend blend = WgpuBlend::SrcAlpha;
+    if (mat) blend = (WgpuBlend)mat->GetBlend();
+
+    wgpu::BlendState bs = mPipelines.MapBlend(blend);
+
+    wgpu::ColorTargetState ct{};
+    ct.format = mGpu.SurfaceFormat();
+    ct.blend = &bs;
+    ct.writeMask = wgpu::ColorWriteMask::All;
+
+    wgpu::FragmentState frag{};
+    frag.module = m2dShader;
+    frag.entryPoint = hasTex ? "fs_2d" : "fs_2d_notex";
+    frag.targetCount = 1;
+    frag.targets = &ct;
+
+    // Vertex layout
+    wgpu::VertexAttribute attrs[3] = {};
+    attrs[0].format = wgpu::VertexFormat::Float32x2; attrs[0].offset = 0; attrs[0].shaderLocation = 0;
+    attrs[1].format = wgpu::VertexFormat::Float32x2; attrs[1].offset = 8; attrs[1].shaderLocation = 1;
+    attrs[2].format = wgpu::VertexFormat::Float32x4; attrs[2].offset = 16; attrs[2].shaderLocation = 2;
+
+    wgpu::VertexBufferLayout vbl{};
+    vbl.arrayStride = sizeof(Vertex2D);
+    vbl.stepMode = wgpu::VertexStepMode::Vertex;
+    vbl.attributeCount = 3;
+    vbl.attributes = attrs;
+
+    wgpu::DepthStencilState ds{};
+    ds.format = wgpu::TextureFormat::Depth24PlusStencil8;
+    ds.depthWriteEnabled = wgpu::OptionalBool::False;
+    ds.depthCompare = wgpu::CompareFunction::Always;
+
+    wgpu::RenderPipelineDescriptor pipeDesc{};
+    pipeDesc.layout = m2dPipelineLayout;
+    pipeDesc.vertex.module = m2dShader;
+    pipeDesc.vertex.entryPoint = "vs_2d";
+    pipeDesc.vertex.bufferCount = 1;
+    pipeDesc.vertex.buffers = &vbl;
+    pipeDesc.fragment = &frag;
+    pipeDesc.depthStencil = &ds;
+    pipeDesc.primitive.topology = wgpu::PrimitiveTopology::TriangleList;
+    pipeDesc.multisample.count = 4;
+
+    // TODO: cache this pipeline
+    wgpu::RenderPipeline pipe = dev.CreateRenderPipeline(&pipeDesc);
+
+    // Bind group
+    wgpu::BindGroupEntry bgEntries[2] = {};
+    bgEntries[0].binding = 0;
+    bgEntries[0].textureView = texView;
+    bgEntries[1].binding = 1;
+    bgEntries[1].sampler = mDefaultSampler;
+
+    wgpu::BindGroupDescriptor bgDesc{};
+    bgDesc.layout = m2dBindGroupLayout;
+    bgDesc.entryCount = 2;
+    bgDesc.entries = bgEntries;
+    wgpu::BindGroup bg = dev.CreateBindGroup(&bgDesc);
+
+    mPass.SetPipeline(pipe);
+    mPass.SetBindGroup(0, bg);
+    mPass.SetVertexBuffer(0, m2dVertexBuffer, 0, sizeof(verts));
+    mPass.Draw(6);
+}
+
+// ============================================================================
+// Post-Processing
+// ============================================================================
+
+struct PostProcUniforms {
+    float contrast;          // 0=neutral
+    float brightness;        // 0=neutral
+    float saturation;        // 0=neutral (added to 1.0 in shader)
+    float vignetteIntensity; // 0=off
+    float vignetteColor[4];  // rgba
+    float chromaticOffset;   // pixels
+    float chromaticSharpen;  // 1.0 if sharpen mode
+    float posterLevels;      // 0=off
+    float posterMin;         // min intensity
+    // Color levels
+    float levelInLo[4];
+    float levelInHi[4];
+    float levelOutLo[4];
+    float levelOutHi[4];
+};
+static_assert(sizeof(PostProcUniforms) == 112, "PostProcUniforms must be 112 bytes");
+
+static const char* kPostProcShaderSource = R"WGSL(
+struct PostProcUB {
+    contrast: f32,
+    brightness: f32,
+    saturation: f32,
+    vignetteIntensity: f32,
+    vignetteColor: vec4f,
+    chromaticOffset: f32,
+    chromaticSharpen: f32,
+    posterLevels: f32,
+    posterMin: f32,
+    levelInLo: vec4f,
+    levelInHi: vec4f,
+    levelOutLo: vec4f,
+    levelOutHi: vec4f,
+};
+
+@group(0) @binding(0) var sceneTex: texture_2d<f32>;
+@group(0) @binding(1) var sceneSampler: sampler;
+@group(0) @binding(2) var<uniform> pp: PostProcUB;
+
+struct VOut {
+    @builtin(position) pos: vec4f,
+    @location(0) uv: vec2f,
+};
+
+// Fullscreen triangle (no vertex buffer needed)
+@vertex fn vs_postproc(@builtin(vertex_index) idx: u32) -> VOut {
+    var out: VOut;
+    // Generate fullscreen triangle: 3 vertices covering [-1,1] clip space
+    let x = f32(i32(idx & 1u)) * 4.0 - 1.0;
+    let y = f32(i32(idx >> 1u)) * 4.0 - 1.0;
+    out.pos = vec4f(x, y, 0.0, 1.0);
+    out.uv = vec2f((x + 1.0) * 0.5, (1.0 - y) * 0.5);
+    return out;
+}
+
+@fragment fn fs_postproc(in: VOut) -> @location(0) vec4f {
+    let texSize = vec2f(textureDimensions(sceneTex));
+
+    // Chromatic aberration / sharpen
+    var color: vec3f;
+    if (pp.chromaticOffset > 0.0) {
+        let offset = pp.chromaticOffset / texSize;
+        let r = textureSample(sceneTex, sceneSampler, in.uv + vec2f(offset.x, 0.0)).r;
+        let g = textureSample(sceneTex, sceneSampler, in.uv).g;
+        let b = textureSample(sceneTex, sceneSampler, in.uv - vec2f(offset.x, 0.0)).b;
+        if (pp.chromaticSharpen > 0.5) {
+            // Sharpen: use center minus offset as unsharp mask
+            let center = textureSample(sceneTex, sceneSampler, in.uv).rgb;
+            let blur = vec3f(r, g, b);
+            color = center + (center - blur) * 1.5;
+        } else {
+            color = vec3f(r, g, b);
+        }
+    } else {
+        color = textureSample(sceneTex, sceneSampler, in.uv).rgb;
+    }
+
+    // Levels: remap input range to output range
+    let inRange = max(pp.levelInHi.rgb - pp.levelInLo.rgb, vec3f(0.001));
+    let normalized = clamp((color - pp.levelInLo.rgb) / inRange, vec3f(0.0), vec3f(1.0));
+    color = mix(pp.levelOutLo.rgb, pp.levelOutHi.rgb, normalized);
+
+    // Contrast: scale around mid-gray
+    color = (color - 0.5) * (1.0 + pp.contrast / 100.0) + 0.5;
+
+    // Brightness: additive shift
+    color = color + pp.brightness / 100.0;
+
+    // Saturation
+    let luma = dot(color, vec3f(0.2126, 0.7152, 0.0722));
+    color = mix(vec3f(luma), color, 1.0 + pp.saturation / 100.0);
+
+    // Posterize
+    if (pp.posterLevels > 1.0) {
+        let levels = pp.posterLevels;
+        let intensity = max(max(color.r, color.g), color.b);
+        if (intensity >= pp.posterMin) {
+            color = floor(color * levels + 0.5) / levels;
+        }
+    }
+
+    // Vignette
+    if (pp.vignetteIntensity > 0.0) {
+        let center = in.uv - 0.5;
+        let dist = length(center) * 1.414; // normalize so corners = 1.0
+        let vig = 1.0 - smoothstep(0.4, 1.0, dist) * pp.vignetteIntensity;
+        color = mix(pp.vignetteColor.rgb, color, vig);
+    }
+
+    return vec4f(clamp(color, vec3f(0.0), vec3f(1.0)), 1.0);
+}
+)WGSL";
+
+void WgpuRnd::EnsurePostProcPipeline() {
+    if (mPostProcReady) return;
+    auto& dev = mGpu.Device();
+
+    // Shader
+    wgpu::ShaderSourceWGSL src;
+    src.code = kPostProcShaderSource;
+    wgpu::ShaderModuleDescriptor smDesc{};
+    smDesc.nextInChain = &src;
+    mPostProcShader = dev.CreateShaderModule(&smDesc);
+
+    // Bind group layout: texture + sampler + uniforms
+    wgpu::BindGroupLayoutEntry entries[3] = {};
+    entries[0].binding = 0;
+    entries[0].visibility = wgpu::ShaderStage::Fragment;
+    entries[0].texture.sampleType = wgpu::TextureSampleType::Float;
+    entries[0].texture.viewDimension = wgpu::TextureViewDimension::e2D;
+
+    entries[1].binding = 1;
+    entries[1].visibility = wgpu::ShaderStage::Fragment;
+    entries[1].sampler.type = wgpu::SamplerBindingType::Filtering;
+
+    entries[2].binding = 2;
+    entries[2].visibility = wgpu::ShaderStage::Fragment;
+    entries[2].buffer.type = wgpu::BufferBindingType::Uniform;
+    entries[2].buffer.minBindingSize = sizeof(PostProcUniforms);
+
+    wgpu::BindGroupLayoutDescriptor bglDesc{};
+    bglDesc.entryCount = 3;
+    bglDesc.entries = entries;
+    mPostProcBGL = dev.CreateBindGroupLayout(&bglDesc);
+
+    wgpu::PipelineLayoutDescriptor plDesc{};
+    plDesc.bindGroupLayoutCount = 1;
+    plDesc.bindGroupLayouts = &mPostProcBGL;
+    mPostProcPipelineLayout = dev.CreatePipelineLayout(&plDesc);
+
+    // Uniform buffer
+    wgpu::BufferDescriptor bufDesc{};
+    bufDesc.size = sizeof(PostProcUniforms);
+    bufDesc.usage = wgpu::BufferUsage::Uniform | wgpu::BufferUsage::CopyDst;
+    mPostProcUniformBuffer = dev.CreateBuffer(&bufDesc);
+
+    // Pipeline (no depth, no MSAA, renders to swapchain directly)
+    wgpu::ColorTargetState ct{};
+    ct.format = mGpu.SurfaceFormat();
+    ct.writeMask = wgpu::ColorWriteMask::All;
+
+    wgpu::FragmentState frag{};
+    frag.module = mPostProcShader;
+    frag.entryPoint = "fs_postproc";
+    frag.targetCount = 1;
+    frag.targets = &ct;
+
+    wgpu::RenderPipelineDescriptor pipeDesc{};
+    pipeDesc.layout = mPostProcPipelineLayout;
+    pipeDesc.vertex.module = mPostProcShader;
+    pipeDesc.vertex.entryPoint = "vs_postproc";
+    pipeDesc.fragment = &frag;
+    pipeDesc.primitive.topology = wgpu::PrimitiveTopology::TriangleList;
+
+    mPostProcPipeline = dev.CreateRenderPipeline(&pipeDesc);
+    mPostProcReady = true;
+}
+
+void WgpuRnd::RunPostProcessing() {
+    EnsurePostProcPipeline();
+
+    RndPostProc* pp = RndPostProc::Current();
+    if (!pp) return;
+
+    // Fill uniforms from PostProc
+    PostProcUniforms uni{};
+    const RndColorXfm& cxfm = pp->GetColorXfm();
+    uni.contrast = cxfm.mContrast;
+    uni.brightness = cxfm.mBrightness;
+    uni.saturation = cxfm.mSaturation;
+    uni.vignetteIntensity = pp->GetVignetteIntensity();
+    const Hmx::Color& vc = pp->GetVignetteColor();
+    uni.vignetteColor[0] = vc.red;
+    uni.vignetteColor[1] = vc.green;
+    uni.vignetteColor[2] = vc.blue;
+    uni.vignetteColor[3] = vc.alpha;
+    uni.chromaticOffset = pp->GetChromaticAberrationOffset();
+    uni.chromaticSharpen = pp->GetChromaticSharpen() ? 1.0f : 0.0f;
+    uni.posterLevels = pp->GetPosterLevels();
+    uni.posterMin = pp->GetPosterMin();
+
+    // Levels
+    uni.levelInLo[0] = cxfm.mLevelInLo.red;   uni.levelInLo[1] = cxfm.mLevelInLo.green;
+    uni.levelInLo[2] = cxfm.mLevelInLo.blue;   uni.levelInLo[3] = 0;
+    uni.levelInHi[0] = cxfm.mLevelInHi.red;   uni.levelInHi[1] = cxfm.mLevelInHi.green;
+    uni.levelInHi[2] = cxfm.mLevelInHi.blue;   uni.levelInHi[3] = 1;
+    uni.levelOutLo[0] = cxfm.mLevelOutLo.red; uni.levelOutLo[1] = cxfm.mLevelOutLo.green;
+    uni.levelOutLo[2] = cxfm.mLevelOutLo.blue; uni.levelOutLo[3] = 0;
+    uni.levelOutHi[0] = cxfm.mLevelOutHi.red; uni.levelOutHi[1] = cxfm.mLevelOutHi.green;
+    uni.levelOutHi[2] = cxfm.mLevelOutHi.blue; uni.levelOutHi[3] = 1;
+
+    mGpu.Queue().WriteBuffer(mPostProcUniformBuffer, 0, &uni, sizeof(uni));
+
+    // Create bind group
+    wgpu::BindGroupEntry bgEntries[3] = {};
+    bgEntries[0].binding = 0;
+    bgEntries[0].textureView = mIntermediateView;
+    bgEntries[1].binding = 1;
+    bgEntries[1].sampler = mDefaultSampler;
+    bgEntries[2].binding = 2;
+    bgEntries[2].buffer = mPostProcUniformBuffer;
+    bgEntries[2].size = sizeof(PostProcUniforms);
+
+    wgpu::BindGroupDescriptor bgDesc{};
+    bgDesc.layout = mPostProcBGL;
+    bgDesc.entryCount = 3;
+    bgDesc.entries = bgEntries;
+    wgpu::BindGroup bg = mGpu.Device().CreateBindGroup(&bgDesc);
+
+    // Render pass targeting swapchain (mFrameView)
+    wgpu::RenderPassColorAttachment colorAtt{};
+    colorAtt.view = mFrameView;
+    colorAtt.loadOp = wgpu::LoadOp::Clear;
+    colorAtt.storeOp = wgpu::StoreOp::Store;
+    colorAtt.clearValue = {0, 0, 0, 1};
+
+    wgpu::RenderPassDescriptor rpDesc{};
+    rpDesc.colorAttachmentCount = 1;
+    rpDesc.colorAttachments = &colorAtt;
+
+    auto pass = mEncoder.BeginRenderPass(&rpDesc);
+    pass.SetPipeline(mPostProcPipeline);
+    pass.SetBindGroup(0, bg);
+    pass.Draw(3);  // Fullscreen triangle
+    pass.End();
 }

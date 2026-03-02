@@ -85,12 +85,12 @@ public:
 
     int CachedPipelineCount() const { return (int)mPipelineCache.size(); }
 
+    // State mapping (public for DrawRect)
+    wgpu::BlendState MapBlend(WgpuBlend blend);
+
 private:
     wgpu::RenderPipeline CreatePipeline(const PipelineKey& key);
     wgpu::ShaderModule GetOrCreateShader(uint32_t shaderType);
-
-    // State mapping helpers
-    wgpu::BlendState MapBlend(WgpuBlend blend);
     wgpu::DepthStencilState MapDepthStencil(WgpuZMode z, WgpuStencil s);
     wgpu::CullMode MapCull(WgpuCull cull);
 

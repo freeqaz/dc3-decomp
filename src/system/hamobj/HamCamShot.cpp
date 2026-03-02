@@ -252,14 +252,23 @@ END_PROPSYNCS
 
 BinStream &operator<<(BinStream &bs, const HamCamShot::Target &t) {
     bs << t.mTarget;
+    unsigned char teleport = t.mTeleport;
+    bs.Write(&teleport, 1);
     bs << t.mTo;
     bs << t.mAnimGroup;
+    unsigned char ret = t.mReturn;
+    bs.Write(&ret, 1);
     bs << t.mFastForward;
     bs << t.mForwardEvent;
-    unsigned int bits = (t.mForceLOD & 7) | (t.mTeleport ? 8 : 0) | (t.mReturn ? 16 : 0) |
-                        (t.mSelfShadow ? 32 : 0) | (t.unk68p4 ? 64 : 0) | (t.unk68p3 ? 128 : 0);
-    bs << bits;
+    unsigned char selfShadow = t.mSelfShadow;
+    bs.Write(&selfShadow, 1);
+    unsigned char p4 = t.unk68p4;
+    bs.Write(&p4, 1);
+    unsigned char p3 = t.unk68p3;
+    bs.Write(&p3, 1);
     bs << t.mEnvOverride;
+    unsigned char forceLOD = t.mForceLOD;
+    bs.Write(&forceLOD, 1);
     return bs;
 }
 

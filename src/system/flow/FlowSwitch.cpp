@@ -138,15 +138,31 @@ void FlowSwitch::VerifyTypes() {
 }
 
 void FlowSwitch::ActivateValueCases(DataNode &value, DataNode &previousValue) {
-    FLOW_LOG("ActivateValueCases\n");
+    FLOW_LOG("Activating Value Cases\n");
+    int matchCount = 0;
+    bool pending = false;
     FOREACH (it, mChildNodes) {
         FlowSwitchCase *cur = static_cast<FlowSwitchCase *>(it->Obj());
         if (!cur->IsRunning() && cur->Op() != kTransition) {
             bool valid = cur->IsValidCase(this, &value, &previousValue, false);
             if (valid) {
+                matchCount++;
+                if (!cur->HasChildren()) {
+                    pending = true;
+                } else {
+                    ActivateChild(cur);
+                }
+            } else {
+                if (pending && cur->HasChildren()) {
+                    matchCount++;
+                    ActivateChild(cur);
+                    pending = false;
+                }
+            }
+            if (valid && mFirstValidCaseOnly && !pending)
+                return;
+            if (cur->Op() == kDefault && matchCount == 0) {
                 ActivateChild(cur);
-                if (mFirstValidCaseOnly)
-                    return;
             }
             if (mStopRequested)
                 return;

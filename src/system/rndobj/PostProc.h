@@ -94,6 +94,23 @@ public:
     static void Init();
     static void Reset();
 
+#ifdef HX_NATIVE
+    const RndColorXfm& GetColorXfm() const { return mColorXfm; }
+    float GetVignetteIntensity() const { return mVignetteIntensity; }
+    const Hmx::Color& GetVignetteColor() const { return mVignetteColor; }
+    float GetChromaticAberrationOffset() const { return mChromaticAberrationOffset; }
+    bool GetChromaticSharpen() const { return mChromaticSharpen; }
+    float GetPosterLevels() const { return mPosterLevels; }
+    float GetPosterMin() const { return mPosterMin; }
+    float GetBloomIntensity() const { return mBloomIntensity; }
+    float GetBloomThreshold() const { return mBloomThreshold; }
+    const Hmx::Color& GetBloomColor() const { return mBloomColor; }
+    bool GetBloomGlare() const { return mBloomGlare; }
+    bool GetBloomStreak() const { return mBloomStreak; }
+    float GetBloomStreakAttenuation() const { return mBloomStreakAttenuation; }
+    float GetBloomStreakAngle() const { return mBloomStreakAngle; }
+#endif
+
 protected:
     RndPostProc();
 

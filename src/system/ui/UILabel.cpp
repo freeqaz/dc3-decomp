@@ -822,14 +822,8 @@ void UILabel::LabelUpdate(bool b) {
             UIColor *colorOvr = lstyle.mColorOverride;
             RndFontBase *styleFont = style.mFont;
             if (colorOvr && styleFont && styleFont != refFont) {
-                void **cvptr = *(void ***)colorOvr;
-                if (!cvptr) {
-                    fprintf(stderr, "LabelUpdate: colorOverride '%s' has null vtable, skipping\n",
-                            colorOvr->Name());
-                } else {
-                    const Hmx::Color &c = colorOvr->GetColor();
-                    memcpy(&style.mTextColor, &c, sizeof(Hmx::Color));
-                }
+                const Hmx::Color &c = colorOvr->GetColor();
+                memcpy(&style.mTextColor, &c, sizeof(Hmx::Color));
 #else
             if (lstyle.mColorOverride && style.mFont && style.mFont != refFont) {
                 const Hmx::Color &c = lstyle.mColorOverride->GetColor();

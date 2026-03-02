@@ -106,6 +106,7 @@ void HolmesToLocal(char *, const char *);
 char const *HolmesFileHostName();
 void HolmesClientPoll();
 CacheResourceResult HolmesClientCacheResource(const char *, const char *);
+void HolmesClientSendMessage(const class Message &);
 DataNode DumpHolmesLog(DataArray *);
 
 // HolmesClient_NetSocket

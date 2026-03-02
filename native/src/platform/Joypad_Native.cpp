@@ -253,10 +253,35 @@ void JoypadPoll() {
         data->mNewReleased = oldButtons & ~newButtons;
         data->mButtons = newButtons;
 
+        // Native button-to-action mapping (DTA config may not be loaded)
+        auto nativeButtonToAction = [](JoypadButton btn) -> JoypadAction {
+            switch (btn) {
+            case kPad_X:        return kAction_Confirm;     // A button
+            case kPad_Circle:   return kAction_Cancel;      // B button
+            case kPad_Start:    return kAction_Start;
+            case kPad_Select:   return kAction_Option;
+            case kPad_DUp:      return kAction_Up;
+            case kPad_DDown:    return kAction_Down;
+            case kPad_DLeft:    return kAction_Left;
+            case kPad_DRight:   return kAction_Right;
+            case kPad_L1:       return kAction_PageUp;      // LB
+            case kPad_R1:       return kAction_PageDown;    // RB
+            case kPad_Square:   return kAction_ViewModify;  // X button
+            case kPad_Tri:      return kAction_ShellOption;  // Y button
+            case kPad_LStickUp:    return kAction_Up;
+            case kPad_LStickDown:  return kAction_Down;
+            case kPad_LStickLeft:  return kAction_Left;
+            case kPad_LStickRight: return kAction_Right;
+            default:            return kAction_None;
+            }
+        };
+
         // Broadcast button messages
         for (int b = 0; b < kPad_NumButtons; b++) {
             if (data->mNewPressed & (1 << b)) {
                 JoypadAction action = ButtonToAction((JoypadButton)b, data->mControllerType);
+                if (action == kAction_None)
+                    action = nativeButtonToAction((JoypadButton)b);
                 ButtonDownMsg msg(data->mUser, (JoypadButton)b, action, pad);
                 JoypadPushThroughMsg(msg);
             }
@@ -264,6 +289,8 @@ void JoypadPoll() {
         for (int b = 0; b < kPad_NumButtons; b++) {
             if (data->mNewReleased & (1 << b)) {
                 JoypadAction action = ButtonToAction((JoypadButton)b, data->mControllerType);
+                if (action == kAction_None)
+                    action = nativeButtonToAction((JoypadButton)b);
                 ButtonUpMsg msg(data->mUser, (JoypadButton)b, action, pad);
                 JoypadPushThroughMsg(msg);
             }

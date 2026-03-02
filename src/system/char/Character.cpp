@@ -31,6 +31,7 @@
 #include "utl/MemMgr.h"
 #include "utl/Std.h"
 #include "utl/Symbol.h"
+#include <string.h>
 
 Character *Character::sCurrent;
 Character *gCharMe;
@@ -897,4 +898,27 @@ void Character::DrawLodOrShadow(int lod, DrawMode drawMode) {
         }
     }
     DrawShowing();
+}
+
+void DrawPtrVec::Draw() const {
+    for (const_iterator it = begin(); it != end(); ++it) {
+        it->Obj()->DrawShowing();
+    }
+}
+
+RndDrawable *DrawPtrVec::CollideShowing(const Segment &s, float &dist, Plane &pl) const {
+    RndDrawable *result = nullptr;
+    Segment seg;
+    memcpy(&seg, &s, sizeof(Segment));
+    dist = 1.0f;
+    for (const_iterator it = begin(); it != end(); ++it) {
+        float d;
+        RndDrawable *hit = (*it)->Collide(seg, d, pl);
+        if (hit) {
+            Interp(seg.start, seg.end, d, seg.start);
+            dist *= d;
+            result = hit;
+        }
+    }
+    return result;
 }

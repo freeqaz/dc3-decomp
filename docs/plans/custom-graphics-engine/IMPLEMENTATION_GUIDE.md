@@ -6,7 +6,7 @@ foundation.
 
 ## Current Status
 
-**Phase 0 complete, Phase 1 Track A & B complete, Phase 2 Tier 1.5 complete, Phase 3 complete, Phase 4 complete.**
+**Phase 0 complete, Phase 1 Track A & B complete, Phase 2 nearly complete, Phase 3 complete, Phase 4 complete.**
 
 The full engine boots on x86_64 Linux, loads game data from `.ark` archives,
 initializes all subsystems, navigates UI screens automatically via DTA scripts,
@@ -18,7 +18,7 @@ headless boot stability.
 
 **Batch screenshot script**: `native/scripts/render_screenshots.sh`
 
-**Next**: Skinned mesh rendering, UI text rendering, getting past tutorial screens.
+**Next**: Verify text renders end-to-end in engine screenshots, get past tutorial screens (DTA override for Kinect gesture), motion capture integration (Phase 5).
 
 ## Prerequisites
 

@@ -1,8 +1,22 @@
 #include "rndobj/Console.h"
-#include "os/System.h"
-#include "obj/DataFunc.h"
 #include "obj/DataFile.h"
+#include "obj/DataFunc.h"
+#include "obj/Msg.h"
+#ifndef HX_NATIVE
+#include "os/HolmesClient.h"
+#endif
+#include "os/Keyboard.h"
+#include "os/System.h"
+#include "rndobj/Rnd.h"
 #include "utl/Cheats.h"
+#include "utl/Std.h"
+#include <string.h>
+
+#ifdef HX_NATIVE
+static void HolmesClientSendMessage(const Message&) {}
+#endif
+
+DataNode DataBreak(DataArray *da);
 
 RndConsole *gConsole;
 
@@ -115,6 +129,18 @@ RndConsole::Breakpoint::~Breakpoint() {
     }
 }
 
+void RndConsole::InsertBreak(DataArray *arr, int i) {
+    DataArray *localArr = new DataArray(1);
+    localArr->Node(0) = DataBreak;
+    DataArray *cmd = arr->Command(i);
+    localArr->SetFileLine(cmd->File(), cmd->Line());
+    arr->Insert(i, DataNode(localArr, kDataCommand));
+    localArr->Release();
+    mBreakpoints.push_back(Breakpoint());
+    mBreakpoints.back().parent = arr;
+    mBreakpoints.back().index = i;
+}
+
 void RndConsole::SetBreak(DataArray *arr) {
     if (arr->Size() > 1) {
         DataArray *arr9 = nullptr;
@@ -167,6 +193,86 @@ void RndConsole::Breakpoints() {
 DataNode DataBreakpoints(DataArray *) {
     gConsole->Breakpoints();
     return 0;
+}
+
+void RndConsole::Clear(int iii) {
+    if (iii > 0) {
+        FOREACH (it, mBreakpoints) {
+            iii--;
+            if (iii == 0) {
+                mBreakpoints.erase(it);
+                return;
+            }
+        }
+    } else if (iii == 0) {
+        FOREACH (it, mBreakpoints) {
+            if (it->parent->UncheckedArray(it->index) == mDebugging) {
+                mBreakpoints.erase(it);
+                return;
+            }
+        }
+    } else {
+        mBreakpoints.clear();
+        return;
+    }
+    MILO_FAIL("Couldn't clear breakpoint");
+}
+
+void RndConsole::Break(DataArray *arr) {
+    if (mDebugging)
+        MILO_FAIL("Can't break while debugging, did you mean set_break?");
+    if (arr->UncheckedFunc(0) != DataNop) {
+        bool drawing = TheRnd.Drawing();
+        bool showing = mShowing;
+        Hmx::Color oldClear = TheRnd.GetClearColor();
+        if (drawing) {
+            TheRnd.EndDrawing();
+        }
+        if (!showing) {
+            SetShowing(true);
+        }
+        TheRnd.SetClearColor(Hmx::Color(0, 0, 0));
+        mDebugging = arr;
+        mLevel = 0;
+        gPreExecuteFunc = nullptr;
+        mInput->Clear();
+        if (arr->UncheckedFunc(0) == DataBreak) {
+            *mInput << "Break at ";
+        } else
+            *mInput << "Step to ";
+        *mInput << arr->File() << ":" << arr->Line() << "\n";
+        List();
+        while (mDebugging) {
+            KeyboardPoll();
+            TheRnd.BeginDrawing();
+            TheRnd.EndDrawing();
+        }
+        mOutput->Clear();
+        TheRnd.SetClearColor(oldClear);
+        if (!showing)
+            SetShowing(false);
+        if (drawing)
+            TheRnd.BeginDrawing();
+    }
+}
+
+void RndConsole::SetShowing(bool show) {
+    if (mShowing != show) {
+        if (show) {
+            mInput->Clear();
+            mKeyboardOverride = KeyboardOverride(this);
+            TheDebug.SetReflect(mOutput);
+        } else {
+            KeyboardOverride(mKeyboardOverride);
+            TheDebug.SetReflect(nullptr);
+            mDebugging = nullptr;
+        }
+        mShowing = show;
+        mOutput->SetShowing(show);
+        mInput->SetShowing(show);
+        Message msg("rnd_console_showing", show);
+        HolmesClientSendMessage(msg);
+    }
 }
 
 void RndConsole::List() {
@@ -222,6 +328,128 @@ DataNode DataDown(DataArray *) {
 BEGIN_HANDLERS(RndConsole)
     HANDLE_MESSAGE(KeyboardKeyMsg)
 END_HANDLERS
+
+bool RndConsole::OnMsg(const KeyboardKeyMsg &msg) {
+    if (!mShowing)
+        return 0;
+    if (msg.GetKey() == 0x12E) {
+        SetShowing(false);
+    } else if (msg.GetKey() == 9) {
+        if (mTabLen == 0)
+            mTabLen = mInput->CurrentLine().length();
+        if (!mBuffer.empty()) {
+            if (mBufPtr == mBuffer.end()) {
+                mBufPtr = mBuffer.begin();
+            }
+            do {
+                ++mBufPtr;
+                if (mBufPtr == mBuffer.end()) {
+                    mBufPtr = mBuffer.begin();
+                }
+                if (strncmp(mInput->CurrentLine().c_str(), (*mBufPtr).c_str(), mTabLen)
+                    == 0) {
+                    mInput->CurrentLine() = *mBufPtr;
+                    break;
+                }
+            } while (mBufPtr != mBuffer.end());
+        }
+        MinEq<int>(mCursor, mInput->CurrentLine().length());
+    } else if (msg.GetKey() == 0x142) {
+        if (!mBuffer.empty()) {
+            if (mBufPtr != mBuffer.end()) {
+                ++mBufPtr;
+            }
+            if (mBufPtr == mBuffer.end()) {
+                mBufPtr = mBuffer.begin();
+            }
+            mInput->CurrentLine() = *mBufPtr;
+        }
+        mCursor = mInput->CurrentLine().length();
+    } else if (msg.GetKey() == 0x143) {
+        if (!mBuffer.empty()) {
+            if (mBufPtr != mBuffer.end()) {
+                --mBufPtr;
+            } else
+                mBufPtr = mBuffer.begin();
+            if (mBufPtr == mBuffer.begin()) {
+                mBufPtr = PrevItr(mBuffer.begin(), 1);
+            }
+            mInput->CurrentLine() = *mBufPtr;
+        }
+        MinEq<int>(mCursor, mInput->CurrentLine().length());
+    } else if (msg.GetKey() == 8) {
+        String &curLine = mInput->CurrentLine();
+        if (mCursor != 0) {
+            mCursor--;
+            curLine.erase(mCursor, 1);
+        }
+    } else if (msg.GetKey() == 0x137) {
+        String &curLine = mInput->CurrentLine();
+        if (mCursor < mInput->CurrentLine().length()) {
+            curLine.erase(mCursor, 1);
+        }
+    } else if (msg.GetKey() == 0x140) {
+        mCursor = Max(mCursor - 1, 0);
+    } else if (msg.GetKey() == 0x141) {
+        mCursor = Min<int>(mCursor + 1, mInput->CurrentLine().length());
+    } else if (msg.GetKey() == 0x139) {
+        mCursor = mInput->CurrentLine().length();
+    } else if (msg.GetKey() == 0x138) {
+        mCursor = 0;
+    } else if (msg.GetKey() == 10) {
+        mCursor = 0;
+        MILO_TRY { ExecuteLine(); }
+        MILO_CATCH(errMsg) {
+            mInput->CurrentLine().erase();
+            *mInput << errMsg << "\n";
+            MILO_LOG("%s\n", errMsg);
+        }
+    } else if (msg.GetKey() == 0x7D) {
+        if (msg.GetCtrl()) {
+            String &curLine = mInput->CurrentLine();
+            curLine.insert(0, 1, '{');
+            curLine.insert(curLine.length(), "} ");
+            mCursor = curLine.length();
+        } else {
+            char buf[2] = { '\0', '\0' };
+            buf[0] = msg.GetKey();
+            if (mCursor > mInput->CurrentLine().length()) {
+                mCursor = mInput->CurrentLine().length();
+            }
+            mInput->CurrentLine().insert(mCursor, buf);
+            mCursor++;
+        }
+    }
+    mInput->SetCursorChar(msg.GetKey() == 10 ? -1 : mCursor);
+    if (msg.GetKey() != 9) {
+        mTabLen = 0;
+    }
+    return 0;
+}
+
+void RndConsole::Step(int level) {
+    if (mDebugging) {
+        mDebugging = nullptr;
+        gPreExecuteFunc = DataBreak;
+        gPreExecuteLevel = (gCallStackPtr - gCallStack) + mLevel + level;
+    } else
+        MILO_FAIL("Can't step unless debugging");
+}
+
+void RndConsole::MoveLevel(int delta) {
+    if (mDebugging) {
+        mLevel += delta;
+        int maxLevel = (gCallStack - gCallStackPtr) + 2;
+        if (mLevel >= 1) {
+            mLevel = 0;
+        } else if (mLevel < maxLevel) {
+            mLevel = maxLevel;
+        }
+        mDebugging = gCallStackPtr[mLevel - 2];
+        List();
+    } else
+        MILO_FAIL("Can't move level unless debugging");
+}
 
 DataNode DataStep(DataArray *) {
     gConsole->Step(0);

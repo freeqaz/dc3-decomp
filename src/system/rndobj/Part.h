@@ -257,6 +257,10 @@ public:
     const Hmx::Color &MidColorHigh() const { return mMidColorHigh; }
     RndMesh *GetMesh() const { return mMeshEmitter; }
     RndParticle *ActiveParticles() const { return mActiveParticles; }
+#ifdef HX_NATIVE
+    int NumTilesAcross() const { return mNumTilesAcross; }
+    int NumTilesDown() const { return mNumTilesDown; }
+#endif
 
 protected:
     RndParticleSys();

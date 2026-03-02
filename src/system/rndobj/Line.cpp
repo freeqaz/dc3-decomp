@@ -334,3 +334,132 @@ DataNode RndLine::OnSetMat(const DataArray *array) {
     SetShowing(mat);
     return 0;
 }
+
+#ifdef HX_NATIVE
+
+void RndLine::MapVerts(int idx, VertsMap &vmap) {
+    if (!mHasCaps || mLinePairs) {
+        // No caps or line pairs mode: simple 2 verts per point
+        vmap.t = 0;
+        if (mLinePairs && mHasCaps) {
+            // Pairs with caps: 4 verts per pair (cap+main for each)
+            int pairIdx = idx / 2;
+            int withinPair = idx % 2;
+            vmap.v = &mMesh->Verts()[(pairIdx * 4 + withinPair * 2)];
+        } else {
+            vmap.v = &mMesh->Verts()[idx * 2];
+        }
+    } else {
+        // Has caps, not pairs
+        int numPts = (int)mPoints.size();
+        if (idx == 0) {
+            // First point: cap at start (4 verts: cap pair + main pair)
+            vmap.t = 1;
+            vmap.v = &mMesh->Verts()[0];
+        } else if (idx == numPts - 1) {
+            // Last point: cap at end (4 verts: main pair + cap pair)
+            vmap.t = 2;
+            // 4 verts for first point + 2 verts per middle point
+            int vertIdx = 4 + (idx - 1) * 2;
+            vmap.v = &mMesh->Verts()[vertIdx];
+        } else {
+            // Middle point: 2 verts
+            vmap.t = 0;
+            int vertIdx = 4 + (idx - 1) * 2;
+            vmap.v = &mMesh->Verts()[vertIdx];
+        }
+    }
+}
+
+void RndLine::SetPointsColor(int start, int count, const Hmx::Color &color) {
+    int end = start + count;
+    if (end > (int)mPoints.size()) end = (int)mPoints.size();
+    for (int i = start; i < end; i++) {
+        mPoints[i].color = color;
+        UpdatePointColor(i, false);
+    }
+    mMesh->Sync(0x1F);
+}
+
+void RndLine::UpdateLine(const Transform &camXfm, float nearPlane) {
+    int numPts = (int)mPoints.size();
+    if (numPts < 2) return;
+
+    // Camera position in world space
+    Vector3 camPos = camXfm.v;
+
+    // Process each point — generate billboard vertices facing the camera
+    for (int i = 0; i < numPts; i++) {
+        Vector3 &p = mPoints[i].point;
+
+        // Compute segment direction
+        Vector3 dir;
+        if (i == 0) {
+            Subtract(mPoints[1].point, p, dir);
+        } else if (i == numPts - 1) {
+            Subtract(p, mPoints[i - 1].point, dir);
+        } else {
+            // Average of adjacent segments for smooth corners
+            Vector3 d1, d2;
+            Subtract(p, mPoints[i - 1].point, d1);
+            Subtract(mPoints[i + 1].point, p, d2);
+
+            // Check fold angle — if angle too sharp, use incoming direction
+            float dot = d1.x * d2.x + d1.y * d2.y + d1.z * d2.z;
+            float len1 = Length(d1);
+            float len2 = Length(d2);
+            if (len1 > 0.0001f && len2 > 0.0001f) {
+                float cosAngle = dot / (len1 * len2);
+                if (cosAngle < mFoldCos) {
+                    // Sharp fold — use incoming segment
+                    dir = d1;
+                } else {
+                    Add(d1, d2, dir);
+                }
+            } else {
+                Add(d1, d2, dir);
+            }
+        }
+
+        Normalize(dir, dir);
+
+        // Camera-facing perpendicular
+        Vector3 toCamera;
+        Subtract(camPos, p, toCamera);
+        Vector3 side;
+        Cross(toCamera, dir, side);
+        float sideLen = Length(side);
+        if (sideLen > 0.0001f) {
+            Scale(side, mWidth * 0.5f / sideLen, side);
+        }
+
+        // Set vertex positions
+        VertsMap vmap;
+        MapVerts(i, vmap);
+
+        if (vmap.t == 1) {
+            // Start cap: cap verts at point position (degenerate)
+            vmap.v->pos.Set(p.x + side.x, p.y + side.y, p.z + side.z);
+            vmap.v++;
+            vmap.v->pos.Set(p.x - side.x, p.y - side.y, p.z - side.z);
+            vmap.v++;
+        }
+
+        // Main verts
+        vmap.v->pos.Set(p.x + side.x, p.y + side.y, p.z + side.z);
+        vmap.v++;
+        vmap.v->pos.Set(p.x - side.x, p.y - side.y, p.z - side.z);
+        vmap.v++;
+
+        if (vmap.t == 2) {
+            // End cap: cap verts at point position (degenerate)
+            vmap.v->pos.Set(p.x + side.x, p.y + side.y, p.z + side.z);
+            vmap.v++;
+            vmap.v->pos.Set(p.x - side.x, p.y - side.y, p.z - side.z);
+        }
+    }
+
+    mMesh->Sync(0x1F);
+}
+
+#endif

@@ -15,6 +15,7 @@ public:
         CtrlPoint();
         void Save(BinStream &) const;
         void Load(BinStreamRev &);
+        void Interp(const CtrlPoint &, const CtrlPoint &, float);
 
         Vector3 mPos; // 0x0
         float mRoll; // 0x10

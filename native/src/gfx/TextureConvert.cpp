@@ -344,15 +344,15 @@ wgpu::TextureFormat MapBitmapFormat(const RndBitmap& bmp, bool hasBCSupport) {
 
     if (dxt && hasBCSupport) {
         switch (dxt) {
-        case kDXT1: return wgpu::TextureFormat::BC1RGBAUnormSrgb;
-        case kDXT3: return wgpu::TextureFormat::BC2RGBAUnormSrgb;
-        case kDXT5: return wgpu::TextureFormat::BC3RGBAUnormSrgb;
-        default:    return wgpu::TextureFormat::RGBA8UnormSrgb; // fallback
+        case kDXT1: return wgpu::TextureFormat::BC1RGBAUnorm;
+        case kDXT3: return wgpu::TextureFormat::BC2RGBAUnorm;
+        case kDXT5: return wgpu::TextureFormat::BC3RGBAUnorm;
+        default:    return wgpu::TextureFormat::RGBA8Unorm; // fallback
         }
     }
 
     // Non-DXT or BC not supported: decompress to RGBA8
-    return wgpu::TextureFormat::RGBA8UnormSrgb;
+    return wgpu::TextureFormat::RGBA8Unorm;
 }
 
 // ============================================================================
@@ -398,6 +398,17 @@ wgpu::Texture CreateFromBitmap(GpuDevice& gpu, const RndBitmap& bmp, int numMips
         int mh = curMip->Height();
         int pixelBytes = curMip->PixelBytes();
         const uint8_t* srcPixels = curMip->Pixels();
+
+        if (dxt && hasBCSupport && mipLevel == 0) {
+            int blockW = (mw + 3) / 4;
+            int blockH = (mh + 3) / 4;
+            int blockBytes = (dxt == kDXT1) ? 8 : 16;
+            int required = blockW * blockH * blockBytes;
+            if (pixelBytes != required) {
+                fprintf(stderr, "TEX_DEBUG: mip%d %dx%d dxt=%d bpp=%d rowBytes=%d order=0x%x pixelBytes=%d required=%d ratio=%.1f\n",
+                    mipLevel, mw, mh, dxt, bpp, curMip->RowBytes(), order, pixelBytes, required, (float)required/pixelBytes);
+            }
+        }
 
         if (!srcPixels || pixelBytes == 0) break;
 
@@ -484,15 +495,13 @@ wgpu::Texture CreateFromBitmap(GpuDevice& gpu, const RndBitmap& bmp, int numMips
 
         wgpu::TexelCopyBufferLayout srcLayout{};
         if (dxt && hasBCSupport) {
-            // BC formats: bytesPerRow = blocks_per_row * block_size
             int blockW = (mw + 3) / 4;
             int blockBytes = (dxt == kDXT1) ? 8 : 16;
             srcLayout.bytesPerRow = blockW * blockBytes;
-            srcLayout.rowsPerImage = (mh + 3) / 4;
         } else {
             srcLayout.bytesPerRow = mw * 4;
-            srcLayout.rowsPerImage = mh;
         }
+        // rowsPerImage = 0 (unused) for single-slice 2D uploads
 
         wgpu::Extent3D extent = {(uint32_t)mw, (uint32_t)mh, 1};
         gpu.Queue().WriteTexture(&dstInfo, uploadData, uploadSize, &srcLayout, &extent);
@@ -583,10 +592,8 @@ wgpu::Texture CreateCubeFromBitmaps(GpuDevice& gpu, const RndBitmap* faces, int 
             int blockW = (fw + 3) / 4;
             int blockBytes = (dxt == kDXT1) ? 8 : 16;
             srcLayout.bytesPerRow = blockW * blockBytes;
-            srcLayout.rowsPerImage = (fh + 3) / 4;
         } else {
             srcLayout.bytesPerRow = fw * 4;
-            srcLayout.rowsPerImage = fh;
         }
 
         wgpu::Extent3D extent = {(uint32_t)fw, (uint32_t)fh, 1};

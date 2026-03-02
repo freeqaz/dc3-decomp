@@ -72,6 +72,8 @@ protected:
     DataNode OnPlayGroup(const DataArray *);
     DataNode OnPlayGroupFlags(const DataArray *);
     DataNode OnGetClipOrGroupList(DataArray *);
+    DataNode OnEvaluateFlags(const DataArray *);
+    DataNode OnGetFirstFlags(const DataArray *);
     void SyncInternalBones();
     void SetClipType(Symbol s) {
         if (mClipType != s) {

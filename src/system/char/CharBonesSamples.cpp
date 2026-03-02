@@ -125,11 +125,13 @@ void CharBonesSamples::LoadData(BinStreamRev &d) {
 #ifdef HX_NATIVE
     // Cached .milo_xbox files store exactly mTotalSize bytes per sample:
     // uncompressed Vector3 = 12 data + 4 zero pad = 16 bytes = sizeof(Vector3).
-    // The element-by-element path reads only 12 bytes per Vector3 via BinStream >> Vector3,
-    // causing stream desync. Bulk-read matches the cached format layout exactly.
-    int totalBytes = AllocateSize();
-    if (totalBytes > 0 && mRawData) {
-        d.stream.Read(mRawData, totalBytes);
+    // Non-cached streams store only 12 bytes per Vector3 (no pad) and must use
+    // the element-by-element path below.
+    if (d.stream.Cached()) {
+        int totalBytes = AllocateSize();
+        if (totalBytes > 0 && mRawData) {
+            d.stream.Read(mRawData, totalBytes);
+        }
         // Byte-swap big-endian (Xbox 360) data to native little-endian
         for (int i = 0; i < mNumSamples; i++) {
             unsigned char *base = (unsigned char *)(mRawData + mTotalSize * i);
@@ -177,8 +179,11 @@ void CharBonesSamples::LoadData(BinStreamRev &d) {
                 }
             }
         }
-    }
+    } else {
+    // Non-cached: element-by-element (also used on Xbox in #else path)
 #else
+    {
+#endif
     for (int i = 0; i < mNumSamples; i++) {
         mStart = mRawData + mTotalSize * Min(i, mNumSamples - 1);
 
@@ -224,7 +229,7 @@ void CharBonesSamples::LoadData(BinStreamRev &d) {
             }
         }
     }
-#endif
+    } // end non-cached / #else block
 }
 
 int CharBonesSamples::AllocateSize() { return mTotalSize * mNumSamples; }

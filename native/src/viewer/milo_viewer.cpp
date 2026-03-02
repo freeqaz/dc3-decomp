@@ -25,6 +25,7 @@
 #include "math/Mtx.h"
 #include "math/Vec.h"
 #include "utl/FilePath.h"
+#include "utl/MakeString.h"
 
 #include "world/World.h"
 #include "hamobj/Ham.h"
@@ -374,10 +375,18 @@ int main(int argc, char** argv) {
     const char* clipName = nullptr;
     const char* videoPath = nullptr;
     const char* cameraMode = "orbit";
-    std::vector<std::string> subdirPaths;
+    struct SubdirEntry {
+        std::string path;
+        float offsetX = 0, offsetY = 0, offsetZ = 0;
+        float rotateDeg = 0; // rotation around Z axis (up)
+    };
+    std::vector<SubdirEntry> subdirEntries;
     float camAzimuthDeg = -999.0f;  // sentinel: use default
     float camElevationDeg = -999.0f;
     float camDistanceOverride = -1.0f;  // sentinel: use auto
+    float eyeX = 0, eyeY = 0, eyeZ = 0;
+    float lookX = 0, lookY = 0, lookZ = 0;
+    bool hasEye = false, hasLookat = false;
     float startFrame = -1.0f;       // sentinel: use default
     float animSpeed = 1.0f;
     float bpm = 120.0f;
@@ -392,7 +401,24 @@ int main(int argc, char** argv) {
         } else if (strcmp(argv[i], "--screenshot") == 0 && i + 1 < argc) {
             screenshotPath = argv[++i];
         } else if (strcmp(argv[i], "--subdir") == 0 && i + 1 < argc) {
-            subdirPaths.push_back(argv[++i]);
+            SubdirEntry e;
+            e.path = argv[++i];
+            // Check for optional offset: --subdir-offset X Y Z
+            // Check for optional modifiers after --subdir <path>
+            while (i + 1 < argc) {
+                if (strcmp(argv[i + 1], "--subdir-offset") == 0 && i + 4 < argc) {
+                    i++;
+                    e.offsetX = (float)atof(argv[++i]);
+                    e.offsetY = (float)atof(argv[++i]);
+                    e.offsetZ = (float)atof(argv[++i]);
+                } else if (strcmp(argv[i + 1], "--subdir-rotate") == 0 && i + 2 < argc) {
+                    i++;
+                    e.rotateDeg = (float)atof(argv[++i]);
+                } else {
+                    break;
+                }
+            }
+            subdirEntries.push_back(e);
         } else if (strcmp(argv[i], "--clips") == 0 && i + 1 < argc) {
             clipsPath = argv[++i];
         } else if (strcmp(argv[i], "--clip") == 0 && i + 1 < argc) {
@@ -413,6 +439,16 @@ int main(int argc, char** argv) {
             camElevationDeg = (float)atof(argv[++i]);
         } else if (strcmp(argv[i], "--distance") == 0 && i + 1 < argc) {
             camDistanceOverride = (float)atof(argv[++i]);
+        } else if (strcmp(argv[i], "--eye") == 0 && i + 3 < argc) {
+            eyeX = (float)atof(argv[++i]);
+            eyeY = (float)atof(argv[++i]);
+            eyeZ = (float)atof(argv[++i]);
+            hasEye = true;
+        } else if (strcmp(argv[i], "--lookat") == 0 && i + 3 < argc) {
+            lookX = (float)atof(argv[++i]);
+            lookY = (float)atof(argv[++i]);
+            lookZ = (float)atof(argv[++i]);
+            hasLookat = true;
         } else if (strcmp(argv[i], "--frame") == 0 && i + 1 < argc) {
             startFrame = (float)atof(argv[++i]);
         } else if (strcmp(argv[i], "--speed") == 0 && i + 1 < argc) {
@@ -457,6 +493,7 @@ int main(int argc, char** argv) {
     }
 
     printf("Milo Viewer: SystemPreInit...\n");
+    InitMakeString();  // Must happen before SystemPreInit (SetSystemArgs uses MakeString)
     SetFileChecksumData();
     SystemPreInit(argc, argv, "config/ham_preinit_keep.dta");
 
@@ -529,10 +566,10 @@ int main(int argc, char** argv) {
 
     // ---- Load subdirectories (--subdir) ----
     std::vector<ObjDirPtr<ObjectDir>> subdirs;
-    for (const auto& sdPathStr : subdirPaths) {
+    for (const auto& entry : subdirEntries) {
         char sdAbsPath[PATH_MAX];
-        if (!realpath(sdPathStr.c_str(), sdAbsPath)) {
-            fprintf(stderr, "Warning: cannot resolve subdir path '%s', skipping\n", sdPathStr.c_str());
+        if (!realpath(entry.path.c_str(), sdAbsPath)) {
+            fprintf(stderr, "Warning: cannot resolve subdir path '%s', skipping\n", entry.path.c_str());
             continue;
         }
         printf("Milo Viewer: loading subdir '%s'...\n", sdAbsPath);
@@ -545,6 +582,42 @@ int main(int argc, char** argv) {
         if (!sdDir) {
             fprintf(stderr, "Warning: failed to load subdir '%s'\n", sdAbsPath);
             continue;
+        }
+
+        // Apply position offset and/or rotation to all transformables
+        if (entry.offsetX != 0 || entry.offsetY != 0 || entry.offsetZ != 0 || entry.rotateDeg != 0) {
+            int moved = 0;
+            float rad = entry.rotateDeg * (3.14159265f / 180.0f);
+            float cosR = cosf(rad), sinR = sinf(rad);
+            ObjDirItr<RndTransformable> xfmIt(sdDir, true);
+            while (xfmIt) {
+                RndTransformable* t = xfmIt;
+                Transform wxfm = t->WorldXfm();
+                // Rotate around Z axis (up in Milo)
+                if (entry.rotateDeg != 0) {
+                    float ox = wxfm.v.x, oy = wxfm.v.y;
+                    wxfm.v.x = ox * cosR - oy * sinR;
+                    wxfm.v.y = ox * sinR + oy * cosR;
+                    // Rotate orientation vectors too
+                    float xx = wxfm.m.x.x, xy = wxfm.m.x.y;
+                    wxfm.m.x.x = xx * cosR - xy * sinR;
+                    wxfm.m.x.y = xx * sinR + xy * cosR;
+                    float yx = wxfm.m.y.x, yy = wxfm.m.y.y;
+                    wxfm.m.y.x = yx * cosR - yy * sinR;
+                    wxfm.m.y.y = yx * sinR + yy * cosR;
+                    float zx = wxfm.m.z.x, zy = wxfm.m.z.y;
+                    wxfm.m.z.x = zx * cosR - zy * sinR;
+                    wxfm.m.z.y = zx * sinR + zy * cosR;
+                }
+                wxfm.v.x += entry.offsetX;
+                wxfm.v.y += entry.offsetY;
+                wxfm.v.z += entry.offsetZ;
+                t->SetWorldXfm(wxfm);
+                moved++;
+                ++xfmIt;
+            }
+            printf("Milo Viewer: transformed subdir (offset=%.1f,%.1f,%.1f rot=%.1f°) — %d objects\n",
+                   entry.offsetX, entry.offsetY, entry.offsetZ, entry.rotateDeg, moved);
         }
 
         baseScene->AppendSubDir(sd);
@@ -974,6 +1047,27 @@ int main(int argc, char** argv) {
         gOrbitCam.distance = camDistanceOverride;
     }
 
+    // Direct camera placement (--eye / --lookat) — bypasses orbit camera for this frame
+    if (hasEye) {
+        // Set orbit target to lookat point (or bbox center if no lookat)
+        if (hasLookat) {
+            gOrbitCam.targetX = lookX;
+            gOrbitCam.targetY = lookY;
+            gOrbitCam.targetZ = lookZ;
+        }
+        // Compute distance and angles from eye to target
+        float dx = eyeX - gOrbitCam.targetX;
+        float dy = eyeY - gOrbitCam.targetY;
+        float dz = eyeZ - gOrbitCam.targetZ;
+        gOrbitCam.distance = sqrtf(dx*dx + dy*dy + dz*dz);
+        if (gOrbitCam.distance < 0.01f) gOrbitCam.distance = 1.0f;
+        gOrbitCam.azimuth = atan2f(dx, dy);
+        gOrbitCam.elevation = asinf(dz / gOrbitCam.distance);
+        printf("Milo Viewer: eye=(%.1f,%.1f,%.1f) lookat=(%.1f,%.1f,%.1f) dist=%.1f az=%.1f° el=%.1f°\n",
+               eyeX, eyeY, eyeZ, gOrbitCam.targetX, gOrbitCam.targetY, gOrbitCam.targetZ,
+               gOrbitCam.distance, gOrbitCam.azimuth * 57.2958f, gOrbitCam.elevation * 57.2958f);
+    }
+
     // Helper lambda: render one frame (draw all meshes from all loaded dirs)
     auto drawFrame = [&]() {
         // Find best environment from any loaded dir
@@ -994,11 +1088,32 @@ int main(int argc, char** argv) {
         RndEnvironTracker tracker(env, &origin);
 
         // Draw meshes from base scene
+        static bool dumpedMeshInfo = false;
         ObjDirItr<RndMesh> meshIt(baseScene, true);
         while (meshIt) {
+            if (!dumpedMeshInfo && meshIt->Showing() && meshIt->IsSkinned()) {
+                const char* mname = meshIt->Name();
+                printf("  SKINNED '%s' bones=%d\n", mname, meshIt->NumBones());
+                for (int bi = 0; bi < meshIt->NumBones(); bi++) {
+                    RndTransformable* bone = meshIt->BoneTransAt(bi);
+                    if (bone) {
+                        const Transform& bw = bone->WorldXfm();
+                        const Transform& off = meshIt->BoneOffsetAt(bi);
+                        Transform skin;
+                        Multiply(off, bw, skin);
+                        float dist = sqrtf(bw.v.x*bw.v.x + bw.v.y*bw.v.y + bw.v.z*bw.v.z);
+                        // Flag bones near origin (likely not driven)
+                        const char* flag = (dist < 1.0f) ? " *** NEAR ORIGIN ***" : "";
+                        printf("    [%d] '%s' world=(%.2f,%.2f,%.2f) skin=(%.2f,%.2f,%.2f)%s\n",
+                               bi, bone->Name(), bw.v.x, bw.v.y, bw.v.z,
+                               skin.v.x, skin.v.y, skin.v.z, flag);
+                    }
+                }
+            }
             meshIt->DrawShowing();
             ++meshIt;
         }
+        dumpedMeshInfo = true;
 
         // Draw meshes from subdirs
         for (auto& sd : subdirs) {

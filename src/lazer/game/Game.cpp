@@ -753,9 +753,7 @@ DataNode OnCycleTestDancer(DataArray *);
 DataNode OnDumpMoves(DataArray *);
 
 void GameInit() {
-#ifndef HX_NATIVE
     GameModeInit();
-#endif
     REGISTER_OBJ_FACTORY(GamePanel)
     REGISTER_OBJ_FACTORY(BustAMovePanel)
     TheDebug.AddExitCallback(GameTerminate);

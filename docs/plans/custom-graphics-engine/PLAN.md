@@ -223,7 +223,7 @@ RenderDoc, and don't require Xbox 360-specific deswizzling at runtime.
 via the engine's `DirLoader` → `ObjDirPtr<ObjectDir>::LoadFile()`. Meshes, materials,
 textures, and transforms all load correctly. Verified with 17+ prop files.
 
-### Phase 2: Rendering (Pixels on Screen) — IN PROGRESS
+### Phase 2: Rendering (Pixels on Screen) — NEARLY COMPLETE
 
 **Goal**: Visual output. Characters, stages, UI visible and animating.
 
@@ -233,11 +233,14 @@ Structure the implementation so a command recording layer could be inserted late
 (keep draw calls going through a small number of methods that could become recording
 points).
 
-**Status (Tier 1.5 — COMPLETE)**: Full material pipeline operational. Props render with
-Blinn-Phong specular highlights, emissive glow, rim lighting, intensify, and
-multi-directional lighting read from RndEnviron. Ring buffer auto-grows on overflow,
-GPU resources cleaned up via destructor hooks, pipeline cache bounded with warnings.
-Engine's `DrawShowing` path renders in-game scenes (headless + windowed).
+**Status**: Full rendering pipeline operational including skinned meshes, post-processing,
+and 2D UI rendering. Props and characters render with Blinn-Phong specular, emissive,
+rim lighting, intensify, skin/hair shader variants, 4 point lights, and multi-directional
+lighting from RndEnviron. Post-processing includes contrast, chromatic aberration,
+posterization, vignette, and color levels. 2D quad rendering (`DrawRect`) supports
+textured quads with gradient colors. Text glyph mesh generation goes through
+`DrawShowing()` → `FontMapBase` → glyph meshes → `RndMesh::DrawShowing()`.
+Remaining items are cosmetic (particles, lines, flares).
 
 **Work items**:
 - [x] Implement `WgpuRnd` subclass using `webgpu.h` / `webgpu_cpp.h`
@@ -245,8 +248,8 @@ Engine's `DrawShowing` path renders in-game scenes (headless + windowed).
 - [x] Mesh rendering (`RndMesh` → GPU vertex/index buffers, compressed vertex unpack)
 - [x] Material system (`RndMat` → shader uniforms, blend states, pipeline cache)
 - [x] Camera (`RndCam` → view/projection matrices, orbit camera in viewer)
-- [x] Multi-light support (up to 4 directional lights from `RndEnviron::LightsReal()`)
-- [x] Write standard.wgsl shader (half-Lambert diffuse + Blinn-Phong specular + emissive + rim + intensify + fog + alpha test)
+- [x] Multi-light support (up to 4 directional + 4 point lights with range attenuation)
+- [x] Write standard.wgsl shader (half-Lambert diffuse + Blinn-Phong specular + emissive + rim + intensify + fog + alpha test + skin/hair variants)
 - [x] Texture loading (`RndTex` → GPU textures, DXT1/3/5 byte-swap + untile + decompress)
 - [x] Specular highlights (Blinn-Phong from `BaseMaterial::GetSpecularRGB()`)
 - [x] Emissive support (`BaseMaterial::GetEmissiveMultiplier()`)
@@ -255,9 +258,15 @@ Engine's `DrawShowing` path renders in-game scenes (headless + windowed).
 - [x] Ring buffer overflow protection (auto-grow)
 - [x] GPU resource cleanup (destructor hooks in RndMesh/RndTex)
 - [x] Pipeline cache bounds warning (512 entries)
-- [ ] Skinned mesh rendering (bone transforms, vertex skinning shader)
-- [ ] Post-processing (bloom, etc.)
-- [ ] UI rendering (2D overlays, text)
+- [x] Skinned mesh rendering (40-bone blending, compressed verts, multi-pass)
+- [x] Secondary texture maps (normal, specular, emissive, rim, env cube, detail-normal)
+- [x] Post-processing (contrast, chromatic aberration, posterization, vignette, color levels)
+- [x] 2D quad rendering (`DrawRect` with texture + gradient colors)
+- [x] Text glyph mesh generation (`DrawShowing` → `FontMapBase` → glyph meshes)
+- [x] Skin/hair shader variants (half-Lambert + warm shadows, Kajiya-Kay anisotropic)
+- [ ] Particle systems (`RndParticleSys`) — cosmetic, not blocking
+- [ ] Lines/Flares (`RndLine`, `RndFlare`) — cosmetic, not blocking
+- [ ] `RndGroup` draw ordering — may need work for correct layering
 
 **Deliverable**: Game renders a venue with characters. Visual fidelity may be rough
 but geometry, textures, and animation are correct.

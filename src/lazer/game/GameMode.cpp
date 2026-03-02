@@ -23,7 +23,14 @@ GameMode *TheGameMode = nullptr;
 
 GameMode::GameMode() : mInPartyMode(0) {
     SetName("gamemode", ObjectDir::Main());
+#ifndef HX_NATIVE
+    // SetMode depends on SystemConfig("modes") and TheHamProvider being ready.
+    // On native, those aren't initialized yet during GameInit (called from App ctor).
+    // The mode gets set later by DTA scripts via set_mode handler.
     SetMode("init", "none");
+#else
+    mMode = "init";
+#endif
 }
 
 BEGIN_HANDLERS(GameMode)

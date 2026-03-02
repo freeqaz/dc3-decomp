@@ -59,6 +59,7 @@
 #include "rndobj/ShaderMgr.h"
 #include "rndobj/ShaderOptions.h"
 #include "rndobj/Tex.h"
+#include "rnddx9/Tex.h"
 #include "rndobj/TexProc.h"
 #include "rndobj/TexRenderer.h"
 #include "rndobj/Text.h"
@@ -90,6 +91,14 @@ struct {
 
 #define gRndThread gRndHandles.mThread
 #define gRndTextureEvent gRndHandles.mTextureEvent
+
+#ifdef HX_NATIVE
+static void* sTexture = nullptr; // stub — DxTex doesn't exist on native
+#else
+DxTex *sTexture;
+#endif
+bool sCompressDone;
+void *sCompressData;
 
 extern int lbl_82F14008;
 void MemPrintOverview(int, char *const);
@@ -360,13 +369,60 @@ void Rnd::PreInit() {
     DataRegisterFunc("restart_console", FailRestartConsole);
 }
 
-DWORD CompressThread(HANDLE h);
-// {
-//     while(true){
-//         WaitForSingleObject(gRndTextureEvent, -1);
-//         if(!sTexture) break;
-//     }
-// }
+void WordWrap(const char *src, int lineWidth, char *dst, int dstSize) {
+    char *dstEnd = dst + dstSize - 2;
+    const char *srcEnd = src;
+    while (*srcEnd != '\0')
+        srcEnd++;
+    while (true) {
+        char *lastSpace = nullptr;
+        const char *lastSrcSpace = nullptr;
+        int col = 0;
+        while (col < lineWidth) {
+            if (src >= srcEnd || dst >= dstEnd || *src == '\n')
+                break;
+            if (*src == ' ') {
+                lastSpace = dst;
+                lastSrcSpace = src;
+            }
+            *dst = *src;
+            col++;
+            src++;
+            dst++;
+        }
+        if (dst == dstEnd || src == srcEnd) {
+            *dst = '\0';
+            return;
+        }
+        char *wrapDst = dst;
+        const char *wrapSrc = src;
+        if (*src != '\n') {
+            if (lastSrcSpace == nullptr || (int)src - (int)lastSrcSpace > 10) {
+                wrapDst = dst;
+                wrapSrc = src - 1;
+            } else {
+                wrapDst = lastSpace;
+                wrapSrc = lastSrcSpace;
+            }
+        }
+        src = wrapSrc + 1;
+        *wrapDst = '\n';
+        dst = wrapDst + 1;
+    }
+}
+
+#ifndef HX_NATIVE
+DWORD CompressThread(void *) {
+    while (true) {
+        WaitForSingleObject(gRndTextureEvent, -1);
+        if (!sTexture)
+            break;
+        sTexture->DoCompress(sCompressData);
+        sCompressDone = true;
+    }
+    return 0;
+}
+#endif
 
 void Rnd::Init() {
     DataArray *cfg = SystemConfig("rnd");
@@ -379,10 +435,12 @@ void Rnd::Init() {
     }
     RndUtlInit();
     RndPostProc::Init();
+#ifndef HX_NATIVE
     gRndTextureEvent = CreateEventA(nullptr, false, false, "texture_event");
     gRndThread = CreateThread(nullptr, 0, CompressThread, nullptr, 4, nullptr);
     XSetThreadProcessor(gRndThread, 1);
     ResumeThread(gRndThread);
+#endif
 }
 
 void Rnd::Terminate() {
@@ -486,6 +544,31 @@ void Rnd::EndDrawing() {
     }
     mDrawing = false;
     mFrameID++;
+}
+
+void Rnd::TestPoint(const Vector3 &pos, RndFlare *flare) {
+    if (TheHiResScreen.IsActive())
+        return;
+    RndCam *cam = RndCam::Current();
+    if (cam->TargetTex()) {
+        MILO_NOTIFY_ONCE("Flare %s can't be drawn in render to texture mode", (char *)flare->Name());
+        flare->SetVisible(false);
+    } else {
+        Vector2 screen;
+        float depth = cam->WorldToScreen(pos, screen);
+        if (depth >= cam->NearPlane() && depth <= cam->FarPlane()
+            && screen.x >= 0.0f && screen.y >= 0.0f && screen.x < 1.0f && screen.y < 1.0f) {
+            PointTest pt = { 0, 0, 0, 0 };
+            std::list<PointTest>::iterator it = mPointTests.insert(mPointTests.begin(), pt);
+            it->mFlare = flare;
+            it->x = (int)((float)mWidth * screen.x);
+            it->y = (int)((float)mHeight * screen.y);
+            it->z = cam->ProjectZ(depth);
+        } else {
+            flare->SetVisible(false);
+        }
+    }
+    flare->SetOcclusionReady(true);
 }
 
 void Rnd::RemovePointTest(RndFlare *flare) {
@@ -890,6 +973,12 @@ void Rnd::CreateDefaults() {
     RELEASE(mDefaultCubeTexBlack);
     RELEASE(mDefaultCubeTexWhite);
     CreateCubeTextures();
+}
+
+Rnd::CompressTexDesc::~CompressTexDesc() {
+    if (callback) {
+        callback->TextureCompressed((int)this);
+    }
 }
 
 int Rnd::CompressTexture(

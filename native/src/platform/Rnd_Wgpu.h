@@ -31,8 +31,14 @@ struct SceneUniforms {
     float ambientColor[4];    // vec4f
     float numLights;          // f32
     float _padN[3];
+    // Point lights (up to 4)
+    float pointLightPos[4][4];    // array<vec4f, 4> — world position (.w unused)
+    float pointLightColors[4][4]; // array<vec4f, 4> — color per light
+    float pointLightRanges[4];    // vec4f — falloff range per light
+    float numPointLights;         // f32
+    float _padPL[3];
 };
-static_assert(sizeof(SceneUniforms) == 336, "SceneUniforms must match WGSL layout");
+static_assert(sizeof(SceneUniforms) == 496, "SceneUniforms must match WGSL layout");
 
 struct MaterialUniforms {
     float color[4];             // vec4f
@@ -57,8 +63,12 @@ struct MaterialUniforms {
     float texGenMode;           // f32 — 0=none, 1=xfm, 2=sphere, 3=projected, 4=xfmOrigin, 5=environ
     float texXfmRow0[4];        // vec4f — UV transform row 0 (u)
     float texXfmRow1[4];        // vec4f — UV transform row 1 (v)
+    float normDetailTiling;     // f32 — UV tiling for detail normal map
+    float normDetailStrength;   // f32 — blend strength (0 = disabled)
+    float hasNormDetailMap;     // f32 — 1.0 when detail map bound
+    float _pad4;                // align to 176
 };
-static_assert(sizeof(MaterialUniforms) == 160, "MaterialUniforms must match WGSL layout");
+static_assert(sizeof(MaterialUniforms) == 176, "MaterialUniforms must match WGSL layout");
 
 struct ObjectUniforms {
     float world[16];            // mat4x4f
@@ -147,14 +157,25 @@ public:
     void BeginDrawing() override;
     void EndDrawing() override;
 
+    // Screen-space 2D drawing (NgRnd override)
+    void DrawRect(const Hmx::Rect&, RndMat*, ShaderType, const Hmx::Color&,
+                  const Hmx::Color*, const Hmx::Color*) override;
+    // Base Rnd override
+    void DrawRect(const Hmx::Rect& r, const Hmx::Color& c, RndMat* m,
+                  const Hmx::Color* tr, const Hmx::Color* bl) override {
+        DrawRect(r, m, kStandardShader, c, tr, bl);
+    }
+
     // Accessors for Mesh_Wgpu.cpp / Tex_Wgpu.cpp
     GpuDevice& Gpu() { return mGpu; }
     PipelineManager& Pipelines() { return mPipelines; }
     wgpu::RenderPassEncoder& CurrentPass() { return mPass; }
     bool IsInPass() const { return mInPass; }
 
-    // Scene bind group (group 0) — set once per frame
+    // Scene bind group (group 0) — updated when camera changes
     wgpu::BindGroup& SceneBindGroup() { return mSceneBindGroup; }
+    wgpu::Buffer& SceneBuffer() { return mSceneBuffer; }
+    void EnsureSceneUniformsCurrent();  // call before drawing — re-uploads if camera changed
 
     // Default textures
     wgpu::TextureView& WhiteTexView() { return mWhiteTexView; }
@@ -171,6 +192,7 @@ public:
         wgpu::TextureView emissive;
         wgpu::TextureView rim;
         wgpu::TextureView environCube;
+        wgpu::TextureView normDetail;
     };
 
     // Create material bind group (group 1)
@@ -237,6 +259,31 @@ private:
     wgpu::Texture mBlackCubeTex;
     wgpu::TextureView mBlackCubeTexView;
     wgpu::Sampler mDefaultSampler;
+
+    // 2D drawing (DrawRect)
+    wgpu::ShaderModule m2dShader;
+    wgpu::BindGroupLayout m2dBindGroupLayout;
+    wgpu::PipelineLayout m2dPipelineLayout;
+    wgpu::Buffer m2dVertexBuffer;
+    void EnsureDrawRect2DPipeline();
+    bool m2dPipelineReady = false;
+
+    // Post-processing
+    wgpu::Texture mIntermediateTex;
+    wgpu::TextureView mIntermediateView;
+    int mIntermediateWidth = 0;
+    int mIntermediateHeight = 0;
+    wgpu::ShaderModule mPostProcShader;
+    wgpu::BindGroupLayout mPostProcBGL;
+    wgpu::PipelineLayout mPostProcPipelineLayout;
+    wgpu::RenderPipeline mPostProcPipeline;
+    wgpu::Buffer mPostProcUniformBuffer;
+    bool mPostProcReady = false;
+    void EnsurePostProcPipeline();
+    void RunPostProcessing();
+
+    // Camera tracking — re-upload scene uniforms when camera changes
+    RndCam* mLastSceneCam = nullptr;
 
     // Clear color
     Hmx::Color mWgpuClearColor;

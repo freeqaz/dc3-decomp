@@ -31,17 +31,39 @@ __forceinline ObjRefConcrete<T1, T2>::ObjRefConcrete(const ObjRefConcrete &o)
 
 template <class T1, class T2>
 ObjRefConcrete<T1, T2>::~ObjRefConcrete() {
-    if (mObject)
+    if (mObject) {
+#ifdef HX_NATIVE
+        // Guard against use-after-free: during ObjectDir::DeleteObjects(),
+        // objects are destroyed in arbitrary order. A ref's target may already
+        // be freed, making mObject a dangling pointer. Check the live-object set.
+        if (!HmxObjectIsLive(mObject)) {
+            // Can't call mObject->Release(this) since mObject is freed, but
+            // we MUST still unlink ourselves from the target's ref ring.
+            // Otherwise the ring retains a dangling pointer to this node,
+            // and the target's eventual ReplaceRefs walk will crash.
+            Release(nullptr);
+            return;
+        }
+#endif
         mObject->Release(this);
+    }
 }
 
 template <class T1, class T2>
 void ObjRefConcrete<T1, T2>::SetObjConcrete(T1 *obj) {
-    if (mObject)
-        mObject->Release(this);
+    if (mObject) {
+#ifdef HX_NATIVE
+        if (HmxObjectIsLive(mObject))
+#endif
+            mObject->Release(this);
+    }
     mObject = obj;
-    if (mObject)
-        mObject->AddRef(this);
+    if (mObject) {
+#ifdef HX_NATIVE
+        if (HmxObjectIsLive(mObject))
+#endif
+            mObject->AddRef(this);
+    }
 }
 
 template <class T1, class T2>
@@ -192,8 +214,11 @@ void ObjPtrVec<T1, T2>::ReplaceNode(Node *n, Hmx::Object *obj) {
         Hmx::Object *oldObj = n->SetObj(obj);
         if (!oldObj && mListMode == kObjListNoNull) {
 #ifdef HX_NATIVE
-            // Standard STL iterators aren't raw pointers; convert via offset
-            erase(iterator(mNodes.begin() + (n - mNodes.data())));
+            // During ReplaceList walks, suppress erase to avoid vector element
+            // shifting which corrupts the ObjRef ring's prev/next pointers.
+            if (!gSuppressRefErase) {
+                erase(iterator(mNodes.begin() + (n - mNodes.data())));
+            }
 #else
             erase(n);
 #endif

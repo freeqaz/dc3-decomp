@@ -968,8 +968,9 @@ void RndMesh::RemoveInvalidBones() {
     for (ObjVector<RndBone>::iterator it = mBones.begin(); it != mBones.end();) {
         if (it->mBone)
             ++it;
-        else
+        else {
             it = mBones.erase(it);
+        }
     }
 }
 

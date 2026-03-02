@@ -19,7 +19,6 @@ public:
     virtual DataNode Handle(DataArray *, bool);
 
     void MoveLevel(int);
-    void InsertBreak(DataArray *, int);
     void SetBreak(DataArray *);
     void Clear(int);
     void Breakpoints();
@@ -31,9 +30,10 @@ public:
     void Help(Symbol);
     bool Showing() { return mShowing; }
     void SetShowing(bool);
-    void ExecuteLine();
 
 private:
+    void ExecuteLine();
+    void InsertBreak(DataArray *, int);
     bool OnMsg(const KeyboardKeyMsg &);
 
     bool mShowing; // 0x1c

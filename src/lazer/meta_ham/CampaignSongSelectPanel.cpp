@@ -133,6 +133,9 @@ void CampaignSongProvider::UpdateList() {
     CampaignPerformer *pPerformer =
         dynamic_cast<CampaignPerformer *>(MetaPerformer::Current());
     MILO_ASSERT(pPerformer, 0x3d);
+#ifdef HX_NATIVE
+    if (!TheCampaign || !pPerformer) return;
+#endif
     CampaignEra *pEra = TheCampaign->GetCampaignEra(pPerformer->Era());
     MILO_ASSERT(pEra, 0x41);
     int numSongs = pEra->GetNumSongs();
@@ -179,6 +182,13 @@ END_HANDLERS
 void CampaignSongSelectPanel::Load() {
     CampaignPerformer *pPerformer =
         dynamic_cast<CampaignPerformer *>(MetaPerformer::Current());
+#ifdef HX_NATIVE
+    if (!pPerformer) {
+        MILO_WARN("CampaignSongSelectPanel::Load: no CampaignPerformer, skipping");
+        TexLoadPanel::Load();
+        return;
+    }
+#endif
     MILO_ASSERT(pPerformer, 0x199);
     mEra = pPerformer->Era();
     m_pCurCampaignEra = TheCampaign->GetCampaignEra(mEra);

@@ -302,7 +302,7 @@ void FlowNode::PushDrivenProperties() {
         }
 
         DataArray *propPath = entry.Node().Array();
-        if (propPath) {
+        if (propPath && targetValue.Type() != kDataUndef) {
             SetProperty(propPath, targetValue);
         }
     }

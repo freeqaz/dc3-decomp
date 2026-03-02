@@ -61,21 +61,25 @@ private:
     DataType mType; // 0x4
 public:
     DataNode() {
+        mValue.object = nullptr; // zero all 8 bytes on LP64
         mValue.integer = 0;
         mType = kDataInt;
     }
 
     DataNode(int i) {
+        mValue.object = nullptr;
         mValue.integer = i;
         mType = kDataInt;
     }
 
     DataNode(long l) {
+        mValue.object = nullptr;
         mValue.integer = l;
         mType = kDataInt;
     }
 
     DataNode(unsigned long l) {
+        mValue.object = nullptr;
         mValue.integer = l;
         mType = kDataInt;
     }
@@ -83,6 +87,7 @@ public:
 #ifdef HX_NATIVE
     // On native LP64, unsigned int (u32) is distinct from unsigned long
     DataNode(unsigned int u) {
+        mValue.object = nullptr;
         mValue.integer = u;
         mType = kDataInt;
     }
@@ -99,6 +104,7 @@ public:
     }
 
     DataNode(DataType ty, int i) {
+        mValue.object = nullptr;
         mType = ty;
         mValue.integer = i;
     }
@@ -109,11 +115,13 @@ public:
     }
 
     DataNode(float f) {
+        mValue.object = nullptr;
         mValue.real = f;
         mType = kDataFloat;
     }
 
     DataNode(double d) {
+        mValue.object = nullptr;
         mValue.real = d;
         mType = kDataFloat;
     }

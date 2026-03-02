@@ -208,3 +208,58 @@ void RndSpline::PrepareShader(float farg0, float farg1) const {
         }
     }
 }
+
+void RndSpline::SetStartCtrlPoint(int idx) {
+    if (idx != -1) {
+        int maxIdx = mCtrlPoints.size() - 2;
+        if (idx > maxIdx)
+            idx = maxIdx;
+        else if (idx < 0)
+            idx = 0;
+    }
+    if (idx == mStartCtrlPoint)
+        return;
+    mStartCtrlPoint = idx;
+    if (idx == -1)
+        return;
+    if (mEndCtrlPoint != -1 && mEndCtrlPoint <= idx) {
+        mEndCtrlPoint = idx + 1;
+    }
+}
+
+void RndSpline::SetEndCtrlPoint(int idx) {
+    if (idx != -1) {
+        int maxIdx = mCtrlPoints.size() - 1;
+        if (idx > maxIdx)
+            idx = maxIdx;
+        else if (idx < 1)
+            idx = 1;
+    }
+    if (idx == mEndCtrlPoint)
+        return;
+    mEndCtrlPoint = idx;
+    if (idx == -1)
+        return;
+    if (idx <= mStartCtrlPoint) {
+        mStartCtrlPoint = idx - 1;
+    }
+}
+
+void RndSpline::CtrlPoint::Interp(const CtrlPoint &a, const CtrlPoint &b, float t) {
+    ::Interp(a.mPos, b.mPos, t, mPos);
+    mRoll = a.mRoll + (b.mRoll - a.mRoll) * t;
+}
+
+void RndSpline::Poll() {
+    if (!mTestPulseActive)
+        return;
+    if (!mPulseDrawing)
+        return;
+    float offset = mPulseOffset + 1.0f / 30.0f;
+    mPulseOffset = offset;
+    if (offset <= (float)((unsigned int)mCtrlPoints.size()))
+        return;
+    mTestPulseActive = false;
+    mPulseDrawing = false;
+    mPulseOffset = -1000.0f;
+}

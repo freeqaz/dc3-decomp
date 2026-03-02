@@ -13,6 +13,7 @@
 #include "os/System.h"
 #include "os/UserMgr.h"
 #include "rndobj/Cam.h"
+#include "rndobj/Env.h"
 #include "ui/CheatProvider.h"
 #include "utl/Cheats.h"
 #include "utl/FilePath.h"
@@ -155,6 +156,22 @@ void UIManager::ToggleLoadTimes() {
 }
 
 void UIManager::Draw() {
+#ifdef HX_NATIVE
+    // Select the UI camera and environment for screen-space rendering.
+    // On Xbox 360, NgRnd's draw pipeline did this per-panel. Our native
+    // renderer uses a single pass, so we select once before UI draws.
+    RndCam* savedCam = RndCam::Current();
+    RndEnviron* savedEnv = RndEnviron::Current();
+    if (mCam) {
+        mCam->Select();
+        extern int gDebugFrameID;
+        if (gDebugFrameID == 500) {
+            printf("DC3 UI::Draw@500: selected [ui.cam], RndCam::Current()='%s'\n",
+                   RndCam::Current() ? RndCam::Current()->Name() : "NULL");
+        }
+    }
+    if (mEnv) mEnv->Select(nullptr);
+#endif
     for (std::vector<UIScreen *>::iterator it = mPushedScreens.begin();
          it != mPushedScreens.end();
          ++it) {
@@ -162,6 +179,11 @@ void UIManager::Draw() {
     }
     if (mCurrentScreen)
         mCurrentScreen->Draw();
+#ifdef HX_NATIVE
+    // Restore previous camera/environment
+    if (savedCam) savedCam->Select();
+    if (savedEnv) savedEnv->Select(nullptr);
+#endif
 }
 
 void UIManager::GotoScreen(const char *name, bool b2, bool b3) {
@@ -201,12 +223,18 @@ UIScreen *UIManager::ScreenAtDepth(int depth) {
 }
 
 void UIManager::UseJoypad(bool useJoypad, bool enableAutoRepeat) {
+#ifdef HX_NATIVE
+    printf("DC3 UI: UseJoypad(%d, %d)\n", (int)useJoypad, (int)enableAutoRepeat);
+#endif
     if (useJoypad && !mJoyClient) {
         mJoyClient = new JoypadClient(this);
         mJoyClient->SetVirtualDpad(true);
         if (enableAutoRepeat) {
             mJoyClient->SetRepeatMask(0xf000);
         }
+#ifdef HX_NATIVE
+        printf("DC3 UI: JoypadClient created for UIManager\n");
+#endif
     } else if (!useJoypad) {
         if (mJoyClient) {
             RELEASE(mJoyClient);
@@ -330,6 +358,14 @@ bool UIManager::BlockHandlerDuringTransition(Symbol s, DataArray *da) {
 }
 
 void UIManager::GotoScreenImpl(UIScreen *scr, bool b1, bool b2) {
+#ifdef HX_NATIVE
+    // Skip screens that require campaign/performer session state.
+    // On Xbox 360, a signed-in player provides this context via MetaPerformer.
+    if (scr && strstr(scr->Name(), "campaign")) {
+        MILO_WARN("Skipping screen '%s' on native (campaign not supported)", scr->Name());
+        return;
+    }
+#endif
     // Only proceed if:
     // - Force transition (b1), OR
     // - Already in a transition, OR
@@ -569,9 +605,12 @@ void UIManager::Poll() {
         }
     }
     if (mTransitionState == kTransitionFrom) {
-        if (!mCurrentScreen
-#ifndef HX_NATIVE
-            || !mCurrentScreen->Entering()
+        if (
+#ifdef HX_NATIVE
+            // Skip entering check on native — animations don't complete
+            true
+#else
+            !mCurrentScreen || !mCurrentScreen->Entering()
 #endif
             ) {
             if (mOverlay && mOverlay->Showing() && mLoadTimer.Running()

@@ -46,7 +46,20 @@ ObjectDir::ObjectDir()
 }
 
 ObjectDir::~ObjectDir() {
+#ifdef HX_NATIVE
+    // Suppress ObjDirPtr::operator= from deleting targets during mSubDirs.clear().
+    // Without this, clearing an ObjDirPtr triggers cascading destruction of sub-dir
+    // hierarchies whose DeleteObjects() walks ref rings containing dangling nodes
+    // from not-yet-cleaned sibling objects.
+    {
+        bool oldSuppress = gSuppressDirPtrDelete;
+        gSuppressDirPtrDelete = true;
+        mSubDirs.clear();
+        gSuppressDirPtrDelete = oldSuppress;
+    }
+#else
     mSubDirs.clear();
+#endif
     delete mLoader;
     if (TheLoadMgr.AsyncUnload()) {
         new DirUnloader(this);
@@ -651,11 +664,42 @@ void ObjectDir::RemovingSubDir(ObjDirPtr<ObjectDir> &subdir) {
 }
 
 void ObjectDir::DeleteObjects() {
+#ifdef HX_NATIVE
+    // Two-pass deletion: collect first, then delete.
+    // Pass 1 nulls all inter-object refs so that destructors don't walk
+    // linked lists containing nodes in already-freed objects.
+    // gSuppressDirPtrDelete prevents ObjDirPtr::operator=(nullptr) from
+    // triggering cascading destruction during the ref-replacement pass.
+    std::vector<Hmx::Object*> toDelete;
+    for (ObjDirItr<Hmx::Object> it(this, false); it != nullptr; ++it) {
+        if (&*it != this) {
+            toDelete.push_back(&*it);
+        }
+    }
+    // Suppress ObjDirPtr deletion for both passes.  During pass 1 (ref
+    // replacement), Replace(nullptr) on an ObjDirPtr would cascade-delete
+    // sub-dirs whose ref rings may still contain live cross-refs.  During
+    // pass 2 (object deletion), nested destructors clearing mSubDirs would
+    // trigger the same cascade.  The second pass explicitly deletes objects,
+    // so the ObjDirPtr auto-delete is redundant here.
+    bool oldSuppress = gSuppressDirPtrDelete;
+    gSuppressDirPtrDelete = true;
+    for (size_t i = 0; i < toDelete.size(); i++) {
+        if (HmxObjectIsLive(toDelete[i]))
+            toDelete[i]->ReplaceRefs(nullptr);
+    }
+    for (size_t i = 0; i < toDelete.size(); i++) {
+        if (HmxObjectIsLive(toDelete[i]))
+            delete toDelete[i];
+    }
+    gSuppressDirPtrDelete = oldSuppress;
+#else
     for (ObjDirItr<Hmx::Object> it(this, false); it != nullptr; ++it) {
         if (it != this) {
             delete it;
         }
     }
+#endif
 }
 
 void ObjectDir::RemoveSubDir(const ObjDirPtr<ObjectDir> &dPtr) {

@@ -300,14 +300,19 @@ static void UnpackUDEC4N_BE(int packed, float out[4]) {
 }
 
 static void UnpackUBYTE4_BE(int packed, uint8_t out[4]) {
-    // UBYTE4: 4 individual bytes — NO endian swap needed.
-    // Each byte is independent (not a multi-byte integer like UDEC4N).
-    // bswap would reverse the byte order, mapping vertices to wrong bones.
-    const unsigned char* bytes = (const unsigned char*)&packed;
-    out[0] = bytes[0];
-    out[1] = bytes[1];
-    out[2] = bytes[2];
-    out[3] = bytes[3];
+    // UBYTE4: 4 individual bytes packed into a 32-bit int.
+    // The int is stored big-endian in the file, so on a LE system the byte
+    // order within the native int is reversed. We must bswap to restore the
+    // original Xbox byte order before extracting individual indices.
+    // Packing on Xbox: value = idx0 + idx1*256 + idx2*65536 + idx3*16M
+    // File bytes (BE): [idx3, idx2, idx1, idx0]
+    // LE native int:   idx3 + idx2*256 + idx1*65536 + idx0*16M (reversed)
+    // After bswap:     idx0 + idx1*256 + idx2*65536 + idx3*16M (correct)
+    unsigned int val = __builtin_bswap32((unsigned int)packed);
+    out[0] = (val) & 0xFF;
+    out[1] = (val >> 8) & 0xFF;
+    out[2] = (val >> 16) & 0xFF;
+    out[3] = (val >> 24) & 0xFF;
 }
 
 int UnpackCompressedSkinnedVertices(const unsigned char* compressedData, int numVerts,

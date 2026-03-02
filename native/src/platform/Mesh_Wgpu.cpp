@@ -14,7 +14,9 @@
 #include "rndobj/CubeTex.h"
 #include "math/Mtx.h"
 
+#include <algorithm>
 #include <unordered_map>
+#include <vector>
 #include <cstdio>
 #include <cstring>
 #include <cmath>
@@ -83,6 +85,44 @@ static void EnsureDummyBoneBindGroup() {
 // Cleanup — called from RndMesh destructor to release GPU resources
 void CleanupGpuMesh(RndMesh* mesh) {
     sMeshGpuData.erase(mesh);
+}
+
+// Transparent draw queue — meshes with alpha blend are deferred and sorted
+struct DeferredDraw {
+    RndMesh* mesh;
+    float distSq; // squared distance from camera to centroid
+    RndCam* cam;  // camera active when queued (restored during flush)
+};
+static std::vector<DeferredDraw> sTransparentQueue;
+
+static bool IsTransparentBlend(int blend) {
+    return blend == BaseMaterial::kBlendSrcAlpha ||
+           blend == BaseMaterial::kBlendSrcAlphaAdd ||
+           blend == BaseMaterial::kBlendAdd ||
+           blend == BaseMaterial::kBlendSubtract ||
+           blend == BaseMaterial::kPreMultAlpha;
+}
+
+// Forward declaration — draws a mesh immediately (called for both opaque and deferred)
+static void DrawMeshImmediate(RndMesh* mesh);
+
+// Called from EndDrawing to flush transparent draws
+void FlushTransparentDraws() {
+    if (sTransparentQueue.empty()) return;
+
+    // Sort back-to-front (farthest first)
+    std::sort(sTransparentQueue.begin(), sTransparentQueue.end(),
+        [](const DeferredDraw& a, const DeferredDraw& b) {
+            return a.distSq > b.distSq;
+        });
+
+    for (auto& dd : sTransparentQueue) {
+        // Restore the camera that was active when this mesh was queued
+        if (dd.cam && dd.cam != RndCam::Current())
+            dd.cam->Select();
+        DrawMeshImmediate(dd.mesh);
+    }
+    sTransparentQueue.clear();
 }
 
 // Set depth bias for a mesh (used by viewer to push combined meshes behind splits)
@@ -328,6 +368,7 @@ static bool EnsureMeshUploaded(RndMesh* mesh) {
             delete[] indices;
             return false;
         }
+
         FixZeroAlpha(verts, unpacked);
 
         wgpu::BufferDescriptor vbDesc{};
@@ -375,15 +416,13 @@ static bool EnsureMeshUploaded(RndMesh* mesh) {
     gWgpuRnd->Gpu().Queue().WriteBuffer(indexBuf, 0, indices, ibAlignedSize);
     delete[] indices;
 
-    GpuMeshData data;
+    GpuMeshData& data = sMeshGpuData[mesh];
     data.vertexBuffer = vertexBuf;
     data.indexBuffer = indexBuf;
     data.numIndices = numIndices;
     data.numVertices = unpacked;
     data.skinned = skinned;
     data.uploaded = true;
-
-    sMeshGpuData[mesh] = data;
     return true;
 }
 
@@ -416,10 +455,61 @@ void RndMesh::DrawShowing() {
     RndMat* mat = Mat();
     if (!mat) return;
 
-    // Ensure mesh data is on GPU
-    if (!EnsureMeshUploaded(this)) return;
+    // Defer transparent meshes for back-to-front sorting
+    if (IsTransparentBlend(mat->GetBlend())) {
+        float distSq = 0.0f;
+        RndCam* cam = RndCam::Current();
+        if (cam) {
+            const Vector3& camPos = cam->WorldXfm().v;
+            const Vector3& meshPos = WorldXfm().v;
+            float dx = meshPos.x - camPos.x;
+            float dy = meshPos.y - camPos.y;
+            float dz = meshPos.z - camPos.z;
+            distSq = dx*dx + dy*dy + dz*dz;
+        }
+        sTransparentQueue.push_back({this, distSq, RndCam::Current()});
+        return;
+    }
 
-    auto& meshData = sMeshGpuData[this];
+    DrawMeshImmediate(this);
+}
+
+static void DrawMeshImmediate(RndMesh* mesh) {
+    if (!gWgpuRnd || !gWgpuRnd->IsInPass()) return;
+
+    // Re-upload scene uniforms if camera changed (e.g., UI camera vs world camera)
+    gWgpuRnd->EnsureSceneUniformsCurrent();
+
+    // Debug: log draw details at frame 3000
+    {
+        extern int gDebugFrameID;
+        static int sDbg3k = 0;
+        if (gDebugFrameID == 3000 && sDbg3k < 20) {
+            RndCam* cam = RndCam::Current();
+            RndMat* dbgMat = mesh->Mat();
+            RndMesh* geom = mesh->GetGeomOwner();
+            if (!geom) geom = mesh;
+            const Transform& mw = mesh->WorldXfm();
+            auto& meshData = sMeshGpuData[mesh];
+            printf("DC3 MeshDraw@3000[%d]: mesh='%s' geomVerts=%d compVerts=%d indices=%d pos=(%.1f,%.1f,%.1f) mat='%s' color=(%.2f,%.2f,%.2f,%.2f) blend=%d\n",
+                   sDbg3k, mesh->Name(),
+                   geom->NumVerts(), geom->NumCompressedVerts(), meshData.numIndices,
+                   mw.v.x, mw.v.y, mw.v.z,
+                   dbgMat ? dbgMat->Name() : "NULL",
+                   dbgMat ? dbgMat->GetColor().red : 0.0f, dbgMat ? dbgMat->GetColor().green : 0.0f,
+                   dbgMat ? dbgMat->GetColor().blue : 0.0f, dbgMat ? dbgMat->GetColor().alpha : 0.0f,
+                   dbgMat ? (int)dbgMat->GetBlend() : -1);
+            sDbg3k++;
+        }
+    }
+
+    RndMat* mat = mesh->Mat();
+    if (!mat) return;
+
+    // Ensure mesh data is on GPU
+    if (!EnsureMeshUploaded(mesh)) return;
+
+    auto& meshData = sMeshGpuData[mesh];
     auto& pass = gWgpuRnd->CurrentPass();
     bool skinned = meshData.skinned;
 
@@ -537,6 +627,11 @@ void RndMesh::DrawShowing() {
     // Prelit: vertex color is pre-lit, skip lighting
     matUni.prelit = mat->Prelit() ? 1.0f : 0.0f;
 
+    // Detail normal map
+    matUni.normDetailTiling = mat->GetNormDetailTiling();
+    matUni.normDetailStrength = mat->GetNormDetailStrength();
+    matUni.hasNormDetailMap = mat->GetNormDetailMap() ? 1.0f : 0.0f;
+
     // TexGen mode and transform
     matUni.texGenMode = (float)mat->GetTexGen();
     if (mat->GetTexGen() == kTexGenXfm || mat->GetTexGen() == kTexGenXfmOrigin ||
@@ -562,6 +657,9 @@ void RndMesh::DrawShowing() {
     texViews.specular = resolveMap(mat->GetSpecularMap(), gWgpuRnd->WhiteTexView());
     texViews.emissive = resolveMap(mat->GetEmissiveMap(), gWgpuRnd->BlackTexView());
     texViews.rim      = resolveMap(mat->GetRimMap(),      gWgpuRnd->WhiteTexView());
+
+    // Detail normal map
+    texViews.normDetail = resolveMap(mat->GetNormDetailMap(), gWgpuRnd->FlatNormalTexView());
 
     // Environment cube map
     RndCubeTex* environMap = mat->GetEnvironMap();
@@ -620,7 +718,7 @@ void RndMesh::DrawShowing() {
         identity.Reset();
         FillObjectUniforms(identity, objUni);
     } else {
-        FillObjectUniforms(WorldXfm(), objUni);
+        FillObjectUniforms(mesh->WorldXfm(), objUni);
     }
 
     uint32_t objOffset = gWgpuRnd->ObjectRing().Write(
@@ -635,20 +733,16 @@ void RndMesh::DrawShowing() {
         BoneUniforms boneUni{};
         memset(&boneUni, 0, sizeof(boneUni));
 
-        int numBones = NumBones();
+        int numBones = mesh->NumBones();
         if (numBones > kMaxBones) numBones = kMaxBones;
 
         for (int i = 0; i < numBones; i++) {
-            RndTransformable* boneTrans = BoneTransAt(i);
+            RndTransformable* boneTrans = mesh->BoneTransAt(i);
             if (boneTrans) {
-                // mOffset takes vertex: mesh local → world → bone local (at bind time)
-                // boneCurrentWorld takes: bone local → current world
-                // Combined: v * mOffset * boneCurrentWorld
                 Transform skinMatrix;
-                Multiply(mBones[i].mOffset, boneTrans->WorldXfm(), skinMatrix);
+                Multiply(mesh->BoneOffsetAt(i), boneTrans->WorldXfm(), skinMatrix);
                 TransformToMat4(skinMatrix, boneUni.bones[i]);
             } else {
-                // Null bone — use identity
                 boneUni.bones[i][0]  = 1.0f;
                 boneUni.bones[i][5]  = 1.0f;
                 boneUni.bones[i][10] = 1.0f;
@@ -682,4 +776,78 @@ void RndMesh::DrawShowing() {
     pass.SetIndexBuffer(meshData.indexBuffer, wgpu::IndexFormat::Uint16, 0,
                         meshData.numIndices * sizeof(uint16_t));
     pass.DrawIndexed(meshData.numIndices);
+
+    // --- Multi-pass materials ---
+    // Walk the NextPass chain and draw additional passes with the same geometry
+    BaseMaterial* nextPass = mat->NextPass();
+    while (nextPass) {
+        // Pipeline may differ (blend mode, z mode, etc.)
+        PipelineKey npKey = key;
+        npKey.blend = (WgpuBlend)nextPass->GetBlend();
+        npKey.zMode = (WgpuZMode)nextPass->GetZMode();
+        npKey.cull = (WgpuCull)nextPass->GetCull();
+        npKey.stencil = (WgpuStencil)nextPass->GetStencil();
+        npKey.alphaCut = nextPass->GetAlphaCut();
+        npKey.alphaWrite = nextPass->GetAlphaWrite();
+        npKey.alphaToCoverage = nextPass->GetAlphaCut();
+
+        wgpu::RenderPipeline npPipeline = gWgpuRnd->Pipelines().GetPipeline(npKey);
+        if (npPipeline) {
+            pass.SetPipeline(npPipeline);
+
+            // Fill material uniforms from nextPass
+            MaterialUniforms npMatUni{};
+            const Hmx::Color& npc = nextPass->GetColor();
+            npMatUni.color[0] = npc.red; npMatUni.color[1] = npc.green;
+            npMatUni.color[2] = npc.blue; npMatUni.color[3] = npc.alpha;
+            npMatUni.alphaThreshold = nextPass->GetAlphaCut() ? nextPass->GetAlphaThreshold() / 255.0f : 0.0f;
+            const Hmx::Color& nps = nextPass->GetSpecularRGB();
+            float npSpecPower = nps.alpha > 0.0f ? nps.alpha : 0.0f;
+            npMatUni.specularPower = npSpecPower;
+            npMatUni.specularColor[0] = nps.red; npMatUni.specularColor[1] = nps.green;
+            npMatUni.specularColor[2] = nps.blue; npMatUni.specularColor[3] = 1.0f;
+            npMatUni.emissiveMultiplier = nextPass->GetEmissiveMap() ? nextPass->GetEmissiveMultiplier() : 0.0f;
+            npMatUni.intensify = nextPass->GetIntensify() ? 2.0f : 1.0f;
+            npMatUni.deNormal = nextPass->GetDeNormal();
+            npMatUni.hasNormalMap = nextPass->NormalMap() ? 1.0f : 0.0f;
+            npMatUni.prelit = nextPass->Prelit() ? 1.0f : 0.0f;
+            npMatUni.texGenMode = (float)nextPass->GetTexGen();
+
+            // Resolve textures
+            WgpuRnd::MaterialTexViews npTexViews;
+            wgpu::TextureView npDiffuse;
+            if (nextPass->GetDiffuseTex()) {
+                npDiffuse = GetGpuTexView(nextPass->GetDiffuseTex());
+            }
+            if (npDiffuse) {
+                npMatUni.useTexture = 1.0f;
+                npTexViews.diffuse = npDiffuse;
+            } else {
+                npMatUni.useTexture = 0.0f;
+                npTexViews.diffuse = gWgpuRnd->WhiteTexView();
+            }
+            npTexViews.normal = nextPass->NormalMap() ? GetGpuTexView(nextPass->NormalMap()) : gWgpuRnd->FlatNormalTexView();
+            if (!npTexViews.normal) npTexViews.normal = gWgpuRnd->FlatNormalTexView();
+            npTexViews.specular = nextPass->GetSpecularMap() ? GetGpuTexView(nextPass->GetSpecularMap()) : gWgpuRnd->WhiteTexView();
+            if (!npTexViews.specular) npTexViews.specular = gWgpuRnd->WhiteTexView();
+            npTexViews.emissive = nextPass->GetEmissiveMap() ? GetGpuTexView(nextPass->GetEmissiveMap()) : gWgpuRnd->BlackTexView();
+            if (!npTexViews.emissive) npTexViews.emissive = gWgpuRnd->BlackTexView();
+            npTexViews.rim = nextPass->GetRimMap() ? GetGpuTexView(nextPass->GetRimMap()) : gWgpuRnd->WhiteTexView();
+            if (!npTexViews.rim) npTexViews.rim = gWgpuRnd->WhiteTexView();
+            npTexViews.environCube = gWgpuRnd->BlackCubeTexView();
+            npTexViews.normDetail = nextPass->GetNormDetailMap() ? GetGpuTexView(nextPass->GetNormDetailMap()) : gWgpuRnd->FlatNormalTexView();
+            if (!npTexViews.normDetail) npTexViews.normDetail = gWgpuRnd->FlatNormalTexView();
+
+            uint32_t npMatOffset = gWgpuRnd->MaterialRing().Write(
+                gWgpuRnd->Gpu().Queue(), &npMatUni, sizeof(npMatUni));
+
+            wgpu::BindGroup npMatBG = gWgpuRnd->CreateMaterialBindGroup(
+                npMatOffset, sizeof(MaterialUniforms), npTexViews, sampler, mapSampler);
+            pass.SetBindGroup(1, npMatBG);
+
+            // Object + bone bind groups unchanged, just re-draw
+            pass.DrawIndexed(meshData.numIndices);
+        }
+        nextPass = nextPass->NextPass();
+    }
 }

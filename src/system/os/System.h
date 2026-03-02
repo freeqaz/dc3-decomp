@@ -3,7 +3,11 @@
 #include "os/Platform.h"
 #include "utl/Symbol.h"
 
+#ifdef HX_NATIVE
+#define kCommandLineSz 0x2000  // 8KB for long paths on native
+#else
 #define kCommandLineSz 0x200
+#endif
 
 int Hx_snprintf(char *, unsigned int, char const *, ...);
 

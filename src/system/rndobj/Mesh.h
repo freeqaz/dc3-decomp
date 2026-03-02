@@ -181,6 +181,7 @@ public:
     int MaxBones() const { return GetGfxMode() != kOldGfx ? 40 : 4; }
     int NumBones() const { return mBones.size(); }
     RndTransformable *BoneTransAt(int idx) { return mBones[idx].mBone; }
+    const Transform& BoneOffsetAt(int idx) const { return mBones[idx].mOffset; }
     void SetMutable(int m) { mGeomOwner->mMutable = m; }
     int Mutable() const { return mGeomOwner->mMutable; }
     bool HasAOCalc() const { return mGeomOwner->mHasAOCalc; }

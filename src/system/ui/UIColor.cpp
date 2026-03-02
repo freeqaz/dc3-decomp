@@ -2,6 +2,7 @@
 #include "obj/Object.h"
 #include "utl/BinStream.h"
 
+const Hmx::Color &UIColor::GetColor() const { return mColor; }
 void UIColor::SetColor(const Hmx::Color &color) { mColor = color; }
 UIColor::UIColor() : mColor(1, 1, 1, 1) {}
 

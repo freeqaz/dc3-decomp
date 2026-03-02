@@ -177,3 +177,117 @@ void MsgSinks::AddPropertySink(Hmx::Object *o, DataArray *a, Symbol s) {
     mPropSyncHandlers->Node(mPropSyncHandlers->Size() - 1) = path;
     AddSink(o, path, s, Hmx::Object::kHandle, false);
 }
+
+static void ExportSink(Hmx::Object *obj, Hmx::Object::SinkMode mode, DataArray *arr) {
+    switch (mode) {
+    case Hmx::Object::kHandle:
+        obj->Handle(arr, false);
+        break;
+    case Hmx::Object::kExport:
+        obj->Export(arr, false);
+        break;
+    case Hmx::Object::kType:
+        obj->HandleType(arr);
+        break;
+    case Hmx::Object::kExportType:
+        obj->Export(arr, true);
+        break;
+    }
+}
+
+void MsgSinks::Export(DataArray *arr) {
+    mExporting++;
+    Symbol oldEvent = sCurrentExportEvent;
+
+    // Dispatch to global sinks
+    for (ObjList<Sink>::iterator it = mSinks.begin(); it != mSinks.end();) {
+        if (it->obj == nullptr) {
+            if (mExporting == 1) {
+                it = mSinks.erase(it);
+                continue;
+            }
+        } else {
+            ExportSink(it->obj, it->mode, arr);
+        }
+        ++it;
+    }
+
+    // Find and dispatch to event-specific sinks
+    Symbol msgType = arr->Sym(1);
+    sCurrentExportEvent = msgType;
+
+    for (ObjList<EventSink>::iterator evIt = mEventSinks.begin();
+         evIt != mEventSinks.end(); ++evIt) {
+        if (evIt->event == arr->Sym(1)) {
+            // Save original message node and replace with handler symbol
+            DataNode origNode = arr->Node(1);
+            for (ObjList<EventSinkElem>::iterator sinkIt = evIt->sinks.begin();
+                 sinkIt != evIt->sinks.end();) {
+                if (sinkIt->obj == nullptr) {
+                    if (mExporting == 1) {
+                        sinkIt = evIt->sinks.erase(sinkIt);
+                        continue;
+                    }
+                } else {
+                    arr->Node(1) = DataNode(sinkIt->handler);
+                    ExportSink(sinkIt->obj, sinkIt->mode, arr);
+                }
+                ++sinkIt;
+            }
+            // Restore original message node
+            arr->Node(1) = origNode;
+            break;
+        }
+    }
+
+    sCurrentExportEvent = oldEvent;
+    mExporting--;
+}
+
+void MsgSinks::RemoveSink(Hmx::Object *obj, Symbol ev) {
+    if (ev.Null()) {
+        for (ObjList<Sink>::iterator it = mSinks.begin(); it != mSinks.end(); ++it) {
+            if (it->obj == obj) {
+                if (mExporting) {
+                    it->obj = nullptr;
+                } else {
+                    mSinks.erase(it);
+                }
+                return;
+            }
+        }
+    } else {
+        for (ObjList<EventSink>::iterator it = mEventSinks.begin();
+             it != mEventSinks.end(); ++it) {
+            if (it->event == ev) {
+                it->Remove(obj, mExporting != 0);
+                if (it->sinks.empty() && !mExporting) {
+                    mEventSinks.erase(it);
+                }
+                return;
+            }
+        }
+    }
+}
+
+bool MsgSinks::Replace(ObjRef *ref, Hmx::Object *obj) {
+    // Check global sinks
+    for (ObjList<Sink>::iterator it = mSinks.begin(); it != mSinks.end(); ++it) {
+        if (&it->obj == ref) {
+            it->obj = static_cast<Hmx::Object*>(obj);
+            return true;
+        }
+    }
+    // Check event sinks
+    for (ObjList<EventSink>::iterator evIt = mEventSinks.begin();
+         evIt != mEventSinks.end(); ++evIt) {
+        for (ObjList<EventSinkElem>::iterator sinkIt = evIt->sinks.begin();
+             sinkIt != evIt->sinks.end(); ++sinkIt) {
+            if (&sinkIt->obj == ref) {
+                sinkIt->obj = static_cast<Hmx::Object*>(obj);
+                return true;
+            }
+        }
+    }
+    return false;
+}

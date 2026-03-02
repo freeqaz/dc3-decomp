@@ -42,7 +42,8 @@ public:
         kGreaterThanOrEqual = 3,
         kLessThan = 4,
         kLessThanOrEqual = 5,
-        kTransition = 6
+        kTransition = 6,
+        kDefault = 7
     };
     // Hmx::Object
     virtual ~FlowNode();
@@ -82,6 +83,7 @@ public:
     const ObjVector<DrivenPropertyEntry> &DrivenPropEntries() const {
         return mDrivenPropEntries;
     }
+    bool HasChildren() const { return !mChildNodes.empty(); }
 
 protected:
     FlowNode();

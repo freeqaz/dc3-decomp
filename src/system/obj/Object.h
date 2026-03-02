@@ -17,6 +17,22 @@ class ObjRef;
 class ObjRefOwner;
 class ObjectDir;
 
+#ifdef HX_NATIVE
+// Returns true if the given Hmx::Object pointer is still alive (not yet destroyed).
+// Used to guard against use-after-free when ObjRef nodes reference freed objects.
+bool HmxObjectIsLive(Hmx::Object *obj);
+
+// When true, ObjPtrVec/ObjPtrList should NOT erase nodes during Replace(nullptr).
+// Set during ObjRef::ReplaceList walks to prevent vector element shifting from
+// corrupting the ObjRef ring's prev/next pointers.
+extern bool gSuppressRefErase;
+
+// When true, ObjDirPtr::operator=(nullptr) should NOT delete its target.
+// Set during ObjectDir::DeleteObjects() bulk ref-replacement pass to prevent
+// cascading destruction that corrupts ref rings.
+extern bool gSuppressDirPtrDelete;
+#endif
+
 #pragma region ObjRef
 
 // Object Ref/Ptr declarations
@@ -101,20 +117,19 @@ public:
     bool empty() const { return next == this; }
 
     void Clear() { next = prev = this; }
+#ifdef HX_NATIVE
+    void ReplaceList(Hmx::Object *obj);
+#else
     void ReplaceList(Hmx::Object *obj) {
         while (this != next) {
             ObjRef *n = next;
             n->Replace(obj);
             if (n == next) {
-#ifdef HX_NATIVE
-                // Broken vtable can't advance the list — force unlink to prevent infinite loop
-                next = n->next;
-#else
                 MILO_FAIL("ReplaceList stuck in infinite loop");
-#endif
             }
         }
     }
+#endif
 
     // per ObjectDir::HasDirPtrs, this is the way to iterate across refs
     // for (ObjRef *it = mRefs.next; it != &mRefs; it = it->next) {

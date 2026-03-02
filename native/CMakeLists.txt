@@ -865,6 +865,7 @@ set(DC3_NATIVE_CORE_SOURCES
     src/platform/FxSendNative.cpp
     src/platform/Rnd_Wgpu.cpp
     src/platform/Mesh_Wgpu.cpp
+    src/platform/Part_Wgpu.cpp
     src/platform/Tex_Wgpu.cpp
     src/platform/Cam_Native.cpp
     src/platform/Net_Stub.cpp
@@ -1036,6 +1037,7 @@ target_link_options(milo-viewer PRIVATE
     # -fsanitize=address  # Disabled: complex virtual inheritance VTT issues
     -Wl,--unresolved-symbols=ignore-all
     -Wl,--warn-unresolved-symbols
+    -Wl,--allow-multiple-definition
 )
 
 target_link_libraries(milo-viewer PRIVATE
@@ -1063,6 +1065,7 @@ if(BUILD_TESTS)
     add_executable(milo-tests
         tests/test_helpers.cpp
         tests/test_binstream.cpp
+        tests/test_charbones_serialization.cpp
         tests/test_chunkstream.cpp
         tests/test_dirloader.cpp
         tests/test_milo_diagnostic.cpp

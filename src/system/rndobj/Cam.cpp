@@ -10,11 +10,17 @@
 #include "os/Debug.h"
 #include "os/System.h"
 #include "rndobj/Draw.h"
+#include "rndobj/HiResScreen.h"
 #include "rndobj/Trans.h"
 
 float RndCam::sDefaultNearPlane = 1;
 float RndCam::sMaxFarNearPlaneRatio = 1000;
-static Transform sFlipYZ;
+static Transform sFlipYZ
+#ifdef HX_NATIVE
+    // Y/Z flip: Milo (X=right, Y=forward, Z=up) → D3D (X=right, Y=up, Z=forward)
+    = {{Vector3(1,0,0), Vector3(0,0,1), Vector3(0,1,0)}, Vector3(0,0,0)}
+#endif
+    ;
 
 RndCam::RndCam()
     : mNearPlane(sDefaultNearPlane), mFarPlane(mNearPlane * sMaxFarNearPlaneRatio),
@@ -125,6 +131,36 @@ BEGIN_LOADS(RndCam)
     UpdateLocal();
 END_LOADS
 
+void RndCam::UpdateLocal() {
+    float ratio = (mScreenRect.h / mScreenRect.w) * mAspectRatio;
+    if (mTargetTex) {
+        ratio *= (float)mTargetTex->Height() / (float)mTargetTex->Width();
+    } else {
+        ratio *= TheRnd.YRatio();
+    }
+    mLocalFrustum.Set(mNearPlane, mFarPlane, mYFov, ratio);
+    mLocalProjectXfm.m.Zero();
+    mLocalProjectXfm.v.Zero();
+    mInvLocalProjectXfm.m.Zero();
+    mInvLocalProjectXfm.v.Zero();
+    if (mYFov == 0) {
+        mInvLocalProjectXfm.m.z.x = -ratio;
+        mLocalProjectXfm.m.x.x = 1;
+        mLocalProjectXfm.v.x = -1.0f / ratio;
+        mInvLocalProjectXfm.m.x.x = 1;
+    } else {
+        float thetan = tanf(mYFov * 0.5f);
+        mLocalProjectXfm.m.z.x = 1;
+        mInvLocalProjectXfm.v.x = 1;
+        mInvLocalProjectXfm.m.x.x = thetan / ratio;
+        mInvLocalProjectXfm.m.z.x = -thetan;
+        mLocalProjectXfm.m.x.x = ratio / thetan;
+        mLocalProjectXfm.v.x = -1.0f / thetan;
+    }
+    UpdatedWorldXfm();
+    mAspect = TheRnd.GetAspect();
+}
+
 void RndCam::UpdatedWorldXfm() {
     const Transform &xfm = WorldXfm();
     Invert(xfm, mInvWorldXfm);
@@ -151,6 +187,20 @@ Transform RndCam::GetInvViewXfm() {
     Transform out;
     Multiply(sFlipYZ, WorldXfm(), out);
     return out;
+}
+
+void RndCam::GetCamFrustum(Vector3 &origin, Vector3 (&dirs)[4]) {
+    static Vector2 sCorners[4] = {
+        Vector2(0, 0), Vector2(0, 1), Vector2(1, 0), Vector2(1, 1)
+    };
+    const Transform &xfm = WorldXfm();
+    origin = xfm.v;
+    for (int i = 0; i < 4; i++) {
+        ScreenToWorld(sCorners[i], mFarPlane, dirs[i]);
+        dirs[i].x -= origin.x;
+        dirs[i].y -= origin.y;
+        dirs[i].z -= origin.z;
+    }
 }
 
 void RndCam::SetViewProj(const Hmx::Matrix4 &mtx) {
@@ -228,6 +278,46 @@ void RndCam::ScreenToWorld(const Vector2 &v2, float f, Vector3 &vout) const {
     vout.y = y;
     vout.x = x;
     Multiply(vout, mInvWorldProjectXfm, vout);
+}
+
+void RndCam::GetViewProjectXfms(Transform &viewXfm, Hmx::Matrix4 &projMtx) const {
+    Multiply(mInvWorldXfm, sFlipYZ, viewXfm);
+    projMtx.Zero();
+    float nearPlane = mNearPlane;
+    float farPlane = mFarPlane;
+    float farRatio;
+    if (mYFov == 0) {
+        projMtx.w.w = 1.0f;
+        farRatio = 1.0f / (farPlane - nearPlane);
+    } else {
+        projMtx.z.w = 1.0f;
+        farRatio = farPlane / (farPlane - nearPlane);
+    }
+
+    Hmx::Rect hiRect = TheHiResScreen.ScreenRect(this, mScreenRect);
+
+    float cx = mScreenRect.w * 0.5f + mScreenRect.x;
+    float cy = mScreenRect.h * 0.5f + mScreenRect.y;
+
+    float left = Max(hiRect.x, 0.0f);
+    float bottom = Max(hiRect.y, 0.0f);
+    float right = Min(hiRect.x + hiRect.w, 1.0f);
+    float top = Min(hiRect.y + hiRect.h, 1.0f);
+
+    float l = (left - cx) * 2.0f;
+    float b = (bottom - cy) * 2.0f;
+    float r = (right - cx) * 2.0f;
+    float t = (top - cy) * 2.0f;
+
+    float width = r - l;
+    float height = t - b;
+
+    projMtx.z.z = farRatio;
+    projMtx.x.x = (mScreenRect.w * mLocalProjectXfm.m.x.x * 2.0f) / width;
+    projMtx.y.y = (-(mScreenRect.h * mLocalProjectXfm.v.x) * 2.0f) / height;
+    projMtx.z.y = (t + b) / height;
+    projMtx.z.x = -((r + l) / width);
+    projMtx.w.z = -(mNearPlane * farRatio);
 }
 
 void RndCam::GetDepthRangeValues(Vector4 &v) const {

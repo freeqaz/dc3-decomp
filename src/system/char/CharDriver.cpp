@@ -5,6 +5,7 @@
 #include "char/CharClipDisplay.h"
 #include "char/CharWeightable.h"
 #include "macros.h"
+#include "math/Rand.h"
 #include "math/Utl.h"
 #include "obj/Msg.h"
 #include "obj/Object.h"
@@ -262,6 +263,19 @@ void CharDriver::SyncInternalBones() {
     if (mInternalBones) {
         mInternalBones->ClearBones();
         CharBoneDir::StuffBones(*mInternalBones, mClipType);
+    }
+}
+
+void CharDriver::SetClipWeightMap() {
+    mClipWeightMap.clear();
+    for (CharClipDriver *it = mFirst; it != nullptr; it = it->Next()) {
+        CharClip *clip = it->GetClip();
+        std::map<CharClip *, float>::iterator found = mClipWeightMap.find(clip);
+        if (found != mClipWeightMap.end()) {
+            found->second += it->mWeight;
+        } else {
+            mClipWeightMap.insert(std::pair<CharClip *, float>(clip, it->mWeight));
+        }
     }
 }
 
@@ -536,17 +550,49 @@ void CharDriver::Poll() {
     }
 }
 
+DataNode CharDriver::OnEvaluateFlags(const DataArray *msg) {
+    return EvaluateFlags(msg->Int(2));
+}
+
+DataNode CharDriver::OnGetFirstFlags(const DataArray *msg) {
+    CharClip *clip = FirstPlayingClip();
+    return clip ? clip->Flags() : 0;
+}
+
 BEGIN_HANDLERS(CharDriver)
     HANDLE(play, OnPlay)
     HANDLE(play_group, OnPlayGroup)
     HANDLE(play_group_flags, OnPlayGroupFlags)
+    {
+        static Symbol _s("add_beat");
+        if (sym == _s) {
+            if (mFirst) {
+                mFirst->mBeat += RandomFloat(_msg->Float(2), _msg->Float(_msg->Size() - 1));
+            }
+            return 0;
+        }
+    }
+    HANDLE(evaluate_flags, OnEvaluateFlags)
+    HANDLE(get_first_flags, OnGetFirstFlags)
+    HANDLE_EXPR(first_clip, mFirst ? (Hmx::Object *)mFirst->GetClip() : (Hmx::Object *)0)
+    HANDLE_ACTION(set_clip_type, mClipType = _msg->Sym(2))
     HANDLE_ACTION(set_beat_scale, SetBeatScale(_msg->Float(2), true))
     HANDLE_ACTION(transfer, Transfer(*_msg->Obj<CharDriver>(2)))
     HANDLE(print, OnPrint)
     HANDLE(set_default_clip, OnSetDefaultClip)
     HANDLE(set_first_beat_offset, OnSetFirstBeatOffset)
-    HANDLE_ACTION(clear, Clear())
+    {
+        static Symbol _s("clear");
+        if (sym == _s) {
+            if (mFirst) {
+                mFirst->DeleteStack();
+            }
+            mFirst = nullptr;
+            return 0;
+        }
+    }
     HANDLE(get_clip_or_group_list, OnGetClipOrGroupList)
+    HANDLE_EXPR(default_clip, mDefaultClip.Ptr())
     HANDLE_SUPERCLASS(RndPollable)
     HANDLE_SUPERCLASS(Hmx::Object)
 END_HANDLERS

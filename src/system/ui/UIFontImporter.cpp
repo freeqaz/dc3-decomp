@@ -556,11 +556,30 @@ RndFontBase *UIFontImporter::FindFontForMat(RndMat *mat) const {
         FOREACH (it, mat->Refs()) {
             Hmx::Object *owner = (*it).RefOwner();
             if (owner) {
+#ifdef HX_NATIVE
+                // Use Itanium ABI typeinfo to identify Font/Font3d without calling
+                // virtual functions — some owners may have broken vtables (.bss zeros)
+                // because their GCC key function is undefined.
+                void **vptr = *(void ***)owner;
+                if (!vptr) continue;
+                void *typeinfo = vptr[-1];
+                if (!typeinfo) continue;
+                const char *tname = *(const char **)((char *)typeinfo + sizeof(void *));
+                if (!tname) continue;
+                if (strcmp(tname, "7RndFont") == 0) {
+                    return static_cast<RndFont *>(static_cast<RndFontBase *>(owner));
+                }
+                if (strcmp(tname, "9RndFont3d") == 0) {
+                    return static_cast<RndFont3d *>(static_cast<RndFontBase *>(owner));
+                }
+#else
                 if (owner->ClassName() == Font) {
                     return dynamic_cast<RndFont *>(owner);
                 }
-                if (owner->ClassName() == Font3d)
+                if (owner->ClassName() == Font3d) {
                     return dynamic_cast<RndFont3d *>(owner);
+                }
+#endif
             }
         }
     }

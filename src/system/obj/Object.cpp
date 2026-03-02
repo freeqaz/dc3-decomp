@@ -14,20 +14,32 @@
 #include "utl/Symbol.h"
 
 #ifdef HX_NATIVE
-#include <signal.h>
-#include <setjmp.h>
-#include <set>
-static sigjmp_buf sNewObjectJmpBuf;
-static volatile sig_atomic_t sNewObjectGuardActive = 0;
-static std::set<Symbol> sBrokenClasses;
-static void NewObjectSigHandler(int sig) {
-    if (sNewObjectGuardActive) {
-        sNewObjectGuardActive = 0;
-        siglongjmp(sNewObjectJmpBuf, 1);
+#include <unordered_set>
+static std::unordered_set<Hmx::Object *> &GetLiveObjects() {
+    static std::unordered_set<Hmx::Object *> sLiveObjects;
+    return sLiveObjects;
+}
+
+bool HmxObjectIsLive(Hmx::Object *obj) {
+    return GetLiveObjects().count(obj) > 0;
+}
+
+// Suppress ObjPtrVec/ObjPtrList node erasure during ReplaceList walks to prevent
+// vector reallocation invalidating ObjRef ring pointers.
+bool gSuppressRefErase = false;
+bool gSuppressDirPtrDelete = false;
+
+void ObjRef::ReplaceList(Hmx::Object *obj) {
+    bool oldSuppress = gSuppressRefErase;
+    gSuppressRefErase = true;
+    while (this != next) {
+        ObjRef *n = next;
+        n->Replace(obj);
+        if (n == next) {
+            next = n->next;
+        }
     }
-    // Not our guard — re-raise with default handler
-    signal(SIGSEGV, SIG_DFL);
-    raise(SIGSEGV);
+    gSuppressRefErase = oldSuppress;
 }
 #endif
 
@@ -48,6 +60,9 @@ Hmx::Object::Object()
     : mTypeProps(nullptr), mTypeDef(nullptr), mName(gNullStr), mDir(nullptr),
       mSinks(nullptr) {
     mRefs.Clear();
+#ifdef HX_NATIVE
+    GetLiveObjects().insert(this);
+#endif
 }
 
 Hmx::Object::~Object() {
@@ -66,6 +81,11 @@ Hmx::Object::~Object() {
     if (gDataThis == this) {
         gDataThis = nullptr;
     }
+#ifdef HX_NATIVE
+    // Remove from live-object set AFTER ReplaceRefs, so that refs can still
+    // call Release() on this object during the cleanup walk.
+    GetLiveObjects().erase(this);
+#endif
 }
 
 bool Hmx::Object::Replace(ObjRef *from, Hmx::Object *to) {
@@ -286,6 +306,43 @@ const char *Hmx::Object::FindPathName() {
 #pragma region Ref Methods
 
 void Hmx::Object::ReplaceRefs(Hmx::Object *obj) {
+#ifdef HX_NATIVE
+    // Snapshot all ref nodes before processing.  The ring can become corrupted
+    // during processing because:
+    //   1. ObjPtrVec::erase shifts contiguous nodes, invalidating ring pointers
+    //   2. ObjDirPtr::operator= can trigger cascading deletion
+    //   3. Dead nodes (from freed owners) may have garbage prev/next
+    // By snapshotting and self-unlinking each node upfront, we avoid walking a
+    // mutated linked list entirely.
+    if (mRefs.begin() == mRefs.end())
+        return;
+
+    // Collect all refs into a vector
+    std::vector<ObjRef *> refs;
+    refs.reserve(16);
+    for (ObjRef *r = mRefs.next; r != &mRefs; r = r->next) {
+        refs.push_back(r);
+    }
+    // Detach all nodes from the ring
+    mRefs.Clear();
+    for (size_t i = 0; i < refs.size(); i++) {
+        refs[i]->prev = refs[i];
+        refs[i]->next = refs[i];
+    }
+    // Now process each ref.  Since refs are self-referencing, Release() inside
+    // SetObjConcrete becomes a no-op.  Some refs may have been invalidated by
+    // prior Replace calls (e.g., ObjPtrVec erase shifting nodes), so check the
+    // vtable before virtual dispatch.
+    bool oldSuppress = gSuppressRefErase;
+    gSuppressRefErase = true;
+    for (size_t i = 0; i < refs.size(); i++) {
+        void *vptr = *(void **)refs[i];
+        if (!vptr)
+            continue; // Node was freed/zeroed — skip
+        refs[i]->Replace(obj);
+    }
+    gSuppressRefErase = oldSuppress;
+#else
     if (mRefs.begin() != mRefs.end()) {
         ObjRef other(mRefs);
         other.prev->next = &other;
@@ -293,6 +350,7 @@ void Hmx::Object::ReplaceRefs(Hmx::Object *obj) {
         mRefs.Clear();
         other.ReplaceList(obj);
     }
+#endif
 }
 
 void Hmx::Object::ReplaceRefsFrom(Hmx::Object *from, Hmx::Object *to) {
@@ -607,40 +665,10 @@ Hmx::Object *Hmx::Object::NewObject(Symbol name) {
     MILO_ASSERT_FMT(it != sFactories.end(), "Unknown class %s", name);
 #ifdef HX_NATIVE
     if (it == sFactories.end()) {
-        printf("NewObject: unknown class '%s', returning nullptr\n", name.Str());
         return nullptr;
     }
-    // Skip types known to have broken vtables (from previous construction crash)
-    if (sBrokenClasses.count(name)) {
-        return nullptr;
-    }
-    // Guard against SIGSEGV from broken vtables/VTTs (weak zero-filled symbols)
-    struct sigaction sa, old_sa;
-    sa.sa_handler = NewObjectSigHandler;
-    sigemptyset(&sa.sa_mask);
-    sa.sa_flags = SA_NODEFER;
-    sigaction(SIGSEGV, &sa, &old_sa);
-    sNewObjectGuardActive = 1;
-    Hmx::Object *obj = nullptr;
-    if (sigsetjmp(sNewObjectJmpBuf, 1) == 0) {
-        obj = (it->second)();
-        if (obj) {
-            // Verify vtable is valid by calling a virtual method.
-            // Weak stub constructors don't set up the vtable, so this
-            // will SIGSEGV if the constructor was a no-op stub.
-            (void)obj->ClassName();
-        }
-    } else {
-        printf("NewObject: '%s' crashed (broken vtable from weak stub), blacklisting\n", name.Str());
-        sBrokenClasses.insert(name);
-        obj = nullptr;
-    }
-    sNewObjectGuardActive = 0;
-    sigaction(SIGSEGV, &old_sa, nullptr);
-    return obj;
-#else
-    return (it->second)();
 #endif
+    return (it->second)();
 }
 
 bool Hmx::Object::RegisteredFactory(Symbol name) {

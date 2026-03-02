@@ -59,9 +59,9 @@ public:
     };
 
     struct PointTest {
-        int z; // 0x0 - raw depth value
-        int x; // 0x4 - screen x position
-        int y; // 0x8 - screen y position
+        int x; // 0x0 - screen x position
+        int y; // 0x4 - screen y position
+        int z; // 0x8 - raw depth value
         RndFlare *mFlare; // 0xc
     };
 
@@ -70,6 +70,7 @@ public:
     struct CompressTexDesc {
         CompressTexDesc(RndTex *tex, RndTex::AlphaCompress a, CompressTextureCallback *cb)
             : tex(nullptr, tex), alpha(a), callback(cb) {}
+        ~CompressTexDesc();
 
         MEM_OVERLOAD(CompressTexDesc, 0x1E4)
 
@@ -90,6 +91,7 @@ public:
     virtual void ReInit() {}
     virtual void Terminate();
     virtual void SetClearColor(const Hmx::Color &c) { mClearColor = c; }
+    const Hmx::Color &GetClearColor() const { return mClearColor; }
     virtual void Clear(unsigned int, const Hmx::Color &) = 0;
     virtual void ForceColorClear() {}
     virtual void ScreenDump(const char *);
@@ -140,6 +142,7 @@ public:
     int Width() const { return mWidth; }
     int Height() const { return mHeight; }
     int Bpp() const { return mScreenBpp; }
+    bool Drawing() const { return mDrawing; }
     bool WorldEnded() const { return mWorldEnded; }
     bool GetReleaseImmediate() { return mReleaseImmediate; }
     Aspect GetAspect() const { return mAspect; }

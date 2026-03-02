@@ -27,7 +27,11 @@ public:
     virtual ~ObjDirPtr() { *this = nullptr; }
     virtual bool IsDirPtr() { return true; }
     virtual void Replace(Hmx::Object *o) {
+#ifdef HX_NATIVE
+        if (!ObjRefConcrete<C>::mObject) return;
+#else
         MILO_ASSERT(ObjRefConcrete<C>::mObject, 0x70);
+#endif
         *this = o ? dynamic_cast<C *>(o) : nullptr;
     }
 
@@ -44,14 +48,27 @@ public:
         if ((dir != mObject) || !dir) {
             RELEASE(mLoader);
             if (mObject) {
-                mObject->Release(this);
-                if (!mObject->HasDirPtrs()) {
-                    delete mObject;
+#ifdef HX_NATIVE
+                if (HmxObjectIsLive(mObject)) {
+#endif
+                    mObject->Release(this);
+                    if (!mObject->HasDirPtrs()) {
+#ifdef HX_NATIVE
+                        if (!gSuppressDirPtrDelete)
+#endif
+                            delete mObject;
+                    }
+#ifdef HX_NATIVE
                 }
+#endif
             }
             mObject = dir;
-            if (mObject)
-                dir->AddRef(this);
+            if (mObject) {
+#ifdef HX_NATIVE
+                if (HmxObjectIsLive(dir))
+#endif
+                    dir->AddRef(this);
+            }
         }
         return *this;
     }

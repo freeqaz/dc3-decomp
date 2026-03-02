@@ -530,6 +530,10 @@ void RndParticleSys::DrawShowing() {
         }
         mDrawCount = 0;
     }
+#ifdef HX_NATIVE
+    extern void DrawParticlesBillboard(RndParticleSys*);
+    DrawParticlesBillboard(this);
+#endif
 }
 
 void RndParticleSys::Mats(std::list<RndMat *> &mats, bool) {

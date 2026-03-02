@@ -6,6 +6,17 @@
 
 RndMeshAnim::RndMeshAnim() : mMesh(this), mKeysOwner(this, this) {}
 
+// Replace and SetFrame are declared in the header but never decomped.
+// On GCC, Replace is the key function — without it, the vtable ends up in .bss as zeros,
+// which crashes at construction time due to null VTT entries.
+bool RndMeshAnim::Replace(ObjRef *ref, Hmx::Object *obj) {
+    return Hmx::Object::Replace(ref, obj);
+}
+
+void RndMeshAnim::SetFrame(float frame, float blend) {
+    RndAnimatable::SetFrame(frame, blend);
+}
+
 BEGIN_HANDLERS(RndMeshAnim)
     HANDLE_SUPERCLASS(RndAnimatable)
     HANDLE_EXPR(num_verts, NumVerts())

@@ -150,11 +150,13 @@ void DrawPtrVec::CollideList(const Segment &s, std::list<RndDrawable::Collision>
     }
 }
 
+#ifndef HX_NATIVE
 void DrawPtrVec::Draw() const {
     FOREACH (it, *this) {
         (*it)->Draw();
     }
 }
+#endif
 
 void RndDrawable::Highlight() {
     if (sHighlightStyle != kHighlightNone) {

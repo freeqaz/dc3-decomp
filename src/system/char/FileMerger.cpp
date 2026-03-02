@@ -184,7 +184,9 @@ void FileMerger::PreLoad(BinStream &bs) {
         d >> str;
     }
     d >> mMergers;
+#ifndef HX_NATIVE
     StartLoadInternal(true, true);
+#endif
 }
 
 void FileMerger::FinishLoading(Loader *ldr) {

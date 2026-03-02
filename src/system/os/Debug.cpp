@@ -34,7 +34,7 @@ void Debug::SetDisabled(bool d) { mNoDebug = d; }
 
 void Debug::StopLog() { RELEASE(mLog); }
 
-const char *DevHostName(Symbol s) {
+const char *DevHostname(Symbol s) {
     static Symbol hostnames = "hostnames";
     return SystemConfig() ? SystemConfig(hostnames, s)->Str(1) : nullptr;
 }
@@ -143,8 +143,8 @@ void Debug::Notify(const char *msg) {
 void Debug::Fail(const char *msg, void *v) {
 #ifdef HX_NATIVE
     fprintf(stderr, "FAIL: %s\n", msg);
-    // MILO_FATAL_FAILS=0 to continue past MILO_FAIL (like Xbox 360's "Continue" dialog)
-    // Default: fatal, to catch real bugs early
+    // Default: fatal, to catch bugs early. Set MILO_FATAL_FAILS=0 to continue
+    // past MILO_FAIL (like Xbox 360 debug build "Continue" dialog).
     static int sFatalFails = -1;
     if (sFatalFails == -1) {
         const char *env = getenv("MILO_FATAL_FAILS");

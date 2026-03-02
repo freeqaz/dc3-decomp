@@ -959,12 +959,22 @@ DEF_DATA_FUNC(DataHandleTypeRet) {
     if (!obj) {
         String str;
         n.Print(str, true, 0);
+#ifdef HX_NATIVE
+        MILO_WARN(
+            "Object %s not found (file %s, line %d)",
+            str.c_str(),
+            array->File(),
+            array->Line()
+        );
+        return DataNode(kDataUnhandled, 0);
+#else
         MILO_FAIL(
             "Object %s not found (file %s, line %d)",
             str.c_str(),
             array->File(),
             array->Line()
         );
+#endif
     }
     return obj->HandleType(arr);
 }
@@ -1011,12 +1021,22 @@ DEF_DATA_FUNC(DataHandleRet) {
     if (!o) {
         String str;
         n.Print(str, true, 0);
+#ifdef HX_NATIVE
+        MILO_WARN(
+            "Object %s not found (file %s, line %d)",
+            str.c_str(),
+            array->File(),
+            array->Line()
+        );
+        return DataNode(kDataUnhandled, 0);
+#else
         MILO_FAIL(
             "Object %s not found (file %s, line %d)",
             str.c_str(),
             array->File(),
             array->Line()
         );
+#endif
     }
     return o->Handle(a, false);
 }

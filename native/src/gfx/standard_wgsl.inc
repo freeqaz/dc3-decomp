@@ -25,6 +25,14 @@ struct SceneUniforms {
     _padN1: f32,
     _padN2: f32,
     _padN3: f32,
+    // Point lights (up to 4)
+    pointLightPos: array<vec4f, 4>,
+    pointLightColors: array<vec4f, 4>,
+    pointLightRanges: vec4f,
+    numPointLights: f32,
+    _padPL1: f32,
+    _padPL2: f32,
+    _padPL3: f32,
 };
 
 @group(0) @binding(0) var<uniform> scene: SceneUniforms;
@@ -53,6 +61,10 @@ struct MaterialUniforms {
     texGenMode: f32,         // 0=none, 1=xfm, 2=sphere, 3=projected, 4=xfmOrigin, 5=environ
     texXfmRow0: vec4f,       // UV transform row 0
     texXfmRow1: vec4f,       // UV transform row 1
+    normDetailTiling: f32,   // UV tiling for detail normal map
+    normDetailStrength: f32, // blend strength (0 = disabled)
+    hasNormDetailMap: f32,   // 1.0 when detail map bound
+    _pad4: f32,
 };
 
 @group(1) @binding(0) var<uniform> material: MaterialUniforms;
@@ -65,6 +77,7 @@ struct MaterialUniforms {
 @group(1) @binding(7) var mapSampler: sampler;
 @group(1) @binding(8) var environMapTex: texture_cube<f32>;
 @group(1) @binding(9) var environSampler: sampler;
+@group(1) @binding(10) var normDetailMapTex: texture_2d<f32>;
 
 // === Bind Group 2: Per-object ===
 struct ObjectUniforms {
@@ -250,8 +263,23 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     var N = normalize(in.worldNormal);
     if (material.hasNormalMap > 0.5) {
         let normalSample = textureSample(normalMapTex, mapSampler, in.uv);
-        // Decode tangent-space normal from [0,1] to [-1,1]
-        var tsNormal = normalSample.xyz * 2.0 - 1.0;
+        var tsNormal: vec3f;
+        // Detect format: DXT5nm has data in alpha+green only (R+B near zero)
+        // Standard RGB normal maps have data in all channels
+        if (normalSample.r + normalSample.b < 0.1) {
+            // DXT5nm format (Xbox 360): X in alpha, Y in green, reconstruct Z
+            let nx = normalSample.a * 2.0 - 1.0;
+            let ny = normalSample.g * 2.0 - 1.0;
+            let nz = sqrt(max(1.0 - nx * nx - ny * ny, 0.0));
+            tsNormal = vec3f(nx, ny, nz);
+            // If all channels are zero, the texture is missing — use flat normal
+            if (normalSample.a < 0.01 && normalSample.g < 0.01) {
+                tsNormal = vec3f(0.0, 0.0, 1.0);
+            }
+        } else {
+            // Standard RGB normal map: XYZ in RGB
+            tsNormal = normalSample.rgb * 2.0 - 1.0;
+        }
         // Apply deNormal: lerp toward (0,0,1) — 0=neutral, 1=flat, -1=exaggerate
         let diminish = clamp(material.deNormal, -3.0, 1.0);
         tsNormal = vec3f(
@@ -260,6 +288,17 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
             mix(tsNormal.z, 1.0, max(diminish, 0.0))
         );
         tsNormal = normalize(tsNormal);
+        // Blend detail normal map (UDN method)
+        if (material.hasNormDetailMap > 0.5) {
+            let detailUV = in.uv * material.normDetailTiling;
+            let detailSample = textureSample(normDetailMapTex, mapSampler, detailUV);
+            let detailNorm = detailSample.xyz * 2.0 - 1.0;
+            tsNormal = normalize(vec3f(
+                tsNormal.x + detailNorm.x * material.normDetailStrength,
+                tsNormal.y + detailNorm.y * material.normDetailStrength,
+                tsNormal.z
+            ));
+        }
         // Build TBN matrix and transform to world space
         let T = normalize(in.worldTangent);
         let B = normalize(in.worldBitangent);
@@ -267,6 +306,8 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     }
 
     let V = normalize(scene.cameraPos - in.worldPos);
+
+
 
     // Sample specular map (RGB = specular color mask, A = gloss/power mask)
     let specMapSample = textureSample(specularMapTex, mapSampler, in.uv);
@@ -341,6 +382,39 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
                 let spec = pow(max(dot(N, H), 0.0), max(specPower, 1.0));
                 totalSpecular += material.specularColor.rgb * specMapSample.rgb * lightColor * spec;
             }
+        }
+    }
+
+    // Point lights
+    let pointLightCount = i32(scene.numPointLights);
+    for (var pi = 0; pi < 4; pi++) {
+        if (pi >= pointLightCount) { break; }
+
+        let lightPos = scene.pointLightPos[pi].xyz;
+        let toLight = lightPos - in.worldPos;
+        let dist = length(toLight);
+        let L = toLight / max(dist, 0.001);
+
+        // Range-based attenuation (smooth falloff)
+        var range: f32;
+        switch(pi) {
+            case 0: { range = scene.pointLightRanges.x; }
+            case 1: { range = scene.pointLightRanges.y; }
+            case 2: { range = scene.pointLightRanges.z; }
+            default: { range = scene.pointLightRanges.w; }
+        }
+        let atten = saturate(1.0 - dist / max(range, 0.001));
+        let atten2 = atten * atten; // quadratic falloff
+
+        let lightColor = scene.pointLightColors[pi].rgb * atten2;
+        let NdotL = max(dot(N, L), 0.0);
+        totalDiffuse += lightColor * NdotL;
+
+        if (material.specularPower > 0.0) {
+            let H = normalize(L + V);
+            let specPower = material.specularPower * specMapSample.a;
+            let spec = pow(max(dot(N, H), 0.0), max(specPower, 1.0));
+            totalSpecular += material.specularColor.rgb * specMapSample.rgb * lightColor * spec;
         }
     }
 
