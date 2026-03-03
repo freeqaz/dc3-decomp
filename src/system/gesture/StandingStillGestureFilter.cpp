@@ -136,9 +136,7 @@ StandingStillLogic:
     float dx = savedPos.x - pos.x;
     float dy = savedPos.y - pos.y;
     float dz = savedPos.z - pos.z;
-    float distThreshold = 0.25f;
-    float distThresholdSq = distThreshold * distThreshold;
-    if (dx * dx + dy * dy + dz * dz < distThresholdSq) {
+    if (dx * dx + dy * dy + dz * dz < 0.0625f) {
         mRaisedMs += ms;
     } else {
         TheGestureMgr->unk30[idx] = 10;
