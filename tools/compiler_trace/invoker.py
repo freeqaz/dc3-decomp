@@ -67,8 +67,21 @@ def _load_include_flags() -> List[str]:
     # Split "/I path" into ["/I", "path"] for subprocess argument passing
     result = []
     for flag in ns["cflags_includes"]:
+        path_str = ""
         if flag.startswith("/I "):
-            result.extend(["/I", flag[3:]])
+            path_str = flag[3:]
+        else:
+            path_str = flag
+
+        # Map original build paths to local source tree
+        if path_str.startswith("e:/lazer_build_gmc1/system/src"):
+            local_path = PROJECT_ROOT / "src" / "system" / path_str[len("e:/lazer_build_gmc1/system/src") :].lstrip("/")
+            result.extend(["/I", str(local_path)])
+        elif path_str.startswith("e:/lazer_build_gmc1/lazer/src"):
+            local_path = PROJECT_ROOT / "src" / "lazer" / path_str[len("e:/lazer_build_gmc1/lazer/src") :].lstrip("/")
+            result.extend(["/I", str(local_path)])
+        elif flag.startswith("/I "):
+            result.extend(["/I", path_str])
         else:
             result.append(flag)
     return result

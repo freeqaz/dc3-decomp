@@ -240,6 +240,14 @@ def trace_bsf(
         gdb_f.write(script)
         gdb_path = Path(gdb_f.name)
 
+    # WIBO_PATH_MAP for mapping e:\ paths to local src/
+    wibo_path_map = (
+        f"e:/lazer_build_gmc1/system/src/={PROJECT_ROOT}/src/system;"
+        f"e:/lazer_build_gmc1/lazer/src/={PROJECT_ROOT}/src/lazer"
+    )
+    env = os.environ.copy()
+    env["WIBO_PATH_MAP"] = wibo_path_map
+
     try:
         result = subprocess.run(
             ["gdb", "-batch", "-x", str(gdb_path)],
@@ -247,6 +255,7 @@ def trace_bsf(
             capture_output=True,
             text=True,
             timeout=timeout,
+            env=env,
         )
 
         output = result.stdout + result.stderr
