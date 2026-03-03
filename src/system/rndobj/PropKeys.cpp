@@ -10,7 +10,17 @@
 Hmx::Object *ObjectStage::sOwner;
 Message PropKeys::sInterpMessage(gNullStr, 0, 0, 0, 0, 0);
 
-float CalcSpline(float, float *const);
+float CalcSpline(float t, float *const p) {
+    float p0 = p[0];
+    float p1 = p[1];
+    float p2 = p[2];
+    float p3 = p[3];
+    return (p1 * 2.0f
+        + (p2 - p0) * t
+        + (p0 * 2.0f - p1 * 5.0f + p2 * 4.0f - p3) * t * t
+        + (-(p2 * 3.0f - (p1 * 3.0f - p0)) + p3) * t * t * t)
+        * 0.5f;
+}
 
 #pragma region PropKeys
 
@@ -622,6 +632,36 @@ int BoolKeys::BoolAt(float frame, bool &b) {
 // ------------------------------------------------
 // QuatKeys
 // ------------------------------------------------
+
+int QuatKeys::QuatAt(float frame, Hmx::Quat &quat) {
+    MILO_ASSERT(size(), 0x281);
+    const Key<Hmx::Quat> *prev;
+    const Key<Hmx::Quat> *next;
+    float ref = 0.0f;
+    int at = AtFrame(frame, prev, next, ref);
+    if (mInterpolation == kSpline)
+        QuatSpline(*this, prev, next, ref, quat);
+    else
+        switch (mInterpolation) {
+        case kStep:
+            quat = prev->value;
+            break;
+        case kLinear:
+            FastInterp(prev->value, next->value, ref, quat);
+            break;
+        case kSlerp:
+            Interp(prev->value, next->value, ref, quat);
+            break;
+        case kEaseIn:
+            FastInterp(prev->value, next->value, ref * ref * ref, quat);
+            break;
+        case kEaseOut:
+            ref = 1.0f - ref;
+            FastInterp(prev->value, next->value, -(ref * ref * ref - 1.0f), quat);
+            break;
+        }
+    return at;
+}
 
 void QuatKeys::SetFrame(float frame, float f2, float f3) {
     if (mProp && mTarget && size()) {

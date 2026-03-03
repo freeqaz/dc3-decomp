@@ -175,6 +175,28 @@ inline BinStream &operator>>(BinStream &bs, Vector3 &vec) {
 
 TextStream &operator<<(TextStream &, const Vector3 &);
 
+// 16-byte padded Vector3 for structs that need XMVECTOR-compatible stride
+struct PaddedJointPos {
+    float x, y, z, _pad;
+    PaddedJointPos() {}
+    PaddedJointPos(const Vector3 &v) : x(v.x), y(v.y), z(v.z), _pad(0) {}
+    operator Vector3 &() { return *(Vector3 *)&x; }
+    operator const Vector3 &() const { return *(const Vector3 *)&x; }
+    PaddedJointPos &operator=(const Vector3 &v) {
+        x = v.x;
+        y = v.y;
+        z = v.z;
+        return *this;
+    }
+    void Set(float a, float b, float c) {
+        x = a;
+        y = b;
+        z = c;
+    }
+    float &operator[](int i) { return ((Vector3 &)*this)[i]; }
+    float operator[](int i) const { return ((const Vector3 &)*this)[i]; }
+};
+
 class Vector4 {
 protected:
     static Vector4 sX;

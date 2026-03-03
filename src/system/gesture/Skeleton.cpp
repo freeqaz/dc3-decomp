@@ -349,67 +349,69 @@ bool Skeleton::NeedIdentify() const {
     return GetEnrollmentIndex() == -1 || GetEnrollmentIndex() == -5;
 }
 
-void Skeleton::Poll(int idx, const SkeletonFrame &frame) {
-    MILO_ASSERT((0) <= (idx) && (idx) < (6), 0x1F8);
-    if (mSkeletonIdx != idx && TheGestureMgr) {
-        IdentityInfo *info = TheGestureMgr->GetIdentityInfo(idx);
-        MILO_ASSERT(info, 0x1FC);
-        info->Reset(idx);
+void Skeleton::Poll(int skel_idx, const SkeletonFrame &frame) {
+    MILO_ASSERT((0) <= (skel_idx) && (skel_idx) < (6), 0x1F8);
+    if (mSkeletonIdx != skel_idx && TheGestureMgr) {
+        IdentityInfo *identityInfo = TheGestureMgr->GetIdentityInfo(skel_idx);
+        MILO_ASSERT(identityInfo, 0x1FC);
+        identityInfo->Reset(skel_idx);
     }
 
-    mSkeletonIdx = idx;
+    mSkeletonIdx = skel_idx;
     mElapsedMs = frame.mElapsedMs;
-    const SkeletonData &data = frame.mSkeletonDatas[idx];
+    const SkeletonData &data = frame.mSkeletonDatas[skel_idx];
     mTrackingID = data.mTrackingID;
     unkab0 = data.mHipCenter;
     mTracking = data.mTracking;
-    if (mTracking == kSkeletonNotTracked) {
+    if (mTracking != kSkeletonNotTracked) {
+        if (mTracking == kSkeletonTracked) {
+            mQualityFlags = data.mQualityFlags;
+            if (TheGestureMgr) {
+                IdentityInfo *identityInfo = TheGestureMgr->GetIdentityInfo(skel_idx);
+                MILO_ASSERT(identityInfo, 0x211);
+                if (identityInfo->EnrollmentIndex() != data.mClippedFlags) {
+                    identityInfo->SetEnrollmentIndex(data.mClippedFlags);
+                }
+            }
+
+            {
+                const Vector3 &floorNormal = frame.mFloorNormal;
+                for (int i = 1; i < kNumCoordSys; i++) {
+                    BaseSkeleton::MakeCameraToPlayerXfm(
+                        (SkeletonCoordSys)i,
+                        mPlayerXfms[i - 1],
+                        (const Vector3 *)data.mJointPositions,
+                        floorNormal
+                    );
+                }
+            }
+
+            for (int i = 0; i < kNumJoints; i++) {
+                mTrackedJoints[i].mJointPos[kCoordCamera] = data.mJointPositions[i];
+                for (int j = 1; j < kNumCoordSys; j++) {
+                    MultiplyTranspose(
+                        data.mJointPositions[i],
+                        mPlayerXfms[j - 1],
+                        mTrackedJoints[i].mJointPos[j]
+                    );
+                }
+                mTrackedJoints[i].mJointConf = (JointConfidence)data.mJointTrackingState[i];
+                mTrackedJoints[i].mSmoothedPos = data.mRawPositions[i];
+            }
+
+            for (int i = 0; i < kNumBones; i++) {
+                mCamBoneLengths[i] = BaseSkeleton::BoneLength((SkeletonBone)i, kCoordCamera);
+            }
+
+            mCamDisplacements.clear();
+
+            Vector4 clipPlane = frame.mFloorClipPlane;
+            unkac4 = clipPlane.w + (mTrackedJoints[kJointHipLeft].mJointPos[kCoordCamera].y
+                      + mTrackedJoints[kJointHipRight].mJointPos[kCoordCamera].y)
+                * 0.5f;
+        }
+    } else {
         Init();
-        return;
-    }
-    if (mTracking == kSkeletonTracked) {
-        mQualityFlags = data.mQualityFlags;
-        if (TheGestureMgr) {
-            IdentityInfo *info = TheGestureMgr->GetIdentityInfo(idx);
-            MILO_ASSERT(info, 0x211);
-            if (info->EnrollmentIndex() != data.mClippedFlags) {
-                info->SetEnrollmentIndex(data.mClippedFlags);
-            }
-        }
-
-        for (int i = 1; i < kNumCoordSys; i++) {
-            BaseSkeleton::MakeCameraToPlayerXfm(
-                (SkeletonCoordSys)i,
-                mPlayerXfms[i - 1],
-                (const Vector3 *)data.mJointPositions,
-                frame.mFloorNormal
-            );
-        }
-
-        for (int i = 0; i < kNumJoints; i++) {
-            mTrackedJoints[i].mJointPos[kCoordCamera] = data.mJointPositions[i];
-            for (int j = 1; j < kNumCoordSys; j++) {
-                MultiplyTranspose(
-                    data.mJointPositions[i],
-                    mPlayerXfms[j - 1],
-                    mTrackedJoints[i].mJointPos[j]
-                );
-            }
-            mTrackedJoints[i].mJointConf = (JointConfidence)data.mJointTrackingState[i];
-            mTrackedJoints[i].mSmoothedPos = data.mRawPositions[i];
-        }
-
-        for (int i = 0; i < kNumBones; i++) {
-            mCamBoneLengths[i] = BoneLength((SkeletonBone)i, kCoordCamera);
-        }
-
-        if (!mCamDisplacements.empty()) {
-            mCamDisplacements.erase(mCamDisplacements.begin(), mCamDisplacements.end());
-        }
-
-        unkac4 = (mTrackedJoints[kJointHipLeft].mJointPos[kCoordCamera].y
-                  + mTrackedJoints[kJointHipRight].mJointPos[kCoordCamera].y)
-            * 0.5f + frame.mFloorClipPlane.w;
     }
 }
 

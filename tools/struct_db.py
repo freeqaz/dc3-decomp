@@ -30,6 +30,7 @@ class Member:
     type_str: str
     offset: int
     line_number: int
+    raw_line: str = ""  # Original line for array detection
 
 
 @dataclass
@@ -121,6 +122,20 @@ class StructDB:
 
             CREATE INDEX IF NOT EXISTS idx_classes_name
             ON classes(name);
+
+            CREATE TABLE IF NOT EXISTS layout_issues (
+                id INTEGER PRIMARY KEY,
+                class_id INTEGER REFERENCES classes(id),
+                member_name TEXT NOT NULL,
+                issue_type TEXT NOT NULL,
+                expected_size INTEGER,
+                actual_gap INTEGER,
+                details TEXT,
+                UNIQUE(class_id, member_name, issue_type)
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_layout_issues_class
+            ON layout_issues(class_id);
         """)
         self.conn.commit()
 
@@ -319,6 +334,76 @@ class StructDB:
         return total_classes, total_members
 
 
+# Known type sizes (ILP32 / Xbox 360)
+TYPE_SIZES = {
+    'bool': 1, 'char': 1, 'unsigned char': 1, 'signed char': 1,
+    'u8': 1, 's8': 1,
+    'short': 2, 'unsigned short': 2, 'u16': 2, 's16': 2,
+    'int': 4, 'unsigned int': 4, 'float': 4,
+    'u32': 4, 's32': 4, 'long': 4, 'unsigned long': 4,
+    'long long': 8, 'unsigned long long': 8, 'double': 8,
+    'u64': 8, 's64': 8,
+    'Symbol': 4, 'DataNode': 16,
+    'Vector2': 8, 'Vector3': 12, 'PaddedJointPos': 16, 'Vector4': 16,
+    'Hmx::Color': 16, 'Color': 16,
+    'Hmx::Quat': 16, 'Quat': 16,
+    'XMVECTOR': 16, 'XMMATRIX': 64,
+    'Transform': 64, 'Plane': 16,
+    'String': 8, 'FilePath': 8, 'DateTime': 8,
+    'Sphere': 16, 'Box': 24,
+}
+
+# Template type sizes (the template itself, not the parameter)
+TEMPLATE_SIZES = {
+    'ObjPtr': 0x14, 'ObjOwnerPtr': 0x14,
+    'ObjPtrList': 0xC, 'ObjList': 0xC,
+    'ObjDirPtr': 0x10, 'ObjVector': 0xC,
+}
+
+# Known array size constants
+ARRAY_CONSTANTS = {
+    'kNumJoints': 20, 'kNumBones': 19, 'kNumCoordSys': 8,
+    'kMaxNumErrorNodes': 33, 'kMaxNumNormBones': 3,
+    'kNumHam1Nodes': 16,
+}
+
+ARRAY_RE = re.compile(r'\[(\w+)\]')
+
+
+def guess_type_size(type_str: str) -> Optional[int]:
+    """Guess the size of a C++ type on ILP32."""
+    t = type_str.strip()
+    # Remove mutable/const/volatile qualifiers
+    for qual in ('mutable ', 'const ', 'volatile '):
+        t = t.replace(qual, '')
+    t = t.strip()
+
+    if t in TYPE_SIZES:
+        return TYPE_SIZES[t]
+    if t.endswith('*') or t.endswith('* const'):
+        return 4
+    # Template types
+    for tmpl, size in TEMPLATE_SIZES.items():
+        if t.startswith(tmpl + '<') or t.startswith(tmpl + ' <'):
+            return size
+    if 'std::vector' in t or 'vector<' in t:
+        return 0xC
+    if 'std::list' in t or 'list<' in t:
+        return 0xC
+    return None
+
+
+def guess_array_count(raw_line: str) -> Optional[int]:
+    """Extract array count from a member declaration line."""
+    m = ARRAY_RE.search(raw_line)
+    if not m:
+        return None
+    token = m.group(1)
+    if token.isdigit():
+        return int(token)
+    return ARRAY_CONSTANTS.get(token)
+
+
 def parse_inheritance(inherit_str: str) -> Tuple[List[str], Dict[str, bool]]:
     """Parse inheritance string into parent list and virtual flags."""
     parents = []
@@ -428,7 +513,8 @@ def parse_header(path: Path) -> List[ClassInfo]:
                     name=name,
                     type_str=type_str,
                     offset=offset,
-                    line_number=i + 1
+                    line_number=i + 1,
+                    raw_line=line.strip()
                 ))
 
         i += 1
@@ -438,6 +524,222 @@ def parse_header(path: Path) -> List[ClassInfo]:
         classes.append(current_class)
 
     return classes
+
+
+def validate_classes(header_paths: List[Path], rb2_dump_path: Optional[Path] = None) -> List[dict]:
+    """Validate struct layouts by checking offset gaps against expected type sizes.
+
+    Returns a list of issue dicts with keys:
+        class_name, file_path, member_name, type_str, line,
+        offset, next_offset, next_member, expected_size, actual_gap,
+        issue_type, details
+    """
+    issues = []
+    rb2_parser = None
+
+    if rb2_dump_path and rb2_dump_path.exists():
+        import sys
+        project_root = str(Path(__file__).resolve().parent.parent)
+        if project_root not in sys.path:
+            sys.path.insert(0, project_root)
+        try:
+            from scripts.orchestrator.rb2_dwarf import RB2DwarfParser
+            rb2_parser = RB2DwarfParser(rb2_dump_path)
+        except Exception:
+            pass
+
+    for path in header_paths:
+        classes = parse_header(path)
+
+        # Also do a raw scan to find unannotated member lines between annotated ones
+        try:
+            raw_lines = path.read_text(encoding='utf-8', errors='ignore').splitlines()
+        except Exception:
+            raw_lines = []
+
+        # Regex for any member declaration (with or without offset comment)
+        any_member_re = re.compile(
+            r'^\s+(?:mutable\s+)?(?!virtual\b|static\b|friend\b|typedef\b|enum\b|struct\b|class\b|union\b|using\b|public|private|protected|//|/\*|#)'
+            r'[\w:<>, *&]+\s+\w+\s*(?:\[[^\]]*\])?\s*;'
+        )
+
+        for cls in classes:
+            members = cls.members
+            for i in range(len(members) - 1):
+                m1 = members[i]
+                m2 = members[i + 1]
+
+                if m1.offset is None or m2.offset is None:
+                    continue
+
+                actual_gap = m2.offset - m1.offset
+                if actual_gap <= 0:
+                    continue
+
+                # Check for unannotated members between m1 and m2
+                has_unannotated = False
+                if raw_lines and m1.line_number < m2.line_number:
+                    for ln in range(m1.line_number, m2.line_number - 1):
+                        if ln < len(raw_lines):
+                            line = raw_lines[ln]
+                            # Skip if it has an offset comment (it's m1 or m2)
+                            if re.search(r'//\s*0x[0-9a-fA-F]+', line):
+                                continue
+                            if any_member_re.match(line):
+                                has_unannotated = True
+                                break
+
+                elem_size = guess_type_size(m1.type_str)
+                if elem_size is None:
+                    continue
+
+                arr_count = guess_array_count(m1.raw_line)
+                expected = elem_size * arr_count if arr_count else elem_size
+
+                # Allow alignment padding (round up to 4)
+                expected_aligned = (expected + 3) & ~3
+
+                if actual_gap == expected or actual_gap == expected_aligned:
+                    continue
+
+                # If there are unannotated members between, gap is expected to be
+                # larger — only flag if gap is SMALLER than expected (real bug) or
+                # if it's a clear stride issue
+                if has_unannotated:
+                    # Still flag stride_16 (likely real even with hidden members)
+                    if not (arr_count and elem_size == 12
+                            and actual_gap == arr_count * 16):
+                        continue
+
+                # Classify the issue
+                if arr_count and elem_size == 12 and actual_gap == arr_count * 16:
+                    issue_type = 'stride_16'
+                    details = (f"Vector3[{arr_count}] uses 16-byte stride "
+                              f"(gap=0x{actual_gap:x}, need PaddedJointPos)")
+                elif arr_count:
+                    actual_stride = actual_gap / arr_count
+                    issue_type = 'stride_mismatch'
+                    details = (f"stride={actual_stride:.0f}, expected={elem_size} "
+                              f"(gap=0x{actual_gap:x})")
+                else:
+                    issue_type = 'gap_mismatch'
+                    details = (f"gap=0x{actual_gap:x} ({actual_gap}), "
+                              f"expected=0x{expected:x} ({expected})")
+
+                issue = {
+                    'class_name': cls.name,
+                    'file_path': str(cls.file_path),
+                    'member_name': m1.name,
+                    'type_str': m1.type_str,
+                    'line': m1.line_number,
+                    'offset': m1.offset,
+                    'next_offset': m2.offset,
+                    'next_member': m2.name,
+                    'expected_size': expected,
+                    'actual_gap': actual_gap,
+                    'issue_type': issue_type,
+                    'details': details,
+                }
+
+                # Cross-validate with RB2 if available
+                if rb2_parser:
+                    rb2_info = rb2_parser.get_class(cls.name)
+                    if rb2_info and 'members' in rb2_info:
+                        for rb2_m in rb2_info['members']:
+                            if rb2_m.get('offset') == m1.offset:
+                                rb2_size = rb2_m.get('size')
+                                if rb2_size and rb2_size != elem_size:
+                                    issue['rb2_size'] = rb2_size
+                                    issue['details'] += (
+                                        f" [RB2 DWARF: size={rb2_size} at same offset]"
+                                    )
+                                break
+
+                issues.append(issue)
+
+    return issues
+
+
+def cmd_validate(args):
+    """Validate struct layouts and optionally store results in DB."""
+    paths = [Path(p) for p in args.paths] if args.paths else [Path("src/")]
+
+    header_files = []
+    for p in paths:
+        if p.is_file():
+            header_files.append(p)
+        elif p.is_dir():
+            header_files.extend(p.rglob("*.h"))
+
+    rb2_path = None
+    default_rb2 = Path.home() / "code/milohax/rb3/doc/rb2_dump.cpp"
+    if default_rb2.exists():
+        rb2_path = default_rb2
+
+    issues = validate_classes(header_files, rb2_path)
+
+    # Filter by type if requested
+    if args.type:
+        issues = [i for i in issues if i['issue_type'] == args.type]
+
+    # Filter to only stride issues (most actionable)
+    if args.stride_only:
+        issues = [i for i in issues if 'stride' in i['issue_type']]
+
+    if not issues:
+        print("No layout issues found!")
+        return
+
+    print(f"Found {len(issues)} layout issues:\n")
+
+    # Group by issue type
+    by_type = {}
+    for iss in issues:
+        by_type.setdefault(iss['issue_type'], []).append(iss)
+
+    for issue_type, type_issues in sorted(by_type.items()):
+        print(f"=== {issue_type} ({len(type_issues)}) ===\n")
+        for iss in type_issues:
+            relpath = Path(iss['file_path']).name
+            print(f"  {relpath}:{iss['line']}  {iss['class_name']}::{iss['member_name']}")
+            print(f"    {iss['type_str']} @ 0x{iss['offset']:x} -> "
+                  f"{iss['next_member']} @ 0x{iss['next_offset']:x}")
+            print(f"    {iss['details']}")
+            print()
+
+    # Store in DB if requested
+    if args.store:
+        with StructDB(args.db) as db:
+            db.create_schema()
+            cursor = db.conn.cursor()
+            stored = 0
+            for iss in issues:
+                # Find class_id
+                row = cursor.execute(
+                    "SELECT id FROM classes WHERE name = ?",
+                    (iss['class_name'],)
+                ).fetchone()
+                if not row:
+                    continue
+                class_id = row[0]
+                try:
+                    cursor.execute("""
+                        INSERT OR REPLACE INTO layout_issues
+                        (class_id, member_name, issue_type, expected_size,
+                         actual_gap, details)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                    """, (class_id, iss['member_name'], iss['issue_type'],
+                          iss['expected_size'], iss['actual_gap'], iss['details']))
+                    stored += 1
+                except Exception:
+                    pass
+            db.conn.commit()
+            print(f"\nStored {stored} issues in {args.db}")
+
+    # Summary
+    print(f"\n--- Summary ---")
+    for t, items in sorted(by_type.items()):
+        print(f"  {t}: {len(items)}")
 
 
 def cmd_build(args):
@@ -624,6 +926,28 @@ def main():
         help='Show struct_db statistics and exit'
     )
 
+    # validate command
+    validate_parser = subparsers.add_parser(
+        'validate',
+        help='Validate struct layouts (detect stride/gap mismatches)'
+    )
+    validate_parser.add_argument(
+        'paths', nargs='*',
+        help='Paths to scan (default: src/)'
+    )
+    validate_parser.add_argument(
+        '--type', '-t',
+        help='Filter by issue type (stride_16, stride_mismatch, gap_mismatch)'
+    )
+    validate_parser.add_argument(
+        '--stride-only', '-s', action='store_true',
+        help='Only show stride mismatches (most actionable)'
+    )
+    validate_parser.add_argument(
+        '--store', action='store_true',
+        help='Store results in layout_issues table'
+    )
+
     args = parser.parse_args()
 
     if args.command == 'build':
@@ -636,6 +960,8 @@ def main():
         cmd_list(args)
     elif args.command == 'import-ghidra':
         cmd_import_ghidra(args)
+    elif args.command == 'validate':
+        cmd_validate(args)
 
 
 if __name__ == '__main__':

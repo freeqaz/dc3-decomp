@@ -71,19 +71,19 @@ private:
     float mSongMs; // 0x48
     float mStreamMs; // 0x4c
     bool mStreamJumped; // 0x50
-    float unk54;
-    float unk58;
+    float mPreJumpMs; // 0x54
+    float mPostJumpMs; // 0x58
     float mStreamMsAtJump; // 0x5c
     SongPos mSongPos; // 0x60
     SongPos mPrevSongPos; // 0x78
     std::vector<int> mSubmixIdxs; // 0x90
-    float unk9c;
-    float unka0;
-    float unka4;
+    float unk9c; // 0x9c
+    float unka0; // 0xa0
+    float unka4; // 0xa4
     std::list<Vector2> mLevelHistory; // 0xa8
-    int unkb0;
-    int unkb4;
-    int unkb8;
+    int unkb0; // 0xb0
+    int mLastBeatIndex; // 0xb4
+    int mBeatCount; // 0xb8
     bool mMetronome; // 0xbc
 };
 

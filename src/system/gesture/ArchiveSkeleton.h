@@ -28,7 +28,7 @@ public:
     void Set(const Skeleton &);
 
 protected:
-    Vector3 mJointPoses[kNumJoints]; // 0x4
+    PaddedJointPos mJointPoses[kNumJoints]; // 0x4
     JointConfidence mJointConfs[kNumJoints]; // 0x144
     int mElapsedMs; // 0x194
     bool mTracked; // 0x198

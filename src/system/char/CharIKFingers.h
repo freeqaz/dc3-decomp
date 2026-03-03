@@ -24,24 +24,24 @@ public:
             : mIsEngaged(0), mTargetWorldPos(0, 0, 0), mRefWorldPos(0, 0, 0), mFinger01(nullptr),
               mFinger02(nullptr), mFinger03(nullptr), mFingertip(nullptr), mBlendFrames(0),
               mBlendOutFrames(0), mNeedsUpdate(1) {}
-        bool mIsEngaged;
-        float mBoneTotalLength;
-        Vector3 mTargetWorldPos;
-        Vector3 mRefWorldPos;
+        bool mIsEngaged; // 0x0
+        float mBoneTotalLength; // 0x4
+        Vector3 mTargetWorldPos; // 0x8
+        Vector3 mRefWorldPos; // 0x18
         ObjPtr<RndTransformable> mFinger01; // 0x28
         ObjPtr<RndTransformable> mFinger02; // 0x3c
         ObjPtr<RndTransformable> mFinger03; // 0x50
         ObjPtr<RndTransformable> mFingertip; // 0x64
-        float mCurFinger02Angle;
-        float mCurFinger03Angle;
-        float mDestFinger02Angle;
-        float mDestFinger03Angle;
-        int mBlendFrames;
-        int mBlendOutFrames;
-        bool mNeedsUpdate;
-        Vector3 mDestOrientVec;
-        Vector3 mCurOrientVec;
-        bool mNeedsIKSolve;
+        float mCurFinger02Angle; // 0x78
+        float mCurFinger03Angle; // 0x7c
+        float mDestFinger02Angle; // 0x80
+        float mDestFinger03Angle; // 0x84
+        int mBlendFrames; // 0x88
+        int mBlendOutFrames; // 0x8c
+        bool mNeedsUpdate; // 0x90
+        Vector3 mDestOrientVec; // 0x94
+        Vector3 mCurOrientVec; // 0xa4
+        bool mNeedsIKSolve; // 0xb4
     };
     // Hmx::Object
     virtual ~CharIKFingers();

@@ -34,6 +34,8 @@ public:
     virtual void EnableReads(bool enable) { mEnableReads = enable; }
     virtual bool Done() { return mState == 4; }
     virtual bool Fail() { return mState == 5; }
+
+protected:
     virtual void Init();
 
 private:

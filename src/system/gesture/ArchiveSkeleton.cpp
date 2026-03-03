@@ -43,5 +43,5 @@ JointConfidence ArchiveSkeleton::JointConf(SkeletonJoint joint) const {
 }
 
 void ArchiveSkeleton::CameraToPlayerXfm(SkeletonCoordSys cs, Transform &xfm) const {
-    BaseSkeleton::MakeCameraToPlayerXfm(cs, xfm, mJointPoses, Vector3(0, 1, 0));
+    BaseSkeleton::MakeCameraToPlayerXfm(cs, xfm, (const Vector3 *)mJointPoses, Vector3(0, 1, 0));
 }

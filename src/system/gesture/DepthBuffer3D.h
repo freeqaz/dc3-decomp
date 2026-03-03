@@ -16,8 +16,8 @@ struct DepthBuffer3DAttachment {
     int player; // 0x4
     int mJoint; // 0x8
     Vector3 mOffset; // 0xc
-    bool unk1c;
-    int unk20;
+    bool unk1c; // 0x1c
+    int unk20; // 0x20
 };
 
 /** "Render the Kinect depth buffer as a 3D mesh" */
@@ -92,15 +92,15 @@ protected:
     float mPlayer2Grooviness; // 0x180
     int mForceDrawSkeletonIdx; // 0x184
     bool mForceDrawEnabled; // 0x188
-    ObjPtr<RndTex> mPlayerPaletteTex;
-    int unk1a0;
-    int unk1a4;
-    int unk1a8;
-    int unk1ac;
-    int unk1b0;
-    int unk1b4;
-    int unk1b8;
-    int unk1bc;
+    ObjPtr<RndTex> mPlayerPaletteTex; // 0x18c
+    int unk1a0; // 0x1a0
+    int unk1a4; // 0x1a4
+    int unk1a8; // 0x1a8
+    int unk1ac; // 0x1ac
+    int unk1b0; // 0x1b0
+    int unk1b4; // 0x1b4
+    int unk1b8; // 0x1b8
+    int unk1bc; // 0x1bc
     /** "How many times to tile the mesh in the x-axis/y-axis" */
     Vector2 mTile; // 0x1c0
     /** "Voxel scalar" */
@@ -114,15 +114,15 @@ protected:
     ObjPtr<RhythmDetector> mGroovinessDetector1; // 0x1d8
     ObjPtr<RhythmDetector> mGroovinessDetector2; // 0x1ec
     std::vector<DepthBuffer3DAttachment> mAttachments; // 0x200
-    DoubleExponentialSmoother unk20c;
-    DoubleExponentialSmoother unk220;
-    DoubleExponentialSmoother unk234;
-    DoubleExponentialSmoother unk248;
-    DoubleExponentialSmoother unk25c;
-    DoubleExponentialSmoother unk270;
+    DoubleExponentialSmoother unk20c; // 0x20c
+    DoubleExponentialSmoother unk220; // 0x220
+    DoubleExponentialSmoother unk234; // 0x234
+    DoubleExponentialSmoother unk248; // 0x248
+    DoubleExponentialSmoother unk25c; // 0x25c
+    DoubleExponentialSmoother unk270; // 0x270
     /** "maximum uv zooming" */
     float mMaxZoom; // 0x284
     /** "maximum uv zooming" */
     float mMaxDepthZoom; // 0x288
-    bool unk28c;
+    bool unk28c; // 0x28c
 };

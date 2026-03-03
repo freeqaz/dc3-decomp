@@ -21,7 +21,7 @@
 
 HamMaster::HamMaster(HamSongData *data, MidiParserMgr *mgr)
     : mSongData(data), mAudio(nullptr), mMidiParserMgr(mgr), mSongInfo(nullptr),
-      mLoader(0), mLoaded(0), mSongMs(0), mStreamMs(-1), mStreamJumped(0), unk54(-1), unk58(-1),
+      mLoader(0), mLoaded(0), mSongMs(0), mStreamMs(-1), mStreamJumped(0), mPreJumpMs(-1), mPostJumpMs(-1),
       mStreamMsAtJump(-1), unk9c(0), unka0(0), unka4(0), unkb0(0), mMetronome(0) {
     Reset();
     mAudio = new HamAudio();
@@ -82,8 +82,8 @@ void HamMaster::Jump(float f1) {
     SongPos tmp = mSongPos;
     mSongPos = calcedPos;
     mPrevSongPos = tmp;
-    unkb4 = -1;
-    unkb8 = 0;
+    mLastBeatIndex = -1;
+    mBeatCount = 0;
     if (mMidiParserMgr) {
         mMidiParserMgr->Reset(tmp.GetTotalTick());
     }
@@ -92,8 +92,8 @@ void HamMaster::Jump(float f1) {
 
 void HamMaster::Reset() {
     mPrevSongPos = SongPos();
-    unkb8 = 0;
-    unkb4 = -1;
+    mBeatCount = 0;
+    mLastBeatIndex = -1;
     for (int i = 0; i < mSubmixIdxs.size(); i++) {
         mSubmixIdxs[i] = 0;
     }
@@ -104,7 +104,7 @@ void HamMaster::Reset() {
     Export(msg, true);
     ResetAudio();
     mStreamMs = 0;
-    unk54 = 0;
+    mPreJumpMs = 0;
     mStreamJumped = false;
     mSongMs = 0;
     if (TheSynth->CheckCommonBank(false)) {
@@ -174,8 +174,8 @@ bool HamMaster::DetectStreamJump(float &f1, float &f2, float &f3) const {
     if (!mStreamJumped) {
         return false;
     } else {
-        f1 = unk54;
-        f2 = unk58;
+        f1 = mPreJumpMs;
+        f2 = mPostJumpMs;
         f3 = mStreamMsAtJump;
         return true;
     }

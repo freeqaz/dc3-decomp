@@ -61,11 +61,11 @@ struct ErrorFrameInput {
     const BaseSkeleton &mBaseSkeleton; // 0x4
     float mBoneLengths[kNumBones]; // 0x8
     float mBaseBoneLengths[kNumBones]; // 0x54
-    Vector3 mJointDisps[kNumJoints]; // 0xa0
-    Vector3 mBaseJointDisps[kNumJoints]; // 0x1e0
+    PaddedJointPos mJointDisps[kNumJoints]; // 0xa0
+    PaddedJointPos mBaseJointDisps[kNumJoints]; // 0x1e0
     bool mDisplacements; // 0x320
-    Vector3 mJointPositions[kNumJoints]; // 0x324
-    Vector3 mBaseJointPositions[kNumJoints]; // 0x464
+    PaddedJointPos mJointPositions[kNumJoints]; // 0x324
+    PaddedJointPos mBaseJointPositions[kNumJoints]; // 0x464
 };
 
 // Ham1NodeWeight size: 0x14

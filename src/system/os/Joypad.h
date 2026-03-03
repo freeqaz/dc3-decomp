@@ -226,7 +226,7 @@ public:
     class LocalUser *mUser; // 0x44
     bool mConnected; // 0x48
     bool mVibrateEnabled; // 0x49
-    bool mHasCapFlag1, mIsWireless, unk4c;
+    bool mHasCapFlag1, mIsWireless, unk4c; // 0x4a, 0x4b, 0x4c
     int mNumAnalogSticks; // 0x50
     bool mTranslateSticks; // 0x54
     int mIgnoreButtonMask; // 0x58
@@ -246,23 +246,23 @@ public:
     Hmx::Object *mBreedCallback; // 0x84 - callback object for breed data read/write results
     BreedData mBreedData; // 0x88
     BreedData *mBreedDataDest; // 0x94
-    int unk98;
-    int mSuppressWriteCallback;
-    int unka0;
-    int unka4;
-    int unka8;
-    int unkac;
-    int unkb0;
-    int unkb4;
-    int unkb8;
-    int unkbc;
-    bool mEepromWriteDone;
-    int unkc4;
-    int unkc8;
-    int unkcc;
-    int unkd0;
-    int unkd4;
-    int unkd8;
+    int unk98; // 0x98
+    int mSuppressWriteCallback; // 0x9c
+    int unka0; // 0xa0
+    int unka4; // 0xa4
+    int unka8; // 0xa8
+    int unkac; // 0xac
+    int unkb0; // 0xb0
+    int unkb4; // 0xb4
+    int unkb8; // 0xb8
+    int unkbc; // 0xbc
+    bool mEepromWriteDone; // 0xc0
+    int unkc4; // 0xc4
+    int unkc8; // 0xc8
+    int unkcc; // 0xcc
+    int unkd0; // 0xd0
+    int unkd4; // 0xd4
+    int unkd8; // 0xd8
 
     JoypadData();
     float GetAxis(Symbol) const;

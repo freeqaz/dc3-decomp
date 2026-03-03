@@ -46,7 +46,7 @@ private:
     Hmx::Matrix4 mViewProjXfm; // 0x8
     Vector4 mDepthRangeValues; // 0x48
     Vector3 mFrustumNear; // 0x58
-    Vector3 mFrustumCorners[4]; // 0x68
+    PaddedJointPos mFrustumCorners[4]; // 0x68
     RndCam *mCam; // 0xa8
     RndXfmCache mXfmCaches[2]; // 0xac
     Timer mTimer; // 0x36bb8

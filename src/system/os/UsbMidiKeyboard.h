@@ -43,8 +43,6 @@ public:
     static void Poll();
     static void SendMessage(const Message &msg) { JoypadPushThroughMsg(msg); }
 
-    int GetSlottedKeyVelocityFromExtended(int, unsigned char *);
-
     int GetAccelAxisVal(int pad, int axis) {
         if (0 <= axis && (unsigned int)axis < 4)
             return mAccelerometer[pad][axis];
@@ -96,6 +94,9 @@ public:
     int GetConnectedAccessory(int i) const { return mConnectedAccessories[i]; }
     int GetLowHandPlacement(int i) const { return mLowHandPlacement[i]; }
     int GetHighHandPlacement(int i) const { return mHighHandPlacement[i]; }
+
+private:
+    int GetSlottedKeyVelocityFromExtended(int, unsigned char *);
 
     bool mKeyPressed[4][128]; // 0x0
     int mKeyVelocity[4][128]; // 0x200

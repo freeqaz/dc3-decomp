@@ -79,6 +79,7 @@ struct BoneJoints {
     SkeletonJoint joint2;
 };
 
+
 class BaseSkeleton {
 public:
     virtual ~BaseSkeleton() {} // 0x0

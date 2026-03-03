@@ -347,10 +347,8 @@ void SkeletonViz::Visualize(
     std::vector<SkeletonCallback *> *callbacks,
     bool faded
 ) {
-    if (!mResource.IsLoaded()) {
-        if (!TheLoadMgr.EditMode()) {
-            return;
-        }
+    if (!mResource) {
+        MILO_ASSERT(TheLoadMgr.EditMode(), 0x72);
         Init();
     }
     MILO_ASSERT(mResource.IsLoaded(), 0x76);
@@ -363,15 +361,16 @@ void SkeletonViz::Visualize(
     }
     mLineWidthScale = input.DrawScale();
 
-    Transform worldXfm = unk1d4;
+    Transform worldXfm;
     if (unk218) {
         worldXfm = WorldXfm();
+    } else {
+        worldXfm = unk1d4;
     }
 
     const SkeletonFrame &cachedFrame = input.CachedFrame();
-    if (!skeleton.IsTracked()) {
-        SetCamera(cachedFrame, worldXfm, 0.0f);
-    } else {
+    RndCam *currentCam = RndCam::Current();
+    if (skeleton.IsTracked()) {
         Vector3 camJointPos[kNumJoints];
         Vector3 drawJointPos[kNumJoints];
         for (int i = 0; i < kNumJoints; i++) {
@@ -385,6 +384,11 @@ void SkeletonViz::Visualize(
             FOREACH (it, *callbacks) {
                 (*it)->Draw(skeleton, *this);
             }
+        }
+    } else {
+        SetCamera(cachedFrame, worldXfm, 0.0f);
+        if (currentCam) {
+            currentCam->Select();
         }
     }
 }

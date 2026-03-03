@@ -1,6 +1,7 @@
 #pragma once
 #include "gesture/BaseSkeleton.h"
 #include "gesture/CameraInput.h"
+#include "math/Color.h"
 #include "gesture/Skeleton.h"
 #include "hamobj/Difficulty.h"
 #include "math/Vec.h"
@@ -16,16 +17,16 @@
 struct RecordedFrame {
     void MakeSkeletonFrame(SkeletonFrame &, int) const;
 
-    int unk0;
-    int unk4;
-    Vector3 unk8;
-    Vector4 unk18; // could also be an XMVECTOR?
+    int mFrameNumber;
+    int mElapsedMs;
+    Vector3 mFloorNormal;
+    Hmx::Color mFloorClipPlane;
     bool mIsTracked;
-    Vector3 unk2c[kNumJoints];
-    int unk16c[kNumJoints];
-    int unk1bc;
-    int unk1c0;
-    float unk1c4;
+    PaddedJointPos mJointPositions[kNumJoints];
+    int mJointTrackingState[kNumJoints];
+    int mQualityFlags;
+    int mTrackingID;
+    float mSongSeconds;
 };
 
 class SkeletonClip : public CameraInput,
@@ -77,7 +78,7 @@ public:
     void SetAutoplay(bool);
     void SetPath(const char *);
     void EnableAlternateRecord(int);
-    void SetRecordClipIndexHint(int clipIndex) { unk11fc = clipIndex; }
+    void SetRecordClipIndexHint(int clipIndex) { mRecordClipIndexHint = clipIndex; }
     int NumMoveRatings() const;
     void WriteClip(FileStream &);
     const MoveRating &GetMoveRating(int) const;
@@ -113,7 +114,7 @@ protected:
     std::vector<RecordedFrame> *mRecordedFrames; // 0x11f0
     SkeletonFrame *mCamFrame; // 0x11f4
     String *mLoadedFile; // 0x11f8
-    int unk11fc; // 0x11fc
+    int mRecordClipIndexHint; // 0x11fc
     DateTime mTimeRecorded; // 0x1200
     Symbol mSong; // 0x1208
     Difficulty mDifficulty; // 0x120c
@@ -122,7 +123,7 @@ protected:
     int mWeighted; // 0x121c
     int mOverrideDiff; // 0x1220
     std::vector<MoveRating> mMoveRatings; // 0x1224
-    bool unk1230;
+    bool mRecordSuspended;
     bool mIsRecording;
     FileStream *mFileStream; // 0x1234
     String mFile; // 0x1238

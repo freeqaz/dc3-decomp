@@ -28,7 +28,7 @@ public:
 private:
     void Identified(unsigned int);
 
-    bool mIdentified;
+    bool mIdentified; // 0x0
     int mEnrollmentIdx; // 0x4
     bool mProfileMatched; // 0x8
     bool unk9; // 0x9

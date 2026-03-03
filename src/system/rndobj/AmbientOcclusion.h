@@ -49,6 +49,7 @@ protected:
 
     void OnCalculate(bool);
     void BuildSHCoeff(const Vector3 &, float *) const;
+    float DistanceSH(const Vector4 &, const Vector3 &, const Vector4 &, const Vector3 &) const;
     bool IsValid_Mesh(const RndMesh *) const;
     bool IsValid_AOCast(const RndMesh *) const;
     bool IsValid_AOReceive(const RndMesh *) const;
@@ -59,6 +60,8 @@ protected:
     bool CanBurnXfm(const RndMesh *) const;
     void PreprocessMesh();
     void BurnTransform(RndMesh *, std::list<RndMesh *> &) const;
+    void CalculateAOAtPoint(const Vector3 &, const Vector3 &, float *) const;
+    void SmoothResults(RndMesh *) const;
 
     DataNode OnGetValidObjects(DataArray *) const;
     DataNode OnGetRecvMeshes(DataArray *);

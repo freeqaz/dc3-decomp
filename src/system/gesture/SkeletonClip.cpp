@@ -41,8 +41,8 @@ void ReserveFrames() {
 }
 
 SkeletonClip::SkeletonClip()
-    : mRecordedFrames(sFrames), mCamFrame(sCamFrame), mLoadedFile(sLoadedFile), unk11fc(-1),
-      mDifficulty(kNumDifficulties), mWeighted(0), unk1230(0), mIsRecording(0),
+    : mRecordedFrames(sFrames), mCamFrame(sCamFrame), mLoadedFile(sLoadedFile), mRecordClipIndexHint(-1),
+      mDifficulty(kNumDifficulties), mWeighted(0), mRecordSuspended(0), mIsRecording(0),
       mFileStream(nullptr), mPlaybackFrame(0), mAutoplay(false) {
     SetRate(k30_fps);
 }
@@ -56,54 +56,54 @@ SkeletonClip::~SkeletonClip() {
 void RecordedFrame::MakeSkeletonFrame(SkeletonFrame &frame, int idx) const {
     MILO_ASSERT_RANGE(idx, 0, 6, 0x2E);
     memset(&frame, 0, sizeof(SkeletonFrame));
-    frame.mFrameNumber = unk0;
-    frame.mElapsedMs = unk4;
-    frame.mFloorNormal = unk8;
-    frame.mFloorClipPlane = unk18;
+    frame.mFrameNumber = mFrameNumber;
+    frame.mElapsedMs = mElapsedMs;
+    frame.mFloorNormal = mFloorNormal;
+    frame.mFloorClipPlane = *(Vector4 *)&mFloorClipPlane;
     SkeletonData &data = frame.mSkeletonDatas[idx];
     data.mTracking = mIsTracked ? kSkeletonTracked : kSkeletonNotTracked;
-    memcpy(data.mJointPositions, unk2c, sizeof(unk2c));
-    memcpy(data.mJointTrackingState, unk16c, sizeof(unk16c));
-    data.mQualityFlags = unk1bc;
-    data.mTrackingID = unk1c0;
-    data.mClippedFlags = unk16c[0];
-    data.mHipCenter = unk2c[0];
+    memcpy(data.mJointPositions, mJointPositions, sizeof(mJointPositions));
+    memcpy(data.mJointTrackingState, mJointTrackingState, sizeof(mJointTrackingState));
+    data.mQualityFlags = mQualityFlags;
+    data.mTrackingID = mTrackingID;
+    data.mClippedFlags = mJointTrackingState[0];
+    data.mHipCenter = mJointPositions[0];
 }
 
 void SkeletonClip::LoadFrame(BinStream &bs, RecordedFrame &frame, int version) {
-    if (version >= 7) {
-        bs >> frame.unk0;
+    if (version > 6) {
+        bs >> frame.mFrameNumber;
     } else {
-        frame.unk0 = 0;
+        frame.mFrameNumber = 0;
     }
 
-    if (version < 2) {
-        frame.unk4 = 0x21;
-        frame.unk8.Set(0, 0, 1);
-        frame.unk18.Set(0, 0, 1, 0);
+    if (version > 1) {
+        bs >> frame.mElapsedMs;
+        bs >> frame.mFloorNormal;
+        bs >> frame.mFloorClipPlane;
     } else {
-        bs >> frame.unk4;
-        bs >> frame.unk8;
-        bs >> frame.unk18;
+        frame.mElapsedMs = 0x21;
+        frame.mFloorNormal.Set(0, 0, 1);
+        frame.mFloorClipPlane.Set(0, 0, 1, 0);
     }
 
     bs >> frame.mIsTracked;
     if (frame.mIsTracked || version < 2) {
         for (int i = 0; i < kNumJoints; i++) {
-            bs >> frame.unk2c[i];
-            bs >> frame.unk16c[i];
+            bs >> frame.mJointPositions[i];
+            bs >> frame.mJointTrackingState[i];
         }
-        bs >> frame.unk1bc;
-        bs >> frame.unk1c0;
+        bs >> frame.mQualityFlags;
+        bs >> frame.mTrackingID;
     }
 
     if (version == 1) {
-        String tmp;
+        String tmp("");
         bs >> tmp;
     } else if (version > 2) {
-        bs >> frame.unk1c4;
+        bs >> frame.mSongSeconds;
     } else {
-        frame.unk1c4 = 0;
+        frame.mSongSeconds = 0;
     }
 }
 
@@ -115,17 +115,17 @@ const RecordedFrame *SkeletonClip::RecordedFrameAt(
         return nullptr;
     }
 
-    while (frames.back().unk1c4 < seconds) {
+    while (frames.back().mSongSeconds < seconds) {
         if ((int)frames.size() <= loopCount) {
             return nullptr;
         }
-        seconds -= frames.back().unk1c4;
+        seconds -= frames.back().mSongSeconds;
         loopCount++;
     }
 
     std::vector<RecordedFrame>::const_iterator it = std::lower_bound(
         frames.begin(), frames.end(), seconds, [](const RecordedFrame &f, float value) {
-            return f.unk1c4 < value;
+            return f.mSongSeconds < value;
         }
     );
     if (it != frames.end()) {
@@ -140,11 +140,13 @@ const RecordedFrame *SkeletonClip::CurRecordedFrame(int &loopCount, int &frameId
         if (TheHamDirector) {
             return RecordedFrameAt(*mRecordedFrames, MoveDir::SongSeconds(), loopCount, frameIdx);
         }
-        float frame = GetFrame();
-        if (!mRecordedFrames->empty() && frame < mRecordedFrames->size()) {
-            frameIdx = 0;
-            loopCount = (int)frame;
-            return &(*mRecordedFrames)[(int)frame];
+        if (mRecordedFrames->size() > 0) {
+            float frame = GetFrame();
+            if ((float)mRecordedFrames->size() > frame) {
+                frameIdx = 0;
+                loopCount = (int)frame;
+                return &(*mRecordedFrames)[(int)frame];
+            }
         }
     }
     return nullptr;
@@ -167,21 +169,21 @@ void SkeletonClip::PollRecording(const SkeletonFrame &frame) {
         songSeconds = MoveDir::SongSeconds();
     }
     if (TheHamDirector && !mRecordedFrames->empty()
-        && mRecordedFrames->back().unk1c4 >= songSeconds) {
+        && mRecordedFrames->back().mSongSeconds >= songSeconds) {
         return;
     }
 
     RecordedFrame recorded;
-    recorded.unk0 = frame.mFrameNumber;
-    recorded.unk4 = frame.mElapsedMs;
-    recorded.unk8 = frame.mFloorNormal;
-    recorded.unk18 = frame.mFloorClipPlane;
+    recorded.mFrameNumber = frame.mFrameNumber;
+    recorded.mElapsedMs = frame.mElapsedMs;
+    recorded.mFloorNormal = frame.mFloorNormal;
+    recorded.mFloorClipPlane = *(Hmx::Color *)&frame.mFloorClipPlane;
 
     int active_skel_idx = -1;
-    if (unk11fc == -1) {
+    if (mRecordClipIndexHint == -1) {
         active_skel_idx = TheGestureMgr->GetActiveSkeletonIndex();
     } else {
-        HamPlayerData *player = TheGameData->Player(unk11fc);
+        HamPlayerData *player = TheGameData->Player(mRecordClipIndexHint);
         active_skel_idx =
             TheGestureMgr->GetSkeletonIndexByTrackingID(player->GetSkeletonTrackingID());
     }
@@ -190,11 +192,11 @@ void SkeletonClip::PollRecording(const SkeletonFrame &frame) {
         MILO_ASSERT_RANGE(active_skel_idx, 0, 6, 0x2A9);
         const SkeletonData &data = frame.mSkeletonDatas[active_skel_idx];
         recorded.mIsTracked = data.mTracking == kSkeletonTracked;
-        memcpy(recorded.unk2c, data.mJointPositions, sizeof(recorded.unk2c));
-        memcpy(recorded.unk16c, data.mJointTrackingState, sizeof(recorded.unk16c));
-        recorded.unk1bc = data.mQualityFlags;
-        recorded.unk1c0 = data.mTrackingID;
-        recorded.unk1c4 = songSeconds;
+        memcpy(recorded.mJointPositions, data.mJointPositions, sizeof(recorded.mJointPositions));
+        memcpy(recorded.mJointTrackingState, data.mJointTrackingState, sizeof(recorded.mJointTrackingState));
+        recorded.mQualityFlags = data.mQualityFlags;
+        recorded.mTrackingID = data.mTrackingID;
+        recorded.mSongSeconds = songSeconds;
 
         if (mRecordedFrames->size() == mRecordedFrames->capacity()) {
             MILO_LOG(
@@ -248,7 +250,7 @@ void SkeletonClip::FillMoveRatings() {
 
 float SkeletonClip::SongStartSeconds() const {
     if (!mFile.empty() && !mRecordedFrames->empty() && !mSong.Null()) {
-        return mRecordedFrames->front().unk1c4;
+        return mRecordedFrames->front().mSongSeconds;
     }
     return 0.0f;
 }
@@ -256,32 +258,28 @@ float SkeletonClip::SongStartSeconds() const {
 bool SkeletonClip::PrevSkeleton(
     const Skeleton &skeleton, int targetMs, ArchiveSkeleton &archive, int &elapsedMs
 ) const {
-    if (skeleton.SkeletonIndex() != 0) {
-        return false;
+    if (skeleton.SkeletonIndex() == 0) {
+        int loopCount, frameIdx;
+        const RecordedFrame *curRecorded = CurRecordedFrame(loopCount, frameIdx);
+        if (curRecorded) {
+            float curTime =
+                mRecordedFrames->back().mSongSeconds * loopCount + curRecorded->mSongSeconds;
+            float prevTime = curTime - targetMs * 0.00100000005f;
+
+            const RecordedFrame *prevRecorded =
+                RecordedFrameAt(*mRecordedFrames, prevTime, loopCount, frameIdx);
+            if (prevRecorded) {
+                elapsedMs = (curTime - prevTime) * 1000.0f;
+                SkeletonFrame frame;
+                prevRecorded->MakeSkeletonFrame(frame, skeleton.SkeletonIndex());
+                Skeleton prevSkeleton;
+                prevSkeleton.Poll(skeleton.SkeletonIndex(), frame);
+                archive.Set(prevSkeleton);
+                return true;
+            }
+        }
     }
-
-    int loopCount, frameIdx;
-    const RecordedFrame *curRecorded = CurRecordedFrame(loopCount, frameIdx);
-    if (!curRecorded) {
-        return false;
-    }
-
-    float curTime = mRecordedFrames->back().unk1c4 * frameIdx + curRecorded->unk1c4;
-    float prevTime = curTime - targetMs * 0.00100000005f;
-
-    const RecordedFrame *prevRecorded =
-        RecordedFrameAt(*mRecordedFrames, prevTime, loopCount, frameIdx);
-    if (!prevRecorded) {
-        return false;
-    }
-
-    elapsedMs = (curTime - prevTime) * 1000.0f;
-    SkeletonFrame frame;
-    prevRecorded->MakeSkeletonFrame(frame, skeleton.SkeletonIndex());
-    Skeleton prevSkeleton;
-    prevSkeleton.Poll(skeleton.SkeletonIndex(), frame);
-    archive.Set(prevSkeleton);
-    return true;
+    return false;
 }
 
 BEGIN_HANDLERS(SkeletonClip)
@@ -484,7 +482,7 @@ const char *SkeletonClip::Song() const {
     }
 }
 
-bool SkeletonClip::IsRecording() const { return mIsRecording && !unk1230; }
+bool SkeletonClip::IsRecording() const { return mIsRecording && !mRecordSuspended; }
 const String &SkeletonClip::Path() const { return mFile; }
 
 String SkeletonClip::DateTimeStr() const {
@@ -564,20 +562,20 @@ void SkeletonClip::WriteClipHeader(FileStream &stream) {
 }
 
 void SkeletonClip::WriteClipFrame(FileStream &stream, const RecordedFrame &recordedFrame) {
-    stream << recordedFrame.unk0;
-    stream << recordedFrame.unk4;
-    stream << recordedFrame.unk8;
-    stream << recordedFrame.unk18;
+    stream << recordedFrame.mFrameNumber;
+    stream << recordedFrame.mElapsedMs;
+    stream << recordedFrame.mFloorNormal;
+    stream << recordedFrame.mFloorClipPlane;
     stream << recordedFrame.mIsTracked;
     if (recordedFrame.mIsTracked) {
         for (int i = 0; i < kNumJoints; i++) {
-            stream << recordedFrame.unk2c[i];
-            stream << recordedFrame.unk16c[i];
+            stream << recordedFrame.mJointPositions[i];
+            stream << recordedFrame.mJointTrackingState[i];
         }
-        stream << recordedFrame.unk1bc;
-        stream << recordedFrame.unk1c0;
+        stream << recordedFrame.mQualityFlags;
+        stream << recordedFrame.mTrackingID;
     }
-    stream << recordedFrame.unk1c4;
+    stream << recordedFrame.mSongSeconds;
 }
 
 void SkeletonClip::WriteClip(FileStream &stream) {
@@ -781,7 +779,7 @@ void SkeletonClip::StartXboxRecording(const char *cc) {
 
 float SkeletonClip::SongEndSeconds() const {
     if (!mFile.empty() && !mRecordedFrames->empty() && !mSong.Null()) {
-        float result = mRecordedFrames->back().unk1c4;
+        float result = mRecordedFrames->back().mSongSeconds;
         if (IsFailClip()) {
             result *= 1000.0f;
         }

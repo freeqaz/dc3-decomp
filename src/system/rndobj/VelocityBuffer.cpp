@@ -34,7 +34,7 @@ void RndVelocityBuffer::CacheCameraSettings(RndCam *camera) {
     camera->GetViewProjectXfms(tfa0, me0);
     mViewProjXfm = tfa0 * me0;
     camera->GetDepthRangeValues(mDepthRangeValues);
-    camera->GetCamFrustum(mFrustumNear, mFrustumCorners);
+    camera->GetCamFrustum(mFrustumNear, (Vector3 (&)[4])mFrustumCorners);
     mCam = camera;
 }
 

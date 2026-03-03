@@ -147,12 +147,6 @@ public:
      */
     bool LoadSafely(BinStream &bs, int w, int h);
     void Blt(const RndBitmap &, int, int, int, int, int, int);
-    /** Determine if this RndBitmap and the supplied RndBitmap have identical pixel
-     * formats. */
-    bool SamePixelFormat(const RndBitmap &) const;
-    /** Determine if this RndBitmap and the supplied RndBitmap have identical color
-     * palettes. */
-    bool SamePaletteColors(const RndBitmap &) const;
     /** Determine if the image is translucent (i.e. alpha value of any pixel < 253) */
     bool IsTranslucent() const;
     /** Set the supplied number color in the color palette to the desired RGBA values.
@@ -238,6 +232,8 @@ public:
     bool HasName() const { return mName.mCRC; }
 
 private:
+    bool SamePixelFormat(const RndBitmap &) const;
+    bool SamePaletteColors(const RndBitmap &) const;
     void ConvertToAlpha();
     void DxtColor(
         int x,

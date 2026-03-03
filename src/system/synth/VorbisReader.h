@@ -45,10 +45,10 @@ protected:
     int mHeadersRead; // 0x34
     char *mReadBuffer; // 0x38
     bool mEnableReads; // 0x3c
-    int unk40;
-    bool unk44;
+    int unk40; // 0x40
+    bool unk44; // 0x44
     bool mDone; // 0x45
-    int unk48;
+    int unk48; // 0x48
     StandardStream *mStream; // 0x4c
     ogg_sync_state *mOggSync; // 0x50
     ogg_stream_state *mOggStream; // 0x54
@@ -61,7 +61,7 @@ protected:
     long mKeyIndex; // 0x70
     long mMagicHashA; // 0x74
     long mMagicHashB; // 0x78
-    int unk7c;
+    int unk7c; // 0x7c
     ogg_packet mPendingPacket; // 0x80
     bool mHasPendingPacket;
     int mSeekTarget; // 0xa4
@@ -72,12 +72,12 @@ protected:
     symmetric_CTR *mCtrState; // 0xc8
     unsigned char mNonce[16]; // 0xcc
     unsigned char mKeyMask[16]; // 0xdc
-    bool unkec;
-    bool unked;
-    bool mEof;
+    bool unkec; // 0xec
+    bool unked; // 0xed
+    bool mEof; // 0xee
     bool mFail; // 0xef
     int mVersion; // 0xf0 - mogg version?
     std::vector<std::vector<short> > mPcmBuffers; // 0xf4 - per-channel PCM sample buffers
-    s64 mLastGranulePos;
-    int mPcmReadPos;
+    s64 mLastGranulePos; // 0x100
+    int mPcmReadPos; // 0x108
 };

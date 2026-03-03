@@ -97,7 +97,7 @@ protected:
     float mTimestamps[8]; // 0xa84 - cached beat timestamps
     int unkaa4;
     float mLastBeatTime; // 0xaa8 - last beat time at recording start
-    Vector3 unkaac[kNumJoints]; // 0xaac
+    PaddedJointPos unkaac[kNumJoints]; // 0xaac
     RecordData mRecordData; // 0xbec
 
 private:

@@ -1,11 +1,16 @@
 #include "hamobj/TransConstraint.h"
+#include "math/Geo.h"
 #include "math/Mtx.h"
 #include "math/Rot.h"
+#include "math/Utl.h"
+#include "math/Vec.h"
 #include "obj/Object.h"
 #include "os/Debug.h"
+#include "os/System.h"
 #include "rndobj/Highlight.h"
 #include "rndobj/Poll.h"
 #include "rndobj/Trans.h"
+#include "rndobj/Utl.h"
 
 TransConstraint::TransConstraint()
     : mParent(this), mChild(this), mSpeed(10), mAffectScale(0), mUseUITime(0), mEnabled(1) {
@@ -138,6 +143,140 @@ void TransConstraint::SnapToParent() {
                 }
             }
             SetScaleVectorOnTransform(mChild, v60);
+        }
+    }
+}
+
+void TransConstraint::Highlight() {
+    if (mParent && mChild) {
+        Transform xfm = mParent->WorldXfm();
+        xfm.m.Identity();
+
+        Box box;
+        for (int i = 0; i < 3; i++) {
+            float halfExtent = mStaticCube[i] * 0.5f;
+            box.mMin[i] = -halfExtent;
+            box.mMax[i] = halfExtent;
+        }
+
+        Hmx::Color white(1, 1, 1, 1);
+        UtilDrawAxes(mParent->WorldXfm(), 10.0f, white);
+
+        Hmx::Color white2(1, 1, 1, 1);
+        UtilDrawAxes(mChild->WorldXfm(), 10.0f, white2);
+
+        Hmx::Color yellow(1, 1, 0, 1);
+        UtilDrawBox(xfm, box, yellow, true);
+    }
+}
+
+void TransConstraint::Poll() {
+    if (!mParent || !mChild || !mEnabled)
+        return;
+
+    float dt;
+    if (mUseUITime) {
+        dt = TheTaskMgr.DeltaUISeconds();
+    } else {
+        dt = TheTaskMgr.DeltaSeconds();
+    }
+
+    Vector3 parentPos = mParent->WorldXfm().v;
+    Vector3 childPos = mChild->WorldXfm().v;
+
+    Vector3 delta;
+    delta.x = parentPos.x - childPos.x;
+    delta.y = parentPos.y - childPos.y;
+    delta.z = parentPos.z - childPos.z;
+
+    for (int i = 0; i < 3; i++) {
+        if (!mTracks[i]) {
+            delta[i] = 0.0f;
+        }
+    }
+
+    if (Length(delta) > mSpeed * 3.0f) {
+        SnapToParent();
+    } else {
+        Vector3 dir;
+        Normalize(delta, dir);
+
+        for (int i = 0; i < 3; i++) {
+            if (mTracks[i]) {
+                float halfCube = mStaticCube[i] * 0.5f;
+                float lo = parentPos[i] - halfCube;
+                float hi = parentPos[i] + halfCube;
+
+                if (childPos[i] < lo || childPos[i] > hi) {
+                    float step = dir[i] * mSpeed;
+
+                    if (childPos[i] < lo) {
+                        childPos[i] += step * dt;
+                        float &cp = childPos[i];
+                        cp = Min(cp, lo);
+                    } else if (childPos[i] > hi) {
+                        childPos[i] += step * dt;
+                        float &cp = childPos[i];
+                        cp = Max(cp, hi);
+                    }
+                }
+            }
+        }
+
+        mChild->SetWorldPos(childPos);
+
+        if (mAffectScale) {
+            Vector3 childWorldScale;
+            Vector3 parentScale;
+            MakeScale(mParent->WorldXfm().m, parentScale);
+            MakeScale(mChild->WorldXfm().m, childWorldScale);
+            Vector3 childLocalScale;
+            MakeScale(mChild->LocalXfm().m, childLocalScale);
+
+            Vector3 scaleDelta;
+            scaleDelta.x = parentScale.x - childWorldScale.x;
+            scaleDelta.y = parentScale.y - childWorldScale.y;
+            scaleDelta.z = parentScale.z - childWorldScale.z;
+
+            for (int i = 0; i < 3; i++) {
+                if (!mTracks[i]) {
+                    scaleDelta[i] = 0.0f;
+                }
+            }
+
+            float scaleRatio = 1.0f;
+            float posDist = Length(delta);
+            if (0.0f < posDist) {
+                scaleRatio = Length(scaleDelta) / posDist;
+            }
+            Vector3 scaleDir;
+            Normalize(scaleDelta, scaleDir);
+
+            float scaleSpeed = scaleRatio * mSpeed;
+
+            for (int i = 0; i < 3; i++) {
+                if (mTracks[i]) {
+                    float ps = parentScale[i];
+                    if (childWorldScale[i] < ps
+                        || childWorldScale[i] > ps) {
+                        float step = scaleDir[i] * scaleSpeed;
+
+                        if (childWorldScale[i] < ps) {
+                            childWorldScale[i] += step * dt;
+                            float &cws = childWorldScale[i];
+                            cws = Min(cws, ps);
+                        } else if (childWorldScale[i] > ps) {
+                            childWorldScale[i] += step * dt;
+                            float &cws = childWorldScale[i];
+                            cws = Max(cws, ps);
+                        }
+                    }
+                } else {
+                    childWorldScale[i] = childLocalScale[i] + parentScale[i];
+                }
+            }
+
+            SetScaleVectorOnTransform(mChild, childWorldScale);
         }
     }
 }

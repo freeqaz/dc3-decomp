@@ -10,15 +10,17 @@ public:
     // SampleInst pure virtuals
     virtual bool IsPlaying() const;
     virtual void SetFXCore(FXCore);
+    virtual void Pause(bool);
+    virtual void SetADSR(const ADSRImpl &);
+
+    POOL_OVERLOAD(SampleInst360, 0x16)
+
+protected:
     virtual void StartImpl();
     virtual void StopImpl(bool);
     virtual void SetVolumeImpl(float);
     virtual void SetPanImpl(float);
     virtual void SetSpeedImpl(float);
-    virtual void Pause(bool);
-    virtual void SetADSR(const ADSRImpl &);
-
-    POOL_OVERLOAD(SampleInst360, 0x16)
 
 private:
     // Xbox 360 specific members

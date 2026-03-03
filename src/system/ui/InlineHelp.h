@@ -50,7 +50,6 @@ public:
     // RndPollable
     virtual void Poll();
     virtual void Enter();
-    virtual void OldResourcePreload(BinStream &);
 
     NEW_OBJ(InlineHelp)
     OBJ_MEM_OVERLOAD(0x16)
@@ -64,6 +63,8 @@ public:
     DataNode OnSetConfig(DataArray const *);
 
 protected:
+    virtual void OldResourcePreload(BinStream &);
+
     InlineHelp();
     void Update();
     void UpdateLabelText();

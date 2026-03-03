@@ -21,6 +21,7 @@
 #include "utl/MemMgr.h"
 #include "utl/Std.h"
 #include "os/Timer.h"
+#include "obj/Utl.h"
 
 PatchVerts gPatchVerts;
 int MESH_REV_SEP_COLOR = 0x25;
@@ -1100,6 +1101,313 @@ void RndMesh::CopyGeometry(const RndMesh *mesh, bool b2) {
     if (b2)
         SetVolume(mesh->mGeomOwner->mVolume);
     mBones = mesh->mBones;
+}
+
+void RndMesh::SetVolume(RndMesh::Volume vol) {
+    if (mGeomOwner != this)
+        mGeomOwner->SetVolume(vol);
+    else {
+        mVolume = vol;
+        RELEASE(mBSPTree);
+        if (mVerts.empty() || mFaces.empty())
+            return;
+        else {
+            if (mVolume == kVolumeBox) {
+                Box box;
+                FOREACH (it, mVerts) {
+                    box.GrowToContain(it->pos, &it->pos == &mVerts.begin()->pos);
+                }
+                mBSPTree = new BSPNode();
+                BSPNode *bspIt = mBSPTree;
+                for (int i = 0; i < 6; i++) {
+                    Vector3 vb0;
+                    vb0.Zero();
+                    vb0[i % 3] = i > 2 ? -1.0f : 1.0f;
+                    const Vector3 &point = i > 2 ? box.mMin : box.mMax;
+                    bspIt->plane = Plane(vb0, point);
+                    bspIt->left = 0;
+                    if (i == 5) {
+                        bspIt->right = 0;
+                    } else {
+                        bspIt->right = new BSPNode();
+                        bspIt = bspIt->right;
+                    }
+                }
+            } else if (mVolume == kVolumeBSP) {
+                std::list<BSPFace> faces;
+                for (int i = mFaces.size() - 1; i >= 0; i--) {
+                    Face &curFace = mFaces[i];
+                    const Vector3 &v1 = mVerts[curFace.v1].pos;
+                    const Vector3 &v2 = mVerts[curFace.v2].pos;
+                    const Vector3 &v3 = mVerts[curFace.v3].pos;
+                    BSPFace bspFace;
+                    bspFace.Set(v1, v2, v3);
+                    faces.push_back(bspFace);
+                }
+                if (!MakeBSPTree(mBSPTree, faces, 0)) {
+                    RELEASE(mBSPTree);
+                }
+                if (mBSPTree) {
+                    Box boxa0;
+                    FOREACH (it, mVerts) {
+                        boxa0.GrowToContain(it->pos, &it->pos == &mVerts.begin()->pos);
+                    }
+                    if (!CheckBSPTree(mBSPTree, boxa0)) {
+                        MILO_WARN("BSP tree outside bounding box");
+                        RELEASE(mBSPTree);
+                    }
+                }
+                if (mBSPTree) {
+                    int x = 0, y = 0;
+                    NumNodes(mBSPTree, x, y);
+                    TheDebug << MakeString(
+                        "Made BSP tree for \"%s\" (nodes:%d depth:%d)\n", Name(), x, y
+                    );
+                } else {
+                    MILO_WARN("Couldn't make BSP tree for \"%s\"", Name());
+                    mVolume = kVolumeEmpty;
+                }
+            }
+        }
+    }
+}
+
+void RndMesh::OnSync(int flags) {
+    if (mGeomOwner != this || (flags & 0x80U) || !(flags & 0x20U))
+        return;
+    mPatches.clear();
+    if (PatchOkay(mVerts.size(), mFaces.size())) {
+        mPatches.push_back(mFaces.size());
+    } else if (flags & 0x100U) {
+        int u13 = 0xFFFF;
+        int i4 = 0;
+        int i12 = 0;
+        FOREACH (it, mFaces) {
+            i12 = Max(Max<u16>(i12, it->v1, it->v2), it->v3);
+            u13 = Min(Min<u16>(u13, it->v1, it->v2), it->v3);
+            if (!PatchOkay((i12 - u13) + 1, i4 + 1)) {
+                mPatches.push_back(i4);
+                i12 = Max(it->v1, it->v2, it->v3);
+                u13 = Min(it->v1, it->v2, it->v3);
+                i4 = 1;
+            } else
+                i4++;
+        }
+        mPatches.push_back(i4);
+    } else {
+        gPatchVerts.Clear();
+        std::vector<Face> faces;
+        Vector3 v40(0, 0, 0);
+        int i4 = 0;
+        while (true) {
+            if (mFaces.empty())
+                break;
+            int u5 = 4;
+            float f68 = 0;
+            std::vector<Face>::iterator faceIt = mFaces.begin();
+            for (; faceIt != mFaces.end(); ++faceIt) {
+                int uvar16 = !gPatchVerts.HasVert(faceIt->v1)
+                    + !gPatchVerts.HasVert(faceIt->v2) + !gPatchVerts.HasVert(faceIt->v3);
+                if (uvar16 < u5) {
+                    Vector3 v4c;
+                    FaceCenter(this, &*faceIt, v4c);
+                    Vector3 diff;
+                    Subtract(v4c, v40, diff);
+                    f68 = LengthSquared(diff);
+                    u5 = uvar16;
+                } else if (uvar16 == u5) {
+                    Vector3 v58;
+                    FaceCenter(this, &*faceIt, v58);
+                    Vector3 diff2;
+                    Subtract(v58, v40, diff2);
+                    if (MinEq(f68, LengthSquared(diff2))) {
+                        u5 = uvar16;
+                    }
+                }
+            }
+            if (!PatchOkay(u5 + gPatchVerts.NumVerts(), i4 + 1)) {
+                gPatchVerts.Clear();
+                mPatches.push_back(i4);
+                i4 = 0;
+            }
+            for (int i = 0; i < 3; i++) {
+                if (!gPatchVerts.HasVert((*faceIt)[i])) {
+                    gPatchVerts.Add((*faceIt)[i], mVerts, v40);
+                }
+            }
+            faces.push_back(*faceIt);
+            mFaces.erase(faceIt);
+            i4++;
+            if (mFaces.empty())
+                break;
+        }
+        mPatches.push_back(i4);
+        mFaces = faces;
+    }
+}
+
+void RndMesh::DeleteBones(bool findRoot) {
+    if (mBones.empty())
+        return;
+
+    std::vector<RndTransformable *> boneTransforms(mBones.size(), NULL);
+    for (unsigned int i = 0; i < boneTransforms.size(); i++) {
+        boneTransforms[i] = mBones[i].mBone;
+    }
+
+    RndTransformable *root = NULL;
+    if (findRoot) {
+        RndTransformable *parent = mBones[0].mBone;
+        while (parent) {
+            RndTransformable *transParent = dynamic_cast<RndTransformable *>(parent->TransParent());
+            root = parent;
+            if (transParent)
+                break;
+            MILO_ASSERT(parent != parent->TransParent(), 0x5a1);
+            parent = parent->TransParent();
+        }
+    }
+
+    mBones.erase(mBones.begin(), mBones.end());
+
+    for (unsigned int i = 0; i < boneTransforms.size(); i++) {
+        if (boneTransforms[i]) {
+            delete boneTransforms[i];
+        }
+    }
+
+    if (root) {
+        delete root;
+    }
+}
+
+void RndMesh::InstanceGeomOwnerBones() {
+    if (!mGeomOwner) {
+        MILO_NOTIFY_ONCE("Cannot duplicate bones if mesh is not a Geom Owner!");
+        return;
+    }
+
+    ObjectDir *dir = dynamic_cast<ObjectDir *>(Dir());
+    if (!dir) {
+        MILO_NOTIFY_ONCE("Cannot duplicate bones if parent Dir is not a RndDir.");
+        return;
+    }
+
+    if (mBones.empty())
+        return;
+
+    bool needsCopy = mGeomOwner && mGeomOwner->mBones[0].mBone != mBones[0].mBone;
+    if (needsCopy) {
+        DeleteBones(true);
+        if (!mGeomOwner) {
+            mBones.erase(mBones.begin(), mBones.end());
+        } else {
+            mBones = mGeomOwner->mBones;
+        }
+    }
+
+    // Find the root bone in the geom owner's hierarchy
+    RndTransformable *oldRoot = NULL;
+    for (RndTransformable *parent = mGeomOwner->mBones[0].mBone; parent != NULL;
+         parent = parent->TransParent()) {
+        RndTransformable *transParent =
+            dynamic_cast<RndTransformable *>(parent->TransParent());
+        oldRoot = parent;
+        if (transParent)
+            break;
+    }
+    MILO_ASSERT(oldRoot, 0x5e9);
+
+    // Create new root
+    RndTransformable *newRoot = Hmx::Object::New<RndTransformable>();
+    newRoot->SetName(NextName(oldRoot->Name(), Dir()), Dir());
+    newRoot->Copy(oldRoot, Hmx::Object::kCopyDeep);
+
+    // Parent new root under the RndDir
+    RndTransformable *dirTrans = dynamic_cast<RndTransformable *>(Dir());
+    newRoot->SetTransParent(dirTrans, false);
+
+    // Create new bone transforms for each bone
+    for (unsigned int i = 0; i < mBones.size(); i++) {
+        RndTransformable *newBone = Hmx::Object::New<RndTransformable>();
+        RndTransformable *ownerBone = mGeomOwner->mBones[i].mBone;
+        newBone->SetName(NextName(ownerBone->Name(), Dir()), Dir());
+        newBone->Copy(ownerBone, Hmx::Object::kCopyDeep);
+        mBones[i].mBone = newBone;
+
+        // Find parent in owner hierarchy and reparent
+        int parentIdx = mGeomOwner->GetBoneIndex(ownerBone->TransParent());
+        RndTransformable *parent = (parentIdx != -1) ? mBones[parentIdx].mBone : newRoot;
+        newBone->SetTransParent(parent, false);
+    }
+}
+
+DataNode RndMesh::OnCompareEdgeVerts(const DataArray *da) {
+    std::vector<int> vec20(Verts().size(), -1);
+    std::list<int> vec28;
+    std::vector<std::list<int> > vec30(Verts().size());
+    for (int i = 0; i < Verts().size(); i++) {
+        if (vec20[i] == -1) {
+            vec20[i] = i;
+            for (int j = i; j < Verts().size(); j++) {
+                if (Verts(j).pos == Verts(i).pos) {
+                    vec20[j] = i;
+                }
+            }
+        }
+    }
+    FOREACH (it, Faces()) {
+        int i40 = vec20[it->v1];
+        int i44 = vec20[it->v2];
+        int i48 = vec20[it->v3];
+        vec30[i40].push_back(i44);
+        vec30[i40].push_back(i48);
+        vec30[i44].push_back(i40);
+        vec30[i44].push_back(i48);
+        vec30[i48].push_back(i40);
+        vec30[i48].push_back(i44);
+    }
+    for (int i = 0; i < Verts().size(); i++) {
+        vec30[i].sort();
+        vec30[i].unique();
+    }
+    for (int i = 0; i < Verts().size(); i++) {
+        FOREACH (it, vec30[i]) {
+            int i10 = 0;
+            FOREACH (it2, vec30[*it]) {
+                FOREACH (it3, vec30[i]) {
+                    if (*it3 != *it) {
+                        if (*it3 == *it2) {
+                            i10++;
+                            break;
+                        }
+                    }
+                }
+            }
+            if (i10 < 2) {
+                vec28.push_back(i);
+                break;
+            }
+        }
+    }
+    DataArray *array = da->Array(2);
+    for (int i = 0; i < array->Size(); i++) {
+        RndMesh *curMesh = array->Obj<RndMesh>(i);
+        auto _tmp6 = MakeString("testing %s\n", curMesh->Name());
+        TheDebug << _tmp6;
+        FOREACH (it, vec28) {
+            if (Verts(*it).pos == curMesh->Verts(*it).pos)
+                continue;
+            else
+                TheDebug << MakeString("   %d doesn't match position\n", *it);
+        }
+    }
+    if (mGeomOwner != this && (mVerts.size() != 0 || mFaces.size() != 0)) {
+        if (mGeomOwner)
+            mGeomOwner->Name();
+        PathName(this);
+    }
+    return 0;
 }
 
 DataNode RndMesh::OnPointCollide(const DataArray *da) {

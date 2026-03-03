@@ -114,6 +114,7 @@ public:
     HamNavProvider *GetHelpbarProvider() { return mNavProvider; }
     void Disengage();
     void SetSkeletonTrackingID(int id) { mSkeletonTrackingID = id; }
+    void UpdateGestures(const Skeleton *);
 
     static void Init();
     static bool sLastSelectInControllerMode;
@@ -137,7 +138,6 @@ private:
     int GetHighlightItem(void) const;
     bool IsElementBig(int) const;
     void DetermineHighlightedItem();
-    void UpdateGestures(const Skeleton *);
     float GetTargetSwellAmount(int);
 
     static const int sListStateMaxDisplay;

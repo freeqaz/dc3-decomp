@@ -105,30 +105,11 @@ public:
     virtual void Draw(const BaseSkeleton &, class SkeletonViz &) = 0;
 };
 
-// 16-byte aligned joint position for SkeletonData arrays
-struct JointPos {
-    float x, y, z, _pad;
-    JointPos() {}
-    JointPos(const Vector3 &v) : x(v.x), y(v.y), z(v.z), _pad(0) {}
-    operator Vector3() const { return Vector3(x, y, z); }
-    JointPos &operator=(const Vector3 &v) {
-        x = v.x;
-        y = v.y;
-        z = v.z;
-        return *this;
-    }
-    void Set(float a, float b, float c) {
-        x = a;
-        y = b;
-        z = c;
-    }
-};
-
 // size 0x2f0
 struct SkeletonData {
     SkeletonTrackingState mTracking; // 0x0
-    JointPos mRawPositions[kNumJoints]; // 0x4
-    JointPos mJointPositions[kNumJoints]; // 0x144
+    PaddedJointPos mRawPositions[kNumJoints]; // 0x4
+    PaddedJointPos mJointPositions[kNumJoints]; // 0x144
     int mJointTrackingState[kNumJoints]; // 0x284
     int mQualityFlags; // 0x2d4
     int mTrackingID; // 0x2d8

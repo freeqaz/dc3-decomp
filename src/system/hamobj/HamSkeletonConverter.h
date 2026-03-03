@@ -56,7 +56,7 @@ protected:
     int unk28; // 0x28
     ObjPtr<HamCharacter> mCharacter; // 0x2c
     Transform unk40; // 0x40
-    Vector3 mJointPositions[kNumJoints]; // 0x80
+    PaddedJointPos mJointPositions[kNumJoints]; // 0x80
     Transform mBoneTransforms[kNumJoints]; // 0x1c0
     std::vector<RndTransformable *> mBoneMeshes; // 0x6c0
     RndTransformable *mPelvisMesh; // 0x6cc

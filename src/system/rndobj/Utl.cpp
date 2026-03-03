@@ -26,6 +26,7 @@
 #include "utl/Cache.h"
 #include "utl/Std.h"
 #include "rndobj/Utl.h"
+#include <set>
 #include "math/Key.h"
 #include "os/File.h"
 #include "obj/Data.h"
@@ -1775,6 +1776,348 @@ void BurnXfm(RndMesh *mesh, bool keepTranslation) {
         ident.v = mesh->LocalXfm().v;
     }
     mesh->SetLocalXfm(ident);
+}
+
+void TessellateMesh(RndMesh *mesh) {
+    typedef RndAmbientOcclusion::Edge Edge;
+    std::set<Edge> edges;
+    std::vector<RndMesh::Face> newFaces;
+    RndMesh *geomOwner = mesh->GetGeomOwner();
+
+    std::vector<RndMesh::Vert> newVerts;
+
+    newFaces.reserve(geomOwner->Faces().size() * 4);
+    newVerts.reserve(geomOwner->Verts().size() * 3);
+
+    unsigned short nextVert = (unsigned short)geomOwner->Verts().size();
+
+    for (unsigned int i = 0; i < (unsigned int)geomOwner->Faces().size(); i++) {
+        RndMesh::Face &face = geomOwner->Faces()[i];
+        unsigned short v1 = face.v1;
+        unsigned short v2 = face.v2;
+        unsigned short v3 = face.v3;
+
+        int vertsBase = (int)(unsigned int)geomOwner->Verts().mVerts;
+
+        RndMesh::Vert *pv1 = (RndMesh::Vert *)((unsigned int)v1 * 0x60 + vertsBase);
+        RndMesh::Vert *pv2 = (RndMesh::Vert *)((unsigned int)v2 * 0x60 + vertsBase);
+        RndMesh::Vert *pv3 = (RndMesh::Vert *)((unsigned int)v3 * 0x60 + vertsBase);
+
+        RndMesh::Vert blend12, blend23, blend31;
+        RndAmbientOcclusion::BlendVert(*pv1, *pv2, blend12);
+        RndAmbientOcclusion::BlendVert(*pv2, *pv3, blend23);
+        RndAmbientOcclusion::BlendVert(*pv3, *pv1, blend31);
+
+        unsigned short mid12, mid23, mid31;
+
+        // Edge v1-v2
+        Edge e12;
+        e12.v0 = v1;
+        e12.v1 = v2;
+        e12.midpoint = -1;
+        std::set<Edge>::iterator it12 = edges.find(e12);
+        if (it12 == edges.end()) {
+            mid12 = nextVert++;
+            e12.midpoint = mid12;
+            edges.insert(e12);
+            newVerts.push_back(blend12);
+        } else {
+            mid12 = it12->midpoint;
+        }
+
+        // Edge v2-v3
+        Edge e23;
+        e23.v0 = v2;
+        e23.v1 = v3;
+        e23.midpoint = -1;
+        std::set<Edge>::iterator it23 = edges.find(e23);
+        if (it23 == edges.end()) {
+            mid23 = nextVert++;
+            e23.midpoint = mid23;
+            edges.insert(e23);
+            newVerts.push_back(blend23);
+        } else {
+            mid23 = it23->midpoint;
+        }
+
+        // Edge v3-v1
+        Edge e31;
+        e31.v0 = v3;
+        e31.v1 = v1;
+        e31.midpoint = -1;
+        std::set<Edge>::iterator it31 = edges.find(e31);
+        if (it31 == edges.end()) {
+            mid31 = nextVert++;
+            e31.midpoint = mid31;
+            edges.insert(e31);
+            newVerts.push_back(blend31);
+        } else {
+            mid31 = it31->midpoint;
+        }
+
+        // 4 sub-faces
+        RndMesh::Face f1, f2, f3, f4;
+        f1.Set(v1, mid12, mid31);
+        f2.Set(mid31, mid12, mid23);
+        f3.Set(mid12, v2, mid23);
+        f4.Set(mid23, v3, mid31);
+        newFaces.push_back(f1);
+        newFaces.push_back(f2);
+        newFaces.push_back(f3);
+        newFaces.push_back(f4);
+    }
+
+    // Replace faces
+    geomOwner->Faces().assign(newFaces.begin(), newFaces.end());
+
+    // Expand verts and copy new midpoint verts
+    int origNumVerts = geomOwner->Verts().size();
+    geomOwner->Verts().resize(origNumVerts + (int)newVerts.size());
+
+    if ((unsigned int)origNumVerts < (unsigned int)(nextVert & 0xFFFF)) {
+        int offset = origNumVerts * 0x60;
+        int count = (nextVert & 0xFFFF) - origNumVerts;
+        RndMesh::Vert *src = &newVerts[0];
+        do {
+            memcpy(
+                (void *)((int)(unsigned int)geomOwner->Verts().mVerts + offset),
+                src,
+                sizeof(RndMesh::Vert)
+            );
+            count--;
+            offset += 0x60;
+            src++;
+        } while (count != 0);
+    }
+
+    mesh->Sync(0x3f);
+}
+
+void BuildVisit(BSPNode *node) {
+    if (node == NULL)
+        return;
+
+    BuildPoly newPoly;
+    newPoly.mPoly.points.clear();
+    gParentPolys.push_back(newPoly);
+
+    std::list<BuildPoly>::iterator lastIt = gParentPolys.end();
+    --lastIt;
+    BuildPoly &poly = *lastIt;
+
+    Plane &plane = node->plane;
+    float lenSq = plane.a * plane.a + plane.b * plane.b + plane.c * plane.c;
+    float invDist = -(plane.d / lenSq);
+
+    poly.mTransform.v.x = plane.a * invDist;
+    poly.mTransform.v.y = plane.b * invDist;
+    poly.mTransform.v.z = plane.c * invDist;
+
+    poly.mTransform.m.z.x = plane.a;
+    poly.mTransform.m.z.y = plane.b;
+    poly.mTransform.m.z.z = plane.c;
+
+    poly.mTransform.m.y.Set(0, 1, 0);
+
+    if (fabsf(poly.mTransform.m.z.x * 0.0f + poly.mTransform.m.z.z * 0.0f
+              + poly.mTransform.m.z.y * 1.0f)
+        > 0.9f) {
+        poly.mTransform.m.y.Set(1, 0, 0);
+    }
+
+    // x = y cross z
+    poly.mTransform.m.x.x =
+        poly.mTransform.m.y.y * poly.mTransform.m.z.z
+        - poly.mTransform.m.y.z * poly.mTransform.m.z.y;
+    poly.mTransform.m.x.y =
+        poly.mTransform.m.z.x * poly.mTransform.m.y.z
+        - poly.mTransform.m.z.z * poly.mTransform.m.y.x;
+    poly.mTransform.m.x.z =
+        poly.mTransform.m.y.x * poly.mTransform.m.z.y
+        - poly.mTransform.m.y.y * poly.mTransform.m.z.x;
+
+    Normalize(poly.mTransform.m.x, poly.mTransform.m.x);
+
+    // y = z cross x
+    poly.mTransform.m.y.x =
+        poly.mTransform.m.z.y * poly.mTransform.m.x.z
+        - poly.mTransform.m.z.z * poly.mTransform.m.x.y;
+    poly.mTransform.m.y.y =
+        poly.mTransform.m.x.x * poly.mTransform.m.z.z
+        - poly.mTransform.m.x.z * poly.mTransform.m.z.x;
+    poly.mTransform.m.y.z =
+        poly.mTransform.m.z.x * poly.mTransform.m.x.y
+        - poly.mTransform.m.z.y * poly.mTransform.m.x.x;
+
+    // Add large quad
+    Vector2 p0(-10000.0f, 10000.0f);
+    Vector2 p1(-10000.0f, -10000.0f);
+    Vector2 p2(10000.0f, -10000.0f);
+    Vector2 p3(10000.0f, 10000.0f);
+    poly.mPoly.points.push_back(p0);
+    poly.mPoly.points.push_back(p1);
+    poly.mPoly.points.push_back(p2);
+    poly.mPoly.points.push_back(p3);
+
+    if (node->left == NULL) {
+        // Leaf: clip parents against plane (front), recurse right
+        for (std::list<BuildPoly>::iterator it = gParentPolys.begin();
+             it != gParentPolys.end(); ++it) {
+            Clip(*it, node->plane, true);
+        }
+
+        BuildVisit(node->right);
+
+        for (std::list<BuildPoly>::iterator it = gChildPolys.begin();
+             it != gChildPolys.end(); ++it) {
+            Clip(*it, node->plane, true);
+        }
+    } else {
+        // Save parents
+        std::list<BuildPoly> savedParents(gParentPolys);
+
+        // Clip parents (back side), recurse left
+        for (std::list<BuildPoly>::iterator it = gParentPolys.begin();
+             it != gParentPolys.end(); ++it) {
+            Clip(*it, node->plane, false);
+        }
+
+        BuildVisit(node->left);
+
+        // Clip children (back side)
+        for (std::list<BuildPoly>::iterator it = gChildPolys.begin();
+             it != gChildPolys.end(); ++it) {
+            Clip(*it, node->plane, false);
+        }
+
+        // Swap children and parents with saved state
+        std::list<BuildPoly> tempChildren;
+        tempChildren.swap(gChildPolys);
+        gParentPolys.swap(savedParents);
+
+        // Clip parents (front side), recurse right
+        for (std::list<BuildPoly>::iterator it = gParentPolys.begin();
+             it != gParentPolys.end(); ++it) {
+            Clip(*it, node->plane, true);
+        }
+
+        BuildVisit(node->right);
+
+        // Clip children (front side)
+        for (std::list<BuildPoly>::iterator it = gChildPolys.begin();
+             it != gChildPolys.end(); ++it) {
+            Clip(*it, node->plane, true);
+        }
+
+        // Splice saved lists back
+        gParentPolys.splice(gParentPolys.end(), savedParents);
+        gChildPolys.splice(gChildPolys.end(), tempChildren);
+
+        tempChildren.clear();
+        savedParents.clear();
+    }
+
+    // Move polys whose normal matches this node's plane from parents to children
+    std::list<BuildPoly>::iterator it = gParentPolys.begin();
+    while (it != gParentPolys.end()) {
+        bool match = (node->plane.a == it->mTransform.m.z.x
+                      && it->mTransform.m.z.y == node->plane.b
+                      && it->mTransform.m.z.z == node->plane.c);
+        if (match) {
+            std::list<BuildPoly>::iterator next = it;
+            ++next;
+            gChildPolys.splice(gChildPolys.begin(), gParentPolys, it);
+            it = next;
+        } else {
+            ++it;
+        }
+    }
+}
+
+void BuildFromBSP(RndMesh *mesh) {
+    RndMesh *geomOwner = mesh->GetGeomOwner();
+    BuildVisit(geomOwner->GetBSPTree());
+
+    int totalVerts = 0;
+    unsigned int totalFaces = 0;
+
+    std::list<BuildPoly>::iterator it = gChildPolys.begin();
+    while (it != gChildPolys.end()) {
+        int numPoints = (int)it->mPoly.points.size();
+        if ((unsigned int)numPoints < 3) {
+            it = gChildPolys.erase(it);
+        } else {
+            totalVerts += numPoints;
+            totalFaces += numPoints - 2;
+            ++it;
+        }
+    }
+
+    geomOwner->Verts().resize(totalVerts);
+
+    int currentFaces = (int)geomOwner->Faces().size();
+    if (totalFaces < (unsigned int)currentFaces) {
+        geomOwner->Faces().erase(
+            geomOwner->Faces().begin() + totalFaces,
+            geomOwner->Faces().end()
+        );
+    } else {
+        RndMesh::Face emptyFace;
+        geomOwner->Faces().insert(
+            geomOwner->Faces().end(),
+            totalFaces - currentFaces,
+            emptyFace
+        );
+    }
+
+    int vertIdx = 0;
+    int faceIdx = 0;
+
+    for (std::list<BuildPoly>::iterator pit = gChildPolys.begin();
+         pit != gChildPolys.end(); ++pit) {
+        Vector2 *points = &pit->mPoly.points[0];
+        Vector2 *pointsEnd = &pit->mPoly.points[0] + pit->mPoly.points.size();
+
+        if (points != pointsEnd) {
+            int vertOffset = vertIdx * 0x60;
+            do {
+                Vector3 pt(points->x, points->y, 0.0f);
+                Multiply(
+                    pt,
+                    pit->mTransform,
+                    *(Vector3 *)((char *)geomOwner->Verts().mVerts + vertOffset)
+                );
+                points++;
+                vertIdx++;
+                vertOffset += 0x60;
+            } while (points != pointsEnd);
+        }
+
+        int firstVert = vertIdx - (int)pit->mPoly.points.size();
+        int j = firstVert + 2;
+        if (j < vertIdx) {
+            int numTris = vertIdx - j;
+            int faceOffset = faceIdx * 6;
+            int v2 = firstVert + 1;
+            faceIdx += numTris;
+            do {
+                unsigned short *facePtr =
+                    (unsigned short *)((char *)&geomOwner->Faces()[0] + faceOffset);
+                facePtr[0] = (unsigned short)firstVert;
+                facePtr[1] = (unsigned short)v2;
+                facePtr[2] = (unsigned short)j;
+                j++;
+                v2++;
+                faceOffset += 6;
+                numTris--;
+            } while (numTris != 0);
+        }
+    }
+
+    gParentPolys.clear();
+    gChildPolys.clear();
+
+    MakeNormals(mesh);
 }
 
 template int Keys<Vector3, Vector3>::AtFrame(

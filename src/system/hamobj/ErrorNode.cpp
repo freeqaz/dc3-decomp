@@ -28,16 +28,16 @@ ErrorFrameInput::ErrorFrameInput(
     : mSkeleton(dancerSkeleton), mBaseSkeleton(baseSkeleton) {
     dancerSkeleton.CamBoneLengths(mBoneLengths);
     baseSkeleton.CamBoneLengths(mBaseBoneLengths);
-    dancerSkeleton.CamJointPositions(mJointPositions);
-    baseSkeleton.CamJointPositions(mBaseJointPositions);
+    dancerSkeleton.CamJointPositions((Vector3 *)mJointPositions);
+    baseSkeleton.CamJointPositions((Vector3 *)mBaseJointPositions);
     mDisplacements = false;
     int elapsedMs = dancerSkeleton.ElapsedMs();
     if (elapsedMs != -1) {
         int div = (int)(elapsedMs / f1);
         mDisplacements =
-            baseSkeleton.Displacements(history, kCoordCamera, div, mBaseJointDisps, div);
+            baseSkeleton.Displacements(history, kCoordCamera, div, (Vector3 *)mBaseJointDisps, div);
     }
-    dancerSkeleton.CamJointDisplacements(mJointDisps);
+    dancerSkeleton.CamJointDisplacements((Vector3 *)mJointDisps);
 }
 
 void ErrorNodeInput::Set(const Vector3 &v, const Ham1NodeWeight *w) {

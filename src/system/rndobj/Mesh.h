@@ -155,7 +155,6 @@ public:
     virtual int NumFaces() const { return mFaces.size(); }
     /** "Number of verts in the mesh" */
     virtual int NumVerts() const { return mVerts.size(); }
-    virtual void OnSync(int);
 #ifdef HX_NATIVE
     virtual void DrawShowing();
 #endif
@@ -212,6 +211,7 @@ public:
 
 protected:
     RndMesh();
+    virtual void OnSync(int);
 
     void ClearCompressedVerts();
     bool PatchOkay(int, int);
@@ -276,9 +276,9 @@ public:
     void Clear();
     bool HasVert(int) const;
 
+protected:
     int GreaterEq(int) const;
 
-protected:
     Vector3 mCentroid; // 0x0
     std::vector<int> mPatchVerts; // 0xc
 };

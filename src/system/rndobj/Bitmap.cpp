@@ -1107,69 +1107,59 @@ void RndBitmap::SetAlpha(AlphaFlag flag) {
     }
 }
 
+void RndBitmap::SetPreMultipliedAlpha() {
+    ConvertToAlpha();
+    if (mBpp <= 8) {
+        int numColors;
+        if (mPalette) {
+            numColors = 1 << mBpp;
+        } else {
+            numColors = 0;
+        }
+        for (int i = numColors - 1; i >= 0; i--) {
+            unsigned char r, g, b, a;
+            PaletteColor(i, r, g, b, a);
+            if (a != 255) {
+                float scale = a * (1.0f / 255.0f);
+                r = (unsigned char)(float)(r * scale);
+                g = (unsigned char)(float)(g * scale);
+                b = (unsigned char)(float)(b * scale);
+                SetPaletteColor(i, r, g, b, a);
+            }
+        }
+    } else {
+        for (int i = 0; i < mHeight; i++) {
+            for (int j = 0; j < mWidth; j++) {
+                unsigned char r, g, b, a;
+                PixelColor(j, i, r, g, b, a);
+                if (a != 255) {
+                    float scale = a * (1.0f / 255.0f);
+                    r = (unsigned char)(float)(r * scale);
+                    g = (unsigned char)(float)(g * scale);
+                    b = (unsigned char)(float)(b * scale);
+                    SetPixelColor(j, i, r, g, b, a);
+                }
+            }
+        }
+    }
+}
+
 bool RndBitmap::SamePaletteColors(const RndBitmap &bmap) const {
-    u8 *bmapPalette = bmap.mPalette;
-    u8 *thisPalette = mPalette;
-    u32 bmapPaletteWord = *(u32 *)(bmapPalette + 0x14);
-    u32 thisPaletteWord = *(u32 *)(thisPalette + 0x14);
-
-    if (bmapPaletteWord == thisPaletteWord) {
+    if (mPalette == bmap.Palette())
+        return true;
+    else {
+        for (int i = (1 << mBpp) - 1; i >= 0; i--) {
+            unsigned int myColors;
+            unsigned int otherColors;
+            unsigned char *myC = (unsigned char *)&myColors;
+            unsigned char *otherC = (unsigned char *)&otherColors;
+            PaletteColor(i, myC[0], myC[1], myC[2], myC[3]);
+            bmap.PaletteColor(i, otherC[0], otherC[1], otherC[2], otherC[3]);
+            if (myColors != otherColors)
+                return false;
+        }
         return true;
     }
-
-    u8 bppVal = bmap.mBpp;
-    u32 paletteIndexMask = (1 << bppVal) - 1;
-
-    if ((s32)paletteIndexMask < 0) {
-        return true;
-    }
-
-    u32 paletteIndexMaskMinus8 = paletteIndexMask - 8;
-    u32 thisBitmapFlags = mOrder & 2;
-    u32 bmapBitmapFlags = bmap.mOrder & 2;
-
-    u32 paletteIdx = paletteIndexMask;
-
-    while (true) {
-        u32 thisAdjustedIdx = paletteIdx;
-        if (thisBitmapFlags != 0 && bppVal == 8) {
-            u32 bits = paletteIdx & 0x18;
-            if (bits == 8) {
-                thisAdjustedIdx = paletteIndexMaskMinus8 + 0x10;
-            } else if (bits == 0x10) {
-                thisAdjustedIdx = paletteIndexMaskMinus8;
-            }
-        }
-
-        u8 thisR, thisG, thisB, thisA;
-        ConvertColor(thisPalette + thisAdjustedIdx * 4, thisR, thisG, thisB, thisA);
-
-        u32 bmapAdjustedIdx = paletteIdx;
-        if (bmapBitmapFlags != 0 && bppVal == 8) {
-            u32 bits = paletteIdx & 0x18;
-            if (bits == 8) {
-                bmapAdjustedIdx = paletteIndexMaskMinus8 + 0x10;
-            } else if (bits == 0x10) {
-                bmapAdjustedIdx = paletteIndexMaskMinus8;
-            }
-        }
-
-        u8 bmapR, bmapG, bmapB, bmapA;
-        bmap.ConvertColor(bmapPalette + bmapAdjustedIdx * 4, bmapR, bmapG, bmapB, bmapA);
-
-        if (thisR != bmapR) {
-            return false;
-        }
-
-        paletteIdx -= 1;
-        paletteIndexMaskMinus8 -= 1;
-
-        if ((s32)paletteIdx < 0) {
-            break;
-        }
-    }
-
-    return true;
 }
 
 bool RndBitmap::LoadBmp(const char *filename, bool wantMips, bool noAlpha) {
@@ -1188,5 +1178,97 @@ bool RndBitmap::LoadBmp(const char *filename, bool wantMips, bool noAlpha) {
             }
             return true;
         }
+    }
+}
+
+bool RndBitmap::LoadDIB(BinStream *bs, unsigned int offbits) {
+    tagBITMAPINFOHEADER infoheader;
+    *bs >> infoheader;
+    if (infoheader.biBitCount < 4) {
+        MILO_NOTIFY("%s: Unsupported bit depth %d", bs->Name(), infoheader.biBitCount);
+        return false;
+    }
+    if (infoheader.biCompression != 0) {
+        MILO_NOTIFY("%s: Unsupported compression %d", bs->Name(), (long)infoheader.biCompression);
+        return false;
+    }
+    int paletteBytes = 0;
+    if (infoheader.biBitCount <= 8) {
+        paletteBytes = (1 << infoheader.biBitCount) * 4;
+    }
+    int bitsPerRow;
+    if (infoheader.biBitCount == 4 && (infoheader.biWidth & 1)) {
+        bitsPerRow = (infoheader.biWidth + 1) * 4;
+    } else {
+        bitsPerRow = infoheader.biBitCount * infoheader.biWidth;
+    }
+    int rowBytes = (bitsPerRow / 8 + 3) & ~3;
+    int pixelBytes = infoheader.biHeight * rowBytes;
+    void *buf = MemAlloc(pixelBytes + paletteBytes, __FILE__, 0x481, "Bitmap_buf", 0);
+    void *palette = nullptr;
+    if (paletteBytes != 0) {
+        int readSize = paletteBytes;
+        if (infoheader.biClrUsed != 0 && infoheader.biClrUsed < (unsigned int)(1 << infoheader.biBitCount)) {
+            memset(buf, 0, paletteBytes);
+            readSize = infoheader.biClrUsed * 4;
+        }
+        bs->Read(buf, readSize);
+        palette = buf;
+    }
+    void *pixels = (void *)((int)buf + paletteBytes);
+    bs->Seek(offbits, BinStream::kSeekBegin);
+    if (infoheader.biHeight < 0) {
+        bs->Read(pixels, pixelBytes);
+    } else {
+        for (int i = infoheader.biHeight - 1; i >= 0; i--) {
+            bs->Read((void *)((int)pixels + i * rowBytes), rowBytes);
+        }
+    }
+    if (infoheader.biBitCount == 4) {
+        unsigned char *p = (unsigned char *)pixels;
+        for (int k = pixelBytes; k > 0; k--) {
+            *p = (*p << 4) | (*p >> 4);
+            p++;
+        }
+    }
+    if ((int)infoheader.biSize != 0xB11) {
+        for (int i = paletteBytes - 4; i >= 0; i -= 4) {
+            *((unsigned char *)palette + i + 3) = 0xFF;
+        }
+        if (infoheader.biBitCount == 16) {
+            for (int i = pixelBytes - 2; i >= 0; i -= 2) {
+                *((unsigned char *)pixels + i + 1) |= 0x80;
+            }
+        }
+    }
+    Create(infoheader.biWidth, infoheader.biHeight, rowBytes, infoheader.biBitCount, 0, palette, pixels, buf);
+    return true;
+}
+
+void RndBitmap::Load(BinStream &bs) {
+    u8 mipCt;
+    LoadHeader(bs, mipCt);
+    if (mBuffer) {
+        MemFree(mBuffer, __FILE__, 0x750, "unknown");
+        mBuffer = nullptr;
+    }
+    mPalette = nullptr;
+    AllocateBuffer();
+    if (mPalette) {
+        bs.Read(mPalette, PaletteBytes());
+    }
+    ReadChunks(bs, mPixels, PixelBytes(), 0x8000);
+    RELEASE(mMip);
+    int workingW = mWidth;
+    int workingH = mHeight;
+    RndBitmap *workingMip = this;
+    while (mipCt--) {
+        RndBitmap *newMip = new RndBitmap();
+        workingMip->mMip = newMip;
+        workingW = workingW >> 1;
+        workingH = workingH >> 1;
+        newMip->Create(workingW, workingH, 0, mBpp, mOrder, mPalette, 0, 0);
+        ReadChunks(bs, newMip->mPixels, newMip->PixelBytes(), 0x8000);
+        workingMip = newMip;
     }
 }

@@ -82,29 +82,36 @@ void SkeletonRecoverer::Poll() {
             continue;
         }
 
-        TrackingIDHistory *found = nullptr;
-        FOREACH (it, mIDHistory) {
-            if (it->mTrackingID == skel.TrackingID()) {
+        int trackingID = skel.TrackingID();
+        TrackingIDHistory *found;
+        for (std::list<TrackingIDHistory>::iterator it = mIDHistory.begin();
+             it != mIDHistory.end(); ++it) {
+            if (it->mTrackingID == trackingID) {
                 found = &(*it);
-                break;
+                goto check_found;
             }
         }
-
-        if (!found) {
-            TrackingIDHistory history;
-            history.mTrackingID = skel.TrackingID();
-            history.unk4 = skel.GetUnkab0().x;
-            history.unk8 = skel.GetUnkab0().y;
-            history.unkC = skel.GetUnkab0().z;
-            history.unk10 = 0.0f;
-            history.mUntrackedTime = 0.0f;
-            mIDHistory.push_front(history);
-        } else {
+        found = nullptr;
+        check_found:
+        if (found) {
             found->mUntrackedTime = 0.0f;
-            found->unk4 = skel.GetUnkab0().x;
-            found->unk8 = skel.GetUnkab0().y;
-            found->unkC = skel.GetUnkab0().z;
-            found->unk10 = 0.0f;
+            const int *src = reinterpret_cast<const int *>(&skel.GetUnkab0());
+            int *dst = reinterpret_cast<int *>(&found->unk4);
+            dst[0] = src[0];
+            dst[1] = src[1];
+            dst[2] = src[2];
+            dst[3] = src[3];
+        } else {
+            TrackingIDHistory history;
+            const int *src = reinterpret_cast<const int *>(&skel.GetUnkab0());
+            int *dst = reinterpret_cast<int *>(&history.unk4);
+            dst[1] = src[1];
+            dst[0] = src[0];
+            history.mUntrackedTime = 0.0f;
+            dst[2] = src[2];
+            dst[3] = src[3];
+            history.mTrackingID = trackingID;
+            mIDHistory.insert(mIDHistory.begin(), history);
         }
     }
 
@@ -115,7 +122,7 @@ void SkeletonRecoverer::Poll() {
             continue;
         }
         if (!IsSkeletonTracked(it->mTrackingID)) {
-            it->mUntrackedTime += deltaSeconds;
+            it->mUntrackedTime = deltaSeconds + it->mUntrackedTime;
         }
         ++it;
     }

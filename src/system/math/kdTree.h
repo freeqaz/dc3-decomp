@@ -33,7 +33,11 @@ public:
 
     class kdTreeNode {
     public:
-        struct Stack {};
+        struct Stack {
+            kdTreeNode *node;
+            float tNear;
+            float tFar;
+        };
 
         kdTreeNode() {
             mData.triList = 0;

@@ -65,9 +65,9 @@ private:
     /** "player 1 object" */
     ObjPtr<RhythmBattlePlayer> mPlayerTwo; // 0x44
     ObjPtr<RndTransformable> mBoxyLeadHeadTrans; // 0x58
-    ObjPtr<RndAnimatable> mIntroAnim;
-    ObjPtr<RndAnimatable> mBattleEndAnim;
-    ObjPtr<RndAnimatable> unk94;
+    ObjPtr<RndAnimatable> mIntroAnim; // 0x6c
+    ObjPtr<RndAnimatable> mBattleEndAnim; // 0x80
+    ObjPtr<RndAnimatable> unk94; // 0x94
     ObjPtr<RndAnimatable> mSwagJack1BarP2ToP1Anim; // 0xa8
     ObjPtr<RndAnimatable> mSwagJack1BarP1ToP2Anim; // 0xbc
     ObjPtr<RndAnimatable> mSwagJack2BarP2ToP1Anim; // 0xd0
@@ -77,31 +77,31 @@ private:
     bool mFullKTB; // 0xf9
     bool mFinale; // 0xfa
     bool mActive; // 0xfb
-    bool mIntroAnimStarted;
-    bool mIsGrooveMode;
-    bool mHalftimePlayed;
-    bool mAlmostOverPlayed;
-    bool mBattleStarted;
-    bool mBattleFinished;
-    bool mPaused;
+    bool mIntroAnimStarted; // 0xfc
+    bool mIsGrooveMode; // 0xfd
+    bool mHalftimePlayed; // 0xfe
+    bool mAlmostOverPlayed; // 0xff
+    bool mBattleStarted; // 0x100
+    bool mBattleFinished; // 0x101
+    bool mPaused; // 0x102
     float mStartBeat; // 0x104
     float mEndBeat; // 0x108
-    float mMindControlIntensity;
-    float mMindControlTimer;
-    float mHalftimeBeat;
-    float mAlmostOverBeat;
-    int mMoveKeyCount;
-    float unk120;
+    float mMindControlIntensity; // 0x10c
+    float mMindControlTimer; // 0x110
+    float mHalftimeBeat; // 0x114
+    float mAlmostOverBeat; // 0x118
+    int mMoveKeyCount; // 0x11c
+    float unk120; // 0x120
     int mSwagJackState; // 0x124 - RhythmBattleJackState
-    int mSwagJackCounter;
+    int mSwagJackCounter; // 0x128
     Symbol mLeader; // 0x12c
-    FreestyleMoveRecorder *mMoveRecorder;
-    std::vector<ArchiveSkeleton> mSkeletonHistory;
-    int mJackCooldown;
-    int mLastBeatTracked;
-    int mFinaleSequenceTimer;
-    int mFinalePhaseIndex;
-    std::vector<Symbol> mFinaleVOQueue;
+    FreestyleMoveRecorder *mMoveRecorder; // 0x130
+    std::vector<ArchiveSkeleton> mSkeletonHistory; // 0x134
+    int mJackCooldown; // 0x140
+    int mLastBeatTracked; // 0x144
+    int mFinaleSequenceTimer; // 0x148
+    int mFinalePhaseIndex; // 0x14c
+    std::vector<Symbol> mFinaleVOQueue; // 0x150
 };
 
 void SetJump(int, int);

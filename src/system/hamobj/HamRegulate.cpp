@@ -114,9 +114,10 @@ void HamRegulate::Regulate(Vector3 &posDelta, float &rotDelta) {
             float pdz = mPosDelta.z;
             float pdy = mPosDelta.y;
             dy = wpXfm.v.y;
-            posDelta.x = wpXfm.v.x - mPosDelta.x;
+            float dx = wpXfm.v.x - mPosDelta.x;
+            posDelta.x = dx;
             float factor = Min(absDt * invRadius * 1.1f, 1.0f);
-            posDelta.x *= factor;
+            posDelta.x = dx * factor;
             dy = (dy - pdy) * factor;
             dz = (dz - pdz) * factor;
         }

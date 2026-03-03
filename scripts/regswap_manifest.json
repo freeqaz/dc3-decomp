@@ -6379,5 +6379,14 @@
     "actual_pct": 92.19685,
     "patch_count": 79,
     "total_reg_changes": 96
+  },
+  {
+    "symbol": "?Poll@SkeletonRecoverer@@QAAXXZ",
+    "demangled": "public: void __cdecl SkeletonRecoverer::Poll(void)",
+    "unit": "default/system/gesture/SkeletonRecoverer",
+    "db_pct": 90.81554,
+    "actual_pct": 90.81554,
+    "patch_count": 22,
+    "total_reg_changes": 22
   }
 ]

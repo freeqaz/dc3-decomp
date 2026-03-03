@@ -8,7 +8,6 @@ class CharBonesMeshes : public CharBonesAlloc {
 public:
     CharBonesMeshes();
     virtual ~CharBonesMeshes();
-    virtual bool Replace(ObjRef *, Hmx::Object *);
     virtual bool SyncProperty(DataNode &, DataArray *, int, PropOp);
 
     void AcquirePose();
@@ -19,6 +18,7 @@ public:
     static void Terminate();
 
 protected:
+    virtual bool Replace(ObjRef *, Hmx::Object *);
     virtual void ReallocateInternal();
 
     static RndTransformable *sDummyMesh;

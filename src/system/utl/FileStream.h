@@ -23,7 +23,6 @@ public:
     virtual bool Fail();
     virtual const char *Name() const { return mFilename.c_str(); }
 
-    void DeleteChecksum();
     void StartChecksum();
     bool ValidateChecksum();
 
@@ -32,6 +31,8 @@ public:
     MEM_OVERLOAD(FileStream, 0x1A);
 
 private:
+    void DeleteChecksum();
+
     File *mFile;
     class String mFilename;
     bool mFail;

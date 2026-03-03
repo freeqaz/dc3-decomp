@@ -95,7 +95,7 @@ private:
     ObjPtr<RndAnimatable> mBattleMeterOutAnim; // 0xe4
     /** "override the world boxydir" */
     ObjPtr<RndDir> mBoxyDir; // 0xf8
-    ObjPtr<HamLabel> mBattleLabel;
+    ObjPtr<HamLabel> mBattleLabel; // 0x10c
     /** "instruction display" */
     ObjPtr<HamLabel> mScoreLabel; // 0x120
     ObjPtr<Flow> mInTheZoneFlow; // 0x134
@@ -122,24 +122,24 @@ private:
     float mMovePresenceAccumulator; // 0x254 - cumulative move presence counter
     float mWindowElapsedTime; // 0x258 - elapsed time in scoring window
     float mLastBeatTime; // 0x25c - previous beat time for deltaTime calculation
-    int mZoneLevel;
-    int mPrevZoneLevel;
+    int mZoneLevel; // 0x260
+    int mPrevZoneLevel; // 0x264
     int mInTheZone; // 0x268
-    int mPrevInTheZone;
+    int mPrevInTheZone; // 0x26c
     float mNormalizedRhythmScore; // 0x270 - 0.0-1.0 normalized rhythm score
     float mNormalizedFreshnessScore; // 0x274 - 0.0-1.0 normalized freshness average
     float mMoveConsistencyScore; // 0x278 - 0.0-1.0 move consistency metric
     Symbol mTrickSymbol; // 0x27c - trickpose/trickjump/none
-    int mScore;
-    float mComboMeter;
-    bool mSwapped;
+    int mScore; // 0x280
+    float mComboMeter; // 0x284
+    bool mSwapped; // 0x288
     float mScoringWindowStart; // 0x28c - start beat of scoring window
     float mScoringWindowEnd; // 0x290 - end beat of scoring window
     int mDebugScoreValue; // 0x294 - debug score value, -1=not logging
-    Symbol mSwagJackedState;
-    int unk29c;
+    Symbol mSwagJackedState; // 0x298
+    int mGrooveCooldown; // 0x29c
     float mPrevMaxFootY; // 0x2a0 - previous max foot Y for jump detection
-    bool mSuppressRhythm;
-    bool mAutoPass;
+    bool mSuppressRhythm; // 0x2a4
+    bool mAutoPass; // 0x2a5
     int mFramesSinceLastTrigger; // 0x2a8 - incremented in UpdateScore
 };

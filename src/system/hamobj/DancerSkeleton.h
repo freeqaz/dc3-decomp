@@ -39,8 +39,8 @@ public:
     void SetTracked(bool b) { mTracked = b; }
 
 private:
-    Vector3 mCamJointPositions[kNumJoints]; // 0x4
-    Vector3 mCamJointDisplacements[kNumJoints]; // 0x144
+    PaddedJointPos mCamJointPositions[kNumJoints]; // 0x4
+    PaddedJointPos mCamJointDisplacements[kNumJoints]; // 0x144
     float mCamBoneLengths[kNumBones]; // 0x284
     int mElapsedMs; // 0x2d0
     bool mTracked; // 0x2d4

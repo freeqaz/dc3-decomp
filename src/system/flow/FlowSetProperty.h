@@ -46,19 +46,19 @@ protected:
 class FlowSetProperty : public FlowNode, public PropertyEventListener {
 protected:
     FlowSetProperty(void);
-    u32 unk_0x74; // might be fake.
-    FlowPtr<Hmx::Object> mTarget;
+    u32 unk_0x74; // 0x74 - might be fake.
+    FlowPtr<Hmx::Object> mTarget; // 0x78
 
-    DataNode unk_0x98; // "property_path"
+    DataNode unk_0x98; // 0x98 - "property_path"
     DataNodeObjTrack mValue; // 0xA0
     bool mPersistent; // 0xBC
     int mRate; // 0xC0
     f32 mBlendTime; // 0xC4
     f32 mChangePerUnit; // 0xC8
-    ObjOwnerPtr<Task> unk_0xCC;
+    ObjOwnerPtr<Task> unk_0xCC; // 0xcc
     int mEase; // 0xE0
     f32 mEasePower; // 0xE4
-    u8 unk_0xE8;
+    u8 unk_0xE8; // 0xe8
     int mStopMode; // 0xEC
 
     void OnTargetChanged(void);

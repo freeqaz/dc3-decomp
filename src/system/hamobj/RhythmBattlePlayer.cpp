@@ -41,7 +41,7 @@ RhythmBattlePlayer::RhythmBattlePlayer()
       mTextFeedback(this), mMoveFeedback(this), mStealPart(this), mStealAnim(this),
       mPlayer(0), mRhythmBattle(0), mRhythmSuccessFraction(0), mFreshnessScore(0), mMaxRhythmInWindow(0), mFreshnessAccumulator(0), mWindowElapsedTime(0),
       mLastBeatTime(0), mZoneLevel(0), mInTheZone(-2), mNormalizedRhythmScore(0), mNormalizedFreshnessScore(0), mScore(0), mComboMeter(0),
-      mSwapped(false), mDebugScoreValue(-1), mSwagJackedState("none"), unk29c(0), mSuppressRhythm(false),
+      mSwapped(false), mDebugScoreValue(-1), mSwagJackedState("none"), mGrooveCooldown(0), mSuppressRhythm(false),
       mAutoPass(false),
       mFramesSinceLastTrigger(0) {}
 
@@ -476,7 +476,7 @@ void RhythmBattlePlayer::UpdateScore(int points) {
 void RhythmBattlePlayer::OnReset(RhythmBattle *rb) {
     static Symbol none("none");
     mRhythmBattle = rb;
-    unk29c = 0;
+    mGrooveCooldown = 0;
     mTrickSymbol = none;
     mZoneLevel = 0;
     mMoveConsistencyScore = 0;
@@ -578,9 +578,9 @@ void RhythmBattlePlayer::UpdateAnimations(Hmx::Object *handler) {
             }
         }
         if (groove_passed[1] != move_ok && groove_passed[1] != move_awesome) {
-            unk29c = 0;
-        } else if (unk29c > 0) {
-            unk29c--;
+            mGrooveCooldown = 0;
+        } else if (mGrooveCooldown > 0) {
+            mGrooveCooldown--;
         }
         bool d13 = false;
         if (gDebugGroove) {

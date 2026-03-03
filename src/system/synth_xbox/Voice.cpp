@@ -27,7 +27,7 @@ typedef HRESULT (*EndLoopFunc)(int *, int);
 
 Voice::Voice(bool b1, int i, bool b2)
     : mState(0), mAudioData(0), mAudioBytes(0), mNumSamples(0), mSampleRate(0), mStartSamp(0), mLoopStart(-1),
-      mLoopEnd(-1), mVolume(1.0f), mPan(0), unk2c(1.0f), mAttackRate(0.001f), mReleaseRate(0.001f),
+      mLoopEnd(-1), mVolume(1.0f), mPan(0), mSpeed(1.0f), mAttackRate(0.001f), mReleaseRate(0.001f),
       mXMA(b1), unk3c(), mReverbEnabled(false), mReverbMixDb(-96.0f), unk48(false), mSynchronized(b2),
       mChannels(i), mTagState(0), unk54(false) {
     unk5c = 0;

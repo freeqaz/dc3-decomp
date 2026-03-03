@@ -41,19 +41,19 @@ protected:
     Keys<Symbol, Symbol> *mClipKeys; // 0x0
     Keys<Symbol, Symbol> *mClipCrossoverKeys; // 0x4
     Keys<Symbol, Symbol> *mMasterClipKeys; // 0x8
-    float mBeat;
-    float mPrevBeat;
-    int mPlayerIndex;
+    float mBeat; // 0xc
+    float mPrevBeat; // 0x10
+    int mPlayerIndex; // 0x14
     ObjectDir *mClipDir; // 0x18
-    HamDriver *mDriver;
-    float mPracticeStart;
-    float mPracticeEnd;
+    HamDriver *mDriver; // 0x1c
+    float mPracticeStart; // 0x20
+    float mPracticeEnd; // 0x24
     CharClip *mInClip; // 0x28
     CharClip *mOutClip; // 0x2c
     CharClip *mRestClip; // 0x30
     CharClip *mRestStepClips[4]; // 0x34
-    int mClipCount;
-    int mTargetClip;
-    int unk4c;
-    float mBeatOffset;
+    int mClipCount; // 0x44
+    int mTargetClip; // 0x48
+    int unk4c; // 0x4c
+    float mBeatOffset; // 0x50
 };

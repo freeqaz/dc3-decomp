@@ -15,7 +15,6 @@ public:
     virtual void Save(BinStream &);
     virtual void Copy(const Hmx::Object *, CopyType);
     virtual void Load(BinStream &);
-    virtual RndTransformable *RootTrans();
 
     const char *GetDefaultText() const;
     UILabel *ElementLabel(int) const;
@@ -24,6 +23,7 @@ public:
     OBJ_MEM_OVERLOAD(0x11)
 
 protected:
+    virtual RndTransformable *RootTrans();
     virtual UIListSlotElement *CreateElement(UIList *);
     UIListLabel();
 

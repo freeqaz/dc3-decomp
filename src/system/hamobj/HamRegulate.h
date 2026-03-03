@@ -40,12 +40,12 @@ protected:
 
     Character *mCharacter; // 0x10
     ObjPtr<Waypoint> mWaypoint; // 0x14
-    int mRegulateMode;
-    float mArriveRadius;
-    Vector3 mPosDelta;
-    Vector3 mAccumVelocity;
-    int mFootState;
-    float mMaxSpeed;
+    int mRegulateMode; // 0x28
+    float mArriveRadius; // 0x2c
+    Vector3 mPosDelta; // 0x30
+    Vector3 mAccumVelocity; // 0x40
+    int mFootState; // 0x50
+    float mMaxSpeed; // 0x54
     ObjPtr<CharIKFoot> mLeftFoot; // 0x58
     ObjPtr<CharIKFoot> mRightFoot; // 0x6c
 };

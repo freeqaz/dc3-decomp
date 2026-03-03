@@ -11,6 +11,7 @@ These patterns can often be fixed with source changes. Sorted by ROI (impact x s
 
 | Pattern | Impact | Success | File |
 |---------|--------|---------|------|
+| Struct Layout (Padded Arrays) | +5-40% | 100% | [fixable-struct-layout.md](fixable-struct-layout.md#padded-vector3-arrays-16-byte-stride) |
 | Explicit Destructor | +37-70% | 100% | [fixable-declarations.md](fixable-declarations.md#explicit-destructor) |
 | noreturn Attribute | +38% | 100% | [fixable-casting.md](fixable-casting.md#noreturn-attribute) |
 | Float/Double Separation | +80% | 95% | [fixable-casting.md](fixable-casting.md#floatdouble-separation) |
@@ -257,6 +258,7 @@ From 143 successful fine-tuning attempts (90%+ start, 100% end):
 
 ## See Also
 
+- [fixable-struct-layout.md](fixable-struct-layout.md) — Padded arrays, struct offset verification, stride mismatches
 - [fixable-comparison.md](fixable-comparison.md) — Signed/unsigned, empty vs size, zero-check
 - [fixable-casting.md](fixable-casting.md) — Float cast, noreturn, float/double, sizeof
 - [fixable-control-flow.md](fixable-control-flow.md) — Max/Min explicit, ternary vs if/else, loop structure
