@@ -17,8 +17,11 @@ public:
     struct Edge {
         short v0;
         short v1;
+        short midpoint;
         bool operator<(const Edge &) const;
     };
+
+    static void BlendVert(const RndMesh::Vert &, const RndMesh::Vert &, RndMesh::Vert &);
 
     // Hmx::Object
     virtual ~RndAmbientOcclusion();

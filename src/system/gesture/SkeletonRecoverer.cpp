@@ -34,36 +34,34 @@ int SkeletonRecoverer::GetTrackingIDWithRecovery(int id, int exclude) {
         }
     }
     if (!found) {
-        id = 0;
-    } else {
-        int bestSkeleton = -1;
-        int i = 0;
-        float bestDist = FLT_MAX;
-        do {
-            Skeleton &candidate = TheGestureMgr->GetSkeleton(i);
-            if (candidate.TrackingState() != kSkeletonNotTracked
-                && candidate.TrackingID() != exclude) {
-                float dx = candidate.GetUnkab0().x - found->unk4;
-                float dz = candidate.GetUnkab0().z - found->unkC;
-                float dy = candidate.GetUnkab0().y - found->unk8;
-                float dist = dx * dx + dz * dz + dy * dy;
-                if (dist < bestDist) {
-                    bestDist = dist;
-                    bestSkeleton = i;
-                }
-            }
-            i++;
-        } while (i < 6);
-
-        float maxRecoveryDistance = GestureMgr::MaxRecoveryDistance();
-        if (bestSkeleton == -1 || maxRecoveryDistance * maxRecoveryDistance < bestDist
-            || found->mUntrackedTime <= GestureMgr::MinRecoveryTime()) {
-            id = found->mTrackingID;
-        } else {
-            id = TheGestureMgr->GetSkeleton(bestSkeleton).TrackingID();
-        }
+        return 0;
     }
-    return id;
+
+    int bestSkeleton = -1;
+    int i = 0;
+    float bestDist = FLT_MAX;
+    do {
+        Skeleton &candidate = TheGestureMgr->GetSkeleton(i);
+        if (candidate.TrackingState() != kSkeletonNotTracked
+            && candidate.TrackingID() != exclude) {
+            float dy = candidate.GetUnkab0().y - found->unk8;
+            float dz = candidate.GetUnkab0().z - found->unkC;
+            float dx = candidate.GetUnkab0().x - found->unk4;
+            float dist = dx * dx + (dz * dz + dy * dy);
+            if (dist < bestDist) {
+                bestDist = dist;
+                bestSkeleton = i;
+            }
+        }
+        i++;
+    } while (i < 6);
+
+    float maxRecoveryDistance = GestureMgr::MaxRecoveryDistance();
+    if (bestSkeleton == -1 || bestDist > maxRecoveryDistance * maxRecoveryDistance
+        || found->mUntrackedTime <= GestureMgr::MinRecoveryTime()) {
+        return found->mTrackingID;
+    }
+    return TheGestureMgr->GetSkeleton(bestSkeleton).TrackingID();
 }
 
 bool SkeletonRecoverer::WaitingToRecover() {

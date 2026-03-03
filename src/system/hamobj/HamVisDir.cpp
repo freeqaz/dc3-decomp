@@ -284,21 +284,31 @@ void HamVisDir::PostUpdate(const SkeletonUpdateData *data) {
 }
 
 void HamVisDir::UpdateGestureFilter(const Skeleton &skel, int playerIdx) {
-    if (mMiloManualFrame) return;
-    // Get left and right hand heights from the skeleton joint positions
-    Vector3 rightHandPos, leftHandPos;
-    skel.JointPos(kCoordCamera, kJointHandRight, rightHandPos);
-    skel.JointPos(kCoordCamera, kJointHandLeft, leftHandPos);
-    // Animate from 0-100 based on hand height (y coordinate normalized)
-    ObjPtr<RndAnimatable> *rightAnim = (playerIdx == 0) ? &mPlayer1Right : &mPlayer2Right;
-    ObjPtr<RndAnimatable> *leftAnim = (playerIdx == 0) ? &mPlayer1Left : &mPlayer2Left;
-    if (*rightAnim) {
-        float frame = Clamp(0.0f, (rightHandPos.y + 1.0f) * 50.0f, 100.0f);
-        (*rightAnim)->SetFrame(frame, 1.0f);
+    RndAnimatable *leftAnim;
+    RndAnimatable *rightAnim;
+    if (playerIdx == 0) {
+        leftAnim = mPlayer1Left;
+        rightAnim = mPlayer1Right;
+    } else {
+        leftAnim = mPlayer2Left;
+        rightAnim = mPlayer2Right;
     }
-    if (*leftAnim) {
-        float frame = Clamp(0.0f, (leftHandPos.y + 1.0f) * 50.0f, 100.0f);
-        (*leftAnim)->SetFrame(frame, 1.0f);
+    if ((leftAnim || rightAnim) && (!TheLoadMgr.EditMode() || !mMiloManualFrame)) {
+        std::vector<float> armLengths(2, 0.0f);
+        CalcArmLengths(armLengths, skel);
+        std::vector<float> shoulderY(2, 0.0f);
+        shoulderY[0] = skel.TrackedJoints()[kJointShoulderLeft].mJointPos[0].y;
+        shoulderY[1] = skel.TrackedJoints()[kJointShoulderRight].mJointPos[0].y;
+        std::vector<float> wristY(2, 0.0f);
+        wristY[0] = skel.TrackedJoints()[kJointWristLeft].mJointPos[0].y;
+        wristY[1] = skel.TrackedJoints()[kJointWristRight].mJointPos[0].y;
+        for (int i = 0; i < 2; i++) {
+            RndAnimatable *anim = (i == 0) ? leftAnim : rightAnim;
+            float frame = mGrooviness * 100.0f;
+            if (anim) {
+                anim->SetFrame(frame, 1.0f);
+            }
+        }
     }
 }
 

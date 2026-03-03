@@ -1,7 +1,9 @@
 #include "rndobj/ScreenMask.h"
 #include "math/Geo.h"
 #include "os/Debug.h"
+#include "rndobj/Cam.h"
 #include "rndobj/Draw.h"
+#include "rndobj/HiResScreen.h"
 #include "rndobj/Rnd.h"
 #include "utl/BinStream.h"
 
@@ -64,5 +66,46 @@ BEGIN_LOADS(RndScreenMask)
 END_LOADS
 
 void RndScreenMask::DrawShowing() {
-    TheRnd.DrawRectScreen(mRect, mColor, mMat, nullptr, nullptr);
+    if (TheRnd.GetDrawMode() != Rnd::kDrawNormal)
+        return;
+
+    float width = (float)TheRnd.Width();
+    RndCam *cam = RndCam::Current();
+
+    float height = (float)TheRnd.Height();
+    RndTex *targetTex = cam->TargetTex();
+    if ((int)targetTex) {
+        height = (float)targetTex->Height();
+        width = (float)targetTex->Width();
+    }
+
+    if (!mUseCamRect && (int)targetTex) {
+        Hmx::Rect defaultRect(0.0f, 0.0f, 1.0f, 1.0f);
+        if (!(cam->GetScreenRect() == defaultRect)) {
+            MILO_NOTIFY_ONCE(
+                "%s: Overriding camera screen_rect not supported with render texture",
+                (char *)Name()
+            );
+        }
+    }
+
+    if (!mUseCamRect && !cam->TargetTex()) {
+        TheRnd.GetDefaultCam()->Select();
+        Hmx::Rect hiRes = TheHiResScreen.InvScreenRect();
+        Hmx::Rect drawRect;
+        drawRect.x = (mRect.x * hiRes.w + hiRes.x) * width;
+        drawRect.y = (mRect.y * hiRes.h + hiRes.y) * height;
+        drawRect.w = (mRect.w * hiRes.w) * width;
+        drawRect.h = (mRect.h * hiRes.h) * height;
+        TheRnd.DrawRect(drawRect, mColor, mMat, nullptr, nullptr);
+        cam->Select();
+    } else {
+        Hmx::Rect hiRes = TheHiResScreen.InvScreenRect();
+        Hmx::Rect drawRect;
+        drawRect.x = (mRect.x * hiRes.w + hiRes.x) * width;
+        drawRect.y = (mRect.y * hiRes.h + hiRes.y) * height;
+        drawRect.w = (mRect.w * hiRes.w) * width;
+        drawRect.h = (mRect.h * hiRes.h) * height;
+        TheRnd.DrawRect(drawRect, mColor, mMat, nullptr, nullptr);
+    }
 }

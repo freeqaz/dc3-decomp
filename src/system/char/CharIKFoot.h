@@ -6,6 +6,7 @@
 
 /** "Remedial foot skate ik, not yet ready for prime time." */
 class CharIKFoot : public CharIKHand {
+    friend class HamRegulate;
 public:
     // Hmx::Object
     virtual ~CharIKFoot();

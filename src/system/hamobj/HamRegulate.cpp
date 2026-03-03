@@ -1,11 +1,16 @@
 #include "hamobj/HamRegulate.h"
+#include "char/CharIKFoot.h"
+#include "char/CharServoBone.h"
 #include "char/Character.h"
 #include "char/Waypoint.h"
+#include "math/Rot.h"
+#include "math/Utl.h"
 #include "math/Vec.h"
 #include "obj/Dir.h"
 #include "obj/Object.h"
 #include "os/System.h"
 #include "rndobj/Poll.h"
+#include "utl/Loader.h"
 
 const float kConstFloats[2] = { 4, 4 };
 
@@ -79,25 +84,132 @@ void HamRegulate::RegulateWay(Waypoint *w, float f) {
     mRegulateMode = 0;
 }
 
-void HamRegulate::Regulate(Vector3 &pos, float dt) {
-    // No regulation if no waypoint
-    if (!mWaypoint) return;
-    // Move character towards waypoint
-    Vector3 target = mWaypoint->WorldXfm().v;
-    Vector3 diff;
-    Subtract(target, pos, diff);
-    float dist = Length(diff);
-    if (dist > mArriveRadius) {
-        float speed = Min(mMaxSpeed * dt, dist);
-        Scale(diff, speed / dist, diff);
-        Add(pos, diff, pos);
+void HamRegulate::Regulate(Vector3 &posDelta, float &rotDelta) {
+    float radius = mArriveRadius;
+    if (mArriveRadius < 0.0f) {
+        if (mLeftFoot) {
+            radius = mLeftFoot->mData->LocalXfm().v.z;
+        } else {
+            radius = 0.0f;
+        }
+    }
+    radius = Max(radius, 0.01f);
+    float invRadius = 1.0f / radius;
+
+    float dt = TheTaskMgr.DeltaBeat();
+    Character *character = mCharacter;
+    float absDt = Max(0.0f, dt);
+
+    if (mRegulateMode == 1) {
+        Waypoint *waypoint = mWaypoint;
+        float dy, dz;
+        if (character->Teleported()) {
+            const Transform &wpXfm = waypoint->WorldXfm();
+            dz = wpXfm.v.z - character->LocalXfm().v.z;
+            dy = wpXfm.v.y - character->LocalXfm().v.y;
+            posDelta.x = wpXfm.v.x - character->LocalXfm().v.x;
+        } else {
+            const Transform &wpXfm = waypoint->WorldXfm();
+            dz = wpXfm.v.z;
+            float pdz = mPosDelta.z;
+            float pdy = mPosDelta.y;
+            dy = wpXfm.v.y;
+            posDelta.x = wpXfm.v.x - mPosDelta.x;
+            float factor = Min(absDt * invRadius * 1.1f, 1.0f);
+            posDelta.x *= factor;
+            dy = (dy - pdy) * factor;
+            dz = (dz - pdz) * factor;
+        }
+        posDelta.y = dy;
+        posDelta.z = dz;
+    } else {
+        Transform facing;
+        facing.Reset();
+        CharServoBone *servo = character->BoneServo();
+        servo->MoveToFacing(facing);
+        FastInvert(facing, facing);
+        Multiply(facing, character->LocalXfm(), facing);
+
+        rotDelta = -(mWaypoint->LocalXfm().m.x.x * facing.m.x.y
+                    - mWaypoint->LocalXfm().m.x.y * facing.m.x.x);
+
+        Waypoint *wp = mWaypoint;
+        float posFactor = Min(Max(0.0f, absDt * invRadius), 1.0f);
+
+        posDelta.x = wp->LocalXfm().v.x - facing.v.x;
+        posDelta.z = wp->LocalXfm().v.z - facing.v.z;
+        posDelta.y = wp->LocalXfm().v.y - facing.v.y;
+
+        rotDelta *= posFactor;
+        posDelta.x *= posFactor;
+        posDelta.y *= posFactor;
+        posDelta.z *= posFactor;
     }
 }
 
 void HamRegulate::Poll() {
-    if (!mCharacter || !mWaypoint) return;
-    // Regulate character position
-    Transform &xfm = mCharacter->DirtyLocalXfm();
+    if (!mWaypoint || !mCharacter) return;
+    CharServoBone *servo = mCharacter->BoneServo();
+    if (!servo) return;
+
+    Vector3 posDelta(0, 0, 0);
+    float rotDelta = 0.0f;
+    Regulate(posDelta, rotDelta);
+
     float dt = TheTaskMgr.DeltaSeconds();
-    Regulate(xfm.v, dt);
+    int footState = 0;
+    float absDt = Max(0.0f, dt);
+
+    if (!mCharacter->Teleported()) {
+        float maxMove = mMaxSpeed * absDt;
+        float posMag = sqrtf(posDelta.y * posDelta.y + posDelta.x * posDelta.x);
+        float fRotDelta = rotDelta;
+        if (posMag > 0.0f && posMag > maxMove) {
+            float scale = maxMove / posMag;
+            posDelta.x *= scale;
+            posDelta.y *= scale;
+            posDelta.z *= scale;
+            fRotDelta = rotDelta * scale;
+        }
+        rotDelta = fRotDelta;
+
+        if (mLeftFoot && mRightFoot) {
+            int leftState = (mLeftFoot->mFootFsmState == 1) ? 1 : 0;
+            int rightState = (mRightFoot->mFootFsmState == 1) ? 2 : 0;
+            footState = leftState | rightState;
+
+            if (footState == 3) {
+                mAccumVelocity.Zero();
+                rotDelta = 0.0f;
+                posDelta.Zero();
+            } else {
+                if ((mFootState ^ footState) & footState) {
+                    mAccumVelocity.Zero();
+                }
+                mAccumVelocity.x += posDelta.x;
+                mAccumVelocity.y += posDelta.y;
+                mAccumVelocity.z += posDelta.z;
+                if (mAccumVelocity.x * mAccumVelocity.x
+                    + mAccumVelocity.z * mAccumVelocity.z
+                    + mAccumVelocity.y * mAccumVelocity.y > 16.0f) {
+                    mAccumVelocity.Zero();
+                    rotDelta = 0.0f;
+                    posDelta.Zero();
+                }
+            }
+        }
+    }
+
+    Character *character = mCharacter;
+    mFootState = footState;
+
+    Transform &xfm = character->DirtyLocalXfm();
+
+    if (!TheLoadMgr.EditMode() || mCharacter->Teleported() || absDt != 0.0f) {
+        RotateAboutZ(xfm.m, rotDelta, xfm.m);
+        xfm.v.x += posDelta.x;
+        xfm.v.y += posDelta.y;
+        xfm.v.z += posDelta.z;
+        mWaypoint->Constrain(xfm);
+    }
 }

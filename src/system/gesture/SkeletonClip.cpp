@@ -469,7 +469,7 @@ void SkeletonClip::Poll() {
             if (mPlaybackFrame >= end) {
                 mPlaybackFrame = 0;
             }
-            SetFrame(mPlaybackFrame, 1);
+            SetFrame(mPlaybackFrame / 2, 1.0f);
         }
     }
 }

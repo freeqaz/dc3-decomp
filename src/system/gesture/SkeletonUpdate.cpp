@@ -96,10 +96,12 @@ DWORD SkeletonUpdateThread(LPVOID) {
     MILO_ASSERT(skeleton_updated_event, 0x23);
     WaitForSingleObject(new_skeleton_event, -1);
     while (!sBool878) {
-        SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
-        if (SkeletonUpdate::sInstance && SkeletonUpdate::sInstance->mIsUpdateThreadActive) {
-            SkeletonUpdate::sInstance->Update();
-            SetEvent(skeleton_updated_event);
+        {
+            SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
+            if (SkeletonUpdate::sInstance->mIsUpdateThreadActive) {
+                SkeletonUpdate::sInstance->Update();
+                SetEvent(skeleton_updated_event);
+            }
         }
         WaitForSingleObject(new_skeleton_event, -1);
     }

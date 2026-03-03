@@ -70,7 +70,7 @@ Objdiff snapshot after implementation:
 - `SkeletonClip::RecordedFrameAt` -> 86.7%
 - `SkeletonClip::CurRecordedFrame` -> 91.2%
 - `SkeletonClip::SwapMoveRecord` -> 99.8%
-- `SkeletonClip::PollRecording` -> 96.9%
+- `SkeletonClip::PollRecording` -> 99.1%
 - `SkeletonClip::FillMoveRatings` -> 79.8%
 - `SkeletonClip::SongStartSeconds` -> 99.0%
 - `SkeletonClip::PrevSkeleton` -> 81.0%
@@ -78,7 +78,7 @@ Objdiff snapshot after implementation:
 - `SkeletonUpdate::UpdateFakeArmPos` -> 39.0%
 - `SkeletonUpdate::InsertFakeArmPos` -> 48.6%
 - `SkeletonRecoverer::WaitingToRecover` -> 99.4%
-- `SkeletonRecoverer::GetTrackingIDWithRecovery` -> 90.2%
+- `SkeletonRecoverer::GetTrackingIDWithRecovery` -> 94.6%
 - `SkeletonRecoverer::Poll` -> 63.0%
 - `SkeletonQualityFilter::Update` -> 73.6%
 - `DrawGestureMgr` -> 91.6%
@@ -92,7 +92,8 @@ Objdiff snapshot after implementation:
 Pass 2 focused updates (function-by-function):
 - `SkeletonUpdate::UpdateFakeArmPos` -> 98.5% (from 39.0%)
 - `SkeletonUpdate::InsertFakeArmPos` -> 79.3% (from 48.6%)
-- `SkeletonRecoverer::GetTrackingIDWithRecovery` remains at 90.2% after control-flow reshaping (no codegen change yet).
+- `SkeletonClip::PollRecording` -> 99.1% (from 96.9%) after `TheHamDirector` re-check split, compare-order alignment, and `MILO_LOG` argument-type fix.
+- `SkeletonRecoverer::GetTrackingIDWithRecovery` -> 94.6% (from 90.2%) after return-carrier/control-flow reshaping and distance/threshold ordering fixes; one search/null-path control-flow cluster remains.
 
 ## Weak Stub Linkage Clarification
 - Weak stubs are fallback symbols compiled in `native/src/engine_stubs_generated.cpp`.
@@ -351,8 +352,9 @@ cd native/build
 - [x] Re-ran objdiff on implemented symbols; documented non-stub status + current match percentages.
 - [x] Continued one-function-at-a-time refinement on `SkeletonUpdate` helpers:
   - `UpdateFakeArmPos`: raised to 98.5% with correct fsel clamp structure and intermediate state write.
-  - `InsertFakeArmPos`: raised to 77.8% via branch/control-flow rewrite to raw stick/trigger field path (`mSticks`/`mTriggers`), still needs ordering/codegen alignment.
-- [x] Attempted `SkeletonRecoverer::GetTrackingIDWithRecovery` control-flow reshaping; function behavior and generated code remained effectively unchanged at 90.2%.
+  - `InsertFakeArmPos`: raised to 79.3% via branch/control-flow rewrite to raw stick/trigger field path (`mSticks`/`mTriggers`), still needs ordering/codegen alignment.
+- [x] Continued one-function-at-a-time refinement on `SkeletonClip::PollRecording`; raised to 99.1% and removed all insert/delete/replace mismatches (remaining `diff_arg` primarily MakeString template + relocation noise).
+- [x] Continued one-function-at-a-time refinement on `SkeletonRecoverer::GetTrackingIDWithRecovery`; raised to 94.6% with remaining divergence concentrated in one search/null-path control-flow cluster.
 - [ ] Fix Gate 0 blockers (TrackObjectBytes assert path + pose server script path).
 - [ ] Improve low-match implemented functions (especially `SkeletonUpdate::Update*`, `Skeleton::Displacements`, `SkeletonViz::*`) toward `COMPLETE`.
 - [ ] Implement remaining P2 gesture debug helpers (`GestureMgr::GetSecondarySkeletonIndex`, `DrawSkeletonKinectData`) and validate if still required by target/runtime path.

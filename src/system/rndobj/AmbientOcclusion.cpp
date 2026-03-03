@@ -15,6 +15,60 @@
 #include <float.h>
 #include "utl/Std.h"
 
+bool RndAmbientOcclusion::Edge::operator<(const Edge &other) const {
+    short aMin = v0 < v1 ? v0 : v1;
+    short aMax = v0 < v1 ? v1 : v0;
+    short bMin = other.v0 < other.v1 ? other.v0 : other.v1;
+    short bMax = other.v0 < other.v1 ? other.v1 : other.v0;
+    unsigned int a = ((unsigned int)(unsigned short)aMax << 16) | (unsigned short)aMin;
+    unsigned int b = ((unsigned int)(unsigned short)bMax << 16) | (unsigned short)bMin;
+    return a < b;
+}
+
+void RndAmbientOcclusion::BlendVert(
+    const RndMesh::Vert &v1, const RndMesh::Vert &v2, RndMesh::Vert &out
+) {
+    memcpy(&out, &v1, sizeof(RndMesh::Vert));
+    out.pos.x += v2.pos.x;
+    out.pos.y += v2.pos.y;
+    out.pos.z += v2.pos.z;
+    out.tex.x += v2.tex.x;
+    out.tex.y += v2.tex.y;
+    out.color.red += v2.color.red;
+    out.color.green += v2.color.green;
+    out.color.blue += v2.color.blue;
+    out.color.alpha += v2.color.alpha;
+    out.norm.x += v2.norm.x;
+    out.norm.y += v2.norm.y;
+    out.norm.z += v2.norm.z;
+    float tx = v2.tangent.x + out.tangent.x;
+    out.pos.x *= 0.5f;
+    out.pos.y *= 0.5f;
+    out.pos.z *= 0.5f;
+    out.tex.x *= 0.5f;
+    out.tex.y *= 0.5f;
+    out.color.red *= 0.5f;
+    out.color.green *= 0.5f;
+    out.color.blue *= 0.5f;
+    out.color.alpha *= 0.5f;
+    float ty = v2.tangent.y + out.tangent.y;
+    float tz = v2.tangent.z + out.tangent.z;
+    Normalize(out.norm, out.norm);
+    float tLen = sqrtf(tx * tx + ty * ty + tz * tz);
+    if (tLen > 0.0f) {
+        tx /= tLen;
+        ty /= tLen;
+        tz /= tLen;
+    }
+    out.tangent.x = tx;
+    out.tangent.y = ty;
+    out.tangent.z = tz;
+    out.color.alpha = 0.0f;
+    out.color.blue = 0.0f;
+    out.color.green = 0.0f;
+    out.color.red = 0.0f;
+}
+
 bool IsValidObject(Hmx::Object *obj) {
     RndMesh *mesh = dynamic_cast<RndMesh *>(obj);
     RndGroup *group = dynamic_cast<RndGroup *>(obj);

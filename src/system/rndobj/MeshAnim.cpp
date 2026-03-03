@@ -22,8 +22,120 @@ bool RndMeshAnim::Replace(ObjRef *ref, Hmx::Object *obj) {
     return Hmx::Object::Replace(ref, obj);
 }
 
+struct GetVertPoint {
+    static Vector3 &get(RndMesh::Vert *v) { return v->pos; }
+};
+struct GetVertNormal {
+    static Vector3 &get(RndMesh::Vert *v) { return v->norm; }
+};
+struct GetVertTex {
+    static Vector2 &get(RndMesh::Vert *v) { return v->tex; }
+};
+struct GetVertColor {
+    static Hmx::Color &get(RndMesh::Vert *v) { return v->color; }
+};
+
+template <class T1, class T2>
+void InterpVertData(
+    const std::vector<T1> &a,
+    const std::vector<T1> &b,
+    float ref,
+    RndMesh::VertVector &verts,
+    float blend
+) {
+    MILO_ASSERT(a.size() == b.size(), 0x133);
+    typename std::vector<T1>::const_iterator ait = a.begin();
+    typename std::vector<T1>::const_iterator bit = b.begin();
+    typename std::vector<T1>::const_iterator aend = a.end();
+    RndMesh::Vert *vertit = verts.begin();
+    if (a.size() > verts.size()) {
+        aend -= (a.size() - verts.size());
+    }
+    if (ref == 0.0f) {
+        if (blend != 1.0f) {
+            for (; ait != aend; ++ait, vertit++) {
+                Interp(T2::get(vertit), *ait, blend, T2::get(vertit));
+            }
+        } else {
+            for (; ait != aend; ++ait, ++vertit) {
+                T2::get(vertit) = *ait;
+            }
+        }
+    } else if (ref == 1.0f) {
+        if (blend != 1.0f) {
+            for (; ait != aend; ++ait, ++bit, ++vertit) {
+                Interp(T2::get(vertit), *bit, blend, T2::get(vertit));
+            }
+        } else {
+            for (; ait != aend; ++ait, ++bit, ++vertit) {
+                T2::get(vertit) = *bit;
+            }
+        }
+    } else if (blend != 1.0f) {
+        for (; ait != aend; ++ait, ++bit, ++vertit) {
+            T1 tmp;
+            Interp(*ait, *bit, ref, tmp);
+            Interp(T2::get(vertit), tmp, blend, T2::get(vertit));
+        }
+    } else {
+        for (; ait != aend; ++ait, ++bit, ++vertit) {
+            Interp(*ait, *bit, ref, T2::get(vertit));
+        }
+    }
+}
+
 void RndMeshAnim::SetFrame(float frame, float blend) {
     RndAnimatable::SetFrame(frame, blend);
+    if (mMesh) {
+        if ((mMesh->Mutable() & 0x1F) == 0) {
+            MILO_NOTIFY_ONCE("Mesh %s is animated but not mutable.\n", mMesh->Name());
+        } else {
+            int syncnum = 0;
+            if (!VertPointsKeys().empty()) {
+                const Key<std::vector<Vector3> > *prev;
+                const Key<std::vector<Vector3> > *next;
+                float ref = 0;
+                VertPointsKeys().AtFrame(frame, prev, next, ref);
+                InterpVertData<Vector3, GetVertPoint>(
+                    prev->value, next->value, ref, mMesh->Verts(), blend
+                );
+                syncnum |= 0x1F;
+            }
+            if (!VertNormalsKeys().empty()) {
+                const Key<std::vector<Vector3> > *prev;
+                const Key<std::vector<Vector3> > *next;
+                float ref = 0;
+                VertNormalsKeys().AtFrame(frame, prev, next, ref);
+                InterpVertData<Vector3, GetVertNormal>(
+                    prev->value, next->value, ref, mMesh->Verts(), blend
+                );
+                syncnum |= 0x1F;
+            }
+            if (!VertTexsKeys().empty()) {
+                const Key<std::vector<Vector2> > *prev;
+                const Key<std::vector<Vector2> > *next;
+                float ref = 0;
+                VertTexsKeys().AtFrame(frame, prev, next, ref);
+                InterpVertData<Vector2, GetVertTex>(
+                    prev->value, next->value, ref, mMesh->Verts(), blend
+                );
+                syncnum |= 0x1F;
+            }
+            if (!VertColorsKeys().empty()) {
+                const Key<std::vector<Hmx::Color> > *prev;
+                const Key<std::vector<Hmx::Color> > *next;
+                float ref = 0;
+                VertColorsKeys().AtFrame(frame, prev, next, ref);
+                InterpVertData<Hmx::Color, GetVertColor>(
+                    prev->value, next->value, ref, mMesh->Verts(), blend
+                );
+                syncnum |= 0x1F;
+            }
+            if (syncnum != 0) {
+                mMesh->Sync(syncnum);
+            }
+        }
+    }
 }
 
 BEGIN_HANDLERS(RndMeshAnim)

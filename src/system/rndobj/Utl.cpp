@@ -47,8 +47,8 @@ static ObjectDir *sSphereDir;
 static RndMesh *sSphereMesh;
 static ObjectDir *sCylinderDir;
 static RndMesh *sCylinderMesh;
-// std::list<BuildPoly> gChildPolys;
-// std::list<BuildPoly> gParentPolys;
+std::list<BuildPoly> gChildPolys;
+std::list<BuildPoly> gParentPolys;
 SplashFunc gSplashPoll;
 SplashFunc gSplashSuspend;
 SplashFunc gSplashResume;
@@ -487,6 +487,21 @@ void UtilDrawRect2D(const Vector2 &v1, const Vector2 &v2, const Hmx::Color &colo
     UtilDrawLine(cross2, v1, color);
 }
 
+void UtilDrawCircle2D(const Vector2 &center, float radius, const Hmx::Color &color, int segments) {
+    std::vector<Vector2> pts(segments + 1);
+    float aspect = TheRnd.YRatio();
+    for (int i = 0; i <= segments; i++) {
+        float angle = (float)i * 6.2831854820251465f / (float)segments;
+        float cosVal = FastSin(angle + 1.5707963705062866f);
+        float sinVal = FastSin(angle);
+        pts[i].x = cosVal * aspect * radius + center.x;
+        pts[i].y = sinVal * radius + center.y;
+    }
+    for (int i = 0; i < segments; i++) {
+        UtilDrawLine(pts[i], pts[i + 1], color);
+    }
+}
+
 void CalcSphere(RndTransAnim *a, Sphere &s) {
     s.Zero();
     if (!a->TransKeys().empty()) {
@@ -892,6 +907,67 @@ void UtilDrawCylinder(
     }
 }
 
+void UtilDrawCigar(
+    const Transform &tf, const float *const radii, const float *const lengths,
+    const Hmx::Color &col, int segments
+) {
+    if (!sCylinderMesh) {
+        MILO_NOTIFY_ONCE("Cylinder mesh is not loaded");
+    } else {
+        Vector3 scaledLengths;
+        float len = Length(*(const Vector3 *)lengths);
+        for (int i = 0; i < 3; i++) {
+            (&scaledLengths.x)[i] = radii[i] * len;
+        }
+        Hmx::Matrix3 basis;
+        memcpy(&basis, lengths, sizeof(Hmx::Matrix3));
+        Normalize(*(Vector3 *)&basis, *(Vector3 *)&basis);
+
+        Vector3 bottom, top;
+        bottom.Set(0, scaledLengths.x - radii[0], 0);
+        top.Set(0, scaledLengths.y + radii[1], 0);
+        Multiply(bottom, (const Transform &)basis, bottom);
+        Multiply(top, (const Transform &)basis, top);
+
+        int i = 0;
+        if (segments > 0) {
+            float angleStep = 6.2831854820251465f / (float)segments;
+            float angle = 1.5707963705062866f;
+            do {
+                float sinVal = FastSin(angle + angleStep);
+                float cosVal = FastSin(angle);
+                Vector3 p1, p2, p3, p4;
+
+                p1.Set(cosVal * radii[0], sinVal * radii[0], 0);
+                Multiply(p1, (const Transform &)basis, p1);
+                Add(p1, bottom, p1);
+
+                p2.Set(cosVal * radii[1], sinVal * radii[1], 0);
+                Multiply(p2, (const Transform &)basis, p2);
+                Add(p2, top, p2);
+
+                float nextSin = FastSin(angle + angleStep + angleStep);
+                float nextCos = FastSin(angle + angleStep);
+
+                p3.Set(nextCos * radii[0], nextSin * radii[0], 0);
+                Multiply(p3, (const Transform &)basis, p3);
+                Add(p3, bottom, p3);
+
+                p4.Set(nextCos * radii[1], nextSin * radii[1], 0);
+                Multiply(p4, (const Transform &)basis, p4);
+                Add(p4, top, p4);
+
+                TheRnd.DrawLine(p1, p2, col, false);
+                TheRnd.DrawLine(p1, p3, col, false);
+                TheRnd.DrawLine(p2, p4, col, false);
+
+                angle += angleStep;
+                i++;
+            } while (i < segments);
+        }
+    }
+}
+
 void UtilDrawPlane(
     const Plane &p, const Vector3 &v, const Hmx::Color &c, int i4, float f, bool
 ) {
@@ -1191,7 +1267,91 @@ void TestTexturePaths(ObjectDir *dir) {
     }
 }
 
-void TestMaterialTextures(ObjectDir *) {}
+void TestMaterialTextures(ObjectDir *dir) {
+    for (ObjDirItr<RndMat> it(dir, false); it != 0; ++it) {
+        RndTex *normMap = it->NormalMap();
+        if (normMap) {
+            FilePath fp(normMap->File());
+            if (!normMap->IsRenderTarget() && !strstr(fp.c_str(), "_norm")) {
+                MILO_NOTIFY(
+                    "normal map %s used by %s must have _norm in the filename",
+                    PathName(normMap),
+                    PathName(it)
+                );
+            }
+        }
+    }
+}
+
+void ComputeFaceTangentBasis(RndMesh *m, int faceIdx, Hmx::Matrix3 &outBasis);
+
+void MakeTangentsLate(RndMesh *m) {
+    if (!m) return;
+    RndMesh *geom = m->GetGeomOwner();
+    if (geom != m || geom->Verts().size() == 0) return;
+    if (GetGfxMode() == kOldGfx) return;
+
+    // Build per-face tangent array
+    Vector4 zeroTangent(0, 0, 0, 0);
+    std::vector<Vector4> faceTangents(m->Faces().size(), zeroTangent);
+    double posW = 1.0;
+    double negW = -1.0;
+    for (unsigned int i = 0; i < m->Faces().size(); i++) {
+        Hmx::Matrix3 basis;
+        ComputeFaceTangentBasis(m, i, basis);
+        double w = posW;
+        if ((basis.x.z * basis.z.y - basis.z.z * basis.x.y) * basis.y.x +
+            basis.y.y * (basis.z.z * basis.x.x - basis.x.z * basis.z.x) +
+            basis.y.z * (basis.x.y * basis.z.x - basis.z.y * basis.x.x) < 0.0) {
+            w = negW;
+        }
+        Normalize(basis.x, *(Vector3*)&faceTangents[i]);
+        faceTangents[i].w = (float)w;
+    }
+
+    // Accumulate tangents per vertex
+    double zeroThresh = 0.0;
+    for (int i = 0; i < (int)m->Verts().size(); i++) {
+        RndMesh::Vert& v = m->Verts()[i];
+        bool first = true;
+        for (unsigned int f = 0; f < m->Faces().size(); f++) {
+            RndMesh::Face& face = m->Faces()[f];
+            int k;
+            for (k = 0; k < 3; k++) {
+                if (face[k] == i) break;
+            }
+            if (k != 3) {
+                Vector4& ft = faceTangents[f];
+                if (first) {
+                    first = false;
+                    v.tangent = ft;
+                } else {
+                    if ((double)(ft.w * v.tangent.w) < zeroThresh) {
+                        auto _tmp4 = MakeString("NOTIFY: %s has previously welded vertex tangents with opposite handedness; re-export from Max for more accurate normal mapping.\n", (char*)PathName(m));
+                        TheDebug << _tmp4;
+                    } else {
+                        v.tangent.x += ft.x;
+                        v.tangent.y += ft.y;
+                        v.tangent.z += ft.z;
+                    }
+                }
+            }
+        }
+        Normalize(*(Vector3*)&v.tangent, *(Vector3*)&v.tangent);
+
+        // Gram-Schmidt orthogonalize tangent against normal
+        float tx = v.tangent.x, ty = v.tangent.y, tz = v.tangent.z;
+        float tDotN = v.norm.x * tx + v.norm.z * tz + v.norm.y * ty;
+        float scaleX = v.norm.x * tDotN;
+        float scaleY = v.norm.y * tDotN;
+        float scaleZ = v.norm.z * tDotN;
+        float ox = tx - scaleX;
+        float oy = ty - scaleY;
+        float oz = tz - scaleZ;
+        Normalize(*(Vector3*)&ox, *(Vector3*)&v.tangent);
+    }
+    TheDebug << MakeString("NOTIFY: %s MakingTangentsLate, resave this file!", (char*)PathName(m));
+}
 
 void ComputeFaceTangentBasis(RndMesh *m, int faceIdx, Hmx::Matrix3 &outBasis) {
     if (!m) {
@@ -1513,6 +1673,63 @@ void RndScaleObject(Hmx::Object *obj, float scale, float fovScale) {
     }
 }
 
+void FixVertOrder(const RndMesh *src, RndMesh *dst) {
+    int mismatchCount = 0;
+    RndMesh::VertVector &srcVerts = const_cast<RndMesh *>(src)->Verts();
+    RndMesh::VertVector &dstVerts = dst->Verts();
+    int srcCount = srcVerts.mNumVerts;
+    float tolerance = 1e-5f;
+    if (srcCount > 0) {
+        unsigned int i = 0;
+        do {
+            unsigned int j = 0;
+            float stx = srcVerts.mVerts[i].tex.x;
+            float sty = srcVerts.mVerts[i].tex.y;
+            if (dstVerts.mNumVerts > 0) {
+                do {
+                    if (fabsf(stx - dstVerts.mVerts[j].tex.x) < tolerance &&
+                        fabsf(sty - dstVerts.mVerts[j].tex.y) < tolerance)
+                        goto found;
+                    j++;
+                } while ((int)j < dstVerts.mNumVerts);
+            }
+            j = (unsigned int)-1;
+        found:
+            if (!((int)j == -1)) {
+                unsigned short ii = (unsigned short)i;
+                unsigned short js = (unsigned short)j;
+                if (js != ii) {
+                    RndMesh::Vert tmp;
+                    memcpy(&tmp, &dstVerts.mVerts[js], sizeof(RndMesh::Vert));
+                    memcpy(&dstVerts.mVerts[js], &dstVerts.mVerts[ii], sizeof(RndMesh::Vert));
+                    memcpy(&dstVerts.mVerts[ii], &tmp, sizeof(RndMesh::Vert));
+                    int numFaces = (int)dst->Faces().size();
+                    if (numFaces > 0) {
+                        unsigned short *faceData = &dst->Faces()[0].v1;
+                        int n = numFaces;
+                        do {
+                            if (faceData[0] == js) faceData[0] = ii;
+                            else if (faceData[0] == ii) faceData[0] = js;
+                            if (faceData[1] == js) faceData[1] = ii;
+                            else if (faceData[1] == ii) faceData[1] = js;
+                            if (faceData[2] == js) faceData[2] = ii;
+                            else if (faceData[2] == ii) faceData[2] = js;
+                            faceData += 3;
+                            n--;
+                        } while (n != 0);
+                    }
+                }
+            } else {
+                mismatchCount++;
+            }
+            i++;
+        } while ((int)i < srcCount);
+        if (mismatchCount != 0) {
+            TheDebug << MakeString("%s has %d mismatched verts\n", PathName(src), mismatchCount);
+        }
+    }
+}
+
 void BurnXfm(RndMesh *mesh, bool keepTranslation) {
     Transform xfm = mesh->LocalXfm();
     if (keepTranslation) {
@@ -1559,3 +1776,7 @@ void BurnXfm(RndMesh *mesh, bool keepTranslation) {
     }
     mesh->SetLocalXfm(ident);
 }
+
+template int Keys<Vector3, Vector3>::AtFrame(
+    float, const Key<Vector3> *&, const Key<Vector3> *&, float &
+) const;

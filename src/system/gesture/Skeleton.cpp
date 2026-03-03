@@ -31,14 +31,14 @@ void SkeletonFrame::Init() {
     sUpVectorSmoother.ForceValue(Vector3(0, 1, 0));
 }
 
-void SkeletonFrame::Create(const NUI_SKELETON_FRAME &nui_frame, int i2) {
+void SkeletonFrame::Create(const NUI_SKELETON_FRAME &nui_frame, int elapsed) {
     mFrameNumber = nui_frame.dwFrameNumber;
-    mElapsedMs = i2;
+    mElapsedMs = elapsed;
 
     sUpVectorSmoother.Smooth(
-        Vector3(nui_frame.vFloorClipPlane.x, nui_frame.vFloorClipPlane.y, nui_frame.vFloorClipPlane.z),
-        i2 * 0.001f,
-        true
+        Vector3(nui_frame.vNormalToGravity.x, nui_frame.vNormalToGravity.y, nui_frame.vNormalToGravity.z),
+        elapsed * 0.001f,
+        false
     );
 
     mFloorNormal = sUpVectorSmoother.Value();
@@ -48,6 +48,77 @@ void SkeletonFrame::Create(const NUI_SKELETON_FRAME &nui_frame, int i2) {
         nui_frame.vFloorClipPlane.z,
         nui_frame.vFloorClipPlane.w
     );
+
+    // Pass smoothed floor normal (with w=0) to NuiTransformMatrixLevel
+    XMVECTOR gravVec;
+    gravVec.x = mFloorNormal.x;
+    gravVec.y = mFloorNormal.y;
+    gravVec.z = mFloorNormal.z;
+    gravVec.w = 0.0f;
+    XMMATRIX mat = NuiTransformMatrixLevel(gravVec);
+
+    static const SkeletonTrackingState sTrackingMap[] = {
+        kSkeletonNotTracked, kSkeletonPositionOnly, kSkeletonTracked
+    };
+    static const int sJointTrackingMap[] = { 0, 1, 2 };
+    static const int sJointRemap[kNumJoints][2] = {
+        {0, 0}, {1, 1}, {2, 2}, {3, 3}, {4, 4}, {5, 5}, {6, 6}, {7, 7},
+        {8, 8}, {9, 9}, {10, 10}, {11, 11}, {12, 12}, {13, 13}, {14, 14},
+        {18, 15}, {15, 16}, {16, 17}, {17, 18}, {19, 19}
+    };
+
+    // First pass: transform joint positions by gravity matrix
+    XMVECTOR transformed[6 * kNumJoints];
+    for (int s = 0; s < 6; s++) {
+        const NUI_SKELETON_DATA &nuiSkel = nui_frame.SkeletonData[s];
+        if (nuiSkel.eTrackingState == NUI_SKELETON_TRACKED) {
+            for (int j = 0; j < kNumJoints; j++) {
+                XMVECTOR pos = nuiSkel.SkeletonPositions[j];
+                XMVECTOR sZ = __vspltw(pos, 2);
+                XMVECTOR sY = __vspltw(pos, 1);
+                XMVECTOR sX = __vspltw(pos, 0);
+                XMVECTOR result = __vmaddfp(sZ, mat.r[2], mat.r[3]);
+                result = __vmaddfp(sY, mat.r[1], result);
+                result = __vmaddfp(sX, mat.r[0], result);
+                transformed[s * kNumJoints + j] = result;
+            }
+        }
+    }
+
+    // Second pass: copy NUI data to SkeletonData
+    for (int s = 0; s < 6; s++) {
+        const NUI_SKELETON_DATA &nuiSkel = nui_frame.SkeletonData[s];
+        SkeletonData &data = mSkeletonDatas[s];
+        data.mTracking = sTrackingMap[nuiSkel.eTrackingState];
+        if (data.mTracking == kSkeletonTracked) {
+            data.mQualityFlags = nuiSkel.dwQualityFlags;
+            for (int j = 0; j < kNumJoints; j++) {
+                int dst = sJointRemap[j][0];
+                int src = sJointRemap[j][1];
+                data.mRawPositions[dst].z = nuiSkel.SkeletonPositions[src].z;
+                data.mRawPositions[dst].y = nuiSkel.SkeletonPositions[src].y;
+                data.mRawPositions[dst].x = nuiSkel.SkeletonPositions[src].x;
+                data.mJointPositions[dst].y = transformed[s * kNumJoints + src].y;
+                data.mJointPositions[dst].x = transformed[s * kNumJoints + src].x;
+                data.mJointPositions[dst].z = transformed[s * kNumJoints + src].z;
+                data.mJointTrackingState[dst] = sJointTrackingMap[nuiSkel.eSkeletonPositionTrackingState[src]];
+            }
+        }
+        data.mTrackingID = nuiSkel.dwTrackingID;
+        data.mClippedFlags = nuiSkel.dwEnrollmentIndex;
+
+        // Transform hip center by gravity matrix
+        XMVECTOR hipPos = nuiSkel.Position;
+        XMVECTOR hZ = __vspltw(hipPos, 2);
+        XMVECTOR hY = __vspltw(hipPos, 1);
+        XMVECTOR hX = __vspltw(hipPos, 0);
+        XMVECTOR hipResult = __vmaddfp(hZ, mat.r[2], mat.r[3]);
+        hipResult = __vmaddfp(hY, mat.r[1], hipResult);
+        hipResult = __vmaddfp(hX, mat.r[0], hipResult);
+        data.mHipCenter.z = hipResult.z;
+        data.mHipCenter.y = hipResult.y;
+        data.mHipCenter.x = hipResult.x;
+    }
 }
 
 #pragma endregion
@@ -261,7 +332,7 @@ void Skeleton::Init() {
         mTrackedJoints[i].mSmoothedPos.Zero();
     }
     memset(mCamBoneLengths, 0, sizeof(mCamBoneLengths));
-    mCamDisplacements = std::vector<CameraDisplacement>();
+    mCamDisplacements.clear();
 }
 
 bool Skeleton::ProfileMatched() const {
@@ -310,7 +381,7 @@ void Skeleton::Poll(int idx, const SkeletonFrame &frame) {
             BaseSkeleton::MakeCameraToPlayerXfm(
                 (SkeletonCoordSys)i,
                 mPlayerXfms[i - 1],
-                data.mJointPositions,
+                (const Vector3 *)data.mJointPositions,
                 frame.mFloorNormal
             );
         }

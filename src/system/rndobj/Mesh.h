@@ -52,9 +52,10 @@ public:
         Vert()
             : pos(0, 0, 0), norm(0, 1, 0), boneWeights(0, 0, 0, 0), color(1, 1, 1, 1),
               tex(0, 0) {
-            for (int i = 0; i < 4; i++) {
-                boneIndices[i] = i;
-            }
+            boneIndices[0] = 0;
+            boneIndices[1] = 1;
+            boneIndices[2] = 2;
+            boneIndices[3] = 3;
             tangent.Set(1, 0, 0, 1);
         }
 
