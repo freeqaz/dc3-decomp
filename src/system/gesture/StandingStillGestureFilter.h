@@ -28,7 +28,8 @@ private:
     bool mStandingStill; // 0x2c
     int mRaisedMs; // 0x30
     int mRequiredMs; // 0x34
-    Vector3 unk38;
+    Vector3 unk38; // 0x38
+    int unk44; // 0x44 - padding field for 16-byte copy alignment
     float mForwardFacingCutoff; // 0x48
     bool unk4c;
 };
