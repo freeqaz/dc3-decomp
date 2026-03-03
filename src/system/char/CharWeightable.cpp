@@ -1,5 +1,8 @@
 #include "char/CharWeightable.h"
 #include "obj/Object.h"
+#include "synth_xbox/PitchCorrectedVoice.h"
+
+void TrueColor::ExposureRecipe::SetGlobalGain(float f) { mField_0x08 = f; }
 
 CharWeightable::CharWeightable() : mWeight(1), mWeightOwner(this, this) {}
 

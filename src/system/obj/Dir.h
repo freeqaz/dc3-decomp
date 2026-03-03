@@ -438,6 +438,9 @@ private:
         for (; mEntry != nullptr; mEntry = mSubDirs.front()->HashTable().Next(mEntry)) {
 #ifdef HX_NATIVE
             if (!mEntry->obj) {
+                static int sNullObj = 0;
+                if (sNullObj++ < 5)
+                    fprintf(stderr, "  ObjDirItr: null obj for '%s'\n", mEntry->name ? mEntry->name : "(null)");
                 continue;
             }
             extern const char* g_lastDyncastEntry;
@@ -448,6 +451,9 @@ private:
             // that haven't been fully loaded yet). dynamic_cast on these segfaults.
             void **vptr = *(void ***)mEntry->obj;
             if (!vptr) {
+                static int sNullVptr = 0;
+                if (sNullVptr++ < 5)
+                    fprintf(stderr, "  ObjDirItr: null vptr for '%s' obj=%p\n", mEntry->name ? mEntry->name : "(null)", (void*)mEntry->obj);
                 continue;
             }
 #endif

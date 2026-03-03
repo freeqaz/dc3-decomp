@@ -4,8 +4,10 @@
 #include "hamobj/HamCharacter.h"
 #include "math/Geo.h"
 #include "math/Mtx.h"
+#include "math/Rot.h"
 #include "math/Vec.h"
 #include "obj/Object.h"
+#include "obj/Task.h"
 #include "os/Debug.h"
 #include "os/File.h"
 #include "rndobj/Cam.h"
@@ -13,10 +15,12 @@
 #include "rndobj/Env.h"
 #include "rndobj/Line.h"
 #include "rndobj/Mat.h"
+#include "rndobj/Utl.h"
 #include "rndobj/Poll.h"
 #include "rndobj/Trans.h"
 #include "utl/BinStream.h"
 #include "utl/Loader.h"
+#include <algorithm>
 
 SkeletonViz::SkeletonViz()
     : mUsePhysicalCam(0), mPhysicalCamRotation(0), mCurrentCamRotation(0), mAxesCoordSys(kCoordCamera),
@@ -206,7 +210,7 @@ void SkeletonViz::DrawLine3D(
     MILO_ASSERT(mat, 0x178);
 
     if (!color2) {
-        mat->SetColor(color2->red, color2->green, color2->blue);
+        mat->SetColor(color1.red, color1.green, color1.blue);
     } else {
         mUtlLine->SetMat(0);
         mUtlLine->SetPointColor(0, *color2, true);
@@ -217,7 +221,170 @@ void SkeletonViz::DrawLine3D(
     mUtlLine->SetMat(mat);
 }
 
-#ifdef HX_NATIVE
-// TODO: animation stepping with DeltaUISeconds
-void SkeletonViz::Poll() {}
-#endif
+void SkeletonViz::Poll() {
+    if (mPhysicalCamRotation <= mCurrentCamRotation) {
+        if (mCurrentCamRotation <= mPhysicalCamRotation) {
+            return;
+        }
+        mCurrentCamRotation -= TheTaskMgr.DeltaUISeconds() * 120.0f;
+        if (mCurrentCamRotation < mPhysicalCamRotation) {
+            mCurrentCamRotation = mPhysicalCamRotation;
+        }
+    } else {
+        mCurrentCamRotation += TheTaskMgr.DeltaUISeconds() * 120.0f;
+        if (mCurrentCamRotation > mPhysicalCamRotation) {
+            mCurrentCamRotation = mPhysicalCamRotation;
+        }
+    }
+}
+
+void SkeletonViz::SetCamera(const SkeletonFrame &frame, const Transform &worldXfm, float) {
+    if (!mUsePhysicalCam) {
+        if (mAxesCoordSys == kCoordCamera || !unk218) {
+            UtilDrawAxes(worldXfm, 5.0f / mLineWidthScale, Hmx::Color(1, 1, 1, 1));
+        }
+        if (unk218 && mCamMesh) {
+            mCamMesh->SetWorldPos(worldXfm.v);
+            mCamMesh->DrawShowing();
+        }
+    } else if (mPhysicalCam && unk218) {
+        Transform camXfm = worldXfm;
+        Hmx::Matrix3 rotMtx;
+        rotMtx.Identity();
+        RotateAboutZ(rotMtx, mCurrentCamRotation * DEG2RAD, rotMtx);
+        camXfm.m = rotMtx;
+        mPhysicalCam->SetLocalXfm(camXfm);
+        mPhysicalCam->SetFrustum(0.01f, 10.0f, 0.7955211f, 1.0f);
+        mPhysicalCam->Select();
+    }
+
+    if (unk218) {
+        Plane plane;
+        plane.Set(
+            frame.mFloorClipPlane.x,
+            frame.mFloorClipPlane.y,
+            frame.mFloorClipPlane.z,
+            frame.mFloorClipPlane.w
+        );
+        UtilDrawPlane(plane, worldXfm.v, Hmx::Color(1, 1, 0, 1), 5, 0.5f, false);
+    }
+}
+
+void SkeletonViz::DrawPoint3D(
+    const Vector3 &vec, float scale, const Hmx::Color &color, float alpha
+) {
+    if (!mSphereMesh) {
+        return;
+    }
+
+    Vector3 point;
+    Multiply(vec, unk1d4, point);
+    if (unk218) {
+        Multiply(point, WorldXfm(), point);
+    }
+
+    if (mSphereMesh->Mat()) {
+        mSphereMesh->Mat()->SetColor(color.red, color.green, color.blue);
+    }
+    mSphereMesh->SetWorldPos(point);
+    mSphereMesh->DrawShowing();
+}
+
+void SkeletonViz::DrawJoints(
+    const BaseSkeleton &skeleton, Vector3 *camPos, Vector3 *drawPos, bool faded
+) {
+    float tint = faded ? 0.5f : 1.0f;
+
+    float minZ = 1.0e30f;
+    for (int i = 0; i < kNumBones; i++) {
+        minZ = std::min(minZ, camPos[BaseSkeleton::sBones[i].joint1].z);
+    }
+
+    float maxDepth = camPos[kJointShoulderCenter].z + camPos[kJointHead].z
+        + camPos[kJointShoulderLeft].z + minZ;
+    float invRange = 1.0f / (minZ - maxDepth);
+
+    for (int i = 0; i < kNumBones; i++) {
+        const BoneJoints &bone = BaseSkeleton::sBones[i];
+        float c0 =
+            std::max(0.0f, std::min(1.0f, (camPos[bone.joint1].z - maxDepth) * invRange));
+        float c1 =
+            std::max(0.0f, std::min(1.0f, (camPos[bone.joint2].z - maxDepth) * invRange));
+        c0 = c0 * 0.8f + 0.2f;
+        c1 = c1 * 0.8f + 0.2f;
+        Hmx::Color col0(tint * c0, tint * c0, tint * c0, 1.0f);
+        Hmx::Color col1(tint * c1, tint * c1, tint * c1, 1.0f);
+
+        mBoneLines[i]->SetPointColor(0, col0, true);
+        mBoneLines[i]->SetPointColor(1, col1, true);
+        mBoneLines[i]->SetPointPos(0, drawPos[bone.joint1]);
+        mBoneLines[i]->SetPointPos(1, drawPos[bone.joint2]);
+        float baseWidth = mBoneLines[i]->GetWidth();
+        mBoneLines[i]->SetWidth(mLineWidthScale * baseWidth);
+        mBoneLines[i]->DrawShowing();
+        mBoneLines[i]->SetWidth(baseWidth);
+    }
+
+    if (mJointMesh && mJointMat) {
+        for (int i = 0; i < kNumJoints; i++) {
+            JointConfidence conf = skeleton.JointConf((SkeletonJoint)i);
+            Hmx::Color color(1, 0, 0, 1);
+            if (conf == kConfidenceInferred) {
+                color = Hmx::Color(0.5f, 0.5f, 0.0f, 1.0f);
+            } else if (conf == kConfidenceTracked) {
+                color = Hmx::Color(0.0f, 0.5f, 0.0f, 1.0f);
+            }
+            mJointMat->SetColor(color.red, color.green, color.blue);
+            mJointMesh->SetWorldPos(drawPos[i]);
+            mJointMesh->DrawShowing();
+        }
+    }
+}
+
+void SkeletonViz::Visualize(
+    const CameraInput &input,
+    const BaseSkeleton &skeleton,
+    std::vector<SkeletonCallback *> *callbacks,
+    bool faded
+) {
+    if (!mResource.IsLoaded()) {
+        if (!TheLoadMgr.EditMode()) {
+            return;
+        }
+        Init();
+    }
+    MILO_ASSERT(mResource.IsLoaded(), 0x76);
+
+    RndEnvironTracker environTracker(mSkeletonEnv, nullptr);
+
+    unk218 = !input.NatalToWorld(unk1d4);
+    if (unk218) {
+        unk1d4 = unk194;
+    }
+    mLineWidthScale = input.DrawScale();
+
+    Transform worldXfm = unk1d4;
+    if (unk218) {
+        worldXfm = WorldXfm();
+    }
+
+    const SkeletonFrame &cachedFrame = input.CachedFrame();
+    if (!skeleton.IsTracked()) {
+        SetCamera(cachedFrame, worldXfm, 0.0f);
+    } else {
+        Vector3 camJointPos[kNumJoints];
+        Vector3 drawJointPos[kNumJoints];
+        for (int i = 0; i < kNumJoints; i++) {
+            skeleton.JointPos(kCoordCamera, (SkeletonJoint)i, camJointPos[i]);
+            Multiply(camJointPos[i], unk194, drawJointPos[i]);
+        }
+        SetCamera(cachedFrame, worldXfm, drawJointPos[kJointShoulderCenter].z);
+        DrawJoints(skeleton, camJointPos, drawJointPos, faded);
+
+        if (callbacks) {
+            FOREACH (it, *callbacks) {
+                (*it)->Draw(skeleton, *this);
+            }
+        }
+    }
+}

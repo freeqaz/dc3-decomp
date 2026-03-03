@@ -9,6 +9,11 @@
 #include "utl/Loader.h"
 #include "utl/MemMgr.h"
 #include "utl/Symbol.h"
+#ifdef HX_NATIVE
+#include "obj/Dir.h"
+#include "rndobj/Mesh.h"
+#include "rndobj/Text.h"
+#endif
 
 ObjectDir *UIPanel::DataDir() {
     if (mDir) {
@@ -87,6 +92,29 @@ bool UIPanel::Entering() const {
 
 void UIPanel::Draw() {
     if (mFinalDrawPassFlag == sIsFinalDrawPass && mDir && !mLoaded) {
+#ifdef HX_NATIVE
+        if (strstr(Name(), "choose_mode")) {
+            static int sPanelDraw = 0;
+            if (sPanelDraw < 1) {
+                sPanelDraw++;
+                auto &ht = mDir->HashTable();
+                int sz = mDir->HashTableSize();
+                int used = mDir->HashTableUsedSize();
+                fprintf(stderr, "DC3_PANEL '%s' dir=%p hashSz=%d used=%d\n",
+                        Name(), (void*)mDir, sz, used);
+                // Dump all non-empty entries
+                int count = 0;
+                for (int i = 0; i < sz && count < 10; i++) {
+                    ObjectDir::Entry *e = &ht.GetEntries()[i];
+                    if (e->name != nullptr) {
+                        fprintf(stderr, "  [%d] name='%s' name=%p obj=%p\n",
+                                i, e->name, (void*)e->name, (void*)e->obj);
+                        count++;
+                    }
+                }
+            }
+        }
+#endif
         mDir->DrawShowing();
     }
 }

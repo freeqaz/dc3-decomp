@@ -27,6 +27,7 @@ class CameraManager;
 class WorldCrowd : public RndDrawable, public RndPollable {
     friend class CameraManager;
     friend class CamShotCrowd;
+    friend class HamWardrobe;
 public:
     class CharDef {
     public:

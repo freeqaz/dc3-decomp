@@ -251,9 +251,7 @@ fn vs_skinned(in: SkinnedVertexInput) -> VertexOutput {
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     // Base color: material RGB tints vertex color.
-    // Material color alpha=0 is common on UI overlays (driven by DTA scripts at runtime);
-    // treat near-zero material alpha as 1.0 to avoid invisible geometry.
-    var matAlpha = select(material.color.a, 1.0, material.color.a < 0.004);
+    var matAlpha = material.color.a;
     var baseColor = vec4f(material.color.rgb * in.color.rgb, matAlpha * in.color.a);
 
     // Sample diffuse texture if available

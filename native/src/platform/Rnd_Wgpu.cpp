@@ -200,6 +200,12 @@ void WgpuRnd::Terminate() {
 }
 
 void WgpuRnd::Clear(unsigned int flags, const Hmx::Color& color) {
+    static int sClearLog = 0;
+    if (sClearLog < 5) {
+        sClearLog++;
+        fprintf(stderr, "DC3_CLEAR flags=0x%x color=(%.2f,%.2f,%.2f,%.2f)\n",
+                flags, color.red, color.green, color.blue, color.alpha);
+    }
     mWgpuClearColor = color;
 }
 
@@ -313,7 +319,7 @@ void WgpuRnd::BeginDrawing() {
 
     // Begin render pass
     wgpu::RenderPassColorAttachment colorAtt{};
-    bool hasPostProc = RndPostProc::Current() != nullptr;
+    bool hasPostProc = !mGpu.IsHeadless() && RndPostProc::Current() != nullptr;
     if (kMSAASamples > 1) {
         colorAtt.view = mMsaaView;            // Render to MSAA target
         if (hasPostProc) {
@@ -378,6 +384,11 @@ void WgpuRnd::BeginDrawing() {
 
     mPass = mEncoder.BeginRenderPass(&rpDesc);
     mInPass = true;
+    if (mFrameID == 500) {
+        fprintf(stderr, "DC3_PASS F500: msaa=%d postproc=%d frameView=%p clear=(%.2f,%.2f,%.2f,%.2f)\n",
+                kMSAASamples, hasPostProc ? 1 : 0, (void*)&mFrameView,
+                colorAtt.clearValue.r, colorAtt.clearValue.g, colorAtt.clearValue.b, colorAtt.clearValue.a);
+    }
 
     // Bind scene uniforms (group 0) — stays bound for entire frame
     mPass.SetBindGroup(0, mSceneBindGroup);
@@ -407,6 +418,9 @@ void WgpuRnd::EndDrawing() {
         return;
     }
 
+    if (mFrameID >= 499 && mFrameID <= 501) {
+        fprintf(stderr, "DC3_END F%d: inPass=%d frameView=%p\n", mFrameID, mInPass ? 1 : 0, (void*)&mFrameView);
+    }
     if (mInPass) {
         // Flush deferred transparent draws (sorted back-to-front)
         FlushTransparentDraws();
@@ -847,6 +861,8 @@ void WgpuRnd::MaybeCaptureFrame() {
     uint8_t* pixels = (uint8_t*)malloc(pixelSize);
     if (!pixels) return;
 
+    fprintf(stderr, "DC3_CAPTURE F%d: headless=%d tex=%p w=%d h=%d\n",
+            mFrameID, mGpu.IsHeadless(), (void*)&mGpu, w, h);
     if (mGpu.ReadbackHeadlessFrame(pixels, pixelSize)) {
         // Debug: count non-black pixels (check RGB, not alpha)
         int nonBlack = 0;

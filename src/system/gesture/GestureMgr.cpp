@@ -10,6 +10,7 @@
 #include "gesture/SkeletonUpdate.h"
 #include "gesture/SpeechMgr.h"
 #include "gesture/WaveToTurnOnLight.h"
+#include "hamobj/HamGameData.h"
 #include "obj/Dir.h"
 #include "obj/DirLoader.h"
 #include "obj/Object.h"
@@ -17,6 +18,7 @@
 #include "os/PlatformMgr.h"
 #include "os/System.h"
 #include "rndobj/Dir.h"
+#include "utl/Loader.h"
 #include "xdk/NUI.h"
 
 float GestureMgr::sMaxRecoveryDistance = 0.3;
@@ -27,6 +29,7 @@ float GestureMgr::sConfidenceRegainThreshold = 16;
 
 GestureMgr *TheGestureMgr;
 bool GestureMgr::sIdentityOpInProgress;
+static bool sAutoPauseOnCameraDisconnect;
 
 GestureMgr::GestureMgr()
     : mLiveCamInput(LiveCameraInput::sInstance), mPauseOnSkeletonLossMode(2), mIDEnabled(1),
@@ -171,6 +174,88 @@ void GestureMgr::Poll() {
     TheCameraTilt->Poll();
     TheWaveToTurnOnLight->Poll();
 #endif
+}
+
+LiveCameraInput *GestureMgr::GetLiveCameraInput() const { return mLiveCamInput; }
+
+void GestureMgr::PostUpdate(const SkeletonUpdateData *data) {
+    if (!data) {
+        return;
+    }
+
+    if (!UsingCD() && !data->mCameraInput->IsConnected() && !sAutoPauseOnCameraDisconnect) {
+        sAutoPauseOnCameraDisconnect = true;
+        mPauseOnSkeletonLossMode = 1;
+    }
+
+    Skeleton *const *allSkeletons = data->mSkeletonsRight;
+    for (int i = 0; i < 6; i++) {
+        bool updateSkeleton = true;
+        unk30[i] = 0;
+
+        if (mTrackingAllSkeletons && allSkeletons[i]
+            && allSkeletons[i]->TrackingID() == mSkeletons[i].TrackingID()) {
+            updateSkeleton = allSkeletons[i]->TrackingState() != kSkeletonPositionOnly;
+        }
+        if (updateSkeleton && allSkeletons[i]) {
+            mSkeletons[i] = *allSkeletons[i];
+        }
+
+        mFilters[i].Update(mSkeletons[i], mInShellMode);
+        mIdentityInfos[i].PostUpdate();
+    }
+
+    if (TheLoadMgr.EditMode()) {
+        if (mActiveSkelTrackingID > 0) {
+            int idx = GetSkeletonIndexByTrackingID(mActiveSkelTrackingID);
+            if (idx < 0) {
+                mActiveSkelTrackingID = -1;
+            }
+        }
+        if (mActiveSkelTrackingID <= 0) {
+            for (int i = 0; i < 6; i++) {
+                if (mSkeletons[i].IsTracked()) {
+                    mActiveSkelTrackingID = mSkeletons[i].TrackingID();
+                    break;
+                }
+            }
+        }
+    }
+
+    if (mTrackingAllSkeletons) {
+        int leftID = mPlayerSkeletonIDs[0];
+        int rightID = mPlayerSkeletonIDs[1];
+        int leftIdx = GetSkeletonIndexByTrackingID(leftID);
+        int rightIdx = GetSkeletonIndexByTrackingID(rightID);
+
+        int nextLeft = leftID;
+        int start = leftIdx >= 0 ? leftIdx + 1 : 0;
+        int end = leftIdx >= 0 ? leftIdx + 5 : 5;
+        for (int i = start; i <= end; i++) {
+            int candidate = mSkeletons[i % 6].TrackingID();
+            if (candidate > 0 && candidate != rightID) {
+                nextLeft = candidate;
+                break;
+            }
+        }
+
+        int nextRight = rightID;
+        start = rightIdx >= 0 ? rightIdx + 1 : 0;
+        end = rightIdx >= 0 ? rightIdx + 5 : 5;
+        for (int i = start; i <= end; i++) {
+            int candidate = mSkeletons[i % 6].TrackingID();
+            if (candidate > 0 && candidate != nextLeft && candidate != leftID) {
+                nextRight = candidate;
+                break;
+            }
+        }
+
+        mPlayerSkeletonIDs[0] = nextLeft;
+        mPlayerSkeletonIDs[1] = nextRight;
+        UpdateTrackedSkeletons();
+    }
+
+    mRecoverer.Poll();
 }
 
 IdentityInfo *GestureMgr::GetIdentityInfo(int idx) {

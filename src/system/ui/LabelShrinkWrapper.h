@@ -26,8 +26,6 @@ public:
     // RndPollable
     virtual void Poll();
     virtual void Enter();
-    // UIComponent
-    virtual void OldResourcePreload(BinStream &);
 
     NEW_OBJ(LabelShrinkWrapper)
     OBJ_MEM_OVERLOAD(0x14)
@@ -35,6 +33,8 @@ public:
     static void Init();
 
 protected:
+    // UIComponent
+    virtual void OldResourcePreload(BinStream &);
     LabelShrinkWrapper();
     void Update();
     void UpdateAndDrawWrapper();

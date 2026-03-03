@@ -82,7 +82,7 @@ MatShaderOptions GetDefaultMatShaderOpts(const Hmx::Object *, RndMat *);
 void ResetNormals(RndMesh *);
 void TessellateMesh(RndMesh *);
 void ClearAO(RndMesh *);
-void BurnXfm(RndMesh *, bool);
+void BurnXfm(RndMesh *, bool keepTranslation);
 void AttachMesh(RndMesh *, RndMesh *);
 void RandomPointOnMesh(RndMesh *, Vector3 &, Vector3 &);
 void BuildFromBSP(RndMesh *);

@@ -1,4 +1,5 @@
 #include "char/CharSignalApplier.h"
+#include "char/CharBoneTwist.h"
 #include "char/CharWeightable.h"
 #include "math/Mtx.h"
 #include "math/Rot.h"
@@ -39,6 +40,11 @@ BinStreamRev &operator>>(BinStreamRev &d, CharSignalApplier::BoneOp &op) {
     d >> op.mMaxAngle;
     return d;
 }
+
+BEGIN_HANDLERS(CharBoneTwist)
+    HANDLE_SUPERCLASS(CharWeightable)
+    HANDLE_SUPERCLASS(Hmx::Object)
+END_HANDLERS
 
 BEGIN_CUSTOM_PROPSYNC(CharSignalApplier::BoneOp)
     SYNC_PROP(bone, o.mBone)

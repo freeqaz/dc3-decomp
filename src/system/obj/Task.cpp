@@ -438,6 +438,26 @@ void TaskMgr::QueueTaskDelete(Task *task) {
     }
 }
 
+float TaskMgr::DeltaTutorialSeconds() const {
+    return mTimelines[kTaskTutorialSeconds].DeltaTime();
+}
+
+void TaskMgr::Poll() {
+    mTime.Split();
+    if (mAutoSecondsBeats) {
+        float secs = mTime.Ms() / 1000.0f;
+        mTimelines[kTaskSeconds].SetTime(secs, false);
+        mTimelines[kTaskBeats].SetTime(secs * 2.0f, false);
+    }
+    for (int i = 0; i < kTaskNumUnits; i++) {
+        mTimelines[i].Poll();
+    }
+    for (int i = 0; i < unk84.size(); i++) {
+        delete unk84[i].Ptr();
+    }
+    unk84.clear();
+}
+
 TaskMgr::TaskMgr() { mTimelines = new TaskTimeline[4]; }
 
 TaskMgr::~TaskMgr() {

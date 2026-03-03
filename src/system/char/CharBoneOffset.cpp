@@ -1,8 +1,13 @@
 #include "char/CharBoneOffset.h"
 #include "char/CharPollable.h"
+#include "hamobj/PhotoSpotlightPositioner.h"
 #include "obj/Object.h"
 
 CharBoneOffset::CharBoneOffset() : mDest(this), mOffset(0, 0, 0) {}
+
+BEGIN_HANDLERS(PhotoSpotlightPositioner)
+    HANDLE_SUPERCLASS(Hmx::Object)
+END_HANDLERS
 
 BEGIN_HANDLERS(CharBoneOffset)
     HANDLE_SUPERCLASS(Hmx::Object)

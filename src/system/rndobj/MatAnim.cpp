@@ -1,9 +1,11 @@
 #include "rndobj/MatAnim.h"
 #include "obj/Object.h"
 #include "os/Debug.h"
+#include "os/File.h"
 #include "rndobj/Anim.h"
 #include "rndobj/Tex.h"
 #include "utl/BinStream.h"
+#include "utl/Loader.h"
 
 Hmx::Object *RndMatAnim::sOwner;
 
@@ -108,7 +110,7 @@ BEGIN_LOADS(RndMatAnim)
     }
     if (d.rev > 6) {
         d >> mTransKeys >> mScaleKeys >> mRotKeys;
-        // d >> mTexKeys;
+        d >> mTexKeys;
     }
 END_LOADS
 
@@ -207,6 +209,34 @@ void RndMatAnim::SetKey(float frame) {
 
 #pragma endregion
 #pragma region RndMatAnim
+
+void RndMatAnim::LoadStages(BinStreamRev &d) {
+    unsigned int stageCount;
+    d >> stageCount;
+    if (stageCount != 0) {
+        bool oldEditMode = TheLoadMgr.EditMode();
+        TheLoadMgr.SetEditMode(true);
+        RndMatAnim *it = this;
+        int i = 1;
+        LoadStage(d);
+        if (stageCount != 1) {
+            do {
+                if (EndFrame() != 0.0f) {
+                    const char *mnm =
+                        MakeString("%s_%d.mnm", FileGetBase(Name()), i);
+                    MILO_NOTIFY("Splitting out %s from %s", mnm, PathName(this));
+                    it = Dir()->New<RndMatAnim>(mnm);
+                    const char *matName =
+                        MakeString("%s_%d", FileGetBase(mMat->Name()), i);
+                    it->mMat = LookupOrCreateMat(matName, Dir());
+                }
+                i++;
+                it->LoadStage(d);
+            } while ((unsigned int)i != stageCount);
+        }
+        TheLoadMgr.SetEditMode(oldEditMode);
+    }
+}
 
 void RndMatAnim::LoadStage(BinStreamRev &d) {
     if (d.rev < 2) {

@@ -4,6 +4,7 @@
 #include "math/Rand.h"
 #include "math/Utl.h"
 #include "obj/Object.h"
+#include "os/Debug.h"
 #include "utl/Str.h"
 #include <cstring>
 
@@ -174,14 +175,13 @@ struct Alphabetically {
 
 void CharClipGroup::Sort() { mClips.sort(Alphabetically()); }
 
-void CharClipGroup::DeleteRemaining(int count) {
-    while ((int)mClips.size() > count) {
-        mClips.erase(mClips.begin() + (mClips.size() - 1));
+void CharClipGroup::DeleteRemaining(int x) {
+    CharClip *clips[256];
+    MILO_ASSERT(mClips.size() < 256, 0x88);
+    for (int i = 0; i < (int)mClips.size(); i++) {
+        clips[i] = (CharClip *)mClips[i];
     }
-    if (mWhich >= (int)mClips.size())
-        mWhich = 0;
-    if (mLRUBoundary >= (int)mClips.size())
-        mLRUBoundary = 0;
+    CharClip::LockAndDelete(clips, mClips.size(), x);
 }
 
 CharClip *CharClipGroup::FindClip(const char *name) const {

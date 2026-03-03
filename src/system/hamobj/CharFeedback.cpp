@@ -5,9 +5,11 @@
 #include "rndobj/Anim.h"
 #include "rndobj/Draw.h"
 #include "rndobj/Line.h"
+#include "rndobj/Mat.h"
 #include "rndobj/Mesh.h"
 #include "rndobj/Poll.h"
 #include "ui/UIColor.h"
+#include "utl/Loader.h"
 
 bool CharFeedback::sEnabled = true;
 
@@ -173,7 +175,42 @@ void CharFeedback::Sync() {
     }
 }
 
-#ifdef HX_NATIVE
-// TODO: real implementation uses TaskMgr::Seconds/DeltaSeconds with timer loops
-void CharFeedback::Poll() {}
-#endif
+void CharFeedback::DrawShowing() {
+    if (!TheLoadMgr.EditMode() && !sEnabled)
+        return;
+    if (!mTarget || !mFailMat)
+        return;
+    for (int i = 0; i < kNumLimbFeedbacks; i++) {
+        LimbState &limb = mLimbStates[i];
+        if (limb.unk8 > 0.0f && limb.mMesh) {
+            mFailMat->SetAlpha(limb.unk8);
+            limb.mMesh->DrawShowing();
+        }
+    }
+}
+
+void CharFeedback::Poll() {
+    float seconds = TheTaskMgr.Seconds(TaskMgr::kRealTime);
+    float delta = TheTaskMgr.DeltaSeconds();
+    for (int i = 0; i < kNumLimbFeedbacks; i++) {
+        LimbState &limb = mLimbStates[i];
+        if (limb.mLastChangeTime != -1.0f) {
+            if (limb.unk0) {
+                if (!limb.mFailing) {
+                    limb.unk0 = false;
+                }
+            } else if (limb.mFailing
+                       && seconds > mFailTriggerSecs + limb.mLastChangeTime) {
+                limb.unk0 = true;
+            }
+            float fadeStep = delta / mFadeSecs;
+            if (!limb.unk0) {
+                fadeStep *= -1.0f;
+            }
+            limb.unk8 += fadeStep;
+            limb.unk8 = Clamp<float>(0.0f, 1.0f, limb.unk8);
+        } else {
+            limb.unk8 = 0.0f;
+        }
+    }
+}

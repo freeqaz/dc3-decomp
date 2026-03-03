@@ -26,6 +26,7 @@ class MetagameStats : public Hmx::Object,
                       public FixedSizeSaveable {
 public:
     struct FavoriteStat {
+        FavoriteStat();
         // key:
         //  -song id for favorite song metrics
         //  -index in big char array macro for character metric

@@ -950,6 +950,18 @@ void RndText::UpdateText() {
                     continue;
                 }
 
+#ifdef HX_NATIVE
+                // Word wrap: if xPos exceeds mWidth, wrap to next line
+                if (mWidth > 0.0f && xPos > 0.0f) {
+                    float charAdv = mStyles[0].mFont->CharAdvance(us) * size;
+                    if (xPos + charAdv > mWidth) {
+                        xPos = 0.0f;
+                        yPos -= leading;
+                        prevChar = 0;
+                    }
+                }
+#endif
+
                 fontMap->SetupCharacter(us, xPos, yPos, state, prevChar, size, mFitType, leading);
                 prevChar = us;
             }

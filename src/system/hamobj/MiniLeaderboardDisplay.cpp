@@ -2,6 +2,7 @@
 #include "MiniLeaderboardDisplay.h"
 #include "obj/Object.h"
 #include "os/Debug.h"
+#include "ui/LabelShrinkWrapper.h"
 #include "ui/UIComponent.h"
 
 MiniLeaderboardDisplay::MiniLeaderboardDisplay() : mResourceDir(this) {}
@@ -60,6 +61,12 @@ void MiniLeaderboardDisplay::DrawShowing() {
 }
 
 void MiniLeaderboardDisplay::OldResourcePreload(BinStream &bs) {
+    char name[256];
+    bs.ReadString(name, 256);
+    mResourceDir.SetName(name, true);
+}
+
+void LabelShrinkWrapper::OldResourcePreload(BinStream &bs) {
     char name[256];
     bs.ReadString(name, 256);
     mResourceDir.SetName(name, true);

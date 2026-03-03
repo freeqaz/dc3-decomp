@@ -1,6 +1,9 @@
 #include "char/CharClipDisplay.h"
+#include "math/Geo.h"
 #include "obj/Object.h"
+#include "os/Debug.h"
 #include "rndobj/Rnd.h"
+#include <cmath>
 
 float CharClipDisplay::sZoom;
 float CharClipDisplay::sEm;
@@ -57,4 +60,45 @@ void CharClipDisplay::DrawBeatString(char const *c, float f1, Hmx::Color const &
     float posY = mDrawPosY - 4.0f;
     float posX = GetX(f1) - 18.0f;
     TheRnd.DrawString(c, Vector2(posY, posX), color, true);
+}
+
+void CharClipDisplay::DrawBlend(float beat, float weight) {
+    Hmx::Rect rect(0.0f, mDrawPosY + 1.0f, 0.0f, 2.0f);
+    float x1 = GetX(beat);
+    rect.x = x1;
+    float x2 = GetX(beat + weight);
+    rect.w = x2 - x1;
+    Hmx::Color blendColor(0.0f, 0.0f, 1.0f, 0.4f);
+    TheRnd.DrawRect(rect, blendColor, nullptr, nullptr, nullptr);
+    rect.h = 4.0f;
+    rect.y = mDrawPosY - 1.0f;
+    rect.w = 3.0f;
+    float midX = GetX(weight * 0.5f + beat);
+    rect.x = midX - 1.0f;
+    Hmx::Color markerColor(0.0f, 0.0f, 1.0f, 1.0f);
+    TheRnd.DrawRect(rect, markerColor, nullptr, nullptr, nullptr);
+}
+
+void CharClipDisplay::DrawBeatString(float beat, Hmx::Color const &color) {
+    const char *text;
+    if (beat == (float)std::floor(beat)) {
+        text = MakeString("%d", (int)beat);
+    } else {
+        text = MakeString("%.2f", beat);
+    }
+    DrawBeatString(text, beat, color);
+}
+
+void CharClipDisplay::DrawCursor() {
+    Hmx::Color yellow(1.0f, 1.0f, 0.0f, 1.0f);
+    float x = GetX(unk1c);
+    Hmx::Rect rect(x, mDrawPosY - 3.0f, 1.0f, 9.0f);
+    TheRnd.DrawRect(rect, yellow, nullptr, nullptr, nullptr);
+    const char *text;
+    if (unk20 >= 1.0f) {
+        text = MakeString("%.1f (%.2f)", unk1c, unk20);
+    } else {
+        text = MakeString("%.1f", unk1c);
+    }
+    DrawBeatString(text, unk1c, yellow);
 }

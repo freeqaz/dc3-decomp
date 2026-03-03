@@ -378,7 +378,9 @@ static bool EnsureMeshUploaded(RndMesh* mesh) {
             return false;
         }
 
-        FixZeroAlpha(verts, unpacked);
+        // Only fix zero-alpha for opaque meshes; blended meshes may intentionally have alpha=0
+        if (!mesh->Mat() || mesh->Mat()->GetBlend() == BaseMaterial::kBlendDest)
+            FixZeroAlpha(verts, unpacked);
 
         wgpu::BufferDescriptor vbDesc{};
         vbDesc.size = unpacked * sizeof(GpuVertexSkinned);
@@ -406,7 +408,9 @@ static bool EnsureMeshUploaded(RndMesh* mesh) {
             delete[] indices;
             return false;
         }
-        FixZeroAlpha(verts, unpacked);
+        // Only fix zero-alpha for opaque meshes; blended meshes may intentionally have alpha=0
+        if (!mesh->Mat() || mesh->Mat()->GetBlend() == BaseMaterial::kBlendDest)
+            FixZeroAlpha(verts, unpacked);
 
         wgpu::BufferDescriptor vbDesc{};
         vbDesc.size = unpacked * sizeof(GpuVertex);
@@ -491,6 +495,16 @@ static void DrawMeshImmediate(RndMesh* mesh) {
 
     RndMat* mat = mesh->Mat();
     if (!mat) return;
+
+    // Skip multiply-blend meshes with near-black color — these produce Dst*0=0
+    // wiping the framebuffer to black. They're meant to be animated to white/transparent
+    // but if the animation hasn't set them up yet, skip rather than destroy the scene.
+    if (mat->GetBlend() == BaseMaterial::kBlendMultiply) {
+        const Hmx::Color& c = mat->GetColor();
+        if (c.red < 0.01f && c.green < 0.01f && c.blue < 0.01f) {
+            return;
+        }
+    }
 
     // Ensure mesh data is on GPU
     if (!EnsureMeshUploaded(mesh)) return;

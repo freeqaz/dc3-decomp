@@ -161,7 +161,7 @@ void FillCompressedVertex(
     PackVector((unsigned int &)compressed.mTangent, normVec, 10, 10, 10, 2, true);
 
     // Pack tangent as DEC4N
-    PackVector((unsigned int &)compressed.mBinormal, vert.unk50, 10, 10, 10, 2, true);
+    PackVector((unsigned int &)compressed.mBinormal, vert.tangent, 10, 10, 10, 2, true);
 
     // Pack bone indices as UBYTE4
     compressed.mBoneWeights = (((int)vert.boneIndices[3] * 0x100

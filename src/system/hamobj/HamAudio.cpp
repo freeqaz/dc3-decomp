@@ -327,84 +327,198 @@ DataNode HamAudio::OnSetCrossfadeJump(DataArray *a) {
 }
 
 void HamAudio::FinishLoad() {
-    MILO_ASSERT(mSongInfo, 0x100);
-    int bufSize;
-    char *buf = nullptr;
     if (mFileLoader) {
-        buf = mFileLoader->GetBuffer(&bufSize);
-        mRawBuffer = buf;
-        mRawBufferSize = bufSize;
-        RELEASE(mFileLoader);
+        mRawBuffer = mFileLoader->GetBuffer(&mRawBufferSize);
+        delete mFileLoader;
+        mFileLoader = NULL;
+
+        static Symbol main("main");
+        mStreams[0] = TheSynth->NewBufStream(mRawBuffer, mRawBufferSize, main, 0.25f, true);
+        mStreams[1] = TheSynth->NewBufStream(mRawBuffer, mRawBufferSize, main, 0.25f, false);
+        mSongStream = mStreams[0];
     }
 
-    const std::vector<TrackChannels> &tracks = mSongInfo->GetTracks();
-    int numChannels = 0;
-    for (int i = 0; i < (int)tracks.size(); i++) {
-        numChannels += tracks[i].mChannels.size();
-    }
+    unsigned int counter = 2;
+    Stream **pStream = &mStreams[0];
+    const char *multiLevelFade = "multi_level.fade";
+    const char *vocalsLevelFade = "vocals_level.fade";
 
-    static Symbol main("main");
-    Symbol streamType = main;
+    do {
+        if (*pStream) {
+            (*pStream)->Faders()->Add(mMasterFader);
+            Fader *crossFader = (&mCrossFaders[0])[pStream - &mStreams[0]];
+            (*pStream)->Faders()->Add(crossFader);
+            crossFader->SetVolume(0.0f);
 
-    if (buf) {
-        Stream *s0 = TheSynth->NewBufStream(buf, bufSize, streamType, 0, false);
-        mStreams[0] = s0;
-        mSongStream = s0;
-        if (s0) {
-            s0->Faders()->Add(mMasterFader);
+            const std::vector<float> &vols = mSongInfo->GetVols();
+            const std::vector<float> &pans = mSongInfo->GetPans();
+            int numChannels = (int)vols.size();
+            MILO_ASSERT(pans.size() == numChannels, 0x9d);
+
+            for (int ch = 0; ch < numChannels; ch++) {
+                Fader *fader;
+                if (!((unsigned int)ch < mChannelFaders.size())) {
+                    fader = Hmx::Object::New<Fader>();
+                    fader->SetVolume(vols[ch]);
+                    mChannelFaders.push_back(fader);
+                } else {
+                    fader = mChannelFaders[ch];
+                }
+                (*pStream)->ChannelFaders(ch).Add(fader);
+                (*pStream)->SetPan(ch, pans[ch]);
+            }
+
+            const std::vector<TrackChannels> &tracks = mSongInfo->GetTracks();
+            for (unsigned int t = 0; t < tracks.size(); t++) {
+                SongInfoAudioType audioType = tracks[t].mAudioType;
+                Symbol trackSym = SongInfoAudioTypeToSym(audioType);
+
+                Fader *trackFader;
+                if (mTrackFaders.find(trackSym) == mTrackFaders.end()) {
+                    trackFader = Hmx::Object::New<Fader>();
+                    mTrackFaders[trackSym] = trackFader;
+                } else {
+                    trackFader = mTrackFaders[trackSym];
+                }
+
+                const std::vector<int> &channels = tracks[t].mChannels;
+                for (unsigned int c = 0; c < channels.size(); c++) {
+                    (*pStream)->ChannelFaders(channels[c]).Add(trackFader);
+                }
+
+                if (TheSynth->CheckCommonBank(false)) {
+                    Fader *vocalsFader = TheSynth->Find<Fader>(vocalsLevelFade, false);
+                    if (vocalsFader && audioType == kAudioTypeVocals) {
+                        for (unsigned int c = 0; c < channels.size(); c++) {
+                            (*pStream)->ChannelFaders(channels[c]).Add(vocalsFader);
+                        }
+                    }
+
+                    Fader *multiFader = TheSynth->Find<Fader>(multiLevelFade, false);
+                    if (multiFader && audioType == kAudioTypeMulti) {
+                        for (unsigned int c = 0; c < channels.size(); c++) {
+                            (*pStream)->ChannelFaders(channels[c]).Add(multiFader);
+                        }
+                    }
+
+                    FxSend *reverbSend = TheSynth->Find<FxSend>("reverb_send", false);
+                    if (reverbSend) {
+                        for (int ch = 0; ch < numChannels; ch++) {
+                            (*pStream)->SetFXSend(ch, reverbSend);
+                        }
+                        mFXSendApplied = true;
+                    }
+                }
+            }
         }
-    }
+        pStream++;
+        counter--;
+    } while (counter != 0);
 
-    // Set up channel faders from SongInfo
-    const std::vector<float> &vols = mSongInfo->GetVols();
-    for (int ch = 0; ch < numChannels; ch++) {
-        Fader *fader = Hmx::Object::New<Fader>();
-        mChannelFaders.push_back(fader);
-    }
-
-    // Set up track faders
-    for (int t = 0; t < (int)tracks.size(); t++) {
-        const TrackChannels &track = tracks[t];
-        Symbol trackSym = SongInfoAudioTypeToSym(track.mAudioType);
-        if (!trackSym.Null()) {
-            Fader *fader = Hmx::Object::New<Fader>();
-            mTrackFaders[trackSym] = fader;
+    if (mStreams[1]) {
+        if (mStreams[1]->IsReady()) {
+            mStreams[1]->Resync(10000.0f);
+        } else {
+            MILO_NOTIFY("HamAudio::FinishLoad - stream 1 not ready for resync");
         }
     }
 }
 
 void HamAudio::PollCrossfade() {
-    if (!mCrossfadePending && mCrossfadeState == 0) {
-        return;
-    }
-    float currentTime = GetTime();
-    if (mCrossfadePending) {
-        float halfFade = mCrossfadeDuration * 0.5f;
-        if (currentTime >= mCrossfadeStartTime - halfFade) {
-            mActiveCrossfadeStart = currentTime;
-            mActiveCrossfadeDuration = mCrossfadeDuration;
-            mCrossfadePending = 0;
-            mCrossfadeState = 1;
-        }
-    }
-    if (mCrossfadeState > 0) {
-        float elapsed = currentTime - mActiveCrossfadeStart;
-        float halfFade = mActiveCrossfadeDuration * 0.5f;
-        if (elapsed >= halfFade) {
-            if (mCrossfadeState == 1) {
-                // Switch streams
-                if (mStreams[1]) {
-                    mSongStream = mStreams[1];
-                    mStreams[1]->Resync(mCrossfadeEndTime);
-                }
-                mCrossfadeState = 2;
+    float currentTime = mSongStream->GetInSongTime();
+    float kEpsilon = 1.0f / 120.0f;
+    float halfFade = 0.5f;
+
+    if ((unsigned int)mCrossfadePending == 1 && mCrossfadeState <= 1) {
+        MILO_ASSERT_FMT(mStreams[1], "Crossfade requires 2 song streams");
+        float jumpPoint = mCrossfadeEndTime
+            - (mCrossfadeStartTime - (-(mCrossfadeDuration * halfFade - mCrossfadeStartTime)));
+        if (mStreams[1]->GetTime() != jumpPoint) {
+            if (mStreams[1]->IsReady()) {
+                mStreams[1]->Resync(jumpPoint);
+                SetLoop(mCrossfadeStartTime, mCrossfadeEndTime, mStreams[1]);
+            } else {
+                MILO_NOTIFY("HamAudio::PollCrossFade() - almost ready for crossfade");
             }
         }
-        if (elapsed >= mActiveCrossfadeDuration) {
-            mCrossfadeState = 0;
-            mCrossFaders[0]->SetVolume(0);
-            mCrossFaders[1]->SetVolume(kDbSilence);
+        bool shouldActivate
+            = currentTime
+            > (-(mCrossfadeDuration * halfFade - mCrossfadeStartTime) - kEpsilon);
+        if (mCrossfadeStartTime < mCrossfadeEndTime) {
+            shouldActivate = shouldActivate && currentTime < mCrossfadeEndTime;
         }
+        if (shouldActivate) {
+            unk6c = mCrossfadeStartTime;
+            mActiveCrossfadeStart = mCrossfadeEndTime;
+            mActiveCrossfadeDuration = mCrossfadeDuration;
+            mCrossfadeState = mCrossfadePending;
+        }
+    }
+
+    unsigned int state = mCrossfadeState;
+    if (state == 0) {
+        goto done;
+    }
+    if (state == 1) {
+        mStreams[1]->Play();
+        state = 2;
+    } else if (!(state < 3)) {
+        if (state != 3) {
+            MILO_ASSERT(0, 0x18E);
+            goto done;
+        }
+        float halfFade = mActiveCrossfadeDuration * 0.5f;
+        bool ready = (mActiveCrossfadeStart + halfFade) < currentTime;
+        if (mActiveCrossfadeStart <= unk6c) {
+            ready = ready
+                && currentTime < (unk6c - halfFade) - kEpsilon;
+        }
+        if (!ready) {
+            goto done;
+        }
+        mCrossFaders[0]->SetVolume(0);
+        mStreams[1]->Stop();
+        mStreams[1]->ClearJump();
+        state = 0;
+    } else {
+        bool ready = mActiveCrossfadeStart <= currentTime;
+        if (mActiveCrossfadeStart <= unk6c) {
+            ready = ready
+                && currentTime
+                    < (unk6c - mActiveCrossfadeDuration * 0.5f) - kEpsilon;
+        }
+        if (!ready) {
+            goto done;
+        }
+        state = 3;
+    }
+    done:
+    if (mCrossfadeState = state > 1) {
+        float fadePos;
+        if (mCrossfadeState == 2) {
+            float start = unk6c;
+            float fadeStart = -(mActiveCrossfadeDuration * 0.5f - start);
+            float ratio = 1.0f;
+            if (start != fadeStart) {
+                ratio = (currentTime - fadeStart) / (start - fadeStart);
+            }
+            float clamped = Clamp(0.0f, 1.0f, ratio);
+            fadePos = clamped * -0.5f + 1.0f;
+        } else {
+            float end = mActiveCrossfadeDuration * 0.5f + mActiveCrossfadeStart;
+            float start2 = mActiveCrossfadeStart;
+            float ratio = 1.0f;
+            if (end != start2) {
+                ratio = (currentTime - start2) / (end - start2);
+            }
+            float clamped = Clamp(0.0f, 1.0f, ratio);
+            fadePos = clamped * 0.5f + 0.5f;
+        }
+        float vol = (float)fadePos;
+        float db0 = (float)log10((double)vol) * 10.0f;
+        mCrossFaders[0]->SetVolume(db0);
+        float db1 = (float)log10((double)(1.0f - vol)) * 10.0f;
+        mCrossFaders[1]->SetVolume(db1);
     }
 }
 

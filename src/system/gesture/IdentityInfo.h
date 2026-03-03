@@ -10,6 +10,20 @@ public:
     void Init() { unkc = 0; }
     void Init(int skeletonIdx) { unkc = skeletonIdx; }
     void SetIdentified(bool b1) { mIdentified = b1; }
+    void SetProfileMatched(bool b1) { mProfileMatched = b1; }
+    void SetEnrollmentIndex(int enrollmentIdx) {
+        if (mEnrollmentIdx != enrollmentIdx) {
+            mEnrollmentIdx = enrollmentIdx;
+            unk9 = true;
+        }
+    }
+    void Reset(int skeletonIdx) {
+        mIdentified = false;
+        mEnrollmentIdx = -1;
+        mProfileMatched = false;
+        unk9 = false;
+        unkc = skeletonIdx;
+    }
 
 private:
     void Identified(unsigned int);

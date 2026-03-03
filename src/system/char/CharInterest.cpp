@@ -14,10 +14,7 @@ CharInterest::CharInterest()
     SyncMaxViewAngle();
 }
 
-BEGIN_HANDLERS(CharInterest)
-    HANDLE_SUPERCLASS(RndTransformable)
-    HANDLE_SUPERCLASS(Hmx::Object)
-END_HANDLERS
+// Handle is in Waypoint.cpp (cross-unit)
 
 INIT_REVS(6, 0)
 

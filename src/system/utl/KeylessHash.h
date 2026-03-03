@@ -80,6 +80,7 @@ public:
     // getters
     int Size() const { return mSize; }
     int UsedSize() const { return mNumEntries; }
+    T2 *GetEntries() { return mEntries; }
 
     void Remove(T2 *);
     void Clear();

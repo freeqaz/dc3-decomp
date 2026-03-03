@@ -160,6 +160,17 @@ void UIScreen::Draw() {
 
     for (std::list<PanelRef>::iterator it = mPanelList.begin(); it != mPanelList.end();
          it++) {
+#ifdef HX_NATIVE
+        if (strstr(Name(), "choose_mode")) {
+            static int sDrawLog = 0;
+            if (sDrawLog < 5) {
+                sDrawLog++;
+                fprintf(stderr, "DC3_SCREEN_DRAW '%s' panel='%s' active=%d showing=%d dir=%p\n",
+                        Name(), it->mPanel->Name(), it->Active(), it->mPanel->Showing(),
+                        (void*)it->mPanel->LoadedDir());
+            }
+        }
+#endif
         if (it->Active() && it->mPanel->Showing()) {
             if (TheRnd.ShouldDrawPanel(it->mPanel)) {
                 static Symbol suppress_blacklight_text("suppress_blacklight_text");

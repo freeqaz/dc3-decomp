@@ -2,6 +2,7 @@
 #include "BaseMaterial.h"
 #include "MetaMaterial.h"
 #include "obj/Data.h"
+#include "obj/Utl.h"
 
 #include "os/Debug.h"
 #include "utl/BinStream.h"
@@ -298,3 +299,17 @@ BEGIN_LOADS(MetaMaterial)
 END_LOADS
 
 MetaMaterial::MetaMaterial() { Init(); }
+
+bool MetaMaterial::IsEquivalent(MetaMaterial *other) {
+    std::list<Symbol> props;
+    ListProperties(props, "MetaMaterial", 0, nullptr, false);
+    bool result = true;
+    for (std::list<Symbol>::iterator it = props.begin(); it != props.end(); ++it) {
+        if (PropValDifferent(*it, other)) {
+            result = false;
+            break;
+        }
+    }
+    props.clear();
+    return result;
+}

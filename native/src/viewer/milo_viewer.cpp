@@ -22,6 +22,9 @@
 #include "char/CharDriver.h"
 #include "char/CharClip.h"
 #include "char/CharServoBone.h"
+#include "char/CharPollable.h"
+#include "math/Rot.h"
+#include "math/Trig.h"
 #include "char/CharBoneDir.h"
 #include "char/CharUtl.h"
 #include "char/CharBone.h"
@@ -55,6 +58,137 @@
 extern Rnd& TheRnd;
 extern void NativeDetectDataDir();
 void SetFileChecksumData();
+
+// ============================================================================
+// Twist bone solver — replicates CharUpperTwist::Poll() and CharForeTwist::Poll()
+// These CharPollable objects don't exist in outfit .milo files; they live in a
+// shared character setup dir (char/main/gen/main.milo_xbox) which we don't load.
+// ============================================================================
+static void NormalizeAboutX_Viewer(Hmx::Matrix3& m) {
+    Cross(m.x, m.y, m.z);
+    Normalize(m.z, m.z);
+    Cross(m.z, m.x, m.y);
+}
+
+// Distributes rotation across N intermediate bones between clavicle and the
+// reference twist bone. bones[0] is closest to clavicle (twist2/reference),
+// bones[1..N-1] are interpolated at even fractions toward clavicle's rest pose.
+static void SolveUpperTwistChain(RndTransformable* refBone,
+                                  RndTransformable** bones, int count) {
+    if (!refBone || count == 0) return;
+    RndTransformable* parent = refBone->TransParent();
+    if (!parent) return;
+    const Transform& parentWorld = parent->WorldXfm();
+    const Transform& refWorld = refBone->WorldXfm();
+    Hmx::Quat q;
+    MakeRotQuat(parentWorld.m.x, refWorld.m.x, q);
+    Vector3 rotatedY;
+    Multiply(parentWorld.m.y, q, rotatedY);
+    // Interpolate each bone: bone[i] gets fraction (i+1)/(count+1)
+    // bone[0] is closest to parent → highest fraction (most rotated)
+    // bone[count-1] is closest to ref bone → lowest fraction
+    for (int i = 0; i < count; i++) {
+        if (!bones[i]) continue;
+        float frac = (float)(count - i) / (float)(count + 1);
+        Transform tf;
+        tf.m.x = refWorld.m.x;
+        tf.v = bones[i]->WorldXfm().v;
+        Interp(rotatedY, refWorld.m.y, frac, tf.m.y);
+        NormalizeAboutX_Viewer(tf.m);
+        bones[i]->SetWorldXfm(tf);
+    }
+}
+
+// Replicates CharForeTwist::Poll() — distributes hand twist along forearm
+static float LimitAng_Viewer(float ang) {
+    float r = fmod(ang + PI, 2.0f * PI);
+    return r < 0 ? r + PI : r - PI;
+}
+
+static void SolveForeTwist(RndTransformable* hand, RndTransformable* twist2,
+                           float offset, float bias) {
+    if (!hand || !twist2) return;
+    float handAngle = GetXAngle(hand->LocalXfm().m);
+    float twist = LimitAng_Viewer(handAngle + offset * DEG2RAD + bias * DEG2RAD) / 3.0f;
+    Hmx::Matrix3 rotMat;
+    rotMat.x.Set(1, 0, 0);
+    rotMat.y.Set(0, Cosine(twist), Sine(twist));
+    rotMat.z.Set(0, -Sine(twist), Cosine(twist));
+    Multiply(twist2->LocalXfm().m, rotMat, twist2->DirtyLocalXfm().m);
+    RndTransformable* twist1 = twist2->TransParent();
+    if (twist1) {
+        float twist1Ang = 2.0f * twist;
+        rotMat.y.Set(0, Cosine(twist1Ang), Sine(twist1Ang));
+        rotMat.z.Set(0, -Sine(twist1Ang), Cosine(twist1Ang));
+        Multiply(twist1->LocalXfm().m, rotMat, twist1->DirtyLocalXfm().m);
+    }
+}
+
+// Solve thigh twist — thighTwist01 interpolates between pelvis and thigh rotation
+static void SolveThighTwist(RndTransformable* thighTwist, RndTransformable* thigh) {
+    if (!thighTwist || !thigh) return;
+    RndTransformable* parent = thigh->TransParent(); // pelvis
+    if (!parent) return;
+    const Transform& parentWorld = parent->WorldXfm();
+    const Transform& thighWorld = thigh->WorldXfm();
+    Hmx::Quat q;
+    MakeRotQuat(parentWorld.m.x, thighWorld.m.x, q);
+    Vector3 rotatedY;
+    Multiply(parentWorld.m.y, q, rotatedY);
+    Transform tf;
+    tf.m.x = thighWorld.m.x;
+    tf.v = thighTwist->WorldXfm().v;
+    Interp(rotatedY, thighWorld.m.y, 0.5f, tf.m.y);
+    NormalizeAboutX_Viewer(tf.m);
+    thighTwist->SetWorldXfm(tf);
+}
+
+// Solve all twist bones for a character
+static void SolveAllTwists(ObjectDir* dir) {
+    if (!dir) return;
+
+    // Upper arm twists: shoulderTwist2 (closest to clavicle), 3, 4 (closest to upperArm)
+    // Reference bone is shoulderTwist2 (has the full twist from clip animation)
+    // We interpolate shoulderTwist3 and shoulderTwist4 between clavicle and twist2
+    const char* sides[] = {"L", "R"};
+    for (auto side : sides) {
+        char refName[64], b3Name[64], b4Name[64];
+        snprintf(refName, sizeof(refName), "bone_%s-shoulderTwist2.mesh", side);
+        snprintf(b3Name, sizeof(b3Name), "bone_%s-shoulderTwist3.mesh", side);
+        snprintf(b4Name, sizeof(b4Name), "bone_%s-shoulderTwist4.mesh", side);
+        RndTransformable* ref = dir->Find<RndTransformable>(refName, false);
+        RndTransformable* bones[2] = {
+            dir->Find<RndTransformable>(b3Name, false),
+            dir->Find<RndTransformable>(b4Name, false),
+        };
+        SolveUpperTwistChain(ref, bones, 2);
+    }
+
+    // Forearm twists (left offset=0/bias=45, right offset=180/bias=-45)
+    struct ForeTwistSetup {
+        const char* hand; const char* twist2; float offset; float bias;
+    };
+    ForeTwistSetup foreSetups[] = {
+        {"bone_L-hand.mesh", "bone_L-foreTwist2.mesh", 0.0f, 45.0f},
+        {"bone_R-hand.mesh", "bone_R-foreTwist2.mesh", 180.0f, -45.0f},
+    };
+    for (auto& s : foreSetups) {
+        SolveForeTwist(
+            dir->Find<RndTransformable>(s.hand, false),
+            dir->Find<RndTransformable>(s.twist2, false),
+            s.offset, s.bias);
+    }
+
+    // Thigh twists
+    for (auto side : sides) {
+        char twistName[64], thighName[64];
+        snprintf(twistName, sizeof(twistName), "bone_%s-thighTwist01.mesh", side);
+        snprintf(thighName, sizeof(thighName), "bone_%s-thigh.mesh", side);
+        SolveThighTwist(
+            dir->Find<RndTransformable>(twistName, false),
+            dir->Find<RndTransformable>(thighName, false));
+    }
+}
 
 // ============================================================================
 // 4x4 matrix multiply (row-major, right-multiply convention)
@@ -410,6 +544,8 @@ int main(int argc, char** argv) {
     const char* exportTexturesDir = nullptr;
     const char* exportMaterialsDir = nullptr;
     const char* exportGltfPath = nullptr;
+    bool dumpBones = false;  // --dump-bones: dump raw bone buffer after clip eval
+    bool directPose = false; // --direct-pose: use CharClip::PoseMeshes instead of CharDriver
     std::vector<std::string> hidePatterns;  // mesh name substrings to hide
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
@@ -492,6 +628,10 @@ int main(int argc, char** argv) {
             exportGltfPath = argv[++i];
         } else if (strcmp(argv[i], "--hide") == 0 && i + 1 < argc) {
             hidePatterns.push_back(argv[++i]);
+        } else if (strcmp(argv[i], "--dump-bones") == 0) {
+            dumpBones = true;
+        } else if (strcmp(argv[i], "--direct-pose") == 0) {
+            directPose = true;
         } else if (!miloPath) {
             miloPath = argv[i];
         }
@@ -774,6 +914,47 @@ int main(int argc, char** argv) {
                                clipToPlay->Name(),
                                clipToPlay->StartBeat(), clipToPlay->EndBeat());
 
+                        // Diagnostic: dump clip data layout
+                        {
+                            const auto& full = clipToPlay->GetFull();
+                            printf("=== CLIP DATA DIAGNOSTIC ===\n");
+                            printf("  mFull: compression=%d samples=%d totalSize=%d\n",
+                                   full.GetCompression(), full.NumSamples(), full.TotalSize());
+                            printf("  mFull offsets: POS=%d SCALE=%d QUAT=%d ROTX=%d ROTY=%d ROTZ=%d END=%d\n",
+                                   full.GetOffset(CharBones::TYPE_POS),
+                                   full.GetOffset(CharBones::TYPE_SCALE),
+                                   full.GetOffset(CharBones::TYPE_QUAT),
+                                   full.GetOffset(CharBones::TYPE_ROTX),
+                                   full.GetOffset(CharBones::TYPE_ROTY),
+                                   full.GetOffset(CharBones::TYPE_ROTZ),
+                                   full.GetOffset(CharBones::TYPE_END));
+                            printf("  mFull bones: %d, start=%p\n",
+                                   (int)const_cast<CharBonesSamples&>(full).GetBones().size(), full.GetStart());
+                            // Dump first sample's raw position data
+                            if (full.NumSamples() > 0 && full.GetStart()) {
+                                const unsigned char* raw = (const unsigned char*)full.GetStart();
+                                printf("  sample0 first 32 bytes: ");
+                                for (int b = 0; b < 32 && b < full.TotalSize(); b++)
+                                    printf("%02x ", raw[b]);
+                                printf("\n");
+                                // Interpret first position based on compression
+                                if (full.GetCompression() >= CharBones::kCompressVects) {
+                                    const short* sp = (const short*)raw;
+                                    printf("  sample0 pos0 (short): %d %d %d -> %.4f %.4f %.4f\n",
+                                           sp[0], sp[1], sp[2],
+                                           sp[0]*0.039674062f, sp[1]*0.039674062f, sp[2]*0.039674062f);
+                                } else {
+                                    const float* fp = (const float*)raw;
+                                    printf("  sample0 pos0 (float): %.4f %.4f %.4f\n", fp[0], fp[1], fp[2]);
+                                }
+                            }
+                            const auto& one = clipToPlay->GetOne();
+                            printf("  mOne: compression=%d samples=%d totalSize=%d bones=%d\n",
+                                   one.GetCompression(), one.NumSamples(), one.TotalSize(),
+                                   (int)const_cast<CharBonesSamples&>(one).GetBones().size());
+                            printf("=== END DIAGNOSTIC ===\n");
+                        }
+
                         // Stuff ALL clips' bones into the servo so ScaleDown
                         // can find every bone name referenced by any clip
                         CharServoBone* servo = activeServo = charObj->Find<CharServoBone>("bone.servo", false);
@@ -787,6 +968,34 @@ int main(int argc, char** argv) {
                                    (int)servo->GetBones().size());
 
                             // Diagnostic removed — all skeleton bones resolve correctly
+                        }
+
+                        // Dump T-pose bone transforms before animation starts
+                        {
+                            RndTransformable* pelvis = charObj->Find<RndTransformable>("bone_pelvis.mesh", false);
+                            RndTransformable* lthigh = charObj->Find<RndTransformable>("bone_L-thigh.mesh", false);
+                            RndTransformable* lknee = charObj->Find<RndTransformable>("bone_L-knee.mesh", false);
+                            printf("=== T-POSE REFERENCE ===\n");
+                            if (pelvis) {
+                                printf("  pelvis local.v=(%7.2f,%7.2f,%7.2f) world.v=(%7.2f,%7.2f,%7.2f)\n",
+                                       pelvis->LocalXfm().v.x, pelvis->LocalXfm().v.y, pelvis->LocalXfm().v.z,
+                                       pelvis->WorldXfm().v.x, pelvis->WorldXfm().v.y, pelvis->WorldXfm().v.z);
+                                printf("  pelvis local.m.x=(%6.3f,%6.3f,%6.3f) .y=(%6.3f,%6.3f,%6.3f) .z=(%6.3f,%6.3f,%6.3f)\n",
+                                       pelvis->LocalXfm().m.x.x, pelvis->LocalXfm().m.x.y, pelvis->LocalXfm().m.x.z,
+                                       pelvis->LocalXfm().m.y.x, pelvis->LocalXfm().m.y.y, pelvis->LocalXfm().m.y.z,
+                                       pelvis->LocalXfm().m.z.x, pelvis->LocalXfm().m.z.y, pelvis->LocalXfm().m.z.z);
+                            }
+                            if (lthigh) {
+                                printf("  L-thigh local.v=(%7.2f,%7.2f,%7.2f) world.v=(%7.2f,%7.2f,%7.2f)\n",
+                                       lthigh->LocalXfm().v.x, lthigh->LocalXfm().v.y, lthigh->LocalXfm().v.z,
+                                       lthigh->WorldXfm().v.x, lthigh->WorldXfm().v.y, lthigh->WorldXfm().v.z);
+                            }
+                            if (lknee) {
+                                printf("  L-knee local.v=(%7.2f,%7.2f,%7.2f) world.v=(%7.2f,%7.2f,%7.2f)\n",
+                                       lknee->LocalXfm().v.x, lknee->LocalXfm().v.y, lknee->LocalXfm().v.z,
+                                       lknee->WorldXfm().v.x, lknee->WorldXfm().v.y, lknee->WorldXfm().v.z);
+                            }
+                            printf("=== END T-POSE ===\n");
                         }
 
                         // Enter just the CharDriver (not the full Character, which triggers
@@ -1199,8 +1408,24 @@ int main(int argc, char** argv) {
     // Advances incrementally in small steps to avoid huge delta issues
     float lastAnimSeconds = 0.0f;
     float lastAnimBeat = 0.0f;
+    // Collect all CharPollable objects for per-frame polling
+    // These include CharDriver, CharServoBone, CharUpperTwist, CharForeTwist,
+    // CharBoneTwist, CharNeckTwist — all needed for proper bone animation
+    std::vector<CharPollable*> charPollables;
+
     auto advanceCharAnim = [&](float targetSeconds, float targetBeat) {
         if (!charAnimActive || !charObj || !charObj->Driver()) return;
+
+        // Collect pollables on first call
+        if (charPollables.empty()) {
+            ObjDirItr<CharPollable> it(charObj, false);
+            for (; it != nullptr; ++it) {
+                charPollables.push_back(it);
+                printf("Milo Viewer: found CharPollable '%s' (%s)\n",
+                       it->Name(), it->ClassName());
+            }
+        }
+
         // Advance in small steps (0.1 beat increments) to avoid huge delta
         float stepBeats = 0.1f;
         float stepSeconds = stepBeats * 60.0f / bpm;
@@ -1208,17 +1433,15 @@ int main(int argc, char** argv) {
             lastAnimBeat += stepBeats;
             lastAnimSeconds += stepSeconds;
             TheTaskMgr.SetSecondsAndBeat(lastAnimSeconds, lastAnimBeat, false);
-            charObj->Driver()->Poll();
+            for (auto* p : charPollables) p->Poll();
         }
         // Final step to exact target
         lastAnimBeat = targetBeat;
         lastAnimSeconds = targetSeconds;
         TheTaskMgr.SetSecondsAndBeat(targetSeconds, targetBeat, false);
-        charObj->Driver()->Poll();
-        // Apply bone transforms to mesh nodes
-        if (activeServo) {
-            activeServo->Poll();
-        }
+        for (auto* p : charPollables) p->Poll();
+        // Solve twist bones (CharUpperTwist/CharForeTwist not in outfit .milo)
+        SolveAllTwists(charObj);
     };
 
     // ---- Screenshot mode: render a few frames then save and exit ----
@@ -1264,9 +1487,89 @@ int main(int argc, char** argv) {
         if (charAnimActive) {
             float beat = (startFrame >= 0.0f) ? startFrame : 4.0f;
             printf("Milo Viewer: advancing animation to beat %.1f (seconds=%.2f)\n", beat, beat * 60.0f / bpm);
-            advanceCharAnim(beat * 60.0f / bpm, beat);
 
+            if (activeClip && !directPose) {
+                // Direct pose: bypass CharDriver, use CharClip::PoseMeshes
+                // This avoids the CharServoBone facing system compounding
+                // transforms over hundreds of incremental steps
+                printf("Milo Viewer: using CharClip::PoseMeshes(dir, %.1f)\n", beat);
+                activeClip->PoseMeshes(charObj, beat);
+                SolveAllTwists(charObj);
+            } else {
+                advanceCharAnim(beat * 60.0f / bpm, beat);
+            }
 
+            // Dump raw bone buffer values and mesh transforms
+            if (dumpBones && activeServo) {
+                float dumpBeat = (startFrame >= 0.0f) ? startFrame : 4.0f;
+                printf("=== RAW BONE BUFFER DUMP (beat %.1f) ===\n", dumpBeat);
+
+                auto bones = activeServo->GetBones();
+                char* start = activeServo->GetStart();
+                int posEnd = activeServo->GetOffset(CharBones::TYPE_SCALE);
+                int scaleEnd = activeServo->GetOffset(CharBones::TYPE_QUAT);
+                int quatEnd = activeServo->GetOffset(CharBones::TYPE_ROTX);
+                int rotxEnd = activeServo->GetOffset(CharBones::TYPE_ROTY);
+                int rotyEnd = activeServo->GetOffset(CharBones::TYPE_ROTZ);
+                int rotzEnd = activeServo->GetOffset(CharBones::TYPE_END);
+
+                printf("  Buffer layout: POS[0..%d] SCALE[%d..%d] QUAT[%d..%d] ROTX[%d..%d] ROTY[%d..%d] ROTZ[%d..%d]\n",
+                       posEnd, posEnd, scaleEnd, scaleEnd, quatEnd, quatEnd, rotxEnd, rotxEnd, rotyEnd, rotyEnd, rotzEnd);
+                printf("  Bone count: %d\n", (int)bones.size());
+
+                // Dump raw buffer values AND resulting mesh transforms
+                printf("\n  --- POSITIONS ---\n");
+                Vector3* posData = (Vector3*)start;
+                int numPos = posEnd / (int)sizeof(Vector3);
+                for (int i = 0; i < numPos && i < (int)bones.size(); i++) {
+                    RndTransformable* mesh = CharUtlFindBoneTrans(bones[i].name.Str(), charObj);
+                    printf("  [%2d] %-35s buf=(%8.3f,%8.3f,%8.3f) w=%.3f",
+                           i, bones[i].name.Str(), posData[i].x, posData[i].y, posData[i].z, bones[i].weight);
+                    if (mesh) {
+                        printf("  mesh='%s' local.v=(%8.3f,%8.3f,%8.3f)",
+                               mesh->Name(), mesh->LocalXfm().v.x, mesh->LocalXfm().v.y, mesh->LocalXfm().v.z);
+                    } else {
+                        printf("  ** NO MESH **");
+                    }
+                    printf("\n");
+                }
+
+                printf("\n  --- QUATERNIONS ---\n");
+                Hmx::Quat* quatData = (Hmx::Quat*)(start + scaleEnd);
+                int numQuat = (quatEnd - scaleEnd) / (int)sizeof(Hmx::Quat);
+                int quatBoneIdx = posEnd / (int)sizeof(Vector3);  // bones after pos (no scales here since scaleEnd==posEnd)
+                for (int i = 0; i < numQuat; i++) {
+                    int bi = quatBoneIdx + i;
+                    if (bi >= (int)bones.size()) break;
+                    RndTransformable* mesh = CharUtlFindBoneTrans(bones[bi].name.Str(), charObj);
+                    printf("  [%2d] %-35s quat=(%7.4f,%7.4f,%7.4f,%7.4f) w=%.3f",
+                           bi, bones[bi].name.Str(),
+                           quatData[i].x, quatData[i].y, quatData[i].z, quatData[i].w,
+                           bones[bi].weight);
+                    if (mesh) {
+                        const Hmx::Matrix3& m = mesh->LocalXfm().m;
+                        printf("  mesh='%s' m.x=(%6.3f,%6.3f,%6.3f)", mesh->Name(), m.x.x, m.x.y, m.x.z);
+                    }
+                    printf("\n");
+                }
+
+                printf("\n  --- ROTZ ---\n");
+                float* rotzData = (float*)(start + rotyEnd);
+                int numRotz = (rotzEnd - rotyEnd) / (int)sizeof(float);
+                int rotzBoneIdx = quatBoneIdx + numQuat;  // after quat bones (no rotx/roty here)
+                for (int i = 0; i < numRotz; i++) {
+                    int bi = rotzBoneIdx + i;
+                    if (bi >= (int)bones.size()) break;
+                    RndTransformable* mesh = CharUtlFindBoneTrans(bones[bi].name.Str(), charObj);
+                    printf("  [%2d] %-35s rotz=%8.4f (%.1f deg) w=%.3f",
+                           bi, bones[bi].name.Str(), rotzData[i], rotzData[i] * 57.2958f, bones[bi].weight);
+                    if (mesh) {
+                        printf("  mesh='%s'", mesh->Name());
+                    }
+                    printf("\n");
+                }
+                printf("=== END BONE BUFFER DUMP ===\n");
+            }
 
             // Re-center camera on animated character's pelvis bone
             // Skip if user specified --eye (manual camera placement)
@@ -1342,12 +1645,9 @@ int main(int argc, char** argv) {
         }
 
         // Pre-advance character to a reasonable pose (beat 4) for initial camera setup
-        if (charAnimActive) {
-            float initBeat = 4.0f;
-            advanceCharAnim(initBeat * 60.0f / bpm, initBeat);
-            // Reset anim time so video starts from beat 0
-            lastAnimSeconds = 0.0f;
-            lastAnimBeat = 0.0f;
+        if (charAnimActive && activeClip) {
+            activeClip->PoseMeshes(charObj, 20.0f); // use a beat within clip range
+            SolveAllTwists(charObj);
 
             // Center camera on pelvis for initial framing
             if (pelvisBone && !hasEye) {
@@ -1367,8 +1667,17 @@ int main(int argc, char** argv) {
             float seconds = (float)frame * dt;
             float beat = seconds * (bpm / 60.0f) * gAnim.speed;
 
-            // Advance character animation
-            advanceCharAnim(seconds, beat);
+            // Advance character animation using direct pose (no incremental stepping)
+            if (charAnimActive && activeClip) {
+                // Clamp beat to clip range for looping
+                float clipStart = activeClip->StartBeat();
+                float clipEnd = activeClip->EndBeat();
+                float clipLen = clipEnd - clipStart;
+                float clipBeat = clipStart + fmodf(beat, clipLen);
+                if (clipBeat < clipStart) clipBeat += clipLen;
+                activeClip->PoseMeshes(charObj, clipBeat);
+                SolveAllTwists(charObj);
+            }
 
             // Advance prop/TransAnim animations
             if (gAnim.hasAnimation) {

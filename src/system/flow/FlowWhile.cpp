@@ -1,10 +1,13 @@
 #include "flow/FlowWhile.h"
+#include "flow/Flow.h"
+#include "flow/FlowManager.h"
 #include "flow/FlowNode.h"
 #include "flow/FlowSwitch.h"
 #include "flow/FlowSwitchCase.h"
 #include "flow/PropertyEventListener.h"
 #include "obj/Data.h"
 #include "obj/Object.h"
+#include "os/Timer.h"
 
 FlowWhile::FlowWhile() : PropertyEventListener(this), mEntryCount(0) {}
 
@@ -171,4 +174,76 @@ void FlowWhile::GenerateAutoNames(FlowNode *n, bool b) {
     //       iVar4 = iVar4 + 0x14;
     //     }
     //   }
+}
+
+void FlowWhile::ReActivate() {
+    FLOW_LOG("Reactivate\n");
+    Timer timer;
+    timer.Restart();
+    PushDrivenProperties();
+    mEntryCount++;
+    if (mEntryCount > 8) {
+        char *path = (char *)PathName(Dir());
+        MILO_NOTIFY(
+            "While reentrance count > 8 in flow %s, did you mean to use a switch? Aborting while node behavior",
+            path
+        );
+        mEntryCount--;
+        return;
+    }
+
+    if (!FlowNode::IsRunning()) {
+        if (mPreviousValue.Equal(mValue, nullptr, true)) {
+            mEntryCount--;
+            return;
+        }
+        if (!ActivateTransitionCases(mValue, mPreviousValue)) {
+            ActivateValueCases(mValue, mPreviousValue);
+        }
+        mPreviousValue = mValue;
+    } else if (!(!mFirstValidCaseOnly)) {
+        FlowSwitchCase *running =
+            static_cast<FlowSwitchCase *>(mRunningNodes.front());
+        if (running->Op() != kTransition) {
+            FlowSwitchCase *validCase = nullptr;
+            FOREACH (it, mChildNodes) {
+                validCase = static_cast<FlowSwitchCase *>(it->Obj());
+                if (validCase->IsValidCase(this, &mValue, &mValue, true)) {
+                    break;
+                }
+            }
+            if (validCase != running) {
+                running->RequestStop();
+            }
+        }
+    } else {
+        FOREACH (it, mChildNodes) {
+            FlowSwitchCase *child = static_cast<FlowSwitchCase *>(it->Obj());
+            if (!(child->IsValidCase(this, &mValue, &mPreviousValue, true))) {
+                if (child->IsRunning()) {
+                    child->RequestStop();
+                }
+            } else {
+                if (child->IsRunning()) {
+                    child->RequestStopCancel();
+                } else {
+                    ActivateChild(child);
+                    if (mStopRequested)
+                        break;
+                }
+            }
+        }
+    }
+
+    mEntryCount--;
+    if (mEntryCount == 0) {
+        timer.Stop();
+    }
+    FlowNode *flow = GetTopFlow();
+    while (flow->GetParent()) {
+        flow = flow->GetParent()->GetTopFlow();
+    }
+    Symbol sym =
+        MakeString("%s: %s->%s", ClassName(), flow->Dir()->Name(), flow->Name());
+    TheFlowMgr->AddEventTime(sym, timer.Ms());
 }

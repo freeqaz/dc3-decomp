@@ -9,8 +9,9 @@
 
 struct DistEntry {
 public:
+    DistEntry() : beat(0) {}
     DistEntry(const DistEntry &);
-    ~DistEntry() {}
+    ~DistEntry();
 
     DistEntry &operator= (const DistEntry &right);
 
@@ -24,6 +25,7 @@ public:
     class Array2d {
     public:
         Array2d() : mWidth(0), mHeight(0), mData(0) {}
+        ~Array2d() { delete mData; }
         void Resize(int, int);
         int CalcWidth();
         int CalcHeight();
@@ -46,7 +48,7 @@ public:
     MEM_OVERLOAD(ClipDistMap, 0x24);
 
     ClipDistMap(CharClip *, CharClip *, float, float, int, DataArray const *);
-    ~ClipDistMap();
+    ~ClipDistMap() {}
     void SetNodes(ClipDistMap::Node *, ClipDistMap::Node *);
     void Draw(float, float, CharDriver *);
     void FindNodes(float, float, float);

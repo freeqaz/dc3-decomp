@@ -188,6 +188,7 @@ protected:
     void ReactToCollision_InsertRealShot(Symbol, float);
     void ReactToCollision_MoveShot(int, float);
     bool ReactToCollision(float);
+    bool AreCharactersColliding();
     bool ShouldDoCollisionPrevention() const;
     void StartStopVisualizer();
     void SendCurWorldMsg(Symbol, bool);
@@ -333,4 +334,5 @@ class AnimPtr : public ObjPtr<RndPropAnim> {
 public:
     AnimPtr() : ObjPtr<RndPropAnim>(TheHamDirector) {}
     AnimPtr(RndPropAnim *anim) : ObjPtr<RndPropAnim>(TheHamDirector, anim) {}
+    virtual ~AnimPtr();
 };

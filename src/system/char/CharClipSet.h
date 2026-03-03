@@ -39,6 +39,7 @@ public:
     virtual float EndFrame();
 
     // RndDrawable
+    virtual void Draw();
     virtual void ListDrawChildren(std::list<class RndDrawable *> &);
 
     // ObjectDir

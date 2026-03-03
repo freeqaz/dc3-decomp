@@ -83,6 +83,42 @@ bool Skeleton::Displacement(
     }
 }
 
+bool Skeleton::Displacements(
+    const SkeletonHistory *history,
+    SkeletonCoordSys cs,
+    int i4,
+    Vector3 *disps,
+    int &iref
+) const {
+    FOREACH (it, mCamDisplacements) {
+        if (it->unk0 == i4) {
+            memcpy(disps, it->unk8, sizeof(it->unk8));
+            iref = it->unk4;
+            return (iref + 1) != 0;
+        }
+    }
+
+    CameraDisplacement camDisp;
+    camDisp.unk0 = i4;
+    bool ok = false;
+    ArchiveSkeleton archiveSkeleton;
+    if (PrevTrackedSkeleton(history, i4, iref, archiveSkeleton)) {
+        for (int i = 0; i < kNumJoints; i++) {
+            Vector3 prevPos;
+            archiveSkeleton.JointPos(cs, (SkeletonJoint)i, prevPos);
+            Subtract(mTrackedJoints[i].mJointPos[cs], prevPos, disps[i]);
+            camDisp.unk8[i] = disps[i];
+        }
+        ok = true;
+    } else {
+        memset(disps, 0, sizeof(camDisp.unk8));
+        memset(camDisp.unk8, 0, sizeof(camDisp.unk8));
+    }
+    camDisp.unk4 = iref;
+    mCamDisplacements.push_back(camDisp);
+    return ok;
+}
+
 JointConfidence Skeleton::JointConf(SkeletonJoint joint) const {
     MILO_ASSERT((0) <= (joint) && (joint) < (kNumJoints), 0xE1);
     return mTrackedJoints[joint].mJointConf;
@@ -242,6 +278,70 @@ bool Skeleton::NeedIdentify() const {
     return GetEnrollmentIndex() == -1 || GetEnrollmentIndex() == -5;
 }
 
+void Skeleton::Poll(int idx, const SkeletonFrame &frame) {
+    MILO_ASSERT((0) <= (idx) && (idx) < (6), 0x1F8);
+    if (mSkeletonIdx != idx && TheGestureMgr) {
+        IdentityInfo *info = TheGestureMgr->GetIdentityInfo(idx);
+        MILO_ASSERT(info, 0x1FC);
+        info->Reset(idx);
+    }
+
+    mSkeletonIdx = idx;
+    mElapsedMs = frame.mElapsedMs;
+    const SkeletonData &data = frame.mSkeletonDatas[idx];
+    mTrackingID = data.mTrackingID;
+    unkab0 = data.mHipCenter;
+    mTracking = data.mTracking;
+    if (mTracking == kSkeletonNotTracked) {
+        Init();
+        return;
+    }
+    if (mTracking == kSkeletonTracked) {
+        mQualityFlags = data.mQualityFlags;
+        if (TheGestureMgr) {
+            IdentityInfo *info = TheGestureMgr->GetIdentityInfo(idx);
+            MILO_ASSERT(info, 0x211);
+            if (info->EnrollmentIndex() != data.mClippedFlags) {
+                info->SetEnrollmentIndex(data.mClippedFlags);
+            }
+        }
+
+        for (int i = 1; i < kNumCoordSys; i++) {
+            BaseSkeleton::MakeCameraToPlayerXfm(
+                (SkeletonCoordSys)i,
+                mPlayerXfms[i - 1],
+                data.mJointPositions,
+                frame.mFloorNormal
+            );
+        }
+
+        for (int i = 0; i < kNumJoints; i++) {
+            mTrackedJoints[i].mJointPos[kCoordCamera] = data.mJointPositions[i];
+            for (int j = 1; j < kNumCoordSys; j++) {
+                MultiplyTranspose(
+                    data.mJointPositions[i],
+                    mPlayerXfms[j - 1],
+                    mTrackedJoints[i].mJointPos[j]
+                );
+            }
+            mTrackedJoints[i].mJointConf = (JointConfidence)data.mJointTrackingState[i];
+            mTrackedJoints[i].mSmoothedPos = data.mRawPositions[i];
+        }
+
+        for (int i = 0; i < kNumBones; i++) {
+            mCamBoneLengths[i] = BoneLength((SkeletonBone)i, kCoordCamera);
+        }
+
+        if (!mCamDisplacements.empty()) {
+            mCamDisplacements.erase(mCamDisplacements.begin(), mCamDisplacements.end());
+        }
+
+        unkac4 = (mTrackedJoints[kJointHipLeft].mJointPos[kCoordCamera].y
+                  + mTrackedJoints[kJointHipRight].mJointPos[kCoordCamera].y)
+            * 0.5f + frame.mFloorClipPlane.w;
+    }
+}
+
 void Skeleton::PostUpdate() {}
 
 bool Skeleton::RequestIdentity() {
@@ -263,4 +363,60 @@ bool Skeleton::RequestIdentity() {
     } else {
         return false;
     }
+}
+
+bool Skeleton::EnrollIdentity(int enrollmentIdx) {
+    MILO_ASSERT(!GestureMgr::sIdentityOpInProgress, 0x25D);
+    IdentityInfo *info = TheGestureMgr->GetIdentityInfo(mSkeletonIdx);
+    if (!info) {
+        return false;
+    }
+
+    DWORD flags = enrollmentIdx == -1 ? 1 : 0x21;
+    if (enrollmentIdx == -3) {
+        enrollmentIdx = -2;
+    }
+
+    HRESULT hr = NuiIdentityEnroll(mTrackingID, flags, IdentityCallback, info);
+    MILO_ASSERT(hr != E_INVALIDARG, 0x26E);
+
+    bool immediate = hr == 0;
+    if (hr < 0) {
+        if (hr != (HRESULT)0x8000000A) {
+            return false;
+        }
+        immediate = false;
+    }
+
+    if (immediate) {
+        info->SetIdentified(true);
+    } else {
+        GestureMgr::sIdentityOpInProgress = true;
+    }
+    return true;
+}
+
+int Skeleton::IdentityCallback(void *context, NUI_IDENTITY_MESSAGE *msg) {
+    IdentityInfo *info = (IdentityInfo *)context;
+    MILO_ASSERT(info != nullptr, 0x280);
+    MILO_ASSERT(msg != nullptr, 0x281);
+
+    if (msg->MessageId != NUI_IDENTITY_MESSAGE_ID_FRAME_PROCESSED) {
+        if (msg->MessageId == NUI_IDENTITY_MESSAGE_ID_COMPLETE) {
+            info->SetIdentified(true);
+            info->SetProfileMatched(msg->Data.Complete.bProfileMatched != 0);
+            if (info->EnrollmentIndex() != (int)msg->Data.Complete.dwEnrollmentIndex) {
+                info->SetEnrollmentIndex(msg->Data.Complete.dwEnrollmentIndex);
+            }
+        } else {
+            MILO_ASSERT(false, 0x297);
+        }
+    }
+
+    bool enabled = TheGestureMgr->IDEnabled();
+    if (!enabled) {
+        MILO_LOG("An identification operation that was in progress was canceled.\n");
+        GestureMgr::sIdentityOpInProgress = false;
+    }
+    return enabled;
 }

@@ -240,6 +240,11 @@ public:
 
     friend class CharClipDriver;
 
+#ifdef HX_NATIVE
+    const CharBonesSamples& GetFull() const { return mFull; }
+    const CharBonesSamples& GetOne() const { return mOne; }
+#endif
+
 protected:
     CharClip();
 

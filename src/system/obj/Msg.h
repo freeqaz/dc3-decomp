@@ -197,6 +197,7 @@ class MsgSinks {
 public:
     struct Sink {
         Sink(Hmx::Object *owner) : obj(owner, nullptr) {}
+        ~Sink();
 
         Sink &operator=(const Sink &s) {
             obj.SetObjConcrete(s.obj);

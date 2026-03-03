@@ -47,15 +47,14 @@ FlowMathOp::FlowMathOp(Hmx::Object *obj)
 
 float FlowMathOp::Apply(float val) {
     float rhs = mDefault;
-    // If driven object exists and op is pow, read property from object
-    if ((Hmx::Object *)mDrivenObj && mOp == kMathOp_Pow) {
-        const DataNode *prop = mDrivenObj->Property(mLhs.Array(0), false);
+    if ((Hmx::Object *)mDrivenObj && mRhs.Type() == kDataArray) {
+        const DataNode *prop = mDrivenObj->Property(mRhs.Array(0), false);
         if (prop && prop->CompatibleType(kDataInt)) {
             rhs = prop->LiteralFloat(0);
         }
     }
 
-    switch (mOp) {
+    switch ((int)mOp) {
     case kMathOp_Add:
         rhs = rhs + val;
         break;
@@ -156,12 +155,13 @@ float FlowMathOp::Apply(float val) {
     case kMathOp_Pow:
         rhs = (float)pow(val, rhs);
         break;
-    case kMathOp_Script: {
+    case kMathOp_Script:
         if (mLhs.Type() == kDataString) {
             String str(mLhs.Str(0));
             if (*str.c_str() != '\0') {
                 DataNode varSave = DataVariable("flow_math_op_result");
                 DataNode valSave = DataVariable("flow_math_op_val");
+                TheDebug.SetTry(true);
                 DataArray *script = DataReadString(str.c_str());
                 DataNode scriptNode(script, kDataArray);
                 DataArray *arr = scriptNode.Array(0);
@@ -178,26 +178,25 @@ float FlowMathOp::Apply(float val) {
             }
             return val;
         }
-        goto lookup;
+        // fall through to lookup
+    case 100: {
+        if (mLhs.Type() != kDataSymbol) {
+            return val;
+        }
+        DataArray *config = SystemConfig("flow", "math_ops", "driven_property");
+        DataArray *found = config->FindArray(mLhs.Sym(0), false);
+        if (!found) {
+            return val;
+        }
+        DataVariable("flow_math_op_result") = DataNode(0);
+        DataVariable("flow_math_op_val") = DataNode(0);
+        return found->Node(1).Float(found);
     }
     case kMathOp_ClampMin:
         break;
     default:
-        MILO_NOTIFY("Unknown math op type %d", mOp);
+        MILO_NOTIFY_ONCE("Unknown math op type %d", mOp);
         return val;
     }
     return rhs;
-
-lookup:
-    if (mLhs.Type() != kDataSymbol) {
-        return val;
-    }
-    DataArray *config = SystemConfig("flow", "math_ops", "driven_property");
-    DataArray *found = config->FindArray(mLhs.Sym(0), false);
-    if (!found) {
-        return val;
-    }
-    DataVariable("flow_math_op_result") = DataNode(0);
-    DataVariable("flow_math_op_val") = DataNode(0);
-    return found->Node(1).Float(found);
 }

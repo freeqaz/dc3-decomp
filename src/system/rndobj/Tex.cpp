@@ -387,8 +387,26 @@ void RndTex::SetBitmap(const RndBitmap &bmap, const char *path, bool keepFormat)
 }
 
 void RndTex::SetBitmap(const RndBitmap &bmap, const char *path, bool keepFormat, Type ty) {
-    SetBitmap(bmap, path, keepFormat);
+    PresyncBitmap();
+    mWidth = bmap.Width();
+    mHeight = bmap.Height();
+    mBpp = bmap.Bpp();
     mType = ty;
+    mFilepath.Set(FilePath::Root().c_str(), "");
+    mNumMips = bmap.NumMips();
+    const char *err = CheckSize(mWidth, mHeight, mBpp, mNumMips, mType, false);
+    if (err) {
+        MILO_NOTIFY(err, Name());
+        mBitmap.Reset();
+    } else {
+        int bppOut = bmap.Bpp();
+        int orderOut = bmap.Order();
+        if (!keepFormat) {
+            PlatformBppOrder(path, bppOut, orderOut, bmap.IsTranslucent());
+        }
+        mBitmap.Create(bmap, bppOut, orderOut, 0);
+    }
+    SyncBitmap();
 }
 
 #ifndef HX_NATIVE
@@ -408,10 +426,7 @@ bool RndTex::PowerOf2() {
 }
 
 #ifndef HX_NATIVE
-void RndTex::Load(BinStream &bs) {
-    PreLoad(bs);
-    PostLoad(bs);
-}
+// Load is in CubeTex.cpp (cross-unit)
 
 void RndTex::PreLoad(BinStream &bs) {
     int revData;

@@ -456,12 +456,13 @@ float CharDriver::Display(float f) {
 
     float oldBeat = mOldBeat;
     const char *pathName = PathName(this);
+    float sEm = CharClipDisplay::GetSEm();
     float textOfs = lineSpacing * 0.1f;
     const char *dirName = Dir()->Name();
     Hmx::Color textColor(1, 1, 1, 1);
     TheRnd.DrawString(
         MakeString("%s %s, beat: %.2f", dirName, pathName, oldBeat),
-        Vector2(CharClipDisplay::GetSEm() + textOfs, y + lineSpacing),
+        Vector2(sEm + textOfs, y + lineSpacing),
         textColor,
         true
     );

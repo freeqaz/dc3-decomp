@@ -23,6 +23,7 @@
 #include "hamobj/Difficulty.h"
 #include "hamobj/HamCamShot.h"
 #include "hamobj/HamCharacter.h"
+#include "hamobj/HamWardrobe.h"
 #include "hamobj/HamGameData.h"
 #include "hamobj/HamMaster.h"
 #include "hamobj/HamMove.h"
@@ -765,6 +766,27 @@ void HamDirector::ReactToCollision_MoveShot(int shotIdx, float beat) {
     PropKeys *shot_keys = GetPropKeysByPlayer(0, shot);
     MILO_ASSERT(shot_keys, 0xE10);
     shot_keys->ChangeFrame(shotIdx, BeatToFrame(beat), true);
+}
+
+bool AreDancersColliding1D(
+    std::vector<RndTransformable *> &,
+    std::vector<RndTransformable *> &,
+    const Vector3 &,
+    const Vector3 &
+);
+
+bool HamDirector::AreCharactersColliding() {
+    HamCharacter *chars[2];
+    std::vector<RndTransformable *> bones[2];
+    for (int i = 0; i < 2; i++) {
+        chars[i] = TheHamWardrobe ? TheHamWardrobe->GetCharacter(i) : nullptr;
+        if (!chars[i])
+            return false;
+        SongCollision::GatherUsefulBones(bones[i], chars[i]);
+    }
+    return AreDancersColliding1D(
+        bones[0], bones[1], chars[0]->WorldXfm().v, chars[1]->WorldXfm().v
+    );
 }
 
 bool HamDirector::ShouldDoCollisionPrevention() const {

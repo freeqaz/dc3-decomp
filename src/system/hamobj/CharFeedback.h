@@ -37,6 +37,8 @@ public:
     virtual void Save(BinStream &);
     virtual void Copy(const Hmx::Object *, Hmx::Object::CopyType);
     virtual void Load(BinStream &);
+    // RndDrawable
+    virtual void DrawShowing();
     // RndPollable
     virtual void Poll();
     virtual void Enter();

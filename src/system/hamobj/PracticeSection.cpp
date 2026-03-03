@@ -4,7 +4,10 @@
 #include "hamobj/MoveDir.h"
 #include "obj/Object.h"
 #include "rndobj/Anim.h"
+#include "synth/FxSend.h"
 #include "utl/Std.h"
+
+void (*gForceDestroyRange)(LevelData *, LevelData *) = stlpmtx_std::_Destroy_Range;
 
 PracticeSection::PracticeSection() : mDifficulty(kDifficultyEasy), mTestStepSequence(0) {}
 

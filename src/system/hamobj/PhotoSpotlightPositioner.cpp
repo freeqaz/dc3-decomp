@@ -1,13 +1,15 @@
 #include "hamobj/PhotoSpotlightPositioner.h"
+#include "gesture/GestureMgr.h"
+#include "hamobj/HamGameData.h"
+#include "math/Utl.h"
 #include "obj/Object.h"
+#include "utl/Loader.h"
 
 PhotoSpotlightPositioner::PhotoSpotlightPositioner()
     : mPlayer(0), mSpotlight(this), mRefImage(this) {}
 PhotoSpotlightPositioner::~PhotoSpotlightPositioner() {}
 
-BEGIN_HANDLERS(PhotoSpotlightPositioner)
-    HANDLE_SUPERCLASS(Hmx::Object)
-END_HANDLERS
+// Handle is in CharBoneOffset.cpp (cross-unit)
 
 BEGIN_PROPSYNCS(PhotoSpotlightPositioner)
     SYNC_PROP(player, mPlayer)
@@ -46,6 +48,23 @@ BEGIN_LOADS(PhotoSpotlightPositioner)
 END_LOADS
 
 void PhotoSpotlightPositioner::Init() { REGISTER_OBJ_FACTORY(PhotoSpotlightPositioner); }
+
+void PhotoSpotlightPositioner::Poll() {
+    HamPlayerData *player = TheGameData->Player(mPlayer);
+    Skeleton *skel = TheGestureMgr->GetSkeletonByTrackingID(player->GetSkeletonTrackingID());
+    if (mSpotlight && !TheLoadMgr.EditMode()) {
+        if (skel) {
+            Vector2 rightFoot, leftFoot;
+            skel->ScreenPos(kJointFootRight, rightFoot);
+            skel->ScreenPos(kJointFootLeft, leftFoot);
+            float y = Max(leftFoot.y, rightFoot.y);
+            Vector3 pos = GetImagePos(Vector2((leftFoot.x + rightFoot.x) * 0.5f, y));
+            mSpotlight->SetWorldPos(pos);
+        } else {
+            mSpotlight->SetWorldPos(GetImagePos(Vector2(-10.0f, -10.0f)));
+        }
+    }
+}
 
 Vector3 PhotoSpotlightPositioner::GetImagePos(Vector2 v2) const {
     RndMesh *mesh = mRefImage;

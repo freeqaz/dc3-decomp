@@ -1,5 +1,6 @@
 #include "rndobj/TexRenderer.h"
 #include "math/Mtx.h"
+#include "math/Utl.h"
 #include "obj/Data.h"
 #include "obj/Object.h"
 #include "rndobj/Anim.h"
@@ -13,8 +14,17 @@
 #include "rndobj/Poll.h"
 #include "rndobj/Rnd.h"
 #include "utl/FilePath.h"
+#include <cmath>
 
-float ComputeAngle(const Vector3 &, const Vector3 &, const Vector3 &);
+float ComputeAngle(const Vector3 &center, const Vector3 &b, const Vector3 &c) {
+    Vector3 v1, v2;
+    Subtract(b, center, v1);
+    Subtract(c, center, v2);
+    Normalize(v1, v1);
+    Normalize(v2, v2);
+    float dot = Dot(v1, v2);
+    return std::acos(Clamp(-1.0f, 1.0f, dot));
+}
 
 void RndTexRenderer::UpdatePreClearState() {
     TheRnd.PreClearDrawAddOrRemove(this, mDrawPreClear, 0);

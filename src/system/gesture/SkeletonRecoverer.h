@@ -4,16 +4,17 @@
 class SkeletonRecoverer {
 public:
     struct TrackingIDHistory {
-        int unk0;
-        int unk4;
-        int unk8;
-        int unkC;
-        int unk10;
-        int unk14;
+        int mTrackingID; // 0x0
+        float unk4; // 0x4
+        float unk8; // 0x8
+        float unkC; // 0xc
+        float unk10; // 0x10
+        float mUntrackedTime; // 0x14
     };
     SkeletonRecoverer();
     virtual ~SkeletonRecoverer();
 
+    void Poll();
     bool WaitingToRecover();
     int GetTrackingIDWithRecovery(int, int);
 

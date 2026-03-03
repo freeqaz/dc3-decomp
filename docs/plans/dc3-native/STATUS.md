@@ -31,8 +31,41 @@ With scripted input (Start/Confirm/Down buttons), the same flow occurs. The tuto
 
 - WebGPU (Dawn) backend, headless or windowed
 - 3D mesh geometry renders (verified via headless screenshots)
-- UI text/panel overlays not yet visible in screenshots
+- UI text rendering works — white text on black background visible
+- Alpha transparency fixed (2026-03-02) — UI panel backgrounds with alpha=0 now correctly invisible
 - Tested with `MILO_RENDER=1 MILO_HEADLESS=1`
+
+#### Current vs Target
+
+Current native port screenshots: `archive/screenshots/native_alpha_fix_f*.png`
+
+| Frame | What's Visible | What's Missing vs Reference |
+|-------|---------------|---------------------------|
+| f100 | Black screen (early boot) | N/A |
+| f200 | Copyright text + translucent panel overlay + cyan gradient bar | Autosave orb icon, clean layout |
+| f300 | Autosave text, panel borders visible | Background gradient, orb animation |
+| f400 | "Voice Control" tutorial text on black | Clean — close to target |
+| f500 | "choose_mode_screen" — partial UI elements | Full main menu (see reference) |
+
+#### Reference Screenshots (Xbox 360 target)
+
+Located in `archive/screenshots/references/`:
+
+| File | Screen | Key Visual Elements |
+|------|--------|-------------------|
+| `dc3_main_menu.jpg` | Main menu | DC3 logo, player silhouettes in corners, "MAIN MENU" text, cyan/purple swirl background, copyright bar |
+| `dc3_song_select.jpg` | Song select | Song list with gradient bars, character preview, skill level meter, sort controls |
+| `dc3_gameplay_ui.jpg` | Gameplay | 3D venue + characters, move cards (purple/blue), score display, "FLAWLESS" text |
+
+#### Rendering Gap Analysis
+
+Comparing `native_alpha_fix_f200.png` (native) to `dc3_main_menu.jpg` (Xbox 360 reference):
+
+1. **Background**: Native renders black; Xbox has animated cyan/purple swirl gradient with horizontal light bars. This is likely a venue scene (`turbo_shell`) with animated meshes, environment mapping, and post-processing that aren't rendering yet.
+2. **UI panels**: Native shows raw panel outlines; Xbox shows polished translucent panels with rounded corners and glow effects. Missing: proper blend modes, multi-pass rendering, glow/bloom post-process.
+3. **Text**: Native renders basic white text; Xbox has styled text with outlines, shadows, and color formatting (the `<alt>` markup tags are rendering as literal text instead of being processed).
+4. **Icons/Sprites**: Missing entirely — autosave orb, player silhouettes, button prompts, microphone icon.
+5. **3D content**: The main menu has a 3D animated background scene that isn't rendering (camera is set to `turbo_shell.cam` but the shell venue meshes aren't drawing).
 
 ### Stability
 
@@ -197,14 +230,23 @@ Run with: `ASAN_OPTIONS="alloc_dealloc_mismatch=0:detect_odr_violation=0"`
 
 ## Key Fixes (Session 2026-03-02)
 
+### Alpha Transparency Fix
+- **Shader alpha clamp removed**: `standard_wgsl.inc` had `select(alpha, 1.0, alpha < 0.004)` which forced UI panel backgrounds (alpha=0, intentionally invisible) to fully opaque dark boxes. Changed to `var matAlpha = material.color.a`.
+- **FixZeroAlpha guarded by blend mode**: `Mesh_Wgpu.cpp` `FixZeroAlpha()` was forcing all-zero vertex alpha to 1.0 for every mesh. Now only applies to opaque meshes (`kBlendDest`). Blended meshes (`kBlendSrcAlpha`, etc.) keep their intentional zero alpha.
+- Screenshots: `archive/screenshots/native_alpha_fix_f*.png`
+
 ### Font Loading Bugs
 - Fixed `RndFontBase::Load` / `UIFontImporter` loading path — fonts were failing to load due to missing native codepath
 - Fixed `UILabel` drawing to go through `RndText::DrawShowing()` → `FontMapBase` → glyph meshes → `RndMesh::DrawShowing()`
-- Still needs screenshot verification to confirm text is visible end-to-end
+- Text rendering confirmed working in screenshots (f200-f400)
 
-## Next Steps
+## Next Steps (Rendering Priority)
 
-1. **Get past tutorial screens** — Need to either stub Kinect gesture detection or add DTA override to skip tutorials
-2. **Verify text renders** — Font loading bugs fixed (session 2026-03-02), needs screenshot confirmation
-3. **MeshAnim stub** — Write proper stub (same pattern as KinectSharePanel) to avoid blacklisting
-4. **Main menu navigation** — Once past tutorials, test list navigation with scripted input
+Benchmarking against `archive/screenshots/references/dc3_main_menu.jpg`:
+
+1. **Venue background rendering** — The `turbo_shell` 3D scene should render behind UI (animated cyan/purple swirls with light bars). Currently black. Need to investigate why venue meshes aren't drawing (camera is positioned but `DrawShowing` isn't reaching the venue's drawable tree).
+2. **Text markup processing** — `<alt>` tags render as literal text instead of applying bold/color styling. Need to implement or stub the markup parser in `RndText`.
+3. **Sprite/icon rendering** — Player silhouettes, autosave orb, button prompts are missing. These may be `RndTex` quads drawn via `DrawRect` or `RndMesh` billboard geometry.
+4. **Bloom/glow post-process** — The Xbox UI has glow effects on panels and text that give the neon aesthetic. Basic post-processing exists but bloom is not implemented.
+5. **MeshAnim stub** — Write proper stub (same pattern as KinectSharePanel) to avoid blacklisting.
+6. **Get past tutorial screens** — Need to either stub Kinect gesture detection or add DTA override to skip tutorials.

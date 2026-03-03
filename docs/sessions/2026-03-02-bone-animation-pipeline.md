@@ -293,25 +293,112 @@ This is applied to `mPelvis->DirtyLocalXfm()` — modifying the pelvis bone's lo
 - All 5 frame renders show distinct, correct dance poses with no mesh tearing
 - Earlier "deformed" renders were from a previous build (before rim fix, PropertyTask stub)
 
+## Twist Bone System (CharPollable post-processors)
+
+After CharDriver::Poll() writes the bone buffer and CharServoBone::Poll() copies it to mesh transforms, additional CharPollable objects distribute twist rotation across intermediate bones. These twist objects do NOT exist in outfit .milo files (e.g., aubrey01.milo_xbox) — they live in the shared character setup (char/main/gen/main.milo_xbox).
+
+### Twist Bone Types
+
+| Type | Source | Purpose | Bones Per Side |
+|------|--------|---------|---------------|
+| CharUpperTwist | CharUpperTwist.cpp | Distributes clavicle→upperArm rotation across shoulderTwist bones | shoulderTwist2,3,4 (3 bones) |
+| CharForeTwist | CharForeTwist.cpp | Distributes hand X-rotation twist across forearm twist bones | foreTwist1,2 (2 bones) |
+| CharBoneTwist | CharBoneTwist.cpp | Points bone Y-axis toward weighted average of target bones | varies |
+| CharNeckTwist | CharNeckTwist.cpp | Distributes head yaw to neck twist bone | 1 bone |
+
+### DC3 Aubrey Bone Hierarchy (confirmed via skin bone dump)
+
+```
+bone_pelvis.mesh
+├── bone_L-thigh.mesh + bone_L-thighTwist01.mesh (sibling)
+│   └── bone_L-knee.mesh → bone_L-ankle.mesh → bone_L-toe.mesh
+├── bone_R-thigh.mesh + bone_R-thighTwist01.mesh (sibling)
+│   └── bone_R-knee.mesh → bone_R-ankle.mesh → bone_R-toe.mesh
+└── bone_spine1.mesh → spine2 → spine_upper → spine3
+    ├── bone_L-clavicle.mesh
+    │   ├── bone_L-shoulderTwist2.mesh (closest to clavicle)
+    │   ├── bone_L-shoulderTwist3.mesh
+    │   ├── bone_L-shoulderTwist4.mesh (same pos as upperArm)
+    │   └── bone_L-upperArm.mesh
+    │       ├── bone_L-foreTwist1.mesh
+    │       │   └── bone_L-foreTwist2.mesh
+    │       └── bone_L-foreArm.mesh
+    │           └── bone_L-hand.mesh → fingers (thumb01, index01, etc.)
+    └── bone_R-clavicle.mesh (mirror of L)
+```
+
+**Key naming findings:**
+- Shoulder twist: `shoulderTwist2/3/4` (NO shoulderTwist1)
+- Forearm twist: `foreTwist1/2` (NOT foreArmTwist)
+- Thigh twist: `thighTwist01` (single per side)
+- All twist bones are under clavicle/pelvis as siblings
+
+### Viewer Twist Solver Implementation
+
+Since we can't load main.milo (hangs), the viewer implements twist solvers directly:
+
+```
+SolveAllTwists(ObjectDir* dir):
+1. SolveUpperTwistChain — interpolates shoulderTwist3,4 between clavicle and shoulderTwist2
+   - Uses MakeRotQuat to find rotation between parent X-axis and reference X-axis
+   - Interpolates Y-axis at even fractions (1/3, 2/3 for 2 bones)
+2. SolveForeTwist — distributes hand X-angle across foreTwist1 (2/3) and foreTwist2 (1/3)
+   - Left: offset=0, bias=45°; Right: offset=180°, bias=-45°
+3. SolveThighTwist — interpolates thighTwist01 halfway between pelvis and thigh rotation
+```
+
+### Results
+
+- **Without twist solver**: Hands detached/stretched, shoulders malformed, leg skin tearing
+- **With twist solver**: Hands properly attached, natural arm deformation, legs much improved
+- **Remaining artifacts**: Minor forearm stretching at extreme wrist angles, some dark patches on inner thighs at wide stances (likely back-face rendering, not bone issue)
+
+## Decomp Status of Animation Chain (2026-03-02)
+
+Every function in the animation pipeline is **fully implemented** (no stubs).
+
+| Function | Match% | Status | Notes |
+|----------|--------|--------|-------|
+| CharDriver::Poll | 92.1% | AT_LIMIT | r29↔r30 regswap (42/82 swap instrs), logic correct |
+| CharDriver::Enter | 99.7% | COMPLETE | |
+| CharDriver::Play(DataNode) | 99.9% | COMPLETE | |
+| CharDriver::Play(CharClip*) | 97.9% | COMPLETE | |
+| CharClipDriver::PreEvaluate | 94.8% | AT_LIMIT | regswaps |
+| CharClipDriver::Evaluate | 97.5% | AT_LIMIT | regswaps |
+| CharClipDriver::ScaleAdd | 99.8% | COMPLETE | |
+| CharClip::ScaleDown | 95.2% (via mFull/mOne/mFacing) | COMPLETE | |
+| CharClip::ScaleAdd | 95.2% | COMPLETE | |
+| CharBones::ScaleDown | 97.9% | COMPLETE | unicorn equivalent |
+| CharBones::ScaleAdd | 97.5%+ | COMPLETE | |
+| CharBonesSamples::EvaluateChannel | **79.2%** | AT_LIMIT | **Lowest in chain** — structural diffs in compressed short→float conversion (lha/fcfid ordering), 25 insert/18 delete. Behaviorally equivalent per unicorn. |
+| CharBonesSamples::Load | 95.2% | COMPLETE | unicorn equivalent |
+| CharServoBone::Poll | 98.8% | COMPLETE | unicorn equivalent |
+| CharBonesMeshes::PoseMeshes | (in CharBonesMeshes unit) | COMPLETE | |
+| CharBonesMeshes::ReallocateInternal | 98.0% | COMPLETE | |
+
+**Key finding**: `CharBonesSamples::EvaluateChannel` at 79.2% is the weakest link. The diagnosis shows:
+- 9 insert/delete clusters (structural code rearrangement)
+- Compressed data conversion differs: original uses `lha`→`std`→stack→`fcfid` while decomp does `fcfid`→`frsp` inline
+- f12↔f13 FPR swap (13 instructions)
+- Offset shifts ±16 (stack frame layout difference)
+- Despite structural differences, **unicorn confirms behavioral equivalence** — animations play correctly
+
+**CharClipDriver::ScaleDown does NOT exist** — CharDriver::Poll calls `CharClip::ScaleDown` directly on the clip, not through CharClipDriver.
+
 ## Remaining Potential Issues
 
-### 1. Shutdown crash (device lost)
-- `GpuDevice: device lost (reason 2): Device was destroyed` on exit
-- Screenshot saves before crash, so non-blocking, but should fix cleanup order
+### 1. Shutdown crash (signal 11)
+- Occurs on exit after screenshot/video save
+- Non-blocking — output saves before crash
 
-### 2. Bone diagnostic dump still in draw path
-- Mesh_Wgpu.cpp:730-763: one-time bone dump enabled via static bool
-- Should be removed or gated behind `--verbose` for production
-
-### 3. Scale bones not fully tested
+### 2. Scale bones not fully tested
 - PoseMeshes writes scale data after POS but before QUAT section
 - Scale is applied by adjusting existing rotation matrix axes
 - Haven't confirmed scale bones (e.g. face morphs) work correctly
 
-### 4. Finger/face bones
-- crew_battle_win clip may not include finger bone channels
-- Finger bones fall back to whatever LocalXfm was loaded from .milo (T-pose)
-- This is correct behavior — same as Xbox runtime without finger clip data
+### 3. Missing twist object parameters
+- The actual CharUpperTwist/CharForeTwist objects in main.milo may have different bone assignments than our hardcoded ones
+- Loading main.milo as --subdir would give us the real parameters but currently crashes
 
 ## Key Code Locations
 
@@ -348,7 +435,9 @@ milo_viewer.cpp setup:
 Per-frame (advanceCharAnim lambda):
 1. Advance in 0.1-beat steps to avoid huge delta
 2. TheTaskMgr.SetSecondsAndBeat(seconds, beat, false)
-3. charObj->Driver()->Poll()  → ScaleDown + ScaleAdd (writes bone buffer)
-4. activeServo->Poll()        → PoseMeshes (buffer → mesh LocalXfm)
+3. Poll all CharPollable objects (CharDriver, CharServoBone, CharHair, etc.)
+   - CharDriver::Poll() → ScaleDown + ScaleAdd (writes bone buffer)
+   - CharServoBone::Poll() → PoseMeshes (buffer → mesh LocalXfm) + facing
+4. SolveAllTwists(dir) → shoulder, forearm, thigh twist bone interpolation
 5. Draw path reads bone WorldXfm (lazy recompute from dirty local)
 ```

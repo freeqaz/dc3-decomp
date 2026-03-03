@@ -1,6 +1,7 @@
 #include "DrawUtl.h"
 
 #include "SkeletonViz.h"
+#include "gesture/SkeletonUpdate.h"
 #include "rndobj/Utl.h"
 
 Vector3 DrawUtlVec3(0.5f, 0.05f, 0.4f);
@@ -86,6 +87,35 @@ void InitDrawUtl(const GestureMgr &gm) {
 
 void SetDrawSpace(float x, float y, float z) {
     DrawUtlVec3.Set(x, y, z);
+}
+
+void DrawGestureMgr(GestureMgr &gm, LiveCameraInput::BufferType bufferType, float) {
+    TheRnd.EndWorld();
+
+    if (bufferType != LiveCameraInput::kBufferNum && bufferType != LiveCameraInput::kBufferPlayer
+        && bufferType != LiveCameraInput::kBufferDepth) {
+        LiveCameraInput *cam = gm.GetLiveCameraInput();
+        RndTex *displayTex = cam->DisplayTex(bufferType);
+        if (UpdateBufferTex(cam, displayTex, bufferType, &gm)) {
+            DrawBufferMat(cam->DisplayMat(bufferType), DrawUtlRect);
+        }
+    }
+
+    if (TheSkeletonViz && TheSkeletonViz->Showing()) {
+        Hmx::Rect screenRect;
+        ScreenSpace(screenRect);
+        TheSkeletonViz->SetPhysicalCamScreenRect(screenRect);
+
+        SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
+        CameraInput *cameraInput = handle.GetCameraInput();
+        if (cameraInput) {
+            for (int i = 0; i < 6; i++) {
+                TheSkeletonViz->Visualize(
+                    *cameraInput, gm.GetSkeleton(i), &handle.Callbacks(), false
+                );
+            }
+        }
+    }
 }
 
 bool UpdateBufferTex(LiveCameraInput *cam, RndTex *tex, LiveCameraInput::BufferType bufType, GestureMgr *gm) {

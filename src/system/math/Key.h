@@ -11,6 +11,8 @@ struct Weight {
     float derivOut;
 };
 
+// NOTE: BinStreamRev overloads are REQUIRED - do not remove.
+// BinStreamRev reads fields in reverse member order for versioned loading.
 inline BinStreamRev &operator>>(BinStreamRev &bs, Weight &w) {
     bs >> w.weight >> w.derivIn >> w.derivOut;
     return bs;
@@ -52,6 +54,7 @@ BinStream &operator>>(BinStream &bs, Key<T> &key) {
     return bs;
 }
 
+// NOTE: BinStreamRev overload is REQUIRED - do not remove
 template <class T>
 BinStreamRev &operator>>(BinStreamRev &bs, Key<T> &key) {
     bs >> key.value >> key.frame;
@@ -371,6 +374,7 @@ public:
     }
 };
 
+// NOTE: BinStreamRev overload is REQUIRED - do not remove
 template <class T1, class T2>
 BinStreamRev &operator>>(BinStreamRev &bs, Keys<T1, T2> &keys) {
     return bs >> (std::vector<Key<T1> > &)keys;

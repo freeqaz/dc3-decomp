@@ -1,5 +1,6 @@
 #include "char/CharBoneDir.h"
 #include "char/CharBone.h"
+#include "utl/SongInfoCopy.h"
 #include "char/CharUtl.h"
 #include "obj/Data.h"
 #include "obj/DataFunc.h"
@@ -11,6 +12,8 @@
 #include "utl/BinStream.h"
 #include "utl/FilePath.h"
 #include "utl/MemMgr.h"
+
+const std::vector<TrackChannels> &SongInfoCopy::GetTracks() const { return mTrackChannels; }
 
 ObjectDir *sResources;
 DataArray *CharBoneDir::sCharClipTypes;

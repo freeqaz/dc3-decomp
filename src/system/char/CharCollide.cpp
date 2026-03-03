@@ -1,6 +1,8 @@
 #include "char/CharCollide.h"
+#include "math/Mtx.h"
 #include "obj/Object.h"
 #include "rndobj/Trans.h"
+#include "rndobj/Utl.h"
 
 CharCollide::CharCollide()
     : mShape(kCollideSphere), mFlags(0), mMesh(this), mMeshYBias(false) {
@@ -123,7 +125,48 @@ BEGIN_COPYS(CharCollide)
     END_COPYING_MEMBERS
 END_COPYS
 
-void CharCollide::Highlight() {}
+void CharCollide::Highlight() {
+    Hmx::Color white(1, 1, 1, 1);
+    Hmx::Color red(1, 0, 0, 1);
+    unsigned int shape = mShape;
+    if (shape >= 1) {
+        if (shape >= 3) {
+            if (shape < 5) {
+                UtilDrawCigar(WorldXfm(), mOrigRadius, mOrigLength, red, 8);
+                UtilDrawCigar(WorldXfm(), mCurRadius, mCurLength, white, 8);
+            }
+        } else {
+            UtilDrawSphere(WorldXfm().v, mOrigRadius[0], red, nullptr);
+            UtilDrawSphere(WorldXfm().v, mCurRadius[0], white, nullptr);
+        }
+    } else {
+        Plane plane(WorldXfm().v, WorldXfm().m.x);
+        UtilDrawPlane(plane, WorldXfm().v, red, 1, 12.0f, false);
+    }
+    if (mMesh) {
+        int count;
+        if (mShape == kCollideCigar || mShape == kCollideInsideCigar) {
+            count = 2;
+        } else if (mShape == kCollideSphere || mShape == kCollideInsideSphere) {
+            count = 1;
+        } else {
+            count = 0;
+        }
+        int n = count << 2;
+        if (n > 0) {
+            CharCollideStruct *s = unkStructs;
+            do {
+                s++;
+                Hmx::Color sphereColor(0, 0, 1, 1);
+                UtilDrawSphere(
+                    mMesh->Verts(s->vertIdx).pos,
+                    0.1f, sphereColor, nullptr
+                );
+                n--;
+            } while (n != 0);
+        }
+    }
+}
 
 void CharCollide::SyncShape() {
     if (mCurLength[0] > mCurLength[1]) {

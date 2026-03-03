@@ -25,7 +25,7 @@ public:
     virtual void Load(BinStream &);
     // RndPollable
     virtual void Poll();
-    virtual void Enter() { RndPollable::Enter(); }
+    virtual void Enter();
     virtual void Exit() { RndPollable::Exit(); }
 
     void BeginMinigame(DataArray *);

@@ -1,4 +1,5 @@
 #include "char/CharLipSync.h"
+#include "hamobj/HamDirector.h"
 #include "math/Utl.h"
 #include "obj/Data.h"
 #include "obj/DataFile.h"
@@ -8,6 +9,8 @@
 #include "os/Debug.h"
 #include "rndobj/PropAnim.h"
 #include "utl/TextStream.h"
+
+AnimPtr::~AnimPtr() {}
 
 std::map<Symbol, CharLipSync *> *CharLipSync::sLipSyncMap;
 

@@ -1,7 +1,10 @@
 #include "gesture/SkeletonQualityFilter.h"
 #include "BaseSkeleton.h"
 #include "gesture/BaseSkeleton.h"
+#include "gesture/GestureMgr.h"
 #include "gesture/Skeleton.h"
+#include "hamobj/HamGameData.h"
+#include "hamobj/HamPlayerData.h"
 #include "math/Vec.h"
 
 SkeletonQualityFilter::SkeletonQualityFilter()
@@ -19,6 +22,40 @@ void SkeletonQualityFilter::SetSidewaysCutoffThreshold(float thresh) {
 
 void SkeletonQualityFilter::RestoreDefaultSidewaysCutoffThreshold() {
     mSidewaysCutoffThreshold = 0.55;
+}
+
+void SkeletonQualityFilter::Update(const Skeleton &skeleton, bool inShellMode) {
+    int skeletonIdx = skeleton.SkeletonIndex();
+    if (skeletonIdx >= 0 && skeletonIdx < 6) {
+        if (skeleton.IsTracked() || TheGestureMgr->IsTrackingAllSkeletons()) {
+            const Vector3 &root = skeleton.GetUnkab0();
+            if (!(root.x == 0.0f && root.y == 0.0f && root.z == 0.0f)) {
+                bool playerIsPlaying = false;
+                for (int i = 0; i < 2; i++) {
+                    HamPlayerData *player = TheGameData->Player(i);
+                    if (player->GetSkeletonTrackingID() == skeleton.TrackingID()) {
+                        playerIsPlaying = player->IsPlaying();
+                        break;
+                    }
+                }
+                const TrackedJoint *joints = skeleton.TrackedJoints();
+                UpdateIsConfident(joints);
+                UpdateIsSideways(joints);
+                UpdateIsSitting(joints);
+
+                if (!inShellMode && playerIsPlaying) {
+                    mValid = true;
+                } else {
+                    mValid = mIsConfident && !mSideways && !mSitting;
+                }
+                return;
+            }
+        }
+        mValid = false;
+        mSitting = false;
+        mSideways = false;
+        mIsConfident = false;
+    }
 }
 
 void SkeletonQualityFilter::UpdateIsConfident(const TrackedJoint *joints) {

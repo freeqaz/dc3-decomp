@@ -1,4 +1,5 @@
 #include "char/Waypoint.h"
+#include "char/CharInterest.h"
 #include "math/Rand.h"
 #include "math/Rot.h"
 #include "obj/Data.h"
@@ -30,6 +31,11 @@ Waypoint::~Waypoint() {
         }
     }
 }
+
+BEGIN_HANDLERS(CharInterest)
+    HANDLE_SUPERCLASS(RndTransformable)
+    HANDLE_SUPERCLASS(Hmx::Object)
+END_HANDLERS
 
 BEGIN_HANDLERS(Waypoint)
     HANDLE_SUPERCLASS(RndTransformable)

@@ -267,6 +267,12 @@ public:
 class Plane {
 public:
     Plane() {}
+    Plane(const Vector3 &point, const Vector3 &normal) {
+        a = normal.x;
+        b = normal.y;
+        c = normal.z;
+        d = -(a * point.x + b * point.y + c * point.z);
+    }
 
     void Set(const Vector3 &, const Vector3 &, const Vector3 &);
     void Set(float f1, float f2, float f3, float f4) {

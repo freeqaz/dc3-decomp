@@ -3,6 +3,7 @@
 #include "macros.h"
 #include "obj/Object.h"
 #include "rndobj/Cam.h"
+#include "rndobj/Rnd.h"
 #include "rndobj/Tex.h"
 
 RndCam *RndShadowMap::sLightCam;
@@ -22,3 +23,5 @@ void RndShadowMap::Init() {
     sShadowTex->SetBitmap(512, 512, 32, RndTex::kShadowMap, false, nullptr);
     sLightCam->SetTargetTex(sShadowTex);
 }
+
+void RndShadowMap::EndShadow() { TheRnd.SetShadowMap(nullptr, nullptr, nullptr); }

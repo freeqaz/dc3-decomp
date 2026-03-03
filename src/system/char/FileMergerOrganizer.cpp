@@ -1,6 +1,7 @@
 #include "char/FileMergerOrganizer.h"
 #include "FileMerger.h"
 #include "FileMergerOrganizer.h"
+#include "hamobj/SongCollision.h"
 #include "math/Rand.h"
 #include "obj/Object.h"
 #include "os/Debug.h"
@@ -63,6 +64,10 @@ BEGIN_HANDLERS(FileMergerOrganizer)
     HANDLE_ACTION(add_file_merger, AddFileMerger(_msg->Obj<FileMerger>(2)))
     HANDLE_SUPERCLASS(Hmx::Object)
 END_HANDLERS
+
+BEGIN_PROPSYNCS(SongCollision)
+    SYNC_SUPERCLASS(Hmx::Object)
+END_PROPSYNCS
 
 BEGIN_PROPSYNCS(FileMergerOrganizer)
     SYNC_SUPERCLASS(Hmx::Object)

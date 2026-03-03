@@ -109,15 +109,7 @@ void FlowDistance::ChildFinished(FlowNode *n) {
     }
 }
 
-void FlowDistance::RequestStop() {
-    FLOW_LOG("RequestStop\n");
-    FlowNode::RequestStop();
-}
-
-void FlowDistance::RequestStopCancel() {
-    FLOW_LOG("RequestStopCancel\n");
-    FlowNode::RequestStopCancel();
-}
+// RequestStop and RequestStopCancel are in FlowSlider.cpp (cross-unit)
 
 void FlowDistance::Execute(QueueState qs) {
     bool shouldStop = false;

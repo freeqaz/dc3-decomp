@@ -281,6 +281,12 @@ float CharClipSet::EndFrame() {
         return 0;
 }
 
+void CharClipSet::Draw() {
+    if (mPreviewChar) {
+        mPreviewChar->DrawShowing();
+    }
+}
+
 void CharClipSet::ListDrawChildren(std::list<RndDrawable *> &draws) {
     if (mPreviewChar) {
         RndDir *ptr = mPreviewChar;

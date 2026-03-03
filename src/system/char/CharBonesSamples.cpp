@@ -123,11 +123,12 @@ void CharBonesSamples::LoadData(BinStreamRev &d) {
         d >> x;
     }
 #ifdef HX_NATIVE
-    // Cached .milo_xbox files store exactly mTotalSize bytes per sample:
-    // uncompressed Vector3 = 12 data + 4 zero pad = 16 bytes = sizeof(Vector3).
-    // Non-cached streams store only 12 bytes per Vector3 (no pad) and must use
-    // the element-by-element path below.
-    if (d.stream.Cached()) {
+    // Cached .milo_xbox files pad each uncompressed Vector3 to 16 bytes
+    // (12 data + 4 zero), but in-memory layout uses sizeof(Vector3)=12.
+    // When positions are uncompressed (compression < kCompressVects),
+    // we must read element-by-element to skip the on-disk padding.
+    bool cachedPaddingMismatch = d.stream.Cached() && mCompression < kCompressVects;
+    if (d.stream.Cached() && !cachedPaddingMismatch) {
         int totalBytes = AllocateSize();
         if (totalBytes > 0 && mRawData) {
             d.stream.Read(mRawData, totalBytes);
@@ -179,8 +180,64 @@ void CharBonesSamples::LoadData(BinStreamRev &d) {
                 }
             }
         }
+    } else if (cachedPaddingMismatch) {
+    // Cached stream with uncompressed positions: read element-by-element
+    // but skip 4-byte padding after each Vector3 position/scale
+    for (int i = 0; i < mNumSamples; i++) {
+        mStart = mRawData + mTotalSize * Min(i, mNumSamples - 1);
+
+        // Positions + Scales: 16 bytes on disk (12 data + 4 pad), 12 in memory
+        {
+            Vector3 *quatOffset = (Vector3 *)(mStart + mOffsets[TYPE_QUAT]);
+            for (Vector3 *p = (Vector3 *)mStart; p < quatOffset; p++) {
+                d >> *p;
+                float pad; d >> pad; // skip 4-byte zero padding
+            }
+        }
+
+        // Quaternions
+        if (mCompression >= kCompressQuats) {
+            char *rotXOffset = mStart + mOffsets[TYPE_ROTX];
+            for (char *p = mStart + mOffsets[TYPE_QUAT]; p < rotXOffset; p += 4) {
+                d.stream.Read(p, 4);
+            }
+        } else if (mCompression != kCompressNone) {
+            short *rotXOffset = (short *)(mStart + mOffsets[TYPE_ROTX]);
+            for (short *p = (short *)(mStart + mOffsets[TYPE_QUAT]); p < rotXOffset; p += 4) {
+                d >> p[0] >> p[1] >> p[2] >> p[3];
+            }
+        } else {
+            Hmx::Quat *rotXOffset = (Hmx::Quat *)(mStart + mOffsets[TYPE_ROTX]);
+            for (Hmx::Quat *p = (Hmx::Quat *)(mStart + mOffsets[TYPE_QUAT]); p < rotXOffset; p++) {
+                d >> *p;
+            }
+        }
+
+        // Rotations
+        if (mCompression != kCompressNone) {
+            short *endOffset = (short *)(mStart + mOffsets[TYPE_END]);
+            for (short *p = (short *)(mStart + mOffsets[TYPE_ROTX]); p < endOffset; p++) {
+                d >> *p;
+            }
+        } else {
+            float *endOffset = (float *)(mStart + mOffsets[TYPE_END]);
+            for (float *p = (float *)(mStart + mOffsets[TYPE_ROTX]); p < endOffset; p++) {
+                d >> *p;
+            }
+        }
+
+        // Skip per-sample end padding (cached aligns to 16)
+        {
+            int dataSize = mOffsets[TYPE_END] - mOffsets[TYPE_POS];
+            int delta = ((dataSize + 0xF) & ~0xF) - dataSize;
+            if (delta > 0) {
+                char skip[16];
+                d.stream.Read(skip, delta);
+            }
+        }
+    }
     } else {
-    // Non-cached: element-by-element (also used on Xbox in #else path)
+    // Non-cached: element-by-element
 #else
     {
 #endif

@@ -100,6 +100,9 @@ public:
     SkeletonRecoverer &Recoverer() { return mRecoverer; }
     int GetActiveSkeletonTrackingID() const { return mActiveSkelTrackingID; }
     void SetActiveSkeletonTrackingID(int id) { mActiveSkelTrackingID = id; }
+    static float MaxRecoveryDistance() { return sMaxRecoveryDistance; }
+    static float MinRecoveryTime() { return sMinRecoveryTime; }
+    static float MaxRecoveryTime() { return sMaxRecoveryTime; }
 
     static bool sIdentityOpInProgress;
     static void Init();
@@ -107,6 +110,8 @@ public:
     static void Terminate();
 
 private:
+    friend class HandRaisedGestureFilter;
+    friend class StandingStillGestureFilter;
     GestureMgr();
 
     DataNode OnMsg(const KinectHardwareStatusMsg &);

@@ -4,12 +4,14 @@
 #include "gesture/GestureMgr.h"
 #include "gesture/LiveCameraInput.h"
 #include "gesture/Skeleton.h"
+#include "gesture/StubCameraInput.h"
 #include "hamobj/HamGameData.h"
 #include "hamobj/HamPlayerData.h"
 #include "obj/DataFunc.h"
 #include "obj/Object.h"
 #include "os/CritSec.h"
 #include "os/Debug.h"
+#include "os/Joypad.h"
 #include "os/OSFuncs.h"
 #include "os/Timer.h"
 #include "utl/MemMgr.h"
@@ -82,6 +84,10 @@ void SkeletonUpdateHandle::PostUpdate() {
 #pragma region SkeletonUpdate
 
 static bool sBool878;
+extern "C" float lbl_82F0BE80;
+SkeletonUpdate *SkeletonUpdate::sInstance;
+HANDLE SkeletonUpdate::sNewSkeletonEvent;
+HANDLE SkeletonUpdate::sSkeletonUpdatedEvent;
 
 DWORD SkeletonUpdateThread(LPVOID) {
     HANDLE new_skeleton_event = SkeletonUpdate::NewSkeletonEvent();
@@ -91,12 +97,10 @@ DWORD SkeletonUpdateThread(LPVOID) {
     WaitForSingleObject(new_skeleton_event, -1);
     while (!sBool878) {
         SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
-        //     SkeletonUpdate::InstanceHandle(local_40);
-        //     if (local_40[0][0x539c] != (SkeletonUpdate)0x0) {
-        //       SkeletonUpdate::Update(local_40[0]);
-        //       SetEvent(hEvent);
-        //     }
-        //     CriticalSection::Exit(&SkeletonUpdateHandle::sCritSec);
+        if (SkeletonUpdate::sInstance && SkeletonUpdate::sInstance->mIsUpdateThreadActive) {
+            SkeletonUpdate::sInstance->Update();
+            SetEvent(skeleton_updated_event);
+        }
         WaitForSingleObject(new_skeleton_event, -1);
     }
     return 0;
@@ -170,7 +174,198 @@ void SkeletonUpdate::Terminate() { RELEASE(sInstance); }
 bool SkeletonUpdate::HasInstance() { return sInstance; }
 void *SkeletonUpdate::NewSkeletonEvent() { return sNewSkeletonEvent; }
 
-void SkeletonUpdateCallbackSlowdownCB(float, void *);
+void SkeletonUpdate::Update() {
+    DWORD prevFrame = mNUISkeletonFrame->dwFrameNumber;
+    if (NuiSkeletonGetNextFrame(0, mNUISkeletonFrame) == 0) {
+        mHasNewFrame = true;
+        if (!mIsCameraOverride) {
+            mSkeletonFrame.Create(
+                *mNUISkeletonFrame, (int)mNUISkeletonFrame->dwFrameNumber - (int)prevFrame
+            );
+        }
+    } else {
+        if (mIsCameraConnected) {
+            return;
+        }
+        if (!mIsCameraOverride) {
+            mHasNewFrame = true;
+            StubCameraInput::StubSkeletonFrame(mSkeletonFrame);
+            for (int i = 0; i < NUM_SKELETONS; i++) {
+                SkeletonData &data = mSkeletonFrame.mSkeletonDatas[i];
+                data.mTracking = kSkeletonNotTracked;
+                data.mQualityFlags = 0;
+                memset(data.mRawPositions, 0, sizeof(data.mRawPositions));
+                memset(data.mJointPositions, 0, sizeof(data.mJointPositions));
+                memset(data.mJointTrackingState, 0, sizeof(data.mJointTrackingState));
+                data.mTrackingID = -1;
+                data.mClippedFlags = -1;
+                data.mHipCenter.Zero();
+            }
+        }
+    }
+    UpdateCallbacks();
+}
+
+void SkeletonUpdate::UpdateFakeArmPos() {
+    JoypadData *padData = JoypadGetPadData(0);
+    float fVar1 = padData->mSticks[1][1];
+    float fVar4 = TheTaskMgr.DeltaUISeconds();
+    float fVar11 = fVar4;
+    fVar11 *= lbl_82F0BE80;
+    float fVar12 = -(fVar1 * fVar11 - unk5398);
+    *(volatile float *)&unk5398 = fVar12;
+
+    float fVar0 = -0.25f;
+    fVar0 = (-0.25f - fVar12 >= 0.0f) ? -0.25f : fVar12;
+    unk5398 = (fVar0 - 0.6f >= 0.0f) ? 0.6f : fVar0;
+}
+
+void SkeletonUpdate::InsertFakeArmPos(SkeletonData &data) {
+    JoypadData *padData = JoypadGetPadData(0);
+    float ry = padData->mSticks[1][0];
+    if (ry > 0.5f) {
+        data.mJointPositions[kJointElbowRight].z = data.mJointPositions[kJointShoulderRight].z;
+        data.mJointPositions[kJointElbowRight].y = data.mJointPositions[kJointShoulderRight].y - 0.3f;
+        float elbowRightX = data.mJointPositions[kJointShoulderRight].x + 0.3f;
+        data.mJointPositions[kJointElbowRight].x = elbowRightX;
+        data.mJointPositions[kJointWristRight].z = data.mJointPositions[kJointElbowRight].z;
+        data.mJointPositions[kJointWristRight].x = elbowRightX + 0.3f;
+        data.mJointPositions[kJointWristRight].y = data.mJointPositions[kJointElbowRight].y - 0.3f;
+        data.mJointPositions[kJointHandRight] = data.mJointPositions[kJointWristRight];
+    } else if (ry < -0.5f) {
+        data.mJointPositions[kJointHandRight].y = 0.65f;
+        data.mJointPositions[kJointHandLeft].y = 0.65f;
+        data.mJointPositions[kJointWristRight].y = 0.6f;
+        data.mJointPositions[kJointWristLeft].y = 0.6f;
+        data.mJointPositions[kJointElbowRight].y = 0.45f;
+        data.mJointPositions[kJointElbowLeft].y = 0.45f;
+    } else {
+        float rt = padData->mTriggers[1];
+        float lt = padData->mTriggers[0];
+        if (rt > 0.5f && lt > 0.5f) {
+            data.mJointPositions[kJointHandRight].y = 0.65f;
+            data.mJointPositions[kJointWristRight].y = 0.6f;
+            data.mJointPositions[kJointElbowRight].y = 0.45f;
+        } else {
+            float rightZ = data.mJointPositions[kJointElbowRight].z - 0.5f;
+            float rightY = data.mJointPositions[kJointElbowRight].y + unk5398;
+            float rightX = -((rt * 0.5f) - 0.1f) + data.mJointPositions[kJointElbowRight].x;
+            Vector3 rightPos;
+            rightPos.z = rightZ;
+            rightPos.y = rightY;
+            rightPos.x = rightX;
+            data.mJointPositions[kJointHandRight] = rightPos;
+            data.mJointPositions[kJointWristRight] = rightPos;
+        }
+    }
+
+    float lt = padData->mTriggers[0];
+    if (lt > 0.0f && padData->mTriggers[1] == 0.0f) {
+        float leftY = data.mJointPositions[kJointElbowLeft].y + unk5398;
+        float leftZ = data.mJointPositions[kJointElbowLeft].z - 0.5f;
+        float leftX = (lt * 0.5f - 0.25f) + data.mJointPositions[kJointElbowLeft].x;
+        Vector3 leftPos;
+        leftPos.y = leftY;
+        leftPos.z = leftZ;
+        leftPos.x = leftX;
+        data.mJointPositions[kJointWristLeft] = leftPos;
+        data.mJointPositions[kJointHandLeft] = leftPos;
+    }
+}
+
+void SkeletonUpdate::UpdateCallbacks() {
+    if (unk5388 > 0) {
+        int tracked = 0;
+        for (int i = 0; i < NUM_SKELETONS; i++) {
+            if (mSkeletonFrame.mSkeletonDatas[i].mTracking != kSkeletonNotTracked) {
+                tracked++;
+            }
+        }
+        if (tracked < 2) {
+            for (int i = 0; i < NUM_SKELETONS; i++) {
+                if (mSkeletonFrame.mSkeletonDatas[i].mTracking == kSkeletonNotTracked) {
+                    Vector3 offset(tracked > 0 ? -0.5f : 0.5f, 0.0f, 0.0f);
+                    StubCameraInput::StubSkeletonData(mSkeletonFrame.mSkeletonDatas[i], offset);
+                    tracked++;
+                }
+                if (tracked == 2 || tracked == unk5388) {
+                    break;
+                }
+            }
+        }
+    }
+
+    if (unk538c > 0) {
+        UpdateFakeArmPos();
+        unsigned bit = 1;
+        for (unsigned i = 0; i < NUM_SKELETONS; i++, bit <<= 1) {
+            SkeletonData &data = mSkeletonFrame.mSkeletonDatas[i];
+            if ((bit & unk538c) == 0) {
+                data.mTracking = kSkeletonNotTracked;
+                continue;
+            }
+            unsigned side = i;
+            if (i <= 1 && mSwapSides) {
+                side = 1 - i;
+            }
+            Vector3 offset(-((float)side * 0.5f - 0.25f), 0.0f, 0.0f);
+            StubCameraInput::StubSkeletonData(data, offset);
+            data.mTrackingID = i + 1;
+            if ((int)i == unk5394) {
+                InsertFakeArmPos(data);
+            }
+        }
+    }
+
+    for (int i = 0; i < NUM_SKELETONS; i++) {
+        if (mSkeletons[i].IsTracked()) {
+            AddToHistory(i, mSkeletons[i]);
+        } else {
+            ClearHistory(i);
+        }
+        mSkeletons[i].Poll(i, mSkeletonFrame);
+    }
+
+    for (int i = 0; i < 2; i++) {
+        mSkeletonsLeft[i] = nullptr;
+        for (int j = 0; j < NUM_SKELETONS; j++) {
+            if (mSkeletonTrackingIDs[i] == mSkeletons[j].TrackingID()) {
+                mSkeletonsLeft[i] = &mSkeletons[j];
+                break;
+            }
+        }
+    }
+
+    Skeleton **rightSkeletons = (Skeleton **)&mSkeletonsRight[0];
+    for (int i = 0; i < NUM_SKELETONS; i++) {
+        rightSkeletons[i] = &mSkeletons[i];
+    }
+
+    SkeletonUpdateData data;
+    data.mSkeletonsLeft = &mSkeletonsLeft[0];
+    data.mSkeletonsRight = &mSkeletonsRight[0];
+    data.mFrame = &mSkeletonFrame;
+    data.mHistory = this;
+    data.mCameraInput = mCameraInput;
+    FOREACH (it, mCallbacks) {
+        (*it)->Update(data);
+    }
+}
+
+void SkeletonUpdateCallbackSlowdownCB(float msecs, void *cbObj) {
+    Hmx::Object *obj = dynamic_cast<Hmx::Object *>((SkeletonCallback *)cbObj);
+    const char *name = obj ? obj->Name() : "null";
+    if (!name) {
+        name = "none";
+    }
+
+    const char *className = "null";
+    if (obj) {
+        Symbol objClass = obj->ClassName();
+        className = objClass.Null() ? "unknown class" : objClass.Str();
+    }
+    MILO_LOG("%2.2f msec %s %s\n", msecs, name, className);
+}
 
 void SkeletonUpdate::PostUpdate() {
     MILO_ASSERT(MainThread(), 0x26F);
@@ -217,12 +412,45 @@ void SkeletonUpdate::PostUpdate() {
     }
 }
 
-DataNode OnToggleSkeletalUpdateThread(DataArray *);
-DataNode OnCycleNumStubSkeletons(DataArray *);
-DataNode OnCycleFakeShellSkeletons(DataArray *);
-DataNode OnCycleActiveFakeShellSkeleton(DataArray *);
-DataNode OnSetFakeSkeletonSidesSwapped(DataArray *);
-DataNode OnGetFakeSkeletonSidesSwapped(DataArray *);
+DataNode OnToggleSkeletalUpdateThread(DataArray *) {
+    SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
+    SkeletonUpdate::sInstance->mIsUpdateThreadActive =
+        !SkeletonUpdate::sInstance->mIsUpdateThreadActive;
+    ResetEvent(SkeletonUpdate::sSkeletonUpdatedEvent);
+    return (int)SkeletonUpdate::sInstance->mIsUpdateThreadActive;
+}
+
+DataNode OnCycleNumStubSkeletons(DataArray *) {
+    SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
+    int value = (SkeletonUpdate::sInstance->unk5388 + 1) % 3;
+    SkeletonUpdate::sInstance->unk5388 = value;
+    return value;
+}
+
+DataNode OnCycleFakeShellSkeletons(DataArray *a) {
+    SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
+    unsigned int idx = a->Int(1);
+    SkeletonUpdate::sInstance->unk538c ^= 1 << (idx & 0x3f);
+    return SkeletonUpdate::sInstance->unk538c;
+}
+
+DataNode OnCycleActiveFakeShellSkeleton(DataArray *) {
+    SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
+    int value = (SkeletonUpdate::sInstance->unk5394 + 1) % 2;
+    SkeletonUpdate::sInstance->unk5394 = value;
+    return value;
+}
+
+DataNode OnSetFakeSkeletonSidesSwapped(DataArray *a) {
+    SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
+    SkeletonUpdate::sInstance->mSwapSides = a->Int(1) != 0;
+    return 0;
+}
+
+DataNode OnGetFakeSkeletonSidesSwapped(DataArray *) {
+    SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
+    return (int)SkeletonUpdate::sInstance->mSwapSides;
+}
 
 void SkeletonUpdate::Init() {
     sNewSkeletonEvent = CreateEventA(nullptr, true, false, nullptr);

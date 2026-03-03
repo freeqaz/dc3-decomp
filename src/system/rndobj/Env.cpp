@@ -351,6 +351,17 @@ BEGIN_HANDLERS(RndEnviron)
     HANDLE_SUPERCLASS(Hmx::Object)
 END_HANDLERS
 
+void RndEnviron::Draw() {
+    if (Showing()) {
+        const Transform &xfm = WorldXfm();
+        const Vector3 &pos = xfm.v;
+        if (sCurrent == this && sCurrentPosSet && !(sCurrentPos != pos)) {
+            return;
+        }
+        Select(&pos);
+    }
+}
+
 RndEnviron::~RndEnviron() {
     if (sCurrent == this) {
         sCurrent = nullptr;

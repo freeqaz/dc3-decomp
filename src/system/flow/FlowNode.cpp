@@ -367,6 +367,13 @@ void FlowNode::ActivateLabel(FlowLabel *label) {
     }
 }
 
+static ObjectDir *FlowParentDir(Flow *flow) {
+    if (flow->Loader()) {
+        return flow->Loader()->ProxyDir();
+    }
+    return flow->Dir();
+}
+
 Hmx::Object *FlowNode::LoadObjectFromMainOrDir(BinStream &bs, ObjectDir *dir) {
     Symbol sym;
     bs >> sym;
@@ -374,44 +381,27 @@ Hmx::Object *FlowNode::LoadObjectFromMainOrDir(BinStream &bs, ObjectDir *dir) {
         return nullptr;
 
     // Try main dir first
-    Hmx::Object *obj = ObjectDir::Main()->FindObject(sym.Str(), false, true);
-    if (obj)
-        return obj;
-
-    // Try the passed dir
-    if (dir) {
-        obj = dir->FindObject(sym.Str(), false, true);
-        if (obj)
-            return obj;
-
-        // Walk up the dir hierarchy via Loader chain
-        DirLoader *loader = dir->Loader();
-        ObjectDir *parentDir = nullptr;
-        if (loader) {
-            parentDir = loader->GetDir();
-        } else {
-            parentDir = dir->Dir();
-        }
-        if (parentDir && parentDir != dir) {
-            obj = parentDir->FindObject(sym.Str(), false, true);
-            if (obj)
-                return obj;
-
-            // One more level up
-            DirLoader *parentLoader = parentDir->Loader();
-            ObjectDir *grandparentDir = nullptr;
-            if (parentLoader) {
-                grandparentDir = parentLoader->GetDir();
-            } else {
-                grandparentDir = parentDir->Dir();
-            }
-            if (grandparentDir && grandparentDir != parentDir) {
-                obj = grandparentDir->FindObject(sym.Str(), false, true);
-                if (obj)
-                    return obj;
+    Hmx::Object *obj = ObjectDir::Main()->Find<Hmx::Object>(sym.Str(), false);
+    if (obj == 0)
+        obj = dir->Find<Hmx::Object>(sym.Str(), false);
+    if (obj == 0) {
+        Flow *flow = dynamic_cast<Flow *>(dir);
+        if (flow) {
+            ObjectDir *parentDir = FlowParentDir(flow);
+            if (parentDir) {
+                obj = FlowParentDir(flow)->Find<Hmx::Object>(sym.Str(), false);
+                if (obj == 0) {
+                    Flow *parentFlow = dynamic_cast<Flow *>(FlowParentDir(flow));
+                    if (parentFlow) {
+                        ObjectDir *gpDir = FlowParentDir(parentFlow);
+                        if (gpDir) {
+                            obj = FlowParentDir(parentFlow)->Find<Hmx::Object>(sym.Str(), false);
+                        }
+                    }
+                }
             }
         }
     }
 
-    return nullptr;
+    return obj;
 }

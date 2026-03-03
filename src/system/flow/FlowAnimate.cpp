@@ -4,6 +4,7 @@
 #include "flow/FlowNode.h"
 #include "obj/Object.h"
 #include "os/Debug.h"
+#include "os/Timer.h"
 #include "rndobj/Anim.h"
 #include "utl/MakeString.h"
 
@@ -168,46 +169,70 @@ bool FlowAnimate::Activate() {
 }
 
 void FlowAnimate::Execute(QueueState state) {
-    FLOW_LOG("Execute\n");
-    if (!IsRunning()) {
+    FLOW_LOG("Execute: state = %i\n", state);
+    if (IsRunning()) {
+        // Already running (an animtask is active)
+        if (mAnimTask && state == kIgnore) {
+            mAnimTask->mListener = NULL;
+            if (mStopMode != kReleaseAndContinue) {
+                AnimTask *task = mAnimTask;
+                if (task) {
+                    delete task;
+                }
+            }
+            mAnimTask = nullptr;
+            FLOW_LOG("Timed Release From Parent \n");
+            Timer timer;
+            timer.Reset();
+            timer.Start();
+            mFlowParent->ChildFinished(this);
+            timer.Stop();
+            TheFlowMgr->AddMs(timer.Ms());
+        }
+    } else {
         if (state == kQueue) {
             // Start the animation
             mStopDeferred = false;
             mDeferredStopMode = 0;
-            RndAnimatable *anim = (RndAnimatable *)mAnim;
-            Task *task = nullptr;
-            if (anim) {
-                if (!mEnable) {
-                    task = anim->Animate(mBlend, false, mDelay, this, kEaseLinear, 2.0f, false);
-                } else if (mPeriod == 0.0f) {
+            if (mEnable) {
+                float period = mPeriod;
+                bool wrap = mWrap;
+                int ease = mEase;
+                Symbol type = mType;
+                int rate = mRate;
+                float easePower = mEasePower;
+                RndAnimatable *anim = (RndAnimatable *)mAnim;
+                Task *task;
+                if (period == 0.0f) {
+                    float scale = mScale;
+                    float end = mEnd;
+                    float start = mStart;
+                    float blend = mBlend;
+                    float delay = mDelay;
                     task = anim->Animate(
-                        mBlend, false, mDelay, mRate, mStart, mEnd,
-                        0.0f, mScale, mType, this, mEase, mEasePower, mWrap
+                        blend, false, delay, (RndAnimatable::Rate)rate, start, end,
+                        0.0f, scale, type, this, (EaseType)ease, easePower, wrap
                     );
                 } else {
+                    float end = mEnd;
+                    float start = mStart;
+                    float blend = mBlend;
+                    float delay = mDelay;
                     task = anim->Animate(
-                        mBlend, false, mDelay, mRate, mStart, mEnd,
-                        mPeriod, 1.0f, mType, this, mEase, mEasePower, mWrap
+                        blend, false, delay, (RndAnimatable::Rate)rate, start, end,
+                        period, 1.0f, type, this, (EaseType)ease, easePower, wrap
                     );
                 }
                 mAnimTask = static_cast<AnimTask *>(task);
+            } else {
+                float delay = mDelay;
+                float blend = mBlend;
+                RndAnimatable *anim = (RndAnimatable *)mAnim;
+                Task *task = anim->Animate(blend, false, delay, this, kEaseLinear, 2.0f, false);
+                mAnimTask = static_cast<AnimTask *>(task);
             }
-        } else {
-            // kIgnore when not running: notify parent
-            if (mFlowParent)
-                mFlowParent->ChildFinished(this);
-        }
-    } else {
-        // Already running (an animtask is active)
-        if (mAnimTask && state == kIgnore) {
-            mAnimTask->mListener = NULL;
-            AnimTask *task = mAnimTask;
-            mAnimTask = nullptr;
-            if (mStopMode != kReleaseAndContinue) {
-                delete task;
-            }
-            if (mFlowParent)
-                mFlowParent->ChildFinished(this);
+        } else if (state == kIgnore) {
+            mFlowParent->ChildFinished(this);
         }
     }
 }
@@ -222,57 +247,83 @@ void FlowAnimate::ChildFinished(FlowNode *node) {
 }
 
 void FlowAnimate::OnAnimEvent(Symbol sym) {
-    FLOW_LOG("OnAnimEvent: %s\n", sym.Str());
-    static Symbol sStop("stop");
-    static Symbol sMarker("marker");
-    static Symbol sBetweenMarkers("between_markers");
-    static Symbol sStartMarker("start_marker");
-    static Symbol sLoopMarker("loop_marker");
+    FLOW_LOG("Event: %s\n", (char *)sym.Str());
 
-    // First, scan child nodes for FlowLabels matching this symbol and activate them
+    // Scan child nodes for FlowLabels matching this symbol
     FOREACH (it, mChildNodes) {
         FlowNode *child = it->Obj();
-        FlowLabel *label = dynamic_cast<FlowLabel *>(child);
-        if (label && label->Label() == sym) {
-            ActivateLabel(label);
+        if (child->ClassName() == FlowLabel::StaticClassName()
+            && ((FlowLabel *)child)->Label() == sym) {
+            ActivateLabel((FlowLabel *)child);
             break;
         }
     }
 
-    if (sym == sStop) {
-        // Animation finished: clear animtask and notify parent if nothing else running
+    static Symbol sEnded("ended");
+    static Symbol sStop("stop");
+    static Symbol sNoStop("no_stop");
+    static Symbol sInterrupted("interrupted");
+    static Symbol sLooped("looped");
+
+    // "interrupted": independent check (not in else-if chain)
+    if (sym == sInterrupted) {
+        mAnimTask = nullptr;
+        if (mRunningNodes.empty() && !mImmediateRelease) {
+            FLOW_LOG("Timed Release From Parent \n");
+            Timer timer;
+            timer.Reset();
+            timer.Start();
+            mFlowParent->ChildFinished(this);
+            timer.Stop();
+            TheFlowMgr->AddMs(timer.Ms());
+        }
+    }
+
+    if (sym == sEnded) {
         if (mAnimTask) {
-            mAnimTask->mListener = NULL;
+            mAnimTask->mAnimTarget = NULL;
         }
         mAnimTask = nullptr;
         if (mRunningNodes.empty() && !mImmediateRelease) {
-            FLOW_LOG("Releasing\n");
-            if (mFlowParent)
-                mFlowParent->ChildFinished(this);
+            FLOW_LOG("Timed Release From Parent \n");
+            Timer timer;
+            timer.Reset();
+            timer.Start();
+            mFlowParent->ChildFinished(this);
+            timer.Stop();
+            TheFlowMgr->AddMs(timer.Ms());
         }
-    } else if (sym == sBetweenMarkers) {
-        if ((mDeferredStopMode == kStopBetweenMarkers || mDeferredStopMode == kStopOnMarker) &&
-            mAnimTask) {
-            TheFlowMgr->QueueCommand(this, kIgnore);
-        }
-        mDeferredStopMode = 0;
-        mBetweenStopMarkers = true;
-    } else if (sym == sMarker) {
-        mDeferredStopMode = 0;
-    } else if (sym == sLoopMarker) {
-        if (mStopDeferred && mAnimTask) {
-            // Defer stop was requested; stop at this loop point
-            if (mAnimTask) {
-                mAnimTask->mListener = NULL;
+    } else {
+        if (sym == sStop) {
+            if (mDeferredStopMode == kStopBetweenMarkers || mDeferredStopMode == kStopOnMarker) {
+                TheFlowMgr->QueueCommand(this, kIgnore);
             }
-            mAnimTask = nullptr;
-            FLOW_LOG("Releasing\n");
-            if (mFlowParent)
-                mFlowParent->ChildFinished(this);
+            mDeferredStopMode = 0;
+            mBetweenStopMarkers = true;
             return;
         }
-        mBetweenStopMarkers = false;
-    } else if (sym == sStartMarker) {
+        if (sym == sNoStop) {
+            mDeferredStopMode = 0;
+        } else {
+            if (sym != sLooped) {
+                return;
+            }
+            if (mStopDeferred && mAnimTask) {
+                AnimTask *task = mAnimTask;
+                if (task) {
+                    task->mAnimTarget = NULL;
+                }
+                delete (AnimTask *)mAnimTask;
+                FLOW_LOG("Timed Release From Parent \n");
+                Timer timer;
+                timer.Reset();
+                timer.Start();
+                mFlowParent->ChildFinished(this);
+                timer.Stop();
+                TheFlowMgr->AddMs(timer.Ms());
+                return;
+            }
+        }
         mBetweenStopMarkers = false;
     }
 }

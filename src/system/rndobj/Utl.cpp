@@ -823,37 +823,37 @@ void RandomPointOnMesh(RndMesh *m, Vector3 &v1, Vector3 &v2) {
         v1.Zero();
         v2.Zero();
     } else {
-        Vector3 v58, v64, v70;
-        Vector3 v7c, v88, v94;
+        Vector3 pos1, pos2, pos3;
+        Vector3 norm1, norm2, norm3;
         if (m->NumBones() > 0) {
-            v58 = m->SkinVertex(m->Verts()[face.v1], &v7c);
-            v64 = m->SkinVertex(m->Verts()[face.v2], &v88);
-            v70 = m->SkinVertex(m->Verts()[face.v3], &v94);
+            pos1 = m->SkinVertex(m->Verts()[face.v1], &norm1);
+            pos2 = m->SkinVertex(m->Verts()[face.v2], &norm2);
+            pos3 = m->SkinVertex(m->Verts()[face.v3], &norm3);
         } else {
-            v58 = m->Verts()[face.v1].pos;
-            v64 = m->Verts()[face.v2].pos;
-            v70 = m->Verts()[face.v3].pos;
-            v7c = m->Verts()[face.v1].norm;
-            v88 = m->Verts()[face.v2].norm;
-            v94 = m->Verts()[face.v3].norm;
+            pos1 = m->Verts()[face.v1].pos;
+            pos2 = m->Verts()[face.v2].pos;
+            pos3 = m->Verts()[face.v3].pos;
+            norm1 = m->Verts()[face.v1].norm;
+            norm2 = m->Verts()[face.v2].norm;
+            norm3 = m->Verts()[face.v3].norm;
         }
-        float f8 = RandomFloat();
-        float f9 = RandomFloat();
-        if (f8 + f9 > 1.0f) {
-            f8 = 1.0f - f8;
-            f9 = 1.0f - f9;
+        float baryU = RandomFloat();
+        float baryV = RandomFloat();
+        if (baryU + baryV > 1.0f) {
+            baryU = 1.0f - baryU;
+            baryV = 1.0f - baryV;
         }
-        float f1 = (1.0f - f8) - f9;
-        v58 *= f8;
-        v64 *= f9;
-        v70 *= f1;
-        Add(v58, v64, v1);
-        Add(v1, v70, v1);
-        v7c *= f8;
-        v88 *= f9;
-        v94 *= f1;
-        Add(v7c, v88, v2);
-        Add(v2, v94, v2);
+        float baryW = (1.0f - baryU) - baryV;
+        pos1 *= baryU;
+        pos2 *= baryV;
+        pos3 *= baryW;
+        Add(pos1, pos2, v1);
+        Add(v1, pos3, v1);
+        norm1 *= baryU;
+        norm2 *= baryV;
+        norm3 *= baryW;
+        Add(norm1, norm2, v2);
+        Add(v2, norm3, v2);
         Normalize(v2, v2);
     }
 }
@@ -902,9 +902,9 @@ void UtilDrawPlane(
     mb0.Identity();
     int idx = 0;
     int minIdx = 0;
-    float ref = 10000.0f;
+    float minDotProduct = 10000.0f;
     for (; idx < 3; idx++) {
-        if (MinEq(ref, Dot(mb0[idx], tf88.m.y))) {
+        if (MinEq(minDotProduct, Dot(mb0[idx], tf88.m.y))) {
             minIdx = idx;
         }
     }
@@ -1044,17 +1044,17 @@ DataNode GetNormalMapTextures(ObjectDir *dir) {
     int idx = 0;
     ptr->Node(idx++) = NULL_OBJ;
     for (ObjDirItr<RndTex> it(dir, true); it; ++it) {
-        bool b1 = false;
+        bool isNormalMapOrRenderTarget = false;
         FilePath fp(it->File());
         if (strstr(FileGetBase(fp.c_str()), "_norm")) {
-            b1 = true;
+            isNormalMapOrRenderTarget = true;
         } else {
             if (fp.empty()) {
                 if (it->IsRenderTarget())
-                    b1 = true;
+                    isNormalMapOrRenderTarget = true;
             }
         }
-        if (b1) {
+        if (isNormalMapOrRenderTarget) {
             ptr->Node(idx++) = DataNode(it);
         }
     }
@@ -1099,14 +1099,14 @@ DataNode OnTestDrawGroups(DataArray *da) {
         if (arr) {
             for (std::list<RndGroup *>::iterator gListIt = gList.begin();
                  gListIt != gList.end();) {
-                bool canerase = false;
+                bool shouldErase = false;
                 for (int i = 0; i < arr->Size(); i++) {
                     if (streq((*gListIt)->Name(), arr->Str(i))) {
-                        canerase = true;
+                        shouldErase = true;
                         break;
                     }
                 }
-                if (canerase)
+                if (shouldErase)
                     gListIt = gList.erase(gListIt);
                 else
                     ++gListIt;
@@ -1129,19 +1129,19 @@ void TestTextureSize(ObjectDir *dir, int iType, int i3, int i4, int i5, int maxB
     bool rendered = false;
     if (iType == RndTex::kRendered || iType == RndTex::kRenderedNoZ)
         rendered = true;
-    bool b2 = false;
+    bool shouldCheckBpp = false;
     if (GetGfxMode() == 0 || rendered)
-        b2 = true;
-    int ivar4 = 1;
-    if (b2)
-        ivar4 = i5;
+        shouldCheckBpp = true;
+    int scaleFactor = 1;
+    if (shouldCheckBpp)
+        scaleFactor = i5;
     for (ObjDirItr<RndTex> it(dir, true); it != 0; ++it) {
         if (iType == it->GetType()) {
-            int local_bpp = b2 ? it->Bpp() : 1;
+            int local_bpp = shouldCheckBpp ? it->Bpp() : 1;
             if (rendered && GetGfxMode() == 1 && local_bpp == 0x10)
                 local_bpp = 0x20;
             int product = it->Width() * it->Height() * local_bpp;
-            if (product > i3 * i4 * ivar4) {
+            if (product > i3 * i4 * scaleFactor) {
                 MILO_WARN(
                     "%s is too big w:%d h:%d bpp:%d",
                     PathName(it),
@@ -1150,7 +1150,7 @@ void TestTextureSize(ObjectDir *dir, int iType, int i3, int i4, int i5, int maxB
                     local_bpp
                 );
             }
-            if (product != 0 && b2 && local_bpp > maxBpp) {
+            if (product != 0 && shouldCheckBpp && local_bpp > maxBpp) {
                 MILO_WARN("%s is %d bpp > %d, too big", PathName(it), local_bpp, maxBpp);
             }
         }
@@ -1193,6 +1193,231 @@ void TestTexturePaths(ObjectDir *dir) {
 
 void TestMaterialTextures(ObjectDir *) {}
 
+void ComputeFaceTangentBasis(RndMesh *m, int faceIdx, Hmx::Matrix3 &outBasis) {
+    if (!m) {
+        MILO_ASSERT(m, 0x250);
+    }
+    outBasis.x.x = 1.0f; outBasis.x.y = 0.0f; outBasis.x.z = 0.0f;
+    outBasis.y.x = 0.0f; outBasis.y.y = 1.0f; outBasis.y.z = 0.0f;
+    outBasis.z.x = 0.0f; outBasis.z.y = 0.0f; outBasis.z.z = 1.0f;
+
+    RndMesh::Face &face = m->Faces()[faceIdx];
+    if (face.v1 != face.v2 && face.v2 != face.v3 && face.v3 != face.v1) {
+        RndMesh::Vert &vert1 = m->Verts()[face.v1];
+        RndMesh::Vert &vert2 = m->Verts()[face.v2];
+        RndMesh::Vert &vert3 = m->Verts()[face.v3];
+
+        if (!BadUV(vert1.tex) && !BadUV(vert2.tex) && !BadUV(vert3.tex)) {
+            float dx21 = vert2.pos.x - vert1.pos.x;
+            float dy21 = vert2.pos.y - vert1.pos.y;
+            float dz21 = vert2.pos.z - vert1.pos.z;
+            float dx31 = vert3.pos.x - vert1.pos.x;
+            float dy31 = vert3.pos.y - vert1.pos.y;
+            float dz31 = vert3.pos.z - vert1.pos.z;
+
+            float du21 = vert2.tex.x - vert1.tex.x;
+            float dv21 = vert2.tex.y - vert1.tex.y;
+            float du31 = vert3.tex.x - vert1.tex.x;
+            float dv31 = vert3.tex.y - vert1.tex.y;
+
+            if (dx21 == 0.0f && dy21 == 0.0f && dz21 == 0.0f) return;
+            if (dx31 == 0.0f && dy31 == 0.0f && dz31 == 0.0f) return;
+            if (du21 == 0.0f && dv21 == 0.0f) return;
+            if (du31 == 0.0f && dv31 == 0.0f) return;
+
+            float crossX = dz31 * dy21 - dy31 * dz21;
+            float crossY = dx31 * dz21 - dz31 * dx21;
+            float crossZ = dy31 * dx21 - dx31 * dy21;
+            Hmx::Matrix3 edgeMat(Vector3(dx21, dy21, dz21),
+                                  Vector3(dx31, dy31, dz31),
+                                  Vector3(crossX, crossY, crossZ));
+
+            Invert(edgeMat, edgeMat);
+
+            // Transpose the inverted edge matrix
+            float swapXY = edgeMat.x.y; edgeMat.x.y = edgeMat.y.x; edgeMat.y.x = swapXY;
+            float swapXZ = edgeMat.x.z; edgeMat.x.z = edgeMat.z.x; edgeMat.z.x = swapXZ;
+            float swapYZ = edgeMat.y.z; edgeMat.y.z = edgeMat.z.y; edgeMat.z.y = swapYZ;
+
+            Hmx::Matrix3 texMat;
+            texMat.x.Set(du21, du31, 0.0f);
+            texMat.y.Set(dv21, dv31, 0.0f);
+            texMat.z.Set(0.0f, 0.0f, 1.0f);
+
+            Multiply(texMat, edgeMat, outBasis);
+            return;
+        }
+        TheDebug << MakeString("NOTIFY: %s has bad UVs, should reexport from Max\n", (char*)PathName(m));
+    }
+}
+
+void MakeNormals(RndMesh *m) {
+    if (!m || m->GetGeomOwner() != m || m->Verts().size() == 0) return;
+
+    bool leftHanded = LeftHanded(m->WorldXfm().m);
+
+    int numVerts = m->Verts().size();
+    std::vector<int> repVerts(numVerts);
+    for (int i = 0; i < m->Verts().size(); i++) {
+        const Vector3& pos = m->Verts()[i].pos;
+        int rep = i;
+        for (int j = 0; (unsigned int)j < i; j++) {
+            const Vector3& otherPos = m->Verts()[j].pos;
+            if (fabs(pos.x - otherPos.x) <= 0.001f &&
+                fabs(pos.y - otherPos.y) <= 0.001f &&
+                fabs(pos.z - otherPos.z) <= 0.001f) {
+                rep = j;
+                break;
+            }
+        }
+        repVerts[i] = rep;
+    }
+
+    for (int i = 0; i < m->Verts().size(); i++) {
+        m->Verts()[i].norm.Zero();
+
+        int rep = repVerts[i];
+        for (int f = 0; f < m->Faces().size(); f++) {
+            RndMesh::Face& face = m->Faces()[f];
+            int k;
+            for (k = 0; k < 3; k++) {
+                if ((unsigned int)repVerts[face[k]] == rep)
+                    break;
+            }
+            if (k != 3) {
+                const RndMesh::Vert& v0 = m->Verts()[face[k]];
+                const RndMesh::Vert& v1 = m->Verts()[face[(k+1)%3]];
+                const RndMesh::Vert& v2 = m->Verts()[face[(k+2)%3]];
+
+                Vector3 e1(v1.pos.x - v0.pos.x, v1.pos.y - v0.pos.y, v1.pos.z - v0.pos.z);
+                Vector3 e2(v2.pos.x - v0.pos.x, v2.pos.y - v0.pos.y, v2.pos.z - v0.pos.z);
+
+                if (e1.x != 0 || e1.y != 0 || e1.z != 0) {
+                    if (e2.x != 0 || e2.y != 0 || e2.z != 0) {
+                        if (e1.x != e2.x || e1.y != e2.y || e1.z != e2.z) {
+                            Vector3 crossProd(e2.z * e1.y - e2.y * e1.z, e2.x * e1.z - e2.z * e1.x, e2.y * e1.x - e2.x * e1.y);
+                            Normalize(crossProd, crossProd);
+                            Normalize(e1, e1);
+                            Normalize(e2, e2);
+                            float angle = (float)acos((double)(e2.x * e1.x + e2.y * e1.y + e2.z * e1.z));
+
+                            m->Verts()[i].norm.x += crossProd.x * angle;
+                            m->Verts()[i].norm.y += crossProd.y * angle;
+                            m->Verts()[i].norm.z += crossProd.z * angle;
+                        }
+                    }
+                }
+            }
+        }
+        Normalize(m->Verts()[i].norm, m->Verts()[i].norm);
+
+        if (leftHanded) {
+            m->Verts()[i].norm.x = -m->Verts()[i].norm.x;
+            m->Verts()[i].norm.y = -m->Verts()[i].norm.y;
+            m->Verts()[i].norm.z = -m->Verts()[i].norm.z;
+        }
+    }
+    m->Sync(0x1F);
+}
+
+void ResetNormals(RndMesh *m) {
+    if (!m || m->GetGeomOwner() != m || m->Verts().size() == 0) return;
+
+    auto zeroVec = Vector4(0, 0, 0, 0);
+
+    bool leftHanded = LeftHanded(m->WorldXfm().m);
+    std::vector<Vector4> faceTangents(m->Faces().size(), zeroVec);
+
+    for (int i = 0; i < m->Faces().size(); i++) {
+        Hmx::Matrix3 basis;
+        ComputeFaceTangentBasis(m, i, basis);
+
+        float crossX = basis.x.y * basis.z.x - basis.z.y * basis.x.x;
+        float crossY = basis.z.z * basis.x.x - basis.x.z * basis.z.x;
+        float crossZ = basis.x.z * basis.z.y - basis.z.z * basis.x.y;
+        Normalize(basis.x, *(Vector3*)&faceTangents[i]);
+        float w = (crossZ * basis.y.x + basis.y.y * crossY + basis.y.z * crossX < 0.0f) ? -1.0f : 1.0f;
+        faceTangents[i].w = w;
+    }
+
+    int numVerts = m->Verts().size();
+    std::vector<int> repVerts(numVerts);
+    for (int i = 0; i < m->Verts().size(); i++) {
+        const Vector3& pos = m->Verts()[i].pos;
+        int rep = i;
+        for (int j = 0; j < i; j++) {
+            const Vector3& otherPos = m->Verts()[j].pos;
+            if (fabs(pos.x - otherPos.x) <= 0.001f &&
+                fabs(pos.y - otherPos.y) <= 0.001f &&
+                fabs(pos.z - otherPos.z) <= 0.001f) {
+                rep = j;
+                break;
+            }
+        }
+        repVerts[i] = rep;
+    }
+
+    for (int i = 0; i < m->Verts().size(); i++) {
+        RndMesh::Vert& v = m->Verts()[i];
+        v.norm.Zero();
+        v.tangent.Set(0, 0, 0, 0);
+
+        int rep = repVerts[i];
+        for (int f = 0; f < m->Faces().size(); f++) {
+            RndMesh::Face& face = m->Faces()[f];
+            for (int k = 0; k < 3; k++) {
+                if ((unsigned int)repVerts[face[k]] == rep) {
+                    const RndMesh::Vert& v0 = m->Verts()[face[k]];
+                    const RndMesh::Vert& v1 = m->Verts()[face[(k+1)%3]];
+                    const RndMesh::Vert& v2 = m->Verts()[face[(k+2)%3]];
+
+                    float dx1 = v1.pos.x - v0.pos.x;
+                    float dy1 = v1.pos.y - v0.pos.y;
+                    float dz1 = v1.pos.z - v0.pos.z;
+                    float dx2 = v2.pos.x - v0.pos.x;
+                    float dy2 = v2.pos.y - v0.pos.y;
+                    float dz2 = v2.pos.z - v0.pos.z;
+
+                    if (dx1 != 0 || dy1 != 0 || dz1 != 0) {
+                        if (dx2 != 0 || dy2 != 0 || dz2 != 0) {
+                            if (dx1 != dx2 || dy1 != dy2 || dz1 != dz2) {
+                                Vector3 crossProd(dz2 * dy1 - dy2 * dz1, dx2 * dz1 - dz2 * dx1, dy2 * dx1 - dx2 * dy1);
+                                Normalize(crossProd, crossProd);
+                                Vector3 e1(dx1, dy1, dz1), e2(dx2, dy2, dz2);
+                                Normalize(e1, e1);
+                                Normalize(e2, e2);
+                                float angle = (float)acos((double)(e2.x * e1.x + e2.y * e1.y + e2.z * e1.z));
+
+                                v.norm.x += crossProd.x * angle;
+                                v.norm.y += crossProd.y * angle;
+                                v.norm.z += crossProd.z * angle;
+
+                                Vector4& ft = faceTangents[f];
+                                v.tangent.x += ft.x * angle;
+                                v.tangent.y += ft.y * angle;
+                                v.tangent.z += ft.z * angle;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Normalize(v.norm, v.norm);
+        Normalize(*(Vector3*)&v.tangent, *(Vector3*)&v.tangent);
+
+        if (leftHanded) {
+            v.norm.x = -v.norm.x; v.norm.y = -v.norm.y; v.norm.z = -v.norm.z;
+            v.tangent.x = -v.tangent.x; v.tangent.y = -v.tangent.y; v.tangent.z = -v.tangent.z;
+        }
+
+        float tx = v.tangent.x, ty = v.tangent.y, tz = v.tangent.z;
+        float tDotN = v.norm.x * tx + v.norm.z * tz + v.norm.y * ty;
+        Vector3 ortho(tx - v.norm.x * tDotN, ty - v.norm.y * tDotN, tz - v.norm.z * tDotN);
+        Normalize(ortho, *(Vector3*)&v.tangent);
+    }
+    m->Sync(0x1F);
+}
+
 void ConvertBonesToTranses(ObjectDir *dir, bool b) {
     std::list<RndMesh *> meshes;
     for (ObjDirItr<RndMesh> it(dir, true); it != 0; ++it) {
@@ -1201,19 +1426,19 @@ void ConvertBonesToTranses(ObjectDir *dir, bool b) {
             meshes.push_back(it);
         } else {
             if (b) {
-                bool b1 = false;
+                bool foundBoneRef = false;
                 FOREACH (rit, it->Refs()) {
                     RndMesh *curRefOwner = dynamic_cast<RndMesh *>(rit->RefOwner());
                     if (curRefOwner) {
                         for (int i = 0; i < curRefOwner->NumBones(); i++) {
                             if (curRefOwner->BoneTransAt(i) == itTrans) {
                                 meshes.push_back(it);
-                                b1 = true;
+                                foundBoneRef = true;
                                 break;
                             }
                         }
                     }
-                    if (b1)
+                    if (foundBoneRef)
                         break;
                 }
             }
@@ -1241,19 +1466,19 @@ const char *ResourceFileCacheHelper::CacheFile(const char *cc) {
 }
 
 bool RndAmbientOcclusion::Edge::operator<(const Edge &e) const {
-    unsigned short a1 = v1, a0 = v0;
+    unsigned short aMax = v1, aMin = v0;
     unsigned int a;
-    if (a0 < a1) {
-        a = ((unsigned int)a0 << 16) | a1;
+    if (aMin < aMax) {
+        a = ((unsigned int)aMin << 16) | aMax;
     } else {
-        a = ((unsigned int)a1 << 16) | a0;
+        a = ((unsigned int)aMax << 16) | aMin;
     }
-    unsigned short b1 = e.v1, b0 = e.v0;
+    unsigned short bMax = e.v1, bMin = e.v0;
     unsigned int b;
-    if (b0 < b1) {
-        b = ((unsigned int)b0 << 16) | b1;
+    if (bMin < bMax) {
+        b = ((unsigned int)bMin << 16) | bMax;
     } else {
-        b = ((unsigned int)b1 << 16) | b0;
+        b = ((unsigned int)bMax << 16) | bMin;
     }
     return a < b;
 }
@@ -1286,4 +1511,51 @@ void RndScaleObject(Hmx::Object *obj, float scale, float fovScale) {
         }
         return;
     }
+}
+
+void BurnXfm(RndMesh *mesh, bool keepTranslation) {
+    Transform xfm = mesh->LocalXfm();
+    if (keepTranslation) {
+        xfm.v.Zero();
+    }
+    Hmx::Matrix3 normalMat;
+    Invert(xfm.m, normalMat);
+
+    float xy = normalMat.x.y;
+    normalMat.x.y = normalMat.y.x;
+    normalMat.y.x = xy;
+
+    float xz = normalMat.x.z;
+    normalMat.x.z = normalMat.z.x;
+    normalMat.z.x = xz;
+
+    float yz = normalMat.y.z;
+    normalMat.y.z = normalMat.z.y;
+    normalMat.z.y = yz;
+
+    for (RndMesh::Vert *it = mesh->Verts().begin(); it != mesh->Verts().end(); it++) {
+        Multiply(it->pos, xfm, it->pos);
+        Multiply(it->norm, normalMat, it->norm);
+        Normalize(it->norm, it->norm);
+        Vector3 tangent(it->tangent.x, it->tangent.y, it->tangent.z);
+        Multiply(tangent, normalMat, tangent);
+        Normalize(tangent, tangent);
+        it->tangent.x = tangent.x;
+        it->tangent.y = tangent.y;
+        it->tangent.z = tangent.z;
+    }
+    mesh->Sync(0x1F);
+    if (mesh->GetBSPTree()) {
+        MultiplyEq(mesh->GetBSPTree(), xfm);
+    }
+    Sphere s;
+    Multiply(mesh->GetSphere(), xfm, s);
+    mesh->SetSphere(s);
+
+    Transform ident;
+    ident.Reset();
+    if (keepTranslation) {
+        ident.v = mesh->LocalXfm().v;
+    }
+    mesh->SetLocalXfm(ident);
 }

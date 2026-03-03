@@ -4,10 +4,7 @@
 
 CharBoneTwist::CharBoneTwist() : mBone(this), mTargets(this) {}
 
-BEGIN_HANDLERS(CharBoneTwist)
-    HANDLE_SUPERCLASS(CharWeightable)
-    HANDLE_SUPERCLASS(Hmx::Object)
-END_HANDLERS
+// Handle is in CharSignalApplier.cpp (cross-unit)
 
 BEGIN_PROPSYNCS(CharBoneTwist)
     SYNC_PROP(bone, mBone)

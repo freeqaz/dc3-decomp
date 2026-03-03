@@ -533,28 +533,23 @@ int RndFont::CharPage(unsigned short c) const {
 bool RndFont::CharWidthAdvanceCoords(
     unsigned short c, float &charW, float &advW, Vector2 &uvMin, Vector2 &uvMax
 ) const {
-    // TODO: this is a native-only approximation — the original implementation
-    // likely lives in the undecompiled portion of the binary
-    if (!HasChar(c))
-        return false;
-    const RndFont *owner = mTextureOwner ? mTextureOwner : this;
+    const RndFont *owner = this;
+    while (owner->mTextureOwner != owner) {
+        owner = owner->mTextureOwner;
+    }
     std::map<unsigned short, CharInfo>::const_iterator it = owner->mCharInfoMap.find(c);
-    if (it == owner->mCharInfoMap.end())
-        return false;
-    const CharInfo &info = it->second;
-    charW = info.charWidth;
-    advW = mMonospace ? 1.0f : info.mAdvance;
-
-    // Compute UV coordinates from font texture atlas
-    // mU/mV are the top-left UV (0-1 range)
-    // Cell size in UV space = cellSize / textureSize
-    RndTex *tex = ValidTexture(info.mPage);
-    if (!tex || tex->Width() <= 0 || tex->Height() <= 0)
-        return false;
-    float cellU = owner->mCellSize.x / (float)tex->Width();
-    float cellV = owner->mCellSize.y / (float)tex->Height();
-    uvMin.Set(info.mU, info.mV);
-    uvMax.Set(info.mU + charW * cellU, info.mV + cellV);
-    return true;
+    if (it != owner->mCharInfoMap.end()) {
+        const CharInfo &info = it->second;
+        if (info.mU != 0 || info.mV != 0 || info.mAdvance != 0) {
+            charW = info.charWidth;
+            advW = owner->mMonospace ? 1.0f : info.mAdvance;
+            uvMin.x = info.mU;
+            uvMax.x = owner->mMaterialOffsets[info.mPage].x * info.charWidth + info.mU;
+            uvMin.y = info.mV;
+            uvMax.y = owner->mMaterialOffsets[info.mPage].y + info.mV;
+            return true;
+        }
+    }
+    return false;
 }
 

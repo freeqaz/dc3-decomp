@@ -193,6 +193,16 @@ bash native/scripts/render_screenshots.sh
 bash native/scripts/render_screenshots.sh --only disco
 ```
 
+## Reference Screenshots
+
+Xbox 360 reference images for visual comparison are in `archive/screenshots/references/`:
+
+- `dc3_main_menu.jpg` — Main menu (DC3 logo, player silhouettes, swirl background)
+- `dc3_song_select.jpg` — Song select (list with gradient bars, character preview)
+- `dc3_gameplay_ui.jpg` — Gameplay (3D venue, move cards, score, characters)
+
+Native port progress screenshots are in `archive/screenshots/native_alpha_fix_f*.png`.
+
 ## Related Docs
 
 - [STATUS.md](STATUS.md) — Track A: full engine boot status

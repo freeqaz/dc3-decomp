@@ -103,6 +103,14 @@ void MoveGraph::CacheLinks() {
     }
 }
 
+MoveParent *MoveGraph::GetNonConstMoveParent(Symbol name) const {
+    std::map<Symbol, MoveParent *>::const_iterator it = mMoveParents.find(name);
+    if (it != mMoveParents.end())
+        return it->second;
+    else
+        return nullptr;
+}
+
 MoveVariant *MoveGraph::FindNonConstMoveByVariantName(Symbol name) const {
     std::map<Symbol, MoveVariant *>::const_iterator it = mMoveVariants.find(name);
     if (it != mMoveVariants.end())

@@ -7,6 +7,11 @@
 #include "utl/BinStream.h"
 #include "utl/Loader.h"
 
+void RndTex::Load(BinStream &bs) {
+    PreLoad(bs);
+    PostLoad(bs);
+}
+
 void RndCubeTex::CubeTexProperties::Set(const RndBitmap &bmap) {
     mBpp = bmap.Bpp();
     mHeight = bmap.Height();

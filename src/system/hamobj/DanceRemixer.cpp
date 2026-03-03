@@ -1,7 +1,9 @@
 #include "hamobj/DanceRemixer.h"
+#include "meta_ham/MetagameStats.h"
 #include "MoveMgr.h"
 #include "hamobj/HamDirector.h"
 #include "hamobj/HamMaster.h"
+#include "hamobj/HamAudio.h"
 #include "hamobj/HamGameData.h"
 #include "hamobj/HamMove.h"
 #include "hamobj/MoveDetector.h"
@@ -12,6 +14,10 @@
 #include "obj/Object.h"
 #include "obj/Task.h"
 #include "os/Debug.h"
+#include "os/System.h"
+#include "utl/TimeConversion.h"
+
+MetagameStats::FavoriteStat::FavoriteStat() {}
 
 DanceRemixer::DanceRemixer() {}
 DanceRemixer::~DanceRemixer() { HandleType(Message("deinit")); }
@@ -58,6 +64,41 @@ BEGIN_HANDLERS(DanceRemixer)
     HANDLE_EXPR(measures_total, mTotalMeasures)
     HANDLE_SUPERCLASS(Hmx::Object)
 END_HANDLERS
+
+void DanceRemixer::SetJump(int from, int to) {
+    ClearJump();
+    mFromMeasure = from - 1;
+    mToMeasure = to - 1;
+    int fromBeat = mFromMeasure * 4;
+    if (mFromMeasure == mToMeasure) {
+        TheMaster->GetAudio()->SetLoop((float)(mToMeasure * 4), (float)fromBeat);
+    } else {
+        float fromMs = BeatToMs((float)fromBeat);
+        float toMs = BeatToMs((float)(mToMeasure * 4));
+        float jumpOffset = SystemConfig("dance", "jump")->Node(1).Float(nullptr);
+        float crossfadeMs = BeatToMs((float)(mFromMeasure * 4) + jumpOffset);
+        TheMaster->GetAudio()->SetCrossfadeJump(fromMs, toMs, crossfadeMs - fromMs);
+
+        mJumpMap[mToMeasure] = mFromMeasure;
+        if (mFromMeasure > 0 && mToMeasure > 0) {
+            mJumpMap[mFromMeasure - 1] = mToMeasure - 1;
+        }
+
+        float curBeat = TheTaskMgr.Beat();
+        int idx = mFromMeasure - 1;
+        int count = (int)curBeat / 4 - idx + 5;
+        if (count > 0 && 0 < (int)count) {
+            do {
+                MILO_ASSERT(ValidMoveIdx(idx), 0x16d);
+                for (int p = 0; p < 2; p++) {
+                    SelectMove(p, idx);
+                }
+                idx = JumpedMeasureAdd(idx + 1, 1) - 1;
+                count--;
+            } while (count != 0);
+        }
+    }
+}
 
 void DanceRemixer::ClearJump() {
     mFromMeasure = -1;
@@ -245,6 +286,36 @@ int DanceRemixer::JumpedMeasureStepsBetween(int from, int to, int step) const {
         from = JumpedMeasureAdd(from, step);
     }
     return count;
+}
+
+const MoveVariant *DanceRemixer::MoveVariantFromHamMove(const HamMove *move) const {
+    MILO_ASSERT(move, 0x1f7);
+    Symbol moveName = move->Name();
+
+    for (int i = 0; i < 2; i++) {
+        const auto &measures = TheMoveMgr->mRoutineMeasures[i];
+        for (unsigned int j = 0; j < measures.size(); j++) {
+            if (JumpedMoveIdx(j) == (int)j) {
+                if (measures[j].first && measures[j].first->HamMoveName() == moveName) {
+                    return measures[j].first;
+                }
+                if (measures[j].second && measures[j].second->HamMoveName() == moveName) {
+                    return measures[j].second;
+                }
+            }
+        }
+    }
+
+    // Fall back to searching the move graph's variant map
+    const std::map<Symbol, MoveVariant *> &variants = TheMoveMgr->mMoveGraph.MoveVariants();
+    for (std::map<Symbol, MoveVariant *>::const_iterator it = variants.begin();
+         it != variants.end(); ++it) {
+        if (it->second->HamMoveName() == moveName) {
+            return it->second;
+        }
+    }
+
+    return nullptr;
 }
 
 const MoveParent *DanceRemixer::GetMoveParent(int x, int y) {

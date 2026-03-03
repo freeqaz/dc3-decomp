@@ -96,7 +96,6 @@ int NuiSpeechStopRecognition() { return 0; }
 int NuiSpeechUnloadGrammar() { return 0; }
 int NuiWaveGetGestureOwnerProgress() { return 0; }
 int NuiWaveSetEnabled() { return 0; }
-int OnlyReturns() { return 0; }
 int OutputDebugStringA() { return 0; }
 int printbuf_free() { return 0; }
 int printbuf_memappend() { return 0; }

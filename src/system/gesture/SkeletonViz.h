@@ -55,6 +55,8 @@ public:
 private:
     void LoadResource(bool);
     void UpdateResource();
+    void SetCamera(const SkeletonFrame &, const Transform &, float);
+    void DrawJoints(const BaseSkeleton &, Vector3 *, Vector3 *, bool);
 
 protected:
     SkeletonViz();

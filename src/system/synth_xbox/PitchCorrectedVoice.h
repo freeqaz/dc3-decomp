@@ -39,6 +39,7 @@ namespace TrueColor {
 class ExposureRecipe {
 public:
     void SetMinIntegrationTime(float);
+    void SetGlobalGain(float);
 
     float mField_0x00;         // 0x00
     float mField_0x04;         // 0x04

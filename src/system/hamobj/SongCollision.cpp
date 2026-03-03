@@ -83,9 +83,7 @@ BEGIN_HANDLERS(SongCollision)
     HANDLE_SUPERCLASS(Hmx::Object)
 END_HANDLERS
 
-BEGIN_PROPSYNCS(SongCollision)
-    SYNC_SUPERCLASS(Hmx::Object)
-END_PROPSYNCS
+// SyncProperty is in FileMergerOrganizer.cpp (cross-unit)
 
 BEGIN_SAVES(SongCollision)
     SAVE_REVS(2, 1)

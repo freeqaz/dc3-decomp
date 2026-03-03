@@ -12,7 +12,7 @@ const std::vector<float> &SongInfoCopy::GetVols() const { return mVols; }
 
 const std::vector<int> &SongInfoCopy::GetCores() const { return mCores; }
 
-const std::vector<TrackChannels> &SongInfoCopy::GetTracks() const { return mTrackChannels; }
+// GetTracks is in CharBoneDir.cpp (cross-unit)
 
 const char *SongInfoCopy::GetPackageName() const {
     if (!mPackageName.empty())
