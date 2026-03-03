@@ -95,7 +95,7 @@ Pass 2 focused updates (function-by-function):
 - `SkeletonClip::PollRecording` -> 99.1% (from 96.9%) after `TheHamDirector` re-check split, compare-order alignment, and `MILO_LOG` argument-type fix.
 - `SkeletonRecoverer::GetTrackingIDWithRecovery` -> 94.6% (from 90.2%) after return-carrier/control-flow reshaping and distance/threshold ordering fixes; one search/null-path control-flow cluster remains.
 
-## Current Gap Assessment (2026-03-03, Live Objdiff In-Tree)
+## Current Gap Assessment (2026-03-03, Live Objdiff In-Tree, Latest Pass)
 - Important: decomp DB status rows for several gesture symbols currently show `COMPLETE (reset: stub with no source implementation)`, which does not reflect local in-tree matching. Gap tracking below uses **live objdiff** against current source.
 
 Near complete (>=95%):
@@ -103,23 +103,23 @@ Near complete (>=95%):
 - `SkeletonClip::PollRecording` -> 99.1%
 - `SkeletonClip::SongStartSeconds` -> 99.0%
 - `SkeletonUpdate::UpdateFakeArmPos` -> 98.5%
+- `SkeletonViz::Visualize` -> 97.4%
 
 Close but still meaningful gaps (80-95%):
 - `SkeletonRecoverer::GetTrackingIDWithRecovery` -> 94.6%
 - `SkeletonClip::Poll` -> 92.5%
+- `SkeletonRecoverer::Poll` -> 90.8%
 - `SkeletonClip::CurRecordedFrame` -> 91.2%
 - `RecordedFrame::MakeSkeletonFrame` -> 89.4%
 - `SkeletonClip::RecordedFrameAt` -> 86.7%
+- `Skeleton::Poll` -> 81.0%
 - `SkeletonClip::PrevSkeleton` -> 81.0%
 - `SkeletonUpdate::UpdateCallbacks` -> 81.0%
 
 Remaining major gaps (<80%):
-- `SkeletonUpdate::InsertFakeArmPos` -> 79.3%
+- `SkeletonUpdate::InsertFakeArmPos` -> 58.2%
 - `SkeletonClip::FillMoveRatings` -> 79.8%
-- `Skeleton::Poll` -> 69.2%
 - `GestureMgr::PostUpdate` -> 68.3%
-- `SkeletonViz::Visualize` -> 66.1%
-- `SkeletonRecoverer::Poll` -> 63.0%
 - `SkeletonClip::LoadFrame` -> 61.7%
 - `SkeletonUpdate::Update` -> 49.2%
 - `SkeletonViz::DrawPoint3D` -> 37.2%
@@ -131,8 +131,8 @@ Root-cause buckets now driving remaining work:
 - Prologue/local-variable layout mismatches dominate `SkeletonViz` and some `SkeletonRecoverer`/`SkeletonUpdate` functions; these are declaration-order/code-shape sensitive.
 
 Readiness summary:
-- We are close on the `SkeletonClip` recording/playback micro-path pieces, but not yet close on the broader runtime visualization/update chain.
-- Biggest remaining functional risk to ground-truth bone validation is still in low-match transform/update hot-paths (`SkeletonUpdate::Update`, `Skeleton::Poll`, `GestureMgr::PostUpdate`, `SkeletonViz::SetCamera/Visualize`).
+- We are close on the `SkeletonClip` recording/playback micro-path pieces and `SkeletonViz::Visualize`, but not yet close on the broader runtime update/camera chain.
+- Biggest remaining functional risk to ground-truth bone validation is still in low-match transform/update hot-paths (`SkeletonUpdate::Update`, `GestureMgr::PostUpdate`, `SkeletonViz::SetCamera`, `SkeletonViz::DrawPoint3D`, `SkeletonUpdate::InsertFakeArmPos`).
 
 ## Weak Stub Linkage Clarification
 - Weak stubs are fallback symbols compiled in `native/src/engine_stubs_generated.cpp`.

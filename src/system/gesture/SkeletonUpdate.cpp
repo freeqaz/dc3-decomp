@@ -227,12 +227,14 @@ void SkeletonUpdate::InsertFakeArmPos(SkeletonData &data) {
     float ry = padData->mSticks[1][0];
     if (ry > 0.5f) {
         data.mJointPositions[kJointElbowRight].z = data.mJointPositions[kJointShoulderRight].z;
-        data.mJointPositions[kJointElbowRight].y = data.mJointPositions[kJointShoulderRight].y - 0.3f;
+        data.mJointPositions[kJointElbowRight].y =
+            data.mJointPositions[kJointShoulderRight].y - 0.3f;
         float elbowRightX = data.mJointPositions[kJointShoulderRight].x + 0.3f;
         data.mJointPositions[kJointElbowRight].x = elbowRightX;
         data.mJointPositions[kJointWristRight].z = data.mJointPositions[kJointElbowRight].z;
         data.mJointPositions[kJointWristRight].x = elbowRightX + 0.3f;
-        data.mJointPositions[kJointWristRight].y = data.mJointPositions[kJointElbowRight].y - 0.3f;
+        data.mJointPositions[kJointWristRight].y =
+            data.mJointPositions[kJointElbowRight].y - 0.3f;
         data.mJointPositions[kJointHandRight] = data.mJointPositions[kJointWristRight];
     } else if (ry < -0.5f) {
         data.mJointPositions[kJointHandRight].y = 0.65f;
@@ -244,20 +246,20 @@ void SkeletonUpdate::InsertFakeArmPos(SkeletonData &data) {
     } else {
         float rt = padData->mTriggers[1];
         float lt = padData->mTriggers[0];
-        if (rt > 0.5f && lt > 0.5f) {
-            data.mJointPositions[kJointHandRight].y = 0.65f;
-            data.mJointPositions[kJointWristRight].y = 0.6f;
-            data.mJointPositions[kJointElbowRight].y = 0.45f;
-        } else {
+        if (rt <= 0.5f || lt <= 0.5f) {
             float rightZ = data.mJointPositions[kJointElbowRight].z - 0.5f;
             float rightY = data.mJointPositions[kJointElbowRight].y + unk5398;
             float rightX = -((rt * 0.5f) - 0.1f) + data.mJointPositions[kJointElbowRight].x;
-            Vector3 rightPos;
+            PaddedJointPos rightPos;
             rightPos.z = rightZ;
             rightPos.y = rightY;
             rightPos.x = rightX;
             data.mJointPositions[kJointHandRight] = rightPos;
             data.mJointPositions[kJointWristRight] = rightPos;
+        } else {
+            data.mJointPositions[kJointHandRight].y = 0.65f;
+            data.mJointPositions[kJointWristRight].y = 0.6f;
+            data.mJointPositions[kJointElbowRight].y = 0.45f;
         }
     }
 
@@ -266,7 +268,7 @@ void SkeletonUpdate::InsertFakeArmPos(SkeletonData &data) {
         float leftY = data.mJointPositions[kJointElbowLeft].y + unk5398;
         float leftZ = data.mJointPositions[kJointElbowLeft].z - 0.5f;
         float leftX = (lt * 0.5f - 0.25f) + data.mJointPositions[kJointElbowLeft].x;
-        Vector3 leftPos;
+        PaddedJointPos leftPos;
         leftPos.y = leftY;
         leftPos.z = leftZ;
         leftPos.x = leftX;

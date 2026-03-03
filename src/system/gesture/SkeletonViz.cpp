@@ -238,7 +238,9 @@ void SkeletonViz::Poll() {
     }
 }
 
-void SkeletonViz::SetCamera(const SkeletonFrame &frame, const Transform &worldXfm, float distance) {
+void SkeletonViz::SetCamera(
+    const SkeletonFrame &frame, const Transform &worldXfm, float distance
+) {
     RndCam *physCam = mPhysicalCam;
     bool natal = unk218;
     float rot = mPhysicalCamRotation;
@@ -264,7 +266,9 @@ void SkeletonViz::SetCamera(const SkeletonFrame &frame, const Transform &worldXf
         physCam->Select();
     } else {
         if (axes == kCoordCamera || !natal) {
-            UtilDrawAxes(worldXfm, 5.0f / mLineWidthScale, Hmx::Color(1.0f, 1.0f, 1.0f, 1.0f));
+            UtilDrawAxes(
+                worldXfm, 5.0f / mLineWidthScale, Hmx::Color(1.0f, 1.0f, 1.0f, 1.0f)
+            );
         }
         if (natal && mCamMesh) {
             mCamMesh->SetWorldPos(worldXfm.v);
@@ -276,7 +280,9 @@ void SkeletonViz::SetCamera(const SkeletonFrame &frame, const Transform &worldXf
                 normal.x += worldXfm.v.x;
                 normal.y += worldXfm.v.y;
                 normal.z += worldXfm.v.z;
-                TheRnd.DrawLine(worldXfm.v, normal, Hmx::Color(1.0f, 1.0f, 1.0f, 1.0f), false);
+                TheRnd.DrawLine(
+                    worldXfm.v, normal, Hmx::Color(1.0f, 1.0f, 1.0f, 1.0f), false
+                );
             }
         }
     }
@@ -292,24 +298,34 @@ void SkeletonViz::SetCamera(const SkeletonFrame &frame, const Transform &worldXf
         plane.c = pc;
         plane.d = pd;
         Multiply(plane, unk1d4, plane);
-        UtilDrawPlane(plane, worldXfm.v, Hmx::Color(1.0f, 1.0f, 0.0f, 1.0f), 5, 0.5f, false);
+        UtilDrawPlane(
+            plane, worldXfm.v, Hmx::Color(1.0f, 1.0f, 0.0f, 1.0f), 5, 0.5f, false
+        );
     }
 }
 
-void SkeletonViz::DrawPoint3D(const Vector3 &vec, float scale, const Hmx::Color &color, float alpha) {
-    if (mSphereMesh) {
-        Vector3 point;
-        Multiply(vec, unk1d4, point);
-        if (unk218) {
-            Multiply(point, WorldXfm(), point);
-        }
-        RndMat *mat = mSphereMesh->Mat();
-        if (mat) {
-            mat->SetColor(color.red, color.green, color.blue);
-        }
-        mSphereMesh->SetWorldPos(point);
-        mSphereMesh->DrawShowing();
+void SkeletonViz::DrawPoint3D(
+    const Vector3 &vec, float scale, const Hmx::Color &color, float alpha
+) {
+    Vector3 point;
+    Multiply(vec, unk1d4, point);
+    if (unk218) {
+        Multiply(point, WorldXfm(), point);
     }
+
+    float pointAlpha = alpha;
+    float scaled = mLineWidthScale * scale;
+    mSphereMesh->Mat()->SetColor(color.red, color.green, color.blue);
+    mSphereMesh->Mat()->SetAlpha(pointAlpha);
+    mSphereMesh->Mat()->SetCull(kCullNone);
+
+    Transform sphereXfm;
+    sphereXfm.Reset();
+    sphereXfm.v = point;
+    Scale(Vector3(scaled, scaled, scaled), sphereXfm.m, sphereXfm.m);
+    mSphereMesh->SetLocalXfm(sphereXfm);
+    mSphereMesh->SetLocalPos(point);
+    mSphereMesh->DrawShowing();
 }
 
 void SkeletonViz::DrawJoints(

@@ -71,7 +71,7 @@ void RecordedFrame::MakeSkeletonFrame(SkeletonFrame &frame, int idx) const {
 }
 
 void SkeletonClip::LoadFrame(BinStream &bs, RecordedFrame &frame, int version) {
-    if (version > 6) {
+    if ((int)version > 6) {
         bs >> frame.mFrameNumber;
     } else {
         frame.mFrameNumber = 0;
@@ -102,8 +102,6 @@ void SkeletonClip::LoadFrame(BinStream &bs, RecordedFrame &frame, int version) {
         bs >> tmp;
     } else if (version > 2) {
         bs >> frame.mSongSeconds;
-    } else {
-        frame.mSongSeconds = 0;
     }
 }
 
