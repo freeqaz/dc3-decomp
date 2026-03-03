@@ -48,6 +48,11 @@ public:
     bool Showing() const { return mShowing; }
     bool AnimatePosFromPreset() const { return mAnimatePositionFromPreset; }
     bool AnimateRangeFromPreset() const { return mAnimateRangeFromPreset; }
+    int GetProjectedBlend() const { return mProjectedBlend; }
+    RndTex *GetTexture() const { return mTexture; }
+    RndCubeTex *GetCubeTexture() const { return mCubeTexture; }
+    ObjPtrList<RndDrawable> *GetShadowOverride() const { return mShadowOverride; }
+    int ShadowObjectsSize() const { return mShadowObjects.size(); }
 
     Transform Projection();
 
@@ -77,7 +82,7 @@ protected:
     ObjPtrList<RndDrawable> *mShadowOverride; // 0x11c
     ObjPtrList<RndDrawable> mShadowObjects; // 0x120
     Transform mTextureXfm; // 0x134
-    float mTopRadius; // 0x10C
-    float mBotRadius; // 0x110
-    int mProjectedBlend; // 0x114
+    float mTopRadius; // 0x174
+    float mBotRadius; // 0x178
+    int mProjectedBlend; // 0x17c
 };

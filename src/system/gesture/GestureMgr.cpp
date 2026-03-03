@@ -193,11 +193,11 @@ void GestureMgr::PostUpdate(const SkeletonUpdateData *data) {
         bool updateSkeleton = true;
         unk30[i] = 0;
 
-        if (mTrackingAllSkeletons && allSkeletons[i]
+        if (mTrackingAllSkeletons
             && allSkeletons[i]->TrackingID() == mSkeletons[i].TrackingID()) {
             updateSkeleton = allSkeletons[i]->TrackingState() != kSkeletonPositionOnly;
         }
-        if (updateSkeleton && allSkeletons[i]) {
+        if (updateSkeleton) {
             mSkeletons[i] = *allSkeletons[i];
         }
 
@@ -206,16 +206,20 @@ void GestureMgr::PostUpdate(const SkeletonUpdateData *data) {
     }
 
     if (TheLoadMgr.EditMode()) {
+        int idx = -1;
         if (mActiveSkelTrackingID > 0) {
-            int idx = GetSkeletonIndexByTrackingID(mActiveSkelTrackingID);
-            if (idx < 0) {
-                mActiveSkelTrackingID = -1;
+            for (int i = 0; i < 6; i++) {
+                if (mSkeletons[i].TrackingID() == mActiveSkelTrackingID) {
+                    idx = i;
+                    break;
+                }
             }
         }
-        if (mActiveSkelTrackingID <= 0) {
+        if (idx < 0) {
             for (int i = 0; i < 6; i++) {
-                if (mSkeletons[i].IsTracked()) {
-                    mActiveSkelTrackingID = mSkeletons[i].TrackingID();
+                Skeleton &skel = GetSkeleton(i);
+                if (skel.IsTracked()) {
+                    mActiveSkelTrackingID = skel.TrackingID();
                     break;
                 }
             }
@@ -229,10 +233,13 @@ void GestureMgr::PostUpdate(const SkeletonUpdateData *data) {
         int rightIdx = GetSkeletonIndexByTrackingID(rightID);
 
         int nextLeft = leftID;
-        int start = leftIdx >= 0 ? leftIdx + 1 : 0;
-        int end = leftIdx >= 0 ? leftIdx + 5 : 5;
+        int start = 0, end = 5;
+        if (leftIdx != -1) {
+            start = leftIdx + 1;
+            end = leftIdx + 5;
+        }
         for (int i = start; i <= end; i++) {
-            int candidate = mSkeletons[i % 6].TrackingID();
+            int candidate = GetSkeleton(i % 6).TrackingID();
             if (candidate > 0 && candidate != rightID) {
                 nextLeft = candidate;
                 break;
@@ -240,10 +247,14 @@ void GestureMgr::PostUpdate(const SkeletonUpdateData *data) {
         }
 
         int nextRight = rightID;
-        start = rightIdx >= 0 ? rightIdx + 1 : 0;
-        end = rightIdx >= 0 ? rightIdx + 5 : 5;
+        start = 0;
+        end = 5;
+        if (rightIdx != -1) {
+            start = rightIdx + 1;
+            end = rightIdx + 5;
+        }
         for (int i = start; i <= end; i++) {
-            int candidate = mSkeletons[i % 6].TrackingID();
+            int candidate = GetSkeleton(i % 6).TrackingID();
             if (candidate > 0 && candidate != nextLeft && candidate != leftID) {
                 nextRight = candidate;
                 break;

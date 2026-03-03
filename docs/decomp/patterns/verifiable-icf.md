@@ -108,6 +108,33 @@ After verification:
 
 ---
 
+## MakeString Array-Size ICF (Resolved)
+
+**Status:** Resolved in objdiff (2026-03-03). No longer causes match% loss.
+
+`MakeString<char[N], int, char[M]>` template instantiations produce identical machine code regardless of N/M (arrays decay to pointers). The original linker ICF-merged all variants to one address, but our pre-link `.obj` files reference per-file instantiations with different array sizes.
+
+### Previous Impact
+
+- **2,550+ functions** across **546 units** had `bl` `diff_arg` mismatches
+- Each mismatch cost ~1-5% per function
+
+### Solution
+
+objdiff's `reloc_eq()` now normalizes MSVC mangled array sizes before comparing symbol names. Two symbols like:
+- `??$MakeString@$$BY07$$CBDH$$BY0CD@$$CBD@@...` (char[8], int, char[36])
+- `??$MakeString@$$BY07$$CBDH$$BY0BJ@$$CBD@@...` (char[8], int, char[26])
+
+...are recognized as equivalent because they differ only in array dimension sizes (`Y<digit><size>` patterns).
+
+This is distinct from the [MakeString type mismatch](fixable-casting.md#makestring-template-type-mismatch-milo-macro-arguments) pattern, which involves different argument **types** (e.g., `Symbol` vs `const char*`) and requires source-level fixes.
+
+### Details
+
+See [../../plans/MAKESTRING_ICF_EQUIVALENCE.md](../../plans/MAKESTRING_ICF_EQUIVALENCE.md) for full implementation details.
+
+---
+
 ## LTCG/Global Pooling
 
 > **Note:** This pattern likely does NOT apply to DC3. The target binary is a debug build

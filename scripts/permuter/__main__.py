@@ -79,6 +79,11 @@ def parse_args() -> argparse.Namespace:
         help="Disable BSF-guided declaration reordering",
     )
     parser.add_argument(
+        "--bsf-required",
+        action="store_true",
+        help="Fail if BSF tracing/guidance fails (no fallback to unguided)",
+    )
+    parser.add_argument(
         "--list-patterns",
         action="store_true",
         help="List available patterns and exit",
@@ -185,6 +190,7 @@ def main():
         for p in patterns:
             if p.name == "declaration_reorder":
                 p.bsf_guided = True
+                p.bsf_required = getattr(args, "bsf_required", False)
                 print("BSF-guided declaration reordering enabled", file=sys.stderr)
 
     # Extract function

@@ -154,6 +154,7 @@ public:
     DataArray *Font() const { return mFont; }
     RndEnviron *DefaultEnv() const { return mDefaultEnv; }
     RndMat *DefaultMat() const { return mDefaultMat; }
+    RndCubeTex *DefaultCubeTexWhite() const { return mDefaultCubeTexWhite; }
     RndMat *OverlayMat() const { return mOverlayMat; }
     bool ResourceCached() const { return mResourceCached; }
     bool VerboseTimers() const { return mVerboseTimers; }

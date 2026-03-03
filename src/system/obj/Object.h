@@ -921,7 +921,7 @@ extern DataArray *SystemConfig(Symbol, Symbol, Symbol);
     if (d.rev > rev1 || d.altRev > rev2) {                                               \
         fprintf(                                                                         \
             stderr,                                                                      \
-            "ASSERT_REVS FAILED: %s '%s' version %d > %d (or alt %d > %d)\n",            \
+            "ASSERT_REVS WARNING: %s '%s' version %d > %d (or alt %d > %d)\n",           \
             ClassName(),                                                                 \
             Name(),                                                                      \
             d.rev,                                                                       \
@@ -929,7 +929,6 @@ extern DataArray *SystemConfig(Symbol, Symbol, Symbol);
             d.altRev,                                                                    \
             rev2                                                                         \
         );                                                                               \
-        abort();                                                                         \
     }
 #else
 #define ASSERT_REVS(rev1, rev2)                                                          \

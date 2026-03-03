@@ -1,8 +1,18 @@
 #ifdef HX_NATIVE
 
 #include "Skeleton_Native.h"
+#include "gesture/CameraInput.h"
 #include "gesture/GestureMgr.h"
 #include <cstdio>
+
+// Minimal CameraInput for native — reports connected, no real frame data.
+// Only used to satisfy SkeletonUpdateData::mCameraInput pointer.
+class NativeCameraInput : public CameraInput {
+public:
+    const SkeletonFrame *PollNewFrame() override { return nullptr; }
+};
+
+static NativeCameraInput *sNativeCameraInput = nullptr;
 
 // Native implementation of GestureMgr::Init — replaces the early return stub.
 // Called from game startup to initialize skeleton tracking via webcam + YOLO pose.
@@ -26,6 +36,8 @@ void GestureMgr_NativeInit() {
         printf("Native skeleton tracking failed to start (gameplay will have no body input)\n");
     }
 
+    sNativeCameraInput = new NativeCameraInput();
+
     // Force controller mode so gesture-gated screens (tutorial, skeleton chooser)
     // don't block waiting for Kinect hand-raise gestures.
     if (TheGestureMgr) {
@@ -40,10 +52,12 @@ void GestureMgr_NativeTerminate() {
         delete TheSkeletonProvider;
         TheSkeletonProvider = nullptr;
     }
+    delete sNativeCameraInput;
+    sNativeCameraInput = nullptr;
 }
 
 // Called each frame by GestureMgr::Poll() to update skeleton slots
-// from the YOLO pose server.
+// from the YOLO pose server, then run the filtering pipeline.
 void GestureMgr_NativePoll(GestureMgr *mgr) {
     if (!TheSkeletonProvider || !TheSkeletonProvider->IsRunning())
         return;
@@ -58,9 +72,25 @@ void GestureMgr_NativePoll(GestureMgr *mgr) {
         if (i < numPersons) {
             TheSkeletonProvider->FillSkeleton(skel, i);
         }
-        // Skeletons not covered by current detections keep their previous state
-        // (will timeout naturally via SkeletonQualityFilter)
     }
+
+    // Build SkeletonUpdateData pointing to mgr's own skeleton slots
+    // so PostUpdate() runs the quality filters and identity tracking.
+    // On Xbox, SkeletonUpdate::PostUpdate builds this and calls callbacks.
+    // On native, we build it here since there's no SkeletonUpdate thread.
+    Skeleton *skelPtrs[NUM_SKELETONS];
+    for (int i = 0; i < NUM_SKELETONS; i++) {
+        skelPtrs[i] = &mgr->GetSkeleton(i);
+    }
+
+    SkeletonUpdateData data;
+    data.mSkeletonsLeft = skelPtrs;
+    data.mSkeletonsRight = skelPtrs;
+    data.mFrame = nullptr;
+    data.mHistory = nullptr;
+    data.mCameraInput = sNativeCameraInput;
+
+    mgr->PostUpdate(&data);
 }
 
 #endif // HX_NATIVE

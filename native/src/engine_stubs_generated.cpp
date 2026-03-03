@@ -44,6 +44,7 @@ int json_object_get_type() { return 0; }
 int json_object_new_array() { return 0; }
 int json_object_put() { return 0; }
 int json_tokener_parse() { return 0; }
+extern "C" float lbl_82F0BE80 = 2.0f;
 int lbl_82F14008() { return 0; }
 int lbl_82F1AB98() { return 0; }
 int lbl_82F1AB9C() { return 0; }

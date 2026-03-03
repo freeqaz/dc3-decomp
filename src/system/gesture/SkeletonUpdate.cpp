@@ -177,12 +177,12 @@ bool SkeletonUpdate::HasInstance() { return sInstance; }
 void *SkeletonUpdate::NewSkeletonEvent() { return sNewSkeletonEvent; }
 
 void SkeletonUpdate::Update() {
-    DWORD prevFrame = mNUISkeletonFrame->dwFrameNumber;
+    LONGLONG prevFrame = mNUISkeletonFrame->liTimeStamp.QuadPart;
     if (NuiSkeletonGetNextFrame(0, mNUISkeletonFrame) == 0) {
         mHasNewFrame = true;
         if (!mIsCameraOverride) {
             mSkeletonFrame.Create(
-                *mNUISkeletonFrame, (int)mNUISkeletonFrame->dwFrameNumber - (int)prevFrame
+                *mNUISkeletonFrame, (int)mNUISkeletonFrame->liTimeStamp.QuadPart - (int)prevFrame
             );
         }
     } else {
@@ -196,12 +196,15 @@ void SkeletonUpdate::Update() {
                 SkeletonData &data = mSkeletonFrame.mSkeletonDatas[i];
                 data.mTracking = kSkeletonNotTracked;
                 data.mQualityFlags = 0;
-                memset(data.mRawPositions, 0, sizeof(data.mRawPositions));
-                memset(data.mJointPositions, 0, sizeof(data.mJointPositions));
-                memset(data.mJointTrackingState, 0, sizeof(data.mJointTrackingState));
+                for (int j = 0; j < kNumJoints; j++) {
+                    data.mJointPositions[j].z = 0.0f;
+                    data.mJointPositions[j].y = 0.0f;
+                    data.mJointPositions[j].x = 0.0f;
+                    data.mJointTrackingState[j] = 0;
+                }
                 data.mTrackingID = -1;
                 data.mClippedFlags = -1;
-                data.mHipCenter.Zero();
+                data.mHipCenter = Vector3::ZeroVec();
             }
         }
     }
@@ -226,10 +229,12 @@ void SkeletonUpdate::InsertFakeArmPos(SkeletonData &data) {
     JoypadData *padData = JoypadGetPadData(0);
     float ry = padData->mSticks[1][0];
     if (ry > 0.5f) {
-        data.mJointPositions[kJointElbowRight].z = data.mJointPositions[kJointShoulderRight].z;
-        data.mJointPositions[kJointElbowRight].y =
-            data.mJointPositions[kJointShoulderRight].y - 0.3f;
-        float elbowRightX = data.mJointPositions[kJointShoulderRight].x + 0.3f;
+        float shoulderX = data.mJointPositions[kJointShoulderRight].x;
+        float shoulderY = data.mJointPositions[kJointShoulderRight].y;
+        float shoulderZ = data.mJointPositions[kJointShoulderRight].z;
+        data.mJointPositions[kJointElbowRight].z = shoulderZ;
+        data.mJointPositions[kJointElbowRight].y = shoulderY - 0.3f;
+        float elbowRightX = shoulderX + 0.3f;
         data.mJointPositions[kJointElbowRight].x = elbowRightX;
         data.mJointPositions[kJointWristRight].z = data.mJointPositions[kJointElbowRight].z;
         data.mJointPositions[kJointWristRight].x = elbowRightX + 0.3f;
@@ -249,7 +254,7 @@ void SkeletonUpdate::InsertFakeArmPos(SkeletonData &data) {
         if (rt <= 0.5f || lt <= 0.5f) {
             float rightZ = data.mJointPositions[kJointElbowRight].z - 0.5f;
             float rightY = data.mJointPositions[kJointElbowRight].y + unk5398;
-            float rightX = -((rt * 0.5f) - 0.1f) + data.mJointPositions[kJointElbowRight].x;
+            float rightX = 0.1f - rt * 0.5f + data.mJointPositions[kJointElbowRight].x;
             PaddedJointPos rightPos;
             rightPos.z = rightZ;
             rightPos.y = rightY;
@@ -265,9 +270,9 @@ void SkeletonUpdate::InsertFakeArmPos(SkeletonData &data) {
 
     float lt = padData->mTriggers[0];
     if (lt > 0.0f && padData->mTriggers[1] == 0.0f) {
-        float leftY = data.mJointPositions[kJointElbowLeft].y + unk5398;
         float leftZ = data.mJointPositions[kJointElbowLeft].z - 0.5f;
-        float leftX = (lt * 0.5f - 0.25f) + data.mJointPositions[kJointElbowLeft].x;
+        float leftY = data.mJointPositions[kJointElbowLeft].y + unk5398;
+        float leftX = data.mJointPositions[kJointElbowLeft].x + (lt * 0.5f - 0.25f);
         PaddedJointPos leftPos;
         leftPos.y = leftY;
         leftPos.z = leftZ;

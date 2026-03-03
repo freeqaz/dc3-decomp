@@ -517,6 +517,21 @@ RndTex *RndFont::ValidTexture(int idx) const {
         return nullptr;
 }
 
+void RndFont::SetBitmapSize(const Vector2 &cs) {
+    mCellSize = cs;
+    if (mMaterialOffsets.size() != mMats.size()) {
+        mMaterialOffsets.resize(mMats.size());
+    }
+    for (int i = 0; i < (int)mMats.size(); i++) {
+        RndMat *mat = mMats[i];
+        RndTex *tex = mat ? mat->GetDiffuseTex() : nullptr;
+        if (tex && tex->Width() != 0 && tex->Height() != 0) {
+            mMaterialOffsets[i].x = mCellSize.x / (float)tex->Width();
+            mMaterialOffsets[i].y = mCellSize.y / (float)tex->Height();
+        }
+    }
+}
+
 void RndFont::SetCellSize(float x, float y) {
     mCellSize.Set(x, y);
     UpdateChars();

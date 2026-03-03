@@ -24,6 +24,7 @@ from __future__ import annotations
 import itertools
 import random
 import sys
+from pathlib import Path
 from typing import Iterator
 
 from tree_sitter import Node
@@ -42,6 +43,8 @@ class DeclarationReorderPattern(Pattern):
 
     # Set by the permuter when --bsf-guided is enabled
     bsf_guided: bool = False
+    # When True, fail instead of falling back to unguided generation
+    bsf_required: bool = False
     # Cache BSF trace to avoid re-tracing on composition passes
     _bsf_cache: object = None  # BSFTrace or None
     _bsf_cache_path: object = None  # Path that was traced
@@ -57,10 +60,21 @@ class DeclarationReorderPattern(Pattern):
         counter = 0
 
         # Try BSF-guided generation first
+        bsf_produced = False
         if self.bsf_guided:
             for variant in self._try_bsf_guided(ctx, counter):
                 yield variant
                 counter += 1
+                bsf_produced = True
+
+            # If --bsf-required, skip unguided fallback
+            if self.bsf_required and not bsf_produced:
+                print(
+                    "  BSF mode: required but no guided candidates — "
+                    "skipping unguided fallback",
+                    file=sys.stderr,
+                )
+                return
 
         # Then fill remaining budget with random permutations
         for group in _find_declaration_groups(ctx):
@@ -98,6 +112,10 @@ class DeclarationReorderPattern(Pattern):
         Traces the compiler's register allocation, identifies which
         variables get which colors, then generates targeted pairwise
         swaps instead of blind permutation.
+
+        When possible, compiles with /FAs to get assembly listing and
+        partitions BSF calls by function, isolating the target function's
+        colorings from noise caused by other functions in the TU.
         """
         try:
             from tools.compiler_trace.bsf_trace import trace_bsf
@@ -107,7 +125,7 @@ class DeclarationReorderPattern(Pattern):
             )
         except ImportError:
             print(
-                "BSF guidance unavailable (tools.compiler_trace not found)",
+                "  BSF mode: unavailable (tools.compiler_trace not found)",
                 file=sys.stderr,
             )
             return
@@ -133,27 +151,98 @@ class DeclarationReorderPattern(Pattern):
                 self._bsf_cache = bsf
                 self._bsf_cache_path = ctx.file_path
             except Exception as e:
-                print(f" failed: {e}", file=sys.stderr)
+                print(f"  BSF mode: fallback (trace failed: {e})", file=sys.stderr)
                 return
 
         # Get swap pairs from diagnosis
         if not ctx.diagnosis:
+            print("  BSF mode: fallback (no diagnosis available)", file=sys.stderr)
             return
         swap_pairs = [
             pair for pair in ctx.diagnosis.reg_swap_pairs
             if pair[0].startswith("r") or pair[1].startswith("r")
         ]
         if not swap_pairs:
+            print("  BSF mode: fallback (no GPR swap pairs in diagnosis)", file=sys.stderr)
             return
 
+        # Try to partition BSF trace by function using assembly listing
+        function_calls = None
+        try:
+            from tools.compiler_trace.invoker import CompilerInvoker
+            import tempfile
+
+            invoker = CompilerInvoker()
+            asm_dir = Path(tempfile.mkdtemp(prefix="bsf_asm_", dir="/tmp/claude"))
+            result = invoker.compile_with_asm(ctx.file_path, asm_dir, listing_type="/FAs")
+            if result.returncode == 0:
+                # Find the listing file
+                asm_file = None
+                for ext in (".cod", ".asm"):
+                    files = list(asm_dir.glob(f"*{ext}"))
+                    if files:
+                        asm_file = files[0]
+                        break
+                if asm_file:
+                    asm_lines = asm_file.read_text().splitlines()
+                    partitions = bsf.partition_by_function(asm_lines)
+
+                    # Find the partition matching the target function
+                    # Extract function name from tree-sitter AST node
+                    func_declarator = ctx.func_node.child_by_field_name("declarator")
+                    func_name = ""
+                    if func_declarator and func_declarator.text:
+                        func_name = func_declarator.text.decode("utf-8", errors="replace")
+                        # Strip parameter list: "Class::Method(int x)" -> "Class::Method"
+                        paren_idx = func_name.find("(")
+                        if paren_idx > 0:
+                            func_name = func_name[:paren_idx].strip()
+                    for part_name, part_trace in partitions.items():
+                        if part_name == "__all__" or part_name == "__remainder__":
+                            continue
+                        # Match by substring (mangled names contain the function name)
+                        if func_name in part_name or part_name in func_name:
+                            function_calls = part_trace.calls
+                            print(
+                                f"  BSF isolation: {part_name} "
+                                f"({len(function_calls)} calls)",
+                                file=sys.stderr,
+                            )
+                            break
+                    if function_calls is None and len(partitions) > 1:
+                        # Try looser matching — check if any class::method pattern matches
+                        for part_name, part_trace in partitions.items():
+                            if part_name in ("__all__", "__remainder__"):
+                                continue
+                            # Extract unqualified name from mangled symbol
+                            # e.g. ?Poll@LabelNumberTicker@@UAAXXZ -> Poll
+                            simple = func_name.split("::")[-1] if "::" in func_name else func_name
+                            if simple in part_name:
+                                function_calls = part_trace.calls
+                                print(
+                                    f"  BSF isolation (fuzzy): {part_name} "
+                                    f"({len(function_calls)} calls)",
+                                    file=sys.stderr,
+                                )
+                                break
+
+            # Cleanup temp dir
+            import shutil
+            shutil.rmtree(asm_dir, ignore_errors=True)
+        except Exception as e:
+            print(f"  BSF isolation: skipped ({e})", file=sys.stderr)
+
         # Generate guided candidates
-        candidates = guided_pairwise_search(bsf, swap_pairs, decl_names)
+        candidates = guided_pairwise_search(
+            bsf, swap_pairs, decl_names, function_calls=function_calls
+        )
         if not candidates:
+            print("  BSF mode: active but no guided candidates", file=sys.stderr)
             return
 
         print(
-            f"  BSF guidance: {len(candidates)} candidates for "
-            f"{len(swap_pairs)} swap pair(s)",
+            f"  BSF mode: active (guided candidates={len(candidates)} "
+            f"for {len(swap_pairs)} swap pair(s))",
             file=sys.stderr,
         )
 

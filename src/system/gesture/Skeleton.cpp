@@ -469,20 +469,21 @@ bool Skeleton::EnrollIdentity(int enrollmentIdx) {
     return true;
 }
 
-int Skeleton::IdentityCallback(void *context, NUI_IDENTITY_MESSAGE *msg) {
-    IdentityInfo *info = (IdentityInfo *)context;
-    MILO_ASSERT(info != nullptr, 0x280);
-    MILO_ASSERT(msg != nullptr, 0x281);
+int Skeleton::IdentityCallback(void *pvContext, NUI_IDENTITY_MESSAGE *pMessage) {
+    IdentityInfo *info = (IdentityInfo *)pvContext;
+    MILO_ASSERT(pvContext != NULL, 0x280);
+    MILO_ASSERT(pMessage != NULL, 0x281);
 
-    if (msg->MessageId != NUI_IDENTITY_MESSAGE_ID_FRAME_PROCESSED) {
-        if (msg->MessageId == NUI_IDENTITY_MESSAGE_ID_COMPLETE) {
-            info->SetIdentified(true);
-            info->SetProfileMatched(msg->Data.Complete.bProfileMatched != 0);
-            if (info->EnrollmentIndex() != (int)msg->Data.Complete.dwEnrollmentIndex) {
-                info->SetEnrollmentIndex(msg->Data.Complete.dwEnrollmentIndex);
-            }
-        } else {
-            MILO_ASSERT(false, 0x297);
+    if (pMessage->MessageId < NUI_IDENTITY_MESSAGE_ID_COMPLETE) {
+        // frame processed
+    } else if (!(pMessage->MessageId == NUI_IDENTITY_MESSAGE_ID_COMPLETE)) {
+        MILO_ASSERT(false, 0x297);
+    } else {
+        info->SetIdentified(true);
+        info->SetProfileMatched(pMessage->Data.Complete.bProfileMatched != 0);
+        if ((unsigned int)info->EnrollmentIndex()
+            != pMessage->Data.Complete.dwEnrollmentIndex) {
+            info->SetEnrollmentIndex(pMessage->Data.Complete.dwEnrollmentIndex);
         }
     }
 

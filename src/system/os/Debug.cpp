@@ -16,7 +16,17 @@
 #include "xdk/xbdm/xbdm.h"
 #include "utl/Std.h"
 
-extern long HmxGlobalHandler(_EXCEPTION_POINTERS *);
+const char *GetExpCode(int code);
+
+long HmxGlobalHandler(_EXCEPTION_POINTERS *ep) {
+    if (DmIsDebuggerPresent()) {
+        return 1;
+    }
+    void *addr = ep->ContextRecord;
+    const char *code = GetExpCode(ep->ExceptionRecord->ExceptionCode);
+    TheDebug.Fail(code, addr);
+    return 0;
+}
 
 const char *kAssertStr = "File: %s Line: %d Error: %s\n";
 bool gMemoryUsageTest;

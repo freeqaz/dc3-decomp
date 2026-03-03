@@ -31,6 +31,13 @@ from .invoker import (
     _load_include_flags,
 )
 
+# Regex patterns for parsing MSVC assembly listings
+_PROC_RE = re.compile(r"^(\S+)\s+PROC\s+NEAR")
+_ENDP_RE = re.compile(r"^(\S+)\s+ENDP")
+_SAVEGPRLR_RE = re.compile(r"__savegprlr_(\d+)")
+_STMW_RE = re.compile(r"\bstmw\s+r(\d+)")
+_STW_CALLEE_RE = re.compile(r"\bstw\s+r(\d+)")  # For individual saves
+
 # 32-bit wibo build (required for GDB — the 64-bit one crashes)
 WIBO_32 = Path("/home/free/code/milohax/wibo/build/debug/wibo")
 
@@ -85,6 +92,130 @@ class BSFTrace:
     def phase_calls(self, caller_rva: int) -> list[BSFCall]:
         """Get BSF calls from a specific compiler phase (by caller RVA)."""
         return [c for c in self.calls if c.caller_rva == caller_rva]
+
+    def partition_by_function(
+        self, asm_lines: list[str]
+    ) -> dict[str, "BSFTrace"]:
+        """Partition BSF trace by function using assembly listing.
+
+        Parses PROC NEAR/ENDP markers from the assembly listing to get
+        function names in source order. Counts callee-saved registers per
+        function from __savegprlr_N / stmw patterns. Then partitions the
+        initial coloring BSF calls by consuming the expected number of
+        distinct colors for each function in order.
+
+        Args:
+            asm_lines: Lines from MSVC assembly listing (/FAs output).
+
+        Returns:
+            Dict mapping function name to a BSFTrace containing only that
+            function's initial coloring BSF calls. Falls back to returning
+            {'__all__': self} if partitioning fails.
+        """
+        from .regmap_solver import INITIAL_COLORING_RVA
+
+        # Step 1: Parse function order and callee-saved register counts
+        func_info = _parse_function_info(asm_lines)
+        if not func_info:
+            return {"__all__": self}
+
+        # Step 2: Get initial coloring calls (the ones sensitive to decl order)
+        initial_calls = self.phase_calls(INITIAL_COLORING_RVA)
+        if not initial_calls:
+            return {"__all__": self}
+
+        # Step 3: Walk initial coloring calls, consuming N distinct colors
+        # per function. Each function's initial coloring is a contiguous block
+        # of BSF calls where we see N new (previously unseen within this
+        # function) colors.
+        result: dict[str, BSFTrace] = {}
+        call_idx = 0
+
+        for func_name, n_callee_saved in func_info:
+            if n_callee_saved == 0:
+                # Function uses no callee-saved registers — skip it
+                result[func_name] = BSFTrace(source=self.source, calls=[])
+                continue
+
+            func_calls: list[BSFCall] = []
+            seen_colors: set[int] = set()
+            distinct_count = 0
+
+            while call_idx < len(initial_calls) and distinct_count < n_callee_saved:
+                call = initial_calls[call_idx]
+                func_calls.append(call)
+                if call.bit >= 0 and call.bit not in seen_colors:
+                    seen_colors.add(call.bit)
+                    distinct_count += 1
+                call_idx += 1
+
+            result[func_name] = BSFTrace(source=self.source, calls=func_calls)
+
+        # Any remaining calls go into __remainder__
+        if call_idx < len(initial_calls):
+            result["__remainder__"] = BSFTrace(
+                source=self.source, calls=initial_calls[call_idx:]
+            )
+
+        return result
+
+
+def _parse_function_info(asm_lines: list[str]) -> list[tuple[str, int]]:
+    """Parse function names and callee-saved register counts from assembly listing.
+
+    Returns a list of (function_name, n_callee_saved) in source order.
+    Callee-saved count is determined from __savegprlr_N (saves r_N through r31)
+    or stmw r_N (saves r_N through r31).
+    """
+    functions: list[tuple[str, int]] = []
+    current_func: str | None = None
+    current_callee_saved = 0
+
+    for line in asm_lines:
+        stripped = line.strip()
+
+        # Detect function start
+        m = _PROC_RE.match(stripped)
+        if m:
+            if current_func is not None:
+                functions.append((current_func, current_callee_saved))
+            current_func = m.group(1)
+            current_callee_saved = 0
+            continue
+
+        # Detect function end
+        m = _ENDP_RE.match(stripped)
+        if m:
+            if current_func is not None:
+                functions.append((current_func, current_callee_saved))
+                current_func = None
+                current_callee_saved = 0
+            continue
+
+        if current_func is None:
+            continue
+
+        # Count callee-saved registers from __savegprlr_N pattern
+        m = _SAVEGPRLR_RE.search(stripped)
+        if m:
+            first_saved = int(m.group(1))
+            count = 32 - first_saved  # saves r_N through r31
+            current_callee_saved = max(current_callee_saved, count)
+            continue
+
+        # Count from stmw r_N (store multiple word from r_N to r31)
+        m = _STMW_RE.search(stripped)
+        if m:
+            first_saved = int(m.group(1))
+            if 13 <= first_saved <= 31:
+                count = 32 - first_saved
+                current_callee_saved = max(current_callee_saved, count)
+
+    # Flush last function
+    if current_func is not None:
+        functions.append((current_func, current_callee_saved))
+
+    return functions
 
 
 def _generate_gdb_script(

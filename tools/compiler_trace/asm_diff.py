@@ -113,12 +113,19 @@ def normalize_listing(lines: List[str], source_name: str = "") -> List[str]:
 
 
 def detect_register_swaps(
-    lines_a: List[str], lines_b: List[str]
+    lines_a: List[str], lines_b: List[str], strict: bool = True
 ) -> Dict[str, str]:
     """Detect consistent register swaps between two listings.
 
     Returns a mapping of register renames (e.g. {"r11": "r10", "r10": "r11"}).
-    Only returns swaps that are consistent across ALL differing lines.
+
+    Args:
+        lines_a: Assembly lines from variant A.
+        lines_b: Assembly lines from variant B.
+        strict: If True (default), only consider lines that differ ONLY in
+            register names (original behavior). If False, also extract register
+            pairs from lines with mixed register+non-register differences,
+            requiring 2+ consistent occurrences for each swap pair.
     """
     # PPC register pattern
     reg_pattern = re.compile(r"\br(\d+)\b")
@@ -136,12 +143,23 @@ def detect_register_swaps(
         regs_b = reg_pattern.findall(b)
 
         if len(regs_a) != len(regs_b):
+            if not strict:
+                # In relaxed mode, try to extract positional register pairs
+                # from matching register positions
+                _extract_positional_pairs(a, b, reg_pattern, swap_candidates)
             continue
 
         # Check if lines differ only in register names
         a_no_regs = reg_pattern.sub("rX", a)
         b_no_regs = reg_pattern.sub("rX", b)
         if a_no_regs != b_no_regs:
+            if not strict:
+                # In relaxed mode, still extract register pairs from matching positions
+                for ra, rb in zip(regs_a, regs_b):
+                    if ra != rb:
+                        pair = tuple(sorted([f"r{ra}", f"r{rb}"]))
+                        swap_candidates[pair] += 1
+                total_diffs += 1
             continue
 
         # Record register pairings
@@ -151,17 +169,49 @@ def detect_register_swaps(
                 pair = tuple(sorted([f"r{ra}", f"r{rb}"]))
                 swap_candidates[pair] += 1
 
-    if total_diffs == 0:
+    if total_diffs == 0 and not swap_candidates:
         return {}
 
     # A swap is "consistent" if it accounts for register differences
+    min_count = 2 if not strict else 1
     swaps = {}
     for (ra, rb), count in swap_candidates.most_common():
+        if count < min_count:
+            continue
         if ra not in swaps and rb not in swaps:
             swaps[ra] = rb
             swaps[rb] = ra
 
     return swaps
+
+
+def _extract_positional_pairs(
+    line_a: str,
+    line_b: str,
+    reg_pattern: re.Pattern,
+    candidates: Counter,
+) -> None:
+    """Extract register swap pairs from lines with different register counts.
+
+    Uses token splitting to align register mentions by position in the
+    non-register text structure.
+    """
+    # Split both lines by non-register content and try to align
+    parts_a = reg_pattern.split(line_a)
+    parts_b = reg_pattern.split(line_b)
+    regs_a = reg_pattern.findall(line_a)
+    regs_b = reg_pattern.findall(line_b)
+
+    # Only try if the non-register structure partially matches
+    if not parts_a or not parts_b:
+        return
+
+    # Simple alignment: match registers at same text positions
+    min_regs = min(len(regs_a), len(regs_b))
+    for i in range(min_regs):
+        if regs_a[i] != regs_b[i]:
+            pair = tuple(sorted([f"r{regs_a[i]}", f"r{regs_b[i]}"]))
+            candidates[pair] += 1
 
 
 def apply_register_map(

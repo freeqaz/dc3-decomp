@@ -70,6 +70,8 @@ Tool-specific deep docs live in subdirectories:
 | Doc | Description |
 |-----|-------------|
 | [permuter/INDEX.md](permuter/INDEX.md) | C++ Permuter: tree-sitter based source permutation for register allocation |
+| [permuter/guided-permuter.md](permuter/guided-permuter.md) | Diagnosis-guided permuter: objdiff-driven targeting, BSF isolation, batch automation |
+| [permuter/bsf-engine.md](permuter/bsf-engine.md) | BSF engine: compiler register allocation tracing, per-function isolation, color→GPR mapping |
 | [permuter/evolution/OVERVIEW.md](permuter/evolution/OVERVIEW.md) | Permuter evolution: primitives, migration, composition |
 
 ## Projects

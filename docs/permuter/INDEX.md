@@ -3,7 +3,8 @@
 Tree-sitter based source permuter for automatic code variation generation. Unlike the original decomp-permuter (C only), this tool works with C++ source code.
 
 See also:
-- [Diagnosis-Guided Permuter](guided-permuter.md) — design for objdiff-driven targeting
+- [Diagnosis-Guided Permuter](guided-permuter.md) — objdiff-driven targeting and BSF-guided register allocation
+- [BSF Engine](bsf-engine.md) — compiler trace integration for register allocation analysis
 - [Permuter Evolution](evolution/OVERVIEW.md) — primitives, pattern migration, and composition layer
 
 ## Installation
@@ -48,6 +49,8 @@ python -m scripts.permuter \
 | `--unit` | Unit name for unicorn execution equivalence guard rail |
 | `--compose` | Enable composition: chain pattern pairs for multi-step transforms |
 | `--no-guided` | Disable diagnosis-guided pattern filtering |
+| `--no-bsf-guided` | Disable BSF-guided declaration reordering (use blind pairwise) |
+| `--bsf-required` | Fail if BSF tracing fails instead of falling back to unguided |
 | `--list-patterns` | List available patterns and exit |
 
 ## Patterns
@@ -80,6 +83,26 @@ if ((unsigned long)ptr != 0)
 if (ptr > 0)  // for != 0 comparisons
 ```
 
+### declaration_reorder (30% win rate)
+
+Reorders variable declarations within a function to fix register allocation mismatches. The PowerPC compiler assigns callee-saved registers (r19-r31) based on declaration/first-use order, so swapping declaration order can fix register swap pairs.
+
+Supports **BSF-guided mode** (default when BSF tracing is available): traces the compiler's register allocator to map colors to GPRs, then generates only the swaps targeting diagnosed register pairs instead of blind C(n,2) enumeration. Falls back to unguided pairwise when tracing fails or `--no-bsf-guided` is set. See [BSF Engine](bsf-engine.md) for details.
+
+```cpp
+// Before
+int count = GetCount();
+float scale = GetScale();
+
+// After (swap declaration order)
+float scale = GetScale();
+int count = GetCount();
+```
+
+### declaration_movement
+
+Moves a variable declaration earlier or later in a function body. Similar to `declaration_reorder` but operates on a single declaration at a time, sliding it up or down relative to other statements.
+
 ### inline_assignment (22% win rate)
 
 Folds consecutive assignment + call into inline assignment argument.
@@ -93,18 +116,57 @@ CampaignEraProgress *p = GetEraProgress(era);
 CampaignEraProgress *p = GetEraProgress(era = pEra->GetName());
 ```
 
+### commutative_swap
+
+Swap operands in commutative expressions: `a + b` → `b + a`, `a * b` → `b * a`, etc. Applies to `add`, `fadd`, `mul`, `fmul`, `and`, `or`, `xor`.
+
+### comparison_flip
+
+Swap comparison operands: `a == b` → `b == a`, `a < b` → `b > a`.
+
+### comparison_equivalence
+
+Try equivalent comparison forms: `x != 0` → `x > 0` (for unsigned), `x < y` → `!(x >= y)`.
+
+### branch_polarity
+
+Invert condition and swap if/else bodies: `if (x) { A } else { B }` → `if (!x) { B } else { A }`.
+
+### ternary_swap
+
+Convert simple if-else to ternary and vice versa.
+
+### fma_reorder
+
+Reorder FMA expressions: `1.0f - x*y` ↔ `x*y - 1.0f`. Targets `fnmsubs`/`fmsubs` mismatches.
+
+### argument_swap
+
+Swap function call arguments when overloads or implicit conversions may change codegen.
+
+### empty_size_swap
+
+Swap between `.empty()` and `.size() == 0` (or `!= 0`) which can differ in codegen.
+
+### comma_split
+
+Split comma expressions into separate statements, or merge sequential statements into comma expressions.
+
 ## How It Works
 
-1. **Extract**: Uses tree-sitter-cpp to parse the source file and extract the target function
-2. **Generate**: Each pattern walks the AST and generates source variants via byte-level splicing
-3. **Score**: Writes each variant to disk, runs `ninja`, and scores with `./bin/objdiff-cli`
-4. **Report**: Sorts variants by match percentage and reports improvements
+1. **Diagnose**: Run objdiff on baseline, parse instruction diff into `Diagnosis` (register swaps, opcode mismatches, offset shifts)
+2. **Filter**: Each pattern's `relevant()` method checks if the diagnosis contains signals it can fix
+3. **Generate**: Relevant patterns walk the AST and generate source variants via byte-level splicing
+4. **Score**: Writes each variant to disk, runs `ninja`, and scores with `./bin/objdiff-cli`
+5. **Report**: Sorts variants by match percentage and reports improvements
 
 Key design decisions:
 - **Byte-level splicing**: All mutations operate on raw bytes using tree-sitter node ranges. No regex or string parsing.
 - **Scope-aware**: Variable extraction respects compound_statement boundaries (won't extract loop-scoped variables to function scope)
 - **File restoration**: Scorer uses a context manager to guarantee source file restoration even on errors
 - **Independent variants by default**: Each variant is generated from the original source; composition (chaining pattern pairs) is available via `--compose`
+- **Diagnosis-driven**: Patterns only generate variants when diagnosis signals match (reduces ~100 blind variants to ~5-20 targeted ones)
+- **BSF-guided**: Declaration reordering uses compiler register allocator traces when available
 
 ## Example Output
 
@@ -155,7 +217,7 @@ Use `--json` for structured output suitable for integration with other tools:
 ```
 scripts/permuter/
 ├── __init__.py          # Public API exports
-├── __main__.py          # CLI entry point
+├── __main__.py          # CLI entry point + diagnosis-guided orchestration
 ├── types.py             # FunctionContext, Variant, ScoreResult dataclasses
 ├── extractor.py         # tree-sitter function extraction + reparse
 ├── scorer.py            # ninja build + objdiff scoring
@@ -165,20 +227,39 @@ scripts/permuter/
 ├── ast_queries.py       # Reusable AST query helpers
 ├── diagnosis.py         # Diagnosis dataclass + objdiff mismatch parsing
 └── patterns/
-    ├── __init__.py      # Auto-imports all patterns
-    ├── base.py          # Pattern ABC with auto-registration
-    ├── variable_extraction.py
-    ├── signed_unsigned.py
-    ├── inline_assignment.py
-    ├── declaration_reorder.py
+    ├── __init__.py              # Auto-imports all patterns
+    ├── base.py                  # Pattern ABC with auto-registration
     ├── argument_swap.py
     ├── branch_polarity.py
+    ├── comma_split.py
     ├── commutative_swap.py
     ├── comparison_equivalence.py
     ├── comparison_flip.py
+    ├── declaration_movement.py
+    ├── declaration_reorder.py   # BSF-guided mode
     ├── empty_size_swap.py
     ├── fma_reorder.py
-    └── ternary_swap.py
+    ├── inline_assignment.py
+    ├── signed_unsigned.py
+    ├── ternary_swap.py
+    └── variable_extraction.py
+
+scripts/permuter/
+├── batch_auto.py        # Batch automation: sweep workable functions with hill_climber
+├── batch_validate.py    # Batch validation: single-pass permuter sweep
+├── batch_triage.py      # Batch triage: diagnose + classify near-match functions
+├── hill_climber.py      # Iterative hill-climbing loop for a single function
+
+tools/compiler_trace/           # BSF engine (see bsf-engine.md)
+├── bsf_trace.py                # GDB-based BSF call tracing + per-function partitioning
+├── bsf_diff.py                 # Diff two BSF traces
+├── asm_diff.py                 # ASM listing extraction + register swap detection (strict/relaxed)
+├── regmap_solver.py            # Color→GPR mapping + guided swap generation (isolation-aware)
+├── invoker.py                  # CompilerInvoker (wibo + cl.exe wrapper)
+├── gdb_script.py               # GDB script generation for BSF breakpoints
+└── tests/
+    ├── test_bsf_engine.py      # 30 integration tests (incl. partition tests)
+    └── test_bsf_pipeline.py    # 3 end-to-end pipeline tests
 ```
 
 ## Adding New Patterns
@@ -208,12 +289,60 @@ class MyPattern(Pattern):
 
 Import it in `patterns/__init__.py` to register it.
 
+## Hill Climbing
+
+The `hill_climber` runs iterative improve-apply-repeat rounds on a single function:
+
+```bash
+python -m scripts.permuter.hill_climber \
+    --symbol "?Poll@LabelNumberTicker@@UAAXXZ" \
+    --source src/system/ui/LabelNumberTicker.cpp \
+    --function "LabelNumberTicker::Poll" \
+    --max-rounds 10 --compose --json
+```
+
+Stops on: 100% match, plateau (N rounds without improvement), max rounds, or all noise.
+
+## Batch Automation
+
+Sweep all workable functions automatically:
+
+```bash
+# Sweep all workable functions
+python -m scripts.permuter.batch_auto --target workable --max-rounds 5
+
+# Target specific unit
+python -m scripts.permuter.batch_auto --target unit --unit "system/rndobj/Shader"
+
+# Dry run — show triage without running
+python -m scripts.permuter.batch_auto --target workable --dry-run --limit 20
+
+# Resume from previous run
+python -m scripts.permuter.batch_auto --resume logs/permuter/auto_20260303_120000
+```
+
+Features: resume support (progress.json), per-function JSON logs, triage filtering, grouped by source file.
+
+## Test Suite
+
+```bash
+# Permuter pattern tests (65 tests)
+python -m pytest scripts/permuter/tests/test_patterns.py -v
+
+# BSF engine integration tests (30 tests, requires wibo + MSVC + GDB)
+python -m pytest tools/compiler_trace/tests/test_bsf_engine.py -v
+
+# BSF pipeline e2e tests (3 tests, requires wibo + MSVC + GDB)
+python -m pytest tools/compiler_trace/tests/test_bsf_pipeline.py -v
+```
+
 ## Tips
 
 - **Start with near-matches**: The permuter works best on functions already at 90%+ match
 - **Use --dry-run first**: Review generated variants before committing to builds
 - **Single pattern testing**: Use `--patterns variable_extraction` to test one pattern at a time
 - **JSON for scripting**: Use `--json` for integration with orchestrator or batch processing
+- **BSF tracing needs ptrace**: Run outside the sandbox or with `dangerouslyDisableSandbox: true`
 
 ## See Also
 

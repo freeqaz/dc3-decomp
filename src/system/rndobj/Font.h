@@ -94,6 +94,7 @@ protected:
     virtual void SetASCIIChars(String);
 
     void UpdateChars();
+    void SetBitmapSize(const Vector2 &);
 
     ObjPtrVec<RndMat> mMats; // 0x44
     ObjOwnerPtr<RndFont> mTextureOwner; // 0x60
@@ -138,6 +139,10 @@ public:
     OBJ_MEM_OVERLOAD(0x10A)
     NEW_OBJ(RndFont3d)
     static void Init() { REGISTER_OBJ_FACTORY(RndFont3d) }
+
+    CharInfo *GetCharInfo(unsigned short) const;
+    Vector3 CharOriginOffset() const;
+    bool CharWidthAdvanceMesh(unsigned short, float &, float &, RndMesh **) const;
 
 protected:
     RndFont3d();

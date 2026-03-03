@@ -8,6 +8,7 @@
 #include <sys/un.h>
 #include <sys/wait.h>
 #include <poll.h>
+#include <linux/limits.h>
 
 NativeSkeletonProvider *TheSkeletonProvider = nullptr;
 
@@ -50,8 +51,26 @@ bool NativeSkeletonProvider::Start(
     mSocketPath = socketPath;
 
     // Launch pose_server.py as child process
-    // Find the script relative to the executable
-    std::string scriptPath = "native/scripts/pose_server.py";
+    // Resolve script path relative to the executable location
+    std::string scriptPath;
+    {
+        char exePath[PATH_MAX] = {};
+        ssize_t len = readlink("/proc/self/exe", exePath, sizeof(exePath) - 1);
+        if (len > 0) {
+            exePath[len] = '\0';
+            // Walk up from executable (native/build/milo-viewer) to project root
+            std::string dir(exePath);
+            // Strip executable name
+            size_t slash = dir.rfind('/');
+            if (slash != std::string::npos) dir = dir.substr(0, slash);
+            // Strip "build" directory
+            slash = dir.rfind('/');
+            if (slash != std::string::npos) dir = dir.substr(0, slash);
+            scriptPath = dir + "/scripts/pose_server.py";
+        } else {
+            scriptPath = "native/scripts/pose_server.py";
+        }
+    }
 
     mServerPid = fork();
     if (mServerPid == 0) {
@@ -309,22 +328,13 @@ void NativeSkeletonProvider::FillSkeleton(Skeleton &skel, int personIdx) const {
 
     const PersonData &person = mPersons[personIdx];
 
-    // Access protected members via pointer arithmetic matching Skeleton layout:
-    // mTrackedJoints at offset 0x4, each TrackedJoint is 0x74 bytes
-    TrackedJoint *joints = (TrackedJoint *)((char *)&skel + 4);
-
+    // Access protected members directly via friend declaration (LP64-safe)
     for (int j = 0; j < kNumJoints; j++) {
-        // Set camera-space position (kCoordCamera = 0)
-        joints[j].mJointPos[kCoordCamera] = person.joints[j];
-        joints[j].mSmoothedPos = person.joints[j];
-        joints[j].mJointConf = person.confidence[j];
+        skel.mTrackedJoints[j].mJointPos[kCoordCamera] = person.joints[j];
+        skel.mTrackedJoints[j].mSmoothedPos = person.joints[j];
+        skel.mTrackedJoints[j].mJointConf = person.confidence[j];
     }
 
-    // Set tracking state
-    SkeletonTrackingState *tracking = (SkeletonTrackingState *)((char *)&skel + 0xaa0);
-    *tracking = kSkeletonTracked;
-
-    // Set tracking ID
-    int *trackingId = (int *)((char *)&skel + 0xaac);
-    *trackingId = person.trackId;
+    skel.mTracking = kSkeletonTracked;
+    skel.mTrackingID = person.trackId;
 }

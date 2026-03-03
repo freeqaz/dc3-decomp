@@ -1,8 +1,117 @@
 #include "rndobj/Env_NG.h"
+#include "rndobj/Lit_NG.h"
 #include "rndobj/Mat_NG.h"
 #include "rndobj/Rnd.h"
 #include "rndobj/ShaderMgr.h"
 #include "rndobj/Stats_NG.h"
+#include "rnddx9/RenderState.h"
+
+namespace {
+    Transform sIdentityXfm;
+
+    void ClearLightTransforms() {
+        TheShaderMgr.SetVConstant4x3(
+            (VShaderConstant)0xdd, *(const Hmx::Matrix4 *)&sIdentityXfm
+        );
+        TheShaderMgr.SetPConstant4x3(
+            (PShaderConstant)0xdd, *(const Hmx::Matrix4 *)&sIdentityXfm
+        );
+    }
+
+    void ClearPointCubeTex() {
+        TheShaderMgr.SetPConstant((PShaderConstant)0xd, TheRnd.DefaultCubeTexWhite());
+        TheRenderState.SetTextureClamp(0xd, (RndRenderState::ClampMode)1);
+        TheRenderState.SetTextureFilter(0xd, (RndRenderState::FilterMode)1, false);
+    }
+
+    bool CheckPointLight(NgLight &light) {
+        if (!light.Showing())
+            return false;
+        Hmx::Color color = light.GetColor();
+        return (((int)(color.blue * 255.0f) & 0xff)
+            | ((int)(color.green * 255.0f) & 0xff)
+            | ((int)(color.red * 255.0f) & 0xff)) != 0;
+    }
+
+    bool CheckProjLight(NgLight &light) {
+        if (!light.Showing())
+            return false;
+        if (light.GetProjectedBlend() == 0 && light.GetTexture() == nullptr)
+            return false;
+        if (light.GetProjectedBlend() == 1) {
+            bool hasShadowOverride = light.GetShadowOverride()
+                && light.GetShadowOverride()->size() != 0;
+            if (!hasShadowOverride && light.ShadowObjectsSize() == 0)
+                return false;
+        }
+        Hmx::Color color = light.GetColor();
+        if ((((int)(color.red * 255.0f) & 0xff)
+            | ((int)(color.green * 255.0f) & 0xff)
+            | ((int)(color.blue * 255.0f) & 0xff)) != 0) {
+            light.CheckShadowMap();
+            return true;
+        }
+        return false;
+    }
+
+    bool SetPointLightRegisters(int lightIdx, RndLight &light, bool &hasPointCubeTex) {
+        hasPointCubeTex = false;
+        if (!light.Showing())
+            return false;
+        Hmx::Color color = light.GetColor();
+        if ((((int)(color.red * 255.0f) & 0xff)
+            | ((int)(color.green * 255.0f) & 0xff)
+            | ((int)(color.blue * 255.0f) & 0xff)) != 0) {
+            const Transform &xfm = light.WorldXfm();
+            float posX = xfm.v.x;
+            float posY = xfm.v.y;
+            float posZ = xfm.v.z;
+            float range = light.Range();
+            float falloff = light.FalloffStart();
+            float invRange, rangeScale;
+            if (range <= falloff) {
+                rangeScale = 1.0f;
+                invRange = 0.0f;
+            } else {
+                invRange = 1.0f / (falloff - range);
+                rangeScale = -(range * invRange);
+            }
+            Vector4 pos(posX, posY, posZ, invRange);
+            TheShaderMgr.SetVConstant((VShaderConstant)(lightIdx + 0x3e), pos);
+            TheShaderMgr.SetPConstant((PShaderConstant)(lightIdx + 0x3e), pos);
+            Vector4 colorVec(color.red, color.green, color.blue, rangeScale);
+            TheShaderMgr.SetVConstant((VShaderConstant)(lightIdx + 0x42), colorVec);
+            Vector4 colorVec2(color.red, color.green, color.blue, rangeScale);
+            TheShaderMgr.SetPConstant((PShaderConstant)(lightIdx + 0x42), colorVec2);
+            if (light.GetCubeTexture() != nullptr && lightIdx == 0) {
+                TheShaderMgr.SetPConstant((PShaderConstant)0xd, light.GetCubeTexture());
+                TheRenderState.SetTextureClamp(0xd, (RndRenderState::ClampMode)1);
+                TheRenderState.SetTextureFilter(0xd, (RndRenderState::FilterMode)1, false);
+                Transform localXfm = light.WorldXfm();
+                TheShaderMgr.SetVConstant4x3(
+                    (VShaderConstant)0xdd, Hmx::Matrix4(localXfm)
+                );
+                TheShaderMgr.SetPConstant4x3(
+                    (PShaderConstant)0xdd, Hmx::Matrix4(localXfm)
+                );
+                hasPointCubeTex = true;
+            }
+            return true;
+        }
+        return false;
+    }
+
+    void ClearLightRegisters(int lightIdx) {
+        static Vector4 sDefaultLight(0, 0, 0, 1);
+        static Vector4 sZeroVec(0, 0, 0, 0);
+        TheShaderMgr.SetVConstant((VShaderConstant)(lightIdx + 0x3e), sZeroVec);
+        TheShaderMgr.SetPConstant((PShaderConstant)(lightIdx + 0x3e), sZeroVec);
+        Vector4 v(sDefaultLight.x, sDefaultLight.y, sDefaultLight.z, sDefaultLight.w);
+        TheShaderMgr.SetVConstant((VShaderConstant)(lightIdx + 0x42), v);
+        Vector4 v2(sDefaultLight.x, sDefaultLight.y, sDefaultLight.z, sDefaultLight.w);
+        TheShaderMgr.SetPConstant((PShaderConstant)(lightIdx + 0x42), v2);
+    }
+}
 
 NgEnviron::NgEnviron()
     : mProjectedBlend(), mNumLightsReal(0), mNumLightsApprox(0), mNumLightsPoint(0),

@@ -356,7 +356,7 @@ Target: bl MakeString<const char*, const char*, const char*, unsigned char>
 Base:   bl MakeString<Symbol, Symbol, Symbol, bool>
 ```
 
-The `char[N]` size in the mangled name may also differ (this is the `__FILE__` string length — a separate issue).
+The `char[N]` size in the mangled name may also differ (this is the `__FILE__` string length — a separate issue, [resolved in objdiff](../../plans/MAKESTRING_ICF_EQUIVALENCE.md) via array-size normalization).
 
 ### Why It Works
 

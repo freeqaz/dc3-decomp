@@ -71,7 +71,6 @@ BEGIN_COPYS(RndFont3d)
     }
 END_COPYS
 
-#ifdef HX_NATIVE
 BEGIN_LOADS(RndFont3d)
     LOAD_REVS(bs)
     LOAD_SUPERCLASS(RndFontBase)
@@ -82,25 +81,63 @@ BEGIN_LOADS(RndFont3d)
     bs >> unk8c;
     int size;
     bs >> size;
-    // Clear existing map
-    FOREACH (it, mCharInfoMap) {
-        delete it->second;
-    }
-    mCharInfoMap.clear();
-    for (int i = 0; i < size; i++) {
+    for (unsigned int i = 0; i < (unsigned int)size; i++) {
         unsigned short key;
         bs >> key;
         CharInfo *info = new CharInfo();
         bs >> info->unk0;
         bs >> info->advance;
-        // TODO: mMesh is ObjRefConcrete — serialized as name string, need to resolve via Dir
-        String meshName;
-        bs >> meshName;
+        info->mMesh.Load(bs, true, nullptr);
         bs >> info->visible;
         mCharInfoMap[key] = info;
     }
 END_LOADS
-#endif
+
+RndFont3d::CharInfo *RndFont3d::GetCharInfo(unsigned short c) const {
+    if (mTextureOwner != this) {
+        return mTextureOwner->GetCharInfo(c);
+    }
+    std::map<unsigned short, CharInfo *>::const_iterator it = mCharInfoMap.find(c);
+    if (it != mCharInfoMap.end()) {
+        return it->second;
+    }
+    return nullptr;
+}
+
+Vector3 RndFont3d::CharOriginOffset() const {
+    if (mTextureOwner != this) {
+        return mTextureOwner->CharOriginOffset();
+    }
+    float unit = FontUnit();
+    Vector3 result;
+    result.x = unk8c.x * unit;
+    result.y = unk8c.y * unit;
+    result.z = unk8c.z * unit;
+    return result;
+}
+
+bool RndFont3d::CharWidthAdvanceMesh(
+    unsigned short c, float &width, float &advance, RndMesh **mesh
+) const {
+    if (mTextureOwner != this) {
+        return mTextureOwner->CharWidthAdvanceMesh(c, width, advance, mesh);
+    }
+    std::map<unsigned short, CharInfo *>::const_iterator it = mCharInfoMap.find(c);
+    if (it != mCharInfoMap.end()) {
+        CharInfo *info = it->second;
+        if (info->unk0.Volume() > 0.0f || info->advance > 0.0f) {
+            width = FontUnit() * Max(info->unk0.mMax.x, 0.f);
+            if (mMonospace) {
+                advance = 1.0f;
+            } else {
+                advance = FontUnit() * info->advance;
+            }
+            *mesh = info->mMesh;
+            return true;
+        }
+    }
+    return false;
+}
 
 float RndFont3d::CharWidth(unsigned short c) const {
     if (mTextureOwner != this) {

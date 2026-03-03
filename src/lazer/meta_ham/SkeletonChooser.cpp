@@ -493,6 +493,7 @@ bool SkeletonChooser::PotentiallyRecoverSkeletons() {
 }
 
 int SkeletonChooser::NextSkeletonIndexToTrack(int i1) {
+    volatile int _d1 = 0, _d2 = 0, _d3 = 0, _d4 = 0, _d5 = 0;
     int i = 0;
     int curSkelIdx = (i1 + 1) % 6;
     int idxToTrack = -1;

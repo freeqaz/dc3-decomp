@@ -1337,7 +1337,7 @@ void RndMesh::InstanceGeomOwnerBones() {
 
         // Find parent in owner hierarchy and reparent
         int parentIdx = mGeomOwner->GetBoneIndex(ownerBone->TransParent());
-        RndTransformable *parent = (parentIdx != -1) ? mBones[parentIdx].mBone : newRoot;
+        RndTransformable *parent = (parentIdx != -1) ? (RndTransformable *)mBones[parentIdx].mBone : newRoot;
         newBone->SetTransParent(parent, false);
     }
 }

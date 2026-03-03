@@ -7,7 +7,9 @@
 #include "synth/FxSend.h"
 #include "utl/Std.h"
 
+#ifndef HX_NATIVE
 void (*gForceDestroyRange)(LevelData *, LevelData *) = stlpmtx_std::_Destroy_Range;
+#endif
 
 PracticeSection::PracticeSection() : mDifficulty(kDifficultyEasy), mTestStepSequence(0) {}
 

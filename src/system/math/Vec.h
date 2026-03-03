@@ -188,6 +188,7 @@ struct PaddedJointPos {
         z = v.z;
         return *this;
     }
+    void Zero() { x = y = z = 0.0f; }
     void Set(float a, float b, float c) {
         x = a;
         y = b;

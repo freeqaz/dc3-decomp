@@ -564,7 +564,7 @@ void test_func(int x) {
         pattern_name="variable_extraction",
         description="extract nested call into auto variable",
         func_name="test_func",
-        diagnosis=diag_always(),
+        diagnosis=diag_with_clusters(),
         seeded_source="""\
 void test_func(int display) {
     check(display < mElements.size(), 0x74);
@@ -740,9 +740,13 @@ class TestPatternRelevance(unittest.TestCase):
         p = get_pattern("commutative_swap")
         self.assertFalse(p.relevant(_empty_diag()))
 
-    def test_variable_extraction_always_relevant(self):
+    def test_variable_extraction_relevant_with_clusters(self):
         p = get_pattern("variable_extraction")
-        self.assertTrue(p.relevant(_empty_diag()))
+        self.assertTrue(p.relevant(diag_with_clusters()))
+
+    def test_variable_extraction_irrelevant_empty(self):
+        p = get_pattern("variable_extraction")
+        self.assertFalse(p.relevant(_empty_diag()))
 
     def test_declaration_reorder_relevant_gpr(self):
         p = get_pattern("declaration_reorder")
@@ -1097,12 +1101,13 @@ class TestBudgetAllocation(unittest.TestCase):
         from scripts.permuter.generator import allocate_budgets
 
         # empty_size_swap requires divw in diff_ops; empty diag has none
+        # variable_extraction also requires some mismatch signal
         patterns = [get_pattern("empty_size_swap"), get_pattern("variable_extraction")]
         diag = _empty_diag()
         budgets = allocate_budgets(patterns, 100, diag)
 
         self.assertEqual(budgets.get("empty_size_swap", 0), 0)
-        self.assertGreater(budgets.get("variable_extraction", 0), 0)
+        self.assertEqual(budgets.get("variable_extraction", 0), 0)
 
     def test_total_does_not_exceed_budget(self):
         """Sum of allocated budgets <= total_budget."""
@@ -1301,6 +1306,172 @@ def _run_cli():
             print(f"  {fid}: {detail}")
 
     sys.exit(0 if failed == 0 else 1)
+
+
+# ---------------------------------------------------------------------------
+# BSF-guided search tests
+# ---------------------------------------------------------------------------
+
+class TestGuidedPairwiseSearch(unittest.TestCase):
+    """Tests for the targeted guided_pairwise_search() solver."""
+
+    @staticmethod
+    def _make_mock_trace(colors: list[int]) -> object:
+        """Create a mock BSFTrace with initial coloring calls for given colors.
+
+        Each color represents a variable's color assignment in declaration order.
+        Colors are assigned via INITIAL_COLORING_RVA.
+        """
+        from tools.compiler_trace.bsf_trace import BSFTrace, BSFCall
+        from tools.compiler_trace.regmap_solver import INITIAL_COLORING_RVA
+
+        calls = []
+        for i, color in enumerate(colors):
+            calls.append(BSFCall(
+                index=i + 1,
+                caller_rva=INITIAL_COLORING_RVA,
+                lo=0, hi=0, base=0,
+                bit=color,
+            ))
+        return BSFTrace(source=Path("/dev/null"), calls=calls)
+
+    def test_targeted_narrows_search_space(self):
+        """For n=8 decls and 1 swap pair, guided candidates << C(8,2)=28."""
+        from tools.compiler_trace.regmap_solver import guided_pairwise_search
+
+        # 8 variables with colors 0-7 (r11, r10, ..., r4)
+        # But we only need to swap r30<->r31 which are colors 9, 10
+        # Those colors aren't in the trace, so this tests the fallback path
+        # Instead: set up colors 8,9 = r29,r30 for a swap pair (r29, r30)
+        colors = [0, 1, 2, 3, 4, 5, 8, 9]  # 8 vars, last two are r29, r30
+        trace = self._make_mock_trace(colors)
+        decl_names = [f"v{i}" for i in range(8)]
+
+        # Swap pair: r29 <-> r30 (colors 8 and 9 → decl indices 6 and 7)
+        candidates = guided_pairwise_search(trace, [("r29", "r30")], decl_names)
+
+        # Should be much less than C(8,2)=28
+        self.assertGreater(len(candidates), 0, "Should produce at least 1 candidate")
+        self.assertLess(len(candidates), 28, f"Should narrow from 28, got {len(candidates)}")
+
+        # The targeted swap (v6, v7) should be first
+        self.assertIn("v7", candidates[0])
+        self.assertIn("v6", candidates[0])
+        # Verify the targeted pair is actually swapped
+        idx6 = candidates[0].index("v6")
+        idx7 = candidates[0].index("v7")
+        self.assertEqual(idx6, 7, "v6 should be at index 7 (swapped with v7)")
+        self.assertEqual(idx7, 6, "v7 should be at index 6 (swapped with v6)")
+
+    def test_different_swap_pairs_produce_different_candidates(self):
+        """Different swap_pairs should produce different candidate sets."""
+        from tools.compiler_trace.regmap_solver import guided_pairwise_search
+
+        # 5 vars with colors mapping to r11, r10, r9, r29, r30
+        colors = [0, 1, 2, 8, 9]
+        trace = self._make_mock_trace(colors)
+        decl_names = ["a", "b", "c", "d", "e"]
+
+        # Swap r29<->r30 (colors 8,9 → decl indices 3,4)
+        cands_de = guided_pairwise_search(trace, [("r29", "r30")], decl_names)
+
+        # Swap r11<->r10 (colors 0,1 → decl indices 0,1)
+        cands_ab = guided_pairwise_search(trace, [("r11", "r10")], decl_names)
+
+        # First candidate of each should swap different positions
+        self.assertNotEqual(cands_de[0], cands_ab[0],
+                            "Different swap pairs should produce different first candidates")
+
+    def test_two_decls_one_swap_gives_one_targeted(self):
+        """With 2 declarations and 1 swap pair, should get exactly the swap."""
+        from tools.compiler_trace.regmap_solver import guided_pairwise_search
+
+        colors = [8, 9]  # r29, r30
+        trace = self._make_mock_trace(colors)
+        decl_names = ["x", "y"]
+
+        candidates = guided_pairwise_search(trace, [("r29", "r30")], decl_names)
+
+        # Should produce exactly 1 candidate: ["y", "x"]
+        self.assertEqual(len(candidates), 1)
+        self.assertEqual(candidates[0], ["y", "x"])
+
+    def test_unmapped_registers_use_bounded_fallback(self):
+        """Swap pairs with unmappable registers get bounded fallback, not all-pairs."""
+        from tools.compiler_trace.regmap_solver import guided_pairwise_search
+
+        colors = [0, 1, 2, 3, 4, 5, 6, 7]  # 8 vars, all volatile
+        trace = self._make_mock_trace(colors)
+        decl_names = [f"v{i}" for i in range(8)]
+
+        # r19<->r20 are outside the known color mapping range
+        candidates = guided_pairwise_search(trace, [("r19", "r20")], decl_names)
+
+        # Should get bounded fallback, not C(8,2)=28
+        self.assertLess(len(candidates), 28,
+                        f"Unmapped fallback should be bounded, got {len(candidates)}")
+
+    def test_multi_swap_combined(self):
+        """Multiple swap pairs should try simultaneous swap."""
+        from tools.compiler_trace.regmap_solver import guided_pairwise_search
+
+        # 4 vars: r11, r10, r29, r30
+        colors = [0, 1, 8, 9]
+        trace = self._make_mock_trace(colors)
+        decl_names = ["a", "b", "c", "d"]
+
+        # Two swap pairs: r11<->r10 and r29<->r30
+        candidates = guided_pairwise_search(
+            trace, [("r11", "r10"), ("r29", "r30")], decl_names
+        )
+
+        # Should include the simultaneous swap: ["b", "a", "d", "c"]
+        simultaneous = ["b", "a", "d", "c"]
+        self.assertIn(simultaneous, candidates,
+                      f"Combined swap not found in candidates: {candidates}")
+
+
+class TestColorToGpr(unittest.TestCase):
+    """Tests for the color <-> GPR mapping functions."""
+
+    def test_volatile_roundtrip(self):
+        from tools.compiler_trace.regmap_solver import color_to_gpr, gpr_to_color
+        for color in range(7):  # colors 0-6 are volatile
+            gpr = color_to_gpr(color)
+            self.assertIsNotNone(gpr)
+            self.assertEqual(gpr_to_color(gpr), color,
+                             f"Roundtrip failed for color {color} -> {gpr}")
+
+    def test_callee_saved_roundtrip(self):
+        from tools.compiler_trace.regmap_solver import color_to_gpr, gpr_to_color
+        for color in range(7, 26):  # colors 7-25 are callee-saved (r31-r13)
+            gpr = color_to_gpr(color)
+            self.assertIsNotNone(gpr)
+            self.assertEqual(gpr_to_color(gpr), color,
+                             f"Roundtrip failed for color {color} -> {gpr}")
+
+    def test_known_mappings(self):
+        """Empirically confirmed mapping from test_bsf_engine.py."""
+        from tools.compiler_trace.regmap_solver import color_to_gpr, gpr_to_color
+        # Volatile: color = 11 - reg
+        self.assertEqual(color_to_gpr(0), "r11")
+        self.assertEqual(color_to_gpr(6), "r5")
+        # Callee-saved: color 7 = r31 (NOT r4!)
+        self.assertEqual(color_to_gpr(7), "r31")
+        self.assertEqual(color_to_gpr(8), "r30")
+        self.assertEqual(color_to_gpr(9), "r29")
+        self.assertEqual(color_to_gpr(10), "r28")
+        self.assertEqual(color_to_gpr(11), "r27")
+        self.assertEqual(color_to_gpr(25), "r13")
+        self.assertIsNone(color_to_gpr(26))
+
+        self.assertEqual(gpr_to_color("r11"), 0)
+        self.assertEqual(gpr_to_color("r5"), 6)
+        self.assertEqual(gpr_to_color("r31"), 7)
+        self.assertEqual(gpr_to_color("r30"), 8)
+        self.assertEqual(gpr_to_color("r13"), 25)
+        self.assertIsNone(gpr_to_color("r3"))
+        self.assertIsNone(gpr_to_color("r4"))  # r4 is arg reg, not in color space
 
 
 if __name__ == "__main__":

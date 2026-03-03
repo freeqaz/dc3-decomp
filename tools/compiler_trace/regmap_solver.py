@@ -32,18 +32,57 @@ INITIAL_COLORING_RVA = 0x027242
 COALESCING_RVA = 0x026B5E
 RECOLORING_RVA = 0x0272E8
 
-# PPC register color mappings (from Experiment 9 findings)
-# Volatile GPRs: assigned top-down from r11
-VOLATILE_GPRS = [f"r{i}" for i in range(11, 2, -1)]  # r11, r10, r9, ..., r3
-# Callee-saved GPRs: assigned bottom-up from r29
-CALLEE_SAVED_GPRS = [f"r{i}" for i in range(29, 32)]  # r29, r30, r31
+# PPC register color mappings (empirically determined via test_bsf_engine.py)
+#
+# The MSVC PPC graph coloring allocator uses a single color space.
+# Empirical mapping (from TestColorToRegisterMapping):
+#
+#   Variable  Register  BSF Color  Formula
+#   --------  --------  ---------  -------
+#   a         r31       7          38 - 7 = 31
+#   b         r30       8          38 - 8 = 30
+#   c         r29       9          38 - 9 = 29
+#   d         r28       10         38 - 10 = 28
+#   e         r27       11         38 - 11 = 27
+#
+# Volatile GPRs (colors 0-6): reg = 11 - color  (r11, r10, r9, r8, r7, r6, r5)
+# Callee-saved GPRs (colors 7-25): reg = 38 - color  (r31, r30, ..., r13)
+#
+# Note: colors >=20 in BSF traces may be FPR or other register classes
+# (identified by the 'base' field in BSF calls, not the color alone).
 
-# Color to register mapping
-# Colors 0-7 -> volatile regs (r11 down to r4), colors 8+ -> callee-saved
-# The exact mapping depends on the register class and interference graph,
-# but the general pattern is:
-# - Low colors (small bit indices) = high-numbered volatile regs
-# - High colors (large bit indices) = callee-saved regs
+VOLATILE_GPRS = [f"r{i}" for i in range(11, 4, -1)]  # r11, r10, r9, ..., r5
+CALLEE_SAVED_GPRS = [f"r{i}" for i in range(31, 12, -1)]  # r31, r30, ..., r13
+
+
+def color_to_gpr(color: int) -> str | None:
+    """Map a BSF color index to a PPC GPR name.
+
+    Empirically determined from test_bsf_engine.py:
+    - Colors 0-6 map to volatile GPRs: r11, r10, r9, r8, r7, r6, r5
+    - Colors 7-25 map to callee-saved GPRs: r31, r30, ..., r13
+    Returns None for colors outside known GPR range.
+    """
+    if 0 <= color <= 6:
+        return f"r{11 - color}"  # color 0->r11, 1->r10, ..., 6->r5
+    elif 7 <= color <= 25:
+        return f"r{38 - color}"  # color 7->r31, 8->r30, ..., 25->r13
+    return None
+
+
+def gpr_to_color(reg: str) -> int | None:
+    """Reverse map: PPC GPR name to BSF color index.
+
+    Returns None if the register doesn't have a known color mapping.
+    """
+    if not reg.startswith("r"):
+        return None
+    num = int(reg[1:])
+    if 5 <= num <= 11:
+        return 11 - num  # r11->0, r10->1, ..., r5->6
+    elif 13 <= num <= 31:
+        return 38 - num  # r31->7, r30->8, ..., r13->25
+    return None
 
 
 @dataclass
@@ -68,15 +107,28 @@ class RegisterSolution:
     swap_pairs: list[tuple[str, str]] = field(default_factory=list)  # Detected swap pairs
 
 
-def extract_initial_colorings(trace: BSFTrace) -> list[ColorAssignment]:
+def extract_initial_colorings(
+    trace: BSFTrace,
+    function_calls: list[BSFCall] | None = None,
+) -> list[ColorAssignment]:
     """Extract the initial coloring assignments from a BSF trace.
 
     The initial coloring phase (caller RVA 0x027242) assigns colors to
     variables in symbol ID order. Each variable typically gets multiple
     BSF calls (one per live range), but the first call for each new
     color represents a new variable's assignment.
+
+    Args:
+        trace: Full BSF trace (used if function_calls is None).
+        function_calls: Pre-partitioned BSF calls for a specific function.
+            When provided, these calls are used directly instead of
+            filtering the full trace by caller RVA.
     """
-    initial_calls = trace.phase_calls(INITIAL_COLORING_RVA)
+    if function_calls is not None:
+        initial_calls = function_calls
+    else:
+        initial_calls = trace.phase_calls(INITIAL_COLORING_RVA)
+
     if not initial_calls:
         return []
 
@@ -266,48 +318,111 @@ def guided_pairwise_search(
     bsf_trace: BSFTrace,
     swap_pairs: list[tuple[str, str]],
     decl_names: list[str],
+    function_calls: list[BSFCall] | None = None,
 ) -> list[list[str]]:
-    """Generate candidate declaration orders by pairwise swapping.
+    """Generate candidate declaration orders targeted at specific swap pairs.
 
-    Instead of blind permutation (n! possibilities), generate only the
-    candidates that swap variables whose colors correspond to the swapped
-    registers. This dramatically reduces the search space.
+    Uses BSF color assignments to map register swap pairs back to specific
+    declaration indices, then generates only those swaps. Falls back to
+    bounded neighbor search when mapping confidence is low.
+
+    Args:
+        bsf_trace: Full BSF trace.
+        swap_pairs: Register swap pairs from objdiff (e.g. [("r30", "r31")]).
+        decl_names: Variable declaration names in source order.
+        function_calls: Pre-partitioned BSF calls for the target function.
+            When provided, colorings are extracted from these calls only,
+            isolating the target function from other functions in the TU.
 
     Returns a list of candidate orderings (each is a list of variable names).
     """
     import itertools
 
-    colorings = extract_initial_colorings(bsf_trace)
+    colorings = extract_initial_colorings(bsf_trace, function_calls=function_calls)
     n_vars = min(len(colorings), len(decl_names))
 
     if n_vars < 2:
         return []
 
-    # For each swap pair, find variable indices that might need swapping
-    # We try swapping pairs of adjacent/nearby declarations
-    candidates: list[list[str]] = []
-    base_order = list(range(n_vars))
+    # Build color → declaration index mapping
+    color_to_decl_idx: dict[int, int] = {}
+    for i, ca in enumerate(colorings):
+        if i < n_vars:
+            color_to_decl_idx[ca.color] = i
 
-    # Generate all pairwise swaps
-    for i in range(n_vars):
-        for j in range(i + 1, n_vars):
-            new_order = list(base_order)
-            new_order[i], new_order[j] = new_order[j], new_order[i]
-            candidate = [decl_names[k] for k in new_order]
+    # For each swap pair, find the declaration indices to swap
+    targeted_swaps: list[tuple[int, int]] = []
+    unmapped_pairs: list[tuple[str, str]] = []
+
+    for rA, rB in swap_pairs:
+        colorA = gpr_to_color(rA)
+        colorB = gpr_to_color(rB)
+
+        if colorA is not None and colorB is not None:
+            idxA = color_to_decl_idx.get(colorA)
+            idxB = color_to_decl_idx.get(colorB)
+
+            if idxA is not None and idxB is not None and idxA != idxB:
+                pair = (min(idxA, idxB), max(idxA, idxB))
+                if pair not in targeted_swaps:
+                    targeted_swaps.append(pair)
+            else:
+                unmapped_pairs.append((rA, rB))
+        else:
+            unmapped_pairs.append((rA, rB))
+
+    base_order = list(range(n_vars))
+    candidates: list[list[str]] = []
+    seen: set[tuple[str, ...]] = set()
+
+    def _add_candidate(order: list[int]) -> None:
+        candidate = [decl_names[k] for k in order]
+        key = tuple(candidate)
+        if key not in seen:
+            seen.add(key)
             candidates.append(candidate)
 
-    # Also try multi-swaps for multi-pair cases
-    if len(swap_pairs) > 1 and n_vars <= 8:
-        for perm in itertools.permutations(range(n_vars)):
-            if list(perm) == base_order:
-                continue
-            # Count how many positions changed
-            changes = sum(1 for a, b in zip(perm, base_order) if a != b)
-            # Only consider permutations that change 2*len(swap_pairs) positions
-            if changes == 2 * len(swap_pairs):
-                candidate = [decl_names[k] for k in perm]
-                if candidate not in candidates:
-                    candidates.append(candidate)
+    # Generate targeted swaps from mapped pairs
+    if targeted_swaps:
+        # Single targeted swaps
+        for i, j in targeted_swaps:
+            new_order = list(base_order)
+            new_order[i], new_order[j] = new_order[j], new_order[i]
+            _add_candidate(new_order)
+
+        # Also try +-1 neighbor swaps for each targeted pair (near-miss)
+        for i, j in targeted_swaps:
+            for di in (-1, 0, 1):
+                for dj in (-1, 0, 1):
+                    ni, nj = i + di, j + dj
+                    if ni == nj or ni < 0 or nj < 0 or ni >= n_vars or nj >= n_vars:
+                        continue
+                    if (min(ni, nj), max(ni, nj)) in targeted_swaps and di == 0 and dj == 0:
+                        continue  # Already added above
+                    new_order = list(base_order)
+                    new_order[ni], new_order[nj] = new_order[nj], new_order[ni]
+                    _add_candidate(new_order)
+
+        # Multi-swap: apply all targeted swaps simultaneously
+        if len(targeted_swaps) > 1:
+            new_order = list(base_order)
+            for i, j in targeted_swaps:
+                new_order[i], new_order[j] = new_order[j], new_order[i]
+            _add_candidate(new_order)
+
+    # Bounded fallback for unmapped pairs: try nearby declarations
+    # Cap at 2 * len(swap_pairs) additional candidates
+    fallback_budget = 2 * len(swap_pairs)
+    if unmapped_pairs and len(candidates) < fallback_budget:
+        for i in range(n_vars):
+            for j in range(i + 1, min(i + 3, n_vars)):  # Only nearby pairs
+                new_order = list(base_order)
+                new_order[i], new_order[j] = new_order[j], new_order[i]
+                _add_candidate(new_order)
+                if len(candidates) >= fallback_budget + len(targeted_swaps):
+                    break
+            if len(candidates) >= fallback_budget + len(targeted_swaps):
+                break
 
     return candidates
 

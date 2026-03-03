@@ -84,6 +84,22 @@ void RndFontBase::Save(BinStream &bs) {
     }
 }
 
+#ifndef HX_NATIVE
+BEGIN_LOADS(RndFontBase)
+    LOAD_REVS(bs)
+    LOAD_SUPERCLASS(Hmx::Object)
+    bs >> mChars;
+    bs >> mMonospace;
+    bs >> mBaseKerning;
+    bool hasKerning;
+    bs >> hasKerning;
+    if (hasKerning) {
+        mKerningTable = new KerningTable();
+        mKerningTable->Load(d, this);
+    }
+END_LOADS
+#endif
+
 bool RndFontBase::HasChar(unsigned short us) const {
     if (DataOwner() != this) {
         return DataOwner()->HasChar(us);

@@ -31,7 +31,7 @@ Every pattern currently has its own recursive AST walker, its own byte-splicing 
 
 ## Verification
 
-The test suite (`scripts/permuter/tests/`, 82 tests) is the safety net for every change. Each phase adds its own tests and must pass all existing ones:
+The test suite is the safety net for every change. Each phase adds its own tests and must pass all existing ones:
 
 ```bash
 python -m pytest scripts/permuter/tests/ -v

@@ -29,7 +29,7 @@ void SkeletonQualityFilter::Update(const Skeleton &skeleton, bool inShellMode) {
     if (skeletonIdx >= 0 && skeletonIdx < 6) {
         if (skeleton.IsTracked() || TheGestureMgr->IsTrackingAllSkeletons()) {
             const Vector3 &root = skeleton.GetUnkab0();
-            if (!(root.x == 0.0f && root.y == 0.0f && root.z == 0.0f)) {
+            if (!root.IsZero()) {
                 bool playerIsPlaying = false;
                 for (int i = 0; i < 2; i++) {
                     HamPlayerData *player = TheGameData->Player(i);

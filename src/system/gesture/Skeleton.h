@@ -5,8 +5,8 @@
 
 // TrackedJoint size: 0x74
 struct TrackedJoint {
-    Vector3 mJointPos[kNumCoordSys]; // 0x0
-    Vector3 mSmoothedPos; // 0x60
+    PaddedJointPos mJointPos[kNumCoordSys]; // 0x0
+    PaddedJointPos mSmoothedPos; // 0x60
     JointConfidence mJointConf; // 0x70
 };
 
@@ -71,6 +71,10 @@ public:
     const Vector3 &GetUnkab0() const { return unkab0; }
 
     static int IdentityCallback(void *, NUI_IDENTITY_MESSAGE *);
+
+#ifdef HX_NATIVE
+    friend class NativeSkeletonProvider;
+#endif
 
 protected:
     // size 0x148

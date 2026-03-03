@@ -222,84 +222,76 @@ void SkeletonViz::DrawLine3D(
 }
 
 void SkeletonViz::Poll() {
-    if (mPhysicalCamRotation <= mCurrentCamRotation) {
-        if (mCurrentCamRotation <= mPhysicalCamRotation) {
+    if (mPhysicalCamRotation < mCurrentCamRotation) {
+        mPhysicalCamRotation += TheTaskMgr.DeltaUISeconds() * 120.0f;
+        if (mPhysicalCamRotation <= mCurrentCamRotation) {
             return;
         }
-        mCurrentCamRotation -= TheTaskMgr.DeltaUISeconds() * 120.0f;
-        if (mCurrentCamRotation < mPhysicalCamRotation) {
-            mCurrentCamRotation = mPhysicalCamRotation;
-        }
     } else {
-        mCurrentCamRotation += TheTaskMgr.DeltaUISeconds() * 120.0f;
-        if (mCurrentCamRotation > mPhysicalCamRotation) {
-            mCurrentCamRotation = mPhysicalCamRotation;
+        if (mPhysicalCamRotation <= mCurrentCamRotation) {
+            return;
+        }
+        mPhysicalCamRotation -= TheTaskMgr.DeltaUISeconds() * 120.0f;
+        if (mPhysicalCamRotation >= mCurrentCamRotation) {
+            return;
         }
     }
+    mPhysicalCamRotation = mCurrentCamRotation;
 }
 
 void SkeletonViz::SetCamera(
     const SkeletonFrame &frame, const Transform &worldXfm, float distance
 ) {
-    RndCam *physCam = mPhysicalCam;
-    bool natal = unk218;
-    float rot = mPhysicalCamRotation;
-    SkeletonCoordSys axes = mAxesCoordSys;
-
     if (mUsePhysicalCam) {
-        if (natal) {
-            {
-                Vector3 pos;
-                pos.x = 0.0f;
-                pos.y = -distance;
-                pos.z = 0.0f;
-                RotateAboutZ(pos, rot * DEG2RAD, pos);
-                pos.y += distance;
-                physCam->SetLocalPos(pos);
-            }
-            physCam->SetLocalRot(Vector3(frame.TiltAngle() * RAD2DEG, 0.0f, rot));
-            physCam->SetFrustum(0.01f, 10.0f, 0.7955211f, 1.0f);
+        if (unk218) {
+            Vector3 pos;
+            pos.x = 0.0f;
+            pos.y = -distance;
+            pos.z = 0.0f;
+            RotateAboutZ(pos, mPhysicalCamRotation * DEG2RAD, pos);
+            pos.y += distance;
+            mPhysicalCam->SetLocalPos(pos);
+            float tilt = frame.TiltAngle() * RAD2DEG;
+            mPhysicalCam->SetLocalRot(Vector3(tilt, 0.0f, mPhysicalCamRotation));
+            mPhysicalCam->SetFrustum(0.01f, 10.0f, 0.7955211f, 1.0f);
         } else {
-            physCam->SetFrustum(0.5f, 1000.0f, physCam->YFov(), 1.0f);
-            physCam->SetLocalXfm(Transform::IDXfm());
+            Transform xfm;
+            xfm.Reset();
+            xfm.v = unk1d4.v;
+            mPhysicalCam->SetFrustum(0.5f, 1000.0f, mPhysicalCam->YFov(), 1.0f);
+            mPhysicalCam->SetLocalXfm(xfm);
         }
-        physCam->Select();
+        mPhysicalCam->Select();
     } else {
-        if (axes == kCoordCamera || !natal) {
+        if (mAxesCoordSys == kCoordCamera || !unk218) {
             UtilDrawAxes(
                 worldXfm, 5.0f / mLineWidthScale, Hmx::Color(1.0f, 1.0f, 1.0f, 1.0f)
             );
         }
-        if (natal && mCamMesh) {
+        if (unk218) {
             mCamMesh->SetWorldPos(worldXfm.v);
             mCamMesh->DrawShowing();
-
-            {
-                Vector3 normal;
-                Multiply(frame.mFloorNormal, unk1d4.m, normal);
-                normal.x += worldXfm.v.x;
-                normal.y += worldXfm.v.y;
-                normal.z += worldXfm.v.z;
-                TheRnd.DrawLine(
-                    worldXfm.v, normal, Hmx::Color(1.0f, 1.0f, 1.0f, 1.0f), false
-                );
-            }
+            Vector3 normal;
+            Multiply(frame.mFloorNormal, unk1d4.m, normal);
+            normal.x += worldXfm.v.x;
+            normal.y += worldXfm.v.y;
+            normal.z += worldXfm.v.z;
+            TheRnd.DrawLine(
+                worldXfm.v, normal, Hmx::Color(1.0f, 1.0f, 1.0f, 1.0f), false
+            );
         }
     }
 
-    if (natal) {
-        float pa = frame.mFloorClipPlane.x;
-        float pb = frame.mFloorClipPlane.y;
-        float pc = frame.mFloorClipPlane.z;
-        float pd = frame.mFloorClipPlane.w;
+    if (unk218) {
         Plane plane;
-        plane.a = pa;
-        plane.b = pb;
-        plane.c = pc;
-        plane.d = pd;
-        Multiply(plane, unk1d4, plane);
+        memcpy(&plane, &frame.mFloorClipPlane, sizeof(Plane));
+        Transform localXfm = unk1d4;
+        localXfm.v = worldXfm.v;
+        Multiply(plane, localXfm, plane);
+        Vector3 planePos = worldXfm.v;
+        planePos.y += distance;
         UtilDrawPlane(
-            plane, worldXfm.v, Hmx::Color(1.0f, 1.0f, 0.0f, 1.0f), 5, 0.5f, false
+            plane, planePos, Hmx::Color(1.0f, 1.0f, 0.0f, 1.0f), 5, 0.5f, false
         );
     }
 }
