@@ -23,9 +23,9 @@
 #include <algorithm>
 
 SkeletonViz::SkeletonViz()
-    : mUsePhysicalCam(0), mPhysicalCamRotation(0), mCurrentCamRotation(0), mAxesCoordSys(kCoordCamera),
-      mUtlLine(0), mSkeletonEnv(0), mCamMesh(0), mJointMesh(0), mJointMat(0),
-      mPhysicalCam(0), mLineWidthScale(0), unk218(true) {
+    : mUsePhysicalCam(0), mPhysicalCamRotation(0), mCurrentCamRotation(0),
+      mAxesCoordSys(kCoordCamera), mUtlLine(0), mSkeletonEnv(0), mCamMesh(0),
+      mJointMesh(0), mJointMat(0), mPhysicalCam(0), mLineWidthScale(0), unk218(true) {
     unk194.Reset();
     Multiply(Hmx::Matrix3(1, 0, 0, 0, 0, 1, 0, 1, 0), unk194.m, unk194.m);
     unk1d4 = unk194;
@@ -238,106 +238,218 @@ void SkeletonViz::Poll() {
     }
 }
 
-void SkeletonViz::SetCamera(const SkeletonFrame &frame, const Transform &worldXfm, float) {
-    if (!mUsePhysicalCam) {
-        if (mAxesCoordSys == kCoordCamera || !unk218) {
-            UtilDrawAxes(worldXfm, 5.0f / mLineWidthScale, Hmx::Color(1, 1, 1, 1));
+void SkeletonViz::SetCamera(const SkeletonFrame &frame, const Transform &worldXfm, float distance) {
+    RndCam *physCam = mPhysicalCam;
+    bool natal = unk218;
+    float rot = mPhysicalCamRotation;
+    SkeletonCoordSys axes = mAxesCoordSys;
+
+    if (mUsePhysicalCam) {
+        if (natal) {
+            {
+                Vector3 pos;
+                pos.x = 0.0f;
+                pos.y = -distance;
+                pos.z = 0.0f;
+                RotateAboutZ(pos, rot * DEG2RAD, pos);
+                pos.y += distance;
+                physCam->SetLocalPos(pos);
+            }
+            physCam->SetLocalRot(Vector3(frame.TiltAngle() * RAD2DEG, 0.0f, rot));
+            physCam->SetFrustum(0.01f, 10.0f, 0.7955211f, 1.0f);
+        } else {
+            physCam->SetFrustum(0.5f, 1000.0f, physCam->YFov(), 1.0f);
+            physCam->SetLocalXfm(Transform::IDXfm());
         }
-        if (unk218 && mCamMesh) {
+        physCam->Select();
+    } else {
+        if (axes == kCoordCamera || !natal) {
+            UtilDrawAxes(worldXfm, 5.0f / mLineWidthScale, Hmx::Color(1.0f, 1.0f, 1.0f, 1.0f));
+        }
+        if (natal && mCamMesh) {
             mCamMesh->SetWorldPos(worldXfm.v);
             mCamMesh->DrawShowing();
+
+            {
+                Vector3 normal;
+                Multiply(frame.mFloorNormal, unk1d4.m, normal);
+                normal.x += worldXfm.v.x;
+                normal.y += worldXfm.v.y;
+                normal.z += worldXfm.v.z;
+                TheRnd.DrawLine(worldXfm.v, normal, Hmx::Color(1.0f, 1.0f, 1.0f, 1.0f), false);
+            }
         }
-    } else if (mPhysicalCam && unk218) {
-        Transform camXfm = worldXfm;
-        Hmx::Matrix3 rotMtx;
-        rotMtx.Identity();
-        RotateAboutZ(rotMtx, mCurrentCamRotation * DEG2RAD, rotMtx);
-        camXfm.m = rotMtx;
-        mPhysicalCam->SetLocalXfm(camXfm);
-        mPhysicalCam->SetFrustum(0.01f, 10.0f, 0.7955211f, 1.0f);
-        mPhysicalCam->Select();
     }
 
-    if (unk218) {
+    if (natal) {
+        float pa = frame.mFloorClipPlane.x;
+        float pb = frame.mFloorClipPlane.y;
+        float pc = frame.mFloorClipPlane.z;
+        float pd = frame.mFloorClipPlane.w;
         Plane plane;
-        plane.Set(
-            frame.mFloorClipPlane.x,
-            frame.mFloorClipPlane.y,
-            frame.mFloorClipPlane.z,
-            frame.mFloorClipPlane.w
-        );
-        UtilDrawPlane(plane, worldXfm.v, Hmx::Color(1, 1, 0, 1), 5, 0.5f, false);
+        plane.a = pa;
+        plane.b = pb;
+        plane.c = pc;
+        plane.d = pd;
+        Multiply(plane, unk1d4, plane);
+        UtilDrawPlane(plane, worldXfm.v, Hmx::Color(1.0f, 1.0f, 0.0f, 1.0f), 5, 0.5f, false);
     }
 }
 
-void SkeletonViz::DrawPoint3D(
-    const Vector3 &vec, float scale, const Hmx::Color &color, float alpha
-) {
-    if (!mSphereMesh) {
-        return;
+void SkeletonViz::DrawPoint3D(const Vector3 &vec, float scale, const Hmx::Color &color, float alpha) {
+    if (mSphereMesh) {
+        Vector3 point;
+        Multiply(vec, unk1d4, point);
+        if (unk218) {
+            Multiply(point, WorldXfm(), point);
+        }
+        RndMat *mat = mSphereMesh->Mat();
+        if (mat) {
+            mat->SetColor(color.red, color.green, color.blue);
+        }
+        mSphereMesh->SetWorldPos(point);
+        mSphereMesh->DrawShowing();
     }
-
-    Vector3 point;
-    Multiply(vec, unk1d4, point);
-    if (unk218) {
-        Multiply(point, WorldXfm(), point);
-    }
-
-    if (mSphereMesh->Mat()) {
-        mSphereMesh->Mat()->SetColor(color.red, color.green, color.blue);
-    }
-    mSphereMesh->SetWorldPos(point);
-    mSphereMesh->DrawShowing();
 }
 
 void SkeletonViz::DrawJoints(
     const BaseSkeleton &skeleton, Vector3 *camPos, Vector3 *drawPos, bool faded
 ) {
-    float tint = faded ? 0.5f : 1.0f;
+    float tint = 1.0f;
+    if (faded) {
+        tint = 0.5f;
+    }
+    Hmx::Color tintColor(tint, tint, tint, 1.0f);
+
+    float len4 = skeleton.BoneLength((SkeletonBone)4, kCoordCamera);
+    float len3 = skeleton.BoneLength((SkeletonBone)3, kCoordCamera);
+    len3 += len4;
+    float len2 = skeleton.BoneLength((SkeletonBone)2, kCoordCamera);
 
     float minZ = 1.0e30f;
+    Vector3 *camIt = camPos - 1;
     for (int i = 0; i < kNumBones; i++) {
-        minZ = std::min(minZ, camPos[BaseSkeleton::sBones[i].joint1].z);
+        camIt++;
+        float z = camIt->z;
+        if (minZ > z) {
+            minZ = z;
+        }
     }
 
-    float maxDepth = camPos[kJointShoulderCenter].z + camPos[kJointHead].z
-        + camPos[kJointShoulderLeft].z + minZ;
+    float maxDepth = minZ + len2 + len3;
     float invRange = 1.0f / (minZ - maxDepth);
 
-    for (int i = 0; i < kNumBones; i++) {
-        const BoneJoints &bone = BaseSkeleton::sBones[i];
-        float c0 =
-            std::max(0.0f, std::min(1.0f, (camPos[bone.joint1].z - maxDepth) * invRange));
-        float c1 =
-            std::max(0.0f, std::min(1.0f, (camPos[bone.joint2].z - maxDepth) * invRange));
-        c0 = c0 * 0.8f + 0.2f;
-        c1 = c1 * 0.8f + 0.2f;
-        Hmx::Color col0(tint * c0, tint * c0, tint * c0, 1.0f);
-        Hmx::Color col1(tint * c1, tint * c1, tint * c1, 1.0f);
+    Hmx::Color shadedColor;
+    RndLine **lineIt = mBoneLines - 1;
+    const BoneJoints *boneIt = BaseSkeleton::sBones + 1;
+    const BoneJoints *boneEnd = BaseSkeleton::sBones + kNumBones;
+    while (boneIt <= boneEnd) {
+        const BoneJoints &bone = boneIt[-1];
 
-        mBoneLines[i]->SetPointColor(0, col0, true);
-        mBoneLines[i]->SetPointColor(1, col1, true);
-        mBoneLines[i]->SetPointPos(0, drawPos[bone.joint1]);
-        mBoneLines[i]->SetPointPos(1, drawPos[bone.joint2]);
-        float baseWidth = mBoneLines[i]->GetWidth();
-        mBoneLines[i]->SetWidth(mLineWidthScale * baseWidth);
-        mBoneLines[i]->DrawShowing();
-        mBoneLines[i]->SetWidth(baseWidth);
+        float c0 = (camPos[bone.joint1].z - maxDepth) * invRange;
+        float c0clamped = (-c0 < 0.0f) ? c0 : 0.0f;
+        c0 = (c0clamped - 1.0f < 0.0f) ? c0clamped : 1.0f;
+        c0 = c0 * 0.8f + 0.2f;
+
+        RndLine *line = lineIt[1];
+        shadedColor.red = tintColor.red * c0;
+        shadedColor.green = tintColor.green * c0;
+        shadedColor.blue = tintColor.blue * c0;
+        shadedColor.alpha = tintColor.alpha;
+        line->SetPointColor(0, shadedColor, true);
+
+        float c1 = (camPos[bone.joint2].z - maxDepth) * invRange;
+        float c1clamped = (-c1 < 0.0f) ? c1 : 0.0f;
+        c1 = (c1clamped - 1.0f < 0.0f) ? c1clamped : 1.0f;
+        c1 = c1 * 0.8f + 0.2f;
+        shadedColor.red = tintColor.red * c1;
+        shadedColor.green = tintColor.green * c1;
+        shadedColor.blue = tintColor.blue * c1;
+        line->SetPointColor(1, shadedColor, true);
+
+        line->SetPointPos(0, drawPos[bone.joint1]);
+        line->SetPointPos(1, drawPos[bone.joint2]);
+        float baseWidth = line->GetWidth();
+        line->SetWidth(mLineWidthScale * baseWidth);
+        line->DrawShowing();
+        lineIt++;
+        lineIt[0]->SetWidth(baseWidth);
+        boneIt++;
     }
 
-    if (mJointMesh && mJointMat) {
-        for (int i = 0; i < kNumJoints; i++) {
-            JointConfidence conf = skeleton.JointConf((SkeletonJoint)i);
-            Hmx::Color color(1, 0, 0, 1);
+    float baseScaleZ = mJointMesh->LocalXfm().m.z.z;
+    float baseScaleY = mJointMesh->LocalXfm().m.y.y;
+    float baseScaleX = mJointMesh->LocalXfm().m.x.x;
+    Vector3 scaledScale(
+        mLineWidthScale * baseScaleX,
+        mLineWidthScale * baseScaleY,
+        mLineWidthScale * baseScaleZ
+    );
+    SetLocalScale(mJointMesh, scaledScale);
+
+    Vector3 *jointIt = drawPos;
+    for (int i = 0; i < kNumJoints; i++) {
+        JointConfidence conf = skeleton.JointConf((SkeletonJoint)i);
+        float red;
+        float green;
+        if (conf == kConfidenceTracked) {
+            red = 0.0f;
+            green = tint;
+        } else {
+            red = tint;
             if (conf == kConfidenceInferred) {
-                color = Hmx::Color(0.5f, 0.5f, 0.0f, 1.0f);
-            } else if (conf == kConfidenceTracked) {
-                color = Hmx::Color(0.0f, 0.5f, 0.0f, 1.0f);
+                green = tint;
+            } else {
+                green = 0.0f;
             }
-            mJointMat->SetColor(color.red, color.green, color.blue);
-            mJointMesh->SetWorldPos(drawPos[i]);
-            mJointMesh->DrawShowing();
         }
+        mJointMesh->SetLocalPos(*jointIt);
+        mJointMat->SetColor(red, green, 0.0f);
+        mJointMesh->DrawShowing();
+        jointIt++;
+    }
+
+    Vector3 baseScale(baseScaleX, baseScaleY, baseScaleZ);
+    SetLocalScale(mJointMesh, baseScale);
+
+    int clippingFlags = skeleton.QualityFlags();
+    Hmx::Color textColor(1.0f, 1.0f, 1.0f, 1.0f);
+    Vector2 screenPos(0.1f, 0.1f);
+    if (mUsePhysicalCam) {
+        const Hmx::Rect &screenRect = mPhysicalCam->GetScreenRect();
+        float sy = screenRect.y;
+        float sx = screenRect.x;
+        screenPos.x = sx;
+        screenPos.y = sy;
+    }
+    if (clippingFlags & 1) {
+        const Vector2 &sz =
+            TheRnd.DrawStringScreen("clipped right", screenPos, textColor, true);
+        screenPos.y = sz.y;
+    }
+    if (clippingFlags & 2) {
+        const Vector2 &sz =
+            TheRnd.DrawStringScreen("clipped left", screenPos, textColor, true);
+        screenPos.y = sz.y;
+    }
+    if (clippingFlags & 4) {
+        const Vector2 &sz =
+            TheRnd.DrawStringScreen("clipped top", screenPos, textColor, true);
+        screenPos.y = sz.y;
+    }
+    if (clippingFlags & 8) {
+        const Vector2 &sz =
+            TheRnd.DrawStringScreen("clipped bottom", screenPos, textColor, true);
+        screenPos.y = sz.y;
+    }
+
+    if (mAxesCoordSys != kCoordCamera && unk218) {
+        Transform axesXfm, worldXfm;
+        skeleton.CameraToPlayerXfm(mAxesCoordSys, axesXfm);
+        Multiply(axesXfm, unk1d4, worldXfm);
+        Multiply(worldXfm, WorldXfm(), worldXfm);
+        Hmx::Color white(1.0f, 1.0f, 1.0f, 1.0f);
+        UtilDrawAxes(worldXfm, mLineWidthScale * 0.25f, white);
     }
 }
 
