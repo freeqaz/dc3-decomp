@@ -7,12 +7,15 @@ SkeletonIdentifiedMsg::SkeletonIdentifiedMsg(int arg1, int arg2)
 
 void IdentityInfo::Identified(unsigned int enrollmentIdx) {
     GestureMgr::sIdentityOpInProgress = false;
-    if ((int)enrollmentIdx == -5 || (int)enrollmentIdx == -4) {
-        enrollmentIdx = -2;
-    } else if ((int)enrollmentIdx == -2) {
-        enrollmentIdx = -1;
-    } else if ((int)enrollmentIdx == -1) {
-        enrollmentIdx = -2;
+    switch ((int)enrollmentIdx) {
+    case -5:
+    case -4:
+    case -1:
+        enrollmentIdx = (unsigned int)-2;
+        break;
+    case -2:
+        enrollmentIdx = (unsigned int)-1;
+        break;
     }
     SkeletonIdentifiedMsg msg(enrollmentIdx, unkc);
     TheGestureMgr->Export(msg, true);

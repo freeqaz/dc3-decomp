@@ -227,6 +227,47 @@ def diag_with_replace_real() -> Diagnosis:
     return d
 
 
+def diag_with_cmplwi_cmpwi() -> Diagnosis:
+    """cmplwi vs cmpwi mismatch (ObjPtr bool extraction)."""
+    d = _empty_diag()
+    d.diff_ops = [DiffOp(index=5, target_opcode="cmplwi", base_opcode="cmpwi")]
+    d.replace_real = 2
+    return d
+
+
+def diag_with_lfd_lfs() -> Diagnosis:
+    """lfd vs lfs mismatch (float/double literal width)."""
+    d = _empty_diag()
+    d.diff_ops = [DiffOp(index=8, target_opcode="lfs", base_opcode="lfd")]
+    return d
+
+
+def diag_with_offset_deltas() -> Diagnosis:
+    """Offset swap mismatches (assignment reorder)."""
+    d = _empty_diag()
+    d.offset_deltas = {4: 2, -4: 2}
+    d.clusters = [Cluster(start_idx=5, end_idx=10, size=5, inserts=2, deletes=2)]
+    return d
+
+
+def diag_with_callee_saved_swaps() -> Diagnosis:
+    """Callee-saved GPR swaps (temp elimination / member ref bind)."""
+    d = _empty_diag()
+    d.reg_swap_pairs = {
+        ("r30", "r29"): SwapInfo(count=3, first_idx=10, last_idx=40)
+    }
+    return d
+
+
+def diag_with_insert_delete() -> Diagnosis:
+    """Insert/delete cluster (MILO log swap)."""
+    d = _empty_diag()
+    d.insert_count = 3
+    d.delete_count = 2
+    d.clusters = [Cluster(start_idx=5, end_idx=10, size=5, inserts=3, deletes=2)]
+    return d
+
+
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -1468,6 +1509,209 @@ void test_func(int x) {
 void Fail(const char* msg);
 void test_func(int x) {
     if (x < 0) Fail("bad");
+}
+""",
+    ),
+
+    # ===================== temp_elimination =====================
+
+    PatternFixture(
+        id="tmpelim_inline_single_use",
+        pattern_name="temp_elimination",
+        description="Inline single-use temp variable",
+        func_name="test_func",
+        diagnosis=diag_with_arith_ops(),
+        seeded_source="""\
+float LimitAng(float x);
+void test_func(float mAng, float mLastAng, float locf) {
+    float norm1 = LimitAng(mLastAng - locf);
+    mAng = LimitAng(norm1 + mAng);
+}
+""",
+        expected_source="""\
+float LimitAng(float x);
+void test_func(float mAng, float mLastAng, float locf) {
+    mAng = LimitAng(LimitAng(mLastAng - locf) + mAng);
+}
+""",
+    ),
+
+    # ===================== objptr_bool_extract =====================
+
+    PatternFixture(
+        id="ptrext_bool_decl_chain",
+        pattern_name="objptr_bool_extract",
+        description="Extract member from && chain in bool declaration",
+        func_name="test_func",
+        diagnosis=diag_with_cmplwi_cmpwi(),
+        match_mode="contains",
+        seeded_source="""\
+void test_func() {
+    bool b = (mTex && mTex->Width() && mTex->Height());
+    if (b) { mTex->Draw(); }
+}
+""",
+        expected_source="""\
+auto *_ptr0 = mTex;
+    bool b = (_ptr0 && _ptr0->Width() && _ptr0->Height());
+""",
+    ),
+
+    # ===================== float_double_literal =====================
+
+    PatternFixture(
+        id="fltlit_add_f_suffix",
+        pattern_name="float_double_literal",
+        description="Add f suffix to double literal",
+        func_name="test_func",
+        diagnosis=diag_with_lfd_lfs(),
+        seeded_source="""\
+void test_func(float x) {
+    float y = x + 6.0;
+}
+""",
+        expected_source="""\
+void test_func(float x) {
+    float y = x + 6.0f;
+}
+""",
+    ),
+
+    PatternFixture(
+        id="fltlit_remove_f_suffix",
+        pattern_name="float_double_literal",
+        description="Remove f suffix from float literal",
+        func_name="test_func",
+        diagnosis=diag_with_lfd_lfs(),
+        seeded_source="""\
+void test_func(float x) {
+    float y = x + 6.0f;
+}
+""",
+        expected_source="""\
+void test_func(float x) {
+    float y = x + 6.0;
+}
+""",
+    ),
+
+    # ===================== fabs_variant =====================
+
+    PatternFixture(
+        id="fabs_to_fabsf",
+        pattern_name="fabs_variant",
+        description="Swap fabs to fabsf",
+        func_name="test_func",
+        diagnosis=diag_with_lfd_lfs(),
+        seeded_source="""\
+void test_func(float x) {
+    float y = fabs(x);
+}
+""",
+        expected_source="""\
+void test_func(float x) {
+    float y = fabsf(x);
+}
+""",
+    ),
+
+    PatternFixture(
+        id="fabsf_to_stdfabs",
+        pattern_name="fabs_variant",
+        description="Swap fabsf to std::fabs",
+        func_name="test_func",
+        diagnosis=diag_with_lfd_lfs(),
+        seeded_source="""\
+void test_func(float x) {
+    float y = fabsf(x);
+}
+""",
+        expected_source="""\
+void test_func(float x) {
+    float y = std::fabs(x);
+}
+""",
+    ),
+
+    # ===================== milo_log_swap =====================
+
+    PatternFixture(
+        id="logswap_warn_to_notify",
+        pattern_name="milo_log_swap",
+        description="Swap MILO_WARN to MILO_NOTIFY",
+        func_name="test_func",
+        diagnosis=diag_with_insert_delete(),
+        seeded_source="""\
+void test_func(int x) {
+    MILO_WARN("value is %d", x);
+}
+""",
+        expected_source="""\
+void test_func(int x) {
+    MILO_NOTIFY("value is %d", x);
+}
+""",
+    ),
+
+    PatternFixture(
+        id="logswap_notify_to_log",
+        pattern_name="milo_log_swap",
+        description="Swap MILO_NOTIFY to MILO_LOG",
+        func_name="test_func",
+        diagnosis=diag_with_insert_delete(),
+        seeded_source="""\
+void test_func(int x) {
+    MILO_NOTIFY("value is %d", x);
+}
+""",
+        expected_source="""\
+void test_func(int x) {
+    MILO_LOG("value is %d", x);
+}
+""",
+    ),
+
+    # ===================== assignment_reorder =====================
+
+    PatternFixture(
+        id="asgnreorder_swap_pair",
+        pattern_name="assignment_reorder",
+        description="Swap two consecutive assignments",
+        func_name="test_func",
+        diagnosis=diag_with_offset_deltas(),
+        match_mode="contains",
+        seeded_source="""\
+struct W { float a; float b; float c; };
+void test_func(W &w) {
+    w.a = 0;
+    w.b = 0;
+    w.c = 0;
+}
+""",
+        expected_source="""\
+    w.b = 0;
+    w.a = 0;
+""",
+    ),
+
+    # ===================== iterator_deref_style =====================
+
+    PatternFixture(
+        id="itderef_star_to_arrow",
+        pattern_name="iterator_deref_style",
+        description="Convert (*it).member to it->member",
+        func_name="test_func",
+        diagnosis=diag_with_replace_real(),
+        seeded_source="""\
+struct Iter { int mWeight; };
+void test_func(Iter *it) {
+    int x = (*it).mWeight;
+}
+""",
+        expected_source="""\
+struct Iter { int mWeight; };
+void test_func(Iter *it) {
+    int x = it->mWeight;
 }
 """,
     ),

@@ -98,8 +98,8 @@ DWORD SkeletonUpdateThread(LPVOID) {
     while (!sBool878) {
         {
             SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
-            if (SkeletonUpdate::sInstance->mIsUpdateThreadActive) {
-                SkeletonUpdate::sInstance->Update();
+            if (handle.mInst->mIsUpdateThreadActive) {
+                handle.mInst->Update();
                 SetEvent(skeleton_updated_event);
             }
         }
@@ -217,7 +217,7 @@ void SkeletonUpdate::UpdateFakeArmPos() {
     float fVar4 = TheTaskMgr.DeltaUISeconds();
     float fVar11 = fVar4;
     fVar11 *= lbl_82F0BE80;
-    float fVar12 = -(fVar1 * fVar11 - unk5398);
+    float fVar12 = -(fVar11 * fVar1 - unk5398);
     *(volatile float *)&unk5398 = fVar12;
 
     float fVar0 = -0.25f;
@@ -284,17 +284,22 @@ void SkeletonUpdate::InsertFakeArmPos(SkeletonData &data) {
 
 void SkeletonUpdate::UpdateCallbacks() {
     if (unk5388 > 0) {
+        float posHalf = 0.5f;
         int tracked = 0;
+        SkeletonData *sd = &mSkeletonFrame.mSkeletonDatas[0];
         for (int i = 0; i < NUM_SKELETONS; i++) {
-            if (mSkeletonFrame.mSkeletonDatas[i].mTracking != kSkeletonNotTracked) {
+            if (sd[i].mTracking != kSkeletonNotTracked) {
                 tracked++;
             }
         }
         if (tracked < 2) {
+            float negHalf = -0.5f;
             for (int i = 0; i < NUM_SKELETONS; i++) {
-                if (mSkeletonFrame.mSkeletonDatas[i].mTracking == kSkeletonNotTracked) {
-                    Vector3 offset(tracked > 0 ? -0.5f : 0.5f, 0.0f, 0.0f);
-                    StubCameraInput::StubSkeletonData(mSkeletonFrame.mSkeletonDatas[i], offset);
+                if (sd[i].mTracking == kSkeletonNotTracked) {
+                    float x = posHalf;
+                    if (tracked > 0) x = negHalf;
+                    Vector3 offset(x, 0.0f, 0.0f);
+                    StubCameraInput::StubSkeletonData(sd[i], offset);
                     tracked++;
                 }
                 if (tracked == 2 || tracked == unk5388) {
@@ -306,24 +311,30 @@ void SkeletonUpdate::UpdateCallbacks() {
 
     if (unk538c > 0) {
         UpdateFakeArmPos();
-        unsigned bit = 1;
-        for (unsigned i = 0; i < NUM_SKELETONS; i++, bit <<= 1) {
-            SkeletonData &data = mSkeletonFrame.mSkeletonDatas[i];
-            if ((bit & unk538c) == 0) {
-                data.mTracking = kSkeletonNotTracked;
-                continue;
+        unsigned revBit = 1;
+        unsigned i = 0;
+        SkeletonData *sd2 = &mSkeletonFrame.mSkeletonDatas[0];
+        do {
+            if (((1u << i) & (unsigned)unk538c) != 0) {
+                unsigned side;
+                if (i >= 2 || !mSwapSides) {
+                    side = i;
+                } else {
+                    side = revBit;
+                }
+                Vector3 offset(-((float)(int)side * 0.5f - 0.25f), 0.0f, 0.0f);
+                StubCameraInput::StubSkeletonData(*sd2, offset);
+                sd2->mTrackingID = i + 1;
+                if ((int)i == unk5394) {
+                    InsertFakeArmPos(*sd2);
+                }
+            } else {
+                sd2->mTracking = kSkeletonNotTracked;
             }
-            unsigned side = i;
-            if (i <= 1 && mSwapSides) {
-                side = 1 - i;
-            }
-            Vector3 offset(-((float)side * 0.5f - 0.25f), 0.0f, 0.0f);
-            StubCameraInput::StubSkeletonData(data, offset);
-            data.mTrackingID = i + 1;
-            if ((int)i == unk5394) {
-                InsertFakeArmPos(data);
-            }
-        }
+            revBit--;
+            i++;
+            sd2++;
+        } while ((int)revBit > -5);
     }
 
     auto& _ref1 = mSkeletons;
@@ -353,7 +364,7 @@ void SkeletonUpdate::UpdateCallbacks() {
 
     SkeletonUpdateData data;
     data.mSkeletonsLeft = &mSkeletonsLeft[0];
-    data.mSkeletonsRight = &mSkeletonsRight[0];
+    data.mSkeletonsRight = (Skeleton **)&mSkeletonsRight[0];
     data.mFrame = &mSkeletonFrame;
     data.mHistory = this;
     data.mCameraInput = mCameraInput;
@@ -364,15 +375,27 @@ void SkeletonUpdate::UpdateCallbacks() {
 
 void SkeletonUpdateCallbackSlowdownCB(float msecs, void *cbObj) {
     Hmx::Object *obj = dynamic_cast<Hmx::Object *>((SkeletonCallback *)cbObj);
-    const char *name = obj ? obj->Name() : "null";
-    if (!name) {
-        name = "none";
+    const char *name;
+    if (obj) {
+        const char *n = obj->Name();
+        if ((int)n == 0) {
+            n = "none";
+        }
+        name = n;
+    } else {
+        name = "null";
     }
 
-    const char *className = "null";
+    const char *className;
     if (obj) {
         Symbol objClass = obj->ClassName();
-        className = objClass.Null() ? "unknown class" : objClass.Str();
+        if (objClass.Null()) {
+            className = "unknown class";
+        } else {
+            className = obj->ClassName().Str();
+        }
+    } else {
+        className = "null";
     }
     MILO_LOG("%2.2f msec %s %s\n", msecs, name, className);
 }
@@ -424,42 +447,41 @@ void SkeletonUpdate::PostUpdate() {
 
 DataNode OnToggleSkeletalUpdateThread(DataArray *) {
     SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
-    SkeletonUpdate::sInstance->mIsUpdateThreadActive =
-        !SkeletonUpdate::sInstance->mIsUpdateThreadActive;
+    handle.mInst->mIsUpdateThreadActive = !handle.mInst->mIsUpdateThreadActive;
     ResetEvent(SkeletonUpdate::sSkeletonUpdatedEvent);
-    return (int)SkeletonUpdate::sInstance->mIsUpdateThreadActive;
+    return (int)handle.mInst->mIsUpdateThreadActive;
 }
 
 DataNode OnCycleNumStubSkeletons(DataArray *) {
     SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
-    int value = (SkeletonUpdate::sInstance->unk5388 + 1) % 3;
-    SkeletonUpdate::sInstance->unk5388 = value;
+    int value = (handle.mInst->unk5388 + 1) % 3;
+    handle.mInst->unk5388 = value;
     return value;
 }
 
 DataNode OnCycleFakeShellSkeletons(DataArray *a) {
     SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
-    unsigned int idx = a->Int(1);
-    SkeletonUpdate::sInstance->unk538c ^= 1 << (idx & 0x3f);
-    return SkeletonUpdate::sInstance->unk538c;
+    int result = handle.mInst->unk538c ^ (1 << a->Int(1));
+    handle.mInst->unk538c = result;
+    return result;
 }
 
 DataNode OnCycleActiveFakeShellSkeleton(DataArray *) {
     SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
-    int value = (SkeletonUpdate::sInstance->unk5394 + 1) % 2;
-    SkeletonUpdate::sInstance->unk5394 = value;
+    int value = (handle.mInst->unk5394 + 1) % 2;
+    handle.mInst->unk5394 = value;
     return value;
 }
 
 DataNode OnSetFakeSkeletonSidesSwapped(DataArray *a) {
     SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
-    SkeletonUpdate::sInstance->mSwapSides = a->Int(1) != 0;
+    handle.mInst->mSwapSides = a->Int(1) != 0;
     return 0;
 }
 
 DataNode OnGetFakeSkeletonSidesSwapped(DataArray *) {
     SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
-    return (int)SkeletonUpdate::sInstance->mSwapSides;
+    return (int)handle.mInst->mSwapSides;
 }
 
 void SkeletonUpdate::Init() {

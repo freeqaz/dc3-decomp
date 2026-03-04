@@ -104,25 +104,30 @@ void SkeletonRecoverer::Poll() {
         } else {
             TrackingIDHistory history;
             const int *src = reinterpret_cast<const int *>(&skel.GetUnkab0());
-            int *dst = reinterpret_cast<int *>(&history.unk4);
-            dst[1] = src[1];
-            dst[0] = src[0];
+            int w0 = src[0];
+            int w1 = src[1];
+            int w2 = src[2];
+            int w3 = src[3];
             history.mUntrackedTime = 0.0f;
-            dst[2] = src[2];
-            dst[3] = src[3];
             history.mTrackingID = trackingID;
+            int *dst = reinterpret_cast<int *>(&history.unk4);
+            dst[0] = w0;
+            dst[1] = w1;
+            dst[2] = w2;
+            dst[3] = w3;
             mIDHistory.insert(mIDHistory.begin(), history);
         }
     }
 
     for (std::list<TrackingIDHistory>::iterator it = mIDHistory.begin();
          it != mIDHistory.end();) {
-        if (it->mUntrackedTime > GestureMgr::MaxRecoveryTime()) {
+        TrackingIDHistory *data = &(*it);
+        if (data->mUntrackedTime > GestureMgr::MaxRecoveryTime()) {
             it = mIDHistory.erase(it);
             continue;
         }
-        if (!IsSkeletonTracked(it->mTrackingID)) {
-            it->mUntrackedTime = deltaSeconds + it->mUntrackedTime;
+        if (!IsSkeletonTracked(data->mTrackingID)) {
+            data->mUntrackedTime = deltaSeconds + data->mUntrackedTime;
         }
         ++it;
     }

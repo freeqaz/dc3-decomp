@@ -173,6 +173,7 @@ def run_objdiff(symbol: str) -> tuple[float, dict | None]:
     """Run objdiff-cli with --include-instructions and return (match%, json)."""
     cmd = [
         "./bin/objdiff-cli", "diff", "-p", ".", symbol,
+        "-c", "functionRelocDiffs=none",
         "-f", "json", "--include-instructions",
     ]
     result = subprocess.run(

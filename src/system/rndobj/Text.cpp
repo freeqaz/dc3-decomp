@@ -928,142 +928,53 @@ RndText::FontMapBase *RndText::AcquireFontMap(RndFontBase *font) {
 }
 
 void RndText::UpdateText() {
-    // Rebuild font maps and text display
-    BuildFontMaps(false);
-
-    // Reset displayable chars on all font maps
-    FOREACH (it, mFontMaps) {
-        (*it)->ResetDisplayableChars();
+    if (mFitType == kFitEllipsis) {
+        FitTextJust();
+        return;
     }
-
-    // Count displayable characters in the text
-    const char *p = mText.c_str();
-    int charCount = 0;
-    while (*p) {
-        unsigned short us;
-        int consumed = DecodeUTF8(us, p);
-        if (consumed <= 0) break;
-        p += consumed;
-        // Count this char in the appropriate font map
-        for (auto it = mFontMaps.begin(); it != mFontMaps.end(); ++it) {
-            (*it)->IncrementDisplayableChars(us);
+    if (mStyles[0].mSize > 0.0f && mWidth > 0.0f) {
+        if (mFitType == kFitScrollMarqueeWrap) {
+        do_ellipsis:
+            FitTextEllipsis();
+            return;
         }
-        charCount++;
-    }
-
-    // Allocate meshes for the displayable characters
-    FOREACH (it, mFontMaps) {
-        (*it)->AllocateMeshes(this, mFixedLength);
-    }
-
-    // Setup character quads — iterate text and fill vertex data
-    if (!mStyles.empty() && mStyles[0].mFont) {
-        float size = mStyles[0].mSize;
-        float leading;
-        float totalHeight = ComputeHeight(1, 1.0f, leading);
-        StyleState state(this, size);
-
-        float xPos = 0.0f;
-        float yPos = 0.0f;
-        unsigned short prevChar = 0;
-
-        // Find the font map for the primary style
-        int fmIdx = FontMapIndex(mStyles[0].mFont, mStyles[0].mBlacklight);
-        if (fmIdx >= 0) {
-            FontMapBase *fontMap = mFontMaps[fmIdx];
-            const char *p = mText.c_str();
-            while (*p) {
-                unsigned short us;
-                int consumed = DecodeUTF8(us, p);
-                if (consumed <= 0) break;
-                p += consumed;
-
-                if (us == '\n') {
-                    xPos = 0.0f;
-                    yPos -= leading;
-                    prevChar = 0;
+        if (mFitType == kFitScrollPingPong
+            || mFitType == kFitScrollMarqueeReset
+            || mFitType == kFitStretch
+            || mFitType == kFitScrollMarqueeWrapAlways) {
+            for (unsigned int i = 0; i < (unsigned int)mStyles.size(); i++) {
+                RndFontBase *font = mStyles[i].mFont;
+                const char *fontName;
+                if (font == 0) {
+                    fontName = "NULL";
+                } else if (font->ClassName() != RndFont::StaticClassName()) {
+                    fontName = font->Name();
+                } else {
                     continue;
                 }
-
-#ifdef HX_NATIVE
-                // Word wrap: if xPos exceeds mWidth, wrap to next line
-                if (mWidth > 0.0f && xPos > 0.0f) {
-                    float charAdv = mStyles[0].mFont->CharAdvance(us) * size;
-                    if (xPos + charAdv > mWidth) {
-                        xPos = 0.0f;
-                        yPos -= leading;
-                        prevChar = 0;
-                    }
-                }
-#endif
-
-                fontMap->SetupCharacter(us, xPos, yPos, state, prevChar, size, mFitType, leading);
-                prevChar = us;
+                MILO_NOTIFY(
+                    "%s %s requests scrolling, but uses a font that does not support it (%s)",
+                    PathName(this), ClassName().Str(), fontName
+                );
+                mFitType = kFitScrollMarqueeWrap;
+                goto do_ellipsis;
             }
+            FitTextScroll();
+            return;
         }
     }
-
-#ifdef HX_NATIVE
-    // Apply alignment offset to vertex positions.
-    // The character layout above always starts at (0,0) and extends right/down.
-    // Alignment adjusts the anchor point:
-    //   horizontal: left=no shift, center=-width/2, right=-width
-    //   vertical: top=no shift, middle=+height/2, bottom=+height
+    // Normal wrap path
     {
-        int hAlign = mAlignment & 0x0F; // 1=left, 2=center, 4=right
-        int vAlign = mAlignment & 0xF0; // 0x10=top, 0x20=middle, 0x40=bottom
-
-        // Compute text extents from mesh vertex bounds
-        float minX = 1e30f, maxX = -1e30f;
-        float minZ = 1e30f, maxZ = -1e30f;
-        FOREACH (it, mFontMaps) {
-            FontMapBase *fontMap = *it;
-            for (int i = 0; i < fontMap->NumMeshes(); i++) {
-                RndMesh *mesh = fontMap->Mesh(i);
-                if (!mesh) continue;
-                for (int v = 0; v < mesh->NumVerts(); v++) {
-                    const Vector3 &pos = mesh->Verts(v).pos;
-                    if (pos.x == 0.0f && pos.z == 0.0f) continue; // skip zeroed verts
-                    if (pos.x < minX) minX = pos.x;
-                    if (pos.x > maxX) maxX = pos.x;
-                    if (pos.z < minZ) minZ = pos.z;
-                    if (pos.z > maxZ) maxZ = pos.z;
-                }
-            }
-        }
-        float totalWidth = (maxX > minX) ? (maxX - minX) : 0.0f;
-        float totalHeight = (maxZ > minZ) ? (maxZ - minZ) : 0.0f;
-
-        float xOffset = 0.0f;
-        if (hAlign == 2) xOffset = -totalWidth * 0.5f; // center
-        else if (hAlign == 4) xOffset = -totalWidth;     // right
-
-        float zOffset = 0.0f;
-        if (vAlign == 0x20) zOffset = totalHeight * 0.5f; // middle
-        else if (vAlign == 0x40) zOffset = totalHeight;    // bottom
-
-        if (xOffset != 0.0f || zOffset != 0.0f) {
-            FOREACH (it, mFontMaps) {
-                FontMapBase *fontMap = *it;
-                for (int i = 0; i < fontMap->NumMeshes(); i++) {
-                    RndMesh *mesh = fontMap->Mesh(i);
-                    if (!mesh) continue;
-                    for (int v = 0; v < mesh->NumVerts(); v++) {
-                        mesh->Verts(v).pos.x += xOffset;
-                        mesh->Verts(v).pos.z += zOffset;
-                    }
-                }
-            }
-        }
+        HX_VECTOR(Line) lines;
+        BuildFontMaps(true);
+        HX_VECTOR(unsigned short) wideChars;
+        int numChars = ConvertTextToWide(mText.c_str(), wideChars);
+        float *charWidths = (float *)_alloca((numChars + 2) * sizeof(float));
+        OnComputeCharWidths(&wideChars[0], charWidths, false);
+        Hmx::Rect bounds;
+        WrapText(&wideChars[0], numChars, charWidths, lines, bounds, 1.0f);
+        ConstructMeshes(lines, bounds, 1.0f);
     }
-#endif
-
-    // Cleanup and sync the meshes (zeros remaining verts, calls Sync)
-    FOREACH (it, mFontMaps) {
-        (*it)->CleanupSyncMeshes();
-    }
-
-    UpdateSphere();
 }
 
 void RndText::DrawShowing() {

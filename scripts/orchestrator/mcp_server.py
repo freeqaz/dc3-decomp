@@ -58,6 +58,37 @@ from tools.struct_db import StructDB
 from tools.merged_symbols import MergedSymbolLookup
 
 
+# Patterns for filtering noisy build output
+_NINJA_PROGRESS = re.compile(r'^\s*\[\d+/\d+\]\s')
+_NOISY_PREFIXES = (' INFO ', ' WARN ', 'xex: ', 'INFO ')
+_NOISY_SUBSTRINGS = (
+    'Skipping tail block merge',
+    'Known functions complete',
+    'Detected tail block',
+    'Not a function @',
+    'Found ',  # "Found N imps", "Found N known funcs"
+)
+
+
+def _filter_build_output(text: str) -> str:
+    """Filter noisy build/split output, keeping only meaningful lines."""
+    if not text:
+        return ""
+    lines = text.strip().splitlines()
+    filtered = []
+    for line in lines:
+        if _NINJA_PROGRESS.match(line):
+            continue
+        if any(line.startswith(p) for p in _NOISY_PREFIXES):
+            continue
+        if any(s in line for s in _NOISY_SUBSTRINGS):
+            continue
+        if re.match(r'^\s*Warning! Illegal inst found', line):
+            continue
+        filtered.append(line)
+    return "\n".join(filtered)
+
+
 # Itanium ABI mangled name pattern: MethodName__<N><ClassName><params>
 _ITANIUM_PATTERN = re.compile(r'^(.+?)__(\d+)(\w+)')
 
@@ -386,7 +417,8 @@ class DecompMCPServer:
                 if status == "complete":
                     try:
                         check_result = subprocess.run(
-                            [str(self.project_root / "bin" / "objdiff-cli"), "diff", "-p", str(self.project_root), symbol],
+                            [str(self.project_root / "bin" / "objdiff-cli"), "diff", "-p", str(self.project_root), symbol,
+                             "-c", "functionRelocDiffs=none"],
                             capture_output=True, text=True, timeout=60,
                         )
                         stdout = check_result.stdout
@@ -533,9 +565,13 @@ class DecompMCPServer:
                 msg += hidden_note
             return [TextContent(type="text", text=msg)]
 
-        # Format results
-        output = f"Found {len(results)} functions:\n\n"
-        for func in results:
+        # Format results, capping output at 30 entries to avoid massive responses
+        max_display = 30
+        output = f"Found {len(results)} functions"
+        if len(results) > max_display:
+            output += f" (showing first {max_display})"
+        output += ":\n\n"
+        for func in results[:max_display]:
             pct = func.get("current_percent")
             pct_str = f"{pct:.1f}%" if pct is not None else "unimplemented"
             verdict = func.get("verdict")
@@ -545,6 +581,9 @@ class DecompMCPServer:
                 verdict_str += f" ({verdict_reason})"
             output += f"- `{func['symbol']}` ({func.get('demangled', 'N/A')})\n"
             output += f"  Unit: {func.get('unit', 'unknown')} | Match: {pct_str}{verdict_str}\n"
+
+        if len(results) > max_display:
+            output += f"\n... and {len(results) - max_display} more (use a narrower unit_pattern or limit to see specific results)\n"
 
         if hidden_note:
             output += hidden_note
@@ -1250,12 +1289,16 @@ class DecompMCPServer:
             )]
 
         # Common args for both runs
+        # Use functionRelocDiffs=none to ignore address relocation noise
+        # (lis/addi pairs with different link-time addresses for same symbol).
+        # This matches the behavior of objdiff's report command.
         base_args = [
             str(objdiff_cli),
             "diff",
             "-p", str(project_dir),
             symbol,
             "--verdict",
+            "-c", "functionRelocDiffs=none",
         ]
 
         build_flag = ["--build"]
@@ -1268,17 +1311,6 @@ class DecompMCPServer:
         json_extra = ["--include-instructions"]
         if context:
             json_extra.extend(["-C", str(context)])
-
-        def _filter_stderr(stderr: str) -> str:
-            """Filter ninja progress lines from stderr, return error lines."""
-            if not stderr:
-                return ""
-            lines = stderr.strip().splitlines()
-            error_lines = [
-                line for line in lines
-                if not re.match(r'^\s*\[\d+/\d+\]\s', line)
-            ]
-            return "\n".join(error_lines)
 
         try:
             # 1) JSON run (with build) - for enrichment data
@@ -1293,18 +1325,27 @@ class DecompMCPServer:
 
             # Check for errors in JSON output
             json_output = json_result.stdout
-            stderr_text = _filter_stderr(json_result.stderr)
+            stderr_text = _filter_build_output(json_result.stderr)
 
-            if "Symbol not found" in json_output or "Failed" in json_output:
+            # Check for errors - look in stderr first (build failures),
+            # then in stdout but only if no JSON object was found
+            has_json = "{" in json_output
+            stdout_has_error = "Symbol not found" in json_output or (
+                "Failed" in json_output and not has_json
+            )
+            stderr_has_error = "Failed" in (json_result.stderr or "")
+
+            if stdout_has_error or (stderr_has_error and not has_json):
                 suggestions = self._suggest_similar_symbols(symbol)
-                error_msg = json_output.strip()
+                # Don't dump raw dtk output - filter it
+                error_msg = _filter_build_output(json_output)
                 if stderr_text:
                     error_msg += f"\n\n[stderr]\n{stderr_text}"
                 if suggestions:
                     error_msg += "\n\nDid you mean:\n" + "\n".join(
                         f"  - {s}" for s in suggestions
                     )
-                return [TextContent(type="text", text=error_msg)]
+                return [TextContent(type="text", text=error_msg.strip())]
 
             # Strip ninja build preamble (e.g. "ninja: no work to do.\n")
             # that --build writes to stdout before the JSON
@@ -1490,14 +1531,9 @@ class DecompMCPServer:
 
             output = result.stdout
             if result.stderr:
-                # Filter stderr to only keep errors/warnings, not ninja progress lines
-                stderr_lines = result.stderr.strip().splitlines()
-                error_lines = [
-                    line for line in stderr_lines
-                    if not re.match(r'^\s*\[\d+/\d+\]\s', line)
-                ]
-                if error_lines:
-                    output += f"\n\n[stderr]\n" + "\n".join(error_lines)
+                filtered_stderr = _filter_build_output(result.stderr)
+                if filtered_stderr:
+                    output += f"\n\n[stderr]\n{filtered_stderr}"
 
             if result.returncode != 0:
                 return [TextContent(
@@ -1597,6 +1633,7 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
                     "-p", str(project_dir),
                     symbol,
                     "--include-instructions", "--build", "--incremental",
+                    "-c", "functionRelocDiffs=none",
                     "-f", "json",
                 ]
                 result = subprocess.run(
@@ -1636,6 +1673,7 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
                     "-p", str(project_dir),
                     symbol,
                     "--include-instructions", "--build", "--incremental",
+                    "-c", "functionRelocDiffs=none",
                     "-f", "json",
                 ]
                 result = subprocess.run(
@@ -1686,6 +1724,7 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
                     "-p", str(project_dir),
                     symbol,
                     "--include-instructions", "--build", "--incremental",
+                    "-c", "functionRelocDiffs=none",
                     "-f", "json",
                 ]
                 result = subprocess.run(
@@ -1777,16 +1816,9 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
 
                 output = result.stdout
                 if result.stderr:
-                    # Filter ninja progress lines
-                    stderr_lines = result.stderr.strip().splitlines()
-                    error_lines = [
-                        line for line in stderr_lines
-                        if not re.match(r'^\s*\[\d+/\d+\]\s', line)
-                        and not line.startswith("Running objdiff for:")
-                        and not line.startswith("Output:")
-                    ]
-                    if error_lines:
-                        output += f"\n\n[stderr]\n" + "\n".join(error_lines)
+                    filtered_stderr = _filter_build_output(result.stderr)
+                    if filtered_stderr:
+                        output += f"\n\n[stderr]\n{filtered_stderr}"
 
                 if result.returncode != 0:
                     return [TextContent(type="text", text=f"Error (exit {result.returncode}):\n{output}")]

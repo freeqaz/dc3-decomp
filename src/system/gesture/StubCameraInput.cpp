@@ -38,7 +38,7 @@ void StubCameraInput::StubSkeletonData(SkeletonData &data, const Vector3 &vec) {
     data.mClippedFlags = 0;
     data.mTracking = kSkeletonTracked;
     data.mHipCenter.Set(0.0f, 0.5f, 2.3f);
-    data.mHipCenter += vec;
+    ((Vector3 &)data.mHipCenter) += vec;
     data.mJointPositions[0].Set(0.126847f, 0.111759f, 2.264718f);
     data.mJointPositions[1].Set(0.127627f, 0.178946f, 2.32085f);
     data.mJointPositions[2].Set(0.13937f, 0.554082f, 2.307118f);

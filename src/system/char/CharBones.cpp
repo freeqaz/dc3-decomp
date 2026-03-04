@@ -529,12 +529,13 @@ void CharBones::Blend(CharBones &dst) const {
     const Bone *src = mBones.begin();
     if (src == mBones.end()) return;
 
-    if (mCounts[TYPE_QUAT] > mCounts[TYPE_POS]) {
+    auto& _ref1 = mCounts;
+    if (_ref1[TYPE_QUAT] > _ref1[TYPE_POS]) {
         Vector3 *sdata = (Vector3 *)mStart;
         Vector3 *ddata = (Vector3 *)dst.mStart;
         Bone *db = dst.mBones.begin() + dst.mCounts[TYPE_POS];
         Bone *db_end = dst.mBones.begin() + dst.mCounts[TYPE_QUAT];
-        const Bone *src_end = src + mCounts[TYPE_QUAT];
+        const Bone *src_end = src + _ref1[TYPE_QUAT];
         while (true) {
             while (db->name != src->name) {
                 db++;
@@ -557,12 +558,12 @@ void CharBones::Blend(CharBones &dst) const {
         }
     }
 blend_quat:
-    if (mCounts[TYPE_ROTX] > mCounts[TYPE_QUAT]) {
+    if (_ref1[TYPE_ROTX] > _ref1[TYPE_QUAT]) {
         Bone *db = dst.mBones.begin() + dst.mCounts[TYPE_QUAT];
         Bone *db_end = dst.mBones.begin() + dst.mCounts[TYPE_ROTX];
         Hmx::Quat *dquat = (Hmx::Quat *)(dst.mStart + dst.mOffsets[TYPE_QUAT]);
         Hmx::Quat *squat = (Hmx::Quat *)(mStart + mOffsets[TYPE_QUAT]);
-        const Bone *src_end = mBones.data() + mCounts[TYPE_ROTX];
+        const Bone *src_end = mBones.data() + _ref1[TYPE_ROTX];
         while (true) {
             while (db->name != src->name) {
                 db++;
@@ -599,12 +600,12 @@ blend_quat:
         }
     }
 blend_rot:
-    if (mCounts[TYPE_END] > mCounts[TYPE_ROTX]) {
+    if (_ref1[TYPE_END] > _ref1[TYPE_ROTX]) {
         Bone *db = dst.mBones.begin() + dst.mCounts[TYPE_ROTX];
         Bone *db_end = dst.mBones.begin() + dst.mCounts[TYPE_END];
         float *dfdata = (float *)(dst.mStart + dst.mOffsets[TYPE_ROTX]);
         float *sfdata = (float *)(mStart + mOffsets[TYPE_ROTX]);
-        const Bone *src_end = mBones.data() + mCounts[TYPE_END];
+        const Bone *src_end = mBones.data() + _ref1[TYPE_END];
         while (true) {
             while (db->name != src->name) {
                 db++;

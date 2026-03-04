@@ -503,7 +503,8 @@ void CharIKHand::Highlight() {
     float charWeight = Weight();
     float leftover = 0;
     float localWeights[16];
-    if (charWeight == 0 || !mHand || mTargets.empty())
+    auto& _ref0 = mHand;
+    if (charWeight == 0 || !_ref0 || mTargets.empty())
         return;
     else {
         if (mTargets.size() != 1) {
@@ -561,8 +562,8 @@ void CharIKHand::Highlight() {
                 }
             }
         }
-        UtilDrawAxes(mHand->WorldXfm(), 1.0f, Hmx::Color(1, 1, 1));
-        UtilDrawSphere(mHand->WorldXfm().v, 1.0f, Hmx::Color(0, 1, 0), nullptr);
+        UtilDrawAxes(_ref0->WorldXfm(), 1.0f, Hmx::Color(1, 1, 1));
+        UtilDrawSphere(_ref0->WorldXfm().v, 1.0f, Hmx::Color(0, 1, 0), nullptr);
     }
 }
 

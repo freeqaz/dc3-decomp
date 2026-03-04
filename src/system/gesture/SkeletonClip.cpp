@@ -53,14 +53,14 @@ SkeletonClip::~SkeletonClip() {
     RELEASE(mFileStream);
 }
 
-void RecordedFrame::MakeSkeletonFrame(SkeletonFrame &frame, int idx) const {
-    MILO_ASSERT_RANGE(idx, 0, 6, 0x2E);
+void RecordedFrame::MakeSkeletonFrame(SkeletonFrame &frame, int skel_idx) const {
+    MILO_ASSERT_RANGE(skel_idx, 0, 6, 0x2E);
     memset(&frame, 0, sizeof(SkeletonFrame));
     frame.mFrameNumber = mFrameNumber;
     frame.mElapsedMs = mElapsedMs;
     frame.mFloorNormal = mFloorNormal;
     frame.mFloorClipPlane = *(Vector4 *)&mFloorClipPlane;
-    SkeletonData &data = frame.mSkeletonDatas[idx];
+    SkeletonData &data = frame.mSkeletonDatas[skel_idx];
     data.mTracking = mIsTracked ? kSkeletonTracked : kSkeletonNotTracked;
     memcpy(data.mJointPositions, mJointPositions, sizeof(mJointPositions));
     memcpy(data.mJointTrackingState, mJointTrackingState, sizeof(mJointTrackingState));

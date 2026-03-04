@@ -299,7 +299,9 @@ void LiveCameraInput::InitTextureStore(int max) {
 
 void LiveCameraInput::ClearTextureStore() {
     for (int i = 0; i < mTextureStore.size(); i++) {
-        RELEASE(mTextureStore[i].mTex);
+        TextureStore &s = mTextureStore[i];
+        delete s.mTex;
+        s.mTex = null;
     }
     mTextureStore.clear();
     mTextureStore.resize(mMaxTextures);

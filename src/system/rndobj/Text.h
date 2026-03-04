@@ -15,6 +15,10 @@
 
 #ifndef HX_NATIVE
 using stlpmtx_std::StlNodeAlloc;
+// Convenience: on Xbox, stlpmtx_std::vector with StlNodeAlloc; on native, std::vector
+#define HX_VECTOR(T) stlpmtx_std::vector<T, stlpmtx_std::StlNodeAlloc<T> >
+#else
+#define HX_VECTOR(T) std::vector<T>
 #endif
 
 class RndCam;
@@ -328,20 +332,31 @@ public:
 
     friend class UIListLabelElement;
 
+    // Line class for text layout — size 0x14
+    class Line {
+    public:
+        int mStartIdx; // 0x0
+        int mEndIdx; // 0x4
+        float mWidth; // 0x8
+        float mYPos; // 0xc
+        int mStyleIdx; // 0x10
+    };
+
+    void WrapText(const unsigned short *, int, float *, HX_VECTOR(Line) &, Hmx::Rect &, float);
+    void ConstructMeshes(const HX_VECTOR(Line) &, const Hmx::Rect &, float);
+
 protected:
     RndText();
 
     void DoBasicMarkup();
     void BuildFontMaps(bool);
+    void FitTextJust();
+    void FitTextEllipsis();
     void FitTextScroll();
     void SizeCheck();
     void UpdateScrollOffsets();
     static void DrawMesh(RndMesh *, float, int);
-#ifndef HX_NATIVE
-    int ConvertTextToWide(const char *, stlpmtx_std::vector<unsigned short, stlpmtx_std::StlNodeAlloc<unsigned short> > &);
-#else
-    int ConvertTextToWide(const char *, std::vector<unsigned short> &);
-#endif
+    int ConvertTextToWide(const char *, HX_VECTOR(unsigned short) &);
     int OnComputeCharWidths(const unsigned short *, float *, bool);
 
     static void QueueBlacklightPacket(RndMesh *, float, int);

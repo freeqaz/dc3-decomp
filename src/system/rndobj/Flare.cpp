@@ -113,9 +113,9 @@ void RndFlare::Print() {
 }
 
 void RndFlare::DrawShowing() {
-    RndCam *cam = RndCam::Current();
     if (TheRnd.GetDrawMode() != 0)
         return;
+    RndCam *cam = RndCam::Current();
 
     const Transform &worldXfm = WorldXfm();
     Vector2 screenPos;

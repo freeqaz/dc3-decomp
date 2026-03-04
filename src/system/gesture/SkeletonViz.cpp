@@ -307,10 +307,9 @@ void SkeletonViz::DrawPoint3D(
         Multiply(point, WorldXfm(), point);
     }
 
-    float pointAlpha = alpha;
     float scaled = mLineWidthScale * scale;
     mSphereMesh->Mat()->SetColor(color.red, color.green, color.blue);
-    mSphereMesh->Mat()->SetAlpha(pointAlpha);
+    mSphereMesh->Mat()->SetAlpha(alpha);
     mSphereMesh->Mat()->SetCull(kCullNone);
 
     Transform sphereXfm;
@@ -318,7 +317,7 @@ void SkeletonViz::DrawPoint3D(
     sphereXfm.v = point;
     Scale(Vector3(scaled, scaled, scaled), sphereXfm.m, sphereXfm.m);
     mSphereMesh->SetLocalXfm(sphereXfm);
-    mSphereMesh->SetLocalPos(point);
+    mSphereMesh->SetSphere(Sphere(Vector3(0, 0, 0), scaled));
     mSphereMesh->DrawShowing();
 }
 

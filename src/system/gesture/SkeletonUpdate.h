@@ -9,6 +9,14 @@
 class SkeletonUpdate;
 
 class SkeletonUpdateHandle {
+    friend DWORD SkeletonUpdateThread(LPVOID);
+    friend DataNode OnToggleSkeletalUpdateThread(DataArray *);
+    friend DataNode OnCycleNumStubSkeletons(DataArray *);
+    friend DataNode OnCycleFakeShellSkeletons(DataArray *);
+    friend DataNode OnCycleActiveFakeShellSkeleton(DataArray *);
+    friend DataNode OnSetFakeSkeletonSidesSwapped(DataArray *);
+    friend DataNode OnGetFakeSkeletonSidesSwapped(DataArray *);
+
 public:
     SkeletonUpdateHandle(SkeletonUpdate *);
     ~SkeletonUpdateHandle();

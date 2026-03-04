@@ -30,7 +30,7 @@ void ArcDetector::Initialize(
 
 Vector3 ArcDetector::GetCurveStart() const {
     MILO_ASSERT(!mJointPath.empty(), 0xE9);
-    return Vector3((0 - (int)mSide) * mSwipeExtentX, mSwipeExtentY, 0.0f);
+    return Vector3((mSide == kSkeletonLeft ? 1 : -1) * mSwipeExtentX, mSwipeExtentY, 0.0f);
 }
 
 void ArcDetector::Clear() {
