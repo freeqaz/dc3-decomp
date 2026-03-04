@@ -170,7 +170,7 @@ void CharIKMidi::Highlight() {
     } else {
         Hmx::Color white(1, 1, 1);
         Vector2 v2(5.0f, gCharHighlightY);
-        TheRnd.DrawString(MakeString("%s:", PathName(this)), v2, white, true);
+        TheRnd.DrawString(MakeString("%s:", (char *)PathName(this)), v2, white, true);
         v2.y += 16.0f;
         TheRnd.DrawString(
             MakeString("frac %.3f new:%s", mFrac, mCurSpot ? mCurSpot->Name() : "NULL"),

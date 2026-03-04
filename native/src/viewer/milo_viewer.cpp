@@ -119,6 +119,8 @@ static void SolveForeTwist(RndTransformable* hand, RndTransformable* twist2,
     float tan2res = std::atan2(clamp2, clamped);
     float angle = LimitAng_Viewer(offset * DEG2RAD + tan2res + newbias);
     float finalfloat = angle - newbias;
+    if (finalfloat != finalfloat)
+        return; // NaN guard — matches CharForeTwist::Poll()
     Hmx::Matrix3 m58;
     MakeRotMatrixX(finalfloat * 0.33333f, m58);
     RndTransformable* twistparent = twist2->TransParent();
@@ -977,6 +979,9 @@ int main(int argc, char** argv) {
         for (auto& sd : subdirs) sd = nullptr;
         baseDir = nullptr;
         if (gWgpuRnd) gWgpuRnd->Terminate();
+        // _exit skips static destructors — GPU objects in other globals
+        // (RndTex, etc.) may outlive the device and crash during cleanup
+        _exit(0);
     };
 
     // ---- Export-and-exit modes ----
@@ -1768,6 +1773,9 @@ int main(int argc, char** argv) {
                 ensureCharPollables();
                 for (auto* p : charPollables) {
                     if (IsDriverPollable(p) || IsTwistPollable(p)) continue;
+                    // Skip CharHair in direct-pose — physics sim computes huge
+                    // delta from T-pose to clip pose, stretching hair/cloth meshes
+                    if (strcmp(p->ClassName().Str(), "CharHair") == 0) continue;
                     p->Poll();
                 }
 

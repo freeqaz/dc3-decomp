@@ -68,7 +68,18 @@ class TempEliminationPattern(Pattern):
         if diagnosis.clusters:
             return True
 
+        # Prologue mismatch where target needs fewer vars
+        if diagnosis.has_prologue_mismatch and diagnosis.gpr_save_delta < 0:
+            return True
+
         return False
+
+    def priority(self, diagnosis: Diagnosis) -> float:
+        base = 1.0 if self.relevant(diagnosis) else 0.0
+        # Boost when prologue shows target needs fewer callee-saved regs
+        if diagnosis.has_prologue_mismatch and diagnosis.gpr_save_delta < 0:
+            base = min(1.0, base + 0.3)
+        return base
 
     def generate(self, ctx: FunctionContext) -> Iterator[Variant]:
         source = ctx.file_source

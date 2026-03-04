@@ -7,10 +7,12 @@
 #include "utl/BinStream.h"
 #include "utl/Loader.h"
 
+#ifndef HX_NATIVE
 void RndTex::Load(BinStream &bs) {
     PreLoad(bs);
     PostLoad(bs);
 }
+#endif
 
 void RndCubeTex::CubeTexProperties::Set(const RndBitmap &bmap) {
     mBpp = bmap.Bpp();

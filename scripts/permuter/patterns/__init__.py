@@ -42,6 +42,7 @@ from . import iterator_deref_style  # noqa: F401  # (*it).member <-> it->member
 from . import assignment_reorder  # noqa: F401  # Reorder consecutive assignment statements
 from . import milo_str_conv  # noqa: F401  # Add .Str() to Symbol args in MILO macros
 from . import milo_call_merge  # noqa: F401  # Merge duplicate MILO calls via shared variable
+from . import prologue_pressure  # noqa: F401  # Manipulate callee-saved register count via pressure changes
 
 from .base import get_all_patterns, get_pattern, list_patterns
 

@@ -29,10 +29,10 @@ protected:
     CharUpperTwist();
     virtual ~CharUpperTwist();
 
-    /** "The upper arm twist1 bone" */
-    ObjPtr<RndTransformable> mTwist1; // 0x8
-    /** "The upper arm twist2 bone" */
-    ObjPtr<RndTransformable> mTwist2; // 0x1c
     /** "The upper arm bone" */
-    ObjPtr<RndTransformable> mUpperArm; // 0x30
+    ObjPtr<RndTransformable> mUpperArm; // 0x14
+    /** "The upper arm twist1 bone" */
+    ObjPtr<RndTransformable> mTwist1; // 0x28
+    /** "The upper arm twist2 bone" */
+    ObjPtr<RndTransformable> mTwist2; // 0x3c
 };

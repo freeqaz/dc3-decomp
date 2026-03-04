@@ -96,6 +96,36 @@ class Diagnosis:
     noise_total: int
     replace_noise: int = 0   # Symbol-reloc replaces (unfixable)
     replace_real: int = 0    # Real structural replaces (actionable)
+    # Prologue save counts (from __savegprlr_N / __savefpr_N calls)
+    target_gpr_saves: int | None = None  # e.g., 8 for __savegprlr_24 (32-24)
+    base_gpr_saves: int | None = None
+    target_fpr_saves: int | None = None
+    base_fpr_saves: int | None = None
+
+    @property
+    def has_prologue_mismatch(self) -> bool:
+        """True if target and base differ in prologue save count."""
+        if self.target_gpr_saves is not None and self.base_gpr_saves is not None:
+            if self.target_gpr_saves != self.base_gpr_saves:
+                return True
+        if self.target_fpr_saves is not None and self.base_fpr_saves is not None:
+            if self.target_fpr_saves != self.base_fpr_saves:
+                return True
+        return False
+
+    @property
+    def gpr_save_delta(self) -> int:
+        """Target GPR saves minus base GPR saves. Positive = target needs more."""
+        if self.target_gpr_saves is not None and self.base_gpr_saves is not None:
+            return self.target_gpr_saves - self.base_gpr_saves
+        return 0
+
+    @property
+    def fpr_save_delta(self) -> int:
+        """Target FPR saves minus base FPR saves. Positive = target needs more."""
+        if self.target_fpr_saves is not None and self.base_fpr_saves is not None:
+            return self.target_fpr_saves - self.base_fpr_saves
+        return 0
 
 
 @dataclass

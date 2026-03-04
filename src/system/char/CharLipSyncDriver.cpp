@@ -88,7 +88,7 @@ BEGIN_LOADS(CharLipSyncDriver) // register error
     if (d.rev < 1) {
         FilePath fp;
         d >> fp;
-        MILO_NOTIFY("%s old version, won't load %s", PathName(this), fp);
+        MILO_NOTIFY("%s old version, won't load %s", PathName(this), (String &)fp);
         String str;
         d >> str;
     } else

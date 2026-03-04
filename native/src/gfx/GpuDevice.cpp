@@ -39,6 +39,8 @@ bool GpuDevice::Init(const GpuDeviceDesc& desc) {
 
 void GpuDevice::Shutdown() {
     mSamplerCache.clear();
+    mHeadlessView = nullptr;
+    mHeadlessTex = nullptr;
     mSurface = nullptr;
     mQueue = nullptr;
     mDevice = nullptr;

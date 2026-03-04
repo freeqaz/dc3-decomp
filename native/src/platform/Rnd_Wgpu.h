@@ -98,6 +98,7 @@ class UniformRingBuffer {
 public:
     void Init(wgpu::Device& device, uint32_t capacity);
     void Reset() { mOffset = 0; }
+    void Release() { mBuffer = nullptr; mDevice = nullptr; }
 
     // Write data at next aligned offset, return the offset used
     uint32_t Write(wgpu::Queue& queue, const void* data, uint32_t size);

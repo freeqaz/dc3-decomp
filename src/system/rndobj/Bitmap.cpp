@@ -1245,6 +1245,7 @@ bool RndBitmap::LoadDIB(BinStream *bs, unsigned int offbits) {
     return true;
 }
 
+#ifndef HX_NATIVE
 void RndBitmap::Load(BinStream &bs) {
     u8 mipCt;
     LoadHeader(bs, mipCt);
@@ -1272,3 +1273,4 @@ void RndBitmap::Load(BinStream &bs) {
         workingMip = newMip;
     }
 }
+#endif

@@ -183,6 +183,9 @@ void WgpuRnd::Init() {
 
 void WgpuRnd::Terminate() {
     gNativeWindow = nullptr;
+
+    // Release all GPU objects BEFORE device shutdown to avoid
+    // use-after-free in static destructor (Dawn/Vulkan teardown ordering)
     mDepthTex = nullptr;
     mDepthView = nullptr;
     mWhiteTex = nullptr;
@@ -196,6 +199,82 @@ void WgpuRnd::Terminate() {
     mDefaultSampler = nullptr;
     mSceneBuffer = nullptr;
     mSceneBindGroup = nullptr;
+    mMsaaTex = nullptr;
+    mMsaaView = nullptr;
+
+    // Ring buffers
+    mMaterialRing.Release();
+    mObjectRing.Release();
+    mBoneRing.Release();
+
+    // PipelineManager
+    mPipelines.Terminate();
+
+    // 2D drawing
+    m2dShader = nullptr;
+    m2dBindGroupLayout = nullptr;
+    m2dPipelineLayout = nullptr;
+    m2dVertexBuffer = nullptr;
+    m2dPipelineReady = false;
+
+    // Post-processing
+    mIntermediateTex = nullptr;
+    mIntermediateView = nullptr;
+    mPostProcShader = nullptr;
+    mPostProcBGL = nullptr;
+    mPostProcPipelineLayout = nullptr;
+    mPostProcPipeline = nullptr;
+    mPostProcUniformBuffer = nullptr;
+    mPostProcReady = false;
+
+    // Bloom
+    for (int i = 0; i < kBloomMips; i++) {
+        mBloomTex[i] = nullptr;
+        mBloomView[i] = nullptr;
+        mBloomTempTex[i] = nullptr;
+        mBloomTempView[i] = nullptr;
+    }
+    mBloomShader = nullptr;
+    mBloomBGL = nullptr;
+    mBloomPipelineLayout = nullptr;
+    mBloomThresholdPipeline = nullptr;
+    mBloomBlurHPipeline = nullptr;
+    mBloomBlurVPipeline = nullptr;
+    mBloomUpsamplePipeline = nullptr;
+    mBloomUniformBuffer = nullptr;
+    mBloomReady = false;
+
+    // Shadows
+    mShadowDepthTex = nullptr;
+    mShadowDepthView = nullptr;
+    mShadowSampler = nullptr;
+    mShadowShader = nullptr;
+    mShadowSceneBGL = nullptr;
+    mShadowObjectBGL = nullptr;
+    mShadowBoneBGL = nullptr;
+    mShadowPipelineLayout = nullptr;
+    mShadowSkinnedPipelineLayout = nullptr;
+    mShadowStaticPipeline = nullptr;
+    mShadowSkinnedPipeline = nullptr;
+    mShadowLightVPBuffer = nullptr;
+    mShadowSceneBindGroup = nullptr;
+    mShadowReady = false;
+
+    // DoF
+    mDofIntermediateTex = nullptr;
+    mDofIntermediateView = nullptr;
+    mDepthResolveTex = nullptr;
+    mDepthResolveView = nullptr;
+    mDofShader = nullptr;
+    mDofBGL = nullptr;
+    mDofPipelineLayout = nullptr;
+    mDofPipeline = nullptr;
+    mDepthResolvePipeline = nullptr;
+    mDepthResolveBGL = nullptr;
+    mDepthResolvePipelineLayout = nullptr;
+    mDofUniformBuffer = nullptr;
+    mDofReady = false;
+
     mGpu.Shutdown();
 }
 

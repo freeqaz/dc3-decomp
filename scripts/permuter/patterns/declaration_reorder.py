@@ -70,11 +70,15 @@ class DeclarationReorderPattern(Pattern):
             if r0.startswith("r") or r1.startswith("r")
         )
         if gpr_pairs >= 3:
-            return 0.9
-        if gpr_pairs >= 2:
-            return 0.7
-        return 0.5
-        return False
+            base = 0.9
+        elif gpr_pairs >= 2:
+            base = 0.7
+        else:
+            base = 0.5
+        # Prologue mismatch boost — reordering can shift register allocation
+        if diagnosis.has_prologue_mismatch:
+            base = min(1.0, base + 0.2)
+        return base
 
     def generate(self, ctx: FunctionContext) -> Iterator[Variant]:
         counter = 0

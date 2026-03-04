@@ -583,10 +583,9 @@ BEGIN_LOADS(CharClip)
         if (!eventName.empty()) {
             MILO_NOTIFY("%s has old exit event %s, must port", PathName(this), eventName);
         }
-        float f1 = -kHugeFloat;
         int count;
-        d >> count;
         float lastFrame = -kHugeFloat;
+        d >> count;
         for (int i = 0; i < count; i++) {
             float frameNum;
             d >> frameNum;
@@ -597,7 +596,7 @@ BEGIN_LOADS(CharClip)
                 );
             }
             if (frameNum < lastFrame) {
-                MILO_NOTIFY("Keyframes in %s are out of order.", Name());
+                MILO_NOTIFY("Keyframes in %s are out of order.", (char *)Name());
             }
             lastFrame = frameNum;
         }
@@ -812,7 +811,7 @@ void CharClip::EvaluateChannel(void *v1, const void *v2, int iii, float f) {
         if (oneOffset < mOne.TotalSize()) {
             mOne.EvaluateChannel(v1, oneOffset, 0, 0);
         } else {
-            MILO_FAIL("%s could not find offset %d %d", offset, oneOffset, PathName(this));
+            MILO_FAIL("%s could not find offset %d %d", PathName(this), offset, oneOffset);
         }
     }
 }

@@ -376,7 +376,7 @@ void CharacterTest::Poll() {
         return;
     if (!gClick) {
         ObjectDir *clickdir = DirLoader::LoadObjects(
-            FilePath(MakeString("%s/char/chartest.milo", FileSystemRoot())), 0, 0
+            FilePath(MakeString("%s/char/chartest.milo", (char *)FileSystemRoot())), 0, 0
         );
         gClick = clickdir->Find<Hmx::Object>("click_hi.cue", true);
     }

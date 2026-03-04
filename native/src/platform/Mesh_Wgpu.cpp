@@ -496,6 +496,26 @@ static void DrawMeshImmediate(RndMesh* mesh) {
     RndMat* mat = mesh->Mat();
     if (!mat) return;
 
+    // Debug: log eye mesh material properties
+    static int sEyeDebugCount = 0;
+    if (sEyeDebugCount < 10 && mesh->Name() &&
+        (strcmp(mesh->Name(), "eye-L.mesh") == 0 || strcmp(mesh->Name(), "eye-R.mesh") == 0)) {
+        sEyeDebugCount++;
+        const Hmx::Color& c = mat->GetColor();
+        printf("DEBUG eye mesh '%s': mat='%s' blend=%d prelit=%d color=(%.2f,%.2f,%.2f,%.2f)\n",
+               mesh->Name(), mat->Name(), (int)mat->GetBlend(), (int)mat->Prelit(),
+               c.red, c.green, c.blue, c.alpha);
+        printf("  diffuseTex=%p emissiveMap=%p emissiveMul=%.2f\n",
+               mat->GetDiffuseTex(), mat->GetEmissiveMap(), mat->GetEmissiveMultiplier());
+        // Check vertex colors
+        auto& verts = mesh->Verts();
+        if (verts.size() > 0) {
+            printf("  vert[0] color=(%.2f,%.2f,%.2f,%.2f) pos=(%.2f,%.2f,%.2f)\n",
+                   verts[0].color[0], verts[0].color[1], verts[0].color[2], verts[0].color[3],
+                   verts[0].pos.x, verts[0].pos.y, verts[0].pos.z);
+        }
+    }
+
     // Skip multiply-blend meshes with near-black color — these produce Dst*0=0
     // wiping the framebuffer to black. They're meant to be animated to white/transparent
     // but if the animation hasn't set them up yet, skip rather than destroy the scene.

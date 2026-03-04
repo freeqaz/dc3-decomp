@@ -85,6 +85,15 @@ public:
 
     int CachedPipelineCount() const { return (int)mPipelineCache.size(); }
 
+    // Release all GPU objects (call before device shutdown)
+    void Terminate() {
+        mPipelineCache.clear();
+        mShaderCache.clear();
+        mPipelineLayout = nullptr;
+        for (auto& l : mLayouts) l = nullptr;
+        mDevice = nullptr;
+    }
+
     // State mapping (public for DrawRect)
     wgpu::BlendState MapBlend(WgpuBlend blend);
 

@@ -1172,6 +1172,7 @@ void RndMesh::SetVolume(RndMesh::Volume vol) {
     }
 }
 
+#ifndef HX_NATIVE
 void RndMesh::OnSync(int flags) {
     if (mGeomOwner != this || (flags & 0x80U) || !(flags & 0x20U))
         return;
@@ -1249,6 +1250,7 @@ void RndMesh::OnSync(int flags) {
         mFaces = faces;
     }
 }
+#endif
 
 void RndMesh::DeleteBones(bool findRoot) {
     if (mBones.empty())

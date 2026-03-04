@@ -8,7 +8,7 @@ void NormalizeAboutX(Hmx::Matrix3 &m) {
     Cross(m.z, m.x, m.y);
 }
 
-CharUpperTwist::CharUpperTwist() : mTwist1(this), mTwist2(this), mUpperArm(this) {}
+CharUpperTwist::CharUpperTwist() : mUpperArm(this), mTwist1(this), mTwist2(this) {}
 CharUpperTwist::~CharUpperTwist() {}
 
 BEGIN_HANDLERS(CharUpperTwist)

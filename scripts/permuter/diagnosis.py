@@ -6,9 +6,14 @@ duplicating logic. Produces a Diagnosis dataclass for pattern filtering.
 
 from __future__ import annotations
 
+import re
 from collections import Counter
 
 from .types import Cluster, DiffOp, Diagnosis, SwapInfo
+
+# Match __savegprlr_N or __savefpr_N in bl targets
+_SAVE_GPR_RE = re.compile(r"__savegprlr_(\d+)")
+_SAVE_FPR_RE = re.compile(r"__savefpr_(\d+)")
 
 # Import pure analysis functions from diff_inspect
 from scripts.analysis.diff_inspect import (
@@ -18,6 +23,55 @@ from scripts.analysis.diff_inspect import (
     find_clusters,
     categorize_replaces,
 )
+
+
+def _extract_prologue_saves(
+    instrs: list[dict], side: str
+) -> tuple[int | None, int | None]:
+    """Extract GPR and FPR save counts from prologue instructions.
+
+    Scans the first ~15 instructions on the given side ('target' or 'base')
+    for `bl __savegprlr_N` and `bl __savefpr_N` calls. Returns (gpr_saves, fpr_saves)
+    where saves = 32 - N (the number of callee-saved registers pushed).
+    """
+    gpr_saves: int | None = None
+    fpr_saves: int | None = None
+
+    for ins in instrs[:15]:
+        side_data = ins.get(side, {})
+        opcode = side_data.get("opcode", "")
+        if opcode != "bl":
+            continue
+
+        # Get the branch target from typed_args (objdiff JSON format)
+        # Also check "arguments" for compatibility with diff_breakdown format
+        args = side_data.get("typed_args", []) or side_data.get("arguments", [])
+        for arg in args:
+            val = arg.get("value")
+            if not isinstance(val, str):
+                continue
+
+            m = _SAVE_GPR_RE.search(val)
+            if m:
+                gpr_saves = 32 - int(m.group(1))
+                continue
+
+            m = _SAVE_FPR_RE.search(val)
+            if m:
+                fpr_saves = 32 - int(m.group(1))
+
+        # Also check raw "args" string as fallback
+        if gpr_saves is None and fpr_saves is None:
+            raw_args = side_data.get("args", "")
+            if isinstance(raw_args, str):
+                m = _SAVE_GPR_RE.search(raw_args)
+                if m:
+                    gpr_saves = 32 - int(m.group(1))
+                m = _SAVE_FPR_RE.search(raw_args)
+                if m:
+                    fpr_saves = 32 - int(m.group(1))
+
+    return gpr_saves, fpr_saves
 
 
 def diagnose_baseline(objdiff_json: dict) -> Diagnosis:
@@ -90,6 +144,10 @@ def diagnose_baseline(objdiff_json: dict) -> Diagnosis:
     # Replace categorization: symbol-reloc noise vs real structural
     replace_noise, replace_real, _ = categorize_replaces(instrs)
 
+    # Prologue save counts
+    target_gpr_saves, target_fpr_saves = _extract_prologue_saves(instrs, "target")
+    base_gpr_saves, base_fpr_saves = _extract_prologue_saves(instrs, "base")
+
     # Noise budget: how many diff_arg instructions are fully explained
     #
     # Address relocation heuristic: diff_arg with no diff_breakdown is almost
@@ -140,6 +198,10 @@ def diagnose_baseline(objdiff_json: dict) -> Diagnosis:
         noise_total=noise_total,
         replace_noise=replace_noise,
         replace_real=replace_real,
+        target_gpr_saves=target_gpr_saves,
+        base_gpr_saves=base_gpr_saves,
+        target_fpr_saves=target_fpr_saves,
+        base_fpr_saves=base_fpr_saves,
     )
 
 
@@ -207,6 +269,21 @@ def format_diagnosis_summary(diagnosis: Diagnosis) -> str:
         parts.append(
             f"replaces {diagnosis.replace_real} real + {diagnosis.replace_noise} noise"
         )
+
+    # Prologue mismatch
+    if diagnosis.has_prologue_mismatch:
+        prologue_parts = []
+        if diagnosis.gpr_save_delta != 0:
+            prologue_parts.append(
+                f"GPR target {diagnosis.target_gpr_saves} vs base {diagnosis.base_gpr_saves} "
+                f"(delta {diagnosis.gpr_save_delta:+d})"
+            )
+        if diagnosis.fpr_save_delta != 0:
+            prologue_parts.append(
+                f"FPR target {diagnosis.target_fpr_saves} vs base {diagnosis.base_fpr_saves} "
+                f"(delta {diagnosis.fpr_save_delta:+d})"
+            )
+        parts.append(f"prologue: {'; '.join(prologue_parts)}")
 
     # Noise
     if diagnosis.noise_total > 0:

@@ -17,6 +17,9 @@
 #include <set>
 #include "utl/Std.h"
 
+// PPC: Edge::operator< lives in Utl.cpp (matching original link unit).
+// Native: define it here since AmbientOcclusion.cpp is the natural home.
+#ifdef HX_NATIVE
 bool RndAmbientOcclusion::Edge::operator<(const Edge &other) const {
     short aMin = v0 < v1 ? v0 : v1;
     short aMax = v0 < v1 ? v1 : v0;
@@ -26,6 +29,7 @@ bool RndAmbientOcclusion::Edge::operator<(const Edge &other) const {
     unsigned int b = ((unsigned int)(unsigned short)bMax << 16) | (unsigned short)bMin;
     return a < b;
 }
+#endif
 
 void RndAmbientOcclusion::BlendVert(
     const RndMesh::Vert &v1, const RndMesh::Vert &v2, RndMesh::Vert &out

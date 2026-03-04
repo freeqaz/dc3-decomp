@@ -67,8 +67,7 @@ DataNode CharBone::OnGetContextFlags(DataArray *da) {
         return dir->GetContextFlags();
     else {
         MILO_NOTIFY("CharBone: No CharBoneDir for context flags.");
-        DataArrayPtr ptr;
-        return ptr;
+        return DataArrayPtr();
     }
 }
 

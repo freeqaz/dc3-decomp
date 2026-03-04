@@ -1628,6 +1628,7 @@ const char *ResourceFileCacheHelper::CacheFile(const char *cc) {
     return CacheResource(cc, (const Hmx::Object *)0);
 }
 
+#ifndef HX_NATIVE
 bool RndAmbientOcclusion::Edge::operator<(const Edge &e) const {
     unsigned short aMax = v1, aMin = v0;
     unsigned int a;
@@ -1645,6 +1646,7 @@ bool RndAmbientOcclusion::Edge::operator<(const Edge &e) const {
     }
     return a < b;
 }
+#endif
 
 #include "rndobj/CamAnim.h"
 
