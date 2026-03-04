@@ -119,8 +119,8 @@ void SongSort::BuildItemList() {
         static Symbol finish_setlist("finish_setlist");
         SongFunctionNode *node = new SongFunctionNode(nullptr, finish_setlist, "ui/image/song_select_setlist_keep");
         node->SetShortcut(mShortcutNodes[0]);
-        auto _tmp2 = mAllNodes.end();
-        mAllNodes.insert(_tmp2, node);
+        auto allNodesEnd = mAllNodes.end();
+        mAllNodes.insert(allNodesEnd, node);
     }
 
     FOREACH(it, mAllNodes) {

@@ -154,6 +154,7 @@ void MoggClip::SynthPoll() {
 #pragma region PlayableSample
 
 void MoggClip::Play(float f1) {
+
     if (EnsureLoaded()) {
         KillStream();
         Stream *stream = TheSynth->NewBufStream(mData, mDataSize, "mogg", 0, false);
@@ -314,11 +315,11 @@ void MoggClip::LoadNumChannels() {
     // Poll synth up to 200 times waiting for channel count to become available
     int retries = 0;
     int numChannels = 0;
-    while (retries < 200) {
+    while ((int)retries < 200) {
         Timer::Sleep(1);
         TheSynth->Poll();
         numChannels = mStream->GetNumChannels();
-        if (numChannels > 0) {
+        if (numChannels >= 1) {
             break;
         }
         retries++;

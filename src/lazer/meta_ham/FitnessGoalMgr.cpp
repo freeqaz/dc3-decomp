@@ -58,6 +58,7 @@ bool FitnessGoalMgr::HasValidProfile() {
 
 void FitnessGoalMgr::UploadNextProfile() {
     std::list<HamProfile *>::iterator it;
+
     if (!mPendingProfiles.empty()) {
         mCurrentProfile = *mPendingProfiles.begin();
         it = mPendingProfiles.erase(mPendingProfiles.begin());

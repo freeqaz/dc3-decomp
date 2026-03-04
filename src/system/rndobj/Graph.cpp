@@ -121,7 +121,8 @@ void RndGraph::Reset() {
 void RndGraph::DrawAll() {
     if (sCam)
         sCam->Select();
-    for (std::list<RndGraph *>::iterator it = sGraphs->begin(); it != sGraphs->end();
+    auto _tmp0 = sGraphs->end();
+    for (std::list<RndGraph *>::iterator it = sGraphs->begin(); _tmp0 != it;
          ++it) {
         (*it)->Draw();
     }

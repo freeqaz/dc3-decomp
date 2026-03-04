@@ -250,6 +250,7 @@ void SongCollision::GatherUsefulBones(
 }
 
 void SongCollision::Update(MoveDir *moveDir) {
+
     if (moveDir) {
         MILO_ASSERT(TheGameData, 0xFB);
         MILO_ASSERT(TheHamDirector, 0xFC);

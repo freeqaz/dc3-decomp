@@ -61,26 +61,32 @@ BEGIN_LOADS(CharForeTwist)
 END_LOADS
 
 void CharForeTwist::Poll() {
-    if (!mHand || !mTwist2)
+    if (!mHand || !mTwist2 || !mHand->TransParent() || !mTwist2->TransParent())
         return;
-    // Get the X-axis rotation angle of the hand (roll/twist around forearm axis)
-    float handAngle = GetXAngle(mHand->LocalXfm().m);
-    // Apply offset and bias, divide by 3 to distribute twist across twist bones
-    float twist = LimitAng(handAngle + mOffset * DEG2RAD + mBias * DEG2RAD) / 3.0f;
-    // Build rotation matrix for twist2 about the X axis
-    Hmx::Matrix3 rotMat;
-    rotMat.x.Set(1, 0, 0);
-    rotMat.y.Set(0, Cosine(twist), Sine(twist));
-    rotMat.z.Set(0, -Sine(twist), Cosine(twist));
-    Multiply(mTwist2->LocalXfm().m, rotMat, mTwist2->DirtyLocalXfm().m);
-    // Also rotate twist2's parent (foretwist1) by 2/3 of the twist
-    RndTransformable *twist1 = mTwist2->TransParent();
-    if (twist1) {
-        float twist1Ang = 2.0f * twist;
-        rotMat.y.Set(0, Cosine(twist1Ang), Sine(twist1Ang));
-        rotMat.z.Set(0, -Sine(twist1Ang), Cosine(twist1Ang));
-        Multiply(twist1->LocalXfm().m, rotMat, twist1->DirtyLocalXfm().m);
-    }
+    const Transform &parentxfm = mHand->TransParent()->WorldXfm();
+    const Transform &handxfm = mHand->WorldXfm();
+    float clamped = Clamp(-1.0f, 1.0f, Dot(parentxfm.m.y, handxfm.m.z));
+    Vector3 v98;
+    Cross(parentxfm.m.y, handxfm.m.z, v98);
+    float clamp2 = Clamp(-1.0f, 1.0f, Dot(parentxfm.m.x, v98));
+    float newbias = mBias * DEG2RAD;
+    float tan2res = std::atan2(clamp2, clamped);
+    float angle = LimitAng(mOffset * DEG2RAD + tan2res + newbias);
+    float finalfloat = angle - newbias;
+    if (finalfloat != finalfloat)
+        return;
+    Hmx::Matrix3 m58;
+    MakeRotMatrixX(finalfloat * 0.33333f, m58);
+    RndTransformable *twistparent = mTwist2->TransParent();
+    Transform tf88;
+    tf88.v = parentxfm.v;
+    Multiply(m58, parentxfm.m, tf88.m);
+    twistparent->SetWorldXfm(tf88);
+    RndTransformable *hand = mHand;
+    RndTransformable *twist2 = mTwist2;
+    Interp(tf88.v, handxfm.v, twist2->mLocalXfm.v.x / hand->mLocalXfm.v.x, tf88.v);
+    Multiply(m58, tf88.m, tf88.m);
+    mTwist2->SetWorldXfm(tf88);
 }
 
 void CharForeTwist::PollDeps(

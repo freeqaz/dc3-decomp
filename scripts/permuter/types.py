@@ -124,6 +124,7 @@ class Variant:
     pattern_name: str
     description: str
     source: bytes  # Full modified file content
+    edits: list | None = None  # Edits applied to produce this variant
 
 
 @dataclass

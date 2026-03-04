@@ -2,6 +2,8 @@
 #include "synth/SampleInst.h"
 #include "synth_xbox/SynthSample.h"
 
+class Voice;
+
 class SampleInst360 : public SampleInst {
 public:
     SampleInst360(SynthSample360 *, bool, int, int);
@@ -23,8 +25,6 @@ protected:
     virtual void SetSpeedImpl(float);
 
 private:
-    // Xbox 360 specific members
-    // Size is 0xB0 - base SampleInst is ~0xA8
-    int unk_a8; // 0xa8
+    Voice *mVoice; // 0xa8
     int unk_ac; // 0xac
 };

@@ -348,8 +348,8 @@ void Campaign::ConfigureCampaignData(DataArray *i_pConfig) {
     DataArray *pSongArray = pIntroArray->FindArray(songs);
     MILO_ASSERT(pSongArray, 0x99);
     MILO_ASSERT(pSongArray->Size() > 1, 0x9a);
-    auto _tmp5 = pSongArray->Size();
-    int numSongs = _tmp5 - 1;
+    auto songArraySize = pSongArray->Size();
+    int numSongs = songArraySize - 1;
     for (int i = 0; i < numSongs; i++) {
         DataArray *curArr = pSongArray->Array(i + 1);
         Symbol s1 = curArr->Sym(0);
@@ -499,12 +499,12 @@ bool Campaign::UpdateEraSongUnlockInstructions(
         return false;
     }
     int requiredStars = pEra->GetSongRequiredStars(song);
-    if (requiredStars == 0) {
+    if ((int)(int)requiredStars == 0) {
         static Symbol era01("era01");
         static Symbol era02("era02");
         static Symbol era03("era03");
         static Symbol era04("era04");
-        if (era == era01) {
+        if ((int)era == era01) {
             static Symbol campaign_song_hint_70s("campaign_song_hint_70s");
             i_pInstructionsLabel->SetTextToken(campaign_song_hint_70s);
         } else if (era == era02) {
@@ -571,7 +571,7 @@ bool Campaign::UpdateEraSongUnlockInstructions(
             return true;
         }
     } else if (i8 == 0) {
-        if (i9 > 1) {
+        if (i9 >= 2) {
             static Symbol campaign_song_hint_moves("campaign_song_hint_moves");
             i_pInstructionsLabel->SetTokenFmt(campaign_song_hint_moves, i9);
             return true;

@@ -85,14 +85,16 @@ void RndFontBase::Save(BinStream &bs) {
 }
 
 #ifndef HX_NATIVE
+INIT_REVS(0, 0)
 BEGIN_LOADS(RndFontBase)
     LOAD_REVS(bs)
+    ASSERT_REVS(0, 0)
     LOAD_SUPERCLASS(Hmx::Object)
-    bs >> mChars;
-    bs >> mMonospace;
-    bs >> mBaseKerning;
+    d >> mChars;
+    d >> mMonospace;
+    d >> mBaseKerning;
     bool hasKerning;
-    bs >> hasKerning;
+    d >> hasKerning;
     if (hasKerning) {
         mKerningTable = new KerningTable();
         mKerningTable->Load(d, this);

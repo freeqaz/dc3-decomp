@@ -1057,8 +1057,8 @@ int PartyModeMgr::PickNextPlayer() {
             int idx = 1;
             if (mTeam2Players.size() < mTeam1Players.size())
                 idx = 0;
-            auto _tmp11 = arr->Int(idx);
-            ret = mTeam1Players.size() + _tmp11;
+            auto teamCount = arr->Int(idx);
+            ret = mTeam1Players.size() + teamCount;
         }
     }
     return ret;
@@ -1265,8 +1265,8 @@ PartyModeMgr::SubMode *PartyModeMgr::CreateEventA() {
     event->mPlayerIndices.insert(event->mPlayerIndices.begin(), vec.begin(), vec.end());
     DataArray *a = new DataArray(numPlayers);
     for (int i = 0; i < numPlayers; i++) {
-        auto _tmp3 = a->Node(i);
-        _tmp3 = event->mPlayerIndices[i];
+        auto playerNode = a->Node(i);
+        playerNode = event->mPlayerIndices[i];
     }
     event->mPlayers = a;
     return event;
@@ -1359,8 +1359,8 @@ void PartyModeMgr::FinalizePlaytestParty() {
         Symbol song = eventArr->Sym(2);
         if (eventArr->Size() > 4) {
             int team = eventArr->Int(3);
-            auto _tmp3 = eventArr->Int(4);
-            int playerIdx = _tmp3 + mPlayers.size();
+            auto playerOffset = eventArr->Int(4);
+            int playerIdx = playerOffset + mPlayers.size();
             team1Players.push_back(team);
             team2Players.push_back(playerIdx);
         }

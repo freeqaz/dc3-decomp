@@ -6,6 +6,7 @@
 #include "math/Trig.h"
 #include "obj/Object.h"
 #include "os/Debug.h"
+#include "os/Timer.h"
 #include "utl/ChunkStream.h"
 #include "utl/MemMgr.h"
 #line 8 "CharBonesSamples.cpp"
@@ -45,7 +46,6 @@ void CharBonesSamples::Load(BinStream &bs) {
 
 void CharBonesSamples::LoadHeader(BinStreamRev &d) {
     MemFree(mRawData);
-    mRawData = nullptr;
     int numBones;
     d >> numBones;
     mBones.resize(numBones);
@@ -62,35 +62,26 @@ void CharBonesSamples::LoadHeader(BinStreamRev &d) {
     if (d.rev > 9) {
         ReadCounts(d.stream, d.rev > 0xF ? 7 : 10);
         d >> (int &)mCompression;
-        int numSamples;
-        d >> numSamples;
-        MILO_ASSERT(numSamples < 32767, 0x2D7);
-        mNumSamples = numSamples;
+        d >> mNumSamples;
     } else {
         int i;
         if (d.rev > 5) {
             int count;
             if (d.rev > 7) {
                 count = 9;
+            } else if (d.rev > 6) {
+                count = 6;
             } else {
                 count = 10;
-                if (d.rev > 6)
-                    count = 6;
             }
             for (i = 0; i < count; i++) {
                 int tmp;
                 d >> tmp;
             }
             d >> (int &)mCompression;
-            int numSamples;
-            d >> numSamples;
-            MILO_ASSERT(numSamples < 32767, 0x2F1);
-            mNumSamples = numSamples;
+            d >> mNumSamples;
         } else {
-            int numSamples;
-            d >> numSamples;
-            MILO_ASSERT(numSamples < 32767, 0x2FC);
-            mNumSamples = numSamples;
+            d >> mNumSamples;
             if (d.rev > 3) {
                 d >> (int &)mCompression;
             }
@@ -98,7 +89,7 @@ void CharBonesSamples::LoadHeader(BinStreamRev &d) {
         for (i = 0; i < 7; i++) {
             mCounts[i] = 0;
         }
-        for (i = 0; i < (int)mBones.size(); i++) {
+        for (i = 0; i < mBones.size(); i++) {
             mCounts[CharBones::TypeOf(mBones[i].name) + 1]++;
         }
         for (i = 1; i < 7; i++) {
@@ -113,7 +104,7 @@ void CharBonesSamples::LoadHeader(BinStreamRev &d) {
     }
     RecomputeSizes();
     mRawData = (char *)MemAlloc(
-        AllocateSize(), "CharBonesSamples.cpp", 0x2d1, "CharBonesSamples", 0
+        AllocateSize(), "CharBonesSamples.cpp", 0x301, "CharBonesSamples", 0
     );
 }
 
@@ -122,171 +113,74 @@ void CharBonesSamples::LoadData(BinStreamRev &d) {
         bool x;
         d >> x;
     }
-#ifdef HX_NATIVE
-    // Cached .milo_xbox files pad each uncompressed Vector3 to 16 bytes
-    // (12 data + 4 zero), but in-memory layout uses sizeof(Vector3)=12.
-    // When positions are uncompressed (compression < kCompressVects),
-    // we must read element-by-element to skip the on-disk padding.
-    bool cachedPaddingMismatch = d.stream.Cached() && mCompression < kCompressVects;
-    if (d.stream.Cached() && !cachedPaddingMismatch) {
-        int totalBytes = AllocateSize();
-        if (totalBytes > 0 && mRawData) {
-            d.stream.Read(mRawData, totalBytes);
-        }
-        // Byte-swap big-endian (Xbox 360) data to native little-endian
+    bool cached = d.stream.Cached();
+    if (!cached || d.rev <= 0xE) {
         for (int i = 0; i < mNumSamples; i++) {
-            unsigned char *base = (unsigned char *)(mRawData + mTotalSize * i);
+            mStart = mRawData + mTotalSize * Min(i, mNumSamples - 1);
 
-            // Positions + Scales [0, mOffsets[TYPE_QUAT])
-            if (mCompression >= kCompressVects) {
-                for (int j = 0; j < mOffsets[TYPE_QUAT]; j += 2) {
-                    unsigned char t = base[j]; base[j] = base[j+1]; base[j+1] = t;
-                }
+            if (cached) {
+                d.stream.Read(mStart, mOffsets[TYPE_END] - mOffsets[TYPE_POS]);
             } else {
-                for (int j = 0; j < mOffsets[TYPE_QUAT]; j += 4) {
-                    unsigned char t;
-                    t = base[j]; base[j] = base[j+3]; base[j+3] = t;
-                    t = base[j+1]; base[j+1] = base[j+2]; base[j+2] = t;
+                if (mCompression >= kCompressVects) {
+                    short *quatOffset = (short *)(mStart + mOffsets[TYPE_QUAT]);
+                    for (short *p = (short *)mStart; p < quatOffset; p += 3) {
+                        d >> p[0] >> p[1] >> p[2];
+                    }
+                } else {
+                    Vector3 *quatOffset = (Vector3 *)(mStart + mOffsets[TYPE_QUAT]);
+                    for (Vector3 *p = (Vector3 *)mStart; p < quatOffset; p++) {
+                        d >> *p;
+                    }
+                }
+
+                if (mCompression >= kCompressQuats) {
+                    char *rotXOffset = mStart + mOffsets[TYPE_ROTX];
+                    for (char *p = mStart + mOffsets[TYPE_QUAT]; p < rotXOffset; p += 4) {
+                        d.stream.Read(p, 1);
+                        d.stream.Read(p + 1, 1);
+                        d.stream.Read(p + 2, 1);
+                        d.stream.Read(p + 3, 1);
+                    }
+                } else if (mCompression != kCompressNone) {
+                    short *rotXOffset = (short *)(mStart + mOffsets[TYPE_ROTX]);
+                    for (short *p = (short *)(mStart + mOffsets[TYPE_QUAT]); p < rotXOffset;
+                         p += 4) {
+                        d >> p[0] >> p[1] >> p[2] >> p[3];
+                    }
+                } else {
+                    Hmx::Quat *rotXOffset =
+                        (Hmx::Quat *)(mStart + mOffsets[TYPE_ROTX]);
+                    for (Hmx::Quat *p = (Hmx::Quat *)(mStart + mOffsets[TYPE_QUAT]);
+                         p < rotXOffset; p++) {
+                        d >> *p;
+                    }
+                }
+
+                if (mCompression != kCompressNone) {
+                    short *endOffset = (short *)(mStart + mOffsets[TYPE_END]);
+                    for (short *p = (short *)(mStart + mOffsets[TYPE_ROTX]); p < endOffset;
+                         p++) {
+                        d >> *p;
+                    }
+                } else {
+                    float *endOffset = (float *)(mStart + mOffsets[TYPE_END]);
+                    for (float *p = (float *)(mStart + mOffsets[TYPE_ROTX]); p < endOffset;
+                         p++) {
+                        d >> *p;
+                    }
                 }
             }
 
-            // Quaternions [mOffsets[TYPE_QUAT], mOffsets[TYPE_ROTX])
-            if (mCompression >= kCompressQuats) {
-                // ByteQuat: 1-byte elements, no swap needed
-            } else if (mCompression != kCompressNone) {
-                // ShortQuat: 2-byte shorts
-                for (int j = mOffsets[TYPE_QUAT]; j < mOffsets[TYPE_ROTX]; j += 2) {
-                    unsigned char t = base[j]; base[j] = base[j+1]; base[j+1] = t;
-                }
-            } else {
-                // Hmx::Quat: 4-byte floats
-                for (int j = mOffsets[TYPE_QUAT]; j < mOffsets[TYPE_ROTX]; j += 4) {
-                    unsigned char t;
-                    t = base[j]; base[j] = base[j+3]; base[j+3] = t;
-                    t = base[j+1]; base[j+1] = base[j+2]; base[j+2] = t;
-                }
-            }
-
-            // Rotations [mOffsets[TYPE_ROTX], mOffsets[TYPE_END])
-            if (mCompression != kCompressNone) {
-                for (int j = mOffsets[TYPE_ROTX]; j < mOffsets[TYPE_END]; j += 2) {
-                    unsigned char t = base[j]; base[j] = base[j+1]; base[j+1] = t;
-                }
-            } else {
-                for (int j = mOffsets[TYPE_ROTX]; j < mOffsets[TYPE_END]; j += 4) {
-                    unsigned char t;
-                    t = base[j]; base[j] = base[j+3]; base[j+3] = t;
-                    t = base[j+1]; base[j+1] = base[j+2]; base[j+2] = t;
+            if ((i & 0x7F) == 0x7F) {
+                while (d.stream.Eof() == TempEof) {
+                    Timer::Sleep(0);
                 }
             }
         }
-    } else if (cachedPaddingMismatch) {
-    // Cached stream with uncompressed positions: read element-by-element
-    // but skip 4-byte padding after each Vector3 position/scale
-    for (int i = 0; i < mNumSamples; i++) {
-        mStart = mRawData + mTotalSize * Min(i, mNumSamples - 1);
-
-        // Positions + Scales: 16 bytes on disk (12 data + 4 pad), 12 in memory
-        {
-            Vector3 *quatOffset = (Vector3 *)(mStart + mOffsets[TYPE_QUAT]);
-            for (Vector3 *p = (Vector3 *)mStart; p < quatOffset; p++) {
-                d >> *p;
-                float pad; d >> pad; // skip 4-byte zero padding
-            }
-        }
-
-        // Quaternions
-        if (mCompression >= kCompressQuats) {
-            char *rotXOffset = mStart + mOffsets[TYPE_ROTX];
-            for (char *p = mStart + mOffsets[TYPE_QUAT]; p < rotXOffset; p += 4) {
-                d.stream.Read(p, 4);
-            }
-        } else if (mCompression != kCompressNone) {
-            short *rotXOffset = (short *)(mStart + mOffsets[TYPE_ROTX]);
-            for (short *p = (short *)(mStart + mOffsets[TYPE_QUAT]); p < rotXOffset; p += 4) {
-                d >> p[0] >> p[1] >> p[2] >> p[3];
-            }
-        } else {
-            Hmx::Quat *rotXOffset = (Hmx::Quat *)(mStart + mOffsets[TYPE_ROTX]);
-            for (Hmx::Quat *p = (Hmx::Quat *)(mStart + mOffsets[TYPE_QUAT]); p < rotXOffset; p++) {
-                d >> *p;
-            }
-        }
-
-        // Rotations
-        if (mCompression != kCompressNone) {
-            short *endOffset = (short *)(mStart + mOffsets[TYPE_END]);
-            for (short *p = (short *)(mStart + mOffsets[TYPE_ROTX]); p < endOffset; p++) {
-                d >> *p;
-            }
-        } else {
-            float *endOffset = (float *)(mStart + mOffsets[TYPE_END]);
-            for (float *p = (float *)(mStart + mOffsets[TYPE_ROTX]); p < endOffset; p++) {
-                d >> *p;
-            }
-        }
-
-        // Skip per-sample end padding (cached aligns to 16)
-        {
-            int dataSize = mOffsets[TYPE_END] - mOffsets[TYPE_POS];
-            int delta = ((dataSize + 0xF) & ~0xF) - dataSize;
-            if (delta > 0) {
-                char skip[16];
-                d.stream.Read(skip, delta);
-            }
-        }
-    }
     } else {
-    // Non-cached: element-by-element
-#else
-    {
-#endif
-    for (int i = 0; i < mNumSamples; i++) {
-        mStart = mRawData + mTotalSize * Min(i, mNumSamples - 1);
-
-        if (mCompression >= kCompressVects) {
-            short *quatOffset = (short *)(mStart + mOffsets[TYPE_QUAT]);
-            for (short *p = (short *)mStart; p < quatOffset; p += 3) {
-                d >> p[0] >> p[1] >> p[2];
-            }
-        } else {
-            Vector3 *quatOffset = (Vector3 *)(mStart + mOffsets[TYPE_QUAT]);
-            for (Vector3 *p = (Vector3 *)mStart; p < quatOffset; p++) {
-                d >> *p;
-            }
-        }
-
-        if (mCompression >= kCompressQuats) {
-            char *rotXOffset = mStart + mOffsets[TYPE_ROTX];
-            for (char *p = mStart + mOffsets[TYPE_QUAT]; p < rotXOffset; p += 4) {
-                d.stream.Read(p, 4);
-            }
-        } else if (mCompression != kCompressNone) {
-            short *rotXOffset = (short *)(mStart + mOffsets[TYPE_ROTX]);
-            for (short *p = (short *)(mStart + mOffsets[TYPE_QUAT]); p < rotXOffset; p += 4) {
-                d >> p[0] >> p[1] >> p[2] >> p[3];
-            }
-        } else {
-            Hmx::Quat *rotXOffset = (Hmx::Quat *)(mStart + mOffsets[TYPE_ROTX]);
-            for (Hmx::Quat *p = (Hmx::Quat *)(mStart + mOffsets[TYPE_QUAT]); p < rotXOffset;
-                 p++) {
-                d >> *p;
-            }
-        }
-
-        if (mCompression != kCompressNone) {
-            short *endOffset = (short *)(mStart + mOffsets[TYPE_END]);
-            for (short *p = (short *)(mStart + mOffsets[TYPE_ROTX]); p < endOffset; p++) {
-                d >> *p;
-            }
-        } else {
-            float *endOffset = (float *)(mStart + mOffsets[TYPE_END]);
-            for (float *p = (float *)(mStart + mOffsets[TYPE_ROTX]); p < endOffset; p++) {
-                d >> *p;
-            }
-        }
+        mStart = mRawData;
+        ReadChunks(d.stream, mRawData, mNumSamples * mTotalSize, mTotalSize << 7);
     }
-    } // end non-cached / #else block
 }
 
 int CharBonesSamples::AllocateSize() { return mTotalSize * mNumSamples; }
@@ -351,13 +245,12 @@ void CharBonesSamples::Clone(const CharBonesSamples &samp) {
 }
 
 void CharBonesSamples::Print() {
-    auto samples = mNumSamples;
     auto size = mTotalSize * mNumSamples;
     auto address = mRawData;
     auto compression = mCompression;
     MILO_LOG(
         "samples: %d size: %d address: %x compression %d\n",
-        samples,
+        mNumSamples,
         size,
         address,
         compression
@@ -510,14 +403,14 @@ int CharBonesSamples::FracToSample(float *frac) const {
     float scaledPos = clampedFrac * (total - 1);
     *frac = scaledPos;
     int sampleIdx = scaledPos;
-    if (sampleIdx >= total - 1) {
+    if ((unsigned int)sampleIdx >= total - 1) {
         *frac = 0.0f;
         return mNumSamples - 1;
     }
     float interpFrac = scaledPos - sampleIdx;
     *frac = interpFrac;
     int ret = sampleIdx;
-    if (mFrames.size() != 0) { // sometimes accessing mFrames at 0x50? wtf is going on
+    if (mFrames.size() != 0) {
         float frame = mFrames[sampleIdx];
         float nextFrame = mFrames[sampleIdx + 1];
         float interpFrame = frame + (nextFrame - frame) * interpFrac;
@@ -568,9 +461,9 @@ void CharBonesSamples::EvaluateChannel(void *dest, int byteOffset, int sample, f
             short *sv = (short *)src;
             float *out = (float *)dest;
             float scale = 1300.0f / 32767.0f;
-            out[2] = (float)sv[2] * scale;
             out[0] = (float)sv[0] * scale;
             out[1] = (float)sv[1] * scale;
+            out[2] = (float)sv[2] * scale;
             return;
         }
         int *out = (int *)dest;

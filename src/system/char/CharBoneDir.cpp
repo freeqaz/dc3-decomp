@@ -228,25 +228,22 @@ void CharBoneDir::StuffBones(CharBones &bones, int i) {
 }
 
 void CharBoneDir::StuffBones(CharBones &bones, Symbol sym) {
-    const char *errmsg;
     DataArray *found = sCharClipTypes->FindArray(sym, false);
-    if (!found)
-        errmsg = "CharClip has no type %s";
-    else {
-        DataArray *resource = found->FindArray("resource", false);
-        if (!resource)
-            errmsg = "CharClip %s has no (resource ...) field";
-        else {
-            CharBoneDir *dir = FindBoneDirResource(resource->Str(1));
-            if (!dir)
-                errmsg = "CharClip %s has no resource";
-            else {
-                dir->StuffBones(bones, DataGetMacro(resource->Str(2))->Int(0));
-                return;
-            }
-        }
+    if (!found) {
+        MILO_NOTIFY("CharClip has no type %s", sym);
+        return;
     }
-    MILO_NOTIFY(errmsg, sym);
+    DataArray *resource = found->FindArray("resource", false);
+    if (!resource) {
+        MILO_NOTIFY("CharClip %s has no (resource ...) field", sym);
+        return;
+    }
+    CharBoneDir *dir = FindBoneDirResource(resource->Str(1));
+    if (!dir) {
+        MILO_NOTIFY("CharClip %s has no resource", sym);
+        return;
+    }
+    dir->StuffBones(bones, DataGetMacro(resource->Str(2))->Int(0));
 }
 
 void CharBoneDir::SyncFilter() {

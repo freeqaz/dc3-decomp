@@ -104,8 +104,8 @@ void KinectSharePanel::Poll() {
 }
 
 void KinectSharePanel::ConvertImages() {
-    auto _tmp0 = mTex.Ptr();
-    MILO_ASSERT(_tmp0, 0x2B);
+    auto texPtr = mTex.Ptr();
+    MILO_ASSERT(texPtr, 0x2B);
     RndBitmap bitmapa0;
     RndBitmap bitmap80;
     mTex->LockBitmap(bitmapa0, true);
@@ -125,7 +125,7 @@ void KinectSharePanel::ConvertImages() {
         mImagePostParams.FullImageByteCount = iref;
         mImagePostParams.pFullImage = (const BYTE *)mBuf;
     }
-    auto _tmp2 = bitmapa0.Height();
+    auto bitmapHeight = bitmapa0.Height();
     {
         static int _x = MemFindHeap("physical");
         MemHeapTracker mem(_x);
@@ -141,8 +141,8 @@ void KinectSharePanel::ConvertImages() {
         MILO_ASSERT(mPreviewBuf != NULL, 0x57);
         if (mPreviewBuf) {
             EndianSwapBitmap(bitmapa0);
-            auto _tmp4 = bitmapa0.Pixels();
-            memcpy(mPreviewBuf, _tmp4, mult);
+            auto bitmapPixels = bitmapa0.Pixels();
+            memcpy(mPreviewBuf, bitmapPixels, mult);
             unsigned char *previewPtr = (unsigned char *)mPreviewBuf;
             int area = bitmapa0.Height() * bitmapa0.Width();
             for (int i = 0; i < area; i++) {
@@ -154,7 +154,7 @@ void KinectSharePanel::ConvertImages() {
             "KinectSharePanel: preview bitmap = 0x%08x %d %d %d 0x%08x\n",
             mPreviewBuf,
             bitmapa0.Width(),
-            _tmp2,
+            bitmapHeight,
             bitmapa0.RowBytes(),
             TheDxRnd.D3DFormatForBitmap(bitmapa0)
         );

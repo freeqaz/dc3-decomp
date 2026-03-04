@@ -80,8 +80,8 @@ void HamMaster::Poll(float f1) {
 void HamMaster::Jump(float f1) {
     SongPos calcedPos = mSongData->CalcSongPos(this, f1);
     SongPos tmp = mSongPos;
-    mSongPos = calcedPos;
     mPrevSongPos = tmp;
+    mSongPos = calcedPos;
     mLastBeatIndex = -1;
     mBeatCount = 0;
     if (mMidiParserMgr) {

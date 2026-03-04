@@ -62,6 +62,7 @@ VorbisReader::VorbisReader(File *file, bool expectMap, StandardStream *stream, b
 }
 
 VorbisReader::~VorbisReader() {
+
     mTerminating = true;
     unked = false;
     while (mTerminating) {

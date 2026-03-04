@@ -911,7 +911,7 @@ float CharClip::DeltaSecondsToDeltaBeat(float f1, float beat) {
     if (mBeatTrack.size() == 1)
         return f1;
     float beatFrame = BeatToFrame(beat);
-    float ret = FrameToBeat(f1 * mBeatTrack.front().value + beatFrame);
+    float ret = FrameToBeat(f1 * mFramesPerSec + beatFrame);
     return ret - beat;
 }
 

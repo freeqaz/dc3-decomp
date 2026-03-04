@@ -64,8 +64,9 @@ bool MQSongSortMgr::IsCharacter(Symbol sym) const {
 
 void MQSongSortMgr::UpdateList() {
     MILO_ASSERT(TheCampaign, 0x6e);
-    if (mFlatList.begin() != mFlatList.end()) {
-        mFlatList.clear();
+    auto& _ref0 = mFlatList;
+    if (_ref0.begin() != _ref0.end()) {
+        _ref0.clear();
     }
     Symbol mqCrew = TheCampaign->GetMQCrew();
     mCharacterSongs.clear();
@@ -82,9 +83,9 @@ void MQSongSortMgr::UpdateList() {
         }
     }
     FOREACH (it, mCharacterSongs) {
-        mFlatList.push_back(it->first);
+        _ref0.push_back(it->first);
         FOREACH (it2, it->second) {
-            mFlatList.push_back(*it2);
+            _ref0.push_back(*it2);
         }
     }
 }

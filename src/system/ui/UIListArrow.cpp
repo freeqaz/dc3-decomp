@@ -46,8 +46,8 @@ BEGIN_LOADS(UIListArrow)
     int dump;
     bool tmp;
     bs >> mMesh >> dump >> mShowOnlyScroll >> tmp;
-    mOnHighlight = tmp;
     mPosition = (UIListArrowPosition)dump;
+    mOnHighlight = tmp;
     if (d.rev > 0)
         bs >> mScrollAnim;
 END_LOADS

@@ -493,7 +493,6 @@ bool SkeletonChooser::PotentiallyRecoverSkeletons() {
 }
 
 int SkeletonChooser::NextSkeletonIndexToTrack(int i1) {
-    volatile int _d1 = 0, _d2 = 0, _d3 = 0, _d4 = 0, _d5 = 0;
     int i = 0;
     int curSkelIdx = (i1 + 1) % 6;
     int idxToTrack = -1;
@@ -707,8 +706,8 @@ void SkeletonChooser::SwapPlayerDataForPractice() {
     TheGameData->Player(1)->SetOutfit(sym0);
 
     // Swap preferred outfit
-    auto _tmp12 = TheGameData->Player(0)->GetPreferredOutfit();
-    sym0 = _tmp12;
+    auto player0PreferredOutfit = TheGameData->Player(0)->GetPreferredOutfit();
+    sym0 = player0PreferredOutfit;
     sym1 = TheGameData->Player(1)->GetPreferredOutfit();
     TheGameData->Player(0)->SetPreferredOutfit(sym1);
     TheGameData->Player(1)->SetPreferredOutfit(sym0);

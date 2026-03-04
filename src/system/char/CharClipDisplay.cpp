@@ -47,12 +47,43 @@ Hmx::Object *CharClipDisplay::FindSource(Hmx::Object *obj) {
     return nullptr;
 }
 
-void CharClipDisplay::SetStartEnd(float start, float end, bool resetZoom) {
+__declspec(noinline) void
+CharClipDisplay::SetStartEnd(float start, float end, bool resetZoom) {
+    unk4 = start;
+    unk8 = end;
     mStartBeat = start;
     mEndBeat = end;
+    float zoomRange = 16.0f / sZoom;
     if (resetZoom) {
-        unk4 = start;
-        unk8 = end;
+        float margin = sEm * 3.0f;
+        float screenWidth = (float)(long long)TheRnd.Width();
+        float textOffset = mPadding + mTextWidth + margin;
+        mStartBeat =
+            unk1c - ((screenWidth * 0.5f - textOffset) * zoomRange) / screenWidth;
+        mEndBeat = (((screenWidth - margin) - textOffset) * zoomRange)
+                / (float)(long long)TheRnd.Width()
+            + mStartBeat;
+    } else {
+        if (end - start > zoomRange) {
+            float cursor = unk1c;
+            float halfZoom = zoomRange * 0.5f;
+            if (halfZoom + start < cursor) {
+                if (end - halfZoom < cursor) {
+                    mStartBeat = end - zoomRange;
+                    return;
+                }
+                mStartBeat = cursor - halfZoom;
+                mEndBeat = halfZoom + cursor;
+            } else {
+                mEndBeat = zoomRange + start;
+            }
+        } else {
+            if (end != start) {
+                return;
+            }
+            mStartBeat = start - zoomRange * 0.5f;
+            mEndBeat = zoomRange * 0.5f + end;
+        }
     }
 }
 

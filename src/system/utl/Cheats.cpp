@@ -32,8 +32,9 @@ void CheatsInit() {
         KeyboardSubscribe(gCheatsManager);
 
         DataArray *quickCheats = SystemConfig("quick_cheats");
+        auto leftCheats = quickCheats->FindArray("left", true);
         InitQuickJoyCheats(
-            quickCheats->FindArray("left", true), CheatsManager::kLeftShift
+            leftCheats, CheatsManager::kLeftShift
         );
         InitQuickJoyCheats(
             quickCheats->FindArray("right", true), CheatsManager::kRightShift
@@ -203,8 +204,9 @@ void CheatsTerminate() {
 void CheatsManager::RebuildKeyCheatsForMode() {
     static Symbol modes("modes");
     mKeyCheatPtrsMode.clear();
+    auto _tmp0 = mKeyCheats.end();
     for (std::vector<KeyCheat>::iterator it = mKeyCheats.begin();
-         it != mKeyCheats.end(); ++it) {
+         it != _tmp0; ++it) {
         DataArray *modesArr = it->mScript->FindArray(modes, false);
         if (!modesArr || modesArr->Contains(mSymMode)) {
             mKeyCheatPtrsMode.push_back(&*it);

@@ -159,21 +159,21 @@ void MemHeap::Init(
     bool allowTemp
 ) {
     MILO_ASSERT_FMT(start, "Could not allocate %d bytes for heap %s\n", size * 4, name);
-    mStart = start;
+    auto& _ref0 = mStart;
+    _ref0 = start;
     mName = name;
     mNum = num;
-    int *i7 = (int *)(((uintptr_t)start - 4 & ~(uintptr_t)0xFU) + 0x10);
     mIsHandleHeap = handle;
+    int *i7 = (int *)(((uintptr_t)start - 4 & ~(uintptr_t)0xFU) + 0x10);
     mStrategy = strat;
-    mStart = i7;
+    _ref0 = i7;
     mAllowTemp = allowTemp;
     mMinFreeBytes = -1;
     mDebugLevel = debugLevel;
-    mSizeWords = size - (i7 - start);
-    int time = gTimeStamp;
+        int time = gTimeStamp;
     gTimeStamp++;
-    InsertFreeBlock((FreeBlock *)mStart, mSizeWords, nullptr, nullptr, time);
-    if (mDebugLevel >= 1) {
+    InsertFreeBlock((FreeBlock *)_ref0, mSizeWords = size - (i7 - start), nullptr, nullptr, time);
+    if (1 <= mDebugLevel) {
         FreeBlock *blockStart = mFreeBlockChain;
         int *blockStartInt = (int *)blockStart;
         int *blockEnd = blockStartInt + blockStart->mSizeWords;

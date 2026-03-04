@@ -150,7 +150,7 @@ void DingoSvrXbox::Poll() {
         }
         if (found) {
             if (*mXLSPFilter.c_str() == '\0') {
-                MILO_NOTIFY("DingoSvrXbox: Empty XLSP filter string.");
+                MILO_WARN("DingoSvrXbox: Empty XLSP filter string.");
             } else if ((unsigned int)mDingoServiceId == 0U) {
                 MILO_NOTIFY("DingoSvrXbox: Invalid Dingo service ID.");
             } else {

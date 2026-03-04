@@ -247,8 +247,8 @@ void HamStoreProvider::ApplySort() {
     if (!mSorts.empty()) {
         MILO_ASSERT_RANGE(mSortIndex, 0, mSorts.size(), 0xf1);
         if (mSorts[mSortIndex].Str() != gNullStr) {
-            auto _tmp4 = SortCmp();
-            std::sort(mFilteredOffers->begin(), mFilteredOffers->end(), _tmp4);
+            auto sortCmp = SortCmp();
+            std::sort(mFilteredOffers->begin(), mFilteredOffers->end(), sortCmp);
         }
     }
 }

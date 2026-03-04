@@ -264,8 +264,9 @@ void MetaPanel::FinishLoad() {
         }
     }
     UIPanel::FinishLoad();
+    auto _tmp0 = TheSynth->Find<Fader>("background_music_level.fade", true);
     if (TheMetaMusic)
-        TheMetaMusic->AddFader(TheSynth->Find<Fader>("background_music_level.fade", true));
+        TheMetaMusic->AddFader(_tmp0);
 }
 
 bool MetaPanel::IsLoaded() const {
@@ -274,7 +275,9 @@ bool MetaPanel::IsLoaded() const {
             return true;
         }
     }
-    return UIPanel::IsLoaded() && (!TheMetaMusic || TheMetaMusic->Loaded());
+        if (!(UIPanel::IsLoaded()))
+        return false;
+    return (!TheMetaMusic || TheMetaMusic->Loaded());
 }
 
 void MetaPanel::Poll() {

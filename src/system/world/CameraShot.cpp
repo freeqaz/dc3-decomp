@@ -1033,27 +1033,28 @@ void CamShot::SetFrame(float frame, float blend) {
     CamShotFrame *frame4c = nullptr;
     float f48 = 1.0f;
     GetKey(frame, frame4c, frame50, f48);
+    auto& _ref0 = mLastNext;
     if (mDisabled != 0) {
         frame50->UpdateTarget();
         if (frame4c)
             frame4c->UpdateTarget();
         unk283 = false;
     } else {
-        if (frame50 != mLastNext) {
+        if (frame50 != _ref0) {
             frame50->UpdateTarget();
         }
         if (!frame4c) {
             nullFrame.Interp(*frame50, 1.0f, blend, cam);
         } else {
             if (frame4c != mLastPrev) {
-                if (frame4c != mLastNext) {
+                if (frame4c != _ref0) {
                     frame4c->UpdateTarget();
                 }
                 mLastPrev = frame4c;
             }
             frame4c->Interp(*frame50, f48, blend, cam);
         }
-        mLastNext = frame50;
+        _ref0 = frame50;
         if (CheckShotStarted()) {
             static Message msg("shot_started");
             HandleType(msg);

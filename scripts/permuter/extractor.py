@@ -70,6 +70,10 @@ class OffsetNode:
         return [OffsetNode(c, self._offset) for c in self._inner.named_children]
 
     @property
+    def named_child_count(self) -> int:
+        return self._inner.named_child_count
+
+    @property
     def parent(self) -> OffsetNode | None:
         p = self._inner.parent
         return OffsetNode(p, self._offset) if p is not None else None

@@ -182,7 +182,8 @@ void FlowSound::Execute(QueueState qs) {
                 timer.Start();
                 mFlowParent->ChildFinished(this);
                 timer.Stop();
-                TheFlowMgr->AddMs(timer.Ms());
+                auto elapsedMs = timer.Ms();
+                TheFlowMgr->AddMs(elapsedMs);
             }
             FlowNode::Deactivate(false);
         }

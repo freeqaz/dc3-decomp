@@ -25,6 +25,8 @@ from typing import Optional
 from .score_cache import ScoreCache, md5_bytes, md5_file
 from .types import Variant, ScoreResult, Diagnosis
 
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+
 
 class Scorer:
     """Scores variants by writing source, building, and running objdiff.
@@ -51,9 +53,18 @@ class Scorer:
         self.diagnosis: Optional[Diagnosis] = None
         self._cache: Optional[ScoreCache] = None
 
-        # Derive targeted object path from source path
+        # Derive targeted object path from source path.
+        # Accept either relative or absolute source paths.
         # src/system/rndobj/Foo.cpp -> build/373307D9/src/system/rndobj/Foo.obj
-        self._obj_target = f"build/373307D9/{source_path.with_suffix('.obj')}"
+        source_obj_path = source_path.with_suffix(".obj")
+        try:
+            if source_obj_path.is_absolute():
+                source_obj_path = source_obj_path.relative_to(REPO_ROOT)
+        except ValueError:
+            # Leave path unchanged if it's outside repo root.
+            pass
+
+        self._obj_target = f"build/373307D9/{source_obj_path}"
         self._obj_path = Path(self._obj_target)
         self._compile_cwd: Optional[str] = None
         self._compile_shell_cmd: Optional[str] = None
@@ -105,8 +116,16 @@ class Scorer:
                 cmd_line = line  # keep overwriting — last one wins
 
         if cmd_line is None:
+            lines = result.stdout.strip().splitlines()
+            if not lines:
+                err = result.stderr.strip()
+                details = f"; stderr: {err}" if err else ""
+                raise RuntimeError(
+                    f"Could not derive compile command for target '{self._obj_target}'"
+                    f" from 'ninja -t commands'{details}"
+                )
             # Fallback: use last line
-            cmd_line = result.stdout.strip().splitlines()[-1]
+            cmd_line = lines[-1]
 
         if cmd_line.startswith("cd "):
             parts = cmd_line.split(" && ", 1)

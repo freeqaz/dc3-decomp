@@ -71,36 +71,35 @@ static void NormalizeAboutX_Viewer(Hmx::Matrix3& m) {
     Cross(m.z, m.x, m.y);
 }
 
-// Distributes rotation across N intermediate bones between clavicle and the
-// reference twist bone. bones[0] is closest to clavicle (twist2/reference),
-// bones[1..N-1] are interpolated at even fractions toward clavicle's rest pose.
-static void SolveUpperTwistChain(RndTransformable* refBone,
-                                  RndTransformable** bones, int count) {
-    if (!refBone || count == 0) return;
-    RndTransformable* parent = refBone->TransParent();
+// Exact CharUpperTwist::Poll() math.
+static void SolveUpperTwistPoll(
+    RndTransformable* twist2, RndTransformable* twist1, RndTransformable* upperArm
+) {
+    if (!twist2 || !twist1 || !upperArm) return;
+    RndTransformable* parent = twist2->TransParent();
     if (!parent) return;
     const Transform& parentWorld = parent->WorldXfm();
-    const Transform& refWorld = refBone->WorldXfm();
+    const Transform& twist2World = twist2->WorldXfm();
     Hmx::Quat q;
-    MakeRotQuat(parentWorld.m.x, refWorld.m.x, q);
+    MakeRotQuat(parentWorld.m.x, twist2World.m.x, q);
     Vector3 rotatedY;
     Multiply(parentWorld.m.y, q, rotatedY);
-    // Interpolate each bone: bone[i] gets fraction (i+1)/(count+1)
-    // bone[0] is closest to parent → highest fraction (most rotated)
-    // bone[count-1] is closest to ref bone → lowest fraction
-    for (int i = 0; i < count; i++) {
-        if (!bones[i]) continue;
-        float frac = (float)(count - i) / (float)(count + 1);
-        Transform tf;
-        tf.m.x = refWorld.m.x;
-        tf.v = bones[i]->WorldXfm().v;
-        Interp(rotatedY, refWorld.m.y, frac, tf.m.y);
-        NormalizeAboutX_Viewer(tf.m);
-        bones[i]->SetWorldXfm(tf);
-    }
+
+    Transform tf;
+    tf.m.x = twist2World.m.x;
+    tf.v = upperArm->WorldXfm().v;
+    Interp(rotatedY, twist2World.m.y, 0.333f, tf.m.y);
+    NormalizeAboutX_Viewer(tf.m);
+    upperArm->SetWorldXfm(tf);
+
+    tf.v = twist1->WorldXfm().v;
+    Interp(rotatedY, twist2World.m.y, 0.666f, tf.m.y);
+    NormalizeAboutX_Viewer(tf.m);
+    twist1->SetWorldXfm(tf);
 }
 
 // Replicates CharForeTwist::Poll() — distributes hand twist along forearm
+// Uses world-space algorithm matching the actual decomp (dot/cross/atan2).
 static float LimitAng_Viewer(float ang) {
     float r = fmod(ang + PI, 2.0f * PI);
     return r < 0 ? r + PI : r - PI;
@@ -108,21 +107,28 @@ static float LimitAng_Viewer(float ang) {
 
 static void SolveForeTwist(RndTransformable* hand, RndTransformable* twist2,
                            float offset, float bias) {
-    if (!hand || !twist2) return;
-    float handAngle = GetXAngle(hand->LocalXfm().m);
-    float twist = LimitAng_Viewer(handAngle + offset * DEG2RAD + bias * DEG2RAD) / 3.0f;
-    Hmx::Matrix3 rotMat;
-    rotMat.x.Set(1, 0, 0);
-    rotMat.y.Set(0, Cosine(twist), Sine(twist));
-    rotMat.z.Set(0, -Sine(twist), Cosine(twist));
-    Multiply(twist2->LocalXfm().m, rotMat, twist2->DirtyLocalXfm().m);
-    RndTransformable* twist1 = twist2->TransParent();
-    if (twist1) {
-        float twist1Ang = 2.0f * twist;
-        rotMat.y.Set(0, Cosine(twist1Ang), Sine(twist1Ang));
-        rotMat.z.Set(0, -Sine(twist1Ang), Cosine(twist1Ang));
-        Multiply(twist1->LocalXfm().m, rotMat, twist1->DirtyLocalXfm().m);
-    }
+    if (!hand || !twist2 || !hand->TransParent() || !twist2->TransParent())
+        return;
+    const Transform& parentxfm = hand->TransParent()->WorldXfm();
+    const Transform& handxfm = hand->WorldXfm();
+    float clamped = Clamp(-1.0f, 1.0f, Dot(parentxfm.m.y, handxfm.m.z));
+    Vector3 v98;
+    Cross(parentxfm.m.y, handxfm.m.z, v98);
+    float clamp2 = Clamp(-1.0f, 1.0f, Dot(parentxfm.m.x, v98));
+    float newbias = bias * DEG2RAD;
+    float tan2res = std::atan2(clamp2, clamped);
+    float angle = LimitAng_Viewer(offset * DEG2RAD + tan2res + newbias);
+    float finalfloat = angle - newbias;
+    Hmx::Matrix3 m58;
+    MakeRotMatrixX(finalfloat * 0.33333f, m58);
+    RndTransformable* twistparent = twist2->TransParent();
+    Transform tf;
+    tf.v = parentxfm.v;
+    Multiply(m58, parentxfm.m, tf.m);
+    twistparent->SetWorldXfm(tf);
+    Interp(tf.v, handxfm.v, twist2->LocalXfm().v.x / hand->LocalXfm().v.x, tf.v);
+    Multiply(m58, tf.m, tf.m);
+    twist2->SetWorldXfm(tf);
 }
 
 // Solve thigh twist — thighTwist01 interpolates between pelvis and thigh rotation
@@ -145,33 +151,59 @@ static void SolveThighTwist(RndTransformable* thighTwist, RndTransformable* thig
 }
 
 // Solve all twist bones for a character
+static bool IsDriverPollable(const CharPollable* p) {
+    if (!p) return false;
+    const char* cn = p->ClassName().Str();
+    return strcmp(cn, "CharDriver") == 0 || strcmp(cn, "CharDriverMidi") == 0;
+}
+
+static bool IsTwistPollable(const CharPollable* p) {
+    if (!p) return false;
+    const char* cn = p->ClassName().Str();
+    return strcmp(cn, "CharForeTwist") == 0
+        || strcmp(cn, "CharUpperTwist") == 0
+        || strcmp(cn, "CharNeckTwist") == 0
+        || strcmp(cn, "CharBoneTwist") == 0;
+}
+
 static void SolveAllTwists(ObjectDir* dir) {
     if (!dir) return;
 
-    // Upper arm twists: shoulderTwist2 (closest to clavicle), 3, 4 (closest to upperArm)
-    // Reference bone is shoulderTwist2 (has the full twist from clip animation)
-    // We interpolate shoulderTwist3 and shoulderTwist4 between clavicle and twist2
+    // Prefer authoritative in-scene pollables when present.
+    bool polledTwistObjects = false;
+    for (ObjDirItr<CharPollable> it(dir, true); it != nullptr; ++it) {
+        if (IsTwistPollable(it)) {
+            it->Poll();
+            polledTwistObjects = true;
+        }
+    }
+    if (polledTwistObjects) return;
+
+    // Fallback: emulate expected twist behavior for outfit-only scenes
+    // that do not include the shared Char*Twist pollables from main setup dirs.
     const char* sides[] = {"L", "R"};
     for (auto side : sides) {
-        char refName[64], b3Name[64], b4Name[64];
-        snprintf(refName, sizeof(refName), "bone_%s-shoulderTwist2.mesh", side);
-        snprintf(b3Name, sizeof(b3Name), "bone_%s-shoulderTwist3.mesh", side);
-        snprintf(b4Name, sizeof(b4Name), "bone_%s-shoulderTwist4.mesh", side);
-        RndTransformable* ref = dir->Find<RndTransformable>(refName, false);
-        RndTransformable* bones[2] = {
-            dir->Find<RndTransformable>(b3Name, false),
-            dir->Find<RndTransformable>(b4Name, false),
-        };
-        SolveUpperTwistChain(ref, bones, 2);
+        char upperArmName[64], upperTwist1Name[64], upperTwist2Name[64];
+        snprintf(upperArmName, sizeof(upperArmName), "bone_%s-upperArm.mesh", side);
+        snprintf(upperTwist1Name, sizeof(upperTwist1Name), "bone_%s-upperTwist1.mesh", side);
+        snprintf(upperTwist2Name, sizeof(upperTwist2Name), "bone_%s-upperTwist2.mesh", side);
+
+        RndTransformable* upperArm = dir->Find<RndTransformable>(upperArmName, false);
+        RndTransformable* upperTwist1 = dir->Find<RndTransformable>(upperTwist1Name, false);
+        RndTransformable* upperTwist2 = dir->Find<RndTransformable>(upperTwist2Name, false);
+
+        if (upperTwist2 && upperTwist1 && upperArm) {
+            SolveUpperTwistPoll(upperTwist2, upperTwist1, upperArm);
+        }
     }
 
-    // Forearm twists (left offset=0/bias=45, right offset=180/bias=-45)
+    // CharacterTest::AddDefaults() offsets for missing CharForeTwist setup.
     struct ForeTwistSetup {
         const char* hand; const char* twist2; float offset; float bias;
     };
     ForeTwistSetup foreSetups[] = {
-        {"bone_L-hand.mesh", "bone_L-foreTwist2.mesh", 0.0f, 45.0f},
-        {"bone_R-hand.mesh", "bone_R-foreTwist2.mesh", 180.0f, -45.0f},
+        {"bone_L-hand.mesh", "bone_L-foreTwist2.mesh", 90.0f, 0.0f},
+        {"bone_R-hand.mesh", "bone_R-foreTwist2.mesh", -90.0f, 0.0f},
     };
     for (auto& s : foreSetups) {
         SolveForeTwist(
@@ -1571,19 +1603,21 @@ int main(int argc, char** argv) {
     // These include CharDriver, CharServoBone, CharUpperTwist, CharForeTwist,
     // CharBoneTwist, CharNeckTwist — all needed for proper bone animation
     std::vector<CharPollable*> charPollables;
+    auto ensureCharPollables = [&]() {
+        if (!charObj || !charPollables.empty()) return;
+        ObjDirItr<CharPollable> it(charObj, true);
+        for (; it != nullptr; ++it) {
+            charPollables.push_back(it);
+            printf("Milo Viewer: found CharPollable '%s' (%s)\n",
+                   it->Name(), it->ClassName());
+        }
+    };
 
     auto advanceCharAnim = [&](float targetSeconds, float targetBeat) {
         if (!charAnimActive || !charObj || !charObj->Driver()) return;
 
         // Collect pollables on first call
-        if (charPollables.empty()) {
-            ObjDirItr<CharPollable> it(charObj, false);
-            for (; it != nullptr; ++it) {
-                charPollables.push_back(it);
-                printf("Milo Viewer: found CharPollable '%s' (%s)\n",
-                       it->Name(), it->ClassName());
-            }
-        }
+        ensureCharPollables();
 
         // Advance in small steps (0.1 beat increments) to avoid huge delta
         float stepBeats = 0.1f;
@@ -1724,6 +1758,11 @@ int main(int argc, char** argv) {
                 }
 
                 activeClip->PoseMeshes(charObj, beat);
+                ensureCharPollables();
+                for (auto* p : charPollables) {
+                    if (IsDriverPollable(p) || IsTwistPollable(p)) continue;
+                    p->Poll();
+                }
 
                 // Dump post-pose transforms
                 printf("=== POST-PoseMeshes bone transforms ===\n");

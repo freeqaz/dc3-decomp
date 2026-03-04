@@ -223,11 +223,12 @@ void CharLipSync::Generator::Finish() {
 }
 
 void CharLipSync::Generator::RemoveViseme(int visemeIdx) {
-    mLipSync->mVisemes.erase(mLipSync->mVisemes.begin() + visemeIdx);
+    auto _tmp0 = mLipSync->mVisemes.begin();
+    mLipSync->mVisemes.erase(_tmp0 + visemeIdx);
 
-    int cur = 0;
     int i = 0;
     CharLipSync *lipSync = mLipSync;
+    int cur = 0;
     if (lipSync->mFrames > 0) {
         do {
             int j = 0;

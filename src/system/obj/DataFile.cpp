@@ -84,8 +84,8 @@ DataArray *DataReadFile(const char *file, bool warn) {
     char buf[256];
     strcpy(buf, file);
     bool b;
-    const char *cached = CachedDataFile(buf, b);
     DataNode *node;
+    const char *cached = CachedDataFile(buf, b);
     if (gReadingFile) {
         node = &gReadFiles[cached];
         if (node->Type() == kDataArray) {
@@ -118,7 +118,8 @@ DataArray *DataReadFile(const char *file, bool warn) {
         }
 
         if (node) {
-            *node = DataNode(ret, kDataArray);
+            auto dataNode = DataNode(ret, kDataArray);
+            *node = dataNode;
         } else {
             FinishDataRead();
         }

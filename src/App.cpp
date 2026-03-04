@@ -322,9 +322,9 @@ App::App(int argc, char **argv) {
             0
         );
         if (allocatedFileCache) {
-            auto _tmp0 = persistentCacheConfig->Node(1).Int(persistentCacheConfig);
+            auto cacheSize = persistentCacheConfig->Node(1).Int(persistentCacheConfig);
             allocatedFileCache = new (allocatedFileCache)
-                FileCache(_tmp0, kLoadFront, false, true);
+                FileCache(cacheSize, kLoadFront, false, true);
         }
         gPersistentCache = allocatedFileCache;
         gPersistentCache->StartSet(0);
@@ -746,7 +746,7 @@ void App::RunWithoutDebugging() {
     if (maxFrames <= 0) maxFrames = 10000;
 
     if (windowed)
-        printf("DC3 Native: Windowed mode — close window or press ESC to exit\n");
+        printf("DC3 Native: Windowed mode - close window or press ESC to exit\n");
     else
         printf("DC3 Native: Headless mode — running %d frames\n", maxFrames);
 
@@ -868,10 +868,10 @@ void App::RunWithoutDebugging() {
             float loopMs = loop_timer.SplitMs();
             float waiverMs = Timer::SlowFrameWaiver();
             float slowMs = Timer::SlowFrameTimer().SplitMs();
-            waiverMs = Min(slowMs, waiverMs);
+            if (waiverMs > slowMs) waiverMs = slowMs;
             float frameMs = loopMs - waiverMs;
 
-            if (frameMs > 83.3333f) {
+            if (frameMs > 83.3333) {
                 const char *msg = 0;
                 const char *activeScreen = "none";
                 UIScreen *currentScreen = TheUI->CurrentScreen();

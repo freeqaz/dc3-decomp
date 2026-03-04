@@ -104,9 +104,9 @@ void SaveCompressedVertex(const CompressedVertex_Xbox &cv, BinStream &bs) {
 
 /** Calculate the centroid of a triangle face by averaging its three vertex positions. */
 void FaceCenter(RndMesh *mesh, RndMesh::Face *face, Vector3 &center) {
-    center.z = 0.0f;
-    center.y = 0.0f;
     center.x = 0.0f;
+    center.y = 0.0f;
+    center.z = 0.0f;
     RndMesh::Vert *verts = mesh->mGeomOwner->mVerts.mVerts;
     // Accumulate positions of all three vertices
     for (int i = 0; i < 3; i++) {
@@ -1397,8 +1397,8 @@ DataNode RndMesh::OnCompareEdgeVerts(const DataArray *da) {
     DataArray *array = da->Array(2);
     for (int i = 0; i < array->Size(); i++) {
         RndMesh *curMesh = array->Obj<RndMesh>(i);
-        auto _tmp6 = MakeString("testing %s\n", curMesh->Name());
-        TheDebug << _tmp6;
+        auto debugMsg = MakeString("testing %s\n", curMesh->Name());
+        TheDebug << debugMsg;
         FOREACH (it, vec28) {
             if (Verts(*it).pos == curMesh->Verts(*it).pos)
                 continue;
@@ -1711,8 +1711,8 @@ void RndMesh::LoadVertices(BinStreamRev &d) {
 
 void RndMesh::SaveVertices(BinStream &bs) {
     bool useCached;
-    auto _tmp4 = bs.GetPlatform();
-    if (bs.Cached() && (bs.GetPlatform() == kPlatformPS3 || _tmp4 == kPlatformXBox)) {
+    auto platform = bs.GetPlatform();
+    if (bs.Cached() && (bs.GetPlatform() == kPlatformPS3 || platform == kPlatformXBox)) {
         useCached = true;
     } else {
         useCached = false;

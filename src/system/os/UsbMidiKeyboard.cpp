@@ -42,7 +42,7 @@ void UsbMidiKeyboard::Poll() {
     if (!TheKeyboard)
         return;
 
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; (unsigned int)i < 4; i++) {
         JoypadType ty = JoypadGetPadData(i)->mType;
         if (ty == kJoypadXboxMidiBoxKeyboard || ty == kJoypadPs3MidiBoxKeyboard
             || ty == kJoypadWiiMidiBoxKeyboard || ty == kJoypadXboxKeytar
@@ -52,7 +52,7 @@ void UsbMidiKeyboard::Poll() {
                 (ProKeysData *)&JoypadGetPadData(i)->mProGuitarData;
 
             int slotCounter = 1;
-            for (int note = 0x30; note <= 0x48; note++) {
+            for (int note = 0x30; note < 73; note++) {
                 int keyIndex = note - 0x30;
                 int byteIdx = keyIndex / 8;
                 int bitIdx = 7 - (keyIndex % 8);

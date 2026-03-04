@@ -7,6 +7,8 @@
 
 class PoseElement {
 public:
+    PoseElement() {}
+    PoseElement(float w) : unk4(w) {}
     virtual ~PoseElement() {}
     virtual float Score(const Skeleton &) const = 0;
 
@@ -15,7 +17,7 @@ public:
 
 class CamDistancePoseElement : public PoseElement {
 public:
-    CamDistancePoseElement(float f1, float f2) : unk8(f2) { unk4 = f1; }
+    CamDistancePoseElement(float f1, float f2) : PoseElement(f1), unk8(f2) {}
     virtual float Score(const Skeleton &) const;
 
 protected:

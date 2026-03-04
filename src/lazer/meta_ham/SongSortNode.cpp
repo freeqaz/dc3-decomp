@@ -314,12 +314,12 @@ void SongSortNode::Text(UIListLabel *ull, UILabel *ul) const {
         if (!IsCoverSong(shortname)) {
             ul->SetTextToken(gNullStr);
         } else {
-            auto _tmp1 = ull->GetDefaultText();
-            ul->SetTextToken(_tmp1);
+            auto defaultText = ull->GetDefaultText();
+            ul->SetTextToken(defaultText);
         }
     } else if (ull->Matches("artist")) {
-        auto _tmp1 = unk_0x48->ShortName();
-        if (!TheAccomplishmentMgr->IsUnlockableAsset(_tmp1)) {
+        auto shortName = unk_0x48->ShortName();
+        if (!TheAccomplishmentMgr->IsUnlockableAsset(shortName)) {
             ul->SetTextToken(gNullStr);
         }
         AppLabel *app_label = dynamic_cast<AppLabel *>(ul);

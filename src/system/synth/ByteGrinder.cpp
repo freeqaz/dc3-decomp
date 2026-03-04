@@ -93,10 +93,10 @@ DataNode getRandomSequence32A(DataArray *da) {
     static unsigned long s_seed = 0x521;
     static bool usedUp[0x20];
 
-    if (da->Size() > 1) {
+    if (da->Size() >= 2) {
         int dataint = da->Int(1);
         memset(usedUp, 0, 0x20);
-        if (dataint != 0) {
+        if ((unsigned int)dataint != 0) {
             s_seed = dataint;
         }
         return DataNode(kDataInt, 0x610A660F);
@@ -119,10 +119,10 @@ DataNode getRandomSequence32B(DataArray *da) {
     static unsigned long s_seed = 0x303F;
     static bool usedUp[0x20];
 
-    if (da->Size() > 1) {
+    if (da->Size() >= 2) {
         int dataint = da->Int(1);
         memset(usedUp, 0, 0x20);
-        if (dataint != 0) {
+        if ((unsigned int)dataint != 0) {
             s_seed = dataint;
         }
         return DataNode(kDataInt, 0x610A660F);
@@ -169,8 +169,8 @@ DataNode op2(DataArray *msg) {
 }
 
 DataNode op3(DataArray *msg) {
-    unsigned long operand = msg->Int(1);
     unsigned long w = msg->Int(2);
+    unsigned long operand = msg->Int(1);
     bool b = (operand == 0);
     unsigned long ret = u8(w) | ((w << 8) & 0xFF00);
     ret >>= b;

@@ -116,15 +116,15 @@ void LockedContentPanel::SetUpCampaignMasterQuestHeader(Symbol song) {
     if (!pAccomplishment) {
         MILO_NOTIFY("Could not find accomplishment for %s", song);
     } else {
-        auto _tmp3 = pAccomplishment->GetType();
+        auto accomplishmentType = pAccomplishment->GetType();
         if (pAccomplishment->GetType() == kAccomplishmentTypeLessonSongListConditional
-            || _tmp3 == kAccomplishmentTypeTourConditional) {
+            || accomplishmentType == kAccomplishmentTypeTourConditional) {
             AccomplishmentCountConditional *pAccomplishmentCountConditional =
                 dynamic_cast<AccomplishmentCountConditional *>(pAccomplishment);
             Flow *pFlow = DataDir()->Find<Flow>("one_shot.flow");
             pFlow->Activate();
-            auto _tmp0 = MakeString("%s%s%s", "award_", song, "_instruction");
-            pTeaser->SetTextToken(_tmp0);
+            auto awardInstructionToken = MakeString("%s%s%s", "award_", song, "_instruction");
+            pTeaser->SetTextToken(awardInstructionToken);
         } else {
             MILO_ASSERT(false, 0xbe);
         }
@@ -145,8 +145,8 @@ void LockedContentPanel::SetUp(Symbol song) {
     } else {
         pContentName->SetTextToken(song);
     }
-    auto _tmp1 = MakeString("%s%s", "teaser_award_", song);
-    pTeaser->SetTextToken(_tmp1);
+    auto teaserAwardToken = MakeString("%s%s", "teaser_award_", song);
+    pTeaser->SetTextToken(teaserAwardToken);
     TriggerTeaserText();
     mSound = nullptr;
     if (!pAccomplishment) {

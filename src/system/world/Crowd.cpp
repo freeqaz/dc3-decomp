@@ -732,8 +732,7 @@ void WorldCrowd::SetFullness(float flatFullness, float charFullness) {
             // handle m3DChars (visible 3D chars)
             int totalChars3D = (int)it->m3DChars.size() + (int)it->m3DCharsCreated.size();
             int targetChars3D = (int)((float)totalChars3D * flatFullness);
-            if (targetChars3D > (int)instances.size())
-                targetChars3D = (int)instances.size();
+            targetChars3D = Min(targetChars3D, (int)instances.size());
             int currentChars3D = (int)it->m3DChars.size();
             if (currentChars3D < targetChars3D) {
                 int toAdd = targetChars3D - currentChars3D;

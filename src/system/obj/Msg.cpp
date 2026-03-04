@@ -10,7 +10,8 @@ Symbol MsgSinks::sCurrentExportEvent(gNullStr);
 
 Symbol MsgSinks::GetPropSyncHandler(DataArray *arr) {
     if (mPropSyncHandlers) {
-        for (int i = 0; i < mPropSyncHandlers->Size(); i += 2) {
+        auto _tmp0 = mPropSyncHandlers->Size();
+        for (int i = 0; i < _tmp0; i += 2) {
             DataArray *array = mPropSyncHandlers->Array(i);
             if (array->Size() == arr->Size()) {
                 bool ret = true;

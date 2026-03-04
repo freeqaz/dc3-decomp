@@ -54,7 +54,7 @@ protected:
     CharLipSyncDriver();
 
     void ApplyBlinks();
-    void UpdatePlayback(CharLipSync::PlayBack *, float, float);
+    void UpdatePlayback(CharLipSync::PlayBack *, float weight, float songTime);
 
     /** "The lipsync file to use" */
     ObjPtr<CharLipSync> mLipSync; // 0x30

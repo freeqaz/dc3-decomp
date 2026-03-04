@@ -465,14 +465,15 @@ bool RndAmbientOcclusion::IsValid_AOReceive(const RndMesh *mesh) const {
         isPrelit = mat->Prelit();
         isTransparent = transparent;
     }
+    bool _result = false;
     if (!mIgnoreHidden || mesh->Showing()) {
         if (!mIgnoreTransparent || !isTransparent) {
             if (!mIgnorePrelit || !isPrelit) {
-                return true;
+                                _result = true;
             }
         }
     }
-    return false;
+    return _result;
 }
 
 bool RndAmbientOcclusion::IsValid_Tessellate(

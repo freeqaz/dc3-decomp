@@ -280,7 +280,7 @@ void DistanceToErrors(const Vector3 &a, const Vector3 &b, const Vector3 &c, Vect
     d.z *= c.z;
 
     for (int j = 0; j < 3; ++j) {
-        float x = fabs(d[j]);
+        float x = fabsf(d[j]);
         float y = -x;
         float z = (y >= 0.0f) ? 0.0f : x;
         float w = (z - 1.0f >= 0.0f) ? 1.0f : z;

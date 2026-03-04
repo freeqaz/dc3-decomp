@@ -84,7 +84,7 @@ void CamShotVOData(
                 }
             }
             if (s1.Null()) {
-                MILO_NOTIFY("Unknown intro category %s", s);
+                MILO_WARN("Unknown intro category %s", s);
             }
         } else if (hasOutros) {
             if (subStrings.size() > 0 && subStrings[0] == "BATTLE") {

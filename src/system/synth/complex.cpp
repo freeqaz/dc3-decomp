@@ -18,9 +18,13 @@ complex csqrt(complex cplx) {
     double dy;
     double dx;
 
-    h = hypot(cplx.y, cplx.x);
-    dy = (h - cplx.x) * 0.5;
-    result.y = (dy >= 0.0) ? sqrt(dy) : 0.0;
+        auto _tmp0 = hypot(cplx.y, cplx.x);
+        dy = (h = _tmp0 - cplx.x) * 0.5;
+        if ((dy >= 0.0)) {
+        result.y = sqrt(dy);
+    } else {
+        result.y = 0.0;
+    }
 
     dx = (cplx.y + h) * 0.5;
     result.x = (dx >= 0.0) ? sqrt(dx) : 0.0;

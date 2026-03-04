@@ -781,7 +781,7 @@ DataNode Hmx::Object::OnGetTypeList(const DataArray *a) {
 }
 
 DataNode Hmx::Object::OnAddSink(DataArray *a) {
-    if (a->Size() > 3) {
+    if (a->Size() >= 4) {
         SinkMode mode = (a->Size() > 4) ? (SinkMode)a->Int(4) : kHandle;
         bool chain = (a->Size() > 5) ? a->Int(5) : true;
         DataArray *arr3 = a->Array(3);

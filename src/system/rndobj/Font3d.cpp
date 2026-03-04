@@ -71,24 +71,26 @@ BEGIN_COPYS(RndFont3d)
     }
 END_COPYS
 
+INIT_REVS(0, 0)
 BEGIN_LOADS(RndFont3d)
     LOAD_REVS(bs)
+    ASSERT_REVS(0, 0)
     LOAD_SUPERCLASS(RndFontBase)
-    bs >> mMat;
-    bs >> mTextureOwner;
-    bs >> mCellSize;
-    bs >> mInvCellSize;
-    bs >> unk8c;
+    d >> mMat;
+    d >> mTextureOwner;
+    d >> mCellSize;
+    d >> mInvCellSize;
+    d >> unk8c;
     int size;
-    bs >> size;
+    d >> size;
     for (unsigned int i = 0; i < (unsigned int)size; i++) {
         unsigned short key;
-        bs >> key;
+        d >> key;
         CharInfo *info = new CharInfo();
-        bs >> info->unk0;
-        bs >> info->advance;
-        info->mMesh.Load(bs, true, nullptr);
-        bs >> info->visible;
+        d >> info->unk0;
+        d >> info->advance;
+        info->mMesh.Load(d.stream, true, nullptr);
+        d >> info->visible;
         mCharInfoMap[key] = info;
     }
 END_LOADS

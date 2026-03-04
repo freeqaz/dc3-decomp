@@ -262,7 +262,7 @@ void HamStorePanel::ExitStore(StoreError err) const {
 void HamStorePanel::CreateCartUIs() {
     static Symbol album_name("album_name");
     static Symbol art("art");
-    auto _tmp0 = mFilters.begin();
+    auto filtersBegin = mFilters.begin();
     static Symbol artist("artist");
     static Symbol name("name");
     static Symbol store_filter_shopping_cart("store_filter_shopping_cart");
@@ -273,7 +273,7 @@ void HamStorePanel::CreateCartUIs() {
 
     static Symbol description("description");
     static Symbol type("type");
-    mFilters.insert(_tmp0, filter1);
+    mFilters.insert(filtersBegin, filter1);
 
     HamStoreFilter *filter2 = new HamStoreFilter(store_filter_song_import_offers);
     mFilters.push_back(filter2);

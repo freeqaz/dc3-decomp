@@ -46,7 +46,11 @@ void BinkMovieSys::Init() {
 
     if (mCriticalSection == nullptr) {
         void *ptr = MemAlloc(0x20, __FILE__, __LINE__, "CriticalSection", 0);
-        mCriticalSection = ptr ? new (ptr) CriticalSection() : nullptr;
+                if (ptr) {
+            mCriticalSection = new (ptr) CriticalSection();
+        } else {
+            mCriticalSection = nullptr;
+        }
     }
 
     CriticalSection *sec = mCriticalSection;

@@ -40,8 +40,8 @@ END_PROPSYNCS
 
 void StorePanel::Load() {
     UIPanel::Load();
-    mNeedsCacheLoad = true;
     mLoadOk = true;
+    mNeedsCacheLoad = true;
     ThePlatformMgr.AddSink(this);
     if (StoreProfile() == 0) {
         ExitError(kStoreErrorLiveServer);
@@ -608,7 +608,7 @@ DataNode StorePanel::OnMsg(SigninChangedMsg const &msg) {
         // Check if this profile's pad number is in the signin change mask
         int changedMask;
         int padNum;
-        changedMask = msg.mData->Node(3).Int(msg.mData);
+        changedMask = bool(msg.mData->Node(3).Int(msg.mData));
         padNum = profile->GetPadNum();
         // If this pad's bit is not set in the change mask, ignore the message
         if (((1 << padNum) & changedMask) == 0) {

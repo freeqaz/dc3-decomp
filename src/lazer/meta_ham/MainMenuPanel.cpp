@@ -343,8 +343,8 @@ void MainMenuPanel::MotdHandleTextScrolledOut(int i) {
 }
 
 void MainMenuPanel::MotdHandleTextScrolledIn(int idx) {
-    static Symbol dlc("dlc");
     static Symbol utility("utility");
+    static Symbol dlc("dlc");
 
     if (!mMotdProcessingActive)
         return;
@@ -464,12 +464,12 @@ end:
 
 void MainMenuPanel::MotdInitializeTexts() {
     static Symbol dlc("dlc");
-    static Symbol no_profile("no_profile");
-    Symbol *pCategory = &no_profile;
-    static Symbol stats("stats");
-    static Symbol community("community");
-
     static Symbol utility("utility");
+    static Symbol community("community");
+    static Symbol stats("stats");
+    static Symbol no_profile("no_profile");
+
+    Symbol *pCategory = &no_profile;
 
     // Ensure label uses scroll marquee wrap always
     if (mMsgLabel->GetFitType() != RndText::kFitScrollMarqueeWrapAlways) {
@@ -504,7 +504,6 @@ void MainMenuPanel::MotdInitializeTexts() {
     // Enable scrolling mode
     mMotdProcessingActive = true;
     mMsgLabel->SetAltStyle(this);
-    auto _tmp6 = mMotdMessagesByCategory[dlc].empty();
     {
         float targetWidth = mMsgLabel->Width() * 2.0f;
         mMotdPromoFreq = TheRockCentral.GetMotdFreq();
@@ -514,7 +513,7 @@ void MainMenuPanel::MotdInitializeTexts() {
         int statsCount = mMotdMessagesByCategory[stats].size();
 
         // Adjust promo frequency
-        if (_tmp6
+        if (mMotdMessagesByCategory[dlc].empty()
             && mMotdMessagesByCategory[utility].empty()) {
             mMotdPromoFreq = 0;
         } else if (mMotdPromoFreq < 1) {

@@ -323,8 +323,7 @@ void CharClipSet::SortGroups() {
 void CharClipSet::LoadCharacter() {
     MILO_ASSERT(TheLoadMgr.EditMode(), 0x14b);
     delete mPreviewChar;
-    ObjectDir *loadedobj = DirLoader::LoadObjects(mCharFilePath, 0, 0);
-    ObjectDir *dummy = dynamic_cast<RndDir *>(loadedobj);
+    ObjectDir *dummy = dynamic_cast<RndDir *>(DirLoader::LoadObjects(mCharFilePath, 0, 0));
     mPreviewChar = dynamic_cast<RndDir *>(dummy);
     Character *theChar = dynamic_cast<Character *>(dummy);
     if (mPreviewChar && !theChar) {

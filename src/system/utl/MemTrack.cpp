@@ -128,13 +128,15 @@ void StartLog(const char *base) {
         StopLog();
     }
     MILO_ASSERT(!gLog, 0x5B);
-    if (strstr(base, "diff")) {
+    bool _cond = strstr(base, "diff");
+    if (_cond) {
         gNumDiffs++;
     }
     int num = gNumDiffs;
     while (true) {
         MILO_ASSERT(strlen( base ) < 55, 0x68);
-        strcpy(buffer, MakeString("%s_%03i.txt", base, num));
+        auto _tmp0 = MakeString("%s_%03i.txt", base, num);
+        strcpy(buffer, _tmp0);
         num++;
         File *file = NewFile(buffer, 0x10001);
         if (!file)

@@ -780,9 +780,10 @@ void ObjectDir::Iterate(DataArray *arr, bool b) {
     objects->FindArray(s2);
     DataNode *var = arr->Var(3);
     DataNode varNode(*var);
+    Symbol first;
     for (ObjDirItr<Hmx::Object> it(this, b); it != nullptr; ++it) {
         bool bbb;
-        Symbol first = it->ClassName();
+                first = it->ClassName();
         std::pair<Symbol, Symbol> key = std::make_pair(first, s2);
         std::map<std::pair<Symbol, Symbol>, bool>::iterator superclassIt =
             sSuperClassMap.find(key);
@@ -1054,8 +1055,8 @@ void ObjectDir::PreLoad(BinStream &bs) {
         bs.ReadString(buf, 0x80);
     }
 
-    static std::vector<FilePath> inlinedSubDirs;
     static std::vector<FilePath> notInlinedSubDirs;
+    static std::vector<FilePath> inlinedSubDirs;
 
     if (d.rev > 2) {
         bs >> notInlinedSubDirs;

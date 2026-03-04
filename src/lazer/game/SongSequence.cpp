@@ -171,8 +171,8 @@ bool SongSequence::DoNext(bool b1, bool b2) {
         }
     }
     if (!b2 && mCurrentIndex >= 0) {
-        auto _tmp2 = TheHamProvider->Property(holla_back_config)->Int();
-        if (_tmp2) {
+        auto hollaBackEnabled = TheHamProvider->Property(holla_back_config)->Int();
+        if (hollaBackEnabled) {
             static Symbol num_stars("num_stars");
             const DataNode *prop = TheGamePanel->Property(num_stars, false);
             int stars;
@@ -188,8 +188,8 @@ bool SongSequence::DoNext(bool b1, bool b2) {
             int p0Score = p0->Provider()->Property(score)->Int();
             int p1Score = p1->Provider()->Property(score)->Int();
             mEntries[mCurrentIndex].mTotalScore = p0Score + p1Score;
-            auto _tmp4 = MetaPerformer::Current();
-            CampaignPerformer *cp = static_cast<CampaignPerformer *>(_tmp4);
+            auto currentPerformer = MetaPerformer::Current();
+            CampaignPerformer *cp = static_cast<CampaignPerformer *>(currentPerformer);
             Entry &entry = mEntries[mCurrentIndex];
             cp->UpdateEraSong(cp->GetDifficulty(), entry.mSongLongName, entry.mSongLongName, stars);
             cp->TriggerSongCompletion(entry.mTotalScore, (float)entry.mStarCount);
@@ -313,8 +313,8 @@ void SongSequence::OnSongLoaded() {
             }
         }
         if (mCurrentIndex != 0 || !inHollaback) {
-            auto _tmp4 = Message(reset);
-            gamePanel->Handle(_tmp4, true);
+            auto resetMsg = Message(reset);
+            gamePanel->Handle(resetMsg, true);
         }
         if (!inMindControl) {
             TheHamProvider->SetProperty("game_stage", Symbol("intro"));

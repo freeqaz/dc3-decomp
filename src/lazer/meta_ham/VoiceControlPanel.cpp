@@ -226,9 +226,9 @@ void VoiceControlPanel::CreatePlaySongGrammar() const {
         TheSongSortMgr->OnEnter();
     }
 
-    auto _tmp4 = TheSongSortMgr->mSongRecordMap.end();
+    auto songRecordMapEnd = TheSongSortMgr->mSongRecordMap.end();
     for (std::map<Symbol, SongRecord>::iterator it = TheSongSortMgr->mSongRecordMap.begin();
-         it != _tmp4; ++it) {
+         it != songRecordMapEnd; ++it) {
         SongRecord &record = it->second;
         const HamSongMetadata *data = record.Metadata();
         std::vector<String> prons = data->Pronunciations();

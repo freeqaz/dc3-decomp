@@ -130,18 +130,20 @@ Symbol ChallengeHeaderNode::OnSelectDone() {
 }
 
 int ChallengeHeaderNode::GetSongID() {
-    if (mChildren.size() != 0) {
+    auto _tmp1 = mChildren.size();
+    int _result = 0;
+    if (_tmp1 != 0) {
         ChallengeSortNode *node = static_cast<ChallengeSortNode *>(mChildren.front());
         MILO_ASSERT(node, 0x136);
-        return node->GetChallengeRecord()->GetChallengeRow().mSongID;
+                _result = node->GetChallengeRecord()->GetChallengeRow().mSongID;
     }
-    return 0;
+    return _result;
 }
 
 Symbol ChallengeHeaderNode::GetSongShortName() {
     if (mChildren.size() != 0) {
-        auto _tmp0 = mChildren.front()->GetToken();
-        return _tmp0;
+        auto firstChildToken = mChildren.front()->GetToken();
+        return firstChildToken;
     }
     return gNullStr;
 }

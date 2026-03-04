@@ -237,14 +237,15 @@ void HelpBarPanel::SyncToPanel(UIPanel *panel) {
             mLeftHandNavList->SetHighButtonMode(true);
         }
     }
-    static Symbol helpbar_confirm_label("helpbar_confirm_label");
     static Symbol helpbar_allow_controller("helpbar_allow_controller");
+    static Symbol helpbar_confirm_label("helpbar_confirm_label");
     mAllowController = true;
 
     if (!panel) {
     ugh:
         if (TheHamUI.CurrentScreen()) {
-            prop = TheHamUI.CurrentScreen()->Property(helpbar_confirm_label, false);
+            auto screenProp = TheHamUI.CurrentScreen()->Property(helpbar_confirm_label, false);
+            prop = screenProp;
         }
     } else {
         prop = panel->Property(helpbar_confirm_label, false);
@@ -285,8 +286,8 @@ bool HelpBarPanel::UpdateBackButton(UIPanel *panel) {
     if (panel) {
         prop = panel->Property(back_token, false);
     }
-    RndGroup *backIcon = DataDir()->Find<RndGroup>("back_icon.grp", false);
     UILabel *leftHandLabel = DataDir()->Find<UILabel>("left_hand.lbl", false);
+    RndGroup *backIcon = DataDir()->Find<RndGroup>("back_icon.grp", false);
     bool b11 = false;
     if (prop) {
         if (prop->Type() == kDataSymbol) {
@@ -296,7 +297,8 @@ bool HelpBarPanel::UpdateBackButton(UIPanel *panel) {
                 prov->SetLabel(1, 0, prop->Sym());
             }
         } else if (prop->Type() == kDataArray) {
-            if (prop->Array()->Size() > 0) {
+            auto arraySize = prop->Array()->Size();
+            if (arraySize > 0) {
                 b11 = true;
                 mLeftHandNavList->GetHelpbarProvider()->SetLabels(1, prop->Array());
             }

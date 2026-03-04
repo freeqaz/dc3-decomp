@@ -570,7 +570,7 @@ void StandardStream::UpdateVolumes() {
             float vol = mChanParams[i]->mFaders.GetVolume();
             float ratio = DbToRatio(vol);
             // Clamp to [0, 1]
-            if (ratio < 0.0f) ratio = 0.0f;
+            ratio = Max(ratio, 0.0f);
             if (ratio > 1.0f) ratio = 1.0f;
             mChannels[i]->SetVolume(ratio);
             mChanParams[i]->mFaders.ClearDirty();

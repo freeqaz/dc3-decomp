@@ -92,8 +92,7 @@ void RndWind::SelfGetWind(const Vector3 &pos, float time, Vector3 &result) {
         }
     }
 
-    float lenSq = result.x * result.x + result.y * result.y + result.z * result.z;
-    float len = sqrtf(lenSq);
+    float len = sqrtf(result.x * result.x + result.y * result.y + result.z * result.z);
     float limit;
     if (len > 0.0f) {
         if (len > mMaxSpeed) {
@@ -222,7 +221,7 @@ void RndWind::SyncLoops() {
 void RndWind::SetWindOwner(RndWind *wind) { mWindOwner = wind ? wind : this; }
 
 bool RndWind::Replace(ObjRef *from, Hmx::Object *to) {
-    if (from == &mWindOwner) {
+    if (&mWindOwner == from) {
         RndWind *wind = dynamic_cast<RndWind *>(to);
         mWindOwner = wind ? wind : this;
         return true;

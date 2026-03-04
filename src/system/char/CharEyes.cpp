@@ -41,7 +41,7 @@ CharEyes::CharEyes()
       mMaxExtrapolation(19.5), mMinTargetDist(35), mUpperLidTrackUp(1),
       mUpperLidTrackDown(1), mLowerLidTrackUp(0.75), mLowerLidTrackDown(0.75),
       mLowerLidTrackRotate(false), mInterestFilterFlags(0), mLastFacing(0, 0, 0),
-      mLastCang(0), mLastLook(0), mMaxEyeCang(0), mAvDelta(0), mLastBlinkWeight(0),
+      mLastCang(0), mLastBlinkWeight(0),
       mBlinkDetect(0), mBlinkActive(0), mCurrentInterest(this), mFocusInterest(this),
       mFocusTimer(-1), mNeedRecalc(0), mDartOffset(0, 1, 0), mDartTimer(0),
       mDartEnabled(0), mDartInterval(-1), mEyeClampCount(-1),
@@ -72,8 +72,8 @@ void CharEyes::Enter() {
     mDartTimer = 0.0f;
     mNeedRecalc = false;
     mEnabled = false;
-    mNeedRecalc = false;
     RndTransformable *head = GetHead();
+    mNeedRecalc = false;
     if (head) {
         mLastFacing = head->WorldXfm().m.y;
         Normalize(mLastFacing, mLastFacing);
@@ -548,43 +548,37 @@ void CharEyes::PollDeps(
 }
 
 void CharEyes::DartUpdate() {
-    auto& _ref0 = mDartTimer;
-    _ref0 -= TheTaskMgr.DeltaSeconds();
-    if (mDartEnabled) {
-        if (_ref0 < 0) {
+    static DataNode &dartCheat = DataVariable("cheat.disable_eye_darts");
+    if (sDisableEyeDart || dartCheat.Int(NULL) != 0)
+        return;
+    mDartInterval -= TheTaskMgr.DeltaSeconds();
+    if (mDartInterval < 0) {
+        if (mDartEnabled) {
             mEyeClampCount--;
             if (mEyeClampCount < 0) {
                 mDartEnabled = false;
-                _ref0 = RandomFloat(
+                mDartInterval = RandomFloat(
                     mData.mMinSecsBetweenSequences,
                     mData.mMaxSecsBetweenSequences
                 );
-            } else {
-                _ref0 = RandomFloat(
-                    mData.mMinSecsBetweenDarts,
-                    mData.mMaxSecsBetweenDarts
-                );
-                Vector3 dartOffset = GenerateDartOffset();
-                mCurrentDartOffsetX = dartOffset.x;
-                mCurrentDartOffsetY = dartOffset.y;
-                mCurrentDartOffsetZ = dartOffset.z;
+                return;
             }
+        } else {
+            if (!EyesOnTarget(mData.mOnTargetAngleThresh))
+                return;
+            if (mBlinkEnabled)
+                return;
+            mDartEnabled = true;
+            mEyeClampCount = RandomInt(
+                mData.mMinDartsPerSequence,
+                mData.mMaxDartsPerSequence
+            );
         }
-    } else if (_ref0 < 0 && EyesOnTarget(mData.mOnTargetAngleThresh)
-               && !mBlinkActive) {
-        mDartEnabled = true;
-        mEyeClampCount = RandomInt(
-            mData.mMinDartsPerSequence,
-            mData.mMaxDartsPerSequence
-        );
-        _ref0 = RandomFloat(
+        mDartInterval = RandomFloat(
             mData.mMinSecsBetweenDarts,
             mData.mMaxSecsBetweenDarts
         );
-        Vector3 dartOffset = GenerateDartOffset();
-        mCurrentDartOffsetX = dartOffset.x;
-        mCurrentDartOffsetY = dartOffset.y;
-        mCurrentDartOffsetZ = dartOffset.z;
+        *(Vector3 *)&mCurrentDartOffsetX = GenerateDartOffset();
     }
 }
 
@@ -1137,13 +1131,13 @@ void CharEyes::ProceduralBlinkUpdate() {
     if (elapsed < 0.115f) {
         // Closing phase
         float t = Clamp(0.0f, 1.0f, elapsed * 8.695652f);
-        auto _tmp0 = EaseInExp(t);
-        mFaceServo->SetProceduralBlinkWeight(_tmp0);
+        auto blinkWeight = EaseInExp(t);
+        mFaceServo->SetProceduralBlinkWeight(blinkWeight);
     } else if (elapsed < 0.3f) {
         // Opening phase
         float t = Clamp(0.0f, 1.0f, 1.0f - (elapsed - 0.115f) * 5.405405f);
-        auto _tmp0 = EaseSigmoid(t, 0.0f, 0.0f);
-        mFaceServo->SetProceduralBlinkWeight(_tmp0);
+        auto blinkWeight = EaseSigmoid(t, 0.0f, 0.0f);
+        mFaceServo->SetProceduralBlinkWeight(blinkWeight);
         mTarget = mHeadForward;
     } else {
         // Blink complete
@@ -1229,8 +1223,8 @@ void CharEyes::Poll() {
             if (!blinkDetected) {
                 if (canSeeTarget) {
                     bool anyEyeClamped = false;
-                    auto _tmp1 = mEyes.end();
-                    for (ObjVector<EyeDesc>::iterator it = mEyes.begin(); it != _tmp1;
+                    auto eyesEnd = mEyes.end();
+                    for (ObjVector<EyeDesc>::iterator it = mEyes.begin(); it != eyesEnd;
                          ++it) {
                         if (it->mEye && it->mEye->mDisableRoll) {
                             anyEyeClamped = true;

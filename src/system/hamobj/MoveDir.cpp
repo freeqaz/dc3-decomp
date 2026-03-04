@@ -1091,7 +1091,7 @@ void MoveDir::SetCurrentMove(int player, HamMove *move) {
         }
     }
     if (mpd.mTextFeedback) {
-        mpd.mTextFeedback->SetShowing(mpd.mFeedbackMode == 0);
+        mpd.mTextFeedback->SetShowing(0 == mpd.mFeedbackMode);
     }
     mpd.mCurMove = move;
     if (move) {

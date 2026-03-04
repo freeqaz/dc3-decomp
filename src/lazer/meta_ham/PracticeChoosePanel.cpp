@@ -221,8 +221,8 @@ int PracticeChoosePanel::NumData() const { return mStepMoves.size(); }
 
 void PracticeChoosePanel::InitData(RndDir *dir) {
     TheGame->GetMaster()->SetMaps();
-    auto _tmp1 = TheGameData->GetSong();
-    if (mCurrentSong != _tmp1
+    auto currentSong = TheGameData->GetSong();
+    if (mCurrentSong != currentSong
         || mCurrentDifficulty
             != DifficultyToSym(
                 TheGameData->Player(TheHamProvider->Property("ui_nav_player")->Int())
@@ -272,8 +272,8 @@ void PracticeChoosePanel::InitData(RndDir *dir) {
     }
     mStepMoves.push_back(stepMoves);
     FOREACH (it, mStepMoves) {
-        auto _tmp5 = GetStepNumber(*it);
-        it->mDisplayNum = _tmp5;
+        auto stepNumber = GetStepNumber(*it);
+        it->mDisplayNum = stepNumber;
     }
     mProblemCalloutMat = dir->Find<RndMat>("problem_callout.mat");
     sIndex = 0;

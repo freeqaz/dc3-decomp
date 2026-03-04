@@ -589,8 +589,8 @@ void RndText::FontMap::AllocateMeshes(RndText *text, int fixedLength) {
                 RndTransformable::kConstraintParentWorld, nullptr, false
             );
             if (mFont) {
-                auto _tmp2 = mFont->Mat(i);
-                mesh->SetMat(_tmp2);
+                auto fontMat = mFont->Mat(i);
+                mesh->SetMat(fontMat);
             }
             mesh->SetShowing(page.displayableChars > 0);
             if ((unsigned int)fixedLength == 0) {
@@ -1012,8 +1012,8 @@ void RndText::DrawShowing() {
 
     // Apply font color overrides from styles
     bool hasOverride = false;
-    auto _tmp3 = mStyles.end();
-    for (auto it = mStyles.begin(); it != _tmp3; ++it) {
+    auto stylesEnd = mStyles.end();
+    for (auto it = mStyles.begin(); it != stylesEnd; ++it) {
         Style &style = *it;
         if (style.mFont && style.mFontColorOverride) {
             int fmIdx = FontMapIndex(style.mFont, style.mBlacklight);
@@ -1052,9 +1052,9 @@ void RndText::DrawShowing() {
         for (int i = 0; i < numMeshes; i++) {
             RndMesh *mesh = fontMap->Mesh(i);
             if (mesh) {
-                auto _tmp4 = TheUI->DisableScreenBlacklight();
+                auto blacklightDisabled = TheUI->DisableScreenBlacklight();
                 if (!sBlacklightModeEnabled || !fontMap->mBlacklight ||
-                    _tmp4) {
+                    blacklightDisabled) {
                     DrawMesh(mesh, mStyles[0].mSize, 0);
                 } else {
                     QueueBlacklightPacket(mesh, mStyles[0].mSize, 0);
@@ -1066,11 +1066,11 @@ void RndText::DrawShowing() {
     // Restore material colors (r, g, b only — not alpha)
     if (hasOverride) {
         vlaIdx = 0;
-        auto _tmp4 = mFontMaps.end();
-        for (auto it = mFontMaps.begin(); it != _tmp4; ++it) {
+        auto fontMapsEnd = mFontMaps.end();
+        for (auto it = mFontMaps.begin(); it != fontMapsEnd; ++it) {
             FontMapBase *fontMap = *it;
-            auto _tmp5 = fontMap->NumMaterials();
-            for (int i = 0; i < _tmp5; i++) {
+            auto numMaterials = fontMap->NumMaterials();
+            for (int i = 0; i < numMaterials; i++) {
                 RndMat *mat = fontMap->Material(i);
 #ifdef HX_NATIVE
                 Hmx::Color &color = mat->GetColor();

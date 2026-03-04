@@ -337,21 +337,21 @@ void SkeletonUpdate::UpdateCallbacks() {
         } while ((int)revBit > -5);
     }
 
-    auto& _ref1 = mSkeletons;
+
     for (int i = 0; i < NUM_SKELETONS; i++) {
-        if (_ref1[i].IsTracked()) {
-            AddToHistory(i, _ref1[i]);
+        if (mSkeletons[i].IsTracked()) {
+            AddToHistory(i, mSkeletons[i]);
         } else {
             ClearHistory(i);
         }
-        _ref1[i].Poll(i, mSkeletonFrame);
+        mSkeletons[i].Poll(i, mSkeletonFrame);
     }
 
     for (int i = 0; i < 2; i++) {
         mSkeletonsLeft[i] = nullptr;
         for (int j = 0; j < NUM_SKELETONS; j++) {
-            if (mSkeletonTrackingIDs[i] == _ref1[j].TrackingID()) {
-                mSkeletonsLeft[i] = &_ref1[j];
+            if (mSkeletonTrackingIDs[i] == mSkeletons[j].TrackingID()) {
+                mSkeletonsLeft[i] = &mSkeletons[j];
                 break;
             }
         }
@@ -359,7 +359,7 @@ void SkeletonUpdate::UpdateCallbacks() {
 
     Skeleton **rightSkeletons = (Skeleton **)&mSkeletonsRight[0];
     for (int i = 0; i < NUM_SKELETONS; i++) {
-        rightSkeletons[i] = &_ref1[i];
+        rightSkeletons[i] = &mSkeletons[i];
     }
 
     SkeletonUpdateData data;

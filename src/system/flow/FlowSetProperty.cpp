@@ -323,12 +323,13 @@ void FlowSetProperty::ReActivate() {
     Timer t;
     t.Restart();
     PushDrivenProperties();
-    if (mBlendTime == 0.0f && mChangePerUnit == 0.0f) {
-        FLOW_LOG("Setting Value on %s\n", mTarget->Name())
-        mTarget->SetProperty(unk_0x98.Array(), mValue.Node());
+    auto& _ref0 = mTarget;
+    if (0.0f == mBlendTime && mChangePerUnit == 0.0f) {
+        FLOW_LOG("Setting Value on %s\n", _ref0->Name())
+        _ref0->SetProperty(unk_0x98.Array(), mValue.Node());
         return;
     }
-    if (mTarget->Property(unk_0x98.Array(), true)->Evaluate()
+    if (_ref0->Property(unk_0x98.Array(), true)->Evaluate()
         != mValue.Node().Evaluate()) {
         FLOW_LOG("Queueing\n")
         TheFlowMgr->QueueCommand(this, kQueue);

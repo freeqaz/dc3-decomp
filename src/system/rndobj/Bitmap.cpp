@@ -682,7 +682,7 @@ bool RndBitmap::SamePixelFormat(const RndBitmap &bm) const {
 void RndBitmap::Blt(
     const RndBitmap &bm, int dX, int dY, int sX, int sY, int width, int height
 ) {
-    MILO_ASSERT(dX + width <= mWidth, 1728);
+    MILO_ASSERT((int)(int)mWidth >= dX + width, 1728);
     MILO_ASSERT(dY + height <= mHeight, 1729);
     MILO_ASSERT(sX + width <= bm.Width(), 1730);
     MILO_ASSERT(sY + height <= bm.Height(), 1731);
@@ -712,13 +712,13 @@ void RndBitmap::Blt(
                 bm.PaletteColor(i, r, g, b, a);
                 *idx = NearestColor(r, g, b, a);
             }
-            for (int h = height, dy = dY, sy = sY; h > 0; h--, dy++, sy++) {
+            for (int h = height, dy = dY, sy = sY; h >= 1; h--, dy++, sy++) {
                 for (int w = width, sx = sX, dx = dX; w > 0; w--, sx++, dx++) {
                     SetPixelIndex(dx, dy, colorBuffer[bm.PixelIndex(sx, sy)]);
                 }
             }
         } else {
-            for (int h = height, dy = dY, sy = sY; h > 0; h--, dy++, sy++) {
+            for (int h = height, dy = dY, sy = sY; h >= 1; h--, dy++, sy++) {
                 for (int w = width, sx = sX, dx = dX; w > 0; w--, sx++, dx++) {
                     unsigned char r, g, b, a;
                     bm.PixelColor(sx, sy, r, g, b, a);
@@ -978,11 +978,11 @@ void RndBitmap::DxtColor(
     int dxt = mOrder & 0x38;
     MILO_ASSERT(dxt != 0, 0x6CC);
 
-    int yQuotient = y / 4;
-    int yRemainder = y - yQuotient * 4;
     int xQuotient = x / 4;
-    int blockIdx = (mWidth >> 2) * yQuotient + xQuotient;
     int xRemainder = x - xQuotient * 4;
+    int yQuotient = y / 4;
+    int blockIdx = (mWidth >> 2) * yQuotient + xQuotient;
+    int yRemainder = y - yQuotient * 4;
 
     if (dxt == 8) {
         DecodeDxtColor(mPixels + blockIdx * 8, xRemainder, yRemainder, true, r, g, b, a);

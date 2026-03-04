@@ -261,7 +261,9 @@ SuperFormatString::SuperFormatString(
 }
 
 const char *SuperFormatString::FinalStr() {
-    if (!mTokensOnly) {
+    if (!(!mTokensOnly)) {
+        return mFmt;
+    } else {
         const char *result = Str();
         if (mHasPercentFormat) {
             String str(result);
@@ -269,7 +271,5 @@ const char *SuperFormatString::FinalStr() {
             result = MakeString(str.c_str(), "");
         }
         return result;
-    } else {
-        return mFmt;
     }
 }

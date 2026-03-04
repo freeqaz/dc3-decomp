@@ -285,8 +285,10 @@ def hill_climb(
                     stopped_reason = "plateau"
                     break
     except Exception as e:
+        import traceback
         stopped_reason = "error"
         print(f"Error: {e}", file=sys.stderr)
+        traceback.print_exc()
     finally:
         # If not applying, restore original source
         if not apply:

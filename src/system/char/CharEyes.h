@@ -161,8 +161,8 @@ protected:
     RndOverlay *mEyeStatusOverlay; // 0xd0
     int mInterestFilterFlags; // 0xd4
     Vector3 mLastFacing; // 0xd8
-    float mLastCang; // 0xe8
-    float mLastLook; // 0xec
+    float mLastLook; // 0xe8
+    float mLastCang; // 0xec
     float mMaxEyeCang; // 0xf0
     float mAvDelta; // 0xf4
     float mLastBlinkWeight; // 0xf8
@@ -188,7 +188,6 @@ protected:
     float mUpperBlinkAngle; // 0x198
     float mLowerBlinkAngle; // 0x19c
     Vector3 mHeadForward; // 0x1a0
-    int unk1ac; // 0x1ac
-    bool mEnabled; // 0x1b0
-    bool mHeadIKActive; // 0x1b1
+    bool mEnabled; // 0x1ac
+    bool mHeadIKActive; // 0x1ad
 };

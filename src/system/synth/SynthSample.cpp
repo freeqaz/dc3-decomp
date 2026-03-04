@@ -175,10 +175,11 @@ SynthSample::~SynthSample() {
 }
 
 BEGIN_HANDLERS(SynthSample)
-    HANDLE_EXPR(platform_size_kb, (mSampleData.SizeAs(SampleData::kPCM) >> 10) + 0)
-    HANDLE_EXPR(num_markers, mSampleData.NumMarkers())
-    HANDLE_EXPR(marker_name, mSampleData.GetMarker(_msg->Int(2)).Name())
-    HANDLE_EXPR(marker_sample, mSampleData.GetMarker(_msg->Int(2)).Sample())
+    auto& _ref0 = mSampleData;
+    HANDLE_EXPR(platform_size_kb, (_ref0.SizeAs(SampleData::kPCM) >> 10) + 0)
+    HANDLE_EXPR(num_markers, _ref0.NumMarkers())
+    HANDLE_EXPR(marker_name, _ref0.GetMarker(_msg->Int(2)).Name())
+    HANDLE_EXPR(marker_sample, _ref0.GetMarker(_msg->Int(2)).Sample())
     HANDLE_EXPR(sample_length, (int)(LengthMs() * 0.001f))
     HANDLE_SUPERCLASS(Hmx::Object)
 END_HANDLERS

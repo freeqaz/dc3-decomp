@@ -95,6 +95,8 @@ public:
             mStartMode = start ? 2 : 1;
     }
 
+    friend class FlowNode;
+
 protected:
     Flow();
 

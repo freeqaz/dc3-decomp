@@ -60,14 +60,15 @@ END_PROPSYNCS
 // - Target pre-loads NumDisplay() into r29 across Write call
 // - Speed() call is ICF-merged to merged_82752368 (verified: UIListState::Speed)
 BEGIN_SAVES(UIListDir)
-    SAVE_REVS(1, 0)
+    SAVE_REVS(0, 1)
     SAVE_SUPERCLASS(RndDir)
     bs << mOrientation;
     bs << mFadeOffset;
     bs << mTestMode;
-    bs << mTestState.NumDisplay();
+    auto& _ref0 = mTestState;
+    bs << _ref0.NumDisplay();
     bs << mElementSpacing;
-    bs << mTestState.Speed();
+    bs << _ref0.Speed();
     bs << mTestNumData;
     bs << mTestComponentState;
     bs << mTestGapSize;

@@ -45,7 +45,7 @@ bool BinkMovieImpl::PlatformCacheFile(const char *filename) {
     long long fileTime = ((long long)stat.st_mtime + 0x2B6109100LL) * 10000000LL;
     FILETIME srcTime;
     srcTime.dwLowDateTime = (DWORD)fileTime;
-    srcTime.dwHighDateTime = (DWORD)(fileTime >> 32);
+    srcTime.dwHighDateTime = bool((DWORD)(fileTime >> 32));
 
     String cachePath(FileMakePath("DEVKIT:", filename));
     FileQualifiedFilename(cachePath, cachePath.c_str());

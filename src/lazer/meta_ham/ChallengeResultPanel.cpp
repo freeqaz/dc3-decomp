@@ -172,13 +172,13 @@ void ChallengeResultPanel::UpdateList(int player) {
     MILO_ASSERT(playerData, 0x7D);
     PropertyEventProvider *provider = playerData->Provider();
     MILO_ASSERT(provider, 0x7F);
-    auto _tmp0 = provider->Property(score)->Int();
-    mPlayerScore = _tmp0;
+    auto playerScore = provider->Property(score)->Int();
+    mPlayerScore = playerScore;
     auto missionIndex = provider->Property(challenge_mission_index)->Int();
     mRivalIndex = missionIndex + numDisplay;
     mSide = provider->Property(side)->Int();
-    auto _tmp1 = provider->Property(player_name)->Str();
-    playerName = _tmp1;
+    auto playerNameStr = provider->Property(player_name)->Str();
+    playerName = playerNameStr;
     int challengeScore = provider->Property(challenge_mission_score)->Int();
     bool challengeSelf = provider->Property(is_challenging_self)->Int();
     mHalfDisplayCount = (numDisplay / 2) + 1;

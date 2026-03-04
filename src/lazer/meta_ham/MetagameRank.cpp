@@ -177,12 +177,12 @@ DataNode HandleDeferredAward(DataArray *) {
 }
 
 void MetagameRank::Init() {
-    static DataNode &xp_force_award_all = DataVariable("xp_force_award_all");
     static DataNode &xp_force_award_small = DataVariable("xp_force_award_small");
-    static DataNode &xp_force_one_rank_up = DataVariable("xp_force_one_rank_up");
-    static DataNode &xp_force_award_medium = DataVariable("xp_force_award_medium");
     static DataNode &xp_force_award_one_time = DataVariable("xp_force_award_one_time");
+    static DataNode &xp_force_award_medium = DataVariable("xp_force_award_medium");
     static DataNode &xp_force_award_large = DataVariable("xp_force_award_large");
+    static DataNode &xp_force_award_all = DataVariable("xp_force_award_all");
+    static DataNode &xp_force_one_rank_up = DataVariable("xp_force_one_rank_up");
     xp_force_award_small = 0;
     xp_force_award_medium = 0;
     xp_force_award_large = 0;
@@ -195,7 +195,8 @@ void MetagameRank::Init() {
     DataArray *rankCfg = SystemConfig("rank");
     DataArray *unlockArr = rankCfg->FindArray("unlockables");
     if (unlockArr) {
-        unlockablesSize = unlockArr->Size() - 1;
+        auto unlockablesArrSize = unlockArr->Size();
+        unlockablesSize = unlockablesArrSize - 1;
         gUnlockables.resize(unlockablesSize);
         for (int i = 0; i < unlockablesSize; i++) {
             DataArray *curUnlockArray = unlockArr->Array(i + 1);
@@ -204,8 +205,8 @@ void MetagameRank::Init() {
             cur.unk4 = curUnlockArray->Sym(0);
             cur.unk8 = curUnlockArray->FindSym("name");
             cur.unkc = curUnlockArray->FindSym("desc");
-            auto _tmp8 = curUnlockArray->FindSym("image");
-            cur.unk10 = _tmp8;
+            auto imageSym = curUnlockArray->FindSym("image");
+            cur.unk10 = imageSym;
             DataArray *unlocksToPopulate = curUnlockArray->FindArray("unlock");
             cur.unk14.resize(unlocksToPopulate->Size() - 1);
             for (int j = 1; j < unlocksToPopulate->Size(); j++) {
@@ -216,7 +217,8 @@ void MetagameRank::Init() {
     }
     DataArray *tierArr = rankCfg->FindArray("tiers");
     if (tierArr) {
-        int tiersSize = tierArr->Size() - 1;
+        auto tierArrSize = tierArr->Size();
+        int tiersSize = tierArrSize - 1;
         gTiers.resize(tiersSize);
         for (int i = 0; i < tiersSize; i++) {
             DataArray *innerTierArr = tierArr->Array(i + 1);

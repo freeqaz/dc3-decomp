@@ -945,8 +945,8 @@ void LightPreset::AnimateState(
 }
 
 void LightPreset::SetFrameEx(float frame, float blend, bool b) {
-    RndAnimatable::SetFrame(frame, blend);
-    if (frame == 0 && TheLoadMgr.EditMode()) {
+    RndAnimatable::SetFrame(blend, frame);
+    if ((unsigned int)frame == 0 && TheLoadMgr.EditMode()) {
         SyncNewSpotlights();
     }
     if (!mKeyframes.empty()) {
@@ -977,7 +977,7 @@ void LightPreset::SetFrameEx(float frame, float blend, bool b) {
             }
             if (mLastManualFrame != -1) {
                 kfPrev = &mKeyframes[mLastManualFrame];
-                if (mManualFadeTime > 0) {
+                if (mManualFadeTime >= 1) {
                     f = Min((frame - mManualFrameStart) / mManualFadeTime, 1.0f);
                     f = Max(0.0f, f);
                 } else {
@@ -1194,22 +1194,23 @@ BEGIN_LOADS(LightPreset)
     LOAD_REVS(bs)
     ASSERT_REVS(0x16, 0)
     LOAD_SUPERCLASS(Hmx::Object)
+    auto& _ref0 = mKeyframes;
     if (d.rev != 0xE) {
         LOAD_SUPERCLASS(RndAnimatable)
         // Load keyframes manually since there's no BinStream >> Keyframe operator
         {
             unsigned int count;
             bs >> count;
-            mKeyframes.resize(count);
+            _ref0.resize(count);
             BinStreamRev rev(bs, d.rev);
             for (uint i = 0; i < count; i++) {
-                mKeyframes[i].Load(rev);
+                _ref0[i].Load(rev);
             }
         }
     } else {
-        mKeyframes.resize(1);
+        _ref0.resize(1);
         BinStreamRev rev(bs, 0xE);
-        mKeyframes[0].LegacyLoadP9(rev);
+        _ref0[0].LegacyLoadP9(rev);
     }
     bs >> mSpotlights;
     bs >> mEnvironments;

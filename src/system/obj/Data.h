@@ -115,13 +115,11 @@ public:
     }
 
     DataNode(float f) {
-        mValue.object = nullptr;
         mValue.real = f;
         mType = kDataFloat;
     }
 
     DataNode(double d) {
-        mValue.object = nullptr;
         mValue.real = d;
         mType = kDataFloat;
     }

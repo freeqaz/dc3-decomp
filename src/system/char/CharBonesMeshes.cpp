@@ -30,6 +30,9 @@ void CharBonesMeshes::ReallocateInternal() {
     String str;
     mMeshes.clear();
     mMeshes.reserve(mBones.size());
+#ifdef HX_NATIVE
+    int foundCount = 0, dummyCount = 0;
+#endif
     for (int i = 0; i < mBones.size(); i++) {
         RndTransformable *trans = CharUtlFindBoneTrans(mBones[i].name.Str(), Dir());
         if (!trans) {
@@ -37,9 +40,27 @@ void CharBonesMeshes::ReallocateInternal() {
                 str += MakeString("%s, ", mBones[i].name);
             }
             trans = sDummyMesh;
+#ifdef HX_NATIVE
+            dummyCount++;
+            if (dummyCount <= 5)
+                printf("  ReallocateInternal: MISSING bone '%s' in dir '%s' -> sDummyMesh\n",
+                       mBones[i].name.Str(), Dir() ? Dir()->Name() : "(null)");
+#endif
         }
+#ifdef HX_NATIVE
+        else {
+            foundCount++;
+            if (foundCount <= 3)
+                printf("  ReallocateInternal: found bone '%s' -> '%s' (%p)\n",
+                       mBones[i].name.Str(), trans->Name(), (void*)trans);
+        }
+#endif
         mMeshes.push_back(trans);
     }
+#ifdef HX_NATIVE
+    printf("  ReallocateInternal: %d found, %d dummy, %zu total bones, dir='%s'\n",
+           foundCount, dummyCount, mBones.size(), Dir() ? Dir()->Name() : "(null)");
+#endif
     if (mMeshes.empty())
         return;
     else
@@ -93,9 +114,34 @@ void CharBonesMeshes::AcquirePose() {
 void CharBonesMeshes::PoseMeshes() {
     ObjPtrVec<RndTransformable>::iterator curMesh = mMeshes.begin();
 
+#ifdef HX_NATIVE
+    printf("  CharBonesMeshes::PoseMeshes: mMeshes.size()=%zu mStart=%p mTotalSize=%d\n",
+           mMeshes.size(), (void*)mStart, mTotalSize);
+    printf("    offsets: POS=0 SCALE=%d QUAT=%d ROTX=%d ROTY=%d ROTZ=%d END=%d\n",
+           mOffsets[TYPE_SCALE], mOffsets[TYPE_QUAT], mOffsets[TYPE_ROTX],
+           mOffsets[TYPE_ROTY], mOffsets[TYPE_ROTZ], mOffsets[TYPE_END]);
+    printf("    counts: POS=%d SCALE=%d QUAT=%d ROTX=%d ROTY=%d ROTZ=%d END=%d\n",
+           mCounts[0], mCounts[1], mCounts[2], mCounts[3], mCounts[4], mCounts[5], mCounts[6]);
+#endif
+
     // Set positions
     Vector3 *pos = (Vector3 *)mStart;
     Vector3 *scaleOff = (Vector3 *)(mStart + mOffsets[TYPE_SCALE]);
+#ifdef HX_NATIVE
+    int posCount = 0;
+    for (Vector3 *p = pos; p < scaleOff; p++, posCount++) {
+        if (posCount < 2) {
+            printf("    POS[%d]: buf=(%.3f,%.3f,%.3f) mesh='%s' pre_local=(%.3f,%.3f,%.3f)\n",
+                   posCount, p->x, p->y, p->z,
+                   mMeshes[posCount] ? mMeshes[posCount]->Name() : "(null)",
+                   mMeshes[posCount] ? mMeshes[posCount]->LocalXfm().v.x : 0,
+                   mMeshes[posCount] ? mMeshes[posCount]->LocalXfm().v.y : 0,
+                   mMeshes[posCount] ? mMeshes[posCount]->LocalXfm().v.z : 0);
+        }
+    }
+    printf("    POS loop: %d entries (mOffsets[SCALE]=%d / sizeof(Vector3)=%zu)\n",
+           posCount, mOffsets[TYPE_SCALE], sizeof(Vector3));
+#endif
     for (; pos < scaleOff; pos++, ++curMesh) {
         (*curMesh)->SetLocalPos(*pos);
     }
@@ -107,7 +153,20 @@ void CharBonesMeshes::PoseMeshes() {
         // Apply quaternion rotations
         Hmx::Quat *quat = (Hmx::Quat *)(mStart + mOffsets[TYPE_QUAT]);
         Hmx::Quat *quatEnd = (Hmx::Quat *)(mStart + mOffsets[TYPE_ROTX]);
+#ifdef HX_NATIVE
+        int quatIdx = 0;
+        printf("    QUAT section: offset=%d endOffset=%d, count=%d\n",
+               mOffsets[TYPE_QUAT], mOffsets[TYPE_ROTX],
+               (int)(((char*)quatEnd - (char*)quat) / sizeof(Hmx::Quat)));
+#endif
         for (; quat < quatEnd; quat++, ++curMesh) {
+#ifdef HX_NATIVE
+            if (quatIdx < 3)
+                printf("    QUAT[%d]: (%.4f,%.4f,%.4f,%.4f) -> mesh='%s'\n",
+                       quatIdx, quat->x, quat->y, quat->z, quat->w,
+                       (*curMesh) ? (*curMesh)->Name() : "(null)");
+            quatIdx++;
+#endif
             Normalize(*quat, *quat);
             MakeRotMatrix(*quat, (*curMesh)->DirtyLocalXfm().m);
         }

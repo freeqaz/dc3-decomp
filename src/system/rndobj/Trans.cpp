@@ -209,8 +209,8 @@ BEGIN_LOADS(RndTransformable)
         break;
     case 1:
     case 2: {
-        int numb4;
-        bs >> numb4;
+        unsigned int numb4;
+        bs >> (int &)numb4;
         int sp80[6] = { 0, 0, 0, 5, 6, 7 };
                 mConstraint = numb4 >= 0x18 ? kConstraintNone : (Constraint)sp80[numb4];
         break;

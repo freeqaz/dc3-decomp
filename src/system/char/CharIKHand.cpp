@@ -175,16 +175,16 @@ void CharIKHand::PullShoulder(
 ) {
     if (mPullShoulder) {
         Subtract(vconst, tf.v, v);
-        float lensq = LengthSquared(v);
         float f2 = fff * 0.95f;
+        float lensq = LengthSquared(v);
         if (lensq > f2 * f2) {
             v *= 1.0f - f2 / (float)std::sqrt(lensq);
-        } else {
-            v.x = 0;
-            v.y = 0;
-            v.z = 0;
+            return;
         }
     }
+    v.x = 0;
+    v.y = 0;
+    v.z = 0;
 }
 
 void CharIKHand::MeasureLengths() {
@@ -503,8 +503,8 @@ void CharIKHand::Highlight() {
     float charWeight = Weight();
     float leftover = 0;
     float localWeights[16];
-    auto& _ref0 = mHand;
-    if (charWeight == 0 || !_ref0 || mTargets.empty())
+
+    if (charWeight == 0 || !mHand || mTargets.empty())
         return;
     else {
         if (mTargets.size() != 1) {
@@ -562,8 +562,8 @@ void CharIKHand::Highlight() {
                 }
             }
         }
-        UtilDrawAxes(_ref0->WorldXfm(), 1.0f, Hmx::Color(1, 1, 1));
-        UtilDrawSphere(_ref0->WorldXfm().v, 1.0f, Hmx::Color(0, 1, 0), nullptr);
+        UtilDrawAxes(mHand->WorldXfm(), 1.0f, Hmx::Color(1, 1, 1));
+        UtilDrawSphere(mHand->WorldXfm().v, 1.0f, Hmx::Color(0, 1, 0), nullptr);
     }
 }
 

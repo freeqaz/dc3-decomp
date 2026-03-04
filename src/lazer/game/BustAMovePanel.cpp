@@ -234,8 +234,8 @@ void BustAMovePanel::ResetScores() {
 void BustAMovePanel::SetFlashcardName(int side, int index, int i3) {
     Symbol s(gNullStr);
     if (i3 >= 0) {
-        auto _tmp0 = GetMoveNameData(i3)->Sym(1);
-        s = _tmp0;
+        auto moveName = GetMoveNameData(i3)->Sym(1);
+        s = moveName;
     }
     HamLabel *label =
         mBAMColumns[side]->Find<HamLabel>(MakeString("flashcard_name_%d.lbl", index));
@@ -543,8 +543,8 @@ int BustAMovePanel::RepsToNextPhrase() {
         TheMaster->GetAudio()->GetCurrLoopBeats(beat, loopEnd);
     }
 
-    auto _tmp2 = mSongStructure.begin();
-    int size = (int)((mSongStructure.end() - _tmp2));
+    auto songStructureBegin = mSongStructure.begin();
+    int size = (int)((mSongStructure.end() - songStructureBegin));
     int *data = &mSongStructure[0];
     unsigned int count = 0;
     int repsInPhrase;
@@ -589,11 +589,11 @@ calc_total:;
 void BustAMovePanel::SetFlashcardImage(int side, int index, int i3) {
     RndMat *flashcardBgMat =
         mBAMColumns[side]->Find<RndMat>(MakeString("flashcard_background%d.mat", index));
-    auto _tmp1 = MakeString("flashcard%d.mat", index);
+    auto flashcardMatName = MakeString("flashcard%d.mat", index);
     RndTex *flashcardTex;
 
     RndMat *flashcardMat =
-        mBAMColumns[side]->Find<RndMat>(_tmp1);
+        mBAMColumns[side]->Find<RndMat>(flashcardMatName);
     RndTex *bgTex;
     RndTex *blankTex = DataDir()->Find<RndTex>("blank.tex");
     if (i3 >= 0) {
@@ -602,8 +602,8 @@ void BustAMovePanel::SetFlashcardImage(int side, int index, int i3) {
         flashcardTex = blankTex;
         bgTex = mBAMColumns[side]->Find<RndTex>("blank_bustamove.tex");
     } else {
-        auto _tmp1 = DataDir()->Find<RndTex>("blank.tex");
-        flashcardTex = _tmp1;
+        auto blankTex2 = DataDir()->Find<RndTex>("blank.tex");
+        flashcardTex = blankTex2;
         bgTex = flashcardTex;
     }
 
@@ -868,8 +868,8 @@ void BustAMovePanel::OnBeat() {
             mFlashcardLabels.push_back(gNullStr);
             mFlashcardLabels.push_back(Symbol("bam_record1"));
             mFlashcardLabels.push_back(Symbol("bam_record2"));
-            auto _tmp16 = Symbol("bam_record3");
-            mFlashcardLabels.push_back(_tmp16);
+            auto bamRecord3 = Symbol("bam_record3");
+            mFlashcardLabels.push_back(bamRecord3);
             mFlashcardLabels.push_back(Symbol("bam_record4"));
             CountIn(16);
         }
@@ -1573,8 +1573,8 @@ void BustAMovePanel::Poll() {
     }
 
     if (mState == kBAMState_Playing) {
-        auto _tmp15 = mRecorder->GetScore(skelIdx, 0, -1.0f, false);
-        mMoveScore = _tmp15;
+        auto currentMoveScore = mRecorder->GetScore(skelIdx, 0, -1.0f, false);
+        mMoveScore = currentMoveScore;
         mPhraseMeters[mCreatorSide]->SetShowing(true);
         float base = mMoveScore;
         unsigned int e = 2;

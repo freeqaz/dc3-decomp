@@ -248,7 +248,7 @@ bool RndFlare::RectOffscreen(const Hmx::Rect &r) const {
 }
 
 void RndFlare::CalcScale() {
-    if (mMatrix != WorldXfm().m) {
+    if (WorldXfm().m != mMatrix) {
         Vector3 v28;
         mMatrix = WorldXfm().m;
         float len = Length(mMatrix.z);

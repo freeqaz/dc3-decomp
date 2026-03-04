@@ -63,8 +63,7 @@ float Pose::CurrentScore() const {
 JointDistPoseElement::JointDistPoseElement(
     SkeletonJoint j1, SkeletonJoint j2, float minDist, float maxDist
 )
-    : mJoint1(j1), mJoint2(j2), mMinDist(minDist), mMaxDist(maxDist), mCoordSys(0) {
-    unk4 = 1.0f;
+    : PoseElement(1.0f), mJoint1(j1), mJoint2(j2), mMinDist(minDist), mMaxDist(maxDist), mCoordSys(0) {
     MILO_ASSERT(minDist <= maxDist, 0x2f);
 }
 
@@ -108,7 +107,6 @@ float BoneAngleRangePoseElement::Score(const Skeleton &skeleton) const {
 BoneAngleRangePoseElement::BoneAngleRangePoseElement(
     SkeletonBone bone, const Vector3 &v, float f1, float f2
 )
-    : mBone(bone), unk1c(f1) {
-    unk4 = f2;
+    : PoseElement(f2), mBone(bone), unk1c(f1) {
     Normalize(v, mAngle);
 }

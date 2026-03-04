@@ -61,7 +61,7 @@ KinectShare::KinectShare(
     memcpy(unk11b, hx60.Data(), sizeof(HxGuid));
     unk12b = 0;
     unk12f = 0;
-    mLanguage = ULSystemLanguage();
+    mLanguage = bool(ULSystemLanguage());
     mLocale = ULSystemLocale();
 }
 

@@ -177,7 +177,7 @@ void Sound::Play(
             "[EH] BZ-64344 Playing sound with camp_gameplay_failure in it: '%s'\n", Name()
         );
     }
-    MILO_ASSERT(delayMs >= 0.f, 0x1B7);
+    MILO_ASSERT((int)delayMs >= 0.f, 0x1B7);
 
     if (delayMs > 0.0f) {
         DelayArgs *args = new DelayArgs;
@@ -211,7 +211,8 @@ void Sound::Play(
             float faderVol, faderPan, faderTranspose;
             mFaders.GetVal(faderVol, faderPan, faderTranspose);
             sample->Play(mVolume + faderVol + volume);
-            sample->SetPan(Clamp(-4.0f, 4.0f, mPan + faderPan + pan));
+            auto _tmp0 = Clamp(-4.0f, 4.0f, mPan + faderPan + pan);
+            sample->SetPan(_tmp0);
             sample->SetSpeed(Clamp(
                 0.00390625f,
                 4.0f,

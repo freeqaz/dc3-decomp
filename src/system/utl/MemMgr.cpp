@@ -478,10 +478,10 @@ MemRealloc(void *mem, int size, const char *file, int line, const char *name, in
 MemHeapStack &ThreadMemStack(bool);
 
 void MemPushHeap(int iHeap) {
-    if (gInitted && gNumHeaps > 0) {
+    if (gInitted && (unsigned int)gNumHeaps > 0) {
         MemHeapStack &s = ThreadMemStack(true);
         MILO_ASSERT_FMT(
-            iHeap > kNoHeap && iHeap < gNumHeaps,
+            (unsigned int)iHeap > kNoHeap && iHeap < gNumHeaps,
             "iHeap = %d, gNumHeaps=%d",
             iHeap,
             gNumHeaps

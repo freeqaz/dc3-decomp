@@ -955,11 +955,12 @@ void MetaPerformer::CheckForFitnessAccomplishments() {
 }
 
 void MetaPerformer::SetDefaultSongCharacter(int playerFlag) {
-    Symbol nullSym;
+    Symbol primaryOutfit;
     Symbol primaryCrew;
     Symbol primaryChar;
-    Symbol primaryOutfit;
-    int songID = TheHamSongMgr.GetSongIDFromShortName(TheGameData->GetSong(), true);
+    auto _tmp0 = TheGameData->GetSong();
+    Symbol nullSym;
+    int songID = TheHamSongMgr.GetSongIDFromShortName(_tmp0, true);
     const HamSongMetadata *pSongData = TheHamSongMgr.Data(songID);
     MILO_ASSERT(pSongData, 0x592);
     bool b2 = TheGameMode->InMode("dance_battle", true)
@@ -978,7 +979,8 @@ void MetaPerformer::SetDefaultSongCharacter(int playerFlag) {
         pPrimary->SetCharacter(primaryChar);
         pPrimary->SetOutfit(primaryOutfit);
         pPrimary->SetCrew(primaryCrew);
-        if (pPrimary->Char() != pSecondary->Char()) {
+        auto _tmp3 = pSecondary->Char();
+        if (pPrimary->Char() != _tmp3) {
             return;
         }
         pSecondary->SetCharacter(nullSym);
@@ -1209,8 +1211,8 @@ void MetaPerformer::SaveDanceBattleScores(Symbol s1) {
         MILO_ASSERT(pPlayerProvider, 0x205);
         const DataNode *pScoreNode = pPlayerProvider->Property(score);
         MILO_ASSERT(pScoreNode, 0x207);
-        auto _tmp0 = pScoreNode->Int();
-        if (_tmp0 > 0) {
+        auto playerScoreVal = pScoreNode->Int();
+        if (playerScoreVal > 0) {
             i6++;
         }
     }
@@ -1259,8 +1261,8 @@ void MetaPerformer::CalcCharacters(
     Symbol &secondaryChar,
     Symbol &secondaryOutfit
 ) {
-    HamPlayerData *pPlayer1Data = TheGameData->Player(0);
     HamPlayerData *pPlayer2Data = TheGameData->Player(1);
+    HamPlayerData *pPlayer1Data = TheGameData->Player(0);
     Symbol player1Char = pPlayer1Data->MiniGameCharacter();
     Symbol player2Char = pPlayer2Data->MiniGameCharacter();
 
@@ -1276,7 +1278,7 @@ void MetaPerformer::CalcCharacters(
     bool hasPlayer2Char = player2Char != gNullStr;
 
     // Fast path: Both players have valid, non-conflicting characters
-    if (hasPlayer1Char && hasPlayer2Char && !CharConflict(player1Char, player2Char)) {
+    if (hasPlayer1Char && hasPlayer2Char && !CharConflict(player2Char, player1Char)) {
         primaryPlayer = pPlayer1Data;
         secondaryPlayer = pPlayer2Data;
         primaryCrew = GetCrewForCharacter(player1Char);

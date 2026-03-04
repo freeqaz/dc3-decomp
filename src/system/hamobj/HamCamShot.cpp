@@ -829,7 +829,8 @@ RndDrawable *HamCamShot::GetFlipCharacter(RndDrawable *draw) {
     static Symbol player1("player1");
     static Symbol backup0("backup0");
     static Symbol backup1("backup1");
-    Symbol name(draw->Name());
+    auto _tmp0 = draw->Name();
+    Symbol name(_tmp0);
     if (!TheHamDirector) return draw;
     HamCharacter *c;
     if (name == player0) {
@@ -888,7 +889,8 @@ void HamCamShot::FlipTargetAnimGroups() {
 HamCamShot *HamCamShot::InitialShot() {
     HamCamShot *initialShot = this;
     ObjRef::iterator it = initialShot->Refs().begin();
-    while (it != initialShot->Refs().end()) {
+    auto _tmp0 = initialShot->Refs().end();
+    while (it != _tmp0) {
         HamCamShot *cur = dynamic_cast<HamCamShot *>((*it).RefOwner());
         if (cur) {
             for (ObjPtrList<HamCamShot>::iterator ni = cur->mNextShots.begin();

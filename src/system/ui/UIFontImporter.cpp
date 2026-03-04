@@ -373,7 +373,8 @@ int UIFontImporter::GetMatVariationIdx(Symbol s) const {
     int i;
     Symbol name;
     for (i = 0; i < count; i++) {
-        name = GetMatVariationName(i);
+        auto varName = GetMatVariationName(i);
+        name = varName;
         if (name == s)
             return i;
     }
