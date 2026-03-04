@@ -101,20 +101,19 @@ void DrawGestureMgr(GestureMgr &gm, LiveCameraInput::BufferType bufferType, floa
         }
     }
 
-    if (TheSkeletonViz && TheSkeletonViz->Showing()) {
+    if (TheSkeletonViz->Showing()) {
         Hmx::Rect screenRect;
         ScreenSpace(screenRect);
         TheSkeletonViz->SetPhysicalCamScreenRect(screenRect);
 
         SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
         CameraInput *cameraInput = handle.GetCameraInput();
-        if (cameraInput) {
-            for (int i = 0; i < 6; i++) {
-                TheSkeletonViz->Visualize(
-                    *cameraInput, gm.GetSkeleton(i), &handle.Callbacks(), false
-                );
-            }
+        for (int i = 0; i < 6; i++) {
+            TheSkeletonViz->Visualize(
+                *cameraInput, gm.GetSkeleton(i), &handle.Callbacks(), false
+            );
         }
+        gm.DrawSkeletonKinectData();
     }
 }
 

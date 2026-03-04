@@ -298,10 +298,15 @@ void LiveCameraInput::InitTextureStore(int max) {
 }
 
 void LiveCameraInput::ClearTextureStore() {
-    for (int i = 0; i < mTextureStore.size(); i++) {
-        TextureStore &s = mTextureStore[i];
-        delete s.mTex;
-        s.mTex = null;
+    unsigned int i = 0;
+    while (i < mTextureStore.size()) {
+        TextureStore *data = mTextureStore.begin();
+        if (data[i].mTex) {
+            delete data[i].mTex;
+            data[i].mTex = null;
+        }
+        data[i].mTex = null;
+        i++;
     }
     mTextureStore.clear();
     mTextureStore.resize(mMaxTextures);
