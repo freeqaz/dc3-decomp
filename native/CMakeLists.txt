@@ -1176,6 +1176,7 @@ if(BUILD_TESTS)
         tests/test_subsystems.cpp
         tests/test_bone_ground_truth.cpp
         tests/test_headless_boot.cpp
+        tests/test_milo_viewer_screenshot.cpp
         ${DC3_ENGINE_SOURCES}
         ${DC3_NATIVE_CORE_SOURCES}
         ${DC3_GFX_SOURCES}

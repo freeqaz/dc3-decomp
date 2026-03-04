@@ -19,6 +19,24 @@
 #include "math/Mtx.h"
 #include "char/CharBones.h"
 #include "char/CharBonesSamples.h"
+#include "os/Platform.h"
+
+class CachedMemBinStream : public MemBinStream {
+public:
+    CachedMemBinStream(const void *data, int size, bool littleEndian = false,
+                       Platform platform = kPlatformXBox)
+        : MemBinStream(data, size, littleEndian), mPlatform(platform) {}
+
+    explicit CachedMemBinStream(bool littleEndian = false,
+                                Platform platform = kPlatformXBox)
+        : MemBinStream(littleEndian), mPlatform(platform) {}
+
+    bool Cached() const override { return true; }
+    Platform GetPlatform() const override { return mPlatform; }
+
+private:
+    Platform mPlatform;
+};
 
 // ============================================================================
 // Math type size invariants
@@ -309,4 +327,80 @@ TEST_F(CharBonesSamplesTest, TwoConsecutiveLoads_AllCompressions) {
             << "Stream desync after second Load with compression=" << (int)comp;
         EXPECT_FALSE(reader.Fail());
     }
+}
+
+TEST_F(CharBonesSamplesTest, SaveCachedFormat_SizeDeltaMatchesExpectedPadding) {
+    // Uncompressed positions in cached streams write 12-byte Vector3 plus 4-byte padding.
+    // Cached streams also add per-sample alignment padding to 16-byte boundaries.
+    CharBonesSamples samples;
+    SetupSimpleSamples(samples, 1, 2, 3, CharBones::kCompressRots);
+
+    MemBinStream nonCachedWriter(false);
+    samples.Save(nonCachedWriter);
+
+    CachedMemBinStream cachedWriter(false, kPlatformXBox);
+    samples.Save(cachedWriter);
+
+    int vecCount = samples.GetCount(CharBones::TYPE_QUAT) - samples.GetCount(CharBones::TYPE_POS);
+    int dataSize = samples.GetOffset(CharBones::TYPE_END) - samples.GetOffset(CharBones::TYPE_POS);
+    int deltaPerSample = ((dataSize + 0xF) & ~0xF) - dataSize;
+    int expectedExtra = (vecCount * 4 + deltaPerSample) * samples.NumSamples();
+
+    EXPECT_EQ(cachedWriter.Size() - nonCachedWriter.Size(), expectedExtra);
+
+    CachedMemBinStream reader(cachedWriter.Buffer(), cachedWriter.Size(), false, kPlatformXBox);
+    CharBonesSamples loaded;
+    loaded.Load(reader);
+    EXPECT_EQ(reader.Tell(), cachedWriter.Size());
+    EXPECT_FALSE(reader.Fail());
+    EXPECT_EQ(loaded.NumSamples(), samples.NumSamples());
+}
+
+TEST_F(CharBonesSamplesTest, TwoConsecutiveLoads_CachedUncompressed_NoDesync) {
+    // Reproduce CharClip mFull+mOne sequential load in cached mode with
+    // uncompressed positions (kCompressRots), which triggers cachedPaddingMismatch path.
+    CharBonesSamples full, one;
+    SetupSimpleSamples(full, 1, 2, 4, CharBones::kCompressRots);
+    SetupSimpleSamples(one, 3, 1, 2, CharBones::kCompressRots);
+
+    CachedMemBinStream writer(false, kPlatformXBox);
+    full.Save(writer);
+    int afterFull = writer.Tell();
+    one.Save(writer);
+    int afterOne = writer.Tell();
+
+    CachedMemBinStream reader(writer.Buffer(), writer.Size(), false, kPlatformXBox);
+    CharBonesSamples loadedFull, loadedOne;
+
+    loadedFull.Load(reader);
+    EXPECT_EQ(reader.Tell(), afterFull) << "cached mFull.Load consumed wrong bytes";
+    EXPECT_FALSE(reader.Fail());
+
+    loadedOne.Load(reader);
+    EXPECT_EQ(reader.Tell(), afterOne) << "cached mOne.Load consumed wrong bytes";
+    EXPECT_FALSE(reader.Fail());
+}
+
+TEST_F(CharBonesSamplesTest, TwoConsecutiveLoads_CachedCompressedVects_NoDesync) {
+    // Cached mode with compressed vectors should take the bulk-read path.
+    CharBonesSamples full, one;
+    SetupSimpleSamples(full, 2, 2, 3, CharBones::kCompressVects);
+    SetupSimpleSamples(one, 1, 1, 5, CharBones::kCompressVects);
+
+    CachedMemBinStream writer(false, kPlatformXBox);
+    full.Save(writer);
+    int afterFull = writer.Tell();
+    one.Save(writer);
+    int afterOne = writer.Tell();
+
+    CachedMemBinStream reader(writer.Buffer(), writer.Size(), false, kPlatformXBox);
+    CharBonesSamples loadedFull, loadedOne;
+
+    loadedFull.Load(reader);
+    EXPECT_EQ(reader.Tell(), afterFull) << "cached compressed mFull.Load consumed wrong bytes";
+    EXPECT_FALSE(reader.Fail());
+
+    loadedOne.Load(reader);
+    EXPECT_EQ(reader.Tell(), afterOne) << "cached compressed mOne.Load consumed wrong bytes";
+    EXPECT_FALSE(reader.Fail());
 }

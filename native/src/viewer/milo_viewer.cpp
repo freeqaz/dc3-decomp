@@ -51,6 +51,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <climits>
+#include <algorithm>
 #include <vector>
 #include <string>
 
@@ -203,6 +204,117 @@ static void Mat4Multiply(const float* a, const float* b, float* out) {
             out[i * 4 + j] = sum;
         }
     }
+}
+
+static std::vector<std::string> ParseCommaSeparatedList(const char* csv) {
+    std::vector<std::string> out;
+    if (!csv || !csv[0]) return out;
+    const char* cur = csv;
+    while (*cur) {
+        while (*cur == ' ' || *cur == '\t' || *cur == ',') cur++;
+        if (!*cur) break;
+        const char* start = cur;
+        while (*cur && *cur != ',') cur++;
+        const char* end = cur;
+        while (end > start && (end[-1] == ' ' || end[-1] == '\t')) end--;
+        if (end > start) out.emplace_back(start, (size_t)(end - start));
+        if (*cur == ',') cur++;
+    }
+    return out;
+}
+
+static bool PoseDumpBoneSelected(const std::vector<std::string>& selected, const char* boneName) {
+    if (selected.empty()) return true;
+    for (const auto& b : selected) {
+        if (b == boneName) return true;
+    }
+    return false;
+}
+
+static void WriteJsonEscaped(FILE* f, const char* s) {
+    fputc('"', f);
+    for (const unsigned char* p = (const unsigned char*)s; *p; ++p) {
+        unsigned char c = *p;
+        if (c == '"' || c == '\\') {
+            fputc('\\', f);
+            fputc(c, f);
+        } else if (c == '\n') {
+            fputs("\\n", f);
+        } else if (c == '\r') {
+            fputs("\\r", f);
+        } else if (c == '\t') {
+            fputs("\\t", f);
+        } else if (c < 0x20) {
+            fprintf(f, "\\u%04x", (unsigned)c);
+        } else {
+            fputc(c, f);
+        }
+    }
+    fputc('"', f);
+}
+
+static bool WritePoseDumpJson(const char* path,
+                              ObjectDir* dir,
+                              const std::vector<std::string>& selectedBones,
+                              const char* sourceMilo,
+                              const char* clipName,
+                              float beat) {
+    if (!path || !dir) return false;
+
+    std::vector<RndTransformable*> bones;
+    ObjDirItr<RndTransformable> it(dir, true);
+    for (; it; ++it) {
+        if (PoseDumpBoneSelected(selectedBones, it->Name())) {
+            bones.push_back(it);
+        }
+    }
+    std::sort(bones.begin(), bones.end(), [](const RndTransformable* a, const RndTransformable* b) {
+        return strcmp(a->Name(), b->Name()) < 0;
+    });
+
+    FILE* f = fopen(path, "wb");
+    if (!f) {
+        fprintf(stderr, "Error: cannot write pose dump '%s'\n", path);
+        return false;
+    }
+
+    fprintf(f, "{\n");
+    fprintf(f, "  \"source_milo\": ");
+    WriteJsonEscaped(f, sourceMilo ? sourceMilo : "");
+    fprintf(f, ",\n  \"clip\": ");
+    WriteJsonEscaped(f, clipName ? clipName : "");
+    fprintf(f, ",\n  \"beat\": %.7f,\n", beat);
+    fprintf(f, "  \"bone_count\": %zu,\n", bones.size());
+    fprintf(f, "  \"bones\": [\n");
+
+    for (size_t i = 0; i < bones.size(); i++) {
+        RndTransformable* b = bones[i];
+        const Transform& l = b->LocalXfm();
+        const Transform& w = b->WorldXfm();
+        fprintf(f, "    {\n");
+        fprintf(f, "      \"name\": ");
+        WriteJsonEscaped(f, b->Name());
+        fprintf(f, ",\n");
+        fprintf(f, "      \"local\": {\n");
+        fprintf(f, "        \"pos\": [%.9g, %.9g, %.9g],\n", l.v.x, l.v.y, l.v.z);
+        fprintf(f, "        \"m\": [[%.9g, %.9g, %.9g], [%.9g, %.9g, %.9g], [%.9g, %.9g, %.9g]]\n",
+                l.m.x.x, l.m.x.y, l.m.x.z,
+                l.m.y.x, l.m.y.y, l.m.y.z,
+                l.m.z.x, l.m.z.y, l.m.z.z);
+        fprintf(f, "      },\n");
+        fprintf(f, "      \"world\": {\n");
+        fprintf(f, "        \"pos\": [%.9g, %.9g, %.9g],\n", w.v.x, w.v.y, w.v.z);
+        fprintf(f, "        \"m\": [[%.9g, %.9g, %.9g], [%.9g, %.9g, %.9g], [%.9g, %.9g, %.9g]]\n",
+                w.m.x.x, w.m.x.y, w.m.x.z,
+                w.m.y.x, w.m.y.y, w.m.y.z,
+                w.m.z.x, w.m.z.y, w.m.z.z);
+        fprintf(f, "      }\n");
+        fprintf(f, "    }%s\n", (i + 1 < bones.size()) ? "," : "");
+    }
+
+    fprintf(f, "  ]\n}\n");
+    fclose(f);
+    return true;
 }
 
 // ============================================================================
@@ -480,6 +592,9 @@ int main(int argc, char** argv) {
         fprintf(f, "  --azimuth <degrees>        Camera azimuth angle (default: ~23)\n");
         fprintf(f, "  --elevation <degrees>      Camera elevation angle (default: ~17)\n");
         fprintf(f, "  --frame <number>           Start at specific animation frame\n");
+        fprintf(f, "  --pose-dump <file.json>    Dump final pose transforms (JSON)\n");
+        fprintf(f, "  --pose-dump-bones <csv>    Restrict pose dump to named bones\n");
+        fprintf(f, "  --pose-dump-beat <value>   Beat for pose dump (number | START | MID)\n");
         fprintf(f, "  --speed <multiplier>       Animation speed (default: 1.0)\n");
         fprintf(f, "  --paused                   Start with animation paused\n");
         fprintf(f, "  --width <pixels>           Render width (default: 1280)\n");
@@ -544,6 +659,9 @@ int main(int argc, char** argv) {
     const char* exportTexturesDir = nullptr;
     const char* exportMaterialsDir = nullptr;
     const char* exportGltfPath = nullptr;
+    const char* poseDumpPath = nullptr;
+    const char* poseDumpBonesCsv = nullptr;
+    const char* poseDumpBeatArg = nullptr;
     bool dumpBones = false;  // --dump-bones: dump raw bone buffer after clip eval
     bool directPose = false; // --direct-pose: use CharClip::PoseMeshes instead of CharDriver
     std::vector<std::string> hidePatterns;  // mesh name substrings to hide
@@ -626,6 +744,12 @@ int main(int argc, char** argv) {
             exportMaterialsDir = argv[++i];
         } else if (strcmp(argv[i], "--export-gltf") == 0 && i + 1 < argc) {
             exportGltfPath = argv[++i];
+        } else if (strcmp(argv[i], "--pose-dump") == 0 && i + 1 < argc) {
+            poseDumpPath = argv[++i];
+        } else if (strcmp(argv[i], "--pose-dump-bones") == 0 && i + 1 < argc) {
+            poseDumpBonesCsv = argv[++i];
+        } else if (strcmp(argv[i], "--pose-dump-beat") == 0 && i + 1 < argc) {
+            poseDumpBeatArg = argv[++i];
         } else if (strcmp(argv[i], "--hide") == 0 && i + 1 < argc) {
             hidePatterns.push_back(argv[++i]);
         } else if (strcmp(argv[i], "--dump-bones") == 0) {
@@ -642,6 +766,8 @@ int main(int argc, char** argv) {
         showHelp(stderr);
         return 1;
     }
+
+    std::vector<std::string> poseDumpBones = ParseCommaSeparatedList(poseDumpBonesCsv);
 
     // Resolve file path to absolute
     char absPath[PATH_MAX];
@@ -807,6 +933,18 @@ int main(int argc, char** argv) {
         printf("Milo Viewer: %d subdirectories loaded\n", (int)subdirs.size());
     }
 
+    // Clip dir handle is needed for teardown even when no clips are loaded.
+    ObjDirPtr<ObjectDir> clipsDir;
+
+    // Keep teardown order consistent across all early exits:
+    // release loaded object dirs before terminating renderer resources.
+    auto teardownAndTerminate = [&]() {
+        clipsDir = nullptr;
+        for (auto& sd : subdirs) sd = nullptr;
+        baseDir = nullptr;
+        if (gWgpuRnd) gWgpuRnd->Terminate();
+    };
+
     // ---- Export-and-exit modes ----
     if (exportOnly) {
         if (exportTexturesDir) {
@@ -828,11 +966,11 @@ int main(int argc, char** argv) {
             if (ok) printf("Exported glTF to %s\n", exportGltfPath);
             else fprintf(stderr, "Error: glTF export failed\n");
         }
+        teardownAndTerminate();
         return 0;
     }
 
     // ---- Load animation clips (--clips) ----
-    ObjDirPtr<ObjectDir> clipsDir;
     Character* charObj = nullptr;
     bool charAnimActive = false;
     CharClip* activeClip = nullptr;
@@ -928,6 +1066,27 @@ int main(int argc, char** argv) {
                                    full.GetOffset(CharBones::TYPE_ROTY),
                                    full.GetOffset(CharBones::TYPE_ROTZ),
                                    full.GetOffset(CharBones::TYPE_END));
+                            printf("  mFull counts: %d %d %d %d %d %d %d\n",
+                                   full.GetCount(0), full.GetCount(1), full.GetCount(2),
+                                   full.GetCount(3), full.GetCount(4), full.GetCount(5), full.GetCount(6));
+                            printf("  sizeof(Vector3)=%zu sizeof(Quat)=%zu sizeof(short)=%zu\n",
+                                   sizeof(Vector3), sizeof(Hmx::Quat), sizeof(short));
+                            printf("  kCompressNone=%d kCompressRots=%d kCompressVects=%d kCompressQuats=%d kCompressAll=%d\n",
+                                   CharBones::kCompressNone, CharBones::kCompressRots, CharBones::kCompressVects,
+                                   CharBones::kCompressQuats, CharBones::kCompressAll);
+                            // Verify RecomputeSizes manually
+                            int comp = full.GetCompression();
+                            int manualOffsets[7];
+                            manualOffsets[0] = 0;
+                            for (int ti = 0; ti < 6; ti++) {
+                                int cnt = full.GetCount(ti+1) - full.GetCount(ti);
+                                int tsz;
+                                if (ti <= 1) tsz = (comp >= CharBones::kCompressVects) ? 6 : 12; // POS/SCALE
+                                else if (ti == 2) tsz = (comp >= CharBones::kCompressQuats) ? 4 : (comp != 0 ? 8 : 16); // QUAT
+                                else tsz = (comp != 0) ? 2 : 4; // ROT
+                                manualOffsets[ti+1] = manualOffsets[ti] + tsz * cnt;
+                                printf("  manual[%d]: cnt=%d tsz=%d -> offset=%d\n", ti, cnt, tsz, manualOffsets[ti+1]);
+                            }
                             printf("  mFull bones: %d, start=%p\n",
                                    (int)const_cast<CharBonesSamples&>(full).GetBones().size(), full.GetStart());
                             // Dump first sample's raw position data
@@ -1447,6 +1606,8 @@ int main(int argc, char** argv) {
     // ---- Screenshot mode: render a few frames then save and exit ----
     if (screenshotPath) {
         printf("Milo Viewer: rendering frames for screenshot...\n");
+        float poseDumpBeatResolved = 0.0f;
+        bool poseDumpBeatSet = false;
 
         // Apply animation frame if specified
         if (gAnim.hasAnimation && startFrame >= 0.0f) {
@@ -1471,7 +1632,7 @@ int main(int argc, char** argv) {
                 } else if (strcmp(testBoneAxis, "y") == 0) {
                     rot.x.x = c; rot.x.z = -s; rot.y.y = 1; rot.z.x = s; rot.z.z = c;
                 } else {
-                    rot.x.x = c; rot.x.y = s; rot.y.x = -s; rot.y.y = c; rot.z.z = 1;
+                    rot.x.x = c; rot.x.y = -s; rot.y.x = s; rot.y.y = c; rot.z.z = 1;
                 }
                 // Apply rotation: new_m = rot * old_m
                 Hmx::Matrix3 oldm = tf.m;
@@ -1485,15 +1646,102 @@ int main(int argc, char** argv) {
 
         // If character animation active, advance to a reasonable pose
         if (charAnimActive) {
-            float beat = (startFrame >= 0.0f) ? startFrame : 4.0f;
-            printf("Milo Viewer: advancing animation to beat %.1f (seconds=%.2f)\n", beat, beat * 60.0f / bpm);
+            float beat;
+            float beatSelector = startFrame;
+            if (poseDumpBeatArg && poseDumpBeatArg[0]) {
+                if (strcmp(poseDumpBeatArg, "START") == 0 || strcmp(poseDumpBeatArg, "start") == 0) {
+                    beatSelector = -1.0f;
+                } else if (strcmp(poseDumpBeatArg, "MID") == 0 || strcmp(poseDumpBeatArg, "mid") == 0) {
+                    beatSelector = -2.0f;
+                } else {
+                    beatSelector = (float)atof(poseDumpBeatArg);
+                }
+                printf("Milo Viewer: pose-dump beat selector '%s' -> %.2f\n", poseDumpBeatArg, beatSelector);
+            }
 
-            if (activeClip && !directPose) {
+            if (beatSelector >= 0.0f) {
+                beat = beatSelector;
+            } else if (beatSelector <= -1.5f && activeClip) {
+                // -2 sentinel: use midpoint of clip's beat range
+                beat = (activeClip->StartBeat() + activeClip->EndBeat()) * 0.5f;
+            } else if (activeClip) {
+                // -1 sentinel: use clip's start beat
+                beat = activeClip->StartBeat();
+            } else {
+                beat = 4.0f;
+            }
+            printf("Milo Viewer: advancing animation to beat %.1f (seconds=%.2f)\n", beat, beat * 60.0f / bpm);
+            poseDumpBeatResolved = beat;
+            poseDumpBeatSet = true;
+
+            if (activeClip && directPose) {
                 // Direct pose: bypass CharDriver, use CharClip::PoseMeshes
                 // This avoids the CharServoBone facing system compounding
                 // transforms over hundreds of incremental steps
                 printf("Milo Viewer: using CharClip::PoseMeshes(dir, %.1f)\n", beat);
+
+                // Dump pre-pose transforms for key bones
+                const char* diagBones[] = {"bone_pelvis.mesh", "bone_head.mesh",
+                    "bone_R-thigh.mesh", "bone_R-upperArm.mesh", "bone_spine1.mesh", nullptr};
+                printf("=== PRE-PoseMeshes bone transforms ===\n");
+                for (int di = 0; diagBones[di]; di++) {
+                    RndTransformable* db = charObj->Find<RndTransformable>(diagBones[di], true);
+                    if (db) {
+                        const Transform& lx = db->LocalXfm();
+                        printf("  %s local: pos=(%.3f,%.3f,%.3f) m.x=(%.4f,%.4f,%.4f) m.y=(%.4f,%.4f,%.4f) m.z=(%.4f,%.4f,%.4f)\n",
+                            diagBones[di], lx.v.x, lx.v.y, lx.v.z,
+                            lx.m.x.x, lx.m.x.y, lx.m.x.z,
+                            lx.m.y.x, lx.m.y.y, lx.m.y.z,
+                            lx.m.z.x, lx.m.z.y, lx.m.z.z);
+                    }
+                }
+
+                // Dump clip bone type counts
+                {
+                    std::list<CharBones::Bone> boneList;
+                    activeClip->ListBones(boneList);
+                    int typeCounts[7] = {};
+                    for (auto& b : boneList) {
+                        int t = CharBones::TypeOf(b.name);
+                        if (t >= 0 && t < 7) typeCounts[t]++;
+                    }
+                    printf("=== Clip bone type counts ===\n");
+                    const char* typeNames[] = {"POS","SCALE","QUAT","ROTX","ROTY","ROTZ","END"};
+                    for (int t = 0; t < 7; t++) {
+                        if (typeCounts[t] > 0)
+                            printf("  %s: %d\n", typeNames[t], typeCounts[t]);
+                    }
+                    printf("  Total bones in clip: %zu\n", boneList.size());
+                    // Print first 10 position bones
+                    printf("=== First position bones in clip ===\n");
+                    int count = 0;
+                    for (auto& b : boneList) {
+                        if (CharBones::TypeOf(b.name) == 0 && count < 10) {
+                            printf("  POS: %s\n", b.name.Str());
+                            count++;
+                        }
+                    }
+                }
+
                 activeClip->PoseMeshes(charObj, beat);
+
+                // Dump post-pose transforms
+                printf("=== POST-PoseMeshes bone transforms ===\n");
+                for (int di = 0; diagBones[di]; di++) {
+                    RndTransformable* db = charObj->Find<RndTransformable>(diagBones[di], true);
+                    if (db) {
+                        const Transform& lx = db->LocalXfm();
+                        const Transform& wx = db->WorldXfm();
+                        printf("  %s local: pos=(%.3f,%.3f,%.3f) m.x=(%.4f,%.4f,%.4f) m.y=(%.4f,%.4f,%.4f) m.z=(%.4f,%.4f,%.4f)\n",
+                            diagBones[di], lx.v.x, lx.v.y, lx.v.z,
+                            lx.m.x.x, lx.m.x.y, lx.m.x.z,
+                            lx.m.y.x, lx.m.y.y, lx.m.y.z,
+                            lx.m.z.x, lx.m.z.y, lx.m.z.z);
+                        printf("  %s world: pos=(%.3f,%.3f,%.3f)\n",
+                            diagBones[di], wx.v.x, wx.v.y, wx.v.z);
+                    }
+                }
+
                 SolveAllTwists(charObj);
             } else {
                 advanceCharAnim(beat * 60.0f / bpm, beat);
@@ -1592,6 +1840,24 @@ int main(int argc, char** argv) {
             TheRnd.EndDrawing();
         }
 
+        if (poseDumpPath) {
+            if (!poseDumpBeatSet) {
+                if (startFrame >= 0.0f) {
+                    poseDumpBeatResolved = startFrame;
+                } else {
+                    poseDumpBeatResolved = 0.0f;
+                }
+            }
+            const char* dumpClipName = activeClip ? activeClip->Name() : "";
+            if (WritePoseDumpJson(poseDumpPath, baseScene, poseDumpBones,
+                                  absPath, dumpClipName, poseDumpBeatResolved)) {
+                printf("Milo Viewer: pose dump saved to %s (%zu selected filters)\n",
+                       poseDumpPath, poseDumpBones.size());
+            } else {
+                fprintf(stderr, "Error: failed to write pose dump '%s'\n", poseDumpPath);
+            }
+        }
+
         // Readback the framebuffer
         int w = gWgpuRnd->Gpu().WindowWidth();
         int h = gWgpuRnd->Gpu().WindowHeight();
@@ -1609,10 +1875,7 @@ int main(int argc, char** argv) {
         }
 
         free(pixels);
-        baseDir = nullptr;
-        for (auto& sd : subdirs) sd = nullptr;
-        clipsDir = nullptr;
-        gWgpuRnd->Terminate();
+        teardownAndTerminate();
         return 0;
     }
 
@@ -1625,12 +1888,14 @@ int main(int argc, char** argv) {
 
         if (!pixels) {
             fprintf(stderr, "Error: failed to allocate framebuffer (%d x %d)\n", w, h);
+            teardownAndTerminate();
             return 1;
         }
 
         VideoEncoder encoder;
         if (!encoder.Start(videoPath, w, h, videoFps)) {
             free(pixels);
+            teardownAndTerminate();
             return 1;
         }
 
@@ -1733,10 +1998,7 @@ int main(int argc, char** argv) {
         free(pixels);
         printf("Milo Viewer: video saved to %s\n", videoPath);
 
-        baseDir = nullptr;
-        for (auto& sd : subdirs) sd = nullptr;
-        clipsDir = nullptr;
-        gWgpuRnd->Terminate();
+        teardownAndTerminate();
         return 0;
     }
 
@@ -1824,10 +2086,7 @@ int main(int argc, char** argv) {
 
     // ---- Cleanup ----
     printf("Milo Viewer: shutting down\n");
-    clipsDir = nullptr;
-    for (auto& sd : subdirs) sd = nullptr;
-    baseDir = nullptr;  // release the loaded dir
-    gWgpuRnd->Terminate();
+    teardownAndTerminate();
 
     return 0;
 }

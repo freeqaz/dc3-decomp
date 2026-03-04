@@ -13,9 +13,12 @@
 #include "obj/DirLoader.h"
 #include "rndobj/Trans.h"
 #include "char/CharClip.h"
+#include "char/CharUtl.h"
 #include "utl/ChunkStream.h"
 #include "utl/FilePath.h"
 #include "math/Vec.h"
+#include "math/Mtx.h"
+#include "math/Rot.h"
 
 #include <cmath>
 #include <cstdlib>
@@ -45,6 +48,20 @@ static ObjectDir *TryLoadMilo(const char *path) {
                dir->Name(), dir->ClassName().Str());
     }
     return dir;
+}
+
+static float MaxMatrixDiff(const Hmx::Matrix3& a, const Hmx::Matrix3& b) {
+    float d = 0.0f;
+    d = std::max(d, std::fabs(a.x.x - b.x.x));
+    d = std::max(d, std::fabs(a.x.y - b.x.y));
+    d = std::max(d, std::fabs(a.x.z - b.x.z));
+    d = std::max(d, std::fabs(a.y.x - b.y.x));
+    d = std::max(d, std::fabs(a.y.y - b.y.y));
+    d = std::max(d, std::fabs(a.y.z - b.y.z));
+    d = std::max(d, std::fabs(a.z.x - b.z.x));
+    d = std::max(d, std::fabs(a.z.y - b.z.y));
+    d = std::max(d, std::fabs(a.z.z - b.z.z));
+    return d;
 }
 
 // ============================================================================
@@ -509,6 +526,223 @@ TEST_F(ClipPoseFixture, PoseDeterminism) {
     printf("  %d/%zu bones had non-deterministic results\n",
            mismatches, pass1.size());
     EXPECT_EQ(mismatches, 0) << "PoseMeshes should be deterministic for same beat";
+}
+
+TEST_F(ClipPoseFixture, ChannelEvaluationIsFiniteAtKeyBeats) {
+    std::list<CharBones::Bone> bones;
+    sClip->ListBones(bones);
+    ASSERT_FALSE(bones.empty());
+
+    float beats[2] = {
+        sClip->StartBeat(),
+        sClip->StartBeat() + sClip->LengthBeats() * 0.5f
+    };
+
+    for (float beat : beats) {
+        int checked = 0;
+        for (const auto &b : bones) {
+            void *channel = sClip->GetChannel(b.name);
+            ASSERT_NE(channel, nullptr) << "Missing channel for " << b.name.Str();
+
+            CharBones::Type ty = CharBones::TypeOf(b.name);
+            if (ty == CharBones::TYPE_POS || ty == CharBones::TYPE_SCALE) {
+                Vector3 v;
+                sClip->EvaluateChannel(&v, channel, beat);
+                EXPECT_TRUE(std::isfinite(v.x));
+                EXPECT_TRUE(std::isfinite(v.y));
+                EXPECT_TRUE(std::isfinite(v.z));
+                EXPECT_LT(std::fabs(v.x), 10000.0f);
+                EXPECT_LT(std::fabs(v.y), 10000.0f);
+                EXPECT_LT(std::fabs(v.z), 10000.0f);
+            } else if (ty == CharBones::TYPE_QUAT) {
+                Hmx::Quat q;
+                sClip->EvaluateChannel(&q, channel, beat);
+                EXPECT_TRUE(std::isfinite(q.x));
+                EXPECT_TRUE(std::isfinite(q.y));
+                EXPECT_TRUE(std::isfinite(q.z));
+                EXPECT_TRUE(std::isfinite(q.w));
+                float n = std::sqrt(q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w);
+                EXPECT_GT(n, 0.001f);
+                EXPECT_LT(n, 2.0f);
+            } else {
+                float r = 0.0f;
+                sClip->EvaluateChannel(&r, channel, beat);
+                EXPECT_TRUE(std::isfinite(r));
+                EXPECT_LT(std::fabs(r), 100.0f);
+            }
+            checked++;
+        }
+        EXPECT_GT(checked, 0);
+    }
+}
+
+TEST_F(ClipPoseFixture, PelvisPosChannelMatchesPoseMeshesLocalPos) {
+    // End-to-end: clip channel evaluation -> ScaleAdd -> PoseMeshes -> RndTransformable local pose.
+    Symbol pelvisPosSym("bone_pelvis.pos");
+    void *channel = sClip->GetChannel(pelvisPosSym);
+    ASSERT_NE(channel, nullptr) << "Missing channel bone_pelvis.pos";
+
+    RndTransformable *pelvis = FindBone("bone_pelvis.mesh");
+    ASSERT_NE(pelvis, nullptr);
+
+    float beats[2] = {
+        sClip->StartBeat(),
+        sClip->StartBeat() + sClip->LengthBeats() * 0.5f
+    };
+
+    for (float beat : beats) {
+        Vector3 expected;
+        sClip->EvaluateChannel(&expected, channel, beat);
+
+        sClip->PoseMeshes(sDir, beat);
+        const Vector3 &actual = pelvis->LocalXfm().v;
+
+        EXPECT_NEAR(actual.x, expected.x, 0.01f);
+        EXPECT_NEAR(actual.y, expected.y, 0.01f);
+        EXPECT_NEAR(actual.z, expected.z, 0.01f);
+    }
+}
+
+TEST_F(ClipPoseFixture, WeightedPosAndQuatChannelsMatchLocalPose) {
+    std::list<CharBones::Bone> bones;
+    sClip->ListBones(bones);
+    ASSERT_FALSE(bones.empty());
+
+    float beats[2] = {
+        sClip->StartBeat(),
+        sClip->StartBeat() + sClip->LengthBeats() * 0.5f
+    };
+
+    int checkedPos = 0;
+    int checkedQuat = 0;
+    int skippedUnresolved = 0;
+    int skippedWeighted = 0;
+
+    for (float beat : beats) {
+        sClip->PoseMeshes(sDir, beat);
+        for (const auto& b : bones) {
+            CharBones::Type ty = CharBones::TypeOf(b.name);
+            if (ty != CharBones::TYPE_POS && ty != CharBones::TYPE_QUAT) continue;
+
+            // Only assert direct channel->local equivalence for full-weight channels.
+            // Partial-weight channels blend with base pose and won't match raw channel.
+            if (std::fabs(b.weight - 1.0f) > 1e-4f) {
+                skippedWeighted++;
+                continue;
+            }
+
+            RndTransformable* trans = CharUtlFindBoneTrans(b.name.Str(), sDir);
+            if (!trans) {
+                skippedUnresolved++;
+                continue;
+            }
+
+            void* channel = sClip->GetChannel(b.name);
+            ASSERT_NE(channel, nullptr) << "Missing channel for " << b.name.Str();
+
+            if (ty == CharBones::TYPE_POS) {
+                Vector3 expected;
+                sClip->EvaluateChannel(&expected, channel, beat);
+                const Vector3& actual = trans->LocalXfm().v;
+                EXPECT_NEAR(actual.x, expected.x, 0.02f) << b.name.Str();
+                EXPECT_NEAR(actual.y, expected.y, 0.02f) << b.name.Str();
+                EXPECT_NEAR(actual.z, expected.z, 0.02f) << b.name.Str();
+                checkedPos++;
+            } else {
+                Hmx::Quat q;
+                sClip->EvaluateChannel(&q, channel, beat);
+                Hmx::Matrix3 expectedM;
+                MakeRotMatrix(q, expectedM);
+                float md = MaxMatrixDiff(trans->LocalXfm().m, expectedM);
+                EXPECT_LT(md, 0.08f) << "matrix mismatch for " << b.name.Str();
+                checkedQuat++;
+            }
+        }
+    }
+
+    printf("  weighted channel/local checks: pos=%d quat=%d unresolved=%d partialWeight=%d\n",
+           checkedPos, checkedQuat, skippedUnresolved, skippedWeighted);
+    EXPECT_GT(checkedPos, 0);
+    EXPECT_GT(checkedQuat, 0);
+}
+
+TEST_F(ClipPoseFixture, BoneWorldMatchesLocalComposedWithParent) {
+    float beat = sClip->StartBeat() + sClip->LengthBeats() * 0.5f;
+    sClip->PoseMeshes(sDir, beat);
+
+    int checked = 0;
+    for (ObjDirItr<RndTransformable> it(sDir, true); it; ++it) {
+        RndTransformable* t = it;
+        if (strncmp(t->Name(), "bone_", 5) != 0) continue;
+
+        RndTransformable* parent = t->TransParent();
+        if (!parent) continue;
+
+        Transform expected;
+        Multiply(t->LocalXfm(), parent->WorldXfm(), expected);
+        const Transform& actual = t->WorldXfm();
+
+        EXPECT_NEAR(actual.v.x, expected.v.x, 1e-3f) << t->Name();
+        EXPECT_NEAR(actual.v.y, expected.v.y, 1e-3f) << t->Name();
+        EXPECT_NEAR(actual.v.z, expected.v.z, 1e-3f) << t->Name();
+        EXPECT_LT(MaxMatrixDiff(actual.m, expected.m), 1e-3f) << t->Name();
+        checked++;
+    }
+
+    printf("  checked parent/local/world composition on %d bones\n", checked);
+    EXPECT_GT(checked, 20);
+}
+
+TEST_F(ClipPoseFixture, KeyBoneWorldDeltasAreFiniteAcrossBeats) {
+    const char* keyBoneGroups[][3] = {
+        {"bone_pelvis.mesh", "bone_pelvis.trans", nullptr},
+        {"bone_head.mesh", "bone_head.trans", nullptr},
+        {"bone_L-hand.mesh", "bone_L-hand.trans", nullptr},
+        {"bone_R-hand.mesh", "bone_R-hand.trans", nullptr},
+        {"bone_L-foot.mesh", "bone_L-ankle.mesh", nullptr},
+        {"bone_R-foot.mesh", "bone_R-ankle.mesh", nullptr},
+    };
+
+    float b0 = sClip->StartBeat();
+    float b1 = sClip->StartBeat() + sClip->LengthBeats() * 0.5f;
+    float b2 = sClip->EndBeat();
+    float beats[3] = {b0, b1, b2};
+
+    int resolvedGroups = 0;
+    for (const auto& group : keyBoneGroups) {
+        RndTransformable* bone = nullptr;
+        const char* usedName = nullptr;
+        for (int gi = 0; group[gi]; gi++) {
+            bone = FindBone(group[gi]);
+            if (bone) {
+                usedName = group[gi];
+                break;
+            }
+        }
+        if (!bone) continue;
+        resolvedGroups++;
+
+        Vector3 prev(0, 0, 0);
+        bool hasPrev = false;
+        for (float beat : beats) {
+            sClip->PoseMeshes(sDir, beat);
+            const Vector3& w = bone->WorldXfm().v;
+            EXPECT_TRUE(std::isfinite(w.x));
+            EXPECT_TRUE(std::isfinite(w.y));
+            EXPECT_TRUE(std::isfinite(w.z));
+
+            if (hasPrev) {
+                float dx = w.x - prev.x;
+                float dy = w.y - prev.y;
+                float dz = w.z - prev.z;
+                float d = std::sqrt(dx * dx + dy * dy + dz * dz);
+                EXPECT_LT(d, 300.0f) << usedName << " large jump at beat " << beat;
+            }
+            prev = w;
+            hasPrev = true;
+        }
+    }
+    EXPECT_GT(resolvedGroups, 3) << "Too few key bones resolved in current asset";
 }
 
 // ============================================================================
