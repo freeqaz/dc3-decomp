@@ -138,6 +138,7 @@ private:
     int GetHighlightItem(void) const;
     bool IsElementBig(int) const;
     void DetermineHighlightedItem();
+    bool InControllerMode() const;
     float GetTargetSwellAmount(int);
 
     static const int sListStateMaxDisplay;

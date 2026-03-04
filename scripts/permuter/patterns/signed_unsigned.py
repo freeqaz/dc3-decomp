@@ -43,6 +43,22 @@ class SignedUnsignedPattern(Pattern):
                 return True
         return False
 
+    def priority(self, diagnosis: Diagnosis) -> float:
+        if not self.relevant(diagnosis):
+            return 0.0
+        score = 0.0
+        for d in diagnosis.diff_ops:
+            # Direct signed/unsigned comparison mismatch — strong signal
+            pair = {d.target_opcode, d.base_opcode}
+            if pair & {"cmpw", "cmplw"} == {"cmpw", "cmplw"}:
+                score += 0.4
+            elif pair & {"cmpwi", "cmplwi"} == {"cmpwi", "cmplwi"}:
+                score += 0.4
+            # beq/bne near comparison ops — weaker signal
+            elif d.target_opcode in {"beq", "bne"} or d.base_opcode in {"beq", "bne"}:
+                score += 0.1
+        return min(score, 1.0)
+
     def generate(self, ctx: FunctionContext) -> Iterator[Variant]:
         counter = 0
         for stmt in ctx.statements:

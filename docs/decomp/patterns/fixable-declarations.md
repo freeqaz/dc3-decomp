@@ -406,11 +406,15 @@ Only ~30% success rate. If 10+ reordering attempts don't help, the function is l
 **Success Rate:** HIGH
 **Time:** 2 minutes
 
-Use `0` instead of `0.0f` or `false` in initializer lists.
+Use `0` instead of `0.0f` or `false` in initializer lists to match register allocation.
 
 ### Symptom
 
 objdiff shows different register allocation in constructor initializer sequence.
+
+### Why It Works
+
+Different literal types (`0`, `0.0f`, `false`) cause the compiler to select different registers during initialization. Using integer literal `0` consistently can match the target's register allocation pattern.
 
 ### Fix
 
@@ -421,6 +425,10 @@ Shuttle::Shuttle() : mMs(0.0f), mEndMs(0.0f), mActive(false), mController(0) {}
 // After - all use integer literal 0
 Shuttle::Shuttle() : mMs(0), mEndMs(0), mActive(0), mController(0) {}
 ```
+
+### Permuter Pattern
+
+The `initializer_literal` permuter pattern normalizes initializer expressions by testing both typed (`0.0f`, `false`) and untyped (`0`) forms to find register-allocation-friendly variants.
 
 ---
 
@@ -1016,6 +1024,10 @@ float *buffer = alloca(n * sizeof(*buffer));
 // After - intrinsic with stack probe
 float *buffer = _alloca(n * sizeof(*buffer));
 ```
+
+### Permuter Pattern
+
+The `alloca_intrinsic` permuter pattern automatically tests both `alloca()` and `_alloca()` function calls to detect when the target uses stack probing.
 
 ### Real Examples
 

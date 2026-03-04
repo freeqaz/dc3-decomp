@@ -35,6 +35,18 @@ class Pattern(ABC):
         """
         return True
 
+    def priority(self, diagnosis: Diagnosis) -> float:
+        """Return 0.0-1.0 priority score for budget allocation.
+
+        Higher priority = more variants allocated. 0.0 = skip entirely.
+        Default: 1.0 if relevant(), 0.0 if not.
+
+        Override in subclasses to provide diagnosis-specific scoring.
+        Priorities let the budget allocator concentrate variants on
+        patterns most likely to help for the specific mismatch profile.
+        """
+        return 1.0 if self.relevant(diagnosis) else 0.0
+
 
 def get_pattern(name: str) -> Pattern:
     """Get a registered pattern by name."""

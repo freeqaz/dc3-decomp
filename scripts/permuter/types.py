@@ -2,11 +2,55 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
 from tree_sitter import Node
+
+# Regex to extract qualified C++ name from demangled signature.
+# Matches Class::Method( and also handles operator overloads like:
+#   Class::operator()(...  Class::operator==(... Class::operator<<(...
+_QUALIFIED_NAME_RE = re.compile(
+    r"([\w~][\w:~]*(?:::[\w~]+)+)"  # Base: Class::Method (requires ::)
+    r"("
+    r"\(\)"  # operator()
+    r"|[!=<>]=?"  # operator==, operator!=, operator<, etc.
+    r"|<<|>>"  # operator<<, operator>>
+    r"|\[\]"  # operator[]
+    r"|\+\+|--"  # operator++, operator--
+    r"|[+\-*/&|^%~!]"  # operator+, operator-, etc.
+    r")?"  # operator suffix is optional
+    r"\s*\("  # opening paren of arg list
+)
+
+# Matches free functions: "return_type __cdecl FuncName("
+_FREE_FUNC_RE = re.compile(
+    r"__cdecl\s+([\w]+)\s*\("
+)
+
+
+def extract_qualified_name(demangled: str) -> str | None:
+    """Extract qualified C++ name from MSVC demangled signature.
+
+    Handles operator overloads like operator(), operator==, etc.
+    Also handles free functions like op50, PropSync, etc.
+    Returns None if no qualified name found.
+    """
+    m = _QUALIFIED_NAME_RE.search(demangled)
+    if m:
+        name = m.group(1)
+        if m.group(2):
+            name += m.group(2)
+        return name
+
+    # Try free function pattern
+    m = _FREE_FUNC_RE.search(demangled)
+    if m:
+        return m.group(1)
+
+    return None
 
 
 @dataclass
@@ -65,6 +109,7 @@ class FunctionContext:
     statements: list[Node]  # Top-level named children in the body
     func_byte_range: tuple[int, int]  # (start_byte, end_byte)
     diagnosis: Optional[Diagnosis] = None
+    symbol: Optional[str] = None  # Mangled symbol name for BSF isolation
 
     def source_text(self, node: Node) -> str:
         """Extract source text for a tree-sitter node."""

@@ -146,8 +146,7 @@ void RndShaderMgr::LoadShaders(const char *cc) {
     if (TheLoadMgr.GetPlatform() != kPlatformNone) {
         String str(MakeString(cc, PlatformSymbol(TheLoadMgr.GetPlatform())));
         FileStat stat;
-        if (!mCacheShaders || !FileGetStat(str.c_str(), &stat)) {
-            if (stat.st_mtime > shaders || strstr(cc, "preinit")) {
+        if (!mCacheShaders || !FileGetStat(str.c_str(), &stat) && stat.st_mtime > shaders || strstr(cc, "preinit")) {
                 FileStream stream(str.c_str(), FileStream::kRead, true);
                 if (!stream.Fail()) {
                     // this check is made somewhere in here according to the asm
@@ -159,7 +158,6 @@ void RndShaderMgr::LoadShaders(const char *cc) {
                     }
                 }
             }
-        }
     }
 }
 

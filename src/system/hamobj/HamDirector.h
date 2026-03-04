@@ -190,6 +190,7 @@ protected:
     bool ReactToCollision(float);
     bool AreCharactersColliding();
     bool ShouldDoCollisionPrevention() const;
+    void ChangeNextShotIfCharacterCollisionLikely();
     void StartStopVisualizer();
     void SendCurWorldMsg(Symbol, bool);
     bool ShotsDisabled();

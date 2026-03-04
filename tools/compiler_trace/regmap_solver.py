@@ -54,6 +54,19 @@ RECOLORING_RVA = 0x0272E8
 VOLATILE_GPRS = [f"r{i}" for i in range(11, 4, -1)]  # r11, r10, r9, ..., r5
 CALLEE_SAVED_GPRS = [f"r{i}" for i in range(31, 12, -1)]  # r31, r30, ..., r13
 
+# FPR register mappings (empirically confirmed via synthetic TU experiment, 2026-03-03)
+#
+# FPR allocation does NOT use BSF (base=7 has only 6 calls globally).
+# Instead, FPRs are assigned sequentially by declaration order:
+#   First float variable → f31, second → f30, third → f29, etc.
+#
+# This is the same pattern as callee-saved GPR (first int → r31, etc.)
+# but without BSF graph coloring — simpler sequential allocator.
+#
+# Callee-saved FPRs: f14-f31 (declaration-order-dependent, FIXABLE)
+# Volatile FPRs: f0-f13 (scheduling-dependent, NOT fixable by reorder)
+CALLEE_SAVED_FPRS = [f"f{i}" for i in range(31, 13, -1)]  # f31, f30, ..., f14
+
 
 def color_to_gpr(color: int) -> str | None:
     """Map a BSF color index to a PPC GPR name.
@@ -83,6 +96,45 @@ def gpr_to_color(reg: str) -> int | None:
     elif 13 <= num <= 31:
         return 38 - num  # r31->7, r30->8, ..., r13->25
     return None
+
+
+def fpr_to_decl_index(reg: str) -> int | None:
+    """Map a callee-saved FPR name to its declaration order index.
+
+    FPR allocation is sequential by declaration order (no BSF):
+    - f31 = first float declared (index 0)
+    - f30 = second float declared (index 1)
+    - f29 = third float declared (index 2)
+    - ...
+    - f14 = 18th float declared (index 17)
+
+    Returns None for volatile FPRs (f0-f13) which are not
+    declaration-order-controlled.
+    """
+    if not reg.startswith("f"):
+        return None
+    num = int(reg[1:])
+    if 14 <= num <= 31:
+        return 31 - num  # f31->0, f30->1, ..., f14->17
+    return None
+
+
+def decl_index_to_fpr(index: int) -> str | None:
+    """Map a declaration order index to a callee-saved FPR name.
+
+    Returns None if index is out of range (0-17).
+    """
+    if 0 <= index <= 17:
+        return f"f{31 - index}"  # 0->f31, 1->f30, ..., 17->f14
+    return None
+
+
+def is_callee_saved_fpr(reg: str) -> bool:
+    """Check if a register is a callee-saved FPR (f14-f31)."""
+    if not reg.startswith("f"):
+        return False
+    num = int(reg[1:])
+    return 14 <= num <= 31
 
 
 @dataclass
@@ -355,19 +407,33 @@ def guided_pairwise_search(
     unmapped_pairs: list[tuple[str, str]] = []
 
     for rA, rB in swap_pairs:
+        idxA: int | None = None
+        idxB: int | None = None
+
+        # Try GPR color mapping first (via BSF trace)
         colorA = gpr_to_color(rA)
         colorB = gpr_to_color(rB)
-
         if colorA is not None and colorB is not None:
             idxA = color_to_decl_idx.get(colorA)
             idxB = color_to_decl_idx.get(colorB)
 
-            if idxA is not None and idxB is not None and idxA != idxB:
-                pair = (min(idxA, idxB), max(idxA, idxB))
-                if pair not in targeted_swaps:
-                    targeted_swaps.append(pair)
-            else:
-                unmapped_pairs.append((rA, rB))
+        # Try callee-saved FPR declaration-index mapping
+        # FPR allocation is sequential by declaration order (no BSF needed)
+        if idxA is None or idxB is None:
+            fpr_idxA = fpr_to_decl_index(rA)
+            fpr_idxB = fpr_to_decl_index(rB)
+            if fpr_idxA is not None and fpr_idxB is not None:
+                # FPR indices are relative to float declarations only,
+                # but we map them to the overall declaration order.
+                # For now, treat as direct swap targets if within range.
+                if fpr_idxA < n_vars and fpr_idxB < n_vars:
+                    idxA = fpr_idxA
+                    idxB = fpr_idxB
+
+        if idxA is not None and idxB is not None and idxA != idxB:
+            pair = (min(idxA, idxB), max(idxA, idxB))
+            if pair not in targeted_swaps:
+                targeted_swaps.append(pair)
         else:
             unmapped_pairs.append((rA, rB))
 
@@ -409,6 +475,36 @@ def guided_pairwise_search(
             for i, j in targeted_swaps:
                 new_order[i], new_order[j] = new_order[j], new_order[i]
             _add_candidate(new_order)
+
+        # Detect and handle 3-way cycles (A↔B, B↔C, A↔C → rotation)
+        # Build adjacency from targeted swap indices
+        if len(targeted_swaps) >= 3:
+            from collections import defaultdict
+            adj: dict[int, set[int]] = defaultdict(set)
+            for i, j in targeted_swaps:
+                adj[i].add(j)
+                adj[j].add(i)
+
+            # Find 3-cliques (triangles) = 3-way cycles
+            indices = sorted(adj.keys())
+            for ai, a in enumerate(indices):
+                for bi in range(ai + 1, len(indices)):
+                    b = indices[bi]
+                    if b not in adj[a]:
+                        continue
+                    for ci in range(bi + 1, len(indices)):
+                        c = indices[ci]
+                        if c in adj[a] and c in adj[b]:
+                            # Found 3-clique: a, b, c
+                            # Try both rotation directions
+                            for rotation in [(a, b, c), (a, c, b)]:
+                                new_order = list(base_order)
+                                # Rotate: position[0] ← val[2], [1] ← val[0], [2] ← val[1]
+                                r0, r1, r2 = rotation
+                                new_order[r0] = base_order[r2]
+                                new_order[r1] = base_order[r0]
+                                new_order[r2] = base_order[r1]
+                                _add_candidate(new_order)
 
     # Bounded fallback for unmapped pairs: try nearby declarations
     # Cap at 2 * len(swap_pairs) additional candidates

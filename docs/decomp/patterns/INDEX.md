@@ -2,8 +2,8 @@
 
 Quick reference for all documented decompilation patterns in DC3 (Dance Central 3), targeting Xbox 360 / MSVC (PowerPC).
 
-> **Data source:** `decomp.db` — 48,349 functions (32,328 non-excluded). 97.3% COMPLETE, 2.8% AT_LIMIT, ~0 remaining.
-> **Last updated:** 2026-02-27
+> **Data source:** `decomp.db` — 50,981 functions (34,215 non-excluded). 92.8% COMPLETE, 7.2% AT_LIMIT, 0.04% remaining (14 stubs).
+> **Last updated:** 2026-03-03
 
 ## Fixable Patterns
 
@@ -32,6 +32,7 @@ These patterns can often be fixed with source changes. Sorted by ROI (impact x s
 | Unsigned Zero Comparison | +0.4-1.3% | 95% | [fixable-comparison.md](fixable-comparison.md#unsigned-zero-comparison) |
 | Operator Overload Selection | +1-2% | 100% | [fixable-operators.md](fixable-operators.md#operator-overload-selection) |
 | Inline Assignment | +1-2% | 95% | [fixable-operators.md](fixable-operators.md#inline-assignment) |
+| Negation Splitting (fneg/frsp) | +3-4% | HIGH | [fixable-operators.md](fixable-operators.md#negation-splitting-fnegfrsp-scheduling) |
 | Early Return Destructor Path Separation | +10-16% | HIGH | [fixable-control-flow.md](fixable-control-flow.md#early-return-for-destructor-path-separation) |
 | Ternary vs If-Else | +5-10% | 75% | [fixable-control-flow.md](fixable-control-flow.md#ternary-vs-if-else) |
 | IsNaN vs Threshold Check | +3-5% | HIGH | [fixable-comparison.md](fixable-comparison.md#isnan-vs-threshold-check) |
@@ -91,6 +92,7 @@ These patterns resist simple source-level fixes. Each documents what would be ne
 | Pattern | Prevalence | Typical Gap | File |
 |---------|------------|-------------|------|
 | Linker Merged (ICF) | ~350 functions | 0.5-3% | [verifiable-icf.md](verifiable-icf.md#linker-merged-icf) (verify first) |
+| ~~MakeString Array-Size ICF~~ | ~~2,550+ functions~~ | ~~1-5%~~ | [verifiable-icf.md](verifiable-icf.md#makestring-array-size-icf-resolved) — **Resolved** in objdiff (2026-03-03) |
 | LTCG/Global Pooling | varies | 0.5-1% | [verifiable-icf.md](verifiable-icf.md#ltcg-global-pooling) |
 | Float Constant Pooling | common | 1-2 instr | [verifiable-icf.md](verifiable-icf.md#float-constant-pooling) |
 | Register Allocation | ~250 functions | 1-3% | [unfixable-compiler.md](unfixable-compiler.md#register-allocation) (mechanism understood) |
@@ -125,7 +127,7 @@ These patterns make matches **worse**. Avoid them.
 
 ## Quick Decision Tree
 
-> **Note (2026-02-27):** All 32,328 non-excluded functions have been triaged. 97.1% are COMPLETE, 3.0% are AT_LIMIT. This decision tree remains useful for future work if new functions are added or compiler tooling changes.
+> **Note (2026-03-03):** 34,201 of 34,215 non-excluded functions are done (92.8% COMPLETE, 7.2% AT_LIMIT). Only 14 remain as unimplemented stubs. This decision tree remains useful for future work if new functions are added or compiler tooling changes.
 
 ```
 Match% < 50%?
@@ -211,16 +213,24 @@ See [DATABASE_SCHEMA.md](../../reference/DATABASE_SCHEMA.md) for full schema doc
 
 ---
 
-## Statistics (2026-02-27)
+## Statistics (2026-03-03)
 
-From `decomp.db` — 48,349 total functions (16,021 excluded SDK/library):
+From `decomp.db` — 50,981 total functions (16,766 excluded SDK/library):
 
 | Metric | Value |
 |--------|-------|
-| Non-excluded functions | 32,328 |
-| COMPLETE (100% match) | 31,453 (97.3%) |
-| AT_LIMIT (unfixable) | 894 (2.8%) |
-| Remaining workable | ~0 (all triaged) |
+| Non-excluded functions | 34,215 |
+| COMPLETE (100% match) | 31,740 (92.8%) |
+| AT_LIMIT (unfixable) | 2,461 (7.2%) |
+| Remaining workable | 14 (0.04%) |
+
+**Report-based metrics** (from `report.json`, uses objdiff fuzzy match):
+
+| Metric | Value |
+|--------|-------|
+| Fuzzy match | **54.06%** |
+| Complete units | 969 / 2,224 |
+| Matched functions | 29,637 / 48,234 (61.4%) |
 
 ### AT_LIMIT Breakdown
 
@@ -271,3 +281,4 @@ From 143 successful fine-tuning attempts (90%+ start, 100% end):
 - [TECHNICAL_NOTES.md: MSVC Encoding](../TECHNICAL_NOTES.md#msvc-mangled-number-encoding) — Decode MakeString template sizes
 - [verifiable-icf.md](verifiable-icf.md) — ICF, LTCG, float constant pooling
 - [harmful-avoid.md](harmful-avoid.md) — Member aliasing, child pointer in loop
+- [PERMUTER_ROI_ANALYSIS.md](PERMUTER_ROI_ANALYSIS.md) — Pattern automation ROI rankings, permuter coverage gaps

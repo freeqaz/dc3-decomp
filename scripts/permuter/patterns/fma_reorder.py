@@ -38,6 +38,16 @@ class FmaReorderPattern(Pattern):
                 return True
         return False
 
+    def priority(self, diagnosis: Diagnosis) -> float:
+        if not self.relevant(diagnosis):
+            return 0.0
+        # FMA mismatch is a very specific signal — high priority
+        for d in diagnosis.diff_ops:
+            pair = {d.target_opcode, d.base_opcode}
+            if len(pair & _FMA_OPCODES) == 2:
+                return 0.9  # one FMA op replaced by another
+        return 0.6  # FMA vs non-FMA — still likely relevant
+
     def generate(self, ctx: FunctionContext) -> Iterator[Variant]:
         counter = 0
         for stmt in ctx.statements:

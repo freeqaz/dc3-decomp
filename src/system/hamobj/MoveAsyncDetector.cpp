@@ -161,6 +161,44 @@ activate:
     mActiveDetectors.insert(detector);
 }
 
+float MoveDetector::Last4BeatsDetectFrac(int player) const {
+    MILO_ASSERT(mActive, 0x54);
+    MILO_ASSERT((0) <= (player) && (player) < (2), 0x55);
+    int lowCount = 0;
+    float sum = 0.0f;
+    for (int i = 0; i < 4; i++) {
+        float val = mDetectThresholds[player][i];
+        sum += val;
+        if (val < 0.13f) {
+            lowCount++;
+        }
+    }
+    if (lowCount > 1)
+        return 0.0f;
+    float avg = sum * 0.25f;
+    avg = avg * 1.15f;
+    float clampedSum = 0.0f;
+    for (int i = 0; i < 4; i++) {
+        float val = mDetectThresholds[player][i];
+        float absVal = -val < 0.0f ? val : 0.0f;
+        float clamped = absVal - avg < 0.0f ? absVal : avg;
+        clampedSum += clamped;
+    }
+    float result = -clampedSum < 0.0f ? clampedSum : 0.0f;
+    return result - 1.0f < 0.0f ? result : 1.0f;
+}
+
+void MoveAsyncDetector::ClearLoopedRatingFrac(const HamMove *move) {
+    MoveDetector *det = FindDetector(move);
+    if (det) {
+        for (int i = 0; i < 2; i++) {
+            for (int j = 0; j < 4; j++) {
+                det->mDetectThresholds[i][j] = 0;
+            }
+        }
+    }
+}
+
 void MoveAsyncDetector::DisableDetector(HamMove *move) {
     MoveDetector *detector = FindDetector(move);
     if (detector != 0) {

@@ -977,8 +977,8 @@ void UtilDrawPlane(
     tf88.m.y = *(const Vector3 *)&p;
     Hmx::Matrix3 mb0;
     mb0.Identity();
-    int idx = 0;
     int minIdx = 0;
+    int idx = 0;
     float minDotProduct = 10000.0f;
     for (; idx < 3; idx++) {
         if (MinEq(minDotProduct, Dot(mb0[idx], tf88.m.y))) {
@@ -1117,8 +1117,8 @@ const char *CacheResource(const char *cc, CacheResourceResult &res) {
 }
 
 DataNode GetNormalMapTextures(ObjectDir *dir) {
-    DataArrayPtr ptr(new DataArray(0x100));
     int idx = 0;
+    DataArrayPtr ptr(new DataArray(0x100));
     ptr->Node(idx++) = NULL_OBJ;
     for (ObjDirItr<RndTex> it(dir, true); it; ++it) {
         bool isNormalMapOrRenderTarget = false;
@@ -1132,7 +1132,8 @@ DataNode GetNormalMapTextures(ObjectDir *dir) {
             }
         }
         if (isNormalMapOrRenderTarget) {
-            ptr->Node(idx++) = DataNode(it);
+            auto _tmp6 = DataNode(it);
+            ptr->Node(idx++) = _tmp6;
         }
     }
     ptr->Resize(idx);
@@ -1142,7 +1143,7 @@ DataNode GetNormalMapTextures(ObjectDir *dir) {
 DataNode GetTexturesOfType(ObjectDir *dir, RndTex::Type texType) {
     int num = 0;
     for (ObjDirItr<RndTex> it(dir, true); it != 0; ++it) {
-        if (texType == (texType & it->GetType())) {
+        if ((texType & it->GetType()) == texType) {
             num++;
         }
     }
@@ -1588,7 +1589,8 @@ void ConvertBonesToTranses(ObjectDir *dir, bool b) {
         } else {
             if (b) {
                 bool foundBoneRef = false;
-                FOREACH (rit, it->Refs()) {
+                auto _tmp0 = it->Refs();
+                FOREACH (rit, _tmp0) {
                     RndMesh *curRefOwner = dynamic_cast<RndMesh *>(rit->RefOwner());
                     if (curRefOwner) {
                         for (int i = 0; i < curRefOwner->NumBones(); i++) {

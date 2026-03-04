@@ -63,6 +63,7 @@ public:
     CharClipDriver *PlayGroup(const char *, int, float, float, float);
     void SetClipWeightMap();
     CharClip *FindClip(DataNode const &, bool notify = true);
+    void SetBlendWidth(float w) { mBlendWidth = w; }
 
 protected:
     CharDriver();

@@ -103,8 +103,8 @@ BEGIN_LOADS(RndMeshDeform)
         (0 == mMeshInverse.v.x && 0 == mMeshInverse.v.y && 0 == mMeshInverse.v.z
          && 1 == mMeshInverse.m.x.x && 0 == mMeshInverse.m.x.y && 0 == mMeshInverse.m.x.z
          && 0 == mMeshInverse.m.y.x && 1 == mMeshInverse.m.y.y && 0 == mMeshInverse.m.y.z
-         && 0 == mMeshInverse.m.z.x && 0 == mMeshInverse.m.z.y
-         && 1 == mMeshInverse.m.z.z);
+         & 0 == mMeshInverse.m.z.x && 0 == mMeshInverse.m.z.y
+         & 1 == mMeshInverse.m.z.z);
 END_LOADS
 
 void RndMeshDeform::PreSave(BinStream &bs) {

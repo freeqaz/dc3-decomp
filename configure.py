@@ -280,6 +280,14 @@ config.wibo_path_map = (
 config.shift_jis = False
 config.progress_all = False
 
+# Precompiled header: covers ~370 files (42% of codebase) that include obj/Object.h
+config.pch_header = "decomp_pch.h"
+config.pch_source = Path("src/system/decomp_pch.cpp")
+config.pch_eligible_dirs = {
+    "rndobj", "hamobj", "char", "synth", "ui", "flow", "gesture",
+    "world", "meta", "obj", "os", "utl", "movie",
+}
+
 # Post-compile patchers: run after all .obj files are compiled, before linking.
 # These patch decomp .obj files to match original binary patterns.
 stamp_dir = config.build_dir / config.version

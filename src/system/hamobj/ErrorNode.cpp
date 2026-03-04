@@ -231,33 +231,45 @@ bool BaseDisplacementNode::Displacements(
     DisplacementData &dispData,
     Ham1DisplacementData &ham1Data
 ) const {
+    ham1Data.unk4.Zero();
+    ham1Data.unk14 = false;
+    ham1Data.unk18 = 0.0f;
+    ham1Data.unk0 = 0.0f;
+    ham1Data.unk1c = 0.0f;
     bool ok = Displacements(frame_input, dispData);
-    // Ham1-style: compute angle-based displacement data
     if (ok) {
-        Vector3 &jd = dispData.mJointDisplacement;
-        Vector3 &bjd = dispData.mBaseJointDisplacement;
-        float jdLen = Length(jd);
-        float bjdLen = Length(bjd);
-        ham1Data.unk0 = bjdLen > 0 ? (jdLen / bjdLen) : 1.0f;
-        if (jdLen > 0.0001f && bjdLen > 0.0001f) {
-            Normalize(jd, ham1Data.unk4);
-            ham1Data.unk14 = true;
-            ham1Data.unk18 = Dot(jd, bjd) / (jdLen * bjdLen);
-            ham1Data.unk1c = acosf(Clamp(-1.0f, ham1Data.unk18, 1.0f));
-        } else {
-            ham1Data.unk4.Zero();
-            ham1Data.unk14 = false;
-            ham1Data.unk18 = 1.0f;
-            ham1Data.unk1c = 0.0f;
+        float jdLen = Length(dispData.mJointDisplacement);
+        ham1Data.unk1c = jdLen;
+        float nx = 0.0f, ny = 0.0f, nz = 0.0f;
+        if (0.0f < jdLen) {
+            float inv = 1.0f / jdLen;
+            nz = dispData.mJointDisplacement.z * inv;
+            ny = inv * dispData.mJointDisplacement.y;
+            nx = dispData.mJointDisplacement.x * inv;
         }
-    } else {
-        ham1Data.unk0 = 1.0f;
-        ham1Data.unk4.Zero();
-        ham1Data.unk14 = false;
-        ham1Data.unk18 = 1.0f;
-        ham1Data.unk1c = 0.0f;
+        float dot = nx * dispData.mBaseJointDisplacement.x
+            + ny * dispData.mBaseJointDisplacement.y
+            + nz * dispData.mBaseJointDisplacement.z;
+        ham1Data.unk4.x = nx * dot;
+        ham1Data.unk4.y = ny * dot;
+        ham1Data.unk4.z = nz * dot;
+        ham1Data.unk14 = (0.0f < dot);
+        float bjdLen = Length(dispData.mBaseJointDisplacement);
+        ham1Data.unk0 = bjdLen;
+        float bnx = 0.0f, bny = 0.0f, bnz = 0.0f;
+        if (0.0f < bjdLen) {
+            float inv = 1.0f / bjdLen;
+            bnz = inv * dispData.mBaseJointDisplacement.z;
+            bny = dispData.mBaseJointDisplacement.y * inv;
+            bnx = dispData.mBaseJointDisplacement.x * inv;
+        }
+        float cosAngle = bnx * nx + bny * ny + bnz * nz;
+        float clamped = -1.0f - cosAngle < 0.0f ? cosAngle : -1.0f;
+        clamped = clamped - 1.0f < 0.0f ? clamped : 1.0f;
+        ham1Data.unk18 = fabsf(acosf(clamped));
+        return true;
     }
-    return ok;
+    return false;
 }
 
 void DistanceToErrors(const Vector3 &a, const Vector3 &b, const Vector3 &c, Vector3 &d) {
@@ -317,35 +329,36 @@ void Ham1DisplacementNode::Errors(
     DisplacementData &dispData,
     Ham1DisplacementData &ham1Data
 ) const {
-    MILO_ASSERT(node_input.mNodeWeight, 0x190);
     bool ok = Displacements(frame_input, dispData, ham1Data);
     if (!ok) {
-        errData.unk0 = 0;
-        errData.unk4 = 0;
-        errData.unk8 = 0;
+        errData.unk8 = 1.0f;
+        errData.unk0 = 1.0f;
+        errData.unk4 = 1.0f;
         return;
     }
-    // Compute scale based on potential angle
-    float angleDist = ScaleDistToError(mPotentialAngleOp, ham1Data.unk1c);
-    // Compute magnitude error using Ham1NodeWeight
-    const Ham1NodeWeight *nw = node_input.mNodeWeight;
-    float jdLen = Length(dispData.mJointDisplacement);
-    float bjdLen = Length(dispData.mBaseJointDisplacement);
-    // Scale base by bone length ratio
-    float lenRatio = ham1Data.unk0;
-    ScaleOp op1;
-    op1.mType = kErrorScaleDistSq;
-    op1.mPerfectDist = nw->mPerfectDist;
-    op1.mRate = nw->mRate;
-    float err1 = ScaleDistToError(op1, fabs(jdLen - bjdLen * lenRatio));
-    ScaleOp op2;
-    op2.mType = kErrorScaleDistSq;
-    op2.mPerfectDist = nw->mPerfectDist2;
-    op2.mRate = nw->mRate2;
-    float err2 = ScaleDistToError(op2, fabs(ham1Data.unk1c));
-    errData.unk0 = angleDist;
-    errData.unk4 = err1;
-    errData.unk8 = err2;
+    float angle = ham1Data.unk18;
+    ScaleOp op;
+    op.mType = kErrorScaleDistSq;
+    op.mPerfectDist = node_input.mNodeWeight->mPerfectDist2;
+    op.mRate = node_input.mNodeWeight->mRate2;
+    float projLen = Length(ham1Data.unk4);
+    errData.unk4 = ScaleDistToError(mPotentialAngleOp, ham1Data.unk0);
+    errData.unk4 = errData.unk4 - 1.0f < 0.0f ? errData.unk4 : 1.0f;
+    errData.unk8 = ScaleDistToError(op, angle);
+    float ratio = 1.0f;
+    if (0.0f < ham1Data.unk1c) {
+        ratio = projLen / ham1Data.unk1c;
+    }
+    float magInput;
+    if (ham1Data.unk14) {
+        magInput = fabsf(1.0f - ratio);
+    } else {
+        magInput = ratio + 1.0f;
+    }
+    op.mType = kErrorScaleDistSq;
+    op.mPerfectDist = node_input.mNodeWeight->mPerfectDist;
+    op.mRate = node_input.mNodeWeight->mRate;
+    errData.unk0 = ScaleDistToError(op, magInput);
 }
 
 PositionNode::PositionNode(ErrorNodeType e, const DataArray *cfg) : ErrorNode(e, cfg) {
@@ -386,6 +399,23 @@ void PositionNode::CalcError(
     }
 }
 
+float ScaleDistToError(const ScaleOp &op, float dist) {
+    if (op.mPerfectDist == -1.0f)
+        return dist;
+    if (dist < 0.0f) {
+        MILO_NOTIFY("%f distance is less than zero (%f, %f)", dist, op.mPerfectDist, op.mRate);
+        return 1.0f;
+    }
+    if (op.mPerfectDist < dist) {
+        float excess = dist - op.mPerfectDist;
+        if (op.mType == kErrorScaleDistSq) {
+            excess = excess * excess;
+        }
+        return op.mRate * excess;
+    }
+    return 0.0f;
+}
+
 float ScaleFullErrorDist(const ScaleOp &op) {
     if (op.mPerfectDist == -1.0f)
         return 1.0f;
@@ -396,6 +426,20 @@ float ScaleFullErrorDist(const ScaleOp &op) {
         invRate = sqrtf(1.0f / op.mRate);
     }
     return invRate + op.mPerfectDist;
+}
+
+void XZErrorWeight(const Vector3 &v, float &xzWeight, float &yWeight) {
+    static Vector3 up(0, 0, 1);
+    Vector3 flat;
+    flat.x = v.x;
+    flat.y = 0;
+    flat.z = v.z;
+    Normalize(flat, flat);
+    float dot = flat.x * up.x + flat.y * up.y + flat.z * up.z;
+    float absDot = fabs(dot);
+    float angle = acosf(absDot);
+    xzWeight = angle * (2.0f / PI);
+    yWeight = 1.0f - xzWeight;
 }
 
 void ScaleOp::Set(const DataArray *cfg) {

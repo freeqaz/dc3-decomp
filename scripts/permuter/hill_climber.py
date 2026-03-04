@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -35,15 +36,15 @@ def parse_args() -> argparse.Namespace:
         description="Iterative hill-climbing loop for decomp matching.",
     )
     parser.add_argument(
-        "--symbol", required=True,
-        help="Mangled symbol name for objdiff",
+        "--symbol",
+        help="Mangled symbol name for objdiff (auto-resolves source/function from DB)",
     )
     parser.add_argument(
-        "--source", type=Path, required=True,
+        "--source", type=Path,
         help="Path to .cpp source file",
     )
     parser.add_argument(
-        "--function", required=True,
+        "--function",
         help="Qualified C++ function name (e.g. LabelNumberTicker::Poll)",
     )
     parser.add_argument(
@@ -75,6 +76,10 @@ def parse_args() -> argparse.Namespace:
         help="Unit name for unicorn execution guard rail",
     )
     parser.add_argument(
+        "--workers", type=int, default=0,
+        help="Parallel compile workers for batch scoring (default: CPU count)",
+    )
+    parser.add_argument(
         "--json", action="store_true", dest="json_output",
         help="Output results as JSON",
     )
@@ -92,6 +97,7 @@ def hill_climb(
     compose: bool = False,
     apply: bool = True,
     unit: str | None = None,
+    workers: int = 6,
 ) -> HillClimbResult:
     """Run the hill-climbing loop for a single function.
 
@@ -146,7 +152,8 @@ def hill_climb(
 
                 print(f"Baseline: {baseline:.2f}%", file=sys.stderr)
 
-                # Wire diagnosis into context
+                # Wire symbol and diagnosis into context
+                ctx.symbol = symbol
                 if scorer.diagnosis:
                     ctx.diagnosis = scorer.diagnosis
                     print(
@@ -194,36 +201,39 @@ def hill_climb(
                     stopped_reason = "no_variants"
                     break
 
-                # Score all variants
+                # Score all variants (parallel compilation)
                 best_result: ScoreResult | None = None
                 best_score = baseline
 
-                for i, variant in enumerate(variants):
-                    print(
-                        f"  [{i + 1}/{len(variants)}] {variant.name}... ",
-                        end="", flush=True, file=sys.stderr,
-                    )
-                    result = scorer.score(variant)
+                print(
+                    f"Scoring {len(variants)} variants "
+                    f"({workers} workers)...",
+                    file=sys.stderr,
+                )
+                batch_results = scorer.score_batch(variants, workers=workers)
 
+                for i, result in enumerate(batch_results):
                     marker = ""
-                    if not result.build_success:
+                    if result.error in ("source_dedup", "cache_hit", "obj_dedup"):
+                        marker = f" [{result.error}]"
+                    elif not result.build_success:
                         marker = " BUILD FAILED"
-                    elif result.error:
+                    elif result.error and result.error != "cached_build_fail":
                         marker = f" ERROR"
-                    elif result.match_percent > best_score:
-                        marker = " NEW BEST"
+
+                    if result.match_percent > best_score:
+                        marker += " NEW BEST"
                         best_result = result
                         best_score = result.match_percent
                     elif result.match_percent > baseline:
-                        marker = " improved"
+                        marker += " improved"
 
-                    print(f"{result.match_percent:.2f}%{marker}", file=sys.stderr)
-
-                    # Early stop on perfect
-                    if result.match_percent >= 100.0:
-                        best_result = result
-                        best_score = result.match_percent
-                        break
+                    print(
+                        f"  [{i + 1}/{len(batch_results)}] "
+                        f"{result.variant.name}: "
+                        f"{result.match_percent:.2f}%{marker}",
+                        file=sys.stderr,
+                    )
 
             # After Scorer exits (source restored), record round and apply
             delta = best_score - baseline
@@ -301,12 +311,42 @@ def hill_climb(
 def main():
     args = parse_args()
 
+    # Auto-resolve from DB if only --symbol is provided
+    if args.symbol and (not args.source or not args.function):
+        from .__main__ import resolve_from_db
+        resolved = resolve_from_db(args.symbol)
+        if resolved:
+            mangled, source_path, qualified_name = resolved
+            if not args.source:
+                args.source = source_path
+            if not args.function:
+                args.function = qualified_name
+            args.symbol = mangled
+            print(f"Resolved: {args.symbol} -> {args.function} in {args.source}", file=sys.stderr)
+        else:
+            print(f"Could not resolve '{args.symbol}' from decomp.db", file=sys.stderr)
+            sys.exit(1)
+
+    # Validate required args
+    missing = []
+    if not args.symbol:
+        missing.append("--symbol")
+    if not args.source:
+        missing.append("--source")
+    if not args.function:
+        missing.append("--function")
+    if missing:
+        print(f"Error: required arguments: {', '.join(missing)}", file=sys.stderr)
+        sys.exit(1)
+
     # Resolve patterns
     if args.patterns == "all":
         patterns = get_all_patterns()
     else:
         pattern_names = [p.strip() for p in args.patterns.split(",")]
         patterns = [get_pattern(name) for name in pattern_names]
+
+    workers = args.workers or os.cpu_count() or 4
 
     result = hill_climb(
         symbol=args.symbol,
@@ -319,6 +359,7 @@ def main():
         compose=args.compose,
         apply=not args.no_apply,
         unit=args.unit,
+        workers=workers,
     )
 
     if args.json_output:

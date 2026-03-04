@@ -48,4 +48,5 @@ public:
 
     const DataNode &Rhs() const { return mRhs; }
     Hmx::Object *DrivenObj() { return mDrivenObj; }
+    float Default() const { return mDefault; }
 };

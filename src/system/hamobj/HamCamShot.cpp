@@ -2,9 +2,11 @@
 #include "char/Character.h"
 #include "flow/PropertyEventProvider.h"
 #include "hamobj/HamDirector.h"
+#include "hamobj/HamGameData.h"
 #include "math/Mtx.h"
 #include "math/Vec.h"
 #include "obj/Data.h"
+#include "obj/DataUtl.h"
 #include "obj/Dir.h"
 #include "obj/Msg.h"
 #include "obj/Object.h"
@@ -119,35 +121,183 @@ DataNode HamCamShot::OnAllowableNextShots(const DataArray *a) {
     DataArrayPtr result;
     ObjDirItr<HamCamShot> dirIt(Dir(), true);
     while (dirIt) {
-        HamCamShot *shot = &*dirIt;
-        bool inNextShots = false;
-        for (ObjPtrList<HamCamShot>::iterator it = mNextShots.begin();
-             it != mNextShots.end(); ++it) {
-            if (*it == shot) {
-                inNextShots = true;
-                break;
+        HamCamShot *shot = dirIt;
+        if (this != shot) {
+            if (!mNextShots.find(shot)) {
+                std::list<HamCamShot *> nextList;
+                shot->ListNextShots(nextList);
+                std::list<HamCamShot *>::iterator lit = nextList.begin();
+                while (lit != nextList.end()) {
+                    if (*lit == this) break;
+                    ++lit;
+                }
+                if (lit == nextList.end()) {
+                    result->Insert(result->Size(), DataNode(shot));
+                }
             }
         }
-        if (!inNextShots) {
-            result->Insert(result->Size(), DataNode(shot));
-        }
         ++dirIt;
+    }
+    static DataNode &miloPropVar = DataVariable(Symbol("milo_prop_path"));
+    if (miloPropVar.Type() == kDataArray && miloPropVar.Array(nullptr)->Size() == 2) {
+        DataArray *arr = miloPropVar.Array(nullptr);
+        int idx = arr->Node(1).Int(arr);
+        ObjPtrList<HamCamShot>::iterator it = mNextShots.begin();
+        while (idx != 0) {
+            ++it;
+            idx--;
+        }
+        result->Insert(result->Size(), DataNode(*it));
     }
     return DataNode(result);
 }
 
 void HamCamShot::UpdateTargetsFlipped() {
+    static Symbol gameplay_mode("gameplay_mode");
+    static Symbol dance_battle("dance_battle");
+
     bool flipped = AreTargetsFlipped();
-    if ((flipped ? 1 : 0) != (mFlipActive ? 1 : 0)) {
+    Symbol mode = TheHamProvider->Property(gameplay_mode, true)->Sym(NULL);
+    bool isDanceBattle = (mode == dance_battle);
+
+    if (TheHamDirector) {
+        TheHamDirector->SetPhraseMetersFlipped(flipped);
+    }
+
+    WorldDir *venueWorld = NULL;
+    if (TheHamDirector) {
+        venueWorld = TheHamDirector->GetVenueWorld();
+    }
+
+    if (venueWorld != NULL) {
+        static Symbol game_stage("game_stage");
+        static Symbol intro("intro");
+        static Symbol crew_battle_intro("crew_battle_intro");
+        static Symbol crewbattle_intro("crewbattle_intro");
+        static Symbol BattleIntro("BattleIntro");
+
+        if (isDanceBattle && flipped) {
+            Symbol stage = TheHamProvider->Property(game_stage, true)->Sym(NULL);
+            if (stage == intro) {
+                TheDebug << MakeString("Camshot %s\n", PathName(this));
+                int targetIdx = 0;
+                for (ObjList<Target>::iterator it = mTargets.begin();
+                     it != mTargets.end(); ++it) {
+                    HamCharacter *character = CharacterNameToCharacter(it->mTarget);
+                    ObjectDir *clipsDir = NULL;
+                    if (character != NULL) {
+                        clipsDir = character->Find<ObjectDir>("clips", true);
+                    }
+
+                    if (((mPlayerFlag == kHamPlayer1 && targetIdx % 2 == 0) ||
+                         (mPlayerFlag == kHamPlayer0 && targetIdx % 2 == 1)) &&
+                        character != NULL) {
+                        if (clipsDir != NULL) {
+                            Hmx::Object *found =
+                                clipsDir->Find<Hmx::Object>("crewbattle_intro", false);
+                            Symbol animGroupName = crewbattle_intro;
+                            if (found == NULL) {
+                                found = clipsDir->Find<Hmx::Object>("BattleIntro", false);
+                                animGroupName = BattleIntro;
+                                if (found == NULL) {
+                                    found =
+                                        clipsDir->Find<Hmx::Object>("crew_battle_intro", false);
+                                    animGroupName = crew_battle_intro;
+                                }
+                            }
+                            if (found != NULL) {
+                                it->mAnimGroup = animGroupName;
+                            }
+                        }
+                    }
+
+                    const char *clipsDirName;
+                    if (!(clipsDir == NULL)) {
+                        clipsDirName = clipsDir->Name();
+                    } else {
+                        clipsDirName = "NULL";
+                    }
+                    const char *charName;
+                    if (!(character == NULL)) {
+                        charName = PathName(character);
+                    } else {
+                        charName = "NULL";
+                    }
+                    TheDebug << MakeString(
+                        "   Target %d: character = '%s' clips = '%s' animGroup = '%s'\n",
+                        targetIdx, charName, clipsDirName, it->mAnimGroup.Str()
+                    );
+                    targetIdx++;
+                }
+            }
+        }
+    }
+
+    if (flipped != mFlipActive) {
         mFlipActive = flipped;
-        if (flipped) {
-            mFlipEndHideList = mFlipPostProcOverrides;
-            mFlipDrawOverrides = mFlipGenHideList;
-            mFlipShowList = mFlipEndHideList;
+        CreateFlippedShowHideList();
+
+        WorldDir *venueWorld2 = NULL;
+        if (TheHamDirector) {
+            venueWorld2 = TheHamDirector->GetVenueWorld();
+        }
+
+        if (venueWorld2 != NULL) {
+            for (int k = 0; k < mKeyframes.size(); k++) {
+                CamShotFrame &frame = mKeyframes[k];
+                std::vector<RndTransformable *> newTargets;
+                for (ObjPtrList<RndTransformable>::iterator tit = frame.mTargets.begin();
+                     tit != frame.mTargets.end(); ++tit) {
+                    RndTransformable *target = *tit;
+                    const char *name = target->Name();
+                    char buf[7];
+                    char *dst = buf;
+                    const char *src = name;
+                    do {
+                        *dst = *src;
+                        dst++;
+                        src++;
+                    } while (src[-1] != '\0');
+
+                    RndTransformable *newTarget = target;
+                    if (!flipped) {
+                        if (strstr(name, "_p0") && mPlayerFlag == kHamPlayer1) {
+                            buf[5] = '1';
+                            newTarget = venueWorld2->Find<RndTransformable>(buf, true);
+                        } else if (strstr(name, "_p1") && mPlayerFlag == kHamPlayer0) {
+                            buf[5] = '0';
+                            newTarget = venueWorld2->Find<RndTransformable>(buf, true);
+                        }
+                    } else {
+                        if (strstr(name, "_p0") && mPlayerFlag == kHamPlayer0) {
+                            buf[5] = '1';
+                            newTarget = venueWorld2->Find<RndTransformable>(buf, true);
+                        } else if (strstr(name, "_p1") && mPlayerFlag == kHamPlayer1) {
+                            buf[5] = '0';
+                            newTarget = venueWorld2->Find<RndTransformable>(buf, true);
+                        }
+                    }
+                    newTargets.push_back(newTarget);
+                }
+                while (!frame.mTargets.empty()) {
+                    frame.mTargets.pop_back();
+                }
+                for (int j = 0; j < (int)newTargets.size(); j++) {
+                    frame.mTargets.push_back(newTargets[j]);
+                }
+            }
+        }
+
+        if (!flipped) {
+            mShowList = mFlipShowList;
+            mHideList = mFlipHideList;
+            mGenHideList = mFlipGenHideList;
+            mGenHideVector = mFlipGenHideVector;
         } else {
-            mFlipEndHideList = mFlipHideList;
-            mFlipDrawOverrides = mFlipShowList;
-            mFlipShowList = mFlipGenHideList;
+            mShowList = mFlipPostProcOverrides;
+            mHideList = mFlipDrawOverrides;
+            mGenHideList = mFlipEndHideList;
+            mGenHideVector = mFlipEndShowVector;
         }
     }
 }
@@ -155,29 +305,68 @@ void HamCamShot::UpdateTargetsFlipped() {
 void HamCamShot::Reteleport(const Vector3 &offset, bool teleport, Symbol sym) {
     for (ObjList<Target>::iterator it = mTargets.begin(); it != mTargets.end(); ++it) {
         Target &target = *it;
+        Target *flipTarget = &target;
+        if (mTargetsFlipped) {
+            flipTarget = GetFlipTarget(&target);
+        }
+
         if (target.mTarget.Null()) continue;
-        if (!teleport && !target.mTeleport) continue;
-        if (!sym.Null() && sym != target.mTarget) continue;
+        if (teleport && !target.mTeleport) continue;
+        if (!sym.Null() & sym != target.mTarget) continue;
+
         std::list<TargetCache>::iterator cacheIt = CreateTargetCache(target.mTarget);
         if (cacheIt->mTrans) {
-            Transform xfm = target.mTo;
-            xfm.v += offset;
-            if (mTargetsFlipped) {
-                Target *flipTarget = GetFlipTarget(&target);
-                if (flipTarget != &target) {
-                    // Get the flipped target's transform
-                    Transform flipXfm;
-                    if (TargetTeleportTransform(flipTarget->mTarget, flipXfm)) {
-                        Multiply(flipXfm, WorldXfm(), xfm);
-                        TeleportTarget(cacheIt->mTrans, xfm, false);
-                        sCache.erase(cacheIt);
-                        continue;
+            cacheIt->mTransform = cacheIt->mTrans->LocalXfm();
+            Transform xfm = flipTarget->mTo;
+
+            static Symbol player0("player0");
+            static Symbol player1("player1");
+            static Symbol backup0("backup0");
+            static Symbol backup1("backup1");
+            static Symbol DC_PLAYER_FREESTYLE("DC_PLAYER_FREESTYLE");
+            static Symbol INTRO_QUICK("INTRO_QUICK");
+            static Symbol INTRO_PLAYLIST("INTRO_PLAYLIST");
+
+            if (TheGameData->SidesSwapped() &&
+                (mPlayerFlag == kHamPlayerBoth || mPlayerFlag == kHamPlayerOff) &&
+                (target.mTarget == player0 || target.mTarget == player1 ||
+                 target.mTarget == backup0 || target.mTarget == backup1)) {
+
+                static Symbol AUTHORED_CAM_CATS("AUTHORED_CAM_CATS");
+                DataArray *cats = DataGetMacro(AUTHORED_CAM_CATS);
+
+                bool doSwap = false;
+                if (cats != NULL) {
+                    DataNode catNode(mCategory);
+                    if (cats->Contains(catNode)) {
+                        doSwap = true;
+                    }
+                }
+                if (!doSwap) {
+                    if (mCategory == DC_PLAYER_FREESTYLE ||
+                        mCategory == INTRO_QUICK ||
+                        mCategory == INTRO_PLAYLIST) {
+                        doSwap = true;
+                    }
+                }
+
+                if (doSwap) {
+                    Symbol otherName = GetFlipTarget(flipTarget->mTarget);
+                    for (ObjList<Target>::iterator it2 = mTargets.begin();
+                         it2 != mTargets.end(); ++it2) {
+                        if (it2->mTarget == otherName) {
+                            xfm = it2->mTo;
+                            break;
+                        }
                     }
                 }
             }
-            TeleportTarget(cacheIt->mTrans, xfm, false);
+
+            Transform result;
+            Multiply(xfm, WorldXfm(), result);
+            result.v += offset;
+            TeleportTarget(cacheIt->mTrans, result, false);
         }
-        sCache.erase(cacheIt);
     }
     sCache.clear();
 }

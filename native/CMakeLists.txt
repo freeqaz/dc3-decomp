@@ -1174,6 +1174,7 @@ if(BUILD_TESTS)
         tests/test_input.cpp
         tests/test_audio.cpp
         tests/test_subsystems.cpp
+        tests/test_bone_ground_truth.cpp
         tests/test_headless_boot.cpp
         ${DC3_ENGINE_SOURCES}
         ${DC3_NATIVE_CORE_SOURCES}

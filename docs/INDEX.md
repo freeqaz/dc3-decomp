@@ -74,6 +74,14 @@ Tool-specific deep docs live in subdirectories:
 | [permuter/bsf-engine.md](permuter/bsf-engine.md) | BSF engine: compiler register allocation tracing, per-function isolation, color→GPR mapping |
 | [permuter/evolution/OVERVIEW.md](permuter/evolution/OVERVIEW.md) | Permuter evolution: primitives, migration, composition |
 
+## Build Performance
+
+| Doc | Description |
+|-----|-------------|
+| [sessions/WIBO_COMPILER_OPTIMIZATION.md](sessions/WIBO_COMPILER_OPTIMIZATION.md) | **Wibo FS cache** — 3.7s → 1.15s compile (3.2x), syscall profiling, `pathFromWindows` cache |
+| [sessions/PCH_BUILD_OPTIMIZATION.md](sessions/PCH_BUILD_OPTIMIZATION.md) | **PCH implementation** — byte-identical .text validation, ninja rules, ~0.9s compile |
+| [sessions/PERMUTER_PERFORMANCE_PLAN.md](sessions/PERMUTER_PERFORMANCE_PLAN.md) | Permuter optimization roadmap — dedup cache, parallel scoring, adaptive selection |
+
 ## Projects
 
 | Doc | Description |
@@ -98,8 +106,10 @@ Tool-specific deep docs live in subdirectories:
 | [plans/XENIA_HEADLESS_STATUS.md](plans/XENIA_HEADLESS_STATUS.md) | Early plan — see `runtime/XENIA_HEADLESS_STATUS.md` for current |
 | [plans/THUNK_SECTION_IMPLEMENTATION.md](plans/THUNK_SECTION_IMPLEMENTATION.md) | Import resolution implementation (COMPLETED) |
 | [plans/SCRIPTED_INPUT_IMPLEMENTATION.md](plans/SCRIPTED_INPUT_IMPLEMENTATION.md) | Original plan (COMPLETED) — see `runtime/SCRIPTED_INPUT_TESTING.md` |
+| [plans/MAKESTRING_ICF_EQUIVALENCE.md](plans/MAKESTRING_ICF_EQUIVALENCE.md) | MakeString array-size normalization in objdiff (+8.66pp fuzzy match) |
 | [plans/LBL_SYMBOL_MATCHING.md](plans/LBL_SYMBOL_MATCHING.md) | Fix `lbl_` symbol matching for function-local statics (match% accuracy) |
 | [plans/compiler-instrumentation.md](plans/compiler-instrumentation.md) | Compiler introspection: register allocator, encoding patterns (DONE) |
+| [plans/REGSWAP_SOURCE_FIX_ROADMAP.md](plans/REGSWAP_SOURCE_FIX_ROADMAP.md) | **Register swap source-fix roadmap** — systematic plan to fix regswaps from source, FPR discovery, assembly-listing guidance |
 | [plans/XENIA_BOOT_VALIDATION.md](plans/XENIA_BOOT_VALIDATION.md) | Xenia emulator build, hybrid XEX boot validation, headless mode plan |
 | [plans/custom-graphics-engine/PLAN.md](plans/custom-graphics-engine/PLAN.md) | **Native port master plan** — phased roadmap, rendering/audio/input/motion |
 | [plans/dc3-native/STATUS.md](plans/dc3-native/STATUS.md) | **Native port status** — boot flow, error handling, env vars, test commands |

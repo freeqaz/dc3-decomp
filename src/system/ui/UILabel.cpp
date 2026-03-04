@@ -708,7 +708,7 @@ void UILabel::SetTokenFmtImp(
             SuperFormatString str(localized, da1, b, TheLocale, gNullStr);
             if (da2) {
                 int size = da2->Size();
-                if (i < size) {
+                if (size > i) {
                     do {
                         const DataNode &n = da2->Evaluate(i);
                         if (n.Type() == kDataSymbol) {

@@ -54,6 +54,7 @@ public:
     void SetTrackedSkeletons(int, int);
     void UpdateTrackedSkeletons();
     int GetActiveSkeletonIndex() const;
+    int GetSecondarySkeletonIndex(bool requireValid) const;
     void SetInControllerMode(bool);
     void SetInVoiceMode(bool);
     bool InVoiceMode() const { return mInVoiceMode; }
@@ -64,6 +65,7 @@ public:
     void StartTrackAllSkeletons();
     void CancelTrackAllSkeletons();
     void Poll();
+    void DrawSkeletonKinectData();
     bool IsTrackingAllSkeletons() const;
     int GetPlayerSkeletonID(int);
     void SetPlayerSkeletonID(int, int);

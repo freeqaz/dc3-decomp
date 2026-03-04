@@ -32,6 +32,7 @@
 #include "meta/MetaMusicManager.h"
 #include "rndobj/Rnd.h"
 #include "rndobj/Utl.h"
+#include "ui/Utl.h"
 #include "math/Color.h"
 #include "math/Geo.h"
 #include "world/Instance.h"
@@ -1281,32 +1282,35 @@ void HamNavList::SetSelecting(bool selecting) {
     RndAnimatable::Animate(0.0f, false, 0.0f, nullptr, kEaseLinear, 0.0f, false);
 }
 
+bool HamNavList::InControllerMode() const {
+    return TheGestureMgr && TheGestureMgr->InControllerMode();
+}
+
 void HamNavList::DetermineHighlightedItem() {
-    bool inControllerMode = TheGestureMgr && TheGestureMgr->InControllerMode();
-    MILO_ASSERT(!inControllerMode, 0x2b7);
+    MILO_ASSERT(!InControllerMode(), 0x2b7);
     MILO_ASSERT(!TheLoadMgr.EditMode(), 0x2b8);
 
     int numItems = NumItems();
     int maxItem = numItems - 1;
     double maxItemD = (double)maxItem;
-    float threshold = (float)(-(maxItemD * 0.15 - 1.0) / (double)numItems);
+    float threshold = -(float)(maxItemD * (double)0.15f - 1.0) / (float)numItems;
 
     int highlightItem = GetHighlightItem();
 
-    // gathering() is a voice input state not in our headers (always false)
-    const bool gathering = false;
+    bool gathering = mListState.ScrollPastMinDisplay();
     bool atTop = mScrollBehavior.AtTop();
     if (gathering && !atTop) {
         if (highlightItem != 0 || mScrollBehavior.mScrollDir != 1) {
-            if (highlightItem == 3 && mScrollBehavior.mScrollDir == 2) {
-                highlightItem = 5;
+            if (highlightItem == HamListRibbon::sNumListSelectable - 2
+                && mScrollBehavior.mScrollDir == 2) {
+                highlightItem = HamListRibbon::sNumListSelectable;
             } else {
                 highlightItem = highlightItem + 1;
             }
         }
     }
 
-    unsigned int posU = (unsigned int)((double)maxItemD * (double)mHandHeight + 0.5);
+    unsigned int posU = (unsigned int)(maxItemD * (double)mHandHeight + 0.5);
     if ((int)posU > maxItem) {
         posU &= (posU >> 31) - 1;
     }
@@ -1319,15 +1323,15 @@ void HamNavList::DetermineHighlightedItem() {
         int iPos = (int)adjustedPos;
         if (iPos == -1) {
             mScrollBehavior.mScrollDir = 1;
-        } else if (iPos == 4) {
+        } else if (iPos == HamListRibbon::sNumListSelectable - 1) {
             mScrollBehavior.mScrollDir = 2;
         } else {
             mScrollBehavior.mScrollDir = 0;
         }
-        if (iPos < 4) {
+        if (iPos < HamListRibbon::sNumListSelectable - 1) {
             adjustedPos &= (unsigned int)(-(long long)((long long)(adjustedPos << 32) >> 63));
         } else {
-            adjustedPos = 3;
+            adjustedPos = HamListRibbon::sNumListSelectable - 2;
         }
     }
 
@@ -1342,6 +1346,10 @@ void HamNavList::DetermineHighlightedItem() {
         if (newHighlight != curSelected) {
             SetHighlight(newHighlight);
         }
+    } else {
+        if (mScrollBehavior.AtBottom()) {
+            mScrollBehavior.mScrollDir = 0;
+        }
     }
 }
 
@@ -1351,7 +1359,7 @@ void HamNavList::UpdateGestures(const Skeleton *skeleton) {
 
     bool inControllerMode = TheGestureMgr && TheGestureMgr->InControllerMode();
     if (!inControllerMode) {
-        bool inVoiceMode = TheGestureMgr && TheGestureMgr->InVoiceMode();
+        bool inVoiceMode = TheGestureMgr && TheGestureMgr->GesturingWithVoice();
         if (!inVoiceMode && mEnabled) {
             if (mRibbonMode == HamListRibbon::kRibbonSelect) {
                 if (RndAnimatable::IsAnimating()) {
@@ -1363,46 +1371,36 @@ void HamNavList::UpdateGestures(const Skeleton *skeleton) {
                     return;
                 }
             }
-            bool gvm = TheGestureMgr && TheGestureMgr->InVoiceMode();
-            if (gvm) {
+            if (TheGestureMgr && TheGestureMgr->InVoiceMode()) {
                 TheGestureMgr->SetInVoiceMode(false);
             }
 
-            DirectionGestureFilter *filter = mDirectionGestureFilter;
-            bool notDisengaged = (mRibbonMode != HamListRibbon::kRibbonDisengaged);
-
-            if (!notDisengaged) {
-                filter->Clear();
+            if (mRibbonMode == HamListRibbon::kRibbonDisengaged) {
+                mDirectionGestureFilter->Clear();
             }
-            filter->SetEngaged(notDisengaged);
+            mDirectionGestureFilter->SetEngaged(mRibbonMode != HamListRibbon::kRibbonDisengaged);
 
             if (mScrollBehavior.IsScrolling()) {
-                filter->Clear();
-                filter->ClearSwipe();
+                mDirectionGestureFilter->Clear();
+                mDirectionGestureFilter->ClearSwipe();
             }
 
             int numItems = NumItems();
             if (numItems == 1) {
-                filter->ClearSwipe();
+                mDirectionGestureFilter->ClearSwipe();
             }
-            filter->SetAllowAboveShoulder(numItems != 1);
+            mDirectionGestureFilter->SetAllowAboveShoulder(numItems != 1);
 
             int firstShowing = mListState.FirstShowing();
-            const bool gathering = false; // voice gathering state not in headers
+            bool gathering = mListState.ScrollPastMinDisplay();
             int selected = mListState.Selected();
-            if (selected + ((int)gathering - firstShowing) == numItems - 1) {
-                filter->ClearSwipe();
+            if (NumItems() - 1 == selected + ((int)gathering - firstShowing)) {
+                mDirectionGestureFilter->ClearSwipe();
             }
 
-            bool handValid = false;
-            if (skeleton && skeleton->IsValid()) {
-                handValid = filter->IsHandValid(*skeleton);
-            }
-
-            bool posValid = false;
-            if (gathering) {
-                posValid = filter->IsValidScrollPos(*skeleton);
-            }
+            bool handValid = skeleton && skeleton->IsValid()
+                && mDirectionGestureFilter->IsHandValid(*skeleton);
+            bool posValid = gathering && mDirectionGestureFilter->IsValidScrollPos(*skeleton);
 
             if ((!handValid && !posValid) && mOnlyUseWhenFocused && !TheLoadMgr.EditMode()) {
                 Disengage();
@@ -1412,32 +1410,31 @@ void HamNavList::UpdateGestures(const Skeleton *skeleton) {
                 SetSwelling();
             }
 
-            if (mListRibbonResource && mListRibbonResource->TestEntering()) {
+            bool testEntering = mListRibbonResource->TestEntering();
+            if (mListRibbonResource && testEntering) {
                 return;
             }
 
             mHandHeight = mHandHeightFilter->GetHandHeight();
 
-            bool hasDirection = filter->HasDirection();
-            if (hasDirection && mSelectionEnabled) {
-                filter->SetEngaged(false);
-                static Message sSelectMsg(Symbol("nav_select_gesture"));
-                TheUI->Handle(sSelectMsg, false);
+            if (mDirectionGestureFilter->HasDirection() && mSelectionEnabled) {
+                mDirectionGestureFilter->ClearSwipe();
+                static Message forceLetterboxOff(Symbol("force_letterbox_off"));
+                TheUI->Handle(forceLetterboxOff, false);
                 SetSelecting(false);
                 return;
             }
 
-            bool lockedIn = filter->IsLockedIn();
-            if (lockedIn) {
-                bool hasDir2 = filter->HasDirection();
-                if (!hasDir2 && mScrollBehavior.mScrollDir == 0) {
+            if (mDirectionGestureFilter->IsLockedIn()) {
+                if (!mDirectionGestureFilter->HasDirection()
+                    && mScrollBehavior.mScrollDir == 0) {
                     SetSwelling();
                     return;
                 }
                 if (!mSelectionEnabled) {
                     return;
                 }
-                float pct = filter->GetPercentPulled();
+                float pct = mDirectionGestureFilter->GetPercentPulled();
                 SetSliding(pct);
                 return;
             }
@@ -1445,6 +1442,53 @@ void HamNavList::UpdateGestures(const Skeleton *skeleton) {
     }
 
     mDirectionGestureFilter->ClearSwipe();
+}
+
+DataNode HamNavList::OnMsg(const ButtonDownMsg &msg) {
+    if (mRefreshPending)
+        RealRefresh();
+
+    bool inControllerMode = InControllerMode();
+    if ((inControllerMode || TheLoadMgr.EditMode())
+        && !RndAnimatable::IsAnimating() && mEnabled) {
+        bool gesturing = TheGestureMgr && TheGestureMgr->GesturingWithVoice();
+        if (!gesturing && TheUI->FocusComponent() == this) {
+            int dir = ScrollDirection(msg, false, true, 1);
+            if (dir != 0) {
+                int selected = mListState.Selected();
+                do {
+                    selected += dir;
+                    if (selected < 0)
+                        return DataNode(0);
+                    if (selected >= mListState.NumShowing())
+                        return DataNode(0);
+                } while (!mListState.Provider()->IsActive(selected));
+
+                if (mListState.ScrollPastMinDisplay()) {
+                    int firstShowing = mListState.FirstShowing();
+                    if (selected < firstShowing) {
+                        mScrollBehavior.ScrollUp(false);
+                    } else if (selected >= firstShowing
+                        + HamListRibbon::sNumListSelectable - 1) {
+                        mScrollBehavior.ScrollDown(false);
+                    } else {
+                        SetHighlight(selected);
+                    }
+                } else {
+                    SetHighlight(selected);
+                }
+                return DataNode(0);
+            }
+
+            if (msg.GetAction() == kAction_Confirm) {
+                if (mSelectionEnabled) {
+                    SetSelecting(true);
+                }
+                return DataNode(0);
+            }
+        }
+    }
+    return DataNode(kDataUnhandled, 0);
 }
 
 void HamNavList::DrawDebug() const {

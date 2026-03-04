@@ -450,15 +450,6 @@ BEGIN_LOADS(Spotlight)
     }
 END_LOADS
 
-void Spotlight::UpdateSphere() {
-    Sphere s;
-    MakeWorldSphere(s, true);
-    Transform xfm;
-    FastInvert(WorldXfm(), xfm);
-    Multiply(s, xfm, s);
-    SetSphere(s);
-}
-
 bool Spotlight::MakeWorldSphere(Sphere &s, bool b) {
     if (b) {
         s.Zero();

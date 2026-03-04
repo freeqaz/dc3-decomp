@@ -16,6 +16,10 @@
 #include "utl/Std.h"
 
 enum HamBackupDancers {
+    kBackupDancersOutfit = 0,
+    kBackupDancersDanceBattle = 1,
+    kBackupDancersTan = 2,
+    kBackupDancersOverride = 3,
     kBackupDancersNumTypes = 4
 };
 

@@ -307,6 +307,32 @@ class StructOffsetResult:
     error: Optional[str] = None
 
 
+@dataclass
+class VtableSlotInfo:
+    """Information about a vtable slot."""
+    slot: int
+    offset: int  # Byte offset in vtable
+    symbol: str  # Mangled symbol name
+    demangled: str  # Demangled name
+
+
+@dataclass
+class VtableMismatch:
+    """A vtable offset mismatch - wrong virtual function being called."""
+    index: int  # Instruction index
+    class_name: str  # Class whose vtable is being used
+    target_offset: int  # Offset in target binary (original)
+    base_offset: int  # Offset in base (our compiled code)
+    target_slot: Optional[VtableSlotInfo] = None  # Resolved target slot
+    base_slot: Optional[VtableSlotInfo] = None  # Resolved base slot
+
+
+@dataclass
+class VtableAnalysisResult:
+    """Results from vtable offset analysis."""
+    mismatches: List[VtableMismatch] = field(default_factory=list)
+    suggestions: List[str] = field(default_factory=list)
+    error: Optional[str] = None
 
 
 @dataclass
@@ -317,6 +343,7 @@ class AnalysisResult:
     ghidra: GhidraResult
     m2c: Optional[M2CResult] = None
     struct_offsets: Optional[StructOffsetResult] = None
+    vtable: Optional[VtableAnalysisResult] = None
 
 
 # =============================================================================
@@ -1075,6 +1102,178 @@ def resolve_struct_offsets(
     return result
 
 
+# =============================================================================
+# Vtable Offset Resolution
+# =============================================================================
+
+def detect_vtable_mismatches(
+    objdiff_data: Dict[str, Any]
+) -> List[Tuple[int, int, int]]:
+    """
+    Detect vtable offset mismatches in objdiff instruction data.
+
+    Vtable call pattern on PPC:
+        lwz rN, OFFSET(rM)   ; load vtable pointer
+        lwz rN, SLOT(rN)     ; load function pointer from vtable
+        mtctr rN
+        bctrl
+
+    We look for diff_arg on lwz where the offset differs and the pattern
+    looks like a vtable slot load (both offsets are small multiples of 4,
+    and the dest/base register match — typical vtable dereference).
+
+    Returns:
+        List of (instruction_index, target_offset, base_offset)
+    """
+    mismatches = []
+    instructions = objdiff_data.get('instructions', [])
+
+    for instr in instructions:
+        match_type = instr.get('match_type', '')
+        if match_type != 'diff_arg':
+            continue
+
+        target = instr.get('target', {})
+        base = instr.get('base', {})
+
+        target_op = target.get('opcode', '')
+        base_op = base.get('opcode', '')
+
+        # Must be lwz on both sides (vtable slot load)
+        if target_op != 'lwz' or base_op != 'lwz':
+            continue
+
+        target_args = target.get('args', '')
+        base_args = base.get('args', '')
+
+        target_parsed = parse_offset_from_args(target_args)
+        base_parsed = parse_offset_from_args(base_args)
+
+        if not target_parsed or not base_parsed:
+            continue
+
+        target_offset, target_reg = target_parsed
+        base_offset, base_reg = base_parsed
+
+        # Both offsets must differ
+        if target_offset == base_offset:
+            continue
+
+        # Vtable heuristic: both offsets positive, aligned to 4, and
+        # dest register == base register (rN, offset, rN pattern)
+        # Also: vtable offsets are typically < 0x200 (128 virtual functions)
+        if (target_offset >= 0 and base_offset >= 0 and
+            target_offset % 4 == 0 and base_offset % 4 == 0 and
+            target_offset < 0x200 and base_offset < 0x200):
+            # Check if dest reg matches base reg (lwz rN, off, rN)
+            import re
+            dest_match_t = re.match(r'(r\d+)', target_args)
+            dest_match_b = re.match(r'(r\d+)', base_args)
+            if dest_match_t and dest_match_b:
+                dest_t = dest_match_t.group(1)
+                dest_b = dest_match_b.group(1)
+                # dest == base register is the classic vtable pattern
+                if dest_t == target_reg and dest_b == base_reg:
+                    mismatches.append((
+                        instr.get('index', -1),
+                        target_offset,
+                        base_offset
+                    ))
+
+    return mismatches
+
+
+def resolve_vtable_mismatches(
+    mismatches: List[Tuple[int, int, int]],
+    class_hints: List[str],
+    project_dir: str
+) -> VtableAnalysisResult:
+    """
+    Resolve vtable offset mismatches using dump_vtable COFF parsing.
+
+    Args:
+        mismatches: List of (index, target_offset, base_offset)
+        class_hints: Class names to try
+        project_dir: Project root directory
+
+    Returns:
+        VtableAnalysisResult with resolved slot info and suggestions
+    """
+    result = VtableAnalysisResult()
+
+    try:
+        scripts_dir = os.path.join(project_dir, 'scripts')
+        if scripts_dir not in sys.path:
+            sys.path.insert(0, scripts_dir)
+        from dump_vtable import get_vtable_layout
+    except ImportError as e:
+        result.error = f'Could not import dump_vtable: {e}'
+        return result
+
+    # Cache vtable layouts per class
+    vtable_cache: Dict[str, List[Dict]] = {}
+
+    def get_cached_layout(class_name):
+        if class_name not in vtable_cache:
+            vtable_cache[class_name] = get_vtable_layout(
+                class_name, project_root=project_dir
+            )
+        return vtable_cache[class_name]
+
+    def find_slot(layout, offset):
+        for entry in layout:
+            if entry['offset'] == offset:
+                return VtableSlotInfo(
+                    slot=entry['slot'],
+                    offset=entry['offset'],
+                    symbol=entry['symbol'],
+                    demangled=entry['demangled'],
+                )
+        return None
+
+    for idx, target_off, base_off in mismatches:
+        mismatch = VtableMismatch(
+            index=idx,
+            class_name='',
+            target_offset=target_off,
+            base_offset=base_off,
+        )
+
+        # Try each class hint
+        for class_name in class_hints:
+            layout = get_cached_layout(class_name)
+            if not layout:
+                continue
+
+            target_slot = find_slot(layout, target_off)
+            base_slot = find_slot(layout, base_off)
+
+            if target_slot or base_slot:
+                mismatch.class_name = class_name
+                mismatch.target_slot = target_slot
+                mismatch.base_slot = base_slot
+
+                # Generate suggestion
+                if target_slot and base_slot:
+                    result.suggestions.append(
+                        f'Vtable slot mismatch at index {idx}: '
+                        f'original calls {target_slot.demangled} (slot {target_slot.slot}, 0x{target_off:x}), '
+                        f'but decomp calls {base_slot.demangled} (slot {base_slot.slot}, 0x{base_off:x}). '
+                        f'Change the virtual method call in source.'
+                    )
+                elif target_slot:
+                    result.suggestions.append(
+                        f'Vtable slot mismatch at index {idx}: '
+                        f'original calls {target_slot.demangled} (slot {target_slot.slot}, 0x{target_off:x}), '
+                        f'decomp uses offset 0x{base_off:x} (not found in {class_name} vtable).'
+                    )
+                break
+
+        result.mismatches.append(mismatch)
+
+    return result
+
+
 def extract_class_hints_from_demangled(demangled: str) -> List[str]:
     """
     Extract potential class names from a demangled function name.
@@ -1768,6 +1967,42 @@ def format_markdown(result: AnalysisResult) -> str:
 
             lines.append("")
 
+    # Vtable Analysis Section
+    if result.vtable is not None:
+        vt = result.vtable
+        if vt.mismatches or vt.error:
+            lines.append("## Vtable Analysis")
+
+            if vt.error:
+                lines.append(f"**Error**: {vt.error}")
+            elif vt.mismatches:
+                lines.append(f"Found {len(vt.mismatches)} vtable slot mismatch(es):")
+                lines.append("")
+
+                for mismatch in vt.mismatches:
+                    target_info = f"0x{mismatch.target_offset:x}"
+                    base_info = f"0x{mismatch.base_offset:x}"
+
+                    if mismatch.target_slot:
+                        s = mismatch.target_slot
+                        target_info = f"**{s.demangled}** (slot {s.slot}, 0x{mismatch.target_offset:x})"
+                    if mismatch.base_slot:
+                        s = mismatch.base_slot
+                        base_info = f"**{s.demangled}** (slot {s.slot}, 0x{mismatch.base_offset:x})"
+
+                    cls = f" [{mismatch.class_name}]" if mismatch.class_name else ""
+                    lines.append(f"- **lwz** at index {mismatch.index}{cls}:")
+                    lines.append(f"  - Original: {target_info}")
+                    lines.append(f"  - Decomp: {base_info}")
+
+                if vt.suggestions:
+                    lines.append("")
+                    lines.append("### Fix")
+                    for suggestion in vt.suggestions:
+                        lines.append(f"- {suggestion}")
+
+            lines.append("")
+
     # Cross References Section
     if ghidra.callers or ghidra.callees:
         lines.append("## Cross References")
@@ -1875,6 +2110,30 @@ def format_json(result: AnalysisResult) -> str:
             "class_hints": offsets.class_hints,
             "suggestions": offsets.suggestions,
             "error": offsets.error
+        }
+
+    # Add vtable results if present
+    if result.vtable is not None:
+        vt = result.vtable
+        def slot_to_dict(s):
+            if s is None:
+                return None
+            return {"slot": s.slot, "offset": s.offset, "symbol": s.symbol, "demangled": s.demangled}
+
+        output["vtable"] = {
+            "mismatches": [
+                {
+                    "index": m.index,
+                    "class_name": m.class_name,
+                    "target_offset": m.target_offset,
+                    "base_offset": m.base_offset,
+                    "target_slot": slot_to_dict(m.target_slot),
+                    "base_slot": slot_to_dict(m.base_slot),
+                }
+                for m in vt.mismatches
+            ],
+            "suggestions": vt.suggestions,
+            "error": vt.error
         }
 
     return json.dumps(output, indent=2)
@@ -2070,13 +2329,35 @@ def analyze_function(
         else:
             vprint("No offset mismatches found", verbose, prefix="analyze")
 
+    # Detect vtable offset mismatches (always runs if we have instructions)
+    vtable_result = None
+    if resolve_offsets and objdiff_result.raw.get('instructions'):
+        vtable_mismatches = detect_vtable_mismatches(objdiff_result.raw)
+        if vtable_mismatches:
+            # Get class hints
+            class_hints_v = []
+            if objdiff_result.demangled:
+                class_hints_v = extract_class_hints_from_demangled(objdiff_result.demangled)
+            elif function_name and '::' in function_name:
+                class_hints_v = [function_name.split('::')[0]]
+
+            vprint(f"Found {len(vtable_mismatches)} vtable offset mismatch(es), class hints: {class_hints_v}", verbose, prefix="analyze")
+            vtable_result = resolve_vtable_mismatches(vtable_mismatches, class_hints_v, project_dir)
+
+            if vtable_result.error:
+                vprint(f"Vtable resolution error: {vtable_result.error}", verbose, prefix="analyze")
+            else:
+                resolved = len([m for m in vtable_result.mismatches if m.target_slot or m.base_slot])
+                vprint(f"Resolved {resolved}/{len(vtable_mismatches)} vtable slot(s)", verbose, prefix="analyze")
+
     # Build combined result
     result = AnalysisResult(
         function_name=function_name,
         objdiff=objdiff_result,
         ghidra=ghidra_result,
         m2c=m2c_result,
-        struct_offsets=struct_offset_result
+        struct_offsets=struct_offset_result,
+        vtable=vtable_result,
     )
 
     # Format output

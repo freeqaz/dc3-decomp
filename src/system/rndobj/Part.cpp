@@ -823,7 +823,8 @@ void RndParticleSys::MoveParticles(float dt, float frameSpan) {
 
     float dragFactor;
     if (mDrag > 0.0f) {
-        dragFactor = std::pow(1.0f - mDrag, frameSpan * oneOverThirty);
+        auto _tmp0 = std::pow(1.0f - mDrag, frameSpan * oneOverThirty);
+        dragFactor = _tmp0;
     } else {
         dragFactor = 1.0f;
     }
@@ -838,21 +839,21 @@ void RndParticleSys::MoveParticles(float dt, float frameSpan) {
     RndTransformable *bounce = mBounce;
 
     // Force direction scaled by frameSpan
+    float forceX_dt = mForceDir.x * frameSpan;
     float forceZ_dt = mForceDir.z * frameSpan;
     float forceY_dt = mForceDir.y * frameSpan;
-    float forceX_dt = mForceDir.x * frameSpan;
 
     // Individual matrix components needed for fmadds sequence in pre-computation.
     // Removing these and using mRelativeXfm.m.x.x etc. directly drops match by ~0.4%.
-    float m_yz = mRelativeXfm.m.y.z;
-    float m_xz = mRelativeXfm.m.x.z;
+    float m_yx = mRelativeXfm.m.y.x;
+    bool isRotate = mRotate;
     float m_yy = mRelativeXfm.m.y.y;
+    bool isFancy = (mType == kFancy);
+    float m_yz = mRelativeXfm.m.y.z;
+    float m_xx = mRelativeXfm.m.x.x;
+    float m_xz = mRelativeXfm.m.x.z;
     float m_xy = mRelativeXfm.m.x.y;
     bool isBubble = mBubble;
-    bool isFancy = (mType == kFancy);
-    bool isRotate = mRotate;
-    float m_yx = mRelativeXfm.m.y.x;
-    float m_xx = mRelativeXfm.m.x.x;
 
     // Pre-compute all 3 transformed force rows (target does this before bounce check).
     // Row 2 uses mRelativeXfm.m.z directly (not cached into locals) to match target.
@@ -968,8 +969,9 @@ void RndParticleSys::MoveParticles(float dt, float frameSpan) {
                         // Suggests original may have used a bool for this condition.
                         if (strength == magicStrength) {
                             dz = 0.0f;
+                            auto _tmp0 = a.mAttractor.Owner();
                             RndParticleSys *ps =
-                                dynamic_cast<RndParticleSys *>(a.mAttractor.Owner());
+                                dynamic_cast<RndParticleSys *>(_tmp0);
                             if (ps != NULL) {
                                 const Transform &t1xf = a.mAttractor->WorldXfm();
                                 const Transform &t2xf = ps->WorldXfm();

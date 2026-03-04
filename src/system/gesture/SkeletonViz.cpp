@@ -5,6 +5,7 @@
 #include "math/Geo.h"
 #include "math/Mtx.h"
 #include "math/Rot.h"
+#include "math/Utl.h"
 #include "math/Vec.h"
 #include "obj/Object.h"
 #include "obj/Task.h"
@@ -251,7 +252,8 @@ void SkeletonViz::SetCamera(
             RotateAboutZ(pos, mPhysicalCamRotation * DEG2RAD, pos);
             pos.y += distance;
             mPhysicalCam->SetLocalPos(pos);
-            float tilt = frame.TiltAngle() * RAD2DEG;
+            float tiltRad = frame.TiltAngle();
+            float tilt = tiltRad * RAD2DEG;
             mPhysicalCam->SetLocalRot(Vector3(tilt, 0.0f, mPhysicalCamRotation));
             mPhysicalCam->SetFrustum(0.01f, 10.0f, 0.7955211f, 1.0f);
         } else {
@@ -339,9 +341,7 @@ void SkeletonViz::DrawJoints(
     for (int i = 0; i < kNumBones; i++) {
         camIt++;
         float z = camIt->z;
-        if (minZ > z) {
-            minZ = z;
-        }
+        minZ = Min(minZ, z);
     }
 
     float maxDepth = minZ + len2 + len3;
@@ -355,8 +355,7 @@ void SkeletonViz::DrawJoints(
         const BoneJoints &bone = boneIt[-1];
 
         float c0 = (camPos[bone.joint1].z - maxDepth) * invRange;
-        float c0clamped = (-c0 < 0.0f) ? c0 : 0.0f;
-        c0 = (c0clamped - 1.0f < 0.0f) ? c0clamped : 1.0f;
+        c0 = Clamp(0.0f, 1.0f, c0);
         c0 = c0 * 0.8f + 0.2f;
 
         RndLine *line = lineIt[1];
@@ -367,8 +366,7 @@ void SkeletonViz::DrawJoints(
         line->SetPointColor(0, shadedColor, true);
 
         float c1 = (camPos[bone.joint2].z - maxDepth) * invRange;
-        float c1clamped = (-c1 < 0.0f) ? c1 : 0.0f;
-        c1 = (c1clamped - 1.0f < 0.0f) ? c1clamped : 1.0f;
+        c1 = Clamp(0.0f, 1.0f, c1);
         c1 = c1 * 0.8f + 0.2f;
         shadedColor.red = tintColor.red * c1;
         shadedColor.green = tintColor.green * c1;

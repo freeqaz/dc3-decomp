@@ -53,16 +53,23 @@ def diagnose_baseline(objdiff_json: dict) -> Diagnosis:
     delta_hist_raw = compute_offset_histogram(offset_diffs)
     offset_deltas = dict(delta_hist_raw)
 
-    # Diff ops (opcode mismatches)
+    # Diff ops (opcode mismatches) — includes both diff_op and replace types
+    # since both represent structural code differences that patterns can fix
     diff_ops: list[DiffOp] = []
     for ins in instrs:
-        if ins.get("match_type") == "diff_op":
+        match_type = ins.get("match_type")
+        if match_type in ("diff_op", "replace"):
             t = ins.get("target", {})
             b = ins.get("base", {})
+            t_op = t.get("opcode", "")
+            b_op = b.get("opcode", "")
+            # Skip if both sides are empty (pure insert/delete classified as replace)
+            if not t_op and not b_op:
+                continue
             diff_ops.append(DiffOp(
                 index=ins["index"],
-                target_opcode=t.get("opcode", ""),
-                base_opcode=b.get("opcode", ""),
+                target_opcode=t_op,
+                base_opcode=b_op,
             ))
 
     # Insert/delete clusters
@@ -84,6 +91,13 @@ def diagnose_baseline(objdiff_json: dict) -> Diagnosis:
     replace_noise, replace_real, _ = categorize_replaces(instrs)
 
     # Noise budget: how many diff_arg instructions are fully explained
+    #
+    # Address relocation heuristic: diff_arg with no diff_breakdown is almost
+    # always an address relocation mismatch (lis/addi loading symbol addresses,
+    # bl calling a function at a different address). objdiff doesn't provide
+    # diff_breakdown for these, but the symbols match — pure noise.
+    _ADDR_RELOC_OPCODES = frozenset({"lis", "addi", "bl", "bla"})
+
     noise_total = sum(1 for ins in instrs if ins.get("match_type") == "diff_arg")
     noise_explained = 0
     for ins in instrs:
@@ -91,6 +105,10 @@ def diagnose_baseline(objdiff_json: dict) -> Diagnosis:
             continue
         bd = ins.get("diff_breakdown")
         if not bd:
+            # No breakdown data — check if it's a known address relocation opcode
+            opcode = ins.get("target", {}).get("opcode", "")
+            if opcode in _ADDR_RELOC_OPCODES:
+                noise_explained += 1
             continue
         all_explained = True
         for arg in bd.get("arguments", []):
@@ -128,9 +146,14 @@ def diagnose_baseline(objdiff_json: dict) -> Diagnosis:
 def is_all_noise(diagnosis: Diagnosis) -> bool:
     """Return True if all mismatches are noise (nothing to permute).
 
-    Noise = no diff_ops, no clusters, no unexplained diff_arg, and no GPR swaps.
+    Noise = no real diff_ops, no clusters, no unexplained diff_arg, and no GPR swaps.
     """
-    if diagnosis.diff_ops:
+    # diff_ops now includes replaces — check if any are non-noise
+    if diagnosis.replace_real > 0:
+        return False
+    # Check for pure diff_op type mismatches (not from replace)
+    non_replace_diff_ops = len(diagnosis.diff_ops) - (diagnosis.replace_real + diagnosis.replace_noise)
+    if non_replace_diff_ops > 0:
         return False
     if diagnosis.clusters:
         return False

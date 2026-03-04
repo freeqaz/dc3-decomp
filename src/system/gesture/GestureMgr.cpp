@@ -11,15 +11,22 @@
 #include "gesture/SpeechMgr.h"
 #include "gesture/WaveToTurnOnLight.h"
 #include "hamobj/HamGameData.h"
+#include "hamobj/HamPlayerData.h"
+#include "math/Rot.h"
 #include "obj/Dir.h"
 #include "obj/DirLoader.h"
 #include "obj/Object.h"
 #include "os/Debug.h"
 #include "os/PlatformMgr.h"
 #include "os/System.h"
+#include "rndobj/Anim.h"
 #include "rndobj/Dir.h"
+#include "rndobj/Rnd.h"
+#include "ui/UILabel.h"
 #include "utl/Loader.h"
+#include "utl/MakeString.h"
 #include "xdk/NUI.h"
+#include <cmath>
 
 float GestureMgr::sMaxRecoveryDistance = 0.3;
 float GestureMgr::sMinRecoveryTime = 0.7;
@@ -340,6 +347,22 @@ done:
     return i;
 }
 
+int GestureMgr::GetSecondarySkeletonIndex(bool requireValid) const {
+    for (int i = 0; i < NUM_SKELETONS; i++) {
+        if (i != GetActiveSkeletonIndex()) {
+            if (GetSkeleton(i).IsTracked()) {
+                if (!requireValid) {
+                    return i;
+                }
+                if (GetSkeleton(i).IsValid()) {
+                    return i;
+                }
+            }
+        }
+    }
+    return -1;
+}
+
 void GestureMgr::SetTrackedSkeletons(int i1, int i2) {
     mPlayerSkeletonIDs[0] = i1;
     mPlayerSkeletonIDs[1] = i2;
@@ -426,9 +449,8 @@ int GestureMgr::GetPlayerFilteredSkeletonID(int playerIndex, bool b2) {
 
 DataNode GestureMgr::OnMsg(const KinectHardwareStatusMsg &msg) {
     if (msg->Int(2) == 1) {
-        if (mLiveCamInput) {
-            mLiveCamInput->SetAutoexposure(true);
-        }
+        MILO_ASSERT(mLiveCamInput, 0x21b);
+        mLiveCamInput->SetAutoexposure(true);
     }
     return 1;
 }
@@ -437,4 +459,113 @@ DataNode GestureMgr::OnMsg(const KinectUserBindingChangedMsg &msg) {
     static SkeletonEnrollmentChangedMsg enrollmentChangedMsg;
     Export(enrollmentChangedMsg, true);
     return 0;
+}
+
+void GestureMgr::DrawSkeletonKinectData() {
+    Vector2 textPos(0.15f, 0.2f);
+
+    for (int i = 0; i < NUM_SKELETONS; i++) {
+        const Skeleton &skel = GetSkeleton(i);
+        SkeletonTrackingState tracking = skel.TrackingState();
+
+        if (mDebugDir == NULL) {
+            const char *statusStr;
+            if (tracking == kSkeletonTracked) {
+                statusStr = "tracked";
+            } else if (tracking == kSkeletonPositionOnly) {
+                statusStr = "position only";
+            } else {
+                statusStr = "not tracked";
+            }
+
+            int trackingID = skel.TrackingID();
+            const char *activeStr = (i == GetActiveSkeletonIndex()) ? "(active)" : "";
+
+            Hmx::Color white(1.0f, 1.0f, 1.0f, 1.0f);
+            Vector2 &result = TheRnd.DrawString(
+                MakeString("%i: %s %s %d", i, statusStr, activeStr, trackingID),
+                textPos, white, true
+            );
+            textPos.y = result.y;
+        } else {
+            RndDir *marker =
+                mDebugDir->Find<RndDir>(MakeString("marker%d", i), false);
+            if (marker != NULL) {
+                marker->SetShowing(tracking != kSkeletonNotTracked);
+                if (tracking != kSkeletonNotTracked) {
+                    const Vector3 &root = skel.GetUnkab0();
+                    Vector3 markerPos(root.x, -root.z, 0.0f);
+                    marker->SetLocalPos(markerPos);
+
+                    UILabel *idLabel =
+                        marker->Find<UILabel>("id.lbl", false);
+                    if (idLabel) {
+                        idLabel->SetInt(skel.TrackingID(), false);
+                    }
+
+                    UILabel *indexLabel =
+                        marker->Find<UILabel>("index.lbl", false);
+                    if (indexLabel) {
+                        indexLabel->SetInt(i, false);
+                    }
+
+                    RndAnimatable *activeAnim =
+                        marker->Find<RndAnimatable>("active.anim", false);
+                    if (activeAnim) {
+                        float frame =
+                            (i == GetActiveSkeletonIndex()) ? 1.0f : 0.0f;
+                        activeAnim->SetFrame(frame, 1.0f);
+                    }
+
+                    RndAnimatable *trackedAnim =
+                        marker->Find<RndAnimatable>("tracked.anim", false);
+                    if (trackedAnim) {
+                        trackedAnim->SetFrame(
+                            (float)(tracking == kSkeletonTracked), 1.0f
+                        );
+                    }
+
+                    RndAnimatable *colorAnim = marker->Find<RndAnimatable>(
+                        "player_color.anim", false
+                    );
+                    if (colorAnim) {
+                        int playerIdx = -1;
+                        for (int j = 0; j < 2; j++) {
+                            if (skel.TrackingID()
+                                == TheGameData->Player(j)
+                                       ->GetSkeletonTrackingID()) {
+                                playerIdx = j;
+                            }
+                        }
+                        colorAnim->SetFrame((float)playerIdx, 1.0f);
+                    }
+
+                    float rotation = 0.0f;
+                    if (tracking == kSkeletonTracked) {
+                        Vector3 leftShoulder, rightShoulder;
+                        skel.JointPos(
+                            kCoordCamera, kJointShoulderLeft, leftShoulder
+                        );
+                        skel.JointPos(
+                            kCoordCamera, kJointShoulderRight, rightShoulder
+                        );
+                        Vector3 diff;
+                        Subtract(rightShoulder, leftShoulder, diff);
+                        rotation = (float)std::atan(diff.z / diff.x) * RAD2DEG;
+                    }
+
+                    RndAnimatable *rotAnim = marker->Find<RndAnimatable>(
+                        "rotation.anim", false
+                    );
+                    if (rotAnim) {
+                        rotAnim->SetFrame(rotation, 1.0f);
+                    }
+                }
+            }
+        }
+    }
+
+    if (mDebugDir) {
+        mDebugDir->DrawShowing();
+    }
 }

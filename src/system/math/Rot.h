@@ -27,6 +27,7 @@ void RotateAboutZ(const Hmx::Matrix3 &, float, Hmx::Matrix3 &);
 void MakeRotMatrixX(float, Hmx::Matrix3 &);
 void MakeRotMatrixY(float, Hmx::Matrix3 &);
 void MakeRotMatrixZ(float, Hmx::Matrix3 &);
+void NormalizeAboutX(Hmx::Matrix3 &);
 void MakeEuler(const Hmx::Quat &, Vector3 &);
 void MakeRotQuat(const Vector3 &, const Vector3 &, Hmx::Quat &);
 void MakeRotQuatUnitX(const Vector3 &, Hmx::Quat &);

@@ -115,11 +115,21 @@ public:
 
     class StyleState {
     public:
-        StyleState(RndText *text, float size) : mText(text), mSize(size), mStyleIdx(0) {}
+        StyleState(RndText *text, float size);
 
-        RndText *mText;
-        float mSize;
-        int mStyleIdx;
+        // First 0x34 bytes: copied from Style via memcpy
+        float mSize; // 0x0 - Style::mSize, then scaled by size param
+        Hmx::Color mTextColor; // 0x4
+        bool mFontColorOverride; // 0x14
+        Hmx::Color mFontColor; // 0x18
+        float mItalics; // 0x28
+        float mKerning; // 0x2c
+        float mZOffset; // 0x30
+        // End of memcpy'd Style data
+        Style *mStyle; // 0x34
+        int mFontMapIdx; // 0x38
+        float mBaseSize; // 0x3c
+        bool mActive; // 0x40
     };
 
     class BlacklightPacket {
@@ -263,7 +273,7 @@ public:
         RndFont3d *mFont; // 0x8
         int mDisplayableChars; // 0xc
         std::vector<RndMesh *> mMeshes; // 0x10
-        int mPrevDisplayableChars;
+        RndMesh **mMeshCursor; // 0x1c - current position for SetupCharacter
     };
 
     // Hmx::Object

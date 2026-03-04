@@ -2354,9 +2354,141 @@ void HamDirector::PlayNextShot() {
 }
 
 DataNode HamDirector::OnSelectCamera(DataArray *a) {
-    Symbol shotName = a->Sym(2);
-    SetShot(shotName);
+    RndPropAnim *songAnim = SongAnim(0);
+    if (!mDisabled) {
+        float beat = TheTaskMgr.Beat();
+        float seconds = BeatToSeconds(beat);
+        float val = seconds * 30.0f;
+        float frame = val < 0.0f ? 0.0f : val;
+
+        float realTime = TheTaskMgr.Seconds(TaskMgr::kRealTime);
+        if (realTime >= 0.0f || TheLoadMgr.EditMode()) {
+            float blend = 1.0f;
+            if (songAnim && (!TheLoadMgr.EditMode() || frame != songAnim->GetFrame())) {
+                static Timer *song_anim_timer = AutoTimer::GetTimer(Symbol("song_anim"));
+                AutoTimer timer(song_anim_timer, 50.0f, NULL, NULL);
+                songAnim->SetFrame(frame, blend);
+            }
+
+            for (Difficulty d = (Difficulty)0; (int)d < kNumDifficultiesDC2; d = (Difficulty)((int)d + 1)) {
+                if (mDancerFaceAnims[d].Ptr() &&
+                    (!TheLoadMgr.EditMode() || frame != mDancerFaceAnims[d]->GetFrame())) {
+                    mDancerFaceAnims[d]->SetFrame(frame, blend);
+                }
+            }
+        }
+
+        if (mSyncScene) {
+            SyncScene();
+        }
+
+        if (TheLoadMgr.EditMode() && TheTaskMgr.DeltaSeconds() < 0.0f) {
+            mLastShotTime = -kHugeFloat;
+            mLastCollisionTime = -kHugeFloat;
+        }
+
+        if (!mNextShot.Ptr() &&
+            TheTaskMgr.Seconds(TaskMgr::kRealTime) >= mLastShotTime &&
+            !ShotsDisabled()) {
+            HamCamShot *dircut = FindNextDircut();
+            mNextShot = dircut;
+
+            if (!mNextShot.Ptr() && !mPickNewShot &&
+                ShouldDoCollisionPrevention() &&
+                AreCharactersColliding() &&
+                TheTaskMgr.Seconds(TaskMgr::kRealTime) >= mLastCollisionTime) {
+                if (ReactToCollision(frame)) {
+                    static Symbol collisionMacro("SONG_COLLISION_DONT_CUT_AGAIN_FOR_X_BEATS");
+                    DataArray *macro = DataGetMacro(collisionMacro);
+                    float collisionDelay = macro->Node(0).Float(macro);
+                    float currentBeat = TheTaskMgr.Beat();
+                    float futureMs = BeatToMs(currentBeat + collisionDelay);
+                    float currentMs = BeatToMs(currentBeat);
+                    float delaySec = (futureMs - currentMs) * 0.001f;
+                    mLastCollisionTime = TheTaskMgr.Seconds(TaskMgr::kRealTime) + delaySec;
+                }
+            }
+
+            if (!mNextShot.Ptr() && mPickNewShot) {
+                FindNextShot();
+                if (mNextShot.Ptr() && mSongCollision.Ptr() &&
+                    ShouldDoCollisionPrevention()) {
+                    ChangeNextShotIfCharacterCollisionLikely();
+                }
+            }
+        }
+    }
+    PlayNextShot();
     return 0;
+}
+
+void HamDirector::ChangeNextShotIfCharacterCollisionLikely() {
+    static Symbol shot("shot");
+    PropKeys *shotKeys = GetPropKeysByPlayer(0, shot);
+    if (!shotKeys)
+        return;
+
+    const char *cat = mNextShot->Category().Str();
+    if (strncmp(cat, "Area", 4) != 0)
+        return;
+
+    float beat = TheTaskMgr.Beat();
+    float frame = BeatToSeconds(beat) * 30.0f;
+
+    Symbol unused;
+    int keyIdx = shotKeys->SymbolAt(frame, unused);
+
+    int currentBeatInt = (int)TheTaskMgr.Beat();
+    keyIdx++;
+    int numKeys = shotKeys->NumKeys();
+
+    float nextFrame;
+    if (keyIdx >= numKeys) {
+        RndPropAnim *anim = SongAnim(0);
+        nextFrame = anim->EndFrame();
+    } else {
+        shotKeys->FrameFromIndex(keyIdx, nextFrame);
+    }
+
+    int nextBeatPlusOne = (int)SecondsToBeat(nextFrame / 30.0f) + 1;
+
+    Difficulty diffs[2];
+    Transform transforms[2];
+
+    int playerIdx = 0;
+    int otherIdx = 1;
+    do {
+        bool swapped = TheGameData->SidesSwapped();
+        int targetIdx = swapped ? otherIdx : playerIdx;
+
+        HamPlayerData *player = TheGameData->Player(playerIdx);
+        diffs[targetIdx] = player->GetDifficulty();
+
+        static Symbol player0("player0");
+        static Symbol player1("player1");
+        Symbol targetSym = (targetIdx == 0) ? player0 : player1;
+
+        if (!mNextShot->TargetTeleportTransform(targetSym, transforms[targetIdx])) {
+            return;
+        }
+
+        otherIdx--;
+        playerIdx++;
+    } while (-1 < otherIdx);
+
+    if (mSongCollision->IsCollision(
+            currentBeatInt, nextBeatPlusOne, diffs, transforms, NULL
+        )) {
+        static Symbol area1Wide("Area1_WIDE");
+        static Symbol area2Wide("Area2_WIDE");
+
+        if (strncmp(cat, "Area1", 5) == 0) {
+            mShot = area1Wide;
+        } else {
+            mShot = area2Wide;
+        }
+        FindNextShot();
+    }
 }
 
 void HamDirector::OnPopulateMoves() {}
@@ -2364,13 +2496,135 @@ void HamDirector::OnPopulateMoves() {}
 void HamDirector::OnPopulateFromMoveMgr() {}
 
 void HamDirector::DrawIconMan(Symbol sym1, Symbol sym2, Symbol sym3, float f1, float f2, RndTex *tex) {
-    if (!mIconManChar) return;
-    CharClip *clip1 = mClipDir ? mClipDir->Find<CharClip>(sym1.Str(), false) : nullptr;
-    CharClip *clip2 = mClipDir ? mClipDir->Find<CharClip>(sym2.Str(), false) : nullptr;
-    PoseIconMan(clip1, f1, tex, false, clip2, f2, 0.0f);
+    if (!mMasterClipAnim.Ptr()) {
+        SetMasterClipAnim();
+    }
+    if (!mIconManChar.Ptr() || !mIconManTex.Ptr() || !mMasterClipAnim.Ptr() || !tex || !mClipDir.Ptr()) {
+        return;
+    }
+
+    static Symbol practice("practice");
+    static Symbol clip_sym("clip");
+
+    auto _tmp0 = DataArrayPtr(practice);
+    PropKeys *practiceKeys = mMasterClipAnim->GetKeys(this, _tmp0);
+    Keys<Symbol, Symbol> *keys = practiceKeys->AsSymbolKeys();
+
+    unsigned int foundIdx = 0;
+    unsigned int numKeys = (unsigned int)keys->size();
+    if (numKeys != 0) {
+        for (unsigned int i = 0; i < numKeys; i++) {
+            if ((*keys)[i].value == sym1) goto found;
+            foundIdx++;
+        }
+    }
+    foundIdx = -1;
+found:
+    if (foundIdx == (unsigned int)-1) {
+        String moveStr(sym1.Str());
+        moveStr += ".move";
+        Symbol moveSym(moveStr.c_str());
+
+        static Symbol move("move");
+        PropKeys *moveKeys = mMasterClipAnim->GetKeys(this, DataArrayPtr(move));
+        keys = moveKeys->AsSymbolKeys();
+
+        foundIdx = 0;
+        numKeys = (unsigned int)keys->size();
+        if (numKeys != 0) {
+            for (unsigned int i = 0; i < numKeys; i++) {
+                if ((*keys)[i].value == moveSym) goto found2;
+                foundIdx++;
+            }
+        }
+        foundIdx = -1;
+    found2:;
+    }
+
+    float keyFrame = (*keys)[foundIdx].frame;
+    float keyBeat = SecondsToBeat(keyFrame / 30.0f);
+    if (keyBeat + f1 < 0.0f) {
+        f1 = 0.0f;
+    }
+
+    float beat = SecondsToBeat(keyFrame / 30.0f) + f2 + f1;
+    float frame = BeatToSeconds(beat) * 30.0f;
+    SecondsToBeat(keyFrame / 30.0f);
+
+    PropKeys *clipKeys = mMasterClipAnim->GetKeys(this, DataArrayPtr(clip_sym));
+    Keys<Symbol, Symbol> *clipKeysData = clipKeys->AsSymbolKeys();
+
+    int clipIdx = clipKeysData->KeyLessEq(frame);
+    Key<Symbol> &clipKey = (*clipKeysData)[clipIdx];
+
+    CharClip *clip = mClipDir->Find<CharClip>(clipKey.value.Str(), false);
+    if (!clip) {
+        TheDebug << MakeString("Could not draw IconMan for %s", (char *)sym1.Str());
+        return;
+    }
+
+    float clipBeat = SecondsToBeat(clipKey.frame / 30.0f);
+    float alignOff = 0.0f;
+    int beatAlign = (clip->PlayFlags() >> 12) & 0xf;
+    if ((float)beatAlign != 0.0f) {
+        alignOff = Mod(clipBeat - clip->StartBeat(), (float)beatAlign);
+    }
+    float poseBeat = beat - (clipBeat - alignOff) + clip->StartBeat();
+
+    PoseIconMan(clip, poseBeat, NULL, (bool)tex, NULL, 0.0f, 0.0f);
 }
 
-void HamDirector::DrawIconMan(Difficulty diff, float f1, float f2, float f3, float f4, RndTex *tex) {}
+void HamDirector::DrawIconMan(Difficulty diff, float f1, float f2, float f3, float f4, RndTex *tex) {
+    if (!mMasterClipAnim.Ptr()) {
+        SetMasterClipAnim();
+    }
+    if (!mIconManChar.Ptr() || !mIconManTex.Ptr() || !mMasterClipAnim.Ptr() || !tex || !mClipDir.Ptr()) {
+        return;
+    }
+
+    if (diff == kDifficultyExpert) {
+        static Symbol clip_sym("clip");
+        PropKeys *clipKeys = mMasterClipAnim->GetKeys(this, DataArrayPtr(clip_sym));
+        if (clipKeys) {
+            Keys<Symbol, Symbol> *keys = clipKeys->AsSymbolKeys();
+            float frame = BeatToSeconds(f1) * 30.0f;
+            int clipIdx = keys->KeyLessEq(frame);
+            Key<Symbol> &key = (*keys)[clipIdx];
+
+            CharClip *clip = mClipDir->Find<CharClip>(key.value.Str(), false);
+            if (clip) {
+                float clipBeat = SecondsToBeat(key.frame / 30.0f);
+                if (f2 + f4 < clipBeat) {
+                    f4 = 0.0f;
+                }
+                int beatAlign = (clip->PlayFlags() >> 12) & 0xf;
+                float alignOff = 0.0f;
+                if ((float)beatAlign != 0.0f) {
+                    alignOff = Mod(clipBeat - clip->StartBeat(), (float)beatAlign);
+                }
+                float poseBeat = f1 - (clipBeat - alignOff) + clip->StartBeat();
+                if (f3 + f4 < f1 - f2) {
+                    poseBeat -= f3;
+                }
+                PoseIconMan(clip, poseBeat, NULL, (bool)tex, NULL, 0.0f, 0.0f);
+            }
+        }
+    } else {
+        static Symbol clip_sym2("clip");
+        PropKeys *clipKeys = GetPropKeys(diff, clip_sym2);
+        if (clipKeys) {
+            Keys<Symbol, Symbol> *keys = clipKeys->AsSymbolKeys();
+            float frame = BeatToSeconds(f1) * 30.0f;
+            int clipIdx = keys->KeyLessEq(frame);
+            Key<Symbol> &key = keys->at(clipIdx);
+            float clipBeat = SecondsToBeat(key.frame / 30.0f);
+            if (clipIdx > 0) {
+                keys->at(clipIdx - 1);
+            }
+            DrawIconMan(key.value, Symbol(), Symbol(), f1 - clipBeat, f4, tex);
+        }
+    }
+}
 
 CharClip *HamDirector::GetClipStartAndEndBeats(
     Symbol clipName, float &startBeat, float &endBeat, std::pair<float, float> *range

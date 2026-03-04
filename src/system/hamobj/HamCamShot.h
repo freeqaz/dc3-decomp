@@ -133,6 +133,7 @@ protected:
     RndDrawable *GetFlipCharacter(RndDrawable *);
     void FlipTargetAnimGroups();
     void UpdateTargetsFlipped();
+    void CreateFlippedShowHideList();
     bool IterateNextShot();
     bool ListNextShots(std::list<HamCamShot *> &);
 

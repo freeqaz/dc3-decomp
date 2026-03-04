@@ -101,6 +101,53 @@ namespace {
         return false;
     }
 
+    bool SetProjLightRegisters(int lightIdx, int projIdx, NgLight &light) {
+        if (!light.Showing())
+            return false;
+        if (light.GetTexture() == nullptr && light.GetProjectedBlend() == 0)
+            return false;
+        Hmx::Color color = light.GetColor();
+        if ((((int)(color.red * 255.0f) & 0xff)
+            | ((int)(color.green * 255.0f) & 0xff)
+            | ((int)(color.blue * 255.0f) & 0xff)) == 0)
+            return false;
+        const Transform &xfm = light.WorldXfm();
+        float dirX = -xfm.m.y.x;
+        float dirY = -xfm.m.y.y;
+        float dirZ = -xfm.m.y.z;
+        Vector4 dir(dirX, dirY, dirZ, 0.0f);
+        TheShaderMgr.SetVConstant((VShaderConstant)(lightIdx + 0x3e), dir);
+        Vector4 dir2(dirX, dirY, dirZ, 0.0f);
+        TheShaderMgr.SetPConstant((PShaderConstant)(lightIdx + 0x3e), dir2);
+        Vector4 colorVec(color.red, color.green, color.blue, 1.0f);
+        TheShaderMgr.SetVConstant((VShaderConstant)(lightIdx + 0x42), colorVec);
+        Vector4 colorVec2(color.red, color.green, color.blue, 1.0f);
+        TheShaderMgr.SetPConstant((PShaderConstant)(lightIdx + 0x42), colorVec2);
+        Transform proj = light.Projection();
+        TheShaderMgr.SetPConstant4x3(
+            (PShaderConstant)(projIdx * 3 + 0x5f), Hmx::Matrix4(proj)
+        );
+        TheShaderMgr.SetPConstant((PShaderConstant)(projIdx + 5), light.GetShadowMapTex());
+        TheRenderState.SetTextureFilter(projIdx + 5, (RndRenderState::FilterMode)1, false);
+        int blend = light.GetProjectedBlend();
+        if (blend == 0) {
+            TheShaderMgr.SetPConstant((PShaderConstant)(projIdx + 10), light.GetTexture());
+            TheRenderState.SetTextureClamp(projIdx + 10, (RndRenderState::ClampMode)6);
+            TheRenderState.SetBorderColor(projIdx + 10, false);
+            TheRenderState.SetTextureFilter(projIdx + 10, (RndRenderState::FilterMode)1, false);
+            TheRenderState.SetTextureClamp(projIdx + 5, (RndRenderState::ClampMode)6);
+            TheRenderState.SetBorderColor(projIdx + 5, true);
+        } else if (blend == 1) {
+            TheShaderMgr.SetPConstant(
+                (PShaderConstant)(projIdx + 10),
+                TheRnd.GetDefaultTex(Rnd::kDefaultTex_WhiteTransparent)
+            );
+            TheRenderState.SetTextureClamp(projIdx + 5, (RndRenderState::ClampMode)6);
+            TheRenderState.SetBorderColor(projIdx + 5, false);
+        }
+        return true;
+    }
+
     void ClearLightRegisters(int lightIdx) {
         static Vector4 sDefaultLight(0, 0, 0, 1);
         static Vector4 sZeroVec(0, 0, 0, 0);

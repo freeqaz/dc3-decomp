@@ -7,5 +7,6 @@ bool IsSkeletonBone(const char *);
 const char *JointName(SkeletonJoint);
 const char *CharBoneName(SkeletonJoint);
 const char *MirrorBoneName(SkeletonJoint);
+int JointParent(SkeletonJoint);
 void JointScreenPos(const TrackedJoint &, Vector2 &);
 void JointScreenPos(const TrackedJoint &, Vector3 &);

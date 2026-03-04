@@ -6,6 +6,16 @@
 #include "rndobj/Mat.h"
 #include "rndobj/Trans.h"
 #include "utl/BinStream.h"
+#include "world/Spotlight.h"
+
+void Spotlight::UpdateSphere() {
+    Sphere s;
+    MakeWorldSphere(s, true);
+    Transform xfm;
+    FastInvert(WorldXfm(), xfm);
+    Multiply(s, xfm, s);
+    SetSphere(s);
+}
 
 RndLine *gLine;
 

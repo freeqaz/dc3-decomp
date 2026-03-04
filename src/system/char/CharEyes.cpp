@@ -479,7 +479,7 @@ bool CharEyes::SetFocusInterest(CharInterest *interest, int i) {
 
     mFocusInterest = interest;
     mFocusTimer = i;
-    if (interest != mFocusInterest)
+    if (mFocusInterest != interest)
         mNeedRecalc = true;
     if (!mFocusInterest)
         mFocusTimer = -1;
@@ -744,7 +744,7 @@ void CharEyes::NextLook() {
         float dx = (facingDir.x - mLastFacing.x) * 45.0f;
         float dy = (facingDir.y - mLastFacing.y) * 45.0f;
 
-        float extrapMag = std::sqrt(dx * dx + dz * dz + dy * dy);
+        float extrapMag = std::sqrt((dx * dx + (dz * dz + dy * dy)));
         float maxExtrap = std::tan(mMaxExtrapolation * 0.017453292f);
 
         if (extrapMag > maxExtrap) {
@@ -772,7 +772,7 @@ void CharEyes::NextLook() {
         RndTransformable *dirTrans = dynamic_cast<RndTransformable *>(Dir());
         if (dirTrans) {
             const Vector3 &dirPos = dirTrans->WorldXfm().v;
-            if (mTarget.z < dirPos.z) {
+            if (dirPos.z > mTarget.z) {
                 float scale = (dirPos.z - headXfm.v.z) / (mTarget.z - headXfm.v.z);
                 float sx = projX * scale;
                 float sy = projY * scale;
@@ -929,7 +929,7 @@ void CharEyes::LidTrackAndClampingUpdate(EyeDesc &desc, float blinkWeight) {
 
     if (upperLid) {
         float angle =
-            (eyeRot >= 0.0f ? mUpperLidTrackUp : mUpperLidTrackDown) * negEyeRot;
+            (0.0f <= eyeRot ? mUpperLidTrackUp : mUpperLidTrackDown) * negEyeRot;
         bool isNaN = (angle != angle);
         if (!isNaN) {
             Transform &xfm = upperLid->DirtyLocalXfm();
@@ -1136,11 +1136,13 @@ void CharEyes::ProceduralBlinkUpdate() {
     if (elapsed < 0.115f) {
         // Closing phase
         float t = Clamp(0.0f, 1.0f, elapsed * 8.695652f);
-        mFaceServo->SetProceduralBlinkWeight(EaseInExp(t));
+        auto _tmp0 = EaseInExp(t);
+        mFaceServo->SetProceduralBlinkWeight(_tmp0);
     } else if (elapsed < 0.3f) {
         // Opening phase
         float t = Clamp(0.0f, 1.0f, 1.0f - (elapsed - 0.115f) * 5.405405f);
-        mFaceServo->SetProceduralBlinkWeight(EaseSigmoid(t, 0.0f, 0.0f));
+        auto _tmp0 = EaseSigmoid(t, 0.0f, 0.0f);
+        mFaceServo->SetProceduralBlinkWeight(_tmp0);
         mTarget = mHeadForward;
     } else {
         // Blink complete
@@ -1226,7 +1228,8 @@ void CharEyes::Poll() {
             if (!blinkDetected) {
                 if (canSeeTarget) {
                     bool anyEyeClamped = false;
-                    for (ObjVector<EyeDesc>::iterator it = mEyes.begin(); it != mEyes.end();
+                    auto _tmp1 = mEyes.end();
+                    for (ObjVector<EyeDesc>::iterator it = mEyes.begin(); it != _tmp1;
                          ++it) {
                         if (it->mEye && it->mEye->mDisableRoll) {
                             anyEyeClamped = true;

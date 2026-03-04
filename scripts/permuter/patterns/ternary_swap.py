@@ -10,6 +10,17 @@ Also handles return-ternary:
 vs:
     if (cond) { return a; } else { return b; }
 
+And condition polarity flips:
+    if (cond) { x = a; } else { x = b; }
+    ->
+    x = !cond ? b : a;
+
+And bare if/return (no else):
+    if (cond) return a;
+    return b;
+    ->
+    return cond ? a : b;
+
 Example:
     if (flag) { val = 1; } else { val = 2; }
     ->
@@ -50,6 +61,11 @@ class TernarySwapPattern(Pattern):
                 yield variant
                 counter += 1
 
+            # if/else -> ternary with polarity flip (!cond ? alt : cons)
+            for variant in _if_to_ternary_flipped(stmt, ctx, counter):
+                yield variant
+                counter += 1
+
             # ternary -> if/else
             for variant in _ternary_to_if(stmt, ctx, counter):
                 yield variant
@@ -63,6 +79,16 @@ class TernarySwapPattern(Pattern):
             for variant in _if_return_to_ternary(stmt, ctx, counter):
                 yield variant
                 counter += 1
+
+            # if/else return with polarity flip
+            for variant in _if_return_to_ternary_flipped(stmt, ctx, counter):
+                yield variant
+                counter += 1
+
+        # bare if/return (no else) -> return ternary
+        for variant in _bare_if_return_to_ternary(ctx.statements, ctx, counter):
+            yield variant
+            counter += 1
 
 
 def _extract_identifier(node: Node) -> str | None:
@@ -361,6 +387,17 @@ def _extract_single_return(compound: Node) -> str | None:
     return None
 
 
+def _extract_return_value(node: Node) -> str | None:
+    """Extract return value from a return_statement or compound with single return."""
+    if node.type == "return_statement":
+        for child in node.named_children:
+            return child.text.decode("utf-8") if child.text else None
+        return None
+    if node.type == "compound_statement":
+        return _extract_single_return(node)
+    return None
+
+
 def _get_condition_text(condition: Node, ctx: FunctionContext) -> str | None:
     """Get the expression text from a condition_clause, stripping outer parens."""
     for child in condition.named_children:
@@ -430,3 +467,249 @@ def _parse_ternary(
         ctx.source_text(cons),
         ctx.source_text(alt),
     )
+
+
+# ---------------------------------------------------------------------------
+# Condition negation (shared logic with bool_return_expr)
+# ---------------------------------------------------------------------------
+
+_INVERSIONS = {
+    b"<": b">=", b">": b"<=", b"<=": b">", b">=": b"<",
+    b"==": b"!=", b"!=": b"==",
+}
+
+
+def _negate_condition_bytes(node: Node, source: bytes) -> bytes:
+    """Negate a condition expression, preferring operator inversion."""
+    text = source[node.start_byte:node.end_byte]
+
+    # Already negated: !!x -> x
+    if node.type == "unary_expression":
+        op = node.child_by_field_name("operator")
+        if op is not None and op.text == b"!":
+            arg = node.child_by_field_name("argument")
+            if arg is not None:
+                return source[arg.start_byte:arg.end_byte]
+
+    # Binary comparison: invert operator
+    if node.type == "binary_expression":
+        op = node.child_by_field_name("operator")
+        if op is not None and op.text in _INVERSIONS:
+            return (
+                source[node.start_byte:op.start_byte]
+                + _INVERSIONS[op.text]
+                + source[op.end_byte:node.end_byte]
+            )
+
+    # Fallback: wrap with !()
+    return b"!(" + text + b")"
+
+
+# ---------------------------------------------------------------------------
+# Polarity-flipped ternary variants
+# ---------------------------------------------------------------------------
+
+def _if_to_ternary_flipped(node: Node, ctx: FunctionContext, counter: int) -> Iterator[Variant]:
+    """Convert if/else with single assignments to ternary with negated condition.
+
+    if (cond) { x = a; } else { x = b; }  ->  x = !cond ? b : a;
+    """
+    if node.type != "if_statement":
+        for child in node.children:
+            yield from _if_to_ternary_flipped(child, ctx, counter)
+        return
+
+    condition = node.child_by_field_name("condition")
+    consequence = node.child_by_field_name("consequence")
+    alternative = node.child_by_field_name("alternative")
+
+    if condition is None or consequence is None or alternative is None:
+        return
+
+    cons_assign = _extract_single_assignment(consequence)
+    if cons_assign is None:
+        return
+
+    alt_body = None
+    for child in alternative.children:
+        if child.type == "compound_statement":
+            alt_body = child
+            break
+        elif child.type == "if_statement":
+            return
+
+    if alt_body is None:
+        return
+
+    alt_assign = _extract_single_assignment(alt_body)
+    if alt_assign is None:
+        return
+
+    cons_var, cons_val = cons_assign
+    alt_var, alt_val = alt_assign
+
+    if cons_var != alt_var:
+        return
+
+    # Get the inner condition node for negation
+    inner_cond = None
+    for child in condition.named_children:
+        if child.type != "comment":
+            inner_cond = child
+            break
+    if inner_cond is None:
+        return
+
+    negated = _negate_condition_bytes(inner_cond, ctx.file_source)
+
+    # Build ternary with flipped branches: var = !cond ? alt_val : cons_val;
+    indent = get_indent(ctx.file_source, node)
+    ternary = (
+        indent + cons_var.encode("utf-8")
+        + b" = " + negated
+        + b" ? " + alt_val.encode("utf-8")
+        + b" : " + cons_val.encode("utf-8")
+        + b";"
+    )
+
+    source = ctx.file_source
+    new_source = source[:node.start_byte] + ternary + source[node.end_byte:]
+
+    yield Variant(
+        name=f"ternary_{counter}",
+        pattern_name="ternary_swap",
+        description=f"if/else -> ternary (polarity flip): {cons_var} = !cond ? ... : ...",
+        source=new_source,
+    )
+
+
+def _if_return_to_ternary_flipped(node: Node, ctx: FunctionContext, counter: int) -> Iterator[Variant]:
+    """Convert if/else return to ternary with negated condition.
+
+    if (cond) { return a; } else { return b; }  ->  return !cond ? b : a;
+    """
+    if node.type != "if_statement":
+        for child in node.children:
+            yield from _if_return_to_ternary_flipped(child, ctx, counter)
+        return
+
+    condition = node.child_by_field_name("condition")
+    consequence = node.child_by_field_name("consequence")
+    alternative = node.child_by_field_name("alternative")
+
+    if condition is None or consequence is None or alternative is None:
+        return
+
+    cons_ret = _extract_single_return(consequence)
+    if cons_ret is None:
+        return
+
+    alt_body = None
+    for child in alternative.children:
+        if child.type == "compound_statement":
+            alt_body = child
+            break
+        elif child.type == "if_statement":
+            return
+
+    if alt_body is None:
+        return
+
+    alt_ret = _extract_single_return(alt_body)
+    if alt_ret is None:
+        return
+
+    inner_cond = None
+    for child in condition.named_children:
+        if child.type != "comment":
+            inner_cond = child
+            break
+    if inner_cond is None:
+        return
+
+    negated = _negate_condition_bytes(inner_cond, ctx.file_source)
+
+    indent = get_indent(ctx.file_source, node)
+    ternary = (
+        indent + b"return " + negated
+        + b" ? " + alt_ret.encode("utf-8")
+        + b" : " + cons_ret.encode("utf-8")
+        + b";"
+    )
+
+    source = ctx.file_source
+    new_source = source[:node.start_byte] + ternary + source[node.end_byte:]
+
+    yield Variant(
+        name=f"ternary_{counter}",
+        pattern_name="ternary_swap",
+        description="if/else return -> return ternary (polarity flip)",
+        source=new_source,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Bare if/return (no else clause)
+# ---------------------------------------------------------------------------
+
+def _bare_if_return_to_ternary(
+    stmts: list[Node], ctx: FunctionContext, counter: int
+) -> Iterator[Variant]:
+    """Convert bare if (cond) return a; return b; -> return cond ? a : b;
+
+    Handles consecutive statements where if has no else clause.
+    """
+    for i in range(len(stmts) - 1):
+        if_stmt = stmts[i]
+        next_stmt = stmts[i + 1]
+
+        if if_stmt.type != "if_statement":
+            continue
+        if next_stmt.type != "return_statement":
+            continue
+
+        condition = if_stmt.child_by_field_name("condition")
+        consequence = if_stmt.child_by_field_name("consequence")
+        alternative = if_stmt.child_by_field_name("alternative")
+
+        # Must have NO else clause
+        if condition is None or consequence is None or alternative is not None:
+            continue
+
+        cons_ret = _extract_return_value(consequence)
+        if cons_ret is None:
+            continue
+
+        # Get the return value from the next statement
+        next_ret_val = None
+        for child in next_stmt.named_children:
+            if child.type != "comment":
+                next_ret_val = child.text.decode("utf-8") if child.text else None
+                break
+        if next_ret_val is None:
+            continue
+
+        cond_expr = _get_condition_text(condition, ctx)
+        if cond_expr is None:
+            continue
+
+        source = ctx.file_source
+        indent = get_indent(source, if_stmt)
+
+        # return cond ? cons_ret : next_ret;
+        ternary = (
+            indent + b"return " + cond_expr.encode("utf-8")
+            + b" ? " + cons_ret.encode("utf-8")
+            + b" : " + next_ret_val.encode("utf-8")
+            + b";"
+        )
+
+        new_source = source[:if_stmt.start_byte] + ternary + source[next_stmt.end_byte:]
+
+        yield Variant(
+            name=f"ternary_{counter}",
+            pattern_name="ternary_swap",
+            description="bare if/return -> return ternary",
+            source=new_source,
+        )
+        counter += 1

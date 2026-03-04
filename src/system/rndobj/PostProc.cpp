@@ -13,6 +13,9 @@
 #include "rndobj/DOFProc.h"
 #include "rndobj/HiResScreen.h"
 #include "utl/BinStream.h"
+#include "synth_xbox/PitchCorrectedVoice.h"
+
+float TrueColor::ExposureRecipe::GetLux() { return mLux; }
 
 void RndPostProc::ResetDofProc() { TheDOFProc->UnSet(); }
 RndPostProc *RndPostProc::Current() { return sCurrent; }

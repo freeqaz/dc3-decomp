@@ -27,34 +27,39 @@ void SkeletonQualityFilter::RestoreDefaultSidewaysCutoffThreshold() {
 void SkeletonQualityFilter::Update(const Skeleton &skeleton, bool inShellMode) {
     int skeletonIdx = skeleton.SkeletonIndex();
     if (skeletonIdx >= 0 && skeletonIdx < 6) {
-        if (skeleton.IsTracked() || TheGestureMgr->IsTrackingAllSkeletons()) {
-            const Vector3 &root = skeleton.GetUnkab0();
-            if (!root.IsZero()) {
-                bool playerIsPlaying = false;
-                for (int i = 0; i < 2; i++) {
-                    HamPlayerData *player = TheGameData->Player(i);
-                    if (player->GetSkeletonTrackingID() == skeleton.TrackingID()) {
-                        playerIsPlaying = player->IsPlaying();
-                        break;
-                    }
-                }
-                const TrackedJoint *joints = skeleton.TrackedJoints();
-                UpdateIsConfident(joints);
-                UpdateIsSideways(joints);
-                UpdateIsSitting(joints);
-
-                if (!inShellMode && playerIsPlaying) {
-                    mValid = true;
-                } else {
-                    mValid = mIsConfident && !mSideways && !mSitting;
-                }
-                return;
+        if (!(skeleton.IsTracked() || TheGestureMgr->IsTrackingAllSkeletons())) {
+            mValid = false;
+            mSitting = false;
+            mSideways = false;
+            mIsConfident = false;
+            return;
+        }
+        const Vector3 &root = skeleton.GetUnkab0();
+        if (root == Vector3::ZeroVec()) {
+            mValid = false;
+            mSitting = false;
+            mSideways = false;
+            mIsConfident = false;
+            return;
+        }
+        bool playerIsPlaying = false;
+        for (int i = 0; i < 2; i++) {
+            HamPlayerData *player = TheGameData->Player(i);
+            if (player->GetSkeletonTrackingID() == skeleton.TrackingID()) {
+                playerIsPlaying = player->IsPlaying();
+                break;
             }
         }
-        mValid = false;
-        mSitting = false;
-        mSideways = false;
-        mIsConfident = false;
+        const TrackedJoint *joints = skeleton.TrackedJoints();
+        UpdateIsConfident(joints);
+        UpdateIsSideways(joints);
+        UpdateIsSitting(joints);
+
+        if (!inShellMode && playerIsPlaying) {
+            mValid = true;
+        } else {
+            mValid = mIsConfident && !mSideways && !mSitting;
+        }
     }
 }
 

@@ -321,30 +321,61 @@ void HamIKEffector::Poll() {
 void HamIKEffector::ComputeHandPullAndQuat(
     QuatXfm &quatOut, Transform &xfmOut, const Transform &parentXfm, const Vector3 &targetPos
 ) {
-    // Get local transform from parent to effector
-    RndTransformable *effectorParent = mEffector->TransParent();
-    if (!effectorParent) {
-        quatOut.v.Zero();
-        quatOut.q.Reset();
-        xfmOut = mEffector->LocalXfm();
-        return;
+    RndTransformable *effector = mEffector;
+    float dz = targetPos.z - parentXfm.v.z;
+    float dx = targetPos.x - parentXfm.v.x;
+    RndTransformable *parent = effector->TransParent();
+    float dy = targetPos.y - parentXfm.v.y;
+    quatOut.v.z = dz;
+    quatOut.v.x = dx;
+    quatOut.v.y = dy;
+
+    float effectorLen = effector->LocalXfm().v.x;
+    float parentLen = parent->LocalXfm().v.x;
+    float maxReach = (parentLen + effectorLen) * 0.99f;
+    float maxReachSq = maxReach * maxReach;
+    float distSq = dx * dx + dy * dy + dz * dz;
+
+    if (distSq <= maxReachSq
+        || (GetType() != kEffectorTypeHand && GetType() != kEffectorTypeAnkle)) {
+        quatOut.v.z = 0.0f;
+        quatOut.v.y = 0.0f;
+        quatOut.v.x = 0.0f;
+    } else {
+        float factor = 1.0f - maxReach / sqrtf(distSq);
+        quatOut.v.x *= factor;
+        quatOut.v.y *= factor;
+        quatOut.v.z *= factor;
+        distSq = maxReachSq;
     }
-    // Compute the direction from parent to target in world space
-    Vector3 dir;
-    Subtract(targetPos, parentXfm.v, dir);
-    float len = Length(dir);
-    if (len > 0.0001f) {
-        Normalize(dir, dir);
-    }
-    // Get current direction of the effector chain
-    Vector3 curDir = parentXfm.m.z;
-    // Build rotation from curDir to dir
-    Hmx::Quat rot;
-    rot.Reset();
-    MakeRotQuat(curDir, dir, rot);
-    quatOut.q = rot;
-    quatOut.v.Zero();
-    xfmOut = effectorParent->LocalXfm();
+
+    RndTransformable *effParent = mEffector->TransParent();
+    xfmOut.v = effParent->LocalXfm().v;
+
+    float cosAngle =
+        (distSq - (parentLen * parentLen + effectorLen * effectorLen))
+        / (parentLen * effectorLen * 2.0f);
+
+    xfmOut.m.x.z = 0.0f;
+
+    float clampedCos = -1.0f - cosAngle < 0.0f ? cosAngle : -1.0f;
+    clampedCos = clampedCos - 1.0f < 0.0f ? clampedCos : 1.0f;
+
+    xfmOut.m.x.x = clampedCos;
+    float sinAngle = -sqrtf(-(clampedCos * clampedCos - 1.0f));
+    xfmOut.m.x.y = sinAngle;
+    xfmOut.m.y.y = clampedCos;
+    xfmOut.m.y.z = 0.0f;
+    xfmOut.m.y.x = -sinAngle;
+    xfmOut.m.z.x = 0.0f;
+    xfmOut.m.z.y = 0.0f;
+    xfmOut.m.z.z = 1.0f;
+
+    Vector3 localDir;
+    Multiply(mEffector->TransParent()->LocalXfm().v, xfmOut, localDir);
+    Vector3 localTarget;
+    MultiplyTranspose(targetPos, parentXfm, localTarget);
+    MakeRotQuat(localDir, localTarget, quatOut.q);
 }
 
 void HamIKEffector::ComputeElbowPullAndQuat(

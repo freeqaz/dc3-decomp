@@ -16,6 +16,7 @@ public:
     NEW_OBJ(NgLight);
 
     void CheckShadowMap();
+    RndTex *GetShadowMapTex() const { return mShadowMapTex; }
 
     static void Init();
 
@@ -32,7 +33,7 @@ protected:
     bool HaveShadows(std::vector<RndDrawable *> &);
 
     RndTex *mShadowRT; // 0x180
-    int mShadowMap; // 0x184
+    RndTex *mShadowMapTex; // 0x184
     RndTex *unk188; // 0x188
     int unk18c; // 0x18c
 };

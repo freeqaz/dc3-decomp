@@ -198,6 +198,35 @@ def diag_with_noise() -> Diagnosis:
     return d
 
 
+def diag_with_fneg_frsp() -> Diagnosis:
+    """Diagnosis with fneg/frsp scheduling mismatch (for negation_split)."""
+    d = _empty_diag()
+    d.diff_ops = [DiffOp(index=12, target_opcode="frsp", base_opcode="fneg")]
+    d.clusters = [Cluster(start_idx=10, end_idx=15, size=5, inserts=2, deletes=2)]
+    return d
+
+
+def diag_with_store_load_ops() -> Diagnosis:
+    d = _empty_diag()
+    d.diff_ops = [DiffOp(index=5, target_opcode="stw", base_opcode="lwz")]
+    d.clusters = [Cluster(start_idx=3, end_idx=8, size=5, inserts=3, deletes=2)]
+    return d
+
+
+def diag_with_dead_code() -> Diagnosis:
+    d = _empty_diag()
+    d.clusters = [Cluster(start_idx=20, end_idx=25, size=5, inserts=5, deletes=0)]
+    return d
+
+
+def diag_with_replace_real() -> Diagnosis:
+    """Diagnosis with real replace instructions (for bool_cast)."""
+    d = _empty_diag()
+    d.replace_real = 2
+    d.clusters = [Cluster(start_idx=3, end_idx=6, size=3, inserts=1, deletes=1)]
+    return d
+
+
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -687,6 +716,758 @@ float test_func(float a, float b, float c) {
         expected_source="""\
 float test_func(float a, float b, float c) {
     return b * c + a;
+}
+""",
+    ),
+
+    # ===================== negation_split =====================
+
+    PatternFixture(
+        id="negsplit_func_call",
+        pattern_name="negation_split",
+        description="Split -func() into var = func(); var = -var;",
+        func_name="test_func",
+        diagnosis=diag_with_fneg_frsp(),
+        seeded_source="""\
+float test_func(float x, float y) {
+    float angle = -acos(Dot(x, y));
+    return angle;
+}
+""",
+        expected_source="""\
+float test_func(float x, float y) {
+    float angle = acos(Dot(x, y));
+    angle = -angle;
+    return angle;
+}
+""",
+    ),
+
+    PatternFixture(
+        id="negsplit_paren_call",
+        pattern_name="negation_split",
+        description="Split -(expr) into var = expr; var = -var;",
+        func_name="test_func",
+        diagnosis=diag_with_fneg_frsp(),
+        seeded_source="""\
+float test_func(float a, float b) {
+    float result = -(Compute(a, b));
+    return result;
+}
+""",
+        expected_source="""\
+float test_func(float a, float b) {
+    float result = (Compute(a, b));
+    result = -result;
+    return result;
+}
+""",
+    ),
+
+    # ===================== and_split =====================
+
+    PatternFixture(
+        id="andsplit_split_and",
+        pattern_name="and_split",
+        description="Split if (a && b) into nested ifs",
+        func_name="test_func",
+        diagnosis=diag_with_branch_ops(),
+        seeded_source="""\
+void test_func(int a, int b) {
+    if (a > 0 && b > 0) {
+        DoSomething();
+    }
+}
+""",
+        expected_source="""\
+void test_func(int a, int b) {
+    if (a > 0) {
+        if (b > 0) {
+            DoSomething();
+        }
+    }
+}
+""",
+    ),
+
+    PatternFixture(
+        id="andsplit_merge_nested",
+        pattern_name="and_split",
+        description="Merge nested ifs into && condition",
+        func_name="test_func",
+        diagnosis=diag_with_branch_ops(),
+        seeded_source="""\
+void test_func(int a, int b) {
+    if (a > 0) {
+        if (b > 0) {
+            DoSomething();
+        }
+    }
+}
+""",
+        expected_source="""\
+void test_func(int a, int b) {
+    if (a > 0 && b > 0) {
+        DoSomething();
+    }
+}
+""",
+    ),
+
+    # ===================== bool_cast =====================
+
+    PatternFixture(
+        id="boolcast_return_call",
+        pattern_name="bool_cast",
+        description="Wrap return call with bool()",
+        func_name="test_func",
+        diagnosis=diag_with_replace_real(),
+        seeded_source="""\
+bool test_func(int x) {
+    return IsActive(x);
+}
+""",
+        expected_source="""\
+bool test_func(int x) {
+    return bool(IsActive(x));
+}
+""",
+    ),
+
+    # ===================== bitwise_accumulator =====================
+
+    PatternFixture(
+        id="bitacc_logical_to_bitwise",
+        pattern_name="bitwise_accumulator",
+        description="Replace && with & for bool accumulator",
+        func_name="test_func",
+        diagnosis=diag_with_branch_ops(),
+        seeded_source="""\
+bool test_func(bool a, bool b) {
+    bool result = a && b;
+    return result;
+}
+""",
+        expected_source="""\
+bool test_func(bool a, bool b) {
+    bool result = a & b;
+    return result;
+}
+""",
+    ),
+
+    PatternFixture(
+        id="bitacc_bitwise_to_logical",
+        pattern_name="bitwise_accumulator",
+        description="Replace & with && for bool accumulator",
+        func_name="test_func",
+        diagnosis=diag_with_branch_ops(),
+        seeded_source="""\
+bool test_func(bool a, bool b) {
+    bool result = a & b;
+    return result;
+}
+""",
+        expected_source="""\
+bool test_func(bool a, bool b) {
+    bool result = a && b;
+    return result;
+}
+""",
+    ),
+
+    # ===================== max_to_conditional =====================
+
+    PatternFixture(
+        id="maxcond_expand_max",
+        pattern_name="max_to_conditional",
+        description="Expand Max(a, b) to if-statement",
+        func_name="test_func",
+        diagnosis=diag_with_branch_ops(),
+        seeded_source="""\
+void test_func(int i1) {
+    i1 = Max(i1, 1);
+}
+""",
+        expected_source="""\
+void test_func(int i1) {
+    if (i1 < 1) i1 = 1;
+}
+""",
+    ),
+
+    PatternFixture(
+        id="maxcond_collapse_to_max",
+        pattern_name="max_to_conditional",
+        description="Collapse if (a < b) a = b to Max()",
+        func_name="test_func",
+        diagnosis=diag_with_branch_ops(),
+        seeded_source="""\
+void test_func(int val) {
+    if (val < 0) {
+        val = 0;
+    }
+}
+""",
+        expected_source="""\
+void test_func(int val) {
+    val = Max(val, 0);
+}
+""",
+    ),
+
+    # ===================== early_return_merge =====================
+
+    PatternFixture(
+        id="retmerge_merge_guards",
+        pattern_name="early_return_merge",
+        description="Merge 3 guard returns into || chain",
+        func_name="test_func",
+        diagnosis=diag_with_branch_ops(),
+        seeded_source="""\
+bool test_func(int a, int b, int c) {
+    if (a < 0)
+        return false;
+    if (b < 0)
+        return false;
+    if (c < 0)
+        return false;
+    return true;
+}
+""",
+        expected_source="""\
+bool test_func(int a, int b, int c) {
+    if (a < 0 || b < 0 || c < 0)
+        return false;
+    return true;
+}
+""",
+    ),
+
+    PatternFixture(
+        id="retmerge_split_chain",
+        pattern_name="early_return_merge",
+        description="Split || chain into separate guard returns",
+        func_name="test_func",
+        diagnosis=diag_with_branch_ops(),
+        seeded_source="""\
+bool test_func(int a, int b, int c) {
+    if (a < 0 || b < 0 || c < 0)
+        return false;
+    return true;
+}
+""",
+        expected_source="""\
+bool test_func(int a, int b, int c) {
+    if (a < 0)
+        return false;
+    if (b < 0)
+        return false;
+    if (c < 0)
+        return false;
+    return true;
+}
+""",
+    ),
+
+    # ===================== bool_return_expr =====================
+
+    PatternFixture(
+        id="boolret_merge_to_return",
+        pattern_name="bool_return_expr",
+        description="Merge if/return false + return true -> return !cond",
+        func_name="test_func",
+        diagnosis=diag_with_branch_ops(),
+        seeded_source="""\
+bool test_func(int x) {
+    if (x > 0)
+        return false;
+    return true;
+}
+""",
+        expected_source="""\
+bool test_func(int x) {
+    return x <= 0;
+}
+""",
+    ),
+
+    PatternFixture(
+        id="boolret_split_to_if",
+        pattern_name="bool_return_expr",
+        description="Split return !cond into if/return",
+        func_name="test_func",
+        diagnosis=diag_with_branch_ops(),
+        seeded_source="""\
+bool test_func(int x) {
+    return !x;
+}
+""",
+        expected_source="""\
+bool test_func(int x) {
+    if (x)
+        return false;
+    return true;
+}
+""",
+    ),
+
+    PatternFixture(
+        id="boolret_and_split",
+        pattern_name="bool_return_expr",
+        description="Split return a && b into if/return",
+        func_name="test_func",
+        diagnosis=diag_with_branch_ops(),
+        seeded_source="""\
+bool test_func(int a, int b) {
+    return a == 0 && b != 0;
+}
+""",
+        expected_source="""\
+bool test_func(int a, int b) {
+    if (a != 0)
+        return false;
+    return b != 0;
+}
+""",
+    ),
+
+    # ===================== fsel_template =====================
+
+    PatternFixture(
+        id="fsel_single_to_max",
+        pattern_name="fsel_template",
+        description="Convert if (v < 0) v = 0 to Max(v, 0)",
+        func_name="test_func",
+        diagnosis=diag_with_branch_ops(),
+        seeded_source="""\
+void test_func(float val) {
+    if (val < 0.0f) {
+        val = 0.0f;
+    }
+}
+""",
+        expected_source="""\
+void test_func(float val) {
+    val = Max(val, 0.0f);
+}
+""",
+    ),
+
+    PatternFixture(
+        id="fsel_clamp_pair",
+        pattern_name="fsel_template",
+        description="Combine two guards into Clamp()",
+        func_name="test_func",
+        diagnosis=diag_with_branch_ops(),
+        seeded_source="""\
+void test_func(float val) {
+    if (val < 0.0f) {
+        val = 0.0f;
+    }
+    if (val > 1.0f) {
+        val = 1.0f;
+    }
+}
+""",
+        expected_source="""\
+void test_func(float val) {
+    val = Clamp(0.0f, 1.0f, val);
+}
+""",
+    ),
+
+    # ===================== alloca_intrinsic =====================
+
+    PatternFixture(
+        id="alloca_to_underscored",
+        pattern_name="alloca_intrinsic",
+        description="alloca() -> _alloca()",
+        func_name="test_func",
+        diagnosis=diag_always(),
+        seeded_source="""\
+void test_func(int size) {
+    char* buf = (char*)alloca(size);
+}
+""",
+        expected_source="""\
+void test_func(int size) {
+    char* buf = (char*)_alloca(size);
+}
+""",
+    ),
+
+    PatternFixture(
+        id="underscored_alloca_to_plain",
+        pattern_name="alloca_intrinsic",
+        description="_alloca() -> alloca()",
+        func_name="test_func",
+        diagnosis=diag_always(),
+        seeded_source="""\
+void test_func(int size) {
+    char* buf = (char*)_alloca(size);
+}
+""",
+        expected_source="""\
+void test_func(int size) {
+    char* buf = (char*)alloca(size);
+}
+""",
+    ),
+
+    # ===================== sizeof_signed_cast =====================
+
+    PatternFixture(
+        id="sizeof_add_int_cast",
+        pattern_name="sizeof_signed_cast",
+        description="sizeof(X) -> (int)sizeof(X)",
+        func_name="test_func",
+        diagnosis=diag_always(),
+        seeded_source="""\
+void test_func(int total) {
+    int n = total / sizeof(int);
+}
+""",
+        expected_source="""\
+void test_func(int total) {
+    int n = total / (int)sizeof(int);
+}
+""",
+    ),
+
+    PatternFixture(
+        id="sizeof_remove_int_cast",
+        pattern_name="sizeof_signed_cast",
+        description="(int)sizeof(X) -> sizeof(X)",
+        func_name="test_func",
+        diagnosis=diag_always(),
+        seeded_source="""\
+void test_func(int total) {
+    int n = total / (int)sizeof(int);
+}
+""",
+        expected_source="""\
+void test_func(int total) {
+    int n = total / sizeof(int);
+}
+""",
+    ),
+
+    # ===================== initializer_literal =====================
+
+    PatternFixture(
+        id="initlit_float_to_zero",
+        pattern_name="initializer_literal",
+        description="0.0f -> 0 in initializer",
+        func_name="test_func",
+        diagnosis=diag_always(),
+        seeded_source="""\
+void test_func() {
+    float val = 0.0f;
+}
+""",
+        expected_source="""\
+void test_func() {
+    float val = 0;
+}
+""",
+    ),
+
+    PatternFixture(
+        id="initlit_zero_to_float",
+        pattern_name="initializer_literal",
+        description="0 -> 0.0f in initializer",
+        func_name="test_func",
+        diagnosis=diag_always(),
+        seeded_source="""\
+void test_func() {
+    float val = 0;
+}
+""",
+        expected_source="""\
+void test_func() {
+    float val = 0.0f;
+}
+""",
+    ),
+
+    # ===================== single_return =====================
+
+    PatternFixture(
+        id="single_return_merge",
+        pattern_name="single_return",
+        description="if-return-return -> result variable",
+        func_name="test_func",
+        diagnosis=diag_with_branch_ops(),
+        seeded_source="""\
+int test_func(int cond) {
+    if (cond) {
+        return 1;
+    }
+    return 0;
+}
+""",
+        expected_source="""\
+int test_func(int cond) {
+    int _result = 0;
+    if (cond) {
+        _result = 1;
+    }
+    return _result;
+}
+""",
+    ),
+
+    PatternFixture(
+        id="single_return_with_body",
+        pattern_name="single_return",
+        description="if with body + return merged to result var",
+        func_name="test_func",
+        diagnosis=diag_with_branch_ops(),
+        seeded_source="""\
+int test_func(int x) {
+    if (x > 0) {
+        x = x + 1;
+        return x;
+    }
+    return -1;
+}
+""",
+        expected_source="""\
+int test_func(int x) {
+    int _result = -1;
+    if (x > 0) {
+        x = x + 1;
+        _result = x;
+    }
+    return _result;
+}
+""",
+    ),
+
+    # ===================== bit_test_bool =====================
+
+    PatternFixture(
+        id="bittest_extract_to_bool",
+        pattern_name="bit_test_bool",
+        description="Extract (flags & MASK) to bool local",
+        func_name="test_func",
+        diagnosis=diag_with_replace_real(),
+        seeded_source="""\
+void test_func(int flags) {
+    if ((flags & 0x10) && flags > 5) {
+        flags = 0;
+    }
+}
+""",
+        expected_source="""\
+void test_func(int flags) {
+    bool _bit0 = (flags & 0x10) != 0;
+    if ((_bit0) && flags > 5) {
+        flags = 0;
+    }
+}
+""",
+    ),
+
+    PatternFixture(
+        id="bittest_simple_mask",
+        pattern_name="bit_test_bool",
+        description="Extract simple bitwise AND test",
+        func_name="test_func",
+        diagnosis=diag_with_replace_real(),
+        seeded_source="""\
+void test_func(int f) {
+    if (f & 1) {
+        f = 0;
+    }
+}
+""",
+        expected_source="""\
+void test_func(int f) {
+    bool _bit0 = (f & 1) != 0;
+    if (_bit0) {
+        f = 0;
+    }
+}
+""",
+    ),
+
+    # ===================== pragma_fp_contract =====================
+
+    PatternFixture(
+        id="fma_insert_pragma_off",
+        pattern_name="pragma_fp_contract",
+        description="Insert #pragma fp_contract(off) before function",
+        func_name="test_func",
+        diagnosis=diag_with_fma_ops(),
+        seeded_source="""\
+void test_func(float a, float b, float c) {
+    float r = a * b + c;
+}
+""",
+        expected_source="""\
+#pragma fp_contract(off)
+void test_func(float a, float b, float c) {
+    float r = a * b + c;
+}
+""",
+    ),
+
+    PatternFixture(
+        id="fma_remove_pragma_off",
+        pattern_name="pragma_fp_contract",
+        description="Remove existing #pragma fp_contract(off)",
+        func_name="test_func",
+        diagnosis=diag_with_fma_ops(),
+        seeded_source="""\
+#pragma fp_contract(off)
+void test_func(float a, float b, float c) {
+    float r = a * b + c;
+}
+""",
+        expected_source="""\
+void test_func(float a, float b, float c) {
+    float r = a * b + c;
+}
+""",
+    ),
+
+    # ===================== hoist_sret =====================
+
+    PatternFixture(
+        id="hoist_sret_outside_loop",
+        pattern_name="hoist_sret",
+        description="Hoist declaration from inside loop to before loop",
+        func_name="test_func",
+        diagnosis=diag_with_store_load_ops(),
+        seeded_source="""\
+void test_func(int n) {
+    for (int i = 0; i < n; i++) {
+        int pos = GetPos(i);
+        Use(pos);
+    }
+}
+""",
+        expected_source="""\
+void test_func(int n) {
+    int pos;
+    for (int i = 0; i < n; i++) {
+        pos = GetPos(i);
+        Use(pos);
+    }
+}
+""",
+    ),
+
+    PatternFixture(
+        id="hoist_sret_into_loop",
+        pattern_name="hoist_sret",
+        description="Sink declaration into loop body",
+        func_name="test_func",
+        diagnosis=diag_with_store_load_ops(),
+        seeded_source="""\
+void test_func(int n) {
+    int pos;
+    for (int i = 0; i < n; i++) {
+        pos = GetPos(i);
+        Use(pos);
+    }
+}
+""",
+        expected_source="""\
+void test_func(int n) {
+    for (int i = 0; i < n; i++) {
+        int pos = GetPos(i);
+        Use(pos);
+    }
+}
+""",
+    ),
+
+    # ===================== ternary_swap (new variants) =====================
+
+    PatternFixture(
+        id="ternary_polarity_flip",
+        pattern_name="ternary_swap",
+        description="if/else -> ternary with negated condition",
+        func_name="test_func",
+        diagnosis=diag_with_branch_and_clusters(),
+        seeded_source="""\
+void test_func(int x) {
+    int val;
+    if (x > 0) {
+        val = 1;
+    } else {
+        val = 2;
+    }
+}
+""",
+        expected_source="""\
+void test_func(int x) {
+    int val;
+    val = x <= 0 ? 2 : 1;
+}
+""",
+    ),
+
+    PatternFixture(
+        id="ternary_bare_if_return",
+        pattern_name="ternary_swap",
+        description="Bare if/return (no else) -> return ternary",
+        func_name="test_func",
+        diagnosis=diag_with_branch_and_clusters(),
+        seeded_source="""\
+int test_func(int cond) {
+    if (cond) return 10;
+    return 20;
+}
+""",
+        expected_source="""\
+int test_func(int cond) {
+    return cond ? 10 : 20;
+}
+""",
+    ),
+
+    # ===================== noreturn_attr =====================
+
+    PatternFixture(
+        id="noreturn_add_attr",
+        pattern_name="noreturn_attr",
+        description="Add __declspec(noreturn) to Fail declaration",
+        func_name="test_func",
+        diagnosis=diag_with_dead_code(),
+        seeded_source="""\
+void Fail(const char* msg);
+void test_func(int x) {
+    if (x < 0) Fail("bad");
+}
+""",
+        expected_source="""\
+__declspec(noreturn) void Fail(const char* msg);
+void test_func(int x) {
+    if (x < 0) Fail("bad");
+}
+""",
+    ),
+
+    PatternFixture(
+        id="noreturn_remove_attr",
+        pattern_name="noreturn_attr",
+        description="Remove __declspec(noreturn) from declaration",
+        func_name="test_func",
+        diagnosis=diag_with_dead_code(),
+        seeded_source="""\
+__declspec(noreturn) void Fail(const char* msg);
+void test_func(int x) {
+    if (x < 0) Fail("bad");
+}
+""",
+        expected_source="""\
+void Fail(const char* msg);
+void test_func(int x) {
+    if (x < 0) Fail("bad");
 }
 """,
     ),
@@ -1431,6 +2212,129 @@ class TestGuidedPairwiseSearch(unittest.TestCase):
                       f"Combined swap not found in candidates: {candidates}")
 
 
+# ---------------------------------------------------------------------------
+# Diagnosis noise classification tests (from real-world permuter runs)
+# ---------------------------------------------------------------------------
+
+class TestDiagnosisNoise(unittest.TestCase):
+    """Tests for diagnosis noise classification, including address relocation heuristic."""
+
+    def test_addr_reloc_lis_addi_counted_as_noise(self):
+        """lis/addi pairs without diff_breakdown should be classified as noise."""
+        from scripts.permuter.diagnosis import diagnose_baseline, is_all_noise
+
+        # Simulate objdiff JSON with lis/addi diff_arg (no diff_breakdown)
+        instrs = []
+        # 90 equal instructions
+        for i in range(90):
+            instrs.append({"index": i, "match_type": "equal", "target": {"opcode": "mr"}, "base": {"opcode": "mr"}})
+        # 5 lis/addi pairs as diff_arg with no diff_breakdown (address relocation noise)
+        for i in range(5):
+            instrs.append({"index": 90 + i * 2, "match_type": "diff_arg",
+                           "target": {"opcode": "lis"}, "base": {"opcode": "lis"}})
+            instrs.append({"index": 91 + i * 2, "match_type": "diff_arg",
+                           "target": {"opcode": "addi"}, "base": {"opcode": "addi"}})
+
+        objdiff_json = {"instructions": instrs}
+        diag = diagnose_baseline(objdiff_json)
+
+        self.assertEqual(diag.noise_total, 10)
+        self.assertEqual(diag.noise_explained, 10)
+        self.assertTrue(is_all_noise(diag))
+
+    def test_bl_without_breakdown_counted_as_noise(self):
+        """bl (branch-link) without diff_breakdown should be classified as noise."""
+        from scripts.permuter.diagnosis import diagnose_baseline
+
+        instrs = [
+            {"index": 0, "match_type": "equal", "target": {"opcode": "mr"}, "base": {"opcode": "mr"}},
+            {"index": 1, "match_type": "diff_arg", "target": {"opcode": "bl"}, "base": {"opcode": "bl"}},
+        ]
+        diag = diagnose_baseline({"instructions": instrs})
+        self.assertEqual(diag.noise_explained, 1)
+        self.assertEqual(diag.noise_total, 1)
+
+    def test_non_reloc_opcode_without_breakdown_not_noise(self):
+        """diff_arg with unknown opcode and no diff_breakdown should NOT be counted as noise."""
+        from scripts.permuter.diagnosis import diagnose_baseline
+
+        instrs = [
+            {"index": 0, "match_type": "equal", "target": {"opcode": "mr"}, "base": {"opcode": "mr"}},
+            {"index": 1, "match_type": "diff_arg", "target": {"opcode": "stw"}, "base": {"opcode": "stw"}},
+        ]
+        diag = diagnose_baseline({"instructions": instrs})
+        self.assertEqual(diag.noise_explained, 0)
+        self.assertEqual(diag.noise_total, 1)
+
+    def test_diff_arg_with_breakdown_still_analyzed(self):
+        """diff_arg with diff_breakdown should use the existing analysis path."""
+        from scripts.permuter.diagnosis import diagnose_baseline
+
+        instrs = [
+            {"index": 0, "match_type": "equal", "target": {"opcode": "mr"}, "base": {"opcode": "mr"}},
+            {"index": 1, "match_type": "diff_arg", "target": {"opcode": "lfs"}, "base": {"opcode": "lfs"},
+             "diff_breakdown": {"arguments": [{"arg_type": "immediate", "target": {"value": 0xec}, "base": {"value": 0xe8}}]}},
+        ]
+        diag = diagnose_baseline({"instructions": instrs})
+        self.assertEqual(diag.noise_explained, 1)  # immediate with numeric values = noise
+
+
+# ---------------------------------------------------------------------------
+# extract_qualified_name tests
+# ---------------------------------------------------------------------------
+
+class TestExtractQualifiedName(unittest.TestCase):
+    """Tests for extract_qualified_name() handling operator overloads."""
+
+    def test_regular_method(self):
+        from scripts.permuter.types import extract_qualified_name
+        self.assertEqual(
+            extract_qualified_name("public: virtual void __cdecl CharBlendBone::Poll(void)"),
+            "CharBlendBone::Poll",
+        )
+
+    def test_destructor(self):
+        from scripts.permuter.types import extract_qualified_name
+        self.assertEqual(
+            extract_qualified_name("public: __cdecl ClipDistMap::~ClipDistMap(void)"),
+            "ClipDistMap::~ClipDistMap",
+        )
+
+    def test_operator_call(self):
+        from scripts.permuter.types import extract_qualified_name
+        self.assertEqual(
+            extract_qualified_name(
+                "public: bool __cdecl FileMergerSort::operator()"
+                "(struct FileMerger::Merger const *, struct FileMerger::Merger const *)"
+            ),
+            "FileMergerSort::operator()",
+        )
+
+    def test_operator_eq(self):
+        from scripts.permuter.types import extract_qualified_name
+        self.assertEqual(
+            extract_qualified_name("public: class DataNode __cdecl Object::operator==(class Object const *)"),
+            "Object::operator==",
+        )
+
+    def test_operator_subscript(self):
+        from scripts.permuter.types import extract_qualified_name
+        self.assertEqual(
+            extract_qualified_name("public: class Hmx::Object * __cdecl ObjectDir::operator[](char const *)"),
+            "ObjectDir::operator[]",
+        )
+
+    def test_free_function_returns_none(self):
+        """Free functions (no ::) return None since we can't extract a qualified name."""
+        from scripts.permuter.types import extract_qualified_name
+        # operator>> as a free function — no class qualifier, just 'operator>>'
+        result = extract_qualified_name(
+            "class BinStream & __cdecl operator>>(class BinStream &, struct CharEyes::EyeDesc &)"
+        )
+        # Free function without :: — extract_qualified_name requires ::
+        self.assertIsNone(result)
+
+
 class TestColorToGpr(unittest.TestCase):
     """Tests for the color <-> GPR mapping functions."""
 
@@ -1472,6 +2376,515 @@ class TestColorToGpr(unittest.TestCase):
         self.assertEqual(gpr_to_color("r13"), 25)
         self.assertIsNone(gpr_to_color("r3"))
         self.assertIsNone(gpr_to_color("r4"))  # r4 is arg reg, not in color space
+
+
+# ---------------------------------------------------------------------------
+# 3-way register swap tests (cycle: rA↔rB, rB↔rC, rA↔rC)
+# ---------------------------------------------------------------------------
+
+def diag_with_3way_gpr_swaps() -> Diagnosis:
+    """Diagnosis with a 3-way GPR register swap cycle (r24↔r25↔r26)."""
+    d = _empty_diag()
+    d.reg_swap_pairs = {
+        ("r24", "r25"): SwapInfo(count=3, first_idx=10, last_idx=40),
+        ("r25", "r26"): SwapInfo(count=2, first_idx=15, last_idx=45),
+        ("r24", "r26"): SwapInfo(count=2, first_idx=20, last_idx=50),
+    }
+    return d
+
+
+def diag_with_fpr_swaps() -> Diagnosis:
+    """Diagnosis with FPR register swaps only (no GPR swaps)."""
+    d = _empty_diag()
+    d.reg_swap_pairs = {
+        ("f1", "f2"): SwapInfo(count=4, first_idx=5, last_idx=30),
+        ("f3", "f4"): SwapInfo(count=2, first_idx=10, last_idx=35),
+    }
+    return d
+
+
+def diag_with_mixed_gpr_fpr_swaps() -> Diagnosis:
+    """Diagnosis with both GPR and FPR register swaps."""
+    d = _empty_diag()
+    d.reg_swap_pairs = {
+        ("r28", "r29"): SwapInfo(count=3, first_idx=10, last_idx=40),
+        ("f1", "f2"): SwapInfo(count=4, first_idx=5, last_idx=30),
+    }
+    return d
+
+
+class TestThreeWayRegSwap(unittest.TestCase):
+    """Tests for 3-way register swap cycles.
+
+    A 3-way swap (r24↔r25↔r26) means the compiler assigned registers
+    in a cyclic pattern. Fixing this requires a 3-way permutation, not
+    just pairwise swaps. These tests verify the current solver behavior
+    and document expected failures.
+    """
+
+    @staticmethod
+    def _make_mock_trace(colors: list[int]) -> object:
+        from tools.compiler_trace.bsf_trace import BSFTrace, BSFCall
+        from tools.compiler_trace.regmap_solver import INITIAL_COLORING_RVA
+        calls = []
+        for i, color in enumerate(colors):
+            calls.append(BSFCall(
+                index=i + 1,
+                caller_rva=INITIAL_COLORING_RVA,
+                lo=0, hi=0, base=0,
+                bit=color,
+            ))
+        return BSFTrace(source=Path("/dev/null"), calls=calls)
+
+    def test_3way_swap_relevant(self):
+        """3-way GPR swaps should make declaration_reorder relevant."""
+        from scripts.permuter.patterns import get_pattern
+        p = get_pattern("declaration_reorder")
+        self.assertTrue(p.relevant(diag_with_3way_gpr_swaps()))
+
+    def test_3way_swap_generates_candidates(self):
+        """The solver should generate SOME candidates for 3-way swaps.
+
+        Even if pairwise swaps can't solve a 3-way cycle, the solver
+        should still try individual pair swaps as partial fixes.
+        """
+        from tools.compiler_trace.regmap_solver import guided_pairwise_search
+
+        # r24=color14, r25=color13, r26=color12
+        # (color_to_gpr: color N = r(38-N) for callee-saved)
+        colors = [7, 8, 9, 10, 11, 12, 13, 14]  # r31..r24
+        trace = self._make_mock_trace(colors)
+        decl_names = [f"v{i}" for i in range(8)]
+
+        # 3-way cycle: r24↔r25, r25↔r26, r24↔r26
+        swap_pairs = [("r24", "r25"), ("r25", "r26"), ("r24", "r26")]
+        candidates = guided_pairwise_search(trace, swap_pairs, decl_names)
+
+        self.assertGreater(len(candidates), 0,
+                           "Should produce candidates even for 3-way swap")
+
+    def test_3way_swap_has_cyclic_candidate(self):
+        """A 3-way swap cycle needs a 3-way permutation (rotation).
+
+        For r24↔r25↔r26, the fix is to rotate declarations:
+        v5(r26) → v6(r25) → v7(r24) becomes v7 → v5 → v6
+        (shift the 3 positions by 1).
+        """
+        from tools.compiler_trace.regmap_solver import guided_pairwise_search
+
+        # 3 variables: colors 12,13,14 → r26,r25,r24
+        colors = [12, 13, 14]
+        trace = self._make_mock_trace(colors)
+        decl_names = ["a", "b", "c"]
+
+        # 3-way cycle
+        swap_pairs = [("r24", "r25"), ("r25", "r26"), ("r24", "r26")]
+        candidates = guided_pairwise_search(trace, swap_pairs, decl_names)
+
+        # The cyclic rotation: a→b→c→a means [c, a, b] or [b, c, a]
+        rotations = [["c", "a", "b"], ["b", "c", "a"]]
+        has_rotation = any(r in candidates for r in rotations)
+        self.assertTrue(has_rotation,
+                        f"No cyclic rotation found in candidates: {candidates}")
+
+    def test_3way_swap_pairwise_subset(self):
+        """3-way swap should at least produce the individual pairwise swaps."""
+        from tools.compiler_trace.regmap_solver import guided_pairwise_search
+
+        # r24=color14, r25=color13, r26=color12
+        colors = [12, 13, 14]
+        trace = self._make_mock_trace(colors)
+        decl_names = ["a", "b", "c"]
+
+        swap_pairs = [("r24", "r25"), ("r25", "r26"), ("r24", "r26")]
+        candidates = guided_pairwise_search(trace, swap_pairs, decl_names)
+
+        # Should have at least the pairwise swaps
+        # r24↔r25 = indices 2,1 = ["a", "c", "b"]
+        # r25↔r26 = indices 1,0 = ["b", "a", "c"]
+        # r24↔r26 = indices 2,0 = ["c", "b", "a"]
+        pair_swaps = [["a", "c", "b"], ["b", "a", "c"], ["c", "b", "a"]]
+        found = sum(1 for p in pair_swaps if p in candidates)
+        self.assertGreaterEqual(found, 2,
+                                f"Should have at least 2 pairwise swaps, got {found} of {candidates}")
+
+
+# ---------------------------------------------------------------------------
+# FPR register swap tests
+# ---------------------------------------------------------------------------
+
+class TestFPRSwapHandling(unittest.TestCase):
+    """Tests for FPR (floating-point register) swap handling.
+
+    Currently BSF tracing and the regmap solver only handle GPR swaps.
+    FPR swaps are detected by diagnosis but NOT addressable by BSF-guided
+    declaration reorder. These tests document the current state and
+    will be updated when FPR support is added.
+    """
+
+    def test_fpr_only_diagnosis_makes_declreorder_irrelevant(self):
+        """declaration_reorder should NOT be relevant for FPR-only swaps.
+
+        The pattern checks for GPR swaps (r-prefix). FPR swaps (f-prefix)
+        should not trigger it since BSF-guided reorder can't fix them.
+        """
+        from scripts.permuter.patterns import get_pattern
+        p = get_pattern("declaration_reorder")
+        diag = diag_with_fpr_swaps()
+        self.assertFalse(p.relevant(diag),
+                         "declaration_reorder should NOT be relevant for FPR-only swaps")
+
+    def test_mixed_gpr_fpr_makes_declreorder_relevant(self):
+        """Mixed GPR+FPR swaps should still make declreorder relevant (for GPR part)."""
+        from scripts.permuter.patterns import get_pattern
+        p = get_pattern("declaration_reorder")
+        diag = diag_with_mixed_gpr_fpr_swaps()
+        self.assertTrue(p.relevant(diag),
+                        "Should be relevant when GPR swaps present alongside FPR")
+
+    def test_fpr_color_mapping_not_implemented(self):
+        """Verify FPR registers have no color mapping (documenting limitation)."""
+        from tools.compiler_trace.regmap_solver import gpr_to_color
+        # FPR registers should return None from the GPR mapper
+        for fpr in ["f0", "f1", "f2", "f13", "f31"]:
+            self.assertIsNone(gpr_to_color(fpr),
+                              f"FPR {fpr} should not have a GPR color mapping")
+
+    def test_fpr_swap_uses_untargeted_fallback(self):
+        """FPR swaps fall through to bounded neighbor fallback (untargeted).
+
+        Since fpr_to_color() doesn't exist, FPR pairs are treated as
+        unmapped and get generic neighbor swaps. The candidates are NOT
+        targeted at the right FPR registers — they're just blind guesses.
+        When we add FPR color mapping, candidates should be targeted.
+        """
+        from tools.compiler_trace.regmap_solver import guided_pairwise_search
+        from tools.compiler_trace.bsf_trace import BSFTrace, BSFCall
+        from tools.compiler_trace.regmap_solver import INITIAL_COLORING_RVA
+
+        calls = [
+            BSFCall(index=1, caller_rva=INITIAL_COLORING_RVA, lo=0, hi=0, base=0, bit=26),
+            BSFCall(index=2, caller_rva=INITIAL_COLORING_RVA, lo=0, hi=0, base=0, bit=27),
+        ]
+        trace = BSFTrace(source=Path("/dev/null"), calls=calls)
+        decl_names = ["x", "y"]
+
+        # FPR swap pair — unmappable, should use fallback
+        candidates = guided_pairwise_search(trace, [("f1", "f2")], decl_names)
+        # Fallback produces candidates but they're not targeted
+        self.assertGreater(len(candidates), 0,
+                           "Fallback should produce some candidates")
+        # With only 2 decls, the only swap is ["y", "x"]
+        self.assertEqual(candidates[0], ["y", "x"])
+
+    def test_fpr_callee_saved_mapping(self):
+        """Callee-saved FPR (f14-f31) should map to declaration indices.
+
+        FPR allocation is sequential by declaration order:
+        f31 = first float (index 0), f30 = second (index 1), etc.
+        """
+        from tools.compiler_trace.regmap_solver import (
+            fpr_to_decl_index,
+            decl_index_to_fpr,
+            is_callee_saved_fpr,
+        )
+
+        # Callee-saved FPRs have declaration indices
+        self.assertEqual(fpr_to_decl_index("f31"), 0)
+        self.assertEqual(fpr_to_decl_index("f30"), 1)
+        self.assertEqual(fpr_to_decl_index("f14"), 17)
+
+        # Volatile FPRs return None
+        self.assertIsNone(fpr_to_decl_index("f0"))
+        self.assertIsNone(fpr_to_decl_index("f13"))
+
+        # Round-trip
+        self.assertEqual(decl_index_to_fpr(0), "f31")
+        self.assertEqual(decl_index_to_fpr(1), "f30")
+        self.assertEqual(decl_index_to_fpr(17), "f14")
+
+        # Classification
+        self.assertTrue(is_callee_saved_fpr("f14"))
+        self.assertTrue(is_callee_saved_fpr("f31"))
+        self.assertFalse(is_callee_saved_fpr("f13"))
+        self.assertFalse(is_callee_saved_fpr("f0"))
+        self.assertFalse(is_callee_saved_fpr("r31"))
+
+
+# ---------------------------------------------------------------------------
+# BSF isolation exact match tests
+# ---------------------------------------------------------------------------
+
+class TestBSFIsolationMatching(unittest.TestCase):
+    """Tests for BSF per-function isolation matching logic.
+
+    The partition matching in declaration_reorder.py should:
+    1. Exact-match the mangled symbol first (tier 0)
+    2. Match qualified name (both Class AND Method) as tier 1
+    3. NOT match partial names (e.g., "Highlight" matching "RndHighlightable")
+    """
+
+    def test_exact_symbol_match_preferred(self):
+        """When ctx.symbol is set, exact match should be used first."""
+        # This is a logic test for the matching tiers. We verify that
+        # _partition_match (conceptual) prefers exact symbol over fuzzy.
+        # The actual method is embedded in declaration_reorder._try_bsf_guided()
+        # so we test the logic in isolation.
+        partitions = {
+            "__all__": "all_trace",
+            "?Highlight@CharCollide@@UAAXXZ": "correct_trace",
+            "??0RndHighlightable@@QAA@XZ": "wrong_trace",
+            "__remainder__": "remainder",
+        }
+
+        target_symbol = "?Highlight@CharCollide@@UAAXXZ"
+
+        # Tier 0: exact match
+        match = None
+        for name in partitions:
+            if name in ("__all__", "__remainder__"):
+                continue
+            if name == target_symbol:
+                match = name
+                break
+
+        self.assertEqual(match, "?Highlight@CharCollide@@UAAXXZ",
+                         "Exact symbol match should find correct partition")
+
+    def test_fuzzy_match_rejects_partial_class(self):
+        """Fuzzy matching should require BOTH class AND method name.
+
+        Bug case: "Highlight" (method) substring-matched "RndHighlightable"
+        (a different class constructor) because only method name was checked.
+        """
+        partitions = {
+            "??0RndHighlightable@@QAA@XZ": "wrong_trace",  # Constructor of different class
+            "?SetName@CharCollide@@UAAXXZ": "also_wrong",
+        }
+
+        # Target: CharCollide::Highlight
+        class_name = "CharCollide"
+        method_name = "Highlight"
+
+        # Tier 1: require both class and method in partition name
+        match = None
+        for name in partitions:
+            if class_name in name and method_name in name:
+                match = name
+                break
+
+        self.assertIsNone(match,
+                          "Should NOT match RndHighlightable when looking for CharCollide::Highlight")
+
+    def test_fuzzy_match_finds_correct_partition(self):
+        """When both class and method name appear, fuzzy match should work."""
+        partitions = {
+            "?Highlight@CharCollide@@UAAXXZ": "correct_trace",
+            "??0RndHighlightable@@QAA@XZ": "wrong_trace",
+        }
+
+        class_name = "CharCollide"
+        method_name = "Highlight"
+
+        match = None
+        for name in partitions:
+            if class_name in name and method_name in name:
+                match = name
+                break
+
+        self.assertEqual(match, "?Highlight@CharCollide@@UAAXXZ",
+                         "Should match partition containing both CharCollide and Highlight")
+
+    def test_operator_overload_exact_match(self):
+        """Operator overloads should match via exact symbol (tier 0)."""
+        partitions = {
+            "??RFileMergerSort@@QAA_NPBUMerger@FileMerger@@0@Z": "correct_trace",
+            "??0FileMerger@@QAA@XZ": "wrong_trace",
+        }
+
+        target_symbol = "??RFileMergerSort@@QAA_NPBUMerger@FileMerger@@0@Z"
+
+        match = None
+        for name in partitions:
+            if name == target_symbol:
+                match = name
+                break
+
+        self.assertEqual(match, target_symbol,
+                         "Operator overload should match via exact symbol")
+
+
+# ---------------------------------------------------------------------------
+# BSF population reality check (documents what we learned from scanning)
+# ---------------------------------------------------------------------------
+
+class TestBSFPopulationAssumptions(unittest.TestCase):
+    """Documents empirical findings about BSF call distribution.
+
+    From scanning 100 AT_LIMIT functions with register swaps:
+    - 17% have BSF calls in their partition (addressable by BSF-guided reorder)
+    - 83% have 0 BSF calls (compiler uses simpler allocation, not graph coloring)
+    - Functions with few local variables (< ~5-6) tend to have 0 BSF calls
+    - Template/utility functions (MakeString, PropSync) consume most BSF calls
+    """
+
+    def test_gpr_to_color_covers_callee_saved_range(self):
+        """Callee-saved GPRs r13-r31 should all have color mappings."""
+        from tools.compiler_trace.regmap_solver import gpr_to_color
+        for reg_num in range(13, 32):
+            color = gpr_to_color(f"r{reg_num}")
+            self.assertIsNotNone(color,
+                                 f"r{reg_num} should have a color mapping")
+
+    def test_color_range_for_typical_regswaps(self):
+        """Typical regswap pairs (r28↔r29, r30↔r31) should map to adjacent colors."""
+        from tools.compiler_trace.regmap_solver import gpr_to_color
+        # r28=color10, r29=color9, r30=color8, r31=color7
+        self.assertEqual(gpr_to_color("r31"), 7)
+        self.assertEqual(gpr_to_color("r30"), 8)
+        self.assertEqual(gpr_to_color("r29"), 9)
+        self.assertEqual(gpr_to_color("r28"), 10)
+
+        # Adjacent colors → adjacent declarations → pairwise swap is correct strategy
+        self.assertEqual(gpr_to_color("r30") - gpr_to_color("r31"), 1)
+        self.assertEqual(gpr_to_color("r29") - gpr_to_color("r30"), 1)
+
+
+# ---------------------------------------------------------------------------
+# Real-world test cases from the project
+# ---------------------------------------------------------------------------
+
+class TestRealWorldCalcRotzBone(unittest.TestCase):
+    """Real-world test case: HamSkeletonConverter::CalcRotzBone.
+
+    At 96.1% match with:
+    - Offset swaps: (0x54,0x58) and (0x64,0x68) — dir1/dir2 stack layout
+    - FPR scheduling: fneg/frsp order around -acos() result
+    - f0↔f31 register swap (f31 is callee-saved = first float declared)
+    - Branch polarity at instruction 65
+
+    This function is a good test case because:
+    1. It has a callee-saved FPR swap (f31) — testable with our new FPR mapping
+    2. The offset swap correlates with Vector3 declaration order (dir1 vs dir2)
+    3. The fix likely involves reordering float/Vector3 declarations
+    """
+
+    def test_fpr_f31_is_first_float_declaration(self):
+        """f31 = first float declared. In CalcRotzBone, 'angle' is the only
+        float local, so it gets f31. The target negates into f31 (callee-saved)
+        while our code uses f0 (volatile)."""
+        from tools.compiler_trace.regmap_solver import fpr_to_decl_index
+        self.assertEqual(fpr_to_decl_index("f31"), 0,
+                         "f31 should be declaration index 0 (first float)")
+
+    def test_offset_swap_suggests_vector3_reorder(self):
+        """Offset swaps (0x54↔0x58, 0x64↔0x68) are 4 bytes apart, suggesting
+        adjacent Vector3 components or adjacent Vector3 locals on the stack.
+        Swapping dir1/dir2 declaration order may fix this."""
+        # Document the pattern: when two Vector3 locals have their
+        # stack offsets swapped by exactly sizeof(float)=4, it means
+        # the compiler laid them out in a different order
+        offset_pairs = [(0x54, 0x58), (0x64, 0x68)]
+        for a, b in offset_pairs:
+            self.assertEqual(abs(a - b), 4,
+                             "Offset swap should be sizeof(float) apart")
+
+    def test_fpr_swap_classification(self):
+        """CalcRotzBone has 2 FPR swap pairs: f0↔f31 (callee-saved) and f0↔f1 (volatile).
+        Our FPR mapping should correctly classify them."""
+        from tools.compiler_trace.regmap_solver import is_callee_saved_fpr
+
+        # Real swap pairs from diff_inspect regswaps output
+        swap_pairs = [("f0", "f31"), ("f0", "f1")]
+
+        callee_saved_swaps = [
+            (a, b) for a, b in swap_pairs
+            if is_callee_saved_fpr(a) or is_callee_saved_fpr(b)
+        ]
+        volatile_only_swaps = [
+            (a, b) for a, b in swap_pairs
+            if not is_callee_saved_fpr(a) and not is_callee_saved_fpr(b)
+        ]
+        self.assertEqual(len(callee_saved_swaps), 1,
+                         "Should have 1 swap involving callee-saved FPR (f0↔f31)")
+        self.assertEqual(len(volatile_only_swaps), 1,
+                         "Should have 1 volatile-only FPR swap (f0↔f1)")
+
+    def test_fpr_targeted_swap_for_callee_saved_pair(self):
+        """The FPR swap f0↔f31 involves one callee-saved register (f31).
+        Since f0 is volatile (return value), this is NOT a pure declaration
+        reorder target — it's a scheduling difference. Only f14-f31 ↔ f14-f31
+        pairs are pure declaration reorder targets."""
+        from tools.compiler_trace.regmap_solver import (
+            fpr_to_decl_index,
+            is_callee_saved_fpr,
+        )
+        # f0↔f31: f0 is volatile, f31 is callee-saved
+        # This is NOT a pure declaration reorder target because
+        # f0 has no declaration index
+        self.assertIsNone(fpr_to_decl_index("f0"))
+        self.assertIsNotNone(fpr_to_decl_index("f31"))
+
+        # Pure callee-saved pairs (like f30↔f31 in Invert) ARE targets
+        self.assertTrue(is_callee_saved_fpr("f30"))
+        self.assertTrue(is_callee_saved_fpr("f31"))
+        idx30 = fpr_to_decl_index("f30")
+        idx31 = fpr_to_decl_index("f31")
+        self.assertEqual(abs(idx30 - idx31), 1,
+                         "f30 and f31 are adjacent declaration indices")
+
+
+class TestRealWorldInvertTransform(unittest.TestCase):
+    """Real-world test case: Invert(Transform const&, Transform&).
+
+    At 99.5% match with:
+    - f30↔f31 callee-saved FPR swap (4 instructions)
+    - Offset swaps: (0x4,0x14) and (0x8,0x18) — Matrix3 member access order
+    - Pure FPR swap — no GPR swaps
+
+    This is the cleanest FPR swap target: a pure callee-saved pair (f30↔f31)
+    that should be fixable by swapping two float expression evaluations.
+    """
+
+    def test_f30_f31_are_adjacent_declarations(self):
+        """f30 = second float, f31 = first float. Swapping their declaration
+        order should swap the register assignment."""
+        from tools.compiler_trace.regmap_solver import fpr_to_decl_index
+        self.assertEqual(fpr_to_decl_index("f31"), 0)  # First float
+        self.assertEqual(fpr_to_decl_index("f30"), 1)  # Second float
+        # Adjacent — a simple pairwise swap of float declarations
+
+    def test_guided_search_maps_fpr_callee_saved_pair(self):
+        """guided_pairwise_search should map f30↔f31 to declaration indices
+        0↔1 and generate a targeted swap candidate."""
+        from tools.compiler_trace.regmap_solver import (
+            guided_pairwise_search,
+            INITIAL_COLORING_RVA,
+        )
+        from tools.compiler_trace.bsf_trace import BSFTrace, BSFCall
+
+        # Minimal BSF trace with 2 GPR-like variables
+        # (BSF trace is used for GPR coloring; FPR mapping is direct)
+        trace = BSFTrace(source=Path("test.cpp"), calls=[
+            BSFCall(index=1, caller_rva=INITIAL_COLORING_RVA,
+                    lo=0xFFFFFF80, hi=0xFFFFFFFF, base=0, bit=7),
+            BSFCall(index=2, caller_rva=INITIAL_COLORING_RVA,
+                    lo=0xFFFFFF00, hi=0xFFFFFFFF, base=0, bit=8),
+        ])
+
+        # FPR swap pair from objdiff
+        swap_pairs = [("f30", "f31")]
+        decl_names = ["expr_a", "expr_b"]
+
+        candidates = guided_pairwise_search(
+            trace, swap_pairs, decl_names
+        )
+
+        # Should produce a targeted swap: ["expr_b", "expr_a"]
+        self.assertTrue(len(candidates) > 0,
+                        "Should produce candidates for callee-saved FPR swap")
+        self.assertIn(["expr_b", "expr_a"], candidates,
+                      "Should include the pairwise swap of the two declarations")
 
 
 if __name__ == "__main__":

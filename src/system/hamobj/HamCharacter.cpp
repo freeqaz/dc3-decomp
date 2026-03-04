@@ -29,7 +29,9 @@
 #include "rndobj/Draw.h"
 #include "rndobj/TexBlender.h"
 #include "rndobj/Trans.h"
+#include "synth/Sound.h"
 #include "synth/Synth.h"
+#include "obj/Task.h"
 #include "utl/BinStream.h"
 #include "utl/FilePath.h"
 #include "utl/Loader.h"
@@ -676,15 +678,38 @@ void HamCharacter::BlendInFaceOverrideClip(Symbol clipName, float blendIn, float
 }
 
 DataNode HamCharacter::OnSoundPlay(const DataArray *a) {
-    if (TheSynth) {
-        Symbol bank = a->Sym(2);
-        if (mCampaignVOBank) {
-            static Symbol play("play");
-            Message msg(play, bank);
-            mCampaignVOBank->Handle(msg, false);
+    const DataNode &val = const_cast<DataArray *>(a)->Node(2).Evaluate();
+    if (val.Type() == kDataObject) {
+        Hmx::Object *obj = val.UncheckedObj();
+        if (!obj) return DataNode(0);
+        Sound *sound = dynamic_cast<Sound *>(obj);
+        if (sound) {
+            if (mOutfit.Str()[0] == '\0') {
+                MILO_NOTIFY(
+                    "HamCharacter::OnSoundPlay: No outfit specified for character %s. "
+                    "Not going to play lipsync\n",
+                    (char *)Name()
+                );
+                return DataNode(0);
+            }
+            Symbol outfitChar = GetOutfitCharacter(mOutfit, true);
+            StackString<128> soundName(sound->Name());
+            unsigned int pos = soundName.find(outfitChar.Str());
+            if (pos != (unsigned int)-1) {
+                CharLipSync *lipSync = CharLipSync::FindLipSyncForSound(sound);
+                if (lipSync) {
+                    TheDebug << MakeString(
+                        "HamCharacter: found lipsync [%s] to play for sound [%s]\n",
+                        lipSync->Name(),
+                        sound->Name()
+                    );
+                    float seconds = TheTaskMgr.Seconds(TaskMgr::kRealTime);
+                    EnableFacialAnimation(lipSync, -seconds);
+                }
+            }
         }
     }
-    return 0;
+    return DataNode(0);
 }
 
 #ifndef HX_NATIVE

@@ -284,28 +284,58 @@ void FlowNode::PushDrivenProperties() {
         DrivenPropertyEntry &entry = *it;
         ObjVector<FlowMathOp> &mathOps =
             const_cast<ObjVector<FlowMathOp> &>(entry.MathOps());
-        DataNode targetValue(kDataUndef, 0);
+        DataNode targetValue(0);
 
-        if (!mathOps.empty()) {
-            FlowMathOp &firstOp = mathOps[0];
-            Hmx::Object *drivenObj = firstOp.DrivenObj();
+        FlowMathOp &firstOp = mathOps[0];
+        Hmx::Object *drivenObj = firstOp.DrivenObj();
 
-            if (drivenObj) {
-                const DataNode &rhsNode = firstOp.Rhs();
-                if (rhsNode.Type() == kDataArray) {
-                    const DataNode *drivenVal =
-                        drivenObj->Property(rhsNode.Array(), false);
-                    if (drivenVal)
-                        targetValue = *drivenVal;
+        if (drivenObj) {
+            DataArray *propPath = firstOp.Rhs().Array(NULL);
+            const DataNode *prop = drivenObj->Property(propPath, false);
+            if (prop) {
+                targetValue = *prop;
+            } else {
+                targetValue = DataNode(firstOp.Default());
+            }
+        } else {
+            targetValue = DataNode(firstOp.Default());
+        }
+
+        if (&mathOps[0] + 1 == &*mathOps.end()) {
+            SetProperty(entry.Node().Array(NULL), targetValue);
+        } else {
+            if (targetValue.CompatibleType(kDataFloat)) {
+                float val = targetValue.LiteralFloat(NULL);
+                FlowMathOp *op = &mathOps[0];
+                auto opEnd = mathOps.end();
+                while (op++, op != opEnd) {
+                    val = op->Apply(val);
+                }
+                targetValue = DataNode(val);
+            }
+
+            const DataNode *existingProp = Property(entry.Node().Array(NULL), true);
+
+            if (existingProp->Type() == targetValue.Type()) {
+                SetProperty(entry.Node().Array(NULL), targetValue);
+            } else if (targetValue.Type() == kDataFloat
+                       || targetValue.Type() == kDataInt) {
+                if (existingProp->Type() == kDataFloat) {
+                    SetProperty(entry.Node().Array(NULL), targetValue);
+                } else {
+                    float fVal = targetValue.LiteralFloat(NULL);
+                    int iVal;
+                    if (fVal > 0.0f) {
+                        iVal = (int)(fVal + 0.5f);
+                    } else {
+                        iVal = (int)(fVal - 0.5f);
+                    }
+                    SetProperty(entry.Node().Array(NULL), DataNode(iVal));
                 }
             }
         }
-
-        DataArray *propPath = entry.Node().Array();
-        if (propPath && targetValue.Type() != kDataUndef) {
-            SetProperty(propPath, targetValue);
-        }
     }
+    sPushDrivenProperties = false;
 }
 
 void FlowNode::ActivateChild(FlowNode *child) {

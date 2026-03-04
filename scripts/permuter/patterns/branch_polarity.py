@@ -46,6 +46,21 @@ class BranchPolarityPattern(Pattern):
         # Also relevant if there are insert/delete clusters (block reordering)
         return bool(diagnosis.clusters)
 
+    def priority(self, diagnosis: Diagnosis) -> float:
+        if not self.relevant(diagnosis):
+            return 0.0
+        # Strong: beq↔bne or blt↔bge swap with few clusters (simple polarity)
+        polarity_swaps = 0
+        for d in diagnosis.diff_ops:
+            pair = frozenset((d.target_opcode.rstrip("+-"), d.base_opcode.rstrip("+-")))
+            if pair in ({"beq", "bne"}, {"blt", "bge"}, {"ble", "bgt"}):
+                polarity_swaps += 1
+        if polarity_swaps > 0 and len(diagnosis.clusters) <= 1:
+            return 0.8
+        if polarity_swaps > 0:
+            return 0.4
+        return 0.15
+
     def generate(self, ctx: FunctionContext) -> Iterator[Variant]:
         counter = 0
         for stmt in ctx.statements:

@@ -97,6 +97,22 @@ Similar to existing patchers (`obj_anon_ns_patcher.py`, `obj_guard_patcher.py`):
 
 **File:** `scripts/obj_makestring_patcher.py` (not yet created)
 
+## MakeString Type Mismatches (PAD vs PBD) — All AT_LIMIT
+
+The 27 remaining MakeString template type mismatches (detected pattern: `MAKESTRING_TEMPLATE_MISMATCH`) are distinct from the array-size normalization above. These involve argument type differences like `char*` (PAD) vs `const char*` (PBD), not array dimension sizes.
+
+Investigation (2026-03-03) confirmed **all 27 are AT_LIMIT** — they come from `Ease()` function assert stripping and other unfixable compiler artifacts. These are not fixable by changing source-level `Symbol→.Str()` conversions or casting arguments.
+
+Some individual MakeString type mismatches within otherwise-workable functions CAN be fixed with `(char*)` casts (e.g., `DirLoader::LoadHeader` casting `mStream->Name()`, `DirLoader::DirLoader` casting `arr->Str(i)`), but the 27 detected-pattern instances are all in functions that have other unfixable issues.
+
+## jeff PAIR Relocation Fix
+
+**Date:** 2026-03-03
+
+The jeff linker had a bug where `IMAGE_REL_PPC_PAIR` relocations (used for `lis`/`addi` pairs that form 32-bit addresses) were not being applied correctly. The fix processes PAIR relocs by combining the upper and lower 16-bit halves and applying them as a single 32-bit relocation.
+
+This fix resolved many `lis`/`addi` address mismatches in the linked binary and was applied alongside the array-size normalization.
+
 ## See Also
 
 - [../decomp/patterns/verifiable-icf.md](../decomp/patterns/verifiable-icf.md) — General ICF pattern documentation

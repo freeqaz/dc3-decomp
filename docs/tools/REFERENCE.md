@@ -97,6 +97,18 @@ Note: `ninja` will overwrite patched `.obj` files on the next rebuild, so the pa
 must be re-run after each build. The patcher auto-reverts any function where patching
 causes a regression.
 
+## objdiff MakeString Array-Size Normalization
+
+Built into objdiff's `reloc_eq()` comparison (no separate tool needed). Automatically treats
+`MakeString<char[N], int, char[M]>` template instantiations as equivalent regardless of N/M,
+since arrays decay to pointers and produce identical machine code.
+
+This resolves `bl` `diff_arg` mismatches caused by `__FILE__` string length differences
+between the original build environment and ours. See
+[../plans/MAKESTRING_ICF_EQUIVALENCE.md](../plans/MAKESTRING_ICF_EQUIVALENCE.md) for details.
+
+**Impact:** +8.66pp fuzzy match (45.40% → 54.06%), +601 complete units.
+
 ## Quick Commands
 
 ```bash

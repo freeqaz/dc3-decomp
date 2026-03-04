@@ -679,7 +679,7 @@ void WorldCrowd::Reset3DCrowd() {
             InstanceList &instances = multiMesh->Instances();
             InstanceList::iterator instIt = instances.begin();
             int curInstIdx = 0;
-            for (int i = 0; i < (int)it->m3DCharsCreated.size(); i++) {
+            for (int i = 0; (unsigned int)i < (int)it->m3DCharsCreated.size(); i++) {
                 int targetInstIdx = (int)(intptr_t)it->m3DCharsCreated[i].mHandle;
                 while (curInstIdx < targetInstIdx) {
                     ++instIt;

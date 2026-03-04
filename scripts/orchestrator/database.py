@@ -485,17 +485,13 @@ def ingest_report(
             size = int(func.get("size", 0) or 0)
 
             # Calculate match percentage from fuzzy_match_percent or match_percent
+            # NOTE: report.json match% is unreliable for stubs (base_size=0 bug
+            # returns 100% for unimplemented functions). We ingest it as-is but
+            # do NOT set verdicts from it. Verdicts come from sync_objdiff.py
+            # (which runs actual objdiff diff) or from agents/humans.
             percent = func.get("fuzzy_match_percent")
             if percent is None:
                 percent = func.get("match_percent")
-
-            # Determine verdict based on matching
-            if percent == 100.0:
-                verdict = "COMPLETE"
-            elif percent is not None and percent >= 99.0:
-                verdict = "NEAR_COMPLETE"
-            else:
-                verdict = None
 
             # Check if function exists
             existing = conn.execute(
@@ -505,45 +501,34 @@ def ingest_report(
 
             if existing:
                 if update_existing:
-                    # Update if we have better data
-                    best = existing["best_percent"] or 0
-                    if percent is not None and percent > best:
-                        best = percent
-
-                    # Never overwrite terminal verdicts (AT_LIMIT, COMPLETE)
-                    # set by agents/humans. Only upgrade NULL -> verdict.
-                    existing_verdict = existing["verdict"]
-                    if existing_verdict in ("AT_LIMIT", "COMPLETE"):
-                        safe_verdict = existing_verdict
-                    else:
-                        safe_verdict = verdict or existing_verdict
-
+                    # Update metadata (size, demangled, unit) but NOT verdict.
+                    # Don't update current_percent from report.json — it's
+                    # unreliable. Only sync_objdiff.py should set match%.
                     conn.execute(
                         """
                         UPDATE functions SET
                             demangled = COALESCE(?, demangled),
                             unit = COALESCE(?, unit),
                             size = COALESCE(?, size),
-                            current_percent = ?,
-                            best_percent = ?,
-                            verdict = ?,
                             updated_at = CURRENT_TIMESTAMP
                         WHERE id = ?
                         """,
-                        (demangled, unit_name, size, percent, best, safe_verdict, existing["id"]),
+                        (demangled, unit_name, size, existing["id"]),
                     )
                     updated += 1
                 else:
                     skipped += 1
             else:
-                # Insert new function
+                # Insert new function — no verdict, match% from report is
+                # unreliable so leave current_percent NULL for sync_objdiff
+                # to fill in later.
                 conn.execute(
                     """
                     INSERT INTO functions
-                        (symbol, demangled, unit, size, current_percent, best_percent, verdict)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                        (symbol, demangled, unit, size)
+                    VALUES (?, ?, ?, ?)
                     """,
-                    (symbol, demangled, unit_name, size, percent, percent, verdict),
+                    (symbol, demangled, unit_name, size),
                 )
                 inserted += 1
 

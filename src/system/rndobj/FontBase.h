@@ -42,6 +42,7 @@ public:
     void SetBaseKerning(float);
     void SetKerning(const std::vector<KernInfo> &);
     void GetKerning(std::vector<KernInfo> &) const;
+    bool IsMonospace() const { return mMonospace; }
 
 protected:
     RndFontBase();

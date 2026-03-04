@@ -26,10 +26,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 OBJDIFF_JSON = REPO_ROOT / "objdiff.json"
 DECOMP_DB = REPO_ROOT / "decomp.db"
 
-# Regex to extract qualified C++ name from demangled signature
-import re
-
-QUALIFIED_NAME_RE = re.compile(r"([\w~][\w:~]*(?:::[\w~]+)+)\s*\(")
+from .types import extract_qualified_name
 
 
 def parse_args() -> argparse.Namespace:
@@ -121,11 +118,9 @@ def query_candidates(
         if not Path(REPO_ROOT / source_path).exists():
             continue
 
-        m = QUALIFIED_NAME_RE.search(demangled or "")
-        if not m:
+        qualified_name = extract_qualified_name(demangled or "")
+        if not qualified_name:
             continue
-
-        qualified_name = m.group(1)
         row_dict["source_path"] = source_path
         row_dict["qualified_name"] = qualified_name
         candidates.append(row_dict)

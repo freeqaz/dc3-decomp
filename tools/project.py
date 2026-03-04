@@ -188,6 +188,11 @@ class ProjectConfig:
             True  # Generate compile_commands.json for clangd
         )
         self.extra_clang_flags: List[str] = []  # Extra flags for clangd
+
+        # Precompiled header (PCH) support
+        self.pch_header: Optional[str] = None  # PCH boundary header name (e.g. "decomp_pch.h")
+        self.pch_source: Optional[Path] = None  # PCH source file (e.g. Path("src/system/decomp_pch.cpp"))
+        self.pch_eligible_dirs: Optional[Set[str]] = None  # Directory basenames eligible for PCH
         self.scratch_preset_id: Optional[int] = (
             None  # Default decomp.me preset ID for scratches
         )
@@ -725,7 +730,7 @@ def generate_build_ninja(
     wrapper_for_msvc = config.wrapper if config.wrapper else wrapper
     wrapper_abs = str(wrapper_for_msvc.resolve()) if wrapper_for_msvc else ""
     wrapper_cmd_msvc = f"{wrapper_abs} " if wrapper_abs else ""
-    wibo_env = "WIBO_COMPUTER_NAME='9QVZU3' "
+    wibo_env = "WIBO_COMPUTER_NAME='9QVZU3' WIBO_FS_CACHE='1' "
     msvc_cmd = f"cd $in_dir && {wrapper_cmd_msvc}{wibo_env}{msvc_abs} $cflags /Fo$abs_out $in_win"
     if config.wibo_path_map:
         msvc_cmd = f"cd $in_dir && {wrapper_cmd_msvc}{wibo_env}WIBO_PATH_MAP='$wibo_path_map' {msvc_abs} $cflags /Fo$abs_out $in_win"
@@ -734,6 +739,32 @@ def generate_build_ninja(
     n.rule(
         name="msvc",
         command=msvc_cmd,
+        description="MSVC $out",
+    )
+    n.newline()
+
+    # MSVC PCH create rule: compiles the PCH source and produces the .pch file
+    msvc_pch_create_cmd = msvc_cmd.replace(
+        "$cflags /Fo$abs_out $in_win",
+        '/Yc"decomp_pch.h" /Fp$pch_out $cflags /Fo$abs_out $in_win',
+    )
+    n.comment("MSVC PCH create")
+    n.rule(
+        name="msvc_pch_create",
+        command=msvc_pch_create_cmd,
+        description="PCH $pch_out",
+    )
+    n.newline()
+
+    # MSVC PCH use rule: compiles with precompiled header
+    msvc_pch_cmd = msvc_cmd.replace(
+        "$cflags /Fo$abs_out $in_win",
+        '/Yu"decomp_pch.h" /FI"decomp_pch.h" /Fp$pch_file $cflags /Fo$abs_out $in_win',
+    )
+    n.comment("MSVC build with PCH")
+    n.rule(
+        name="msvc_pch",
+        command=msvc_pch_cmd,
         description="MSVC $out",
     )
     n.newline()
@@ -828,6 +859,69 @@ def generate_build_ninja(
 
     # Add all build steps needed before we compile (e.g. processing assets)
     write_custom_step("pre-compile")
+
+    ###
+    # PCH build edge
+    ###
+    pch_path: Optional[Path] = None
+    if config.pch_source and config.pch_header:
+        pch_dir = build_path / "pch"
+        pch_path = pch_dir / "system.pch"
+        pch_obj = pch_dir / "decomp_pch.obj"
+        pch_src = config.pch_source
+        pch_src_abs = pch_src.resolve()
+
+        # Get engine cflags for the PCH compilation
+        # Use the first lib's cflags (engine) since PCH covers engine code
+        pch_cflags_str = ""
+        if config.libs:
+            for lib_cfg in config.libs:
+                if lib_cfg["lib"] == "system":
+                    pch_cflags_str = make_flags_str(lib_cfg["cflags"])
+                    break
+            if not pch_cflags_str and config.libs:
+                pch_cflags_str = make_flags_str(config.libs[0]["cflags"])
+
+        # Absolutize relative /I paths
+        project_root = str(Path.cwd())
+        def absolutize_pch_include(flag):
+            if flag.startswith("/I "):
+                inc = flag[3:]
+                if ":" not in inc and not inc.startswith("/"):
+                    return f"/I {project_root}/{inc}"
+            elif flag.startswith("/I"):
+                inc = flag[2:]
+                if ":" not in inc and not inc.startswith("/"):
+                    return f"/I{project_root}/{inc}"
+            return flag
+
+        if config.libs:
+            for lib_cfg in config.libs:
+                if lib_cfg["lib"] == "system":
+                    pch_cflags_list = [absolutize_pch_include(f) for f in lib_cfg["cflags"]]
+                    # Add /TP for C++ mode
+                    pch_cflags_list.insert(0, "/TP")
+                    pch_cflags_str = make_flags_str(pch_cflags_list)
+                    break
+
+        n.comment("Precompiled header")
+        n.build(
+            outputs=[pch_obj],
+            rule="msvc_pch_create",
+            inputs=pch_src,
+            implicit=[compilers_implicit or msvc, wrapper_implicit],
+            implicit_outputs=[pch_path],
+            variables={
+                "mw_version": Path(config.linker_version),
+                "cflags": pch_cflags_str,
+                "in_win": pch_src.name,
+                "in_dir": str(pch_src_abs.parent),
+                "abs_out": str(pch_obj.resolve()),
+                "pch_out": str(pch_path.resolve()),
+            },
+            order_only="pre-compile",
+        )
+        n.newline()
 
     ###
     # Source files
@@ -1043,13 +1137,30 @@ def generate_build_ninja(
                 build_rule = "mwcc_extab"
                 build_implcit = mwcc_extab_implicit
                 variables["extab_padding"] = "".join(f"{i:02x}" for i in obj.options["extab_padding"])
+
+            # Use PCH for eligible files (must be on plain msvc rule, C++ mode, in eligible dir)
+            pch_implicit: List[Optional[Path]] = []
+            if (
+                pch_path is not None
+                and build_rule == "msvc"
+                and config.pch_eligible_dirs
+                and file_is_cpp(src_path)
+                and "/TC" not in all_cflags
+            ):
+                # Check if source is in a PCH-eligible directory
+                src_dir_name = src_path.parent.name
+                if src_dir_name in config.pch_eligible_dirs:
+                    build_rule = "msvc_pch"
+                    variables["pch_file"] = str(pch_path.resolve())
+                    pch_implicit = [pch_path]
+
             n.comment(f"{obj.name}: {lib_name} (linked {obj.completed})")
             n.build(
                 outputs=obj.src_obj_path,
                 rule=build_rule,
                 inputs=src_path,
                 variables=variables,
-                implicit=build_implcit,
+                implicit=[*build_implcit, *pch_implicit],
                 order_only="pre-compile",
             )
 

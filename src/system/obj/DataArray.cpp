@@ -379,7 +379,8 @@ void DataArray::Load(BinStream &bs) {
         } else if (node.Type() == kDataDefine) {
             DataNode macro;
             bs >> macro;
-            DataSetMacro(STR_TO_SYM(nodeSym), macro.Array(this));
+            auto _tmp0 = STR_TO_SYM(nodeSym);
+            DataSetMacro(_tmp0, macro.Array(this));
             size -= 2;
         } else if (node.Type() == kDataUndef) {
             DataSetMacro(STR_TO_SYM(nodeSym), nullptr);

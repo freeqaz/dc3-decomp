@@ -121,10 +121,10 @@ def resolve_from_db(symbol: str) -> tuple[str, Path, str] | None:
     unit = row["unit"]
 
     # Extract qualified C++ name from demangled signature
-    m = re.search(r"([\w~][\w:~]*(?:::[\w~]+)+)\s*\(", demangled)
-    if not m:
+    from .types import extract_qualified_name
+    qualified_name = extract_qualified_name(demangled)
+    if not qualified_name:
         return None
-    qualified_name = m.group(1)
 
     # Look up source_path from objdiff.json
     objdiff_path = Path("objdiff.json")
@@ -211,7 +211,8 @@ def main():
         baseline = scorer.get_baseline(guided=guided)
         baseline_exec = scorer._baseline_equivalent
 
-        # Wire diagnosis into context and print summary
+        # Wire symbol and diagnosis into context
+        ctx.symbol = args.symbol
         if scorer.diagnosis:
             ctx.diagnosis = scorer.diagnosis
             print(format_diagnosis_summary(scorer.diagnosis), file=sys.stderr)

@@ -93,6 +93,7 @@ class FunctionResult:
     has_scope_counter_mismatch: bool = False
     detected_patterns: list[str] | None = None
     primary_pattern: str | None = None
+    verdict_classification: str | None = None
     error: str | None = None
 
 
@@ -226,6 +227,9 @@ def _run_single_batch(functions: list[tuple[int, str]], project_dir: str) -> lis
             continue
 
         _extract_patterns_from_analysis(result, data)
+        # Extract verdict classification from objdiff analysis
+        verdict = data.get("verdict", {})
+        result.verdict_classification = verdict.get("classification")
         results.append(result)
 
     # Mark missing symbols as not_found
@@ -334,7 +338,7 @@ def main():
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode = WAL")
 
-    query = "SELECT id, symbol, unit, current_percent, verdict FROM functions WHERE 1=1"
+    query = "SELECT id, symbol, unit, current_percent, best_percent, verdict FROM functions WHERE 1=1"
     params: list = []
 
     # Exclude SDK
@@ -373,6 +377,14 @@ def main():
 
     rows = conn.execute(query, params).fetchall()
     functions = [(row["id"], row["symbol"]) for row in rows]
+    # Build lookup for verdict downgrade decisions
+    function_meta: dict[int, dict] = {
+        row["id"]: {
+            "verdict": row["verdict"],
+            "best_percent": row["best_percent"],
+        }
+        for row in rows
+    }
     conn.close()
 
     print(f"Functions to scan: {len(functions)}")
@@ -409,6 +421,8 @@ def main():
         "errors": 0,
         "pct_updated": 0,
         "promoted": 0,
+        "demoted_complete": 0,
+        "demoted_at_limit": 0,
         "patterns_set": 0,
     }
 
@@ -422,6 +436,8 @@ def main():
     pct_updates: list[tuple] = []
     enrich_updates: list[tuple] = []
     promotions: list[int] = []
+    at_limit_promotions: list[int] = []  # NULL -> AT_LIMIT
+    demotions: list[int] = []  # COMPLETE/AT_LIMIT -> NULL
     stub_updates: list[int] = []
 
     for r in results:
@@ -502,8 +518,24 @@ def main():
                 promotions.append(r.db_id)
                 stats["promoted"] += 1
 
+            # Verdict downgrade logic
+            meta = function_meta.get(r.db_id, {})
+            old_verdict = meta.get("verdict")
+            if old_verdict == "COMPLETE" and r.match_percent < 100.0:
+                # False COMPLETE — demote back to NULL so it's workable
+                demotions.append(r.db_id)
+                stats["demoted_complete"] += 1
+
+            # Auto-promote to AT_LIMIT when objdiff says all mismatches
+            # are unfixable (verdict_classification == AT_LIMIT)
+            if (old_verdict is None
+                    and r.match_percent < 100.0
+                    and r.verdict_classification == "AT_LIMIT"):
+                at_limit_promotions.append(r.db_id)
+                stats["auto_at_limit"] = stats.get("auto_at_limit", 0) + 1
+
     # Apply to DB
-    if not args.dry_run and (pct_updates or enrich_updates or promotions or stub_updates):
+    if not args.dry_run and (pct_updates or enrich_updates or promotions or at_limit_promotions or demotions or stub_updates):
         conn = sqlite3.connect(str(args.db))
         conn.execute("PRAGMA journal_mode = WAL")
 
@@ -559,6 +591,25 @@ def main():
                 [(fid,) for fid in promotions],
             )
 
+        if at_limit_promotions:
+            conn.executemany(
+                """UPDATE functions
+                   SET verdict = 'AT_LIMIT',
+                       verdict_reason = 'auto: all mismatches unfixable',
+                       updated_at = CURRENT_TIMESTAMP
+                   WHERE id = ?""",
+                [(fid,) for fid in at_limit_promotions],
+            )
+
+        if demotions:
+            conn.executemany(
+                """UPDATE functions
+                   SET verdict = NULL,
+                       updated_at = CURRENT_TIMESTAMP
+                   WHERE id = ?""",
+                [(fid,) for fid in demotions],
+            )
+
         if stub_updates:
             conn.executemany(
                 """UPDATE functions
@@ -581,6 +632,9 @@ def main():
     print(f"  Errors:             {stats['errors']}")
     print(f"  Percent updated:    {stats['pct_updated']}")
     print(f"  Promoted:           {stats['promoted']} (-> COMPLETE)")
+    print(f"  Auto AT_LIMIT:      {stats.get('auto_at_limit', 0)} (all mismatches unfixable)")
+    print(f"  Demoted COMPLETE:   {stats['demoted_complete']} (-> NULL)")
+    print(f"  Demoted AT_LIMIT:   {stats['demoted_at_limit']} (-> NULL)")
     print(f"  Patterns set:       {stats['patterns_set']}")
     pattern_labels = [
         ("merged", "Merged"),

@@ -390,6 +390,10 @@ if (obj != 0 || mListMode != kObjListNoNull) {
 return result;
 ```
 
+### Permuter Pattern
+
+The `single_return` permuter pattern automatically converts early-return patterns to single-return forms by pre-initializing the result variable and converting assignments, testing both branch structures.
+
 ### Real Examples
 
 | Function | Before | After | Delta | Notes |

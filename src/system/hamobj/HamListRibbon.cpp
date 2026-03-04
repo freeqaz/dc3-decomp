@@ -408,7 +408,38 @@ void HamListRibbon::Draw(
     RndDir::DrawShowing();
 }
 
-#ifdef HX_NATIVE
-// TODO: complex implementation with multiple anim paths
-float HamListRibbon::EndFrame() { return 0; }
-#endif
+float HamListRibbon::EndFrame() {
+    if (mTestEntering && mEnterAnim) {
+        return mEnterAnim->EndFrame();
+    } else {
+        switch (mMode) {
+        case kRibbonSwell:
+            if (mSwellAnim) {
+                return mSwellAnim->EndFrame();
+            } else {
+                return 0;
+            }
+        case kRibbonSlide:
+            if (mSlideAnim) {
+                return mSlideAnim->EndFrame();
+            } else {
+                return 0;
+            }
+        case kRibbonSelect:
+            if (mSelectToggle && mSelectToggleAnim) {
+                return mSelectToggleAnim->EndFrame();
+            } else if (mSelectAnim || mSelectAllAnim) {
+                if (mSelectAnim && !mSelectAllAnim) {
+                    return mSelectAnim->EndFrame();
+                } else if (!mSelectAnim && mSelectAllAnim) {
+                    return mSelectAllAnim->EndFrame();
+                } else if (mSelectAnim && mSelectAllAnim) {
+                    return Max(mSelectAnim->EndFrame(), mSelectAllAnim->EndFrame());
+                }
+            }
+            return 0;
+        default:
+            return 0;
+        }
+    }
+}

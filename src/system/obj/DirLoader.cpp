@@ -53,7 +53,7 @@ DirLoader::DirLoader(
         DataArray *arr = SystemConfig()->FindArray("force_milo_inline", false);
         if (arr) {
             for (int i = 1; i < arr->Size(); i++) {
-                const char *str = arr->Str(i);
+                char *str = (char *)arr->Str(i);
                 if (FileMatch(fp.c_str(), str)) {
                     MILO_FAIL("Can't dynamically load milo files matching %s", str);
                 }
@@ -909,7 +909,7 @@ void DirLoader::LoadHeader() {
         if (t != TempEof) {
             Cleanup(MakeString(
                 "%s: Unexpected end of file. Proceeding as if file were empty.",
-                mStream->Name()
+                (char *)mStream->Name()
             ));
             return;
         }

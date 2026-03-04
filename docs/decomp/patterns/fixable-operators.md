@@ -301,6 +301,69 @@ swapped_operands: [(r3, r4), (r5, r6)]
 
 ---
 
+## Negation Splitting (fneg/frsp Scheduling)
+
+**Impact:** +3-4%
+**Success Rate:** HIGH
+**Time:** 2 minutes
+
+When a float function result is negated inline (`-func()`), the compiler may
+generate `fneg` before `frsp` (float round to single). But the original code
+may have done `frsp` then `fneg`. Splitting the negation into a separate
+statement fixes the instruction order.
+
+### Symptom
+
+objdiff shows an insert/delete cluster around `fneg` and `frsp`:
+```
+insert: fneg f0, f1
+insert: li   r11, 0x1
+diff_arg: frsp f0, f1 → frsp f31, f0    (register + order change)
+delete: li   r11, 0x1
+delete: fneg f31, f0
+```
+
+The key tell: `frsp` and `fneg` are present in both target and base, but in
+opposite order.
+
+### Why It Works
+
+`-func()` folds the negation into the double-precision result before rounding:
+```
+bl    func        ; returns double in f1
+fneg  f0, f1      ; negate double
+frsp  f31, f0     ; round to single
+```
+
+Splitting the negation forces round-then-negate:
+```
+bl    func        ; returns double in f1
+frsp  f0, f1      ; round to single first
+fneg  f31, f0     ; then negate single
+```
+
+### Fix
+
+```cpp
+// Before (generates fneg before frsp — wrong order)
+float angle = -acos(Dot(dir1, dir2));
+
+// After (generates frsp then fneg — matches target)
+float angle = acos(Dot(dir1, dir2));
+angle = -angle;
+```
+
+### Real Example
+
+`HamSkeletonConverter::CalcRotzBone`: 96.1% → 99.9% with this single change.
+
+### Automation
+
+A permuter pattern `negation_split` could detect this by looking for
+`-func()` expressions and splitting them into `f = func(); f = -f;`.
+
+---
+
 ## See Also
 
 - [fixable-control-flow.md](fixable-control-flow.md) - Branch structure patterns

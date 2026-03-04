@@ -474,7 +474,7 @@ int Skeleton::IdentityCallback(void *pvContext, NUI_IDENTITY_MESSAGE *pMessage) 
     MILO_ASSERT(pvContext != NULL, 0x280);
     MILO_ASSERT(pMessage != NULL, 0x281);
 
-    if (pMessage->MessageId < NUI_IDENTITY_MESSAGE_ID_COMPLETE) {
+    if ((unsigned int)pMessage->MessageId < NUI_IDENTITY_MESSAGE_ID_COMPLETE) {
         // frame processed
     } else if (!(pMessage->MessageId == NUI_IDENTITY_MESSAGE_ID_COMPLETE)) {
         MILO_ASSERT(false, 0x297);
@@ -487,10 +487,10 @@ int Skeleton::IdentityCallback(void *pvContext, NUI_IDENTITY_MESSAGE *pMessage) 
         }
     }
 
-    bool enabled = TheGestureMgr->IDEnabled();
-    if (!enabled) {
+    if (!TheGestureMgr->IDEnabled()) {
         MILO_LOG("An identification operation that was in progress was canceled.\n");
         GestureMgr::sIdentityOpInProgress = false;
+        return 0;
     }
-    return enabled;
+    return 1;
 }

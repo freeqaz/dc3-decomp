@@ -45,6 +45,11 @@ public:
 protected:
     HamSkeletonConverter();
 
+    void CalcQuatBone(SkeletonJoint, SkeletonJoint, SkeletonJoint);
+    void CalcRotzBone(SkeletonJoint, SkeletonJoint, SkeletonJoint);
+    void SetLeg(SkeletonJoint, SkeletonJoint, SkeletonJoint, SkeletonJoint, SkeletonJoint, const BaseSkeleton *, int);
+    void SetArm(SkeletonJoint, SkeletonJoint, SkeletonJoint, SkeletonJoint);
+    void ScaleBone(SkeletonJoint, SkeletonJoint, SkeletonCoordSys, const Vector3 &, const Vector3 &, const Vector3 &, Vector3 &);
     void GetParentWorldXfm(RndTransformable *, Transform &, SkeletonJoint);
     void SetQuatBoneValue(String, Hmx::Quat);
     void SetRotzBoneValue(String, float);
@@ -61,12 +66,12 @@ protected:
     std::vector<RndTransformable *> mBoneMeshes; // 0x6c0
     RndTransformable *mPelvisMesh; // 0x6cc
     Transform mPelvisTransform; // 0x6d0
-    Vector3 mLeftHipZAxisInit; // 0x710
-    Vector3 mRightHipZAxisInit;
-    Vector3 mLeftHipZAxis;
-    Vector3 mRightHipZAxis;
-    bool mIsActive;
-    bool unk751;
+    PaddedJointPos mLeftHipZAxisInit; // 0x710
+    PaddedJointPos mRightHipZAxisInit; // 0x720
+    PaddedJointPos mLeftHipZAxis; // 0x730
+    PaddedJointPos mRightHipZAxis; // 0x740
+    bool mIsActive; // 0x750
+    bool unk751; // 0x751
     float unk754;
     float mPelvisInitialZ;
 };

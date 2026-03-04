@@ -36,7 +36,9 @@ _PROC_RE = re.compile(r"^(\S+)\s+PROC\s+NEAR")
 _ENDP_RE = re.compile(r"^(\S+)\s+ENDP")
 _SAVEGPRLR_RE = re.compile(r"__savegprlr_(\d+)")
 _STMW_RE = re.compile(r"\bstmw\s+r(\d+)")
-_STW_CALLEE_RE = re.compile(r"\bstw\s+r(\d+)")  # For individual saves
+# Individual callee-saved register saves: std rN,-X(r1) or stw rN,-X(r1)
+# These appear in debug builds instead of __savegprlr_N or stmw
+_INDIVIDUAL_SAVE_RE = re.compile(r"\bst[dw]\s+r(\d+)\s*,\s*-")
 
 # 32-bit wibo build (required for GDB — the 64-bit one crashes)
 WIBO_32 = Path("/home/free/code/milohax/wibo/build/debug/wibo")
@@ -164,12 +166,16 @@ def _parse_function_info(asm_lines: list[str]) -> list[tuple[str, int]]:
     """Parse function names and callee-saved register counts from assembly listing.
 
     Returns a list of (function_name, n_callee_saved) in source order.
-    Callee-saved count is determined from __savegprlr_N (saves r_N through r31)
-    or stmw r_N (saves r_N through r31).
+    Callee-saved count is determined from:
+    - __savegprlr_N (saves r_N through r31) — optimized builds
+    - stmw r_N (store multiple, saves r_N through r31) — optimized builds
+    - Individual std/stw r_N,-offset(r1) in prologue — debug builds
     """
     functions: list[tuple[str, int]] = []
     current_func: str | None = None
     current_callee_saved = 0
+    callee_saved_regs: set[int] = set()  # Track individual saves
+    in_prologue = True  # Only count saves before first bl or .endprolog
 
     for line in asm_lines:
         stripped = line.strip()
@@ -178,22 +184,32 @@ def _parse_function_info(asm_lines: list[str]) -> list[tuple[str, int]]:
         m = _PROC_RE.match(stripped)
         if m:
             if current_func is not None:
-                functions.append((current_func, current_callee_saved))
+                count = max(current_callee_saved, len(callee_saved_regs))
+                functions.append((current_func, count))
             current_func = m.group(1)
             current_callee_saved = 0
+            callee_saved_regs = set()
+            in_prologue = True
             continue
 
         # Detect function end
         m = _ENDP_RE.match(stripped)
         if m:
             if current_func is not None:
-                functions.append((current_func, current_callee_saved))
+                count = max(current_callee_saved, len(callee_saved_regs))
+                functions.append((current_func, count))
                 current_func = None
                 current_callee_saved = 0
+                callee_saved_regs = set()
+                in_prologue = True
             continue
 
         if current_func is None:
             continue
+
+        # End of prologue markers
+        if ".endprolog" in stripped or (stripped.startswith("bl ") and "__savegprlr" not in stripped):
+            in_prologue = False
 
         # Count callee-saved registers from __savegprlr_N pattern
         m = _SAVEGPRLR_RE.search(stripped)
@@ -210,10 +226,21 @@ def _parse_function_info(asm_lines: list[str]) -> list[tuple[str, int]]:
             if 13 <= first_saved <= 31:
                 count = 32 - first_saved
                 current_callee_saved = max(current_callee_saved, count)
+            continue
+
+        # Count individual callee-saved saves in prologue: std/stw rN,-offset(r1)
+        # Debug builds save registers individually instead of using __savegprlr_N
+        if in_prologue:
+            m = _INDIVIDUAL_SAVE_RE.search(stripped)
+            if m:
+                reg_num = int(m.group(1))
+                if 13 <= reg_num <= 31:
+                    callee_saved_regs.add(reg_num)
 
     # Flush last function
     if current_func is not None:
-        functions.append((current_func, current_callee_saved))
+        count = max(current_callee_saved, len(callee_saved_regs))
+        functions.append((current_func, count))
 
     return functions
 

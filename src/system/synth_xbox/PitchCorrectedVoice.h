@@ -40,9 +40,10 @@ class ExposureRecipe {
 public:
     void SetMinIntegrationTime(float);
     void SetGlobalGain(float);
+    float GetLux();
 
     float mField_0x00;         // 0x00
-    float mField_0x04;         // 0x04
+    float mLux;                // 0x04
     float mField_0x08;         // 0x08
     float mField_0x0C;         // 0x0C
     float mField_0x10;         // 0x10

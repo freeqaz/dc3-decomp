@@ -121,6 +121,29 @@ BEGIN_LOADS(SongCollision)
     }
 END_LOADS
 
+bool SongCollision::Equals(SongCollision *other) {
+    if (!other)
+        return false;
+    for (int i = 0; i < kNumDifficulties; i++) {
+        if (mData[i].size() != other->mData[i].size())
+            return false;
+        for (unsigned int j = 0; j < mData[i].size(); j++) {
+            BeatCollisionData &a = mData[i][j];
+            BeatCollisionData &b = other->mData[i][j];
+            if (std::fabs(a.mMaxX - b.mMaxX) >= 0.0001f)
+                return false;
+            if (std::fabs(a.mMinX - b.mMinX) >= 0.0001f)
+                return false;
+            float dx = a.mOffset.x - b.mOffset.x;
+            float dy = a.mOffset.y - b.mOffset.y;
+            float dz = a.mOffset.z - b.mOffset.z;
+            if (std::sqrt(dx * dx + dy * dy + dz * dz) >= 0.0001f)
+                return false;
+        }
+    }
+    return true;
+}
+
 void SongCollision::Print() {
     int maxDatas = 0;
     for (int i = 0; i < kNumDifficulties; i++) {

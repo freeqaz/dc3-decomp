@@ -449,7 +449,7 @@ Symbol RemoveDigitSuffix(const Symbol &symbol) {
 
     int symbolLen = scanPtr - symbolText;
     symbolLen -= 1;
-    if (symbolLen <= 0) {
+    if (symbolLen < 1) {
         TheDebug.Fail(MakeString(kAssertStr, "App.cpp", 0x2AB, "len > 0"), nullptr);
     }
 

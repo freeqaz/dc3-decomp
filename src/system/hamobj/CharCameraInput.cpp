@@ -40,42 +40,41 @@ bool CharCameraInput::NatalToWorld(Transform &world) const {
 }
 
 void CharCameraInput::ResetSkeletonCharOrigin() {
-    // Set the natal transform to the character's current world transform
-    // This establishes the origin point for skeleton tracking
-    if (mChar) {
-        mNatalXfm = mChar->WorldXfm();
-    } else {
-        mNatalXfm.Reset();
-    }
+    mNatalXfm.Reset();
+    float s = DrawScale();
+    mNatalXfm.m.x.Set(-s, 0.0f, 0.0f);
+    mNatalXfm.m.y.Set(0.0f, 0.0f, s);
+    mNatalXfm.m.z.Set(0.0f, -s, 0.0f);
+    Vector3 worldPos = mChar->WorldXfm().v;
+    worldPos.y += DrawScale() * 2.0f;
+    worldPos.z += DrawScale();
+    mNatalXfm.v = worldPos;
 }
 
 const SkeletonFrame *CharCameraInput::PollNewFrame() {
-    if (!mChar)
-        return nullptr;
+    MILO_ASSERT(mChar, 0x48);
+
+    Transform invXfm;
+    Invert(mNatalXfm, invXfm);
 
     SkeletonData &skelData = mCharFrame.mSkeletonDatas[0];
 
-    // Update joint positions from character bone transforms
     for (int i = 0; i < kNumJoints; i++) {
+        SkeletonJoint mj = BaseSkeleton::MirrorJoint((SkeletonJoint)i);
         RndTransformable *bone = mBoneNames[i];
         if (bone) {
-            // Convert world position to Kinect-space coordinates
-            // Kinect uses meters, Milo uses cm-scale units
-            Vector3 worldPos = bone->WorldXfm().v;
-            // Scale from game units to Kinect meter space (1/kDrawScale)
-            skelData.mJointPositions[i].Set(
-                worldPos.x / kDrawScale,
-                worldPos.y / kDrawScale,
-                worldPos.z / kDrawScale
-            );
-            skelData.mRawPositions[i] = skelData.mJointPositions[i];
+            Multiply(bone->WorldXfm().v, invXfm, skelData.mJointPositions[mj]);
+        } else {
+            skelData.mJointPositions[mj].z = 0.0f;
+            skelData.mJointPositions[mj].y = 0.0f;
+            skelData.mJointPositions[mj].x = 0.0f;
         }
+        if (unk2430) {
+            skelData.mJointPositions[mj].x *= -1.0f;
+            skelData.mJointPositions[mj].z *= -1.0f;
+        }
+        skelData.mRawPositions[mj] = skelData.mJointPositions[mj];
     }
 
-    // Set hip center from average of left/right hip bones
-    // Hip center is index 0 in Kinect joints
-    skelData.mHipCenter = skelData.mJointPositions[0];
-
-    mCharFrame.mFrameNumber++;
     return &mCharFrame;
 }

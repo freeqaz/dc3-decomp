@@ -38,8 +38,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 OBJDIFF_JSON = REPO_ROOT / "objdiff.json"
 DECOMP_DB = REPO_ROOT / "decomp.db"
 
-# Regex to extract qualified C++ name from demangled signature
-QUALIFIED_NAME_RE = re.compile(r"([\w~][\w:~]*(?:::[\w~]+)+)\s*\(")
+from .types import extract_qualified_name
 
 # Mismatch types that are unlikely to be fixable by the permuter
 SKIP_PATTERNS = frozenset([
@@ -79,6 +78,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--plateau-limit", type=int, default=2,
         help="Stop after N rounds without improvement (default: 2)",
+    )
+    parser.add_argument(
+        "--include-at-limit", action="store_true",
+        help="Include AT_LIMIT functions (default: excluded)",
     )
     parser.add_argument(
         "--min-pct", type=float, default=0,
@@ -131,16 +134,22 @@ def query_workable(
     max_pct: float,
     limit: int,
     unit_pattern: str | None = None,
+    include_at_limit: bool = False,
 ) -> list[dict]:
     """Query decomp.db for workable functions."""
     conn = sqlite3.connect(str(DECOMP_DB))
     conn.row_factory = sqlite3.Row
 
-    query = """
+    if include_at_limit:
+        verdict_clause = "AND (verdict IS NULL OR verdict NOT IN ('COMPLETE'))"
+    else:
+        verdict_clause = "AND (verdict IS NULL OR verdict NOT IN ('AT_LIMIT', 'COMPLETE'))"
+
+    query = f"""
         SELECT symbol, demangled, unit, current_percent, verdict
         FROM functions
         WHERE current_percent >= ? AND current_percent <= ?
-          AND (verdict IS NULL OR verdict NOT IN ('AT_LIMIT', 'COMPLETE'))
+          {verdict_clause}
           AND symbol NOT LIKE 'merged_%'
           AND symbol NOT LIKE 'fn_%'
           AND demangled NOT LIKE '%stlpmtx_std::%'
@@ -179,11 +188,9 @@ def query_workable(
             continue
 
         # Extract qualified C++ name from demangled
-        m = QUALIFIED_NAME_RE.search(demangled or "")
-        if not m:
+        qualified_name = extract_qualified_name(demangled or "")
+        if not qualified_name:
             continue
-
-        qualified_name = m.group(1)
         row_dict["source_path"] = source_path
         row_dict["qualified_name"] = qualified_name
         candidates.append(row_dict)
@@ -260,7 +267,7 @@ def main():
     print(f"Querying decomp.db...", file=sys.stderr)
     candidates = query_workable(
         unit_source_map, args.min_pct, args.max_pct,
-        args.limit, args.unit,
+        args.limit, args.unit, args.include_at_limit,
     )
     print(f"  {len(candidates)} candidates found", file=sys.stderr)
 

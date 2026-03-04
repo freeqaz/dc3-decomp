@@ -59,7 +59,8 @@ SuperFormatString::SuperFormatString(
                     *phInfoPos = '\0';
                     phInfoPos = phInfo;
                     state = 3;
-                    bool phInfoCmp = strcmp(phInfoPos, "string") == 0;
+                    auto _tmp0 = strcmp(phInfoPos, "string");
+                    bool phInfoCmp = _tmp0 == 0;
                     if (phInfoCmp) {
                         phType = 0;
                         continue;

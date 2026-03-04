@@ -29,8 +29,8 @@ int MESH_REV_SEP_COLOR = 0x25;
 Vector3 TransformNormal(const Vector3 &normal, const Hmx::Matrix3 &mat) {
     Hmx::Matrix3 inv;
     FastInvert(mat, inv);
-    float ny = normal.y;
     float nz = normal.z;
+    float ny = normal.y;
     float nx = normal.x;
     Vector3 result;
     result.y = ny * inv.y.y + nz * inv.z.y + nx * inv.x.y;
@@ -54,13 +54,13 @@ void PatchVerts::Add(int vertIdx, RndMesh::VertVector &verts, Vector3 &centroid)
 }
 
 int PatchVerts::GreaterEq(int iii) const {
-    if (!mPatchVerts.empty() && mPatchVerts.front() < iii) {
-        if (mPatchVerts.back() < iii) {
+    if (!mPatchVerts.empty() && iii > mPatchVerts.front()) {
+        if (iii > mPatchVerts.back()) {
             return mPatchVerts.size();
         } else {
             int u5 = 0;
             int u2 = mPatchVerts.size() - 1;
-            while (u5 + 1 < u2) {
+            while (u2 > u5 + 1) {
                 int u4 = (u5 + u2) >> 1;
                 int curVert = mPatchVerts[u4];
                 if (curVert < iii) {
@@ -915,7 +915,7 @@ void RndMesh::ClearCompressedVerts() {
 }
 
 bool RndMesh::Replace(ObjRef *ref, Hmx::Object *obj) {
-    if (ref == &mGeomOwner) {
+    if (&mGeomOwner == ref) {
         RndMesh *meshObj;
         if (mGeomOwner == this
             || (meshObj = dynamic_cast<RndMesh *>(obj)) == nullptr) {
@@ -1205,6 +1205,7 @@ void RndMesh::OnSync(int flags) {
             int u5 = 4;
             float f68 = 0;
             std::vector<Face>::iterator faceIt = mFaces.begin();
+            std::vector<Face>::iterator bestFaceIt = mFaces.begin();
             for (; faceIt != mFaces.end(); ++faceIt) {
                 int uvar16 = !gPatchVerts.HasVert(faceIt->v1)
                     + !gPatchVerts.HasVert(faceIt->v2) + !gPatchVerts.HasVert(faceIt->v3);
@@ -1215,6 +1216,7 @@ void RndMesh::OnSync(int flags) {
                     Subtract(v4c, v40, diff);
                     f68 = LengthSquared(diff);
                     u5 = uvar16;
+                    bestFaceIt = faceIt;
                 } else if (uvar16 == u5) {
                     Vector3 v58;
                     FaceCenter(this, &*faceIt, v58);
@@ -1222,9 +1224,11 @@ void RndMesh::OnSync(int flags) {
                     Subtract(v58, v40, diff2);
                     if (MinEq(f68, LengthSquared(diff2))) {
                         u5 = uvar16;
+                        bestFaceIt = faceIt;
                     }
                 }
             }
+            faceIt = bestFaceIt;
             if (!PatchOkay(u5 + gPatchVerts.NumVerts(), i4 + 1)) {
                 gPatchVerts.Clear();
                 mPatches.push_back(i4);
@@ -1657,7 +1661,12 @@ void RndMesh::LoadVertices(BinStreamRev &d) {
             compressedSize = 0x24;
             b4 = true;
         }
-        unsigned int versionCheck = (TheLoadMgr.GetPlatform() == kPlatformXBox) ? 1U : 0U;
+                unsigned int versionCheck;
+        if ((TheLoadMgr.GetPlatform() == kPlatformXBox)) {
+            versionCheck = 1U;
+        } else {
+            versionCheck = 0U;
+        }
         if (compressedSize != loadedCompressedSize || versionCheck != loadedVersion) {
             b4 = false;
         }
@@ -1702,13 +1711,14 @@ void RndMesh::LoadVertices(BinStreamRev &d) {
 
 void RndMesh::SaveVertices(BinStream &bs) {
     bool useCached;
-    if (bs.Cached() && (bs.GetPlatform() == kPlatformPS3 || bs.GetPlatform() == kPlatformXBox)) {
+    auto _tmp4 = bs.GetPlatform();
+    if (bs.Cached() && (bs.GetPlatform() == kPlatformPS3 || _tmp4 == kPlatformXBox)) {
         useCached = true;
     } else {
         useCached = false;
     }
-    bool hasMeshData = (mMutable & 0x1F) > 0 || mKeepMeshData == true;
     bool isXBox;
+    bool hasMeshData = (mMutable & 0x1F) > 0 || mKeepMeshData == true;
     if (TheLoadMgr.GetPlatform() == kPlatformXBox || TheLoadMgr.GetPlatform() == kPlatformPS3) {
         isXBox = true;
     } else {

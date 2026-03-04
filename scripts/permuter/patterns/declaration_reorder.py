@@ -48,12 +48,30 @@ class DeclarationReorderPattern(Pattern):
     # Cache BSF trace to avoid re-tracing on composition passes
     _bsf_cache: object = None  # BSFTrace or None
     _bsf_cache_path: object = None  # Path that was traced
+    # Cache isolation result: (file_path, symbol) → function_calls or None
+    _isolation_cache: dict | None = None
+    # Whether BSF summary has already been printed this run
+    _bsf_printed: bool = False
 
     def relevant(self, diagnosis: Diagnosis) -> bool:
         # Only relevant when there are GPR swap pairs
         for (r0, r1) in diagnosis.reg_swap_pairs:
             if r0.startswith("r") or r1.startswith("r"):
                 return True
+
+    def priority(self, diagnosis: Diagnosis) -> float:
+        if not self.relevant(diagnosis):
+            return 0.0
+        # More GPR swap pairs = stronger signal for declaration reorder
+        gpr_pairs = sum(
+            1 for (r0, r1) in diagnosis.reg_swap_pairs
+            if r0.startswith("r") or r1.startswith("r")
+        )
+        if gpr_pairs >= 3:
+            return 0.9
+        if gpr_pairs >= 2:
+            return 0.7
+        return 0.5
         return False
 
     def generate(self, ctx: FunctionContext) -> Iterator[Variant]:
@@ -166,85 +184,121 @@ class DeclarationReorderPattern(Pattern):
             print("  BSF mode: fallback (no GPR swap pairs in diagnosis)", file=sys.stderr)
             return
 
-        # Try to partition BSF trace by function using assembly listing
-        function_calls = None
-        try:
-            from tools.compiler_trace.invoker import CompilerInvoker
-            import tempfile
+        # Try to partition BSF trace by function using assembly listing (cached)
+        cache_key = (str(ctx.file_path), ctx.symbol or "")
+        if self._isolation_cache is not None and cache_key in self._isolation_cache:
+            function_calls = self._isolation_cache[cache_key]
+        else:
+            function_calls = None
+            isolation_method = None
+            try:
+                from tools.compiler_trace.invoker import CompilerInvoker
+                import tempfile
 
-            invoker = CompilerInvoker()
-            asm_dir = Path(tempfile.mkdtemp(prefix="bsf_asm_", dir="/tmp/claude"))
-            result = invoker.compile_with_asm(ctx.file_path, asm_dir, listing_type="/FAs")
-            if result.returncode == 0:
-                # Find the listing file
-                asm_file = None
-                for ext in (".cod", ".asm"):
-                    files = list(asm_dir.glob(f"*{ext}"))
-                    if files:
-                        asm_file = files[0]
-                        break
-                if asm_file:
-                    asm_lines = asm_file.read_text().splitlines()
-                    partitions = bsf.partition_by_function(asm_lines)
-
-                    # Find the partition matching the target function
-                    # Extract function name from tree-sitter AST node
-                    func_declarator = ctx.func_node.child_by_field_name("declarator")
-                    func_name = ""
-                    if func_declarator and func_declarator.text:
-                        func_name = func_declarator.text.decode("utf-8", errors="replace")
-                        # Strip parameter list: "Class::Method(int x)" -> "Class::Method"
-                        paren_idx = func_name.find("(")
-                        if paren_idx > 0:
-                            func_name = func_name[:paren_idx].strip()
-                    for part_name, part_trace in partitions.items():
-                        if part_name == "__all__" or part_name == "__remainder__":
-                            continue
-                        # Match by substring (mangled names contain the function name)
-                        if func_name in part_name or part_name in func_name:
-                            function_calls = part_trace.calls
-                            print(
-                                f"  BSF isolation: {part_name} "
-                                f"({len(function_calls)} calls)",
-                                file=sys.stderr,
-                            )
+                invoker = CompilerInvoker()
+                asm_dir = Path(tempfile.mkdtemp(prefix="bsf_asm_", dir="/tmp/claude"))
+                result = invoker.compile_with_asm(ctx.file_path, asm_dir, listing_type="/FAs")
+                if result.returncode == 0:
+                    # Find the listing file
+                    asm_file = None
+                    for ext in (".cod", ".asm"):
+                        files = list(asm_dir.glob(f"*{ext}"))
+                        if files:
+                            asm_file = files[0]
                             break
-                    if function_calls is None and len(partitions) > 1:
-                        # Try looser matching — check if any class::method pattern matches
-                        for part_name, part_trace in partitions.items():
-                            if part_name in ("__all__", "__remainder__"):
-                                continue
-                            # Extract unqualified name from mangled symbol
-                            # e.g. ?Poll@LabelNumberTicker@@UAAXXZ -> Poll
-                            simple = func_name.split("::")[-1] if "::" in func_name else func_name
-                            if simple in part_name:
-                                function_calls = part_trace.calls
-                                print(
-                                    f"  BSF isolation (fuzzy): {part_name} "
-                                    f"({len(function_calls)} calls)",
-                                    file=sys.stderr,
-                                )
-                                break
+                    if asm_file:
+                        asm_lines = asm_file.read_text().splitlines()
+                        partitions = bsf.partition_by_function(asm_lines)
 
-            # Cleanup temp dir
-            import shutil
-            shutil.rmtree(asm_dir, ignore_errors=True)
-        except Exception as e:
-            print(f"  BSF isolation: skipped ({e})", file=sys.stderr)
+                        # Tier 0: exact mangled symbol match (most reliable)
+                        if ctx.symbol:
+                            for part_name, part_trace in partitions.items():
+                                if part_name in ("__all__", "__remainder__"):
+                                    continue
+                                if part_name == ctx.symbol:
+                                    function_calls = part_trace.calls
+                                    isolation_method = "exact"
+                                    break
+
+                        # Tier 1: qualified name match (Class::Method in mangled name)
+                        if function_calls is None:
+                            func_declarator = ctx.func_node.child_by_field_name("declarator")
+                            func_name = ""
+                            if func_declarator and func_declarator.text:
+                                func_name = func_declarator.text.decode("utf-8", errors="replace")
+                                paren_idx = func_name.find("(")
+                                if paren_idx > 0:
+                                    func_name = func_name[:paren_idx].strip()
+
+                            class_name = ""
+                            method_name = func_name
+                            if "::" in func_name:
+                                parts = func_name.rsplit("::", 1)
+                                class_name = parts[0]
+                                method_name = parts[1]
+
+                            for part_name, part_trace in partitions.items():
+                                if part_name in ("__all__", "__remainder__"):
+                                    continue
+                                if class_name and method_name:
+                                    if (class_name in part_name and
+                                            method_name in part_name):
+                                        function_calls = part_trace.calls
+                                        isolation_method = "qualified"
+                                        break
+                                elif method_name:
+                                    if method_name in part_name:
+                                        function_calls = part_trace.calls
+                                        isolation_method = "name"
+                                        break
+
+                # Cleanup temp dir
+                import shutil
+                shutil.rmtree(asm_dir, ignore_errors=True)
+            except Exception as e:
+                if not self._bsf_printed:
+                    print(f"  BSF isolation: skipped ({e})", file=sys.stderr)
+
+            # Cache the result (even if None, to avoid retrying)
+            if self._isolation_cache is None:
+                self._isolation_cache = {}
+            self._isolation_cache[cache_key] = function_calls
+
+        # Early-exit when isolation yields 0 calls — no guided candidates possible
+        if function_calls is not None and len(function_calls) == 0:
+            if not self._bsf_printed:
+                print(
+                    f"  BSF: traced {bsf.total_calls} calls, "
+                    f"isolated 0 for target → no guided candidates",
+                    file=sys.stderr,
+                )
+                self._bsf_printed = True
+            return
 
         # Generate guided candidates
         candidates = guided_pairwise_search(
             bsf, swap_pairs, decl_names, function_calls=function_calls
         )
         if not candidates:
-            print("  BSF mode: active but no guided candidates", file=sys.stderr)
+            if not self._bsf_printed:
+                n_isolated = len(function_calls) if function_calls else bsf.total_calls
+                print(
+                    f"  BSF: traced {bsf.total_calls} calls, "
+                    f"isolated {n_isolated} for target → no guided candidates",
+                    file=sys.stderr,
+                )
+                self._bsf_printed = True
             return
 
-        print(
-            f"  BSF mode: active (guided candidates={len(candidates)} "
-            f"for {len(swap_pairs)} swap pair(s))",
-            file=sys.stderr,
-        )
+        if not self._bsf_printed:
+            n_isolated = len(function_calls) if function_calls else bsf.total_calls
+            print(
+                f"  BSF: traced {bsf.total_calls} calls, "
+                f"isolated {n_isolated} → {len(candidates)} guided candidate(s) "
+                f"for {len(swap_pairs)} swap pair(s)",
+                file=sys.stderr,
+            )
+            self._bsf_printed = True
 
         # Build dependency edges for the full declarations group
         deps = _build_dependency_edges(all_decls)

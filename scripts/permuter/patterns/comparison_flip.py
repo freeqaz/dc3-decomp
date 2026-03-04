@@ -43,6 +43,17 @@ class ComparisonFlipPattern(Pattern):
             return True
         return False
 
+    def priority(self, diagnosis: Diagnosis) -> float:
+        if not self.relevant(diagnosis):
+            return 0.0
+        cmp_count = sum(
+            1 for d in diagnosis.diff_ops
+            if d.target_opcode in _CMP_OPCODES or d.base_opcode in _CMP_OPCODES
+        )
+        if cmp_count > 0:
+            return 0.6
+        return 0.2  # regswap only — weaker signal
+
     def generate(self, ctx: FunctionContext) -> Iterator[Variant]:
         counter = 0
         for stmt in ctx.statements:

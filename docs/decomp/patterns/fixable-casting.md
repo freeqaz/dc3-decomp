@@ -443,6 +443,38 @@ dataP.AddPair(perf_current_stars, (int)num_stars_val);
 
 ---
 
+## sizeof() Signed Materialization
+
+**Impact:** Variable
+**Success Rate:** HIGH
+**Time:** 1 minute
+
+Cast `sizeof()` to `(int)` when the compiler uses signed division for a power-of-2 divisor.
+
+### Symptom
+
+objdiff shows `srawi` (signed arithmetic shift) vs `srwi` (unsigned logical shift) for division by a constant that is a power of 2.
+
+### Why It Works
+
+`sizeof()` is `size_t` (unsigned), so `value / sizeof(Type)` generates unsigned division (`srwi`). Casting to `(int)sizeof(Type)` forces signed division, which emits `srawi` for negative values in the dividend.
+
+### Fix
+
+```cpp
+// Before - unsigned division
+return (bytes / sizeof(int));
+
+// After - signed division
+return (bytes / (int)sizeof(int));
+```
+
+### Permuter Pattern
+
+The `sizeof_signed_cast` permuter pattern automatically inserts `(int)` casts on `sizeof()` expressions in arithmetic contexts to test both signed and unsigned paths.
+
+---
+
 ## See Also
 
 - [fixable-comparison.md](fixable-comparison.md) - Signedness comparison patterns

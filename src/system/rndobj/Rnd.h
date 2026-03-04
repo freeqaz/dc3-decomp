@@ -155,6 +155,7 @@ public:
     RndEnviron *DefaultEnv() const { return mDefaultEnv; }
     RndMat *DefaultMat() const { return mDefaultMat; }
     RndCubeTex *DefaultCubeTexWhite() const { return mDefaultCubeTexWhite; }
+    RndTex *GetDefaultTex(DefaultTextureType type) const { return mDefaultTex[type]; }
     RndMat *OverlayMat() const { return mOverlayMat; }
     bool ResourceCached() const { return mResourceCached; }
     bool VerboseTimers() const { return mVerboseTimers; }

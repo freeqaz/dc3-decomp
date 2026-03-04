@@ -177,12 +177,12 @@ DataNode HandleDeferredAward(DataArray *) {
 }
 
 void MetagameRank::Init() {
-    static DataNode &xp_force_award_small = DataVariable("xp_force_award_small");
     static DataNode &xp_force_award_all = DataVariable("xp_force_award_all");
-    static DataNode &xp_force_award_large = DataVariable("xp_force_award_large");
+    static DataNode &xp_force_award_small = DataVariable("xp_force_award_small");
     static DataNode &xp_force_one_rank_up = DataVariable("xp_force_one_rank_up");
-    static DataNode &xp_force_award_one_time = DataVariable("xp_force_award_one_time");
     static DataNode &xp_force_award_medium = DataVariable("xp_force_award_medium");
+    static DataNode &xp_force_award_one_time = DataVariable("xp_force_award_one_time");
+    static DataNode &xp_force_award_large = DataVariable("xp_force_award_large");
     xp_force_award_small = 0;
     xp_force_award_medium = 0;
     xp_force_award_large = 0;
@@ -204,7 +204,8 @@ void MetagameRank::Init() {
             cur.unk4 = curUnlockArray->Sym(0);
             cur.unk8 = curUnlockArray->FindSym("name");
             cur.unkc = curUnlockArray->FindSym("desc");
-            cur.unk10 = curUnlockArray->FindSym("image");
+            auto _tmp8 = curUnlockArray->FindSym("image");
+            cur.unk10 = _tmp8;
             DataArray *unlocksToPopulate = curUnlockArray->FindArray("unlock");
             cur.unk14.resize(unlocksToPopulate->Size() - 1);
             for (int j = 1; j < unlocksToPopulate->Size(); j++) {

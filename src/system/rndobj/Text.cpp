@@ -162,6 +162,15 @@ RndText::Style::Style(const Style &s)
     mBlacklight = s.mBlacklight;
 }
 
+RndText::StyleState::StyleState(RndText *text, float size) {
+    memcpy(this, &text->mStyles[0], 0x34);
+    mStyle = &text->mStyles[0];
+    mFontMapIdx = text->FontMapIndex(mStyle->mFont, mStyle->mBlacklight);
+    mBaseSize = size;
+    mSize *= size;
+    mActive = true;
+}
+
 BinStream &operator<<(BinStream &bs, const RndText::Style &s) {
     bs << s.mFont;
     bs << s.mSize;
@@ -584,7 +593,7 @@ void RndText::FontMap::AllocateMeshes(RndText *text, int fixedLength) {
                 mesh->SetMat(_tmp2);
             }
             mesh->SetShowing(page.displayableChars > 0);
-            if (fixedLength == 0) {
+            if ((unsigned int)fixedLength == 0) {
                 mesh->SetMutable(0);
                 ResetFontMapPageMeshFaces(mesh, page.displayableChars * 2);
                 page.mSyncFlags |= 0xA0;
@@ -1066,7 +1075,8 @@ void RndText::DrawShowing() {
 
     // Apply font color overrides from styles
     bool hasOverride = false;
-    for (auto it = mStyles.begin(); it != mStyles.end(); ++it) {
+    auto _tmp3 = mStyles.end();
+    for (auto it = mStyles.begin(); it != _tmp3; ++it) {
         Style &style = *it;
         if (style.mFont && style.mFontColorOverride) {
             int fmIdx = FontMapIndex(style.mFont, style.mBlacklight);
@@ -1105,8 +1115,9 @@ void RndText::DrawShowing() {
         for (int i = 0; i < numMeshes; i++) {
             RndMesh *mesh = fontMap->Mesh(i);
             if (mesh) {
+                auto _tmp4 = TheUI->DisableScreenBlacklight();
                 if (!sBlacklightModeEnabled || !fontMap->mBlacklight ||
-                    TheUI->DisableScreenBlacklight()) {
+                    _tmp4) {
                     DrawMesh(mesh, mStyles[0].mSize, 0);
                 } else {
                     QueueBlacklightPacket(mesh, mStyles[0].mSize, 0);
@@ -1145,12 +1156,26 @@ void RndText::DrawShowing() {
 }
 
 void RndText::GetWidthHeightBox(Box &box) const {
-    box.mMin.x = mBoundsLeft;
-    box.mMin.y = mBoundsTop;
-    box.mMin.z = 0.0f;
-    box.mMax.x = mBoundsRight;
-    box.mMax.y = mBoundsBottom;
-    box.mMax.z = 0.0f;
+    if (mAlignment & 1) {
+        box.mMin.x = 0;
+    } else if (mAlignment & 2) {
+        box.mMin.x = mWidth * -0.5f;
+    } else {
+        box.mMin.x = -mWidth;
+    }
+
+    if (mAlignment & 0x10) {
+        box.mMin.z = -mHeight;
+    } else if (mAlignment & 0x20) {
+        box.mMin.z = mHeight * -0.5f;
+    } else {
+        box.mMin.z = 0;
+    }
+
+    box.mMax.x = mWidth + box.mMin.x;
+    box.mMax.z = mHeight + box.mMin.z;
+    box.mMax.y = 0;
+    box.mMin.y = 0;
 }
 
 void RndText::ReFitTextScroll(String str) {
@@ -1212,8 +1237,8 @@ void RndText::FontMap3d::AllocateMeshes(RndText *text, int fixedLength) {
         }
         mMeshes.pop_back();
     }
-    // Save previous count for cleanup
-    mPrevDisplayableChars = mDisplayableChars;
+    // Reset mesh cursor for SetupCharacter
+    mMeshCursor = mMeshes.data();
 }
 
 void RndText::FontMap3d::CleanupSyncMeshes() {
@@ -1282,10 +1307,67 @@ void RndText::FontMap3d::SetupCharacter(
     FitType fitType,
     float leading
 ) {
-    // Not implemented for native port - 3d font rendering is complex
-    if (!mFont) return;
-    if (!mFont->CharDefined(charCode)) return;
-    xPos += mFont->CharAdvance(charCode) * size;
+    float width, advance;
+    RndMesh *charMesh;
+    if (!mFont->CharWidthAdvanceMesh(charCode, width, advance, &charMesh))
+        return;
+
+    // Apply kerning + style kerning
+    xPos += (mFont->Kerning(prevChar, charCode) + state.mKerning) * state.mSize;
+
+    // Use advance as display width if width <= 0
+    if (width <= 0.0f) {
+        width = advance;
+    }
+
+    // Monospace centering
+    float centerOffset = 0.0f;
+    if (mFont->IsMonospace()) {
+        centerOffset = Max((advance - width) * 0.5f, 0.0f);
+    }
+
+    float scaledWidth = state.mSize * width;
+    float scaledCenter = state.mSize * centerOffset;
+
+    if (scaledWidth <= 0.0f)
+        return;
+
+    yPos += state.mZOffset * state.mSize;
+
+    if (charMesh && mMeshCursor != mMeshes.end()) {
+        RndMesh *mesh = *mMeshCursor;
+        mMeshCursor++;
+        mesh->SetGeomOwner(charMesh);
+
+        // Copy origin to transform position, then scale in-place
+        Vector3 origin = mFont->CharOriginOffset();
+
+        Transform xfm;
+        xfm.v = origin;
+        xfm.v.x = xfm.v.x * state.mSize + scaledCenter + xPos;
+        xfm.v.y *= state.mSize;
+        xfm.v.z = xfm.v.z * state.mSize + yPos;
+
+        // Scale matrix by cell height
+        float cellHeight = mFont->FontUnitInverse() * state.mSize;
+        xfm.m.x.Set(cellHeight, 0.0f, 0.0f);
+        xfm.m.y.Set(0.0f, cellHeight, 0.0f);
+        xfm.m.z.Set(0.0f, 0.0f, cellHeight);
+
+        if (size != 0.0f) {
+            float circlePos = scaledWidth * 0.5f + xfm.v.x;
+            Transform circleXfm = XfmOnCircleEdge(circlePos, size);
+            xfm.v.x -= circlePos;
+            Multiply(xfm, circleXfm, xfm);
+        }
+
+        memcpy(&mesh->mWorldXfm, &xfm, sizeof(Transform));
+        if (!mesh->mDirty) {
+            mesh->SetDirty_Force();
+        }
+    }
+
+    xPos += state.mSize * advance;
 }
 
 #ifndef HX_NATIVE

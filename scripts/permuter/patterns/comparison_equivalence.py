@@ -46,6 +46,15 @@ class ComparisonEquivalencePattern(Pattern):
                 return True
         return False
 
+    def priority(self, diagnosis: Diagnosis) -> float:
+        if not self.relevant(diagnosis):
+            return 0.0
+        # Strong: cmpwi with different immediates — exactly what < vs <= fixes
+        for d in diagnosis.diff_ops:
+            if d.target_opcode == d.base_opcode and d.target_opcode in ("cmpwi", "cmplwi"):
+                return 0.7  # same opcode, likely different immediate
+        return 0.4
+
     def generate(self, ctx: FunctionContext) -> Iterator[Variant]:
         counter = 0
         for stmt in ctx.statements:

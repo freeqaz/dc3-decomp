@@ -9,21 +9,6 @@ from .types import Diagnosis, FunctionContext, Variant
 from .patterns.base import Pattern, get_pattern
 from .composer import compose_variants
 
-# Historical win rates (from batch validation data)
-_WIN_RATES: dict[str, float] = {
-    "variable_extraction": 0.42,
-    "signed_unsigned": 0.30,
-    "inline_assignment": 0.22,
-    "declaration_reorder": 0.20,
-    "comparison_flip": 0.15,
-    "comparison_equivalence": 0.10,
-    "branch_polarity": 0.05,
-    "ternary_swap": 0.05,
-    "argument_swap": 0.05,
-    "commutative_swap": 0.02,
-    "empty_size_swap": 0.02,
-    "fma_reorder": 0.02,
-}
 _MIN_BUDGET = 3  # minimum variants per relevant pattern
 
 
@@ -32,25 +17,32 @@ def allocate_budgets(
     total_budget: int,
     diagnosis: Diagnosis | None,
 ) -> dict[str, int]:
-    """Allocate variant budget proportionally by win rate.
+    """Allocate variant budget proportionally by pattern priority.
 
-    Each relevant pattern gets at least _MIN_BUDGET to avoid starvation.
-    Irrelevant patterns (based on diagnosis) get 0.
+    Uses each pattern's priority(diagnosis) score for budget weighting.
+    Patterns with priority 0.0 are skipped. Remaining patterns get at
+    least _MIN_BUDGET variants each, with the rest distributed by
+    priority weight.
 
     Args:
         patterns: List of pattern instances.
         total_budget: Total number of variants to distribute.
-        diagnosis: Current diagnosis for relevance filtering (None = all relevant).
+        diagnosis: Current diagnosis for priority scoring (None = all get 1.0).
 
     Returns:
         Dict mapping pattern name to allocated budget.
     """
-    # Determine which patterns are relevant
-    relevant: list[Pattern] = []
     budgets: dict[str, int] = {}
+    priorities: dict[str, float] = {}
+    relevant: list[Pattern] = []
 
     for pattern in patterns:
-        if diagnosis and not pattern.relevant(diagnosis):
+        if diagnosis:
+            p = pattern.priority(diagnosis)
+        else:
+            p = 1.0
+        priorities[pattern.name] = p
+        if p <= 0.0:
             budgets[pattern.name] = 0
         else:
             relevant.append(pattern)
@@ -67,20 +59,19 @@ def allocate_budgets(
             budgets[pattern.name] = per_pattern
         return budgets
 
-    # Distribute remaining budget proportionally by win rate
+    # Distribute remaining budget proportionally by priority
     remaining = total_budget - min_total
-    weights = {p.name: _WIN_RATES.get(p.name, 0.01) for p in relevant}
-    total_weight = sum(weights.values())
+    total_weight = sum(priorities[p.name] for p in relevant)
 
     for pattern in relevant:
-        w = weights[pattern.name]
+        w = priorities[pattern.name]
         extra = int(remaining * w / total_weight) if total_weight > 0 else 0
         budgets[pattern.name] = _MIN_BUDGET + extra
 
-    # Distribute any rounding remainder to the highest-weight pattern
+    # Distribute rounding remainder to the highest-priority pattern
     allocated = sum(budgets[p.name] for p in relevant)
     if allocated < total_budget:
-        best = max(relevant, key=lambda p: weights[p.name])
+        best = max(relevant, key=lambda p: priorities[p.name])
         budgets[best.name] += total_budget - allocated
 
     return budgets
@@ -95,7 +86,7 @@ def generate_variants(
     """Apply patterns to a function context and yield variants.
 
     Phase 1: Independent variants with per-pattern budgets (allocated
-    proportionally by historical win rate).
+    proportionally by pattern priority scores).
 
     Phase 2: Composed variants (when compose_pairs is provided), using
     remaining budget after phase 1.

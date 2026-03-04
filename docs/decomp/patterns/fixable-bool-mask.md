@@ -171,6 +171,10 @@ if ((mType & kMovie) && (mType & 0x20)) { ... }
 if (bool(mType & kMovie) && (mType & 0x20)) { ... }
 ```
 
+### Permuter Pattern
+
+The `bit_test_bool` permuter pattern automatically tests both `bool` casts and variable extractions on bitwise AND expressions to match target bit-test encoding (`extrwi` vs `rlwinm`).
+
 ### Worked Example: DxTex::ResetSurfaces
 
 ```cpp

@@ -531,7 +531,7 @@ int UIListState::MinDisplay() const { return 1; }
 
 int UIListState::MaxDisplay() const { return 1; }
 
-bool UIListState::ScrollPastMinDisplay() const { return false; }
+bool UIListState::ScrollPastMinDisplay() const { return mScrollPastMinDisplay; }
 
 bool UIListState::ScrollPastMaxDisplay() const { return mScrollPastMaxDisplay; }
 

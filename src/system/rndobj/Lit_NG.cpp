@@ -40,7 +40,7 @@ NgLight::~NgLight() {
     RELEASE(unk188);
 }
 
-NgLight::NgLight() : mShadowRT(0), mShadowMap(0), unk188(0), unk18c(-1) {}
+NgLight::NgLight() : mShadowRT(0), mShadowMapTex(0), unk188(0), unk18c(-1) {}
 
 RndTex *NgLight::CreateShadowTex() {
     PhysMemTypeTracker tracker("D3D(phys):ShadowTex");
