@@ -50,8 +50,8 @@ void CharBonesMeshes::AcquirePose() {
     ObjPtrVec<RndTransformable>::iterator curMesh = mMeshes.begin();
 
     // Copy positions
-    char *pos = mStart;
     char *scaleOff = mOffsets[TYPE_SCALE] + mStart;
+    char *pos = mStart;
     for (; pos < scaleOff; pos += sizeof(Vector3), ++curMesh) {
         *(Vector3 *)pos = (*curMesh)->LocalXfm().v;
     }

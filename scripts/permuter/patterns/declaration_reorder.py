@@ -50,6 +50,8 @@ class DeclarationReorderPattern(Pattern):
     _bsf_cache_path: object = None  # Path that was traced
     # Cache isolation result: (file_path, symbol) → function_calls or None
     _isolation_cache: dict | None = None
+    # Cache assembly listing lines: (file_path,) → asm_lines or None
+    _asm_lines_cache: dict | None = None
     # Whether BSF summary has already been printed this run
     _bsf_printed: bool = False
 
@@ -140,7 +142,9 @@ class DeclarationReorderPattern(Pattern):
             from tools.compiler_trace.regmap_solver import (
                 extract_initial_colorings,
                 guided_pairwise_search,
+                asm_guided_search,
             )
+            from tools.compiler_trace.asm_regmap import parse_asm_listing
         except ImportError:
             print(
                 "  BSF mode: unavailable (tools.compiler_trace not found)",
@@ -186,6 +190,7 @@ class DeclarationReorderPattern(Pattern):
 
         # Try to partition BSF trace by function using assembly listing (cached)
         cache_key = (str(ctx.file_path), ctx.symbol or "")
+        asm_lines_key = str(ctx.file_path)
         if self._isolation_cache is not None and cache_key in self._isolation_cache:
             function_calls = self._isolation_cache[cache_key]
         else:
@@ -208,6 +213,12 @@ class DeclarationReorderPattern(Pattern):
                             break
                     if asm_file:
                         asm_lines = asm_file.read_text().splitlines()
+
+                        # Cache asm_lines for ASM-guided fallback
+                        if self._asm_lines_cache is None:
+                            self._asm_lines_cache = {}
+                        self._asm_lines_cache[asm_lines_key] = asm_lines
+
                         partitions = bsf.partition_by_function(asm_lines)
 
                         # Tier 0: exact mangled symbol match (most reliable)
@@ -264,21 +275,47 @@ class DeclarationReorderPattern(Pattern):
                 self._isolation_cache = {}
             self._isolation_cache[cache_key] = function_calls
 
-        # Early-exit when isolation yields 0 calls — no guided candidates possible
+        # When BSF isolation yields 0 calls, try ASM-guided fallback
+        use_asm_fallback = False
         if function_calls is not None and len(function_calls) == 0:
-            if not self._bsf_printed:
-                print(
-                    f"  BSF: traced {bsf.total_calls} calls, "
-                    f"isolated 0 for target → no guided candidates",
-                    file=sys.stderr,
-                )
-                self._bsf_printed = True
-            return
+            use_asm_fallback = True
 
-        # Generate guided candidates
-        candidates = guided_pairwise_search(
-            bsf, swap_pairs, decl_names, function_calls=function_calls
-        )
+        candidates: list[list[str]] = []
+
+        if not use_asm_fallback:
+            # Generate BSF-guided candidates
+            candidates = guided_pairwise_search(
+                bsf, swap_pairs, decl_names, function_calls=function_calls
+            )
+            if not candidates:
+                use_asm_fallback = True
+
+        if use_asm_fallback:
+            # ASM-guided fallback: parse /FAs listing for var→reg mapping
+            cached_asm = (
+                self._asm_lines_cache.get(asm_lines_key)
+                if self._asm_lines_cache else None
+            )
+            if cached_asm:
+                func_name = ctx.symbol or ""
+                asm_regmap = parse_asm_listing(cached_asm, func_name)
+                if asm_regmap and asm_regmap.var_to_reg:
+                    gpr_swap_pairs = [
+                        (r0, r1) for r0, r1 in swap_pairs
+                        if r0.startswith("r") and r1.startswith("r")
+                    ]
+                    candidates = asm_guided_search(
+                        asm_regmap, gpr_swap_pairs, decl_names
+                    )
+                    if candidates and not self._bsf_printed:
+                        print(
+                            f"  ASM-guided: {len(asm_regmap.var_to_reg)} var→reg mappings "
+                            f"→ {len(candidates)} candidate(s) "
+                            f"for {len(gpr_swap_pairs)} swap pair(s)",
+                            file=sys.stderr,
+                        )
+                        self._bsf_printed = True
+
         if not candidates:
             if not self._bsf_printed:
                 n_isolated = len(function_calls) if function_calls else bsf.total_calls

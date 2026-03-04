@@ -32,6 +32,8 @@ from . import pragma_fp_contract  # noqa: F401
 from . import hoist_sret  # noqa: F401
 from . import noreturn_attr  # noqa: F401
 from . import const_overload  # noqa: F401
+from . import member_ref_bind  # noqa: F401  # Binds member/param to local ref to fix callee-saved regswaps
+from . import temp_elimination  # noqa: F401  # Inline single-use temps to fix commutative/regswap
 
 from .base import get_all_patterns, get_pattern, list_patterns
 

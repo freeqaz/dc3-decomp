@@ -523,6 +523,101 @@ def guided_pairwise_search(
     return candidates
 
 
+def asm_guided_search(
+    asm_regmap: "AsmRegMap",
+    swap_pairs: list[tuple[str, str]],
+    decl_names: list[str],
+) -> list[list[str]]:
+    """Generate targeted declaration reorders using assembly register mapping.
+
+    Uses the var→reg mapping from /FAs listing analysis instead of BSF traces.
+    For each swap pair (rA, rB):
+    1. Look up which vars currently have rA and rB via asm_regmap
+    2. Swap those vars' positions in the declaration order
+
+    Callee-saved assignment rule: 1st declared → r31, 2nd → r30, etc.
+    So swapping declaration positions swaps register assignments.
+
+    Args:
+        asm_regmap: Register mapping from parse_asm_listing().
+        swap_pairs: Register swap pairs from objdiff (e.g. [("r30", "r31")]).
+        decl_names: Variable declaration names in current source order.
+
+    Returns:
+        List of candidate declaration orderings.
+    """
+    from .asm_regmap import AsmRegMap
+
+    n_vars = len(decl_names)
+    if n_vars < 2:
+        return []
+
+    # Build name→index mapping
+    name_to_idx: dict[str, int] = {name: i for i, name in enumerate(decl_names)}
+
+    # For each swap pair, find the declaration indices to swap
+    targeted_swaps: list[tuple[int, int]] = []
+
+    for rA, rB in swap_pairs:
+        # Only handle GPR swaps
+        if not (rA.startswith("r") and rB.startswith("r")):
+            continue
+
+        # Look up which variable has each register
+        varA = asm_regmap.reg_to_var.get(rA)
+        varB = asm_regmap.reg_to_var.get(rB)
+
+        if varA and varB and varA in name_to_idx and varB in name_to_idx:
+            idxA = name_to_idx[varA]
+            idxB = name_to_idx[varB]
+            if idxA != idxB:
+                pair = (min(idxA, idxB), max(idxA, idxB))
+                if pair not in targeted_swaps:
+                    targeted_swaps.append(pair)
+
+    if not targeted_swaps:
+        return []
+
+    base_order = list(range(n_vars))
+    candidates: list[list[str]] = []
+    seen: set[tuple[str, ...]] = set()
+
+    def _add_candidate(order: list[int]) -> None:
+        candidate = [decl_names[k] for k in order]
+        key = tuple(candidate)
+        if key not in seen:
+            seen.add(key)
+            candidates.append(candidate)
+
+    # Single targeted swaps
+    for i, j in targeted_swaps:
+        new_order = list(base_order)
+        new_order[i], new_order[j] = new_order[j], new_order[i]
+        _add_candidate(new_order)
+
+    # +-1 neighbor variants for each targeted pair
+    for i, j in targeted_swaps:
+        for di in (-1, 0, 1):
+            for dj in (-1, 0, 1):
+                ni, nj = i + di, j + dj
+                if ni == nj or ni < 0 or nj < 0 or ni >= n_vars or nj >= n_vars:
+                    continue
+                if di == 0 and dj == 0:
+                    continue  # Already added above
+                new_order = list(base_order)
+                new_order[ni], new_order[nj] = new_order[nj], new_order[ni]
+                _add_candidate(new_order)
+
+    # Multi-swap: apply all targeted swaps simultaneously
+    if len(targeted_swaps) > 1:
+        new_order = list(base_order)
+        for i, j in targeted_swaps:
+            new_order[i], new_order[j] = new_order[j], new_order[i]
+        _add_candidate(new_order)
+
+    return candidates
+
+
 def cmd_bsf_solve(args) -> None:
     """Entry point for bsf-solve subcommand."""
     import json

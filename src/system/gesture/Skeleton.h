@@ -94,7 +94,7 @@ protected:
     int mQualityFlags; // 0xaa4
     int mElapsedMs; // 0xaa8
     int mTrackingID; // 0xaac
-    Vector3 unkab0;
+    PaddedJointPos unkab0;
     int mSkeletonIdx; // 0xac0
     float unkac4;
     mutable std::vector<CameraDisplacement> mCamDisplacements; // 0xac8
@@ -118,7 +118,7 @@ struct SkeletonData {
     int mQualityFlags; // 0x2d4
     int mTrackingID; // 0x2d8
     int mClippedFlags; // 0x2dc
-    Vector3 mHipCenter; // 0x2e0
+    PaddedJointPos mHipCenter; // 0x2e0
 };
 
 struct SkeletonUpdateData {

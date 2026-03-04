@@ -44,7 +44,6 @@ from orchestrator.database import (
     get_function_by_symbol,
     query_functions as db_query_functions,
     get_attempts_for_function,
-    get_stats,
     record_attempt,
     update_function_status,
     get_file_pair,
@@ -340,14 +339,6 @@ class DecompMCPServer:
                         "required": ["address"],
                     },
                 ),
-                Tool(
-                    name="get_progress",
-                    description="Get decomp progress summary. Returns total/complete/at_limit counts, percentages, and top units with remaining work.",
-                    inputSchema={
-                        "type": "object",
-                        "properties": {},
-                    },
-                ),
             ]
 
         @self.server.call_tool()
@@ -370,8 +361,6 @@ class DecompMCPServer:
                 return await self._lookup_struct_offset(arguments)
             elif name == "lookup_merged_symbol":
                 return await self._lookup_merged_symbol(arguments)
-            elif name == "get_progress":
-                return await self._get_progress(arguments)
             else:
                 return [TextContent(type="text", text=f"Unknown tool: {name}")]
 
@@ -1985,93 +1974,6 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
 
         except Exception as e:
             return [TextContent(type="text", text=f"Error looking up merged symbol: {e}")]
-
-    async def _get_progress(self, args: dict) -> list[TextContent]:
-        """Return decomp progress summary with per-unit breakdown."""
-        conn = get_connection(self.db_path)
-
-        # Overall stats
-        stats = get_stats(self.db_path)
-        total = stats["total_functions"]
-        complete = stats["complete"]
-        at_limit = stats["at_limit"]
-
-        # Count excluded (xdk) functions
-        excluded = conn.execute(
-            "SELECT COUNT(*) FROM functions WHERE unit LIKE '%xdk%'"
-        ).fetchone()[0]
-        non_excluded = total - excluded
-        remaining = non_excluded - complete - at_limit
-
-        complete_pct = (complete / non_excluded * 100) if non_excluded else 0
-        done_pct = ((complete + at_limit) / non_excluded * 100) if non_excluded else 0
-
-        output = "## Decomp Progress\n\n"
-        output += f"| Metric | Count | % of non-excluded |\n"
-        output += f"|--------|------:|---:|\n"
-        output += f"| Total functions | {total:,} | - |\n"
-        output += f"| Excluded (SDK) | {excluded:,} | - |\n"
-        output += f"| Non-excluded | {non_excluded:,} | 100% |\n"
-        output += f"| COMPLETE | {complete:,} | {complete_pct:.1f}% |\n"
-        output += f"| AT_LIMIT | {at_limit:,} | {at_limit / non_excluded * 100:.1f}% |\n"
-        output += f"| Remaining | {remaining:,} | {remaining / non_excluded * 100:.1f}% |\n"
-        output += f"| **Done (COMPLETE + AT_LIMIT)** | **{complete + at_limit:,}** | **{done_pct:.1f}%** |\n"
-
-        # Pattern counts
-        pattern_keys = [
-            ("pattern_merged", "Linker merged"),
-            ("pattern_bool_mask", "Bool mask"),
-            ("pattern_makestring_mismatch", "MakeString mismatch"),
-            ("pattern_address_relocation", "Address relocation"),
-            ("pattern_boolean_negation", "Boolean negation"),
-            ("pattern_float_precision", "Float precision"),
-            ("pattern_fsel_ternary", "fsel ternary"),
-            ("pattern_float_to_int_to_float", "Float-int-float"),
-            ("pattern_register_swap", "Register swap"),
-            ("pattern_comparison_style", "Comparison style"),
-            ("pattern_control_flow", "Control flow"),
-            ("pattern_commutative_op_order", "Commutative op order"),
-            ("pattern_offset_swap", "Offset swap"),
-            ("pattern_anonymous_namespace_hash", "Anon namespace hash"),
-            ("pattern_static_guard_counter", "Static guard counter"),
-            ("pattern_dynamic_cast_mismatch", "dynamic_cast mismatch"),
-            ("pattern_dead_store_elimination", "Dead store elimination"),
-            ("pattern_prologue_mismatch", "Prologue mismatch"),
-            ("pattern_alloca_mismatch", "alloca mismatch"),
-            ("pattern_scope_counter_mismatch", "Scope counter mismatch"),
-        ]
-        has_patterns = any(stats.get(k, 0) > 0 for k, _ in pattern_keys)
-        if has_patterns:
-            output += f"\n### Detected Patterns\n\n"
-            output += f"| Pattern | Count |\n"
-            output += f"|---------|------:|\n"
-            for key, label in pattern_keys:
-                count = stats.get(key, 0)
-                if count > 0:
-                    output += f"| {label} | {count:,} |\n"
-
-        # Top units with remaining work (NULL verdict, non-excluded)
-        rows = conn.execute("""
-            SELECT unit, COUNT(*) as cnt
-            FROM functions
-            WHERE verdict IS NULL
-              AND unit NOT LIKE '%xdk%'
-              AND symbol NOT LIKE 'merged_%'
-              AND demangled NOT LIKE '%stlpmtx_std::%'
-            GROUP BY unit
-            ORDER BY cnt DESC
-            LIMIT 15
-        """).fetchall()
-
-        if rows:
-            output += f"\n### Top Units with Remaining Work\n\n"
-            output += f"| Unit | Remaining |\n"
-            output += f"|------|----------:|\n"
-            for row in rows:
-                unit = row["unit"].replace("default/", "")
-                output += f"| {unit} | {row['cnt']} |\n"
-
-        return [TextContent(type="text", text=output)]
 
     async def run(self):
         """Run the MCP server."""

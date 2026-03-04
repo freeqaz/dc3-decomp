@@ -52,7 +52,7 @@ python3 tools/ghidra/struct_check.py ClassName [ClassName2 ...]
 ## Tips
 
 - Check multiple classes at once for efficiency
-- Use with `mcp__orchestrator__get_rb2_class_info` for DWARF comparison
+- Use with `/rb2-class` for DWARF comparison
 - Mismatches often indicate:
   - Missing base class members
   - Wrong member order

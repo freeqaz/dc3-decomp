@@ -171,21 +171,19 @@ bool Skeleton::Displacements(
 
     CameraDisplacement camDisp;
     camDisp.unk0 = i4;
-    bool ok = false;
     ArchiveSkeleton archiveSkeleton;
-    if (PrevTrackedSkeleton(history, i4, iref, archiveSkeleton)) {
+    bool ok = PrevTrackedSkeleton(history, i4, iref, archiveSkeleton);
+    if (ok) {
         for (int i = 0; i < kNumJoints; i++) {
             Vector3 prevPos;
             archiveSkeleton.JointPos(cs, (SkeletonJoint)i, prevPos);
             Subtract(mTrackedJoints[i].mJointPos[cs], prevPos, disps[i]);
-            camDisp.unk8[i] = disps[i];
         }
-        ok = true;
     } else {
         memset(disps, 0, sizeof(camDisp.unk8));
-        memset(camDisp.unk8, 0, sizeof(camDisp.unk8));
     }
     camDisp.unk4 = iref;
+    memcpy(camDisp.unk8, disps, sizeof(camDisp.unk8));
     mCamDisplacements.push_back(camDisp);
     return ok;
 }
@@ -365,50 +363,53 @@ void Skeleton::Poll(int skel_idx, const SkeletonFrame &frame) {
     mTracking = data.mTracking;
     if (mTracking != kSkeletonNotTracked) {
         if (mTracking == kSkeletonTracked) {
-            mQualityFlags = data.mQualityFlags;
-            if (TheGestureMgr) {
-                IdentityInfo *identityInfo = TheGestureMgr->GetIdentityInfo(skel_idx);
-                MILO_ASSERT(identityInfo, 0x211);
-                if (identityInfo->EnrollmentIndex() != data.mClippedFlags) {
-                    identityInfo->SetEnrollmentIndex(data.mClippedFlags);
-                }
+        mQualityFlags = data.mQualityFlags;
+        if (TheGestureMgr) {
+            IdentityInfo *identityInfo = TheGestureMgr->GetIdentityInfo(skel_idx);
+            MILO_ASSERT(identityInfo, 0x211);
+            if (identityInfo->EnrollmentIndex() != data.mClippedFlags) {
+                identityInfo->SetEnrollmentIndex(data.mClippedFlags);
             }
+        }
 
-            {
-                const Vector3 &floorNormal = frame.mFloorNormal;
-                for (int i = 1; i < kNumCoordSys; i++) {
-                    BaseSkeleton::MakeCameraToPlayerXfm(
-                        (SkeletonCoordSys)i,
-                        mPlayerXfms[i - 1],
-                        (const Vector3 *)data.mJointPositions,
-                        floorNormal
-                    );
-                }
+        {
+            const Vector3 &floorNormal = frame.mFloorNormal;
+            for (int i = 1; i < kNumCoordSys; i++) {
+                BaseSkeleton::MakeCameraToPlayerXfm(
+                    (SkeletonCoordSys)i,
+                    mPlayerXfms[i - 1],
+                    (const Vector3 *)data.mJointPositions,
+                    floorNormal
+                );
             }
+        }
 
-            for (int i = 0; i < kNumJoints; i++) {
-                mTrackedJoints[i].mJointPos[kCoordCamera] = data.mJointPositions[i];
-                for (int j = 1; j < kNumCoordSys; j++) {
+        for (int i = 0; i < kNumJoints; i++) {
+            for (int j = 0; j < kNumCoordSys; j++) {
+                if (j == 0) {
+                    mTrackedJoints[i].mJointPos[0] = data.mJointPositions[i];
+                } else {
                     MultiplyTranspose(
                         data.mJointPositions[i],
                         mPlayerXfms[j - 1],
                         mTrackedJoints[i].mJointPos[j]
                     );
                 }
-                mTrackedJoints[i].mJointConf = (JointConfidence)data.mJointTrackingState[i];
-                mTrackedJoints[i].mSmoothedPos = data.mRawPositions[i];
             }
+            mTrackedJoints[i].mJointConf = (JointConfidence)data.mJointTrackingState[i];
+            mTrackedJoints[i].mSmoothedPos = data.mRawPositions[i];
+        }
 
-            for (int i = 0; i < kNumBones; i++) {
-                mCamBoneLengths[i] = BaseSkeleton::BoneLength((SkeletonBone)i, kCoordCamera);
-            }
+        for (int i = 0; i < kNumBones; i++) {
+            mCamBoneLengths[i] = BaseSkeleton::BoneLength((SkeletonBone)i, kCoordCamera);
+        }
 
-            mCamDisplacements.clear();
+        mCamDisplacements.clear();
 
-            Vector4 clipPlane = frame.mFloorClipPlane;
-            unkac4 = clipPlane.w + (mTrackedJoints[kJointHipLeft].mJointPos[kCoordCamera].y
-                      + mTrackedJoints[kJointHipRight].mJointPos[kCoordCamera].y)
-                * 0.5f;
+        Vector4 clipPlane = frame.mFloorClipPlane;
+        unkac4 = (mTrackedJoints[kJointHipRight].mJointPos[kCoordCamera].y
+                  + mTrackedJoints[kJointHipLeft].mJointPos[kCoordCamera].y)
+            * 0.5f + clipPlane.w;
         }
     } else {
         Init();
@@ -445,23 +446,24 @@ bool Skeleton::EnrollIdentity(int enrollmentIdx) {
         return false;
     }
 
-    DWORD flags = enrollmentIdx == -1 ? 1 : 0x21;
+    DWORD flags = 1;
+    if (enrollmentIdx != -1) {
+        flags = 0x21;
+    }
     if (enrollmentIdx == -3) {
         enrollmentIdx = -2;
     }
 
-    HRESULT hr = NuiIdentityEnroll(mTrackingID, flags, IdentityCallback, info);
+    HRESULT hr = NuiIdentityEnroll(mTrackingID, enrollmentIdx, flags, IdentityCallback, info);
     MILO_ASSERT(hr != E_INVALIDARG, 0x26E);
 
-    bool immediate = hr == 0;
     if (hr < 0) {
         if (hr != (HRESULT)0x8000000A) {
             return false;
         }
-        immediate = false;
     }
 
-    if (immediate) {
+    if (hr == 0) {
         info->SetIdentified(true);
     } else {
         GestureMgr::sIdentityOpInProgress = true;

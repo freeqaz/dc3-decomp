@@ -58,6 +58,7 @@ HRESULT NuiIdentityIdentify(
 );
 HRESULT NuiIdentityEnroll(
     DWORD dwTrackingID,
+    int enrollmentIdx,
     DWORD dwFlags,
     NUI_IDENTITY_CALLBACK *pfnIdentityCallback,
     VOID *pvContext

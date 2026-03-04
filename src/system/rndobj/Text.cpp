@@ -780,7 +780,7 @@ void RndText::SetTextASCII(const char *cstr) {
 }
 
 void RndText::QueueBlacklightPacket(RndMesh *mesh, float f2, int i3) {
-    u32 cursize = sBlacklightPacketPool.size();
+    u32 cursize = sBlacklightPacketPool.capacity();
     if ((u32)sBlacklightPacketCount >= cursize) {
         int newsize = 8;
         if (cursize != 0) {
@@ -804,11 +804,11 @@ void RndText::QueueBlacklightPacket(RndMesh *mesh, float f2, int i3) {
     int idx = sBlacklightPacketCount++;
     int *pkt_ptr = (int *)&sBlacklightPacketPool[0] + (idx << 3);
     pkt_ptr[0] = (int)mesh;
-    char *mesh_char = (char *)mesh + 0x128;
-    pkt_ptr[1] = *(int *)(mesh_char + 0x2C);
-    pkt_ptr[2] = *(int *)(mesh_char + 0x30);
-    pkt_ptr[3] = *(int *)(mesh_char + 0x34);
-    pkt_ptr[4] = *(int *)(mesh_char + 0x38);
+    int *mat = *(int **)((char *)mesh + 0x128);
+    pkt_ptr[1] = *(int *)((char *)mat + 0x2C);
+    pkt_ptr[2] = *(int *)((char *)mat + 0x30);
+    pkt_ptr[3] = *(int *)((char *)mat + 0x34);
+    pkt_ptr[4] = *(int *)((char *)mat + 0x38);
     *(float *)(pkt_ptr + 5) = f2;
     pkt_ptr[6] = i3;
     pkt_ptr[7] = (int)RndCam::Current();
@@ -818,9 +818,9 @@ void RndText::QueueBlacklightPacket(RndMesh *mesh, float f2, int i3) {
 void RndText::ClearBlacklight() { sBlacklightPacketCount = 0; }
 
 void RndText::DrawBlacklight() {
-#ifdef HX_NATIVE
     RndCam *savedCam = RndCam::Current();
     for (int i = 0; i < sBlacklightPacketCount; i++) {
+#ifdef HX_NATIVE
         BlacklightPacket &pkt = sBlacklightPacketPool[i];
         if (pkt.mCam && pkt.mCam != RndCam::Current()) {
             pkt.mCam->Select();
@@ -834,11 +834,26 @@ void RndText::DrawBlacklight() {
             mat->MarkDirty(1);
         }
         DrawMesh(pkt.mMesh, pkt.mSize, pkt.mSyncFlags);
+#else
+        int *pkt = (int *)((char *)&sBlacklightPacketPool[0] + i * 0x20);
+        RndCam *cam = (RndCam *)pkt[7];
+        if (cam != 0 && cam != RndCam::Current()) {
+            cam->Select();
+        }
+        float savedB = *(float *)(pkt + 3);
+        float savedG = *(float *)(pkt + 2);
+        float savedR = *(float *)(pkt + 1);
+        int *mat = *(int **)((char *)pkt[0] + 0x128);
+        *(float *)((char *)mat + 0x2c) = savedR;
+        *(float *)((char *)mat + 0x30) = savedG;
+        *(float *)((char *)mat + 0x34) = savedB;
+        *(int *)((char *)mat + 0x228) |= 1;
+        DrawMesh((RndMesh *)pkt[0], *(float *)(pkt + 5), pkt[6]);
+#endif
     }
-    if (savedCam && savedCam != RndCam::Current()) {
+    if (savedCam != 0 && savedCam != RndCam::Current()) {
         savedCam->Select();
     }
-#endif
 }
 
 void RndText::SizeCheck() {
@@ -875,8 +890,19 @@ void RndText::FitTextScroll() {
 }
 
 void RndText::DrawMesh(RndMesh *mesh, float size, int syncFlags) {
-    if (mesh && mesh->Showing()) {
-        mesh->DrawShowing();
+    mesh->DrawShowing();
+    if (size != 0.0f && syncFlags > 0) {
+        float offset = size;
+        do {
+            Vector3 pos = mesh->LocalXfm().v;
+            pos.x += offset;
+            mesh->SetLocalPos(pos);
+            mesh->DrawShowing();
+            pos.x -= offset;
+            mesh->SetLocalPos(pos);
+            syncFlags--;
+            offset += size;
+        } while (syncFlags != 0);
     }
 }
 
@@ -1242,7 +1268,9 @@ void RndText::FontMap3d::AllocateMeshes(RndText *text, int fixedLength) {
 }
 
 void RndText::FontMap3d::CleanupSyncMeshes() {
-    // Nothing to sync for 3d font maps in native port
+    for (; mMeshCursor != &mMeshes.back() + 1; mMeshCursor++) {
+        (*mMeshCursor)->SetShowing(false);
+    }
 }
 
 void RndText::FontMap::SetupCharacter(

@@ -6,7 +6,7 @@
 class ArchiveSkeleton : public BaseSkeleton {
 public:
     ArchiveSkeleton();
-    virtual ~ArchiveSkeleton();
+    virtual ~ArchiveSkeleton() {}
     virtual void JointPos(SkeletonCoordSys, SkeletonJoint, Vector3 &) const; // 0x4
     virtual bool
     Displacement(const SkeletonHistory *, SkeletonCoordSys, SkeletonJoint, int, Vector3 &, int &)

@@ -40,8 +40,7 @@ String &RndOverlay::CurrentLine() {
         String newstr;
         mLines.pop_front();
         mLines.push_back(newstr);
-        std::list<String>::iterator it = mLines.end();
-        mLine = --it;
+        mLine = PrevItr(mLines.end());
         mLine->reserve(0x7F);
     }
     return *mLine;

@@ -4,6 +4,7 @@
 #include "os/Debug.h"
 #include "utl/Str.h"
 #include "utl/Symbol.h"
+#include "world/CameraShot.h"
 
 Symbol MsgSinks::sCurrentExportEvent(gNullStr);
 
@@ -34,7 +35,7 @@ Symbol PathToEventName(DataArray *arr) {
         if (arr->Type(i) == kDataSymbol) {
             str += arr->LiteralSym(i).Str();
         } else {
-            str += MakeString("%i", arr->Int(i));
+            str += MakeString("%i", (CamShotFrame::BlendEaseMode)arr->Int(i));
         }
     }
     str += "_change";
