@@ -53,7 +53,7 @@ int MemcardMgr::ThreadStart() {
     int ret = 0;
     switch (mState) {
     case kS_None:
-        MILO_FAIL("ThreadCall triggered MemcardMgr::ThreadStart with no mode set.\n");
+        MILO_WARN("ThreadCall triggered MemcardMgr::ThreadStart with no mode set.\n");
         break;
     case kS_Search:
         ret = ThreadCall_SearchForDevice();

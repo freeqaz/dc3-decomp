@@ -227,6 +227,24 @@ def diag_with_replace_real() -> Diagnosis:
     return d
 
 
+def diag_with_bl_mismatch() -> Diagnosis:
+    """bl mismatch (different call target, e.g. MakeString specialization)."""
+    d = _empty_diag()
+    d.diff_ops = [DiffOp(index=10, target_opcode="bl", base_opcode="bl")]
+    d.replace_real = 1
+    d.clusters = [Cluster(start_idx=8, end_idx=14, size=6, inserts=3, deletes=3)]
+    return d
+
+
+def diag_with_large_clusters() -> Diagnosis:
+    """Large clusters suggesting duplicated code blocks."""
+    d = _empty_diag()
+    d.clusters = [
+        Cluster(start_idx=5, end_idx=20, size=15, inserts=10, deletes=5),
+    ]
+    return d
+
+
 def diag_with_cmplwi_cmpwi() -> Diagnosis:
     """cmplwi vs cmpwi mismatch (ObjPtr bool extraction)."""
     d = _empty_diag()
@@ -1713,6 +1731,125 @@ struct Iter { int mWeight; };
 void test_func(Iter *it) {
     int x = it->mWeight;
 }
+""",
+    ),
+
+    # ===================== milo_str_conv =====================
+
+    PatternFixture(
+        id="strconv_classname",
+        pattern_name="milo_str_conv",
+        description="Add .Str() to ClassName() in MILO_NOTIFY",
+        func_name="test_func",
+        diagnosis=diag_with_bl_mismatch(),
+        seeded_source="""\
+void test_func() {
+    MILO_NOTIFY("error in %s %s", PathName(this), ClassName());
+}
+""",
+        expected_source="""\
+void test_func() {
+    MILO_NOTIFY("error in %s %s", PathName(this), ClassName().Str());
+}
+""",
+    ),
+
+    PatternFixture(
+        id="strconv_member_name",
+        pattern_name="milo_str_conv",
+        description="Add .Str() to obj->Name() in MILO_WARN",
+        func_name="test_func",
+        diagnosis=diag_with_bl_mismatch(),
+        seeded_source="""\
+void test_func(Hmx::Object *obj) {
+    MILO_WARN("bad obj %s", obj->Name());
+}
+""",
+        expected_source="""\
+void test_func(Hmx::Object *obj) {
+    MILO_WARN("bad obj %s", obj->Name().Str());
+}
+""",
+    ),
+
+    PatternFixture(
+        id="strconv_multiple_args",
+        pattern_name="milo_str_conv",
+        description="Add .Str() to multiple Symbol args at once",
+        func_name="test_func",
+        diagnosis=diag_with_bl_mismatch(),
+        seeded_source="""\
+void test_func() {
+    MILO_NOTIFY("%s %s %s", PathName(this), ClassName(), Name());
+}
+""",
+        expected_source="""\
+void test_func() {
+    MILO_NOTIFY("%s %s %s", PathName(this), ClassName().Str(), Name().Str());
+}
+""",
+    ),
+
+    PatternFixture(
+        id="strconv_already_has_str",
+        pattern_name="milo_str_conv",
+        description="Don't double-add .Str() when already present",
+        func_name="test_func",
+        diagnosis=diag_with_bl_mismatch(),
+        seeded_source="""\
+void test_func() {
+    MILO_NOTIFY("%s %s", ClassName().Str(), Name());
+}
+""",
+        expected_source="""\
+void test_func() {
+    MILO_NOTIFY("%s %s", ClassName().Str(), Name().Str());
+}
+""",
+    ),
+
+    PatternFixture(
+        id="strconv_static_classname",
+        pattern_name="milo_str_conv",
+        description="Add .Str() to StaticClassName() in MILO_FAIL",
+        func_name="test_func",
+        diagnosis=diag_with_bl_mismatch(),
+        seeded_source="""\
+void test_func() {
+    MILO_FAIL("type %s", StaticClassName());
+}
+""",
+        expected_source="""\
+void test_func() {
+    MILO_FAIL("type %s", StaticClassName().Str());
+}
+""",
+    ),
+
+    # ===================== milo_call_merge =====================
+
+    PatternFixture(
+        id="callmerge_two_if_blocks",
+        pattern_name="milo_call_merge",
+        description="Merge two MILO_WARN calls in consecutive if-blocks",
+        func_name="test_func",
+        diagnosis=diag_with_large_clusters(),
+        match_mode="contains",
+        seeded_source="""\
+void test_func(int font, const char *name) {
+    if (font == 0) {
+        MILO_WARN("bad font %s %s", PathName(this), "NULL");
+        goto done;
+    }
+    if (font == 1) {
+        MILO_WARN("bad font %s %s", PathName(this), name);
+        goto done;
+    }
+    done:;
+}
+""",
+        expected_source="""\
+MILO_WARN("bad font %s %s", PathName(this), _mergedArg);
 """,
     ),
 ]

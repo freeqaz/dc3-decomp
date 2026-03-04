@@ -94,6 +94,7 @@ public:
     Bone GetBonesAt(int index) { return mBones[index]; }
     char *GetStart() const { return mStart; }
     int GetOffset(Type type) const { return mOffsets[type]; }
+    int GetCount(int idx) const { return mCounts[idx]; }
 
     static Type TypeOf(Symbol);
     static const char *SuffixOf(Type);

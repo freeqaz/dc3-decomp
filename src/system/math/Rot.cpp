@@ -183,7 +183,7 @@ void MakeRotMatrix(const Hmx::Quat &q, Hmx::Matrix3 &mtx) {
 }
 
 void MakeRotMatrix(const Vector3 &v, Hmx::Matrix3 &mtx, bool lookup) {
-    float xsin, xcos, ysin, ycos, zsin, zcos;
+    float xcos, xsin, ycos, ysin, zsin, zcos;
     if (lookup) {
         zsin = Sine(v.z);
         zcos = Cosine(v.z);
@@ -266,7 +266,7 @@ void MakeRotMatrixY(float angle, Hmx::Matrix3 &m) {
 void MakeRotMatrixZ(float angle, Hmx::Matrix3 &m) {
     float c = Cosine(angle);
     float s = Sine(angle);
-    m.Set(c, -s, 0.0f, s, c, 0.0f, 0.0f, 0.0f, 1.0f);
+    m.Set(c, s, 0.0f, -s, c, 0.0f, 0.0f, 0.0f, 1.0f);
 }
 
 void MakeRotQuat(const Vector3 &v1, const Vector3 &v2, Hmx::Quat &q) {

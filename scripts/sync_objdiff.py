@@ -40,6 +40,59 @@ SDK_UNIT_PREFIXES = [
     "default/xdk/",
 ]
 
+# Units and symbol patterns for functions that are expected to have base_size=0
+# (compiler-generated boilerplate, third-party libs, platform stubs).
+# These are reported as "Skipped" rather than "Unimplemented".
+SKIP_UNITS = {
+    "default/Memory_Xbox",
+    "default/link_glue",
+}
+SKIP_UNIT_PREFIXES = [
+    "default/lib/",
+    "default/system/oggvorbis/",
+]
+
+
+def _is_skippable_stub(symbol: str, unit: str) -> bool:
+    """Return True if this base_size=0 function is expected boilerplate."""
+    # Platform / third-party / glue units
+    if unit in SKIP_UNITS:
+        return True
+    for prefix in SKIP_UNIT_PREFIXES:
+        if unit.startswith(prefix):
+            return True
+    # Compiler-generated symbols
+    if symbol.startswith("??__F"):       # atexit destructors
+        return True
+    if symbol.startswith("??__E"):       # dynamic initializers
+        return True
+    if symbol.startswith("??_9"):        # vcall thunks
+        return True
+    if symbol.startswith("??_H"):        # vector ctor iterators
+        return True
+    if symbol.startswith("??_E"):        # scalar deleting destructors
+        return True
+    if symbol.startswith("??_G"):        # scalar deleting destructors (variant)
+        return True
+    # Template instantiations that the compiler emits per-TU
+    if symbol.startswith("??$"):          # all template instantiations (MakeString, PropSync, Find, sort, etc.)
+        return True
+    if "stlpmtx_std" in symbol:          # STL internal templates
+        return True
+    # Methods on template classes (ObjPtrVec, ObjPtrList, ObjRefConcrete, ObjPtr, etc.)
+    if "@?$Obj" in symbol or symbol.startswith("??1?$Obj"):
+        return True
+    # Adjustor thunks for multiple inheritance (contain $4PPPPPPPM or $2PPPPPPPM)
+    if "PPPPPPPM@" in symbol:
+        return True
+    # CRT / std library internals
+    if "exception@std@@" in symbol:
+        return True
+    if "?_Copy_str@" in symbol:
+        return True
+    return False
+
+
 # Itanium ABI mangled name pattern: MethodName__<N><ClassName><params>
 _ITANIUM_PATTERN = re.compile(r'^(.+?)__(\d+)(\w+)')
 
@@ -178,7 +231,8 @@ def _run_single_batch(functions: list[tuple[int, str]], project_dir: str) -> lis
 
     try:
         proc = subprocess.run(
-            [str(OBJDIFF_CLI), "diff", "-p", project_dir, "--batch"],
+            [str(OBJDIFF_CLI), "diff", "-p", project_dir,
+             "-c", "functionRelocDiffs=none", "--batch"],
             input=stdin_data, capture_output=True, text=True,
             timeout=600,
         )
@@ -222,7 +276,10 @@ def _run_single_batch(functions: list[tuple[int, str]], project_dir: str) -> lis
         result.demangled = data.get("demangled")
 
         if data.get("base_size", 0) == 0:
-            result.error = "unimplemented"
+            if _is_skippable_stub(original_symbol, data.get("unit", "")):
+                result.error = "skipped"
+            else:
+                result.error = "unimplemented"
             results.append(result)
             continue
 
@@ -338,7 +395,7 @@ def main():
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode = WAL")
 
-    query = "SELECT id, symbol, unit, current_percent, best_percent, verdict FROM functions WHERE 1=1"
+    query = "SELECT id, symbol, unit, current_percent, best_percent, verdict, is_stub FROM functions WHERE 1=1"
     params: list = []
 
     # Exclude SDK
@@ -382,6 +439,7 @@ def main():
         row["id"]: {
             "verdict": row["verdict"],
             "best_percent": row["best_percent"],
+            "is_stub": row["is_stub"],
         }
         for row in rows
     }
@@ -418,6 +476,7 @@ def main():
         "matched": 0,
         "not_found": 0,
         "unimplemented": 0,
+        "skipped": 0,
         "errors": 0,
         "pct_updated": 0,
         "promoted": 0,
@@ -439,13 +498,30 @@ def main():
     at_limit_promotions: list[int] = []  # NULL -> AT_LIMIT
     demotions: list[int] = []  # COMPLETE/AT_LIMIT -> NULL
     stub_updates: list[int] = []
+    stub_clears: list[int] = []  # is_stub 1 -> 0 (now has base code)
+
+    # Build set of symbols that have base code somewhere (for COMDAT detection).
+    # If a symbol is "unimplemented" in one unit but compiled in another,
+    # it's a COMDAT emission difference, not truly missing.
+    compiled_symbols: set[str] = set()
+    for r in results:
+        if r.error is None and r.match_percent is not None:
+            compiled_symbols.add(r.symbol)
 
     for r in results:
         if r.error == "not_found":
             stats["not_found"] += 1
             continue
+        if r.error == "skipped":
+            stats["skipped"] += 1
+            if not args.dry_run:
+                stub_updates.append(r.db_id)
+            continue
         if r.error == "unimplemented":
-            stats["unimplemented"] += 1
+            if r.symbol in compiled_symbols:
+                stats["comdat_elsewhere"] = stats.get("comdat_elsewhere", 0) + 1
+            else:
+                stats["unimplemented"] += 1
             if not args.dry_run:
                 stub_updates.append(r.db_id)
             continue
@@ -454,6 +530,12 @@ def main():
             continue
 
         stats["matched"] += 1
+
+        # Clear stale is_stub flag if function now has base code
+        meta = function_meta.get(r.db_id, {})
+        if meta.get("is_stub") and not args.dry_run:
+            stub_clears.append(r.db_id)
+            stats["stub_cleared"] = stats.get("stub_cleared", 0) + 1
 
         if r.match_percent is not None:
             reachable = 1
@@ -519,7 +601,6 @@ def main():
                 stats["promoted"] += 1
 
             # Verdict downgrade logic
-            meta = function_meta.get(r.db_id, {})
             old_verdict = meta.get("verdict")
             if old_verdict == "COMPLETE" and r.match_percent < 100.0:
                 # False COMPLETE — demote back to NULL so it's workable
@@ -535,7 +616,7 @@ def main():
                 stats["auto_at_limit"] = stats.get("auto_at_limit", 0) + 1
 
     # Apply to DB
-    if not args.dry_run and (pct_updates or enrich_updates or promotions or at_limit_promotions or demotions or stub_updates):
+    if not args.dry_run and (pct_updates or enrich_updates or promotions or at_limit_promotions or demotions or stub_updates or stub_clears):
         conn = sqlite3.connect(str(args.db))
         conn.execute("PRAGMA journal_mode = WAL")
 
@@ -619,6 +700,15 @@ def main():
                 [(fid,) for fid in stub_updates],
             )
 
+        if stub_clears:
+            conn.executemany(
+                """UPDATE functions
+                   SET is_stub = 0,
+                       updated_at = CURRENT_TIMESTAMP
+                   WHERE id = ?""",
+                [(fid,) for fid in stub_clears],
+            )
+
         conn.commit()
         conn.close()
 
@@ -628,7 +718,10 @@ def main():
     print(f"  Scanned:            {stats['scanned']}")
     print(f"  Matched:            {stats['matched']}")
     print(f"  Not found:          {stats['not_found']}")
+    print(f"  Skipped:            {stats['skipped']} (boilerplate/third-party with no base code)")
+    print(f"  COMDAT elsewhere:   {stats.get('comdat_elsewhere', 0)} (compiled in different TU)")
     print(f"  Unimplemented:      {stats['unimplemented']}")
+    print(f"  Stub cleared:       {stats.get('stub_cleared', 0)} (was stub, now has base code)")
     print(f"  Errors:             {stats['errors']}")
     print(f"  Percent updated:    {stats['pct_updated']}")
     print(f"  Promoted:           {stats['promoted']} (-> COMPLETE)")

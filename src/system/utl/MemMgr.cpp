@@ -371,11 +371,11 @@ void MemInit() {
                 heapArr = cfg->FindArray("discReleaseHeaps");
             }
         }
-        if (gSingleHeap == 0) {
+        if (!(gSingleHeap == 0)) {
+            gNumHeaps = 1;
+        } else {
             gNumHeaps = heapArr->Size();
             MILO_ASSERT(gNumHeaps < MAX_HEAPS, 0x295);
-        } else {
-            gNumHeaps = 1;
         }
         Symbol size("size");
         for (int i = 1; i < heapArr->Size(); i++) {

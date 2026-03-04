@@ -247,9 +247,9 @@ void PracticeChoosePanel::InitData(RndDir *dir) {
     }
     MILO_ASSERT(section, 0x51);
     static Symbol learn("learn");
-    auto &steps = section->Steps();
-    int stepNum = 1;
     static Symbol review("review");
+    int stepNum = 1;
+    auto &steps = section->Steps();
     FOREACH (it, steps) {
         if (it->mType == learn || it->mType == review) {
             StepMoves innerSteps;
@@ -272,7 +272,8 @@ void PracticeChoosePanel::InitData(RndDir *dir) {
     }
     mStepMoves.push_back(stepMoves);
     FOREACH (it, mStepMoves) {
-        it->mDisplayNum = GetStepNumber(*it);
+        auto _tmp5 = GetStepNumber(*it);
+        it->mDisplayNum = _tmp5;
     }
     mProblemCalloutMat = dir->Find<RndMat>("problem_callout.mat");
     sIndex = 0;

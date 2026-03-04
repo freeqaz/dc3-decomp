@@ -40,6 +40,8 @@ from . import float_double_literal  # noqa: F401  # Swap 0.001 <-> 0.001f litera
 from . import objptr_bool_extract  # noqa: F401  # Extract ObjPtr to raw ptr before && chains (cmpwi->cmplwi)
 from . import iterator_deref_style  # noqa: F401  # (*it).member <-> it->member
 from . import assignment_reorder  # noqa: F401  # Reorder consecutive assignment statements
+from . import milo_str_conv  # noqa: F401  # Add .Str() to Symbol args in MILO macros
+from . import milo_call_merge  # noqa: F401  # Merge duplicate MILO calls via shared variable
 
 from .base import get_all_patterns, get_pattern, list_patterns
 

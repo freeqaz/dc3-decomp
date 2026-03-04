@@ -322,8 +322,9 @@ App::App(int argc, char **argv) {
             0
         );
         if (allocatedFileCache) {
+            auto _tmp0 = persistentCacheConfig->Node(1).Int(persistentCacheConfig);
             allocatedFileCache = new (allocatedFileCache)
-                FileCache(persistentCacheConfig->Node(1).Int(persistentCacheConfig), kLoadFront, false, true);
+                FileCache(_tmp0, kLoadFront, false, true);
         }
         gPersistentCache = allocatedFileCache;
         gPersistentCache->StartSet(0);

@@ -18,7 +18,9 @@
 #include "rndobj/Wind.h"
 #include "utl/Symbol.h"
 #include "world/Dir.h"
+#ifndef HX_NATIVE
 #include "xdk/LIBCMT/stdio.h"
+#endif
 
 HamWardrobe *TheHamWardrobe;
 

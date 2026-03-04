@@ -36,6 +36,10 @@ def parse_args() -> argparse.Namespace:
         help="Comma-separated pattern names, or 'all' (default: all)",
     )
     parser.add_argument(
+        "--workers", type=int, default=1,
+        help="Parallel workers for variant scoring (default: 1)",
+    )
+    parser.add_argument(
         "--max-variants",
         type=int,
         default=100,
@@ -245,37 +249,65 @@ def main():
             _print_dry_run(variants, args.json_output)
             return
 
-        for i, variant in enumerate(variants):
-            print(
-                f"[{i + 1}/{len(variants)}] {variant.name}: {variant.description}... ",
-                end="",
-                flush=True,
-                file=sys.stderr,
-            )
-            result = scorer.score(variant)
-            results.append(result)
+        if args.workers > 1:
+            print(f"Scoring {len(variants)} variants ({args.workers} workers)...", file=sys.stderr)
+            batch_results = scorer.score_batch(variants, workers=args.workers)
+            for i, result in enumerate(batch_results):
+                results.append(result)
+                marker = ""
+                if not result.build_success:
+                    marker = " BUILD FAILED"
+                elif result.error and "equivalence" in result.error.lower():
+                    marker = " EXEC BROKEN"
+                elif result.match_percent > baseline:
+                    marker = " IMPROVED"
+                elif result.match_percent == baseline:
+                    marker = " same"
 
-            marker = ""
-            if not result.build_success:
-                marker = " BUILD FAILED"
-            elif result.error and "equivalence" in result.error.lower():
-                marker = " EXEC BROKEN"
-            elif result.match_percent > baseline:
-                marker = " IMPROVED"
-            elif result.match_percent == baseline:
-                marker = " same"
+                exec_tag = ""
+                if result.execution_equivalent is True:
+                    exec_tag = " [EXEC OK]"
+                elif result.execution_equivalent is False:
+                    exec_tag = " [EXEC BROKEN]"
+                    
+                dedup_tag = f" [{result.error}]" if result.error in ("source_dedup", "cache_hit", "obj_dedup") else ""
+                print(f"[{i + 1}/{len(variants)}] {result.variant.name}: {result.match_percent:.2f}%{marker}{exec_tag}{dedup_tag}", file=sys.stderr)
+                
+                if not args.no_stop_on_perfect and result.match_percent >= 100.0:
+                    print("Perfect match found! (Remaining batch variants may have been evaluated)", file=sys.stderr)
+                    # We don't break early here because the batch is already processed, but we can stop subsequent ones if there was another batch.
+        else:
+            for i, variant in enumerate(variants):
+                print(
+                    f"[{i + 1}/{len(variants)}] {variant.name}: {variant.description}... ",
+                    end="",
+                    flush=True,
+                    file=sys.stderr,
+                )
+                result = scorer.score(variant)
+                results.append(result)
 
-            exec_tag = ""
-            if result.execution_equivalent is True:
-                exec_tag = " [EXEC OK]"
-            elif result.execution_equivalent is False:
-                exec_tag = " [EXEC BROKEN]"
+                marker = ""
+                if not result.build_success:
+                    marker = " BUILD FAILED"
+                elif result.error and "equivalence" in result.error.lower():
+                    marker = " EXEC BROKEN"
+                elif result.match_percent > baseline:
+                    marker = " IMPROVED"
+                elif result.match_percent == baseline:
+                    marker = " same"
 
-            print(f"{result.match_percent:.2f}%{marker}{exec_tag}", file=sys.stderr)
+                exec_tag = ""
+                if result.execution_equivalent is True:
+                    exec_tag = " [EXEC OK]"
+                elif result.execution_equivalent is False:
+                    exec_tag = " [EXEC BROKEN]"
 
-            if not args.no_stop_on_perfect and result.match_percent >= 100.0:
-                print("Perfect match found!", file=sys.stderr)
-                break
+                print(f"{result.match_percent:.2f}%{marker}{exec_tag}", file=sys.stderr)
+
+                if not args.no_stop_on_perfect and result.match_percent >= 100.0:
+                    print("Perfect match found!", file=sys.stderr)
+                    break
 
     # Sort by match percentage descending
     results.sort(key=lambda r: r.match_percent, reverse=True)

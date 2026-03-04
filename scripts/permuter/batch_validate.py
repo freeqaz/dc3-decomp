@@ -33,6 +33,10 @@ def parse_args() -> argparse.Namespace:
         description="Batch-run the permuter on candidate functions and report results.",
     )
     parser.add_argument(
+        "--jobs", type=int, default=1,
+        help="Parallel jobs for processing functions (default: 1)",
+    )
+    parser.add_argument(
         "--limit", type=int, default=75,
         help="Max functions to test (default: 75)",
     )
@@ -239,6 +243,7 @@ def run_permuter(
     apply: bool = False,
     no_guided: bool = False,
     no_compose: bool = False,
+    workers: int = 1,
 ) -> tuple[dict, str]:
     """Run the permuter subprocess for a single function.
 
@@ -253,6 +258,7 @@ def run_permuter(
         "--symbol", symbol,
         "--source", source_path,
         "--function", function_name,
+        "--workers", str(workers),
         "--json",
     ]
     if not apply:
@@ -340,17 +346,15 @@ def main():
     per_function_logs: list[dict] = []
     start_time = time.time()
 
-    for i, candidate in enumerate(candidates):
+    import os
+    workers_per_job = max(1, (os.cpu_count() or 1) // args.jobs)
+
+    def process_candidate(candidate_info):
+        i, candidate = candidate_info
         symbol = candidate["symbol"]
         source = candidate["source_path"]
         func = candidate["qualified_name"]
-        pct = candidate["current_percent"]
-
-        print(
-            f"[{i + 1}/{len(candidates)}] {func} ({pct:.1f}%) ... ",
-            end="", flush=True, file=sys.stderr,
-        )
-
+        
         func_start = time.time()
         result, stderr_text = run_permuter(
             symbol, source, func,
@@ -358,81 +362,126 @@ def main():
             apply=not args.no_apply,
             no_guided=args.no_guided,
             no_compose=args.no_compose,
+            workers=workers_per_job,
         )
         func_elapsed = time.time() - func_start
-
+        
         # Save per-function log
         save_function_log(log_dir, i, candidate, result, stderr_text, func_elapsed)
+        return i, candidate, result, stderr_text, func_elapsed
 
-        if result["timed_out"]:
-            total_timeouts += 1
-            print(f"TIMEOUT ({func_elapsed:.0f}s)", file=sys.stderr)
-            continue
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    
+    # We must not run functions from the same source file concurrently if apply is True!
+    # Let's just group them by source or use a lock if we want true concurrent apply.
+    # The permuter modifies the source file. If two permuters modify the same file concurrently, they will corrupt it.
+    # Therefore, we group by source file and use ThreadPoolExecutor on the groups, or just don't process same-source concurrently.
 
-        if result["error"]:
-            error_msg = result["error"]
-            # Detect early-skip (all noise)
-            if "Nothing to permute" in stderr_text:
-                total_early_skip += 1
-                print("SKIP (all noise)", file=sys.stderr)
+    from collections import defaultdict
+    by_source = defaultdict(list)
+    for i, c in enumerate(candidates):
+        by_source[c["source_path"]].append((i, c))
+
+    def process_group(source_path, funcs):
+        results = []
+        for c_info in funcs:
+            i, candidate = c_info
+            pct = candidate["current_percent"]
+            func = candidate["qualified_name"]
+            
+            # Since output is concurrent, we format a single string to print
+            print(f"[{i + 1}/{len(candidates)}] {func} ({pct:.1f}%) ... ", end="", flush=True, file=sys.stderr)
+            
+            res_tuple = process_candidate(c_info)
+            results.append(res_tuple)
+            
+            i_ret, candidate_ret, result, stderr_text, func_elapsed = res_tuple
+            baseline = result.get("baseline", 0)
+            variants = result.get("results", [])
+            
+            if result["timed_out"]:
+                print(f"TIMEOUT ({func_elapsed:.0f}s)", file=sys.stderr)
+            elif result["error"]:
+                if "Nothing to permute" in stderr_text:
+                    print("SKIP (all noise)", file=sys.stderr)
+                else:
+                    print(f"ERROR: {result['error'][:60]}", file=sys.stderr)
+            elif not variants:
+                print(f"no variants (baseline {baseline:.1f}%)", file=sys.stderr)
             else:
-                total_errors += 1
-                print(f"ERROR: {error_msg[:60]}", file=sys.stderr)
-            continue
+                improved = [v for v in variants if v.get("build_success", True) and v.get("match_percent", 0) > baseline]
+                if improved:
+                    best = max(improved, key=lambda v: v["match_percent"])
+                    delta = best["match_percent"] - baseline
+                    print(f"IMPROVED +{delta:.2f}% ({baseline:.1f}% -> {best['match_percent']:.1f}%) [{best.get('pattern', '?')}]", file=sys.stderr)
+                else:
+                    build_fails = sum(1 for v in variants if not v.get("build_success", True))
+                    exec_broken = sum(1 for v in variants if v.get("execution_equivalent") is False)
+                    suffix = f" ({exec_broken} exec-broken)" if exec_broken else ""
+                    print(f"no improvement ({len(variants)} variants, {build_fails} build fails{suffix})", file=sys.stderr)
 
-        total_tested += 1
-        variants = result.get("results", [])
-        baseline = result.get("baseline", 0)
+        return results
 
-        if not variants:
-            total_no_variants += 1
-            print(f"no variants (baseline {baseline:.1f}%)", file=sys.stderr)
-            continue
-
-        total_variants += len(variants)
-
-        # Count build failures
-        build_fails = sum(1 for v in variants if not v.get("build_success", True))
-        total_build_failures += build_fails
-
-        # Find best improvement
-        improved = [
-            v for v in variants
-            if v.get("build_success", True) and v.get("match_percent", 0) > baseline
-        ]
-
-        if improved:
-            best = max(improved, key=lambda v: v["match_percent"])
-            delta = best["match_percent"] - baseline
-            total_improvements += 1
-            improvements.append({
-                "symbol": symbol,
-                "function": func,
-                "source": source,
-                "baseline": baseline,
-                "new_pct": best["match_percent"],
-                "delta": delta,
-                "variant": best.get("name", "?"),
-                "pattern": best.get("pattern", "?"),
-                "description": best.get("description", "?"),
-                "applied": not args.no_apply,
-            })
-            print(
-                f"IMPROVED +{delta:.2f}% ({baseline:.1f}% -> {best['match_percent']:.1f}%) "
-                f"[{best.get('pattern', '?')}]",
-                file=sys.stderr,
-            )
-        else:
-            # Count exec-broken
-            exec_broken = sum(
-                1 for v in variants
-                if v.get("execution_equivalent") is False
-            )
-            suffix = f" ({exec_broken} exec-broken)" if exec_broken else ""
-            print(
-                f"no improvement ({len(variants)} variants, {build_fails} build fails{suffix})",
-                file=sys.stderr,
-            )
+    if args.jobs <= 1:
+        for source_path, funcs in by_source.items():
+            res = process_group(source_path, funcs)
+            for i, candidate, result, stderr_text, func_elapsed in res:
+                # Same aggregation logic
+                pass # We do the aggregation below
+    else:
+        all_results = []
+        with ThreadPoolExecutor(max_workers=args.jobs) as executor:
+            futures = []
+            for source_path, funcs in by_source.items():
+                futures.append(executor.submit(process_group, source_path, funcs))
+            
+            for future in as_completed(futures):
+                all_results.extend(future.result())
+        
+        # Sort by original index to process linearly
+        all_results.sort(key=lambda x: x[0])
+        
+        for i, candidate, result, stderr_text, func_elapsed in all_results:
+            if result["timed_out"]:
+                total_timeouts += 1
+                continue
+            
+            if result["error"]:
+                if "Nothing to permute" in stderr_text:
+                    total_early_skip += 1
+                else:
+                    total_errors += 1
+                continue
+            
+            total_tested += 1
+            variants = result.get("results", [])
+            baseline = result.get("baseline", 0)
+            
+            if not variants:
+                total_no_variants += 1
+                continue
+            
+            total_variants += len(variants)
+            build_fails = sum(1 for v in variants if not v.get("build_success", True))
+            total_build_failures += build_fails
+            
+            improved = [v for v in variants if v.get("build_success", True) and v.get("match_percent", 0) > baseline]
+            if improved:
+                best = max(improved, key=lambda v: v["match_percent"])
+                delta = best["match_percent"] - baseline
+                total_improvements += 1
+                improvements.append({
+                    "symbol": candidate["symbol"],
+                    "function": candidate["qualified_name"],
+                    "source": candidate["source_path"],
+                    "baseline": baseline,
+                    "new_pct": best["match_percent"],
+                    "delta": delta,
+                    "variant": best.get("name", "?"),
+                    "pattern": best.get("pattern", "?"),
+                    "description": best.get("description", "?"),
+                    "applied": not args.no_apply,
+                })
 
     elapsed = time.time() - start_time
 
