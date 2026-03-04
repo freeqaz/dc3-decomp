@@ -912,12 +912,10 @@ void UtilDrawCigar(
     const Transform &tf, const float *const radii, const float *const lengths,
     const Hmx::Color &col, int segments
 ) {
-    if (!sCylinderMesh) {
-        MILO_NOTIFY("Cylinder mesh is not loaded");
-    } else {
+    if (!(!sCylinderMesh)) {
         Vector3 scaledLengths;
         float len = Length(*(const Vector3 *)lengths);
-        for (int i = 0.0f; i < 3; i++) {
+        for (int i = 0; i < 3; i++) {
             (&scaledLengths.x)[i] = radii[i] * len;
         }
         Hmx::Matrix3 basis;
@@ -966,6 +964,8 @@ void UtilDrawCigar(
                 i++;
             } while (i < segments);
         }
+    } else {
+        MILO_NOTIFY("Cylinder mesh is not loaded");
     }
 }
 

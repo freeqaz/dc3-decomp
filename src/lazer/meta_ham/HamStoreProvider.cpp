@@ -348,8 +348,7 @@ void HamStoreProvider::SetFilter(StoreOffer const *packOffer) {
 }
 
 bool HamStoreProvider::ShowBrowserPurchased(StoreOffer const *offer) const {
-    if (!offer) return false;
-    return const_cast<StoreOffer *>(offer)->IsPurchased();
+        return offer && const_cast<StoreOffer *>(offer)->IsPurchased();
 }
 
 #pragma endregion HamStoreProvider

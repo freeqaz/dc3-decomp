@@ -292,9 +292,10 @@ float HamIKEffector::GetGroundHeight(RndTransformable *t) {
 }
 
 void HamIKEffector::Poll() {
-    if (!mEffector || !mSkeleton) return;
+    auto& _ref0 = mEffector;
+    if (!_ref0 || !mSkeleton) return;
     float weight = WeightOwner()->Weight();
-    if (weight <= 0) return;
+    if ((int)weight <= 0) return;
     EffectorType t = GetType();
     if (t == kEffectorTypeHand) {
         // Apply hand IK
@@ -303,7 +304,7 @@ void HamIKEffector::Poll() {
         if (!mConstraints.empty()) {
             q.v.Zero();
             q.q.Reset();
-            Transform xfm = mEffector->WorldXfm();
+            Transform xfm = _ref0->WorldXfm();
             float totalWeight = ApplyConstraints(q, xfm, this);
             if (totalWeight > 0.0001f) {
                 Normalize(q.q, q.q);
@@ -312,7 +313,7 @@ void HamIKEffector::Poll() {
                 MakeRotMatrix(q.q, newXfm.m);
                 newXfm.v = q.v;
                 Interp(xfm, newXfm, Min(weight, 1.0f), newXfm);
-                mEffector->SetWorldXfm(newXfm);
+                _ref0->SetWorldXfm(newXfm);
             }
         }
     }
