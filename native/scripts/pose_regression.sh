@@ -5,6 +5,8 @@
 # Usage:
 #   ./native/scripts/pose_regression.sh                  # Capture all poses
 #   ./native/scripts/pose_regression.sh --capture-with-dump
+#   ./native/scripts/pose_regression.sh --crop-size 640  # Square crop size
+#   ./native/scripts/pose_regression.sh --no-square-crop
 #   ./native/scripts/pose_regression.sh --update-goldens # Copy captures to golden dir
 #   ./native/scripts/pose_regression.sh --compare        # Compare captures against goldens
 #   ./native/scripts/pose_regression.sh --compare-pose-json
@@ -29,6 +31,10 @@ MILO_LIB="${MILO_LIB:-$HOME/code/milohax/milo-engine-libs/harmonix-repos/milo-rn
 
 WIDTH=1280
 HEIGHT=720
+SQUARE_CROP=1
+CROP_SIZE=640
+CROP_FUZZ="1%"
+CROP_BORDER=80
 
 # Suppress known ASan issues
 export ASAN_OPTIONS="alloc_dealloc_mismatch=0:halt_on_error=0:detect_odr_violation=0"
@@ -52,14 +58,21 @@ CAPTURE_WITH_DUMP=0
 while [ $# -gt 0 ]; do
     case "$1" in
         --capture-with-dump) CAPTURE_WITH_DUMP=1; shift ;;
+        --crop-size)
+            CROP_SIZE="${2:-640}"
+            shift 2
+            ;;
+        --no-square-crop) SQUARE_CROP=0; shift ;;
         --update-goldens) MODE="update" ; shift ;;
         --compare)        MODE="compare"; shift ;;
         --compare-pose-json) MODE="compare_pose_json"; shift ;;
         --help|-h)
-            echo "Usage: $0 [--capture-with-dump | --update-goldens | --compare | --compare-pose-json]"
+            echo "Usage: $0 [--capture-with-dump] [--crop-size N] [--no-square-crop] [--update-goldens | --compare | --compare-pose-json]"
             echo ""
             echo "  (default)          Capture pose screenshots to archive/pose_regression/captures/"
             echo "  --capture-with-dump Capture screenshots and pose JSON sidecars"
+            echo "  --crop-size N      Square crop output size in pixels (default: 640)"
+            echo "  --no-square-crop   Disable square crop postprocess (keep raw 1280x720)"
             echo "  --update-goldens   Copy current captures to goldens/ as new baselines"
             echo "  --compare          Compare captures against goldens (pixel diff)"
             echo "  --compare-pose-json Compare pose JSON sidecars against goldens (tolerance-based)"
@@ -197,11 +210,35 @@ fi
 
 mkdir -p "$CAPTURE_DIR"
 
+# Pick ImageMagick command for postprocess crop (prefer "magick" on IMv7)
+MAGICK_CMD=()
+if command -v magick >/dev/null 2>&1; then
+    MAGICK_CMD=(magick)
+elif command -v convert >/dev/null 2>&1; then
+    MAGICK_CMD=(convert)
+fi
+
+crop_square_png() {
+    local png="$1"
+    local tmp="${png}.tmp"
+    "${MAGICK_CMD[@]}" "$png" \
+        -fuzz "$CROP_FUZZ" -trim +repage \
+        -bordercolor black -border "${CROP_BORDER}x${CROP_BORDER}" \
+        -gravity center \
+        -resize "${CROP_SIZE}x${CROP_SIZE}" \
+        -extent "${CROP_SIZE}x${CROP_SIZE}" \
+        "$tmp"
+    mv "$tmp" "$png"
+}
+
 echo "=== Pose Regression Capture ==="
 echo "Output: $CAPTURE_DIR"
 echo "Resolution: ${WIDTH}x${HEIGHT}"
 if [ "$CAPTURE_WITH_DUMP" -eq 1 ]; then
     echo "Pose dump: enabled (.pose.json sidecars)"
+fi
+if [ "$SQUARE_CROP" -eq 1 ]; then
+    echo "Postprocess: square crop ${CROP_SIZE}x${CROP_SIZE}"
 fi
 echo ""
 
@@ -286,18 +323,39 @@ for entry in "${POSES[@]}"; do
     fi
 
     if [ -f "$png" ] && [ -s "$png" ]; then
+        if [ "$SQUARE_CROP" -eq 1 ]; then
+            if [ "${#MAGICK_CMD[@]}" -eq 0 ]; then
+                printf "  %-35s FAIL (ImageMagick missing for crop)\n" "$name"
+                failed=$((failed + 1))
+                continue
+            fi
+            if ! crop_square_png "$png" >/dev/null 2>&1; then
+                printf "  %-35s FAIL (square crop failed)\n" "$name"
+                failed=$((failed + 1))
+                continue
+            fi
+        fi
+
         size=$(stat -c%s "$png" 2>/dev/null || echo 0)
         if [ "$CAPTURE_WITH_DUMP" -eq 1 ]; then
             pose_json="$CAPTURE_DIR/${name}.pose.json"
             if [ -f "$pose_json" ] && [ -s "$pose_json" ]; then
-                printf "  %-35s OK  (%s bytes + pose%s)\n" "$name" "$size" "$note"
+                if [ "$SQUARE_CROP" -eq 1 ]; then
+                    printf "  %-35s OK  (%s bytes + pose%s, %sx%s)\n" "$name" "$size" "$note" "$CROP_SIZE" "$CROP_SIZE"
+                else
+                    printf "  %-35s OK  (%s bytes + pose%s)\n" "$name" "$size" "$note"
+                fi
                 success=$((success + 1))
             else
                 printf "  %-35s FAIL (missing pose json)\n" "$name"
                 failed=$((failed + 1))
             fi
         else
-            printf "  %-35s OK  (%s bytes%s)\n" "$name" "$size" "$note"
+            if [ "$SQUARE_CROP" -eq 1 ]; then
+                printf "  %-35s OK  (%s bytes%s, %sx%s)\n" "$name" "$size" "$note" "$CROP_SIZE" "$CROP_SIZE"
+            else
+                printf "  %-35s OK  (%s bytes%s)\n" "$name" "$size" "$note"
+            fi
             success=$((success + 1))
         fi
     else

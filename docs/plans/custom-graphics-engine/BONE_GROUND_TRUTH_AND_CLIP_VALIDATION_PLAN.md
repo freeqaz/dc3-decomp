@@ -1,6 +1,6 @@
 # Bone Ground Truth and Clip Validation Plan
 
-**Status**: Active
+**Status**: In Progress (`Phase 6` active; Gates 0-5 passed)
 **Created**: 2026-03-02
 **Last Updated**: 2026-03-04
 **Owner**: Native graphics/animation debugging track
@@ -40,6 +40,10 @@ We only move to the next stage after the current gate passes.
   - `Skeleton::Init` is **99.9% AT_LIMIT** and `SkeletonUpdateThread` is **93.8% AT_LIMIT**.
   - `GestureMgr::GetSecondarySkeletonIndex(bool)` is **99.8% AT_LIMIT**; `DrawSkeletonKinectData` is **91.7% AT_LIMIT** (`LINKER_MERGED` blocked).
 - Primary remaining plan work is now **Gate 5 regression lock-in** and screenshot parity cleanup for `milo_viewer --direct-pose`.
+- Follow-up crouch-pose investigation found a remaining hand-specific defect:
+  - screenshots still show obvious hand/finger artifacts in crouching poses,
+  - direct `PoseMeshes` path and driver-polled path diverge heavily on hand bones (`max_pos=31.5201`, `max_mat=1.9378` on `crouching_great_01` at `START` beat),
+  - this is now tracked as **Phase 6** below.
 
 ## Audit Snapshot (2026-03-03, Post Push-to-Limit, Historical)
 - **Runtime decomp gap is CLOSED**: All P0/P1 gesture skeleton functions now have strong source implementations with high match percentages. `SkeletonUpdate::Update` is 100% COMPLETE. The remaining AT_LIMIT mismatches are codegen-only (register allocation, address relocations, MakeString templates) — not behavioral divergences.
@@ -353,38 +357,105 @@ Notes:
   - do not treat it as runtime-truth over DC3 binary behavior.
 
 ## Decomp Status Audit (Char/Bones/Clip)
-- Query results show many related functions as `COMPLETE`, including key paths:
-  - `CharBonesSamples::LoadHeader`, `LoadData`, `Load`
-  - `CharClip::Load`, `Save`, `ScaleAdd`, `RotateBy`, `RotateTo`, `PoseMeshes`
-  - `CharClipDriver::Evaluate`, `PreEvaluate`, `ExecuteEvent` (mixed statuses but present and largely matched)
-- There are still related `AT_LIMIT` symbols (examples: `CharBonesSamples::EvaluateChannel`, `CharDriver::Poll`, `CharClipDriver::Evaluate`), but attempt history indicates several were previously marked 100% and later demoted by tooling/base-size resets.
+- Confirmed strong/high-match core clip-pose path:
+  - `CharClip::PoseMeshes`, `CharClip::ScaleAdd`, `CharClip::ScaleAddSample` -> **100%**
+  - `CharBonesMeshes::AcquirePose` -> **99.8%**, `PoseMeshes` -> **99.1%**
+  - `CharDriver`/`CharClipDriver` runtime chain is largely high-match (`CharDriver::Poll` 92.5%, `CharClipDriver::Evaluate` 98.6%, `PreEvaluate` 95.5%).
+- Hand-critical functions still below high-confidence decomp thresholds:
+  - `CharBones::ScaleAdd(CharBones&, float)` -> **73.4% AT_LIMIT**
+  - `CharBonesSamples::EvaluateChannel(...)` -> **79.3% AT_LIMIT**
+  - `CharBonesSamples::LoadData(...)` -> **68.7%**, `LoadHeader(...)` -> **54.5%**
+  - `CharIKHand::Poll` -> **85.6% AT_LIMIT**, `CharIKHand::IKElbow` -> **86.1% AT_LIMIT**
+  - `CharIKFingers::CalculateHandDest` -> **80.0% AT_LIMIT**, `CalculateFingerDest` -> **87.1% AT_LIMIT**
+  - `CharForeTwist::Poll` currently reports **9.0% AT_LIMIT** (tooling demotion/stale-state candidate); `CharUpperTwist::Poll` is **99.9%**.
 - Current conclusion:
-  - unresolved decomp entries may still matter in edge cases,
-  - but they are not yet the strongest evidence for the current clip validation failures.
+  - pose decode + application is mostly validated,
+  - remaining visible hand defects are most likely in hand/twist parity and low-match hand-specific math paths.
 
 ## Gate 5: Regression Lock-In
+**Status**: PASSED (2026-03-04)
 **Intent**: Prevent recurrence.
 
-- [ ] Keep fast numeric pose tests in normal test runs
-- [ ] Keep screenshot suite as deterministic regression checks (can be gated by env/label)
-- [ ] Document update workflow for goldens
-- [ ] Add troubleshooting notes for common failure signatures
+- [x] Keep fast numeric pose tests in normal test runs (13 tests in `test_bone_ground_truth.cpp`, no `DISABLED_` prefix, graceful skip if assets missing)
+- [x] Keep screenshot suite as deterministic regression checks (`native/scripts/pose_regression.sh` — 5 poses captured, goldens established, `--compare` passes 5/5)
+- [x] Document update workflow for goldens (see `POSE_REGRESSION_GUIDE.md`)
+- [x] Add troubleshooting notes for common failure signatures (see `POSE_REGRESSION_GUIDE.md`)
+
+**Fixes applied during Gate 5**:
+- Fixed `!directPose` inversion in `milo_viewer.cpp` — screenshot path now correctly uses `PoseMeshes` when `--direct-pose` is passed
+- Fixed `--start-frame` → `--frame` arg mismatch in `pose_regression.sh`
+- Added midpoint beat resolution (`--frame -2` → `(StartBeat + EndBeat) / 2`) in viewer
+- Guarded `xdk/LIBCMT/stdio.h` include in `HamWardrobe.cpp` for native builds
 
 **Pass criteria**
-- Future bone desync regressions are caught with actionable failures.
+- Future bone desync regressions are caught with actionable failures. ✓
+
+## Phase 6: Hand Pose Parity and Hand-Pipeline Validation (2026-03-04)
+**Status**: IN PROGRESS  
+**Core goal**: Validate and fix why poses read from files still render incorrect hands (most visible in crouching clips), despite manual pose controls working.
+
+### Runtime Call Trace (Hand-Relevant)
+1. Screenshot/direct-pose path (`milo_viewer --direct-pose`):
+   - `milo_viewer.cpp` screenshot branch
+   - `CharClip::PoseMeshes(charObj, beat)`
+   - `CharClip::ScaleAdd(...)` -> `CharClip::ScaleAddSample(...)`
+   - `CharBonesSamples::ScaleAddSample(...)` -> `CharBones::ScaleAdd(...)`
+   - `CharBonesMeshes::PoseMeshes()`
+   - viewer-local `SolveAllTwists(charObj)` (`SolveUpperTwistChain`, `SolveForeTwist`, `SolveThighTwist`)
+2. Driver/poll path (no `--direct-pose`):
+   - `TheTaskMgr.SetSecondsAndBeat(...)`
+   - all `CharPollable::Poll()` on character dir
+   - `CharDriver::Poll()` -> `CharClipDriver::PreEvaluate/Evaluate/ScaleAdd/RotateTo`
+   - `CharServoBone::Poll()` (facing/pelvis adjustment path)
+   - viewer-local `SolveAllTwists(charObj)` fallback (because twist pollables are typically absent in outfit dirs)
+3. Shared mapping layer:
+   - `CharBonesMeshes::ReallocateInternal()` uses `CharUtlFindBoneTrans(...)` to map channels to transformables.
+
+### Evidence Triggering Phase 6
+- Crouch screenshots still show bad hands after framing/crop fixes:
+  - `archive/screenshots/pose_regression/captures/crouch_great_start.png`
+  - `archive/screenshots/pose_regression/captures/crouch_great_mid.png`
+- Direct-vs-driver pose dump comparison on `crouching_great_01` (`START` beat) shows large hand-bone divergence:
+  - `max_pos=31.5201` (bone_R-index01.mesh world)
+  - `max_mat=1.9378` (bone_R-foreTwist1.mesh local)
+- This indicates we must close runtime parity for hand/twist behavior, not just parser correctness.
+
+### Prioritized Function Targets
+**P0 (work next)**
+- `native/src/viewer/milo_viewer.cpp`
+  - `SolveAllTwists`, `SolveForeTwist`, `SolveUpperTwistChain`:
+    - replace/tighten heuristic constants and interpolation so behavior matches engine pollables.
+- `src/system/char/CharForeTwist.cpp`
+  - `CharForeTwist::Poll` (currently reported 9.0% stale/AT_LIMIT): verify true source parity and use as authoritative reference for viewer fallback.
+- `src/system/char/CharBones.cpp`
+  - `CharBones::ScaleAdd(CharBones&, float)` (73.4%): hand rotations/twist weighting pass through here.
+- `src/system/char/CharBonesSamples.cpp`
+  - `EvaluateChannel` (79.3%), `LoadData` (68.7%), `LoadHeader` (54.5%): verify hand channel decode/eval edge cases under cached clip data.
+
+**P1 (immediately after P0)**
+- `src/system/char/CharIKHand.cpp`
+  - `CharIKHand::Poll` (85.6%), `IKElbow` (86.1%)
+- `src/system/char/CharIKFingers.cpp`
+  - `CalculateHandDest` (80.0%), `CalculateFingerDest` (87.1%)
+- `src/system/char/CharDriver.cpp`
+  - `CharDriver::Poll` (92.5%) for any remaining driver-path parity drift around weighting/ordering.
+
+### Phase 6 Exit Criteria
+- Direct and driver pose paths agree on hand/twist bones within strict thresholds at `START` and `MID` beats for crouch clips.
+- Crouch screenshots no longer show visible hand/finger artifacts.
+- Add dedicated hand parity tests (numeric transform diffs + screenshot evidence) into normal regression flow.
 
 ## What Is Left (As Of 2026-03-04)
-1. Gate 5 lock-in work:
-   - Keep numeric pose tests in normal runs.
-   - Add deterministic screenshot regression checks with fixed camera/setup and baselines.
-   - Document golden update workflow and troubleshooting signatures.
-2. Screenshot harness parity fix:
-   - Align `milo_viewer --direct-pose` screenshot path with video path (currently inverted condition around `PoseMeshes` usage).
-3. Optional decomp hygiene (non-blocking for gate completion):
-   - `SkeletonViz::SkeletonViz()` at 68.1% `AT_LIMIT`
-   - `DrawJoints@SkeletonViz` at 68.5% `AT_LIMIT`
-   - `SkeletonClip::Poll` at 93.1% `AT_LIMIT` (already documented as relocation-dominated)
-   - `DrawSkeletonKinectData` at 91.7% `AT_LIMIT` (`LINKER_MERGED`)
+- Gates 0-5 are complete, but **Phase 6 hand-pose parity is still open**.
+- Remaining blocking work for core goal (file pose display correctness):
+  - close direct-vs-driver hand/twist divergence,
+  - align viewer twist fallback with engine behavior,
+  - resolve remaining low-match hand-critical decomp functions listed in Phase 6 P0/P1.
+- Non-blocking decomp hygiene remains:
+  - `SkeletonViz::SkeletonViz()` at 68.1% `AT_LIMIT`
+  - `DrawJoints@SkeletonViz` at 68.5% `AT_LIMIT`
+  - `SkeletonClip::Poll` at 93.1% `AT_LIMIT` (relocation-dominated)
+  - `DrawSkeletonKinectData` at 91.7% `AT_LIMIT` (`LINKER_MERGED`)
 
 ## Initial Implementation Targets
 - Test harness files:
@@ -508,10 +579,18 @@ cd native/build
   - `SkeletonUpdateThread` now **93.8% AT_LIMIT**
   - `GestureMgr::GetSecondarySkeletonIndex(bool)` **99.8% AT_LIMIT**
   - `GestureMgr::DrawSkeletonKinectData` **91.7% AT_LIMIT** (`LINKER_MERGED`)
-- [x] Confirmed screenshot parity issue is still open in `milo_viewer`:
-  - screenshot path applies `PoseMeshes` when `!directPose`
-  - video path always applies `PoseMeshes`
+- [x] Reconfirmed `milo_viewer` screenshot/video parity status:
+  - `--direct-pose` now correctly applies `PoseMeshes` in screenshot path
+  - screenshot/video teardown is now unified (release dirs first, then renderer terminate) to reduce post-capture SIGSEGV risk
+  - added screenshot subprocess regression test (`MiloViewerScreenshot.ScreenshotModeExitsCleanlyAndWritesPng`)
 - [x] Reconciled stale plan statements (`TrackObjectBytes` blocker notes, old `SkeletonViz::Poll` risk statements, canonical command comments).
+
+### 2026-03-04 — Phase 6 Kickoff (Hand-Pose Investigation)
+- [x] Traced both runtime pose paths end-to-end for hand bones (direct `PoseMeshes` vs driver/poll chain).
+- [x] Confirmed direct-vs-driver divergence is large for crouch hand bones (`max_pos=31.5201`, `max_mat=1.9378`).
+- [x] Re-captured crouch screenshots with improved framing; hand artifacts remain clearly visible.
+- [x] Re-audited decomp status for hand/twist units and added prioritized P0/P1 function targets.
+- [ ] Implement parity fixes (viewer twist fallback + hand-critical low-match functions) and re-baseline crouch goldens.
 
 ## Gate Progress Snapshot
 - Gate 0: `complete` (2026-03-03)
@@ -519,4 +598,5 @@ cd native/build
 - Gate 2: `complete` (2026-03-03) — 4/4 rest pose tests pass
 - Gate 3: `complete` (2026-03-03; reconfirmed 2026-03-04) — 4/4 clip pose tests pass (dance clips move 139/145 bones in current run)
 - Gate 4: `skipped` — Gate 3 passes, no parsing boundary isolation needed
-- Gate 5: `pending`
+- Gate 5: `complete` (2026-03-04) — 5/5 screenshot goldens established, regression comparison passes, troubleshooting doc written
+- Phase 6 (hand pose parity): `in_progress` (2026-03-04)

@@ -548,18 +548,19 @@ void CharEyes::PollDeps(
 }
 
 void CharEyes::DartUpdate() {
-    mDartTimer -= TheTaskMgr.DeltaSeconds();
+    auto& _ref0 = mDartTimer;
+    _ref0 -= TheTaskMgr.DeltaSeconds();
     if (mDartEnabled) {
-        if (mDartTimer < 0) {
+        if (_ref0 < 0) {
             mEyeClampCount--;
             if (mEyeClampCount < 0) {
                 mDartEnabled = false;
-                mDartTimer = RandomFloat(
+                _ref0 = RandomFloat(
                     mData.mMinSecsBetweenSequences,
                     mData.mMaxSecsBetweenSequences
                 );
             } else {
-                mDartTimer = RandomFloat(
+                _ref0 = RandomFloat(
                     mData.mMinSecsBetweenDarts,
                     mData.mMaxSecsBetweenDarts
                 );
@@ -569,14 +570,14 @@ void CharEyes::DartUpdate() {
                 mCurrentDartOffsetZ = dartOffset.z;
             }
         }
-    } else if (mDartTimer < 0 && EyesOnTarget(mData.mOnTargetAngleThresh)
+    } else if (_ref0 < 0 && EyesOnTarget(mData.mOnTargetAngleThresh)
                && !mBlinkActive) {
         mDartEnabled = true;
         mEyeClampCount = RandomInt(
             mData.mMinDartsPerSequence,
             mData.mMaxDartsPerSequence
         );
-        mDartTimer = RandomFloat(
+        _ref0 = RandomFloat(
             mData.mMinSecsBetweenDarts,
             mData.mMaxSecsBetweenDarts
         );
