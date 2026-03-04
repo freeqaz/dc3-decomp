@@ -529,6 +529,10 @@ TEST_F(ClipPoseFixture, PoseDeterminism) {
 }
 
 TEST_F(ClipPoseFixture, ChannelEvaluationIsFiniteAtKeyBeats) {
+    // Triage note:
+    // If this suddenly reports huge 1e20-1e38 magnitudes after source edits,
+    // verify `native/build/milo-tests` was rebuilt first. Stale binaries have
+    // previously produced false regression signals for this check.
     std::list<CharBones::Bone> bones;
     sClip->ListBones(bones);
     ASSERT_FALSE(bones.empty());

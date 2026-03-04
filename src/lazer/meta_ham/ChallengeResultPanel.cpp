@@ -151,24 +151,25 @@ void ChallengeResultPanel::Poll() {
 }
 
 void ChallengeResultPanel::UpdateList(int player) {
-    static Symbol player_name("player_name");
-    static Symbol challenge_mission_score("challenge_mission_score");
-    int numDisplay = mChallengeList->NumDisplay();
-    static Symbol xp_total("xp_total");
-    static Symbol grade("grade");
-    static Symbol rival_is_self("rival_is_self");
     static Symbol max_display("max_display");
-    String playerName;
+    auto& _ref0 = mChallengeList;
+    int numDisplay = _ref0->NumDisplay();
     static Symbol score("score");
-    static Symbol xp_before_mission("xp_before_mission");
-    static Symbol scroll_past_max_display("scroll_past_max_display");
     static Symbol challenge_mission_index("challenge_mission_index");
-    int totalXP = TheChallenges->GetTotalXpEarned(player);
-    static Symbol is_challenging_self("is_challenging_self");
-    static Symbol rival_beaten("rival_beaten");
     static Symbol side("side");
-    HamPlayerData *playerData = TheGameData->Player(player);
+    static Symbol scroll_past_max_display("scroll_past_max_display");
+    static Symbol xp_before_mission("xp_before_mission");
+    static Symbol grade("grade");
+    static Symbol challenge_mission_score("challenge_mission_score");
+    static Symbol rival_beaten("rival_beaten");
     static Symbol xp_mission("xp_mission");
+    static Symbol rival_is_self("rival_is_self");
+    static Symbol player_name("player_name");
+    static Symbol is_challenging_self("is_challenging_self");
+    String playerName;
+    HamPlayerData *playerData = TheGameData->Player(player);
+    int totalXP = TheChallenges->GetTotalXpEarned(player);
+    static Symbol xp_total("xp_total");
     MILO_ASSERT(playerData, 0x7D);
     PropertyEventProvider *provider = playerData->Provider();
     MILO_ASSERT(provider, 0x7F);
@@ -176,7 +177,8 @@ void ChallengeResultPanel::UpdateList(int player) {
     mPlayerScore = playerScore;
     auto missionIndex = provider->Property(challenge_mission_index)->Int();
     mRivalIndex = missionIndex + numDisplay;
-    mSide = provider->Property(side)->Int();
+    auto _tmp0 = provider->Property(side)->Int();
+    mSide = _tmp0;
     auto playerNameStr = provider->Property(player_name)->Str();
     playerName = playerNameStr;
     int challengeScore = provider->Property(challenge_mission_score)->Int();
@@ -186,7 +188,7 @@ void ChallengeResultPanel::UpdateList(int player) {
         mRivalIndex++;
     }
     mItems.clear();
-    for (int i = 0; i < mChallengeList->NumDisplay(); i++) {
+    for (int i = 0; i < _ref0->NumDisplay(); i++) {
         mItems.push_back(ChallengeRow());
     }
 
@@ -256,10 +258,10 @@ void ChallengeResultPanel::UpdateList(int player) {
     }
 
     // Set properties on UIList
-    mChallengeList->SetProperty(max_display, DataNode(0));
-    mChallengeList->SetProperty(scroll_past_max_display, DataNode(1));
-    mChallengeList->StopAutoScroll();
-    mChallengeList->SetProvider(this);
+    _ref0->SetProperty(max_display, DataNode(0));
+    _ref0->SetProperty(scroll_past_max_display, DataNode(1));
+    _ref0->StopAutoScroll();
+    _ref0->SetProvider(this);
 
     // Disable and hide right hand nav list
     mRightHandNavList->Disable();

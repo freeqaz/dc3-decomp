@@ -201,9 +201,11 @@ void CameraManager::PrePoll() {
 }
 
 void CameraManager::Poll() {
+    auto& _ref0 = mCurrentShot;
     if (!MiloCamera()) {
-        if (mCurrentShot) {
-            mCurrentShot->SetFrame(CalcFrame(), 1.0f);
+        if (_ref0) {
+            auto _tmp0 = CalcFrame();
+            _ref0->SetFrame(_tmp0, 1.0f);
         }
         if (mFreeCam)
             mFreeCam->Poll();

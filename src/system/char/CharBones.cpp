@@ -919,7 +919,7 @@ rotate_quat:
                 float dz = dquat->z;
                 float dy = dquat->y;
                 dquat->w = -(dz * sq.z - -(dy * sq.y - (dw * sq.w - dx * sq.x)));
-                dquat->z = -(dx * sq.y - (dy * sq.x + dz * sq.w + dw * sq.z));
+                dquat->z = -(dx * sq.y - ((dy * sq.x + (dz * sq.w + dw * sq.z))));
                 dquat->y = -(dz * sq.x - (dw * sq.y + dy * sq.w + dx * sq.z));
                 dquat->x = -(dy * sq.z - (dw * sq.x + dz * sq.y + dx * sq.w));
                 if (src == src_end) goto rotate_rot;
@@ -1031,7 +1031,8 @@ complain:
 // MARK: RotateTo
 void CharBones::RotateTo(CharBones &dst, float f) const {
     const Bone *src = mBones.begin();
-    if (src == mBones.end()) return;
+    auto _tmp0 = mBones.end();
+    if (src == _tmp0) return;
 
     // Position section
     if (mCounts[TYPE_QUAT] > mCounts[TYPE_POS]) {

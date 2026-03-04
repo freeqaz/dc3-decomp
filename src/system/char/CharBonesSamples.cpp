@@ -120,6 +120,42 @@ void CharBonesSamples::LoadData(BinStreamRev &d) {
 
             if (cached) {
                 d.stream.Read(mStart, mOffsets[TYPE_END] - mOffsets[TYPE_POS]);
+#ifdef HX_NATIVE
+                // Cached .milo_xbox files store raw big-endian data.
+                // Byte-swap floats (4 bytes) in POS/SCALE sections and
+                // shorts (2 bytes) in QUAT/ROT sections to native LE order.
+                if (!d.stream.LittleEndian()) {
+                    // POS + SCALE sections: float data (4 bytes each)
+                    for (char *p = mStart; p < mStart + mOffsets[TYPE_QUAT]; p += 4) {
+                        unsigned int *u = (unsigned int *)p;
+                        *u = __builtin_bswap32(*u);
+                    }
+                    // QUAT section: shorts (2 bytes each) when compressed, floats when not
+                    if (mCompression >= kCompressRots) {
+                        for (char *p = mStart + mOffsets[TYPE_QUAT]; p < mStart + mOffsets[TYPE_ROTX]; p += 2) {
+                            unsigned short *u = (unsigned short *)p;
+                            *u = __builtin_bswap16(*u);
+                        }
+                    } else {
+                        for (char *p = mStart + mOffsets[TYPE_QUAT]; p < mStart + mOffsets[TYPE_ROTX]; p += 4) {
+                            unsigned int *u = (unsigned int *)p;
+                            *u = __builtin_bswap32(*u);
+                        }
+                    }
+                    // ROT sections: shorts (2 bytes each) when compressed, floats when not
+                    if (mCompression != kCompressNone) {
+                        for (char *p = mStart + mOffsets[TYPE_ROTX]; p < mStart + mOffsets[TYPE_END]; p += 2) {
+                            unsigned short *u = (unsigned short *)p;
+                            *u = __builtin_bswap16(*u);
+                        }
+                    } else {
+                        for (char *p = mStart + mOffsets[TYPE_ROTX]; p < mStart + mOffsets[TYPE_END]; p += 4) {
+                            unsigned int *u = (unsigned int *)p;
+                            *u = __builtin_bswap32(*u);
+                        }
+                    }
+                }
+#endif
             } else {
                 if (mCompression >= kCompressVects) {
                     short *quatOffset = (short *)(mStart + mOffsets[TYPE_QUAT]);
@@ -180,6 +216,43 @@ void CharBonesSamples::LoadData(BinStreamRev &d) {
     } else {
         mStart = mRawData;
         ReadChunks(d.stream, mRawData, mNumSamples * mTotalSize, mTotalSize << 7);
+#ifdef HX_NATIVE
+        // ReadChunks reads raw big-endian data — byte-swap all samples
+        // NOTE: this branch is extremely parity-sensitive. Channel finiteness
+        // failures in ClipPoseFixture usually indicate an endian/swap issue
+        // here (or stale native test binaries).
+        if (!d.stream.LittleEndian()) {
+            for (int i = 0; i < mNumSamples; i++) {
+                char *s = mRawData + mTotalSize * i;
+                for (char *p = s; p < s + mOffsets[TYPE_QUAT]; p += 4) {
+                    unsigned int *u = (unsigned int *)p;
+                    *u = __builtin_bswap32(*u);
+                }
+                if (mCompression >= kCompressRots) {
+                    for (char *p = s + mOffsets[TYPE_QUAT]; p < s + mOffsets[TYPE_ROTX]; p += 2) {
+                        unsigned short *u = (unsigned short *)p;
+                        *u = __builtin_bswap16(*u);
+                    }
+                } else {
+                    for (char *p = s + mOffsets[TYPE_QUAT]; p < s + mOffsets[TYPE_ROTX]; p += 4) {
+                        unsigned int *u = (unsigned int *)p;
+                        *u = __builtin_bswap32(*u);
+                    }
+                }
+                if (mCompression != kCompressNone) {
+                    for (char *p = s + mOffsets[TYPE_ROTX]; p < s + mOffsets[TYPE_END]; p += 2) {
+                        unsigned short *u = (unsigned short *)p;
+                        *u = __builtin_bswap16(*u);
+                    }
+                } else {
+                    for (char *p = s + mOffsets[TYPE_ROTX]; p < s + mOffsets[TYPE_END]; p += 4) {
+                        unsigned int *u = (unsigned int *)p;
+                        *u = __builtin_bswap32(*u);
+                    }
+                }
+            }
+        }
+#endif
     }
 }
 

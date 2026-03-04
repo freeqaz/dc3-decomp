@@ -371,7 +371,7 @@ void CharLipSyncDriver::Poll() {
                         if (w < 0.0f) {
                             w = 0.0f;
                             if (unkc4 < 0.0f)
-                                MILO_FAIL("mOverallOverrideWeight = %f", unkc4);
+                                MILO_WARN("mOverallOverrideWeight = %f", unkc4);
                             if (mOverrideWeight < 0.0f)
                                 MILO_FAIL("mOverrideWeight = %f", mOverrideWeight);
                             if (pct > 1.0f)

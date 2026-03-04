@@ -154,7 +154,9 @@ static void SolveThighTwist(RndTransformable* thighTwist, RndTransformable* thig
 static bool IsDriverPollable(const CharPollable* p) {
     if (!p) return false;
     const char* cn = p->ClassName().Str();
-    return strcmp(cn, "CharDriver") == 0 || strcmp(cn, "CharDriverMidi") == 0;
+    return strcmp(cn, "CharDriver") == 0
+        || strcmp(cn, "CharDriverMidi") == 0
+        || strcmp(cn, "CharServoBone") == 0;
 }
 
 static bool IsTwistPollable(const CharPollable* p) {
@@ -1626,14 +1628,19 @@ int main(int argc, char** argv) {
             lastAnimBeat += stepBeats;
             lastAnimSeconds += stepSeconds;
             TheTaskMgr.SetSecondsAndBeat(lastAnimSeconds, lastAnimBeat, false);
-            for (auto* p : charPollables) p->Poll();
+            for (auto* p : charPollables) {
+                if (!IsTwistPollable(p)) p->Poll();
+            }
         }
         // Final step to exact target
         lastAnimBeat = targetBeat;
         lastAnimSeconds = targetSeconds;
         TheTaskMgr.SetSecondsAndBeat(targetSeconds, targetBeat, false);
-        for (auto* p : charPollables) p->Poll();
-        // Solve twist bones (CharUpperTwist/CharForeTwist not in outfit .milo)
+        for (auto* p : charPollables) {
+            if (!IsTwistPollable(p)) p->Poll();
+        }
+        // Solve twist bones — uses in-scene pollables if present,
+        // otherwise falls back to hardcoded solver for outfit-only scenes
         SolveAllTwists(charObj);
     };
 

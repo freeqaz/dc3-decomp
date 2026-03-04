@@ -30,7 +30,8 @@ bool HamStoreOffer::Cmp(StoreOffer const &other, Symbol sortBy) const {
     static Symbol difficulty("difficulty");
     static Symbol release_date("release_date");
     if (sortBy == title) {
-        return strcmp(OfferName(), other.OfferName()) < 0;
+        auto _tmp0 = strcmp(OfferName(), other.OfferName());
+        return _tmp0 < 0;
     } else if (sortBy == artist) {
         return strcmp(ArtistName(), other.ArtistName()) < 0;
     } else if (sortBy == difficulty) {

@@ -913,11 +913,11 @@ void UtilDrawCigar(
     const Hmx::Color &col, int segments
 ) {
     if (!sCylinderMesh) {
-        MILO_NOTIFY_ONCE("Cylinder mesh is not loaded");
+        MILO_NOTIFY("Cylinder mesh is not loaded");
     } else {
         Vector3 scaledLengths;
         float len = Length(*(const Vector3 *)lengths);
-        for (int i = 0; i < 3; i++) {
+        for (int i = 0.0f; i < 3; i++) {
             (&scaledLengths.x)[i] = radii[i] * len;
         }
         Hmx::Matrix3 basis;
@@ -932,7 +932,7 @@ void UtilDrawCigar(
 
         int i = 0;
         if (segments > 0) {
-            float angleStep = 6.2831854820251465f / (float)segments;
+            float angleStep = 6.2831854820251465 / (float)segments;
             float angle = 1.5707963705062866f;
             do {
                 float sinVal = FastSin(angle + angleStep);

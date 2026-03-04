@@ -230,7 +230,7 @@ void CharIKFingers::CalculateHandDest(int engagedCount, int firstEngaged) {
     if (mMoveHand) {
         if (engagedCount > 0) {
             Vector3 destOffset(0, 0, 0);
-            FingerDesc &firstDesc = mFingers[firstEngaged];
+            FingerDesc firstDesc = mFingers[firstEngaged];
             Vector3 avgPos;
             avgPos.Zero();
             bool hasSpecialRotation = false;
@@ -329,9 +329,10 @@ void CharIKFingers::CalculateFingerDest(FingerNum num) {
                 float len03 = Length(finger.mFinger03->LocalXfm().v);
                 float toTargetLen = Length(toTarget);
                 float angle03 = std::acos(
-                    -((toTargetLen - len03) * (toTargetLen - len03) - (len02 * len02 + lenTip * lenTip))
+                    ((toTargetLen - len03) * (toTargetLen - len03) - (len02 * len02 + lenTip * lenTip))
                     / (len02 * 2.0f * lenTip)
                 );
+                angle03 = -angle03;
                 if (angle03 < 0.87f)
                     angle03 = 0.87f;
                 float angle02 = angle03 * 0.5f + 1.5707964f;

@@ -774,7 +774,8 @@ void LightPreset::EnvironmentEntry::Animate(const EnvironmentEntry &other, float
 }
 
 void LightPreset::EnvLightEntry::Animate(const EnvLightEntry &other, float t) {
-    Interp(mColor, other.mColor, t, mColor);
+    Hmx::Color& _ref0 = mColor;
+    Interp(_ref0, other.mColor, t, _ref0);
     Interp(mPosition, other.mPosition, t, mPosition);
     Interp(mRange, other.mRange, t, mRange);
     Interp(mOrientation, other.mOrientation, t, mOrientation);
@@ -946,7 +947,7 @@ void LightPreset::AnimateState(
 
 void LightPreset::SetFrameEx(float frame, float blend, bool b) {
     RndAnimatable::SetFrame(blend, frame);
-    if ((unsigned int)frame == 0 && TheLoadMgr.EditMode()) {
+    if (frame == 0 && TheLoadMgr.EditMode()) {
         SyncNewSpotlights();
     }
     if (!mKeyframes.empty()) {
@@ -977,7 +978,7 @@ void LightPreset::SetFrameEx(float frame, float blend, bool b) {
             }
             if (mLastManualFrame != -1) {
                 kfPrev = &mKeyframes[mLastManualFrame];
-                if (mManualFadeTime >= 1) {
+                if (mManualFadeTime > 0) {
                     f = Min((frame - mManualFrameStart) / mManualFadeTime, 1.0f);
                     f = Max(0.0f, f);
                 } else {
@@ -1038,8 +1039,8 @@ DataNode LightPreset::OnSetKeyframe(DataArray *da) {
 }
 
 void LightPreset::FillEnvPresetData(RndEnviron *env, EnvironmentEntry &e) {
-    e.mAmbientColor = env->AmbientColor();
     e.mFogColor = env->FogColor();
+    e.mAmbientColor = env->AmbientColor();
     e.mFogEnable = env->FogEnable();
 #ifdef HX_NATIVE
     e.mFogStart = env->FogStart();
@@ -1151,11 +1152,13 @@ static float ComputeSpotBlend(int i, float f) {
 void LightPreset::Animate(float f) {
     if (f < 1.1920929E-7f)
         return;
-    for (uint i = 0; i != mSpotlights.size(); i++) {
-        if (mSpotlights[i] && mSpotlights[i]->GetAnimateFromPreset()) {
+    ObjPtrVec<Spotlight>& _ref0 = mSpotlights;
+    int _tmp0 = _ref0.size();
+    for (uint i = 0; i != _tmp0; i++) {
+        if (_ref0[i] && _ref0[i]->GetAnimateFromPreset()) {
             float blend = ComputeSpotBlend(i, f);
             if (blend >= 1.1920929E-7f) {
-                AnimateSpotFromPreset(this, mSpotlights[i], mSpotlightState[i], blend);
+                AnimateSpotFromPreset(this, _ref0[i], mSpotlightState[i], blend);
             }
         }
     }
@@ -1194,7 +1197,7 @@ BEGIN_LOADS(LightPreset)
     LOAD_REVS(bs)
     ASSERT_REVS(0x16, 0)
     LOAD_SUPERCLASS(Hmx::Object)
-    auto& _ref0 = mKeyframes;
+    ObjVector<Keyframe>& _ref0 = mKeyframes;
     if (d.rev != 0xE) {
         LOAD_SUPERCLASS(RndAnimatable)
         // Load keyframes manually since there's no BinStream >> Keyframe operator
@@ -1271,10 +1274,11 @@ BEGIN_LOADS(LightPreset)
 END_LOADS
 
 bool LightPreset::Replace(ObjRef *from, Hmx::Object *to) {
+    ObjPtrVec<Spotlight>& _ref0 = mSpotlights;
     if (!to) {
         Hmx::Object *old = from->GetObj();
-        for (int i = 0; i < (int)mSpotlights.size(); i++) {
-            if (mSpotlights[i] == old) {
+        for (int i = 0; i < (int)_ref0.size(); i++) {
+            if (_ref0[i] == old) {
                 RemoveSpotlight(i);
                 CacheFrames();
                 return true;

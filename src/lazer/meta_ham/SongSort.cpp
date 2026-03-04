@@ -20,10 +20,11 @@ void SongSort::BuildTree() {
 
     // Build a sorted list of song nodes, grouped by header type
     std::vector<NavListItemNode *> sortedNodes;
+    auto _tmp2 = CompareHeaders();
     FOREACH (songEntry, TheSongSortMgr->mSongRecordMap) {
         NavListItemNode *songNode = NewItemNode(&songEntry->second);
         auto insertPos =
-            std::lower_bound(sortedNodes.begin(), sortedNodes.end(), songNode, CompareHeaders());
+            std::lower_bound(sortedNodes.begin(), sortedNodes.end(), songNode, _tmp2);
         sortedNodes.insert(insertPos, songNode);
     }
 
@@ -31,8 +32,8 @@ void SongSort::BuildTree() {
     // For "by_song" and "by_artist" sorts, small groups are combined
     // to avoid too many tiny header sections.
     bool deferring = false;
-    int cumulativeCount = 0;
     auto shortcutStart = sortedNodes.begin();
+    int cumulativeCount = 0;
     auto groupStart = sortedNodes.begin();
 
     if (groupStart != sortedNodes.end()) {

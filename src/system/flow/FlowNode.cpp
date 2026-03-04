@@ -250,16 +250,7 @@ void FlowNode::UpdateIntensity() {
 
 FlowNode *FlowNode::DuplicateChild(FlowNode *child) {
     Flow *childFlow = dynamic_cast<Flow *>(child);
-    if (!childFlow) {
-        Symbol sym = child->ClassName();
-        Hmx::Object *newObj = Hmx::Object::NewObject(sym);
-        FlowNode *newNode = dynamic_cast<FlowNode *>(newObj);
-        newNode->Copy(child, kCopyShallow);
-        ObjectDir *dir = child->Dir();
-        const char *name = NextName("n", dir);
-        newNode->SetName(name, dir);
-        return newNode;
-    } else {
+    if (!(!childFlow)) {
         Symbol flowSym = Flow::StaticClassName();
         Hmx::Object *newObj = Hmx::Object::NewObject(flowSym);
         Flow *newFlow = dynamic_cast<Flow *>(newObj);
@@ -297,6 +288,15 @@ FlowNode *FlowNode::DuplicateChild(FlowNode *child) {
         }
 
         return newFlow;
+    } else {
+        Symbol sym = child->ClassName();
+        Hmx::Object *newObj = Hmx::Object::NewObject(sym);
+        FlowNode *newNode = dynamic_cast<FlowNode *>(newObj);
+        newNode->Copy(child, kCopyShallow);
+        ObjectDir *dir = child->Dir();
+        const char *name = NextName("n", dir);
+        newNode->SetName(name, dir);
+        return newNode;
     }
 }
 

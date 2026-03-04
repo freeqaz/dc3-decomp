@@ -380,13 +380,14 @@ void CacheMgrXbox::PollSearch() {
         DWORD numFound = 0;
         DWORD res = XGetOverlappedResult(&mOverlapped, &numFound, false);
         if (res != 0 && res != 0x65B) {
-            MILO_FAIL("CacheMgrXbox::PollSearch() encountered unknown error %u.\n", res);
+            MILO_WARN("CacheMgrXbox::PollSearch() encountered unknown error %u.\n", res);
             EndSearch(kCache_ErrorCacheNotFound);
         } else if (numFound != 0) {
             MILO_ASSERT(numFound == 1, 0x1FB);
             mContentData.szFileName[0] &= 0x7F;
+            auto _tmp0 = strlen(mContentData.szFileName);
             int cmp = mStrCacheName.compare(
-                0, strlen(mContentData.szFileName), mContentData.szFileName
+                0, _tmp0, mContentData.szFileName
             );
             if (cmp == 0) {
                 MILO_ASSERT(mppCacheID != NULL, 0x20C);

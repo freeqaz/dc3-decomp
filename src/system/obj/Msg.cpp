@@ -199,26 +199,22 @@ static void ExportSink(Hmx::Object *obj, Hmx::Object::SinkMode mode, DataArray *
 
 void MsgSinks::Export(DataArray *arr) {
     mExporting++;
-    Symbol oldEvent = sCurrentExportEvent;
-
     // Dispatch to global sinks
     for (ObjList<Sink>::iterator it = mSinks.begin(); it != mSinks.end();) {
-        if (it->obj == nullptr) {
+        if (!(it->obj == nullptr)) {
+            ExportSink(it->obj, it->mode, arr);
+        } else {
             if (mExporting == 1) {
                 it = mSinks.erase(it);
                 continue;
             }
-        } else {
-            ExportSink(it->obj, it->mode, arr);
         }
         ++it;
     }
 
     // Find and dispatch to event-specific sinks
     Symbol msgType = arr->Sym(1);
-    sCurrentExportEvent = msgType;
-
-    for (ObjList<EventSink>::iterator evIt = mEventSinks.begin();
+        for (ObjList<EventSink>::iterator evIt = mEventSinks.begin();
          evIt != mEventSinks.end(); ++evIt) {
         if (evIt->event == arr->Sym(1)) {
             // Save original message node and replace with handler symbol
@@ -242,7 +238,7 @@ void MsgSinks::Export(DataArray *arr) {
         }
     }
 
-    sCurrentExportEvent = oldEvent;
+    sCurrentExportEvent = msgType = sCurrentExportEvent;
     mExporting--;
 }
 

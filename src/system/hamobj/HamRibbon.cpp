@@ -134,13 +134,15 @@ void HamRibbon::SetActive(bool active) {
     mActive = active;
 }
 
+#pragma fp_contract(off)
 void HamRibbon::UpdateChase() {
+auto& _ref0 = mSegTrans;
 #ifdef HX_NATIVE
     // TODO: needs Interp(Transform,...) and ObjPtrList subscript - not needed for boot
 #else
-    if (!mActive || mSegTrans.empty()) return;
+    if (!mActive || _ref0.empty()) return;
     float now = TheTaskMgr.Seconds(TaskMgr::kDelayedTime);
-    if (mLastTime < 0) {
+    if ((int)mLastTime < 0) {
         mLastTime = now;
         mChaseKeys.clear();
     }
@@ -148,7 +150,7 @@ void HamRibbon::UpdateChase() {
     Transform followed = Transform::IDXfm();
     if (mFollowA) {
         followed = mFollowA->WorldXfm();
-        if (mFollowB && mFollowWeight > 0) {
+        if (mFollowB && mFollowWeight >= 1) {
             Transform bXfm = mFollowB->WorldXfm();
             Interp(followed, bXfm, mFollowWeight, followed);
         }
@@ -163,13 +165,13 @@ void HamRibbon::UpdateChase() {
         mChaseKeys.Remove(0);
     }
     // Distribute keys to segment transforms
-    int numSegs = mSegTrans.size();
+    int numSegs = _ref0.size();
     if (numSegs > 0 && mChaseKeys.NumKeys() > 0) {
         float oldest = mChaseKeys.front().frame;
         float newest = mChaseKeys.back().frame;
         float timeRange = newest - oldest;
         int i = 0;
-        for (ObjPtrList<RndTransformable>::iterator it = mSegTrans.begin(); it != mSegTrans.end(); ++it, i++) {
+        for (ObjPtrList<RndTransformable>::iterator it = _ref0.begin(); it != _ref0.end(); ++it, i++) {
             float t = (numSegs > 1) ? (float)i / (numSegs - 1) : 0.0f;
             float sampleTime = oldest + t * timeRange;
             Transform segXfm;
