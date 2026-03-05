@@ -12,6 +12,7 @@
 #   scripts/measure_progress.sh --detailed HEAD~5  # Show per-unit breakdown
 #   scripts/measure_progress.sh --functions c8d98a # Show function-level changes
 #   scripts/measure_progress.sh --regressions      # Only show regressions
+#   scripts/measure_progress.sh --current-dir /path/to/worktree HEAD  # Use worktree as "current"
 #
 set -euo pipefail
 
@@ -21,6 +22,7 @@ BASELINE_REF="HEAD~1"
 COMPARE_FLAGS=()
 WORKTREE_DIR="/tmp/claude/measure-progress"
 CREATED_WORKTREE=0
+CURRENT_DIR=""
 
 # --- Parse arguments ---
 while [[ $# -gt 0 ]]; do
@@ -41,6 +43,10 @@ while [[ $# -gt 0 ]]; do
             COMPARE_FLAGS+=("--regressions")
             shift
             ;;
+        --current-dir)
+            CURRENT_DIR="$2"
+            shift 2
+            ;;
         --limit)
             COMPARE_FLAGS+=("--limit" "$2")
             shift 2
@@ -59,10 +65,25 @@ done
 WORKTREE="${WORKTREE_DIR}"
 CACHE_DIR="${MAIN_REPO}/build/373307D9/baselines"
 
+# --- Resolve current directory (main repo or worktree) ---
+if [[ -n "${CURRENT_DIR}" ]]; then
+    CURRENT_DIR="$(cd "${CURRENT_DIR}" && pwd)"
+    if [[ ! -f "${CURRENT_DIR}/${REPORT_REL}" ]]; then
+        echo "Current report not found in worktree, building..."
+        ninja -C "${CURRENT_DIR}" "${REPORT_REL}" -j"$(nproc)" 2>&1 | tail -1
+    fi
+    CURRENT_REPORT="${CURRENT_DIR}/${REPORT_REL}"
+    CURRENT_LABEL="worktree:$(basename "${CURRENT_DIR}")"
+else
+    CURRENT_DIR="${MAIN_REPO}"
+    CURRENT_REPORT="${MAIN_REPO}/${REPORT_REL}"
+    CURRENT_LABEL="working tree"
+fi
+
 # --- Verify prerequisites ---
-if [[ ! -f "${MAIN_REPO}/${REPORT_REL}" ]]; then
-    echo "Error: Current report not found: ${MAIN_REPO}/${REPORT_REL}"
-    echo "Run 'ninja' in the main repo first."
+if [[ ! -f "${CURRENT_REPORT}" ]]; then
+    echo "Error: Current report not found: ${CURRENT_REPORT}"
+    echo "Run 'ninja' first."
     exit 1
 fi
 
@@ -74,7 +95,7 @@ fi
 # Resolve the baseline ref to an actual commit hash
 BASELINE_COMMIT=$(git -C "${MAIN_REPO}" rev-parse "${BASELINE_REF}")
 BASELINE_SHORT=$(git -C "${MAIN_REPO}" rev-parse --short "${BASELINE_COMMIT}")
-CURRENT_SHORT=$(git -C "${MAIN_REPO}" rev-parse --short HEAD)
+CURRENT_SHORT="${CURRENT_LABEL}"
 
 echo "Measuring progress: ${BASELINE_SHORT} (baseline) -> ${CURRENT_SHORT} (current)"
 
@@ -289,4 +310,4 @@ echo ""
 python3 "${MAIN_REPO}/scripts/analysis/compare_progress.py" \
     "${COMPARE_FLAGS[@]}" \
     "${BASELINE_REPORT}" \
-    "${MAIN_REPO}/${REPORT_REL}"
+    "${CURRENT_REPORT}"

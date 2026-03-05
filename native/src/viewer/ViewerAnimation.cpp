@@ -60,7 +60,9 @@ void AnimState::ScanScene(ObjectDir* dir, const ViewerConfig& cfg) {
     int transAnimCount = 0, propAnimCount = 0, otherAnimCount = 0;
     float globalStart = 1e10f, globalEnd = -1e10f;
 
-    ObjDirItr<RndAnimatable> animIt(dir, true);
+    // Use non-recursive iteration to avoid traversing into potentially
+    // corrupted subdirs after FileMerger merge
+    ObjDirItr<RndAnimatable> animIt(dir, false);
     while (animIt) {
         RndAnimatable* anim = animIt;
         float sf = anim->StartFrame();

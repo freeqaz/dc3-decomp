@@ -42,7 +42,7 @@ DirLoader::DirLoader(
     : Loader(fp, pos), mOwnStream(false), mStream(stream), mRev(0), mCounter(0),
       mObjects(nullptr, kObjListAllowNull), mCallback(cb), mDir(dir), mPostLoad(false),
       mLoadDir(true), mDeleteSelf(false), mProxyName(nullptr), mAccessed(0), mForceFailCallback(0),
-      unk9a(0), mSubDir(bbb), unk9c(dir2), mProxyDir(this) {
+      mHasEditorDir(0), mSubDir(bbb), mParentDir(dir2), mProxyDir(this) {
     if (dir) {
         mDeleteSelf = true;
         mProxyName = dir->Name();
@@ -759,7 +759,7 @@ void DirLoader::LoadObjs() {
         } else if (mRev == 0x1f) {
             ReadEditorDirDead(*mStream);
         }
-        if (unk9a && mRev > 0x1f) {
+        if (mHasEditorDir && mRev > 0x1f) {
             ReadEditorDirDead(*mStream);
         }
     }
@@ -945,14 +945,14 @@ void DirLoader::LoadHeader() {
             return;
         int size1, size2;
         *mStream >> size1 >> size2;
+        bool &hasEditorDir = mHasEditorDir;
+        hasEditorDir = false;
+        if (mRev > 0x1c) {
+            *mStream >> hasEditorDir;
+        }
         size1 += mDir->HashTableUsedSize() + 0x10;
         size2 += mDir->StrTableUsedSize() + 0x98;
         mDir->Reserve(size1, size2);
-        bool &unk9aRef = unk9a;
-        unk9aRef = false;
-        if (mRev > 0x1c) {
-            *mStream >> unk9aRef;
-        }
         mDir->SetName(buf, mDir);
     } else if (mRev > 0xC) {
         Symbol sa8;

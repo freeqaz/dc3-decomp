@@ -20,7 +20,6 @@
 #include "char/CharEyes.h"
 #include "char/CharFaceServo.h"
 #include "char/CharLipSyncDriver.h"
-#include "char/FileMerger.h"
 #include "utl/FilePath.h"
 #include "utl/MakeString.h"
 
@@ -252,51 +251,7 @@ int main(int argc, char** argv) {
     }
 
     // ---- FileMerger-based outfit/viseme loading (--char-setup) ----
-    bool fileMergerActive = false;
-    if (cfg.charSetupPath && charObj) {
-        FileMerger* fm = baseScene->Find<FileMerger>("char.fm", false);
-        if (fm) {
-            printf("Milo Viewer: FileMerger 'char.fm' found\n");
-
-            // Select outfit (the original miloPath)
-            if (cfg.miloPath) {
-                char outfitAbsPath[PATH_MAX];
-                if (realpath(cfg.miloPath, outfitAbsPath)) {
-                    FilePath outfitFp(outfitAbsPath);
-                    fm->Select("outfit", outfitFp, false);
-                    printf("Milo Viewer: outfit selected: %s\n", outfitAbsPath);
-                } else {
-                    fprintf(stderr, "Warning: cannot resolve outfit path '%s'\n", cfg.miloPath);
-                }
-            }
-
-            // Select visemes
-            if (cfg.visemesPath) {
-                char visAbsPath[PATH_MAX];
-                if (realpath(cfg.visemesPath, visAbsPath)) {
-                    FilePath visFp(visAbsPath);
-                    fm->Select("viseme", visFp, false);
-                    printf("Milo Viewer: viseme selected: %s\n", visAbsPath);
-                } else {
-                    fprintf(stderr, "Warning: cannot resolve visemes path '%s'\n", cfg.visemesPath);
-                }
-            }
-
-            // Synchronous merge
-            fm->StartLoad(false);
-            printf("Milo Viewer: FileMerger StartLoad complete\n");
-
-            // SyncObjects wires CharFaceServo, CharEyes, CharLipSyncDriver
-            if (rndScene) {
-                rndScene->SyncObjects();
-                printf("Milo Viewer: SyncObjects after FileMerger complete\n");
-            }
-
-            fileMergerActive = true;
-        } else {
-            fprintf(stderr, "Warning: --char-setup specified but 'char.fm' FileMerger not found\n");
-        }
-    }
+    scene.LoadFileMerger(cfg);
 
     // ---- Load animation clips (--clips) ----
     CharAnimState charAnim;
@@ -393,7 +348,7 @@ int main(int argc, char** argv) {
     }
 
     // ---- Load viseme clips (--visemes) — manual path, skipped when FileMerger is active ----
-    if (!fileMergerActive && cfg.visemesPath && charObj) {
+    if (!scene.fileMergerActive && cfg.visemesPath && charObj) {
         char visAbsPath[PATH_MAX];
         if (realpath(cfg.visemesPath, visAbsPath)) {
             printf("Milo Viewer: loading visemes from '%s'...\n", visAbsPath);
@@ -445,7 +400,7 @@ int main(int argc, char** argv) {
     }
 
     // ---- Wire facial components ----
-    if (fileMergerActive && charObj) {
+    if (scene.fileMergerActive && charObj) {
         // FileMerger path: components are auto-wired by SyncObjects, just find them
         charAnim.faceServo = charObj->Find<CharFaceServo>("face.faceservo", false);
         if (charAnim.faceServo) {
@@ -480,7 +435,13 @@ int main(int argc, char** argv) {
     scene.PrintSummary(cfg.verbose);
 
     // ---- Scan for animation data ----
-    gAnim.ScanScene(baseScene, cfg);
+    printf("DBG: before ScanScene\n"); fflush(stdout);
+    if (!scene.fileMergerActive) {
+        gAnim.ScanScene(baseScene, cfg);
+    } else {
+        printf("DBG: skipping ScanScene (FileMerger active)\n"); fflush(stdout);
+    }
+    printf("DBG: after ScanScene\n"); fflush(stdout);
 
     // Set window title
     if (window) {
@@ -493,7 +454,9 @@ int main(int argc, char** argv) {
 
     // Activate scene environment
     {
+        printf("DBG: before FindEnvironment\n"); fflush(stdout);
         RndEnviron* env = scene.FindEnvironment();
+        printf("DBG: FindEnvironment = %p\n", env); fflush(stdout);
         if (env) {
             Vector3 origin(0, 0, 0);
             env->Select(&origin);
@@ -501,8 +464,11 @@ int main(int argc, char** argv) {
         }
     }
 
+    printf("DBG: before AutoFrameCamera\n"); fflush(stdout);
     scene.AutoFrameCamera(gOrbitCam, cam, cfg);
+    printf("DBG: after AutoFrameCamera\n"); fflush(stdout);
     scene.SetupSyntheticLights(cfg);
+    printf("DBG: after SetupSyntheticLights\n"); fflush(stdout);
 
     // ---- Dispatch to mode runner ----
     ViewerMode mode = SelectMode(cfg);

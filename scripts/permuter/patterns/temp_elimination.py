@@ -170,6 +170,12 @@ class TempEliminationPattern(Pattern):
         # Strategy 3: Eliminate multiple consecutive temps at once
         for variant in _multi_eliminate(ctx, source, stmts, counter):
             yield variant
+            counter += 1
+
+        # Strategy 4: Eliminate multi-use value temps (2-3 uses, pure init expr)
+        for variant in _multi_use_value_eliminate(ctx, source, stmts, counter):
+            yield variant
+            counter += 1
 
 
 def _extract_single_decl(
@@ -409,3 +415,108 @@ def _multi_eliminate(
                 counter += 1
 
         i = max(j, i + 1)
+
+
+def _multi_use_value_eliminate(
+    ctx: FunctionContext, source: bytes, stmts: list[Node], counter: int
+) -> Iterator[Variant]:
+    """Eliminate value-type locals used 2-3 times by substituting the init expression.
+
+    Only safe when:
+    - The init expression is pure (no calls, no side effects)
+    - No statements with side effects between the declaration and the last use
+    - The variable is a plain value type (not a ref/ptr — those are reference_elimination)
+
+    Example:
+        int count = mElements.size();   <-- has call, skip
+        float x = mFoo;                 <-- pure member read, OK
+        bar(x + y);
+        baz(x);
+        ->
+        bar(mFoo + y);
+        baz(mFoo);
+    """
+    if counter >= 10:
+        return
+
+    for i, stmt in enumerate(stmts):
+        if counter >= 10:
+            break
+
+        decl_info = _extract_single_decl(stmt, source)
+        if decl_info is None:
+            continue
+
+        var_name, init_expr, decl_start, decl_end = decl_info
+
+        # Skip ref/ptr declarators (handled by reference_elimination)
+        init_decls = [c for c in stmt.named_children if c.type == "init_declarator"]
+        if init_decls:
+            declarator = init_decls[0].child_by_field_name("declarator")
+            if declarator is not None and declarator.type in (
+                "reference_declarator", "pointer_declarator"
+            ):
+                continue
+
+        # Init expression must be pure (no calls)
+        if _has_side_effects(stmt, source):
+            continue
+
+        # Count uses
+        uses = []
+        for j in range(i + 1, len(stmts)):
+            uses.extend(_find_identifier_uses(stmts[j], var_name))
+
+        # Only 2-3 uses (single-use already handled, >3 is too aggressive)
+        if len(uses) < 2 or len(uses) > 3:
+            continue
+
+        # Find the statement index of the last use
+        last_use_stmt_idx = None
+        for j in range(len(stmts) - 1, i, -1):
+            if any(_node_contains(stmts[j], u) for u in uses):
+                last_use_stmt_idx = j
+                break
+        if last_use_stmt_idx is None:
+            continue
+
+        # No side-effecting statements between decl and last use
+        has_intervening_effects = False
+        for k in range(i + 1, last_use_stmt_idx + 1):
+            if _has_side_effects(stmts[k], source):
+                has_intervening_effects = True
+                break
+        if has_intervening_effects:
+            continue
+
+        # Build variant: delete declaration, replace all uses
+        ed = SourceEditor(source)
+
+        del_end = decl_end
+        while del_end < len(source) and source[del_end:del_end + 1] in (b"\n", b"\r"):
+            del_end += 1
+        del_start = decl_start
+        while del_start > 0 and source[del_start - 1:del_start] in (b" ", b"\t"):
+            del_start -= 1
+
+        ed.delete_range(del_start, del_end)
+
+        for use_node in sorted(uses, key=lambda n: n.start_byte, reverse=True):
+            ed.replace_node(use_node, init_expr)
+
+        try:
+            new_source = ed.apply()
+        except ValueError:
+            continue
+
+        var_str = var_name.decode("utf-8", errors="replace")
+        init_str = init_expr.decode("utf-8", errors="replace")
+        if len(init_str) > 40:
+            init_str = init_str[:37] + "..."
+        yield Variant(
+            name=f"tmpelim_multiuse_{counter}",
+            pattern_name="temp_elimination",
+            description=f"Eliminate multi-use value '{var_str}' ({len(uses)} uses) = {init_str}",
+            source=new_source,
+        )
+        counter += 1

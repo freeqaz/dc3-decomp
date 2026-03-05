@@ -2,6 +2,7 @@
 #include "test_helpers.h"
 #include "obj/Dir.h"
 #include "obj/DirLoader.h"
+#include "obj/Object.h"
 #include "utl/ChunkStream.h"
 #include "utl/FilePath.h"
 #include "utl/Loader.h"
@@ -13,6 +14,62 @@ extern void ReadDead(BinStream &);
 // ============================================================================
 
 class DirLoaderTest : public EngineTestFixture {};
+
+static const char *kPreferredMiloFiles[] = {
+    // Known-good archive-backed assets in this workspace.
+    "char/shared/main_resource.milo",
+    "char/shared/viseme_resource.milo",
+    "char/shared/skeleton_bones_resource.milo",
+    // Optional world fixtures if present.
+    "world/shared/props/gen/discoball.milo_xbox",
+    "world/shared/lighting/gen/shared_lights.milo_xbox",
+    nullptr
+};
+
+static const char *kReadableMiloFiles[] = {
+    "world/shared/props/gen/discoball.milo_xbox",
+    "world/shared/lighting/gen/shared_lights.milo_xbox",
+    nullptr
+};
+
+static const char *FindLoadableMilo(const char *const *candidates) {
+    for (int i = 0; candidates[i]; i++) {
+        ObjectDir *dir = DirLoader::LoadObjects(FilePath(candidates[i]), nullptr, nullptr);
+        if (dir) {
+            delete dir;
+            return candidates[i];
+        }
+    }
+    return nullptr;
+}
+
+static const char *FindReadableMilo(const char *const *candidates) {
+    for (int i = 0; candidates[i]; i++) {
+        ChunkStream cs(
+            candidates[i], ChunkStream::kRead, 0x8000, false, kPlatformNone, false
+        );
+        if (!cs.Fail()) {
+            return candidates[i];
+        }
+    }
+    return nullptr;
+}
+
+static std::string WriteDirHeaderFixture() {
+    std::vector<uint8_t> chunk;
+    PutBE32(chunk, 0x20);                     // mRev
+    PutBEString(chunk, "ObjectDir");          // dirClass
+    PutBEString(chunk, "dirloader_fixture");  // dirName
+    PutBE32(chunk, 1);                        // numEntries
+    PutBEString(chunk, "Object");             // className
+    PutBEString(chunk, "fixture_obj");        // objName
+    PutDeadMarker(chunk);
+    PutBE32(chunk, 0x12345678);
+
+    std::string path = "/tmp/claude-1000/milo_tests/dirloader_header_fixture.milo_xbox";
+    EXPECT_TRUE(WriteSyntheticMilo(path.c_str(), {chunk}));
+    return path;
+}
 
 // ============================================================================
 // StreamPositionTracking — manually read the DirLoader header fields
@@ -28,33 +85,11 @@ class DirLoaderTest : public EngineTestFixture {};
 // ============================================================================
 
 TEST_F(DirLoaderTest, StreamPositionTracking) {
-    // Find a test .milo file — we need game data for this
-    // Try a small, known-working file first
-    const char *testFiles[] = {
-        "world/shared/props/gen/discoball.milo_xbox",
-        "world/shared/lighting/gen/shared_lights.milo_xbox",
-        nullptr
-    };
-
-    // Resolve via the engine's file system
-    const char *found = nullptr;
-    for (int i = 0; testFiles[i]; i++) {
-        FilePath fp(testFiles[i]);
-        const char *resolved = fp.c_str();
-        if (resolved && resolved[0]) {
-            // Try to open it
-            ChunkStream *cs = new ChunkStream(resolved, ChunkStream::kRead, 0x8000, false, kPlatformNone, false);
-            if (!cs->Fail()) {
-                delete cs;
-                found = testFiles[i];
-                break;
-            }
-            delete cs;
-        }
-    }
-
+    const char *found = FindReadableMilo(kReadableMiloFiles);
+    std::string syntheticPath;
     if (!found) {
-        GTEST_SKIP() << "No test .milo files found (need game data)";
+        syntheticPath = WriteDirHeaderFixture();
+        found = syntheticPath.c_str();
     }
 
     printf("DirLoaderTest: using %s\n", found);
@@ -79,8 +114,6 @@ TEST_F(DirLoaderTest, StreamPositionTracking) {
     cs >> dirClass;
     printf("  dirClass = '%s' (tell=%d)\n", dirClass.Str(), cs.Tell());
     EXPECT_NE(strlen(dirClass.Str()), 0u) << "dirClass should not be empty";
-
-    int afterClass = cs.Tell();
 
     // Read dirName (only if mRev >= some version — usually present)
     if (mRev > 1) {
@@ -113,26 +146,10 @@ TEST_F(DirLoaderTest, StreamPositionTracking) {
 // ============================================================================
 
 TEST_F(DirLoaderTest, LoadSimpleMilo) {
-    const char *testFiles[] = {
-        "world/shared/props/gen/discoball.milo_xbox",
-        nullptr
-    };
-
-    const char *found = nullptr;
-    for (int i = 0; testFiles[i]; i++) {
-        FilePath fp(testFiles[i]);
-        // Check if file can be opened
-        ChunkStream *cs = new ChunkStream(fp.c_str(), ChunkStream::kRead, 0x8000, false, kPlatformNone, false);
-        if (!cs->Fail()) {
-            delete cs;
-            found = testFiles[i];
-            break;
-        }
-        delete cs;
-    }
+    const char *found = FindLoadableMilo(kPreferredMiloFiles);
 
     if (!found) {
-        GTEST_SKIP() << "No test .milo files found (need game data)";
+        GTEST_SKIP() << "No loadable .milo fixtures found";
     }
 
     printf("DirLoaderTest::LoadSimpleMilo: loading %s\n", found);
@@ -158,17 +175,12 @@ class LoadMiloParam : public EngineTestFixture,
 TEST_P(LoadMiloParam, LoadWithoutDesync) {
     const char *miloFile = GetParam();
 
-    FilePath fp(miloFile);
-    ChunkStream *probe = new ChunkStream(fp.c_str(), ChunkStream::kRead, 0x8000, false, kPlatformNone, false);
-    if (probe->Fail()) {
-        delete probe;
-        GTEST_SKIP() << "File not found: " << miloFile;
-    }
-    delete probe;
-
     printf("LoadWithoutDesync: %s\n", miloFile);
+    FilePath fp(miloFile);
     ObjectDir *dir = DirLoader::LoadObjects(fp, nullptr, nullptr);
-    ASSERT_NE(dir, nullptr) << "Failed to load " << miloFile;
+    ASSERT_NE(dir, nullptr)
+        << "Failed to load " << miloFile
+        << " (expected to be archive-backed)";
     printf("  OK: '%s' class='%s'\n", dir->Name(), dir->ClassName().Str());
 }
 
@@ -177,10 +189,9 @@ INSTANTIATE_TEST_SUITE_P(
     MiloFiles,
     LoadMiloParam,
     ::testing::Values(
-        "world/shared/props/gen/discoball.milo_xbox",
-        "world/shared/lighting/gen/shared_lights.milo_xbox"
-        // Add more files here as they are verified to work
-        // "char/main/gen/skeleton.milo_xbox"  // <-- the problem file
+        "char/shared/main_resource.milo",
+        "char/shared/viseme_resource.milo",
+        "char/shared/skeleton_bones_resource.milo"
     )
 );
 
@@ -190,25 +201,11 @@ INSTANTIATE_TEST_SUITE_P(
 // ============================================================================
 
 TEST_F(DirLoaderTest, DeadMarkerInRealFile) {
-    const char *testFiles[] = {
-        "world/shared/props/gen/discoball.milo_xbox",
-        nullptr
-    };
-
-    const char *found = nullptr;
-    for (int i = 0; testFiles[i]; i++) {
-        FilePath fp(testFiles[i]);
-        ChunkStream *cs = new ChunkStream(fp.c_str(), ChunkStream::kRead, 0x8000, false, kPlatformNone, false);
-        if (!cs->Fail()) {
-            delete cs;
-            found = testFiles[i];
-            break;
-        }
-        delete cs;
-    }
-
+    const char *found = FindReadableMilo(kReadableMiloFiles);
+    std::string syntheticPath;
     if (!found) {
-        GTEST_SKIP() << "No test .milo files found";
+        syntheticPath = WriteDirHeaderFixture();
+        found = syntheticPath.c_str();
     }
 
     ChunkStream cs(found, ChunkStream::kRead, 0x8000, false, kPlatformNone, false);
@@ -245,4 +242,28 @@ TEST_F(DirLoaderTest, DeadMarkerInRealFile) {
     // but we can check that reading doesn't immediately fail.
     EXPECT_FALSE(cs.Fail()) << "Stream in failed state after header parse";
     EXPECT_NE(cs.Eof(), RealEof) << "Unexpected EOF right after header";
+}
+
+TEST_F(DirLoaderTest, RepeatedLoadLeavesOnlyLiveEntries) {
+    const char *found = FindLoadableMilo(kPreferredMiloFiles);
+    if (!found) {
+        GTEST_SKIP() << "No loadable .milo fixtures found";
+    }
+
+    FilePath fp(found);
+    ObjectDir *first = DirLoader::LoadObjects(fp, nullptr, nullptr);
+    ObjectDir *second = DirLoader::LoadObjects(fp, nullptr, nullptr);
+    ASSERT_NE(first, nullptr) << "First load failed for " << found;
+    ASSERT_NE(second, nullptr) << "Second load failed for " << found;
+
+    int itrCount = 0;
+    for (ObjDirItr<Hmx::Object> it(second, false); it != nullptr; ++it) {
+        EXPECT_TRUE(HmxObjectIsLive(&*it));
+        itrCount++;
+        ASSERT_LT(itrCount, 100000);
+    }
+    EXPECT_GT(itrCount, 0);
+
+    delete first;
+    delete second;
 }

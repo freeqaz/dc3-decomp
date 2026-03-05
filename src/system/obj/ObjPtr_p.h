@@ -320,6 +320,18 @@ ObjPtrVec<T1, T2>::find(const Hmx::Object *target) const {
     return end();
 }
 
+#ifdef HX_NATIVE
+template <class T1, class T2>
+typename ObjPtrVec<T1, T2>::iterator
+ObjPtrVec<T1, T2>::find(const Hmx::Object *target) {
+    for (iterator it = begin(); it != end(); ++it) {
+        if (*it == target)
+            return it;
+    }
+    return end();
+}
+#endif
+
 template <class T1, class T2>
 void ObjPtrVec<T1, T2>::swap(int a, int b) {
     iterator begin_a = begin() + a;

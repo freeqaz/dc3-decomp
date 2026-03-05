@@ -7,8 +7,10 @@ The target binary in `orig/` is a debug build pulled from an Xbox 360 dev unit (
 ## Key Commands
 
 ```bash
-ninja                              # Build
-ninja build/373307D9/report.json   # Generate progress report
+ninja                              # Build and regenerate report.json
+scripts/measure_progress.sh --functions --detailed HEAD  # Progress vs commit
+scripts/measure_progress.sh --current-dir /path/to/worktree HEAD  # Worktree vs commit
+scripts/clean_stale_objects.sh     # Fix stale .obj files (older than PCH)
 ```
 
 Check `./docs/tools/INDEX.md` for agent tool selection and `./docs/INDEX.md` for the full docs sitemap.
@@ -30,7 +32,9 @@ Use the `mcp__orchestrator__` tools for all decomp analysis. Do not call `objdif
 ## Known Patterns
 - **Unsigned zero comparisons**: Use `x > 0` instead of `x != 0` for unsigned types (generates `ble` vs `beq`)
 - **Merged symbols**: `merged_<addr>` names indicate Identical COMDAT Folding (ICF) where the linker merged functions with identical machine code to a single address
-- **Stale object files**: Ninja doesn't track header deps — after changing a header, `touch src/path/file.cpp && ninja build/373307D9/src/path/file.obj` to force rebuild
+- **Automatic header tracking**: Ninja tracks all header dependencies via `/showIncludes` + wibo path rewriting. Touching any header automatically rebuilds only the affected .obj files. No manual `touch` needed.
+- **Stale object diagnosis**: `scripts/clean_stale_objects.sh --dry-run` finds .obj files older than the PCH. Use `--all` to force-touch every .cpp for a full rebuild.
+For a complete collection of patterns, find then under ./docs/decomp/patterns/ -- these are incredibly helpful for identifying 'hard' fixes when decompiling.
 
 ## Git Commits
 
@@ -46,6 +50,7 @@ Use `scripts/setup_worktree.sh <path> <branch>` to create worktrees with a worki
 - `build/` - Build outputs, object files, `373307D9/report.json`
 - `include/` - Headers
 - `native/` - Native port (x86_64 Linux, WebGPU renderer)
+  - Note: You must skip the sandbox for GPU access.
 - `objdiff.json` - Project config for objdiff
 
 ## Test Assets

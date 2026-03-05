@@ -269,14 +269,14 @@ void ObjectDir::Save(BinStream &bs) {
             id.shared = true;
         case kInlineCached: {
             bool old = gLoadingProxyFromDisk;
-            if (!bs.Cached()) {
-                id.dir = nullptr;
-            } else {
+            if (bs.Cached()) {
                 gLoadingProxyFromDisk = false;
                 DirLoader::SetCacheMode(false);
                 id.dir.LoadFile(id.file, false, false, kLoadFront, true);
                 DirLoader::SetCacheMode(true);
                 gLoadingProxyFromDisk = old;
+            } else {
+                id.dir = nullptr;
             }
             break;
         }
@@ -296,7 +296,6 @@ void ObjectDir::Save(BinStream &bs) {
             break;
         }
         }
-        // what's happening here?
         if (id.dir) {
         } else {
         }
@@ -339,6 +338,7 @@ void ObjectDir::Save(BinStream &bs) {
         }
     }
     std::vector<InlinedDir> unused;
+    mInlinedDirs.swap(unused);
     mCurViewportID = (ViewportId)0;
     const char *nextname = unk8c ? unk8c->Name() : "";
     gLoadingProxyFromDisk = oldProxy;

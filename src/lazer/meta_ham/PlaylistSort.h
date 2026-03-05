@@ -17,6 +17,7 @@ public:
     virtual void OnSelectShortcut(int);
 
     PlaylistSort();
+    virtual ~PlaylistSort();
 };
 
 class PlaylistSortByType : public PlaylistSort {

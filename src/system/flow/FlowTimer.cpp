@@ -114,9 +114,7 @@ void FlowTimer::Execute(FlowNode::QueueState state) {
 
     if (IsRunning()) {
         if (state == kIgnore) {
-            if (mTask) {
-                delete mTask;
-            }
+            delete mTask;
             FLOW_LOG("Timed Release From Parent \n");
             Timer timer;
             timer.Reset();

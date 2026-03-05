@@ -735,16 +735,30 @@ def generate_build_ninja(
     if config.wibo_path_map:
         msvc_cmd = f"cd $in_dir && {wrapper_cmd_msvc}{wibo_env}WIBO_PATH_MAP='$wibo_path_map' {msvc_abs} $cflags /Fo$abs_out $in_win"
 
+    # Add /showIncludes + WIBO_REWRITE_SHOWINCLUDES for header dependency tracking.
+    # Wibo rewrites "Note: including file:" paths using WIBO_PATH_MAP so ninja's
+    # deps=msvc can track host filesystem paths. Zero extra process spawns.
+    msvc_deps = None
+    if config.wibo_path_map:
+        msvc_cmd_with_deps = msvc_cmd.replace(
+            wibo_env,
+            wibo_env + "WIBO_REWRITE_SHOWINCLUDES='1' ",
+        ).replace("$cflags", "/showIncludes $cflags")
+        msvc_deps = "msvc"
+    else:
+        msvc_cmd_with_deps = msvc_cmd
+
     n.comment("MSVC build")
     n.rule(
         name="msvc",
-        command=msvc_cmd,
+        command=msvc_cmd_with_deps,
         description="MSVC $out",
+        deps=msvc_deps,
     )
     n.newline()
 
     # MSVC PCH create rule: compiles the PCH source and produces the .pch file
-    msvc_pch_create_cmd = msvc_cmd.replace(
+    msvc_pch_create_cmd = msvc_cmd_with_deps.replace(
         "$cflags /Fo$abs_out $in_win",
         '/Yc"decomp_pch.h" /Fp$pch_out $cflags /Fo$abs_out $in_win',
     )
@@ -753,11 +767,12 @@ def generate_build_ninja(
         name="msvc_pch_create",
         command=msvc_pch_create_cmd,
         description="PCH $pch_out",
+        deps=msvc_deps,
     )
     n.newline()
 
     # MSVC PCH use rule: compiles with precompiled header
-    msvc_pch_cmd = msvc_cmd.replace(
+    msvc_pch_cmd = msvc_cmd_with_deps.replace(
         "$cflags /Fo$abs_out $in_win",
         '/Yu"decomp_pch.h" /FI"decomp_pch.h" /Fp$pch_file $cflags /Fo$abs_out $in_win',
     )
@@ -766,6 +781,7 @@ def generate_build_ninja(
         name="msvc_pch",
         command=msvc_pch_cmd,
         description="MSVC $out",
+        deps=msvc_deps,
     )
     n.newline()
 
@@ -905,11 +921,14 @@ def generate_build_ninja(
                     break
 
         n.comment("Precompiled header")
+        pch_implicit = [compilers_implicit or msvc, wrapper_implicit]
+        if transform_dep is not None:
+            pch_implicit.append(transform_dep)
         n.build(
             outputs=[pch_obj],
             rule="msvc_pch_create",
             inputs=pch_src,
-            implicit=[compilers_implicit or msvc, wrapper_implicit],
+            implicit=pch_implicit,
             implicit_outputs=[pch_path],
             variables={
                 "mw_version": Path(config.linker_version),
@@ -1143,15 +1162,15 @@ def generate_build_ninja(
             if (
                 pch_path is not None
                 and build_rule == "msvc"
-                and config.pch_eligible_dirs
                 and file_is_cpp(src_path)
                 and "/TC" not in all_cflags
+                and config.pch_eligible_dirs
             ):
-                # Check if source is in a PCH-eligible directory
                 src_dir_name = src_path.parent.name
                 if src_dir_name in config.pch_eligible_dirs:
                     build_rule = "msvc_pch"
                     variables["pch_file"] = str(pch_path.resolve())
+                    # msvc_pch builds need the .pch binary as an input
                     pch_implicit = [pch_path]
 
             n.comment(f"{obj.name}: {lib_name} (linked {obj.completed})")

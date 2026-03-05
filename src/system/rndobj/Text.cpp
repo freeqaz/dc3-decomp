@@ -244,20 +244,20 @@ BinStream &operator>>(BinStream &bs, RndText::Style &s) {
     bs >> s.mItalics;
     bs >> s.mKerning;
     bs >> s.mZOffset;
-    if (TEXT_REV >= 0x19) {
+    if (TEXT_REV >= 25) {
         bs >> s.mBlacklight;
     }
     return bs;
 }
 
-INIT_REVS(0x1C, 1)
+INIT_REVS(28, 1)
 
 BEGIN_LOADS(RndText)
     LOAD_REVS(bs)
-    ASSERT_REVS(0x1C, 1)
+    ASSERT_REVS(28, 1)
     Style style(this);
     TEXT_REV = d.rev;
-    if (d.rev > 0xF) {
+    if (d.rev > 15) {
         Hmx::Object::Load(bs);
     }
     RndDrawable::Load(bs);
@@ -270,7 +270,7 @@ BEGIN_LOADS(RndText)
     if (d.rev > 1) {
         RndTransformable::Load(bs);
     }
-    if (d.rev < 0x16) {
+    if (d.rev < 22) {
         bs >> style.mFont;
     }
     if (d.rev < 3) {
@@ -288,15 +288,15 @@ BEGIN_LOADS(RndText)
         SetLocalPos(Vector3(v2.x, 0, -v2.y * 0.75f));
     }
     bs >> mText;
-    if (d.rev < 0x14) {
+    if (d.rev < 20) {
         std::vector<unsigned short> vec;
         ASCIItoWideVector(vec, mText.c_str());
         WideVectorToUTF8(vec, mText);
     }
-    if (d.rev > 0 && d.rev < 0x16) {
+    if (d.rev > 0 && d.rev < 22) {
         bs >> style.mTextColor;
     }
-    if (d.rev > 0xC) {
+    if (d.rev > 12) {
         bs >> mWidth;
     } else if (d.rev > 3) {
         bool b;
@@ -317,16 +317,16 @@ BEGIN_LOADS(RndText)
         if (style.mFont) {
             RndFont *oldfont2d = dynamic_cast<RndFont *>(style.mFont.Ptr());
             MILO_ASSERT(oldfont2d, 0xBC1);
-            if (oldfont2d->NumMats() > 0 && oldfont2d->Mat(0)) {
-                int zMode = !mMarkup ? 2 : 0;
-                oldfont2d->Mat(0)->SetZMode((ZMode)zMode);
+            if (oldfont2d->NumMats() != 0 && oldfont2d->Mat(0)) {
+                int zMode = b ? 2 : 0;
+                style.mFont->Mat()->SetZMode((ZMode)zMode);
             }
         }
     }
     if (d.rev > 7) {
         bs >> mLeading;
     }
-    if (d.rev > 0xB) {
+    if (d.rev > 11) {
         int len;
         bs >> len;
         SetFixedLength(len);
@@ -339,72 +339,73 @@ BEGIN_LOADS(RndText)
             mFixedLength = 0;
         }
     }
-    if (d.rev > 9 && d.rev < 0x16) {
+    if (d.rev > 9 && d.rev < 22) {
         bs >> style.mItalics;
     }
-    if (d.rev < 0x16) {
-        if (d.rev > 0xB) {
+    if (d.rev < 22) {
+        if (d.rev > 12) {
             bs >> style.mSize;
         } else if (style.mFont) {
             RndFont *oldfont2d = dynamic_cast<RndFont *>(style.mFont.Ptr());
             MILO_ASSERT(oldfont2d, 0xBE9);
             style.mSize = oldfont2d->DeprecatedSize();
         }
-        if (d.rev < 0xD) {
+        if (d.rev < 13) {
             style.mItalics /= style.mSize;
         }
     }
-    if (d.rev > 0xD) {
-        LOAD_BITFIELD(bool, mMarkup)
+    if (d.rev > 13) {
+        d >> mMarkup;
     }
-    if (d.rev > 0xE) {
+    if (d.rev > 14) {
         bs >> (int &)mCapsMode;
     } else {
         mCapsMode = kCapsModeNone;
     }
-    if (d.rev > 0xF) {
-        bs >> mHeight;
-        bs >> mCircle;
-        bs >> (int &)mFitType;
-    }
-    if (d.rev >= 0x12 && d.rev < 0x15) {
+    if (d.rev >= 18 && d.rev < 21) {
         bool b;
         d >> b;
     }
-    if (d.rev >= 0x13 && d.rev < 0x15) {
+    if (d.rev >= 19 && d.rev < 21) {
         int i, j, k;
         bs >> i;
         bs >> j;
         bs >> k;
     }
-    if (d.rev >= 0x16) {
-        if (d.rev == 0x17) {
-            TheDebug.Notify(
-                MakeString("%s was bad version 23, suggest resave", PathName(this))
-            );
+    if (d.rev >= 22) {
+        if (d.rev > 22) {
+            if (d.rev == 23) {
+                TheDebug.Notify(MakeString(
+                    "%s was bad version 23, suggest reverting and resaving, lost [height] and [fit_type]",
+                    PathName(this)
+                ));
+            } else {
+                bs >> mHeight;
+                if (d.rev < 24) {
+                    String str;
+                    bs >> str;
+                }
+                if (d.altRev > 0) {
+                    bs >> mCircle;
+                }
+                bs >> (int &)mFitType;
+            }
         }
-        // mFitType already read in the d.rev > 0xF block above
-        if (d.rev < 0x18) {
-            String str;
-            bs >> str;
-        }
-        // altRev > 0: original binary doesn't write mDirtyFlags/mLastSyncFlags
-        // (confirmed: Save writes altRev=1 but no corresponding data)
         d >> mStyles;
     } else {
         mStyles.resize(1);
         memcpy(&mStyles[0], &style, 0x34);
         mStyles[0].mFont = style.mFont;
     }
-    if (d.rev >= 0x1A) {
+    if (d.rev >= 26) {
         bs >> mScrollDelay;
         bs >> mScrollRate;
         bs >> mScrollPause;
     }
-    if (d.rev >= 0x1B) {
+    if (d.rev >= 27) {
         bs >> mIndentation;
     }
-    if (d.rev >= 0x1C) {
+    if (d.rev >= 28) {
         d >> mBasicMarkup;
     }
     UpdateText();
@@ -474,6 +475,10 @@ int RndText::CollidePlane(const Plane &p) {
     }
     return ret;
 }
+
+#ifdef HX_NATIVE
+void RndText::Highlight() { RndDrawable::Highlight(); }
+#endif
 
 float RndText::GetDistanceToPlane(const Plane &p, Vector3 &v) {
     if (mFontMaps.empty())

@@ -37,7 +37,7 @@ public:
     POOL_OVERLOAD(DirLoader, 0x2A);
 
     static bool sPrintTimes;
-    static ObjectDir *sTopSaveDir;
+    static ObjectDir *TopSaveDir() { return sTopSaveDir; }
     static void SetCacheMode(bool);
     static void SetPathEvalCallback(bool (*cb)(const char *)) { sPathEval = cb; }
 
@@ -53,6 +53,8 @@ public:
     static ObjectDir *LoadObjects(const FilePath &, Callback *, BinStream *);
 
 private:
+    static ObjectDir *sTopSaveDir;
+
     virtual void PollLoading() { (this->*mState)(); }
 
     Symbol FixClassName(Symbol);
@@ -81,13 +83,13 @@ private:
     bool mLoadDir; // 0x5d
     bool mDeleteSelf; // 0x5e
     const char *mProxyName; // 0x60
-    int unk64;
+    int mPad64; // 0x64 - unused padding (dead code from RB2)
     Timer mTimer; // 0x68
     bool mAccessed;
     bool mForceFailCallback;
-    bool unk9a;
+    bool mHasEditorDir; // 0x9a - gates ReadEditorDirDead in LoadObjs
     bool mSubDir;
-    class ObjectDir *unk9c;
+    class ObjectDir *mParentDir; // 0x9c
     ObjOwnerPtr<ObjectDir> mProxyDir; // 0xa0
 
     static bool sCacheMode;

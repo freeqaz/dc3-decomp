@@ -10,12 +10,12 @@ Which tool to use for decomp work. For scripts, commands, and reference material
 
 ## MCP Orchestrator Tools (Primary Interface)
 
-Use `mcp__orchestrator__` tools for all decomp analysis. Do not call `objdiff-cli` directly.
+Prefer `mcp__orchestrator__` tools for decomp analysis. Use CLI directly for advanced flags not yet exposed through MCP.
 
 | Tool | Description |
 |------|-------------|
-| `run_objdiff` | Build + diff a function. Returns match%, verdict. Source of truth for percentages. |
-| `run_diff_inspect` | Deep mismatch analysis: `diagnose`, `mismatches`, `clusters`, `regswaps`, `offsets`, `replaces`, `compare` |
+| `run_objdiff` | Build + diff a function. Returns match%, verdict. Source of truth for percentages. Supports `full_listing` for complete instruction output. |
+| `run_diff_inspect` | Deep mismatch analysis: `diagnose`, `mismatches`, `clusters`, `regswaps`, `offsets`, `replaces`, `compare`, `asm_listing` |
 | `run_analyze_function` | Combined objdiff + struct offset resolution for field-level context |
 | `query_functions` | Find workable functions by unit pattern and match range |
 | `lookup_rb3` | Search RB3 codebase for reference implementations (shared Milo engine) |

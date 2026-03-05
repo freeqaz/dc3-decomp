@@ -33,6 +33,7 @@ public:
 
     struct Anim {
         Anim(Hmx::Object *);
+        Anim &operator=(const Anim &);
 
         ObjOwnerPtr<RndAnimatable> mAnim; // 0x0
         float mBlend; // 0x14
@@ -55,6 +56,7 @@ public:
     };
     struct ProxyCall {
         ProxyCall(Hmx::Object *);
+        ProxyCall &operator=(const ProxyCall &);
 
         ObjOwnerPtr<ObjectDir> mProxy; // 0x0
         Symbol mCall; // 0x14
@@ -64,6 +66,7 @@ public:
 
     struct HideDelay {
         HideDelay(Hmx::Object *);
+        HideDelay &operator=(const HideDelay &);
 
         /** "object to hide" */
         ObjOwnerPtr<RndDrawable> mHide; // 0x0

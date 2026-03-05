@@ -89,6 +89,27 @@ def _filter_build_output(text: str) -> str:
     return "\n".join(filtered)
 
 
+def _extract_function_fallback(asm_lines: list[str], symbol: str) -> list[str] | None:
+    """Fallback function extraction from /FAs listing using PROC/ENDP markers."""
+    # Clean symbol for matching (strip leading ? for MSVC mangled names)
+    search = symbol.lstrip("?")
+
+    in_func = False
+    func_lines = []
+    for line in asm_lines:
+        stripped = line.strip()
+        if not in_func:
+            if "PROC" in stripped and search in stripped:
+                in_func = True
+                func_lines.append(line)
+        else:
+            func_lines.append(line)
+            if "ENDP" in stripped:
+                return func_lines
+
+    return func_lines if func_lines else None
+
+
 # Itanium ABI mangled name pattern: MethodName__<N><ClassName><params>
 _ITANIUM_PATTERN = re.compile(r'^(.+?)__(\d+)(\w+)')
 
@@ -280,6 +301,10 @@ class DecompMCPServer:
                                 "type": "boolean",
                                 "description": "Concise output: match%, compact summary, patterns, verdict headline. Default: true. Set false for full instruction table + auto-diagnosis.",
                             },
+                            "full_listing": {
+                                "type": "boolean",
+                                "description": "Show ALL instructions (matching + mismatched) instead of only mismatches. Use when diagnosing isolated mismatches where surrounding matching instructions provide data flow context. Default: false.",
+                            },
                         },
                         "required": ["symbol", "project_dir"],
                     },
@@ -323,8 +348,8 @@ class DecompMCPServer:
                             },
                             "mode": {
                                 "type": "string",
-                                "enum": ["diagnose", "clusters", "regswaps", "offsets", "replaces", "compare", "save_baseline", "mismatches"],
-                                "description": "Analysis mode: diagnose (root cause), clusters (contiguous insert/delete groups), regswaps (register swap pairs), offsets (offset shift histogram), replaces (categorize noise vs real), compare (delta vs baseline), save_baseline (save current state), mismatches (list all mismatched instructions with target/base details)",
+                                "enum": ["diagnose", "clusters", "regswaps", "offsets", "replaces", "compare", "save_baseline", "mismatches", "asm_listing"],
+                                "description": "Analysis mode: diagnose (root cause), clusters (contiguous insert/delete groups), regswaps (register swap pairs), offsets (offset shift histogram), replaces (categorize noise vs real), compare (delta vs baseline), save_baseline (save current state), mismatches (list all mismatched instructions with target/base details), asm_listing (compile with /FAs and return source-annotated assembly with var->register mapping)",
                             },
                             "project_dir": {
                                 "type": "string",
@@ -1253,6 +1278,7 @@ class DecompMCPServer:
         project_dir_arg = args.get("project_dir", None)
         context = args.get("context", 3)
         concise = args.get("concise", True)
+        full_listing = args.get("full_listing", False)
 
         if not symbol:
             return [TextContent(type="text", text="Error: No symbol provided.")]
@@ -1309,7 +1335,9 @@ class DecompMCPServer:
         # The markdown run uses --verdict alone which already contains the
         # analysis, patterns, and suggestions without the bulky instruction table.
         json_extra = ["--include-instructions"]
-        if context:
+        if full_listing:
+            json_extra.append("--full-listing")
+        elif context:
             json_extra.extend(["-C", str(context)])
 
         try:
@@ -1356,7 +1384,9 @@ class DecompMCPServer:
             # 2) Markdown run (no build, already built) - for display
             # Explicit -f markdown avoids TUI fallback when no TTY is present
             md_cmd = list(base_args) + ["-f", "markdown"]
-            if concise:
+            if full_listing:
+                md_cmd.append("--full-listing")
+            elif concise:
                 md_cmd.append("--concise")
             md_result = subprocess.run(
                 md_cmd,
@@ -1373,6 +1403,19 @@ class DecompMCPServer:
                 data = json.loads(json_output)
                 data = self._enrich_objdiff_data(data)
                 enrichment = self._format_enrichment_sections(data, skip_rb3=concise)
+
+                # Fix match% in markdown header: use fuzzy_match_percent from JSON
+                # (which respects functionRelocDiffs=none) to override the markdown
+                # header which may not apply the config consistently.
+                fuzzy_pct = data.get("fuzzy_match_percent")
+                raw_pct = data.get("raw_match_percent")
+                if fuzzy_pct is not None and raw_pct is not None:
+                    output = re.sub(
+                        r"Match: [\d.]+% normalized \([\d.]+% raw\)",
+                        f"Match: {fuzzy_pct:.1f}% normalized ({raw_pct:.1f}% raw)",
+                        output,
+                        count=1,
+                    )
             except (json.JSONDecodeError, KeyError):
                 pass
 
@@ -1594,7 +1637,7 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
         if not mode:
             return [TextContent(type="text", text="Error: No mode provided.")]
 
-        valid_modes = {"diagnose", "clusters", "regswaps", "offsets", "replaces", "compare", "save_baseline", "mismatches"}
+        valid_modes = {"diagnose", "clusters", "regswaps", "offsets", "replaces", "compare", "save_baseline", "mismatches", "asm_listing"}
         if mode not in valid_modes:
             return [TextContent(type="text", text=f"Error: Invalid mode '{mode}'. Valid: {', '.join(sorted(valid_modes))}")]
 
@@ -1801,6 +1844,10 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
                 output = "\n".join(lines)
                 return [TextContent(type="text", text=output)]
 
+            # ── asm_listing mode (compile with /FAs, return annotated assembly) ──
+            elif mode == "asm_listing":
+                return await self._run_asm_listing(symbol, project_dir)
+
             # ── analysis modes (diagnose/clusters/regswaps/offsets/replaces) ──
             else:
                 cmd = [
@@ -1840,6 +1887,146 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
             return [TextContent(type="text", text=f"Error: diff_inspect timed out (mode={mode}).")]
         except Exception as e:
             return [TextContent(type="text", text=f"Error running diff_inspect: {e}")]
+
+    async def _run_asm_listing(self, symbol: str, project_dir: Path) -> list[TextContent]:
+        """Compile with /FAs and return source-annotated assembly listing with var->register mapping."""
+        import tempfile as _tempfile
+
+        # 1. Find the obj target for this symbol from report.json
+        report_path = project_dir / "build" / "373307D9" / "report.json"
+        if not report_path.exists():
+            return [TextContent(type="text", text=f"Error: report.json not found at {report_path}. Run 'ninja' first.")]
+
+        try:
+            with open(report_path) as f:
+                report = json.load(f)
+        except (json.JSONDecodeError, OSError) as e:
+            return [TextContent(type="text", text=f"Error reading report.json: {e}")]
+
+        # Find which unit contains this symbol
+        source_path = None
+        for unit in report.get("units", []):
+            for func in unit.get("functions", []):
+                if func.get("name") == symbol:
+                    source_path = unit.get("metadata", {}).get("source_path")
+                    break
+            if source_path:
+                break
+
+        if not source_path:
+            return [TextContent(type="text", text=f"Error: Symbol '{symbol}' not found in report.json. Cannot determine source file.")]
+
+        # 2. Derive the obj target from source path (src/foo/Bar.cpp -> build/373307D9/default/foo/Bar.obj)
+        obj_target = source_path.replace("src/", "build/373307D9/default/").rsplit(".", 1)[0] + ".obj"
+
+        # 3. Extract compile command from ninja
+        ninja_result = subprocess.run(
+            ["ninja", "-t", "commands", obj_target],
+            capture_output=True, text=True,
+            cwd=str(project_dir),
+        )
+        if ninja_result.returncode != 0:
+            return [TextContent(type="text", text=f"Error getting compile command: {ninja_result.stderr}")]
+
+        # Find the last "cd " line (actual compile command)
+        cmd_line = None
+        for line in ninja_result.stdout.strip().splitlines():
+            if line.startswith("cd "):
+                cmd_line = line
+
+        if cmd_line is None:
+            lines = ninja_result.stdout.strip().splitlines()
+            cmd_line = lines[-1] if lines else ""
+
+        # Parse cd + command
+        if cmd_line.startswith("cd "):
+            parts = cmd_line.split(" && ", 1)
+            compile_cwd = parts[0][3:]
+            compile_cmd = parts[1] if len(parts) > 1 else ""
+        else:
+            compile_cwd = str(project_dir)
+            compile_cmd = cmd_line
+
+        # 4. Add /FAs flag and redirect output to temp file
+        asm_dir = Path(_tempfile.mkdtemp(dir="/tmp/claude-1000"))
+        asm_output = asm_dir / "listing.asm"
+
+        # Add /FAs and /Fa<path> to the compile command
+        compile_cmd = compile_cmd + f" /FAs /Fa{asm_output}"
+
+        # 5. Run the compile
+        result = subprocess.run(
+            compile_cmd, shell=True, cwd=compile_cwd,
+            capture_output=True, text=True, timeout=120,
+        )
+
+        if not asm_output.exists():
+            error = result.stderr or result.stdout or "Unknown error"
+            return [TextContent(type="text", text=f"Error: /FAs compilation produced no output.\n{error[:1000]}")]
+
+        # 6. Read asm listing and extract the function's block
+        asm_text = asm_output.read_text(errors="replace")
+        asm_lines = asm_text.splitlines()
+
+        # Try to find the function using extract_function from asm_regmap's dependency
+        try:
+            from tools.compiler_trace.asm_diff import extract_function
+            from tools.compiler_trace.asm_regmap import parse_asm_listing
+        except ImportError:
+            # Fall back to manual extraction
+            extract_function = None
+            parse_asm_listing = None
+
+        func_lines = None
+        if extract_function:
+            func_lines = extract_function(asm_lines, symbol)
+
+        if not func_lines:
+            # Fallback: search for PROC/ENDP markers
+            func_lines = _extract_function_fallback(asm_lines, symbol)
+
+        if not func_lines:
+            # Return the full listing if function not found (trimmed)
+            total = len(asm_lines)
+            if total > 500:
+                output = "\n".join(asm_lines[:500])
+                output += f"\n\n... ({total - 500} more lines, function not isolated)"
+            else:
+                output = asm_text
+            return [TextContent(type="text", text=f"## ASM Listing (function not isolated)\n\n```asm\n{output}\n```")]
+
+        # 7. Build output with optional var->register mapping
+        output_parts = []
+        output_parts.append(f"## ASM Listing: {symbol}")
+        output_parts.append(f"({len(func_lines)} lines)")
+        output_parts.append("")
+        output_parts.append("```asm")
+        output_parts.extend(func_lines)
+        output_parts.append("```")
+
+        # 8. Try to get var->register mapping
+        if parse_asm_listing:
+            regmap = parse_asm_listing(asm_lines, symbol)
+            if regmap and regmap.var_to_reg:
+                output_parts.append("")
+                output_parts.append("## Variable -> Register Mapping")
+                output_parts.append("")
+                output_parts.append(f"Callee-saved GPRs used: {regmap.callee_saved_count}")
+                output_parts.append("")
+                output_parts.append("| Variable | Register |")
+                output_parts.append("|----------|----------|")
+                for var, reg in sorted(regmap.var_to_reg.items(), key=lambda x: x[1]):
+                    output_parts.append(f"| {var} | {reg} |")
+
+        # Clean up temp files
+        try:
+            asm_output.unlink()
+            asm_dir.rmdir()
+        except OSError:
+            pass
+
+        output = "\n".join(output_parts)
+        return [TextContent(type="text", text=output)]
 
     async def _lookup_rb3(self, args: dict) -> list[TextContent]:
         """Handle lookup_rb3 tool call."""

@@ -233,7 +233,7 @@ protected:
     float mClampHeight; // 0xf8
     /** "Category for shot-picking" */
     Symbol mCategory; // 0xfc
-    int unk100; // 0x100
+    int mShotStartedPending; // 0x100
     /** "animatables to be driven with the same frame" */
     ObjPtrList<RndAnimatable> mAnims; // 0x104
     /** "Optional camera path to use" */
@@ -284,7 +284,7 @@ protected:
     bool mShotStarted; // 0x280
     bool mShotOver; // 0x281
     bool mHidden; // 0x282
-    bool unk283;
+    bool mSetFrameActive;
 };
 
 class AutoPrepTarget {

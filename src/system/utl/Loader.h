@@ -37,7 +37,7 @@ public:
 protected:
     virtual void PollLoading() = 0;
 
-    int unk4; // 0x4 - DC3 addition, purpose unknown
+    int mLoadCount; // 0x4 - snapshot of gLoadCount for re-entrance detection
     LoaderPos mPos; // 0x8
     FilePath mFile; // 0xc
     int mLoadStartMs; // 0x14 - debug load timing: SystemMs() when tracking starts, -1 when inactive

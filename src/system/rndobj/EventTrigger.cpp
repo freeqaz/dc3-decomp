@@ -533,8 +533,39 @@ EventTrigger::Anim::Anim(Hmx::Object *o)
     mType = range;
 }
 
+EventTrigger::Anim &EventTrigger::Anim::operator=(const Anim &other) {
+    mAnim = other.mAnim.Ptr();
+    mBlend = other.mBlend;
+    mWait = other.mWait;
+    mDelay = other.mDelay;
+    mEnable = other.mEnable;
+    mRate = other.mRate;
+    mStart = other.mStart;
+    mEnd = other.mEnd;
+    mPeriod = other.mPeriod;
+    mScale = other.mScale;
+    mType = other.mType;
+    return *this;
+}
+
 EventTrigger::ProxyCall::ProxyCall(Hmx::Object *o) : mProxy(o), mEvent(o) {}
 EventTrigger::HideDelay::HideDelay(Hmx::Object *o) : mHide(o, 0), mDelay(0), mRate(0) {}
+
+EventTrigger::HideDelay &
+EventTrigger::HideDelay::operator=(const HideDelay &other) {
+    mHide = other.mHide.Ptr();
+    mDelay = other.mDelay;
+    mRate = other.mRate;
+    return *this;
+}
+
+EventTrigger::ProxyCall &
+EventTrigger::ProxyCall::operator=(const ProxyCall &other) {
+    mProxy = other.mProxy.Ptr();
+    mCall = other.mCall;
+    mEvent = other.mEvent.Ptr();
+    return *this;
+}
 
 void EventTrigger::SetNextLink(EventTrigger *trig) {
     for (EventTrigger *it = trig; it != nullptr; it = it->mNextLink) {

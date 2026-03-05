@@ -12,6 +12,7 @@
 #include "rndobj/Cam.h"
 #include "rndobj/Dir.h"
 #include "rndobj/Env.h"
+#include "rndobj/Graph.h"
 #include "rndobj/Mat.h"
 #include "rndobj/PostProc.h"
 #include "rndobj/Rnd.h"
@@ -439,13 +440,12 @@ void WorldDir::SyncObjects() {
 void WorldDir::DrawShowing() {
     START_AUTO_TIMER("world_draw");
     if (TheWorld) {
-        // Nested WorldDir — just draw through parent class
+        MILO_ASSERT(TheWorld != this, 0x25c);
         if (Showing())
-            PanelDir::DrawShowing();
+            RndDir::DrawShowing();
     } else {
         SetTheWorld(this);
 
-        // Resolve camera shot
         CamShot *shot = nullptr;
         if (mCameraMgr) {
             shot = mCameraMgr->MiloCamera();
@@ -455,7 +455,6 @@ void WorldDir::DrawShowing() {
         if (shot)
             shot = shot->CurrentShot();
 
-        // Camera override selection
         RndCam *camOverride = CamOverride();
         RndCam *savedCam = RndCam::Current();
         if (camOverride) {
@@ -463,41 +462,37 @@ void WorldDir::DrawShowing() {
             savedCam = camOverride;
         }
 
-        // Environment selection
         RndEnviron *env = GetEnv();
         if (!env)
             env = TheUI->GetEnv();
         if (env)
             env->Select(nullptr);
 
-        // Draw overrides from shot
-        if ((TheRnd.ProcCmds() & kProcessWorld) && shot && !shot->mDrawOverrides.empty()) {
-            FOREACH (it, shot->mDrawOverrides) {
-                (*it)->DrawShowing();
+        if (TheRnd.ProcCmds() & kProcessWorld) {
+            if (!shot || shot->mDrawOverrides.empty()) {
+                RndDir::DrawShowing();
+            } else {
+                FOREACH (it, shot->mDrawOverrides) {
+                    (*it)->DrawShowing();
+                }
+            }
+
+            if (shot) {
+                Spotlight *spot = shot->mGlowSpot;
+                if (spot && spot->Showing() && spot->Intensity() > 0) {
+                    Hmx::Rect rect(0, 0, TheRnd.Width(), TheRnd.Height());
+                    Hmx::Color color(spot->Color());
+                    color.alpha = 0.25f;
+                    TheRnd.DrawRect(rect, color, sGlowMat, nullptr, nullptr);
+                }
             }
         }
 
-        // Normal draw path
-        if (!shot || shot->mDrawOverrides.empty()) {
-            RndDir::DrawShowing();
-        }
-
-        // Glow spot rendering
-        if ((TheRnd.ProcCmds() & kProcessWorld) && shot) {
-            Spotlight *spot = shot->mGlowSpot;
-            if (spot && spot->Showing() && spot->Intensity() > 0) {
-                Hmx::Rect rect(0, 0, TheRnd.Width(), TheRnd.Height());
-                Hmx::Color color(spot->Color());
-                color.alpha = 0.25f;
-                TheRnd.DrawRect(rect, color, sGlowMat, nullptr, nullptr);
-            }
-        }
-
-        // Copy world cam and end world pass
         TheRnd.CopyWorldCam(Cam());
-        TheRnd.EndWorld();
+        if (mExplicitPostProc) {
+            TheRnd.EndWorld();
+        }
 
-        // Post-proc overrides
         if (shot) {
             savedCam->Select();
             if (env)
@@ -507,14 +502,15 @@ void WorldDir::DrawShowing() {
             }
         }
 
-        // HUD
+        RndGraph::SetCamera(RndCam::Current());
+
         if (mHUDDir)
             mHUDDir->DrawShowing();
         if (mHUD && mHUD->Showing()) {
+            START_AUTO_TIMER("hud_draw");
             mHUD->DrawShowing();
         }
 
-        // Spotlight cleanup
         if ((TheRnd.ProcCmds() & kProcessPost) && SpotlightDrawer::Current()) {
             SpotlightDrawer::Current()->DeSelect();
         }

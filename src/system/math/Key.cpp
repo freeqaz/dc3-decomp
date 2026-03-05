@@ -17,7 +17,7 @@ void InterpTangent(
     float f4 = f * 4.0f;
 
     float a = fsq * 6.0f - f6;
-    float b = 1.0f - (f4 - fsq3);
+    float b = fsq3 - f4 + 1.0f;
     float c = f6 - fsq * 6.0f;
     float d = fsq3 - f * 2.0f;
 

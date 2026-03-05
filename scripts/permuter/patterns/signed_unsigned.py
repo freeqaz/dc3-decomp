@@ -101,6 +101,26 @@ class SignedUnsignedPattern(Pattern):
                         )
                         counter += 1
 
+                # Double-cast for subscript/smart-pointer operands:
+                # (unsigned int)(Type*)expr — extract through conversion operator then cast
+                for operand, side in [(left, "left"), (right, "right")]:
+                    if operand.type == "subscript_expression":
+                        for outer_cast in [b"(unsigned int)(void*)", b"(int)(void*)"]:
+                            ed = SourceEditor(ctx.file_source)
+                            ed.insert_before(operand, outer_cast)
+                            try:
+                                new_source = ed.apply()
+                            except ValueError:
+                                continue
+                            cast_str = outer_cast.decode()
+                            yield Variant(
+                                name=f"signunsign_{counter}",
+                                pattern_name=self.name,
+                                description=f"Double-cast {side} subscript: {cast_str}",
+                                source=new_source,
+                            )
+                            counter += 1
+
                 # Swap != 0 <-> > 0 (always worth trying, 0 is ambiguous)
                 right_text = ctx.file_source[
                     right.start_byte : right.end_byte

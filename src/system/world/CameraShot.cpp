@@ -50,10 +50,10 @@ AutoPrepTarget::AutoPrepTarget(CamShotFrame &frame)
     mFrame->mZoomFOV = 0;
     mShot->mFilter = 0.0f;
     mShot->mClampHeight = -1.0f;
-    mShot->mLastDesiredShakeOffset.Zero();
-    mShot->mLastDesiredShakeAngOffset.Zero();
     mShot->mLastShakeOffset.Zero();
     mShot->mLastShakeAngOffset.Zero();
+    mShot->mLastDesiredShakeOffset.Zero();
+    mShot->mLastDesiredShakeAngOffset.Zero();
     sChanging = true;
     mFrame->UpdateTarget();
     mShot->SetFrame(mFrame->mFrame, 1.0f);
@@ -537,7 +537,7 @@ CamShot::CamShot()
       mLastDesiredShakeAngOffset(0, 0, 0), mLastShakeOffset(0, 0, 0),
       mLastShakeAngOffset(0, 0, 0), mShakeVelocity(0, 0, 0), mShakeAngVelocity(0, 0, 0), mLastNext(0),
       mLastPrev(0), mDuration(0), mDisabled(0), mShotStarted(1), mShotOver(0), mHidden(0),
-      unk283(0) {}
+      mSetFrameActive(0) {}
 
 CamShot::~CamShot() {}
 
@@ -1015,7 +1015,7 @@ void CamShot::EndAnim() {
 
 void CamShot::SetFrame(float frame, float blend) {
     START_AUTO_TIMER("camera");
-    if (unk283)
+    if (mSetFrameActive)
         return;
     RndAnimatable::SetFrame(frame, blend);
     RndCam *cam = GetCam();
@@ -1024,7 +1024,7 @@ void CamShot::SetFrame(float frame, float blend) {
     SetFrames(mAnims, frame);
     if (mKeyframes.empty())
         return;
-    unk283 = true;
+    mSetFrameActive = true;
     mPathFrame = -1;
     EndFrame();
     static CamShotFrame nullFrame(nullptr);
@@ -1038,7 +1038,7 @@ void CamShot::SetFrame(float frame, float blend) {
         frame50->UpdateTarget();
         if (frame4c)
             frame4c->UpdateTarget();
-        unk283 = false;
+        mSetFrameActive = false;
     } else {
         if (frame50 != _ref0) {
             frame50->UpdateTarget();
@@ -1063,7 +1063,7 @@ void CamShot::SetFrame(float frame, float blend) {
         if (CheckShotOver(frame)) {
             SetShotOver();
         }
-        unk283 = false;
+        mSetFrameActive = false;
     }
 }
 

@@ -67,6 +67,7 @@ PlaylistSortMgr::PlaylistSortMgr(SongPreview &sp) : NavListSortMgr(sp) {
     mProcessingCommand = false;
 }
 
+PlaylistSort::~PlaylistSort() {}
 PlaylistSortMgr::~PlaylistSortMgr() {}
 
 void PlaylistSortMgr::Init(SongPreview &sp) {

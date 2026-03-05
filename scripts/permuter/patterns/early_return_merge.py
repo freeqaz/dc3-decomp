@@ -6,6 +6,10 @@ shares the return target.
 
 Also does the reverse: splits a || chain into sequential guard returns.
 
+Also handles guard-to-conjunction collapse:
+    if (!cond) return false; return expr;  ->  return cond && expr;
+This was proven to fix MetaPanel::IsLoaded (beq/bne inversions).
+
 Example:
     if (s < f.front) return false;
     if (s < f.back) return false;
@@ -63,6 +67,16 @@ class EarlyReturnMergePattern(Pattern):
 
         # Direction 2: Split || chain in guard return into separate returns
         for variant in _split_guard_returns(stmts, ctx, counter):
+            yield variant
+            counter += 1
+
+        # Direction 3: Collapse guard return + final return into && conjunction
+        for variant in _guard_to_conjunction(stmts, source, counter):
+            yield variant
+            counter += 1
+
+        # Direction 4: Expand && conjunction into guard return + final return
+        for variant in _conjunction_to_guard(stmts, source, counter):
             yield variant
             counter += 1
 
@@ -251,3 +265,166 @@ def _collect_or_operands(node: Node, source: bytes) -> list[bytes]:
                 result.extend(_collect_or_operands(right, source))
             return result
     return [source[node.start_byte:node.end_byte]]
+
+
+def _negate_condition(cond_text: bytes) -> bytes:
+    """Negate a condition expression, stripping double negation."""
+    stripped = cond_text.strip()
+    # !(expr) -> expr
+    if stripped.startswith(b"!(") and stripped.endswith(b")"):
+        inner = stripped[2:-1]
+        # Check balanced parens
+        depth = 0
+        for ch in inner:
+            if ch == ord(b"("):
+                depth += 1
+            elif ch == ord(b")"):
+                depth -= 1
+            if depth < 0:
+                break
+        if depth == 0:
+            return inner
+    # !expr -> expr (simple identifier)
+    if stripped.startswith(b"!") and not stripped.startswith(b"!="):
+        return stripped[1:]
+    # expr -> !(expr)
+    return b"!(" + cond_text + b")"
+
+
+def _guard_to_conjunction(
+    stmts: list[Node], source: bytes, counter: int
+) -> Iterator[Variant]:
+    """Collapse `if (!cond) return false; return expr;` into `return cond && expr;`.
+
+    Also handles the positive case: `if (cond) return false; return expr;`
+    becomes `return !cond && expr;`.
+    """
+    for i in range(len(stmts) - 1):
+        guard = stmts[i]
+        final_ret = stmts[i + 1]
+
+        if guard.type != "if_statement" or final_ret.type != "return_statement":
+            continue
+
+        # Guard must not have an else clause
+        alternative = guard.child_by_field_name("alternative")
+        if alternative is not None:
+            continue
+
+        # Guard consequence must be a return false/true
+        condition = guard.child_by_field_name("condition")
+        consequence = guard.child_by_field_name("consequence")
+        if condition is None or consequence is None:
+            continue
+
+        guard_ret = _extract_guard_return(guard, source)
+        if guard_ret is None:
+            continue
+        guard_cond, guard_ret_val = guard_ret
+
+        # Only handle return false/true (boolean guards)
+        guard_ret_stripped = guard_ret_val.strip()
+        if guard_ret_stripped not in (b"false", b"true", b"0", b"1"):
+            continue
+
+        # Get the final return expression
+        final_ret_val = _get_return_value_node(final_ret, source)
+        if final_ret_val is None:
+            continue
+
+        indent = get_indent(source, guard)
+
+        if guard_ret_stripped in (b"false", b"0"):
+            # if (cond) return false; return expr; -> return !cond && expr;
+            negated = _negate_condition(guard_cond)
+            new_ret = indent + b"return " + negated + b" && " + final_ret_val + b";"
+        else:
+            # if (cond) return true; return expr; -> return cond || expr;
+            new_ret = indent + b"return " + guard_cond + b" || " + final_ret_val + b";"
+
+        new_source = (
+            source[:guard.start_byte]
+            + new_ret
+            + source[final_ret.end_byte:]
+        )
+        yield Variant(
+            name=f"retmerge_{counter}",
+            pattern_name="early_return_merge",
+            description="Collapse guard return into && conjunction",
+            source=new_source,
+        )
+        counter += 1
+
+
+def _conjunction_to_guard(
+    stmts: list[Node], source: bytes, counter: int
+) -> Iterator[Variant]:
+    """Expand `return cond && expr;` into `if (!cond) return false; return expr;`.
+
+    The reverse of guard-to-conjunction.
+    """
+    for stmt in stmts:
+        if stmt.type != "return_statement":
+            continue
+
+        # Get the return expression
+        ret_expr = None
+        for child in stmt.named_children:
+            if child.type != "comment":
+                ret_expr = child
+                break
+        if ret_expr is None:
+            continue
+
+        # Check if it's a && expression
+        if ret_expr.type != "binary_expression":
+            continue
+        op = ret_expr.child_by_field_name("operator")
+        if op is None or op.text not in (b"&&", b"||"):
+            continue
+
+        left = ret_expr.child_by_field_name("left")
+        right = ret_expr.child_by_field_name("right")
+        if left is None or right is None:
+            continue
+
+        left_text = source[left.start_byte:left.end_byte]
+        right_text = source[right.start_byte:right.end_byte]
+        indent = get_indent(source, stmt)
+
+        if op.text == b"&&":
+            # return A && B; -> if (!A) return false; return B;
+            negated = _negate_condition(left_text)
+            new_text = (
+                indent + b"if (" + negated + b")\n"
+                + indent + b"    return false;\n"
+                + indent + b"return " + right_text + b";"
+            )
+        else:
+            # return A || B; -> if (A) return true; return B;
+            new_text = (
+                indent + b"if (" + left_text + b")\n"
+                + indent + b"    return true;\n"
+                + indent + b"return " + right_text + b";"
+            )
+
+        new_source = (
+            source[:stmt.start_byte]
+            + new_text
+            + source[stmt.end_byte:]
+        )
+        yield Variant(
+            name=f"retmerge_{counter}",
+            pattern_name="early_return_merge",
+            description=f"Expand {op.text.decode()} into guard return + final return",
+            source=new_source,
+        )
+        counter += 1
+
+
+def _get_return_value_node(ret_stmt: Node, source: bytes) -> bytes | None:
+    """Get return value text from a return_statement."""
+    for child in ret_stmt.named_children:
+        if child.type != "comment":
+            return source[child.start_byte:child.end_byte]
+    return None

@@ -60,14 +60,13 @@ END_COPYS
 
 SpotDrawParams &SpotDrawParams::operator=(const SpotDrawParams &other) {
     mIntensity = other.mIntensity;
-    mColor = other.mColor;
     mBaseIntensity = other.mBaseIntensity;
     mSmokeIntensity = other.mSmokeIntensity;
     mHalfDistance = other.mHalfDistance;
     mLightingInfluence = other.mLightingInfluence;
+    mColor = other.mColor;
     mTexture = other.mTexture;
     mProxy = other.mProxy;
-    mOwner = other.mOwner;
     return *this;
 }
 

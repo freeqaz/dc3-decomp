@@ -17,6 +17,9 @@ class ObjRef;
 class ObjRefOwner;
 class ObjectDir;
 
+class MergeFilter;
+void MergeObjectsRecurse(ObjectDir *, ObjectDir *, MergeFilter &, bool);
+
 #ifdef HX_NATIVE
 // Returns true if the given Hmx::Object pointer is still alive (not yet destroyed).
 // Used to guard against use-after-free when ObjRef nodes reference freed objects.
@@ -48,6 +51,7 @@ public:
 // ObjRef size: 0xc
 class ObjRef {
     friend class Hmx::Object;
+    friend void ::MergeObjectsRecurse(ObjectDir *, ObjectDir *, MergeFilter &, bool);
 
 protected:
     // seems to be a linked list of an Object's refs
@@ -65,15 +69,10 @@ protected:
     void Release(ObjRef *ref) {
         prev->next = next;
         next->prev = prev;
-        // do something with ref here
     }
 
 public:
     ObjRef() {}
-    // ObjRef(const ObjRef &other) : next(other.next), prev(other.prev) {
-    //     prev->next = this;
-    //     next->prev = this;
-    // }
     virtual ~ObjRef() {}
     virtual Hmx::Object *RefOwner() const { return nullptr; }
     virtual bool IsDirPtr() { return false; }
@@ -107,6 +106,13 @@ public:
             return tmp;
         }
 
+#ifdef HX_NATIVE
+        iterator operator--() {
+            curRef = curRef->prev;
+            return *this;
+        }
+#endif
+
         bool operator!=(iterator it) { return curRef != it.curRef; }
         bool operator==(iterator it) { return curRef == it.curRef; }
         bool operator!() { return curRef == nullptr; }
@@ -130,9 +136,6 @@ public:
         }
     }
 #endif
-
-    // per ObjectDir::HasDirPtrs, this is the way to iterate across refs
-    // for (ObjRef *it = mRefs.next; it != &mRefs; it = it->next) {
 };
 
 #pragma endregion
@@ -364,6 +367,9 @@ public:
     iterator erase(iterator);
     iterator insert(const_iterator, T1 *);
     const_iterator find(const Hmx::Object *) const;
+#ifdef HX_NATIVE
+    iterator find(const Hmx::Object *);
+#endif
     int size() const { return mNodes.size(); }
     bool empty() const { return mNodes.empty(); }
     T1 *front() const { return *begin(); }
@@ -1037,6 +1043,10 @@ namespace Hmx {
      * class has Object as a superclass."
      */
     class Object : public ObjRefOwner {
+#ifdef HX_NATIVE
+        friend class ObjRef;
+#endif
+        friend void ::MergeObjectsRecurse(ObjectDir *, ObjectDir *, MergeFilter &, bool);
     private:
         /** Remove this Object from its associated ObjectDir. */
         void RemoveFromDir();

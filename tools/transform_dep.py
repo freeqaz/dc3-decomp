@@ -16,6 +16,18 @@ winedevices = os.path.join(wineprefix, "dosdevices")
 
 INCLUDE_PREFIX = "Note: including file:"
 
+# Parse WIBO_PATH_MAP (format: "win_path=linux_path;win_path2=linux_path2")
+# Used by wibo to map Windows paths to Linux paths during cross-compilation.
+wibo_path_map: list[tuple[str, str]] = []
+if "WIBO_PATH_MAP" in os.environ:
+    for entry in os.environ["WIBO_PATH_MAP"].split(";"):
+        if "=" in entry:
+            win_path, linux_path = entry.split("=", 1)
+            # Normalize: lowercase, forward slashes, ensure trailing slash
+            win_norm = win_path.replace("\\", "/").lower().rstrip("/") + "/"
+            linux_norm = linux_path.rstrip("/") + "/"
+            wibo_path_map.append((win_norm, linux_norm))
+
 
 def in_wsl() -> bool:
     return "microsoft-standard" in uname().release
@@ -66,6 +78,15 @@ def resolve_windows_path(raw_path: str) -> str:
         drive = stripped[0].lower()
         remainder = stripped[2:].lstrip("\\/")
         remainder = remainder.replace("\\", "/")
+
+        # Try WIBO_PATH_MAP first (e.g. e:/lazer_build_gmc1/system/src/ -> /home/.../src/system)
+        full_win = f"{drive}:/{remainder}"
+        full_win_lower = full_win.lower()
+        for win_prefix, linux_prefix in wibo_path_map:
+            if full_win_lower.startswith(win_prefix):
+                result = linux_prefix + full_win[len(win_prefix):]
+                result = os.path.normpath(result)
+                return normalize_path_case(result)
 
         if drive == "z":
             result = "/" + remainder.lstrip("/")

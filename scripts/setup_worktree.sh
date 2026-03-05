@@ -69,7 +69,7 @@ echo "==> Running configure.py with absolute tool paths"
 echo "==> Symlinking shared build artifacts"
 WT_BUILD="$WORKTREE_PATH/build/373307D9"
 MAIN_BUILD="$MAIN_REPO/build/373307D9"
-mkdir -p "$WT_BUILD"
+mkdir -p "$WT_BUILD" "$WT_BUILD/pch"
 
 # Target objects (original binary, never changes)
 ln -sf "$MAIN_BUILD/obj" "$WT_BUILD/obj"

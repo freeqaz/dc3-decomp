@@ -16,6 +16,7 @@ class RndCam;
 
 struct ScreenshotMode {
     std::vector<std::string> poseDumpBones;
+    int warmupFrames = 3;
 };
 
 struct VideoMode {

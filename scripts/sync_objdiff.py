@@ -609,11 +609,25 @@ def main():
 
             # Auto-promote to AT_LIMIT when objdiff says all mismatches
             # are unfixable (verdict_classification == AT_LIMIT)
+            # OR when match% >= 95% and all detected patterns are practically
+            # unfixable (register swaps, prologue mismatches, etc.)
+            PRACTICALLY_UNFIXABLE = UNFIXABLE_PATTERNS | {
+                "REGISTER_SWAP", "PROLOGUE_MISMATCH",
+                "STATIC_GUARD_COUNTER",
+            }
             if (old_verdict is None
-                    and r.match_percent < 100.0
-                    and r.verdict_classification == "AT_LIMIT"):
-                at_limit_promotions.append(r.db_id)
-                stats["auto_at_limit"] = stats.get("auto_at_limit", 0) + 1
+                    and r.match_percent is not None
+                    and r.match_percent < 100.0):
+                should_promote = False
+                if r.verdict_classification == "AT_LIMIT":
+                    should_promote = True
+                elif (r.match_percent >= 95.0
+                      and r.detected_patterns
+                      and set(r.detected_patterns).issubset(PRACTICALLY_UNFIXABLE)):
+                    should_promote = True
+                if should_promote:
+                    at_limit_promotions.append(r.db_id)
+                    stats["auto_at_limit"] = stats.get("auto_at_limit", 0) + 1
 
     # Apply to DB
     if not args.dry_run and (pct_updates or enrich_updates or promotions or at_limit_promotions or demotions or stub_updates or stub_clears):

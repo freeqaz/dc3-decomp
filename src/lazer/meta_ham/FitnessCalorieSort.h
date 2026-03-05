@@ -19,4 +19,5 @@ public:
     virtual void OnSelectShortcut(int);
 
     FitnessCalorieSort();
+    virtual ~FitnessCalorieSort();
 };

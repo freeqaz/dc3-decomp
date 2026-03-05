@@ -229,7 +229,7 @@ void MetaPanel::Load() {
     DataArray *sysConfig = SystemConfig("synth", "metamusic", "music");
     int loopIndex = PickLoopIndex(sysConfig->Size());
     DataArray *loopArray = sysConfig->Array(loopIndex);
-    if (!TheMetaMusic && sHamMaster) {
+    if (!TheMetaMusic) {
         TheMetaMusic = new MetaMusic(sHamMaster, "sfx/shell_fx.milo");
         TheMetaMusic->Load(0.0f, true, true);
         sHamMaster->Load(
@@ -265,8 +265,7 @@ void MetaPanel::FinishLoad() {
     }
     UIPanel::FinishLoad();
     auto _tmp0 = TheSynth->Find<Fader>("background_music_level.fade", true);
-    if (TheMetaMusic)
-        TheMetaMusic->AddFader(_tmp0);
+    TheMetaMusic->AddFader(_tmp0);
 }
 
 bool MetaPanel::IsLoaded() const {
@@ -275,9 +274,7 @@ bool MetaPanel::IsLoaded() const {
             return true;
         }
     }
-        if (!(UIPanel::IsLoaded()))
-        return false;
-    return (!TheMetaMusic || TheMetaMusic->Loaded());
+    return UIPanel::IsLoaded() && TheMetaMusic->Loaded();
 }
 
 void MetaPanel::Poll() {
@@ -321,8 +318,7 @@ void MetaPanel::Exit() {
     }
     UIPanel::Exit();
     mSongPreview.Start(gNullStr, nullptr);
-    if (TheMetaMusic)
-        TheMetaMusic->Stop();
+    TheMetaMusic->Stop();
     ThePlatformMgr.DisableXMP();
 }
 
@@ -335,7 +331,7 @@ bool MetaPanel::Exiting() const {
     if (mState != 2) {
         return UIPanel::Exiting();
     }
-    bool ret = mSongPreview.IsWaitingToDelete() || mSongPreview.IsFadingOut() || (TheMetaMusic && TheMetaMusic->IsActive()) || UIPanel::Exiting();
+    bool ret = mSongPreview.IsWaitingToDelete() || mSongPreview.IsFadingOut() || TheMetaMusic->IsActive() || UIPanel::Exiting();
     if (!ret) {
         TheTaskMgr.SetAutoSecondsBeats(true);
     }

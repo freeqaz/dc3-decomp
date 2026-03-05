@@ -46,7 +46,7 @@ const char *WhiteSpace(int count) {
 #pragma region Loader
 
 Loader::Loader(const FilePath &fp, LoaderPos pos)
-    : unk4(0), mPos(pos), mFile(fp), mLoadStartMs(-1), mHeap(GetCurrentHeapNum()) {
+    : mLoadCount(0), mPos(pos), mFile(fp), mLoadStartMs(-1), mHeap(GetCurrentHeapNum()) {
     MILO_ASSERT(MemNumHeaps() == 0 || (mHeap != kNoHeap && mHeap != kSystemHeap), 0x1F0);
     TheLoadMgr.Loaders().push_front(this);
     if (mPos == kLoadFront) {
@@ -352,7 +352,7 @@ Loader *LoadMgr::AddLoader(const FilePath &file, LoaderPos pos) {
 }
 
 void LoadMgr::PollUntilLoaded(Loader *ldr1, Loader *ldr2) {
-    AutoGlitchReport hang(1e9f, __FUNCTION__);
+    AutoGlitchReport hang(50.0f, __FUNCTION__);
     float saved_period = mCurrentPeriod;
     while (!ldr1->IsLoaded()) {
         mCurrentPeriod = 1e+30f;

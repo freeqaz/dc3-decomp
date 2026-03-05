@@ -10,8 +10,8 @@ Symbol MsgSinks::sCurrentExportEvent(gNullStr);
 
 Symbol MsgSinks::GetPropSyncHandler(DataArray *arr) {
     if (mPropSyncHandlers) {
-        auto _tmp0 = mPropSyncHandlers->Size();
-        for (int i = 0; i < _tmp0; i += 2) {
+        int size = mPropSyncHandlers->Size();
+        for (int i = 0; i < size; i += 2) {
             DataArray *array = mPropSyncHandlers->Array(i);
             if (array->Size() == arr->Size()) {
                 bool ret = true;
@@ -22,7 +22,7 @@ Symbol MsgSinks::GetPropSyncHandler(DataArray *arr) {
                     }
                 }
                 if (ret)
-                    return mPropSyncHandlers->Sym(0);
+                    return mPropSyncHandlers->Sym(i + 1);
             }
         }
     }
@@ -167,7 +167,7 @@ void MsgSinks::AddSink(
 }
 
 void MsgSinks::AddPropertySink(Hmx::Object *o, DataArray *a, Symbol s) {
-    Symbol handler = GetPropSyncHandler(a);
+    GetPropSyncHandler(a);
     Symbol path = PathToEventName(a);
     if (!mPropSyncHandlers) {
         mPropSyncHandlers = new DataArray(2);
@@ -180,7 +180,7 @@ void MsgSinks::AddPropertySink(Hmx::Object *o, DataArray *a, Symbol s) {
     AddSink(o, path, s, Hmx::Object::kHandle, false);
 }
 
-static void ExportSink(Hmx::Object *obj, Hmx::Object::SinkMode mode, DataArray *arr) {
+void MsgSinks::Sink::Export(DataArray *arr) {
     switch (mode) {
     case Hmx::Object::kHandle:
         obj->Handle(arr, false);
@@ -199,69 +199,78 @@ static void ExportSink(Hmx::Object *obj, Hmx::Object::SinkMode mode, DataArray *
 
 void MsgSinks::Export(DataArray *arr) {
     mExporting++;
-    // Dispatch to global sinks
     for (ObjList<Sink>::iterator it = mSinks.begin(); it != mSinks.end();) {
-        if (!(it->obj == nullptr)) {
-            ExportSink(it->obj, it->mode, arr);
+        if (it->obj != nullptr) {
+            it->Export(arr);
+            ++it;
         } else {
             if (mExporting == 1) {
                 it = mSinks.erase(it);
-                continue;
+            } else {
+                ++it;
             }
         }
-        ++it;
     }
 
-    // Find and dispatch to event-specific sinks
+    Symbol oldExportEvent = sCurrentExportEvent;
     Symbol msgType = arr->Sym(1);
-        for (ObjList<EventSink>::iterator evIt = mEventSinks.begin();
+    sCurrentExportEvent = msgType;
+    for (ObjList<EventSink>::iterator evIt = mEventSinks.begin();
          evIt != mEventSinks.end(); ++evIt) {
         if (evIt->event == arr->Sym(1)) {
-            // Save original message node and replace with handler symbol
             DataNode origNode = arr->Node(1);
             for (ObjList<EventSinkElem>::iterator sinkIt = evIt->sinks.begin();
                  sinkIt != evIt->sinks.end();) {
-                if (sinkIt->obj == nullptr) {
+                if (sinkIt->obj != nullptr) {
+                    arr->Node(1) = DataNode(sinkIt->handler);
+                    sinkIt->Export(arr);
+                    ++sinkIt;
+                } else {
                     if (mExporting == 1) {
                         sinkIt = evIt->sinks.erase(sinkIt);
-                        continue;
+                    } else {
+                        ++sinkIt;
                     }
-                } else {
-                    arr->Node(1) = DataNode(sinkIt->handler);
-                    ExportSink(sinkIt->obj, sinkIt->mode, arr);
                 }
-                ++sinkIt;
             }
-            // Restore original message node
             arr->Node(1) = origNode;
+            if (evIt->sinks.empty()) {
+                mEventSinks.erase(evIt);
+            }
             break;
         }
     }
 
-    sCurrentExportEvent = msgType = sCurrentExportEvent;
     mExporting--;
+    sCurrentExportEvent = oldExportEvent;
 }
 
 void MsgSinks::RemoveSink(Hmx::Object *obj, Symbol ev) {
-    if (ev.Null()) {
-        for (ObjList<Sink>::iterator it = mSinks.begin(); it != mSinks.end(); ++it) {
-            if (it->obj == obj) {
-                if (mExporting) {
-                    it->obj = nullptr;
-                } else {
-                    mSinks.erase(it);
-                }
-                return;
+    MILO_ASSERT(obj, 0x10A);
+    for (ObjList<Sink>::iterator it = mSinks.begin(); it != mSinks.end(); ++it) {
+        if (it->obj == obj) {
+            if (!ev.Null()) {
+                MILO_WARN(
+                    "%s: removing global to %s for event %s, all other events will be wiped out",
+                    PathName(mOwner), obj->Name(), ev
+                );
             }
+            it->obj = nullptr;
+            if (!mExporting)
+                mSinks.erase(it);
+            return;
+        }
+    }
+    if (ev.Null()) {
+        for (ObjList<EventSink>::iterator it = mEventSinks.begin();
+             it != mEventSinks.end(); ++it) {
+            it->Remove(obj, mExporting != 0);
         }
     } else {
         for (ObjList<EventSink>::iterator it = mEventSinks.begin();
              it != mEventSinks.end(); ++it) {
             if (it->event == ev) {
                 it->Remove(obj, mExporting != 0);
-                if (it->sinks.empty() && !mExporting) {
-                    mEventSinks.erase(it);
-                }
                 return;
             }
         }
@@ -269,20 +278,18 @@ void MsgSinks::RemoveSink(Hmx::Object *obj, Symbol ev) {
 }
 
 bool MsgSinks::Replace(ObjRef *ref, Hmx::Object *obj) {
-    // Check global sinks
     for (ObjList<Sink>::iterator it = mSinks.begin(); it != mSinks.end(); ++it) {
         if (&it->obj == ref) {
-            it->obj = static_cast<Hmx::Object*>(obj);
+            mSinks.erase(it);
             return true;
         }
     }
-    // Check event sinks
     for (ObjList<EventSink>::iterator evIt = mEventSinks.begin();
          evIt != mEventSinks.end(); ++evIt) {
         for (ObjList<EventSinkElem>::iterator sinkIt = evIt->sinks.begin();
              sinkIt != evIt->sinks.end(); ++sinkIt) {
             if (&sinkIt->obj == ref) {
-                sinkIt->obj = static_cast<Hmx::Object*>(obj);
+                evIt->sinks.erase(sinkIt);
                 return true;
             }
         }

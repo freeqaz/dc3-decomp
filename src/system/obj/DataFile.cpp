@@ -66,7 +66,7 @@ void FinishDataRead() {
 }
 
 DataArray *DataReadString(const char *c) {
-    BufStream stream = BufStream(&c, strlen(c), true);
+    BufStream stream((void *)c, strlen(c), true);
     return DataReadStream(&stream);
 }
 
@@ -102,6 +102,8 @@ DataArray *DataReadFile(const char *file, bool warn) {
     if (fs.Fail()) {
         if (warn)
             MILO_WARN("DataReadFile: Can't open %s", buf);
+        if (!node)
+            FinishDataRead();
         return nullptr;
     } else {
         DataArray *ret;

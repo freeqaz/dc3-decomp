@@ -310,9 +310,7 @@ void FlowAnimate::OnAnimEvent(Symbol sym) {
             }
             if (mStopDeferred && mAnimTask) {
                 AnimTask *task = mAnimTask;
-                if (task) {
-                    task->mAnimTarget = NULL;
-                }
+                task->mAnimTarget = NULL;
                 delete (AnimTask *)mAnimTask;
                 FLOW_LOG("Timed Release From Parent \n");
                 Timer timer;

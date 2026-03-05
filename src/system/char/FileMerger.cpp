@@ -191,7 +191,21 @@ void FileMerger::PreLoad(BinStream &bs) {
 
 void FileMerger::FinishLoading(Loader *ldr) {
     DirLoader *dl = dynamic_cast<DirLoader *>(ldr);
+#ifdef HX_NATIVE
+    printf("FileMerger::FinishLoading dl=%p file='%s' sDisableAll=%d\n",
+           dl, ldr ? ldr->LoaderFile().c_str() : "null", sDisableAll);
+#endif
     Merger *merger = NotifyFileLoaded(ldr, dl);
+#ifdef HX_NATIVE
+    printf("  merger='%s' proxy=%d dl_dir=%p\n",
+           merger->mName.Str(), merger->mProxy, dl ? dl->GetDir() : nullptr);
+    if (dl && dl->GetDir()) {
+        int cnt = 0;
+        ObjDirItr<Hmx::Object> allIt(dl->GetDir(), true);
+        while (allIt) { cnt++; ++allIt; }
+        printf("  loaded dir '%s' has %d objects\n", dl->GetDir()->Name(), cnt);
+    }
+#endif
     if (dl && !sDisableAll) {
         if (merger->mProxy) {
             MILO_ASSERT(dl->GetDir(), 0x236);
@@ -208,8 +222,20 @@ void FileMerger::FinishLoading(Loader *ldr) {
             }
         } else {
             ObjectDir *mergerDir = merger->MergerDir();
+#ifdef HX_NATIVE
+            printf("  MergeDirs: src='%s'(%d objs) -> dst='%s'(%d objs)\n",
+                   dl->GetDir()->Name(),
+                   (int)dl->GetDir()->HashTableSize(),
+                   mergerDir->Name(),
+                   (int)mergerDir->HashTableSize());
+#endif
             ReserveToFit(dl->GetDir(), mergerDir, 0);
             MergeDirs(dl->GetDir(), mergerDir, *this);
+#ifdef HX_NATIVE
+            printf("  after MergeDirs: dst='%s' now has %d objs\n",
+                   mergerDir->Name(),
+                   (int)mergerDir->HashTableSize());
+#endif
         }
     }
     PostMerge(merger, dl, true);
@@ -419,10 +445,15 @@ void FileMerger::Select(Symbol name, const FilePath &fp, bool b3) {
 bool FileMerger::StartLoadInternal(bool async, bool loading) {
     mAsyncLoad = async;
     mLoadingLoad = loading;
+#ifndef HX_NATIVE
+    // In the game, this lets the owning type (e.g. HamCharacter) reconfigure
+    // selections via OnConfigureFileMerger. In the native viewer, we configure
+    // selections explicitly before calling StartLoad, so skip this.
     static Message msg("change_files", 0, 0);
     msg[0] = async;
     msg[1] = loading;
     HandleType(msg);
+#endif
     for (int i = 0; i < mMergers.size(); i++) {
         Merger &cur = mMergers[i];
         if (NeedsLoading(cur)) {

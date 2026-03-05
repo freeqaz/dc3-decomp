@@ -43,8 +43,7 @@ MicXbox::MicXbox(int, float volume)
 MicXbox::~MicXbox() {
     if (mRunning)
         Stop();
-    if (mPlaybackVoice)
-        delete mPlaybackVoice;
+    delete mPlaybackVoice;
     mPlaybackVoice = 0;
 }
 

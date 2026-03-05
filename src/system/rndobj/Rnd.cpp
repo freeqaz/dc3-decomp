@@ -1028,7 +1028,8 @@ void Rnd::UpdateRate() {
     }
 }
 
-float Rnd::DrawTimers(float f) {
+// noinline: Prevents inlining of this stub implementation. Remove once fully implemented.
+__declspec(noinline) float Rnd::DrawTimers(float f) {
     // TODO: implement full timer drawing (complex function involving AutoTimer stats)
     return f;
 }

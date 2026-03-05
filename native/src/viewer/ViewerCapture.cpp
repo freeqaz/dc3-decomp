@@ -50,11 +50,14 @@ ViewerMode SelectMode(const ViewerConfig& cfg) {
     if (cfg.screenshotPath) {
         ScreenshotMode m;
         m.poseDumpBones = ParseCommaSeparatedList(cfg.poseDumpBonesCsv);
+        if (cfg.maxFrames > 0) {
+            m.warmupFrames = cfg.maxFrames;
+        }
         return m;
     }
     if (cfg.videoPath) {
         VideoMode m;
-        m.totalFrames = (int)(cfg.videoDuration * cfg.videoFps);
+        m.totalFrames = cfg.maxFrames > 0 ? cfg.maxFrames : (int)(cfg.videoDuration * cfg.videoFps);
         m.dt          = 1.0f / (float)cfg.videoFps;
         return m;
     }
@@ -227,7 +230,7 @@ int RunScreenshot(ScreenshotMode& m, ViewerScene& scene,
     }
 
     // Render a few frames to let GPU resources settle
-    for (int frame = 0; frame < 3; frame++) {
+    for (int frame = 0; frame < m.warmupFrames; frame++) {
         gOrbitCam.Update(cam);
         TheRnd.BeginDrawing();
         scene.DrawAllMeshes(cfg);
@@ -408,6 +411,7 @@ int RunInteractive(InteractiveMode& /*m*/, ViewerScene& scene,
         interactivePelvis = charAnim.character->Find<RndTransformable>("bone_pelvis.mesh", false);
     }
 
+    int frameCount = 0;
     while (!gWgpuRnd->Gpu().ShouldClose()) {
         gWgpuRnd->Gpu().PollEvents();
 
@@ -468,6 +472,11 @@ int RunInteractive(InteractiveMode& /*m*/, ViewerScene& scene,
         TheRnd.BeginDrawing();
         scene.DrawAllMeshes(cfg);
         TheRnd.EndDrawing();
+
+        frameCount++;
+        if (cfg.maxFrames > 0 && frameCount >= cfg.maxFrames) {
+            break;
+        }
     }
 
     return 0;

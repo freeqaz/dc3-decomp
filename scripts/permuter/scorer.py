@@ -77,11 +77,21 @@ class Scorer:
                 pass  # Unicorn runner not available or unit not found
 
     def __enter__(self):
-        self._original_source = self.source_path.read_bytes()
-        self._original_source_md5 = md5_bytes(self._original_source)
         self._backup_path = self.source_path.with_suffix(
             self.source_path.suffix + ".permuter_bak"
         )
+        # Check for stale backup from a previous crash/kill
+        if self._backup_path.exists():
+            print(
+                f"  WARNING: Found stale backup {self._backup_path.name} — "
+                f"restoring from previous interrupted run.",
+                file=sys.stderr,
+            )
+            shutil.copy2(self._backup_path, self.source_path)
+            self._backup_path.unlink()
+
+        self._original_source = self.source_path.read_bytes()
+        self._original_source_md5 = md5_bytes(self._original_source)
         shutil.copy2(self.source_path, self._backup_path)
         # Open cache for this symbol
         self._cache = ScoreCache(self.symbol)

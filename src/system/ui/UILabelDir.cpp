@@ -155,7 +155,9 @@ RndFontBase *UILabelDir::FontObj(Symbol s) const {
 UIColor *UILabelDir::GetStateColor(UIComponent::State state) const {
     MILO_ASSERT(state < UIComponent::kNumStates, 0x39);
     UIColor *c = mColors[state];
-    return c ? c : mDefaultColor.Ptr();
+    if (c) return c;
+    c = mDefaultColor;
+    return c ? c : gUILabelDefaultColor;
 }
 
 DataNode UILabelDir::GetMatVariations(UILabelDir *pThis) {

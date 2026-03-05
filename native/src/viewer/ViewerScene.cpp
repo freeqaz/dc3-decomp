@@ -161,37 +161,102 @@ bool ViewerScene::LoadFileMerger(const ViewerConfig& cfg) {
     printf("Milo Viewer: FileMerger 'char.fm' found\n");
 
     // Select outfit (the original miloPath = the outfit .milo)
+    // Accepts either absolute filesystem paths or ark-relative paths
     if (cfg.miloPath) {
-        char outfitAbsPath[PATH_MAX];
-        if (realpath(cfg.miloPath, outfitAbsPath)) {
-            FilePath outfitFp(outfitAbsPath);
-            fm->Select("outfit", outfitFp, false);
-            printf("Milo Viewer: outfit selected: %s\n", outfitAbsPath);
-        } else {
-            fprintf(stderr, "Warning: cannot resolve outfit path '%s'\n", cfg.miloPath);
-        }
+        char resolved[PATH_MAX];
+        const char* outfitPath = cfg.miloPath;
+        if (realpath(cfg.miloPath, resolved))
+            outfitPath = resolved;
+        FilePath outfitFp(outfitPath);
+        fm->Select("outfit", outfitFp, false);
+        printf("Milo Viewer: outfit selected: %s\n", outfitPath);
     }
 
     // Select visemes
     if (cfg.visemesPath) {
-        char visAbsPath[PATH_MAX];
-        if (realpath(cfg.visemesPath, visAbsPath)) {
-            FilePath visFp(visAbsPath);
-            fm->Select("viseme", visFp, false);
-            printf("Milo Viewer: viseme selected: %s\n", visAbsPath);
-        } else {
-            fprintf(stderr, "Warning: cannot resolve visemes path '%s'\n", cfg.visemesPath);
+        char resolved[PATH_MAX];
+        const char* visPath = cfg.visemesPath;
+        if (realpath(cfg.visemesPath, resolved))
+            visPath = resolved;
+        FilePath visFp(visPath);
+        fm->Select("viseme", visFp, false);
+        printf("Milo Viewer: viseme selected: %s\n", visPath);
+    }
+
+    // Print merger config before load
+    for (int i = 0; i < 3; i++) {
+        FileMerger::Merger* m = fm->FindMerger(Symbol(), false);
+    }
+    {
+        FileMerger::Merger* om = fm->FindMerger("outfit", false);
+        FileMerger::Merger* vm = fm->FindMerger("viseme", false);
+        if (om) {
+            ObjectDir* oDir = om->MergerDir();
+            printf("  outfit: proxy=%d dir=%p('%s' class='%s') selected='%s'\n",
+                   om->IsProxy(), oDir, oDir ? oDir->Name() : "?",
+                   oDir ? oDir->ClassName().Str() : "?", om->mSelected.c_str());
+        }
+        if (vm) {
+            ObjectDir* vDir = vm->MergerDir();
+            printf("  viseme: proxy=%d dir=%p('%s' class='%s') selected='%s'\n",
+                   vm->IsProxy(), vDir, vDir ? vDir->Name() : "?",
+                   vDir ? vDir->ClassName().Str() : "?", vm->mSelected.c_str());
         }
     }
 
+    // Count before merge
+    {
+        int before = 0;
+        ObjDirItr<Hmx::Object> bIt(baseScene, true);
+        while (bIt) { before++; ++bIt; }
+        printf("Milo Viewer: objects BEFORE merge: %d\n", before);
+    }
+
     // Synchronous merge
-    fm->StartLoad(false);
-    printf("Milo Viewer: FileMerger StartLoad complete\n");
+    bool loaded = fm->StartLoad(false);
+    printf("Milo Viewer: FileMerger StartLoad returned %d, pending=%d\n",
+           loaded, fm->HasPendingFiles());
+
+    // Count objects in baseScene after merge
+    {
+        int meshes = 0, total = 0, itrTotal = 0;
+        ObjDirItr<Hmx::Object> allIt(baseScene, true);
+        while (allIt) {
+            itrTotal++;
+            const char* cn = allIt->ClassName().Str();
+            if (strcmp(cn, "Mesh") == 0 || strcmp(cn, "RndMesh") == 0)
+                meshes++;
+            ++allIt;
+        }
+        // Also count via hash table directly
+        int hashCap = baseScene->HashTableSize();
+        int hashUsed = baseScene->HashTableUsedSize();
+        printf("Milo Viewer: after merge: itr=%d hashUsed=%d hashCap=%d meshes=%d\n",
+               itrTotal, hashUsed, hashCap, meshes);
+        // Check if any mesh via Find
+        RndMesh* testMesh = baseScene->Find<RndMesh>("aubrey01_head.mesh", false);
+        printf("  Find<RndMesh>('aubrey01_head.mesh') = %p\n", testMesh);
+        Hmx::Object* testObj = baseScene->Find<Hmx::Object>("aubrey01_head.mesh", false);
+        printf("  Find<Object>('aubrey01_head.mesh') = %p class='%s'\n",
+               testObj, testObj ? testObj->ClassName().Str() : "?");
+
+        // Check subdirs
+        int sdCount = 0;
+        for (auto& sdPtr : baseScene->SubDirs()) {
+            ObjectDir* sd = sdPtr;
+            int sdMeshes = 0;
+            ObjDirItr<RndMesh> mIt(sd, true);
+            while (mIt) { sdMeshes++; ++mIt; }
+            printf("  subdir '%s' class='%s': %d meshes\n",
+                   sd->Name(), sd->ClassName().Str(), sdMeshes);
+            sdCount++;
+        }
+        printf("  %d subdirs total\n", sdCount);
+    }
 
     // SyncObjects wires CharFaceServo, CharEyes, CharLipSyncDriver
     if (rndScene) {
         rndScene->SyncObjects();
-        printf("Milo Viewer: SyncObjects after FileMerger complete\n");
     }
 
     fileMergerActive = true;
@@ -383,12 +448,13 @@ void ViewerScene::AutoFrameCamera(OrbitCamera& cam, RndCam* rndCam, const Viewer
     ObjDirItr<RndMesh> bboxIt(baseScene, !charFraming);
     while (bboxIt) {
         RndMesh* m = bboxIt;
+        if (!m || !HmxObjectIsLive(m)) { ++bboxIt; continue; }
         if (!m->Showing()) { ++bboxIt; continue; }
         const Transform& xfm = m->WorldXfm();
         float px = xfm.v.x, py = xfm.v.y, pz = xfm.v.z;
 
         RndMesh* owner = m->GetGeomOwner();
-        if (!owner) owner = m;
+        if (!owner || !HmxObjectIsLive(owner)) owner = m;
 
         int nv = owner->NumVerts();
         int ncv = owner->NumCompressedVerts();

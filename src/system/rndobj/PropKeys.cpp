@@ -21,7 +21,7 @@ float CalcSpline(float t, float *const p) {
     float p3 = p[3];
     float p0x2mp1x5 = p0 * 2.0f - p1x5;
     float term2 = p2 * 4.0f + p0x2mp1x5 - p3;
-    float term3 = p3 - (p2 * 3.0f - p1x3m0);
+    float term3 = p1x3m0 - p2 * 3.0f + p3;
     float t3 = t2 * t;
     return (p1 * 2.0f + diff * t + term2 * t2 + term3 * t3) * 0.5f;
 }

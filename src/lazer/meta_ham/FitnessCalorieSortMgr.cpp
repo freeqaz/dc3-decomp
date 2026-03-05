@@ -37,6 +37,7 @@ FitnessCalorieSortMgr::FitnessCalorieSortMgr(SongPreview &sp) : NavListSortMgr(s
     }
 }
 
+FitnessCalorieSort::~FitnessCalorieSort() {}
 FitnessCalorieSortMgr::~FitnessCalorieSortMgr() {}
 
 void FitnessCalorieSortMgr::Init(SongPreview &sp) {

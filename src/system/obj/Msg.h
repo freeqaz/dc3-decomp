@@ -197,13 +197,15 @@ class MsgSinks {
 public:
     struct Sink {
         Sink(Hmx::Object *owner) : obj(owner, nullptr) {}
-        ~Sink();
+        ~Sink() {}
 
         Sink &operator=(const Sink &s) {
             obj.SetObjConcrete(s.obj);
             mode = s.mode;
             return *this;
         }
+
+        void Export(DataArray *);
 
         ObjOwnerPtr<Hmx::Object> obj; // 0x0
         Hmx::Object::SinkMode mode; // 0x14

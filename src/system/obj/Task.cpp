@@ -6,6 +6,7 @@
 
 #include "obj/Object.h"
 #include "os/Debug.h"
+#include "os/Timer.h"
 #include "utl/BeatMap.h"
 #include "utl/TempoMap.h"
 
@@ -266,8 +267,8 @@ void ScriptTask::Poll(float f1) {
 
 bool ThreadTask::Replace(ObjRef *ref, Hmx::Object *obj) {
     if (mExecuting) {
-        if (&mObjects == ref->Parent() && ref) {
-            mObjects.remove(obj);
+        if ((ref->Parent() == &mObjects) & (ref != 0)) {
+            mObjects.erase(*(ObjPtrList<Hmx::Object>::iterator *)&ref);
             return true;
         }
     }
@@ -443,6 +444,7 @@ float TaskMgr::DeltaTutorialSeconds() const {
 }
 
 void TaskMgr::Poll() {
+    START_AUTO_TIMER("anim");
     mTime.Split();
     if (mAutoSecondsBeats) {
         float secs = mTime.Ms() / 1000.0f;

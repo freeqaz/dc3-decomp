@@ -65,8 +65,6 @@
 #include "rndobj/Utl.h"
 #include "world/Dir.h"
 
-MsgSinks::Sink::~Sink() {}
-
 CharDebug TheCharDebug;
 
 void CharInit() {

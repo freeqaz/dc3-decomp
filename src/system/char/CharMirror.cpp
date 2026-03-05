@@ -47,13 +47,14 @@ BEGIN_LOADS(CharMirror)
 END_LOADS
 
 void CharMirror::Poll() {
-    static Symbol mirror_x("mirror_x");
-    static Symbol x("x");
     static Symbol xy("xy");
+    static Symbol x("x");
+    static Symbol mirror_x("mirror_x");
     static Symbol zw("zw");
 
+    auto _tmp0 = mBones.TotalSize();
     float w = Weight();
-    if (w == 0.0f || mBones.TotalSize() == 0)
+    if (w == 0.0f || _tmp0 == 0)
         return;
 
     mBones.ScaleDown(*mServo, 1.0f - w);

@@ -292,6 +292,54 @@ void ListSuperClasses(Symbol classSym, std::vector<Symbol> &classes) {
     classes.push_back("Object");
 }
 
+void MergeObjectsRecurse(ObjectDir *fromDir, ObjectDir *toDir, MergeFilter &filt, bool b) {
+    if (!b) {
+        switch (filt.FilterSubdir(fromDir, toDir)) {
+        case MergeFilter::kMergeReplace:
+            if (!toDir->HasSubDir(fromDir)) {
+                ObjDirPtr<ObjectDir> dirPtr(fromDir);
+                toDir->AppendSubDir(dirPtr);
+            }
+            return;
+        case MergeFilter::kMergeKeep:
+            return;
+        default:
+            break;
+        }
+        ObjRef tempRefs;
+        tempRefs.Clear();
+        for (ObjRef *it = fromDir->mRefs.next; it != &fromDir->mRefs;) {
+            Hmx::Object *owner = it->RefOwner();
+            if (owner && owner->Dir() == fromDir) {
+                ObjRef *prevRef = it->prev;
+                it->Release(nullptr);
+                it->AddRef(&tempRefs);
+                it = prevRef;
+            }
+            it = it->next;
+        }
+        tempRefs.ReplaceList(toDir);
+    }
+
+    for (ObjectDir::Entry *entry = fromDir->mHashTable.Begin(); entry != 0;
+         entry = fromDir->mHashTable.Next(entry)) {
+        Hmx::Object *curObj = entry->obj;
+        if (curObj) {
+            Hmx::Object *foundObj = toDir->FindObject(curObj->Name(), false, true);
+            if (foundObj != curObj) {
+                MergeObject(curObj, foundObj, toDir, filt.Filter(curObj, foundObj, toDir));
+            }
+        }
+    }
+
+    std::vector<ObjDirPtr<ObjectDir> > &subDirs = fromDir->mSubDirs;
+    for (int i = 0; i < subDirs.size(); i++) {
+        ObjectDir *sd = subDirs[i];
+        if (sd)
+            MergeObjectsRecurse(sd, toDir, filt, false);
+    }
+}
+
 void MergeDirs(ObjectDir *fromDir, ObjectDir *toDir, MergeFilter &filt) {
     MILO_ASSERT(fromDir && toDir, 0x193);
     Hmx::Object *toObj = toDir;

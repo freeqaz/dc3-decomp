@@ -44,6 +44,9 @@ from . import milo_str_conv  # noqa: F401  # Add .Str() to Symbol args in MILO m
 from . import milo_call_merge  # noqa: F401  # Merge duplicate MILO calls via shared variable
 from . import prologue_pressure  # noqa: F401  # Manipulate callee-saved register count via pressure changes
 from . import parameter_live_range  # noqa: F401  # Kill bs param live range after LOAD_REVS via d.stream
+from . import reference_elimination  # noqa: F401  # Eliminate multi-use ref/ptr vars (inverse of member_ref_bind)
+from . import subscript_ref_bind  # noqa: F401  # Bind repeated arr[i] to local ref (inverse of reference_elimination)
+from . import null_guard_elimination  # noqa: F401  # Remove redundant null checks (if (ptr) ptr->M() -> ptr->M())
 
 from .base import get_all_patterns, get_pattern, list_patterns
 

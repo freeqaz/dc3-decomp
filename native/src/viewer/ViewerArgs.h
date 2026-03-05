@@ -58,6 +58,7 @@ struct ViewerConfig {
     bool verbose = false;
     bool dumpBones = false;
     bool directPose = false;
+    int maxFrames = -1;
 
     bool IsExportOnly() const {
         return exportTexturesDir || exportMaterialsDir || exportGltfPath;

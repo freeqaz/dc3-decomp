@@ -97,7 +97,7 @@ protected:
     ObjPtr<CharClip> mOverrideBlendClip; // 0x108
     float mOverrideBlendWeight; // 0x11c
     float mOverrideBlendDuration; // 0x120
-    float unk124; // 0x124
+    float mOverrideBlendStartTime; // 0x124
     bool mOverrideBlendActive; // 0x128
     /** "This will be used instead of the song, if set" */
     ObjPtr<CharDriver> mAlternateDriver; // 0x12c

@@ -27,10 +27,11 @@ class ParameterLiveRangePattern(Pattern):
 
     def relevant(self, diagnosis: Diagnosis) -> bool:
         # Most useful for prologue mismatches where target needs fewer regs
-        if diagnosis.has_prologue_mismatch and diagnosis.gpr_save_delta < 0:
-            return True
-        # Also relevant for any prologue mismatch (chain merging can help either way)
         if diagnosis.has_prologue_mismatch:
+            return True
+        # Also relevant when there are register swaps or insert/delete clusters,
+        # which can indicate different register allocation from bs live range
+        if diagnosis.reg_swap_pairs or diagnosis.clusters:
             return True
         return False
 
@@ -39,6 +40,9 @@ class ParameterLiveRangePattern(Pattern):
             return 0.9
         if diagnosis.has_prologue_mismatch:
             return 0.7
+        # Lower priority when no prologue mismatch but regswaps/clusters present
+        if diagnosis.reg_swap_pairs or diagnosis.clusters:
+            return 0.4
         return 0.0
 
     def generate(self, ctx: FunctionContext) -> Iterator[Variant]:

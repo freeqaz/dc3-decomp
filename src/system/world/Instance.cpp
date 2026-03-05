@@ -185,7 +185,7 @@ void WorldInstance::LoadPersistentObjects(BinStreamRev &bs) {
 }
 
 void WorldInstance::DeleteTransientObjects() {
-    if (!Dir() || Dir() == DirLoader::sTopSaveDir
+    if (!Dir() || Dir() == DirLoader::TopSaveDir()
         || Dir()->InlineSubDirType() != kInlineAlways) {
         DeleteObjects();
     } else {

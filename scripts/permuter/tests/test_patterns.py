@@ -186,6 +186,16 @@ def diag_with_fma_ops() -> Diagnosis:
     return d
 
 
+def diag_with_fma_addsub_ops() -> Diagnosis:
+    """FMA vs separate add/sub — paren expansion candidate."""
+    d = _empty_diag()
+    d.diff_ops = [
+        DiffOp(index=5, target_opcode="fnmsubs", base_opcode="fmsubs"),
+        DiffOp(index=6, target_opcode="fadds", base_opcode="fsubs"),
+    ]
+    return d
+
+
 def diag_always() -> Diagnosis:
     """Empty diagnosis — for patterns whose relevant() always returns True."""
     return _empty_diag()
@@ -274,6 +284,36 @@ def diag_with_callee_saved_swaps() -> Diagnosis:
     d.reg_swap_pairs = {
         ("r30", "r29"): SwapInfo(count=3, first_idx=10, last_idx=40)
     }
+    return d
+
+
+def diag_with_lwz_ops() -> Diagnosis:
+    """Load ordering mismatches (reference_elimination / subscript_ref_bind)."""
+    d = _empty_diag()
+    d.diff_ops = [DiffOp(index=5, target_opcode="lwz", base_opcode="stw")]
+    d.clusters = [Cluster(start_idx=3, end_idx=8, size=5, inserts=2, deletes=2)]
+    return d
+
+
+def diag_with_prologue_more_saves() -> Diagnosis:
+    """Target needs more callee-saved regs than base (subscript_ref_bind)."""
+    d = _empty_diag()
+    d.reg_swap_pairs = {
+        ("r31", "r30"): SwapInfo(count=2, first_idx=5, last_idx=20)
+    }
+    d.target_gpr_saves = 5
+    d.base_gpr_saves = 4
+    return d
+
+
+def diag_with_prologue_fewer_saves() -> Diagnosis:
+    """Target needs fewer callee-saved regs than base (reference_elimination)."""
+    d = _empty_diag()
+    d.reg_swap_pairs = {
+        ("r31", "r30"): SwapInfo(count=2, first_idx=5, last_idx=20)
+    }
+    d.target_gpr_saves = 4
+    d.base_gpr_saves = 5
     return d
 
 
@@ -1852,6 +1892,380 @@ void test_func(int font, const char *name) {
 MILO_WARN("bad font %s %s", PathName(this), _mergedArg);
 """,
     ),
+
+    # ===================== fma_reorder (paren expansion) =====================
+
+    PatternFixture(
+        id="fma_paren_expand_calcspline",
+        pattern_name="fma_reorder",
+        description="Expand a - (b * c - d) -> d - b * c + a (CalcSpline fix)",
+        func_name="test_func",
+        diagnosis=diag_with_fma_addsub_ops(),
+        seeded_source="""\
+float test_func(float p3, float p2, float p1x3m0) {
+    float term3 = p3 - (p2 * 3.0f - p1x3m0);
+    return term3;
+}
+""",
+        expected_source="""\
+float test_func(float p3, float p2, float p1x3m0) {
+    float term3 = p1x3m0 - p2 * 3.0f + p3;
+    return term3;
+}
+""",
+    ),
+
+    PatternFixture(
+        id="fma_paren_expand_interptangent",
+        pattern_name="fma_reorder",
+        description="Expand a - (b - c) -> c - b + a (InterpTangent fix)",
+        func_name="test_func",
+        diagnosis=diag_with_fma_addsub_ops(),
+        seeded_source="""\
+float test_func(float f4, float fsq3) {
+    float b = 1.0f - (f4 - fsq3);
+    return b;
+}
+""",
+        expected_source="""\
+float test_func(float f4, float fsq3) {
+    float b = fsq3 - f4 + 1.0f;
+    return b;
+}
+""",
+    ),
+
+    # ===================== early_return_merge (guard-to-conjunction) =====================
+
+    PatternFixture(
+        id="retmerge_guard_to_conjunction",
+        pattern_name="early_return_merge",
+        description="Collapse if (!cond) return false; return expr; into && conjunction",
+        func_name="test_func",
+        diagnosis=diag_with_branch_ops(),
+        seeded_source="""\
+bool test_func(int a) {
+    if (!(IsLoaded()))
+        return false;
+    return GetMusic()->Loaded();
+}
+""",
+        expected_source="""\
+bool test_func(int a) {
+    return IsLoaded() && GetMusic()->Loaded();
+}
+""",
+    ),
+
+    PatternFixture(
+        id="retmerge_conjunction_to_guard",
+        pattern_name="early_return_merge",
+        description="Expand return A && B; into guard return + final return",
+        func_name="test_func",
+        diagnosis=diag_with_branch_ops(),
+        seeded_source="""\
+bool test_func(int a) {
+    return IsLoaded() && GetMusic()->Loaded();
+}
+""",
+        expected_source="""\
+bool test_func(int a) {
+    if (!(IsLoaded()))
+        return false;
+    return GetMusic()->Loaded();
+}
+""",
+    ),
+
+    PatternFixture(
+        id="retmerge_guard_true_to_disjunction",
+        pattern_name="early_return_merge",
+        description="Collapse if (cond) return true; return expr; into || disjunction",
+        func_name="test_func",
+        diagnosis=diag_with_branch_ops(),
+        seeded_source="""\
+bool test_func(int a) {
+    if (IsDone())
+        return true;
+    return HasFallback();
+}
+""",
+        expected_source="""\
+bool test_func(int a) {
+    return IsDone() || HasFallback();
+}
+""",
+    ),
+
+    PatternFixture(
+        id="retmerge_disjunction_to_guard_true",
+        pattern_name="early_return_merge",
+        description="Expand return A || B; into if (A) return true; return B;",
+        func_name="test_func",
+        diagnosis=diag_with_branch_ops(),
+        seeded_source="""\
+bool test_func(int a) {
+    return IsDone() || HasFallback();
+}
+""",
+        expected_source="""\
+bool test_func(int a) {
+    if (IsDone())
+        return true;
+    return HasFallback();
+}
+""",
+    ),
+
+    # ===================== fma_reorder (paren expansion flat) =====================
+
+    PatternFixture(
+        id="fma_paren_expand_flat",
+        pattern_name="fma_reorder",
+        description="Expand a - (b + c) flat -> a - b - c",
+        func_name="test_func",
+        diagnosis=diag_with_fma_addsub_ops(),
+        seeded_source="""\
+float test_func(float a, float b, float c) {
+    float r = a - (b + c);
+    return r;
+}
+""",
+        expected_source="""\
+float test_func(float a, float b, float c) {
+    float r = a - b - c;
+    return r;
+}
+""",
+    ),
+
+    PatternFixture(
+        id="fma_paren_expand_plus_outer",
+        pattern_name="fma_reorder",
+        description="Expand a + (b - c) -> a + b - c (remove unnecessary parens)",
+        func_name="test_func",
+        diagnosis=diag_with_fma_addsub_ops(),
+        seeded_source="""\
+float test_func(float a, float b, float c) {
+    float r = a + (b - c);
+    return r;
+}
+""",
+        expected_source="""\
+float test_func(float a, float b, float c) {
+    float r = a + b - c;
+    return r;
+}
+""",
+    ),
+
+    # ===================== reference_elimination =====================
+
+    PatternFixture(
+        id="refelim_subscript_ref",
+        pattern_name="reference_elimination",
+        description="Eliminate reference to subscript expression used twice",
+        func_name="test_func",
+        diagnosis=diag_with_callee_saved_swaps(),
+        seeded_source="""\
+void MergeObjectsRecurse(int dir, int toDir, int filt, bool top);
+int test_func(int* subDirs, int toDir, int filt, int n) {
+    for (int i = 0; i < n; i++) {
+        int& oPtr = subDirs[i];
+        if (oPtr != 0)
+            MergeObjectsRecurse(oPtr, toDir, filt, false);
+    }
+    return 0;
+}
+""",
+        expected_source="""\
+void MergeObjectsRecurse(int dir, int toDir, int filt, bool top);
+int test_func(int* subDirs, int toDir, int filt, int n) {
+    for (int i = 0; i < n; i++) {
+        if (subDirs[i] != 0)
+            MergeObjectsRecurse(subDirs[i], toDir, filt, false);
+    }
+    return 0;
+}
+""",
+    ),
+
+    PatternFixture(
+        id="refelim_field_ptr",
+        pattern_name="reference_elimination",
+        description="Eliminate pointer to field expression used three times",
+        func_name="test_func",
+        diagnosis=diag_with_lwz_ops(),
+        match_mode="contains",
+        seeded_source="""\
+struct Obj { int x; };
+void use(int*);
+void test_func(Obj* obj) {
+    int* p = obj->x;
+    if (p) {
+        use(p);
+        use(p);
+    }
+}
+""",
+        expected_source="""\
+    if (obj->x) {
+        use(obj->x);
+        use(obj->x);
+    }
+""",
+    ),
+
+    # ===================== temp_elimination (multi-use value) =====================
+
+    PatternFixture(
+        id="tmpelim_multiuse_member_read",
+        pattern_name="temp_elimination",
+        description="Eliminate multi-use value temp initialized from member",
+        func_name="test_func",
+        diagnosis=diag_with_callee_saved_swaps(),
+        seeded_source="""\
+int test_func(int mFoo, int y) {
+    int x = mFoo;
+    int a = x + y;
+    int b = x - y;
+    return a + b;
+}
+""",
+        expected_source="""\
+int test_func(int mFoo, int y) {
+    int a = mFoo + y;
+    int b = mFoo - y;
+    return a + b;
+}
+""",
+    ),
+
+    # Note: tmpelim_multiuse_skip_call is a negative test — see TestMultiUseTempSafety
+
+    # ===================== subscript_ref_bind =====================
+
+    PatternFixture(
+        id="subbind_repeated_subscript",
+        pattern_name="subscript_ref_bind",
+        description="Bind repeated subscript expression to local ref",
+        func_name="test_func",
+        diagnosis=diag_with_callee_saved_swaps(),
+        match_mode="contains",
+        seeded_source="""\
+void process(int x, int y);
+void test_func(int* mDirs, int n) {
+    for (int i = 0; i < n; i++) {
+        if (mDirs[i] != 0)
+            process(mDirs[i], n);
+    }
+}
+""",
+        expected_source="""\
+auto& _sub0 = mDirs[i];
+        if (_sub0 != 0)
+            process(_sub0, n);
+""",
+    ),
+
+    # ===================== signed_unsigned (double-cast) =====================
+
+    PatternFixture(
+        id="signunsign_double_cast_subscript",
+        pattern_name="signed_unsigned",
+        description="Double-cast subscript operand with (unsigned int)(void*)",
+        func_name="test_func",
+        diagnosis=diag_with_cmp_ops(),
+        match_mode="contains",
+        seeded_source="""\
+int test_func(int* arr, int i) {
+    if (arr[i] != 0) {
+        return 1;
+    }
+    return 0;
+}
+""",
+        expected_source="""\
+(unsigned int)(void*)arr[i] != 0
+""",
+    ),
+    # ===================== null_guard_elimination =====================
+
+    PatternFixture(
+        id="nullguard_if_ptr_call",
+        pattern_name="null_guard_elimination",
+        description="Remove if (ptr) ptr->Method() guard (no braces)",
+        func_name="test_func",
+        diagnosis=diag_with_branch_ops(),
+        seeded_source="""\
+void test_func() {
+    if (TheMetaMusic)
+        TheMetaMusic->Stop();
+}
+""",
+        expected_source="""\
+void test_func() {
+    TheMetaMusic->Stop();
+}
+""",
+    ),
+
+    PatternFixture(
+        id="nullguard_if_ptr_call_braces",
+        pattern_name="null_guard_elimination",
+        description="Remove if (ptr) { ptr->Method(); } guard (with braces)",
+        func_name="test_func",
+        diagnosis=diag_with_branch_ops(),
+        seeded_source="""\
+void test_func() {
+    if (TheMetaMusic) {
+        TheMetaMusic->Stop();
+    }
+}
+""",
+        expected_source="""\
+void test_func() {
+    TheMetaMusic->Stop();
+}
+""",
+    ),
+
+    PatternFixture(
+        id="nullguard_drop_and_operand",
+        pattern_name="null_guard_elimination",
+        description="Drop leading && operand: if (!ptr && other) -> if (!ptr)",
+        func_name="test_func",
+        diagnosis=diag_with_branch_ops(),
+        match_mode="contains",
+        seeded_source="""\
+void test_func(int sHamMaster) {
+    if (!TheMetaMusic && sHamMaster) {
+        TheMetaMusic = CreateMusic();
+    }
+}
+""",
+        expected_source="""\
+if (!TheMetaMusic) {
+""",
+    ),
+
+    PatternFixture(
+        id="nullguard_or_chain",
+        pattern_name="null_guard_elimination",
+        description="Remove null guard from || chain: (ptr && ptr->M()) -> ptr->M()",
+        func_name="test_func",
+        diagnosis=diag_with_branch_ops(),
+        match_mode="contains",
+        seeded_source="""\
+bool test_func() {
+    bool ret = IsFading() || (TheMetaMusic && TheMetaMusic->IsActive()) || IsExiting();
+    return ret;
+}
+""",
+        expected_source="""\
+IsFading() || TheMetaMusic->IsActive() || IsExiting()
+""",
+    ),
 ]
 
 # Build lookup by ID
@@ -1922,6 +2336,10 @@ class TestPatternRelevance(unittest.TestCase):
         p = get_pattern("fma_reorder")
         self.assertTrue(p.relevant(diag_with_fma_ops()))
 
+    def test_fma_relevant_addsub_ops(self):
+        p = get_pattern("fma_reorder")
+        self.assertTrue(p.relevant(diag_with_fma_addsub_ops()))
+
     def test_fma_irrelevant_empty(self):
         p = get_pattern("fma_reorder")
         self.assertFalse(p.relevant(_empty_diag()))
@@ -1973,6 +2391,122 @@ class TestPatternRelevance(unittest.TestCase):
     def test_argument_swap_irrelevant_empty(self):
         p = get_pattern("argument_swap")
         self.assertFalse(p.relevant(_empty_diag()))
+
+    # reference_elimination
+    def test_reference_elimination_relevant_callee_saved(self):
+        p = get_pattern("reference_elimination")
+        self.assertTrue(p.relevant(diag_with_callee_saved_swaps()))
+
+    def test_reference_elimination_relevant_lwz(self):
+        p = get_pattern("reference_elimination")
+        self.assertTrue(p.relevant(diag_with_lwz_ops()))
+
+    def test_reference_elimination_relevant_clusters(self):
+        p = get_pattern("reference_elimination")
+        self.assertTrue(p.relevant(diag_with_clusters()))
+
+    def test_reference_elimination_relevant_prologue_fewer(self):
+        p = get_pattern("reference_elimination")
+        self.assertTrue(p.relevant(diag_with_prologue_fewer_saves()))
+
+    def test_reference_elimination_irrelevant_empty(self):
+        p = get_pattern("reference_elimination")
+        self.assertFalse(p.relevant(_empty_diag()))
+
+    # subscript_ref_bind
+    def test_subscript_ref_bind_relevant_callee_saved(self):
+        p = get_pattern("subscript_ref_bind")
+        self.assertTrue(p.relevant(diag_with_callee_saved_swaps()))
+
+    def test_subscript_ref_bind_relevant_lwz(self):
+        p = get_pattern("subscript_ref_bind")
+        self.assertTrue(p.relevant(diag_with_lwz_ops()))
+
+    def test_subscript_ref_bind_relevant_clusters(self):
+        p = get_pattern("subscript_ref_bind")
+        self.assertTrue(p.relevant(diag_with_clusters()))
+
+    def test_subscript_ref_bind_relevant_prologue_more(self):
+        p = get_pattern("subscript_ref_bind")
+        self.assertTrue(p.relevant(diag_with_prologue_more_saves()))
+
+    def test_subscript_ref_bind_irrelevant_empty(self):
+        p = get_pattern("subscript_ref_bind")
+        self.assertFalse(p.relevant(_empty_diag()))
+
+    # null_guard_elimination
+    def test_null_guard_relevant_branch_ops(self):
+        p = get_pattern("null_guard_elimination")
+        self.assertTrue(p.relevant(diag_with_branch_ops()))
+
+    def test_null_guard_relevant_clusters(self):
+        p = get_pattern("null_guard_elimination")
+        self.assertTrue(p.relevant(diag_with_clusters()))
+
+    def test_null_guard_relevant_cmp_ops(self):
+        p = get_pattern("null_guard_elimination")
+        self.assertTrue(p.relevant(diag_with_cmp_ops()))
+
+    def test_null_guard_irrelevant_empty(self):
+        p = get_pattern("null_guard_elimination")
+        self.assertFalse(p.relevant(_empty_diag()))
+
+
+# ---------------------------------------------------------------------------
+# Negative tests (patterns should NOT produce certain variants)
+# ---------------------------------------------------------------------------
+
+class TestMultiUseTempSafety(unittest.TestCase):
+    """Verify multi-use value temp elimination skips call initializers."""
+
+    def test_skip_call_initializer(self):
+        """Multi-use temp with call init should NOT be eliminated (re-evaluates side effects)."""
+        source = """\
+int GetCount();
+int test_func(int y) {
+    int x = GetCount();
+    int a = x + y;
+    int b = x - y;
+    return a + b;
+}
+"""
+        ctx = make_context(source, "test_func", diag_with_callee_saved_swaps())
+        p = get_pattern("temp_elimination")
+        variants = list(p.generate(ctx))
+
+        # No variant should substitute GetCount() at multiple use sites
+        bad_pattern = "GetCount() + y"
+        for v in variants:
+            v_text = v.source.decode("utf-8", errors="replace")
+            self.assertNotIn(
+                bad_pattern, v_text,
+                f"Variant '{v.name}' unsafely inlined call at multiple sites: {v.description}"
+            )
+
+    def test_skip_intervening_side_effects(self):
+        """Multi-use temp should not be eliminated if calls exist between decl and use."""
+        source = """\
+void sideEffect();
+int test_func(int mFoo, int y) {
+    int x = mFoo;
+    sideEffect();
+    int a = x + y;
+    int b = x - y;
+    return a + b;
+}
+"""
+        ctx = make_context(source, "test_func", diag_with_callee_saved_swaps())
+        p = get_pattern("temp_elimination")
+        variants = list(p.generate(ctx))
+
+        # No variant should eliminate x when sideEffect() sits between decl and use
+        for v in variants:
+            v_text = v.source.decode("utf-8", errors="replace")
+            # If x was eliminated, mFoo would appear where x was used
+            if "mFoo + y" in v_text and "int x" not in v_text:
+                self.fail(
+                    f"Variant '{v.name}' eliminated temp past side-effecting call: {v.description}"
+                )
 
 
 # ---------------------------------------------------------------------------

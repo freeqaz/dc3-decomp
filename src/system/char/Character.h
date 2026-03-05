@@ -159,8 +159,10 @@ protected:
     CharDriver *mDriver; // 0x24c
     /** "Whether this character should be self-shadowed." */
     bool mSelfShadow; // 0x250
-    bool unk251; // 0x251
-    bool unk252; // 0x252
+    /** "Does the character have a spot-light cutout?" */
+    bool mSpotCutout; // 0x251
+    /** "Does the character render a floor shadow?" */
+    bool mFloorShadow; // 0x252
     /** "Base for bounding sphere, such as bone_pelvis.mesh" */
     ObjOwnerPtr<RndTransformable> mSphereBase; // 0x254
     /** "bounding sphere for the character, fixed" */

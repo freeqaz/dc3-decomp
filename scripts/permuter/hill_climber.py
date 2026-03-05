@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import signal
 import sys
 import time
 from pathlib import Path
@@ -28,6 +29,28 @@ from .generator import generate_variants
 from .patterns import get_all_patterns, get_pattern
 from .scorer import Scorer
 from .types import HillClimbResult, RoundResult, ScoreResult
+
+# Graceful interrupt flag — set by SIGINT handler, checked between rounds
+_interrupted = False
+
+
+def _sigint_handler(signum, frame):
+    """Handle Ctrl+C by setting flag for graceful shutdown."""
+    global _interrupted
+    if _interrupted:
+        # Second Ctrl+C — force exit
+        print("\nForce quit.", file=sys.stderr)
+        raise KeyboardInterrupt
+    _interrupted = True
+    print("\nInterrupt received — finishing current operation and restoring source...",
+          file=sys.stderr)
+
+
+def install_signal_handler():
+    """Install the graceful SIGINT handler. Returns the previous handler."""
+    global _interrupted
+    _interrupted = False
+    return signal.signal(signal.SIGINT, _sigint_handler)
 
 
 def parse_args() -> argparse.Namespace:
@@ -129,6 +152,11 @@ def hill_climb(
 
     try:
         for round_num in range(1, max_rounds + 1):
+            if _interrupted:
+                stopped_reason = "interrupted"
+                print("\nInterrupted — stopping gracefully.", file=sys.stderr)
+                break
+
             print(
                 f"\n--- Round {round_num}/{max_rounds} ---",
                 file=sys.stderr,
@@ -284,14 +312,17 @@ def hill_climb(
                 if plateau_count >= plateau_limit:
                     stopped_reason = "plateau"
                     break
+    except KeyboardInterrupt:
+        stopped_reason = "interrupted"
+        print("\nInterrupted — restoring source and stopping.", file=sys.stderr)
     except Exception as e:
         import traceback
         stopped_reason = "error"
         print(f"Error: {e}", file=sys.stderr)
         traceback.print_exc()
     finally:
-        # If not applying, restore original source
-        if not apply:
+        # If not applying or interrupted, restore original source
+        if not apply or stopped_reason == "interrupted":
             source_path.write_bytes(original_source)
 
     elapsed = time.time() - start_time
@@ -312,6 +343,7 @@ def hill_climb(
 
 def main():
     args = parse_args()
+    install_signal_handler()
 
     # Auto-resolve from DB if only --symbol is provided
     if args.symbol and (not args.source or not args.function):

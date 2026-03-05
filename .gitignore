@@ -99,6 +99,11 @@ scripts/build/inspect_pdata.py
 /hooks
 /objects
 /refs
+native/HEAD
+native/config
+native/objects
+native/refs
+native/.claude/
 
 # Log files
 *.log

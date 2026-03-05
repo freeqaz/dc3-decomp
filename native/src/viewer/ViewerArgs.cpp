@@ -9,6 +9,8 @@ void ViewerConfig::PrintHelp(FILE* f) {
     fprintf(f, "Options:\n");
     fprintf(f, "  --help                     Show this help message\n");
     fprintf(f, "  --screenshot <file.png>    Render headlessly and save screenshot (PNG)\n");
+    fprintf(f, "  --output <file.png>        Alias for --screenshot\n");
+    fprintf(f, "  --frames <count>           Max frames to render (video/interactive), screenshot warmup count\n");
     fprintf(f, "  --subdir <path.milo_xbox>  Load additional .milo as subdirectory (repeatable)\n");
     fprintf(f, "  --clips <path.milo_xbox>   Load CharClip animation directory\n");
     fprintf(f, "  --char-setup <path.milo_xbox>  Load base HamCharacter (uses FileMerger for outfit/viseme)\n");
@@ -69,6 +71,10 @@ ViewerConfig ViewerConfig::Parse(int argc, char** argv) {
             exit(0);
         } else if (strcmp(argv[i], "--screenshot") == 0 && i + 1 < argc) {
             cfg.screenshotPath = argv[++i];
+        } else if (strcmp(argv[i], "--output") == 0 && i + 1 < argc) {
+            cfg.screenshotPath = argv[++i];
+        } else if (strcmp(argv[i], "--frames") == 0 && i + 1 < argc) {
+            cfg.maxFrames = atoi(argv[++i]);
         } else if (strcmp(argv[i], "--subdir") == 0 && i + 1 < argc) {
             SubdirEntry e;
             e.path = argv[++i];

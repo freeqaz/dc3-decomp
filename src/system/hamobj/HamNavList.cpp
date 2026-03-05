@@ -340,7 +340,7 @@ void HamNavList::Poll() {
                 slideSoundAnim->SetFrame(0.0f, 1.0f);
             }
         }
-        // TODO(stub): mDirectionGestureFilter->ClearSwipe() called here in target
+        mDirectionGestureFilter->ClearSwipe();
         return;
     }
 
@@ -827,7 +827,7 @@ void HamNavList::SetHighlight(int i) {
         RealRefresh();
     UIListProvider *provider = mListState.Provider();
     if (provider && (0 <= i) && (i < mListState.NumShowing())) {
-        // TODO(match): mDirectionGestureFilter calls ResetHoverTimer() here
+        mDirectionGestureFilter->ResetHoverTimer();
         mListState.SetSelected(i, mListState.FirstShowing(), true);
         HandleHighlightChanged(i);
     }

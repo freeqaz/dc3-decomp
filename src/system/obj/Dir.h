@@ -171,6 +171,11 @@ BinStream &operator>>(BinStream &bs, ObjDirPtr<T> &ptr) {
     return bs;
 }
 
+class ObjectDir;
+#ifdef HX_NATIVE
+class MergeFilter;
+#endif
+
 /**
  * @brief: A directory of Objects.
  * Original _objects description:
@@ -181,6 +186,7 @@ BinStream &operator>>(BinStream &bs, ObjDirPtr<T> &ptr) {
  */
 class ObjectDir : public virtual Hmx::Object {
     friend class Hmx::Object;
+    friend void MergeObjectsRecurse(ObjectDir *, ObjectDir *, MergeFilter &, bool);
     friend bool PropSyncSubDirs(
         std::vector<ObjDirPtr<ObjectDir> > &subdirs,
         DataNode &val,
@@ -441,6 +447,18 @@ private:
                 static int sNullObj = 0;
                 if (sNullObj++ < 5)
                     fprintf(stderr, "  ObjDirItr: null obj for '%s'\n", mEntry->name ? mEntry->name : "(null)");
+                continue;
+            }
+            if (!HmxObjectIsLive(mEntry->obj)) {
+                static int sDeadObj = 0;
+                if (sDeadObj++ < 5) {
+                    fprintf(
+                        stderr,
+                        "  ObjDirItr: dead obj for '%s' obj=%p\n",
+                        mEntry->name ? mEntry->name : "(null)",
+                        (void *)mEntry->obj
+                    );
+                }
                 continue;
             }
             extern const char* g_lastDyncastEntry;
