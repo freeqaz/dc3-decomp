@@ -435,13 +435,7 @@ int main(int argc, char** argv) {
     scene.PrintSummary(cfg.verbose);
 
     // ---- Scan for animation data ----
-    printf("DBG: before ScanScene\n"); fflush(stdout);
-    if (!scene.fileMergerActive) {
-        gAnim.ScanScene(baseScene, cfg);
-    } else {
-        printf("DBG: skipping ScanScene (FileMerger active)\n"); fflush(stdout);
-    }
-    printf("DBG: after ScanScene\n"); fflush(stdout);
+    gAnim.ScanScene(baseScene, cfg);
 
     // Set window title
     if (window) {
@@ -454,9 +448,7 @@ int main(int argc, char** argv) {
 
     // Activate scene environment
     {
-        printf("DBG: before FindEnvironment\n"); fflush(stdout);
         RndEnviron* env = scene.FindEnvironment();
-        printf("DBG: FindEnvironment = %p\n", env); fflush(stdout);
         if (env) {
             Vector3 origin(0, 0, 0);
             env->Select(&origin);
@@ -464,11 +456,8 @@ int main(int argc, char** argv) {
         }
     }
 
-    printf("DBG: before AutoFrameCamera\n"); fflush(stdout);
     scene.AutoFrameCamera(gOrbitCam, cam, cfg);
-    printf("DBG: after AutoFrameCamera\n"); fflush(stdout);
     scene.SetupSyntheticLights(cfg);
-    printf("DBG: after SetupSyntheticLights\n"); fflush(stdout);
 
     // ---- Dispatch to mode runner ----
     ViewerMode mode = SelectMode(cfg);

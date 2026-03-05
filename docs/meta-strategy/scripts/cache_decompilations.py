@@ -119,8 +119,13 @@ def run_cache(db_path: Path, limit: int = 0, resume: bool = False,
               batch_size: int = 50, verbose: bool = False,
               mode: str = "both"):
     """Main caching loop."""
-    conn = sqlite3.connect(db_path)
+    # Use autocommit + WAL so each write is a short transaction.
+    # This avoids holding the write lock across large batches and lets
+    # other tools keep reading/writing the DB concurrently.
+    conn = sqlite3.connect(db_path, timeout=10, isolation_level=None)
     conn.execute("PRAGMA journal_mode = WAL")
+    conn.execute("PRAGMA synchronous = NORMAL")
+    conn.execute("PRAGMA busy_timeout = 10000")
     conn.row_factory = sqlite3.Row
 
     # Get already-cached symbols for resume
@@ -257,9 +262,8 @@ def run_cache(db_path: Path, limit: int = 0, resume: bool = False,
 
         processed += 1
 
-        # Batch commit + progress
+        # Progress report
         if (i + 1) % batch_size == 0:
-            conn.commit()
             elapsed = time.time() - start_time
             rate = (i + 1) / elapsed if elapsed > 0 else 0
             eta_secs = (total - i - 1) / rate if rate > 0 else 0
@@ -274,9 +278,6 @@ def run_cache(db_path: Path, limit: int = 0, resume: bool = False,
 
             print(f"  [{i+1}/{total}] {status}, "
                   f"{rate:.1f}/s, ETA {eta_min:.0f}m")
-
-    # Final commit
-    conn.commit()
 
     elapsed = time.time() - start_time
     print(f"\nCaching complete in {elapsed/60:.1f} minutes")

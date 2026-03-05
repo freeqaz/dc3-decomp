@@ -187,23 +187,6 @@ bool ViewerScene::LoadFileMerger(const ViewerConfig& cfg) {
     for (int i = 0; i < 3; i++) {
         FileMerger::Merger* m = fm->FindMerger(Symbol(), false);
     }
-    {
-        FileMerger::Merger* om = fm->FindMerger("outfit", false);
-        FileMerger::Merger* vm = fm->FindMerger("viseme", false);
-        if (om) {
-            ObjectDir* oDir = om->MergerDir();
-            printf("  outfit: proxy=%d dir=%p('%s' class='%s') selected='%s'\n",
-                   om->IsProxy(), oDir, oDir ? oDir->Name() : "?",
-                   oDir ? oDir->ClassName().Str() : "?", om->mSelected.c_str());
-        }
-        if (vm) {
-            ObjectDir* vDir = vm->MergerDir();
-            printf("  viseme: proxy=%d dir=%p('%s' class='%s') selected='%s'\n",
-                   vm->IsProxy(), vDir, vDir ? vDir->Name() : "?",
-                   vDir ? vDir->ClassName().Str() : "?", vm->mSelected.c_str());
-        }
-    }
-
     // Count before merge
     {
         int before = 0;

@@ -5,6 +5,7 @@
 #include "obj/Dir.h"
 #include "rndobj/TransAnim.h"
 #include "rndobj/PropAnim.h"
+#include "rndobj/Group.h"
 #include "char/Character.h"
 #include "char/CharClip.h"
 #include "char/CharServoBone.h"
@@ -65,6 +66,15 @@ void AnimState::ScanScene(ObjectDir* dir, const ViewerConfig& cfg) {
     ObjDirItr<RndAnimatable> animIt(dir, false);
     while (animIt) {
         RndAnimatable* anim = animIt;
+
+        // Skip container animatables (RndDir, RndGroup) — their EndFrame()
+        // recurses into children causing infinite loops between Dir<->Group
+        if (dynamic_cast<ObjectDir*>((Hmx::Object*)anim) ||
+            dynamic_cast<RndGroup*>((Hmx::Object*)anim)) {
+            ++animIt;
+            continue;
+        }
+
         float sf = anim->StartFrame();
         float ef = anim->EndFrame();
 

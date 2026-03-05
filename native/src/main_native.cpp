@@ -20,15 +20,6 @@ static void SignalHandler(int sig, siginfo_t *info, void *) {
         signame, sig, info ? info->si_addr : nullptr);
     write(STDERR_FILENO, buf, len);
 
-    extern const char* g_lastDyncastEntry;
-    extern void* g_lastDyncastObj;
-    if (g_lastDyncastEntry) {
-        len = snprintf(buf, sizeof(buf),
-            "  Last dynamic_cast attempt: entry='%s' obj=%p\n",
-            g_lastDyncastEntry, g_lastDyncastObj);
-        write(STDERR_FILENO, buf, len);
-    }
-
     void *bt[64];
     int n = backtrace(bt, 64);
     backtrace_symbols_fd(bt, n, STDERR_FILENO);

@@ -618,6 +618,40 @@ def asm_guided_search(
     return candidates
 
 
+def ghidra_guided_search(
+    ghidra_var_order: list,
+    swap_pairs: list[tuple[str, str]],
+    decl_names: list[str],
+    gpr_save_count: int | None = None,
+) -> list[list[str]]:
+    """Generate targeted declaration reorders using Ghidra variable order.
+
+    Parallel to asm_guided_search() but uses Ghidra decompilation output
+    instead of assembly listing analysis.
+
+    Algorithm:
+    1. Ghidra var order -> target register allocation (1st var -> r31, etc.)
+    2. Source decl order -> our register allocation (same rule)
+    3. For each swap pair, find misallocated variables, generate targeted swaps
+
+    Args:
+        ghidra_var_order: VarInfo list from extract_variable_first_use_order()
+        swap_pairs: Register swap pairs from objdiff
+        decl_names: Variable declaration names in current source order
+        gpr_save_count: GPR save count from Ghidra __savegprlr_N
+
+    Returns:
+        List of candidate declaration orderings.
+    """
+    from scripts.permuter.ghidra_var_match import ghidra_guided_reorder
+    return ghidra_guided_reorder(
+        ghidra_vars=ghidra_var_order,
+        source_decl_names=decl_names,
+        swap_pairs=swap_pairs,
+        gpr_save_count=gpr_save_count,
+    )
+
+
 def cmd_bsf_solve(args) -> None:
     """Entry point for bsf-solve subcommand."""
     import json

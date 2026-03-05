@@ -13,6 +13,7 @@ Designed for agent-driven decompilation workflows.
 import argparse
 import json
 import os
+import sqlite3
 import subprocess
 import sys
 import time
@@ -86,6 +87,7 @@ PROJECT_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, ".."))
 OBJDIFF_CLI = os.path.join(PROJECT_DIR, "bin", "objdiff-cli")
 OBJDIFF_TO_M2C = os.path.join(SCRIPT_DIR, "objdiff_to_m2c.py")
 M2C_PATH = os.path.expanduser("~/code/milohax/m2c/m2c.py")
+DECOMP_DB = os.path.join(PROJECT_DIR, "decomp.db")
 
 # =============================================================================
 # Pattern Documentation Mapping
@@ -784,6 +786,69 @@ def parse_objdiff_ambiguous_matches(stderr: str) -> Tuple[List[str], List[Tuple[
                 matches.append(stripped)
 
     return matches, matches_with_units
+
+
+def _is_likely_mangled(name: str) -> bool:
+    """Heuristic for mangled names used in decomp.db keys."""
+    if not name:
+        return False
+    return name.startswith("?") or name.startswith("_Z")
+
+
+def choose_decomp_cache_symbol(
+    objdiff_symbol: str,
+    requested_name: str,
+    ghidra_function_name: str,
+) -> str:
+    """Choose best symbol key for caching decompilation in decomp.db."""
+    if objdiff_symbol:
+        return objdiff_symbol
+    if _is_likely_mangled(requested_name):
+        return requested_name
+    if _is_likely_mangled(ghidra_function_name):
+        return ghidra_function_name
+    return requested_name or ghidra_function_name
+
+
+def cache_decompilation(
+    symbol: str,
+    code: str,
+    address: str = "",
+    signature: Optional[str] = None,
+    verbose: bool = False,
+) -> bool:
+    """Upsert a decompilation row into decomp.db (best effort)."""
+    if not symbol or not code:
+        return False
+    if not os.path.exists(DECOMP_DB):
+        vprint(f"decomp.db not found at {DECOMP_DB}", verbose, prefix="cache")
+        return False
+
+    try:
+        conn = sqlite3.connect(DECOMP_DB, timeout=10)
+        try:
+            conn.execute("PRAGMA busy_timeout = 10000")
+            conn.execute(
+                """
+                INSERT INTO decompilations(symbol, address, code, signature, error, cached_at)
+                VALUES(?, ?, ?, ?, NULL, CURRENT_TIMESTAMP)
+                ON CONFLICT(symbol) DO UPDATE SET
+                    address=excluded.address,
+                    code=excluded.code,
+                    signature=excluded.signature,
+                    error=NULL,
+                    cached_at=CURRENT_TIMESTAMP
+                """,
+                (symbol, address or "", code, signature),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        vprint(f"cached decompilation for {symbol}", verbose, prefix="cache")
+        return True
+    except Exception as e:
+        vprint(f"cache upsert failed for {symbol}: {e}", verbose, prefix="cache")
+        return False
 
 
 def run_objdiff(
@@ -2259,6 +2324,20 @@ def analyze_function(
             ghidra_result.decompilation = decompile
             if addr:
                 ghidra_result.address = addr
+
+            # Cache decompilation in decomp.db so future --ghidra consumers can reuse it.
+            cache_symbol = choose_decomp_cache_symbol(
+                objdiff_result.symbol,
+                function_name,
+                ghidra_func_name,
+            )
+            cache_decompilation(
+                symbol=cache_symbol,
+                code=decompile,
+                address=addr or ghidra_result.resolved_address or "",
+                signature=None,
+                verbose=verbose,
+            )
 
             # Detect potential stub/wrong function
             if ghidra_result.decompilation and objdiff_result.base_size:
