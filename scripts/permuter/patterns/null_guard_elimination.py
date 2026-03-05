@@ -20,13 +20,12 @@ Detection signals:
 
 from __future__ import annotations
 
-import re
 from typing import Iterator
 
 from tree_sitter import Node
 
 from .base import Pattern
-from ..ast_queries import walk, get_indent, get_line_start
+from ..ast_queries import walk, get_indent
 from ..editor import SourceEditor
 from ..types import Diagnosis, FunctionContext, Variant
 

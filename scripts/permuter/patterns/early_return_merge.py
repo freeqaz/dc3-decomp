@@ -422,7 +422,7 @@ def _guard_to_conjunction(
             continue
 
         # Get the final return expression
-        final_ret_val = _get_return_value_node(final_ret, source)
+        final_ret_val = _get_return_value(final_ret, source)
         if final_ret_val is None:
             continue
 
@@ -514,14 +514,6 @@ def _conjunction_to_guard(
             source=new_source,
         )
         counter += 1
-
-
-def _get_return_value_node(ret_stmt: Node, source: bytes) -> bytes | None:
-    """Get return value text from a return_statement."""
-    for child in ret_stmt.named_children:
-        if child.type != "comment":
-            return source[child.start_byte:child.end_byte]
-    return None
 
 
 def _stmt_has_or_condition(stmt: Node, source: bytes) -> bool:

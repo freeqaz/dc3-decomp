@@ -21,7 +21,7 @@ from typing import Iterator
 from tree_sitter import Node
 
 from .base import Pattern
-from ..ast_queries import find_if_else, get_indent, walk
+from ..ast_queries import get_indent, walk
 from ..types import Diagnosis, FunctionContext, Variant
 
 _BRANCH_OPCODES = {"beq", "bne", "ble", "bgt", "bge", "blt",

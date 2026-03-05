@@ -11,7 +11,6 @@ current beam, prune to beam_width by source diversity, reparse for next stage.
 from __future__ import annotations
 
 import sqlite3
-import sys
 from pathlib import Path
 from typing import Iterator
 

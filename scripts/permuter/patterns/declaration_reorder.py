@@ -60,6 +60,7 @@ class DeclarationReorderPattern(Pattern):
         for (r0, r1) in diagnosis.reg_swap_pairs:
             if r0.startswith("r") or r1.startswith("r"):
                 return True
+        return False
 
     def priority(self, diagnosis: Diagnosis) -> float:
         if not self.relevant(diagnosis):
@@ -444,7 +445,6 @@ class DeclarationReorderPattern(Pattern):
             function_calls = self._isolation_cache[cache_key]
         else:
             function_calls = None
-            isolation_method = None
             try:
                 from tools.compiler_trace.invoker import CompilerInvoker
                 import tempfile
@@ -477,7 +477,6 @@ class DeclarationReorderPattern(Pattern):
                                     continue
                                 if part_name == ctx.symbol:
                                     function_calls = part_trace.calls
-                                    isolation_method = "exact"
                                     break
 
                         # Tier 1: qualified name match (Class::Method in mangled name)
@@ -504,12 +503,10 @@ class DeclarationReorderPattern(Pattern):
                                     if (class_name in part_name and
                                             method_name in part_name):
                                         function_calls = part_trace.calls
-                                        isolation_method = "qualified"
                                         break
                                 elif method_name:
                                     if method_name in part_name:
                                         function_calls = part_trace.calls
-                                        isolation_method = "name"
                                         break
 
                 # Cleanup temp dir
