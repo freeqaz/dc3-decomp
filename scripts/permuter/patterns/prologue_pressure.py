@@ -61,7 +61,7 @@ class ProloguePressurePattern(Pattern):
                 if counter >= 12:
                     return
 
-            for v in self._add_pressure_vars(ctx, counter):
+            for v in self._extract_call_args(ctx, counter):
                 yield v
                 counter += 1
                 if counter >= 12:
@@ -103,6 +103,10 @@ class ProloguePressurePattern(Pattern):
             # Hoist field accesses that appear multiple times
             seen_texts: dict[bytes, list[Node]] = {}
             for fe in field_exprs:
+                # Skip if this field_expression is the function target of a call
+                # (e.g., mat->NextPass in mat->NextPass() — hoisting just the name is invalid)
+                if _is_call_target(fe):
+                    continue
                 text = source[fe.start_byte:fe.end_byte]
                 # Skip if it contains a call (side-effecting)
                 if any(n.type == "call_expression" for n in walk(fe)):
@@ -220,58 +224,79 @@ class ProloguePressurePattern(Pattern):
             )
             counter += 1
 
-    # -- Strategy 3: Add pressure variables before function calls -------------
+    # -- Strategy 3: Extract call arguments to extend live ranges --------------
 
-    def _add_pressure_vars(
+    def _extract_call_args(
         self, ctx: FunctionContext, start: int
     ) -> Iterator[Variant]:
-        """Add `auto _keep = expr;` before function calls to force callee-saved allocation."""
+        """Extract non-trivial call arguments into named locals before the call.
+
+        Unlike dead pressure variables, these genuinely change register allocation
+        by creating a new named variable whose live range spans the call. This
+        forces the compiler to allocate a callee-saved register for the extracted
+        value, increasing pressure to match the target prologue.
+
+        Only targets top-level statements (not nested scopes) and avoids
+        extracting simple identifiers or literals.
+        """
         source = ctx.file_source
         stmts = ctx.statements
         counter = start
 
-        # Find member field accesses (this->x, mFoo) that appear before calls
         for i, stmt in enumerate(stmts):
-            if counter - start >= 4:
+            if counter - start >= 6:
                 break
 
-            # Find calls in this statement
-            calls = list(find_calls(stmt))
-            if not calls:
-                continue
+            # Find call expressions in this top-level statement
+            for call_node in find_calls(stmt):
+                if counter - start >= 6:
+                    break
 
-            # Look for field expressions in previous statements
-            for j in range(max(0, i - 3), i):
-                prev = stmts[j]
-                fields = [n for n in walk(prev) if n.type == "field_expression"]
-                for field in fields:
-                    if counter - start >= 4:
+                args = call_node.child_by_field_name("arguments")
+                if args is None:
+                    continue
+
+                for arg in args.named_children:
+                    if counter - start >= 6:
                         break
-                    field_text = source[field.start_byte:field.end_byte]
-                    # Skip if it contains calls
-                    if any(n.type == "call_expression" for n in walk(field)):
+
+                    # Skip trivial or problematic expressions
+                    if arg.type in ("identifier", "number_literal", "string_literal",
+                                    "true", "false", "null", "this",
+                                    # Calls reorder side effects; casts are type-only
+                                    "call_expression", "cast_expression",
+                                    "parenthesized_expression",
+                                    # Unary ops are too simple
+                                    "unary_expression", "pointer_expression"):
+                        continue
+
+                    arg_text = source[arg.start_byte:arg.end_byte]
+
+                    # Skip very short expressions (just a var name or cast)
+                    if len(arg_text) < 5:
                         continue
 
                     indent = get_indent(source, stmt)
-                    var_name = f"_keep{counter}".encode()
+                    var_name = f"_arg{counter}".encode()
                     line_start = get_line_start(source, stmt)
-                    decl = indent + b"auto " + var_name + b" = " + field_text + b";\n"
+                    decl = indent + b"auto " + var_name + b" = " + arg_text + b";\n"
 
                     ed = SourceEditor(source)
                     ed.insert_at(line_start, decl)
+                    ed.replace_node(arg, var_name)
 
                     try:
                         new_source = ed.apply()
                     except ValueError:
                         continue
 
-                    text_str = field_text.decode("utf-8", errors="replace")
+                    text_str = arg_text.decode("utf-8", errors="replace")
                     if len(text_str) > 40:
                         text_str = text_str[:37] + "..."
                     yield Variant(
-                        name=f"prolpres_keep_{counter}",
+                        name=f"prolpres_arg_{counter}",
                         pattern_name=self.name,
-                        description=f"Add pressure var for '{text_str}' before call",
+                        description=f"Extract call arg '{text_str}' to extend live range",
                         source=new_source,
                     )
                     counter += 1
@@ -374,6 +399,20 @@ class ProloguePressurePattern(Pattern):
 
 
 # -- Helpers ------------------------------------------------------------------
+
+def _is_call_target(node: Node) -> bool:
+    """Check if this node is the function name of a call_expression.
+
+    E.g., in `mat->NextPass()`, the field_expression `mat->NextPass` is the
+    call target. Hoisting it alone (without the `()`) produces invalid code.
+    """
+    parent = node.parent
+    if parent is not None and parent.type == "call_expression":
+        func = parent.child_by_field_name("function")
+        if func is not None and func.id == node.id:
+            return True
+    return False
+
 
 def _get_loop_body(stmt: Node) -> Node | None:
     """Get the compound_statement body of a loop statement."""

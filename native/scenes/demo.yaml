@@ -1,0 +1,442 @@
+# DC3 Milo Viewer — Scene Definitions
+#
+# Render all:   python native/scripts/render_scenes.py native/scenes/demo.yaml
+# Render one:   python native/scripts/render_scenes.py native/scenes/demo.yaml --shot aubrey_front
+# Dry run:      python native/scripts/render_scenes.py native/scenes/demo.yaml --dry-run
+# List shots:   python native/scripts/render_scenes.py native/scenes/demo.yaml --list
+#
+# See native/docs/scene-renderer.md for full documentation.
+
+settings:
+  milo_lib: ~/code/milohax/milo-engine-libs/harmonix-repos/milo-rnd-library/dc3
+  output_dir: archive/screenshots
+  width: 1920
+  height: 1080
+  jobs: 4
+
+# ============================================================================
+# Scenes: reusable character + venue combinations
+# ============================================================================
+scenes:
+
+  # --- Dancers on venues ---
+
+  aubrey_glitterati:
+    char_setup: char/main/gen/main.milo_xbox
+    character: char/main/dancer/gen/aubrey01.milo_xbox
+    venue: world/glitterati/gen/glitterati_set.milo_xbox
+    clips: char/main/backup/glitterati01_bd01/gen/clips.milo_xbox
+    visemes: char/main/backup/glitterati01_bd01/gen/viseme.milo_xbox
+    hide: [shadow, Shadow, particle, Particle]
+
+  aubrey_glitterati_outfit2:
+    character: char/main/dancer/gen/aubrey02.milo_xbox
+    venue: world/glitterati/gen/glitterati_set.milo_xbox
+    clips: char/main/backup/glitterati01_bd01/gen/clips.milo_xbox
+    visemes: char/main/backup/glitterati01_bd01/gen/viseme.milo_xbox
+    hide: [shadow, Shadow]
+
+  emilia_dclive:
+    character: char/main/dancer/gen/emilia01.milo_xbox
+    venue: world/dclive/gen/dclive.milo_xbox
+    clips: char/main/backup/dclive01_bd01/gen/clips.milo_xbox
+    hide: [shadow, Shadow]
+
+  bodie_houseparty:
+    character: char/main/dancer/gen/bodie01.milo_xbox
+    venue: world/houseparty/gen/houseparty_set.milo_xbox
+    clips: char/main/backup/houseparty01_bd01/gen/clips.milo_xbox
+    hide: [shadow, Shadow]
+
+  angel_rollerrink:
+    character: char/main/dancer/gen/angel01.milo_xbox
+    venue: world/rollerrink/gen/rollerrink_set.milo_xbox
+    clips: char/main/backup/rollerrink01_bd01/gen/clips.milo_xbox
+    hide: [shadow, Shadow]
+
+  taye_flash4wrd:
+    character: char/main/dancer/gen/taye01.milo_xbox
+    venue: world/flash4wrd/gen/flash4wrd_set.milo_xbox
+    clips: char/main/backup/flash4wrd01_bd01/gen/clips.milo_xbox
+    hide: [shadow, Shadow]
+
+  dare_dci:
+    character: char/main/dancer/gen/dare04.milo_xbox
+    venue: world/dclive/gen/dclive.milo_xbox
+    clips: char/main/backup/dci01_bd03/gen/clips.milo_xbox
+    hide: [shadow, Shadow]
+
+  glitch_hidef:
+    character: char/main/dancer/gen/glitch01.milo_xbox
+    venue: world/bid/gen/bid.milo_xbox
+    clips: char/main/backup/hidef01_bd01/gen/clips.milo_xbox
+    visemes: char/main/backup/hidef01_bd01/gen/viseme.milo_xbox
+    hide: [shadow, Shadow]
+
+  mo_lush:
+    character: char/main/dancer/gen/mo01.milo_xbox
+    venue: world/houseparty/gen/houseparty.milo_xbox
+    clips: char/main/backup/lush01_bd01/gen/clips.milo_xbox
+    visemes: char/main/backup/lush01_bd01/gen/viseme.milo_xbox
+    hide: [shadow, Shadow]
+
+  lilt_riptide:
+    character: char/main/dancer/gen/lilt01.milo_xbox
+    venue: world/rollerrink/gen/rollerrink.milo_xbox
+    clips: char/main/backup/riptide01_bd01/gen/clips.milo_xbox
+    visemes: char/main/backup/riptide01_bd01/gen/viseme.milo_xbox
+    hide: [shadow, Shadow]
+
+  taye_ninja:
+    character: char/main/dancer/gen/taye03.milo_xbox
+    venue: world/dclive/gen/dclive.milo_xbox
+    clips: char/main/backup/ninja01_bd01/gen/clips.milo_xbox
+    visemes: char/main/backup/ninja01_bd01/gen/viseme.milo_xbox
+    hide: [shadow, Shadow]
+
+  jaryn_dcypher:
+    character: char/main/dancer/gen/jaryn01.milo_xbox
+    venue: world/glitterati/gen/glitterati_set.milo_xbox
+    clips: char/main/backup/dcypher01_bd01/gen/clips.milo_xbox
+    visemes: char/main/backup/dcypher01_bd01/gen/viseme.milo_xbox
+    hide: [shadow, Shadow, particle, Particle]
+
+  kerith_throneroom:
+    character: char/main/dancer/gen/kerith01.milo_xbox
+    venue: world/throneroom/gen/throneroom.milo_xbox
+    clips: char/main/backup/hidef01_bd01/gen/clips.milo_xbox
+    hide: [shadow, Shadow]
+
+  # --- Standalone characters (no venue) ---
+
+  aubrey_solo:
+    char_setup: char/main/gen/main.milo_xbox
+    character: char/main/dancer/gen/aubrey01.milo_xbox
+    clips: char/main/backup/glitterati01_bd01/gen/clips.milo_xbox
+    visemes: char/main/backup/glitterati01_bd01/gen/viseme.milo_xbox
+    lights:
+      - type: dir
+        dir: [-0.5, -0.8, -0.3]
+        color: [1.0, 0.95, 0.9]
+        intensity: 1.2
+      - type: dir
+        dir: [0.5, 0.3, -0.2]
+        color: [0.4, 0.5, 0.7]
+        intensity: 0.6
+    ambient: [0.15, 0.15, 0.2]
+
+  emilia_solo:
+    character: char/main/dancer/gen/emilia01.milo_xbox
+    clips: char/main/backup/dclive01_bd01/gen/clips.milo_xbox
+    lights:
+      - type: dir
+        dir: [-0.3, -1.0, -0.4]
+        color: [1.0, 0.9, 0.8]
+        intensity: 1.0
+    ambient: [0.2, 0.2, 0.25]
+
+  # --- Venues only ---
+
+  glitterati_venue:
+    primary: world/glitterati/gen/glitterati_set.milo_xbox
+    hide: [shadow, Shadow, particle, Particle]
+
+  dclive_venue:
+    primary: world/dclive/gen/dclive.milo_xbox
+    hide: [shadow, Shadow]
+
+  # --- Props ---
+
+  discoball:
+    primary: world/shared/props/gen/discoballsml.milo_xbox
+
+  chandelier:
+    primary: world/shared/props/gen/hsp_chandelier.milo_xbox
+
+  arcade:
+    primary: world/shared/props/gen/arcade_b.milo_xbox
+
+
+# ============================================================================
+# Shots: what to render from each scene
+# ============================================================================
+shots:
+
+  # --- Aubrey on Glitterati: hero shots ---
+
+  aubrey_front:
+    scene: aubrey_glitterati
+    camera: { azimuth: 0, elevation: 15, distance: 120 }
+
+  aubrey_3quarter:
+    scene: aubrey_glitterati
+    camera: { azimuth: 30, elevation: 20, distance: 130 }
+
+  aubrey_side:
+    scene: aubrey_glitterati
+    camera: { azimuth: 90, elevation: 10, distance: 100 }
+
+  aubrey_back:
+    scene: aubrey_glitterati
+    camera: { azimuth: 180, elevation: 15, distance: 120 }
+
+  aubrey_closeup:
+    scene: aubrey_glitterati
+    camera: { azimuth: 10, elevation: 25, distance: 60 }
+
+  aubrey_wideshot:
+    scene: aubrey_glitterati
+    camera: { azimuth: -20, elevation: 30, distance: 250 }
+
+  # --- Aubrey face closeup (visemes + blink demo) ---
+
+  aubrey_face_closeup:
+    scene: aubrey_glitterati
+    type: video
+    duration: 10
+    fps: 30
+    camera: { eye: [8, 28, 60], lookat: [0, 2, 57] }
+
+  # --- Aubrey orbit video ---
+
+  aubrey_orbit:
+    scene: aubrey_glitterati
+    type: video
+    duration: 8
+    fps: 30
+    camera: { mode: auto-orbit }
+
+  # --- Aubrey solo (lit, no venue) ---
+
+  aubrey_solo_front:
+    scene: aubrey_solo
+    camera: { azimuth: 0, elevation: 12, distance: 100 }
+
+  aubrey_solo_face:
+    scene: aubrey_solo
+    type: video
+    duration: 8
+    fps: 30
+    camera: { eye: [8, 28, 60], lookat: [0, 2, 57] }
+
+  aubrey_solo_dramatic:
+    scene: aubrey_solo
+    camera: { azimuth: 45, elevation: 5, distance: 80 }
+    lights:
+      - type: dir
+        dir: [-1, -0.5, -0.2]
+        color: [1.0, 0.3, 0.1]
+        intensity: 1.5
+      - type: dir
+        dir: [0.5, 0.8, -0.5]
+        color: [0.1, 0.2, 0.8]
+        intensity: 0.8
+    ambient: [0.05, 0.05, 0.08]
+
+  # --- Aubrey outfit 2 ---
+
+  aubrey_outfit2_front:
+    scene: aubrey_glitterati_outfit2
+    camera: { azimuth: 0, elevation: 15, distance: 120 }
+
+  # --- Emilia on DC Live ---
+
+  emilia_front:
+    scene: emilia_dclive
+    camera: { azimuth: 0, elevation: 15, distance: 120 }
+
+  emilia_side:
+    scene: emilia_dclive
+    camera: { azimuth: 80, elevation: 10, distance: 110 }
+
+  emilia_orbit:
+    scene: emilia_dclive
+    type: video
+    duration: 10
+    camera: { mode: auto-orbit, elevation: 20, distance: 150 }
+
+  # --- Bodie at House Party ---
+
+  bodie_front:
+    scene: bodie_houseparty
+    camera: { azimuth: 0, elevation: 15, distance: 130 }
+
+  bodie_3quarter:
+    scene: bodie_houseparty
+    camera: { azimuth: 35, elevation: 20, distance: 140 }
+
+  # --- Angel at Roller Rink ---
+
+  angel_front:
+    scene: angel_rollerrink
+    camera: { azimuth: 0, elevation: 15, distance: 120 }
+
+  angel_orbit:
+    scene: angel_rollerrink
+    type: video
+    duration: 8
+    camera: { mode: auto-orbit, elevation: 18 }
+
+  # --- Taye at Flash4wrd ---
+
+  taye_front:
+    scene: taye_flash4wrd
+    camera: { azimuth: 0, elevation: 15, distance: 120 }
+
+  taye_lowangle:
+    scene: taye_flash4wrd
+    camera: { azimuth: 15, elevation: -5, distance: 90 }
+
+  # --- Dare on Streets ---
+
+  dare_front:
+    scene: dare_streets
+    camera: { azimuth: 0, elevation: 15, distance: 120 }
+
+  # --- Dare at DCI ---
+
+  dare_orbit:
+    scene: dare_dci
+    type: video
+    duration: 8
+    fps: 30
+    camera: { mode: auto-orbit, elevation: 15 }
+
+  dare_front:
+    scene: dare_dci
+    camera: { azimuth: 0, elevation: 15, distance: 120 }
+
+  # --- Glitch at Hi-Def ---
+
+  glitch_orbit:
+    scene: glitch_hidef
+    type: video
+    duration: 8
+    fps: 30
+    camera: { mode: auto-orbit, elevation: 18 }
+
+  glitch_front:
+    scene: glitch_hidef
+    camera: { azimuth: 0, elevation: 15, distance: 120 }
+
+  # --- Mo at Lush ---
+
+  mo_orbit:
+    scene: mo_lush
+    type: video
+    duration: 8
+    fps: 30
+    camera: { mode: auto-orbit, elevation: 20 }
+
+  mo_front:
+    scene: mo_lush
+    camera: { azimuth: 0, elevation: 15, distance: 130 }
+
+  # --- Lilt at Riptide ---
+
+  lilt_orbit:
+    scene: lilt_riptide
+    type: video
+    duration: 8
+    fps: 30
+    camera: { mode: auto-orbit, elevation: 15 }
+
+  lilt_front:
+    scene: lilt_riptide
+    camera: { azimuth: 0, elevation: 12, distance: 110 }
+
+  # --- Taye Ninja ---
+
+  taye_ninja_orbit:
+    scene: taye_ninja
+    type: video
+    duration: 8
+    fps: 30
+    camera: { mode: auto-orbit, elevation: 18 }
+
+  # --- Jaryn at Glitterati (D-Cyphered) ---
+
+  jaryn_orbit:
+    scene: jaryn_dcypher
+    type: video
+    duration: 10
+    fps: 30
+    camera: { mode: auto-orbit, elevation: 20, distance: 140 }
+
+  jaryn_front:
+    scene: jaryn_dcypher
+    camera: { azimuth: 0, elevation: 15, distance: 120 }
+
+  # --- Kerith at Throne Room ---
+
+  kerith_orbit:
+    scene: kerith_throneroom
+    type: video
+    duration: 8
+    fps: 30
+    camera: { mode: auto-orbit, elevation: 15 }
+
+  kerith_front:
+    scene: kerith_throneroom
+    camera: { azimuth: 0, elevation: 18, distance: 130 }
+
+  # --- Venue-only shots ---
+
+  glitterati_wide:
+    scene: glitterati_venue
+    camera: { azimuth: 0, elevation: 25, distance: 300 }
+
+  glitterati_stage:
+    scene: glitterati_venue
+    camera: { azimuth: -15, elevation: 10, distance: 150 }
+
+  dclive_overview:
+    scene: dclive_venue
+    camera: { azimuth: 30, elevation: 35, distance: 400 }
+
+  # --- Props ---
+
+  prop_discoball:
+    scene: discoball
+    camera: { azimuth: 25, elevation: 20 }
+
+  prop_chandelier:
+    scene: chandelier
+    camera: { azimuth: 30, elevation: 25 }
+
+  prop_arcade:
+    scene: arcade
+    camera: { azimuth: 160, elevation: 15 }
+
+  # --- Multi-camera video "edits" ---
+  # These simulate camera cuts by rendering separate clips at different frames,
+  # then you can concatenate with ffmpeg:
+  #   ffmpeg -f concat -i shots.txt -c copy final.mp4
+
+  aubrey_edit_wide:
+    scene: aubrey_glitterati
+    type: video
+    duration: 3
+    camera: { azimuth: -20, elevation: 30, distance: 250 }
+    frame: 0
+
+  aubrey_edit_medium:
+    scene: aubrey_glitterati
+    type: video
+    duration: 2
+    camera: { azimuth: 15, elevation: 15, distance: 120 }
+    frame: 90   # 3 seconds at 30fps
+
+  aubrey_edit_closeup:
+    scene: aubrey_glitterati
+    type: video
+    duration: 2
+    camera: { azimuth: -10, elevation: 20, distance: 60 }
+    frame: 150  # 5 seconds at 30fps
+
+  aubrey_edit_orbit_finish:
+    scene: aubrey_glitterati
+    type: video
+    duration: 3
+    camera: { mode: auto-orbit, elevation: 20, distance: 140 }
+    frame: 210  # 7 seconds at 30fps

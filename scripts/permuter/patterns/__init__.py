@@ -43,6 +43,7 @@ from . import assignment_reorder  # noqa: F401  # Reorder consecutive assignment
 from . import milo_str_conv  # noqa: F401  # Add .Str() to Symbol args in MILO macros
 from . import milo_call_merge  # noqa: F401  # Merge duplicate MILO calls via shared variable
 from . import prologue_pressure  # noqa: F401  # Manipulate callee-saved register count via pressure changes
+from . import parameter_live_range  # noqa: F401  # Kill bs param live range after LOAD_REVS via d.stream
 
 from .base import get_all_patterns, get_pattern, list_patterns
 

@@ -22,7 +22,7 @@ public:
             : mEye(owner), mUpperLid(owner), mLowerLid(owner), mLowerLidBlink(owner),
               mUpperLidBlink(owner) {}
         EyeDesc &operator=(const EyeDesc &desc) {
-            mEye = desc.mEye;
+            mEye = desc.mEye.Ptr();
             mUpperLid = desc.mUpperLid;
             mLowerLid = desc.mLowerLid;
             mUpperLidBlink = desc.mUpperLidBlink;
@@ -78,6 +78,10 @@ public:
     void SetInterestFilterFlags(int i) { mInterestFilterFlags = i; }
     void ClearInterestFilterFlags() { mInterestFilterFlags = mDefaultFilterFlags; }
     void SetEnabled(bool b) { mEnabled = b; }
+#ifdef HX_NATIVE
+    void SetFaceServo(CharFaceServo *servo) { mFaceServo = servo; }
+    int NumEyes() const { return mEyes.size(); }
+#endif
 
     void ForceBlink();
     CharInterest *GetCurrentInterest();
@@ -161,8 +165,8 @@ protected:
     RndOverlay *mEyeStatusOverlay; // 0xd0
     int mInterestFilterFlags; // 0xd4
     Vector3 mLastFacing; // 0xd8
-    float mLastLook; // 0xe8
-    float mLastCang; // 0xec
+    float mLastCang; // 0xe8
+    float mLastLook; // 0xec
     float mMaxEyeCang; // 0xf0
     float mAvDelta; // 0xf4
     float mLastBlinkWeight; // 0xf8

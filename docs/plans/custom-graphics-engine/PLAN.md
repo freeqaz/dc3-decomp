@@ -223,7 +223,7 @@ RenderDoc, and don't require Xbox 360-specific deswizzling at runtime.
 via the engine's `DirLoader` → `ObjDirPtr<ObjectDir>::LoadFile()`. Meshes, materials,
 textures, and transforms all load correctly. Verified with 17+ prop files.
 
-### Phase 2: Rendering (Pixels on Screen) — NEARLY COMPLETE
+### Phase 2: Rendering (Pixels on Screen) — IN PROGRESS (~85%)
 
 **Goal**: Visual output. Characters, stages, UI visible and animating.
 
@@ -233,14 +233,11 @@ Structure the implementation so a command recording layer could be inserted late
 (keep draw calls going through a small number of methods that could become recording
 points).
 
-**Status**: Full rendering pipeline operational including skinned meshes, post-processing,
-and 2D UI rendering. Props and characters render with Blinn-Phong specular, emissive,
-rim lighting, intensify, skin/hair shader variants, 4 point lights, and multi-directional
-lighting from RndEnviron. Post-processing includes contrast, chromatic aberration,
-posterization, vignette, and color levels. 2D quad rendering (`DrawRect`) supports
-textured quads with gradient colors. Text glyph mesh generation goes through
-`DrawShowing()` → `FontMapBase` → glyph meshes → `RndMesh::DrawShowing()`.
-Remaining items are cosmetic (particles, lines, flares).
+**Status**: Full rendering pipeline operational in the **standalone viewer** including
+skinned meshes, post-processing, and 2D UI rendering. The **engine rendering path**
+has the same GPU code but the scene traversal differs — venue backgrounds don't render
+(turbo_shell behind UI is black), UI sprites/icons are missing, text markup tags render
+as literals. The gap is in the engine's DrawShowing tree traversal, not the GPU code.
 
 **Work items**:
 - [x] Implement `WgpuRnd` subclass using `webgpu.h` / `webgpu_cpp.h`
@@ -268,8 +265,36 @@ Remaining items are cosmetic (particles, lines, flares).
 - [ ] Lines/Flares (`RndLine`, `RndFlare`) — cosmetic, not blocking
 - [ ] `RndGroup` draw ordering — may need work for correct layering
 
+**Remaining work**:
+- Venue background rendering in engine (turbo_shell scene behind UI)
+- RndGroup draw ordering for correct UI/3D layering
+- UI sprite/icon rendering (player silhouettes, button prompts)
+- Text markup processing (`<alt>` tags)
+- Particles, lines, flares (cosmetic)
+
 **Deliverable**: Game renders a venue with characters. Visual fidelity may be rough
 but geometry, textures, and animation are correct.
+
+### Phase 2.5: Character Animation Fidelity — IN PROGRESS (~60%)
+
+**Goal**: Characters animate with full fidelity — root motion, twist bones, lip sync,
+blinking. Covers the gap between "bones move" and "characters look alive."
+
+**Status**: Root motion (facing bones), twist bone solvers (upper/fore/neck), and full
+CharClip dance animation implemented in the standalone viewer. Lip sync, procedural
+blinking, and eye gaze not yet started.
+
+**Work items**:
+- [x] Twist bone solvers (CharUpperTwist, CharForeTwist fallbacks in viewer)
+- [x] Root motion / facing bones (`bone_facing.pos`, `bone_facing.rotz` applied to character transform)
+- [x] Neck twist fallback (CharNeckTwist half-yaw algorithm)
+- [ ] Lip sync — viseme clip loading, CharFaceServo, CharLipSyncDriver playback.
+  See [LIP_SYNC.md](LIP_SYNC.md) for full plan.
+- [ ] Procedural blinking (CharFaceServo blink weight timer)
+- [ ] CharEyes gaze direction (eye bone targeting)
+
+**Deliverable**: Characters dance with natural root motion, properly twisted limbs,
+blinking eyes, and lip-synced mouths during songs.
 
 ### Phase 3: Audio — COMPLETE
 
@@ -478,6 +503,7 @@ macros.dta, sfx_macros.dta, and all other config files without issues.
 | [APPROACH_FORGE_DILIGENT_LLGL.md](APPROACH_FORGE_DILIGENT_LLGL.md) | The Forge, Diligent Engine, LLGL (backup options) |
 | [APPROACH_YARG_COMMUNITY.md](APPROACH_YARG_COMMUNITY.md) | YARG and community project survey |
 | [IMPLEMENTATION_GUIDE.md](IMPLEMENTATION_GUIDE.md) | Build instructions + step-by-step walkthrough |
+| [LIP_SYNC.md](LIP_SYNC.md) | Lip sync system — viseme loading, CharFaceServo, CharLipSyncDriver |
 | [MOTION_CAPTURE.md](MOTION_CAPTURE.md) | Kinect replacement / motion capture |
 | [PORTING_ANALYSIS.md](PORTING_ANALYSIS.md) | Codebase analysis for x86_64 port |
 | [STREAM_DESYNC.md](STREAM_DESYNC.md) | Stream desync: nested ObjectDir detection, defensive guards |

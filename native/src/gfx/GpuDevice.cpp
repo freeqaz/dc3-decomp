@@ -104,6 +104,13 @@ bool GpuDevice::InitAdapter() {
            (int)info.device.length, info.device.data,
            (int)info.description.length, info.description.data);
 
+    // Detect null/fallback backend (renders produce empty frames)
+    mNullBackend = (info.backendType == wgpu::BackendType::Null);
+    if (mNullBackend) {
+        fprintf(stderr, "GpuDevice: WARNING — using Null backend (no real GPU). "
+                "Renders will be black/empty.\n");
+    }
+
     // Check for BC texture compression support
     mHasBCCompression = adapter.HasFeature(wgpu::FeatureName::TextureCompressionBC);
     printf("GpuDevice: BC texture compression %s\n",

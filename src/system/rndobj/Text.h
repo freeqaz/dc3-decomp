@@ -335,11 +335,11 @@ public:
     // Line class for text layout — size 0x14
     class Line {
     public:
-        int mStartIdx; // 0x0
-        int mEndIdx; // 0x4
+        const unsigned short *mStart; // 0x0 - pointer to first char
+        const unsigned short *mEnd; // 0x4 - pointer past last char
         float mWidth; // 0x8
-        float mYPos; // 0xc
-        int mStyleIdx; // 0x10
+        float mXStart; // 0xc - x starting position
+        float mYPos; // 0x10 - y position
     };
 
     void WrapText(const unsigned short *, int, float *, HX_VECTOR(Line) &, Hmx::Rect &, float);
@@ -357,7 +357,9 @@ protected:
     void UpdateScrollOffsets();
     static void DrawMesh(RndMesh *, float, int);
     int ConvertTextToWide(const char *, HX_VECTOR(unsigned short) &);
+    void ReplaceMissingCharacters(HX_VECTOR(unsigned short) &);
     int OnComputeCharWidths(const unsigned short *, float *, bool);
+    const unsigned short *ParseMarkup(const unsigned short *, StyleState &, unsigned short &);
 
     static void QueueBlacklightPacket(RndMesh *, float, int);
     static FontMapBase *AcquireFontMap(RndFontBase *);

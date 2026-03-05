@@ -5,6 +5,7 @@
 #include "obj/Object.h"
 #include "rndobj/PropAnim.h"
 #include "synth/Sound.h"
+#include "utl/FilePath.h"
 #include "utl/MemMgr.h"
 #include "utl/TextStream.h"
 
@@ -36,7 +37,7 @@ public:
     class PlayBack {
     public:
         struct Weight {
-            Weight() : mClip(nullptr) {}
+            Weight() : mClip(nullptr), mPrevWeight(0), mNextWeight(0), mCurWeight(0) {}
 
             ObjPtr<CharClip> mClip;
             float mPrevWeight;
@@ -91,7 +92,7 @@ protected:
     DataNode OnParseArray(DataArray *);
 
     /** "viseme names" */
-    std::vector<String> mVisemes; // 0x2c
+    std::vector<FilePath> mVisemes; // 0x2c
     /** "how many keyframes" */
     int mFrames; // 0x38
     std::vector<unsigned char> mData; // 0x3c

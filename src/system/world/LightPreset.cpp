@@ -798,12 +798,11 @@ void LightPreset::SpotlightEntry::Animate(
 void LightPreset::SpotlightEntry::CalculateDirection(
     Spotlight *spot, Hmx::Quat &q
 ) const {
-    if (mTarget) {
+    q = mRotation;
+    if ((mFlags & 2) && mTarget) {
         Hmx::Matrix3 m;
         spot->CalculateDirection(mTarget, m);
         q = Hmx::Quat(m);
-    } else {
-        q.Reset();
     }
 }
 
@@ -946,7 +945,7 @@ void LightPreset::AnimateState(
 }
 
 void LightPreset::SetFrameEx(float frame, float blend, bool b) {
-    RndAnimatable::SetFrame(blend, frame);
+    RndAnimatable::SetFrame(frame, blend);
     if (frame == 0 && TheLoadMgr.EditMode()) {
         SyncNewSpotlights();
     }
@@ -1032,20 +1031,23 @@ void LightPreset::SetKeyframe(Keyframe &k) {
 }
 
 DataNode LightPreset::OnSetKeyframe(DataArray *da) {
-    int idx = da->Int(2);
-    SetKeyframe(mKeyframes[idx]);
-    CacheFrames();
-    return 0;
+    if (mHue) {
+        MILO_WARN("Can't set keyframe with hue translation");
+        return 0;
+    } else {
+        int idx = da->Int(2);
+        SyncKeyframeTargets();
+        SetKeyframe(mKeyframes[idx]);
+        return OnViewKeyframe(da);
+    }
 }
 
 void LightPreset::FillEnvPresetData(RndEnviron *env, EnvironmentEntry &e) {
     e.mFogColor = env->FogColor();
     e.mAmbientColor = env->AmbientColor();
     e.mFogEnable = env->FogEnable();
-#ifdef HX_NATIVE
-    e.mFogStart = env->FogStart();
-    e.mFogEnd = env->FogEnd();
-#endif
+    e.mFogStart = env->mAmbientFogOwner->mFogStart;
+    e.mFogEnd = env->mAmbientFogOwner->mFogEnd;
 }
 
 void LightPreset::TranslateColor(const Hmx::Color &col, Hmx::Color &res) {
@@ -1152,13 +1154,11 @@ static float ComputeSpotBlend(int i, float f) {
 void LightPreset::Animate(float f) {
     if (f < 1.1920929E-7f)
         return;
-    ObjPtrVec<Spotlight>& _ref0 = mSpotlights;
-    int _tmp0 = _ref0.size();
-    for (uint i = 0; i != _tmp0; i++) {
-        if (_ref0[i] && _ref0[i]->GetAnimateFromPreset()) {
+    for (uint i = 0; i != mSpotlights.size(); i++) {
+        if (mSpotlights[i] && mSpotlights[i]->GetAnimateFromPreset()) {
             float blend = ComputeSpotBlend(i, f);
             if (blend >= 1.1920929E-7f) {
-                AnimateSpotFromPreset(this, _ref0[i], mSpotlightState[i], blend);
+                AnimateSpotFromPreset(this, mSpotlights[i], mSpotlightState[i], blend);
             }
         }
     }

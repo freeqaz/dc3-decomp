@@ -1,77 +1,134 @@
 # DC3 Native Port — Status
 
-**Last updated**: 2026-03-02
+**Last updated**: 2026-03-05
 
 ## Current State
 
-The DC3 native port (x86_64 Linux) boots through ALL engine subsystems, navigates UI screens automatically via DTA scripts, and runs 5000+ frames stably with clean exit.
+The DC3 native port (x86_64 Linux) has a fully operational rendering pipeline in the
+standalone viewer (Track B) and a mostly-functional engine boot path (Track A). Audio,
+input, and asset loading are all complete. The focus now shifts to **getting the actual
+game working** — merging the viewer's rendering quality into the engine path and reaching
+gameplay screens.
 
-### Boot Flow (verified)
+### Phase Summary
 
-```
-Archive loading → Config/DTA parsing → SystemInit → All subsystem inits →
-UIManager::Init → GotoFirstScreen('attract_screen') → Main loop (Poll + Draw)
-```
+| Phase | Status | Completion |
+|-------|--------|:---:|
+| Phase 0: Foundation | COMPLETE | 100% |
+| Phase 1A: Headless Engine | NEARLY COMPLETE | ~95% |
+| Phase 1B: Milo Viewer | COMPLETE | 100% |
+| Phase 1.5: Asset Pipeline | COMPLETE | 100% |
+| Phase 2: Rendering | IN PROGRESS | ~85% |
+| Phase 2.5: Character Animation | IN PROGRESS | ~60% |
+| Phase 3: Audio | COMPLETE | 100% |
+| Phase 4: Input | COMPLETE | 100% |
+| Phase 5: Motion Capture | NOT STARTED | 0% |
+| Phase 6: Polish & Platforms | NOT STARTED | 5% |
 
-### Screen Navigation (automatic, no input required)
+### What Works Today
 
-```
-attract_screen
-  → autosave_warning_screen
-  → title_screen
-  → wait_main_after_saveload_screen
-  → title_screen_to_voice_control_tutorial_screen
-  → tutorial_party_mode_screen_0
-  → tutorial_party_mode_screen_1  ← stuck here (needs Kinect gesture to advance)
-```
+**Viewer (Track B)**:
+- Full Blinn-Phong material pipeline (specular, emissive, rim, intensify, fog)
+- Skinned mesh rendering (4-bone blending, 40-bone palettes)
+- Character dance animation (CharClip, CharDriver, twist bones, root motion)
+- Multi-file scene loading (character + venue + clips)
+- Post-processing (contrast, chromatic aberration, posterization, vignette)
+- Video recording, batch rendering, glTF export
+- 15+ static props, 12+ characters, 2+ venues verified
 
-With scripted input (Start/Confirm/Down buttons), the same flow occurs. The tutorial screens auto-advance via DTA timers without user input.
+**Engine (Track A)**:
+- Full boot through all subsystems → main loop → screen navigation
+- Auto-skip to main menu (attract → autosave → title → tutorials → choose_mode)
+- 5000+ frames stable, clean exit
+- Audio pipeline complete (FFmpeg, Vorbis, miniaudio, DSP effects)
+- Input working (gamepad + keyboard)
+- Text rendering partially working (glyph meshes via FontMapBase)
+- 51 draw calls/frame on choose_mode_screen
 
-### Rendering
+**Shared infrastructure**: .ark archive loading (6,377 files), runtime .milo loading,
+LP64-safe DataArray scripting, BinStream endian conversion.
 
-- WebGPU (Dawn) backend, headless or windowed
-- 3D mesh geometry renders (verified via headless screenshots)
-- UI text rendering works — white text on black background visible
-- Alpha transparency fixed (2026-03-02) — UI panel backgrounds with alpha=0 now correctly invisible
-- Tested with `MILO_RENDER=1 MILO_HEADLESS=1`
+---
 
-#### Current vs Target
+## Roadmap: Getting the Game Working
 
-Current native port screenshots: `archive/screenshots/native_alpha_fix_f*.png`
+### Milestone 1: Stable Boot to Main Menu (Current Focus)
 
-| Frame | What's Visible | What's Missing vs Reference |
-|-------|---------------|---------------------------|
-| f100 | Black screen (early boot) | N/A |
-| f200 | Copyright text + translucent panel overlay + cyan gradient bar | Autosave orb icon, clean layout |
-| f300 | Autosave text, panel borders visible | Background gradient, orb animation |
-| f400 | "Voice Control" tutorial text on black | Clean — close to target |
-| f500 | "choose_mode_screen" — partial UI elements | Full main menu (see reference) |
+**Goal**: Engine boots to main menu without crashes, UI is readable.
 
-#### Reference Screenshots (Xbox 360 target)
+| Task | Status | Blocker? |
+|------|--------|:---:|
+| Implement `RndText::ConvertTextToWide` | IN PROGRESS | YES — crash on boot |
+| Skip Kinect tutorial screens | TODO | YES — stuck at tutorial |
+| Fix localization tokens (Localize() returns raw tokens) | TODO | No — cosmetic |
+| MeshAnim proper stub (currently blacklisted) | TODO | No |
 
-Located in `archive/screenshots/references/`:
+**Current crash**: `undefined symbol: RndText::ConvertTextToWide` — UTF-8→UTF-16
+converter with caps mode. Being implemented now.
 
-| File | Screen | Key Visual Elements |
-|------|--------|-------------------|
-| `dc3_main_menu.jpg` | Main menu | DC3 logo, player silhouettes in corners, "MAIN MENU" text, cyan/purple swirl background, copyright bar |
-| `dc3_song_select.jpg` | Song select | Song list with gradient bars, character preview, skill level meter, sort controls |
-| `dc3_gameplay_ui.jpg` | Gameplay | 3D venue + characters, move cards (purple/blue), score display, "FLAWLESS" text |
+**Tutorial skip**: Auto-skip reaches `tutorial_party_mode_screen_1` but can't advance
+past Kinect gesture. Options:
+1. DTA override to skip all tutorials
+2. Stub gesture detection to return "gesture completed"
+3. Hardcode `MILO_FIRST_SCREEN` to jump past tutorials
 
-#### Rendering Gap Analysis
+### Milestone 2: Engine Rendering Parity with Viewer
 
-Comparing `native_alpha_fix_f200.png` (native) to `dc3_main_menu.jpg` (Xbox 360 reference):
+**Goal**: What the viewer renders beautifully, the engine should too.
 
-1. **Background**: Native renders black; Xbox has animated cyan/purple swirl gradient with horizontal light bars. This is likely a venue scene (`turbo_shell`) with animated meshes, environment mapping, and post-processing that aren't rendering yet.
-2. **UI panels**: Native shows raw panel outlines; Xbox shows polished translucent panels with rounded corners and glow effects. Missing: proper blend modes, multi-pass rendering, glow/bloom post-process.
-3. **Text**: Native renders basic white text; Xbox has styled text with outlines, shadows, and color formatting (the `<alt>` markup tags are rendering as literal text instead of being processed).
-4. **Icons/Sprites**: Missing entirely — autosave orb, player silhouettes, button prompts, microphone icon.
-5. **3D content**: The main menu has a 3D animated background scene that isn't rendering (camera is set to `turbo_shell.cam` but the shell venue meshes aren't drawing).
+The standalone viewer and the engine share the same `Mesh_Wgpu.cpp` / `Rnd_Wgpu.cpp`
+rendering code, but the engine's scene traversal path differs — the viewer manually
+iterates drawables, while the engine uses `WorldDir::DrawShowing()` → `RndGroup` →
+`RndDrawable` tree.
 
-### Stability
+| Task | Priority | Notes |
+|------|----------|-------|
+| Venue background rendering | HIGH | `turbo_shell` 3D scene behind UI is black. Camera positioned but venue meshes not reaching DrawShowing |
+| RndGroup draw ordering | HIGH | Hierarchical draw order for correct UI/3D layering |
+| UI sprite/icon rendering | MEDIUM | Player silhouettes, button prompts, autosave orb — likely RndTex quads |
+| Text markup processing | MEDIUM | `<alt>` tags render as literal text instead of styling |
+| Bloom/glow post-process | LOW | Neon aesthetic from Xbox UI |
 
-- 5000+ frames without crash (default fatal mode)
-- Clean exit via `MILO_MAX_FRAMES` env var
-- No memory corruption detected (ASan clean with known suppressions)
+### Milestone 3: Gameplay Screen
+
+**Goal**: Navigate to a song, start gameplay, see the dance stage.
+
+| Task | Priority | Notes |
+|------|----------|-------|
+| Song select screen navigation | HIGH | From choose_mode → song select → gameplay |
+| Stage/venue loading in gameplay | HIGH | Load venue .milo + character .milo for dance stage |
+| Move card UI rendering | MEDIUM | Purple/blue move cards showing dance moves |
+| Score display | MEDIUM | Points, streak counter, rating text |
+| Song audio playback during gameplay | HIGH | Already implemented, needs wiring to gameplay flow |
+
+### Milestone 4: Playable Dance Gameplay
+
+**Goal**: Full dance gameplay loop — see moves, hear music, track body, score.
+
+| Task | Priority | Notes |
+|------|----------|-------|
+| Character animation in gameplay | HIGH | CharClip playback synced to beat |
+| Lip sync (CharFaceServo, CharLipSyncDriver) | MEDIUM | See [LIP_SYNC.md](../custom-graphics-engine/LIP_SYNC.md) |
+| Procedural blinking (CharFaceServo) | LOW | Cosmetic |
+| CharEyes gaze direction | LOW | Cosmetic |
+| Motion capture integration (Phase 5) | HIGH | Kinect replacement via webcam + ML pose estimation |
+| Scoring system verification | HIGH | Gesture matching → score calculation |
+
+### Milestone 5: Polish
+
+**Goal**: Full game experience.
+
+| Task | Priority | Notes |
+|------|----------|-------|
+| Particle systems (RndParticleSys) | MEDIUM | Stage effects, confetti |
+| Lines/Flares (RndLine, RndFlare) | LOW | Light beams, glow |
+| Save/load game progress | MEDIUM | Profile, unlocks |
+| DLC content loading | LOW | Extra songs |
+| macOS / Windows support | MEDIUM | WebGPU handles backends |
+| Web build (Emscripten) | LOW | Future |
+| Performance optimization | MEDIUM | Draw call batching, culling |
+
+---
 
 ## Architecture
 
@@ -88,8 +145,6 @@ Comparing `native_alpha_fix_f200.png` (native) to `dc3_main_menu.jpg` (Xbox 360 
 - `1` (default): Fatal — abort on MILO_ASSERT and MILO_FAIL. Catches real bugs early.
 - `0`: Non-fatal — print + continue (Xbox 360 "Continue" dialog behavior). Use for exploring past crashes.
 
-**`MILO_FAIL_DTA`**: Defined in `Debug.h`. On Xbox, expands identically to `MILO_FAIL` (no decomp impact). On native, expands to `MILO_WARN`. Used for errors that fire on Xbox debug builds but aren't code bugs (e.g., DTA script accessing a property that doesn't exist on a particular object type).
-
 ### DataNode Safe Fallback Returns
 
 When `MILO_FAIL_DTA` returns (non-fatal mode), DataNode accessor methods need safe return values to prevent SIGSEGV from dereferencing garbage union members. Under `#ifdef HX_NATIVE`, each accessor returns a safe default after the error:
@@ -103,38 +158,7 @@ When `MILO_FAIL_DTA` returns (non-fatal mode), DataNode accessor methods need sa
 
 `Hmx::Object::NewObject()` wraps factory calls in `sigsetjmp/siglongjmp` to catch SIGSEGV from broken vtables (weak stub constructors that don't initialize the vtable). After construction, it calls `obj->ClassName()` to verify the vtable works. Broken types are blacklisted in `sBrokenClasses` and return nullptr on subsequent calls.
 
-**Currently blacklisted**: `KinectSharePanel` (now has proper stub), `MeshAnim` (weak stub only).
-
-## Key Fixes (Sessions 20-21)
-
-### KinectSharePanel Vtable Crash
-
-**Root cause**: `native/src/platform/KinectShare_Stub.cpp` was empty — no constructor, no vtable. The weak stub in `engine_stubs_generated.cpp` ran instead (`return 0`), leaving the vtable uninitialized. DTA scripts call `{new KinectSharePanel ...}` during UIManager::Init, and subsequent virtual calls (ClassName, SetName) crashed.
-
-**Fix**: Wrote a proper stub in `KinectShare_Stub.cpp` with constructor, handler table, propsyncs, and Poll. All XDK-specific methods (OnUpload, OnPostLink, ConvertImages, etc.) are no-ops.
-
-**Also**: Improved `NewObject` to verify vtable after construction by calling `ClassName()` under the sigsetjmp guard.
-
-### UIListSlot::Fill Assert Ordering
-
-**Root cause**: `#ifdef HX_NATIVE` bounds guard was placed AFTER `MILO_ASSERT`, so the assert fired fatally before the guard could return.
-
-**Fix**: Moved the native guard before the assert.
-
-### UIList mListDir Null Guards
-
-**Root cause**: `HamList.lst` deserializes `mListDir` via `ObjPtr<UIListDir>`, but the referenced UIListDir subobject doesn't exist in the directory at deserialization time. ObjPtr resolves to null. Subsequent calls to `mListDir->CreateElements()`, `mListDir->PollWidgets()`, `mListDir->ListEntered()` crash.
-
-**Fix**: Added `#ifdef HX_NATIVE if (!mListDir) return;` guards in `Update()`, `Poll()`, and `Enter()`.
-
-### MILO_FAIL_DTA Macro
-
-**Root cause**: DTA runtime errors like "property [outfit] not found" and "Data 0 is not Symbol" cascade — Property returns null → Evaluate returns sNullNode(0) → DTA calls Sym() on int 0 → type mismatch → MILO_FAIL → abort. These errors also fire on Xbox 360 debug builds (developer clicks Continue).
-
-**Fix**: Created `MILO_FAIL_DTA` macro — `MILO_FAIL` on Xbox (identical codegen), `MILO_WARN` on native. Applied to:
-- All DataNode type error messages ("Data %s is not TYPE")
-- Object::Property/HandleProperty/PropertySize "property not found"
-- DataArray::Execute "not function or object"
+**Currently blacklisted**: `MeshAnim` (weak stub only).
 
 ## Environment Variables
 
@@ -148,6 +172,7 @@ When `MILO_FAIL_DTA` returns (non-fatal mode), DataNode accessor methods need sa
 | `MILO_INPUT_SCRIPT` | (none) | Path to scripted input file |
 | `MILO_FATAL_FAILS` | 1 | Fatal Debug::Fail (0=continue past errors) |
 | `MILO_FORCE_DRAW_PANEL` | (none) | Force-draw a specific panel (debug) |
+| `MILO_FIRST_SCREEN` | (none) | Skip to a specific screen (e.g., `main_screen`) |
 
 ## Test Commands
 
@@ -166,41 +191,16 @@ MILO_RENDER=1 MILO_HEADLESS=1 MILO_MAX_FRAMES=500 \
   ASAN_OPTIONS="alloc_dealloc_mismatch=0:halt_on_error=0:detect_odr_violation=0" \
   timeout 60 ./native/build/dc3-native
 
-# With scripted input
-cat > /tmp/claude-1000/input.txt << 'EOF'
-300 start
-600 confirm
-900 down
-1200 confirm
-EOF
-MILO_RENDER=1 MILO_HEADLESS=1 MILO_MAX_FRAMES=3000 \
-  MILO_INPUT_SCRIPT=/tmp/claude-1000/input.txt \
-  MILO_SCREENSHOT_DIR=/tmp/claude-1000/shots \
-  MILO_SCREENSHOT_FRAMES=200,400,700,1000,1500,2500 \
+# Skip to main menu
+MILO_FIRST_SCREEN=main_screen MILO_MAX_FRAMES=500 \
   ASAN_OPTIONS="alloc_dealloc_mismatch=0:halt_on_error=0:detect_odr_violation=0" \
-  timeout 120 ./native/build/dc3-native
+  timeout 60 ./native/build/dc3-native
 
 # Non-fatal mode (explore past crashes)
 MILO_FATAL_FAILS=0 MILO_MAX_FRAMES=5000 \
   ASAN_OPTIONS="alloc_dealloc_mismatch=0:halt_on_error=0:detect_odr_violation=0" \
   timeout 180 ./native/build/dc3-native
 ```
-
-## Files Modified (Sessions 20-21)
-
-| File | Changes |
-|------|---------|
-| `src/system/os/Debug.h` | `MILO_FAIL_DTA` macro |
-| `src/system/os/Debug.cpp` | `MILO_FATAL_FAILS` env var in `Debug::Fail` |
-| `src/system/obj/Object.cpp` | NewObject vtable verification; MILO_FAIL_DTA for property not found |
-| `src/system/obj/DataNode.cpp` | MILO_FAIL_DTA for type errors; `#ifdef HX_NATIVE` safe fallback returns |
-| `src/system/obj/DataArray.cpp` | MILO_FAIL_DTA for "not function or object" |
-| `src/system/obj/DataFunc.cpp` | `#ifdef HX_NATIVE` null guard in DataNew |
-| `src/system/ui/UIList.cpp` | mListDir null guards in Update/Poll/Enter |
-| `src/system/ui/UIListSlot.cpp` | Reorder native bounds guard before MILO_ASSERT |
-| `src/system/char/Character.cpp` | MergeDraws null guard before assert |
-| `native/src/platform/KinectShare_Stub.cpp` | Proper stub with constructor/handlers/propsyncs |
-| `native/src/platform/Mesh_Wgpu.cpp` | Use getters for protected BaseMaterial members |
 
 ## Testing Infrastructure
 
@@ -218,8 +218,6 @@ MILO_FATAL_FAILS=0 MILO_MAX_FRAMES=5000 \
 | `Subsystems.LocaleInitialized` | Locale subsystem doesn't crash |
 | `Subsystems.JoypadPoll` | Joypad polling doesn't crash |
 
-Tests launch `dc3-native` as a subprocess with `MILO_FATAL_FAILS=0`. Crashes produce `CrashSummary()` with signal, assertion, last DirLoader load, and last DataNew.
-
 ### ASan Build
 
 ```bash
@@ -228,25 +226,13 @@ cmake .. -DENABLE_ASAN=ON && cmake --build .
 
 Run with: `ASAN_OPTIONS="alloc_dealloc_mismatch=0:detect_odr_violation=0"`
 
-## Key Fixes (Session 2026-03-02)
+## Key Fixes Log
 
-### Alpha Transparency Fix
-- **Shader alpha clamp removed**: `standard_wgsl.inc` had `select(alpha, 1.0, alpha < 0.004)` which forced UI panel backgrounds (alpha=0, intentionally invisible) to fully opaque dark boxes. Changed to `var matAlpha = material.color.a`.
-- **FixZeroAlpha guarded by blend mode**: `Mesh_Wgpu.cpp` `FixZeroAlpha()` was forcing all-zero vertex alpha to 1.0 for every mesh. Now only applies to opaque meshes (`kBlendDest`). Blended meshes (`kBlendSrcAlpha`, etc.) keep their intentional zero alpha.
-- Screenshots: `archive/screenshots/native_alpha_fix_f*.png`
+See `docs/native/NATIVE_PORT_STATUS.md` for the full session-by-session fix log including
+LP64 issues, iterator compat, vtable crashes, stream desyncs, and rendering pipeline work.
 
-### Font Loading Bugs
-- Fixed `RndFontBase::Load` / `UIFontImporter` loading path — fonts were failing to load due to missing native codepath
-- Fixed `UILabel` drawing to go through `RndText::DrawShowing()` → `FontMapBase` → glyph meshes → `RndMesh::DrawShowing()`
-- Text rendering confirmed working in screenshots (f200-f400)
+## Related Docs
 
-## Next Steps (Rendering Priority)
-
-Benchmarking against `archive/screenshots/references/dc3_main_menu.jpg`:
-
-1. **Venue background rendering** — The `turbo_shell` 3D scene should render behind UI (animated cyan/purple swirls with light bars). Currently black. Need to investigate why venue meshes aren't drawing (camera is positioned but `DrawShowing` isn't reaching the venue's drawable tree).
-2. **Text markup processing** — `<alt>` tags render as literal text instead of applying bold/color styling. Need to implement or stub the markup parser in `RndText`.
-3. **Sprite/icon rendering** — Player silhouettes, autosave orb, button prompts are missing. These may be `RndTex` quads drawn via `DrawRect` or `RndMesh` billboard geometry.
-4. **Bloom/glow post-process** — The Xbox UI has glow effects on panels and text that give the neon aesthetic. Basic post-processing exists but bloom is not implemented.
-5. **MeshAnim stub** — Write proper stub (same pattern as KinectSharePanel) to avoid blacklisting.
-6. **Get past tutorial screens** — Need to either stub Kinect gesture detection or add DTA override to skip tutorials.
+- [VIEWER_STATUS.md](VIEWER_STATUS.md) — Track B: standalone milo viewer status & roadmap
+- [../custom-graphics-engine/PLAN.md](../custom-graphics-engine/PLAN.md) — master native port plan
+- [../../native/NATIVE_PORT_STATUS.md](../../native/NATIVE_PORT_STATUS.md) — detailed session log

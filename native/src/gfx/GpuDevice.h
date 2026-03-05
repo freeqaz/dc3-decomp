@@ -49,6 +49,8 @@ public:
     void Shutdown();
 
     // Accessors
+    bool IsReady() const { return mDevice != nullptr; }
+    bool IsNullBackend() const { return mNullBackend; }
     wgpu::Device& Device() { return mDevice; }
     wgpu::Queue& Queue() { return mQueue; }
     wgpu::Instance& Instance() { return mInstance; }
@@ -95,6 +97,7 @@ private:
     wgpu::Surface mSurface;
     wgpu::TextureFormat mSurfaceFormat = wgpu::TextureFormat::BGRA8Unorm;
 
+    bool mNullBackend = false;
     GLFWwindow* mWindow = nullptr;
     int mWidth = 0;
     int mHeight = 0;

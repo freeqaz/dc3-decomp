@@ -378,8 +378,10 @@ static bool EnsureMeshUploaded(RndMesh* mesh) {
             return false;
         }
 
-        // Only fix zero-alpha for opaque meshes; blended meshes may intentionally have alpha=0
-        if (!mesh->Mat() || mesh->Mat()->GetBlend() == BaseMaterial::kBlendDest)
+        // Fix zero vertex colors for opaque meshes — many meshes don't use vertex color
+        // and have all-zero RGBA, which would multiply baseColor to black in the shader.
+        // Only skip for intentionally transparent blends (SrcAlpha, Add, etc.)
+        if (!mesh->Mat() || mesh->Mat()->GetBlend() <= BaseMaterial::kBlendSrc)
             FixZeroAlpha(verts, unpacked);
 
         wgpu::BufferDescriptor vbDesc{};
@@ -408,8 +410,10 @@ static bool EnsureMeshUploaded(RndMesh* mesh) {
             delete[] indices;
             return false;
         }
-        // Only fix zero-alpha for opaque meshes; blended meshes may intentionally have alpha=0
-        if (!mesh->Mat() || mesh->Mat()->GetBlend() == BaseMaterial::kBlendDest)
+        // Fix zero vertex colors for opaque meshes — many meshes don't use vertex color
+        // and have all-zero RGBA, which would multiply baseColor to black in the shader.
+        // Only skip for intentionally transparent blends (SrcAlpha, Add, etc.)
+        if (!mesh->Mat() || mesh->Mat()->GetBlend() <= BaseMaterial::kBlendSrc)
             FixZeroAlpha(verts, unpacked);
 
         wgpu::BufferDescriptor vbDesc{};
@@ -495,26 +499,6 @@ static void DrawMeshImmediate(RndMesh* mesh) {
 
     RndMat* mat = mesh->Mat();
     if (!mat) return;
-
-    // Debug: log eye mesh material properties
-    static int sEyeDebugCount = 0;
-    if (sEyeDebugCount < 10 && mesh->Name() &&
-        (strcmp(mesh->Name(), "eye-L.mesh") == 0 || strcmp(mesh->Name(), "eye-R.mesh") == 0)) {
-        sEyeDebugCount++;
-        const Hmx::Color& c = mat->GetColor();
-        printf("DEBUG eye mesh '%s': mat='%s' blend=%d prelit=%d color=(%.2f,%.2f,%.2f,%.2f)\n",
-               mesh->Name(), mat->Name(), (int)mat->GetBlend(), (int)mat->Prelit(),
-               c.red, c.green, c.blue, c.alpha);
-        printf("  diffuseTex=%p emissiveMap=%p emissiveMul=%.2f\n",
-               mat->GetDiffuseTex(), mat->GetEmissiveMap(), mat->GetEmissiveMultiplier());
-        // Check vertex colors
-        auto& verts = mesh->Verts();
-        if (verts.size() > 0) {
-            printf("  vert[0] color=(%.2f,%.2f,%.2f,%.2f) pos=(%.2f,%.2f,%.2f)\n",
-                   verts[0].color[0], verts[0].color[1], verts[0].color[2], verts[0].color[3],
-                   verts[0].pos.x, verts[0].pos.y, verts[0].pos.z);
-        }
-    }
 
     // Skip multiply-blend meshes with near-black color — these produce Dst*0=0
     // wiping the framebuffer to black. They're meant to be animated to white/transparent
@@ -679,7 +663,14 @@ static void DrawMeshImmediate(RndMesh* mesh) {
     };
     texViews.normal   = resolveMap(mat->NormalMap(),      gWgpuRnd->FlatNormalTexView());
     texViews.specular = resolveMap(mat->GetSpecularMap(), gWgpuRnd->WhiteTexView());
-    texViews.emissive = resolveMap(mat->GetEmissiveMap(), gWgpuRnd->BlackTexView());
+    // Eye materials: boost emissive so sclera/iris stay bright (compensates for
+    // missing environment map reflections that the real game uses for eye shine)
+    bool isEyeMat = strstr(mat->Name(), "eyes") || strstr(mat->Name(), "eye_");
+    if (isEyeMat) {
+        matUni.emissiveMultiplier = std::max(matUni.emissiveMultiplier, 1.0f);
+    }
+    texViews.emissive = resolveMap(mat->GetEmissiveMap(),
+        isEyeMat ? gWgpuRnd->WhiteTexView() : gWgpuRnd->BlackTexView());
     texViews.rim      = resolveMap(mat->GetRimMap(),      gWgpuRnd->WhiteTexView());
 
     // Detail normal map
@@ -696,6 +687,11 @@ static void DrawMeshImmediate(RndMesh* mesh) {
     } else {
         texViews.environCube = gWgpuRnd->BlackCubeTexView();
         matUni.environMapStrength = 0.0f;
+        // If material references an env map we can't render, boost emissive
+        // so the diffuse texture stays bright (e.g. eye sclera, glossy surfaces)
+        if (environMap) {
+            matUni.emissiveMultiplier = std::max(matUni.emissiveMultiplier, 0.6f);
+        }
     }
 
     uint32_t matOffset = gWgpuRnd->MaterialRing().Write(

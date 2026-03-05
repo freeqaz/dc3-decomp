@@ -106,7 +106,7 @@ void FlowAnimate::Load(BinStream &bs) {
         );
     }
 
-    FlowNode::Load(bs);
+    FlowNode::Load(d.stream);
 
     if (d.rev < 3) {
         RndAnimatable *anim = mAnim.LoadFromMainOrDir(d.stream);
@@ -116,8 +116,8 @@ void FlowAnimate::Load(BinStream &bs) {
     }
 
     d >> mBlend >> mWait >> mDelay;
-    d >> (int&)mStopMode >> mEnable;
-    d >> (int&)mRate >> mStart;
+    d >> (int&)mStopMode >> mEnable
+      >> (int&)mRate >> mStart;
     d >> mEnd >> mPeriod;
     d >> mType;
     d >> mScale;

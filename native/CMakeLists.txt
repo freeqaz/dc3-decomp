@@ -1016,6 +1016,13 @@ target_link_libraries(wgpu-window-test PRIVATE
 # ============================================================================
 add_executable(milo-viewer
     src/viewer/milo_viewer.cpp
+    src/viewer/ViewerArgs.cpp
+    src/viewer/ViewerCamera.cpp
+    src/char/CharTwistSolver.cpp
+    src/viewer/ViewerPoseDump.cpp
+    src/viewer/ViewerScene.cpp
+    src/viewer/ViewerAnimation.cpp
+    src/viewer/ViewerCapture.cpp
     src/gfx/VideoEncoder.cpp
     ${DC3_ENGINE_SOURCES}
     ${DC3_NATIVE_CORE_SOURCES}

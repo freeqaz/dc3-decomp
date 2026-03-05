@@ -344,4 +344,8 @@ u64 RndShaderFur::CalcShaderOpts(NgMat*, ShaderType, bool) { return 0; }
 void RndShaderSyncTrack::Select(RndMat*, ShaderType, bool) {}
 u64 RndShaderSyncTrack::CalcShaderOpts(NgMat*, ShaderType, bool) { return 0; }
 
+// Stubs for unimplemented functions needed by native build
+#include "rndobj/Text.h"
+void RndText::FitTextJust() {}
+
 // FlowSetProperty — PropertyTask::Poll now defined in FlowSetProperty.cpp

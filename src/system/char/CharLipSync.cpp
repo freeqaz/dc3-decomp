@@ -82,7 +82,7 @@ void CharLipSync::Print(TextStream &ts) {
     ts << "; song: " << PathName(this) << "\n";
     ts << "(visemes\n";
     for (int i = 0; i < mVisemes.size(); i++) {
-        ts << "   " << mVisemes[i] << "\n";
+        ts << "   " << mVisemes[i].c_str() << "\n";
     }
     ts << ")\n";
     ts << "(frames ; @ 30fps\n";
@@ -182,7 +182,7 @@ void CharLipSync::Generator::Init(CharLipSync *sync) {
 }
 
 void CharLipSync::Generator::NextFrame() {
-    int count = mLipSync->mData.size() - 1 - mLastCount;
+    int count = (mLipSync->mData.size() - 1 - mLastCount) / 2;
     MILO_ASSERT(count >= 0 && count < 256, 0x53);
     mLipSync->mData[mLastCount] = count;
     mLastCount = mLipSync->mData.size();
@@ -223,30 +223,28 @@ void CharLipSync::Generator::Finish() {
 }
 
 void CharLipSync::Generator::RemoveViseme(int visemeIdx) {
-    auto _tmp0 = mLipSync->mVisemes.begin();
-    mLipSync->mVisemes.erase(_tmp0 + visemeIdx);
+    mLipSync->mVisemes.erase(mLipSync->mVisemes.begin() + visemeIdx);
 
-    int i = 0;
-    CharLipSync *lipSync = mLipSync;
     int cur = 0;
+    CharLipSync *lipSync = mLipSync;
+    int i = 0;
+    std::vector<unsigned char> &data = lipSync->mData;
     if (lipSync->mFrames > 0) {
         do {
             int j = 0;
-            int count = lipSync->mData[cur++];
-            // For each viseme entry in this frame
+            int count = data[cur++];
             if (count > 0) {
                 do {
-                    // Adjust indices for visemes after the removed one
-                    if (lipSync->mData[cur] >= visemeIdx) {
-                        lipSync->mData[cur]--;
-                        MILO_ASSERT(lipSync->mData[cur] < mLipSync->mVisemes.size(), 0x96);
+                    if (data[cur] >= visemeIdx) {
+                        data[cur]--;
+                        MILO_ASSERT(data[cur] < mLipSync->mVisemes.size(), 0x96);
                     }
                     j++;
                     cur += 2;
                 } while (j < count);
             }
             i++;
-        } while (i < lipSync->mFrames);
+        } while (i < mLipSync->mFrames);
     }
 }
 
@@ -330,7 +328,7 @@ void CharLipSync::PlayBack::Poll(float time) {
     }
 
     float frame = time * 30.0f;
-    int frameIdx = (int)ceil(frame);
+    int frameIdx = (int)(float)ceil(frame);
     float frac = frame - (float)(frameIdx - 1);
 
     if (frameIdx < 1) {

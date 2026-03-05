@@ -193,10 +193,11 @@ void CharLookAt::Poll() {
                 srcFwd.z = 0;
                 float dot = Dot(srcFwd, lookDir2d);
                 float clamped = Clamp<float>(-1.0f, 1.0f, dot / (Length(srcFwd) * Length(lookDir2d)));
+                float acosDeg = (float)std::acos(clamped) * RAD2DEG;
                 float autoWeight = Clamp<float>(
                     0.0f,
                     1.0f,
-                    mMaxWeightYaw - (std::acos(clamped) / (mMaxWeightYaw - mMinWeightYaw))
+                    (mMaxWeightYaw - acosDeg) / (mMaxWeightYaw - mMinWeightYaw)
                 );
                 float autoWeightDelta = (autoWeight - mPivotLookWeight) / deltasecs;
                 if (MinEq(autoWeightDelta, mWeightYawSpeed)) {
@@ -214,8 +215,9 @@ void CharLookAt::Poll() {
                     Subtract(source->WorldXfm().m.y, unka4, sourceFilter);
                     float filterSq = LengthSquared(sourceFilter);
                     float srcRad = mSourceRadius * DEG2RAD;
-                    if (srcRad * srcRad < filterSq) {
-                        sourceFilter *= srcRad / std::sqrt(filterSq);
+                    if (filterSq > srcRad * srcRad) {
+                        float sqrtFilter = std::sqrt(filterSq);
+                        sourceFilter *= srcRad / sqrtFilter;
                     }
                 }
                 if (source != mPivot) {

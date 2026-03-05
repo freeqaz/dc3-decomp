@@ -394,7 +394,7 @@ void WgpuRnd::BeginDrawing() {
     mEncoder = mGpu.Device().CreateCommandEncoder();
 
     // Shadow pre-pass: render depth from light's perspective
-    // RenderShadowPass();  // disabled: red-screen debug
+    RenderShadowPass();
 
     // Begin render pass
     wgpu::RenderPassColorAttachment colorAtt{};
@@ -719,7 +719,7 @@ void WgpuRnd::WriteSceneUniforms() {
     if (env) {
         // Ambient color (with minimum floor for visibility)
         const Hmx::Color& amb = env->AmbientColor();
-        float minAmbient = 0.15f;
+        float minAmbient = 0.35f;
         scene.ambientColor[0] = amb.red > minAmbient ? amb.red : minAmbient;
         scene.ambientColor[1] = amb.green > minAmbient ? amb.green : minAmbient;
         scene.ambientColor[2] = amb.blue > minAmbient ? amb.blue : minAmbient;
@@ -762,18 +762,44 @@ void WgpuRnd::WriteSceneUniforms() {
             lightIdx++;
         }
 
-        // Fallback: if no lights found, use a default three-quarter light
+        // Supplement with fill lights if env has few directional lights
+        if (lightIdx > 0 && lightIdx < 3) {
+            // Add a front-fill light to ensure faces are visible
+            // Hemisphere fill — from below-front to fill eye sockets and faces
+            scene.lightDirs[lightIdx][0] = 0.0f;
+            scene.lightDirs[lightIdx][1] = 0.0f;
+            scene.lightDirs[lightIdx][2] = 1.0f;  // light shines upward
+            scene.lightDirs[lightIdx][3] = 0.0f;
+            scene.lightColors[lightIdx][0] = scene.lightColors[lightIdx][1] = scene.lightColors[lightIdx][2] = 0.35f;
+            scene.lightColors[lightIdx][3] = 1.0f;
+            lightIdx++;
+        }
+        // Fallback: if no lights found, use key + fill + rim lights
         if (lightIdx == 0) {
+            // Key light — strong three-quarter light from front-left
             scene.lightDirs[0][0] = -0.4f;
             scene.lightDirs[0][1] = -0.7f;
             scene.lightDirs[0][2] = 0.5f;
             scene.lightDirs[0][3] = 0.0f;
             scene.lightColors[0][0] = scene.lightColors[0][1] = scene.lightColors[0][2] = 0.9f;
             scene.lightColors[0][3] = 1.0f;
-            lightIdx = 1;
+            // Fill light — softer from front-right
+            scene.lightDirs[1][0] = 0.5f;
+            scene.lightDirs[1][1] = -0.5f;
+            scene.lightDirs[1][2] = 0.3f;
+            scene.lightDirs[1][3] = 0.0f;
+            scene.lightColors[1][0] = scene.lightColors[1][1] = scene.lightColors[1][2] = 0.4f;
+            scene.lightColors[1][3] = 1.0f;
+            // Rim light — from behind for edge definition
+            scene.lightDirs[2][0] = 0.0f;
+            scene.lightDirs[2][1] = 0.8f;
+            scene.lightDirs[2][2] = 0.4f;
+            scene.lightDirs[2][3] = 0.0f;
+            scene.lightColors[2][0] = scene.lightColors[2][1] = scene.lightColors[2][2] = 0.3f;
+            scene.lightColors[2][3] = 1.0f;
+            lightIdx = 3;
         }
         scene.numLights = (float)lightIdx;
-
         // Point lights (kPoint and kFakeSpot are in LightsReal)
         int pointIdx = 0;
         ObjPtrList<RndLight>& realLights = env->LightsReal();
@@ -800,16 +826,31 @@ void WgpuRnd::WriteSceneUniforms() {
         }
         scene.numPointLights = (float)pointIdx;
     } else {
-        // Default lighting — single directional light
-        scene.ambientColor[0] = scene.ambientColor[1] = scene.ambientColor[2] = 0.15f;
+        // Default lighting — three-point light setup
+        scene.ambientColor[0] = scene.ambientColor[1] = scene.ambientColor[2] = 0.4f;
         scene.ambientColor[3] = 1.0f;
-        scene.lightDirs[0][0] = -0.4f;
-        scene.lightDirs[0][1] = -0.7f;
-        scene.lightDirs[0][2] = 0.5f;
+        // Key (front-facing for character visibility)
+        scene.lightDirs[0][0] = 0.5f;
+        scene.lightDirs[0][1] = 0.3f;
+        scene.lightDirs[0][2] = -0.7f;
         scene.lightDirs[0][3] = 0.0f;
-        scene.lightColors[0][0] = scene.lightColors[0][1] = scene.lightColors[0][2] = 0.9f;
+        scene.lightColors[0][0] = scene.lightColors[0][1] = scene.lightColors[0][2] = 1.1f;
         scene.lightColors[0][3] = 1.0f;
-        scene.numLights = 1.0f;
+        // Fill
+        scene.lightDirs[1][0] = 0.5f;
+        scene.lightDirs[1][1] = -0.5f;
+        scene.lightDirs[1][2] = 0.3f;
+        scene.lightDirs[1][3] = 0.0f;
+        scene.lightColors[1][0] = scene.lightColors[1][1] = scene.lightColors[1][2] = 0.4f;
+        scene.lightColors[1][3] = 1.0f;
+        // Rim
+        scene.lightDirs[2][0] = 0.0f;
+        scene.lightDirs[2][1] = 0.8f;
+        scene.lightDirs[2][2] = 0.4f;
+        scene.lightDirs[2][3] = 0.0f;
+        scene.lightColors[2][0] = scene.lightColors[2][1] = scene.lightColors[2][2] = 0.3f;
+        scene.lightColors[2][3] = 1.0f;
+        scene.numLights = 3.0f;
     }
 
     // Shadow mapping data

@@ -17,6 +17,7 @@
 #include "utl/UTF8.h"
 #include "wordwrap.h"
 #include "ui/UI.h"
+#include <algorithm>
 
 std::vector<RndText::BlacklightPacket> RndText::sBlacklightPacketPool;
 int RndText::sBlacklightPacketCount;
@@ -714,6 +715,234 @@ float RndText::ComputeHeight(int i1, float f2, float &f3) {
     return ((i1 - 1) * mLeading + 1.0f) * f1;
 }
 
+#ifdef HX_NATIVE
+struct WrapPoint {
+    int charIdx;
+    unsigned int cost;
+    int bestPrevIdx;
+    int nextIdx;
+    float lineWidth;
+    bool isLineEnd;
+    bool isHardBreak;
+};
+
+void RndText::WrapText(
+    const unsigned short *wideChars, int numChars, float *charWidths,
+    HX_VECTOR(Line) &lines, Hmx::Rect &bounds, float scale
+) {
+    StyleState styleState(this, scale);
+    const unsigned short *baseChars = wideChars;
+    { MemTemp tmp; lines.reserve(100); }
+    lines.erase(lines.begin(), lines.end());
+    bool hasFont = (mFontMaps.begin() != mFontMaps.end());
+    if (!hasFont || numChars == 0 || mStyles[0].mFont == 0) {
+        Line emptyLine = {};
+        if (lines.size() < 1) lines.insert(lines.end(), 1 - lines.size(), emptyLine);
+        else lines.erase(lines.begin() + 1, lines.end());
+        lines[0].mWidth = 0.0f;
+        lines[0].mStart = baseChars;
+        lines[0].mEnd = baseChars;
+    } else if (mWidth == 0.0f) {
+        Line emptyLine = {};
+        if (lines.size() < 1) lines.insert(lines.end(), 1 - lines.size(), emptyLine);
+        else lines.erase(lines.begin() + 1, lines.end());
+        lines[0].mYPos = 0.0f;
+        lines[0].mXStart = 0.0f;
+        lines[0].mStart = baseChars;
+        lines[0].mEnd = baseChars + numChars;
+        lines[0].mWidth = SegmentLength(0, numChars, charWidths, baseChars, scale);
+    } else {
+        WrapPoint *wps = (WrapPoint *)_alloca((numChars + 1) * sizeof(WrapPoint));
+        bool activeMarkup = styleState.mActive;
+        int markupCount = 0;
+        wps[0].charIdx = 0;
+        wps[0].lineWidth = 0.0f;
+        wps[0].cost = 0;
+        wps[0].isLineEnd = false;
+        wps[0].bestPrevIdx = -1;
+        wps[0].nextIdx = -1;
+        wps[0].isHardBreak = true;
+        float minW = mWidth * 0.7f;
+        float goodW = mWidth * 0.95f;
+        const unsigned short *brkChars = baseChars;
+        if (mMarkup) {
+            unsigned short *stripped = (unsigned short *)_alloca((numChars + 1) * 2);
+            brkChars = stripped;
+            const unsigned short *s = baseChars;
+            unsigned short *d = stripped;
+            unsigned short c = *s;
+            while (c != 0) {
+                if (c == 0x3c) {
+                    short t = c;
+                    do { if (t == 0x3e) break; s++; t = *s; } while (t != 0);
+                    if (t != 0) s++;
+                } else { *d = c; d++; s++; }
+                c = *s;
+            }
+            *d = 0;
+        }
+        int nWp = 1, wpI = 0;
+        const unsigned short *cur = baseChars;
+        const unsigned short *curBrk = brkChars;
+        int cCount = 0;
+        for (;;) {
+            unsigned short ch = *cur;
+            const wchar_t *brkW = (const wchar_t *)curBrk;
+            int prevI = wpI;
+            WrapPoint *nxt = &wps[nWp];
+            if (ch == 0 || ch == '\n') {
+                int best = -1, bestC = 100000;
+                bool ovf = false;
+                float bestW = 0.0f;
+                int endI = (int)(cur - baseChars);
+                MILO_ASSERT(prevI >= 0, 0x6ed);
+                float mxW = mWidth;
+                for (int wi = wpI; wi >= 0; wi--) {
+                    float sw = SegmentLength(wps[wi].charIdx, endI, charWidths, baseChars, scale);
+                    unsigned int pen = 10;
+                    if (sw <= mxW) {
+                        if (!(mAlignment & 0x20)) {
+                            if (endI - wps[wi].charIdx < 5) pen = 50;
+                        } else {
+                            float fw = SegmentLength(wps[wi].charIdx, numChars, charWidths, baseChars, scale);
+                            if (mxW <= fw) {
+                                pen = (unsigned int)((1.0f - sw / mxW) * 30.0f);
+                                if (sw < minW) pen += 100;
+                            }
+                        }
+                    } else if (wi != prevI && best != -1) { pen = 2010; ovf = true; }
+                    int tc = wps[wi].cost + pen;
+                    if (tc < bestC) { bestC = tc; best = wi; bestW = sw; }
+                    if (wps[wi].isHardBreak || ovf) break;
+                }
+                MILO_ASSERT(best != -1, 0x6ed);
+                MILO_ASSERT(nWp <= numChars + 1, 0x6ef);
+                nxt->charIdx = endI;
+                nxt->cost = bestC;
+                nxt->bestPrevIdx = best;
+                nxt->isLineEnd = true;
+                nxt->nextIdx = -1;
+                nxt->lineWidth = bestW;
+                nxt->isHardBreak = true;
+                nWp++; wpI++;
+                wps[best].isLineEnd = false;
+                if (ch == 0) goto buildLines;
+            } else {
+                unsigned short mc = ch;
+                if (ch == 0x3c && mMarkup) {
+                    cur = ParseMarkup(cur, styleState, mc);
+                    cCount--;
+                    brkW = (const wchar_t *)curBrk - 1;
+                    cur--;
+                    if (styleState.mActive != activeMarkup && styleState.mActive)
+                        activeMarkup = true;
+                }
+                if (mc != 0) {
+                    int ci = (int)(cur - baseChars);
+                    if (activeMarkup) {
+                        bool canBrk = cCount >= 1 && WordWrap_CanBreakLineAt(brkW, (const wchar_t *)brkChars);
+                        if (canBrk) {
+                            int best = -1, bestC = 100000;
+                            bool ovf = false;
+                            float bestW = 0.0f;
+                            MILO_ASSERT(prevI >= 0, 0x690);
+                            for (int wi = wpI; wi >= 0; wi--) {
+                                float sw = SegmentLength(wps[wi].charIdx, ci, charWidths, baseChars, scale);
+                                MILO_ASSERT(sw >= bestW, 0x65d);
+                                unsigned int pen = 10;
+                                float mxW2 = mWidth;
+                                if (sw <= mxW2) {
+                                    if (sw < goodW) {
+                                        float fw = SegmentLength(wps[wi].charIdx, numChars, charWidths, baseChars, scale);
+                                        if (mxW2 <= fw) {
+                                            pen = (unsigned int)((1.0f - sw / mxW2) * 60.0f);
+                                            if (sw < minW) pen += 200;
+                                        }
+                                    }
+                                } else if (wi != prevI && best != -1) { pen = 2010; ovf = true; }
+                                if ((int)(wps[wi].cost + pen) <= bestC) {
+                                    bestC = wps[wi].cost + pen;
+                                    best = wi; bestW = sw;
+                                }
+                                if (wps[wi].isHardBreak || ovf) break;
+                            }
+                            MILO_ASSERT(best != -1, 0x690);
+                            MILO_ASSERT(nWp <= numChars + 1, 0x693);
+                            nxt->lineWidth = bestW;
+                            nxt->charIdx = ci;
+                            nxt->cost = bestC;
+                            nxt->bestPrevIdx = best;
+                            nxt->nextIdx = -1;
+                            nxt->isLineEnd = true;
+                            nWp++; wpI++;
+                            nxt->isHardBreak = false;
+                            wps[best].isLineEnd = false;
+                        }
+                    }
+                    if (activeMarkup != styleState.mActive) {
+                        MILO_ASSERT(!styleState.mActive, 0x6a2);
+                        activeMarkup = false;
+                    }
+                }
+            }
+            cur++; cCount++; curBrk++;
+        }
+    buildLines:
+        if (nWp > 1) {
+            int idx = nWp - 1;
+            do {
+                unsigned int pi = wps[idx].bestPrevIdx;
+                wps[pi].nextIdx = idx;
+                idx = pi;
+            } while (idx != 0);
+        }
+        int chi = wps[0].nextIdx;
+        while (chi != -1) {
+            WrapPoint *wp = &wps[chi];
+            WrapPoint *pw = &wps[wp->bestPrevIdx];
+            const unsigned short *cs = baseChars + (pw->charIdx & 0x7fffffff);
+            const unsigned short *ce = baseChars + (wp->charIdx & 0x7fffffff);
+            while (cs < ce && (*cs == ' ' || *cs == '\t')) cs++;
+            while (ce > cs) {
+                unsigned short p = *(ce - 1);
+                if (p != ' ' && p != '\n' && p != '\t') break;
+                ce--;
+            }
+            Line ol;
+            ol.mStart = cs;
+            ol.mEnd = ce;
+            ol.mWidth = wp->lineWidth;
+            ol.mXStart = 0.0f;
+            ol.mYPos = 0.0f;
+            lines.push_back(ol);
+            chi = wp->nextIdx;
+        }
+        if (lines.empty()) {
+            Line el = {};
+            lines.push_back(el);
+        }
+    }
+    float ls;
+    float th = ComputeHeight((int)lines.size(), scale, ls);
+    bounds.h = th;
+    float topY = 0.0f;
+    if (mAlignment & 0x20) topY = th * 0.5f;
+    else if (mAlignment & 0x40) topY = th;
+    bounds.w = 0.0f;
+    for (unsigned int i = 0; i < lines.size(); i++) {
+        Line &l = lines[i];
+        if (bounds.w < l.mWidth) bounds.w = l.mWidth;
+        if (mAlignment & 0x2) l.mXStart = l.mWidth * -0.5f;
+        else if (mAlignment & 0x4) l.mXStart = -l.mWidth;
+        else l.mXStart = 0.0f;
+        l.mYPos = topY;
+        topY -= ls;
+    }
+    bounds.x = lines[0].mXStart;
+    bounds.y = lines[0].mYPos - bounds.h;
+}
+#endif
+
 void RndText::SetText(const char *str) {
     if (mFixedLength != 0) {
         MILO_ASSERT(mText.capacity() >= mFixedLength, 0x75E);
@@ -777,6 +1006,210 @@ void RndText::SetTextASCII(const char *cstr) {
         WideVectorToUTF8(vec, str);
     }
     SetText(str.c_str());
+}
+
+int RndText::ConvertTextToWide(const char *str, HX_VECTOR(unsigned short) &wideChars) {
+    char emptyStr = 0;
+    const char *p = str;
+    if (str == 0) {
+        p = &emptyStr;
+    }
+
+    // Manual strlen to match target inline loop
+    const char *s = p;
+    while (*s++ != '\0') {}
+    int len = (s - p) - 1;
+
+    MemPushTemp();
+    unsigned short zero = 0;
+    unsigned short ssChar;
+    wideChars.resize(len * 2 + 1, zero);
+    MemPopTemp();
+
+    unsigned short *out = &wideChars[0];
+    int capsMode = mCapsMode;
+
+    if (capsMode == kForceUpper) {
+        DecodeUTF8(ssChar, "\xC3\x9F");
+        int fixedLen = mFixedLength;
+        unsigned short *limit;
+        if (fixedLen != 0) {
+            limit = out + fixedLen;
+        } else {
+            limit = 0;
+        }
+        while (*p != '\0') {
+            if (out == limit) break;
+            unsigned short ch;
+            p += DecodeUTF8(ch, p);
+            if (ch == ssChar) {
+                *out = 0x53;
+                out++;
+                if (out == limit) break;
+                *out = 0x53;
+            } else {
+                *out = WToUpper(ch);
+            }
+            out++;
+        }
+    } else if (capsMode == kForceLower) {
+        while (*p != '\0') {
+            unsigned short ch;
+            p += DecodeUTF8(ch, p);
+            *out = WToLower(ch);
+            out++;
+        }
+    } else {
+        while (*p != '\0') {
+            p += DecodeUTF8(*out, p);
+            out++;
+        }
+    }
+
+    *out = 0;
+    ReplaceMissingCharacters(wideChars);
+    return (int)(out - &wideChars[0]);
+}
+
+// FIXME: stub - full implementation is 0x568 bytes
+__declspec(noinline)
+void RndText::ReplaceMissingCharacters(HX_VECTOR(unsigned short) &wideChars) {
+}
+
+int RndText::OnComputeCharWidths(const unsigned short *wideChars, float *widths, bool marqueeWrap) {
+    StyleState styleState(this, 1.0f);
+    std::vector<unsigned short> missingChars;
+    std::vector<unsigned short> negWidthChars;
+    std::vector<RndFontBase *> missingFonts;
+    unsigned short prevChar = 0;
+    float cumWidth = 0.0f;
+    widths[0] = 0.0f;
+    const unsigned short *p = wideChars;
+    float *w = widths + 1;
+    for (;;) {
+        if (*p == 0) {
+            if (!missingChars.empty()) {
+                String msg = MakeString("%s:%s '", PathName(this), ClassName().Str());
+                String hexMsg;
+                for (unsigned int i = 0; i < missingChars.size(); i++) {
+                    unsigned short tmp[2] = {missingChars[i], 0};
+                    msg += MakeString("%s", WideCharToChar(tmp));
+                    hexMsg += MakeString("0x%02x ", missingChars[i]);
+                }
+                msg += MakeString("' (%s", hexMsg.c_str());
+                String fontNames;
+                for (unsigned int i = 0; i < missingFonts.size(); i++) {
+                    fontNames += MakeString("%s ", PathName(missingFonts[i]));
+                }
+                msg += MakeString(") missing from font(s) (%s) in string \"", fontNames.c_str());
+                const unsigned short *q = wideChars;
+                while (*q != 0) {
+                    unsigned short tmp[2] = {*q, 0};
+                    msg += MakeString("%s", WideCharToChar(tmp));
+                    q++;
+                }
+                msg += "\"";
+                MILO_NOTIFY("%s", msg.c_str());
+            }
+            if (!negWidthChars.empty()) {
+                String msg = MakeString("%s: '", PathName(this));
+                String hexMsg;
+                for (unsigned int i = 0; i < negWidthChars.size(); i++) {
+                    unsigned short tmp[2] = {negWidthChars[i], 0};
+                    msg += MakeString("%s", WideCharToChar(tmp));
+                    hexMsg += MakeString("0x%02x ", negWidthChars[i]);
+                }
+                msg += MakeString("' (%s", hexMsg.c_str());
+                if (styleState.mFontMapIdx != -1) {
+                    RndFontBase *font = mFontMaps[styleState.mFontMapIdx]->Font();
+                    msg += MakeString(") have negative widths from %s in string \"", PathName(font));
+                }
+                const unsigned short *q = wideChars;
+                while (*q != 0) {
+                    unsigned short tmp[2] = {*q, 0};
+                    msg += MakeString("%s", WideCharToChar(tmp));
+                    q++;
+                }
+                msg += "\"";
+                MILO_NOTIFY("%s", msg.c_str());
+            }
+            *w = cumWidth;
+            return (int)(w - widths) - 1;
+        }
+        unsigned short ch = *p;
+        if (ch == '<' && mMarkup) {
+            unsigned short replaceChar = 0;
+            const unsigned short *next = ParseMarkup(p, styleState, replaceChar);
+            if (next > p) {
+                *w = cumWidth;
+                int numSkipped = (int)(next - p);
+                for (int i = 1; i < numSkipped; i++) {
+                    *(w + i) = cumWidth;
+                }
+                w += numSkipped;
+                p = next;
+            }
+            if (replaceChar != 0) {
+                w--;
+                p--;
+                ch = replaceChar;
+                goto process_char;
+            }
+        } else {
+process_char:
+            if (ch != 0 && styleState.mFontMapIdx != -1) {
+                FontMapBase *fontMap = mFontMaps[styleState.mFontMapIdx];
+                RndFontBase *font = fontMap->Font();
+                if (font) {
+                    if (mFitType == kFitScrollMarqueeWrapAlways && ch == '\n') {
+                        if (!marqueeWrap) {
+                            mNumLines++;
+                            float lw = (float)((double)mNumLines * (double)mIndentation + (double)cumWidth);
+                            mLineWidths.insert(mLineWidths.end(), lw);
+                            float lo = (float)((double)mNumLines * (double)mIndentation + (double)cumWidth);
+                            mLineOffsets.insert(mLineOffsets.end(), lo);
+                        } else {
+                            cumWidth = (float)((double)mIndentation + (double)cumWidth);
+                        }
+                        float charWidth;
+                        if (font->CharAdvance(prevChar, (unsigned short)'\n', charWidth)) {
+                            fontMap->IncrementDisplayableChars('\n');
+                        }
+                    } else {
+                        float charWidth;
+                        bool found = font->CharAdvance(prevChar, ch, charWidth);
+                        if (!found) {
+                            if (ch != '\n') {
+                                if (std::find(missingChars.begin(), missingChars.end(), ch) == missingChars.end()) {
+                                    missingChars.push_back(ch);
+                                }
+                                if (std::find(missingFonts.begin(), missingFonts.end(), font) == missingFonts.end()) {
+                                    missingFonts.push_back(font);
+                                }
+                            }
+                        } else {
+                            charWidth = (charWidth + styleState.mKerning) * styleState.mSize;
+                            if ((double)charWidth < 0.0) {
+                                if (ch != '\n') {
+                                    if (std::find(negWidthChars.begin(), negWidthChars.end(), ch) == negWidthChars.end()) {
+                                        negWidthChars.push_back(ch);
+                                    }
+                                }
+                            } else {
+                                cumWidth = (float)((double)charWidth + (double)cumWidth);
+                            }
+                            fontMap->IncrementDisplayableChars(ch);
+                            prevChar = ch;
+                        }
+                    }
+                }
+            }
+            *w = cumWidth;
+            w++;
+            p++;
+            continue;
+        }
+    }
 }
 
 void RndText::QueueBlacklightPacket(RndMesh *mesh, float f2, int i3) {
@@ -876,6 +1309,100 @@ void RndText::UpdateScrollOffsets() {
     }
 }
 
+static const wchar_t kEllipsisStr[] = L"...";
+static const wchar_t kBreakChars[] = L" \t\n";
+
+void RndText::FitTextEllipsis() {
+    BuildFontMaps(true);
+
+    HX_VECTOR(Line) lines;
+    HX_VECTOR(unsigned short) wideChars;
+    int numChars = ConvertTextToWide(mText.c_str(), wideChars);
+
+    float *charWidths = (float *)_alloca((numChars + 2) * sizeof(float));
+    OnComputeCharWidths(&wideChars[0], charWidths, false);
+
+    Hmx::Rect bounds;
+    float scale = 1.0f;
+
+    if (charWidths[numChars] <= mWidth) {
+        // Text fits, just wrap normally
+        WrapText(&wideChars[0], numChars, charWidths, lines, bounds, 1.0f);
+    } else {
+        // Text doesn't fit — need to truncate and add ellipsis
+        int ellipsisLen = wcslen(kEllipsisStr);
+
+        // Binary search for how many chars fit
+        int lo = 1;
+        int hi = numChars;
+        if (numChars > 2) {
+            int tmpLo = lo;
+            do {
+                int mid = ((int)tmpLo + (int)hi) >> 1;
+                lo = mid;
+                if (mWidth <= charWidths[mid]) {
+                    hi = mid;
+                    lo = tmpLo;
+                }
+                tmpLo = lo;
+            } while ((int)lo + 1 < (int)hi);
+        }
+
+        // Total length = truncated text + ellipsis
+        int totalLen = lo + ellipsisLen;
+
+        // Allocate buffer for truncated text + ellipsis
+        unsigned short *buf =
+            (unsigned short *)_alloca((totalLen + 1) * sizeof(unsigned short));
+        memcpy(buf, &wideChars[0], lo * sizeof(unsigned short));
+
+        // Respect mFixedLength if set
+        if (ellipsisLen + 1 < mFixedLength && mFixedLength < totalLen) {
+            totalLen = mFixedLength;
+        }
+
+        // Place ellipsis at the truncation point
+        int truncPos = totalLen - ellipsisLen;
+        wcscpy((wchar_t *)&buf[truncPos], kEllipsisStr);
+
+        BuildFontMaps(true);
+        OnComputeCharWidths(buf, charWidths, false);
+        WrapText(buf, totalLen, charWidths, lines, bounds, 1.0f);
+
+        // Iteratively shrink if text still doesn't fit
+        while (truncPos > 1
+            && (lines.size() > 1 || mWidth <= bounds.w
+                || wcschr(kBreakChars, (wchar_t)buf[truncPos - 1]) != 0)) {
+            totalLen = totalLen - 1;
+            // Try to find a space to break at (within ~87.5% of current length)
+            int minPos = (int)totalLen * 0xe >> 4;
+            if (minPos <= (int)totalLen - 1) {
+                int searchPos = totalLen - 1;
+                unsigned short *searchPtr = &buf[searchPos];
+                while (true) {
+                    if (*searchPtr == 0x20) {
+                        // Found a space — break here
+                        totalLen = searchPos + ellipsisLen;
+                        break;
+                    }
+                    searchPos--;
+                    searchPtr--;
+                    if (minPos > searchPos)
+                        break;
+                }
+            }
+
+            truncPos = totalLen - ellipsisLen;
+            wcscpy((wchar_t *)&buf[truncPos], kEllipsisStr);
+            BuildFontMaps(true);
+            OnComputeCharWidths(buf, charWidths, false);
+            WrapText(buf, totalLen, charWidths, lines, bounds, 1.0f);
+        }
+    }
+
+    ConstructMeshes(lines, bounds, scale);
+}
+
 void RndText::FitTextScroll() {
     // Scrolling text layout — sets up mesh scrolling constraints
     if (mFitType < kFitScrollMarqueeWrap)
@@ -925,6 +1452,100 @@ RndText::FontMapBase *RndText::AcquireFontMap(RndFontBase *font) {
         map->SetFont(font);
         return map;
     }
+}
+
+void RndText::ConstructMeshes(
+    const HX_VECTOR(Line) &lines, const Hmx::Rect &bounds, float scale
+) {
+    // Store scale and number of lines
+    mScrollSpeed = scale;
+    mCurScrollChars = lines.size();
+
+    // Copy bounds using integer word copies (matching target codegen)
+#ifdef HX_NATIVE
+    mBoundsLeft = bounds.x;
+    mBoundsTop = bounds.y;
+    mBoundsRight = bounds.w;
+    mBoundsBottom = bounds.h;
+#else
+    {
+        const int *bsrc = (const int *)&bounds;
+        int *bdst = (int *)&mBoundsLeft;
+        bdst[0] = bsrc[0];
+        bdst[1] = bsrc[1];
+        bdst[2] = bsrc[2];
+        bdst[3] = bsrc[3];
+    }
+#endif
+
+    // Allocate meshes for each font map
+    for (std::vector<FontMapBase *>::iterator it = mFontMaps.begin(); it != mFontMaps.end();
+         ++it) {
+        (*it)->AllocateMeshes(this, mFixedLength);
+    }
+
+    // Build character meshes if we have a font set
+    if (mStyles[0].mFont != NULL) {
+        StyleState state(this, scale);
+
+        for (unsigned int i = 0; i < (unsigned int)lines.size(); i++) {
+            const Line &line = lines[i];
+            float yPos = line.mYPos;
+            float xPos = line.mXStart;
+
+            const unsigned short *cur = line.mStart;
+            unsigned short prevChar = 0;
+
+            while (cur != line.mEnd) {
+                unsigned short ch = *cur;
+
+                if (ch == 0x3c && mMarkup) {
+                    cur = ParseMarkup(cur, state, ch);
+                    if (ch != 0) {
+                        cur--;
+                    }
+                }
+
+                if (ch != 0) {
+                    FontMapBase *fontMap = mFontMaps[state.mFontMapIdx];
+                    fontMap->SetupCharacter(
+                        ch,
+                        xPos,
+                        yPos,
+                        state,
+                        prevChar,
+                        mCircle,
+                        mFitType,
+                        mIndentation
+                    );
+                    prevChar = ch;
+                }
+
+                cur++;
+            }
+        }
+    }
+
+    // Cleanup and sync meshes
+    for (std::vector<FontMapBase *>::iterator it = mFontMaps.begin(); it != mFontMaps.end();
+         ++it) {
+        (*it)->CleanupSyncMeshes();
+    }
+}
+
+const unsigned short *
+RndText::ParseMarkup(const unsigned short *str, StyleState &state, unsigned short &ch) {
+    // TODO: full markup parsing
+    // For now, skip past the markup tag and return the character after it
+    const unsigned short *cur = str + 1;
+    while (*cur != 0 && *cur != '>') {
+        cur++;
+    }
+    if (*cur == '>') {
+        cur++;
+    }
+    ch = 0;
+    return cur;
 }
 
 void RndText::UpdateText() {

@@ -1,6 +1,6 @@
 # DC3 Native Port — Viewer Status & Roadmap
 
-**Last updated**: 2026-03-02
+**Last updated**: 2026-03-05
 
 The milo-viewer (`native/src/viewer/milo_viewer.cpp`) is the standalone asset
 viewer for DC3's `.milo_xbox` scene files. It's the primary testbed for rendering
@@ -43,9 +43,57 @@ Real-time `RndTransAnim` keyframe playback with delta-time advancement at 30fps.
 **Tested**: Palmtrees (24 TransAnims), banners (30+), newspaper (3). Video proof
 at `archive/screenshots/palmtree_animation.mp4`.
 
+### Multi-File Scene Loading (Phase 1.5) — COMPLETE
+
+`--subdir` flag loads additional `.milo` files as subdirectories. Venue meshes render
+alongside character meshes. Supports offset (`--subdir-offset X Y Z`) and rotation
+(`--subdir-rotate deg`). Multiple subdirs supported.
+
+**Tested**: Character + venue combos (Aubrey on Glitterati, Emilia on DC Live, etc.)
+
+### Character Dance Animation (CharClip) — COMPLETE
+
+Full `CharClip::PoseMeshes()` pipeline: load `CharClipSet` from `--clips`, create
+`CharDriver` + `CharServoBone`, play beat-based animation. Twist bone solver
+replicates `CharUpperTwist::Poll()` / `CharForeTwist::Poll()`.
+
+**Tested**: 4 dance routines (Glitterati, Riptide, Ninja, Hi-Def) across multiple characters.
+
+### Video Recording — COMPLETE
+
+Headless deterministic frame capture via ffmpeg pipe. `--video out.mp4 --duration 10 --fps 30`.
+Frame timing is deterministic (not wall-clock), so output is machine-speed-independent.
+
+### Synthetic Lighting — COMPLETE
+
+`--light <type> <X> <Y> <Z> <R> <G> <B> [intensity]` creates `RndLight` objects and
+adds them to the scene's `RndEnviron`. Supports directional and point lights. `--ambient R G B`
+overrides ambient color. Falls back to creating a synthetic `RndEnviron` if none exists.
+
+### Smooth Camera Tracking — COMPLETE
+
+Orbit camera tracks dancer's pelvis bone with exponential smoothing (alpha=0.05 for video,
+0.08 for interactive). Eliminates "bouncing" from hip movement during dance animation.
+Auto-orbit starts at -29 deg (counter-clockwise from front) to sweep across the dancer's front.
+
+### YAML Scene Renderer — COMPLETE
+
+Python-based batch renderer (`native/scripts/render_scenes.py`) reads YAML scene definitions
+and runs `milo-viewer` in parallel. Supports screenshots, videos, multi-camera edits,
+custom lighting, camera orbits.
+
+**Docs**: [`native/docs/scene-renderer.md`](../../../native/docs/scene-renderer.md) (user guide),
+[`native/docs/viewer-internals.md`](../../../native/docs/viewer-internals.md) (technical)
+
+### Export Pipelines — COMPLETE
+
+- `--export-textures <dir>` — all textures as PNG
+- `--export-materials <dir>` — all materials as JSON
+- `--export-gltf <path>` — scene as glTF 2.0
+
 ## Current Limitations
 
-### Single-File Loading Only
+### ~~Single-File Loading Only~~ (RESOLVED — see Multi-File Scene Loading above)
 
 The viewer loads one `.milo_xbox` in isolation. DC3 splits assets across a
 parent-child hierarchy:
@@ -165,13 +213,17 @@ Fur (shell-based), refraction, motion blur, occlusion queries, movie textures.
 
 | File | Role |
 |------|------|
-| `native/src/viewer/milo_viewer.cpp` | Viewer main — loading, camera, animation, render loop |
+| `native/src/viewer/milo_viewer.cpp` | Viewer main — loading, camera, animation, lights, render loop |
 | `native/src/platform/Mesh_Wgpu.cpp` | `RndMesh::DrawShowing` (static + skinned paths) |
-| `native/src/platform/Rnd_Wgpu.cpp` | Frame lifecycle, scene uniforms, bind groups |
+| `native/src/platform/Rnd_Wgpu.cpp` | Frame lifecycle, scene uniforms, bind groups, lighting |
 | `native/src/gfx/standard_wgsl.inc` | WGSL shaders (static + skinned + skin/hair) |
 | `native/src/gfx/PipelineManager.cpp` | 4 bind group layouts, pipeline cache |
 | `native/src/gfx/VertexFormats.cpp` | Vertex layouts, compressed vertex unpacking |
-| `native/scripts/render_screenshots.sh` | Batch screenshot script |
+| `native/scripts/render_scenes.py` | YAML scene batch renderer (parallel, screenshots + video) |
+| `native/scripts/render_screenshots.sh` | Legacy bash batch renderer (props only) |
+| `native/scenes/demo.yaml` | Demo scene definitions (30 shots across 15 scenes) |
+| `native/docs/scene-renderer.md` | User guide: YAML format, camera, lighting, CLI |
+| `native/docs/viewer-internals.md` | Technical: orbit camera, smoothing, light injection, pipeline |
 
 ## How to Run
 
@@ -182,15 +234,34 @@ cd native/build && cmake --build . --target milo-viewer
 # View a prop (windowed)
 ./native/build/milo-viewer path/to/file.milo_xbox
 
-# Screenshot mode
-./native/build/milo-viewer path/to/file.milo_xbox --screenshot output.png
+# Character on venue with dance animation
+./native/build/milo-viewer char/aubrey01.milo_xbox \
+  --subdir world/glitterati_set.milo_xbox \
+  --clips char/backup/glitterati01_bd01/gen/clips.milo_xbox \
+  --bpm 90
 
-# With animation
-./native/build/milo-viewer path/to/file.milo_xbox --frame 50 --screenshot output.png
+# Screenshot
+./native/build/milo-viewer file.milo_xbox --screenshot output.png
 
-# Batch screenshots
+# Video with auto-orbit camera
+./native/build/milo-viewer file.milo_xbox --subdir venue.milo_xbox \
+  --clips clips.milo_xbox --bpm 90 \
+  --video dance.mp4 --duration 10 --camera auto-orbit
+
+# Custom lighting (character without venue)
+./native/build/milo-viewer char.milo_xbox --clips clips.milo_xbox \
+  --light dir -0.5 -0.8 -0.3 1.0 0.95 0.9 1.2 \
+  --ambient 0.15 0.15 0.2 \
+  --screenshot dramatic.png
+
+# YAML batch rendering (recommended for multi-shot workflows)
+python native/scripts/render_scenes.py native/scenes/demo.yaml
+python native/scripts/render_scenes.py native/scenes/demo.yaml --dry-run
+python native/scripts/render_scenes.py native/scenes/demo.yaml --shot "aubrey_*"
+python native/scripts/render_scenes.py native/scenes/demo.yaml --list
+
+# Legacy prop batch screenshots
 bash native/scripts/render_screenshots.sh
-bash native/scripts/render_screenshots.sh --only disco
 ```
 
 ## Reference Screenshots
