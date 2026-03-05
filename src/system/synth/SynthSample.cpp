@@ -95,7 +95,7 @@ void SynthSample::PreLoad(BinStream &bs) {
     bs >> mFile;
     // Rev <= 5 had loop fields (isLooped bool, loopStartSamp int if rev >= 3)
     if (rev <= 5) {
-        bool isLooped;
+        unsigned char isLooped;
         bs >> isLooped;
         if (rev >= 3) {
             int loopStartSamp;
@@ -162,10 +162,11 @@ END_CUSTOM_PROPSYNC
 SynthSample::SynthSample() {}
 
 SynthSample::~SynthSample() {
-    while (!mSampleInsts.empty()) {
-        SampleInst *inst = mSampleInsts.front();
-        mSampleInsts.pop_front();
+    auto& sampleInsts = mSampleInsts;
+    while (!sampleInsts.empty()) {
+        SampleInst *inst = sampleInsts.front();
         delete inst;
+        sampleInsts.pop_front();
     }
 
     if (sLoading == this) {

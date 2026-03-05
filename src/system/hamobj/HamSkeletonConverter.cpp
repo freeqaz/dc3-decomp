@@ -83,8 +83,8 @@ void HamSkeletonConverter::Enter() {
     Vector3 z = mBoneMeshes[kJointHipLeft]->WorldXfm().m.z;
     mLeftHipZAxis = z;
     z = mBoneMeshes[kJointHipRight]->WorldXfm().m.z;
-    mRightHipZAxis = z;
     mLeftHipZAxisInit = mLeftHipZAxis;
+    mRightHipZAxis = z;
     mRightHipZAxisInit = mRightHipZAxis;
 }
 
@@ -215,11 +215,12 @@ void HamSkeletonConverter::CalcQuatBone(
     Multiply(xfm.m.z, q, mat.z);
     Normalize(mat, mat);
 
-    memcpy(&mBoneTransforms[from].m, &mat, sizeof(Hmx::Matrix3));
-    mBoneTransforms[from].v = xfm.v;
+    auto& boneXfm = mBoneTransforms[from];
+    memcpy(&boneXfm.m, &mat, sizeof(Hmx::Matrix3));
+    boneXfm.v = xfm.v;
 
     Invert(parentXfm, parentXfm);
-    Multiply(mBoneTransforms[from], parentXfm, xfm);
+    Multiply(boneXfm, parentXfm, xfm);
 
     q.Set(xfm.m);
     SetQuatBoneValue(String(CharBoneName(from)), q);
@@ -294,12 +295,11 @@ void HamSkeletonConverter::SetArm(
     Cross(cross1, dir, cross2);
     Normalize(cross2, cross2);
 
-    RndTransformable *mesh = mBoneMeshes[shoulder];
     Transform parentXfm;
-    GetParentWorldXfm(mesh, parentXfm, parent);
+    GetParentWorldXfm(mBoneMeshes[shoulder], parentXfm, parent);
 
     Vector3 worldPos;
-    Multiply(mesh->LocalXfm().v, parentXfm, worldPos);
+    Multiply(mBoneMeshes[shoulder]->LocalXfm().v, parentXfm, worldPos);
 
     Hmx::Matrix3 mat;
     mat.x = dir;
@@ -310,8 +310,9 @@ void HamSkeletonConverter::SetArm(
     memcpy(&xfm.m, &mat, sizeof(Hmx::Matrix3));
     xfm.v = worldPos;
 
-    memcpy(&mBoneTransforms[shoulder].m, &mat, sizeof(Hmx::Matrix3));
-    mBoneTransforms[shoulder].v = worldPos;
+    auto& shoulderXfm = mBoneTransforms[shoulder];
+    memcpy(&shoulderXfm.m, &mat, sizeof(Hmx::Matrix3));
+    shoulderXfm.v = worldPos;
 
     Transform invParent;
     Invert(parentXfm, invParent);
@@ -342,7 +343,8 @@ void HamSkeletonConverter::SetLeg(
     Subtract(mJointPositions[ankle], mJointPositions[knee], dir2);
     Normalize(dir2, dir2);
 
-    float angle = -acos(Dot(dir, dir2));
+    float angle = acos(Dot(dir, dir2));
+    angle = -angle;
     int isNaN = (angle != angle) ? 1 : 0;
     if ((isNaN & 0xFF) == 0) {
         RndTransformable *mesh = mBoneMeshes[hip];

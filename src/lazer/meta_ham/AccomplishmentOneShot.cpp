@@ -34,11 +34,11 @@ bool AccomplishmentOneShot::AreOneShotConditionsMet(
         Symbol sbc = it->mConditionType;
         Difficulty d2 = it->mDifficulty;
         int i3 = it->mCount;
-        bool b6;
+        unsigned char b6;
         if (d2 == kDifficultyBeginner) {
-            b6 = true;
+            b6 = 1;
         } else if (d == kDifficultyBeginner) {
-            b6 = false;
+            b6 = 0;
         } else {
             b6 = d2 <= d;
         }

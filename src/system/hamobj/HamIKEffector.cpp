@@ -292,8 +292,8 @@ float HamIKEffector::GetGroundHeight(RndTransformable *t) {
 }
 
 void HamIKEffector::Poll() {
-    auto& _ref0 = mEffector;
-    if (!_ref0 || !mSkeleton) return;
+    auto& effectorRef = mEffector;
+    if (!effectorRef || !mSkeleton) return;
     float weight = WeightOwner()->Weight();
     if ((int)weight <= 0) return;
     EffectorType t = GetType();
@@ -304,7 +304,7 @@ void HamIKEffector::Poll() {
         if (!mConstraints.empty()) {
             q.v.Zero();
             q.q.Reset();
-            Transform xfm = _ref0->WorldXfm();
+            Transform xfm = effectorRef->WorldXfm();
             float totalWeight = ApplyConstraints(q, xfm, this);
             if (totalWeight > 0.0001f) {
                 Normalize(q.q, q.q);
@@ -313,7 +313,7 @@ void HamIKEffector::Poll() {
                 MakeRotMatrix(q.q, newXfm.m);
                 newXfm.v = q.v;
                 Interp(xfm, newXfm, Min(weight, 1.0f), newXfm);
-                _ref0->SetWorldXfm(newXfm);
+                effectorRef->SetWorldXfm(newXfm);
             }
         }
     }
@@ -322,8 +322,9 @@ void HamIKEffector::Poll() {
 void HamIKEffector::ComputeHandPullAndQuat(
     QuatXfm &quatOut, Transform &xfmOut, const Transform &parentXfm, const Vector3 &targetPos
 ) {
-    RndTransformable *effector = mEffector;
-    float dz = targetPos.z - parentXfm.v.z;
+    auto& effectorRef = mEffector;
+    RndTransformable *effector = effectorRef;
+    float dz = parentXfm.v.z - targetPos.z;
     float dx = targetPos.x - parentXfm.v.x;
     RndTransformable *parent = effector->TransParent();
     float dy = targetPos.y - parentXfm.v.y;
@@ -350,7 +351,7 @@ void HamIKEffector::ComputeHandPullAndQuat(
         distSq = maxReachSq;
     }
 
-    RndTransformable *effParent = mEffector->TransParent();
+    RndTransformable *effParent = effectorRef->TransParent();
     xfmOut.v = effParent->LocalXfm().v;
 
     float cosAngle =
@@ -373,7 +374,7 @@ void HamIKEffector::ComputeHandPullAndQuat(
     xfmOut.m.z.z = 1.0f;
 
     Vector3 localDir;
-    Multiply(mEffector->TransParent()->LocalXfm().v, xfmOut, localDir);
+    Multiply(effectorRef->TransParent()->LocalXfm().v, xfmOut, localDir);
     Vector3 localTarget;
     MultiplyTranspose(targetPos, parentXfm, localTarget);
     MakeRotQuat(localDir, localTarget, quatOut.q);

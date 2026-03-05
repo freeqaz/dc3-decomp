@@ -285,7 +285,9 @@ void CharHair::SimulateInternal(float fps) {
                 // Collision
                 if (pt.collides.size() != 0) {
                     float diffRad = pt.outerRadius - pt.radius;
-                    float maxRad = Max(pt.radius, pt.outerRadius);
+                    float maxRad;
+                    if (pt.radius < pt.outerRadius) maxRad = pt.outerRadius;
+                    else maxRad = pt.radius;
                     for (ObjPtrList<CharCollide>::iterator it = pt.collides.begin();
                          it != pt.collides.end();
                          ++it) {
@@ -588,17 +590,18 @@ CharHair::Strand::Strand(const Strand &rhs)
 }
 
 void CharHair::Strand::SetRoot(RndTransformable *trans) {
-    mRoot = trans;
-    if (!mRoot) {
+    auto& root = mRoot;
+    root = trans;
+    if (!root) {
         mPoints.resize(0);
     } else {
-        float savedLength = mPoints.size() != 0 ? mPoints.back().length : 0.0f;
-        mBaseMat = mRoot->LocalXfm().m;
+        float savedLength = 0 != mPoints.size() ? mPoints.back().length : 0.0f;
+        mBaseMat = root->LocalXfm().m;
         SetAngle(mAngle);
 
         // Count chain depth by walking Children until leaf
         int depth = 0;
-        for (RndTransformable *it = mRoot; ; it = it->Children().front()) {
+        for (RndTransformable *it = root; ; it = it->Children().front()) {
             depth++;
             if (it->Children().empty())
                 break;
@@ -606,10 +609,10 @@ void CharHair::Strand::SetRoot(RndTransformable *trans) {
 
         mPoints.resize(depth);
         // Assign bones: root gets points[0], then walk children
-        mPoints[0].bone = mRoot;
-        if (!mRoot->Children().empty()) {
+        mPoints[0].bone = root;
+        if (!root->Children().empty()) {
             int idx = 0;
-            for (RndTransformable *it = mRoot; !it->Children().empty(); ) {
+            for (RndTransformable *it = root; !it->Children().empty(); ) {
                 idx++;
                 it = it->Children().front();
                 mPoints[idx].bone = it;
@@ -618,7 +621,7 @@ void CharHair::Strand::SetRoot(RndTransformable *trans) {
 
         // Set length and pos for all but last point
         Point *prevPt = nullptr;
-        for (int i = 1; i < (int)mPoints.size(); i++) {
+        for (int i = 1; (unsigned int)i < (int)mPoints.size(); i++) {
             Point &prevPoint = mPoints[i - 1];
             prevPt = &prevPoint;
             RndTransformable *nextBone = mPoints[i].bone;

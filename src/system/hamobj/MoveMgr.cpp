@@ -442,11 +442,13 @@ void MoveMgr::NextMovesToShow(DataArray *a, int measure) {
         PrepareNextChoiceSet(measure - 1);
     }
     for (int i = 0; i < 4; i++) {
-        MILO_LOG("\t%s\n", mChoiceSets[measure].mChoices[i]->Name());
+        auto choiceName = mChoiceSets[measure].mChoices[i]->Name();
+        MILO_LOG("\t%s\n", choiceName);
     }
     a->Resize(4);
     for (int i = 0; i < 4; i++) {
-        a->Node(i) = mChoiceSets[measure].mChoices[i]->Name();
+        auto choiceName = mChoiceSets[measure].mChoices[i]->Name();
+        a->Node(i) = choiceName;
     }
 }
 

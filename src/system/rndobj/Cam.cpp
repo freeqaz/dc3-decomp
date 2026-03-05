@@ -190,12 +190,12 @@ Transform RndCam::GetInvViewXfm() {
 }
 
 void RndCam::GetCamFrustum(Vector3 &origin, Vector3 (&dirs)[4]) {
+    const Transform &xfm = WorldXfm();
+    origin = xfm.v;
     static Vector2 sCorners[4] = {
         Vector2(0, 0), Vector2(0, 1), Vector2(1, 0), Vector2(1, 1)
     };
-    const Transform &xfm = WorldXfm();
-    origin = xfm.v;
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; (unsigned int)i < 4; i++) {
         ScreenToWorld(sCorners[i], mFarPlane, dirs[i]);
         dirs[i].x -= origin.x;
         dirs[i].y -= origin.y;

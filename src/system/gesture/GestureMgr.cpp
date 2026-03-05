@@ -195,17 +195,16 @@ void GestureMgr::PostUpdate(const SkeletonUpdateData *data) {
         mPauseOnSkeletonLossMode = 1;
     }
 
-    Skeleton *const *allSkeletons = data->mSkeletonsRight;
-    for (int i = 0; i < 6; i++) {
+    for (int i = 0; (unsigned int)i < 6; i++) {
         bool updateSkeleton = true;
         unk30[i] = 0;
 
         if (mTrackingAllSkeletons
-            && allSkeletons[i]->TrackingID() == mSkeletons[i].TrackingID()) {
-            updateSkeleton = allSkeletons[i]->TrackingState() != kSkeletonPositionOnly;
+            && data->mSkeletonsRight[i]->TrackingID() == mSkeletons[i].TrackingID()) {
+            updateSkeleton = data->mSkeletonsRight[i]->TrackingState() != kSkeletonPositionOnly;
         }
         if (updateSkeleton) {
-            mSkeletons[i] = *allSkeletons[i];
+            mSkeletons[i] = *data->mSkeletonsRight[i];
         }
 
         mFilters[i].Update(mSkeletons[i], mInShellMode);
@@ -464,11 +463,12 @@ DataNode GestureMgr::OnMsg(const KinectUserBindingChangedMsg &msg) {
 void GestureMgr::DrawSkeletonKinectData() {
     Vector2 textPos(0.15f, 0.2f);
 
-    for (int i = 0; i < NUM_SKELETONS; i++) {
+    auto& debugDir = mDebugDir;
+    for (int i = 0; (unsigned int)i < NUM_SKELETONS; i++) {
         const Skeleton &skel = GetSkeleton(i);
         SkeletonTrackingState tracking = skel.TrackingState();
 
-        if (mDebugDir == NULL) {
+        if (debugDir == NULL) {
             const char *statusStr;
             if (tracking == kSkeletonTracked) {
                 statusStr = "tracked";
@@ -489,7 +489,7 @@ void GestureMgr::DrawSkeletonKinectData() {
             textPos.y = result.y;
         } else {
             RndDir *marker =
-                mDebugDir->Find<RndDir>(MakeString("marker%d", i), false);
+                debugDir->Find<RndDir>(MakeString("marker%d", i), false);
             if (marker != NULL) {
                 marker->SetShowing(tracking != kSkeletonNotTracked);
                 if (tracking != kSkeletonNotTracked) {
@@ -565,7 +565,7 @@ void GestureMgr::DrawSkeletonKinectData() {
         }
     }
 
-    if (mDebugDir) {
-        mDebugDir->DrawShowing();
+    if (debugDir) {
+        debugDir->DrawShowing();
     }
 }

@@ -125,7 +125,6 @@ FormatString &FormatString::operator<<(int i) {
 }
 
 const char *FormatString::Str() {
-    const char *result = mBuf;
 
     if (mType != kNone)
         MILO_NOTIFY(
@@ -135,6 +134,7 @@ const char *FormatString::Str() {
         MILO_ASSERT(mFmtEnd - mFmt < mBufSize, 0x16F);
         strcpy(mBuf + MAX_BUF_SIZE - mBufSize, mFmt);
     }
+    const char *result = mBuf;
     return result;
 }
 

@@ -12,10 +12,10 @@ void BinkMovieSys::PlatformInit() {
 }
 
 void BinkMovieSys::PlatformStoreCache(void *ptr, unsigned int size) {
+    char *addr = (char *)ptr;
     if (size == 0) {
         return;
     }
-    char *addr = (char *)ptr;
     unsigned int count = ((size - 1) >> 7) + 1;
     do {
         __dcbst(0, addr);

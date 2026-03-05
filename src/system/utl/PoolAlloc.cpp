@@ -89,10 +89,10 @@ void FixedSizeAlloc::Free(void *v) {
 }
 
 int *FixedSizeAlloc::RawAlloc(int size) {
+    int *buf = sPoolBuf;
     int alignedSize = (size >> 2) << 2;
     gPoolCapacity += size;
 
-    int *buf = sPoolBuf;
     if ((unsigned int)((char *)buf + alignedSize) > (unsigned int)sPoolEnd) {
         if (MemNumHeaps() > 0) {
             if (gBigHunk == gSmallHunk) {

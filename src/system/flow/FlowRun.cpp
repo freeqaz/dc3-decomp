@@ -94,7 +94,8 @@ bool FlowRun::Activate() {
 
 void FlowRun::ResolveTarget() {
     Flow *target = mTarget;
-    if (!target && mTargetName.length() > 0) {
+    auto& targetName = mTargetName;
+    if (!target && targetName.length() > 0) {
         ObjectDir *dir = mTargetDir;
         if (!dir) {
             // Find the containing flow's dir
@@ -107,10 +108,8 @@ void FlowRun::ResolveTarget() {
             }
         }
         if (dir) {
-            Hmx::Object *found = dir->Find<Hmx::Object>(mTargetName.c_str(), false);
-            if (found) {
-                mTarget = dynamic_cast<Flow *>(found);
-            }
+            Hmx::Object *found = dir->Find<Hmx::Object>(targetName.c_str(), false);
+            mTarget = dynamic_cast<Flow *>(found);
         }
     }
 }

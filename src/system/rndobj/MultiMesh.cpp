@@ -342,7 +342,6 @@ void RndMultiMesh::CollideList(const Segment &seg, std::list<Collision> &colls) 
                 Plane pl;
                 if (mMesh->CollideShowing(seg, f, pl)) {
                     RndMultiMeshProxy *proxy = nullptr;
-                    RndMultiMeshProxy *proxy00 = proxy;
                     for (std::list<std::pair<RndMultiMeshProxy *, int> >::iterator sit =
                              sProxyPool.begin();
                          sit != sProxyPool.end();
@@ -351,22 +350,22 @@ void RndMultiMesh::CollideList(const Segment &seg, std::list<Collision> &colls) 
                         if (proxy->MultiMesh() == this && proxy->Index() == it)
                             break;
                     }
-                    proxy00 = proxy;
+                    proxy = proxy;
                     if (!proxy) {
                         for (std::list<std::pair<RndMultiMeshProxy *, int> >::iterator
                                  sit = sProxyPool.begin();
                              sit != sProxyPool.end();
                              ++sit) {
                             if (stamp != sit->second) {
-                                proxy00 = sit->first;
-                                if (!proxy00->Children().size()) {
+                                proxy = sit->first;
+                                if (!proxy->Children().size()) {
                                     sit->second = stamp;
                                     break;
                                 }
                             }
                         }
                     }
-                    if (!proxy00) {
+                    if (!proxy) {
                         RndMultiMeshProxy *new_proxy =
                             Hmx::Object::New<RndMultiMeshProxy>();
                         sProxyPool.push_front(std::make_pair(new_proxy, stamp));

@@ -100,8 +100,7 @@ void FlowSwitch::ChildFinished(FlowNode *n) {
 }
 
 void FlowSwitch::VerifyTypes() {
-    static Symbol valueStr("value");
-    DrivenPropertyEntry *entry = GetDrivenEntry(valueStr);
+    DrivenPropertyEntry *entry = GetDrivenEntry(("value"));
     if (!entry)
         return;
     // Get the property path for the "value" property

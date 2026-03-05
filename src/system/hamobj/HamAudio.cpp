@@ -327,26 +327,24 @@ DataNode HamAudio::OnSetCrossfadeJump(DataArray *a) {
 }
 
 void HamAudio::FinishLoad() {
+    auto& stream0 = mStreams[0];
+    unsigned int counter = 2;
+
     if (mFileLoader) {
         mRawBuffer = mFileLoader->GetBuffer(&mRawBufferSize);
         delete mFileLoader;
         mFileLoader = NULL;
 
         static Symbol main("main");
-        mStreams[0] = TheSynth->NewBufStream(mRawBuffer, mRawBufferSize, main, 0.25f, true);
+        stream0 = TheSynth->NewBufStream(mRawBuffer, mRawBufferSize, main, 0.25f, true);
         mStreams[1] = TheSynth->NewBufStream(mRawBuffer, mRawBufferSize, main, 0.25f, false);
-        mSongStream = mStreams[0];
+        mSongStream = stream0;
     }
-
-    unsigned int counter = 2;
-    Stream **pStream = &mStreams[0];
-    const char *multiLevelFade = "multi_level.fade";
-    const char *vocalsLevelFade = "vocals_level.fade";
-
+    Stream **pStream = &stream0;
     do {
         if (*pStream) {
             (*pStream)->Faders()->Add(mMasterFader);
-            Fader *crossFader = (&mCrossFaders[0])[pStream - &mStreams[0]];
+            Fader *crossFader = (&mCrossFaders[0])[pStream - &stream0];
             (*pStream)->Faders()->Add(crossFader);
             crossFader->SetVolume(0.0f);
 
@@ -387,14 +385,14 @@ void HamAudio::FinishLoad() {
                 }
 
                 if (TheSynth->CheckCommonBank(false)) {
-                    Fader *vocalsFader = TheSynth->Find<Fader>(vocalsLevelFade, false);
+                    Fader *vocalsFader = TheSynth->Find<Fader>("vocals_level.fade", false);
                     if (vocalsFader && audioType == kAudioTypeVocals) {
                         for (unsigned int c = 0; c < channels.size(); c++) {
                             (*pStream)->ChannelFaders(channels[c]).Add(vocalsFader);
                         }
                     }
 
-                    Fader *multiFader = TheSynth->Find<Fader>(multiLevelFade, false);
+                    Fader *multiFader = TheSynth->Find<Fader>("multi_level.fade", false);
                     if (multiFader && audioType == kAudioTypeMulti) {
                         for (unsigned int c = 0; c < channels.size(); c++) {
                             (*pStream)->ChannelFaders(channels[c]).Add(multiFader);

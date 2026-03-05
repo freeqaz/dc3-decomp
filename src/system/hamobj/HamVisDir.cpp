@@ -29,7 +29,8 @@ HamVisDir::HamVisDir()
     : mFilter(0), mRunning(0), unk2d8(0), unk2dc(0), mPlayer1Right(this),
       mPlayer1Left(this), mPlayer2Right(this), mPlayer2Left(this), mMiloManualFrame(1),
       mGrooviness(0) {
-    if (SkeletonUpdate::HasInstance()) {
+    bool hasInstance = SkeletonUpdate::HasInstance();
+    if (hasInstance) {
         SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
         if (!handle.HasCallback(this)) {
             handle.AddCallback(this);

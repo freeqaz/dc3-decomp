@@ -587,11 +587,7 @@ void WorldCrowd::Draw3DChars() {
     if (!Crowd3DExists()) return;
     // Use mEnviron3D if it has a pointer, else mEnviron
     RndEnviron *env;
-    if (mEnviron3D) {
-        env = mEnviron3D;
-    } else {
-        env = mEnviron;
-    }
+    env = mEnviron3D ? mEnviron3D : mEnviron;
     // Save and clear the environ's use-approx-global flag
     bool savedApprox = true;
     if (env) {
@@ -600,11 +596,12 @@ void WorldCrowd::Draw3DChars() {
     }
     RndEnvironTracker tracker(env, nullptr);
     ObjList<CharData>::iterator charIt = mCharacters.begin();
-    for (; charIt != mCharacters.end(); ++charIt) {
+    auto charsEnd = mCharacters.end();
+    for (; charIt != charsEnd; ++charIt) {
         Character *curChar = charIt->mDef.mChar;
         if (!curChar || !charIt->mMMesh) continue;
         int numChars = (int)charIt->m3DChars.size();
-        for (int i = 0; i < numChars; i++) {
+        for (int i = 0; (unsigned int)i < numChars; i++) {
             Apply3DCharXfm(charIt, i, RndCam::Current());
 #ifndef HX_NATIVE
             if (charIt->mDef.mUseRandomColor) {
@@ -842,10 +839,10 @@ void WorldCrowd::Set3DCharList(
         Reset3DCrowd();
         std::vector<std::pair<RndMultiMesh *, InstanceList::iterator> > grosserPairs;
         grosserPairs.reserve(pairVec.size());
-        for (int i = 0; i < (int)pairVec.size(); i++) {
+        for (int i = 0; (unsigned int)i < (int)pairVec.size(); i++) {
             int meshIdx = pairVec[i].first;
-            if (meshIdx >= (int)mCharacters.size()) {
-                MILO_WARN(
+            if ((unsigned int)meshIdx >= (int)mCharacters.size()) {
+                MILO_NOTIFY(
                     "%s setting bad mesh %d, only has %d",
                     PathName(obj),
                     meshIdx,
@@ -855,24 +852,24 @@ void WorldCrowd::Set3DCharList(
                 ObjList<CharData>::iterator charIt = mCharacters.begin();
                 for (int n = 0; n < meshIdx; ++n, ++charIt)
                     ;
-                RndMultiMesh *curMMesh = charIt->mMMesh;
-                if (curMMesh) {
+                if (charIt->mMMesh) {
                     int charInstIdx = pairVec[i].second;
-                    if (charInstIdx >= (int)curMMesh->Instances().size()) {
+                    if (charInstIdx >= (int)charIt->mMMesh->Instances().size()) {
                         MILO_WARN(
                             "%s setting bad 3d char %d on mmesh %s, only has %d chars",
                             PathName(this),
                             charInstIdx,
-                            curMMesh->Name(),
-                            curMMesh->Instances().size()
+                            charIt->mMMesh->Name(),
+                            charIt->mMMesh->Instances().size()
                         );
                     } else {
-                        InstanceList::iterator instIt = curMMesh->Instances().begin();
+                        InstanceList::iterator instIt = charIt->mMMesh->Instances().begin();
                         for (int n = 0; n < charInstIdx; ++instIt, ++n)
                             ;
                         CharData::Char3D char3D(instIt->mXfm, charInstIdx);
                         charIt->m3DChars.push_back(char3D);
-                        grosserPairs.push_back(std::make_pair(charIt->mMMesh, instIt));
+                        auto meshInstPair = std::make_pair(charIt->mMMesh, instIt);
+                        grosserPairs.push_back(meshInstPair);
                     }
                 }
             }
@@ -934,9 +931,8 @@ void WorldCrowd::DrawShowing() {
         if (TheRnd.GetDrawMode() == Rnd::kDrawNormal) {
             // Render billboard crowd
             FOREACH (it, mCharacters) {
-                RndMultiMesh *multiMesh = it->mMMesh;
-                if (it->mDef.mChar && multiMesh && !mShow3DOnly) {
-                    multiMesh->DrawShowing();
+                if (it->mDef.mChar && it->mMMesh && !mShow3DOnly) {
+                    it->mMMesh->DrawShowing();
                 }
             }
         }

@@ -92,8 +92,8 @@ void NavListSort::DeleteTree() {
 
 bool NavListSort::SetHighlightID(DataArray *a) {
     NavListSortNode *prevHighlight = mHighlightNode;
-    mPrevHighlightNode = prevHighlight;
     mHighlightNode = nullptr;
+    mPrevHighlightNode = prevHighlight;
     int arraySize = a->Size();
     if (arraySize == 0)
         return false;
@@ -104,8 +104,9 @@ bool NavListSort::SetHighlightID(DataArray *a) {
         mHighlightNode = *nodeIt;
         return true;
     }
-    auto shortcutIt = std::find_if(mShortcutNodes.begin(), mShortcutNodes.end(), NodeFind(a->Sym(0)));
-    if (shortcutIt == mShortcutNodes.end())
+    auto& shortcuts = mShortcutNodes;
+    auto shortcutIt = std::find_if(shortcuts.begin(), shortcuts.end(), NodeFind(a->Sym(0)));
+    if (shortcutIt == shortcuts.end())
         return false;
     MILO_ASSERT(kNodeShortcut == (*shortcutIt)->GetType(), 0x44);
     const std::list<NavListSortNode *> &children = (*shortcutIt)->Children();

@@ -148,16 +148,17 @@ void SongSequence::LoadNextSongAudio() {
 }
 
 bool SongSequence::DoNext(bool b1, bool b2) {
-    static Symbol active("active");
-    static Symbol holla_back_config("holla_back_config");
-    static Symbol perform("perform");
-    static Symbol in_campaign_era_intro("in_campaign_era_intro");
-    static Symbol gameplay_mode("gameplay_mode");
     static Symbol midi_player("midi_player");
+    static Symbol active("active");
+    static Symbol perform("perform");
+    static Symbol gameplay_mode("gameplay_mode");
+    static Symbol holla_back_config("holla_back_config");
+    static Symbol in_campaign_era_intro("in_campaign_era_intro");
     static Symbol mind_control("mind_control");
     static Symbol holla_back("holla_back");
     mVenueEntered = false;
-    if (mEntries.empty())
+    bool isEmpty = mEntries.empty();
+    if (isEmpty)
         return true;
     bool isLoaded = TheGame->IsLoaded();
     if (!b1 && !isLoaded) {
@@ -225,8 +226,9 @@ bool SongSequence::DoNext(bool b1, bool b2) {
             }
         }
         if (loadCrew && isLoaded) {
+            auto crew = TheGameData->Player(0)->Crew();
             TheHamDirector->LoadCrew(
-                TheGameData->Player(0)->Crew(), TheGameData->Player(1)->Crew()
+                crew, TheGameData->Player(1)->Crew()
             );
         }
         static Symbol hud_panel("hud_panel");

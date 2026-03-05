@@ -94,9 +94,7 @@ void BinkMovieSys::Terminate() {
         cs->Exit();
     }
 
-    if (mCriticalSection) {
-        delete mCriticalSection;
-    }
+    delete mCriticalSection;
     mCriticalSection = 0;
 
     MovieSys::Terminate();

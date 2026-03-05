@@ -80,8 +80,8 @@ int JointParent(SkeletonJoint joint) {
 }
 
 void JointScreenPos(const TrackedJoint &joint, Vector2 &v2) {
-    FLOAT fDepthX, fDepthY;
     XMVECTOR vmx;
+    FLOAT fDepthX, fDepthY;
     vmx.x = joint.mSmoothedPos.x;
     vmx.y = joint.mSmoothedPos.y;
     vmx.z = joint.mSmoothedPos.z;

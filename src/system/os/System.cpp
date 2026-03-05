@@ -520,7 +520,7 @@ void SetSystemArgs(const char *commandLine) {
         int newToken = 1;
 
         for (;;) {
-            if (!inQuotes && *ptr == ' ') {
+            if (!inQuotes) {
                 *ptr = 0;
                 newToken = 1;
                 ptr++;

@@ -206,13 +206,13 @@ void UIListWidget::DrawMesh(
         int maxData[4];
         const int *src = (const int *)box;
         minData[0] = src[0];
-        minData[1] = src[1];
         minData[2] = src[2];
         minData[3] = src[3];
         maxData[0] = src[4];
-        maxData[1] = src[5];
+        minData[1] = src[1];
         maxData[2] = src[6];
         maxData[3] = src[7];
+        maxData[1] = src[5];
         Box localbox;
         int *dst = (int *)&localbox;
         dst[0] = minData[0];

@@ -298,12 +298,11 @@ int Challenges::GetTotalXpEarned(int player) {
     MILO_ASSERT(provider, 0x438);
     static Symbol score("score");
     int playerScore = provider->Property(score)->Int();
-    std::vector<ChallengeRow> &playerChallenges = mPlayerChallenges[player];
     int xp = 0;
-    for (int i = 0; i < playerChallenges.size(); i++) {
-        if (playerScore > playerChallenges[i].mScore) {
+    for (int i = 0; i < mPlayerChallenges[player].size(); i++) {
+        if (playerScore > mPlayerChallenges[player][i].mScore) {
             xp += CalculateChallengeXp(
-                playerChallenges[i].mScore, playerChallenges[i].mDiff
+                mPlayerChallenges[player][i].mScore, mPlayerChallenges[player][i].mDiff
             );
         }
     }
@@ -385,13 +384,14 @@ void Challenges::UpdateChallengeTimeStamp() {
         if (profile) {
             FOREACH (it, mProfileChallenges) {
                 if (it->first == profile->GetName()) {
+                    auto& firstChallenge = it->second[0];
                     MILO_LOG(
                         ">>>> Update challenge time stamp from %i to %i\n",
                         profile->GetChallengeTimeStamp(),
-                        it->second[0].mTimeStamp
+                        firstChallenge.mTimeStamp
                     );
                     profile->MakeDirty();
-                    profile->SetChallengeTimeStamp(it->second[0].mTimeStamp);
+                    profile->SetChallengeTimeStamp(firstChallenge.mTimeStamp);
                     return;
                 }
             }
@@ -463,13 +463,12 @@ bool Challenges::GetBeatenChallengeXPs(
     if (provider->Property(has_valid_challenge_data)->Int()) {
         for (int i = 0; i < 2; i++) {
             if (playerData == TheGameData->Player(i)) {
-                std::vector<ChallengeRow> &challenges = mPlayerChallenges[i];
-                if (challenges.size() == 0)
+                if (mPlayerChallenges[i].size() == 0)
                     return false;
-                for (int j = 0; j < challenges.size(); j++) {
-                    if (score > challenges[j].mScore) {
+                for (int j = 0; j < mPlayerChallenges[i].size(); j++) {
+                    if (score > mPlayerChallenges[i][j].mScore) {
                         int xp = CalculateChallengeXp(
-                            challenges[j].mScore, challenges[j].mDiff
+                            mPlayerChallenges[i][j].mScore, mPlayerChallenges[i][j].mDiff
                         );
                         beatenXPs.push_back(xp);
                         MILO_LOG("XP = %i\n", xp);

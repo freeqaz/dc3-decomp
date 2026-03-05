@@ -33,8 +33,8 @@ bool CompareType(const Playlist *p1, const Playlist *p2) {
     int p2type = p2->GetType();
     if (p1type == p2type) {
         // Manual strcmp on playlist name (Symbol mName at offset 0x4)
-        unsigned char *b1 = (unsigned char *)p1 + 4;
         unsigned char *b2 = (unsigned char *)p2 + 4;
+        unsigned char *b1 = (unsigned char *)p1 + 4;
         int diff;
         do {
             unsigned char c1 = *b1;

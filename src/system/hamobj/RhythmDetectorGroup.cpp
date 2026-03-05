@@ -97,15 +97,16 @@ void RhythmDetectorGroup::RemoveDebugGraphs() {
 void RhythmDetectorGroup::AddDebugGraphs() {
     float f6 = 1.0f / (float)(mDetectors.size() + 1);
     float f7 = f6 * 0.9f;
-    delete mDebugGraph;
     float f10 = f6;
+    Hmx::Color bgColor = Hmx::Color(0.4, 0.4, 0.4, 0.8);
+    delete mDebugGraph;
     mDebugGraph = new DebugGraph(
         0.1f,
         0.0f,
         0.8f,
         0.9f,
         Hmx::Color(0.4, 0.4, 0.4, 0.8),
-        Hmx::Color(0.4, 0.4, 0.4, 0.8),
+        bgColor,
         null,
         0.0,
         2.0,

@@ -58,7 +58,8 @@ void MemHeap::FreeBlockStats(int &lFrags, int &rFrags, int &freeBytes, int &i4, 
 
 void MemHeap::Print(TextStream &ts, bool verbose) {
     ts << MakeString(";---------------------------------------\n");
-    ts << MakeString("; HEAP: %i (%s), starts %p, %d bytes\n", mNum, mName, mStart, mSizeWords * 4);
+    const char *heapInfo = MakeString("; HEAP: %i (%s), starts %p, %d bytes\n", mNum, mName, mStart, mSizeWords * 4);
+    ts << heapInfo;
     int rFrags, lFrags, freeBytes, maxFreeIdx, minFreeBytes;
     FreeBlockStats(lFrags, rFrags, freeBytes, maxFreeIdx, minFreeBytes);
     ts << MakeString("\n");
@@ -68,17 +69,17 @@ void MemHeap::Print(TextStream &ts, bool verbose) {
         rFrags,
         freeBytes
     );
-    ts << MakeString("\n");
-
     unsigned int *curPtr = (unsigned int *)mStart;
-    unsigned int *endPtr = curPtr + mSizeWords;
-    unsigned int *curFreeBlock = (unsigned int *)mFreeBlockChain;
-    int curAllocCount = 0;
-    int curAllocSize = 0;
-    int *curAllocPtr = nullptr;
-    const AllocInfo *curAllocInfo = nullptr;
 
+    ts << MakeString("\n");
+    int curAllocCount = 0;
+    int *curAllocPtr = nullptr;
+    int curAllocSize = 0;
+    unsigned int *endPtr = curPtr + mSizeWords;
+    const AllocInfo *curAllocInfo = nullptr;
     unsigned int blockSizeWords = 0;
+
+    unsigned int *curFreeBlock = (unsigned int *)mFreeBlockChain;
     for (; curPtr < endPtr; curPtr += blockSizeWords) {
         unsigned int *savedCurPtr = curPtr;
 
@@ -170,8 +171,8 @@ void MemHeap::Init(
     mAllowTemp = allowTemp;
     mMinFreeBytes = -1;
     mDebugLevel = debugLevel;
-        int time = gTimeStamp;
     gTimeStamp++;
+        int time = gTimeStamp;
     InsertFreeBlock((FreeBlock *)_ref0, mSizeWords = size - (i7 - start), nullptr, nullptr, time);
     if (1 <= mDebugLevel) {
         FreeBlock *blockStart = mFreeBlockChain;

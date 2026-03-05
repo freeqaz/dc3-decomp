@@ -48,8 +48,8 @@ void CamShotVOData(
     static Symbol win_hype_solo("win_hype_solo");
     static Symbol win_hype_crew("win_hype_crew");
     static Symbol win_hype_diff_crew("win_hype_diff_crew");
-    static Symbol win_camp_crew("win_camp_crew");
     static Symbol lose_camp_char("lose_camp_char");
+    static Symbol win_camp_crew("win_camp_crew");
     static Symbol battle_outro_crew("battle_outro_crew");
     static Symbol all("all");
     static Symbol active("active");
@@ -87,7 +87,8 @@ void CamShotVOData(
                 MILO_WARN("Unknown intro category %s", s);
             }
         } else if (hasOutros) {
-            if (subStrings.size() > 0 && subStrings[0] == "BATTLE") {
+            auto numSubStrings = subStrings.size();
+            if (numSubStrings > 0 && subStrings[0] == "BATTLE") {
                 s1 = battle_outro_crew;
                 crewSym = StrToCrewSym(subStrings[2]);
             } else if (subStrings.size() > 1 && subStrings[1] == "CAMP") {

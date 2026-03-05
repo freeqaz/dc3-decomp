@@ -341,12 +341,16 @@ void PoseFatalities::PollVO() {
     uint flag_val = mFeedbackFlags;
     bool flag1 = flag_val & 1;
     bool flag2 = (flag_val >> 1) & 1;
-    if ((flag1 || !flag2) && flag1) {
+    if ((flag1 || !flag2)) {
+        if (flag1) {
         if (flag2) {
             PlayVO("nar_sap_both_fc");
         } else {
             PlayVO("nar_sap_left_fc");
         }
+    } else if (flag1 == 0 && flag2 != 0) {
+        PlayVO("nar_sap_right_fc");
+    }
     } else if (flag1 == 0 && flag2 != 0) {
         PlayVO("nar_sap_right_fc");
     }

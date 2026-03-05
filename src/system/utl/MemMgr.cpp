@@ -507,10 +507,10 @@ void MemPopHeap() {
 }
 
 void MemPushTemp() {
-    if (gNumHeaps == 0) {
+    if ((int)gNumHeaps == 0) {
         return;
     }
-    if (gNumHeaps <= 0) {
+    if (gNumHeaps < 1) {
         return;
     }
     MemHeapStack &s = ThreadMemStack(true);
@@ -521,10 +521,10 @@ void MemPopTemp() {
     if (gNumHeaps == 0) {
         return;
     }
+    MemHeapStack &s = ThreadMemStack(true);
     if (gNumHeaps <= 0) {
         return;
     }
-    MemHeapStack &s = ThreadMemStack(true);
     s.mSize--;
 }
 

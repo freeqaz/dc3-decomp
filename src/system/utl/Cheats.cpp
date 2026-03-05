@@ -202,11 +202,11 @@ void CheatsTerminate() {
 }
 
 void CheatsManager::RebuildKeyCheatsForMode() {
+    auto cheatsEnd = mKeyCheats.end();
     static Symbol modes("modes");
     mKeyCheatPtrsMode.clear();
-    auto _tmp0 = mKeyCheats.end();
     for (std::vector<KeyCheat>::iterator it = mKeyCheats.begin();
-         it != _tmp0; ++it) {
+         it != cheatsEnd; ++it) {
         DataArray *modesArr = it->mScript->FindArray(modes, false);
         if (!modesArr || modesArr->Contains(mSymMode)) {
             mKeyCheatPtrsMode.push_back(&*it);

@@ -67,25 +67,26 @@ END_HANDLERS
 
 void DanceRemixer::SetJump(int from, int to) {
     ClearJump();
-    mFromMeasure = from - 1;
+    auto& fromMeasure = mFromMeasure;
+    fromMeasure = from - 1;
     mToMeasure = to - 1;
-    int fromBeat = mFromMeasure * 4;
-    if (mFromMeasure == mToMeasure) {
+    int fromBeat = fromMeasure * 4;
+    if (fromMeasure == mToMeasure) {
         TheMaster->GetAudio()->SetLoop((float)(mToMeasure * 4), (float)fromBeat);
     } else {
         float fromMs = BeatToMs((float)fromBeat);
         float toMs = BeatToMs((float)(mToMeasure * 4));
         float jumpOffset = SystemConfig("dance", "jump")->Node(1).Float(nullptr);
-        float crossfadeMs = BeatToMs((float)(mFromMeasure * 4) + jumpOffset);
+        float crossfadeMs = BeatToMs((float)(fromMeasure * 4) + jumpOffset);
         TheMaster->GetAudio()->SetCrossfadeJump(fromMs, toMs, crossfadeMs - fromMs);
 
-        mJumpMap[mToMeasure] = mFromMeasure;
-        if (mFromMeasure > 0 && mToMeasure > 0) {
-            mJumpMap[mFromMeasure - 1] = mToMeasure - 1;
+        mJumpMap[mToMeasure] = fromMeasure;
+        if (fromMeasure > 0 && mToMeasure > 0) {
+            mJumpMap[fromMeasure - 1] = mToMeasure - 1;
         }
 
         float curBeat = TheTaskMgr.Beat();
-        int idx = mFromMeasure - 1;
+        int idx = fromMeasure - 1;
         int count = (int)curBeat / 4 - idx + 5;
         if (count > 0 && 0 < (int)count) {
             do {
@@ -184,8 +185,8 @@ void DanceRemixer::PostMoveFinished() {
     MoveDir *moveDir = TheHamDirector->GetMoveDir();
     MoveAsyncDetector *detector = moveDir->GetAsyncDetector();
     for (int i = 0; i < 2; i++) {
-        auto _tmp1 = ScoredDanceMeasure(i, JumpedMoveIdx(moveIdx - 1) + 1);
-        if (_tmp1) {
+        auto scored = ScoredDanceMeasure(i, JumpedMoveIdx(moveIdx - 1) + 1);
+        if (scored) {
             detector->DisableAllDetectors();
             break;
         }

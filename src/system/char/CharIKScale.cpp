@@ -76,8 +76,8 @@ void CharIKScale::Poll() {
     float weight = Weight();
     if (mDest && weight != 0) {
         if (mAutoWeight) {
-            float localZ = mDest->LocalXfm().v.z;
             float bottom = mBottomHeight;
+            float localZ = mDest->LocalXfm().v.z;
             if (localZ < bottom)
                 weight = 0;
             else if (localZ > mTopHeight)

@@ -395,14 +395,13 @@ void HamListRibbon::Draw(
 ) {
     // Set our world transform
     SetWorldXfm(xfm);
-    int numItems = (int)drawStates.size();
-    for (int i = 0; i < numItems; i++) {
+    for (int i = 0; i < (int)drawStates.size(); i++) {
         const HamListRibbonDrawState &state = drawStates[i];
         if (state.mHidden) continue;
         // Set animations based on state
         bool selected = state.mSelected;
         float swellFrame = state.mSwellSmoother.Level();
-        SetAnims(selected, swellFrame);
+        SetAnims(swellFrame, selected);
     }
     // Draw all children
     RndDir::DrawShowing();

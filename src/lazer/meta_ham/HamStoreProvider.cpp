@@ -273,8 +273,9 @@ BEGIN_HANDLERS(HamStoreProvider)
 END_HANDLERS
 
 void HamStoreProvider::OnNextSort() {
+    auto& sortIndex = mSortIndex;
     if (mSorts.size() > 1) {
-        mSortIndex = (mSortIndex + 1) % (int)mSorts.size();
+        sortIndex = (sortIndex + 1) % (int)mSorts.size();
         Refresh();
     }
 }

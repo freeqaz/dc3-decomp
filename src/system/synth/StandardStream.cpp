@@ -413,9 +413,7 @@ void StandardStream::UpdateTimeByFiltering() {
         return;
     }
 
-    float rawTime = GetRawTime();
-    float timerMs = mTimer.Ms();
-    float drift = rawTime - timerMs;
+    float drift = GetRawTime() - mTimer.Ms();
 
     if (fabsf(drift) <= 50.0f) {
         drift *= 0.1f;

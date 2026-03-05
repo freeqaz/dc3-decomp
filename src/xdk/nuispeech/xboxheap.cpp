@@ -5,7 +5,8 @@ NUISPEECH::CXboxHeap::CXboxHeap(unsigned int initSize, unsigned int size) {
     mFreeHead = this;
     mCount = 0;
     mUsedHead = this;
-    mListHead.mNext = &mListHead;
-    mListHead.mPrev = &mListHead;
+    auto& listHead = mListHead;
+    listHead.mNext = &listHead;
+    listHead.mPrev = &listHead;
     AllocatePageBlock(initSize);
 }

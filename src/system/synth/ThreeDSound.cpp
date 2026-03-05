@@ -141,8 +141,8 @@ void ThreeDSound::Highlight() {
         Vector3 vscale;
         MakeScale(xfm.m, vscale);
         vscale.x = 1.0f / vscale.x;
-        vscale.y = 1.0f / vscale.y;
         vscale.z = 1.0f / vscale.z;
+        vscale.y = 1.0f / vscale.y;
         Scale(vscale, xfm.m, xfm.m);
         if (mRadius > mMinFalloffDistance) {
             UtilDrawSphere(

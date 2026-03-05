@@ -242,8 +242,8 @@ void MetagameRank::Init() {
         }
     }
     DataArray *taskArr = rankCfg->FindArray("tasks");
-    gRepeatableTasks = taskArr->FindArray("repeatable");
     gOneTimeTasks = rankCfg->FindArray("one_time");
+    gRepeatableTasks = taskArr->FindArray("repeatable");
 }
 
 void MetagameRank::Clear() {
@@ -341,7 +341,8 @@ void MetagameRank::UpdateScore(
     int unk
 ) {
     // Check if in party mode - early return (NOT static - constructed each call)
-    if (TheHamProvider->Property(Symbol("is_in_party_mode"), true)->Int(0)) {
+    auto isPartyMode = TheHamProvider->Property(Symbol("is_in_party_mode"), true)->Int(0);
+    if (isPartyMode) {
         return;
     }
 
@@ -351,40 +352,40 @@ void MetagameRank::UpdateScore(
 
     // Static symbols - order matches guard counter allocation (Ghidra verified)
     // Guard word 1 (bits 0-31)
-    static Symbol double_xp_weekend("double_xp_weekend");
-    static Symbol completed_song_with_1_star("completed_song_with_1_star");
-    static Symbol completed_song_with_2_stars("completed_song_with_2_stars");
-    static Symbol completed_song_with_3_stars("completed_song_with_3_stars");
-    static Symbol completed_song_with_4_stars("completed_song_with_4_stars");
-    static Symbol completed_song_with_5_stars("completed_song_with_5_stars");
-    static Symbol completed_song_on_beginner("completed_song_on_beginner");
-    static Symbol completed_song_on_easy("completed_song_on_easy");
-    static Symbol completed_song_on_medium("completed_song_on_medium");
-    static Symbol completed_song_on_hard("completed_song_on_hard");
-    static Symbol golden_performance("golden_performance");
-    static Symbol completed_song_warmup("completed_song_warmup");
-    static Symbol completed_song_simple("completed_song_simple");
+    static Symbol new_song_completed_on_hard("new_song_completed_on_hard");
     static Symbol completed_song_moderate("completed_song_moderate");
-    static Symbol completed_song_tough("completed_song_tough");
-    static Symbol completed_song_legit("completed_song_legit");
+    static Symbol completed_song_on_beginner("completed_song_on_beginner");
+    static Symbol new_song_completed_on_beginner("new_song_completed_on_beginner");
+    static Symbol new_song_completed_on_medium("new_song_completed_on_medium");
     static Symbol completed_song_hardcore("completed_song_hardcore");
-    static Symbol completed_song_off_the_hook("completed_song_off_the_hook");
+    static Symbol bodie_birthday("bodie_birthday");
+    static Symbol nail_fatality("nail_fatality");
+    static Symbol challenge_met("challenge_met");
+    static Symbol completed_song_on_hard("completed_song_on_hard");
     static Symbol random_bonus_occurs_1pct_of_the_time(
         "random_bonus_occurs_1pct_of_the_time"
     );
-    static Symbol new_song_completed_on_beginner("new_song_completed_on_beginner");
-    static Symbol new_song_completed_on_easy("new_song_completed_on_easy");
-    static Symbol new_song_completed_on_medium("new_song_completed_on_medium");
-    static Symbol new_song_completed_on_hard("new_song_completed_on_hard");
     static Symbol fitness_bonus("fitness_bonus");
-    static Symbol playlist_bonus("playlist_bonus");
-    static Symbol dlc_bonus("dlc_bonus");
-    static Symbol challenge_met("challenge_met");
-    static Symbol challenge_attempt("challenge_attempt");
-    static Symbol nail_fatality("nail_fatality");
+    static Symbol completed_song_on_easy("completed_song_on_easy");
+    static Symbol completed_song_on_medium("completed_song_on_medium");
+    static Symbol double_xp_weekend("double_xp_weekend");
+    static Symbol completed_song_warmup("completed_song_warmup");
+    static Symbol completed_song_with_4_stars("completed_song_with_4_stars");
+    static Symbol completed_song_tough("completed_song_tough");
+    static Symbol completed_song_simple("completed_song_simple");
+    static Symbol completed_song_with_1_star("completed_song_with_1_star");
+    static Symbol completed_song_legit("completed_song_legit");
+    static Symbol completed_song_with_2_stars("completed_song_with_2_stars");
     static Symbol perfect_performance_no_misses("perfect_performance_no_misses");
+    static Symbol playlist_bonus("playlist_bonus");
+    static Symbol new_song_completed_on_easy("new_song_completed_on_easy");
+    static Symbol challenge_attempt("challenge_attempt");
+    static Symbol dlc_bonus("dlc_bonus");
+    static Symbol completed_song_with_5_stars("completed_song_with_5_stars");
+    static Symbol completed_song_with_3_stars("completed_song_with_3_stars");
+    static Symbol golden_performance("golden_performance");
+    static Symbol completed_song_off_the_hook("completed_song_off_the_hook");
     static Symbol emilia_birthday("emilia_birthday");
-    static Symbol bodie_birthday("bodie_birthday");
     // Guard word 2 (bits 0-30)
     static Symbol taye_birthday("taye_birthday");
     static Symbol lilt_birthday("lilt_birthday");
@@ -522,11 +523,11 @@ void MetagameRank::UpdateScore(
                                          campaign_completed_on_hard,
                                          five_star_a_characters_songlist };
         bool awarded = false;
-        for (int i = 0; i < 10; i++) {
+        for (int i = 0; (unsigned int)i < 10; i++) {
             Symbol task = oneTimeTasks[i];
             int task_index = -1;
             if (GetOneTimeTask(task, nullptr, &task_index)) {
-                MILO_ASSERT(task_index >= 0 && task_index < 0x40, 0x36F);
+                MILO_ASSERT(task_index >= 0 && task_index < 64, 0x36F);
                 if (!mOneTimeTaskFlags[task_index]) {
                     TheDebug << MakeString("XP Forcing One-Time Task: %s\n", task);
                     AwardPointsForTask(task);

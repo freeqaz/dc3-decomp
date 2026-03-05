@@ -12,13 +12,14 @@ const char *ResourceDirBase::GetResourcesPath(Symbol s1, Symbol s2) {
     superClasses.push_back(s1);
     ListSuperClasses(s1, superClasses);
     static Symbol objects("objects");
+    int offset = 0;
     static Symbol resources_path("resources_path");
     static DataArray *cfg = SystemConfig(objects);
-    const char *path = nullptr;
     unsigned int i = 0;
-    int offset = 0;
+    const char *path = nullptr;
     do {
-        if (i >= superClasses.size())
+        unsigned int numClasses = superClasses.size();
+        if (i >= numClasses)
             break;
         DataArray *curClassCfg = cfg->FindArray(superClasses[i], true);
         if (curClassCfg) {

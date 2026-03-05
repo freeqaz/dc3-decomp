@@ -341,8 +341,8 @@ static void DrawBounds(Vector3 lookDir, const Hmx::Matrix3 &rotMat, const Vector
 
 void CharLookAt::Highlight() {
     if (mSource && mTarget) {
-        RndGraph *graph = RndGraph::GetOneFrame();
         RndTransformable *target = mTarget;
+        RndGraph *graph = RndGraph::GetOneFrame();
         Hmx::Color red(1, 0, 0, 1);
         RndTransformable *source = GetSource();
         graph->AddLine(source->WorldXfm().v, target->WorldXfm().v, red, false);

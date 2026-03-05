@@ -63,9 +63,10 @@ VorbisReader::VorbisReader(File *file, bool expectMap, StandardStream *stream, b
 
 VorbisReader::~VorbisReader() {
 
-    mTerminating = true;
+    auto& terminating = mTerminating;
+    terminating = true;
     unked = false;
-    while (mTerminating) {
+    while (terminating) {
         SetEvent(gEvent);
     }
     delete[] mHdrBuf;

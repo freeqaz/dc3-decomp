@@ -97,8 +97,8 @@ int CDRead(int arkFile, int offset, int size, void *buffer) {
             return 1;
         }
         u64 pos = (u64)offset << 0xB;
-        gOverlapped.Offset = pos;
         gOverlapped.OffsetHigh = pos >> 0x20;
+        gOverlapped.Offset = pos;
         if (!ReadFile(gArkFiles[arkFile], buffer, size << 0xB, nullptr, &gOverlapped)) {
             DWORD err = GetLastError();
             gErrorCode = err;

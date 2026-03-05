@@ -286,8 +286,9 @@ DataNode OnEnumerateFrameRateResults(DataArray *da) {
     DataNode ret(new DataArray(0), kDataArray);
     gFrameRateArray = ret.Array();
     char *suffix = (char *)FrameRateSuffix();
+    const char *pattern = MakeString("ui/framerate/venue_test/*%s", suffix);
     RecursePatternInternal(
-        MakeString("ui/framerate/venue_test/*%s", suffix),
+        pattern,
         OnFrameRateRecurseCB,
         false,
         false
@@ -463,8 +464,7 @@ const char *FileMakePath(const char *root, const char *file) {
 const char *FileLocalize(const char *iFilename, char *buffer) {
     GfxMode mode = GetGfxMode();
     bool isOg = (mode == kNewGfx);
-    Symbol lang = SystemLanguage();
-    if (!lang.Null() || isOg) {
+    if (!SystemLanguage().Null() || isOg) {
         Symbol lang2 = SystemLanguage();
         if (!lang2.Null()) {
             for (const char *p = iFilename; *p != '\0'; p++) {

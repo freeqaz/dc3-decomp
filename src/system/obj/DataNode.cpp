@@ -640,8 +640,9 @@ bool DataNode::operator>(const DataNode &other) const {
 }
 
 bool DataNode::Equal(const DataNode &n, DataArray *a, bool warn) const {
+    DataType otherType = n.Type();
     const DataNode &first = mType < n.Type() ? *this : n;
-    const DataNode &second = mType < n.Type() ? n : *this;
+    const DataNode &second = mType < otherType ? n : *this;
     DataType firstType = first.Type();
     DataType secondType = second.Type();
     if (firstType == secondType) {

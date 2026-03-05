@@ -68,9 +68,9 @@ void MoveRatingHistory::AddHistory(Symbol s1, int i2) {
     key.mMoveSymbol = s1;
     RatingHistory &history = mMoveRatingMap[key];
     MoveRating old = history.mRatingArray[0];
-    history.mRatingArray[1] = old;
     history.mRatingArray[2] = old;
     history.mRatingArray[3] = old;
+    history.mRatingArray[1] = old;
     history.mRatingArray[0] = (MoveRating)i2;
     mHasModifiedHistory = true;
 }

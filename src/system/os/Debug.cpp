@@ -56,7 +56,7 @@ ModalCallbackFunc *Debug::SetModalCallback(ModalCallbackFunc *func) {
     mModalCallback = func;
     if (!gNotifies.empty()) {
         for (int i = 0; i < gNotifies.size(); i++) {
-            MILO_NOTIFY("%s\n", gNotifies[i].c_str());
+            MILO_LOG("%s\n", gNotifies[i].c_str());
         }
         gNotifies.clear();
     }
@@ -268,8 +268,6 @@ void Debug::Init() {
 }
 
 const char *GetExpCode(int code) {
-    volatile int arg = code;
-
     if (code <= 0xC000008D) {
         if (code != 0xC000008D) {
             if (code <= 0xC0000006) {
@@ -327,7 +325,7 @@ const char *GetExpCode(int code) {
                 return "EXCEPTION_PRIV_INSTRUCTION";
             }
             extern const char *merged_82610090(const char *, volatile int *);
-            return merged_82610090("Unhandled Exception", &arg);
+            return merged_82610090("Unhandled Exception", &code);
         }
         case (int)0xC00000FD:
             return "EXCEPTION_STACK_OVERFLOW";

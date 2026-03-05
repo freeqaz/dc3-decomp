@@ -144,14 +144,15 @@ Symbol GetDanceBattleBackupOutfit(Symbol s1, Symbol s2) {
     str90 = str90.substr(0, str90.length() - 2);
     int i = 1;
     if (charArr->Size() > 1) {
+        Symbol s;
         while (i < charArr->Size()) {
-            Symbol s = charArr->Sym(i);
+            s = charArr->Sym(i);
             if (str90 != s.Str()) {
                 const char *cStr = s.Str();
                 const char *p = cStr;
                 while (*p) p++;
                 unsigned int len = (unsigned int)(p - cStr);
-                if (len < 0x1E) {
+                if ((int)len < 0x1E) {
                     char buf[30];
                     const char *src = cStr;
                     char *dst = buf;
@@ -368,8 +369,8 @@ void HamWardrobe::PlayCrowdAnimation(Symbol animName, int flags, bool override) 
                     buf, flags | 0x30, -1.0f, 1e30f, 0.0f
                 );
                 if (cd == NULL) {
-                    auto _tmp6 = MakeString("clip not found - groupName = %s\n", buf);
-                    TheDebug << _tmp6;
+                    auto errMsg = MakeString("clip not found - groupName = %s\n", buf);
+                    TheDebug << errMsg;
                     MILO_NOTIFY(
                         "%s could not find clip from group %s", PathName(c), buf
                     );
@@ -379,10 +380,10 @@ void HamWardrobe::PlayCrowdAnimation(Symbol animName, int flags, bool override) 
                         buf, flags | 0x30, -1.0f, 1e30f, 0.0f
                     );
                     if (cd == NULL) {
-                        auto _tmp7 = MakeString(
+                        auto errMsg2 = MakeString(
                             "  clip not found - groupName = %s\n", buf
                         );
-                        TheDebug << _tmp7;
+                        TheDebug << errMsg2;
                         MILO_NOTIFY(
                             "  %s could not find clip from group %s", PathName(c), buf
                         );
@@ -407,8 +408,8 @@ void HamWardrobe::LoadCharacters(
     Symbol venue,
     bool asyncLoad
 ) {
-    outfit1 = HandleRobot(outfit1);
     outfit2 = HandleRobot(outfit2);
+    outfit1 = HandleRobot(outfit1);
 
     mMainCharacters.clear();
     for (int i = 0; i < 2; i++) {
@@ -416,25 +417,25 @@ void HamWardrobe::LoadCharacters(
         mMainCharacters.push_back(c);
     }
 
-    unk34 = speed;
-
     if (!outfit1.Null()) {
         LoadMainCharacter(0, outfit1, asyncLoad);
     }
+
+    unk34 = speed;
     if (!outfit2.Null()) {
         LoadMainCharacter(1, outfit2, asyncLoad);
     }
 
     for (int i = 0; i < 2; i++) {
         Symbol *outfit = (i == 0) ? &outfit1 : &outfit2;
-        Symbol *crew = (i == 0) ? &crew1 : &crew2;
         Symbol backupOutfit(gNullStr);
+        Symbol *crew = (i == 0) ? &crew1 : &crew2;
 
         if (backupType == kBackupDancersOutfit) {
             if (*outfit != gNullStr) {
                 Symbol dancer = GetOutfitBackupDancer(*outfit);
-                auto _tmp5 = Symbol(MakeString("%s_bd0%d", dancer.Str(), i + 1));
-                backupOutfit = _tmp5;
+                auto backupSym = Symbol(MakeString("%s_bd0%d", dancer.Str(), i + 1));
+                backupOutfit = backupSym;
             }
         } else if (backupType == kBackupDancersTan) {
             if (i == 0) {
@@ -446,8 +447,8 @@ void HamWardrobe::LoadCharacters(
                 backupOutfit = GetBackupOutfitOverride(i);
             } else {
                 MILO_ASSERT(backupType == kBackupDancersDanceBattle, 0x1ac);
-                auto _tmp2 = GetDanceBattleBackupOutfit(*outfit, *crew);
-                backupOutfit = _tmp2;
+                auto battleBackup = GetDanceBattleBackupOutfit(*outfit, *crew);
+                backupOutfit = battleBackup;
             }
         }
 
@@ -497,20 +498,21 @@ DataNode HamWardrobe::OnSetVenue(DataArray *a) {
 
 DataNode HamWardrobe::OnAddCrowd(DataArray *a) {
     WorldCrowd *crowd = a->Obj<WorldCrowd>(2);
-    auto _tmp0 = crowd->mCharacters.end();
+    auto crowdEnd = crowd->mCharacters.end();
+    auto& crowdMembers = mCrowdMembers;
     for (std::list<WorldCrowd::CharData>::iterator it = crowd->mCharacters.begin();
-         it != _tmp0; ++it) {
+         it != crowdEnd; ++it) {
         Character *c = it->mDef.mChar;
         if (c) {
-            ObjPtrList<Character>::iterator mit = mCrowdMembers.begin();
-            for (; mit != mCrowdMembers.end(); ++mit) {
+            ObjPtrList<Character>::iterator mit = crowdMembers.begin();
+            for (; mit != crowdMembers.end(); ++mit) {
                 Character *existing = *mit;
                 if (existing && (ObjectDir *)existing == (ObjectDir *)c) {
                     break;
                 }
             }
-            if (mit == mCrowdMembers.end()) {
-                mCrowdMembers.push_back(c);
+            if (mit == crowdMembers.end()) {
+                crowdMembers.push_back(c);
             }
         }
     }
@@ -524,7 +526,7 @@ DataNode HamWardrobe::OnLoadCharacters(DataArray *a) {
     int backupType;
     Symbol speed;
     if (size > 6) {
-        backupType = a->Int(6);
+        backupType = bool(a->Int(6));
         speed = a->Sym(7);
     } else {
         backupType = 0;
@@ -535,8 +537,6 @@ DataNode HamWardrobe::OnLoadCharacters(DataArray *a) {
         asyncLoad = a->Int(8);
     }
     Symbol venue = TheGameData->Venue();
-    Symbol outfit2 = a->Sym(3);
-    Symbol outfit1 = a->Sym(2);
-    LoadCharacters(outfit1, outfit2, crew1, crew2, (HamBackupDancers)backupType, speed, venue, asyncLoad);
+    LoadCharacters(a->Sym(2), a->Sym(3), crew1, crew2, (HamBackupDancers)backupType, speed, venue, asyncLoad);
     return 0;
 }

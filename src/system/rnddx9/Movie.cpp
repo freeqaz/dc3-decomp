@@ -97,7 +97,8 @@ void DxMovie::Update() {
     tex->SwapMovieSurface();
     if (surface) {
         D3DLOCKED_RECT lock;
-        int srcPitch = mVideo.Bpp() * mVideo.Width() * 4;
+        int bpp = mVideo.Bpp();
+        int srcPitch = bpp * mVideo.Width() * 4;
         D3DSurface_LockRect(surface, &lock, nullptr, 0);
         if (srcPitch == lock.Pitch) {
             memcpy(lock.pBits, mReadPtr, mVideo.FrameSize());
@@ -123,9 +124,7 @@ int DxMovie::StreamChunkSize() {
 void DxMovie::StreamNextBuffer() {
     StreamReadFinish();
     mBufOffset = mBufOffset ? 0 : mVideo.FrameSize();
-    char *c44 = (char *)mFrameBuf;
-    int size = StreamChunkSize();
-    mStream->ReadAsync(c44 + mBufOffset, size);
+    mStream->ReadAsync((char *)mFrameBuf + mBufOffset, StreamChunkSize());
 }
 
 void DxMovie::StreamRestart(int frame) {

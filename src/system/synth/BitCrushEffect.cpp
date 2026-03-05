@@ -18,8 +18,8 @@ void BitCrushEffect::Process(float *f, int numSamples, int numChans) {
         int stride;
         int ctr;
 
-        left = f;
         stride = numChans << 2;
+        left = f;
         right = f + 1;
         ctr = numSamples;
 

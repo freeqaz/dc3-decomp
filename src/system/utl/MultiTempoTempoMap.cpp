@@ -154,8 +154,8 @@ float MultiTempoTempoMap::TickToTime(float tick) const {
             return pt->mMs
                 + (pt->mTempo * (tick - pt->mTick) / 480.0f / 1000.0f);
     } else {
-        float loopTickLength = mEndLoopTick - startTick;
         float loopTick = tick - mEndLoopTick;
+        float loopTickLength = mEndLoopTick - startTick;
         float loopPercent = std::floor(loopTick / loopTickLength);
         float loopTimeLength = mEndLoopTime - mStartLoopTime;
 

@@ -372,11 +372,11 @@ void Rnd::PreInit() {
 void WordWrap(const char *src, int lineWidth, char *dst, int dstSize) {
     char *dstEnd = dst + dstSize - 2;
     const char *srcEnd = src;
-    while (*srcEnd != '\0')
+    while ('\0' != *srcEnd)
         srcEnd++;
     while (true) {
-        char *lastSpace = nullptr;
         const char *lastSrcSpace = nullptr;
+        char *lastSpace = nullptr;
         int col = 0;
         while (col < lineWidth) {
             if (src >= srcEnd || dst >= dstEnd || *src == '\n')
@@ -395,17 +395,16 @@ void WordWrap(const char *src, int lineWidth, char *dst, int dstSize) {
             return;
         }
         char *wrapDst = dst;
-        const char *wrapSrc = src;
         if (*src != '\n') {
             if (lastSrcSpace == nullptr || (int)src - (int)lastSrcSpace > 10) {
                 wrapDst = dst;
-                wrapSrc = src - 1;
+                src = src - 1;
             } else {
                 wrapDst = lastSpace;
-                wrapSrc = lastSrcSpace;
+                src = lastSrcSpace;
             }
         }
-        src = wrapSrc + 1;
+        src = src + 1;
         *wrapDst = '\n';
         dst = wrapDst + 1;
     }
@@ -417,8 +416,8 @@ DWORD CompressThread(void *) {
         WaitForSingleObject(gRndTextureEvent, -1);
         if (!sTexture)
             break;
-        sTexture->DoCompress(sCompressData);
         sCompressDone = true;
+        sTexture->DoCompress(sCompressData);
     }
     return 0;
 }
@@ -1103,7 +1102,8 @@ RndTex *Rnd::CreateDefaultTexture(DefaultTextureType textureType) {
     case kDefaultTex_Error:
         for (int i = 0; i < height; i++) {
             for (int j = 0; j < width; j++) {
-                if (((i ^ j) >> 2) & 1) {
+                bool _bit0 = (((i ^ j) >> 2) & 1) != 0;
+                if (_bit0) {
                     bmap.SetPixelColor(j, i, 0xFF, 0x80, 0x40, alpha);
                 } else {
                     bmap.SetPixelColor(j, i, 0, 0, 0, alpha);

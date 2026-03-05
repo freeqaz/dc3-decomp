@@ -220,7 +220,8 @@ void RndFlare::DrawShowing() {
 
 void RndFlare::Mats(std::list<RndMat *> &list, bool) {
     if (mMat) {
-        mMat->SetShaderOpts(GetDefaultMatShaderOpts(this, mMat));
+        MatShaderOptions shaderOpts = GetDefaultMatShaderOpts(this, mMat);
+        mMat->SetShaderOpts(shaderOpts);
         list.push_back(mMat);
     }
 }

@@ -82,7 +82,7 @@ void AsyncFileWin::_OpenAsync() {
     );
     if (mFile == (HANDLE)-1) {
         err = GetLastError();
-        if ((err != 2) && (err != 3) && (err != 0x15)) {
+        if ((err != 2) && (err != 3)) {
             ReadError(mFilename.c_str());
         }
         mFail = true;

@@ -159,6 +159,8 @@ void DxMultiMesh::UpdateGeometryBuffers() {
 
     if (loopCount != 0) {
         var_r10 = 0;
+        u32 indexCount = (u32)((*(s32 *)((char *)temp_r11_3 + 0x114) -
+                                  *(s32 *)((char *)temp_r11_3 + 0x110)) / 6);
         do {
             temp_r8 = *(s32 *)((char *)temp_r11_3 + 0x110);
             var_r9++;
@@ -171,8 +173,7 @@ void DxMultiMesh::UpdateGeometryBuffers() {
             *(s32 *)((char *)temp_r3_3 + 4) = (s32)*(u16 *)((char *)temp_r11_4 + 4);
             temp_r11_3 = *(void **)((char *)temp_r30 + 0x148);
             var_r3 = (void *)((char *)temp_r3_3 + 8);
-        } while (var_r9 != (u32)((*(s32 *)((char *)temp_r11_3 + 0x114) -
-                                  *(s32 *)((char *)temp_r11_3 + 0x110)) / 6));
+        } while (var_r9 != indexCount);
     }
 
     D3DVertexBuffer_Unlock((D3DVertexBuffer *)*(void **)((char *)this + temp_r28_2));

@@ -417,7 +417,10 @@ normal_pick:
         data.mType = stats;
         mMotdCommunityRunCount = 0;
         mMotdStatsRunCount = iVar8;
-    } else if (mMotdStatsRunCount < mMotdMaxStatsRun) {
+    } else if (!(mMotdStatsRunCount < mMotdMaxStatsRun)) {
+        mMotdCommunityRunCount = 1;
+        mMotdStatsRunCount = 0;
+    } else {
         iVar8 = RandomInt(0, 2);
         data.mType = community;
         if (iVar8 == 0) {
@@ -426,9 +429,6 @@ normal_pick:
         }
         mMotdStatsRunCount = 0;
         mMotdCommunityRunCount = mMotdCommunityRunCount + 1;
-    } else {
-        mMotdCommunityRunCount = 1;
-        mMotdStatsRunCount = 0;
     }
 
     {

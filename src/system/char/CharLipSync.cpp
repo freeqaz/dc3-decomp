@@ -288,7 +288,7 @@ void CharLipSync::PlayBack::Set(CharLipSync *lipsync, ObjPtr<ObjectDir> clips) {
         int newSize = numVisemes + arrSize;
         if (mWeights.size() != newSize) {
             mWeights.resize(newSize);
-            for (int i = numVisemes; i < newSize; i++) {
+            for (int i = numVisemes; (unsigned int)i < newSize; i++) {
                 Symbol visemeSym = arr->Sym(i - numVisemes);
                 ObjPtr<CharClip> &clip = mWeights[i].mClip;
                 clip = mClips->Find<CharClip>(visemeSym.Str(), false);

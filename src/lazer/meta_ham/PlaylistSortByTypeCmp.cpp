@@ -22,11 +22,11 @@ int PlaylistTypeCmp::Compare(
     } else if (nodeType == kNodeHeader) {
         const PlaylistTypeCmp *otherCmp = other->GetPlaylistTypeCmp();
         return mType - otherCmp->mType;
-    } else if (nodeType == kNodeItem) {
+    } else if (!(nodeType == kNodeItem)) {
+        TheDebug.Fail(FormatString("invalid type of node comparison.").Str(), 0);
+    } else {
         other->GetPlaylistTypeCmp();
         return -1;
-    } else {
-        TheDebug.Fail(FormatString("invalid type of node comparison.").Str(), 0);
     }
     return 0;
 }

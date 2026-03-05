@@ -195,8 +195,8 @@ void ClipCollide::TestClips() {
     if (!mWaypoint || !mChar)
         return;
     for (ObjDirItr<CharClip> it(Clips(), true); it != 0; ++it) {
-        auto _tmp0 = ValidClip(it);
-        if (_tmp0) {
+        auto isValid = ValidClip(it);
+        if (isValid) {
             const char *directions[4] = { "front", "back", "left", "right" };
             for (int i = 0; i < 4; i++) {
                 mPosition = directions[i];
@@ -310,12 +310,13 @@ DataNode ClipCollide::OnListReport(DataArray *da) {
     DataArray *arr = new DataArray(mReports.size() + 1);
     arr->Node(0) = "";
     for (int i = 0; i < mReports.size(); i++) {
+        auto& report = mReports[i];
         arr->Node(i + 1) = MakeString(
             "%d %s %s %s",
             i + 1,
-            mReports[i].clip,
-            mReports[i].waypoint->Name(),
-            mReports[i].name
+            report.clip,
+            report.waypoint->Name(),
+            report.name
         );
     }
     DataNode ret(arr, kDataArray);

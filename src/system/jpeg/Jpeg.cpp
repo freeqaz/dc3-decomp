@@ -42,8 +42,8 @@ bool LoadBitmapIntoJpeg(char *data, int width, int height, int depth, void *dest
     *(long long*)(((char*)&destMgr) + 8) = 0;
     // Note: bufferStart and bufferSize are set up at specific offsets
     // JpegInitDestination will copy these to pub.next_output_byte and pub.free_in_buffer
-    destMgr.bufferStart = (JOCTET *)destBuffer;
     *(long long*)(((char*)&destMgr) + 16) = 0;
+    destMgr.bufferStart = (JOCTET *)destBuffer;
     destMgr.bufferSize = 2;
     *(long long*)(((char*)&destMgr) + 24) = 0;
 
@@ -56,14 +56,12 @@ bool LoadBitmapIntoJpeg(char *data, int width, int height, int depth, void *dest
     jpeg_set_defaults(&cinfo);
     jpeg_start_compress(&cinfo, TRUE);
 
-    bytesPerRow = depth * width;
-
-    if (height > 0) {
+        if (height > 0) {
         do {
             rowPtr = (JSAMPROW)data;
             jpeg_write_scanlines(&cinfo, (JSAMPARRAY)&rowPtr, 1);
             height--;
-            data += bytesPerRow;
+            data += bytesPerRow = depth * width;
         } while (height != 0);
     }
 

@@ -442,9 +442,7 @@ void RndConsole::MoveLevel(int delta) {
         int maxLevel = (gCallStack - gCallStackPtr) + 2;
         if (mLevel >= 1) {
             mLevel = 0;
-        } else if (mLevel < maxLevel) {
-            mLevel = maxLevel;
-        }
+        } else mLevel = Max(mLevel, maxLevel);
         mDebugging = gCallStackPtr[mLevel - 2];
         List();
     } else
@@ -514,7 +512,7 @@ void RndConsole::ExecuteLine() {
     String &line_txt = mInput->CurrentLine();
     DataNode n40, n48;
     if (line_txt.empty())
-        MILO_FAIL("Empty command");
+        MILO_WARN("Empty command");
     mBuffer.push_front(line_txt);
     if (line_txt[line_txt.length() - 1] == '/') {
         line_txt.erase(line_txt.length() - 1, 1);

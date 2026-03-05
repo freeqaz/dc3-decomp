@@ -255,7 +255,8 @@ void MoveVariant::Load(BinStream &bs, MoveGraph *graph, MoveParent *parent) {
     if (isSym) {
         Symbol s;
         bs >> s;
-        mLinkedTo.mVariantName = s.Str();
+        const char *str = s.Str();
+        mLinkedTo.mVariantName = str;
     } else {
         mLinkedTo.mVariant = nullptr;
     }
@@ -274,14 +275,16 @@ void MoveVariant::Load(BinStream &bs, MoveGraph *graph, MoveParent *parent) {
 
     unsigned int numCandidates;
     bs >> numCandidates;
-    mPrevCandidates.resize(numCandidates);
+    auto& prevCandidates = mPrevCandidates;
+    prevCandidates.resize(numCandidates);
     for (unsigned int i = 0; i < (unsigned int)numCandidates; i++) {
-        mPrevCandidates[i].Load(bs);
+        prevCandidates[i].Load(bs);
     }
     bs >> numCandidates;
-    mNextCandidates.resize(numCandidates);
+    auto& nextCandidates = mNextCandidates;
+    nextCandidates.resize(numCandidates);
     for (unsigned int i = 0; i < (unsigned int)numCandidates; i++) {
-        mNextCandidates[i].Load(bs);
+        nextCandidates[i].Load(bs);
     }
     graph->mMoveVariants[mVariantName] = this;
 }

@@ -130,7 +130,7 @@ void RndGraph::DrawAll() {
         sOneFrame->Draw();
         sOneFrame->Reset();
     }
-    for (std::list<FakeGraph>::iterator it = sFakes.begin(); it != sFakes.end(); ++it) {
+    for (std::list<FakeGraph>::iterator it = sFakes.begin(); sFakes.end() != it; ++it) {
         it->mDrawCallback();
     }
     sCam = nullptr;

@@ -76,7 +76,7 @@ float FlowMathOp::Apply(float val) {
         break;
     }
     case kMathOp_Min:
-        if (rhs <= val) {
+        if (val >= rhs) {
             return val;
         }
         break;
@@ -114,10 +114,10 @@ float FlowMathOp::Apply(float val) {
         break;
     case kMathOp_NormalizeDb: {
         float absVal = 0.0f;
+        float clamped = rhs;
         if (-val < 0.0f) {
             absVal = val;
         }
-        float clamped = rhs;
         if (absVal - rhs < 0.0f) {
             clamped = absVal;
         }
@@ -165,11 +165,11 @@ float FlowMathOp::Apply(float val) {
                 DataArray *script = DataReadString(str.c_str());
                 DataNode scriptNode(script, kDataArray);
                 DataArray *arr = scriptNode.Array(0);
-                if (arr->Node(0).Type() == kDataCommand && arr->Size() == 1) {
-                    DataNode result = arr->Node(0).Command(arr)->Execute(true);
+                if (!(arr->Node(0).Type() == kDataCommand && arr->Size() == 1)) {
+                    DataNode result = arr->Execute(true);
                     val = result.Float(0);
                 } else {
-                    DataNode result = arr->Execute(true);
+                    DataNode result = arr->Node(0).Command(arr)->Execute(true);
                     val = result.Float(0);
                 }
                 TheDebug.SetTry(false);

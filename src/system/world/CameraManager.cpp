@@ -278,15 +278,15 @@ bool CameraManager::SetCrowds(ObjVector<CamShotCrowd> &crowds) {
         CamShotCrowd *begin = crowds.begin();
         CamShotCrowd *cit = begin;
         // Manual pointer arithmetic required for codegen match (sizeof(CamShotCrowd) == 0x28)
-        for (; end != cit; cit = (CamShotCrowd *)((intptr_t)cit + 0x28)) {
-            if (cit->mCrowd == curCrowd) {
+        for (; cit != end; cit = (CamShotCrowd *)((intptr_t)cit + 0x28)) {
+            if (curCrowd == cit->mCrowd) {
                 break;
             }
         }
         if (cit != end) {
+            curCrowd->mCrowdRotate = cit->mCrowdRotate;
             curCrowd->SetShowing(true);
             ret = true;
-            curCrowd->mCrowdRotate = cit->mCrowdRotate;
         } else {
             curCrowd->SetShowing(false);
         }

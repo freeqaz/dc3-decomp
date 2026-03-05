@@ -77,11 +77,11 @@ void DepthBuffer3D::Init() {
 void DepthBuffer3D::UpdateAttachment(
     DepthBuffer3DAttachment &attachment, const Vector4 &v1, const Vector4 &v2
 ) {
+    bool b5 = false;
+    Vector3 newPos;
     int skelIdx = TheGestureMgr->GetSkeletonIndexByTrackingID(
         TheGameData->Player(attachment.player)->GetSkeletonTrackingID()
     );
-    bool b5 = false;
-    Vector3 newPos;
     if (skelIdx + 1 > 0) {
         Skeleton &skeleton = TheGestureMgr->GetSkeleton(skelIdx);
         Vector3 localPos = LocalXfm().v;
@@ -100,8 +100,8 @@ void DepthBuffer3D::UpdateAttachment(
 }
 
 void DepthBuffer3D::AddAttachment(const DepthBuffer3DAttachment &attachment) {
-    MILO_ASSERT(attachment.obj, 0x390);
     bool found = false;
+    MILO_ASSERT(attachment.obj, 0x390);
     FOREACH (it, mAttachments) {
         if (it->obj == attachment.obj) {
             found = true;

@@ -112,8 +112,8 @@ float OSCMessenger::GetFloat(String str, float fValue) {
         val->mHasNewValue = 0;
     } else {
         OSCValue newValue;
-        newValue.mAddress = str;
         newValue.mHasNewValue = 0;
+        newValue.mAddress = str;
         newValue.mType = 'f';
         *(float *)newValue.buffer = fValue;
         mValues.push_back(newValue);

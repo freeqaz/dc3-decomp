@@ -192,8 +192,8 @@ void UIScreen::Enter(UIScreen *from) {
 #ifdef HX_NATIVE
         // Skip panel unload on native — ObjRef lifecycle issues cause SIGSEGV
         // during bulk object deletion (ObjPtrList::Unlink on freed nodes).
-        // This leaks memory but avoids the crash.
-        printf("DC3 UI: Skipping UnloadPanels for '%s' (native workaround)\n", from->Name());
+        // Instead, hide the old screen so it stops drawing.
+        from->mShowing = false;
 #else
         from->UnloadPanels();
 #endif

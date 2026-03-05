@@ -13,11 +13,8 @@ bool IsEastAsianChar(wchar_t ch) {
             return false;
         }
     }
-    if ((ch >= 0x1100 && ch <= 0x11FF)
+        return (ch >= 0x1100 && ch <= 0x11FF)
         || (ch >= 0x3000 && ch <= 0xD7AF)
         || (ch >= 0xF900 && ch <= 0xFAFF)
-        || (ch >= 0xFF00 && ch <= 0xFFDC)) {
-        return true;
-    }
-    return false;
+        || (ch >= 0xFF00 && ch <= 0xFFDC);
 }

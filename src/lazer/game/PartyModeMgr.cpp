@@ -1346,11 +1346,11 @@ DataNode PartyModeMgr::OnMsg(const SmartGlassMsg &msg) {
 
 void PartyModeMgr::FinalizePlaytestParty() {
     int numEvents = mPartyModePlaytestEvents->Size() - 1;
-    std::vector<int> team2Players;
-    std::vector<int> team1Players;
-    std::vector<Symbol> subModeVec(numEvents, gNullStr);
-    std::vector<Symbol> songVec(numEvents, gNullStr);
     std::vector<Symbol> modeVec(numEvents, gNullStr);
+    std::vector<Symbol> subModeVec(numEvents, gNullStr);
+    std::vector<int> team2Players;
+    std::vector<Symbol> songVec(numEvents, gNullStr);
+    std::vector<int> team1Players;
 
     for (int i = 1; i <= numEvents; i++) {
         DataArray *eventArr = mPartyModePlaytestEvents->Array(i);

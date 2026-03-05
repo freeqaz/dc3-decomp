@@ -607,7 +607,8 @@ DataNode SaveLoadManager::GetDialogMsg() {
 }
 
 void SaveLoadManager::SetState(State newState) {
-    if (mState == newState)
+    auto& state = mState;
+    if (state == newState)
         return;
 
     static Symbol saveload_dialog_event("saveload_dialog_event");
@@ -616,42 +617,42 @@ void SaveLoadManager::SetState(State newState) {
 
     // Cleanup resources based on current state before transition
     // WARNING: Control flow structure is critical for codegen - do not refactor
-    if (mState <= kS_GlobalOptionsWrite) {
-        if (kS_GlobalOptionsWrite == mState) {
+    if (state <= kS_GlobalOptionsWrite) {
+        if (kS_GlobalOptionsWrite == state) {
             // 0x3E: free mData unless going to Finish
             if ((newState != kS_Finish) && mData) {
                 MemFree(mData, "SaveLoadManager.cpp", 0x424);
                 mData = nullptr;
             }
-        } else if (mState == kS_Idle) {
-            // 0: set wasIdle flag
-            wasIdle = true;
-        } else {
-            if (mState == kS_AutoloadStartLoad) {
+        } else if (!(state == kS_Idle)) {
+            if (state == kS_AutoloadStartLoad) {
                 // 0xB: release mAction unless going to Abort
                 if (newState != kS_Abort) {
                     RELEASE(mAction);
                 }
-            } else if (((mState == kS_SongCacheWrite) || (mState == kS_SongCacheDone))
-                       || ((mState > kS_GlobalDoneRead) && (mState < kS_GlobalUnmount))) {
+            } else if (((state == kS_SongCacheWrite) || (state == kS_SongCacheDone))
+                       || ((state > kS_GlobalDoneRead) && (state < kS_GlobalUnmount))) {
                 // 0x1F, 0x21, or 0x32-0x33: free mData unless going to Finish
                 if ((newState != kS_Finish) && mData) {
                     MemFree(mData, "SaveLoadManager.cpp", 0x424);
                     mData = nullptr;
                 }
             }
+        } else {
+            // 0: set wasIdle flag
+            wasIdle = true;
         }
-    } else if (mState > kS_SaveDeviceInvalid) {  // > 0x45
-        if ((mState < kS_SaveConfirmOverwrite) || (mState == kS_ManualLoadStartLoad)) {
+    } else if (state > kS_SaveDeviceInvalid) {  // > 0x45
+        if ((state < kS_SaveConfirmOverwrite) || (state == kS_ManualLoadStartLoad)) {
             // (mState < 0x48) || (mState == 0x60): release mAction unless going to Abort
             if (newState != kS_Abort) {
                 RELEASE(mAction);
             }
         } else {
-            if (mState == kS_Abort) {
+            if (state == kS_Abort) {
                 // 0x65: release mAction unconditionally
                 RELEASE(mAction);
-            } else if ((mState == kS_Finish) && mData) {
+            } else if ((state == kS_Finish) && mData) {
                 // 0x67: free mData
                 MemFree(mData, "SaveLoadManager.cpp", 0x433);
                 mData = nullptr;
@@ -659,17 +660,17 @@ void SaveLoadManager::SetState(State newState) {
         }
     }
 
-    mState = newState;
+    state = newState;
 
     if (wasIdle) {
         UpdateStatus((SaveLoadMgrStatus)0);
     }
 
     // Handle state based on new state value
-    if (mState > kS_Done)
+    if (state > kS_Done)
         return;
 
-    switch (mState) {
+    switch (state) {
     case kS_Idle:
         UpdateStatus((SaveLoadMgrStatus)5);
         break;
@@ -1156,7 +1157,7 @@ void SaveLoadManager::SetState(State newState) {
     case kS_SaveLoadError2: {
         int errorType = 1;
         mDeviceIDState = 0;
-        if (mState == kS_SaveLoadError2) {
+        if (state == kS_SaveLoadError2) {
             errorType = -1;
         }
         HamProfile *pProfile = mActiveProfile;

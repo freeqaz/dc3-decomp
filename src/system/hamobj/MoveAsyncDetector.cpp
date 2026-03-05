@@ -14,7 +14,7 @@ MoveDetector::MoveDetector(
 )
     : mMove(move), mActive(false), mLastDetectFrameIdx(-1), mDetectFrameOffset(-1) {
     MILO_ASSERT(mMove, 0x18);
-    bool mirrored = mMove->Mirrored();
+    unsigned char mirrored = (unsigned char)(mMove->Mirrored());
     const std::vector<MoveFrame> &moveFrames = mMove->GetMoveFrames();
     mDancerFrames.resize(moveFrames.size());
     for (int i = 0; i < 2; i++) {

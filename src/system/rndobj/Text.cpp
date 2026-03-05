@@ -615,12 +615,21 @@ void RndText::FontMap::AllocateMeshes(RndText *text, int fixedLength) {
                 page.mSyncFlags |= 0xA0;
                 mesh->Verts().resize(page.displayableChars * 4);
             }
+#ifndef HX_NATIVE
             MILO_ASSERT(mesh->Verts().size() >= page.displayableChars * 4, 0xD2);
-#ifdef HX_NATIVE
+#else
+            // Clamp to available verts in native builds
+            if (mesh->Verts().size() < page.displayableChars * 4)
+                page.displayableChars = mesh->Verts().size() / 4;
             page.mVertStart = mesh->Verts().begin();
 #endif
         }
+#ifndef HX_NATIVE
         MILO_ASSERT(!fixedLength || (page.displayableChars <= fixedLength), 0xD5);
+#else
+        if (fixedLength && page.displayableChars > fixedLength)
+            page.displayableChars = fixedLength;
+#endif
     }
 }
 
@@ -994,6 +1003,8 @@ void RndText::BuildFontMaps(bool b1) {
         }
     }
     if (mFontMaps.empty()) {
+#ifdef HX_NATIVE
+#endif
         for (int i = 0; i < mStyles.size(); i++) {
             RndFontBase *font = mStyles[i].mFont;
             if (font) {
@@ -1526,7 +1537,11 @@ void RndText::ConstructMeshes(
                         yPos,
                         state,
                         prevChar,
+#ifdef HX_NATIVE
+                        state.mSize,  // mCircle=0 for non-circular text, use style size
+#else
                         mCircle,
+#endif
                         mFitType,
                         mIndentation
                     );
@@ -1679,6 +1694,15 @@ void RndText::DrawShowing() {
     }
 
     // Draw each mesh
+#ifdef HX_NATIVE
+    // Switch to UI camera for text rendering — text positions are in UI/screen
+    // space, not world space. On Xbox 360, text was drawn in a separate 2D pass.
+    RndCam *savedCam = RndCam::Current();
+    RndCam *uiCam = TheUI ? TheUI->GetCam() : nullptr;
+    if (uiCam && uiCam != savedCam) {
+        uiCam->Select();
+    }
+#endif
     for (auto it = mFontMaps.begin(); it != mFontMaps.end(); ++it) {
         FontMapBase *fontMap = *it;
         int numMeshes = fontMap->NumMeshes();
@@ -1695,6 +1719,12 @@ void RndText::DrawShowing() {
             }
         }
     }
+#ifdef HX_NATIVE
+    // Restore previous camera
+    if (savedCam && savedCam != RndCam::Current()) {
+        savedCam->Select();
+    }
+#endif
 
     // Restore material colors (r, g, b only — not alpha)
     if (hasOverride) {

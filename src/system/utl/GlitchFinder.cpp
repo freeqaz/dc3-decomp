@@ -90,7 +90,7 @@ void GlitchPoker::Dump(TextStream &stream, int i1) {
         smLastDumpTime = mTimeEnd;
         return;
     }
-    if (smDumpLeaves && mParent) {
+    if (mParent) {
         f1 = smThreshold;
         if (mTimeEnd - mTime > f1) {
             if (mChildren.size() != 0) {

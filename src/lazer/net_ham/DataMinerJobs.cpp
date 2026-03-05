@@ -113,10 +113,9 @@ GameEndedDataPointJob::GameEndedDataPointJob(
         String move_ratings_str("move_ratings="); move_ratings_str += buf;
 
         bool hasRatings = true;
-        const char *ratings_base = perf_move_ratings_str;
         if (lastMode == perform || lastMode == dance_battle || lastMode == perform_legacy ||
-            (ratings_base = pract_move_ratings_str, lastMode == practice)) {
-            ratings_str = ratings_base;
+            (perf_move_ratings_str = pract_move_ratings_str, lastMode == practice)) {
+            ratings_str = perf_move_ratings_str;
             ratings_str += buf;
         } else {
             hasRatings = false;

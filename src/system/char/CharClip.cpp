@@ -836,7 +836,9 @@ CharClip::FindNode(CharClip *clip, float f1, int iii, float f2) const {
     const CharGraphNode *n = nullptr;
 
     if (blendMode >= kPlayNoBlend) {
-        if (blendMode != kPlayNoBlend) {
+        if (!(blendMode != kPlayNoBlend)) {
+            n = nullptr;
+        } else {
             if (blendMode >= kPlayLast) {
                 if (blendMode == kPlayLast) {
                     n = FindLastNode(clip, f1);
@@ -846,8 +848,6 @@ CharClip::FindNode(CharClip *clip, float f1, int iii, float f2) const {
             } else {
                 n = FindFirstNode(clip, f1);
             }
-        } else {
-            n = nullptr;
         }
     }
 

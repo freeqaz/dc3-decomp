@@ -538,7 +538,8 @@ void RndParticleSys::DrawShowing() {
 
 void RndParticleSys::Mats(std::list<RndMat *> &mats, bool) {
     if (mMat) {
-        mMat->SetShaderOpts(GetDefaultMatShaderOpts(this, mMat));
+        MatShaderOptions shaderOpts = GetDefaultMatShaderOpts(this, mMat);
+        mMat->SetShaderOpts(shaderOpts);
         mats.push_back(mMat);
     }
 }
@@ -819,12 +820,12 @@ void RndParticleSys::MoveParticles(float dt, float frameSpan) {
     if (mActiveParticles == NULL || frameSpan == 0.0f)
         return;
 
-    float oneOverThirty = 1.0f / 30.0f;
-
     float dragFactor;
+
+    float oneOverThirty = 1.0f / 30.0f;
     if (mDrag > 0.0f) {
-        auto _tmp0 = std::pow(1.0f - mDrag, frameSpan * oneOverThirty);
-        dragFactor = _tmp0;
+        float powResult = std::pow(1.0f - mDrag, frameSpan * oneOverThirty);
+        dragFactor = powResult;
     } else {
         dragFactor = 1.0f;
     }
@@ -835,8 +836,6 @@ void RndParticleSys::MoveParticles(float dt, float frameSpan) {
     } else {
         rpmDragFactor = 1.0f;
     }
-
-    RndTransformable *bounce = mBounce;
 
     // Force direction scaled by frameSpan
     float forceX_dt = mForceDir.x * frameSpan;
@@ -858,7 +857,7 @@ void RndParticleSys::MoveParticles(float dt, float frameSpan) {
     // Pre-compute all 3 transformed force rows (target does this before bounce check).
     // Row 2 uses mRelativeXfm.m.z directly (not cached into locals) to match target.
     float relForceRow0 =
-        m_xx * forceX_dt + m_xy * forceY_dt + m_xz * forceZ_dt;
+        (m_xx * forceX_dt + (m_xy * forceY_dt + m_xz * forceZ_dt));
     float relForceRow1 =
         m_yx * forceX_dt + m_yy * forceY_dt + m_yz * forceZ_dt;
     float relForceRow2 =
@@ -868,12 +867,12 @@ void RndParticleSys::MoveParticles(float dt, float frameSpan) {
     // TODO: target calls WorldXfm twice via a shared branch point (bl+b pattern).
     // Our compiler generates a different call sequence (diff_op at idx 126).
     float planeNx, planeNy, planeNz, planeD;
-    if (bounce != NULL) {
-        const Transform &bxf = bounce->WorldXfm();
+    if (mBounce != NULL) {
+        const Transform &bxf = mBounce->WorldXfm();
         planeNy = bxf.m.z.y;
         planeNz = bxf.m.z.z;
         planeNx = bxf.m.z.x;
-        const Transform &bxf2 = bounce->WorldXfm();
+        const Transform &bxf2 = mBounce->WorldXfm();
         planeD = -(bxf2.v.x * planeNx + bxf2.v.z * planeNz + bxf2.v.y * planeNy);
     }
 
@@ -934,7 +933,7 @@ void RndParticleSys::MoveParticles(float dt, float frameSpan) {
                 p->pos.z += frameSpan * p->vel.z;
 
                 // Bounce plane reflection
-                if (bounce != NULL) {
+                if (mBounce != NULL) {
                     float dist = planeNx * p->pos.x + planeNy * p->pos.y + planeNz * p->pos.z
                         + planeD;
                     if (dist < 0.0f) {
@@ -955,9 +954,8 @@ void RndParticleSys::MoveParticles(float dt, float frameSpan) {
                 unsigned int numAttractors = mAttractors.size();
                 for (unsigned int i = 0; i < numAttractors; i++) {
                     Attractor &a = mAttractors[i];
-                    RndTransformable *trans = a.mAttractor;
-                    if (trans != NULL) {
-                        const Transform &axf = trans->WorldXfm();
+                    if (a.mAttractor != NULL) {
+                        const Transform &axf = a.mAttractor->WorldXfm();
                         float dz = axf.v.z - p->pos.z;
                         float dy = axf.v.y - p->pos.y;
                         float strength = a.mStrength;
@@ -1157,8 +1155,8 @@ void RndParticleSys::UpdateParticles() {
             if (mPauseOffscreen != 0) {
                 if (frameUpdate > 4.0f) {
                     float excess = frameUpdate - 4.0f;
-                    frameUpdate = 4.0f;
                     mPausedTime += excess;
+                    frameUpdate = 4.0f;
                 }
                 currentFrame -= mPausedTime;
             }

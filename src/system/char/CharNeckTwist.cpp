@@ -47,7 +47,7 @@ void CharNeckTwist::Poll() {
     // Get the Z-axis rotation angle of the head (yaw/twist around neck axis)
     float headAngle = GetZAngle(mHead->LocalXfm().m);
     // Apply half of the head's yaw to the neck twist bone
-    float twist = headAngle * 0.5f;
+    float twist = headAngle * 0.5;
     // Build rotation matrix for twist around Z axis
     Hmx::Matrix3 rotMat;
     rotMat.x.Set(Cosine(twist), Sine(twist), 0);

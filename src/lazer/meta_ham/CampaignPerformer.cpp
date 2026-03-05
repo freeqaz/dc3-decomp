@@ -170,8 +170,8 @@ void CampaignPerformer::OnLoadSong() {
     mStarsEarnedSoFar = 0;
     if (TheGameMode->InMode("campaign_outro", true)) {
         int idx = GetPlaylistIndex();
-        static Symbol perform("perform");
         static Symbol song_shortening_enabled("song_shortening_enabled");
+        static Symbol perform("perform");
         static Symbol deinit("deinit");
         Symbol mode = TheCampaign->GetOutroSongGameplayMode(idx);
         if (TheGameMode->GameplayMode() != mode) {

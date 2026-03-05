@@ -330,9 +330,7 @@ bool NetLoaderRef::NeedsToDownload() {
 
 bool NetLoaderRef::IsDownloading() {
     MILO_ASSERT(IsValid(), 0x321);
-    if (!mCacheLoader || (int)mCacheLoader->mState == 2)
-        return true;
-    return false;
+        return !mCacheLoader || (int)mCacheLoader->mState == 2;
 }
 
 void NetCacheMgrInit() {

@@ -120,7 +120,7 @@ void RndPostProcMgr::BlendToPostProc(RndPostProc *iPostProc, float iBlendTime) {
 
 RndPostProc *RndPostProcMgr::MsgToPostProc(DataArray *iMsg) {
     MILO_ASSERT(iMsg, 0x116);
-    RndPostProc *result = nullptr;
+    RndPostProc *result = 0;
     if (iMsg->Size() > 2) {
         DataType t = iMsg->Type(2);
         if (t == kDataObject) {
@@ -129,7 +129,7 @@ RndPostProc *RndPostProcMgr::MsgToPostProc(DataArray *iMsg) {
             const char *name = iMsg->Str(2);
             result = Dir()->Find<RndPostProc>(name, false);
             if (!result) {
-                MILO_NOTIFY("could not find post-proc %s", name);
+                MILO_NOTIFY("could not find post-proc %s", (char *)name);
             }
         } else {
             MILO_NOTIFY("unexpected post-proc data type %d", t);

@@ -152,7 +152,7 @@ Symbol DataGetMacroByInt(int value, const char *prefix) {
          it != gMacroTable.end();
          it++) {
         DataArray *data_arr = it->second;
-        if (data_arr != 0 && data_arr->Size() != 0) {
+        if (data_arr->Size() != 0) {
             DataNode &node = data_arr->Node(0);
             if (node.Type() == kDataInt && node.Int() == value) {
                 String name(it->first);

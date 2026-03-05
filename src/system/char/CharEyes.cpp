@@ -55,9 +55,9 @@ CharEyes::~CharEyes() {}
 
 void CharEyes::Enter() {
     mLastFacing.Zero();
-    mLastCang = 1.0f;
     mLastLook = 0;
     mLastBlinkWeight = -1.0f;
+    mLastCang = 1.0f;
     mBlinkDetect = false;
     mBlinkActive = false;
     mDartEnabled = false;
@@ -70,10 +70,11 @@ void CharEyes::Enter() {
     mLowerBlinkAngle = -1.0f;
     mInterestFilterFlags = mDefaultFilterFlags;
     mDartTimer = 0.0f;
-    mNeedRecalc = false;
+    auto& needRecalc = mNeedRecalc;
+    needRecalc = false;
     mEnabled = false;
     RndTransformable *head = GetHead();
-    mNeedRecalc = false;
+    needRecalc = false;
     if (head) {
         mLastFacing = head->WorldXfm().m.y;
         Normalize(mLastFacing, mLastFacing);
@@ -108,9 +109,8 @@ void CharEyes::Highlight() {
         RndGraph *oneframe = RndGraph::GetOneFrame();
         RndTransformable *trans = 0;
         for (ObjVector<EyeDesc>::iterator it = mEyes.begin(); it != mEyes.end(); ++it) {
-            CharLookAt *eye = it->mEye;
-            if (eye) {
-                trans = eye->GetSource();
+            if (it->mEye) {
+                trans = it->mEye->GetSource();
                 if (trans) {
                     const Transform &tf = trans->WorldXfm();
                     Vector3 v100(
@@ -118,7 +118,7 @@ void CharEyes::Highlight() {
                         tf.m.y.y * 3.0f + tf.v.y,
                         tf.m.y.z * 3.0f + tf.v.z
                     );
-                    if (eye->mDisableRoll)
+                    if (it->mEye->mDisableRoll)
                         oneframe->AddLine(
                             trans->WorldXfm().v, v100, Hmx::Color(1.0f, 0.0f, 0.0f), true
                         );
@@ -131,8 +131,8 @@ void CharEyes::Highlight() {
         }
         Vector3 headPos(GetHead()->WorldXfm().v);
         if (trans) {
-            float f1 = mCurrentInterest ? mCurrentInterest->mMaxViewAngleCos : mMaxEyeCang;
             float f2 = mLastBlinkWeight;
+            float f1 = mCurrentInterest ? mCurrentInterest->mMaxViewAngleCos : mMaxEyeCang;
             if (mDartEnabled) {
                 oneframe->AddSphere(
                     mTarget, mData.mMaxRadius, Hmx::Color(0.9f, 0.9f, 0.9f)
@@ -537,7 +537,8 @@ void CharEyes::PollDeps(
     for (ObjVector<CharInterestState>::iterator it = mInterests.begin();
          it != mInterests.end();
          ++it) {
-        if (it->mInterest && it->mInterest->Dir() == Dir()) {
+        auto interestDir = it->mInterest->Dir();
+        if (it->mInterest && Dir() == interestDir) {
             changedBy.push_back(it->mInterest);
         }
     }
@@ -702,18 +703,19 @@ bool CharEyes::Replace(ObjRef *ref, Hmx::Object *obj) {
         }
     }
     int stateSize = sizeof(CharInterestState);
-    int stateCount = mInterests.size();
+    auto& interests = mInterests;
+    int stateCount = interests.size();
 #ifdef HX_NATIVE
-    int stateOffset = (char *)ref - (char *)mInterests.data();
+    int stateOffset = (char *)ref - (char *)interests.data();
 #else
-    int stateOffset = (char *)ref - (char *)mInterests.begin();
+    int stateOffset = (char *)ref - (char *)interests.begin();
 #endif
     if ((unsigned)stateOffset < (unsigned)(stateSize * stateCount)) {
         int stateIdx = stateOffset / stateSize;
         if (stateOffset == stateIdx * stateSize) {
-            CharInterestState &state = mInterests[stateIdx];
+            CharInterestState &state = interests[stateIdx];
             if (!state.mInterest.SetObj(obj))
-                mInterests.erase(mInterests.begin() + stateIdx);
+                interests.erase(interests.begin() + stateIdx);
             return true;
         }
     }

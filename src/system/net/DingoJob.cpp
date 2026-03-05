@@ -111,7 +111,7 @@ void DingoJob::AddContent(HttpReq *httpReq) {
 
     // Find the end of the encoded string
     const char *scan;
-    for (scan = str2.c_str(); *scan != '\0'; scan++) {
+    for (scan = str2.c_str(); '\0' != *scan; scan++) {
     }
 
     // Calculate total size: "params=" (7 bytes) + encoded string length
@@ -126,7 +126,7 @@ void DingoJob::AddContent(HttpReq *httpReq) {
 
     // Find the end of the prefix (after the null terminator byte)
     char *end;
-    for (end = (char *)mContentBuffer; *end != '\0'; end++) {
+    for (end = (char *)mContentBuffer; '\0' != *end; end++) {
     }
     end--;
 

@@ -129,8 +129,8 @@ void StorePanel::Poll() {
                 char *buffer = loader->GetBuffer();
                 MILO_ASSERT(buffer, 0x16d);
                 RndBitmap bmap;
-                bmap.Reset();
                 BufStream stream(buffer, size, true);
+                bmap.Reset();
                 bmap.Load(stream);
                 bmap.SetMip(0);
                 TheNetCacheMgr->DeleteNetCacheLoader(loader);
@@ -166,7 +166,26 @@ void StorePanel::Poll() {
             bool enumFinished = false;
             bool purchaseMade = false;
             if (mPurchaser->PurchaseMade()) {
-                if (mCartOffers.empty()) {
+                if (!(mCartOffers.empty())) {
+                    // Multiple items checkout
+                    if (mPurchaser->IsSuccess()) {
+                        std::vector<unsigned long long> songIds;
+                        for (size_t i = 0; i < mCartOffers.size(); i++) {
+                            songIds.push_back(mCartOffers[i]->songID);
+                        }
+                        void *mem = operator new(0x64);
+                        MultipleItemsPostPurchaseEnumJob *job = 0;
+                        job = new (mem) MultipleItemsPostPurchaseEnumJob(
+                                this,
+                                mCheckoutProfile,
+                                songIds,
+                                mPurchaser->mSource,
+                                mPurchaser->mUserIndex
+                            );
+                        mPostPurchaseJob = job;
+                        purchaseMade = true;
+                    }
+                } else {
                     // Single item checkout
                     if (mCheckoutItem != 0 && !mCheckoutItem->isPurchased) {
                         if (mPurchaser->IsSuccess()) {
@@ -180,39 +199,16 @@ void StorePanel::Poll() {
                         } else if (mCheckoutProfile != 0) {
                             void *mem = operator new(0x50);
                             PostPurchaseEnumJob *job = 0;
-                            if (mem) {
-                                job = new (mem) PostPurchaseEnumJob(
+                            job = new (mem) PostPurchaseEnumJob(
                                     this,
                                     mCheckoutProfile,
                                     mCheckoutItem->songID,
                                     mPurchaser->mSource,
                                     mPurchaser->mUserIndex
                                 );
-                            }
                             mPostPurchaseJob = job;
                             purchaseMade = true;
                         }
-                    }
-                } else {
-                    // Multiple items checkout
-                    if (mPurchaser->IsSuccess()) {
-                        std::vector<unsigned long long> songIds;
-                        for (size_t i = 0; i < mCartOffers.size(); i++) {
-                            songIds.push_back(mCartOffers[i]->songID);
-                        }
-                        void *mem = operator new(0x64);
-                        MultipleItemsPostPurchaseEnumJob *job = 0;
-                        if (mem) {
-                            job = new (mem) MultipleItemsPostPurchaseEnumJob(
-                                this,
-                                mCheckoutProfile,
-                                songIds,
-                                mPurchaser->mSource,
-                                mPurchaser->mUserIndex
-                            );
-                        }
-                        mPostPurchaseJob = job;
-                        purchaseMade = true;
                     }
                 }
             }
@@ -221,9 +217,7 @@ void StorePanel::Poll() {
             HandleType(checkoutMsg.mData);
             TheUI->Handle(checkoutMsg.mData, false);
 
-            if (mPurchaser) {
-                delete mPurchaser;
-            }
+            delete mPurchaser;
             mPurchaser = 0;
             mCheckoutItem = 0;
             mCheckoutProfile = 0;
@@ -338,9 +332,9 @@ void StorePanel::HandleNetCacheMgrFailure() {
 }
 
 void StorePanel::HandleNetCacheLoaderFailure(int failType) {
-    StoreError err = kStoreErrorSuccess;
 
     MILO_ASSERT((0) <= (failType) && (failType) < (4), 0xe5);
+    StoreError err = kStoreErrorSuccess;
 
     switch (failType) {
     case 0:
@@ -522,13 +516,13 @@ void StorePanel::FinishEnum(std::list<EnumProduct> const &enumList, bool arg) {
 }
 
 StoreError StorePanel::UpdateOffers(std::list<EnumProduct> const &enumList, bool arg) {
-    StoreError result;
     std::vector<StoreOffer *> *offers;
+    StoreError result;
 
-    if (arg == 0) {
-        offers = &mOffers;
-    } else {
+    if (!(arg == 0)) {
         offers = &mPendingOffers;
+    } else {
+        offers = &mOffers;
     }
 
     // Check if mShowTestOffers is non-zero
@@ -545,7 +539,8 @@ StoreError StorePanel::UpdateOffers(std::list<EnumProduct> const &enumList, bool
 
     // Iterate through offers
     std::vector<StoreOffer *>::iterator it;
-    for (it = offers->begin(); it != offers->end(); ++it) {
+    auto offersEnd = offers->end();
+    for (it = offers->begin(); it != offersEnd; ++it) {
         StoreOffer *offer = *it;
         if (offer->Exists()) {
             std::list<EnumProduct>::const_iterator enumIt;

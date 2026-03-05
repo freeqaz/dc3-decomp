@@ -57,10 +57,10 @@ int fft_matrix_forward_columnwise(float* data, long size, float* context) {
     if (power & 1) {
         cols_power++;
     }
-    int cols = 1 << cols_power;
+    float* temp = (float*)malloc(rows * 16);
 
     // Allocate temp buffer
-    float* temp = (float*)malloc(rows * 16);
+    int cols = 1 << cols_power;
     if (temp == nullptr) {
         return 0xC;  // Out of memory
     }
@@ -72,7 +72,7 @@ int fft_matrix_forward_columnwise(float* data, long size, float* context) {
     // Main processing loop
     for (int col = 0; col < half_cols; col++) {
         // Calculate twiddle factors
-        float angle1 = (float)(col * 2.0 * M_PI / (float)cols);
+        float angle1 = (float)(col * 2.0f * M_PI / (float)cols);
         float angle2 = (float)((col + 2) * 2.0 * M_PI / (float)cols);
 
         float sin_val1 = sinf(angle1);
@@ -100,7 +100,8 @@ int fft_matrix_forward_columnwise(float* data, long size, float* context) {
         }
 
         // Process second half of columns
-        err = FFTComplex((float*)((unsigned long)temp + rows * 8), rows, -1, context);
+        int fftErr = FFTComplex((float*)((unsigned long)temp + rows * 8), rows, -1, context);
+        err = fftErr;
         if (err != 0) {
             free(temp);
             return err;

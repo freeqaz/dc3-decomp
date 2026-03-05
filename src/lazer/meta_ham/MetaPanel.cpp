@@ -98,13 +98,14 @@ MetaPanel::MetaPanel() : mLoopHistoryCursor(0), mSongPreview(TheHamSongMgr), mXM
     mCampaign = new Campaign(SystemConfig("campaign"));
     mHAQManager = new HAQManager();
 #endif
-    mSongPreview.SetName("song_preview", ObjectDir::Main());
+    auto& songPreview = mSongPreview;
+    songPreview.SetName("song_preview", ObjectDir::Main());
 #ifndef HX_NATIVE
-    SongSortMgr::Init(mSongPreview);
-    ChallengeSortMgr::Init(mSongPreview);
-    PlaylistSortMgr::Init(mSongPreview);
-    MQSongSortMgr::Init(mSongPreview);
-    FitnessCalorieSortMgr::Init(mSongPreview);
+    SongSortMgr::Init(songPreview);
+    ChallengeSortMgr::Init(songPreview);
+    PlaylistSortMgr::Init(songPreview);
+    MQSongSortMgr::Init(songPreview);
+    FitnessCalorieSortMgr::Init(songPreview);
 #endif
     mLoopHistory.reserve(3);
     for (int i = 3; i != 0; i--) {
@@ -112,6 +113,8 @@ MetaPanel::MetaPanel() : mLoopHistoryCursor(0), mSongPreview(TheHamSongMgr), mXM
     }
     ThePlatformMgr.AddSink(this, "xmp_state_changed");
 #ifdef HX_NATIVE
+    // SongDB/HamMaster init requires song MIDI data from ark
+    // Skip for now — MetaMusic will be null-guarded
     sSongDB = nullptr;
     sHamMaster = nullptr;
 #else
@@ -264,8 +267,11 @@ void MetaPanel::FinishLoad() {
         }
     }
     UIPanel::FinishLoad();
-    auto _tmp0 = TheSynth->Find<Fader>("background_music_level.fade", true);
-    TheMetaMusic->AddFader(_tmp0);
+#ifdef HX_NATIVE
+    if (!TheMetaMusic) return;
+#endif
+    auto bgMusicFader = TheSynth->Find<Fader>("background_music_level.fade", true);
+    TheMetaMusic->AddFader(bgMusicFader);
 }
 
 bool MetaPanel::IsLoaded() const {
@@ -274,6 +280,9 @@ bool MetaPanel::IsLoaded() const {
             return true;
         }
     }
+#ifdef HX_NATIVE
+    if (!TheMetaMusic) return UIPanel::IsLoaded();
+#endif
     return UIPanel::IsLoaded() && TheMetaMusic->Loaded();
 }
 
@@ -318,6 +327,9 @@ void MetaPanel::Exit() {
     }
     UIPanel::Exit();
     mSongPreview.Start(gNullStr, nullptr);
+#ifdef HX_NATIVE
+    if (TheMetaMusic)
+#endif
     TheMetaMusic->Stop();
     ThePlatformMgr.DisableXMP();
 }
@@ -331,7 +343,13 @@ bool MetaPanel::Exiting() const {
     if (mState != 2) {
         return UIPanel::Exiting();
     }
-    bool ret = mSongPreview.IsWaitingToDelete() || mSongPreview.IsFadingOut() || TheMetaMusic->IsActive() || UIPanel::Exiting();
+    bool ret = mSongPreview.IsWaitingToDelete() || mSongPreview.IsFadingOut() ||
+#ifdef HX_NATIVE
+        (TheMetaMusic && TheMetaMusic->IsActive()) ||
+#else
+        TheMetaMusic->IsActive() ||
+#endif
+        UIPanel::Exiting();
     if (!ret) {
         TheTaskMgr.SetAutoSecondsBeats(true);
     }
@@ -390,8 +408,8 @@ void MetaPanel::CycleVenuePreference() {
         MILO_ASSERT(pVenueEntryArray, 0x76);
         venuePref = pVenueEntryArray->Sym(0);
     } else {
-        auto _tmp1 = pVenueArray->Size();
-        for (int i = 1; i < _tmp1; i++) {
+        auto venueCount = pVenueArray->Size();
+        for (int i = 1; i < venueCount; i++) {
             DataArray *pVenueEntryArray = pVenueArray->Array(i);
             MILO_ASSERT(pVenueEntryArray, 0x80);
             Symbol entrySym = pVenueEntryArray->Sym(0);

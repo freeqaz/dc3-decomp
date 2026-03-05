@@ -251,6 +251,7 @@ void SongCollision::GatherUsefulBones(
 
 void SongCollision::Update(MoveDir *moveDir) {
 
+    auto& data = mData;
     if (moveDir) {
         MILO_ASSERT(TheGameData, 0xFB);
         MILO_ASSERT(TheHamDirector, 0xFC);
@@ -264,7 +265,7 @@ void SongCollision::Update(MoveDir *moveDir) {
             timer.Restart();
             MILO_ASSERT(TheGameData, 0x10C);
             TheGameData->Player(0)->SetDifficulty((Difficulty)i);
-            mData[i].clear();
+            data[i].clear();
             MocapSkeletonIterator it(0, TheHamDirector->SongAnim(0)->EndFrame());
             int current_beat = -1;
             Transform startXfm;
@@ -275,9 +276,9 @@ void SongCollision::Update(MoveDir *moveDir) {
                 if (beat != current_beat) {
                     MILO_ASSERT(beat == current_beat + 1, 0x11F);
                     if (current_beat >= 0) {
-                        BeatCollisionData data;
-                        data.Set(minX, maxX, startXfm, dancer->WorldXfm());
-                        mData[i].push_back(data);
+                        BeatCollisionData bcd;
+                        bcd.Set(minX, maxX, startXfm, dancer->WorldXfm());
+                        data[i].push_back(bcd);
                     }
                     startXfm = dancer->WorldXfm();
                     maxX = 0;
@@ -287,9 +288,9 @@ void SongCollision::Update(MoveDir *moveDir) {
                 bones_min_max_x(minX, maxX, usefulBones, startXfm);
             }
             if (current_beat != -1) {
-                BeatCollisionData data;
-                data.Set(minX, maxX, startXfm, dancer->WorldXfm());
-                mData[i].push_back(data);
+                BeatCollisionData bcd;
+                bcd.Set(minX, maxX, startXfm, dancer->WorldXfm());
+                data[i].push_back(bcd);
             } else {
                 MILO_NOTIFY(
                     "Could not process collision mocap for %s", TheGameData->GetSong()
@@ -298,7 +299,7 @@ void SongCollision::Update(MoveDir *moveDir) {
             timer.Stop();
             MILO_LOG("Took %fms\n", timer.Ms());
         }
-        int sizeKB = mData[0].size() * 0x48; // where is this 0x48 coming from
+        int sizeKB = data[0].size() * 0x48; // where is this 0x48 coming from
         sizeKB /= 1024;
         MILO_LOG("Approx size = %ikB\n", sizeKB);
     }

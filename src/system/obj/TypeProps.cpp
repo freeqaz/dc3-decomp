@@ -304,8 +304,7 @@ void TypeProps::Save(BinStream &bs) {
     if (mMap) {
         if (TheLoadMgr.EditMode()) {
             DataArray *def = ref->TypeDef();
-            if (def) {
-                for (int i = 0; mMap && i < mMap->Size(); i += 2) {
+            for (int i = 0; mMap && i < mMap->Size(); i += 2) {
                     DataArray *arr = def->FindArray(mMap->Sym(i), false);
                     if (arr && arr->Type(1) != kDataCommand) {
                         if (arr->Node(1).CompatibleType(mMap->Type(i + 1)))
@@ -316,8 +315,7 @@ void TypeProps::Save(BinStream &bs) {
                         else
                             break;
                     }
-                }
-            }
+                };
         }
         if (mMap && ref->DataDir() == ref && ref->Dir() != ref || gLoadingProxyFromDisk) {
             DataArray *def = ref->TypeDef();

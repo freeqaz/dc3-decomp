@@ -159,7 +159,8 @@ int BinStream::PopRev(Hmx::Object *o) {
 }
 
 void BinStream::Read(void *data, int bytes) {
-    if (Fail()) {
+    bool failed = Fail();
+    if (failed) {
         MILO_NOTIFY_ONCE("Stream error: Can't read from %s", Name());
         memset(data, 0, bytes);
     } else {

@@ -75,7 +75,7 @@ bool FlowPickOne::Activate() {
         chosen = GetNthChild(mChildNodes, mIndex);
         break;
     case kChoiceRandomNoRepeat:
-        if (numChildren < 2) {
+        if (numChildren <= 1) {
             mIndex = 0;
         } else {
             int newIndex;
@@ -88,8 +88,9 @@ bool FlowPickOne::Activate() {
         break;
     case kChoiceRandomJukeBox:
         if (numChildren <= 1) {
+            auto firstChild = mChildNodes.begin()->Obj();
             if (numChildren == 1)
-                chosen = mChildNodes.begin()->Obj();
+                chosen = firstChild;
             break;
         }
         {
@@ -112,8 +113,9 @@ bool FlowPickOne::Activate() {
                 }
                 mIndex = 0;
                 // If first element is same as lastChosen, start at 1
+                auto firstHistory = mChoiceHistory.begin()->Obj();
                 if (lastChosen && newSize > 0 &&
-                    mChoiceHistory.begin()->Obj() == lastChosen) {
+                    firstHistory == lastChosen) {
                     mIndex = 1;
                 }
                 historySize = newSize;

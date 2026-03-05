@@ -123,10 +123,7 @@ void RndTexBlender::DrawBlendList(
     // This check verifies texture validity - non-null indicates the texture
     // has valid internal state. Platform-specific, no accessor available.
     u32 texdata = 0;
-    if (texmap) {
-        texdata = *(u32 *)((char *)texmap + 0xC);
-    }
-
+    texdata = *(u32 *)((char *)texmap + 0xC);
     if (((texdata != 0) || (state == 8)) && (!list.empty())) {
         mRenderedStates |= state;
 
@@ -136,7 +133,8 @@ void RndTexBlender::DrawBlendList(
 
         Transform xfm;
         xfm.Reset();
-        TheShaderMgr.SetVConstant(kVS_ViewProjMatrix, Hmx::Matrix4(xfm));
+        Hmx::Matrix4 viewProjMtx = Hmx::Matrix4(xfm);
+        TheShaderMgr.SetVConstant(kVS_ViewProjMatrix, viewProjMtx);
         TheShaderMgr.SetTransform(xfm);
         SetupMaterial(mat, texmap);
 

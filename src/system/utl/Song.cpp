@@ -108,16 +108,16 @@ void Song::SetFrame(float frame, float blend) {
     if (mHxMaster) {
         paused = mHxMaster->GetHxAudio()->Paused();
     }
-    if (paused && mLoopPoints.y < frame || frame < mLoopPoints.x) {
-        if (frame <= mLoopPoints.y) {
-            frame = mLoopPoints.x;
-        } else {
+    if (paused && frame > mLoopPoints.y || frame < mLoopPoints.x) {
+        if (!(frame <= mLoopPoints.y)) {
             frame = frame - (mLoopPoints.y - mLoopPoints.x);
+        } else {
+            frame = mLoopPoints.x;
         }
         SetStateDirty(true);
     }
     frame = Min(frame, StartFrame(), EndFrame());
-    RndAnimatable::SetFrame(frame, blend);
+    RndAnimatable::SetFrame(blend, frame);
     if (paused) {
         if (mHxMaster) {
             mHxMaster->Poll(frame * 1000.0f);

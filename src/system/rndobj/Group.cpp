@@ -231,7 +231,7 @@ void RndGroup::DrawShowing() {
             if (trans) {
                 Vector3 delta;
                 Subtract(camXfm.v, trans->WorldXfm().v, delta);
-                gdd.dist = LengthSquared(delta);
+                gdd.dist = bool(LengthSquared(delta));
             } else {
                 gdd.dist = 0.0f;
             }

@@ -194,7 +194,7 @@ D3DFORMAT DxRnd::D3DFormatForBitmap(const RndBitmap &bitmap) {
             result = D3DFMT_DXN;
             break;
         default:
-            MILO_FAIL("Invalid dxt format: %d", fmt);
+            MILO_WARN("Invalid dxt format: %d", fmt);
             MILO_ASSERT(fmt != D3DFMT_UNKNOWN, 999);
             break;
         }

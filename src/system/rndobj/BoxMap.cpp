@@ -50,12 +50,12 @@ bool BoxMapLighting::QueueLight(RndLight *light, float colorScale) {
 
 void BoxMapLighting::ApplyQueuedLights(Hmx::Color * __restrict color, const Vector3 *v3) const {
     START_AUTO_TIMER("draw_light_approx");
-    gLightIndex = 0;
     ApplyLight(mQueued_Directional);
     if (v3) {
         ApplyLight(mQueued_Spot, *v3);
         ApplyLight(mQueued_Point, *v3);
     }
+    gLightIndex = 0;
     // Accumulate light contributions into output colors
     for (int i = 0; i < 6; i++) {
         color[i].red = gLightBuffer1[i].x;

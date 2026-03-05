@@ -407,12 +407,14 @@ DataNode Sound::OnPlay(DataArray *a) {
 SynthSample *Sound::Sample() { return mSynthSample; }
 
 void Sound::SynthPoll() {
-    float deltaTime = TheTaskMgr.DeltaSeconds() * 1000.0f;
+    float deltaSecs = TheTaskMgr.DeltaSeconds();
+    float deltaTime = deltaSecs * 1000.0f;
 
     // Process delayed arguments
     if (!mDelayArgs.empty()) {
         float dummy = 0.0f;
-        for (auto it = mDelayArgs.begin(); it != mDelayArgs.end();) {
+        auto delayEnd = mDelayArgs.end();
+        for (auto it = mDelayArgs.begin(); it != delayEnd;) {
             DelayArgs *args = *it;
             args->mDelayMs -= deltaTime;
             if (args->mDelayMs <= dummy) {
@@ -430,7 +432,8 @@ void Sound::SynthPoll() {
         PlayableSample *sample = *it;
         if (!mIsSynthSample && mMaxPolyphony != 0) {
             if (sample->DonePlaying()) {
-                it = mSamples.erase(it);
+                auto nextIt = mSamples.erase(it);
+                it = nextIt;
             } else {
                 ++it;
             }

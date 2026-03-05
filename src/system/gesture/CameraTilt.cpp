@@ -482,12 +482,13 @@ void CameraTilt::UpdateTiltingDown() {
 }
 
 void CameraTilt::Poll() {
-    if (!mScanActive)
+    auto& scanActive = mScanActive;
+    if (!scanActive)
         return;
     unsigned int state = mState;
     switch (state) {
     case 0:
-        mScanActive = false;
+        scanActive = false;
         mCycles = 0;
         mElapsedMs = 0;
         mTimer.Stop();

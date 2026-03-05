@@ -654,15 +654,16 @@ const Transform &RndTransformable::WorldXfm_Force() {
 }
 
 void RndTransformable::ApplyDynamicConstraint() {
-    if (mConstraint == kConstraintTargetWorld) {
+    auto& constraint = mConstraint;
+    if (constraint == kConstraintTargetWorld) {
         mWorldXfm = mTarget->WorldXfm();
-    } else if (mConstraint == kConstraintShadowTarget) {
+    } else if (constraint == kConstraintShadowTarget) {
         Transform tf;
         Transpose(mTarget->WorldXfm(), tf);
         Multiply(mWorldXfm, tf, mWorldXfm);
         Plane pl;
-        Multiply(sShadowPlane, tf, pl);
         float planeB = pl.b;
+        Multiply(sShadowPlane, tf, pl);
         tf.m.Set(1, -pl.a / planeB, 0, 0, 0, 0, 0, -pl.c / planeB, 1);
         tf.v.Set(0, -pl.d / pl.b, 0);
         Multiply(mWorldXfm, tf, mWorldXfm);
@@ -673,7 +674,7 @@ void RndTransformable::ApplyDynamicConstraint() {
         if (mPreserveScale) {
             MakeScale(mWorldXfm.m, scaleVec);
         }
-        switch (mConstraint) {
+        switch (constraint) {
         case kConstraintFastBillboardXYZ:
             mWorldXfm.m = camWorld.m;
             break;

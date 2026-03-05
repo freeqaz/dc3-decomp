@@ -57,7 +57,7 @@ void ContentLoadingPanel::Poll() {
     if (mShowing) {
         UIPanel::Poll();
         RndGroup *progressGroup = ObjectDir::Main()->Find<RndGroup>("progress.grp", true);
-        if (mContentCount > 0 && progressGroup) {
+        if (progressGroup) {
             // Animate progress bar smoothly toward target percentage
             f32 currentFrame = progressGroup->GetFrame();
             int total = mMountedCount;

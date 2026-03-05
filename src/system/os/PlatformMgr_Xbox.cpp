@@ -83,8 +83,8 @@ bool PlatformMgr::IsEthernetCableConnected() { return XNetGetEthernetLinkStatus(
 void PlatformMgr::UpdateSigninState() {
     XUID oldCache[4] = { mXuidCache[0], mXuidCache[1], mXuidCache[2], mXuidCache[3] };
     int i;
-    mSigninSameGuest = 0;
     mSigninMask = 0;
+    mSigninSameGuest = 0;
     for (i = 0; i < 4; i++) {
         if (XUserGetSigninState(i) != 0) {
             XUSER_SIGNIN_INFO info = {};

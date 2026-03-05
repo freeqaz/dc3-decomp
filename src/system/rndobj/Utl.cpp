@@ -880,8 +880,8 @@ void UtilDrawSphere(const Vector3 &v, float f, const Hmx::Color &col, RndMat *) 
     } else {
         Transform tf58;
         tf58.Reset();
-        tf58.v = v;
         Scale(Vector3(f, f, f), tf58.m, tf58.m);
+        tf58.v = v;
         sSphereMesh->Mat()->SetColor(col.red, col.green, col.blue);
         sSphereMesh->Mat()->SetAlpha(0.2f);
         sSphereMesh->Mat()->SetCull(kCullNone);
@@ -1150,8 +1150,9 @@ DataNode GetTexturesOfType(ObjectDir *dir, RndTex::Type texType) {
     DataArrayPtr ptr(new DataArray(num + 1));
     num = 0;
     for (ObjDirItr<RndTex> it(dir, true); it != 0; ++it) {
-        if (texType == (texType & it->GetType())) {
-            ptr->Node(num++) = DataNode(it);
+        if ((texType & it->GetType()) == texType) {
+            DataNode texNode = DataNode(it);
+            ptr->Node(num++) = texNode;
         }
     }
     ptr->Node(num) = NULL_OBJ;
