@@ -297,7 +297,7 @@ public:
     virtual void DrawShowing();
     virtual RndDrawable *CollideShowing(const Segment &, float &, Plane &);
     virtual int CollidePlane(const Plane &);
-    virtual void Highlight() { RndDrawable::Highlight(); }
+    virtual void Highlight();
     // RndText
     virtual Symbol TextToken() { return gNullStr; }
 

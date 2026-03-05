@@ -426,6 +426,8 @@ void RndText::UpdateSphere() {
     SetSphere(s);
 }
 
+void RndText::Highlight() { RndDrawable::Highlight(); }
+
 void RndText::Mats(std::list<class RndMat *> &mats, bool) {
     FOREACH (it, mFontMaps) {
         for (int i = 0; i < (*it)->NumMaterials(); i++) {
