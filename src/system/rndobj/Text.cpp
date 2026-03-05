@@ -58,7 +58,7 @@ Transform XfmOnCircleEdge(float circumference, float pos) {
     xfm.m.y.z = 0.0f * negSign;
 
     xfm.m.x.z = -(xfm.m.y.x * xfm.m.z.y - xfm.m.z.x * xfm.m.y.y);
-    xfm.m.x.x = xfm.m.z.z * xfm.m.y.y - xfm.m.y.z * xfm.m.z.y;
+    xfm.m.x.x = -(xfm.m.y.z * xfm.m.z.y - xfm.m.z.z * xfm.m.y.y);
     xfm.m.x.y = xfm.m.y.z * xfm.m.z.x - xfm.m.z.z * xfm.m.y.x;
 
     float radius = (sign * (circumference * 0.15915494f));
@@ -476,10 +476,6 @@ int RndText::CollidePlane(const Plane &p) {
     return ret;
 }
 
-#ifdef HX_NATIVE
-void RndText::Highlight() { RndDrawable::Highlight(); }
-#endif
-
 float RndText::GetDistanceToPlane(const Plane &p, Vector3 &v) {
     if (mFontMaps.empty())
         return 0;
@@ -570,6 +566,9 @@ void RndText::FontMap::IncrementDisplayableChars(unsigned short num) {
 
 void ResetFontMapPageMeshFaces(RndMesh *mesh, int numFaces) {
     MILO_ASSERT(mesh, 0x96);
+#ifdef HX_NATIVE
+    if (numFaces <= 0 || numFaces > 100000) return;
+#endif
     mesh->Faces().resize(numFaces);
     std::vector<RndMesh::Face>::iterator it = mesh->Faces().begin();
     std::vector<RndMesh::Face>::iterator itEnd = mesh->Faces().end();
@@ -583,6 +582,12 @@ void ResetFontMapPageMeshFaces(RndMesh *mesh, int numFaces) {
 void RndText::FontMap::AllocateMeshes(RndText *text, int fixedLength) {
     for (int i = 0; i < mPages.size(); i++) {
         Page &page = *(mPages[i]);
+#ifdef HX_NATIVE
+        // Guard against garbage displayableChars from font loading issues
+        if (page.displayableChars < 0 || page.displayableChars > 10000) {
+            page.displayableChars = 0;
+        }
+#endif
         if (!page.mesh && mFont && page.displayableChars > 0) {
             page.mesh = Hmx::Object::New<RndMesh>();
         }
@@ -1022,13 +1027,11 @@ int RndText::ConvertTextToWide(const char *str, HX_VECTOR(unsigned short) &wideC
 
     // Manual strlen to match target inline loop
     const char *s = p;
-    while (*s++ != '\0') {}
-    int len = (s - p) - 1;
-
+    while ('\0' != *s++) {}
     MemPushTemp();
     unsigned short zero = 0;
     unsigned short ssChar;
-    wideChars.resize(len * 2 + 1, zero);
+    wideChars.resize(((s - p) - 1) * 2 + 1, zero);
     MemPopTemp();
 
     unsigned short *out = &wideChars[0];
@@ -1083,10 +1086,10 @@ void RndText::ReplaceMissingCharacters(HX_VECTOR(unsigned short) &wideChars) {
 
 int RndText::OnComputeCharWidths(const unsigned short *wideChars, float *widths, bool marqueeWrap) {
     StyleState styleState(this, 1.0f);
-    std::vector<unsigned short> missingChars;
-    std::vector<unsigned short> negWidthChars;
     std::vector<RndFontBase *> missingFonts;
     unsigned short prevChar = 0;
+    std::vector<unsigned short> negWidthChars;
+    std::vector<unsigned short> missingChars;
     float cumWidth = 0.0f;
     widths[0] = 0.0f;
     const unsigned short *p = wideChars;
@@ -1094,7 +1097,8 @@ int RndText::OnComputeCharWidths(const unsigned short *wideChars, float *widths,
     for (;;) {
         if (*p == 0) {
             if (!missingChars.empty()) {
-                String msg = MakeString("%s:%s '", PathName(this), ClassName().Str());
+                auto pathStr = PathName(this);
+                String msg = MakeString("%s:%s '", pathStr, ClassName().Str());
                 String hexMsg;
                 for (unsigned int i = 0; i < missingChars.size(); i++) {
                     unsigned short tmp[2] = {missingChars[i], 0};
@@ -1320,20 +1324,18 @@ static const wchar_t kBreakChars[] = L" \t\n";
 void RndText::FitTextEllipsis() {
     BuildFontMaps(true);
 
-    HX_VECTOR(Line) lines;
     HX_VECTOR(unsigned short) wideChars;
-    int numChars = ConvertTextToWide(mText.c_str(), wideChars);
+    HX_VECTOR(Line) lines;
+    auto textStr = mText.c_str();
+    int numChars = ConvertTextToWide(textStr, wideChars);
 
     float *charWidths = (float *)_alloca((numChars + 2) * sizeof(float));
     OnComputeCharWidths(&wideChars[0], charWidths, false);
 
-    Hmx::Rect bounds;
     float scale = 1.0f;
+    Hmx::Rect bounds;
 
-    if (charWidths[numChars] <= mWidth) {
-        // Text fits, just wrap normally
-        WrapText(&wideChars[0], numChars, charWidths, lines, bounds, 1.0f);
-    } else {
+    if (!(charWidths[numChars] <= mWidth)) {
         // Text doesn't fit — need to truncate and add ellipsis
         int ellipsisLen = wcslen(kEllipsisStr);
 
@@ -1345,7 +1347,7 @@ void RndText::FitTextEllipsis() {
             do {
                 int mid = ((int)tmpLo + (int)hi) >> 1;
                 lo = mid;
-                if (mWidth <= charWidths[mid]) {
+                if (charWidths[mid] >= mWidth) {
                     hi = mid;
                     lo = tmpLo;
                 }
@@ -1375,9 +1377,10 @@ void RndText::FitTextEllipsis() {
         WrapText(buf, totalLen, charWidths, lines, bounds, 1.0f);
 
         // Iteratively shrink if text still doesn't fit
+        auto breakChar = wcschr(kBreakChars, (wchar_t)buf[truncPos - 1]);
         while (truncPos > 1
             && (lines.size() > 1 || mWidth <= bounds.w
-                || wcschr(kBreakChars, (wchar_t)buf[truncPos - 1]) != 0)) {
+                || breakChar != 0)) {
             totalLen = totalLen - 1;
             // Try to find a space to break at (within ~87.5% of current length)
             int minPos = (int)totalLen * 0xe >> 4;
@@ -1403,6 +1406,9 @@ void RndText::FitTextEllipsis() {
             OnComputeCharWidths(buf, charWidths, false);
             WrapText(buf, totalLen, charWidths, lines, bounds, 1.0f);
         }
+    } else {
+        // Text fits, just wrap normally
+        WrapText(&wideChars[0], numChars, charWidths, lines, bounds, 1.0f);
     }
 
     ConstructMeshes(lines, bounds, scale);
@@ -1413,12 +1419,12 @@ void RndText::FitTextScroll() {
     if (mFitType < kFitScrollMarqueeWrap)
         return;
 
+    mWrapEnabled = true;
     FOREACH (it, mFontMaps) {
         if ((*it)->SupportsScrolling()) {
             (*it)->SetupScrolling();
         }
     }
-    mWrapEnabled = true;
 }
 
 void RndText::DrawMesh(RndMesh *mesh, float size, int syncFlags) {
@@ -1501,11 +1507,12 @@ void RndText::ConstructMeshes(
             const unsigned short *cur = line.mStart;
             unsigned short prevChar = 0;
 
-            while (cur != line.mEnd) {
+            while (cur != line.mEnd && cur < line.mEnd) {
                 unsigned short ch = *cur;
 
                 if (ch == 0x3c && mMarkup) {
                     cur = ParseMarkup(cur, state, ch);
+                    if (cur > line.mEnd) break;
                     if (ch != 0) {
                         cur--;
                     }
@@ -1546,10 +1553,10 @@ RndText::ParseMarkup(const unsigned short *str, StyleState &state, unsigned shor
     while (*cur != 0 && *cur != '>') {
         cur++;
     }
+    ch = 0;
     if (*cur == '>') {
         cur++;
     }
-    ch = 0;
     return cur;
 }
 
@@ -1742,20 +1749,21 @@ void RndText::GetWidthHeightBox(Box &box) const {
 }
 
 void RndText::ReFitTextScroll(String str) {
+    auto& maxWidth = mWidth;
     if (mFitType != kFitScrollMarqueeWrapAlways) {
     } else {
         SetText(str.c_str());
         FitTextScroll();
         *(float *)&mScrollPos = 0.0f;
         mZeroAlphaTime = 0.0f;
-        float width = mWidth;
-        while (*mLineWidths.begin() <= width) {
+        float width = maxWidth;
+        while (width >= *mLineWidths.begin()) {
             mDirtyFlags++;
             if (mDirtyFlags >= mTotalWidth) {
                 mDirtyFlags = 0;
             }
             if (*mLineWidths.begin() == *(float *)&mNumLines) {
-                mZeroAlphaTime += mWidth;
+                mZeroAlphaTime += maxWidth;
             }
             unsigned int count = 0;
             for (auto it = mLineWidths.begin(); it != mLineWidths.end(); ++it) {
@@ -1765,7 +1773,7 @@ void RndText::ReFitTextScroll(String str) {
                 mLineWidths.insert(mLineWidths.end(), *mLineWidths.begin());
             }
             mLineWidths.erase(mLineWidths.begin());
-            width = mWidth - mZeroAlphaTime;
+            width = maxWidth - mZeroAlphaTime;
         }
         *(float *)&mScrollState = *(float *)&mScrollOffset;
     }
@@ -1794,7 +1802,7 @@ void RndText::FontMap3d::AllocateMeshes(RndText *text, int fixedLength) {
     // Resize the mesh array to match displayable chars
     // Each char gets one mesh from the 3d font
     // For now just ensure we don't have more meshes than chars
-    while ((int)mMeshes.size() > mDisplayableChars) {
+    while (mDisplayableChars < (int)mMeshes.size()) {
         if (mMeshes.back()) {
             delete mMeshes.back();
         }
@@ -1805,6 +1813,10 @@ void RndText::FontMap3d::AllocateMeshes(RndText *text, int fixedLength) {
 }
 
 void RndText::FontMap3d::CleanupSyncMeshes() {
+#ifdef HX_NATIVE
+    if (mMeshes.empty())
+        return;
+#endif
     for (; mMeshCursor != &mMeshes.back() + 1; mMeshCursor++) {
         (*mMeshCursor)->SetShowing(false);
     }
@@ -1834,14 +1846,15 @@ void RndText::FontMap::SetupCharacter(
     float charW, advW;
     Vector2 uvMin, uvMax;
     if (!mFont->CharWidthAdvanceCoords(charCode, charW, advW, uvMin, uvMax)) {
-        xPos += mFont->CharAdvance(charCode) * size;
+        auto advance = mFont->CharAdvance(charCode);
+        xPos += advance * size;
         return;
     }
 
-    float cellH = mFont->AspectRatio() * size;
+    float z0 = yPos;
     float x0 = xPos;
     float x1 = x0 + charW * size;
-    float z0 = yPos;
+    float cellH = mFont->AspectRatio() * size;
     float z1 = z0 - cellH;
 
     RndMesh::Vert *v = pg.mVertStart;

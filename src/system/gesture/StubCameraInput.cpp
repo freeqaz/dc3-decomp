@@ -23,10 +23,11 @@ void StubCameraInput::StubSkeletonFrame(SkeletonFrame &frame) {
 
 const SkeletonFrame *StubCameraInput::PollNewFrame() {
     for (int i = 0; i < 6; i++) {
+        auto& skelData = unk11d4.mSkeletonDatas[i];
         if (unk239c[i].unk0) {
-            StubSkeletonData(unk11d4.mSkeletonDatas[i], *(Vector3 *)&unk239c[i].unk4);
+            StubSkeletonData(skelData, *(Vector3 *)&unk239c[i].unk4);
         } else {
-            unk11d4.mSkeletonDatas[i].mTracking = kSkeletonNotTracked;
+            skelData.mTracking = kSkeletonNotTracked;
         }
     }
     return &unk11d4;
@@ -59,7 +60,7 @@ void StubCameraInput::StubSkeletonData(SkeletonData &data, const Vector3 &vec) {
     data.mJointPositions[17].Set(0.22748f, -0.893713f, 2.355198f);
     data.mJointPositions[18].Set(-0.043792f, -0.917228f, 2.308891f);
     data.mJointPositions[19].Set(0.216633f, -0.932548f, 2.347959f);
-    for (int i = 0; i < kNumJoints; i++) {
+    for (int i = 0; kNumJoints > i; i++) {
         data.mJointPositions[i].x += vec.x;
         data.mJointPositions[i].y += vec.y;
         data.mJointPositions[i].z += vec.z;

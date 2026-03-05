@@ -266,16 +266,6 @@ void Hmx::Object::SetName(const char *name, ObjectDir *dir) {
         }
         entry->obj = this;
         mName = entry->name;
-#ifdef HX_NATIVE
-        if (dir->Name() && !strcmp(dir->Name(), "main")) {
-            static int sMainLog = 0;
-            if (sMainLog < 5) {
-                sMainLog++;
-                fprintf(stderr, "DC3_SETNAME_MAIN obj=%p name='%s' dir=%p entry->obj=%p\n",
-                        (void*)this, name, (void*)dir, (void*)entry->obj);
-            }
-        }
-#endif
         dir->AddedObject(this);
     }
 }
@@ -701,16 +691,7 @@ void Hmx::Object::RemoveFromDir() {
         if (!entry || entry->obj != this) {
             MILO_FAIL("No entry for %s in %s", PathName(this), PathName(mDir));
         }
-#ifdef HX_NATIVE
-        // Track destruction: log every removal from choose_mode's dir
-        // The dir pointer is only known at runtime, so log ALL
-        static int sRemoveCount = 0;
-        sRemoveCount++;
-        if (sRemoveCount <= 500) {
-            fprintf(stderr, "DC3_RM %d '%s' dir=%p('%s')\n",
-                    sRemoveCount, mName, (void*)mDir, mDir->Name());
-        }
-#endif
+
         entry->obj = nullptr;
     }
 }

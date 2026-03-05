@@ -108,10 +108,11 @@ void MakeEuler(const Hmx::Matrix3 &m, Vector3 &v) {
 }
 
 void MakeScale(const Hmx::Matrix3 &m, Vector3 &v) {
-    float zlen = Length(m.z);
     Vector3 cross;
     Cross(m.x, m.y, cross);
-    if (Dot(cross, m.z) <= 0) {
+    float zlen = Length(m.z);
+    auto dotResult = Dot(cross, m.z);
+    if (dotResult <= 0) {
         zlen = -zlen;
     }
     v.Set(Length(m.x), Length(m.y), zlen);

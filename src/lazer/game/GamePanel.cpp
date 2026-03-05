@@ -112,8 +112,10 @@ float LoopVizCallback::UpdateOverlay(RndOverlay *o, float y) {
     mLoopEndChangeTimer -= TheTaskMgr.DeltaSeconds();
 
     // Draw semi-transparent background
+    auto bgColor = Hmx::Color(0, 0, 0, 0.6f);
+    auto bgRect = Hmx::Rect(0.05f, 0.1f, 0.9f, 0.2f);
     TheRnd.DrawRectScreen(
-        Hmx::Rect(0.05f, 0.1f, 0.9f, 0.2f), Hmx::Color(0, 0, 0, 0.6f), nullptr, nullptr, nullptr
+        bgRect, bgColor, nullptr, nullptr, nullptr
     );
 
     // Get current loop boundaries
@@ -131,8 +133,8 @@ float LoopVizCallback::UpdateOverlay(RndOverlay *o, float y) {
     }
 
     // Calculate current playback position
-    float currentBeat = MsToBeat(TheMaster->StreamMs());
     int loopRange = loopEnd - loopStart;
+    float currentBeat = MsToBeat(TheMaster->StreamMs());
     float loopProgress = (currentBeat - (float)loopStart) / (float)loopRange;
 
     // Get stream info for buffer-ahead visualization
@@ -145,8 +147,8 @@ float LoopVizCallback::UpdateOverlay(RndOverlay *o, float y) {
     // Calculate normalized positions relative to full song
     static Symbol end("end");
     int songEndBeat = TheMaster->EventBeat(end);
-    float loopStartNorm = (float)loopStart / (float)songEndBeat;
     float loopEndNorm = (float)loopEnd / (float)songEndBeat;
+    float loopStartNorm = (float)loopStart / (float)songEndBeat;
     float loopRangeNorm = loopEndNorm - loopStartNorm;
 
     // === FIRST METER: Song-wide loop visualization ===

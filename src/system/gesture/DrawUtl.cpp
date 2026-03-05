@@ -66,8 +66,8 @@ RndMat *CreateCameraBufferMat(int width, int height, RndTex::Type type) {
 }
 
 void DrawSnapshot(const GestureMgr &gm, int index) {
-    if (index > 0) {
-        MILO_ASSERT(index >= 0 && index < gm.GetLiveCameraInput()->NumSnapshots(), 0xfb);
+    if (index >= 1) {
+        MILO_ASSERT((unsigned int)index >= 0 && index < gm.GetLiveCameraInput()->NumSnapshots(), 0xfb);
     }
     auto cam = gm.GetLiveCameraInput();
     auto snap = cam->GetSnapshot(index);
@@ -119,7 +119,7 @@ void DrawGestureMgr(GestureMgr &gm, LiveCameraInput::BufferType bufferType, floa
 
 bool UpdateBufferTex(LiveCameraInput *cam, RndTex *tex, LiveCameraInput::BufferType bufType, GestureMgr *gm) {
     START_AUTO_TIMER("draw_natal_buffer");
-    MILO_ASSERT(bufType < LiveCameraInput::kBufferNum, 0x12b);
+    MILO_ASSERT((unsigned int)bufType < LiveCameraInput::kBufferNum, 0x12b);
     if (cam == nullptr) {
         return false;
     }

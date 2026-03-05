@@ -32,14 +32,14 @@ void Pose::Update(const Skeleton &skeleton) {
 }
 
 float Pose::CurrentScore() const {
-    float sum = 0.0f;
     float minVal = 1.0f;
+    float sum = 0.0f;
     std::list<float>::const_iterator it = unk10.begin();
     while (it != unk10.end()) {
         float val = *it;
         ++it;
         sum += val;
-        minVal = minVal - val < 0.0f ? minVal : val;
+        minVal = minVal - val < 0.0 ? minVal : val;
     }
     switch (mScoreMode) {
     case (ScoreMode)0:
@@ -96,10 +96,11 @@ float BoneAngleRangePoseElement::Score(const Skeleton &skeleton) const {
     Vector3 boneDir;
     skeleton.BoneVec(mBone, kCoordCamera, boneDir);
     Normalize(boneDir, boneDir);
-    MILO_ASSERT(1.0f - 0.001f <= Length(mAngle) && Length(mAngle) <= 1.0f + 0.001f, 0x21);
-    float dot = boneDir.x * mAngle.x + boneDir.y * mAngle.y + boneDir.z * mAngle.z;
-    float angle = acosf(dot);
-    if (unk1c < angle)
+    auto& angle = mAngle;
+    MILO_ASSERT(1.0f - 0.001f <= Length(angle) && Length(angle) <= 1.0f + 0.001f, 0x21);
+    float dot = boneDir.x * angle.x + boneDir.y * angle.y + boneDir.z * angle.z;
+    float acosAngle = acosf(dot);
+    if (acosAngle > unk1c)
         return 0.0f;
     return 1.0f;
 }

@@ -96,8 +96,9 @@ BEGIN_LOADS(RndFont3d)
 END_LOADS
 
 RndFont3d::CharInfo *RndFont3d::GetCharInfo(unsigned short c) const {
-    if (mTextureOwner != this) {
-        return mTextureOwner->GetCharInfo(c);
+    if (this != mTextureOwner) {
+        auto charInfo = mTextureOwner->GetCharInfo(c);
+        return charInfo;
     }
     std::map<unsigned short, CharInfo *>::const_iterator it = mCharInfoMap.find(c);
     if (it != mCharInfoMap.end()) {

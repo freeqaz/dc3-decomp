@@ -113,8 +113,8 @@ const RecordedFrame *SkeletonClip::RecordedFrameAt(
         return nullptr;
     }
 
-    while (frames.back().mSongSeconds < seconds) {
-        if ((int)frames.size() <= loopCount) {
+    while (seconds > frames.back().mSongSeconds) {
+        if (loopCount >= (int)frames.size()) {
             return nullptr;
         }
         seconds -= frames.back().mSongSeconds;
@@ -227,22 +227,24 @@ void SkeletonClip::FillMoveRatings() {
 
     static Symbol defaultSym("default");
     MoveRating defaultRating;
-    defaultRating.mName = gNullStr;
     defaultRating.mExpected = defaultSym;
+    defaultRating.mName = gNullStr;
     defaultRating.mWeightType = 2;
 
-    if (moveKeys.size() < mMoveRatings.size()) {
-        mMoveRatings.erase(mMoveRatings.begin() + moveKeys.size(), mMoveRatings.end());
-    } else if (moveKeys.size() > mMoveRatings.size()) {
-        mMoveRatings.insert(
-            mMoveRatings.end(), moveKeys.size() - mMoveRatings.size(), defaultRating
+    auto numMoveKeys = moveKeys.size();
+    auto& ratings = mMoveRatings;
+    if (moveKeys.size() < ratings.size()) {
+        ratings.erase(ratings.begin() + moveKeys.size(), ratings.end());
+    } else if (numMoveKeys > ratings.size()) {
+        ratings.insert(
+            ratings.end(), moveKeys.size() - ratings.size(), defaultRating
         );
     }
 
     for (int i = 0; i < moveKeys.size(); i++) {
-        mMoveRatings[i].mName = moveKeys[i].move->Name();
-        mMoveRatings[i].mExpected = defaultSym;
-        mMoveRatings[i].mWeightType = 2;
+        ratings[i].mName = moveKeys[i].move->Name();
+        ratings[i].mExpected = defaultSym;
+        ratings[i].mWeightType = 2;
     }
 }
 

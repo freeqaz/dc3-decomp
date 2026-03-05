@@ -65,10 +65,10 @@ BEGIN_SAVES(UIListDir)
     bs << mOrientation;
     bs << mFadeOffset;
     bs << mTestMode;
-    auto& _ref0 = mTestState;
-    bs << _ref0.NumDisplay();
+    auto& testState = mTestState;
+    bs << testState.NumDisplay();
     bs << mElementSpacing;
-    bs << _ref0.Speed();
+    bs << testState.Speed();
     bs << mTestNumData;
     bs << mTestComponentState;
     bs << mTestGapSize;
@@ -435,8 +435,9 @@ void UIListDir::BuildDrawState(
 void UIListDir::CreateElements(UIList *uilist, std::vector<UIListWidget *> &vec, int i) {
     DeleteAll(vec);
     for (ObjDirItr<UIListWidget> it(this, true); it != 0; ++it) {
+        auto newObj = Hmx::Object::NewObject(it->ClassName());
         UIListWidget *widget =
-            dynamic_cast<UIListWidget *>(Hmx::Object::NewObject(it->ClassName()));
+            dynamic_cast<UIListWidget *>(newObj);
         widget->ResourceCopy(it);
         widget->SetParentList(uilist);
         vec.push_back(widget);

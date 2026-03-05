@@ -433,14 +433,6 @@ void DirLoader::WriteTypeMemDump(TextFileStream *file) {
 }
 
 void DirLoader::Cleanup(const char *str) {
-#ifdef HX_NATIVE
-    static int sCleanupLog = 0;
-    if (sCleanupLog < 30) {
-        sCleanupLog++;
-        fprintf(stderr, "DC3_CLEANUP file='%s' msg='%s' loaded=%d\n",
-                mFile.c_str(), str ? str : "(null)", IsLoaded());
-    }
-#endif
     if (str) {
         MILO_NOTIFY(str);
     }
@@ -838,10 +830,6 @@ void DirLoader::LoadResources() {
 }
 
 void DirLoader::CreateObjects() {
-#ifdef HX_NATIVE
-    fprintf(stderr, "DC3_CREATE_OBJS file='%s' counter=%d dir=%p\n",
-            mFile.c_str(), mCounter, (void*)mDir);
-#endif
     while (mCounter-- != 0) {
         Hmx::Object *obj = nullptr;
         Symbol classSym;
@@ -945,10 +933,9 @@ void DirLoader::LoadHeader() {
             return;
         int size1, size2;
         *mStream >> size1 >> size2;
-        bool &hasEditorDir = mHasEditorDir;
-        hasEditorDir = false;
+        mHasEditorDir = false;
         if (mRev > 0x1c) {
-            *mStream >> hasEditorDir;
+            *mStream >> mHasEditorDir;
         }
         size1 += mDir->HashTableUsedSize() + 0x10;
         size2 += mDir->StrTableUsedSize() + 0x98;
@@ -968,14 +955,6 @@ void DirLoader::LoadHeader() {
     }
     mDir->SetLoader(this);
     *mStream >> mCounter;
-#ifdef HX_NATIVE
-    static int sHeaderLog = 0;
-    if (sHeaderLog < 30) {
-        sHeaderLog++;
-        fprintf(stderr, "DC3_HEADER file='%s' rev=0x%x counter=%d dir=%p\n",
-                mFile.c_str(), mRev, mCounter, (void*)mDir);
-    }
-#endif
     if (mRev < 0xE) {
         mDir->Reserve(mCounter * 2, mCounter * 25);
     }
@@ -984,13 +963,6 @@ void DirLoader::LoadHeader() {
 
 void DirLoader::OpenFile() {
     mTimer.Start();
-#ifdef HX_NATIVE
-    static int sOpenLog = 0;
-    if (sOpenLog < 30) {
-        sOpenLog++;
-        fprintf(stderr, "DC3_OPEN file='%s' stream=%p\n", mFile.c_str(), (void*)mStream);
-    }
-#endif
     if (mStream == nullptr) {
         Archive *theArchive = TheArchive;
         bool using_cd = UsingCD();

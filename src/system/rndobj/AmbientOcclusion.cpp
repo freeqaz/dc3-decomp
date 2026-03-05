@@ -35,15 +35,15 @@ void RndAmbientOcclusion::BlendVert(
     const RndMesh::Vert &v1, const RndMesh::Vert &v2, RndMesh::Vert &out
 ) {
     memcpy(&out, &v1, sizeof(RndMesh::Vert));
-    out.pos.y += v2.pos.y;
     out.pos.z += v2.pos.z;
+    out.pos.y += v2.pos.y;
     out.pos.x += v2.pos.x;
     out.tex.x += v2.tex.x;
     out.tex.y += v2.tex.y;
-    out.color.blue += v2.color.blue;
+    out.color.green += v2.color.green;
     out.color.red += v2.color.red;
     out.color.alpha += v2.color.alpha;
-    out.color.green += v2.color.green;
+    out.color.blue += v2.color.blue;
     out.norm.x += v2.norm.x;
     out.norm.z += v2.norm.z;
     out.norm.y += v2.norm.y;
@@ -240,8 +240,8 @@ void RndAmbientOcclusion::BuildTrees(Quality quality) {
     MILO_ASSERT(quality < kQuality_Max, 0x1E3);
     mQuality = quality;
     if (!mObjectsCast.empty() && !mObjectsReceive.empty()) {
-        auto _tmp2 = mTriList.empty();
-        MILO_ASSERT(_tmp2, 0x1E9);
+        auto triListEmpty = mTriList.empty();
+        MILO_ASSERT(triListEmpty, 0x1E9);
         Timer timer;
         timer.Restart();
         MILO_LOG("RndAmbientOcclusion: Building kd-Tree...\n");
@@ -288,15 +288,16 @@ void RndAmbientOcclusion::BuildSHCoeff(const Vector3 &inVector, float *fArr) con
 float RndAmbientOcclusion::DistanceSH(
     const Vector4 &sh1, const Vector3 &n1, const Vector4 &sh2, const Vector3 &n2
 ) const {
-    float dz = (sh1.z * 2.0f - 1.0f) - (sh2.z * 2.0f - 1.0f);
     float dw = (sh1.w * 2.0f - 1.0f) - (sh2.w * 2.0f - 1.0f);
+    float dz = (sh1.z * 2.0f - 1.0f) - (sh2.z * 2.0f - 1.0f);
     float dy = (sh1.y * 2.0f - 1.0f) - (sh2.y * 2.0f - 1.0f);
     float dot = n1.x * n2.x + n1.z * n2.z + n1.y * n2.y;
     if (dot <= 0.0f) {
         dot = -dot;
     }
     float dx = sh1.x - sh2.x;
-    return sqrtf(dx * dx + dy * dy + dw * dw + dz * dz) / (dot + 1.0f);
+    auto dist = sqrtf(dx * dx + dy * dy + dw * dw + dz * dz);
+    return dist / (dot + 1.0f);
 }
 
 template <class T>
@@ -326,8 +327,8 @@ void RndAmbientOcclusion::BuildObjectLists() {
     std::vector<RndMesh *> meshes;
     GatherObjectsFromDir(myDir, meshes);
     std::unique_copy(meshes.begin(), meshes.end(), meshes.begin());
-    std::vector<RndMesh *> dontCastMeshes;
     std::vector<RndMesh *> dontReceiveMeshes;
+    std::vector<RndMesh *> dontCastMeshes;
     std::vector<RndMesh *> tessellateMeshes;
     FOREACH (it, mDontCastAO) {
         GatherObject(*it, dontCastMeshes);
@@ -408,8 +409,9 @@ bool RndAmbientOcclusion::IsSerializable(const RndMesh *mesh) const {
         return false;
     }
     ObjectDir *meshDir = mesh->Dir();
-    return (meshDir == Dir())
-        || (meshDir->IsSubDir() && meshDir->InlineSubDirType() == kInlineAlways);
+        if ((meshDir == Dir()))
+        return true;
+    return (meshDir->IsSubDir() && meshDir->InlineSubDirType() == kInlineAlways);
 }
 
 bool RndAmbientOcclusion::IsValid_Mesh(const RndMesh *mesh) const {
@@ -459,6 +461,7 @@ bool RndAmbientOcclusion::IsValid_AOReceive(const RndMesh *mesh) const {
         return false;
     }
     RndMat *mat = mesh->Mat();
+    bool _result = false;
     if (mat != NULL) {
         ZMode zmode = mat->GetZMode();
         bool transparent = false;
@@ -469,7 +472,6 @@ bool RndAmbientOcclusion::IsValid_AOReceive(const RndMesh *mesh) const {
         isPrelit = mat->Prelit();
         isTransparent = transparent;
     }
-    bool _result = false;
     if (!mIgnoreHidden || mesh->Showing()) {
         if (!mIgnoreTransparent || !isTransparent) {
             if (!mIgnorePrelit || !isPrelit) {
@@ -483,17 +485,7 @@ bool RndAmbientOcclusion::IsValid_AOReceive(const RndMesh *mesh) const {
 bool RndAmbientOcclusion::IsValid_Tessellate(
     const RndMesh *mesh, const ObjectDir *dir
 ) const {
-    if (!IsValid_AOCast(mesh))
-        return false;
-    if (!IsValid_AOReceive(mesh))
-        return false;
-    if (mesh->IsSkinned())
-        return false;
-    if (mesh->GetGeomOwner() != mesh)
-        return false;
-    if (mesh->Dir() == dir)
-        return false;
-    return true;
+                return !(!IsValid_AOCast(mesh) || !IsValid_AOReceive(mesh) || mesh->IsSkinned() || mesh->GetGeomOwner() != mesh || mesh->Dir() == dir);
 }
 
 bool RndAmbientOcclusion::IsMeshAnimated(const RndMesh *mesh) const {
@@ -651,7 +643,7 @@ void RndAmbientOcclusion::CalculateAOAtPoint(
     float shCoeffs[4];
     float occlusion = 1.0f;
 
-    for (int i = 0; i < numSamples; i++) {
+    for (int i = 0; (unsigned int)i < numSamples; i++) {
         const Vector3 &sampleDir = unkb8[i];
         float dot = norm.x * sampleDir.x + sampleDir.z * norm.z + sampleDir.y * norm.y;
         occlusion = 1.0f;
@@ -663,7 +655,7 @@ void RndAmbientOcclusion::CalculateAOAtPoint(
                 occlusion = t * t;
             }
             BuildSHCoeff(sampleDir, shCoeffs);
-            for (int j = 0; j < 4; j++) {
+            for (int j = 0; j <= 3; j++) {
                 shAccum[j] += (double)(shCoeffs[j] * occlusion * dot);
             }
         }
@@ -855,9 +847,9 @@ void RndAmbientOcclusion::CalculateAO(float *outTime) {
         return;
 
     unsigned int totalVerts = 0;
-    auto _tmp3 = mObjectsReceive.end();
+    auto receiveEnd = mObjectsReceive.end();
     for (std::vector<RndMesh *>::iterator it = mObjectsReceive.begin();
-         it != _tmp3; ++it) {
+         it != receiveEnd; ++it) {
         RndMesh *mesh = *it;
         if (mesh->GetGeomOwner() != mesh) {
             mesh->CopyGeometry(mesh->GetGeomOwner(), true);
@@ -916,7 +908,8 @@ struct FacePriority {
 };
 
 void RndAmbientOcclusion::Tessellate(float *outTessTime, float *outPatchTime) {
-    if (mObjectsTessellate.empty())
+    bool noTessellate = mObjectsTessellate.empty();
+    if (noTessellate)
         return;
 
     // Clamp triLarge >= triSmall (fsel pattern)
@@ -1059,7 +1052,7 @@ void RndAmbientOcclusion::Tessellate(float *outTessTime, float *outPatchTime) {
             // Sort priorities (most negative = highest priority first)
             FacePriority *priEnd = &priorities[0] + priorities.size();
             FacePriority *priBegin = &priorities[0];
-            std::sort(priBegin, priEnd);
+            std::sort(priEnd, priBegin);
 
             // Phase 2: Process priority faces — split all 3 edges
             unsigned int priCount = ((int)priEnd - (int)priBegin) >> 3;

@@ -67,8 +67,8 @@ CharClipDisplay::SetStartEnd(float start, float end, bool resetZoom) {
         if (end - start > zoomRange) {
             float cursor = unk1c;
             float halfZoom = zoomRange * 0.5f;
-            if (halfZoom + start < cursor) {
-                if (end - halfZoom < cursor) {
+            if (cursor > halfZoom + start) {
+                if (cursor > end - halfZoom) {
                     mStartBeat = end - zoomRange;
                     return;
                 }
@@ -126,10 +126,10 @@ void CharClipDisplay::DrawCursor() {
     Hmx::Rect rect(x, mDrawPosY - 3.0f, 1.0f, 9.0f);
     TheRnd.DrawRect(rect, yellow, nullptr, nullptr, nullptr);
     const char *text;
-    if (unk20 >= 1.0f) {
-        text = MakeString("%.1f (%.2f)", unk1c, unk20);
-    } else {
+    if (!(unk20 >= 1.0f)) {
         text = MakeString("%.1f", unk1c);
+    } else {
+        text = MakeString("%.1f (%.2f)", unk1c, unk20);
     }
     DrawBeatString(text, unk1c, yellow);
 }

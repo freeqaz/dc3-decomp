@@ -42,12 +42,12 @@ void RndEnviron::Save(BinStream &bs) {
     SAVE_SUPERCLASS(RndTransformable);
     bs << mLightsReal << mLightsApprox;
     bs << mAmbientColor;
-    bs << mFogEnable;
     bs << mFogStart;
+    bs << mFogEnable;
     bs << mFogEnd;
     bs << mFogColor;
-    bs << mAnimateFromPreset;
     bs << mAmbientFogOwner;
+    bs << mAnimateFromPreset;
     bs << mFadeOut;
     bs << mFadeStart;
     bs << mFadeEnd;
@@ -86,7 +86,7 @@ void RndEnviron::OnRemoveAllLights() {
 }
 
 bool RndEnviron::Replace(ObjRef *from, Hmx::Object *to) {
-    if (from == &mAmbientFogOwner) {
+    if (&mAmbientFogOwner == from) {
         if (mAmbientFogOwner == this) {
             mAmbientFogOwner = this;
         } else {

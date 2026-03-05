@@ -19,7 +19,7 @@ extern "C" {
 }
 
 int fft_matrix_forward_columnwise(float* data, long size, float* context) {
-    if (data == nullptr || size <= 0 || (((unsigned long)data) & 0xF) != 0) {
+    if (data == nullptr || (int)size <= 0 || (((unsigned long)data) & 0xF) != 0) {
         return 0x16;  // Invalid pointer alignment
     }
 
@@ -108,7 +108,7 @@ int fft_matrix_forward_columnwise(float* data, long size, float* context) {
     }
 
     // Process remaining columns if size is power of 2 > 2
-    if (rows > 1) {
+    if (rows >= 2) {
         for (int row = rows - 1; row >= 0; row--) {
             float* col_ptr = (float*)((unsigned long)data + row * cols * 8);
             int err = FFTComplex(col_ptr, cols, -1, context);

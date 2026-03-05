@@ -153,8 +153,8 @@ void HamRegulate::Poll() {
     CharServoBone *servo = mCharacter->BoneServo();
     if (!servo) return;
 
-    Vector3 posDelta(0, 0, 0);
     float rotDelta = 0.0f;
+    Vector3 posDelta(0, 0, 0);
     Regulate(posDelta, rotDelta);
 
     float dt = TheTaskMgr.DeltaSeconds();
@@ -206,7 +206,8 @@ void HamRegulate::Poll() {
 
     Transform &xfm = character->DirtyLocalXfm();
 
-    if (!TheLoadMgr.EditMode() || mCharacter->Teleported() || absDt != 0.0f) {
+    auto teleported = mCharacter->Teleported();
+    if (!TheLoadMgr.EditMode() || teleported || absDt != 0.0f) {
         RotateAboutZ(xfm.m, rotDelta, xfm.m);
         xfm.v.x += posDelta.x;
         xfm.v.y += posDelta.y;

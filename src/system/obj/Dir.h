@@ -52,9 +52,13 @@ public:
                 if (HmxObjectIsLive(mObject)) {
 #endif
                     mObject->Release(this);
-                    if (!mObject->HasDirPtrs()) {
 #ifdef HX_NATIVE
-                        if (!gSuppressDirPtrDelete)
+                    // Short-circuit: if suppressing deletion, skip HasDirPtrs()
+                    // which walks the ref ring — it may contain freed ObjRef
+                    // nodes after MergeObjectsRecurse's ref manipulation.
+                    if (!gSuppressDirPtrDelete && !mObject->HasDirPtrs()) {
+#else
+                    if (!mObject->HasDirPtrs()) {
 #endif
                             delete mObject;
                     }
@@ -443,37 +447,14 @@ private:
     void Advance() {
         for (; mEntry != nullptr; mEntry = mSubDirs.front()->HashTable().Next(mEntry)) {
 #ifdef HX_NATIVE
-            if (!mEntry->obj) {
-                static int sNullObj = 0;
-                if (sNullObj++ < 5)
-                    fprintf(stderr, "  ObjDirItr: null obj for '%s'\n", mEntry->name ? mEntry->name : "(null)");
+            // Skip null, dead, or vtable-corrupted entries left by merge/delete
+            if (!mEntry->obj)
                 continue;
-            }
-            if (!HmxObjectIsLive(mEntry->obj)) {
-                static int sDeadObj = 0;
-                if (sDeadObj++ < 5) {
-                    fprintf(
-                        stderr,
-                        "  ObjDirItr: dead obj for '%s' obj=%p\n",
-                        mEntry->name ? mEntry->name : "(null)",
-                        (void *)mEntry->obj
-                    );
-                }
+            if (!HmxObjectIsLive(mEntry->obj))
                 continue;
-            }
-            extern const char* g_lastDyncastEntry;
-            extern void* g_lastDyncastObj;
-            g_lastDyncastEntry = mEntry->name;
-            g_lastDyncastObj = (void*)mEntry->obj;
-            // Guard against objects with null/corrupt vtables (e.g. stub objects
-            // that haven't been fully loaded yet). dynamic_cast on these segfaults.
             void **vptr = *(void ***)mEntry->obj;
-            if (!vptr) {
-                static int sNullVptr = 0;
-                if (sNullVptr++ < 5)
-                    fprintf(stderr, "  ObjDirItr: null vptr for '%s' obj=%p\n", mEntry->name ? mEntry->name : "(null)", (void*)mEntry->obj);
+            if (!vptr)
                 continue;
-            }
 #endif
             mObj = dynamic_cast<T *>(mEntry->obj);
             if (mObj)

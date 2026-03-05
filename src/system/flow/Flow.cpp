@@ -220,21 +220,10 @@ void Flow::PreLoad(BinStream &bs) {
 
 void Flow::PostLoad(BinStream &bs) {
     BinStreamRev d(bs, bs.PopRev(this));
-#ifdef HX_NATIVE
-    fprintf(stderr, "Flow::PostLoad '%s' rev=%d proxy=%d (stream pos=%d)\n",
-            Name(), d.rev, IsProxy(), bs.Tell());
-#endif
     ObjectDir::PostLoad(bs);
-#ifdef HX_NATIVE
-    fprintf(stderr, "  Flow::PostLoad after ObjectDir::PostLoad (stream pos=%d)\n", bs.Tell());
-#endif
     if (IsProxy()) {
         int numDynProps = 0;
         bs.ReadEndian(&numDynProps, 4);
-#ifdef HX_NATIVE
-        fprintf(stderr, "  Flow::PostLoad proxy numDynProps=%d rev=%d (stream pos=%d)\n",
-                numDynProps, d.rev, bs.Tell());
-#endif
         if (d.rev < 5) {
             for (int i = 0; i < numDynProps; i++) {
                 Symbol propName;
@@ -292,22 +281,9 @@ void Flow::PostLoad(BinStream &bs) {
             }
         }
     } else {
-#ifdef HX_NATIVE
-        fprintf(stderr, "  Flow::PostLoad non-proxy path rev=%d (stream pos=%d)\n",
-                d.rev, bs.Tell());
-#endif
         if (d.rev >= 3) {
-#ifdef HX_NATIVE
-            fprintf(stderr, "  Flow::PostLoad before FlowQueueable::Load (stream pos=%d)\n", bs.Tell());
-#endif
             FlowQueueable::Load(bs);
-#ifdef HX_NATIVE
-            fprintf(stderr, "  Flow::PostLoad after FlowQueueable::Load (stream pos=%d)\n", bs.Tell());
-#endif
             d >> mHardStop;
-#ifdef HX_NATIVE
-            fprintf(stderr, "  Flow::PostLoad after mHardStop (stream pos=%d)\n", bs.Tell());
-#endif
         } else {
             int oldRev = 0;
             bs.ReadEndian(&oldRev, 4);
@@ -369,14 +345,7 @@ void Flow::PostLoad(BinStream &bs) {
             stopEvents.clear();
             triggerEvents.clear();
         }
-#ifdef HX_NATIVE
-        fprintf(stderr, "  Flow::PostLoad before mDynamicProperties (stream pos=%d)\n", bs.Tell());
-#endif
         d >> mDynamicProperties;
-#ifdef HX_NATIVE
-        fprintf(stderr, "  Flow::PostLoad after mDynamicProperties size=%d (stream pos=%d)\n",
-                (int)mDynamicProperties.size(), bs.Tell());
-#endif
         if (d.rev < 7) {
             bool startOnEnter;
             d >> startOnEnter;

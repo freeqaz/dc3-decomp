@@ -199,7 +199,7 @@ void NgPostProc::CheckGradientMap() {
 }
 
 void NgPostProc::ReleaseTex() {
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; (unsigned int)i < 3; i++) {
         sBloom.mTextures[i].FreeTextures();
     }
     RndVelocityBuffer::Singleton().FreeData();

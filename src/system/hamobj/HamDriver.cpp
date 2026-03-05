@@ -92,7 +92,7 @@ float HamDriver::DisplayRecurse(Layer *layer, int indent, float y) {
         }
     } else {
         LayerClip *clip = dynamic_cast<LayerClip *>(layer);
-        if (clip && clip->mEaseWeight != 0.0f) {
+        if (clip->mEaseWeight != 0.0f) {
             float padding = (float)(int)indent * CharClipDisplay::LineSpacing();
             CharClipDisplay display;
             display.mPadding = padding;

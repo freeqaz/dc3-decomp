@@ -354,7 +354,7 @@ void HamIKEffector::ComputeHandPullAndQuat(
     xfmOut.v = effParent->LocalXfm().v;
 
     float cosAngle =
-        (distSq - (parentLen * parentLen + effectorLen * effectorLen))
+        (distSq - parentLen * parentLen - effectorLen * effectorLen)
         / (parentLen * effectorLen * 2.0f);
 
     xfmOut.m.x.z = 0.0f;

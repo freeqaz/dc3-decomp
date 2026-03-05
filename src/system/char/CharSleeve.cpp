@@ -108,7 +108,7 @@ void CharSleeve::Poll() {
         Vector3 vcc;
         Subtract(vb4, sleeveparent->WorldXfm().v, vcc);
         float dotted2 = Dot(vcc, sleeveparent->WorldXfm().m.x);
-        float d4 = (1.0f - (1.0f - powed)) * dotted2;
+        float d4 = (1.0f - 1.0f + powed) * dotted2;
         ClampEq(d4, -mRange, mRange);
         ScaleAddEq(vcc, sleeveparent->WorldXfm().m.x, (d4 - dotted2));
         float len = Length(vcc);

@@ -1132,8 +1132,8 @@ DataNode GetNormalMapTextures(ObjectDir *dir) {
             }
         }
         if (isNormalMapOrRenderTarget) {
-            auto _tmp6 = DataNode(it);
-            ptr->Node(idx++) = _tmp6;
+            auto texNode = DataNode(it);
+            ptr->Node(idx++) = texNode;
         }
     }
     ptr->Resize(idx);
@@ -1329,8 +1329,8 @@ void MakeTangentsLate(RndMesh *m) {
                     v.tangent = ft;
                 } else {
                     if ((double)(ft.w * v.tangent.w) < zeroThresh) {
-                        auto _tmp4 = MakeString("NOTIFY: %s has previously welded vertex tangents with opposite handedness; re-export from Max for more accurate normal mapping.\n", (char*)PathName(m));
-                        TheDebug << _tmp4;
+                        auto notifyMsg = MakeString("NOTIFY: %s has previously welded vertex tangents with opposite handedness; re-export from Max for more accurate normal mapping.\n", (char*)PathName(m));
+                        TheDebug << notifyMsg;
                     } else {
                         v.tangent.x += ft.x;
                         v.tangent.y += ft.y;
@@ -1388,7 +1388,7 @@ void ComputeFaceTangentBasis(RndMesh *m, int faceIdx, Hmx::Matrix3 &outBasis) {
             if (du31 == 0.0f && dv31 == 0.0f) return;
 
             float crossX = dz31 * dy21 - dy31 * dz21;
-            float crossY = dx31 * dz21 - dz31 * dx21;
+            float crossY = dz31 * dx21 - dx31 * dz21;
             float crossZ = dy31 * dx21 - dx31 * dy21;
             Hmx::Matrix3 edgeMat(Vector3(dx21, dy21, dz21),
                                   Vector3(dx31, dy31, dz31),
@@ -1543,7 +1543,7 @@ void ResetNormals(RndMesh *m) {
                     if (dx1 != 0 || dy1 != 0 || dz1 != 0) {
                         if (dx2 != 0 || dy2 != 0 || dz2 != 0) {
                             if (dx1 != dx2 || dy1 != dy2 || dz1 != dz2) {
-                                Vector3 crossProd(dz2 * dy1 - dy2 * dz1, dx2 * dz1 - dz2 * dx1, dy2 * dx1 - dx2 * dy1);
+                                Vector3 crossProd(dz2 * dy1 - dy2 * dz1, dx2 * dz1 - dz2 * dx1, -(dx2 * dy1 - dy2 * dx1));
                                 Normalize(crossProd, crossProd);
                                 Vector3 e1(dx1, dy1, dz1), e2(dx2, dy2, dz2);
                                 Normalize(e1, e1);
@@ -1589,8 +1589,8 @@ void ConvertBonesToTranses(ObjectDir *dir, bool b) {
         } else {
             if (b) {
                 bool foundBoneRef = false;
-                auto _tmp0 = it->Refs();
-                FOREACH (rit, _tmp0) {
+                auto refs = it->Refs();
+                FOREACH (rit, refs) {
                     RndMesh *curRefOwner = dynamic_cast<RndMesh *>(rit->RefOwner());
                     if (curRefOwner) {
                         for (int i = 0; i < curRefOwner->NumBones(); i++) {
@@ -1785,13 +1785,14 @@ void BurnXfm(RndMesh *mesh, bool keepTranslation) {
 void TessellateMesh(RndMesh *mesh) {
     typedef RndAmbientOcclusion::Edge Edge;
     std::set<Edge> edges;
-    std::vector<RndMesh::Face> newFaces;
     RndMesh *geomOwner = mesh->GetGeomOwner();
-
     std::vector<RndMesh::Vert> newVerts;
 
+    std::vector<RndMesh::Face> newFaces;
+
     newFaces.reserve(geomOwner->Faces().size() * 4);
-    newVerts.reserve(geomOwner->Verts().size() * 3);
+    auto vertCount = geomOwner->Verts().size();
+    newVerts.reserve(vertCount * 3);
 
     unsigned short nextVert = (unsigned short)geomOwner->Verts().size();
 

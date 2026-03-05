@@ -45,11 +45,12 @@ void DebugGraph::Draw() {
         Vector2 labelPos(mRect.x, 0.0f);
         labelPos.y = (1.0f - cx) * mRect.h + mRect.y;
         Hmx::Color white2(1.0f, 1.0f, 1.0f, 1.0f);
-        graph->AddScreenString(MakeString("%.3f", mThresholdValue), labelPos, white2);
+        auto thresholdStr = MakeString("%.3f", mThresholdValue);
+        graph->AddScreenString(thresholdStr, labelPos, white2);
     }
 
-    Vector2 namePos(mRect.x + 0.1f, mRect.y);
     Hmx::Color white3(1.0f, 1.0f, 1.0f, 1.0f);
+    Vector2 namePos(mRect.x + 0.1f, mRect.y);
     graph->AddScreenString(mGraphName.c_str(), namePos, white3);
 
     std::list<Sample>::iterator it = mSamples.begin();

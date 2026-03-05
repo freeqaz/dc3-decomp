@@ -68,7 +68,8 @@ UILabel *UIListLabel::ElementLabel(int display) const {
 
 UIListSlotElement *UIListLabel::CreateElement(UIList *uilist) {
     MILO_ASSERT(mLabel, 0x86);
-    UILabel *l = dynamic_cast<UILabel *>(Hmx::Object::NewObject(mLabel->ClassName()));
+    auto newObj = Hmx::Object::NewObject(mLabel->ClassName());
+    UILabel *l = dynamic_cast<UILabel *>(newObj);
     MILO_ASSERT(l, 0x89);
     l->Copy(mLabel, kCopyDeep);
     l->SetTextToken(gNullStr);
@@ -83,8 +84,8 @@ UIListLabelElement::~UIListLabelElement() { delete mLabel; }
 void UIListLabelElement::Draw(const Transform &tf, float f, UIColor *col, Box *box) {
     mLabel->SetWorldXfm(tf);
     if (box) {
-        Box localbox = *box;
         int numFontMaps = mLabel->mFontMaps.size();
+        Box localbox = *box;
         for (int i = 0; i < numFontMaps; i++) {
             RndText::FontMapBase *fm = mLabel->mFontMaps[i];
             int numMeshes = fm->NumMeshes();
@@ -100,8 +101,8 @@ void UIListLabelElement::Draw(const Transform &tf, float f, UIColor *col, Box *b
     } else {
         float oldAlpha = mLabel->Style(0).GetAlpha();
         UILabel::LabelStyle &ls0 = mLabel->LStyle(0);
-        UIColor *oldColorOverride = ls0.mColorOverride;
         ls0.mColorOverride = col;
+        UIColor *oldColorOverride = ls0.mColorOverride;
         mLabel->Style(0).SetAlpha(f * oldAlpha);
         mLabel->DrawShowing();
         mLabel->Style(0).SetAlpha(oldAlpha);

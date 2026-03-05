@@ -617,13 +617,11 @@ void CharDriver::Poll() {
     if (CharDriverStarved(mFirst) && !mStarvedHandler.Null()) {
         Dir()->Handle(Message(mStarvedHandler), true);
     }
-    if (CharDriverStarved(mFirst) && mFirst) {
-        if ((mFirst->mPlayFlags & 0xF0) == 0x30) {
-            int flags = mFirst->mPlayFlags;
-            CharClip::SetDefaultBlendFlag(flags, 4);
-            Play(mFirst->GetClip(), flags, -1, kHugeFloat, 0);
-        }
-    }
+        if (!(CharDriverStarved(mFirst) && mFirst)) return;
+    if ((mFirst->mPlayFlags & 0xF0) != 0x30) return;
+    int flags = mFirst->mPlayFlags;
+    CharClip::SetDefaultBlendFlag(flags, 4);
+    Play(mFirst->GetClip(), flags, -1, kHugeFloat, 0);
     if (CharDriverStarved(mFirst) && mFirst && (mFirst->mPlayFlags & 0xF0) == 0x40) {
         Play(mLastNode, 0x44, -1, kHugeFloat, 0);
     }

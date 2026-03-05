@@ -824,7 +824,7 @@ void MetaPerformer::CalculatePracticeResults() {
         }
     }
     mNumLearnMovesPassed = mSkillsAwards->AwardCount((SkillsAward)2);
-    mNumLearnMovesFastLaned = mSkillsAwards->AwardCount((SkillsAward)3);
+    mNumLearnMovesFastLaned = bool(mSkillsAwards->AwardCount((SkillsAward)3));
     for (unsigned int i = 0; i < mReviewMoveMaskBySection.size(); i++) {
         for (unsigned int j = 0; j < mReviewMoveMaskBySection[i].size(); j++) {
             if (mReviewMoveMaskBySection[i][j]) {
@@ -958,9 +958,9 @@ void MetaPerformer::SetDefaultSongCharacter(int playerFlag) {
     Symbol primaryOutfit;
     Symbol primaryCrew;
     Symbol primaryChar;
-    auto _tmp0 = TheGameData->GetSong();
+    auto song = TheGameData->GetSong();
     Symbol nullSym;
-    int songID = TheHamSongMgr.GetSongIDFromShortName(_tmp0, true);
+    int songID = TheHamSongMgr.GetSongIDFromShortName(song, true);
     const HamSongMetadata *pSongData = TheHamSongMgr.Data(songID);
     MILO_ASSERT(pSongData, 0x592);
     bool b2 = TheGameMode->InMode("dance_battle", true)
@@ -979,8 +979,8 @@ void MetaPerformer::SetDefaultSongCharacter(int playerFlag) {
         pPrimary->SetCharacter(primaryChar);
         pPrimary->SetOutfit(primaryOutfit);
         pPrimary->SetCrew(primaryCrew);
-        auto _tmp3 = pSecondary->Char();
-        if (pPrimary->Char() != _tmp3) {
+        auto secondaryChar = pSecondary->Char();
+        if (pPrimary->Char() != secondaryChar) {
             return;
         }
         pSecondary->SetCharacter(nullSym);
@@ -1267,11 +1267,11 @@ void MetaPerformer::CalcCharacters(
     Symbol player2Char = pPlayer2Data->MiniGameCharacter();
 
     // Clear character preferences based on PlayerFlag
-    if (0 == flags || flags == 2) {
-        player1Char = gNullStr;
-    }
     if (1 == flags || flags == 2) {
         player2Char = gNullStr;
+    }
+    if (0 == flags || flags == 2) {
+        player1Char = gNullStr;
     }
 
     bool hasPlayer1Char = player1Char != (int)(int)gNullStr;
@@ -1397,7 +1397,8 @@ void MetaPerformer::HandleGameplayEnded(const EndGameResult &egr) {
                     pProfileFromPad, pPlayer, egr
                 );
             }
-            if (TheGameMode->InMode("campaign") && egr == kEndGameResult_3) {
+            auto inCampaign = TheGameMode->InMode("campaign");
+            if (inCampaign && egr == kEndGameResult_3) {
                 pProfileFromPad->DiscardRecentCampaignProgress();
             }
         }
@@ -1438,7 +1439,8 @@ void MetaPerformer::SaveAndUploadScores(Symbol s, int i1, int i2) {
             Difficulty difficulty = (Difficulty)pPlayerData->GetDifficulty();
             int padNum = pPlayerData->PadNum();
 
-            if (IsHarderDifficulty(difficulty, highestDiff)) {
+            bool isHarder = IsHarderDifficulty(difficulty, highestDiff);
+            if (isHarder) {
                 highestDiff = difficulty;
             }
 

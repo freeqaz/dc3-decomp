@@ -733,19 +733,18 @@ void LightPreset::SyncKeyframeTargets() {
         }
     }
     for (ObjDirItr<RndEnviron> it(Dir(), true); it; ++it) {
-        RndEnviron *key = it;
-        ObjPtrVec<RndEnviron, ObjectDir>::const_iterator found = mEnvironments.find(key);
+        ObjPtrVec<RndEnviron, ObjectDir>::const_iterator found = mEnvironments.find(it);
         if (found == mEnvironments.end()) {
-            AddEnvironment(key);
+            AddEnvironment(it);
         }
-        FOREACH (lit, key->mLightsReal) {
+        FOREACH (lit, it->mLightsReal) {
             RndLight *lkey = *lit;
             ObjPtrVec<RndLight, ObjectDir>::const_iterator lfound = mLights.find(lkey);
             if (lfound == mLights.end()) {
                 AddLight(lkey);
             }
         }
-        FOREACH (lit, key->mLightsApprox) {
+        FOREACH (lit, it->mLightsApprox) {
             RndLight *lkey = *lit;
             ObjPtrVec<RndLight, ObjectDir>::const_iterator lfound = mLights.find(lkey);
             if (lfound == mLights.end()) {
@@ -796,7 +795,7 @@ void LightPreset::SpotlightEntry::Animate(
     c2.Unpack(other.mColor);
     Interp(c1, c2, t, result);
     mColor = result.Pack();
-    if (mRotation != Hmx::Quat(0, 0, 0, 0) && other.mRotation != Hmx::Quat(0, 0, 0, 0)) {
+    if (mRotation != Hmx::Quat(0, 0, 0, 0) & Hmx::Quat(0, 0, 0, 0) != other.mRotation) {
         Interp(mRotation, other.mRotation, t, mRotation);
     }
 }
@@ -904,10 +903,10 @@ void LightPreset::GetKey(float frame, int &prevIdx, int &curIdx, float &blend) c
                 blend = 1.0f;
                 return;
             }
-            if (theframe <= mKeyframes[mid].unka8) {
-                cap = mid;
-            } else {
+            if (!(theframe <= mKeyframes[mid].unka8)) {
                 i = mid;
+            } else {
+                cap = mid;
             }
         }
 
@@ -950,8 +949,8 @@ void LightPreset::AnimateState(
     }
     for (uint i = 0; i != mSpotlightDrawerState.size(); i++) {
         if (kCur.mSpotlightDrawerChanges[i]) {
-            SpotlightDrawerEntry &state = mSpotlightDrawerState[i];
             const SpotlightDrawerEntry &prev = kPrev.mSpotlightDrawerEntries[i];
+            SpotlightDrawerEntry &state = mSpotlightDrawerState[i];
             Interp(state.mTotalIntensity, prev.mTotalIntensity, t, state.mTotalIntensity);
             Interp(state.mBaseIntensity, prev.mBaseIntensity, t, state.mBaseIntensity);
             Interp(state.mSmokeIntensity, prev.mSmokeIntensity, t, state.mSmokeIntensity);
@@ -1330,11 +1329,11 @@ BEGIN_LOADS(LightPreset)
 END_LOADS
 
 bool LightPreset::Replace(ObjRef *from, Hmx::Object *to) {
-    ObjPtrVec<Spotlight>& _ref0 = mSpotlights;
+    ObjPtrVec<Spotlight>& spotlights = mSpotlights;
     if (!to) {
         Hmx::Object *old = from->GetObj();
-        for (int i = 0; i < (int)_ref0.size(); i++) {
-            if (_ref0[i] == old) {
+        for (int i = 0; i < (int)spotlights.size(); i++) {
+            if (spotlights[i] == old) {
                 RemoveSpotlight(i);
                 CacheFrames();
                 return true;

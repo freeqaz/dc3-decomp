@@ -122,9 +122,10 @@ void PropertyTask::Poll(float ms) {
 }
 
 bool PropertyTask::Replace(ObjRef *from, Hmx::Object *to) {
-    if (from == static_cast<ObjRef *>(&mTarget)) {
-        mTarget = to;
-        if (mTarget == nullptr) {
+    auto& target = mTarget;
+    if (from == static_cast<ObjRef *>(&target)) {
+        target = to;
+        if (target == nullptr) {
             delete this;
         }
         return true;
@@ -221,9 +222,6 @@ INIT_REVS(4, 0)
 BEGIN_LOADS(FlowSetProperty)
     LOAD_REVS(bs)
     ASSERT_REVS(4, 0)
-#ifdef HX_NATIVE
-    fprintf(stderr, "FlowSetProperty::Load '%s' rev=%d altRev=%d\n", Name(), d.rev, d.altRev);
-#endif
     LOAD_SUPERCLASS(FlowNode)
     bs >> mTarget;
     bs >> unk_0x98;
@@ -238,25 +236,14 @@ BEGIN_LOADS(FlowSetProperty)
         // non-kDataObject: explicit [type_prefix], then DataNode::Save [type, data]
         int type;
         bs >> type;
-#ifdef HX_NATIVE
-        fprintf(stderr, "  mValue type discriminator: %d (kDataObject=%d)\n", type, kDataObject);
-#endif
         if (type == kDataObject) {
-            // We consumed the type from DataNode::Save. Read name string.
             char buf[128];
             bs.ReadString(buf, 128);
-#ifdef HX_NATIVE
-            fprintf(stderr, "  mValue kDataObject name='%s'\n", buf);
-#endif
             Hmx::Object *obj = Dir() ? Dir()->FindObject(buf, false, true) : nullptr;
             mValue = DataNode(obj);
         } else {
-            // We consumed the explicit prefix. DataNode::Load reads [type, data].
             DataNode node;
             node.Load(bs);
-#ifdef HX_NATIVE
-            fprintf(stderr, "  mValue loaded as type=%d\n", node.Type());
-#endif
             mValue = node;
         }
     }
@@ -269,9 +256,6 @@ BEGIN_LOADS(FlowSetProperty)
     bs >> unk_0xE8;
     bs >> mPersistent;
     bs >> mStopMode;
-#ifdef HX_NATIVE
-    fprintf(stderr, "  FlowSetProperty::Load done OK\n");
-#endif
 END_LOADS
 
 void FlowSetProperty::MoveIntoDir(ObjectDir *r4, ObjectDir *r5) {
@@ -323,13 +307,13 @@ void FlowSetProperty::ReActivate() {
     Timer t;
     t.Restart();
     PushDrivenProperties();
-    auto& _ref0 = mTarget;
+    auto& target = mTarget;
     if (0.0f == mBlendTime && mChangePerUnit == 0.0f) {
-        FLOW_LOG("Setting Value on %s\n", _ref0->Name())
-        _ref0->SetProperty(unk_0x98.Array(), mValue.Node());
+        FLOW_LOG("Setting Value on %s\n", target->Name())
+        target->SetProperty(unk_0x98.Array(), mValue.Node());
         return;
     }
-    if (_ref0->Property(unk_0x98.Array(), true)->Evaluate()
+    if (target->Property(unk_0x98.Array(), true)->Evaluate()
         != mValue.Node().Evaluate()) {
         FLOW_LOG("Queueing\n")
         TheFlowMgr->QueueCommand(this, kQueue);
@@ -348,7 +332,7 @@ void FlowSetProperty::Execute(QueueState qs) {
     FLOW_LOG("Execute: state = %i\n", qs);
 
     if (IsRunning()) {
-        if (qs == kIgnore) {
+        if ((unsigned int)qs == kIgnore) {
             FLOW_LOG("RequestStop: Stopping\n");
             if (unk_0xE8) {
                 UnregisterEvents(this);
@@ -363,7 +347,7 @@ void FlowSetProperty::Execute(QueueState qs) {
             if (mChangePerUnit != 0.0f && !unk_0xE8) {
                 const DataNode *node = mTarget->Property(unk_0x98.Array(), true);
 
-                if (node != nullptr && node->Type() == kDataFloat) {
+                if (node != nullptr & node->Type() == kDataFloat) {
                     float endVal = node->Float();
                     durationTime = (mValue.Node().Float() - endVal) / mChangePerUnit;
                     if (durationTime < 0.0f) {

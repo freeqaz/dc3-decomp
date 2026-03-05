@@ -88,10 +88,10 @@ bool AccomplishmentSongConditional::CheckNoFlashcardsCondition(
 bool AccomplishmentSongConditional::CheckConditionsForSong(
     SongStatusMgr *mgr, Symbol s
 ) const {
-    static Symbol score("score");
     static Symbol stars("stars");
-    static Symbol played("played");
+    static Symbol score("score");
     static Symbol practice_percentage("practice_percentage");
+    static Symbol played("played");
     FOREACH (it, m_lConditions) {
         const AccomplishmentCondition &curCond = *it;
         Symbol curSym = curCond.mConditionType;

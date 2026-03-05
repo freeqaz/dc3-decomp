@@ -70,8 +70,9 @@ void AllocInfo::PrintCsv(TextStream &ts) const {
     MILO_ASSERT(s_pTrie, 0xC6);
     char buf21[0x80];
     char buf1d[0x80];
+    auto trieStr21 = s_pTrie->get(unk21, buf21, 0x80);
     ts << ", actual, " << mActSize << ", heap, " << mHeap << ", " << mFile << ", "
-       << mLine << ", " << s_pTrie->get(unk21, buf21, 0x80) << ", "
+       << mLine << ", " << trieStr21 << ", "
        << s_pTrie->get(unk1d, buf1d, 0x80);
     if (mPooled) {
         ts << ", pooled";

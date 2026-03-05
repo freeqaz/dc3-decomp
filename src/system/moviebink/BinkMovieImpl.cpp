@@ -37,8 +37,8 @@ MovieInternalBuffers::MovieInternalBuffers() {
 MovieInternalBuffers::~MovieInternalBuffers() {
     delete mBinks[16];
     mBinks[16] = nullptr;
-    for (int j = 0; j < 2; j++) {
-        for (int i = 0; i < 2; i++) {
+    for (int j = 0; (unsigned int)j < 2; j++) {
+        for (int i = 0; (unsigned int)i < 2; i++) {
             int base = j * 2 + i;
             delete mBinks[base];
             mBinks[base] = nullptr;

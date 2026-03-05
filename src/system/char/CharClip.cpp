@@ -513,10 +513,6 @@ BEGIN_LOADS(CharClip)
     int oldRev, x, y, oldVer, tv;
     LOAD_REVS(bs)
     ASSERT_REVS(0x16, 0)
-#ifdef HX_NATIVE
-    fprintf(stderr, "CharClip::Load '%s' rev=%d altRev=%d streamPos=%d\n",
-            Name(), d.rev, d.altRev, bs.Tell());
-#endif
     oldRev = 0;
     if (d.rev < 0x10)
         d >> oldRev;
@@ -609,17 +605,8 @@ BEGIN_LOADS(CharClip)
         mDirty = true;
     }
     if (d.rev > 0xC) {
-#ifdef HX_NATIVE
-        fprintf(stderr, "CharClip::Load '%s' before mFull.Load streamPos=%d\n", Name(), d.stream.Tell());
-#endif
         mFull.Load(d.stream);
-#ifdef HX_NATIVE
-        fprintf(stderr, "CharClip::Load '%s' after mFull.Load streamPos=%d LE=%d\n", Name(), d.stream.Tell(), d.stream.LittleEndian());
-#endif
         mOne.Load(d.stream);
-#ifdef HX_NATIVE
-        fprintf(stderr, "CharClip::Load '%s' after mOne.Load streamPos=%d\n", Name(), d.stream.Tell());
-#endif
     } else {
         mFull.LoadHeader(d);
         mOne.LoadHeader(d);

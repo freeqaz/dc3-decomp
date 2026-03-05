@@ -513,8 +513,9 @@ void RhythmBattlePlayer::OnReset(RhythmBattle *rb) {
             mBattleMeterOutAnim->Units()
         );
     }
-    if (mComboColorAnim) {
-        mComboColorAnim->SetFrame(0, 1);
+    auto& comboColorAnim = mComboColorAnim;
+    if (comboColorAnim) {
+        comboColorAnim->SetFrame(0, 1);
     }
     if (mComboPosAnim) {
         mComboPosAnim->SetFrame(mComboMeter, 1);

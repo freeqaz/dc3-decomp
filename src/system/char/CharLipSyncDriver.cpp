@@ -302,9 +302,7 @@ void CharLipSyncDriver::UpdatePlayback(CharLipSync::PlayBack *pb, float weight, 
                 if (curWeight < 0.0f) {
                     MILO_FAIL("weight = %f", curWeight);
                 }
-                if (curWeight < 0.0f) {
-                    curWeight = 0.0f;
-                }
+                curWeight = Max(curWeight, 0.0f);
                 ScaleAddViseme(clip, curWeight);
             }
         }
@@ -430,15 +428,13 @@ void CharLipSyncDriver::Poll() {
 
     if (!mIsOverrideActive) {
         if (mMainPlayback) {
-            CharLipSync *lipSync = mMainPlayback->mLipSync;
-            if (lipSync) {
-                float duration = lipSync->Duration();
+            if (mMainPlayback->mLipSync) {
+                float duration = mMainPlayback->mLipSync->Duration();
                 float songTime = TheTaskMgr.Seconds(TaskMgr::kRealTime) + mSongOffset;
                 if (songTime >= duration) {
-                    CharLipSync *ls = mMainPlayback->mLipSync;
                     char *lsName;
-                    if (ls)
-                        lsName = (char *)ls->Name();
+                    if (mMainPlayback->mLipSync)
+                        lsName = (char *)mMainPlayback->mLipSync->Name();
                     else
                         lsName = (char *)"";
                     MILO_LOG(
@@ -453,10 +449,9 @@ void CharLipSyncDriver::Poll() {
 
     if (mIsOverrideActive) {
         if (mMainBlendAlpha < 0.001f) {
-            CharLipSync *ls2 = mMainPlayback->mLipSync;
             char *lsName2;
-            if (ls2)
-                lsName2 = (char *)ls2->Name();
+            if (mMainPlayback->mLipSync)
+                lsName2 = (char *)mMainPlayback->mLipSync->Name();
             else
                 lsName2 = (char *)"";
             MILO_LOG(
@@ -506,9 +501,8 @@ void CharLipSyncDriver::Poll() {
             mSongOwner->mMainPlayback->Poll(songTime);
             CharLipSync::PlayBack *pb = mSongOwner->mMainPlayback;
             for (unsigned int i = 0; i < pb->mWeights.size(); i++) {
-                CharLipSync::PlayBack::Weight &w = pb->mWeights[i];
-                CharClip *clip = w.mClip;
-                float curWeight = w.mCurWeight * remainingWeight;
+                CharClip *clip = pb->mWeights[i].mClip;
+                float curWeight = pb->mWeights[i].mCurWeight * remainingWeight;
                 if (curWeight != 0.0f && clip && clip != mSongOwner->mBlinkClip) {
                     CharClip *remapped = mClips->Find<CharClip>(clip->Name(), true);
                     ScaleAddViseme(remapped, curWeight);

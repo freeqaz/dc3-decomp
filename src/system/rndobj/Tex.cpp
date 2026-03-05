@@ -420,8 +420,9 @@ void RndTex::SetPowerOf2() {
 }
 
 bool RndTex::PowerOf2() {
-    bool wPow2 = mWidth <= 0 || (((mWidth - 1) & mWidth) == 0);
+    auto& width = mWidth;
     bool hPow2 = mHeight <= 0 || (((mHeight - 1) & mHeight) == 0);
+    bool wPow2 = width <= 0.0 || (((width - 1) & width) == 0);
     return wPow2 && hPow2;
 }
 
@@ -434,7 +435,7 @@ void RndTex::PreLoad(BinStream &bs) {
     int rev = revData & 0xffff;
     int altRev = (unsigned int)revData >> 0x10;
     if (rev > 11) {
-        MILO_FAIL(
+        MILO_WARN(
             "%s can't load new %s version %d > %d",
             PathName(this),
             ClassName(),

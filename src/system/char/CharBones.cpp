@@ -152,7 +152,7 @@ CharBones::Type CharBones::TypeOf(Symbol s) {
         }
         c = *++p;
     }
-    MILO_FAIL("Unknown bone suffix in %s", s);
+    MILO_FAIL("Unknown bone suffix in %s", (String &)s);
     return NUM_TYPES;
 }
 
@@ -530,12 +530,13 @@ void CharBones::Blend(CharBones &dst) const {
     if (src == mBones.end()) return;
 
 
-    if (mCounts[TYPE_QUAT] > mCounts[TYPE_POS]) {
+    auto& counts = mCounts;
+    if (counts[TYPE_QUAT] > counts[TYPE_POS]) {
         Vector3 *sdata = (Vector3 *)mStart;
         Vector3 *ddata = (Vector3 *)dst.mStart;
         Bone *db = dst.mBones.begin() + dst.mCounts[TYPE_POS];
         Bone *db_end = dst.mBones.begin() + dst.mCounts[TYPE_QUAT];
-        const Bone *src_end = src + mCounts[TYPE_QUAT];
+        const Bone *src_end = src + counts[TYPE_QUAT];
         while (true) {
             while (db->name != src->name) {
                 db++;
@@ -558,12 +559,12 @@ void CharBones::Blend(CharBones &dst) const {
         }
     }
 blend_quat:
-    if (mCounts[TYPE_ROTX] > mCounts[TYPE_QUAT]) {
+    if (counts[TYPE_ROTX] > counts[TYPE_QUAT]) {
         Bone *db = dst.mBones.begin() + dst.mCounts[TYPE_QUAT];
         Bone *db_end = dst.mBones.begin() + dst.mCounts[TYPE_ROTX];
         Hmx::Quat *dquat = (Hmx::Quat *)(dst.mStart + dst.mOffsets[TYPE_QUAT]);
         Hmx::Quat *squat = (Hmx::Quat *)(mStart + mOffsets[TYPE_QUAT]);
-        const Bone *src_end = mBones.data() + mCounts[TYPE_ROTX];
+        const Bone *src_end = mBones.data() + counts[TYPE_ROTX];
         while (true) {
             while (db->name != src->name) {
                 db++;
@@ -575,12 +576,12 @@ blend_quat:
             dquat->x *= wt;
             dquat->y *= wt;
             dquat->z *= wt;
-            float abs_wt = fabs(src->weight);
+            float abs_wt = fabsf(src->weight);
             float sy = squat->y * abs_wt;
             float sx = squat->x * abs_wt;
             float sz = squat->z * abs_wt;
             float sw = src->weight * squat->w;
-            if ((dquat->z * sz + (dquat->w * sw + (dquat->y * sy + dquat->x * sx))) < 0.0f) {
+            if (((dquat->x * sx + (dquat->y * sy + (dquat->w * sw + dquat->z * sz)))) < 0.0f) {
                 dquat->x -= sx;
                 dquat->y -= sy;
                 dquat->z -= sz;
@@ -600,12 +601,12 @@ blend_quat:
         }
     }
 blend_rot:
-    if (mCounts[TYPE_END] > mCounts[TYPE_ROTX]) {
+    if (counts[TYPE_END] > counts[TYPE_ROTX]) {
         Bone *db = dst.mBones.begin() + dst.mCounts[TYPE_ROTX];
         Bone *db_end = dst.mBones.begin() + dst.mCounts[TYPE_END];
         float *dfdata = (float *)(dst.mStart + dst.mOffsets[TYPE_ROTX]);
         float *sfdata = (float *)(mStart + mOffsets[TYPE_ROTX]);
-        const Bone *src_end = mBones.data() + mCounts[TYPE_END];
+        const Bone *src_end = mBones.data() + counts[TYPE_END];
         while (true) {
             while (db->name != src->name) {
                 db++;
@@ -918,7 +919,7 @@ rotate_quat:
                 src++;
                 float dz = dquat->z;
                 float dy = dquat->y;
-                dquat->w = -(dz * sq.z - -(dy * sq.y - (dw * sq.w - dx * sq.x)));
+                dquat->w = -(-(dy * sq.y - (dw * sq.w - dx * sq.x)) - dz * sq.z);
                 dquat->z = -(dx * sq.y - ((dy * sq.x + (dz * sq.w + dw * sq.z))));
                 dquat->y = -(dz * sq.x - (dw * sq.y + dy * sq.w + dx * sq.z));
                 dquat->x = -(dy * sq.z - (dw * sq.x + dz * sq.y + dx * sq.w));
@@ -943,7 +944,7 @@ rotate_quat:
                 src++;
                 float dz = dquat->z;
                 float dy = dquat->y;
-                dquat->w = -(dz * sq.z - -(dy * sq.y - (dw * sq.w - dx * sq.x)));
+                dquat->w = -(-(dy * sq.y - (dw * sq.w - dx * sq.x)) - dz * sq.z);
                 dquat->z = -(dx * sq.y - (dy * sq.x + dz * sq.w + dw * sq.z));
                 dquat->y = -(dz * sq.x - (dw * sq.y + dy * sq.w + dx * sq.z));
                 dquat->x = -(dy * sq.z - (dw * sq.x + dz * sq.y + dx * sq.w));
@@ -1031,8 +1032,8 @@ complain:
 // MARK: RotateTo
 void CharBones::RotateTo(CharBones &dst, float f) const {
     const Bone *src = mBones.begin();
-    auto _tmp0 = mBones.end();
-    if (src == _tmp0) return;
+    auto bonesEnd = mBones.end();
+    if (src == bonesEnd) return;
 
     // Position section
     if (mCounts[TYPE_QUAT] > mCounts[TYPE_POS]) {
@@ -1144,7 +1145,7 @@ rotateto_quat:
                 float dz = dquat->z;
                 float dw = dquat->w;
                 float dy = dquat->y;
-                dquat->w = -(dz * sq.z - -(dy * sy - (sq.w * dw - dx * sq.x)));
+                dquat->w = -(dz * sq.z - -(dy * sy - (dx * sq.x - sq.w * dw)));
                 dquat->z = -(dy * sx - (sq.z * dw + dz * sq.w + dx * sy));
                 dquat->y = -(dx * sq.z - (sy * dw + dy * sq.w + dz * sx));
                 dquat->x = -(dz * sy - (dw * sx + dy * sq.z + dx * sq.w));

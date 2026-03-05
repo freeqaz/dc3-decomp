@@ -273,7 +273,7 @@ void CharHair::SimulateInternal(float fps) {
                 Subtract(pt.pos, strandXfm.v, boneFrame.y);
                 float boneLen = Length(boneFrame.y);
                 float recipLen = boneLen > 0 ? (1.0f / boneLen) : 0.0f;
-                float lenDiff = pt.length * recipLen - 1.0f;
+                float lenDiff = -(1.0f - pt.length * recipLen);
                 if (j > 0) {
                     ScaleAdd(points[j - 1].force, boneFrame.y, -sixtyOver * 0.5f * lenDiff, points[j - 1].force);
                 }

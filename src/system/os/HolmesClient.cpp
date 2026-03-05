@@ -429,6 +429,7 @@ bool HolmesClientOpen(const char *arg0, int arg1, unsigned int &arg2, int &arg3)
         MILO_ASSERT(gHolmesStream, 866);
     }
 
+    bool _result = false;
     if (!gHolmesStream->Fail()) {
         BeginCmd(Holmes::kOpenFile, true);
         *gStreamBuffer << u8(Holmes::kOpenFile);
@@ -453,11 +454,10 @@ bool HolmesClientOpen(const char *arg0, int arg1, unsigned int &arg2, int &arg3)
         EndCmd(Holmes::kOpenFile);
 
         if (arg3 != -1) {
-            return true;
+                        _result = true;
         }
     }
-
-    return false;
+    return _result;
 }
 
 void HolmesClientWrite(int file, int offset, int length, const void *data) {
@@ -468,8 +468,8 @@ void HolmesClientWrite(int file, int offset, int length, const void *data) {
     if (!gHolmesStream->Fail() || gHostLogging == false) {
         BeginCmd(Holmes::kWriteFile, true);
         *gStreamBuffer << u8(Holmes::kWriteFile);
-        *gStreamBuffer << file;
         *gStreamBuffer << offset;
+        *gStreamBuffer << file;
         *gStreamBuffer << length;
         gStreamBuffer->Write(data, length);
         HolmesFlushStreamBuffer();
@@ -680,8 +680,6 @@ bool HolmesClientCacheFile(char *arg0, const char *arg1) {
     u8 fileInfo[0x20];
     int attrResult = GetFileAttributesExA(arg0, (GET_FILEEX_INFO_LEVELS)0, fileInfo);
     bool fileExists = (attrResult - 1) != (-1);
-    s64 fileTime = *(s64*)(fileInfo + 0x14);
-
     if ((str != gLastCachedResource) && (gLastCacheResult > 0 || fileExists)) {
         EndCmd(Holmes::kCacheFile);
         return true;
@@ -695,7 +693,7 @@ bool HolmesClientCacheFile(char *arg0, const char *arg1) {
     gStreamBuffer->Write(&hasFileFlag, 1);
 
     if (fileExists) {
-        gStreamBuffer->WriteEndian(&fileTime, 8);
+        gStreamBuffer->WriteEndian(&*(s64*)(fileInfo + 0x14), 8);
     }
 
     HolmesFlushStreamBuffer();

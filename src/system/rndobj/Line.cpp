@@ -284,7 +284,7 @@ void RndLine::UpdateInternal() {
 
 void RndLine::SetNumPoints(int num) {
     mPoints.resize(num);
-    if (num >= 1) {
+    if ((int)num >= 1) {
         int i1 = num;
         if (mHasCaps) {
             i1 = num + 2;
@@ -294,7 +294,7 @@ void RndLine::SetNumPoints(int num) {
         }
         mMesh->Verts().resize(i1 * 2);
         int numPoints = mPoints.size();
-        for (int i = 0; i < numPoints; i++) {
+        for (int i = 0; (unsigned int)i < numPoints; i++) {
             VertsMap vmap;
             MapVerts(i, vmap);
             Hmx::Color &ptColor = mPoints[i].color;

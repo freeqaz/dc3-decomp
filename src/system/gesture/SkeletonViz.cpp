@@ -479,11 +479,7 @@ void SkeletonViz::Visualize(
     mLineWidthScale = input.DrawScale();
 
     Transform worldXfm;
-    if (unk218) {
-        worldXfm = WorldXfm();
-    } else {
-        worldXfm = unk1d4;
-    }
+        worldXfm = unk218 ? WorldXfm() : unk1d4;
 
     const SkeletonFrame &cachedFrame = input.CachedFrame();
     RndCam *currentCam = RndCam::Current();

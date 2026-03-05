@@ -182,7 +182,7 @@ void SongPreview::PreparePreview() {
         previewend = mEndPreviewMs;
     } else {
         int songid = mSongMgr.GetSongIDFromShortName(mSong, true);
-        mSongMgr.Data(songid)->PreviewTimes(previewstart, previewend);
+        mSongMgr.Data(songid)->PreviewTimes(previewend, previewstart);
     }
     mStartMs = previewstart;
     mEndMs = previewend;

@@ -817,7 +817,7 @@ void WorldCrowd::Apply3DCharXfm(
         // simple cross with up
         float fx = forwardDir.x, fy = forwardDir.y, fz = forwardDir.z;
         forwardDir.x = fy * envY.z - envY.y * 0.0f;
-        forwardDir.y = envY.x * 0.0f - envY.z * fx;
+        forwardDir.y = envY.z * fx - envY.x * 0.0f;
         forwardDir.z = envY.y * fx - fy * envY.x;
     }
     Normalize(forwardDir, forwardDir);

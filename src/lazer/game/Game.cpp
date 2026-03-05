@@ -447,7 +447,7 @@ bool Game::IsSongDefaultPlayerPlaying() {
     Symbol symSong = TheGameData->GetSong();
     Symbol symDefaultCharacter = TheHamSongMgr.GetCharacter(symSong);
     Symbol symPrimaryCharacter = TheGameData->Player(0)->Char();
-    bool ret = symPrimaryCharacter == symDefaultCharacter;
+    bool ret = symDefaultCharacter == symPrimaryCharacter;
     const char *songStr = symSong.Str();
     const char *defaultStr = symDefaultCharacter.Str();
     const char *primaryStr = symPrimaryCharacter.Str();

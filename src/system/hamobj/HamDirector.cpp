@@ -637,16 +637,14 @@ Key<Symbol> *HamDirector::GetMasterPracticeFrame(Symbol s) {
 
 HamCamShot *HamDirector::FindNextDircut() {
     float secs = TheTaskMgr.Seconds(TaskMgr::kRealTime);
-    HamCamShot *shot = nullptr;
     const DircutEntry *entry = mDirCutKeys.Cross(secs, secs - TheTaskMgr.DeltaSeconds());
-    if (entry) {
-        if (mNumPlayersFailed || (entry->mForced && mExcitement >= 3)) {
+    HamCamShot *shot = nullptr;
+    if (mNumPlayersFailed || (entry->mForced && mExcitement >= 3)) {
             shot = entry->mShot;
             if (shot) {
                 mPickNewShot = true;
             }
-        }
-    }
+        };
     return shot;
 }
 
@@ -1945,7 +1943,7 @@ void HamDirector::LoadRoutineBuilderData(
     } else {
         ObjectDir *moveMgrDir = TheMoveMgr->MoveDataDir();
         if (!moveMgrDir) {
-            MILO_NOTIFY("Move data missing from %s", TheGameData->GetSong());
+            MILO_LOG("Move data missing from %s", TheGameData->GetSong());
         } else {
             ObjectDir *movesDir = GetWorld()->Find<ObjectDir>("moves", true);
             int movesDirHash = movesDir->HashTableSize() + moveMgrDir->HashTableSize();
@@ -2329,7 +2327,7 @@ void HamDirector::PlayNextShot() {
     }
     HamCamShot *nextShot = mNextShot;
     mPickNewShot = false;
-    if (nextShot == 0) {
+    if ((int)nextShot == 0) {
         return;
     }
     mNextShot = nullptr;
@@ -2428,7 +2426,8 @@ void HamDirector::ChangeNextShotIfCharacterCollisionLikely() {
     if (!shotKeys)
         return;
 
-    const char *cat = mNextShot->Category().Str();
+    auto& nextShot = mNextShot;
+    const char *cat = nextShot->Category().Str();
     if (strncmp(cat, "Area", 4) != 0)
         return;
 
@@ -2468,7 +2467,7 @@ void HamDirector::ChangeNextShotIfCharacterCollisionLikely() {
         static Symbol player1("player1");
         Symbol targetSym = (targetIdx == 0) ? player0 : player1;
 
-        if (!mNextShot->TargetTeleportTransform(targetSym, transforms[targetIdx])) {
+        if (!nextShot->TargetTeleportTransform(targetSym, transforms[targetIdx])) {
             return;
         }
 
@@ -2664,7 +2663,7 @@ void HamDirector::Poll() {
                     }
                 }
                 if (p1anim != -1) {
-                    bool hasPractice = GetPracticeFrames(practiceEnd, practiceStart);
+                    bool hasPractice = GetPracticeFrames(practiceStart, practiceEnd);
                     if (!hasPractice) {
                         bool clipInited = player1Clip.Init(1);
                         if (clipInited) {

@@ -406,7 +406,7 @@ float ScaleDistToError(const ScaleOp &op, float dist) {
         MILO_NOTIFY("%f distance is less than zero (%f, %f)", dist, op.mPerfectDist, op.mRate);
         return 1.0f;
     }
-    if (op.mPerfectDist < dist) {
+    if (dist > op.mPerfectDist) {
         float excess = dist - op.mPerfectDist;
         if (op.mType == kErrorScaleDistSq) {
             excess = excess * excess;
@@ -431,11 +431,11 @@ float ScaleFullErrorDist(const ScaleOp &op) {
 void XZErrorWeight(const Vector3 &v, float &xzWeight, float &yWeight) {
     static Vector3 up(0, 0, 1);
     Vector3 flat;
-    flat.x = v.x;
-    flat.y = 0;
     flat.z = v.z;
-    Normalize(flat, flat);
+    flat.y = 0;
     float dot = flat.x * up.x + flat.y * up.y + flat.z * up.z;
+    flat.x = v.x;
+    Normalize(flat, flat);
     float absDot = fabs(dot);
     float angle = acosf(absDot);
     xzWeight = angle * (2.0f / PI);

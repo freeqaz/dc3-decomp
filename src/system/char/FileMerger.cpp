@@ -191,21 +191,7 @@ void FileMerger::PreLoad(BinStream &bs) {
 
 void FileMerger::FinishLoading(Loader *ldr) {
     DirLoader *dl = dynamic_cast<DirLoader *>(ldr);
-#ifdef HX_NATIVE
-    printf("FileMerger::FinishLoading dl=%p file='%s' sDisableAll=%d\n",
-           dl, ldr ? ldr->LoaderFile().c_str() : "null", sDisableAll);
-#endif
     Merger *merger = NotifyFileLoaded(ldr, dl);
-#ifdef HX_NATIVE
-    printf("  merger='%s' proxy=%d dl_dir=%p\n",
-           merger->mName.Str(), merger->mProxy, dl ? dl->GetDir() : nullptr);
-    if (dl && dl->GetDir()) {
-        int cnt = 0;
-        ObjDirItr<Hmx::Object> allIt(dl->GetDir(), true);
-        while (allIt) { cnt++; ++allIt; }
-        printf("  loaded dir '%s' has %d objects\n", dl->GetDir()->Name(), cnt);
-    }
-#endif
     if (dl && !sDisableAll) {
         if (merger->mProxy) {
             MILO_ASSERT(dl->GetDir(), 0x236);
@@ -222,20 +208,8 @@ void FileMerger::FinishLoading(Loader *ldr) {
             }
         } else {
             ObjectDir *mergerDir = merger->MergerDir();
-#ifdef HX_NATIVE
-            printf("  MergeDirs: src='%s'(%d objs) -> dst='%s'(%d objs)\n",
-                   dl->GetDir()->Name(),
-                   (int)dl->GetDir()->HashTableSize(),
-                   mergerDir->Name(),
-                   (int)mergerDir->HashTableSize());
-#endif
             ReserveToFit(dl->GetDir(), mergerDir, 0);
             MergeDirs(dl->GetDir(), mergerDir, *this);
-#ifdef HX_NATIVE
-            printf("  after MergeDirs: dst='%s' now has %d objs\n",
-                   mergerDir->Name(),
-                   (int)mergerDir->HashTableSize());
-#endif
         }
     }
     PostMerge(merger, dl, true);

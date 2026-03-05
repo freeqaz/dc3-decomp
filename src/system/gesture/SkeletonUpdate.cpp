@@ -254,7 +254,7 @@ void SkeletonUpdate::InsertFakeArmPos(SkeletonData &data) {
         if (rt <= 0.5f || lt <= 0.5f) {
             float rightZ = data.mJointPositions[kJointElbowRight].z - 0.5f;
             float rightY = data.mJointPositions[kJointElbowRight].y + unk5398;
-            float rightX = 0.1f - rt * 0.5f + data.mJointPositions[kJointElbowRight].x;
+            float rightX = -(rt * 0.5f - 0.1f) + data.mJointPositions[kJointElbowRight].x;
             PaddedJointPos rightPos;
             rightPos.z = rightZ;
             rightPos.y = rightY;
@@ -283,7 +283,7 @@ void SkeletonUpdate::InsertFakeArmPos(SkeletonData &data) {
 }
 
 void SkeletonUpdate::UpdateCallbacks() {
-    if (unk5388 > 0) {
+    if ((unsigned int)(unsigned int)unk5388 > 0) {
         float posHalf = 0.5f;
         int tracked = 0;
         SkeletonData *sd = &mSkeletonFrame.mSkeletonDatas[0];

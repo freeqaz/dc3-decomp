@@ -482,7 +482,7 @@ DataNode UIList::OnSetSelected(DataArray *da) {
     } else if (node.Type() == kDataSymbol || node.Type() == kDataString) {
         int i3;
         if (da->Size() == 4)
-            i3 = da->Int(3);
+            i3 = bool(da->Int(3));
         else
             i3 = 1;
         if (da->Size() == 5)
@@ -861,7 +861,7 @@ float UIList::GetDistanceToPlane(const Plane &p, Vector3 &v) {
                            Vector3(box.mMax.x, box.mMin.y, box.mMax.z),
                            Vector3(box.mMax.x, box.mMax.y, box.mMax.z),
                            Vector3(box.mMin.x, box.mMax.y, box.mMax.z) };
-    for (int i = 0; i < 8; i++) {
+    for (int i = 0; 8 > i; i++) {
         float dot = p.Dot(boxVecs[i]);
         if (first || (std::fabs(dot) < std::fabs(ret))) {
             ret = dot;

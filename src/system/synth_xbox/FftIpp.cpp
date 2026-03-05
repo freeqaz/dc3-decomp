@@ -53,7 +53,7 @@ void FftIpp::SetMode(int mode) {
             mOrder = mOrder + 1;
             int o = *(volatile int *)&mOrder;
             int s = *(volatile int *)&mSize;
-            if ((1 << o) < s) continue;
+            if (s > (1 << o)) continue;
             break;
         } while (true);
     }

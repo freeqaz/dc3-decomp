@@ -338,15 +338,14 @@ void NgMat::SetRegularShaderConst(bool perPixel) {
 
 void NgMat::RefreshState() {
     // Half-pixel offset from diffuse texture dimensions
-    RndTex *diffTex = mDiffuseTex;
-    if (!diffTex || diffTex->Width() == 0 || diffTex->Height() == 0) {
+    if (!mDiffuseTex || mDiffuseTex->Width() == 0 || mDiffuseTex->Height() == 0) {
         mTexHalfPixelX = 0.0f;
         mTexHalfPixelY = 0.0f;
         mTexHalfPixelNegX = 0.0f;
         mTexHalfPixelNegY = 0.0f;
     } else {
-        int w = diffTex->Width();
-        int h = diffTex->Height();
+        int w = mDiffuseTex->Width();
+        int h = mDiffuseTex->Height();
         mTexHalfPixelY = 0.5f / h;
         mTexHalfPixelX = 0.5f / w;
         mTexHalfPixelNegY = -0.5f / h;

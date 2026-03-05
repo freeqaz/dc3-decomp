@@ -54,7 +54,9 @@ void PatchVerts::Add(int vertIdx, RndMesh::VertVector &verts, Vector3 &centroid)
 }
 
 int PatchVerts::GreaterEq(int iii) const {
-    if (!mPatchVerts.empty() && iii > mPatchVerts.front()) {
+    if (!(!mPatchVerts.empty() && iii > mPatchVerts.front())) {
+        return 0;
+    } else {
         if (iii > mPatchVerts.back()) {
             return mPatchVerts.size();
         } else {
@@ -63,7 +65,7 @@ int PatchVerts::GreaterEq(int iii) const {
             while (u2 > u5 + 1) {
                 int u4 = (u5 + u2) >> 1;
                 int curVert = mPatchVerts[u4];
-                if (curVert < iii) {
+                if (iii > curVert) {
                     u5 = u4;
                 }
                 if (iii <= curVert) {
@@ -72,8 +74,6 @@ int PatchVerts::GreaterEq(int iii) const {
             }
             return u2;
         }
-    } else {
-        return 0;
     }
 }
 
@@ -104,9 +104,9 @@ void SaveCompressedVertex(const CompressedVertex_Xbox &cv, BinStream &bs) {
 
 /** Calculate the centroid of a triangle face by averaging its three vertex positions. */
 void FaceCenter(RndMesh *mesh, RndMesh::Face *face, Vector3 &center) {
-    center.x = 0.0f;
-    center.y = 0.0f;
     center.z = 0.0f;
+    center.y = 0.0f;
+    center.x = 0.0f;
     RndMesh::Vert *verts = mesh->mGeomOwner->mVerts.mVerts;
     // Accumulate positions of all three vertices
     for (int i = 0; i < 3; i++) {
@@ -1153,7 +1153,7 @@ void RndMesh::SetVolume(RndMesh::Volume vol) {
                         boxa0.GrowToContain(it->pos, &it->pos == &mVerts.begin()->pos);
                     }
                     if (!CheckBSPTree(mBSPTree, boxa0)) {
-                        MILO_WARN("BSP tree outside bounding box");
+                        MILO_LOG("BSP tree outside bounding box");
                         RELEASE(mBSPTree);
                     }
                 }
@@ -1181,10 +1181,10 @@ void RndMesh::OnSync(int flags) {
         mPatches.push_back(mFaces.size());
     } else if (flags & 0x100U) {
         int u13 = 0xFFFF;
-        int i4 = 0;
         int i12 = 0;
+        int i4 = 0;
         FOREACH (it, mFaces) {
-            i12 = Max(Max<u16>(i12, it->v1, it->v2), it->v3);
+            i12 = Max(it->v3, Max<u16>(i12, it->v1, it->v2));
             u13 = Min(Min<u16>(u13, it->v1, it->v2), it->v3);
             if (!PatchOkay((i12 - u13) + 1, i4 + 1)) {
                 mPatches.push_back(i4);
@@ -1236,8 +1236,9 @@ void RndMesh::OnSync(int flags) {
                 i4 = 0;
             }
             for (int i = 0; i < 3; i++) {
-                if (!gPatchVerts.HasVert((*faceIt)[i])) {
-                    gPatchVerts.Add((*faceIt)[i], mVerts, v40);
+                auto& vertIdx = (*faceIt)[i];
+                if (!gPatchVerts.HasVert(vertIdx)) {
+                    gPatchVerts.Add(vertIdx, mVerts, v40);
                 }
             }
             faces.push_back(*faceIt);
@@ -1253,17 +1254,18 @@ void RndMesh::OnSync(int flags) {
 #endif
 
 void RndMesh::DeleteBones(bool findRoot) {
-    if (mBones.empty())
+    auto& bones = mBones;
+    if (bones.empty())
         return;
 
-    std::vector<RndTransformable *> boneTransforms(mBones.size(), NULL);
+    std::vector<RndTransformable *> boneTransforms(bones.size(), NULL);
     for (unsigned int i = 0; i < boneTransforms.size(); i++) {
-        boneTransforms[i] = mBones[i].mBone;
+        boneTransforms[i] = bones[i].mBone;
     }
 
     RndTransformable *root = NULL;
     if (findRoot) {
-        RndTransformable *parent = mBones[0].mBone;
+        RndTransformable *parent = bones[0].mBone;
         while (parent) {
             RndTransformable *transParent = dynamic_cast<RndTransformable *>(parent->TransParent());
             root = parent;
@@ -1274,7 +1276,7 @@ void RndMesh::DeleteBones(bool findRoot) {
         }
     }
 
-    mBones.erase(mBones.begin(), mBones.end());
+    bones.erase(bones.begin(), bones.end());
 
     for (unsigned int i = 0; i < boneTransforms.size(); i++) {
         if (boneTransforms[i]) {
@@ -1289,7 +1291,7 @@ void RndMesh::DeleteBones(bool findRoot) {
 
 void RndMesh::InstanceGeomOwnerBones() {
     if (!mGeomOwner) {
-        MILO_NOTIFY_ONCE("Cannot duplicate bones if mesh is not a Geom Owner!");
+        MILO_WARN("Cannot duplicate bones if mesh is not a Geom Owner!");
         return;
     }
 
@@ -1305,10 +1307,10 @@ void RndMesh::InstanceGeomOwnerBones() {
     bool needsCopy = mGeomOwner && mGeomOwner->mBones[0].mBone != mBones[0].mBone;
     if (needsCopy) {
         DeleteBones(true);
-        if (!mGeomOwner) {
-            mBones.erase(mBones.begin(), mBones.end());
-        } else {
+        if (!(!mGeomOwner)) {
             mBones = mGeomOwner->mBones;
+        } else {
+            mBones.erase(mBones.begin(), mBones.end());
         }
     }
 
@@ -1336,13 +1338,12 @@ void RndMesh::InstanceGeomOwnerBones() {
     // Create new bone transforms for each bone
     for (unsigned int i = 0; i < mBones.size(); i++) {
         RndTransformable *newBone = Hmx::Object::New<RndTransformable>();
-        RndTransformable *ownerBone = mGeomOwner->mBones[i].mBone;
-        newBone->SetName(NextName(ownerBone->Name(), Dir()), Dir());
-        newBone->Copy(ownerBone, Hmx::Object::kCopyDeep);
+        newBone->SetName(NextName(mGeomOwner->mBones[i].mBone->Name(), Dir()), Dir());
+        newBone->Copy(mGeomOwner->mBones[i].mBone, Hmx::Object::kCopyDeep);
         mBones[i].mBone = newBone;
 
         // Find parent in owner hierarchy and reparent
-        int parentIdx = mGeomOwner->GetBoneIndex(ownerBone->TransParent());
+        int parentIdx = mGeomOwner->GetBoneIndex(mGeomOwner->mBones[i].mBone->TransParent());
         RndTransformable *parent = (parentIdx != -1) ? (RndTransformable *)mBones[parentIdx].mBone : newRoot;
         newBone->SetTransParent(parent, false);
     }
@@ -1713,8 +1714,7 @@ void RndMesh::LoadVertices(BinStreamRev &d) {
 
 void RndMesh::SaveVertices(BinStream &bs) {
     bool useCached;
-    auto platform = bs.GetPlatform();
-    if (bs.Cached() && (bs.GetPlatform() == kPlatformPS3 || platform == kPlatformXBox)) {
+    if (bs.Cached() && (bs.GetPlatform() == kPlatformPS3 || bs.GetPlatform() == kPlatformXBox)) {
         useCached = true;
     } else {
         useCached = false;
@@ -1739,7 +1739,8 @@ void RndMesh::SaveVertices(BinStream &bs) {
         unsigned int vertSize = 0;
         unsigned int version = 0;
         if (TheLoadMgr.GetPlatform() != kPlatformXBox) {
-            TheDebug.Fail(FormatString("Unsupported platform for vertex compression").Str(), 0);
+            auto errMsg = FormatString("Unsupported platform for vertex compression").Str();
+            TheDebug.Fail(errMsg, 0);
             MILO_ASSERT(vertSize > 0, 0x339);
             MILO_ASSERT(version > 0, 0x33A);
         } else {

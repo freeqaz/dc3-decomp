@@ -342,11 +342,12 @@ void CharBonesSamples::Print() {
 }
 
 void CharBonesSamples::Relativize(CharClip *clip) {
-    if (mBones.empty())
+    auto& bones = mBones;
+    if (bones.empty())
         return;
 
     for (int sample = mNumSamples - 1; sample >= 0; sample--) {
-        Bone *bone = &mBones[0];
+        Bone *bone = &bones[0];
         mStart = mRawData + sample * mTotalSize;
 
         if (mCompression >= kCompressVects) {
@@ -613,8 +614,9 @@ void CharBonesSamples::Save(BinStream &bs) {
     bs << mNumSamples;
     bs << mFrames;
 
-    bool cached = bs.Cached() && (bs.GetPlatform() == kPlatformPS3 || bs.GetPlatform() == kPlatformXBox);
+    auto isCached = bs.Cached();
     int delta = 0;
+    bool cached = isCached && (bs.GetPlatform() == kPlatformPS3 || bs.GetPlatform() == kPlatformXBox);
     if (cached) {
         int dataSize = mOffsets[TYPE_END] - mOffsets[TYPE_POS];
         delta = ((dataSize + 0xF) & ~0xF) - dataSize;

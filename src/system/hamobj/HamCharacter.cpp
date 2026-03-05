@@ -481,8 +481,8 @@ void HamCharacter::SetCampaignVo(const char *cc) {
     mCampaignVO = cc;
     Hmx::Object *&bank = mCampaignVOBank;
     RELEASE(bank);
-    bool _cond = !mCampaignVO.empty();
-    if (_cond) {
+    bool hasVO = !mCampaignVO.empty();
+    if (hasVO) {
         String milo = GetCampaignVoMilo();
         mCampaignVODir = DirLoader::LoadObjects(milo.c_str(), 0, 0);
         for (ObjDirItr<Hmx::Object> it(mCampaignVODir, false); it != nullptr; ++it) {
@@ -508,11 +508,9 @@ int HamCharacter::SongAnimation() {
     CharClip *c = nullptr;
     if (Driver()) {
         c = Driver()->FirstClip();
-        if (c) {
-            MILO_ASSERT(c->Type() == "main", 0x3AB);
-        }
+        MILO_ASSERT(c->Type() == "main", 0x3AB);
     }
-    if (InClipTest() & (c && c->Dir()->Dir() != this)) {
+    if (InClipTest() && (c && c->Dir()->Dir() != this)) {
         return c->Property("clip_skeleton_index", false)->Int();
     } else if (mUseCameraSkeleton || c) {
         return -1;

@@ -374,9 +374,9 @@ void UILabel::PostLoad(BinStream &bs) {
     }
 
     // Handle font mat loading based on file revision
-    if (rev >= 0x1c) {
+    if (rev >= 28) {
         unsigned int i = 0;
-        if (mLabelStyles.size() != 0) {
+        if (mLabelStyles.size() > 0) {
             do {
                 char buffer[0x100];
                 bs.ReadString(buffer, 0x100);
@@ -970,7 +970,8 @@ bool PropSync(UILabel::LabelStyle &style, DataNode &_val, DataArray *_prop, int 
             } else {
                 if (_op == (PropOp)0x40)
                     return false;
-                _val = DataNode(sLabel->GetFontMat(styleIdx));
+                auto fontMatNode = DataNode(sLabel->GetFontMat(styleIdx));
+                _val = fontMatNode;
             }
             return true;
         }
