@@ -22,13 +22,13 @@ import sys
 import time
 from pathlib import Path
 
-from .composer import _DEFAULT_PAIRS
+from .composer import _DEFAULT_PAIRS, build_adaptive_chains
 from .diagnosis import format_diagnosis_summary, is_all_noise
 from .extractor import extract_function
 from .generator import generate_variants
 from .patterns import get_all_patterns, get_pattern
 from .scorer import Scorer
-from .types import HillClimbResult, RoundResult, ScoreResult
+from .types import ChainSpec, HillClimbResult, RoundHints, RoundResult, ScoreResult
 
 # Graceful interrupt flag — set by SIGINT handler, checked between rounds
 _interrupted = False
@@ -106,6 +106,26 @@ def parse_args() -> argparse.Namespace:
         "--json", action="store_true", dest="json_output",
         help="Output results as JSON",
     )
+    parser.add_argument(
+        "--ghidra", action="store_true",
+        help="Enable Ghidra-guided patterns (lookup decomp.db cache)",
+    )
+    parser.add_argument(
+        "--chain", action="store_true",
+        help="Enable N-stage pattern chains via beam search (implies --compose)",
+    )
+    parser.add_argument(
+        "--chain-depth", type=int, default=3,
+        help="Maximum chain depth for N-stage composition (default: 3)",
+    )
+    parser.add_argument(
+        "--adaptive", action="store_true",
+        help="Enable adaptive per-round pattern suppression/boosting",
+    )
+    parser.add_argument(
+        "--constrained", action="store_true",
+        help="Enable constraint-directed synthesis pre-pass (implies --ghidra)",
+    )
     return parser.parse_args()
 
 
@@ -121,6 +141,11 @@ def hill_climb(
     apply: bool = True,
     unit: str | None = None,
     workers: int = 6,
+    ghidra: bool = False,
+    chain: bool = False,
+    chain_depth: int = 3,
+    adaptive: bool = False,
+    constrained: bool = False,
 ) -> HillClimbResult:
     """Run the hill-climbing loop for a single function.
 
@@ -135,17 +160,43 @@ def hill_climb(
         compose: Enable two-step pattern composition.
         apply: Whether to apply improvements to source file.
         unit: Unit name for unicorn guard rail.
+        ghidra: Enable Ghidra-guided patterns.
+        chain: Enable N-stage pattern chains via beam search.
+        chain_depth: Maximum chain depth for N-stage composition.
+        adaptive: Enable adaptive per-round pattern suppression/boosting.
+        constrained: Enable constraint-directed synthesis pre-pass.
 
     Returns:
         HillClimbResult with full session history.
     """
+    # --constrained implies --ghidra
+    if constrained:
+        ghidra = True
+    # --chain implies --compose
+    if chain:
+        compose = True
     compose_pairs = _DEFAULT_PAIRS if compose else None
+
+    # Create adaptive hints tracker when chain or adaptive is enabled
+    round_hints: RoundHints | None = None
+    if chain or adaptive:
+        round_hints = RoundHints()
     start_time = time.time()
     rounds: list[RoundResult] = []
     initial_percent = 0.0
     current_percent = 0.0
     plateau_count = 0
     stopped_reason = "max_rounds"
+
+    # Pattern stats tracking
+    from .pattern_stats import RunStatsAccumulator
+    pattern_accumulator = RunStatsAccumulator()
+
+    # Ghidra stats tracking
+    ghidra_run_stats = None
+    if ghidra:
+        from .ghidra_stats import GhidraRunStats
+        ghidra_run_stats = GhidraRunStats()
 
     # Save original source for rollback if not applying
     original_source = source_path.read_bytes()
@@ -172,7 +223,7 @@ def hill_climb(
 
             # Fresh scorer per round — context manager restores source on exit
             with Scorer(source_path, symbol, unit=unit) as scorer:
-                baseline = scorer.get_baseline(guided=True)
+                baseline = scorer.get_baseline(guided=True, ghidra=ghidra)
 
                 if round_num == 1:
                     initial_percent = baseline
@@ -180,8 +231,32 @@ def hill_climb(
 
                 print(f"Baseline: {baseline:.2f}%", file=sys.stderr)
 
-                # Wire symbol and diagnosis into context
+                # Wire symbol, diagnosis, and Ghidra data into context
                 ctx.symbol = symbol
+                if scorer.ghidra_code:
+                    ctx.ghidra_code = scorer.ghidra_code
+                    ctx.ghidra_ast = scorer.ghidra_ast
+                    if scorer.ghidra_ast:
+                        from .ghidra_ast import (
+                            extract_variable_first_use_order,
+                            extract_savegpr_count,
+                        )
+                        ctx.target_var_order = extract_variable_first_use_order(
+                            scorer.ghidra_ast
+                        )
+                        ctx.target_gpr_saves = extract_savegpr_count(
+                            scorer.ghidra_code
+                        )
+                    # Wire ASM listing path for Ghidra+ASM crossref
+                    if scorer.asm_listing_path:
+                        ctx.asm_listing_path = scorer.asm_listing_path
+                    # Track Ghidra stats (only on first round)
+                    if ghidra_run_stats and round_num == 1:
+                        ghidra_run_stats.ghidra_available = True
+                        ghidra_run_stats.ghidra_code_bytes = len(scorer.ghidra_code)
+                        if ctx.target_var_order:
+                            ghidra_run_stats.ghidra_vars_count = len(ctx.target_var_order)
+                        ghidra_run_stats.ghidra_gpr_saves = ctx.target_gpr_saves
                 if scorer.diagnosis:
                     ctx.diagnosis = scorer.diagnosis
                     print(
@@ -198,21 +273,139 @@ def hill_climb(
                         stopped_reason = "noise_only"
                         break
 
+                # Ghidra preflight check
+                if ghidra and ctx.ghidra_ast and round_num == 1:
+                    from .ghidra_preflight import run_preflight
+                    preflight = run_preflight(
+                        ctx.ghidra_ast, ctx.func_node, ctx.file_source,
+                        diagnosis=scorer.diagnosis,
+                        symbol=symbol,
+                    )
+                    if preflight.skip_reason:
+                        print(
+                            f"  [GHIDRA PREFLIGHT] {preflight.skip_reason} "
+                            f"(confidence={preflight.confidence:.1f})",
+                            file=sys.stderr,
+                        )
+                    if ghidra_run_stats:
+                        ghidra_run_stats.preflight_flagged = preflight.skip_reason is not None
+                        ghidra_run_stats.preflight_reason = preflight.skip_reason
+                        ghidra_run_stats.preflight_confidence = preflight.confidence
+                    # Hard skip: very high confidence unfixable
+                    if preflight.confidence >= 0.9:
+                        print(
+                            f"  [GHIDRA PREFLIGHT] Unfixable — skipping",
+                            file=sys.stderr,
+                        )
+                        stopped_reason = "unfixable"
+                        break
+                    # High-confidence: reduce rounds
+                    if preflight.confidence >= 0.6:
+                        max_rounds = min(max_rounds, 2)
+                        print(
+                            f"  [GHIDRA PREFLIGHT] Reducing to {max_rounds} rounds",
+                            file=sys.stderr,
+                        )
+
+                # Constraint-directed synthesis pre-pass (round 1 only)
+                if constrained and round_num == 1 and ctx.ghidra_ast is not None:
+                    from .constraint_solver import synthesize
+                    synthesis = synthesize(ctx)
+
+                    if synthesis.skip_reason:
+                        print(
+                            f"  [SYNTH] Unfixable: {synthesis.skip_reason}",
+                            file=sys.stderr,
+                        )
+                        stopped_reason = "unfixable"
+                        break
+
+                    if synthesis.variants:
+                        print(
+                            f"  [SYNTH] {len(synthesis.variants)} candidates "
+                            f"({synthesis.deterministic_edit_count} resolved, "
+                            f"{synthesis.free_variable_count} free)",
+                            file=sys.stderr,
+                        )
+                        synth_results = scorer.score_batch(
+                            synthesis.variants, workers=workers,
+                        )
+                        synth_best = max(
+                            synth_results, key=lambda r: r.match_percent,
+                        )
+                        if synth_best.match_percent > baseline:
+                            if apply:
+                                source_path.write_bytes(synth_best.variant.source)
+                            print(
+                                f"  [SYNTH] {baseline:.2f}% -> "
+                                f"{synth_best.match_percent:.2f}%",
+                                file=sys.stderr,
+                            )
+                            if synth_best.match_percent >= 100.0:
+                                stopped_reason = "perfect"
+                                current_percent = 100.0
+                                rounds.append(RoundResult(
+                                    round_num=0,
+                                    baseline=baseline,
+                                    best_name=synth_best.variant.name,
+                                    best_pattern="constraint_solver",
+                                    best_score=100.0,
+                                    delta=100.0 - baseline,
+                                    num_variants=len(synthesis.variants),
+                                    improved=True,
+                                ))
+                                break
+                            # Update baseline for subsequent rounds
+                            baseline = synth_best.match_percent
+                            current_percent = baseline
+                        else:
+                            print(
+                                f"  [SYNTH] No improvement from synthesis",
+                                file=sys.stderr,
+                            )
+
                 # Perfect match check
                 if baseline >= 100.0:
                     print("Already at 100%!", file=sys.stderr)
                     stopped_reason = "perfect"
                     break
 
+                # Build adaptive chains for this round
+                round_chains: list[ChainSpec] | None = None
+                if chain and ctx.diagnosis:
+                    round_chains = build_adaptive_chains(
+                        diagnosis=ctx.diagnosis,
+                        patterns=patterns,
+                        hints=round_hints,
+                        max_depth=chain_depth,
+                    )
+                    if round_chains:
+                        print(
+                            f"Built {len(round_chains)} chains: "
+                            + ", ".join(
+                                f"[{'+'.join(c.stages)}]" for c in round_chains
+                            ),
+                            file=sys.stderr,
+                        )
+
                 # Generate variants
                 variants = list(generate_variants(
                     ctx, patterns, max_variants,
                     compose_pairs=compose_pairs,
+                    chains=round_chains,
+                    round_hints=round_hints if adaptive else None,
                 ))
                 print(
                     f"Generated {len(variants)} variants",
                     file=sys.stderr,
                 )
+
+                # Track Ghidra variant counts
+                if ghidra_run_stats:
+                    ghidra_run_stats.total_variants += len(variants)
+                    ghidra_run_stats.ghidra_variants_generated += sum(
+                        1 for v in variants if v.name.startswith("ghidra_")
+                    )
 
                 if not variants:
                     print("No variants generated — stopping.", file=sys.stderr)
@@ -256,6 +449,15 @@ def hill_climb(
                     elif result.match_percent > baseline:
                         marker += " improved"
 
+                    # Record pattern stats
+                    pattern_accumulator.record_variant(
+                        pattern_name=result.variant.pattern_name,
+                        variant_name=result.variant.name,
+                        match_pct=result.match_percent,
+                        baseline=baseline,
+                        build_success=result.build_success,
+                    )
+
                     print(
                         f"  [{i + 1}/{len(batch_results)}] "
                         f"{result.variant.name}: "
@@ -278,9 +480,35 @@ def hill_climb(
                 improved=improved,
             ))
 
+            # Update adaptive round hints
+            if round_hints:
+                round_hints.record_round(
+                    round_num=round_num,
+                    variant_results=batch_results,
+                    baseline=baseline,
+                    winner_pattern=(
+                        best_result.variant.pattern_name
+                        if best_result and best_score > baseline
+                        else None
+                    ),
+                )
+                if ctx.diagnosis:
+                    round_hints.last_diagnosis = ctx.diagnosis
+
             if improved:
                 plateau_count = 0
                 current_percent = best_score
+
+                # Track winning pattern
+                if best_result:
+                    pattern_accumulator.mark_winner(best_result.variant.pattern_name)
+
+                # Track if Ghidra-guided variant won
+                if ghidra_run_stats and best_result:
+                    if best_result.variant.name.startswith("ghidra_"):
+                        ghidra_run_stats.ghidra_winner = True
+                        ghidra_run_stats.winning_variant = best_result.variant.name
+                        ghidra_run_stats.winning_pattern = best_result.variant.pattern_name
 
                 if apply:
                     # Write the improved source (Scorer already restored original)
@@ -328,6 +556,36 @@ def hill_climb(
     elapsed = time.time() - start_time
     final_percent = current_percent if apply else initial_percent
 
+    # Store pattern stats to DB
+    try:
+        from .pattern_stats import store_run as store_pattern_run
+        store_pattern_run(
+            accumulator=pattern_accumulator,
+            symbol=symbol,
+            function_name=function_name,
+            source_path=str(source_path),
+            initial_pct=initial_percent,
+            final_pct=final_percent,
+            unit=unit,
+            caller="hill_climber",
+        )
+    except Exception:
+        pass  # Don't fail the run if stats storage fails
+
+    # Store Ghidra stats to DB
+    if ghidra_run_stats:
+        try:
+            from .ghidra_stats import store_run
+            store_run(
+                symbol=symbol,
+                function_name=function_name,
+                run=ghidra_run_stats,
+                initial_pct=initial_percent,
+                final_pct=final_percent,
+            )
+        except Exception:
+            pass  # Don't fail the run if stats storage fails
+
     return HillClimbResult(
         symbol=symbol,
         function_name=function_name,
@@ -338,6 +596,7 @@ def hill_climb(
         rounds=rounds,
         stopped_reason=stopped_reason,
         elapsed_seconds=round(elapsed, 2),
+        ghidra_stats=ghidra_run_stats,
     )
 
 
@@ -394,6 +653,11 @@ def main():
         apply=not args.no_apply,
         unit=args.unit,
         workers=workers,
+        ghidra=args.ghidra,
+        chain=args.chain,
+        chain_depth=args.chain_depth,
+        adaptive=args.adaptive,
+        constrained=args.constrained,
     )
 
     if args.json_output:
@@ -416,6 +680,23 @@ def _print_result(result: HillClimbResult):
     print(f"  Rounds:     {len(result.rounds)}", file=sys.stderr)
     print(f"  Stopped:    {result.stopped_reason}", file=sys.stderr)
     print(f"  Elapsed:    {result.elapsed_seconds:.1f}s", file=sys.stderr)
+
+    # Ghidra stats
+    gs = result.ghidra_stats
+    if gs:
+        parts = []
+        if gs.ghidra_available:
+            parts.append(f"cache={gs.ghidra_code_bytes}B")
+            parts.append(f"vars={gs.ghidra_vars_count}")
+            if gs.ghidra_gpr_saves is not None:
+                parts.append(f"gpr_saves={gs.ghidra_gpr_saves}")
+        else:
+            parts.append("no cached decompilation")
+        if gs.ghidra_variants_generated > 0:
+            parts.append(f"guided_variants={gs.ghidra_variants_generated}/{gs.total_variants}")
+        if gs.ghidra_winner:
+            parts.append(f"WINNER={gs.winning_variant}")
+        print(f"  Ghidra:     {', '.join(parts)}", file=sys.stderr)
 
     if result.rounds:
         print(f"\n  Round history:", file=sys.stderr)

@@ -71,6 +71,14 @@ class NullGuardEliminationPattern(Pattern):
         source = ctx.file_source
         counter = 0
 
+        # Ghidra-guided: only remove guards absent in target
+        if ctx.ghidra_ast is not None:
+            for variant in self._try_ghidra_guided(ctx, counter):
+                yield variant
+                counter += 1
+            if counter > 0:
+                return  # Ghidra guided produced candidates, skip blind
+
         # Walk all statements including nested scopes
         for compound in _find_compound_statements(ctx.body_node):
             if counter >= 10:
@@ -95,6 +103,265 @@ class NullGuardEliminationPattern(Pattern):
                 for variant in _simplify_or_chain_guard(stmt, source, counter):
                     yield variant
                     counter += 1
+
+    def _try_ghidra_guided(self, ctx: FunctionContext, start_counter: int) -> Iterator[Variant]:
+        """Use Ghidra to identify which null checks are absent in the target."""
+        if ctx.ghidra_ast is None:
+            return
+
+        # Find all null-checked identifiers in the Ghidra output
+        ghidra_guards = _extract_ghidra_null_checks(ctx.ghidra_ast)
+
+        # Find all null-checked identifiers in our source
+        source_guards = _extract_source_null_checks(ctx.body_node, ctx.file_source)
+
+        # Guards in our source but NOT in Ghidra -> should be removed
+        removable = source_guards - ghidra_guards
+
+        if not removable:
+            return
+
+        counter = start_counter
+        source = ctx.file_source
+
+        for compound in _find_compound_statements(ctx.body_node):
+            if counter >= 10:
+                break
+            stmts = list(compound.named_children)
+            for stmt in stmts:
+                if counter >= 10:
+                    break
+                # Only try removal if the guard variable is in the removable set
+                if stmt.type == "if_statement":
+                    guard_var = _get_guard_variable(stmt, source)
+                    if guard_var and guard_var in removable:
+                        for variant in _eliminate_guard_call(stmt, source, counter):
+                            yield Variant(
+                                name=f"ghidra_nullguard_{counter}",
+                                pattern_name=variant.pattern_name,
+                                description=f"[ghidra] {variant.description}",
+                                source=variant.source,
+                            )
+                            counter += 1
+                        for variant in _drop_leading_and_operand(stmt, source, counter):
+                            yield Variant(
+                                name=f"ghidra_nullguard_{counter}",
+                                pattern_name=variant.pattern_name,
+                                description=f"[ghidra] {variant.description}",
+                                source=variant.source,
+                            )
+                            counter += 1
+
+
+def _extract_ghidra_null_checks(ghidra_ast) -> set[str]:
+    """Find identifiers that are null-checked in Ghidra output.
+
+    Looks for patterns like:
+    - if (var != (TYPE *)0x0)
+    - if (var != 0)
+    - if (var) (implicit null check)
+    """
+    from ..ghidra_ast import _walk_all
+
+    if ghidra_ast.body_node is None:
+        return set()
+
+    code_bytes = ghidra_ast.code.encode("utf-8")
+    guards: set[str] = set()
+
+    for node in _walk_all(ghidra_ast.body_node):
+        if node.type != "if_statement":
+            continue
+
+        condition = node.child_by_field_name("condition")
+        if condition is None:
+            continue
+
+        # Get the inner expression
+        inner = _get_ghidra_condition_inner(condition)
+        if inner is None:
+            continue
+
+        # Case 1: if (var != (TYPE *)0x0) or if (var != 0)
+        if inner.type == "binary_expression":
+            op = inner.child_by_field_name("operator")
+            if op is not None and op.text in (b"!=", b"=="):
+                left = inner.child_by_field_name("left")
+                right = inner.child_by_field_name("right")
+                if left is not None and right is not None:
+                    # Check if right side is a null literal (0, 0x0, (TYPE *)0x0)
+                    if _is_null_literal(right, code_bytes):
+                        name = _extract_base_name(left, code_bytes)
+                        if name:
+                            guards.add(name)
+                    # Also check reversed: 0 != var
+                    elif _is_null_literal(left, code_bytes):
+                        name = _extract_base_name(right, code_bytes)
+                        if name:
+                            guards.add(name)
+
+            # Case 2: if (var && ...) — conjunction with leading null check
+            if op is not None and op.text == b"&&":
+                left = inner.child_by_field_name("left")
+                if left is not None:
+                    # Left operand of && might be a null check itself
+                    _collect_null_check_names(left, code_bytes, guards)
+
+        # Case 3: if (var) — implicit null check (identifier used as condition)
+        elif inner.type == "identifier":
+            name = code_bytes[inner.start_byte:inner.end_byte].decode("utf-8", errors="replace")
+            guards.add(_strip_ghidra_prefix(name))
+
+    return guards
+
+
+def _extract_source_null_checks(body_node: Node, source: bytes) -> set[str]:
+    """Find identifiers that are null-checked in our source."""
+    guards: set[str] = set()
+
+    for node in walk(body_node):
+        if node.type != "if_statement":
+            continue
+
+        condition = node.child_by_field_name("condition")
+        if condition is None:
+            continue
+
+        inner = _get_inner_expr(condition)
+        if inner is None:
+            continue
+
+        # if (ptr)
+        if inner.type == "identifier":
+            name = source[inner.start_byte:inner.end_byte].decode("utf-8", errors="replace")
+            guards.add(name)
+
+        # if (ptr != nullptr) or if (ptr != 0)
+        elif inner.type == "binary_expression":
+            op = inner.child_by_field_name("operator")
+            if op is not None and op.text in (b"!=", b"=="):
+                left = inner.child_by_field_name("left")
+                right = inner.child_by_field_name("right")
+                if left is not None and right is not None:
+                    right_text = source[right.start_byte:right.end_byte].strip()
+                    if right_text in (b"nullptr", b"0", b"NULL"):
+                        if left.type == "identifier":
+                            name = source[left.start_byte:left.end_byte].decode("utf-8", errors="replace")
+                            guards.add(name)
+
+            # if (A && B) where A is a simple identifier (null guard)
+            if op is not None and op.text == b"&&":
+                left = inner.child_by_field_name("left")
+                if left is not None and left.type == "identifier":
+                    name = source[left.start_byte:left.end_byte].decode("utf-8", errors="replace")
+                    guards.add(name)
+
+    return guards
+
+
+def _get_guard_variable(stmt: Node, source: bytes) -> str | None:
+    """Get the variable name being null-checked in an if statement."""
+    if stmt.type != "if_statement":
+        return None
+
+    condition = stmt.child_by_field_name("condition")
+    if condition is None:
+        return None
+
+    inner = _get_inner_expr(condition)
+    if inner is None:
+        return None
+
+    # if (ptr)
+    if inner.type == "identifier":
+        return source[inner.start_byte:inner.end_byte].decode("utf-8", errors="replace")
+
+    # if (A && B) where A is a simple identifier
+    if inner.type == "binary_expression":
+        op = inner.child_by_field_name("operator")
+        if op is not None and op.text == b"&&":
+            left = inner.child_by_field_name("left")
+            if left is not None and left.type == "identifier":
+                return source[left.start_byte:left.end_byte].decode("utf-8", errors="replace")
+
+    return None
+
+
+def _get_ghidra_condition_inner(condition: Node) -> Node | None:
+    """Get the inner expression from a Ghidra condition (parenthesized_expression)."""
+    for child in condition.named_children:
+        if child.type != "comment":
+            return child
+    return None
+
+
+def _is_null_literal(node: Node, code_bytes: bytes) -> bool:
+    """Check if a node represents a null/zero literal, including casts like (TYPE *)0x0."""
+    text = code_bytes[node.start_byte:node.end_byte].strip()
+
+    # Direct null literals
+    if text in (b"0", b"0x0", b"0x00", b"NULL", b"nullptr"):
+        return True
+
+    # Cast expression: (TYPE *)0x0
+    if node.type == "cast_expression":
+        value = node.child_by_field_name("value")
+        if value is not None:
+            return _is_null_literal(value, code_bytes)
+
+    # Parenthesized: (0)
+    if node.type == "parenthesized_expression":
+        for child in node.named_children:
+            return _is_null_literal(child, code_bytes)
+
+    return False
+
+
+def _extract_base_name(node: Node, code_bytes: bytes) -> str | None:
+    """Extract a base identifier name from a node, stripping Ghidra prefixes."""
+    if node.type == "identifier":
+        name = code_bytes[node.start_byte:node.end_byte].decode("utf-8", errors="replace")
+        return _strip_ghidra_prefix(name)
+
+    # Handle pointer dereference: *var
+    if node.type == "pointer_expression":
+        for child in node.named_children:
+            if child.type == "identifier":
+                name = code_bytes[child.start_byte:child.end_byte].decode("utf-8", errors="replace")
+                return _strip_ghidra_prefix(name)
+
+    return None
+
+
+def _strip_ghidra_prefix(name: str) -> str:
+    """Strip Ghidra-specific prefixes to get a base name for comparison.
+
+    Ghidra often preserves global names (TheXxx, gXxx) as-is, but may
+    rename locals. For globals, the name is typically preserved exactly.
+    """
+    # Ghidra typically preserves global names like TheMetaMusic as-is
+    return name
+
+
+def _collect_null_check_names(node: Node, code_bytes: bytes, guards: set[str]) -> None:
+    """Collect identifier names from null-check sub-expressions."""
+    if node.type == "identifier":
+        name = code_bytes[node.start_byte:node.end_byte].decode("utf-8", errors="replace")
+        guards.add(_strip_ghidra_prefix(name))
+    elif node.type == "binary_expression":
+        op = node.child_by_field_name("operator")
+        if op is not None and op.text in (b"!=", b"=="):
+            left = node.child_by_field_name("left")
+            right = node.child_by_field_name("right")
+            if left is not None and right is not None:
+                if _is_null_literal(right, code_bytes):
+                    name = _extract_base_name(left, code_bytes)
+                    if name:
+                        guards.add(name)
+                elif _is_null_literal(left, code_bytes):
+                    name = _extract_base_name(right, code_bytes)
+                    if name:
+                        guards.add(name)
 
 
 def _find_compound_statements(body: Node) -> list[Node]:

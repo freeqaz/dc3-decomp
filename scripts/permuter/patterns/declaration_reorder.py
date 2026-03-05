@@ -83,9 +83,27 @@ class DeclarationReorderPattern(Pattern):
     def generate(self, ctx: FunctionContext) -> Iterator[Variant]:
         counter = 0
 
-        # Try BSF-guided generation first
+        # Priority chain: Ghidra+ASM crossref -> Ghidra -> BSF/ASM -> blind
+        # Try compound Ghidra+ASM crossref first (highest confidence)
+        crossref_produced = False
+        if (ctx.ghidra_ast is not None and ctx.target_var_order is not None
+                and ctx.asm_listing_path is not None):
+            for variant in self._try_ghidra_asm_crossref(ctx, counter):
+                yield variant
+                counter += 1
+                crossref_produced = True
+
+        # Try Ghidra-guided generation
+        ghidra_produced = False
+        if ctx.ghidra_ast is not None and ctx.target_var_order is not None and not crossref_produced:
+            for variant in self._try_ghidra_guided(ctx, counter):
+                yield variant
+                counter += 1
+                ghidra_produced = True
+
+        # Try BSF-guided generation
         bsf_produced = False
-        if self.bsf_guided:
+        if self.bsf_guided and not ghidra_produced and not crossref_produced:
             for variant in self._try_bsf_guided(ctx, counter):
                 yield variant
                 counter += 1
@@ -99,6 +117,10 @@ class DeclarationReorderPattern(Pattern):
                     file=sys.stderr,
                 )
                 return
+
+        # Skip blind permutations if any guided method produced candidates
+        if crossref_produced or ghidra_produced or bsf_produced:
+            return
 
         # Then fill remaining budget with random permutations
         for group in _find_declaration_groups(ctx):
@@ -129,6 +151,229 @@ class DeclarationReorderPattern(Pattern):
                     source=new_source,
                 )
                 counter += 1
+
+    def _try_ghidra_asm_crossref(self, ctx: FunctionContext, start_counter: int) -> Iterator[Variant]:
+        """Generate high-confidence reorder variants using Ghidra + ASM crossref.
+
+        Compound signal: Ghidra tells us the target's register order,
+        ASM listing tells us our current order. The diff is the exact swap.
+        """
+        from ..ghidra_var_match import infer_target_register_order
+
+        if not ctx.diagnosis or not ctx.asm_listing_path:
+            return
+
+        swap_pairs = [
+            pair for pair in ctx.diagnosis.reg_swap_pairs
+            if pair[0].startswith("r") or pair[1].startswith("r")
+        ]
+        if not swap_pairs:
+            return
+
+        all_decls = [s for s in ctx.statements if s.type == "declaration"]
+        if len(all_decls) < 2:
+            return
+
+        decl_names = []
+        for decl in all_decls:
+            name = _get_declared_name(decl)
+            decl_names.append(name or "?")
+
+        # Get target register allocation from Ghidra
+        target_mappings = infer_target_register_order(
+            ctx.target_var_order, ctx.target_gpr_saves
+        )
+        if not target_mappings:
+            return
+
+        # Get our current register allocation from ASM listing
+        try:
+            from tools.compiler_trace.asm_regmap import parse_asm_listing
+            asm_lines = ctx.asm_listing_path.read_text().splitlines()
+            asm_regmap = parse_asm_listing(asm_lines, ctx.symbol or "")
+            if not asm_regmap or not asm_regmap.var_to_reg:
+                return
+        except Exception:
+            return
+
+        # Build crossref: for each swap pair, find which vars need to swap
+        # target_reg_to_ghidra_var: which Ghidra var should be in which register
+        target_reg_to_var: dict[str, str] = {}
+        for m in target_mappings:
+            target_reg_to_var[m.inferred_register] = m.ghidra_name
+
+        # asm_var_to_reg: which source var is currently in which register
+        our_reg_to_var: dict[str, str] = {}
+        for var_name, reg in asm_regmap.var_to_reg.items():
+            our_reg_to_var[reg] = var_name
+
+        # Find exact swaps needed
+        targeted_swaps: list[tuple[int, int]] = []
+        n_vars = len(decl_names)
+
+        for rA, rB in swap_pairs:
+            if not (rA.startswith("r") and rB.startswith("r")):
+                continue
+
+            # Under callee-saved rule: r31 = index 0, r30 = index 1, etc.
+            idxA = 31 - int(rA[1:])
+            idxB = 31 - int(rB[1:])
+
+            if 0 <= idxA < n_vars and 0 <= idxB < n_vars:
+                pair = (min(idxA, idxB), max(idxA, idxB))
+                if pair not in targeted_swaps:
+                    targeted_swaps.append(pair)
+
+        if not targeted_swaps:
+            return
+
+        print(
+            f"  Ghidra+ASM crossref: {len(targeted_swaps)} swap(s) from "
+            f"{len(target_mappings)} Ghidra vars + {len(asm_regmap.var_to_reg)} ASM mappings",
+            file=sys.stderr,
+        )
+
+        # Build dependency edges
+        deps = _build_dependency_edges(all_decls)
+        base_order = list(range(n_vars))
+        counter = start_counter
+        seen: set[tuple[str, ...]] = set()
+
+        # Generate single-swap variants
+        for i, j in targeted_swaps:
+            new_order = list(base_order)
+            new_order[i], new_order[j] = new_order[j], new_order[i]
+            candidate = [decl_names[k] for k in new_order]
+            key = tuple(candidate)
+            if key in seen or new_order == base_order:
+                continue
+            seen.add(key)
+
+            if not _respects_deps(new_order, deps):
+                continue
+
+            reordered = [all_decls[k] for k in new_order]
+            new_source = _apply_reorder(ctx.file_source, all_decls, reordered)
+            if new_source == ctx.file_source:
+                continue
+
+            moved = [candidate[k] for k in range(n_vars) if candidate[k] != decl_names[k]]
+            yield Variant(
+                name=f"ghidra_asm_declreorder_{counter}",
+                pattern_name=self.name,
+                description=f"Ghidra+ASM crossref reorder: {', '.join(moved[:4])}",
+                source=new_source,
+            )
+            counter += 1
+
+        # Multi-swap: all targeted swaps simultaneously
+        if len(targeted_swaps) > 1:
+            new_order = list(base_order)
+            for i, j in targeted_swaps:
+                new_order[i], new_order[j] = new_order[j], new_order[i]
+            candidate = [decl_names[k] for k in new_order]
+            key = tuple(candidate)
+            if key not in seen and new_order != base_order and _respects_deps(new_order, deps):
+                seen.add(key)
+                reordered = [all_decls[k] for k in new_order]
+                new_source = _apply_reorder(ctx.file_source, all_decls, reordered)
+                if new_source != ctx.file_source:
+                    moved = [candidate[k] for k in range(n_vars) if candidate[k] != decl_names[k]]
+                    yield Variant(
+                        name=f"ghidra_asm_declreorder_{counter}",
+                        pattern_name=self.name,
+                        description=f"Ghidra+ASM multi-swap: {', '.join(moved[:4])}",
+                        source=new_source,
+                    )
+                    counter += 1
+
+    def _try_ghidra_guided(self, ctx: FunctionContext, start_counter: int) -> Iterator[Variant]:
+        """Generate Ghidra-guided reorder variants.
+
+        Uses variable first-use order from Ghidra decompilation to infer
+        the target's register allocation, then generates targeted swaps.
+        """
+        from ..ghidra_var_match import ghidra_guided_reorder
+
+        all_decls = [s for s in ctx.statements if s.type == "declaration"]
+        if len(all_decls) < 2:
+            return
+
+        decl_names = []
+        for decl in all_decls:
+            name = _get_declared_name(decl)
+            decl_names.append(name or "?")
+
+        # Get swap pairs from diagnosis
+        if not ctx.diagnosis:
+            return
+        swap_pairs = [
+            pair for pair in ctx.diagnosis.reg_swap_pairs
+            if pair[0].startswith("r") or pair[1].startswith("r")
+        ]
+        if not swap_pairs:
+            return
+
+        candidates = ghidra_guided_reorder(
+            ghidra_vars=ctx.target_var_order,
+            source_decl_names=decl_names,
+            swap_pairs=swap_pairs,
+            gpr_save_count=ctx.target_gpr_saves,
+        )
+
+        if not candidates:
+            return
+
+        print(
+            f"  Ghidra-guided reorder: {len(candidates)} candidate(s) "
+            f"for {len(swap_pairs)} swap pair(s)",
+            file=sys.stderr,
+        )
+
+        # Build dependency edges for safety checking
+        deps = _build_dependency_edges(all_decls)
+
+        counter = start_counter
+        for candidate_names in candidates:
+            # Map candidate name order back to node order
+            name_to_node = {}
+            for decl in all_decls:
+                name = _get_declared_name(decl)
+                if name:
+                    name_to_node[name] = decl
+
+            reordered = []
+            valid = True
+            for name in candidate_names:
+                if name in name_to_node:
+                    reordered.append(name_to_node[name])
+                else:
+                    valid = False
+                    break
+
+            if not valid or len(reordered) != len(all_decls):
+                continue
+
+            # Check dependency safety
+            perm_indices = [all_decls.index(n) for n in reordered]
+            if not _respects_deps(perm_indices, deps):
+                continue
+
+            new_source = _apply_reorder(ctx.file_source, all_decls, reordered)
+            if new_source == ctx.file_source:
+                continue
+
+            moved = [n for i, n in enumerate(candidate_names)
+                     if candidate_names[i] != decl_names[i]]
+            desc = f"Ghidra-guided reorder: {', '.join(moved[:4])}"
+
+            yield Variant(
+                name=f"ghidra_declreorder_{counter}",
+                pattern_name=self.name,
+                description=desc,
+                source=new_source,
+            )
+            counter += 1
 
     def _try_bsf_guided(self, ctx: FunctionContext, start_counter: int) -> Iterator[Variant]:
         """Generate BSF-guided reorder variants.

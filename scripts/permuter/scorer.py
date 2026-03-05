@@ -52,6 +52,9 @@ class Scorer:
         self._baseline_equivalent: Optional[bool] = None
         self.diagnosis: Optional[Diagnosis] = None
         self._cache: Optional[ScoreCache] = None
+        # Ghidra-guided fields (populated by get_baseline when ghidra=True)
+        self.ghidra_code: Optional[str] = None
+        self.ghidra_ast: object = None  # GhidraAST or None
 
         # Derive targeted object path from source path.
         # Accept either relative or absolute source paths.
@@ -488,11 +491,12 @@ class Scorer:
 
         return results  # type: ignore[return-value]
 
-    def get_baseline(self, guided: bool = True) -> float:
+    def get_baseline(self, guided: bool = True, ghidra: bool = False) -> float:
         """Score the unmodified source. Must be called within context manager.
 
         When guided=True, runs objdiff with --include-instructions and
         produces a Diagnosis for pattern filtering.
+        When ghidra=True, also looks up cached Ghidra decompilation.
         """
         if self._original_source is None:
             raise RuntimeError("get_baseline() must be called within context manager")
@@ -507,6 +511,35 @@ class Scorer:
         if guided and objdiff_data and objdiff_data.get("instructions"):
             from .diagnosis import diagnose_baseline
             self.diagnosis = diagnose_baseline(objdiff_data)
+
+        # Ghidra cache lookup
+        if ghidra:
+            try:
+                from .ghidra_cache import get_or_cache_decompilation
+                from .ghidra_ast import parse_ghidra, extract_savegpr_count
+                code = get_or_cache_decompilation(self.symbol)
+                if code:
+                    self.ghidra_code = code
+                    self.ghidra_ast = parse_ghidra(code)
+                    gpr_saves = extract_savegpr_count(code)
+                    if gpr_saves is not None:
+                        print(f"  Ghidra: loaded ({len(code)} bytes, "
+                              f"GPR saves={gpr_saves})", file=sys.stderr)
+                    else:
+                        print(f"  Ghidra: loaded ({len(code)} bytes)",
+                              file=sys.stderr)
+            except Exception as e:
+                print(f"  Ghidra: unavailable ({e})", file=sys.stderr)
+
+        # Check for ASM listing (for Ghidra+ASM crossref)
+        # The /FAs listing would be at the same path as .obj but with .asm/.cod extension
+        self.asm_listing_path = None
+        if ghidra:
+            for ext in (".asm", ".cod"):
+                asm_path = self._obj_path.with_suffix(ext)
+                if asm_path.exists():
+                    self.asm_listing_path = asm_path
+                    break
 
         self._baseline_equivalent = self._check_equivalence()
         self._baseline_pct = baseline

@@ -55,6 +55,15 @@ class AndSplitPattern(Pattern):
 
     def generate(self, ctx: FunctionContext) -> Iterator[Variant]:
         counter = 0
+
+        # Ghidra-guided: only generate the direction that matches Ghidra's structure
+        if ctx.ghidra_ast is not None:
+            for variant in self._try_ghidra_guided(ctx, counter):
+                yield variant
+                counter += 1
+            if counter > 0:
+                return  # Ghidra guided produced candidates, skip blind
+
         for stmt in ctx.statements:
             # Split: if (a && b) -> if (a) { if (b) }
             for variant in _split_and_conditions(stmt, ctx, counter):
@@ -64,6 +73,73 @@ class AndSplitPattern(Pattern):
             for variant in _merge_nested_ifs(stmt, ctx, counter):
                 yield variant
                 counter += 1
+
+    def _try_ghidra_guided(self, ctx: FunctionContext, start_counter: int) -> Iterator[Variant]:
+        """Generate only the direction indicated by Ghidra's condition structure."""
+        from ..ghidra_ast import extract_condition_structure
+
+        tags = extract_condition_structure(ctx.ghidra_ast)
+        if not tags:
+            return
+
+        has_conjunction = "conjunction" in tags
+        has_nested_if = "nested_if" in tags
+
+        counter = start_counter
+
+        # Ghidra has && but source has nested-if -> merge only
+        # Ghidra has nested-if but source has && -> split only
+        # If ambiguous, skip (fall through to blind)
+        do_split = False
+        do_merge = False
+
+        if has_conjunction and not has_nested_if:
+            # Ghidra uses conjunction — source should too; merge nested-ifs
+            do_merge = True
+        elif has_nested_if and not has_conjunction:
+            # Ghidra uses nested-if — source should too; split conjunctions
+            do_split = True
+        else:
+            # Ambiguous or no signal from condition_structure — try CF skeleton
+            from ..ghidra_ast import extract_control_flow_skeleton
+
+            skeleton = extract_control_flow_skeleton(ctx.ghidra_ast)
+            if not skeleton:
+                return
+
+            max_consecutive_ifs = _count_consecutive_ifs(skeleton)
+            guard_pairs = _count_guard_return_pairs(skeleton)
+
+            if max_consecutive_ifs >= 2:
+                # Ghidra uses nested ifs -> source probably has conjunction -> try split
+                do_split = True
+            elif guard_pairs >= 2:
+                # Ghidra uses guards -> early_return_merge handles this, not us
+                return
+            else:
+                return
+
+        for stmt in ctx.statements:
+            if do_split:
+                for variant in _split_and_conditions(stmt, ctx, counter):
+                    variant = Variant(
+                        name=f"ghidra_andsplit_{counter}",
+                        pattern_name=variant.pattern_name,
+                        description=f"[ghidra] {variant.description}",
+                        source=variant.source,
+                    )
+                    yield variant
+                    counter += 1
+            if do_merge:
+                for variant in _merge_nested_ifs(stmt, ctx, counter):
+                    variant = Variant(
+                        name=f"ghidra_andsplit_{counter}",
+                        pattern_name=variant.pattern_name,
+                        description=f"[ghidra] {variant.description}",
+                        source=variant.source,
+                    )
+                    yield variant
+                    counter += 1
 
 
 def _split_and_conditions(
@@ -118,8 +194,22 @@ def _split_and_conditions(
         else:
             # With else: if (a && b) { body } else { alt }
             # -> if (a) { if (b) { body } else { alt } } else { alt }
-            # This duplicates the else — skip for now, too complex
-            continue
+            alt_body = _get_else_body(alternative, source)
+            if alt_body is None:
+                continue
+
+            inner_if = (indent + b"    " + b"if (" + right_text + b") "
+                       + cons_text + b" else " + alt_body)
+            new_body = b"{\n" + inner_if + b"\n" + indent + b"}"
+
+            new_source = (
+                source[:condition.start_byte]
+                + b"(" + left_text + b")"
+                + source[condition.end_byte:consequence.start_byte]
+                + new_body
+                + b" else " + alt_body
+                + source[alternative.end_byte:]
+            )
 
         yield Variant(
             name=f"andsplit_{counter}",
@@ -146,9 +236,6 @@ def _merge_nested_ifs(
 
         if condition is None or consequence is None:
             continue
-        # Only merge when outer has no else
-        if alternative is not None:
-            continue
 
         # Check if consequence is { if (b) { body } } with nothing else
         inner_if = _get_sole_inner_if(consequence)
@@ -161,9 +248,6 @@ def _merge_nested_ifs(
 
         if inner_cond is None or inner_cons is None:
             continue
-        # Skip if inner has else
-        if inner_alt is not None:
-            continue
 
         outer_expr = _get_inner_expr(condition)
         inner_expr = _get_inner_expr(inner_cond)
@@ -174,14 +258,43 @@ def _merge_nested_ifs(
         inner_text = source[inner_expr.start_byte:inner_expr.end_byte]
         inner_cons_text = source[inner_cons.start_byte:inner_cons.end_byte]
 
-        # Merge: if (outer && inner) { inner_body }
-        new_source = (
-            source[:condition.start_byte]
-            + b"(" + outer_text + b" && " + inner_text + b")"
-            + source[condition.end_byte:consequence.start_byte]
-            + inner_cons_text
-            + source[consequence.end_byte:]
-        )
+        if inner_alt is not None:
+            # Inner has else — only merge if outer also has matching else
+            if alternative is None:
+                continue
+
+            inner_alt_body = _get_else_body(inner_alt, source)
+            outer_alt_body = _get_else_body(alternative, source)
+
+            if inner_alt_body is None or outer_alt_body is None:
+                continue
+
+            # Only merge if else bodies are identical (ignoring indentation)
+            if _normalize_ws(inner_alt_body) != _normalize_ws(outer_alt_body):
+                continue
+
+            # Merge: if (outer && inner) { inner_body } else { alt }
+            new_source = (
+                source[:condition.start_byte]
+                + b"(" + outer_text + b" && " + inner_text + b")"
+                + source[condition.end_byte:consequence.start_byte]
+                + inner_cons_text
+                + b" else " + outer_alt_body
+                + source[alternative.end_byte:]
+            )
+        else:
+            # Simple case: no else on either
+            if alternative is not None:
+                continue
+
+            # Merge: if (outer && inner) { inner_body }
+            new_source = (
+                source[:condition.start_byte]
+                + b"(" + outer_text + b" && " + inner_text + b")"
+                + source[condition.end_byte:consequence.start_byte]
+                + inner_cons_text
+                + source[consequence.end_byte:]
+            )
 
         yield Variant(
             name=f"andsplit_{counter}",
@@ -190,6 +303,19 @@ def _merge_nested_ifs(
             source=new_source,
         )
         counter += 1
+
+
+def _normalize_ws(text: bytes) -> bytes:
+    """Normalize whitespace for comparison: collapse runs of spaces/tabs/newlines."""
+    return b" ".join(text.split())
+
+
+def _get_else_body(alternative: Node, source: bytes) -> bytes | None:
+    """Extract the body (block or statement) from an else_clause node."""
+    for child in alternative.named_children:
+        if child.type != "comment":
+            return source[child.start_byte:child.end_byte]
+    return None
 
 
 def _get_inner_expr(condition: Node) -> Node | None:
@@ -209,3 +335,25 @@ def _get_sole_inner_if(compound_stmt: Node) -> Node | None:
     if len(stmts) == 1 and stmts[0].type == "if_statement":
         return stmts[0]
     return None
+
+
+def _count_consecutive_ifs(skeleton: list[str]) -> int:
+    """Count the longest run of consecutive 'if' entries in a CF skeleton."""
+    max_run = 0
+    current_run = 0
+    for item in skeleton:
+        if item == "if":
+            current_run += 1
+            max_run = max(max_run, current_run)
+        else:
+            current_run = 0
+    return max_run
+
+
+def _count_guard_return_pairs(skeleton: list[str]) -> int:
+    """Count 'if' immediately followed by 'return' (guard pattern)."""
+    count = 0
+    for i in range(len(skeleton) - 1):
+        if skeleton[i] == "if" and skeleton[i + 1] == "return":
+            count += 1
+    return count

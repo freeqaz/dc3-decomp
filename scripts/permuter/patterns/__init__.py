@@ -40,6 +40,7 @@ from . import float_double_literal  # noqa: F401  # Swap 0.001 <-> 0.001f litera
 from . import objptr_bool_extract  # noqa: F401  # Extract ObjPtr to raw ptr before && chains (cmpwi->cmplwi)
 from . import iterator_deref_style  # noqa: F401  # (*it).member <-> it->member
 from . import assignment_reorder  # noqa: F401  # Reorder consecutive assignment statements
+from . import statement_reorder  # noqa: F401  # Reorder independent statements within blocks
 from . import milo_str_conv  # noqa: F401  # Add .Str() to Symbol args in MILO macros
 from . import milo_call_merge  # noqa: F401  # Merge duplicate MILO calls via shared variable
 from . import prologue_pressure  # noqa: F401  # Manipulate callee-saved register count via pressure changes
@@ -47,6 +48,10 @@ from . import parameter_live_range  # noqa: F401  # Kill bs param live range aft
 from . import reference_elimination  # noqa: F401  # Eliminate multi-use ref/ptr vars (inverse of member_ref_bind)
 from . import subscript_ref_bind  # noqa: F401  # Bind repeated arr[i] to local ref (inverse of reference_elimination)
 from . import null_guard_elimination  # noqa: F401  # Remove redundant null checks (if (ptr) ptr->M() -> ptr->M())
+from . import varargs_cast  # noqa: F401  # Add (char *) casts to MILO macro varargs
+from . import bool_to_uchar  # noqa: F401  # Change bool locals to unsigned char
+from . import guard_to_nested  # noqa: F401  # Convert guard returns <-> nested if blocks
+from . import noinline_stub  # noqa: F401  # Mark trivial same-TU callees as __declspec(noinline)
 
 from .base import get_all_patterns, get_pattern, list_patterns
 

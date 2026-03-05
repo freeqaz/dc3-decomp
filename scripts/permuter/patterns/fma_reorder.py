@@ -69,6 +69,17 @@ class FmaReorderPattern(Pattern):
 
     def generate(self, ctx: FunctionContext) -> Iterator[Variant]:
         counter = 0
+
+        # Try Ghidra-guided generation first — produces fewer, better variants
+        ghidra_produced = False
+        if ctx.ghidra_ast is not None:
+            for variant in self._try_ghidra_guided(ctx, counter):
+                yield variant
+                counter += 1
+                ghidra_produced = True
+            if ghidra_produced:
+                return  # Skip blind generation when guided produced candidates
+
         for stmt in ctx.statements:
             for binop in _find_fma_candidates(stmt):
                 for variant in _generate_reorders(binop, ctx, counter):
@@ -78,6 +89,59 @@ class FmaReorderPattern(Pattern):
                 for variant in _generate_paren_expansions(binop, ctx, counter):
                     yield variant
                     counter += 1
+
+    def _try_ghidra_guided(
+        self, ctx: FunctionContext, start_counter: int
+    ) -> Iterator[Variant]:
+        """Generate expression variants guided by Ghidra's target structure.
+
+        Compares arithmetic expression structure between our source and
+        Ghidra's decompilation. When they differ structurally (e.g.
+        parenthesized vs flat), generates only the variant that matches
+        the target's structure.
+        """
+        import sys
+        from ..ghidra_expr_match import compare_arithmetic_expressions, is_flat_vs_paren
+
+        diffs = compare_arithmetic_expressions(
+            ctx.statements, ctx.file_source, ctx.ghidra_ast
+        )
+
+        if not diffs:
+            return
+
+        counter = start_counter
+        for diff in diffs:
+            # For flat-vs-paren diffs, use the existing expansion machinery
+            if is_flat_vs_paren(diff):
+                # The source node has parenthesized structure — expand it
+                src_node = diff.source_node
+                for variant in _generate_paren_expansions(src_node, ctx, counter):
+                    variant.name = f"ghidra_fma_{counter}"
+                    variant.description = (
+                        f"Ghidra-guided: {diff.source_structure} -> "
+                        f"{diff.target_structure}"
+                    )
+                    yield variant
+                    counter += 1
+            else:
+                # For other structural diffs (e.g. operand swap), try FMA reorders
+                src_node = diff.source_node
+                for variant in _generate_reorders(src_node, ctx, counter):
+                    variant.name = f"ghidra_fma_{counter}"
+                    variant.description = (
+                        f"Ghidra-guided: {diff.source_structure} -> "
+                        f"{diff.target_structure}"
+                    )
+                    yield variant
+                    counter += 1
+
+        if counter > start_counter:
+            print(
+                f"  Ghidra-guided FMA: {counter - start_counter} variant(s) "
+                f"from {len(diffs)} structural diff(s)",
+                file=sys.stderr,
+            )
 
 
 def _find_fma_candidates(node: Node) -> Iterator[Node]:

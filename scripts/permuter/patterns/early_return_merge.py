@@ -60,6 +60,14 @@ class EarlyReturnMergePattern(Pattern):
         source = ctx.file_source
         stmts = ctx.statements
 
+        # Ghidra-guided: only generate the direction(s) that match Ghidra's structure
+        if ctx.ghidra_ast is not None:
+            for variant in self._try_ghidra_guided(ctx, counter):
+                yield variant
+                counter += 1
+            if counter > 0:
+                return  # Ghidra guided produced candidates, skip blind
+
         # Direction 1: Merge consecutive guard returns into || chain
         for variant in _merge_guard_returns(stmts, source, counter):
             yield variant
@@ -79,6 +87,92 @@ class EarlyReturnMergePattern(Pattern):
         for variant in _conjunction_to_guard(stmts, source, counter):
             yield variant
             counter += 1
+
+    def _try_ghidra_guided(self, ctx: FunctionContext, start_counter: int) -> Iterator[Variant]:
+        """Generate only the direction(s) indicated by Ghidra's condition structure."""
+        from ..ghidra_ast import extract_condition_structure
+
+        tags = extract_condition_structure(ctx.ghidra_ast)
+
+        source = ctx.file_source
+        stmts = ctx.statements
+        counter = start_counter
+
+        has_conjunction = "conjunction" in tags
+        has_disjunction = "disjunction" in tags
+        has_guard_return = "guard_return" in tags
+        has_guard_false = "guard_return_false" in tags
+
+        # Check what the source currently has
+        source_has_guards = any(
+            _extract_guard_return(s, source) is not None for s in stmts
+        )
+        source_has_or_chain = any(
+            s.type == "if_statement" and _stmt_has_or_condition(s, source)
+            for s in stmts
+        )
+        source_has_and_return = any(
+            s.type == "return_statement" and _stmt_has_logical_return(s, source, b"&&")
+            for s in stmts
+        )
+        source_has_or_return = any(
+            s.type == "return_statement" and _stmt_has_logical_return(s, source, b"||")
+            for s in stmts
+        )
+
+        generated = False
+
+        if tags:
+            # Ghidra has conjunction + source has guard returns -> guard_to_conjunction
+            if has_conjunction and source_has_guards:
+                for variant in _guard_to_conjunction(stmts, source, counter):
+                    yield _tag_variant(variant, counter, "ghidra_retmerge")
+                    counter += 1
+                    generated = True
+
+            # Ghidra has guard_return + source has && return -> conjunction_to_guard
+            if has_guard_return and (source_has_and_return or source_has_or_return):
+                for variant in _conjunction_to_guard(stmts, source, counter):
+                    yield _tag_variant(variant, counter, "ghidra_retmerge")
+                    counter += 1
+                    generated = True
+
+            # Ghidra has disjunction + source has separate guards -> merge_guard_returns
+            if has_disjunction and source_has_guards and not source_has_or_chain:
+                for variant in _merge_guard_returns(stmts, source, counter):
+                    yield _tag_variant(variant, counter, "ghidra_retmerge")
+                    counter += 1
+                    generated = True
+
+            # Ghidra has separate guards + source has || chain -> split_guard_returns
+            if has_guard_return and not has_disjunction and source_has_or_chain:
+                for variant in _split_guard_returns(stmts, ctx, counter):
+                    yield _tag_variant(variant, counter, "ghidra_retmerge")
+                    counter += 1
+                    generated = True
+
+        # If no signal from condition_structure, try CF skeleton
+        if not generated:
+            from ..ghidra_ast import extract_control_flow_skeleton
+
+            skeleton = extract_control_flow_skeleton(ctx.ghidra_ast)
+            if skeleton:
+                guard_pairs = sum(
+                    1 for i in range(len(skeleton) - 1)
+                    if skeleton[i] == "if" and skeleton[i + 1] == "return"
+                )
+
+                # Ghidra shows guard pattern + source has || chains -> split
+                if guard_pairs >= 2 and source_has_or_chain:
+                    for variant in _split_guard_returns(stmts, ctx, counter):
+                        yield _tag_variant(variant, counter, "ghidra_skeleton")
+                        counter += 1
+
+                # Ghidra shows few guards + source has many guards -> merge
+                elif guard_pairs <= 1 and source_has_guards:
+                    for variant in _merge_guard_returns(stmts, source, counter):
+                        yield _tag_variant(variant, counter, "ghidra_skeleton")
+                        counter += 1
 
 
 def _merge_guard_returns(
@@ -428,3 +522,49 @@ def _get_return_value_node(ret_stmt: Node, source: bytes) -> bytes | None:
         if child.type != "comment":
             return source[child.start_byte:child.end_byte]
     return None
+
+
+def _stmt_has_or_condition(stmt: Node, source: bytes) -> bool:
+    """Check if an if_statement has a || in its condition."""
+    condition = stmt.child_by_field_name("condition")
+    if condition is None:
+        return False
+    inner = _get_inner_expr(condition)
+    if inner is None:
+        return False
+    return _node_has_op(inner, b"||")
+
+
+def _stmt_has_logical_return(stmt: Node, source: bytes, op: bytes) -> bool:
+    """Check if a return_statement returns a logical expression with the given operator."""
+    for child in stmt.named_children:
+        if child.type == "comment":
+            continue
+        if child.type == "binary_expression":
+            op_node = child.child_by_field_name("operator")
+            if op_node is not None and op_node.text == op:
+                return True
+        break
+    return False
+
+
+def _node_has_op(node: Node, op: bytes) -> bool:
+    """Check if node contains a binary expression with the given operator."""
+    if node.type == "binary_expression":
+        op_node = node.child_by_field_name("operator")
+        if op_node is not None and op_node.text == op:
+            return True
+    for child in node.children:
+        if _node_has_op(child, op):
+            return True
+    return False
+
+
+def _tag_variant(variant: Variant, counter: int, prefix: str) -> Variant:
+    """Re-tag a variant with a ghidra prefix."""
+    return Variant(
+        name=f"{prefix}_{counter}",
+        pattern_name=variant.pattern_name,
+        description=f"[ghidra] {variant.description}",
+        source=variant.source,
+    )

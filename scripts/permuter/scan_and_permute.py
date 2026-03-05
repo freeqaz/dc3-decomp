@@ -109,8 +109,32 @@ def parse_args() -> argparse.Namespace:
              "Functions in the same file run sequentially.",
     )
     parser.add_argument(
+        "--scan", action="store_true",
+        help="When listing patterns (no --patterns), scan codebase and show hit counts (~30s)",
+    )
+    parser.add_argument(
         "--json", action="store_true", dest="json_output",
         help="Output results as JSON",
+    )
+    parser.add_argument(
+        "--ghidra", action="store_true",
+        help="Enable Ghidra-guided patterns (lookup decomp.db cache)",
+    )
+    parser.add_argument(
+        "--constrained", action="store_true",
+        help="Enable constraint-directed synthesis pre-pass (implies --ghidra)",
+    )
+    parser.add_argument(
+        "--chain", action="store_true",
+        help="Enable N-stage pattern chains via beam search (implies --compose)",
+    )
+    parser.add_argument(
+        "--chain-depth", type=int, default=3,
+        help="Maximum chain depth for N-stage composition (default: 3)",
+    )
+    parser.add_argument(
+        "--adaptive", action="store_true",
+        help="Enable adaptive per-round pattern suppression/boosting",
     )
     return parser.parse_args()
 
@@ -187,37 +211,149 @@ def _get_pattern_description(pattern) -> str:
     return first_line
 
 
-def _print_pattern_table():
-    """Print a formatted table of all available patterns."""
+def _scan_all_counts(unit_glob: str | None = None) -> dict[str, int]:
+    """Run a quick AST scan of all patterns and return hit counts per pattern.
+
+    Uses SQLite cache keyed by file content hash — only re-scans changed files.
+    """
+    from .scan_cache import _get_conn, hash_file, get_cached, store_hits_batch
+
+    patterns = get_all_patterns()
+    pattern_names = [p.name for p in patterns]
+    files = _load_source_files(unit_glob)
+    match_info = _load_match_info()
+
+    conn = _get_conn()
+    counts: dict[str, int] = defaultdict(int)
+    cache_hits = 0
+    cache_misses = 0
+
+    # Batch pending writes for one commit at the end
+    pending_stores: list[tuple[str, str, list[tuple[str, int]]]] = []
+
+    for unit_name, source_path in files:
+        path = Path(source_path)
+        fhash = hash_file(path)
+        if fhash is None:
+            continue
+
+        # Check cache for ALL patterns at once
+        all_cached = True
+        cached_counts: dict[str, int] = {}
+        for pname in pattern_names:
+            cached = get_cached(conn, fhash, pname)
+            if cached is None:
+                all_cached = False
+                break
+            # Count functions with hits (not total variant count)
+            cached_counts[pname] = sum(1 for _, vc in cached if vc > 0)
+
+        if all_cached:
+            for pname, count in cached_counts.items():
+                counts[pname] += count
+            cache_hits += 1
+            continue
+
+        # Cache miss — scan the file
+        cache_misses += 1
+        hits = _scan_file(
+            path, patterns, unit_name,
+            match_info, show_variants=False,
+        )
+
+        # Group hits by pattern for caching
+        # Each ScanHit is one function×pattern — count unique functions per pattern
+        by_pattern: dict[str, list[tuple[str, int]]] = defaultdict(list)
+        seen: set[tuple[str, str]] = set()
+        for hit in hits:
+            by_pattern[hit.pattern_name].append(
+                (hit.function_name, hit.variant_count)
+            )
+            key = (hit.pattern_name, hit.function_name)
+            if key not in seen:
+                seen.add(key)
+                counts[hit.pattern_name] += 1
+
+        # Queue for batch write
+        for pname in pattern_names:
+            pending_stores.append((fhash, pname, by_pattern.get(pname, [])))
+
+    # Single transaction for all cache writes
+    if pending_stores:
+        store_hits_batch(conn, pending_stores)
+
+    conn.close()
+
+    if cache_hits > 0 or cache_misses > 0:
+        print(
+            f"  Cache: {cache_hits} hit, {cache_misses} miss "
+            f"({len(files)} files)",
+            file=sys.stderr,
+        )
+
+    return dict(counts)
+
+
+def _print_pattern_table(counts: dict[str, int] | None = None):
+    """Print a formatted table of all available patterns.
+
+    Args:
+        counts: Optional dict of pattern_name -> hit count from a scan.
+    """
     patterns = sorted(get_all_patterns(), key=lambda p: p.name)
+    has_counts = counts is not None
 
     # Gather data
     rows = []
     for p in patterns:
         desc = _get_pattern_description(p)
-        rows.append((p.name, desc))
+        rows.append((p.name, desc, counts.get(p.name, 0) if has_counts else 0))
+
+    # Sort by hit count descending when counts are available
+    if has_counts:
+        rows.sort(key=lambda r: (-r[2], r[0]))
 
     # Column widths
     name_w = max(len(r[0]) for r in rows)
     desc_w = max(len(r[1]) for r in rows)
-    total_w = name_w + 3 + desc_w  # 3 for " | " separator
 
-    # Header
-    print(f"\n{'=' * (total_w + 4)}")
-    print(f"  AVAILABLE PATTERNS ({len(rows)})")
-    print(f"{'=' * (total_w + 4)}")
-    print(f"  {'Pattern':<{name_w}} | Description")
-    print(f"  {'─' * name_w}─┼─{'─' * desc_w}")
+    if has_counts:
+        hits_w = max(len(str(r[2])) for r in rows)
+        hits_w = max(hits_w, 4)  # "Hits" header
 
-    # Rows
-    for name, desc in rows:
-        print(f"  {name:<{name_w}} | {desc}")
+        # Header
+        total_w = name_w + 3 + hits_w + 3 + desc_w
+        print(f"\n{'=' * (total_w + 4)}")
+        print(f"  AVAILABLE PATTERNS ({len(rows)}) — "
+              f"{sum(r[2] for r in rows):,} total hits across codebase")
+        print(f"{'=' * (total_w + 4)}")
+        print(f"  {'Pattern':<{name_w}} | {'Hits':>{hits_w}} | Description")
+        print(f"  {'─' * name_w}─┼─{'─' * hits_w}─┼─{'─' * desc_w}")
 
-    print(f"  {'─' * name_w}─┴─{'─' * desc_w}")
+        for name, desc, count in rows:
+            count_str = f"{count:>{hits_w},}" if count > 0 else f"{'—':>{hits_w}}"
+            print(f"  {name:<{name_w}} | {count_str} | {desc}")
+
+        print(f"  {'─' * name_w}─┴─{'─' * hits_w}─┴─{'─' * desc_w}")
+    else:
+        total_w = name_w + 3 + desc_w
+        print(f"\n{'=' * (total_w + 4)}")
+        print(f"  AVAILABLE PATTERNS ({len(rows)})")
+        print(f"{'=' * (total_w + 4)}")
+        print(f"  {'Pattern':<{name_w}} | Description")
+        print(f"  {'─' * name_w}─┼─{'─' * desc_w}")
+
+        for name, desc, _ in rows:
+            print(f"  {name:<{name_w}} | {desc}")
+
+        print(f"  {'─' * name_w}─┴─{'─' * desc_w}")
+
     print(f"\nUsage: python -m scripts.permuter.scan_and_permute "
           f"--patterns <name>[,<name>,...] [options]")
     print(f"       python -m scripts.permuter.scan_and_permute "
           f"--patterns all [options]")
+    if not has_counts:
+        print(f"\nTip: add --scan to show hit counts per pattern (~30s)")
 
 
 def _climb_one(
@@ -261,6 +397,10 @@ def _climb_one(
             plateau_limit=args.plateau_limit,
             compose=args.compose,
             apply=not args.no_apply,
+            ghidra=getattr(args, "ghidra", False),
+            chain=getattr(args, "chain", False),
+            chain_depth=getattr(args, "chain_depth", 3),
+            adaptive=getattr(args, "adaptive", False),
         )
         delta = result.final_percent - result.initial_percent
         if delta > 0:
@@ -278,6 +418,7 @@ def _climb_one(
             "delta": delta,
             "patterns": candidate["patterns"],
             "error": None,
+            "ghidra_stats": result.ghidra_stats,
         }
     except Exception as e:
         print(f"  ERROR: {e}", file=sys.stderr)
@@ -329,6 +470,12 @@ def _accumulate_result(stats: dict, result: dict):
     elif result["delta"] <= 0:
         stats["no_change"] += 1
 
+    # Accumulate Ghidra batch stats
+    ghidra_batch = stats.get("ghidra_batch")
+    ghidra_run = result.get("ghidra_stats")
+    if ghidra_batch and ghidra_run:
+        ghidra_batch.accumulate(ghidra_run, result["delta"])
+
 
 def main():
     args = parse_args()
@@ -336,7 +483,13 @@ def main():
 
     # No patterns specified — show table and exit
     if not args.patterns:
-        _print_pattern_table()
+        counts = None
+        if args.scan:
+            print("Scanning codebase for all patterns...", file=sys.stderr)
+            scan_start = time.time()
+            counts = _scan_all_counts(args.unit)
+            print(f"  Done in {time.time() - scan_start:.1f}s", file=sys.stderr)
+        _print_pattern_table(counts)
         sys.exit(0)
 
     # Validate patterns
@@ -434,6 +587,12 @@ def main():
     )
     climb_start = time.time()
 
+    # Initialize Ghidra batch stats if enabled
+    ghidra_batch = None
+    if getattr(args, "ghidra", False):
+        from .ghidra_stats import GhidraBatchStats
+        ghidra_batch = GhidraBatchStats()
+
     stats = {
         "total": len(candidates),
         "processed": 0,
@@ -443,6 +602,7 @@ def main():
         "errors": 0,
         "total_delta": 0.0,
         "improvements": [],
+        "ghidra_batch": ghidra_batch,
     }
 
     if args.jobs <= 1:
@@ -505,7 +665,29 @@ def main():
     print(f"  Errors: {stats['errors']}", file=sys.stderr)
     print(f"  Total time: {total_elapsed:.1f}s", file=sys.stderr)
 
+    # Ghidra stats summary
+    if ghidra_batch:
+        for line in ghidra_batch.summary_lines():
+            print(line, file=sys.stderr)
+
     if args.json_output:
+        # Strip non-serializable fields before JSON output
+        json_stats = {k: v for k, v in stats.items() if k != "ghidra_batch"}
+        # Strip ghidra_stats from improvements (not serializable)
+        for imp in json_stats.get("improvements", []):
+            imp.pop("ghidra_stats", None)
+        ghidra_json = {}
+        if ghidra_batch and ghidra_batch.functions_with_ghidra > 0:
+            ghidra_json = {
+                "functions_total": ghidra_batch.functions_total,
+                "functions_with_ghidra": ghidra_batch.functions_with_ghidra,
+                "functions_with_ghidra_variants": ghidra_batch.functions_with_ghidra_variants,
+                "functions_with_ghidra_wins": ghidra_batch.functions_with_ghidra_wins,
+                "total_ghidra_variants": ghidra_batch.total_ghidra_variants,
+                "total_variants": ghidra_batch.total_variants,
+                "total_delta_ghidra": round(ghidra_batch.total_delta_ghidra, 4),
+                "total_delta_other": round(ghidra_batch.total_delta_other, 4),
+            }
         output = {
             "scan": {
                 "patterns": pattern_names,
@@ -513,7 +695,8 @@ def main():
                 "hits": len(all_hits),
                 "resolved": len(candidates),
             },
-            "climb": stats,
+            "climb": json_stats,
+            "ghidra": ghidra_json,
             "elapsed_seconds": round(total_elapsed, 2),
         }
         print(json.dumps(output, indent=2))
@@ -521,9 +704,13 @@ def main():
     if stats["improvements"]:
         print(f"\nImprovements:", file=sys.stderr)
         for imp in stats["improvements"]:
+            ghidra_tag = ""
+            gs = imp.get("ghidra_stats")
+            if gs and gs.ghidra_winner:
+                ghidra_tag = " [GHIDRA]"
             print(
                 f"  {imp['function']}: {imp['initial']:.1f}% -> {imp['final']:.1f}% "
-                f"(+{imp['delta']:.1f}%) via {', '.join(imp['patterns'])}",
+                f"(+{imp['delta']:.1f}%) via {', '.join(imp['patterns'])}{ghidra_tag}",
                 file=sys.stderr,
             )
 

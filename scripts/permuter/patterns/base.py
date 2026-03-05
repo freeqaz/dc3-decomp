@@ -14,9 +14,12 @@ class Pattern(ABC):
     """Base class for source transformation patterns.
 
     Subclasses are auto-registered by their `name` attribute via __init_subclass__.
+    Set ``opt_in = True`` on patterns that should only run when explicitly requested
+    via ``--patterns``, not in default batch sweeps.
     """
 
     name: str = ""
+    opt_in: bool = False
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
@@ -57,11 +60,23 @@ def get_pattern(name: str) -> Pattern:
     return _REGISTRY[name]
 
 
-def get_all_patterns() -> list[Pattern]:
-    """Return all registered patterns."""
-    return list(_REGISTRY.values())
+def get_all_patterns(include_opt_in: bool = False) -> list[Pattern]:
+    """Return all registered patterns.
+
+    By default, excludes opt-in patterns (those with ``opt_in = True``).
+    Pass ``include_opt_in=True`` to include them.
+    """
+    if include_opt_in:
+        return list(_REGISTRY.values())
+    return [p for p in _REGISTRY.values() if not p.opt_in]
 
 
-def list_patterns() -> list[str]:
-    """Return names of all registered patterns."""
-    return sorted(_REGISTRY.keys())
+def list_patterns(include_opt_in: bool = False) -> list[str]:
+    """Return names of all registered patterns.
+
+    By default, excludes opt-in patterns. Pass ``include_opt_in=True``
+    to include them (e.g. for ``--patterns all`` or ``--patterns noinline_stub``).
+    """
+    if include_opt_in:
+        return sorted(_REGISTRY.keys())
+    return sorted(k for k, v in _REGISTRY.items() if not v.opt_in)

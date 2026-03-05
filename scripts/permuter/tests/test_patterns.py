@@ -913,6 +913,66 @@ void test_func(int a, int b) {
 """,
     ),
 
+    PatternFixture(
+        id="andsplit_with_else_split",
+        pattern_name="and_split",
+        description="Split if (a && b) { body } else { alt } into nested ifs with duplicated else",
+        func_name="test_func",
+        diagnosis=diag_with_branch_and_clusters(),
+        seeded_source="""\
+void test_func(int a, int b) {
+    if (a > 0 && b > 0) {
+        foo();
+    } else {
+        bar();
+    }
+}
+""",
+        expected_source="""\
+void test_func(int a, int b) {
+    if (a > 0) {
+        if (b > 0) {
+            foo();
+        } else {
+            bar();
+        }
+    } else {
+        bar();
+    }
+}
+""",
+    ),
+
+    PatternFixture(
+        id="andsplit_with_else_merge",
+        pattern_name="and_split",
+        description="Merge nested ifs with matching else blocks into && with else",
+        func_name="test_func",
+        diagnosis=diag_with_branch_and_clusters(),
+        seeded_source="""\
+void test_func(int a, int b) {
+    if (a > 0) {
+        if (b > 0) {
+            foo();
+        } else {
+            bar();
+        }
+    } else {
+        bar();
+    }
+}
+""",
+        expected_source="""\
+void test_func(int a, int b) {
+    if (a > 0 && b > 0) {
+        foo();
+    } else {
+        bar();
+    }
+}
+""",
+    ),
+
     # ===================== bool_cast =====================
 
     PatternFixture(
@@ -2266,6 +2326,237 @@ bool test_func() {
 IsFading() || TheMetaMusic->IsActive() || IsExiting()
 """,
     ),
+
+    # ===================== varargs_cast =====================
+
+    PatternFixture(
+        id="varargs_cast_name_to_charptr",
+        pattern_name="varargs_cast",
+        description="Add (char *) cast to Name() in MILO_NOTIFY",
+        func_name="test_func",
+        diagnosis=diag_with_bl_mismatch(),
+        seeded_source="""\
+void test_func() {
+    MILO_NOTIFY("Keyframes in %s are out of order.", Name());
+}
+""",
+        expected_source="""\
+void test_func() {
+    MILO_NOTIFY("Keyframes in %s are out of order.", (char *)Name());
+}
+""",
+    ),
+
+    PatternFixture(
+        id="varargs_cast_filepath_to_string_ref",
+        pattern_name="varargs_cast",
+        description="Add (String &) cast to fp in MILO_NOTIFY",
+        func_name="test_func",
+        diagnosis=diag_with_bl_mismatch(),
+        seeded_source="""\
+void test_func() {
+    MILO_NOTIFY("won't load %s", fp);
+}
+""",
+        expected_source="""\
+void test_func() {
+    MILO_NOTIFY("won't load %s", (String &)fp);
+}
+""",
+    ),
+
+    # ===================== bool_to_uchar =====================
+
+    PatternFixture(
+        id="bool_to_uchar_simple",
+        pattern_name="bool_to_uchar",
+        description="bool skip=false + skip=true -> unsigned char skip=0 + skip=1",
+        func_name="test_func",
+        diagnosis=diag_with_cmp_ops(),
+        seeded_source="""\
+void test_func(int cond) {
+    bool skip = false;
+    if (cond) {
+        skip = true;
+    }
+    return skip;
+}
+""",
+        expected_source="""\
+void test_func(int cond) {
+    unsigned char skip = 0;
+    if (cond) {
+        skip = 1;
+    }
+    return skip;
+}
+""",
+    ),
+
+    PatternFixture(
+        id="bool_to_uchar_expr_init",
+        pattern_name="bool_to_uchar",
+        description="bool result = expr -> unsigned char result = (unsigned char)(expr)",
+        func_name="test_func",
+        diagnosis=diag_with_cmp_ops(),
+        seeded_source="""\
+void test_func(int a, int b) {
+    bool result = a > b;
+    return result;
+}
+""",
+        expected_source="""\
+void test_func(int a, int b) {
+    unsigned char result = (unsigned char)(a > b);
+    return result;
+}
+""",
+    ),
+
+    # ===================== guard_to_nested =====================
+
+    PatternFixture(
+        id="guard_to_nested_basic",
+        pattern_name="guard_to_nested",
+        description="Two void guards to nested if blocks",
+        func_name="test_func",
+        diagnosis=diag_with_branch_and_clusters(),
+        seeded_source="""\
+void test_func(int *a, int *b) {
+    if (!a) return;
+    if (!b) return;
+    a[0] = b[0];
+}
+""",
+        expected_source="""\
+void test_func(int *a, int *b) {
+    if (a) {
+        if (b) {
+            a[0] = b[0];
+        }
+    }
+}
+""",
+    ),
+
+    PatternFixture(
+        id="guard_to_nested_with_value",
+        pattern_name="guard_to_nested",
+        description="Guards returning false to nested if with else",
+        func_name="test_func",
+        diagnosis=diag_with_branch_and_clusters(),
+        seeded_source="""\
+bool test_func(int *a, int *b) {
+    if (!a) return false;
+    if (!b) return false;
+    return a[0] == b[0];
+}
+""",
+        expected_source="""\
+bool test_func(int *a, int *b) {
+    if (a) {
+        if (b) {
+            return a[0] == b[0];
+        } else return false;
+    } else return false;
+}
+""",
+    ),
+
+    PatternFixture(
+        id="nested_to_guard_basic",
+        pattern_name="guard_to_nested",
+        description="Nested if blocks to guard returns (reverse)",
+        func_name="test_func",
+        diagnosis=diag_with_branch_and_clusters(),
+        seeded_source="""\
+void test_func(int *a, int *b) {
+    if (a) {
+        if (b) {
+            a[0] = b[0];
+        }
+    }
+}
+""",
+        expected_source="""\
+void test_func(int *a, int *b) {
+    if (!a) return;
+    if (!b) return;
+    a[0] = b[0];
+}
+""",
+    ),
+
+    # ===================== statement_reorder =====================
+
+    PatternFixture(
+        id="stmt_reorder_assignment_past_guard",
+        pattern_name="statement_reorder",
+        description="Move assignment past independent if-guard",
+        func_name="test_func",
+        diagnosis=diag_with_clusters(),
+        match_mode="contains",
+        seeded_source="""\
+void test_func(float w, float x) {
+    w = 0.0f;
+    if (x < 0.0f)
+        printf("bad x");
+}
+""",
+        expected_source="""\
+void test_func(float w, float x) {
+    if (x < 0.0f)
+        printf("bad x");
+    w = 0.0f;
+}
+""",
+    ),
+
+    PatternFixture(
+        id="stmt_reorder_blocks_dependent",
+        pattern_name="statement_reorder",
+        description="Dependent statements produce no swap of a=5 and b=a+1 but swap independent pair",
+        func_name="test_func",
+        diagnosis=diag_with_clusters(),
+        match_mode="contains",
+        seeded_source="""\
+void test_func(int a, int x) {
+    a = 5;
+    int b = a + 1;
+    x = 99;
+}
+""",
+        expected_source="""\
+void test_func(int a, int x) {
+    a = 5;
+    x = 99;
+    int b = a + 1;
+}
+""",
+    ),
+
+    PatternFixture(
+        id="stmt_reorder_three_statements",
+        pattern_name="statement_reorder",
+        description="Swap adjacent independent assignments (3 statements)",
+        func_name="test_func",
+        diagnosis=diag_with_offset_deltas(),
+        match_mode="contains",
+        seeded_source="""\
+void test_func(int x, int y, int z) {
+    x = 1;
+    y = 2;
+    z = 3;
+}
+""",
+        expected_source="""\
+void test_func(int x, int y, int z) {
+    y = 2;
+    x = 1;
+    z = 3;
+}
+""",
+    ),
 ]
 
 # Build lookup by ID
@@ -2450,6 +2741,139 @@ class TestPatternRelevance(unittest.TestCase):
     def test_null_guard_irrelevant_empty(self):
         p = get_pattern("null_guard_elimination")
         self.assertFalse(p.relevant(_empty_diag()))
+
+
+# ---------------------------------------------------------------------------
+# Ghidra-guided null guard tests
+# ---------------------------------------------------------------------------
+
+def make_ghidra_context(source_text, func_name, diagnosis, ghidra_code):
+    """Make a FunctionContext with ghidra_ast populated."""
+    from scripts.permuter.ghidra_ast import parse_ghidra
+    ctx = make_context(source_text, func_name, diagnosis)
+    ctx.ghidra_ast = parse_ghidra(ghidra_code)
+    ctx.ghidra_code = ghidra_code
+    return ctx
+
+
+class TestNullGuardGhidraGuided(unittest.TestCase):
+    """Test Ghidra-guided null guard elimination."""
+
+    def test_null_guard_ghidra_guided_removes_absent(self):
+        """Ghidra shows no null check -> remove guard."""
+        source = '''
+void test_func() {
+    if (TheMetaMusic)
+        TheMetaMusic->AddFader(fader);
+}
+'''
+        # Ghidra code has no null check
+        ghidra_code = '''
+void test_func(void) {
+    FUN_12345678(TheMetaMusic, fader);
+}
+'''
+        ctx = make_ghidra_context(source, "test_func", diag_with_branch_and_clusters(), ghidra_code)
+        pattern = get_pattern("null_guard_elimination")
+        variants = list(pattern.generate(ctx))
+        self.assertGreater(len(variants), 0)
+        self.assertTrue(any("ghidra" in v.name for v in variants))
+        # Verify the guard was removed
+        self.assertTrue(any(
+            b"TheMetaMusic->AddFader(fader);" in v.source and
+            b"if (TheMetaMusic)" not in v.source for v in variants
+        ))
+
+    def test_null_guard_ghidra_keeps_present(self):
+        """Ghidra shows null check present -> don't remove."""
+        source = '''
+void test_func() {
+    if (TheMetaMusic)
+        TheMetaMusic->AddFader(fader);
+}
+'''
+        # Ghidra code ALSO has null check
+        ghidra_code = '''
+void test_func(void) {
+    if (TheMetaMusic != (MetaMusic *)0x0) {
+        FUN_12345678(TheMetaMusic, fader);
+    }
+}
+'''
+        ctx = make_ghidra_context(source, "test_func", diag_with_branch_and_clusters(), ghidra_code)
+        pattern = get_pattern("null_guard_elimination")
+        variants = list(pattern.generate(ctx))
+        # Should produce no ghidra-guided variants (guard exists in target too)
+        ghidra_variants = [v for v in variants if "ghidra" in v.name]
+        self.assertEqual(len(ghidra_variants), 0)
+
+    def test_null_guard_ghidra_and_operand_removes_absent(self):
+        """Ghidra has no null check in && -> drop the leading operand."""
+        source = '''
+void test_func(int sHamMaster) {
+    if (TheMetaMusic && sHamMaster) {
+        DoSomething();
+    }
+}
+'''
+        # Ghidra just checks sHamMaster, no null check on TheMetaMusic
+        ghidra_code = '''
+void test_func(int param_1) {
+    if (param_1 != 0) {
+        FUN_12345678();
+    }
+}
+'''
+        ctx = make_ghidra_context(source, "test_func", diag_with_branch_and_clusters(), ghidra_code)
+        pattern = get_pattern("null_guard_elimination")
+        variants = list(pattern.generate(ctx))
+        ghidra_variants = [v for v in variants if "ghidra" in v.name]
+        self.assertGreater(len(ghidra_variants), 0)
+
+    def test_null_guard_ghidra_implicit_check_keeps(self):
+        """Ghidra has implicit null check (if (var)) -> don't remove."""
+        source = '''
+void test_func() {
+    if (TheMetaMusic)
+        TheMetaMusic->Stop();
+}
+'''
+        # Ghidra also has the check implicitly
+        ghidra_code = '''
+void test_func(void) {
+    if (TheMetaMusic) {
+        FUN_12345678(TheMetaMusic);
+    }
+}
+'''
+        ctx = make_ghidra_context(source, "test_func", diag_with_branch_and_clusters(), ghidra_code)
+        pattern = get_pattern("null_guard_elimination")
+        variants = list(pattern.generate(ctx))
+        ghidra_variants = [v for v in variants if "ghidra" in v.name]
+        self.assertEqual(len(ghidra_variants), 0)
+
+    def test_null_guard_ghidra_falls_back_to_blind(self):
+        """When Ghidra produces no candidates, fall through to blind mode."""
+        source = '''
+void test_func() {
+    if (TheMetaMusic)
+        TheMetaMusic->Stop();
+}
+'''
+        # Ghidra also has the null check -> no ghidra candidates -> blind mode runs
+        ghidra_code = '''
+void test_func(void) {
+    if (TheMetaMusic != (MetaMusic *)0x0) {
+        FUN_12345678(TheMetaMusic);
+    }
+}
+'''
+        ctx = make_ghidra_context(source, "test_func", diag_with_branch_and_clusters(), ghidra_code)
+        pattern = get_pattern("null_guard_elimination")
+        variants = list(pattern.generate(ctx))
+        # Blind mode should still produce variants (non-ghidra)
+        blind_variants = [v for v in variants if "ghidra" not in v.name]
+        self.assertGreater(len(blind_variants), 0)
 
 
 # ---------------------------------------------------------------------------
@@ -4116,6 +4540,163 @@ class TestParseAsmListing(unittest.TestCase):
         regmap = parse_asm_listing(listing, "TestFunc")
         self.assertIsNotNone(regmap)
         self.assertEqual(regmap.callee_saved_count, 2)
+
+
+# ---------------------------------------------------------------------------
+# Ghidra CF skeleton-guided pattern tests
+# ---------------------------------------------------------------------------
+
+def _make_ghidra_context(source_text: str, func_name: str,
+                         diagnosis: Diagnosis, ghidra_code: str) -> FunctionContext:
+    """Build a FunctionContext with ghidra_ast populated from Ghidra code."""
+    from scripts.permuter.ghidra_ast import parse_ghidra
+
+    ctx = make_context(source_text, func_name, diagnosis)
+    ghidra_ast = parse_ghidra(ghidra_code)
+    ctx.ghidra_ast = ghidra_ast
+    ctx.ghidra_code = ghidra_code
+    return ctx
+
+
+class TestAndSplitSkeletonGuided(unittest.TestCase):
+    """Test that and_split uses CF skeleton when condition_structure is ambiguous."""
+
+    def test_skeleton_nested_ifs_triggers_split(self):
+        """Source has &&, Ghidra shows nested ifs -> should try split."""
+        source = textwrap.dedent("""\
+        void test_func(int *a, int *b) {
+            if (a && b) {
+                a[0] = b[0];
+            }
+        }
+        """)
+        # Ghidra code with both conjunction AND nested_if (ambiguous for
+        # condition_structure -> falls through to skeleton).
+        # Skeleton: ['if', 'if', 'if'] — consecutive ifs >= 2 -> split
+        ghidra_code = textwrap.dedent("""\
+        void test_func(int *a, int *b) {
+            if (a != 0 && b != 0) {
+                if (a != 0) {
+                    if (b != 0) {
+                        *a = *b;
+                    }
+                }
+            }
+        }
+        """)
+        ctx = _make_ghidra_context(source, "test_func",
+                                   diag_with_branch_and_clusters(), ghidra_code)
+        pattern = get_pattern("and_split")
+        variants = list(pattern.generate(ctx))
+        self.assertGreater(len(variants), 0,
+                           "Should produce variants when skeleton shows nested ifs")
+        has_ghidra = any("ghidra" in v.name or "ghidra" in v.description.lower()
+                         for v in variants)
+        self.assertTrue(has_ghidra,
+                        "At least one variant should be ghidra-tagged")
+
+    def test_skeleton_no_signal_falls_through(self):
+        """When skeleton has no useful signal, should fall through to blind mode."""
+        source = textwrap.dedent("""\
+        void test_func(int x) {
+            if (x > 0) {
+                x = x + 1;
+            }
+        }
+        """)
+        # Ghidra code also simple — skeleton is just ['if'], no consecutive ifs
+        ghidra_code = textwrap.dedent("""\
+        void test_func(int x) {
+            if (x > 0) {
+                x = x + 1;
+            }
+        }
+        """)
+        ctx = _make_ghidra_context(source, "test_func",
+                                   diag_with_branch_and_clusters(), ghidra_code)
+        pattern = get_pattern("and_split")
+        # Should not crash
+        variants = list(pattern.generate(ctx))
+        # Fine either way — just shouldn't crash
+
+
+class TestEarlyReturnMergeSkeletonGuided(unittest.TestCase):
+    """Test that early_return_merge uses CF skeleton when condition_structure is empty."""
+
+    def test_skeleton_guard_pairs_triggers_split(self):
+        """Source has || chain, Ghidra shows guard returns -> should split."""
+        source = textwrap.dedent("""\
+        int test_func(int a, int b) {
+            if (a < 0 || b < 0)
+                return 0;
+            return a + b;
+        }
+        """)
+        # Ghidra with separate guard returns
+        ghidra_code = textwrap.dedent("""\
+        int test_func(int a, int b) {
+            if (a < 0)
+                return 0;
+            if (b < 0)
+                return 0;
+            return a + b;
+        }
+        """)
+        ctx = _make_ghidra_context(source, "test_func",
+                                   diag_with_branch_and_clusters(), ghidra_code)
+        pattern = get_pattern("early_return_merge")
+        variants = list(pattern.generate(ctx))
+        self.assertGreater(len(variants), 0,
+                           "Should produce variants for guard return split")
+
+    def test_skeleton_few_guards_triggers_merge(self):
+        """Source has guard returns, Ghidra shows few guards -> skeleton merge."""
+        source = textwrap.dedent("""\
+        int test_func(int a, int b) {
+            if (a < 0)
+                return 0;
+            if (b < 0)
+                return 0;
+            return a + b;
+        }
+        """)
+        # Ghidra code with NO guard returns, no conjunction/disjunction
+        # -> condition_structure returns empty -> skeleton fallback
+        # Skeleton: ['return'] (just a return, guard_pairs=0 <=1)
+        # source_has_guards=True -> merge
+        ghidra_code = textwrap.dedent("""\
+        int test_func(int a, int b) {
+            int result;
+            result = a + b;
+            return result;
+        }
+        """)
+        ctx = _make_ghidra_context(source, "test_func",
+                                   diag_with_branch_and_clusters(), ghidra_code)
+        pattern = get_pattern("early_return_merge")
+        variants = list(pattern.generate(ctx))
+        skeleton_variants = [v for v in variants if "skeleton" in v.name]
+        self.assertGreater(len(skeleton_variants), 0,
+                           "Should produce skeleton-guided merge variants")
+
+
+class TestAndSplitHelpers(unittest.TestCase):
+    """Test the _count_consecutive_ifs and _count_guard_return_pairs helpers."""
+
+    def test_count_consecutive_ifs_basic(self):
+        from scripts.permuter.patterns.and_split import _count_consecutive_ifs
+        self.assertEqual(_count_consecutive_ifs(["if", "if", "return"]), 2)
+        self.assertEqual(_count_consecutive_ifs(["if", "return", "if", "return"]), 1)
+        self.assertEqual(_count_consecutive_ifs(["if", "if", "if"]), 3)
+        self.assertEqual(_count_consecutive_ifs([]), 0)
+        self.assertEqual(_count_consecutive_ifs(["return"]), 0)
+
+    def test_count_guard_return_pairs_basic(self):
+        from scripts.permuter.patterns.and_split import _count_guard_return_pairs
+        self.assertEqual(_count_guard_return_pairs(["if", "return", "if", "return"]), 2)
+        self.assertEqual(_count_guard_return_pairs(["if", "if", "return"]), 1)
+        self.assertEqual(_count_guard_return_pairs(["if", "else", "return"]), 0)
+        self.assertEqual(_count_guard_return_pairs([]), 0)
 
 
 if __name__ == "__main__":

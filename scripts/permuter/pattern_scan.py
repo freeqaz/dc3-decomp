@@ -111,6 +111,10 @@ def parse_args() -> argparse.Namespace:
         "--limit", type=int, default=0,
         help="Max hits to report (0 = unlimited)",
     )
+    parser.add_argument(
+        "--scan", action="store_true",
+        help="When listing patterns (no --patterns), scan codebase and show hit counts (~30s)",
+    )
     return parser.parse_args()
 
 
@@ -239,8 +243,14 @@ def main():
 
     # No patterns specified — show available and exit
     if not args.patterns:
-        from .scan_and_permute import _print_pattern_table
-        _print_pattern_table()
+        from .scan_and_permute import _print_pattern_table, _scan_all_counts
+        counts = None
+        if getattr(args, 'scan', False):
+            print("Scanning codebase for all patterns...", file=sys.stderr)
+            scan_start = time.time()
+            counts = _scan_all_counts(args.unit)
+            print(f"  Done in {time.time() - scan_start:.1f}s", file=sys.stderr)
+        _print_pattern_table(counts)
         sys.exit(0)
 
     # Parse pattern names
