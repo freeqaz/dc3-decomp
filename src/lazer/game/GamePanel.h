@@ -43,6 +43,7 @@ public:
 
     DataNode OnGetFitnessData(const DataArray *);
     bool IsGameOver() const { return mState == kGameOver; }
+    bool Unkf8() const { return unkf8; }
 
 private:
     void CreateGame();

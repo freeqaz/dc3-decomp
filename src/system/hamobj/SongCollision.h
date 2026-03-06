@@ -16,7 +16,19 @@ struct BeatCollisionData {
     Vector3 mOffset; // 0x8
 };
 
-struct SongCollisionOutput {};
+struct SongCollisionOutput {
+    // 6 padded-to-16 Vector3 entries (stride 0x10)
+    // [0] minBone player 0, [1] minBone player 1
+    // [2] maxBone player 0, [3] maxBone player 1
+    // [4] displacement player 0, [5] displacement player 1
+    float boneData[24]; // 0x00-0x5F (6 groups of 4 floats)
+
+    // 2 world transforms padded to 0x40 each
+    char xfmData[0x80]; // 0x60-0xDF
+
+    bool collisionDetected; // 0xE0
+    char _padE1[3]; // 0xE1-0xE3
+};
 
 /** "Contains data for handling potential character collisions" */
 class SongCollision : public Hmx::Object {

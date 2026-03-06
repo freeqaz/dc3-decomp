@@ -27,6 +27,7 @@
 #include "os/System.h"
 #include "rndobj/Anim.h"
 #include "rndobj/Draw.h"
+#include "rndobj/Mat.h"
 #include "rndobj/TexBlender.h"
 #include "rndobj/Trans.h"
 #include "synth/Sound.h"
@@ -36,6 +37,8 @@
 #include "utl/FilePath.h"
 #include "utl/Loader.h"
 #include "utl/Symbol.h"
+
+extern "C" char *_strlwr(char *);
 
 namespace {
     const char *kCrewCardMeshName = "crew_card.mesh";
@@ -715,9 +718,87 @@ DataNode HamCharacter::OnSoundPlay(const DataArray *a) {
 QuatXfm::QuatXfm(const Transform &t) : v(t.v) { q.Set(t.m); }
 #endif
 
-#ifdef HX_NATIVE
-// TODO: real implementation clears a list
-void HamCharacter::Poll() {}
-#endif
+void HamCharacter::Poll() {
+    int skelAnim = SongAnimation();
+    if (skelAnim == -1 || InClipTest()) {
+        if (mDriver) {
+            mDriver->SetWeight(1.0f);
+        }
+    } else {
+        if (mDriver) {
+            mDriver->SetWeight(0.0f);
+        }
+    }
+    bool wasShowing = mShowing;
+    if (!wasShowing && mPollWhenHidden) {
+        RndDrawable::SetShowing(true);
+    }
+    Character::Poll();
+    RndDrawable::SetShowing(wasShowing);
+
+    RndTransformable *boneProp = Find<RndTransformable>("bone_prop0.mesh", false);
+    if (boneProp) {
+        RndTransformable *spotProp = Find<RndTransformable>("spot_prop0.mesh", false);
+        if (spotProp) {
+            int propSkelAnim = SongAnimation();
+            float propWeight;
+            if (propSkelAnim != -1) {
+                propWeight = 0.0f;
+            } else if (mDriver->First()) {
+                propWeight = mDriver->EvaluateFlags(2);
+            } else {
+                propWeight = 1.0f;
+            }
+            QuatXfm boneQxfm(boneProp->WorldXfm());
+            QuatXfm spotQxfm(spotProp->WorldXfm());
+            Vector3 interpPos;
+            Hmx::Quat interpRot;
+            Interp(spotQxfm.v, boneQxfm.v, propWeight, interpPos);
+            Interp(spotQxfm.q, boneQxfm.q, propWeight, interpRot);
+            Transform xfm;
+            xfm.v = interpPos;
+            MakeRotMatrix(interpRot, xfm.m);
+            boneProp->SetWorldXfm(xfm);
+        }
+    }
+
+    RndMat *robotFaceMat = Find<RndMat>("robot_face.mat", false);
+    if (robotFaceMat) {
+        CharLipSyncDriver *lipDriver = Find<CharLipSyncDriver>("face.lipdrv", false);
+        CharLipSync::PlayBack *playBack = lipDriver->GetPlayBack();
+        const char *visemeName = "base";
+        if (playBack) {
+            float maxWeight = 0.0f;
+            int numWeights = playBack->mWeights.size();
+            for (int i = 0; i < numWeights; i++) {
+                CharLipSync::PlayBack::Weight &w = playBack->mWeights[i];
+                CharClip *clip = w.mClip;
+                if (clip) {
+                    float wt = w.mCurWeight;
+                    float oldMax = maxWeight;
+                    if (maxWeight - wt < 0.0f) {
+                        maxWeight = wt;
+                    }
+                    if (maxWeight != oldMax) {
+                        visemeName = clip->Name();
+                    }
+                }
+            }
+        }
+        char texName[256];
+        strcpy(texName, visemeName);
+        _strlwr(texName);
+        strcat(texName, ".tex");
+        RndTex *tex = Find<RndTex>(texName, false);
+        if (!tex) {
+            tex = Find<RndTex>("base.tex", false);
+        }
+        if (tex) {
+            robotFaceMat->SetDiffuseTex(tex);
+        } else {
+            MILO_NOTIFY_ONCE("%s could not find viseme texture %s", PathName(this), texName);
+        }
+    }
+}
 
 template class StackString<128>;

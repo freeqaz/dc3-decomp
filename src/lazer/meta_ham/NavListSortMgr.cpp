@@ -48,6 +48,27 @@ void NavListSortMgr::ClearHeaders() {
     mHeadersB.clear();
 }
 
+bool NavListSortMgr::HeadersSelectable() { return mHeadersSelectable; }
+
+bool NavListSortMgr::SelectionIs(Symbol) { return false; }
+
+bool NavListSortMgr::DataIs(int, Symbol) { return false; }
+
+Symbol NavListSortMgr::MoveOn() { return gNullStr; }
+
+void NavListSortMgr::OnEnter() {
+    FOREACH (it, mSorts) {
+        (*it)->BuildTree();
+    }
+    NavListSort *sort = mSorts[mCurrentSortIdx];
+    sort->BuildItemList();
+    if (mHighlightSaved) {
+        sort->SetHighlightID(mSavedHighlightID);
+        mHighlightSaved = false;
+    }
+    sort->UpdateHighlight();
+}
+
 Symbol NavListSortMgr::GetHeaderSymbolFromChildSymbol(Symbol sym) {
     NavListSort *sort = mSorts[mCurrentSortIdx];
     if (!sort->GetNode(sym)) {

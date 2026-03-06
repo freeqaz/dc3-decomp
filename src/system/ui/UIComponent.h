@@ -54,6 +54,8 @@ public:
     NEW_OBJ(UIComponent)
 
     State GetState() { return mState; }
+    UIComponent *NavRight() const { return mNavRight; }
+    UIComponent *NavDown() const { return mNavDown; }
 
     static void Init();
 

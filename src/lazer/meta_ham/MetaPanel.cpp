@@ -233,6 +233,9 @@ void MetaPanel::Load() {
     int loopIndex = PickLoopIndex(sysConfig->Size());
     DataArray *loopArray = sysConfig->Array(loopIndex);
     if (!TheMetaMusic) {
+#ifdef HX_NATIVE
+        if (!sHamMaster) return;
+#endif
         TheMetaMusic = new MetaMusic(sHamMaster, "sfx/shell_fx.milo");
         TheMetaMusic->Load(0.0f, true, true);
         sHamMaster->Load(
@@ -430,12 +433,22 @@ void MetaPanel::CycleVenuePreference() {
 
 BEGIN_HANDLERS(MetaPanel)
     HANDLE_EXPR(meta_music, TheMetaMusic)
+#ifdef HX_NATIVE
+    HANDLE_ACTION_IF(
+        load_meta_music,
+        sHamMaster && TheMetaMusic,
+        sHamMaster->Load(
+            TheMetaMusic->SongInfo(), true, 0, false, (HamSongDataValidate)0, 0
+        )
+    )
+#else
     HANDLE_ACTION(
         load_meta_music,
         sHamMaster->Load(
             TheMetaMusic->SongInfo(), true, 0, false, (HamSongDataValidate)0, 0
         )
     )
+#endif
     HANDLE_ACTION(init_songpreview, mSongPreview.Init())
     HANDLE_ACTION(unlock_all, UnlockAll())
     HANDLE_ACTION(unlock_classic, UnlockClassicOutfit(_msg->Sym(2)))

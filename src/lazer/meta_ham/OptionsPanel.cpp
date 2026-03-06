@@ -79,9 +79,10 @@ DataNode OptionsPanel::OnMsg(SingleItemEnumCompleteMsg const &msg) {
 }
 
 DataNode OptionsPanel::OnMsg(RCJobCompleteMsg const &msg) {
+    int i = 0;
     if (msg.Job() == mRedeemTokenJob) {
         MILO_LOG("Token: server response: %s\n", mRedeemTokenJob->GetResponseString());
-        String offerStr;
+        String str;
         static Symbol token_redemption_ready("token_redemption_ready");
         static Symbol token_redemption_error("token_redemption_error");
         static Symbol token_redemption_not_found("token_redemption_not_found");
@@ -90,87 +91,74 @@ DataNode OptionsPanel::OnMsg(RCJobCompleteMsg const &msg) {
         static Symbol token_redemption_too_early("token_redemption_too_early");
         static Symbol token_redemption_too_late("token_redemption_too_late");
         static Symbol leaderboard_no_net("leaderboard_no_net");
-
-        int responseCode;
-        mRedeemTokenJob->GetRedeemTokenData(responseCode, offerStr);
-
-        Symbol errorSym = token_redemption_ready;
-        bool isSuccess = false;
-
-        if (responseCode <= 0xA0002) {
-            if (responseCode == 0xA0002) {
-                isSuccess = true;
-                errorSym = token_redemption_ready;
+        mRedeemTokenJob->GetRedeemTokenData(i, str);
+        Symbol errorSym;
+        bool success = false;
+        switch ((unsigned int)i) {
+        case 0x800a0003:
+            errorSym = token_redemption_too_early;
+            break;
+        case 0x800a0005:
+            errorSym = token_redemption_too_late;
+            break;
+        case 0x800a0008:
+            errorSym = token_redemption_other_player;
+            break;
+        case 0x800a0009:
+            errorSym = token_redemption_not_found;
+            break;
+        case 0xa0002:
+        case 0xa0005:
+        case 0xa0007:
+            errorSym = token_redemption_ready;
+            success = true;
+            break;
+        case 0xa0006:
+            errorSym = token_redemption_purchased;
+            break;
+        default:
+            if (!TheRockCentral.IsOnline()) {
+                errorSym = leaderboard_no_net;
             } else {
-                unsigned int code = (unsigned int)responseCode - 0x800A0003;
-                if (code == 0) errorSym = token_redemption_not_found;
-                else {
-                    switch (code) {
-                    case 2: errorSym = token_redemption_other_player; break;
-                    case 5: errorSym = token_redemption_too_late; break;
-                    case 6: errorSym = token_redemption_too_early; break;
-                    default:
-                        if (!TheRockCentral.IsOnline()) errorSym = leaderboard_no_net;
-                        else errorSym = token_redemption_error;
-                        break;
-                    }
-                }
+                errorSym = token_redemption_error;
             }
-        } else {
-            unsigned int code = (unsigned int)responseCode - 0xA0005;
-            if (code == 0) {
-                isSuccess = true;
-                errorSym = token_redemption_ready;
-            } else if (code == 1) {
-                isSuccess = true;
-                errorSym = token_redemption_purchased;
-            } else if (code == 2) {
-                isSuccess = true;
-                errorSym = token_redemption_ready;
-            } else {
-                if (!TheRockCentral.IsOnline()) errorSym = leaderboard_no_net;
-                else errorSym = token_redemption_error;
-            }
+            break;
         }
-
-        static TokenRedeemedMsg redeMsg(true, "", token_redemption_ready);
-        redeMsg.SetSuccess(isSuccess);
-        redeMsg.SetOfferString(offerStr);
-        redeMsg.SetError(errorSym);
-
-        UIPanel *panel = ObjectDir::Main()->Find<UIPanel>("store_redeem_token_panel", true);
-        panel->Handle(redeMsg, true);
-
-        mRedeemTokenJob = nullptr;
+        static TokenRedeemedMsg tokenMsg(true, String(""), token_redemption_ready);
+        tokenMsg.SetSuccess(success);
+        tokenMsg.SetOfferString(str);
+        tokenMsg.SetError(errorSym);
+        UIPanel *panel =
+            ObjectDir::Main()->Find<UIPanel>("store_redeem_token_panel", true);
+        panel->HandleType(tokenMsg);
+        mRedeemTokenJob = 0;
+        return 1;
     } else if (msg.Job() == mGetWebLinkCodeJob) {
-        String webCode;
-        String displayStr;
-        bool ok = mGetWebLinkCodeJob->GetWebLinkCodeData(webCode);
-
-        static LinkingCodeRetrievedMsg retMsg(true, "");
-        bool success = (ok && webCode != "N/A");
-
+        String temp1;
+        String temp2;
+        bool gotData = mGetWebLinkCodeJob->GetWebLinkCodeData(temp1);
+        static LinkingCodeRetrievedMsg linkMsg(true, String(""));
+        bool success = false;
+        if (gotData) {
+            success = (temp1 != "N/A");
+        }
         static Symbol linking_code_desc("linking_code_desc");
         static Symbol linking_code_failure("linking_code_failure");
-
         if (success) {
-            displayStr = Localize(linking_code_desc, nullptr, TheLocale);
-            displayStr += "\n\n";
-            displayStr += webCode;
+            temp2 = Localize(linking_code_desc, 0, TheLocale);
+            temp2 += "\n\n";
+            temp2 += temp1;
         } else {
-            displayStr = Localize(linking_code_failure, nullptr, TheLocale);
+            temp2 = Localize(linking_code_failure, 0, TheLocale);
         }
-
-        retMsg.SetSuccess(success);
-        retMsg.SetLinkingCode(displayStr);
-
-        UIPanel *panel = ObjectDir::Main()->Find<UIPanel>("options_panel", true);
+        linkMsg.SetSuccess(success);
+        linkMsg.SetLinkingCode(temp2);
+        UIPanel *panel =
+            ObjectDir::Main()->Find<UIPanel>("options_panel", true);
         if (panel->GetState() == UIPanel::kUp) {
-            panel->Handle(retMsg, true);
+            panel->HandleType(linkMsg);
         }
-
-        mGetWebLinkCodeJob = nullptr;
-    } else {
+        mGetWebLinkCodeJob = 0;
         return 1;
     }
     return 1;

@@ -161,6 +161,17 @@ void PlatformMgr::DebugFakeSigninChangeMsg(int padnum) {
     Handle(msg, false);
 }
 
+DataNode PlatformMgr::OnSignInUsers(DataArray *msg) {
+    unsigned long flags = 0;
+    if (msg->Size() > 3) {
+        if (msg->Int(3) != 0) {
+            flags = 2;
+        }
+    }
+    SignInUsers(msg->Int(2), flags);
+    return DataNode(0);
+}
+
 void PlatformMgr::QueueEnumJob(Job *j) { mJobMgr->QueueJob(j); }
 
 void PlatformMgr::CancelEnumJob(int i) { mJobMgr->CancelJob(i); }

@@ -300,6 +300,12 @@ void CampaignProgress::SetCampaignMindControlCompleted(bool complete) {
     mProfile->MakeDirty();
 }
 
+bool CampaignProgress::IsCampaignIntroCompleted() const { return mIntroCompleted; }
+
+bool CampaignProgress::IsCampaignMindControlCompleted() const {
+    return mMindControlCompleted;
+}
+
 bool CampaignProgress::IsCampaignTanBattleCompleted() const {
     return mTanBattleCompleted;
 }

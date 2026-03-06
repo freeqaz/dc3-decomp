@@ -77,6 +77,7 @@ public:
     void SetMainFaceOverrideWeight(float);
     Symbol GetMainFaceOverrideClip() const;
     void SetMainFaceOverrideClip(Symbol);
+    bool GetGameStartHold() const { return mGameStartHold; }
     bool IsWorldLoaded() const;
     void UnloadAll();
     void ForceScene(Symbol);

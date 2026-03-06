@@ -58,7 +58,7 @@ void ContentLoadingPanel::Poll() {
         UIPanel::Poll();
         RndGroup *progressGroup = LoadedDir()->Find<RndGroup>("progress.grp", true);
         f32 currentFrame = progressGroup->GetFrame();
-        f32 target = 100.0f;
+        f32 target;
         if (mContentCount > 0) {
             target = ((f32)mMountedCount * 110.0f) / (f32)mContentCount;
         } else {

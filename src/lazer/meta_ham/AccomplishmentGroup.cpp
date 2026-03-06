@@ -14,6 +14,7 @@ AccomplishmentGroup::~AccomplishmentGroup() {}
 bool AccomplishmentGroup::HasAward() const { return mAward != ""; }
 
 Symbol AccomplishmentGroup::GetName() const { return mName; }
+Symbol AccomplishmentGroup::GetAward() const { return mAward; }
 
 void AccomplishmentGroup::Configure(DataArray *i_pConfig) {
     MILO_ASSERT(i_pConfig, 0x1b);

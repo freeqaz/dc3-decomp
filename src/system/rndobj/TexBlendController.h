@@ -10,6 +10,10 @@
 class RndTexBlendController : public Hmx::Object {
 public:
     enum BlendState {
+        kBlendNone = 0,
+        kBlendNear = 1,
+        kBlendFar = 2,
+        kBlendCustom = 3,
     };
     virtual ~RndTexBlendController() {}
     OBJ_CLASSNAME(TexBlendController);

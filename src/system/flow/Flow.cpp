@@ -385,7 +385,8 @@ void Flow::SyncObjects() {
     if (flow) {
         // something here
     }
-    if (flow && flow != this) {
+    if (flow) {
+        if (flow != this) {
         FOREACH (it, mDynamicProperties) {
             if (it->mExposed) {
                 Symbol name(it->mName.c_str());
@@ -409,6 +410,27 @@ void Flow::SyncObjects() {
                 flow->AddPropertySink(this, ptr, "on_reflected_property_changed");
                 AddPropertySink(this, ptr, "on_internal_property_changed");
             }
+        }
+    }
+    }
+}
+
+void Flow::Enter() {
+    if (ProxyFile().empty() && mStartMode != 0) {
+        if (mStartMode == 1) {
+            Execute(kQueue);
+        } else {
+            TheFlowMgr->QueueCommand(this, kQueue);
+        }
+    }
+}
+
+void Flow::Exit() {
+    if (IsRunning() && ProxyFile().empty()) {
+        if (mHardStop) {
+            Deactivate(false);
+        } else {
+            RequestStop();
         }
     }
 }

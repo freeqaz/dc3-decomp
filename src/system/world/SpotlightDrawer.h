@@ -61,7 +61,6 @@ public:
     virtual void Copy(const Hmx::Object *, Hmx::Object::CopyType);
     virtual void Load(BinStream &);
     // RndDrawable
-    virtual void DrawShowing();
     virtual void ListDrawChildren(std::list<RndDrawable *> &);
     // PostProcessor
     virtual void EndWorld();
@@ -85,6 +84,8 @@ public:
     static bool DrawNGSpotlights();
 
 protected:
+    // RndDrawable (protected access for correct mangling)
+    virtual void DrawShowing();
     // SpotlightDrawer
     virtual void SetAmbientColor(const Hmx::Color &);
     virtual void SortLights();

@@ -49,6 +49,7 @@ public:
     float GetOverrideWeight() const { return mOverrideWeight; }
     CharClip *OverrideClip() const { return mOverrideClip; }
     CharLipSync *LipSync() const { return mLipSync; }
+    CharLipSync::PlayBack *GetPlayBack() const { return mMainPlayback; }
 
 protected:
     CharLipSyncDriver();

@@ -1,9 +1,13 @@
 #include "ui/InlineHelp.h"
+#include "math/Mtx.h"
+#include "math/Rot.h"
+#include "math/Trig.h"
 #include "obj/Data.h"
 #include "obj/Object.h"
 #include "obj/Task.h"
 #include "os/Joypad.h"
 #include "rndobj/Dir.h"
+#include "rndobj/Trans.h"
 #include "ui/UIComponent.h"
 #include "ui/UILabel.h"
 #include "utl/BinStream.h"
@@ -21,6 +25,46 @@ InlineHelp::~InlineHelp() {
     int siz = mTextLabels.size();
     for (int i = 0; i < siz; i++) {
         delete mTextLabels[i];
+    }
+}
+
+void InlineHelp::DrawShowing() {
+    int numLabels = mTextLabels.size();
+    const Transform &parentXfm = mTemplateLabel->WorldXfm();
+    Transform worldXfm;
+    memcpy(&worldXfm, &parentXfm, sizeof(Transform));
+    MILO_ASSERT(mTemplateLabel, 0x117);
+
+    Transform offsetXfm;
+    offsetXfm.m.Identity();
+    offsetXfm.v.Zero();
+
+    Transform rotXfm;
+    if (sLabelRot != 0.0f) {
+        Vector3 angles(DegreesToRadians(sLabelRot), 0.0f, 0.0f);
+        Hmx::Matrix3 rotMtx;
+        MakeRotMatrix(angles, rotMtx, true);
+        Multiply(offsetXfm, rotMtx, rotXfm);
+    } else {
+        rotXfm.m.Identity();
+        rotXfm.v.Zero();
+    }
+
+    for (int i = 0; i < numLabels; i++) {
+        if (i > 0) {
+            if (mHorizontal) {
+                offsetXfm.v.x += mSpacing;
+            } else {
+                offsetXfm.v.z += mSpacing;
+            }
+        }
+        Transform labelXfm;
+        Multiply(offsetXfm, worldXfm, labelXfm);
+        if (*mConfig[i].mSecondaryStr.c_str() != '\0') {
+            Multiply(rotXfm, labelXfm, labelXfm);
+        }
+        mTextLabels[i]->SetWorldXfm(labelXfm);
+        mTextLabels[i]->DrawShowing();
     }
 }
 

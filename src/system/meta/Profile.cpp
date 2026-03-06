@@ -4,6 +4,9 @@
 Profile::Profile(int pnum) : mDirty(0), mPadNum(pnum), mState(kMetaProfileUnloaded) {}
 Profile::~Profile() { mDirty = true; }
 
+int Profile::GetPadNum() const { return mPadNum; }
+void Profile::MakeDirty() { mDirty = true; }
+
 BEGIN_HANDLERS(Profile)
     HANDLE_EXPR(get_pad_num, mPadNum)
     HANDLE_EXPR(get_name, GetName())

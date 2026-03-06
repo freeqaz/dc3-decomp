@@ -37,6 +37,9 @@ Symbol Award::GetDisplayName() const {
     return name;
 }
 
+Symbol Award::GetName() const { return mName; }
+bool Award::IsSilent() const { return mIsSilent; }
+
 void Award::Configure(DataArray *i_pConfig) {
     MILO_ASSERT(i_pConfig, 0x21);
     mName = i_pConfig->Sym(0);

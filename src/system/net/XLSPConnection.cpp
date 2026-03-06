@@ -55,6 +55,8 @@ void XLSPConnection::Connect(const char *cc, unsigned int ui) {
     }
 }
 
+unsigned int XLSPConnection::GetServiceIP() { return unk44; }
+
 void XLSPConnection::Disconnect() {
     if (mConnectionRequest != 0) {
         mConnectionRequest = 0;

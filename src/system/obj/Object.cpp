@@ -698,6 +698,12 @@ void Hmx::Object::RemoveFromDir() {
 
 bool Hmx::Object::HasTypeProps() const { return mTypeProps && mTypeProps->HasProps(); }
 
+void Hmx::Object::ClearAllTypeProps() {
+    if (mTypeProps) {
+        RELEASE(mTypeProps);
+    }
+}
+
 DataNode Hmx::Object::HandleType(DataArray *msg) {
     Symbol t = msg->Sym(1);
     DataArray *handler = nullptr;

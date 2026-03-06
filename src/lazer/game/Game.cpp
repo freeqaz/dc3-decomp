@@ -309,6 +309,65 @@ void Game::SetMusicVolume(float vol) {
     mMaster->GetAudio()->SetMasterVolume(vol);
 }
 
+void Game::Poll() {
+    static float sLastBeat;
+
+    if (!HandleWait()) {
+        if (!TheSongSequence.Done()) {
+            float songMs = mGameInput->CurrentMs(mRealTime);
+            TheTaskMgr.SetSeconds(songMs * 0.001f, false);
+        }
+        return;
+    }
+    float drift = 0;
+    float songMs = 0;
+    if (TheGamePanel->Unkf8()) {
+        songMs = mGameInput->CurrentMs(mRealTime);
+        if (!mRealTime && mShuttle->IsActive()) {
+            songMs = PollShuttle();
+        }
+        drift = 0;
+        if (!mRealTime && TheMaster && TheMaster->GetAudio()) {
+            if (TheMaster->GetAudio()->GetSongStream()) {
+                drift = TheMaster->GetAudio()->GetSongStream()->GetJumpBackTotalTime(songMs);
+            }
+        }
+        float beat = MsToBeat(songMs + drift);
+        if (fabs(beat - sLastBeat) > 4.0f) {
+            TheTaskMgr.ResetBeatTaskTime(beat);
+        }
+        sLastBeat = beat;
+        if (!unk68 && songMs >= 0 && !TheHamDirector->GetGameStartHold()) {
+            MILO_LOG("Game::Poll: intro timer expired\n");
+            static Message intro_over("intro_over");
+            TheGamePanel->Handle(intro_over, true);
+            unk68 = true;
+        }
+        TheTaskMgr.SetSecondsAndBeat(songMs * 0.001f, beat, false);
+    }
+    if (!mPaused && !mRealTime && IsLoaded()) {
+        float seconds = TheTaskMgr.Seconds(TaskMgr::kRealTime);
+        float ms = seconds * 1000.0f;
+        mSongPos = mSongDB->CalcSongPos(TheMaster, ms);
+        TheTaskMgr.SetSongPos(mSongPos);
+    }
+    if (songMs >= 0) {
+        mMaster->Poll(songMs);
+        float jumpFrom, jumpTo, jumpBack;
+        if (TheMaster->DetectStreamJump(jumpFrom, jumpTo, jumpBack)) {
+            float streamBeat = MsToBeat(TheMaster->StreamMs());
+            float fromBeat = MsToBeat(jumpFrom);
+            float toBeat = MsToBeat(jumpTo);
+            float backBeat = MsToBeat(jumpBack);
+            TheTaskMgr.SetDeltaTime(kTaskBeats,
+                (streamBeat - backBeat) + (toBeat - fromBeat));
+        }
+    } else {
+        mMaster->GetMidiParserMgr()->Poll();
+    }
+    unk64 = songMs;
+}
+
 void Game::StartIntro() {}
 
 void Game::SetHamMove(int i1, HamMove *move, bool b3) {

@@ -5,9 +5,7 @@
 #include "utl/Str.h"
 #include <vector>
 
-struct BINK {
-    virtual ~BINK();
-};
+struct BINK;
 
 class MovieInternalBuffers {
 public:
@@ -57,21 +55,26 @@ public:
     virtual void SetVolume(float);
 
     void Terminate();
+    void DiscContentionCheck(class Loader *);
 
 private:
     static std::vector<BinkMovieImpl *> sActiveMovies;
     void SetRect();
     void BeginFrame();
+    void DoFrame();
     bool PlatformCacheFile(const char *);
 
     void* mLoader;        // 0x04 - async loader, checked in IsLoading/Ready
     void* mLoader2;       // 0x08 - fallback loader, checked in IsLoading/Ready
     String mFilename;     // 0x0C
-    int mBink;            // 0x14 - BINK* handle, non-zero when open
+    BINK* mBink;          // 0x14 - BINK* handle, non-zero when open
     bool mLoop;           // 0x18
     int mWidth;           // 0x1C
     int mHeight;          // 0x20
     bool mReady;          // 0x24
+    bool unk25;           // 0x25
+    bool mKeepPlaying;    // 0x26
+    char _pad27;          // 0x27
     char mRect[0x18];     // 0x28 - uninitialized region (SetRect)
     int mFrame;           // 0x40
     int mNumFrames;       // 0x44
@@ -91,7 +94,7 @@ private:
     char _padD1[3];       // 0xD1 - align to 0xD4
     bool mEndianSwapped;  // 0xD4
     bool mHasAudio;       // 0xD5
-    unsigned int mThreadId; // 0xD8
+    unsigned long mThreadId; // 0xD8
     int unkDC;            // 0xDC
     int mBinkVolume;      // 0xE0 - Bink volume level (0x8000 = max)
     int mBufferOffset;    // 0xE4

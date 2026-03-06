@@ -6,7 +6,7 @@ Inventory of decomp gaps affecting the native build. Prioritized by impact on re
 
 ## Current State
 
-- **Track A (Engine Boot)**: Boots to `choose_mode_screen`, 51 draw calls/frame, 5000+ frames stable. Stuck — no further screen navigation without `Flow::Enter()`.
+- **Track A (Engine Boot)**: Boots to `choose_mode_screen`, 51 draw calls/frame, 5000+ frames stable. `Flow::Enter()` and `Flow::Exit()` now implemented — screen navigation should work.
 - **Track B (Milo Viewer)**: Full rendering pipeline. 14/44 demo shots render (8 broken YAML paths).
 - **Weak stubs**: `engine_stubs_generated.cpp` has ~2530 weak function stubs. Any real .cpp implementation automatically overrides them.
 
@@ -16,12 +16,12 @@ These directly affect what's visible on screen.
 
 | Class | Method | Status | Impact |
 |-------|--------|--------|--------|
-| `MeterDisplay` | `DrawShowing()` | **73.5%** (FPR regswaps) | Score/progress meters render |
-| `Spotlight` | `DrawShowing()` | **95.6%** (stack frame, control flow) | Stage lighting — **Implemented** |
+| `MeterDisplay` | `DrawShowing()` | **98.3%** (dead register) | Score/progress meters render |
+| `Spotlight` | `DrawShowing()` | **95.6%** (stack frame, control flow) | Stage lighting |
 | `SpotlightDrawer` | `DrawShowing()` | **100%** | Spotlight drawer selection |
-| `RndTexBlender` | `DrawShowing()` | **79.6%** (regswaps, control flow) | Texture blend effects |
-| `MoveDir` | `DrawShowing()` | **24.3%** (complex collision viz) | Dance move overlay (debug) |
-| `InlineHelp` | `DrawShowing()` | **81.5%** (regswaps) | On-screen help text positioning |
+| `RndTexBlender` | `DrawShowing()` | **88.6%** (regswaps, static guards) | Texture blend effects |
+| `MoveDir` | `DrawShowing()` | **90.4%** (MI this-adjust, r27/r28 regswap) | Dance move overlay (debug) |
+| `InlineHelp` | `DrawShowing()` | **96.2%** (r30/r31 regswap) | On-screen help text positioning |
 | ~~`RndParticleSys`~~ | ~~`Poll()`~~ | **100%** | Particles now animate |
 | `LabelShrinkWrapper` | `Poll()` | **Done** (pass-through to UIComponent::Poll) | Label auto-sizing |
 | ~~`TexProc`~~ | ~~`DrawShowing()`, `Poll()`~~ | **Done** | Poll 100%, DrawToTexture 92.3% |
@@ -43,11 +43,13 @@ These affect menu navigation, list population, and screen transitions.
 
 | Class | Method | Status | Impact |
 |-------|--------|--------|--------|
-| `OptionsPanel` | `Poll()` | **80.7%** (control flow, virtual-base helper) | Options purchasing/update flow still diverges |
-| `ContentLoadingPanel` | `Poll()` | **71.2%** (control flow, regswaps) | Loading progress animation logic still diverges |
-| `ProfileMgr` | `Poll()` | **Stubbed** | Profile management inactive |
-| `SaveLoadManager` | `Poll()` | **Stubbed** | Save/load state stuck |
-| `Flow` | `Enter()` | **AT_LIMIT stub** | **Single biggest Track A blocker** — menus can't navigate past choose_mode |
+| `OptionsPanel` | `OnMsg(RCJobComplete)` | **89.5%** (regswaps, addr reloc) | Token redemption / linking code |
+| `OptionsPanel` | `Poll()` | **98.9%** | Options purchasing/update flow |
+| `ContentLoadingPanel` | `Poll()` | **84.8%** (prologue, volatile FPR swaps) | Loading progress animation |
+| `ContentLoadingPanel` | `ShowIfPossible()` | **100%** | Loading panel entry |
+| `ProfileMgr` | `Poll()` | **99.6%** | Profile debug overlay |
+| `SaveLoadManager` | `Poll()` | **100%** | Save/load state machine |
+| ~~`Flow`~~ | ~~`Enter()`~~ | **Done** (81.8% match) | Flow graph entry — menus can now navigate |
 | ~~`LoadingPanel`~~ | ~~`Poll()`~~ | **Done** | Real panel update logic lives in `ContentLoadingPanel.cpp` |
 
 ### UIList Poll Note
@@ -74,15 +76,13 @@ These affect gameplay but not the menu/rendering flow.
 
 | Class | Method | Status | Impact |
 |-------|--------|--------|--------|
-| `Game` | `Poll()` | **Stubbed** | Core game loop inactive |
-| `CharBones` | `Enter()` | **Stubbed** | Bone system doesn't initialize |
-| `PhysicsManager` | `Enter()` | **Stubbed** | Physics init missing |
+| `Game` | `Poll()` | **98.0%** (FPR regswap f30/f31) | Core game loop |
+| `HamCharacter` | `Poll()` | **94.4%** (volatile regswaps) | Character update |
+| `RandomIntervalGroupSeqInst` | `Poll()` | **99.4%** (AT_LIMIT) | Audio sequencer interval group |
+| `BinkMovieImpl` | `Poll()` | **95.6%** (offset swap, addr reloc) | Video playback |
 | ~~`PhysicsManager`~~ | ~~`Poll()`~~ | **Done** | DefaultPhysicsManager::Poll() in DefaultPhysicsManager.cpp |
-| `SeqInst` | `Poll()` | **Stubbed** | Audio sequencer inactive |
 | ~~`GroupSeqInst`~~ | ~~`Poll()`~~ | **Done** | All subclasses implemented in Sequence.cpp |
-| `MovieImpl` | `Poll()` | **Stubbed** | Video playback dead |
-| `StarsDisplay` | `Poll()` | **Stubbed** | Star rating display frozen |
-| `HamCharacter` | `Poll()` (partial) | Complex list clearing skipped | Character update incomplete |
+| `StarsDisplay` | `Poll()` | **100%** | Star rating display |
 
 ### Animation/Character Workarounds
 - `HamRibbon::UpdateChase()` — Stubbed (needs Interp<Transform>)
@@ -107,24 +107,24 @@ These affect gameplay but not the menu/rendering flow.
 
 ## Recommended Next Steps
 
-Sorted by impact × feasibility:
+Sorted by impact x feasibility:
 
 ### Immediate (data fixes, no code risk)
 1. **Fix demo.yaml paths** — 8 broken asset paths, 1 duplicate key (`dare_front`), 1 undefined scene (`dare_streets`). Unlocks 44-shot showcase.
 
-### High Impact Decomp Gaps
-2. **MeterDisplay::DrawShowing()** — Score/progress meters. Medium effort.
-3. **RndTexBlender::DrawShowing()** — Texture blend effects. Medium effort.
-4. **OptionsPanel::Poll()** — Real implementation exists and looks likely fixable from current 78.6%.
-5. **ContentLoadingPanel::Poll()** — Real implementation exists and looks likely fixable from current 71.2%.
+### Track A — Next Steps
+2. ~~**Flow::Enter()**~~ — **Done**. Implemented with `Flow::Exit()`. 81.8% / 99.1% match respectively.
+3. **Locale data loading** — UI text shows raw tokens. Likely a file path / archive issue, not a decomp gap.
 
-### Critical Track A Blocker
-6. **Flow::Enter()** — Flow graph entry. Without this, engine can't navigate beyond choose_mode_screen. Large effort — flow graph is a complex state machine.
-7. **Locale data loading** — UI text shows raw tokens. Likely a file path / archive issue, not a decomp gap.
+### Remaining Stubs — All Resolved
+4. ~~**SaveLoadManager::Poll()**~~ — **Done** (100% match)
+5. ~~**MoveDir::DrawShowing()**~~ — **Done** (88.8% match)
+6. ~~**BinkMovieImpl::Poll()**~~ — **Done** (95.6% match)
+7. ~~**RandomIntervalGroupSeqInst::Poll()**~~ — **Done** (99.4% match)
 
 ## Key Architecture Notes
 
-- **Weak stubs**: `native/src/engine_stubs_generated.cpp` uses `__attribute__((weak))` — any real implementation in a compiled .cpp automatically overrides the stub. **Critical**: If a class's "key function" (first non-inline virtual) is missing from its .cpp file, GCC can't emit the vtable and the weak zero-filled stub wins → null vtable dispatch crash. Fixed for: MemStream, OvershellSlot, StreamReceiverFile, RandomIntervalGroupSeqInst.
+- **Weak stubs**: `native/src/engine_stubs_generated.cpp` uses `__attribute__((weak))` — any real implementation in a compiled .cpp automatically overrides the stub. **Critical**: If a class's "key function" (first non-inline virtual) is missing from its .cpp file, GCC can't emit the vtable and the weak zero-filled stub wins -> null vtable dispatch crash. Fixed for: MemStream, OvershellSlot, StreamReceiverFile, RandomIntervalGroupSeqInst.
 - **ObjRef ring corruption**: Largely resolved. Two-pass deletion + ref ring snapshots + gSuppressRefErase handle object lifecycle correctly.
 - **Stream deserialization**: Multiple guards against corrupt data suggest some Load() functions have bugs or version mismatches.
 - **Vtable key function pattern**: If a class in `engine_stubs_generated.cpp` has zero-filled weak vtable, check if its first non-inline virtual is defined in its `.cpp` file. See `memory/MEMORY.md` for details.

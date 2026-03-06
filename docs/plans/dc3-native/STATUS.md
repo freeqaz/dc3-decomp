@@ -58,19 +58,16 @@ LP64-safe DataArray scripting, BinStream endian conversion.
 
 | Task | Status | Blocker? |
 |------|--------|:---:|
-| Implement `RndText::ConvertTextToWide` | IN PROGRESS | YES — crash on boot |
-| Skip Kinect tutorial screens | TODO | YES — stuck at tutorial |
+| ~~Implement `RndText::ConvertTextToWide`~~ | DONE | ~~YES~~ |
+| ~~Skip Kinect tutorial screens~~ | DONE (auto-advance) | ~~YES~~ |
+| ~~`Flow::Enter()` / `Flow::Exit()`~~ | DONE (81.8% / 99.1%) | ~~YES~~ |
+| ~~MeshAnim proper stub~~ | DONE | ~~No~~ |
 | Fix localization tokens (Localize() returns raw tokens) | TODO | No — cosmetic |
-| MeshAnim proper stub (currently blacklisted) | TODO | No |
+| Scripted input DTA handler crash | KNOWN | No — crashes in UIScreen::Handle joypad config lookup |
 
-**Current crash**: `undefined symbol: RndText::ConvertTextToWide` — UTF-8→UTF-16
-converter with caps mode. Being implemented now.
-
-**Tutorial skip**: Auto-skip reaches `tutorial_party_mode_screen_1` but can't advance
-past Kinect gesture. Options:
-1. DTA override to skip all tutorials
-2. Stub gesture detection to return "gesture completed"
-3. Hardcode `MILO_FIRST_SCREEN` to jump past tutorials
+**Status**: Engine successfully navigates attract → tutorials → main_screen → choose_mode_screen.
+Stable at 3000+ frames on choose_mode_screen. Flow::Enter() enables menu navigation.
+Scripted button input crashes in DTA handler path (joypad button_meanings config lookup).
 
 ### Milestone 2: Engine Rendering Parity with Viewer
 

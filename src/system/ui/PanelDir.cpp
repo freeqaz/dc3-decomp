@@ -300,6 +300,30 @@ UIComponent *PanelDir::ComponentNav(
 ) {
     UIComponent *compIt = nullptr;
     bool overloaded = TheUI->OverloadHorizontalNav(act, btn, JoypadTypeHasLeftyFlip(controller_type));
+#ifdef HX_NATIVE
+    if (act == kAction_Down) {
+        compIt = comp->NavDown();
+    }
+    if (!compIt && (act == kAction_Right || (overloaded && act == kAction_Down))) {
+        compIt = comp->NavRight();
+    }
+    if (!compIt && act == kAction_Up) {
+        FOREACH (it, mComponents) {
+            if ((*it)->NavDown() == comp) {
+                compIt = *it;
+                break;
+            }
+        }
+    }
+    if (!compIt && (act == kAction_Left || (overloaded && act == kAction_Up))) {
+        FOREACH (it, mComponents) {
+            if ((*it)->NavRight() == comp) {
+                compIt = *it;
+                break;
+            }
+        }
+    }
+#else
     if (act == kAction_Down) {
         compIt = *(UIComponent **)((char *)comp + 0x2c);
     }
@@ -324,6 +348,7 @@ UIComponent *PanelDir::ComponentNav(
             }
         }
     }
+#endif
     return compIt;
 }
 

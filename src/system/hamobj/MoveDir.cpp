@@ -12,6 +12,8 @@
 #include "gesture/SkeletonDir.h"
 #include "gesture/SkeletonUpdate.h"
 #include "gesture/SkeletonViz.h"
+#include "gesture/StubCameraInput.h"
+#include "hamobj/SongCollision.h"
 #include "hamobj/CharFeedback.h"
 #include "hamobj/DancerSequence.h"
 #include "hamobj/DetectFrame.h"
@@ -715,6 +717,82 @@ void MoveDir::PostUpdate(const SkeletonUpdateData *data) {
         }
     }
     FinalPoseStateMachine();
+}
+
+void MoveDir::DrawShowing() {
+    if (Dir() != (ObjectDir *)this) {
+        if (mDebugCollision) {
+            SongCollision *sc = Find<SongCollision>("SongCollision", false);
+            if (sc) {
+                int beat = (int)TheTaskMgr.Beat();
+                if (unkf84 != beat) {
+                    unkf84 = beat;
+                    MILO_ASSERT(TheHamDirector, 0xAB1);
+                    for (int i = 0; i < 2; i++) {
+                        HamCharacter *ch = TheHamDirector->GetCharacter(i);
+                        if (ch) {
+                            memcpy(&unkf04[i], &ch->WorldXfm(), 0x40);
+                        }
+                    }
+                }
+                Difficulty diffs[2];
+                for (int i = 0; i < 2; i++) {
+                    diffs[i] = TheGameData->Player(i)->GetDifficulty();
+                }
+                std::vector<SongCollisionOutput> outputs;
+                sc->IsCollision(beat, beat + 1, diffs, unkf04, &outputs);
+                for (unsigned int n = 0; n < outputs.size(); n++) {
+                    SongCollisionOutput &out = outputs[n];
+                    Hmx::Color bgColor(0.8f, 0.8f, 0.8f, 1.0f);
+                    float colorR = 0.0f;
+                    float colorG = 1.0f;
+                    if (out.collisionDetected) {
+                        colorR = 1.0f;
+                        colorG = 0.0f;
+                    }
+                    Hmx::Color fgColor(colorR, colorG, 0.0f);
+                    for (int j = 0; j < 2; j++) {
+                        Vector3 *collPos = (Vector3 *)(out.xfmData + j * 0x40 + 0x30);
+                        UtilDrawSphere(*collPos, 1.0f, bgColor, nullptr);
+                        const char *label = MakeString("%i:%i", j, beat + (int)n);
+                        UtilDrawString(label, *collPos, bgColor);
+                        Vector3 *minPos = (Vector3 *)&out.boneData[j * 4];
+                        TheRnd.DrawLine(*collPos, *minPos, bgColor, false);
+                        UtilDrawSphere(*minPos, 1.0f, bgColor, nullptr);
+                        Vector3 *maxPos = (Vector3 *)&out.boneData[(j + 2) * 4];
+                        TheRnd.DrawLine(*collPos, *maxPos, bgColor, false);
+                        UtilDrawSphere(*maxPos, 1.0f, bgColor, nullptr);
+                    }
+                    for (int j = 0; j < 2; j++) {
+                        Vector3 *collPos = (Vector3 *)(out.xfmData + j * 0x40 + 0x30);
+                        Vector3 *disp = (Vector3 *)&out.boneData[(j + 4) * 4];
+                        Vector3 offsetPos;
+                        offsetPos.x = disp->x + collPos->x;
+                        offsetPos.y = disp->y + collPos->y;
+                        offsetPos.z = disp->z + collPos->z;
+                        TheRnd.DrawLine(*collPos, offsetPos, fgColor, false);
+                        UtilDrawSphere(offsetPos, 2.0f, fgColor, nullptr);
+                        const char *label2 = MakeString("%i", j);
+                        UtilDrawString(label2, offsetPos, fgColor);
+                    }
+                }
+            }
+        }
+    } else if (TheLoadMgr.EditMode()) {
+        if (mDancerSeq) {
+            ObjDirItr<SkeletonViz> it(this, true);
+            if (it != nullptr) {
+                StubCameraInput stubInput;
+                stubInput.PollTracking();
+                const DancerSkeleton *skel = mDancerSeq->CurSkeleton();
+                if (skel) {
+                    it->Visualize(stubInput, *skel, nullptr, false);
+                }
+            }
+        } else {
+            SkeletonDir::DrawShowing();
+        }
+    }
 }
 
 void MoveDir::Draw(const BaseSkeleton &baseSkeleton, SkeletonViz &skeletonViz) {

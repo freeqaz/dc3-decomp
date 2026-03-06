@@ -62,11 +62,14 @@ public:
     virtual ~RandomIntervalGroupSeqInst() {}
     virtual void Stop();
     virtual bool IsRunning();
+
+protected:
     virtual void Poll();
     virtual void StartImpl();
 
-    void ComputeNextTime();
+    void ComputeNextTime(int);
 
+public:
     POOL_OVERLOAD(RandomIntervalGroupSeqInst, 0x90);
 
 protected:

@@ -18,6 +18,9 @@ BEGIN_HANDLERS(WavMgr)
     HANDLE_ACTION(dump_stats, Dump())
 END_HANDLERS
 
+BEGIN_PROPSYNCS(WavMgr)
+END_PROPSYNCS
+
 WavMgr::WavMgr() {}
 
 bool WavMgr::CreateSample(Hmx::CRC crc, void *&v, int size) {

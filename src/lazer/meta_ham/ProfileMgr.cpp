@@ -20,7 +20,9 @@
 #include "meta_ham/ShellInput.h"
 #include "meta_ham/SkeletonChooser.h"
 #include "meta_ham/UIEventMgr.h"
+#include "net/DingoSvr.h"
 #include "net_ham/FriendsListJobs.h"
+#include "net_ham/RockCentral.h"
 #include "obj/Data.h"
 #include "obj/Dir.h"
 #include "obj/Msg.h"
@@ -910,6 +912,57 @@ void ProfileMgr::UpdateFriendsList() {
         if (profile->HasValidSaveData()) {
             UpdateFriendsListJob *job = new UpdateFriendsListJob(nullptr, profile);
             job->EnumerateFriends();
+        }
+    }
+}
+
+void ProfileMgr::Poll() {
+    if (unkb0 && unkb8.SplitMs() > 1000.0f) {
+        unkb0 = false;
+        TriggerSignoutEvent();
+    }
+    if (mProfilesOverlay && mProfilesOverlay->Showing()) {
+        mProfilesOverlay->Clear();
+        const char *authStr;
+        if (TheServer.IsAuthenticated()) {
+            authStr = "auth";
+        } else {
+            authStr = "not auth";
+        }
+        const char *onlineStr;
+        if (TheRockCentral.IsOnline()) {
+            onlineStr = "online";
+        } else {
+            onlineStr = "offline";
+        }
+        *mProfilesOverlay << "rock central " << onlineStr << ", dingo " << authStr << "\n";
+        int lineCount = 1;
+        HamProfile *activeProfile = GetActiveProfile(false);
+        HamProfile *critProfile = mCriticalProfile;
+        for (std::vector<HamProfile *>::iterator it = mProfiles.begin(); it != mProfiles.end();
+             ++it) {
+            HamProfile *profile = *it;
+            if (profile) {
+                int padNum = profile->GetPadNum();
+                if (ThePlatformMgr.IsSignedIn(padNum)) {
+                    const char *name = profile->GetName();
+                    *mProfilesOverlay << "profile " << name << " pad" << padNum;
+                    if (profile == activeProfile) {
+                        *mProfilesOverlay << " active";
+                    }
+                    if (profile == critProfile) {
+                        *mProfilesOverlay << " critical";
+                    }
+                    if (ThePlatformMgr.IsSignedIntoLive(padNum)) {
+                        *mProfilesOverlay << " live";
+                    }
+                    *mProfilesOverlay << "\n";
+                    lineCount++;
+                }
+            }
+        }
+        if (lineCount > 0) {
+            mProfilesOverlay->SetLines(lineCount);
         }
     }
 }

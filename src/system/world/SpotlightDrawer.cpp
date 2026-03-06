@@ -223,6 +223,18 @@ void SpotlightDrawer::ClearPostDraw() {
     sNeedDraw = false;
 }
 
+void SpotlightDrawer::DrawShowing() {
+    if (sCurrent && sCurrent != sDefault && sCurrent != this) {
+        MILO_NOTIFY_ONCE(
+            "Drawing 2 spotlightdrawers in one frame, %s and %s",
+            PathName(sCurrent),
+            PathName(this)
+        );
+    } else {
+        Select();
+    }
+}
+
 void SpotlightDrawer::SetAmbientColor(const Hmx::Color &c) {
     sEnviron->SetAmbientColor(c);
     sEnviron->Select(nullptr);

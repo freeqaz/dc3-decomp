@@ -85,8 +85,8 @@ void FlowManager::Poll() {
     float eventTimeSum = 0.0f;
     Symbol peakSym(NULL);
     Symbol peakElapsedSym(NULL);
-    float maxElapsedTime = -1.0f;
     float maxEventTime = -1.0f;
+    float maxElapsedTime = -1.0f;
 
     if (!mEventTimes.empty()) {
         maxEventTime = maxElapsedTime;
@@ -116,8 +116,9 @@ void FlowManager::Poll() {
                 float f2 = node.Array()->Float(2);
                 float f0 = node.Array()->Float(0);
                 int count = node.Array()->Int(1);
+                auto _tmp0 = MakeString("%s    count: %i   time: %.3f ms   task: %.3f ms\n", it->first.Str(), count, f0, f2);
                 *mFlowEventOverlay
-                    << MakeString("%s    count: %i   time: %.3f ms   task: %.3f ms\n", it->first.Str(), count, f0, f2);
+                    << _tmp0;
             }
         }
 

@@ -54,6 +54,10 @@ void ADSRImpl::Load(BinStream &bs, ADSR *adsr) {
 
 ADSR::ADSR() : mADSR() {}
 
+BEGIN_HANDLERS(ADSR)
+    HANDLE_SUPERCLASS(Hmx::Object)
+END_HANDLERS
+
 BEGIN_COPYS(ADSR)
     COPY_SUPERCLASS(Hmx::Object)
     CREATE_COPY(ADSR)

@@ -22,6 +22,23 @@ ALTERNATENAME stubs in `src/link_glue.cpp`.
 | SDK/Audio | 43 | Keep stub (external library) |
 | **Total** | **1486** | |
 
+## Recent Progress
+
+Recent glue-owner moves landed in source and were removed from `src/link_glue.cpp`:
+
+- [x] `Profile::{GetPadNum, MakeDirty}`
+- [x] `CampaignEra::{GetName, GetIntroMovie}`
+- [x] `AccomplishmentGroup::GetAward`
+- [x] `Award::{GetName, IsSilent}`
+- [x] `AccomplishmentProgress::{GetNumCompleted, GetTotalSongsPlayed, GetTotalCampaignSongsPlayed, GetFlawlessMoveCount}`
+- [x] `CacheMgr::GetLastResult`
+- [x] `CampaignProgress::{IsCampaignIntroCompleted, IsCampaignMindControlCompleted}`
+- [x] `NavListSortMgr::{HeadersSelectable, SelectionIs, DataIs, MoveOn, OnEnter}`
+- [x] `NetCacheMgrXbox::Handle`
+- [x] `Hmx::Object::ClearAllTypeProps`
+- [x] handler/owner duplicate removals: `NavListHeaderNode::Handle`
+- [x] duplicate owner removals already present elsewhere: `MemStream::{Flush, Fail}`, `UIList::SelectedPos`, `GestureMgr::GetLiveCameraInput`, `NetCacheMgr::{GetServiceId, GetXLSPFilter}`
+
 ## How to Query
 
 ### Database (`decomp.db`)

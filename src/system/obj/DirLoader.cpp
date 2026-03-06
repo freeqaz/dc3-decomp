@@ -425,7 +425,7 @@ void DirLoader::WriteTypeMemDump(TextFileStream *file) {
     for (std::map<String, MemPointDelta>::iterator it = sMemPointMap.begin();
          it != sMemPointMap.end();
          ++it) {
-        MemPointDelta pt = it->second;
+        MemPointDelta pt = (*it).second;
         file->Print(it->first.c_str());
         *file << "," << pt.ToString(1) << "\n";
     }

@@ -260,7 +260,7 @@ void BustAMovePanel::CountIn(int i1) {
 }
 
 void BustAMovePanel::ShowMoveRating(MoveRating mr, int side) {
-    char *sideStr = side == 0 ? "left" : "right";
+    const char *sideStr = side == 0 ? "left" : "right";
     RndDir *feedbackDir =
         DataDir()->Find<RndDir>(MakeString("bustamove_text_feedback_%s", sideStr));
     static Symbol move_perfect("move_perfect");

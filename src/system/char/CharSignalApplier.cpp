@@ -46,6 +46,11 @@ BEGIN_HANDLERS(CharBoneTwist)
     HANDLE_SUPERCLASS(Hmx::Object)
 END_HANDLERS
 
+BEGIN_HANDLERS(CharSignalApplier)
+    HANDLE_SUPERCLASS(CharWeightable)
+    HANDLE_SUPERCLASS(Hmx::Object)
+END_HANDLERS
+
 BEGIN_CUSTOM_PROPSYNC(CharSignalApplier::BoneOp)
     SYNC_PROP(bone, o.mBone)
     SYNC_PROP(op, o.mOp)

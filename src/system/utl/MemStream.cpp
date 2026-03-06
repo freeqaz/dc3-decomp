@@ -1,5 +1,8 @@
 #include "utl/MemStream.h"
 
+void MemStream::Flush() {}
+bool MemStream::Fail() { return mFail; }
+
 void MemStream::ReadImpl(void *data, int bytes) {
     unsigned int size = mBuffer.size();
     int tell = mTell;

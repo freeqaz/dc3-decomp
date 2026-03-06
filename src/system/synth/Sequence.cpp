@@ -652,6 +652,38 @@ void RandomGroupSeqInst::Poll() {
 #pragma endregion
 #pragma region RandomIntervalGroupSeqInst
 
+void RandomIntervalGroupSeqInst::Poll() {
+    ObjVector<ObjPtr<SeqInst> >::iterator it = mSeqs.begin();
+    while (it != mSeqs.end()) {
+        if (*it == NULL || !(*it)->IsRunning()) {
+            it = mSeqs.erase(it);
+        } else {
+            it++;
+        }
+    }
+    double currentTime = (double)TheTaskMgr.Seconds(TaskMgr::kRealTime);
+    for (unsigned int i = 0; i < mNextPlayTimes.size(); i++) {
+        if ((double)mNextPlayTimes[i] <= currentTime) {
+            if (mSeqs.size() < (unsigned int)mMaxSimultaneous) {
+                ObjPtrList<Sequence> &children = ((GroupSeq *)mOwner)->Children();
+                int idx = 0;
+                for (ObjPtrList<Sequence>::iterator childIt = children.begin();
+                     childIt != children.end(); ++childIt) {
+                    if (idx == (int)i) {
+                        SeqInst *inst = (*childIt)->MakeInst();
+                        mSeqs.push_back();
+                        mSeqs.back() = inst;
+                        inst->Start();
+                        break;
+                    }
+                    idx++;
+                }
+            }
+            ComputeNextTime(i);
+        }
+    }
+}
+
 RandomIntervalGroupSeqInst::RandomIntervalGroupSeqInst(RandomIntervalGroupSeq *seq)
     : GroupSeqInst(seq, false), mNextPlayTimes(seq->MaxSimultaneous()) {
     unk54 = false;
@@ -662,6 +694,30 @@ RandomIntervalGroupSeqInst::RandomIntervalGroupSeqInst(RandomIntervalGroupSeq *s
     while (i < seq->MaxSimultaneous()) {
         mNextPlayTimes[i] = -1.0f;
         i++;
+    }
+}
+
+void RandomIntervalGroupSeqInst::StartImpl() {
+    for (unsigned int i = 0; i < mNextPlayTimes.size(); i++) {
+        ComputeNextTime(i);
+    }
+    unk54 = true;
+}
+
+void RandomIntervalGroupSeqInst::Stop() {
+    for (ObjVector<ObjPtr<SeqInst> >::iterator it = mSeqs.begin(); it != mSeqs.end(); it++) {
+        if (*it)
+            (*it)->Stop();
+    }
+    unk54 = false;
+}
+
+bool RandomIntervalGroupSeqInst::IsRunning() { return unk54; }
+
+void RandomIntervalGroupSeqInst::ComputeNextTime(int idx) {
+    if ((unsigned int)idx < mNextPlayTimes.size()) {
+        float interval = RandomVal(mAvgIntervalSecs, mIntervalSpread);
+        mNextPlayTimes[idx] = TheTaskMgr.Seconds(TaskMgr::kRealTime) + interval;
     }
 }
 

@@ -3,6 +3,10 @@
 
 MetaMusicManager *TheMetaMusicManager;
 
+BEGIN_HANDLERS(MetaMusicManager)
+    HANDLE_SUPERCLASS(Hmx::Object)
+END_HANDLERS
+
 void MetaMusicManager::Cleanup() {
     for (std::map<Symbol, MetaMusicScene *>::iterator it = m_mapScenes.begin();
          it != m_mapScenes.end();
@@ -74,4 +78,11 @@ bool MetaMusicManager::IsScreenInSceneMap(Symbol sym) const {
         return false;
     }
     return true;
+}
+
+MetaMusicScene *MetaMusicManager::GetScene(Symbol s) const {
+    std::map<Symbol, MetaMusicScene *>::const_iterator it = m_mapScenes.find(s);
+    if (it != m_mapScenes.end())
+        return it->second;
+    return 0;
 }

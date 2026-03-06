@@ -25,7 +25,7 @@ public:
     void AllowedToShow(bool);
 
     bool mAllowedToShow;
-    volatile int mContentCount;
+    int mContentCount;
     int mMountedCount;
 
 private:

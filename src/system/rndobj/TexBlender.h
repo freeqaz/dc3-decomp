@@ -9,6 +9,10 @@
 class RndTexBlender : public RndDrawable {
 public:
     enum TexState {
+        kTexBase = 1,
+        kTexNear = 2,
+        kTexFar = 4,
+        kTexCustom = 8,
     };
     // Hmx::Object
     OBJ_CLASSNAME(TexBlender);

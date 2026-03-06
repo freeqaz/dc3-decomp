@@ -548,19 +548,9 @@ int VenueProvider::NumData() const { return mVenues.size(); }
 
 // (FxSendBitCrush removed — synth/FxSendBitCrush is Matching)
 
-// -- CharSignalApplier --
-// Still needed: vtordisp thunk in split .obj references this
-#include "char/CharSignalApplier.h"
-
-DataNode CharSignalApplier::Handle(DataArray *msg, bool warn) {
-    return Hmx::Object::Handle(msg, warn);
-}
-
 // -- WavMgr --
 // Still needed: SyncProperty referenced from WavMgr.obj split
 #include "synth/WavMgr.h"
-
-bool WavMgr::SyncProperty(DataNode &, DataArray *, int, PropOp) { return false; }
 
 // -- Achievements --
 // Still needed: PlatformInit referenced from Achievements.obj itself
@@ -569,11 +559,6 @@ bool WavMgr::SyncProperty(DataNode &, DataArray *, int, PropOp) { return false; 
 void Achievements::PlatformInit() {}
 
 // (UIManager removed — ui/UI is Matching)
-
-// -- Synth --
-#include "synth/Synth.h"
-
-int Synth::GetNumMics() const { return mNumMics; }
 
 // -- SongMetadata --
 // Still needed: inline in header, not exported from decomp .obj, referenced by SongMgr/SongRecord
@@ -2897,10 +2882,6 @@ BinStream &operator<<(BinStream &bs, const ObjOwnerPtr<RndTex> &ptr) {
 #include "meta/MetaMusicScene.h"
 #include "os/PlatformMgr.h"
 
-// -- Profile stubs --
-int Profile::GetPadNum() const { return mPadNum; }
-void Profile::MakeDirty() { mDirty = true; }
-
 // -- CampaignEra stubs --
 Symbol CampaignEra::GetName() const { return mEra; }
 
@@ -2908,31 +2889,12 @@ Symbol CampaignEra::GetName() const { return mEra; }
 void PlatformMgr::RunNetStartUtility() {}
 void PlatformMgr::CheckMailbox() {}
 void PlatformMgr::DisableXMP() {}
-DataNode PlatformMgr::OnSignInUsers(DataArray *) { return DataNode(0); }
 
 // -- AccomplishmentProgress stubs --
-int AccomplishmentProgress::GetNumCompleted() const { return 0; }
-int AccomplishmentProgress::GetTotalSongsPlayed() const { return mTotalSongsPlayed; }
-int AccomplishmentProgress::GetTotalCampaignSongsPlayed() const { return mTotalCampaignSongsPlayed; }
 
 // -- AccomplishmentGroup stubs --
-Symbol AccomplishmentGroup::GetAward() const { return mAward; }
 
 // -- Award stubs --
-Symbol Award::GetName() const { return mName; }
-
-// -- MetaMusicScene stubs --
-// -- MetaMusicManager stubs --
-MetaMusicScene *MetaMusicManager::GetScene(Symbol s) const {
-    std::map<Symbol, MetaMusicScene *>::const_iterator it = m_mapScenes.find(s);
-    if (it != m_mapScenes.end())
-        return it->second;
-    return 0;
-}
-
-DataNode MetaMusicManager::Handle(DataArray *da, bool b) {
-    return Hmx::Object::Handle(da, b);
-}
 
 // -- ProfileMgr stubs --
 #include "meta_ham/ProfileMgr.h"
@@ -2942,10 +2904,6 @@ DataNode MetaMusicManager::Handle(DataArray *da, bool b) {
 
 // -- CharBonesMeshes stubs (vtordisp thunk needs this) --
 #include "char/CharBonesMeshes.h"
-
-// -- WorldReflection stubs --
-#include "world/Reflection.h"
-void WorldReflection::Highlight() {}
 
 // -- AppLabel stubs --
 #include "meta_ham/AppLabel.h"
@@ -2964,11 +2922,6 @@ DebugNotifyOncePrinter TheDebugNotifyOncePrinter;
 
 // -- NavListSortMgr stubs --
 #include "meta_ham/NavListSortMgr.h"
-bool NavListSortMgr::HeadersSelectable() { return false; }
-bool NavListSortMgr::SelectionIs(Symbol) { return false; }
-bool NavListSortMgr::DataIs(int, Symbol) { return false; }
-Symbol NavListSortMgr::MoveOn() { return gNullStr; }
-void NavListSortMgr::OnEnter() {}
 
 // -- ObjRefConcrete template stubs --
 template <>
@@ -3079,60 +3032,37 @@ bool SongMetadata::IsOnDisc() const { return mIsOnDisc; }
 #include "utl/CacheMgr.h"
 CacheResult CacheMgr::GetLastResult() { return mLastResult; }
 
-// -- MemStream stubs --
-#include "utl/MemStream.h"
-void MemStream::Flush() {}
-bool MemStream::Fail() { return mFail; }
-
-// -- XLSPConnection stubs --
-#include "net/XLSPConnection.h"
-unsigned int XLSPConnection::GetServiceIP() { return 0; }
-
 // -- PracticeSection stubs --
 #include "hamobj/PracticeSection.h"
 const std::vector<PracticeStep> &PracticeSection::Steps() const { return mSteps; }
 
-// -- ADSR stubs --
-#include "synth/ADSR.h"
-DataNode ADSR::Handle(DataArray *da, bool b) { return Hmx::Object::Handle(da, b); }
-
 // -- GestureMgr stubs --
 #include "gesture/GestureMgr.h"
-LiveCameraInput *GestureMgr::GetLiveCameraInput() const { return 0; }
 
 // -- CampaignProgress stubs --
 #include "meta_ham/CampaignProgress.h"
-bool CampaignProgress::IsCampaignIntroCompleted() const { return false; }
-bool CampaignProgress::IsCampaignMindControlCompleted() const { return false; }
 
 // -- CampaignEra stubs (round 2) --
-Symbol CampaignEra::GetIntroMovie() const { return mEraIntroMovie; }
 
 // -- UIListMesh stubs --
 #include "ui/UIListMesh.h"
 RndMat *UIListMesh::DefaultMat() const { return mDefaultMat; }
 
 // -- Hmx::Object stubs --
-void Hmx::Object::ClearAllTypeProps() {}
 
 // -- Award stubs (round 2) --
-bool Award::IsSilent() const { return mIsSilent; }
 
 // -- FaderGroup stubs --
 #include "synth/Faders.h"
 
 // -- UIList stubs --
 #include "ui/UIList.h"
-int UIList::SelectedPos() const { return mListState.Selected(); }
 
 // -- NetCacheMgr stubs --
 #include "utl/NetCacheMgr.h"
-unsigned int NetCacheMgr::GetServiceId() const { return 0; }
-const char *NetCacheMgr::GetXLSPFilter() const { return ""; }
 
 // -- NetCacheMgrXbox stubs --
 #include "utl/NetCacheMgr_Xbox.h"
-DataNode NetCacheMgrXbox::Handle(DataArray *da, bool b) { return NetCacheMgr::Handle(da, b); }
 
 // -- Round 3 stubs --
 
@@ -3155,7 +3085,6 @@ void ObjRefConcrete<CharBone, ObjectDir>::CopyRef(const ObjRefConcrete<CharBone,
 
 // NavListHeaderNode::Handle (MQSongSortNode.obj)
 #include "meta_ham/NavListNode.h"
-DataNode NavListHeaderNode::Handle(DataArray *da, bool b) { return NavListSortNode::Handle(da, b); }
 
 // BinStream operator<< for ObjOwnerPtr<RndTransAnim> (TransAnim.obj)
 #include "rndobj/TransAnim.h"
