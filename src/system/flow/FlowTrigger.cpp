@@ -102,7 +102,8 @@ BEGIN_LOADS(FlowTrigger)
     if (d.rev > 0) {
         d >> mTriggerProperties;
         d >> mStopProperties;
-    } else {
+    }
+    if (d.rev == 0) {
         FOREACH (it, mTriggerEvents) {
             String cur = it->Str();
             if (cur.contains("on_") && cur.contains("_change")) {
