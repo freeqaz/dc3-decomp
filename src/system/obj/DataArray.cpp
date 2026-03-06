@@ -428,7 +428,7 @@ void DataArray::Load(BinStream &bs) {
                 if (!macro) {
                     MILO_FAIL(
                         "Couldn't open embedded file: %s (file %s, line %d)",
-                        path,
+                        (String &)path,
                         mFile.Str(),
                         mLine
                     );

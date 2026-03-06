@@ -114,6 +114,7 @@ void CharBonesSamples::LoadData(BinStreamRev &d) {
         d >> x;
     }
     bool cached = d.stream.Cached();
+    auto& _sub1 = mOffsets[TYPE_QUAT];
     if (!cached || d.rev <= 0xE) {
         for (int i = 0; i < mNumSamples; i++) {
             mStart = mRawData + mTotalSize * Min(i, mNumSamples - 1);
@@ -126,18 +127,18 @@ void CharBonesSamples::LoadData(BinStreamRev &d) {
                 // shorts (2 bytes) in QUAT/ROT sections to native LE order.
                 if (!d.stream.LittleEndian()) {
                     // POS + SCALE sections: float data (4 bytes each)
-                    for (char *p = mStart; p < mStart + mOffsets[TYPE_QUAT]; p += 4) {
+                    for (char *p = mStart; p < mStart + _sub1; p += 4) {
                         unsigned int *u = (unsigned int *)p;
                         *u = __builtin_bswap32(*u);
                     }
                     // QUAT section: shorts (2 bytes each) when compressed, floats when not
                     if (mCompression >= kCompressRots) {
-                        for (char *p = mStart + mOffsets[TYPE_QUAT]; p < mStart + mOffsets[TYPE_ROTX]; p += 2) {
+                        for (char *p = mStart + _sub1; p < mStart + mOffsets[TYPE_ROTX]; p += 2) {
                             unsigned short *u = (unsigned short *)p;
                             *u = __builtin_bswap16(*u);
                         }
                     } else {
-                        for (char *p = mStart + mOffsets[TYPE_QUAT]; p < mStart + mOffsets[TYPE_ROTX]; p += 4) {
+                        for (char *p = mStart + _sub1; p < mStart + mOffsets[TYPE_ROTX]; p += 4) {
                             unsigned int *u = (unsigned int *)p;
                             *u = __builtin_bswap32(*u);
                         }
@@ -158,12 +159,12 @@ void CharBonesSamples::LoadData(BinStreamRev &d) {
 #endif
             } else {
                 if (mCompression >= kCompressVects) {
-                    short *quatOffset = (short *)(mStart + mOffsets[TYPE_QUAT]);
+                    short *quatOffset = (short *)(mStart + _sub1);
                     for (short *p = (short *)mStart; p < quatOffset; p += 3) {
                         d >> p[0] >> p[1] >> p[2];
                     }
                 } else {
-                    Vector3 *quatOffset = (Vector3 *)(mStart + mOffsets[TYPE_QUAT]);
+                    Vector3 *quatOffset = (Vector3 *)(mStart + _sub1);
                     for (Vector3 *p = (Vector3 *)mStart; p < quatOffset; p++) {
                         d >> *p;
                     }
@@ -171,7 +172,7 @@ void CharBonesSamples::LoadData(BinStreamRev &d) {
 
                 if (mCompression >= kCompressQuats) {
                     char *rotXOffset = mStart + mOffsets[TYPE_ROTX];
-                    for (char *p = mStart + mOffsets[TYPE_QUAT]; p < rotXOffset; p += 4) {
+                    for (char *p = mStart + _sub1; p < rotXOffset; p += 4) {
                         d.stream.Read(p, 1);
                         d.stream.Read(p + 1, 1);
                         d.stream.Read(p + 2, 1);
@@ -179,14 +180,14 @@ void CharBonesSamples::LoadData(BinStreamRev &d) {
                     }
                 } else if (mCompression != kCompressNone) {
                     short *rotXOffset = (short *)(mStart + mOffsets[TYPE_ROTX]);
-                    for (short *p = (short *)(mStart + mOffsets[TYPE_QUAT]); p < rotXOffset;
+                    for (short *p = (short *)(mStart + _sub1); p < rotXOffset;
                          p += 4) {
                         d >> p[0] >> p[1] >> p[2] >> p[3];
                     }
                 } else {
                     Hmx::Quat *rotXOffset =
                         (Hmx::Quat *)(mStart + mOffsets[TYPE_ROTX]);
-                    for (Hmx::Quat *p = (Hmx::Quat *)(mStart + mOffsets[TYPE_QUAT]);
+                    for (Hmx::Quat *p = (Hmx::Quat *)(mStart + _sub1);
                          p < rotXOffset; p++) {
                         d >> *p;
                     }
@@ -224,17 +225,17 @@ void CharBonesSamples::LoadData(BinStreamRev &d) {
         if (!d.stream.LittleEndian()) {
             for (int i = 0; i < mNumSamples; i++) {
                 char *s = mRawData + mTotalSize * i;
-                for (char *p = s; p < s + mOffsets[TYPE_QUAT]; p += 4) {
+                for (char *p = s; p < s + _sub1; p += 4) {
                     unsigned int *u = (unsigned int *)p;
                     *u = __builtin_bswap32(*u);
                 }
                 if (mCompression >= kCompressRots) {
-                    for (char *p = s + mOffsets[TYPE_QUAT]; p < s + mOffsets[TYPE_ROTX]; p += 2) {
+                    for (char *p = s + _sub1; p < s + mOffsets[TYPE_ROTX]; p += 2) {
                         unsigned short *u = (unsigned short *)p;
                         *u = __builtin_bswap16(*u);
                     }
                 } else {
-                    for (char *p = s + mOffsets[TYPE_QUAT]; p < s + mOffsets[TYPE_ROTX]; p += 4) {
+                    for (char *p = s + _sub1; p < s + mOffsets[TYPE_ROTX]; p += 4) {
                         unsigned int *u = (unsigned int *)p;
                         *u = __builtin_bswap32(*u);
                     }

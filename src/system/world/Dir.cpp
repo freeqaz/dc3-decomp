@@ -458,8 +458,8 @@ void WorldDir::DrawShowing() {
         RndCam *camOverride = CamOverride();
         RndCam *savedCam = RndCam::Current();
         if (camOverride) {
-            camOverride->Select();
             savedCam = camOverride;
+            camOverride->Select();
         }
 
         RndEnviron *env = GetEnv();

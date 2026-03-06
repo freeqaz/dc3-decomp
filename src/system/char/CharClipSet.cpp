@@ -235,7 +235,8 @@ void CharClipSet::SetFrame(float frame, float blend) {
                 }
                 pelvisXfm.v += *posPtr;
             }
-            for (ObjDirItr<CharBone> it(mPreviewClip->GetResource(), false);
+            auto _tmp1 = mPreviewClip->GetResource();
+            for (ObjDirItr<CharBone> it(_tmp1, false);
                  it != nullptr;
                  ++it) {
                 if (it->BakeOutAsTopLevel()) {
