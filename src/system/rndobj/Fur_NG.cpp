@@ -44,8 +44,8 @@ bool NgFur::Shell(int layerIdx, RndMesh *mesh, RndMat *mat) const {
     float diffGreen = (mEndsTint.green - mRootsTint.green);
     float diffBlue = (mEndsTint.blue - mRootsTint.blue);
     float diffAlpha = (mEndsTint.alpha - mRootsTint.alpha);
-    diffRed = diffRed * fShell;
     diffGreen = diffGreen * fShell;
+    diffRed = diffRed * fShell;
     diffBlue = diffBlue * fShell;
     diffAlpha = diffAlpha * fShell;
     Vector4 furColor(

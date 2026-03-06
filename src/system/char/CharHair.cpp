@@ -159,7 +159,7 @@ void CharHair::Hookup() {
 void CharHair::FreezePoseRaw() {
     for (int i = 0; i < mStrands.size(); i++) {
         Strand &strand = mStrands[i];
-        if (strand.Root() && strand.Root()->TransParent()) {
+        if (strand.Root()) {
             ObjVector<Point> &pts = strand.Points();
             Transform parentXfm(strand.Root()->TransParent()->WorldXfm());
             Invert(parentXfm, parentXfm);

@@ -185,7 +185,7 @@ void HiResScreen::GetBorderForTile(int x, int y, int &left, int &right, int &top
     bottom = 0;
     int xStep = TheRnd.Width() - 480;
     int xPos = xStep * x + TheRnd.Width();
-    if (xPos < (int)mAccumWidth) {
+    if ((unsigned int)xPos < (int)mAccumWidth) {
         right = 480;
     } else if (((x + 1) * xStep) - TheRnd.Width() > 0) {
         left = 480;

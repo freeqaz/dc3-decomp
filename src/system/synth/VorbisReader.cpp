@@ -316,7 +316,7 @@ void VorbisReader::DoRawSeek(int byte) {
     mFile->Seek(byte + mHdrSize, 0);
     if (mCtrState) {
         MILO_ASSERT(byte%16 == 0, 0x3F4);
-        *(int *)mNonce = EndianSwap((unsigned int)byte);
+        *(int *)mNonce = bool(EndianSwap((unsigned int)byte));
         int ret = ctr_reinit(gCipher, mNonce, mCtrState);
         MILO_ASSERT(ret == 0, 0x3F7);
     }

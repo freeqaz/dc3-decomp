@@ -184,12 +184,7 @@ DataNode SetBSPParams(DataArray *da) {
 
 void GeoInit() {
     DataArray *cfg = SystemConfig("math");
-    float scale = cfg->FindArray("bsp_check_scale")->Float(1);
-    int candidates = cfg->FindArray("bsp_max_candidates")->Int(1);
-    int depth = cfg->FindArray("bsp_max_depth")->Int(1);
-    float dirtol = cfg->FindArray("bsp_dir_tol")->Float(1);
-    float postol = cfg->FindArray("bsp_pos_tol")->Float(1);
-    SetBSPParams(postol, dirtol, depth, candidates, scale);
+    SetBSPParams(cfg->FindArray("bsp_pos_tol")->Float(1), cfg->FindArray("bsp_dir_tol")->Float(1), cfg->FindArray("bsp_max_depth")->Int(1), cfg->FindArray("bsp_max_candidates")->Int(1), cfg->FindArray("bsp_check_scale")->Float(1));
     DataRegisterFunc("set_bsp_params", SetBSPParams);
 }
 
@@ -510,8 +505,8 @@ void Frustum::Set(float near, float far, float fovY, float ratio) {
     left.Set(la, lb, 0, 0);
     right.Set(-la, lb, 0, 0);
     if (fovY == 0.0f) {
-        left.d = 1.0f;
         right.d = 1.0f;
+        left.d = 1.0f;
         top.d = ratio;
         bottom.d = ratio;
     }
