@@ -546,7 +546,8 @@ void UIFontImporter::HandmadeFontChanged() {
         mPlus = mHandmadeFont->mChars;
     }
     if (mHandmadeFont) {
-        mHandmadeFont->SetType(RndFont3d::StaticClassName());
+        auto _tmp3 = RndFont3d::StaticClassName();
+        mHandmadeFont->SetType(_tmp3);
     }
 }
 

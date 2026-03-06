@@ -160,12 +160,8 @@ FlowTrigger::PropTriggerDefn::PropTriggerDefn(Hmx::Object *owner) : mProvider(ow
 }
 
 DataNode FlowTrigger::PropTriggerDefn::GetPathDisplay(DataArray *a) {
-    if (!mProvider || mProperty.Type() != kDataArray) {
+    if (!mProvider || mProperty.Type() != kDataArray || mProperty.Array()->Size() == 0)
         return "<none>";
-    }
-    if (mProperty.Array()->Size() == 0) {
-        return "<none>";
-    }
     String str;
     mProperty.Print(str, true, 0);
     return MakeString("%s->%s", mProvider->Name(), str.c_str());
