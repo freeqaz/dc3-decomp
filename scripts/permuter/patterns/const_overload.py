@@ -79,34 +79,6 @@ def _get_declarator(decl: Node) -> Node | None:
     return None
 
 
-def _get_var_name(decl: Node) -> bytes | None:
-    """Extract the variable name from a declaration node."""
-    for child in walk(decl):
-        if child.type == "identifier":
-            parent = child.parent
-            # Skip type identifiers — we want the declarator identifier
-            if parent is not None and parent.type in (
-                "init_declarator", "reference_declarator",
-                "pointer_declarator",
-            ):
-                return child.text
-    return None
-
-
-def _is_written_after_decl(body: Node, var_name: bytes, source: bytes) -> bool:
-    """Check if a variable is assigned to or has non-const methods called on it."""
-    for n in walk(body):
-        if n.type == "assignment_expression":
-            left = n.child_by_field_name("left")
-            if left is not None and left.type == "identifier" and source[left.start_byte:left.end_byte] == var_name:
-                return True
-        if n.type == "update_expression":
-            arg = n.child_by_field_name("argument")
-            if arg is not None and arg.type == "identifier" and source[arg.start_byte:arg.end_byte] == var_name:
-                return True
-    return False
-
-
 class ConstOverloadPattern(Pattern):
     name = "const_overload"
 
@@ -129,11 +101,6 @@ class ConstOverloadPattern(Pattern):
 
             type_node = _get_type_node(decl)
             if type_node is None:
-                continue
-
-            # Skip if the variable is written to after declaration
-            var_name = _get_var_name(decl)
-            if var_name is not None and _is_written_after_decl(ctx.body_node, var_name, ctx.file_source):
                 continue
 
             decl_text = ctx.source_text(decl)

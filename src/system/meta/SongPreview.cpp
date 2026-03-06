@@ -197,7 +197,7 @@ DataNode SongPreview::OnStart(DataArray *arr) {
     if (arr->Size() == 3) {
         mStartPreviewMs = 0;
         mEndPreviewMs = 0;
-        MILO_LOG("start called in upper OnStart here : sym='%s'\n", arr->ForceSym(2));
+        MILO_LOG("start called in upper OnStart here : sym='%s'\n", arr->ForceSym(2).Str());
     } else {
         mStartPreviewMs = arr->Float(3);
         mEndPreviewMs = arr->Float(4);
@@ -205,7 +205,7 @@ DataNode SongPreview::OnStart(DataArray *arr) {
             mSecurePreview = arr->Int(5);
         }
         mSong = gNullStr;
-        MILO_LOG("start called in lower OnStart here : sym='%s'\n", arr->ForceSym(2));
+        MILO_LOG("start called in lower OnStart here : sym='%s'\n", arr->ForceSym(2).Str());
     }
     Start(arr->ForceSym(2), nullptr);
     return 1;
@@ -270,7 +270,7 @@ void SongPreview::Poll() {
             const char *name = mSongMgr.ContentName(mSong, true);
             if (name) {
                 mSongContent = name;
-                if (TheContentMgr.MountContent(name)) {
+                if (TheContentMgr.MountContent(mSongContent.Str())) {
                     mSongContent = 0;
                 }
                 mState = kMountingSong;

@@ -341,8 +341,7 @@ void MergeObjectsRecurse(ObjectDir *fromDir, ObjectDir *toDir, MergeFilter &filt
                 break;
             case MergeFilter::kMergeReplace: {
                 if (!toDir->HasSubDir(sd)) {
-                    ObjDirPtr<ObjectDir> dirPtr(sd);
-                    toDir->AppendSubDir(dirPtr);
+                    toDir->AppendSubDir(subDirs[i]);
                 }
                 fromDir->RemovingSubDir(subDirs[i]);
                 subDirs.erase(subDirs.begin() + i);

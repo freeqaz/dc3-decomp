@@ -26,6 +26,8 @@ void UIComponent::Enter() {
     }
 }
 
+void UIComponent::Exit() { RndPollable::Exit(); }
+
 UIComponent::UIComponent()
     : mState(kNormal), mNavRight(this), mNavDown(this), mSelectScreen(nullptr),
       mSelected(0), mSelectCancelled(0) {}
@@ -117,6 +119,8 @@ void UIComponent::PreLoad(BinStream &bs) {
         OldResourcePreload(bs);
     }
 }
+
+void UIComponent::PostLoad(BinStream &) {}
 
 void UIComponent::SendSelect(LocalUser *user) {
     if (mState == kFocused) {

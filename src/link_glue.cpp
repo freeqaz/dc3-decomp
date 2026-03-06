@@ -151,23 +151,14 @@ FormatString &FormatString::operator<<(unsigned long long) { return *this; }
 // -- ObjectDir --
 #include "obj/Dir.h"
 
-InlineDirType ObjectDir::InlineSubDirType() { return mInlineSubDirType; }
-void ObjectDir::AddedObject(Hmx::Object *) {}
-
 // -- PanelDir --
 #include "ui/PanelDir.h"
-
-UIComponent *PanelDir::FocusComponent() { return mFocusComponent; }
 
 // -- UIComponent --
 #include "ui/UIComponent.h"
 
-void UIComponent::Exit() {}
-
 // -- UIList --
 #include "ui/UIList.h"
-
-int UIList::NumData() const { return mNumData; }
 
 // -- BufStream --
 // Still needed: virtual method not exported from decomp .obj, referenced by other split .objs
@@ -563,14 +554,6 @@ int VenueProvider::NumData() const { return mVenues.size(); }
 
 DataNode CharSignalApplier::Handle(DataArray *msg, bool warn) {
     return Hmx::Object::Handle(msg, warn);
-}
-
-// -- WorldCrowd3DCharHandle --
-// Still needed: vtordisp thunk in split .obj references this
-#include "world/Crowd3DCharHandle.h"
-
-bool WorldCrowd3DCharHandle::SyncProperty(DataNode &, DataArray *, int, PropOp) {
-    return false;
 }
 
 // -- WavMgr --
@@ -2921,9 +2904,6 @@ void Profile::MakeDirty() { mDirty = true; }
 // -- CampaignEra stubs --
 Symbol CampaignEra::GetName() const { return mEra; }
 
-// -- UIComponent stubs --
-void UIComponent::PostLoad(BinStream &) {}
-
 // -- PlatformMgr stubs --
 void PlatformMgr::RunNetStartUtility() {}
 void PlatformMgr::CheckMailbox() {}
@@ -2942,9 +2922,6 @@ Symbol AccomplishmentGroup::GetAward() const { return mAward; }
 Symbol Award::GetName() const { return mName; }
 
 // -- MetaMusicScene stubs --
-Symbol MetaMusicScene::GetName() const { return m_symName; }
-const std::list<Symbol> &MetaMusicScene::GetScreenList() const { return m_lScreens; }
-
 // -- MetaMusicManager stubs --
 MetaMusicScene *MetaMusicManager::GetScene(Symbol s) const {
     std::map<Symbol, MetaMusicScene *>::const_iterator it = m_mapScenes.find(s);
@@ -2959,24 +2936,12 @@ DataNode MetaMusicManager::Handle(DataArray *da, bool b) {
 
 // -- ProfileMgr stubs --
 #include "meta_ham/ProfileMgr.h"
-std::vector<HamProfile *> ProfileMgr::GetSignedInProfiles() {
-    std::vector<HamProfile *> v;
-    return v;
-}
 
 // -- CharServoBone stubs --
 #include "char/CharServoBone.h"
-void CharServoBone::PollDeps(
-    std::list<Hmx::Object *> &changedBy, std::list<Hmx::Object *> &change
-) {
-    CharBonesMeshes::StuffMeshes(change);
-}
 
 // -- CharBonesMeshes stubs (vtordisp thunk needs this) --
 #include "char/CharBonesMeshes.h"
-bool CharBonesMeshes::Replace(ObjRef *ref, Hmx::Object *obj) {
-    return Hmx::Object::Replace(ref, obj);
-}
 
 // -- WorldReflection stubs --
 #include "world/Reflection.h"
@@ -2984,7 +2949,6 @@ void WorldReflection::Highlight() {}
 
 // -- AppLabel stubs --
 #include "meta_ham/AppLabel.h"
-void AppLabel::SetFromGeneralSelectNode(const NavListNode *) {}
 
 // ============================================================================
 // Round 2: Additional stubs for 55 more Matching units
@@ -3106,8 +3070,6 @@ OBJPTRVEC_ERASE(Waypoint)
 
 // -- CharDriver stubs --
 #include "char/CharDriver.h"
-void CharDriver::PollDeps(std::list<Hmx::Object *> &, std::list<Hmx::Object *> &) {}
-void CharDriver::Exit() {}
 
 // -- SongMetadata stubs --
 #include "meta/SongMetadata.h"

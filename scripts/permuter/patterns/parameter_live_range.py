@@ -7,14 +7,11 @@ register and potentially matching the target's prologue.
 
 Strategies:
 1. Replace bs identifiers after LOAD_REVS with d.stream
-2. Replace LOAD_SUPERCLASS(ClassName) macros with ClassName::Load(d.stream)
-3. Combined: replace ALL bs sources (identifiers + macros) at once
-4. Merge consecutive d >> x; d >> y; into d >> x >> y; (chain merging)
+2. Merge consecutive d >> x; d >> y; into d >> x >> y; (chain merging)
 """
 
 from __future__ import annotations
 
-import re
 from typing import Iterator
 
 from tree_sitter import Node
@@ -23,9 +20,6 @@ from .base import Pattern
 from ..ast_queries import walk, get_indent, get_line_start
 from ..editor import SourceEditor
 from ..types import Diagnosis, FunctionContext, Variant
-
-# Matches LOAD_SUPERCLASS(ClassName) — class name may be qualified (Hmx::Object)
-_LOAD_SUPERCLASS_RE = re.compile(rb'LOAD_SUPERCLASS\s*\(\s*([A-Za-z_][\w:]*)\s*\)')
 
 
 class ParameterLiveRangePattern(Pattern):
@@ -64,34 +58,18 @@ class ParameterLiveRangePattern(Pattern):
 
         counter = 0
 
-        # Strategy 1: Replace bs identifiers with d.stream after LOAD_REVS
+        # Strategy 1: Replace bs with d.stream after LOAD_REVS
         for v in self._replace_bs_with_dstream(ctx, stmts, load_revs_idx, counter):
             yield v
             counter += 1
-            if counter >= 18:
+            if counter >= 12:
                 return
 
-        # Strategy 2: Replace LOAD_SUPERCLASS(X) macros with X::Load(d.stream)
-        for v in self._replace_load_superclass_macro(ctx, stmts, load_revs_idx, counter):
-            yield v
-            counter += 1
-            if counter >= 18:
-                return
-
-        # Strategy 3: Combined — replace ALL bs sources (identifiers + macros)
-        for v in self._replace_all_bs_sources(ctx, stmts, load_revs_idx, counter):
-            yield v
-            counter += 1
-            if counter >= 18:
-                return
-
-        # Strategy 4: Merge consecutive d >> chains
-        # Chaining keeps BinStreamRev& return value in a callee-saved register,
-        # eliminating repeated reloads of d's address (proven fix, MEMORY.md)
+        # Strategy 2: Merge consecutive d >> chains
         for v in self._merge_dstream_chains(ctx, stmts, counter):
             yield v
             counter += 1
-            if counter >= 18:
+            if counter >= 12:
                 return
 
     def _replace_bs_with_dstream(
@@ -182,145 +160,6 @@ class ParameterLiveRangePattern(Pattern):
                 description=f"Replace ALL {len(bs_uses)} bs→d after LOAD_REVS",
                 source=new_source,
             )
-
-    def _replace_load_superclass_macro(
-        self,
-        ctx: FunctionContext,
-        stmts: list[Node],
-        load_revs_idx: int,
-        start: int,
-    ) -> Iterator[Variant]:
-        """Replace LOAD_SUPERCLASS(ClassName) with ClassName::Load(d.stream); after LOAD_REVS."""
-        source = ctx.file_source
-        counter = start
-
-        macro_uses = _find_load_superclass_uses(source, stmts, load_revs_idx)
-        if not macro_uses:
-            return
-
-        # Generate variant replacing each individual LOAD_SUPERCLASS
-        for stmt_idx, class_name in macro_uses:
-            if counter - start >= 6:
-                break
-
-            stmt = stmts[stmt_idx]
-            indent = get_indent(source, stmt)
-            line_start = get_line_start(source, stmt)
-            replacement = indent + class_name + b"::Load(d.stream);"
-
-            ed = SourceEditor(source)
-            ed.replace_range(line_start, stmt.end_byte, replacement)
-            try:
-                new_source = ed.apply()
-            except ValueError:
-                continue
-
-            class_str = class_name.decode("utf-8", errors="replace")
-            yield Variant(
-                name=f"parlr_lsmacro_{counter}",
-                pattern_name=self.name,
-                description=f"Replace LOAD_SUPERCLASS({class_str}) -> {class_str}::Load(d.stream)",
-                source=new_source,
-            )
-            counter += 1
-
-        # Try replacing ALL LOAD_SUPERCLASS macros at once
-        if len(macro_uses) > 1 and counter - start < 8:
-            ed = SourceEditor(source)
-            for stmt_idx, class_name in macro_uses:
-                stmt = stmts[stmt_idx]
-                indent = get_indent(source, stmt)
-                line_start = get_line_start(source, stmt)
-                replacement = indent + class_name + b"::Load(d.stream);"
-                ed.replace_range(line_start, stmt.end_byte, replacement)
-            try:
-                new_source = ed.apply()
-            except ValueError:
-                return
-
-            yield Variant(
-                name=f"parlr_lsmacro_all_{counter}",
-                pattern_name=self.name,
-                description=f"Replace ALL {len(macro_uses)} LOAD_SUPERCLASS -> ::Load(d.stream)",
-                source=new_source,
-            )
-            counter += 1
-
-    def _replace_all_bs_sources(
-        self,
-        ctx: FunctionContext,
-        stmts: list[Node],
-        load_revs_idx: int,
-        start: int,
-    ) -> Iterator[Variant]:
-        """Combined: replace ALL bs identifiers AND LOAD_SUPERCLASS macros at once."""
-        source = ctx.file_source
-        counter = start
-
-        # Find bs identifiers
-        bs_uses: list[tuple[int, Node]] = []
-        for i in range(load_revs_idx + 1, len(stmts)):
-            for node in walk(stmts[i]):
-                if node.type == "identifier" and node.text == b"bs":
-                    parent = node.parent
-                    if parent and parent.type in (
-                        "reference_declarator",
-                        "pointer_declarator",
-                        "init_declarator",
-                    ):
-                        continue
-                    bs_uses.append((i, node))
-
-        # Find LOAD_SUPERCLASS macros
-        macro_uses = _find_load_superclass_uses(source, stmts, load_revs_idx)
-
-        # Only useful as combined if we have BOTH types
-        if not bs_uses or not macro_uses:
-            return
-
-        # Variant A: all bs -> d.stream + all LOAD_SUPERCLASS -> ::Load(d.stream)
-        ed = SourceEditor(source)
-        for _, bs_node in bs_uses:
-            ed.replace_node(bs_node, b"d.stream")
-        for stmt_idx, class_name in macro_uses:
-            stmt = stmts[stmt_idx]
-            indent = get_indent(source, stmt)
-            line_start = get_line_start(source, stmt)
-            ed.replace_range(line_start, stmt.end_byte, indent + class_name + b"::Load(d.stream);")
-        try:
-            new_source = ed.apply()
-            total = len(bs_uses) + len(macro_uses)
-            yield Variant(
-                name=f"parlr_combined_ds_{counter}",
-                pattern_name=self.name,
-                description=f"Replace ALL bs sources: {len(bs_uses)} bs->d.stream + {len(macro_uses)} LOAD_SUPERCLASS",
-                source=new_source,
-            )
-            counter += 1
-        except ValueError:
-            pass
-
-        # Variant B: all bs -> d + all LOAD_SUPERCLASS -> ::Load(d.stream)
-        if counter - start < 3:
-            ed = SourceEditor(source)
-            for _, bs_node in bs_uses:
-                ed.replace_node(bs_node, b"d")
-            for stmt_idx, class_name in macro_uses:
-                stmt = stmts[stmt_idx]
-                indent = get_indent(source, stmt)
-                line_start = get_line_start(source, stmt)
-                ed.replace_range(line_start, stmt.end_byte, indent + class_name + b"::Load(d.stream);")
-            try:
-                new_source = ed.apply()
-                yield Variant(
-                    name=f"parlr_combined_d_{counter}",
-                    pattern_name=self.name,
-                    description=f"Replace ALL: {len(bs_uses)} bs->d + {len(macro_uses)} LOAD_SUPERCLASS->d.stream",
-                    source=new_source,
-                )
-                counter += 1
-            except ValueError:
-                pass
 
     def _merge_dstream_chains(
         self,
@@ -447,22 +286,6 @@ class ParameterLiveRangePattern(Pattern):
 
 
 # -- Helpers ------------------------------------------------------------------
-
-def _find_load_superclass_uses(
-    source: bytes, stmts: list[Node], load_revs_idx: int
-) -> list[tuple[int, bytes]]:
-    """Find LOAD_SUPERCLASS(ClassName) calls after LOAD_REVS.
-
-    Returns list of (stmt_idx, class_name_bytes).
-    """
-    uses: list[tuple[int, bytes]] = []
-    for i in range(load_revs_idx + 1, len(stmts)):
-        text = source[stmts[i].start_byte:stmts[i].end_byte]
-        m = _LOAD_SUPERCLASS_RE.search(text)
-        if m:
-            uses.append((i, m.group(1)))
-    return uses
-
 
 def _find_load_revs(source: bytes, stmts: list[Node]) -> int | None:
     """Find the index of the statement containing LOAD_REVS(bs).

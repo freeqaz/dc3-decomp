@@ -46,20 +46,7 @@ ObjectDir::ObjectDir()
 }
 
 ObjectDir::~ObjectDir() {
-#ifdef HX_NATIVE
-    // Suppress ObjDirPtr::operator= from deleting targets during mSubDirs.clear().
-    // Without this, clearing an ObjDirPtr triggers cascading destruction of sub-dir
-    // hierarchies whose DeleteObjects() walks ref rings containing dangling nodes
-    // from not-yet-cleaned sibling objects.
-    {
-        bool oldSuppress = gSuppressDirPtrDelete;
-        gSuppressDirPtrDelete = true;
-        mSubDirs.clear();
-        gSuppressDirPtrDelete = oldSuppress;
-    }
-#else
     mSubDirs.clear();
-#endif
     delete mLoader;
     if (TheLoadMgr.AsyncUnload()) {
         new DirUnloader(this);
@@ -110,6 +97,8 @@ ObjectDir *ObjectDir::ProxyDir() const {
 const char *ObjectDir::ProxyName() const {
     return Loader() ? (Loader()->ProxyName() ? Loader()->ProxyName() : "") : "";
 }
+
+InlineDirType ObjectDir::InlineSubDirType() { return mInlineSubDirType; }
 
 ObjectDir *SyncSubDir(const FilePath &fp, ObjectDir *dir) {
     Loader *loader = TheLoadMgr.GetLoader(fp);
@@ -705,7 +694,7 @@ void ObjectDir::DeleteObjects() {
 void ObjectDir::RemoveSubDir(const ObjDirPtr<ObjectDir> &dPtr) {
     std::vector<ObjDirPtr<ObjectDir> >::iterator it = mSubDirs.begin();
     while (it != mSubDirs.end()) {
-        if (*(u32 *)((u8 *)&(*it) + 0xc) == *(u32 *)((u8 *)&dPtr + 0xc)) {
+        if ((ObjectDir *)*it == (ObjectDir *)dPtr) {
             RemovingSubDir(*it);
             it = mSubDirs.erase(it);
             if (it == mSubDirs.end())

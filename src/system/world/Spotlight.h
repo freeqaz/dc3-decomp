@@ -132,6 +132,7 @@ public:
     static void RemoveFromLists(Spotlight *);
 
 protected:
+
     Spotlight();
 
     void Generate();

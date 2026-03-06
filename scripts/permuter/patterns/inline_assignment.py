@@ -39,7 +39,7 @@ class InlineAssignmentPattern(Pattern):
         for i in range(len(ctx.statements)):
             stmt_a = ctx.statements[i]
 
-            assign_info = _extract_assignment(stmt_a, ctx.file_source)
+            assign_info = _extract_assignment(stmt_a)
             if assign_info is None:
                 continue
 
@@ -96,7 +96,7 @@ class InlineAssignmentPattern(Pattern):
 
 
 def _extract_assignment(
-    stmt: Node, source: bytes,
+    stmt: Node,
 ) -> Optional[tuple[bytes, bytes, Node]]:
     """Extract (var_name, rhs_text, assignment_node) from an expression_statement
     that is a simple assignment `var = expr;`."""
@@ -122,11 +122,9 @@ def _extract_assignment(
         return None
 
     var_name = left.text
-    if var_name is None:
+    rhs_text = right.text
+    if var_name is None or rhs_text is None:
         return None
-
-    # Use byte-range slicing for consistency with SourceEditor and other patterns
-    rhs_text = source[right.start_byte:right.end_byte]
 
     return var_name, rhs_text, expr
 

@@ -4,16 +4,12 @@ Each round: extract function, get baseline with diagnosis, generate variants
 (with composition), score all, apply best improvement, repeat. Stops on
 100% match, plateau (N rounds without improvement), max rounds, or all noise.
 
-By default enables Ghidra, chains, adaptive, constrained, and compose.
-Use --no-* flags to disable individual features.
-
 Usage:
     python -m scripts.permuter.hill_climber \
-        --symbol "?Poll@LabelNumberTicker@@UAAXXZ"
-
-    python -m scripts.permuter.hill_climber \
         --symbol "?Poll@LabelNumberTicker@@UAAXXZ" \
-        --no-ghidra --no-chain --json
+        --source src/system/ui/LabelNumberTicker.cpp \
+        --function "LabelNumberTicker::Poll" \
+        --max-rounds 10 --compose --json
 """
 
 from __future__ import annotations
@@ -24,7 +20,6 @@ import os
 import signal
 import sys
 import time
-from datetime import datetime
 from pathlib import Path
 
 from .composer import _DEFAULT_PAIRS, build_adaptive_chains
@@ -34,9 +29,6 @@ from .generator import generate_variants
 from .patterns import get_all_patterns, get_pattern
 from .scorer import Scorer
 from .types import ChainSpec, HillClimbResult, RoundHints, RoundResult, ScoreResult
-
-# Re-export so the except clause can reference it without a deferred import
-from .ghidra_cache import GhidraCircuitOpen as _GhidraCircuitOpen
 
 # Graceful interrupt flag — set by SIGINT handler, checked between rounds
 _interrupted = False
@@ -59,49 +51,6 @@ def install_signal_handler():
     global _interrupted
     _interrupted = False
     return signal.signal(signal.SIGINT, _sigint_handler)
-
-
-_BANNER_START = b"/* ===== PERMUTER LOCK"
-_BANNER_END = b"===== */\n"
-
-
-def _make_banner(function_name: str) -> bytes:
-    """Build the lock banner comment block."""
-    now = datetime.now().strftime("%Y-%m-%d %H:%M")
-    return (
-        f"/* ===== PERMUTER LOCK — DO NOT EDIT =====\n"
-        f" * The source permuter is actively working on: {function_name}\n"
-        f" * Started: {now} (stale after 5 minutes)\n"
-        f" * This banner is temporary and will be removed automatically.\n"
-        f" ===== */\n"
-    ).encode()
-
-
-def _add_banner(path: Path, function_name: str) -> None:
-    """Add a permuter lock banner to the top of a source file."""
-    content = path.read_bytes()
-    if _BANNER_START in content:
-        return  # Already has a banner
-    path.write_bytes(_make_banner(function_name) + content)
-
-
-def _strip_banner(path: Path) -> None:
-    """Remove the permuter lock banner from a file if present."""
-    content = path.read_bytes()
-    if _BANNER_START not in content:
-        return
-    start = content.index(_BANNER_START)
-    end = content.index(_BANNER_END, start) + len(_BANNER_END)
-    path.write_bytes(content[:start] + content[end:])
-
-
-def _strip_banner_bytes(data: bytes) -> bytes:
-    """Remove the permuter lock banner from source bytes."""
-    if _BANNER_START not in data:
-        return data
-    start = data.index(_BANNER_START)
-    end = data.index(_BANNER_END, start) + len(_BANNER_END)
-    return data[:start] + data[end:]
 
 
 def parse_args() -> argparse.Namespace:
@@ -134,12 +83,8 @@ def parse_args() -> argparse.Namespace:
         help="Stop after N rounds without improvement (default: 3)",
     )
     parser.add_argument(
-        "--compose", action="store_true", default=True,
-        help="Enable two-step pattern composition (default: True)",
-    )
-    parser.add_argument(
-        "--no-compose", action="store_false", dest="compose",
-        help="Disable two-step pattern composition",
+        "--compose", action="store_true",
+        help="Enable two-step pattern composition",
     )
     parser.add_argument(
         "--patterns", default="all",
@@ -162,40 +107,24 @@ def parse_args() -> argparse.Namespace:
         help="Output results as JSON",
     )
     parser.add_argument(
-        "--ghidra", action="store_true", default=True,
-        help="Enable Ghidra-guided patterns (default: True)",
+        "--ghidra", action="store_true",
+        help="Enable Ghidra-guided patterns (lookup decomp.db cache)",
     )
     parser.add_argument(
-        "--no-ghidra", action="store_false", dest="ghidra",
-        help="Disable Ghidra-guided patterns",
+        "--chain", action="store_true",
+        help="Enable N-stage pattern chains via beam search (implies --compose)",
     )
     parser.add_argument(
-        "--chain", action="store_true", default=True,
-        help="Enable N-stage pattern chains via beam search (default: True)",
+        "--chain-depth", type=int, default=3,
+        help="Maximum chain depth for N-stage composition (default: 3)",
     )
     parser.add_argument(
-        "--no-chain", action="store_false", dest="chain",
-        help="Disable N-stage pattern chains",
+        "--adaptive", action="store_true",
+        help="Enable adaptive per-round pattern suppression/boosting",
     )
     parser.add_argument(
-        "--chain-depth", type=int, default=5,
-        help="Maximum chain depth for N-stage composition (default: 5)",
-    )
-    parser.add_argument(
-        "--adaptive", action="store_true", default=True,
-        help="Enable adaptive per-round pattern suppression/boosting (default: True)",
-    )
-    parser.add_argument(
-        "--no-adaptive", action="store_false", dest="adaptive",
-        help="Disable adaptive pattern suppression/boosting",
-    )
-    parser.add_argument(
-        "--constrained", action="store_true", default=True,
-        help="Enable constraint-directed synthesis pre-pass (default: True)",
-    )
-    parser.add_argument(
-        "--no-constrained", action="store_false", dest="constrained",
-        help="Disable constraint-directed synthesis",
+        "--constrained", action="store_true",
+        help="Enable constraint-directed synthesis pre-pass (implies --ghidra)",
     )
     return parser.parse_args()
 
@@ -271,9 +200,6 @@ def hill_climb(
 
     # Save original source for rollback if not applying
     original_source = source_path.read_bytes()
-
-    # Add lock banner so other agents know this file is being permuted
-    _add_banner(source_path, function_name)
 
     try:
         for round_num in range(1, max_rounds + 1):
@@ -355,14 +281,6 @@ def hill_climb(
                         diagnosis=scorer.diagnosis,
                         symbol=symbol,
                     )
-                    has_preflight_signals = (
-                        bool(preflight.struct_offset_mismatches)
-                        or bool(preflight.extra_calls)
-                        or bool(preflight.missing_calls)
-                        or bool(preflight.dead_variables)
-                        or preflight.prologue_mismatch
-                        or preflight.volatile_regswap_only
-                    )
                     if preflight.skip_reason:
                         print(
                             f"  [GHIDRA PREFLIGHT] {preflight.skip_reason} "
@@ -370,38 +288,11 @@ def hill_climb(
                             file=sys.stderr,
                         )
                     if ghidra_run_stats:
-                        ghidra_run_stats.preflight_flagged = has_preflight_signals
+                        ghidra_run_stats.preflight_flagged = preflight.skip_reason is not None
                         ghidra_run_stats.preflight_reason = preflight.skip_reason
                         ghidra_run_stats.preflight_confidence = preflight.confidence
-                        ghidra_run_stats.preflight_struct_offsets = len(
-                            preflight.struct_offset_mismatches
-                        )
-                        ghidra_run_stats.preflight_extra_calls = len(preflight.extra_calls)
-                        ghidra_run_stats.preflight_missing_calls = len(
-                            preflight.missing_calls
-                        )
-                        ghidra_run_stats.preflight_dead_vars = len(preflight.dead_variables)
-                        ghidra_run_stats.preflight_prologue_mismatch = (
-                            preflight.prologue_mismatch
-                        )
-                        ghidra_run_stats.preflight_volatile_only = (
-                            preflight.volatile_regswap_only
-                        )
-                        ghidra_run_stats.preflight_hard_skip = preflight.hard_skip
-                    if has_preflight_signals:
-                        print(
-                            "  [GHIDRA PREFLIGHT DETAIL] "
-                            f"offsets={len(preflight.struct_offset_mismatches)} "
-                            f"extra_calls={len(preflight.extra_calls)} "
-                            f"missing_calls={len(preflight.missing_calls)} "
-                            f"dead_vars={len(preflight.dead_variables)} "
-                            f"prologue={int(preflight.prologue_mismatch)} "
-                            f"volatile_only={int(preflight.volatile_regswap_only)} "
-                            f"hard_skip={int(preflight.hard_skip)}",
-                            file=sys.stderr,
-                        )
                     # Hard skip: very high confidence unfixable
-                    if preflight.hard_skip:
+                    if preflight.confidence >= 0.9:
                         print(
                             f"  [GHIDRA PREFLIGHT] Unfixable — skipping",
                             file=sys.stderr,
@@ -652,8 +543,6 @@ def hill_climb(
     except KeyboardInterrupt:
         stopped_reason = "interrupted"
         print("\nInterrupted — restoring source and stopping.", file=sys.stderr)
-    except _GhidraCircuitOpen:
-        stopped_reason = "ghidra_down"
     except Exception as e:
         import traceback
         stopped_reason = "error"
@@ -663,9 +552,6 @@ def hill_climb(
         # If not applying or interrupted, restore original source
         if not apply or stopped_reason == "interrupted":
             source_path.write_bytes(original_source)
-        else:
-            # Strip the lock banner from the kept (improved) source
-            _strip_banner(source_path)
 
     elapsed = time.time() - start_time
     final_percent = current_percent if apply else initial_percent

@@ -515,7 +515,7 @@ class Scorer:
         # Ghidra cache lookup
         if ghidra:
             try:
-                from .ghidra_cache import get_or_cache_decompilation, GhidraCircuitOpen
+                from .ghidra_cache import get_or_cache_decompilation
                 from .ghidra_ast import parse_ghidra, extract_savegpr_count
                 code = get_or_cache_decompilation(self.symbol)
                 if code:
@@ -528,8 +528,6 @@ class Scorer:
                     else:
                         print(f"  Ghidra: loaded ({len(code)} bytes)",
                               file=sys.stderr)
-            except GhidraCircuitOpen:
-                raise  # Let circuit breaker propagate to hill_climb
             except Exception as e:
                 print(f"  Ghidra: unavailable ({e})", file=sys.stderr)
 

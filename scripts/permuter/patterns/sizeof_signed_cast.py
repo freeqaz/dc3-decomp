@@ -25,16 +25,15 @@ class SizeofSignedCastPattern(Pattern):
     name = "sizeof_signed_cast"
 
     def relevant(self, diagnosis: Diagnosis) -> bool:
-        # Only relevant when shift instruction mismatches are present
+        # Relevant when there are shift instruction mismatches
         for d in diagnosis.diff_ops:
             if d.target_opcode in ("srwi", "srawi", "addze") or \
                d.base_opcode in ("srwi", "srawi", "addze"):
                 return True
-        return False
+        # Also always-on since it's cheap
+        return True
 
     def priority(self, diagnosis: Diagnosis) -> float:
-        if not self.relevant(diagnosis):
-            return 0.0
         # Strong: srwi↔srawi swap — exactly signed vs unsigned shift
         for d in diagnosis.diff_ops:
             pair = {d.target_opcode, d.base_opcode}
@@ -42,7 +41,7 @@ class SizeofSignedCastPattern(Pattern):
                 return 0.9
             if "addze" in pair:
                 return 0.7
-        return 0.4
+        return 0.05  # always-on but very low priority without signal
 
     def generate(self, ctx: FunctionContext) -> Iterator[Variant]:
         counter = 0

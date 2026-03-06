@@ -44,6 +44,8 @@ UIList::~UIList() {
     RELEASE(mDataProvider);
 }
 
+int UIList::NumData() const { return mNumData; }
+
 BEGIN_HANDLERS(UIList)
     HANDLE_MESSAGE(ButtonDownMsg)
     HANDLE(selected_sym, OnSelectedSym)

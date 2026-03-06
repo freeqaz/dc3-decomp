@@ -2,19 +2,23 @@
 #include "Spotlight.h"
 #include "SpotlightDrawer.h"
 #include "math/Color.h"
+#include "math/Geo.h"
 #include "math/Mtx.h"
 #include "math/Rot.h"
 #include "math/Utl.h"
 #include "math/Vec.h"
 #include "obj/Object.h"
 #include "os/Debug.h"
+#include "os/Timer.h"
 #include "rnddx9/Mesh.h"
+#include "rndobj/Cam.h"
 #include "rndobj/Draw.h"
 #include "rndobj/Env.h"
 #include "rndobj/Flare.h"
 #include "rndobj/Group.h"
 #include "rndobj/Mat.h"
 #include "rndobj/Poll.h"
+#include "rndobj/Rnd.h"
 #include "rndobj/Trans.h"
 #include "obj/Task.h"
 #include "utl/BinStream.h"
@@ -449,6 +453,60 @@ BEGIN_LOADS(Spotlight)
         Generate();
     }
 END_LOADS
+
+void Spotlight::DrawShowing() {
+    START_AUTO_TIMER("spotlight");
+    if (mLightCanSort && mLightCanMesh) {
+        mLightCanMesh->SetWorldXfm(mLightCanXfm);
+        Sphere s(mLightCanMesh->GetSphere());
+        if (s.GetRadius() > 0) {
+            Multiply(s, mLightCanXfm, s);
+            if (!(s > RndCam::Current()->WorldFrustum())) {
+                mLightCanMesh->DrawShowing();
+            }
+        }
+    }
+    if (TheRnd.GetDrawMode() == Rnd::kDrawNormal) {
+        SpotlightDrawer::DrawLight(this);
+    } else if (mTargetLoaded) {
+        UpdateTransforms();
+        Hmx::Color c(Color());
+        Multiply(c, Intensity(), c);
+        sEnviron->SetAmbientColor(c);
+        RndEnvironTracker tracker(sEnviron, nullptr);
+        FOREACH (it, mAdditionalObjects) {
+            MILO_ASSERT(*it != this, 0x3E3);
+            if (*it != this)
+                (*it)->DrawShowing();
+        }
+        if (mLensMaterial) {
+            MILO_ASSERT(sDiskMesh, 0x3ED);
+            sDiskMesh->SetWorldXfm(mLensXfm);
+            sDiskMesh->SetMat(mLensMaterial);
+            sDiskMesh->DrawShowing();
+        }
+        if (mBeam.mBeam && TheRnd.GetDrawMode() != 5) {
+            mBeam.mBeam->DrawShowing();
+        }
+        if (mFlare && mFlare->GetMat()) {
+            mFlare->Draw();
+        }
+        if (mTarget) {
+            if (mTargetShadow) {
+                RndDrawable *drawable = dynamic_cast<RndDrawable *>(mTarget.Ptr());
+                if (drawable) {
+                    drawable->DrawShadow(WorldXfm(), 3.0f);
+                }
+            }
+            if (DoFloorSpot()) {
+                MILO_ASSERT(sDiskMesh, 0x40F);
+                sDiskMesh->SetWorldXfm(mFloorSpotXfm);
+                sDiskMesh->SetMat(mSpotMaterial);
+                sDiskMesh->DrawShowing();
+            }
+        }
+    }
+}
 
 bool Spotlight::MakeWorldSphere(Sphere &s, bool b) {
     if (b) {

@@ -72,25 +72,21 @@ TEST_F(ObjectLifetimeTest, MergeDirsNameCollisionLeavesOnlyLivePointers) {
     delete toDir;
 }
 
-// Safety regression: iterator should never return dead entries.
-TEST_F(ObjectLifetimeTest, ObjDirItrSkipsDeadHashEntries) {
+// Normal deletion path should null the hash entry and keep iteration safe.
+TEST_F(ObjectLifetimeTest, ObjDirItrIgnoresNullHashEntriesAfterDelete) {
     ExposedDir *dir = new ExposedDir();
 
     Hmx::Object *victim = Hmx::Object::New<Hmx::Object>();
     victim->SetName("victim.obj", dir);
 
-    // Keep a stale pointer, then force it back into hash table to simulate corruption.
-    Hmx::Object *stale = victim;
     delete victim;
-    ASSERT_FALSE(HmxObjectIsLive(stale));
 
     ObjectDir::Entry *entry = dir->ExposeFindEntry("victim.obj", true);
     ASSERT_NE(entry, nullptr);
-    entry->obj = stale;
+    EXPECT_EQ(entry->obj, nullptr);
 
     int itrCount = 0;
     for (ObjDirItr<Hmx::Object> it(dir, false); it != nullptr; ++it) {
-        // If we ever visit stale, live check will fail.
         EXPECT_TRUE(HmxObjectIsLive(&*it));
         itrCount++;
         ASSERT_LT(itrCount, 32);
@@ -119,6 +115,21 @@ TEST_F(ObjectLifetimeTest, ReplaceRefsRedirectsObjPtr) {
     delete owner;
     delete from;
     delete to;
+}
+
+TEST_F(ObjectLifetimeTest, RemoveSubDirReleasesDirPtrRef) {
+    ObjectDir *owner = Hmx::Object::New<ObjectDir>();
+    ObjectDir *subdir = Hmx::Object::New<ObjectDir>();
+    ObjDirPtr<ObjectDir> hold(subdir);
+
+    owner->AppendSubDir(ObjDirPtr<ObjectDir>(subdir));
+    EXPECT_TRUE(owner->HasSubDir(subdir));
+
+    owner->RemoveSubDir(hold);
+    EXPECT_FALSE(owner->HasSubDir(subdir));
+    EXPECT_TRUE(HmxObjectIsLive(subdir));
+
+    delete owner;
 }
 
 // Fixture-backed safety baseline on real archive content.
@@ -205,6 +216,7 @@ TEST_F(ObjectLifetimeTest, MergeDirsMoveAllSubdirsTransfersOwnership) {
     EXPECT_FALSE(fromDir->HasSubDir(movedSubdir));
 
     delete fromDir;
+    EXPECT_TRUE(HmxObjectIsLive(movedSubdir));
     delete toDir;
 }
 

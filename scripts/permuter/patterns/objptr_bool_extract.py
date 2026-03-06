@@ -148,14 +148,13 @@ def _extract_bool_chain_members(
             if not _MEMBER_RE.match(left_text):
                 continue
 
-            # Check if this member is used with -> in the right side (mFoo->Method())
-            # This confirms it's actually a pointer/smart pointer, not a bool/int
+            # Check if this member is also used in the right side (mFoo->Method())
             right = cond_expr.child_by_field_name("right")
             if right is None:
                 continue
 
             right_text = source[right.start_byte:right.end_byte].decode("utf-8", errors="replace")
-            if (left_text + "->") not in right_text:
+            if left_text not in right_text:
                 continue
 
             # Build variant: extract member into raw pointer local
@@ -238,9 +237,10 @@ def _handle_bool_decl(
     if not _MEMBER_RE.match(left_text):
         return
 
-    # Check if the member is used with -> in the expression (confirms it's a pointer)
+    # Check if the member appears elsewhere in the expression
     full_expr_text = source[expr.start_byte:expr.end_byte].decode("utf-8", errors="replace")
-    if (left_text + "->") not in full_expr_text:
+    # Count occurrences (should be 2+: one standalone, one in member access)
+    if full_expr_text.count(left_text) < 2:
         return
 
     # Build variant: insert raw pointer extraction before this statement

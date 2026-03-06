@@ -72,6 +72,7 @@ public:
     NEW_OBJ(SpotlightDrawer)
 
     static void Init();
+    static void DrawLight(Spotlight *);
 
     void Select();
     void DeSelect();

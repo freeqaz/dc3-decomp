@@ -148,27 +148,6 @@ def _negate_condition(cond_text: bytes) -> bytes:
             elif depth == 0 and stripped[i:i+2] == b"==" and (i + 2 >= len(stripped) or stripped[i+2:i+3] != b"="):
                 return stripped[:i] + b"!=" + stripped[i+2:]
 
-    # Comparison operators: < -> >=, > -> <=, <= -> >, >= -> <
-    _CMP_NEGATIONS = [(b"<=", b">"), (b">=", b"<"), (b"<", b">="), (b">", b"<=")]
-    for op, neg_op in _CMP_NEGATIONS:
-        if op in stripped:
-            depth = 0
-            for i in range(len(stripped) - len(op)):
-                if stripped[i:i+1] == b"(":
-                    depth += 1
-                elif stripped[i:i+1] == b")":
-                    depth -= 1
-                elif depth == 0 and stripped[i:i+len(op)] == op:
-                    # Make sure we don't match << or >> or <= when looking for <
-                    before = stripped[i-1:i] if i > 0 else b""
-                    after = stripped[i+len(op):i+len(op)+1]
-                    if before in (b"<", b">") or after in (b"<", b">"):
-                        continue
-                    # For < and >, don't match <= or >=
-                    if len(op) == 1 and after in (b"=",):
-                        continue
-                    return stripped[:i] + neg_op + stripped[i+len(op):]
-
     # Simple token (no spaces, no parens) — use !expr
     # Covers: identifiers, member access (a->b, a.b), scoped (A::B)
     if b" " not in stripped and b"(" not in stripped and b")" not in stripped:

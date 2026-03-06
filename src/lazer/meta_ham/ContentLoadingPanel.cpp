@@ -56,34 +56,28 @@ void ContentLoadingPanel::Poll() {
     ShowIfPossible();
     if (mShowing) {
         UIPanel::Poll();
-        RndGroup *progressGroup = ObjectDir::Main()->Find<RndGroup>("progress.grp", true);
-        if (progressGroup) {
-            // Animate progress bar smoothly toward target percentage
-            f32 currentFrame = progressGroup->GetFrame();
-            int total = mMountedCount;
-            int current = mContentCount;
-
-            // Calculate target frame (110% of progress, capped at 100)
-            f32 target = ((f32)total * 110.0f) / (f32)current;
-            if (target > 100.0f) {
-                target = 100.0f;
-            }
-
-            // Clamp delta time to [0, 1] range
-            f32 delta = TheTaskMgr.DeltaSeconds();
-            if (delta < 0.0f) {
-                delta = 0.0f;
-            } else if (delta > 1.0f) {
-                delta = 1.0f;
-            }
-
-            // Interpolate toward target, snap to 100% when fully loaded
-            f32 newFrame = (target - currentFrame) * delta + currentFrame;
-            if (current == total) {
-                newFrame = 100.0f;
-            }
-            progressGroup->SetFrame(newFrame, 1.0f);
+        RndGroup *progressGroup = LoadedDir()->Find<RndGroup>("progress.grp", true);
+        f32 currentFrame = progressGroup->GetFrame();
+        f32 target = 100.0f;
+        if (mContentCount > 0) {
+            target = ((f32)mMountedCount * 110.0f) / (f32)mContentCount;
+        } else {
+            target = 100.0f;
         }
+        if (target > 100.0f) {
+            target = 100.0f;
+        }
+        f32 delta = TheTaskMgr.DeltaSeconds();
+        if (delta < 0.0f) {
+            delta = 0.0f;
+        } else if (delta > 1.0f) {
+            delta = 1.0f;
+        }
+        f32 newFrame = (target - currentFrame) * delta + currentFrame;
+        if (mMountedCount == mContentCount) {
+            newFrame = 100.0f;
+        }
+        progressGroup->SetFrame(newFrame, 1.0f);
     }
 }
 

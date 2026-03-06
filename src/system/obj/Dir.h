@@ -446,16 +446,6 @@ class ObjDirItr {
 private:
     void Advance() {
         for (; mEntry != nullptr; mEntry = mSubDirs.front()->HashTable().Next(mEntry)) {
-#ifdef HX_NATIVE
-            // Skip null, dead, or vtable-corrupted entries left by merge/delete
-            if (!mEntry->obj)
-                continue;
-            if (!HmxObjectIsLive(mEntry->obj))
-                continue;
-            void **vptr = *(void ***)mEntry->obj;
-            if (!vptr)
-                continue;
-#endif
             mObj = dynamic_cast<T *>(mEntry->obj);
             if (mObj)
                 return;

@@ -6,7 +6,7 @@
 ## What We Accomplished
 
 ### 1. Merge Decomp Status (Current Workspace)
-`MergeDirs()` and `MergeObjectsRecurse()` are implemented in this workspace.
+`MergeDirs()` is implemented and matches, but `MergeObjectsRecurse()` is currently still a **stub** in this workspace and is a high-priority TODO.
 
 Key DC3-vs-RB3 API differences discovered:
 - `kReplace`/`kKeep` → `kMergeReplace`/`kMergeKeep`
@@ -57,7 +57,7 @@ Most likely because some hash entries point to dead objects after merge/delete i
 ### Q2: Why does subdir recursion crash?
 The crash pattern is still consistent with subdir ownership/ref-lifetime issues during `AppendSubDir` + source-dir teardown. This path remains disabled under `HX_NATIVE`.
 
-Important signal update (this workspace): merge recursion is implemented; current divergence signal is subdir ownership semantics (`kMoveAllSubdirs`) under native lifetime pressure.
+Important signal update (this workspace): `MergeDirs` is complete, but `MergeObjectsRecurse` currently objdiffs as a **stub** (all-insert). That means native behavior can diverge simply because core merge recursion logic is not implemented yet.
 
 ### Q3: How to get animation working with FileMerger path?
 Two practical paths:
@@ -121,9 +121,8 @@ cd native
 - Restore `ScanScene` recursive flag once dangling pointer issue is resolved
 
 ## TODOs (Updated)
-- [x] **Implement `MergeObjectsRecurse(ObjectDir*, ObjectDir*, MergeFilter&, bool)`** in `src/system/obj/Utl.cpp`.
-- [x] Implement/verify `MergeObject(Object*, Object*, ObjectDir*, MergeFilter&)` filter-overload.
-- [ ] Resolve `ObjectLifetimeTest.MergeDirsMoveAllSubdirsTransfersOwnership` failure (source still reports `HasSubDir` true after `kMoveAllSubdirs` merge).
+- [ ] **Implement `MergeObjectsRecurse(ObjectDir*, ObjectDir*, MergeFilter&, bool)`** in `src/system/obj/Utl.cpp` (currently still a stub in this workspace; objdiff reports all-insert).
+- [ ] Implement/verify `MergeObject(Object*, Object*, ObjectDir*, MergeFilter&)` filter-overload if still unresolved in this branch.
 - [ ] Add A/B runtime toggles for native-only ref/lifetime guards (`HX_NATIVE` paths in `Object.cpp`, `ObjPtr_p.h`, `Dir.h`) to isolate which patch masks or introduces divergence.
 - [ ] Keep and expand fixture-backed lifetime tests that load real content from archives (not only synthetic object graphs).
 - [ ] Add fixture test coverage for:

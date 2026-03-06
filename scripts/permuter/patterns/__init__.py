@@ -52,9 +52,6 @@ from . import varargs_cast  # noqa: F401  # Add (char *) casts to MILO macro var
 from . import bool_to_uchar  # noqa: F401  # Change bool locals to unsigned char
 from . import guard_to_nested  # noqa: F401  # Convert guard returns <-> nested if blocks
 from . import noinline_stub  # noqa: F401  # Mark trivial same-TU callees as __declspec(noinline)
-from . import math_return_cast  # noqa: F401  # Add/remove (float) cast on math function returns (frsp fix)
-from . import deep_member_ref_bind  # noqa: F401  # Bind ptr->member chains to local refs (double-indirection)
-from . import loop_condition_cache  # noqa: F401  # Cache/uncache member access in loop conditions
 
 from .base import get_all_patterns, get_pattern, list_patterns
 
