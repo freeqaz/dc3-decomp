@@ -29,6 +29,16 @@ from ..types import Diagnosis, FunctionContext, Variant
 
 _LOOP_TYPES = {"for_statement", "while_statement", "do_statement"}
 
+# Types safe to hoist (have default constructors or are trivial)
+_SAFE_HOIST_TYPES = {
+    "int", "unsigned", "unsigned int", "float", "double", "bool", "char",
+    "short", "long", "unsigned long", "unsigned short", "unsigned char",
+    "signed char", "size_t", "s32", "u32", "s16", "u16", "s8", "u8",
+    "Symbol", "Vector3", "Vector2", "Quat", "Transform", "DataNode",
+    "Color", "Hmx::Color", "Rect", "Hmx::Rect", "Sphere", "Hmx::Sphere",
+    "Plane", "Hmx::Plane", "Box", "Hmx::Box", "String", "FilePath",
+}
+
 
 class HoistSretPattern(Pattern):
     name = "hoist_sret"
@@ -101,6 +111,12 @@ def _hoist_out_of_loop(node: Node, ctx: FunctionContext, counter: int) -> Iterat
             type_text = ctx.source_text(type_node)
             var_name = _get_declarator_text(name_node)
             if var_name is None:
+                continue
+
+            # Only hoist types known to have default constructors.
+            # Pointer types (Type* var;) are always safe to hoist.
+            is_pointer = name_node.type == "pointer_declarator"
+            if not is_pointer and type_text not in _SAFE_HOIST_TYPES:
                 continue
 
             value_text = ctx.source_text(value_node)

@@ -545,14 +545,6 @@ DeJitter::DeJitter() : mCurrentIndex(0), mHistoryCount(0), mFilteredDelta(0), mP
     for (int i = 0; i < 0x20; i++) mHistoryBuffer[i] = 0;
 }
 
-void DeJitter::Reset() {
-    mCurrentIndex = 0;
-    mHistoryCount = 0;
-    mFilteredDelta = 0;
-    mPreviousOutput = 0;
-    for (int i = 0; i < 0x20; i++) mHistoryBuffer[i] = 0;
-}
-
 // (DancerSkeleton removed — hamobj/DancerSkeleton is Matching)
 
 // -- VenueProvider --
@@ -3166,7 +3158,6 @@ bool Award::IsSilent() const { return mIsSilent; }
 
 // -- FaderGroup stubs --
 #include "synth/Faders.h"
-bool FaderGroup::Dirty() { return mDirty; }
 
 // -- UIList stubs --
 #include "ui/UIList.h"
@@ -3199,7 +3190,6 @@ void ObjRefConcrete<CharBone, ObjectDir>::CopyRef(const ObjRefConcrete<CharBone,
 
 // FileLoader::GetSize (FileCache.obj, NetLoader.obj)
 #include "utl/Loader.h"
-int FileLoader::GetSize() { return mBufLen; }
 
 // NavListHeaderNode::Handle (MQSongSortNode.obj)
 #include "meta_ham/NavListNode.h"

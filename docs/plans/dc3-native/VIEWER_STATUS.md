@@ -6,6 +6,28 @@ The milo-viewer (`native/src/viewer/milo_viewer.cpp`) is the standalone asset
 viewer for DC3's `.milo_xbox` scene files. It's the primary testbed for rendering
 work (Track B), separate from the full engine boot (Track A, see `STATUS.md`).
 
+## Status Refresh (2026-03-05, Graphics Polish Checkpoint)
+
+- Focused pose/clip validation is healthy:
+  - `./native/build/milo-tests '--gtest_filter=MiloViewerPosePipeline.*:ClipPoseFixture.*' --gtest_color=no`
+  - **10/10 passed** when run with unrestricted GPU/process access.
+  - In sandboxed runs, `MiloViewerPosePipeline.ViewerPoseDumpMatchesInProcessPoseMeshes` can fail when the viewer subprocess cannot produce the pose dump file.
+- Demo YAML inventory and output coverage:
+  - `native/scenes/demo.yaml` currently defines **20 scenes** and **44 shots**.
+  - Current `archive/screenshots` coverage for those named outputs is **14/44** (30 missing).
+- Demo YAML currently has real data integrity issues:
+  - **8 broken asset paths** (missing files on disk), including:
+    - `emilia_dclive` clips
+    - `bodie_houseparty` venue + clips
+    - `angel_rollerrink` venue + clips
+    - `taye_flash4wrd` venue + clips
+    - `emilia_solo` clips
+  - Duplicate shot key: `dare_front` is declared twice; the second declaration silently overrides the first.
+  - `dare_streets` is referenced by the first `dare_front` declaration but has no corresponding scene block.
+- Visual quality spot-checks after path correction:
+  - Corrected Emilia/Bodie/Taye path combinations render successfully.
+  - Several venue shots still read as sparse/dark framing; this is now mostly a shot composition + scene assembly issue, not a renderer crash issue.
+
 ## Completed
 
 ### Static Mesh Rendering (Tier 1.5)
@@ -116,11 +138,22 @@ textures resolve to null → flat gray shading.
 | Venue sub-scene | `dclive_palmtrees_anim.milo_xbox` | No | Yes | No (gray) |
 | Animation clip | `crowd/anim/female_base.milo_xbox` | No | Yes (no geo) | N/A |
 
-### Missing Drawable Types
+### Drawable Parity Gaps
 
-Particles (`RndParticleSys`), lines (`RndLine`), flares (`RndFlare`) are not
-implemented. Text and 2D quads work in the engine but haven't been wired into
-the standalone viewer.
+- **Particles**: native billboard draw path exists (`DrawParticlesBillboard`), but
+  particle deserialization is still stubbed in native (`RndParticleSys::Load(BinStream&) {}`),
+  so many authored particle systems are not faithfully reproduced.
+- **Lines / flares**: object-side draw paths exist, but we do not yet have dedicated
+  viewer regression coverage proving end-to-end parity across representative scenes.
+- Text/2D draw paths exist in engine code, but viewer parity coverage is still limited.
+
+### Demo Scene Data Hygiene / Coverage
+
+- `native/scenes/demo.yaml` includes stale or incorrect asset paths, plus a duplicate
+  shot key (`dare_front`) and one undefined scene reference (`dare_streets`).
+- The demo output pack is incomplete (14/44 outputs currently present under
+  `archive/screenshots` for defined shot names), so polished showcase generation is
+  currently gated by YAML/data cleanup before renderer-only polish.
 
 ## Roadmap
 
@@ -216,14 +249,23 @@ Fur (shell-based), refraction, motion blur, occlusion queries, movie textures.
 | `native/src/viewer/milo_viewer.cpp` | Viewer main — loading, camera, animation, lights, render loop |
 | `native/src/platform/Mesh_Wgpu.cpp` | `RndMesh::DrawShowing` (static + skinned paths) |
 | `native/src/platform/Rnd_Wgpu.cpp` | Frame lifecycle, scene uniforms, bind groups, lighting |
+| `native/src/platform/Part_Wgpu.cpp` | Native particle billboard draw path |
 | `native/src/gfx/standard_wgsl.inc` | WGSL shaders (static + skinned + skin/hair) |
 | `native/src/gfx/PipelineManager.cpp` | 4 bind group layouts, pipeline cache |
 | `native/src/gfx/VertexFormats.cpp` | Vertex layouts, compressed vertex unpacking |
 | `native/scripts/render_scenes.py` | YAML scene batch renderer (parallel, screenshots + video) |
 | `native/scripts/render_screenshots.sh` | Legacy bash batch renderer (props only) |
-| `native/scenes/demo.yaml` | Demo scene definitions (30 shots across 15 scenes) |
+| `native/scenes/demo.yaml` | Demo scene definitions (44 shots across 20 scenes; currently needs path cleanup) |
 | `native/docs/scene-renderer.md` | User guide: YAML format, camera, lighting, CLI |
 | `native/docs/viewer-internals.md` | Technical: orbit camera, smoothing, light injection, pipeline |
+
+## Immediate Priorities (Polish Track)
+
+1. Fix demo YAML pathing and key collisions (`dare_front` duplicate, undefined `dare_streets`, 8 missing asset paths).
+2. Regenerate full 44-shot demo pack and classify results (OK / dark / fail) from a clean run.
+3. Tune per-shot camera + clip/frame selections for venue readability and pose quality.
+4. Implement/port `RndParticleSys::Load` for authored FX parity in showcase scenes.
+5. Add a renderer-side scene/YAML validation pass to catch missing assets and duplicate keys before long batch runs.
 
 ## How to Run
 

@@ -38,6 +38,8 @@ public:
     virtual bool IsPurchasing() const;
     virtual bool IsSuccess() const;
     virtual bool PurchaseMade() const;
+    virtual bool IsReady() const { return true; }
+    virtual void PollUpdate() {}
 
     XboxPurchaser(
         int,

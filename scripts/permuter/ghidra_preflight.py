@@ -36,6 +36,11 @@ _NOT_CALLS = frozenset({
     "undefined8", "undefined2", "undefined1", "bool", "byte",
 })
 
+_IGNORED_HELPER_CALL_RE = re.compile(
+    r"^(?:__savegprlr_\d+|__restgprlr_\d+|__savefpr_\d+|__restfpr_\d+|"
+    r"CONCAT\d+|ZEXT\d+|SEXT\d+|SUB\d+)$"
+)
+
 
 @dataclass
 class PreflightResult:
@@ -50,6 +55,7 @@ class PreflightResult:
     prologue_mismatch: bool = False
     volatile_regswap_only: bool = False
     is_merged_symbol: bool = False
+    hard_skip: bool = False
 
 
 def run_preflight(
@@ -94,8 +100,12 @@ def run_preflight(
                     ghidra_func_name = child.text.decode("utf-8", errors="replace")
                     break
 
-    ghidra_calls = _extract_calls_from_text(ghidra_ast.code, ghidra_func_name)
-    source_calls = _extract_calls_from_node(source_node, source_bytes)
+    ghidra_calls = _filter_helper_calls(
+        _extract_calls_from_text(ghidra_ast.code, ghidra_func_name)
+    )
+    source_calls = _filter_helper_calls(
+        _extract_calls_from_node(source_node, source_bytes)
+    )
 
     # Remove common names (both sides have them, they're not mismatches)
     common = ghidra_calls & source_calls
@@ -133,21 +143,31 @@ def run_preflight(
             result.volatile_regswap_only = True
 
     # Compute confidence score
-    flags = 0
+    confidence = 0.0
     if result.struct_offset_mismatches:
-        flags += 2  # Strong signal
+        confidence += 0.15
     if result.extra_calls:
-        flags += 1
+        confidence += 0.05
     if result.missing_calls:
-        flags += 1
+        confidence += 0.05
     if result.dead_variables:
-        flags += 1
+        confidence += 0.10
     if result.prologue_mismatch:
-        flags += 1  # Moderate signal (some are fixable)
+        confidence += 0.30
+        if diagnosis and hasattr(diagnosis, "gpr_save_delta"):
+            if abs(diagnosis.gpr_save_delta) >= 3:
+                confidence += 0.10
     if result.volatile_regswap_only:
-        flags += 2  # Strong unfixable signal
+        confidence += 0.30
+        if diagnosis and hasattr(diagnosis, "replace_real") and diagnosis.replace_real == 0:
+            confidence += 0.20
 
-    result.confidence = min(1.0, flags * 0.2)
+    # If objdiff reports real structural replaces, preflight should be cautious
+    # about hard "unfixable" conclusions.
+    if diagnosis and hasattr(diagnosis, "replace_real") and diagnosis.replace_real > 0:
+        confidence *= 0.70
+
+    result.confidence = min(1.0, confidence)
 
     # Generate skip reason if confidence is high enough
     reasons = []
@@ -172,6 +192,7 @@ def run_preflight(
 
     if result.confidence >= 0.4:
         result.skip_reason = "; ".join(reasons)
+    result.hard_skip = result.confidence >= 0.9
 
     return result
 
@@ -193,6 +214,11 @@ def _extract_calls_from_text(code: str, func_name: str | None = None) -> set[str
                 and name != func_name):
             calls.add(name)
     return calls
+
+
+def _filter_helper_calls(calls: set[str]) -> set[str]:
+    """Drop compiler/decompiler helper pseudo-calls from mismatch checks."""
+    return {c for c in calls if not _IGNORED_HELPER_CALL_RE.match(c)}
 
 
 def _extract_calls_from_node(node: Node, source_bytes: bytes) -> set[str]:

@@ -48,7 +48,18 @@ CREATE TABLE IF NOT EXISTS ghidra_stats (
     winning_pattern         TEXT,
     initial_pct             REAL,
     final_pct               REAL,
-    delta                   REAL NOT NULL DEFAULT 0
+    delta                   REAL NOT NULL DEFAULT 0,
+    -- Preflight diagnostics
+    preflight_flagged       INTEGER NOT NULL DEFAULT 0,
+    preflight_reason        TEXT,
+    preflight_confidence    REAL NOT NULL DEFAULT 0,
+    preflight_struct_offsets INTEGER NOT NULL DEFAULT 0,
+    preflight_extra_calls   INTEGER NOT NULL DEFAULT 0,
+    preflight_missing_calls INTEGER NOT NULL DEFAULT 0,
+    preflight_dead_vars     INTEGER NOT NULL DEFAULT 0,
+    preflight_prologue_mismatch INTEGER NOT NULL DEFAULT 0,
+    preflight_volatile_only INTEGER NOT NULL DEFAULT 0,
+    preflight_hard_skip     INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE INDEX IF NOT EXISTS idx_ghidra_stats_symbol
@@ -73,6 +84,13 @@ class GhidraRunStats:
     preflight_flagged: bool = False
     preflight_reason: str | None = None
     preflight_confidence: float = 0.0
+    preflight_struct_offsets: int = 0
+    preflight_extra_calls: int = 0
+    preflight_missing_calls: int = 0
+    preflight_dead_vars: int = 0
+    preflight_prologue_mismatch: bool = False
+    preflight_volatile_only: bool = False
+    preflight_hard_skip: bool = False
 
 
 @dataclass
@@ -105,7 +123,7 @@ class GhidraBatchStats:
             self.total_delta_other += delta
         if run.preflight_flagged:
             self.preflight_flagged += 1
-            if run.preflight_confidence >= 0.8:
+            if run.preflight_hard_skip:
                 self.preflight_skipped += 1
 
     def summary_lines(self) -> list[str]:
@@ -157,13 +175,17 @@ def store_run(
     conn = sqlite3.connect(str(_CACHE_DB))
     conn.execute("PRAGMA journal_mode=WAL")
     conn.executescript(_GHIDRA_SCHEMA)
+    _migrate_schema(conn)
     conn.execute(
         "INSERT INTO ghidra_stats "
         "(symbol, function_name, timestamp, ghidra_available, ghidra_code_bytes, "
         "ghidra_vars_count, ghidra_gpr_saves, ghidra_variants_generated, "
         "total_variants, ghidra_winner, winning_variant, winning_pattern, "
-        "initial_pct, final_pct, delta) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "initial_pct, final_pct, delta, preflight_flagged, preflight_reason, "
+        "preflight_confidence, preflight_struct_offsets, preflight_extra_calls, "
+        "preflight_missing_calls, preflight_dead_vars, preflight_prologue_mismatch, "
+        "preflight_volatile_only, preflight_hard_skip) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             symbol,
             function_name,
@@ -180,10 +202,42 @@ def store_run(
             initial_pct,
             final_pct,
             final_pct - initial_pct,
+            int(run.preflight_flagged),
+            run.preflight_reason,
+            run.preflight_confidence,
+            run.preflight_struct_offsets,
+            run.preflight_extra_calls,
+            run.preflight_missing_calls,
+            run.preflight_dead_vars,
+            int(run.preflight_prologue_mismatch),
+            int(run.preflight_volatile_only),
+            int(run.preflight_hard_skip),
         ),
     )
     conn.commit()
     conn.close()
+
+
+def _migrate_schema(conn: sqlite3.Connection) -> None:
+    """Best-effort migration for ghidra_stats in existing cache DBs."""
+    expected_cols = {
+        "preflight_flagged": "INTEGER NOT NULL DEFAULT 0",
+        "preflight_reason": "TEXT",
+        "preflight_confidence": "REAL NOT NULL DEFAULT 0",
+        "preflight_struct_offsets": "INTEGER NOT NULL DEFAULT 0",
+        "preflight_extra_calls": "INTEGER NOT NULL DEFAULT 0",
+        "preflight_missing_calls": "INTEGER NOT NULL DEFAULT 0",
+        "preflight_dead_vars": "INTEGER NOT NULL DEFAULT 0",
+        "preflight_prologue_mismatch": "INTEGER NOT NULL DEFAULT 0",
+        "preflight_volatile_only": "INTEGER NOT NULL DEFAULT 0",
+        "preflight_hard_skip": "INTEGER NOT NULL DEFAULT 0",
+    }
+    cols = conn.execute("PRAGMA table_info(ghidra_stats)").fetchall()
+    existing = {row[1] for row in cols}
+    for col, ddl in expected_cols.items():
+        if col in existing:
+            continue
+        conn.execute(f"ALTER TABLE ghidra_stats ADD COLUMN {col} {ddl}")
 
 
 def query_summary() -> dict:

@@ -20,6 +20,30 @@ OptionsPanel::OptionsPanel() {
 
 OptionsPanel::~OptionsPanel() {}
 
+void OptionsPanel::Poll() {
+    UIPanel::Poll();
+    if (mXboxPurchaser) {
+        mXboxPurchaser->PollUpdate();
+        if (!mXboxPurchaser->IsPurchasing()) {
+            if (mXboxPurchaser->IsSuccess()) {
+                if (!mXboxPurchaser->PurchaseMade()) {
+                    if (mXboxPurchaser->IsReady()) {
+                        if (mPurchaseProfile) {
+                            PostPurchaseEnumJob *job = new PostPurchaseEnumJob(
+                                this, mXboxPurchaser->mUserIndex, mOfferID,
+                                mXboxPurchaser->mSource, mXboxPurchaser->mUserIndex
+                            );
+                            ThePlatformMgr.QueueEnumJob(job);
+                        }
+                    }
+                }
+            }
+            delete mXboxPurchaser;
+            mXboxPurchaser = nullptr;
+        }
+    }
+}
+
 bool OptionsPanel::OnRedeemToken(int pad, char const *token) {
     mRedeemTokenJob = new RedeemTokenJob(this, pad, token);
     TheRockCentral.ManageJob(mRedeemTokenJob);

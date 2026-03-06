@@ -333,10 +333,27 @@ void MergeObjectsRecurse(ObjectDir *fromDir, ObjectDir *toDir, MergeFilter &filt
     }
 
     std::vector<ObjDirPtr<ObjectDir> > &subDirs = fromDir->mSubDirs;
-    for (int i = 0; i < subDirs.size(); i++) {
+    for (int i = 0; i < subDirs.size();) {
         ObjectDir *sd = subDirs[i];
-        if (sd)
-            MergeObjectsRecurse(sd, toDir, filt, false);
+        if (sd) {
+            switch (filt.FilterSubdir(sd, toDir)) {
+            case MergeFilter::kMergeKeep:
+                break;
+            case MergeFilter::kMergeReplace: {
+                if (!toDir->HasSubDir(sd)) {
+                    ObjDirPtr<ObjectDir> dirPtr(sd);
+                    toDir->AppendSubDir(dirPtr);
+                }
+                fromDir->RemovingSubDir(subDirs[i]);
+                subDirs.erase(subDirs.begin() + i);
+                continue;
+            }
+            default:
+                MergeObjectsRecurse(sd, toDir, filt, false);
+                break;
+            }
+        }
+        i++;
     }
 }
 
