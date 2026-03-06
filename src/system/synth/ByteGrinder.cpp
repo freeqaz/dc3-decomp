@@ -232,48 +232,42 @@ DataNode op9(DataArray *msg) {
 }
 
 DataNode op10(DataArray *msg) {
-    u32 operand = msg->Int(1);
-    u32 w = msg->Int(2);
-    u8 w2 = (w & 0xFF) << 8;
-    u32 w3 = (w2 & 0xFFFFFF00) | (w & 0xFF);
-
-    return DataNode(kDataInt, u8(operand ^ u32(w2 >> !operand)));
+    unsigned long operand = msg->Int(1);
+    unsigned long w = msg->Int(2);
+    unsigned long ret = u8(w) | ((w << 8) & 0xFF00);
+    ret >>= !operand;
+    return DataNode(kDataInt, u8(ret ^ operand));
 }
 
 DataNode op11(DataArray *msg) {
-    u32 operand = msg->Int(1);
-    u32 w = msg->Int(2);
-    u8 w2 = (w & 0xFF) << 8;
-    u32 w3 = (w & 0xFFFFFF00) | (w2 & 0xFF);
-
-    return DataNode(kDataInt, u8(u32(w2 >> !operand) + operand));
+    unsigned long operand = msg->Int(1);
+    unsigned long w = msg->Int(2);
+    unsigned long ret = u8(w) | ((w << 8) & 0xFF00);
+    ret >>= u8(operand & 7);
+    return DataNode(kDataInt, u8(ret ^ operand));
 }
 
 DataNode op12(DataArray *msg) {
-    u32 operand = msg->Int(1);
-    u32 w = msg->Int(2);
-    u8 w2 = (w & 0xFF) << 8;
-    u32 w3 = (w & 0xFFFFFF00) | (w2 & 0xFF);
-
-    return u8(u32(w2 >> !operand) + operand);
+    unsigned long operand = msg->Int(1);
+    unsigned long w = msg->Int(2);
+    unsigned long ret = u8(w) | ((w << 8) & 0xFF00);
+    ret >>= u8(operand & 7);
+    return DataNode(kDataInt, u8(ret + operand));
 }
 
 DataNode op13(DataArray *msg) {
-    u32 operand = msg->Int(1);
-    u32 w = msg->Int(2);
-    u32 w2 = (w & 0xFF) << 8;
-    u32 w3 = (w2 & 0xFFFFFF00) | (w & 0xFF);
-
-    return u8(u32(w3 >> !operand) + operand);
+    unsigned long operand = msg->Int(1);
+    unsigned long w = msg->Int(2);
+    unsigned long ret = u8(w) | ((w << 8) & 0xFF00);
+    ret >>= !operand;
+    return DataNode(kDataInt, u8(ret + operand));
 }
 
 DataNode op14(DataArray *msg) {
-    u32 operand = msg->Int(1);
-    u32 w = msg->Int(2);
-    u32 w2 = (w & 0xFF) << 8;
-    u32 w3 = (w2 & 0xFFFFFF00) | (w & 0xFF);
-
-    return u8((w3 >> 1) + operand);
+    unsigned long operand = msg->Int(1);
+    unsigned long w = msg->Int(2);
+    unsigned long ret = (u8(w) >> 1) | (u8(w) << 7);
+    return DataNode(kDataInt, u8(ret + operand));
 }
 
 DataNode op15(DataArray *msg) {
