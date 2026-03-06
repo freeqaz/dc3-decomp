@@ -5,6 +5,8 @@
 #include "meta_ham/SongSortNode.h"
 #include "ui/UIListWidget.h"
 
+SongCmp::~SongCmp() {}
+
 int SongCmp::Compare(const NavListItemSortCmp *cmp, NavListNodeType type) const {
     switch (type) {
     case kNodeShortcut:

@@ -101,6 +101,10 @@ class Diagnosis:
     base_gpr_saves: int | None = None
     target_fpr_saves: int | None = None
     base_fpr_saves: int | None = None
+    # Boolean materialization: count of subfc/eqv/srwi/addze sequences in target-only
+    bool_materialization_sequences: int = 0
+    # GPR-FPR type conflict: target and base have opposite-sign save deltas
+    has_gpr_fpr_type_conflict: bool = False
 
     @property
     def has_prologue_mismatch(self) -> bool:

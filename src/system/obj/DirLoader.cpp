@@ -843,6 +843,16 @@ void DirLoader::CreateObjects() {
         }
         if (!Hmx::Object::RegisteredFactory(classSym)) {
             MILO_NOTIFY("%s: Can't make %s", mFile.c_str(), classSym);
+#ifdef HX_NATIVE
+            {
+                static int sSkipLog = 0;
+                if (sSkipLog < 50) {
+                    printf("[CreateObjects] SKIP '%s' class='%s' (no factory) in %s\n",
+                           buf, classSym.Str(), mFile.c_str());
+                    sSkipLog++;
+                }
+            }
+#endif
             goto release_obj;
         } else {
             MemPoint begin(MemPoint::kInitType0);

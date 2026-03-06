@@ -43,6 +43,8 @@ Symbol VenueProvider::DataSymbol(int idx) const {
     return mVenues[idx];
 }
 
+int VenueProvider::NumData() const { return mVenues.size(); }
+
 void VenueProvider::UpdateList() {
     mVenues.clear();
     static Symbol Default("default"); // didnt like me using a lowercase d

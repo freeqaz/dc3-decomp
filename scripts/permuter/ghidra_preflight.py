@@ -50,6 +50,9 @@ class PreflightResult:
     prologue_mismatch: bool = False
     volatile_regswap_only: bool = False
     is_merged_symbol: bool = False
+    # Detection-only fields (for reporting, not skipping)
+    bool_materialization_count: int = 0
+    has_gpr_fpr_type_conflict: bool = False
 
 
 def run_preflight(
@@ -131,6 +134,12 @@ def run_preflight(
                         pass
         if all_volatile:
             result.volatile_regswap_only = True
+
+    # Detection-only fields (from diagnosis, for reporting)
+    if diagnosis and hasattr(diagnosis, "bool_materialization_sequences"):
+        result.bool_materialization_count = diagnosis.bool_materialization_sequences
+    if diagnosis and hasattr(diagnosis, "has_gpr_fpr_type_conflict"):
+        result.has_gpr_fpr_type_conflict = diagnosis.has_gpr_fpr_type_conflict
 
     # Compute confidence score
     flags = 0

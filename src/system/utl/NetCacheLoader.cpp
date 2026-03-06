@@ -103,3 +103,7 @@ void NetCacheLoader::Poll() {
 }
 
 const char *NetCacheLoader::GetRemotePath() const { return mRemotePath.c_str(); }
+
+NetCacheMgrFailType NetCacheLoader::GetFailType() const {
+    return (NetCacheMgrFailType)mFailType;
+}

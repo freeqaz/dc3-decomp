@@ -380,3 +380,5 @@ RndEnviron::RndEnviron()
       mUseToneMapping(0), mUseApprox_Local(1), mUseApprox_Global(1) {
     mUpdateTimer.Restart();
 }
+
+void RndEnviron::UpdateApproxLighting(const Vector3 *) {}

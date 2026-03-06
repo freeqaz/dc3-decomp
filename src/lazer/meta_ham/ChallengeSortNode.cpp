@@ -84,6 +84,8 @@ void ChallengeHeaderNode::OnHighlight() {
     SetCollapseStateIcon(true);
 }
 
+Symbol ChallengeHeaderNode::Select() { return gNullStr; }
+
 Symbol ChallengeHeaderNode::OnSelect() {
     if (TheChallengeSortMgr->IsHeaderCollapsed(GetToken())) {
         TheChallengeSortMgr->SetHeaderUncollapsed(GetToken());

@@ -72,6 +72,7 @@ void CacheMgr::AddCacheID(CacheID *id, Symbol s) {
 }
 
 bool CacheMgr::IsDone() { return mOpCur == kOpNone; }
+CacheResult CacheMgr::GetLastResult() { return mLastResult; }
 void CacheMgr::SetLastResult(CacheResult c) { mLastResult = c; }
 void CacheMgr::SetOp(OpType t) { mOpCur = t; }
 CacheMgr::OpType CacheMgr::GetOp() { return mOpCur; }

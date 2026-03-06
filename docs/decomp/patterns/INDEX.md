@@ -33,6 +33,9 @@ These patterns can often be fixed with source changes. Sorted by ROI (impact x s
 | Operator Overload Selection | +1-2% | 100% | [fixable-operators.md](fixable-operators.md#operator-overload-selection) |
 | Inline Assignment | +1-2% | 95% | [fixable-operators.md](fixable-operators.md#inline-assignment) |
 | Negation Splitting (fneg/frsp) | +3-4% | HIGH | [fixable-operators.md](fixable-operators.md#negation-splitting-fnegfrsp-scheduling) |
+| Byte Mask Extraction (rlwimi) | +5-30% | HIGH | [fixable-operators.md](fixable-operators.md#byte-mask-extraction-rlwimi) |
+| NOR Peephole Prevention (u32 Widening) | +1-14% | HIGH | [fixable-operators.md](fixable-operators.md#nor-peephole-prevention-u32-widening) |
+| u8 Intermediate Scheduling | +0.7-1% | MEDIUM | [fixable-operators.md](fixable-operators.md#u8-intermediate-variables-for-shift-scheduling) |
 | Early Return Destructor Path Separation | +10-16% | HIGH | [fixable-control-flow.md](fixable-control-flow.md#early-return-for-destructor-path-separation) |
 | Ternary vs If-Else | +5-10% | 75% | [fixable-control-flow.md](fixable-control-flow.md#ternary-vs-if-else) |
 | IsNaN vs Threshold Check | +3-5% | HIGH | [fixable-comparison.md](fixable-comparison.md#isnan-vs-threshold-check) |

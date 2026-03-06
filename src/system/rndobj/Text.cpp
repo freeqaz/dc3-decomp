@@ -1334,6 +1334,45 @@ void RndText::UpdateScrollOffsets() {
 static const wchar_t kEllipsisStr[] = L"...";
 static const wchar_t kBreakChars[] = L" \t\n";
 
+void RndText::FitTextJust() {
+    BuildFontMaps(true);
+
+    HX_VECTOR(unsigned short) wideChars;
+    HX_VECTOR(Line) lines;
+    int numChars = ConvertTextToWide(mText.c_str(), wideChars);
+    float *charWidths = (float *)_alloca((numChars + 2) * sizeof(float));
+    OnComputeCharWidths(&wideChars[0], charWidths, false);
+
+    Hmx::Rect bounds;
+    float scale = 1.0f;
+    WrapText(&wideChars[0], numChars, charWidths, lines, bounds, scale);
+
+    float lo = 0.2f;
+    float hi = mStyles[0].mSize;
+    float cur = hi;
+
+    if ((mWidth != 0.0f && mWidth < bounds.w) || (mHeight != 0.0f && mHeight < bounds.h)) {
+        if (hi - lo > 0.2f) {
+            do {
+                cur = (lo + hi) * 0.5f;
+                scale = cur / mStyles[0].mSize;
+                WrapText(&wideChars[0], numChars, charWidths, lines, bounds, scale);
+                if ((mWidth != 0.0f && mWidth < bounds.w) || (mHeight != 0.0f && mHeight < bounds.h)) {
+                    hi = cur;
+                } else {
+                    lo = cur;
+                }
+            } while (hi - lo > 0.2f);
+        }
+        if (hi == cur) {
+            scale = lo / mStyles[0].mSize;
+            WrapText(&wideChars[0], numChars, charWidths, lines, bounds, scale);
+        }
+    }
+
+    ConstructMeshes(lines, bounds, scale);
+}
+
 void RndText::FitTextEllipsis() {
     BuildFontMaps(true);
 

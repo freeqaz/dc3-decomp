@@ -744,13 +744,12 @@ void MoveDir::DrawShowing() {
                 for (unsigned int n = 0; n < outputs.size(); n++) {
                     SongCollisionOutput &out = outputs[n];
                     Hmx::Color bgColor(0.8f, 0.8f, 0.8f, 1.0f);
-                    float colorR = 0.0f;
-                    float colorG = 1.0f;
+                    Hmx::Color fgColor;
                     if (out.collisionDetected) {
-                        colorR = 1.0f;
-                        colorG = 0.0f;
+                        fgColor.Set(1.0f, 0.0f, 0.0f);
+                    } else {
+                        fgColor.Set(0.0f, 1.0f, 0.0f);
                     }
-                    Hmx::Color fgColor(colorR, colorG, 0.0f);
                     for (int j = 0; j < 2; j++) {
                         Vector3 *collPos = (Vector3 *)(out.xfmData + j * 0x40 + 0x30);
                         UtilDrawSphere(*collPos, 1.0f, bgColor, nullptr);
@@ -767,9 +766,7 @@ void MoveDir::DrawShowing() {
                         Vector3 *collPos = (Vector3 *)(out.xfmData + j * 0x40 + 0x30);
                         Vector3 *disp = (Vector3 *)&out.boneData[(j + 4) * 4];
                         Vector3 offsetPos;
-                        offsetPos.x = disp->x + collPos->x;
-                        offsetPos.y = disp->y + collPos->y;
-                        offsetPos.z = disp->z + collPos->z;
+                        Add(*disp, *collPos, offsetPos);
                         TheRnd.DrawLine(*collPos, offsetPos, fgColor, false);
                         UtilDrawSphere(offsetPos, 2.0f, fgColor, nullptr);
                         const char *label2 = MakeString("%i", j);

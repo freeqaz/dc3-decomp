@@ -18,6 +18,8 @@
 #include <cstring>
 #include <stdlib.h>
 
+bool SortCmp::operator()(const StoreOffer *, const StoreOffer *) const { return false; }
+
 StorePurchaseable::StorePurchaseable()
     : isAvailable(0), isPurchased(0), cost(0), songID(0) {}
 

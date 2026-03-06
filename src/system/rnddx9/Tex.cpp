@@ -64,6 +64,8 @@ void DxTex::PreDeviceReset() {
     }
 }
 
+void DxTex::SyncBitmap() {}
+
 void DxTex::PostDeviceReset() {
     if (IsBackBuffer()) {
         SetBitmap(TheRnd.Width(), TheRnd.Height(), TheRnd.Bpp(), mType, false, nullptr);

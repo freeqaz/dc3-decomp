@@ -271,6 +271,23 @@ void PanelDir::Enter() {
     static Symbol ui_enter_forward("ui_enter_forward");
     static Symbol ui_enter_back("ui_enter_back");
     SendTransition(ui_enter, ui_enter_forward, ui_enter_back);
+#ifdef HX_NATIVE
+    // Auto-start Dir animation if it has animatable children with keyframes.
+    // On Xbox, this is typically kicked off by DTA enter scripts or UITriggers,
+    // but many DC3 panels rely on implicit animation start.
+    {
+        float ef = EndFrame();
+        float sf = StartFrame();
+        int numAnims = (int)mAnims.size();
+        if (numAnims > 0 || ef > sf) {
+            printf("[PanelDir::Enter] '%s' anims=%d range=[%.1f, %.1f] animating=%d\n",
+                   Name(), numAnims, sf, ef, (int)IsAnimating());
+        }
+        if (ef > sf && !IsAnimating()) {
+            Animate(0, true, 0, RndAnimatable::k30_fps_ui, sf, ef, 0, 1.0f, Symbol("range"), nullptr, kEaseLinear, 0, false);
+        }
+    }
+#endif
 }
 
 void PanelDir::Exit() {

@@ -74,6 +74,8 @@ Voice::~Voice() {
     }
 }
 
+void Voice::dispose(int *, unsigned int) {}
+
 void Voice::SetSampleRate(int i) {
     mSampleRate = i;
     MILO_ASSERT(0 < mSampleRate && mSampleRate <= 48000, 0x2c9);

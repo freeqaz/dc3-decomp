@@ -338,10 +338,57 @@ def diag_with_prologue_fewer_saves() -> Diagnosis:
     return d
 
 
+def diag_with_cntlzw() -> Diagnosis:
+    """cntlzw/extrwi mismatch (arithmetic boolean vs comparison branch)."""
+    d = _empty_diag()
+    d.diff_ops = [
+        DiffOp(index=5, target_opcode="subi", base_opcode="cmpwi"),
+        DiffOp(index=6, target_opcode="cntlzw", base_opcode="beq"),
+        DiffOp(index=7, target_opcode="extrwi", base_opcode=""),
+    ]
+    return d
+
+
+def diag_with_cntlzw_dot() -> Diagnosis:
+    """extrwi./rlwinm. mismatch — dot-suffixed opcodes (record bit set)."""
+    d = _empty_diag()
+    d.diff_ops = [
+        DiffOp(index=5, target_opcode="extrwi.", base_opcode="rlwinm."),
+    ]
+    d.replace_real = 1
+    return d
+
+
+def diag_with_nor() -> Diagnosis:
+    """nor vs xori mismatch (NOR peephole on narrow-type XOR)."""
+    d = _empty_diag()
+    d.diff_ops = [DiffOp(index=5, target_opcode="xori", base_opcode="nor")]
+    return d
+
+
 def diag_with_insert_delete() -> Diagnosis:
     """Insert/delete cluster (MILO log swap)."""
     d = _empty_diag()
     d.insert_count = 3
     d.delete_count = 2
     d.clusters = [Cluster(start_idx=5, end_idx=10, size=5, inserts=3, deletes=2)]
+    return d
+
+
+def diag_with_bool_materialization() -> Diagnosis:
+    """Boolean materialization sequences (subfc/eqv/addze) in target deletes."""
+    d = _empty_diag()
+    d.bool_materialization_sequences = 1
+    d.clusters = [Cluster(start_idx=13, end_idx=17, size=5, inserts=0, deletes=5)]
+    return d
+
+
+def diag_with_gpr_fpr_conflict() -> Diagnosis:
+    """GPR-FPR type conflict (opposite-sign save deltas)."""
+    d = _empty_diag()
+    d.target_gpr_saves = 3
+    d.base_gpr_saves = 2
+    d.target_fpr_saves = 2
+    d.base_fpr_saves = 3
+    d.has_gpr_fpr_type_conflict = True
     return d

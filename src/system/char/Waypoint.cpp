@@ -175,6 +175,8 @@ DataNode Waypoint::OnWaypointLast(DataArray *da) {
     return DataNode(0);
 }
 
+void Waypoint::Highlight() {}
+
 void Waypoint::Constrain(Transform &xfm) {
     float strictRadius = mStrictRadiusDelta;
     if (0.0f < strictRadius) {

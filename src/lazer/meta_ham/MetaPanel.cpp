@@ -88,6 +88,9 @@
 #include "utl/TimeConversion.h"
 #include <cstring>
 
+SongDB *MetaPanel::sSongDB = nullptr;
+HamMaster *MetaPanel::sHamMaster = nullptr;
+
 MetaPanel::MetaPanel() : mLoopHistoryCursor(0), mSongPreview(TheHamSongMgr), mXMPPlaying(false) {
 #ifdef HX_NATIVE
     mMetaMusicManager = nullptr;

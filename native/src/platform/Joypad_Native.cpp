@@ -150,7 +150,10 @@ void JoypadReset() {
     JoypadData *pad = JoypadGetPadData(0);
     pad->mConnected = true;
     pad->mType = kJoypadAnalog;
-    pad->mControllerType = "xbox";
+    // Don't hardcode a controller type — let JoypadControllerTypePadNum
+    // auto-detect from gControllersCfg. Avoids DTA lookup crash when
+    // the type doesn't exist in joypad.dta button_meanings.
+    pad->mControllerType = Symbol();
     pad->mNumAnalogSticks = 2;
     pad->mTranslateSticks = true;
 }

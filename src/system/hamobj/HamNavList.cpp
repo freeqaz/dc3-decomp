@@ -839,7 +839,6 @@ HamListRibbonDrawState::HamListRibbonDrawState()
 
 LeftHandListEngagementMsg::LeftHandListEngagementMsg(bool b) : Message(Type(), b) {}
 
-UIListWidgetDrawState::~UIListWidgetDrawState() {}
 
 void HamNavListGlitchCB(float elapsed, void *context) {
     unsigned int frameId = TheRnd.GetFrameID();

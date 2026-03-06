@@ -135,6 +135,13 @@ void LabelShrinkWrapper::DrawShowing() {
     }
 }
 
+void LabelShrinkWrapper::Poll() {}
+void LabelShrinkWrapper::OldResourcePreload(BinStream &bs) {
+    char name[256];
+    bs.ReadString(name, 256);
+    mResourceDir.SetName(name, true);
+}
+
 BEGIN_HANDLERS(LabelShrinkWrapper)
     HANDLE_SUPERCLASS(UIComponent)
 END_HANDLERS

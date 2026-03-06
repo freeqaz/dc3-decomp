@@ -207,6 +207,7 @@ Symbol CampaignEra::GetHamMoveNameFromVariant(Symbol song, Symbol variant) const
 }
 
 Symbol CampaignEra::GetIntroMovie() const { return mEraIntroMovie; }
+Symbol CampaignEra::GetName() const { return mEra; }
 
 void CampaignEra::Cleanup() {
     FOREACH (it, m_vSongs) {

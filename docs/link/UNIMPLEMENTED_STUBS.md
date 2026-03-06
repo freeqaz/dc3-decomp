@@ -36,8 +36,14 @@ Recent glue-owner moves landed in source and were removed from `src/link_glue.cp
 - [x] `NavListSortMgr::{HeadersSelectable, SelectionIs, DataIs, MoveOn, OnEnter}`
 - [x] `NetCacheMgrXbox::Handle`
 - [x] `Hmx::Object::ClearAllTypeProps`
+- [x] `SongMetadata::{ID, IsOnDisc, GameOrigin}`
+- [x] `VenueProvider::NumData`
+- [x] `UIListMesh::DefaultMat`
+- [x] `BufStream::Size`
+- [x] `Achievements::PlatformInit`
+- [x] `PlatformMgr::{CheckMailbox, RunNetStartUtility}`
 - [x] handler/owner duplicate removals: `NavListHeaderNode::Handle`
-- [x] duplicate owner removals already present elsewhere: `MemStream::{Flush, Fail}`, `UIList::SelectedPos`, `GestureMgr::GetLiveCameraInput`, `NetCacheMgr::{GetServiceId, GetXLSPFilter}`
+- [x] duplicate owner removals already present elsewhere: `MemStream::{Flush, Fail}`, `UIList::SelectedPos`, `GestureMgr::GetLiveCameraInput`, `NetCacheMgr::{GetServiceId, GetXLSPFilter}`, `DeJitter::DeJitter`, `Stream::kStreamEndMs`
 
 ## How to Query
 

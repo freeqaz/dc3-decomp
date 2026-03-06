@@ -4,7 +4,8 @@
 #include "utl/Locale.h"
 #include "utl/Std.h"
 
-LocalePanel::LocalePanel() {}
+
+LocalePanel::~LocalePanel() {}
 
 int LocalePanel::NumData() const { return mEntries.size(); }
 

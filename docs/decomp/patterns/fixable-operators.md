@@ -364,6 +364,162 @@ A permuter pattern `negation_split` could detect this by looking for
 
 ---
 
+## Byte Mask Extraction (rlwimi)
+
+**Impact:** +5-30%
+**Success Rate:** HIGH
+**Time:** 5 minutes
+
+Extract byte-mask expressions to named variables to break rlwimi recognition.
+
+### Symptom
+
+objdiff shows `rlwimi` (rotate left word immediate then mask insert) in target vs `clrlwi + slwi + or` (separate shift/mask/or) in our build, or vice versa.
+
+### Why It Works
+
+MSVC PPC recognizes combined rotate-mask-insert patterns like `u8(w) | ((w << 8) & 0xFF00)` and emits a single `rlwimi` instruction. When the target uses separate instructions instead, extracting the byte mask to a named variable breaks the compiler's pattern recognition, forcing it to fall back to individual operations.
+
+### Fix
+
+```cpp
+// Before (generates rlwimi — wrong)
+unsigned long ret = u8(w) | ((w << 8) & 0xFF00);
+
+// After (generates clrlwi + slwi + or — matches target)
+unsigned long bw = u8(w);
+unsigned long ret = bw | (bw << 8);
+```
+
+By computing `u8(w)` into a named variable first, the compiler no longer sees the combined rotate-mask-insert pattern.
+
+### Real Examples
+
+| Function | Before | After | Delta | Notes |
+|----------|--------|-------|-------|-------|
+| ByteGrinder::op2 | ~93% | 100% | +7% | rlwimi + arg read order |
+| ByteGrinder::op3 | ~93.6% | 100% | +6.4% | rlwimi + arg read order |
+| ByteGrinder::op10 | 71.3% | 100% | +28.7% | rlwimi + XOR pre-mask |
+| ByteGrinder::op11 | 77.2% | 100% | +22.8% | rlwimi + XOR pre-mask |
+| ByteGrinder::op12 | 93.3% | 100% | +6.7% | rlwimi only |
+| ByteGrinder::op13 | 93.2% | 100% | +6.8% | rlwimi only |
+
+### Rule
+
+When you see `rlwimi` mismatches in bitwise byte-manipulation code:
+1. Find the byte-mask expression (`u8(x)`, `(unsigned char)(x)`, `x & 0xFF`)
+2. Extract it to a named `unsigned long` variable
+3. Use the variable in place of the original expression
+
+### Automation
+
+The `byte_mask_extraction` permuter pattern (opt-in) automates this transformation.
+
+---
+
+## NOR Peephole Prevention (u32 Widening)
+
+**Impact:** +1-14%
+**Success Rate:** HIGH
+**Time:** 5 minutes
+
+Widen narrow-type values to u32 before XOR to prevent the compiler from using NOR.
+
+### Symptom
+
+objdiff shows `nor` in target vs `xori` in our build, or vice versa, around XOR-with-all-ones patterns.
+
+### Why It Works
+
+The compiler converts `u8_value ^ all_ones_mask` into a bitwise NOT (`nor` instruction) when the XOR mask covers all bits of the operand type. For example, `(u8)(w >> 3) ^ 0x1F` on a 5-bit result, or `u8_w ^ 0xFF` on an 8-bit value.
+
+By widening to u32 first, the mask no longer covers all 32 bits, so the compiler can't apply the NOR optimization.
+
+### Fix
+
+```cpp
+// Before (generates nor — compiler sees XOR-with-all-ones)
+u8 w = msg->Int(2);
+u32 tmp = (u8)(w >> 3) ^ 0x1F;
+
+// After (generates extrwi + xori — matches target)
+u8 w = msg->Int(2);
+u32 w32 = w;
+u32 tmp = (w32 >> 3) ^ 0x1F;
+```
+
+### Real Examples
+
+| Function | Before | After | Delta | Notes |
+|----------|--------|-------|-------|-------|
+| ByteGrinder::op32 | 95.9% | 100% | +4.1% | u32 widening before XOR |
+| ByteGrinder::op60 | 86.7% | 100% | +13.3% | u32 widening before XOR |
+| ByteGrinder::op63 | 86.7% | 100% | +13.3% | u32 widening before XOR |
+
+### Rule
+
+When you see `nor` mismatches in bitwise code:
+1. Check if a narrow type (u8, u16) is being XOR'd with a mask that covers all its bits
+2. Widen the value to u32 before the XOR
+3. Remove explicit narrow-type casts on intermediate values
+
+---
+
+## u8 Intermediate Variables for Shift Scheduling
+
+**Impact:** +0.7-1%
+**Success Rate:** MEDIUM
+**Time:** 10 minutes
+
+Use u8 intermediate variables to force instruction scheduling order for independent shift operations.
+
+### Symptom
+
+objdiff shows `extrwi`/`clrlslwi` (shift-right/shift-left) instructions in swapped order. Same instructions, different sequence.
+
+### Why It Works
+
+The compiler schedules independent shift-right and shift-left operations in a fixed internal order. When the target uses the opposite order, creating `u8` intermediate variables for each half creates data dependencies (via truncation) that force the compiler's hand.
+
+### Fix
+
+```cpp
+// Before (compiler schedules freely — wrong order)
+u32 tmp = ((u8)(w >> 3) ^ 6) | ((w & 7) << 5);
+
+// After (u8 intermediates force extrwi-first scheduling)
+u32 w32 = w;
+u8 tmp1 = u8((w32 >> 3) ^ 6);    // shift-right half first
+u8 tmp2 = u8(((w32 & 7) << 5));   // shift-left half second
+u8 combined = u8(tmp1 | tmp2);
+```
+
+### Key Details
+
+- Always put shift-right part as the first declaration — compiler schedules `extrwi` first
+- The `u8()` cast on each intermediate forces completion before moving on
+- May need to combine with XOR constant pairing correction (see session doc)
+
+### Real Examples
+
+| Function | Before | After | Delta | Notes |
+|----------|--------|-------|-------|-------|
+| ByteGrinder::op45 | 99.3% | 100% | +0.7% | u8 intermediates |
+| ByteGrinder::op46 | 99.3% | 100% | +0.7% | u8 intermediates |
+| ByteGrinder::op47 | 99.3% | 100% | +0.7% | u8 intermediates |
+| ByteGrinder::op50 | 99.0% | 100% | +1.0% | u8 intermediates + XOR constant swap |
+| ByteGrinder::op52 | 99.0% | 100% | +1.0% | u8 intermediates + XOR constant swap |
+| ByteGrinder::op55 | 99.0% | 100% | +1.0% | u8 intermediates + XOR constant swap |
+| ByteGrinder::op56 | 99.0% | 100% | +1.0% | u8 intermediates + XOR constant swap |
+
+### Warning
+
+This pattern is specific to bit-rotation-with-XOR code. Two functions remain unfixable:
+- **op14**: Pure `srwi`/`slwi` swap with no XOR constants to manipulate
+- **op61**: Scheduling and XOR constants are coupled — fixing one breaks the other
+
+---
+
 ## See Also
 
 - [fixable-control-flow.md](fixable-control-flow.md) - Branch structure patterns

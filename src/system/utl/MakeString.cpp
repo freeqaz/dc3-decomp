@@ -103,6 +103,8 @@ char *NextBuf() {
     return buf;
 }
 
+void TerminateMakeString() {}
+
 FormatString::FormatString()
     : mBuf(NextBuf()), mBufSize(MAX_BUF_SIZE), mFmtEnd(nullptr), mType(kNone) {}
 

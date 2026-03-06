@@ -493,15 +493,16 @@ def main():
         sys.exit(0)
 
     # Validate patterns
-    available = list_patterns()
+    available_default = list_patterns()
+    available_all = list_patterns(include_opt_in=True)
     if args.patterns.strip() == "all":
-        pattern_names = available
+        pattern_names = available_default
     else:
         pattern_names = [p.strip() for p in args.patterns.split(",")]
 
     patterns_map = {}
     for name in pattern_names:
-        if name not in available:
+        if name not in available_all:
             print(f"Error: unknown pattern '{name}'", file=sys.stderr)
             _print_pattern_table()
             sys.exit(1)

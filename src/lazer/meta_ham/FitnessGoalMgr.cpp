@@ -28,6 +28,8 @@ FitnessGoalMgr::FitnessGoalMgr() {
 
 FitnessGoalMgr::~FitnessGoalMgr() {}
 
+void FitnessGoalMgr::OnSmartGlassListen(int) {}
+
 void FitnessGoalMgr::Init() {
     MILO_ASSERT(!TheFitnessGoalMgr, 0x17);
     TheFitnessGoalMgr = new FitnessGoalMgr();

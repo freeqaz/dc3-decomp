@@ -19,6 +19,8 @@ NgDOFProc::NgDOFProc()
     mBlurTex[1] = mBlurTex[0];
 }
 
+void NgDOFProc::Set(RndCam *, float, float, float, float) {}
+
 NgDOFProc::~NgDOFProc() {
     RELEASE(mBlurTex[0]);
     TheRnd.UnregisterPostProcessor(this);

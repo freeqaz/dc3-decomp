@@ -4,6 +4,8 @@
 #include "HamSongMgr.h"
 #include "MQSongSortNode.h"
 
+MQSongSortByCharacter::~MQSongSortByCharacter() {}
+
 int MQSongCharCmp::Compare(const NavListItemSortCmp *cmp, NavListNodeType type) const {
     switch (type) {
     case kNodeShortcut:
@@ -31,6 +33,11 @@ NavListHeaderNode *MQSongSortByCharacter::NewHeaderNode(NavListItemNode *node) c
     MQSongCharCmp *songCharCmp = new MQSongCharCmp(songName, characterName);
     Symbol sym(MakeString(characterName, "mqheader_%s"));
     return new MQSongHeaderNode(songCharCmp, sym, true);
+}
+
+NavListHeaderNode *
+MQSongSortByCharacter::NewHeaderNode(NavListItemNode *n1, NavListItemNode *n2) const {
+    return NewHeaderNode(n1);
 }
 
 NavListShortcutNode *MQSongSortByCharacter::NewShortcutNode(NavListItemNode *node) const {

@@ -35,6 +35,7 @@ extern "C" {
 #endif
 
 void RtlInitializeCriticalSection(RTL_CRITICAL_SECTION *);
+void RtlDeleteCriticalSection(RTL_CRITICAL_SECTION *);
 void RtlEnterCriticalSection(RTL_CRITICAL_SECTION *);
 void RtlLeaveCriticalSection(RTL_CRITICAL_SECTION *);
 int RtlTryEnterCriticalSection(RTL_CRITICAL_SECTION *);

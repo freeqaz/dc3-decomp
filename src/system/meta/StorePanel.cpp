@@ -226,6 +226,9 @@ void StorePanel::Poll() {
     }
 }
 
+void StorePanel::ExitStore(StoreError) const {}
+Profile *StorePanel::StoreProfile() const { return nullptr; }
+
 bool StorePanel::IsLoaded() const {
     return (UIPanel::IsLoaded() && TheContentMgr.RefreshDone());
 }

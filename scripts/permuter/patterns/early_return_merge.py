@@ -39,7 +39,12 @@ class EarlyReturnMergePattern(Pattern):
         for d in diagnosis.diff_ops:
             if d.target_opcode in _BRANCH_OPCODES or d.base_opcode in _BRANCH_OPCODES:
                 return True
-        return bool(diagnosis.clusters)
+        if diagnosis.clusters:
+            return True
+        # Structural replace mismatches indicate branch structure differences
+        if diagnosis.replace_real > 0:
+            return True
+        return False
 
     def priority(self, diagnosis: Diagnosis) -> float:
         if not self.relevant(diagnosis):

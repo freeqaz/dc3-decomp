@@ -6,6 +6,8 @@
 // Usage:
 //   MILO_TEST_BIK=/path/to/file.bik ./milo-tests --gtest_filter=FFmpegIntegration.*
 
+#include "test_helpers.h"
+
 #include <gtest/gtest.h>
 #include <cstdlib>
 #include <cstdio>
@@ -27,9 +29,10 @@ protected:
     const char *bikPath = nullptr;
 
     void SetUp() override {
-        bikPath = getenv("MILO_TEST_BIK");
-        if (!bikPath || !bikPath[0]) {
-            GTEST_SKIP() << "Set MILO_TEST_BIK=/path/to/file.bik";
+        bikPath = GetTestBikPath();
+        if (!bikPath) {
+            GTEST_SKIP() << "No .bik file available. Run ExtractBik.ExtractSmallest first, "
+                         << "or set MILO_TEST_BIK=/path/to/file.bik";
         }
     }
 };

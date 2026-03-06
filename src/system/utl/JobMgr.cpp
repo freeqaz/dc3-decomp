@@ -69,7 +69,7 @@ void JobMgr::CancelAllJobs() {
 
 JobMgr::~JobMgr() { CancelAllJobs(); }
 
-PostPurchaseEnumJob::PostPurchaseEnumJob(Hmx::Object *obj, int unk, u64 u, Symbol s, unsigned int ui) : SingleItemEnumJob(obj, unk, u) {}
+PostPurchaseEnumJob::PostPurchaseEnumJob(Hmx::Object *obj, int unk, u64 u, Symbol s, unsigned int ui) : SingleItemEnumJob(obj, unk, u), mOfferSymbol(s), mPurchaserID(ui) {}
 
 PostPurchaseEnumJob::~PostPurchaseEnumJob() {}
 

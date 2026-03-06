@@ -15,8 +15,8 @@
 LargeQuadRenderData DepthBuffer3D::mQuad;
 
 namespace {
-    void JointToVertexData(Vector3 &, const Skeleton &, SkeletonJoint, const Vector4 &);
-    void VertexToWorld(Vector3 &, const Transform &, float, const Vector4 &);
+    void JointToVertexData(Vector3 &, const Skeleton &, SkeletonJoint, const Vector4 &) {}
+    void VertexToWorld(Vector3 &, const Transform &, float, const Vector4 &) {}
     RndMat *SetUpWorkingMat();
 }
 

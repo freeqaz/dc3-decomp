@@ -22,7 +22,7 @@
 #include "xdk/xapilibi/handleapi.h"
 #include "xdk/xapilibi/winerror.h"
 
-extern u8 *gDebugDepth;
+u8 *gDebugDepth = nullptr;
 
 namespace {
     // bool  GetExposureRegion(struct _NUI_CAMERA_AE_ROI &)

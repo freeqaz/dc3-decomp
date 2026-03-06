@@ -268,6 +268,8 @@ bool HttpGet::HasTimedOut() {
     return mTimer.Ms() > mTimeoutMs;
 }
 
+unsigned int HttpGet::GetBufferSize() { return mFileBufSize; }
+
 void HttpGet::SetTimeout(float timeout) { mTimeoutMs = timeout; }
 
 bool HttpGet::CanRetry() {

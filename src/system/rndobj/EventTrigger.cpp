@@ -1,4 +1,6 @@
 #include "rndobj/EventTrigger.h"
+#include "rndobj/AnimFilter.h"
+#include "obj/Dir.h"
 #include "math/Rand.h"
 #include "obj/Data.h"
 #include "obj/DataFunc.h"
@@ -11,6 +13,7 @@
 #include "rndobj/Anim.h"
 #include "rndobj/PartLauncher.h"
 #include "utl/BinStream.h"
+#include "obj/Task.h"
 #include "utl/Loader.h"
 #include "utl/MakeString.h"
 
@@ -516,6 +519,89 @@ void EventTrigger::CleanupEventCase(std::list<Symbol> &syms) {
     }
 }
 
+void EventTrigger::TriggerSelf() {
+    FOREACH (it, mResetTriggers) {
+        (*it)->BasicReset();
+    }
+    FOREACH (it, mProxyCalls) {
+        if (it->mProxy) {
+            if (!it->mCall.Null()) {
+                static Message msg(0);
+                msg.SetType(it->mCall);
+                it->mProxy->Handle(msg, true);
+            }
+            if (it->mEvent) {
+                it->mEvent->Trigger();
+            }
+        }
+    }
+    FOREACH (it, mAnims) {
+        if (it->mAnim) {
+            if (it->mEnable) {
+                mSpawnedTasks.push_back(it->mAnim->Animate(
+                    it->mBlend,
+                    it->mWait,
+                    it->mDelay,
+                    (RndAnimatable::Rate)it->mRate,
+                    it->mStart,
+                    it->mEnd,
+                    it->mPeriod,
+                    it->mScale,
+                    it->mType,
+                    nullptr,
+                    kEaseLinear,
+                    0,
+                    false
+                ));
+            } else {
+                mSpawnedTasks.push_back(
+                    it->mAnim->Animate(it->mBlend, it->mWait, it->mDelay, nullptr, kEaseLinear, 0, false)
+                );
+            }
+        }
+    }
+    FOREACH (it, mSounds) {
+        (*it)->Play(0, 0, 0);
+    }
+    FOREACH (it, mShows) {
+        if (!(*it)->Showing()) {
+            if (!mTriggered) {
+                mShown.push_back(*it);
+            }
+            (*it)->SetShowing(true);
+        }
+    }
+    FOREACH (it, mHideDelays) {
+        if (it->mHide) {
+            if (it->mHide->Showing()) {
+                if (!mTriggered) {
+                    mHidden.push_back(it->mHide);
+                }
+                if (it->mDelay) {
+                    static Message msg("set_showing", 0);
+                    MessageTask *msgtask = new MessageTask(it->mHide, msg);
+                    mSpawnedTasks.push_back(msgtask);
+                    TheTaskMgr.Start(
+                        msgtask,
+                        RndAnimatable::RateToTaskUnits((RndAnimatable::Rate)it->mRate),
+                        it->mDelay
+                    );
+                } else {
+                    it->mHide->SetShowing(false);
+                }
+            }
+        }
+    }
+    FOREACH (it, mPartLaunchers) {
+        (*it)->LaunchParticles();
+    }
+    if (TypeDef()) {
+        static Message trigger("trigger");
+        HandleType(trigger);
+    }
+    mTriggered = true;
+}
+
 DataNode EventTrigger::OnTrigger(DataArray *) {
     if (mEnabled) {
         if (!mWaitForEvents.empty()) {
@@ -586,6 +672,84 @@ void EventTrigger::CleanupHideShow() {
     mHidden.clear();
 }
 
+DataNode EventTrigger::Cleanup(DataArray *arr) {
+    ObjectDir *dir = arr->Obj<ObjectDir>(1);
+    std::list<EventTrigger *> trigList;
+    for (ObjDirItr<EventTrigger> iter(dir, true); iter != nullptr; ++iter) {
+        trigList.push_back(iter);
+        FOREACH_POST (iter2, iter->mTriggerEvents) {
+            char buf[128];
+            strcpy(buf, iter2->Str());
+            FileNormalizePath(buf);
+            *iter2 = buf;
+        }
+        FOREACH_POST (iter2, iter->mAnims) {
+            RndAnimFilter *filter = dynamic_cast<RndAnimFilter *>(iter2->mAnim.Ptr());
+            if (filter) {
+                ObjRef::iterator rit = filter->Refs().begin();
+                for (; rit != filter->Refs().end(); ++rit) {
+                    if (rit->RefOwner() && rit->RefOwner() != iter) {
+                        break;
+                    }
+                }
+                if (rit == filter->Refs().end() && filter->GetType() != RndAnimFilter::kShuttle) {
+                    iter2->mAnim = filter->Anim();
+                    iter2->mEnable = true;
+                    iter2->mRate = filter->GetRate();
+                    iter2->mStart = filter->Start();
+                    iter2->mEnd = filter->End();
+                    iter2->mPeriod = filter->Period();
+                    iter2->mScale = filter->Property("scale", true)->Float();
+                    static Symbol range("range");
+                    static Symbol loop("loop");
+                    if (filter->GetType() == RndAnimFilter::kLoop)
+                        iter2->mType = loop;
+                    else
+                        iter2->mType = range;
+                    delete filter;
+                }
+            }
+        }
+    }
+    FOREACH (iter, trigList) {
+        EventTrigger *curTrig = *iter;
+        for (std::list<EventTrigger *>::iterator iter2 = iter; iter2 != trigList.end();) {
+            EventTrigger *curTrig2 = *iter2;
+            if (curTrig != curTrig2 && curTrig2->mTriggerEvents == curTrig->mTriggerEvents
+                && curTrig2->mEnableEvents == curTrig->mEnableEvents
+                && curTrig2->mDisableEvents == curTrig->mDisableEvents
+                && curTrig2->mWaitForEvents == curTrig->mWaitForEvents) {
+                MILO_NOTIFY("Combining %s with %s", curTrig2->Name(), curTrig->Name());
+                while (!curTrig2->mAnims.empty()) {
+                    curTrig->mAnims.push_back(curTrig2->mAnims.back());
+                    curTrig2->mAnims.pop_back();
+                }
+                while (!curTrig2->mSounds.empty()) {
+                    curTrig->mSounds.push_back(curTrig2->mSounds.back());
+                    curTrig2->mSounds.pop_back();
+                }
+                while (!curTrig2->mShows.empty()) {
+                    curTrig->mShows.push_back(curTrig2->mShows.back());
+                    curTrig2->mShows.pop_back();
+                }
+                while (!curTrig2->mHideDelays.empty()) {
+                    curTrig->mHideDelays.push_back(curTrig2->mHideDelays.back());
+                    curTrig2->mHideDelays.pop_back();
+                }
+                while (!curTrig2->mProxyCalls.empty()) {
+                    curTrig->mProxyCalls.push_back(curTrig2->mProxyCalls.back());
+                    curTrig2->mProxyCalls.pop_back();
+                }
+                curTrig2->ReplaceRefs(curTrig);
+                delete curTrig2;
+                iter2 = trigList.erase(iter2);
+            } else
+                ++iter2;
+        }
+    }
+    return 0;
+}
+
 void EventTrigger::Init() {
     REGISTER_OBJ_FACTORY(EventTrigger);
     DataRegisterFunc("cleanup_triggers", Cleanup);
@@ -625,9 +789,7 @@ void EventTrigger::LoadOldEvent(
     if (!s.Null()) {
         mTriggerEvents.push_back(s);
     }
-    if (trigName) {
-        SetName(NextName(MakeString("%s_%s.trig", trigName, s), dir), dir);
-    }
+    SetName(NextName(MakeString("%s_%s.trig", trigName, s), dir), dir);
     RndAnimatable *anim = dynamic_cast<RndAnimatable *>(obj);
     if (bs.rev < 5) {
         bool b58;
@@ -639,7 +801,7 @@ void EventTrigger::LoadOldEvent(
         EventTrigger *curTrig = this;
         while (count-- != 0) {
             curTrig->LoadOldAnim(bs.stream, anim);
-            if (count != 0) {
+            if ((int)count != 0) {
                 EventTrigger *newTrig = new EventTrigger();
                 curTrig->mNextLink = newTrig;
                 curTrig = newTrig;

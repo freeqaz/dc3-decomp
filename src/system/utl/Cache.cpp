@@ -7,6 +7,8 @@ Cache::~Cache() {}
 
 bool Cache::IsDone() { return mOpCur == kOpNone; }
 
+CacheResult Cache::GetLastResult() { return mLastResult; }
+
 unsigned int CacheID::GetDeviceID() const {
     MILO_FAIL("CacheID::GetDeviceID() not supported on this platform.\n");
     return -1;

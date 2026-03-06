@@ -318,7 +318,7 @@ void Intersect(const Transform &trans, const Plane &plane, Hmx::Ray &ray) {
     }
 }
 
-bool Intersect(const Segment &seg, const Triangle &tri, bool b, float &out) {
+bool Intersect(const Segment &seg, const Triangle &tri, int b, float &out) {
     float segDirX = seg.end.x - seg.start.x;
     float segDirY = seg.end.y - seg.start.y;
     float segDirZ = seg.end.z - seg.start.z;

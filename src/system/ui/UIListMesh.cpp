@@ -76,6 +76,7 @@ UIListSlotElement *UIListMesh::CreateElement(UIList *uilist) {
     return element;
 }
 
+RndMat *UIListMesh::DefaultMat() const { return mDefaultMat; }
 RndTransformable *UIListMesh::RootTrans() { return mMesh; }
 
 #pragma endregion UIListMesh

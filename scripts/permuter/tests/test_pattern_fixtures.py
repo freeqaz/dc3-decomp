@@ -12,11 +12,14 @@ _PROJECT_ROOT = Path(__file__).resolve().parents[3]
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
+from scripts.permuter.types import Diagnosis, DiffOp
+
 from scripts.permuter.tests.conftest import (
     PatternFixture,
     diag_always,
     diag_with_arith_ops,
     diag_with_bl_mismatch,
+    diag_with_bool_materialization,
     diag_with_branch_and_clusters,
     diag_with_branch_ops,
     diag_with_callee_saved_swaps,
@@ -29,6 +32,7 @@ from scripts.permuter.tests.conftest import (
     diag_with_fma_addsub_ops,
     diag_with_fma_ops,
     diag_with_fneg_frsp,
+    diag_with_gpr_fpr_conflict,
     diag_with_gpr_swaps,
     diag_with_insert_delete,
     diag_with_large_clusters,
@@ -40,6 +44,9 @@ from scripts.permuter.tests.conftest import (
     diag_with_prologue_more_saves,
     diag_with_replace_real,
     diag_with_store_load_ops,
+    diag_with_cntlzw,
+    diag_with_cntlzw_dot,
+    diag_with_nor,
 )
 
 
@@ -2268,6 +2275,493 @@ void test_func(int x, int y, int z) {
     x = 1;
     z = 3;
 }
+""",
+    ),
+
+    # ===================== bool_cast (comparison extraction) =====================
+
+    PatternFixture(
+        id="bool_cast_comparison_extraction",
+        pattern_name="bool_cast",
+        description="Extract comparison in if-condition to bool local",
+        func_name="test_func",
+        diagnosis=diag_with_replace_real(),
+        match_mode="contains",
+        seeded_source="""\
+void test_func(DataArray* da) {
+    if (da->Size() > 1) {
+        do_something();
+    }
+}
+""",
+        expected_source="""\
+    bool _cond = da->Size() > 1;
+    if (_cond)
+""",
+    ),
+
+    # ===================== byte_mask_extraction =====================
+
+    PatternFixture(
+        id="byte_mask_extraction_u8",
+        pattern_name="byte_mask_extraction",
+        description="Extract u8() byte mask to local variable in bitwise expr",
+        func_name="test_func",
+        diagnosis=Diagnosis(
+            total_instructions=100,
+            match_counts={"match": 90, "mismatch": 10},
+            reg_swap_pairs={},
+            offset_deltas={},
+            diff_ops=[DiffOp(index=5, target_opcode="rlwimi", base_opcode="slwi")],
+            clusters=[],
+            noise_explained=0,
+            noise_total=0,
+        ),
+        match_mode="contains",
+        seeded_source="""\
+void test_func(unsigned long w) {
+    unsigned long ret = u8(w) | (u8(w) << 8);
+}
+""",
+        expected_source="""\
+    unsigned long _bm = u8(w);
+    unsigned long ret = _bm | (_bm << 8);
+""",
+    ),
+
+    # ===================== condition_arithmetic =====================
+
+    PatternFixture(
+        id="condition_arithmetic__neq_zero_to_implicit",
+        pattern_name="condition_arithmetic",
+        description="if (x != 0) -> if (x)",
+        func_name="test_func",
+        diagnosis=diag_with_cntlzw(),
+        seeded_source="""\
+void test_func(int x) {
+    if (x != 0) {
+        do_thing();
+    }
+}
+""",
+        expected_source="""\
+void test_func(int x) {
+    if (x) {
+        do_thing();
+    }
+}
+""",
+    ),
+
+    PatternFixture(
+        id="condition_arithmetic__eq_zero_to_not",
+        pattern_name="condition_arithmetic",
+        description="if (x == 0) -> if (!x)",
+        func_name="test_func",
+        diagnosis=diag_with_cntlzw(),
+        seeded_source="""\
+void test_func(int x) {
+    if (x == 0) {
+        do_thing();
+    }
+}
+""",
+        expected_source="""\
+void test_func(int x) {
+    if (!x) {
+        do_thing();
+    }
+}
+""",
+    ),
+
+    PatternFixture(
+        id="condition_arithmetic__implicit_to_neq_zero",
+        pattern_name="condition_arithmetic",
+        description="if (x) -> if (x != 0)",
+        func_name="test_func",
+        diagnosis=diag_with_cntlzw(),
+        seeded_source="""\
+void test_func(int x) {
+    if (x) {
+        do_thing();
+    }
+}
+""",
+        expected_source="""\
+void test_func(int x) {
+    if (x != 0) {
+        do_thing();
+    }
+}
+""",
+    ),
+
+    PatternFixture(
+        id="condition_arithmetic__neq_literal_to_subtract",
+        pattern_name="condition_arithmetic",
+        description="if (k != 1) -> if (k - 1)",
+        func_name="test_func",
+        diagnosis=diag_with_cntlzw(),
+        seeded_source="""\
+void test_func(int k) {
+    if (k != 1) {
+        do_thing();
+    }
+}
+""",
+        expected_source="""\
+void test_func(int k) {
+    if (k - 1) {
+        do_thing();
+    }
+}
+""",
+    ),
+
+    PatternFixture(
+        id="condition_arithmetic__eq_literal_to_not_subtract",
+        pattern_name="condition_arithmetic",
+        description="if (k == 1) -> if (!(k - 1))",
+        func_name="test_func",
+        diagnosis=diag_with_cntlzw(),
+        seeded_source="""\
+void test_func(int k) {
+    if (k == 1) {
+        do_thing();
+    }
+}
+""",
+        expected_source="""\
+void test_func(int k) {
+    if (!(k - 1)) {
+        do_thing();
+    }
+}
+""",
+    ),
+
+    PatternFixture(
+        id="condition_arithmetic__subtract_to_neq",
+        pattern_name="condition_arithmetic",
+        description="if (k - 1) -> if (k != 1)",
+        func_name="test_func",
+        diagnosis=diag_with_cntlzw(),
+        seeded_source="""\
+void test_func(int k) {
+    if (k - 1) {
+        do_thing();
+    }
+}
+""",
+        expected_source="""\
+void test_func(int k) {
+    if (k != 1) {
+        do_thing();
+    }
+}
+""",
+    ),
+
+    PatternFixture(
+        id="condition_arithmetic__bool_subscript",
+        pattern_name="condition_arithmetic",
+        description="arr[side == 0] -> arr[1 - side]",
+        func_name="test_func",
+        diagnosis=diag_with_cntlzw(),
+        seeded_source="""\
+void test_func(int side, int* arr) {
+    int val = arr[side == 0];
+}
+""",
+        expected_source="""\
+void test_func(int side, int* arr) {
+    int val = arr[1 - side];
+}
+""",
+    ),
+
+    # --- return expression transforms ---
+
+    PatternFixture(
+        id="condition_arithmetic__return_eq_literal",
+        pattern_name="condition_arithmetic",
+        description="return state == 2 -> return !(state - 2)",
+        func_name="test_func",
+        diagnosis=diag_with_cntlzw(),
+        seeded_source="""\
+bool test_func(int state) {
+    return state == 2;
+}
+""",
+        expected_source="""\
+bool test_func(int state) {
+    return !(state - 2);
+}
+""",
+    ),
+
+    PatternFixture(
+        id="condition_arithmetic__return_neq_zero",
+        pattern_name="condition_arithmetic",
+        description="return mSignature != 0 -> return mSignature",
+        func_name="test_func",
+        diagnosis=diag_with_cntlzw(),
+        seeded_source="""\
+bool test_func(int mSignature) {
+    return mSignature != 0;
+}
+""",
+        expected_source="""\
+bool test_func(int mSignature) {
+    return mSignature;
+}
+""",
+    ),
+
+    PatternFixture(
+        id="condition_arithmetic__return_neq_literal",
+        pattern_name="condition_arithmetic",
+        description="return mState != 2 -> return mState - 2",
+        func_name="test_func",
+        diagnosis=diag_with_cntlzw(),
+        seeded_source="""\
+bool test_func(int mState) {
+    return mState != 2;
+}
+""",
+        expected_source="""\
+bool test_func(int mState) {
+    return mState - 2;
+}
+""",
+    ),
+
+    # --- while/for condition transforms ---
+
+    PatternFixture(
+        id="condition_arithmetic__while_implicit_to_neq",
+        pattern_name="condition_arithmetic",
+        description="while (state) -> while (state != 0)",
+        func_name="test_func",
+        diagnosis=diag_with_cntlzw(),
+        seeded_source="""\
+void test_func(int state) {
+    while (state) {
+        state--;
+    }
+}
+""",
+        expected_source="""\
+void test_func(int state) {
+    while (state != 0) {
+        state--;
+    }
+}
+""",
+    ),
+
+    PatternFixture(
+        id="condition_arithmetic__for_neq_to_subtract",
+        pattern_name="condition_arithmetic",
+        description="for condition: k != 2 -> k - 2",
+        func_name="test_func",
+        diagnosis=diag_with_cntlzw(),
+        seeded_source="""\
+void test_func() {
+    for (int k = 0; k != 2; k++) {
+        do_thing();
+    }
+}
+""",
+        expected_source="""\
+void test_func() {
+    for (int k = 0; k - 2; k++) {
+        do_thing();
+    }
+}
+""",
+    ),
+
+    # --- subscript !x transforms ---
+
+    PatternFixture(
+        id="condition_arithmetic__subscript_not_to_eq_zero",
+        pattern_name="condition_arithmetic",
+        description="arr[!side] -> arr[side == 0]",
+        func_name="test_func",
+        diagnosis=diag_with_cntlzw(),
+        seeded_source="""\
+void test_func(int side, int* arr) {
+    int val = arr[!side];
+}
+""",
+        expected_source="""\
+void test_func(int side, int* arr) {
+    int val = arr[side == 0];
+}
+""",
+    ),
+
+    PatternFixture(
+        id="condition_arithmetic__subscript_not_to_1_minus",
+        pattern_name="condition_arithmetic",
+        description="arr[!side] -> arr[1 - side]",
+        func_name="test_func",
+        diagnosis=diag_with_cntlzw(),
+        seeded_source="""\
+void test_func(int side, int* arr) {
+    int val = arr[!side];
+}
+""",
+        expected_source="""\
+void test_func(int side, int* arr) {
+    int val = arr[1 - side];
+}
+""",
+    ),
+
+    # --- !(x - N) also yields !expr -> == 0 ---
+
+    PatternFixture(
+        id="condition_arithmetic__not_subtract_to_eq",
+        pattern_name="condition_arithmetic",
+        description="if (!(k - 1)) -> if (k == 1)",
+        func_name="test_func",
+        diagnosis=diag_with_cntlzw(),
+        seeded_source="""\
+void test_func(int k) {
+    if (!(k - 1)) {
+        do_thing();
+    }
+}
+""",
+        expected_source="""\
+void test_func(int k) {
+    if (k == 1) {
+        do_thing();
+    }
+}
+""",
+    ),
+
+    # --- dot-suffixed opcode matching (extrwi. / rlwinm.) ---
+
+    PatternFixture(
+        id="condition_arithmetic__dot_suffix_opcode",
+        pattern_name="condition_arithmetic",
+        description="Detects extrwi. (dot-suffixed) as strong signal",
+        func_name="test_func",
+        diagnosis=diag_with_cntlzw_dot(),
+        seeded_source="""\
+bool test_func(int state) {
+    return state == 3;
+}
+""",
+        expected_source="""\
+bool test_func(int state) {
+    return !(state - 3);
+}
+""",
+    ),
+
+    # ===================== nor_prevention =====================
+
+    PatternFixture(
+        id="nor_prevention_u8_xor",
+        pattern_name="nor_prevention",
+        description="Widen u8 cast to u32 before XOR to prevent NOR peephole",
+        func_name="test_func",
+        diagnosis=diag_with_nor(),
+        match_mode="contains",
+        seeded_source="""\
+void test_func(u8 w) {
+    u32 tmp = (u8)(w >> 3) ^ 0x1F;
+}
+""",
+        expected_source="""\
+    u32 _w32 = w;
+""",
+    ),
+
+    # ===================== bool_materialize =====================
+
+    PatternFixture(
+        id="boolmat_and_to_bool_cast",
+        pattern_name="bool_materialize",
+        description="Add (bool) cast to && RHS comparison (triggers subfc/eqv branchless)",
+        func_name="test_func",
+        diagnosis=diag_with_bool_materialization(),
+        match_mode="contains",
+        seeded_source="""\
+void test_func(bool a, int x) {
+    if (a && x > 1) {
+        do_stuff();
+    }
+}
+""",
+        expected_source="""\
+(bool)(x > 1)
+""",
+    ),
+
+    PatternFixture(
+        id="boolmat_and_to_bitwise",
+        pattern_name="bool_materialize",
+        description="Swap && to & for fully branchless boolean",
+        func_name="test_func",
+        diagnosis=diag_with_bool_materialization(),
+        match_mode="contains",
+        seeded_source="""\
+void test_func(bool a, int x) {
+    if (a && x > 1) {
+        do_stuff();
+    }
+}
+""",
+        expected_source="""\
+a & (x > 1)
+""",
+    ),
+
+    PatternFixture(
+        id="boolmat_bitwise_to_and",
+        pattern_name="bool_materialize",
+        description="Swap & to && (add short-circuit)",
+        func_name="test_func",
+        diagnosis=diag_with_bool_materialization(),
+        match_mode="contains",
+        seeded_source="""\
+void test_func(bool a, int x) {
+    if (a & (x > 1)) {
+        do_stuff();
+    }
+}
+""",
+        expected_source="""\
+a && x > 1
+""",
+    ),
+
+    # ===================== float_literal_pressure =====================
+
+    PatternFixture(
+        id="fltpres_inline_to_static",
+        pattern_name="float_literal_pressure",
+        description="Extract repeated float literal to static const (GPR addr cache)",
+        func_name="test_func",
+        diagnosis=diag_with_gpr_fpr_conflict(),
+        match_mode="contains",
+        seeded_source="""\
+void test_func(float* out, float x) {
+    if (x > 100.0f) x = 100.0f;
+    call();
+    if (x > 100.0f) x = 100.0f;
+    *out = x;
+}
+""",
+        expected_source="""\
+static const float
 """,
     ),
 ]

@@ -22,6 +22,9 @@
 #include "utl/Symbol.h"
 #include "utl/TempoMap.h"
 
+HamMaster *LoadingPanel::sLoadingMaster = nullptr;
+SongDB *LoadingPanel::sSongDB = nullptr;
+
 LoadingPanel::LoadingPanel() : mSongInfo(0), mTempoMap(), mBeatMap(0) { sSongDB = new SongDB(); }
 
 LoadingPanel::~LoadingPanel() {

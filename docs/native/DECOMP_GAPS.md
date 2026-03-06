@@ -26,16 +26,24 @@ These directly affect what's visible on screen.
 | `LabelShrinkWrapper` | `Poll()` | **Done** (pass-through to UIComponent::Poll) | Label auto-sizing |
 | ~~`TexProc`~~ | ~~`DrawShowing()`, `Poll()`~~ | **Done** | Poll 100%, DrawToTexture 92.3% |
 
-### Text Rendering — Mostly Complete
-- `FitTextJust()` — **Implemented** (94.3% match, binary search scale). Remaining: FPR regswaps.
+### Text Rendering
+- `FitTextJust()` — **Implemented** (binary search size fitting). Was missing definition causing `undefined symbol` crash on native.
+- `WrapText()` — current per-function `objdiff` on 2026-03-06 shows the built source is a stub again (`675 insert`, verdict `Stub`), despite stale 100% metadata in the function DB.
 - `AllocateMeshes()` — Clamps displayableChars instead of asserting (font data sometimes corrupt)
 - Multiple `#ifdef HX_NATIVE` guards for font page validation and vertex allocation safety
+- **Text positioning verified working** (2026-03-06): sFlipYZ, ortho projection, and coordinate pipeline all correct. Text renders at correct screen positions on `choose_mode_screen`.
+
+### Small Regression Candidates — 2026-03-06 Baseline
+- `BustAMovePanel::ShowMoveRating()` — 89.5% normalized, still likely fixable. Tested branch-local `DataNode`/typed-zero cleanup variants with no `objdiff` improvement; live mismatch is still branch cleanup/tail-merging around `moveFinishedMsg[1]`.
+- `HamSongData::Load(const SongInfo *, bool, HamSongDataValidate)` — 100.0% normalized on current source.
+- `RndMat::CreateMetaMaterial(bool)` — 100.0% normalized on current source. Keep shared source; do not reintroduce an `#ifdef HX_NATIVE` null-guard split here.
 
 ### Material/Shader Gaps
 - `RndMat::Init()` — Skips MetaMaterial loading (`sMetaMaterials = nullptr`). MetaMaterials only control editor property permissions, not rendering. Blocked by MetaMaterial::Load() decomp gap.
 - All `RndShader*::Select()` — Intentionally stubbed (24 methods). WebGPU renderer bypasses Xbox shader pipeline entirely.
 - All `RndShader*::CalcShaderOpts()` — Return 0 (12 methods). Correct for native — these produce Xbox HLSL macro bitmasks.
 - `PostProc_NG::DoVelocity()` — Motion blur stubbed (hardcoded ILP32 offsets)
+- **Skinned mesh GPU shader**: Full bone-blending vertex shader (`vs_skinned`) exists in `native/src/gfx/standard_wgsl.inc` (542 lines). The standalone `native/shaders/standard.wgsl` has been synced to match.
 
 ## Priority 2: UI & Screen Flow
 
@@ -110,11 +118,12 @@ These affect gameplay but not the menu/rendering flow.
 Sorted by impact x feasibility:
 
 ### Immediate (data fixes, no code risk)
-1. **Fix demo.yaml paths** — 8 broken asset paths, 1 duplicate key (`dare_front`), 1 undefined scene (`dare_streets`). Unlocks 44-shot showcase.
+1. ~~**Fix demo.yaml paths**~~ — **Done**. Removed undefined `dare_streets` scene, fixed duplicate `dare_front` key.
 
 ### Track A — Next Steps
 2. ~~**Flow::Enter()**~~ — **Done**. Implemented with `Flow::Exit()`. 81.8% / 99.1% match respectively.
-3. **Locale data loading** — UI text shows raw tokens. Likely a file path / archive issue, not a decomp gap.
+3. ~~**Locale data loading**~~ — **Done**. 2091 symbols loaded from 2 files. Fix was proper `mInitialized` constructor init + LocalePanel vtable key function fix.
+4. ~~**Text positioning**~~ — **Verified working** (2026-03-06). No alignment issues — sFlipYZ + ortho projection correct. `FitTextJust()` was missing (undefined symbol crash), now implemented.
 
 ### Remaining Stubs — All Resolved
 4. ~~**SaveLoadManager::Poll()**~~ — **Done** (100% match)

@@ -411,21 +411,23 @@ RndFontBase *UIFontImporter::GetGennedFont(Symbol s) const {
     unsigned int numVar = *reinterpret_cast<unsigned int const *>(
         reinterpret_cast<char *>(const_cast<UIFontImporter *>(this)) + 0xc0
     );
+    RndMat *mat;
     if ((unsigned int)idx >= numVar) {
-        return FindFontForMat(nullptr);
-    }
-    void *pPtr = reinterpret_cast<void *>(
-        reinterpret_cast<char *>(const_cast<UIFontImporter *>(this)) + 0xc4
-    );
-    void *ptr = *reinterpret_cast<void * const *>(pPtr);
-    for (; (unsigned)idx; idx--) {
-        ptr = *reinterpret_cast<void * const *>(
-            reinterpret_cast<char *>(ptr) + 0x14
+        mat = nullptr;
+    } else {
+        void *pPtr = reinterpret_cast<void *>(
+            reinterpret_cast<char *>(const_cast<UIFontImporter *>(this)) + 0xc4
+        );
+        void *ptr = *reinterpret_cast<void * const *>(pPtr);
+        for (; (unsigned)idx; idx--) {
+            ptr = *reinterpret_cast<void * const *>(
+                reinterpret_cast<char *>(ptr) + 0x14
+            );
+        }
+        mat = *reinterpret_cast<RndMat * const *>(
+            reinterpret_cast<char *>(ptr) + 0xc
         );
     }
-    RndMat *mat = *reinterpret_cast<RndMat * const *>(
-        reinterpret_cast<char *>(ptr) + 0xc
-    );
     return FindFontForMat(mat);
 #endif
 }
@@ -727,7 +729,7 @@ RndText *UIFontImporter::FindTextForFont(RndFontBase *font) const {
             if (owner) {
                 if (owner->ClassName() == Text) {
                     RndText *text = dynamic_cast<RndText *>(owner);
-                    if (text) {
+                    if (text->mStyles[0].mFont == font) {
                         return text;
                     }
                 }

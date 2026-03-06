@@ -14,6 +14,10 @@
 OvershellSlot::OvershellSlot(HamPlayerData &data)
     : mPlayerData(data), mState((OvershellSlotState)0), unk38(0), unk3c(-1) {}
 
+BEGIN_HANDLERS(OvershellSlot)
+    HANDLE_SUPERCLASS(Hmx::Object)
+END_HANDLERS
+
 void OvershellSlot::SetPlaying(bool playing) {
     static Message quitMsg("player_quit", 0);
     static Message joinMsg("player_join", 0);

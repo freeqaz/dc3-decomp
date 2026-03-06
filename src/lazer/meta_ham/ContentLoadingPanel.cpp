@@ -34,7 +34,7 @@ void ContentLoadingPanel::ContentMountBegun(int i) {
 
 void ContentLoadingPanel::ShowIfPossible() {
     if (!mShowing) {
-        if (mAllowedToShow && mContentCount != 1) { // theres an extra check here
+        if (mAllowedToShow && (bool)(mContentCount > 1)) {
             MILO_ASSERT(CheckIsLoaded(), 0x84);
             Enter();
             mShowing = true;

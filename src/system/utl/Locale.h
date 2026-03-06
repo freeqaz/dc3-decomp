@@ -39,22 +39,16 @@ private:
     bool mInitialized; // 0x1c - checked in Init
     DataArray *mMagnuStrings; // 0x20
 public:
-    Locale() {
-#ifdef HX_NATIVE
-        // mInitialized is UB in original binary (never written, only read in Init).
-        // On Xbox debug build, BSS memory was nonzero so it happened to be true.
-        // On native (zero-init globals), it's false, skipping all locale file loading.
-        mInitialized = true;
-#endif
-    }
-    // : mSize(0), mSymTable(0), mStrTable(0), mStringData(0), mUploadedFlags(0),
-    //   mFile(), mNumFilesLoaded(0), mMagnuStrings(0) {}
+    // mInitialized is never written in the original binary (UB). On Xbox debug builds,
+    // BSS wasn't zeroed so it happened to be true. Initialize it properly here.
+    Locale() : mSize(0), mSymTable(0), mStrTable(0), mStringData(0),
+        mUploadedFlags(0), mNumFilesLoaded(0), mInitialized(true), mMagnuStrings(0) {}
     ~Locale();
 
     void Init();
     void Terminate();
 
-    // static const char *sIgnoreMissingText;
+    static const char *sIgnoreMissingText;
 
     void SetMagnuStrings(DataArray *);
     // bool FindDataIndex(Symbol, int &, bool) const;
@@ -62,7 +56,6 @@ public:
 
     static void SetLocaleVerboseNotify(bool set) { Locale::sVerboseNotify = set; }
 
-protected:
     static bool sVerboseNotify;
 };
 

@@ -2743,7 +2743,7 @@ void HamDirector::Poll() {
             }
             if (mForcePostProc && !mCamPostProc) {
                 float forceBlend = mForcePostProcBlend;
-                if (forceBlend > 0.0f && forceBlend < blend) {
+                if (forceBlend > 0.0f && (bool)(forceBlend < blend)) {
                     mWorldPostProc->Interp(mWorldPostProc, mForcePostProc, forceBlend);
                     overlayB = mForcePostProc;
                     overlayName = "force";

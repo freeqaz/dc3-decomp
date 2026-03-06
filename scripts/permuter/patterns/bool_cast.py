@@ -122,26 +122,56 @@ def _generate_bool_casts(
                 if op and op.text == b"!":
                     call = inner.child_by_field_name("argument")
 
-            if call is None or call.type != "call_expression":
-                continue
+            if call is not None and call.type == "call_expression":
+                inner_text = source[inner.start_byte:inner.end_byte]
+                indent = get_indent(source, node)
 
-            inner_text = source[inner.start_byte:inner.end_byte]
-            indent = get_indent(source, node)
+                # Extract to bool local before the if
+                new_source = (
+                    source[:node.start_byte]
+                    + b"bool _cond = " + inner_text + b";\n"
+                    + indent + b"if (_cond)"
+                    + source[condition.end_byte:]
+                )
+                yield Variant(
+                    name=f"boolcast_{counter}",
+                    pattern_name="bool_cast",
+                    description=f"Extract condition to bool local: {inner_text.decode(errors='replace')[:40]}",
+                    source=new_source,
+                )
+                counter += 1
 
-            # Extract to bool local before the if
-            new_source = (
-                source[:node.start_byte]
-                + b"bool _cond = " + inner_text + b";\n"
-                + indent + b"if (_cond)"
-                + source[condition.end_byte:]
-            )
-            yield Variant(
-                name=f"boolcast_{counter}",
-                pattern_name="bool_cast",
-                description=f"Extract condition to bool local: {inner_text.decode(errors='replace')[:40]}",
-                source=new_source,
-            )
-            counter += 1
+            # Pattern 4: Extract comparison to bool local in if-condition
+            # Only when one side is a call (e.g. da->Size() > 1) — simple
+            # identifier comparisons don't benefit from bool intermediates
+            elif inner.type == "binary_expression":
+                op_node = inner.child_by_field_name("operator")
+                if op_node and op_node.text.decode() in {"<", ">", "<=", ">=", "==", "!="}:
+                    left = inner.child_by_field_name("left")
+                    right = inner.child_by_field_name("right")
+                    has_call = (
+                        (left is not None and _has_call(left))
+                        or (right is not None and _has_call(right))
+                    )
+                    if not has_call:
+                        continue
+
+                    inner_text = source[inner.start_byte:inner.end_byte]
+                    indent = get_indent(source, node)
+
+                    new_source = (
+                        source[:node.start_byte]
+                        + indent + b"bool _cond = " + inner_text + b";\n"
+                        + indent + b"if (_cond)"
+                        + source[condition.end_byte:]
+                    )
+                    yield Variant(
+                        name=f"boolcast_{counter}",
+                        pattern_name="bool_cast",
+                        description=f"Extract comparison to bool local: {inner_text.decode(errors='replace')[:40]}",
+                        source=new_source,
+                    )
+                    counter += 1
 
         # Pattern 3: Bool cast in assignment
         if node.type == "expression_statement":
@@ -174,6 +204,16 @@ def _is_bool_cast(node: Node) -> bool:
     if node.type == "call_expression":
         func = node.child_by_field_name("function")
         if func and func.text == b"bool":
+            return True
+    return False
+
+
+def _has_call(node: Node) -> bool:
+    """Check if node contains a call_expression anywhere."""
+    if node.type == "call_expression":
+        return True
+    for child in node.named_children:
+        if _has_call(child):
             return True
     return False
 

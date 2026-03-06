@@ -1,5 +1,7 @@
 #include "CRC.h"
 
+bool Hmx::CRC::ValidateCRC(int, const char *) { return true; }
+
 int Hmx::CRC::ComputeHash(const char *c, unsigned int size) {
     if (size != 0 && c != 0 && *c != '\0') {
         int number = 0x811c9dc5;

@@ -192,6 +192,8 @@ bool PlatformMgr::ShowFitnessBodyProfileUI(int padNum) {
 void PlatformMgr::PreInit() { XMPOverrideBackgroundMusic(); }
 void PlatformMgr::EnableXMP() { XMPRestoreBackgroundMusic(); }
 void PlatformMgr::DisableXMP() { XMPOverrideBackgroundMusic(); }
+void PlatformMgr::CheckMailbox() {}
+void PlatformMgr::RunNetStartUtility() {}
 
 void PlatformMgr::SetScreenSaver(bool b1) {
     mScreenSaver = b1;
@@ -501,6 +503,17 @@ namespace {
             MILO_FAIL("Failed to initialize Xbox SmartGlass library.\n");
         }
     }
+}
+
+DataNode PlatformMgr::OnSignInUsers(const DataArray *msg) {
+    unsigned long flags = 0;
+    if (msg->Size() > 3) {
+        if (msg->Int(3) != 0) {
+            flags = 2;
+        }
+    }
+    SignInUsers(msg->Int(2), flags);
+    return DataNode(0);
 }
 
 void PlatformMgr::SmartGlassSend(unsigned long clientID, const DataArray *arr) {

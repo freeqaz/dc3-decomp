@@ -185,7 +185,8 @@ void DanceRemixer::PostMoveFinished() {
     MoveDir *moveDir = TheHamDirector->GetMoveDir();
     MoveAsyncDetector *detector = moveDir->GetAsyncDetector();
     for (int i = 0; i < 2; i++) {
-        auto scored = ScoredDanceMeasure(i, JumpedMoveIdx(moveIdx - 1) + 1);
+        auto _tmp1 = JumpedMoveIdx(moveIdx - 1);
+        auto scored = ScoredDanceMeasure(i, _tmp1 + 1);
         if (scored) {
             detector->DisableAllDetectors();
             break;

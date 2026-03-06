@@ -42,7 +42,7 @@ public:
     float GetCurRadius() const { return mCurRadius[0]; }
     Shape GetShape() const { return mShape; }
     /** "Cache world state for collision queries during simulation" */
-    void SyncWorldState() {} // DC3: SimulateInternal queries WorldXfm() directly
+    void SyncWorldState();
 
 protected:
     CharCollide();

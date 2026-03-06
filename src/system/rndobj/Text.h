@@ -133,7 +133,8 @@ public:
         Style *mStyle; // 0x34
         int mFontMapIdx; // 0x38
         float mBaseSize; // 0x3c
-        bool mActive; // 0x40
+        bool brk; // 0x40
+        bool mActive; // 0x41
     };
 
     class BlacklightPacket {
@@ -330,6 +331,7 @@ public:
     int NumStyles() const { return mStyles.size(); }
     float Width() const { return mWidth; }
 
+    friend class UIFontImporter;
     friend class UIListLabelElement;
 
     // Line class for text layout — size 0x14

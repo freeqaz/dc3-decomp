@@ -287,13 +287,11 @@ shots:
     scene: taye_flash4wrd
     camera: { azimuth: 15, elevation: -5, distance: 90 }
 
-  # --- Dare on Streets ---
+  # --- Dare at DCI ---
 
   dare_front:
-    scene: dare_streets
+    scene: dare_dci
     camera: { azimuth: 0, elevation: 15, distance: 120 }
-
-  # --- Dare at DCI ---
 
   dare_orbit:
     scene: dare_dci
@@ -301,10 +299,6 @@ shots:
     duration: 8
     fps: 30
     camera: { mode: auto-orbit, elevation: 15 }
-
-  dare_front:
-    scene: dare_dci
-    camera: { azimuth: 0, elevation: 15, distance: 120 }
 
   # --- Glitch at Hi-Def ---
 

@@ -31,7 +31,7 @@ extern HeadsetConfig lbl_82F474C8;
 
 MicXbox::MicXbox(int, float volume)
     : mRunning(false), unk10(0), mChangeNotify(false), mPlaybackVoice(0), unk301c(unk1c),
-      unk9054(1.0f), unk9058(0), unk905c(0), unk9060(0), mVolume(volume), mMute(false),
+      unk9054(1.0f), unk9058(0), unk905c(0), mFxSend(0), mVolume(volume), mMute(false),
       unk906c(0), mGain(1.0f), mOutputGain(1.0f), mSensitivity(1.0f), unk907c(0),
       mDroppedSamples(0), mDeviceName("generic_usb"), mClipping(false) {
     unk302c.Init(0xc00);
@@ -56,6 +56,8 @@ int MicXbox::GetDroppedSamples() { return mDroppedSamples; }
 float MicXbox::GetOutputGain() const { return mOutputGain; }
 
 float MicXbox::GetSensitivity() const { return mSensitivity; }
+
+Symbol &MicXbox::GetName() const { return (Symbol &)mDeviceName; }
 
 void MicXbox::ClearBuffers() {
     unk302c.Reset();
@@ -101,7 +103,16 @@ void MicXbox::Stop() {
 }
 
 void MicXbox::SetFxSend(FxSend *fx) {
-    // TODO
+    CriticalSection *cs = &MicManagerXbox::GetInstance()->unk68;
+    if (cs)
+        cs->Enter();
+    mFxSend = fx;
+    if (mPlaybackVoice) {
+        StopPlayback();
+        StartPlayback();
+    }
+    if (cs)
+        cs->Exit();
 }
 
 bool MicXbox::IsRunning() const { return mRunning; }

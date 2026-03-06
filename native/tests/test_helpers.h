@@ -194,6 +194,14 @@ protected:
 };
 
 // ============================================================================
+// Bink test asset path
+// ============================================================================
+// Returns path to a .bik file for testing. Checks MILO_TEST_BIK env var first,
+// then falls back to pre-extracted files from ExtractBik.ExtractSmallest.
+// Returns nullptr if no .bik is available.
+const char *GetTestBikPath();
+
+// ============================================================================
 // Synthetic milo file helpers
 // ============================================================================
 

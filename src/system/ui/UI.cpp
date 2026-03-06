@@ -521,12 +521,12 @@ void UIManager::ReloadStrings() {
 }
 
 void UIManager::FakeKeyboardAction(JoypadButton btn, JoypadAction action) {
-    static ButtonDownMsg msg(nullptr, btn, action, 0x18);
-    msg[0] = TheUserMgr->GetLocalUserFromPadNum(0);
-    msg[1] = btn;
-    msg[2] = action;
-    msg[3] = 0;
-    mCurrentScreen->Handle(msg, false);
+    static ButtonDownMsg downMsg(nullptr, (JoypadButton)0x18, (JoypadAction)0, 0);
+    downMsg[0] = TheUserMgr->GetLocalUserFromPadNum(0);
+    downMsg[1] = btn;
+    downMsg[2] = action;
+    downMsg[3] = 0;
+    Handle(downMsg, false);
 }
 
 void UIManager::Poll() {

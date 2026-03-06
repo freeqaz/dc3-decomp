@@ -5,6 +5,10 @@
 BustAMoveData::BustAMoveData() {}
 BustAMoveData::~BustAMoveData() {}
 
+BEGIN_HANDLERS(BustAMoveData)
+    HANDLE_SUPERCLASS(Hmx::Object)
+END_HANDLERS
+
 BEGIN_CUSTOM_PROPSYNC(BAMPhrase)
     SYNC_PROP(count, o.count)
     SYNC_PROP(bars, o.bars)

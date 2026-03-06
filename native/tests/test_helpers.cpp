@@ -113,3 +113,31 @@ bool WriteSyntheticMilo(const char *path,
     fclose(f);
     return true;
 }
+
+// ============================================================================
+// GetTestBikPath — .bik test asset auto-discovery
+// ============================================================================
+
+static const char *kBikFixturePaths[] = {
+    "/tmp/claude-1000/bik_fixtures/satisfaction_prev.bik",
+    "/tmp/claude-1000/bik_fixtures/fire.bik",
+    "/tmp/claude-1000/bik_fixtures/campaign_intro.bik",
+    "/tmp/claude-1000/bik_fixtures/peak_heliblades.bik",
+};
+
+const char *GetTestBikPath() {
+    // 1. Check env var
+    const char *env = getenv("MILO_TEST_BIK");
+    if (env && env[0]) return env;
+
+    // 2. Check pre-extracted fixture files (from ExtractBik.ExtractSmallest)
+    for (const char *path : kBikFixturePaths) {
+        FILE *f = fopen(path, "rb");
+        if (f) {
+            fclose(f);
+            return path;
+        }
+    }
+
+    return nullptr;
+}

@@ -61,7 +61,7 @@ protected:
     std::vector<HamStoreFilter *> *mFilters;
     std::map<Symbol, std::vector<StoreOffer *> *> unk38;
     std::vector<StoreOffer *> unk54;
-    int unk5c;
+    const HamStoreFilter *mCurrentFilter; // 0x5c
     int mSortIndex; // 0x60
     std::vector<StoreOffer *> *mFilteredOffers; // 0x64
     std::vector<Symbol> mSorts; // 0x68

@@ -84,6 +84,8 @@ const char *BufStream::Name() const {
         return mName.c_str();
 }
 
+int BufStream::Size() { return mSize; }
+
 void BufStream::DeleteChecksum() {
     delete mChecksum;
     mChecksum = 0;

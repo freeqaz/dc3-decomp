@@ -20,6 +20,9 @@ int ConvertGameOriginSymbolToEnum(Symbol sym) {
         return 3;
 }
 
+LocationCmp::LocationCmp() : mName(nullptr) {}
+LocationCmp::~LocationCmp() {}
+
 int LocationCmp::Compare(const NavListItemSortCmp *cmp, NavListNodeType type) const {
     switch (type) {
     case kNodeHeader: {
@@ -47,6 +50,11 @@ int LocationCmp::Compare(const NavListItemSortCmp *cmp, NavListNodeType type) co
         MILO_FAIL("invalid type of node comparison.\n");
     }
     return 0;
+}
+
+NavListHeaderNode *
+SongSortByLocation::NewHeaderNode(NavListItemNode *n1, NavListItemNode *n2) const {
+    return NewHeaderNode(n1);
 }
 
 NavListShortcutNode *

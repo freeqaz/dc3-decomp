@@ -3,9 +3,23 @@
 #include "obj/Msg.h"
 #include "obj/Object.h"
 #include "obj/DirLoader.h"
+#include "obj/PropSync_p.h"
 #include "rndobj/Dir.h"
 #include "rndobj/Group.h"
 #include "utl/MemMgr.h"
+
+template <>
+bool PropSync(ObjDirPtr<WorldInstance> &ptr, DataNode &node, DataArray *prop, int i, PropOp op) {
+    if (op == kPropGet) {
+        DataNode tmp(ptr.GetFile());
+        node = tmp;
+    } else {
+        const char *str = node.Str(NULL);
+        FilePath fp(str);
+        ptr.LoadFile(fp, false, true, kLoadFront, false);
+    }
+    return true;
+}
 
 #pragma region WorldInstance
 

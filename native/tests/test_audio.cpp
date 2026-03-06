@@ -4,6 +4,7 @@
 // Tests that need a real audio device skip gracefully if init fails.
 // Tests that need .bik fixtures use MILO_TEST_BIK env var.
 
+#include "test_helpers.h"
 #include <gtest/gtest.h>
 #include "audio/AudioDevice.h"
 #include "platform/StreamReceiver_Native.h"
@@ -258,9 +259,10 @@ class BikAudioTest : public ::testing::Test {
 protected:
     const char *bikPath = nullptr;
     void SetUp() override {
-        bikPath = getenv("MILO_TEST_BIK");
-        if (!bikPath || !bikPath[0]) {
-            GTEST_SKIP() << "Set MILO_TEST_BIK to run";
+        bikPath = GetTestBikPath();
+        if (!bikPath) {
+            GTEST_SKIP() << "No .bik file available. Run ExtractBik.ExtractSmallest first, "
+                         << "or set MILO_TEST_BIK=/path/to/file.bik";
         }
     }
 };

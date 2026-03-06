@@ -76,7 +76,6 @@ void Multiply(const Hmx::Matrix3 &a, const Hmx::Matrix3 &b, Hmx::Matrix3 &out) {
 
 void Multiply(const Transform &a, const Transform &b, Transform &out) {
     Multiply(a.m, b.m, out.m);
-    // Row-vector convention: v * A then v * B => out.v = a.v * b.m + b.v
     Multiply(a.v, b.m, out.v);
     Add(out.v, b.v, out.v);
 }

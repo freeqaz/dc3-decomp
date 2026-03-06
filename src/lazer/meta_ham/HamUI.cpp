@@ -570,10 +570,9 @@ void HamUI::DrawDebug() {
 
 Symbol HamUI::DisplayNextCameraOutput() {
     do {
-        do {
-            mBufferType = (LiveCameraInput::BufferType)(mBufferType + 1);
-        } while (mBufferType == 1);
-    } while (mBufferType == 2);
+        mBufferType = (LiveCameraInput::BufferType)(mBufferType + 1);
+    } while (mBufferType == LiveCameraInput::kBufferDepth
+             || mBufferType == LiveCameraInput::kBufferPlayer);
     if (mBufferType >= NumSnapshots() + 4) {
         mBufferType = (LiveCameraInput::BufferType)-1;
     }

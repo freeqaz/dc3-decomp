@@ -416,11 +416,12 @@ void Flow::SyncObjects() {
 }
 
 void Flow::Enter() {
+    FlowQueueable *q = this;
     if (ProxyFile().empty() && mStartMode != 0) {
         if (mStartMode == 1) {
-            Execute(kQueue);
+            q->Execute(kQueue);
         } else {
-            TheFlowMgr->QueueCommand(this, kQueue);
+            TheFlowMgr->QueueCommand(q, kQueue);
         }
     }
 }

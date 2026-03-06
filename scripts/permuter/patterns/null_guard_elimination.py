@@ -80,12 +80,12 @@ class NullGuardEliminationPattern(Pattern):
 
         # Walk all statements including nested scopes
         for compound in _find_compound_statements(ctx.body_node):
-            if counter >= 10:
+            if counter >= 20:
                 break
 
             stmts = list(compound.named_children)
             for stmt in stmts:
-                if counter >= 10:
+                if counter >= 20:
                     break
 
                 # Strategy 1: if (ptr) ptr->Method(); -> ptr->Method();
@@ -100,6 +100,16 @@ class NullGuardEliminationPattern(Pattern):
 
                 # Strategy 3: ... || (ptr && expr) || ... -> ... || expr || ...
                 for variant in _simplify_or_chain_guard(stmt, source, counter):
+                    yield variant
+                    counter += 1
+
+                # Strategy 4: if (a) { if (b) { body } } -> if (a && b) { body }
+                for variant in _merge_nested_guards(stmt, source, counter):
+                    yield variant
+                    counter += 1
+
+                # Strategy 5: if (ptr) { stmt1; stmt2; } -> stmt1; stmt2;
+                for variant in _unwrap_multi_stmt_guard(stmt, source, counter):
                     yield variant
                     counter += 1
 
@@ -124,11 +134,11 @@ class NullGuardEliminationPattern(Pattern):
         source = ctx.file_source
 
         for compound in _find_compound_statements(ctx.body_node):
-            if counter >= 10:
+            if counter >= 20:
                 break
             stmts = list(compound.named_children)
             for stmt in stmts:
-                if counter >= 10:
+                if counter >= 20:
                     break
                 # Only try removal if the guard variable is in the removable set
                 if stmt.type == "if_statement":
@@ -606,6 +616,149 @@ def _simplify_or_chain_guard(
                         source=new_source,
                     )
                     counter += 1
+
+
+def _merge_nested_guards(
+    stmt: Node, source: bytes, counter: int
+) -> Iterator[Variant]:
+    """Merge `if (a) { if (b) { body } }` -> `if (a && b) { body }`.
+
+    Detects if_statement with no else whose compound_statement body has exactly
+    one child that is also an if_statement with no else.
+    """
+    if stmt.type != "if_statement":
+        return
+
+    condition = stmt.child_by_field_name("condition")
+    consequence = stmt.child_by_field_name("consequence")
+    alternative = stmt.child_by_field_name("alternative")
+
+    if condition is None or consequence is None or alternative is not None:
+        return
+
+    if consequence.type != "compound_statement":
+        return
+
+    inner_stmts = [c for c in consequence.named_children if c.type != "comment"]
+    if len(inner_stmts) != 1 or inner_stmts[0].type != "if_statement":
+        return
+
+    inner_if = inner_stmts[0]
+    inner_cond = inner_if.child_by_field_name("condition")
+    inner_cons = inner_if.child_by_field_name("consequence")
+    inner_alt = inner_if.child_by_field_name("alternative")
+
+    if inner_cond is None or inner_cons is None or inner_alt is not None:
+        return
+
+    # Get outer and inner condition expressions
+    outer_expr = _get_inner_expr(condition)
+    inner_expr = _get_inner_expr(inner_cond)
+    if outer_expr is None or inner_expr is None:
+        return
+
+    outer_text = source[outer_expr.start_byte:outer_expr.end_byte]
+    inner_text = source[inner_expr.start_byte:inner_expr.end_byte]
+    inner_body = source[inner_cons.start_byte:inner_cons.end_byte]
+
+    indent = get_indent(source, stmt)
+    merged = (
+        indent + b"if (" + outer_text + b" && " + inner_text + b") "
+        + inner_body
+    )
+
+    ed = SourceEditor(source)
+    replace_start = stmt.start_byte
+    while replace_start > 0 and source[replace_start - 1:replace_start] in (b" ", b"\t"):
+        replace_start -= 1
+    replace_end = stmt.end_byte
+    while replace_end < len(source) and source[replace_end:replace_end + 1] in (b"\n", b"\r"):
+        replace_end += 1
+
+    ed.delete_range(replace_start, replace_end)
+    ed.insert_at(replace_start, merged + b"\n")
+
+    try:
+        new_source = ed.apply()
+    except ValueError:
+        return
+
+    yield Variant(
+        name=f"nullguard_{counter}",
+        pattern_name="null_guard_elimination",
+        description="Merge nested guards: if (a) { if (b) ... } -> if (a && b) ...",
+        source=new_source,
+    )
+
+
+def _unwrap_multi_stmt_guard(
+    stmt: Node, source: bytes, counter: int
+) -> Iterator[Variant]:
+    """Remove guard from `if (ptr) { stmt1; stmt2; }` -> `stmt1; stmt2;`.
+
+    The body must reference the guard variable to qualify.
+    """
+    if stmt.type != "if_statement":
+        return
+
+    condition = stmt.child_by_field_name("condition")
+    consequence = stmt.child_by_field_name("consequence")
+    alternative = stmt.child_by_field_name("alternative")
+
+    if condition is None or consequence is None or alternative is not None:
+        return
+
+    cond_expr = _get_inner_expr(condition)
+    if cond_expr is None or cond_expr.type != "identifier":
+        return
+
+    guard_name = source[cond_expr.start_byte:cond_expr.end_byte]
+
+    if consequence.type != "compound_statement":
+        return
+
+    inner_stmts = [c for c in consequence.named_children if c.type != "comment"]
+    if len(inner_stmts) < 2:
+        return  # Single-statement is handled by Strategy 1
+
+    # Body must reference the guard variable
+    body_text = source[consequence.start_byte:consequence.end_byte]
+    # Check inside the braces (skip the guard name in condition)
+    inner_body = body_text[1:-1] if len(body_text) > 2 else body_text
+    if guard_name not in inner_body:
+        return
+
+    # Extract all inner statements and re-indent
+    indent = get_indent(source, stmt)
+    parts = []
+    for s in inner_stmts:
+        parts.append(indent + source[s.start_byte:s.end_byte])
+
+    replacement = b"\n".join(parts) + b"\n"
+
+    replace_start = stmt.start_byte
+    while replace_start > 0 and source[replace_start - 1:replace_start] in (b" ", b"\t"):
+        replace_start -= 1
+    replace_end = stmt.end_byte
+    while replace_end < len(source) and source[replace_end:replace_end + 1] in (b"\n", b"\r"):
+        replace_end += 1
+
+    ed = SourceEditor(source)
+    ed.delete_range(replace_start, replace_end)
+    ed.insert_at(replace_start, replacement)
+
+    try:
+        new_source = ed.apply()
+    except ValueError:
+        return
+
+    guard_str = guard_name.decode("utf-8", errors="replace")
+    yield Variant(
+        name=f"nullguard_{counter}",
+        pattern_name="null_guard_elimination",
+        description=f"Unwrap multi-stmt guard: if ({guard_str}) {{ ... }}",
+        source=new_source,
+    )
 
 
 def _get_inner_expr(condition: Node) -> Node | None:

@@ -1649,6 +1649,94 @@ void RndMesh::LoadVertices(BinStreamRev &d) {
     } else {
         b58 = false;
     }
+#ifdef HX_NATIVE
+    // Native: decompress Xbox compressed vertices into regular mVerts
+    if (b58) {
+        unsigned int loadedCompressedSize = 0;
+        unsigned int loadedVersion = 0;
+        d.stream.ReadEndian(&loadedCompressedSize, 4);
+        d.stream.ReadEndian(&loadedVersion, 4);
+
+        if (count > 0 && loadedCompressedSize > 0) {
+            unsigned int totalSize = loadedCompressedSize * count;
+            unsigned char *compData = new unsigned char[totalSize];
+            ReadChunks(d.stream, compData, totalSize, loadedCompressedSize << 9);
+
+            // Byte-swap each 4-byte word from big-endian (Xbox) to little-endian (native)
+            unsigned int *words = (unsigned int *)compData;
+            for (unsigned int i = 0; i < totalSize / 4; i++) {
+                words[i] = __builtin_bswap32(words[i]);
+            }
+
+            // Decompress into regular vertices
+            mVerts.resize(count);
+            for (int i = 0; i < count; i++) {
+                CompressedVertex_Xbox *cv = (CompressedVertex_Xbox *)(compData + i * loadedCompressedSize);
+                Vert &v = mVerts[i];
+
+                // Position: float bits stored as int
+                v.pos.x = *(float *)&cv->mPosX;
+                v.pos.y = *(float *)&cv->mPosY;
+                v.pos.z = *(float *)&cv->mPosZ;
+
+                // Color: packed ABGR (alpha<<24 | blue<<16 | green<<8 | red)
+                unsigned int col = (unsigned int)cv->mColor;
+                v.color.red   = (float)(col & 0xFF) / 255.0f;
+                v.color.green = (float)((col >> 8) & 0xFF) / 255.0f;
+                v.color.blue  = (float)((col >> 16) & 0xFF) / 255.0f;
+                v.color.alpha = (float)((col >> 24) & 0xFF) / 255.0f;
+
+                // Normal: unpack 10-10-10-2 signed
+                unsigned int norm = (unsigned int)cv->mNormal;
+                int nx = norm & 0x3FF; if (nx & 0x200) nx |= ~0x3FF; // sign extend 10-bit
+                int ny = (norm >> 10) & 0x3FF; if (ny & 0x200) ny |= ~0x3FF;
+                int nz = (norm >> 20) & 0x3FF; if (nz & 0x200) nz |= ~0x3FF;
+                v.norm.x = (float)nx / 511.0f;
+                v.norm.y = (float)ny / 511.0f;
+                v.norm.z = (float)nz / 511.0f;
+
+                // Tangent: unpack 10-10-10-2
+                unsigned int tang = (unsigned int)cv->mTangent;
+                int tx = tang & 0x3FF; if (tx & 0x200) tx |= ~0x3FF;
+                int ty = (tang >> 10) & 0x3FF; if (ty & 0x200) ty |= ~0x3FF;
+                v.tex.x = (float)tx / 511.0f;
+                v.tex.y = (float)ty / 511.0f;
+
+                // Tangent vector (use normal-derived default)
+                v.tangent.Set(1, 0, 0, 1);
+
+                // Bone indices: packed 4 bytes
+                unsigned int bi = (unsigned int)cv->mBoneIndices;
+                v.boneIndices[0] = (short)(bi & 0xFF);
+                v.boneIndices[1] = (short)((bi >> 8) & 0xFF);
+                v.boneIndices[2] = (short)((bi >> 16) & 0xFF);
+                v.boneIndices[3] = (short)((bi >> 24) & 0xFF);
+
+                // Bone weights: first float only (compressed format limitation)
+                v.boneWeights.x = *(float *)&cv->mBoneWeights;
+                v.boneWeights.y = 0.0f;
+                v.boneWeights.z = 0.0f;
+                v.boneWeights.w = 0.0f;
+            }
+
+            delete[] compData;
+        } else if (count > 0) {
+            // loadedCompressedSize == 0 but count > 0: skip (shouldn't happen)
+            mVerts.resize(0);
+        }
+    } else {
+        mVerts.resize(count);
+        int i = 0;
+        for (Vert *it = mVerts.begin(); it != mVerts.end(); ++it) {
+            d >> *it;
+            i++;
+            if (!(i & 0x1FF)) {
+                while (d.stream.Eof() == TempEof)
+                    Timer::Sleep(0);
+            }
+        }
+    }
+#else
     unsigned int loadedCompressedSize = 0;
     unsigned int loadedVersion = 0;
     unsigned int compressedSize = 0;
@@ -1710,6 +1798,7 @@ void RndMesh::LoadVertices(BinStreamRev &d) {
             }
         }
     }
+#endif
 }
 
 void RndMesh::SaveVertices(BinStream &bs) {

@@ -12,6 +12,9 @@
 #include <cmath>
 #include <functional>
 #include "math/Decibels.h"
+#include "math/Utl.h"
+
+const float StandardStream::kStreamEndMs = -1.1920929E-7f;
 
 bool StandardStream::sReportLargeTimerErrors = true;
 #ifdef HX_NATIVE
@@ -116,7 +119,7 @@ float StandardStream::GetTime() {
         return mStartMs;
 }
 
-// float StandardStream::GetJumpBackTotalTime() { return mAccumulatedLoopbacks; }
+float StandardStream::GetJumpBackTotalTime(float) { return 0.0f; }
 
 float StandardStream::GetInSongTime() {
     float time = GetTime();
@@ -556,8 +559,9 @@ void StandardStream::UpdateVolumes() {
     // If the master faders are dirty, propagate to each channel's _parent local fader
     if (mFaders->Dirty()) {
         float masterVol = mFaders->GetVolume();
-        for (int i = 0; i < mChanParams.size(); i++) {
-            mChanParams[i]->mFaders.FindLocal(_parent, true)->SetVolume(masterVol);
+        for (std::vector<ChannelParams *>::iterator it = mChanParams.begin();
+             it != mChanParams.end(); ++it) {
+            (*it)->mFaders.FindLocal(_parent, true)->SetVolume(masterVol);
         }
         mFaders->ClearDirty();
     }
@@ -567,9 +571,7 @@ void StandardStream::UpdateVolumes() {
         if (mChanParams[i]->mFaders.Dirty()) {
             float vol = mChanParams[i]->mFaders.GetVolume();
             float ratio = DbToRatio(vol);
-            // Clamp to [0, 1]
-            ratio = Max(ratio, 0.0f);
-            if (ratio > 1.0f) ratio = 1.0f;
+            ClampEq(ratio, 0.0f, 1.0f);
             mChannels[i]->SetVolume(ratio);
             mChanParams[i]->mFaders.ClearDirty();
         }

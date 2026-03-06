@@ -127,6 +127,8 @@ void MQSongHeaderNode::Renumber(std::vector<NavListSortNode *> &vec) {
     }
 }
 
+MQSongSortNode::~MQSongSortNode() {}
+
 Symbol MQSongSortNode::OnSelect() { return Select(); }
 
 void MQSongSortNode::Text(UIListLabel *listlabel, UILabel *label) const {

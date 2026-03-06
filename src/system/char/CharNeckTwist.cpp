@@ -42,18 +42,26 @@ BEGIN_LOADS(CharNeckTwist)
 END_LOADS
 
 void CharNeckTwist::Poll() {
-    if (!mHead || !mTwist)
+    if (!mHead || !mTwist || !mTwist->TransParent())
         return;
-    // Get the Z-axis rotation angle of the head (yaw/twist around neck axis)
-    float headAngle = GetZAngle(mHead->LocalXfm().m);
-    // Apply half of the head's yaw to the neck twist bone
-    float twist = headAngle * 0.5;
-    // Build rotation matrix for twist around Z axis
-    Hmx::Matrix3 rotMat;
-    rotMat.x.Set(Cosine(twist), Sine(twist), 0);
-    rotMat.y.Set(-Sine(twist), Cosine(twist), 0);
-    rotMat.z.Set(0, 0, 1);
-    Multiply(mTwist->LocalXfm().m, rotMat, mTwist->DirtyLocalXfm().m);
+    RndTransformable *parent = mTwist->TransParent();
+    Transform tf(mHead->LocalXfm());
+    RndTransformable *trans;
+    for (trans = mHead->TransParent(); trans && trans != parent;
+         trans = trans->TransParent()) {
+        Multiply(tf, trans->LocalXfm(), tf);
+    }
+    if (trans) {
+        Hmx::Quat q;
+        Vector3 v;
+        MakeRotQuatUnitX(tf.m.x, q);
+        Multiply(tf.m.y, q, v);
+        float angle = LimitAng(std::atan2(v.z, v.y)) * 0.5f;
+        bool isNaN = angle != angle;
+        if (!isNaN) {
+            MakeRotMatrixX(angle, mTwist->DirtyLocalXfm().m);
+        }
+    }
 }
 
 void CharNeckTwist::PollDeps(

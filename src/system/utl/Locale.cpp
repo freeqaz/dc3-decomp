@@ -15,6 +15,8 @@ Locale TheLocale;
 Locale::~Locale() {}
 #endif
 bool gShowTokensCheat = false;
+bool Locale::sVerboseNotify;
+const char *Locale::sIgnoreMissingText;
 
 DataNode DataSetLocaleVerboseNotify(DataArray *arr) {
     Locale::SetLocaleVerboseNotify(arr->Int(1));
@@ -101,9 +103,9 @@ void Locale::Init() {
     MILO_ASSERT(!mSymTable, 0x59);
     MILO_ASSERT(!mSize, 0x5A);
     MILO_ASSERT(!mStringData, 0x5B);
-    MILO_ASSERT(!mNumFilesLoaded, 0x5C);
-
     mSize = 0;
+
+    MILO_ASSERT(!mNumFilesLoaded, 0x5C);
     int totalStrLen = 0;  // Total length of all unique localized strings
     int numChunks = 0;     // Number of locale entries loaded from files
     LocaleChunkSort::OrderedLocaleChunk *chunks = 0;
@@ -279,12 +281,17 @@ const char *Localize(Symbol token, bool *success, Locale &locale) {
             *success = true;
         return token.Str();
     }
-    const char *result = locale.Localize(token, false);
+    const char *textStr = locale.Localize(token, false);
+    bool localized = textStr != 0;
+    if (!localized) {
+        Locale::sIgnoreMissingText = textStr;
+        if (Locale::sVerboseNotify) {
+            MILO_NOTIFY("\"%s\" needs localization", token);
+        }
+        textStr = token.Str();
+    }
     if (success) {
-        *success = (result != nullptr);
+        *success = localized;
     }
-    if (result == nullptr) {
-        result = token.Str();
-    }
-    return result;
+    return textStr;
 }

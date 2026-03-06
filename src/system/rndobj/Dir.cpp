@@ -130,6 +130,15 @@ void RndDir::SetSubDir(bool b1) {
 }
 
 void RndDir::SyncObjects() {
+#ifdef HX_NATIVE
+    {
+        static int sSync = 0;
+        if (sSync < 10) {
+            printf("[RndDir::Sync] '%s' isSubDir=%d\n", Name(), (int)IsSubDir());
+            sSync++;
+        }
+    }
+#endif
     mAnims.clear();
     mPolls.clear();
     mEnters.clear();
@@ -154,6 +163,28 @@ void RndDir::SyncObjects() {
                 it->ListAnimChildren(animchildren);
             }
         }
+#ifdef HX_NATIVE
+        {
+            {
+                // Count total objects, group by class, test dynamic_cast
+                int totalObjs = 0, castOk = 0;
+                std::map<Symbol, int> classCounts;
+                for (ObjDirItr<Hmx::Object> oi(this, true); oi != nullptr; ++oi) {
+                    totalObjs++;
+                    Hmx::Object* obj = (Hmx::Object*)oi;
+                    classCounts[obj->ClassName()]++;
+                    RndAnimatable *ra = dynamic_cast<RndAnimatable*>(obj);
+                    if (ra && ra != this) castOk++;
+                }
+                printf("[RndDir::SyncObjects] '%s' totalObjs=%d anims=%d cast_ok=%d classes:",
+                       Name(), totalObjs, (int)mAnims.size(), castOk);
+                for (auto& p : classCounts) {
+                    printf(" %s=%d", p.first.Str(), p.second);
+                }
+                printf("\n");
+            }
+        }
+#endif
         for (std::list<RndAnimatable *>::const_iterator it = animchildren.begin();
              it != animchildren.end();
              ++it) {

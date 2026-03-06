@@ -93,7 +93,8 @@ DataNode getRandomSequence32A(DataArray *da) {
     static unsigned long s_seed = 0x521;
     static bool usedUp[0x20];
 
-    if (da->Size() >= 2) {
+    bool hasArgs = da->Size() > 1;
+    if (hasArgs) {
         int dataint = da->Int(1);
         memset(usedUp, 0, 0x20);
         if ((unsigned int)dataint != 0) {
@@ -119,7 +120,8 @@ DataNode getRandomSequence32B(DataArray *da) {
     static unsigned long s_seed = 0x303F;
     static bool usedUp[0x20];
 
-    if (da->Size() >= 2) {
+    bool hasArgs = da->Size() > 1;
+    if (hasArgs) {
         int dataint = da->Int(1);
         memset(usedUp, 0, 0x20);
         if ((unsigned int)dataint != 0) {
@@ -158,21 +160,20 @@ DataNode op1(DataArray *msg) {
 }
 
 DataNode op2(DataArray *msg) {
-    unsigned long w = msg->Int(2);
     unsigned long operand = msg->Int(1);
-    unsigned long ret = u8(w) | ((w << 8) & 0xFF00);
+    unsigned long w = msg->Int(2);
+    unsigned long bw = u8(w);
+    unsigned long ret = bw | (bw << 8);
     ret >>= u8(operand & 7);
     return DataNode(kDataInt, u8(ret));
-    // can we put the return value directly in the DataNode and still have the function
-    // match? return DataNode(kDataInt, (BYTE(w) | ((w << 8) & 0xFF00)) >> BYTE(operand &
-    // 7));
 }
 
 DataNode op3(DataArray *msg) {
-    unsigned long w = msg->Int(2);
     unsigned long operand = msg->Int(1);
+    unsigned long w = msg->Int(2);
     bool b = (operand == 0);
-    unsigned long ret = u8(w) | ((w << 8) & 0xFF00);
+    unsigned long bw = u8(w);
+    unsigned long ret = bw | (bw << 8);
     ret >>= b;
     return DataNode(u8(ret));
 }
@@ -234,23 +235,28 @@ DataNode op9(DataArray *msg) {
 DataNode op10(DataArray *msg) {
     unsigned long operand = msg->Int(1);
     unsigned long w = msg->Int(2);
-    unsigned long ret = u8(w) | ((w << 8) & 0xFF00);
+    unsigned long bw = u8(w);
+    unsigned long ret = bw | (bw << 8);
     ret >>= !operand;
-    return DataNode(kDataInt, u8(ret ^ operand));
+    ret ^= operand;
+    return DataNode(kDataInt, (int)(ret & 0xFF));
 }
 
 DataNode op11(DataArray *msg) {
     unsigned long operand = msg->Int(1);
     unsigned long w = msg->Int(2);
-    unsigned long ret = u8(w) | ((w << 8) & 0xFF00);
+    unsigned long bw = u8(w);
+    unsigned long ret = bw | (bw << 8);
     ret >>= u8(operand & 7);
-    return DataNode(kDataInt, u8(ret ^ operand));
+    ret ^= operand;
+    return DataNode(kDataInt, (int)(ret & 0xFF));
 }
 
 DataNode op12(DataArray *msg) {
     unsigned long operand = msg->Int(1);
     unsigned long w = msg->Int(2);
-    unsigned long ret = u8(w) | ((w << 8) & 0xFF00);
+    unsigned long bw = u8(w);
+    unsigned long ret = bw | (bw << 8);
     ret >>= u8(operand & 7);
     return DataNode(kDataInt, u8(ret + operand));
 }
@@ -258,7 +264,8 @@ DataNode op12(DataArray *msg) {
 DataNode op13(DataArray *msg) {
     unsigned long operand = msg->Int(1);
     unsigned long w = msg->Int(2);
-    unsigned long ret = u8(w) | ((w << 8) & 0xFF00);
+    unsigned long bw = u8(w);
+    unsigned long ret = bw | (bw << 8);
     ret >>= !operand;
     return DataNode(kDataInt, u8(ret + operand));
 }
@@ -266,7 +273,8 @@ DataNode op13(DataArray *msg) {
 DataNode op14(DataArray *msg) {
     unsigned long operand = msg->Int(1);
     unsigned long w = msg->Int(2);
-    unsigned long ret = (u8(w) >> 1) | (u8(w) << 7);
+    unsigned long bw = u8(w);
+    unsigned long ret = (bw >> 1) | (bw << 7);
     return DataNode(kDataInt, u8(ret + operand));
 }
 
@@ -415,7 +423,8 @@ DataNode op32(DataArray *msg) {
     u32 operand = msg->Int(1);
     u8 w = msg->Int(2);
 
-    u32 tmp = ((u8)(w >> 3) ^ 0x1F) | ((w & 7) << 5);
+    u32 byteVal = w;
+    u32 tmp = ((byteVal >> 3) ^ 0x1F) | ((byteVal & 7) << 5);
     return u8(tmp ^ operand);
 }
 
@@ -525,24 +534,34 @@ DataNode op44(DataArray *msg) {
 DataNode op45(DataArray *msg) {
     u32 operand = msg->Int(1);
     u8 w = msg->Int(2);
+    u32 byteVal = w;
 
-    u32 tmp = ((u8)(w >> 3) ^ 6) | ((w & 7) << 5);
-    return u8(tmp ^ operand);
+    u8 highBits = u8((byteVal >> 3) ^ 6);
+    u8 lowBits = u8(((byteVal & 7) << 5));
+    u8 rotated = u8(highBits | lowBits);
+    return u8(rotated ^ operand);
 }
 
 DataNode op46(DataArray *msg) {
     u32 operand = msg->Int(1);
     u8 w = msg->Int(2);
+    u32 byteVal = w;
 
-    u32 tmp = ((w * 0x10) & 0xF0) | ((u8)(w >> 4) ^ 3);
-    return u8(tmp ^ operand);
+    u8 highBits = u8((byteVal >> 4) ^ 3);
+    u8 lowBits = u8((byteVal << 4) & 0xF0);
+    u8 rotated = u8(highBits | lowBits);
+    return u8(rotated ^ operand);
 }
 
 DataNode op47(DataArray *msg) {
     u32 operand = msg->Int(1);
     u8 w = msg->Int(2);
+    u32 byteVal = w;
 
-    return u8((((w & 1) << 7) | ((u8)(w >> 1) ^ 0x1B)) ^ operand);
+    u8 highBits = u8((byteVal >> 1) ^ 0x1B);
+    u8 lowBits = u8((byteVal & 1) << 7);
+    u8 rotated = u8(highBits | lowBits);
+    return u8(rotated ^ operand);
 }
 
 DataNode op48(DataArray *msg) {
@@ -560,8 +579,8 @@ DataNode op49(DataArray *msg) {
     u32 operand = msg->Int(1);
     u8 w = msg->Int(2);
 
-    u32 working2 = (w ^ 0x63u);
     u32 working3 = (w << 8) ^ 0x5Cu;
+    u32 working2 = (w ^ 0x63u);
     u32 tmp = ((working2 | working3) >> 3);
     return u8(tmp ^ operand);
 }
@@ -569,9 +588,12 @@ DataNode op49(DataArray *msg) {
 DataNode op50(DataArray *msg) {
     u32 operand = msg->Int(1);
     u8 w = msg->Int(2);
+    u32 byteVal = w;
 
-    u32 tmp = ((w >> 5) ^ 2) | ((w << 3) ^ 3);
-    return u8(tmp ^ operand);
+    u8 highBits = u8(((byteVal << 3) & 0xF8) ^ 2);
+    u8 lowBits = u8((byteVal >> 5) ^ 3);
+    u8 rotated = u8(highBits | lowBits);
+    return u8(rotated ^ operand);
 }
 
 DataNode op51(DataArray *msg) {
@@ -587,9 +609,12 @@ DataNode op51(DataArray *msg) {
 DataNode op52(DataArray *msg) {
     u32 operand = msg->Int(1);
     u8 w = msg->Int(2);
+    u32 byteVal = w;
 
-    u8 tmp = ((w >> 1) ^ 0x1b) | ((w << 7) ^ 0x2e);
-    return u8(tmp ^ operand);
+    u8 highBits = u8((byteVal >> 1) ^ 0x2e);
+    u8 lowBits = u8((byteVal << 7) ^ 0x1b);
+    u8 rotated = u8(highBits | lowBits);
+    return u8(rotated ^ operand);
 }
 
 DataNode op53(DataArray *msg) {
@@ -618,19 +643,23 @@ DataNode op54(DataArray *msg) {
 DataNode op55(DataArray *msg) {
     u32 operand = msg->Int(1);
     u8 w = msg->Int(2);
+    u32 byteVal = w;
 
-    u32 b = ((w & 0x1f) << 3) ^ 2;
-    u32 a = (w >> 5) ^ 1;
-    u32 tmp = (a | b) ^ operand;
-    return u8(tmp);
+    u8 highBits = u8(((byteVal & 0x1f) << 3) ^ 1);
+    u8 lowBits = u8((byteVal >> 5) ^ 2);
+    u8 rotated = u8(highBits | lowBits);
+    return u8(rotated ^ operand);
 }
 
 DataNode op56(DataArray *msg) {
     u32 operand = msg->Int(1);
     u8 w = msg->Int(2);
+    u32 byteVal = w;
 
-    u32 tmp = (((w & 0xF) << 4) ^ 3) | ((u8)(w >> 4) ^ 6);
-    return u8(tmp ^ operand);
+    u8 highBits = u8(((byteVal & 0xF) << 4) ^ 6);
+    u8 lowBits = u8((byteVal >> 4) ^ 3);
+    u8 rotated = u8(highBits | lowBits);
+    return u8(rotated ^ operand);
 }
 
 DataNode op57(DataArray *msg) {
@@ -668,9 +697,10 @@ DataNode op60(DataArray *msg) {
     u32 operand = msg->Int(1);
     u8 w = msg->Int(2);
 
-    u32 working2 = (w ^ 0xFFu);
-    u32 working3 = (w << 8) ^ 0xAAu;
-    u32 tmp = ((working2 | working3) >> 4);
+    u32 byteVal = w;
+    u32 xorLow = (byteVal ^ 0xFFu);
+    u32 xorHigh = (byteVal << 8) ^ 0xAAu;
+    u32 tmp = ((xorLow | xorHigh) >> 4);
     return u8(tmp ^ operand);
 }
 
@@ -678,11 +708,8 @@ DataNode op61(DataArray *msg) {
     u32 operand = msg->Int(2);
     u8 w = msg->Int(1);
 
-    u32 b = w >> 3;
-    u32 a = w & 7;
-    a = a << 5;
-    b = b ^ 0x15;
-    a = a ^ 0x1f;
+    u32 a = (w >> 3) ^ 0x15;
+    u32 b = ((w & 7) << 5) ^ 0x1f;
     u32 tmp = a | b;
     return u8(tmp ^ operand);
 }
@@ -702,9 +729,10 @@ DataNode op63(DataArray *msg) {
     u32 operand = msg->Int(1);
     u8 w = msg->Int(2);
 
-    u32 working2 = (w ^ 0xFFu);
-    u32 working3 = (w << 8) ^ 0xAFu;
-    u32 tmp = ((working2 | working3) >> 6);
+    u32 byteVal = w;
+    u32 xorLow = (byteVal ^ 0xFFu);
+    u32 xorHigh = (byteVal << 8) ^ 0xAFu;
+    u32 tmp = ((xorLow | xorHigh) >> 6);
     return u8(tmp ^ operand);
 }
 

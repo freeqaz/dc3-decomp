@@ -23,6 +23,8 @@ bool CriticalSection::TryEnter() {
         return false;
 }
 
+CriticalSection::~CriticalSection() { RtlDeleteCriticalSection(&mCritSec); }
+
 void CriticalSection::Abandon() {
     while (mEntryCount-- > 1) {
         RtlLeaveCriticalSection(&mCritSec);

@@ -49,9 +49,17 @@ void Timer::SetLastMs(float ms) {
 }
 
 void Timer::Init() {
+#ifdef HX_NATIVE
+    // Native __mftb() returns microseconds, not PPC timebase ticks.
+    // 1 microsecond = 0.001 milliseconds.
+    Timer::sDoubleCycles2Ms = 0.001;
+    Timer::sLowCycles2Ms = 0.001f;
+    Timer::sHighCycles2Ms = 4294967.296f; // 2^32 * 0.001
+#else
     Timer::sDoubleCycles2Ms = 2.0050125313283208e-5;
     Timer::sLowCycles2Ms = 0.000020050125f;
     Timer::sHighCycles2Ms = 86114.63f;
+#endif
 }
 
 void Timer::Reset() {

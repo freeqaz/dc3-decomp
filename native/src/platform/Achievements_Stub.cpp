@@ -1,8 +1,3 @@
 // DC3 Native Port - Achievements Stub
-// Replaces Achievements_Xbox.cpp
-
-#include "meta/Achievements.h"
-
-void Achievements::PlatformInit() {
-    // No Xbox achievements on native
-}
+// PlatformInit() is now defined in the real Achievements.cpp (empty on all platforms)
+// This file is kept for any future Xbox-specific stub needs.

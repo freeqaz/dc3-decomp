@@ -25,9 +25,9 @@ void* expj = 0;
 int FileRecursePattern() { return 0; }
 int FileTimeToSystemTime() { return 0; }
 void* gCharHighlightY = 0;
-void* gCheatsManager = 0;
+// void* gCheatsManager = 0; // now defined in Cheats.cpp
 // void* gDataThisPtr = 0; // now defined in DataFunc.cpp
-void* gDebugDepth = 0;
+// void* gDebugDepth = 0; // now defined in LiveCameraInput.cpp
 int GetLastError() { return 0; }
 int GetOverlappedResult() { return 0; }
 int GetTimeZoneInformation() { return 0; }

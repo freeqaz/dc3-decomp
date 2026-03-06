@@ -222,6 +222,8 @@ void DxShaderMgr::Terminate() {
     RndShaderMgr::Terminate();
 }
 
+void DxShaderMgr::SetVConstant(VShaderConstant, const float *, unsigned int) {}
+
 void DxShaderMgr::SetVConstant(VShaderConstant vsc, RndTex *tex) {
     if (tex) {
         tex->Select(vsc);
@@ -252,47 +254,50 @@ void DxShaderMgr::LoadShaderFile(FileStream &fs) {
     fs >> fileType;
     fs >> fileVersion;
     if (fileType == XBOX_SHADERS_TYPE && fileVersion == XBOX_SHADERS_VERSION) {
-        int num;
+        unsigned int num;
         fs >> num;
-        for (int i = 0; i < num; i++) {
+        for (unsigned int i = 0; i < num; i++) {
             Symbol name;
             fs >> name;
             ShaderType shaderType = ShaderTypeFromName(name.Str());
-            int alloc;
+            unsigned int alloc;
             fs >> alloc;
-            D3DPixelShader *pixelShaders[2];
-            D3DVertexShader *vertexShaders[2];
-            pixelShaders[0] = nullptr;
-            pixelShaders[1] = nullptr;
-            vertexShaders[0] = nullptr;
-            vertexShaders[1] = nullptr;
-            for (int j = 0; j < 2; j++) {
+            void *bases[4];
+            bases[0] = nullptr;
+            bases[1] = nullptr;
+            bases[2] = nullptr;
+            bases[3] = nullptr;
+            for (unsigned int j = 0; j < 2; j++) {
                 SIZE_T size1, size2;
                 fs >> size1;
                 fs >> size2;
                 BeginMemTrackFileName(fs.Name());
-                pixelShaders[j] = (D3DPixelShader *)XMemAlloc(size1, 0x20800000);
-                vertexShaders[j] = (D3DVertexShader *)XMemAlloc(size2, 0xB5800000);
+                bases[j] = XMemAlloc(size1, 0x20800000);
+                bases[j + 2] = XMemAlloc(size2, 0xB5800000);
                 EndMemTrackFileName();
-                fs.Read(pixelShaders[j], size1);
-                fs.Read(vertexShaders[j], size2);
+                fs.Read(bases[j], size1);
+                fs.Read(bases[j + 2], size2);
             }
             ShaderPoolAlloc(alloc);
             RndSplasherSuspend();
-            for (int j = 0; j < alloc; j++) {
+            for (unsigned int j = 0; j < alloc; j++) {
                 u64 shaderOptsMask;
                 fs >> shaderOptsMask;
-                D3DVertexShader *pVS = nullptr;
                 D3DPixelShader *pPS = nullptr;
-                // fix this loop
+                D3DVertexShader *pVS = nullptr;
                 for (int k = 0; k < 2; k++) {
-                    int ic0;
-                    int ibc;
+                    unsigned int ic0;
+                    unsigned int ibc;
                     fs >> ic0;
                     fs >> ibc;
-                    pPS = pixelShaders[ic0];
-                    if (k != -1) {
-                        XGRegisterVertexShader(pVS, 0);
+                    void *addr = (void *)((unsigned int)bases[k] + ic0);
+                    void *physAddr = (void *)((unsigned int)bases[k + 2] + ibc);
+                    if (k - 1) {
+                        pVS = (D3DVertexShader *)addr;
+                        XGRegisterVertexShader(pVS, physAddr);
+                    } else {
+                        pPS = (D3DPixelShader *)addr;
+                        XGRegisterPixelShader(pPS, physAddr);
                     }
                 }
                 MILO_ASSERT(pPS != NULL, 0x1FA);

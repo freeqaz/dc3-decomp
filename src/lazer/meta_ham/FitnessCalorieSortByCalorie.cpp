@@ -5,6 +5,9 @@
 #include "utl/MakeString.h"
 #include "utl/Symbol.h"
 
+FitnessCalorieSortCmp::~FitnessCalorieSortCmp() {}
+FitnessCalorieSortByCalorie::~FitnessCalorieSortByCalorie() {}
+
 // Returns 0 for item nodes, 1 for all other node types
 int FitnessCalorieSortCmp::Compare(
     NavListItemSortCmp const *cmp, NavListNodeType type
@@ -33,6 +36,11 @@ FitnessCalorieSortByCalorie::NewHeaderNode(NavListItemNode *node) const {
     );
     FitnessCalorieSortCmp *cmp = new FitnessCalorieSortCmp();
     return new FitnessCalorieHeaderNode(cmp, s, true);
+}
+
+NavListHeaderNode *
+FitnessCalorieSortByCalorie::NewHeaderNode(NavListItemNode *n1, NavListItemNode *n2) const {
+    return NewHeaderNode(n1);
 }
 
 NavListItemNode *FitnessCalorieSortByCalorie::NewItemNode(void *p1) const {

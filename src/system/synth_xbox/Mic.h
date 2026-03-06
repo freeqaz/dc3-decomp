@@ -77,7 +77,7 @@ public:
     float unk9054;
     float unk9058;
     float unk905c;
-    int unk9060;
+    FxSend *mFxSend; // 0x9060
     float mVolume; // 0x9064
     bool mMute; // 0x9068
     float unk906c;

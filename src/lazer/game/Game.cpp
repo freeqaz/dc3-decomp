@@ -413,6 +413,8 @@ EndGameResult Game::GetResult(bool) {
     return res;
 }
 
+int Game::GetNumRestarts() const { return mRestartCount; }
+
 void Game::ResetAudio() {
     mWaitState = 0;
     mMaster->ResetAudio();

@@ -54,7 +54,7 @@ HamStoreProvider::HamStoreProvider(
     std::vector<HamStoreFilter *> *filters,
     std::vector<CartRow> *rows
 )
-    : mAllOffers(offers), mFilters(filters), unk5c(0), mFilteredOffers(0), mCartRows(rows), unkb8(0) {
+    : mAllOffers(offers), mFilters(filters), mCurrentFilter(0), mFilteredOffers(0), mCartRows(rows), unkb8(0) {
     mFilterProvider = new HamStoreFilterProvider(mFilters);
 }
 
@@ -273,11 +273,9 @@ BEGIN_HANDLERS(HamStoreProvider)
 END_HANDLERS
 
 void HamStoreProvider::OnNextSort() {
-    auto& sortIndex = mSortIndex;
-    if (mSorts.size() > 1) {
-        sortIndex = (sortIndex + 1) % (int)mSorts.size();
-        Refresh();
-    }
+    MILO_ASSERT(AllowSortToggle(), 0xe8);
+    mSortIndex = (mSortIndex + 1) % mSorts.size();
+    ApplySort();
 }
 
 void HamStoreProvider::Refresh() {
@@ -296,54 +294,33 @@ void HamStoreProvider::PopulateOffersInCart() {
 }
 
 void HamStoreProvider::SetFilter(HamStoreFilter const *filter) {
-    if (!filter) {
+    mCurrentFilter = filter;
+    unk54.erase(unk54.begin(), unk54.end());
+    if (!mCurrentFilter || unk38.find(mCurrentFilter->mFilterSym) == unk38.end()) {
+        mCurrentFilter = 0;
         mFilteredOffers = mAllOffers;
         mSorts.clear();
-        mSortIndex = 0;
-        Refresh();
-        return;
-    }
-    // Find a new vector for the filtered offers
-    auto it = unk38.find(filter->mFilterSym);
-    if (it == unk38.end()) {
-        std::vector<StoreOffer *> *offers = new std::vector<StoreOffer *>();
-        unk38[filter->mFilterSym] = offers;
-        mFilteredOffers = offers;
     } else {
-        mFilteredOffers = it->second;
+        mFilteredOffers = unk38.find(mCurrentFilter->mFilterSym)->second;
+        mSorts = mCurrentFilter->mSortTypes;
     }
-    mFilteredOffers->clear();
-    // Copy all offers that match the filter (for now, copy all)
-    if (mAllOffers) {
-        *mFilteredOffers = *mAllOffers;
-    }
-    // Apply sort types from filter
-    mSorts = filter->mSortTypes;
     mSortIndex = 0;
-    Refresh();
+    ApplySort();
 }
 
-void HamStoreProvider::SetFilter(StoreOffer const *packOffer) {
-    // Filter to show songs in a specific pack
-    static Symbol songs("songs");
-    Symbol packSym = packOffer ? packOffer->StoreOfferData()->Sym(0) : gNullStr;
-    auto it = unk38.find(packSym);
-    if (it == unk38.end()) {
-        std::vector<StoreOffer *> *offers = new std::vector<StoreOffer *>();
-        unk38[packSym] = offers;
-        mFilteredOffers = offers;
-    } else {
-        mFilteredOffers = it->second;
-    }
-    mFilteredOffers->clear();
-    if (packOffer && mAllOffers) {
-        for (int i = 0; i < (int)mAllOffers->size(); i++) {
-            StoreOffer *offer = (*mAllOffers)[i];
-            if (packOffer->HasSong(offer)) {
-                mFilteredOffers->push_back(offer);
-            }
+void HamStoreProvider::SetFilter(StoreOffer const *pack) {
+    static Symbol packSym("pack");
+    MILO_ASSERT(pack->OfferType() == packSym, 0xb0);
+    unk54.erase(unk54.begin(), unk54.end());
+    unk54.push_back(const_cast<StoreOffer *>(pack));
+    for (int i = 0; i < pack->NumSongs(); i++) {
+        int songId = pack->Song(i);
+        const StoreOffer *song = FindSong(songId);
+        if (song && (song->isAvailable || TheNetCacheMgr->IsDebug())) {
+            unk54.push_back(const_cast<StoreOffer *>(song));
         }
     }
+    mFilteredOffers = &unk54;
     mSorts.clear();
     mSortIndex = 0;
 }

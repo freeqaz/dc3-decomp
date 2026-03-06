@@ -205,6 +205,17 @@ void CharHair::DoReset(int reset) {
     mReset = 0;
 }
 
+void CharCollide::SyncWorldState() {
+    unk20c = WorldXfm().v;
+    if (mShape >= 3 || mShape == 0) {
+        unk1fc = WorldXfm().m.x;
+        unk1f8 = 1.0f / LengthSquared(unk1fc);
+    }
+    if (mShape >= 3) {
+        unk1f4 = 1.0f / (mCurLength[1] - mCurLength[0]);
+    }
+}
+
 void CharHair::SimulateLoops(int count, float fps) {
     if (!mSimulate || mStrands.size() == 0)
         return;

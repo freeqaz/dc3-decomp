@@ -8,6 +8,8 @@
 #include "os/System.h"
 #include "os/UserMgr.h"
 
+CheatsManager *gCheatsManager = nullptr;
+
 void InitQuickJoyCheats(const DataArray *a, CheatsManager::ShiftMode);
 void InitKeyCheats(const DataArray *);
 void InitLongJoyCheats(const DataArray *);

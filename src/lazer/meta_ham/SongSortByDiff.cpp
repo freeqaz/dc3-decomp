@@ -5,6 +5,8 @@
 #include "SongRecord.h"
 #include "meta/Sorting.h"
 
+DifficultyCmp::~DifficultyCmp() {}
+
 int DifficultyCmp::Compare(const NavListItemSortCmp *cmp, NavListNodeType type) const {
     switch (type) {
         case kNodeShortcut:

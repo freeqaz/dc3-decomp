@@ -12,7 +12,6 @@
 #include "os/Debug.h"
 #include "utl/MemMgr.h"
 #include "utl/PoolAlloc.h"
-#include "synth_xbox/soundtouch/source/SoundTouch/FIRFilter.h"
 #include "synth/Faders.h"
 #include "rndobj/Lit.h"
 #include "world/Spotlight.h"
@@ -30,23 +29,7 @@
 void operator delete(void *v) { MemFree(v, "unknown", 0, "unknown"); }
 void operator delete[](void *v) { MemFree(v, "unknown", 0, "unknown"); }
 
-DataNode &DataArray::Node(int i) const {
-    MILO_ASSERT_FMT(
-        i >= 0 && i < mSize,
-        "Array doesn't have node %d, only has %d (file %s, line %d)",
-        i, mSize, File(), Line()
-    );
-    return mNodes[i];
-}
-
-DataNode &DataArray::Node(int i) {
-    MILO_ASSERT_FMT(
-        i >= 0 && i < mSize,
-        "Array doesn't have node %d, only has %d (file %s, line %d)",
-        i, mSize, File(), Line()
-    );
-    return mNodes[i];
-}
+// (DataArray::Node removed — obj/DataArray is Matching)
 
 void MemOrPoolFreeSTL(
     int poolIdx, void *mem, const char *file, int line, const char *name
@@ -163,8 +146,6 @@ FormatString &FormatString::operator<<(unsigned long long) { return *this; }
 // -- BufStream --
 // Still needed: virtual method not exported from decomp .obj, referenced by other split .objs
 #include "utl/BufStream.h"
-
-int BufStream::Size() { return mSize; }
 
 // -- ObjPtrList template instantiations --
 // The linker needs concrete instantiations for various ObjPtrList<T> methods.
@@ -529,20 +510,12 @@ BinStream &operator<<(BinStream &bs, const ObjOwnerPtr<Hmx::Object> &ptr) {
     return bs;
 }
 
-// -- DeJitter --
-#include "utl/DeJitter.h"
-
-DeJitter::DeJitter() : mCurrentIndex(0), mHistoryCount(0), mFilteredDelta(0), mPreviousOutput(0) {
-    for (int i = 0; i < 0x20; i++) mHistoryBuffer[i] = 0;
-}
-
 // (DancerSkeleton removed — hamobj/DancerSkeleton is Matching)
 
 // -- VenueProvider --
 // Still needed: virtual NumData referenced by CharacterProvider, HamUI, LocalePanel split .objs
 #include "meta_ham/VenueProvider.h"
 
-int VenueProvider::NumData() const { return mVenues.size(); }
 
 // (Accomplishment removed — meta_ham/Accomplishment is Matching)
 
@@ -556,37 +529,21 @@ int VenueProvider::NumData() const { return mVenues.size(); }
 // Still needed: PlatformInit referenced from Achievements.obj itself
 #include "meta/Achievements.h"
 
-void Achievements::PlatformInit() {}
-
 // (UIManager removed — ui/UI is Matching)
 
 // -- SongMetadata --
 // Still needed: inline in header, not exported from decomp .obj, referenced by SongMgr/SongRecord
 #include "meta/SongMetadata.h"
 
-int SongMetadata::ID() const { return mID; }
-Symbol SongMetadata::GameOrigin() const { return mGameOrigin; }
-
 // (HamProfile removed — meta_ham/HamProfile is Matching)
 
-// -- HamSongMetadata --
-// Still needed: not exported from decomp .obj, referenced by MetagameStats/HamSongMgr/PresenceMgr
-#include "meta_ham/HamSongMetadata.h"
-
-const char *HamSongMetadata::Title() const { return mName.c_str(); }
+// (HamSongMetadata::Title removed — meta_ham/HamSongMetadata is Matching)
 
 // (FixedSizeSaveableStream removed — meta/FixedSizeSaveableStream is Matching)
 
-// -- soundtouch::FIRFilter --
-// The soundtouch library is compiled separately but getLength() may be missing
-// from split objects due to ICF.
-namespace soundtouch {
-    unsigned int FIRFilter::getLength() const { return length; }
-}
+// (soundtouch::FIRFilter::getLength removed — synth_xbox/soundtouch FIRFilter.cpp is Matching)
 
-// -- Stream --
-// Static member definition
-const float Stream::kStreamEndMs = 1000000000.0f;
+// (Stream::kStreamEndMs removed — synth/Stream is Matching)
 
 // ============================================================================
 // Additional ObjPtrList template instantiations for RndTransformable,
@@ -2433,17 +2390,9 @@ BinStream &operator<<(BinStream &bs, const ObjOwnerPtr<FxSend> &ptr) {
 // BeatMap constructor stub
 // ============================================================================
 
-#include "utl/BeatMap.h"
+// (BeatMap::BeatMap removed — utl/BeatMap is Matching)
 
-BeatMap::BeatMap() {}
-
-// ============================================================================
-// MidiReader::GetFilename stub
-// ============================================================================
-
-#include "midi/Midi.h"
-
-const char *MidiReader::GetFilename() const { return mStreamName.c_str(); }
+// (MidiReader::GetFilename removed — midi/MidiReader is Matching)
 
 // (FixedString::FixedString removed — utl/Str is Matching)
 
@@ -2847,6 +2796,12 @@ OBJREFCONCRETE_COPYREF(UILabelDir)
 OBJREFCONCRETE_COPYREF(UIList)
 OBJREFCONCRETE_COPYREF(WorldCrowd)
 
+// Hmx::Object uses Hmx:: namespace prefix
+template <>
+void ObjRefConcrete<Hmx::Object, ObjectDir>::CopyRef(const ObjRefConcrete<Hmx::Object, ObjectDir> &o) {
+    SetObjConcrete(o.mObject);
+}
+
 #undef OBJREFCONCRETE_COPYREF
 
 // ============================================================================
@@ -2883,12 +2838,9 @@ BinStream &operator<<(BinStream &bs, const ObjOwnerPtr<RndTex> &ptr) {
 #include "os/PlatformMgr.h"
 
 // -- CampaignEra stubs --
-Symbol CampaignEra::GetName() const { return mEra; }
 
 // -- PlatformMgr stubs --
-void PlatformMgr::RunNetStartUtility() {}
-void PlatformMgr::CheckMailbox() {}
-void PlatformMgr::DisableXMP() {}
+// (PlatformMgr::DisableXMP removed — os/PlatformMgr_Xbox is Matching)
 
 // -- AccomplishmentProgress stubs --
 
@@ -3026,15 +2978,11 @@ OBJPTRVEC_ERASE(Waypoint)
 
 // -- SongMetadata stubs --
 #include "meta/SongMetadata.h"
-bool SongMetadata::IsOnDisc() const { return mIsOnDisc; }
 
 // -- CacheMgr stubs --
 #include "utl/CacheMgr.h"
-CacheResult CacheMgr::GetLastResult() { return mLastResult; }
 
-// -- PracticeSection stubs --
-#include "hamobj/PracticeSection.h"
-const std::vector<PracticeStep> &PracticeSection::Steps() const { return mSteps; }
+// (PracticeSection::Steps removed — hamobj/PracticeSection is Matching)
 
 // -- GestureMgr stubs --
 #include "gesture/GestureMgr.h"
@@ -3046,7 +2994,6 @@ const std::vector<PracticeStep> &PracticeSection::Steps() const { return mSteps;
 
 // -- UIListMesh stubs --
 #include "ui/UIListMesh.h"
-RndMat *UIListMesh::DefaultMat() const { return mDefaultMat; }
 
 // -- Hmx::Object stubs --
 
@@ -3120,6 +3067,55 @@ void MemOrPoolFree(int, void *mem, const char *, int, const char *) {}
 
 
 // ============================================================================
+// ObjPtrList::RefOwner and Node::RefOwner instantiations (promoted from stubs)
+// ============================================================================
+
+#include "flow/FlowNode.h"
+#include "synth/MidiInstrument.h"
+#include "synth/Sfx.h"
+#include "world/Crowd.h"
+#include "char/Waypoint.h"
+
+// ObjPtrList<FlowNode>::RefOwner (list-level)
+template <>
+Hmx::Object *ObjPtrList<FlowNode>::RefOwner() const {
+    return mOwner ? mOwner->RefOwner() : 0;
+}
+
+// Node::RefOwner instantiations
+#define OBJPTRLIST_NODE_REFOWNER(T) \
+template <> \
+Hmx::Object *ObjPtrList<T>::Node::RefOwner() const { \
+    ObjPtrList<T> *list = static_cast<ObjPtrList<T> *>(mOwner); \
+    return list->Owner(); \
+}
+
+OBJPTRLIST_NODE_REFOWNER(CharPollable)
+OBJPTRLIST_NODE_REFOWNER(CharWeightSetter)
+OBJPTRLIST_NODE_REFOWNER(CharWeightable)
+OBJPTRLIST_NODE_REFOWNER(Fader)
+OBJPTRLIST_NODE_REFOWNER(NoteVoiceInst)
+OBJPTRLIST_NODE_REFOWNER(ObjectDir)
+OBJPTRLIST_NODE_REFOWNER(RndLight)
+OBJPTRLIST_NODE_REFOWNER(SeqInst)
+OBJPTRLIST_NODE_REFOWNER(SfxInst)
+OBJPTRLIST_NODE_REFOWNER(ThreeDSound)
+OBJPTRLIST_NODE_REFOWNER(Waypoint)
+OBJPTRLIST_NODE_REFOWNER(WorldCrowd)
+
+#undef OBJPTRLIST_NODE_REFOWNER
+
+// ObjDirPtr<ObjectDir>::IsLoaded
+template <>
+bool ObjDirPtr<ObjectDir>::IsLoaded() const {
+    if (mObject)
+        return true;
+    if (mLoader && mLoader->IsLoaded())
+        return true;
+    return false;
+}
+
+// ============================================================================
 // Linker stubs for compiler-generated symbols missing from split objects
 // These are unresolved because we skip split objects for Matching units,
 // and these compiler-generated symbols have no decomp-source equivalent.
@@ -3144,10 +3140,10 @@ extern "C" const char __link_glue_empty_str[] = "";
 
 
 // Remaining unresolved symbols from Matching unit decomp-only linking.
-#pragma comment(linker, "/ALTERNATENAME:?NewBufStream@Synth@@UAAPAVStream@@PBXHVSymbol@@M_N@Z=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:??1CriticalSection@@QAA@XZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?Terminate@UILabel@@SAXXZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?gCheatsManager@@3PAVCheatsManager@@A=__link_glue_zero")
+// Removed: NewBufStream@Synth — already implemented in Synth.cpp (matching unit)
+// Removed: ~CriticalSection — implemented in CritSec.cpp (matching unit)
+// Removed: Terminate@UILabel — implemented in UILabel.cpp
+// Removed: gCheatsManager — defined in Cheats.cpp (matching unit)
 
 // ============================================================================
 // Auto-generated stubs for symbols lost when units promoted to Matching
@@ -3158,49 +3154,49 @@ extern "C" const char __link_glue_empty_str[] = "";
 #pragma comment(linker, "/ALTERNATENAME:?merged_ObjPtrListPopBack@@YAXPAX@Z=__link_glue_noop")
 
 // -- BinStream operators --
-#pragma comment(linker, "/ALTERNATENAME:??5@YAAAVBinStream@@AAV0@AAUPropTriggerDefn@FlowTrigger@@@Z=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?PostLoad@HamDriver@@UAAXAAVBinStream@@@Z=__link_glue_noop")
+// Removed: operator>>(BinStream&, FlowTrigger::PropTriggerDefn&) — implemented in FlowTrigger.cpp (matching unit)
+// Removed: PostLoad@HamDriver — implemented in HamDriver.cpp (matching unit)
 
 // -- Data symbols --
 #pragma comment(linker, "/ALTERNATENAME:?lbl_82F1AB98@@3IA=__link_glue_zero")
 #pragma comment(linker, "/ALTERNATENAME:?lbl_82F1AB9C@@3IA=__link_glue_zero")
 #pragma comment(linker, "/ALTERNATENAME:?lbl_82F1ABA0@@3IA=__link_glue_zero")
 #pragma comment(linker, "/ALTERNATENAME:?lbl_82F5E180@@3JC=__link_glue_zero")
-#pragma comment(linker, "/ALTERNATENAME:?sLoadingMaster@LoadingPanel@@2PAVHamMaster@@A=__link_glue_zero")
-#pragma comment(linker, "/ALTERNATENAME:?sSongDB@LoadingPanel@@2PAVSongDB@@A=__link_glue_zero")
+// Removed: sLoadingMaster@LoadingPanel — defined in LoadingPanel.cpp (matching unit)
+// Removed: sSongDB@LoadingPanel — defined in LoadingPanel.cpp (matching unit)
 #pragma comment(linker, "/ALTERNATENAME:?tf2cf@RndRenderState@@2PAW4_D3DCMPFUNC@@A=__link_glue_zero")
 
 // -- Other functions --
-#pragma comment(linker, "/ALTERNATENAME:??0LocationCmp@@QAA@XZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:??1DifficultyCmp@@UAA@XZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:??1MQSongSortNode@@UAA@XZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:??1SongCmp@@UAA@XZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:??RSortCmp@@QBA_NPBVStoreOffer@@0@Z=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?DrawFixedZ@DrawString@@UAAXM@Z=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?DrawShowing@SpotlightDrawer@@UAAXXZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?Flush@HDCache@@AAAXXZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?GetBufferSize@HttpGet@@QAAIXZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?GetColor@UIColor@@QBAABVColor@Hmx@@XZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?GetNumRestarts@Game@@QBAHXZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?GetSlipOffset@StreamReceiverFile@@UAAMXZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?Handle@BustAMoveData@@UAA?AVDataNode@@PAVDataArray@@_N@Z=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?Handle@OvershellSlot@@UAA?AVDataNode@@PAVDataArray@@_N@Z=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?Highlight@Waypoint@@UAAXXZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?InsertBreak@RndConsole@@QAAXPAVDataArray@@H@Z=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?IsDifficultyUnlockedForProfile@HamProfile@@QAA_NVSymbol@@0@Z=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?JointToVertexData@?A0x790ae044@@YAXAAVVector3@@ABVSkeleton@@W4SkeletonJoint@@ABVVector4@@@Z=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?OnMsg@HamUI@@IAA?AVDataNode@@ABVConnectionStatusChangedMsg@@@Z=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?OnSelect@NgPostProc@@UAAXXZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?OnSync@RndMesh@@UAAXH@Z=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?OnUnselect@NgPostProc@@UAAXXZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?PresyncBitmap@RndTex@@UAAXXZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?RemoveFromLists@Spotlight@@SAXPAV1@@Z=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?SpewInit@@YAXXZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?SpewTerminate@@YAXXZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?SyncBitmap@RndTex@@UAAXXZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?TerminateMakeString@@YAXXZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?ValidateCRC@CRC@Hmx@@SA_NHPBD@Z=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?VertexToWorld@?A0x790ae044@@YAXAAVVector3@@ABVTransform@@MABVVector4@@@Z=__link_glue_noop")
+// Removed: LocationCmp::LocationCmp — implemented in SongSortByLocation.cpp (matching unit)
+// Removed: ~DifficultyCmp — implemented in SongSortByDiff.cpp (matching unit)
+// Removed: ~MQSongSortNode — implemented in MQSongSortNode.cpp (matching unit)
+// Removed: ~SongCmp — implemented in SongSortBySong.cpp (matching unit)
+// Removed: SortCmp::operator() — implemented in StoreOffer.cpp (matching unit)
+// Removed: DrawFixedZ@DrawString — implemented in Graph.cpp
+// Removed: DrawShowing@SpotlightDrawer — implemented in SpotlightDrawer.cpp (matching unit)
+// Removed: GetBufferSize@HttpGet — implemented in HttpGet.cpp
+// Removed: GetColor@UIColor — implemented in UIColor.cpp (matching unit)
+// Removed: GetNumRestarts@Game — implemented in Game.cpp
+// Removed: GetSlipOffset@StreamReceiverFile — implemented in StreamReceiverFile.cpp
+// Removed: Highlight@Waypoint — implemented in Waypoint.cpp
+// Removed: OnSelect@NgPostProc — implemented in PostProc_NG.cpp (matching unit)
+// Removed: OnSync@RndMesh — implemented in Mesh.cpp (matching unit)
+// Removed: OnUnselect@NgPostProc — implemented in PostProc_NG.cpp (matching unit)
+// Removed: PresyncBitmap@RndTex — implemented in Tex.cpp (matching unit)
+// Removed: SpewInit — implemented in Spew.cpp
+// Removed: SpewTerminate — implemented in Spew.cpp
+// Removed: SyncBitmap@RndTex — implemented in Tex.cpp (matching unit)
+// Removed: TerminateMakeString — implemented in MakeString.cpp
+// Removed: ValidateCRC@CRC@Hmx — implemented in Crc.cpp
+// Removed: Flush@HDCache — implemented in HDCache.cpp (matching unit)
+// Removed: Handle@BustAMoveData — implemented in BustAMoveData.cpp (matching unit)
+// Removed: Handle@OvershellSlot — implemented in Overshell.cpp (matching unit)
+// Removed: InsertBreak@RndConsole — implemented in Console.cpp (matching unit)
+// Removed: IsDifficultyUnlockedForProfile@HamProfile — implemented in HamProfile.cpp (matching unit)
+// Removed: JointToVertexData — implemented in DepthBuffer3D.cpp (matching unit)
+// Removed: OnMsg@HamUI — implemented in HamUI.cpp (matching unit)
+// Removed: RemoveFromLists@Spotlight — implemented in Spotlight.cpp (matching unit)
+// Removed: VertexToWorld — implemented in DepthBuffer3D.cpp (matching unit)
 #pragma comment(linker, "/ALTERNATENAME:?altCfg@@YA?AVDataArrayPtr@@VDataNode@@0@Z=__link_glue_noop")
 #pragma comment(linker, "/ALTERNATENAME:?merged_82610090@@YAPBDPBDPCH@Z=__link_glue_noop")
 
@@ -3256,8 +3252,8 @@ extern "C" const char __link_glue_empty_str[] = "";
 #pragma comment(linker, "/ALTERNATENAME:??__E?m_regProps@?$CSampleXAPOBase@VPitchShiftEffect@@UPitchShiftEffectParams@@@ATG@@0UXAPO_REGISTRATION_PROPERTIES@@A@@YAXXZ=__link_glue_noop")
 #pragma comment(linker, "/ALTERNATENAME:??__E?m_regProps@?$CSampleXAPOBase@VSynapseAPO@DSP@@USynapseAPOParams@2@@ATG@@0UXAPO_REGISTRATION_PROPERTIES@@A@@YAXXZ=__link_glue_noop")
 #pragma comment(linker, "/ALTERNATENAME:??__EgCrit@@YAXXZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:??__EgChildPolys@@YAXXZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:??__EgParentPolys@@YAXXZ=__link_glue_noop")
+// Removed: ??__EgChildPolys — symbol exists in matching Utl.obj
+// Removed: ??__EgParentPolys — symbol exists in matching Utl.obj
 #pragma comment(linker, "/ALTERNATENAME:??__EgPhysicsVolumeBox@?A0x5ba00aca@@YAXXZ=__link_glue_noop")
 #pragma comment(linker, "/ALTERNATENAME:??__EkConvLen@?A0x5c754947@@YAXXZ=__link_glue_noop")
 #pragma comment(linker, "/ALTERNATENAME:??__EmFriendEnumRequests@?A0x8a9ffbf2@@YAXXZ=__link_glue_noop")
@@ -3289,50 +3285,50 @@ extern "C" const char __link_glue_empty_str[] = "";
 // -- Game/engine data symbols (17 symbols) --
 
 // -- Game/engine function stubs (372 symbols) --
-#pragma comment(linker, "/ALTERNATENAME:?DataOwner@RndFont3d@@UBAPBVRndFontBase@@XZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?ExitStore@StorePanel@@UBAXW4StoreError@@@Z=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?GetFailType@NetCacheLoader@@QBA?AW4NetCacheMgrFailType@@XZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?GetJumpBackTotalTime@StandardStream@@UAAMM@Z=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?GetName@MicXbox@@UBAAAVSymbol@@XZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?Handle@FitnessCalorieSortMgr@@UAA?AVDataNode@@PAVDataArray@@_N@Z=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?Handle@RndFont3d@@UAA?AVDataNode@@PAVDataArray@@_N@Z=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?Load@SynthSample@@UAAXAAVBinStream@@@Z=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?Mat@RndFont3d@@UBAPAVRndMat@@XZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?NewHeaderNode@ChallengeSortByScore@@UBAPAVNavListHeaderNode@@PAVNavListItemNode@@0@Z=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?NewHeaderNode@FitnessCalorieSortByCalorie@@UBAPAVNavListHeaderNode@@PAVNavListItemNode@@0@Z=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?NewHeaderNode@MQSongSortByCharacter@@UBAPAVNavListHeaderNode@@PAVNavListItemNode@@0@Z=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?NewHeaderNode@SongSortByLocation@@UBAPAVNavListHeaderNode@@PAVNavListItemNode@@0@Z=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?OldResourcePreload@LabelShrinkWrapper@@UAAXAAVBinStream@@@Z=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?OnParametersChanged@FxSendFlanger360@@MAAXXZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?OnSync@DxMesh@@UAAXH@Z=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?Poll@LabelShrinkWrapper@@UAAXXZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?Poll@RandomIntervalGroupSeqInst@@UAAXXZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?Select@ChallengeHeaderNode@@UAA?AVSymbol@@XZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?Set@NgDOFProc@@UAAXPAVRndCam@@MMMM@Z=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?SetPaused@BinkMovieImpl@@UAA_N_N@Z=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?SetVConstant@DxShaderMgr@@UAAXW4VShaderConstant@@PBMI@Z=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?StartImpl@RandomIntervalGroupSeqInst@@UAAXXZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?StoreProfile@StorePanel@@UBAPAVProfile@@XZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?SyncBitmap@DxTex@@UAAXXZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?UpdateApproxLighting@RndEnviron@@UAAXPBVVector3@@@Z=__link_glue_noop")
+// Removed: DataOwner@RndFont3d — implemented in Font3d.cpp (matching unit)
+// Removed: ExitStore@StorePanel — implemented in StorePanel.cpp (matching unit)
+// Removed: GetFailType@NetCacheLoader — implemented in NetCacheLoader.cpp
+// Removed: GetJumpBackTotalTime@StandardStream — implemented in StandardStream.cpp (matching unit)
+// Removed: GetName@MicXbox — implemented in Mic.cpp
+// Removed: Handle@FitnessCalorieSortMgr — implemented in FitnessCalorieSortMgr.cpp (matching unit)
+// Removed: Handle@RndFont3d — implemented in Font3d.cpp (matching unit)
+// Removed: Load@SynthSample — implemented in SynthSample.cpp (matching unit)
+// Removed: Mat@RndFont3d — implemented in Font3d.cpp (matching unit)
+// Removed: NewHeaderNode(2-arg)@ChallengeSortByScore — implemented in ChallengeSortByScore.cpp (matching unit)
+// Removed: NewHeaderNode(2-arg)@FitnessCalorieSortByCalorie — implemented in FitnessCalorieSortByCalorie.cpp (matching unit)
+// Removed: NewHeaderNode(2-arg)@MQSongSortByCharacter — implemented in MQSongSortByCharacter.cpp (matching unit)
+// Removed: NewHeaderNode(2-arg)@SongSortByLocation — implemented in SongSortByLocation.cpp (matching unit)
+// Removed: OldResourcePreload@LabelShrinkWrapper — implemented in LabelShrinkWrapper.cpp (matching unit)
+// Removed: OnParametersChanged@FxSendFlanger360 — implemented in FxSendFlanger.cpp
+// Removed: OnSync@DxMesh — implemented in rnddx9/Mesh.cpp (matching unit)
+// Removed: Poll@LabelShrinkWrapper — implemented in LabelShrinkWrapper.cpp (matching unit)
+// Removed: Poll@RandomIntervalGroupSeqInst — implemented in Sequence.cpp (matching unit)
+// Removed: Select@ChallengeHeaderNode — implemented in ChallengeSortNode.cpp (matching unit)
+// Removed: Set@NgDOFProc — implemented in DOFProc_NG.cpp (matching unit)
+// Removed: SetPaused@BinkMovieImpl — implemented in BinkMovieImpl.cpp (matching unit)
+// Removed: SetVConstant(float*)@DxShaderMgr — implemented in ShaderMgr.cpp (matching unit)
+// Removed: StartImpl@RandomIntervalGroupSeqInst — implemented in Sequence.cpp (matching unit)
+// Removed: StoreProfile@StorePanel — implemented in StorePanel.cpp (matching unit)
+// Removed: SyncBitmap@DxTex — implemented in rnddx9/Tex.cpp (matching unit)
+// Removed: UpdateApproxLighting@RndEnviron — implemented in Env.cpp (matching unit)
 
 // -- Remaining symbols missed due to substring overlap with ??__E entries --
 // -- Template instantiations (46 symbols) --
 
 // -- Game/engine data (810 symbols) --
-#pragma comment(linker, "/ALTERNATENAME:?gDebugDepth@@3PAEA=__link_glue_zero")
+// Removed: gDebugDepth — defined in LiveCameraInput.cpp
 #pragma comment(linker, "/ALTERNATENAME:?lbl_82F14008@@3HA=__link_glue_zero")
-#pragma comment(linker, "/ALTERNATENAME:?sHamMaster@MetaPanel@@2PAVHamMaster@@A=__link_glue_zero")
-#pragma comment(linker, "/ALTERNATENAME:?sSongDB@MetaPanel@@2PAVSongDB@@A=__link_glue_zero")
+// Removed: sHamMaster@MetaPanel — defined in MetaPanel.cpp (matching unit)
+// Removed: sSongDB@MetaPanel — defined in MetaPanel.cpp (matching unit)
 
 // -- Game/engine functions (535 symbols) --
 #pragma comment(linker, "/ALTERNATENAME:??0CXAPOBase@ATG@@QAA@XZ=__link_glue_noop")
 #pragma comment(linker, "/ALTERNATENAME:??0CXAPOParametersBase@ATG@@QAA@PBXPAXIE@Z=__link_glue_noop")
 #pragma comment(linker, "/ALTERNATENAME:??0ID3DXInclude@@QAA@XZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:??1AppLabel@@UAA@XZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:??1FitnessCalorieSortByCalorie@@UAA@XZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:??1FitnessCalorieSortCmp@@UAA@XZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:??1MQSongSortByCharacter@@UAA@XZ=__link_glue_noop")
+// Removed: ~AppLabel — implemented in AppLabel.cpp (matching unit)
+// Removed: ~FitnessCalorieSortByCalorie — implemented in FitnessCalorieSortByCalorie.cpp (matching unit)
+// Removed: ~FitnessCalorieSortCmp — implemented in FitnessCalorieSortByCalorie.cpp (matching unit)
+// Removed: ~MQSongSortByCharacter — implemented in MQSongSortByCharacter.cpp (matching unit)
 #pragma comment(linker, "/ALTERNATENAME:??1PeakDetector@Synapse@DSP@@QAA@XZ=__link_glue_noop")
 #pragma comment(linker, "/ALTERNATENAME:??1PitchCorrectedVoice@Synapse@DSP@@QAA@XZ=__link_glue_noop")
 #pragma comment(linker, "/ALTERNATENAME:?BinkClose@@YAXPAUBINK@@@Z=__link_glue_noop")
@@ -3342,32 +3338,23 @@ extern "C" const char __link_glue_empty_str[] = "";
 #pragma comment(linker, "/ALTERNATENAME:?BinkOpenTrack@@YAPAUBINKTRACK@@PAUBINK@@E@Z=__link_glue_noop")
 #pragma comment(linker, "/ALTERNATENAME:?BinkSetMemory@@YAXP6APAXH@ZP6AXPAX@Z@Z=__link_glue_noop")
 #pragma comment(linker, "/ALTERNATENAME:?BinkStartAsyncThread@@YAHHH@Z=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?GetLastResult@Cache@@QAA?AW4CacheResult@@XZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?Intersect@@YA_NABVSegment@@ABVTriangle@@HAAM@Z=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?OnSmartGlassListen@FitnessGoalMgr@@AAAXH@Z=__link_glue_noop")
+// Removed: GetLastResult@Cache — implemented in Cache.cpp
+// Removed: Intersect(Segment,Triangle,int,float&) — fixed signature and already in Geo.cpp (matching unit)
+// Removed: OnSmartGlassListen@FitnessGoalMgr — implemented in FitnessGoalMgr.cpp (matching unit)
 #pragma comment(linker, "/ALTERNATENAME:?PreSave@WorldInstance@@UAAXAAVBinStream@@@Z=__link_glue_noop")
 #pragma comment(linker, "/ALTERNATENAME:?RadAlloc@@YAPAXH@Z=__link_glue_noop")
 #pragma comment(linker, "/ALTERNATENAME:?SetReleaseSmoothing@PitchCorrectedVoice@Synapse@DSP@@QAAXM@Z=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?UpdateGestures@HamNavList@@AAAXPBVSkeleton@@@Z=__link_glue_noop")
+// Removed: UpdateGestures@HamNavList — implemented in HamNavList.cpp (matching unit)
 #pragma comment(linker, "/ALTERNATENAME:?__pop_heap_aux@stlpmtx_std@@YAXPAUMemDiffEntry@@0HU?$less@UMemDiffEntry@@@1@@Z=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?dispose@Voice@@AAAXPAHI@Z=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?kStreamEndMs@StandardStream@@2MB=__link_glue_noop")
+// Removed: dispose@Voice — implemented in Voice.cpp (matching unit)
+// Removed: kStreamEndMs@StandardStream — defined in StandardStream.cpp (matching unit)
 #pragma comment(linker, "/ALTERNATENAME:?merged_82610090@@YAPAXPBXPAI@Z=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?CopyRef@?$ObjRefConcrete@VObject@Hmx@@VObjectDir@@@@QAAXABV1@@Z=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?IsLoaded@?$ObjDirPtr@VObjectDir@@@@QBA_NXZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?RefOwner@?$ObjPtrList@VFlowNode@@VObjectDir@@@@EBAPAVObject@Hmx@@XZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?RefOwner@Node@?$ObjPtrList@VCharPollable@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?RefOwner@Node@?$ObjPtrList@VCharWeightSetter@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?RefOwner@Node@?$ObjPtrList@VCharWeightable@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?RefOwner@Node@?$ObjPtrList@VFader@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?RefOwner@Node@?$ObjPtrList@VNoteVoiceInst@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?RefOwner@Node@?$ObjPtrList@VObjectDir@@V1@@@UBAPAVObject@Hmx@@XZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?RefOwner@Node@?$ObjPtrList@VRndLight@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?RefOwner@Node@?$ObjPtrList@VSeqInst@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?RefOwner@Node@?$ObjPtrList@VSfxInst@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?RefOwner@Node@?$ObjPtrList@VThreeDSound@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?RefOwner@Node@?$ObjPtrList@VWaypoint@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ=__link_glue_noop")
-#pragma comment(linker, "/ALTERNATENAME:?RefOwner@Node@?$ObjPtrList@VWorldCrowd@@VObjectDir@@@@UBAPAVObject@Hmx@@XZ=__link_glue_noop")
+// Removed: CopyRef@ObjRefConcrete<Hmx::Object,ObjectDir> — explicit instantiation in link_glue.cpp
+// Removed: IsLoaded@ObjDirPtr<ObjectDir> — explicit instantiation in link_glue.cpp
+// Removed: RefOwner@ObjPtrList<FlowNode> — explicit instantiation in link_glue.cpp
+// Removed: Node::RefOwner for CharPollable, CharWeightSetter, CharWeightable, Fader,
+//          NoteVoiceInst, ObjectDir, RndLight, SeqInst, SfxInst, ThreeDSound,
+//          Waypoint, WorldCrowd — explicit instantiations in link_glue.cpp
 #pragma comment(linker, "/ALTERNATENAME:?copy@?$char_traits@_W@stlpmtx_std@@SAPA_WPA_WPB_WI@Z=__link_glue_noop")
 #pragma comment(linker, "/ALTERNATENAME:BinkInit=__link_glue_noop")
 #pragma comment(linker, "/ALTERNATENAME:D3DTexture_GetLevelDesc=__link_glue_noop")
@@ -3542,11 +3529,7 @@ PROPSYNC_OBJPTRVEC(RndTransformable)
 #undef PROPSYNC_OBJPTRVEC
 
 // -- PropSync<T> for ObjDirPtr<T> --
-
-template <>
-bool PropSync(ObjDirPtr<WorldInstance> &, DataNode &, DataArray *, int, PropOp) {
-    return false;
-}
+// (WorldInstance specialization moved to Instance.cpp)
 
 
 // -- GatherObjectsFromGroup<RndMesh> --

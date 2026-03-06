@@ -508,6 +508,7 @@ public:
     }
 
     T1 *front() const;
+    T1 *back() const;
     void pop_front();
     void pop_back();
     void push_back(T1 *obj);

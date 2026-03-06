@@ -94,6 +94,11 @@ BinkMovieImpl::BinkMovieImpl()
 
 bool BinkMovieImpl::Paused() const { return mPaused; }
 
+bool BinkMovieImpl::SetPaused(bool paused) {
+    mPaused = paused;
+    return mPaused;
+}
+
 BinkMovieImpl::~BinkMovieImpl() {
     if (mThreadId != (unsigned long)GetCurrentThreadId()) {
         if (mThreadId == (unsigned long)-1 && MainThread()) {
