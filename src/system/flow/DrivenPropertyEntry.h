@@ -7,6 +7,8 @@
 class FlowNode;
 
 class DrivenPropertyEntry {
+    friend class FlowNode;
+
 public:
     DrivenPropertyEntry(Hmx::Object *);
     ~DrivenPropertyEntry();

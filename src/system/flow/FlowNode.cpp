@@ -236,9 +236,33 @@ void FlowNode::MiloPreRun() {
 }
 
 void FlowNode::MoveIntoDir(ObjectDir *from, ObjectDir *to) {
-    // Move all child nodes into the new directory
-    FOREACH (it, mChildNodes) {
-        (*it)->MoveIntoDir(from, to);
+    if (Dir() == NULL || Dir() == to) {
+        String suffix("a");
+        suffix[0] = rand() % 25 + 'a';
+        const char *name = NextName(MakeString("%s", (char *)suffix.c_str()), from);
+
+        if (to) {
+            while (!strcmp(name, to->Name()) || !strcmp(name, from->Name())) {
+                suffix[0] = rand() % 25 + 'a';
+                name = MakeString("%s%s", name, suffix.c_str());
+            }
+        }
+
+        SetName(NextName(name, from), from);
+
+        FOREACH (it, mChildNodes) {
+            (*it)->MoveIntoDir(from, to);
+        }
+
+        FOREACH (it, mDrivenPropEntries) {
+            DrivenPropertyEntry &entry = *it;
+            FOREACH (it2, entry.mMathOps) {
+                FlowMathOp &op = *it2;
+                if (op.mDrivenObj == (Hmx::Object *)to) {
+                    op.mDrivenObj = (Hmx::Object *)from;
+                }
+            }
+        }
     }
 }
 
@@ -261,11 +285,14 @@ FlowNode *FlowNode::DuplicateChild(FlowNode *child) {
         // Copy dynamic property values from old flow to new flow
         Flow::DynamicPropertyEntry *it2 = newFlow->mDynamicProperties.begin();
         while (it2 != newFlow->mDynamicProperties.end()) {
-            DataArrayPtr arr(new DataArray(1));
-            arr->Node(0) = DataNode(Symbol(it2->mName.c_str()));
-            const DataNode *prop = childFlow->Property(Symbol(it2->mName.c_str()), false);
-            if (prop) {
-                newFlow->SetProperty(arr, *prop);
+            {
+                DataArrayPtr arr(new DataArray(1));
+                arr->Node(0) = DataNode(Symbol(it2->mName.c_str()));
+                const DataNode *prop =
+                    childFlow->Property(Symbol(it2->mName.c_str()), false);
+                if (prop) {
+                    newFlow->SetProperty(arr, *prop);
+                }
             }
             it2++;
         }
@@ -280,8 +307,8 @@ FlowNode *FlowNode::DuplicateChild(FlowNode *child) {
                 newLabel->InitObject();
                 newLabel->Copy((FlowNode *)(*it), kCopyDeep);
                 newLabel->SetParent(newFlow, true);
-                ObjectDir *dir = child->Dir();
                 Hmx::Object *labelBase = newLabel;
+                ObjectDir *dir = child->Dir();
                 const char *name = NextName("l", dir);
                 labelBase->SetName(name, dir);
             }
@@ -294,8 +321,8 @@ FlowNode *FlowNode::DuplicateChild(FlowNode *child) {
         newObj->InitObject();
         FlowNode *newNode = dynamic_cast<FlowNode *>(newObj);
         newNode->Copy(child, kCopyDeep);
-        ObjectDir *dir = child->Dir();
         Hmx::Object *nodeBase = newNode;
+        ObjectDir *dir = child->Dir();
         const char *name = NextName("n", dir);
         nodeBase->SetName(name, dir);
         return newNode;
@@ -325,7 +352,7 @@ void FlowNode::PushDrivenProperties() {
             targetValue = DataNode(firstOp.Default());
         }
 
-        if (&mathOps[0] + 1 == &*mathOps.end()) {
+        if (&*mathOps.end() == &mathOps[0] + 1) {
             SetProperty(entry.Node().Array(NULL), targetValue);
         } else {
             if (targetValue.CompatibleType(kDataFloat)) {

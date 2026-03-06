@@ -29,6 +29,8 @@ enum MathOpType {
 };
 
 class FlowMathOp {
+    friend class FlowNode;
+
     float mDefault; // 0x0
     MathOpType mOp; // 0x4
     DataNode mLhs; // 0x8
