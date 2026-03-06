@@ -328,7 +328,8 @@ void FileCache::DumpOverSize(int iii) {
         FileCacheEntry *delEntry = mEntries[u9];
         if (unk19) {
             int sz = delEntry->mSize;
-            TheDebug.Notify(MakeString("Forced to dump entry with size %i (max size %i)", sz, mMaxSize));
+            auto _tmp0 = MakeString("Forced to dump entry with size %i (max size %i)", sz, mMaxSize);
+            TheDebug.Notify(_tmp0);
         }
         i2 -= delEntry->mSize;
         delete delEntry;

@@ -179,8 +179,7 @@ ChunkStream::~ChunkStream() {
         mFile->Seek(0, 0);
         mFile->Write(&mChunkInfo, 0x810);
     }
-    if (mFile)
-        delete mFile;
+    delete mFile;
     for (;;) {
         bool anyDecompressing;
         int i = 2;
