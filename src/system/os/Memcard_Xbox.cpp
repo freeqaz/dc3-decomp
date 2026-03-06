@@ -210,11 +210,11 @@ MCResult MCContainerXbox::Mount(CreateType ct) {
     if (res == ERROR_PATH_NOT_FOUND) {
         return kMCFileNotFound;
     }
-    auto _result = TranslateCommonWinErrorToMCResult(res);
+    auto mcResult = TranslateCommonWinErrorToMCResult(res);
     if (res == ERROR_ALREADY_EXISTS) {
-                _result = kMCCorrupt;
+                mcResult = kMCCorrupt;
     }
-    return _result;
+    return mcResult;
 }
 
 MCResult MCContainerXbox::Unmount() {

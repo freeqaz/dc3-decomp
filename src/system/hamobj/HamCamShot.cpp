@@ -829,8 +829,8 @@ RndDrawable *HamCamShot::GetFlipCharacter(RndDrawable *draw) {
     static Symbol player1("player1");
     static Symbol backup0("backup0");
     static Symbol backup1("backup1");
-    auto endIt = draw->Name();
-    Symbol name(endIt);
+    auto drawName = draw->Name();
+    Symbol name(drawName);
     if (!TheHamDirector) return draw;
     HamCharacter *c;
     if (name == player0) {

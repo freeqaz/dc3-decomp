@@ -1102,8 +1102,8 @@ RndTex *Rnd::CreateDefaultTexture(DefaultTextureType textureType) {
     case kDefaultTex_Error:
         for (int i = 0; i < height; i++) {
             for (int j = 0; j < width; j++) {
-                bool _bit0 = (((i ^ j) >> 2) & 1) != 0;
-                if (_bit0) {
+                bool isOddTile = (((i ^ j) >> 2) & 1) != 0;
+                if (isOddTile) {
                     bmap.SetPixelColor(j, i, 0xFF, 0x80, 0x40, alpha);
                 } else {
                     bmap.SetPixelColor(j, i, 0, 0, 0, alpha);

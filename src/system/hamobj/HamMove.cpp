@@ -818,11 +818,11 @@ float HamMove::ConfusabilityWithMoveDataArray(const DataArray *a) {
 }
 
 float HamMove::AdjustNormalizedPercentToConfusability(float f1, float f2) {
-    float fvar1 = PSNRToDetectFrac(mThresholds[kMoveRatingAwesome]) * f2;
-    if (f1 < fvar1) {
-        return (0.5f / fvar1) * f1;
+    float awesomeThreshold = PSNRToDetectFrac(mThresholds[kMoveRatingAwesome]) * f2;
+    if (f1 < awesomeThreshold) {
+        return (0.5f / awesomeThreshold) * f1;
     } else {
-        return ((f1 - fvar1) / (PSNRToDetectFrac(mThresholds[kMoveRatingPerfect]) - fvar1) + 1.0f) / 2.0f;
+        return ((f1 - awesomeThreshold) / (PSNRToDetectFrac(mThresholds[kMoveRatingPerfect]) - awesomeThreshold) + 1.0f) / 2.0f;
     }
 }
 
