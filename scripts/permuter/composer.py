@@ -26,25 +26,73 @@ _DEFAULT_PAIRS: list[tuple[str, str]] = [
 
 # Domain knowledge: which patterns are effective follow-ups to a given pattern.
 _FOLLOW_UP_MAP: dict[str, list[str]] = {
+    # Core extraction/ordering
     "variable_extraction": ["declaration_reorder", "inline_assignment"],
     "inline_assignment": ["comparison_flip", "comparison_equivalence"],
-    "declaration_reorder": ["variable_extraction", "prologue_pressure"],
+    "declaration_reorder": ["variable_extraction", "prologue_pressure", "declaration_movement"],
     "parameter_live_range": ["declaration_reorder", "prologue_pressure"],
-    "comparison_equivalence": ["signed_unsigned", "comparison_flip"],
-    "branch_polarity": ["comparison_flip", "early_return_merge"],
+    "statement_reorder": ["declaration_reorder", "assignment_reorder", "declaration_movement"],
+    "assignment_reorder": ["statement_reorder", "declaration_reorder"],
     "temp_elimination": ["declaration_reorder", "variable_extraction"],
     "member_ref_bind": ["declaration_reorder"],
     "reference_elimination": ["declaration_reorder", "temp_elimination"],
     "subscript_ref_bind": ["declaration_reorder"],
     "prologue_pressure": ["declaration_reorder", "parameter_live_range"],
-    "signed_unsigned": ["comparison_equivalence", "comparison_flip"],
-    "early_return_merge": ["branch_polarity", "guard_to_nested"],
-    "guard_to_nested": ["early_return_merge", "branch_polarity"],
-    "null_guard_elimination": ["branch_polarity", "comparison_flip"],
-    "statement_reorder": ["declaration_reorder", "assignment_reorder"],
-    "assignment_reorder": ["statement_reorder", "declaration_reorder"],
     "color_copy_shape": ["statement_reorder", "declaration_reorder"],
     "native_guard_camera_wrap": ["statement_reorder"],
+
+    # Declaration/ordering (newly connected)
+    "declaration_movement": ["declaration_reorder", "statement_reorder"],
+    "comma_split": ["statement_reorder", "declaration_reorder"],
+    "hoist_sret": ["declaration_reorder", "statement_reorder"],
+    "alloca_intrinsic": ["declaration_reorder"],
+    "commutative_swap": ["declaration_reorder"],
+    "initializer_literal": ["declaration_reorder"],
+
+    # Comparison/boolean
+    "comparison_equivalence": ["signed_unsigned", "comparison_flip"],
+    "signed_unsigned": ["comparison_equivalence", "comparison_flip"],
+    "branch_polarity": ["comparison_flip", "early_return_merge"],
+    "null_guard_elimination": ["branch_polarity", "comparison_flip"],
+    "bool_cast": ["comparison_flip", "signed_unsigned"],
+    "bool_return_expr": ["comparison_flip", "branch_polarity"],
+    "bool_to_uchar": ["signed_unsigned", "comparison_equivalence"],
+    "objptr_bool_extract": ["comparison_flip", "bool_cast"],
+    "bit_test_bool": ["comparison_flip", "bool_cast"],
+
+    # Expression-level
+    "and_split": ["declaration_reorder", "statement_reorder"],
+    "negation_split": ["comparison_flip", "branch_polarity"],
+    "max_to_conditional": ["branch_polarity", "comparison_flip"],
+    "bitwise_accumulator": ["declaration_reorder", "statement_reorder"],
+    "fma_reorder": ["declaration_reorder"],
+
+    # Float/type
+    "float_double_literal": ["comparison_equivalence", "fabs_variant"],
+    "fabs_variant": ["float_double_literal", "math_return_cast"],
+    "math_return_cast": ["fabs_variant", "signed_unsigned"],
+    "sizeof_signed_cast": ["signed_unsigned", "comparison_equivalence"],
+    "empty_size_swap": ["comparison_equivalence", "signed_unsigned"],
+
+    # MILO macros
+    "milo_log_swap": ["milo_str_conv", "milo_call_merge"],
+    "milo_str_conv": ["milo_log_swap", "varargs_cast"],
+    "milo_call_merge": ["milo_log_swap", "declaration_reorder"],
+    "varargs_cast": ["milo_str_conv"],
+
+    # Control flow
+    "early_return_merge": ["branch_polarity", "guard_to_nested"],
+    "guard_to_nested": ["early_return_merge", "branch_polarity"],
+    "single_return": ["branch_polarity", "early_return_merge"],
+    "ternary_swap": ["comparison_flip", "branch_polarity"],
+    "fsel_template": ["comparison_flip", "branch_polarity"],
+    "noreturn_attr": ["branch_polarity"],
+    "return_call_merge": ["branch_polarity", "declaration_reorder"],
+
+    # Misc
+    "argument_swap": ["declaration_reorder", "comparison_flip"],
+    "iterator_deref_style": ["member_ref_bind", "declaration_reorder"],
+    "const_overload": ["comparison_equivalence"],
 }
 
 _CACHE_DB = Path(__file__).resolve().parent.parent.parent / "permuter_cache.db"
@@ -271,13 +319,14 @@ def build_adaptive_chains(
     patterns: list[Pattern],
     hints: RoundHints | None,
     max_depth: int = 3,
-    max_chains: int = 5,
+    max_chains: int = 10,
 ) -> list[ChainSpec]:
     """Build data-driven chain specifications for N-stage composition.
 
     Priority layers:
-    1. Follow-up chains from last winner (domain knowledge)
+    1. Follow-up chains from last winner (recursive walk)
     2. Promising patterns (positive delta in previous rounds)
+    2.5. Round-1 diagnosis-relevant pairwise combos (when no hints)
     3. Historical effective pairs from DB
     4. Diagnosis-driven chains
 
@@ -289,10 +338,13 @@ def build_adaptive_chains(
         max_chains: Maximum chains to return.
     """
     available = {p.name for p in patterns}
+    pattern_map = {p.name: p for p in patterns}
     chains: list[ChainSpec] = []
     seen_stages: set[tuple[str, ...]] = set()
 
-    def _add_chain(stages: list[str], reason: str, budget: int = 10) -> None:
+    def _add_chain(
+        stages: list[str], reason: str, budget: int = 10, priority: float = 0.0,
+    ) -> None:
         # Filter to available patterns
         valid = [s for s in stages if s in available]
         if len(valid) < 2:
@@ -305,40 +357,56 @@ def build_adaptive_chains(
             stages=list(key),
             reason=reason,
             budget=budget,
+            priority=priority,
         ))
 
-    # Layer 1: Follow-up chains from last winner
+    # Layer 1: Follow-up chains from last winner (recursive walk)
     if hints and hints.last_winner:
         for base_name in _split_for_lookup(hints.last_winner):
-            follow_ups = _FOLLOW_UP_MAP.get(base_name, [])
-            for follow_up in follow_ups:
-                # 2-stage: winner -> follow_up
+            for chain_stages in _walk_followups(
+                base_name, _FOLLOW_UP_MAP, max_depth, available,
+            ):
                 _add_chain(
-                    [base_name, follow_up],
+                    chain_stages,
                     f"follow-up: {base_name} won last round",
+                    priority=1.0,
                 )
-                # 3-stage: winner -> follow_up -> follow_up's follow_ups
-                for ff in _FOLLOW_UP_MAP.get(follow_up, [])[:1]:
-                    _add_chain(
-                        [base_name, follow_up, ff],
-                        f"deep follow-up from {base_name}",
-                    )
 
     # Layer 2: Promising patterns (had positive delta before)
     if hints:
         promising = hints.promising_patterns()
-        for p in promising[:3]:
-            follow_ups = _FOLLOW_UP_MAP.get(p, [])
-            for f in follow_ups[:2]:
+        for p in promising[:5]:
+            for chain_stages in _walk_followups(
+                p, _FOLLOW_UP_MAP, min(3, max_depth), available,
+            ):
                 _add_chain(
-                    [p, f],
+                    chain_stages,
                     f"promising: {p} had positive delta",
+                    priority=0.8,
                 )
+
+    # Layer 2.5: Round-1 diagnosis-relevant combos (no hints yet)
+    if not hints and diagnosis:
+        relevant_names = [
+            p.name for p in patterns if p.relevant(diagnosis)
+        ]
+        for name in relevant_names:
+            follow_ups = _FOLLOW_UP_MAP.get(name, [])
+            for fu in follow_ups:
+                if fu in available and fu in {n for n in relevant_names}:
+                    _add_chain(
+                        [name, fu],
+                        f"round1-relevant: {name}+{fu}",
+                        priority=0.5,
+                    )
 
     # Layer 3: Historical effective pairs from DB
     effective_pairs = _query_effective_pairs()
-    for p1, p2 in effective_pairs[:3]:
-        _add_chain([p1, p2], f"historical: {p1}+{p2} won before")
+    for p1, p2 in effective_pairs[:5]:
+        _add_chain(
+            [p1, p2], f"historical: {p1}+{p2} won before",
+            priority=0.6,
+        )
 
     # Layer 4: Diagnosis-driven chains
     if diagnosis:
@@ -348,7 +416,101 @@ def build_adaptive_chains(
                 seen_stages.add(stages_key)
                 chains.append(chain_spec)
 
+    # Sort by priority (highest first) and truncate
+    chains.sort(key=lambda c: -c.priority)
     return chains[:max_chains]
+
+
+def _walk_followups(
+    start: str,
+    follow_map: dict[str, list[str]],
+    max_depth: int,
+    available: set[str],
+    _max_chains: int = 6,
+) -> list[list[str]]:
+    """BFS walk of follow-up map from start, yielding chains of length 2..max_depth.
+
+    Cycle-safe (tracks visited per chain). Returns shorter chains first.
+    Caps at _max_chains to prevent explosion.
+    """
+    results: list[list[str]] = []
+    # BFS queue: (current_chain, visited_set)
+    queue: list[tuple[list[str], set[str]]] = [([start], {start})]
+
+    while queue and len(results) < _max_chains:
+        chain, visited = queue.pop(0)
+        tail = chain[-1]
+        follow_ups = follow_map.get(tail, [])
+        for fu in follow_ups:
+            if fu in visited or fu not in available:
+                continue
+            new_chain = chain + [fu]
+            if len(new_chain) >= 2:
+                results.append(new_chain)
+                if len(results) >= _max_chains:
+                    break
+            if len(new_chain) < max_depth:
+                queue.append((new_chain, visited | {fu}))
+
+    return results
+
+
+def get_compose_pairs(
+    diagnosis: Diagnosis | None,
+    patterns: list[Pattern],
+    max_pairs: int = 12,
+) -> list[tuple[str, str]]:
+    """Build dynamic compose pairs from _FOLLOW_UP_MAP + DB history.
+
+    1. Collect all edges from _FOLLOW_UP_MAP where both patterns are available.
+    2. Filter by diagnosis relevance (at least one pattern passes relevant()).
+    3. Boost pairs that appear in DB win history.
+    4. Return top max_pairs.
+    """
+    available = {p.name for p in patterns}
+    pattern_map = {p.name: p for p in patterns}
+
+    # Collect all valid edges
+    candidates: list[tuple[str, str, float]] = []  # (a, b, score)
+    for src, dsts in _FOLLOW_UP_MAP.items():
+        if src not in available:
+            continue
+        for dst in dsts:
+            if dst not in available:
+                continue
+            # Score: 1.0 base, +0.5 if at least one is diagnosis-relevant
+            score = 1.0
+            if diagnosis:
+                src_pat = pattern_map.get(src)
+                dst_pat = pattern_map.get(dst)
+                if (src_pat and src_pat.relevant(diagnosis)) or \
+                   (dst_pat and dst_pat.relevant(diagnosis)):
+                    score += 0.5
+            candidates.append((src, dst, score))
+
+    # Boost pairs seen in DB win history
+    historical = set(_query_effective_pairs())
+    for i, (a, b, score) in enumerate(candidates):
+        if (a, b) in historical:
+            candidates[i] = (a, b, score + 1.0)
+
+    # Sort by score descending and deduplicate
+    candidates.sort(key=lambda x: -x[2])
+    seen: set[tuple[str, str]] = set()
+    result: list[tuple[str, str]] = []
+    for a, b, _ in candidates:
+        if (a, b) not in seen:
+            seen.add((a, b))
+            result.append((a, b))
+            if len(result) >= max_pairs:
+                break
+
+    # Always include the hardcoded defaults if available
+    for pair in _DEFAULT_PAIRS:
+        if pair not in seen and pair[0] in available and pair[1] in available:
+            result.append(pair)
+
+    return result
 
 
 def _split_for_lookup(pattern_name: str) -> list[str]:
@@ -360,7 +522,7 @@ def _split_for_lookup(pattern_name: str) -> list[str]:
 
 
 def _query_effective_pairs() -> list[tuple[str, str]]:
-    """Query pattern_runs DB for composed patterns with wins."""
+    """Query pattern_runs DB for composed/chained patterns with wins."""
     try:
         conn = sqlite3.connect(str(_CACHE_DB))
         conn.row_factory = sqlite3.Row
@@ -375,7 +537,7 @@ def _query_effective_pairs() -> list[tuple[str, str]]:
         rows = conn.execute("""
             SELECT pattern, SUM(won) as wins, COUNT(*) as runs
             FROM pattern_runs
-            WHERE pattern LIKE 'compose:%' AND won = 1
+            WHERE (pattern LIKE 'compose:%' OR pattern LIKE 'chain:%') AND won = 1
             GROUP BY pattern
             HAVING wins > 0
             ORDER BY wins DESC
@@ -385,12 +547,16 @@ def _query_effective_pairs() -> list[tuple[str, str]]:
 
         pairs = []
         for r in rows:
-            # Parse "compose:a+b" -> (a, b)
             name = r["pattern"]
             if name.startswith("compose:"):
                 parts = name[len("compose:"):].split("+")
                 if len(parts) == 2:
                     pairs.append((parts[0], parts[1]))
+            elif name.startswith("chain:"):
+                # Extract consecutive pairs from chain: "a+b+c" -> (a,b), (b,c)
+                parts = name[len("chain:"):].split("+")
+                for i in range(len(parts) - 1):
+                    pairs.append((parts[i], parts[i + 1]))
         return pairs
     except Exception:
         return []
@@ -409,14 +575,26 @@ def _diagnosis_driven_chains(
             1 for (a, b) in diagnosis.reg_swap_pairs
             if a.startswith("r") and b.startswith("r")
         )
+        fpr_swaps = sum(
+            1 for (a, b) in diagnosis.reg_swap_pairs
+            if a.startswith("f")
+        )
         if gpr_swaps > 0:
             chains.append(ChainSpec(
                 stages=["declaration_reorder", "prologue_pressure", "parameter_live_range"],
                 reason=f"regalloc: {gpr_swaps} GPR swap pairs",
+                priority=0.7,
             ))
             chains.append(ChainSpec(
                 stages=["member_ref_bind", "declaration_reorder"],
                 reason=f"regalloc: bind members to fix register order",
+                priority=0.7,
+            ))
+        if fpr_swaps > 0:
+            chains.append(ChainSpec(
+                stages=["declaration_reorder", "float_double_literal"],
+                reason=f"regalloc: {fpr_swaps} FPR swap pairs",
+                priority=0.7,
             ))
 
     # Prologue mismatch -> pressure chain
@@ -426,11 +604,13 @@ def _diagnosis_driven_chains(
             chains.append(ChainSpec(
                 stages=["prologue_pressure", "declaration_reorder"],
                 reason=f"prologue: target needs {delta} more GPR saves",
+                priority=0.7,
             ))
         elif delta < 0:
             chains.append(ChainSpec(
                 stages=["temp_elimination", "reference_elimination"],
                 reason=f"prologue: target needs {-delta} fewer GPR saves",
+                priority=0.7,
             ))
 
     # Comparison mismatches -> comparison chain
@@ -442,6 +622,7 @@ def _diagnosis_driven_chains(
         chains.append(ChainSpec(
             stages=["comparison_equivalence", "signed_unsigned", "comparison_flip"],
             reason=f"comparison: {cmp_mismatches} cmp mismatches",
+            priority=0.7,
         ))
 
     # Branch mismatches -> branch chain
@@ -453,6 +634,7 @@ def _diagnosis_driven_chains(
         chains.append(ChainSpec(
             stages=["branch_polarity", "comparison_flip", "early_return_merge"],
             reason=f"branch: {branch_mismatches} branch mismatches",
+            priority=0.7,
         ))
 
     # Filter to available patterns

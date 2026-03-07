@@ -243,6 +243,7 @@ class ChainSpec:
     stages: list[str]  # Pattern names in order
     reason: str  # Why selected
     budget: int = 10  # Max final variants from this chain
+    priority: float = 0.0  # Higher = tried first (used for sorting before truncation)
 
 
 @dataclass

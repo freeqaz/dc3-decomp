@@ -123,9 +123,20 @@ class RunStatsAccumulator:
                 stats.best_variant = variant_name
 
     def mark_winner(self, pattern_name: str):
-        """Mark a pattern as the round winner."""
+        """Mark a pattern as the round winner.
+
+        For composed/chained patterns (compose:a+b, chain:a+b+c), also
+        credit each component pattern if tracked.
+        """
         if pattern_name in self.by_pattern:
             self.by_pattern[pattern_name].won = True
+        # Credit individual components of compose/chain winners
+        from .types import _split_pattern_name
+        components = _split_pattern_name(pattern_name)
+        if len(components) > 1:
+            for comp in components:
+                if comp in self.by_pattern and comp != pattern_name:
+                    self.by_pattern[comp].won = True
 
 
 def store_run(

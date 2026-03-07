@@ -109,7 +109,7 @@ def generate_variants(
     - No composition: 100% independent
     - compose_pairs only: 70/30 independent/composed
     - chains only: 80/20 independent/chains
-    - Both: 60/20/20 independent/composed/chains
+    - Both: 50/20/30 independent/composed/chains
 
     Args:
         ctx: Parsed function context.
@@ -123,8 +123,8 @@ def generate_variants(
     """
     # Budget split
     if compose_pairs and chains:
-        independent_budget = int(max_variants * 0.6)
-        compose_budget = int(max_variants * 0.2)
+        independent_budget = int(max_variants * 0.50)
+        compose_budget = int(max_variants * 0.20)
         chain_budget = max_variants - independent_budget - compose_budget
     elif compose_pairs:
         independent_budget = int(max_variants * 0.7)

@@ -28,7 +28,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from .composer import _DEFAULT_PAIRS, build_adaptive_chains
+from .composer import _DEFAULT_PAIRS, build_adaptive_chains, get_compose_pairs
 from .diagnosis import format_diagnosis_summary, is_all_noise
 from .extractor import extract_function
 from .file_util import atomic_write_bytes, SourceFileLock
@@ -283,7 +283,7 @@ def hill_climb(
     # --chain implies --compose
     if chain:
         compose = True
-    compose_pairs = _DEFAULT_PAIRS if compose else None
+    # compose_pairs are now generated dynamically per round (see below)
 
     # Create adaptive hints tracker when chain or adaptive is enabled
     round_hints: RoundHints | None = None
@@ -515,6 +515,14 @@ def hill_climb(
                     print("Already at 100%!", file=sys.stderr)
                     stopped_reason = "perfect"
                     break
+
+                # Build dynamic compose pairs for this round
+                compose_pairs: list[tuple[str, str]] | None = None
+                if compose:
+                    compose_pairs = get_compose_pairs(
+                        diagnosis=ctx.diagnosis,
+                        patterns=patterns,
+                    )
 
                 # Build adaptive chains for this round
                 round_chains: list[ChainSpec] | None = None
