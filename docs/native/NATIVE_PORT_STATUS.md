@@ -1,7 +1,7 @@
 # Native Port Progress (x86_64 Linux)
 
-## Current Status: Session 25 - Text Rendering Working
-**Goal**: Readable text on menu screens, continue toward interactive navigation
+## Current Status: Session 31 - Data Integrity Fixes
+**Goal**: Bright, animated UI matching the original game's cyan neon aesthetic
 
 ### Sessions Complete
 - **Sessions 1-19**: Foundation through mesh rendering (see git history)
@@ -10,6 +10,12 @@
 - **Session 23**: WorldDir::DrawShowing, CameraManager::Poll, light list fix, FlowNode kDataUndef guard
 - **Session 24**: Link fixes, UIScreen auto-skip, boot-to-menu navigation working
 - **Session 25**: Text rendering — depth test fix, DXT5 alpha shader, backface cull fix
+- **Session 26**: Scene ring buffer, screen hiding, text rendering verified across screens
+- **Session 27**: Object lifetime, ObjRef ring fixes, ObjDirItr safety
+- **Session 28**: Compressed vertex decompression — all UI meshes have vertices, 51 draw calls
+- **Session 29**: Animation pipeline fully verified — Timer fix, SyncObjects, AnimTask ticking
+- **Session 30**: ObjOwnerPtr::RefOwner() decomp fix, multiply→opaque blend, auto-prelit, FixZeroAlpha
+- **Session 31**: Object lifetime guard elimination (HmxObjectIsLive, gSuppressDirPtrDelete), ASan verification, ChunkStream endianness fix, ASSERT_REVS decomp bugs fixed, defensive guard instrumentation
 
 ### Completed Phases
 - **Phase 0**: Foundation — COMPLETE
@@ -311,10 +317,26 @@ Key findings:
 - Text vertex positions ARE correctly filled by `SetupCharacter()` — v0-v3 form char quads in XZ plane
 - `MaterialUniforms` struct: added `useAlphaAsRGB` field (176 bytes total, matches WGSL layout)
 
+### Session 29: Animation Pipeline Verified
+| Issue | Root Cause | Fix |
+|-------|-----------|-----|
+| **Timer 50x too slow** | Native `__mftb()` returns µs but Timer::Init used PPC timebase conversion (0.00002) | `#ifdef HX_NATIVE` in Timer::Init — set `sLowCycles2Ms = 0.001f` (µs→ms) |
+| **sPlayCursor undefined** | `StreamReceiverFile::sPlayCursor` declared in header but never defined | Added `int StreamReceiverFile::sPlayCursor = 0;` to StreamReceiverFile.cpp |
+| **Suspected broken dynamic_cast** | Initial diagnosis thought vtables were zero-filled | **False alarm** — vtables and typeinfo are all properly emitted (`D` symbols). dynamic_cast works. |
+| **Suspected 0 animatables** | Debug trace limited to first 10 dirs (all skeleton dirs) | Removed counter limit — UI panel dirs DO have animatables (background=8-12, letterbox=23, main=37) |
+
+Key findings:
+- **7,811 PropAnim objects** across 850+ DC3 UI milo files
+- **Zero EventTrigger/UITrigger objects** in any UI milo — animations driven by PropAnim, not triggers
+- UI panel dirs properly call SyncObjects and collect animatables
+- PanelDir::Enter auto-starts animation via `Animate()` on `kTaskUISeconds` timeline
+- `AnimTask::Poll` receives increasing time (0.0→0.3→0.5→0.7s confirmed)
+- **Remaining gap**: PropAnim drives material properties but the renderer doesn't reflect them visually
+
 ### Next Steps
-1. Fix text positioning (text partially off-screen — alignment/transform issue)
-2. Fix localization (tokens → actual translated strings)
-3. Scripted button input navigation within choose_mode_screen
+1. Trace PropAnim → material property → GPU uniform path to find where values drop
+2. Verify renderer reads material color/alpha per-frame (not cached at load time)
+3. Find and render the DC3 logo
 4. Skinned mesh rendering (bone transforms, vertex skinning shader)
 5. Post-processing, UI rendering
 

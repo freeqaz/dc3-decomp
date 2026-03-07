@@ -360,7 +360,7 @@ EofType ChunkStream::Eof() {
 }
 
 int ChunkStream::WriteChunk() {
-    MILO_ASSERT(mCurBufOffset < kChunkSizeMask, 778);
+    MILO_ASSERT(mCurBufOffset < kChunkSizeMask, 784);
     int size = mCurBufOffset;
     int flags = 0;
     int *firstbuf = (int *)mBuffers[0];
@@ -381,10 +381,10 @@ int ChunkStream::WriteChunk() {
     if (mFile->Write(firstbuf, size) != size) {
         mFail = true;
     }
-    MILO_ASSERT((size & ~kChunkSizeMask) == 0, 820);
-    MILO_ASSERT((flags & (kChunkSizeMask|kChunkUnusedMask)) == 0, 822);
+    MILO_ASSERT((size & ~kChunkSizeMask) == 0, 826);
+    MILO_ASSERT((flags & (kChunkSizeMask|kChunkUnusedMask)) == 0, 828);
     int result = size | flags;
-    MILO_ASSERT((result & kChunkUnusedMask) == 0, 827);
+    MILO_ASSERT((result & kChunkUnusedMask) == 0, 833);
     return result;
 }
 
@@ -398,18 +398,12 @@ BinStream &MarkChunk(BinStream &bs) {
 void DecompressMemHelper(const void *compressedMem, int size, void *dst, int &dstLen, const char *c) {
     unsigned int rawSize = *(unsigned int *)compressedMem;
     DecompressMem((const char *)compressedMem + 4, size - 4, dst, dstLen, c);
-    int expectedDstLen = EndianSwap(rawSize);
 #ifdef HX_NATIVE
-    if (dstLen != expectedDstLen) {
-        static int sDecompWarnCount = 0;
-        if (++sDecompWarnCount <= 3) {
-            fprintf(stderr, "WARN: ChunkStream decompress mismatch: got %d, expected %d (%d more suppressed)\n",
-                    dstLen, expectedDstLen, sDecompWarnCount);
-        }
-    }
+    int expectedDstLen = rawSize;
 #else
-    MILO_ASSERT(dstLen == expectedDstLen, 0x3bb);
+    int expectedDstLen = EndianSwap(rawSize);
 #endif
+    MILO_ASSERT(dstLen == expectedDstLen, 0x3bb);
 }
 
 void ChunkStream::DecompressChunk(DecompressTask &task) {
