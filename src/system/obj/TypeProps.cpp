@@ -187,6 +187,12 @@ DataArray *TypeProps::GetArray(Symbol key) {
     DataNode *n = KeyValue(key, false);
     DataArray *ret;
     if (!n) {
+#ifdef HX_NATIVE
+        if (!typeDef) {
+            MILO_WARN("TypeProps::GetArray: %s has no TypeDef for key %s", PathName(mOwner), key);
+            return nullptr;
+        }
+#endif
         MILO_ASSERT(typeDef, 0x18);
         DataArray *keyArray = typeDef->FindArray(key);
         DataArray *cloned = keyArray->Array(1)->Clone(true, false, 0);
@@ -201,7 +207,14 @@ DataArray *TypeProps::GetArray(Symbol key) {
 }
 
 void TypeProps::SetArrayValue(Symbol key, int i, const DataNode &value) {
-    DataNode &n = GetArray(key)->Node(i);
+    DataArray *arr = GetArray(key);
+#ifdef HX_NATIVE
+    if (!arr) {
+        MILO_WARN("TypeProps::SetArrayValue: null array for key %s", key);
+        return;
+    }
+#endif
+    DataNode &n = arr->Node(i);
     if (n.Type() == kDataObject) {
         Hmx::Object *obj = n.UncheckedObj();
         if (obj) {

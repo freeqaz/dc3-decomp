@@ -663,6 +663,8 @@ void DirLoader::LoadObjs() {
             if (obj) {
                 void **vptr = *(void ***)obj;
                 if (!vptr || !vptr[0]) {
+                    MILO_NOTIFY("DirLoader: skipping stub object '%s' (null vtable) in %s",
+                                obj->Name(), mFile.c_str());
                     if (mRev > 1) ReadDead(*mStream);
                     mObjects.pop_front();
                     continue;
@@ -854,11 +856,15 @@ void DirLoader::CreateObjects() {
             EndMemTrackObjectName();
 #ifdef HX_NATIVE
             if (!obj) {
+                MILO_NOTIFY("DirLoader: NewObject returned null for class %s in %s",
+                            classSym.Str(), mFile.c_str());
                 goto release_obj;
             }
             {
                 void **vptr = *(void ***)obj;
                 if (!vptr || !vptr[0]) {
+                    MILO_NOTIFY("DirLoader: stub vtable for '%s' (class %s) in %s",
+                                buf, classSym.Str(), mFile.c_str());
                     obj = nullptr;
                     goto release_obj;
                 }

@@ -141,6 +141,7 @@ const DataNode &DataNode::Evaluate() const {
         const DataNode *n = gDataThis->Property(mValue.array, true);
 #ifdef HX_NATIVE
         if (!n) {
+            MILO_WARN("DataNode::Evaluate: property lookup returned null on %s", PathName(gDataThis));
             static DataNode sNullNode(0);
             return sNullNode;
         }

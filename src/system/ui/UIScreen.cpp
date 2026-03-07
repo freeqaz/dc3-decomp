@@ -54,7 +54,10 @@ void UIScreen::SetTypeDef(DataArray *data) {
                 MILO_ASSERT(pr.mPanel, 0x41);
             }
 #ifdef HX_NATIVE
-            if (!pr.mPanel) continue; // Skip panels that failed to construct
+            if (!pr.mPanel) {
+                MILO_WARN("UIScreen '%s': panel at index %d failed to construct", Name(), i);
+                continue;
+            }
 #endif
             mPanelList.push_back(pr);
         }
@@ -526,9 +529,7 @@ void UIScreen::ReloadStrings() {
     Message msg(Symbol("reload_string"));
     FOREACH (it, mPanelList) {
 #ifdef HX_NATIVE
-        if (!it->mPanel) {
-            continue;
-        }
+        if (!it->mPanel) continue;
 #endif
         ObjectDir *panelDir = it->mPanel->DataDir();
         if (!panelDir) {

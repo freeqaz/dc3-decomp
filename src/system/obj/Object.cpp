@@ -334,7 +334,7 @@ bool Hmx::Object::HasPropertySink(Hmx::Object *o, DataArray *a) {
 
 void Hmx::Object::RemoveSink(Hmx::Object *o, Symbol s) {
 #ifdef HX_NATIVE
-    if (!this) return;
+    if (!this) { MILO_WARN("RemoveSink called on null object"); return; }
 #endif
     if (mSinks)
         mSinks->RemoveSink(o, s);
@@ -342,7 +342,7 @@ void Hmx::Object::RemoveSink(Hmx::Object *o, Symbol s) {
 
 MsgSinks *Hmx::Object::GetOrAddSinks() {
 #ifdef HX_NATIVE
-    if (!this) return nullptr;
+    if (!this) { MILO_WARN("GetOrAddSinks called on null object"); return nullptr; }
 #endif
     if (!mSinks) {
         mSinks = new MsgSinks(this);
@@ -352,14 +352,14 @@ MsgSinks *Hmx::Object::GetOrAddSinks() {
 
 void Hmx::Object::AddSink(Hmx::Object *o, Symbol s1, Symbol s2, SinkMode sm, bool b) {
 #ifdef HX_NATIVE
-    if (!this) return;
+    if (!this) { MILO_WARN("AddSink called on null object"); return; }
 #endif
     GetOrAddSinks()->AddSink(o, s1, s2, sm, b);
 }
 
 void Hmx::Object::AddPropertySink(Hmx::Object *o, DataArray *a, Symbol s) {
 #ifdef HX_NATIVE
-    if (!this) return;
+    if (!this) { MILO_WARN("AddPropertySink called on null object"); return; }
 #endif
     GetOrAddSinks()->AddPropertySink(o, a, s);
 }
