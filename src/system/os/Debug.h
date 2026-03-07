@@ -57,6 +57,7 @@ public:
     void AddExitCallback(ExitCallbackFunc *func) { mExitCallbacks.push_front(func); }
     void AddFailAppendCallback(FixedStringFunc *func) { mFailAppendCallbacks.push_front(func); }
     void RemoveExitCallback(ExitCallbackFunc *);
+    void AddFixedStrCallback(FixedStringFunc *func) { unk30.push_front(func); }
     bool CheckModalCallback(ModalCallbackFunc *func) { return mModalCallback == func; }
     ModalCallbackFunc *ModalCallback() const { return mModalCallback; }
     bool NoModal() const { return mNoModal; }

@@ -3,6 +3,7 @@
 #include "utl/MakeString.h"
 #include "utl/Str.h"
 #include "utl/Symbol.h"
+#include <cstring>
 
 Symbol GetStarsToken(int i) {
     static Symbol stars_0("stars_0");
@@ -108,7 +109,9 @@ void GetTimeString(int seconds, char *buf) {
     }
     String result;
     if (!secondary.empty()) {
-        result = MakeString(Localize(stats_format_time_double, 0, TheLocale), primary, secondary);
+        result = MakeString(
+            Localize(stats_format_time_double, 0, TheLocale), primary, secondary
+        );
     } else {
         result = primary;
     }

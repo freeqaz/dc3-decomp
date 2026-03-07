@@ -159,6 +159,7 @@ public:
     // these were implemented to match up in retail
     // please do not use these in regular code
     int UncheckedInt() const { return mValue.integer; }
+    float UncheckedFloat() const { return mValue.real; }
     const char *UncheckedStr() const { return mValue.symbol; }
     Hmx::Object *UncheckedObj() const { return mValue.object; }
     DataArray *UncheckedArray() const { return mValue.array; }

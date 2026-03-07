@@ -1,10 +1,7 @@
 #include "WavReader.h"
 
-#include "os/Memcard.h"
-
-WavReader::WavReader(File *file, StandardStream *stream) {
-    mInFile = file;
-    mOutStream = stream;
+WavReader::WavReader(File *file, StandardStream *stream)
+    : mInFile(file), mOutStream(stream) {
     MILO_ASSERT(mInFile, 0x1a);
     mInFileStream = new FileStream(file, true);
     mInWaveFile = new WaveFile(*mInFileStream);
@@ -15,12 +12,13 @@ WavReader::WavReader(File *file, StandardStream *stream) {
     mSampleRate = mInWaveFile->SamplesPerSec();
     mSamplesLeft = mInWaveFile->NumSamples();
     for (int i = 0; i < mInWaveFile->NumMarkers(); i++) {
-        WaveFileMarker &wfm = mInWaveFile->Markers()[i];
-        int frame = wfm.mFrame;
-        float posMS = (float)frame * 1000.0f / (float)mInWaveFile->mSamplesPerSec;
-        Marker marker(wfm.mName);
-        marker.position = frame;
-        marker.posMS = posMS;
+        WaveFileMarker &curWaveFileMarker = mInWaveFile->Markers()[i];
+        Marker marker(
+            curWaveFileMarker.GetName(),
+            curWaveFileMarker.GetFrame(),
+            ((float)curWaveFileMarker.GetFrame() * 1000.0f)
+                / (float)mInWaveFile->SamplesPerSec()
+        );
         stream->AddMarker(marker);
     }
     mInWaveFileData = new WaveFileData(*mInWaveFile);

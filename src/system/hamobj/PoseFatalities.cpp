@@ -503,7 +503,7 @@ lab5548:
     if (randClip) {
         driver->Play(randClip, 0x402, -1, kHugeFloat, 0);
         TheHamDirector->CurShot()->Reteleport(
-            Vector3::ZeroVec(), false, MakeString("player%d", player)
+            Vector3::GetZero(), false, MakeString("player%d", player)
         );
     }
 lab55b4:

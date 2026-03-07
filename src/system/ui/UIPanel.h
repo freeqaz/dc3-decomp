@@ -39,7 +39,7 @@ public:
     virtual bool Exiting() const;
     virtual bool Unloading() const;
     virtual void Poll();
-    virtual void SetPaused(bool);
+    virtual void SetPaused(bool paused) { mPaused = paused; }
     virtual UIComponent *FocusComponent();
     virtual void FocusIn() {}
     virtual void FocusOut() {}

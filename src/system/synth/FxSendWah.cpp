@@ -26,13 +26,33 @@ BEGIN_COPYS(FxSendWah)
     END_COPYING_MEMBERS
 END_COPYS
 
-void FxSendWah::Save(BinStream &bs) {
-    bs << 3;
+BEGIN_SAVES(FxSendWah)
+    SAVE_REVS(3, 0)
     SAVE_SUPERCLASS(FxSend)
     bs << mResonance << mLowerFreq << mUpperFreq << mLfoFreq << mMagic;
     bs << mTempoSync << mTempo << mSyncType;
     bs << mDistAmount << mAutoWah << mFrequency;
-}
+END_SAVES
+
+INIT_REVS(3, 0)
+
+BEGIN_LOADS(FxSendWah)
+    LOAD_REVS(bs)
+    ASSERT_REVS(3, 0)
+    LOAD_SUPERCLASS(FxSend)
+    d >> mResonance;
+    d >> mLowerFreq;
+    d >> mUpperFreq;
+    d >> mLfoFreq;
+    d >> mMagic;
+    if (d.rev >= 2) {
+        d >> mTempoSync >> mTempo >> mSyncType;
+    }
+    if (d.rev >= 3) {
+        d >> mDistAmount >> mAutoWah >> mFrequency;
+    }
+    OnParametersChanged();
+END_LOADS
 
 BEGIN_HANDLERS(FxSendWah)
     HANDLE_SUPERCLASS(FxSend)

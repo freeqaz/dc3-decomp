@@ -11,28 +11,27 @@ void RemoveSpaces(char *out, int len, const char *in) {
     MILO_ASSERT(in, 0x2C1);
     MILO_ASSERT(len > 0, 0x2C2);
 
-    char *dst = out;
     char *max = out + len - 1;
     char *orig = out;
     bool wasSpace = true;
     char c = *in;
 
     while (c != '\0') {
-        if (dst < max) {
+        if (out < max) {
             bool isSpace = (c == ' ');
             if (!isSpace || !wasSpace) {
-                *dst++ = c;
+                *out++ = c;
             }
             wasSpace = isSpace;
+        } else {
+            break;
         }
         c = *++in;
     }
-
-    if (dst > orig && *(dst - 1) == ' ') {
-        dst--;
+    if (out > orig && *(out - 1) == ' ') {
+        out--;
     }
-
-    *dst = '\0';
+    *out = '\0';
 }
 
 // searches for occurrences of substring substr_old within string src, and replaces each

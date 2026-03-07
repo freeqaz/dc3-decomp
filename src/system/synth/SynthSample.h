@@ -48,6 +48,7 @@ public:
     static void Register() { REGISTER_OBJ_FACTORY(SynthSample) }
     static void Init();
     static void Disable();
+    NEW_OBJ(SynthSample);
 
 protected:
     SynthSample();

@@ -1,7 +1,9 @@
 #include "synth/Mic.h"
+#include "math/Utl.h"
 #include "os/Debug.h"
 #include "obj/Data.h"
 #include "utl/MemMgr.h"
+#include <cstring>
 
 void Mic::Set(const DataArray *data) {
     MILO_ASSERT(data, 0x12);
@@ -21,9 +23,9 @@ RingBuffer::~RingBuffer() {
 
 void RingBuffer::Reset() {
     memset(mBuffer, 0, mSize);
-    unkc = 0;
-    unk10 = 0;
-    unk4 = 0;
+    mWriteIx = 0;
+    mReadIx = 0;
+    mTotal = 0;
 }
 
 void RingBuffer::Init(int size) {
@@ -35,4 +37,16 @@ void RingBuffer::Init(int size) {
     mBuffer = MemAlloc(size, __FILE__, 0x2C, "VirtualMic RingBuffer", 0x80);
     MILO_ASSERT(mBuffer, 0x2D);
     Reset();
+}
+
+int RingBuffer::Peek(void *data, int len) {
+    MILO_ASSERT(len <= mSize, 0x62);
+    int i2 = ((mWriteIx - len) + mSize) % mSize;
+    int i30 = mSize - i2;
+    i30 = Max(len, i30);
+    memcpy(data, (char *)mBuffer + i2, i30);
+    if (i30 != len) {
+        memcpy((char *)data + i30, mBuffer, len - i30);
+    }
+    return len;
 }

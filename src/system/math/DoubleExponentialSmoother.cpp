@@ -18,35 +18,37 @@ void DoubleExponentialSmoother::Smooth(float value, float delta) {
 }
 
 void Vector2DESmoother::SetSmoothParameters(float alpha, float beta) {
-    mSmootherX.SetCoeffs(alpha, beta);
-    mSmootherY.SetCoeffs(alpha, beta);
+    mX.SetCoeffs(alpha, beta);
+    mY.SetCoeffs(alpha, beta);
 }
 
 void Vector2DESmoother::ForceValue(Vector2 v) {
-    mSmootherX.SetParams(v.x, v.x, 0);
-    mSmootherY.SetParams(v.y, v.y, 0);
+    mX.mLevel = mX.mPrevLevel = v.x;
+    mX.mTrend = 0;
+    mY.mPrevLevel = mY.mLevel = v.y;
+    mY.mTrend = 0;
 }
 
-Vector2 Vector2DESmoother::Value() const {
-    return Vector2(mSmootherX.mLevel, mSmootherY.mLevel);
-}
+Vector2 Vector2DESmoother::Value() const { return Vector2(mX.mLevel, mY.mLevel); }
 
 Vector3DESmoother::Vector3DESmoother(Vector3 v, float alpha, float beta)
-    : mSmootherX(v.x, alpha, beta), mSmootherY(v.y, alpha, beta),
-      mSmootherZ(v.z, alpha, beta) {}
+    : mX(v.x, alpha, beta), mY(v.y, alpha, beta), mZ(v.z, alpha, beta) {}
 
 void Vector3DESmoother::SetSmoothParameters(float alpha, float beta) {
-    mSmootherX.SetCoeffs(alpha, beta);
-    mSmootherY.SetCoeffs(alpha, beta);
-    mSmootherZ.SetCoeffs(alpha, beta);
+    mX.SetCoeffs(alpha, beta);
+    mY.SetCoeffs(alpha, beta);
+    mZ.SetCoeffs(alpha, beta);
 }
 
 Vector3 Vector3DESmoother::Value() const {
-    return Vector3(mSmootherX.mLevel, mSmootherY.mLevel, mSmootherZ.mLevel);
+    return Vector3(mX.mLevel, mY.mLevel, mZ.mLevel);
 }
 
 void Vector3DESmoother::ForceValue(Vector3 v) {
-    mSmootherX.SetParams(v.x, v.x, 0);
-    mSmootherY.SetParams(v.y, v.y, 0);
-    mSmootherZ.SetParams(v.z, v.z, 0);
+    mX.mLevel = mX.mPrevLevel = v.x;
+    mX.mTrend = 0;
+    mY.mPrevLevel = mY.mLevel = v.y;
+    mY.mTrend = 0;
+    mZ.mLevel = mZ.mPrevLevel = v.z;
+    mZ.mTrend = 0;
 }

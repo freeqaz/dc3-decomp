@@ -107,16 +107,6 @@ LocalUser *GetUser() const { return mData->Obj<LocalUser>(3); }
 bool GetSelected() const { return mData->Int(4); }
 END_MESSAGE
 
-// #define FOCUS_MSG (component_focus ($new_focus $old_focus $panel_dir $nav_type))
-DECLARE_MESSAGE(UIComponentFocusChangeMsg, "component_focus");
-UIComponentFocusChangeMsg(UIComponent *comp1, UIComponent *comp2, PanelDir *dir, Symbol s);
-UIComponent *GetNewFocus() const { return mData->Obj<UIComponent>(2); }
-UIComponent *GetOldFocus() const { return mData->Obj<UIComponent>(3); }
-// GetDir() requires PanelDir definition; use mData->Obj<PanelDir>(4) at call site if
-// needed
-Symbol GetNavType() const { return mData->Sym(5); }
-END_MESSAGE
-
 DECLARE_MESSAGE(UIComponentScrollStartMsg, "component_scroll_start");
 UIComponentScrollStartMsg(UIComponent *comp, LocalUser *user)
     : Message(Type(), comp, user) {}

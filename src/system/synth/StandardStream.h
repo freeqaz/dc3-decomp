@@ -97,6 +97,8 @@ public:
     void InitInfo(int, int, bool, int);
     float GetBufferAheadTime() const;
     int ConsumeData(void **, int, int);
+    void SetBufSecs(float secs) { mBufSecs = secs; }
+    int NumInfoChannels() const { return mInfoChannels; }
 
     static const float kStreamEndMs;
 #ifdef HX_NATIVE

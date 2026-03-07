@@ -124,6 +124,8 @@ public:
     void PlaySound(const char *, float, float, float);
     void AddZombie(SampleInst *);
     int GetNumMics() const;
+    void DrawMeterScale(float &);
+    void DrawMeter(float &, float, float, const char *);
 
     template <class T>
     T *Find(const char *name, bool fail = true) {
@@ -175,7 +177,7 @@ protected:
     std::list<Hmx::Object *> mPlayHandlers; // 0x8c
     MicClientMapper *mMicClientMapper; // 0x94
     int unk98; // TranscodableMixer* mSecureMixer?
-    int unk9c; // Stream* mDebugStream?
+    Stream *mDebugStream; // 0x9c
     RndOverlay *mHud; // 0xa0
     ADSRImpl *mADSR; // 0xa4
     String unka8; // 0xa8

@@ -8,6 +8,7 @@
 #include "utl/KeylessHash.h"
 #include "utl/Loader.h"
 #include "utl/MemMgr.h"
+#include "utl/Std.h"
 #include "utl/StringTable.h"
 #include <vector>
 
@@ -449,14 +450,7 @@ private:
         mObj = nullptr;
     }
     void RecurseSubdirs(ObjectDir *dir) {
-        if (dir) {
-            std::list<ObjectDir *>::iterator it = mSubDirs.begin();
-            if (it != mSubDirs.end()) {
-                for (; it != mSubDirs.end() && *it != dir; ++it)
-                    ;
-                if (it != mSubDirs.end())
-                    return;
-            }
+        if (dir && std::find(mSubDirs.begin(), mSubDirs.end(), dir) == mSubDirs.end()) {
             mSubDirs.push_back(dir);
             for (int i = 0; i < dir->SubDirs().size(); i++) {
                 RecurseSubdirs(dir->SubDirs()[i]);

@@ -7,6 +7,8 @@
 #include "utl/MemMgr.h"
 #include "utl/Str.h"
 #include "xdk/XAPILIB.h"
+#include "xdk/xapilibi/handleapi.h"
+#include "xdk/xapilibi/processthreadsapi.h"
 
 #define MAX_BUF_THREADS 6
 #define MAX_BUF_SIZE 0x1000
@@ -30,6 +32,18 @@ void InitMakeString() {
                     (char *)MemAlloc(0x1000, __FILE__, 0x9B, "MakeString Buffer", 0);
             }
         }
+    }
+}
+
+bool ValidateThreadId(DWORD id) {
+    HANDLE hThread = OpenThread(0x40, false, id);
+    if (!hThread) {
+        return false;
+    } else {
+        DWORD exitCode;
+        GetExitCodeThread(hThread, &exitCode);
+        CloseHandle(hThread);
+        return exitCode == 0x103;
     }
 }
 

@@ -32,7 +32,7 @@ void DrawString::DrawFixedZ(float) { Draw(); }
 void DrawString3D::Draw() { UtilDrawString(mText.c_str(), mPos, mCol); }
 void Line::Draw() { TheRnd.DrawLine(mA, mB, mCol, mZBuf); }
 void Line::DrawFixedZ(float f) {
-    TheRnd.DrawLine(Vector3(mA.X(), mA.Y(), f), Vector3(mB.X(), mB.Y(), f), mCol, mZBuf);
+    TheRnd.DrawLine(Vector3(mA.x, mA.y, f), Vector3(mB.x, mB.y, f), mCol, mZBuf);
 }
 void DrawSphere::DrawFixedZ(float f) {
     UtilDrawSphere(Vector3(mCenter.x, mCenter.z, f), mRadius, mCol, nullptr);

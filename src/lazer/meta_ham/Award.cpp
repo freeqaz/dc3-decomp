@@ -73,8 +73,9 @@ void Award::GrantAward(AwardEntry const &ae, HamProfile *i_pProfile) {
     MILO_ASSERT(i_pProfile, 0x74);
     static Symbol asset("asset");
     Symbol award = ae.m_symAwardCategory;
+    Symbol awardSym = ae.m_symAward;
     if (award == asset) {
-        i_pProfile->UnlockContent(ae.m_symAward);
+        i_pProfile->UnlockContent(awardSym);
     } else {
         MILO_NOTIFY("Award Category is not currently supported: %s ", award);
     }

@@ -458,7 +458,7 @@ public:
 class QuatKeys : public PropKeys, public Keys<Hmx::Quat, Hmx::Quat> {
 public:
     QuatKeys(Hmx::Object *targetOwner, Hmx::Object *target)
-        : PropKeys(targetOwner, target), mVec(Vector3::ZeroVec()) {
+        : PropKeys(targetOwner, target), mVec(Vector3::GetZero()) {
         mKeysType = kQuat;
     }
     virtual ~QuatKeys() {}

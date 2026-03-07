@@ -94,7 +94,7 @@ INIT_REVS(3, 2)
 void MoggClip::PreLoad(BinStream &bs) {
     LOAD_REVS(bs)
     ASSERT_REVS(3, 2)
-    Hmx::Object::Load(bs);
+    LOAD_SUPERCLASS(Hmx::Object)
     bs >> mMoggFile;
     bs >> mVolume;
     if (d.rev <= 2) {
@@ -160,7 +160,7 @@ void MoggClip::Play(float f1) {
         Stream *stream = TheSynth->NewBufStream(mData, mDataSize, "mogg", 0, false);
         mStream = dynamic_cast<StandardStream *>(stream);
         if (mBufSecs > 0) {
-            // set mStream + 0x30 = mBufSecs
+            mStream->SetBufSecs(mBufSecs);
         }
         if (!mStream) {
             delete stream;
@@ -297,43 +297,31 @@ void MoggClip::LoadNumChannels() {
     // Early exit if no mogg file configured
     if (mMoggFile.empty()) {
         mNumChannels = -1;
-        return;
-    }
-
-    // Ensure loader has completed if present
-    if (mLoader && !mLoader->IsLoaded()) {
-        TheLoadMgr.PollUntilLoaded(mLoader, nullptr);
-    }
-
-    // Poll to initialize stream
-    SynthPoll();
-    if (!mStream) {
-        mNumChannels = -1;
-        return;
-    }
-
-    // Poll synth up to 200 times waiting for channel count to become available
-    int retries = 0;
-    int numChannels = 0;
-    while ((int)retries < 200) {
-        Timer::Sleep(1);
-        TheSynth->Poll();
-        numChannels = mStream->GetNumChannels();
-        if (numChannels >= 1) {
-            break;
+    } else {
+        if (mLoader && !mLoader->IsLoaded()) {
+            TheLoadMgr.PollUntilLoaded(mLoader, nullptr);
         }
-        retries++;
-    }
-
-    mNumChannels = numChannels;
-    Pause(0);
-
-    // Log error if channel count retrieval failed
-    if (mNumChannels < 0) {
-        TheDebug.Notify(
-            MakeString("[GetNumChannels] Ret = %d.  Unable to get num channels from '%s'.\n",
-                       mNumChannels, mMoggFile));
-        mNumChannels = -1;
+        Play(0);
+        if (mStream) {
+            for (int i = 0; i < 200; i++) {
+                Timer::Sleep(1);
+                TheSynth->Poll();
+                if (mStream->NumInfoChannels() > 0)
+                    break;
+            }
+            mNumChannels = mStream->NumInfoChannels();
+            Stop(false);
+            if (mNumChannels < 0) {
+                MILO_NOTIFY(
+                    "[GetNumChannels] Ret = %d.  Unable to get the number of channels from mogg: %s!",
+                    mNumChannels,
+                    mMoggFile
+                );
+                mNumChannels = -1;
+            }
+        } else {
+            mNumChannels = -1;
+        }
     }
 }
 
@@ -345,9 +333,10 @@ void MoggClip::LoadFile(BinStream *bs) {
     if (!mMoggFile.empty()) {
         bool loadingMusic = IsLoadingMusicMogg(mMoggFile.c_str());
         bool useless = IsUselessMogg(mMoggFile.c_str());
-        if (useless) {
-            if (!bs || !bs->Cached() || loadingMusic)
+        if (!useless) {
+            if (!(bs && bs->Cached()) || loadingMusic) {
                 bs = nullptr;
+            }
             mLoader = new FileLoader(
                 mMoggFile,
                 FileLocalize(mMoggFile.c_str(), nullptr),
@@ -389,5 +378,34 @@ void MoggClip::AddFader(Fader *fader) {
         if (mStream) {
             mStream->Faders()->Add(fader);
         }
+    }
+}
+
+void MoggClip::SetPan(int i1, float f2) {
+    bool found = false;
+    PanInfo info;
+    info.channel = i1;
+    info.panning = f2;
+    FOREACH (it, mPanInfos) {
+        if (it->channel == i1) {
+            found = true;
+            *it = info;
+            break;
+        }
+    }
+    if (!found) {
+        mPanInfos.push_back(info);
+    }
+    if (mStream) {
+        mStream->SetPan(i1, f2);
+    }
+}
+
+void MoggClip::SetupPanInfo(float f1, float f2, bool stereo) {
+    if (stereo) {
+        SetPan(0, -f2 / 2.0f + f1);
+        SetPan(1, f2 / 2.0f + f1);
+    } else {
+        SetPan(0, f1);
     }
 }

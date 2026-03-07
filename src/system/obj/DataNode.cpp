@@ -657,7 +657,7 @@ bool DataNode::Equal(const DataNode &n, DataArray *a, bool warn) const {
     } else {
         const char *objName = "";
         if (firstType == kDataInt && secondType == kDataFloat) {
-            return first.UncheckedInt() == second.UncheckedInt();
+            return (float)first.UncheckedInt() == second.UncheckedFloat();
         } else {
             if (firstType == kDataObject) {
                 Hmx::Object *obj = first.UncheckedObj();

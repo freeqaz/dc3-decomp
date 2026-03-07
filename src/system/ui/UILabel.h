@@ -4,6 +4,7 @@
 #include "os/DateTime.h"
 #include "os/Debug.h"
 #include "rndobj/Text.h"
+#include "ui/ResourceDirPtr.h"
 #include "ui/UIColor.h"
 #include "ui/UIComponent.h"
 #include "ui/UILabelDir.h"
@@ -16,10 +17,15 @@ class UILabel : public RndText, public UIComponent, public TextHolder {
 public:
     struct LabelStyle {
 #ifdef HX_NATIVE
-        LabelStyle(Hmx::Object *o) : mColorOverride(o, 0), mLabelDir(o), unk28(0) {}
+        LabelStyle(Hmx::Object *o) : mColorOverride(o, 0), mLabelDir(o) {}
 #else
-        LabelStyle(Hmx::Object *o) : mColorOverride(o, 0), mLabelDir(o, 0), unk28(0) {}
+        LabelStyle(Hmx::Object *o) : mColorOverride(o, 0), mLabelDir(o, 0) {}
 #endif
+        __forceinline LabelStyle &operator=(const LabelStyle &style) {
+            mLabelDir = style.mLabelDir;
+            mColorOverride = style.mColorOverride;
+            return *this;
+        }
         ~LabelStyle();
 
         ObjPtr<UIColor> mColorOverride; // 0x0
@@ -28,8 +34,9 @@ public:
 #else
         ObjPtr<UILabelDir> mLabelDir; // 0x14
 #endif
-        int unk28;
     };
+    friend bool __cdecl PropSync(LabelStyle &, DataNode &, DataArray *, int, PropOp);
+
     // Hmx::Object
     virtual ~UILabel() {}
     OBJ_CLASSNAME(UILabel)
@@ -47,7 +54,7 @@ public:
         MILO_ASSERT(false, 0x50);
     }
     // UIComponent
-    virtual void Poll();
+    virtual void Poll() { UIComponent::Poll(); }
     virtual void Highlight();
     // TextHolder
     virtual void SetTextToken(Symbol);

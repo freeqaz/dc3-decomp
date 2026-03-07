@@ -1,10 +1,9 @@
 #pragma once
-
-#include "StreamReader.h"
+#include "synth/StreamReader.h"
 #include "os/File.h"
 #include "utl/FileStream.h"
 #include "utl/WaveFile.h"
-#include "StandardStream.h"
+#include "synth/StandardStream.h"
 
 class WavReader : public StreamReader {
 public:
@@ -12,10 +11,9 @@ public:
     ~WavReader();
     virtual void Poll(float);
     virtual void Seek(int);
-   // virtual void EnableReads(bool enable) { mEnableReads = enable; }
+    virtual void EnableReads(bool enable) { mEnableReads = enable; }
     virtual bool Done() { return mSamplesLeft == 0; }
-    //virtual bool Fail() { return false; }
-    //virtual void EndData() {}
+    virtual bool Fail() { return false; }
 
     int mNumChannels; // 0x4
     int mSampleRate; // 0x8
@@ -36,4 +34,5 @@ public:
 protected:
     virtual void Init();
     virtual int ConsumeData(void **, int, int);
+    virtual void EndData() {}
 };

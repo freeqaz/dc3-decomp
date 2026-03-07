@@ -127,6 +127,6 @@ IListChunk &WaveFile::PrepareToProvideData() {
 }
 
 WaveFileData::WaveFileData(WaveFile &wf)
-    : IDataChunk(wf.PrepareToProvideData()), mWaveFile(&wf) {}
+    : IDataChunk(wf.PrepareToProvideData()), mWaveFile(wf) {}
 
 WaveFileData::~WaveFileData() {}

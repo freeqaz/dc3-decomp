@@ -3,6 +3,8 @@
 #include "macros.h"
 #include "meta/StoreOffer.h"
 #include "meta_ham/AppLabel.h"
+#include "meta_ham/HamStorePanel.h"
+#include "meta_ham/HamUI.h"
 #include "obj/Data.h"
 #include "obj/Object.h"
 #include "os/Debug.h"
@@ -13,6 +15,7 @@
 #include "utl/NetCacheMgr.h"
 #include "utl/Std.h"
 #include "utl/Symbol.h"
+#include "utl/trie.h"
 
 #pragma region PackSongListProvider
 
@@ -59,17 +62,12 @@ HamStoreProvider::HamStoreProvider(
 }
 
 HamStoreProvider::~HamStoreProvider() {
-    // Clean up dynamically allocated vectors in the map
-    for (std::map<Symbol, std::vector<StoreOffer *> *>::iterator it = unk38.begin();
-         it != unk38.end();
-         ++it) {
-        delete it->second;
-        it->second = 0;
+    FOREACH (it, unk38) {
+        RELEASE(it->second);
     }
     unk38.clear();
-    mFilteredOffers = 0;
+    mFilteredOffers = nullptr;
     RELEASE(mFilterProvider);
-    mFilterProvider = 0;
 }
 
 int HamStoreProvider::NumOffersInCart() {
@@ -95,9 +93,7 @@ Symbol HamStoreProvider::DataSymbol(int idx) const {
     return (*mFilteredOffers)[idx]->StoreOfferData()->Sym(0);
 }
 
-void HamStoreProvider::Text(
-    int, int data, UIListLabel *slot, UILabel *label
-) const {
+void HamStoreProvider::Text(int, int data, UIListLabel *slot, UILabel *label) const {
     MILO_ASSERT_RANGE(data, 0, mFilteredOffers->size(), 0x118);
     StoreOffer *offer = (*mFilteredOffers)[data];
     if (!offer) {
@@ -253,6 +249,102 @@ void HamStoreProvider::ApplySort() {
     }
 }
 
+std::list<StoreOffer *> *HamStoreProvider::GetOffersInCart() { return &unkb0; }
+
+bool HamStoreProvider::ShowBrowserPurchased(const StoreOffer *offer) const {
+    static Symbol song("song");
+    static Symbol pack("pack");
+    if (offer->IsPurchased()) {
+        return true;
+    } else {
+        if (offer->OfferType() == song) {
+            const StoreOffer *currOffer = FindPack(offer);
+            if (currOffer && currOffer->HasSong(offer) && currOffer->IsPurchased()) {
+                return true;
+            }
+        } else if (offer->OfferType() == pack) {
+            for (int i = 0; i < offer->NumSongs(); i++) {
+                const StoreOffer *currOffer = FindSong(offer->Song(i));
+                if (!currOffer || !currOffer->IsPurchased()) {
+                    return false;
+                }
+            }
+            return offer->NumSongs() != 0;
+        }
+    }
+    return false;
+}
+
+void HamStoreProvider::SetFilter(StoreOffer const *pack) {
+    MILO_ASSERT(pack->OfferType()=="pack", 0xb0);
+    unk50.clear();
+    unk50.push_back((StoreOffer *)pack);
+    for (int i = 0; i < pack->NumSongs(); i++) {
+        const StoreOffer *offer = FindSong(pack->Song(i));
+        if (offer && (offer->IsAvailable() || TheNetCacheMgr->IsDebug())) {
+            unk50.push_back((StoreOffer *)offer);
+        }
+    }
+    mFilteredOffers = &unk50;
+    mSorts.clear();
+    mSortIndex = 0;
+}
+
+void HamStoreProvider::PopulateOffersInCart() {
+    HamStorePanel *storePanel = dynamic_cast<HamStorePanel *>(TheHamUI.FocusPanel());
+    MILO_ASSERT(storePanel, 0x206);
+    unkb0.clear();
+    FOREACH_PTR (it_cartRow, unkac) {
+        CartRow &row = *it_cartRow;
+        FOREACH_PTR (it_storeOffer, unk30) {
+            StoreOffer *offer = *it_storeOffer;
+            if (offer->IsAvailable() || TheNetCacheMgr->IsDebug()) {
+                static Symbol song("song");
+                if (offer->OfferType() == song && offer->GetSingleSongID() == row.unk0) {
+                    if (offer->IsPurchased()) {
+                        storePanel->RemoveDLCFromCart(offer->GetSingleSongID());
+                    } else {
+                        unkb0.push_back(offer);
+                    }
+                    break;
+                }
+            }
+        }
+    }
+    RefreshFilteredCartOffers();
+}
+
+void HamStoreProvider::OnNextSort() {
+    MILO_ASSERT(AllowSortToggle(), 0xe8);
+    mSortIndex = (mSortIndex + 1) % mSorts.size();
+    ApplySort();
+}
+
+void HamStoreProvider::SetFilter(HamStoreFilter const *filter) {
+    unk5c = (HamStoreFilter *)filter;
+    unk50.clear();
+    std::map<Symbol, std::vector<StoreOffer *> *>::iterator it;
+    if (unk5c && (it = unk38.find(unk5c->unk0), it != unk38.end())) {
+        mFilteredOffers = it->second;
+        mSorts = unk5c->unkc;
+    } else {
+        unk5c = nullptr;
+        mFilteredOffers = unk30;
+        mSorts.clear();
+    }
+    mSortIndex = 0;
+    ApplySort();
+}
+
+bool HamStoreProvider::IsOfferInCart(StoreOffer *offer) {
+    FOREACH (it, unkb0) {
+        if (offer == *it) {
+            return true;
+        }
+    }
+    return false;
+}
+
 BEGIN_HANDLERS(HamStoreProvider)
     HANDLE_ACTION(refresh, Refresh())
     HANDLE_EXPR(get_offer, OnGetOffer(_msg->Int(2)))
@@ -271,135 +363,5 @@ BEGIN_HANDLERS(HamStoreProvider)
     HANDLE_SUPERCLASS(UIListProvider)
     HANDLE_SUPERCLASS(Hmx::Object)
 END_HANDLERS
-
-void HamStoreProvider::OnNextSort() {
-    MILO_ASSERT(AllowSortToggle(), 0xe8);
-    mSortIndex = (mSortIndex + 1) % mSorts.size();
-    ApplySort();
-}
-
-void HamStoreProvider::Refresh() {
-    // Delete all vectors in unk38 map, then clear it
-    for (std::map<Symbol, std::vector<StoreOffer *> *>::iterator it = unk38.begin();
-         it != unk38.end(); ++it) {
-        if (it->second) {
-            delete it->second;
-        }
-        it->second = 0;
-    }
-    unk38.clear();
-    mFilteredOffers = 0;
-
-    // Iterate all offers, categorize by filter symbols
-    std::vector<StoreOffer *> *allOffers = mAllOffers;
-    for (StoreOffer **it = allOffers->begin(); it != allOffers->end(); ++it) {
-        StoreOffer *offer = *it;
-        if (offer->isAvailable || TheNetCacheMgr->IsDebug()) {
-            DataArray *filters = offer->GetData(DataArrayPtr(Symbol("filters")), true).Array(0);
-            for (int i = 1; i < filters->Size(); i++) {
-                Symbol filterSym = filters->Sym(i);
-                std::map<Symbol, std::vector<StoreOffer *> *>::iterator mapIt = unk38.find(filterSym);
-                if (mapIt == unk38.end()) {
-                    std::vector<StoreOffer *> *vec = new std::vector<StoreOffer *>();
-                    vec->push_back(offer);
-                    unk38.insert(std::pair<Symbol, std::vector<StoreOffer *> *>(filterSym, vec));
-                } else {
-                    mapIt->second->push_back(offer);
-                }
-            }
-        }
-    }
-
-    PopulateOffersInCart();
-
-    // Remove empty filters (but keep shopping_cart and song_import_offers)
-    static Symbol store_filter_shopping_cart("store_filter_shopping_cart");
-    static Symbol store_filter_song_import_offers("store_filter_song_import_offers");
-
-    std::vector<HamStoreFilter *> *filters = mFilters;
-    std::vector<HamStoreFilter *>::iterator filterIt = filters->begin();
-    while (filterIt != filters->end()) {
-        HamStoreFilter *filter = *filterIt;
-        std::map<Symbol, std::vector<StoreOffer *> *>::iterator mapIt = unk38.find(filter->mFilterSym);
-        if ((mapIt == unk38.end() || mapIt->second->size() == 0)
-            && filter->mFilterSym != store_filter_shopping_cart
-            && filter->mFilterSym != store_filter_song_import_offers) {
-            filterIt = filters->erase(filterIt);
-        } else {
-            ++filterIt;
-        }
-    }
-
-    SetFilter(mCurrentFilter);
-}
-
-void HamStoreProvider::RefreshFilteredCartOffers() {
-    // Repopulate cart offers section in filtered list
-    PopulateOffersInCart();
-}
-
-void HamStoreProvider::PopulateOffersInCart() {
-    // Nothing to do here without access to the cart row data
-}
-
-void HamStoreProvider::SetFilter(HamStoreFilter const *filter) {
-    mCurrentFilter = filter;
-    unk54.erase(unk54.begin(), unk54.end());
-    if (!mCurrentFilter || unk38.find(mCurrentFilter->mFilterSym) == unk38.end()) {
-        mCurrentFilter = 0;
-        mFilteredOffers = mAllOffers;
-        mSorts.clear();
-    } else {
-        mFilteredOffers = unk38.find(mCurrentFilter->mFilterSym)->second;
-        mSorts = mCurrentFilter->mSortTypes;
-    }
-    mSortIndex = 0;
-    ApplySort();
-}
-
-void HamStoreProvider::SetFilter(StoreOffer const *pack) {
-    static Symbol packSym("pack");
-    MILO_ASSERT(pack->OfferType() == packSym, 0xb0);
-    unk54.erase(unk54.begin(), unk54.end());
-    unk54.push_back(const_cast<StoreOffer *>(pack));
-    for (int i = 0; i < pack->NumSongs(); i++) {
-        int songId = pack->Song(i);
-        const StoreOffer *song = FindSong(songId);
-        if (song && (song->isAvailable || TheNetCacheMgr->IsDebug())) {
-            unk54.push_back(const_cast<StoreOffer *>(song));
-        }
-    }
-    mFilteredOffers = &unk54;
-    mSorts.clear();
-    mSortIndex = 0;
-}
-
-bool HamStoreProvider::ShowBrowserPurchased(StoreOffer const *offer) const {
-    static Symbol song("song");
-    static Symbol pack("pack");
-
-    if (offer->isPurchased) {
-        return true;
-    }
-
-    if (offer->OfferType() == song) {
-        const StoreOffer *p = FindPack(offer);
-        if (p && p->HasSong(offer) && p->isPurchased) {
-            return true;
-        }
-    }
-
-    if (offer->OfferType() == pack) {
-        for (int i = 0; i < offer->NumSongs(); i++) {
-            const StoreOffer *s = FindSong(offer->Song(i));
-            if (!s || !s->isPurchased) {
-                return false;
-            }
-        }
-        return offer->NumSongs() > 0;
-    }
-
-    return false;
-}
 
 #pragma endregion HamStoreProvider

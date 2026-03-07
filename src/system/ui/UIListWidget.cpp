@@ -238,3 +238,5 @@ void UIListWidget::DrawMesh(
         mesh->DrawShowing();
     }
 }
+
+void UIListWidget::ResourceCopy(const UIListWidget *w) { Copy(w, kCopyShallow); }

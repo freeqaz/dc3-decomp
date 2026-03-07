@@ -64,6 +64,8 @@ public:
     bool HasFailed();
     void PollLoading();
 
+    DataArray *GetUnk4() const { return unk4; }
+
 private:
     NetLoader *mNetLoader; // 0x0
     DataArray *mData; // 0x4
